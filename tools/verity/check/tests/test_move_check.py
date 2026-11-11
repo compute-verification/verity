@@ -1718,9 +1718,10 @@ def test_a_cover_may_hold_an_entry_its_tokens_row_sends(tmp_path):
     cover and lists the file under both rules. An entry that holds a file the old list never held (`verity`, with
     `verity/ml/other.py`) is still refused."""
     for case, flock in (("row", "verity/flock/prover"), ("wider", "verity")):
-        repo, base = _repo(tmp_path / case, {**FLOCK, "lib/a/x.py": "X = 1\n", "lib/a/y.py": "Y = 1\n",
+        repo, base = _repo(tmp_path / case, {**FLOCK, "verity/ml/flock/agree.py": "A = 1\n", "lib/a/x.py": "X = 1\n", "lib/a/y.py": "Y = 1\n",
                                              "gates.toml": 'keyed = ["verity/ml/flock", "verity/ml/flock/pod", "lib/a"]\n'})
         for old, new in (("verity/ml/flock/tool.py", "verity/flock/prover/tool.py"), ("verity/ml/flock/pod", "verity/flock/pod"),
+                         ("verity/ml/flock/agree.py", "verity/flock/agreement/agree.py"),
                          ("lib/a/x.py", "p/x.py"), ("lib/a/y.py", "q/y.py")):
             _move(repo, old, new)
         _write(repo, {**FLOCK_MOVED, "gates.toml": f'keyed = ["{flock}", "verity/flock/pod", "p", "q"]\n'})
@@ -1730,6 +1731,27 @@ def test_a_cover_may_hold_an_entry_its_tokens_row_sends(tmp_path):
         if case == "row":
             assert r["certified"], r["refusals"]
             assert r["rules"]["cover"] == ["gates.toml"] and "gates.toml" in r["rules"]["tokens"]
+        else:
+            assert [f["path"] for f in r["refusals"]] == ["gates.toml"]
+
+
+def test_a_cover_whose_one_part_is_where_the_row_points_is_a_cover(tmp_path):
+    """`verity/ml/flock` goes three ways and its `[tokens]` row names one of them. A list that names it alone is written
+    as all three, and the row's part among them is a part like the others: a cover, under no row. With one of the three
+    left out the list is neither what the row says nor a cover, and is refused."""
+    for case, parts in (("all", '"verity/flock/agreement", "verity/flock/pod", "verity/flock/prover"'),
+                        ("less", '"verity/flock/pod", "verity/flock/prover"')):
+        repo, base = _repo(tmp_path / case, {**FLOCK, "verity/ml/flock/agree.py": "A = 1\n", "gates.toml": 'keyed = ["verity/ml/flock"]\n'})
+        for old, new in (("verity/ml/flock/tool.py", "verity/flock/prover/tool.py"), ("verity/ml/flock/pod", "verity/flock/pod"),
+                         ("verity/ml/flock/agree.py", "verity/flock/agreement/agree.py")):
+            _move(repo, old, new)
+        _write(repo, {**FLOCK_MOVED, "gates.toml": f"keyed = [{parts}]\n"})
+        _git(repo, "add", "-A")
+        _git(repo, "commit", "-q", "-m", LAYOUT_MSG)
+        r = MC.certify(base, _git(repo, "rev-parse", "HEAD"), cwd=str(repo))
+        if case == "all":
+            assert r["certified"], r["refusals"]
+            assert r["rules"]["cover"] == ["gates.toml"] and "gates.toml" not in r["rules"]["tokens"]
         else:
             assert [f["path"] for f in r["refusals"]] == ["gates.toml"]
 

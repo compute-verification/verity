@@ -1695,7 +1695,8 @@ def certify(base: str, head: str, extra: dict[str, str] | None = None, cwd: str 
         file it deleted) and each entry of the new list is one of four. An old entry as the range sent it whole. An old
         entry as its row of the maps sends it (`Rows`: `[tokens]`, or this file's `[split]` row). A part: of HEAD's files
         that the range did not add it holds only ones the old list's paths held at BASE, one of them a file of an old
-        entry that the new list no longer has, whose prefix and suffix (`HEAD:`, `/`, `/**`) it bears. A level: the
+        entry that the new list no longer has, whose prefix and suffix (`HEAD:`, `/`, `/**`) it bears; an entry the list
+        has as its row sends it, and every other file of it too, is one it no longer has, and the row's part is a part. A level: the
         `__init__.py` of a package directory above an entry the old list did not have, itself in a package, where the old
         list named a package's `__init__.py` that the range deleted with its package. And the new list still holds every
         file of each old entry it no longer has, one at least or a level. Entries that are no path, and the list's text
@@ -1720,23 +1721,27 @@ def certify(base: str, head: str, extra: dict[str, str] | None = None, cwd: str 
             sent = [{form(m, map_path(m["p"], pmap)): "whole",
                      **({form(m, rows.parts[old, m["p"]]): "split"} if (old, m["p"]) in rows.parts else
                         {form(m, rows.tokens[m["p"]]): "tokens"} if m["p"] in rows.tokens else {})} for m in px]
-            gone = [fs for fs, to in zip(files, sent) if not news & to.keys()]
+            has = {f for y in py for f in H.below(y["p"])}
+            # an old entry is gone unless the list has it whole, or has it as its row sends it and not its other files
+            gone = [not news & to.keys() or (form(m, map_path(m["p"], pmap)) not in news and fs <= has)
+                    for m, fs, to in zip(px, files, sent)]
             anew = [y["p"] for y in py if form(y, y["p"]) not in was]
             lost = any(x["p"].endswith("/__init__.py") and now(x["p"]) is None and emptied(posixpath.dirname(x["p"])) for x in px)
 
             def part(y: re.Match) -> bool:
                 fs, below = {f for f in H.below(y["p"]) if f not in created}, H.has_dir(y["p"])
                 return bool(fs) and fs <= held and any(fs & got and x["pre"] == y["pre"] and (y["post"] or "") == (
-                    (x["post"] or "") if below else "") for x, got, to in zip(px, files, sent) if not news & to.keys())
+                    (x["post"] or "") if below else "") for x, got, g in zip(px, files, gone) if g)
 
             def level(y: re.Match) -> bool:
                 d = posixpath.dirname(y["p"])
                 return lost and y["p"].endswith("/__init__.py") and y["p"] in H.set and not y["post"] and any(
                     c != y["p"] and c.startswith(d + "/") and f"{posixpath.dirname(c)}/__init__.py" in H.set for c in anew)
-            by = {**{f: k for to in sent for f, k in to.items() if k != "whole"}, **{f: k for to in sent for f, k in to.items() if k == "whole"}}
-            kinds = [by.get(form(y, y["p"])) or ("level" if level(y) else "part" if part(y) else None) for y in py]
-            if (None not in kinds and (gone or "level" in kinds)
-                    and all(fs <= {f for y in py for f in H.below(y["p"])} for fs in gone)):
+            whole = {f for to in sent for f, k in to.items() if k == "whole"}
+            by = {f: k for to in sent for f, k in to.items() if k != "whole"}
+            kinds = ["whole" if (f := form(y, y["p"])) in whole else "level" if level(y) else "part" if part(y) else by.get(f)
+                     for y in py]
+            if None not in kinds and (any(gone) or "level" in kinds) and all(fs <= has for fs, g in zip(files, gone) if g):
                 a = a[:a0] + b[b0:b1] + a[a1:]
                 took |= {"cover", *kinds} - {"whole", "part", "level"}
         return a, took
