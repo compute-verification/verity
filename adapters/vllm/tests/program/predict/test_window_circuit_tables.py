@@ -112,6 +112,8 @@ def test_each_tables_readers_are_templates_of_their_own():
     every table has one. Round s's quantizers bind ROUND = s; round 0's token rows are its `ScanSlots_v2` and `TokenFeed_v1`
     units' and round 1's its selects', `SelectCollect_v2{..., ROUND=1}`. Without the tables no template binds a round."""
     c = _lowered().circuit
+    tables: dict[str, set[str]]
+    held_units: dict[str, set[int]]
     units, tables, held_units = {IF.descriptor_id(fn): n for fn, n in c.templates}, {}, {}
     for (tid, _port, u), (table, _row) in _held_rows(c).items():
         tables.setdefault(tid, set()).add(table)
@@ -175,6 +177,7 @@ def _h1_tables(low, slots) -> dict[str, np.ndarray]:
     """H1's tables of the fixed load from the model's values: round s's A table's row 8c + i the leaf (codes, then scale) of
     the c-th quantizer at K = 64 of the position at round s's row i (`Tables.at`), every other row zero codes of scale 0;
     its input-ids table's row i that position's token, every other `EMPTY_ID` (`pouw_h1_served.ids_words`)."""
+    a: dict[int, np.ndarray]
     pos, a, ids = WR.positions(low.fn), {s: np.zeros((6 * 8, LEAF), np.uint16) for s in (0, 1)}, {0: [None] * 8, 1: [None] * 8}
     for k, (P, sl) in enumerate(zip(low.programs, slots)):
         quants: dict[int, list[int]] = {}

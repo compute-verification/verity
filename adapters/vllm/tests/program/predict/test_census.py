@@ -170,7 +170,7 @@ def _times(n: int, g: dict[str, int]) -> dict[str, int]:
     return {k: n * v for k, v in g.items()}
 
 
-def _calls(program) -> dict[str, object]:
+def _calls(program) -> dict:
     return {descriptor_id(nd.fn): nd.fn for nd in program.root.body.nodes if not is_input(nd.fn)}
 
 

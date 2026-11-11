@@ -86,7 +86,7 @@ def test_an_fa3_head_is_v20s_calls_reading_a_key_and_a_value_row_a_position():
     circuit = window_circuit(reg, S.compile_steps(reg, *S._session(*WINDOW)), CLASS, GRAIN, provable=False)
     other = window_circuit(reg, S.compile_steps(reg, *S._session(*OTHER)), CLASS, GRAIN, provable=False)
     assert _bytes(circuit) == _bytes(other) and _blocks(circuit) == _blocks(other)
-    n = Counter()
+    n: Counter[str] = Counter()
     for fn, k in circuit.templates:
         if fn.id.startswith(("Attention", "AttnBlock", "AttnHeadEnd")):
             n[fn.id] += k
@@ -157,6 +157,7 @@ def test_int8_llama_3_2_1b_on_sm_90_lowers_every_unit_to_a_proof_block():
     config = {**json.loads(LLAMA_1B.read_text()), "quantization_config": dict(INT8_EXACT_QUANT)}
     reg, cls = _registered({**H200, "int8_exact": "linears"}, config), WindowClass(4, 32, 4)
     circuit = class_circuit(reg, cls)
+    heads: Counter[str]
     heads, n = Counter(), {_label(fn): k for fn, k in circuit.templates}
     for fn, k in circuit.templates:
         if fn.id.startswith(("Attention", "AttnBlock", "AttnHeadEnd")):

@@ -28,6 +28,7 @@ from verity_vllm.program.predict.node import build_node_program, node_parameters
 
 _spec = importlib.util.spec_from_file_location(
     "nci_reference", Path(__file__).resolve().parents[5] / "verity/protocols/inference_only/verifier/nci/lean/scripts/nci_reference.py")
+assert _spec is not None and _spec.loader is not None
 REF = importlib.util.module_from_spec(_spec)
 _spec.loader.exec_module(REF)
 
@@ -70,6 +71,7 @@ def commit(tmp_path, monkeypatch):
     ckd.mkdir()
     (ckd / "config.json").write_text("{}")
     _shard(ckd / "model.safetensors", CKPT)
+    cfg: dict
     served, roots, bundles, cfg = {}, {}, [], {"programs": {}, "of_record": {}, "requests": [{"request_id": "r0", "prompt_len": 4, "max_tokens": 3}]}
     for r in range(WORLD):
         served[r] = _served(r)

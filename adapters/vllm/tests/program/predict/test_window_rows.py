@@ -118,6 +118,7 @@ def window():
 
 def _position(fn, family: str) -> list[int]:
     """Each position's node of ``family`` (its first)."""
+    out: dict[int, int]
     pos, out = WR.positions(fn), {}
     for j, n in enumerate(fn.body.nodes):
         if n.fn.name == family:
@@ -253,6 +254,7 @@ def _traffic(cls: WC.WindowClass, prompts, arrivals) -> tuple[list[bytes], dict[
     from pathlib import Path
 
     spec = importlib.util.spec_from_file_location("scan_traffic", Path(IS.__file__).parent.parent / "verifier" / "tests" / "scan_traffic.py")
+    assert spec is not None and spec.loader is not None
     ST = sys.modules["scan_traffic"] = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(ST)
     scan = cls.scan
@@ -551,7 +553,7 @@ def test_a_bit_leaf_ports_elements_are_its_bits_least_significant_first():
     """`_as_leaves` and `_packed` against `ScanSlots_v2` and `SlotEntry_v1`, whose ports are words of bit leaves: a state row
     gives `scan_reference`'s lanes through them, and an entry's bits pack to `entry_reference`'s words."""
     scan = SS.bridge(CLASS.scan, CLASS.prompt)
-    row = np.asarray([state_row(CLASS.scan, LANES)], dtype=np.uint64)
+    row: np.ndarray = np.asarray([state_row(CLASS.scan, LANES)], dtype=np.uint64)
     (_, t), = scan.signature()[0]
     out = np.asarray(evaluate_batch(scan, _as_leaves(row, 16, t.leaves), kernel="reference")).reshape(1, -1).astype(np.uint64)
     b = scan.bindings
@@ -579,7 +581,7 @@ def test_a_windows_rows_are_what_its_definitions_compute_on_its_committed_inputs
     win = IF.Window(low.circuit, RUN, LAW, 64, registered=values, forms=WR.FORMS)
     win.supply(CR)
     rows.record(win)
-    bad = {}
+    bad: dict[str, list[int]] = {}
     for fn, n in low.circuit.templates:
         tid = descriptor_id(fn)
         lay = IF.layout(fn)
@@ -605,8 +607,8 @@ def test_a_windows_rows_are_what_its_definitions_compute_on_its_committed_inputs
             part, at = flat[:, at:at + f.leaves], at + f.leaves
             want.append(part if part.shape[1] == got[-1].shape[1] else _packed(part, w))
         got, want = np.concatenate(got, axis=1), np.concatenate(want, axis=1)
-        if (u := np.flatnonzero((got != want).any(axis=1))).size:
-            bad[tid] = u.tolist()
+        if (off := np.flatnonzero((got != want).any(axis=1))).size:
+            bad[tid] = off.tolist()
     assert bad == {}
     c = win.close(salt_key=bytes(32))
     assert c is not None

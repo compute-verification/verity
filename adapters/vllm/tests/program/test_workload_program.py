@@ -154,13 +154,13 @@ def test_a_growing_key_value_sequence_composes_to_the_same_workload_through_its_
         body = W.request_component(desc, REGISTRY, _WP(12)).fn.body
         return body, _encode_body(body, SCHEMA_V1, _Tables())
 
-    body, enc = component()
-    shared = [a.refs for n in body.nodes for a in n.args if getattr(a.refs, "prefix", None) is not None]
+    built, enc = component()
+    shared = [a.refs for n in built.nodes for a in n.args if getattr(a.refs, "prefix", None) is not None]
     assert len(shared) >= 10 and len({id(r.prefix[0]) for r in shared}) == 1
     plain = W._remap
     monkeypatch.setattr(W, "_remap", lambda r, K, logs=None: plain(r, K))
-    body0, enc0 = component()
-    assert [[a.refs.to_json() for a in n.args] for n in body.nodes] == [[a.refs.to_json() for a in n.args] for n in body0.nodes]
+    built0, enc0 = component()
+    assert [[a.refs.to_json() for a in n.args] for n in built.nodes] == [[a.refs.to_json() for a in n.args] for n in built0.nodes]
     assert enc == enc0
 
 

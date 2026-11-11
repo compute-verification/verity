@@ -167,8 +167,13 @@ def test_the_class_of_record_takes_both_windows_to_its_one_class_circuit(monkeyp
     assert (CLASS_OF_RECORD.slots, CLASS_OF_RECORD.lanes, CLASS_OF_RECORD.every, CLASS_OF_RECORD.positions) == (8, 4, 16, 1087)
     assert (CLASS_OF_RECORD.boundaries, CLASS_OF_RECORD.buckets) == ((0, 16), 32)
     assert [(CLASS_OF_RECORD.anchor(k), CLASS_OF_RECORD.lane(k)) for k in range(8)] == [(16 * (k % 2), k // 2) for k in range(8)]
-    calls = []
-    monkeypatch.setattr(WC, "class_circuit", lambda *a: calls.append(a[1:]) or "the class circuit")
+    calls: list[tuple] = []
+
+    def class_circuit(*a):
+        calls.append(a[1:])
+        return "the class circuit"
+
+    monkeypatch.setattr(WC, "class_circuit", class_circuit)
     reg = S._registered()
     for window, placed in ((THREE, [(0, 1), (0, 2), (16, 31)]), (EIGHT, [(0, 1)] * 4 + [(16, 17)] * 4)):
         assert window_circuit(reg, S.compile_steps(reg, *S._session(*window)), CLASS_OF_RECORD, placed=placed) == "the class circuit"
@@ -179,8 +184,13 @@ def test_a_request_anchored_at_16_with_64_outputs_is_expressible(monkeypatch):
     """A slot's Program hands all its outputs to the scan at its anchor bucket and the scan carries them across
     windows (`SC_GROUP`), so a request at the class of record's second boundary (bucket 16) keeping all 64 outputs, its last
     at bucket 16 + D + 64 / r = 59 past the 32-bucket window's end, is taken to the one class circuit."""
-    calls = []
-    monkeypatch.setattr(WC, "class_circuit", lambda *a: calls.append(a[1:]) or "the class circuit")
+    calls: list[tuple] = []
+
+    def class_circuit(*a):
+        calls.append(a[1:])
+        return "the class circuit"
+
+    monkeypatch.setattr(WC, "class_circuit", class_circuit)
     reg = S._registered()
     window = ([(1, 64, {**S.GREEDY, "max_tokens": 64})], [[(0, 0, 1)]] + [[(0, p, 1)] for p in range(1, 64)])
     compiled = S.compile_steps(reg, *S._session(*window))
