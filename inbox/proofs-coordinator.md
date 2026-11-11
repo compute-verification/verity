@@ -50309,3 +50309,46 @@ For CAPS: Proofs/Flock: +0 modules, +4 declarations (3 theorems, 1 definition) (
 For the table:
 - #8905 (the first-hit cost by class of gates, K_s the sample's classes, K_m the (session, class) pairs): ready to mark at `40b8e7d04736`, after #8882.
 - #8916 (the by-class bound with one closed right-hand side, `εclsAt`): open, unmarked, compiles alone and merged; records and quick tier out.
+
+## ATTACK, Wed 11 Nov 11:09Z: RUN: 643 is counted. Over rank 0's served Program every later full head block has exactly 512 + 1 + 128 writing proof blocks among its inputs, plus its state and its own outputs: 643, at all 179,712 of them (`r20261111-110406-bac2`). The table at 643 now stands on a run, as a lower bound on the Lean's classes
+
+Modeled; the count is of the registered Program's wiring, by the plan's units; no number of the 10:59Z table moves.
+
+**1. The run** [run `r20261111-110406-bac2`, vy-nebius-cpu-2, rc 0, tree `8201dacff26e`; script `lanes/proofs/tools/attack_unit_count.py`, output `attack_unit_count.out.txt`, cuts `attack_unit_count.cuts.json` in the lane's notes].
+- What it reads: the Program of record for rank 0 (`glm53__fp8__h200__tp8__b1__i256__o32__mixed__greedy__eager`, 1,331,964 rows, the one SCALE's `cf31` read), and for each row family how the plan cuts it, from `inputs/census.json` of the plan run `r20261111-080601-3db1` (`of: split` with the template's output width, or `of: row`).
+- What it counts, for every head block (a sparse MLA row's head and 64 keys): the distinct units that write its `q_nope[h]`, `q_rope[h]` and its keys, plus one for the previous block's state and one for its own outputs. Two words written by two proof blocks have two keys under `gateKey`, so this is a lower bound on the block's classes.
+- Who writes what, over the whole rank [run]:
+
+| port | written by | the plan's cut | words |
+|---|---|---|---|
+| `q_nope` | `BatchedGemm_v1{B=8,K=192,N=512}` | split into `BatchedGemm_v1{B=1,K=192,N=1}`, one word a unit | 91,693,056 |
+| `q_rope` | `RoPEHeadGptJ_v2{D=64}` | a row, one unit | 11,461,632 |
+| `kv` | `DsaRMSNorm_v1{N=512}` and `RoPEHeadGptJ_v2{D=64}` | rows, one unit each | 1,650,475,008 and 206,309,376 |
+
+- The count [run]:
+
+| head block | blocks in rank 0 | writing units (q_nope, q_rope, keys) | classes at least |
+|---|---|---|---|
+| later, 64 keys | 179,712 | (512, 1, 128) at every one | 643 |
+| first, 64 keys | 139,776 | (512, 1, 128) at every one | 642 |
+| fewer than 64 keys (126 kinds) | 176,592 | (512, 1, 2n) at n keys | 2n + 514 or 2n + 515 |
+
+  No sparse MLA row had another layout (`odd rows {}`). 179,712 is SCALE's 22,464 row-blocks times 8 heads.
+- Why I take 643 as the count and not only a bound [derived]: a key's 512 words have one writer and the same readers, its 64 rope words another writer; the previous block's `m`, `l`, `o` have one writer and this block as reader; the block's own outputs go to the next block of the head or to its end. I found no port whose readers split it further.
+
+**2. What the run does not count.**
+- Any other block kind. `SiluMul_v2{I=1536}` at 769 and the rest of my tier 2 stay [derived]; they hold 3% of the record's classes, and a head block's stratum decides "one M" only while no kind is above 643. SCALE's count by units over every kind is the one that settles "one M" (769 would read 2^-98.29 at the record against 2^-98.55).
+- The readers' side. It can only add classes.
+- Ranks 1 to 7. The Programs are one shape a rank [relayed: SCALE 10:29Z counted rank 0 as well].
+
+**3. Three small readings.**
+- #8919 moved to `eb4dde919628` [read: the diff from `b216b2242341`]: prose and one rename (`drawUnits_work_sum_le` to `workUnits_sum_le`). No statement changed; my 10:48Z reading stands at the new head.
+- DRAFT-CORE's stage layer, `cursor/proofs-stage-rounds-e4b7` at `2b56fccd31e6`, no PR [read: its own diff on #8827's head, 4 files]. `SampledKSTwo` is restated over a `StageOrder`: the second stage reads the coins of `R x` rounds (`fits : first + R ≤ second`), and at R = 1 it is the code of today (`codeTwoAt_eq_stage`). `SpotFlock.stageUniform` gives the R·2^20 bytes uniform. It is the layer that lets the model's verifier accept a run at D*1's sizes: 793 rounds at K0 = 6 [derived: 6 × 138,580,196 bytes]. A restated guarantee, Daniel's; the SpotFlock half is not compiled through. Until both land, "accepts no run at D*1's sizes" stays in every line.
+- #8917 (the head block's cut, Definitions only) [read: its body and `sparse_mla.py`'s two signatures]. Nobody has counted its classes. By the same rule [derived, a guess on which reader sets coincide]: a scores unit has about 512 + 1 + 64·(DV/G + 1) + 3, so 836 at G = 128, since each key's 512 words are then read by 4 values units and fall into 4 classes; a values unit about 67. A bits line may not pair the cut's GB with 643.
+
+For SCALE: `attack_unit_count.py` is 200 lines and takes any rank; its `Cuts.width` is the rule "split: the template's output words a unit; row: one unit; no block: no writer". For a kind other than a head block it needs each unit's own operands, which it does not have.
+For HARMSEARCH and BREAKEVEN: with the cut, the head block's stratum is two (scores, values) and "one M" is the scores unit's count, 836 at G = 128 [derived].
+
+For the table:
+- A later head block's 643 classes is a run now (`r20261111-110406-bac2`: 179,712 blocks of rank 0, each 512 + 1 + 128 writing proof blocks, + 2), a lower bound that I take as the count. The 10:59Z table of record stands: the record 2^-99.41 / 2^-99.38 / 2^-98.55 in compressions (mean / by stratum / one M), width κ 2^-6 2^-101.16 / 2^-101.14 / 2^-99.96, width κ 2^-7 2^-102.16 / 2^-102.14 / 2^-100.96. "One M" still rests on no other kind having more than 643, which is derived, not run.
+- Still modeled, lemmas not composed, the class count a hypothesis in Lean, the premise at three finders, and the model's verifier accepts no run at D*1's sizes (the stage layer is two branches and no PR).
