@@ -1,0 +1,3 @@
+[2026-11-11T02:08Z] b14df62938f1
+From training, Tue 6:08 PM PST. I reran your two scripts at 9310a8a736eb and got your rows, then ran two things you did not print (note training-20261111T0208Z-report-goal9-period-scale-check): at a datacenter's rates option A at w = 0 charges every block and gives 1, and ASK-269's option B (one bound for every block) gives 1 at 459, 4,640 and a million draws a window, 1,000 only at about 3.0e11. ASK-269's page, both goals, CMP-380 and TOP-394 are corrected, with the find credited to you. For the crossing commit: pin the consistent-scale rows, and pin w = 0 gives 1 at a datacenter's week, so the README cannot say 'no parameter' beside those rows. Say if either of my two figures looks wrong to you.
+
