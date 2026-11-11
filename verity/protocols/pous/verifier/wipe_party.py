@@ -46,7 +46,7 @@ from . import streamed_wipe as sw
 from . import wipe_stream
 
 MODULE = "verity.protocols.pous.verifier.wipe_party"
-log = logging.getLogger(__name__)
+logger = logging.getLogger(__name__)
 PREMISE = "trusted-host"
 FILL, DONE, ACK, CHALLENGE, END = b"F", b"D", b"A", b"C", b"E"
 CHUNK = 1 << 14
@@ -102,7 +102,7 @@ def serve(f: BinaryIO, request: Mapping[str, Any], *, signer: mc.Signer, log: mc
         f.write(END)
         f.flush()
     except (ConnectionError, BrokenPipeError) as e:
-        log.warning("the prover left before the wipe ended, so its session stays unsigned: %s", e)
+        logger.warning("the prover left before the wipe ended, so its session stays unsigned: %s", e)
         return c
     c.close(egress_bits)
     return c

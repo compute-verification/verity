@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import hashlib
 import itertools
+import logging
 import socket
 import threading
 import types
@@ -53,8 +54,9 @@ def verify(public: bytes, message: bytes, signature: bytes) -> bool:
     return lms.verify(KEY, public, message, lms.Signature.decode(KEY, signature))
 
 
-def serve(monkeypatch, params: sw.WipeParams, secret: bytes) -> sw.Challenger:
-    """`wipe_party.serve` over a socket pair, its OS samples taken in order from `SEED`'s seeded coins."""
+def serve(monkeypatch, params: sw.WipeParams, secret: bytes, stop_after: int | None = None) -> sw.Challenger:
+    """`wipe_party.serve` over a socket pair, its OS samples taken in order from `SEED`'s seeded coins; the prover
+    leaves after `stop_after` batches when given."""
     coins = S.SeededCoins(SEED)
     monkeypatch.setattr(WP, "secrets", types.SimpleNamespace(token_bytes=coins.draw))
     monkeypatch.setattr(sw, "os", types.SimpleNamespace(urandom=coins.draw))
@@ -70,7 +72,7 @@ def serve(monkeypatch, params: sw.WipeParams, secret: bytes) -> sw.Challenger:
     t = threading.Thread(target=side)
     t.start()
     with b, b.makefile("rwb") as f:
-        WP.answer(f, sw.Prover(params))
+        WP.answer(f, sw.Prover(params), stop_after)
     t.join()
     return got["c"]
 
@@ -149,6 +151,16 @@ def test_a_prover_that_leaves_leaves_the_session_unsigned():
     out = r.outcomes[C]["outcome"]
     assert (out["reads"], out["signed"]) == (3, None)
     assert verdict(out, b"left")["verdict"] == "undecided"
+
+
+def test_serve_says_that_the_prover_left(monkeypatch, caplog):
+    """`wipe_party.serve`, whose `log` is its session log, leaves the session unsigned and says so on the module's
+    logger."""
+    with caplog.at_level(logging.WARNING, logger=WP.__name__):
+        c = serve(monkeypatch, PARAMS, b"left", stop_after=3)
+    assert c.ended is None and c.signed is None
+    said = [r.getMessage() for r in caplog.records if r.name == WP.__name__]
+    assert len(said) == 1 and said[0].startswith("the prover left before the wipe ended, so its session stays unsigned: ")
 
 
 def test_large_fill_frames_are_kept_as_digests_and_the_challenger_replays(tmp_path):
