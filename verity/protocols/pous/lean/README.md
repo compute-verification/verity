@@ -3,7 +3,7 @@
 This package (`pous_grader`) is code: the grader, its driver `grade.sh`, the trusted-file hashes and the submissions. It
 imports only Lean. PoUS's definitions, guarantees and proofs for the timed POUS audit game, whose responder gets no
 outside help (a deployment accounts for help: `../verifier/PROTOCOL.md`, "The problem"), are part of the security analysis,
-`Security/`, listed below by their paths there. Declarations kept their names
+`security/`, listed below by their paths there. Declarations kept their names
 (`python3 tools/move/lean.py --resolve MODULE` maps a module's old name). Conventions follow the other Lean packages:
 the same toolchain and Mathlib pin, `autoImplicit` off, no `axiom` (an assumption is a named `Prop` hypothesis), and a
 check file.
@@ -99,13 +99,13 @@ submissions/reference.lean          the grader's positive control
 
 ~~~bash
 lake build                          # the grader (the default target)
-(cd ../../../../Security/Proofs && lake exe cache get && lake build Proofs.Pous)   # PoUS's analysis; Mathlib prebuilt
-python3 ../../../../tools/verity/lean/check.py --build --fresh . ../../../../Security   # Verity's Lean audit
+(cd ../../../../security/Proofs && lake exe cache get && lake build Proofs.Pous)   # PoUS's analysis; Mathlib prebuilt
+python3 ../../../../tools/verity/lean/check.py --build --fresh . ../../../../security   # Verity's Lean audit
 bash grade.sh submissions/reference.lean Pous.Guarantees.KFloor   # one JSON line, exit 0 iff PASS
 bash check.sh                       # the audit and the grader's controls
 ~~~
 
-**Trusted without proof:** the statements in the three layers `Security/lean-audit.json`'s `meaning` lists,
+**Trusted without proof:** the statements in the three layers `security/lean-audit.json`'s `meaning` lists,
 `Definitions/Pous`, `Definitions/Pous/Assumptions` and `Definitions/Pous/Guarantees` (each directory and its own `.lean` file),
 Core's `Verity.Game.prCoin` (`Definitions/Core/Game.lean`), which `Pous.pr` abbreviates, and the lemmas' statements in
 `Proofs/Pous/Statements.lean` that grade.sh grades against;
@@ -114,7 +114,7 @@ as `lean/submissions/…` and `docs/…` name the POUS Project store, where the 
 
 **The audit.** `tools/verity/lean/check.py` audits every declaration of PoUS's modules: allowed axioms, named assumptions,
 escapes, orphan files, import layers (Definitions imports no assumption, guarantee or proof; Assumptions only
-Definitions; Guarantees no proof), a kernel replay, and the guarantees' records. `Security/lean-audit.json` lists
+Definitions; Guarantees no proof), a kernel replay, and the guarantees' records. `security/lean-audit.json` lists
 as guarantees the sanity theorems, every `Pous.SecurityProofs.X` (among them the stacked one-way bound, the band
 certificate, and the dense scheme at the 64 KB point, with the implementation's tagged keying and its per-segment tags),
 the raw-storage refutations the `m1p` guarantees cite, and P2 in the cost model (`PousP2Ring`: `meets_of_meetsOn`, the
@@ -131,8 +131,8 @@ replays every constant it adds through the kernel, requires `solution`'s type to
 syntactic comparison, so a near-miss statement cannot keep the kernel unfolding), and requires its axioms to be in
 `allowedAxioms` (Lean's three, compiled in). The compile and the grader run under a time limit and a memory limit
 (`POUS_GRADE_TIMEOUT`, `POUS_GRADE_MEMORY_MB`). `grade.sh` needs unprivileged user namespaces (`unshare --user`). A
-graded proof moves into `Security/Proofs/Pous/` as a module, with its theorem added to
-`Security/Proofs/Pous.lean` and listed as a guarantee in `Security/lean-audit.json` (`check.py --update`,
+graded proof moves into `security/Proofs/Pous/` as a module, with its theorem added to
+`security/Proofs/Pous.lean` and listed as a guarantee in `security/lean-audit.json` (`check.py --update`,
 then review the records' diff).
 
 **Changing the trusted layer** means editing the files listed in `TRUSTED.sha256` (among them Core's `prCoin`, in
@@ -143,11 +143,11 @@ starts to hash outside the suite's `[tool.verity.tests] inputs` goes into them t
 
 ~~~bash
 sha256sum lean-toolchain lakefile.toml lake-manifest.json grade.sh Grader/Registry.lean Grader/Main.lean \
-  ../../../../Security/lean-toolchain ../../../../Security/lakefile.toml ../../../../Security/lake-manifest.json \
-  ../../../../Security/Proofs/lakefile.toml ../../../../Security/Proofs/lake-manifest.json \
-  ../../../../Security/Definitions/Pous.lean ../../../../Security/Definitions/Core/Game.lean \
-  ../../../../Security/Proofs/Pous/Statements.lean ../../../../Security/Proofs/Pous/Sanity.lean \
-  ../../../../Security/Proofs/Pous/Prob.lean ../../../../Security/Proofs/Core/Game/Basic.lean \
-  ../../../../Security/Proofs/Pous/Accounting/Numbers.lean \
-  $(find ../../../../Security/Definitions/Pous ../../../../Security/Definitions/Pous -name '*.lean' | LC_ALL=C sort -u) > TRUSTED.sha256
+  ../../../../security/lean-toolchain ../../../../security/lakefile.toml ../../../../security/lake-manifest.json \
+  ../../../../security/Proofs/lakefile.toml ../../../../security/Proofs/lake-manifest.json \
+  ../../../../security/Definitions/Pous.lean ../../../../security/Definitions/Core/Game.lean \
+  ../../../../security/Proofs/Pous/Statements.lean ../../../../security/Proofs/Pous/Sanity.lean \
+  ../../../../security/Proofs/Pous/Prob.lean ../../../../security/Proofs/Core/Game/Basic.lean \
+  ../../../../security/Proofs/Pous/Accounting/Numbers.lean \
+  $(find ../../../../security/Definitions/Pous ../../../../security/Definitions/Pous -name '*.lean' | LC_ALL=C sort -u) > TRUSTED.sha256
 ~~~
