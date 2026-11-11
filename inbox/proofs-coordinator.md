@@ -63065,3 +63065,162 @@ Web (read Wed 11 Nov 2026; "excerpt" means I read the search tool's excerpt of t
 With `main`'s `whole_run/Main.lean`, `whole_run.py` and `nci_phases/Main.lean` checked out over the head's: `3 failed, 5 passed`, the failures `[nci_phases]` (`Main.lean:139:12 ... Unknown identifier NciCheck.Widths.reinterpretation`), `[whole_run]` (`Main.lean:86:6: error: Type mismatch`) and the generator test (`a law is rate:NUM/DEN ... not 'stratified:3'`); through the runner, `failed benchmarks/verifier_cost 5 passed, 3 failed in 9 s`. With the head's files back: 8 passed in 7.6 s, each test 0.6 to 1.8 s [run `r20261111-192957-208e`, rc 0, at `40157cc66775`]. The result is in #9047's body; the head and the mark are unchanged (`research queue status`: ready, admitted, at 19:42Z).
 
 For the table: #9047 marked at `40157cc66775`, no run outstanding; it waits for #9027 and a land verdict.
+
+## OUTBITS, Wed 11 Nov 19:50Z: a served request's replay block returns its ids alone, 32 bits a token: 32,768 bits at the top class, against a cap of 28,000, and nothing built holds a request to either. The check only refuses more and I build it now. The 18-bit id needs a unit that reads 8 selects, which Flock's verifier refuses today as it refuses the new select. One rejected verification phase of a datacenter's 600 s had served up to 316 GB, more than the year's target, and no document says what it is charged
+
+Nothing is built or marked at this entry. One thing ran: a scratch on my machine, under a second, that calls the verifier's own derivation of a replay block's return (`second_stage._return_links`) and counts what it returns; it is quoted as [run: scratch]. Everything else is a read of `main` at `61f13c2275`, of the pull requests' heads named below, or of this file. Marks: [run], [read], [relayed], [mine] my arithmetic or reasoning with no run, [guess]. Mailbox read whole at 19:35Z and again at 19:50Z (three sections, the last 18:59Z). Note: `note:proofs/20261111T1950Z-draft-outbits-served-cover` (this entry's text; synced).
+
+### 1. PRF-509: the check that holds a served request to the cap
+
+**1.1 Which of the row's 1,026 words a request returns.** The row is n, the finish and O ids, each a u32 (`adapters/vllm/verity_vllm/pipeline/boundary_rows.py:156-163`, `egress_row`) [read].
+
+- **Today: none.** No unit writes `b.egress`: the replay block is a stand-in (the check template's units, `Layout.replay`, `boundary_rows.py:21-22`, `:244-245`), and the first stage's record has no port for what a replay block returns [read; relayed: the 18:41Z entry on the chain's stops, stop 1].
+- **Once the request's Definition lands: the O id words, and only those.** What a request returns, in the program the guarantees are being restated on, is the bits its replay block returns: each bit written at an output port that a link of the replay block's Definition names (`returned`, `security/Proofs/Flock/SpotFlock/WireMap.lean:268` on `cursor/proofs-wired-e3fd`) [read]. A link's port is one whole output field of one unit, and the verifier lays a returned field on whole 16-bit words and refuses a returned bit that sits on no computed row (`verity/protocols/spot/verifier/lean/Spot/Bits.lean:693-698`, `:806-808`) [read]. So the count is 16 for each word of each returned field.
+  - **The O ids: returned, 32 bits each**, one `I32` a token from its select unit. The stand-in with the select as its check returns exactly this: `TemplateInstances_v1{template="TokenSelect_v4{V=128}",N=1024}` returns 32,768 bits a replay block [run: scratch]. All O are returned whatever n is: the row is zero past n and the class's units past n still run [read: `egress_row`; guess for the request's Definition].
+  - **n and the finish (4 of the row's 16-bit words, 64 bits): not returned by the replay block.** The request Program "returns no terminator and no finish reason" (`program/predict/reads.py:54-55`) [read]. They become the stop block's one 16-bit word (`StopRule16`, #8925, merged 19:17Z), and the stop blocks are a population of their own with their own record and audit, not units of the replay block (#9028, open, head `23baf41620ff`) [relayed: the 19:19Z entry on the stop driver]. So they are 16 bits a request in another statement, not part of this cap.
+  - **Outside the row: one bit a check** (`program/predict/common.py:63-97`, `with_checks`), if the request's Definition returns them as the one-stage Program does: one more word for each 16 checks [guess: the Definition is not written].
+- **What the two pull requests say.** #8462 (open, `6f4ffa9e7a6a`, old layout) takes S from the certifier card's cap, 875 ids times 32 = 28,000 bits, and names as pending the tie between a statement's served outputs and the tokens the certifier releases. #8414 (open, `359724056748`) has nothing left of its own since #8539 landed: the fan-out F is published by the registration verdict. Neither computes what a replay block returns [read, both whole].
+- **So** [mine]:
+
+| what a replay block of the top class returns | bits | state |
+|---|---:|---|
+| the stand-in on `main`, select as the check, O = 1,024 | 32,768 | on `main`; a stand-in, tied to no served bytes |
+| the request's Definition, ids as `I32`, top class 1,024 (class caps are powers of two, `boundary_rows.py:209-212`) | 32,768 | not built |
+| the same with the top class at the cap, O = 875 | 28,000 | not built; needs the class cap to admit 875 |
+| ids packed at 18 bits, 110 units of 8 ids (section 2) | 15,840 | not built |
+
+  PRF-509's own figure, 32 × (O + 2) = 32,832, counts n and the finish, which the replay block does not return. The difference is 64 bits; the verdict is the same: **at S = 28,000 the top class is refused, and every class of 512 ids or fewer passes (16,384 bits).**
+
+**1.2 The check** [mine; it reads public structure only].
+
+1. **The verifier counts, on its own registered program, the bits one replay block returns:** R = the sum, over the links of the replay block Definition's return, of the link's units a replay block × 16 × the words of the field it names. The links are the ones round 2 already derives (`second_stage._return_links`, Lean `Spot.SecondStage.returnLinks`); nothing is supplied by the prover.
+2. **It publishes R with the registration, beside F** (`WindowCommitmentRecord.fanout`, `service.py:557-569`).
+3. **A capped point is claimed for a class only when F ≤ N and R ≤ S**; the patterns' form needs F = 1 and R = S. Otherwise the refusal is `served-cover` with clause `fanout` (F, N) or `served` (R, S), the class's capped bits are not claimed, and its bound is the sets' form's, as PRF-509 says.
+
+**Where I differ from PRF-509's text, and which reading of S:** PRF-509 reads the bits off the egress row. I read them off the registered Definition's return, because that is what the lemma below is about, because the row holds two words the replay block does not return, and because the row is the adapter's layout while the return is registered structure. **S is then no card's input: it is the published R.** The certifier's cap enters through the layout (a top class of 875 ids, so R = 28,000), not as a number typed beside it. Until the layout has that class, the figure that can be claimed for the top class is 32,768 bits a request, not 28,000.
+
+**1.3 The lemma** [mine; nothing compiled; names are those of `WireMap.lean` at `d7fb3b7015`]. `ServedCover` (`security/Properties/Spot/TwoStageCheck.lean:89-95`) at the connected program:
+
+- **Statement.** Let `h` be an accepted second stage with `MemberFits h` and `writersFirst h`, `wiredProg h = (bitsProgs h.ms).wired (wireMap h) (returned h)` with the partition the restated guarantees use, and `req` the map sending each returned gate to its replay block. If the registration's check gave F ≤ N for every class and R ≤ `D.S`, then `ServedCover` holds for `req`, `D` and the classes.
+- **Its two halves.**
+  1. *No two requests read one proof block.* A returned gate of replay block ρ reads only proof blocks of ρ: a wire stays inside one replay block (`wireUnit_block`, `:145`), a link reads an input of the same replay block (`linkUnit_block`, `:155`), and a source bit the map does not move stays an input gate. What crosses replay blocks is only what the registration's read-alone check lets through (registered values, and values it names as resting on the network period check).
+  2. *The requests reading in replay block ρ serve at most N · S bits together.* By half 1 only ρ reads there; its served bits are the returned gates of ρ, which number R (the definition of `returned`, and `Bits.check`'s refusal of a returned bit on no computed row); R ≤ S ≤ N · S.
+- **No new premise** [guess, until it compiles]. The hypotheses are the two the wiring theorem already takes (`MemberFits`, `writersFirst`) and the registration's verdict.
+- **The witness:** the small connected instance of the select's shape that the restated statements' third pull request carries (one link, the wires, one return); the lemma at that instance, with R computed by the check, is the non-vacuity test.
+- **Two things the lemma needs that are not written:** the Lean twin of the count (`returnedBits` beside `returnLinks`, held by the difftest), and that the fan-out published on the challenger's program (the first stage's) speaks for the connected program (the second stage's). #8414's body says the same of F: "Nothing checks F on the deployed statement" [read].
+
+**1.4 Which part is which, who builds it, what lands first.**
+
+| part | kind | who | state |
+|---|---|---|---|
+| R counted from the Definition's return and published; a capped point refused above it | a check, Python | me, now | section 1.5 |
+| the Lean twin of the count and its difftest | a check, Lean | proofs (me, if you say so) | not built |
+| `ServedCover` at the connected program | a lemma | proofs, after the restated statements land (#9043, then the statements due Thu 02:00Z) | not written |
+| the request's Definition, whose return is the request's ids, and the first stage's port for them | a Definition and a layout | the vLLM lane, deciding now [relayed] | not built |
+| a top class at the cap (875 ids) | a layout | the vLLM lane (`boundary_rows.py:209-212`), with the certifier's cap on `main` (#8462) | not built |
+| the returned ids are the bytes the certifier released | a premise until network accounting's tie lands; its witness is the certifier's record of the same window | network accounting | pending [read: #8462's body] |
+
+**What lands first: the check** (it refuses only). Then the request's Definition and its return port, which give the check something real to count. Then the lemma, after the restated statements.
+
+**1.5 It only refuses more, so I build it.** It changes no guarantee's statement and no verifier accepts anything new: a number is published, and a capped claim above it is refused. Branch `cursor/proofs-servedcover-<4 hex>` from `origin/main`:
+- `verity/protocols/spot/verifier/second_stage.py`: `returned_bits`, the count of 1.2.
+- `verity/protocols/spot/verifier/service.py`: a two-stage registration's `WindowCommitmentRecord.returned`.
+- `verity/protocols/spot/plancheck.py`: `two` takes `returned` with `served`, as it takes `fanout`, and refuses `served` below it.
+- tests on the stand-in at GLM-5.3's top class (refused at 28,000) and at 512 (held).
+**What it will not show:** anything about served bytes. On the stand-in it counts the check template's outputs. The figures' code passes a modelled value, as it passes F = 1 today; I say so in its comment and in the pull request.
+
+**1.6 The length, first as you asked.** A request's length is 11 to 13 bits of advice on every request until its stop block is proved [relayed: my 18:43Z brief]. **Somebody has it now:** the Definition is on `main` (#8925, 19:17Z); the vLLM lane's #9028 registers and samples the stop blocks and is open, not marked; proofs' stop driver builds their proofs and audit record (accept at the smallest class Thu 06:00Z, pull request Thu 18:00Z, the Lean function Fri 02:00Z); the stop record is complete only when network accounting's tie has a verdict (Tue 17 Nov, its guess) [relayed: the 19:19Z entry]. **Once it is on:** the length is no longer advice; a wrong stop block is charged its 16-bit output in the stop population's own sample, beside this cap and not inside it [mine].
+
+### 2. The id packed at 18 bits
+
+**2.1 The shape** [mine; not built, not run through circuit-check].
+- **One unit packs 8 ids.** `IdPack_v1{W=18,N=8}`: parameters `id0` … `id7`, each an `I32` and each one whole output field of one select unit; returns one field `Array<8,Value<18>>`, bit 18j + i of it being bit i of `id_j`. 8 × 18 = 144 bits = 9 words exactly [run: scratch, the verifier's packing gives 9 words; read: `Bits.lean:685-698`, an array is one field]. Wires only on gates: the high 14 bits of each id are read by nothing and returned by nothing, so no lemma about an id's range is needed.
+- **A request's return is then 110 such fields** (880 ids, the last 5 zero): 15,840 bits against 28,000, and 15,750 would be the 875 ids alone. "875 ids in 985 words" as one field of one unit (15,760 bits) packs the same way [run: scratch], but one unit cannot gather 875 units' outputs (below).
+- **Why not one `Value<18>` a token:** a field is laid on words of its own, so it returns 2 words, 32 bits, the same as today [run: scratch; read: `Bits.lean:698`].
+- **The select's `I32` stays inside the replay block**, read by the next step, the stop block's row and the pack unit, and is no longer returned.
+
+**2.2 Against the output-size rule.** A proof block's outputs fit a public size class, a power of two from 16 to 262,144 bits (provisional). The pack unit's 144 bits are in the class of 256: it passes. Under the 16-bit limit (`UNIT_CLASS_MAX` = 16) it does not, and neither does today's select, whose `I32` is 32 bits and whose id cannot fit 16 (V = 154,880): the shape would then be eight units returning each id's low 16 bits and one returning the eight high pairs, the same 9 words [mine].
+
+**2.3 Against how the first stage commits the returned ids.** With one row a token (2 words) the first stage's port matches the select's unit. With the pack unit the returning unit is the pack unit, so the port is **one row for each 8 ids, 9 words wide**. The row's width therefore has to be the returning field's words, not a constant 2: that belongs in the decision the vLLM lane is making now. One thing I could not settle: the stop block and the egress tie read a request's ids as one row (`b.egress`), while a link reads one row a returning unit; whichever layout is picked, the two must be one commitment or tied by a block, or the ids are committed twice with nothing between them [mine].
+
+**2.4 What stops it today.** A pack unit's eight ports all read the select's one output port. Flock's Lean verifier refuses a session in which two ports read one writer port ("two ports of one published frame-v3 domain", `verity/protocols/flock/verifier/Flock/PortRoots.lean:107`, `:133`), which is where the new select's combine stops [relayed: the 19:39Z entry, stop 5, run `r20261111-192333-4ab8`]. **So the pack unit lands behind whichever way out is taken for the new select**, and adds no new obstacle of its own [guess]. If that refusal stays, a chain does the same packing with one unit a token, each reading its select and the previous unit's carry (two different writer ports), at the price of eight more templates in the second stage's sample [mine; not costed].
+
+**2.5 The issue's text, to file as it is.**
+
+> **Title:** Return and commit a request's token ids packed at 18 bits: a pack unit of 8 ids in 9 words
+>
+> @circuits @vllm proofs, Wed 11 Nov. **Ask: a Definition that packs 8 token ids of 18 bits into 9 words of 16 bits, wires only, and a request's returned ids committed in the first stage as those words. It is worth about 8% of the year's figure at the best designed configuration and nothing more; it is not urgent, but its row width should be decided together with the port for the returned ids, which the vLLM lane is deciding now. Nothing here is built or run.**
+>
+> **Why.** The exfiltration bound charges a request with an incorrect proof block at most the bits its replay block returns. The verifier counts a returned output field in whole 16-bit words (`verity/protocols/spot/verifier/lean/Spot/Bits.lean:693-698`; it refuses a returned bit that sits on no computed row, `:806-808`). A select that returns its id as an `I32` therefore returns 32 bits a token, and one that returned a `Value<18>` would still return two words. GLM-5.3's ids have 18 bits (V = 154,880). To be charged 18 bits a token the ids have to share words: 8 ids are 144 bits, exactly 9 words. No lemma about an id's range is needed, because the high 14 bits are not returned at all.
+>
+> **What changes.**
+>
+> @circuits:
+> 1. `verity/definitions/registry/` (beside `stop_rule.py`): `IdPack_v1{W,N}`, here W = 18 bits an id and N = 8 ids. Parameters `id0` … `id7`, each an `I32`; returns one field `Array<8,Value<18>>`, bit 18j + i of it being bit i of `id_j`. On gates it is wires. Its binding in the module's sidecar, its pins, and the circuit-check report in the pull request.
+> 2. Say whether the word layer can express it without new primitives (the stop rule's packing uses `I32Add` doublings and `U32Hi16`), or which primitive it needs.
+> 3. It meets the refusal the new select's combine meets: its eight ports read one writer port, which Flock's verifier refuses today (`verity/protocols/flock/verifier/Flock/PortRoots.lean:107`, `:133`). It lands behind whichever way out is taken there. If none is, the fallback is a chain: one unit a token, reading its select and the previous unit's carry.
+>
+> @vllm:
+> 1. `adapters/vllm/verity_vllm/program/predict/build.py:762-766` (the request's return) and the request's Definition when it is written: the replay block returns the pack units' fields, 110 of them at a cap of 875 ids, and no longer the selects' `I32`s. The select's `I32` stays inside, read by the next step, the stop block and the pack unit.
+> 2. `adapters/vllm/verity_vllm/pipeline/boundary_rows.py` (`egress_row`, `:156-163`; `Layout.words`): the first stage's port for the returned ids is one row for each 8 ids, 9 words wide; the row's width is the returning field's words, not a constant. `adapters/vllm/verity_vllm/pipeline/interior_rows.py`: the pack units' rows in the interior.
+> 3. The top output class at the certifier's cap (875 ids, or 880), where class caps are powers of two today (`boundary_rows.py:209-212`).
+> 4. To decide here: the stop block and the egress tie read a request's ids as one row; the return reads one row a returning unit. They must be one commitment, or tied by a block.
+>
+> For @network-accounting to confirm, no work asked yet: the id event admits any u32 (`verity/protocols/certifier/verifier/active.py:374-376`) while the leak count already takes 18 bits an id (`benchmarks/network_traces/leak_bounds.py:428`); the egress tie would read the packed words.
+>
+> **The figures.** All modelled (world year, utilization 0.4), none measured on the served engine.
+> - **What a request with an incorrect proof block is charged:** 28,000 bits with ids returned as `I32` under a cap of 875 ids (875 × 32); 15,840 bits packed (110 × 144). Today, with the top class at 1,024 ids and no cap built, it is 32,768. These are counts of returned bits, arithmetic on the layout; the first two are of layouts not built.
+> - **The year's figure at the best designed configuration** (itself not built): 5,445 GB at 28,000 bits a request becomes about 5,000 GB at 15,750. **About 8%.** The second number is interpolated between the cost model's runs at 28,000, 20,000 and 14,000 bits; it is not a run. Both are at a verification phase of one machine's 600 s; the figure is now stated at a datacenter's 600 s (5,202 GB), where the packed figure has not been computed.
+> - **On the partition `main` defines** (20,114 GB at a datacenter's 600 s): not established. No run prices it below 28,000 bits.
+>
+> **Done when:** the Definition is on `main` with its circuit-check report; a two-stage registration of a class with the pack units publishes 16 × 9 × (the pack units a replay block) as the bits a replay block returns (the check of PRF-509 reads this number); round 2 accepts the pack unit's session at the smallest configuration; and the cost model's card reads the published number.
+
+### 3. What a rejected verification phase had already served (for Daniel, in his words)
+
+**Nothing we have written bounds it, and it is the whole output of the phase.**
+
+- **What the documents say** [read].
+  - `ARCHITECTURE.md:23-27`: a verification phase runs while the next execution phase runs; "any rejection rejects, and nothing is retried"; accounting adds an accepted phase's share to the monitoring period's totals. It does not say what a rejected phase adds.
+  - `AGENTS.md`, "Live coins only": "a failed proof is a visible failure, and nothing resamples." The only `DESIGN.md` in the tree is the plan of Flock's soundness proof; it has no section on a failed proof.
+  - The proof system (`verity/protocols/spot/verifier/service.py:106-136`): at its failure budget a stream stops, and every stream of the same operator stops with it; nothing of that operator is accepted or registered afterwards. Lean has this (`security/Properties/Spot/Halt.lean`). The two-stage command sets the budget to 1.
+  - The guarantee (`security/Definitions/Claims/SamplingTwo.lean:333`; `ARCHITECTURE.md:141`): except with probability δ, the audit rejects or the incorrect blocks are few. It bounds what leaves in a phase that is accepted. About a rejected phase it says only that it is rejected.
+  - The network lane's bound (`verity/protocols/certifier/verifier/PROTOCOL.md:2099-2118`) charges failed connections. It has no rejected phase in it.
+- **What follows from our own rule** [mine]. Every output bit is explained, certified or charged. A rejected phase's outputs were certified as leaving and are explained by nothing, so all of them are charged. The audit happens after the bytes have left: it catches, it does not prevent. The network certifier's record gives the amount exactly, so it is counted, not estimated.
+- **The largest such amount** [mine: 7,219 requests in one machine's 600 s and 12,500 machines a datacenter, both relayed from the 18:47Z entry on the figures; one request a replay block as the figures model it; at most 28,000 bits a request, the certifier's cap of 875 ids at 32 bits, not yet enforced on the served engine].
+
+| a verification phase of | requests | its whole output, at most |
+|---|---:|---:|
+| one machine's 600 s | 7,219 | 0.025 GB |
+| one machine's 43 hours (257 machines' 600 s) | 1,855,283 | 6.5 GB |
+| one machine's 81 hours (487 machines' 600 s) | 3,515,653 | 12.3 GB |
+| a datacenter's 600 s | 90,237,500 | 316 GB |
+
+  - With ids counted at 18 bits the last line is 178 GB; with today's top class and no cap built, 370 GB.
+  - **One rejected phase of a datacenter's 600 s is more than the 300 GB we aim at for a year**, and it is 1.6% and 6% of the two year figures now stated at that phase (20,114 GB and 5,202 GB).
+  - It is not only the one phase. The verdict on phase j comes while phase j + 1 is served, so two phases have left by the time of a rejection: about 632 GB. The two-stage command's default proof deadline is 24 hours (`benchmarks/one_stage/two_stage.py:61`), which at 600 s is 144 more phases; a deployment has to set it [read; mine].
+  - The stop ends acceptance, not serving. Nothing in the protocol turns the machines off; what the auditor does on a rejection is outside it. Everything served after it is visible and unaudited.
+- **Should a figure carry it: yes, beside the bound, never inside it** [mine; a recommendation].
+  - The figures answer "how much can leave without being caught in a year". This amount answers "how much had left by the time a cheat was caught". Adding them would hide the first under the second: a single caught phase is larger than the whole target.
+  - So each figure states its condition, "in a monitoring period with no rejected verification phase", and one line beside it: "one rejection: up to X GB had already left, counted by the network certifier", X being the phase's whole output times the phases served before the verdict.
+  - **It makes the size of a verification phase a choice with two sides.** A larger phase lowers the sampled bound for the same cost (nothing fits below 43 to 81 machine-hours [relayed]); it raises what one rejection had served in proportion.
+- **What Daniel would decide** (this is what a guarantee says, so it is his): whether the year's figure is stated for periods with no rejection, with the caught amount on its own line (my recommendation), or must include one caught phase, in which case a datacenter's 600 s cannot meet 300 GB and the phase has to be about a pod's 600 s (64 machines: 1.6 GB) or smaller, where no design fits today [mine].
+
+### 4. The three numbers I need from the cost-model run on `cursor/proofs-count-71ac`
+
+Each at a verification phase of a datacenter's 600 s, world year, utilization 0.4, at the 10% budget point as the 18:47Z entry states its figures, so that they compare with 20,114 GB and 5,202 GB at 28,000 bits a request:
+
+1. **The partition `main` defines, at 32,768 bits a request.** What the lane may quote today with nothing new built (the top class's return, section 1.1). If 32,832 is what is queued, that serves: 0.2% apart.
+2. **The partition `main` defines, at 15,750 bits a request.** Replaces my guess of "about 11,000 GB" and says whether the packed id is worth 8% there or far more.
+3. **The best designed configuration, at 15,750 bits a request.** Replaces "about 5,000 GB" and the 8% in the issue's text.
+
+15,840 in place of 15,750 serves equally (0.6% apart). I do not need 18,468 or the best designed configuration at 32,768.
+
+### 5. Not established
+
+1. That the request's Definition will return its checks' bits, and how many; that its units past n run and return zero ids.
+2. The lemma of 1.3: stated from a read of a branch that had not compiled when I read it; nothing of mine compiled.
+3. Whether the word layer expresses the pack unit without a new primitive; whether the chain passes Flock's verifier.
+4. How many requests a rejection would in fact expose: it depends on the proof deadline a deployment sets and on what the auditor does at a rejection, neither of which is written anywhere I found.
+5. Whether the figures' 7,219 replay blocks a machine's 600 s are requests at the cap; I took "at most".
+
+**Next:** the branch of 1.5; its tests through `research run`; the pull request; then my final message.
