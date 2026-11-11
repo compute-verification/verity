@@ -35,8 +35,9 @@ name is rewritten also as the last word of a double-quoted string. A tracked fil
 it moves. It appends [paths] to research's `moves.json` (once), each row whose path the tree has, and never rewrites the
 moves recorded there.
 
-It fails on a rewritten reference to a directory the map splits across destinations (`backends/flock/` to `verity/ml/flock/`
-with its `verifier/lean/` to `verity/core/service/flock/`): the rewrite follows the larger part, so a gate that named the
+It fails on a rewritten reference to a directory the map splits across destinations (`verity/ml/flock/` to
+`verity/protocols/flock/prover/` with its `verifier/` to `verity/protocols/flock/agreement/`): the rewrite follows the
+larger part, so a gate that named the
 whole would no longer cover the part that left. [split] acknowledges each one it may let through, by file and directory,
 with the reason; one that no longer occurs is an error too.
 """
