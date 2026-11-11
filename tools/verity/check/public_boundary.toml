@@ -31,10 +31,12 @@ spot = [
     "verity/protocols/spot/{candidates.py,costfit.py,device,optimize.py,plancheck.py}",
     "verity/protocols/spot/verifier/lean",
 ]
-# C-Flock: its prover, its Lean verifier and ZK server, and its security analysis
+# C-Flock: its prover, its Lean verifier and ZK server with the base packages it requires, and its security analysis
 flock = [
     "verity/protocols/flock",
     "verity/protocols/flock/verifier",
+    "verity/circuits/{base,lean}",
+    "verity/commitments/lean",
     "security/Proofs/Properties/Flock{,.lean}",
     "security/*/Flock{,.lean}",
     "security/Definitions/Assumptions/Flock.lean",

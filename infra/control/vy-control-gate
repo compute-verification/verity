@@ -1,0 +1,346 @@
+#!/usr/bin/python3 -I
+"""vy-control-gate: the one way into the control pod for every key but root's admin key.
+
+A key in the `research` account's authorized_keys is forced to this command (`restrict,command="/usr/local/sbin/vy-control-gate
+LANE"`, written by vy-control-setup; LANE `-` for the key every agent holds). The gate takes the request from
+SSH_ORIGINAL_COMMAND, runs itself as root through sudoers' 60-vy-control (`--ssh REQUEST --key LANE`), and runs one verb or
+refuses. A request is split into words and never reaches a shell: each word is matched whole against its verb's pattern, and
+what runs is an argument list this file builds.
+
+    true                  exit 0 (`research doctor`'s probe)
+    hostname              the pod's host name (`research pods register --host`'s probe)
+    budgets-state         the budgets guard's state, a newline, the pod's clock in epoch seconds (`research pods create`'s gate)
+    wake INSTANCE         pods/nebius/wake.py's `start INSTANCE`: start a stopped Nebius VM the registry names (`research run --on`)
+    pods-list             RunPod's pods as JSON, without their environments
+    pods-get POD          one of them
+    pods-create           create the pod whose body is on stdin (JSON, as pods/runpod.py builds it) once the guard's budgets, read
+                          here, cover its name and its lease; no network volume, since a volume holds what its owner keeps on it
+    pods-terminate POD    terminate one of the project's pods, never the control pod
+    drive ...             ci's key only: drive.sh with one of DRIVE's argument lists
+
+The two requests `research` sent before it knew the verbs (LEGACY) are taken as `budgets-state` and `wake`, so a checkout older
+than the door passes it. Every call is one line in LOG. Exit 2 with `vy-control-gate: refused: WHY` for a request it doesn't take,
+1 when the verb failed, else the verb's own status.
+"""
+from __future__ import annotations
+
+import json
+import os
+import re
+import shlex
+import socket
+import subprocess
+import sys
+import time
+from pathlib import Path
+
+GATE = "/usr/local/sbin/vy-control-gate"
+SUDO = "/usr/bin/sudo"
+STATE = Path("/data/state/root-research/pods/guard-budgets.json")     # /root/.research/pods/guard-budgets.json, by its own path
+GUARD_SRC = "/data/guard-src/tools/research/src"                      # the tree the budgets guard runs: its runpod.py, budgets.py
+WAKE_SRC = "/data/infra/store-index-src/src"
+PYTHON = "/usr/local/bin/python3.12"
+DRIVE_SH = "/data/infra/drive.sh"
+LOG = Path("/data/infra/door/gate.log")
+ENV = {"PATH": "/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin", "HOME": "/root", "USER": "root", "LOGNAME": "root",
+       "LC_ALL": "C.UTF-8"}
+MAX_REQUEST, MAX_BODY = 1024, 1 << 16
+PROJECT = "vy-"                           # the project's pods, the ones the budgets guard counts
+CONTROL = "vy-control"                    # the control pod's name starts with it: never terminated, never created, from here
+LEASE_ENV = "RESEARCH_LEASE_EXPIRES"      # pods/lease.py's: the expiry `research pods create --max-hours` puts in the pod's environment
+
+clock = time.time
+
+LANE = r"-|[A-Za-z0-9][A-Za-z0-9._:-]{0,63}"
+INSTANCE = r"computeinstance-[a-z0-9]{8,40}"
+POD = r"[a-z0-9]{12,20}"
+COMMIT = r"[0-9a-f]{7,40}"
+STEPS = r"[A-Za-z0-9][A-Za-z0-9_.:-]{0,63}(,[A-Za-z0-9][A-Za-z0-9_.:-]{0,63}){0,31}"
+RUN = r"[A-Za-z0-9][A-Za-z0-9._-]{0,127}"
+REASON = r"[A-Za-z0-9][A-Za-z0-9 .,:;#()_/+=@-]{0,299}"
+PUBLIC_KEY = r"(ssh-ed25519|ssh-rsa|ecdsa-sha2-nistp(256|384|521)) [A-Za-z0-9+/]{16,2048}={0,3}( [\x20-\x7e]{0,128})?"
+
+LEGACY = (
+    (re.compile(r"cat /root/\.research/pods/guard-budgets\.json && echo && date \+%s"), lambda m: ["budgets-state"]),
+    (re.compile(rf"PYTHONPATH={re.escape(WAKE_SRC)} python3\.12 -m research\.pods\.nebius\.wake start ({INSTANCE})"),
+     lambda m: ["wake", m[1]]),
+)
+
+#: drive.sh's argument lists ci's key may send: a request's words after `drive` match one of them, word for word
+DRIVE = (
+    ("status",), ("start",), ("stop",), ("once", "--dry-run"),
+    ("deploy", rf"{COMMIT}|main"),
+    ("queue", "promote"),
+    ("queue", "baseline", COMMIT, "--by", "ci"),
+    ("queue", "baseline", COMMIT, "--by", "ci", "--steps", STEPS),
+    ("queue", "accept-checked", COMMIT, "--by", "ci"),
+    ("queue", "drive-shard-add", COMMIT, r"[0-9]{1,3}", RUN),
+    ("queue", "eject", r"[1-9][0-9]{0,6}", "--by", "ci", "--reason", REASON),
+)
+DRIVE_LANES = ("ci",)
+
+
+class Refused(Exception):
+    """The request is not one the gate takes."""
+
+
+class Failed(Exception):
+    """A verb the gate took could not be carried out."""
+
+
+def words(request: str) -> list[str]:
+    """The request's words: a LEGACY request as its verb, else split as a shell would with nothing expanded."""
+    if not request.strip():
+        raise Refused(f"this key opens no shell, only {', '.join(VERBS)}")
+    if len(request) > MAX_REQUEST or not re.fullmatch(r"[\x20-\x7e]+", request):
+        raise Refused(f"a request is at most {MAX_REQUEST} printable ASCII characters on one line")
+    for pattern, verb in LEGACY:
+        if m := pattern.fullmatch(request):
+            return verb(m)
+    try:
+        return shlex.split(request)
+    except ValueError as e:
+        raise Refused(f"the request does not split into words ({e})") from None
+
+
+def none(verb: str, args: list[str]) -> None:
+    if args:
+        raise Refused(f"`{verb}` takes no argument")
+
+
+def one(verb: str, args: list[str], pattern: str, what: str) -> str:
+    if len(args) != 1 or not re.fullmatch(pattern, args[0]):
+        raise Refused(f"`{verb}` takes one argument, {what} ({pattern})")
+    return args[0]
+
+
+def run(argv: list[str], env: dict[str, str]) -> int:
+    return subprocess.run(argv, env=env, cwd="/", stdin=subprocess.DEVNULL, check=False).returncode
+
+
+def research():
+    """pods/runpod.py and pods/budgets.py of the tree the budgets guard runs here: the account's key is root's, read by them.
+    This is the guard's host, so nothing they do asks the door again."""
+    os.environ["RESEARCH_GUARD_HOST"] = "local"
+    if GUARD_SRC not in sys.path:
+        sys.path.insert(0, GUARD_SRC)
+    try:
+        from research.pods import budgets, runpod
+    except Exception as e:  # noqa: BLE001
+        raise Failed(f"cannot load research.pods from {GUARD_SRC} ({type(e).__name__}: {e})") from None
+    return runpod, budgets
+
+
+def api(method: str, path: str, body: dict | None = None):
+    runpod, _ = research()
+    try:
+        return runpod._request(method, path, body)
+    except runpod.PodError as e:
+        raise Failed(str(e)) from None
+
+
+def shown(pod):
+    """A pod as a caller sees it: without its environment, which can hold what its creator put there."""
+    return {k: v for k, v in pod.items() if k != "env"} if isinstance(pod, dict) else pod
+
+
+def answer(doc) -> int:
+    print(json.dumps(doc))
+    return 0
+
+
+def guard_state() -> str:
+    try:
+        return STATE.read_text()
+    except OSError as e:
+        raise Failed(f"cannot read the budgets guard's state ({e})") from None
+
+
+def v_true(args: list[str], lane: str) -> int:
+    none("true", args)
+    return 0
+
+
+def v_hostname(args: list[str], lane: str) -> int:
+    none("hostname", args)
+    print(socket.gethostname())
+    return 0
+
+
+def v_budgets_state(args: list[str], lane: str) -> int:
+    none("budgets-state", args)
+    sys.stdout.write(f"{guard_state()}\n{int(clock())}\n")
+    return 0
+
+
+def v_wake(args: list[str], lane: str) -> int:
+    iid = one("wake", args, INSTANCE, "a Nebius instance id")
+    return run([PYTHON, "-m", "research.pods.nebius.wake", "start", iid], {**ENV, "PYTHONPATH": WAKE_SRC})
+
+
+def v_pods_list(args: list[str], lane: str) -> int:
+    none("pods-list", args)
+    return answer([shown(p) for p in api("GET", "/pods") or []])
+
+
+def v_pods_get(args: list[str], lane: str) -> int:
+    return answer(shown(api("GET", f"/pods/{one('pods-get', args, POD, 'a pod id')}")))
+
+
+def v_pods_terminate(args: list[str], lane: str) -> int:
+    pod_id = one("pods-terminate", args, POD, "a pod id")
+    name = str((api("GET", f"/pods/{pod_id}") or {}).get("name") or "")
+    if not name.startswith(PROJECT) or name.startswith(CONTROL):
+        raise Refused(f"pod {pod_id} is {name or 'unnamed'}: only the project's pods ({PROJECT}*) are terminated from here, and "
+                      f"never the control pod")
+    return answer(api("DELETE", f"/pods/{pod_id}"))
+
+
+def _int(lo: int, hi: int):
+    return lambda v: type(v) is int and lo <= v <= hi
+
+
+def _text(pattern: str):
+    return lambda v: isinstance(v, str) and re.fullmatch(pattern, v) is not None
+
+
+def _each(ok, most: int = 8):
+    return lambda v: isinstance(v, list) and 1 <= len(v) <= most and all(ok(x) for x in v)
+
+
+#: the create body's keys, as pods/runpod.py's `create` sends them, each with the test its value passes; any other key is refused
+BODY = {
+    "name": _text(r"vy-[a-z0-9][a-z0-9-]{0,62}-veritor-campaign"),
+    "imageName": _text(r"[a-z0-9][A-Za-z0-9._/:@-]{0,199}"),
+    "gpuTypeIds": _each(_text(r"[A-Za-z0-9][A-Za-z0-9 ._-]{0,63}")),
+    "gpuCount": _int(1, 16),
+    "cloudType": _text(r"SECURE|COMMUNITY"),
+    "computeType": _text(r"GPU|CPU"),
+    "containerDiskInGb": _int(1, 4000),
+    "volumeInGb": _int(0, 0),
+    "ports": _each(_text(r"[0-9]{1,5}/tcp"), 16),
+    "supportPublicIp": lambda v: v is True,
+    "minVCPUPerGPU": _int(1, 512),
+    "minRAMPerGPU": _int(1, 4096),
+    "dataCenterIds": _each(_text(r"[A-Z0-9][A-Z0-9-]{1,23}")),
+    "cpuFlavorIds": _each(_text(r"[a-z0-9]{2,16}")),
+    "cpuFlavorPriority": _text(r"custom"),
+    "vcpuCount": _int(1, 512),
+    "env": lambda v: (isinstance(v, dict) and set(v) == {"PUBLIC_KEY", LEASE_ENV} and _text(PUBLIC_KEY)(v["PUBLIC_KEY"])
+                      and _text(r"[1-9][0-9]{9,10}")(v[LEASE_ENV])),
+}
+REQUIRED = ("name", "imageName", "computeType", "containerDiskInGb", "ports", "env")
+
+
+def checked_body(raw: bytes) -> dict:
+    if len(raw) > MAX_BODY:
+        raise Refused(f"the create body on stdin is over {MAX_BODY} bytes")
+    try:
+        body = json.loads(raw)
+    except ValueError:
+        raise Refused("the create body on stdin is not JSON") from None
+    if not isinstance(body, dict):
+        raise Refused("the create body on stdin is not a JSON object")
+    if "networkVolumeId" in body or "volumeMountPath" in body:
+        raise Refused("no network volume through the door: a pod that mounts one reads all of it; infra's lead creates that pod")
+    if "dockerStartCmd" in body or "RESEARCH_LEASE_SH" in (body.get("env") if isinstance(body.get("env"), dict) else {}):
+        raise Refused("no start command through the door (`--boot-lease`): `research pods create` arms the lease over ssh")
+    if extra := sorted(set(body) - set(BODY)):
+        raise Refused(f"the create body has keys the gate does not take: {', '.join(k[:40] for k in extra[:5])}")
+    if missing := [k for k in REQUIRED if k not in body]:
+        raise Refused(f"the create body lacks {', '.join(missing)}")
+    if bad := sorted(k for k, v in body.items() if not BODY[k](v)):
+        raise Refused(f"the create body's {', '.join(bad)} is not what `research pods create` sends")
+    if body["name"].startswith(CONTROL):
+        raise Refused("the control pod is not created from here")
+    return body
+
+
+def v_pods_create(args: list[str], lane: str) -> int:
+    none("pods-create", args)
+    body = checked_body(sys.stdin.buffer.read(MAX_BODY + 1))
+    _, budgets = research()
+    now = clock()
+    try:
+        state = json.loads(guard_state())
+    except ValueError as e:
+        raise Failed(f"the budgets guard's state does not parse ({e})") from None
+    hours = (int(body["env"][LEASE_ENV]) - now) / 3600
+    if hours <= 0:
+        raise Refused("the lease in the create body has already expired")
+    if why := budgets.gate(body["name"], hours, state, now):
+        raise Refused(why)
+    return answer(shown(api("POST", "/pods", body)))
+
+
+def v_drive(args: list[str], lane: str) -> int:
+    if lane not in DRIVE_LANES:
+        raise Refused(f"`drive` is for the key of {' or '.join(DRIVE_LANES)}, and this key is {'no lane' if lane == '-' else lane}'s")
+    for form in DRIVE:
+        if len(form) == len(args) and all(re.fullmatch(p, a) for p, a in zip(form, args)):
+            return run([DRIVE_SH, *args], dict(ENV))
+    raise Refused("`drive` takes: " + "; ".join(" ".join(f) for f in DRIVE))
+
+
+VERBS = {"true": v_true, "hostname": v_hostname, "budgets-state": v_budgets_state, "wake": v_wake, "pods-list": v_pods_list,
+         "pods-get": v_pods_get, "pods-create": v_pods_create, "pods-terminate": v_pods_terminate, "drive": v_drive}
+
+
+def note(lane: str, request: str, outcome: str) -> None:
+    """One line of LOG a call; a log that can't be written stops nothing."""
+    try:
+        LOG.parent.mkdir(parents=True, exist_ok=True)
+        with LOG.open("a") as f:
+            f.write(f"{time.strftime('%Y-%m-%dT%H:%M:%SZ', time.gmtime(clock()))} {lane} {outcome} {request[:300]!r}\n")
+    except OSError:
+        pass
+
+
+def serve(request: str, lane: str) -> int:
+    """Run the one verb `request` names for the key of `lane`; -> its exit status."""
+    try:
+        if not re.fullmatch(LANE, lane):
+            raise Refused("the key's lane, the forced command's argument, is not a lane's name")
+        verb, *args = words(request)
+        if verb not in VERBS:
+            raise Refused(f"{verb[:40]!r} is no verb of the gate, which takes {', '.join(VERBS)}")
+        rc = VERBS[verb](args, lane)
+    except Refused as e:
+        note(lane, request, "refused")
+        print(f"vy-control-gate: refused: {e}", file=sys.stderr)
+        return 2
+    except Failed as e:
+        note(lane, request, "failed")
+        print(f"vy-control-gate: {e}", file=sys.stderr)
+        return 1
+    except Exception as e:  # noqa: BLE001  (a caller is told what failed, never shown a traceback of root's files)
+        note(lane, request, "failed")
+        print(f"vy-control-gate: {type(e).__name__}: {str(e)[:300]}", file=sys.stderr)
+        return 1
+    note(lane, request, f"rc={rc}")
+    return rc
+
+
+def main(argv: list[str]) -> int:
+    if len(argv) == 4 and argv[0] == "--ssh" and argv[2] == "--key":
+        request, lane = argv[1], argv[3]
+    elif len(argv) <= 1 and argv not in (["-h"], ["--help"]):
+        request, lane = os.environ.get("SSH_ORIGINAL_COMMAND", ""), argv[0] if argv else "-"
+    else:
+        print(__doc__.strip(), file=sys.stderr)
+        return 0 if len(argv) == 1 else 2
+    if os.geteuid() == 0:
+        os.environ["HOME"] = ENV["HOME"]      # root's, where the RunPod account's key is, whatever sudo kept of the caller's
+        return serve(request, lane)
+    if len(request) > MAX_REQUEST:
+        print(f"vy-control-gate: refused: a request is at most {MAX_REQUEST} characters", file=sys.stderr)
+        return 2
+    try:
+        os.execv(SUDO, [SUDO, "-n", GATE, "--ssh", request, "--key", lane])
+    except OSError as e:
+        print(f"vy-control-gate: cannot run the gate as root ({e}): vy-control-setup installs sudo's rule", file=sys.stderr)
+        return 1
+
+
+if __name__ == "__main__":
+    sys.exit(main(sys.argv[1:]))

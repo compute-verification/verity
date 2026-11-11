@@ -1,7 +1,7 @@
 # `verity graph`
 
 The fine-grained check: Verity's checks as a graph of tasks that depends only on the commit. An executor runs any part of it
-with one result cache, one artifact store and one event stream; drive only reads results. This package is Verity's side:
+with one result cache, one artifact store and one event stream; the verified queue only reads results. This package is Verity's side:
 the listing (graph/v2), one task's run (result/v1) and a serial reference executor. `verity tasks` (`tools/verity/check/
 tasks.py`, tasks/v1) is the coarse graph `check` runs today.
 
@@ -20,9 +20,9 @@ verity graph check --local [--family F ...] [--work DIR] [--retries N] [--events
 
 1. Keys come from declared inputs, not traced reads. A sandbox enforces the declaration: an undeclared read is an error.
 2. Keys include repository paths. A pure move reruns what it moved, once.
-3. Runners report facts. What gates, what may stay red and what a red triggers is drive's configuration, never a runner's.
+3. Runners report facts. What gates, what may stay red and what a red triggers is the verified queue's configuration, never a runner's.
 4. `tasks.toml` holds families (tens of entries), not one row per task.
-5. No `owner` field anywhere in the graph, results or events: who is paged is drive's policy, from paths. The listing
+5. No `owner` field anywhere in the graph, results or events: who is paged is the verified queue's policy, from paths. The listing
    refuses one in a table or a task, and `contract.result_errors` in a result.
 
 ## Layout
@@ -169,7 +169,7 @@ runs them, one task a step:
 
 | task | env | runs | inputs | outputs |
 | --- | --- | --- | --- | --- |
-| `lean-build:verity/protocols/flock/verifier` | lean | `lake build` there (`suites.LAKE_BUILD`) | the package's files but its `lean-audit.json` | each `lean_exe` of its `defaultTargets`, at `.lake/build/bin/<exe>` |
+| `lean-build:verity/protocols/flock/verifier` | lean | `lake build` there (`suites.LAKE_BUILD`) | the files of the package and of the packages of the tree it requires by path, but each one's `lean-audit.json` | each `lean_exe` of its `defaultTargets`, at `.lake/build/bin/<exe>` |
 | `lean-unit-cut:verity/protocols/flock/agreement/unit_cut_agree.py` | py | `unit_cut_agree.py --lean VERIFY --out WORK/lean-unit-cut` | the script and its import closure (the test-file family's `Imports`) | `lean-unit-cut/result.json`, the cuts and how many agreed |
 | `lean-agreement:verity/protocols/flock/agreement` | py | `check.py --lean-agreement WORK UPSTREAM INPUTS VERIFY` | that directory, and what `check.py` reads as it starts (`families/build.py`'s `CHECK_READS`) | `flock-agreement/ci/sets.json`, ci.py's verdicts per set |
 | `lean-suites:SUITE`, `lean-suites:SUITE:K/M` | py | `suites.py SUITE --lean-built --json ... --timeouts --jobs N --mem-gb G` on each suite of `suites.AFTER_LEAN`, or with `--files K/M` on each part of one `families/build.py`'s `PARTS` splits by test file, or of one that declares `parts`, by test id; a parallel suite on the family's slot, another in one process | the whole tree, as tasks/v1 keys a job that declares no inputs: those suites build and run Lake packages, which no tracer follows | `suites-lean.json`, suites.py's report |
@@ -181,7 +181,7 @@ runs them, one task a step:
 `lean-suites` reads every one and puts it at that path in the tree before suites.py runs (its var `bin`). A part's task
 (its var `files`) hands suites.py a timing record with none of the suite's files (`--timings`), so part K is every M-th test
 file by path from the K-th, the same wherever it runs, and the M parts hold each file once. A lean-suites fail names each
-failed suite with its failed tests (`detail.failed`), which drive names, allows and blames as that suite's red. A
+failed suite with its failed tests (`detail.failed`), which the verified queue names, allows and blames as that suite's red. A
 run that ran nothing is no pass: ci.py skipping every set of the agreement, a partition check that compared no cut, a suite
 suites.py didn't run. Each is an error, so no result. The agreement fetches the upstream
 build and inputs `upstream.json` pins (`research data fetch`, as ci.py fetches what it pins) and holds them to the pin's
@@ -189,9 +189,9 @@ sha256, so the store and its client are no input. Those fetches and ci.py's read
 environment names: a `research run` job on a node with no store config of its own gets one with `--store-read`, and without
 one the task is an error that says so. Each runner reports a fail only for the tree's fault and an error for the
 machine's: a toolchain that didn't set up, a pin that didn't fetch, check.py's `cannot run here`, a command a signal killed,
-and for `check_build.sh` any failing exit whose log shows no refused patch and no crate that didn't compile. Drive counts no
-lean-agreement task's result: it takes lean-agreement, and ratchet-gate, which no family lists, from a train.sh run beside
-the executor's check (`research.drive.SLIM_STEPS`).
+and for `check_build.sh` any failing exit whose log shows no refused patch and no crate that didn't compile. The verified
+queue's loop counts no lean-agreement task's result: it takes lean-agreement, and ratchet-gate, which no family lists, from a
+train.sh run beside the executor's check (`research.landing.SLIM_STEPS`, `research.vqueue_slim`).
 
 ## Writing a family
 

@@ -161,7 +161,7 @@ those roots to the vllm-v1 roots is the committer's opening, not proof. Rows the
   `Harm`), the compiled layer (`Extraction`) and composition (`Circuit`); `Audit/Flock*.lean` instantiate them for Flock.
   The two-stage design's certificate is `Claims.SamplingGeneric.compilerKSTwo` (`Claims.SamplingTwo`). The challenger's
   coins are the named assumption `Assumptions.UniformRandomBytes`.
-- **The executable sample** is the Lean verifier's `verity/protocols/flock/verifier/Flock/Draw.lean` (`flock-verify draw`): the
+- **The executable sample** is the Lean verifier's `verity/commitments/lean/Commitments/Draw.lean` (`flock-verify draw`): the
   samplers, the strata and sizes, the sample object and its checks U1 to U3. Soundness's `ExecDraw.lean`,
   `ExecStratified.lean` and `ExecDrawOS.lean` prove that its samples accept incorrect proof blocks no more often than the
   modelled sampling designs do, and `Audit/FlockWork.lean` that its sizes are the model's.
