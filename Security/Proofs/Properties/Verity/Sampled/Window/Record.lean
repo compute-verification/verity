@@ -263,9 +263,8 @@ theorem opened_at_or_new {Lg L₁ L₂ : List Release} {x : Release} {i s n u : 
       rw [hE, List.getElem?_append_right (Nat.le_refl _), Nat.sub_self, List.getElem?_cons_zero]
     exact Or.inl ⟨hmem, nodup_getElem?_inj (openedTrees_nodup Lg) h hτ⟩
 
-/-- **What the verifier's read of a session holds the device's log to**, at the `u`-th tree the log `Lg` opens, the
-session's record `text`, parsed as `J` and decoded as `sess`, the session's tables and its evidence `w`, the bytes
-its proof files are read from:
+/-- **What the verifier's read of a session holds the device's log to, less the closing round**, at the `u`-th tree
+the log `Lg` opens, the session's record `text`, parsed as `J` and decoded as `sess`, and the session's tables:
 
 * `coins`: each round the record gives a stream gives coins;
 * `link`: the tree's first opening is of its stream named the session's, answers the SHA-512 of the record's link
@@ -277,12 +276,12 @@ its proof files are read from:
 * `tree`: the tree is sampled with the session's coin tree;
 * `linkCount`: the tree's first opening asks for a coin a 16 bytes of the record's link coins;
 * `roundCount`: each later opening of the tree, of a stream other than the session's, asks for the `n` of the round
-  the record gives there;
-* `close`: the session's closing round: the tree has an opening of its stream named the session's after one opening
-  of that stream, the link's; it answers the SHA-512 of the session's evidence; and no opening of the tree follows
-  it. -/
-structure SessionRead (Lg : List Release) (tables : Array String) (u : ℕ) (text : String) (J : Json)
-    (sess : Flock.RunRecord) (w : Claims.Msg) : Prop where
+  the record gives there.
+
+No field reads an opening of the tree's stream named the session's after its first, so none changes where the log
+drops one (`SessionOpens.drop_iff`, `Window/Closing.lean`). -/
+structure SessionOpens (Lg : List Release) (tables : Array String) (u : ℕ) (text : String) (J : Json)
+    (sess : Flock.RunRecord) : Prop where
   parse : Flock.JsonParse.parse text = .ok J
   coins : ∀ name, ∀ k < recordRounds J name, (recordRound J name k).isSome
   link : ∀ L₁ x L₂ i s n, Lg = L₁ ++ x :: L₂ → x.frame = .opening i s n → i ∉ openedTrees L₁ →
@@ -310,6 +309,13 @@ structure SessionRead (Lg : List Release) (tables : Array String) (u : ℕ) (tex
     (openedTrees L₁)[u]? = some i → ((helloSpecs L₁)[i]?.bind fun sp => sp.streams[s]?) = some name →
     (name == TREE_SESSION) = false → ∀ st, sess.streams.find? (·.name == name) = some st →
       openedOf L₁ i s < st.rounds.size → n = st.rounds[openedOf L₁ i s]!.n
+
+/-- **What the verifier's read of a session holds the device's log to**: `SessionOpens`, and the session's closing
+round at its evidence `w`, the bytes its proof files are read from (`close`): the tree has an opening of its stream
+named the session's after one opening of that stream, the link's; it answers the SHA-512 of the session's evidence;
+and no opening of the tree follows it. -/
+structure SessionRead (Lg : List Release) (tables : Array String) (u : ℕ) (text : String) (J : Json)
+    (sess : Flock.RunRecord) (w : Claims.Msg) : Prop extends SessionOpens Lg tables u text J sess where
   close : ∀ i, (openedTrees Lg)[u]? = some i → ∃ Lc x L₂ s n, Lg = Lc ++ x :: L₂ ∧ x.frame = .opening i s n ∧
     (openedTrees Lc)[u]? = some i ∧
     ((helloSpecs Lc)[i]?.bind fun sp => sp.streams[s]?) = some TREE_SESSION ∧ openedOf Lc i s = 1 ∧
