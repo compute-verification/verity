@@ -7,10 +7,9 @@ over 2^256. Two forms of that term, at e_s = 1 + 210·k:
     by position:   4·T·(1 + n·e_s + (1 + e_s)·K̄)/2^256
     by gate:       2·K·(T·(1 + d·e_s) + d·openCalls)/2^256 + p_ref·|opensSet| + |opensSet|/(M + 1)
 
-By position is the form the finder's Lean statement takes at the code (`Claims.Flock.Numbers.firstHitBound`): the
-first run with every session extracted, and for each gate the sample needs a run with the sessions holding it
-extracted. It reads the sample's mean and no d. By gate is the union over the gates of a sample of one finder a
-gate, with a cap on each finder's further runs.
+By position is the form the finder's Lean statement takes at the code: the first run with every session extracted,
+and for each gate the sample needs a run with the sessions holding it extracted. It reads the sample's mean and no
+d. By gate is the union over the gates of a sample of one finder a gate, with a cap on each finder's further runs.
 
 * T: the SHA-512 compressions of one run, the prover's and the verifier's (`compressions` converts calls on rows).
 * k: a session's accepted reruns a wait, ⌈4·N₀/e⌉ at a session whose level-0 codewords have N₀ symbols in all

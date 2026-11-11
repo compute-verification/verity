@@ -203,10 +203,10 @@ research data put --kind spot-figure/v1 --tree DIR --preserve                # f
   arithmetic at a design given as parameters: the gates one audit's sample needs (`--K`, or `--card`: one proof block
   a stratum of the model's `workload` card), k, a session's accepted reruns a wait (`--symbols`, `--tables`), and T,
   the prover's SHA-512 compressions (`--row-bytes`: calls on rows). With `--sessions`, a run's most sessions, it is
-  the by-position form, which reads the sample's mean gates and is the expression
-  `Claims.Flock.Numbers.firstHitBound` in Lean; without, the by-gate form, which reads the most gates and d, the
-  sessions holding one gate. It prints the bound at one audit and over each monitoring period, whether each is at
-  most 2^-100 (`--target`), and the most gates that keep it there.
+  the by-position form, which reads the sample's mean gates and is the form the finder's Lean statement takes at
+  the code; without, the by-gate form, which reads the most gates and d, the sessions holding one gate. It prints
+  the bound at one audit and over each monitoring period, whether each is at most 2^-100 (`--target`), and the most
+  gates that keep it there.
 - The headline scope (`figure1.PRIMARY`, a world year) gets the bare file names. Its exfiltration panel also plots
   (A) over the secondary scope (`figure1.SECONDARY`, a datacenter year).
 - A model's `workload` card comes from the block census of its served circuit, every Program row of its Commit's Build

@@ -207,7 +207,8 @@ def test_by_position_the_other_designs_cells():
 
 
 def test_by_position_the_most_mean_gates_32_tables_leave():
-    """The numerals of `Claims.Flock.Numbers.firstHitBound_tables32`."""
+    """A session of 32 tables has k = 395007543, and the sample may then need 227711235758 gates in the mean and
+    no more."""
     k = b.queries(32 * 2 ** 23)
     most = b.most_gates(b.Design(K=1, k=k, sessions=RUN), 100)
     goal = Fraction(1, 2 ** 100)
