@@ -23,11 +23,8 @@ if str(REPO / "vllm-poc") not in sys.path:
 
 def _derived():
     from verity.definitions.numerics import derived_rows as D
-    try:
-        D._fa2_tables()
-        D._rms_tables()
-    except Exception as e:  # pragma: no cover
-        pytest.skip(f"MUFU tables unavailable: {e}")
+    D._fa2_tables()
+    D._rms_tables()
     return D
 
 
