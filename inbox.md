@@ -86,3 +86,69 @@ From CROSS (NET-311 job 3), Tue 10 Nov 7:13 PM PST. **`0d44` now shows what the 
 - **Heads for you to push**: #8459 `cursor/net-cross-8459-a9af` `4e90d97b67d6e7a628db414a5cd8a22fd1439ba5`; #8690 `cursor/net-cross-8690-a9af` `6cd3c7527f948d8bda510479e4d4c64215ae76ef`; #8702 `cursor/net-cross-8702b-a9af` `f113af6d595ff06027ce5fa8e5a247dfa21e4ef3`. Not `cursor/net-cross-8702-a9af`.
 - The note `lanes/network-accounting/20261111T0300Z-report-net311-cross-job3.md` has the new head's section and finding 3.
 
+[2026-11-11T03:15Z] 8b8c89511415
+LEANMERGE to coordinator, NET-325, Tue 10 Nov 7:15 PM PST. **The third refusal, the lemma and your `eps` sentence are in and pushed; the one suites run is `r20261111-031051-b488` at `750292d4cfe3`, and I end my turn on it. One thing is not done: the proofs file has no try at this head (my 7:10 PM message).**
+
+**Branch and head.** `cursor/net325-drawn-le-units-22f3` at `750292d4cfe3d575cac8da36ce339de2f72c5696`, six commits over `2f30e1709f1e`. This turn's four: `d3a14996dc` (the stratum's refusal), `146e840b2a` (docstrings), `8d5b3bbdca` (the strata's sizes' refusal, the mirror, the change kind, the test, the `eps` sentence), `750292d4cf` (the lemma and the statement's docstring). No lock, no `--update`. Five files, the same five as before.
+
+**What `factsOf` refuses, in this order, each before the bound is read** [read: `verity/core/protocols/network/lean/NetworkCheck/Period.lean:1130-1145` at `750292d4cfe3`].
+1. The level: `unless drawn ≤ l.size` (1136), as it was, so `subset` is held and the four first kinds keep their reason.
+2. A stratum: the first with `size < k` (1138), "…: profile: stratum '{name}': {k} sampled of {size} units: more than the stratum holds".
+3. The strata's sizes: `unless held = l.size`, `held` their sum (1140-1142), "…: profile: strata of {held} units in a level of {l.size}: their sizes do not sum to the level's".
+- The mirror's `_facts` refuses the same three in the same order [read: `verity/core/protocols/network/tests/period_case.py:943-967`].
+- Guards: 2 of 1 and 0 of 1 in a level of 2 is refused at the stratum; 1 of 2 and 1 of 2, and 1 of 1 alone, in a level of 2 are refused at the sizes; each reason as a string [read: `Period.lean:1579-1605`].
+- `auditCheck`, `auditChecks`, `chargedOf`, `rowsWindowCheck`, `Facts` and `RowsTiedChargedAt` are as they were [read: `git diff 146e840b2aed 750292d4cfe3`].
+
+**The lemma is in: it is a short induction** [read: `Security/Proofs/Properties/NetworkPeriod.lean:403-442`].
+- `strata_whole` (404): strata with `k ≤ size` each and the same sums have `k = size` each; 9 lines, one induction over the list.
+- `factsOf_stratified_whole` (420): `factsOf what prof pub = .ok f`, `prof.levels = #[l]`, `l.draw = some (.stratified ss)` and `f.drawn = f.units` give `∀ st ∈ ss, st.k = st.size`.
+- It is not a guarantee and no lock names it. Its evidence is the model only, see the block below.
+
+**The docstring's sentences** [read: `Security/Properties/NetworkPeriod.lean:172-178`]: "Every tied audit of an accepted period names no more sampled than its level holds: the check reads both counts off the answer's profile, the level's size and its `subset`'s `k` or its strata's `k` summed, and refuses a profile that names more sampled than the level has (`factsOf`). So a tied audit that is not among `charged` has `drawn = units`: its profile names as many sampled as its level holds. Of a `subset` sample that is the level sampled whole. Of a stratified one it is each stratum sampled whole, because the check also refuses a profile with a stratum that samples more than it holds, and one whose strata's sizes do not sum to the level's. That the strata are the level's units is the audit's own verifier's, which the period check does not read."
+
+**Your `eps` sentence is in**, in `8d5b3bbdca`, word for word, and nothing else of that docstring changed [read: `Period.lean:184-187`].
+
+**The two new change kinds** [read: `period_case.py:1553-1581`, `test_network_period_protocol.py:504-577`].
+- `rows-tied-stratum-oversampled`: the aimed scan's tied audit, whole in two strata, with one to three of one stratum's sample moved to the other. The level's total holds.
+- `rows-tied-strata-sizes`: the same audit with one stratum holding one to three more than it samples, each holding twice as many, or one holding and sampling one fewer. No stratum samples more than it holds.
+- The test (renamed `test_a_profile_that_is_no_sample_of_its_level_is_refused`) runs all six kinds at the same four seeds: Lean and the mirror refuse with the refusal's own reason, with the bound gone too, and both accept the twin. It asserts it met each of the three refusals and strata both above and below the level.
+- The twin of the sizes kind is the level whole in one stratum, since making each stratum whole does not mend the sizes.
+
+**Old cases are byte for byte what they were** [run: on the VM, pure Python, `tools/net325-leanmerge/sizes/pycompare2.py`].
+- How: the generator at each earlier commit loaded beside the new one; every earlier change built at seeds 0 to 3 in both sizes; the two cases compared as JSON and as objects; then the two mirrors' answers compared (verdict, reason, public).
+- Against the base: 720 cases, 0 different. Against the first commit: 752, 0 different. Against the stratum's commit: 760, 0 different. Every answer equal, so no earlier case changed its reason and none accepted is now refused.
+- The new kinds at 304 seeds and both sizes [run: on the VM, `stratum/fuzz.py`, `sizes/fuzz3.py`]: the mirror refuses each at its own refusal. The mirror before the third refusal accepts every sizes case: 405 with strata above the level and not charged, 203 below and charged.
+
+**Runs at `750292d4cfe3`, each `--on auto`, each on vy-nebius-cpu-3.**
+
+| Run | What | Verdict line as printed |
+|---|---|---|
+| `r20261111-030433-eb80` | try `NetworkCheck/Period.lean` | "lean exit 0 in 3 s"; "axiom probe: no theorems in it"; "exit 0 in 336 s wall" |
+| `r20261111-030433-fbcb` | try `Security/Properties/NetworkPeriod.lean` | "lean exit 0 in 10 s"; "axiom probe: no theorems in it"; "exit 0 in 258 s wall" |
+| `r20261111-030433-beaf` | try the proofs file | "error: read-only file system (error code: 30)"; "lake build +Proofs.Properties.NetworkPeriod:deps exit 1 in 10 s"; "exit 1 in 307 s wall" |
+| `r20261111-030432-7756` | `lean_changed.py --build`, the 13 files | "✔ [67/70] Built NetworkCheck.Period (2.3s)"; "Build completed successfully (70 jobs)."; `{"built": {"verity/core/protocols/network/lean": 0}, "failed": {}, "skipped": {}}` |
+| `r20261111-031051-b488` | the three suites | launched 7:10 PM PST; running |
+
+- At `146e840b2aed`, before your 6:47 PM ruling: `r20261111-024031-3d22` and `r20261111-024031-751d` (the two tries, exit 0), `r20261111-024031-f3e5` (the build, rc 0), `r20261111-024031-9bfd` and `r20261111-024428-7e01` (the proofs try, exit 1 on the same path).
+- **One suites run I cancelled:** `r20261111-024753-c794` at `146e840b2aed`. I launched it at 6:47 PM as ordered; your ruling was delivered seconds later; I cancelled it after 0 min (rc 130, CANCELLED_MANUAL). So the suites ran once more only.
+- `r20261111-020707-bbfd` (the first two commits) is still running at 7:14 PM PST, 67 min in, its output still at flock's `lake build`. Not read further.
+
+**For `Core`'s owner, to pass on unchanged.** `Core`'s profile parser reads a stratified sampling design's strata with no relation among their fields or to the level [read: `verity/core/protocols/interface/CoreProtocol/Profile.lean` at `750292d4cfe3`]. `SamplingDesign.ofJson` (143-160) takes an object with `strata` and no `law: "work"` as stratified (154-158): each stratum's `name` is a string, its `size` and `k` are naturals, and the JSON must be the one spelling `toJson` writes (`exactly`, 160). It does not hold `k ≤ size` in a stratum, distinct names, or at least one stratum. A work design is held to more by `WorkStratum.problem` (60-74, called at 152): at least one stratum, `1 ≤ k ≤` the strata's sizes summed, distinct names, a floor of at least one, each `k_s` the work rule's. `Level.ofJson` (162-166) reads `name`, `query`, `size` and `draw` and relates `size` to the design in no way: not a `subset`'s `k ≤ size`, not the strata's `k` summed `≤ size`, not the strata's sizes summed `= size`, for a work design neither. `Integrity.ofJson` (169-181) reads `drawn` per level name and does not compare it with the design's sample. So a profile that reads back through the parser can name a level of 24 units in strata of 7 of 14 and 17 of 34, or a stratum of 2 sampled of 1. One-stage's Python writer refuses both when it builds a profile (`verity/core/protocols/profile.py:161-168` and `:338-340`); the Python reader `verity/core/protocols/pouw/core_check.py:401-422` holds as little as the Lean parser. The readers of a profile through `Core.Integrity.ofJson` that I found by searching `*.lean` for the three parsers' names: the network period check (`verity/core/protocols/network/lean/NetworkCheck/Period.lean:928`, which now holds the three relations itself in `factsOf`, 1130-1145), PoUW's check (`verity/core/protocols/pouw/lean/check/PouwCheck/Inputs.lean:307-315`, `evidenceOf`; what it then holds the profile to I did not read), and the interface's example (`verity/core/protocols/interface/CoreProtocol/Example.lean:114-135`, a read-back). Nothing there was changed.
+
+**What I did not check.**
+- The proofs file at this head on a node. [run: on the VM, bare `lean` on a core-only model with the real `factsOf`, guards and the three lemmas' real text, `sizes/Guard7.lean`]: it elaborates, standard axioms only. The model has no Mathlib.
+- The suites at this head, and the Lean half of the test at any head: `b488` is the first run that can reach it.
+- A scan's or an untied audit's profile at the second and third refusals: the two new kinds aim at the tied audit only. `factsOf` is the one reader for all three [read: `Period.lean:1166`, `1177`], so they are held, but no case shows it.
+- No kernel replay, no `check.py`, no lock. The lock's record of `RowsTiedCharged` is stale by the statement's change in `28528994d9`.
+
+**Least sure of.**
+1. The two new lemmas with Mathlib in scope: `simpa using this` and the `split` hypotheses found by `assumption` are where a real elaboration could differ from the model.
+2. The "fewer" form of the sizes kind lowers the answer's sample by one as well as a stratum's size, so that case differs from the honest one in more than the strata's sizes. It is still one answer, and the mirror's reason is the sizes'.
+3. The suites' cost on cpu-3 tonight: its research slots are full, each of my tries waited about four minutes for one, and `bbfd` is past an hour.
+
+**One slip, mended.** Reading a run's status JSON at 7:07 PM I dropped the four fields at the top level only, and a nested copy of my own build's command and the node's address printed to my terminal. Nothing went to a note or a message. A helper now drops them at every depth (`sizes/rstat.py`).
+
+**Standing.** Nothing on LEAN-249, no comment on NET-325 yet (it waits for the end), no base merged. Note updated and synced: `lanes/network-accounting/20261111T0217Z-state-net325-leanmerge.md`.
+
+TIMER: none
+
