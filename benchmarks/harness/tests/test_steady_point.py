@@ -676,7 +676,8 @@ NOT_ROW_FOR_ROW = [
      "holds 1 rows that aren't the run's 1, one for one by `type` and `provers`"),
     ({"derivation": json.dumps({"rows": [{"fields": ["flat"]}]})},
      "isn't a record of the fields it derived for each row"),
-    ({"derivation": "{"}, "isn't a record of the fields it derived for each row"),
+    ({"derivation": "{"}, "`derivation.json` of art:"),
+    ({"derivation": "{"}, "isn't JSON (Expecting property name enclosed in double quotes)"),
     ({"derivation": json.dumps(["flat"])}, "isn't a record of the fields it derived for each row"),
 ]
 
@@ -1303,8 +1304,9 @@ def test_the_readme_states_a_steady_state_spec_as_the_code_keeps_it():
                  *SP.CLOSURE[:2], "out/verdict.json", "out/point.json"):
         assert f"`{name}`" in section, name
     assert (N.VERDICT_FILE, N.POINT_FILE) == ("out/verdict.json", "out/point.json")
-    assert (f"exits 0 for a passed point, {SP.NOT_PASSED} for a point that was timed and didn't pass, and {N.REFUSED} where "
-            "nothing was timed") in section
+    assert (f"exits 0 for a passed point, {SP.NOT_PASSED} for a point that was timed and didn't pass, {N.REFUSED} where "
+            f"nothing was timed, and {N.STOPPED} where\nTERM or INT ended it") in section
+    assert "`steady_plan.completed_rows`, `completed`" in section and "runs and arts" in section
     spec_keys = {"workload", "card", "cores", "sessions", "ahead", "driver", "cuda", "setup", "[env]", "[admission]",
                  "max_minutes", "mem_gb", "[[row]]", "type", "n", "pin", "provers", "warm", "period", "staged"}
     assert all(f"`{key}`" in section for key in spec_keys), [key for key in spec_keys if f"`{key}`" not in section]

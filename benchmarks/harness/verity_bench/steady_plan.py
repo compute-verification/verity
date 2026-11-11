@@ -113,17 +113,17 @@ def _text(store: Any, art: str, path: str) -> str:
     return (Path(store.fetch(art, paths=[path])) / path).read_text(errors="replace")
 
 
-def _derived(text: str) -> dict[str, frozenset[str]] | None:
-    """The fields a `DERIVATION` names for each row, or None for a file that isn't one."""
+def _derived(text: str) -> dict[str, frozenset[str]] | str:
+    """The fields a `DERIVATION` names for each row, or what a file that isn't one is instead."""
 
     try:
         doc = json.loads(text)
-    except json.JSONDecodeError:
-        return None
+    except json.JSONDecodeError as e:
+        return f"isn't JSON ({e.msg})"
     rows = doc.get("rows") if isinstance(doc, Mapping) else None
     if not isinstance(rows, list) or not all(isinstance(row, Mapping) and isinstance(row.get("fields"), Mapping)
                                              for row in rows):
-        return None
+        return "isn't a record of the fields it derived for each row"
     return {_row_key(row): frozenset(name.strip() for key in row["fields"] for name in str(key).split(",") if name.strip())
             for row in rows}
 
@@ -146,8 +146,8 @@ def completed_rows(store: Any, art: str) -> tuple[list[str], Completed | str | N
     if not store.listing(art, [DERIVATION]):
         return named, f"{_named(art)} holds its rows without their derivation from the run's records (`{DERIVATION}`)"
     derived = _derived(_text(store, art, DERIVATION))
-    if derived is None:
-        return named, f"`{DERIVATION}` of {_named(art)} isn't a record of the fields it derived for each row"
+    if isinstance(derived, str):
+        return named, f"`{DERIVATION}` of {_named(art)} {derived}"
     try:
         rows = json.loads(_text(store, art, path))
     except json.JSONDecodeError as e:
