@@ -11,6 +11,10 @@
   "SparseMlaHeadEnd_v2{DV=16,INV=Fa3InvSum_v2}": {
    "and": 43823,
    "type": "248c4cb736dbe4644b5ff5e11539943152d56ddf878db25569c35bebc2e04004ee7b6ef45c81707177e68e89d0021c78dc62154b397b1ca84ce5c6cc41c42e32"
+  },
+  "SparseMlaHeadValues_v2{NVIS=5,FIRST=True,BN=16,DOT=HopperBF16WgmmaDot16_v2,G=4}": {
+   "and": 10317,
+   "type": "27fb3244cb3c631e2948b4fe07668da04070c95f50fd0911dcc04332187807397cb2dea2f3e4ec3a39babc5a25f40dfc9130d3171f4e3f390ed28101458043eb"
   }
  },
  "digests": {
