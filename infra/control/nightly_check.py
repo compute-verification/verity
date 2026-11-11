@@ -53,9 +53,9 @@ for the steps check caches whole, which `--no-cache` never computes, so such a s
 is the recorded side's alone; the key of a suite a recorded check ran in parts or passed by a traced pass, whose row holds
 the part's key or the suite's traced key and not the key of its inputs, so only its verdict is compared; circuit-check's
 targets, which are one part together; an earlier recorded check's key and Lean report, where a later one holds the part;
-a step every shard of a check runs (the preflight's), on which the shard launched last holds the recorded verdict and
-another shard's failure reads as an earlier check's; and a part the uncached run skipped, which is listed when a
-recorded check has it.
+a step several shards of one check each run, as each runs the preflight, on which the shard launched last holds the
+recorded verdict and another shard's failure reads as an earlier check's; and a part the uncached run skipped, which is
+listed when a recorded check has it.
 
 The rings, each an inbox thread: nobody's for a pass with no part that disagrees (one post, naming nobody); infra's for any
 other outcome and for a comparison that could not be read; infra's and ci's when a part disagrees, whatever the outcome.
