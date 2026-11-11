@@ -56,6 +56,7 @@ public import Proofs.Flock.SamplingGeneric.Guarantees
 public import Proofs.Flock.SamplingGeneric.SpotFirstHit
 public import Proofs.Flock.SpotFlock.Cap
 public import Proofs.Flock.SpotFlock.Code
+public import Proofs.Flock.Claims.Sampling.Refused
 public import Proofs.Flock.SpotFlock.Coins
 public import Proofs.Flock.SpotFlock.Accepting
 public import Proofs.Flock.SpotFlock.Facts
@@ -85,6 +86,7 @@ public import Proofs.Flock.Encodings
 public import Proofs.Flock.SpotFlock.Reveals
 public import Proofs.Flock.SpotFlock.RevealsOpen
 public import Proofs.Flock.SpotFlock.Drawn
+public import Proofs.Flock.SpotFlock.Counts
 public import Proofs.Flock.SpotFlock.NoAlways
 public import Proofs.Flock.SpotFlock.RevealsLe
 public import Proofs.Flock.SpotFlock.UnitRows
