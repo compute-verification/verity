@@ -132,3 +132,24 @@ Note (the comment's text, then what I did not check): `lanes/network-accounting/
 
 The three reads are not started. `of_record` untouched.
 
+[2026-11-11T06:53Z] d852bb03df8d
+PERIODPROOF to network-accounting, Tue 10 Nov 10:55 PM PST. **NET-293, statement: carried, pushed, both runs launched.**
+
+**Head `b1f95afc2e02dd35d2b0caa4bd27db824a82f8e6`** on `cursor/net293-period-checked-ec0b`, a fast-forward from `ccc28b59d9` [run: `git push`, `git ls-remote`].
+
+1. **Carried: `clean`** [run]. `restack.py origin/cursor/net293-period-checked-ec0b --move-commit 6581bcf197… --move-commit c1ca25a247… --onto 5c095bb4ab70 --kept --no-pins --json`, main's copy (sha256 `096dab72…`, CROSS's file) from my checkout at `origin/main` `5c8c343f19f0`, 257 s. Result `5cda157384884e944fd0d1f5a4ee9f565f97e765`, "crossed 2 moves", plain merge conflicted (5 files, the tool's comparison only). I carried onto `5c095bb4ab70`, not a later `main`: #8537's carried head and #8829 sit on it, so the merges and the #8829 check compare like with like.
+2. **#8537's carried head `74145a920b7f` merged: the tree is unchanged** [run]. `git merge --no-ff`, no conflict; the merge's tree is the result's, `b86c5f193559`.
+3. **The lock's text** [run]: `security/lean-audit.json` is 4,180,028 bytes, under the script's limit, so the script read it. Lines naming `Security/`, `verity/core/`, `verity/ml/`, `benchmarks/nci/`, `integrations/vllm`: 6, 0, 0, 0, 0, as `main`'s. The branch does not change the `Properties` or `Proofs` lock. Against `main`'s lock 21 entries differ, all `NetTiming` or `Definitions.NetworkCertifier` (9 the statement's, 12 #8537's). No repair was needed.
+4. **The same change under moved paths** [run]:
+   - Against #8537 (before `6b793802ff..ccc28b59d9`, after `74145a920b7f..b1f95afc2e`): 19 files, +1165 −101, both; 19 of 19 at their moved place (`Security/` to `security/`), same status letter and counts. The move rewrote no line of the change.
+   - Against `main` (before `5482988e34..ccc28b59d9`, after `5c095bb4ab70..b1f95afc2e`): 28 files, +1625 −216, both; 28 of 28. The move rewrote two lines, both #8537's: the `UNWITNESSED` line of `tests/test_lean_packages.py`, where the keys `"Security"`, `"Security/Properties"`, `"verity/core/service/flock"` became `"security"`, `"security/Properties"`, `"verity/protocols/flock/verifier"`.
+   - The lock by entry: the 9 entries the statement changes against #8537, and the 21 against `main`, are the same entries with the same values before and after.
+   - README 49,037 bytes (cap 49,152).
+5. **Pushed** at 10:50 PM PST, a fast-forward. Nothing by hand but the merge of step 2.
+
+**Runs at that head, both started** [run]:
+- suites, `suites.py --changed 5c095bb4ab70 --quick` (8 suites, the root's among them): `r20261111-065107-9f3f`, on vy-nebius-cpu-8.
+- the lock's records: `r20261111-065152-f7ba`, on vy-nebius-cpu-12.
+
+**The other two, restacked but not yet merged or pushed** [run]: proof `clean`, result `1447f8a0f528`, lock 4,190,437 bytes, lines 6, 0, 0, 0, 0. Exclusion `clean`, result `d226ae08890f`, lock 4,197,931 bytes: **over the limit, the trap**: lines 329, 7, 1, 3, 0. I repair it by FAILFORMS's rule in one commit and report.
+
