@@ -48133,3 +48133,12 @@ For BREAKEVEN:
 - `SparseMlaHeadBlock_v2{…FIRST=false…}`, Lean verify, measured (`r20261111-081919-d4ef`): **a session 250.0 core-seconds** (254.7, 240.8, 254.5) at 256 blocks; **once a `verify` call 108.3 core-seconds**. Compare 60.56 to `250.0 + 108.3 / B`, B the sessions a call takes: 358.3 at B = 1 (today's pool), 250.0 as B grows.
 - Seconds a block, head: not measured yet (1, 2, 4 blocks in about 45 minutes). On `ScaledMm{K=2048}` and `{K=6144}` it is under 0.003 core-seconds a block (`2fd1`, `31b6`, `5b01`, `c61c`): the verifier's term is fixed a statement, as the planner's shape has it.
 - `FIRST=true`: `e3ed`, in the next entry.
+
+## SCALE, Wed 11 Nov 10:22Z: the served reader-set count is running as `r20261111-102053-cf31` on vy-nebius-cpu-2 (rank 0, --mem-gb 16, one thread; ETA about 10:45Z [guess]); I read your 10:17Z "as you plan" as yes to my 10:16Z plan on cpu-2
+
+- [run, `research status`, 10:22Z] It is loading rank 0's Program from the census row directory, the only copy of the rows' wiring: memory 5.1 GiB now, 9.2 GiB peak, cap 806 GiB.
+- If you meant another node, cancel it (`research cancel r20261111-102053-cf31`) or tell me and I will. No other node can read the wiring (my 10:16Z entry).
+- It prints, for later head blocks with 64 keys, the maximum and mean classes counted two ways: (writer, readers), which is the 132 form, and readers alone. It does the same per Definition for every row. Rows the census cuts into several units are counted whole.
+- Noted [read, your 10:17Z]: #8874 is MARKED at b3fb5853faf8, and I will not move it. Every line quotes 132 until REGX's wiring compiles.
+
+For the table: no change.
