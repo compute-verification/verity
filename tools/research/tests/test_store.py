@@ -1166,6 +1166,34 @@ def test_throttled_put_is_retried_not_failed(fake_s3, tmp_path, monkeypatch):
     assert remote_s3.retry_delay("Wed, 21 Oct 2026 07:28:00 GMT", 2) == 0.0 and remote_s3.retry_delay(None, 1) == 0.0
 
 
+def test_the_labels_pack_is_replaced_in_place_and_taken_over_s3(fake_s3, tmp_path, monkeypatch):
+    from research.store import labels_sync as LS
+
+    monkeypatch.setattr(LS, "PACK_MIN_MISSING", 2)
+    s = fake_s3()
+    a = LocalStore(tmp_path / "A")
+    for i in range(4):
+        a.add_label("art:" + "4" * 64, "note", f"n{i}", "alice", ts="2026-09-23T01:00:00Z")
+    LS.sync(a)
+    p = LocalStore(tmp_path / "P")
+    first = LS.publish_pack(p)
+    a.add_label("art:" + "4" * 64, "note", "n4", "alice", ts="2026-09-23T01:00:00Z")
+    LS.sync(a)
+    second = LS.publish_pack(p)
+    assert (first["labels"], second["labels"]) == (4, 5) and first["sha256"] != second["sha256"]
+    assert s.puts("packs/") == [(LS.PACK_KEY, False), (LS.PACK_INFO_KEY, False)] * 2, "each a plain PUT over what the key held"
+    assert hashlib.sha256(s.objects[LS.PACK_KEY]).hexdigest() == second["sha256"] == json.loads(s.objects[LS.PACK_INFO_KEY])["sha256"]
+    (tmp_path / "other").write_bytes(b"other")
+    with pytest.raises(RemoteConflict):
+        s.remote().put(LS.PACK_INFO_KEY, tmp_path / "other")                          # `put` still never overwrites
+
+    b = LocalStore(tmp_path / "B")
+    del s.log[:]
+    rep = LS.sync(b, push=False)
+    assert len(rep["pulled"]) == 5 and rep["pack"] == 5 and set(LS.local_labels(b)) == set(LS.local_labels(a))
+    assert [k for m, k, _ in s.log if m == "GET" and k] == [LS.PACK_INFO_KEY, LS.PACK_KEY], "after the listing, the pack alone"
+
+
 @pytest.mark.slow
 def test_cli_push_reports_rate_and_takes_jobs_and_verify(fake_s3, tmp_path, capsys):
     s = fake_s3()

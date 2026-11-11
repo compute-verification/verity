@@ -13,6 +13,14 @@ one way and pulls it the other; it is idempotent and needs no state in the dispo
 directory of assertion files (e.g. an unpacked `labels-backup/v1` tarball, or another store's `labels/`); `import_backup()` does
 that straight from a `labels-backup/v1` artifact, so the interim backups stay readable.
 
+The pack is every assertion of `labels/` as one object at a fixed key, so a machine that lacks most of them needs no request per
+assertion: `PACK_KEY`, a tarball of `labels/` as the remote lays it out (one member per assertion, named by its key), beside
+`PACK_INFO_KEY`, its sha256, size, count and build time.  `publish_pack()` rebuilds and replaces both, the only keys here a writer
+overwrites, and a `sync()` that would pull more than `PACK_MIN_MISSING` assertions takes the pack first (`pull_pack()`) and pulls
+only what it still lacks.  The pack is a cache of `labels/`, never its source: a member lands only when the remote lists its
+name and its content hashes to it, the check a pulled assertion passes, and a pack that is absent, fails its sha256 or cannot be
+read costs only the time it would have saved.
+
 Per target (the r20 lesson: labels asserted on pods lived only in the pod's store; `push` / `publish` moved manifests and blobs and
 nothing under `labels/`, and teardown had to tar `labels/` by hand): a preserved Attempt is not preserved until its assertions are
 durable too.  `attempt_targets(doc)` is the closure an attempt's durability covers -- the attempt itself, its Derivation and every
@@ -24,6 +32,9 @@ assertions, not fields); the catalog shows the latest per (key, by) and `--histo
 """
 from __future__ import annotations
 
+import gzip
+import hashlib
+import io
 import json
 import os
 import re
@@ -31,10 +42,10 @@ import tarfile
 import threading
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
-from typing import Callable, Iterable, TYPE_CHECKING
+from typing import Callable, Iterable, Iterator, TYPE_CHECKING
 
 from . import canon, ids
-from .model import Label
+from .model import Label, utc_now
 
 if TYPE_CHECKING:
     from .local import LocalStore
@@ -44,6 +55,10 @@ PREFIX = "labels/"
 KEY_RE = re.compile(r"^labels/([^/]+)/([0-9a-f]{64})\.json$")
 SYNC_JOBS = 16
 LABELS_BACKUP_KIND = "labels-backup/v1"
+PACK_KEY = "packs/labels/latest.tar.gz"
+PACK_INFO_KEY = "packs/labels/latest.json"
+PACK_SCHEMA = "research/labels-pack/v1"
+PACK_MIN_MISSING = 5000         # a sync that lacks more of the remote's assertions than this takes the pack before it pulls
 
 
 def label_hash(label: Label) -> str:
@@ -58,6 +73,14 @@ def label_key(label: Label, hex_: str | None = None) -> str:
 def parse_label_bytes(data: bytes) -> Label:
     """A validated Label from an assertion file's bytes (ValueError / KeyError / JSONDecodeError on a bad file)."""
     return Label.from_doc(json.loads(data)).validate()
+
+
+def named_label(data: bytes, hex_: str) -> Label:
+    """`parse_label_bytes` of what the remote holds under the content name `hex_`: ValueError when it hashes to another."""
+    lab = parse_label_bytes(data)
+    if label_hash(lab) != hex_:
+        raise ValueError(f"content hashes to {label_hash(lab)}, not its name")
+    return lab
 
 
 def _read_label_files(paths: list[Path], warn: Callable[[str], None] | None) -> dict[str, tuple[Path, Label]]:
@@ -360,15 +383,118 @@ def write_label_file(store: LocalStore, label: Label) -> Path:
     raise RuntimeError(f"could not allocate a label file under {d}")
 
 
-def sync(store: LocalStore, *, push: bool = True, pull: bool = True, jobs: int = SYNC_JOBS, log: Callable[[str], None] | None = None) -> dict:
-    """Union the local labels/ and the remote `labels/` prefix.  Returns `{"remote", "local", "remote_before", "pushed", "pulled",
-    "already", "bad": [...]}` where `pushed` / `pulled` list the content hashes moved and `bad` the remote keys whose content did not
-    hash to their name or did not validate (left alone, never written locally)."""
+class PackUnusable(Exception):
+    """The remote's labels pack can't be read, and why.  A sync then pulls each assertion, as it does with no pack."""
+
+
+def write_pack(labels: dict[str, Label], dst: Path) -> dict:
+    """Write the pack of `labels` (`{content hash: assertion}`) at `dst` and return its info document: a gzipped tarball with one
+    member per assertion, named by its remote key and holding its canonical bytes, in key order.  The same assertions give the
+    same bytes."""
+    members = sorted((label_key(lab, h), h) for h, lab in labels.items())
+    with open(dst, "wb") as f, gzip.GzipFile(filename="", mode="wb", fileobj=f, mtime=0) as gz, tarfile.open(fileobj=gz, mode="w") as tf:
+        for key, h in members:
+            data = canon.dumps(labels[h].to_doc())
+            mem = tarfile.TarInfo(key)
+            mem.size = len(data)
+            tf.addfile(mem, io.BytesIO(data))
+    with open(dst, "rb") as f:
+        sha = hashlib.file_digest(f, "sha256").hexdigest()
+    return {"schema": PACK_SCHEMA, "sha256": sha, "bytes": dst.stat().st_size, "labels": len(members), "built_utc": utc_now()}
+
+
+def publish_pack(store: LocalStore, *, jobs: int = SYNC_JOBS, log: Callable[[str], None] | None = None) -> dict:
+    """Rebuild the labels pack and replace the remote's: pull what the remote lists and this store lacks, pack every assertion
+    the remote lists, and upload the tarball and then its info, so the info never names a tarball that isn't there yet.  Nothing
+    under `labels/` is written.  Returns the info document with `pulled` and `bad`, the pull's counts."""
+    r = store._require_remote()
+    replace = getattr(r, "replace", None)
+    if replace is None:
+        raise NotImplementedError(f"{r.describe()} cannot replace a key, which publishing the labels pack needs")
+    theirs = remote_labels(r)
+    rep = sync(store, push=False, jobs=jobs, log=log, theirs=theirs)
+    labels = {h: lab for h, (_, lab) in local_labels(store).items() if h in theirs}
+    scratch = store.root / "scratch"
+    tmp = scratch / f".labels-pack-build-{os.getpid()}"
+    try:
+        info = write_pack(labels, tmp)
+        replace(PACK_KEY, tmp)
+        tmp.write_bytes(canon.dumps(info))
+        replace(PACK_INFO_KEY, tmp)
+    finally:
+        tmp.unlink(missing_ok=True)
+    return info | {"pulled": len(rep["pulled"]), "bad": len(rep["bad"])}
+
+
+def pack_labels(r: Remote, tmp: Path, want: dict[str, str], warn: Callable[[str], None]) -> Iterator[tuple[str, Label]]:
+    """Each (content hash, assertion) of the remote's labels pack that `want` (`{content hash: key}`) names, downloaded to `tmp`.
+    A member counts only under a key `want` holds and with content that hashes to its name, the check a pulled assertion passes
+    (`named_label`); the others are skipped, and those whose content is not their name are counted in one line to `warn`.
+    Nothing with no pack on the remote; `PackUnusable` for one that fails its sha256 or can't be read."""
+    try:
+        if r.head(PACK_INFO_KEY) is None:
+            return
+        r.get(PACK_INFO_KEY, tmp)
+        want_sha = json.loads(tmp.read_bytes())["sha256"]
+        r.get(PACK_KEY, tmp)
+        with open(tmp, "rb") as f:
+            sha = hashlib.file_digest(f, "sha256").hexdigest()
+        if sha != want_sha:
+            raise ValueError(f"its sha256 is {sha}, not the {want_sha} that {PACK_INFO_KEY} names")
+        seen: set[str] = set()
+        bad = 0
+        with tarfile.open(tmp, "r:gz") as tf:
+            for mem in tf:
+                m = KEY_RE.match(mem.name)
+                if not m or not mem.isfile() or want.get(m.group(2)) != mem.name or m.group(2) in seen:
+                    continue
+                f = tf.extractfile(mem)
+                try:
+                    lab = named_label(f.read() if f else b"", m.group(2))
+                except (KeyError, ValueError, json.JSONDecodeError):
+                    bad += 1
+                    continue
+                seen.add(m.group(2))
+                yield m.group(2), lab
+        if bad:
+            warn(f"labels-sync: {bad} member(s) of the labels pack {PACK_KEY} hold content that is not their name: not written")
+    except Exception as e:                                          # the pack is a cache: whatever is wrong with it, the pull still brings every assertion
+        raise PackUnusable(f"{type(e).__name__}: {e}") from e
+
+
+def pull_pack(store: LocalStore, want: dict[str, str], *, log: Callable[[str], None] | None = None) -> list[str]:
+    """Land the assertions of `want` (`{content hash: key}`: what the remote lists and this store lacks) that the remote's labels
+    pack holds (`pack_labels`), and return their content hashes.  A pack that can't be used is ignored with one line to `log`;
+    what it gave before failing stays."""
+    warn = log or (lambda s: None)
+    scratch = store.root / "scratch"
+    scratch.mkdir(parents=True, exist_ok=True)
+    tmp = scratch / f".labels-pack-{os.getpid()}"
+    got: list[str] = []
+    try:
+        for h, lab in pack_labels(store._require_remote(), tmp, want, warn):
+            write_label_file(store, lab)
+            got.append(h)
+    except PackUnusable as e:
+        warn(f"labels-sync: ignoring the labels pack {PACK_KEY} ({e}); pulling each assertion it would have given")
+    finally:
+        tmp.unlink(missing_ok=True)
+    return got
+
+
+def sync(store: LocalStore, *, push: bool = True, pull: bool = True, jobs: int = SYNC_JOBS, log: Callable[[str], None] | None = None,
+         theirs: dict[str, str] | None = None) -> dict:
+    """Union the local labels/ and the remote `labels/` prefix (`theirs`: its listing, `remote_labels`, when the caller has it).
+    Returns `{"remote", "local", "remote_before", "pushed", "pulled", "pack", "already", "bad": [...]}` where `pushed` / `pulled`
+    list the content hashes moved, `pack` counts those of `pulled` that the labels pack gave (a pull of more than
+    `PACK_MIN_MISSING` takes it first, `pull_pack`) and `bad` lists the remote keys whose content did not hash to their name or
+    did not validate (left alone, never written locally)."""
     r = store._require_remote()  # noqa: SLF001
     warn = log or (lambda s: None)
     mine = local_labels(store, warn)
-    theirs = remote_labels(r)
-    rep: dict = {"remote": r.describe(), "local": len(mine), "remote_before": len(theirs), "pushed": [], "pulled": [], "already": 0, "bad": []}
+    theirs = remote_labels(r) if theirs is None else theirs
+    rep: dict = {"remote": r.describe(), "local": len(mine), "remote_before": len(theirs), "pushed": [], "pulled": [], "pack": 0, "already": 0,
+                 "bad": []}
     rep["already"] = len(set(mine) & set(theirs))
     scratch = store.root / "scratch"
     scratch.mkdir(parents=True, exist_ok=True)
@@ -395,14 +521,11 @@ def sync(store: LocalStore, *, push: bool = True, pull: bool = True, jobs: int =
         tmp = scratch / f".label-pull-{h}-{os.getpid()}"
         try:
             r.get(key, tmp)
-            lab = parse_label_bytes(tmp.read_bytes())
+            return h, named_label(tmp.read_bytes(), h), None
         except (KeyError, ValueError, json.JSONDecodeError) as e:
             return h, None, f"{key}: {type(e).__name__}: {e}"
         finally:
             tmp.unlink(missing_ok=True)
-        if label_hash(lab) != h:
-            return h, None, f"{key}: content hashes to {label_hash(lab)}, not its name"
-        return h, lab, None
 
     with ThreadPoolExecutor(max_workers=max(1, jobs)) as ex:
         if push:
@@ -410,7 +533,11 @@ def sync(store: LocalStore, *, push: bool = True, pull: bool = True, jobs: int =
             rep["pushed"] = [h for h in ex.map(push_one, todo) if h]
         if pull:
             todo = sorted(set(theirs) - set(mine))
-            for h, lab, err in list(ex.map(pull_one, todo)):
+            if len(todo) > PACK_MIN_MISSING:
+                rep["pulled"] = pull_pack(store, {h: theirs[h] for h in todo}, log=log)
+                rep["pack"] = len(rep["pulled"])
+                todo = sorted(set(todo) - set(rep["pulled"]))
+            for h, lab, err in ex.map(pull_one, todo):                  # written as they arrive: a sync cut short keeps what it pulled
                 if err:
                     rep["bad"].append(err)
                     warn(f"labels-sync: {err}")
