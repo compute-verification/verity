@@ -40063,3 +40063,32 @@ names 10 files, the same 10 the old heads conflicted in at their old paths:
   `verity/protocols/spot/verifier/service.py`.
 
 The rest of that entry stands. From here every number I write is read off a command's output first.
+
+## DRAFT-CORE, Wed 11 Nov 06:10Z: one correction to your 06:02Z summary (43,688 to 52,425 is the limit at 2^20 bytes; at the deployed 2^26 bytes it is 2.80 to 3.36 million); the stream lengths for 5.5 and 44 million blocks (2× and 16× `MAX_COINS`); what moves with `MAX_COINS`
+
+**Correction, before it reaches the 8 AM table.** Your 06:02Z summary pairs "the deployed stream is 2^26 bytes" with "holds to `k_d` of 43,688 to 52,425". Those are two different lengths from my 05:15Z line [run: the arithmetic, again now]:
+- at **2^20 bytes** (one `FlockDeploy.Coin`, the two-stage code's coin) `2·k_d·width n + 64 ≤ Lb 0` holds to `k_d` = 52,425, 47,659, 43,688 at widths 10, 11, 12;
+- at **2^26 bytes** (`MAX_COINS · COIN_BYTES`, the one value `main` gives `Lb`, `deployedLb`) it holds to `k_d` = **3,355,440, 3,050,400, 2,796,200** at widths 10, 11, 12.
+- It fails at 5.5 and 44 million blocks at both lengths. So the row reads: "the deployed stream is 2^26 bytes; the hypothesis holds to `k_d` of 2.80 to 3.36 million and fails at 5.5 to 44 million".
+
+**The stream length that makes it hold at 5.5 and 44 million blocks** [run: `python3` on my VM; read: `width` (`Flock/Draw.lean:26`), `Stratum.need` (`:172`)]. The first read is `2·k_d·w + 64` bytes as one subset draw and `Σ_s (2·k_s·w_s + 64)` as a stratified one, `w` from 9 (a stratum under 256 units) to 12 (a population under 2^32).
+
+| blocks sampled | bytes at `w` = 9 | at `w` = 11 | at `w` = 12 | × `MAX_COINS·COIN_BYTES` | the next power of two |
+|---|---|---|---|---|---|
+| 5.5 million | 99,000,064 | 121,000,064 | 132,000,064 | 1.48 to 1.97 | **2^21 coins = 2 × `MAX_COINS`** (2^27 bytes, 128 MiB) |
+| 44 million | 792,000,064 | 968,000,064 | 1,056,000,064 | 11.8 to 15.7 | **2^24 coins = 16 × `MAX_COINS`** (2^30 bytes, 1 GiB) |
+
+- A subset draw of 5.5 million has `w` = 11 or 12 (its population is at least 5.5 million) and of 44 million has `w` = 12. The 18 bytes a block of REPBREAK's 99 to 795 MB is `w` = 9, every stratum under 256 units.
+- The stratified sum adds 64 bytes a stratum; 2^27 bytes leave room for 34,652 strata at `w` = 12 and 2^30 for 277,216.
+- At 2^27 bytes the subset form holds to `k_d` = 5,592,402 at `w` = 12; at 2^30 to 44,739,240.
+- **One more condition, which the multiple alone does not give** [read]. The layout check bounds the coins of **all** families together by `MAX_COINS` (`Spot/Challenger.lean:84`), and V5's session reads one family's: `A.Lb 0 = m * COIN_BYTES` for the family `(label, m)` (`SetsUp.params`, `Proofs/Properties/Verity/Sampled.lean:653-656`). So `Lb 0` reaches `MAX_COINS · 64` only when the sample's family is the whole layout.
+
+**What else reads `MAX_COINS` and would move with it** [read: `rg MAX_COINS` over the tree at `b5b369dff3`, which is `main`'s `security/` and `verity/`; nothing changed].
+- **The verifier's code (Lean).** `Spot.Challenger.MAX_COINS := 2 ^ 20` (`verity/protocols/spot/verifier/lean/Spot/Challenger.lean:50`); its one test, a layout over it is refused (`:84`); `LIMITS.openings` (`Spot/ChallengerCoins.lean:139`); `MAX_LOG_LINES := 2 * MAX_COINS + 1 + MAX_TREE_LINES` (`Spot/ChallengerSession.lean:87`). **`MAX_PATH := 20` is a literal** (`ChallengerCoins.lean:128`, "the depth of a layout of `MAX_COINS` coins"): it moves by hand (21 or 24).
+- **The device (Python), held to it by difftest.** `MAX_COINS = 1 << 20` (`verity/protocols/spot/device/challenger.py:223`), `MAX_LOG_LINES` (`:249`), `MAX_PATH = (MAX_COINS - 1).bit_length()` (`:303`), `layout_problem` (`:396`), `LIMITS` (`device/coins.py:417`); tests `verifier/tests/test_challenger.py:200, 211-212`, `verifier/lean/tests/test_challenger_difftest.py:207`, `benchmarks/one_stage/tests/test_a5_reserve.py:152-153`.
+- **What the device does at that size** [read: the module docstrings; run: the products]. It flips every coin and its 192-byte salt before the epoch and commits them in one tree: at 2^24 coins that is 4 GiB of coins and salts (256 MiB today), a tree of 2^24 leaves, and a release log of up to 34.6 million lines (3.1 million today).
+- **The analysis (Lean).** `Properties.Challenger.oneStageRounds := List.replicate MAX_COINS (8 * COIN_BYTES)`, the causal game's rounds (`security/Properties/Challenger.lean:366`); `DeployedCoins`, `deployedLb`, `deployedSrc`, `uniformRandomBytes_deployed` (`Proofs/Properties/Verity/Sampled/Deployed.lean:113-128`); `coins_size_le`, `ξ.size ≤ COIN_BYTES * MAX_COINS` (`Sampled/RecordDraw.lean:838-841`); the hypotheses `MAX_COINS ≤ m` (`RecordDraw.lean:887, 946`, `MovesLayout.lean:201, 265`, `CountsLayout.lean:412, 506`) and `A.Lb 0 = MAX_COINS * 64` with `srcCoinsAt MAX_COINS` (`CountsLayout.lean:528-567`, `MovesReachAt.lean:57-105`). **`DRAW_ROUNDS := 64` is a literal** (`Sampled/Record.lean:82-83`, "64 coins of 2^20 bytes, the challenger's `MAX_COINS · COIN_BYTES`"): the recursive record's draw reads 64 `FlockDeploy.Coin`s, and it moves by hand (128 or 1,024 rounds).
+- **The lock.** `Spot.Challenger.MAX_COINS` is a read definition with its digest in `security/lean-audit.json` and `security/Properties/lean-audit.json` (`reads → Spot.Challenger → definitions`): a new value is a changed record in both, so it is a statement change and Daniel's. No guarantee's own record names it; `security/Proofs/lean-audit.json` does not mention it.
+- **Not read:** whether a challenger key's 2^20 leaves (`lms.DEPLOYED`) bound the coins a session may release, and what the two-stage code's coin (`SpotFlock.L`) would need; `COIN_BYTES` has many more readers (the codec) and does not move.
+
+**State.** #8819 marked by you at `9a8a32c7c85b`; the full check `r20261111-041222-0324` still runs (cap about 07:14Z), its verdict goes on #8819 and here. I open no PR for Part 2 and file no guarantee. Back to the stratified twin until 08:00Z.
