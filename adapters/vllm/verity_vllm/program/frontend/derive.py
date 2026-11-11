@@ -524,7 +524,7 @@ def derive_report(source, example_inputs: Sequence[Any], *, mode: str, profile: 
         flat_sd, ctx = _derive_flat(source, example_inputs, mode=mode, profile=profile, config=config, allowed_dims=allowed_dims,
                                     name=name, ruleset=ruleset, vocab=vocab, _ctx_holder=holder, exported=exported,
                                     registered_values=registered_values)
-        head = (dict(prov), dict(ctx.unresolved_module_paths))
+        head = (dict(prov), dict(ctx.unresolved_module_paths)) if session is not None else None
         rep = _finish_report(flat_sd, ctx, prov, mode=mode, ruleset=ruleset, rank=rank, check_registry=check_registry, dead_free=dead_free, correspondence=correspondence, theta=theta)
         if session is not None:
             session.append(DerivationTail(flat_sd, ctx, *head, name, mode, ruleset, check_registry, rank, rep.family, dead_free, theta))
