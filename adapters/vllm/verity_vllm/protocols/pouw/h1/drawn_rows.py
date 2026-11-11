@@ -20,6 +20,9 @@ from verity_vllm.errors import Refused
 from verity_vllm.protocols.pouw.h1 import registered as NR
 from verity_vllm.protocols.pouw.h1 import served as SV
 
+__all__ = ["LEAF_NAMES", "LEAF_OUT_ROWS", "LEAF_PROGRAM", "held", "leaf_rows", "leaf_statement", "operands", "partials",
+           "receipt_value", "receipt_words", "split_record", "split_row"]
+
 M32 = (1 << 32) - 1
 #: a lanes-form K's lane and combine statements' names, as `pouw_h1_circuits` lowers them
 LEAF_NAMES = {LL.LANE: "unit/pouw-h1-lane", LL.COMBINE: "unit/pouw-h1-combine"}

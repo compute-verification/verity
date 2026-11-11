@@ -186,7 +186,7 @@ def loaded(device: torch.device) -> Cubin:
     return Cubin.built(device)
 
 
-def seed_words(seeds: list[bytes], device) -> torch.Tensor:
+def seed_words(seeds: list[bytes], device: torch.device | str) -> torch.Tensor:
     w = np.frombuffer(b"".join(seeds), dtype=">u8").astype("<u8").view("<i8").reshape(len(seeds), 8)
     return torch.from_numpy(w.copy()).to(device)
 
@@ -683,6 +683,6 @@ class Receipts:
         return out
 
 
-__all__ = ["Call", "Cubin", "LANES", "NOISE_CU", "Receipts", "call_receipts", "call_stream", "call_streams",
+__all__ = ["C_", "Call", "Cubin", "LANES", "NOISE_CU", "R", "Receipts", "call_receipts", "call_stream", "call_streams",
            "gated_receipts", "gated_reference", "j10r_counters", "layout", "loaded", "noise_blocks", "noise_blocks_cpu",
-           "noise_cubin", "reference", "seed_record", "stream_blocks", "tile_receipts", "unit_seeds", "units"]
+           "noise_cubin", "reference", "seed_record", "seed_words", "stream_blocks", "tile_receipts", "unit_seeds", "units"]

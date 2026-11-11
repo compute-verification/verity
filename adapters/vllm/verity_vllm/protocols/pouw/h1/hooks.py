@@ -190,4 +190,5 @@ def warm_zy(layers: list[Any], rows: int, *, pick: Any = None, call: Any = None)
     return len(seen)
 
 
-__all__ = ["admitting", "committed", "layers", "observer", "serves_zy", "traced", "warm_zy", "weight_roots", "wire"]
+__all__ = ["admitting", "committed", "expert_names", "layers", "observer", "serves_zy", "traced", "warm_zy", "weight_roots",
+           "wire"]

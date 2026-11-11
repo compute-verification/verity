@@ -7,6 +7,8 @@ from collections.abc import Mapping
 from dataclasses import dataclass, field
 from typing import Any
 
+__all__ = ["ModelKey", "model_key"]
+
 
 @dataclass(frozen=True)
 class ModelKey:
