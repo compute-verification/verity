@@ -455,7 +455,8 @@
         "benchmarks/network_e2e/",
         "benchmarks/datacenter/",
         "benchmarks/network_sim/",
-        "benchmarks/prove_path/"
+        "benchmarks/prove_path/",
+        "benchmarks/certifier_timing/"
       ],
       "branch_suffixes": [
         "728f",

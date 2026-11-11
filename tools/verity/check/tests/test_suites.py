@@ -1001,6 +1001,28 @@ def test_the_tests_get_neither_the_runners_research_variables_nor_its_pycache_pr
     assert p.returncode == 0 and "passed  pkg" in p.stdout, p.stdout + p.stderr
 
 
+def test_a_fresh_run_builds_the_verifier_and_runs_the_suites_with_lakes_artifact_cache_off(tmp_path):
+    """`--fresh` compiles what it tests (`UNCACHED_ENV`): its `lake build` of the verifier and the tests of a suite that runs
+    Lake get Lake's local artifact cache off, where Lake would unpack what an earlier build on the node left there instead of
+    compiling it. Without `--fresh` both keep the caller's."""
+    root = tmp_path / "tree"
+    _env_workspace(root, {"verity-flock": "import os\n\ndef test_env():\n"
+                                          "    assert os.environ.get('LAKE_ARTIFACT_CACHE') == os.environ['WANT']\n"})
+    (root / "verity" / "protocols" / "flock" / "verifier").mkdir(parents=True)
+    (root / "verity" / "protocols" / "flock" / "verifier" / "lakefile.toml").write_text('name = "f"\n')
+    (root / ".gitignore").write_text(".lake/\n")
+    _git(root, "add", ".")
+    _git(root, "commit", "-q", "-m", "verifier")
+    lake, said = tmp_path / "home" / ".elan" / "bin" / "lake", tmp_path / "lake-said"   # ELAN puts $HOME/.elan/bin first
+    lake.parent.mkdir(parents=True)
+    lake.write_text(f'#!/bin/sh\necho "$1 ${{LAKE_ARTIFACT_CACHE-unset}}" >> {said}\n')
+    lake.chmod(0o755)
+    for args, want in (((), "true"), (("--fresh",), "false")):
+        p = _run_suite(root, tmp_path, *args, extra={"HOME": str(tmp_path / "home"), "LAKE_ARTIFACT_CACHE": "true", "WANT": want})
+        assert p.returncode == 0 and "passed  verity-flock" in p.stdout, p.stdout + p.stderr
+    assert said.read_text().splitlines() == ["build true", "build false"]
+
+
 def test_inside_a_research_run_the_tests_get_its_custody_key_and_require_the_store(tmp_path):
     """The tests lose RESEARCH_*, the machine's store among them, so a fixture fetch would skip as "the evidence store is not
     reachable" here and pass under a bare pytest. With the run's custody key staged they get it as check's steps do, the
