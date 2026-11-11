@@ -669,7 +669,6 @@
     {"file": "tests/pipeline/test_tp_phases_one_rank.py", "kind": "attr-defined", "symbol": "test_the_warm_up_instrumented_run_at_one_rank_learns_on_that_rank_and_records_nothing_of_it", "detail": ""},
     {"file": "tests/pipeline/test_tp_phases_one_rank.py", "kind": "func-returns-value", "symbol": "test_the_target_check_at_one_rank_reads_that_ranks_engine_and_names_it_when_it_differs", "detail": ""},
     {"file": "tests/pipeline/test_tp_phases_one_rank.py", "kind": "var-annotated", "symbol": "_InProcess.__init__", "detail": ""},
-    {"file": "tests/pipeline/test_tp_post_load_tensors.py", "kind": "name-defined", "symbol": "_Layer", "detail": ""},
     {"file": "tests/pipeline/test_tp_rejudge.py", "kind": "func-returns-value", "symbol": "test_the_cross_rank_check_reruns_over_kept_dumps", "detail": ""},
     {"file": "tests/pipeline/test_tp_replay_deferred.py", "kind": "arg-type", "symbol": "test_a_pending_tp_commit_waits_for_the_replay_stage_which_decides_it", "detail": ""},
     {"file": "tests/pipeline/test_tp_replay_deferred.py", "kind": "attr-defined", "symbol": "_worker", "detail": ""},
