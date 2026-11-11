@@ -238,7 +238,6 @@ pod_records = [
 team = [
     "infra",
     "tools/{research,agent-guard}",
-    "archive/AGENTS.md",
     "benchmarks/census",
     ".agents",
     ".cursor",
