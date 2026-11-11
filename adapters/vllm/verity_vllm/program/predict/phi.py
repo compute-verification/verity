@@ -65,6 +65,7 @@ class Phi:
         """The declared `TargetProfile`; where the target block does not declare `batch_invariant`, the one the execution label names
         (`TargetProfile.execution_label`: a `bi-*` row runs the batch-invariant kernels, an `eager` row vLLM's defaults)."""
         from dataclasses import fields
+
         from verity_vllm.program.frontend.target_profile import TargetProfile
         names = {f.name for f in fields(TargetProfile)}
         tp = TargetProfile.default().with_overrides(**{k: (tuple(v) if k == "compute_capability" else v) for k, v in self.target.items()

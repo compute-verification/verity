@@ -48,7 +48,14 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
-from verity_vllm.config import WORKLOADS, RowEngine, UsageError, option, row_file, workload_file
+from verity_vllm.config import (
+    WORKLOADS,
+    RowEngine,
+    UsageError,
+    option,
+    row_file,
+    workload_file,
+)
 from verity_vllm.records.predicted_row import FILE, PredictedRow
 
 from . import score as S
@@ -79,6 +86,7 @@ def traced_names(program, desc: dict, trace: str) -> tuple[dict[int, str | None]
     trace's, the descriptors being byte-equal) and each weights record field's leaf name (`derive-report.json`'s `provenance.weights`,
     in field order), refused where the fields differ in number or size."""
     from verity.circuits.types import RecordType
+
     from verity_vllm.check.weights_of_record import PARAM as WEIGHTS
     hints = {int(k): v for k, v in ((desc.get("annotations") or {}).get("node_hints") or {}).items()}
     params = []
@@ -231,6 +239,7 @@ def write_row(row: str, out: str, *, config: str | None = None, jobs: int = 1, l
     from verity_vllm.pipeline import manifest as MN
     from verity_vllm.program import prefix_plan as PP
     from verity_vllm.query.required import QUERY_OF_RECORD
+
     from .naming import named_program, write_build
     w = json.loads(workload_file(row_file(row)).read_text())
     if PP.prefix_caching(w):

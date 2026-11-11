@@ -43,17 +43,17 @@ from dataclasses import dataclass, field
 from typing import Any
 
 import numpy as np
-
-from verity.protocols.certifier.prover import ingress_scan as IS
-from verity.protocols.spot.verifier.one_stage import registered as G
 from verity.circuits.codec import descriptor_id
 from verity.circuits.evaluation import evaluate_batch
 from verity.circuits.refs import runs
 from verity.commitments.gates import embedding as E
+from verity.commitments.windows import interface as IF
 from verity.definitions.numerics.rows import ROWS
 from verity.definitions.numerics.token_select_rows import token_select_chunk_bests
 from verity.definitions.registry import io_shell as IO
-from verity.commitments.windows import interface as IF
+from verity.protocols.certifier.prover import ingress_scan as IS
+from verity.protocols.spot.verifier.one_stage import registered as G
+
 from verity_vllm.protocols.pouw.h1 import registered as H1R
 from verity_vllm.query.manifest import format as RM
 

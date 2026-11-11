@@ -15,28 +15,34 @@ from typing import Any
 
 import numpy as np
 import pytest
-from tests.program.predict import test_steps as S
-from tests.program.predict.test_window_circuit import CLASS, GRAIN, SPLIT, SPLIT_GRAIN, state_row
-from tests.program.predict.test_window_circuit_fa3 import H200
-from tests.program.predict.test_window_circuit import SLOTS as SLOTS_CLASS
-from verity_vllm.program.predict import scan_state as SS
-from verity_vllm.program.predict import window_builder as WB
-from verity_vllm.program.predict import window_circuit as WC
-from verity_vllm.program.predict import window_rows as WR
-from verity_vllm.program.predict import window_weights as WW
-
+from verity.circuits.codec import descriptor_id
+from verity.circuits.defs import bind
+from verity.circuits.evaluation import evaluate_batch
+from verity.commitments.gates import embedding as E
+from verity.commitments.windows import interface as IF
+from verity.definitions.registry import io_shell as IO
 from verity.protocols.certifier.prover import ingress_scan as IS
 from verity.protocols.certifier.verifier import warden as W
 from verity.protocols.certifier.verifier.active import id_request
 from verity.protocols.pouw.verifier.audit import hm96_salt
 from verity.protocols.spot.verifier.one_stage import registered as CR
 from verity.protocols.spot.verifier.one_stage import registration as REG
-from verity.circuits.codec import descriptor_id
-from verity.circuits.defs import bind
-from verity.circuits.evaluation import evaluate_batch
-from verity.commitments.gates import embedding as E
-from verity.definitions.registry import io_shell as IO
-from verity.commitments.windows import interface as IF
+
+from tests.program.predict import test_steps as S
+from tests.program.predict.test_window_circuit import (
+    CLASS,
+    GRAIN,
+    SPLIT,
+    SPLIT_GRAIN,
+    state_row,
+)
+from tests.program.predict.test_window_circuit import SLOTS as SLOTS_CLASS
+from tests.program.predict.test_window_circuit_fa3 import H200
+from verity_vllm.program.predict import scan_state as SS
+from verity_vllm.program.predict import window_builder as WB
+from verity_vllm.program.predict import window_circuit as WC
+from verity_vllm.program.predict import window_rows as WR
+from verity_vllm.program.predict import window_weights as WW
 
 PROGRAM = "test/model"
 LAW = {"law": "stratified", "k": 2}

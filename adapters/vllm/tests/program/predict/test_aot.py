@@ -10,15 +10,15 @@ import json
 from pathlib import Path
 
 import pytest
-
 from verity.circuits.types import RecordType
+
+from tests.program.predict.test_predict import TINY, _phi
 from verity_vllm.config import UsageError
-from verity_vllm.correspondence.runtime import SCHEMA as CORRESPONDENCE, correspondence_digest
+from verity_vllm.correspondence.runtime import SCHEMA as CORRESPONDENCE
+from verity_vllm.correspondence.runtime import correspondence_digest
 from verity_vllm.program.predict import aot as A
 from verity_vllm.program.predict import score as S
 from verity_vllm.program.predict.build import build_program
-
-from tests.program.predict.test_predict import TINY, _phi
 
 pytestmark = pytest.mark.usefixtures("code_versions_stood_in")
 

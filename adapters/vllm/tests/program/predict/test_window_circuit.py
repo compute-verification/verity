@@ -19,6 +19,15 @@ from pathlib import Path
 
 import numpy as np
 import pytest
+from verity.circuits.evaluation import evaluate_batch
+from verity.commitments.windows import interface as IF
+from verity.commitments.windows import wiring as WI
+from verity.definitions.registry import io_shell as IO
+from verity.protocols.certifier.prover import ingress_scan as IS
+from verity.protocols.pouw.verifier import audit as AU
+from verity.protocols.spot.verifier.one_stage import partition as P
+from verity.protocols.spot.verifier.one_stage import registered as G
+
 from tests.check.test_weights_of_record import _bf16, write_safetensors
 from tests.program.predict import test_steps as S
 from verity_vllm.check import weights_of_record as WR
@@ -29,17 +38,14 @@ from verity_vllm.program.predict import window_builder as WB
 from verity_vllm.program.predict import window_circuit as WC
 from verity_vllm.program.predict import window_weights as WW
 from verity_vllm.program.predict.build import Unexpressible
-from verity_vllm.program.predict.window_circuit import CLASS_OF_RECORD, Grain, WindowClass, class_circuit, window_circuit
+from verity_vllm.program.predict.window_circuit import (
+    CLASS_OF_RECORD,
+    Grain,
+    WindowClass,
+    class_circuit,
+    window_circuit,
+)
 from verity_vllm.records import weights_registration as WRG
-
-from verity.protocols.certifier.prover import ingress_scan as IS
-from verity.protocols.pouw.verifier import audit as AU
-from verity.protocols.spot.verifier.one_stage import partition as P
-from verity.protocols.spot.verifier.one_stage import registered as G
-from verity.circuits.evaluation import evaluate_batch
-from verity.definitions.registry import io_shell as IO
-from verity.commitments.windows import interface as IF
-from verity.commitments.windows import wiring as WI
 
 GRAIN = Grain(gemm_words=1024, rows=256, select=64)
 CLASS = WindowClass(2, 4, 2)

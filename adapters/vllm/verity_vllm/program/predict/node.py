@@ -33,10 +33,20 @@ from verity.circuits.defs import Builder, CompositeDefinition, bind
 from verity.circuits.program import Program
 from verity.circuits.refs import Affine, Coll, concat
 from verity.circuits.types import Array, RecordType, Type, Value
+
 from verity_vllm.program.inputs import check_params
 
-from .build import I32, I64, WRAPPERS, BUILDER_ID, BuildResult, _Model, decoder
-from .common import Unexpressible, _arr_shape, _Peers, _Stochastic, drive, in_launch, launch_batch, launch_rows
+from .build import BUILDER_ID, I32, I64, WRAPPERS, BuildResult, _Model, decoder
+from .common import (
+    Unexpressible,
+    _arr_shape,
+    _Peers,
+    _Stochastic,
+    drive,
+    in_launch,
+    launch_batch,
+    launch_rows,
+)
 from .phi import Phi
 
 

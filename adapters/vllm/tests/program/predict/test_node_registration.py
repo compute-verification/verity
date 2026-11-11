@@ -11,20 +11,20 @@ from pathlib import Path
 
 import numpy as np
 import pytest
-
 from verity.circuits.codec import canonical_json
 from verity.commitments import hm96
+
+from tests.pipeline.test_cpu_replay import _shard
+from tests.program.predict.test_predict import TINY, _phi
 from verity_vllm.commit import registered_rows as RR
 from verity_vllm.commit import step_rows
 from verity_vllm.config import UsageError
 from verity_vllm.pipeline import registration_log as RL
 from verity_vllm.pipeline import replay_bundle as RB
 from verity_vllm.program.predict import aot as A
-from verity_vllm.program.predict.common import _arr_shape
 from verity_vllm.program.predict import node_registration as NR
+from verity_vllm.program.predict.common import _arr_shape
 from verity_vllm.program.predict.node import build_node_program, node_parameters
-from tests.pipeline.test_cpu_replay import _shard
-from tests.program.predict.test_predict import TINY, _phi
 
 _spec = importlib.util.spec_from_file_location(
     "nci_reference", Path(__file__).resolve().parents[5] / "verity/protocols/inference_only/verifier/nci/lean/scripts/nci_reference.py")

@@ -75,7 +75,10 @@ class StepNeeds:
     """`dsa`'s decoder for φ (one tensor-parallel rank), and what it calls for an engine step (`step`)."""
 
     def __init__(self, phi: Phi) -> None:
-        from verity_vllm.program.frontend.rules.vllm_dsa import DECODE_THRESHOLD, DECODE_THRESHOLD_DEFAULT
+        from verity_vllm.program.frontend.rules.vllm_dsa import (
+            DECODE_THRESHOLD,
+            DECODE_THRESHOLD_DEFAULT,
+        )
 
         from . import dsa
         self.phi, self.net = phi, dsa.Net(phi, 1, 8)
@@ -150,7 +153,10 @@ class StepNeeds:
 
     def _cublas(self, M: int, w: object, f32: bool = False) -> Need:
         from verity.definitions.registry.bf16_gemm_check import default_cublas_route
-        from verity_vllm.program.frontend.rules.vllm_bindings.bf16_gemm import _f32out_phase
+
+        from verity_vllm.program.frontend.rules.vllm_bindings.bf16_gemm import (
+            _f32out_phase,
+        )
         N, K = self._shape[w]
         phase = _f32out_phase(K, N) if f32 else "linear"
         route = default_cublas_route(phase, M, K, N)
@@ -162,7 +168,10 @@ class StepNeeds:
         return self.kind(role, K=K, N=N, DOT=self.net.dot, **route[1])
 
     def _router(self, M: int, w: tuple[int, str]) -> Need:
-        from verity.definitions.registry.bf16_gemm_check import DEFAULT_LL_BF16_FMA, dispatch_sm90
+        from verity.definitions.registry.bf16_gemm_check import (
+            DEFAULT_LL_BF16_FMA,
+            dispatch_sm90,
+        )
         N, K = self._shape[w]
         tier, st = dispatch_sm90(M, K, N)
         if tier == "cublas":
@@ -173,7 +182,10 @@ class StepNeeds:
 
     def _all_reduce(self, M: int, n: int) -> Need:
         from verity.definitions.registry import tp_allreduce as AR
-        from verity_vllm.program.frontend.rules.vllm_bindings.collectives import _ROUTE_KINDS
+
+        from verity_vllm.program.frontend.rules.vllm_bindings.collectives import (
+            _ROUTE_KINDS,
+        )
         setting, route = AR.served_route(self.net.settings, M, self.H)
         c = AR.covered(setting, self.H, route, M) if setting else None
         if c is None:
@@ -199,6 +211,7 @@ class StepNeeds:
 
     def _moe(self, M: int, n: int, L: int) -> list[tuple[Need, int]]:
         from verity.definitions.registry.moe import router_kernel
+
         from verity_vllm.engine.profiles.devices import fused_moe_config
         from verity_vllm.program.frontend import targets as TG
         C, H, G = self.C, self.H, self.G

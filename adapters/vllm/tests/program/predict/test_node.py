@@ -8,13 +8,13 @@ weight, stay its own). So no peer Input is left, and the node reads only its pro
 from __future__ import annotations
 
 import pytest
-
 from verity.circuits.program import RUN, input_id, is_input, is_registered
+
+from tests.program.predict.test_predict import GLM53, TINY, _phi, _row_phi
 from verity_vllm.pipeline import registration_log as RL
 from verity_vllm.program.predict.build import build_program
 from verity_vllm.program.predict.node import build_node_program, check_ranks
 from verity_vllm.program.predict.phi import Phi
-from tests.program.predict.test_predict import GLM53, TINY, _phi, _row_phi
 
 
 def _at(phi: Phi, rank: int) -> Phi:

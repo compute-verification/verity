@@ -44,17 +44,21 @@ class Net:
     DOMAIN = ((8,), "eager", ("float8_e4m3fn",))
 
     def __init__(self, phi: Phi, M: int, history: int) -> None:
-        from verity_vllm.engine.profiles import family_facts as FF
-        from verity_vllm.observe.fold.profiles.generic import rank_hf_config
-        from verity_vllm.program import model as analytic
-        from verity_vllm.program.frontend import targets as TG
-        from verity_vllm.program.frontend.rules.vllm_dsv4 import COMPRESSORS, FLASHMLA_GEOMETRY
-        from verity_vllm.program.frontend.rules.vllm_mhc import MHC_GEOMETRY
         from verity.definitions.registry import dsv4_indexer
         from verity.definitions.registry import dsv4_qnorm_insert as Q
         from verity.definitions.registry.dsa_norm import check_block
         from verity.definitions.registry.dsv4_moe import TOPK as ROUTER_SLOTS
         from verity.definitions.registry.tp_allreduce import settings_of
+
+        from verity_vllm.engine.profiles import family_facts as FF
+        from verity_vllm.observe.fold.profiles.generic import rank_hf_config
+        from verity_vllm.program import model as analytic
+        from verity_vllm.program.frontend import targets as TG
+        from verity_vllm.program.frontend.rules.vllm_dsv4 import (
+            COMPRESSORS,
+            FLASHMLA_GEOMETRY,
+        )
+        from verity_vllm.program.frontend.rules.vllm_mhc import MHC_GEOMETRY
         hf, ff = phi.hf_config, FF.facts_for(phi.hf_config)
         self.world, self.rank = int(phi.tp["world"]), int(phi.tp.get("rank", 0))
         qc = hf.get("quantization_config") or {}
@@ -235,8 +239,12 @@ class _Model(dsa._Model):
     def post_pre(self, parts: list[Refs], streams: list[Refs], mix: list, L: int, side: str) -> tuple[list[Refs], list[Refs], list]:
         """The all-reduce of a sublayer's partials, its post into the streams and the pre of layer L's `side` sublayer: the FMA path at
         most `SMALL_FMA_TOKENS` rows, the TF32 pre above (`MhcFusedPostPreRule`) -> (streams, layer input, (post, comb)) per row."""
-        from verity_vllm.program.frontend.rules.vllm_mhc import MHC_GEOMETRY, SMALL_FMA_TOKENS
         from verity.definitions.numerics.mhc_twin import tf32_num_split
+
+        from verity_vllm.program.frontend.rules.vllm_mhc import (
+            MHC_GEOMETRY,
+            SMALL_FMA_TOKENS,
+        )
         w = lambda f: self.w[(L, f)].refs  # noqa: E731
         x, mhc = self.all_reduce(parts), self.net.mhc
         if len(x) <= SMALL_FMA_TOKENS:
@@ -316,7 +324,11 @@ class _Model(dsa._Model):
         """FlashMLA over the rows each position reads, its window from max(p - window + 1, P) then the compressed rows the history
         holds by then (`Dsv4SparseAttnRule`): one row a decode over each padded to BN rows, at the splits of the planner for the one
         request; more a prefill, each row gathered once and each position's rows, compressed first, padded to its NP pairs of blocks."""
-        from verity.definitions.numerics.flashmla_twin import num_sm_parts, request_splits, sched_meta
+        from verity.definitions.numerics.flashmla_twin import (
+            num_sm_parts,
+            request_splits,
+            sched_meta,
+        )
         C, net, r, P = self.C, self.net, self.net.ratios[L], hist["from"]
         D, DR, NH, NHP, window = (int(C[k]) for k in ("HEAD_DIM", "QK_ROPE", "NH", "PADDED_HEADS", "WINDOW"))
         G, scale, sink = net.G, float(C["ATTN_SCALE"]), self.w[(L, "attn.attn_sink")].refs.slice(0, NH)
@@ -362,9 +374,10 @@ class _Model(dsa._Model):
         """The MoE block over the rows x (`vllm_moe_router`, `vllm_marlin_moe`, op-major): the router logits, the shared expert, each
         row's six experts and weights, the align over the pairs p = t * TOPK + k in pair-index order, per pair the w13 GEMM, the
         clamped SwiGLU and the weighted w2 GEMM; each row's sum of its TOPK rows, plus the shared expert's."""
-        from verity_vllm.program.frontend.rules.vllm_marlin_moe import served_config
         from verity.definitions.numerics.marlin_moe_rows import moe_block
         from verity.definitions.registry import marlin_moe as MM
+
+        from verity_vllm.program.frontend.rules.vllm_marlin_moe import served_config
         C, M, H = self.C, len(x), self.H
         E, TOPK, I, SCALE = int(C["NUM_EXPERTS"]), int(C["TOPK"]), int(C["I"]), float(C["ROUTED_SCALING_FACTOR"])
         P = M * TOPK

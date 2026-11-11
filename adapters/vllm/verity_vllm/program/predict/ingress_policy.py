@@ -9,8 +9,10 @@ from typing import Any
 
 from verity.definitions.registry import io_shell as IO
 from verity.definitions.registry.topp_geometry import registered_splits
+
 from verity_vllm.pipeline import window_advice as WA
-from verity_vllm.program.frontend import seed_rule as SEED, stop_rule as SR
+from verity_vllm.program.frontend import seed_rule as SEED
+from verity_vllm.program.frontend import stop_rule as SR
 
 from . import reads
 from .common import Unexpressible

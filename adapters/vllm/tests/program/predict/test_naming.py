@@ -23,6 +23,8 @@ from typing import Any
 
 import pytest
 from verity.circuits.types import RecordType
+
+from tests.program.predict.test_steps import TINY, _hit, _registered
 from verity_vllm.check.replay import index as IX
 from verity_vllm.correspondence.reader_for_query import recorded_names
 from verity_vllm.correspondence.runtime import validate_document
@@ -33,8 +35,6 @@ from verity_vllm.program.predict.build import Unexpressible
 from verity_vllm.program.predict.naming import WRAPPER, named_program, write_build
 from verity_vllm.program.predict.phi import Phi
 from verity_vllm.program.predict.steps import compile_steps
-
-from tests.program.predict.test_steps import TINY, _hit, _registered
 
 FIX = Path(__file__).parent / "fixtures"
 TRACES = json.loads((FIX / "naming_traces.json").read_text())

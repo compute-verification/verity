@@ -91,6 +91,7 @@ def sampling_of(w: dict, phi: Phi) -> dict:
     """The row's sampling policy as the Build declares it (`pipeline.build.sampling_policy` over the workload manifest, then
     `sampler_geometry` on the declared target: the registered split count)."""
     import tempfile
+
     from verity_vllm.pipeline.build import sampler_geometry, sampling_policy
     with tempfile.TemporaryDirectory() as td:
         path = os.path.join(td, "workload.json")
@@ -171,6 +172,7 @@ def request_component(r):
     """A predicted request Program (a `BuildResult`) as GP-01's component (`program.workload.program_component`): its own root,
     whose definitions are this process's, so nothing is decoded."""
     from verity.circuits.codec import descriptor_id
+
     from verity_vllm.program import workload as W
     params = [(name, repr(t)) for name, t in r.program.fn.signature()[0]]
     fn = getattr(r.program, "program_fn_id", None) or descriptor_id(r.program.fn)
@@ -264,8 +266,9 @@ def first_divergence(pred: dict, traced: dict) -> dict:
 def equivalence(pred_program, traced_desc: dict) -> dict:
     from verity.circuits.codec import decode_program
     from verity.circuits.defs import REGISTRY
-    from verity_vllm.program import descriptor_equivalence as DE
     from verity.definitions.registry.catalog import load as load_registry
+
+    from verity_vllm.program import descriptor_equivalence as DE
     load_registry()
     t0 = time.time()
     try:
@@ -399,6 +402,7 @@ def code_version() -> str:
     from pathlib import Path, PurePosixPath
 
     import verity
+
     import verity_vllm
     h = hashlib.sha256()
     for pkg in (verity, verity_vllm):

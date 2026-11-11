@@ -11,8 +11,21 @@ from types import SimpleNamespace
 
 import numpy as np
 import pytest
+from verity.circuits.evaluation import evaluate_batch
+from verity.commitments.windows import interface as IF
+from verity.protocols.pouw.verifier import credit
+from verity.protocols.pouw.verifier.audit import hm96_salt
+from verity.protocols.spot.verifier.one_stage import registered as CR
+
 from tests.program.predict import test_steps as S
-from tests.program.predict.test_window_circuit import CLASS, G2, WINDOW, _label, held, state_row
+from tests.program.predict.test_window_circuit import (
+    CLASS,
+    G2,
+    WINDOW,
+    _label,
+    held,
+    state_row,
+)
 from tests.program.predict.test_window_circuit_int8 import GRAIN, _registered
 from tests.program.predict.test_window_rows import KEY, PROGRAM, _weights
 from verity_vllm.program.predict import scan_state as SS
@@ -22,12 +35,6 @@ from verity_vllm.program.predict import window_weights as WW
 from verity_vllm.program.predict.build import Unexpressible
 from verity_vllm.program.predict.window_circuit import Tables, WindowClass
 from verity_vllm.protocols.pouw.h1 import served as SV
-
-from verity.protocols.pouw.verifier import credit
-from verity.protocols.pouw.verifier.audit import hm96_salt
-from verity.protocols.spot.verifier.one_stage import registered as CR
-from verity.circuits.evaluation import evaluate_batch
-from verity.commitments.windows import interface as IF
 
 TABLES = Tables(64, 8, 6)
 #: H1's leaf at K = 64: 16 u32 of codes, then the f32 scale, in u16 words
