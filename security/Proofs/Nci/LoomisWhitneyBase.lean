@@ -9,11 +9,11 @@ A finite set of triples has at most `√(|π₁₂| |π₁₃| |π₂₃|)` elem
 The proof slices the set by its first coordinate: a slice lies in the product of its two projections' slices and injects
 into the third projection, so its size squared is at most the product of the three, and Cauchy–Schwarz sums the slices.
 
-NCI's main theorem applies it to the products `W_ℓ[i,j] x_t[j]` an IU computes at its other positions, as index triples
-`(i, j, t)`: their projections are the weight entries `(i, j)` they use, the input entries `(t, j)` they use, and the
-output entries `(t, i)` they contribute to (`card_products_le_sqrt`), and summing over the multiplications `ℓ` with
-Cauchy–Schwarz bounds them by `√(p Q Y)` (`sum_card_products_le_sqrt`). The cover theorem's partial-sum bounds apply it
-to a block's products as cells of a matrix cube. Both import it from here, which needs nothing but Mathlib.
+Over products `W_ℓ[i,j] x_t[j]` as index triples `(i, j, t)`, the projections are the weight entries `(i, j)` they use,
+the input entries `(t, j)` they use, and the output entries `(t, i)` they contribute to (`card_products_le_sqrt`), and
+summing over the multiplications `ℓ` with Cauchy–Schwarz bounds them by `√(p Q Y)` (`sum_card_products_le_sqrt`). The
+min-cut bound applies the inequality to a block's MACs of one matmul (`card_inBlock_sq_le`), and imports it from here,
+which needs nothing but Mathlib.
 -/
 
 @[expose] public section
@@ -92,8 +92,8 @@ theorem card_products_le_sqrt (T : Finset (ι × κ × τ)) {p q y : ℕ}
     exact_mod_cast (card_products_sq_le T).trans (Nat.mul_le_mul (Nat.mul_le_mul hp hq) hy)
 
 /-- Loomis–Whitney at each multiplication `ℓ`, summed with Cauchy–Schwarz: an IU whose products at multiplication `ℓ`
-(at its other positions) use at most `p` weight entries, `q ℓ` input entries and contribute to `y ℓ` output entries
-computes at most `√(p Q Y)` of them in all, with `Q = ∑ q ℓ` and `Y = ∑ y ℓ`. -/
+use at most `p` weight entries, `q ℓ` input entries and contribute to `y ℓ` output entries computes at most `√(p Q Y)`
+of them in all, with `Q = ∑ q ℓ` and `Y = ∑ y ℓ`. -/
 theorem sum_card_products_le_sqrt {L : Type*} (s : Finset L) (T : L → Finset (ι × κ × τ)) {p : ℕ} {q y : L → ℕ}
     (hp : ∀ ℓ ∈ s, #((T ℓ).image fun x => (x.1, x.2.1)) ≤ p)
     (hq : ∀ ℓ ∈ s, #((T ℓ).image fun x => (x.2.2, x.2.1)) ≤ q ℓ)
