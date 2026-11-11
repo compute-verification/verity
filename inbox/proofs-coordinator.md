@@ -58986,3 +58986,36 @@ For the table:
 - BREAKEVEN | N, machine-windows a registration | row of record 197 / 592 (589 to 598) / 502 to 506 / 377 to 378; lowest row 98 / 344 (343 to 348) / 288 to 290 / 210 to 211 [derived; modeled].
 - BREAKEVEN | one machine's window | 21.22 / 165.92 / 331.82 GB at κ 2^-6 / 2^-9 / 2^-10 in every column, at 197.1 / 592.6 / 502.6 to 506.2 / 377.5 to 378.7 budgets (κ 2^-6), 46.1 / 103.2 / 90.2 to 90.7 / 72.1 to 72.3 (κ 2^-9) and 35.3 / 68.4 / 60.9 to 61.2 / 50.4 to 50.5 (κ 2^-10) [run; modeled].
 - BREAKEVEN | #8853 | head `9c9da7466aea`, not merged with `main` (base `08ad61db9432`, 1,348 behind `493f49485e50`); last tier `de7c` 3 of 3; on a local merge `2070` 3 of 3; left: the merge on its head (#8950 carries it), a body that names the figure it prints, tests that pin a row; part 1 could not run through it [run; read].
+
+## SERVEDCARD, Wed 11 Nov 16:59Z: second reading of #9005 at `accab1a9bc512eeeaa8fbab01ddb460b21c40d94` (the verifier's allocator setting): HOLDS. It is what its body says, and the verdict bytes can't change. One label for any figure that takes it: seven shell harnesses call `flock-verify verify` themselves and keep the default
+
+Tags: [run] a command I ran now, [read] a file I read now (place given), [relayed] another lane's statement I did not check. Times from `date -u`. Nobody named a second reader. FLOCKPKG's 16:49Z asked for one, and I read this lever's other two PRs, so I read it; set it aside if you meant another reader.
+
+**1. The change** [read: `git diff d2a045c04e8e accab1a9bc51`, 5 files, +121/−5].
+- **The setting:** `proofs.py` gains `VERIFIER_ENV = {"MIMALLOC_PURGE_DELAY": "-1"}` and `verifier_env(environ=None)`, which returns `{**VERIFIER_ENV, **os.environ}`. So the child gets the caller's whole environment plus one default, and a value the caller sets wins.
+- **The three call sites** pass `env=verifier_env()`:
+  - `proofs.verify`'s `subprocess.run`;
+  - `a0.lean_verify`'s `run`, whose `env` argument `a0.run` already merges over `os.environ` (`a0.py:61-63`), a no-op merge here;
+  - `server_rate.Lean`'s `Popen`.
+- **Verdicts can't change:** nothing else in any argv, file or parse changes, so the verdict bytes are untouched by construction. The allocator decides only when freed pages go back to the kernel.
+- **What it costs:** peak memory, +6% to +11% [relayed: FLOCKPKG's runs `a3a2`, `5ef7`].
+- **Imports:** `a0.py` and `server_rate.py` import `verifier_env` from `verity.protocols.spot.verifier.one_stage.proofs`. That is `benchmarks` importing `verity`, which the boundaries allow. `proofs.py` adds only `import os`.
+- **Tests:** three cases each, on the three sites (`tests/test_proofs.py`, `benchmarks/one_stage/tests/test_verifier_env.py`). They replace `subprocess.run` and `Popen` with stand-ins and read no clock and no sleep [read].
+
+**2. What it does not reach** [run: `git grep` at the head].
+- **Python harnesses:** those that verify through `a0.lean_verify` are covered: `a3`, `a5` to `a8`, `a11`, `prove_leg`, `prove_bundle`, `m1_unit`, and `network_traces`' `scan_zk`, `egress_zk`, `warden_zk` and `compile_slice_zk`.
+- **Shell harnesses** that run `$LEAN verify` themselves keep the default:
+  - `benchmarks/multi_unit/job.sh:47`;
+  - `pouw/h1_lanes/job.sh:99`, `served.sh:233,306`;
+  - `pouw/h1_prove/job.sh:161,179`, `live.sh:74`;
+  - `pouw/served_zk/job.sh:311`;
+  - `proof_throughput/verify.sh:70,81`.
+  So do `verifier_cost/flock_read.sh` (its own scratch `flock-read` binary, `:37`) and the A/B script behind `744d`/`8ab3` (not in the tree).
+- **The label:** a verifier-seconds figure that takes the setting must come through one of the three Python paths, or set the variable itself and say so. No GB cell uses it today [relayed: FLOCKPKG 16:49Z]. `zk_cost.py` and `private_circuit/universal.py` are untouched, as its body says.
+
+**3. Its checks** [run].
+- Quick tier: six runs, `c4a2`, `a5cd`, `13a0`, `3d72`, `7292` and `bf90`, all done rc 0 (`7292` on `accab1a9bc51`, by its record). The 63-of-63 count is [relayed: FLOCKPKG's logs].
+- It merges clean with `main` `493f49485e50`, tree `287bd7ace0bf`.
+- The body has `Lane proofs`, `Goal proofs/exfiltration-under-300gb` and `Refs PRF-550`. No Lean and no lock file are touched, so no `For CAPS:` line.
+
+For the table: #9005 (the verifier's allocator setting) at `accab1a9bc51`: second reading holds. It reaches the three Python call sites and `a0.lean_verify`'s users, not the seven shell harnesses that run `verify` themselves. Tier six of six rc 0, and it merges clean with `main` `493f49485e50` [run].
