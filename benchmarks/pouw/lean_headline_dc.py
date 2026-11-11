@@ -227,7 +227,7 @@ class _Exact:
     fold_names: list[str]                # the design's `fold_routes`, `folds`' entries after its fold
     counted: list[str]                   # those no run has built: the cheater's menu holds them, ♭'s fold never does
     fold_mix: str                        # ♭'s fold in words (`_fold_mix`)
-    words_mix: str                       # ♭'s word production in words (`_words_mix`)
+    words_mix: str                       # how ♭ makes its words, in words (`_words_mix`)
     untimed: list[str]                   # the sheet's classes the vector has no line for, read at its issue slot alone
     q: Fraction                          # the vector and table routes' floors q = q_T (b_T = 0)
     ln_p: Fraction                       # the lower bound on ln(1/p) the folded branch reads
@@ -343,7 +343,7 @@ def _flat_shares(d: E.Design, shares: dict[str, float], bound) -> dict[str, Frac
 
 
 def _words_mix(d: E.Design, wb: Fraction) -> str:
-    """♭'s word production in words: the tensor route, and the design's baseline program on its share of the words."""
+    """How ♭ makes its words, in words: the tensor route, and the design's baseline program on its share of them."""
     if not wb:
         return "the MMA and the operand floor"
 
