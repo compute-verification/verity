@@ -32,7 +32,8 @@ packages() {
    echo "$(date -u +%FT%TZ) packages, try $try"; packages; sleep 20
  done
  git_ok && echo "$(date -u +%FT%TZ) $(git version)" || echo "$(date -u +%FT%TZ) GIT-TOO-OLD: $(git version); drive refuses to merge"
- setsid -f /data/infra/drive.sh > /dev/null 2>&1 < /dev/null) >> /data/boot/packages.log 2>&1 &
+ setsid -f /data/infra/drive.sh > /dev/null 2>&1 < /dev/null
+ setsid -f /data/vqueue/boot.sh >> /data/vqueue/live/boot.log 2>&1 < /dev/null) >> /data/boot/packages.log 2>&1 &
 (cd /workspace/guard-src && PYTHONPATH=tools/research/src RESEARCH_MACHINES_D=/workspace/steward/research-notes/machines.d LC_ALL=C.UTF-8 \
   setsid -f python3 -m research pods guard --supervise --budgets /workspace/steward/research-notes \
   >> /root/.research/pods/guard-budgets.log 2>&1 < /dev/null)
