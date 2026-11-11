@@ -296,9 +296,6 @@ BENCHMARKS_IMPORTERS = {
                                                                           "(`benchmarks/remote_session`, "
                                                                           "`config.REMOTE_SESSION`) and `paged.py` "
                                                                           "(`benchmarks/vllm_encoded`)",
-    "adapters/vllm/verity_vllm/protocols/remote_bandwidth/in_place.py": "proofs: the remote session's `device` and "
-                                                                            "`inplace` (`benchmarks/remote_session`)",
-    "adapters/vllm/verity_vllm/engine/int8_credited_env.py": "circuits (vllm): `benchmarks/vllm_encoded/paged.py`",
     # Flock's measurement campaign, its tests, and the frozen instance sets `instances` reads
     **dict.fromkeys((
         "verity/protocols/flock/pod/gemm_hill.py", "verity/protocols/flock/pod/read_gadget.py",
@@ -324,10 +321,8 @@ BENCHMARKS_IMPORTERS = {
     **dict.fromkeys(("adapters/vllm/tests/protocols/pouw_h1_circuits.py", "adapters/vllm/tests/protocols/pouw_h1_gpu.py"),
                     "compute-accounting: H1's prover, producer and the live challenger's auditor "
                     "(`benchmarks/pouw/h1_prove`, `served_h1`, `verity/composite/device/live_challenger`)"),
-    **dict.fromkeys(("adapters/vllm/tests/engine/ppl_oracle.py", "adapters/vllm/tests/engine/fattn_oracle.py",
-                     "adapters/vllm/tests/engine/int8_store_gpu.py"),
-                    "circuits (vllm): the int8 step's oracles (`benchmarks/ppl/steps.py`, `benchmarks/pouw/edited_gemm`) "
-                    "and `benchmarks/vllm_encoded/paged.py`"),
+    **dict.fromkeys(("adapters/vllm/tests/engine/ppl_oracle.py", "adapters/vllm/tests/engine/fattn_oracle.py"),
+                    "circuits (vllm): the int8 step's oracles (`benchmarks/ppl/steps.py`, `benchmarks/pouw/edited_gemm`)"),
     "adapters/vllm/tests/engine/int8_attention_sass.py": "kernels: the PoUW kernels' SASS gate "
                                                              "(`benchmarks/pouw/harness/sass_gate.py`)",
     # brought out of benchmarks/ by the layout move, each with a load of benchmarks/ by path
