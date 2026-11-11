@@ -71,9 +71,11 @@ v1 audit (`OneStage`) with the verdicts computed here, from the statement's file
   of a tree before the closing round of the one before it or after its own (`Challenger.membersOrder`). Then each
   statement's session is verified as the one statement's is, on its member's own files (`Member.statement`,
   `runMembers`), after the statements before it, so no coin tree serves two statements: its circuit's units a proof
-  block must be the ones the parameters name, and its verdict holds only where its public file's units are exactly
-  its member's, in order (`Member.population`), so every unit its session proves is its member's; the units the
-  statements proved must be the evidence's `proved_units`.
+  block must be the ones the parameters name, and its verdict holds only where its strata are the registration's, each
+  restricted to its units (`Member.sizes`: the parameters fix each stratum's size in a member, and nothing the prover
+  sends moves a unit between strata), and its public file's units are exactly its member's, in order
+  (`Member.population`), so every unit its session proves is its member's; the units the statements proved must be the
+  evidence's `proved_units`.
 
 Without blobs (`toProtocol`) every check rejects: no blob holds the circuit file.
 -/
@@ -852,11 +854,41 @@ def MEMBER_UNITS : String :=
   "units: the public file's units.indices are not exactly the member's units, in order: slot i of its table is the " ++
     "member's i-th unit"
 
-/-- **A member's population check**, in the place of the one statement's `FilePart.check`: its public file `pubB`
-holds exactly the member's units, in order, so slot `i` of its session's table is the member's `i`-th unit and the
-units a session proves (`provedUnits`, read off this file) are the member's. -/
+/-- The units of the ranges `us` in `[a, b)`. -/
+def unitsIn (us : Array (Nat × Nat)) (a b : Nat) : Nat := us.foldl (fun n x => n + (min x.2 b - max x.1 a)) 0
+
+/-- **A member's strata's sizes**: the registration's `strata` (`Partition.strata`), each restricted to the member's
+units, one size a stratum in the strata's order, a stratum holding none of the member's units at 0. The strata read
+stratum by stratum are the registration's units in order (`FilePart.sizes`) and the member's ranges ascend, so the
+member's units read stratum by stratum are its units in order (`Member.indices`): slots `[Σ_{k' < k} n_k', Σ_{k' ≤ k}
+n_k')` of its table are its units in stratum `k`. None where the strata are not the units in order or a unit of the
+member's is past them. A function of the parameters alone: nothing the prover sends moves a unit between strata. -/
+def Member.sizes (m : Member) (strata : Array (String × Array (Nat × Nat))) : Option (Array Nat) :=
+  (FilePart.sizes strata).bind fun ns =>
+    let z := ns.foldl (fun (z : Nat × Array Nat) n => (z.1 + n, z.2.push (unitsIn m.units z.1 (z.1 + n)))) (0, #[])
+    if m.units.all (·.2 ≤ z.1) then some z.2 else none
+
+/-- The refusal of a member whose strata the registration's do not give (`Member.sizes`). -/
+def MEMBER_STRATA : String :=
+  "partition: the registration's strata, read stratum by stratum, are not its units in order, or a unit of the " ++
+    "member's is past them: a member's strata are the registration's, each restricted to the member's units"
+
+/-- A member's population check at the registration's `strata` and its public file's header `h`: the member's strata
+are the registration's restricted to its units (`Member.sizes`), and the header's units are exactly the member's, in
+order (`unitsHeld`). -/
+def Member.heldAt (m : Member) (strata : Array (String × Array (Nat × Nat))) (h : Json) : V Unit :=
+  match m.sizes strata with
+  | none => throw MEMBER_STRATA
+  | some _ => if unitsHeld m.indices h then pure () else throw MEMBER_UNITS
+
+/-- **A member's population check**, in the place of the one statement's `FilePart.check` (`Member.heldAt` at the
+strata of the member's query over its program, as `FilePart.check` reads them): its strata are the registration's
+restricted to its units, of the sizes `Member.sizes` gives, and its public file `pubB` holds exactly the member's
+units, in order, so slot `i` of its session's table is the member's `i`-th unit and the units a session proves
+(`provedUnits`, read off this file) are the member's. -/
 def Member.population (m : Member) (pubB : ByteArray) : V Unit := do
-  if !unitsHeld m.indices (← FilePart.header pubB) then throw MEMBER_UNITS
+  let strata ← Partition.strata (← Program.parse m.own.program) (getD m.own.partition "query")
+  m.heldAt strata (← FilePart.header pubB)
 
 /-- A member's circuit held to the parameters' units a proof block: a circuit file that parses with another
 `vus_per_block` refuses. One that does not parse is its session's reject. -/
@@ -1022,7 +1054,7 @@ def membersRun (p : Params) (ms : Array Member) (c : OneStage.Commitment) (e : E
     throw "the statements' sessions are not the evidence's sessions, in order"
   let ts ← treesOf p.base e.base
   orderHeld p c e
-  membersTreesHeld ts (← linesOf e).tail (sts.zip held) bs
+  membersTreesHeld ts (← linesOf e) (sts.zip held) bs
   popHeld p.base.verifier c.record
   runMembers ms sts e.base.provedUnits bs
 
@@ -1252,9 +1284,19 @@ private def unitsJ (us : Array Nat) : Json := Json.mkObj [("units", Json.mkObj [
 #guard !unitsHeld #[2, 3] (unitsJ #[2, 3, 7])
 #guard !unitsHeld #[2, 3] (unitsJ #[3, 2])
 #guard !unitsHeld #[] Json.null
-#guard refusal ((memberT "m" #[(2, 4), (7, 8)]).population "{\"units\":{\"indices\":[2,3,7]}}\nrest".toUTF8) == ""
-#guard refusal ((memberT "m" #[(2, 4), (7, 8)]).population "{\"units\":{\"indices\":[0,1,2]}}\nrest".toUTF8) ==
+#guard unitsIn #[(2, 4), (7, 8)] 3 8 == 2
+#guard unitsIn #[(2, 4), (7, 8)] 4 7 == 0
+#guard (memberT "m" #[(2, 4), (7, 8)]).sizes #[("a", #[(0, 3)]), ("b", #[(3, 8)])] == some #[1, 2]
+#guard (memberT "m" #[(2, 4), (7, 8)]).sizes #[("a", #[(0, 2), (2, 5)]), ("b", #[(5, 9)])] == some #[2, 1]
+#guard (memberT "m" #[(2, 4), (7, 8)]).sizes #[("a", #[(0, 2)]), ("b", #[(2, 8)])] == some #[0, 3]
+#guard (memberT "m" #[(2, 4), (7, 8)]).sizes #[("a", #[(0, 3)]), ("b", #[(3, 7)])] == none
+#guard (memberT "m" #[(2, 4), (7, 8)]).sizes #[("a", #[(0, 1), (2, 8)]), ("b", #[(1, 2)])] == none
+#guard refusal ((memberT "m" #[(2, 4), (7, 8)]).heldAt #[("a", #[(0, 3)]), ("b", #[(3, 8)])] (unitsJ #[2, 3, 7])) == ""
+#guard refusal ((memberT "m" #[(2, 4), (7, 8)]).heldAt #[("a", #[(0, 3)]), ("b", #[(3, 8)])] (unitsJ #[0, 1, 2])) ==
   MEMBER_UNITS
+#guard refusal ((memberT "m" #[(2, 4), (7, 8)]).heldAt #[("a", #[(0, 3)]), ("b", #[(3, 7)])] (unitsJ #[2, 3, 7])) ==
+  MEMBER_STRATA
+#guard refusal ((memberT "m" #[(2, 4), (7, 8)]).population "{\"units\":{\"indices\":[2,3,7]}}\nrest".toUTF8) != ""
 #guard (runMembers membersT #[] #[] ⟨#[]⟩).toOption.map (·.all) == some true
 #guard whyT (runMembers membersT #[] #[1] ⟨#[]⟩) ==
   "the units the sessions proved are not the evidence's proved_units"

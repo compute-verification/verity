@@ -471,6 +471,62 @@ private def recordT : Json := Json.mkObj [("coin_tree", Json.mkObj [("root", Jso
 #guard membersOrder [openAtT "01" TREE_SESSION, openAtT "01" TREE_SESSION, openAtT "02" TREE_SESSION,
   openAtT "02" TREE_SESSION, openAtT "01" TREE_SESSION] == some #["01", "02", "01"]
 
+/-! Two members' sessions as an honest challenger's release log shows them: each tree sampled, its link points opened
+after its link's roots, one round of its table's first rep, then its closing round after its evidence, the second
+member's first round after the first member's closing round. -/
+
+private def lineT (j : Json) : String := (Flock.canon j).toOption.getD ""
+private def hexT (c : Char) (n : Nat) : String := "".pushn c n
+private def bytesT (s : String) : ByteArray := (Flock.unhex s).toOption.getD ByteArray.empty
+private def specT : Json :=
+  Json.mkObj [("block", Lean.toJson (512 : Nat)), ("rounds_log", Lean.toJson (9 : Nat)),
+    ("scheme", Json.str TREE_SCHEME),
+    ("streams", Json.arr #[Json.str TREE_SESSION, Json.str "t/rep0", Json.str "t/rep1"])]
+private def coinTreeT (c : Char) : Json :=
+  Json.mkObj [("key", Json.str (hexT c 512)), ("nonce", Json.str (hexT c 64)), ("root", Json.str (hexT c 128)),
+    ("spec", specT)]
+private def helloT (c : Char) : String := lineT ((coinTreeT c).setObjVal! "event" (Json.str TREE_EVENT))
+private def roundT (c : Char) (stream : String) (k n : Nat) (after coins : String) : String :=
+  lineT (Json.mkObj [("after", Json.str after), ("coins", Json.str coins), ("event", Json.str OPEN_EVENT),
+    ("n", Lean.toJson n), ("round", Lean.toJson k), ("stream", Json.str stream), ("tree", Json.str (hexT c 128))])
+private def pointsT : String := hexT '1' 32 ++ hexT '2' 32
+private def memberRecordT (c : Char) : Json :=
+  Json.mkObj [("coin_tree", coinTreeT c),
+    ("link", Json.mkObj [("points", Json.arr #[Json.arr #[Json.str (hexT '1' 32)], Json.arr #[Json.str (hexT '2' 32)]]),
+      ("root_b", Json.mkObj [("t", Json.str (hexT 'b' 16))]), ("root_f", Json.str (hexT 'f' 16))]),
+    ("streams", Json.arr #[Json.mkObj [("rounds", Json.arr #[Json.mkObj [("coins", Json.arr #[Json.str (hexT '3' 32)]),
+      ("msg_sha512", Json.str (hexT 'e' 128)), ("n", Lean.toJson (1 : Nat))]]), ("stream", Json.str "t/rep0")]])]
+private def evidenceT (s : String) : String := sha512Hex s.toUTF8
+private def memberLogT (c : Char) (evidence : String) : List String :=
+  [roundT c TREE_SESSION 0 2 (Flock.hexOf (linkAfter (bytesT (hexT 'f' 16)) #[("t", bytesT (hexT 'b' 16))]))
+      (sha512Hex (bytesT pointsT)),
+    roundT c "t/rep0" 0 1 (hexT 'e' 128) (sha512Hex (bytesT (hexT '3' 32))),
+    roundT c TREE_SESSION CLOSING_ROUND 0 evidence (sha512Hex ByteArray.empty)]
+private def membersReasonT (log : List String) (evA evB : String) : Option String :=
+  match coinTreesOf log with
+  | .ok trees => membersTreeReason trees log
+      #[("a", #[("t", some 8)], memberRecordT 'a', evA), ("b", #[("t", some 8)], memberRecordT 'b', evB)]
+  | .error why => some why
+private def oneReasonT (log : List String) : Option String :=
+  match coinTreesOf log with
+  | .ok trees => sessionsTreeReason trees #[("a", #[("t", some 8)], memberRecordT 'a')]
+  | .error why => some why
+private def closedT (c : Char) : List String := memberLogT c (evidenceT (String.singleton c))
+
+#guard membersReasonT ([helloT 'a', helloT 'b'] ++ closedT 'a' ++ closedT 'b') (evidenceT "a") (evidenceT "b") == none
+#guard membersReasonT ([helloT 'a'] ++ closedT 'a' ++ [helloT 'b'] ++ closedT 'b') (evidenceT "a") (evidenceT "b") ==
+  none
+#guard membersReasonT ([helloT 'a', helloT 'b'] ++ closedT 'a' ++ closedT 'b') (evidenceT "a") (evidenceT "x") ==
+  some s!"session b's coins are not the challenger's: {NO_CLOSING}"
+#guard membersReasonT ([helloT 'a', helloT 'b'] ++ (closedT 'a').dropLast ++ closedT 'b') (evidenceT "a")
+  (evidenceT "b") == some s!"session a's coins are not the challenger's: {NO_CLOSING}"
+#guard membersReasonT ([helloT 'a', helloT 'b'] ++ (closedT 'a').dropLast ++ (closedT 'b').take 1 ++
+  (closedT 'a').drop 2 ++ (closedT 'b').drop 1) (evidenceT "a") (evidenceT "b") == some MEMBERS_ORDER
+#guard membersReasonT ([helloT 'a', helloT 'b'] ++ closedT 'b' ++ closedT 'a') (evidenceT "a") (evidenceT "b") ==
+  some MEMBERS_ORDER
+#guard oneReasonT ([helloT 'a'] ++ (closedT 'a').dropLast) == none
+#guard oneReasonT ([helloT 'a'] ++ closedT 'a') == some s!"session a's coins are not the challenger's: {EXTRA_OPENING}"
+
 /-! The difftest's pieces. -/
 
 private def refusing (f : V Json) : Json :=
