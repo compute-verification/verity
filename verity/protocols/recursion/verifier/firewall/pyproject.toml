@@ -21,4 +21,5 @@ untraced = [
 ]
 # `lake` builds this package and, through its path requires, Flock's verifier (`Flock.Firewall.Contract` and what it
 # imports; its `flock-firewall contract` decides the references' transcripts) and the core protocol interface.
-inputs = ["verity/protocols/flock/verifier", "verity/protocols/interface"]
+inputs = ["verity/protocols/flock/verifier", "verity/protocols/interface",
+          "verity/__init__.py", "verity/protocols/__init__.py"]
