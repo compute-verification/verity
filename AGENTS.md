@@ -24,9 +24,9 @@ what the layout's design has and the tree does not.
     interface each protocol's check implements. Code the move brought from `benchmarks/`, which no unit rule reads yet:
     `pouw/clear/`, `pouw/receipts/`, `poub/device/live_verifier/`, `poub/verifier/remote_session/`,
     `inference_only/nci/` and `inference_only/rho/`.
-  - `verity/circuits/`: the circuit language (format in `circuits/PROTOCOL.md`). Three base Lean packages, which every
-    Lean package loads and Flock's verifier requires by path, hold the shared Lean: `verity/circuits/base/` (bytes,
-    hashes and parsing), `verity/circuits/lean/` (the circuit format) and `verity/commitments/lean/` (frame-v3 and the
+  - `verity/circuits/`: the circuit language (format in `circuits/PROTOCOL.md`). Three base Lean packages, which Flock's
+    verifier and the packages requiring it load, hold the shared Lean: `verity/circuits/base/` (bytes, hashes and
+    parsing), `verity/circuits/lean/` (the circuit format) and `verity/commitments/lean/` (frame-v3 and the
     sampling of units). `verity/definitions/`: the circuits
     written in it: `ops` (the primitive circuits' Definitions), `silicon` (the GPUs' exact semantics), `kernels`,
     `private_circuits` (the universal circuit), the served workloads' Definitions, and the evaluator and a circuit's
