@@ -108,7 +108,7 @@ theorem sum_first_sessNeeds_le (L : Compiled Coin A) (x : Msg) (l : List ℕ) (n
       (l.map fun u => (needs u).card).sum := by
   have h := L.sum_sessions_le x l needs
     ((Finset.univ.filter fun i : Fin n => (L.sessSlots x l i.val).head? = some i.val).map Fin.valEmbedding)
-    (fun i hi => by obtain ⟨i, hi, rfl⟩ := Finset.mem_map.1 hi; exact (Finset.mem_filter.1 hi).2)
+    (fun i hi => by obtain ⟨i', hi', rfl⟩ := Finset.mem_map.1 hi; exact (Finset.mem_filter.1 hi').2)
     (fun _ => 1) 1 (fun _ _ => le_rfl) (Finset.univ : Finset (Fin N))
   rw [Finset.sum_comm, Finset.sum_map, Nat.one_mul] at h
   refine le_trans (le_of_eq ?_) h
@@ -146,7 +146,7 @@ theorem card_filter_needs_le (l : List ℕ) (needs : ℕ → Finset ℕ) (N : �
     obtain ⟨u, hu, hgu⟩ := of_decide_eq_true (Finset.mem_filter.1 hg).2
     obtain ⟨j, hj, rfl⟩ := List.mem_iff_getElem.1 hu
     refine Finset.mem_biUnion.2 ⟨j, Finset.mem_range.2 hj, ?_⟩
-    rw [List.getD_eq_getElem hj]
+    rw [List.getD_eq_getElem l 0 hj]
     exact hgu
   calc (Finset.univ.filter fun g : Fin N => decide (∃ u ∈ l, g.val ∈ needs u)).card
       = ((Finset.univ.filter fun g : Fin N => decide (∃ u ∈ l, g.val ∈ needs u)).map Fin.valEmbedding).card :=
