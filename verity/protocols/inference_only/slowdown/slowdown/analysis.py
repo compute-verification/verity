@@ -207,7 +207,7 @@ class Danger:
     #: the value at which the overhead crosses the target, and the worse end of the plausible range
     crossing: float
     worst: float
-    rho_worst: float
+    slowdown_worst: float
 
 
 def dangers(registry: Registry, scenario: str, target: float, keys: Iterable[str] | None = None,
@@ -216,25 +216,25 @@ def dangers(registry: Registry, scenario: str, target: float, keys: Iterable[str
     crosses."""
     out = []
     for s in tornado(registry, scenario, keys, metric) if swings is None else swings:
-        worst, rho_worst = s.worse
-        if rho_worst < target <= s.base:
+        worst, slowdown_worst = s.worse
+        if slowdown_worst < target <= s.base:
             x = threshold(registry, scenario, s.key, target, registry[s.key], worst, metric)
             if x is not None:
-                out.append(Danger(s.key, x, worst, rho_worst))
+                out.append(Danger(s.key, x, worst, slowdown_worst))
     return out
 
 
 def rescues(registry: Registry, scenario: str, target: float, keys: Iterable[str] | None = None,
             metric: Metric = LO, swings: Sequence[Swing] | None = None) -> list[Danger]:
     """The ranged parameters whose plausible range alone lifts the overhead from below `target` to it, each with where
-    it crosses (a `Danger` read the other way: `worst` is the better end, and `rho_worst` the overhead there)."""
+    it crosses (a `Danger` read the other way: `worst` is the better end, and `slowdown_worst` the overhead there)."""
     out = []
     for s in tornado(registry, scenario, keys, metric) if swings is None else swings:
-        best, rho_best = s.better
-        if s.base < target <= rho_best:
+        best, slowdown_best = s.better
+        if s.base < target <= slowdown_best:
             x = threshold(registry, scenario, s.key, target, registry[s.key], best, metric)
             if x is not None:
-                out.append(Danger(s.key, x, best, rho_best))
+                out.append(Danger(s.key, x, best, slowdown_best))
     return out
 
 
@@ -242,7 +242,7 @@ def rescues(registry: Registry, scenario: str, target: float, keys: Iterable[str
 class Corner:
     #: each ranged parameter that lowers the overhead, at the end of its range that lowers it more
     values: Mapping[str, float]
-    rho: float
+    slowdown: float
     base: float
     #: the overhead with every such parameter at its worse end at once (the corner, unless an interaction makes it
     #: higher)
@@ -264,16 +264,16 @@ def corner(registry: Registry, scenario: str, keys: Iterable[str] | None = None,
     joint_values = {s.key: s.worse[0] for s in worse}
     joint = at(registry, scenario, joint_values, metric)
     values: dict[str, float] = {}
-    rho, path = base, []
+    slowdown, path = base, []
     for s in worse:
         v = at(registry, scenario, {**values, s.key: s.worse[0]}, metric)
-        if v <= rho:
+        if v <= slowdown:
             values[s.key] = s.worse[0]
-            rho = v
+            slowdown = v
             path.append((s.key, v))
-    if joint < rho:
-        values, rho = joint_values, joint
-    return Corner(values, rho, base, joint, tuple(path))
+    if joint < slowdown:
+        values, slowdown = joint_values, joint
+    return Corner(values, slowdown, base, joint, tuple(path))
 
 
 def window(p: Param, widen: float = 1.0) -> tuple[float, float]:
@@ -352,9 +352,9 @@ def frontier(registry: Registry, scenario: str, x: str, xs: Sequence[float], y: 
 
 @dataclass(frozen=True)
 class Term:
-    #: `unregistered` (the unregistered leaves), or one of g's terms: a block kind or an uncertified route (`Overhead.terms`)
+    #: `unregistered` (the unregistered leaves), or one of g's terms: a block kind or an uncertified route (`Slowdown.terms`)
     name: str
-    #: its part of the overhead's rate, `1 / overhead` before its floor at 1 (`Overhead.rates`), and its share of it
+    #: its part of the overhead's rate, `1 / overhead` before its floor at 1 (`Slowdown.rates`), and its share of it
     part: float
     share: float
     #: `1 / part`: the overhead can't exceed it while this term remains
@@ -362,15 +362,15 @@ class Term:
 
 
 def attribution(r: Result, side: str = "bound") -> list[Term]:
-    """What sets the overhead, largest first: its rate (`Overhead.rates`) split into the unregistered leaves and g's terms, for
+    """What sets the overhead, largest first: its rate (`Slowdown.rates`) split into the unregistered leaves and g's terms, for
     the family the adversary picks (the least `lo`; with `side="attack"`, its best known attack's)."""
     if side == "bound":
         fam = min(r.families, key=lambda f: (f.lo, f.combined.padded), default=None)
-        s = fam.combined.overhead if fam else None
+        s = fam.combined.parts if fam else None
     else:
         fam = min(r.families, key=lambda f: f.attack, default=None)
         best = fam.best_attack if fam else None
-        s = best.overhead if best else None
+        s = best.parts if best else None
     if s is None:
         return []
     parts = s.rates()

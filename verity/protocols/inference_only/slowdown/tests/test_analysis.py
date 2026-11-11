@@ -74,7 +74,7 @@ def test_the_corner_takes_every_parameter_to_its_worse_end(monkeypatch):
     reg = synthetic(monkeypatch, monotone)
     c = analysis.corner(reg, "s")
     assert c.values == {"b": 0.5, "a": 10.0, "c": 0.0}
-    assert c.rho == c.joint == pytest.approx(100 / math.sqrt(10) * 0.25 * 0.5)
+    assert c.slowdown == c.joint == pytest.approx(100 / math.sqrt(10) * 0.25 * 0.5)
     assert [k for k, _ in c.path] == ["b", "a", "c"]
 
 
@@ -85,7 +85,7 @@ def test_the_corner_never_rises_above_the_base_when_an_interaction_makes_the_joi
     reg = synthetic(monkeypatch, interacting)
     c = analysis.corner(reg, "s")
     assert c.joint == 1000.0 and c.base == 100.0
-    assert c.rho == pytest.approx(12.5) and c.values == {"b": 0.5, "c": 0.0}
+    assert c.slowdown == pytest.approx(12.5) and c.values == {"b": 0.5, "c": 0.0}
 
 
 def test_frontier_traces_the_target_curve_in_a_plane(monkeypatch):
@@ -112,8 +112,8 @@ def test_every_scenario_s_tornado_is_sorted_and_its_corner_is_never_above_the_ba
     for s in swings[:3]:
         assert s.at_low == analysis.at(REG, name, {s.key: s.low})
     c = analysis.corner(REG, name, swings=swings)
-    assert c.rho <= c.base * (1 + 1e-12)
-    assert c.rho <= min((s.worse[1] for s in swings), default=c.base) * (1 + 1e-12)
+    assert c.slowdown <= c.base * (1 + 1e-12)
+    assert c.slowdown <= min((s.worse[1] for s in swings), default=c.base) * (1 + 1e-12)
 
 
 @pytest.mark.parametrize("name", NAMES)
@@ -142,14 +142,14 @@ def test_lo_grows_with_the_statuses_admitted_and_admitting_all_is_lo(name):
 
 
 @pytest.mark.parametrize("name", NAMES)
-def test_attribution_splits_the_adversary_s_rate_and_each_ceiling_caps_rho(name):
+def test_attribution_splits_the_adversary_s_rate_and_each_ceiling_caps_the_slowdown(name):
     r = analysis.result(REG, name)
     terms = analysis.attribution(r)
     assert sum(t.share for t in terms) == pytest.approx(1.0)
     assert terms == sorted(terms, key=lambda t: -t.part)
     fam = min(r.families, key=lambda f: (f.lo, f.combined.padded))
     rate = sum(t.part for t in terms)
-    assert rate == pytest.approx(math.fsum(fam.combined.overhead.rates().values()))
+    assert rate == pytest.approx(math.fsum(fam.combined.parts.rates().values()))
     assert r.lo == pytest.approx(max(1.0, 1 / rate))
     assert all(t.ceiling >= min(r.lo, 1 / rate) * (1 - 1e-9) for t in terms)
     assert any(t.name == "unregistered" for t in terms) == (r.scenario.context.fleet.eps_unreg > 0)
