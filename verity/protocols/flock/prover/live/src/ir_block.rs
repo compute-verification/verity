@@ -442,17 +442,25 @@ fn ask<W>(_: &[W], _: u32) {}
 /// Row `i` of `rows`' XOR over `z`, whose entry `i` is still 0, so a row's own column adds nothing ([`Owns`] says where a
 /// row reads it). With `ahead` > 0 each read is asked of the cache `ahead` column indices before it. A side's indices are
 /// one array in row order, so the ask runs past the row's end into the rows after it, where the processor's own lookahead
-/// stops at the branch that ends a row. A walk of a large net waits on these reads, not on its arithmetic.
+/// stops at the branch that ends a row. A walk of a large net waits on these reads, not on its arithmetic: the loop
+/// holds nothing but the read and the XOR, since each further step a column index leaves the processor fewer reads in
+/// flight at once. So distance 0 is the bare loop, and a row's indices are paired once with the indices `ahead` after
+/// them, as many as the array still has, the rest read bare.
 #[inline(always)]
 fn fold<W: RowWord>(rows: &Rows, i: usize, z: &[W], ahead: usize) -> W {
     let (s, e) = (rows.off[i] as usize, rows.off[i + 1] as usize);
-    let far = if ahead == 0 { &[][..] } else { &rows.cols[s.saturating_add(ahead).min(rows.cols.len())..] };
-    rows.cols[s..e].iter().enumerate().fold(W::splat(0), |x, (k, &c)| {
-        if let Some(&f) = far.get(k) {
-            ask(z, f);
-        }
+    let row = &rows.cols[s..e];
+    let bare = |x: W, row: &[u32]| row.iter().fold(x, |x, &c| x.xor(z[c as usize]));
+    if ahead == 0 {
+        return bare(W::splat(0), row);
+    }
+    let far = &rows.cols[s.saturating_add(ahead).min(rows.cols.len())..];
+    let n = row.len().min(far.len());
+    let x = row[..n].iter().zip(&far[..n]).fold(W::splat(0), |x, (&c, &f)| {
+        ask(z, f);
         x.xor(z[c as usize])
-    })
+    });
+    bare(x, &row[n..])
 }
 
 /// A netlist's `useful` rows, each line `na a.. nb b..`, written in order.
