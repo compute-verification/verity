@@ -52,6 +52,9 @@ of the first further tape that opens the node (`firstHit`), and it finds a pair 
   `pr_off_sample_le_ex_cap_of_coll`), and at every cap without it (`pr_off_sample_le_ex`). The expectation is joint
   in the sample's size and the run's calls: a bound on a run's mean calls at each coins bounds it, a bound on the
   mean over all coins does not.
+* **With no premise** (`pr_off_sample_le_finder`, `ex_cost_sampleFinder_le`): the bound with the finder's success in
+  it, `2·Pr[the finder outputs a collision] + N/(K + 1)`, and the finder's expected calls, at most
+  `E[(1 + |sample|)·c]`. The statements under `ExpectedCR` are these two together.
 
 **What a further run costs.** Every finder here charges a further run all of `c`, the calls of a whole run, whichever
 nodes it still waits for. A finder whose further run costs less when it waits for fewer nodes (one that reads only the
@@ -1217,6 +1220,43 @@ theorem pr_off_sample_le_ex_cap {T : Type} [Fintype T] [Nonempty T] [Fintype Ω]
     (show (0 : ℝ) ≤ 2 ^ (256 : ℝ) by positivity)
   have h5 := pr_miss_tape_le op K
   rw [mul_div_assoc]
+  linarith
+
+/-- **The finder's expected calls**: at most the expectation of a run's calls times one more than the size of its
+coins' sample, whatever the finder outputs and whatever its cap. -/
+theorem ex_cost_sampleFinder_le {T : Type} [Fintype T] [Nonempty T] [Fintype Ω] [Nonempty Ω] [Fintype P]
+    (op : T → Ω → P → Option V) (chk : T → Ω → P → Bool) (c : T → Ω → ℕ) (K : ℕ)
+    (out : T × (Ω × (Fin K → Ω)) → Option (Msg × Msg)) :
+    Ex (fun s => ((sampleFinder op chk c K out).cost s : ℝ)) ≤
+      Ex (fun q : T × Ω => (((1 + #(univ.filter fun p : P => chk q.1 q.2 p)) * c q.1 q.2 : ℕ) : ℝ)) :=
+  ex_costOn_tape_le_ex op chk c K
+
+/-- **The off-plurality mass by the finder's success, with no premise**: at the finder whose output is `outOf`,
+`Pr[a run opens a node off the plurality] ≤ 2·Pr[the finder outputs a collision of H] + N/(K + 1)`, `N` the number
+of nodes and `K` the finder's cap. The finder's expected calls are at most `E[(1 + |sample|)·c]`
+(`ex_cost_sampleFinder_le`), so under the linear expected-time bound at it this is
+`pr_off_sample_le_ex_cap_of_coll`. -/
+theorem pr_off_sample_le_finder {T : Type} [Fintype T] [Nonempty T] [Fintype Ω] [Nonempty Ω] [Fintype P]
+    [DecidableEq V] (H : Msg → Msg) (op : T → Ω → P → Option V) {vstar : T → P → V}
+    (hv : ∀ t, IsPlurality (op t) (vstar t)) (chk : T → Ω → P → Bool) (c : T → Ω → ℕ) (K : ℕ)
+    (coll : T → Ω → Ω → Option (Msg × Msg))
+    (hc : ∀ (t : T) (ω ω' : Ω) (p : P), ConflictAt (op t) (ω, ω') p → (coll t ω ω').isSome)
+    (hs : ∀ (t : T) (ω ω' : Ω) (u v : Msg), coll t ω ω' = some (u, v) → Collision H u v) :
+    Pr (fun q : T × Ω => ∃ p, Off (op q.1) (vstar q.1) q.2 p) ≤
+      2 * (sampleFinder op chk c K
+          fun q : T × (Ω × (Fin K → Ω)) => outOf (op q.1) (coll q.1) K q.2.1 q.2.2).Pr H +
+        (Fintype.card P : ℝ) / ((K : ℝ) + 1) := by
+  have h1 := pr_off_tape_le op hv K
+  have h2 : Pr (fun q : T × (Ω × (Fin K → Ω)) => Found (op q.1) K q.2.1 q.2.2) ≤
+      Pr (fun q : T × (Ω × (Fin K → Ω)) =>
+        ∃ u v, outOf (op q.1) (coll q.1) K q.2.1 q.2.2 = some (u, v) ∧ Collision H u v) :=
+    Pr_mono fun q h => outOf_collision H (op q.1) (coll q.1) (hc q.1) (hs q.1) h
+  have h3 : Pr (fun q : T × (Ω × (Fin K → Ω)) =>
+        ∃ u v, outOf (op q.1) (coll q.1) K q.2.1 q.2.2 = some (u, v) ∧ Collision H u v) =
+      (sampleFinder op chk c K
+        fun q : T × (Ω × (Fin K → Ω)) => outOf (op q.1) (coll q.1) K q.2.1 q.2.2).Pr H := rfl
+  have h5 := pr_miss_tape_le op K
+  rw [← h3]
   linarith
 
 /-- **The off-plurality mass at the sample's expected size, under `ExpectedCR` at the finder of one cap**:
