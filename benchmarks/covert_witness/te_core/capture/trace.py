@@ -243,7 +243,7 @@ def _marked_backward():
 
 #: whether attention's math backend runs half-width operands in their own dtype (True) or casts them to float32, as
 #: torch does unless told (False)
-MATH_SDP_IN_OPERANDS_DTYPE = False
+MATH_SDP_IN_OPERANDS_DTYPE = True
 
 
 @contextlib.contextmanager
