@@ -1425,6 +1425,8 @@
 "SparseMlaHeadSplit_v2",
 "SparseMlaHead_v1",
 "SparseMlaHead_v2",
+"SparseMlaHeadsBlock_v1",
+"SparseMlaHeadsBlock_v2",
 "SparseMlaSplitEndCols_v1",
 "SparseMlaSplitEndCols_v2",
 "SparseMlaSplitEnd_v1",

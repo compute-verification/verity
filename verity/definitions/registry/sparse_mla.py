@@ -24,13 +24,17 @@ Registered functions (all `Name_v1`):
   SparseMlaHead{T,DR,DV,BN,DOT,INV,SCALE}         (q_nope: DV bf16, q_rope: DR bf16, kv: T x (DV+DR) bf16) -> DV bf16
   SparseMlaHeadBlock{DR,DV,NVIS,FIRST,BN,DOT,SCALE}  (q_nope, q_rope, kv: NVIS x (DV+DR), m, l[4], o[DV]) -> (m, l[4], o[DV]);
                                                   one block of a head's chain, a unit of its own (FIRST takes no state)
+  SparseMlaHeadsBlock{NHB,DR,DV,NVIS,FIRST,BN,DOT,SCALE}  (q_nope: NHB x DV, q_rope: NHB x DR, kv: NVIS x (DV+DR), m[NHB],
+                                                  l[NHB][4], o[NHB][DV]) -> (m[NHB], l[NHB][4], o[NHB][DV]); the same block of
+                                                  NHB heads of one row in one unit, their keys read once
   SparseMlaHeadEnd{DV,INV}                        (l[4], o[DV]) -> DV bf16; the head's epilogue, the chain's last unit
   SparseMla{T,NH,DR,DV,BN,DOT,INV,SCALE}          (q_nope: NH x DV, q_rope: NH x DR, kv: T x (DV+DR)) -> NH x DV bf16
 
 T is the row's valid count (at most `index_topk`), kv its selected rows in order; `SPARSE_MLA_GLM53` holds GLM-5.3's statics.
 A head is cut exactly into its key blocks (`visits`), each a `SparseMlaHeadBlock` carrying the online softmax's state to the next,
 and `SparseMlaHeadEnd`, its epilogue: at GLM-5.3's statics a full block fits a Flock block and a head of two blocks does not, so
-serving stages a `SparseMla` row as that chain (`head_chain`, ``CUTS``).
+serving stages a `SparseMla` row as that chain (`head_chain`, ``CUTS``).  A row's heads visit the same key blocks in the same
+order, so block j of NHB of them is also one unit, `SparseMlaHeadsBlock`: each head's `SparseMlaHeadBlock` on the one ``kv``.
 """
 from __future__ import annotations
 
@@ -230,6 +234,35 @@ def SparseMlaHeadBlock(B, S, q_nope, q_rope, kv, m_prev=None, l_prev=None, o_pre
                       o_prev)
 
 
+def heads_block(B, S, tile, q_nope, q_rope, kv, m_prev=None, l_prev=None, o_prev=None):
+    """`SparseMlaHeadsBlock`'s body: ``tile`` the bound single-head block, one Call a head on the one ``kv``, the heads' running
+    maxima, lanes and O each side by side in head order."""
+    if S.NHB < 1:
+        raise ValueError(f"SparseMlaHeadsBlock: NHB={S.NHB} heads")
+    r = [B.call(tile, q_nope[h], q_rope[h], kv, *(() if S.FIRST else (m_prev[h], l_prev[h], o_prev[h]))) for h in range(S.NHB)]
+    return tuple_of(*(array_of([x[i] for x in r]) for i in range(3)))
+
+
+def _heads_block_type(S, bf16=BF16, f32=F32):
+    state = () if S.FIRST else (("m_prev", Array(S.NHB, f32)), ("l_prev", Array(S.NHB, Array(4, f32))),
+                                ("o_prev", Array(S.NHB, Array(S.DV, f32))))
+    return ((("q_nope", Array(S.NHB, Array(S.DV, bf16))), ("q_rope", Array(S.NHB, Array(S.DR, bf16))),
+             ("kv", Array(S.NVIS, Array(S.DR + S.DV, bf16)))) + state,
+            Tuple(Array(S.NHB, f32), Array(S.NHB, Array(4, f32)), Array(S.NHB, Array(S.DV, f32))))
+
+
+@composite("SparseMlaHeadsBlock", 1, ["NHB", "DR", "DV", "NVIS", "FIRST", "BN", "DOT", "SCALE"], _heads_block_type,
+           conformance=_CONF)
+def SparseMlaHeadsBlock(B, S, q_nope, q_rope, kv, m_prev=None, l_prev=None, o_prev=None):
+    """One key block of NHB heads of a `SparseMla_v1` row in one unit: head h's `SparseMlaHeadBlock_v1` on its own query
+    ``q_nope[h]``, ``q_rope[h]`` and state ``m_prev[h]``, ``l_prev[h]``, ``o_prev[h]`` and on the block's NVIS keys, which every
+    head of the row reads, so the unit takes them once.  Its outputs are the heads' (m, l, o), each field side by side in head
+    order: output field i's entry h is field i of that head's own block, word for word."""
+    check_block_statics(S.DR, S.DV, S.NVIS, S.BN)
+    tile = bind(SparseMlaHeadBlock, DR=S.DR, DV=S.DV, NVIS=S.NVIS, FIRST=S.FIRST, BN=S.BN, DOT=S.DOT, SCALE=S.SCALE)
+    return heads_block(B, S, tile, q_nope, q_rope, kv, m_prev, l_prev, o_prev)
+
+
 def _head_end_type(S, bf16=BF16, f32=F32):
     return ((("l", Array(4, f32)), ("o", Array(S.DV, f32))), Array(S.DV, bf16))
 
@@ -271,7 +304,7 @@ def SparseMla(B, S, q_nope, q_rope, kv):
     return B.batch(hd, q_nope, q_rope, kv, axes=(0, 0, None))
 
 
-SPARSE_MLA_COMPOSITES = [SparseMlaBlock, SparseMlaHead, SparseMlaHeadBlock, SparseMlaHeadEnd, SparseMla]
+SPARSE_MLA_COMPOSITES = [SparseMlaBlock, SparseMlaHead, SparseMlaHeadBlock, SparseMlaHeadsBlock, SparseMlaHeadEnd, SparseMla]
 #: each family serving stages as its cut, never whole, with the cut at a binding's statics (circuit-check's ``block`` holds
 #: each unit to the Flock block in the Call's place)
 CUTS = {"SparseMla_v1": head_chain}

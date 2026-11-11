@@ -5,6 +5,7 @@ same statics with the Boolean ``DOT`` and ``INV`` read as their word views.
     SparseMlaBlock_v2{DR,DV,NVIS,FIRST,BN,DOT,SCALE}   DOT: `gemm.HopperBF16WgmmaDot16_v2` (FA3's wgmma k16 step)
     SparseMlaHead_v2{T,DR,DV,BN,DOT,INV,SCALE}         INV: `boolean_attention.Fa3InvSum_v2`
     SparseMlaHeadBlock_v2{DR,DV,NVIS,FIRST,BN,DOT,SCALE}
+    SparseMlaHeadsBlock_v2{NHB,DR,DV,NVIS,FIRST,BN,DOT,SCALE}
     SparseMlaHeadEnd_v2{DV,INV}
     SparseMla_v2{T,NH,DR,DV,BN,DOT,INV,SCALE}
 
@@ -67,6 +68,17 @@ SparseMlaHeadBlockV2 = flat("SparseMlaHeadBlock", 2, ["DR", "DV", "NVIS", "FIRST
                             lambda S: M._head_block_type(S, BF16, F32), _head_block, M.SparseMlaHeadBlock, lifted=_LIFTED)
 
 
+def _heads_block(B, S, q_nope, q_rope, kv, m_prev=None, l_prev=None, o_prev=None):
+    """`SparseMlaHeadsBlock_v1`'s body on bits over `SparseMlaHeadBlock_v2`."""
+    M.check_block_statics(S.DR, S.DV, S.NVIS, S.BN)
+    tile = bind(SparseMlaHeadBlockV2, DR=S.DR, DV=S.DV, NVIS=S.NVIS, FIRST=S.FIRST, BN=S.BN, DOT=S.DOT, SCALE=S.SCALE)
+    return M.heads_block(B, S, tile, q_nope, q_rope, kv, m_prev, l_prev, o_prev)
+
+
+SparseMlaHeadsBlockV2 = flat("SparseMlaHeadsBlock", 2, ["NHB", "DR", "DV", "NVIS", "FIRST", "BN", "DOT", "SCALE"],
+                             lambda S: M._heads_block_type(S, BF16, F32), _heads_block, M.SparseMlaHeadsBlock, lifted=_LIFTED)
+
+
 def _head_end(B, S, l, o):
     """`SparseMlaHeadEnd_v1`'s body on bits, epilogue `INV`."""
     return M.head_end(bit_steps(B), S.INV, l, o)
@@ -85,4 +97,5 @@ def _mla(B, S, q_nope, q_rope, kv):
 SparseMlaV2 = flat("SparseMla", 2, ["T", "NH", "DR", "DV", "BN", "DOT", "INV", "SCALE"], lambda S: M._mla_type(S, BF16), _mla,
                    M.SparseMla, lifted=_LIFTED)
 
-BOOLEAN_SPARSE_MLA = [SparseMlaBlockV2, SparseMlaHeadV2, SparseMlaHeadBlockV2, SparseMlaHeadEndV2, SparseMlaV2]
+BOOLEAN_SPARSE_MLA = [SparseMlaBlockV2, SparseMlaHeadV2, SparseMlaHeadBlockV2, SparseMlaHeadsBlockV2, SparseMlaHeadEndV2,
+                      SparseMlaV2]
