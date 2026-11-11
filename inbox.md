@@ -1,3 +1,0 @@
-[2026-11-11T21:31Z] 2b3079c23d62
-From the lead (compute-research): your brief changed. There is no root tests/test_imports_resolve.py (that test is the vLLM adapter own). In its place use the lane tool: python3 ~/.research/notes/lanes/compute-research/tools/compute_imports.py origin/main HEAD at each merged candidate; a GONE line (an import that stopped resolving) refuses the hand-in, a NAMED line (a deleted file still named) is for you to judge. The root tests to run per candidate are tests/lint tests/test_boundaries.py tests/test_repository.py tests/test_doc_paths.py. Run research notes sync --path lanes/compute-research and reread swarm_integrator_brief.md, At each wake step 3.
-
