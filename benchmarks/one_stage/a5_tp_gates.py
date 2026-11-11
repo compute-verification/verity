@@ -57,7 +57,7 @@ The run exits 0 when it is as expected: both ranks accepted with every negative 
 rank 0 accepted and rank 1 refused by Lean's registered reads by its reason. ``--out`` holds the windows as committed
 (``window/rank<r>/``, their private files too) and a5's records (``rank<r>/``, ``challenger/``, ``summary.json``).
 
-    PYTHONPATH=<tree>:<tree>/benchmarks/numerical/python:<tree>/integrations/vllm \\
+    PYTHONPATH=<tree>:<tree>/benchmarks/numerical/python:<tree>/adapters/vllm \\
       python benchmarks/one_stage/a5_tp_gates.py --m0-pythonpath PATH --bin flock-circuit --lean flock-verify \\
         [--firewall flock-firewall] --challenger local --main FILE [--altered | --made-for KIND] --out DIR
 """
@@ -80,18 +80,18 @@ sys.path.insert(0, str(HERE.parent / "network_traces"))
 
 from a5_warden import composer as row_composer, free_ports, refusal  # noqa: E402
 from warden_zk import WardenRowIdentity  # noqa: E402
-from verity.ml.circuits import evaluation as E  # noqa: E402
-from verity.ml.circuits.defs import bind  # noqa: E402
-from verity.ml.circuits.ops import fp32 as W  # noqa: E402
-from verity.ml.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_V2 as V2  # noqa: E402
-from verity.core.protocols.certifier import warden_rows as WR  # noqa: E402
-from verity.core.protocols.spot import service as S  # noqa: E402
-from verity.core.protocols.spot.one_stage import partition as P, produced, registration as R  # noqa: E402
-from verity.core.protocols.spot.one_stage import registered as G  # noqa: E402
-from verity.ml.windows import rows as CS  # noqa: E402
+from verity.circuits import evaluation as E  # noqa: E402
+from verity.circuits.defs import bind  # noqa: E402
+from verity.definitions.ops import fp32 as W  # noqa: E402
+from verity.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_V2 as V2  # noqa: E402
+from verity.protocols.certifier.verifier import warden_rows as WR  # noqa: E402
+from verity.protocols.spot.verifier import service as S  # noqa: E402
+from verity.protocols.spot.verifier.one_stage import partition as P, produced, registration as R  # noqa: E402
+from verity.protocols.spot.verifier.one_stage import registered as G  # noqa: E402
+from verity.commitments.windows import rows as CS  # noqa: E402
 from verity_vllm.commit import index as IX  # noqa: E402
 from verity_vllm.pipeline import serving_rows as SRW  # noqa: E402
-from verity.ml.definitions.registry.b1_tp2 import AllReduce2  # noqa: E402
+from verity.definitions.registry.b1_tp2 import AllReduce2  # noqa: E402
 from verity_vllm.commit import index as IX  # noqa: E402
 
 #: the stand-in's TP run root, which every rank's window and every partial's domain bind
