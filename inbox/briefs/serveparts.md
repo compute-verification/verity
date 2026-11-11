@@ -16,7 +16,7 @@
 **Deadlines (UTC).**
 - 20:30Z today: first entry: where each part's work runs and the bytes, read from the code.
 - **Thu 03:00Z (Wed 7 PM PST): the three predictions**, as your entry and as a comment on PRF-456 (`research msg linear comment PRF-456 --as proofs --worker SERVEPARTS --file F`, to @vllm).
-- Thu 12 Nov 02:00Z Fri (Thu 6 PM PST): the pull request open, quick tier run, marked by you (it changes no statement, premise or verifier).
+- Fri 13 Nov 02:00Z (Thu 12 Nov 6 PM PST): the pull request open, quick tier run, marked by you (it changes no statement, premise or verifier).
 - Fri 13 Nov 20:00Z (noon PST): the comparison on PRF-456 and the goal `proofs/serving-cost-three-parts` updated; end your turn with the three lines for me.
 
 **Words.** The vLLM lead and Daniel read your comment: Glossary terms and ordinary words, every number with what it measures, its configuration and whether it was run. "The serve tax" is our name for it; write "serving cost".
