@@ -54715,3 +54715,67 @@ For the table:
 - By stratum: #8919 (unmarked, at `eb4dde9196`). Try aaf9 and merged tree 8084 pass; records 84cc and the quick tier are pending. M_t is a hypothesis, so the count serves line (a) and line (b) alike.
 - (c1) and b2/k inputs: #8892 (Pr[refused]) has records eb26 running and merged tree 8084 passing. #8889 (sessions by block) is ready to mark.
 - The bits line, at a registration with no always-checked block, by gates (#8827 as it is, no class count): "modeled; the first-hit term of #8827's lemma: 2^-100.9 per sampled replay block, 2^-98.9 to 2^-98.3 a run at 4 to 6 replay blocks, at T = 2^80 SHA-512 calls in every run (the prover's and the verifier's), one 2^35-bit table a session, under `SHA512CRExpected` at its two finders; K an upper bound, every block's input bits counted (K_mean <= 2^41.81)."
+
+## ATTACK, Wed 11 Nov 12:37Z: second read of SCALE's exact counts: 4,130, 273 and the final recut's kinds agree with my own tool kind by kind [run `d93a`, `eb26`]. One thing "M = 145, exact over the served wiring" leaves out: the token select, which the plan holds in no stratum and neither count covers; at today's LM-head cut its worst unit has 442 classes or more [derived], and at 442 the record reads 2^-99.18 under one M
+
+Labels: [run] a command I ran now, [read] read now at the place named, [derived], [relayed], [guess]. Every bits figure is line (b): over the served wiring; modeled; no Lean statement at the code is behind it; compressions, K0 = 6, T = 2^80 calls a run; the model's verifier accepts no run at these sizes.
+
+**1. The three counts against a second tool.** Mine (`lanes/proofs/tools/attack_unit_count.py`) shares no code with SCALE's `exact_classes.py`. It counts the writing units among the words a block reads, plus one for the block's own outputs; it reads no reader sets and no parameters. So it is a floor: SCALE's exact count must sit at or above it, and the difference must have a name. Runs on cpu-5, rank 0 of the b1 census row, 1,331,964 rows: `r20261111-122420-d93a` (the nine-writer recut) and `r20261111-122844-eb26` (the final recut, then the plan's cut), both rc 0; outputs in `lanes/proofs/tools/attack_unit_count.*.out.txt`.
+
+The final recut [run `eb26`; SCALE's column from `exact_merged.json`, `final2`]:
+
+| kind | mine, a floor | SCALE, exact | the difference |
+|---|---|---|---|
+| the decode router | 129 (128 + 1) | 145 | the bias, and 16 output classes where I count 1 |
+| a later head block, 64 keys | 139 | 139 | none |
+| `quant{K=2048}`, `SiluMul{I=256}` | 129 | 129 | none |
+| `RMSNormFused{N=6144}` | 129 | 131 | the weight, a second output |
+| `DsaRMSNorm{N=2048}`, `DsaIndexerKRow` | 129 | 130 | the weight |
+| a column block of `ResidualAdd` | 101 | 104 | three more output reader sets |
+| `SiluMul{I=1536}` in slices of 192 | 97 | 97 | none |
+| whole-row attention, T = 9 | 91 | 98 | 8 output classes, one a head, where I count 1 |
+| `DsaMqaLogits{N=60}` | 94 | 92 | mine is 2 over, both mine: my tool holds a head's weight word as a unit apart from the head's q words (SCALE's layout makes them one, rightly), and I add 1 for outputs SCALE finds no reader of |
+| the fused all-reduce's norm | 65 | 73 | the weight and the other 7 ranks' partials |
+| `DsaIndexerQ`, one head | 34 | 35 | the weight |
+| the all-reduces' column blocks | 25 | 32 | the other 7 ranks' partials, one class each |
+| `MoeSum` | 25 | 25 | none |
+
+- The router's 16 [read]: `verity/definitions/registry/moe.py:598-608`. Slot k's expert id is a row of its own, read by the read of that expert's weight rows; slot k's weight is a row of its own, read by its down projection. Sixteen fields, sixteen reader sets. So 128 + 1 + 16 = 145.
+- The nine-writer recut [run `d93a`]: the router's floor is 257 (SCALE: 273 = 256 + 1 + 16), a later head block 139, every other kind at most 129. SCALE's correction of its own 139 holds.
+- The plan's cut [run `eb26`, second pass]: whole-row attention at T = 9 has a floor of 4,123 (4,096 + 8 + 18 + 1), 78 blocks at each T from 1 to 9; SCALE's 4,130 has 8 output classes for my 1. [read] the plan's census holds the nine templates `SparseMlaSplit_v1{T=1..9,NS=1,NH=8}` as rows of 65,536 output bits (`inputs/census.json` of `r20261111-080601-3db1`).
+- **Mine to correct:** my 11:35Z "M = 2,049 at the plan's cut" came from a tool that cut every attention row into head blocks. As a maximum it was wrong by a factor of two. 4,130 is the count.
+
+**2. What "M = 145" leaves out: the token select.**
+- **The plan holds it in no stratum** [read]. `TokenSelect_v1{V=154880}` is under `gaps` in the plan's census: "its rows alone need a 2^28 block", 26,948,946 ANDs, 8 prefill and 248 decode rows. `main`'s workload card says the same in its source line: "rows no cut fits (SparseMlaSplit_v1, TokenSelect_v1) are in no stratum" (`benchmarks/spot_figures/cards/workload.glm-5.3.json`).
+- **Neither count covers it** [read]. SCALE's file gives it 2 classes in every configuration (pairs 1, own 1): the all-gather before it stands as its one writer. But the all-gather has no gates (the census's `not_blocks`: "no gates"), so the gates the select reads are the LM head's, `Gemm_v2{K=6144,N=19360}`, which the plan proves one word a block (`Gemm_v2{K=6144,N=1}`). `kfix_exact.py:103` then drops `AllGather` and `TokenSelect` from the frontier. My tool skips it too ("not counted (no block)"). I said this at 11:35Z; your 12:24Z list of what is not exact does not have it.
+- **Its count, whatever cut proves it** [derived]. The select's units read the logits. The tensor-parallel window's own cut is V/C group units of C logits and one combine over their bests (`adapters/vllm/verity_vllm/pipeline/tp/wires.py:16-19`, `grain.py:89-97`). With the LM head proved w words a block, a group unit has C/w + 1 classes and the combine V/C + 2. The least worst unit over C (multiples of 16 that divide 154,880):
+
+| the LM head's block, in words | 1 (the plan) | 2 | 4 | 8 | 16 | 32 |
+|---|---|---|---|---|---|---|
+| classes of the select's worst unit | 442 | 321 | 221 | 161 | 111 | 89 |
+
+- `grain.select_width` itself finds no C at 1, 2 or 4 words (`MAX_ROWS` = 256: `verity/commitments/windows/interface.py:307-311`), and C = 1,280 from 8 words: a group unit of 160 writer rows [run: the function's rule on V = 154,880].
+- **What that does to one M** [derived]. At the final recut SCALE's one-M cells move by log2(M/145); I checked the rule on its own cells at 205 and 273.
+
+| one M | the record | width 2^-4 | width 2^-6 | width 2^-7 |
+|---|---|---|---|---|
+| 145 (SCALE) | -100.79 | -100.24 | -102.24 | -103.24 |
+| 161 (the LM head at 8 words) | -100.64 | -100.09 | -102.09 | -103.09 |
+| 193 (the all-reduce across ranks, section 3) | -100.38 | -99.83 | -101.83 | -102.83 |
+| 442 (the select at the plan's LM head) | -99.18 | -98.63 | -100.63 | -101.63 |
+
+- The record holds 2^-100 under one M up to M = 250, width 2^-4 up to 171 [derived]. By CONCRETE's room [relayed, 12:31Z] the record is inside `K ≤ 2^33` up to 152 and inside `_narrow` up to 248. So 442 is outside every instance that closes the record at 2^-100, and 161 is outside `K ≤ 2^33`.
+- The mean and by-stratum columns need the select's blocks in a stratum with a k. They have none, so I can't compute them.
+- **What would settle it:** a cut of the select in the census, a tenth writer row (the LM head at 16 words or more; its k_log is not sized, and SCALE found the router's BF16 GEMM at the same K over `K_MAX` at 4 words [relayed]) or a select in three levels, and then a count. Which is not mine.
+
+**3. The all-reduce across ranks.** SCALE marks 193 "upper, under a cross-rank Program". [read] `tp/wires.py:6-8, 29, 36-37`: in the window of all ranks each combine unit's parts are wired "row p from rank p's partial row", and "a peer row that isn't its writer's output is a wrong block of the window ..., never a free input". With `ranks`, "the window of those ranks alone: ... every other rank's partial row a free input, as in today's per-rank windows". So the two go together:
+- one window of eight ranks: the embedding's all-reduce unit reads eight ranks' writers, 193 at H = 4, and width 2^-4 reads 2^-99.83;
+- per-rank windows: 32, and the other seven ranks' partial rows are free inputs of the rank's window, by the module's own words.
+
+"M = 145" is the second. Which the served window is I did not establish, and I did not read the cross-rank pass (`tp/xrank_dump.py`), which may tie the peers another way.
+
+**4. #8924's ready line (REGX 12:30Z)** [read: the body at `d025f81332e6`]. The body says what the theorem says: the premise first, in your 12:06Z words; "it says nothing about a wire"; it counts no classes; it names the three expected-time premises as taken. I found nothing to change. Its four checks: elaborates and axioms [relayed: tries `b35a`, `a868`]; kernel replay, the candidate's check; a second reader, EXTFORM on the three files and my own read of the statement at 10:55Z.
+
+**What I did not check.** SCALE's reader-set hashing line by line. Ranks 1 to 7 (both tools ran rank 0). The frontier's pricing (`kfix_exact.py`) beyond line 103. PageCopy, which no Program holds.
+
+For the table: (b) at the final recut: "M = 145 over the kinds the plan prices [SCALE's run; a second tool agrees kind by kind, run `eb26`]: the record 2^-100.79 under one M. The token select is in no stratum and in neither count; counted at the plan's LM-head cut its worst unit is 442 or more [derived], and the record reads 2^-99.18." The table may not say "exact over the served wiring" without the select, nor that the record holds 2^-100 under one M at the final recut until the select has a cut and a count. The plan's cut: 4,130 holds [run `eb26`: floor 4,123]; my 2,049 is withdrawn.
