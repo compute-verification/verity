@@ -297,9 +297,47 @@ fn own_row<R: RowRead + ?Sized>(rows: &R, i: usize) -> bool {
     rows.row_len(i) == 1 && rows.row_cols(i).next() == Some(i)
 }
 
-/// Row `i`'s XOR over `z`, whose entry `i` is still 0, and all ones where it reads column `i` an odd number of times.
-fn fold_own<W: RowWord>(row: &[u32], i: usize, z: &[W]) -> (W, W) {
-    let (x, o) = row.iter().fold((W::splat(0), 0u64), |(x, o), &c| (x.xor(z[c as usize]), o ^ 0u64.wrapping_sub(u64::from(c as usize == i))));
+/// How many column indices before it reads z at one a walk ([`IrUnitNet::eval_wide`]) asks the cache for it, unless
+/// `FC_UNIT_AHEAD` says.
+pub const AHEAD: usize = 64;
+
+/// The walk's distance: `FC_UNIT_AHEAD` column indices when set (0: it never asks), else [`AHEAD`]. A walk's words are the
+/// same at every distance.
+pub fn unit_ahead() -> usize {
+    static N: OnceLock<usize> = OnceLock::new();
+    *N.get_or_init(|| std::env::var("FC_UNIT_AHEAD").ok().map_or(AHEAD, |v| {
+        v.parse().unwrap_or_else(|_| panic!("FC_UNIT_AHEAD={v}: a number of column indices"))
+    }))
+}
+
+/// Asks the cache for `z[c]` before it is read: no value depends on it.
+#[cfg(target_arch = "x86_64")]
+#[inline(always)]
+#[allow(unused_unsafe)]
+fn ask<W>(z: &[W], c: u32) {
+    use std::arch::x86_64::{_MM_HINT_T0, _mm_prefetch};
+    // SAFETY: a prefetch reads nothing and faults at no address, and the address is computed without a dereference
+    unsafe { _mm_prefetch::<{ _MM_HINT_T0 }>(z.as_ptr().wrapping_add(c as usize) as *const i8) }
+}
+
+#[cfg(not(target_arch = "x86_64"))]
+#[inline(always)]
+fn ask<W>(_: &[W], _: u32) {}
+
+/// Row `i` of `rows`' XOR over `z`, whose entry `i` is still 0, and all ones where it reads column `i` an odd number of
+/// times. With `ahead` > 0 each read is asked of the cache `ahead` column indices before it. A side's indices are one array
+/// in row order, so the ask runs past the row's end into the rows after it, where the processor's own lookahead stops at
+/// the branch that ends a row. A walk of a large net waits on these reads, not on its arithmetic.
+#[inline(always)]
+fn fold_own<W: RowWord>(rows: &Rows, i: usize, z: &[W], ahead: usize) -> (W, W) {
+    let (s, e) = (rows.off[i] as usize, rows.off[i + 1] as usize);
+    let far = if ahead == 0 { &[][..] } else { &rows.cols[s.saturating_add(ahead).min(rows.cols.len())..] };
+    let (x, o) = rows.cols[s..e].iter().enumerate().fold((W::splat(0), 0u64), |(x, o), (k, &c)| {
+        if let Some(&f) = far.get(k) {
+            ask(z, f);
+        }
+        (x.xor(z[c as usize]), o ^ 0u64.wrapping_sub(u64::from(c as usize == i)))
+    });
     (x, W::splat(o))
 }
 
@@ -454,6 +492,12 @@ impl IrUnitNet {
     /// rows once for all of them. None: the net has no one-pass form ([`IrUnitNet::one_pass`]). Every row is written in order
     /// and read only by later rows (and the constant's, set first), so only z is initialized.
     pub fn eval_wide<W: RowWord>(&self, input: impl Fn(usize) -> W) -> Option<(Vec<W>, Vec<W>, Vec<W>)> {
+        self.eval_wide_ahead(input, unit_ahead())
+    }
+
+    /// [`IrUnitNet::eval_wide`] asking the cache for z `ahead` column indices before each read (0: never). Its rows are the
+    /// same at every `ahead`.
+    pub fn eval_wide_ahead<W: RowWord>(&self, input: impl Fn(usize) -> W, ahead: usize) -> Option<(Vec<W>, Vec<W>, Vec<W>)> {
         if !self.one_pass() {
             return None;
         }
@@ -470,8 +514,8 @@ impl IrUnitNet {
         }
         z[cp] = one;
         for i in first..cp {
-            let (x, oa) = fold_own(self.a.row(i), i, &z);
-            let (y, ob) = fold_own(self.b.row(i), i, &z);
+            let (x, oa) = fold_own(&self.a, i, &z, ahead);
+            let (y, ob) = fold_own(&self.b, i, &z, ahead);
             let zi = x.and(y);
             z[i] = zi;
             a.push(x.xor(zi.and(oa)));
@@ -1123,14 +1167,19 @@ mod tests {
     fn eval_wide_is_eval64_per_group() {
         fn check<W: RowWord>(net: &IrUnitNet, k: u64) {
             let input = |g: usize, col: usize| (col as u64 + 1).wrapping_mul(0x9e37_79b9_7f4a_7c15 ^ k).rotate_left(7 * g as u32 + 1) ^ g as u64;
-            let (z, a, b) = net.eval_wide(|col| {
+            let wide = |col: usize| {
                 let mut w = W::splat(0);
                 (0..W::N).for_each(|g| w.set(g, input(g, col)));
                 w
-            }).expect("a one-pass net");
+            };
+            let (z, a, b) = net.eval_wide(&wide).expect("a one-pass net");
             for g in 0..W::N {
                 let word = |v: &[W]| v.iter().map(|w| w.word(g)).collect::<Vec<u64>>();
                 assert!((word(&z), word(&a), word(&b)) == net.eval64(|col| input(g, col)), "{} groups, inputs {k}: group {g}", W::N);
+            }
+            // asking ahead changes no word: never, the next index, past a row, past the net
+            for ahead in [0, 1, 7, AHEAD, usize::MAX] {
+                assert!(net.eval_wide_ahead(&wide, ahead) == Some((z.clone(), a.clone(), b.clone())), "{} groups, inputs {k}: asking {ahead} ahead", W::N);
             }
         }
         assert_eq!([align_of::<Row2>(), align_of::<Row4>(), align_of::<Row8>()], [16, 32, 64]);

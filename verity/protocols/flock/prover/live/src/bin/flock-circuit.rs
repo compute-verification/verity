@@ -4842,9 +4842,9 @@ fn plan_of(name: &str, gpu: bool) -> Plan {
 
 /// `unit-walk`: circuit `--net` (default the statement's unit) over `--slots` slots of seeded input words, as the device
 /// witness builds its host units (`unit_ab_into`), at each `--wide` lane groups a pass (default 1,2,4,8) on each `--threads`
-/// pool size (default the global pool's) in turn, `--reps` rounds: a `WALK` line each with its wall and CPU seconds and
-/// whether its packed words are the first run's. The walk reads no input value, so seeded words time it as a served
-/// statement's do.
+/// pool size (default the global pool's) in turn, asking the cache for z at each `--ahead` distance (default 0, never, then
+/// the walk's own, `ir_block::unit_ahead`), `--reps` rounds: a `WALK` line each with its wall and CPU seconds and whether
+/// its packed words are the first run's. The walk reads no input value, so seeded words time it as a served statement's do.
 fn unit_walk(c: &Composite) {
     let ni: usize = arg("--net", &c.unit_net.to_string()).parse().expect("--net");
     let net = &c.nets[ni].1;
@@ -4852,6 +4852,7 @@ fn unit_walk(c: &Composite) {
     let reps: usize = arg("--reps", "2").parse().expect("--reps");
     let list = |name: &str, default: &str| -> Vec<usize> { arg(name, default).split(',').map(|w| w.parse().expect(name)).collect() };
     let widths = list("--wide", "1,2,4,8");
+    let aheads = list("--ahead", &format!("0,{}", flock_live::ir_block::unit_ahead()));
     let pools: Vec<rayon::ThreadPool> = list("--threads", &rayon::current_num_threads().to_string()).into_iter()
         .map(|t| rayon::ThreadPoolBuilder::new().num_threads(t).stack_size(flock_live::THREAD_STACK).build().expect("a thread pool"))
         .collect();
@@ -4866,14 +4867,14 @@ fn unit_walk(c: &Composite) {
     let (mut out, mut first) = (vec![0u64; 4 * uw * slots], None::<(bool, Vec<u64>)>);
     for rep in 0..reps {
         for pool in &pools {
-            for &n in &widths {
+            for (&n, &ahead) in widths.iter().flat_map(|n| aheads.iter().map(move |d| (n, d))) {
                 out.fill(0);
                 let (t, cpu) = (Instant::now(), cpu_seconds());
-                let ok = pool.install(|| flock_live::circuit::unit_ab_into_wide(net, ni, uw, &ins, &mut out, n));
+                let ok = pool.install(|| flock_live::circuit::unit_ab_into_at(net, ni, uw, &ins, &mut out, n, ahead));
                 let (wall_s, cpu_s) = (t.elapsed().as_secs_f64(), cpu_seconds() - cpu);
                 let want = first.get_or_insert_with(|| (ok, out.clone()));
                 println!("WALK\t{}", json!({"net": ni, "rows": net.useful, "nnz": nnz, "slots": slots,
-                    "groups": slots.div_ceil(64), "wide": n, "rep": rep, "threads": pool.current_num_threads(),
+                    "groups": slots.div_ceil(64), "wide": n, "ahead": ahead, "rep": rep, "threads": pool.current_num_threads(),
                     "one_pass": one_pass, "flat_s": flat_s, "wall_s": wall_s, "cpu_s": cpu_s, "ok": ok,
                     "same": want.0 == ok && want.1 == out}));
             }
@@ -7612,6 +7613,6 @@ fn main() {
                 println!("LIVE\t{v}");
             });
         }
-        _ => eprintln!("usage: flock-circuit serve|prove|selftest|statement|replay --instances FILE --circuit FILE [--pin SHA256] ... | stacked --table R.bin ... | unit-walk --circuit FILE [--slots N] [--wide 1,2,4,8]"),
+        _ => eprintln!("usage: flock-circuit serve|prove|selftest|statement|replay --instances FILE --circuit FILE [--pin SHA256] ... | stacked --table R.bin ... | unit-walk --circuit FILE [--slots N] [--wide 1,2,4,8] [--ahead 0,64]"),
     }
 }
