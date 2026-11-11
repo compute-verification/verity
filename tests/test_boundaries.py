@@ -195,7 +195,7 @@ _SIDE_AT = {t: side for side, trees in (("ml", ML_TREES), ("core", CORE_TREES)) 
 #: repository's own directories.
 FORBIDDEN_EXTERNAL = ("verity_sp1", "verity_vllm", "verity_numerical", "verity_flock", "verity_torch", "verity_cli", "verity_difftest",
                       "circuit_check", "research", "cluster", "sp1", "vllm", "torch", "jax", "onnx", "archive", "backends",
-                      "benchmarks", "examples", "frontends", "infra", "integrations", "tools", "veritor")
+                      "benchmarks", "examples", "frontends", "infra", "integrations", "tools", "veritor", "adapters", "demos")
 #: ``verity``'s third-party dependencies (the root's ``pyproject.toml``); anything else it imports is the stdlib or
 #: ``verity``.  A protocol imports none: it is the standard library and ``verity``, and the application composes protocols.
 DEPENDENCIES = {"numpy"}
@@ -454,7 +454,8 @@ def test_core_unit_imports_only_inward(unit: str) -> None:
             target = _unit(".".join(parts[1:])) if parts[0] == "verity" and len(parts) > 1 else None
             third_party = set() if unit.startswith("core.protocols.") else DEPENDENCIES
             if (_external(name, imported, third_party)
-                    or (parts[0] == "verity" and parts[1:2] != ["errors"] and target not in (None, unit, *ALLOWED[unit]))):
+                    or (parts[0] == "verity" and parts[1:2] != ["errors"] and target not in (None, unit, *ALLOWED[unit]))
+                    or (parts[0] == "verity" and _file(name) in NO_UNIT)):
                 offenders.append(f"{path.relative_to(SRC)}:{line}: {name}")
     assert not offenders, "\n".join(offenders)
 
