@@ -91,6 +91,7 @@ import inspect
 import re
 import time
 from collections.abc import Mapping
+from functools import partial
 from typing import Any
 
 from verity_vllm.acquire.sources import call_boundary_source as CB
@@ -204,7 +205,7 @@ class MoeBlockSource:
         self._handles: list = []
         self._hooks = hooks.Hooks()
         self.active = False
-        self.stats = {"launches": 0, "bytes": 0, "layers": len(self.layers), "tensors_per_layer": TENSORS_PER_LAYER, "acquire_s": 0.0,
+        self.stats: dict[str, Any] = {"launches": 0, "bytes": 0, "layers": len(self.layers), "tensors_per_layer": TENSORS_PER_LAYER, "acquire_s": 0.0,
                       "unattributed": 0, "shapes": {}, "plane_flushes": 0, "router": {}, "outputs": 0}
         # the committer decides (gather collector: a launch; arena committer: nothing staged -> False); absent = an old committer
         self._flush_after_plane = getattr(committer, "flush_after_plane", None)
@@ -263,7 +264,7 @@ class MoeBlockSource:
             self._handles.append(m.register_forward_pre_hook(pre_hook))
             self._handles.append(m.register_forward_hook(post_hook, always_call=True))
         for mod, attr in self._sites():
-            self._hooks.wrap(mod, attr, lambda orig, attr=attr, mod=mod: self._wrap(attr, orig, mod))
+            self._hooks.wrap(mod, attr, partial(self._wrap, attr, mod=mod))
         ops_c = self.torch.ops._C
         if hasattr(ops_c, GROUP_QUANT_OP):
             self._hooks.patch(ops_c, GROUP_QUANT_OP, self._group_quant(getattr(ops_c, GROUP_QUANT_OP)))

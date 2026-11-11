@@ -22,6 +22,7 @@ import importlib
 import json
 import re
 import time
+from functools import partial
 from pathlib import Path
 from typing import Any
 
@@ -177,7 +178,7 @@ class TPPartialSource:
         self._handles: list = []
         self._hooks = hooks.Hooks()
         self.active = False
-        self.stats = {"launches": 0, "bytes": 0, "sites": len(self.sites), "acquire_s": 0.0, "unattributed": 0, "shapes": {}, "kinds": {}}
+        self.stats: dict[str, Any] = {"launches": 0, "bytes": 0, "sites": len(self.sites), "acquire_s": 0.0, "unattributed": 0, "shapes": {}, "kinds": {}}
         self.far = AllReduceNorm(self, model)
 
     # -- expected population / arena bound -----------------------------------------------------------------------------------
@@ -269,7 +270,7 @@ class TPPartialSource:
             if (id(mod), attr) in done or not hasattr(mod, attr):
                 continue
             done.add((id(mod), attr))
-            self._hooks.wrap(mod, attr, lambda orig, kind=kind: self._wrap(kind, orig))
+            self._hooks.wrap(mod, attr, partial(self._wrap, kind))
         for mod, attr in self.far.targets:
             self._hooks.wrap(mod, attr, self.far.wrap)
         self.active = True
@@ -586,7 +587,7 @@ class TPPartialSource:
                         continue
                     seen.add(member)
                     ob = _bytes(oracle_t)
-                    n_diff = 0
+                    n_diff: int | None = 0
                     if committed != ob:
                         n_diff = None
                         if len(committed) == len(ob):
