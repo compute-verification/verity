@@ -1,6 +1,7 @@
 """Figure 1 in its total-cost form: the configurations and their serve-tax card, the registrations' spans, the write form
 against every admissible set of a small design, the break-even's search, and one scope end to end with a measured tax
 dropped in."""
+import json
 from itertools import product
 from math import comb
 
@@ -286,6 +287,44 @@ def test_a_computed_types_fixed_cost_counts_in_its_share_of_proving():
         t.computed_proving(cells, row, (True,))
 
 
+def test_a_by_template_designs_strata_are_its_cells():
+    """A by-template design's row has no merged size class: each cell is a stratum by its position
+    (`figure1.split_cells`), so its write form and computed share are those of the width-stratified row with the same
+    strata, and the series carry its counts by position."""
+    cells = [Cell(100, 16, prove=1.0, fixed=50.0, cap=1000), Cell(1, 64, stratum=64, prove=1.0, cap=10)]
+    width = {"merged": 16, "k": {0: 2, 64: 1}, "q": 1e-3, "registration_sample": 0}
+    template = {"design": "template", "merged": None, "k": {0: 2, 1: 1}, "q": 1e-3, "registration_sample": 0}
+    assert [c.stratum for c in f1.split_cells(cells, None)] == [0, 1]
+    assert [c.stratum for c in f1.split_cells(cells, 16)] == [0, 64]
+    assert t.computed_proving(cells, template, (True, False)) == t.computed_proving(cells, width, (True, False))
+    assert t.write_form(cells, template, 4, .01, 500) == t.write_form(cells, width, 4, .01, 500) > 0
+    assert f1._plan(template) == {"merged": None, "q": 1e-3, "k": {"0": 2, "1": 1}}
+    assert f1._plan(width)["k"] == {"<=16": 2, "64": 1}
+
+
+def test_a_lines_counts_are_one_whole_count_a_block_type(tmp_path):
+    """`counts` writes a two-stage line's design as the verifier's two-stage rule takes it: the whole count of a
+    verification phase's requests the first stage samples and one whole count, at least one, for each block type of
+    the line's cut, by the cut's names in its order, with the phase's size and the sessions the design prices, more
+    than one a block type.  A β that pays for no sampled request of the line's verification phase has no counts, and
+    neither has (C), which samples one-stage."""
+    out = t.counts("GLM-5.3", "tokens_datacenter", "world year", 0.1)
+    strata = t._lines("GLM-5.3", "census")[4]["tokens_datacenter"]["partition"].value["strata"]
+    assert list(out["k"]) == [x["block"] for x in strata if x["per_token"] > 0]
+    assert all(isinstance(k, int) and k >= 1 for k in (out["sampled"], *out["k"].values()))
+    phase = out["verification_phase"]
+    assert phase["machines"] > t.POD and out["sampled"] <= phase["replay_blocks"]
+    assert out["sessions"] > len(out["k"]) and out["bound_bits"] > 0
+    assert (out["schema"], out["line"], out["scope"], out["beta"]) == (t.COUNTS_SCHEMA, "tokens_datacenter",
+                                                                      "world year", 0.1)
+    t.main(["counts", "--scope", "world year", "--beta", "0.1", "--out", str(tmp_path / "counts.json")])
+    assert json.loads((tmp_path / "counts.json").read_text()) == out
+    with pytest.raises(ValueError, match="no design within"):
+        t.counts("GLM-5.3", "tokens", "world year", 0.01)
+    with pytest.raises(ValueError, match="no two-stage line"):
+        t.counts("GLM-5.3", "every_block")
+
+
 @pytest.fixture(scope="module")
 def measured(tmp_path_factory) -> dict:
     """One scope at four shares, with (A)'s tax measured, planned without Lean's checks (`test_figure1.py` stubs (C)'s
@@ -347,10 +386,13 @@ def test_each_line_starts_at_its_own_tax(measured, tmp_path):
         for n in (name, f"{name}_pod", f"{name}_datacenter"):
             s = lines[n]
             assert all(0 <= p <= x <= 1 for x, p in zip(s["shared"], s["padding"]))
-            for k, one, binds, plan, share in zip(s["registration_sample"], s["sample_budgets"], s["binds"], s["plan"],
-                                                  s["computed_proving"], strict=True):
+            for k, one, binds, plan, share, sessions in zip(s["registration_sample"], s["sample_budgets"], s["binds"],
+                                                            s["plan"], s["computed_proving"], s["sessions"],
+                                                            strict=True):
                 assert isinstance(k, int) and k >= 0 and (one <= 1) == (k >= 1), n
                 assert (binds, plan, share) == ("served", None, None) if k == 0 else 0 < share < 1, n
+                assert sessions == 0 if k == 0 else plan["merged"] is None and sessions > 0, n
+                assert k == 0 or all(v == int(v) >= 1 for v in plan["k"].values()), n
         samples = [lines[n]["registration_sample"][at] for n in (name, f"{name}_pod", f"{name}_datacenter")]
         assert samples == sorted(samples), name
     assert "samples a whole number K of its requests" in caps["exfiltration"]
@@ -363,7 +405,11 @@ def test_each_line_starts_at_its_own_tax(measured, tmp_path):
     assert caps["exfiltration"].count("bounded here only by everything the scope serves") == 1
     s = lines["tokens_datacenter"]
     assert f"{t._share(s['computed_proving'][at])} of its sampled request's proving" in caps["exfiltration"]
-    assert f"K = {s['registration_sample'][at]:,} sampled" in caps["exfiltration"]
+    assert (f"K = {s['registration_sample'][at]:,} sampled, in {s['sessions'][at]:,.0f} sessions a verification "
+            f"phase for {len(s['plan'][at]['k']):,} block types") in caps["exfiltration"]
+    assert s["sessions"][at] > len(s["plan"][at]["k"])
+    assert "reads one session for each template of a verification phase" in caps["exfiltration"]
+    assert all(c["design"] == "two-stage, by template" for n, c in out["configurations"].items() if n != "every_block")
     assert "everything the scope serves (" not in caps["infiltration"]
     assert "priced, not measured, a lower bound: the hashing alone" in caps["skipped_work"]
     assert "Replay is full-batch" in caps["exfiltration"] and "batch-invariant kernels (dotted" in caps["exfiltration"]

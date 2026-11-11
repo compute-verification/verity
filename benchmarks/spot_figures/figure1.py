@@ -606,8 +606,11 @@ def _size_class(bits: float) -> int:
     return w
 
 
-def split_cells(cells: Sequence[Cell], merged: int) -> list[Cell]:
-    """The cells in a two-stage design's strata: the size classes up to `merged` in stratum 0, each wider one its own."""
+def split_cells(cells: Sequence[Cell], merged: int | None) -> list[Cell]:
+    """The cells in a two-stage design's strata, by its row's `merged`: the size classes up to it in stratum 0 and each
+    wider one its own, or, with None, a by-template design's, each cell the stratum of its position."""
+    if merged is None:
+        return [replace(c, stratum=i) for i, c in enumerate(cells)]
     return [replace(c, stratum=0 if _size_class(c.bits) <= merged else _size_class(c.bits)) for c in cells]
 
 
@@ -675,10 +678,13 @@ PLAN = ("merged", "kappa", "q", "k", "draws", "replay_sample", "prove", "replay"
 
 def _plan(row: dict) -> dict:
     """A point's planner row as the series carry it: a two-stage design's k by stratum, a wide stratum by its size
-    class's bits and the merged one by the widest class it holds (`all` when it is the only one)."""
+    class's bits and the merged one by the widest class it holds (`all` when it is the only one); a by-template
+    design's, whose `merged` is None, by each cell's position."""
     out = {k: row[k] for k in PLAN if k in row}
-    if isinstance(k := out.get("k"), dict):
+    if isinstance(k := out.get("k"), dict) and row["merged"] is not None:
         out["k"] = {str(t) if t else "all" if len(k) == 1 else f"<={row['merged']}": v for t, v in k.items()}
+    elif isinstance(k, dict):
+        out["k"] = {str(t): v for t, v in k.items()}
     return out
 
 

@@ -16,6 +16,8 @@ uv run python benchmarks/spot_figures/figures.py --model GLM-5.3 --out DIR   # f
                                                        # [--request workload] [--workers N] [--points N] [--no-lean]
                                                        # [--serving measured]
 uv run python benchmarks/spot_figures/total_cost.py render DIR/figure1.json  # Figure 1, from the JSON
+uv run python benchmarks/spot_figures/total_cost.py counts --line tokens_datacenter --beta 0.1 --out COUNTS.json
+                                                       # a line's design as the counts the verifier's rule takes
 uv run python benchmarks/spot_figures/render.py DIR/figure1_overhead.json   # the bounds against proof overhead
 uv run python benchmarks/spot_figures/figure4.py DIR/figure1.json            # Figure 4 (figures.py writes it too)
 uv run python benchmarks/spot_figures/figure5.py SURFACE.json... [--path P] [--headline CARD]  # Figure 5
@@ -121,13 +123,21 @@ uv run python benchmarks/spot_figures/record.py stamp META.json [--out DIR]  # a
     one sampled replay block a verification phase, no design is within the budget: the point is at the scope's
     served bits, with no plan, and says what one sampled replay block costs against the phase's budget
     (`sample_budgets`); a point with a design gives the same for its design, so the least verification phase the
-    design fits. A statement holds one Definition's sampled proof blocks of a sampled replay block, or of the
-    verification phase's K, its shape fixed before any coin because K is, its sessions padded to one size, and each
-    Definition takes the phase's statements only where they cost less than its own
-    (`optimize.two_stage_statements`). (A) and (A′) are plotted at each of the three sizes, dark to light, and (B) at
-    one machine's; each series gives K and the shares of its proving in the phase's statements and on padding. No
-    code builds a verification phase of a datacenter's size, one committer over every machine's boundary rows: that
-    line is the cost model's.
+    design fits. Its second stage's strata are the ones the verifier's two-stage rule registers, one a block type
+    of the cut (`total_cost.STRATA`, `optimize.two_stage_design`'s `stratify` "template"): each block type samples
+    its own whole count of a sampled replay block's proof blocks, at least one, where the planner's width-stratified
+    design samples a count among several types, which that rule cannot state. `total_cost.py counts` writes a line's
+    design at a β as the rule takes it, the first stage's count and each block type's by the cut's name
+    (`optimize.two_stage_counts`). A statement holds one Definition's sampled proof blocks of a sampled replay block,
+    or of the verification phase's K, its shape fixed before any coin because K is, its sessions padded to one size
+    and none larger than the `proof_overhead` card measures one, and each Definition takes the phase's statements
+    only where they cost less than its own (`optimize.two_stage_statements`). The verifier's second stage reads one
+    session for each template of a verification phase (`Spot.SecondStage`), so a point with more sessions than block
+    types (`sessions`, in each series and caption) prices sessions the verifier refuses, and no card prices a
+    session of the size one a template would need. (A) and (A′) are plotted at each of the three sizes, dark to
+    light, and (B) at one machine's; each series gives K, its sessions and the shares of its proving in the phase's
+    statements and on padding. No code builds a verification phase of a datacenter's size, one committer over every
+    machine's boundary rows: that line is the cost model's.
   - Exfiltration: (A) and (A′) in the patterns' form (`card_influenceTwo_le_patterns`), under its two modeling
     conditions (each request serves at most S bits, and no proof block is shared across requests), with the capped
     sets' form (`card_influenceTwo_le_served_min`) at one machine's verification phase beside each, thin and dashed;
@@ -288,9 +298,13 @@ Limits of the model:
 - The patterns' form takes each request to serve at most S bits and no proof block to be shared across requests: a
   batched or routed block that several requests read needs the planner changed.
 - A verification phase's statements are sized for the first stage's count alone: a Definition's blocks in a sampled
-  replay block are taken at their mean share of its stratum's k, and its sessions' padding to one size within a
-  statement, not to one size across Definitions. A pod-wide or datacenter-wide verification phase needs one committer
-  over its machines' boundary rows.
+  replay block are its own count, and its sessions' padding to one size within a statement, not to one size across
+  Definitions. A pod-wide or datacenter-wide verification phase needs one committer over its machines' boundary rows.
+- A total-cost line's design has the counts the verifier's two-stage rule registers and more sessions than its
+  second stage reads: one session a template of a verification phase would hold every sampled proof block of the
+  template, far past the statements the `proof_overhead` card measures, and the planner prices no session it has
+  no measurement of. Figure 1's own panels (`figure1.py`) still plot the planner's width-stratified and uniform
+  designs over one verification phase holding every replay block, which the verifier's rule registers neither.
 - A two-stage bound spends δ once over the scope's replay blocks and counts them as one population, each
   verification phase's sample taken to miss its incorrect replay blocks independently of the others'. Lean checks
   that count for one design over the population (`TwoStageCheckPatternsSound`); no Lean statement carries it across

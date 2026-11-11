@@ -13,8 +13,8 @@ witness bits where the card doesn't measure the type; a line's marginal overhead
 
 * `tokens` (A): serving commits the token ids, the schedule record and the KV cache at each replay block's edge; a
   sampled request is replayed with its whole batch from its replay block's edge, one machine's window, since the
-  model's tokens come out bit-exact only in their served batch (`REPLAYS`), and the design is the width-stratified
-  two-stage one.  `tokens_bi` replays a request alone, which needs batch-invariant kernels and pays their tax, the
+  model's tokens come out bit-exact only in their served batch (`REPLAYS`), and the design is the two-stage one by
+  template (`STRATA`).  `tokens_bi` replays a request alone, which needs batch-invariant kernels and pays their tax, the
   comparison.  Exfiltration is its patterns' form
   (`card_influenceTwo_le_patterns`), never above the scope's served bits (`card_influenceTwo_le_two_pow_outs`), at
   a verification phase of one machine's window and, as `tokens_pod` and `tokens_datacenter`, of a pod's and a
@@ -49,9 +49,14 @@ two-stage line's first stage is the one the verifier runs: a verification phase 
 K of its requests, at least one (`optimize.two_stage_design`'s `registration`), so each point is priced and bounded
 at K over the phase's requests, and a β that does not pay for one sampled request a verification phase has no design:
 the line is at the scope's served bits there, with what one sampled request costs against the phase's budget
-(`sample_budgets`).  A two-stage statement holds one Definition's sampled proof blocks of a sampled request, or of the
-verification phase's K sampled requests (`optimize.two_stage_statements`), each
-Definition taking whichever costs less.  `breakeven` gives each patterns'-form
+(`sample_budgets`).  Its second stage's strata are the ones the verifier's two-stage rule registers (`STRATA`): each
+block type of the cut samples its own whole count, at least one, of a sampled request's proof blocks, and `counts`
+writes a point's design as that rule takes it.  A two-stage statement holds one Definition's sampled proof blocks of
+a sampled request, or of the verification phase's K sampled requests (`optimize.two_stage_statements`), each
+Definition taking whichever costs less, and no statement is larger than the `proof_overhead` card measures one.  The
+verifier's second stage reads one session for each template of a verification phase (`Spot.SecondStage`), so a point
+with more `sessions` than block types prices sessions it refuses: each point carries the count, and no card prices a
+session of the size one a template would need.  `breakeven` gives each patterns'-form
 line's marginal overhead and β at which its bound reaches the weights, at FP8 and FP4, each certified by Lean unless
 `lean` is off (`certify`: at the β it gives, the bits Lean certifies for the planner's design are at most the weights).
 Only that side is Lean's: Lean bounds a design's bits from above, so nothing certifies that a smaller β can't reach the
@@ -61,6 +66,7 @@ weights; and what a design costs, so which design fits a β, is the planner's pr
     uv run python benchmarks/spot_figures/total_cost.py render DIR/figure1.json [--scope "world year"] [--out DIR]
     uv run python benchmarks/spot_figures/total_cost.py breakeven --model GLM-5.3 --out DIR [--scope S] [--workers N] \
         [--no-lean]
+    uv run python benchmarks/spot_figures/total_cost.py counts --line tokens_datacenter --beta 0.1 --out COUNTS.json
 """
 from __future__ import annotations
 
@@ -76,7 +82,8 @@ from textwrap import fill
 import cards as spot_cards
 import figure1 as f1
 from verity.protocols.spot import plancheck
-from verity.protocols.spot.optimize import Cell, leak_count, two_stage_design, two_stage_exfil, two_stage_price
+from verity.protocols.spot.optimize import (Cell, leak_count, two_stage_counts, two_stage_design, two_stage_exfil,
+                                            two_stage_price)
 
 SCHEMA = "spot-figure1/v2"
 #: β, the share of compute for replays and proofs, from 0.01% to 1,000% at four points a decade, and the design card's:
@@ -145,11 +152,15 @@ POD = 64
 #: machine, a pod or every machine of the census datacenter.  The first stage samples a whole count of its requests,
 #: and they fill each Definition's statements together
 REGISTRATIONS = {"machine": "one machine's", "pod": f"a {POD}-machine pod's", "datacenter": "a datacenter's"}
+#: a two-stage line's second-stage strata (`optimize.two_stage_design`'s `stratify`): one a block type of the cut, the
+#: strata the verifier's two-stage rule registers, one whole count a template (`Spot.Select.Counts`).  A stratum of
+#: several types, the planner's width-stratified design, samples its count among them, which that rule cannot state
+STRATA = "template"
 #: a two-stage point's verification phase: the requests it samples (K, 0 where no design is within the budget), the
-#: shares of proving in its statements and on their padding, and what one sampled request costs over the phase's
-#: budget (`sample_budgets`: under the point's design at K = 1, so the design fits a phase that many times this
-#: one's size; with no design, under the planner's least one, a single proof block proved)
-REG = ("registration_sample", "shared", "padding", "sample_budgets")
+#: shares of proving in its statements and on their padding, its sessions, and what one sampled request costs over
+#: the phase's budget (`sample_budgets`: under the point's design at K = 1, so the design fits a phase that many
+#: times this one's size; with no design, under the least one, a single proof block of each type proved)
+REG = ("registration_sample", "shared", "padding", "sessions", "sample_budgets")
 
 
 def registration_gpu_seconds(name: str, c: dict[str, f1.InputCard]) -> float:
@@ -170,18 +181,18 @@ def _spans(name: str, line: Configuration) -> dict[str, Configuration]:
 TOKENS = "the token ids, the schedule record and the KV cache at replay-block edges"
 REQUEST = "one machine's 600 s, its whole batch re-run from its edge for each sampled request"
 CONFIGURATIONS = {
-    **_spans("tokens", Configuration("(A) Tokens only", TOKENS, REQUEST, "two-stage, width-stratified",
+    **_spans("tokens", Configuration("(A) Tokens only", TOKENS, REQUEST, "two-stage, by template",
                                      ("exfiltration", "infiltration"), form="patterns", registration="machine")),
     "tokens_bi": Configuration("(A) Tokens only, batch-invariant kernels", TOKENS, "a request, replayed alone",
-                               "two-stage, width-stratified", ("exfiltration",), form="patterns",
+                               "two-stage, by template", ("exfiltration",), form="patterns",
                                registration="machine", variant_of="tokens", replay="request"),
     "layer_of_token": Configuration("(B) Each layer's state",
                                     "the tokens and each layer's residual stream, K/V and indexer keys",
                                     "one engine step's whole batch at one layer, re-run for each sampled layer of one token",
-                                    "two-stage, width-stratified", ("exfiltration", "infiltration"), form="sets",
+                                    "two-stage, by template", ("exfiltration", "infiltration"), form="sets",
                                     registration="machine", replay="step"),
     **_spans("per_expert", Configuration("(A′) Tokens only, the MoE cut per expert", TOKENS, REQUEST,
-                                         "two-stage, width-stratified", ("exfiltration", "infiltration"),
+                                         "two-stage, by template", ("exfiltration", "infiltration"),
                                          partition="per-expert", serve="tokens", form="patterns",
                                          registration="machine")),
     "every_block": Configuration("(C) Every proof-block boundary", "every proof block's outputs", "a proof block",
@@ -381,7 +392,7 @@ def _hazard(q: float, y: float) -> float:
 
 def write_form(cells: list[Cell], row: dict, replay_blocks: float, delta: float, footprint: float) -> float:
     """At least the most bits the incorrect proof blocks of an admissible set write under `row`'s two-stage design
-    (`optimize.two_stage_design`'s: its `merged` size class and `k` by stratum, its `q`), each replay block charged at
+    (`optimize.two_stage_design`'s: its strata, `figure1.split_cells`'s, and `k` by stratum, its `q`), each replay block charged at
     most `footprint` and its own blocks' bits.  An admissible set has Σ_ρ h(y_ρ) < Λ = ln(1/δ), y_ρ = Σ k_t/n_t over its
     blocks in ρ (`two_stage_exfil`'s acceptance), so the charge is at most Λ times the most a replay block charges a
     unit of h, and at most R·F.  A replay block charged c has y at least the least k_t/n_t of a block of at least c bits,
@@ -475,17 +486,17 @@ def _point(job: tuple) -> dict:
                                  "plan": _plan(work["row"]), **checked["work"]}}
     cells = list(g.cells)
     row = two_stage_design(cells, g.replay_blocks, m.delta, budget=budget, replay=g.replay, h=m.byte_s,
-                           served=m.served, union=form == "patterns", registration=span)
+                           stratify=STRATA, served=m.served, union=form == "patterns", registration=span)
     one = g.replay + sum(x.n * x.commit_bytes for x in cells) * m.byte_s
     phase = budget / g.replay_blocks * span
     if row is None:
         count = two_stage_exfil(cells, {x.stratum: 1 for x in cells}, g.replay_blocks, 0.0, m.delta, m.served,
                                 form == "patterns")
         top = min(g.footprint, sum(x.n * x.bits for x in cells))
-        one += two_stage_price([replace(x, stratum=0) for x in cells], {0: 1}, 1)[2]
+        one += two_stage_price(f1.split_cells(cells, None), dict.fromkeys(range(len(cells)), 1), 1)[2]
         return {"exfiltration": {"y": min(count, served), "count": count, "binds": "served", "plan": None,
                                  **({"lean": None, "planner": None, "theta": None} if lean else {}),
-                                 "registration_sample": 0, "shared": 0.0, "padding": 0.0,
+                                 "registration_sample": 0, "shared": 0.0, "padding": 0.0, "sessions": 0.0,
                                  "sample_budgets": one / phase, "computed_proving": None},
                 "infiltration": {"y": g.replay_blocks * top, "plan": None}}
     count, checked = (f1.lean_two(cells, g.replay_blocks, row, m.delta, m.served, form == "patterns") if lean
@@ -538,8 +549,9 @@ def captions(out: dict, scope: str) -> dict[str, str]:
 
     def at_ratio(name: str) -> str:
         """A two-stage line at β = `RATIO_BUDGET`: its bound, the requests its verification phase samples, its
-        statements' sharing, its computed proving and the least verification phase its design fits; or that no design
-        is within the budget, and what one sampled request costs against it."""
+        sessions beside its block types, its statements' sharing, its computed proving and the least verification
+        phase its design fits; or that no design is within the budget, and what one sampled request costs against
+        it."""
         if at is None:
             return ""
         s = lines["exfiltration"][name]
@@ -549,8 +561,9 @@ def captions(out: dict, scope: str) -> dict[str, str]:
         shared = (f"{_share(s['shared'][at])} of its proving in the verification phase's statements, "
                   f"{_share(s['padding'][at])} padding" if s["shared"][at] else "its own statements")
         least = s["sample_budgets"][at] * regs[conf[name]["registration"]]["machines"]
-        return (f" {_size(s['y'][at])}; K = {s['registration_sample'][at]:,} sampled: "
-                f"{shared}; {_share(s['computed_proving'][at])} of its sampled request's proving computed; one "
+        return (f" {_size(s['y'][at])}; K = {s['registration_sample'][at]:,} sampled, in "
+                f"{s['sessions'][at]:,.0f} sessions a verification phase for {len(s['plan'][at]['k']):,} block "
+                f"types: {shared}; {_share(s['computed_proving'][at])} of its sampled request's proving computed; one "
                 f"sampled request of this design costs the budget of {least:,.3g} machines' {window:g} s, the least "
                 f"verification phase it fits (one machine's {least * window / 3600:,.3g} hours);")
 
@@ -576,12 +589,19 @@ def captions(out: dict, scope: str) -> dict[str, str]:
              "requests (of (B), its layers of one token), never fewer than one: each point is priced and bounded at "
              "K over the phase's requests, and where β does not pay for one of them no design is within the budget "
              "and the line is at everything the scope serves. No code builds a verification phase of a datacenter's "
-             "size, one committer over every machine's boundary rows: that line is the cost model's. A two-stage "
+             "size, one committer over every machine's boundary rows: that line is the cost model's. The second "
+             "stage samples each block type at its own whole count of a sampled request's proof blocks, at least "
+             "one, the strata the verifier's two-stage rule registers. A two-stage "
              "statement holds one Definition's sampled proof blocks of a sampled request or of the verification "
-             "phase's K, its sessions padded to one size, and each Definition takes the phase's statements only "
-             "where they cost less than its own. The verification phase, its K and its statements' split are the "
+             "phase's K, its sessions padded to one size and none larger than a measured one, and each Definition "
+             "takes the phase's statements only "
+             "where they cost less than its own. The verifier's second stage reads one session for each template "
+             "of a verification phase, so a line with more sessions than block types prices sessions the verifier "
+             "refuses, and no measurement prices a session of the size one a template would need. "
+             "The verification phase, its K and its statements' split are the "
              "protocol's, fixed before any coin, never the prover's. Each two-stage line gives at "
-             f"β = {_share(f1.RATIO_BUDGET)} its bound and K, the shares of its proving in the phase's statements "
+             f"β = {_share(f1.RATIO_BUDGET)} its bound, K and its sessions a verification phase beside its block "
+             "types, the shares of its proving in the phase's statements "
              "and on padding, the share of its sampled request's proving, the statements' fixed costs included, "
              "that is computed, and the least verification phase its design fits; or that no design is within "
              "the budget, and what one sampled replay block costs against it.")
@@ -783,6 +803,40 @@ def _run(model_name: str, scope_names: tuple[str, ...] | None, request: str, eac
                 caps[panel] += "".join(f" {x}" for x in sentences)
         out_scopes[name]["captions"] = caps
     return out
+
+
+COUNTS_SCHEMA = "spot-two-stage-counts/v1"
+
+
+def counts(model_name: str = "GLM-5.3", line: str = "tokens_datacenter", scope: str | None = None,
+           beta: float = f1.RATIO_BUDGET, request: str = "census", serving: str = "assumed") -> dict:
+    """A two-stage line's design at β on `scope` (default the first) as the verifier's two-stage rule takes it
+    (`optimize.two_stage_counts`): `sampled`, the requests the first stage samples of a verification phase, and `k`,
+    each block type's whole count of a sampled request's proof blocks, by the cut's name of the type; with the phase's
+    size, the design's sessions a verification phase and the planner's bound in bits.  A β that pays for no sampled
+    request of the line's verification phase has no design and no counts (`ValueError`)."""
+    sc, c, _, confs, inputs, lines, _ = _lines(model_name, request, serving=serving)
+    conf = confs[line]
+    if conf.registration is None:
+        raise ValueError(f"{line} is no two-stage line: the counts are a two-stage design's")
+    s = next(x for x in f1.scopes(c, lines["tokens"][0]) if scope in (None, x.name))
+    tb, fl, oh = lines[line]
+    m = f1.model(inputs[line], tb, s, oh, fl)
+    card = sc["infiltration"]["value"]
+    g = grain(m, line, card["replay_blocks_per_token"], card["cap_bits_per_block"], c["tokens_per_request"].value,
+              batch(conf, s, c))
+    gpu_s = registration_gpu_seconds(conf.registration, c)
+    row = two_stage_design(list(g.cells), g.replay_blocks, m.delta, budget=beta * s.gpu_seconds, replay=g.replay,
+                           h=m.byte_s, stratify=STRATA, served=m.served, union=conf.form == "patterns",
+                           registration=g.replay_blocks * gpu_s / s.gpu_seconds)
+    if row is None:
+        raise ValueError(f"{line} has no design within β = {beta:g} on {s.name}: the budget pays for no sampled "
+                         f"replay block of {REGISTRATIONS[conf.registration]} verification phase")
+    names = [x["block"] for x in inputs[line]["partition"].value["strata"] if x["per_token"] > 0]
+    return {"schema": COUNTS_SCHEMA, "model": model_name, "line": line, "scope": s.name, "beta": beta,
+            "verification_phase": {"machines": gpu_s / (c["machine_gpus"].value * c["window"].value),
+                                   "seconds": c["window"].value, "replay_blocks": row["registration"]},
+            **two_stage_counts(row, names), "sessions": row["sessions"], "bound_bits": row["bound"]}
 
 
 def weights(c: dict[str, f1.InputCard]) -> dict[str, float]:
@@ -1136,7 +1190,22 @@ def main(argv=None) -> None:
     be.add_argument("--workers", type=int, default=1)
     be.add_argument("--no-lean", action="store_true", help="skip Lean's certificate of each break-even")
     be.add_argument("--serving", choices=f1.SERVING, default=f1.SERVING[0], help=SERVING_HELP)
+    ct = sub.add_parser("counts", help="write a two-stage line's design at β as the counts the verifier's two-stage "
+                                       "rule takes: the first stage's and each block type's")
+    ct.add_argument("--model", choices=spot_cards.MODELS, default=spot_cards.MODELS[0])
+    ct.add_argument("--line", default="tokens_datacenter", help="a two-stage configuration (default: %(default)s)")
+    ct.add_argument("--scope", help="a scope's name; default the first")
+    ct.add_argument("--beta", type=float, default=f1.RATIO_BUDGET, help="the audit's share of the scope's compute")
+    ct.add_argument("--out", type=Path, required=True)
+    ct.add_argument("--serving", choices=f1.SERVING, default=f1.SERVING[0], help=SERVING_HELP)
     args = ap.parse_args(argv)
+    if args.cmd == "counts":
+        out = counts(args.model, args.line, args.scope, args.beta, serving=args.serving)
+        args.out.write_text(json.dumps(out, indent=1, allow_nan=False) + "\n")
+        print(f"{args.out}: {out['line']} on {out['scope']} at β = {out['beta']:g}: {out['sampled']:,} of a "
+              f"verification phase's {out['verification_phase']['replay_blocks']:,.0f} replay blocks, "
+              f"{len(out['k']):,} block types, {out['sessions']:,.0f} sessions")
+        return
     if args.cmd == "priced-card":
         args.out.write_text(json.dumps(priced_card(args.model, args.serving), indent=1) + "\n")
         print(args.out)
