@@ -530,12 +530,15 @@ def options(opts: list[str]) -> tuple[bool, str | None, float | None, float | No
     rank = vals.get("--rank")
     if rank is not None and not (priority and re.fullmatch(r"\d{1,6}", rank)):
         sys.exit(f"slot: --rank {rank!r} needs --priority and a whole number below 1,000,000; {USAGE}")
-    try:
-        budget = float(vals["--budget-gb"]) if "--budget-gb" in vals else None
-    except ValueError:
-        budget = 0.0
-    if budget is not None and not 0 < budget < float("inf"):
-        sys.exit(f"slot: --budget-gb {vals['--budget-gb']!r} is not a number of GB more than 0; {USAGE}")
+    budget = None
+    if "--budget-gb" in vals:
+        bad = f"slot: --budget-gb {vals['--budget-gb']!r} is not a number of GB more than 0; {USAGE}"
+        try:
+            budget = float(vals["--budget-gb"])
+        except ValueError:
+            sys.exit(bad)
+        if not 0 < budget < float("inf"):
+            sys.exit(bad)
     return (priority, vals.get("--by"), secs["--wait-max"], secs["--run-max"], twin, None if rank is None else int(rank),
             None if budget is None else gib(budget))
 
