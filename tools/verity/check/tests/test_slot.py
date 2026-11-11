@@ -1127,6 +1127,36 @@ def test_a_run_that_asks_for_more_than_its_slots_mem_waits_for_and_reserves_that
     assert "holds a 451 GB research.mem reservation" in SLOT.reserve(raised, NOW)
 
 
+def test_a_budget_is_what_cmd_plans_on_and_the_slot_reserves_what_the_run_asks(tmp_path, monkeypatch):
+    """A run of many suites reserves less than the memory its test processes are counted on (research.suite_size). With
+    `--budget-gb` CMD reads the larger of the slot's mem= and the budget as SLOT_MEM_ENV, in GiB as mem= is, and the slot waits
+    for and reserves what the run asks, as it does without the option; without it CMD reads the slot's mem=."""
+    (tmp_path / "slots").write_text("a 0 mem=15\nb 1 mem=15\nc 2 mem=15\nd 3\n")
+    monkeypatch.setattr(SLOT, "SLOTS", tmp_path / "slots")
+    monkeypatch.setattr(SLOT, "memory_gb", lambda: 1000)
+    monkeypatch.setattr(SLOT.os, "sched_setaffinity", lambda pid, cpus: None)
+    monkeypatch.setattr(SLOT.os, "execvpe", lambda f, argv, env: (_ for _ in ()).throw(Exec(env.get(SLOT.SLOT_MEM_ENV))))
+    monkeypatch.setenv(SLOT.RUN_MEM_ENV, "36")
+    for name, opts, plans in (("a", ["--budget-gb", "72"], "68"), ("b", [], "34"), ("c", ["--budget-gb", "8"], "34")):
+        with pytest.raises(Exec, match=f"^{plans}$"):
+            SLOT.main([*opts, "--", "suites.py"], now=lambda: NOW, sleep=lambda _s: pytest.fail(f"slot {name} is free"))
+        assert json.loads((tmp_path / "ramlock" / f"check-{name}.json").read_text())["gb"] == 36.5, "the ask, whatever the budget"
+    assert SLOT.blocked(SLOT.asking(SLOT.parse("a 0 mem=15"))[0], NOW) is None
+    monkeypatch.setattr(SLOT, "memory_gb", lambda: 40)
+    monkeypatch.setattr(SLOT, "reserved_gb", lambda priority=False: 0)
+    assert SLOT.blocked(SLOT.asking(SLOT.parse("a 0 mem=15"))[0], NOW) is None, "a 68 GiB budget waits for the 34 GiB it reserves"
+    monkeypatch.setattr(SLOT, "memory_gb", lambda: 1000)
+    monkeypatch.delenv(SLOT.RUN_MEM_ENV)
+    (tmp_path / "slots").write_text("d 3\n")
+    with pytest.raises(Exec, match="^68$"):
+        SLOT.main(["--budget-gb", "72", "--", "suites.py"], now=lambda: NOW, sleep=lambda _s: pytest.fail("slot d is free"))
+    assert not (tmp_path / "ramlock" / "check-d.json").exists(), "a slot without mem= and a run with no ask reserve nothing"
+    assert SLOT.options(["--by", "x", "--budget-gb", "128"])[6] == 120 and SLOT.options(["--by", "x"])[6] is None
+    for bad in ("0", "-4", "x", "nan", "inf"):
+        with pytest.raises(SystemExit, match="--budget-gb .* is not a number of GB more than 0"):
+            SLOT.options(["--budget-gb", bad])
+
+
 def test_a_slot_with_mem_counts_what_live_reservations_hold_but_dont_use_yet(tmp_path, monkeypatch):
     """When a check ends, waiting pool shares and a train's twins race for the freed memory, and a twin admitted beside a
     lowering share would read far more free than there is unless that share's reservation is counted."""
