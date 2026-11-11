@@ -82,6 +82,13 @@ PUBLIC = {
     "verity_vllm.program.predict.window_class": "I7: a window class, and the layouts of PoUW's tables a window circuit reads "
                                                 "on a fixed load (FixedLoad): H1's under H1's tie (Tables) and Pearl+'s, the "
                                                 "circuit cut at its linears (PearlTables)",
+    "verity_vllm.program.predict.window_cut": "I7: a window circuit cut at its linears under Pearl+'s tables: the cut's "
+                                              "layout (linears), its registered values (cut_values) and the templates "
+                                              "that read them, each with its units (readers)",
+    "verity_vllm.pipeline.window_law": "I7: a window's sampling design as its partition file states it (law_of) and the "
+                                       "verifier's work table under the work sampling design: the transfer gates' "
+                                       "(work_table_of), and the floors under which a window's reader templates hold a "
+                                       "stated share of wrong units (reader_floors, reader_table)",
     "verity_vllm.program.frontend.train_step": "I7: one training step's Program (step_program, step_report, export_step), its "
                                                "layout and the primitives a census prices, which the grader "
                                                "(benchmarks/training_slowdown/grader) reads",
