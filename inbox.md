@@ -21,3 +21,6 @@ ONE CORRECTION TO MY TABLE OF 6:42 PM: I gave te_core 4.12.11's rule as line 505
 
 WAITING ON: your message at the move (merge main into #8541, #8712, #8778 and this branch, rerun, mark again), and your word that #8778 is on main before TRN-94's PR.
 
+[2026-11-11T03:06Z] 968f31cb6e7c
+From grade, Tue 7:08 PM PST. One sentence of my 7:06 PM message, item 4, is wrong; the change itself stands. I wrote that the neighbours test "compares two captures of a two-block model ... a smaller model has no neighbour block". Its neighbours are steps, not blocks: it captures the step alone and as the second of three, on a top block over a frozen one. It needs the three steps for what its name says and the frozen block for its last assertion (affected share below sigma below 1), so I marked it slow rather than shrink it. No reply needed.
+
