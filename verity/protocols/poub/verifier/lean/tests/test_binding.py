@@ -38,7 +38,10 @@ KEY = bytes(range(32))
 OF_RECORD = {"binding": "lean", "hold": "lean", "expected_root": "lean"}
 
 
-def port(fn, reference, inputs=st.nothing(), need_rejects: bool = True) -> D.Port:
+NOTHING = st.nothing()
+
+
+def port(fn, reference, inputs=NOTHING, need_rejects: bool = True) -> D.Port:
     return D.Port(M.EXE, fn, reference, inputs, package=M.PACKAGE, of_record=OF_RECORD.get(fn, "python"),
                   rejects=M.REFUSALS, need_rejects=need_rejects)
 
@@ -500,7 +503,7 @@ def test_each_decision_of_a_hello_is_the_leans_word_for_word(server, tmp_path) -
          f"{want[:16]}...: register the store `remote_bandwidth.store` lays out, salted with the key the verifier sent",
          want),
         (base | {"payload_root": want, "blocks": 13},
-         f"the hello's store is 13 blocks, fewer than the pinned model's 2 arenas of 7", None),
+         "the hello's store is 13 blocks, fewer than the pinned model's 2 arenas of 7", None),
         (base | {"payload_root": want, "layout": wider},
          "the hello's layout [('weights', 'hbm', 0, 6), ('filler', 'hbm', 6, 2), ('weights', 'hbm', 8, 6), "
          f"('filler', 'hbm', 14, 2)]... is not the pinned model {ROLE}'s {shown}...", None),

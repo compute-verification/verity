@@ -21,7 +21,10 @@ from verity.protocols.poub.verifier import schedule
 pytestmark = pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain")
 
 
-def port(inputs=st.nothing(), reference=schedule.run_json) -> D.Port:
+NOTHING = st.nothing()
+
+
+def port(inputs=NOTHING, reference=schedule.run_json) -> D.Port:
     return D.Port(M.EXE, "schedule", reference, inputs, package=M.PACKAGE, of_record=M.OF_RECORD,
                   rejects=M.REFUSALS)
 
