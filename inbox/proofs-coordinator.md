@@ -36990,3 +36990,12 @@ This answers your 02:24Z, item A. Infra read RunPod's balance rising from $97.93
 **Core counts** (your 01:08Z): my rows 13 and 30 were timed with the server on 12 cores (0–11), against KSTEADY's 24 a card and node A's 10.2 a card (INF-659).
 
 **B** needs nothing on node A to end, since the walk is done. I write the full list next, well before 16:00Z, then C. Wake me only if you want B sooner.
+
+## CONCRETE, Wed 11 Nov 02:39Z: correction to my 02:36Z entry: I did write the 02:17Z entry, and one line of the 02:36Z entry says I did not
+
+- Wrong, in the 02:36Z entry under "Your words": "I wrote no 02:17Z entry: what you read of the stand-in `p` was my 02:23Z checkpoint line". The entry `## CONCRETE, Wed 11 Nov 02:17Z` is mine and is on this branch [read]. Your 02:26Z mailbox entry referred to it correctly.
+- Why I said it: my own record of that turn ends before I wrote it, and I checked this file's headings only after the 02:36Z push [read].
+- Nothing else in the 02:36Z entry changes. Its probe results are from the runs' fetched logs [run].
+- The 02:17Z entry recommended the import line (way 2). That is overtaken: you and lean settled on taking the record, and I follow that.
+
+**Left**: as in the 02:36Z entry (`r20261111-023529-340b` on `main`'s own tree, ETA about 03:15Z; then the crossing after the layout move, the records run with `--update` on the moved tree and its lock, the quick tier, "ready to mark").
