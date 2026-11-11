@@ -29,15 +29,15 @@ product, one Pearl+ epoch a Commit window, under the server's own Commit, whose 
   ``pearl/rows/``), and every window's passes link them (the pouw setting ``kept_rows``): a pass's ``weights/`` holds the
   files its manifest names, as when each window wrote them. A weight's tree is under its window's salt key, so each
   window writes its own.
-* **An epoch made ahead.** A window's epoch is made (`pouw.prepare`) in the install's own order: its coins, the weights
-  committed under its fresh key, the salt coin after their root, then the device run under that salt. With in-process
-  coins it is made ahead of the window: window 0's before the server listens (`PearlWindows.ready`), window k+1's at
-  window k's close, on the loop, once window k's epoch is freed; the window's open then only hooks the model onto it
-  (the pouw setting ``prepared``). With a live session the same happens under ``--challenger-ahead`` alone, since a
-  session made ahead that no window takes is closed unused when the server stops, and an unused session of a lane's
-  period refuses the period: without the flag a live window's epoch is made at its open. At most one epoch is ever
-  ahead, and a window must close within its session's minutes of the session's open. An epoch that can't be made ahead
-  is its window's visible failure at its open, as when the open made it, and is not made again.
+* **An epoch made ahead.** A window's epoch is made (`pouw.prepare`) in the install's own order: its coins,
+  the weights committed under its fresh key, the salt coin after their root, then the device run under that salt. With
+  in-process coins it is made ahead of the window: window 0's before the server listens (`PearlWindows.ready`), window
+  k+1's at window k's close, on the loop, once window k's epoch is freed; the window's open then only hooks the model
+  onto it (the pouw setting ``prepared``). With a live session the same happens under ``--challenger-ahead`` alone,
+  since a session made ahead that no window takes is closed unused when the server stops, and an unused session of a
+  lane's period refuses the period: without the flag a live window's epoch is made at its open. At most one epoch is
+  ever ahead, and a window must close within its session's minutes of the session's open. An epoch that can't be made
+  ahead is its window's visible failure at its open, as when the open made it, and is not made again.
 
 Each window's outcome (`PearlWindows.close`) is its ``windows.jsonl`` line's ``pouw_pearl`` (`PearlWindows.outcome_key`),
 ``serve.json``'s ``protocols`` `PearlWindows.describe`, ``summary.json``'s ``commit.pouw_pearl`` `PearlWindows.summary`.
@@ -55,6 +55,10 @@ from typing import Any
 
 from verity.ml.protocols.pouw.schemes import pearl_c as C
 from verity.ml.protocols.pouw.schemes.pearl_c_device import H100
+
+from verity_vllm.log import init_logger
+
+logger = init_logger(__name__)
 
 #: pearl_c_sm90's scheme, one of `pearl_c.SCHEMES`: v1 forming on the device record of an H100 or H200, -h3 hashing
 SCHEME = C.PearlC(forming="v1", device=H100, hashing="h3").name
@@ -178,8 +182,9 @@ def live(gate: str, peer: str, lane: str, run: Any = None) -> Callable[[int], di
 @dataclasses.dataclass
 class Made:
     """Window ``window``'s epoch as `PearlWindows.make` made it, starting at ``at`` on the arm's clock: the ``epoch``
-    (`pouw.Prepared`), the coin settings it was made with (``coins``; a live session's reserve is their ``session``) and
-    each part's ``seconds``; or, made ahead, why it couldn't be (``error``), which is the window's failure at its open."""
+    (`pearl_c.epoch.Prepared`), the coin settings it was made with (``coins``; a live session's reserve is their
+    ``session``) and each part's ``seconds``; or, made ahead, why it couldn't be (``error``), which is the window's
+    failure at its open."""
 
     window: int
     at: float
@@ -191,8 +196,10 @@ class Made:
 
 def _session(made: Made) -> str:
     """The live session ``made``'s epoch holds, for a log line: nothing for in-process coins."""
-    sid = (made.coins.get("session") or {}).get("session")
-    return "" if sid is None else f" (live session {sid}, reserved and opened; unused, it refuses its lane's open period)"
+    reserved = made.coins.get("session")
+    if reserved is None:
+        return ""
+    return f" (live session {reserved['session']}, reserved and opened; unused, it refuses its lane's open period)"
 
 
 class PearlWindows:
@@ -297,13 +304,11 @@ class PearlWindows:
         try:
             self.made = self.make(window)
             self.aheads["made"] += 1
-            print(f"[serve-pearl] window {window}: its epoch made ahead in {self.clock() - t0:.1f} s{_session(self.made)}",
-                  flush=True)
+            logger.info("window %d: its epoch made ahead in %.1f s%s", window, self.clock() - t0, _session(self.made))
         except (ValueError, RuntimeError, OSError) as e:
             self.made = Made(window, t0, error=e)
             self.aheads["failed"] = [*self.aheads["failed"], window][:20]
-            print(f"[serve-pearl] window {window}: its epoch can't be made ahead: {type(e).__name__}: {str(e)[:300]}",
-                  flush=True)
+            logger.warning("window %d: its epoch can't be made ahead: %s: %s", window, type(e).__name__, str(e)[:300])
         return round(self.clock() - t0, 4)
 
     def drop(self) -> None:
@@ -311,13 +316,12 @@ class PearlWindows:
         made, self.made = self.made, None
         if made is not None and made.epoch is not None:
             self.aheads["unused"] += 1
-            print(f"[serve-pearl] window {made.window}: its epoch made ahead is closed unused, no window having opened on "
-                  f"it{_session(made)}", flush=True)
+            logger.info("window %d: its epoch made ahead is closed unused, no window having opened on it%s", made.window,
+                        _session(made))
             try:
                 made.epoch.close()
             except (ValueError, RuntimeError, OSError) as e:
-                print(f"[serve-pearl] window {made.window}: its unused epoch's close: {type(e).__name__}: {str(e)[:300]}",
-                      flush=True)
+                logger.warning("window %d: its unused epoch's close: %s: %s", made.window, type(e).__name__, str(e)[:300])
 
     def open(self, window: int) -> None:
         """Window ``window``'s epoch, on the open Commit window: the one made ahead for it, else made now (`make`), and

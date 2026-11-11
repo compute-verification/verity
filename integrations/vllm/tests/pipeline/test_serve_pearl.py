@@ -17,6 +17,7 @@ its open makes it, and the open then only hooks the model.
 from __future__ import annotations
 
 import json
+import logging
 import random
 import shlex
 from pathlib import Path
@@ -479,18 +480,20 @@ def _calls(asked):
 
 
 def test_a_live_session_is_made_ahead_only_when_asked_and_the_window_then_opens_without_the_gate(tmp_path, monkeypatch,
-                                                                                                capsys):
+                                                                                                caplog):
     """Live coins.  Without ``ahead`` nothing reaches the gate until a window opens: the ledger, its reserve, its open on
     the weights' root, and its close at the window's close.  With it, window 0's session is reserved and opened on its
     weights' root when the arm is made ready, each reserve before its open; the window's open asks the gate nothing (the
     gate's next word after the session's open is its close, at the window's close), and the next window's session
     follows at that close, the old epoch freed.  The one made ahead that no window takes is closed at the drain, unused.
-    The arm says one line when it makes a session ahead and one when it closes one unused."""
+    The arm logs one line when it makes a session ahead and one when it closes one unused."""
+    caplog.set_level(logging.INFO, logger="verity_vllm")
     period = [{"kind": "period-open", "session": None, "body": {"period": "p7", "lane": LANE}}]
     reserve = lambda k: ["reserve", "--epoch", str(k)]  # noqa: E731
     for name, ahead in (("at-open", None), ("ahead", True)):
         asked: list = []
         RUNS.clear()
+        caplog.clear()
         (tmp_path / name).mkdir()
         monkeypatch.setattr(PHW, "salt_session", _salt_session(asked))
         with _serving(tmp_path / name, Forward(Model()), SPL.live(GATE, PEER, LANE, _gate(period, asked)), ahead) as s:
@@ -507,7 +510,7 @@ def test_a_live_session_is_made_ahead_only_when_asked_and_the_window_then_opens_
         if not ahead:
             assert ready == [] and served == [["ledger"], reserve(0), ["open", "s-0"], ["close", "s-0"]]
             assert _calls(asked) == served and len(RUNS) == 1 and not {"ahead", "next"} & set(line["seconds"])
-            assert "made ahead" not in capsys.readouterr().out
+            assert "made ahead" not in caplog.text
         else:
             assert ready == [["ledger"], reserve(0), ["open", "s-0"]]
             assert served == [*ready, ["close", "s-0"], ["ledger"], reserve(1), ["open", "s-1"]]
@@ -515,7 +518,7 @@ def test_a_live_session_is_made_ahead_only_when_asked_and_the_window_then_opens_
             assert _calls(asked) == [*served, ["close", "s-1"]] and [r.finished for r in RUNS] == [True, True]
             assert arm.summary()["ahead"] == {"made": 2, "taken": 1, "unused": 1, "failed": []}
             assert {"ahead", "next"} <= set(line["seconds"])
-            said = [x for x in capsys.readouterr().out.splitlines() if "made ahead" in x]
-            assert [x.split(": its epoch made ahead ")[0] for x in said] == [f"[serve-pearl] window {k}" for k in (0, 1, 1)]
+            said = [r.getMessage() for r in caplog.records if r.name == SPL.logger.name]
+            assert [x.split(": its epoch made ahead ")[0] for x in said] == [f"window {k}" for k in (0, 1, 1)]
             assert "live session s-1" in said[2] and "closed unused" in said[2] and "refuses its lane's open period" in said[2]
             assert "live session s-0" in said[0] and "closed unused" not in said[0] + said[1]
