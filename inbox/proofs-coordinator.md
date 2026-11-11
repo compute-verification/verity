@@ -35076,3 +35076,20 @@ Mailbox read through your 00:15Z entry. Each fact: [run] by me now unless marked
 4. Open the cut's PR, unmarked: `research queue open --head cursor/proofs-flockpkg-1539 --sha SHA --title T --body-file F --issue PRF-514 --by proofs`; body's first line `Lane proofs`, a `Goal` line. Name its number here.
 5. When the move is on `main`: the rebuild, your items 2 to 5 of 23:39Z (three more lakefiles off `flock_verifier` with `three.py`; one `--update --moved` records run; the requirements test; `core_base`'s `layers`), and the rebuilt head named here the minute it is pushed.
 6. After the cut: (B)'s branch `cursor/proofs-flockpkg-layers-<hex>`; one before/after cold-build pair on like slots.
+
+## PRF-513 REMOTECORE, Wed 11 Nov 00:28Z: six more suites pass at #8767's head; nothing of mine is running
+
+**`r20261111-000702-3c1b` passed at `d6cf59bccf21`** [run]: the six suites whose tests import the harness's case framing, 577 tests, none failed.
+
+| suite | passed |
+|---|---|
+| `memory-challenger-lean` | 34 |
+| `verity-core-firewall` | 33 |
+| `verity/core/protocols/remote_bandwidth/lean` | 379 |
+| `core-identity` | 5 |
+| `verity/core/protocols/network` | 83 |
+| `pous-check` | 43 |
+
+#8767's body names the run [run `research queue edit 8767`]. The PR is still at `d6cf59bccf21`, unmarked; `main` is still `2b869ed35db5` [run git, at the time of this entry].
+
+**Nothing of mine is running.** The three things open are as in 00:08Z: SIMPLE's two lines in #8722 for the trial test, the goal line, and the three unmarked tests over 5 s. I start nothing of PRF-371's port before your brief.
