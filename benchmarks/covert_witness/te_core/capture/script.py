@@ -311,6 +311,7 @@ class _Recorder:
         self.root = torch.nn.Module()
         self.tensors = WeakTensorKeyDictionary()   # tensor -> (node, its storage when mapped)
         self.owner: dict = {}                      # storage -> the node that made it
+        self.storages: dict = {}                   # storage -> itself, held while `owner` names it (`_hold`)
         self.named = WeakTensorKeyDictionary()     # tensor -> (kind, name): θ, the model's parameters and buffers
         self.attrs: dict = {}
         self.keep: list = []
@@ -414,11 +415,20 @@ class _Recorder:
     def _meta(self, n, val) -> None:
         n.meta.update(val=val, te_phase=self.phases[-1], te_step=self.step)
 
+    def _hold(self, t: torch.Tensor, sk) -> None:
+        """Keep the storage `t` is mapped at until the recording ends. `owner` names a storage by its address (`_skey`)
+        and `keep` holds the tensor, not its storage: a program that replaces a mapped tensor's storage
+        (``p.data = ...``) would free it while `owner` still names it, and a tensor the recorder has not seen, allocated
+        at that address later, would be recorded as a view of the old owner, in one recording and not in the next."""
+        if not isinstance(sk, tuple) and sk not in self.storages:
+            self.storages[sk] = t.untyped_storage()
+
     def node_of(self, t: torch.Tensor):
         sk = _skey(t)
         e = self.tensors.get(t)
         if e is not None and e[1] == sk:
             return e[0]
+        self._hold(t, sk)
         own = self.owner.get(sk)
         if own is not None:
             n = self.g.call_function(aten.as_strided.default, (own, list(t.shape), list(t.stride()), t.storage_offset()))
@@ -447,6 +457,7 @@ class _Recorder:
         self._meta(n, t)
         self.tok.add(n)
         sk = _skey(t)
+        self._hold(t, sk)
         self.tensors[t] = (n, sk)
         self.owner.setdefault(sk, n)
         self.keep.append(t)
@@ -454,6 +465,7 @@ class _Recorder:
 
     def _bind(self, o: torch.Tensor, n) -> None:
         sk = _skey(o)
+        self._hold(o, sk)
         self.tensors[o] = (n, sk)
         self.owner.setdefault(sk, n)
         self.keep.append(o)

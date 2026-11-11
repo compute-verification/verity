@@ -2,7 +2,8 @@
 on recorded/islands/toy/train.py: the update's dependence and cut are the same however the program writes it (in place,
 rebound, by an optimizer), a compressed update's cut is its bits, a MeZO update depends on its losses through a Python
 float, and a buffer rewritten from θ and this step's tokens is not the run's; a read-back that decides what the graph
-can't carry (a Python clip, a branch, a float folded over steps) is listed."""
+can't carry (a Python clip, a branch, a float folded over steps) is listed; a storage the program replaced is not named
+again."""
 from __future__ import annotations
 
 import io
@@ -118,6 +119,21 @@ def test_integer_reads_numpy_and_math_on_read_backs_are_listed(starts, monkeypat
         "a comparison of a read-back float", "math.isfinite of a read-back float", "item() of a int64 tensor"]
     assert script.Scalar(1.0) < 2  # a float no tensor was read for decides nothing
     assert len(rec.listed("data_dependent")) == 6
+
+
+def test_a_tensor_made_where_a_replaced_storage_was_is_a_constant_of_its_own():
+    """The recorder names a storage by its address, so it holds every storage it maps. A program that replaces a mapped
+    tensor's storage would otherwise free it, and the allocator would give its address to a later storage: no tensor
+    made afterwards lands there, and each one the recorder has not seen is a constant of its own, no view of the
+    replaced tensor."""
+    rec = script._Recorder(stop=1, wall=[])
+    p = torch.zeros(4)
+    assert rec.node_of(p).op == "get_attr"
+    was = script._skey(p)
+    p.data = torch.ones(4)
+    fresh = [torch.full((4,), float(i)) for i in range(64)]
+    assert was not in {script._skey(q) for q in fresh}
+    assert {rec.node_of(q).op for q in fresh} == {"get_attr"}
 
 
 @pytest.mark.parametrize("unrecorded", [True, False])
