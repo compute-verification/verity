@@ -218,7 +218,24 @@ pub struct IrUnitNet {
 
 /// A clone starts undecided, so a copy whose rows are then edited decides anew.
 #[derive(Default)]
-pub struct PassCache(OnceLock<bool>);
+pub struct PassCache(OnceLock<Option<Owns>>);
+
+/// What a one-pass net's rows say of their own columns, a bit a row (row i: bit i % 64 of word i / 64), decided once with
+/// whether it is one ([`IrUnitNet::one_pass`]):
+/// whether its A side, and its B side, reads the row's own column an odd number of times, and whether its z must be 0 for
+/// z to be a & b there (`zero`: an input row whose A side alone is its column; any later row that reads its own).
+#[derive(Default)]
+pub struct Owns {
+    a: Vec<u64>,
+    b: Vec<u64>,
+    zero: Vec<u64>,
+}
+
+/// All ones where bit `i` of `bits` is set.
+#[inline(always)]
+fn mask(bits: &[u64], i: usize) -> u64 {
+    0u64.wrapping_sub(bits[i / 64] >> (i % 64) & 1)
+}
 
 impl Clone for PassCache {
     fn clone(&self) -> Self {
@@ -422,21 +439,20 @@ fn ask<W>(z: &[W], c: u32) {
 #[inline(always)]
 fn ask<W>(_: &[W], _: u32) {}
 
-/// Row `i` of `rows`' XOR over `z`, whose entry `i` is still 0, and all ones where it reads column `i` an odd number of
-/// times. With `ahead` > 0 each read is asked of the cache `ahead` column indices before it. A side's indices are one array
-/// in row order, so the ask runs past the row's end into the rows after it, where the processor's own lookahead stops at
-/// the branch that ends a row. A walk of a large net waits on these reads, not on its arithmetic.
+/// Row `i` of `rows`' XOR over `z`, whose entry `i` is still 0, so a row's own column adds nothing ([`Owns`] says where a
+/// row reads it). With `ahead` > 0 each read is asked of the cache `ahead` column indices before it. A side's indices are
+/// one array in row order, so the ask runs past the row's end into the rows after it, where the processor's own lookahead
+/// stops at the branch that ends a row. A walk of a large net waits on these reads, not on its arithmetic.
 #[inline(always)]
-fn fold_own<W: RowWord>(rows: &Rows, i: usize, z: &[W], ahead: usize) -> (W, W) {
+fn fold<W: RowWord>(rows: &Rows, i: usize, z: &[W], ahead: usize) -> W {
     let (s, e) = (rows.off[i] as usize, rows.off[i + 1] as usize);
     let far = if ahead == 0 { &[][..] } else { &rows.cols[s.saturating_add(ahead).min(rows.cols.len())..] };
-    let (x, o) = rows.cols[s..e].iter().enumerate().fold((W::splat(0), 0u64), |(x, o), (k, &c)| {
+    rows.cols[s..e].iter().enumerate().fold(W::splat(0), |x, (k, &c)| {
         if let Some(&f) = far.get(k) {
             ask(z, f);
         }
-        (x.xor(z[c as usize]), o ^ 0u64.wrapping_sub(u64::from(c as usize == i)))
-    });
-    (x, W::splat(o))
+        x.xor(z[c as usize])
+    })
 }
 
 /// A netlist's `useful` rows, each line `na a.. nb b..`, written in order.
@@ -596,9 +612,7 @@ impl IrUnitNet {
     /// [`IrUnitNet::eval_wide`] asking the cache for z `ahead` column indices before each read (0: never). Its rows are the
     /// same at every `ahead`.
     pub fn eval_wide_ahead<W: RowWord>(&self, input: impl Fn(usize) -> W, ahead: usize) -> Option<(Vec<W>, Vec<W>, Vec<W>)> {
-        if !self.one_pass() {
-            return None;
-        }
+        let own = self.owns()?;
         let (u, cp, first) = (self.useful, self.const_pos, self.in_words * WORD);
         let (zero, one) = (W::splat(0), W::splat(!0));
         let (mut z, mut a, mut b) = (W::zeroed(u), W::take(u), W::take(u));
@@ -612,12 +626,12 @@ impl IrUnitNet {
         }
         z[cp] = one;
         for i in first..cp {
-            let (x, oa) = fold_own(&self.a, i, &z, ahead);
-            let (y, ob) = fold_own(&self.b, i, &z, ahead);
+            let x = fold(&self.a, i, &z, ahead);
+            let y = fold(&self.b, i, &z, ahead);
             let zi = x.and(y);
             z[i] = zi;
-            a.push(x.xor(zi.and(oa)));
-            b.push(y.xor(zi.and(ob)));
+            a.push(x.xor(zi.and(W::splat(mask(&own.a, i)))));
+            b.push(y.xor(zi.and(W::splat(mask(&own.b, i)))));
         }
         a.push(one);
         b.push(one);
@@ -628,13 +642,45 @@ impl IrUnitNet {
     /// last with rows `[cp]`, every input row `[i]` or empty, and every other row reading only earlier columns, its own and
     /// the constant's.
     pub fn one_pass(&self) -> bool {
-        *self.pass.0.get_or_init(|| {
+        self.owns().is_some()
+    }
+
+    /// A one-pass net's [`Owns`] (None: not one), decided on the first call, which a walk makes before its passes run side
+    /// by side: `a` and `b` must not change after it.
+    fn owns(&self) -> Option<&Owns> {
+        self.pass.0.get_or_init(|| {
             let (u, cp, first) = (self.useful, self.const_pos, self.in_words * WORD);
             let input = |rows: &Rows, i: usize| rows.row_len(i) == 0 || own_row(rows, i);
             let earlier = |rows: &Rows, i: usize| rows.row(i).iter().all(|&c| c as usize <= i || c as usize == cp);
-            u > 0 && cp == u - 1 && first <= cp && self.order.is_none() && own_row(&self.a, cp) && own_row(&self.b, cp)
+            let one = u > 0 && cp == u - 1 && first <= cp && self.order.is_none() && own_row(&self.a, cp) && own_row(&self.b, cp)
                 && (0..first).all(|i| input(&self.a, i) && input(&self.b, i))
-                && (first..cp).into_par_iter().all(|i| earlier(&self.a, i) && earlier(&self.b, i))
+                && (first..cp).into_par_iter().all(|i| earlier(&self.a, i) && earlier(&self.b, i));
+            one.then(|| {
+                let odd = |rows: &Rows, i: usize| rows.row(i).iter().filter(|&&c| c as usize == i).count() as u64 & 1;
+                let words: Vec<[u64; 3]> = (0..u.div_ceil(64)).into_par_iter().map(|w| {
+                    (64 * w..u.min(64 * w + 64)).fold([0u64; 3], |[a, b, zero], i| {
+                        let (oa, ob) = (odd(&self.a, i), odd(&self.b, i));
+                        let z = if i < first { oa & !ob } else if i < cp { oa | ob } else { 0 };
+                        [a | oa << (i % 64), b | ob << (i % 64), zero | z << (i % 64)]
+                    })
+                }).collect();
+                Owns { a: words.iter().map(|w| w[0]).collect(), b: words.iter().map(|w| w[1]).collect(), zero: words.iter().map(|w| w[2]).collect() }
+            })
+        }).as_ref()
+    }
+
+    /// Whether `z`, a lane group's rows from one pass ([`IrUnitNet::eval_wide`]), is a & b on the lanes of `used`, read
+    /// from z alone. A row that reads no column of its own has z = a & b by construction (z is the AND of its two sums);
+    /// a row that reads its own on either side has a & b = 0, as has an input row whose A side alone is its column; so z
+    /// is a & b exactly when it is 0 on those rows.
+    pub fn one_pass_z_is_ab(&self, z: &[u64], used: u64) -> bool {
+        self.owns().expect("a one-pass net").zero.iter().enumerate().all(|(w, &m)| {
+            let mut m = m;
+            std::iter::from_fn(|| (m != 0).then(|| {
+                let t = m.trailing_zeros() as usize;
+                m &= m - 1;
+                64 * w + t
+            })).all(|i| z[i] & used == 0)
         })
     }
 
@@ -1231,7 +1277,7 @@ mod tests {
             let input = |col: usize| (col as u64 + 3).wrapping_mul(0x9e37_79b9_7f4a_7c15);
             let (z, a, b) = net.eval64(input);
             let (pz, pa, pb) = at.eval64_flat(input);
-            assert!(at.pass.0.get() == Some(&false), "a placed net took the one-pass path");
+            assert!(at.pass.0.get().map(Option::is_some) == Some(false), "a placed net took the one-pass path");
             for x in 0..net.useful {
                 assert_eq!((pz[pos[x]], pa[pos[x]], pb[pos[x]]), (z[x], a[x], b[x]), "net {seed}: logical row {x}");
             }
@@ -1249,7 +1295,7 @@ mod tests {
                 let input = |col: usize| (col as u64 + 1).wrapping_mul(0x9e37_79b9_7f4a_7c15 ^ k).rotate_left(k as u32 * 7);
                 assert!(net.eval64_flat(input) == net.eval64(input), "net {seed}, inputs {k}");
             }
-            assert!(net.pass.0.get() == Some(&true), "net {seed} took the two-pass path");
+            assert!(net.pass.0.get().map(Option::is_some) == Some(true), "net {seed} took the two-pass path");
             assert!(net.clone().pass.0.get().is_none(), "a clone keeps the decision");
             // a row reading a later column: the two-pass evaluation, still equal
             let mut fwd = net.clone();
@@ -1257,7 +1303,7 @@ mod tests {
             fwd.a = appended(&fwd.a, i, i + 5);
             let input = |col: usize| col as u64 * 0x2545_f491_4f6c_dd1d;
             assert!(fwd.eval64_flat(input) == fwd.eval64(input));
-            assert!(fwd.pass.0.get() == Some(&false), "a later column took the one-pass path");
+            assert!(fwd.pass.0.get().map(Option::is_some) == Some(false), "a later column took the one-pass path");
         }
     }
 
@@ -1332,6 +1378,40 @@ mod tests {
         let (z, a) = (u64::zeroed(n), u64::take(n));
         assert!(z.len() == n && z.iter().all(|&w| w == 0), "a kept z is zero");
         assert!(a.is_empty() && a.capacity() >= n, "a kept a is empty and holds the rows");
+    }
+
+    /// [`IrUnitNet::one_pass_z_is_ab`] is the check that reads z, a and b, on nets with rows that read their own column on
+    /// either side or both, and input rows that are their column on one side only, at several lane masks, both answers seen.
+    #[test]
+    fn one_pass_z_is_ab_is_the_check_of_all_three() {
+        let mut seen = [0usize; 2];
+        for seed in 0..40u64 {
+            let mut net = random_net(seed, 2, 400);
+            let first = net.in_words * WORD;
+            for i in (first + 3..net.const_pos).step_by(7) {
+                match i % 3 {
+                    0 => net.b = appended(&net.b, i, i),
+                    1 => { net.a = appended(&net.a, i, i); net.b = appended(&net.b, i, i); }
+                    _ => {}
+                }
+            }
+            net.b = net.b.with_row(5, &[]);
+            net.a = net.a.with_row(9, &[]);
+            net.pass = PassCache::default();
+            assert!(net.one_pass(), "seed {seed}: a one-pass net");
+            let input = |col: usize| (col as u64 + seed).wrapping_mul(0x9e37_79b9_7f4a_7c15);
+            let (z, a, b) = net.eval_wide(input).expect("a one-pass net");
+            assert!((z.clone(), a.clone(), b.clone()) == net.eval64(input), "seed {seed}");
+            // the lanes where z is a & b on every row, alone and with one lane where it is not
+            let bad = z.iter().zip(&a).zip(&b).fold(0u64, |x, ((z, a), b)| x | (z ^ (a & b)));
+            for used in [!bad, !bad | (bad & bad.wrapping_neg()), !0u64, 1, 1 << 63, 1 << (seed % 64), 0] {
+                let want = z.iter().zip(&a).zip(&b).all(|((z, a), b)| (z ^ (a & b)) & used == 0);
+                assert_eq!(want, used & bad == 0, "seed {seed}, lanes {used:#x}: the test's own check");
+                assert_eq!(net.one_pass_z_is_ab(&z, used), want, "seed {seed}, lanes {used:#x}");
+                seen[want as usize] += 1;
+            }
+        }
+        assert!(seen[0] >= 40 && seen[1] >= 80, "both answers: {seen:?}");
     }
 
     const WALK_PIN: &str = "c084c17e7a051c6e213039b613738958";
