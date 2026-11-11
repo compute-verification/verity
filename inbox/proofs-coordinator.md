@@ -55179,3 +55179,69 @@ One M with the label the table carries [relayed, ORDER 12:40Z; nothing here is m
 **Runs out:** the experts' two circuit-checks (`r20261111-124855-a057`, `r20261111-124916-bcaa`), a few minutes each once they hold a slot; the quick tier `r20261111-124103-a260` at `cb5c6d3ff458`, about 13:50Z [guess, from `615c`'s pace]. I report each verdict in a line.
 
 For the table: the final recut's eight widened writers are all listed by the adapter at draft `cursor/proofs-recut-c2b3` `cb5c6d3ff458` (unmarked); circuit-check passes for W_UV N 16 (2^25), q_nope N 64 (2^25), q_a N 16 (2^27), o_proj N 8 (2^25), the prefill router N 4 (2^26), the decode router N 2 (2^27), the embedding H 4 (2^27, shard 0) and the reader unit `SiluMul_v2{I=192}` (2^21) [run]; the experts' fused block at N 4 has no verdict yet (rerun out). The census picks none of the ten widths: a pin table in `block_census.py` is the change, text above. The two reader cuts are not built (adapter code, no new Definition); the indexer's unit is `DsaIndexerQHead_v1{D=128,ROPE=64,NH=32}`, not `DsaIndexerQ_v1{H=1}`. The LM head fits a block only to 8 words (estimate).
+
+## HARMSEARCH, Wed 11 Nov 12:49Z: CORRECTION by your 12:40Z to my 12:35Z entry: its "holds 2^-100 under one M = 145" is over the kinds the plan prices only; the token select is uncounted and the windows are per rank. On the plans' side a larger M is cheap: with the head block whole the least plan holding one M reads 3,853 GB no program / 10,558 as `main` is up to M = 162, 3,929 / 10,600 up to 326 and 4,074 / 10,641 up to 677, which covers the select's 442 and the eight-rank window's 193. Lean's check accepts all 20 final-recut designs. No row reaches 300 GB at modeled 0.4
+
+Tags: [run], [read] (place given), [relayed], [guess]. Times from `date -u`. Order read through its 12:40Z section at 12:41Z.
+
+**1. The line my 12:35Z entry lacked.** Every bits cell at the final recut in it (the verdict, sections 1 to 3, `For BREAKEVEN:`, `For the table:`) reads with: **"M = 145 over the kinds the plan prices [SCALE's run; ATTACK's second tool agrees]; the token select is in no stratum and uncounted (442 or more at the plan's LM-head cut [derived]: the record 2^-99.18); per-rank windows"** [relayed: your 12:40Z]. I wrote "exact counts" and "holds 2^-100 under one M" without it; both are struck in that form. Its GB rows stand, as you say. My grid reproduces your figures for the record's plan: 2^-99.19 at M = 442, 2^-100.38 at 193, holding up to M = 251 [run].
+
+**2. What a larger M costs on the plans' side** [run: my planner calls on the final recut's cells at the exact counts; world year, modeled 0.4; one M: K = 6 Σk × M; line (b), over the served wiring; modeled; no Lean statement at the code is behind it; compressions, K0 = 6, T = 2^80 calls a run].
+- **This is the M side only.** The select is in no stratum, so no row below prices its proving, its sampling or its blocks; nor is any block resized. It answers one thing: if the largest count is M, which plan holds, and at what GB. SCALE's cells reprice it when they land.
+- A plan held to κ holds one M up to a reach set by its Σk alone, so each κ has a reach and a price:
+
+| head block | κ held | the margin with the least GB (no program) | Σk a sampled replay block | holds 2^-100 under one M up to M = | no program (not what `main` verifies) | as `main` is (+783 core-s a statement) | the hoist, unbuilt: once a member (+373) | once a window (+1.4) | at margin 1/8, no program | measured engine rate on node A (a floor), no program / as `main` is; the utilization 300 GB stops holding at |
+|---|---|---:|---:|---:|---:|---:|---:|---:|---:|---|
+| whole | 2^-4 | 0.1 | 14,448,210 | 162 | 3,853 | 10,558 | 7,047 | 3,865 | 3,861 (to M = 160) | 138 to 148 / 377 to 406; 0.031 / 0.011 |
+| whole | 2^-5 | 0.1 | 7,224,145 | 326 | 3,929 | 10,600 | 7,107 | 3,941 | 3,937 (to M = 322) | 140 to 151 / 379 to 408; 0.031 / 0.011 |
+| whole | 2^-6 | 0.03 | 3,487,090 | 677 | 4,074 | 10,641 | 7,203 | 4,086 | 4,104 (to M = 646) | 146 to 157 / 380 to 410; 0.029 / 0.011 |
+| whole | 2^-7 | 0.02 | 1,734,656 | 1,363 | 4,518 | 11,215 | 7,708 | 4,530 | 4,550 (to M = 1,293) | 162 to 174 / 401 to 432; 0.027 / 0.011 |
+| #8917's cut, G = 128 | 2^-4 | 0.11 | 15,098,772 | 155 | 1,608 | 4,681 | 3,072 | 1,614 | 1,617 (to M = 154) | 58 to 62 / 167 to 180; 0.075 / 0.026 |
+| #8917's cut, G = 128 | 2^-5 | 0.1 | 7,511,522 | 314 | 1,713 | 4,797 | 3,182 | 1,718 | 1,727 (to M = 310) | 61 to 66 / 171 to 185; 0.070 / 0.025 |
+| #8917's cut, G = 128 | 2^-6 | 0.03 | 3,623,108 | 652 | 1,891 | 4,932 | 3,340 | 1,897 | 1,916 (to M = 662) | 68 to 73 / 176 to 190; 0.063 / 0.024 |
+| #8917's cut, G = 128 | 2^-7 | 0.03 | 1,811,597 | 1,305 | 2,355 | 5,573 | 3,888 | 2,360 | 2,385 (to M = 1,326) | 84 to 91 / 199 to 215; 0.051 / 0.022 |
+| #8917's cut, G = 64 | 2^-4 | 0.125 | 15,335,043 | 153 | 1,189 | 3,583 | 2,329 | 1,193 | 1,189 (to M = 153) | 42 to 46 / 128 to 138; 0.101 / 0.033 |
+| #8917's cut, G = 64 | 2^-5 | 0.11 | 7,610,309 | 310 | 1,298 | 3,715 | 2,450 | 1,303 | 1,300 (to M = 307) | 46 to 50 / 133 to 143; 0.092 / 0.032 |
+| #8917's cut, G = 64 | 2^-6 | 0.04 | 3,671,602 | 643 | 1,475 | 3,847 | 2,605 | 1,479 | 1,501 (to M = 657) | 53 to 57 / 138 to 148; 0.081 / 0.031 |
+| #8917's cut, G = 64 | 2^-7 | 0.03 | 1,826,302 | 1,295 | 1,940 | 4,489 | 3,154 | 1,944 | 1,974 (to M = 1,315) | 69 to 75 / 160 to 173; 0.062 / 0.027 |
+| #8917's cut, G = 32 | 2^-4 | 0.15 | 16,735,370 | 140 | 976 | 3,031 | 1,955 | 980 | 980 (to M = 143) | 35 to 38 / 108 to 117; 0.123 / 0.040 |
+| #8917's cut, G = 32 | 2^-5 | 0.125 | 8,191,389 | 288 | 1,085 | 3,159 | 2,073 | 1,089 | 1,085 (to M = 288) | 39 to 42 / 113 to 122; 0.111 / 0.038 |
+| #8917's cut, G = 32 | 2^-6 | 0.05 | 3,831,233 | 616 | 1,265 | 3,299 | 2,234 | 1,269 | 1,295 (to M = 646) | 45 to 49 / 118 to 127; 0.095 / 0.036 |
+| #8917's cut, G = 32 | 2^-7 | 0.04 | 1,898,023 | 1,246 | 1,728 | 3,942 | 2,782 | 1,732 | 1,769 (to M = 1,155) | 62 to 67 / 141 to 152; 0.069 / 0.030 |
+
+- **Head block whole:** M = 145 to 162 takes κ 2^-4; 163 to 326 κ 2^-5 (+76 GB no program, +42 as `main` is); 327 to 677 κ 2^-6 (+221 / +84); to 1,363 κ 2^-7 (+665 / +657). So the eight-rank window's 193, PageCopy's 205 and the select at an LM head of 4 or 2 words a block (221, 321) all sit in the κ 2^-5 row; the select at the plan's LM-head cut (442) is the κ 2^-6 row: **4,074 no program, 10,641 as `main` is, 7,203 / 4,086 the hoist once a member / once a window.** The select at 8 words a block (161) is inside κ 2^-4's reach by one class.
+- **With #8917's cut** (no Program; small values units, "key rows unwritten"): at M = 442 the κ 2^-6 rows hold at every G: 1,891 / 1,475 / 1,265 no program and 4,932 / 3,847 / 3,299 as `main` is at G = 128 / 64 / 32. Under reading A the scores unit (332 / 588 / 1,100) already forces κ 2^-6 at G = 128 and 64 and 2^-7 at G = 32, whose reach covers 442, so the select moves no reading-A row; under reading B it moves each G's row from κ 2^-4 or 2^-5 to 2^-6.
+- As `main` is, the κ rows are within 0.8% of each other up to M = 677: the setup on every statement swamps the plan's choice.
+
+**3. The margin moves with κ** [run: the margin swept at held κ, 0 to 2 at κ 2^-4 to 2^-6 with the head whole, 0.01 to 0.3 elsewhere; table above, last GB column].
+- My rows so far took margin 1/8 everywhere (#8893's tests and #8950's `MARGIN`). The best margin is 0.1 at κ 2^-4 and 2^-5 with the head whole (8 GB less no program, 35 as `main` is), 0.03 at κ 2^-6 (30 / 129) and 0.02 at κ 2^-7 (33 / 142); with the head cut 0.03 to 0.05 at κ 2^-6 and 2^-7 is worth 1.3% to 2.3%. With no margin κ 2^-4 reads 4,183 (+8.6%).
+- A smaller margin also lowers Σk, so it lengthens a κ's reach: at κ 2^-4 margin 1/8 reaches M = 160 and margin 0.1 reaches 162. Past a point that depends on κ and the setup (0.25 to 1.5 here) the planner returns the design without a margin, since it keeps the lesser bound.
+- Not a PR: `margin` already takes any value (#8893); the driver's 1/8 is within 2.3% of the best in every row above.
+
+**4. Lean's check of the final recut's designs** [run `r20261111-122949-1da8`, rc 0, tree `f1e9d625dd`, the inputs' sha256 checked]. It checks each design's exfiltration bound, the GB; it says nothing about line (b). All 20 designs are accepted. Lean's figure is at most 1.47% below the planner's and never above it by more than 0.012 GB:
+
+| design (margin 1/8) | setup | planner GB | Lean's check GB |
+|---|---|---:|---:|
+| final recut, head whole, size classes (the record's plan) | none / +783 | 6,359.7 / 16,850.7 | 6,359.7 / 16,801.8 |
+| final recut, head whole, κ 2^-4 | none / +373 / +783 | 3,860.9 / 7,067.8 / 10,592.7 | 3,808.4 / 6,971.7 / 10,448.6 |
+| final recut, head whole, κ 2^-5 | none / +783 | 3,936.9 / 10,634.7 | 3,893.1 / 10,516.4 |
+| final recut + #8917's cut, G = 128, κ 2^-4 | none / +783 | 1,617.2 / 4,712.6 | 1,593.4 / 4,644.4 |
+| final recut + #8917's cut, G = 64, κ 2^-4 | none / +373 / +783 | 1,188.6 / 2,329.5 / 3,583.5 | 1,188.3 / 2,329.3 / 3,583.3 |
+| final recut + #8917's cut, G = 64, κ 2^-6 | none / +783 | 1,500.7 / 3,891.2 | 1,498.0 / 3,884.3 |
+| final recut + #8917's cut, G = 32, κ 2^-4 | none / +783 | 979.5 / 3,035.2 | 979.6 / 3,035.2 |
+| final recut + #8917's cut, G = 32, κ 2^-5 | none / +783 | 1,084.9 / 3,158.7 | 1,084.9 / 3,158.7 |
+| the plan's cut, head whole, κ 2^-9 | none / +783 | 7,209.5 / 14,592.6 | 7,199.3 / 14,572.0 |
+
+- That tree is before `main`'s `fanout` (#8539, on `main` at `967b722429f3`); `figure1.FANOUT` is 1, at which the capped form reads S as before [read: `main`'s diff of `optimize.py` and `figure1.py`].
+
+**5. The values units at 2^27** (BENCHCROSS's other case, the key whole) [run]: 4,153 / 4,168 / 4,304 GB at G = 128 / 64 / 32, κ 2^-4, no program, against 3,861 with the head whole. The cut is worth nothing there, as BENCHCROSS found at recut A (4,167.6 at G = 128 [relayed]). At 2^26 it is 2,461 / 2,464 / 2,531 (my 12:35Z section 2).
+
+**6. #8950:** its ready line is my entry before this one (57 of 57 suites, `r20261111-121123-87c2`).
+
+For BREAKEVEN:
+- If the largest count grows past 162, change only κ (and the margin with it): `widths=True, margin=0.1, kappas=(2.0 ** -5,)` up to M = 326; `margin=0.03, kappas=(2.0 ** -6,)` up to 677. Head whole, world year, modeled 0.4: 3,929 / 10,600 and 4,074 / 10,641 (no program / as `main` is). These rows do not price the select itself.
+- At M = 145 the best margin is 0.1, not 1/8: 3,853 / 10,558 / 7,047 / 3,865 (8 to 35 GB under my 12:35Z row).
+
+For the table:
+- PLAN | (b) at the final recut: **M = 145 over the kinds the plan prices [SCALE's run; ATTACK's second tool agrees]; the token select is in no stratum and uncounted (442 or more at the plan's LM-head cut [derived]: the record 2^-99.18); per-rank windows** | on the plans' side one M holds 2^-100 at κ 2^-4 up to M = 162 (3,853 GB no program, 10,558 as `main` is), κ 2^-5 up to 326 (3,929 / 10,600), κ 2^-6 up to 677 (4,074 / 10,641); world year, modeled 0.4; the select's own proving is in no row; (b), over the served wiring; modeled; no Lean statement at the code is behind it; nothing built [run].
+- PLAN | Lean's check of 20 final-recut designs | all accepted; at most 1.47% below the planner, never above by more than 0.012 GB [run `1da8`].
