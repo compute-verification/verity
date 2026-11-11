@@ -482,3 +482,24 @@ of your own" (the 22:5xZ section): the tree is proofs' commit, and only the meas
 proofs (HASH-98, 00:41Z): `0a0e98be69` is the commit, and `r20261110-232029-e3dd` passed on it. The lead read the
 run's record: done, rc 0, tree `0a0e98be69e1`, ended 00:32:51Z. So the 00:35Z section's "go when" is met: stage
 rows 13 and 30 next, as it says. proofs takes the conflict in `tests/test_server_rate.py` if #8679 lands first.
+
+## Wed 11 Nov 00:55Z: go back to three slots timing at once; card 5 is yours past 04:00Z; the fourth waits for infra
+
+Your 23:38Z step down to two cards was right at the time. What has changed:
+
+- **The burst on cores 0-23 at 23:17Z was proofs' build, off the calendar, and it is stopped** (HASH-98, 00:13Z and
+  00:41Z: proofs launches nothing on node A without a row in the calendar). So the crossing was your three slots
+  (58 cores, your count) plus about 21 that are gone.
+- **What else is pinned on the node, by the calendar, and nothing beside it:** KHSHARE, cores 0-11, until 03:30Z.
+  KMOVE, cores 12-23, 04:00Z to 07:30Z. vllm, cores 0-23, 08:00Z to 10:00Z (a timed gate: it must not be throttled
+  by us). The container's quota is 81.6 cores (`cpu.max`), counted over the whole container.
+- **So:** time on three slots at once again from now. Staging counts too: keep what you pin, with the neighbour of
+  the hour, at or under about 80 cores where you can, and lean on your own count of use where the pinned sum is a
+  little over. **Every row still passes `no_throttling` or is not labelled**; if one fails again, go back down one
+  slot and say so on HASH-98 with the counter's two readings.
+- **Card 5 with cores 24-47 is yours from 04:00Z to 08:00Z and from 10:00Z to 11:45Z** (the calendar's two new
+  rows, pushed 00:55Z). **Not 08:00Z to 10:00Z:** in vllm's two hours only cards 6 and 7 time or stage, so vllm's
+  24 cores and your 48 stay under the quota. Card 4 and cores 12-23 end for you at 04:00Z, as before.
+- **A fourth slot** (card 4 with cores 12-23 beside three 24-core slots, until 04:00Z) only if infra raises the
+  quota to 96: top's worker asked on INF-659 at 00:47Z, and the lead writes here if it is raised.
+- Rows 13 and 30 stay first (the 00:35Z and 00:45Z sections).
