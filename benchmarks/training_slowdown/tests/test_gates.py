@@ -6,12 +6,12 @@ import pytest
 
 from training_slowdown import gates
 
-BOOLEAN = Path(__file__).resolve().parents[3] / "verity" / "definitions" / "ops" / "boolean"
+VERITY = Path(__file__).resolve().parents[3] / "verity"
 
 
 def test_each_and_count_is_circuit_checks_pin():
     for name, (module, ands, _, _) in gates.DEFINITIONS.items():
-        pins = json.loads((BOOLEAN / f"{module}.circuit-check.json").read_text())["definitions"]
+        pins = json.loads(VERITY.joinpath(*module.split(".")).with_suffix(".circuit-check.json").read_text())["definitions"]
         assert pins[name]["and"] == ands, name
 
 
@@ -24,14 +24,17 @@ def test_prices():
     assert gates.per_mac("gemm/bf16") == pytest.approx((7872 + 15049 + 761) / 16)
     assert gates.per_mac("elementwise/bf16") == 2053 + 1894
     assert gates.per_mac("elementwise/f32") == gates.per_mac("gemm/f32") == 12637
+    assert gates.per_mac("gemm/tf32") == (6524 + 12120 + 439) / 8 == 2385.375
     assert gates.per_mac("gather") == 48
     assert gates.per_and("gemm/bf16") == pytest.approx((7872 + 15049 + 761) / 7872)
+    assert gates.per_and("gemm/tf32") == pytest.approx(19083 / 6524)
     assert gates.UNIT == "gates: AND + XOR + NOT, 3.0x a bf16 GEMM's AND count"
 
 
 def test_kinds_and_assumptions():
     assert gates.kind_of("fwd", "theta", "mm") == ("gemm/bf16", "gemm in bf16 (no dtype)")
     assert gates.kind_of("forward", "updated", "mm", "float32") == ("gemm/f32", "")
+    assert gates.kind_of("other", "param", "mm", "tf32") == ("gemm/tf32", "")
     assert gates.kind_of("fwd", "act", "_scaled_dot_product_flash_attention", "bfloat16") == ("gemm/bf16", "")
     assert gates.kind_of("other", "param", "_fused_adamw_") == ("elementwise/f32", "optimizer in f32 (no dtype)")
     assert gates.kind_of("bwd", "grad", "mul") == ("elementwise/bf16", "elementwise in bf16 (no dtype)")
@@ -110,3 +113,22 @@ def test_a_log_that_names_every_dtype_is_priced_by_them_with_no_assumption():
     assumed = gates.of_log({"by": {"other/param": 480, "fwd/theta": 16},
                             "ops": {k.rsplit(" ", 1)[0]: [6, 480] if "mm" in k else [2, 16] for k in ops}})
     assert assumed["gates"] == pytest.approx(480 * gates.per_mac("gemm/bf16") + 16 * 3947) != out["gates"]
+
+
+def test_a_row_named_tf32_is_priced_at_the_tf32_step():
+    """Of two GEMM rows of one shape in a record without dtypes, the one named `tf32` costs the TF32 step's gates a
+    MAC and the other bf16's, and nothing is assumed of the named one."""
+    log = {"by": {"other/param": 96}, "ops": {"other param mm [[4, 8], [8, 8]]": [1, 32],
+                                              "other param mm [[4, 8], [8, 8]] tf32": [2, 64]}}
+    out = gates.of_log(log)
+    assert out["kinds"] == {"gemm/bf16": {"macs": 32, "gates": 32 * 1480.125},
+                            "gemm/tf32": {"macs": 64, "gates": 64 * 2385.375}}
+    assert out["assumed"] == {"gemm in bf16 (no dtype)": 32}
+
+
+def test_tf32_names_a_gemm_alone():
+    """TF32 is a GEMM's arithmetic: an elementwise op or a gather a row names `tf32` has no price."""
+    with pytest.raises(gates.Unpriced, match="^mul in tf32: no Definition prices an elementwise MAC"):
+        gates.kind_of("other", "param", "mul", "tf32")
+    with pytest.raises(gates.Unpriced, match="^embedding in tf32: a gather's words"):
+        gates.gather_bits("embedding", "tf32")

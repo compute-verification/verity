@@ -5790,7 +5790,7 @@ def _finish(pkg: Path, work: Path, policy: dict, new: dict, facts: dict, files: 
             repairs = bookkeeping_repairs(fails, fixed, ticket, policy)
             rep |= {"review": notes, "statement_changes": bool(statement_changes(notes)), "regenerated": str(work / POLICY),
                     "changes": changes(notes, policy, fixed), "bookkeeping": [r["line"] for r in repairs], "repairs": repairs}
-            log(f"audit: {pkg}/{POLICY}: passes on its lock with the bookkeeping repaired, {work / POLICY}, which drive "
+            log(f"audit: {pkg}/{POLICY}: passes on its lock with the bookkeeping repaired, {work / POLICY}, which the queue "
                 f"commits: {len(rep['bookkeeping'])} repairs, each a warning")
     elif update:
         dump(work, new)
@@ -6312,7 +6312,7 @@ def main(argv: list[str]) -> int:
     regen = {os.path.relpath(r["package"], a.repo.resolve()): r["regenerated"] for r in reports if r.get("settled")}
     for p, f in regen.items():
         print(f"audit: {p}: every failure is a record difference{' or bookkeeping' if a.bookkeeping else ''}, settled by "
-              f"{f}, which drive commits over {p}/{POLICY} when it lands", flush=True)
+              f"{f}, which the queue commits over {p}/{POLICY}", flush=True)
     warned = [f"{os.path.relpath(r['package'], a.repo.resolve())}: {w}" for r in reports for w in r.get("bookkeeping", [])]
     doc = {"passed": not failed, "failed": failed, "packages": reports, "regenerated": regen} | (
         {"bookkeeping": warned} if a.bookkeeping else {})
