@@ -122,7 +122,6 @@ def test_the_kernel_is_one_cubin_from_two_places_of_the_tree(cuda: str, tmp_path
     assert a == b
 
 
-@pytest.mark.slow
 def test_a_probe_nvcc_builds_differently_at_the_two_places_is_one_cubin_too(cuda: str, tmp_path: Path) -> None:
     a, b = cubins(cuda, tmp_path, "probe.cu", PROBE_CU, "probe.cuh", PROBE_CUH, cc="nvcc")
     assert a != b, ("nvcc itself gives this probe one cubin at both places, so the comparisons here show nothing: give "
