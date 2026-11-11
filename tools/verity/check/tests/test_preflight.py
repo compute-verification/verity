@@ -92,13 +92,16 @@ def _custody(tmp_path: Path, *objects: bytes) -> Path:
     return c
 
 
-def _inputs(tmp_path: Path, urls: dict[str, str] | None = None, *files: bytes) -> Path:
+def _inputs(tmp_path: Path, urls: dict[str, str] | None = None, upstream: bytes | None = None) -> Path:
+    """The run's `--send` files: ``urls`` as the Lean bundles' URLs, and with ``upstream``, the agreement's URLs, its upstream
+    build's listed under the sha256 of those bytes."""
     d = tmp_path / "inputs"
     d.mkdir()
     if urls is not None:
         (d / PF.CHECK.LEAN_DEPS_URLS).write_text(json.dumps(urls))
-    for i, data in enumerate(files):
-        (d / f"sent-{i}.tar.gz").write_bytes(data)
+    if upstream is not None:
+        (d / PF.CHECK.AGREEMENT_URLS).write_text(json.dumps({"upstream": {"art": "art:u", "sha256": _sha(upstream),
+                                                                          "bytes": len(upstream), "url": "https://store.invalid/u"}}))
     return d
 
 
@@ -205,16 +208,18 @@ def test_the_store_read_uses_the_custody_key_and_fails_without_a_credential(tmp_
 
 
 @pytest.mark.parametrize("rustflags, sent, cpu, fail", [
-    ("-C target-cpu=x86-64-v3", True, NO_AVX, False),
-    ("-C target-cpu=native", False, NO_AVX, False),
-    ("-C target-cpu=native", True, AVX, False),
-    ("-C target-cpu=native", True, NO_AVX, True),
-    ("-C target-cpu=x86-64-v4", True, NO_AVX, True),
-    ("", True, NO_AVX, True),
+    ("-C target-cpu=x86-64-v3", UPSTREAM, NO_AVX, False),
+    ("-C target-cpu=native", None, NO_AVX, False),
+    ("-C target-cpu=native", b"another build", NO_AVX, False),
+    ("-C target-cpu=native", UPSTREAM, AVX, False),
+    ("-C target-cpu=native", UPSTREAM, NO_AVX, True),
+    ("-C target-cpu=x86-64-v4", UPSTREAM, NO_AVX, True),
+    ("", UPSTREAM, NO_AVX, True),
 ])
 def test_avx512f_is_required_only_when_the_run_carries_a_build_that_needs_it(tmp_path, path, rustflags, sent, cpu, fail):
+    """The run carries the pinned build as its URL (check.py's `AGREEMENT_URLS`), listed under the pin's sha256."""
     tree = _tree(tmp_path, rustflags=rustflags)
-    inputs = _inputs(tmp_path, None, *([b"other input", UPSTREAM] if sent else [b"other input"]))
+    inputs = _inputs(tmp_path, None, sent)
     _, fails = _run(tmp_path, tree, inputs=inputs, custody=_custody(tmp_path, BUNDLE), cpu=cpu)
     flags = rustflags or "the build host's own (target-cpu=native)"
     want = f"cpu: no avx512f, which the pinned upstream build the run carries needs ({flags}): its replays would die of SIGILL; use a pod with AVX-512"
