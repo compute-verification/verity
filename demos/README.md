@@ -2,7 +2,7 @@
 
 One directory per demo. A demo holds what is its own: the workload it serves, its placement (where each party
 runs), and the commands a person runs to serve and audit it. What attaches Verity to the serving stack is the integration's
-(`adapters/`), and the protocols it runs stay in core (`verity/core/`). `verity` imports nothing from `demos/`
+(`adapters/`), and the protocols it runs stay in `verity/protocols/`. `verity` imports nothing from `demos/`
 (`tests/test_boundaries.py`), and `verity demo NAME` runs `demos/<NAME>/config.toml` (`verity run`), else its `run.py`
 or `run.sh`.
 
@@ -98,6 +98,3 @@ checks are `tools/verity/cli/verity_cli/examples.py`'s; a new role goes in its `
   parties, channels and each subprotocol's piece, PoUS's at 320 challenges, which `verity run --on MACHINE --bindings FILE`
   executes on each machine, the hosts and addresses only in the deploy bindings. `verity run CONFIG --dry-run` resolves
   it without a GPU. It has no run of record yet.
-- `dither_full_util/` (`run` `moved`, `proof` `none`): the remote protocol's PoUW half, as PoUW's work unit. The H200 at
-  full utilization on useful s8 GEMMs, credited by PoUW over Dither's no-fold receipt. It has no runner and no run of
-  record, so `verity demo dither_full_util` runs nothing yet, and it is not a remote run.

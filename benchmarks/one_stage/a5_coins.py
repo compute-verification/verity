@@ -532,13 +532,14 @@ class Local:
                          admit=lambda s: A.admit(host, s, signer=self.signer, pinned=self.pin, now=now, active=alive),
                          start=start, active=alive, ready=lambda s: A.await_commitment(host, s, alive))
         got = json.loads(out)
+        secret = got.pop("secret", None)  # an open the gate answered holds the hello's secret: no error quotes it
         if rc or opened_reason(got, withhold) is not None:
-            raise Ch.CoinError(f"the local gate refused the open, or {opened_reason(got, withhold)}: {out.decode().strip()}")
+            raise Ch.CoinError(f"the local gate refused the open, or {opened_reason(got, withhold)}: {json.dumps(got)}")
         address = host.sessions / self.session / "out" / "address.json"
         # serve.py writes the file in place, its newline last: read it only once it is whole
         while not (address.exists() and address.read_text().endswith("\n")) and alive(self.session):
             time.sleep(0.1)
-        return json.loads(address.read_text())["address"], got["secret"], got["commitment"]
+        return json.loads(address.read_text())["address"], secret, got["commitment"]
 
     def finish(self, dest: Path) -> tuple[Path, Path, Path, Ch.ChallengerKey]:
         """Once the session has ended (its end entry in the ledger): its out/, the ledger and the pins log copied to `dest`, and

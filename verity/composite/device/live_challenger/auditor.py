@@ -5,8 +5,10 @@ tree, one session a window, each recorded in a signed append-only ledger before 
     vy-challenger-gate open --session S --root R
     vy-challenger-gate period-open --name P --cap N --circuit SHA512 [--draw-k K] [--rows T] [--model M | --weights-root W]
                                    [--circuit-files JSON] [--length JSON]
-                                   [--policy ID --alpha N/D --gamma G --registration SHA512] [--lane LANE]
+                                   [(--policy ID --alpha N/D --gamma G | --policy-name NAME) --registration SHA512]
+                                   [--lane LANE]
     vy-challenger-gate period-close --name P
+    vy-challenger-gate policy-register --name NAME --policy ID --alpha N/D --gamma G
     vy-challenger-gate model-register --model M --circuit SHA512 --descriptor FILE --checkpoint DIR
     vy-challenger-gate model-key --model M --circuit SHA512 [--weights-root W]
     vy-challenger-gate certifier-rehearse --peer NAME --port PORT --minutes M [--tamper late|extra|drop|token]
@@ -116,7 +118,10 @@ tree, one session a window, each recorded in a signed append-only ledger before 
   `--alpha N/D` (`alpha`, ``[N, D]``) and `--gamma G` (`gamma`), naturals as those params read them
   (`NciCheck.Protocol`), signed as given, with no default; and `--registration SHA512` (`registration`), the digest of
   the deployment's first registration record (`NciCheck.Baseline.digest`), the one θ's provenance cites. The open's
-  `by` is who gave them, the lane's key or vy-admin; an open with none of the four commits no policy. Its windows are
+  `by` is who gave them, the lane's key or vy-admin; an open with none of the four commits no policy. With
+  `--policy-name NAME` in place of the first three, the open signs the id, α and Γ of the policy vy-admin registered
+  under that name (the policy registry) and the name (`policy_name`), which no open carries otherwise: the auditor's
+  policy, whoever opens the period. Its windows are
   exactly the
   reserves (and one-step v2 opens) whose prover (`for`, else `by`) is its
   lane between its open and its close, at most `cap` (the next reserve is refused); every one counts. The close is
@@ -153,6 +158,11 @@ tree, one session a window, each recorded in a signed append-only ledger before 
   layers in order; it commits each K's b/<K> from the pinned shards alone under a fresh salt key it keeps
   (`weights.weights_roots`), and appends the roots and their fold. `model-key` gives a lane the key (the openings of
   public weights), and `models` reads the registry, which `publish.sh` publishes as `challenger-models/v1`.
+
+- **The policy registry** (`/var/lib/vy-challenger/policies.jsonl`, auditor's, `chattr +a`) is one line a registration,
+  vy-admin's `policy-register` run as `auditor`: a name, used once, and the inference-only policy registered under it
+  (its id, α and Γ, read as a period-open reads them), so the policy a period's open names (`--policy-name`) is the
+  auditor's own, fixed before any lane's open. `policies` reads the registry.
 
 - **A certifier rehearsal** (`certifier-rehearse`, a lane's own gate key or vy-admin): the network certifier in front of
   a served endpoint, `benchmarks/network_traces/certifier_serve.py rehearse`, run here, on the auditor's machine, as the
@@ -492,6 +502,10 @@ class Host:
         return self.root / "models.jsonl"
 
     @property
+    def policies(self) -> Path:
+        return self.root / "policies.jsonl"
+
+    @property
     def certifier(self) -> Path:
         return self.root / "certifier"
 
@@ -691,6 +705,15 @@ def policy_of(s: str) -> str:
     return s
 
 
+def policy_name_of(s: str) -> str:
+    """A registered policy's name (`policy-register --name`, a period-open's `--policy-name`, written as
+    `policy_name`): 1 to 64 of [A-Za-z0-9._:-], or Refused."""
+    if not NAME.fullmatch(s):
+        raise Refused(f"--policy-name {s[:200]!r}: a name of the policy registry (policies), 1 to 64 of "
+                      "[A-Za-z0-9._:-]")
+    return s
+
+
 def alpha_of(s: str) -> list[int]:
     """A period-open's α (`--alpha N/D`, written as `alpha`, ``[N, D]``): the most novel bits a gate the inference-only
     policy lets an isolation unit read, as its check's params read it (`NciCheck.Protocol`: naturals, D at least 1). It
@@ -725,11 +748,13 @@ def registration_of(s: str) -> str:
 #: and `weights_root` name a model registry entry, whose root and model the open signs (`models.resolve`)
 PERIOD_FIELDS = {"draw_k": draw_k_of, "rows": rows_of, "weights_root": weights_root_of, "circuit_files": circuit_files_of,
                  "model": model_of, "length": length_of, "policy": policy_of, "alpha": alpha_of, "gamma": gamma_of,
-                 "registration": registration_of}
+                 "policy_name": policy_name_of, "registration": registration_of}
 #: what an inference-only period's open signs, all of it or none, each with its flag: the policy its check holds the
 #: serve to (its id, α and Γ), and the registration θ is read from
 POLICY_FIELDS = {"policy": "--policy ID", "alpha": "--alpha N/D", "gamma": "--gamma G",
                  "registration": "--registration SHA512"}
+#: what a registered policy's line states of it, which an open that names it (`policy_name`) signs from the registry
+REGISTERED = ("policy", "alpha", "gamma")
 
 
 def field_text(v: Any) -> str:
@@ -925,19 +950,75 @@ def gate_model_key(argv: list[str], host: Host) -> dict:
             "key_sha512": e["key_sha512"]}
 
 
-def seal_models(host: Host, *, own: Callable[[Path], None], seal: Callable[[Path], None] = append_only) -> None:
-    """The registry made auditor's and append-only (`chattr +a`, which only root lifts) before its first line."""
-    if not host.models.exists():
-        host.models.touch()
-        host.models.chmod(0o644)
-        own(host.models)
-    seal(host.models)
+def seal_registry(path: Path, *, own: Callable[[Path], None], seal: Callable[[Path], None] = append_only) -> None:
+    """A registry (`Host.models`, `Host.policies`) made auditor's and append-only (`chattr +a`, which only root lifts)
+    before its first line."""
+    if not path.exists():
+        path.touch()
+        path.chmod(0o644)
+        own(path)
+    seal(path)
 
 
 def as_auditor_register(args: list[str]) -> dict:
     p = subprocess.run(_auditor(["model-register", *args]), stdout=subprocess.PIPE, stderr=None, text=True)
     if p.returncode:
         raise Refused(f"model-register exited {p.returncode} (its reason is on stderr above)")
+    return json.loads(p.stdout)
+
+
+# --- the policy registry ----------------------------------------------------------------------------------------------
+
+def read_policies(path: Path) -> dict[str, dict]:
+    """The policy registry's lines by name; none where it has no line yet."""
+    lines = path.read_text().splitlines() if path.exists() else []
+    return {e["name"]: e for e in map(json.loads, lines)}
+
+
+def policy_register(host: Host, args: list[str], *, pinned: str, now: datetime) -> dict:
+    """`policy-register NAME POLICY ALPHA GAMMA`, as `auditor`: the inference-only policy vy-admin registers under NAME,
+    its id, α and Γ read as a period-open reads them (`policy_of`, `alpha_of`, `gamma_of`), appended to the registry
+    under its lock; or Refused, a name the registry holds among them: a name means one policy."""
+    if len(args) != 4:
+        raise Refused(f"policy-register: {args}")
+    line = {"name": policy_name_of(args[0]), "policy": policy_of(args[1]), "alpha": alpha_of(args[2]),
+            "gamma": gamma_of(args[3]), "by": "vy-admin", "pinned": pinned, "registered_utc": utc(now)}
+    with locked(host.root / "policies.lock"):
+        if line["name"] in read_policies(host.policies):
+            raise Refused(f"policy-register: the registry holds a policy {line['name']} already: a name is registered "
+                          "once")
+        fd = os.open(host.policies, os.O_WRONLY | os.O_APPEND)
+        try:
+            os.write(fd, (json.dumps(line, sort_keys=True, separators=(",", ":")) + "\n").encode())
+            os.fsync(fd)
+        finally:
+            os.close(fd)
+    return line
+
+
+def parse_policy(argv: list[str]) -> list[str]:
+    """`policy-register`'s arguments as the step run as `auditor` takes them, each read once here so that a refusal
+    names its flag."""
+    p = argparse.ArgumentParser(prog="vy-challenger-gate policy-register", exit_on_error=False, add_help=False,
+                                allow_abbrev=False)
+    for flag in ("--name", "--policy", "--alpha", "--gamma"):
+        p.add_argument(flag, required=True)
+
+    def refuse(why: object) -> None:
+        raise Refused(f"policy-register: {why}; {' '.join(p.format_usage().split())}")
+
+    p.error = refuse
+    try:
+        a = p.parse_args(argv)
+    except argparse.ArgumentError as e:
+        refuse(e)
+    return [policy_name_of(a.name), policy_of(a.policy), field_text(alpha_of(a.alpha)), str(gamma_of(a.gamma))]
+
+
+def as_auditor_policy(args: list[str]) -> dict:
+    p = subprocess.run(_auditor(["policy-register", *args]), stdout=subprocess.PIPE, stderr=None, text=True)
+    if p.returncode:
+        raise Refused(f"policy-register exited {p.returncode} (its reason is on stderr above)")
     return json.loads(p.stdout)
 
 
@@ -1731,9 +1812,10 @@ USAGE = ("verbs: reserve --peer NAME --scheme S --families JSON [--epoch E] [--m
          "[--withhold] "
          "| open --session S --root R "
          "| period-open --name P --cap N --circuit SHA512 [--draw-k K] [--rows T] [--model M | --weights-root W] [--circuit-files JSON] "
-         "[--length JSON] [--policy ID --alpha N/D --gamma G --registration SHA512: an inference-only period's, all "
-         "four] [--lane LANE: vy-admin's] "
+         "[--length JSON] [(--policy ID --alpha N/D --gamma G | --policy-name NAME: a registered policy's) "
+         "--registration SHA512: an inference-only period's, all of them] [--lane LANE: vy-admin's] "
          "| period-close --name P "
+         "| policy-register --name NAME --policy ID --alpha N/D --gamma G (vy-admin's) "
          "| declare --program SHA512 [--blocks K,...] [--day D] [--for LANE: vy-admin's] "
          "(a lane's own gate key, or vy-admin) "
          "| model-register --model M --circuit SHA512 --descriptor FILE --checkpoint DIR (vy-admin's) "
@@ -1770,6 +1852,7 @@ def parse_period(verb: str, argv: list[str], *, lane: str | None) -> tuple[str, 
         p.add_argument("--policy", dest="policy", default=None)
         p.add_argument("--alpha", dest="alpha", default=None)
         p.add_argument("--gamma", dest="gamma", default=None)
+        p.add_argument("--policy-name", dest="policy_name", default=None)
         p.add_argument("--registration", dest="registration", default=None)
 
     def refuse(why: object) -> None:
@@ -1848,11 +1931,17 @@ def gate(argv: list[str], host: Host = Host(), **hooks: Any) -> tuple[int, bytes
             if not admin:
                 raise Refused("a model is registered by vy-admin alone (sudo vy-challenger-gate model-register ...)")
             a = parse_model(verb, rest)
-            seal_models(host, own=hooks.get("own") or own_by_auditor, seal=hooks.get("seal") or append_only)
+            seal_registry(host.models, own=hooks.get("own") or own_by_auditor, seal=hooks.get("seal") or append_only)
             line = (hooks.get("register") or as_auditor_register)(
                 [a.model, a.circuit, str(Path(a.descriptor).resolve()), str(Path(a.checkpoint).resolve())])
             doc = {k: line[k] for k in ("model", "circuit", "prefix", "checkpoint_sha512", "roots", "weights_root",
                                         "key_sha512", "registered_utc")}
+        elif verb == "policy-register":
+            if not admin:
+                raise Refused("a policy is registered by vy-admin alone (sudo vy-challenger-gate policy-register ...)")
+            args = parse_policy(rest)
+            seal_registry(host.policies, own=hooks.get("own") or own_by_auditor, seal=hooks.get("seal") or append_only)
+            doc = (hooks.get("register_policy") or as_auditor_policy)(args)
         elif verb == "model-key":
             if by is None:
                 raise Refused("this key reads only: a model's salt key goes to a lane's own gate key, or vy-admin")
@@ -1869,6 +1958,8 @@ def gate(argv: list[str], host: Host = Host(), **hooks: Any) -> tuple[int, bytes
                                  read=hooks.get("read") or sys.stdin.buffer.read)
         elif verb == "models" and not rest:
             return 0, host.models.read_bytes() if host.models.exists() else b""
+        elif verb == "policies" and not rest:
+            return 0, host.policies.read_bytes() if host.policies.exists() else b""
         elif verb == "status" and len(rest) == 1 and CERTIFIER_RUN.fullmatch(rest[0]):
             doc = certifier_status(rest[0], host, hooks.get("certifier_active") or certifier_unit_active)
         elif verb == "fetch" and len(rest) == 1 and CERTIFIER_RUN.fullmatch(rest[0]):
@@ -2000,7 +2091,8 @@ def period(host: Host, args: list[str], *, signer, pinned: str, now: datetime, a
     the registry has no entry of the model alone, from core's pin in `tree`), its fixed length (`length`) and each K's
     circuit file's SHA-512
     (`circuit_files`), and an inference-only period's policy and registration (`policy`, `alpha`, `gamma`,
-    `registration`: all four or none, `POLICY_FIELDS`); it closes once none of its windows
+    `registration`: all four or none, `POLICY_FIELDS`; with `policy_name`, the first three as the policy registry
+    states them under that name, and the name); it closes once none of its windows
     still runs, its close listing each window with its outcome."""
     if len(args) not in (range(6, 6 + len(PERIOD_FIELDS) + 1) if args[:1] == ["period-open"] else (4,)):
         raise Refused(f"period: {args}")
@@ -2012,6 +2104,15 @@ def period(host: Host, args: list[str], *, signer, pinned: str, now: datetime, a
         if len(fields) != len(args) - 6 or not set(fields) <= set(PERIOD_FIELDS):
             raise Refused(f"period: {args}")
         given = {f: PERIOD_FIELDS[f](fields[f]) for f in PERIOD_FIELDS if f in fields}
+        if "policy_name" in given:
+            if set(REGISTERED) & set(given):
+                raise Refused(f"period-open {name}: --policy-name names a policy vy-admin registered, whose id, α and "
+                              "Γ the open signs from the registry: not with --policy, --alpha or --gamma")
+            registered = read_policies(host.policies).get(given["policy_name"])
+            if registered is None:
+                raise Refused(f"period-open {name}: the policy registry (policies) holds no policy "
+                              f"{given['policy_name']}: vy-admin registers one (policy-register)")
+            given.update({f: registered[f] for f in REGISTERED})
         missing = [flag for f, flag in POLICY_FIELDS.items() if f not in given]
         if 0 < len(missing) < len(POLICY_FIELDS):
             raise Refused(f"period-open {name}: {' and '.join(missing)} missing: an inference-only period's open signs "
@@ -2546,8 +2647,9 @@ def main(argv: list[str] | None = None) -> int:
         elif argv[:1] == ["certifier-run"] and len(argv) == 2:
             e = certifier_run(host, argv[1], pinned=pinned_commit(), now=lambda: datetime.now(timezone.utc))
             print(json.dumps({k: e[k] for k in ("run", "rc", "ended", "runs", "device") if k in e}))
-        elif argv[:1] == ["model-register"] and len(argv) == 5:
-            line = model_register(host, argv[1:], pinned=pinned_commit(), now=datetime.now(timezone.utc))
+        elif argv[:1] in (["model-register"], ["policy-register"]) and len(argv) == 5:
+            register = model_register if argv[0] == "model-register" else policy_register
+            line = register(host, argv[1:], pinned=pinned_commit(), now=datetime.now(timezone.utc))
             print(json.dumps(line, sort_keys=True))
         elif argv[:1] == ["pinned"] and len(argv) == 3:
             print(record_pin(host.pins, argv[1], argv[2], datetime.now(timezone.utc)))
