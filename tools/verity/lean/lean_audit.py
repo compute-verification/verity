@@ -1008,8 +1008,10 @@ def prune_replays(cache: Path, kept: int | None = None) -> int:
     return n
 
 
-#: the disk the artifact cache may hold beyond what kept builds share with it (hard links), before its oldest go
-ARTIFACTS_CAP = 20 << 30
+#: the disk the artifact cache may hold beyond what kept builds share with it (hard links), before its oldest go: more
+#: than the largest package's build, with room for the versions before it, since what a tree held is the cache's alone
+#: once that tree is swept (a stopped audit's), and `prune` then cuts to three quarters of this
+ARTIFACTS_CAP = 64 << 30
 ARTIFACT = MK.ARTIFACT
 #: a bundle's members: the index's entries and the artifacts they name, nothing else
 MEMBER = re.compile(r"artifacts/[0-9a-f]{16}\.[a-z.]+|" + MK.INDEX + r"/[0-9a-f]{128}\.json")
