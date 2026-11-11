@@ -1775,9 +1775,11 @@ def test_a_result_is_not_stored_when_the_tree_changed_while_it_ran(tmp_path):
     CC._MEMO.clear()
 
 
-def test_two_writers_of_one_entry_at_once_both_store_it(tmp_path, monkeypatch):
-    """Two checks on one node that store the same entry don't share its temporary file, where the second's rename would find
-    it gone (FileNotFoundError) and fail the whole check."""
+@pytest.mark.parametrize("racing", ["record", "entry"])
+def test_two_writers_of_one_entry_at_once_both_store_it(tmp_path, monkeypatch, racing):
+    """Two checks on one node that store the same entry, and so the same read records, don't share a temporary file, where the
+    second's rename would find it gone (FileNotFoundError) and fail the whole check: the other writer stores it whole between
+    the first's write of a read record, or of the entry, and its rename."""
     import subprocess
 
     from circuit_check import cache as CC
@@ -1790,16 +1792,45 @@ def test_two_writers_of_one_entry_at_once_both_store_it(tmp_path, monkeypatch):
     CC._MEMO.clear()
     replace, inner = os.replace, []
 
-    def racing(src, dst):
-        if not inner:                                                   # the other writer stores the same entry in between
+    def other(src, dst):
+        if not inner and (CC.READS in Path(dst).parts) == (racing == "record"):
             inner.append(None)
             inner[0] = CC.store(tmp_path / "cache", k, tmp_path, got, rep)
         replace(src, dst)
 
-    monkeypatch.setattr(CC.os, "replace", racing)
+    monkeypatch.setattr(CC.os, "replace", other)
     eid = CC.store(tmp_path / "cache", k, tmp_path, got, rep)
     assert eid and inner == [eid]
-    assert [p.name for p in (tmp_path / "cache").rglob("*") if p.is_file()] == [f"{eid}.json"]
+    assert [p.name for p in (tmp_path / "cache").glob("*/*/*.json")] == [f"{eid}.json"]
+    assert [p for p in (tmp_path / "cache").rglob("*") if p.is_file() and p.suffix != ".json"] == []
+    CC._RECORDS.clear()
+    assert CC.read(next((tmp_path / "cache").glob("*/*/*.json")))["reads"] == CC._digests(tmp_path, got)
+    CC._VISIBLE.clear()
+    CC._MEMO.clear()
+
+
+def test_an_entry_in_the_old_form_is_a_miss(tmp_path):
+    """Every key holds the cache's schema (`cache.key`), so an entry stored in the old form, its reads whole in it, is under
+    another key and never looked up; one under a key of the new form anyway is a miss, not a failure, and the run stores the
+    entry again."""
+    import subprocess
+
+    from circuit_check import cache as CC
+
+    subprocess.run(["git", "init", "-q", str(tmp_path)], check=True)
+    (tmp_path / "a.txt").write_text("a")
+    got = {"files": ["a.txt"], "dirs": [], "probes": [], "libs": []}
+    k, rep = {"version": "v", "request": {}}, {"failures": [], "warnings": []}
+    CC._VISIBLE.clear()
+    CC._MEMO.clear()
+    assert CC.key({"target": ["definition", "X_v1"]})["schema"] == CC.SCHEMA
+    old = CC._dir(tmp_path / "cache", k) / "old.json"
+    old.parent.mkdir(parents=True)
+    old.write_text(json.dumps({"key": k, "reads": CC._digests(tmp_path, got), "report": rep}))
+    assert CC.lookup(tmp_path / "cache", k, tmp_path) is None and CC.recorded(tmp_path / "cache", k, tmp_path) is None
+    assert f"{old}: KeyError: 'own'; counted as no entry" in CC.unread()
+    eid = CC.store(tmp_path / "cache", k, tmp_path, got, rep)
+    assert CC.lookup(tmp_path / "cache", k, tmp_path) == (rep, eid)
     CC._VISIBLE.clear()
     CC._MEMO.clear()
 

@@ -120,14 +120,14 @@ FmaRowF32FtzScalar, FmaRowF32FtzElement = EW.shared_operand(
     ("the gates of F32FmaFtz_v3(a, b, c) that read only a, once per row", "F32FmaFtz_v3(a, b, c) from a's own gates"))
 
 
-def _step_row(B, DOT, nv: int, a: Coll, bs: Coll, acc: Coll | None) -> Coll:
-    """One `AttnDotStep` per member of a row that shares ``a`` (its first ``nv`` words): ``bs`` and ``acc`` hold one member
-    each (``acc`` None: from +0), and a's own gates are computed once."""
+def _step_row(B, DOT, nv: int, a: Coll, bs: Coll, acc: Coll | None, axis: int = 0) -> Coll:
+    """One `AttnDotStep` per member of a row that shares ``a`` (its first ``nv`` words): ``bs`` (along ``axis``) and ``acc``
+    hold one member each (``acc`` None: from +0), and a's own gates are computed once."""
     S = {"DOT": DOT, "NV": nv, "FROM_ZERO": acc is None}
     ad = B.call(bind(AttnDotStepA, **S), a)
     if acc is None:
-        return B.batch(bind(AttnDotStep, **S), a, bs, ad, axes=(None, 0, None))
-    return B.batch(bind(AttnDotStep, **S), a, bs, acc, ad, axes=(None, 0, 0, None))
+        return B.batch(bind(AttnDotStep, **S), a, bs, ad, axes=(None, axis, None))
+    return B.batch(bind(AttnDotStep, **S), a, bs, acc, ad, axes=(None, axis, 0, None))
 
 
 def _scale_row(B, xs: Coll, s: Coll, bf16: bool = False) -> Coll:
@@ -151,31 +151,22 @@ def _attention_type(S):
              ("vc", Array(S.T, Array(S.KVH, Array(S.D, BF16))))), Array(S.NH, Array(S.D, BF16)))
 
 
-def _block(B, name: str, D: int, NVIS: int, FIRST: bool, BN: int, DOT, q, k, v, m_prev, l_prev, o_prev, check: bool = True,
-           guard_max: bool = True, scale_log2: Coll | None = None):
-    """One BN-key block of FA2's online softmax for one query row, NVIS visible columns (`AttnBlock_v2` / `_v3`'s body); without
-    ``check`` (`AttnBlock_v5`'s unmasked iteration) the rescale reads the running max as it is, not guarded, and without
-    ``guard_max`` (`AttnBlock_v4`'s) so does `max * scale`. ``scale_log2`` is the scale word when it is an input (v14 to v17's),
-    else the constant `scale_log2_bits(D)`."""
-    if BN % 16 or D % 16 or not 1 <= NVIS <= BN:
-        raise ValueError(f"{name}: BN={BN} and D={D} must be multiples of 16 and 1 <= NVIS={NVIS} <= BN")
-    if FIRST and not check:
-        raise ValueError(f"{name}: the first iteration runs Check_inf (FIRST needs CHECK)")
-    c = _Bits(B)
-    kq = k[0:NVIS].reshape(Array(NVIS, Array(D // 16, A16)))
-    acc = None
-    for t in range(D // 16):
-        acc = _step_row(B, DOT, 16, q[16 * t:16 * t + 16], kq.take(1, t), acc)
-    scores, s = acc, list(acc)
+def _softmax(B, c: _Bits, NVIS: int, FIRST: bool, scores: Coll, m_prev, l_prev, check: bool, guard_max: bool,
+             scale_log2: Coll | None, K: int | None):
+    """A block's online softmax between its scores and its P V steps, ``check`` and ``guard_max`` `_block`'s: the running max,
+    the rescale (none in a FIRST block), P = `ex2(s * scale - max * scale)` and the lane sums, by the scale word ``scale_log2``
+    or, when it is None, the constant ``K`` folded into the gates that read it.  ``(m_new, lanes, bf16(P) by column, the
+    rescale or None)``."""
+    s = list(scores)
     bmax = s[0]
     for j in range(1, NVIS):
         bmax = B.call(BA.F32Max, bmax, s[j])
     m_new = bmax if FIRST else B.call(BA.F32Max, m_prev, bmax)
     m_use = B.call(BA.GuardNegInfZero, m_new) if check or guard_max else m_new
-    K = scale_log2_bits(D) if scale_log2 is None else None
 
     def by_scale(x):
         return B.call(BA.F32MulFtz, x, scale_log2) if K is None else B.call(bind(F32MulFtzConst, K=K), x)
+    scores_scale = None
     if not FIRST:
         scores_scale = B.call(BM.MufuEx2Ftz, by_scale(B.call(BA.F32SubFtz, m_prev, m_use if check else m_new)))
     max_scaled = by_scale(m_use if guard_max else m_new)
@@ -194,7 +185,26 @@ def _block(B, name: str, D: int, NVIS: int, FIRST: bool, BN: int, DOT, q, k, v, 
     for ln, cs in enumerate(cols):
         for j in cs[1:]:
             lanes[ln] = B.call(BA.F32AddFtz, lanes[ln], p[j])
-    pb = [B.call(BG.F2fpBf16, x) for x in p]
+    return m_new, lanes, [B.call(BG.F2fpBf16, x) for x in p], scores_scale
+
+
+def _block(B, name: str, D: int, NVIS: int, FIRST: bool, BN: int, DOT, q, k, v, m_prev, l_prev, o_prev, check: bool = True,
+           guard_max: bool = True, scale_log2: Coll | None = None):
+    """One BN-key block of FA2's online softmax for one query row, NVIS visible columns (`AttnBlock_v2` / `_v3`'s body); without
+    ``check`` (`AttnBlock_v5`'s unmasked iteration) the rescale reads the running max as it is, not guarded, and without
+    ``guard_max`` (`AttnBlock_v4`'s) so does `max * scale`. ``scale_log2`` is the scale word when it is an input (v14 to v17's),
+    else the constant `scale_log2_bits(D)`."""
+    if BN % 16 or D % 16 or not 1 <= NVIS <= BN:
+        raise ValueError(f"{name}: BN={BN} and D={D} must be multiples of 16 and 1 <= NVIS={NVIS} <= BN")
+    if FIRST and not check:
+        raise ValueError(f"{name}: the first iteration runs Check_inf (FIRST needs CHECK)")
+    c = _Bits(B)
+    kq = k[0:NVIS].reshape(Array(NVIS, Array(D // 16, A16)))
+    acc = None
+    for t in range(D // 16):
+        acc = _step_row(B, DOT, 16, q[16 * t:16 * t + 16], kq.take(1, t), acc)
+    m_new, lanes, pb, scores_scale = _softmax(B, c, NVIS, FIRST, acc, m_prev, l_prev, check, guard_max, scale_log2,
+                                              scale_log2_bits(D) if scale_log2 is None else None)
     o = None if FIRST else _scale_row(B, o_prev, scores_scale)
     for ks in range(BN // 16):
         k0 = 16 * ks
