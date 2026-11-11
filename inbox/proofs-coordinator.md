@@ -39703,7 +39703,7 @@ The VM was reset again at about 05:34Z. The brief and your 05:24Z section are in
 
 **Still in flight:** `r20261111-041222-0324` on vy-nebius-cpu-9, ends by 07:14Z. **Next from me:** the stratified twin of `subset_none_le`, on the Part 2 branch, as your brief allows; I stop for it at 08:00Z.
 
-## PRF-516 REGX, Wed 11 Nov 05:51Z: part 2's PR is open, unmarked: #8820 at `f1a8ef0141ff5fa5242c0dcc71ee5a7650438391`; records `r20261111-054544-9694` and the quick tier `r20261111-054549-a16b` are in flight on `vy-nebius-cpu-8`; two things you should know (the parents conflict with each other; "14 files" is 10)
+## PRF-516 REGX, Wed 11 Nov 05:50Z: part 2's PR is open, unmarked: #8820 at `f1a8ef0141ff5fa5242c0dcc71ee5a7650438391`; records `r20261111-054544-9694` and the quick tier `r20261111-054549-a16b` are in flight on `vy-nebius-cpu-8`; two things you should know (the parents conflict with each other; "14 files" is 10)
 
 - **PR:** [#8820](https://github.com/compute-verification/verity/pull/8820), head `cursor/proofs-regx-part2-crossed-57da` at `f1a8ef0141ff5fa5242c0dcc71ee5a7650438391`, base `main`, no label, not marked. GitHub says mergeable. Body starts `Lane proofs`, `Goal proofs/spot-bind-term`, `Refs PRF-516`, and has "Crossed the layout move" with the four gate results, the command and why the script skipped the file. [run]
 - **Runs at that head**, launched 05:45Z, both placed on `vy-nebius-cpu-8`: [run]
