@@ -57,7 +57,7 @@ from __future__ import annotations
 from typing import Callable
 
 from gates import S8, S32_MAX, S32_MIN, U8, Builder, Iv, clog2, iv_add, iv_scale, operand_bits, proven
-from verity.core.protocols.remote_bandwidth import codec
+from verity.protocols.poub.verifier import codec
 
 F = codec.P1024
 P = F.p

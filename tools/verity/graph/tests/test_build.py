@@ -54,9 +54,9 @@ def test_the_build_family_is_check_s_steps_with_the_inputs_check_keys_them_by(do
         "the agreement's key in check covers the verifier's package (the build's inputs) and its own directory"
     verify = [{"task": BUILD, "output": "flock-verify"}]
     assert by[AGREE]["reads"] == by[UNIT]["reads"] == verify and not by[AGREE]["key"] and by[BUILD]["key"]
-    assert {build.UNIT_CUT, "verity/ml/circuits/partition.py"} <= set(_own(by[UNIT])) <= {
+    assert {build.UNIT_CUT, "verity/circuits/partition.py"} <= set(_own(by[UNIT])) <= {
         build.UNIT_CUT, *(f for f in files if f.startswith("verity/") and f.endswith("/__init__.py")),
-        *(f for f in files if f.startswith("verity/ml/circuits/"))}, "the script and what it imports, which reads no data"
+        *(f for f in files if f.startswith("verity/circuits/"))}, "the script and what it imports, which reads no data"
     for t in _suites(doc):
         assert t["inputs"] == files, f"{t['id']}: check's lean-suites, keyed by the whole tree"
         assert t["reads"] == [{"task": BUILD, "output": o["name"]} for o in by[BUILD]["outputs"]] and not t["key"]
@@ -93,7 +93,7 @@ def test_a_part_s_files_are_every_mth_by_path_whatever_this_machine_measured():
 
 def test_lean_build_outputs_the_executables_the_flock_suite_runs_at_their_paths(doc):
     lb, agree = (next(t for t in doc["tasks"] if t["id"] == i) for i in (BUILD, AGREE))
-    tests = tomllib.loads((ROOT / "verity" / "ml" / "flock" / "pyproject.toml").read_text())["tool"]["verity"]["tests"]
+    tests = tomllib.loads((ROOT / "verity" / "protocols" / "flock" / "prover" / "pyproject.toml").read_text())["tool"]["verity"]["tests"]
     bins = [a for a in tests["artifacts"] if a.startswith(f"{build.LEAN}/.lake/build/bin/")]
     assert bins and set(bins) <= {o["path"] for o in lb["outputs"]}
     assert agree["vars"]["verify"] == next(o["path"] for o in lb["outputs"] if o["name"] == "flock-verify")
@@ -360,7 +360,7 @@ lean, out = Path(sys.argv[sys.argv.index("--lean") + 1]), Path(sys.argv[sys.argv
 assert os.access(lean, os.X_OK)
 how = lean.read_text()
 if how == "import":
-    raise ImportError("cannot import name 'validate_unit_cut' from 'verity.ml.circuits.partition'")
+    raise ImportError("cannot import name 'validate_unit_cut' from 'verity.circuits.partition'")
 if how == "oserror":
     raise OSError(8, "Exec format error")
 if how == "kill":

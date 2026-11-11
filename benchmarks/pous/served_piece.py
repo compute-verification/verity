@@ -37,7 +37,7 @@ DIR``).
    105 (`p2.wide320_certificate`'s ``2^-20`` is no run's certificate). The check takes about 2.3 minutes at the
    registered point at 105 challenges or 320: the tie is its cost, not the rounds.
 5. **Zero knowledge**: the answer's commitment is a hiding one, one ``hm96-sha512/row/v2`` row in a ``frame-v3-sha512``
-   tree (`verity.ml.commitments.advice`) holding the run's commitment (the SHA-512 of what setup published) under
+   tree (`verity.commitments.advice`) holding the run's commitment (the SHA-512 of what setup published) under
    `binding`, so the record fixes the run and reveals nothing of ``W``'s digest, the salt or ``C*``'s root. Its opening,
    setup's published outputs, the session and its id, the rounds' latencies, the trusted key, the table, and the case with
    the run protocol's own answer on it (``case.json``, ``answer.json``: the composite's piece, `served_case.write`) go to
@@ -80,14 +80,14 @@ from typing import Any
 
 import torch
 
-from verity.core.deploy.stream import Side
-from verity.core.protocols.pous import challenger_session as CS
-from verity.core.protocols.pous import memory_challenger as mc
-from verity.core.protocols.pous import period
-from verity.core.protocols.pous import run as R
-from verity.core.protocols.pous.schemes import p2 as P2
-from verity.ml.commitments import advice
-from verity.ml.commitments.identity import canonical_json_bytes
+from verity.configuration.deploy.stream import Side
+from verity.protocols.pous.device import challenger_session as CS
+from verity.protocols.pous.device import memory_challenger as mc
+from verity.protocols.pous.verifier import period
+from verity.protocols.pous.verifier import run as R
+from verity.protocols.pous.verifier.schemes import p2 as P2
+from verity.commitments import advice
+from verity.commitments.identity import canonical_json_bytes
 from verity_vllm import protocols as PO
 
 if str(Path(__file__).resolve().parent) not in sys.path:
@@ -98,7 +98,7 @@ import served_case as SC
 
 pous = PO.adapter("pous")
 ROOT = Path(__file__).resolve().parents[2]
-PINS = ROOT / "integrations" / "vllm" / "manifests" / "checkpoints-int8.json"
+PINS = ROOT / "adapters" / "vllm" / "manifests" / "checkpoints-int8.json"
 ENTRY = f"pous:{pous.DEFAULT_SCHEME}"
 #: each linear as vLLM's Llama holds it, from the checkpoint's tensors concatenated by rows in this order
 MERGED = (("self_attn.qkv_proj", ("self_attn.q_proj", "self_attn.k_proj", "self_attn.v_proj")),
@@ -436,7 +436,7 @@ def run(serve_dir: Path, window: int, out: Path, *, hf_home: Path, device: str =
             answer = inner | {"commitment": hidden.root.hex()}
             if inner["verdict"] == "accept":
                 answer["profile"] = inner["profile"] | {
-                    "commitment": {"scheme": "hm96-sha512/row/v2 in frame-v3-sha512 (verity.ml.commitments.advice)",
+                    "commitment": {"scheme": "hm96-sha512/row/v2 in frame-v3-sha512 (verity.commitments.advice)",
                                    "rows": 1, "n_bits": 8 * len(row), "binding": bind.hex(),
                                    "of": "the run protocol's commitment, the SHA-512 of setup's published outputs"},
                     "placement": CS.placement(node, party.host) | {

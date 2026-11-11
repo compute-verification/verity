@@ -3,7 +3,7 @@ of record, from whose coins each rank's registration samples once (`spot.coins.C
 `remote.RemoteChallenger`), and the evidence its verifier checks every sample's coins against once the session has ended.
 
 * **The session.** ``local``: a development session on this machine, run by the auditor host's own service
-  (`benchmarks/live_challenger/auditor.py`'s reserve, admit and run, then `serve.py`, with no tunnel) on a scratch root under an
+  (`verity/composite/device/live_challenger/auditor.py`'s reserve, admit and run, then `serve.py`, with no tunnel) on a scratch root under an
   LMS key made there at `LOCAL_PARAMS`, never under the run's out/: its ledger and the session's out/ are what the challenger host
   writes, and its key is this run's alone, so its samples show the path, not an auditor's coins; and since that key is
   not at `Lms.deployed`, sampled proofs' v2 refuses its audit's case (`OneStageZk.KEY_PARAMS`). Its pins log pins main's
@@ -64,10 +64,11 @@ from multiprocessing.managers import BaseManager
 from pathlib import Path
 from typing import Any
 
-from verity.core.protocols.spot import challenger as Ch, coins as CC, remote as R, service as S
-from verity.core.protocols.spot.one_stage import draw as D, verifier as V
-from verity.ml.circuits.program import Program
-from verity.ml.crypto import lms
+from verity.protocols.spot.device import challenger as Ch, coins as CC, remote as R
+from verity.protocols.spot.verifier import service as S
+from verity.protocols.spot.verifier.one_stage import draw as D, verifier as V
+from verity.circuits.program import Program
+from verity.commitments.crypto import lms
 
 TREE = Path(__file__).resolve().parents[2]
 SCHEME = "verity/one-stage/a5-draw/v1"
@@ -486,7 +487,7 @@ class Local:
     verifier's copy of main's first-parent line `main`."""
 
     def __init__(self, root: Path, main: list[str], by: str = "circuits") -> None:
-        A = _module("a5_auditor", TREE / "benchmarks" / "live_challenger" / "auditor.py")
+        A = _module("a5_auditor", TREE / "verity" / "composite" / "device" / "live_challenger" / "auditor.py")
         self.A, self.by = A, by
         self.host = A.Host(root=root / "var", peers=root / "peers", name=LOCAL_HOST, pins=root / "pins.jsonl")
         (root / "var" / "sessions").mkdir(parents=True)

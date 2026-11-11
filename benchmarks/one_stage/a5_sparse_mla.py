@@ -1,4 +1,4 @@
-"""One-stage audit, run A5, on a sparse-MLA split stand-in: `integrations/vllm/tests/pipeline/test_serving_rows_splits.py`'s
+"""One-stage audit, run A5, on a sparse-MLA split stand-in: `adapters/vllm/tests/pipeline/test_serving_rows_splits.py`'s
 window (one ``SparseMlaSplit_v1{T=40,NS=2,NH=2,DR=16,DV=32,BN=16}`` row in its heads' split chains: per head, split 0's 16-key
 first block and the full block after it, split 1's 8-key first block, each split's end in one column block and the two-split
 combine, each read row wired to the output row of the unit that wrote it), its run ``<ROOT>/rank0``, committed as serving
@@ -13,7 +13,7 @@ sampled proof block (behind the ZK server under ``--firewall``), the Lean verifi
 is accepted and every negative refused. ``--out`` holds the window serving wrote (``window/``, its private files too) and a5's
 records (``rank0/``, ``challenger/``, ``summary.json``).
 
-    PYTHONPATH=<tree>:<tree>/benchmarks/numerical/python:<tree>/integrations/vllm \\
+    PYTHONPATH=<tree>:<tree>/benchmarks/numerical/python:<tree>/adapters/vllm \\
       python benchmarks/one_stage/a5_sparse_mla.py --m0-pythonpath PATH --bin flock-circuit --lean flock-verify \\
         [--firewall flock-firewall] --main FILE --out DIR
 """
@@ -28,19 +28,19 @@ from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
-sys.path.insert(0, str(HERE.parents[1] / "integrations" / "vllm"))
+sys.path.insert(0, str(HERE.parents[1] / "adapters" / "vllm"))
 
 import a5  # noqa: E402
 import a5_coins as AC  # noqa: E402
 from tests.pipeline import test_serving_rows_splits as TS  # noqa: E402
-from verity.core.protocols.spot.one_stage import registration as R  # noqa: E402
+from verity.protocols.spot.verifier.one_stage import registration as R  # noqa: E402
 from verity_vllm.commit import index as IX  # noqa: E402
-from verity.ml.windows import rows as CS  # noqa: E402
+from verity.commitments.windows import rows as CS  # noqa: E402
 
 #: the stand-in's session root, as a TP Commit's run root is its ranks' session root
 ROOT = hashlib.sha512(b"verity/a5/sparse-mla-split-stand-in/v1").hexdigest()
 RULE = "stratified-rate:1/64"
-OF = {"fixture": "integrations/vllm/tests/pipeline/test_serving_rows_splits.py", "row": TS.row()}
+OF = {"fixture": "adapters/vllm/tests/pipeline/test_serving_rows_splits.py", "row": TS.row()}
 
 
 def commit(out: Path) -> CS.Binding:

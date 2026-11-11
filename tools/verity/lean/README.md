@@ -227,7 +227,7 @@ in `tests/fixtures/violations.json` or `module-violations.json`. Among them:
   outside the sandbox, with `{repo}` the checkout, `--repo`, and `{out}` the directory it writes) or else the package's
   own file, either one possibly gzipped (`NAME.gz`). A file is used only with the SHA-256 under `data`: another fails the
   test unrun, and `--update` records it. Generated data stays out of Git and out of the key of `check`'s audit step, so
-  a test of the package's own (PoUW's `verity/core/protocols/pouw/tests/test_lean_package.py`) checks that the generator still writes the recorded
+  a test of the package's own (PoUW's `verity/protocols/pouw/verifier/tests/test_lean_package.py`) checks that the generator still writes the recorded
   data. `--no-runs` skips them.
 - `assumptions_module`: the module (or a submodule) with named assumptions, or a list of such modules (`Security/Properties`
   lists `Properties.Assumptions` beside `Definitions.Assumptions`, for an assumption stated over the code); each must be

@@ -9,7 +9,7 @@ Each 8-wide chunk of a row keeps two of its four element pairs p0 < p1, named by
 128 x 8 logical operand.  ``scale_vec::4X`` (UE4M3) gives each row / column four scales, each over 32 logical columns (16 stored);
 ``2X`` (UE8M0) two, each over 64 logical (32 stored).
 
-Candidates (every one a ``verity.ml.circuits.silicon.models.BlockScaledAlignAdd`` with the pinned sm_120 adder constants, or a chain of the
+Candidates (every one a ``verity.definitions.silicon.models.BlockScaledAlignAdd`` with the pinned sm_120 adder constants, or a chain of the
 pinned dense model; the hardware scale bytes are duplicated onto the model's fixed blocks of 16 / 32 logical columns):
 
 * ``gather_dense``: k = 128 logical, groups of 32 logical columns.  Each such group holds exactly the 16 stored products of one
@@ -45,10 +45,10 @@ import numpy as np
 import probe as P
 
 # isort: split
-# verity_config is importable once probe has put tools/config on sys.path
+# verity_config is importable once probe has put verity/configuration/config on sys.path
 from verity_config.settings import SHARED
 
-from verity.ml.circuits.silicon import models as M
+from verity.definitions.silicon import models as M
 
 if TYPE_CHECKING:
     import argparse
@@ -422,7 +422,7 @@ def main(args: argparse.Namespace) -> int:
     primary = args.expect_model
     results: dict = {"schema": "pouw-rtxpro/tc-probe-fp4-sparse/v1", "instruction": PTX[instr], "instruction_id": INSTRUCTION_ID[instr],
                      "identity": identity, "model": "sparse.candidates: " + ", ".join(sorted(models)),
-                     "model_source": str(Path(__file__).resolve()) + " + verity.ml.circuits.silicon.models", "primary_model": primary,
+                     "model_source": str(Path(__file__).resolve()) + " + verity.definitions.silicon.models", "primary_model": primary,
                      "fake_silicon": args.fake_silicon, "corrupt_word": bool(args.corrupt_word)}
     print("device", json.dumps(identity), flush=True)
     failures: list[str] = []

@@ -1,5 +1,5 @@
 """`training_slowdown.formalism`'s copy of the min-cut bound's arithmetic against the slowdown calculator's module, the
-one place that computes it (`benchmarks/rho/rho/min_cut.py`, loaded by path): `BETA_K` and `beta_k`, `he_rho` and
+one place that computes it (`verity/protocols/inference_only/rho/rho/min_cut.py`, loaded by path): `BETA_K` and `beta_k`, `he_rho` and
 `SHARE`."""
 import importlib.util
 import itertools
@@ -10,7 +10,7 @@ import pytest
 
 from training_slowdown import formalism as F
 
-MIN_CUT = Path(__file__).resolve().parents[3] / "benchmarks/rho/rho/min_cut.py"
+MIN_CUT = Path(__file__).resolve().parents[3] / "verity/protocols/inference_only/rho/rho/min_cut.py"
 
 
 def _min_cut():

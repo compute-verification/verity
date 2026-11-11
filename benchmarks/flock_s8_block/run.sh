@@ -18,7 +18,7 @@
 #               (the GPU's busy time, not its utilization counter's)
 #   5. cpu      per statement of CPU_STATEMENTS (and without --zk, CPU_PLAIN_STATEMENTS), the same session set without --gpu
 #               (the CPU prover), no lease
-#   6. lean     Lean's flock-verify (verity/core/service/flock, built into FLOCK_WORK keyed by its sources) on every session
+#   6. lean     Lean's flock-verify (verity/protocols/flock/verifier, built into FLOCK_WORK keyed by its sources) on every session
 #               steps 4 and 5 kept of `served` and `served-plain`, on the verifier's cores: `verify --zk` of served's --zk sets,
 #               and `verify` of served-plain's plain sets as the plain-leaves statement on its full sample; per session its verdict,
 #               wall and peak memory in out/lean (hm96 leaves without --zk are outside Lean's plain scope, so not verified)
@@ -28,7 +28,7 @@
 #      RUNS=3  VCPUS=4  LEASE_MIN=20  SM=90  DRAW=all (a --zk verifier samples every proof block, subset:N, and a plain one
 #      of a served statement its staged full sample, draw.json; unset, no sample)
 #      WINDOW=DIR (prove_path.py commit's window dir, the prover's files included) MEMBER=0  SUBCIRCUIT=ID  SERVE_RUN=DIR
-#      SERVE_WINDOW=0  CUDA_TK (default: verity/ml/flock/pod/cuda-13.3.sh's)  NSYS=1  NSYS_STATEMENT (default the first)
+#      SERVE_WINDOW=0  CUDA_TK (default: verity/protocols/flock/pod/cuda-13.3.sh's)  NSYS=1  NSYS_STATEMENT (default the first)
 #      FLOCK_WORK (default: a directory under /workspace/tmp, kept between steps; it holds the staged values)
 #      STEPS="build stage sanity gpu cpu" (lean: add it)
 for kv in "$@"; do case $kv in *=*) export "$kv" ;; esac; done
@@ -39,7 +39,7 @@ STATEMENTS=${STATEMENTS:-"4096:1 4096:8 14336:1"}; CPU_STATEMENTS=${CPU_STATEMEN
 PLAIN_STATEMENTS=${PLAIN_STATEMENTS:-}; CPU_PLAIN_STATEMENTS=${CPU_PLAIN_STATEMENTS:-}; DRAW=${DRAW:-}
 SANITY=${SANITY:-1}; WARM=${WARM:-1}; RUNS=${RUNS:-3}; NS=$((WARM + RUNS)); SM=${SM:-90}; STEPS=${STEPS:-"build stage sanity gpu cpu"}
 export FLOCK_WORK=$FW
-. verity/ml/flock/pod/cuda-13.3.sh
+. verity/protocols/flock/pod/cuda-13.3.sh
 export PATH=$CUDA_TK/bin:$HOME/.cargo/bin:$PATH LD_LIBRARY_PATH=$CUDA_TK/lib64:${LD_LIBRARY_PATH:-}
 export FC_PIPELINE_DEPTH=${FC_PIPELINE_DEPTH:-4} FC_HOST_PREPIN=${FC_HOST_PREPIN:-1}
 CPUS=$(python3 -c 'import os; print(",".join(map(str, sorted(os.sched_getaffinity(0)))))'); NC=$(echo $CPUS | tr , '\n' | wc -l)
@@ -51,14 +51,14 @@ has() { case " $STEPS " in *" $1 "*) return 0 ;; esac; return 1; }
 
 if has build; then
   echo "== build $(date -u +%T)"
-  MODE=build GPU=1 SM=$SM FLOCK_WORK=$FW RESEARCH_RUN_DIR=$O/build bash verity/ml/flock/pod/60-circuit.sh > $O/build.log 2>&1 \
+  MODE=build GPU=1 SM=$SM FLOCK_WORK=$FW RESEARCH_RUN_DIR=$O/build bash verity/protocols/flock/pod/60-circuit.sh > $O/build.log 2>&1 \
     || { tail -40 $O/build.log $O/build/out/build.log 2>/dev/null; exit 1; }
   sha256sum $B | tee $O/binary.sha256
 fi
 UV=$(command -v uv || echo $HOME/.local/bin/uv)
 [ -x $UV ] || { curl -LsSf https://astral.sh/uv/install.sh | sh > /dev/null 2>&1; UV=$HOME/.local/bin/uv; }
 [ -x $PY ] || { $UV venv -q --python 3.12 $(dirname $(dirname $PY)) && $UV pip install -q --python $PY numpy blake3; } || exit 1
-export PYTHONPATH=$REPO:$REPO/benchmarks/numerical/python:$REPO/verity/ml/flock/python:$REPO/tools/verity/circuit_check/src:$REPO/integrations/vllm
+export PYTHONPATH=$REPO:$REPO/benchmarks/numerical/python:$REPO/verity/protocols/flock/prover/python:$REPO/tools/verity/circuit_check/src:$REPO/adapters/vllm
 
 # spec K:N[:R] or served[-plain]: "K N R NAME" (a served statement's N its member's n, K and R -)
 spec() {
@@ -92,7 +92,7 @@ print(json.dumps({"served_root_held": ok, "window_run_root": w["run"], "publishe
                   "registration_digest": w["registration_digest"]}))
 sys.exit(0 if ok else 1)' "$WINDOW" "$SERVE_RUN" "${SERVE_WINDOW:-0}" > $o/served-root.json || { cat $o/served-root.json; return 1; }
   fi
-  /usr/bin/time -v -o $o/time-stage.txt $PY $REPO/verity/ml/flock/pod/rec_inner.py stage-window --window "$WINDOW" \
+  /usr/bin/time -v -o $o/time-stage.txt $PY $REPO/verity/protocols/flock/prover/pod/rec_inner.py stage-window --window "$WINDOW" \
     --member ${MEMBER:-0} --subcircuit "${SUBCIRCUIT:?WINDOW needs SUBCIRCUIT}" --sets $FW/data/served-sets \
     --out $FW/data/served-plain --zk-out $FW/data/served > $o/stage.json 2> $o/stage.err || { tail -20 $o/stage.err; return 1; }
   n=$($PY -c 'import json, sys; print(json.load(open(sys.argv[1]))["n"])' $o/stage.json) || return 1
@@ -208,12 +208,12 @@ fi
 LEAN_BAD=0
 if has lean; then
   echo "== lean $(date -u +%T)"
-  LSHA=$(cd verity/core/service/flock && find . -name .lake -prune -o -type f -print | LC_ALL=C sort | xargs sha256sum | sha256sum | cut -c1-16)
+  LSHA=$(cd verity/protocols/flock/verifier && find . -name .lake -prune -o -type f -print | LC_ALL=C sort | xargs sha256sum | sha256sum | cut -c1-16)
   LV=$FW/lean-$LSHA/flock-verify
   if [ ! -x $LV ]; then
     export PATH=$HOME/.elan/bin:$PATH
     command -v lake > /dev/null || curl -sSfL https://raw.githubusercontent.com/leanprover/elan/master/elan-init.sh | sh -s -- -y --default-toolchain none > /dev/null
-    rm -rf $FW/lean-src && mkdir -p $FW/lean-src && cp -r verity/core/service/flock/. $FW/lean-src/ \
+    rm -rf $FW/lean-src && mkdir -p $FW/lean-src && cp -r verity/protocols/flock/verifier/. $FW/lean-src/ \
       && (cd $FW/lean-src && /usr/bin/time -v -o $O/time-lean-build.txt lake build flock-verify) > $O/lean-build.log 2>&1 \
       && mkdir -p $(dirname $LV) && cp $FW/lean-src/.lake/build/bin/flock-verify $LV || { tail -30 $O/lean-build.log; exit 1; }
   fi

@@ -19,7 +19,7 @@ SELFTEST_ALL=${MU_SELFTEST_ALL:-1024:4:4}
 MU_CASES=${MU_CASES:-private_cut_word_tampered unit_internal_bit_flipped output_row_committed_false tail_swapped}
 export HZ_CONFIGS=multi-unit HZ_N=1 HZ_MEM_GB=${CHECK_SLOT_MEM_GB:-${MU_MEM_GB:?}} HZ_RUNS=1 HZ_WARM=0
 [ -n "${MU_CACHE:-}" ] && export HZ_CACHE=$MU_CACHE
-export PYTHONPATH=$SRC:$SRC/verity/ml/flock/python:$SRC/integrations/vllm:$SRC/tools/verity/circuit_check/src${PYTHONPATH:+:$PYTHONPATH}
+export PYTHONPATH=$SRC:$SRC/verity/protocols/flock/prover/python:$SRC/adapters/vllm:$SRC/tools/verity/circuit_check/src${PYTHONPATH:+:$PYTHONPATH}
 source benchmarks/pouw/hidden_zk/job.sh
 
 build_tests() {   # build_tests DEST: DEST/flock-live-tests, flock-live's lib tests (sha512, glue)
@@ -28,7 +28,7 @@ build_tests() {   # build_tests DEST: DEST/flock-live-tests, flock-live's lib te
   rm -rf "$F" "$D.tmp"
   git clone -q https://github.com/succinctlabs/flock "$F" && cd "$F" && git checkout -q b684b12 || return 1
   for p in link gpu-link; do git apply "$SRC/verity/ml/flock/flock-$p-b684b12.patch" || return 1; done
-  cp -r "$SRC/verity/ml/flock/live" crates/flock-live
+  cp -r "$SRC/verity/protocols/flock/prover/live" crates/flock-live
   grep -q '"crates/flock-live"' Cargo.toml || sed -i 's|    "crates/flock-transcript",|    "crates/flock-transcript",\n    "crates/flock-live",|' Cargo.toml
   rm -f crates/flock-merkle/src/hm96.rs
   for p in sha512 glue zk vtime; do git apply "$SRC/verity/ml/flock/flock-$p-b684b12.patch" || return 1; done
@@ -51,7 +51,7 @@ lean_verify() {   # lean_verify D O TAG: the Lean verifier on D's --zk session (
 
 run_shapes() {
   local shape K N n tag D O f TD z
-  TD=$(cached tests "$(tree_key verity/ml/flock/live verity/ml/flock/*.patch)" build_tests)
+  TD=$(cached tests "$(tree_key verity/protocols/flock/prover/live verity/protocols/flock/prover/*.patch)" build_tests)
   [ -x "$TD/flock-live-tests" ] || { log "tests build FAILED"; tail -20 "$OUT/build-tests.log" | tee -a "$OUT/job.log"; }
   for shape in $SHAPES; do
     IFS=: read -r K N n <<< "$shape"

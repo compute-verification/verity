@@ -300,10 +300,10 @@ def _tie(td: Path, scores: np.ndarray, pick: list[int]) -> None:
 def test_a_tie_across_the_cut_goes_to_the_smaller_positions_as_the_counted_mask_breaks_it(tmp_path, monkeypatch) -> None:
     """Five keys tie for the last three of four slots: `DsaTopKMaskCounted_v2` keeps positions 1 to 3, and the check accepts
     that top-k and refuses one keeping position 5 in place of 3."""
-    from verity.ml.circuits import evaluation as E
-    from verity.ml.circuits.boolean import trace as TR
-    from verity.ml.circuits.defs import bind
-    from verity.ml.definitions.registry import boolean_dsa_topk_mask as BM
+    from verity.circuits import evaluation as E
+    from verity.circuits.boolean import trace as TR
+    from verity.circuits.defs import bind
+    from verity.definitions.registry import boolean_dsa_topk_mask as BM
     td = _written(tmp_path, monkeypatch)
     scores, N = np.array([2, 1, 1, 1, 1, 1, 0, 0, 0], "<f4"), 16
     row = scores.view("<u4").tolist() + [0] * (N - len(scores))
