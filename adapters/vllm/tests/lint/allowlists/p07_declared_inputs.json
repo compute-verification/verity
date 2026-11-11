@@ -112,8 +112,6 @@
     {"file": "verity_vllm/pipeline/tp/commit.py", "kind": "environ", "symbol": "main", "detail": "VERITY_WINDOW_MB"},
     {"file": "verity_vllm/pipeline/tp/commit.py", "kind": "environ", "symbol": "main", "detail": "VERITY_WINDOW_SLOTS"},
     {"file": "verity_vllm/pipeline/tp/commit.py", "kind": "environ", "symbol": "main", "detail": "os.environ.items"},
-    {"file": "verity_vllm/pipeline/tp/fold_match.py", "kind": "broad-except", "symbol": "_load", "detail": "except Exception"},
-    {"file": "verity_vllm/pipeline/tp/fold_match.py", "kind": "broad-except", "symbol": "_load_links", "detail": "except Exception"},
     {"file": "verity_vllm/pipeline/tp/match.py", "kind": "environ", "symbol": "_check_main", "detail": "VERITY_CAMPAIGN"},
     {"file": "verity_vllm/pipeline/tp/match.py", "kind": "environ", "symbol": "_engine_main", "detail": "os.environ.items"},
     {"file": "verity_vllm/pipeline/tp/match.py", "kind": "optional-import", "symbol": "_check_main", "detail": "except ImportError"},
