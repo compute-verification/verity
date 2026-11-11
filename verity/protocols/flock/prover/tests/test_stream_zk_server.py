@@ -8,9 +8,9 @@ behind the ZK server otherwise is, one `serve` and one `prove` process on a chal
   commitments and proofs are its own, so no two sessions are equal byte for byte. What is held of the stream's record
   (`session.json`), its `LIVE` line and Lean's verdict on its record (`flock-verify verify --zk`) against the pair's:
   every key, every list's length and every value is the pair's, but a clock's reading (a float) and a field word or digest
-  the session's coins decide (lowercase hex of 32 digits or more, compared by its length). A `LIVE` line's fields about
-  its process and not its session are held on their own (`OWN`, `TEXT`), and the digests its statement decides are
-  equal (`DECIDED`). The Lean it ran is the pair's as well: one tap for the process, then for each member one session
+  the session's coins decide (lowercase hex of 32 digits or more, compared by its length). Lean's verdict names the
+  record it read, each side's own directory. A `LIVE` line's fields about its process and not its session are held on
+  their own (`OWN`, `TEXT`), and the digests its statement decides are equal (`DECIDED`). The Lean it ran is the pair's as well: one tap for the process, then for each member one session
   loop, started with the pair's arguments, so on that member's own circuit and tables.
 * **Member i + 1's first coin follows member i's closing round in the challenger's release log** (`order_reason`). A
   member's closing round is the last round the challenger opened of its coin tree. The verifier has that round's coins
