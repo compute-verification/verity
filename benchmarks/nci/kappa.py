@@ -22,12 +22,21 @@ only, and it takes no weight gradient or optimizer step. A circuit may run sever
 step's two) and no backward (evolution strategies). Over a schedule kappa is a ratio of sums, the token-weighted harmonic
 mean of its phases' kappa.
 
+A model's shape is benchmarks/rho's (its ``data/models.toml``, read through ``rho.instances``, imported by path); this
+module states only each model's pretraining recipe (``RECIPES``).
+
     python benchmarks/nci/kappa.py       # the breakdown per model and phase, each schedule's kappa, and ROWS'
 """
 
 from __future__ import annotations
 
 import argparse
+import sys
+from pathlib import Path
+
+sys.path.insert(1, str(Path(__file__).resolve().parent.parent / "rho"))
+
+from rho import instances
 
 #: gates per query-key pair per head besides its products, (forward, backward): max, subtract, exp, sum and normalize;
 #: P (dP - D) and the scale
@@ -46,61 +55,73 @@ NS_STEPS = 5
 #: gates per weight to regenerate one seeded perturbation and add it (the rows' decode cost)
 SEED = 10
 
-#: the shapes (config.json) and pretraining schedules (tokens, sequence length) of the reports
-MODELS = {
+#: each model's pretraining recipe, from its report: the optimizer, the tokens per batch and the schedule (tokens,
+#: sequence length), for the rho model ``model`` (``models.toml``)
+RECIPES = {
     "kimi-k2": {
-        "source": "moonshotai/Kimi-K2-Base config.json; Kimi K2 report (arXiv 2507.20534) 2.5: 15.5T tokens at 4,096, "
-                  "then an annealing phase of 400B tokens at 4k and 60B at 32k, at 67M tokens per batch; MuonClip",
-        "d": 7168, "layers": 61, "dense_layers": 1, "ffn": 18432, "vocab": 163840,
-        "attention": {"kind": "mla", "heads": 64, "q_rank": 1536, "kv_rank": 512, "nope": 128, "rope": 64, "v": 128},
-        "experts": 384, "active": 8, "shared": 1, "expert_ffn": 2048, "mtp": 0,
+        "model": "kimi-k2",
+        "source": "Kimi K2 report (arXiv 2507.20534) 2.5: 15.5T tokens at 4,096, then an annealing phase of 400B tokens "
+                  "at 4k and 60B at 32k, at 67M tokens per batch; MuonClip",
         "optimizer": "muon", "batch_tokens": 67e6,
         "schedule": [(15.5e12, 4096), (400e9, 4096), (60e9, 32768)],
     },
     "deepseek-v3": {
-        "source": "deepseek-ai/DeepSeek-V3-Base config.json; DeepSeek-V3 report (arXiv 2412.19437) 4.2-4.3: 14.8T tokens "
-                  "at 4K, then 1000 steps of 1920 x 32K and 1000 of 480 x 128K, at 15360 x 4K per batch; AdamW; one MTP "
-                  "module",
-        "d": 7168, "layers": 61, "dense_layers": 3, "ffn": 18432, "vocab": 129280,
-        "attention": {"kind": "mla", "heads": 128, "q_rank": 1536, "kv_rank": 512, "nope": 128, "rope": 64, "v": 128},
-        "experts": 256, "active": 8, "shared": 1, "expert_ffn": 2048, "mtp": 1,
+        "model": "deepseek-v3",
+        "source": "DeepSeek-V3 report (arXiv 2412.19437) 4.2-4.3: 14.8T tokens at 4K, then 1000 steps of 1920 x 32K and "
+                  "1000 of 480 x 128K, at 15360 x 4K per batch; AdamW; the MTP module trained beside the layers",
         "optimizer": "adamw", "batch_tokens": 15360 * 4096,
         "schedule": [(14.8e12, 4096), (1000 * 1920 * 32768, 32768), (1000 * 480 * 131072, 131072)],
     },
     "llama-3-405b": {
-        "source": "Llama 3.1 405B config.json; Llama 3 report (arXiv 2407.21783) 3.4: 15.6T tokens at 8K after 252M at "
-                  "4K, of them about 800B in six stages from 8K to 128K, taken here as equal tokens at 8K x 16^(k/6); "
-                  "16M tokens per batch; AdamW",
-        "d": 16384, "layers": 126, "dense_layers": 126, "ffn": 53248, "vocab": 128256,
-        "attention": {"kind": "gqa", "heads": 128, "kv_heads": 8, "head_dim": 128},
-        "experts": 0, "active": 0, "shared": 0, "expert_ffn": 0, "mtp": 0,
+        "model": "llama3-405b",
+        "source": "Llama 3 report (arXiv 2407.21783) 3.4: 15.6T tokens at 8K after 252M at 4K, of them about 800B in six "
+                  "stages from 8K to 128K, taken here as equal tokens at 8K x 16^(k/6); 16M tokens per batch; AdamW",
         "optimizer": "adamw", "batch_tokens": 16e6,
         "schedule": [(252e6, 4096), (15.6e12 - 800e9 - 252e6, 8192)]
                     + [(800e9 / 6, round(8192 * 16 ** (k / 6))) for k in range(1, 7)],
     },
     "qwen3-235b-a22b": {
-        "source": "Qwen/Qwen3-235B-A22B config.json; Qwen3 report (arXiv 2505.09388) 3.2: over 30T tokens at 4,096, "
-                  "about 5T at 4,096, then hundreds of billions at 32,768, taken here as 0.3T; batch not stated "
-                  "(AdamW's step is negligible at any frontier batch)",
-        "d": 4096, "layers": 94, "dense_layers": 0, "ffn": 0, "vocab": 151936,
-        "attention": {"kind": "gqa", "heads": 64, "kv_heads": 4, "head_dim": 128, "qk_norm": True},
-        "experts": 128, "active": 8, "shared": 0, "expert_ffn": 1536, "mtp": 0,
+        "model": "qwen3-235b-a22b",
+        "source": "Qwen3 report (arXiv 2505.09388) 3.2: over 30T tokens at 4,096, about 5T at 4,096, then hundreds of "
+                  "billions at 32,768, taken here as 0.3T; batch not stated (AdamW's step is negligible at any frontier "
+                  "batch)",
         "optimizer": "adamw", "batch_tokens": 16e6,
         "schedule": [(30.7e12, 4096), (5e12, 4096), (0.3e12, 32768)],
     },
     "dense-100b": {
-        "source": "the thread draft's dense example (models.json dense-100b): d_model 12288 with a 4x GELU MLP and 96 "
-                  "heads of 128 (12 d^2 a layer), 55 layers for 1e11 weights, Llama 3's vocabulary; assumed to train on "
-                  "Llama 3 405B's schedule (arXiv 2407.21783 3.4.1-3.4.2), the one dense frontier report: 252M tokens "
-                  "at 4K, then 8K, and about 800B in six stages from 8K to 128K, at 16M tokens per batch; AdamW",
-        "d": 12288, "layers": 55, "dense_layers": 55, "ffn": 4 * 12288, "mlp": "gelu", "vocab": 128256,
-        "attention": {"kind": "gqa", "heads": 96, "kv_heads": 96, "head_dim": 128},
-        "experts": 0, "active": 0, "shared": 0, "expert_ffn": 0, "mtp": 0,
+        "model": "dense-100b",
+        "source": "the thread draft's dense example (models.json dense-100b), assumed to train on Llama 3 405B's "
+                  "schedule (arXiv 2407.21783 3.4.1-3.4.2), the one dense frontier report: 252M tokens at 4K, then 8K, "
+                  "and about 800B in six stages from 8K to 128K, at 16M tokens per batch; AdamW",
         "optimizer": "adamw", "batch_tokens": 16e6,
         "schedule": [(252e6, 4096), (15.6e12 - 800e9 - 252e6, 8192)]
                     + [(800e9 / 6, round(8192 * 16 ** (k / 6))) for k in range(1, 7)],
     },
 }
+
+
+def shape(model: instances.Model) -> dict:
+    """A rho model's shape in the keys this module reads: the widths, the attention as its config states it, and the
+    experts in one MoE layer (routed, active per token, shared)."""
+    dense = instances.dense_layers(model)
+    moe = model.layers - dense
+
+    def each(group: str, count: str) -> int:
+        ms = model.matrices.get(group, ())
+        return int(getattr(ms[0], count)) // moe if ms else 0
+
+    out = {"d": model.d_model, "layers": model.layers, "dense_layers": dense, "ffn": instances.width(model, "dense"),
+           "vocab": model.vocab, "attention": dict(model.attention), "experts": each("experts", "copies"),
+           "active": each("experts", "active"), "shared": each("shared", "copies"),
+           "expert_ffn": instances.width(model, "experts"), "mtp": model.mtp}
+    if dense and "gate" not in {x.name for x in model.matrices["dense"]}:
+        out["mlp"] = "gelu"
+    return out
+
+
+_SHAPES = instances.models()
+#: each model's shape (``shape``) with its recipe
+MODELS = {name: shape(_SHAPES[recipe["model"]]) | recipe for name, recipe in RECIPES.items()}
 
 #: RL's rollouts: R1-Zero's 512 sampled sequences a step at the 32,768-token cap it kept for its first 8.2k steps
 #: (DeepSeek-R1, arXiv 2501.12948, 2.2)
@@ -288,7 +309,7 @@ def main(argv: list[str] | None = None) -> int:
     for name in args.model or MODELS:
         m = MODELS[name]
         head = m["vocab"] * m["d"]
-        print(f"{name}: {m['source']}")
+        print(f"{name}: {m['model']} of benchmarks/rho's models.toml; {m['source']}")
         print(f"  N = {active_weights(m):.4g} active weights outside the embedding and LM head ({head:.3g} each); "
               f"2|M| = {counted(m) / 1e9:.1f} GFLOP per token")
         table(m, sorted({s for _, s in m["schedule"]}))

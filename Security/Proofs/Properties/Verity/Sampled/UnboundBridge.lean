@@ -77,7 +77,7 @@ theorem not_correct_of_unbound {n : ℕ} (P : FlockSoundness.Audit.Partition C n
   rcases hu with hw | ⟨g, hg, hop⟩
   · have h1 : u ∉ P.wrong (openedOf C κ val) := fun hm => P.mem_wrong.1 hm (correct_of_progCorrect P u val ι hc)
     rw [← Verity.Partition.wrong_ofAudit P] at h1
-    exact h1 ((Verity.Partition.ofAudit P).mem_wrong.2 hw)
+    exact h1 ((Verity.Partition.ofAudit P).mem_incorrect.2 hw)
   · simp only [Verity.Partition.io, Finset.mem_filter] at hg
     obtain ⟨hgc, hgu⟩ := hg
     have hgc' : g ∈ P.committed := (Verity.Partition.mem_committed_ofAudit P g).1 hgc
