@@ -63,8 +63,8 @@ measures each and sets a_out, a_in and |𝒥| per position beside verity/protoco
 
 ## What it reads, what it writes and what loads it
 
-The package reads `verity.circuits` (Programs, the canonical layout, the Boolean GEMM) and the served b1 Definitions
-on bits (`verity.definitions`). For a model's shapes it loads the slowdown calculator where it sits, with
+The package reads `verity.circuits` (Programs, the canonical layout) and `verity.definitions` (the Boolean GEMM and
+the served b1 Definitions on bits). For a model's shapes it loads the slowdown calculator where it sits, with
 `verity/protocols/inference_only/rho` put on `sys.path`: `rho.instances`, and `rho.params` for the registry, which
 loads the inference-only policy's calibrations (`verity/protocols/inference_only/nci/calibrations.json`). The suite
 names what it reads of both among its `inputs`.
