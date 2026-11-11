@@ -31,7 +31,6 @@ public import Definitions.Pouw.Fp8Atom.Vectors.Add
 public import Definitions.Pouw.Fp8Atom.Vectors.C00
 public import Definitions.Pouw.Fp8Atom.Vectors.C01
 public import Definitions.Pouw.FpG1
-public import Definitions.Pouw.Game.ClopperPearson
 public import Definitions.Pouw.Game.Deadline
 public import Definitions.Pouw.Game.Defs
 public import Definitions.Pouw.Game.Params

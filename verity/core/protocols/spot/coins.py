@@ -54,8 +54,8 @@ def _ratio(p: Any) -> tuple[int, int] | None:
 
 def law_problem(law: Mapping[str, Any], population: int) -> str | None:
     """Why `law` is no one-stage sampling design over `population` proof blocks, or None (Lean `Draw.flockLaw`): exactly its keys,
-    a subset's k a natural number at most the population, a Bernoulli p NUM/DEN in [0, 1], and an expanded stratified or
-    work design's strata well formed (`strata_problem`)."""
+    a subset's k a natural number from one to the population, a Bernoulli p NUM/DEN in [0, 1], and an expanded stratified
+    or work design's strata well formed (`strata_problem`)."""
     kind = law.get("law")
     if not isinstance(kind, str) or kind not in _LAW_KEYS:
         return "a one-stage law is subset, bernoulli, stratified or work"
@@ -66,6 +66,8 @@ def law_problem(law: Mapping[str, Any], population: int) -> str | None:
     if not _int(law["k"]) or law["k"] < 0:
         return f"a {kind} law's k is a natural number"
     if kind == "subset":
+        if law["k"] < 1:
+            return "a subset law draws at least one unit"
         return f"a subset draw of {law['k']} exceeds the population of {population}" if law["k"] > population else None
     if not isinstance(law["strata"], list):
         return f"a {kind} law is expanded: its strata are a list (one_stage.draw.derive)"
@@ -466,16 +468,6 @@ def draw_first(randomness: OwnRandomness, law: Mapping[str, Any], population: in
         raise ValueError("a closure widens a work draw only")
     if kind == "subset":
         k = law["k"]
-<<<<<<< 99c8914848:verity/core/protocols/sampled_proofs/coins.py
-||||||| merged common ancestors:verity/core/protocols/sampled_proofs/coins.py
-        if k > population:
-            raise ValueError(f"a subset draw of {k} exceeds the population of {population}")
-=======
-        if k < 1:
-            raise ValueError("a subset law draws at least one unit")
-        if k > population:
-            raise ValueError(f"a subset draw of {k} exceeds the population of {population}")
->>>>>>> 7af4d24fca3e:verity/core/protocols/spot/coins.py
         units = randomness.stream(2 * k * _width(population) + 64, lambda read: _subset(k, population, read))
     elif kind == "bernoulli":
         num, den = _ratio(law["p"])
@@ -522,15 +514,7 @@ def _nth(ranges: Sequence[Sequence[int]], j: int) -> int:
     raise IndexError(j)
 
 
-<<<<<<< 99c8914848:verity/core/protocols/sampled_proofs/coins.py
-__all__ = ["COINS_FORM", "ChallengerCoins", "DRAW_FORM", "OwnRandomness", "RAN_OUT", "SEGMENT_FORM", "Segment",
-           "challenger_stream", "closure_of", "coins_reason", "draw_coins", "draw_first", "ran_out", "read_reason"]
-||||||| merged common ancestors:verity/core/protocols/sampled_proofs/coins.py
-__all__ = ["COINS_FORM", "ChallengerCoins", "DRAW_FORM", "OwnRandomness", "SEGMENT_FORM", "Segment",
-           "challenger_stream", "closure_of", "coins_reason", "draw_coins", "draw_first", "read_reason"]
-=======
 __all__ = ["COINS_FORM", "ChallengerCoins", "DRAW_FORM", "LIMITS", "Limits", "MAX_HELLOS", "MAX_LEDGER_LINES", "MAX_PATH",
-           "MAX_PINS", "OwnRandomness", "SEED_SALT_FAMILY", "SEED_SALT_ONE", "SEED_SALT_WINDOW", "SEGMENT_FORM", "Segment",
-           "challenger_stream", "closure_of", "coins_reason", "coins_within", "draw_coins", "draw_first", "draw_seed_salt",
-           "read_reason", "seed_salt_of"]
->>>>>>> 7af4d24fca3e:verity/core/protocols/spot/coins.py
+           "MAX_PINS", "OwnRandomness", "RAN_OUT", "SEED_SALT_FAMILY", "SEED_SALT_ONE", "SEED_SALT_WINDOW", "SEGMENT_FORM",
+           "Segment", "challenger_stream", "closure_of", "coins_reason", "coins_within", "draw_coins", "draw_first",
+           "draw_seed_salt", "ran_out", "read_reason", "seed_salt_of"]

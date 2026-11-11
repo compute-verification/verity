@@ -28,7 +28,7 @@ draw-gated release (on the first thread), which keeps only the leaves its
 subprotocols' sampled blocks open, and its ``seals.jsonl`` line carries that release's record (``release``). Each line says
 where its close's time went: ``seconds`` (``close``, and off the loop ``on_loop``, the loop's part, ``finalize_wait``, for the
 worker to absorb the window's steps, and ``seal_wait``, for the sealer's room) and ``close_phases_s``, and where its steps'
-Commit time went on the serving thread and the worker (``commit_s``, `commit_s_of`). ``window_bytes``
+Commit time went on the serving thread and the worker (``commit_s``, `spans.commit_s_of`). ``window_bytes``
 closes a window once its steps have committed that many
 bytes, which bounds its bundle. Every close is between engine steps, so a step's schedule, its committed values and its rows
 sit in one window, which runs past its bound by the step that crossed it (and by the steps the committer's worker had not
@@ -61,6 +61,7 @@ from verity.core.protocols.certifier import served_rows as SRW
 from verity_vllm.commit.served_record import BlockValues, base_id, served_rows, window_commit
 from verity_vllm.pipeline.seal_process import SealFailed
 from verity_vllm.pipeline.serve_seal import GB, committed_bytes, extras_of, freeze, seal_window, thaw, window_requests
+from verity_vllm.pipeline.spans import commit_s_of
 
 #: The compile slice's size class beside the engine's statics; R and P (with the engine's L and T, and IW) shape the rows.
 SERVED_CLASS = ("R", "W", "A", "IW", "Q", "D", "P", "K")
@@ -108,22 +109,6 @@ def gc_of(rc: Any) -> dict[str, Any] | None:
     p = list(g.get("pauses") or [])
     return {"n": len(p), "total_s": round(sum(x[2] for x in p), 4), "max_s": round(max((x[2] for x in p), default=0.0), 4),
             "long": [[x[0], round(x[1], 3), round(x[2], 3), x[3]] for x in p if x[2] >= 0.05], "freeze_s": g.get("freeze_s")}
-
-
-COMMIT_S = {"serving": ("acquisition", "movement", "wait"), "worker": ("hashing", "worker_idle", "root_finalisation", "device_pool_wait")}
-
-
-def commit_s_of(rc: Any) -> dict[str, dict[str, float]] | None:
-    """A window's Commit time by thread, summed over its steps (the committer's per-step spans). The serving thread's
-    ``movement`` is the copies' native issue, ``acquisition`` the step ends and the sources' takes (their waits included), and
-    ``wait`` its waits for a free slot of the staging ring, the worker behind. The worker's ``hashing`` holds ``worker_idle``, its
-    waits for the serving thread's windows. The finalize's wait for the worker has no step and isn't counted."""
-    spans = getattr(rc, "spans", None)
-    per_step = spans.get("per_step") if spans else None             # None: the committer recorded no per-step spans
-    if not per_step:
-        return None
-    per = per_step.values()
-    return {side: {c: round(sum(float(d.get(c, 0.0)) for d in per), 4) for c in cs} for side, cs in COMMIT_S.items()}
 
 
 class Mirror:

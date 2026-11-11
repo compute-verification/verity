@@ -8,19 +8,9 @@ nothing carries across it. Its subcircuits are Definitions (`templates`): the W8
 and the row units (RMSNorm, the quantizer, softmax, the residual add, the gathers, the embedding and
 argmax), each id `stub:` until its Definition lands, its ANDs composed from pinned pieces.
 
-<<<<<<< 99c8914848
-**The law is what Lean proves.** Each subcircuit is one sampling block of the block (`IntegrityPeriod`): one C-Flock `--zk`
-session drawing a uniform `subset:k` of its n units, split over `tables` tables of at most `Template.cap` drawn units each
-(m = k_log + nbl <= 35). Every subcircuit draws `k = ceil(ln(S/delta)/share)`, so by `IntegrityPeriodLog` each sampling block has
-||||||| merged common ancestors
-**The law is what Lean proves.** Each subcircuit is one sampling block of the block (`IntegrityPeriod`): one C-Flock `--zk`
-session drawing a uniform `subset:k` of its n units, split over `tables` tables of at most `_cap` drawn units each
-(m = k_log + nbl <= 35). Every subcircuit draws `k = ceil(ln(S/delta)/share)`, so by `IntegrityPeriodLog` each sampling block has
-=======
 **The sampling design is what Lean proves.** Each subcircuit is one sampling block of the block (`IntegrityPeriod`): one Flock `--zk`
-session sampling a uniform `subset:k` of its n units, split over `tables` tables of at most `_cap` sampled proof blocks each
+session sampling a uniform `subset:k` of its n units, split over `tables` tables of at most `Template.cap` sampled proof blocks each
 (m = k_log + nbl <= 35). Every subcircuit samples `k = ceil(ln(S/delta)/share)`, so by `IntegrityPeriodLog` each sampling block has
->>>>>>> 7af4d24fca3e
 fewer than `K0 = ln(S/delta) n/k` <= share n units incorrect outside delta (the S sampling blocks of the block split delta), and by
 `IntegrityHorizon` a subcircuit's sampling blocks over any period have fewer than ln(S/delta) n/k in all. The incorrect ANDs beside
 them (`Stratified.harm_bound`, each unit weighted by its ANDs) are informative: the law-level bound is proved
@@ -49,13 +39,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 import transformer as X  # noqa: E402
-<<<<<<< 99c8914848
-from inputs import I, cap  # noqa: E402
-||||||| merged common ancestors
-from inputs import I  # noqa: E402
-=======
-from inputs import CARDS, I  # noqa: E402
->>>>>>> 7af4d24fca3e
+from inputs import CARDS, I, cap  # noqa: E402
 
 from verity.core.protocols.profile import Stratified, Stratum  # noqa: E402
 from verity.core.protocols.spot.candidates import shape_of  # noqa: E402
@@ -219,16 +203,8 @@ class Rates:
 
 
 @dataclass(frozen=True)
-<<<<<<< 99c8914848
 class SamplingBlock:
-    """One subcircuit's sampling block of the block: `k` of its units drawn in one session of `tables` tables."""
-||||||| merged common ancestors
-class Window:
-    """One subcircuit's sampling block of the block: `k` of its units drawn in one session of `tables` tables."""
-=======
-class Window:
     """One subcircuit's sampling block of the block: `k` of its units sampled in one session of `tables` tables."""
->>>>>>> 7af4d24fca3e
 
     template: Template
     k: int
@@ -243,16 +219,8 @@ class Window:
         return self.statements + self.drawn
 
 
-<<<<<<< 99c8914848
 def window(t: Template, k: int, windows: int, r: Rates) -> SamplingBlock:
-    """`t`'s sampling block drawing k: its tables (at most `Template.cap` drawn units each, k rounded up to a multiple of them, as
-||||||| merged common ancestors
-def window(t: Template, k: int, windows: int, r: Rates) -> Window:
-    """`t`'s sampling block drawing k: its tables (at most `_cap` drawn units each, k rounded up to a multiple of them, as
-=======
-def window(t: Template, k: int, windows: int, r: Rates) -> Window:
-    """`t`'s sampling block sampling k: its tables (at most `_cap` sampled proof blocks each, k rounded up to a multiple of them, as
->>>>>>> 7af4d24fca3e
+    """`t`'s sampling block sampling k: its tables (at most `Template.cap` sampled proof blocks each, k rounded up to a multiple of them, as
     `HiddenWindow.hdiv` needs), its expected proving cost, and at each delta `IntegrityPeriodLog`'s K0 (delta split over
     the block's `windows`) and `IntegrityHorizon`'s bound over any number of the subcircuit's sampling blocks."""
     a, cap = t.proved, t.cap

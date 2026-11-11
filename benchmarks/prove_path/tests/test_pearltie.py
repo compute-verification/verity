@@ -65,7 +65,7 @@ from verity_vllm.protocols.pouw.pearl_c import window as PWR
 
 from verity.core.protocols.pouw.audit import HM96, HM96_WEIGHTS, Workload, activation_binding, commit_rows, weight_binding
 from verity.core.protocols.pouw.protocol import Matmul, Shape
-from verity.core.protocols.sampled_proofs.one_stage import draw as D, partition as P, registered as G, registration as REG
+from verity.core.protocols.spot.one_stage import draw as D, partition as P, registered as G, registration as REG
 from verity.ml.circuits.codec import canonical_json
 from verity.ml.circuits.evaluation import evaluate_batch
 from verity.ml.windows import interface as IF, rows as CS
@@ -90,7 +90,7 @@ KEY, SALT_KEY = bytes(range(32)), bytes(range(64, 96))
 SALT = bytes(range(100, 164))
 #: the audited window's run root
 RUN = "ab" * 64
-LAW = D.parse_law("stratified:1")
+LAW = D.parse_design("stratified:1")
 PROMPT = [(7 * i + 3) % 500 for i in range(CLASS.prompt)]
 #: the flipped bit: round 1's o-projection's (call 1) A row 0, its first word's high half (the BF16 of x's first element)
 FLIP = (PEARL.a(1, 1), 0, 1)

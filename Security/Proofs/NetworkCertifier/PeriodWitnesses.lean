@@ -2,7 +2,6 @@ module
 
 public import Proofs.NetworkCertifier.Witnesses
 public import Proofs.NetworkCertifier.WitnessToys
-public import Proofs.NetworkCertifier.Assumptions.SampledCode
 
 /-!
 # The pooled monitoring period's honest and nontrivial lemmas
@@ -25,9 +24,6 @@ namespace NetTiming.Witness
 
 open Claims Claims.Sampling Claims.Witness Claims.Witness.Sampling
 open Claims.Witness.SamplingGeneric (notStmt notPart)
-
-local notation "relD" => _root_.Flock.Readable.relation
-local notation "shaD" => FlockDeploy.sha512
 
 /-- **`PooledLeakAccepted`'s schedule premises at the deployed instance**, its schedules the fixture `fxQueue`'s alone:
 each fits its rows format (`hfit`), and sends at most 6 cells on each connection (`hcap`). -/

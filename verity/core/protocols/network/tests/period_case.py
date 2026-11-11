@@ -21,24 +21,12 @@ sampled network certifier session, its clock certificate signing a sync of Σ_sy
 the salt in no case), and answered by one-stage with its one unit proved. In the rows form (a change named `rows-…`):
 each link-window's ingress and egress rows committed and registered under a small sampled schedule
 (`warden_rows.Cells.commit` and `registration`, signed by the same key), its three records certified (`past-slots`:
-<<<<<<< 99c8914848
-none of them and neither registration, as the warden leaves a window in which it refused a connection), and the scan's
-registration holding both rows' roots and domains and each lane j's `scan/prog<j>` (`prog_name`) at the root and domain
-of chunk j's entries port of that link-window's slot entries' template (`slot_entry`, `io_shell.SlotEntry_v1` at its
-smallest circuit-check row, or `select_entry`, `SelectEntry_v1` at its smallest binding beside a stand-in scan slots'
-`ScanSlots_v2`, each a pinned Definition with one member a slot) in its own audit's registration and Program
+none of them and neither registration, as the network certifier leaves a window in which it refused a connection), and
+the scan's registration holding both rows' roots and domains and each lane j's `scan/prog<j>` (`prog_name`) at the root
+and domain of chunk j's entries port of that link-window's slot entries' template (`slot_entry`, `io_shell.SlotEntry_v1`
+at its smallest circuit-check row, or `select_entry`, `SelectEntry_v1` at its smallest binding beside a stand-in scan
+slots' `ScanSlots_v2`, each a pinned Definition with one member a slot) in its own audit's registration and Program
 (`_prog_tied`, `_wired`), and its
-||||||| merged common ancestors
-none of them and neither registration, as the warden leaves a window in which it refused a connection), and the scan's
-registration holding both rows' roots and domains and its `prog` (`PROG`) at the root and domain of the entries port of
-that link-window's slot entries' template (`slot_entry`, `io_shell.SlotEntry_v1` at its smallest circuit-check row, a
-pinned Definition, with one member a slot) in its own audit's registration and Program (`_prog_tied`, `_wired`), and its
-=======
-none of them and neither registration, as the network certifier leaves a window in which it refused a connection), and the scan's
-registration holding both rows' roots and domains and its `prog` (`PROG`) at the root and domain of the entries port of
-that link-window's slot entries' template (`slot_entry`, `io_shell.SlotEntry_v1` at its smallest circuit-check row, a
-pinned Definition, with one member a slot) in its own audit's registration and Program (`_prog_tied`, `_wired`), and its
->>>>>>> 7af4d24fca3e
 state (`STATE`) at the root and domain of that audit's `SCAN_STATE` (`_state_tied`), answered by one-stage with a
 stratified or subset sample at the period's δ; the scan's Program is its generator form, stand-ins of its three templates
 at small widths in the Boolean profile's types, as the scan's Definitions have them (`scan_descriptor`), and a Program in
@@ -46,31 +34,23 @@ the checker form is a bad scan (`bad_scans`), as is each check's negative of wha
 (`scan_negatives`). Beside them, the compute audits (in the rows form at least one, whose registrations' `roots` hold the
 scans' `prog`), each registered over its Program, a population of one or two stand-in templates whose units commit from
 8 to 320 bits, with its slot entries' in the rows form (`audit_descriptor`), and answered with a subset or stratified
-<<<<<<< 99c8914848
-draw (a work law's) and its bound on incorrect proof blocks, every unit drawn for an audit a scan's `prog` is tied to,
-or, each accepted and charged, its slot entries' and scan slots' templates whole and the rest in part (`tied-partial`, a
-stratum a template, `_by_template`), one or two of its proof blocks sampled (`tied-sampled`, `subset:k`, the demo's
-sample), or its slot entries' or scan slots' stratum in part too (`tied-entries-sampled`, `tied-slots-sampled`), and a
-link-window whose scan's state is not its
+sample (a work sampling design's) and its bound on incorrect proof blocks, every unit sampled for an audit a scan's
+`prog` is tied to, or, each accepted and charged, its slot entries' and scan slots' templates whole and the rest in part
+(`tied-partial`, a stratum a template, `_by_template`), one or two of its proof blocks sampled (`tied-sampled`,
+`subset:k`, the demo's sample), or its slot entries' or scan slots' stratum in part too (`tied-entries-sampled`,
+`tied-slots-sampled`), and a link-window whose scan's state is not its
 wired audit's `SCAN_STATE` refused (`state-untied`: a `SCAN_STATE` that skips or alters one of the scan's transitions,
-at another root or domain, or none, `UNSTATES`). `case(kind, seed, form)` is a small period of the form aimed at a
+at another root or domain, or none, `UNSTATES`). An answer whose profile samples more than its level holds is refused
+in either form (`OVERSAMPLED`): a compute audit's (`audit-oversampled`, tied or not; `tied-oversampled`, the tied audit
+of the aimed scan) and a scan's (`answer-oversampled`), each under a registration that samples within its population.
+So is one with a stratum that samples more than the stratum holds in a level whose total still holds
+(`STRATUM_OVERSAMPLED`): the aimed scan's tied audit, sampled whole in two strata, with some of one stratum's sample
+moved to the other (`tied-stratum-oversampled`). So is one whose strata's sizes do not sum to its level's
+(`STRATA_SIZES`): that audit with a stratum holding more than it samples, each holding twice as many, or one holding
+and sampling one fewer (`tied-strata-sizes`).
+`case(kind, seed, form)` is a small period of the form aimed at a
 verdict, or at a decoding failure (`KINDS`, those the form reaches: `kinds`), and `cases(seed, form)` one of each with
 its answer, as a composition's difftest takes a real component's cases.
-||||||| merged common ancestors
-draw (a work law's) and its bound on wrong units, every unit drawn for an audit a scan's `prog` is tied to
-(`tied-undrawn`: one such audit drawn `subset:k`, k < N), and a link-window whose scan's state is not its wired audit's
-`SCAN_STATE` refused (`state-untied`: a `SCAN_STATE` that skips or alters one of the scan's transitions, at another root
-or domain, or none, `UNSTATES`). `case(kind, seed, form)` is a small period of the form aimed at a verdict, or at a
-decoding failure (`KINDS`, those the form reaches: `kinds`), and `cases(seed, form)` one of each with its answer, as a
-composition's difftest takes a real component's cases.
-=======
-sample (a work sampling design's) and its bound on incorrect proof blocks, every unit sampled for an audit a scan's `prog` is tied to
-(`tied-undrawn`: one such audit sampled `subset:k`, k < N), and a link-window whose scan's state is not its wired audit's
-`SCAN_STATE` refused (`state-untied`: a `SCAN_STATE` that skips or alters one of the scan's transitions, at another root
-or domain, or none, `UNSTATES`). `case(kind, seed, form)` is a small period of the form aimed at a verdict, or at a
-decoding failure (`KINDS`, those the form reaches: `kinds`), and `cases(seed, form)` one of each with its answer, as a
-composition's difftest takes a real component's cases.
->>>>>>> 7af4d24fca3e
 
 This is test-side Python (it imports `verity_difftest` and PoUW's `core_check`, which the certifier's package may not),
 so it lives beside the period's difftest (`test_network_period_protocol.py`), and other suites load it by path."""
@@ -503,19 +483,9 @@ def slot_entry_digest(j: dict, key: str) -> str:
 
 def _audit(a, ctx: str) -> Audit:
     """`auditOf`: the layout terms and the Program's descriptor, whose root's template instances are the audit's units,
-<<<<<<< 99c8914848
     each committing its template's return; a root with no template refused; its slot entries' templates
     (`ENTRY_IDS`) with their closure digests. It reads the descriptor's root nodes, signatures and the slot entries'
-    Definitions; C-Flock's decoder, which Lean runs on it, refuses no descriptor this module writes."""
-||||||| merged common ancestors
-    each committing its template's return; a root with no template refused; its slot entries' templates with their
-    closure digests. It reads the descriptor's root nodes, signatures and the slot entries' Definitions; C-Flock's
-    decoder, which Lean runs on it, refuses no descriptor this module writes."""
-=======
-    each committing its template's return; a root with no template refused; its slot entries' templates with their
-    closure digests. It reads the descriptor's root nodes, signatures and the slot entries' Definitions; Flock's
-    decoder, which Lean runs on it, refuses no descriptor this module writes."""
->>>>>>> 7af4d24fca3e
+    Definitions; Flock's decoder, which Lean runs on it, refuses no descriptor this module writes."""
     _exactly(a, ["free", "program", "steps"], ctx)
     free, steps, j = _nat(a["free"], ctx), _nat(a["steps"], ctx), a["program"]
     if not isinstance(j, dict) or j.get("schema") != SCHEMA:
@@ -537,19 +507,9 @@ def _scan(j, program: str, s: WardenParams) -> Scan:
     with a row among its parameters (the checker form) refused first. Then what `NetTiming.BoundaryGates.Fits` asks: the
     walk within `FUEL` (`_walkable`), the root returning every egress leaf, the egress template returning only gates it
     computes (`_own_returns`), each ingress row and every template's row, state and egress argument one input node's
-<<<<<<< 99c8914848
     leaves (`_input_arg`), no egress argument an ingress row's, bucket t's `prog<j>` row `⌊t / every⌋` of lane j's
     own input node of its slot entries (`_reads_entries`), and the Program topological (`_topological`). It reads
-    the descriptor's nodes, signatures and returns; C-Flock's decoder, which Lean runs on it, refuses no descriptor
-||||||| merged common ancestors
-    leaves (`_input_arg`), no egress argument an ingress row's, bucket t's `prog<j>` row `j · T / every + ⌊t / every⌋`
-    of one input node of the slot entries (`_reads_entries`), and the Program topological (`_topological`). It reads
-    the descriptor's nodes, signatures and returns; C-Flock's decoder, which Lean runs on it, refuses no descriptor
-=======
-    leaves (`_input_arg`), no egress argument an ingress row's, bucket t's `prog<j>` row `j · T / every + ⌊t / every⌋`
-    of one input node of the slot entries (`_reads_entries`), and the Program topological (`_topological`). It reads
     the descriptor's nodes, signatures and returns; Flock's decoder, which Lean runs on it, refuses no descriptor
->>>>>>> 7af4d24fca3e
     this module writes."""
     if not isinstance(j, dict) or j.get("schema") != SCHEMA:
         raise D.Reject("scan: not a Program's descriptor")
@@ -981,7 +941,8 @@ def _rows_window_check(p: Params, audits: list[dict], w: int, reg: dict,
 
 
 def _facts(what: str, prof: dict, pub) -> Facts:
-    """`factsOf`: one level sampled `subset:k` or stratified, and the public's bound."""
+    """`factsOf`: one level sampled `subset:k` or stratified, sampling no more than the level holds and no more of a
+    stratum than the stratum holds, its strata's sizes summing to the level's, and the public's bound."""
     if len(prof["levels"]) != 1:
         raise Finding(REJECT, f"{what}: profile: not one level")
     (lv,) = prof["levels"]
@@ -992,6 +953,14 @@ def _facts(what: str, prof: dict, pub) -> Facts:
         drawn = sum(s["k"] for s in draw["strata"])
     else:
         raise Finding(REJECT, f"{what}: profile: not a subset or stratified draw")
+    if drawn > lv["size"]:
+        raise Finding(REJECT, f"{what}: profile: {drawn} sampled of {lv['size']} units: {OVERSAMPLED}")
+    for s in draw.get("strata", ()):
+        if s["k"] > s["size"]:
+            raise Finding(REJECT, f"{what}: profile: stratum '{s['name']}': {s['k']} sampled of {s['size']} units: "
+                                  f"{STRATUM_OVERSAMPLED}")
+    if "strata" in draw and (held := sum(s["size"] for s in draw["strata"])) != lv["size"]:
+        raise Finding(REJECT, f"{what}: profile: strata of {held} units in a level of {lv['size']}: {STRATA_SIZES}")
     bound = pub.get("bound") if isinstance(pub, dict) else None
     if not isinstance(bound, int) or isinstance(bound, bool) or bound < 0:
         raise Finding(REJECT, f"{what}: no bound")
@@ -1011,6 +980,12 @@ def _audit_check(i: int, audit: Audit, reg: dict, a: dict) -> Facts:
     return f
 
 
+#: `factsOf`'s refusal of a profile whose level samples more than it holds, after the two counts.
+OVERSAMPLED = "more than the level holds"
+#: `factsOf`'s refusal of a profile with a stratum that samples more than it holds, after the stratum's two counts.
+STRATUM_OVERSAMPLED = "more than the stratum holds"
+#: `factsOf`'s refusal of a profile whose strata's sizes do not sum to its level's, after the two sizes.
+STRATA_SIZES = "their sizes do not sum to the level's"
 #: `wiredCheck`'s refusal, after its window's number.
 UNWIRED = "the scan's prog is no compute audit's slot entries"
 #: `stateCheck`'s refusal, after its window's number.
@@ -1144,7 +1119,7 @@ EXPECT = {
     "answer-protocol": REJECT, "answer-other": REJECT, "answer-reject": REJECT, "answer-undecided": UNDECIDED,
     "answer-profile": REJECT,
     "audit-other": REJECT, "audit-reject": REJECT, "audit-undecided": UNDECIDED, "audit-profile": REJECT,
-    "audit-bound": REJECT, "audit-program": REJECT, "audit-units": REJECT,
+    "audit-bound": REJECT, "audit-program": REJECT, "audit-units": REJECT, "audit-oversampled": REJECT,
     "undecided-and-reject": REJECT, "form": REJECT,
     "first": REJECT, "count-windows": REJECT, "count-audits": REJECT, "evidence-count": REJECT,
     "params": REJECT, "commitment": REJECT, "evidence": REJECT, "case": REJECT,
@@ -1159,10 +1134,12 @@ EXPECT = {
     "rows-schedule": REJECT,
     "rows-answer-protocol": REJECT, "rows-answer-other": REJECT, "rows-answer-window": REJECT,
     "rows-answer-reject": REJECT, "rows-answer-undecided": UNDECIDED, "rows-answer-profile": REJECT,
-    "rows-answer-bound": REJECT, "rows-delta": REJECT, "rows-units": REJECT, "rows-prog-untied": REJECT,
-    "rows-prog-unwired": REJECT, "rows-state-untied": REJECT,
+    "rows-answer-bound": REJECT, "rows-answer-oversampled": REJECT, "rows-delta": REJECT, "rows-units": REJECT,
+    "rows-prog-untied": REJECT, "rows-prog-unwired": REJECT, "rows-state-untied": REJECT,
     "rows-audit-other": REJECT, "rows-audit-reject": REJECT, "rows-audit-undecided": UNDECIDED,
     "rows-audit-profile": REJECT, "rows-audit-bound": REJECT, "rows-audit-program": REJECT, "rows-audit-units": REJECT,
+    "rows-audit-oversampled": REJECT, "rows-tied-oversampled": REJECT, "rows-tied-stratum-oversampled": REJECT,
+    "rows-tied-strata-sizes": REJECT,
     "rows-undecided-and-reject": REJECT, "rows-form": REJECT,
     "rows-first": REJECT, "rows-count-windows": REJECT, "rows-count-audits": REJECT, "rows-evidence-count": REJECT,
     "rows-params": REJECT, "rows-commitment": REJECT, "rows-evidence": REJECT,
@@ -1563,6 +1540,46 @@ def _by_template(r: random.Random, desc: dict, m: str) -> tuple[dict, list[dict]
     return {"k": sum(ks), "law": "stratified", "strata": law}, strata
 
 
+def _oversample(r: random.Random, size: int, k: int, strata: list[dict] | None) -> int:
+    """A profile's `k` sampled of a level of `size` raised past the level, to at most three more than it holds, one of
+    its `strata` taking the excess: what no sample of the level gives (`answer-oversampled`, `audit-oversampled`,
+    `tied-oversampled`)."""
+    over = size + r.randint(1, 3) - k
+    if strata:
+        r.choice(strata)["k"] += over
+    return k + over
+
+
+def _stratum_oversample(r: random.Random, strata: list[dict]) -> None:
+    """One of a profile's `strata` raised past its own size, by one to three, and the others lowered by as much, so the
+    level's sample is what it was: what no sample of that stratum gives, in a level whose total still holds
+    (`tied-stratum-oversampled`). It needs the others to sample more than that stratum is short of its size."""
+    j = r.randrange(len(strata))
+    rest = [s for i, s in enumerate(strata) if i != j]
+    short = strata[j]["size"] - strata[j]["k"]
+    over = short + r.randint(1, min(3, sum(s["k"] for s in rest) - short))
+    strata[j]["k"] += over
+    for s in rest:
+        cut = min(over, s["k"])
+        s["k"], over = s["k"] - cut, over - cut
+
+
+def _strata_resize(r: random.Random, strata: list[dict]) -> int:
+    """A profile's `strata`, each sampled whole, no longer the size of their level: one of them holding one to three
+    more units than it samples, each holding twice as many, or one holding and sampling one fewer. No stratum samples
+    more than it holds and the level's sample is no more than the level holds (`tied-strata-sizes`). The strata's
+    sample."""
+    how, one = r.choice(["more", "twice", "fewer"]), r.choice(strata)
+    if how == "more":
+        one["size"] += r.randint(1, 3)
+    elif how == "twice":
+        for s in strata:
+            s["size"] *= 2
+    else:
+        one["size"], one["k"] = one["size"] - 1, one["k"] - 1
+    return sum(s["k"] for s in strata)
+
+
 def build(m: str, seed: int, small: bool = False) -> dict:
     """A period's case with the change `m`, in the form `m` names (`form_of`), every choice sampled from `seed`; `small`:
     the toy key, as few link-windows and audits as `m` needs."""
@@ -1619,7 +1636,7 @@ def build(m: str, seed: int, small: bool = False) -> dict:
     # the changes that draw the aimed link-window's audit stratified by its templates, its slot entries' and scan slots'
     # whole (`tied-partial`) or one of them in part
     by_template = m in ("tied-partial", "tied-entries-sampled", "tied-slots-sampled")
-    if m == "tied-sampled" or by_template:
+    if m in ("tied-sampled", "tied-oversampled", "tied-stratum-oversampled", "tied-strata-sizes") or by_template:
         a = ties[first + t]["audit"]
     tied = {x["audit"] for x in ties.values()}
     signed = iter(range(1 << 30))
@@ -1725,6 +1742,8 @@ def build(m: str, seed: int, small: bool = False) -> dict:
         k = sum(s["k"] for s in strata) if strata else r.randint(1, units)
         law = {"k": k, "law": "subset"} if strata is None else {"k": k, "law": "stratified", "strata": [
             {"k": s["k"], "template": s["name"], "units": [[j * T, (j + 1) * T]]} for j, s in enumerate(strata)]}
+        if aimed and m == "answer-oversampled":
+            k = _oversample(r, units, k, strata)
         fmt, where = r.choice(FORMATS), r.choice(["roots", "registered"])
         entries += _prog_entries(rp, ties[w], where, untie if aimed else None, unwire == "lane" and aimed, hit)
         entries += _state_entries(rp, states, ties[w]["audit"], where, unstate if aimed else None)
@@ -1827,12 +1846,14 @@ def build(m: str, seed: int, small: bool = False) -> dict:
     for i in range(n_audits):
         sampled = i == a and m == "tied-sampled"
         partial = i == a and by_template
+        # the tied audit in two strata, each whole, then one past its size or their sizes no longer the level's
+        halves = i == a and m in ("tied-stratum-oversampled", "tied-strata-sizes")
         entries = tuple(slots + (rp.choice([1, -1]) if slots > 1 else 1)
                         if w == first + t and unwire == "members" else slots
                         for w, x in ties.items() if x["audit"] == i)
         renamed = rows and unwire == "body" and ties[first + t]["audit"] == i
         scan_slots = (rp.randint(1, 2),) if i in selects else ()
-        units = r.randint(2 if sampled or partial else 1, 40)
+        units = r.randint(2 if sampled or partial or halves else 1, 40)
         n_prog = units + (r.choice([1, -1]) if units > 1 else 1) if i == a and m == "audit-units" else units
         units += sum(entries) + sum(scan_slots)
         split = r.randint(1, n_prog - 1) if n_prog > 1 and r.random() < 0.3 else None
@@ -1847,14 +1868,20 @@ def build(m: str, seed: int, small: bool = False) -> dict:
         if partial:
             law, strata = _by_template(r, desc, m)
             k, wrong = sum(s["k"] for s in strata), 0 if r.random() < 0.25 else r.randint(1, units)
-        elif r.random() < 0.5 and not sampled:
-            cuts = [0, *([r.randint(1, units - 1)] if units > 1 and r.random() < 0.5 else []), units]
+        elif halves or (r.random() < 0.5 and not sampled):
+            cuts = [0, *([r.randint(1, units - 1)] if units > 1 and (halves or r.random() < 0.5) else []), units]
             law = {"k": k, "law": "stratified", "strata": [
                 {"k": stratum_k(k, hi - lo, units), "template": f"s{j}", "units": [[lo, hi]]}
                 for j, (lo, hi) in enumerate(zip(cuts, cuts[1:]))]}
             strata = [{"k": s["k"], "name": s["template"], "size": s["units"][0][1] - s["units"][0][0]}
                       for s in law["strata"]]
             k = sum(s["k"] for s in strata)
+        if i == a and m in ("audit-oversampled", "tied-oversampled"):
+            k = _oversample(r, units, k, strata)
+        if halves and m == "tied-stratum-oversampled":
+            _stratum_oversample(r, strata)
+        elif halves:
+            k = _strata_resize(r, strata)
         rec = {"format": r.choice(FORMATS), "law": law, "partition": f"loop/{i}", "population": units,
                "program": prog, "protocol": ONE_STAGE, "window": {"kind": "served", "window": i}}
         if rows:

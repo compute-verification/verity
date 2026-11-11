@@ -214,14 +214,30 @@ def test_a5s_registered_read_negatives_alter_one_of_a_chunks_two_ports_and_keep_
                                                             "m": SimpleNamespace(n=T)}, tmp_path)
     assert seen == {"chunk-without-registered-reads": None,
                     "registered-read-against-another-root": {**ports, "part0": {**ports["part0"], "root": "00" * 64}},
-<<<<<<< 99c8914848
-                    "registered-reads-another-row": {**ports, "part0": {**ports["part0"], "reads": [*range(1, T), 0]}}}
+                    "registered-reads-another-row": {**ports, "part0": {**ports["part0"], "reads": [*range(1, T), 0]}},
+                    "registered-reads-leaving-a-port-committed-afresh": {"part0": ports["part0"]}}
+    afresh = heads.pop("registered-reads-leaving-a-port-committed-afresh")
+    assert afresh == (("part0",), bytes(range(8))) and set(heads.values()) == {(tuple(sorted(ports)), bytes(range(8)))}
+    assert (member / f"pub-{T}.bin").read_bytes() == pub
+
+
+def staged_member(tmp_path: Path, ports: dict) -> Path:
+    """A member's directory with a public file whose header names ``ports`` registered, as a5 staged it."""
+    member = tmp_path / "m"
+    member.mkdir()
+    head = {"registered": {p: {"value": e["value"], "positions": e["reads"], "paths": [""] * T} for p, e in ports.items()}}
+    (member / f"pub-{T}.bin").write_bytes(json.dumps(head).encode() + b"\n" + bytes(range(8)))
+    return member
+
+
+AFRESH = "registered-reads-leaving-a-port-committed-afresh"
 
 
 def test_a5s_bound_port_negatives_bind_one_port_at_another_root_or_leave_it_out(tmp_path, monkeypatch) -> None:
     """Where a chunk's file binds its other ports to the registration's roots (`registered.bind_ports`), a5's negatives add
     its first bound port at another root and that port left out, each with every other port as honest: Lean is to refuse
-    the one port the negative changes, by its reason."""
+    the one port the negative changes, by its reason. The port committed afresh keeps the bound ports, and with no
+    record declaring it registered its reason is the complete check's."""
     import a5
 
     ports = {f"part{j}": {"value": AT.value_name(j, 0, 0), "root": f"{j}" * 128, "leaves": T, "reads": list(range(T))}
@@ -233,22 +249,26 @@ def test_a5s_bound_port_negatives_bind_one_port_at_another_root_or_leave_it_out(
 
     def lean_verify(lean, st, n, sdir, zk, log):
         seen[log] = json.loads(st["registered_file"].read_text()) if "registered_file" in st else None
-        return {"accepted": False, "digest": "d", "why": "setup: registered reads: none"}
+        return {"accepted": False, "digest": "d", "why": "registered reads (complete): the statement's port part1 is neither"
+                if log == AFRESH else "setup: registered reads: none"}
 
     monkeypatch.setattr(a5.a0, "lean_verify", lean_verify)
-    a5.registered_negatives(SimpleNamespace(lean="lean"), {"st": {"registered_file": tmp_path / "registered.json"},
-                                                            "m": SimpleNamespace(n=T)}, tmp_path)
+    out = a5.registered_negatives(SimpleNamespace(lean="lean"), {
+        "st": {"registered_file": tmp_path / "registered.json", "dir": staged_member(tmp_path, ports)},
+        "m": SimpleNamespace(n=T)}, tmp_path)
     assert seen["bound-port-at-another-root"] == {**honest, "bound": {**bound, "o0": {**bound["o0"], "root": "00" * 64}}}
     assert seen["bound-port-left-out"] == {**honest, "bound": {"o1": bound["o1"]}}
     assert seen["registered-read-against-another-root"]["bound"] == bound
     assert seen["bound-ports-without-interface"] == honest and "declared-port-bound" not in seen
+    assert seen[AFRESH] == {**honest, "ports": {"part0": ports["part0"]}} and out[AFRESH]["refused"]
 
 
 def test_a5s_declared_port_negatives_move_a_port_the_interface_declares_into_bound_or_leave_it_out(tmp_path, monkeypatch):
     """Where the window's registered circuit record declares a registered port of the chunk's template (an embedding
     read's ``o1``, an opening's verdict), a5's negatives move it from the file's ports into ``bound`` at its header's root
     and domain, and leave it out, each beside the other registered port, under the record (`--interface`); the file that
-    binds ports is verified without the record too. Each is to be refused by its reason."""
+    binds ports is verified without the record too. Each is to be refused by its reason; the port committed afresh is
+    that declared port here, so its reason is the declared check's, which Lean makes first."""
     import a5
 
     ports = {p: {"value": f"v-{p}", "root": f"{i}" * 128, "leaves": T, "reads": list(range(T))}
@@ -265,25 +285,19 @@ def test_a5s_declared_port_negatives_move_a_port_the_interface_declares_into_bou
 
     def lean_verify(lean, st, n, sdir, zk, log):
         seen[log] = (json.loads(st["registered_file"].read_text()) if "registered_file" in st else None, st.get("interface_file"))
-        return {"accepted": False, "digest": "d", "why": "setup: registered reads: none"}
+        return {"accepted": False, "digest": "d", "why": "registered reads (declared): the statement's port o1 is one"
+                if log == AFRESH else "setup: registered reads: none"}
 
     monkeypatch.setattr(a5.a0, "lean_verify", lean_verify)
     assert a5.declared_ports(iface, "TEmb_v1") == ["o1"] and a5.declared_ports(iface, "TOther_v1") == []
     fv = {"roots": {"o1": "8" * 128}, "domain_ids": {"o1": "9" * 128}}
     out = a5.registered_negatives(SimpleNamespace(lean="lean"), {
-        "st": {"registered_file": tmp_path / "registered.json", "interface_file": iface},
+        "st": {"registered_file": tmp_path / "registered.json", "interface_file": iface,
+               "dir": staged_member(tmp_path, ports)},
         "m": SimpleNamespace(n=T, template="TEmb_v1"), "header": {"frame_v3": fv}}, tmp_path)
     kept = {**honest, "ports": {"domain": ports["domain"]}}
     assert seen["declared-port-bound"] == ({**kept, "bound": {**bound, "o1": {"root": "8" * 128, "domain": "9" * 128}}}, iface)
     assert seen["declared-port-left-out"] == (kept, iface)
     assert seen["bound-ports-without-interface"] == (honest, None) and seen["bound-port-left-out"][1] == iface
     assert not out["declared-port-bound"]["refused"], "a refusal for another reason is not the negative's"
-||||||| merged common ancestors
-                    "registered-reads-another-row": {**ports, "part0": {**ports["part0"], "reads": [*range(1, T), 0]}}}
-=======
-                    "registered-reads-another-row": {**ports, "part0": {**ports["part0"], "reads": [*range(1, T), 0]}},
-                    "registered-reads-leaving-a-port-committed-afresh": {"part0": ports["part0"]}}
-    afresh = heads.pop("registered-reads-leaving-a-port-committed-afresh")
-    assert afresh == (("part0",), bytes(range(8))) and set(heads.values()) == {(tuple(sorted(ports)), bytes(range(8)))}
-    assert (member / f"pub-{T}.bin").read_bytes() == pub
->>>>>>> 7af4d24fca3e
+    assert seen[AFRESH] == (kept, iface) and out[AFRESH]["refused"]

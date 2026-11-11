@@ -11,14 +11,8 @@ from fractions import Fraction
 
 import pytest
 
-<<<<<<< 99c8914848
-from verity.core.protocols.remote_bandwidth import audit, codec, monitoring, pooled
-||||||| merged common ancestors
-from verity.core.protocols.remote_bandwidth import codec, monitoring, pooled
-=======
 from verity.core.protocols import reporting
-from verity.core.protocols.remote_bandwidth import codec, monitoring, pooled
->>>>>>> 7af4d24fca3e
+from verity.core.protocols.remote_bandwidth import audit, codec, monitoring, pooled
 
 EPS = Fraction(2 ** 24 + 2 * audit.SAMPLES, 2 ** 64)
 ALL_DRAWN = {"verdict": "accept", "reason": None, "public": {"eps": str(EPS), "q_bytes": 34 * codec.BLOCK_BYTES},

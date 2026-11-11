@@ -319,22 +319,6 @@ def test_a_persons_ask_off_track_rings_its_lane_once_a_window_until_it_holds(tmp
     n = len(ring.rings)
     T.linear_audit(state, ring, at(19, 13, 10), lambda: FOUND + asks, lambda: VOLUME, log)        # the same window: nothing new
     assert len(ring.rings) == n
-<<<<<<< 99c8914848
-    T.linear_audit(state, ring, at(19, 13, 10), lambda: FOUND + asks[:3], lambda: VOLUME, log)    # the next hour, with the last
-    again = {to: body for to, body, _ in ring.rings[n:]}                                          # slip explained: the rest again
-    assert sorted(again) == ["ci", "compute-accounting", "top"] and "(unstaffed 1, slipped 1)" in again["ci"]
-    n = len(ring.rings)
-||||||| merged common ancestors
-    T.linear_audit(state, ring, at(19, 13, 10), lambda: FOUND + asks, lambda: VOLUME, log)        # the next hour: the rest again
-    again = {to: body for to, body, _ in ring.rings[n:]}
-    assert sorted(again) == ["ci", "compute-accounting", "top"] and "(unstaffed 1)" in again["ci"]   # slips rang once
-    n = len(ring.rings)
-    later = [*asks[:3], {**slip, "fix": slip["fix"].replace("2 times", "3 times") + " -> 2026-11-02"}]
-    T.linear_audit(state, ring, at(19, 13, 40), lambda: FOUND + later, lambda: VOLUME, log)       # a new date: its slip again
-    assert [to for to, _, _ in ring.rings[n:]] == ["vllm"]
-    n = len(ring.rings)
-=======
->>>>>>> 7af4d24fca3e
     T.linear_audit(state, ring, at(19, 14, 10), lambda: FOUND, lambda: VOLUME, log)               # held: the 12 h ring is done
     assert ring.rings[n:] == []
     T.linear_audit(state, ring, at(20, 0, 30), lambda: FOUND + asks[:3], lambda: VOLUME, log)     # the next window, vllm's slip explained

@@ -144,7 +144,7 @@ class LiveDraw:
 
     def __call__(self, root: bytes, asking: Any) -> tuple[bytes, dict[str, Any]]:
         from verity.core.protocols.pouw import window as Wd
-        from verity.core.protocols.sampled_proofs.challenger import CoinError
+        from verity.core.protocols.spot.challenger import CoinError
         from verity_vllm.protocols.pouw.h1 import window as PHW
 
         lines = self.gate.ledger()

@@ -1,4 +1,4 @@
-"""circuit-check's bindings of `verity.core.protocols.pouw.circuit.lead`'s Definitions, in `circuit_check.targets`' forms
+"""circuit-check's bindings of `verity.ml.protocols.pouw.circuit.lead`'s Definitions, in `circuit_check.targets`' forms
 (`circuit_check.sidecars`)."""
 from __future__ import annotations
 
@@ -12,7 +12,7 @@ def _pouw_roots() -> list[Any]:
     and at its block 1 (one step after the committed words before it, the fold over all 33 steps' coins and a 32-tag walk,
     reading A·B back from the last word). The pieces, `PouwLeadStep0Row`, `PouwLeadStep0Mma`, `PouwLeadStepRow` and
     `PouwLeadStepMma` are catalog roots (primitives and static-free composites)."""
-    from verity.core.protocols.pouw.circuit import lead as L
+    from verity.ml.protocols.pouw.circuit import lead as L
     from verity.ml.circuits.defs import bind
 
     shapes = ((21, 0, 0, 16, 8, 0), (49, 16, 8, 1, 5, 0), (917, 0, 0, 16, 8, 0), (917, 0, 0, 16, 8, 1))

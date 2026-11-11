@@ -508,7 +508,7 @@ def test_beside_sampled_proofs_pearl_c_is_admitted_only_in_a_window_cut_at_its_s
 
     assert pouw.cuts("pearl-c-h100-v1-h3") and not pouw.cuts("ncp-v2") and not pouw.cuts("ncp-v1")
     assert PO.refusals(_cut_window(PEARL)) == ()
-    uncut = (f"{PEARL}: executes {APPLY}, and no Definition computes what it does there: sampled proofs takes it only in a "
+    uncut = (f"{PEARL}: executes {APPLY}, and no Definition computes what it does there: SPOT takes it only in a "
              f"window whose circuit is cut at its sites and reads the tables its calls commit (window_class.PearlTables), "
              f"which the sampled-proofs setting 'cut' names ({{\"sampled-proofs\": {{\"cut\": \"{PEARL}\"}}}})")
     assert PO.refusals(_cut_window()) == (uncut,)

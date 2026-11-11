@@ -328,7 +328,7 @@ def declarations(plan: Plan) -> IF.Registered | None:
             params[param] = leaves
             tables.append(IF.Table(param, param, 0, leaves // E, E))
             roots += [IF.TableRead(t, "in1", param, "root", at, n), IF.TableRead(t, "in2", param, "domain", at, n)]
-            openings.append(IF.Opening(t, param, "in0", ("in3", "in4", "in5"), "o1", at, n))
+            openings.append(IF.TableOpening(t, param, "in0", ("in3", "in4", "in5"), "o1", at, n))
     return IF.Registered(params, tuple(tables), (), tuple(roots), tuple(openings)) if tables else None
 
 

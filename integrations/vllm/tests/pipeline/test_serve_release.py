@@ -235,7 +235,7 @@ def test_a_window_that_reaches_no_release_frees_its_pool_and_is_refused_by_name(
     with pytest.raises(RuntimeError, match="draw-gated release"):
         dev.open_range(0, 0, 1)
     with pytest.raises(SL.Refused, match="reached no release"):
-        draws.put(0, "sampled_proofs", [])
+        draws.put(0, "spot", [])
     reads = [(2, "model.layers.0.mlp.down_proj", 0, 1)]
     assert len(draws.refused(0, reads, dev)) == 1 and DROPPED in draws.refused(0, reads, dev)[0]
     assert draws.summary()["discarded"] == {0: draws.discarded[0]}

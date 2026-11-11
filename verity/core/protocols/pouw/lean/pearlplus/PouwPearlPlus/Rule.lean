@@ -1,6 +1,7 @@
 module
 
 public import PouwPearlPlus.Words
+meta import PouwPearlPlus.Words
 
 /-!
 # The tile rule on an opened tile (`clear_work.check_opened`, `pearl_c_debit`, `verify_run.check_y`)
@@ -18,9 +19,11 @@ After a tile's openings and digest pass, the record decides it, in `check_opened
   per credited row's element (i, l), l < k, that is salt-dead (`saltDead`: the support's two ends agree) or whose atom
   block every word of the row over the credited columns flags. In integers, with D the words' inert work and E the
   elements, the tile keeps its inert-work bound when 400·(n·D + 64·|cols|·E) ≤ creditOf(1, |K|, n)·|rows|·|cols|.
-* **The served y** (`check_y`), on a call that commits one: each real row of the tile opens against the call's y root, and
-  its word at column j is `RN_bf16(RN(RN(U · RN(1/α_A)) · RN(1/α_B)))` widened, `pearl_c_u.y`: `unscale`, the copy of the
-  served y's Definition (`Pouw.PearlC.unscale`, `PearlCUnscale_v1` at `BIAS` off), where each step stays finite.
+* **The served y** (`check_y`), on a call that commits one: each real row of the tile opens against the call's y root,
+  holds a word for each of the tile's columns (the opening doesn't bind how many words a row has; one that ends before
+  the tile's last column is refused, `the opened row holds N words`), and its word at column j is
+  `RN_bf16(RN(RN(U · RN(1/α_A)) · RN(1/α_B)))` widened, `pearl_c_u.y`: `unscale`, the copy of the served y's Definition
+  (`Pouw.PearlC.unscale`, `PearlCUnscale_v1` at `BIAS` off), where each step stays finite.
 
 A debit replay that leaves the finite range raises in the Python (`P.Reject`, uncaught by `verify_passes`); here it refuses
 the tile, `the debit replay: …`.
@@ -298,14 +301,30 @@ def H200_Y : List (Nat × Nat × Nat × Nat) :=
 
 theorem yOf_h200 : H200_Y.all (fun (u, a, b, y) => yOf u a b == some y) = true := by decide
 
-/-- `check_y`'s word check: row x of the tile's real rows (`words` its opened FP32 words, the call's whole width) against
-the tile's U. -/
+/-- `check_y`'s word check: row x of the tile's real rows (`words` its opened FP32 words) against the tile's U. A row is
+first held to the tile's columns, `width` their end (the last column + 1): the y opening binds a row's value and not how
+many words it has, and a read past a row's end is 0, the word of an unscale of +0, so a row that ends before `width` is
+refused before any of its words is read. -/
 def yReason (rows cols : List Nat) (ops : Ops) (ch : Checked) (opened : List (Array Nat)) : Option String := Id.run do
+  let width := cols.foldl (fun w j => max w (j + 1)) 0
   for (words, x) in opened.zipIdx do
+    if words.size < width then
+      return some s!"y[{rows[x]!}]: the opened row holds {words.size} words, the tile's columns end at {width}"
     for (j, z) in cols.zipIdx do
       match yOf ch.u[x]![z]! ops.a.alpha[x]! ops.b.alpha[z]! with
       | none => return some s!"y[{rows[x]!}, {j}]: the unscale of U leaves the finite range"
       | some want => if words[j]! != want <<< 16 then return some s!"y[{rows[x]!}, {j}] is not the unscale of the tile's U"
   return none
+
+-- Row 7 over columns 2 and 3, U = +0 at α = 1 on both, so each cell's unscale is +0 and its word 0, what a read past a
+-- row's end gives: the whole row passes, and a row that ends at column 3, or before the tile, is refused by its length.
+#guard
+  let side (n : Nat) : Formed := { (default : Formed) with alpha := Array.replicate n UNSCALE_ONE }
+  let ops : Ops := { (default : Ops) with a := side 1, b := side 2 }
+  let y := yReason [7] [2, 3] ops ⟨#[], #[#[0, 0]]⟩
+  yOf 0 UNSCALE_ONE UNSCALE_ONE == some 0 && y [#[5, 5, 0, 0]] == none &&
+    y [#[5, 5, 0]] == some "y[7]: the opened row holds 3 words, the tile's columns end at 4" &&
+    y [#[]] == some "y[7]: the opened row holds 0 words, the tile's columns end at 4" &&
+    y [#[5, 5, 0, 1]] == some "y[7, 3] is not the unscale of the tile's U"
 
 end PouwCheck.PearlPlus.Rule

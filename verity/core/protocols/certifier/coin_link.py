@@ -48,19 +48,9 @@ from dataclasses import asdict, dataclass, field
 from functools import cached_property
 from typing import Any
 
-<<<<<<< 99c8914848
 from verity.core.protocols.certifier.grid import Certifier, GridParams, Reason, BlockGrid, row_count
-from verity.core.protocols.sampled_proofs.challenger import CoinError, LiveCommitment, LiveOpening, live_reason
-from verity.core.protocols.sampled_proofs.remote import HEADER, MAX_HEAD
-||||||| merged common ancestors
-from verity.core.protocols.certifier.grid import Certifier, GridParams, Reason, Record, row_count
-from verity.core.protocols.sampled_proofs.challenger import CoinError, LiveCommitment, LiveOpening, live_reason
-from verity.core.protocols.sampled_proofs.remote import HEADER, MAX_HEAD
-=======
-from verity.core.protocols.certifier.grid import Certifier, GridParams, Reason, Record, row_count
 from verity.core.protocols.spot.challenger import CoinError, LiveCommitment, LiveOpening, live_reason
 from verity.core.protocols.spot.remote import HEADER, MAX_HEAD
->>>>>>> 7af4d24fca3e
 from verity.ml.commitments.identity import canonical_json_bytes, tagged_sha512
 
 PARAMETERS_TAG = "verity-network-coin-link/parameters/v1"

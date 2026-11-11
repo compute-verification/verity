@@ -1,4 +1,4 @@
-"""served_cases.py: sampled proofs' one-stage v1 case (onsite's), remote's sampled proofs case (`verity/sampled-proofs/v1`:
+"""served_cases.py: one-stage v1's case (no composite's), the sampled proofs case (`verity/sampled-proofs/v1`:
 v2's case, ``case-v2.json``, in the form ``one-stage``) and the inference-only case (`verity/inference-only/v0`) for a
 served window, from its records audit's v1 case (a5's ``window/case.json``), PoUW's period case once its windows name the
 same record, Pearl+'s run case from the parts its piece wrote, its commitment naming that record, and with ``--v2`` its
@@ -42,16 +42,17 @@ import pytest
 
 from verity.core.protocols.pouw import credit as Cr
 from verity.core.protocols.pouw import weights as PW
-from verity.core.protocols.sampled_proofs import service as S
-from verity.core.protocols.sampled_proofs.one_stage import draw as DR
-from verity.core.protocols.sampled_proofs.one_stage import partition as P
-from verity.core.protocols.sampled_proofs.one_stage import proofs as PF
-from verity.core.protocols.sampled_proofs.one_stage import registered as G
-from verity.core.protocols.sampled_proofs.one_stage import registration as R
+from verity.core.protocols.spot import service as S
+from verity.core.protocols.spot.one_stage import draw as DR
+from verity.core.protocols.spot.one_stage import partition as P
+from verity.core.protocols.spot.one_stage import proofs as PF
+from verity.core.protocols.spot.one_stage import registered as G
+from verity.core.protocols.spot.one_stage import registration as R
 from verity.ml.circuits import codec, partition_object as PO
 from verity.ml.circuits.defs import CompositeDefinition, PrimitiveDefinition, bind
 from verity.ml.circuits.program import Program
 from verity.ml.circuits.types import Array, Value as Bits
+from verity.ml.crypto import lms
 
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE.parent))
@@ -125,8 +126,9 @@ def toy() -> tuple[object, dict]:
 
 def audit_dir(root: Path, v1: dict, *, v2: bool | str = True) -> Path:
     """A records audit's out directory holding v1's case and, with ``v2``, a5's v2 case over two blob files (a string:
-    a5's ``case-v2-error.txt`` instead). The v2 case's params name a challenger (a stand-in key of LMS's form) and its
-    window's root, without which v2's Lean refuses the params before it reads the record."""
+    a5's ``case-v2-error.txt`` instead). The v2 case's params name a challenger (a stand-in key of LMS's form at the
+    deployed parameters, the only ones v2 reads a key under) and its window's root, without which v2's Lean refuses
+    the params before it reads the record."""
     w = root / "audit" / "window"
     w.mkdir(parents=True)
     (w / "case.json").write_text(json.dumps(v1, sort_keys=True))
@@ -138,12 +140,14 @@ def audit_dir(root: Path, v1: dict, *, v2: bool | str = True) -> Path:
         for b in blobs:
             b.write_bytes(b.name.encode())
         evidence = {k: x for k, x in json.loads(bytes.fromhex(v1["evidence"])).items() if k != "verdicts"}
-        evidence["proofs"] = {"public": "aa" * 64, "sessions": [{"name": "5e" * 64, "record": "bb" * 64, "reps": {}}]}
+        evidence["proofs"] = {"sessions": [{"name": "5e" * 64, "record": "bb" * 64, "reps": {}}]}
+        key = {"H": lms.DEPLOYED.H, "W": lms.DEPLOYED.W, "public": "00" * 80}
         (w / "case-v2.json").write_text(json.dumps({
             "blobs": [str(b) for b in blobs], "commitment": v1["commitment"],
             "evidence": codec.canonical_json(evidence).hex(),
-            "params": {**v1["params"], "challenger": {"key": {"H": 5, "W": 4, "public": "00" * 80}, "label": "draw"},
-                       "proofs": {"circuit": "cc" * 64, "registered": None}, "window_root": "0f" * 64}},
+            "params": {**v1["params"], "challenger": {"key": key, "label": "draw"},
+                       "proofs": {"circuit": "cc" * 64, "public": "aa" * 64, "registered": None},
+                       "window_root": "0f" * 64}},
             sort_keys=True))
     return root / "audit"
 
@@ -367,6 +371,25 @@ def test_without_v2_no_v2_case_is_made(tmp_path, capsys):
     assert refused == [{"protocol": SAMPLED, "reason": "no v2 case: ValueError: this audit's are plain"}], refused
     assert sorted(p.name for p in private.iterdir()) == ["inference-only", "sampled-proofs-v1", "scratch"]
     assert not (tmp_path / "sampled.seen").exists()
+
+
+def test_on_a_tree_without_the_policy_the_inference_only_case_is_refused_by_name(tmp_path, capsys, monkeypatch):
+    """Where the tree leaves the inference-only policy out (the public release: no module `SC.POLICY`, which names the
+    policy's Lean package and the Python its check is held to), the inference-only case is refused saying so, never
+    skipped, its Lean never runs, and v1's and sampled proofs' cases are still written; a caller that asks for the
+    package is refused the same way."""
+    program, query = toy()
+    v1 = v1_case(program, query)
+    private = tmp_path / "private"
+    monkeypatch.setattr(SC, "POLICY", "a_module_this_tree_leaves_out")
+    rc, cases, refused, out = run(capsys, "--audit", audit_dir(tmp_path, v1), "--private", private,
+                                  "--alpha", "1", "--gamma", 1, *stand_ins(tmp_path, v1))
+    assert rc == 1 and [c["protocol"] for c in cases] == [V1, SAMPLED], out
+    assert [r["protocol"] for r in refused] == [INF] and "is not on this tree" in refused[0]["reason"], refused
+    assert sorted(p.name for p in private.iterdir()) == ["sampled-proofs", "sampled-proofs-v1", "scratch"]
+    assert not (tmp_path / "reg.seen").exists()
+    with pytest.raises(SC.Refused, match="is not on this tree"):
+        SC.build(*SC.INFERENCE_ONLY_LEAN)
 
 
 @lean

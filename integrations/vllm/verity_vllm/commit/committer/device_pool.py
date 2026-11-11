@@ -10,17 +10,11 @@ bytes leave no room for is refused by name, since no release can come before tha
 
 `gather` is the release's: given the sampled leaves of a step it copies exactly their bytes to host as a `DrawnRanges` and the
 step's device views are dropped; a read of any other leaf of the step is refused by name (`DrawnRanges.dropped`), never answered
-<<<<<<< 99c8914848
-from a recomputation. The step's tree levels and salt key stay, so a drawn leaf's opening path is whole.
+from a recomputation. The step's tree levels and salt key stay, so a sampled leaf's opening path is whole.
 
 A failed run ends every take waiting on the pool by name (`DevicePool.fail`, from `serve_release.Draws.fail`): the step fails
 uncommitted rather than wait on a release that won't come. A window that reaches no release (its draws or its close failed) is
 `discard`ed: every byte it retained dropped, its pieces freed, any read of it refused by name.
-||||||| merged common ancestors
-from a recomputation. The step's tree levels and salt key stay, so a drawn leaf's opening path is whole.
-=======
-from a recomputation. The step's tree levels and salt key stay, so a sampled leaf's opening path is whole.
->>>>>>> 7af4d24fca3e
 """
 from __future__ import annotations
 

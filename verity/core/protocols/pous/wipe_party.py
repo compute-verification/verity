@@ -74,16 +74,8 @@ def params_of(request: Mapping[str, Any], reads: int = READS) -> sw.WipeParams:
 
 def serve(f: BinaryIO, request: Mapping[str, Any], *, signer: mc.Signer, log: mc.SessionLog, egress_bits: int,
           reads: int = READS, clock: Callable[[], int] = time.perf_counter_ns, chunk: int = CHUNK,
-<<<<<<< 99c8914848
           fill: Callable[[bytes, int], Any] | None = None) -> sw.WipeMemoryChallenger:
-    """The challenger's side of one wipe over the connection `f`: the labels' secret and the session id drawn here, the
-||||||| merged common ancestors
-          fill: Callable[[bytes, int], Any] | None = None) -> sw.Challenger:
-    """The challenger's side of one wipe over the connection `f`: the labels' secret and the session id drawn here, the
-=======
-          fill: Callable[[bytes, int], Any] | None = None) -> sw.Challenger:
     """The challenger's side of one wipe over the connection `f`: the labels' secret and the session id sampled here, the
->>>>>>> 7af4d24fca3e
     fill streamed (by `fill(K, N)` when given, which writes the frames to `f`'s connection itself: the native streamer,
     `wipe_stream`), `reads` batches revealed and their answers read on `clock`, the session signed by `signer` with
     `egress_bits` once it ends. A prover that closes first leaves it unsigned."""

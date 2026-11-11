@@ -1,5 +1,62 @@
 # Network certifier (`verity.core.protocols.certifier`)
 
+## The network bound
+
+The network bound limits what a covert sender in the serving node can tell a client through the network certifier
+beyond what the registered Program computes from its committed values: per execution phase, the probability that an
+accepted audit leaves the certified traffic outside what that Program accepts, and over a monitoring period, the number
+of bits of such a sender's secrets a decoder recovers from the client's view.
+
+The guarantee is `NetTiming.Guarantees.PeriodLeakAccepted`
+(`Security/Definitions/NetworkCertifier/Guarantees/Period.lean`), proved as
+`NetTiming.SecurityProofs.PeriodLeakAccepted` (`Security/Proofs/NetworkCertifier/Period.lean`). Over a monitoring
+period of n execution phases (the Lean's windows), execution phase i audited by the compiled sampled verifier at its
+registered statement, with one network certifier on the server's uplink running its code on schedules in `Ss`:
+
+- per execution phase, at a statement in scope, `Pr[accept ∧ ¬RLeakCertifier(δ)] ≤ δ + ε_ks + ε_bind + Pr[B_tap]`;
+- where the network certifier registers its observations in every execution phase, the secrets whose every execution
+  phase meets its good event (`WindowGood`) number at most
+  `#Ss · ∏_c (cap_c + 1) · ∏_i 2^#(freeInputs_i \ reg_i) · #faultySets_i(δ) · 2^β_i · Dj^k_i`, that is
+  `log2 #Ss + Σ_c log2 (cap_c + 1) + Σ_i (#(freeInputs_i \ reg_i) + log2 #faultySets_i(δ) + β_i + k_i · log2 Dj)` bits.
+
+`RLeakCertifier(δ)` says every observation sequence the network certifier registers is one the registered Program
+accepts at the trace's committed values with some incorrect set the audit allows at δ. ε_ks and ε_bind are the sampled
+verifier's errors (`Compiled.KS`'s) and `B_tap` a collision between the extracted trace's openings and the network
+certifier's. `cap_c` bounds connection c's cells; `freeInputs_i \ reg_i` are execution phase i's free inputs (the
+advice) outside its registered inputs; `faultySets_i(δ)` are its possible incorrect sets at δ and β_i bounds the bits
+any of them commits; k_i is its steps and `Dj` bounds each step's jitter class.
+
+It bounds each execution phase's failure on its own: the union over the monitoring period's live coins is not stated,
+and `WindowGood` adds a condition no proof gives, the registration's values at the prover's registered inputs. It is a
+statement about the network certifier's code (`recordingCode`), not about runs of the network check's Lean
+(`../network/lean`, `NetworkCheck`), which is the verifier's code and states no bound.
+`NetTiming.Guarantees.PooledLeakAccepted` (`Security/Definitions/NetworkCertifier/Guarantees/PooledLeak.lean`) is the
+pooled count, with the incorrect proof blocks paid for once over the monitoring period,
+`#Ss · ∏_c (cap_c + 1) · (N + 1)^Fmax · 2^(b · Fmax) · ∏_i 2^#(freeInputs_i \ reg_i) · Dj^k_i` at `Fmax ≥ ln(1/δ)/q`
+(N the period's proof blocks, b each one's committed bits, q the per-execution-phase detection probability), failing
+with probability at most `δ + Σ_i e_i + Σ_i e'_i`. It is conditional on two per-execution-phase hypotheses not yet
+discharged (`hesc`, the conditional escape; `hleak`, the leak relation at the witness's incorrect set), so it is not
+yet the deployed system's bound over a monitoring period.
+
+What `PeriodLeakAccepted` takes, as its record in the lock (`Security/lean-audit.json`, `guarantees`) lists it. Named
+assumptions: none. A premise that is part of what it says (`domain`):
+
+- `Claims.Sampling.CommitmentScheme.Binds`: the trace's commitment binds, a break giving an explicit collision.
+
+Open premises (`open`):
+
+- `Verity.Assumptions.TrustedHost` (`trusted-host`): the network certifier, the auditor's device on a host the developer
+  doesn't control, runs its stated code.
+- `Claims.SamplingGeneric.Compiled.KS`: the compiled sampled verifier is knowledge sound at its errors on the
+  statements in scope.
+- `NetTiming.ScopeAcc`: the statement is in the sampling scope and its boundary layout fits its Program over its steps.
+- `NetTiming.CertifierRegisters`: the network certifier's openings pass under the statement's roots, cover every
+  egress and ingress gate, and hold its record's rows there; the antecedent of the period's count.
+
+`PooledLeakAccepted`'s record lists one open premise, `Verity.Assumptions.TrustedHost`.
+
+## What this package holds
+
 A spec-level reference for network accounting's timing channel:
 - the constant-rate, left-packed certifier;
 - the Program's logical schedule, with its clock-sync advice (δ, ρ);
@@ -224,7 +281,6 @@ A spec-level reference for network accounting's timing channel:
   grain, which contains the gate grain's, held to `prog_fits`, `BoundaryGates.Fits` itself on a flattened program; the scan's
   state and view chains are wires of the record. A frame that is a parameter row, an input, is refused by name. `Fits`
   stays structural: a served window fits in the step-indexed scan's form, and a window in any other form is refused;
-<<<<<<< 99c8914848
 - the transfer rows (`transfer_rows`): a host's load, each value of the weights it loads once a session (the one kind,
   ``load``, ingress), committed as a registered value under the network certifier's own salts at the reading port's
   leaf width and row format, its root in a head the certifier signs for the session's first execution phase
@@ -232,21 +288,6 @@ A spec-level reference for network accounting's timing channel:
   `check_registration` is the verifier's read of it for the transfer it expects, and `port` the verifier's own
   `--registered` port of the value at the signed root (the load relayed and committed as it crosses,
   `benchmarks/network_traces/load_relay.py`);
-||||||| merged common ancestors
-- the transfer rows (`transfer_rows`): every value that crosses a server block's boundary, the weights' load, a
-  window's request bytes in and generated bytes out, and a wire between two servers, committed as a registered value
-  under the network certifier's own salts at the reading port's leaf width and row format, its root in a head the
-  certifier signs for the link-window (`TransferHead`, `registration`). `check_registration` is the verifier's read of
-  it for the transfer it expects, and `port` the verifier's own `--registered` port of the value at the signed root
-  (the load relayed and committed as it crosses, `benchmarks/network_traces/load_relay.py`);
-=======
-- the transfer rows (`transfer_rows`): every value that crosses a server block's boundary, the weights' load, a
-  window's request bytes in and generated bytes out, and a wire between two servers, committed as a registered value
-  under the network certifier's own salts at the reading port's leaf width and row format, its root in a head the
-  certifier signs for the execution phase (`TransferHead`, `registration`). `check_registration` is the verifier's read of
-  it for the transfer it expects, and `port` the verifier's own `--registered` port of the value at the signed root
-  (the load relayed and committed as it crosses, `benchmarks/network_traces/load_relay.py`);
->>>>>>> 7af4d24fca3e
 - the class circuit's check (`blocks`): a circuit record is one host's class window circuit, and which host runs which
   units, and which request occupies which slot and step, are private, placed by the scan inside the zero-knowledge
   proof; the class circuit and its padded counts (proof blocks per host, bits per link) are public, and its ``blocks``

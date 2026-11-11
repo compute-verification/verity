@@ -40,8 +40,8 @@ import hashlib
 
 from verity.core.protocols.pouw import credit as C
 from verity.core.protocols.pouw import weights as W
-from verity.core.protocols.sampled_proofs.one_stage import registered as G
-from verity.core.protocols.sampled_proofs.one_stage import registration as R
+from verity.core.protocols.spot.one_stage import registered as G
+from verity.core.protocols.spot.one_stage import registration as R
 
 H1 = hashlib.sha512(b"the H1 window Program's descriptor").hexdigest()
 I2 = hashlib.sha512(b"V3c's I2 window circuit's population Program").hexdigest()

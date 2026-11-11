@@ -514,7 +514,7 @@ def retain(args: argparse.Namespace) -> int:
     if not rounds:
         return 1
     if args.window_record:
-        from verity.core.protocols.sampled_proofs.one_stage import registration as REG
+        from verity.core.protocols.spot.one_stage import registration as REG
         from verity_vllm.protocols.pouw.pearl_c import window as PWR
 
         try:

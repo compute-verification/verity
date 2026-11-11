@@ -58,16 +58,10 @@ def tree_of_record(root: str | os.PathLike | None = None) -> dict:
     """The executing tree BY CONTENT beside git_head: `source_identity.code_identity` of the repository this module runs from (`root`
     overrides it) -- its import closure, the integration plus Verity core, the same identity the hot Commit worker keys on -- so a dirty
     tree cannot pass as the tagged commit by git_head alone."""
-    from verity_vllm.pipeline import source_identity
+    from verity_vllm.pipeline import research_tools, source_identity
     root = Path(root) if root is not None else source_identity.TREE
-<<<<<<< 99c8914848
-    return {"source": "source_identity.code_identity", "root": str(root), "closure": source_identity.closure(), **source_identity.code_identity(root)}
-||||||| merged common ancestors
-    return {"source": "source_identity.code_identity", "root": str(root), "closure": list(research_tools.CLOSURE), **source_identity.code_identity(root)}
-=======
     ident = source_identity.code_identity_of("the TP Commit's tree of record", root)
     return {"source": "source_identity.code_identity", "root": str(root), "closure": list(research_tools.CLOSURE), **ident}
->>>>>>> 7af4d24fca3e
 
 
 def weights_as_loaded(pin: dict | None) -> partial | None:

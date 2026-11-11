@@ -73,14 +73,6 @@ their floor.
 
 - `served_window.py`: the served window (Llama-3.2-1B int8, T 8,192 on the H200, one step a window) cut at each rung of
   a ladder (K-chunks of the int8 linears, output coordinates, tiles, and fused attention/MLP, layer and 4-layer proof
-<<<<<<< 99c8914848
-  blocks that commit only the residual and K, V; attention in key blocks), a rung fitting only when C-Flock's block holds
-  every proof block of it (`inputs.cap`), for the free-compute target (a window, a week, a year pooled) and
-  the exfiltration target, in the planner's two modes (proving only, and proving plus w times the serve-time
-  commitment) at two readings of a hashed byte's cost, through `grain_costs` and `for_target`; then the chunk family's
-  optimum against √(wβhC/(oΛ)). It writes `served_window.json` and `served_window.md`.
-||||||| merged common ancestors
-=======
   blocks that commit only the residual and K, V), for the free-compute target (a window, and pooled over a week, a month
   and a year) and the exfiltration target, in the planner's two modes (proving only, and proving plus w times the serve-time
   commitment) at two readings of a hashed byte's cost, through `grain_costs` and `for_target`, and the second mode again
@@ -89,7 +81,6 @@ their floor.
   then the chunk family's optimum against √(wβhC/(oΛ)). A rung fits when Flock's block holds each of its proof blocks (`inputs.cap`). Its
   inputs, each with its status and source, are `served_window_inputs.json`; it writes `served_window.json` and
   `served_window.md`.
->>>>>>> 7af4d24fca3e
 
 ```text
 uv run python benchmarks/sampling_plan/int8_llama.py --out DIR [--model qwen3-8b] [--scheme pearl-c] [--weights]
@@ -99,15 +90,6 @@ uv run python benchmarks/sampling_plan/h200.py --out DIR [--share S] [--batch B]
 uv run python benchmarks/sampling_plan/demo_a.py --out DIR [--spans NAME ...] [--no-frontier]
 ```
 
-<<<<<<< 99c8914848
-- `cpu_budget.py`: the block's draw sized to a CPU proving budget. It reads `h200.py`'s `plan.json` (its
-  templates, their n, S, rows and ANDs), prices each template's statements (up to 8 drawn units each) from measured
-  firewalled Flock `--zk` sessions on the Genoa proofs slots, and finds the least share whose statements fit
-||||||| merged common ancestors
-- `cpu_budget.py`: the block's draw sized to a CPU proving budget. It reads `h200.py`'s `plan.json` (its
-  templates, their n, S and proved ANDs), prices each template's statements (up to 8 drawn units each) from measured
-  firewalled Flock `--zk` sessions on the Genoa proofs slots, and finds the least share whose statements fit
-=======
 - `glm53.py`: GLM-5.3 as served (vLLM, H200, TP8, FP8) as the planner's candidates, from its proof-block census
   (`glm53_blocks.json`, `benchmarks/one_stage/block_census.py`'s card over the Commit Build it names, the census in the
   store): each proof-block Definition one candidate, its units one request's count over every rank, its work its
@@ -120,9 +102,8 @@ uv run python benchmarks/sampling_plan/glm53.py [--requests N]
 ```
 
 - `cpu_budget.py`: the block's sample sized to a CPU proving budget. It reads `h200.py`'s `plan.json` (its
-  templates, their n, S and proved ANDs), prices each template's statements (up to 8 sampled proof blocks each) from measured
+  templates, their n, S, rows and ANDs), prices each template's statements (up to 8 sampled proof blocks each) from measured
   ZK-served Flock `--zk` sessions on the Genoa proofs slots, and finds the least share whose statements fit
->>>>>>> 7af4d24fca3e
   `--slots` x `--hours`. It writes the per-template k and cost and the certified units per window and per period, pooled
   and each block, at δ = 1% and 1e-6 (`cpu-budget.json`, `cpu-budget.md`).
 

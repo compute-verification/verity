@@ -24,39 +24,13 @@ def steps(k: int) -> dict:
             2: [("model.layers.0.mlp.down_proj", bytes(i % 251 for i in range(3000 * k)))]}
 
 
-<<<<<<< 99c8914848
-@pytest.fixture(params=[None, R.NAME], ids=["vllm-v1", R.NAME])
-def cs(request):
-    return request.param
-
-
-def committed(cs, values=None, extra=None):
-||||||| merged common ancestors
-@pytest.fixture(params=[None, R.NAME], ids=["vllm-v1", R.NAME])
-def cs(request):
-    return request.param
-
-
-def committed(cs, values=None):
-=======
-def committed(values=None):
->>>>>>> 7af4d24fca3e
+def committed(values=None, extra=None):
     """Steps committed as --retain host keeps them (their blocks, ``host``), then moved into a device pool as --retain device holds them:
-<<<<<<< 99c8914848
     ``values`` (`commit_steps`' form), else `steps`'; ``extra`` adds members by step."""
-    k = (R.ROW_BYTES if cs else GPU_CHUNK_BYTES) // 256
-    st = dict(values or steps(k))
+    st = dict(values or steps(R.ROW_BYTES // 256))
     for s, members in (extra or {}).items():
         st[s] = st[s] + members
-    dev, rc = commit_steps(st, commit_scheme=cs)
-||||||| merged common ancestors
-    ``values`` (`commit_steps`' form), else `steps`'."""
-    k = (R.ROW_BYTES if cs else GPU_CHUNK_BYTES) // 256
-    dev, rc = commit_steps(values or steps(k), commit_scheme=cs)
-=======
-    ``values`` (`commit_steps`' form), else `steps`'."""
-    dev, rc = commit_steps(values or steps(R.ROW_BYTES // 256))
->>>>>>> 7af4d24fca3e
+    dev, rc = commit_steps(st)
     host = {s: bytes(blk.numpy()) for s, (blk, _u) in dev._gpu_blocks.items()}
     dev.device_pool = DP.DevicePool(sum(len(b) for b in host.values()) + 4096 * len(host), device="cpu")
     for s, (blk, used) in list(dev._gpu_blocks.items()):
@@ -115,18 +89,17 @@ def test_a_dropped_leaf_is_refused_by_name_never_replayed(tmp_path):
         dev._gpu_blocks[0][0][0:dev.chunk]
 
 
-<<<<<<< 99c8914848
-def test_a_released_window_dumps_slim_to_its_drawn_leaves(cs, tmp_path):
-    C = R.ROW_BYTES if cs else GPU_CHUNK_BYTES
-    host, rc, dev = committed(cs, {0: [("model.embed_tokens", (bytes(range(251)) * (200 * C // 251 + 1))[:200 * C])]})
+def test_a_released_window_dumps_slim_to_its_drawn_leaves(tmp_path):
+    C = R.ROW_BYTES
+    host, rc, dev = committed({0: [("model.embed_tokens", (bytes(range(251)) * (200 * C // 251 + 1))[:200 * C])]})
     runs = [(3, 6), (100, 101), (199, 200)]
     DP.release(dev, {0: [i for a, b in runs for i in range(a, b)]})
     doc = SD.dump(dev, rc, tmp_path / "w")
     st = doc["steps"][0]
     assert st["drawn_only"] and st["ranges"] == [[a * C, b * C] for a, b in runs]
     assert 0 < len(st["nodes"]) < sum(st["levels"]) // 3
-    assert (tmp_path / "w" / "levels" / "s0.bin").stat().st_size == SD._node(dev) * len(st["nodes"])
-    assert not (tmp_path / "w" / "keys.bin").exists() and (st.get("salted") == [list(r) for r in runs]) == bool(cs)
+    assert (tmp_path / "w" / "levels" / "s0.bin").stat().st_size == SD.NODE * len(st["nodes"])
+    assert not (tmp_path / "w" / "keys.bin").exists() and st.get("salted") == [list(r) for r in runs]
     store, run = SD.load(tmp_path / "w")
     assert [s.root for s in run.steps] == [s.root for s in rc.steps]
     rd = OV.OpenedReader(store, run)
@@ -141,15 +114,8 @@ def test_a_released_window_dumps_slim_to_its_drawn_leaves(cs, tmp_path):
     assert again["steps"][0]["nodes"] == st["nodes"] and again["steps"][0]["ranges"] == st["ranges"]
 
 
-def test_a_release_names_only_committed_leaves_and_happens_once(cs):
-    _host, _rc, dev = committed(cs)
-||||||| merged common ancestors
-def test_a_release_names_only_committed_leaves_and_happens_once(cs):
-    _host, _rc, dev = committed(cs)
-=======
 def test_a_release_names_only_committed_leaves_and_happens_once():
     _host, _rc, dev = committed()
->>>>>>> 7af4d24fca3e
     with pytest.raises(KeyError, match="steps \\[7\\]"):
         DP.release(dev, {7: [0]})
     with pytest.raises(IndexError, match="leaves, not"):
@@ -227,8 +193,8 @@ def test_serve_openai_refuses_retain_device_without_the_rows_commit_or_room_for_
     assert SL.retention_refusal(opts(retention={"retain": "host", "retain_device_gb": 1.0, "release_after": ""})) is None
 
 
-def test_a_discarded_window_frees_its_pool_even_when_its_worker_failed(cs):
-    host, _rc, dev = committed(cs)
+def test_a_discarded_window_frees_its_pool_even_when_its_worker_failed():
+    host, _rc, dev = committed()
 
     def failed():
         raise RuntimeError("worker failed")

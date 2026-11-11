@@ -474,16 +474,8 @@ class PearlC:
     device's own by default; another record marks the name ``…@<device>`` (the H100's atom at sm_120's prices is
     ``pearl-c-h100-v1@sm_120``)."""
 
-<<<<<<< 99c8914848:verity/core/protocols/pouw/schemes/pearl_c.py
     def __init__(self, k_min: int = K_MIN, tile: tuple[int, int] = (TILE, TILE), forming: str = "v0", device: Device = H100,
-                 hashing: str = "h0", prices: Prices | None = None):
-||||||| merged common ancestors:verity/core/protocols/pouw/schemes/pearl_c.py
-    def __init__(self, k_min: int = 1024, tile: tuple[int, int] = (TILE, TILE), forming: str = "v0", device: Device = H100,
-                 hashing: str = "h0", prices: Prices | None = None):
-=======
-    def __init__(self, k_min: int = 1024, tile: tuple[int, int] = (TILE, TILE), forming: str = "v0", device: Device = H100,
                  hashing: str = "h3", prices: Prices | None = None):
->>>>>>> 7af4d24fca3e:verity/ml/protocols/pouw/schemes/pearl_c.py
         if forming not in ("v0", "v1"):
             raise ValueError(f"forming {forming!r}: v0 (the H100 port's) or v1 (§5's)")
         if forming == "v0" and device != H100:

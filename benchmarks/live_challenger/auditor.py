@@ -15,14 +15,7 @@ tree, one session a window, each recorded in a signed append-only ledger before 
                                            | --traffic varied [--rate R] [--prompt-range LO:HI | --prompts < PROMPTS]
                                              [--seed S] [--eos-ids ID,...] [--compact B] [--margin M])
     vy-challenger-gate warden-rehearse --peer NAME --port PORT --minutes M [--requests N] [--tokens N] [--height H]
-<<<<<<< 99c8914848
-                                       [--temperature T] [--top-p P]
-||||||| merged common ancestors
-                                       [--temperature T] [--top-p P]
-                                       [--scan [--bucket-ms MS] [--prompts [--window-per-group]] < PROMPTS]
-=======
                                        [--temperature T] [--top-p P] [--watermark]
->>>>>>> 7af4d24fca3e
                                        [--scan [--bucket-ms MS]
                                         [--prompts [--scan-class w63|w63k4] [--window-per-group]] < PROMPTS]
     vy-challenger-gate weights-write [--shape h200|tiny]

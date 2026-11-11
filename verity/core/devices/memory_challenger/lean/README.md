@@ -9,7 +9,7 @@ one directory up).
 ## Top-level API
 
 - `MemoryChallenger.verdict` (`MemoryChallenger/Verdict.lean`): the check of a signed run of timed rounds against the
-  commitment published before it; it fails closed, and its reasons are the Python's word for word.
+  commitment released with it; it fails closed, and its reasons are the Python's word for word.
 - `MemoryChallenger.protocol` (`MemoryChallenger/Protocol.lean`): that verdict as a core protocol, the executable
   `memory-challenger`; its public output is the verdict alone.
 - `MemoryChallenger.Judge.judge` (`MemoryChallenger/Judge.lean`): the verdict on a record as its caller holds it, the

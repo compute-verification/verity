@@ -40,8 +40,8 @@ from collections.abc import Callable, Mapping
 from pathlib import Path
 from typing import Any
 
-from verity.core.protocols.pouw.schemes import pearl_c as C
-from verity.core.protocols.pouw.schemes.pearl_c_device import H100
+from verity.ml.protocols.pouw.schemes import pearl_c as C
+from verity.ml.protocols.pouw.schemes.pearl_c_device import H100
 
 #: pearl_c_sm90's scheme, one of `pearl_c.SCHEMES`: v1 forming on the device record of an H100 or H200, -h3 hashing
 SCHEME = C.PearlC(forming="v1", device=H100, hashing="h3").name
@@ -88,7 +88,7 @@ def context(config: Mapping[str, Any], pouw: Mapping[str, Any] | None = None) ->
     """The window's composition at stage ``commit``: Pearl+ beside sampled proofs, the circuit cut at Pearl+'s sites, its
     pouw settings ``config``'s with ``pouw`` (the window's transcript dir and coins) over them."""
     from verity_vllm import protocols as PO
-    from verity_vllm.protocols import sampled_proofs as SP
+    from verity_vllm.protocols import spot as SP
 
     return PO.Context(stage="commit", enabled=PO.parse(f"{ENTRY},{SP.NAME}:{SP.DEFAULT_SCHEME}"),
                       settings={"pouw": {**config.get("pouw", {}), **(pouw or {})}, SP.NAME: {PO.CUT: ENTRY}})

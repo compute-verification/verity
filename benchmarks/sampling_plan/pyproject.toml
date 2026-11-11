@@ -18,9 +18,8 @@ inputs = ["verity/__init__.py", "verity/errors.py", "verity/core/__init__.py", "
           "verity/core/protocols/record.py",
           "verity/core/protocols/profile.py", "verity/core/protocols/spot", "verity/core/claims",
           "verity/core/protocols/pouw/__init__.py", "verity/core/protocols/pouw/window.py",
-          "verity/core/periods/__init__.py", "verity/core/protocols/reporting.py",
-          "verity/core/protocols/pous", "verity/ml/__init__.py", "verity/ml/windows",
-          "verity/core/deploy", "verity/core/wire",  # wipe_monitoring reads pous/wipe_party, which runs on deploy.stream.Side
+          "verity/core/protocols/reporting.py",
+          "verity/ml/__init__.py", "verity/ml/windows",
           "verity/ml/circuits", "verity/ml/kernels", "verity/ml/commitments", "verity/ml/crypto",
           "verity/ml/randomness", "benchmarks/census/hardware.json",
           "verity/ml/windows",  # inputs.cap reads C-Flock's composer's sizes (verity.ml.windows.interface)

@@ -88,7 +88,7 @@ def test_every_window_opens_drained(recs):
 def test_the_charge_chain_is_code_v1s_through_forced_admissions(recs):
     """Each window opens on a drained engine, so its first arrival is admitted unasked (`Replay.forced`), which is no
     decision. The certifier's charge chain (`charge_chain.session` at the engine class's D = 32, under the async-light
-    book) over the 339 windows' decisions is `code_v1`'s charge of them alone (`Window(arrived=…)`, every other count
+    book) over the 339 windows' decisions is `code_v1`'s charge of them alone (`Advice(arrived=…)`, every other count
     0) on every window, 5,500 bits: its context ``run`` counts
     decisions only, so a forced admission doesn't reset it as it resets the replay's ``pc``. Charged as a decision (a 1,
     which resets ``run``), each forced admission would change 330 windows' charges."""

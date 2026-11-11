@@ -5,7 +5,6 @@ public import Proofs.Pouw.Lead.PStar.Call
 public import Proofs.Pouw.Lead.PStar.ExpansionProofs
 public import Proofs.Pouw.Lead.PStar.Lanes
 public import Proofs.Pouw.Lead.PStar.Marginal
-public import Proofs.Pouw.Lead.PStar.MassFloorProofs
 public import Proofs.Pouw.Lead.PStar.Stream
 public import Proofs.Pouw.Lead.PStar.Table
 public import Proofs.Pouw.Lead.PStar.Tile
@@ -27,7 +26,6 @@ Its proofs are in `Lead/PStar/`, its new declarations in `Pouw.SecurityProofs.Le
   and `(1, 127, 1)` on odd: `p* = 65/2,097,152` exactly on either class, and the coin sum's range `±16,383`.
 * `Marginal`: a part of the draw caps the whole: a value that moves with one part of the draw only through a term
   hits a fixed value on at most the share that term does.
-* `MassFloorProofs`: point masses at most `p` force a variance of at least `(1/p² − 1)/12`, with its mean over steps.
 * `Stream`: an MMA tile against the certifier's coin stream: at any step the tile's words are a streamed tile on at
   most a `2^−105` share of the call's coins, whatever the data and the stream's arrangement. The stream holds each of
   the tile's 24 lanes once at most, so at least 5 of its columns compare an even and an odd row with words that don't

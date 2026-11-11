@@ -89,18 +89,9 @@ commitments, is refused earlier, for its form (`ProvedScope.check`).
 
 ~~~text
 cd verity/core/service/flock && lake build    # .lake/build/bin/flock-verify and the other executables
-<<<<<<< 99c8914848
-flock-verify verify [--statement ID] [--archive DIR] --circuit F --public pub.bin [--tables DIR] [--coins seed|os] [--zk] \
-    [--program F] [--partition F] [--registered F [--interface F]] [--session-tables J] [--plain-tables] [--upstream-plain] \
-    --session DIR...
-||||||| merged common ancestors
-flock-verify verify [--statement ID] [--archive DIR] --circuit F --public pub.bin [--tables DIR] [--coins seed|os] [--zk] \
-    [--program F] [--partition F] [--registered F] [--session-tables J] [--plain-tables] [--upstream-plain] --session DIR...
-=======
 flock-verify verify [--statement ID] [--archive DIR] --circuit F --public pub.bin [--tables DIR] [--coins tree] [--zk] \
-    [--program F] [--partition F] [--registered F] [--session-tables J] [--plain-tables] --session DIR...
+    [--program F] [--partition F] [--registered F [--interface F]] [--session-tables J] [--plain-tables] --session DIR...
 flock-verify agree --upstream-plain --upstream-verdicts F [verify's plain flags] --session DIR...   # agreement only
->>>>>>> 7af4d24fca3e
 flock-verify statement [--statement ID] --circuit F --public pub.bin [--tables DIR]   # digest, Σ, Hello
 flock-verify rec-compose --rec-inner F --rec-rows F --rec-run F [--archive DIR] LOG... # a recursive statement's verdict
 ~~~

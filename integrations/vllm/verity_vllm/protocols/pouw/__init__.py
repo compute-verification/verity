@@ -25,35 +25,17 @@ the transcript root with its unit and tile counts.  Pearl-C's also says what it 
 weights were served.  Pearl-C commits one pass per engine step, a step held to what one pass takes (`pouw_pass`), each
 retained in its own directory under ``transcript_dir`` when given.  The audit (sampling tiles, opening
 them) is `verity.core.protocols.pouw.audit`'s, after the run.  Beside sampled proofs the composition asks
-<<<<<<< 99c8914848
-`verity.core.protocols.pouw.circuit` (`protocol_options.CIRCUITS`), and only ``ncp-v2`` has a circuit; Pearl-C has none, and
+`verity.ml.protocols.pouw.circuit` (`protocol_options.CIRCUITS`), and only ``ncp-v2`` has a circuit; Pearl-C has none, and
 runs beside sampled proofs only in a window whose circuit is cut at its sites (`cuts`).  Under ``ncp-v2`` each weight's side (its Y strips and c₀) is instead bound to its own
-||||||| merged common ancestors
-`verity.core.protocols.pouw.circuit` (`protocol_options.CIRCUITS`), and only ``ncp-v2`` has a circuit.  Under ``ncp-v2`` each weight's side (its Y strips and c₀) is instead bound to its own
-=======
-`verity.ml.protocols.pouw.circuit` (`protocol_options.CIRCUITS`), and only ``ncp-v2`` has a circuit.  Under ``ncp-v2`` each weight's side (its Y strips and c₀) is instead bound to its own
->>>>>>> 7af4d24fca3e
 `NcpWeight_v1` Program call, once per run, and each call to its own `NcpLinear_v1` Program call reading it, their units
 computed natively and committed a leaf per unit (`pouw_native`, `pouw_circuit`); the replay samples each call's units under
 its execution phase's key, regenerates them and checks each against its template (`check.replay.pouw_circuit`).
 Under H1 + fx1 (``eps1-sm120-h1fx1``, `pouw_h1`) on the eager int8_exact row nothing is executed in the linear's place
 (`executes`): the arm serves its own y, and each call is recorded as its own Program, compiled to H1 tile units
-<<<<<<< 99c8914848
-(`verity.core.protocols.pouw.circuit.compile`), with its seed group's roots and its positions.
+(`verity.ml.protocols.pouw.circuit.compile`), with its seed group's roots and its positions.
 Under the lead (``lead-blc4a-t64-rot``, `lead`) on the same arm, the setting ``backend`` (the lead's kernel,
 `lead.LeadBackend`) computes each call's y on its coins, taken after the call's root(A_j), in place of
-the arm's ``scaled_mm`` (`engine.int8_experts.PlainGemm.gemm`). Each engine step's forward is one pass and one window,
-||||||| merged common ancestors
-(`verity.core.protocols.pouw.circuit.compile`), with its seed group's roots and its positions.
-Under the lead (``lead-blc4a-t64-rot``, `lead`) on the same arm, the setting ``backend`` (the lead's kernel and
-committer, `lead.LeadBackend`) computes each call's y on its coins, taken after the call's root(A_j), in place of
-the arm's ``scaled_mm`` (`engine.int8_experts.PlainGemm.gemm`). Each engine step's forward is one pass and one window,
-=======
-(`verity.ml.protocols.pouw.circuit.compile`), with its seed group's roots and its positions.
-Under the lead (``lead-blc4a-t64-rot``, `lead`) on the same arm, the setting ``backend`` (the lead's kernel and
-committer, `lead.LeadBackend`) computes each call's y on its coins, taken after the call's root(A_j), in place of
 the arm's ``scaled_mm`` (`engine.int8_experts.PlainGemm.gemm`). Each engine step's forward is one pass and one execution phase,
->>>>>>> 7af4d24fca3e
 whose salt follows its key's leaf, the weights' root and its call count, and is published at the step's end
 (`lead.LeadRun`).
 What is a placeholder is listed in `info` (``placeholder``).
@@ -537,17 +519,9 @@ class _CircuitRun:
 #: The live `ncp-v2` runs by entry, with their sites (the collector's path of each linear -> its ordinal), for the Commit's
 #: replay (`check.replay.pouw_circuit.around`) before the composition closes.
 _CIRCUIT_RUNS: dict[str, tuple[_CircuitRun, dict[str, int]]] = {}
-<<<<<<< 99c8914848
-# The prover's hm96 salt key per entry: its weight trees' salts, drawn afresh by each `commit_weights` (so each install's W,
-# and its salt session, is its own) and read by `install`, never in the record (published commitments without it fail its root check).
-||||||| merged common ancestors
-# The Pearl-C prover's hm96 salt key per entry: its weight trees' salts, drawn afresh by each `commit_weights` (so each install's W,
-# and its salt session, is its own) and read by `install`, never in the record (published commitments without it fail its root check).
-=======
 # The prover's hm96 salt key per entry: its weight trees' salts, read by `install`, never in the record (published commitments
 # without it fail its root check). Pearl-C's is sampled afresh by each `commit_weights` (so each install's W, and its salt
 # session, is its own); the others' once a process, one execution phase (`commit_weights`).
->>>>>>> 7af4d24fca3e
 _SALT_KEYS: dict[str, bytes] = {}
 
 
@@ -656,14 +630,7 @@ def commit_weights(scheme: str, target: Target) -> dict[str, Any]:
         roots = PPD.weight_roots(PPD.Kernel.load(settings.kernel, settings.cubin), {w: m.weight for w, m in enumerate(layers)}, scheme,
                                  salt_key=key)
         return {"weight_roots": {str(w): r.hex() for w, r in roots.items()}, "shapes": {str(w): list(v) for w, v in shapes.items()}}
-<<<<<<< 99c8914848
-    key, roots = os.urandom(32), {}
-    _SALT_KEYS[f"{NAME}:{scheme}"] = key
-||||||| merged common ancestors
-    roots = {}
-=======
     key, roots = _SALT_KEYS.setdefault(entry, os.urandom(32)), {}
->>>>>>> 7af4d24fca3e
     for w, layer in enumerate(layers):
         b, _ = quantize(_host(layer.weight))
         roots[str(w)] = commit_rows(weight_binding(w), -2, [b[j].tobytes() for j in range(b.shape[0])], HM96, key,

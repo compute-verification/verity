@@ -7,22 +7,10 @@ each weights incorrect proof blocks by what one costs it, through the generic we
 its reader lives with the application, not in core.  One `delta` serves every consumer; the application's failure
 union counts it once.
 
-<<<<<<< 99c8914848
-The law is stated over named levels of a partition hierarchy (`verity.ml.circuits.partition.Level`): each level's members
-partition the members of the level above, and a level is either drawn (`Bernoulli`, `Subset`, `Stratified`, `Work`) or
-only groups.  The names are the producer's labels (sampled proofs' one-stage profile is one level "unit"); the profile
-carries draws, never roles.
-||||||| merged common ancestors
-The law is stated over named levels of a partition hierarchy (`verity.ml.circuits.partition.Level`): each level's members
-partition the members of the level above, and a level is either drawn (`Bernoulli`, `Subset`, `Stratified`) or only
-groups.  The names are the producer's labels (sampled proofs' one-stage profile is one level "unit"); the profile
-carries draws, never roles.
-=======
 The sampling design is stated over named levels of a partition hierarchy (`verity.ml.circuits.partition.Level`): each level's members
-partition the members of the level above, and a level is either sampled (`Bernoulli`, `Subset`, `Stratified`) or only
-groups.  The names are the producer's labels (sampled proofs' one-stage profile is one level "unit"); the profile
+partition the members of the level above, and a level is either sampled (`Bernoulli`, `Subset`, `Stratified`, `Work`) or
+only groups.  The names are the producer's labels (sampled proofs' one-stage profile is one level "unit"); the profile
 carries samples, never roles.
->>>>>>> 7af4d24fca3e
 """
 
 from __future__ import annotations
@@ -109,23 +97,11 @@ class Subset:
 class IntegrityProfile:
     """Checked by sampling over `levels`, coarse to fine: `sizes[0]` members at the top level, then `sizes[i]`
     members of level i inside each member of level i - 1.  The finest level is the checked one; each member of it
-<<<<<<< 99c8914848
-    is one statement.  `draws` names the drawn levels: at most one `Bernoulli`, and a `Subset` only at the checked
-    level; undrawn levels only group.  A `Stratified` or `Work` draw is the only draw, of the checked level, with its
-    strata tiling that level's members; `accept`, `rho` and `worst_case` are the other laws', and it reads through
-    `strata`.
-    `drawn` counts the members actually drawn at each level, all passed.
-||||||| merged common ancestors
-    is one statement.  `draws` names the drawn levels: at most one `Bernoulli`, and a `Subset` only at the checked
-    level; undrawn levels only group.  A `Stratified` draw is the only draw, of the checked level, with its strata
-    tiling that level's members; `accept`, `rho` and `worst_case` are the other laws', and it reads through `strata`.
-    `drawn` counts the members actually drawn at each level, all passed.
-=======
     is one statement.  `draws` names the sampled levels: at most one `Bernoulli`, and a `Subset` only at the checked
-    level; unsampled levels only group.  A `Stratified` sample is the only sample, of the checked level, with its strata
-    tiling that level's members; `accept`, `rho` and `worst_case` are the other laws', and it reads through `strata`.
+    level; unsampled levels only group.  A `Stratified` or `Work` sample is the only sample, of the checked level, with
+    its strata tiling that level's members; `accept`, `rho` and `worst_case` are the other laws', and it reads through
+    `strata`.
     `drawn` counts the members actually sampled at each level, all passed.
->>>>>>> 7af4d24fca3e
 
     `accept(m)` reads m at a member's footprint.  When the checked level is committed before the first sample (as
     serving commits every value, at serve time), m is the member's incorrect checked members.  Under a two-stage design
@@ -292,19 +268,9 @@ class IntegrityProfile:
         return best if cap is None else min(best, float(cap))
 
     def strata(self) -> Stratified | None:
-<<<<<<< 99c8914848
-        """The law as independent uniform draws inside strata of the checked level: its `Stratified` draw, a `Work`
-        draw's at its k_s, or, when a `Subset(k)` of the checked level is the only draw, one stratum of all its members,
-        named after the level.  None when a level is drawn `Bernoulli`."""
-||||||| merged common ancestors
-        """The law as independent uniform draws inside strata of the checked level: its `Stratified` draw, or, when a
-        `Subset(k)` of the checked level is the only draw, one stratum of all its members, named after the level.  None
-        when a level is drawn `Bernoulli`."""
-=======
-        """The sampling design as independent uniform samples inside strata of the checked level: its `Stratified` sample, or, when a
-        `Subset(k)` of the checked level is the only sample, one stratum of all its members, named after the level.  None
-        when a level is sampled `Bernoulli`."""
->>>>>>> 7af4d24fca3e
+        """The sampling design as independent uniform samples inside strata of the checked level: its `Stratified`
+        sample, a `Work` sample's at its k_s, or, when a `Subset(k)` of the checked level is the only sample, one stratum
+        of all its members, named after the level.  None when a level is sampled `Bernoulli`."""
         checked = self.levels[-1].name
         law = self.draws[checked]
         if isinstance(law, Stratified):
@@ -620,15 +586,15 @@ class Stratified:
 
 
 def work_k(k: int, work: int, size: int, total: int, floor: int) -> int:
-    """A stratum's draw under the work rule (Lean `Flock.Draw.workK`): ceil(k * work * size / total), at least `floor` and
-    at most `size`."""
+    """A stratum's sample size under the work rule (Lean `Flock.Draw.workK`): ceil(k * work * size / total), at least
+    `floor` and at most `size`."""
     return min(size, max(floor, (k * work * size + total - 1) // total))
 
 
 @dataclass(frozen=True, slots=True)
 class WorkStratum:
-    """A stratum of the work sampling design: `size` members, `k` of them drawn, each doing `work` (an integer in any
-    fixed unit, 0 for members that do none), and `floor`, the fewest it draws."""
+    """A stratum of the work sampling design: `size` members, `k` of them sampled, each doing `work` (an integer in any
+    fixed unit, 0 for members that do none), and `floor`, the fewest it samples."""
 
     name: str
     size: int
@@ -639,9 +605,9 @@ class WorkStratum:
 
 @dataclass(frozen=True, slots=True)
 class Work:
-    """The work sampling design `work:k` (Lean `Core.SamplingDesign.work`): uniform draws inside disjoint strata of the checked
-    level, each stratum's k_s sized by its work above its floor (`work_k`).  Its sample is the stratified one at those
-    k_s, so its bounds are `stratified`'s."""
+    """The work sampling design `work:k` (Lean `Core.SamplingDesign.work`): uniform samples inside disjoint strata of
+    the checked level, each stratum's k_s sized by its work above its floor (`work_k`).  Its sample is the stratified
+    one at those k_s, so its bounds are `stratified`'s."""
 
     k: int
     strata: tuple[WorkStratum, ...]

@@ -296,8 +296,6 @@ def test_a_spec_states_each_public_item_once_with_its_reason():
     for fixed in ("subset:two", "subset:2", "stratified:2", "work:2"):
         with pytest.raises(ValueError):
             S.Law(fixed)
-    with pytest.raises(ValueError, match="uniform"):
-        S.Sequential("subset:4", "B")
     with pytest.raises(ValueError, match="positive"):
         _spec(proof_deadline=0)
     assert _spec().digest() == _spec().digest() != _spec(S.Law("rate:1/2")).digest()
@@ -807,13 +805,7 @@ def test_a_closure_map_is_refused_before_any_coin_is_read():
 @pytest.mark.parametrize("text", ["rate:1/3", "stratified-rate:1/3", "work-rate:1/3"])
 def test_the_default_draw_is_draw_first_on_the_challengers_bytes(text):
     """The sample is Lean's `drawWith` on the coins (`coins.draw_first`), so `flock-verify draw` on the same bytes
-<<<<<<< 99c8914848:verity/core/protocols/sampled_proofs/tests/test_service.py
-    draws the same proof blocks."""
-||||||| merged common ancestors:verity/core/protocols/sampled_proofs/tests/test_service.py
-    draws the same proof blocks; a work sample's closure is the same too."""
-=======
     samples the same proof blocks."""
->>>>>>> 7af4d24fca3e:verity/core/protocols/spot/tests/test_service.py
     table = WORK if text.startswith("work") else None
     for seed in range(8):
         stream = _stream(_spec(S.Law(text), public=(*RECORD_ITEMS, STRATUM)), coins=random.Random(seed).randbytes)

@@ -19,14 +19,8 @@ from typing import Sequence
 import numpy as np
 
 from verity.core.protocols.pouw import credit as CR
-<<<<<<< 99c8914848
-from verity.core.protocols.sampled_proofs.one_stage import proofs as PF
-from verity_vllm.protocols.pouw.h1 import answers as A
-||||||| merged common ancestors
-from verity.core.protocols.sampled_proofs.one_stage import proofs as PF
-=======
 from verity.core.protocols.spot.one_stage import proofs as PF
->>>>>>> 7af4d24fca3e
+from verity_vllm.protocols.pouw.h1 import answers as A
 from verity_vllm.protocols.pouw.h1 import drawn as D
 
 MODELS = Path(__file__).resolve().parents[2] / "live_challenger" / "models.py"
@@ -61,17 +55,9 @@ def checkpoint_weights(checkpoint: Path, linears: Sequence[tuple[str, int, int]]
 
 def verified(statements: list | dict, files: dict, win: dict, units: list[int], lean: Path
              ) -> tuple[list | None, tuple | None]:
-<<<<<<< 99c8914848
-    """Credit's verification of a window's drawn statements (`credit._verified` under the window's draw, then
+    """Credit's verification of a window's sampled statements (`credit._verified` under the window's sample, then
     `credit._proved`), its Lean verifier the ``flock-verify`` at `lean`, each run `_verified` asks for answered by
     `answers.Answers` and judged in its order."""
-||||||| merged common ancestors
-    """Credit's verification of a window's drawn statements (`credit._verified` under the window's draw, then
-    `credit._proved`), its Lean verifier the ``flock-verify`` at `lean`."""
-=======
-    """Credit's verification of a window's sampled statements (`credit._verified` under the window's sample, then
-    `credit._proved`), its Lean verifier the ``flock-verify`` at `lean`."""
->>>>>>> 7af4d24fca3e
     PF.executable = lambda: lean
     proofs, why = CR._verified(statements, files, win["raw"], win["layout"], win["entries"], win["root"], units,
                                win["steps"], A.Answers(by="the check"), win["salt"], win["draw"])

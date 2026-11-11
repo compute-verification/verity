@@ -1,7 +1,7 @@
 """A row's stages as research Attempts: `verity-vllm row stage|chain|shed`.
 
 * ``stage <build|match|commit> ROW ROLE REPO REV [flags]``: the workload of ONE ``research run --tool vllm.<stage>``
-  Attempt (``research`` declares the Tool).  A Match / Commit whose row dir holds a Build with another Program digest than the cited
+  Attempt (``research_tools``).  A Match / Commit whose row dir holds a Build with another Program digest than the cited
   Build artifact (the run's ``job.json`` ``store.inputs``) stops by name (PRECHECK_FAIL_BUILD_INPUT_*, exit 3).  On exit,
   whatever the rc: the stage's typed outputs (``research-outputs write``) and the run id on the pod guard's durability
   list, so the pod is not terminated before the outputs are preserved.

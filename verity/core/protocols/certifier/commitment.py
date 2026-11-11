@@ -26,16 +26,8 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-<<<<<<< 99c8914848
-from verity.ml.commitments.identity import Digest, canonical_json_bytes, tagged_sha256
-from verity.core.protocols.certifier.grid import Grid, GridParams, BlockGrid, Row, Status, row_count, row_left_packed
-||||||| merged common ancestors
-from verity.ml.commitments.identity import Digest, canonical_json_bytes, tagged_sha256
-from verity.core.protocols.certifier.grid import Grid, GridParams, Record, Row, Status, row_count, row_left_packed
-=======
 from verity.ml.commitments.identity import Digest, canonical_json_bytes, tagged_sha512
-from verity.core.protocols.certifier.grid import Grid, GridParams, Record, Row, Status, row_count, row_left_packed
->>>>>>> 7af4d24fca3e
+from verity.core.protocols.certifier.grid import Grid, GridParams, BlockGrid, Row, Status, row_count, row_left_packed
 
 ROW_TAG = "verity-network-certifier/row-sha512/v1"
 RECORD_TAG = "verity-network-certifier/record-sha512/v1"

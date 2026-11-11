@@ -59,17 +59,9 @@ PRODUCTS = {"onsite": "verity/onsite/v0", "remote": "verity/remote/v0", "remote-
 #: list them; read only to name the missing ones.
 COMPONENTS = {
     "onsite": ("verity/certifier/v0", "verity/inference-only/v0", "verity/pous/p2/v4/run", "verity/pouw/period/v1",
-<<<<<<< 99c8914848
-               "verity/remote-bandwidth/p2/v0", "verity/sampled-proofs/one-stage/v1", "verity/wipe/v0"),
-    "remote": ("verity/inference-only/v0", "verity/pouw/period/v1", "verity/sampled-proofs/v1"),
-    "remote-v1": ("verity/inference-only/v0", "verity/pouw/pearl-plus/v1", "verity/sampled-proofs/v1"),
-||||||| merged common ancestors
-               "verity/remote-bandwidth/p2/v0", "verity/sampled-proofs/one-stage/v1", "verity/wipe/v0"),
-    "remote": ("verity/inference-only/v0", "verity/pouw/period/v1", "verity/sampled-proofs/one-stage/v1"),
-=======
                "verity/remote-bandwidth/p2/v0", "verity/sampled-proofs/v1", "verity/wipe/v0"),
     "remote": ("verity/inference-only/v0", "verity/pouw/period/v1", "verity/sampled-proofs/v1"),
->>>>>>> 7af4d24fca3e
+    "remote-v1": ("verity/inference-only/v0", "verity/pouw/pearl-plus/v1", "verity/sampled-proofs/v1"),
 }
 #: The subprotocols a product composes in the clear, as a stated exception to everything-zero-knowledge, each with the
 #: line its record carries (`Core.Remote`'s and `Core.Onsite`'s docstrings say the same).

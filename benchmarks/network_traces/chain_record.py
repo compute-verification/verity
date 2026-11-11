@@ -657,23 +657,12 @@ def audit_of(d: Path, pins: dict | None = None) -> dict:
     """A compute audit's window as one-stage registers it (``registration.json`` and ``circuit.json``): its proof
     blocks, the proof blocks its sampling design samples (a subset design's ``k``, a stratified design's ``Σ k``, as
     `NetworkCheck.Period` counts them), the
-<<<<<<< 99c8914848
-    least rate it draws a unit at (``q``: ``k/n``, or the least stratum's ``k/n``) and its free inputs
-    (`free_inputs`). Its jitter term is the link's steps over the period, which `d1_terms` charges."""
-||||||| merged common ancestors
-    least rate it draws a unit at (``q``: ``k/n``, or the least stratum's ``k/n``) and its free inputs
-    (`free_inputs`); its jitter term 0 at D_j = 1, `JITTER`: N2 holds the egress counts exactly, and J the offsets
-    within a bucket."""
-=======
     least rate it samples a unit at (``q``: ``k/n``, or the least stratum's ``k/n``) and its free inputs with the terms
     taken out of them (`input_terms`, the registered rows at the verifier's ``pins`` the registration's window records as
-    its ``registered_roots``); its jitter term 0 at D_j = 1, `JITTER`: N2 holds the egress counts
-    exactly, and J the offsets within a bucket. A window holding a pin must bind ``circuit.json`` by its SHA-512
-    (``window.circuit``), as `NetworkCheck.Period.auditCheck` refuses a count on a circuit its registration doesn't
-    bind."""
+    its ``registered_roots``). Its jitter term is the link's steps over the period, which `d1_terms` charges. A window
+    holding a pin must bind ``circuit.json`` by its SHA-512 (``window.circuit``), as `NetworkCheck.Period.auditCheck`
+    refuses a count on a circuit its registration doesn't bind."""
     from verity.ml.windows import interface as IF
-
->>>>>>> 7af4d24fca3e
     reg = json.loads((d / "registration.json").read_text())
     body = (d / "circuit.json").read_bytes()
     window = reg.get("window") if isinstance(reg.get("window"), dict) else {}
@@ -697,15 +686,8 @@ def audit_of(d: Path, pins: dict | None = None) -> dict:
     else:
         raise SystemExit(f"--audit {d}: K's q is a subset or stratified law's, not {law}")
     return {"window": str(d), "registration": hashlib.sha512(json.dumps(reg, sort_keys=True).encode()).hexdigest(),
-<<<<<<< 99c8914848
-            "units": n, "drawn": drawn, "q": str(q),
-            "free": free_inputs(json.loads((d / "circuit.json").read_text()))}
-||||||| merged common ancestors
-            "units": n, "drawn": drawn, "q": str(q),
-            "free": free_inputs(json.loads((d / "circuit.json").read_text())), "jitter": 0}
-=======
             "units": n, "drawn": drawn, "q": str(q), "free": terms["free"], "inputs": terms,
-            "held": sorted(IF.held_params(pins, roots)), "jitter": 0}
+            "held": sorted(IF.held_params(pins, roots))}
 
 
 def power_bits(m: int, f: int, exact_below: int = 1 << 16) -> int:
@@ -726,7 +708,6 @@ def power_bits(m: int, f: int, exact_below: int = 1 << 16) -> int:
         x = decimal.Decimal(f) * decimal.Decimal(m).ln() / decimal.Decimal(2).ln()
         slack = decimal.Decimal("1e-30")
         return int((x + slack).to_integral_value(decimal.ROUND_FLOOR)) + 1
->>>>>>> 7af4d24fca3e
 
 
 def pooled_k(audits: list[dict], delta: Fraction, network: dict) -> dict:

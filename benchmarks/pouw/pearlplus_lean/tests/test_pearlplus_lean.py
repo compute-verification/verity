@@ -35,6 +35,7 @@ from fractions import Fraction
 from pathlib import Path
 
 import pytest
+import settings
 
 pytest.importorskip("torch")
 
@@ -44,7 +45,6 @@ ROOT = Path(__file__).resolve().parents[4]
 PACKAGE = ROOT / "verity" / "core" / "protocols" / "pouw" / "lean" / "pearlplus"
 SOURCE = b"verifier" * 4
 H100 = "pearl-c-h100-v1-h3"
-RECORDED = os.environ.get("POUW_PEARLPLUS_RECORDED")
 
 
 def _module(name: str, path: Path):
@@ -304,6 +304,20 @@ def test_a_served_y_that_is_not_the_unscale_of_its_u(exe, tmp_path):
     assert "the prover's files don't open its y: ValueError: " in same(exe, [path])["reason"]
 
 
+def test_a_served_y_row_that_ends_before_its_tiles_columns(exe, tmp_path):
+    """A prover's own y whose last real row is short (`short_y`: the rows file cut, the tree and root over the row as it
+    is, so it opens), on a row whose unscale is +0 at every column (`zero_a`: its A row is zero, so it is excluded and its
+    tile is opened whatever the draw), where the word a read past the Lean row's end gives, 0, is the word the check
+    wants.  Both sides open the row the file holds and refuse it by its length, and half a word is no row on either."""
+    path = T.proved_pass(tmp_path, H100, zero_a=19)[0]
+    assert same(exe, [path])["verdict"] == "accept"
+    T.short_y(path, 0, 8)
+    assert same(exe, [path])["reason"].endswith("y[19]: the opened row holds 12 words, the tile's columns end at 16")
+    T.short_y(path, 0, 1)
+    assert same(exe, [path])["reason"].endswith(
+        "the prover's files don't open its y: ValueError: buffer size must be a multiple of element size")
+
+
 def test_a_layer_past_k_max(exe, tmp_path):
     """A weight of K_MAX + 1 = 2^16 + 1 channels, its call at the split's k (whole promotion groups) and |K|, with the
     records root the pass publishes over them: the pass load refuses it (`DomainError`, k ≤ 2^16 among the domain's
@@ -514,7 +528,7 @@ def test_a_pass_that_is_not_ws(exe, tmp_path):
     assert got["reason"] == "ValueError: W's pearl-a/1/1: its root not the call's"
 
 
-@pytest.mark.skipif(not RECORDED, reason="POUW_PEARLPLUS_RECORDED names no recorded run")
+@pytest.mark.skipif(not settings.RECORDED, reason="POUW_PEARLPLUS_RECORDED names no recorded run")
 @pytest.mark.parametrize("name, passes", [("run", ("prefill", "decode")), ("control", ("prefill", "decode", "control"))])
 def test_a_recorded_h200_run(exe, name, passes):
     """An H200 run's retained passes, the served run's (accepted) and with its control pass, whose activations aren't the
@@ -524,7 +538,7 @@ def test_a_recorded_h200_run(exe, name, passes):
     verify`` does, on the batch forms with every 256th tile on the scalar reference too (the scalar replay alone takes
     hours here).  It is the one case on a served instance's 64 x 64 tiles at k_min 1,024; each Lean replay takes about 45
     minutes on a CPU node, so ``reject`` is left to the CPU cases."""
-    d = Path(RECORDED)
+    d = Path(settings.RECORDED)
     rec = json.loads((d / "verdicts" / f"{name}.json").read_text())
     paths = [d / "passes" / p / "manifest.json" for p in passes]
     coins, source = d / "passes" / "coins.json", bytes.fromhex(rec["source"])

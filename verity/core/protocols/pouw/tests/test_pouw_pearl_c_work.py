@@ -91,7 +91,7 @@ def test_the_band_rule_holds_in_the_draw_a_tile_of_a_voluntary_rows_band_has_no_
     is one 64 × 64 tile, which a per-row rule credits 63 rows of and so draws, and the band rule credits none.  The band
     rule is in `UnitRecord.credited`, which the ticket weight reads, so the tile has no ticket and is never drawn: every
     draw lands on the other record's tile."""
-    s = C.PearlC(k_min=32, tile=(64, 64), forming="v1")
+    s = C.PearlC(k_min=32, tile=(64, 64), forming="v1", hashing="h0")
     r = W.UnitRecord(Matmul(0, Shape(64, K, 64), 0), 64, K, voluntary_a=(5,))
     clean = W.UnitRecord(Matmul(1, Shape(64, K, 64), 1), 64, K)
     (tile,) = s.tiles(r.matmul.shape)
@@ -262,26 +262,12 @@ def test_audit_credits_real_rows_and_checks_the_excluded_ones():
 
 
 def test_an_excluded_weight_row_earns_nothing_and_its_tiles_are_accepted():
-<<<<<<< 99c8914848
     """A weight row that fails the per-row rules is excluded, and by the band rule it takes the credit of its whole block
-    of 64 columns, so no tile holding its column has a credited cell.  L3's `TileCheck.Accepts` asks `weightOK` of each
+    of 64 columns, so no tile holding its column has a credited cell.  L3's `TileCheck.Accepts` asks `fixedOK` of each
     of a tile's columns and refuses such a tile, and the game counts every column of a credited tile (`cols g`); the band
-    rule leaves such a tile neither a ticket nor credit, so the work law no longer credits a tile the game refuses.  Here
+    rule leaves such a tile neither a ticket nor credit, so the work sampling design no longer credits a tile the game refuses.  Here
     the block holds all 16 columns: W and the credit are 0, the one exclusion tile (A row 3's and B row 5's) is opened and
     accepted, and declaring the row credited fails its tile."""
-||||||| merged common ancestors
-    """Where the work law and L3's tile check differ: a weight row that fails the per-row rules is excluded, and every
-    tile holding its column is accepted with none of that column's cells credited, while L3's `TileCheck.Accepts` asks
-    `weightOK` of each of a tile's columns and refuses the tile.  The work law is credit-sound there only while the
-    excluded column's chain words (its C̃ and U words, computed and bound as any other's) earn nothing: W and the credit
-    count 19 · 15 cells, not 19 · 16, and declaring the row credited fails its tile."""
-=======
-    """Where the work sampling design and L3's tile check differ: a weight row that fails the per-row rules is excluded, and every
-    tile holding its column is accepted with none of that column's cells credited, while L3's `TileCheck.Accepts` asks
-    `fixedOK` of each of a tile's columns and refuses the tile.  The work sampling design is credit-sound there only while the
-    excluded column's chain words (its C̃ and U words, computed and bound as any other's) earn nothing: W and the credit
-    count 19 · 15 cells, not 19 · 16, and declaring the row credited fails its tile."""
->>>>>>> 7af4d24fca3e
     rows_a = CV.rows_f32("work-life", "A", 20, K) + [C.f32_row([0] * K)] * 12
     rows_a[3] = spiked(rows_a[3])
     rows_b = CV.rows_f32("work-life", "B", 16, K)
@@ -309,23 +295,11 @@ def test_a_padded_weights_last_tile_is_neither_drawn_nor_credited():
     Pearl-C's domain.  Its last tile holds real columns and zero rows, and a zero row fails the noise floor, so no tile
     check may see it (L3's `TileCheck.Accepts` asks `fixedOK` of every column): the padded tile's rows are voluntary,
     which leaves it no credited cell, so no sample lands on it and it opens no exclusion tile.  Here 500 rows padded to
-<<<<<<< 99c8914848
     504 on 8-column tiles (V-EX's ⌈n/64⌉ cap holds the tile's 8 rows): by the band rule the padded rows take their block
     of 64 columns, 448 … 503, so its 7 tiles have no ticket and the credit is the other blocks' 448 columns, under the
     real columns' honest credit.  Declaring the zero rows only as voluntary leaves them excluded, and their exclusion
     tile is the padded one."""
-    s = C.PearlC(k_min=32, tile=(16, 8), forming="v1")
-||||||| merged common ancestors
-    504 on 8-column tiles (V-EX's ⌈n/64⌉ cap holds the tile's 8 rows): the credit is the 496 real columns of full tiles,
-    under the real columns' honest credit.  Declaring the zero rows only as voluntary leaves them excluded, and their
-    exclusion tile is the padded one."""
-    s = C.PearlC(k_min=32, tile=(16, 8), forming="v1")
-=======
-    504 on 8-column tiles (V-EX's ⌈n/64⌉ cap holds the tile's 8 rows): the credit is the 496 real columns of full tiles,
-    under the real columns' honest credit.  Declaring the zero rows only as voluntary leaves them excluded, and their
-    exclusion tile is the padded one."""
     s = C.PearlC(k_min=32, tile=(16, 8), forming="v1", hashing="h0")
->>>>>>> 7af4d24fca3e
     rows_a = CV.rows_f32("work-pad", "A", 16, K)
     real = [r for r in CV.rows_f32("work-pad", "B", 504, K) if CW.row_passes(C.parse_f32_row(r, K))][:500]
     rows_b, padded = W.pad_weight(real, s.tile[1])

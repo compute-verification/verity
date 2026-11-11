@@ -65,17 +65,9 @@ from dataclasses import dataclass, field, replace
 from pathlib import Path
 from typing import Any
 
-<<<<<<< 99c8914848
-from verity.core.protocols import registration as REG
-from verity.core.protocols.certifier import advice as I1
-from verity.ml.windows import interface as IF
-||||||| merged common ancestors
-from verity.core.protocols.certifier import advice as I1
-from verity.ml.circuits.codec import canonical_json
-=======
 import verity.core.protocols.certifier.advice as I1
-from verity.ml.circuits.codec import canonical_json
->>>>>>> 7af4d24fca3e
+from verity.core.protocols import registration as REG
+from verity.ml.windows import interface as IF
 from verity_vllm.config import UsageError, option
 from verity_vllm.engine import step_trace as ST
 
@@ -103,16 +95,15 @@ class Compiler:
 def registered_compiler(name: str = COMPILER, digest: str | None = None, cap_bits: int = CAP_BITS) -> AW.Capped:
     """The compiler the advice is bound to: `advice_windows.Capped` (whose digest names the inner compiler's and ℓ =
     ``cap_bits``) over ``name``, whose digest is ``digest``, else the verifier's `interface.compiler_digest` of ``name`` over
-    the integration's import closure (`source_identity.closure()`) in this git work tree."""
+    the integration's import closure (`research_tools.CLOSURE`) in this git work tree."""
     if digest is None:
+        from verity_vllm.pipeline import research_tools as RT
         from verity_vllm.pipeline import source_identity as SI
-<<<<<<< 99c8914848
-        digest = IF.compiler_digest(name, SI.TREE, [g.removesuffix("/**") for g in SI.closure()])
-||||||| merged common ancestors
-        digest = compiler_digest(name, SI.code_identity(SI.TREE)["sha256"])
-=======
-        digest = compiler_digest(name, SI.code_identity_of("the advice digest", SI.TREE)["sha256"])
->>>>>>> 7af4d24fca3e
+        try:
+            code = [g.removesuffix("/**") for g in RT.CLOSURE]
+        except UsageError as e:
+            raise UsageError(f"the advice digest: {e}") from e
+        digest = IF.compiler_digest(name, SI.TREE, code)
     return AW.Capped(Compiler(name, digest), cap_bits)
 
 

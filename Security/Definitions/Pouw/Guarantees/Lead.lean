@@ -33,7 +33,10 @@ The lead is `tag-blc4a-t64-rot/served/s8/k32/w/l1w/l1a/min` (`Pouw.Lead.lead`). 
   `K ≥ 2,048`, the served shapes': at most 0.157%, 0.134% and 0.131%. The cap doesn't enter the gap.
 * `GapAtDecode`: at decode (`m = 1`, committed as 16 rows), the gap is at most 3.79% of served stock.
 * `GapFixedAt`: for every call of `n, K ≥ 4,096`, the tail's fixed gap is at most 0.127% of served stock at the three
-  points and 2.04% at decode. `TailAt`: `etaLead ≤ 2^−34` there, for calls of at most `2^30` tiles.
+  points and 2.04% at decode. `TailAt`: `etaLead ≤ 2^−34` there, for calls of at most `2^30` tiles. Neither is
+  stated at a call Llama-3.2-1B makes: each of its linears has a side of 2,048, below the 4,096 both ask of `n` and
+  of `K`. At its shapes only the expectation's gap is evaluated (`GapAt`, `GapAtDecode`), and the tail has no number
+  yet.
 * `Honest`: the hypotheses are jointly satisfiable at every call the verifier admits, at the deployed instance: some
   certifier running `certCode`, and at the deployed commitment (`l1wCommit`: A in 1 KiB segments, the forward's words
   in its calls' chunks) and the certifier's coin stream (`certStream`), the nominal W1 table and some set of
@@ -149,7 +152,8 @@ def GapAtDecode : Prop :=
 
 /-- **The tail's fixed gap at the three points and decode**: for every call of `n, K ≥ 4,096`, `gapFixed` is at most
 0.127% of served stock at T 512 × 64, T 512 × 512 and T 8,192, and at most 2.04% at decode, where 16 rows are
-committed for the one served. The cap doesn't enter the fixed gap. -/
+committed for the one served. The cap doesn't enter the fixed gap. No Llama-3.2-1B linear is such a call: each has a
+side of 2,048. -/
 def GapFixedAt : Prop :=
   ∀ T n K : ℕ, 4096 ≤ n → 4096 ≤ K →
     (∀ C : Pouw.Lead.Commit (pt512x64 n K), ChunksOf _ C → gapFixedServed _ C ≤ 127 / 100000) ∧
@@ -159,7 +163,9 @@ def GapFixedAt : Prop :=
 
 /-- **The tail at the three points and decode**: for every call of `n, K ≥ 4,096` with at most `2^30` committed tiles
 (Llama-3.2-1B's largest call has `2^29.2`), `etaLead ≤ 2^−34`. The tables' term is about `2^−35`, from the coin
-stream's `2^40` tiles at `2^−105` each, and the coin-branch tail at most `2^−42`. The tail doesn't read the cap. -/
+stream's `2^40` tiles at `2^−105` each, and the coin-branch tail at most `2^−42`. The tail doesn't read the cap.
+The tile count is the only one of the two conditions a Llama-3.2-1B call meets: each of its linears has a side of
+2,048, so none has `n, K ≥ 4,096`, and this states no `etaLead` at that model's shapes. -/
 def TailAt : Prop :=
   ∀ T n K : ℕ, 4096 ≤ n → 4096 ≤ K →
     ∀ L ∈ [pt512x64 n K, pt512x512 n K, pt8192 n K, lead T 1 n K],

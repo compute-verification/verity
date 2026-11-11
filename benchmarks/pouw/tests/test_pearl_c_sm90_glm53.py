@@ -1,15 +1,7 @@
 """GLM-5.3's linears under pearl-c-h100-v1-h3 (benchmarks/pouw/pearl_c_sm90/glm53.py): one TP8 rank's shapes from the
-<<<<<<< 99c8914848
-checkpoint's config, the sm_90a kernels' domain verdict on each, γ's formula against a Lean price twin, Llama-3.2-1B's
+checkpoint's config, the sm_90a kernels' domain verdict on each, the gap's formula against a Lean price twin, Llama-3.2-1B's
 (llama32_1b.py) beside them, the H200 session's shapes each model's table's, glm53_timing's slowdowns and --whole over a
 stand-in card, and glm53_passes' full check of a retained pass."""
-||||||| merged common ancestors
-checkpoint's config, the sm_90a kernels' domain verdict on each, γ's formula against a Lean price twin, the H200
-session's shapes the table's, glm53_timing's --whole over a stand-in card, and glm53_passes' full check of a retained pass."""
-=======
-checkpoint's config, the sm_90a kernels' domain verdict on each, the gap's formula against a Lean price twin, the H200
-session's shapes the table's, glm53_timing's --whole over a stand-in card, and glm53_passes' full check of a retained pass."""
->>>>>>> 7af4d24fca3e
 
 from __future__ import annotations
 

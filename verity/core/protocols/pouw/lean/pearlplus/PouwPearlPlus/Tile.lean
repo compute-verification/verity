@@ -21,8 +21,9 @@ public import PouwCommit.Rows
 4. the tile rule by the record: its rows (`Rule.rowsFailure`), then the inert-work bound (`Rule.capCheck`), a tile over
    which is `overCap` once every later check passes;
 5. on a call that commits y, the prover's files open the tile's real rows of it (`the prover's files don't open its y`),
-   they open against the call's y root at their positions (`y opening`), and each word is the unscale of the tile's U
-   (`Rule.yReason`), over the bound or not.
+   they open against the call's y root at their positions (`y opening`), each holds a word for every column of the tile
+   (`the opened row holds N words`: the opening binds a row's value, of any length) and each word is the unscale of the
+   tile's U (`Rule.yReason`), over the bound or not.
 
 `wn` is the fixed operand's noise (`Words.fixedNoise`), once per pass and weight; its failure is the tile's
 `inadmissible inputs`, where Python's `encode` meets it.

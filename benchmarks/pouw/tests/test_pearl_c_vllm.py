@@ -23,8 +23,8 @@ from typing import ClassVar
 
 import numpy as np
 import pytest
-from verity.core.protocols.pouw.schemes import pearl_c_u as PCU
-from verity.core.protocols.sampled_proofs.one_stage import registration as REG
+from verity.ml.protocols.pouw.schemes import pearl_c_u as PCU
+from verity.core.protocols.spot.one_stage import registration as REG
 from verity_vllm.protocols.pouw.pearl_c import host as PH
 from verity_vllm.protocols.pouw.pearl_c import served_y as SY
 from verity_vllm.protocols.pouw.pearl_c import window as PWR
@@ -1045,52 +1045,29 @@ def honest_pass(tmp_path, request):
 
 def proved_pass(tmp_path: Path, scheme: str, indices: tuple[int, int] = (0, 1), key: bytes | None = None,
                 live: int | None = None, seed: int = 11, spike: float | None = None, bad_b: int | None = None,
-                tile: tuple[int, int] = (16, 16)):
+                tile: tuple[int, int] = (16, 16), zero_a: int | None = None):
     """Two matmuls of a test instance (k = 128, 16 x 16 tiles), one with 12 filler rows and one liveness-failing row, proved by
     the scheme's reference prover and written in the device run's layout, for each promoted device scheme (hm96 trees, their
     salts under the prover's key, which the manifest retains; the unpromoted record's debit isn't stated, so clear_work can't
-<<<<<<< 99c8914848
     audit it).  The key is fixed per scheme unless `key` names one: -h3's row seeds follow A's salted roots, and under some
-    keys (about 2 in 15) a credited row of a drawn tile is over its own cap, which the law and verify_run both reject.  On the
-||||||| merged common ancestors
-    audit it).  The key is fixed per scheme: -h3's row seeds follow A's salted roots, and under some keys
-    (about 2 in 15) a credited row of a drawn tile is over its own cap, which the law and verify_run both reject.  On the
-=======
-    audit it).  The key is fixed per scheme: -h3's row seeds follow A's salted roots, and under some keys
-    (about 2 in 15) a credited row of a sampled tile is over its own cap, which the sampling design and verify_run both reject.  On the
->>>>>>> 7af4d24fca3e
+    keys (about 2 in 15) a credited row of a sampled tile is over its own cap, which the sampling design and verify_run both reject.  On the
     h100 record (Hopper's 14-bit atom) 2 of the first 8 keys are, the zero key among them: at k = 128 a row's cap admits
     one flagged atom-word (at k = 2,048 and 6,144 the worst of 96 Gaussian rows each is at 0.27 and 0.11 of its cap).
-<<<<<<< 99c8914848
-    The calls have the epoch's indices `indices`, and every pass built here is of the one epoch (the same weights, key and
+    The calls have the execution phase's indices `indices`, and every pass built here is of the one execution phase (the same weights, key and
     salt coin), as passes of one install are.  With `live` the salt coin is a live session's, opened after salt epoch
     `live`'s root over the weights' root (`live_coin`), and the manifest names that epoch (``pass_index``).  `seed` draws
     the rows: under another, the weights are others, and so is the salt the one coin gives them.  With `spike`, credited
     row 9 of the first call holds one entry `spike` times its every-8th entries' RMS (ρ's positions), off them.  With
     `bad_b`, that row of the second call's weight fails liveness as the first call's row 5 does, and is excluded.  `tile`
     is the instance's tile: at 64 x 64 each weight has 64 rows and each matmul is one tile, partial down its rows, k_min 32
-    keeping it a test instance."""
+    keeping it a test instance.  With `zero_a`, that real row of the first call is all +0: it fails liveness and is
+    excluded, its U is +0 and so is every word of its served y."""
     if key is None:
         key = bytes([1]) * 32 if SchemeId.parse(scheme).device == "h100" else bytes(32)
     s = PPD.scheme_of(scheme, k_min=32, tile=tile)
     rng, k = np.random.default_rng(seed), 128
     n0, n1 = max(16, tile[1]), max(32, tile[1])
     wrows = {0: bf16_words(rng, n0, k), 1: bf16_words(rng, n1, k)}
-||||||| merged common ancestors
-    The calls have the epoch's indices `indices`, and every pass built here is of the one epoch (the same weights, key and
-    salt coin), as passes of one install are."""
-    key = bytes([1]) * 32 if SchemeId.parse(scheme).device == "h100" else bytes(32)
-    s = PPD.scheme_of(scheme, k_min=32, tile=(16, 16))
-    rng, k = np.random.default_rng(11), 128
-    wrows = {0: bf16_words(rng, 16, k), 1: bf16_words(rng, 32, k)}
-=======
-    The calls have the execution phase's indices `indices`, and every pass built here is of the one execution phase (the same weights, key and
-    salt coin), as passes of one install are."""
-    key = bytes([1]) * 32 if SchemeId.parse(scheme).device == "h100" else bytes(32)
-    s = PPD.scheme_of(scheme, k_min=32, tile=(16, 16))
-    rng, k = np.random.default_rng(11), 128
-    wrows = {0: bf16_words(rng, 16, k), 1: bf16_words(rng, 32, k)}
->>>>>>> 7af4d24fca3e
     a0 = bf16_words(rng, 32, k)
     a0[20:] = 0
     a0[5, [1, 2, 3]] = np.float32(1e4).view(np.uint32) & 0xFFFF0000
@@ -1098,6 +1075,8 @@ def proved_pass(tmp_path: Path, scheme: str, indices: tuple[int, int] = (0, 1), 
         a0[9, 1] = np.float32(spike * np.sqrt(np.mean(a0[9, ::8].view(np.float32) ** 2))).view(np.uint32) & 0xFFFF0000
     if bad_b is not None:
         wrows[1][bad_b, [1, 2, 3]] = np.float32(1e4).view(np.uint32) & 0xFFFF0000
+    if zero_a is not None:
+        a0[zero_a] = 0
     i0, i1 = indices
     acts = {i0: a0, i1: bf16_words(rng, 16, k)}
     rows = lambda x: [r.tobytes() for r in x]
@@ -1114,7 +1093,8 @@ def proved_pass(tmp_path: Path, scheme: str, indices: tuple[int, int] = (0, 1), 
     splits = {w: PW.Split(k) for w in wrows}
     records = CW.declare(s, epoch, {i: rows(x) for i, x in acts.items()}, {w: rows(x) for w, x in wrows.items()}, splits,
                          real_rows={i0: 20})
-    assert records[0].excluded_a == (5,) and (bad_b is None or records[1].excluded_b == (bad_b,))
+    assert records[0].excluded_a == tuple(sorted({5} | ({zero_a} - {None})))
+    assert bad_b is None or records[1].excluded_b == (bad_b,)
     (tmp_path / "calls").mkdir(parents=True)
     (tmp_path / "weights").mkdir()
     weights = {}
@@ -1140,16 +1120,8 @@ def proved_pass(tmp_path: Path, scheme: str, indices: tuple[int, int] = (0, 1), 
     count = tr.commitment.count
     leaves = [prover.digest(t) for t in range(count)]
     dt = transcript_domain(epoch, count, s.commitment_hash)
-<<<<<<< 99c8914848
-    head = {"schema": PPD.MANIFEST_SCHEMA, "run": RUN, "entry": f"pouw:{scheme}", "scheme": scheme,
-            "instance": {"k_min": 32, "tile": list(tile)},
-||||||| merged common ancestors
-    head = {"schema": PPD.MANIFEST_SCHEMA, "run": RUN, "entry": f"pouw:{scheme}", "scheme": scheme,
-            "instance": {"k_min": 32, "tile": [16, 16]},
-=======
     head = {"schema": CC.MANIFEST_SCHEMA, "run": RUN, "entry": f"pouw:{scheme}", "scheme": scheme,
-            "instance": {"k_min": 32, "tile": [16, 16]},
->>>>>>> 7af4d24fca3e
+            "instance": {"k_min": 32, "tile": list(tile)},
             "coins": coins[0].to_json(), "salt_opening": coins[1].to_json(), "salt": epoch.salt.hex(),
             **({} if live is None else {"pass_index": live}),
             "records_root": PW.records_root(epoch.salt, epoch.weights_root, splits, records).hex(),
@@ -1278,6 +1250,75 @@ def test_a_served_y_that_is_not_the_unscale_of_its_u_rejects_the_run(tmp_path):
     assert moved["answer"]["verdict"] == "reject" and "y opening" in moved["answer"]["reason"], moved["line"]
 
 
+def short_y(path: Path, pos: int, drop: int) -> None:
+    """Call `pos`'s y rows file less its last `drop` bytes, committed as the verifier's opener reads it (`VR.f32_row`: row
+    i is the words the file holds of its bytes [2ni, 2n(i + 1)), a ragged row's whole ones here) under a new root, which the
+    manifest then names: a prover's own y whose last real row is short, and opens."""
+    man = json.loads(path.read_text())
+    u = man["matmuls"][pos]
+    key, n, real = bytes.fromhex(man["hm96_salt_key"]), u["n"], u["real_rows"]
+    file = path.parent / u["y"]["rows"]["path"]
+    data = file.read_bytes()
+    data = data[:len(data) - drop]
+    rows = [data[2 * n * i:2 * n * (i + 1)] for i in range(real)]
+    d = SY.y_domain(bytes.fromhex(man["salt"]), u["index"], real)
+    tree = laid_out(d, [d.leaf(i, i, ROW_SCHEMA, VR.f32_row(r[:len(r) & ~1], len(r), 0) + hm96_salt(key, SY.HM96_Y + u["index"], i))
+                        for i, r in enumerate(rows)])
+    u["y"] = {"root": tree[-64:].hex(), "rows": PPD._write(file, data, digest=False),
+              "tree": PPD._write(path.parent / u["y"]["tree"]["path"], tree)}
+    path.write_text(json.dumps(man))
+
+
+@pytest.mark.slow
+def test_a_served_y_row_that_ends_before_its_tiles_columns_rejects_the_run(tmp_path):
+    """A y row shorter than its tile is refused by its length, and never read past its end.  The opening binds a row's
+    value and not how many words it has, so a prover can commit one: here the last real row of the first call, all +0
+    (its A row is zero, so it is excluded and its tile is opened whatever the draw), less its last 4 words, the tree and
+    root over the row as it is.  The row opens, and each word it lacks is one whose unscale is +0, the word a read past the
+    end of the Lean's row gives: the run is refused naming the row's length, as it is on a row that is absent altogether."""
+    path = proved_pass(tmp_path, PROMOTED[0], zero_a=19)[0]
+    verdict = lambda: VR.verify_passes([path], 3, 1, "test", published(path), b"verifier" * 4, test_instance=True)  # noqa: E731
+    good = verdict()
+    assert good["answer"]["verdict"] == "accept", good["line"]
+    man = json.loads(path.read_text())
+    y = np.frombuffer((path.parent / man["matmuls"][0]["y"]["rows"]["path"]).read_bytes(), "<u2").reshape(20, 16)
+    assert not y[19].any() and y[18].all()
+    for drop, held in ((4, 12), (12, 0)):
+        short_y(path, 0, 2 * drop)
+        short = verdict()
+        assert short["answer"]["verdict"] == "reject" and short["commitment"] != good["commitment"]
+        assert short["answer"]["reason"].endswith(f"y[19]: the opened row holds {held} words, the tile's columns end at 16"), short["line"]
+
+
+def test_check_y_holds_each_opened_row_to_its_tiles_columns():
+    """`check_y` on rows it is handed, the cases of the Lean's `#guard` on `Rule.yReason`: row 7 over columns 2 and 3, U
+    +0 at α = 1 on both, so every cell's unscale is +0.  A row that covers the columns passes; one that ends at column 3,
+    or before the tile, or holds half a word past column 2, is refused by its length (and nothing raises); a whole row
+    is still held to the unscale, word by word."""
+    real, index, salt, key = 8, 3, bytes(64), bytes(32)
+    d = SY.y_domain(salt, index, real)
+    tile = types.SimpleNamespace(rows=(7,), cols=(2, 3))
+    side = lambda n: types.SimpleNamespace(alpha=[PCU.ONE] * n)  # noqa: E731
+    v = types.SimpleNamespace(checked=types.SimpleNamespace(u=[[0, 0]]), ops=types.SimpleNamespace(a=side(1), b=side(2)))
+    assert PCU.y(0, PCU.ONE, PCU.ONE) == 0
+
+    def reason(row: bytes) -> str | None:
+        values = [(row if i == 7 else bytes(16)) + hm96_salt(key, SY.HM96_Y + index, i) for i in range(real)]
+        tree = laid_out(d, [d.leaf(i, i, ROW_SCHEMA, x) for i, x in enumerate(values)])
+        p = types.SimpleNamespace(scheme=types.SimpleNamespace(commitment_hash=HM96, forming="v1", name="stand-in"),
+                                  epoch=types.SimpleNamespace(salt=salt, workload=types.SimpleNamespace(
+                                      matmuls=[types.SimpleNamespace(index=index)])),
+                                  man={"matmuls": [{"real_rows": real, "y": {"root": tree[-64:].hex()}}]})
+        return VR.check_y(p, 0, tile, v, (VR.opening(tree, real, 7, values[7], 64),))
+
+    words = lambda *w: np.array(w, "<u4").tobytes()  # noqa: E731
+    assert reason(words(5, 5, 0, 0)) is None
+    assert reason(words(5, 5, 0)) == "y[7]: the opened row holds 3 words, the tile's columns end at 4"
+    assert reason(words(5, 5, 0) + b"\0\0") == "y[7]: the opened row holds 3 words, the tile's columns end at 4"
+    assert reason(b"") == "y[7]: the opened row holds 0 words, the tile's columns end at 4"
+    assert reason(words(5, 5, 0, 1 << 16)) == "y[7, 3] is not the unscale of the tile's U"
+
+
 def _serve_dir(tmp_path: Path, passes: list[Path]) -> Path:
     """A serve's directory naming `passes` (manifests) in order, as ``served_passes.py serve`` writes it."""
     d = tmp_path / "served"
@@ -1289,19 +1330,9 @@ def _serve_dir(tmp_path: Path, passes: list[Path]) -> Path:
 
 
 def test_served_passes_verify_refuses_two_passes_of_one_salt_sharing_a_call_index(tmp_path):
-<<<<<<< 99c8914848
-    """Two honest passes of one epoch whose calls are 0, 1 and 1, 2: call 1's seeds, noise and tickets are the same in
+    """Two honest passes of one execution phase whose calls are 0, 1 and 1, 2: call 1's seeds, noise and tickets are the same in
     both, so the run is refused (``repeated-call``) before any pass is replayed, whether served.json or ``--manifest``
     names them."""
-||||||| merged common ancestors
-    """Two honest passes of one epoch whose calls are 0, 1 and 1, 2: call 1's seeds, noise and tickets are the same in
-    both, so the run is refused (``repeated-call``) before any pass is replayed."""
-    SP = load("pearl_c_vllm_served_passes", KERNEL.parent / "pearl_c_vllm" / "served_passes.py")
-=======
-    """Two honest passes of one execution phase whose calls are 0, 1 and 1, 2: call 1's seeds, noise and tickets are the same in
-    both, so the run is refused (``repeated-call``) before any pass is replayed."""
-    SP = load("pearl_c_vllm_served_passes", KERNEL.parent / "pearl_c_vllm" / "served_passes.py")
->>>>>>> 7af4d24fca3e
     a, b = (proved_pass(tmp_path / name, PROMOTED[0], ix)[0] for name, ix in (("a", (0, 1)), ("b", (1, 2))))
     assert json.loads(a.read_text())["salt"] == json.loads(b.read_text())["salt"]
     for d, more in ((_serve_dir(tmp_path, [a, b]), ()), (a.parent, ("--manifest", str(a), "--manifest", str(b)))):
@@ -1313,8 +1344,7 @@ def test_served_passes_verify_refuses_two_passes_of_one_salt_sharing_a_call_inde
 
 @pytest.mark.slow
 def test_served_passes_verify_accepts_an_epochs_passes_numbered_on(tmp_path):
-<<<<<<< 99c8914848
-    """Two honest passes of one epoch numbered on, 0, 1 then 2, 3, as the device numbers a serve's passes: one draw over
+    """Two honest passes of one execution phase numbered on, 0, 1 then 2, 3, as the device numbers a serve's passes: one draw over
     both, each pass's exclusion tile opened, accepted, its MACs over both (a test instance's, credited nothing)."""
     a, b = (proved_pass(tmp_path / name, PROMOTED[0], ix)[0] for name, ix in (("a", (0, 1)), ("b", (2, 3))))
     rc, doc, answer = served_verify(_serve_dir(tmp_path, [a, b]), tmp_path / "verify.json")
@@ -1373,13 +1403,6 @@ def test_served_passes_verify_credits_the_timed_call_its_passes_less_the_runs_wh
     """Where served.json says which passes the timed call made, an accepted verdict also carries the credit over those
     alone (`served_passes.timed_credit`): the run's credited MACs less the warm-up pass's credited cells' MACs at (1 − ρ),
     rounded up, so the run's deduction for ε falls wholly on the timed pass."""
-||||||| merged common ancestors
-    """Two honest passes of one epoch numbered on, 0, 1 then 2, 3, as the device numbers a serve's passes: both replayed and
-    accepted."""
-=======
-    """Two honest passes of one execution phase numbered on, 0, 1 then 2, 3, as the device numbers a serve's passes: both replayed and
-    accepted."""
->>>>>>> 7af4d24fca3e
     SP = load("pearl_c_vllm_served_passes", KERNEL.parent / "pearl_c_vllm" / "served_passes.py")
     a, b = (proved_pass(tmp_path / name, PROMOTED[0], ix)[0] for name, ix in (("a", (0, 1)), ("b", (2, 3))))
     served = {"run": RUN, "passes": [{"pass": 0, "timed": False, "units": 2, "tiles": 4, "manifest": str(a)},

@@ -143,6 +143,9 @@
         "verity/core/protocols/record.py",
         "verity/core/protocols/registration.py",
         "verity/core/site/",
+        "benchmarks/flock_kernels/",
+        "benchmarks/two_stage/",
+        "verity/ml/definitions/numerics/cuda/",
         "verity/core/protocols/interface/"
       ],
       "branch_suffixes": [

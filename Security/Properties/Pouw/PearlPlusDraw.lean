@@ -11,8 +11,7 @@ public import Mathlib.Algebra.BigOperators.Fin
 The sample a verdict opens (`PlanMeans`'s tiles): `t` work-weighted samples with replacement over every retained pass's
 tickets together (`tickets`, `pearlDraw`'s `weightedDraw`). Its units are the run's tiles in `tickets`' order, tile `u`
 holding `weightsOf tk u` tickets, so a sample is a `Pouw.Ticket (weightsOf tk) tk.length`: the sampling design `Pouw.MissBound` is
-stated over, and Clopper–Pearson's table is a miss bound for it (`Pouw.Proofs.missBound_cpUpper`). Two statements tie the
-code's sample to that sampling design:
+stated over. Two statements tie the code's sample to that sampling design:
 
 * `DrawIsOnItsStreams`: sample `j` reads its own stream of the run's sample key, index `("u", j)`, `drawBytes` bytes long,
   takes the uniform integer `uniformOn` gives below the tickets' total `W`, and names the tile of the ticket with that

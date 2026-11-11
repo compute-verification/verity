@@ -21,7 +21,7 @@ import threading
 import time
 from collections import defaultdict
 from contextlib import contextmanager
-from typing import Iterator
+from typing import Any, Iterator
 
 COMPONENTS = ("acquisition", "movement", "hashing", "root_finalisation", "opening_generation", "wait")
 
@@ -80,3 +80,19 @@ class Spans:
                 "per_step": {int(s): {c: v for c, v in d.items()} for s, d in sorted(self.per_step.items())},
                 "throughput": throughput,
             }
+
+
+COMMIT_S = {"serving": ("acquisition", "movement", "wait"), "worker": ("hashing", "worker_idle", "root_finalisation", "device_pool_wait")}
+
+
+def commit_s_of(rc: Any) -> dict[str, dict[str, float]] | None:
+    """A window's Commit time by thread, summed over its steps (the committer's per-step spans). The serving thread's
+    ``movement`` is the copies' native issue, ``acquisition`` the step ends and the sources' takes (their waits included), and
+    ``wait`` its waits for a free slot of the staging ring, the worker behind. The worker's ``hashing`` holds ``worker_idle``, its
+    waits for the serving thread's windows. The finalize's wait for the worker has no step and isn't counted."""
+    spans = getattr(rc, "spans", None)
+    per_step = spans.get("per_step") if spans else None             # None: the committer recorded no per-step spans
+    if not per_step:
+        return None
+    per = per_step.values()
+    return {side: {c: round(sum(float(d.get(c, 0.0)) for d in per), 4) for c in cs} for side, cs in COMMIT_S.items()}

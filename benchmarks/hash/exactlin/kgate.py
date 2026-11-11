@@ -251,7 +251,6 @@ def dump_replay(path: Path, x: torch.Tensor, xq: torch.Tensor, s: torch.Tensor, 
              y=y[:, :DUMP_N].contiguous().view(torch.int16).cpu().numpy().view(np.uint16))
 
 
-<<<<<<< HEAD
 def zy_doc(xq, s, w, s_w, y_ref) -> dict:
     """The served zy op body (`int8_fused.product_zy`, at its own `_plan`) against `int8_exact.scaled_mm_zy`."""
     from verity_vllm.engine import int8_fused as F
@@ -269,12 +268,8 @@ def zy_doc(xq, s, w, s_w, y_ref) -> dict:
     return doc
 
 
-def one(n: int, k: int, m: int, seed: int, with_stock: bool, names: list[str] | None = None, cfg=None,
-        dump: Path | None = None, zy: bool = False) -> dict:
-=======
 def one(n: int, k: int, m: int, seed: int, with_stock: bool, names: list[str] | None = None, cfg: X.Cfg | None = None,
-        dump: Path | None = None) -> dict:
->>>>>>> origin/main
+        dump: Path | None = None, zy: bool = False) -> dict:
     """`cfg` is the GEMM's config (default `exactlin.pick`, what `install` serves); `dump` a directory that gets the
     graph replay's outputs (`dump_replay`); `zy` adds the served zy op body's check (`zy_doc`)."""
     e = E()

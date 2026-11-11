@@ -118,14 +118,8 @@ from typing import Any
 from verity.ml.commitments.identity import canonical_json_bytes, tagged_sha512
 from verity.core.protocols.certifier.active import (DATA, HEADER, PAD, RUN_ID_BYTES, decode_frame, encode_frame,
                                                    precise_sleep)
-<<<<<<< 99c8914848
 from verity.core.protocols.certifier.grid import Certifier, GridParams, Reason, BlockGrid, Row, Status, row_count
-||||||| merged common ancestors
-from verity.core.protocols.certifier.grid import Certifier, GridParams, Reason, Record, Row, Status, row_count
-=======
-from verity.core.protocols.certifier.grid import Certifier, GridParams, Reason, Record, Row, Status, row_count
 from verity.core.protocols.certifier.io_tie import parse_cell
->>>>>>> 7af4d24fca3e
 from verity.core.protocols.certifier.pacer import Pacer, Report
 from verity.core.protocols.certifier.release import WATERMARK_END, watermark_chunk, watermark_head, with_release
 
@@ -341,33 +335,17 @@ class Warden:
     - `release(link, row)`, when given, receives each grid's row as it ticks, ingress, egress, then fails, before
       that tick's `publish`: a publisher in another process builds each record from them as it fills, so that the
       tick never hands it a whole window at once;
-<<<<<<< 99c8914848
-    - `requests_released` counts the `END`s released, each connection's N its count before (`log`'s `release`), and
-      `run_id`, `RUN_ID_BYTES` sampled from `run_nonce` at construction, names the run on the server's side;
-    - with `paced`, seconds past `slack`, each tick hands its bucket to the pacer (`pacer.Pacer`; the module
-      docstring's "The pacer"), which releases it `paced` after its boundary on the host's monotonic clock, `origin`'s
-      clock then, to each connection's socket (`writer.get_extra_info("socket")`); `releases` holds each bucket's
-      `pacer.Report` once its writes end. On the host's clock (`clock` `time.monotonic`) `paced` is required: only a
-      warden on an injected clock writes each bucket on its loop;
-||||||| merged common ancestors
-    - `requests_released` counts the `END`s released, each connection's N its count before (`log`'s `release`), and
-      `run_id`, `RUN_ID_BYTES` sampled from `run_nonce` at construction, names the run on the server's side;
-    - with `paced`, seconds past `slack` (off by default), each tick hands its bucket to the pacer (`pacer.Pacer`;
-      the module docstring's "The pacer"), which releases it `paced` after its boundary on the host's monotonic clock,
-      `origin`'s clock then, to each connection's socket (`writer.get_extra_info("socket")`); `releases` holds each
-      bucket's `pacer.Report` once its writes end;
-=======
     - `requests_released` counts the `END`s released, each connection's N its count before (`log`'s `release`, its
       bucket `ingress_end`), and `run_id`, `RUN_ID_BYTES` sampled from `run_nonce` at construction, names the run on
       the server's side;
     - with `watermark`, a connect like `connect` (off by default), the watermark stream (the module docstring's "The
       watermark"): `watermarked` is the last line's (t, n), `watermark_lost` the releases its lines named lost, and
       `watermark_error` why the stream stopped, if it did;
-    - with `paced`, seconds past `slack` (off by default), each tick hands its bucket to the pacer (`pacer.Pacer`;
-      the module docstring's "The pacer"), which releases it `paced` after its boundary on the host's monotonic clock,
-      `origin`'s clock then, to each connection's socket (`writer.get_extra_info("socket")`); `releases` holds each
-      bucket's `pacer.Report` once its writes end;
->>>>>>> 7af4d24fca3e
+    - with `paced`, seconds past `slack`, each tick hands its bucket to the pacer (`pacer.Pacer`; the module
+      docstring's "The pacer"), which releases it `paced` after its boundary on the host's monotonic clock, `origin`'s
+      clock then, to each connection's socket (`writer.get_extra_info("socket")`); `releases` holds each bucket's
+      `pacer.Report` once its writes end. On the host's clock (`clock` `time.monotonic`) `paced` is required: only a
+      warden on an injected clock writes each bucket on its loop;
     - `until(predicate)` waits until the warden's state satisfies it, for a caller that drives a `VirtualClock`."""
 
     def __init__(self, params: WardenParams, connect: Callable[[], Awaitable[tuple[Any, Any]]], *, origin: float,
@@ -377,17 +355,11 @@ class Warden:
                  withhold: Callable[[BlockGrid, GridParams], None] | None = None,
                  release: Callable[[str, Row], None] | None = None, slack: float = 0.025,
                  egress_link: str = "responses", ingress_link: str = "requests", fails_link: str = "fails",
-<<<<<<< 99c8914848
-                 run_nonce: Callable[[int], bytes] = secrets.token_bytes, paced: float | None = None) -> None:
+                 run_nonce: Callable[[int], bytes] = secrets.token_bytes, paced: float | None = None,
+                 watermark: Callable[[], Awaitable[tuple[Any, Any]]] | None = None) -> None:
         if paced is None and clock is time.monotonic:
             raise ValueError("a warden on the host's clock is paced: a bucket written on its loop leaves when its tick "
                              "runs, which a server's writes move; give it `paced`, seconds past the slack")
-||||||| merged common ancestors
-                 run_nonce: Callable[[int], bytes] = secrets.token_bytes, paced: float | None = None) -> None:
-=======
-                 run_nonce: Callable[[int], bytes] = secrets.token_bytes, paced: float | None = None,
-                 watermark: Callable[[], Awaitable[tuple[Any, Any]]] | None = None) -> None:
->>>>>>> 7af4d24fca3e
         if paced is not None and not (isinstance(paced, (int, float)) and slack < paced < params.bucket_ms / 1000):
             raise ValueError(f"a paced bucket leaves past the slack and before the next boundary, so that a tick in "
                              f"time hands it before its time, not {paced!r} s after its boundary")

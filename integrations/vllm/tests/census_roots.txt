@@ -31,6 +31,7 @@ verity_vllm/ops/pod_bootstrap.sh
 verity_vllm/ops/pod_gate.sh
 
 # --- Python entry points
+verity_vllm.pipeline.research_tools
 verity_vllm.pipeline.cli
 verity_vllm.program.frontend.train_step      # a training step as a Program: a library entry point (`step_program`, `step_report`, `primitives`), called by tools/train_step_census.py and benchmarks/training_slowdown/grader
 verity_vllm.program.predict.steps      # I2, the compiler: a library entry point (`compile_steps`), called from outside the package
