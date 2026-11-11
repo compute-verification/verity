@@ -482,14 +482,15 @@ class BoundaryWindows:
     holds a finished one (``drained``), and at `stop`; its finished spans are committed class by class (`commit`, `write`)
     on a thread of their own, under ``out``/w<window>/, before anything can sample them, and each class's
     ``commit.json`` goes to ``sink`` too. ``check`` is the check template, or a callable giving it on that thread, and
-    ``inline`` its `Layout`'s. A failed commit is reported to ``sink`` (``error``) and registers nothing."""
+    ``inline`` and ``verdicts`` its `Layout`'s. A failed commit is reported to ``sink`` (``error``) and registers
+    nothing."""
 
     def __init__(self, out: Path, check: SpecializedDefinition | Callable[[], SpecializedDefinition], per_prompt: int,
                  per_output: int, window_s: float, *, drained: bool = True, inline: bool = False,
                  sink: Callable[[dict], None] | None = None, clock: Callable[[], float] = time.monotonic,
-                 serve: str | None = None) -> None:
+                 serve: str | None = None, verdicts: bool = False) -> None:
         self.out, self.per_prompt, self.per_output = Path(out), int(per_prompt), int(per_output)
-        self.window_s, self.drained, self.inline = float(window_s), drained, inline
+        self.window_s, self.drained, self.inline, self.verdicts = float(window_s), drained, inline, verdicts
         self.sink, self.clock = sink, clock
         self.serve = serve or secrets.token_hex(32)
         self._check, self._check_fn = (check, None) if isinstance(check, SpecializedDefinition) else (None, check)
@@ -502,11 +503,11 @@ class BoundaryWindows:
     @classmethod
     def of(cls, cfg: Mapping[str, Any], out: Path, sink: Callable[[dict], None] | None = None) -> BoundaryWindows:
         """From a serve's configuration: ``check``, a serving template's descriptor id (`check_template`), and
-        ``per_prompt``, ``per_output``, ``window_s``, ``drained`` and ``inline``."""
+        ``per_prompt``, ``per_output``, ``window_s``, ``drained``, ``inline`` and ``verdicts``."""
         t = str(cfg["check"])
         return cls(out, lambda: check_template(t), int(cfg.get("per_prompt", 0)), int(cfg.get("per_output", 1)),
                    float(cfg.get("window_s", 600)), drained=bool(cfg.get("drained", True)),
-                   inline=bool(cfg.get("inline", False)), sink=sink)
+                   inline=bool(cfg.get("inline", False)), sink=sink, verdicts=bool(cfg.get("verdicts", False)))
 
     @property
     def check(self) -> SpecializedDefinition:
@@ -572,7 +573,7 @@ class BoundaryWindows:
             for (p, o), mine in classes(spans).items():
                 try:
                     layout = Layout(self.check, self.per_prompt, self.per_output, p, o, len(mine),
-                                    run_root(self.serve, window), self.inline)
+                                    run_root(self.serve, window), self.inline, verdicts=self.verdicts)
                     c = commit(mine, layout, window)
                     write(c, self.out / f"w{window}" / f"p{p}-o{o}")
                     line = {**c.public(), "serve": self.serve, "open_s": opened, "close_s": closed, "carried": carried}

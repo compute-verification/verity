@@ -47,8 +47,8 @@ The arms, each one engine configuration; each adds its change to the arm it name
   rows and generators are taken, all kept until the next edge (`servetax_plugin.edges_of`, `boundary.rank_take`).
 - ``boundary-rows``: ``record`` with prefix caching off and the two-stage audit's boundary commitment at serve, each
   window's finished requests committed by size class (`verity_vllm.pipeline.boundary_rows`), its object (``check``,
-  ``per_prompt``, ``per_output``, ``drained``, ``inline``) ``--boundary-rows``'s JSON, at ``--window-s``; the server is
-  held after its loads until its windows' commits account for every finished request (`await_commits`).
+  ``per_prompt``, ``per_output``, ``drained``, ``inline``, ``verdicts``) ``--boundary-rows``'s JSON, at ``--window-s``; the
+  server is held after its loads until its windows' commits account for every finished request (`await_commits`).
 
 `plan` fixes the requests every arm serves, so a job's arms and reps read one file (``--plan``).
 

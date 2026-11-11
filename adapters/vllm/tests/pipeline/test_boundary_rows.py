@@ -330,3 +330,31 @@ def test_the_hook_commits_each_windows_finished_requests_by_class_as_it_closes(t
     with pytest.raises(ValueError, match="prefix caching off"):
         BR.BoundaryWindows(tmp_path / "x", PAIR, 0, 1, 10.0, clock=lambda: 0.0).install(Scheduler(caching=True), Hooks())
 
+
+def test_the_hook_commits_the_return_of_a_serve_whose_check_returns_verdicts(tmp_path):
+    """A serve configured with ``verdicts`` (`BoundaryWindows.of`): a class's ``commit.json`` holds its replay block's
+    return as a third value, and its files reopen to the roots its sink line holds. A serve without it holds the two
+    values. A check that returns no verdicts commits nothing and says why on the sink."""
+    for cfg, want in (({"verdicts": True}, True), ({}, False)):
+        bw = BR.BoundaryWindows.of({"check": "c", **cfg}, tmp_path / f"of{want}")
+        bw.stop()
+        assert bw.verdicts is want
+    got = {}
+    for name, check, verdicts in (("on", SAME, True), ("off", SAME, False), ("refused", PAIR, True)):
+        lines, sched, hooks = [], Scheduler(), Hooks(tag=f"test-boundary-verdicts-{name}")
+        bw = BR.BoundaryWindows(tmp_path / name, check, 0, 1, 10.0, sink=lines.append, clock=lambda: 0.0, serve="s",
+                                verdicts=verdicts).install(sched, hooks)
+        try:
+            sched.add_request(Request("a", [1, 2, 3]))
+            _step(sched, {"a": ([7, 8, 9], "length")})
+        finally:
+            bw.stop()
+            hooks.uninstall()
+        (got[name],) = lines
+    on, off = got["on"], got["off"]
+    assert on["verdicts"] is True and list(on["values"]) == [*BR.PORTS, BR.RETURN] and on["values"][BR.RETURN]["leaves"] == 4
+    c = BR.reopen(tmp_path / "on" / "w0" / "p4-o4", SAME)
+    assert {k: v.hex() for k, v in c.roots.items()} == {k: v["root"] for k, v in on["values"].items()}
+    assert "verdicts" not in off and list(off["values"]) == list(BR.PORTS)
+    assert got["refused"]["error"].startswith("ValueError") and "verdicts" in got["refused"]["error"]
+    assert not (tmp_path / "refused" / "w0").exists()
