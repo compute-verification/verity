@@ -1,6 +1,7 @@
 module
 
 public import Proofs.Flock.SpotFlock.SlotsAt
+public import Proofs.Flock.SpotFlock.WireMap
 public import Proofs.Flock.Claims.Sampling.Rewire
 
 /-!
@@ -35,6 +36,10 @@ which gates a unit needs and which roots each is opened under.
 
 At the wiring that moves nothing and returns everything, `Addresses` gives the property (`addressesWired_id`): it asks
 no more than `Addresses` of a design with no wire.
+
+The property is a premise only where every source bit of a member is at a port a link or a wire names
+(`sourcesNamed`, decided on what the verifier holds): round 2 reads any other port off the interior record, and the
+wired program opens its gates under the statement's roots.
 -/
 
 @[expose] public section
@@ -201,6 +206,33 @@ gate at the address `Addresses` gives it. So the property asks no more than `Add
 theorem addressesWired_id (hA : Addresses h) : AddressesWired h id (fun _ => true) :=
   ⟨fun g => (hA g).choose, fun _ => ⟨rfl, rfl⟩, fun r hr i hi =>
     CheckedRun.addressHoldsWired_id hr ((hA i).choose_spec r hr hi)⟩
+
+/-! ## Where the property is a premise: every source bit at a port a link or a wire names -/
+
+/-- **Every source bit is at a port a link or a wire names**, decided on what the verifier holds: each source gate
+of a member that has a commitment position (`sourceBits`) is at a port the auditor's copies give a link or a wire
+(`heldLink`, `heldWire`). Round 2 reads any other port at its own port of the interior record
+(`SecondStage.readOk`), under the replay block's roots, while the wired program leaves its gates inputs, opened
+under the statement's roots (`CheckedRun.rootsWired`). `AddressesWired` asks the two to be one, so it is a premise
+only where this holds. -/
+def sourcesNamed : Bool :=
+  (sourceBits h.ms).all fun s =>
+    (heldLink h (h.names.getD s.2.1 "") s.2.2.row).isSome || (heldWire h (h.names.getD s.2.1 "") s.2.2.row).isSome
+
+/-- **Only source bits at a port a link names stay inputs**: where every source bit is at a port a link or a wire
+names and every wired source bit has a gate to go to (`wiresMove`), a source bit at a port no link names has one
+(`wireTarget`), so the wiring map moves it. -/
+theorem wireTarget_of_sourcesNamed (hn : sourcesNamed h = true) (hc : wiresMove h = true) {x t : ℕ}
+    {r : Spot.Bits.RowPos} (hs : (x, t, r) ∈ sourceBits h.ms) (hl : heldLink h (h.names.getD t "") r.row = none) :
+    ∃ y, wireTarget h x = some y := by
+  have hall : ((heldLink h (h.names.getD t "") r.row).isSome ||
+      (heldWire h (h.names.getD t "") r.row).isSome) = true := List.all_eq_true.1 hn (x, t, r) hs
+  rw [hl] at hall
+  cases hw : heldWire h (h.names.getD t "") r.row with
+  | none =>
+    rw [hw] at hall
+    simp at hall
+  | some w => exact wireTarget_of_wiresMove h hc hs hl hw
 
 /-! ## A connected instance: the gates and their roots
 
