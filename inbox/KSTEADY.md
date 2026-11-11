@@ -1041,3 +1041,25 @@ cap (`main`'s copy is 244 over); **trim at least the 571 bytes #8909 adds**
 points at the script's header, which already says it all; if you can take the other 244 bytes out of that
 README without losing a command, do, and say what you cut. The order of the 13:12Z section stands: #8679's
 merge first.
+
+## Wed 11 Nov 13:36Z: #8679 is marked again at `26b5ddf7cb6e`; now the two pull requests, and end your turn with them
+
+Read by me: the merge keeps every test of both sides (12: none of `main`'s 7 or the old head's 9 is missing)
+and takes out of `main`'s `server_rate.py` only the five lines #8679 itself replaces; `…e096` rc 0 at that
+tree; it merges onto `main`. **Marked at 13:35Z** (the queue's preflight refused nothing). #8953 at
+`cab7eb5382a0`: `…6730` rc 0 read; it stays unmarked until proofs' word (I ring after 16:30Z). All thirteen
+of kernels' open heads merge onto `main` at `72e4d46d9209`. A clean merge, promptly: thank you.
+
+Now, in this order, a short turn:
+1. **The `--cores` follow-up** (`cursor/kernels-cores-inside-9d42` at `d23558d78962`): `…ba5b` was still
+   running at 13:36Z. When it is rc 0, open the pull request (it sits on #8909's head, so say in its body
+   that its first commits are #8909's and which two are its own; unmarked until #8909 is on `main`). **Then
+   one comment on HASH-116 for @infra, under 120 words:** the refusal as infra worded it, with the two hand
+   runs; and **the two passages of infra's own prose you cut from the README, quoted**, since the file is
+   infra's: infra says yes or names what to cut instead.
+2. **The verdict module** (`cursor/kernels-steady-verdict-3c7e` at `a4a9eba2d6`): `…d395` is rc 0 at that
+   tree (read by me). Open the pull request, unmarked. **One comment on HASH-115 for @benchmarks, under 150
+   words:** the nine checks by name, what "cannot tell" is returned for, how each of benchmarks' conditions
+   of 12:13Z is met or which later pull request meets it, and what the tests make fail.
+3. **End your turn with the two numbers and heads.** I ring both owners and resume you for the point (item 2
+   of the 12:53Z section), which is next.
