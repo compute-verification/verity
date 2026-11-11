@@ -469,20 +469,31 @@ def joined(pending: list[Future]) -> None:
         pending.clear()
 
 
-def _linked(path: Path, kept: dict[str, tuple[Path, dict]], data: Callable[[], bytes], digest: bool = True) -> dict:
+def rows_name(w: int, n: int, k: int, digests: bytes) -> str:
+    """What weight `w`'s rows file (n rows of k) is kept under in a store that outlives an install (`_linked`'s ``name``):
+    the weight, and the SHA-512 of its shape and its rows' digests as the device computed them (``rowdig_b``, under no
+    key, which an install's tree is made from).  An install links the file only where the rows it hashed have those
+    digests, so a weight whose rows differ from the file's is never linked to it."""
+    return f"{w}.rows.bf16@{hashlib.sha512(n.to_bytes(8, 'little') + k.to_bytes(8, 'little') + digests).hexdigest()}"
+
+
+def _linked(path: Path, kept: dict[str, tuple[Path, dict]], data: Callable[[], bytes], digest: bool = True,
+            name: str | None = None) -> dict:
     """`_write`'s file for bytes that don't change within an install (a weight's rows and tree): a hard link to the copy an
-    earlier retained pass wrote (`kept`, by file name), so every pass's directory holds what it opens without writing it
-    again; written (and kept) where there is none or the link fails (another file system, the copy deleted)."""
-    first = kept.get(path.name)
+    earlier retained pass wrote (`kept`, by file name, or by `name` where the copy outlives the install: `rows_name`),
+    so every pass's directory holds what it opens without writing it again; written (and kept) where there is none or
+    the link fails (another file system, the copy deleted).  The entry names `path` either way."""
+    name = name or path.name
+    first = kept.get(name)
     if first is not None and first[0] != path:
         try:
             path.unlink(missing_ok=True)
             os.link(first[0], path)
-            return dict(first[1])
+            return {**first[1], **_entry(path, first[1]["bytes"])}
         except OSError:
             pass
     out = _write(path, data(), digest)
-    kept[path.name] = (path, out)
+    kept[name] = (path, out)
     return out
 
 

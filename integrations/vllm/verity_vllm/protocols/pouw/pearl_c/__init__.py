@@ -104,11 +104,12 @@ from verity_vllm.protocols.pouw.pearl_c.host import (
     _stream,
     _TorchStream,
     _Uploads,
-    _write,  # noqa: F401 - kept importable here, as the tests read it
+    _write,
     _zeros,
     call_keys,  # noqa: F401 - kept importable here, as the tests read it
     epoch_of,
     memmove,
+    rows_name,
     write_manifest,  # noqa: F401 - kept importable here, as the tests read it
 )
 from verity_vllm.protocols.pouw.pearl_c.kernel import (
@@ -223,27 +224,51 @@ class _Shape:
         return self.keys if name == "keys" else self.b[name]
 
 
+def _epoch_phase(kernel: Kernel, s: C.PearlC, w: int, weight: Any, steps: tuple[str, ...],
+                 keys: dict[str, int]) -> tuple[dict[str, Any], dict[str, int], Any]:
+    """Weight `w`'s rows (the BF16 weight widened to FP32, exact) through `steps` of phase ``epoch``, on buffers of their
+    own under `keys` (a step that reads none needs none: ``rowdig_b``): the buffers, the pipeline's sizes, and the FP32
+    rows, which the caller holds until it has read the buffers back."""
+    import torch
+    R = kernel.run
+    n, k = weight.shape
+    size = R.Pipeline.sizes(R.BM, n, k, R.BM)
+    b = {name: _zeros(size[name], weight.device) for name in ("tree_b", "faT32", "fbT32", "fbT128", "rowdig_b", "segdig_b")}
+    xb = weight.to(torch.float32).contiguous()
+    pipe = _pipeline(kernel, R.BM, n, k, {**{x: t.data_ptr() for x, t in b.items()}, "line_a": 0}, xb.data_ptr(), keys,
+                     variant=s.device.name, weight=w)
+    _run(kernel, pipe, steps, _stream(weight.device))
+    return b, size, xb
+
+
 def weight_roots(kernel: Kernel, weights: dict[int, Any], scheme: str = SCHEMES[0], salt_key: bytes | None = None) -> dict[int, bytes]:
     """Each weight's B-row tree root (phase ``epoch`` alone), before any salt: the composition's weight phase, under the scheme
     `scheme` names: its device record is the pipeline variant, and its hashing format gives the tree hash.  The trees' hm96
     salts are the prover's, from `salt_key` (the install's, which its run is given too)."""
-    import torch
     s = scheme_of(scheme)
-    variant, hash = s.device.name, hash_format(s).tree_hash
-    R, out = kernel.run, {}
-    nb = R.NB
+    hash, nb, out = hash_format(s).tree_hash, kernel.run.NB, {}
     for w, weight in weights.items():
-        n, k = weight.shape
-        size = R.Pipeline.sizes(R.BM, n, k, R.BM)
-        b = {name: _zeros(size[name], weight.device) for name in ("tree_b", "faT32", "fbT32", "fbT128", "rowdig_b", "segdig_b")}
         keys, const = _zeros(128, weight.device), _constants(s, weight.device, salt_key)
-        _put(keys[64:], rows_domain(_weight_binding(w), -2, n, hash).domain_id)
-        xb = weight.to(torch.float32).contiguous()
-        pipe = _pipeline(kernel, R.BM, n, k, {**{x: t.data_ptr() for x, t in b.items()}, "line_a": 0}, xb.data_ptr(),
-                         {"line_b": keys.data_ptr(), "dom_b": keys.data_ptr() + 64, **_constant_keys(const)},
-                         variant=variant, weight=w)
-        _run(kernel, pipe, EPOCH_STEPS, _stream(weight.device))
+        _put(keys[64:], rows_domain(_weight_binding(w), -2, weight.shape[0], hash).domain_id)
+        b, size, _fp32 = _epoch_phase(kernel, s, w, weight, EPOCH_STEPS,
+                                      {"line_b": keys.data_ptr(), "dom_b": keys.data_ptr() + 64, **_constant_keys(const)})
         out[w] = _bytes(b["tree_b"][size["tree_b"] - nb:size["tree_b"]])
+    return out
+
+
+def keep_rows(kernel: Kernel, weights: dict[int, Any], scheme: str, directory: Path) -> dict[str, tuple[Path, dict]]:
+    """Every weight's rows (BF16, exact) written once under `directory`, each file named by `rows_name` from the row
+    digests the device computes of them (``rowdig_b`` alone, the step every install's tree starts from, which reads no
+    key): the store a served model's installs share (`PearlCDeviceRun`'s ``rows``), so a retained pass of any of them
+    links its weights' rows where it would write them."""
+    import torch
+    s, out = scheme_of(scheme), {}
+    directory.mkdir(mode=0o700, parents=True, exist_ok=True)
+    for w, weight in weights.items():
+        b, size, _fp32 = _epoch_phase(kernel, s, w, weight, ("rowdig_b",), {})
+        name = rows_name(w, *weight.shape, _bytes(b["rowdig_b"][:size["rowdig_b"]]))
+        rows = _bytes(weight.detach().to(torch.bfloat16).contiguous().view(torch.uint8))
+        out[name] = (directory / name, _write(directory / name, rows, digest=False))
     return out
 
 
@@ -296,18 +321,23 @@ class PearlCDeviceRun(LaneCalls, GraphCalls, EpochCalls, PassEnds):
                  flag_rows: int = FLAG_ROWS, salt_key: bytes | None = None, whole_defer_a: bool = False,
                  whole_fork_stats: bool = False, lag_ends: bool = False, whole_tree_sm: bool = False, aside_ends: bool = False,
                  pass_index: int | None = None, whole_prefetch_b: bool = False, whole_eager: str | Schedule | None = None,
-                 whole_shape_joins: bool = False, whole_pd_shared: bool = False):
+                 whole_shape_joins: bool = False, whole_pd_shared: bool = False,
+                 rows: dict[str, tuple[Path, dict]] | None = None):
         """`coins` is the epoch's coin commitment, held in this process or a live session's on the auditor host, and `opening`
         its salt coin, opened after the weights' root, or a live session's after salt epoch `pass_index`'s root (`epoch_of`,
         which raises `DomainError` otherwise): the salt is the coin's.
         The whole capture's options: `whole_options`.  `lag_ends`: an engine step's pass end (`_ExecutorPass.end`, `end_pass`
         with ``step``) leaves its commitment's readback in flight (`end` with ``lag``, `LaneCalls.settle`); with `aside_ends`
         too, its tile tree runs on a stream of its own over a copy of the leaves (`LaneCalls._end_aside`).  `whole_eager`
-        is the schedule a forward a whole-step arm runs eagerly takes (`eager_forward`)."""
+        is the schedule a forward a whole-step arm runs eagerly takes (`eager_forward`).  `rows` is a store of weight
+        rows files that outlives the run (`keep_rows`', the served model's, shared by its installs): a retained pass
+        links a weight's rows from it where the rows this install hashed on the device are the ones the file was
+        written from (`rows_name`), and writes them as its own otherwise, as it does without a store."""
         whole_options(entry, kernel, whole_defer, whole_defer_a, whole_fork_stats, whole_tree_sm, lag_ends, aside_ends,
                       whole_prefetch_b, whole_shape_joins, whole_pd_shared)
         self.scheme, self.entry, self.kernel, self.hashing, self.capacity = scheme, entry, kernel, hashing, capacity
         self.nb, self.salt_key, self.retain_dir, self.retained, self._weight_files = kernel.run.NB, salt_key, None, 0, {}
+        self._rows, self._rows_at = dict(rows or {}), {}
         self.graphs = graphs and next(iter(weights.values())).device.type == "cuda"
         self.whole_defer, self.whole_defer_a, self.whole_fork_stats = whole_defer, whole_defer_a, whole_fork_stats
         self.whole_tree_sm, self.whole_prefetch_b, self.whole_shape_joins = whole_tree_sm, whole_prefetch_b, whole_shape_joins

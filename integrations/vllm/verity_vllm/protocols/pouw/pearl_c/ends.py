@@ -19,7 +19,16 @@ from verity.core.protocols.pouw.protocol import Matmul
 from verity.ml.protocols.pouw.schemes import pearl_c_work as PW
 from verity.core.protocols.pouw.serving import Schedule, SchemeId
 
-from verity_vllm.protocols.pouw.pearl_c.host import _bytes, _linked, _put, _zeros, joined, write_behind, write_manifest
+from verity_vllm.protocols.pouw.pearl_c.host import (
+    _bytes,
+    _linked,
+    _put,
+    _zeros,
+    joined,
+    rows_name,
+    write_behind,
+    write_manifest,
+)
 from verity_vllm.protocols.pouw.pearl_c.host import behind as host_behind
 from verity_vllm.protocols.pouw.pearl_c.manifest import session_head
 from verity_vllm.protocols.pouw.pearl_c.screen import excluded, excluded_host
@@ -46,7 +55,7 @@ class PassEnds:
     """`PearlCDeviceRun`'s pass ends, as its base class: the run's ``cur``, ``hashing``, ``kernel``, ``nb``, ``roots``,
     ``salt``, ``schedule``, ``leaves``, ``roots_buf``, ``flag_buf``, ``const_keys``, ``tree_hash``, ``details``,
     ``commits``, ``weights``, ``entry``, ``scheme``, ``coins``, ``opening``, ``salt_key``, ``device``, ``aside_ends``,
-    ``lag_ends``, ``_lagged``, ``_weight_files``, ``shapes``, ``_graphs`` and ``_stages``, and its ``stream``,
+    ``lag_ends``, ``_lagged``, ``_weight_files``, ``_rows``, ``_rows_at``, ``shapes``, ``_graphs`` and ``_stages``, and its ``stream``,
     ``join_sides``, ``begin``, ``settle``, ``_end_aside`` and ``_ended``."""
 
     #: the run's y trees on its device (`served_y.DeviceTrees`), made at the first retained call on it
@@ -219,7 +228,8 @@ class PassEnds:
                         out: dict[str, Any]) -> Callable[[], None]:
         """A retained pass's last files (the leaves and the tile tree, written behind the end) and the step that completes it
         once every file is: its records, its weights' files and its manifest, ``out``'s ``excluded_rows`` and ``manifest``.
-        A weight's files are written from the device by the first retained pass, on this thread, and hard-linked after."""
+        A weight's files are written from the device by the first retained pass, on this thread, and hard-linked after;
+        its rows are linked by the first too where the run's store holds them (`_rows_kept`)."""
         import torch
         d, nb = cur.retain, self.nb
         wd = d / "weights"
@@ -228,9 +238,12 @@ class PassEnds:
         sizes = {w: self.kernel.run.Pipeline.sizes(self.kernel.run.BM, wt.n, wt.k, self.kernel.run.BM)["tree_b"]
                  for w, wt in self.weights.items()}
 
+        rows = {w: self._rows_kept(w) for w in self.weights}
+
         def weight_files(read: Callable[[int, str], Callable[[], bytes]]) -> dict[str, dict]:
             return {str(w): {"n": wt.n, "k": wt.k, "root": wt.root.hex(), "excluded_b": list(wt.excluded),
-                             "rows": _linked(wd / f"{w}.rows.bf16", self._weight_files, digest=False, data=read(w, "rows.bf16")),
+                             "rows": _linked(wd / f"{w}.rows.bf16", rows[w][0], digest=False, data=read(w, "rows.bf16"),
+                                             name=rows[w][1]),
                              "tree": _linked(wd / f"{w}.tree", self._weight_files, data=read(w, "tree"))}
                     for w, wt in sorted(self.weights.items())}
 
@@ -241,9 +254,11 @@ class PassEnds:
             return lambda: _bytes(wt.tensor.to(torch.bfloat16).contiguous().view(torch.uint8))
 
         def from_first(w: int, part: str) -> Callable[[], bytes]:
-            return self._weight_files[f"{w}.{part}"][0].read_bytes
+            if part == "tree":
+                return self._weight_files[f"{w}.tree"][0].read_bytes
+            return rows[w][0][rows[w][1]][0].read_bytes
 
-        kept = all(f"{w}.{p}" in self._weight_files for w in self.weights for p in ("rows.bf16", "tree"))
+        kept = all(rows[w][1] in rows[w][0] and f"{w}.tree" in self._weight_files for w in self.weights)
         weights = None if kept else weight_files(from_device)
         head = {"schema": MANIFEST_SCHEMA, "run": cur.run, "entry": self.entry, "scheme": self.scheme.name,
                 "scheme_args": {k: getattr(SchemeId.parse(self.scheme.name), k) for k in ("forming", "device", "hashing")},
@@ -264,6 +279,17 @@ class PassEnds:
             path = write_manifest(d, head, weights or weight_files(from_first), matmuls)
             out.update(excluded_rows=sum(len(r.excluded_a) for r in cur.records), manifest=str(path))
         return complete
+
+    def _rows_kept(self, w: int) -> tuple[dict[str, tuple[Path, dict]], str]:
+        """Where weight `w`'s rows file is kept and under what name (`_linked`'s ``kept`` and ``name``): the store the run
+        was given, under `rows_name` of the row digests this install's tree was made from, read back from the device
+        once, where the store holds that name; else the run's own files, under the file's name, as its tree's is."""
+        if w not in self._rows_at:
+            wt, name = self.weights[w], None
+            if self._rows:
+                name = rows_name(w, wt.n, wt.k, _bytes(wt.b["rowdig_b"][:64 * wt.n]))
+            self._rows_at[w] = (self._rows, name) if name in self._rows else (self._weight_files, f"{w}.rows.bf16")
+        return self._rows_at[w]
 
     def retained_ends(self, wait: bool = True) -> None:
         """The retained passes ended behind their steps (`end`'s ``behind``) complete, in order, when `wait`; else those

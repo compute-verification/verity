@@ -770,6 +770,97 @@ def test_each_served_step_is_a_pass_retained_on_its_own(monkeypatch, tmp_path, d
         assert len({p["activation_roots"] for p in passes}) == 3
 
 
+def hashed_rows(monkeypatch) -> None:
+    """The recording stand-in runs no hash kernel, so every weight's row digests stay zero.  With this, the epoch phase's
+    ``rowdig_b`` step leaves each row's SHA-512 over its FP32 words (the device's is sha512/row-seg/v1 over the same
+    words): a weight's digests follow its rows, as on the device."""
+    run = PPD._run
+
+    def hashed(kernel, pipe, names, stream):
+        run(kernel, pipe, names, stream)
+        if "rowdig_b" in names:
+            for j in range(pipe.n):
+                row = ctypes.string_at(pipe.b["xb"] + pipe.row_bytes * j, pipe.row_bytes)
+                ctypes.memmove(pipe.b["rowdig_b"] + 64 * j, hashlib.sha512(row).digest(), 64)
+    monkeypatch.setattr(PPD, "_run", hashed)
+
+
+@pytest.mark.parametrize("dev", ["recording", pytest.param("twin", marks=[
+    pytest.mark.slow, pytest.mark.skipif(not (shutil.which("g++") or shutil.which("c++")), reason="simt_twin needs a C++ compiler")])])
+def test_a_served_models_rows_are_written_once_and_every_installs_passes_link_them(monkeypatch, tmp_path, dev):
+    """`keep_rows` writes each weight's rows once, named by the device's digests of them.  Two installs of the model given
+    that store (two windows: each its own hm96 key, its own roots and trees) retain passes whose ``weights/<w>.rows.bf16``
+    are hard links to it, and each manifest's ``weights`` is what an install without the store writes under the same key,
+    entry for entry, over the same bytes.  An install on a model whose weight 0 has one word changed, given the same
+    store, writes that weight's rows from its own weight and links only weight 1's; one whose kept file is gone writes
+    it again.  No install changes the store.  On ``recording`` the row digests are `hashed_rows`'; on ``twin`` the
+    device's kernels compute them, and the trees."""
+    rng = np.random.default_rng(31)
+    weights = {w: torch.from_numpy(bf16_words(rng, n, 1024).view(np.float32).copy()).to(torch.bfloat16)
+               for w, n in ((0, 256), (1, 128))}
+    kernel = PPD.Kernel(R, F, TwinDev(HD.build(tmp_path)) if dev == "twin" else RecordingDev(), "0" * 64)
+    if dev == "recording":
+        hashed_rows(monkeypatch)
+    bf16 = lambda t: t.contiguous().view(torch.uint8).numpy().tobytes()  # noqa: E731
+    store = PPD.keep_rows(kernel, weights, SCHEME, tmp_path / "rows")
+    kept = {int(name.split(".")[0]): path for name, (path, _) in store.items()}
+    assert sorted(p.name for p in (tmp_path / "rows").iterdir()) == sorted(store) and sorted(kept) == [0, 1]
+    assert all(kept[w].read_bytes() == bf16(weights[w]) and store[kept[w].name][1] == {
+        "path": kept[w].name, "bytes": 2 * weights[w].numel()} for w in weights)
+    before = dict(store)
+
+    def window(name, key, weights, rows=None):
+        """An install under hm96 key `key`, two passes retained in ``name/pass-<i>``: their manifests."""
+        roots = PPD.weight_roots(kernel, weights, SCHEME, salt_key=key)
+        run = PPD.PearlCDeviceRun(PPD.scheme_of(SCHEME), f"pouw:{SCHEME}", kernel, weights, roots, *salt_coin(roots),
+                                  capacity=1 << 12, salt_key=key, rows=rows)
+        mans = []
+        for i in range(2):
+            run.begin(retain=str(tmp_path / name / f"pass-{i}"))
+            for w, t in weights.items():
+                run.gemm(w, torch.randn(32, 1024).to(torch.bfloat16), t, None)
+            mans.append(json.loads(Path(run.end()["manifest"]).read_text()))
+        run.finish()
+        return mans
+
+    def files(name, part):
+        return [[tmp_path / name / f"pass-{i}" / "weights" / f"{w}.{part}" for i in range(2)] for w in (0, 1)]
+
+    keys = (bytes(range(1, 33)), bytes(range(2, 34)))
+    w0, w1 = window("w0", keys[0], weights, store), window("w1", keys[1], weights, store)
+    for w in (0, 1):
+        linked = files("w0", "rows.bf16")[w] + files("w1", "rows.bf16")[w]
+        assert {p.stat().st_ino for p in linked} == {kept[w].stat().st_ino} and kept[w].stat().st_nlink == 5
+        for name in ("w0", "w1"):
+            trees = files(name, "tree")[w]
+            assert trees[0].stat().st_ino == trees[1].stat().st_ino and trees[0].stat().st_nlink == 2
+        assert files("w0", "tree")[w][0].stat().st_ino != files("w1", "tree")[w][0].stat().st_ino
+    own = window("own", keys[1], weights)
+    assert [m["weights"] for m in own] == [m["weights"] for m in w1]
+    assert [m["weights"][str(w)]["rows"] for m in w1 for w in (0, 1)] == [
+        {"path": f"weights/{w}.rows.bf16", "bytes": 2 * weights[w].numel()} for _ in w1 for w in (0, 1)]
+    for part in ("rows.bf16", "tree"):
+        for a, b in zip(files("own", part), files("w1", part)):
+            assert a[0].read_bytes() == b[0].read_bytes() and a[0].stat().st_ino != b[0].stat().st_ino
+    if dev == "twin":
+        assert all(w0[0]["weights"][w]["root"] != w1[0]["weights"][w]["root"] for w in ("0", "1"))
+
+    changed = weights[0].clone()
+    changed[3, 5] = -changed[3, 5]
+    assert bf16(changed) != bf16(weights[0])
+    window("other", keys[0], {0: changed, 1: weights[1]}, store)
+    mine, linked = files("other", "rows.bf16")
+    assert mine[0].read_bytes() == bf16(changed) and mine[0].stat().st_ino == mine[1].stat().st_ino != kept[0].stat().st_ino
+    assert {p.stat().st_ino for p in linked} == {kept[1].stat().st_ino} and kept[0].stat().st_nlink == 5
+
+    kept[1].unlink()
+    window("gone", keys[0], weights, store)
+    _, again = files("gone", "rows.bf16")
+    assert again[0].read_bytes() == bf16(weights[1]) and again[0].stat().st_ino == again[1].stat().st_ino
+    assert files("gone", "rows.bf16")[0][0].stat().st_ino == kept[0].stat().st_ino
+    assert store == before and kept[0].read_bytes() == bf16(weights[0])
+
+
 #: `_retained_files`' digest of the three steps below as the retention path wrote them when each call's copies, its record,
 #: y's root and the pass's files and manifest were all waited for in its step
 RETAINED_DIGEST = "6ea82b92968e7213c16a075e8c0d7910dcbe5ea32f8892f937b85165e3a8722d"
@@ -1192,6 +1283,34 @@ def test_verify_run_rejects_a_wrong_weight_row_and_undeclared_exclusions(honest_
     path.write_text(json.dumps(man))
     r = VR.verify(path, 3, 1, "test", b"verifier" * 4, coins=published(path))
     assert not r["accepted"] and "records are not the ones" in r["line"]
+
+
+@pytest.mark.slow
+def test_verify_run_accepts_a_later_windows_pass_on_linked_rows_and_refuses_other_weights_on_them(tmp_path):
+    """A served model's later window: the same weights under a fresh hm96 key, so its roots and trees are its own, and
+    its pass's ``weights/<w>.rows.bf16`` hard links to the first window's files, as the store `keep_rows` writes gives
+    every install's passes.  verify_run accepts it as it accepts the first window's.  A pass over other weights whose
+    rows files are links to the first's is refused at the weight opening: a link gives a pass no rows its own roots
+    don't bind."""
+    scheme = "pearl-c-h100-v1-h3"
+    first = proved_pass(tmp_path / "w0", scheme)[0]
+    later = proved_pass(tmp_path / "w1", scheme, key=bytes([3]) * 32)[0]
+    other = proved_pass(tmp_path / "w2", scheme, seed=12)[0]
+    weights = [json.loads(p.read_text())["weights"] for p in (first, later, other)]
+    assert all(weights[0][w]["root"] != weights[1][w]["root"] and weights[0][w]["rows"] == weights[1][w]["rows"]
+               for w in ("0", "1"))
+    for path, same in ((later, True), (other, False)):
+        for w in ("0", "1"):
+            rows, kept = (p.parent / weights[0][w]["rows"]["path"] for p in (path, first))
+            assert (rows.read_bytes() == kept.read_bytes()) == same
+            rows.unlink()
+            rows.hardlink_to(kept)
+            assert rows.stat().st_ino == kept.stat().st_ino
+    for path in (first, later):
+        r = VR.verify(path, 3, 1, "test", b"verifier" * 4, coins=published(path))
+        assert r["accepted"] and r["line"].startswith(f"ACCEPT {scheme} pouw:{scheme}"), r.get("line") or r.get("error")
+    r = VR.verify(other, 3, 1, "test", b"verifier" * 4, coins=published(other))
+    assert not r["accepted"] and "weight opening" in r["line"] and r["line"].startswith("REJECT")
 
 
 def served_verify(d: Path, out: Path, *more: str) -> tuple[int, dict, dict]:
