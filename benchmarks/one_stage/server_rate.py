@@ -224,13 +224,10 @@ def cores(cpus=None, nodes: Path | None = None) -> dict:
     inherit it, and none sets its own), as their count, their list and the NUMA nodes that hold any of them
     (`NODES`' ``nodeN/cpulist``; none on a machine that lists no nodes)."""
     mine, held = set(os.sched_getaffinity(0) if cpus is None else cpus), []
-    for d in (nodes or NODES).glob("node[0-9]*"):
-        try:
-            parts = (d / "cpulist").read_text().strip().split(",")
-        except OSError:
-            continue
+    for f in (nodes or NODES).glob("node[0-9]*/cpulist"):
+        parts = f.read_text().strip().split(",")
         if any(mine & set(range(int(p.split("-")[0]), int(p.split("-")[-1]) + 1)) for p in parts if p):
-            held.append(int(d.name[4:]))
+            held.append(int(f.parent.name[4:]))
     return {"count": len(mine), "list": cpu_list(mine), "numa_nodes": sorted(held)}
 
 
