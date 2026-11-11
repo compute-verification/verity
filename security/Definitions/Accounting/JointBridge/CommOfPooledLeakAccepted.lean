@@ -1,0 +1,193 @@
+module
+
+public import Definitions.Accounting.JointPeriod
+public import Definitions.NetworkCertifier.PooledLeak
+public import Definitions.NetworkCertifier.Tap
+public import Definitions.Core.Assumptions
+import Mathlib.Algebra.Order.Floor.Extended
+import Mathlib.Algebra.Order.Interval.Basic
+import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
+import Mathlib.Analysis.SpecialFunctions.Bernstein
+import Mathlib.Analysis.SpecialFunctions.Gamma.Basic
+import Mathlib.Analysis.SpecialFunctions.Trigonometric.DerivHyp
+import Mathlib.Combinatorics.Enumerative.DyckWord
+import Mathlib.Combinatorics.SimpleGraph.Triangle.Removal
+import Mathlib.Data.NNRat.Floor
+import Mathlib.Data.Nat.Choose.Multinomial
+import Mathlib.Geometry.Euclidean.Altitude
+import Mathlib.NumberTheory.Chebyshev
+import Mathlib.NumberTheory.Height.NumberField
+import Mathlib.NumberTheory.Height.Projectivization
+import Mathlib.NumberTheory.LucasLehmer
+import Mathlib.NumberTheory.SelbergSieve
+import Mathlib.RingTheory.Radical.NatInt
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Topology.Sheaves.Init
+
+/-!
+# A period whose communication audit is the network certifier's monitoring period of sampled audits, pooled (trusted)
+
+A period's run leaves the network certifier's claim (`commWithin`) and its verdict (`accepts .network`) as fields.
+`RealizesCommOfPooledLeakAccepted` is a run whose communication audit is the monitoring period of `m` execution
+phases that `NetTiming.Guarantees.PooledLeakAccepted` is about (its windows): each execution phase registered as
+`sw i` and audited in its verification phase on its own live coins, the network certifier recording each one's
+observations. The network audit's own coins are the `m` verification phases' coins (`coins`), and the run's claim at
+`K` is the monitoring period's good event, `NetTiming.PooledGood`: the incorrect sets of the witnesses computed from
+each registration hold fewer than `Fmax` proof blocks in total, and every execution phase's observations meet its leak
+relation at its own incorrect set. That is the event whose secrets `PooledLeakAccepted` counts, with the incorrect
+proof blocks paid for once over the monitoring period, so `K` is the bits of that count: the pooled reading of the
+monitoring period, where the realization beside this one is the reading per phase. The run carries the deployed
+network certifier in `PooledLeakAccepted`'s form, and its trust, `trusted-host` (`Verity.Assumptions.TrustedHost`), is
+a field.
+-/
+
+@[expose] public section
+
+namespace Accounting.JointBridge
+
+open Claims Claims.Sampling NetTiming
+
+/-- **A period whose communication audit is the network certifier's monitoring period of `m` sampled audits,
+pooled**, at the public layouts `lay`, horizons `k`, registered inputs `reg`, jitter bound `Dj` and the bound `Fmax`
+on the period's incorrect proof blocks, with the claim at `K`. Every field is a property of the deployed run:
+
+* the period's execution phases, as `PooledLeakAccepted` takes them: each one's registration (`sw`), its partition
+  into proof blocks (`Pw`), its registered values (`ρ`) and its operator (`op`);
+* the network audit's own coins are the `m` verification phases' coins, each a `Coin` (`coins`). Every field below
+  reads the run at the other audits' coins `ξ` with the network audit's own set to the phases' coins `ω`
+  (`Function.update ξ (r.own .network) (coins.symm ω)`, as an audit's guarantee, `Sound`, does), so nothing reads the
+  coordinate of `ξ` at the network audit;
+* the deployed network certifier, in `PooledLeakAccepted`'s form: one device (`device`) on the server's uplink, with
+  its connections `Conn`, cells `Cell` and the server's state `Srv`, whose run (`run`) on a schedule and the server's
+  state gives the cells the client receives and its record of the period's execution phases; its record format
+  (`fmt`) and what reaches it from the server on each connection (`arr`); and, at the coins, its schedule (`sched`),
+  which the format holds (`fits`), and the server's state (`srv`). The record that the claim and the audits read is
+  its run's on those two;
+* the network certifier runs its code on its host (`trusted`, `trusted-host`);
+* at execution phase `i`, after the earlier phases' coins: its audit's verdict at its own coins `x` (`acc ξ i ω x`),
+  and the incorrect set of the witness computed from its registration, before its sample (`W ξ ω i`). Neither reads
+  the coins of phase `i` or of a later one through `ω` (`acc_prefix`, `W_prefix`), which holds when each execution
+  phase is registered before its coins are flipped and each verification phase's verdict is fixed before the next
+  one's are. Without it a prover that saw those coins could place its incorrect proof blocks where no sample falls,
+  and the miss probabilities would not multiply;
+* the network audit accepts only if every verification phase's audit does (`accepts_imp`);
+* the claim at `K` is the monitoring period's good event at those incorrect sets and the network certifier's record
+  (`comm_iff`): that is the event whose secrets `PooledLeakAccepted` counts, so `K` is the bits of that count, `log2`
+  of the bound it gives. No field ties the number `K` to the count yet, and none holds the count's own parameters
+  (each execution phase's number of proof blocks, the bits a proof block commits, the run's schedules and the most
+  cells each gives a connection): they come with that tie.
+
+The two inputs that `PooledLeakAccepted` takes at each execution phase are not fields: the miss probability given the
+earlier phases' coins (`MissWithin`) and the leak relation at the witness's incorrect set (`LeakWithin`), stated over
+`acc`, `W` and the record, are the premises of `Accounting.Guarantees.Bridge.CommOfPooledLeakAccepted` (`hesc`,
+`hleak`). -/
+structure RealizesCommOfPooledLeakAccepted {ι : Type} {d : Device ι} {α : Type} [Fintype α] {C : Verity.Circuit}
+    {I : Type} {Ω : I → Type} [DecidableEq I] [∀ i, Fintype (Ω i)]
+    (r : PeriodRun d α C Ω) (K : ℝ) (L Kₒ S : ℕ)
+    (lay : AuditStatement → BoundaryGates L S) (k : AuditStatement → ℕ) (reg : AuditStatement → Finset ℕ)
+    (Dj m Fmax : ℕ) where
+  /-- each execution phase's registration -/
+  sw : Fin m → AuditStatement
+  /-- each execution phase's partition into proof blocks -/
+  Pw : Fin m → Partition
+  /-- each execution phase's registered values at its registered inputs -/
+  ρ : Fin m → ℕ → Bool
+  /-- each execution phase's operator: the ingress at each step, from the observations before it -/
+  op : Fin m → ℕ → List (Obs L Kₒ S) → List Bool
+  /-- one verification phase's coins -/
+  Coin : Type
+  [coinFintype : Fintype Coin]
+  [coinNonempty : Nonempty Coin]
+  /-- the network audit's own coins are the `m` verification phases' coins, phase `i`'s at `coins x i` -/
+  coins : Ω (r.own .network) ≃ (Fin m → Coin)
+  /-- the connections on the server's uplink that the network certifier carries -/
+  Conn : Type
+  [connFintype : Fintype Conn]
+  /-- the cells it carries -/
+  Cell : Type
+  /-- the server's state, which fixes what reaches the network certifier -/
+  Srv : Type
+  /-- the network certifier's devices -/
+  Dev : Type
+  /-- what reaches the network certifier from the server on each connection, at the server's state -/
+  arr : Srv → Conn → Arrivals Cell
+  /-- the network certifier's record format over the period's execution phases -/
+  fmt : RecordFormat Conn Cell (Fin m → List (Obs L Kₒ S))
+  /-- the deployed network certifier -/
+  device : Dev
+  /-- what the network certifier does on a schedule and the server's state: the cells the client receives and its
+  record of the period's execution phases -/
+  run : Dev → CertifierSchedule Conn × Srv → (Conn → List (ℕ × CellView Cell)) × (Fin m → List (Obs L Kₒ S))
+  /-- the network certifier runs its code (`recordingCode`) on its host: `trusted-host`, the trust the network audit
+  rests on. `PooledLeakAccepted` takes it, and its record is what the leak relation (`hleak`) is about. -/
+  trusted : Verity.Assumptions.TrustedHost device run fun p => recordingCode fmt p.1 (arr p.2)
+  /-- the network certifier's schedule at the coins -/
+  sched : ((i : I) → Ω i) → CertifierSchedule Conn
+  /-- the server's state at the coins -/
+  srv : ((i : I) → Ω i) → Srv
+  /-- the record format holds every schedule of the run -/
+  fits : ∀ ξ, fmt.fits (sched ξ)
+  /-- execution phase `i`'s audit accepts at its own coins `x`, after the earlier phases' coins in `ω`, at the other
+  audits' coins `ξ` -/
+  acc : ((i : I) → Ω i) → Fin m → (Fin m → Coin) → Coin → Prop
+  /-- a verification phase's verdict reads `ω` only at the phases before it -/
+  acc_prefix : ∀ ξ i ω ω', (∀ j, j < i → ω j = ω' j) → acc ξ i ω = acc ξ i ω'
+  /-- the incorrect set of the witness computed from execution phase `i`'s registration, before its sample, after the
+  earlier phases' coins in `ω`, at the other audits' coins `ξ` -/
+  W : ((i : I) → Ω i) → (Fin m → Coin) → Fin m → Finset ℕ
+  /-- an execution phase's incorrect set reads `ω` only at the phases before it -/
+  W_prefix : ∀ ξ i ω ω', (∀ j, j < i → ω j = ω' j) → W ξ ω i = W ξ ω' i
+  /-- the network audit accepts only if every verification phase's audit accepts at its own coins -/
+  accepts_imp : ∀ ξ ω, r.accepts .network (Function.update ξ (r.own .network) (coins.symm ω)) → ∀ i, acc ξ i ω (ω i)
+  /-- the claim at `K`: the monitoring period's good event, at the witnesses' incorrect sets and the network
+  certifier's record of the run -/
+  comm_iff : ∀ ξ ω, r.commWithin K (Function.update ξ (r.own .network) (coins.symm ω)) ↔
+    PooledGood lay k reg Dj sw Pw ρ op Fmax (W ξ ω)
+      (run device (sched (Function.update ξ (r.own .network) (coins.symm ω)),
+        srv (Function.update ξ (r.own .network) (coins.symm ω)))).2
+
+attribute [instance] RealizesCommOfPooledLeakAccepted.coinFintype RealizesCommOfPooledLeakAccepted.coinNonempty
+  RealizesCommOfPooledLeakAccepted.connFintype
+
+namespace RealizesCommOfPooledLeakAccepted
+
+variable {ι : Type} {d : Device ι} {α : Type} [Fintype α] {C : Verity.Circuit} {I : Type} {Ω : I → Type}
+  [DecidableEq I] [∀ i, Fintype (Ω i)] {r : PeriodRun d α C Ω} {K : ℝ} {L Kₒ S : ℕ}
+  {lay : AuditStatement → BoundaryGates L S} {k : AuditStatement → ℕ} {reg : AuditStatement → Finset ℕ}
+  {Dj m Fmax : ℕ} (R : RealizesCommOfPooledLeakAccepted r K L Kₒ S lay k reg Dj m Fmax)
+
+/-- **The miss probability given the earlier phases' coins**, `PooledLeakAccepted`'s first input (its `hesc`) on this
+run: at every value `ξ` of the other audits' coins and after any coins `ω` of the earlier phases, execution phase
+`i`'s audit accepts with probability at most `(1 - q)^|W ξ ω i| + e i` over its own coins. `q` is the sampling
+design's detection probability of one incorrect proof block in an execution phase, and `e i` what the audit's
+knowledge soundness adds. A premise: SPOT's guarantee at each verification phase, given what came before it, is what
+gives it, and no proof here does. -/
+def MissWithin (q : ℝ) (e : Fin m → ℝ) : Prop :=
+  ∀ ξ i ω, Claims.Pr (R.acc ξ i ω) ≤ (1 - q) ^ (R.W ξ ω i).card + e i
+
+/-- **The leak relation at the witness's incorrect set**, `PooledLeakAccepted`'s second input (its `hleak`) on this
+run: at every value `ξ` of the other audits' coins, over the period's coins `ω`, execution phase `i`'s audit accepts
+while its observations in the network certifier's record fail the leak relation at `W ξ ω i` (`LeakAt`) with
+probability at most `e' i`. A premise: the leak guarantee of one sampled audit, on live coins and at the incorrect set
+of the witness computed before the sample, is what gives it, and no proof here does. -/
+def LeakWithin (e' : Fin m → ℝ) : Prop :=
+  ∀ ξ i, Claims.Pr (fun ω : Fin m → R.Coin => R.acc ξ i ω (ω i) ∧
+    ¬LeakAt lay k reg Dj (R.sw i) (R.Pw i) (R.ρ i) (R.op i) (R.W ξ ω i)
+      ((R.run R.device (R.sched (Function.update ξ (r.own .network) (R.coins.symm ω)),
+        R.srv (Function.update ξ (r.own .network) (R.coins.symm ω)))).2 i)) ≤ e' i
+
+end RealizesCommOfPooledLeakAccepted
+
+end Accounting.JointBridge

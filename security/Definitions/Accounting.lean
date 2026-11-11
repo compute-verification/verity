@@ -29,6 +29,7 @@ public import Definitions.Accounting.JointBridge.H200
 public import Definitions.Accounting.JointBridge.SpaceOfPeriodHeld
 public import Definitions.Accounting.JointBridge.BandwidthOfAuditPerRunPeriod
 public import Definitions.Accounting.JointBridge.CommOfPeriodLeakAccepted
+public import Definitions.Accounting.JointBridge.CommOfPooledLeakAccepted
 public import Definitions.Accounting.JointLive
 public import Definitions.Accounting.Memory
 public import Definitions.Accounting.PerRun
