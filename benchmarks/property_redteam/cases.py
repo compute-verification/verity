@@ -22,20 +22,30 @@ Definition of its own.
 from __future__ import annotations
 
 import struct
+from collections.abc import Callable
 from dataclasses import dataclass, field
-from typing import Any, Callable
-
-from verity.circuits.defs import REGISTRY, CompositeDefinition, PrimitiveDefinition
-from verity.definitions.ops import prims, s8
-from verity.definitions.ops import scalar  # noqa: F401  (I32Add, SelectI32, F32Fmaxf, F32Fminf register on import)
-from verity.circuits.program import Program
-from verity.circuits.refs import Coll, array_of, concat, tuple_of
-from verity.definitions.silicon.integer import S32_MAX, s32_word
-from verity.circuits.types import Array, Tuple as TupleT, Value
+from typing import Any
 
 import verity.protocols.pouw.prover.circuit.words  # noqa: F401  (PouwNoiseByte)
-from verity.definitions.registry import dsa, dsv4_qnorm_insert, flashmla, marlin_moe, topp_word_gates  # noqa: F401
+from verity.circuits.defs import REGISTRY, CompositeDefinition, PrimitiveDefinition
+from verity.circuits.program import Program
+from verity.circuits.refs import Coll, array_of, concat, tuple_of
+from verity.circuits.types import Array, Value
+from verity.circuits.types import Tuple as TupleT
+from verity.definitions.ops import (
+    prims,
+    s8,
+    scalar,  # noqa: F401  (I32Add, SelectI32, F32Fmaxf, F32Fminf register on import)
+)
+from verity.definitions.registry import (  # noqa: F401
+    dsa,
+    dsv4_qnorm_insert,
+    flashmla,
+    marlin_moe,
+    topp_word_gates,
+)
 from verity.definitions.registry.ref_prims import gather_f32
+from verity.definitions.silicon.integer import S32_MAX, s32_word
 
 CLASSES = ("roundings", "compare_select", "gathers", "products", "other")
 NEEDS_FAMILY = "verity.definitions.ops.s8"
