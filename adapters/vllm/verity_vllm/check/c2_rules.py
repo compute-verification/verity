@@ -126,10 +126,9 @@ def _query_population_scope(sr: dict | None) -> tuple[str | None, str | None]:
     if isinstance(cc, dict) and cc.get("agree") is False:
         return None, ("required manifest engines DISAGREE (the cross-check: the traversal of record and the inventory beside it must agree "
                       f"row for row for one release) -- {str(cc.get('why') or cc)[:300]}")
-    try:
-        c = QueryChecks.of(chk, QUERY_CHECKS)
-    except RecordError as e:
-        return None, f"C2 population reconciliation refused, nothing graded ({e})"
+    c, refused = _query_checks_read(sr)
+    if c is None:
+        return None, f"C2 population reconciliation refused, nothing graded ({refused})"
     if c.ok is False:
         parts = []
         if c.manifest_refused is not None:
@@ -174,14 +173,21 @@ def _query_population_scope(sr: dict | None) -> tuple[str | None, str | None]:
     return f"C2 population scope (query of record {qid}): {scope}", None
 
 
+def _query_checks_read(sr: dict) -> tuple[QueryChecks | None, str | None]:
+    """The replay's `population.query_checks` as its record, or the record's refusal of it; neither when the replay carries none."""
+    chk = _d(sr.get("population")).get("query_checks")
+    if not isinstance(chk, dict):
+        return None, None
+    try:
+        return QueryChecks.of(chk, QUERY_CHECKS), None
+    except RecordError as e:
+        return None, str(e)
+
+
 def _query_checks(sr: dict) -> QueryChecks | None:
     """The replay's `population.query_checks` as its record; None when the record carries none, or one `_query_population_scope`
     refuses (that refusal is the FAIL)."""
-    chk = _d(sr.get("population")).get("query_checks")
-    try:
-        return QueryChecks.of(chk, QUERY_CHECKS) if isinstance(chk, dict) else None
-    except RecordError:
-        return None
+    return _query_checks_read(sr)[0]
 
 
 def _faulted_prefix_facts(sr: dict) -> list[dict]:

@@ -1,8 +1,6 @@
 {
   "rule": "Recorded outcomes (in check/ and commit/, a caught exception is recorded, never dropped)",
   "entries": [
-    {"file": "verity_vllm/check/c2_rules.py", "kind": "silent-except", "symbol": "_query_checks", "detail": "except RecordError: return None"},
-    {"file": "verity_vllm/check/commit_rules.py", "kind": "silent-except", "symbol": "_int", "detail": "except (TypeError, ValueError): return default"},
     {"file": "verity_vllm/check/fold_compare.py", "kind": "silent-except", "symbol": "_extra_norm_layer_fields", "detail": "except (AttributeError, KeyError, ValueError, IndexError): return {}"},
     {"file": "verity_vllm/check/fold_compare.py", "kind": "silent-except", "symbol": "_moe_layer_fields", "detail": "except (AttributeError, KeyError, ValueError, IndexError): return {}"},
     {"file": "verity_vllm/check/match/global_match_fast.py", "kind": "silent-except", "symbol": "_spec_id_memo", "detail": "except (AttributeError, KeyError): pass"},
