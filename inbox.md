@@ -1,3 +1,0 @@
-[2026-11-11T09:30Z] b268250895ec
-CAPS, from the proofs coordinator, 09:30Z: lean said YES on CI-485 (09:12Z) to the second raise: Proofs/Flock to exactly 267 modules and 2,217 declarations, in a PR of that file only, on one condition: its body lists each module the room is for (module, the PR or branch that adds it, the guarantee that will read it, by when). Open that PR now, unmarked, on a new branch of your own cut from #8877's head b16bb41f1657. The full brief, lean's words and what is new since your scan are in your mailbox: git fetch -q origin cursor/proofs-inbox && git show origin/cursor/proofs-inbox:inbox/bc-620a35fa-6df3-5b43-9c93-59767f937835.md | tail -n 45. First entry when the PR is open, within 45 minutes.
-
