@@ -109,6 +109,7 @@ untraced = [
     "tests/test_research_cancel.py",
     "tests/test_run_custody.py",
     "tests/test_run_cwd_clone.py",
+    "tests/test_run_env.py",
     "tests/test_run_launched.py",
     "tests/test_run_on_fixes.py",
     "tests/test_scopemem.py",

@@ -11,6 +11,7 @@ import pytest
 
 from research import runs as R
 from research.cli import main
+from research.result import env_defaults
 
 
 def test_run_records_and_inspects(tmp_path, capsys):
@@ -55,7 +56,7 @@ def test_local_env_is_applied_to_the_workload_recorded_and_scoped(tmp_path, monk
     assert Path(seen["cwd"]).resolve() == run_dir.resolve() and list(src.iterdir()) == [], "default cwd is the run dir: the checkout stays clean"
     assert "RSEC_FOO" not in os.environ and os.environ["RSEC_API_TOKEN"] == "callers", "--env is scoped to the workload"
     params = json.loads((run_dir / "job.json").read_text())["store"]["params"]
-    assert params["env"] == {"RSEC_FOO": "bar", "RSEC_API_TOKEN": "<redacted>"}
+    assert params["env"] == {**env_defaults(os.environ), "RSEC_FOO": "bar", "RSEC_API_TOKEN": "<redacted>"}
     assert main(["run", "--runs-dir", str(tmp_path / "runs"), "--no-sampler", "--env", "NOEQUALS", "--", "true"]) == 2
 
 
