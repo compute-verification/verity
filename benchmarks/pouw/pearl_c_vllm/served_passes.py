@@ -789,11 +789,14 @@ def case(args: argparse.Namespace) -> int:
         return refuse(f"the coin record lacks {', '.join(k for k in CASE_RECORD if k not in coin)}")
     from verity.core.protocols.spot.one_stage import registration as REG
 
+    no_w = ("the Python verdict held the passes to no window record W (verify --tie) this can read, and the "
+            "case's commitment names W")
+    if not doc.get("tie_record"):         # no path to read: `Path("")` is the working directory
+        return refuse(no_w)
     try:
-        w = json.loads(Path(doc.get("tie_record") or "").read_text())
+        w = json.loads(Path(doc["tie_record"]).read_text())
     except (OSError, ValueError):
-        return refuse("the Python verdict held the passes to no window record W (verify --tie) this can read, and the "
-                      "case's commitment names W")
+        return refuse(no_w)
     if not isinstance(w, dict) or REG.digest(w) != (doc.get("tie") or {}).get("record"):
         return refuse("the window record W is not the one the Python verdict held the passes to")
     coins = VR.epoch_coins(passes / "coins.json")
