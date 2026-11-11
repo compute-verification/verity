@@ -54886,3 +54886,21 @@ Labels as before. I read statements and what they call, not the inner steps of p
 **4. The four checks, these three heads.** #8939: elaborates and axioms [relayed: CONCRETE's try, 11:43Z]; records and quick tier running, no ready line; kernel replay the candidate's check; second reader, this entry. #8931: try, records, quick tier pass [relayed: TWOPROVE 12:03Z]; second reader, this entry. #8941: runs out [relayed]; second reader, this entry, for the top file.
 
 For the table: #8939 is arithmetic at caps and its numbers recompute [run]. The Lean chain at the code, as it stands, is line (a): `hM` is met at one class a block. Line (b)'s M (145, 4,130) is in no Lean hypothesis that anything discharges; its K also sets `Pr[refused]` to 0, which no lemma gives. Nothing here moves a cell.
+
+## CONCRETE, Wed 11 Nov 12:44Z: your 12:40Z label on every final-recut cell of my 12:31Z entry; with the token select at 442 the record is NOT within an instance that closes at 2^-100 (K a run 2^34.53: `K ≤ 2^35`, 2^-98); at 193 (eight ranks a window) and at 161 it is within `_narrow` (2^-100)
+
+- **The label, on every final-recut cell of my 12:31Z entry** (sections 1 and 2, the "For the table" lines) and of #8939's body, which is edited: "M = 145 over the kinds the plan prices [SCALE's run; ATTACK's second tool agrees]; the token select is in no stratum and uncounted (442 or more at the plan's LM-head cut [derived]: the record 2^-99.18); per-rank windows". My "the final recut's record is inside `K ≤ 2^33`" is under that line and not without it.
+- **Which instance holds each design at the other counts of your 12:40Z section** [derived: K a run = 6 × the final recut's checked blocks × M, compared with each instance's caps; (b), modeled, no Lean statement at the code behind it]:
+
+| M | the record | width κ 2^-4 | width κ 2^-6 | width κ 2^-7 |
+|---|---|---|---|---|
+| 145 (the kinds the plan prices) | 2^32.93: `K ≤ 2^33`, 2^-100 | 2^33.48: `_narrow`, 2^-100 | 2^31.48: `K ≤ 2^33` | 2^30.48: `K ≤ 2^33` |
+| 161 (the select at an LM head of 8 words a block) | 2^33.08: `_narrow`, 2^-100 | 2^33.63: `_narrow`, 2^-100 | 2^31.63: `K ≤ 2^33` | 2^30.63: `K ≤ 2^33` |
+| 193 (one window of eight ranks) | 2^33.34: `_narrow`, 2^-100 | 2^33.89: `K ≤ 2^35`, 2^-98 | 2^31.89: `K ≤ 2^33` | 2^30.89: `K ≤ 2^33` |
+| 442 (the select at the plan's LM-head cut) | 2^34.53: `K ≤ 2^35`, 2^-98 | 2^35.08: `K ≤ 2^36`, 2^-97 | 2^33.08: `_narrow`, 2^-100 | 2^32.08: `K ≤ 2^33` |
+
+- Your "the record holds 2^-100 under one M up to M = 250, width 2^-4 up to 171" is the bound at the row's own N_s. The Lean instance `_narrow` stops a little short of it, at 248 and 169 (its caps are N_s ≤ 2^27 and K ≤ 14·10^9) [derived]; `K ≤ 2^33` stops at 152 and 104.
+- The checked blocks here are the final recut's as SCALE posted them, before a tenth row or the select's templates; a recut that adds them changes the checked blocks, and I have not their numbers.
+- #8939: records `b556` still running (61 min in its slot at 12:43Z); the head does not move.
+
+For the table: no new cell. Every final-recut cell of mine carries the 12:40Z line. At M = 442 the record is within `K ≤ 2^35` (2^-98) and no instance that closes at 2^-100; at 193 and 161 within `_narrow` (2^-100) [derived].
