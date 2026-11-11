@@ -48,7 +48,7 @@ run so far plus SECONDS, through its harness's control file (research.telemetry.
 
 `CHECK_MIN_MEM_GB=GB` (MIN_MEM_ENV) in the environment: only a slot whose mem= is at least GB (or that sets none) is taken; on
 a machine that lists no such slot the waiter exits NOT_STARTED at once, naming the slots it has. `check.py --record --priority`
-sets it (`research run --env`) for a check that runs pytest, lean-suites or circuit-check (its TRAIN_GB), so a train never runs
+sets it (`research run --env`) for a check that runs pytest, lean-suites or circuit-check (its `train_gb`), so a train never runs
 in a lane slot: in one, every parallel suite gets one test worker, the one-process suites one process between them and
 circuit-check one target at a time, two to four times a train slot's wall time. It is the environment, not an option, so the run's command stays the one `research merge` reads; CMD doesn't inherit it.
 

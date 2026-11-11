@@ -938,10 +938,11 @@ def test_record_asks_for_a_train_slot_only_for_a_trains_tests_or_circuit_check_a
     assert check.train_gb(True, None, ["lean-build", "lean-audit:Security"], False) is None
     assert check.train_gb(True, None, ["pytest"], False) == check.TRAIN_GB                  # an after-landing run of the suites
     assert check.train_gb(True, None, ["lean-build", "lean-audit", "lean-suites"], False) == check.TRAIN_GB   # its Lean shard
+    assert check.train_gb(True, None, ["pytest", "lean-audit:security"], False) == check.TRAIN_GB   # the audit's shard
     assert check.train_gb(True, None, ["lean-suites:verity-flock"], False) == check.TRAIN_GB
     assert check.train_gb(True, None, ["flock-circuit-build", "circuit-check"], False) == check.TRAIN_GB
     assert check.train_gb(True, None, None, True) is None
-    assert check.TRAIN_GB == 300 and SLOT.MIN_MEM_ENV not in " ".join(calls[-1][calls[-1].index("--") + 1:])
+    assert check.TRAIN_GB == 200 and SLOT.MIN_MEM_ENV not in " ".join(calls[-1][calls[-1].index("--") + 1:])
 
 
 def test_memory_gb_is_the_least_of_memavailable_and_each_cgroup_limits_headroom(tmp_path):
