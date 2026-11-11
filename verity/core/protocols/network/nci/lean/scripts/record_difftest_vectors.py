@@ -48,7 +48,9 @@ word refused by the wires' own check. Then a root that
 hands a unit a row that is not input gates of its own: the served shape with one input run handed to two rows, with
 a row every unit shares, and with a row of computed gates. Then a text the form reads nothing of: the served shape's
 record as one that lists its members, which states no wires, refused by the wires' reader; and the text of no wire
-and nothing else, which names no Program, refused with its templates.
+and nothing else, which names no Program, refused with its templates. Then a row declared twice (`TWICE`): the served
+shape's record with one declaration more, into a row it already declares, a case each pair of a wire, a registered
+read, a table read, an opening's port and ingress, each refused.
 
 Every wire of every case is one `Record.sameSlot`'s search decides within its fuel (`searched`, the search
 mirrored and held to the expansion as the cases are made), so the Lean's count of a wire is the reference's.
@@ -736,7 +738,74 @@ def odd_output(S: int = 2, words: int = 2) -> Circuit:
 ODD_WIRE = {"reader": "OddWhole_v1", "port": "v", "writer": "OddOut_v1", "out": "o0", "at": 0, "radix": [1],
             "base": 0, "step": [0]}
 WEIGHTS = ("weights/embed/table", "weights/norm", "weights/query", "weights/mixing")
-EMBED = "LowEmbed_v1"
+EMBED, NORM, MIX, TABLE = "LowEmbed_v1", "LowNorm_v1", "LowMix_v1", "table/weights/embed"
+
+
+def _put(key: str, x: dict):
+    """The edit that declares `x` among a record's `key`: its `wires` or `ingress`, or one of `registered`'s lists."""
+    def edit(d: dict) -> None:
+        (d if key in ("wires", "ingress") else d["registered"]).setdefault(key, []).append(dict(x))
+    return edit
+
+
+def _port(port: str):
+    """The edit that lists `port` once more among the ports of a record's opening."""
+    return lambda d: d["registered"]["openings"][0]["ports"].append(port)
+
+
+def _take(key: str, reader: str, port: str):
+    """The edit that drops what a record's `key` declares to fill `reader`'s row `port`: of its `openings`, the port
+    from each one's ports, once; else every declaration into that row."""
+    def edit(d: dict) -> None:
+        at = d if key == "wires" else d["registered"]
+        if key == "openings":
+            for o in at[key]:
+                o["ports"].remove(port)
+        else:
+            at[key] = [x for x in at[key] if (x["reader"], x["port"]) != (reader, port)]
+    return edit
+
+
+def _read(reader: str, port: str, param: str, **more) -> dict:
+    """A registered read of `param`'s first leaves into row `port` of `reader`'s first unit."""
+    return {"reader": reader, "port": port, "param": param, "at": 0, "radix": [1], "base": 0, "step": [0], **more}
+
+
+def _ingress(reader: str, port: str) -> dict:
+    return {"reader": reader, "port": port, "at": 0, "units": 1, "step": 0}
+
+
+#: a row of `lowered(2, 3)` declared twice, a case each pair of what can fill a row that its record has a row for:
+#: the stage that refuses the record, the edit that declares the row a second time, and the edit that drops what
+#: the record as built declares to fill it. Each second declaration is well formed: with the first dropped, the
+#: stage takes it.
+TWICE: dict[str, tuple] = {
+    "a wire into a wired row":
+        ("wires", _put("wires", {"reader": EMBED, "port": "tok", "writer": "LowScan_v1", "out": "o0", "at": 0,
+                                 "radix": [1], "base": 0, "step": [0]}), _take("wires", EMBED, "tok")),
+    "a registered read into a wired row":
+        ("inputs", _put("reads", _read(NORM, "x", "weights/norm")), _take("wires", NORM, "x")),
+    "a registered read into one row of a wired cut":
+        ("inputs", _put("reads", _read(MIX, "a", "weights/norm", cut=[1, 1])), _take("wires", MIX, "a")),
+    "a registered read into a row a registered read fills":
+        ("inputs", _put("reads", _read(NORM, "w", "weights/norm")), _take("reads", NORM, "w")),
+    "a registered read into a row a table read fills":
+        ("inputs", _put("reads", _read(EMBED, "root", "weights/embed/table")), _take("roots", EMBED, "root")),
+    "a registered read into an opened row":
+        ("inputs", _put("reads", _read(EMBED, "row", "weights/embed/table")), _take("openings", EMBED, "row")),
+    "a table read into a row a table read fills":
+        ("inputs", _put("roots", {"reader": EMBED, "port": "root", "table": TABLE, "of": "domain", "at": 0, "units": 1}),
+         _take("roots", EMBED, "root")),
+    "a wired row among an opening's ports": ("inputs", _port("tok"), _take("wires", EMBED, "tok")),
+    "a row a table read fills among an opening's ports": ("inputs", _port("root"), _take("roots", EMBED, "root")),
+    "a row twice among an opening's ports": ("inputs", _port("path"), _take("openings", EMBED, "path")),
+    "ingress into a wired row": ("inputs", _put("ingress", _ingress(NORM, "x")), _take("wires", NORM, "x")),
+    "ingress into a row a registered read fills":
+        ("inputs", _put("ingress", _ingress(NORM, "w")), _take("reads", NORM, "w")),
+    "ingress into a row a table read fills":
+        ("inputs", _put("ingress", _ingress(EMBED, "root")), _take("roots", EMBED, "root")),
+    "ingress into an opened row": ("inputs", _put("ingress", _ingress(EMBED, "row")), _take("openings", EMBED, "row")),
+}
 
 
 def shaped() -> list[dict]:
@@ -769,7 +838,12 @@ def shaped() -> list[dict]:
     has, `Feed`'s selection not mapped, and `Select`'s row handed `Norm`'s output.
 
     Then the accepted case with its record's text another: one that lists its members and so states no wires
-    (`listed`, refused `wires`), and the text of no wire and nothing else, which names no Program (`templates`)."""
+    (`listed`, refused `wires`), and the text of no wire and nothing else, which names no Program (`templates`).
+
+    Then the accepted case with one row declared twice (`TWICE`): its record with one declaration more, into a row
+    the record already declares, a case each pair of a wire, a registered read, a table read, an opening's port and
+    ingress that the circuit has a row for. Two wires into one row are refused by the wires' own check (`wires`), and
+    every other pair with the declarations (`inputs`)."""
     out = []
     first = None
     for n, (S, T) in enumerate([(2, 3), (4, 35)]):
@@ -893,6 +967,8 @@ def shaped() -> list[dict]:
     first("2x3 a record that lists its members", c, 45, edit=listed(c), broken="wires")
     first("2x3 a text of no wire that names no Program", lowered(2, 3), 46,
           edit=lambda d: (d.clear(), d.update(wires=[])), broken="templates")
+    for k, (what, (stage, declare, _)) in enumerate(TWICE.items()):
+        first(f"2x3 {what}", lowered(2, 3), 47 + k, edit=declare, broken=stage)
     return out
 
 
@@ -1449,7 +1525,7 @@ NAMES = ("cases", "python")
 
 def total() -> int:
     """How many cases the audit's data has: the random ones and `shaped()`'s."""
-    return COUNT + 50
+    return COUNT + 50 + len(TWICE)
 
 
 def results(case: dict) -> dict:
