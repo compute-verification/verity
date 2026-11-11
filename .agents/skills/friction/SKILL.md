@@ -134,6 +134,8 @@ Keys and access:
   admin, billing, the Nebius and Cloudflare consoles).
 - The control pod holds a Nebius key that can only stop and read instances, root only, for infra's backstops,
   so stopping a machine never waits on an agent VM.
+- Workers' PRs go through `research queue open|edit` and a GitHub App on the control pod with pull-requests write only
+  (no contents), whose token no worker holds; the tool refuses a PR whose head branch isn't the caller's lane's.
 - A lane's gate key on an auditor's gate (vy-challenger-1, vy-auditor-2): the lane makes an ed25519 key, sends
   infra only the public half, and infra registers it under that lane.
 
@@ -156,16 +158,16 @@ Protocols and claims:
 - Credit and every report of computation are in AND gates (tentative). 𝓜's resources appear only inside
   exclusion, which reports in AND gates. Whoever finds a reason this is wrong floats it at once.
 - Credit of declared size, values certified, is a statement about values (sampled proofs'). Compute credit (Dither's;
-  PoUW's bar is now T1–T3) also needs values that read live noise and SAK's lower bound, so SAK is a premise of compute
-  credit as well as of exclusion (ASK-166). SAK is over noised operands only, never prover-chosen ones (pinned weights,
-  served activations, un-noised outputs), and an un-noised call earns no compute credit (ASK-174).
+  PoUW's bar is T1–T3) also needs values that read live noise and SAK's lower bound, so SAK is a premise of compute
+  credit as well as of exclusion. SAK is over noised operands only, never prover-chosen ones (pinned weights,
+  served activations, un-noised outputs), and an un-noised call earns no compute credit.
 - A workload is what a datacenter runs over a monitoring period (its Programs, their inputs and placement), at
   every scale; workloads compose, and "row" never names one.
 - The network certifier is one device on each AI server's uplink, whose one code run under one `trusted-host` gives
   both the cells and the records (`security/Definitions/NetworkCertifier/Tap.lean`). No statement
   ties them by a premise or trusts them separately.
 - θ comes only from registered public data, registered at the start of a deployment; outputs of earlier runs
-  are never θ (drops `NciCheck.Baseline`'s output provenance).
+  are never θ.
 - A protocol's verifier switches from Python to Lean only on evidence: its gap list shows nothing the
   Python checks that the Lean doesn't, and every recorded run replayed through the Lean gets the Python's verdict,
   negative controls included. The Python keeps running as the reference, the switch is one reversible line, and it moves
@@ -178,9 +180,8 @@ Protocols and claims:
   the circuit can't learn a coin, and verifier coins stay public. Only the weights may take a private encoding from a
   trusted third party, salted after the commitment with secrets the developer never sees, as one deployment variant.
 - No private or trapdoor encoding for KV. Credited dynamic memory rests on the public codec, and the stacking
-  bound on the named conjecture `EncodeChainHardness`, with the claims resting on it listed as conditional.
-  (`EncodeChainHardness` is falsified, `EncodeChainRefuted`; the bound now rests on `SquaringFloor` and
-  `ChainSum` in the repriced gate model, a thin lane a compare-select unit, listed the same way.)
+  bound on `SquaringFloor` and `ChainSum` in the repriced gate model (a thin lane a compare-select unit), with the
+  claims resting on it listed as conditional.
 - Memory and bandwidth accounting: no bound assumes the weights are incompressible, and a scheme may refuse
   all-zero weights; exhaustion is over the node's whole memory, KV included; no overhead target beyond 99%; guarantees
   are for the whole node. PoUB treats the developer's resources as one pool (conservation, no identity
