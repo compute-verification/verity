@@ -47,7 +47,11 @@ from typing import Any
 
 import torch
 
-from verity_vllm.acquire.sources.inductor_hooks import FLUSH, PREFIX, install_codegen_hooks
+from verity_vllm.acquire.sources.inductor_hooks import (
+    FLUSH,
+    PREFIX,
+    install_codegen_hooks,
+)
 from verity_vllm.engine import hooks
 
 GRAPH_MODES = ("FULL", "PIECEWISE")

@@ -285,6 +285,7 @@ def _definition(spec: str) -> tuple[Any, list[Any]]:
     """The registered Definition a Call's spec names and its parameters."""
     from verity.circuits.evaluation.reference import signature_of
     from verity.definitions.call_scope import specialization
+
     from verity_vllm.query.manifest.format import spec_family
     from verity_vllm.query.program_view import spec_statics
 

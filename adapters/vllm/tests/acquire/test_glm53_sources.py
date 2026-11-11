@@ -327,7 +327,11 @@ def test_the_moe_output_is_bound_only_on_a_tp_rank_of_a_module_that_does_not_red
 
 
 def test_identity_check_holds_a_served_step_to_ten_planes_per_layer_and_its_out(monkeypatch):
-    from verity_vllm.commit.committer.native_host import GPU_CHUNK_BYTES, NativeHostCommitter, TensorMeta
+    from verity_vllm.commit.committer.native_host import (
+        GPU_CHUNK_BYTES,
+        NativeHostCommitter,
+        TensorMeta,
+    )
 
     _c, src, names = run_source(monkeypatch, [3, 4])
     com = NativeHostCommitter(None, run_id="glm53-moe", gpu_tree=True)
@@ -546,7 +550,11 @@ class FarRun:
 
     def identity_check(self) -> dict[str, Any]:
         """The committer's X-03 identity check over the steps run, with this source attached and the norms as its modules."""
-        from verity_vllm.commit.committer.native_host import GPU_CHUNK_BYTES, NativeHostCommitter, TensorMeta
+        from verity_vllm.commit.committer.native_host import (
+            GPU_CHUNK_BYTES,
+            NativeHostCommitter,
+            TensorMeta,
+        )
 
         com = NativeHostCommitter(None, run_id="glm53-far", gpu_tree=True)
         com._modules = [(n, m) for n, m in self.root.named_modules() if isinstance(m, Norm)]

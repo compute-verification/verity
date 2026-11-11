@@ -31,13 +31,18 @@ import contextlib
 import importlib
 import json
 import types
+from collections.abc import Callable, Iterable, Mapping
 from pathlib import Path
 from typing import Any
-from collections.abc import Callable, Iterable, Mapping
 
 from verity_vllm.acquire.sources import call_boundary_source as CB
-from verity_vllm.acquire.sources.oracle_witness import MEMBERS, digest, schedule_file, witness_file
 from verity_vllm.acquire.sources.moe_source import moe_layers_of
+from verity_vllm.acquire.sources.oracle_witness import (
+    MEMBERS,
+    digest,
+    schedule_file,
+    witness_file,
+)
 from verity_vllm.engine import hooks
 from verity_vllm.query.manifest.bind import Port
 

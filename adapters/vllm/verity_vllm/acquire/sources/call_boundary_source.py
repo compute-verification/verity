@@ -23,14 +23,19 @@ from __future__ import annotations
 import math
 import re
 import time
-from typing import Any
 from collections.abc import Callable, Collection, Mapping, Sequence
+from typing import Any
 
 import numpy as np
 
 from verity_vllm.acquire.sources import call_boundary_plan as CP
 from verity_vllm.acquire.sources import int8_source
-from verity_vllm.acquire.sources.call_boundary_plan import FAMILY, WORD_DTYPES, Body, Plan
+from verity_vllm.acquire.sources.call_boundary_plan import (
+    FAMILY,
+    WORD_DTYPES,
+    Body,
+    Plan,
+)
 from verity_vllm.commit.binding import logical_request
 from verity_vllm.log import init_logger
 

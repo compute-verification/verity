@@ -19,18 +19,29 @@ the last layer's prompt rows before the last) whenever the manifest names narrow
 from __future__ import annotations
 
 import json
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from functools import partial
 from pathlib import Path
 from typing import Any
-from collections.abc import Mapping, Sequence
 
-from verity_vllm.acquire.sources import (attention_source, call_boundary_source, dsv4_attention_source, int8_source,
-                                         linear_quant_source, moe_align_source, narrowed_source, norm_scale_source,
-                                         route_source, router_softmax_source, scale_products_source, vocab_range_source)
+from verity_vllm.acquire.sources import (
+    attention_source,
+    call_boundary_source,
+    dsv4_attention_source,
+    int8_source,
+    linear_quant_source,
+    moe_align_source,
+    moe_source,
+    narrowed_source,
+    norm_scale_source,
+    route_source,
+    router_softmax_source,
+    scale_products_source,
+    vocab_range_source,
+)
 from verity_vllm.acquire.sources.call_boundary_plan import Plan
 from verity_vllm.acquire.sources.hidden_source import require_hidden_on_every_rank
-from verity_vllm.acquire.sources import moe_source
 from verity_vllm.config import option
 from verity_vllm.log import init_logger
 from verity_vllm.query import norm_scales as NS

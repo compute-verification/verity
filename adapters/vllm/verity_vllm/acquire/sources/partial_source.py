@@ -30,8 +30,14 @@ from verity_vllm.acquire.sources.allreduce_norm import AllReduceNorm
 from verity_vllm.commit.opened import OpenedReader, OpeningNotVerified
 from verity_vllm.engine import hooks
 from verity_vllm.engine.collectives import fused_norm as FN
-from verity_vllm.engine.collectives.collective_sites import MOE_COLLECTIVE_CLASSES as MOE_SITE_CLASSES, MOE_COLLECTIVE_MODULES
-from verity_vllm.engine.collectives.collective_sites import mid_module_site_census, patch_targets
+from verity_vllm.engine.collectives.collective_sites import (
+    MOE_COLLECTIVE_CLASSES as MOE_SITE_CLASSES,
+)
+from verity_vllm.engine.collectives.collective_sites import (
+    MOE_COLLECTIVE_MODULES,
+    mid_module_site_census,
+    patch_targets,
+)
 from verity_vllm.engine.profiles import layer_classes as LC
 from verity_vllm.log import init_logger
 

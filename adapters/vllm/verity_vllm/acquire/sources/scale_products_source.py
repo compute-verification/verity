@@ -13,13 +13,13 @@ is a collector error.
 from __future__ import annotations
 
 import time
-from typing import Any
 from collections.abc import Mapping
+from typing import Any
 
 import numpy as np
+from verity.definitions.numerics import fp8_twins
 
 from verity_vllm.engine import hooks
-from verity.definitions.numerics import fp8_twins
 from verity_vllm.log import init_logger
 from verity_vllm.query import scale_products as SP
 

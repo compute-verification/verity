@@ -43,16 +43,16 @@ from __future__ import annotations
 import inspect
 import re
 import sys
-from typing import Any
 from collections.abc import Mapping, Sequence
+from typing import Any
 
 import torch
 
 from verity_vllm.acquire.sources import call_boundary_source as CB
 from verity_vllm.commit import capture_map as CM
 from verity_vllm.commit.committer.run_values import RunValues
-from verity_vllm.query.manifest.bind import Port
 from verity_vllm.engine.hooks import Hooks
+from verity_vllm.query.manifest.bind import Port
 
 BINDER = "attention"
 ATTEND, MQA, MHA, NORM_ROPE = "_sparse_indexer_and_attn", "forward_mqa", "forward_mha", "fused_norm_rope"
