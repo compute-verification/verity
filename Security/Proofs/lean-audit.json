@@ -117,6 +117,7 @@
   "Proofs.Properties.Verity.Sampled.Window.Streams",
   "Proofs.Properties.Verity.Sampled.Window.Trees",
   "Proofs.Properties.Verity.Sampled.Window.Record",
+  "Proofs.Properties.Verity.Sampled.Window.Counts",
   "Proofs.Properties.Challenger.Window",
   "Proofs.Properties.Challenger.CanonLine",
   "Proofs.Properties.Challenger.Drawn",

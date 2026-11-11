@@ -282,7 +282,7 @@ theorem Member.spec_at {nJ : ℕ} (m : Member nJ) (hc : m.I.count = 1) (hr : m.I
       show #[st.tags.table] = #[m.I.tags.table]
       rw [hP.tagsEq]
       exact congrArg (fun t => #[t]) (zkTags_table m.I)
-    · exact absurd h1 (by omega)
+    · exact absurd h1 (by show ¬ 1 < m.I.count; omega)
   · funext b
     simp [Flock.SessionSpec.dg, h512]
 
@@ -303,9 +303,9 @@ theorem Member.mPts_eq {nJ : ℕ} (m : Member nJ) (t : ℕ) {record : String} {s
     ⟨-, st, hst, hsp, -⟩ | ⟨h1', -⟩
   · rw [hsp]
     refine Eq.trans ((hpin ⟨0, Composed.nTab_pos m.I⟩).2 st ?_) hcls
-    simp only [Exec.tagsAt, Composed.drawJ, ite_eq_left h1]
+    simp only [Exec.tagsAt, Composed.drawJ, if_pos h1]
     exact hst
-  · exact absurd h1' (by omega)
+  · exact absurd h1' (by show ¬ 1 < m.I.count; omega)
 
 /-- A member's plan has one table. -/
 theorem Member.tabs_eq {nJ : ℕ} (m : Member nJ) (t : ℕ) (S : Finset (Fin nJ)) (Rg : ByteArray) :
@@ -365,7 +365,6 @@ theorem session_stop_count {V : Vocab d α} {θ : ByteArray} {F : Array ByteArra
   have hnT := repStreamName_ne spec.tables[0]! ρ.val
   have hn' := hR.roundCount m _ L' i s n _ hlog rfl hτ hname hnT st hst hkR
   rw [getElem!_pos st.rounds (openedOf m i s) hkR] at hn'
-  rw [hn']
-  exact (rep_tailCount_accepted hv hd hret ρ hst hkR hmsg).symm
+  exact hn'.trans (rep_tailCount_accepted hv hd hret ρ hst hkR hmsg).symm
 
 end Verity.Sampled
