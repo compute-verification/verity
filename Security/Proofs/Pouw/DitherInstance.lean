@@ -19,9 +19,11 @@ public import Proofs.Core.Accel.Model
   its block's dither coins, inside the period, and arrives within `τ_ans` of its check coin, before the period's end
   (`AnswerAfterWork`, `Timed`), so it runs within the period (`AnswersFit`). No count of sampling blocks or of selected
   ones is read.
-* `workSoundAt_of_workSound`, `workSoundOnCard_of_workSound`: at every `x` meeting (P1) and (P2), and at the `x`
-  `CardWithinAccel` gives; `WorkSoundH200`, `WorkSoundSm120`, `WorkSoundOnCardH200` and `WorkSoundOnCardSm120` from
-  `Proofs.Pouw.Dither.WorkSound`. None reads a premise beyond `WorkSound`'s and the statement's.
+* `workSoundAt_of_workSound`, `WorkSoundAt`: at every card table, menu, host row and `x` meeting (P1) and (P2), from
+  `Proofs.Pouw.Dither.WorkSound`. It reads no premise beyond `WorkSound`'s and the statement's.
+* `workSoundOnCard`: the headline on the card itself, a corollary of `WorkSoundAt`: at the `x` `CardWithinAccel`
+  gives, where the card's runs are its model's. `workSoundH200`, `workSoundSm120`, `workSoundOnCardH200` and
+  `workSoundOnCardSm120`: the two at the H200's and the RTX PRO 6000's tables, menus and host rows.
 * `h200_semantics`, `sm120_semantics`: the exact `s8` semantics (`Verity.Accel.s8Open`) meets (P1) and (P2) on each
   card, so `WorkSoundAt`'s hypotheses on `x` are not empty.
 * `h200_onCard`, `sm120_onCard`: at that semantics, on any period's devices, `cardAccel` (programs as runs within the
@@ -92,6 +94,7 @@ theorem workSoundAtX_of_workSound (h : Pouw.Guarantees.Dither.WorkSound) (c : Ve
       linarith [h4.2.1, h4.2.2]
     show G.use (A.answer b) (A.answerIn o x b) r ≤ G.rate r * Pd.T
     exact h1.2.trans (mul_le_mul_of_nonneg_left hwa (g2.1 r).le)
+  unfold WorkBound
   refine ⟨h G P nsb Reg Obs _ dev Pd μ Wmm Wsha Wans (fun b => pubCost e μ pb.mm (macs b))
     (fun b => pubCost e μ pb.sha (comps b)) ηw δ (nmax * Wmac) (Ein + Eout) κS Q κdmm κdsha sel Badv ξ κx κsha
     hdual hinst' hH hη hδ hδ1 (mul_nonneg hn hWmac) (add_nonneg hEi hEo) hξ hκd hcap g1 g2 g3 p1 p2 sak sha out svc'
@@ -127,41 +130,59 @@ theorem workSoundAtX_of_workSound (h : Pouw.Guarantees.Dither.WorkSound) (c : Ve
     linarith
 
 
-/-- `WorkSound` gives the headline on every card table at every semantics meeting (P1) and (P2). -/
-theorem workSoundAt_of_workSound (h : Pouw.Guarantees.Dither.WorkSound) (c : Verity.Accel.Card)
-    (pb : PubBest c) (hr : HostRow) : WorkSoundAt c pb hr :=
-  fun x _ _ => workSoundAtX_of_workSound h c pb hr x
+/-- `WorkSound` gives the headline on every card table, menu and host row at every semantics meeting (P1) and
+(P2). -/
+theorem workSoundAt_of_workSound (h : Pouw.Guarantees.Dither.WorkSound) : WorkSoundAt :=
+  fun c pb hr x _ _ => workSoundAtX_of_workSound h c pb hr x
 
-/-- `WorkSound` gives the headline on the card itself: `CardWithinAccel` gives the semantics, with the card's runs as
-its model's there, and the headline holds at them. -/
-theorem workSoundOnCard_of_workSound (h : Pouw.Guarantees.Dither.WorkSound) (c : Verity.Accel.Card)
-    (pb : PubBest c) (hr : HostRow) : WorkSoundOnCard c pb hr := by
-  intro can hcw
+/-- **The headline on a card table at θ**, from `WorkSound`'s proof. -/
+theorem WorkSoundAt : Pouw.Guarantees.DitherInstance.WorkSoundAt :=
+  workSoundAt_of_workSound Pouw.SecurityProofs.Dither.WorkSound
+
+/-- **The headline on the card itself**, a corollary of `WorkSoundAt`: if the card can do no more than its accelerator
+model (the card premise, `Assumptions.CardWithinAccel c can`, for the card's computations `can`), then at some
+semantics `x` both hold: `x` meets (P1) and (P2) and the card's runs are the machine `⟨c, x⟩`'s programs
+(`CardRunsAt`), and the headline holds at `x` (`WorkSoundAtX`). The first three are the card premise unfolded, and the
+last is `WorkSoundAt` at that `x`. -/
+theorem workSoundOnCard_of_workSoundAt (h : Pouw.Guarantees.DitherInstance.WorkSoundAt) (c : Verity.Accel.Card)
+    (pb : PubBest c) (hr : HostRow) (can : (c.Mem → c.Mem) → ℚ≥0 → (c.Mem → Prop) → Prop)
+    (hcw : Verity.Assumptions.CardWithinAccel c can) :
+    ∃ x, c.Exact x ∧ Verity.Assumptions.AccelProductForm x ∧ CardRunsAt c x can ∧ WorkSoundAtX c pb hr x := by
   obtain ⟨x, hf, hp, hrun⟩ := hcw
-  exact ⟨x, hf, hp, hrun, workSoundAtX_of_workSound h c pb hr x⟩
+  exact ⟨x, hf, hp, hrun, h c pb hr x hf hp⟩
 
-theorem workSoundH200_of_workSound (h : Pouw.Guarantees.Dither.WorkSound) : WorkSoundH200 :=
-  workSoundAt_of_workSound h _ _ _
+/-- **The headline on the card itself**, on every card table, menu and host row, under the card premise. -/
+theorem workSoundOnCard (c : Verity.Accel.Card) (pb : PubBest c) (hr : HostRow)
+    (can : (c.Mem → c.Mem) → ℚ≥0 → (c.Mem → Prop) → Prop) (hcw : Verity.Assumptions.CardWithinAccel c can) :
+    ∃ x, c.Exact x ∧ Verity.Assumptions.AccelProductForm x ∧ CardRunsAt c x can ∧ WorkSoundAtX c pb hr x :=
+  workSoundOnCard_of_workSoundAt WorkSoundAt c pb hr can hcw
 
-theorem workSoundSm120_of_workSound (h : Pouw.Guarantees.Dither.WorkSound) : WorkSoundSm120 :=
-  workSoundAt_of_workSound h _ _ _
+/-- The headline on the H200 SXM at θ: `WorkSoundAt` at `Verity.Accel.H200.card`, `pubBestH200` and `hostH200`. -/
+theorem workSoundH200 (x : Verity.Accel.Open) (h1 : Verity.Accel.H200.card.Exact x)
+    (h2 : Verity.Assumptions.AccelProductForm x) : WorkSoundAtX Verity.Accel.H200.card pubBestH200 hostH200 x :=
+  WorkSoundAt Verity.Accel.H200.card pubBestH200 hostH200 x h1 h2
 
-/-- **The headline on the H200 at θ**, from `WorkSound`'s proof. -/
-theorem WorkSoundH200 : Pouw.Guarantees.DitherInstance.WorkSoundH200 :=
-  workSoundH200_of_workSound Pouw.SecurityProofs.Dither.WorkSound
+/-- The headline on the RTX PRO 6000 (sm_120) at θ: `WorkSoundAt` at `Verity.Accel.Sm120.card`, `pubBestSm120` and
+`hostSm120`. -/
+theorem workSoundSm120 (x : Verity.Accel.Open) (h1 : Verity.Accel.Sm120.card.Exact x)
+    (h2 : Verity.Assumptions.AccelProductForm x) : WorkSoundAtX Verity.Accel.Sm120.card pubBestSm120 hostSm120 x :=
+  WorkSoundAt Verity.Accel.Sm120.card pubBestSm120 hostSm120 x h1 h2
 
-/-- **The headline on the RTX PRO 6000 at θ**, from `WorkSound`'s proof. -/
-theorem WorkSoundSm120 : Pouw.Guarantees.DitherInstance.WorkSoundSm120 :=
-  workSoundSm120_of_workSound Pouw.SecurityProofs.Dither.WorkSound
+/-- The headline on the H200 SXM itself, under `card-within-accel(H200)`. -/
+theorem workSoundOnCardH200 (can : (Verity.Accel.H200.card.Mem → Verity.Accel.H200.card.Mem) → ℚ≥0 →
+      (Verity.Accel.H200.card.Mem → Prop) → Prop)
+    (hcw : Verity.Assumptions.CardWithinAccel Verity.Accel.H200.card can) :
+    ∃ x, Verity.Accel.H200.card.Exact x ∧ Verity.Assumptions.AccelProductForm x ∧
+      CardRunsAt Verity.Accel.H200.card x can ∧ WorkSoundAtX Verity.Accel.H200.card pubBestH200 hostH200 x :=
+  workSoundOnCard Verity.Accel.H200.card pubBestH200 hostH200 can hcw
 
-/-- **The headline on the H200 itself**, from `WorkSound`'s proof, under `card-within-accel(H200)`. -/
-theorem WorkSoundOnCardH200 : Pouw.Guarantees.DitherInstance.WorkSoundOnCardH200 :=
-  workSoundOnCard_of_workSound Pouw.SecurityProofs.Dither.WorkSound _ _ _
-
-/-- **The headline on the RTX PRO 6000 itself**, from `WorkSound`'s proof, under
-`card-within-accel(RTX PRO 6000)`. -/
-theorem WorkSoundOnCardSm120 : Pouw.Guarantees.DitherInstance.WorkSoundOnCardSm120 :=
-  workSoundOnCard_of_workSound Pouw.SecurityProofs.Dither.WorkSound _ _ _
+/-- The headline on the RTX PRO 6000 itself, under `card-within-accel(RTX PRO 6000)`. -/
+theorem workSoundOnCardSm120 (can : (Verity.Accel.Sm120.card.Mem → Verity.Accel.Sm120.card.Mem) → ℚ≥0 →
+      (Verity.Accel.Sm120.card.Mem → Prop) → Prop)
+    (hcw : Verity.Assumptions.CardWithinAccel Verity.Accel.Sm120.card can) :
+    ∃ x, Verity.Accel.Sm120.card.Exact x ∧ Verity.Assumptions.AccelProductForm x ∧
+      CardRunsAt Verity.Accel.Sm120.card x can ∧ WorkSoundAtX Verity.Accel.Sm120.card pubBestSm120 hostSm120 x :=
+  workSoundOnCard Verity.Accel.Sm120.card pubBestSm120 hostSm120 can hcw
 
 /-- The H200's (P1) and (P2) are met, by the exact `s8` semantics. -/
 theorem h200_semantics :
@@ -289,9 +310,9 @@ theorem cardAccel_callsAtPub {c : Verity.Accel.Card} (x : Verity.Accel.Open) (D 
     {u : ResUnits} (hu : u ∈ pb.sha) : CallsAtPub (cardAccel c x D u) (Equiv.refl _) pb :=
   ⟨u, hu, fun _ => rfl, fun _ => rfl⟩
 
-/-- **`WorkSoundH200`'s hypotheses on the card are met**: at the exact `s8` semantics (P1, P2), on any
-period's devices with positive other rates, some accelerator is the devices under some match, meets (G1), (G2) and
-(G3), and has its oracle calls at a public compression. -/
+/-- **`WorkSoundAt`'s hypotheses on the card are met at the H200's table**: at the exact `s8` semantics (P1, P2), on
+any period's devices with positive other rates, some accelerator is the devices under some match, meets (G1), (G2)
+and (G3), and has its oracle calls at a public compression. -/
 theorem h200_onCard (D : Devices Verity.Accel.H200.card) (P : RoundProto)
     (L : Layout (D.machine Verity.Accel.s8Open) P) (hoth : ∀ h, 0 < D.oth.rate h) (hmem : 0 ≤ D.oth.mem) :
     ∃ (G : Accel) (e : G.Res ≃ Verity.Accel.Res ⊕ D.oth.Res),
@@ -301,7 +322,7 @@ theorem h200_onCard (D : Devices Verity.Accel.H200.card) (P : RoundProto)
     cardAccel_onCard _ _ D (shaUnits 3400 152 (3608 / 32)) P L h200_rates_pos hoth hmem
   exact ⟨_, _, h1, h2, h3, h4, cardAccel_callsAtPub Verity.Accel.s8Open D pubBestH200 (List.Mem.head _)⟩
 
-/-- **`WorkSoundSm120`'s hypotheses on the card are met**, as on the H200. -/
+/-- **`WorkSoundAt`'s hypotheses on the card are met at the RTX PRO 6000's table**, as on the H200. -/
 theorem sm120_onCard (D : Devices Verity.Accel.Sm120.card) (P : RoundProto)
     (L : Layout (D.machine Verity.Accel.s8Open) P) (hoth : ∀ h, 0 < D.oth.rate h) (hmem : 0 ≤ D.oth.mem) :
     ∃ (G : Accel) (e : G.Res ≃ Verity.Accel.Res ⊕ D.oth.Res),
