@@ -25,8 +25,8 @@ if [ -z "${J10R_GPU_S:-}" ]; then
   nice -n 10 "$NVCC" -O3 -std=c++17 --expt-relaxed-constexpr -gencode "$GENCODE" -Xcompiler -fPIC \
     -shared -DH1U_KSPLIT=4 -DH1K_AUTO=1 -DH1K_RONLY=1 -o "$S/h1u_hbc.so" benchmarks/hash/dither/h1u.cu \
     > "$OUT/build-hbc.log" 2>&1 || { echo "j10r_gpu: NVCC_FAIL h1u.cu"; tail -30 "$OUT/build-hbc.log"; exit 11; }
-  nice -n 10 "$NVCC" -O3 -std=c++17 -I verity/ml/kernels -gencode "$GENCODE" -cubin \
-    -o "$S/noise.cubin" integrations/vllm/verity_vllm/protocols/pouw/pouw_cuda/noise.cu > "$OUT/build-noise.log" 2>&1 \
+  nice -n 10 "$NVCC" -O3 -std=c++17 -I verity/definitions/kernels -gencode "$GENCODE" -cubin \
+    -o "$S/noise.cubin" adapters/vllm/verity_vllm/protocols/pouw/pouw_cuda/noise.cu > "$OUT/build-noise.log" 2>&1 \
     || { echo "j10r_gpu: NVCC_FAIL noise.cu"; tail -30 "$OUT/build-noise.log"; exit 11; }
   sha256sum "$S/h1u_hbc.so" "$S/noise.cubin" | tee "$OUT/builds.txt"
   lease=$(command -v gpu-lease || echo /workspace/pouw/infra/bin/gpu-lease)
@@ -36,7 +36,7 @@ if [ -z "${J10R_GPU_S:-}" ]; then
   exit $rc
 fi
 S=$J10R_GPU_S
-export PYTHONPATH="$ROOT:$ROOT/tools/config:$ROOT/integrations/vllm" HF_HOME=${HF_HOME:-/workspace/hf}
+export PYTHONPATH="$ROOT:$ROOT/verity/configuration/config:$ROOT/adapters/vllm" HF_HOME=${HF_HOME:-/workspace/hf}
 nvidia-smi --query-gpu=index,name,memory.used,utilization.gpu --format=csv | tee "$OUT/gpu.txt"
 case "${JOB:-tests}" in
   tests)
@@ -58,7 +58,7 @@ case "${JOB:-tests}" in
     [ "${NOISE:-j10r}" = v1 ] && j10r=
     commit="--commit --negatives"
     [ "${COMMIT:-1}" = 0 ] && commit=
-    cd integrations/vllm
+    cd adapters/vllm
     # shellcheck disable=SC2086
     "$PY" -m tests.protocols.pouw_h1_gpu --workload fill --served $commit --receipts "$so" $j10r \
       --declare "${DECLARE:-32,3,32,4}" ${WINDOW_ARGS:-} --out "$OUT" --at 2026-10-24T00:00:00Z --by compute-accounting 2>&1 \
