@@ -28,8 +28,8 @@ def _capture(run: Path, *, rows=None, links=None, control: list[int] | None = No
     """A two-rank capture under ``run``: two steps of three collectives, each received value the Definition of the two ranks' parts, each
     recorder row the digests of its stored tensors, and each rank's Build links.  ``rows(rank, rows)`` and ``links(rank, doc)`` edit a
     rank's recorder rows and its Build's links; ``control`` is what a control arm generated; ``stored`` False stores no tensors."""
-    cap = run / "capture"
-    cap.mkdir(parents=True)
+    capture = run / "capture"
+    capture.mkdir(parents=True)
     g = torch.Generator().manual_seed(7)
     recorded: dict[int, list[dict]] = {0: [], 1: []}
     for step in (0, 1):
@@ -45,15 +45,15 @@ def _capture(run: Path, *, rows=None, links=None, control: list[int] | None = No
                                     "shape": list(part.shape), "part_sha256": _sha(part), "out_sha256": _sha(out)})
         for r in (0, 1):
             if stored:
-                torch.save(vals[r], cap / f"coll.rank{r}.step{step}.pt")
+                torch.save(vals[r], capture / f"coll.rank{r}.step{step}.pt")
     for r in (0, 1):
         mine = rows(r, recorded[r]) if rows else recorded[r]
-        (cap / f"coll.rank{r}.jsonl").write_text("".join(json.dumps(x) + "\n" for x in mine))
+        (capture / f"coll.rank{r}.jsonl").write_text("".join(json.dumps(x) + "\n" for x in mine))
         doc = {"rank": r, "world": 2, "program_digest": f"d{r}",
                "links": [{"k": k, "kind": kind, "shape": [1, w], "module_path": f"inner.model.{site} (Cls)"} for k, (site, kind, w) in enumerate(SITES)]}
         (run / f"b{r}").mkdir()
         (run / f"b{r}" / "tp_links.json").write_text(json.dumps(links(r, doc) if links else doc))
-    (cap / "tokens.json").write_text(_tokens(GENERATED, 1.5))
+    (capture / "tokens.json").write_text(_tokens(GENERATED, 1.5))
     if control is not None:
         (run / "control").mkdir()
         (run / "control" / "tokens.json").write_text(_tokens(control, 2.5))

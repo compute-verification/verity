@@ -208,7 +208,7 @@ def _structure(builds: list[str], recs: dict, steps: list, sched: dict[int, tupl
     return struct
 
 
-def _provenance(cap: Path, ranks: list[int], recs: dict, steps: list, recorder_sha: dict[str, str]) -> dict[str, Any]:
+def _provenance(capture: Path, ranks: list[int], recs: dict, steps: list, recorder_sha: dict[str, str]) -> dict[str, Any]:
     """Part 2 of the check, on the stored steps: every stored tensor digests to its recorder row (``recorder_sha``: the recorder files'
     own digests, which travel with the record), and every rank received the registered Definition of the ranks' partials."""
     import torch
@@ -240,9 +240,9 @@ def _provenance(cap: Path, ranks: list[int], recs: dict, steps: list, recorder_s
                                 f"for r in order[1:], order = {list(order)} (b1_tp2.allreduce_order); world 8: the routed Definition")
     prov["alt_f32_once_equal"] = 0
     prov["alt_ascending_equal"] = 0
-    switches = _routed_settings(cap, ranks, world, prov)
+    switches = _routed_settings(capture, ranks, world, prov)
     for s in steps:
-        pts = [cap / f"coll.rank{r}.step{s}.pt" for r in ranks]
+        pts = [capture / f"coll.rank{r}.step{s}.pt" for r in ranks]
         if not all(p.exists() for p in pts):
             continue
         vs = [torch.load(p) for p in pts]
