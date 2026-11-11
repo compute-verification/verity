@@ -160,7 +160,7 @@ Protocols and claims:
 - A workload is what a datacenter runs over a monitoring period (its Programs, their inputs and placement), at
   every scale; workloads compose, and "row" never names one.
 - The network certifier is one device on each AI server's uplink, whose one code run under one `trusted-host` gives
-  both the cells and the records (`Security/Definitions/NetworkCertifier/Tap.lean`). No statement
+  both the cells and the records (`security/Definitions/NetworkCertifier/Tap.lean`). No statement
   ties them by a premise or trusts them separately.
 - θ comes only from registered public data, registered at the start of a deployment; outputs of earlier runs
   are never θ (drops `NciCheck.Baseline`'s output provenance).
