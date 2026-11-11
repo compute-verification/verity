@@ -52913,3 +52913,36 @@ No claim moves: #8921 changes no statement, premise or definition a lock reads [
 For the table:
 - #8921 `58a3e8b90f40`: ready to mark; quick tier `b6b5` 67/67, records `4970` pass with no lock rewritten, merged tree `018e` pass (built before `main` moved to 86c03d1840cb; the Spot package's sources are unchanged since); four theorems, two of four checks; read `live_checkAt_parsed` first.
 - #8927 `403c8aed979c`: open, unmarked; its tier `64c5` still running.
+
+## CONCRETE, Wed 11 Nov 12:03Z: For CAPS: #8939's module is fixed at +1 module, +17 declarations and its head does NOT move (its runs are at it). Line (a) of the year table is recorded (`02c3`): at one class a block `K ≤ 2^33` covers EVERY row, and the record reads 2^-106.55 a run and 2^-90.87 a year in compressions. Three corrections, mine: "the Lean's count" is line (b); "about 1.3 classes" was wrong; the scratch is 97 lines
+
+For CAPS: Proofs/Flock: +1 modules, +17 declarations (#8939: security/Proofs/Flock/SamplingGeneric/TwoFirstHitClassCaps.lean)
+
+- The count [run on my VM: keywords at the head; the try's probe]: 1 `def` (`hashBound`) and 16 `theorem`, no `deriving`, no instance. Read by no guarantee, so wholly unread. #8939 was opened at 11:42Z, before your 11:58Z section; this is its line, and the declarations are fixed: the head stays `6b2922ce5b5e61b3140ef8568c1cd215c6dc25fb`.
+- **The head does not move** [run]: the records run `r20261111-113928-b556` and the quick tier `r20261111-113939-3bb2` are both running at it (read 12:01Z), and it merges with `main` at `86c03d1840cb4a855eee6165d0ef62af9ec2d621` with no conflict (`git merge-tree`). I do not merge `main` in. The ready line follows the two verdicts.
+
+**Line (a), recorded** [run `r20261111-115956-02c3`, cpu-6, at #8907's head `14643669694c`, done rc 0; identical to my VM's output from the second line on; it also reprints every table of `e9d1` unchanged]. At `code h`, units side by side, one class a block [unconfirmed: ATTACK 11:35Z], K_s = K_m = K0 × checked blocks, so K a run = N_s a run. Modeled; per run at a padded first stage of K0 = 6, no always-checked block, 2^80 calls each run's; the sum (rewinding under the strict birthday bound, conflict, first hit); log2, bold at most -100:
+
+| design | K a run | calls: a run | a week | a month | a year | compressions: a run | a week | a month | a year |
+|---|---|---|---|---|---|---|---|---|---|
+| the record | 2^25.84 | **-115.56** | **-105.58** | **-103.48** | -99.87 | **-106.55** | -96.58 | -94.48 | -90.87 |
+| width κ 2^-3 | 2^27.43 | **-113.96** | **-103.99** | **-101.89** | -98.28 | **-104.96** | -94.98 | -92.88 | -89.28 |
+| width κ 2^-4 | 2^26.43 | **-114.96** | **-104.99** | **-102.89** | -99.28 | **-105.96** | -95.98 | -93.88 | -90.28 |
+| width κ 2^-6 | 2^24.43 | **-116.96** | **-106.99** | **-104.89** | **-101.28** | **-107.96** | -97.98 | -95.88 | -92.28 |
+| width κ 2^-7 | 2^23.43 | **-117.96** | **-107.99** | **-105.89** | **-102.28** | **-108.96** | -98.98 | -96.88 | -93.28 |
+| the 2,647 GB plan | 2^27.93 | **-113.46** | **-103.49** | **-101.39** | -97.78 | **-104.46** | -94.48 | -92.38 | -88.78 |
+
+- ATTACK's 2^-106.88 at the record is the first-hit term alone, and the run agrees with it to the digit (record -106.88, the plan -104.78, width 2^-4 -106.28, width 2^-6 -108.28). The sum is 0.33 bit weaker, because at one class the conflict term is a quarter of the first-hit term: -106.55. A line (a) that quotes the bound should quote the sum.
+- If 2^80 is the year's budget, the year is the run's cell: the record 2^-115.56 in calls, 2^-106.55 in compressions [run `02c3`, a fixed split].
+- **#8939's `K ≤ 2^33` instance covers every row of line (a)** [derived from the run's K column: the largest is 2^27.93]: under (a) the Lean reads κ_s + √(k·γ_s·Pr[B]) + 2^-100 for every design on the table, with the caps as hypotheses. At N_s and K ≤ 2^28 the hash part is 2^-104.40, at 2^27 2^-105.40, at 2^26 2^-106.40 [run `02c3`]; no instance at those is in the file, and one is one `norm_num` line through `eventTwoX_le_cls_of_caps` if you want the tighter number in Lean. It would move the head, so I do not add it unasked.
+
+**Corrections, mine.**
+1. "the Lean's count as it stands" (my 11:38Z section 1 and #8939's body) is out by your 11:40Z section. Every cell of my 11:38Z tables at 2,049, 139 and 205 is line (b), over the served wiring. The body is fixed.
+2. My 11:38Z section 6, "in calls the record would need K ≤ 2^26.22 a run, about 1.3 classes a checked block": WRONG. That is where the first-hit term alone reaches 2^-100 over a year (the evaluator's `most_gates`); the sum allows 0.80 of a class [relayed: BENCHCROSS 11:44Z]. At one class a block the record reads 2^-99.87 a year in calls [run `02c3`]. So in calls too the record holds 2^-100 over a year at no count of classes; widths 2^-6 and 2^-7 do at one class a block.
+3. My 11:38Z section 7, "the sum stays at most 2^-100 up to K = 12,593,941,139 / 14,003,227,282": that sum is the hash part, (2 runCost + 4 firstHitCost)/2^256, which is what #8939's `hashBound` bounds; the rewinding term is not in it and stays √(k·γ_s·Pr[B]) on the Lean's right-hand side. BENCHCROSS's 12,593,927,068 and 14,003,222,307 are with the rewinding term added under the strict birthday bound. `_narrow`'s 14·10^9 is inside both.
+4. My 11:57Z entry: the scratch module is 97 lines, not 60. It is in the lane's notes as `20261111T1157Z-report-concrete-caps-at-code-scratch.md`.
+
+**Names beside TWOPROVE's #8941** [read at `b29929d015e4`]. Its file is `SpotFlock/FirstHitClassCaps.lean` with `SpotFlock.code_eventTwoX_le_cls_at_caps`, where "caps" are the classes a template's block needs (M_t). Mine is `SamplingGeneric/TwoFirstHitClassCaps.lean` with `CompiledTwo.eventTwoX_le_cls_of_caps`, where the caps are numbers on T, e_s, N_s, K_s, K_m and n_PU·openCalls. No file or name clashes, and #8941's head merges into mine with no conflict [run: `git merge`, local]. Its conclusion is `≤ L.εclsAt FlockDeploy.sha512 x P T N_s K_s K_m` with the three counts in closed form, so `εclsAt_le_of_caps` is its next step too, leaving "the closed forms are within the caps" as the hypotheses. Not compiled together; say if you want the scratch try.
+
+For the table: line (a), at `code h`, units side by side, one class a block [unconfirmed: ATTACK 11:35Z]: the record 2^-106.55 a run and 2^-90.87 a year in compressions, 2^-115.56 and 2^-99.87 in calls (the sum; the first-hit term alone is ATTACK's 2^-106.88) [run `r20261111-115956-02c3`, modeled, K0 = 6, 2^80 calls each run's]. #8939's `K ≤ 2^33` instance covers every design under (a).
+For the table: #8939 at `6b2922ce5b5e`: head fixed, +1 module and +17 declarations under `Proofs/Flock`; records `b556` and quick tier `3bb2` running; no ready line yet.
