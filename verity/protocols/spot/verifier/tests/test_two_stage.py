@@ -3,7 +3,7 @@ stage, the interior registration over the replay sample's proof blocks, the seco
 binding both registrations and both samples, each step by both verifiers; replay blocks of one template and of two,
 whose interior is template-major and whose second stage samples each cell; round 2's statement check of the
 second-stage sessions (`second_stage`), which refuses the two-stage form while `second_stage.FORM` is off; its
-refusals; and its profile at the footprint."""
+refusals; its profile at the footprint; and its replay grain's fan-out."""
 
 from __future__ import annotations
 
@@ -15,12 +15,13 @@ from math import comb
 
 import pytest
 
-from verity.circuits import codec
+from verity.circuits import codec, partition_object as PO
 from verity.circuits.defs import CompositeDefinition, PrimitiveDefinition, bind
 from verity.circuits.program import Program
-from verity.circuits.refs import tuple_of
+from verity.circuits.refs import array_of, tuple_of
 from verity.circuits.types import Array, Tuple, Value as Bits
 from verity.protocols.spot.verifier.profile import Bernoulli, Subset
+from verity.protocols.spot import optimize as O
 from verity.protocols.spot.verifier import second_stage as SS, service as S
 from verity.protocols.spot.verifier.one_stage import (draw as D, partition as P, registration as R,
                                                             verifier as V)
@@ -804,6 +805,38 @@ def test_the_second_stage_samples_k_in_each_cell():
                                   ([0], (4,), (0,), "1 to n_t"), ([0], (4, 2), (1, 3), "1 to n_t")):
         with pytest.raises(ValueError, match=match):
             S.select_second(sample, ns, ks, lambda m: bytes(m))
+
+
+def _over(r, x):
+    """`x`, a replay block's input, with its first pair's second byte taken from replay block result `r`'s first byte."""
+    return array_of([array_of([x[0][0], r[0]]), x[1], x[2]])
+
+
+def _shared(B, S_, x):
+    a = B.call(BLOCK, x[0])
+    b = B.call(BLOCK, _over(a, x[1]))
+    c = B.call(BLOCK, x[2])
+    d = B.batch(BLOCK, array_of([_over(b, x[3]), x[4]]), axes=(0,))
+    return tuple_of(a, b, c, d, B.call(BLOCK, _over(d[1], x[5])))
+
+
+def test_a_replay_block_reading_anothers_values_joins_its_group():
+    """Fan-out (`partition.fanout`): replay blocks are joined when one reads part of another's result, directly or
+    through others, and F is the most one group holds.  A population of closed replay blocks has F = 1.  Here the second
+    reads the first's result and the fourth, a batch member, the second's, while the last reads the batch's other
+    member: groups {0, 1, 3}, {2} and {4, 5}, F = 3, each member joining only what its own share reads.  F is a template
+    query's."""
+    assert P.fanout(P.population_program(BLOCK, 4), GRAIN) == 1
+    o = Array(3, Bits(8))
+    prog = Program(bind(CompositeDefinition("TwoStageTestShared", 0, (),
+                                            lambda S_: ((("x", Array(6, Array(3, Array(2, Bits(8))))),),
+                                                        Tuple(o, o, o, Array(2, o), o)), _shared, register=False)))
+    assert P.units(prog, GRAIN) == 6 and P.fanout(prog, GRAIN) == 3
+    cells, k, f = [O.Cell(3, 8.0)], {0: 1}, P.fanout(prog, GRAIN)
+    charge = O.two_stage_exfil(cells, k, 6, .5, DELTA, 8.0, fanout=f)
+    assert charge == O.two_stage_exfil(cells, k, 6, .5, DELTA, f * 8.0) > O.two_stage_exfil(cells, k, 6, .5, DELTA, 8.0)
+    with pytest.raises(P.QueryRefused, match="template query's"):
+        P.fanout(Program(PAIR), PO.call_query(16))
 
 
 TRIPLE = bind(CompositeDefinition("TwoStageTestTriple", 0, (), lambda S_: ((("x", Array(3, Bits(8))),), Bits(8)),

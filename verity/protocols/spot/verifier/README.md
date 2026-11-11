@@ -133,12 +133,14 @@ template-major, so each cell is a range of the interior's proof blocks and the s
 `C(n − w, k) / C(n, k)`, a replay block's cells independently; the profile at the footprint reads a replay block as
 `Subset(min k_t)` over `T·n_max` proof blocks, which bounds that product. The verifier samples both stages
 (`Select.select`, `Select.selectSecond`), and the two-stage certificate's knowledge soundness at Flock's masked record
-holds of that code (`SamplingDeploy.ksTwo_code`, `security/Proofs/Flock/SamplingGeneric/TwoCode.lean`). Its premises
+holds of that code (`SamplingDeploy.ksTwo_code`). Its premises
 are that the registration is the design's (`RegMatchesTwo`), that each stage's coin bytes are uniform and the sessions'
 rounds don't move them, and the refusals, interior roots and sessions that one-stage's `SamplingDeploy.ks_masked` takes.
+A bound of S served bits charges a replay block at most F S, F the grain's fan-out (`partition.fanout`; the capped form at N = F),
+1 when every replay block is closed.
 Round 2: `second_stage` (Lean `SecondStage`); its `FORM` still refuses two-stage runs. A boundary record may commit a
-step schedule (`schedule`, Lean `Schedule`: its replay blocks as runs of positions of its requests), which round 2
-refuses unless it covers the replay blocks in order and each request's positions in order (`second-schedule`).
+step schedule (`schedule`, Lean `Schedule`: its replay blocks as runs of its requests' positions), which round 2
+refuses unless it covers the replay blocks, and each request's positions, in order (`second-schedule`).
 
 Not built yet: the security function and its review, and composition checks such as PoUW's tiles
 per proof block matching this partition (a tile family built with `each` over the proof blocks nests in them by construction).
