@@ -37999,3 +37999,47 @@ Branch `cursor/proofs-v2-members-9810`, head `43f313ea6b`. Still refused: `check
 **For vllm, word for word**: "In the served window's registered record, `roots` is a list of `{port, root, leaves, domain}`. For each entry, which member's is it, as a function the verifier computes from the entry's `port` and the window's public member table (the members' names and unit ranges) alone, with nothing from the prover: for example 'the port named `<member>/<x>`', or 'the port of the proof block whose units lie in the member's ranges'. Is any entry the window's and no member's, or read by two members? The port refuses a record where an entry falls to no member or to two, so such an entry needs its own rule, stated."
 
 **The date for the wiring's PR**: in my entry by 20:00Z, as you asked.
+
+## KILIAN, Wed 11 Nov 03:36Z: item 4 compiles: `KSRegTwoX`'s event with both square roots replaced, `κ_s + √(k·γ_s·Pr[B]) + Pr[B_conf,X] + 4·E[(1 + |sample|)·c]/2^256`, on `cursor/proofs-firsthit-two-b41d` at `8f51e10fc536` (try `r20261111-032956-68c7`, clean axioms); EXTFORM's finding holds there too (`c` is the whole run, d = s); your 03:01Z and 03:29Z questions answered; item 1 still running
+
+**Item 4, what compiled** [run]
+- Branch `cursor/proofs-firsthit-two-b41d`, cut from REGX's `fe391c772c`, head `8f51e10fc536be40df73f502df275295dd10b915`, pushed. Above REGX's head: the Core file and its import line, then `Security/Proofs/Flock/SamplingGeneric/TwoRegFirstHit.lean` (719 lines) and its import line. Nothing under `Security/Definitions/`, no lock, nothing pushed to REGX's branch.
+- Try `r20261111-032956-68c7` (vy-nebius-cpu-7): lean exit 0 in 47 s; none of its 23 theorems uses an axiom beyond `propext`, `Classical.choice`, `Quot.sound`. Of the four checks: elaborates yes, axioms yes, kernel replay no (no `check.py` on this branch), red-teamed no.
+- **The statement** (`CompiledTwo.eventTwoX_le_firstHit`) [read: my file]. Premises: `A.KS H`, `L.commit.Binds H`, `L.Sessions H` (`CompilerKSRegTwoX`'s three), a statement in scope, `hpos`, and `ExpectedCR` at two finders of every cap. Conclusion: `KSRegTwoX`'s first conjunct's event word for word (`out = acc ∧ ∃ u ∈ checked x r, u ∈ FregTwoX`) has probability at most `κ_s + √(k·γ_s·Pr[B]) + Pr[B_conf,X] + 4·E[(1 + |sample|)·c]/2^256`. `ε_reg,2,X`'s `N·√Pr[B_conf,X]` and `N·√Pr[B_conf,2]` are each `2·E[(1 + |sample|)·c]/2^256` here.
+- `|sample|` at coins `r` is `#{g < N : ∃ u ∈ checked x r, g ∈ needs u}`; `c` is `callsAt`: the prover's calls, the verifier's and the extraction's, of one run. The expectation is over the tape, the run's coins and the extractor's.
+- The two halves: `Compiled.pr_offRegX_le_needs_ex` (`Pr[OffRegX] ≤ 2·E[…]/2^256`) and `CompiledTwo.pr_offIreg_le_needs_ex` (`Pr[OffIreg] ≤ 2·E[…]/2^256`, the same right-hand side). `eventTwo_le_of_off` is the event's bound from any three bounds at any boundary trace.
+- **K as a hypothesis** (your way b): `eventTwoX_le_firstHit_of_card` takes `hw : ∀ r, |sample r| ≤ w` and gives `4·(1 + w)·E[c]/2^256`. `w` is whatever `checked` holds: at SPOT[Flock] the always-checked blocks are in `checked` [relayed: SCALE], so `w ≥ K_always`. I prove nothing about `w`. `eventTwoX_le_firstHit_of_card_outside` takes the bound outside a set `bad` of coins and adds `(1 + N)·E[c at bad coins]`: for a design whose sample has no bound at every coins.
+
+**Where it differs from your brief** [derived from REGX's files]
+1. **The boundary finder keeps nothing** (`T := Unit`), not the tape. `regValX` is the plurality over tape, coins and extractor's coins together (`plurX`, `RegX.lean`), so a further run is at a fresh tape. Keeping the tape is right for `regVal` (`KSRegTwo`), which I did not write on this branch; `eventTwo_le_of_off` takes any boundary trace, so it is one more instance.
+2. **The interior finder** keeps (tape, coins) and redraws a coin vector of which only the second stage is read (`forkOn (stage2 x) r e`) with the extractor's coins. Its sample reads the kept coins and the redrawn ones, never the tape, which is EXTFORM's condition.
+3. Acceptance is dropped before each finder (`Pr[acc ∧ Off] ≤ Pr[Off]`), so the expectation is over all runs, accepted or not.
+4. One run's own disagreement stays `Pr[B_conf,X]` (REGX's `pr_inConfX_le`).
+
+**The contract, clause by clause** [read: `hS.<clause>` in my file and in REGX's `TwoReg.lean`; lemmas of other files that take `hS` whole are not traced]
+- `interior`: the two openings the interior finder compares are under one replay block's interior roots (`icoll_of_conflictAt`). The only clause a finder reads.
+- `slots`: the event's split, directly. `shared`, `opens`, `interior`, `slots`: through REGX's `regTwo_split`.
+- `fixed`, `runs`: the sessions' bound (`sessionKS_of`), for the unfound term.
+- `secondDraws`, `replayDraws`, `unions`, `refuses`, `keys`: named by neither file. The event's bound does not read the second stage's draw law; the miss form does.
+- **`RevealsWithinTwo`: not taken.** The one added hypothesis is SCALE's root-free `hpos : ∀ u v w, ∀ p ∈ L.reveal s u v w, p.2.pos ∈ needs u`. My proof needs no opening's root: `opensAt` filters to the statement's roots and `iopensAt` to the block's interior roots themselves, and each table has its own finder. Waits are keyed by (table, gate); a coincidence of roots puts one opening in both tables and changes no count.
+
+**Your 03:01Z questions**
+- **The cap.** `FirstHit` has it [read]: `pr_off_sample_le_of_coll` and `pr_off_sample_le_ex_cap` carry `+ N/(K + 1)` at one cap under `ExpectedCR` at that cap's finder alone. Its `N` is every position, not the opened set, so it is weaker than `|opensSet|/(M + 1)`. The bridges take the premise at every cap and drop the term. One-cap expectation forms at the bridges are EXTFORM's ask 2, next.
+- **`hpos`:** SCALE's root-free form, above.
+
+**EXTFORM's finding holds at two stages too** [read: my `callsAt`]. `callsAt` holds `runExt`, so each further run of both finders extracts every session of its sample. This bound is at d = s as well. Not fixed in what compiled.
+
+**Ask 5: a finder that extracts by position** [derived; dates are a guess]
+1. **Core: additive.** A new section: `loopCostAt` charges a further run `c₂ ω' p` for each waited node `p` its sample holds (`c₂ : Ω → P → ℕ`, a run plus the extraction of the sessions holding `p`); the first run stays `c`. The bound is `2·E[c + Σ_{p ∈ sample} c₂(·, p)]/2^256`, the paper's `2T[(1 + s·e_s) + W(1 + d·e_s)]/2^256`. All 51 Core theorems stay; about 8 get twins (the cost lemmas, the finder, the end statements). Success, the cap and the tape forms are reused.
+2. **Bridge.** `runExtAt J`: `runExt`'s `flatMapRP` over the slots of `J`. `flatMapRP_eval` gives its output as the sub-list, so `opensAt` at `g` is the partial extraction's at any `J` holding the slots whose blocks need `g` (by `hpos`). The collision is read off the first run whole and the further run at those slots.
+3. **Not read yet:** whether `bconfX_of_disagree` and `bconf_of_disagree` go through at a sub-list of slots (they read `ownLog` of `runExt`). If not, about 150 lines of re-proof.
+4. **What survives of the bridges:** everything that takes the off-trace bounds as hypotheses (the plurality lemmas, `kept_pos_mem_needs`, `eventTwo_split_acc`, `eventTwo_le_of_off`, `eventTwoX_le_of_off`, `pr_regHit_le_of_offReg`). The finders, `runCost`/`callsAt`, the collision readers and the end statements get by-position twins. `d` becomes a hypothesis like `hw`.
+5. **Dates:** Core's part compiled by Wed 11 Nov 08:00Z, one stage by 12:00Z, two stages by 15:00Z; each elaborated with clean axioms, none kernel-replayed. I do EXTFORM's asks 1 to 4 and item 2 first, then this, unless you reorder.
+
+**Item 1** [run]: `r20261111-025253-8dec` still running, holds audit slot 0 of 4 on vy-nebius-cpu-3, nothing printed yet; ends by 05:53Z.
+
+**Item 2** [read at `origin/main` `a930252c49`, 03:35Z]: #8769 is open (head `178f49c90c`), so no branch yet. It renames `Security/` to `security/`. The audit's `layers` do not refuse the import: `Security/lean-audit.json` has no `layers` entry under `Proofs`, the proofs lock's one entry is `Proofs.Pouw.Dimension.Lifting`, and `Proofs/Core/Leak.lean` and `Proofs/Core/Rec.lean` already import `Proofs.Flock.Claims.*`. The root tests I know by name only; the quick tier will say.
+
+**One sentence for Daniel:** the two-stage finder now elaborates in Lean as well: at `KSRegTwoX`'s own event both square-root terms become `2·E[(1 + |sample|)·c]/2^256`, under `ExpectedCR` at two first-hit finders and one position hypothesis the contract does not state; clean axioms, not kernel-replayed, not red-teamed, no locked statement changed; and like the one-stage bound it charges a whole run with every session extracted at each rerun, so its number is the Lean's row (d = s), not the paper's.
+
+Tries: `r20261111-032547-b57b` (first, 21 theorems), `r20261111-032956-68c7` (head). I cancelled my own `r20261111-032211-1952` on cpu-2 (queued behind a records run). Note: `note:proofs/20261111T0301Z-checkpoint-firsthit-kilian-resume`, updated next.
