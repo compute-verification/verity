@@ -27,6 +27,7 @@ the prover and the statement and no tape, so nothing the prover's tape holds mov
 * `le_bconfX`, `pr_inConfX_le`, `pr_conflictX_le`: one run whose extractions open a position two ways, and two runs
   at two tapes that open a gate two ways, each give a collision `BconfX` finds (`bconfX_of_disagree`: both runs open
   under the statement's roots).
+* `ex_offRegX_le`: the rewinding lemma averaged over the tape, at most `N·√Pr[B_conf,X]`.
 * `ksRegX_of_sessionKS`, `compilerKSRegX_of`: **`KSRegX`**: an accepted run that samples a proof block of `FregX` has
   the first such block's session unfound at its first slot (the sessions' bound at `leadSel (selOf FregX)`), or its
   extractions disagree with themselves (`BconfX`'s first run) or open a gate off the trace (the rewinding lemma); and
@@ -144,6 +145,21 @@ theorem pr_conflictX_le {H : Msg → Msg} {L : Compiled Coin A} (hbind : L.commi
   exact bconfX_of_disagree hbind s P q.1.1 q.2.1 q.1.2 q.2.2 (Or.inl ha) (Or.inr ha') (ha1.trans ha1'.symm)
     (ha2.trans ha2'.symm) (by rw [ha3, ha3']; exact fun h => hne (congrArg some h))
 
+/-- **The rewinding lemma at the trace read at the statement, averaged over the tape**: at most `N·√Pr[B_conf,X]`. The
+average over the tape is the probability over the tape and the run together, which the lemma bounds as one. -/
+theorem ex_offRegX_le {H : Msg → Msg} {L : Compiled Coin A} (hbind : L.commit.Binds H) {x : Msg}
+    {s : AuditStatement} (hs : L.parse x = some s) {Ω : Type} [Fintype Ω] [Nonempty Ω] (P : Prover Ω) :
+    Ex (fun ω : Ω => Pr fun rc : (Fin (L.V.k x) → Coin) × L.SlotEC x => L.OffRegX H P x ω rc.1 rc.2) ≤
+      L.nG x * Real.sqrt ((BconfX H L Ω P x).Pr H) :=
+  calc Ex (fun ω : Ω => Pr fun rc : (Fin (L.V.k x) → Coin) × L.SlotEC x => L.OffRegX H P x ω rc.1 rc.2)
+      = Pr (fun q : Ω × ((Fin (L.V.k x) → Coin) × L.SlotEC x) => L.OffRegX H P x q.1 q.2.1 q.2.2) :=
+        (Sampling.Pr_prod_eq_Ex (fun q : Ω × ((Fin (L.V.k x) → Coin) × L.SlotEC x) =>
+          L.OffRegX H P x q.1 q.2.1 q.2.2)).symm
+    _ ≤ L.nG x * Real.sqrt (Pr fun qq : (Ω × ((Fin (L.V.k x) → Coin) × L.SlotEC x)) ×
+          (Ω × ((Fin (L.V.k x) → Coin) × L.SlotEC x)) => L.ConflictX H P x qq) := L.pr_offRegX_le H P x
+    _ ≤ L.nG x * Real.sqrt ((BconfX H L Ω P x).Pr H) :=
+        mul_le_mul_of_nonneg_left (Real.sqrt_le_sqrt (pr_conflictX_le hbind hs P)) (Nat.cast_nonneg _)
+
 /-! ## The committed form -/
 
 set_option synthInstance.maxSize 1024 in
@@ -194,16 +210,7 @@ theorem ksRegX_of_sessionKS {H : Msg → Msg} {L : Compiled Coin A} (hbind : L.c
   have hT := L.pr_unfound_le H P β hβ0 hβ (fun _ => L.leadSel x (L.selOf x (L.FregX H P x)))
     fun ω r => hκ ω r (L.leadSel x (L.selOf x (L.FregX H P x)))
   have hI := pr_inConfX_le hbind hs P
-  have hO : Ex (fun ω : Ω => Pr fun rc : (Fin (L.V.k x) → Coin) × L.SlotEC x => L.OffRegX H P x ω rc.1 rc.2) ≤
-      L.nG x * Real.sqrt ((BconfX H L Ω P x).Pr H) := by
-    calc Ex (fun ω : Ω => Pr fun rc : (Fin (L.V.k x) → Coin) × L.SlotEC x => L.OffRegX H P x ω rc.1 rc.2)
-        = Pr (fun q : Ω × ((Fin (L.V.k x) → Coin) × L.SlotEC x) => L.OffRegX H P x q.1 q.2.1 q.2.2) :=
-          (Sampling.Pr_prod_eq_Ex (fun q : Ω × ((Fin (L.V.k x) → Coin) × L.SlotEC x) =>
-            L.OffRegX H P x q.1 q.2.1 q.2.2)).symm
-      _ ≤ L.nG x * Real.sqrt (Pr fun qq : (Ω × ((Fin (L.V.k x) → Coin) × L.SlotEC x)) ×
-            (Ω × ((Fin (L.V.k x) → Coin) × L.SlotEC x)) => L.ConflictX H P x qq) := L.pr_offRegX_le H P x
-      _ ≤ L.nG x * Real.sqrt ((BconfX H L Ω P x).Pr H) :=
-          mul_le_mul_of_nonneg_left (Real.sqrt_le_sqrt (pr_conflictX_le hbind hs P)) (Nat.cast_nonneg _)
+  have hO := ex_offRegX_le hbind hs P
   have h1 : Pr (fun p : Ω × (Fin (L.V.k x) → Coin) => (run H P L.V x p.1 p.2).out = .acc ∧
       ∃ u ∈ L.checked x p.2, u ∈ L.FregX H P x) ≤ L.εregX H x P := by
     refine (Sampling.Pr_prod_eq_Ex _).trans_le ((Ex_mono hper).trans ?_)
