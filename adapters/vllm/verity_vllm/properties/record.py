@@ -253,7 +253,7 @@ class PropertyRecord:
 
     @property
     def name(self) -> str | None:
-        p = BY_SCHEMA.get(self.doc.get("schema"))
+        p = BY_SCHEMA.get(self.doc.get("schema", ""))
         return p.name if p else None
 
     @property

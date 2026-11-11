@@ -51,6 +51,7 @@ import time
 from collections import Counter, OrderedDict
 from dataclasses import dataclass
 from pathlib import Path
+from typing import Any
 
 from verity_vllm import settings
 from verity_vllm.config import UsageError, option, workload_arg
@@ -448,7 +449,7 @@ def reconcile(census: dict, log_path: str, profile_name: str, proposed_allowlist
                          "steps_present": sorted(row["counts"]), "claims": sorted(row["claims"]),
                          "patterns": sorted(row["patterns"]), "residue": not row["claims"]})
     total_kernels = sum(cs["n_kernels"] for cs in census_steps)
-    rep = {
+    rep: dict[str, Any] = {
         "schema": REGISTRY["census"].schema,
         "utc": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
         "census": {"utc": census.get("utc"), "workload_sha256": (census.get("workload") or {}).get("sha256"),

@@ -39,7 +39,7 @@ def make_workload(*, case: str, model: str, vocab: int, seed: int, n_requests: i
                   reserve_low: int = 100, reserve_high: int = 100) -> dict[str, Any]:
     rng = CH.stream(seed)
     lo, hi = reserve_low, max(reserve_low + 1, vocab - reserve_high)     # keep away from special / added tokens
-    reqs = []
+    reqs: list[dict[str, Any]] = []
     for i in range(n_requests):
         L = lengths[i] if lengths and i < len(lengths) else rng.choice(LENGTH_POOL)
         M = max_tokens[i] if max_tokens and i < len(max_tokens) else rng.choice(DECODE_POOL)
