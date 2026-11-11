@@ -56316,3 +56316,49 @@ For the table: nothing new measured. Head block today 2.43 s a statement at four
 
 For BREAKEVEN: add 0.095 s a MB of program (0.065 to 0.125; measured `r20261111-131955-b5e9`, two pairs on one node, one block) to every "with its program" column for the digest's reading in `inputs`: as `main` is +783 → about +990; the hoist (#8949, unmarked) +554 to +563 → +761 to +770; the hoist + one parse (a branch, only compiled) +236 to +239 → +443 to +446. "No program" does not change.
 For the table: "as `main` is" was the setup alone; with the digest's reading it is about +990 core-s a statement (+924 to +1,055), measured on one block and scaled per MB.
+
+## SERVEDCARD, Wed 11 Nov 13:34Z: second reading of the one-parse step (`cursor/proofs-progjson-89e3` at `b4ae0d8445a1f4e531a37f9db0a9c1aefead5227`, no PR): HOLDS as built. It is `main`'s verifier by equations proved for all bytes, and `8ab3`'s record says what FLOCKPKG's 13:17Z table says, with all three verifiers' outputs equal. Three of its theorems have no axiom probe yet
+
+Tags: [run] a command I ran now, [read] a file I read now (place given), [relayed] another lane's statement I did not check, [derived] my arithmetic on cited figures, [guess] mine, unchecked. Times from `date -u`. Nobody asked me for this reading. I read it because ORDER 11:40Z has me reading this lever and the step has no second reader.
+
+**1. The code** [read: `git diff c14e4bd284b1 b4ae0d8445a1`, three files: `Flock/Program.lean` +57, `Flock/ProgramRead.lean` +111/−8, `FlockVerify.lean` +3/−3].
+- **What is new:**
+  - `Program.readJson`: the bytes' UTF-8 check, then `JsonParse.parse`.
+  - `decodeOf`, `Desc.parseOfWith`/`parseOf` and `programDigestOf`: each is its original's body after that parse.
+  - A third thunk, `json`, in `ProgramRead`: both readings are made from `json.get`, and `jsonAt` uses the kept JSON on the same bytes.
+  - One changed call in `verifyCmd`: `programSha := program.bind fun b => programDigestOf (read.jsonAt b)`.
+- **Each copy is held to its original for all bytes, by `rfl`:**
+  - `decode_eq_of`, `Desc.parseWith_eq_of` (for every monad and `sha512`) and `programDigest_eq_of` each unfold both sides, generalize `String.fromUTF8? bytes` and close each case by `rfl`. So the kernel checks that the copies' bodies are the originals' (error strings included), not a reader.
+  - `descAt_of` and `progAt_of` now go through `parse_eq_of` and `decode_eq_of`. The new `jsonAt_of` and `programDigestOf_read` cover the changed `programSha` call.
+  - With #8949's three `_read` lemmas, every reading `verifyCmd` changes is its `main` function on every input.
+- **What the copies cost** [run: `grep` of `main`'s locks].
+  - The copies are about 80 lines next to their originals, and #8949's twins about 360.
+  - The other way, `decode b := decodeOf (readJson b)` and the like, keeps one definition each. But it edits functions that `security/lean-audit.json` and `security/Properties/lean-audit.json` both record: `Program.decode`, `Desc.parse`, `Desc.parseWith`, and `programDigest` (in `security`'s lock only).
+  - So the copies are the price of moving no guarantee's record. A later PR may fold them when it may move records. That is a choice for the coordinator; I don't propose it tonight.
+
+**2. Its builds and probes** [run: `9640`'s `job.json` and `stdout.log`].
+- `9640` ran `lean_changed.py --try FlockVerify.lean --siblings` on `b4ae0d8445a1` (clean tree). The package built (167 jobs), lean exit 0, and its 8 theorems are axiom-clean.
+- Those 8 reach `decode_eq_of` and `Desc.parse_eq_of` through `buildSessionBy_read`. They do not reach `jsonAt_of`, `programDigest_eq_of` or `programDigestOf_read`.
+- Those three contain no `sorry`, `native_decide` or `axiom` [run: `git grep`], and the build log has no "sorry" [run]. A try of `Flock/ProgramRead.lean --siblings` would print their axioms; that is FLOCKPKG's, before a PR.
+
+**3. The A/B, `r20261111-125728-8ab3`** [run: `research fetch --all`, its `out/job.log`, `inputs/`, `out/*.out`].
+- **Source and builds:**
+  - Source `b4ae0d8445a1`.
+  - "main" is `967b722429f3`'s `Flock.lean`, `Flock/Program.lean` and `FlockVerify.lean` laid over it; "hoist" is `c14e4bd284b1`'s `Flock/Program.lean`, `Flock/ProgramRead.lean` and `FlockVerify.lean` [run: sha256 of `inputs/ov.*` against `git show`, all six equal].
+  - The "main" binary is `7f5ec4ce43a913b5`, the same as `744d`'s base.
+- **The table holds, cell for cell:**
+  - setup: `main` 61.3 and 61.9 s, the hoist 42.5 and 42.9, one parse 18.7 and 18.5;
+  - `inputs` 34.7 to 35.7 s for all three;
+  - peak RSS 9.12, 9.84 and 9.08 GB.
+  - So one parse is 0.30 of `main`'s setup and 0.43 of the hoist's [derived].
+- **Same outputs:** in each pair (first, second and named-twice calls), the one-parse verifier's stdout equals `main`'s and the hoist's once the millisecond fields are removed. The named-twice calls accept, then refuse the repeat (S2): 0.52 s for one parse, 0.54 s for the hoist, 63.2 s for `main`.
+
+**4. Its PR waits on #8789** [run: `git merge-tree`].
+- `b4ae0d8445a1` conflicts with #8789's head `5124b2689c75` in `Flock/Program.lean`, one conflict beyond import lists.
+- #8949's head `c14e4bd284b1` merges with `5124b2689c75` clean.
+- As FLOCKPKG says, the step opens after #8789 and #8949 land.
+
+**Fix to my 13:01Z:** its `research status` ran at about 13:00Z, not "13:05Z" (`af62` observed 13:00:15Z).
+
+For BREAKEVEN: the one-parse column (+236 to +239 at one session a call, by proportion from 0.30) rests on a record that holds [run: `8ab3`]. ORDER 13:26Z's label stands: "built on a branch, only compiled; modeled by proportion from one ratio". To it I'd add "second reading of its code and A/B: holds".
+For the table: one parse (`cursor/proofs-progjson-89e3` at `b4ae0d8445a1`, no PR): second reading holds [read: code; run: `8ab3`'s record, `9640`]. Setup 0.30 of `main`'s at the 152 MB program, outputs equal. Three theorems have no axiom probe yet. It conflicts with #8789 until that lands.
