@@ -220,20 +220,24 @@ noncomputable def leafGates (P : Prog) (rs : Array TRange) (W : Spot.Wires.Wirin
 
 variable {D : Verity.Circuit} {at_ : Fin D.N → ℕ}
 
+/-- A gate of `D` is in `landOf g` when a read of `g` lands on it. -/
 theorem mem_landOf {g : ℕ} {a : Fin D.N} : a ∈ landOf P rs W S at_ g ↔ Lands P rs W S g (at_ a) := by
   classical
   simp only [landOf, Finset.mem_filter, Finset.mem_univ, true_and]
 
+/-- A gate of `D` is in `writerLand r l` when a read of leaf `l` of `r`'s writer lands on it. -/
 theorem mem_writerLand {r : Row} {l : ℕ} {a : Fin D.N} :
     a ∈ writerLand P rs W S at_ r l ↔ ∃ g lo hi, WriterLeaf P rs S r l g lo hi ∧ Lands P rs W S g (at_ a) := by
   classical
   simp only [writerLand, Finset.mem_filter, Finset.mem_univ, true_and]
 
+/-- A gate of `D` is in `leafGates r l` when it is leaf `l` of `r`. -/
 theorem mem_leafGates {r : Row} {l : ℕ} {a : Fin D.N} :
     a ∈ leafGates P rs W at_ r l ↔ ∃ lo hi, RowLeaf P rs W r l (at_ a) lo hi := by
   classical
   simp only [leafGates, Finset.mem_filter, Finset.mem_univ, true_and]
 
+/-- A gate of `D` is in `landing r` when a read of a leaf of `r` lands on it. -/
 theorem mem_landing {r : Row} {a : Fin D.N} :
     a ∈ landing P rs W S at_ r ↔ ∃ l o lo hi, RowLeaf P rs W r l o lo hi ∧ Lands P rs W S o (at_ a) := by
   classical
