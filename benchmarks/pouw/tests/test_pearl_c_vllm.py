@@ -1534,11 +1534,11 @@ def _split(got: dict) -> None:
     exactly; the totals are the calls' sums, ``credited`` floored."""
     sums: dict = {}
     for c in got["calls"]:
-        terms = [Fraction(c[x]) for x in ("epsilon_macs", "over_cap_macs", "rho_macs", "credited_macs")]
+        terms = [Fraction(c[x]) for x in ("epsilon_macs", "over_bound_macs", "rho_macs", "credited_macs")]
         assert c["macs"] == c["checked_macs"] + sum(c["uncredited_macs"].values()) and c["checked_macs"] == sum(terms), c
         assert set(c["uncredited_macs"]) == set(VR.UNCREDITED_ROWS) and min(terms) >= 0
         for x, v in (("macs", c["macs"]), ("checked_macs", c["checked_macs"]), *c["uncredited_macs"].items(),
-                     *((x, Fraction(c[x])) for x in ("epsilon_macs", "over_cap_macs", "rho_macs", "credited_macs"))):
+                     *((x, Fraction(c[x])) for x in ("epsilon_macs", "over_bound_macs", "rho_macs", "credited_macs"))):
             sums[x] = sums.get(x, 0) + v
     assert got["totals"] == {**{x: str(v) if isinstance(v, Fraction) else v for x, v in sums.items()},
                              "credited": math.floor(sums["credited_macs"])}
@@ -1549,7 +1549,7 @@ def test_uncredited_calls_split_each_calls_macs_by_cause_and_sum_to_the_runs_cre
     leaves out, by cause: the fixture's excluded A row (its filler rows are no call's real MACs); an excluded B row's block
     of 64 columns, which takes the excluded A row's cells in it too; a voluntary A row's band, likewise.  Its terms sum to
     `credit_at_assumption`'s credit exactly, with or without draws over the inert-work bound, which only move part of the
-    deduction to ``over_cap_macs``."""
+    deduction to ``over_bound_macs``."""
     path = proved_pass(tmp_path, PROMOTED[0])[0]
     p = VR.load(path, published(path))
     for over in (0, 3):
@@ -1557,7 +1557,7 @@ def test_uncredited_calls_split_each_calls_macs_by_cause_and_sum_to_the_runs_cre
         credit = VR.credit_at_assumption([p], 459, Fraction(1, 100), over)
         _split(got)
         assert (got["totals"]["checked_macs"], got["totals"]["credited"]) == (credit["macs"], credit["credited"])
-        assert (Fraction(got["totals"]["over_cap_macs"]) > 0) == (over > 0) and got["over_cap_draws"] == over
+        assert (Fraction(got["totals"]["over_bound_macs"]) > 0) == (over > 0) and got["over_cap_draws"] == over
     calls = got["calls"]
     assert [c["call"] for c in calls] == [r.matmul.index for r in p.records]
     at = next(j for j, r in enumerate(p.records) if r.excluded_a)

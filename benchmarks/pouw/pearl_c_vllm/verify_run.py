@@ -683,7 +683,7 @@ def uncredited_calls(passes: list[Pass], t: int, delta: Fraction, over: int = 0)
     real MACs (its real rows × n × its weight's k), the MACs its credited cells hold at |K| (``checked_macs``, summing to
     the credit's ``macs``), its real MACs the credit leaves out by cause (`uncredited_cells` at |K|, and ``kept_width``,
     its real rows × n × the k − |K| side channels), and the credit's three terms on it: ``epsilon_macs``, what
-    `credit_at_assumption`'s deduction takes off it at ε with no draw over the inert-work bound; ``over_cap_macs``, what
+    `credit_at_assumption`'s deduction takes off it at ε with no draw over the inert-work bound; ``over_bound_macs``, what
     the ``over`` draws on tiles over it add; ``rho_macs``, ρ of the rest; and ``credited_macs``, (1 − ρ) of the rest.  The
     terms are exact fractions, so a call's real MACs are its checked MACs and its causes, and its checked MACs its three
     terms and its credit; ``totals`` sums them, ``credited`` floored as the credit is, which is the credit's.  It reads
@@ -704,7 +704,7 @@ def uncredited_calls(passes: list[Pass], t: int, delta: Fraction, over: int = 0)
                                  f"tiles' {sum(tiles)}")
             checked = cells * r.k_kept
             causes = {**{c: m * r.k_kept for c, m in left.items()}, "kept_width": r.real_rows * s.n * (k - r.k_kept)}
-            terms = {"epsilon_macs": sampled, "over_cap_macs": wrong - sampled, "rho_macs": rho * (checked - wrong),
+            terms = {"epsilon_macs": sampled, "over_bound_macs": wrong - sampled, "rho_macs": rho * (checked - wrong),
                      "credited_macs": (1 - rho) * (checked - wrong)}
             calls.append({"pass": i, "call": r.matmul.index, "weight": r.matmul.weight, "m": s.m, "k": k, "n": s.n,
                           "real_rows": r.real_rows, "k_kept": r.k_kept,
