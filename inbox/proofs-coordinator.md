@@ -46568,3 +46568,108 @@ For the table:
 For HEADPROF: cursor/proofs-witness-9dbc at 88f0665ab6644e3cb511868343230babeb27d792 (unchanged).
 For BREAKEVEN: unchanged from 09:33Z: measured on the 9-million-row instance on a CPU node (`r20261111-085753-8868`), the walk's CPU-seconds fall 25% to 37%; the served block's number follows from `r20261111-082933-6294`; HEADPROF's rows on the card are the ones to price.
 For the table: head block, host witness (8.7 CPU-s): #8891 **ready to mark** at `88f0665ab6` (quick tier `e406` 49/49); −25% to −37% of the walk's CPU-s measured on a 9M-row instance; served-block and card rows pending.
+
+## CROSS, Wed 11 Nov 09:59Z: SHEPHERD TABLE 3: our ten are in ci's candidate `4ff79d86930a` (built 09:44:57Z), whose Lean files and locks are byte for byte the tree `3dd5` passed; nothing of ours is red; three asks: mark #8890, a verdict for #8836, a second pinned build for the four lock-changing heads
+
+**What changed since table 2 (09:03Z)** [run: `research queue status --json`, the label store, `/data/vqueue/live/decisions.jsonl`, the `queue/*` refs, read 09:50Z to 09:57Z; read: CI-485's comments to 09:54Z].
+- **The chain:** `main` `0a722c6ec984` (09:16:45Z). Above it, each landing only after the one below: the cold batch `8f5d3c3823f0` (12, built 09:19:13Z), `08ad61db9432` (+ #8694, **#8568**, #8698, #8054), `c91f5995afd5` (+ 16, among them **#8517**), then **ours, `4ff79d86930a`: #8785, #8877, #8820, #8827, #8788, #8828, #8781, #8819, #8841, #8857**, built 09:44:57Z, judged pending at 09:53:46Z. ci watches it to its verdict and ejects a red by hand (CI-485, 09:47Z) [read].
+- **The candidate is the tree I built.** `git diff --name-only 4ff79d86930a 8eed8897023a` shows no `.lean` file, no `lean-audit.json`, no lakefile and no toolchain file: in Lean and locks, ci's candidate equals my scratch nine, which passed the records run `r20261111-083411-3dd5` with no record regenerated. It differs in `unread-caps.json` (it has #8877's) and in other lanes' files, among them `tools/verity/lean/check.py`, `lean_audit.py` and `lean_changed.py` [run]. Not shown by any run: the kernel replay, and the check as those changed tools run it.
+- **The unread ratchet on it** passes: `Proofs/Flock` 247 / 1,916 against #8877's 259 / 2,069 (my 09:48Z entry, measured by `fd8c`) [run].
+- **Since 09:46:40Z the loop runs `--lean 0`: no lock-changing PR rides outside a pinned build** (CI-485, 09:47Z) [read]. Marked, lock-changing and in no candidate: #8226, #8368, #8539, #8764, and #8836 (no verdict). They need a second pinned build; `r20261111-094021-2b3b` (the 18 marked Lean heads merged, #8877 first) is the build that says whether they go with the ten. It has waited for a `research` line on vy-nebius-cpu-1 since 09:40:46Z (`1 check(s) ahead in line`) [run, 09:56Z].
+- **ci holds #8866, #8888, #8354 and #8536 behind #8890** (CAPS's second raise), which is unmarked (CI-485, 09:49Z) [read]. By my count the 18 marked heads with #8866 and #8888 fit #8877's caps without #8890: at most 255 / 2,041 against 259 / 2,069 [derived: `fd8c`'s measured 247 / 1,916 plus CAPS's by-hand counts of the eight modules, which I did not recount]. That is a bound and not a measurement, so ci's order behind #8890 is the safe one and I ask for no change.
+- **Marked since table 2:** #8836 at `ae8886e9a2fc` (09:50Z), #8859 (09:38Z), #8866 (09:20Z), #8888 (09:28Z). #8857's hold is a land (review-13, 09:29Z). 34 marked, 39 not, 73 open [run].
+- **Reviewers' questions:** none. No comment and no review on any of the 73 PRs on GitHub [run: `gh pr view N --json comments,reviews`, 09:54Z].
+- **Test merges** [run: `git merge-tree`, 09:43Z, 09:54Z and 09:58Z; a merge, not a build]: each of the 34 marked heads merges with `main` `0a722c6ec984` and with each other. Each of #8862, #8867 `65788418c6e8`, #8869, #8870, #8873 `3b134fb24872`, #8874, #8878, #8879, #8882, #8885, #8889, #8890, #8891, #8892, #8893, #8896, #8898, #8899, #8900 merges with `main` and with all 34. #8454 `4d87c7899a6d` still conflicts with #8694 and #8698, which are in `08ad61db9432`.
+- **Builds of merged trees, mine:** the nine, `3dd5`, pass. The 18, `2b3b`, waiting. #8866 + #8888 on the 18: staged at `04306f233f7e`, launched when `2b3b` ends. Others' builds are relayed in the column.
+
+In the column "Lean: builds with", "adds" counts new modules against the head's merge base with `main`, so a stacked PR's count holds those of the PRs below it (#8888's 6 hold #8819's 4).
+
+| PR | head | marked | verdict | in a candidate | place in the line | refused or held | Lean: builds with | ask |
+|---|---|---|---|---|---|---|---|---|
+| #8226 | `f8a3b83aa0f0` | 06:23Z | land (review-17, 06:33Z) | no | 121 of 150 |  | adds 1 Proofs/WeightSecurity; the 18 marked: `2b3b` waiting for a slot | `ask ci to pin a second build`: #8226, #8368, #8539, #8764 (and #8836) change a lock, and under `--lean 0` none rides outside a pinned build (CI-485, 09:47Z) |
+| #8339 | `9fd291257ffc` | 06:33Z | none; low-risk, needs none | no | 14 of 150 |  |  | none |
+| #8354 | `5591b15e3b35` | 06:40Z | land (review-17, 07:00Z) | no | 143 of 150 |  | adds 1 Proofs/Flock, no lock change; the 18 marked: `2b3b` waiting for a slot | none: ci takes it right behind #8890 |
+| #8368 | `c833b3ff0a9b` | 06:53Z | land (review-13, 07:01Z) | no | 114 of 150 | lands after #8354 | adds 2 Proofs/Flock; the 18 marked: `2b3b` waiting for a slot | the same second pinned build (it lands after #8354) |
+| #8425 | `d4967690acd5` | 06:49Z | none; low-risk, needs none | no | 20 of 150 |  |  | none |
+| #8454 | `4d87c7899a6d` | 06:22Z | land (review-17, 06:49Z) | no | 6 of 150 |  |  | none yet: #8694 and #8698 are in `08ad61db9432`; when they land I merge `main` in (drafted, scratch `6a9e5f0f2285`), run the quick tier and write its line. Until then the loop will find it in conflict |
+| #8458 | `81c162ded6fa` | 06:55Z | land (review-17, 07:18Z) | no | 116 of 150 |  | the 18 marked: `2b3b` waiting for a slot | none: no lock change, an ordinary batch takes it |
+| #8517 | `620badf31958` | 05:58Z | land (review-16, 06:19Z) | `c91f5995afd5` |  |  |  | none: in `c91f5995afd5` |
+| #8523 | `b61bbcfd88aa` | 06:37Z | none; low-risk, needs none | no | 15 of 150 | its candidate was dropped 07:13Z (its base failed) |  | none |
+| #8536 | `7c9387e95a73` | 06:57Z | land (review-13, 07:02Z) | no | 144 of 150 |  | adds 5 Proofs/Flock, no lock change; the 18 marked: `2b3b` waiting for a slot | none: ci takes it right behind #8890 |
+| #8539 | `984a73968ccd` | 05:58Z | land (review-15, 06:50Z) | no | 129 of 150 |  | the 18 marked: `2b3b` waiting for a slot | the same second pinned build |
+| #8540 | `1b0f4f7b64fe` | 06:59Z | none; low-risk, needs none | no | 29 of 150 |  |  | none |
+| #8553 | `650593be39af` | 06:23Z | none; low-risk, needs none | no | 9 of 150 | lands after #8523; its candidate was dropped 07:13Z (its base failed) |  | none |
+| #8568 | `8fb2b94ee4b4` | 05:50Z | none; low-risk, needs none | `08ad61db9432` |  |  |  | none: in `08ad61db9432` |
+| #8576 | `d35fd4990def` | 07:01Z | land (review-13, 07:17Z) | no | 32 of 150 |  |  | none |
+| #8583 | `4624bfc6cd0f` | yes, carried | none at this head; an older head's counts | no | 101 of 150 |  |  | none |
+| #8730 | `f612d5d5897d` | 07:03Z | land (review-14, 07:34Z) | no | 122 of 150 |  | the 18 marked: `2b3b` waiting for a slot | none: no lock change, an ordinary batch takes it |
+| #8741 | `2e61e09454d2` | 07:04Z | land (review-14, 07:59Z) | no | 33 of 150 |  |  | none |
+| #8764 | `8dfde58665a3` | 05:27Z | land (review-13, 05:39Z) | no | 134 of 150 |  | adds 2 Proofs/Flock; the 18 marked: `2b3b` waiting for a slot | the same second pinned build |
+| #8771 | `4b3b557b8c46` | 06:51Z | none; low-risk, needs none | no | 21 of 150 | lands after #8425 |  | none |
+| #8781 | `b7c268c7c1fe` | 07:04Z | land (review-16, 07:16Z) | `4ff79d86930a` |  |  | adds 2 Proofs/Flock; the nine: `3dd5` pass | none: in ci's candidate |
+| #8785 | `e7b741b17e53` | 05:32Z | land (review-15, 05:36Z) | `4ff79d86930a` |  |  | adds 1 Definitions/Claims, 1 Proofs/Flock; the nine: `3dd5` pass | none: in ci's candidate `4ff79d86930a` |
+| #8788 | `37079664740c` | 09:02Z | land (top, 08:50Z) | `4ff79d86930a` |  |  | the nine: `3dd5` pass; alone `a26f` pass | none: in ci's candidate at the crossed head |
+| #8819 | `9a8a32c7c85b` | 06:00Z | land (review-17, 06:14Z) | `4ff79d86930a` |  |  | adds 4 Proofs/Flock, no lock change; the nine: `3dd5` pass | none: in ci's candidate |
+| #8820 | `f1a8ef0141ff` | 07:06Z | land (review-13, 07:24Z) | `4ff79d86930a` |  | lands after #8785 | adds 3 Definitions/Claims, 7 Proofs/Flock, 3 Proofs/WeightSecurity; the nine: `3dd5` pass | none: in ci's candidate |
+| #8827 | `946b7b72f26d` | 07:41Z | land (review-15, 07:58Z) | `4ff79d86930a` |  | lands after #8785, #8820 | adds 3 Definitions/Claims, 1 Proofs/Core, 9 Proofs/Flock, 3 Proofs/WeightSecurity; the nine: `3dd5` pass | none: in ci's candidate |
+| #8828 | `53dd644bdad8` | 07:40Z | land (review-13, 07:48Z) | `4ff79d86930a` |  | lands after #8788 | adds 3 Proofs/Flock; the nine: `3dd5` pass | none: in ci's candidate |
+| #8836 | `ae8886e9a2fc` | 09:50Z | none | no | not in it | lands after #8785, #8820; no land verdict | adds 3 Definitions/Claims, 1 Proofs/Core, 9 Proofs/Flock, 3 Proofs/WeightSecurity; with #8827 and #8781 (`33c3`, `134b`) [relayed: SCALE 09:40Z]; not with the 18 | `ask ci for a verdict on #8836` and a place in a pinned build: it changes `security`'s lock, and the loop runs `--lean 0` |
+| #8841 | `5f197bc45539` | 07:39Z | land (review-17, 07:54Z) | `4ff79d86930a` |  |  |  | none: in ci's candidate |
+| #8857 | `96985b18aafb` | 08:09Z | land (review-13, 09:29Z) | `4ff79d86930a` |  |  | adds 1 Proofs/Core, no lock change; the nine: `3dd5` pass | none: in ci's candidate; review-13's hold is now a land |
+| #8859 | `563d9b20e91e` | 09:38Z | none; low-risk, needs none | no | 95 of 150 |  |  | none |
+| #8866 | `e19752e7b617` | 09:20Z | land (review-16, 09:29Z) | no | 145 of 150 |  | its file with #8827 (`ba63`) [relayed: PARAMS]; with the 18: staged `04306f233f7e`, behind `2b3b` | none: ci takes it right behind #8890 |
+| #8877 | `b16bb41f1657` | 09:02Z | land (review-17, 09:06Z) | `4ff79d86930a` |  |  | caps only; the nine's unread count passes under it (`fd8c`) | none: in ci's candidate, right after #8785 |
+| #8888 | `746c43e0c848` | 09:28Z | land (review-13, 09:36Z) | no | 146 of 150 | lands after #8819 | adds 6 Proofs/Flock, no lock change; its two files with #8827, #8781, #8828, #8857 [relayed: DRAFT-CORE]; with the 18: staged `04306f233f7e`, behind `2b3b` | none: ci takes it right behind #8890 (it lands after #8819) |
+| #7850 | `ed27bb143d82` | no | none | no |  | stale; conflicts with `main` |  | none |
+| #7952 | `4d3d22fda080` | no | land (review-1) | no |  | stale |  | none |
+| #8120 | `b6e0c1dc5de8` | no | none | no |  | conflicts with `main` |  | none |
+| #8139 | `c274cac9c132` | no | none | no |  |  | adds 1 Proofs/Flock, 1 Proofs/Properties;  | none yet: after #8539 lands (the 11-file merge is drafted; its records `ae4e` passed) |
+| #8177 | `6dd74f50be00` | no | none | no |  |  |  | none |
+| #8363 | `a81a1b11ea1d` | no | none | no |  | conflicts with `main` |  | none |
+| #8406 | `3d8e9aa8c0af` | no | none | no |  |  |  | none yet: after #8339 lands I merge `main` in and write its line |
+| #8414 | `359724056748` | no | none | no |  |  |  | none, ever (inside #8539) |
+| #8438 | `e04dd44e6ccd` | no | none | no |  | conflicts with `main` |  | none |
+| #8462 | `6f4ffa9e7a6a` | no | none | no |  | conflicts with `main` |  | none |
+| #8512 | `815b893acd23` | no | none | no |  |  | adds 1 Definitions/Claims, 4 Proofs/Flock, 3 Proofs/WeightSecurity;  | none, ever (inside #8820) |
+| #8527 | `33452276ad20` | no | none | no |  |  | adds 1 Definitions/Claims, 4 Proofs/Flock, 6 Proofs/WeightSecurity;  | yours: mark at `33452276ad20` once #8820 is on `main` |
+| #8543 | `2007687fd9b8` | no | none | no |  | conflicts with `main` |  | none |
+| #8552 | `cb416aece716` | no | none | no |  |  |  | none yet: after #8539 lands |
+| #8563 | `80bc72a80541` | no | none | no |  |  |  | none |
+| #8578 | `0a713e7caaf6` | no | none | no |  | conflicts with `main` |  | none |
+| #8767 | `d6cf59bccf21` | no | none | no |  |  |  | none |
+| #8789 | `5124b2689c75` | no | none | no |  |  |  | FLOCKPKG's: new head, its runs are out (09:41Z) |
+| #8814 | `2ff70e199447` | no | none | no |  |  |  | none |
+| #8862 | `23e96bd37477` | no | none | no |  |  | adds 3 Proofs/Properties; `f4bd` with fifteen marked heads, running [relayed: MEMBERS 09:37Z] | none yet: MEMBERS's merged build `f4bd` is out |
+| #8867 | `65788418c6e8` | no | none | no |  |  |  | `mark #8867 at 65788418c6e8275077e3bb727d76bf80d456e2bd` on CONCRETE's line (09:51Z) plus this row |
+| #8869 | `df881f327aa1` | no | none | no |  |  |  | none |
+| #8870 | `e7d354135fbb` | no | none | no |  |  | adds 1 Proofs/Flock, no lock change;  | none |
+| #8871 | `2d4670d64165` | no | none | no |  |  | adds 3 Definitions/Claims, 1 Proofs/Core, 10 Proofs/Flock, 3 Proofs/WeightSecurity;  | close it: REGX superseded it (08:46Z) |
+| #8873 | `3b134fb24872` | no | none | no |  |  | adds 1 Proofs/Flock, no lock change;  | none |
+| #8874 | `b3fb5853faf8` | no | none | no |  |  | adds 3 Definitions/Claims, 1 Proofs/Core, 11 Proofs/Flock, 3 Proofs/WeightSecurity;  | none |
+| #8878 | `816e2396bdf7` | no | none | no |  |  |  | none |
+| #8879 | `9eb9f26cea4a` | no | none | no |  |  | adds 3 Definitions/Claims, 1 Proofs/Core, 10 Proofs/Flock, 3 Proofs/WeightSecurity;  | none |
+| #8882 | `da385b86ccd2` | no | none | no |  |  | adds 3 Definitions/Claims, 1 Proofs/Core, 10 Proofs/Flock, 3 Proofs/WeightSecurity;  | none |
+| #8885 | `6d4878d5670e` | no | none | no |  |  | with #8828 and #8781, passed [relayed: TWOPROVE 09:54Z] | Daniel's (TWOPROVE, 09:54Z): no mark before his ruling |
+| #8889 | `50b06ae65a50` | no | none | no |  |  | adds 1 Proofs/Flock, no lock change;  | none |
+| #8890 | `3abd6b5bc8e2` | no | none | no |  |  |  | `mark #8890 at 3abd6b5bc8e2da7779a007481a13e5beef2ff001` when CAPS's quick tier `35f9` passes (running at 09:57Z), then `ask ci for a verdict on #8890`: ci holds #8866, #8888, #8354 and #8536 behind it (CI-485, 09:49Z) |
+| #8891 | `88f0665ab664` | no | none | no |  |  |  | none |
+| #8892 | `5bbe4bd22803` | no | none | no |  |  | adds 1 Proofs/Flock, no lock change;  | none |
+| #8893 | `6f65951e0eb8` | no | none | no |  |  |  | none |
+| #8896 | `6128ce8267e3` | no | none | no |  |  | adds 7 Proofs/Flock, no lock change;  | none |
+| #8898 | `9d9adf6fe723` | no | none | no |  |  | adds 3 Proofs/Properties;  | none |
+| #8899 | `6950f9d93eb3` | no | none | no |  |  |  | none |
+| #8900 | `1c041bac78f5` | no | none | no |  |  | adds 1 Proofs/Flock, no lock change;  | none |
+
+**The asks, in order of what they unblock:**
+1. `mark #8890 at 3abd6b5bc8e2da7779a007481a13e5beef2ff001` when CAPS writes that its quick tier `r20261111-092621-35f9` passed (running at 09:57Z [run]), then `ask ci for a verdict on #8890`: #8866, #8888, #8354 and #8536 wait behind it.
+2. `ask ci for a verdict on #8836` (marked 09:50Z at `ae8886e9a2fc`, no label at that head).
+3. `ask ci to pin a second build of ours` after `4ff79d86930a`: #8226 `f8a3b83aa0f0`, #8368 `c833b3ff0a9b` (after #8354), #8539 `984a73968ccd`, #8764 `8dfde58665a3`, and #8836 once it has its verdict. I name the order and the build's verdict when `2b3b` ends; if you want the ask sent before that, the order above is the queue's own.
+4. `mark #8867 at 65788418c6e8275077e3bb727d76bf80d456e2bd` on CONCRETE's 09:51Z line (no Lean, no lock; merges with `main` and all 34).
+5. Close #8871 (superseded by REGX's branch).
+
+**Runs out, mine:** `r20261111-094021-2b3b` (records, the 18 marked Lean heads, vy-nebius-cpu-1): waiting for a `research` line since 09:40:46Z; once it starts, about 35 to 65 minutes [guess: `3dd5` took 62 minutes, most of it one build that this node now holds].
+
+For the table:
+- LANDING: our ten (#8785, #8877, #8820, #8827, #8788, #8828, #8781, #8819, #8841, #8857) are in ci's candidate `4ff79d86930a`, built 09:44:57Z, fourth in a chain of four above `main` `0a722c6ec984`; pending, no red [run, 09:57Z]. Its Lean files and locks equal the tree that passed `r20261111-083411-3dd5` (a build, the axioms scan and the records; no kernel replay) [run].
+- 34 of our 73 open PRs are marked; lock-changing #8226, #8368, #8539, #8764 and #8836 need a second pinned build (the loop runs `--lean 0`); #8866, #8888, #8354, #8536 wait behind #8890, unmarked [read: CI-485, 09:47Z and 09:49Z].
+- No reviewer's question on any PR of ours [run, 09:54Z].
