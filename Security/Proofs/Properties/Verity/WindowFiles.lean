@@ -19,6 +19,9 @@ in its own circuit at that circuit's part of the trace, so the units a trace doe
   `mem_committed_beside_left`, `mem_io_beside_left`, `correct_beside_left` and their `right` forms).
 * **The incorrect and the unbound units** (`Partition.wrong_beside`, `unbound_beside`, `card_unbound_beside`): those
   of the two side by side are `C`'s at `C`'s part of the trace, then `D`'s at `D`'s, so their counts add.
+* **A window's members** (`FileRead.unitsWith_eq_sum`, `FileRead.unboundWith`, `FileRead.card_unbound_partsWith`):
+  the window's units are the members' summed, and the units a trace of the window's circuit doesn't bind are counted
+  a member at a time, each member at its own part of the trace and the openings at its own gates.
 -/
 
 @[expose] public section
@@ -458,5 +461,43 @@ theorem card_unbound_beside {C D : Circuit} {n m : ℕ} (P : Partition C n) (Q :
   obtain ⟨a, -, ha⟩ := Finset.mem_map.1 hl
   obtain ⟨b, -, hb⟩ := Finset.mem_map.1 hr
   exact natAdd_ne_castAdd b a (hb.trans ha.symm)
+
+namespace FileRead
+
+theorem unitsWith_eq_sum (r : FileRead) (rs : List FileRead) :
+    unitsWith r rs = ((r :: rs).map FileRead.units).sum := by
+  induction rs generalizing r with
+  | nil => simp [unitsWith]
+  | cons s rs ih =>
+    rw [unitsWith, ih s]
+    simp only [List.map_cons, List.sum_cons]
+
+open Classical in
+/-- **The units of a first member and the rest that a trace doesn't bind, counted a member at a time**: the first
+member's that its part of the trace doesn't bind under the openings at its gates, then the rest's at theirs. -/
+noncomputable def unboundWith : (r : FileRead) → (rs : List FileRead) →
+    ((g : Fin (circuitWith r rs).N) → BitVec ((circuitWith r rs).w g) → Prop) → (circuitWith r rs).Trace → ℕ
+  | r, [], opens, X => (Accounting.unbound r.parts opens X).card
+  | r, s :: rs, opens, X =>
+    (Accounting.unbound r.parts
+        (fun i v => opens (Fin.castAdd (circuitWith s rs).N i)
+          (v.cast (Circuit.besideW_left r.circuit (circuitWith s rs) i).symm))
+        (Circuit.traceLeft X)).card +
+      unboundWith s rs
+        (fun j v => opens (Fin.natAdd r.circuit.N j)
+          (v.cast (Circuit.besideW_right r.circuit (circuitWith s rs) j).symm))
+        (Circuit.traceRight X)
+
+open Classical in
+/-- **The units a trace of the members' circuits side by side doesn't bind are counted a member at a time.** -/
+theorem card_unbound_partsWith (r : FileRead) (rs : List FileRead)
+    (opens : (g : Fin (circuitWith r rs).N) → BitVec ((circuitWith r rs).w g) → Prop) (X : (circuitWith r rs).Trace) :
+    (Accounting.unbound (partsWith r rs) opens X).card = unboundWith r rs opens X := by
+  induction rs generalizing r with
+  | nil => rfl
+  | cons s rs ih =>
+    exact (card_unbound_beside r.parts (partsWith s rs) opens X).trans (congrArg (_ + ·) (ih s _ _))
+
+end FileRead
 
 end Verity
