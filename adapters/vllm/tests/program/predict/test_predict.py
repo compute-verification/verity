@@ -23,12 +23,8 @@ from verity_vllm.config import MANIFESTS, WORKLOADS, RowEngine
 from verity_vllm.engine.profiles.dense_generic import HF_CONFIG_DIR, pinned_hf_config
 from verity_vllm.program.model import INT8_EXACT_LMHEAD_QUANT, INT8_EXACT_QUANT
 from verity_vllm.program.predict import score as S
-from verity_vllm.program.predict.build import (
-    Unexpressible,
-    build_program,
-    model_shape,
-    weight_leaves,
-)
+from verity_vllm.program.predict.build import Unexpressible, build_program
+from verity_vllm.program.predict.model_shape import model_shape, weight_leaves
 from verity_vllm.program.predict.phi import Phi
 
 FIX = Path(__file__).parent / "fixtures"
