@@ -46852,3 +46852,62 @@ For REGX: `hcls` is the last piece; the class needs "same side" exactly as you h
 For the table:
 - g: `SpotFirstHitTwo` is a conditional form at the code: the event is at most κ_s + √(k·γ_s·Pr[B]) + (2·c_R + 4·c_F)/2^256 for any reals that bound Pr[B_conf,X] and the two off-trace masses. It proves no number and names no premise on SHA-512; do not write "the first-hit bound is a guarantee at the code".
 - By classes in compressions at the record, a run at K0 = 6: 2^-101.6 with K a mean (derived, not a Lean count), 2^-100.8 with the count the Lean's lemmas give (checked blocks × 132 classes); the 2,647 GB plan misses either way. All modeled; `hwhole` is written and not compiled, `hcls` is not written.
+
+## SCALE, Wed 11 Nov 10:03Z: by gates no count in Lean reaches 2^-100 at the record (today's one-M count 2^-88.61 in compressions, a count by stratum 2^-89.13); by classes ATTACK's ≤ 72 with one M already reads 2^-101.69 at the record, and the count by stratum is what carries the 2,647 GB plan over (2^-99.60 to 2^-100.58); that lemma is TWOWITNESS's (claimed 10:02Z), so I don't write it, and #8874 keeps `proved_size_le` and `firstK` for it
+
+No guarantee's statement or premise changes in this entry. All figures are modeled: T = 2^80 SHA-512 calls, compressions add log2 513 = 9.00, a run at K0 = 6, n_sess = 6·Σ_t k_t, `term()` as in my 09:52Z entry.
+
+**Where each number comes from.**
+- [run] The cells, strata and record k are the planner run `r20261111-080601-3db1`'s `plan_dump`. `kappa_rule` at the record's classes and κ reproduces the record's Σ_t k_t exactly (10,046,500), so every row below uses one rule.
+- [run] The needs by gates are `FC._unit_ports` at the census tree `52da59a094b9`: a later head block needs 632,128 bits, a first one 615,584.
+- [derived] The rows and reader sets per Definition are my reading of `chain_rows.py` and `ProgramIndex.rows[*].args`.
+- [run] The probe `r20261111-095316-8938` (rank 0 of `glm53__fp8__h200__tp8__b1__i256__o32`, first request) checked the head block's key writers:
+  - 22,386 SparseMla rows; `q_nope` is written by `BatchedGemm_v1` and `q_rope` by `RoPEHeadGptJ_v2` on every row;
+  - every one of 3,223,584 key reads has exactly two writer rows, `DsaRMSNorm_v1` (`kv_c`) and `RoPEHeadGptJ_v2` (`k_pe`).
+- [guess] `PageCopy[262144 bits]` is a modeled cell (about 158 a world-year) with no binding. I take it at 2 rows and 58 reader sets (two writers a key over 28 keys). With every bit a row, it alone sets the record's by-stratum maximum by rows to 2^-96.7. It decides any one-M count by classes, so its real count is needed before a one-M line is cited.
+
+**1. The three K forms at every design** [derived by `~/.research/notes/lanes/proofs/tools/scale_kfix.py`, compressions, K0 = 6]. "Mean" is my old line (no Lean gives it), "max_t" is Σ_t k_t · max_{u ∈ t} needs(u) (a count by stratum), and "one M" is #8874's `code_card_biUnion_le_count` and (c1) (Σ_t k_t times the largest block's needs).
+
+| design | κ | Σ_t k_t | GB ratio | gates: mean | max_t | one M | rows 9: mean | max_t | one M (18) | rows 72: mean | max_t | one M (72) | reader sets: mean | max_t | one M (132) |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| record, size classes | 2^-5 | 10,046,500 | 1.000 | -89.33 | -89.13 | **-88.61** | -104.74 | -104.55 | -103.63 | -102.45 | -102.39 | **-101.69** | -101.63 | -101.57 | -100.83 |
+| the 2,647 GB plan, width | 2^-2.5 | 42,855,252 | 0.655 | -87.49 | -87.22 | -86.52 | -102.68 | -102.47 | -101.54 | -100.64 | **-100.58** | **-99.60** | -99.85 | -99.78 | -98.73 |
+| width | 2^-3 | 30,303,243 | 0.656 | -87.99 | -87.72 | -87.02 | -103.18 | -102.97 | -102.04 | -101.14 | -101.08 | -100.10 | -100.35 | -100.28 | -99.23 |
+| width | 2^-4 | 15,151,640 | 0.665 | -88.99 | -88.72 | -88.02 | -104.18 | -103.97 | -103.04 | -102.14 | -102.08 | -101.10 | -101.35 | -101.28 | -100.23 |
+| width | 2^-6 | 3,787,940 | 0.690 | -90.99 | -90.72 | -90.02 | -106.18 | -105.97 | -105.04 | -104.14 | -104.08 | -103.10 | -103.35 | -103.28 | -102.23 |
+| width | 2^-7 | 1,893,988 | 0.798 | -91.99 | -91.72 | -91.02 | -107.18 | -106.97 | -106.04 | -105.14 | -105.08 | -104.10 | -104.35 | -104.28 | -103.23 |
+
+Coin a run [derived from DRAFT-CORE's formula, relayed]: 1,567 MB at the record, 6,685 MB at the 2,647 GB plan, 4,727 MB at 2^-3, 2,364 MB at 2^-4, 591 MB at 2^-6 and 295 MB at 2^-7. In calls, add 9.00 to every cell; by gates the one-M record is -97.61 in calls, which matches ATTACK's 2^-97.6 at K0 = 6 [relayed].
+
+- [derived] By gates, the count by stratum recovers only 0.5 to 0.7 bit over one M (the head block, 632,128 bits, is the largest block in most strata). No design with a GB ratio under 0.8 reaches 2^-100 in compressions by gates under any form.
+- [derived] By rows 72 (ATTACK's ≤ 72, the count REGX's class gives; see 3), one M reads -101.69 at the record, -101.10 at 2^-4 and -100.10 at 2^-3. The count by stratum adds about one bit at the width designs, since a stratum without a head block takes its own maximum. That is what puts the 2,647 GB plan over 100 bits (-99.60 to -100.58).
+
+**2. HEADCIRC's cut** (each later head block becomes scores plus four column quarters, each reading the block's keys whole) [derived; the cut's sizes are HEADCIRC's 09:48Z, relayed].
+- How I modeled it: each `SparseMlaHeadBlock_v1{NVIS=64,FIRST=false}` cell of n becomes a scores cell of n (1,216 output bits, needs 600,416) and a quarters cell of 4n (4,096 output bits, needs 599,072). k is from `kappa_rule` on the cut's cells. Reader sets are 133 and 131, counted my writer-distinguishing way, so they are an upper bound.
+- No GB: the plan has no prove price for the cut's units.
+
+| design | κ | Σ_t k_t | gates: mean | max_t | reader sets: mean | max_t |
+|---|---|---|---|---|---|---|
+| size classes | 2^-5 | 8,316,932 (uncut 10,046,500) | -89.88 (uncut -89.33) | -89.45 (-89.13) | -102.16 (-101.63) | -101.88 (-101.57) |
+| width | 2^-2.5 | 44,269,253 (42,855,252) | -87.46 (-87.49) | -87.18 (-87.22) | -99.75 (-99.85) | -99.68 (-99.78) |
+| width | 2^-6 | 3,912,920 (3,787,940) | -90.96 (-90.99) | -90.68 (-90.72) | -103.25 (-103.35) | -103.18 (-103.28) |
+| width | 2^-7 | 1,956,479 (1,893,988) | -91.96 (-91.99) | -91.68 (-91.72) | -104.25 (-104.35) | -104.18 (-104.28) |
+
+- [derived] By gates the cut costs nothing per checked unit (600,416 and 599,072 against 632,128). HEADCIRC's 4.84× is a block's five units against the block once, and the count charges each checked unit, not each block.
+- [derived] Under size classes the cut gains 0.55 bit: the narrow outputs fall into small classes whose k is lower, so Σ_t k_t drops by 17%. Under width it loses 0.03 to 0.10 bit (Σ_t k_t rises 3%). So the order's "by gates the cut costs bits" holds under width and not under size classes; neither moves a design across 2^-100.
+
+**3. (c) refined: what a later head block's classes number** [derived from REGX 09:53Z (relayed: the class is "same readers, same replay block, same side", with no writer in it) and the probe above].
+- My 132 counted (writer, readers) pairs: 2 for the queries, 2 a key times 64, 1 for the state in and 1 for the outputs. Under REGX's class the writer drops out, and a key's two pieces have the same readers (the probe: both are read by the same SparseMla rows), so a key is one class. That gives 64 + 2 + up to 6 = ATTACK's ≤ 72. The probe's two writers a key matter only for my old count.
+- [guess] Keys from one prefill step share readers, so a block of prefill keys is one class, not 64. The ≤ 72 is the maximum, reached by a block of decode keys, each read from its own step on. `block_census` could count the served classes exactly, but only per request at the census row, not the world-year mix.
+
+**4. The count by stratum: I could state and prove it, but TWOWITNESS claimed it at 10:02Z (a new PR stacked on #8870), so I don't** [read: TWOWITNESS 10:02Z, this inbox]. #8874 keeps `RegTwo.proved_size_le` and `firstK` as TWOWITNESS asks, since its `SpotFlock/Counts.lean` reads them.
+- Two pieces in the tree its loop can use [read]: `unit_mem_list` (`Proofs/Flock/Soundness/Discharge/ZkLink/DrawOk.lean:83`) puts a stratum's `unit j` in its ranges; `qsort_perm` (`Proofs/Flock/Soundness/ExecDraw.lean:95`) carries a sum through the sort.
+- The M_t its hypothesis needs, per template [derived, `scale_kfix.py`]:
+  - by gates, 632,128 for a later head block, 615,584 for a first one, and each other Definition its own `in_bits + out_bits`;
+  - by classes, at most 72 and 69 for the two head blocks, 18 for `MoeRouterSigmoidBiasSlots_v2`, and its row count for the rest.
+- `PageCopy` must be its own stratum, or have a class count, before any M_t by classes is cited.
+
+**#8874:** records `r20261111-091422-a581` passed [run, 09:52Z]; quick tier `r20261111-091429-6f84` is running on vy-nebius-cpu-7 [run, 09:57Z]. Its ready line follows when it passes.
+
+For BREAKEVEN: by gates the count by stratum is worth 0.5 to 0.7 bit, so at the record the gates line stays at 2^-89.1 in compressions. By classes at most 72 a block, the 2,647 GB plan needs the count by stratum (-100.58 against one M's -99.60); widths 2^-3 and 2^-4 clear 2^-100 with one M (-100.10, -101.10) at GB ratios 0.656 and 0.665.
+For the table: by classes (≤ 72) the record reads 2^-101.69 with one M (Lean's form; modeled; rests on EXTFORM's theorem and on `PageCopy`'s class count, unknown) and 2^-102.39 with a count by stratum (TWOWITNESS's lemma, not yet written). By gates the record reads 2^-88.61 (one M) and 2^-89.13 (by stratum), in compressions at K0 = 6. HEADCIRC's cut moves gates by +0.55 bit under size classes and -0.03 to -0.10 under width.
