@@ -16,7 +16,7 @@ AGENTS.md states the code's layout and rules. This skill states how the team tha
 - **An agent VM only edits.** Its 16 GB are shared by every agent on it, and one out-of-memory kill takes them all down.
   Locally, run only git, reading and editing, messaging and the notes, one test file or `-k` selection under about a
   minute and 1 GB, `lake env lean` on one file of a built tree, a Lean package with no Mathlib or ArkLib, and the lock
-  fast path. Everything else (every suite, `verity check`, circuit-check, any build of `Security`, cargo, nvcc, every
+  fast path. Everything else (every suite, `verity check`, circuit-check, any build of `security`, cargo, nvcc, every
   e2e and GPU job) runs through `research run --on auto --cwd source [--wait] -- CMD` (the writing-runs skill): an
   `agent-test` job on the cluster queue (4 CPUs, 16 GiB, 60 min unless `--cpus`, `--mem-gb` or `--timeout` say
   otherwise), or a `research` pool when one starts sooner. The shell hook refuses those locally and names the remote
@@ -38,8 +38,9 @@ AGENTS.md states the code's layout and rules. This skill states how the team tha
   `budgets.toml`) and runs preserve their results from the pod. The lane whose budget line pays for a machine stops it
   when its work there ends.
 - **Secrets.** The shell hook (`.cursor/hooks.json`, `tools/agent-guard/shell_hook.py`) refuses a command that would
-  print the environment or every process's command line; on a VM booted without it, run origin/main's
-  `tools/agent-guard/boot.sh`. A secret is stored as one line (a key as base64, `NAME_B64`).
+  print the environment, every process's command line, or a key or env file (its names: `envnames.py` beside the
+  hook); on a VM where it doesn't run, `research` says so, with the fix. A secret is stored as one line (a
+  key as base64, `NAME_B64`).
 
 ## Landing
 
@@ -63,14 +64,14 @@ it, and fast-forwards `main` only to a candidate whose check passed every step o
   pre-mark run), plus a suite's slow tier when you changed its core. Prefer small PRs.
 - Reviewers ci staffs, never the owner, record a verdict at the head (`research queue review N --land|--hold REASON --by
   LANE`); no other per-head grant exists. A PR whose change touches nothing drive.toml's `lowrisk_excludes` names (Lean,
-  locks, Lake files, `verity/core/`, the soundness-path Python) lands on its ready mark alone, with no verdict (the
+  locks, Lake files, the verifiers, the soundness-path Python) lands on its ready mark alone, with no verdict (the
   low-risk lane); a layout move's PR (`Move: tools/move/MAP.toml` in its body) never does.
 - The loop builds candidates from the marked PRs with a land verdict or in the low-risk lane, in the priority file's order
   and then by mark time, each after the PRs it contains, so a stack lands its bases first: `main`'s tip, or the candidate
   below, and one `Queue: #N` merge per PR. A PR that doesn't merge onto `main` is left out, and its owner told to merge
   `main` (across a move, `tools/move/restack.py`) and mark the new head. A candidate holding a change to a
-  `lean-audit.json` lock, to the spec (Lean under `Security/Definitions/`, `Security/Definitions.lean` and `Security/`'s
-  Lake files) or to Lean that runs as code (a `.lean` outside `Security/`) first runs `lean-audit` alone (its records
+  `lean-audit.json` lock, to the spec (Lean under `security/Definitions/`, `security/Definitions.lean` and `security/`'s
+  Lake files) or to Lean that runs as code (a `.lean` outside `security/`) first runs `lean-audit` alone (its records
   run), commits the records it regenerated as `Lock records regenerated for #N...`, and is checked on that commit, so
   `main` moves only to regenerated records; a records run that fails is a failure like any other.
 - A candidate's check is `check.py --record` of every step, in shards on the queue's machines, judged on the merge gate,
@@ -124,10 +125,10 @@ does no lane work. Launching, handing over and archiving coordinators: `infra/cu
   `cursor/<lane>-<topic>-<hex>` from `origin/main` and push only there, and names an inbox branch it reads hourly
   (`git show origin/B:inbox/<agent-id>.md`); larger changes go in when you resume it. It opens its own PR, or reports
   its branch and SHA for its launcher to.
-- **Pick a subagent's effort by how conceptually heavy its task is**, and pass it as `Task`'s `model`
-  (`claude-opus-5-5-<effort>`; `inherit` runs it at your own effort), a standing request for every agent here: `max` for
-  the hardest conceptual work, `xhigh` for conceptually heavy work, `high` for slightly heavy work, `medium` for routine
-  execution, `low` for trivial lookups.
+- **Every agent runs Claude Fable 5.2.** Pick a subagent's effort by how conceptually heavy its task is, and pass it
+  as `Task`'s `model` (`claude-fable-5-2-<effort>`; `inherit` only when you run Fable 5.2 yourself), a standing
+  request for every agent here: `max` for the hardest conceptual work, `xhigh` for conceptually heavy work, `high` for
+  slightly heavy work, `medium` for routine execution, `low` for trivial lookups.
 - **Reach a running agent** on any VM through its shell commands, since it never rereads a shared file mid-run:
   `python3 tools/agent-guard/inbox.py send AGENT_ID --text '…'` from a checkout pushes to origin's `inbox/AGENT_ID`, and
   its shell hook delivers it within about a minute or as its turn ends (`--local`: a subagent on your VM, at once);
@@ -142,7 +143,7 @@ does no lane work. Launching, handing over and archiving coordinators: `infra/cu
   with a done-condition anyone can check, which its lead proposed and Daniel approved.
 - **Work in a checkout no other agent uses** (your VM, or your own `git worktree` and venv), push only to branches you
   created or were handed, and push after every commit (never `main`, never `--force`).
-- **Slack** (computeverification.slack.com) is for handle holders and named humans; a worker asks its own coordinator.
+- **Slack** is for handle holders and named humans; a worker asks its own coordinator.
   The coordination API is `research msg` (the using-slack skill). Work for another lead goes in as a Linear issue in its
   team; Slack is the conversation around it.
 

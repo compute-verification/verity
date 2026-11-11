@@ -137,13 +137,13 @@ Keys and access:
 
 Landing:
 
-- The vLLM integration's lint ratchets are no-growth: no change adds an
+- The vLLM adapter's lint ratchets are no-growth: no change adds an
   exception or raises a recorded count, and a change to a lint's own code or thresholds is judged like source. Dedicated
-  cleanup lanes pay the exceptions down; a feature PR owes none (`integrations/vllm/tools/ratchet_gate.py`).
-- A `# noqa` is an exception too: in `integrations/vllm`, no
+  cleanup lanes pay the exceptions down; a feature PR owes none (`adapters/vllm/tools/ratchet_gate.py`).
+- A `# noqa` is an exception too: in `adapters/vllm`, no
   change adds more `noqa` lines than it removes. One that moves with its code counts as kept, and deleting a stale one is a
   retirement. The ratchet gate counts them, with no allowlist.
-- Outside `integrations/vllm/`, the same gate holds `tests/lint/`'s no-growth lists and checks each landing's changed Python
+- Outside `adapters/vllm/`, the same gate holds `tests/lint/`'s no-growth lists and checks each landing's changed Python
   after it lands, ringing its owner, never reverting: fix the code, never the list; a rename moves its entries (`--move OLD NEW`); a
   list may catch up to what its base's lint finds in its tree, no further. Ruff: the root `ruff.toml`, per (file, rule),
   `noqa` uncounted. No new direct environment read: use the area's settings registry (a `settings.py`, or a list mark at
@@ -160,7 +160,7 @@ Protocols and claims:
 - A workload is what a datacenter runs over a monitoring period (its Programs, their inputs and placement), at
   every scale; workloads compose, and "row" never names one.
 - The network certifier is one device on each AI server's uplink, whose one code run under one `trusted-host` gives
-  both the cells and the records (`Security/Definitions/NetworkCertifier/Tap.lean`). No statement
+  both the cells and the records (`security/Definitions/NetworkCertifier/Tap.lean`). No statement
   ties them by a premise or trusts them separately.
 - θ comes only from registered public data, registered at the start of a deployment; outputs of earlier runs
   are never θ (drops `NciCheck.Baseline`'s output provenance).
@@ -168,7 +168,7 @@ Protocols and claims:
   Python checks that the Lean doesn't, and every recorded run replayed through the Lean gets the Python's verdict,
   negative controls included. The Python keeps running as the reference, the switch is one reversible line, and it moves
   the protocol's properties into `Properties/`. Where it leads: Lean is the definition and the
-  verifier, `verity.ml`'s Python mirrors it under difftest, and a verifier imports no `verity.ml` code.
+  verifier, the provers' Python mirrors it under difftest, and a verifier imports none of it.
 - An auditor device releases its commitment to its coins only after the prover's commitment is in, so no
   soundness statement takes a hiding premise on it. A guarantee whose break includes a forged device release names two
   assumptions outside the theorem: `ecr/sha-512` for its finders and `euf-cma/lms-sha512-n64` for the forgery finder.

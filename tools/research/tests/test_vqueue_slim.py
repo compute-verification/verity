@@ -31,20 +31,20 @@ OFF = ("circuit-check", "ratchet-gate")
 #: what `step_paths` finds of `LINT_LOG`, a failed preflight-lints: its failing test and the path its failure names
 LINT_PATHS = frozenset({"tests/test_repository.py", "tools/research/src/research/store/README.md"})
 #: a graph build family declaring lean-agreement's reads in the shape the tree's does
-BUILD_SRC = ('VERIFIER = "verity/ml/flock/verifier"\nLEAN = "verity/core/service/flock"\n'
+BUILD_SRC = ('VERIFIER = "verity/protocols/flock/agreement"\nLEAN = "verity/protocols/flock/verifier"\n'
              'CHECK_READS = (*(f"tools/verity/check/{m}" for m in ("check.py", "settings.py")),\n'
              '               ".agents/skills/using-slack/registry.json")\n')
 ART = "art:" + "ab" * 32
 #: a `main` whose files each bounded step reads, beside one none of them does (docs/notes.md)
 KEYED = {BUILD: BUILD_SRC, "tools/verity/check/check.py": "# check\n", "tools/verity/check/settings.py": "# settings\n",
          ".agents/skills/using-slack/registry.json": "{}\n", "uv.lock": "version = 1\n", "pyproject.toml": "[project]\n",
-         "tools/x/pyproject.toml": "[project]\n", "verity/ml/flock/verifier/ci.py": "# ci\n",
-         "verity/core/service/flock/Main.lean": "-- main\n", "fixtures/artifacts.json": json.dumps({ART: "fixtures/golden/a.json"}),
+         "tools/x/pyproject.toml": "[project]\n", "verity/protocols/flock/agreement/ci.py": "# ci\n",
+         "verity/protocols/flock/verifier/Main.lean": "-- main\n", "fixtures/artifacts.json": json.dumps({ART: "fixtures/golden/a.json"}),
          "fixtures/golden/a.json": "{}\n", "docs/notes.md": "notes\n"}
 #: each step the run judges whose reads are bounded, with files of `KEYED` it reads and files it doesn't
 BOUNDED = {"preflight-lock": (("uv.lock", "tools/x/pyproject.toml", "tools/verity/check/check.py", ".python-version"),
-                              ("verity/ml/flock/verifier/ci.py", "fixtures/golden/a.json")),
-           "lean-agreement": (("verity/ml/flock/verifier/ci.py", "verity/core/service/flock/Main.lean",
+                              ("verity/protocols/flock/agreement/ci.py", "fixtures/golden/a.json")),
+           "lean-agreement": (("verity/protocols/flock/agreement/ci.py", "verity/protocols/flock/verifier/Main.lean",
                                "tools/verity/check/settings.py", ".agents/skills/using-slack/registry.json", "uv.lock"),
                               ("tools/x/pyproject.toml", "fixtures/golden/a.json", "tools/verity/check/other.py")),
            "preflight-fixtures": (("fixtures/artifacts.json", "fixtures/golden/a.json", "tools/research/src/research/x.py",
@@ -76,7 +76,7 @@ def _harness(world: World, monkeypatch, agreement: bool = False, off_gate: tuple
     _move_main(world, {**GATED_TREE, "tools/verity/check/policy.toml": _policy(off_gate=off_gate), **(tree or {})})
     asked: list[tuple[str, str, str]] = []
     monkeypatch.setattr(merge, "required_steps", lambda repo, base, commit, tool: asked.append((base, commit, tool)) or (
-        {"lean-agreement": ["verity/ml/flock/"]} if agreement else {}))
+        {"lean-agreement": ["verity/protocols/flock/prover/"]} if agreement else {}))
     h = Beside(world, monkeypatch, **kw)
     h.q._clone()
     base, sha = _main(world), world.change(change or {"f.txt": "1\n"})
@@ -380,7 +380,7 @@ def test_start_and_judge_write_nothing_to_the_queues_state_and_tell_and_stop_not
 # -- the check that gates
 
 #: lean-audit's log of a package that failed its build, in the scratch tree ``n``, and one more failure it may print
-AUDIT = ("AUDIT /w/lean-audit-scratch-{n}-x/Security/Proofs: FAIL; built WITHOUT a sandbox\n  build: exit 1\n"
+AUDIT = ("AUDIT /w/lean-audit-scratch-{n}-x/security/Proofs: FAIL; built WITHOUT a sandbox\n  build: exit 1\n"
          "    error: ../Proofs/A.lean:100:2: Tactic `rfl` failed\n  closure: {n} modules checked, 2 reused\n"
          "  trust gap: 2 premises outside their trust\n    G: 2 (a, b)\n")
 RECORD = "  record: the statement of G changed\n"
@@ -429,7 +429,7 @@ def test_every_shard_of_a_candidates_check_leaves_out_the_tests_the_loops_list_n
     h, base, sha, _ = _harness(world, monkeypatch)
     h.d.on, listed = "m1,m2,m3", tmp_path / "deselect"
     ids = ["tools/verity/circuit_check/tests/test_circuit_check.py::test_every_call_the_suite_checks_is_partitioned",
-           "verity/core/protocols/composition/tests/test_composition_difftest.py::test_remote_agrees"]
+           "verity/protocols/remote/verifier/composition/tests/test_composition_difftest.py::test_remote_agrees"]
     listed.write_text(f"# over 5 minutes\n\n{ids[0]}\nnot a node id\n/abs/test_x.py::t\n{ids[1]}\n{ids[0]}\n")
     start(h.d, sha, base, shards=3, deselect=listed)
     sent = tmp_path / "deselect.sent"
@@ -678,13 +678,13 @@ def test_a_check_killed_on_what_only_the_candidates_own_allowance_covers_is_infr
 
 
 def test_lean_audit_s_failures_are_what_it_prints_under_each_failed_package_but_its_run_s_counts():
-    log = ("lean-audit: verity/core/primitives/world: PASS reused\n" + AUDIT.format(n=1)
-           + "  tamper: /w/lean-audit-scratch-1-x/Security/Proofs/A.olean changed\n"
-           "AUDIT /w/lean-audit-scratch-1-x/Security: PASS  12 declarations\n  note: fine\n"
-           "AUDIT /w/lean-audit-scratch-1-x/Flock: FAIL\nAUDIT: FAIL (Security/Proofs, Flock); reports in /out\n"
+    log = ("lean-audit: verity/hardware/world: PASS reused\n" + AUDIT.format(n=1)
+           + "  tamper: /w/lean-audit-scratch-1-x/security/Proofs/A.olean changed\n"
+           "AUDIT /w/lean-audit-scratch-1-x/security: PASS  12 declarations\n  note: fine\n"
+           "AUDIT /w/lean-audit-scratch-1-x/Flock: FAIL\nAUDIT: FAIL (security/Proofs, Flock); reports in /out\n"
            "lean-audit: FAIL: unread: Core grew\n")
-    named = {"Security/Proofs::build: exit 1", "Security/Proofs::error: ../Proofs/A.lean:100:2: Tactic `rfl` failed",
-             "Security/Proofs::tamper: Security/Proofs/A.olean changed", "Flock::rest", "lean-audit: FAIL: unread: Core grew"}
+    named = {"security/Proofs::build: exit 1", "security/Proofs::error: ../Proofs/A.lean:100:2: Tactic `rfl` failed",
+             "security/Proofs::tamper: security/Proofs/A.olean changed", "Flock::rest", "lean-audit: FAIL: unread: Core grew"}
     assert audit_failures(log, "rest") == named == audit_failures(log.replace("scratch-1-x", "scratch-22-y"), "rest")
     assert audit_failures("AUDIT: PASS; reports in /out\n", "rest") == set()
 
@@ -700,8 +700,8 @@ def test_a_lean_audit_failure_is_inherited_only_while_it_prints_no_more_than_the
     rec = start(h.d, sha, base, shards=1)
     _slim(h, tmp_path, lean_audit=AUDIT.format(n=2) + more)
     (f,) = based(judge(h.d, rec), rec_base).failed
-    assert f.key != f.base_key and f.inputs == {"Security/Proofs/A.lean"} and _inherited(f) is (not more)
-    assert f.tests - f.base_tests == ({"Security/Proofs::record: the statement of G changed"} if more else set())
+    assert f.key != f.base_key and f.inputs == {"security/Proofs/A.lean"} and _inherited(f) is (not more)
+    assert f.tests - f.base_tests == ({"security/Proofs::record: the statement of G changed"} if more else set())
     assert unnamed(f.key) not in f.tests
 
 
