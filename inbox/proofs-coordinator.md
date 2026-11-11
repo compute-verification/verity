@@ -45271,3 +45271,33 @@ For the table: CAPS: #8890 open, unmarked, at `3abd6b5bc8e2`, stacked on #8877: 
 For the table:
 - The nine marked result PRs build together: `security/Proofs` on main + #8785, #8820, #8827, #8788 (`37079664740c`), #8828, #8781, #8819, #8841, #8857 is `AUDIT: PASS`, 193,914 declarations in 3,838 modules, axioms the three (`r20261111-083411-3dd5`; a build and the axioms scan, no kernel replay) [run].
 - `main` `0a722c6ec984`; the cold batch `8f5d3c3823f0` is building; none of the nine is in a candidate yet [run, 09:27Z].
+
+## TWOWITNESS, Wed 11 Nov 09:32Z: a refused draw stops round 2, so every session at those coins is the refused view; I don't write (c2), since (c1) at Pr[refused] ≤ 1 covers `K_s` and `K_m` needs only a sharper cost lemma; SessCount is #8889 (try passed); no lock change
+
+**Which: it does.** [read: `security/Proofs/Flock/SpotFlock/Code.lean` on `main`]
+- `secondDraw h c₀ c₁` is `none` exactly where `Spot.Select.selectSecond (h.reg.sample (src c₀)) h.reg.ns h.reg.ks (src c₁)` errors (`:375-378`). It is the same `selectSecond` that `RegTwo.checked` reads at the code's two coins, since round 0 is the first stage and round 1 the second (`order`, `:553-555`).
+- `readsOk` is `false` at every template where `secondDraw` is `none` (`:456-460`). So `stmtOk` is `false` wherever the registration has a template (`:483-490`, `(List.range h.ms.length).all`).
+- Round 2 then answers `.rej` (`:536`), and the run is refused.
+- Every unit's `session` is `(xS₀ t, refusedSeen)` there. `off t ≥ 3` (`three_le_off`, `:550`), so the rounds before the session include round 2, whose answer is not a message (`:575-581`).
+- So at a refused draw no session can accept. ATTACK's sharper cost lemma applies: refused coins weigh in `K_s` (times T) and in `K_m` (times e·T) only through `sessCount`, which counts every slot [relayed: ATTACK's 09:26Z entry].
+- Whether an extraction at `refusedSeen` reruns at all is the cost lemma's to state (KILIAN's step 1) [guess].
+
+**So I don't write (c2).**
+- For `K_s`, (c1) at `Pr[refused] ≤ 1` adds `Σ_{u<N} |needs u|` once, which is ATTACK's 2^57.6 against 2^68.96 [relayed].
+- For `K_m`, the refused term goes away once the cost lemma counts sessions only on accepted draws. That is `E[sessCount · 1_ok]`, at most the accepted bound with no refusal term. It is a two-line corollary of (c1) once KILIAN states `hKm` that way [guess: not written].
+- DRAFT-CORE's `units_error_le` stays the route if anyone needs `Pr[refused]` small at a stage that holds the first read. Its missing step at `selectSecond` is that `checkDraw` passes on every draw of the second law (`Spot/Draw.lean:164-228`) [read].
+
+**Where the three PRs are.**
+- #8870 at `e7d354135fbb`: records `r20261111-085250-c066` running [run: `research status`, 09:28Z].
+- #8889 (SessCount, opened 09:27Z, unmarked, PRF-533) at `50b06ae65a50038de9c9a9731c7c0dec26c9a00a`.
+  - Try `r20261111-092203-c9b8` passed: lean exit 0; all 7 theorems on `propext`, `Classical.choice` and `Quot.sound` only; no other module declares the same names [run: its log].
+  - The theorems: `sum_first_sessNeeds_le` (`hKm`), `card_filter_needs_le` (`hKs`), `card_firstSlots_le` (`hNs`, `|firstSlots x l| ≤ |l|`), `sum_sessions_le` and three helpers [read].
+- (c1) on `cursor/proofs-refused-3b8d` at `06c39217b29e1b1980fca5159e6d94ee16011837`, on `main` `0a722c6ec984`: `Claims/Sampling/Refused.lean`, 6 theorems, not yet compiled. Try `r20261111-092939-f6a7` is waiting [run].
+  - `RegTwo.ex_checked_le`: `E[F(checked)] ≤ B + Pr[refused]·F(List.range N)`, for any `F` at most `B ≥ 0` wherever the second stage accepts [read: the file].
+  - `RegTwo.ex_sum_checked_le`: with a weight at most `M` and at most `C` proved units on an accepted draw, `E[Σ_{u ∈ checked} w u] ≤ Σ_always w + C·M + Pr[refused]·Σ_{u<N} w u` [read].
+  - `C = K·Σ_t k_t` comes from #8870's count with SCALE's `RegTwo.sample_size_le` [guess: the composition is not written].
+- Merged tree, for all three: scratch commit `f6cd9639ec` on no branch is `main` `0a722c6ec984` with #8539, #8781, #8785, #8820, #8827, #8828, #8354 and #8368, the marked heads touching my aggregators, then my three heads. Git merges all eleven clean; it is not yet built, and I rebuild it at the refused branch's new head first [run: `git merge`].
+
+For the table:
+- c: a refused draw stops round 2 (`SpotFlock/Code.lean:375-378, 536, 575-581`), so (c2) is not needed: (c1) at `Pr[refused] ≤ 1` covers `K_s`, and `K_m` waits on a sharper cost lemma. Modeled; the first-hit term of #8827's lemma; per sampled replay block at T = 2^80 calls a run.
+- b2 and k: #8889 (try passed) holds the three counts' halves; (c1) composes them at the registration, try waiting.
