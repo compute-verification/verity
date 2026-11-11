@@ -48,8 +48,11 @@ rule, and never by requests what a check counts by capacity:
 
 * the scan, `rowsTerms`'s terms (`terms`). The network certifier's own are the schedules and the fail cells,
   ⌈log2(egress_cells + 1)⌉ each a connection of the period's parameters, counted by request, and the jitter,
-  ⌈log2 D_j^T⌉ an execution phase of each link, which is 0 at D_j = 1 and a bit a bucket at D_j = 2. The entries, the
-  tied compute audits' free inputs, are the compute side's. The check charges every slot's entry at its whole width
+  ⌈log2 D_j^T⌉ an execution phase of each link, which is 0 at D_j = 1 and a bit a bucket at D_j = 2. The term of
+  record is the one at D_j = 2 (`OF_RECORD`), two release schedules. The term at D_j = 1 is what a network certifier
+  with a set-time card, a network card that releases at a set time, would be charged; no timing test has shown one,
+  so a figure at D_j = 1 is printed only under its label (`SET_TIME`). The entries, the tied compute audits' free
+  inputs, are the compute side's. The check charges every slot's entry at its whole width
   (`ingress_scan.entry_bits`), lanes × T / EVERY of them a link's execution phase, a count by capacity that needs the
   class's lanes; with none given the entries are one a request, the least the check can charge;
 * N2, the clock form's terms (`clock_terms`): the schedules are ⌈log2 #Σ_sync^m⌉ over a link's m execution phases,
@@ -58,8 +61,9 @@ rule, and never by requests what a check counts by capacity:
 * the scan under each of `CHANGES`, the three changes to its check, and under all three: a response's length held to
   its Program's output count, and that count to its ids by a stop block, a proof block that checks where a response's
   ids stop, sampled on a served audit, so that the schedules are 0 and the connections that fail are charged pooled
-  over the period (`failed`); the release times taken once, by the compute side's tick, so that the jitter is 0; and
-  the entries charged through the compute audit, whose own bound then stands in their place and is not counted here;
+  over the period (`failed`); the release times taken once, by the compute side's tick, so that the jitter is 0,
+  which rests on the set-time card no timing test has shown; and the entries charged through the compute audit, whose
+  own bound then stands in their place and is not counted here;
 * the design, which no run has behind it: head checks, a lengths unit on the network certifier's records, and a stop
   block sampled on a served audit. The lengths unit holds a response's length to its Program's output count and the
   stop block holds that count to the ids, so the lengths are held; the entries are the compute audit's; and its term
@@ -146,7 +150,9 @@ CHANGES = {"lengths": "a response's length held to its Program's output count, a
                       "stop block, a proof block that checks where a response's ids stop, sampled on a served "
                       "audit: the schedules are 0, and the connections that fail are charged pooled over the "
                       "period, which of them failed and where each one's stream ended",
-           "timing": "the release times taken once, by the compute side's tick: the jitter is 0",
+           "timing": "the release times taken once, by the compute side's tick: the jitter is 0, which rests on a "
+                     "set-time card, a network card of the network certifier that releases at a set time, and no "
+                     "timing test has shown one",
            "entries": "the entries charged through the compute audit: the compute side's own bound stands in their "
                       "place, and is not counted here"}
 
@@ -437,6 +443,11 @@ _MARK = {"measured": "measured", "modeled": "modeled", "derived": "modeled", "da
          "assumed": "assumed", "ruled": "assumed"}
 #: the jitter bounds each row is counted at: D_j = 1, where the jitter is 0, and D_j = 2, a bit a bucket
 JITTERS = (1, 2)
+#: the jitter bound of the term of record: two release schedules
+OF_RECORD = 2
+#: the label every figure at D_j = 1 is printed under: what a network certifier whose network card releases at a set
+#: time would be charged, which no timing test has shown
+SET_TIME = "with a set-time card (not yet tested)"
 SCOPES = ("node", "datacenter", "world")
 #: the assumed class's defaults: the most ids a response holds, an id's bits and an execution phase's buckets
 RESPONSE_IDS, ID_BITS, BUCKETS = 4096, 18, 1280
@@ -478,7 +489,8 @@ ROWS = {
                "link's execution phase"),
     **{name: Kind("a change to the scan", (name,), what) for name, what in CHANGES.items()},
     "all three": Kind("a change to the scan", tuple(CHANGES),
-                      "the three changes together, with the stop block the lengths' change rests on"),
+                      "the three changes together, with the stop block the lengths' change rests on and the set-time "
+                      "card the timing's change rests on"),
     "design, no stop block": Kind(
         "a design with no run behind it", ("lengths", "entries"),
         "the design before a stop block, a proof block that checks where a response's ids stop, has been sampled on "
@@ -741,10 +753,12 @@ def document(inp: Mapping[str, Input], *, target_gb: float | Fraction = TARGET_G
              run: str | None = None, only: Iterable[str] = (), periods: Iterable[str] = ()) -> dict:
     """`table`'s rows as a document: each row's terms in bits and GB, the network certifier's term at each jitter
     bound beside ``target_gb`` and the weights, an execution phase of one link and a request; what each row counts
-    and where it stands (`ROWS`); the inputs; and at the top the term over the world's year as the scan's check
-    charges it today at D_j = 1, as ``value`` in ``unit``, with the ``commit`` and the ``run`` that computed it.
-    ``only`` and ``periods`` keep the rows of those scopes and monitoring periods; ``covers`` is the share of its
-    scope's compute a row counts, and ``request_count`` which of `COUNTS` its requests are, the document's one."""
+    and where it stands (`ROWS`); the inputs; and at the top the term of record, the term over the world's year as
+    the scan's check charges it today at two release schedules (D_j = `OF_RECORD`), as ``value`` in ``unit``, with
+    the ``commit`` and the ``run`` that computed it. Beside it ``with_set_time_card`` holds the same term at D_j = 1,
+    its unit and the label it is printed under (`SET_TIME`). ``only`` and ``periods`` keep the rows of those scopes
+    and monitoring periods; ``covers`` is the share of its scope's compute a row counts, and ``request_count`` which
+    of `COUNTS` its requests are, the document's one."""
     only, periods, target = set(only) or set(SCOPES), set(periods) or set(PERIODS), Fraction(target_gb) * GB
     if not target > 0 or only - set(SCOPES) or periods - set(PERIODS):
         raise ValueError(f"the target is positive, a scope one of {', '.join(SCOPES)} and a monitoring period one of "
@@ -767,9 +781,10 @@ def document(inp: Mapping[str, Input], *, target_gb: float | Fraction = TARGET_G
     connections = head["requests"] * inp["connections"].value
     return {"schema": "certifier-term/v1",
             "name": f"the network certifier's term for {MODEL} over the world's year, as the scan's check charges "
-                    "it today at D_j = 1",
-            "value": head["term"]["1"]["GB"], "unit": "GB", "commit": commit, "run": run, "model": MODEL,
-            "request_count": counted,
+                    f"it today at two release schedules (D_j = {OF_RECORD})",
+            "value": head["term"][str(OF_RECORD)]["GB"], "unit": "GB",
+            "with_set_time_card": {"value": head["term"]["1"]["GB"], "unit": "GB", "label": SET_TIME},
+            "commit": commit, "run": run, "model": MODEL, "request_count": counted,
             "target": {"value": float(target_gb), "unit": "GB", "bits_a_phase": float(target) / head["phases"],
                        "bits_a_request": float(target) / head["requests"] if head["requests"] else None},
             "weights": {"value": WEIGHTS.bits / GB, "unit": "GB", "label": WEIGHTS.label},
@@ -817,15 +832,26 @@ def render(doc: dict) -> str:
     bits."""
     ph, tg, at, theirs = doc["phase"], doc["target"], [str(dj) for dj in JITTERS], "the compute side's"
     counted, seen = doc["request_count"], {(r["scope"], r["period"]): r for r in doc["rows"]}
+    card = doc["with_set_time_card"]
+    # the scan's schedules and fail cells are the same at each jitter bound and its jitter is 0 at D_j = 1, so what
+    # the term of record holds past the labelled term is the jitter alone
+    jitter = doc["value"] - card["value"]
 
     def entries(r: dict, unit: str) -> str:
         return _n(r["entries"] and r["entries"][unit], theirs)
+
+    def head(what: str, dj: str) -> str:
+        """A column's header at a jitter bound: at D_j = 1 it carries the label's short form."""
+        return f"{what}, D_j = {dj}" + ("" if int(dj) == OF_RECORD else f", {card['label'].removeprefix('with a ')}")
 
     lines = [
         f"# {doc['name'][0].upper()}{doc['name'][1:].split(' over ')[0]}, at a scope's load", "",
         f"commit {doc['commit'] or 'unknown'}, run {doc['run'] or 'none'}", "",
         "Each row counts all its scope serves over the monitoring period, by its check's own rule. The term is the "
         "schedules, the fail cells and the jitter. The entries are the compute side's.",
+        f"The term of record is the one at D_j = {OF_RECORD}, two release schedules. The term at D_j = 1 is what a "
+        "network certifier whose network card releases at a set time would be charged; no timing test has shown "
+        f"one, so it is printed as \"{card['label']}\".",
         f"Request count {counted}: {COUNTS[counted]}. Every row names its request count, and rows of two request "
         "counts don't compare.",
         "The rows of a scope and a monitoring period:",
@@ -838,8 +864,10 @@ def render(doc: dict) -> str:
         f"The target is {_n(tg['value'])} GB: over the world's year, {_n(tg['bits_a_phase'])} bit a link's execution "
         f"phase and {_n(tg['bits_a_request'])} bit a request. The weights are one copy of {doc['weights']['label']}, "
         f"{_n(doc['weights']['value'])} GB.",
-        "With the lengths held and the timing taken once, the world's year meets the target at a failure rate of at "
-        f"most {_n(doc['failure_rate_at_target'])}.",
+        "With the lengths held by a stop block and the release times taken once by a network certifier whose network "
+        "card releases at a set time (not yet tested), the world's year meets the target at a failure rate of at "
+        f"most {_n(doc['failure_rate_at_target'])}. Without that card the jitter alone, at D_j = {OF_RECORD}, is "
+        f"{_n(jitter)} {doc['unit']} over the world's year, {_n(jitter / tg['value'])} times the target.",
         "ε is the scan's execution phases' δ summed, a union bound: at 1 or more it bounds nothing.", "",
         "## Inputs", "",
         *_pipes(("input", "value", "unit", "mark", "source"),
@@ -850,8 +878,8 @@ def render(doc: dict) -> str:
                  for k, r in seen.items()], 3), "",
         "## The terms in GB", "",
         *_pipes(("scope", "period", "row", "request count", "schedules", "cells",
-                 *(f"jitter, D_j = {dj}" for dj in at),
-                 *(c for dj in at for c in (f"term, D_j = {dj}", "x target", "x weights")),
+                 *(head("jitter", dj) for dj in at),
+                 *(c for dj in at for c in (head("term", dj), "x target", "x weights")),
                  "entries, the compute side's"),
                 [(r["scope"], r["period"], r["row"], r["request_count"], _n(r["schedules"]["GB"]),
                   _n(r["cells"]["GB"]), *(_n(r["jitter"][dj]["GB"]) for dj in at),
@@ -859,9 +887,9 @@ def render(doc: dict) -> str:
                   entries(r, "GB")) for r in doc["rows"]], 4), "",
         "## The terms in bits", "",
         *_pipes(("scope", "period", "row", "request count", "schedules", "cells",
-                 *(f"jitter, D_j = {dj}" for dj in at),
-                 *(f"term, D_j = {dj}" for dj in at), "entries, the compute side's",
-                 *(f"a link's phase, D_j = {dj}" for dj in at), *(f"a request, D_j = {dj}" for dj in at)),
+                 *(head("jitter", dj) for dj in at),
+                 *(head("term", dj) for dj in at), "entries, the compute side's",
+                 *(head("a link's phase", dj) for dj in at), *(head("a request", dj) for dj in at)),
                 [(r["scope"], r["period"], r["row"], r["request_count"], _n(r["schedules"]["bits"]),
                   _n(r["cells"]["bits"]), *(_n(r["jitter"][dj]["bits"]) for dj in at),
                   *(_n(r["term"][dj]["bits"]) for dj in at),
@@ -886,8 +914,11 @@ def main(argv: Sequence[str] | None = None) -> int:
                     "datacenter and the world, over a week, a month and a year, in bits and GB: as each check on "
                     "main charges it by its own rule, under each of three changes to the scan's check, and for the "
                     "design that has no run behind it, without its stop block and with it: eight rows a scope and "
-                    "monitoring period.")
-    ap.add_argument("--json", action="store_true", help="print the document (value, unit, commit, run, inputs, rows)")
+                    f"monitoring period. The term of record is the one at D_j = {OF_RECORD}, two release schedules; "
+                    f"the term at D_j = 1 is printed as \"{SET_TIME}\".")
+    ap.add_argument("--json", action="store_true",
+                    help="print the document (value, the scan's term over the world's year at D_j = "
+                         f"{OF_RECORD}; unit, commit, run, inputs, rows)")
     ap.add_argument("--response-ids", type=int, default=RESPONSE_IDS, metavar="N",
                     help=f"the most ids a response holds (default {RESPONSE_IDS})")
     ap.add_argument("--id-bits", type=int, default=ID_BITS, metavar="N", help=f"an id's bits (default {ID_BITS})")

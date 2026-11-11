@@ -11,6 +11,8 @@ load of a node, the reference datacenter and the world, each check's by its own 
 - the world, the datacenter, the requests and the weights are read from the files, each input marked with its source;
 - the world's requests are by default the sampling plan's, the break-even planner's own count; the census's where
   asked; a given count in place of either; and every row names which;
+- the term of record is the one at D_j = 2: the document's value is the scan's over the world's year at D_j = 2, and
+  a figure at D_j = 1 is beside it only under its label, in the document and in every header of the tables;
 - the command prints the table and its JSON (value, unit, commit, run), through `verity bench`'s runner too."""
 
 from __future__ import annotations
@@ -362,7 +364,10 @@ def test_nothing_counted_by_capacity_scales_with_the_requests():
 def test_the_document_names_its_value_unit_commit_and_run(capsys):
     doc = LB.document(small(), commit="c0ffee", run="r1")
     assert (doc["unit"], doc["commit"], doc["run"], doc["model"]) == ("GB", "c0ffee", "r1", "GLM-5.3")
-    assert doc["value"] == 147_825_000 / LB.GB and "world's year" in doc["name"] and "D_j = 1" in doc["name"]
+    assert doc["value"] == 171_477_000 / LB.GB and "world's year" in doc["name"]
+    assert "two release schedules (D_j = 2)" in doc["name"] and "D_j = 1" not in doc["name"]
+    assert doc["with_set_time_card"] == {"value": 147_825_000 / LB.GB, "unit": "GB",
+                                         "label": "with a set-time card (not yet tested)"}
     assert doc["target"] == {"value": 300.0, "unit": "GB", "bits_a_phase": 300 * LB.GB / 739_125,
                              "bits_a_request": 300 * LB.GB / 7_391_250}
     assert doc["weights"]["value"] == LB.WEIGHTS.bits / LB.GB
@@ -411,11 +416,52 @@ def test_the_document_names_its_value_unit_commit_and_run(capsys):
     assert "4 lanes x 2 strides" in slots["entries_rule"] and "by capacity" in slots["entries_rule"]
 
 
+def test_the_headline_is_the_scans_world_year_term_at_two_release_schedules_and_d_j_1_carries_its_label():
+    """The term of record is the one at D_j = 2. On a hand-worked world the scan's year is 2 × 73,912,500 bits of
+    schedules and fail cells and 739,125 execution phases × 32 bits of jitter: the document's value is all of it, and
+    the term without the jitter is beside it only under the label, in the document and in each table's headers."""
+    label = "with a set-time card (not yet tested)"
+    assert (LB.OF_RECORD, LB.SET_TIME) == (2, label) and LB.OF_RECORD in LB.JITTERS
+    for given in ({}, {"failure_rate": Fraction(1, 100), "lanes": 4}):
+        for doc in (LB.document(small(**given)), LB.document(small(**given), only=["node"], periods=["week"])):
+            assert (doc["value"], doc["unit"]) == ((2 * 73_912_500 + 739_125 * 32) / LB.GB, "GB")
+            assert doc["with_set_time_card"] == {"value": 2 * 73_912_500 / LB.GB, "unit": "GB", "label": label}
+            assert "two release schedules (D_j = 2)" in doc["name"] and "D_j = 1" not in doc["name"]
+    for inp in (small(), LB.inputs(), LB.inputs(requests="census")):
+        doc = LB.document(inp)
+        by = {(r["scope"], r["period"], r["row"]): r for r in doc["rows"]}
+        scan = by["world", "year", "scan"]
+        assert doc["value"] == scan["term"]["2"]["GB"] > scan["term"]["1"]["GB"] == doc["with_set_time_card"]["value"]
+        jitter = scan["jitter"]["2"]["GB"]
+        assert doc["value"] - doc["with_set_time_card"]["value"] == pytest.approx(jitter, rel=1e-9)
+        assert jitter == by["world", "year", "design"]["term"]["2"]["GB"] and scan["jitter"]["1"]["GB"] == 0
+    text = LB.render(doc).splitlines()
+    assert ("The term of record is the one at D_j = 2, two release schedules. The term at D_j = 1 is what a network "
+            "certifier whose network card releases at a set time would be charged; no timing test has shown one, so "
+            f"it is printed as \"{label}\".") in text
+    held = next(line for line in text if line.startswith("With the lengths held by a stop block and the release "))
+    assert "taken once by a network certifier whose network card releases at a set time (not yet tested)" in held
+    assert held.endswith(f" Without that card the jitter alone, at D_j = 2, is {LB._n(jitter)} GB over the world's "
+                         f"year, {LB._n(jitter / 300)} times the target.")
+    heads = [[c.strip() for c in line.strip("|").split("|")] for line in text if line.startswith("| scope")]
+    assert [sum("D_j = 1" in c for c in head) for head in heads] == [0, 2, 4]
+    for head in heads:
+        assert all(c.endswith(", D_j = 1, set-time card (not yet tested)") for c in head if "D_j = 1" in c)
+        assert sum("D_j = 2" in c for c in head) == sum("D_j = 1" in c for c in head)
+        assert not any("set-time card" in c for c in head if "D_j = 1" not in c)
+    few = LB.render(LB.document(small(), only=["node"], periods=["week"]))
+    assert "Without that card the jitter alone, at D_j = 2, is " in few and f"it is printed as \"{label}\"." in few
+    zeroed = {name for name, kind in LB.ROWS.items() if "timing" in (kind.changes or ())}
+    assert zeroed == {"timing", "all three"} == {name for name, k in LB.ROWS.items() if "set-time card" in k.counts}
+    assert "no timing test has shown one" in LB.CHANGES["timing"]
+
+
 def test_the_command_prints_the_table_and_its_json(capsys, monkeypatch):
     assert LB.main(["--json", "--commit", "c0ffee", "--run", "r1", "--world-requests", "1e16"]) == 0
     doc = json.loads(capsys.readouterr().out)
     assert doc == json.loads(json.dumps(LB.document(LB.inputs(world_requests=1e16), commit="c0ffee", run="r1")))
-    assert doc["value"] == 2 * 13 * 1e16 / LB.GB and len(doc["rows"]) == 72
+    assert doc["with_set_time_card"]["value"] == 2 * 13 * 1e16 / LB.GB and len(doc["rows"]) == 72
+    assert doc["value"] == pytest.approx((2 * 13 * 1e16 + 1_280 * 46_870_000 * 246_375) / LB.GB, rel=1e-12)
     assert doc["target"]["bits_a_phase"] == pytest.approx(300 * LB.GB / (46_870_000 * 246_375))
     rate = doc["failure_rate_at_target"]
     assert 1e-6 < rate < 1e-5 and LB.failed(1e16, 1e16 * rate, 4_097) == pytest.approx(300 * LB.GB)

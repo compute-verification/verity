@@ -18,6 +18,12 @@ verity bench certifier_term --help                       every parameter and its
 It reads files and computes, so it needs no GPU and no run. Under `research run`, give the document its run and
 commit: `--run "$RESEARCH_RUN_ID" --commit "$RESEARCH_SOURCE_SHA"`. Without `--commit` it names the checkout's HEAD.
 
+The document's `value` is the term of record: the scan's term over the world's year, charged at two release
+schedules (D_j = 2), in GB. The term at D_j = 1 is what a network certifier with a set-time card, a network card
+that releases at a set time, would be charged. No timing test has shown one, so a figure at D_j = 1 is never the
+term of record and is printed only under the label "with a set-time card (not yet tested)": the document's
+`with_set_time_card` holds the scan's term over the world's year at D_j = 1, its unit and that label.
+
 ## The rows
 
 A scope is a node (one machine), the reference datacenter or the world, each machine behind one network certifier.
@@ -35,7 +41,8 @@ and each row says where it stands:
   length held to its Program's output count, with the release times taken once by the compute side's tick, and with
   the entries charged through the compute audit. The schedules' 0 under `lengths` and `all three` rests on a stop
   block, a proof block that checks where a response's ids stop, sampled on a served audit: it holds that output count
-  to the response's ids.
+  to the response's ids. The jitter's 0 under `timing` and `all three` rests on the set-time card, which no timing
+  test has shown.
 - `design, no stop block` (no run behind it): the design, below, before a stop block has been sampled on a served
   audit. The lengths unit holds a response's length to its Program's output count, but until a stop block holds that
   count to the ids the server picks it, so each connection is still charged its schedule, as the scan charges it.
@@ -57,9 +64,13 @@ cells, and nothing else.
   without, it is the failed connections' charge instead, pooled over the period: which connections failed and where
   each one's stream ended, at most F·(log2(e·N / F) + log2(cells + 1)) bits for F failures among N connections, and
   0 with none (`--failure-rate`, the share that fail, which no run has measured).
-- **jitter**: ⌈log2 D_j^T⌉ bits for each execution phase of T buckets on each link. At D_j = 1 it is 0; at D_j = 2 it
-  is a bit a bucket. Both are printed; where the timing is taken once it is 0.
-- **term**: the three summed, the network certifier's own term, at each D_j.
+- **jitter**: ⌈log2 D_j^T⌉ bits for each execution phase of T buckets on each link. At D_j = 2, two release
+  schedules, it is a bit a bucket, and that is the jitter of record. At D_j = 1 it is 0, which is what a network
+  certifier with a set-time card would be charged: it is printed as "with a set-time card (not yet tested)". Where
+  the timing is taken once it is 0 at either D_j, and that 0 rests on the same card.
+- **term**: the three summed, the network certifier's own term, at each D_j. The term of record is the one at
+  D_j = 2. The one at D_j = 1 is printed beside it only as "with a set-time card (not yet tested)", never as the
+  term.
 - **entries**: the slot entries, which are the compute side's and not part of the term. The scan's check charges
   every slot's entry at its whole width, a count by capacity: with `--lanes N`, the connections a link holds at once,
   it is printed so. Without it the column is one entry a request, the least the check can charge. Where the compute
@@ -79,14 +90,17 @@ cells, and nothing else.
   `plan`, `census` or `given`, the request the row's requests are counted of. One table holds one request count;
   rows of two don't compare.
 - **The terms in GB**: schedules, cells, the jitter at each D_j, and the term at each D_j with its multiple of the
-  target (`x target`, `--target-gb`) and of one copy of the weights in FP4 (`x weights`); then the entries.
+  target (`x target`, `--target-gb`) and of one copy of the weights in FP4 (`x weights`); then the entries. Every
+  column at D_j = 1 has the label in its header, as `set-time card (not yet tested)`.
 - **The terms in bits**: the same pooled totals in bits, beside the term for one execution phase of one link
   (`a link's phase`) and for one request (`a request`), the term as a share of the compute it covers.
 
-The lines above the tables give each row's rule, one link's execution phase (its requests, a connection's bits, N2's
-schedules, a slot entry's bits), the target as bits a link's execution phase and a request over the world's year, and
-the largest failure rate at which, with the lengths held and the timing taken once, the world's year meets the
-target.
+The lines above the tables give the rule for the term of record, each row's rule, one link's execution phase (its
+requests, a connection's bits, N2's schedules, a slot entry's bits), the target as bits a link's execution phase and
+a request over the world's year, and the largest failure rate at which, with the lengths held by a stop block and
+the release times taken once by a network certifier whose network card releases at a set time (not yet tested), the
+world's year meets the target. Then they give what the jitter alone is without that card, at D_j = 2 over the
+world's year, in GB and as a multiple of the target.
 
 ## Where the scale comes from
 
