@@ -47794,3 +47794,44 @@ I compared each lock as parsed JSON, section by section and entry by entry, base
 - TWOWITNESS claimed it at 10:02Z: "the by-stratum count is mine, a new PR on #8870 (its head stays)". The lemma to prove is \(\sum_{j \in \text{proved}} W_j \le |\text{sample}| \cdot \sum_t k_t M_t\), and `hNs`, `hKs` and `hKm` are on `cursor/proofs-codecounts-9e41` at `5a3d01fe1fc9` [read: that entry].
 - SCALE says the same at 10:03Z and 10:05Z: "the by-stratum count is TWOWITNESS's (claimed 10:02Z), not mine and not TWOPROVE's" [read].
 - I made no branch and launched no run; nothing of mine is in flight [run].
+
+## PARAMS, Wed 11 Nov 10:16Z: CORRECTION to my 10:10Z entry (it read the order through 09:52Z; your 10:07Z table replaces its rows): at tables of 2^33 bits the 2,647 GB plan by reader sets reads 2^-101.84 in compressions for 2^-99.84, with nothing changed in Flock, its verifier or its Lean; unbuilt (the registration split) and unpriced. And `k0 ≤ 6` is stated in five files outside my what-if build, not one
+
+Clock: `date -u` read 10:16Z. Order reread through 10:07Z; mailbox unchanged.
+
+**1. The level-0 length on your 10:07Z table** [derived from your rows, which I relay; modeled; the first-hit term of #8827's lemma; a run at K0 = 6; T = 2^80 calls in every run; K a mean by strata]. The term is `4T(1 + n·e + (1 + e)·K)/2^256`, and K, counted a checked block, does not move when a session is cut in four; I recomputed each row with four and sixteen times the sessions and the shift is 2.000 and 4.000 bits to the third decimal.
+
+| design | by reader sets, compressions, as it is | tables of 2^33 bits | tables of 2^31 bits, or the wide leaf at 2^35 | by gates, calls: as it is / 2^33 / 2^31 |
+|---|---|---|---|---|
+| the record | 2^-101.63 | 2^-103.63 | 2^-105.63 | 2^-98.34 / 2^-100.34 / 2^-102.34 |
+| the 2,647 GB plan | **2^-99.84 (misses)** | **2^-101.84** | 2^-103.84 | 2^-96.50 / 2^-98.50 / 2^-100.50 |
+| width, κ 2^-6 | 2^-103.34 | 2^-105.34 | 2^-107.34 | 2^-100.00 / 2^-102.00 / 2^-104.00 |
+| width, κ 2^-7 | 2^-104.34 | 2^-106.34 | 2^-108.34 | 2^-101.00 / 2^-103.00 / 2^-105.00 |
+
+- My 10:10Z rows "at most 18 / at most 72" go with yours.
+- These are means. When SCALE prints the Lean's count (checked blocks times the largest block's classes), every row drops, and the 0.34 bit at κ 2^-3 may not cover it. The level-0 length is the one lever here that adds bits on every row and changes no sampling rate.
+- By gates in compressions nothing reaches 2^-100: the best above is 2^-95.99.
+- What tables of 2^33 bits cost, as far as I can say:
+  - The same level-0 leaves and salts in all, four sessions for one. Proof wire about 2.45 MB a session, so about 9.8 MB for 256 head blocks against 2.66 MB [derived from the measured 2.66 MB: 6 levels for 7 and paths two siblings shorter; good to 10%].
+  - The host's pads tree is a fixed cost a session, 0.067 + 0.061 s [run: `r20261111-061047-6773`, medians of `t.zk_pads_commit`], so +0.38 CPU-s for 256 head blocks.
+  - The verifier's comb is fixed a statement, 5.68 CPU-s [relayed: SERVEDCARD 07:48Z], so +17 CPU-s for 256 head blocks.
+  - Not measured by anyone: a head-block row at `n = 64`.
+- Against it, the wide leaf keeps one session for 256 head blocks and cuts the salts by 16, and needs the verifier, the Lean and the card changed.
+
+**2. Correction on what breaks in the Lean under the wide leaf** [read; a grep I should have run before 10:10Z].
+- `k0 ≤ 6` is stated in five files my build did not reach, not in one:
+  - `SessionLoop/Concrete/Serves.lean:49-83`;
+  - `Claims/NumbersGamma.lean:105` and `Claims/NumbersPads.lean:65-71` (the pads' domain; it stays 2^12 or 2^13 at k0 ≤ 10, since the sum is at most 140 of 628);
+  - `Claims/NumbersDeploy.lean:224-229` (`plain_facts`, `zk_facts`), read by the bound of 2,200 rounds a repetition, which closes with 2 rounds of room at k0 ≤ 10 (2,198);
+  - `Claims/Recursion/NextRRows.lean:147` (`fast100_bound`), read by `IVStarCalls.lean:252-328`.
+- Each becomes `≤ 10`. I have read no place where the bound then fails. None is built.
+- All 19 unbuilt files that split on m are now read: each states a bound the new rows are inside (hash-sum coefficient at most 25,638, level-0 length at most 2^23, upper levels at most 2,795,520 positions, at most 7 levels). Their three rational checks pass in my exact replica of the Lean's bounds: `check_wide` 2^-205.04 and `m1_check_zk` 2^-205.06, both under 2^-205, and `m1_check_wide` 2^-205.06 under 3/2^206 [run: `params_whatif_checks.py` in the lane's notes; the replica agrees with the Lean at the deployed rows and at both probes].
+
+For BREAKEVEN: a second way to hold 2^-100 in compressions by reader sets at the 2,647 GB plan, beside κ 2^-3: tables of 2^33 bits (64 head blocks a statement), +2.00 bits at the plan's own sampling. Its GB price is the head block's time a block at `n = 64` against `n = 256`; I have no measured row, and the three costs above are what I can name.
+
+For SCALE and CONCRETE: the shift is exact on every row, means or the Lean's count: e_max 648,059,371 at tables of 2^33 bits, 162,015,001 at 2^31 bits, against 2,592,237,061.
+
+For the table:
+- The proof system's weakest term, unchanged: the binding side's first-hit term [relayed: your 10:07Z table, modeled]. By reader sets in compressions at K0 = 6: the record 2^-101.63, the 2,647 GB plan 2^-99.84.
+- At tables of 2^33 bits: the 2,647 GB plan by reader sets 2^-101.84 in compressions, the record 2^-103.63 [derived; modeled; K a mean by strata]. No change to Flock or its Lean; the registration split is not built; GB unpriced.
+- Largest slack, unchanged: the second repetition, 100 bits no bound reads, 41% of the card's proving time [run: `r20261111-061047-6773`]. Daniel's, unbuilt.
