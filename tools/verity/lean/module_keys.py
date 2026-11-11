@@ -64,7 +64,7 @@ its key reads (`loads`), each built in the package `keys` found it in, and its o
 module it reads is indexed before it. An indexed key is thus computed from a parse Lake agreed with, and the same sources
 and the same outputs of what they read give the same key wherever they are checked out. Each entry records what its key
 read (`record`), and the index keeps which entry each module was last indexed under (`LAST`), so a build says which
-input of a module it didn't restore differs from that entry's (`differs`). Stdlib only, loaded by path
+inputs of a module it didn't restore differ from that entry's (`differs`). Stdlib only, loaded by path
 (`check.sibling`)."""
 from __future__ import annotations
 
@@ -481,7 +481,7 @@ SHORT = 12
 def record(mod: str, keyed: dict[str, Key], digests: dict[tuple[str, str], str],
            loaded: dict[str, int] | None = None) -> dict | None:
     """What an index entry records of ``mod``'s key (`key`, of the same arguments), so that a later miss can say which
-    input differs (`differs`): its vars, its env's parts, the digest of each file it reads by path, and for each module it
+    inputs differ (`differs`): its vars, its env's parts, the digest of each file it reads by path, and for each module it
     loads `SHORT` hex digits of a digest of the outputs it reads of it. None when a read's digest is missing."""
     k, reads = keyed[mod], {}
     for g, level in sorted((loads(mod, keyed) if loaded is None else loaded).items()):
@@ -499,24 +499,24 @@ NEVER, GONE, BEHIND, UNKEYED_READ = ("never indexed here", "no input: its entry 
 
 
 def differs(now: dict, was: dict | None) -> str:
-    """Which input of a module's key (``now``, its `record`) differs from the one it was last indexed under (``was``, that
-    entry's record; None: it never was, here), the first of: its library, the toolchain, the fetched packages, its source,
-    its lakefile, an input file, an output it reads. `GONE` when none does: the entry under this key was removed."""
+    """Which inputs of a module's key (``now``, its `record`) differ from those it was last indexed under (``was``, that
+    entry's record; None: it never was, here), every one of them in one phrase and in this order: its library, the
+    toolchain, the fetched packages, its source, its lakefile, an input file, an output it reads. Every one, since the
+    first alone reads as the cause where another changed too. `GONE` when none does: the entry under this key was
+    removed."""
     if not isinstance(was, dict):
         return NEVER
-    src = f"{now['vars']['package']}/"
-    lakefile = f"{src}lakefile.toml"
-    if now["vars"] != was.get("vars"):
-        return "its library"
-    for part, what in ((TOOLCHAIN, "the toolchain"), (FETCHED, "the fetched packages")):
-        if now["env"].get(part) != (was.get("env") or {}).get(part):
-            return what
     a, b = now["files"], was.get("files") or {}
-    if changed := sorted(f for f in set(a) | set(b) if a.get(f) != b.get(f)):
-        if lakefile in changed:
-            return "its lakefile"
-        return "its source" if any(f.endswith(".lean") for f in changed) else "an input file"
-    return "an output it reads" if now["reads"] != was.get("reads") else GONE
+    changed = {f for f in set(a) | set(b) if a.get(f) != b.get(f)}
+    lakefile = {f"{now['vars']['package']}/lakefile.toml"} & changed
+    source = {f for f in changed - lakefile if f.endswith(".lean")}
+    which = [what for what, other in (
+        ("its library", now["vars"] != was.get("vars")),
+        *((what, now["env"].get(part) != (was.get("env") or {}).get(part))
+          for part, what in ((TOOLCHAIN, "the toolchain"), (FETCHED, "the fetched packages"))),
+        ("its source", source), ("its lakefile", lakefile), ("an input file", changed - lakefile - source),
+        ("an output it reads", now["reads"] != was.get("reads"))) if other]
+    return " and ".join(filter(None, (", ".join(which[:-1]), *which[-1:]))) or GONE
 
 
 def last_path(store: Path, scope: str, mod: str) -> Path | None:
