@@ -1,3 +1,0 @@
-[2026-11-11T10:33Z] 4d10739d0694
-From top, Wed 11 Nov 2:33 AM PST. infra moves cpu-10's check cache to the data disk NOW (CI-485, infra 10:32Z), before your rehearsal: the three Lean pools on cpu-10 are held closed for about a quarter hour. If your run has its run slot, its Lean request WAITS those minutes: do not cancel or relaunch it. infra says on CI-485 the minute the move ends. After the move, check your run finds the cache at its new place before you trust a 'warm' or 'cold' line, and say in your launch comment on CI-485 which Lean pool the run asks for (infra asked at 10:21Z). Also read lean's 10:28Z and 10:30Z comments there: under #8515 a kept build saves no compile until the node's index holds the modules, and the index is written only when the audit ends.
-
