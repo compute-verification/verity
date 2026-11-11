@@ -214,7 +214,7 @@ def test_an_unlinked_class_is_committed_and_proved_blockwise_and_round_2_refuses
     `replayed` refuses it by name, and with ``unlinked`` commits the sampled spans' chunks and combines as the
     interior, registering no value, and samples K of each in every sampled span. The verifier's reads then put every
     port at the interior's own, and round 2 refuses the statements by ``second-wires`` alone: the sessions prove each
-    block and tie none to another or to round 1. Slow (about 40 s): it lowers both templates twice."""
+    block and tie none to another or to round 1. Slow (about 10 s): it lowers both templates twice."""
     v = 4096
     got, check = SM.serve(tmp_path, v, O, N, inline=True), BR.check_template(SM.template(v))
     c, pub = BR.reopen(got["class"], check), json.loads((got["class"] / BR.COMMIT).read_text())
