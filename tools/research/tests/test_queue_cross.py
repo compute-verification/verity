@@ -8,7 +8,8 @@ from __future__ import annotations
 
 import dataclasses
 import json
-import os
+import subprocess
+import sys
 from pathlib import Path
 
 import pytest
@@ -235,36 +236,39 @@ def test_a_stack_crosses_lowest_first_and_what_restack_wont_cross_onto_the_cross
 
 
 def test_a_crossing_merges_with_mains_drivers_where_the_tree_it_merges_keeps_them_at_their_old_path(tmp_path, monkeypatch):
-    """A clone registers its merge drivers at `main`'s paths, which a move may have changed: merging two trees from before
-    the move, as a crossing's base merge does, finds no driver there and conflicts, unless it runs `main`'s copy
-    (`cross_drivers`)."""
+    """Every git the queue runs registers the merge drivers at `main`'s paths (`git_env`), which a move may have changed:
+    merging two trees from before the move, as a crossing's base merge does, finds no driver there and conflicts, unless it
+    runs `main`'s copy (`cross_drivers`)."""
+    monkeypatch.delenv("GIT_CONFIG_PARAMETERS", raising=False)
+    path = Q._git(tmp_path, "config", "--get", "merge.vllm-allowlist.driver").stdout.split()[1]
     r = tmp_path / "r"
     _git(tmp_path, "init", "-q", "-b", "main", str(r))
     (r / "old").mkdir()
     (r / "old" / "drv.py").write_text("import sys\na, b = (open(p).read().splitlines() for p in sys.argv[2:4])\n"
                                       "open(sys.argv[2], 'w').write(''.join(f'{x}\\n' for x in a + [x for x in b if x not in a]))\n")
-    (r / ".gitattributes").write_text("*.lst merge=lists\n")
+    (r / ".gitattributes").write_text("*.lst merge=vllm-allowlist\n")
     (r / "x.lst").write_text("a\n")
     _git(r, "add", "-A")
     _git(r, "commit", "-q", "-m", "base")
     (r / "x.lst").write_text("a\nb\n")
     _git(r, "commit", "-q", "-am", "theirs")
     base = _git(r, "rev-parse", "HEAD")
-    _git(r, "mv", "old", "new")
+    (r / path).parent.mkdir(parents=True)
+    _git(r, "mv", "old/drv.py", path)
     _git(r, "commit", "-q", "-m", "Move: tools/move/ old -> new")
     main = _git(r, "rev-parse", "HEAD")
     _git(r, "checkout", "-q", "-b", "head", "HEAD~2")
     (r / "x.lst").write_text("a\nc\n")
     _git(r, "commit", "-q", "-am", "ours")
-    _git(r, "config", "merge.lists.driver", "python3 new/drv.py %O %A %B %P")
     _git(r, "config", "merge.abs.driver", "python3 /nowhere/drv.py %O %A %B %P")
     assert Q._git(r, "merge-tree", "--write-tree", "HEAD", base, check=False).returncode == 1
 
-    n = int(os.environ.get("GIT_CONFIG_COUNT") or 0)
-    assert (env := Q.cross_drivers(r, main, tmp_path / "d")) == {
-        "GIT_CONFIG_COUNT": str(n + 1), f"GIT_CONFIG_KEY_{n}": "merge.lists.driver",
-        f"GIT_CONFIG_VALUE_{n}": f"python3 {tmp_path / 'd' / str(n) / 'drv.py'} %O %A %B %P"}
-    for k, v in env.items():
-        monkeypatch.setenv(k, v)
+    env = Q.cross_drivers(r, main, tmp_path / "d")
+    assert list(env) == ["GIT_CONFIG_PARAMETERS"] and "nowhere" not in env["GIT_CONFIG_PARAMETERS"]
+    assert f"'merge.vllm-allowlist.driver'='python3 {tmp_path / 'd'}/" in env["GIT_CONFIG_PARAMETERS"]
+    monkeypatch.setenv("GIT_CONFIG_PARAMETERS", env["GIT_CONFIG_PARAMETERS"])
     merged = Q._git(r, "merge-tree", "--write-tree", "HEAD", base).stdout.strip()
     assert _git(r, "show", f"{merged}:x.lst") == "a\nc\nb"
+    assert not subprocess.run([sys.executable, "-c", "import subprocess, sys; sys.exit(subprocess.run(['git', '-c', "
+                               "'core.hooksPath=/dev/null', 'merge-tree', '--write-tree', 'HEAD', sys.argv[1]]).returncode)",
+                               base], cwd=r, env=Q._script_env(), capture_output=True).returncode

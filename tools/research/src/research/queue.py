@@ -4175,22 +4175,27 @@ def _commit(repo: Path, sha: str) -> bool:
 
 
 def cross_drivers(repo: Path, main: str, into: Path) -> dict[str, str]:
-    """`GIT_CONFIG_*` settings that run each merge driver the clone defines as `python3 PATH ...`, PATH in the worktree, from
+    """The `GIT_CONFIG_PARAMETERS` that runs each merge driver git would run as `python3 PATH ...`, PATH in the worktree, from
     ``main``'s copy of PATH written under ``into``: a crossing merges trees from before a move, where the path ``main``'s
-    drivers name may not be, and a driver that isn't found leaves its file conflicted."""
-    env, n = {}, int(os.environ.get("GIT_CONFIG_COUNT") or 0)
+    drivers name may not be, and a driver that isn't found leaves its file conflicted.  Git reads these settings after every
+    `GIT_CONFIG_COUNT` one, `git_env`'s drivers included."""
+    drivers: dict[str, str] = {}
     for line in _git(repo, "config", "--get-regexp", r"^merge\..*\.driver$", check=False).stdout.splitlines():
         key, _, cmd = line.partition(" ")
+        drivers[key] = cmd
+    got = []
+    for i, (key, cmd) in enumerate(drivers.items()):
         words = cmd.split(" ")
         if len(words) < 2 or words[0] != "python3" or os.path.isabs(words[1]):
             continue
         if (src := _git(repo, "show", f"{main}:{words[1]}", check=False)).returncode:
             continue
-        (f := into / str(n) / Path(words[1]).name).parent.mkdir(parents=True)
+        (f := into / str(i) / Path(words[1]).name).parent.mkdir(parents=True)
         f.write_text(src.stdout, errors="surrogateescape")
-        env |= {f"GIT_CONFIG_KEY_{n}": key, f"GIT_CONFIG_VALUE_{n}": " ".join(["python3", str(f), *words[2:]])}
-        n += 1
-    return {**env, "GIT_CONFIG_COUNT": str(n)} if env else {}
+        got.append((key, " ".join(["python3", str(f), *words[2:]])))
+    quote = lambda s: "'" + s.replace("'", "'\\''") + "'"  # noqa: E731
+    have = os.environ.get("GIT_CONFIG_PARAMETERS", "")
+    return {"GIT_CONFIG_PARAMETERS": " ".join([*filter(None, [have]), *(f"{quote(k)}={quote(v)}" for k, v in got)])} if got else {}
 
 
 def restack_why(x: dict) -> str:
