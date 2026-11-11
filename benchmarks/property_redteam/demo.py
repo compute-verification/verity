@@ -30,10 +30,12 @@ import sys
 from verity.circuits.defs import REGISTRY, PrimitiveDefinition
 from verity.circuits.evaluation.reference import ScalarReference, evaluate
 from verity.circuits.types import Array, Value
-from verity.definitions.silicon.integer import (BLACKWELL_SM120_S8_M16N8K32 as IMMA_SAT,
-                                                 BLACKWELL_SM120_S8_M16N8K32_WRAP as IMMA_WRAP, IntegerMma, S32_MAX,
-                                                 S32_MIN, s32_value)
 from verity.definitions.registry import catalog
+from verity.definitions.silicon.integer import BLACKWELL_SM120_S8_M16N8K32 as IMMA_SAT
+from verity.definitions.silicon.integer import (
+    BLACKWELL_SM120_S8_M16N8K32_WRAP as IMMA_WRAP,
+)
+from verity.definitions.silicon.integer import S32_MAX, S32_MIN, IntegerMma, s32_value
 from verity.protocols.poub.verifier import codec as C
 
 M32 = (1 << 32) - 1
@@ -124,7 +126,7 @@ def section_imma(rng: random.Random, trials: int = 3000) -> dict:
                              "sum_at_K_max": at, "exact_at_K_max": at == k_s8 * 16384,
                              "one_more_product_clamps_to_S32_MAX": one_more == S32_MAX,
                              "instructions": full + 2, "each_instruction_K": 32,
-                             "u8xs8_PV_at_131072_context_exceeds_K_max": 131072 > k_u8s8}
+                             "u8xs8_PV_at_131072_context_exceeds_K_max": k_u8s8 < 131072}
 
     # The runtime incoming accumulator: a value r in [0, 2^23) the circuit holds biased toward the s32 edge (any earlier
     # chain or add puts it there once); each threshold test then adds a short constant chain (<= 17 IMMA steps).

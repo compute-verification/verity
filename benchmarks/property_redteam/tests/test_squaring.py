@@ -72,7 +72,7 @@ def test_the_free_squaring_costs_nothing_at_p1024_and_chains():
     assert fixed_once == 6014 and b.fixed_units == 2 * fixed_once
     # Renormalization ⟨1024, 105⟩ d₀ = 4, c = 0, t = 64 at ε = 2^−40 (Guarantees/Gates.lean): its conclusion
     # ε·2^(8·128) ≤ 2^(8·(budgeted + d₀ + c)) fails for this circuit, whose inputs are a's bytes (coin) and outputs u8.
-    assert not 2 ** (8 * S.N_LIMBS) <= 2 ** 40 * 2 ** (8 * (b.lean_units + 4))
+    assert not 2 ** 40 * 2 ** (8 * (b.lean_units + 4)) >= 2 ** (8 * S.N_LIMBS)
     for x in (rng.randrange(S.P), S.P - 1, 0):
         vals, window, hold = b.evaluate(dict(enumerate(S.limbs(x))))
         assert window and hold and vals[c1] == 0 and vals[c2] == 0
@@ -206,7 +206,7 @@ def test_the_whole_codec_word_is_free_at_6bs_fields():
         b, out, slots = builds[key]
         vals, window, hold = b.evaluate(FC.sample_inputs(n, c, cs, K, tau, i, m))
         assert window and hold
-        assert [vals[o] for o in out] == [(y // 2 * 2) >> (8 * l) & 255 for l in range(n // 8)]
+        assert [vals[o] for o in out] == [(y // 2 * 2) >> (8 * ell) & 255 for ell in range(n // 8)]
     for b, out, slots in builds.values():
         assert "budgeted" not in b.kinds
         assert "run" not in b.bindings.values()
@@ -228,4 +228,4 @@ def test_the_free_codec_word_is_right_on_every_sample_tried():
         y = FC.encode_word_ref(p, cs, K, tau * i % p, m)
         vals, window, hold = b.evaluate(FC.sample_inputs(n, c, cs, K, tau, i, m))
         assert window and hold
-        assert [vals[o] for o in out] == [(y // 2 * 2) >> (8 * l) & 255 for l in range(n // 8)]
+        assert [vals[o] for o in out] == [(y // 2 * 2) >> (8 * ell) & 255 for ell in range(n // 8)]

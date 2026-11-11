@@ -17,6 +17,7 @@ import free_codec as FC  # noqa: E402
 import gates as G  # noqa: E402
 import renorm as R  # noqa: E402
 import squaring as S  # noqa: E402
+
 from verity.circuits.evaluation.reference import evaluate  # noqa: E402
 
 PINS = {
@@ -108,7 +109,7 @@ def test_renorms_circuits_are_pinned_on_every_input(tag):
     _m, names = R.monomials(T.digits[:1])
     cn = None if tag == "honest" else R.Constraint([[-1, 0, 1]], [[-1, 0, 0, 0, 0, 0, 0, -3, 0]], [1], 32, "row+q-lll")
     bc = R.build(T, cn, names)
-    runs = [bc.C.evaluate({l: int(T.digits[a, l]) for l in range(F.L)}) for a in range(F.p)]
+    runs = [bc.C.evaluate({ell: int(T.digits[a, ell]) for ell in range(F.L)}) for a in range(F.p)]
     w = R.renormalization_witness(T, bc)
     assert (w["budgeted"], w["good"]) == ((3, 59) if cn is None else (2, 32))
     extra = (w["restricted"], w["budgeted"], w["good"], w["window_on_good"])

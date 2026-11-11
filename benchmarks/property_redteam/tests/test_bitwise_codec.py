@@ -33,7 +33,7 @@ CODEC_ROWS = [
 
 
 def targets(n: int, y: int) -> list[int]:
-    return [(y // 2 * 2) >> (8 * l) & 255 for l in range(n // 8)]
+    return [(y // 2 * 2) >> (8 * ell) & 255 for ell in range(n // 8)]
 
 
 def check_block(b, outs, x: dict, want: dict[int, list[int]]) -> None:
@@ -134,7 +134,7 @@ def test_bitwise_squaring_pays_its_partial_products():
         b = G.Builder()
         B = BC.Bits(b)
         F = BC.Field(B, n, c)
-        xs = [bit for l in range(n // 8) for bit in B.byte_bits(b.inp(("a", l), 0, 255, binding="coin"))]
+        xs = [bit for ell in range(n // 8) for bit in B.byte_bits(b.inp(("a", ell), 0, 255, binding="coin"))]
         before = b.products
         F.mul(xs, xs)
         assert b.products - before >= n * n, (n, b.products - before)
