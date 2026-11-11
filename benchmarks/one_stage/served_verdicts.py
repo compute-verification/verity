@@ -483,7 +483,9 @@ GIVE_UP_TEXT = (
     (re.compile(r"\b[\d,]+ (tiles left over a cap)\b"), r"\1"),
     (re.compile(r'\\?"(?:%s)\\?": ?\{[^{}]*\}(?:, ?)?' % "|".join(sorted(OWN_DOCS))), ""),
 )
-#: A window's number, step range or count in text, each with what the published text says in its place
+#: A window's number, step range or count in text, each with what the published text says in its place; and its
+#: population where a stream's rule states it, the denominator of a rate written from the window's own N
+#: (`records_audit.rule_of`), which is no sampling rate and says only the design, K of each N
 WINDOW_TEXT = (
     (re.compile(r'\\?"(?:%s)\\?": ?(?:-?\d+(?:\.\d+)?|\[[^\]]*\]|\{[^{}]*\}|true|false)(?:, ?)?'
                 % "|".join(sorted(OWN | NUMBERED))), ""),
@@ -493,6 +495,7 @@ WINDOW_TEXT = (
     (re.compile(r"\b\d+ (sealed|closed)\b"), r"\1"),
     (re.compile(r"(?i)\b(steps?) \[\d+, ?\d+[\])]"), r"\1"),
     (re.compile(r"\b\d+/\d+ ok\b"), "ok"),
+    (re.compile(r"\b((?:stratified-|work-)?rate:\d+)/\d+"), r"\1/N"),
 )
 #: A window's number in a file's path under the published dir: the file is held whole
 NAMED = re.compile(r"(?<![A-Za-z0-9])w\d+(?![A-Za-z0-9])")

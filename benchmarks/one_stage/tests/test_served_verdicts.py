@@ -171,6 +171,8 @@ LINES = [
     ("POUW-DEV calls at /srv/h1/w7/pouw-h1-calls.json: drawn unit 52294",
      "POUW-DEV calls at /srv/h1/wK/pouw-h1-calls.json: drawn unit 52294"),
     ("REQUESTS (exit 0): [serve-load] varied: 3/3 ok", "REQUESTS (exit 0): [serve-load] varied: ok"),
+    ('V3C-AUDIT refused: {"codes": ["stream"], "rule": {"law": "stratified-rate:1/2244", "rule": "law"}} (rate:3/561:4)',
+     'V3C-AUDIT refused: {"codes": ["stream"], "rule": {"law": "stratified-rate:1/N", "rule": "law"}} (rate:3/N:4)'),
     ("CLASSES: the window circuit's 4,32,4; the certifier's scan W63 (w63k4), the one class the gate serves",) * 2,
     ('POUS {"rc": 1, "reason": "the session ended late after 9 of 320 rounds", "verdict": "reject"}',) * 2,
 ]
@@ -178,7 +180,8 @@ LINES = [
 
 def test_a_published_line_names_no_window_and_counts_none_of_a_windows_own(tmp_path, monkeypatch, capsys):
     """Each verdict line's published form (`public_line`) names no window and counts no window closed, sealed or refused, and
-    none of a window's steps or requests, in its text or its JSON, and replaces a JSON object cut short that names one; the
+    none of a window's steps or requests, in its text or its JSON, and replaces a JSON object cut short that names one; a
+    stream's rule keeps its design and not the window's population, its rate's denominator; the
     class, the scan class, the sample, a refusal's reason and the protocol's rounds stay. `public-lines` prints that form and
     keeps each line whole in the serve dir's private/verdicts.txt, 0700, where that serve dir exists."""
     for line, public in LINES:
