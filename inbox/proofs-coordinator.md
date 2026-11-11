@@ -44392,3 +44392,73 @@ For the table:
 
 For the table:
 - The merged build `r20261111-083411-3dd5` (the nine on `main`) is a build with the axioms scan and the lock's records, no kernel replay; the first kernel replay of the merged nine is the Lean check of ci's candidate.
+
+## SERVEDCARD, Wed 11 Nov 09:09Z: PRF-548 question 1 measured: 17.6 of the 22.4 h between proofs is the ZK server's Lean setup of the window's program; question 3: every kind passes the GPU prover's refusals, no rate yet (needs a card)
+
+**1. Question 1: the 22.4 h between proofs, split.**
+- [run `r20261111-084902-56bc`, the audit's tree `4f816e9da631` on cpu-3] The ZK server's Lean setup at the member's own sample:
+  - It is `flock-firewall session --schedule`, which runs `Hello.Setup.setup draw`, the same call the loop makes before it
+    answers the prover's finish.
+  - m12 took 86.7 s; the audit's prover waited 84.1 s on m12 between `Register` and `Hello`. So that span is this setup.
+  - m89948 took 91.8 s.
+  - Without `--partition` and `--program`, setup stops at the partition check after 1.9 s (m12) and 8.5 s (m89948): the
+    member's own part.
+- [run `r20261111-084840-4695`, `main`] The same setup takes 80.2 s (m12) and 81.3 s (m89948), and 1.7 s and 4.5 s without
+  the program.
+- [run: the audit's 554 prove logs, beside vllm's 22.4 h, relayed]
+
+| part | hours | median a member | what it is |
+|---|---:|---:|---|
+| the ZK server's Lean setup | 17.61 | 83.5 s | the window's 299 MB program parsed again for each member (above, and my 08:46Z entry) |
+| the prover before its clock | 2.61 | 8.6 s | its start and the circuit's load (median 5.6 s), and Rust's statement build (median 3.0 s, 1.49 h) |
+| outside the prover process | 1.56 | | the verifier's start (its own statement build, 1.84 s on m12) and `a5`'s work between members [guess on what] |
+| witness, and the rest of `Hello` to the end | 0.63 | 2.9 s | |
+
+- What a kept prover-verifier pair removes: the pair's start and the circuit's load, at most about 2.6 h of the 22.4 h
+  [derived]. Rust's statement build stays, since each member is a new circuit.
+- What removes the 17.6 h: the ZK server parses the window's program once. Measured, a member's own part of its setup is
+  1.7 to 8.5 s; that leaves about 0.3 to 1.3 h of the 17.6 h [derived from the two members; guess for the other kinds].
+- What it would take [read; guess, unbuilt]:
+  - The loop reads one circuit (`Hello.Setup.ofArgs`), so a kept ZK server needs a loop that takes each member's statement
+    as it comes, with the program parsed once.
+  - Or, with no kept process: hoist the program's parse out of `Stmt.setupHiddenOf`, so each member's loop parses once
+    instead of two or three times. That is less: about a third to a half.
+- What assumes a fresh pair:
+  - Coins: none. Each session's coins come from its own coin tree, and the loop already serves several sessions of one
+    statement, each with its own `Hello` (`Session.lean:872-947`) [read].
+  - The record: each session files its own [read].
+  - "Its own ZK server pass" in AGENTS.md: I read a pass as a session, not a process. A kept loop gives each statement exactly
+    one session [guess; the ruling is the coordinator's, or top's for the rule's text].
+
+**2. Question 2, the other half: the templated check on these members.**
+- [run] On `main`, a member's own part of Lean's verify is 4 s of 110 s (m12) and about 14 s of 157 s (m89948): its circuit's
+  parse, its checks and the session's verify (4.9 s on m89948).
+- The templated check speeds only that part. So staging these members templated cuts at most 4 to 14 s a member. The window's
+  program, parsed once, cuts 106 to 142 s a member.
+
+**3. Question 3: does `prove --zk --gpu` take these kinds?**
+- [run `r20261111-085124-53f6`] I ran `flock-circuit statement --zk --gpu` with the audit's own binary on the largest member of
+  each of the 16 kinds. It builds the statement and applies the device prover's three refusals (`flock-circuit.rs:5971-5987` at
+  `4f816e9da631`, the same on `main` at `7285-7298`): more than 12 slot types, a net past `u32::MAX` nonzeros, and a typed
+  template's table reads.
+  - All 16 pass: each exits 0 with a `STATEMENT` line and no refusal.
+  - Pearl+'s two kinds: `LinearARow_v1` (m127241: 4 blocks, `k_log` 26, `m` 29, statement in 6.0 s, 7.1 GB) and
+    `LinearOut_v1` (m127240: 15.8 s, 13.9 GB).
+  - The largest statements: `Gemm_v2` m100088 (64 blocks, `k_log` 27, `m` 33, 68 s, 22 GB of host memory) and the attention
+    unit-class circuits (`AttnBlockFirst_v1` NVIS 33, m127034: 5 min 17 s, 76 GB).
+- What these checks don't cover: the card's memory at `m` = 33, and anything the CUDA path refuses later. No GPU run was made.
+- **The rate: unmeasured.** No note or entry times these Definitions on a card [read: vllm's sizing note, lines 112-115, says
+  "unknown"; grep of the coordinator's file]. It needs about one card-hour on an H200 for one member of each kind, Pearl+'s
+  two first [guess].
+- It only reaches the prover's 15.2 h, which is not the long line: Lean's queue (45.8 h, relayed from vllm) and the 17.6 h
+  above are.
+- I launch nothing on a card without your go. Say if you want it, and on which card.
+
+For the table:
+- The 22.4 h between proofs is 17.6 h of the ZK server's Lean setup, the window's 299 MB program parsed for each member,
+  plus 2.6 h of the prover's start, load and build [run]. Parsed once a window, that line falls to about 4 to 6 h [derived].
+- Every member kind passes the GPU prover's refusals [run]; its rate on them is unmeasured.
+
+For vllm: a kept pair alone saves at most about 2.6 h. The ZK server and the verifier of record each parsing the program
+once a window removes about 16 h of the gaps. It also removes most of Lean's 30.8 h of setup and about 4 h of its inputs: the
+program's digest, about 28 s a member on `main` [derived from two members' profiles].
