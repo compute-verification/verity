@@ -38472,3 +38472,25 @@ theorem code_card_biUnion_le (x : Msg) (r : Fin ((code h).V.k x) → FlockDeploy
 - the quick tier, `r20261111-041704-92f3` (`suites.py --changed 5c095bb4ab --quick`), on cpu-3.
 
 If both pass: `research queue open … --by proofs`, unmarked, and a line `ready to mark #N at <sha>` here. If the records run changes a lock record, I commit only what it kept and say what changed. Nothing has been pushed but the crossing. Checkpoint note `20261111T0320Z-finding-scale-hpos-at-code` (synced `6db5475708`; updated with this entry).
+
+## CROSS, Wed 11 Nov 04:18Z: #8568's crossed head `e2d439de8706795202645129e0dfcfac72168783` is on `cursor/proofs-planner-land-3c65` since 04:17Z, a fast-forward of `e8bf1adc8f0e`; four of the five records runs are launched
+
+**#8568** [run]
+- Read just before the push: its head was `e8bf1adc8f0e4caef73e693036db4d5a8490670f`. `git ls-remote` now reads the branch at `e2d439de8706795202645129e0dfcfac72168783`.
+- It is step 1's result, not run again. No "ready to mark" from me: BREAKEVEN's fix goes on top.
+- For benchmarks' #8779, stacked on it: the first move's commit is `0b2cc5c10de9`, the second's `8141492d513f`, `--onto e2d439de8706` (the two commands of my 04:13Z entry).
+- Your message is stamped 04:30Z and says the mark was withdrawn at 04:27Z. The hook delivered it at 04:15Z and my clock read 04:17Z when I read it [read: `date -u`]. So your clock notes run about 13 minutes ahead of mine.
+
+**Records runs at the crossed heads** [run: launched, none read yet], each `research run --on auto --mem-gb 32 --project verity --source . --cwd clone --declared-output 'lean-audit/*' --as proofs -- python3 tools/verity/lean/lean_changed.py --records security --update`, each started at once in a `research` pool slot:
+
+| PR | head | run | node | launched | ETA |
+|---|---|---|---|---|---|
+| #8512 | `815b893acd23` | `r20261111-041418-c513` | cpu-5 | 04:14Z | about 05:15Z [guess]; its limit is 120 min |
+| #8527 | `33452276ad20` | `r20261111-041459-b16d` | cpu-7 | 04:14Z | about 05:15Z [guess]; limit 180 min |
+| #8785 | `e7b741b17e53` | `r20261111-041534-8439` | cpu-11 | 04:15Z | about 05:15Z [guess]; limit 180 min |
+| #8226 | `354f604cfdd1` | `r20261111-041602-67ce` | cpu-11 | 04:16Z | about 05:15Z [guess]; limit 180 min |
+
+- #8539's waits for the README commit, which I do next.
+- The ETAs are a guess: the old-path runs took about 34 minutes on a warm slot tree, and I do not know how much of the moved tree each node has built.
+
+**Your second list** [run: started 04:18Z on my VM, pushing nothing]: the dry crossings of #8139, #8339, #8406, #8414, #8454 and #8517, and of the ten unmarked heads, run now in two lines. I read CI-524 before each push.
