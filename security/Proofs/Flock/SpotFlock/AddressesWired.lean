@@ -6,9 +6,10 @@ public import Proofs.Flock.Claims.Sampling.Rewire
 /-!
 # Where each gate's value sits, at the wired program
 
-`Addresses h` (`SlotsAt.lean`) reads the members' programs side by side, where it fails at every registration with
-an accepted run (`AddressesAt.lean`): every gate a proof block needs is committed there, so the program opens it
-under the statement's roots, while round 2 reads a session's own ports, and a wired read, off the interior record.
+`Addresses h` (`SlotsAt.lean`) reads the members' programs side by side. Every gate a proof block needs is committed
+there, so the program opens it under the statement's roots, while round 2 reads a session's own ports, and a wired
+read, off the interior record: one accepted run with a checked unit all of whose session's reads round 2 reads off
+the interior record refutes it (`AddressesAt.lean`).
 
 `AddressesWired h ω keep` is the same property read at the members' programs wired by `ω`, returning `keep`
 (`Prog.wired`), each proof block and replay block without the gates `ω` moves (`cutBlock`). A run and its checked
@@ -79,7 +80,7 @@ def ReadsRegisteredWired (S : Address) (g : ℕ) : Prop :=
 like the unit's port, the session has one table, `g` is a gate of the unit's replay block that `ω` leaves alone and
 the wired program doesn't commit as that block sees it, and under the replay block's roots the address's slot names the
 template's port of the interior record; over any population the session's public file loads, the slot has the
-published tree's schema, its leaf count is the tree's and its leaf (`leafAt`) the drawn unit's row. -/
+published tree's schema, its leaf count is the tree's and its leaf (`leafAt`) the sampled unit's row. -/
 def ReadsInteriorWired (S : Address) (g : ℕ) : Prop :=
   regNamed r.ins r.sts (S.port r.u) = none ∧ r.ins.read.I.count ≤ 1 ∧ S.port r.u < r.sts[0]!.c.ports.size ∧
     (g ∈ cutBlock ω r.rb ∧ (r.s.prog.wired ω keep).Boundary (cutBlock ω r.rb) g = false) ∧
@@ -113,7 +114,8 @@ place and slot; so has a unit that reads it and the unit that writes it. -/
 def AddressesWired : Prop :=
   ∃ addr : ℕ → Address,
     (∀ i, (addr i).place = (addr (ω i)).place ∧ (addr i).slot = (addr (ω i)).slot) ∧
-      ∀ r : CheckedRun h.stage, r.Ok h → ∀ i, r.s.prog.Needs r.b i → r.AddressHoldsWired h ω keep (addr i) i (ω i)
+      ∀ r : CheckedRun h.stage, r.Ok h →
+        ∀ i, r.s.prog.Needs r.b i → r.AddressHoldsWired h ω keep (addr i) i (ω i)
 
 /-! ## The entry a writer and its readers name -/
 

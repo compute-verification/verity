@@ -619,7 +619,7 @@ theorem stmtOpensWired (hB : BuiltWired h ω keep) (hA : AddressesWired h ω kee
   exact CheckedRun.correct_wired hr hB hA hW
     (fun _ => decoded_rewired h hx hP hd hin hok hu hck (List.getElem?_eq_getElem hlt) hρ hrb hW) val ι hv
 
-/-- **Every registration whose frame is set to SPOT's own at the wired program is built there**: the address map
+/-- **Every held code whose frame is set to SPOT's own at the wired program is built there**: the address map
 doesn't read the frame. -/
 theorem builtWired_spot (c₀ : Code) :
     BuiltWired
