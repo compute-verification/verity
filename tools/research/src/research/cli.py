@@ -47,7 +47,7 @@
   research merge --train A B C [--on MACHINE --project P]                # several refs as one candidate, one check, a fast-forward
   research queue status|sync|land|eject|ready|judge|review [--shadow] [--dry-run]  # the merge queue: ready PRs on `next`, `checked`
                                                  # fast-forwarded to its reviewed prefix, `main` to what passed the gated steps (research/queue.py)
-  research goals show|set|confirm|done|remove|replace|priority ...   # the Goals page, written with this agent's Cursor identity
+  research goals show|set|confirm|done|remove|replace|priority|audit ...   # the Goals page, written with this agent's Cursor identity
                                                  # (research/goals.py)
   research jobs add|list|show|cancel|events ...  # the Job queue: batch work on pods, on the control app (research/jobs/cli.py)
   research worker --dispatch --pods A,B [--name rc]   # stage 1's dispatcher: claims jobs, runs each with `run --on` on a free pod
