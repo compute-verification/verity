@@ -136,8 +136,8 @@ theorem tower_back (d : Nat) (lf : Nat → ByteArray) :
     simp only [_root_.Flock.Firewall.Level0.tower, Array.back?_push]
 
 /-- **A built level 0's root is its commitment's cap, concatenated.** -/
-theorem cap_root_build {l : _root_.Flock.Firewall.Level0.Level0} {m tPad : Nat} {lv g extra pads salts}
-    (h : l = _root_.Flock.Firewall.Level0.build m lv tPad g extra pads salts) :
+theorem cap_root_build {l : _root_.Flock.Firewall.Level0.Level0} {wide : Bool} {m tPad : Nat} {lv g extra pads salts}
+    (h : l = _root_.Flock.Firewall.Level0.build wide m lv tPad g extra pads salts) :
     _root_.Flock.Firewall.Finish.flat (_root_.Flock.Firewall.Finish.commitOf l).cap = l.root := by
   subst h
   unfold _root_.Flock.Firewall.Finish.commitOf _root_.Flock.Firewall.Level0.build

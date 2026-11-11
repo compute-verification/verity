@@ -43,7 +43,8 @@ theorem tab_of_toIn {m : Nat} {g g' : Array F128} {d d' : ByteArray} {l l' : _ro
     unfold _root_.Flock.Firewall.Finish.commitOf
     rw [hrows, hlay, hlv2, show l.salt = l'.salt from congrArg _root_.Flock.Firewall.Link.In.salt he]
   unfold _root_.Flock.Firewall.Finish.tabOfLevel0
-  rw [hm.trans hm'.symm, htp, show l.g = l'.g from congrArg _root_.Flock.Firewall.Link.In.g he, he, hc]
+  rw [hm.trans hm'.symm, show l.wideLeaf = l'.wideLeaf from congrArg _root_.Flock.Firewall.Link.In.wideLeaf he, htp,
+    show l.g = l'.g from congrArg _root_.Flock.Firewall.Link.In.g he, he, hc]
 
 /-- **The level-0 half of `RealAt` at the loop's own tables**, at the loop `σ` for session `sid`, where the model's
 samples are `src`'s at its statement, witness and tapes (`hsrc`), the session's entry is the setup's (`SessOn`), the

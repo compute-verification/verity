@@ -47,9 +47,9 @@ theorem linkRows_size (lv : _root_.Flock.Level) (tPad : Nat) (g : Array F128) (e
   · simp [_root_.Flock.Firewall.Link.rowsDirect]
 
 /-- **A built level 0 has a row for each tree position.** -/
-theorem buildRows_size (m : Nat) (lv : _root_.Flock.Level) (tPad : Nat) (g : Array F128)
+theorem buildRows_size (wide : Bool) (m : Nat) (lv : _root_.Flock.Level) (tPad : Nat) (g : Array F128)
     (extra pads : Array (Array F128)) (salts : ByteArray) :
-    (_root_.Flock.Firewall.Level0.build m lv tPad g extra pads salts).rows.size = 2 ^ lv.d := by
+    (_root_.Flock.Firewall.Level0.build wide m lv tPad g extra pads salts).rows.size = 2 ^ lv.d := by
   exact linkRows_size _ _ _ _ _
 
 /-- **A level 0 is sampled at `m`** from a packed table and samples of the sizes `m`'s `--zk` schedule takes. -/
@@ -63,7 +63,8 @@ theorem ofDraws_of_sizes {m : Nat} {s : _root_.Flock.Schedule} {tp : Nat}
     pure, Except.pure]
   all_goals exact ⟨_, rfl⟩
 
-/-- **A level 0 sampled at a statement's `m` gives a table** where the statement commits under `hm96Sha512`. -/
+/-- **A level 0 sampled at a statement's `m` and version gives a table** where the statement commits under
+`hm96Sha512`. -/
 theorem tab_of_drawn {stm : Stmt} (hmk : stm.merkle = _root_.Flock.MerkleScheme.hm96Sha512) {g : Array F128}
     {d : ByteArray} {l : _root_.Flock.Firewall.Level0.Level0}
     (hl : _root_.Flock.Firewall.Level0.ofDraws stm.wideLeaf stm.m g d = .ok l) :
@@ -71,8 +72,11 @@ theorem tab_of_drawn {stm : Stmt} (hmk : stm.merkle = _root_.Flock.MerkleScheme.
   obtain ⟨hm, -, ⟨s, hz, -⟩, -⟩ := _root_.Flock.Firewall.Level0.ofDraws_ok hl
   have e1 : (_root_.Flock.Setup.ofCircuit stm).merkle = _root_.Flock.MerkleScheme.hm96Sha512 := hmk
   have e2 : (_root_.Flock.Setup.ofCircuit stm).m = stm.m := rfl
+  have e3 : (_root_.Flock.Setup.ofCircuit stm).wideLeaf = stm.wideLeaf := rfl
+  have hw : l.wideLeaf = stm.wideLeaf := _root_.Flock.Firewall.Level0.ofDraws_wideLeaf hl
   unfold _root_.Flock.Firewall.Finish.tabOfLevel0
-  simp only [e1, e2, hm, hz, bne_self_eq_false, Bool.false_eq_true, ↓reduceIte, bind, Except.bind, pure, Except.pure]
+  simp only [e1, e2, e3, hm, hw, hz, bne_self_eq_false, Bool.false_eq_true, ↓reduceIte, bind, Except.bind, pure,
+    Except.pure]
   all_goals exact ⟨_, rfl⟩
 
 /-- Where the left of two related results is a value, the right is one too, related to it. -/

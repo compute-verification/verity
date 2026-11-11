@@ -172,7 +172,7 @@ theorem builtAt_stays {W Rr : Type} {M : LoopModel W Rr} {spec : SessionSpec} {s
 /-- **A level 0 `Level0.ofDraws` gives is a `Level0.build`.** -/
 theorem build_of_ofDraws {m : Nat} {g : Array F128} {d : ByteArray} {l : _root_.Flock.Firewall.Level0.Level0}
     (h : _root_.Flock.Firewall.Level0.ofDraws wideLeaf m g d = .ok l) :
-    ∃ lv tPad extra pads salts, l = _root_.Flock.Firewall.Level0.build m lv tPad g extra pads salts := by
+    ∃ lv tPad extra pads salts, l = _root_.Flock.Firewall.Level0.build wideLeaf m lv tPad g extra pads salts := by
   unfold _root_.Flock.Firewall.Level0.ofDraws at h
   cases hz : _root_.Flock.Zk.schedule wideLeaf m with
   | error e => rw [hz] at h; cases h
@@ -194,6 +194,8 @@ theorem cap_of_drawn {m : Nat} {g : Array F128} {d : ByteArray} {l : _root_.Floc
   have hcm : t.cm0 = _root_.Flock.Firewall.Finish.commitOf l := by
     unfold _root_.Flock.Firewall.Finish.tabOfLevel0 at ht
     simp only [bind, Except.bind] at ht
+    split at ht
+    · cases ht
     split at ht
     · cases ht
     split at ht
