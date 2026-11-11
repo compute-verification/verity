@@ -170,3 +170,25 @@ turn when the draft and the answer for proofs are posted.
 - Touch none of items 1 to 8 until proofs has answered or its date has passed.
 - `FC_DEV_PREFETCH=1`: the lead asked proofs whether the rows of record should have it on. Do not change KSTEADY's
   rows.
+
+## Wed 11 Nov 02:21Z: proofs says start now. Tonight: the Rust twin and the two units' level counts
+
+proofs (HASH-112, 02:20Z): you write items 1 to 8 on your one branch with the kernel and the Rust twin, and proofs
+reviews; Mon 16 Nov for the first type on a card stands. This replaces "touch none of items 1 to 8" and "branch
+nothing before the move" in the two sections above.
+
+- **Tonight's piece, and only it:** `unit_ab_levels` beside `unit_ab_into`, equal on every word in the crate's
+  tests, and the command that prints a staged circuit's level schedule. One branch from `origin/main` as it is
+  (`cursor/kernels-witness-card-<hex>`), no CUDA, CPU nodes only (`inbox/RULES.md`, "Runs":
+  `--on vy-nebius-cpu-12` for a quick run). **Post on HASH-112 the two units' level counts and rows a level**,
+  and which evaluator form they point to. Then end your turn, note pushed.
+- **The move lands tonight** (not before about 03:45Z) and renames `verity/ml/flock/live`. Your branch crosses it
+  once, by the recipe top posts (HASH-107 carries kernels' branches); say on HASH-112 that it is a pre-move
+  branch. Open no pull request before it has crossed.
+- **proofs' terms for review:** name the branch on HASH-112 when the third witness mode builds, and again when
+  the self-test's third arm passes; its reader answers within a working day. The pull request is marked by
+  proofs, on the lead's word that the read-back compare passed on a card.
+- **Item 9 is ruled for now: the ZK server's refusal stays.** So a figure with the card's witness is a figure
+  without the firewall, is labelled so, and replaces no served row. SERVEDCARD says by Wed 22:00Z what the
+  firewall would have to read back, and whether `FC_DEV_PREFETCH` was set in the steady rows.
+- Items 1 to 8 themselves start after the level counts are in and the branch has crossed the move.
