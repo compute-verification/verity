@@ -52,3 +52,23 @@ Nothing of mine is running. Evidence in my artifacts: `8688-mend.diff`, `8688-in
 
 CROSSB
 
+[2026-11-11T07:24Z] 4a6febf3fa74
+PERIODPROOF to coordinator (network-accounting), Tue 10 Nov 11:26 PM PST. NET-293 carry: the statement's two runs are green and its pull request is open, unmarked: #8848. Four run entries and the pull request.
+
+**The pull request.** [run] https://github.com/compute-verification/verity/pull/8848, head `b1f95afc2e02dd35d2b0caa4bd27db824a82f8e6`, base `main`, open, no label, not marked; GitHub shows 28 files, +1625 −216, mergeable. `research queue open`'s dry run printed "would open … (9085 bytes of body, ending 'Goal network/period-bound-checked'; would link it to NET-293 through the Linear app; dry run)"; the real call printed the link and "linked to NET-293 through the Linear app". **No warning from the tool, in either call.** Title: "The period's leak with each window's checked inputs left out of the count: PeriodLeakChecked, stated and not yet proved". The body is `lanes/network-accounting/tools/net293carry/pr-stmt-body.md` in the notes: `Lane network-accounting`, why it is not marked, the carrying paragraph (what `restack.py` did, the merge of `74145a920b7f`, the lock's text and size, the change before and after), the five items, what it is and is not, the nine lock entries against #8537's head, the 19 files, the two runs' lines and the three from before the move.
+
+Two things in the body you did not dictate, so check them:
+- It names the four of proofs' records the change of `CheckedWitness` alters (`SampledLeakChecked`, `SampledLeakCarried` and their two `_nontrivial` lemmas) and the `open` entry `NetTiming.CheckedWitness` (digest only) [run: the lock's entries against `74145a920b7f`]. Your comment of 9 Nov on NET-293 said the pull request names both records.
+- For "as @soundness and @lean ruled" it says the lane's lead relays the ruling and that it is not quoted there. I have not read the ruling.
+
+**Runs, one entry each.** Read from each run's own `stdout.log` and `result.json` after `research fetch --all`.
+- [run] `r20261111-065107-9f3f`, the statement's suites at `b1f95afc2e02`, exit 0. Last line: "8 suites: 8 passed (0 cached), 0 failed; 32.7 min of test time". Each: `repository` 280 passed; `verity-graph` 181 passed; `verity-pouw-benchmarks` 1216 passed, 21 skipped; `verity/definitions/ops` 949 passed, 2 skipped; `verity/protocols/inference_only/nci` 137 passed; `verity/protocols/inference_only/rho` 602 passed; `verity/protocols/pous/verifier` 536 passed, 12 skipped; `verity/protocols/pouw/verifier` 1844 passed.
+- [run] `r20261111-065152-f7ba`, the statement's records at `b1f95afc2e02`, exit 0. Last line: `lean-records: OUTCOME {"outcome": "pass", "package": "security", …}`. **Outcome `pass`, not `regenerated`: no record changed, the lock stays as committed.** Each package: `security` pass ("AUDIT …/security: PASS  27032 declarations in 719 modules; axioms propext, Classical.choice, Quot.sound; 1079 guarantees"), `security/Proofs` pass ("PASS  193438 declarations in 3819 modules"), `security/Properties` pass ("PASS  3088 declarations in 94 modules; … 463 guarantees"); "AUDIT: PASS" twice. A `lean-fast/v1` result: no kernel replay.
+- [run] `r20261111-065518-826e`, the proof's suites at `ff5d7a3d5aec`, exit 0. Last line: "8 suites: 8 passed (0 cached), 0 failed; 31.1 min of test time". The same eight suites with the same counts as the statement's.
+- [run] `r20261111-070036-6f8d`, the exclusion's suites at `03780e9dc98c`, exit 0. Last line: "8 suites: 8 passed (0 cached), 0 failed; 29.1 min of test time". The same eight, the same counts.
+- [read] The root suite passes at the proof's and the exclusion's heads with the README 9 and 15 bytes over its cap: `test_markdown_size_caps` is bookkeeping and warns. The runs' `stdout.log` does not print the warning; I did not read the suite's own log on the node.
+
+**Still running:** the proof's records `r20261111-065546-b150` and the exclusion's records `r20261111-070113-e06f`. One entry each when they end.
+
+**Waiting on you:** the README's cap (my 11:04 PM PST message). Nothing else is open.
+
