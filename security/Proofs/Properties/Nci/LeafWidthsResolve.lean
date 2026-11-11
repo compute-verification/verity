@@ -17,6 +17,8 @@ activation, to the gate that computes it. This module proves that the gate is as
   (`step_wide`): going down into a member, by the node's shape (`down_wide`); going up through a parameter, by the
   shape of the argument it is bound to (`up_wide`, with `axis_wide` for a member along an axis of a batch); and in
   both, by the widths the body's references keep (`BodyWide`).
+* `arg_wide`: a member's argument leaf is as wide as the callee's parameter leaf, for any callee, composite or
+  primitive: it reads the node's shape and the argument's references, and nothing of the callee's body.
 * `gate_of_node`: locating the gate of a member of a primitive's node, in an activation resolution reaches, arrives at
   that node in that activation. The walk starts at the root, over every activation resolution reaches (`under_root`);
   from an activation over the node's it steps into the member that is still over it (`Resolve.gateStep_member`), and
@@ -482,6 +484,59 @@ private theorem up_wide (P : Prog) (hroot : P.root < P.defs.size ∧ (P.defs[P.r
           Nat.mod_eq_of_lt hj]
       · simp only [hx, ite_false] at hu ⊢
         rw [harg j hu, hnx hx]
+
+/-- **A member's argument leaf is as wide as the callee's parameter leaf, for any callee.** Member `m` of node `k`
+of an activation's body reads leaf `j` of its parameter `i` at a reference of the node's argument `i`: reference
+`j` where the node is a call, reference `Resolve.memberIdx _ m j` where it is a batch. The leaf that reference
+names in the activation's body is as wide as leaf `j` of the callee's parameter, the callee a composite or a
+primitive: nothing here reads the callee's body. -/
+theorem arg_wide (P : Prog) (hroot : P.root < P.defs.size ∧ (P.defs[P.root]!).prim = false)
+    (hB : ∀ sc, Good P sc → BodyOk P sc.d) (hD : ∀ d < P.defs.size, BodiesOk.DefOk P.defs d P.defs[d]!)
+    (hW : ∀ d < P.defs.size, (P.defs[d]!).prim = false →
+      (P.defs[d]!).body.retType = (P.defs[d]!).ret ∧ BodyWide (P.defs[d]!).body)
+    (parent : Scope) (hp : Good P parent) (k : ℕ) (hk : k < (P.defs[parent.d]!).body.nodes.size) (m : ℕ)
+    (hm : m < ((P.defs[parent.d]!).body.nodes[k]!).members) (i : ℕ)
+    (hi : i < (P.defs[((P.defs[parent.d]!).body.nodes[k]!).fn]!).params.size) (j : ℕ)
+    (hj : j < ((P.defs[((P.defs[parent.d]!).body.nodes[k]!).fn]!).params[i]!).2.leaves) :
+    (((P.defs[parent.d]!).body.nodes[k]!).form = .call →
+      Widths.wAt (tyOf P parent ((((P.defs[parent.d]!).body.nodes[k]!).args[i]!).seq.get j))
+          ((((P.defs[parent.d]!).body.nodes[k]!).args[i]!).seq.get j).j =
+        Widths.wAt ((P.defs[((P.defs[parent.d]!).body.nodes[k]!).fn]!).params[i]!).2 j) ∧
+    (((P.defs[parent.d]!).body.nodes[k]!).form = .batch →
+      Widths.wAt (tyOf P parent ((((P.defs[parent.d]!).body.nodes[k]!).args[i]!).seq.get
+            (Resolve.memberIdx (((P.defs[parent.d]!).body.nodes[k]!).args[i]!) m j)))
+          ((((P.defs[parent.d]!).body.nodes[k]!).args[i]!).seq.get
+            (Resolve.memberIdx (((P.defs[parent.d]!).body.nodes[k]!).args[i]!) m j)).j =
+        Widths.wAt ((P.defs[((P.defs[parent.d]!).body.nodes[k]!).fn]!).params[i]!).2 j) := by
+  obtain ⟨hpd, hpp⟩ := Resolve.good_d P hroot hB parent hp
+  obtain ⟨-, hargs, -, -, -⟩ := (hB parent hp).1 k hk
+  obtain ⟨-, ⟨hsz, hcnt, -, -, hshape, -⟩, -⟩ := (hD parent.d hpd).2.1 k hk
+  have hia : i < ((P.defs[parent.d]!).body.nodes[k]!).args.size := by
+    rw [hsz]; exact hi
+  have hc := hcnt i hia
+  have hsw := (hW parent.d hpd hpp).2.1 k hk i hia
+  have harg : ∀ t, t < (((P.defs[parent.d]!).body.nodes[k]!).args[i]!).seq.count →
+      Widths.wAt (tyOf P parent ((((P.defs[parent.d]!).body.nodes[k]!).args[i]!).seq.get t))
+          ((((P.defs[parent.d]!).body.nodes[k]!).args[i]!).seq.get t).j =
+        Widths.wAt (((P.defs[parent.d]!).body.nodes[k]!).args[i]!).ty t :=
+    fun t ht => seq_wide P parent.d parent rfl k _ _ (Nat.le_of_lt hk) hsw t ht (hargs i t ht)
+  refine ⟨fun hf => ?_, fun hf => ?_⟩
+  · simp only [hf, BodiesOk.Shape] at hshape
+    have hty := hshape.2 i hia
+    rw [harg j (by rw [hc, hty]; exact hj), hty]
+  · simp only [hf, BodiesOk.Shape] at hshape
+    rcases hshape.2 i hia with ⟨hdn, hty⟩ | ⟨ax, mt, hrem, hmt, hdims⟩
+    · have hidx : Resolve.memberIdx (((P.defs[parent.d]!).body.nodes[k]!).args[i]!) m j = j := by
+        simp only [Resolve.memberIdx, hdn]
+      rw [hidx, harg j (by rw [hc, hty]; exact hj), hty]
+    · obtain ⟨L, hax, -, -, hb⟩ := BodiesOk.axis_spec ax _ _ mt hrem
+      have hidx : Resolve.memberIdx (((P.defs[parent.d]!).body.nodes[k]!).args[i]!) m j =
+          (j / L * ((P.defs[parent.d]!).body.nodes[k]!).n + m) * L + j % L := by
+        simp only [Resolve.memberIdx, hdims, hax]
+      have hmn : m < ((P.defs[parent.d]!).body.nodes[k]!).n := by
+        rw [← Resolve.bs_members _ (Or.inl hf)]; exact hm
+      rw [hidx, harg _ (by rw [hc]; exact hb j (by rw [hmt]; exact hj) m hmn),
+        axis_wide ax _ _ mt L hrem hax j (by rw [hmt]; exact hj) m hmn, hmt]
 
 /-- **One step of resolution keeps the width.** From a state that resolves below a bound, a step ends at a member of
 a node of the activation, of a primitive that returns one value as wide as the leaf the state names, or it moves to a
