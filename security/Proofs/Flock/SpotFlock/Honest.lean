@@ -47,11 +47,6 @@ theorem drop_map_range {α : Type} (f : ℕ → α) (o l : ℕ) :
 theorem getD_append_left {l l' : List Msg} {n : ℕ} (hn : n < l.length) : (l ++ l').getD n [] = l.getD n [] := by
   simp [List.getD_eq_getElem?_getD, List.getElem?_append_left hn]
 
-theorem getD_map_range {α : Type} (f : ℕ → α) {i n : ℕ} (hi : i < n) (d : α) :
-    ((List.range n).map f).getD i d = f i := by
-  rw [List.getD_eq_getElem?_getD, List.getElem?_map, List.getElem?_range hi]
-  rfl
-
 /-- **A run's first rounds, their messages known**: where the prover sends `a j` on a history of `j < n` rounds with no
 `H` call, and the verifier answers `a 0, …, a j` with the message `b j` and no `H` call, the run's first `j ≤ n` rounds
 leave a history of `j` rounds and the messages `a 0, …, a (j - 1)`. -/

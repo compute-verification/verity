@@ -306,6 +306,16 @@ def shapeOf (xS : Msg) : List ℕ :=
 
 /-! ## What the verifier evaluates -/
 
+theorem getD_map_range {α : Type} (f : ℕ → α) {i n : ℕ} (hi : i < n) (d : α) :
+    ((List.range n).map f).getD i d = f i := by
+  rw [List.getD_eq_getElem?_getD, List.getElem?_map, List.getElem?_range hi]
+  rfl
+
+theorem getD_concat {α : Type} (l : List α) (a d : α) : (l ++ [a]).getD l.length d = a := by
+  have e := List.getD_append_right l [a] d l.length (Nat.le_refl _)
+  rw [Nat.sub_self] at e
+  exact e
+
 variable (h : Held)
 
 /-- **The hidden-outputs tag of a session statement's reading**, `false` where it has none. -/
@@ -583,6 +593,13 @@ theorem next_coin (x : Msg) {as : List Msg} {cs : List FlockDeploy.Coin} (h0 : a
   unfold next
   rw [ite_eq_right hc, ite_eq_left hle]
 
+/-- **The verifier's step in rounds 0 and 1**: the round's coin. -/
+theorem next_two (x : Msg) {as : List Msg} {cs : List FlockDeploy.Coin} (h0 : as ≠ []) (hcs : cs.length = as.length)
+    (h2 : as.length ≤ 2) : next h x as cs = .ret (.msg (cs.getD (as.length - 1) default).bytes) := by
+  have hpos : 0 < h.stage := Nat.succ_pos _
+  have hle : as.length ≤ h.stage + 1 := by omega
+  rw [next_coin h x h0 hcs hle, ite_eq_left (Or.inl h2)]
+
 /-- **The verifier's step at round `stage + 1`**: the session statements' check. -/
 theorem next_stmt (x : Msg) {as : List Msg} {cs : List FlockDeploy.Coin} (hcs : cs.length = as.length)
     (hlen : as.length = h.stage + 2) :
@@ -621,6 +638,29 @@ def order (x : Msg) : Order ((V h).k x) :=
 
 /-- **The run's stage order**: the second stage reads the coins of rounds `1` to `stage`. -/
 def stageOrder (x : Msg) : StageOrder ((V h).k x) h.stage := ⟨order h x, (Nat.zero_add h.stage).le⟩
+
+/-- **The second stage's coins of a run**: its rounds 1 to `stage`'s, in order. -/
+def stageCoins (x : Msg) (r : Fin ((V h).k x) → FlockDeploy.Coin) : Stage h := fun i => r ((stageOrder h x).round i)
+
+theorem round_val (x : Msg) (i : Fin h.stage) : ((stageOrder h x).round i).val = i.val + 1 := by
+  have hi := i.isLt
+  show h.stage - (h.stage - 1 - i.val) = i.val + 1
+  omega
+
+/-- The second stage's coin `i` is the run's round `i + 1`'s. -/
+theorem coinSeq_stage (x : Msg) (r : Fin ((V h).k x) → FlockDeploy.Coin) (i : Fin h.stage) :
+    coinSeq r (i.val + 1) = stageCoins h x r i := by
+  have hlt : i.val + 1 < (V h).k x := by
+    have hr := ((stageOrder h x).round i).isLt
+    rw [round_val h x i] at hr
+    exact hr
+  unfold coinSeq
+  rw [dite_eq_left hlt]
+  exact congrArg r (Fin.ext (round_val h x i).symm)
+
+theorem coinSeq_stageCoins (x : Msg) (r : Fin ((V h).k x) → FlockDeploy.Coin) {j : ℕ} (hj : j < h.stage) :
+    coinSeq (stageCoins h x r) j = coinSeq r (j + 1) :=
+  (dite_eq_left hj).trans (coinSeq_stage h x r ⟨j, hj⟩).symm
 
 /-- **A run refused before its session, as a Flock run**: the reference statement's run of a prover whose first
 message, empty, Flock refuses. -/
