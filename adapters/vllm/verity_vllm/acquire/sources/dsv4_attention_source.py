@@ -115,8 +115,13 @@ PORTS = {"attn.q": _call((INSERT_DEF,), "0"), "attn.swa_rows.nope": _call((INSER
          "attn.o_einsum": _call(("ScaledMmFp8BlockGrouped_v1",), "out")}
 
 
+def _taps(cmap: Mapping[str, Any]) -> list[dict[str, Any]]:
+    """The map's taps this source commits: those whose `commit` block names `BINDER` (a tap with no block is committed nowhere)."""
+    return [t for t in cmap["taps"] if (c := t.get("commit")) is not None and c["binder"] == BINDER]
+
+
 def binds(cmap: Mapping[str, Any]) -> bool:
-    return any((t.get("commit") or {}).get("binder") == BINDER for t in cmap["taps"])
+    return bool(_taps(cmap))
 
 
 def role_of(tap: Mapping[str, Any]) -> str:
@@ -133,8 +138,7 @@ def cache_of(role: str) -> str:
 def ports_of(cmap: Mapping[str, Any]) -> dict[str, Port]:
     """`bind.Binder`'s declared labels for the taps of `cmap` this source binds: each tap's label (its commit name's last part) -> its
     role's port (`PORTS`)."""
-    return {t["commit"]["name"].rsplit("/", 1)[1]: PORTS[role_of(t)] for t in cmap["taps"]
-            if (t.get("commit") or {}).get("binder") == BINDER and role_of(t) in PORTS}
+    return {t["commit"]["name"].rsplit("/", 1)[1]: PORTS[role_of(t)] for t in _taps(cmap) if role_of(t) in PORTS}
 
 
 def claims(r: Mapping[str, Any]) -> str | None:
@@ -197,7 +201,7 @@ class Dsv4AttentionSource:
         self.c, self.cmap, self.env, self.on_target = com, routes.cmap, routes.env, routes.on_target
         cid = self.cmap.get("id")
         free = self.cmap.get("free_symbols", {})
-        taps = [t for t in self.cmap["taps"] if (t.get("commit") or {}).get("binder") == BINDER]
+        taps = _taps(self.cmap)
         unknown = sorted({role_of(t) for t in taps} - ROLES)
         if unknown:
             raise ValueError(f"capture map {cid}: the dsv4_attention source binds no {unknown}")

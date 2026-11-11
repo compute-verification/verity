@@ -74,8 +74,13 @@ TAP_PORTS = {**{t: Port(fams, "out", call_boundary=True) for t, fams in CALL_TAP
 _CALL_SITE = re.compile(r"(?:^|\.)layers\.(\d+)\.self_attn/[^/]+$")
 
 
+def _taps(cmap: Mapping[str, Any]) -> list[dict[str, Any]]:
+    """The map's taps this source commits: those whose `commit` block names `BINDER` (a tap with no block is committed nowhere)."""
+    return [t for t in cmap["taps"] if (c := t.get("commit")) is not None and c["binder"] == BINDER]
+
+
 def binds(cmap: Mapping[str, Any]) -> bool:
-    return any((t.get("commit") or {}).get("binder") == BINDER for t in cmap["taps"])
+    return bool(_taps(cmap))
 
 
 def call_tap(r: Mapping[str, Any]) -> tuple[str, int] | None:
@@ -145,7 +150,7 @@ class AttentionSource:
         self.c, self.cmap, self.env, self.on_target = com, routes.cmap, routes.env, routes.on_target
         self.layers: dict[int, Any] = dict(routes.layers)
         free = self.cmap.get("free_symbols", {})
-        self.taps = {t["id"]: t for t in self.cmap["taps"] if (t.get("commit") or {}).get("binder") == BINDER}
+        self.taps = {t["id"]: t for t in _taps(self.cmap)}
         unknown = sorted(set(self.taps) - TAPS)
         if unknown:
             raise ValueError(f"capture map {self.cmap.get('id')}: the attention source binds no tap {unknown}")

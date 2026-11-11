@@ -47,8 +47,13 @@ DECISION = "hc"
 POST_PRE_PORTS = tuple(Port(frozenset({"MhcFusedPostPre_v1", "MhcPostPreTf32_v1"}), p, call_boundary=True) for p in "0231")
 
 
+def _taps(cmap: Mapping[str, Any]) -> list[dict[str, Any]]:
+    """The map's taps this source commits: those whose `commit` block names `BINDER` (a tap with no block is committed nowhere)."""
+    return [t for t in cmap["taps"] if (c := t.get("commit")) is not None and c["binder"] == BINDER]
+
+
 def binds(cmap: Mapping[str, Any]) -> bool:
-    return any((t.get("commit") or {}).get("binder") == BINDER for t in cmap["taps"])
+    return bool(_taps(cmap))
 
 
 def function_of(tap: Mapping[str, Any]) -> str:
@@ -59,7 +64,7 @@ def function_of(tap: Mapping[str, Any]) -> str:
 def ports_of(cmap: Mapping[str, Any]) -> dict[str, Port]:
     """`bind.Binder`'s declared labels: each post_pre tap's, its return's port of the fused post_pre (`POST_PRE_PORTS`)."""
     return {t["commit"]["name"].rsplit("/", 1)[1]: POST_PRE_PORTS[int(t["site"]["output"])]
-            for t in cmap["taps"] if (t.get("commit") or {}).get("binder") == BINDER and function_of(t) == POST_PRE}
+            for t in _taps(cmap) if function_of(t) == POST_PRE}
 
 
 class MhcSource:
@@ -67,7 +72,7 @@ class MhcSource:
 
     def __init__(self, com: Any, routes: Any, model: Any) -> None:
         self.c, self.cmap, self.env, self.on_target = com, routes.cmap, routes.env, routes.on_target
-        taps = [t for t in self.cmap["taps"] if (t.get("commit") or {}).get("binder") == BINDER]
+        taps = _taps(self.cmap)
         unknown = sorted({function_of(t) for t in taps} - set(FUNCTIONS))
         if unknown:
             raise ValueError(f"capture map {self.cmap.get('id')}: the mhc source wraps no {unknown}")
