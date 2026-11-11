@@ -51300,3 +51300,170 @@ For vllm:
 For the table:
 - second reading of #8926 at `1204dc214aa2`: holds. At the default nothing moves (eleven digests equal at base and head); under `serving="measured"` requests a GPU-second are the card's rate over the scope's tokens a request, with no MACs a token, and the fleet's GPUs are untouched.
 - The card's first value is a floor, 181.83 tokens a GPU-second: by proportion 518 GB on the price of record on `main`, 147 at measured prices, 230 with the head verify at 250.0, 571 with the setup once a session.
+
+## NET, Wed 11 Nov 11:33Z, final: no GB moved and none can tonight. The stop check's audit side is specified for form A and needs no Lean change inside one log; what it still rests on is named. One condition is added to the count reaching 0: the ingress tie must refuse a nonzero `ignore_eos`. #8869 is overtaken and stays unmarked, its quick tier unfinished
+
+**The verdict.** The certifier's part of the exfiltration number is unchanged: the output count stays the server's choice, 24,447,500 GB a world year at the plan's 1,024 class (modeled at 0.4), until a served audit draws a stop block. Nothing a proofs worker could build tonight changes that. What I did is the audit's design and the readings the other lanes asked for. One of them is a condition on the number: the stop check removes the count only if the ingress tie also refuses a nonzero `ignore_eos`.
+
+**The PR.** #8869, head `df881f327aa1a2e532168e1964d2bdc3b4232a6c`, open, unmarked, no `.lean` file. It binds and pins the two-word stop rule at T = 1,024, NSTOP = 3.
+- circuits says it is overtaken: the served block calls `StopRule16`, which circuits' own PR pins at that class [relayed: yours, 10:33Z]. Nothing I build calls the two-word form.
+- It conflicts with circuits' branch in all three of its files [run: `git merge-tree` against `afcf1474a1`]. Not rebased, by your word.
+- **Its quick tier has not passed:** 47 of 55 suites passed, none failed, 8 have no verdict. Both runs were cut by the check slot's limit.
+
+**Runs.**
+
+| run | what | result |
+|---|---|---|
+| `r20261111-081552-9bd2` | circuit-check on the two sidecars at #8869's head | 8 targets, 0 failures, 3 warnings; the digest pin holds |
+| `r20261111-081009-9e91` | the same with `--update-pins` | 9 targets, 0 failures, no pin written |
+| `r20261111-080733-44ce` | CPU `--zk` prove time of the two-word rule at T = 1,024 | 11.03 ms a block, 0.888 s fixed a statement, 36 cores; every session accepted |
+| `r20261111-093930-b9ed` | the ks-form mirror on the same sessions | accepted at N = 1, 64 and the full count |
+| `r20261111-081553-1365` | #8869's quick tier | 45 of 55 suites passed, none failed; cut at the slot's 3,600 s |
+| `r20261111-093130-61a9` | the 10 suites it did not reach | 2 passed; cut (`STAGE_TIMEOUT`) with 8 unjudged |
+| `r20261111-092413-8482` | a second whole quick tier | cancelled by me after 7 minutes |
+| `r20261111-094004-c2b1` | the two-word rule's sessions through the Lean verifier | staged nothing; rc 0 with `all_pass: false` |
+| `r20261111-112040-48a0` | the two premise entries through `audit_record`, Python and Lean | waiting for a slot when I posted; its result goes in an addendum |
+| `r20261111-111816-e45b` | the same without its third case | cancelled by me before it took a slot |
+
+- None of these measures `StopRule16` or `EgressStop_v1`. No session has opened a boundary row through `flock-verify`.
+- `c2b1` failed on a bug in `benchmarks/served_units/job.sh`: line 42 puts the unit's name unquoted in a `bash -c` string, so a census name with two statics is split at its braces [run: the split and the quoted form, on my VM]. Friction note `proofs/20261111T1048Z-friction-served-units-job-splits-census-name` has the one-line fix. I did not push it: my one branch holds #8869.
+
+**What the audit side now says** (entries 10:30Z `67d84a18b0`, 10:40Z `8a20b49a7a`, 10:47Z `c5b4fdfd55`, 10:55Z `7c8201e621`; all [read] with file and line, nothing built):
+- **Form A is what `main` takes.** The stop blocks are a one-stage population of their own, one record a class record, the word the stop record's one port. vllm built it so at `6fef77c702`.
+- **The Lean verifier opens vllm's u16 `row/v2` rows as the block's 32-bit leaves.** The commitment is the same bytes [run], and R7 and `checkPort` hold the entry's `words` × `word_bits` to the block's own [read]. No session run.
+- **For a reader that is a one-stage record, the ordering rule is two checks already on `main`, inside one log:** `R7-output` and `select`'s `coins`. No line is added.
+- **network-accounting's two ties are not such readers.** Each is a certifier service that names the word's port in its own `--registered` file. Its record names the stop records in a `window` item, and the order check is the tie's `register`: theirs, about ten lines.
+- **Across streams every form rests on a verifier-side read of another stream's log**, which no Lean checks. Soundness ruled at 11:03Z: the first served audit may run with that named as an open premise in its record, and the Lean check goes in with the driver or right after [read: VLLM-318].
+- **A tie's verdict is held to accept only by the certifier's own verifiers.** SPOT's one-stage verifier alone holds none: a proved block whose verdict is 0 passes its audit. The lengths unit's `o0` is a known-content port in its `--registered` file, which Flock's Lean verifier checks; it is not in the record and R3 does not see it.
+- **The stop words are 13 trees a window**, one a class, and nothing in a stop record says which connection a slot is. The tie's verifier needs its own source for that.
+
+**The certifier's part, row by row** [relayed unless tagged: PRF-456, VLLM-318, your mailbox; goals and dates read from the Goals page at 11:00Z, times in UTC. Figures: `benchmarks/certifier_term/run.py --response-ids 1024` at #8579's head `e525c7d1734b`, run by me; every figure modeled. No command on `main` prints any of them: `network/capacity-command-on-main` is due Thu 12 Nov 02:00Z, on track].
+
+World year, GB. The second column is the measured engine rate on node A, a floor (0.0143 to 0.0154): the rate is not measured at the headline's mix.
+
+| # | term | bits | modeled 0.4 | measured engine rate on node A (a floor) | what removes it | owner | date |
+|---|---|---|---|---|---|---|---|
+| 1 | a response's length, as the scan charges it | 11 a connection; 10 once a cap of 875 is certified (`network/cap-certified`, Fri 13 Nov 02:00Z, on track) | 24,447,500 | 873,998 to 941,229 | the lengths unit (#8690, #8702) and its period statement | network-accounting | `network/egress-tied-to-trace` Sat 14 Nov 02:00Z, off track; `network/certifier-term-zero` Tue 24 Nov 02:00Z, off track |
+| 2 | the fail cell | 11 a connection | 24,447,500 | 873,998 to 941,229 | failures charged as they happen (row 4), with the lengths unit | network-accounting | with row 1 |
+| 3 | the output count, before a stop block is sampled. The same charge as row 1 at a later time, not a sum | 11 a request | 24,447,500 | 873,998 to 941,229 | the stop check, six parts: `StopRule16` on `main`; part B; the lengths unit holding the word and its verdict; the ingress tie holding `b.request`, a nonzero `ignore_eos` refused; the audit driver; a new GPU serve audited | circuits (CIR-236); vllm (VLLM-318); network-accounting; network-accounting; proofs; vllm | `circuits/stop-rule-one-output` 13:00Z today, on track; Thu 12 Nov 02:00Z; design 20:00Z today; the tie over `b.request` has no date I read; Thu 12 Nov 08:00Z [guess]; the serve has no date |
+| 3a | the same, once sampled | 23 to 41 a wrong request | 0.110 | 0.0039 to 0.0042, at the same sampled requests a year [my arithmetic] | n/a | n/a | n/a |
+| 4 | failed connections, lengths held | 32 to 40 a failure | 47,587 at one in a thousand; 69.74 at one in a million | 1,701 to 1,832; 2.49 to 2.69 | a measured failure rate under 4.628e-6 (1.449e-4 to 1.568e-4 at the measured rate) for the 300 GB target | network-accounting; vllm's `certserve` (VLLM-324) measures it | no measurement yet |
+| 5 | a failed connection's released ids, untied | up to 28,000 a failure | 62,300 at one failure in a million | 2,227 to 2,399 [my arithmetic: by requests] | a failed span committed as the ids the certifier released | vllm | no date |
+| 6 | release times | 1 a 100 ms bucket at D_j = 2; 0 at D_j = 1 | 1,847,615 at D_j = 2 | 1,847,615: it does not read the rate | release times taken as fixed on the auditor's host, a ruling | soundness and Daniel; network-accounting | the ruling asked today, no date; `network/timing-benchmark-written` done |
+| 7 | the content, as the scan charges it | 18,480 a request at 1,024 ids [my arithmetic from the row] | 41,071,800,000 | 1,468,316,850 to 1,581,264,300 | the content tie through the compute audit's sample; then it is the compute part | network-accounting, proofs (the pooled count), vllm | `network/content-tie-design-posted` 20:00Z today, on track; `proofs/spot-bind-term` Wed 18 Nov, off track |
+| 8 | N2's schedules | 7 a link's phase | 10,104 | 10,104 | n/a: it lists no connection, so it ties no content | network-accounting | n/a |
+
+- **Week and month, and a datacenter:** rows 1 to 3 are 468,856 and 2,009,384 GB a world week and month at 0.4 (16,762 to 18,051 and 71,835 to 77,361 at the measured rate); a datacenter's week, month and year are 125, 536 and 6,520 GB (4.5 to 4.8, 19 to 21, 233 to 251). The full table is in `note:proofs/20261111T0800Z-report-net-certifier-part`, its last section.
+- **Share of the compute it covers:** rows 1 to 3 are 11 bits a request whatever the period; the plan charges 28,000 bits a request for the response itself.
+- **Rows a proofs worker could take tonight: none.** Row 3's audit side is designed and waits on two inputs. Row 7's pooled count is `proofs/spot-bind-term`'s. The rest are the device, a serve, a measurement and a ruling.
+
+**The audit driver for the stop population, for whoever starts it cold.** [read unless tagged; vllm's file is `adapters/vllm/verity_vllm/pipeline/boundary_rows.py` at `a5d90960df4b113ef0f16a7579fad34017995306`, the head of `cursor/vllm-stopcheck-a368` at 11:06Z, run: `git fetch`]
+- **Nothing of it exists.** No branch, no file. My branch `cursor/proofs-net-1d7e` holds only #8869, which the driver does not use. The design is my 10:47Z and 10:55Z entries.
+- **It waits on two things:** `StopRule16` on `main`, and part B opened from that branch. At that head the block reads `ignore_eos` off the request's row (`:244-275`).
+- **Where it goes:** one file beside `benchmarks/one_stage/two_stage.py`, which already builds a stream a class (`:96-114` at vllm's head).
+- **Its calls into part B.** `pub` is the class's public `commit.json`, `check` the class's check template, `boundary` the class's boundary record.
+  1. `L = layout_of(pub, check)` (`:527`): the verifier's own copy of the layout, from public items.
+  2. `L.stop_program`, `L.stop_query`, `L.stop_ports()` (`:412, 420, 460`): the population, its query, and `b.stop`'s leaves and domain.
+  3. `reg = stop_registration(pub, check, boundary)` (`:557`): `reg.values`, `reg.outputs` and `reg.schemas` for the verifier, `reg.registered` for the record.
+  4. `stop_record(pub, check, law, boundary)` (`:576`): the prover's record. Its `previous` is the boundary record's digest; its `window` is the boundary's with `"population": "stop"`.
+  5. Prover side only: `reopen(directory, check)` (`:617`) and `port_rows(spans, layout)` (`:470`), for the sampled blocks' rows and salts.
+- **The verifier's calls.**
+  - `Stream(spec, L.stop.template, …, log=[boundary])`, the selection a rate law [`spot/verifier/service.py:1534-1536`].
+  - `stream.register(record, L.stop_ports(), registered=reg.values, outputs=reg.outputs, schemas=reg.schemas)` [`service.py:1860`]: R1 to R7 in Python and in Lean. vllm's test makes the same check one level down [`adapters/vllm/tests/pipeline/test_boundary_rows.py:390-394` at `6fef77c702`].
+  - `stream.select(registration)` [`:2108`], each session through `flock-verify verify --zk --registered`, then `stream.outcome(…)` [`:2241`].
+  - **I did not trace the session staging.** Two drivers stage a population with registered reads: `benchmarks/prove_path/served_tie_zk.py:263-293` and `certifier/verifier/tie_service.py:540-590`.
+- **What it must not read from the prover's side.**
+  - The boundary record: from the boundary stream's own log (`Stream.log`), never rebuilt from `commit.json`.
+  - The law and the sample: the verifier's own rule and the challenger's coins.
+  - The block's statics, the stop ids, the model's length and T: held to the serve's registered declaration, not taken from `commit.json`'s `stop`. On `main` a declared stop rule is in the workload Program (`adapters/vllm/verity_vllm/records/declared_stop.py`). I did not trace whether the boundary path's serve registers one.
+  - `index.json`, `salts.bin` and the rows: prover-only. The verifier side opens nothing with them.
+- **What it does not check:** N. It is the prover's count; the lengths unit holds it to the certifier's.
+- **A stop record is named by its digest and its `window`, never by its domain.** `b.stop`'s domain has no class and no window in it: two stop classes with the same N share it (`Layout.domain`, `:444-451`) [relayed: vllm-stopcheck on VLLM-318, 11:02Z; read].
+- **The lookup across streams, three cases:**
+  1. accepted: the record the stop stream's log starts with is a record of the boundary stream's log, with its receipt, and the boundary stream's audit record accepted;
+  2. refused: no record of the boundary stream's log has that digest;
+  3. refused: the boundary stream holds it, and its audit record is missing or did not accept.
+- **What soundness ruled on it** [read: VLLM-318, 11:03Z]:
+  - The first served audit of a stop block may run and be reported with the lookup in the driver's Python. Its record then says "cross-stream order: checked by the audit driver, not by the Lean verifier", and every guarantee quoted from the run carries that line.
+  - The Lean check is a function over the runs' audit records beside `Record.record`, with those three cases as its difftest. It goes in the driver's PR or the next. The stop block's leg counts as proved only from that head.
+  - `select` taking a list of digests is not needed.
+- **The premise line: its field and its wording** (your 11:07Z) [read; the run that puts both entries through Python and Lean, `r20261111-112040-48a0`, was waiting for a slot when I posted].
+  - **The field:** one more entry of `verdicts` in the stop population's audit record, under the key `cross-stream-order`. That is the record `audit_record` and Lean's `Record.record` write, format `verity/one-stage/audit/v0`; no format changes.
+
+    ```json
+    "cross-stream-order": {
+      "accepted": true,
+      "of_record": false,
+      "tool": "<the driver's file>",
+      "premise": "cross-stream order: checked by the audit driver, not by the Lean verifier",
+      "case": 1,
+      "boundary": {"registration": "<the boundary record's digest>",
+                   "received": "<its index in the boundary stream's log>",
+                   "audit": "<SHA-512 of the boundary stream's audit record>"},
+      "stop": {"registration": "<the stop record's digest>", "previous": "<the stop record's previous>"}
+    }
+    ```
+  - **The wording:** the `premise` string is soundness's, word for word: `cross-stream order: checked by the audit driver, not by the Lean verifier`. A table row or a guarantee quoted from the run copies that string.
+  - **Why there:** the record carries every verdict whole and accepts only when every verdict that ran accepted, in Python and in Lean [`one_stage/audit.py:147-155`; `Spot/Record.lean:335-339, 379-382, 431`]. So case 2 or 3 writes `"accepted": false` with its `case`, and the record does not accept.
+  - **`of_record` is false:** it is the driver's Python, not the verifier of record. `Stream.outcome` holds only verdicts of record to the sessions, so it lets this one through [`spot/verifier/service.py:683-693`].
+  - **The record's `integrity_profile` does not carry the line.** A figure quoted from the profile alone copies the line from `verdicts`.
+  - **When the Lean function lands:** the entry becomes that function's verdict, of record, and the `premise` key goes.
+  - **No field on `main` carries such a line today.** I found none for the rows link in the one-stage drivers or the two verifiers [run: `rg` over `benchmarks/one_stage`, `benchmarks/prove_path`, `verity/protocols/spot/verifier`, `verity/protocols/certifier/verifier`], so this follows the verdicts' own form.
+
+**The seven words an id request does not fix: proofs' view** (your 11:07Z) [read unless tagged; vllm's file at `a5d90960df4b`].
+- **The stop rule reads one of the seven: `ignore_eos`.**
+  - `EgressStop_v1` reads its word in `b.request`'s row and gives the rule no stop id where it is not 0 (`:264-265`). `StopRule16` itself reads none of the seven.
+  - The block does not read `min_tokens`. The serve files a span with a nonzero one in no stop class (`Stop.word`, `:322-324`); that is the serve's filing, and the block takes any word there.
+  - `top_k`, `min_p` and the three penalties are the sampler's inputs. They belong to the class's request Definition, which is a stand-in today (`:48-53`).
+- **`ignore_eos`: yes, a prover can pick it, and it moves the length. The cost is at most one bit a request.**
+  - An id request cannot carry the field. Ingress schemas v0 and v1 are fixed layouts without it, and `ok` refuses any other byte [`verity/definitions/registry/io_shell.py:4-8, 16-21, 32-33`]. So the certified bytes do not fix the word.
+  - The row's word is the engine's (`sampling_of`, `:158-164`). With 0 the block is correct for the response that ends at its first stop id. With 1 it is correct for the response that runs on to `max_tokens` or the model's length. The ids past the stop id are the model's own, so both pass.
+  - Two responses a request pass, so the bound adds one bit a request (AGENTS.md, output accounting). That is row 3 over 11: 2,222,500 GB a world year modeled at 0.4 (79,454 to 85,566 at the measured engine rate on node A, a floor; the rate is not measured at the headline's mix) [my arithmetic]. With this word free the stop check does not bring the count to 0.
+  - **The read in the block was my row of 10:09Z.** It is exact for a request whose body carries the field. An id request's body cannot, so for released requests it is exact only with the tie's refusal below. Where the serve knows its releases, only released requests are in a stop class (`:44-45`), and there the read has no honest use.
+- **`min_tokens`: it cannot steer the stop block, and the stop block does not shut it.**
+  - A response served under `min_tokens` m has no stop id in its first m ids and ends at the next one [guess: vLLM's documented behaviour; the tree does not state it]. The block is correct whatever the row says.
+  - What changes is an id: where the model's sample was a stop id, the engine served another. Whether that is a wrong block or a free choice is the request Definition's.
+    - If its sampler never reads `min_tokens`, that step's block is wrong and the audit's sample bounds it.
+    - If it reads the row's word, the prover picks m: up to log₂(T + 1) bits a request, all of row 3 again.
+  - `main`'s compiler takes the first way: `min_tokens`, `top_k`, `min_p` and the three penalties are refused off their neutral values [`adapters/vllm/verity_vllm/program/predict/reads.py:86-88, 125-128`].
+- **Who holds the two words: the ingress tie, at the constant 0. Nothing needs publishing for them.**
+  - network-accounting's tie will refuse a released request's row whose `ignore_eos` or `min_tokens` is not 0 [relayed: vllm's lead on VLLM-318, 10:28Z; designed, not built]. That closes both.
+  - It is the right place. The tie is the one unit that reads the certified bytes, and the schema says the body has no such field. So 0 can be a constant of the tie's Definition, public in its id, and no serve chooses it.
+  - If the engine's own default were not 0, honest serving would fail the tie. That is completeness, the serve's to keep. `main`'s plain protocol reads a body without the two as 0 and false [`adapters/vllm/verity_vllm/pipeline/serve_protocol.py:114`]; vLLM's own defaults I did not read.
+  - **Until the tie holds `b.request`, every word the block reads is the engine's, `max_tokens` too** (vllm's docstring, `:40-42`). So the tie is a sixth part of what removes row 3, and its refusal of a nonzero `ignore_eos` is what removes the last bit.
+- **What the audit side needs published: for the stop block, nothing new by window.**
+  - A `defaults` object in each class's `commit.json` and the record's `window` (vllm-stopcheck's proposal) makes a value public and holds nothing. The serve writes it a window, and filing a span out of a stop class is the serve's filing, not a check. Only a block holds a row's word.
+  - If a default is published anyway, it goes in the serve's registered declaration, beside the stop ids and the model's length. A block takes it as a static, and the driver holds that static to the declaration in the lookup it already makes.
+  - What the stop population's audit does need:
+    1. the tie's registered Definition is the one whose layout has none of the seven and which holds `ignore_eos` and `min_tokens` at 0;
+    2. until that tie's verdict is held over `b.request`, the stop record's audit carries a second entry of `verdicts`, `"request-row": {"accepted": null, "of_record": false, "premise": "request row: the engine's words, not held to the certified request"}`. A null verdict is one that did not run: the record can accept and says `"complete": false` [`one_stage/audit.py:17-18, 147, 155`]. No figure quotes row 3 as removed from such a record.
+- **The other five are the request Definition's, and the two serves disagree on them today.**
+  - Its sampler takes them as statics, or the tie refuses a released row off the neutral values. Either way the value sits in a Definition's id, which the registration binds already.
+  - The boundary path's serve is vLLM's own server with no `--generation-config` flag, so the checkpoint's generation config fills a missing field [relayed: vllm-stopcheck on VLLM-318, 11:02Z; read: `benchmarks/serve_tax/serve_tax.py:314`, `tp_restore.py:14-18`]. The adapter's server applies none of it [`adapters/vllm/verity_vllm/pipeline/serve_openai.py:28-29, 589`].
+  - That is vllm's to settle before the request Definition lands. It does not touch the stop block.
+
+**What is left, and whose.**
+- **The audit driver for the stop population: proofs', not started, by your word not before `StopRule16` is on `main` and part B is opened.** The section above is its cold start. Ready line Thu 12 Nov 08:00Z if both land when said [guess]. You name its holder by 20:00Z.
+- **The Lean function for the order across streams:** proofs', with the driver or in the next PR; about 30 lines and three difftest cases [guess].
+- **The lengths unit's verdict, finish 0, the `window` item and the map from a connection to a class and slot:** network-accounting's.
+- **Part B:** vllm's, at `a5d90960df4b`, not opened; it now reads `ignore_eos` in the block [relayed: VLLM-318, 11:02Z; read: `:264`].
+- **The ingress tie over `b.request`, with its refusal of a nonzero `ignore_eos` or `min_tokens`:** network-accounting's, designed and not built. Row 3 does not reach 0 without it.
+- **Whether the seven are published, and where:** vllm's lead's to answer its worker. My view is the section above: a constant in the tie for the two the length depends on, nothing by window.
+- **#8869:** open, unmarked, overtaken. Closing it is not mine.
+- **`job.sh`'s quoting:** the friction note; one line, for whoever next touches `benchmarks/served_units`.
+
+For the coordinator to ask:
+- **network-accounting** (asked by you at 11:02Z, no answer when I wrote this): does the lengths unit prove every block or a sample; one port a class or one population a class; and where does its verifier get the row each block reads?
+- **network-accounting:** which unit refuses a released request's row whose `ignore_eos` or `min_tokens` is not 0, is 0 a constant of its Definition, and by what date does it hold `b.request`? Does it also hold `max_tokens` and the prompt's length there?
+- **soundness:** is a null verdict entry (`request-row`, the record then `"complete": false`) the right way to carry "the request row is not held", or do you want the first served audit to wait for the tie?
+
+For vllm:
+- the stop block reads `ignore_eos` from the row, and an id request cannot carry it. Until the tie refuses a nonzero word, that read leaves one bit a request. Leaving the word unread closes it for released requests; a request that sets the field then gets no stop block, as at `6fef77c702`. A `defaults` object by window holds nothing.
+- the block takes any `min_tokens` word. The request Definition's sampler must not read it from the row, or the tie's refusal must be in place first.
+
+For BREAKEVEN:
+- no figure of yours changes. One condition is added to row 3 reaching 0: the ingress tie refuses a nonzero `ignore_eos` in a released request's row. Without it one bit a request stays: 2,222,500 GB a world year modeled at 0.4 (79,454 to 85,566 at the measured engine rate on node A, a floor; the rate is not measured at the headline's mix) [my arithmetic: row 3 over 11].
+
+For the table:
+- the certifier's part (NET, final): unchanged. The output count stays charged, 24,447,500 GB a world year at the 1,024 class modeled at 0.4 (873,998 to 941,229 at the measured engine rate on node A, a floor; the rate is not measured at the headline's mix), until a served audit draws a stop block: `StopRule16` on `main`, part B, the lengths unit, the ingress tie over `b.request`, the audit driver and a new GPU serve, none complete.
+- the stop check's audit side: specified for form A [read, nothing built]; no Lean change inside one log; #8869 open, unmarked, overtaken.
