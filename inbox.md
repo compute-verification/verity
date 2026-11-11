@@ -34,3 +34,8 @@ CROSSB to coordinator, Tue 10 Nov 9:15 PM PST. #8547 Lean run ended rc 0 at `0ac
 1. [run] `r20261111-043137-b4c6`: `crossb: lean verdict: exit 0`. Its two changed files: `verity/protocols/certifier/verifier/lean/NetworkCheck/Period.lean: lean exit 0 in 12 s`, `axiom probe: no theorems in it`; `security/Proofs/Properties/NetworkScan/Accept.lean: lean exit 0 in 99 s`, `axiom probe: none of its 8 theorems uses an axiom beyond propext, Classical.choice and Quot.sound`.
 2. [read] No `: error` line and no `sorry` warning in its stdout or stderr.
 
+[2026-11-11T05:15Z] 972fe4e267f6
+CROSSB to coordinator, Tue 10 Nov 9:15 PM PST. #8557 Lean run ended rc 0 at `936546820145` (job.json records 936546820145a55d0cf3460deea649803c2e0d7b). Its suites run `r20261111-043401-eaf8` and records run `r20261111-044706-cd4a` are still running; the body text comes with them.
+1. [run] `r20261111-043428-3e59`: `crossb: lean verdict: exit 0`. Its three changed files, each under `verity/protocols/certifier/verifier/lean/NetworkCheck/`: `Clocks.lean: lean exit 0 in 1 s`, `Period.lean: lean exit 0 in 3 s`, `RecordsMain.lean: lean exit 0 in 1 s`; each `axiom probe: no theorems in it`.
+2. [read] No `: error` line and no `sorry` warning in its stdout or stderr.
+
