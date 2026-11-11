@@ -11,11 +11,11 @@ from __future__ import annotations
 
 from circuit_properties.ops import Designation, Site
 
-from verity.ml.circuits import boolean as BL
-from verity.ml.circuits.defs import CompositeDefinition, bind
-from verity.ml.circuits.program import Program
-from verity.ml.circuits.refs import Coll, broadcast, concat, tuple_of
-from verity.ml.circuits.types import Array, Tuple
+from verity.circuits import boolean as BL
+from verity.circuits.defs import CompositeDefinition, bind
+from verity.circuits.program import Program
+from verity.circuits.refs import Coll, broadcast, concat, tuple_of
+from verity.circuits.types import Array, Tuple
 
 BIT = BL.BIT
 LANE = Array(2, BIT)
