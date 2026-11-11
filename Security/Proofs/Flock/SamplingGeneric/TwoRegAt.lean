@@ -23,17 +23,17 @@ namespace Claims.SamplingGeneric
 open Claims Claims.Sampling
 
 /-- Over two runs' coins sharing a first coordinate, the first run's term has the run's own expectation. -/
-theorem Ex_pair_fst {R X : Type} [Fintype R] [Fintype X] [Nonempty X] (f : R × X → ℝ) :
-    Ex (fun p : R × X × X => f (p.1, p.2.1)) = Ex f :=
-  ((Ex_prod fun p : R × X × X => f (p.1, p.2.1)).trans (congrArg Ex (funext fun r =>
-    (Ex_prod fun y : X × X => f (r, y.1)).trans (congrArg Ex (funext fun a => Ex_const (α := X) (f (r, a))))))).trans
+theorem Ex_pair_fst {α β : Type} [Fintype α] [Fintype β] [Nonempty β] (f : α × β → ℝ) :
+    Ex (fun p : α × β × β => f (p.1, p.2.1)) = Ex f :=
+  ((Ex_prod fun p : α × β × β => f (p.1, p.2.1)).trans (congrArg Ex (funext fun r =>
+    (Ex_prod fun y : β × β => f (r, y.1)).trans (congrArg Ex (funext fun a => Ex_const (α := β) (f (r, a))))))).trans
     (Ex_prod f).symm
 
 /-- Over two runs' coins sharing a first coordinate, the second run's term has the run's own expectation. -/
-theorem Ex_pair_snd {R X : Type} [Fintype R] [Fintype X] [Nonempty X] (f : R × X → ℝ) :
-    Ex (fun p : R × X × X => f (p.1, p.2.2)) = Ex f :=
-  ((Ex_prod fun p : R × X × X => f (p.1, p.2.2)).trans (congrArg Ex (funext fun r =>
-    (Ex_prod fun y : X × X => f (r, y.2)).trans (Ex_const (α := X) (Ex fun b : X => f (r, b)))))).trans
+theorem Ex_pair_snd {α β : Type} [Fintype α] [Fintype β] [Nonempty β] (f : α × β → ℝ) :
+    Ex (fun p : α × β × β => f (p.1, p.2.2)) = Ex f :=
+  ((Ex_prod fun p : α × β × β => f (p.1, p.2.2)).trans (congrArg Ex (funext fun r =>
+    (Ex_prod fun y : β × β => f (r, y.2)).trans (Ex_const (α := β) (Ex fun b : β => f (r, b)))))).trans
     (Ex_prod f).symm
 
 /-- Two runs at one tape sharing their coins off the rounds `I`, each with fresh coins on `I` and its own extractor's
