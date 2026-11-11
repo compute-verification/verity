@@ -58,7 +58,7 @@ def beaten(name: str) -> list[tuple[float, str, str, str]]:
 
 
 def test_the_committed_instances_are_the_exporters():
-    """Security/Definitions/Accounting/Headline/Sm120.lean and Sm120Measured.lean are what lean_headline.py writes from
+    """security/Definitions/Accounting/Headline/Sm120.lean and Sm120Measured.lean are what lean_headline.py writes from
     the data, π* included."""
     assert H.main(["--check"]) == 0
 
@@ -120,7 +120,7 @@ def test_no_census_program_beats_the_measured_vector():
 
 
 def test_bit_exact_folds_meet_fold_opt_at_pi_star():
-    """FOLD-OPT at the headline's certificate (`FoldOptFoldedAt`, an open conjecture under Security/lean-audit.json's
+    """FOLD-OPT at the headline's certificate (`FoldOptFoldedAt`, an open conjecture under security/lean-audit.json's
     `shape.conjectures`), which a bit-exact fold priced below φ* at π* falsifies: each of `FOLDS` costs at least the
     menu's cheapest route at both headlines' π*, DS-120's issue and DS_smem mix and JI3t_0 on VF3s-16. The menu is not
     cheapest at every certificate, which is why FOLD-OPT at every certificate (`FoldOptFolded`) is not asked: the IMAD
