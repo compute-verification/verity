@@ -486,8 +486,8 @@ def _get(d: Any, path: str, what: str) -> Any:
 # ---------------------------------------------------------------------------------------------------------
 
 
-@_gate("G1")
-def gate_G1(run: RunArtifacts) -> GateResult:
+@_gate(OBSERVATION)
+def gate_observation(run: RunArtifacts) -> GateResult:
     """Observation fidelity: `noninterference.json` PASS; tokens equal across the (a) observer, (b) hooks and (c) bare
     variants AND equal to the clean control run's tokens (computed here from `generated_token_ids`, never from a
     workload-authored accepted list); every boundary hash equal; `steps == max_tokens`; `layers == expected_layers`
@@ -613,8 +613,8 @@ def _ambiguity(res: dict, run: RunArtifacts) -> tuple[int | None, str, str | Non
     return None, "unavailable", None
 
 
-@_gate("G2")
-def gate_G2(run: RunArtifacts) -> GateResult:
+@_gate(SEMANTIC_CLOSURE)
+def gate_semantic_closure(run: RunArtifacts) -> GateResult:
     """Semantic closure: the resolution report has 0 Unsupported (and 0 ResolutionErrors), the fold 0 Unresolved (and no
     other fold error: any fold error leaves an instance unemitted), and 0 ambiguous pattern matches (the census
     reconciliation's ambiguity count stands in when the resolver report has no ambiguity field)."""
@@ -664,8 +664,8 @@ def gate_G2(run: RunArtifacts) -> GateResult:
 # ---------------------------------------------------------------------------------------------------------
 
 
-@_gate("G3")
-def gate_G3(run: RunArtifacts) -> GateResult:
+@_gate(ROOT_CLOSURE)
+def gate_root_closure(run: RunArtifacts) -> GateResult:
     """Root closure: 0 unknown roots (fold summary and resolution report), 0 opaque / prescribed fallbacks, and
     `root_policy.json` status pass with `new_root_classes == []` and no failed root validation."""
     fs = run.need("fold_summary")
@@ -736,8 +736,8 @@ def quarantine_specs(res: dict | None) -> list[str]:
     return sorted(set(out))
 
 
-@_gate("G4")
-def gate_G4(run: RunArtifacts) -> GateResult:
+@_gate(PRIMITIVE)
+def gate_primitive(run: RunArtifacts) -> GateResult:
     """Primitive exactness: the tier-a replay passes with `k >= TIER_A_K` and no uncovered specialization; when the run
     uses newly registered definitions, `quarantine.json` must show every differential test passed (passed == total > 0)
     and `negative_matcher_tests: pass` — missing while the resolution report lists quarantine specs is a failure."""
@@ -798,8 +798,8 @@ def gate_G4(run: RunArtifacts) -> GateResult:
 # G5 — composition exactness (tier b replay of step 0 and every decode snapshot step)
 # ---------------------------------------------------------------------------------------------------------
 
-@_gate("G5")
-def gate_G5(run: RunArtifacts) -> GateResult:
+@_gate(COMPOSITION)
+def gate_composition(run: RunArtifacts) -> GateResult:
     """Composition exactness (D82): exhaustive provenance/structure, sampled numerical semantics.
 
     (a) `wiring.json` — every operand read of every instance is reproduced by the independent last-writer map
@@ -897,8 +897,8 @@ def gate_G5(run: RunArtifacts) -> GateResult:
 # ---------------------------------------------------------------------------------------------------------
 
 
-@_gate("G6")
-def gate_G6(run: RunArtifacts) -> GateResult:
+@_gate(CANONICALITY)
+def gate_canonicality(run: RunArtifacts) -> GateResult:
     """Canonicality + regression: two independent folds (separate processes) of the same log give one digest, and
     `golden.json` (`verity_vllm.properties.golden --check`) passes with every entry's digest and attribution sha as expected.
     Equal digests across two captures of one workload are NOT required (recorded as detail when available)."""
@@ -937,8 +937,8 @@ def gate_G6(run: RunArtifacts) -> GateResult:
 # ---------------------------------------------------------------------------------------------------------
 
 
-@_gate("G7")
-def gate_G7(run: RunArtifacts) -> GateResult:
+@_gate(HOLDOUT)
+def gate_holdout(run: RunArtifacts) -> GateResult:
     """Holdout generalization: `holdouts.json` (written by the orchestrator) is present with at least one holdout and
     G1..G6 pass in every holdout."""
     h = run.json("holdouts")
@@ -971,8 +971,8 @@ def gate_G7(run: RunArtifacts) -> GateResult:
 # ---------------------------------------------------------------------------------------------------------
 
 
-@_gate("G8")
-def gate_G8(run: RunArtifacts) -> GateResult:
+@_gate(VU_PARTITION)
+def gate_vu_partition(run: RunArtifacts) -> GateResult:
     """Proof-block partition: `query_use.json` (`verity-ir/query-use/v1`, written by the partition track: use configuration + verdict).
     Pass iff `verdict.partition.status == "exact"` and `verdict.width.status == "ok"` (no violators, no unsupported); fail with
     the partition codes / width violators otherwise.  Absent document -> `skipped` ("no query-use document"); a document that
@@ -1363,7 +1363,8 @@ __all__ = [
     "STRUCTURAL_GATES", "INTEGRITY_GATES", "REF_INTEGRITY_RULE", "ALL_GATES", "QUERY_USE_SCHEMA", "QUERY_USE_KIND",
     "GATES_SCHEMA", "FOLD_SUMMARY_SCHEMA", "FOLD_SUMMARY_FIELDS", "ARTIFACTS", "ARTIFACT_STAGE", "replay_b_key", "replay_b_rel",
     "GateResult", "ArtifactError", "RunArtifacts", "load_profile_config",
-    "gate_G1", "gate_G2", "gate_G3", "gate_G4", "gate_G5", "gate_G6", "gate_G7", "gate_G8", "gate_R1", "fold_integrity", "quarantine_specs",
+    "gate_observation", "gate_semantic_closure", "gate_root_closure", "gate_primitive", "gate_composition", "gate_canonicality", "gate_holdout",
+    "gate_vu_partition", "gate_R1", "fold_integrity", "quarantine_specs",
     "evaluate_gates", "verdict", "gates_json", "write_gates", "gates_markdown",
     "strip_T", "diag_structure", "diag_family_match", "diag_overhead", "diagnostics",
 ]
