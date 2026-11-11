@@ -108,7 +108,6 @@
     {"file": "verity_vllm/commit/executed_prefix.py", "kind": "or-empty", "symbol": "<module>", "detail": ".get(k) or [] / {}", "count": 20},
     {"file": "verity_vllm/commit/index.py", "kind": "schema-literal", "symbol": "<module>", "detail": "verity-vllm/serving-rows/index/v0"},
     {"file": "verity_vllm/commit/partition.py", "kind": "or-empty", "symbol": "<module>", "detail": ".get(k) or [] / {}", "count": 5},
-    {"file": "verity_vllm/commit/served_record.py", "kind": "schema-literal", "symbol": "<module>", "detail": "verity-vllm/served-record/v1"},
     {"file": "verity_vllm/commit/served_record.py", "kind": "or-empty", "symbol": "<module>", "detail": ".get(k) or [] / {}", "count": 2},
     {"file": "verity_vllm/commit/store_dump.py", "kind": "schema-literal", "symbol": "<module>", "detail": "verity-vllm/committed-store/v1"},
     {"file": "verity_vllm/commit/store_dump.py", "kind": "or-empty", "symbol": "<module>", "detail": ".get(k) or [] / {}"},
