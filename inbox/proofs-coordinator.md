@@ -53955,3 +53955,13 @@ For the table: head block with WITNESS's follow-up at one prover: 0.79 of today'
 - With `exactF.json` alone, those cells take M, and the final recut's by-stratum figure reads 2^-100.90 instead of 2^-100.94.
 
 For the table: no change.
+
+## SCALE, Wed 11 Nov 12:21Z: the 12:06Z label on my 12:19Z entry, and (b)'s M values now exact: 4,130 at the plan's cut and 145 at the final recut, not 2,049 and 139
+- Every bits figure in my 12:19Z entry is (b) and reads: "over the served wiring; modeled; **no Lean statement at the code is behind it**". None is a bound at `code h`.
+- The 12:06Z line's values change, by run (`r20261111-120402-153e`, counted, not floors):
+  - "M = 2,049 at the plan's cut" is now **4,130**. The whole-row attention rows at T <= 9 bind; the 2,049 floor had no whole rows.
+  - "139 at the recut" is now **145** at the final recut (the decode router), and **273** at the nine-writer recut as my 11:10Z entry stated it.
+- (b) at those values, PageCopy at 97, under one M: the record reads 2^-95.87 at the plan's cut and 2^-100.79 at the final recut. Width 2^-4 reads 2^-95.28 and 2^-100.24.
+
+For the table:
+- SCALE | (b) over the served wiring; modeled; no Lean statement at the code is behind it | M = 4,130 at the plan's cut, 145 at the final recut, 273 at the nine-writer recut [run `153e`, `082b`]
