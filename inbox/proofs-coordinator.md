@@ -50652,3 +50652,70 @@ For the table: nothing new.
 
 For the table:
 - b2 and k at `code h`: Counts at `04def4644b`, its deciding try waiting; the first try (`827d`, at `5e1baad461`) failed in three proofs. "modeled; the first-hit term of #8827's lemma: 2^-100.9 per sampled replay block, 2^-98.9 to 2^-98.3 a run at 4 to 6 replay blocks, at T = 2^80 SHA-512 calls in every run (the prover's and the verifier's), one 2^35-bit table a session, under `SHA512CRExpected` at its two finders; K an upper bound, every block's input bits counted (K_mean <= 2^41.81)."
+
+## TWOPROVE, Wed 11 Nov 11:18Z: the by-class bound's three counts at the code, by template, COMPILE on the first try. `code_hKs_cls` and `code_hKm_cls` take EXTFORM's file as it is, applied to TWOWITNESS's `code_hKs` and `code_hKm` at the needs by class; `hNs` is `code_hNs`. Try `827a` rc 0 on the three axioms. PR #8931 is open, unmarked, at 2cc7decd36a619f31512871b7f479bef75e4d78e
+
+No claim: no premise, no guarantee, no lock record, nothing under `Definitions/` or `Models/` [read: the PR's two new files and two import lines].
+
+**1. The statements, as written** [read: `security/Proofs/Flock/SpotFlock/ClassCounts.lean` at `2cc7decd36a6`].
+- **Where they hold:** at `L = compiledTwo F (code h) iroots (two h) (rs h) (cap h)`, for any `F`, any `needs` and any `cls : Fin (L.nG x) → Fin (L.nG x)`.
+- **What they take:**
+  - a cap by template `M : ℕ → ℕ`, with `hM : ∀ ρ t i, t < h.reg.ns.size → i < h.reg.ns.getD t 0 → (Compiled.clsNeeds (L.nG x) cls needs (h.reg.blockOf ρ t i)).card ≤ M t`;
+  - `hK : firstK h.reg.first = some K`.
+- `code_hKs_cls x needs cls M hM hK`:
+  - LHS: `Ex (fun r => (((L.toCompiled.sampleNeeds x needs (L.checked x r)).image cls).card : ℝ))`;
+  - RHS: `((Σ_{u<N, always u} |clsNeeds u| + K · Σ_t k_t · M t : ℕ) : ℝ) + Pr[selectSecond refused] · Σ_{u<N} |clsNeeds u|`, where `|clsNeeds u|` stands for `(Compiled.clsNeeds (L.nG x) cls needs u).card`, `N` for `SamplingDeploy.units ((base h).atOrder (order h)) x`, and `k_t` for `h.reg.ks.getD t 0`.
+- `code_hKm_cls x needs cls hidem M hM hK`:
+  - LHS: `Ex (fun r => (L.toCompiled.sessCountIn x needs (fun l => (L.toCompiled.sampleNeeds x needs l).image cls) (L.checked x r) : ℝ))`;
+  - RHS: the same as `code_hKs_cls`'s;
+  - it also takes `hidem : ∀ g, cls (cls g) = cls g`.
+- **They plug in word for word.** The two LHSs are `eventTwoX_le_cls_at_budget`'s `hKs` and `hKm` [read: `TwoFirstHitClassAt.lean:73-77`]. Its `hNs` is `code_hNs`'s LHS as it stands [read: `Counts.lean`, `code_hNs`].
+- **What the weight means:** `|clsNeeds u|` is the number of classes among the gates `u` needs (`Compiled.card_clsNeeds`) [read: EXTFORM's file].
+- **The proofs:** each is one term. `Compiled.ex_cls_le` is applied to `code_hKs` at `needs := Compiled.clsNeeds (L.nG x) cls needs`, and `Compiled.ex_sessCountIn_cls_le … hidem` to `code_hKm` at the same needs [read].
+
+**2. The lemma G l ≤ Σ_{u ∈ l} w u is EXTFORM's** (your 11:00Z).
+- **How I took it:** `git am` of `lanes/proofs/tools/extform_class_count.patch`, as its own commit `fd17c5b279`, keeping the patch's author line and message. The file's blob is `20133b821b`, the one the patch names [run].
+- **How it splits:**
+  - First, the by-class count on a sample is at most the by-gates count at `clsNeeds`: `image_sampleNeeds_subset`, and `sessCountIn_cls_le` under `hidem`.
+  - Then that is at most `Σ_{u ∈ l} |clsNeeds u|`: SessCount's `card_filter_needs_le` and `sum_first_sessNeeds_le`, inside TWOWITNESS's `code_hKs`/`code_hKm` [read].
+- **My draft is replaced:** I had proved the same two bounds directly (commit `f2d0f20fe0`, never tried). `2cc7decd36` replaces it with EXTFORM's, so there is one definition of the class needs [read].
+- **Two linter warnings in EXTFORM's file:** the section variables `[Fintype Coin] [Nonempty Coin] [Inhabited Coin]` are included but unused in `image_sampleNeeds_subset` and `sessCountIn_cls_le` [run: `827a`'s build log]. I left them, as you asked for the file as it is. An `omit … in` on each would silence them [derived]. `ClassCounts.lean` has no warning [run].
+
+**3. Your item 2: does `code_ex_le` take the weight?** Yes [read: `Counts.lean` at `04def4644bc4`].
+- `code_ex_le` and `code_ex_le_strata` take any `G` and any `w`, with `hG : ∀ l, G l ≤ ((l.map w).sum : ℝ)`.
+- TWOWITNESS's fix from `5e1baad46126` to `04def4644bc4` changed proof steps only, no statement: the coin space is named at two steps, and `code_hNs` uses `length_take_le'` [read: the diff].
+- My try built that `Counts.lean` [run: `827a`].
+- I did not call `code_ex_le` itself: `code_hKs` and `code_hKm` at `clsNeeds` are the by-template counts your 11:00Z asked for.
+
+**4. Your item 3: by stratum.** The counts are by template: `M t` for each template, through #8919's `sum_checked_le_strata` inside `code_ex_le_strata` [read]. One cap `M` is the case `M t = M`, which gives `K · Σ_t k_t · M`; no lemma of its own [derived]. This matches your 11:15Z: "M_t is a hypothesis on the registration, by template" [relayed].
+
+**5. At REGX's `needs` and `cls`** (#8924): the counts hold at any `needs` and any `cls`, so they apply at `needs = fun u => (Reveal.needs (partition h) s u).toFinset` and `cls = clsOf fun g => gateKey h s Pt d g.val` as they stand, with `hidem := Compiled.clsOf_idem _` [derived; `clsOf_idem` read in EXTFORM's file].
+
+**6. Checks** [run].
+- **Try `r20261111-110513-827a`** (vy-nebius-cpu-3): `lean_changed.py --try security/Proofs/Flock/SpotFlock/ClassCounts.lean --siblings`.
+  - Its 10,939 dependencies built, with `Counts.lean` and `TwoFirstHitClassCount.lean` among them.
+  - lean exit 0 in 545 s.
+  - `'SpotFlock.code_hKs_cls' depends on axioms: [propext, Classical.choice, Quot.sound]`, and the same for `code_hKm_cls`.
+  - No name clashes among 1,266 built modules; the rest are left to the records run.
+- **The earlier try:** I cancelled `r20261111-105315-8785`, my try of `Counts.lean` at `5e1baad46126`. It was queued for a slot on vy-nebius-cpu-10 and never started, and `827a` covers it.
+- **Records `r20261111-111617-debb` and quick tier `r20261111-111625-a1ca`** run at the head on vy-nebius-cpu-9, both from 11:16Z. The ready line waits for both.
+- **Merges:** `git merge-tree --write-tree` exits 0 with `main` `08ad61db9432` and with #8924's head `d025f81332e6`.
+- **The PR's issue:** `research queue open` linked PRF-523 and warned that it has no goal label. Labelling it is a Linear write, so it is yours.
+
+**7. What it rests on.**
+- No premise. The hypotheses are `hM`, `hK`, and `hidem` for `K_m` [read].
+- Stacked on TWOWITNESS's `cursor/proofs-codecounts-9e41` at `04def4644bc4`, which has no PR, and #8916 at `8784a105de5b` [run].
+- With them come these 15 open PRs, all ancestors of the head: #8919, #8916, #8906, #8905, #8892, #8889, #8882, #8879, #8874, #8870, #8836, #8827, #8820, #8785 and #8512 [run: `git merge-base --is-ancestor` on each open PR's head].
+- Not merged in: REGX's #8912, #8922 and #8924, which the counts read nothing from.
+
+**8. What is left before the by-class bound at the code has no count hypothesis** [derived].
+- **One composition remains:** #8924's `code_eventTwoX_le_cls_at_budget` with `Ns`, `Ks` and `Km` set to the right-hand sides of `code_hNs`, `code_hKs_cls` and `code_hKm_cls`, at #8924's `needs` and `cls` and `F = FlockDeploy.deployZk _root_.Flock.Readable.relation`, with `hidem := Compiled.clsOf_idem _`.
+- **What it needs:** a tree with #8924's head merged in, which merges clean. No new lemma is needed: the counts are stated at any `F`, `needs` and `cls`.
+- **What it would still take, after that:**
+  - `hM`, the caps `M t` by template, which are numbers on the registration and outside Lean (2,049 at the plan's cut, 139 at the recut [relayed: your 11:15Z]);
+  - `hK`;
+  - the budget (`T`, `hT`) and the three expected-time premises (`hBc`, `hX`, `hI`) [relayed: REGX 11:04Z].
+- The `Pr[refused] · Σ_{u<N} |clsNeeds u|` term stays in the bound, as a term and not a hypothesis [read].
+- I can write that composition next if you want it.
+
+For CAPS: Proofs/Flock: +2 modules, +11 declarations (#8931: `SamplingGeneric/TwoFirstHitClassCount.lean` 9 (EXTFORM's: 1 def, 8 theorems), `SpotFlock/ClassCounts.lean` 2)
