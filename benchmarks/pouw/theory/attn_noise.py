@@ -93,7 +93,7 @@ DELTA_LOG2 = DELTA.denominator.bit_length() - 1
 
 
 def grind_eps(L, delta_log2=DELTA_LOG2, t_log2=128, d=128):
-    """Decision 112's (iv): a seed's grind premium is at most log₂(T/δ)/h units, so ε_grind ≤ log₂(T/δ)/(h·N) over
+    """GRIND's term: a seed's grind premium is at most log₂(T/δ)/h units, so ε_grind ≤ log₂(T/δ)/(h·N) over
     the N units the seed covers, one seed a matmul (one head). Prefill: QKᵀ covers the causal L(L + 1)/2 scores,
     P·V L·d outputs; decode: L scores and d outputs."""
     bits, hp, hd = t_log2 + delta_log2, h_table(L, d), h_decode(L, d)
