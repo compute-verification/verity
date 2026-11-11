@@ -26,8 +26,8 @@ text prints beside it, and a credit above the class's linears is refused: its pa
 `--from RUN` reads the verifier's side of the run's record in the evidence store, and nothing the developer's node
 reports of what it served:
 
-- `out/pieces/pouw/pearlplus-answer.json`, the Pearl+ verifier's answer: its verdict, its credit, and its draw's ε_s
-  at δ_s (`epsilon_s`, `delta_s`): a draw that accepts misses more than the share ε_s of the credited work with
+- `out/pieces/pouw/pearlplus-answer.json`, the Pearl+ verifier's answer: its verdict, its credit, and its sample's
+  ε_s at δ_s (`epsilon_s`, `delta_s`): a sample that accepts misses more than the share ε_s of the credited work with
   probability at most δ_s. They are sampling's alone, not the ε and δ the credit holds at: the assumption's gap ε_a
   and its own δ_a, and the binding of the passes' commitments, are not in them;
 - `out/pieces/pouw/pearlplus-lean.json` and `pearlplus-lean-check.json`, the Lean verifier's verdict and the record's
@@ -184,7 +184,7 @@ def _held(tree: Path, path: str) -> Any:
 def credit(tree: Path) -> dict:
     """The Pearl+ verifier's credit in the record under `tree`: `NoNumber` unless its answer is Pearl+'s accept with a
     credit, and the Lean verifier's verdict and the record's comparison of the two, where it holds them, are the
-    answer's. `epsilon_s` and `delta_s` are the answer's `public.work.epsilon` and `profile.delta`, its draw's."""
+    answer's. `epsilon_s` and `delta_s` are the answer's `public.work.epsilon` and `profile.delta`, its sample's."""
     try:
         answer, lean, check = (_held(tree, p) for p in (ANSWER, LEAN, LEAN_CHECK))
         if answer is None:
@@ -300,7 +300,7 @@ def text(doc: dict) -> str:
     at = ", ".join(f"{k} {doc[name]}" for k, name in (("ε_s", "epsilon_s"), ("δ_s", "delta_s")) if doc[name] is not None)
     lines.append(f"  {doc['run'] or 'no recorded run'}, commit {doc['commit'] or 'unknown'}: Pearl+'s answer accepts"
                  + (f" (scheme {doc['scheme']})" if doc["scheme"] else "")
-                 + (f" at its draw's {at} ({SAMPLING_ALONE})" if at else "")
+                 + (f" at {at} ({SAMPLING_ALONE})" if at else "")
                  + (", and the Lean verifier's verdict is the same" if doc["lean"] else ", and the record holds no Lean "
                     "verdict"))
     lines.append("  PoUW's row in the run's composed record " + ("accepts too" if record["verdict"] == "accept" else

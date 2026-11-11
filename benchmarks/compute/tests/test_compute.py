@@ -161,9 +161,9 @@ def test_an_accepted_run_prints_the_share_of_the_models_macs_as_text_and_as_json
     assert text == [
         "compute: 75.00% of the served model's MACs are credited by Pearl+ (105,449,127,936 of 140,598,837,248), below "
         "the 97% target",
-        f"  {RUN}, commit {COMMIT}: Pearl+'s answer accepts (scheme pearl-c-h100-v1-h3) at its draw's ε_s 1/100, δ_s "
-        f"1/100 (sampling's alone: the assumption's gap and δ, and binding, are not in them), and the Lean verifier's "
-        f"verdict is the same",
+        f"  {RUN}, commit {COMMIT}: Pearl+'s answer accepts (scheme pearl-c-h100-v1-h3) at ε_s 1/100, δ_s 1/100 "
+        f"(sampling's alone: the assumption's gap and δ, and binding, are not in them), and the Lean verifier's verdict "
+        f"is the same",
         "  PoUW's row in the run's composed record is `missing`, not an accept, so the credit is the Pearl+ piece's "
         "alone: development run, credits nothing: the registration can't be read",
         "  unsloth/Llama-3.2-1B at 4 slots of 32 prompt and 4 output tokens: linears 136,230,993,920, attention "
@@ -179,7 +179,7 @@ def test_an_accepted_run_prints_the_share_of_the_models_macs_as_text_and_as_json
     assert (doc["credited_macs"], doc["model_macs"], doc["macs"], doc["passes_macs"]) == (CREDITED, TOTAL, MACS, 120_000_000_000)
     assert (doc["target"], doc["met"], doc["lean"], doc["policy_agrees"]) == (0.97, False, True, True)
     assert doc["record"] == {"verdict": "missing", "why": "development run, credits nothing: the registration can't be read"}
-    # the answer's ε and δ are its draw's, and the document names them so: it has no `epsilon` or `delta` of the credit
+    # the answer's ε and δ are sampling's, and the document names them so: it has no `epsilon` or `delta` of the credit
     assert (doc["epsilon_s"], doc["delta_s"]) == ("1/100", "1/100") and not {"epsilon", "delta"} & set(doc)
     assert doc["withdrawn"] == [] and store.pulled == [[RUN, f"art:{RUN}"]]
     assert doc["tokens"] == {"prompt": 128, "output": 16, "positions": 140} and doc["tokens_from"] == "class"
@@ -270,8 +270,8 @@ def test_a_record_with_no_lean_verdict_prints_the_answers_number_and_says_so(sto
     store.add(RUN, a_record(tmp_path, LEAN=None, LEAN_CHECK=None), dirty=True)
     assert bench(store, "--from", RUN) == 0
     text, doc, _ = printed(capsys)
-    assert text[1] == (f"  {RUN}, commit {COMMIT}-dirty: Pearl+'s answer accepts (scheme pearl-c-h100-v1-h3) at its draw's "
-                       f"ε_s 1/100, δ_s 1/100 ({C.SAMPLING_ALONE}), and the record holds no Lean verdict")
+    assert text[1] == (f"  {RUN}, commit {COMMIT}-dirty: Pearl+'s answer accepts (scheme pearl-c-h100-v1-h3) at ε_s 1/100, "
+                       f"δ_s 1/100 ({C.SAMPLING_ALONE}), and the record holds no Lean verdict")
     assert doc["lean"] is False and doc["value"] == 0.75 and doc["commit"] == f"{COMMIT}-dirty"
 
 
