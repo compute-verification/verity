@@ -9,10 +9,12 @@ public import Proofs.Properties.Nci.RecordJson
 of that template, sorted, tiling its units, neighbours of one row length merged. This module states what that gives
 (`gridsOf_ok`): the class has at least one slot, there is one list of grids a template, in the templates' order,
 and a template's grids are in unit order, each after the one before it, cover its units and no other, and each has a
-row length of at least one.
+row length of at least one. Each grid is whole periods (`gridsOf_period`): its row length times the slots divides
+its units, and a template's grids have the template's units between them (`tiles_sum`).
 
 The steps: ranges that tile are in order (`tiles_ordered`), merging neighbours keeps a tiling and every row length
-(`merged_tiles`), and an entry's row length is a product of radices of at least one (`gridOf_q`).
+(`merged_tiles`) and keeps whole periods (`mergeStep_period`), and an entry's row length is a product of radices of
+at least one (`gridOf_q`) which, times the slot digit's radix, divides the product of them all (`gridOf_period`).
 -/
 
 @[expose] public section
@@ -176,6 +178,86 @@ theorem gridOf_q {S : Nat} {e : Json} {tid : String} {g : Grid} (h : gridOf S e 
     · cases hx
   · cases hx
 
+/-- Grids that tile `[cur, units)` have `units - cur` units between them. -/
+theorem tiles_sum : ∀ (gs : List Grid) (cur units : Nat), tiles (rangesOf gs) cur units = true →
+    cur + (gs.map (·.units)).sum = units
+  | [], cur, units, h => by
+    simp only [rangesOf, List.map_nil, tiles, beq_iff_eq] at h
+    simp only [List.map_nil, List.sum_nil]
+    omega
+  | g :: gs, cur, units, h => by
+    simp only [rangesOf, List.map_cons, tiles, Bool.and_eq_true, beq_iff_eq, decide_eq_true_eq] at h
+    have := tiles_sum gs (cur + g.units) units h.2
+    simp only [List.map_cons, List.sum_cons]
+    omega
+
+/-- A product from `a` is `a` times the product from one. -/
+theorem foldl_mul_init : ∀ (l : List Nat) (a : Nat), l.foldl (· * ·) a = a * l.foldl (· * ·) 1
+  | [], a => by simp
+  | x :: l, a => by
+    rw [List.foldl_cons, List.foldl_cons, foldl_mul_init l (a * x), foldl_mul_init l (1 * x), Nat.one_mul,
+      Nat.mul_assoc]
+
+/-- A product of radices is a multiple of the radix at `k` times the product of the radices after it. -/
+theorem foldl_mul_dvd : ∀ (l : List Nat) (k : Nat), k < l.length →
+    (l.drop (k + 1)).foldl (· * ·) 1 * l[k]! ∣ l.foldl (· * ·) 1
+  | [], k, h => by cases h
+  | x :: l, 0, _ => by
+    rw [List.foldl_cons, foldl_mul_init l (1 * x), Nat.one_mul]
+    simp only [Nat.zero_add, List.drop_succ_cons, List.drop_zero, List.getElem!_cons_zero]
+    exact ⟨1, by rw [Nat.mul_one, Nat.mul_comm]⟩
+  | x :: l, k + 1, h => by
+    have ih := foldl_mul_dvd l k (by simpa using h)
+    rw [List.foldl_cons, foldl_mul_init l (1 * x), Nat.one_mul]
+    simp only [List.drop_succ_cons, List.getElem!_cons_succ]
+    exact Nat.dvd_trans ih (Nat.dvd_mul_left _ _)
+
+/-- **An inference entry's units are whole periods**: its row length times the slots divides its units, the slot
+digit's radix being the slots. -/
+theorem gridOf_period {S : Nat} {e : Json} {tid : String} {g : Grid} (h : gridOf S e = .ok (tid, g)) :
+    g.q * S ∣ g.units := by
+  unfold gridOf at h
+  simp only [bind, Except.bind, pure, Except.pure, throw, throwThe, MonadExceptOf.throw] at h
+  repeat (split at h <;> try cases h)
+  rename_i axes _ _ radix _ hlen _ k hk hrk _
+  have hkm : k ∈ List.filter (fun k => RecordText.stringOf? axes[k]! == some "slot") (List.range axes.size) := by
+    rw [hk]
+    exact List.mem_singleton.2 rfl
+  have hk' : k < radix.length := by
+    have h1 := List.mem_range.1 (List.mem_filter.1 hkm).1
+    simp only [Bool.or_eq_true, bne_iff_ne, ne_eq, not_or, Decidable.not_not] at hlen
+    omega
+  have hS : radix[k]! = S := by simpa using hrk
+  show (radix.drop (k + 1)).foldl (· * ·) 1 * S ∣ radix.foldl (· * ·) 1
+  rw [← hS]
+  exact foldl_mul_dvd radix k hk'
+
+/-- The fold of `merged` keeps every grid whole periods: the neighbours it merges have one row length. -/
+theorem mergeStep_period (S : Nat) : ∀ (gs acc : List Grid), (∀ g ∈ acc, g.q * S ∣ g.units) →
+    (∀ g ∈ gs, g.q * S ∣ g.units) → ∀ g ∈ gs.foldl mergeStep acc, g.q * S ∣ g.units
+  | [], _, ha, _ => ha
+  | g :: gs, acc, ha, hg => by
+    rw [List.foldl_cons]
+    refine mergeStep_period S gs (mergeStep acc g) (fun x hx => ?_) fun x hx => hg x (List.mem_cons_of_mem _ hx)
+    cases acc with
+    | nil =>
+      simp only [mergeStep, List.mem_singleton] at hx
+      subst hx
+      exact hg _ List.mem_cons_self
+    | cons last before =>
+      rw [mergeStep_cons] at hx
+      split at hx
+      · rename_i hq
+        rcases List.mem_cons.1 hx with rfl | hx
+        · have h1 := ha last List.mem_cons_self
+          have h2 := hg g List.mem_cons_self
+          rw [← beq_iff_eq.1 hq] at h2
+          exact Nat.dvd_add h1 h2
+        · exact ha x (List.mem_cons_of_mem _ hx)
+      · rcases List.mem_cons.1 hx with rfl | hx
+        · exact hg _ List.mem_cons_self
+        · exact ha x hx
+
 /-- A pair found by `lookup` is in the list. -/
 theorem mem_of_lookup {β : Type} : ∀ (l : List (String × β)) (a : String) (b : β), l.lookup a = some b → (a, b) ∈ l
   | [], _, _, h => by cases h
@@ -220,6 +302,26 @@ theorem gridsOf_ok {ts : List Tmpl} {doc : Json} {S : Nat} {per : List (String �
     · cases hy'
     · cases hy'
       exact ⟨_, (Json.mapM_ok _ _ _ hper _).2 ⟨t, ht, hy⟩⟩
+
+/-- **A template's grids are whole periods**: each grid's row length times the slots divides its units, so a whole
+number of rounds over the slots fits in it. -/
+theorem gridsOf_period {ts : List Tmpl} {doc : Json} {S : Nat} {per : List (String × List Grid)}
+    (h : gridsOf ts doc = .ok (S, per)) (tid : String) (ms : List Grid) (hm : (tid, ms) ∈ per) :
+    ∀ g ∈ ms, g.q * S ∣ g.units := by
+  unfold gridsOf at h
+  simp only [bind, Except.bind, pure, Except.pure, throw, throwThe, MonadExceptOf.throw] at h
+  repeat (split at h <;> try cases h)
+  rename_i _ _ _ _ _ gs _ _ _ hS hgs hper
+  obtain ⟨t, ht, he⟩ := (Json.mapM_ok _ _ _ hper (tid, ms)).1 hm
+  split at he
+  · cases he
+  · cases he
+    intro g hg
+    rw [merged_eq] at hg
+    refine mergeStep_period _ _ [] (fun _ hx => by cases hx) (fun x hx => ?_) g (List.mem_reverse.1 hg)
+    obtain ⟨y, hy, rfl⟩ := List.mem_map.1 (List.mem_mergeSort.1 hx)
+    obtain ⟨e, -, he⟩ := (Json.mapM_ok _ _ _ hgs y).1 (List.mem_filter.1 hy).1
+    exact gridOf_period (tid := y.1) he
 
 /-- **The grids a template's units are read by**: in unit order, each after the one before it, so no unit in two of
 them, and each with a row length of at least one. -/
