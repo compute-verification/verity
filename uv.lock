@@ -2535,27 +2535,34 @@ source = { virtual = "benchmarks/pouw" }
 dependencies = [
     { name = "blake3" },
     { name = "numpy" },
-    { name = "research" },
     { name = "scipy" },
     { name = "verity" },
     { name = "verity-difftest" },
-    { name = "verity-exact-kit" },
     { name = "verity-vllm" },
     { name = "z3-solver" },
+]
+
+[package.optional-dependencies]
+exact-kit = [
+    { name = "verity-exact-kit" },
+]
+research = [
+    { name = "research" },
 ]
 
 [package.metadata]
 requires-dist = [
     { name = "blake3", specifier = ">=1.0" },
     { name = "numpy" },
-    { name = "research", editable = "tools/research" },
+    { name = "research", marker = "extra == 'research'", editable = "tools/research" },
     { name = "scipy", specifier = "==1.18.1" },
     { name = "verity", editable = "." },
     { name = "verity-difftest", editable = "verity/difftest" },
-    { name = "verity-exact-kit", editable = "benchmarks/pouw/exact_kit" },
+    { name = "verity-exact-kit", marker = "extra == 'exact-kit'", editable = "benchmarks/pouw/exact_kit" },
     { name = "verity-vllm", editable = "adapters/vllm" },
     { name = "z3-solver", specifier = ">=4.13" },
 ]
+provides-extras = ["research", "exact-kit"]
 
 [[package]]
 name = "verity-pouw-check-difftest"
