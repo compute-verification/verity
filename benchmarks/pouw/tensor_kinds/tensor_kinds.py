@@ -271,7 +271,7 @@ def analyze(out: Path) -> tuple[dict, list[str]]:
         rows = {}
         # JI3e is sm_120's; on another target its loads say nothing
         for row, (am, ao) in (JI3E.items() if arch == 120 else ()):
-            def load(p, am=am, ao=ao):
+            def load(p: dict, am: float = am, ao: float = ao) -> float:
                 return (am + ao * p["ops_per_mma"]) / p["cycles_per_mma"]
             w = max(pts, key=load)
             rows[row] = {"load": load(w), "at": f"{w['mode']} R={w['R']}", "over": load(w) > 1 - NOISE}

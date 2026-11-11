@@ -27,6 +27,7 @@ import operator
 import re
 import sys
 from collections import Counter, defaultdict
+from collections.abc import Callable
 from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
@@ -473,7 +474,7 @@ def census(outs: list[Path], ext: list[Path] = ()) -> tuple[str, str]:
     ext_runs: set[str] = set()
     issue_runs: set[str] = set()
 
-    def keep(d, k, v, run, better):
+    def keep(d: dict, k: str, v: float | None, run: str, better: Callable[[float, float], bool]) -> None:
         if v is None:
             return
         old = d.get(k)
