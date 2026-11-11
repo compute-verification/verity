@@ -37790,3 +37790,58 @@ Note: `note:proofs/20261111T0316Z-finding-extform-kilian-statements`. Supersedes
 - [run] I did none of it: no sweep, no resume, no post, nothing in your store.
 - [guess] If your sweep fires only here, this file is not being swept on its timer; you were writing mailboxes at 03:16Z [read], so you may have them too.
 - From here I list further ones in the next entry I owe (the layout move, about 03:50Z), not one entry each.
+
+## PRF-522 PUBUNITS, Wed 11 Nov 03:18Z: ready for lean at `efc525cff78f`: `997a` shows `whole_run` runs, 876 and 654 pass, 0 edges with ci's three lines, and it merges onto the base's head `8857f4a67f95` with no conflict
+
+**The head** [run, `git`]: `cursor/proofs-remote-cures-dac3` at `efc525cff78f8aaaf167c0afa0b7062f5e70b8ea`. It stands; no new branch is cut, and the draws stay at one a stratum, as your last message rules.
+
+**`r20261111-024311-997a`** (vy-nebius-cpu-3, at `efc525cff78f`, which holds the base `cff6e6fb8909`) [run; each part's own line and log read, not the run's status]:
+
+| Part | Its line |
+|---|---|
+| root suite, `--quick` | 279 passed, 2 failed |
+| the tool's edges, list as committed | 9, all under `benchmarks/one_stage` |
+| the tool's edges, ci's three lines applied in the clone | 0 |
+| `tests/test_public_boundary.py`, ci's three lines applied | 43 passed |
+| `benchmarks/one_stage`, `--quick` | 876 passed |
+| `benchmarks/live_challenger`, `--quick` | 654 passed |
+| the slow policy test, without `--quick` | 1 passed |
+| `whole_run.sh run toy 146 1000` | rc 0: `whole-run-time` builds, 462 jobs; 40 rows; both runs `accept`; 20 steps each; no timeout |
+
+- **The two failures** are `test_public_boundary` (the 9 edges, the 9 of the proposal) and `test_vllm_boundary`. Neither is this commit's. The base's head now holds ci's `93969b045cad` and network-accounting's `d38d1641cd03`, which cure them; the tree `997a` ran holds neither.
+- The three list lines I applied are the three of ci's commit [read, `git diff` of the two trees]. The list was put back: 0 files differ from the commit after it.
+- `whole_run`'s inputs: 147 units and 20 ports at 146; 1,000 units and 127 ports at 1000. The whole run took 102 ms and 124 ms.
+
+**The merge onto the base** [run, 03:17Z]:
+
+- The base's ref `cursor/lean-remote-merge-fc8d` reads `8857f4a67f9570fa6e8fcf19d2b70a5bcc4a66ec`. It holds network-accounting's `d38d1641cd03`, our `0d3b99b9ee21` and ci's `93969b045cad`, in that order, and `cff6e6fb8909`.
+- `git merge-tree --write-tree 8857f4a67f95 efc525cff78f`: rc 0, no conflict, tree `cc210154808b998d9c0113d50aebc8bf762faa8b`.
+- That tree differs from the base's (`ea205a2bc0b7`) in one file: `benchmarks/verifier_cost/whole_run.py`, 7 lines added, 4 removed.
+- It differs from the tree `997a` ran in two files, neither ours: `benchmarks/prove_path/prove_path.py` and `tools/verity/check/public_boundary.toml`. No suite was run on the merged tree itself. I expect the root suite whole there [guess].
+
+**ci's answer** [read, your 02:48Z mailbox entry and lean's 02:42Z on LEAN-249; the merge by `git log` of the base]: ci took the three lines as `93969b045cad`, and lean merged it. So our 9 edges should be gone on the base's head [not run there by me].
+
+**The text for LEAN-249**, handle-free, between the two rules:
+
+---
+
+To lean's 6:42 PM PST (02:42Z). **The `whole_run.py` commit is run. Take `efc525cff78f8aaaf167c0afa0b7062f5e70b8ea` on `cursor/proofs-remote-cures-dac3`: it is the `0d3b99b9ee21` you merged, the base at `cff6e6fb8909`, and one commit of ours in one file. It merges onto the base's head `8857f4a67f95` with no conflict.**
+
+- **What it changes:** `benchmarks/verifier_cost/whole_run.py`, the input writer of `whole_run.sh`, 7 lines added and 4 removed. It asked for the fixed count `stratified:K`, which `service.Law` refuses, so the benchmark stopped before it timed anything. It now states `stratified-rate:1/population`, and takes the record's design and the statement's count from `service.params_law` and `draw.derive`, as `test_difftest._v1_audit` does.
+- **What it samples:** one unit a stratum, 3 on the toy shape and 7 on l5. The fixed count drew 4 and 9. The program, the query, the population and the ports at each size are unchanged.
+- **Under nothing:** the file is in no suite, no Lake package and no lock.
+- **The run** [`r20261111-024311-997a` on vy-nebius-cpu-3, at `efc525cff78f`; each part's own line read]:
+  - `whole_run.sh run toy 146 1000`: `whole-run-time` builds, 462 jobs. 40 rows, both runs `accept`, 20 steps each, no timeout.
+  - `benchmarks/one_stage` `--quick`: 876 passed. `benchmarks/live_challenger` `--quick`: 654 passed.
+  - Root suite `--quick`: 279 passed, 2 failed, `test_public_boundary` and `test_vllm_boundary`. That tree holds neither ci's `93969b045cad` nor network-accounting's `d38d1641cd03`. With ci's three lines applied in the clone the tool counts 0 edges and `tests/test_public_boundary.py` is 43 passed.
+  - `whole_run.sh desc l5 146`, the runner's other mode: 18 rows, no timeout [`r20261111-022949-e2c1` on vy-nebius-cpu-1, the same file on `0d3b99b9ee21`].
+- **The merge** [`git merge-tree --write-tree 8857f4a67f95 efc525cff78f`]: no conflict, tree `cc210154808b998d9c0113d50aebc8bf762faa8b`. It differs from the base's tree `ea205a2bc0b7` in that one file.
+- **Not run:** any suite on the merged tree. It differs from the tree the run had in `benchmarks/prove_path/prove_path.py` and `tools/verity/check/public_boundary.toml`, neither ours. The Lean check: no file of a Lake package changes.
+
+---
+
+**Left:**
+
+1. lean's merge of `efc525cff78f`, after you post the text. If the base moves first, the same `git merge-tree` line with the new head says whether it still merges.
+2. TRN-83's `README.md` line, a PR of its own from the moved `main`. `main` reads `a930252c4993`, no move, at 03:17Z [run]. When it lands: the branch, `tests/test_documented_commands.py` and the directory's quick suite on a node, `research queue open`, and "ready to mark #N at SHA".
+3. Never run by me: a served run on a GPU node; `benchmarks/prove_path`'s slow tests; the Lean check.
