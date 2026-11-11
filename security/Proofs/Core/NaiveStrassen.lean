@@ -92,7 +92,8 @@ def h200Measured : List Atom :=
   [s8, ⟨8, 33, some (32, 14)⟩, ⟨8, 17, some (32, 14)⟩, ⟨16, 4097, some (16, 24)⟩, ⟨16, 513, some (16, 24)⟩,
     ⟨32, 4097, some (8, 24)⟩, b1]
 
-/-- The RTX PRO 6000 at the measured `k` (f16 and bf16 at 16, f16 at 8 at twice the weight, tf32 at 4). -/
+/-- The RTX PRO 6000 at the measured `k` (f16 and bf16 at 16, f16 at 8 at twice the weight, tf32 at 4), its `b1`
+`rtx6000Sheet`'s, at the H200's weight 1/8. -/
 def rtx6000Measured : List Atom :=
   [s8, ⟨8, 33, some (32, 24)⟩, ⟨8, 17, some (32, 24)⟩, ⟨8, 9, some (32, 24)⟩, ⟨4, 9, some (64, 24)⟩,
     ⟨16, 4097, some (16, 24)⟩, ⟨32, 4097, some (8, 24)⟩, ⟨16, 513, some (16, 24)⟩, ⟨32, 4097, some (4, 24)⟩, b1]
