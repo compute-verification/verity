@@ -152,7 +152,7 @@ def test_a_token_with_no_valid_row_writes_zeros():
 def test_bad_statics_are_refused_by_name(fn, kw, needle):
     extra = {k: v for k, v in (("DOT", P.HopperBF16WgmmaDot16), ("SCALE", 0.25)) if k in fn.statics}
     with pytest.raises(ValueError, match=needle):
-        bind(fn, **kw, **extra).body
+        _ = bind(fn, **kw, **extra).body
 
 
 # --- the Boolean Definitions --------------------------------------------------------------------------------------------------------

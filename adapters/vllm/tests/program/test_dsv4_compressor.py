@@ -242,7 +242,7 @@ def test_the_state_score_at_both_widths(W):
 ], ids=["ratio", "width", "group", "quant-group", "warps", "rope", "rows", "eps"])
 def test_bad_statics_are_refused_by_name(fn, kw, needle):
     with pytest.raises(ValueError, match=needle):
-        bind(fn, **kw).body
+        _ = bind(fn, **kw).body
 
 
 # --- the Boolean Definitions -------------------------------------------------------------------------------------------------------

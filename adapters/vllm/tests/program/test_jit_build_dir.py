@@ -157,7 +157,7 @@ def test_concurrent_first_users_resolve_one_path_compile_once_and_load_it(tmp_pa
     def first_user() -> None:
         go.wait()
         lib = _jit.atomic_build(_jit.lib_path("libtc_model.so"), [src], compile_to)
-        ctypes.CDLL(str(lib)).tc_records
+        _ = ctypes.CDLL(str(lib)).tc_records
         loaded.put(str(lib))
 
     users = [ctx.Process(target=first_user) for _ in range(6)]

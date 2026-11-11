@@ -30,7 +30,7 @@ from verity.circuits import Program, bind
 from verity.circuits.codec import encode_program, program_digest
 from verity.circuits.defs import composite
 from verity.circuits.refs import array_of, tuple_of
-from verity.definitions.registry import b1, lifted as L, moe, moe_pad as MP, prims as P
+from verity.definitions.registry import b1, lifted as L, moe, moe_pad as MP
 from verity.definitions.numerics import serve3_reference as ref
 from verity.definitions.registry.prims import BF16, F32, I32
 from verity.circuits.types import Array, Tuple

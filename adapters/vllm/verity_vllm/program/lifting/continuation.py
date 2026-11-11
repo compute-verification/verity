@@ -31,9 +31,10 @@ Everything here is labelled `lifted-padded` and carries `CONTINUATION_VERSION` b
 """
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from collections.abc import Iterable, Sequence
+from dataclasses import dataclass
 from enum import Enum
-from typing import Any, Callable, Iterable, Sequence
+from typing import Any
 
 from verity.definitions.registry import lifted as L
 from verity_vllm.program.lifting import lifted_records

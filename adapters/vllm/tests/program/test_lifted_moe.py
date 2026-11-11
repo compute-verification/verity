@@ -29,7 +29,7 @@ import pytest
 from verity.circuits import Program, bind
 from verity.circuits.codec import descriptor_id, encode_program, program_digest
 from verity.circuits.defs import composite
-from verity.circuits.refs import Coll, array_of, coll_concat, tuple_of
+from verity.circuits.refs import array_of, tuple_of
 from verity.definitions.registry import b1, lifted as L, moe, prims as P
 from verity.definitions.numerics import serve3_reference as ref
 from verity.definitions.registry.prims import BF16, F32, I32

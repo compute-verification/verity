@@ -26,7 +26,6 @@ import pytest
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
 from verity.circuits import Program, bind
-from verity.circuits.defs import REGISTRY
 from verity.definitions.registry import b1, lifted as L, pad_prims as PP, prims as P
 from verity_vllm.program.lifting import lifted_records
 from verity_vllm.program.lifting import lifted_compose

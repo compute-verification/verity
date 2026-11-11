@@ -14,7 +14,7 @@ import pytest
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
 L = pytest.importorskip("verity.definitions.registry.lifted")
-pytest.importorskip("verity.definitions.registry.lifted", reason="the lifted registry").leaf_words  # DENSE B1 additions present?
+_ = pytest.importorskip("verity.definitions.registry.lifted", reason="the lifted registry").leaf_words  # DENSE B1 additions present?
 
 from verity.circuits import Program  # noqa: E402
 from verity.definitions.registry import b1  # noqa: E402

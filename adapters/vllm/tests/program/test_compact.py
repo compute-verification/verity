@@ -1,9 +1,10 @@
-import pytest
 """cb_a.compact: run progressions are the record's maximal runs, run-length-encoded over (idx, lo, hi) -- built from the
 descriptor's refs JSON without expanding a Strided or a gather over consecutive producers, equal iff the run lists are equal, expandable
 back to the record's bytes."""
 import json
 import random
+
+import pytest
 
 from verity_vllm.program import compact as K
 from verity_vllm.observe.fold.memory import access_runs
@@ -102,6 +103,25 @@ def test_alias_splices_the_aliased_operand_like_the_codec():
             assert K.from_json(j, alias=lambda k, a_: node0) == K.from_runs(runs(refs_from_json(plain)))
 
 
+def _rle_runs(mapped_runs: list[tuple], n_base: int) -> list[tuple]:
+    """Reference for `rle_mapped`: greedy RLE (no contiguity merge) of a mapped run list whose last `n_base` fields are the integers."""
+    out: list[tuple] = []
+    for t in mapped_runs:
+        head, v = t[:-n_base], t[-n_base:]
+        if out:
+            p = out[-1]
+            ph, pb, pd, pc = p[:-3], p[-3], p[-2], p[-1]
+            if ph == head:
+                if pc == 1:
+                    out[-1] = head + (pb, tuple(x - y for x, y in zip(v, pb)), 2)
+                    continue
+                if v == tuple(b + pc * d for b, d in zip(pb, pd)):
+                    out[-1] = head + (pb, pd, pc + 1)
+                    continue
+        out.append(head + (v, (0,) * n_base, 1))
+    return out
+
+
 def test_rle_of_mapped_progressions_equals_rle_of_the_mapped_runs():
     rng = random.Random(99)
     for _ in range(6000):
@@ -113,7 +133,7 @@ def test_rle_of_mapped_progressions_equals_rle_of_the_mapped_runs():
             delta = (rng.choice([0, 1]), rng.choice([0, 1, 3, -2]), rng.choice([0, 1, 3, -2])) if c > 1 else (0, 0, 0)
             items.append(head + (base, delta, c))
         m = K.rle_mapped(items)
-        assert m == K.rle_runs(K.expand(items), 3), (items, m)
+        assert m == _rle_runs(K.expand(items), 3), (items, m)
         assert K.expand(m) == K.expand(items)
 
 
@@ -255,7 +275,6 @@ def test_tp_rank_compare_in_compact_form_is_the_records(tmp_path, monkeypatch):
     # the two-rank fold persisted as runs and as progressions: the TP collective-row reader
     # (rank_match.own_producers_from_record, the one consumer of NODE-space refs from the file) reads the same producers from either store,
     # and the cross-rank verdict over them is the same PASS; every negative above is a compare negative, this check is the record reader's.
-    import os
     from verity_vllm.pipeline import match as RC
     from verity_vllm.check.match import rank_match as RM
     folds = {r: T.fold_rank(r) for r in (0, 1)}
@@ -416,7 +435,6 @@ def test_persist_program_progressions_form_gives_the_same_prog_and_document_and_
     compact form) and the GM-01 document are identical over both files; (3) no sidecar, same fold digest; (4) the header AND the loader
     name the form."""
     import os
-    import shutil
     from verity_vllm.pipeline import match as RC
     from verity_vllm.check.match import program_compare as C
     from verity_vllm.check.match import global_match as gm

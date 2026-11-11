@@ -125,7 +125,7 @@ def test_layout_is_the_ptx_loads() -> None:
                                           (512, 1e-39, "below 2\\^-126")])
 def test_statics_are_checked(N: int, EPS_: float, match: str) -> None:
     with pytest.raises(ValueError, match=match):
-        bind(DN.DsaRMSNorm, N=N, EPS=EPS_).body
+        _ = bind(DN.DsaRMSNorm, N=N, EPS=EPS_).body
 
 
 @pytest.mark.parametrize("N", [512, 2048])
@@ -208,7 +208,7 @@ def test_dsa_rmsnorm_is_the_unmasked_four_warp_block(N: int) -> None:
                                            ({"N": 4096, "BLOCK": 2048, "WARPS": 8}, "whole vectors")])
 def test_block_statics_are_checked(statics: dict, match: str) -> None:
     with pytest.raises(ValueError, match=match):
-        bind(DN.TritonBlockRMSNorm, EPS=EPS, **statics).body
+        _ = bind(DN.TritonBlockRMSNorm, EPS=EPS, **statics).body
 
 
 def test_block_registrations() -> None:

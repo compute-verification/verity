@@ -315,7 +315,6 @@ def hash_operand(items: list[tuple]) -> list | dict:
 # since the GLM-5.3 scattered weight reads: a transposed-weight operand is ~2048 parameter-space progressions over ~1e6 runs, which the
 # first v2 form, node-space progressions only, stored run by run.)  `file_items_from_runs` is lossless:
 # `runs_from_file_items(file_items_from_runs(R)) == R` for every run list R (the greedy rule is a function of the run list and expands back).
-FILE_PROG = "N"
 _FILE_MARKERS = {"n": "N", "p": "P"}   # space -> stored progression marker
 _FILE_SPACES = {"N": "n", "P": "p"}    # stored progression marker -> space
 
@@ -463,25 +462,6 @@ def rle_mapped(items: list[tuple]) -> list[tuple]:
                     out.append(head + (_add(base, delta, 1), delta if rest > 1 else (0,) * len(base), rest))
                     continue
         out.append(head + (base, delta, c))
-    return out
-
-
-def rle_runs(mapped_runs: list[tuple], n_base: int) -> list[tuple]:
-    """Reference for `rle_mapped`: greedy RLE (no contiguity merge) of a mapped run list whose last `n_base` fields are the integers."""
-    out: list[tuple] = []
-    for t in mapped_runs:
-        head, v = t[:-n_base], t[-n_base:]
-        if out:
-            p = out[-1]
-            ph, pb, pd, pc = p[:-3], p[-3], p[-2], p[-1]
-            if ph == head:
-                if pc == 1:
-                    out[-1] = head + (pb, _sub(v, pb), 2)
-                    continue
-                if v == _add(pb, pd, pc):
-                    out[-1] = head + (pb, pd, pc + 1)
-                    continue
-        out.append(head + (v, (0,) * n_base, 1))
     return out
 
 

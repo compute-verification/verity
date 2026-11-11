@@ -56,8 +56,8 @@ def test_a_prefix_row_without_prompt_ids_is_refused():
 def test_shape_keys_and_names_keep_every_uncached_shape():
     assert PP.shape(168, 9) == (168, 9) and PP.shape(168, 9, 0) == (168, 9) and PP.shape(168, 9, 128) == (168, 9, 128)
     assert PP.shape_name((168, 9)) == "LP168_T9" and PP.shape_name((168, 9, 128)) == "LP168_T9_C128"
-    assert PP.shape_key((168, 9, 128)) == "168,9,128" and PP.parse_shape_key("168,9") == (168, 9)
-    assert PP.cached_rows(PP.parse_shape_key("168,9,128")) == 128 and PP.cached_rows((168, 9)) == 0
+    assert PP.shape_key((168, 9, 128)) == "168,9,128" and PP.shape_key((168, 9)) == "168,9"
+    assert PP.cached_rows((168, 9, 128)) == 128 and PP.cached_rows((168, 9)) == 0
 
 
 def test_a_warm_prefill_launches_its_uncached_suffix_from_row_c():

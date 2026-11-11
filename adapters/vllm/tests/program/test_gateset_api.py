@@ -90,10 +90,6 @@ def sweep(program, sets) -> tuple[bool, bool, int]:
     return (not overlap), (not overlap and covered == program.gates), covered
 
 
-def all_items(spec):
-    return frozenset((j, m) for j, node in enumerate(spec.body.nodes) for m in range(n_members(node)))
-
-
 # -- GateSet -----------------------------------------------------------------------------------------------------
 
 

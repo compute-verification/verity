@@ -148,7 +148,9 @@ def test_the_decode_split_is_attention(NH: int, KVH: int, D: int) -> None:
     rng = np.random.default_rng(D)
     T = 1000
     q, kc, vc = _bf16(rng, (NH, D)), _bf16(rng, (T, KVH, D)), _bf16(rng, (T, KVH, D))
-    val = lambda a: (a.astype(U32) << 16).view(np.float32).astype(np.float64)
+    def val(a):
+        return (a.astype(U32) << 16).view(np.float32).astype(np.float64)
+
     kf, vf = (np.transpose(val(a), (1, 0, 2))[np.arange(NH) // (NH // KVH)] for a in (kc, vc))
     s = np.einsum("hd,htd->ht", val(q), kf) * D ** -0.5
     p = np.exp(s - s.max(axis=1, keepdims=True))

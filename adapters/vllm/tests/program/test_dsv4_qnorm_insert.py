@@ -463,7 +463,7 @@ def test_the_twin_pads_heads_with_zero():
 ])
 def test_bad_statics_are_refused_by_name(fn, kw, needle):
     with pytest.raises(ValueError, match=needle.replace("[", r"\[").replace("]", r"\]")):
-        bind(fn, **kw).body
+        _ = bind(fn, **kw).body
 
 
 # --- the Boolean Definitions -----------------------------------------------------------------------------------------------------

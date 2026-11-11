@@ -9,8 +9,6 @@ Kernels (SmolLM2-135M, stock compiled vLLM, ``custom_ops none``, IR-op priority 
   ``out = bf16((x * s) * w)``, ``s = libdevice.rsqrt(sum(x*x)/H + eps)`` (FP32).
 * ``triton_per_fused_fused_add_rms_norm_t_0``  ``z = x + residual`` kept in FP32 (the graph's
   bf16 convert is elided), ``out = bf16((z * s(z)) * w)``; no residual output.
-* ``triton_per_fused_fused_add_rms_norm_t_2``  ``z = down + (o_proj + residual)`` both adds FP32,
-  ``residual_out = bf16(z)``, ``out = bf16((z * s(z)) * w)``.
 * ``triton_poi_fused_mul_silu_slice_t_1``  ``out = bf16((g / (1 + exp(-g))) * u)``, ONE rounding.
 
 The eager counterparts (vLLM CUDA / Triton kernels, modelled by W4b in ``beyond_gemm.py``) round
@@ -80,13 +78,6 @@ def fused_add_rms_norm_eager(x_bf16: np.ndarray, residual_bf16: np.ndarray, w_bf
     r = f32_to_bf16((bf16_to_f32(x_bf16) + bf16_to_f32(residual_bf16)).astype(np.float32))
     z = bf16_to_f32(r)
     return rms_rows(z, w_bf16, ulp_offset(ieee_inv_rms(z, eps), k)), r
-
-
-def fused_add_rms_norm_two_outputs_compiled(down_bf16: np.ndarray, o_proj_bf16: np.ndarray, residual_bf16: np.ndarray, w_bf16: np.ndarray, eps: float, k: int = 0) -> tuple[np.ndarray, np.ndarray]:
-    """Model of ``triton_per_fused_fused_add_rms_norm_t_2``: two FP32 adds, residual rounded once at
-    the store, normalisation from the unrounded chain. Returns (normed, residual_out)."""
-    z = (bf16_to_f32(down_bf16) + (bf16_to_f32(o_proj_bf16) + bf16_to_f32(residual_bf16)).astype(np.float32)).astype(np.float32)
-    return rms_rows(z, w_bf16, ulp_offset(ieee_inv_rms(z, eps), k)), f32_to_bf16(z)
 
 
 def silu_mul_compiled(gate_up_bf16: np.ndarray) -> np.ndarray:
