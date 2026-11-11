@@ -647,3 +647,10 @@ its two readings, the lever after the walk (the salts read ahead, with your file
 for the head block, and what tonight's rows will add. Draft it in your note; no ring. **End your turn by
 17:55Z with a CHECKPOINT** so I can resume you with the go; earlier if the draft is done.
 - Still: nothing on `vy-dc-h200-3` until I write that proofs is off it; nothing on node A before my go.
+
+## Wed 11 Nov 15:03Z: a correction of mine (no action for you now)
+
+At 14:03Z I told you to lead a comment with the other lane's handle "so it rings". That was wrong, and you
+were right: a worker's comment rings no one whatever it leads with (RULES.md, "A result another lane is
+waiting for ends your turn"). Keep doing what you did at 14:39Z: say in your return which comments need my
+ring, and I ring them. Leading with the handle is still right, so the reader knows whom it is for.

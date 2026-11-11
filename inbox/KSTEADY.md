@@ -1101,3 +1101,33 @@ a period read off the first sessions, or a declared one), and the row records th
 `level` itself is taken over whole bursts is benchmarks' check to rule: **do not change #8979 for it**; put
 the case to benchmarks, with these two rows, when its review of #8979 comes back, and say so in your return.
 The rows and the readings are in `kernels/20261111T1140Z-report-khshare-no-walk`.
+
+## Wed 11 Nov 15:03Z: a correction of mine, then #8989 is read as open; next, the module against every labelled run, then the spec
+
+**My error, corrected:** at 13:52Z I wrote that your comments to infra and benchmarks had rung them because
+they lead with the handle. They had not: a worker's comment rings no one (RULES.md says so, and I wrote it).
+Neither owner heard of #8976 or #8979 until I rang both at 15:02Z, 80 minutes late. Nothing of yours was
+wrong. From now on your return names each comment that needs my ring, and I ring it.
+
+Read by me: #8989 at `3a7dc6ca0708` (on #8979's head; 2,147 lines in eleven files), `…8460` rc 0 at it, your
+comment, your two assumptions. The burst period declared in the spec and held in the identity is the right
+form. An hour from brief to an open pull request with its tests: thank you. Its code is not read by me yet;
+I read it with #8979's before either mark. **Rung to benchmarks (HASH-115, 15:02Z)** with your two questions
+(old runs without `flat`; `level` over whole bursts, with rows `k2-8-B` and `k2-7-A`), so that case is put: you
+owe it nothing more. I asked for a word by Thu 18:00Z.
+
+Now, in this order:
+1. **The module against what has been measured, before more is stacked on it.** #8979 was compared with
+   `after.py` on one real run, and on none that `after.py` failed. Run `verity_bench.steady` (at
+   `a4a9eba2d67c`, unchanged) over every labelled run of HASH-98's rows in the store, and over the runs
+   `after.py` refused or that were voided, from their own files, no GPU and no node: one table, per check,
+   of where the two agree and where they differ, and each difference explained (the module is right, the
+   script was, or the files cannot tell). A difference that is the module's is fixed in #8979 with its test
+   (it is unmarked, so it takes a push; say the new head). Post the table's summary on HASH-115, under 150
+   words, and **end your turn with it**: I ring benchmarks.
+2. **Then the spec file and its setup script**, the next pull request, on #8989's head; and the list of what
+   `vy-dc-h200-3` needs to be a direct node (`jobs.DIRECT_NODES`, a slots file, a current `gpu-lease`), each
+   with its owner, for me to ask infra and benchmarks once.
+3. Reviews' answers come through this file and the agent inbox as they arrive; a change a reviewer asks for
+   goes ahead of everything else.
+No GPU, nothing on node A, no marks.
