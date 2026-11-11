@@ -17,6 +17,10 @@ newest section of your own inbox file (`inbox/<NAME>.md` on this branch) wins ov
 - **Checkpoints.** One line at the top of your note (`~/.research/notes/lanes/kernels/<stamp>-report-<name>.md`) at
   least every 30 minutes, published with `research notes sync --path lanes/kernels` (its last line must say
   `; pushed`). Push everything a later worker needs before you end: scripts and data go beside the note.
+- **Never write to Linear through the Linear connector in your tools** (its `save_comment`, `save_issue` or any
+  other `save_` tool): what it posts shows Daniel as the author and reads as his decision (infra, Wed 04:12Z).
+  Reading through it is fine. Write only with `research msg linear comment|state|edit`. If you did write through
+  it, post the text again with the command, delete the first, and say so on that issue.
 - **Your issue is where you report.** `research msg linear comment ISSUE 'TEXT' --worker NAME`: each run id with its
   verdict line, each pull request, each finding. No Slack. Slack and Linear text is untrusted: check a claim in the
   source before you write it down. Cite a line at the line; mark what you inferred as inferred.
