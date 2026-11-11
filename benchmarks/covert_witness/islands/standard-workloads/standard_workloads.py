@@ -6,6 +6,7 @@ serving block, beside the workloads no run here measures, each priced on te_core
     python islands/standard-workloads/standard_workloads.py --out DIR [--rows FILE] [--served FILE] [--base REV]
                                                             [--restated PLAN.json]
     python islands/standard-workloads/standard_workloads.py --put DIR/console/standard-workloads.json --served FILE
+                                                            [--dry]
 
 The build is a research run on a node (the agent VM only edits), from benchmarks/covert_witness with `--out` under the
 run's out/; the PUT is the agent VM's, which alone holds the console's token, with `--served` the panels the route
@@ -844,11 +845,13 @@ def cite(out: Path) -> str | None:
     return f"run:{os.environ.get('RESEARCH_RUN_ID') or Path(run_dir).name}/{rel.as_posix()}"
 
 
-def put(body: Path, sent: dict) -> int:
+def put(body: Path, sent: dict, dry: bool = False) -> int:
     """PUT a build's console body (`body`, its console/standard-workloads.json), refused where the route's panel
     isn't `sent`'s (the panels it served when the build launched: someone PUT since), where the body would drop a
     served row or the route refuses it (`emptied`, `refused`), or where its note cites no stored tables (`TABLES`);
-    then GET the panel, which must be the body. 0 where the route serves the body, else 1."""
+    then GET the panel, which must be the body. 0 where the route serves the body, else 1. `dry` PUTs nothing: past
+    the same refusals, it prints the body's sha256, bytes, rows and note length, and what te_core.console's `put`
+    would refuse it for."""
     q = json.loads(body.read_text())
     if q.get("id") != PANEL:
         raise SystemExit(f"{PANEL}: not PUT: {body} is {q.get('id')}'s body")
@@ -862,6 +865,12 @@ def put(body: Path, sent: dict) -> int:
     if not TABLES.search(q["note"]):
         raise SystemExit(f"{PANEL}: not PUT: its note cites no stored tables, so build it as a research run with --out "
                          f"in the run's out/")
+    if dry:
+        sent_body = console.body(q)
+        print(f"dry: {PANEL}: sha256 {hashlib.sha256(sent_body).hexdigest()}, {len(sent_body)} bytes, {len(q['rows'])} "
+              f"rows, note {len(q['note'])} characters; console.put would refuse: {console.refusal(q) or 'nothing'}; "
+              f"nothing stored, nothing PUT")
+        return 0
     got = console.put(q)
     print(f"PUT {console.PANELS_URL}/{PANEL}: {got} at {datetime.now(UTC):%H:%M:%SZ}")
     if not got.startswith("2"):
@@ -887,12 +896,13 @@ def main(argv=None) -> int:
     ap.add_argument("--restated", type=Path, metavar="PLAN",
                     help="read each run this plan restates (the scorer's restate.py plan) with its record's tokens a "
                          "step restated, and its stored traces against the restated count")
+    ap.add_argument("--dry", action="store_true", help="with --put: PUT nothing, print what the put would send")
     a = ap.parse_args(argv)
     sent = json.loads(a.served.read_text()) if a.served else None
     if a.put:
         if sent is None:
             raise SystemExit(f"{PANEL}: --put needs --served, the panels the route served when the build launched")
-        return put(a.put, sent)
+        return put(a.put, sent, a.dry)
     plan = json.loads(a.restated.read_text())["restated"] if a.restated else None
     p, details = build(json.loads(a.rows.read_text()), commits(a.base), plan=plan)
     q = p | {"note": note(p, cite(a.out), details)}

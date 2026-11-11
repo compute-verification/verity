@@ -5,7 +5,10 @@ frontier's least S = p·ρ, in the dashboard's columns (`COLUMNS`).
     python islands/ladder-v3/size_scaling.py trace --out DIR [--only NAME,...]   # on a node, with torch: the steps
     python islands/ladder-v3/size_scaling.py build --tables DIR --ledger DIR --steps DIR --out DIR \
         [--trace-runs RUN | NAME=RUN,...]
-    python islands/ladder-v3/size_scaling.py put FILE                            # on the VM: PUT a built body
+    python islands/ladder-v3/size_scaling.py put FILE [--dry]                    # on the VM: PUT a built body
+
+`put --dry` PUTs nothing: it prints the body's sha256, bytes, rows and note length, and what te_core.console's `put`
+would refuse it for.
 
 Run from `benchmarks/covert_witness/`. c and |C| are Boolean gates (te_core.gates), k bits.
 
@@ -49,6 +52,7 @@ figure (`unpriced`: products not classified at the policy's k, where it is off t
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import math
 import sys
@@ -457,6 +461,7 @@ def main(argv=None) -> int:
     b.add_argument("--art", default=None, help="the tables' art id, for the source")
     u = sub.add_parser("put")
     u.add_argument("file", type=Path)
+    u.add_argument("--dry", action="store_true", help="PUT nothing: what the put would send")
     a = ap.parse_args(argv)
     if a.cmd == "trace":
         a.out.mkdir(parents=True, exist_ok=True)
@@ -488,6 +493,12 @@ def main(argv=None) -> int:
     p = json.loads(a.file.read_text())
     if console.refused(p) or len(console.body(p)) > console.BODY_MAX or len(p["note"]) > console.NOTE_MAX:
         raise SystemExit(f"size_scaling put: the route refuses {a.file}: {console.refused(p)}")
+    if a.dry:
+        body = console.body(p)
+        print(f"dry: {p['id']}: sha256 {hashlib.sha256(body).hexdigest()}, {len(body)} bytes, {len(p['rows'])} rows, "
+              f"note {len(p['note'])} characters; console.put would refuse: {console.refusal(p) or 'nothing'}; nothing "
+              f"stored, nothing PUT")
+        return 0
     print(f"PUT {console.PANELS_URL}/{p['id']}: {console.put(p)} at {datetime.now(UTC).strftime('%H:%M:%SZ')}")
     return 0
 
