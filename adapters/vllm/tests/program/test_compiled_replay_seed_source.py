@@ -1,9 +1,10 @@
-"""The compiled check's sampled-replay seed is POST-COMMITMENT AS A FACT.
+"""The compiled check's sampled-replay seed is the run root's first 4 bytes, and the record names that form.
 
 commit_delta samples the CompiledKernelCheck's random steps from the run root: seed = int(run_root.hex()[:8], 16) (first 4 bytes), and
-records that form on value_correspondence.compiled_check.seed_source (COMPILED_REPLAY_SEED_SOURCE).  The finalizer recomputes the seed from
-the same runs.jsonl's run_root and refuses any other value.  Torch-free: the constant and the call site are read from the source text (the
-module imports torch/vllm), and the rule is exercised on the recorded compiled runs when present.
+records that form on value_correspondence.compiled_check.seed_source (COMPILED_REPLAY_SEED_SOURCE).  The seed has no coin (a prover
+steers the sampled steps by committing again, in at most about 2^32 tries) and no rule of the verdict recomputes or grades it: this file
+alone recomputes it.  Torch-free: the constant and the call site are read from the source text (the module imports torch/vllm), and the
+recomputation is exercised on the recorded compiled runs when present.
 """
 from __future__ import annotations
 
@@ -57,6 +58,6 @@ def test_every_compiled_record_of_this_lane_carries_the_root_seed() -> None:
                 continue
             assert vc["seed"] == seed_of_record(c["run_root"]), f
             src = vc.get("seed_source")
-            assert src in (None, FORM), (f, src)      # records before this commit carry no form; the finalizer's fallback is the recomputation
+            assert src in (None, FORM), (f, src)      # older records carry no form; the recomputation above holds for them too
             checked += 1
     assert checked >= 0
