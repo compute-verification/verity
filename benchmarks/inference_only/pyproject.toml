@@ -1,0 +1,26 @@
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["."]
+markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]
+
+[tool.verity.tests]
+# The benchmark prices a policy with the slowdown calculator's bound, fleets and periods
+# (`verity/protocols/inference_only/rho`: `rho.min_cut`, `periods.py`, its registry and what that reads of the census,
+# the inference-only policy's calibrations and the reporting grid, `verity.protocols.reporting`), and each proved or
+# assumed name's standing from the locks (`rho.lean`). A block's work is priced as a served step is
+# (`benchmarks/one_stage`'s `served_shares` and `served_verdicts`, which imports `served_overhead`). The built class's
+# record, its counts and the model's shape are the integration's (`adapters/vllm`: `verity_vllm` and its manifests),
+# over `verity`. The run's variables are read through `verity_config.settings`, and the count's executable and module
+# are named by its Lake package's `lakefile.toml`. The tests check the count's refusal with its Python reference
+# (`nci_reference.py`), which the count's difftest holds the Lean to, so the suite builds no Lake package.
+inputs = ["verity/protocols/inference_only/rho",
+          "benchmarks/one_stage/served_shares.py", "benchmarks/one_stage/served_verdicts.py",
+          "benchmarks/one_stage/served_overhead.py",
+          "adapters/vllm/verity_vllm", "adapters/vllm/manifests", "verity",
+          "verity/protocols/inference_only/verifier/nci/lean/scripts/nci_reference.py",
+          "verity/protocols/inference_only/verifier/nci/lean/lakefile.toml",
+          "security/lean-audit.json", "security/Properties/lean-audit.json",
+          "benchmarks/census/hardware.json", "benchmarks/census/adversary.json", "benchmarks/census/deployments.json",
+          "verity/protocols/inference_only/nci/tiers.py", "verity/protocols/inference_only/nci/slowdown.py",
+          "verity/protocols/inference_only/nci/catalog.py", "verity/protocols/inference_only/nci/algorithms.json",
+          "verity/protocols/inference_only/nci/calibrations.json", "verity/configuration/config/verity_config"]

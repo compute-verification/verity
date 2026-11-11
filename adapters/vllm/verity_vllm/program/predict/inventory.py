@@ -82,7 +82,8 @@ def row_record(rd: str) -> dict:
         rec["builds"][name] = _workload_dir(bd) if unit_kind(name) == "build_workload" else _build_dir(bd)
     src = _j(os.path.join(rd, "source_identity.json")).get("requested_root")
     rec["source_root"] = src
-    wp = str(workload_file(os.path.join(src, "integrations", "vllm", "workloads", f"{row}.json"))) if src else None
+    top = "adapters" if src and os.path.isdir(os.path.join(src, "adapters", "vllm")) else "integrations"
+    wp = str(workload_file(os.path.join(src, top, "vllm", "workloads", f"{row}.json"))) if src else None
     rec["workload_path"] = wp
     rec["workload"] = None
     if wp and os.path.exists(wp):

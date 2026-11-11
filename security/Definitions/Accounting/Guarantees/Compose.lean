@@ -176,12 +176,15 @@ with `a·d_F + b·d₀ < max(5a, (1 + κ₀)·b)·ln(1/δ_s)/(ρ·K_d) + a·Π_F
 `rOfSeeded`, `Π_F` and `Π_0` the seed groups' premiums `π* = ln(T_q/δ_g)/θ` from the IR at the folded and the whole
 rates, `premiumOf`), except with probability `δ_s + δ_bind + δ_ks + ε_id(T, |J|) + 2·rounds·(δ_g + δ_b)`. `a > 0`
 makes the bound positive, which `WorkAt`'s strict `<` needs. The premium's `T_q` and `δ_bind`, `δ_b` are read at one
-prover budget: at `2^128` a fork finder gives `δ_bind ≈ |L|·2^-64` (`BindingOfECR`).
+prover budget: at `2^128` a fork finder of that expected cost gives `δ_bind ≈ |L|·2^-64` (`BindingOfECR` at its best
+`δ'` and at `κ = 0`).
 
-Its luck line is per seed group from the IR at GRIND's shapes (every linear its own round, attention uncredited,
-`a = 0.218`, `b = 0.998`, `K_d = 96,000`, `δ_s = 2^-40`, `T_q = 2^128` and `δ_g = 2^-40/(2·rounds)`, so the grinding
-events total `2^-40`), and its whole skips' premium is most of it. No ruling grants a whole-tile luck per seed query
-(the ruling decided `½` for the live line only), so each number is conditional on the premise its `wholeTheta` reads:
+Its luck line is per seed group from the IR at GRIND's shapes (every linear its own round, with q/k/v one linear and
+gate/up one, and attention's two matmuls rounds of their own, uncredited: six rounds a layer, four of them credited
+seed groups; `32 × 32` tiles, `a = 0.218`, `b = 0.998`, `K_d = 96,000`, `δ_s = 2^-40`, `T_q = 2^128` and
+`δ_g = 2^-40/(2·rounds)`, so the grinding events total `2^-40`), and its whole skips' premium is most of it. No ruling
+grants a whole-tile luck per seed query (the ruling decided `½` for the live line only), so each number is conditional
+on the premise its `wholeTheta` reads:
 * at `½` a query (B′'s value read per query, `WholeEntropyAt` at `ln 2`; what the decided value gives here), the
   whole moment `½e^{x₀} + ½e^{−κ₀x₀} ≤ 1` needs `κ₀ > 1` and has `x₀ < ln 2`, so a whole skip costs about 177 tiles a
   seed group: at the best `κ₀` (8.5) the line is 56.1%, 56.3% and 56.8% at `r = 1, 2, 4` for Llama-3.1-8B decode at
@@ -189,7 +192,8 @@ events total `2^-40`), and its whole skips' premium is most of it. No ruling gra
   premises the seeded pair says nothing useful at small-batch decode;
 * under `GuessLuckAt` at `2^-64` (proposed, not granted), `κ₀ = 0.092` and `x₀ = 44.34` nats a tile, about 2.8 tiles a
   seed group whatever `K` is: 1.120%, 1.152% and 1.214% at 8B decode up to batch 32 (`Π_F` 0.057%, `Π_0` 1.078%), 0.576%
-  at batch 64, 0.168% at 256, 0.048% at prefill and 0.587% for 70B decode (0.824% and 0.437% at `T_q = 2^80`);
+  at batch 64, 0.168% at 256, 0.048% at prefill and 0.587% for 70B decode (at `T_q = 2^80`, 0.824% for 8B decode at
+  `r = 1` and 0.437% for 70B decode);
 * under `WholeEntropyAt` at `K/8` nats a tile (proposed, not granted), the whole skips at the folded rate: 0.101%,
   0.133% and 0.196% at 8B decode, below the live pair's 0.173% closed.
 

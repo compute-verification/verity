@@ -53,8 +53,9 @@ ingress through `t`, the inputs off `chk` and the held values (`CheckedUnique`).
 
 **The relation.** On `RAcc δ`, the trace run with the incorrect proof blocks' committed gates held at the trace's values
 (`heldAdv`) is the run the count reads at the inputs pinned to the trace (`inputOf_full`), so where it is `valid`,
-`RLeakChecked δ` holds (`rLeakChecked_of`). Otherwise the check missed, which `CheckedWitness` bounds by `εchk`, so
-`KSLinOn` moves from `RAcc δ` to `RLeakChecked δ` at `κ + εchk` (`ksLinOn_rLeakChecked`).
+`RLeakChecked δ` holds (`rLeakChecked_of`). Otherwise the check missed on the trace's run, which `CheckedWitness` at
+`traceRun` bounds by `εchk` (`checkedWitness_traceRun` writes that instance out), so `KSLinOn` moves from `RAcc δ` to
+`RLeakChecked δ` at `κ + εchk` (`ksLinOn_rLeakChecked`).
 
 A monitoring period's bound with checked inputs is `Carried`'s, which gives it at the empty pool for windows that each
 hold a pool of their own (`pooledLeakChecked_of_carried`).
@@ -325,15 +326,32 @@ theorem rLeak_of_rLeakChecked {H : Msg → Msg} {Cm : CommitmentScheme Bool} {pa
   obtain ⟨hl', hD', F, hF, a, ha, free, hfree, -, hacc⟩ := h op o hC hCov hl hD
   exact ⟨hl', hD', F, hF, a, ha, free, hfree, hacc⟩
 
+/-- **The check on the trace's run, written out**: `CheckedWitness` at `traceRun` is the bound `εchk x`, at every
+prover, on the probability that a run accepts and its extracted witness, with no proof block sampled `all` incorrect,
+has a trace run that is not `valid`. The runs are the definition's one parameter, and this is its instance at the
+trace's run. -/
+theorem checkedWitness_traceRun {Coin : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin]
+    {A : Claims.SamplingGeneric.Arg Coin} (H : Msg → Msg) (D : Claims.SamplingGeneric.Compiled Coin A)
+    (valid : AuditStatement → (ℕ → Bool) → Prop) (εchk : Msg → ℝ) (x : Msg) :
+    CheckedWitness H D (traceRun H D.commit) valid εchk x ↔
+      ∀ (Ω : Type) [Fintype Ω] [Nonempty Ω] (P : Prover Ω),
+        Pr (fun r : Ω × (Fin (D.V.k x) → Coin) × D.E.C x =>
+          (run H P D.V x r.1 r.2.1).out = .acc ∧ ∃ w s Pt, (D.E.eval H P x r.1 r.2.1 r.2.2).1 = some w ∧
+            D.parse x = some s ∧ D.partition s = some Pt ∧
+            Disjoint (faulty H D.commit s Pt w) (allSlots s.design Pt) ∧
+            ¬valid s (valOver s.prog (traceVal s.prog (w.val H D.commit s))
+              (heldAdv s.prog Pt (faulty H D.commit s Pt w) (w.val H D.commit s)))) ≤ εchk x := by
+  simp only [CheckedWitness, PrCheckMiss, traceRun, Set.mem_singleton_iff, exists_eq_left]
+
 /-- **`KSLinOn` moves from `RAcc δ` to the leak relation with a valid run**, on the statements where the check holds on
-the trace's run except with probability `εchk` (`CheckedWitness`), at `κ + εchk`. -/
+the trace's run except with probability `εchk` (`CheckedWitness` at `traceRun`), at `κ + εchk`. -/
 theorem ksLinOn_rLeakChecked {Coin : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin]
     {A : Claims.SamplingGeneric.Arg Coin} (H : Msg → Msg) (D : Claims.SamplingGeneric.Compiled Coin A) {L K S : ℕ}
     (lay : AuditStatement → BoundaryGates L S) (k : AuditStatement → ℕ) {δ : ℝ} (reg : AuditStatement → Finset ℕ)
     (valid : AuditStatement → (ℕ → Bool) → Prop) (εchk : Msg → ℝ) (Dj : ℕ)
     (h : KSLinOn H D.V (ScopeAcc D lay k) (RAcc H D.commit D.parse D.partition L K S lay k δ) D.E (D.κ δ) D.γ
       (fun _ => 1) (Bext H D.V D.E)) :
-    KSLinOn H D.V (fun x => ScopeAcc D lay k x ∧ CheckedWitness H D valid εchk x)
+    KSLinOn H D.V (fun x => ScopeAcc D lay k x ∧ CheckedWitness H D (traceRun H D.commit) valid εchk x)
       (RLeakChecked H D.commit D.parse D.partition L K S lay k δ (fun s => AsReg s.prog (lay s) (k s) (reg s)) valid Dj)
       D.E (fun x => D.κ δ x + εchk x) D.γ (fun _ => 1) (Bext H D.V D.E) := by
   intro x hx Ω _ _ P
@@ -352,7 +370,7 @@ theorem ksLinOn_rLeakChecked {Coin : Type} [Fintype Coin] [Nonempty Coin] [Inhab
         by_cases hv : valid s (valOver s.prog (traceVal s.prog (w.val H D.commit s))
             (heldAdv s.prog Pt (faulty H D.commit s Pt w) (w.val H D.commit s)))
         · exact absurd (rLeakChecked_of H D lay k reg valid Dj hx.1 hs hP hRel hdisj hv) hng
-        · exact Or.inr ⟨hacc, w, s, Pt, rfl, hs, hP, hdisj, hv⟩
+        · exact Or.inr ⟨hacc, w, s, Pt, rfl, hs, hP, hdisj, _, Set.mem_singleton _, hv⟩
       · exact Or.inl ⟨hacc, hR⟩
   · beta_reduce
     ring

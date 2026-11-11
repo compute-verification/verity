@@ -5,8 +5,8 @@ description: >
   scratch probes with #print axioms, exact?, trace_state; a slow proof), records, the fast path and check.py,
   stating a guarantee (counted extractors, what proved means), assumptions as named Props, listing, freezing and
   moving guarantees in lean-audit.json, a property's shape, upstream.py watches, parallel Lean lanes, and the standing
-  Lean rulings. Use when adding or changing Lean proofs, definitions or packages (verity/protocols/flock/verifier, Security
-  and its Proofs and Properties, a protocol's lean/), when a Lean build or proof is slow or runs out of memory, editing
+  Lean rulings. Use when adding or changing Lean proofs, definitions or packages (security/, Lean under verity/protocols/),
+  when a Lean build or proof is slow or runs out of memory, editing
   a lean-audit.json or an ASSUMPTIONS.md ledger, bumping a Lean dependency, or preparing a Lean PR.
 ---
 
@@ -40,10 +40,10 @@ The rules are AGENTS.md "Lean"; the Lean check's reference is `tools/verity/lean
 
 - **The edit loop is `verity lean try FILE`** (the README): `lake env lean FILE` in FILE's package against its built
   imports (`bash tools/verity/lean/setup.sh PKG`, then `lake build` there, once), with lean's status. Lean's exit 0
-  isn't proof: the last line, the axiom probe's, names each theorem of FILE whose axioms go beyond `propext`,
-  `Classical.choice` and `Quot.sound` (`sorryAx` too). After editing a file others import, `lake build` its module, then
-  try an importer. Try one that adds or renames declarations with `--siblings --on auto` too: a name another module
-  declares otherwise clashes first at the package root, an hour into a records run.
+  isn't proof: the last line, the axiom probe's, names each theorem of FILE whose axioms go beyond the three AGENTS.md
+  allows (`sorryAx` too). After editing a file others import, `lake build` its module, then try an importer. Try one
+  that adds or renames declarations with `--siblings --on auto` too: a name another module declares otherwise clashes
+  first at the package root, an hour into a records run.
 - **Build on a CPU machine.** Never `lake update` or change an external dependency (a git `require` or its revision,
   Mathlib, ArkLib, `lean-toolchain`) in a feature PR; a `path` require between in-repo packages that AGENTS.md "Lean"
   allows may go in one, in its own commit with the regenerated `lake-manifest.json`, the requires acyclic. The full
@@ -63,7 +63,7 @@ The rules are AGENTS.md "Lean"; the Lean check's reference is `tools/verity/lean
   tree another run left mid-way: never delete or copy one.
 - **A full record**: `research run --on auto --mem-gb 32 --max-min 180 --project verity --source . --cwd clone --
   python3 tools/verity/lean/check.py --build --update PKG`, unwrapped, leaves it at
-  `lean-audit/audit-TAG/lean-audit.json`; below a package's memory floor check.py refuses and prints the line to run.
+  `lean-audit/audit-TAG/lean-audit.json`.
 - **Ask Lean in a scratch file** outside the repository, from the package directory (`lake env lean
   /tmp/scratch/Probe.lean`): `#print axioms X`, `example … := by exact?`, or
   `trace_state` before a `sorry`. Probe what you build on too: a section `variable` typed through a local notation can
@@ -73,7 +73,7 @@ The rules are AGENTS.md "Lean"; the Lean check's reference is `tools/verity/lean
   [Loogle](https://loogle.lean-lang.org). A lemma another package proves is imported or moved, not proved again.
 - **A slow declaration**: measure (`set_option profiler true in`; `#count_heartbeats in` in a Mathlib package), then fix
   the proof: `simp only [...]` outside terminal calls, a split-out lemma, a smaller `decide`. An override that stays has
-  its reason in a `--` comment on or above it.
+  its reason in a `--` comment on or above it (else the Lean bar warns; a new `maxHeartbeats 0` fails).
 - **`X.congr_simp is declared by a replayed module and by one it imports`**: `simp` realized a structure constructor's
   congruence lemma Mathlib had already. Don't unfold a `→+` or `→*` in `simp`; prove its `_apply` lemma by `rfl` and simp
   with that.
@@ -90,7 +90,7 @@ The rules are AGENTS.md "Lean"; the Lean check's reference is `tools/verity/lean
   and the guarantee says nothing. A cost is what the program evaluates, never a field. `tests/test_lean_vocabulary.py`
   flags a second `Extractor` or `Simulator`, not a renamed one.
 - **The verifier derives what soundness reads**: a set soundness depends on (ports to register, sampled proof blocks,
-  bound roots) is computed in Lean from public registered data. A file `verity.ml` or an integration writes only
+  bound roots) is computed in Lean from public registered data. A file a prover or an adapter writes only
   supplies values checked against it; else the guarantee covers the set the writer chose.
 - **"Proved" is four checks**: it elaborates; it and each lemma you added use no axiom past the three AGENTS.md
   allows (the probe's line, or `#print axioms`); a full `check.py` replayed it through the kernel (the fast path
@@ -126,19 +126,19 @@ The rules are AGENTS.md "Lean"; the Lean check's reference is `tools/verity/lean
 
 ## Standards
 
-The checks in `tests/test_lean_packages.py` and `tests/test_retired_terms.py` print their fixes. Two they don't
-hold: Mathlib's names, and no binder `X` or `Y` where ArkLib is imported (its `notation3 "X"` and `"Y"` make each a
-token, and the parse error lands far from the binder).
+The checks in `tests/test_lean_packages.py`, `tests/test_retired_terms.py` and `tests/lint/test_lean_bar.py` print their
+fixes. Two they don't hold: Mathlib's names, and no binder `X` or `Y` where ArkLib is imported (its `notation3 "X"` and
+`"Y"` make each a token, and the parse error lands far from the binder).
 
 ## Before the PR
 
 - The PR says which guarantees changed and why; the ledger's status rows match `lean-audit.json`.
 - Fetch and merge `main`, never rebase, with `python tools/verity/lean/merge.py --install` run once per clone so
-  `lean-audit.json` merges without a rebuild, by `origin/main`'s copy of the driver; each `merge.py:` warning names an
-  entry it took from one side, so read them. It conflicts only where it can't vouch for the merge (a newer lock `format`,
-  the worktree's copy merging in newer merge rules, a merge that drops most of a section), and says why: do what it says.
+  `lean-audit.json` merges without a rebuild; each `merge.py:` warning names an entry it took from one side, so read
+  them. It conflicts only where it can't vouch for the merge (AGENTS.md "Lean", the lock), and says why: do what it
+  says.
 - Record your lock at your own head, then mark; a passing Lean check, a clean merge of `main` over a passing head, or a
-  commit of exactly the records a passing run kept needs no new run. Once your PR lands, drive's lock run regenerates
+  commit of exactly the records a passing run kept needs no new run. Your PR's candidate's records run regenerates
   records another PR moved; re-record only what it can't (a hand-written entry a merge warning says took theirs, `shape`, a
   move's map).
 
@@ -149,7 +149,9 @@ Their history is in the decisions log.
 - A guarantee is a proved `Prop` under named assumptions, with no third status; proving an assumption removes it from
   every guarantee that took it. Lean is the one source of truth for what we assume.
 - Named assumptions are the few real ones (a hash's collision resistance, the auditor's devices), in the lock's
-  `assumptions_module`; any other premise is `domain` or `open` (the README).
+  `assumptions_module`; any other premise is `domain` or `open` (the README). A named `Prop` counted only as an
+  antecedent inside a premise an honest witness concludes is that premise's scope: `domain`, its `why` saying what it
+  restricts there, and no witness is asked to conclude it.
 - A guarantee never assumes a hash or a signature. It ends in a break tied to the run: for SHA-512,
   `P ∨ ∃ x ∈ run.hashInputs, ∃ y ∈ run.hashInputs, x ≠ y ∧ sha512 x = sha512 y`; for LMS, a verifying signature on a
   message missing from the device's log; for Merkle binding, a collision along the two openings' paths. Every `∃` is

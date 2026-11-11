@@ -9,11 +9,23 @@
 # A single-GPU workload defers its replay only as a config run (row_stages.SingleRow.commit_cmd), and leaves one bundle,
 # commit/replay_bundle_p0/, named in commit/verdict.json's replay_deferred (a TP Commit's are replay_bundle_p0_rank<r>/ and
 # replay_deferred.json). The CPU replay deletes a full bundle once it leaves its slim keep (row_config.replay), so the sealed bundle
+<<<<<<< c08d034460b0626dc3b4427debda81c9710da114
 # is hard-linked aside first and put back after it. The workload dir stays on the node under `research keep`, the only copy of the
 # bundle and the keep: they hold clear values (the committed store with its salts, the weights key Kw and the opened weights, the
 # requests and served tokens), so nothing publishes them. The run publishes its stages' records as its outputs, what
 # `research-outputs write` declares for the Build, plan, Match, Commit and replay (research_outputs, as for a sweep stage); $OUT
 # keeps the logs. STORE_ROW=DIR runs none of the phases and only publishes an earlier run's records from its workload dir DIR.
+||||||| c1ca25a247486ec597a815f46f0adacfd9ef2063
+# is hard-linked aside first and put back after it. The workload dir, bundle included, goes to the evidence store as one tree
+# (STORED in $OUT/store.txt), put with the run's own custody key, and stays on the node under `research keep`; $OUT keeps the
+# records and logs. STORE_ROW=DIR runs none of the phases and only stores an earlier run's workload dir DIR.
+=======
+# is hard-linked aside first and put back after it. The workload dir stays on the node under `research keep`, the only copy of
+# its bundle and its slim keep, and nothing stores it. $OUT is published as the run's record, so it keeps the workload's
+# top-level records and logs and match/'s top-level files, and no file of commit/: the Commit's records there hold values (the
+# token record tokens_p<pair>.json, the sampled replays' served lists), and so do the bundle and the keep (the committed store
+# with its salts, the weights key, the opened weights, the requests and served tokens).
+>>>>>>> 493f49485e50deda5fb8020f63c2fde16540f621
 set -uo pipefail
 OUT=${OUT:-${RESEARCH_RUN_DIR:-.}/out}; mkdir -p "$OUT"
 for v in ROW ROLE REPO REV VENV CUDA_HOME HF_HOME LLAMA_ROOT; do
@@ -48,12 +60,31 @@ row() {  # NAME ARGS...: one `verity-vllm row run` of the workload dir, its outp
   tail -5 "$OUT/$name.out"
   return $rc
 }
+<<<<<<< c08d034460b0626dc3b4427debda81c9710da114
 publish() {  # the stages' records in the run's outputs.json, which the recorder publishes when the run ends
+||||||| c1ca25a247486ec597a815f46f0adacfd9ef2063
+records() {  # the workload's records into $OUT (never the bundle, the store or the capture)
+  for f in stages.txt row.log verdict.json build_summary.json manifest.json config_record.json strict_word.json target_family.json \
+    gpu_lease.json effective_config.json commit.log match.log build.log replay.log manifest.log; do cp "$D/$f" "$OUT/" 2>/dev/null; done
+  mkdir -p "$OUT/commit" "$OUT/match"
+  find "$D/commit" -maxdepth 1 -type f -size -50M -exec cp {} "$OUT/commit/" \; 2>/dev/null
+  find "$D/match" -maxdepth 1 -type f -size -50M -exec cp {} "$OUT/match/" \; 2>/dev/null
+  for b in "$D"/commit/replay_bundle_p*/; do
+    [ -d "$b" ] && mkdir -p "$OUT/commit/$(basename "$b")" && cp "$b/MANIFEST.json" "$b/context.json" "$OUT/commit/$(basename "$b")/" 2>/dev/null
+  done
+=======
+records() {  # the workload's records into $OUT, which the run publishes: never a file of commit/ (values), nor the capture
+  for f in stages.txt row.log verdict.json build_summary.json manifest.json config_record.json strict_word.json target_family.json \
+    gpu_lease.json effective_config.json commit.log match.log build.log replay.log manifest.log; do cp "$D/$f" "$OUT/" 2>/dev/null; done
+  mkdir -p "$OUT/match"
+  find "$D/match" -maxdepth 1 -type f -size -50M -exec cp {} "$OUT/match/" \; 2>/dev/null
+>>>>>>> 493f49485e50deda5fb8020f63c2fde16540f621
   du -sh "$D" "$D"/* 2>/dev/null > "$OUT/sizes.txt"
   (cd "$TREE/adapters/vllm" && "$PY" -m verity_vllm.pipeline.cli research-outputs write "$D" "$ROW" build plan match commit replay) \
     2>&1 | tee -a "$OUT/steps.txt"
   [ -s "${RESEARCH_RUN_DIR:?}/outputs.json" ]
 }
+<<<<<<< c08d034460b0626dc3b4427debda81c9710da114
 stop() { publish; echo "STOPPED at $1"; exit "$2"; }
 if [ -n "${STORE_ROW:-}" ]; then   # an earlier run's workload dir: its records, published by this run
   D=$STORE_ROW; rmdir "$BASE/sealed" "$BASE/$ROW" "$BASE" 2>/dev/null
@@ -61,6 +92,39 @@ if [ -n "${STORE_ROW:-}" ]; then   # an earlier run's workload dir: its records,
   publish; exit
 fi
 
+||||||| c1ca25a247486ec597a815f46f0adacfd9ef2063
+stop() { records; echo "STOPPED at $1"; exit "$2"; }
+
+put() {  # the workload dir as one tree, with this run's custody key (a node's job holds no other store credential), then its keep
+  echo "$(date -u +%H:%M:%SZ) store: put $D ($(du -sh "$D" | cut -f1))" | tee -a "$OUT/steps.txt"
+  local C i art
+  C=$(dirname "$(dirname "${RESEARCH_RUN_DIR:?}")")/requests/${RESEARCH_RUN_ID:?}/custody
+  for i in 1 2 3; do
+    ( if [ -f "$C/cred.json" ]; then
+        export RESEARCH_STORE_CONFIG=$C/store.toml
+        eval "$("$PY" -m verity_vllm.pipeline.cli epoch custody-env "$C")"
+      fi
+      rs data put --kind evidence/v1 --tree "$D" --preserve --json --meta "{\"row\": \"$ROW\", \"commit_run\": \"$(basename "$(dirname "$D")")\",
+        \"what\": \"Llama-3.2-1B TP1 Commit of record (config run, deferred): Build, Match, commit/ with the sealed replay_bundle_p0\"}"
+    ) > "$OUT/put.json" && break
+    sleep $((30 * i))
+  done
+  art=$(grep -o 'art:[0-9a-f]\{64\}' "$OUT/put.json" | head -1)
+  echo "STORED ${art:-none} $D" | tee "$OUT/store.txt"
+  [ -n "$art" ] || return 1
+  rs keep "$(dirname "$D")" --owner @vllm --expires 14d --priority high --art "$art" \
+    --why "PROVE-PATH: the Llama-3.2-1B TP1 Commit of record and its sealed bundle, stored as $art" | tail -2
+}
+if [ -n "${STORE_ROW:-}" ]; then   # an earlier run's workload dir, stored as is
+  D=$STORE_ROW; rmdir "$BASE/sealed" "$BASE/$ROW" "$BASE" 2>/dev/null
+  [ -s "$D/commit/replay_bundle_p0/MANIFEST.json" ] || { echo "no sealed bundle under $D/commit"; exit 2; }
+  records; put; exit
+fi
+
+=======
+stop() { records; echo "STOPPED at $1"; exit "$2"; }
+
+>>>>>>> 493f49485e50deda5fb8020f63c2fde16540f621
 unset CONFIG_RUN REPLAY_K REPLAY_DEFERRED
 row build --stages build --config-run 1 --replay-k 460 || stop build 10
 row match --stages match --config-run 0 || stop match 11
@@ -71,6 +135,17 @@ cp -al "$B" "$BASE/sealed/" || stop "linking the sealed bundle aside" 14
 row replay --stages replay --config-run 1 --replay-k 460; rr=$?
 [ -d "$B" ] || cp -al "$BASE/sealed/replay_bundle_p0" "$D/commit/" || stop "restoring the sealed bundle" 15
 (cd "$B" && sha256sum MANIFEST.json) | tee "$OUT/bundle.sha256"
+<<<<<<< c08d034460b0626dc3b4427debda81c9710da114
 publish; pr=$?
 tail -8 "$D/stages.txt" 2>/dev/null
 exit $(( rr != 0 ? 16 : pr != 0 ? 17 : 0 ))
+||||||| c1ca25a247486ec597a815f46f0adacfd9ef2063
+records
+put; pr=$?
+tail -8 "$OUT/stages.txt" 2>/dev/null
+exit $(( rr != 0 ? 16 : pr != 0 ? 17 : 0 ))
+=======
+records
+tail -8 "$OUT/stages.txt" 2>/dev/null
+exit $(( rr != 0 ? 16 : 0 ))
+>>>>>>> 493f49485e50deda5fb8020f63c2fde16540f621

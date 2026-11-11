@@ -34,7 +34,7 @@ SYNC_S = 600
 #: and a mean of 181 s; the slow ones (circuit-check's 63 min) declare their timeout_s
 UNDECLARED_S = 300
 #: suites.py's TEST_PROCESS_GB: what a test process of a suite that declares no worker_gb may reach
-TEST_PROCESS_GB = 9
+TEST_PROCESS_GB = 4.5
 #: kind agent-test's shape (infra/cluster/src/cluster/kinds.py, phase cpu-test, and kinds/infra.toml's max_wall_min)
 AUTO_CPUS, AUTO_MEM_GB, AUTO_MAX_S = 4, 16, 3600
 

@@ -10,12 +10,28 @@
    "declarations": 56
   },
   "Proofs/Core": {
+<<<<<<< c08d034460b0626dc3b4427debda81c9710da114
    "modules": 2,
    "declarations": 31
+||||||| c1ca25a247486ec597a815f46f0adacfd9ef2063
+   "modules": 4,
+   "declarations": 54
+=======
+   "modules": 4,
+   "declarations": 60
+>>>>>>> 493f49485e50deda5fb8020f63c2fde16540f621
   },
   "Proofs/Flock": {
+<<<<<<< c08d034460b0626dc3b4427debda81c9710da114
    "modules": 236,
    "declarations": 1810
+||||||| c1ca25a247486ec597a815f46f0adacfd9ef2063
+   "modules": 241,
+   "declarations": 1843
+=======
+   "modules": 265,
+   "declarations": 2130
+>>>>>>> 493f49485e50deda5fb8020f63c2fde16540f621
   },
   "Proofs/Nci": {
    "modules": 1,

@@ -75,6 +75,9 @@
                                                  # idle: `cluster usage` (infra/cluster usage.py) over the console's record on vy-nebius-1
   research lean-times [--hours 24] [--until T] [--over 15] [--json]   # each Lean task's wall time, from the store's attempts: records
                                                  # runs and checks' Lean steps, p50/p95/max per kind and package (research/lean_times.py)
+  research run-times [--hours 12] [--until T] [--over 10] [--on MACHINE,...] [--json]   # each run's wait to start, setup and run
+                                                 # time from its records on the machines, p50/p90/p95 by kind, machine and pool, and
+                                                 # each run that waited over 10 min with what it waited behind (research/run_times.py)
   research pods ssh TARGET [--print] [-- CMD...]  # TARGET = machines.toml name | pod id | pod name; the port is looked up, never hard-coded
   research pods sync TARGET [SRC] [--dest DIR]    # rsync the worktree's git-visible files (default /workspace/src), prune what it shipped before
   research notes checkpoint LANE STATE TEXT...   # CHECKPOINT <sha> (<HH:MM>Z) [open|blocked|final|superseded] line atop the report
@@ -113,12 +116,16 @@ gives the workload a cache dir keyed by reuse_key.  `research data ...` is the s
 from __future__ import annotations
 
 import argparse
+import importlib.util
 import json
 import math
 import os
+import re
+import shutil
 import subprocess
 import sys
 import tarfile
+import tempfile
 import time
 from datetime import UTC, datetime, timezone
 from pathlib import Path
@@ -470,6 +477,7 @@ def _cmd_run(argv: list[str], clones: list[Path]) -> int:
         return 2
     if ns.claimed and not env_map:
         env_map = _request_env(ns.remote_json)
+    workload_env = {**result.env_defaults(os.environ), **env_map}   # every job's defaults, under --env, which still decides
     if run_dir.exists() and ((run_dir / "job.json").exists() or not ns.claimed):
         print(f"research run: {run_dir} already exists; a rerun gets a fresh id", file=sys.stderr)
         return 2
@@ -490,7 +498,7 @@ def _cmd_run(argv: list[str], clones: list[Path]) -> int:
         except clone.Refused as e:
             return _refuse(ns, run_dir, run_id, f"--cwd {a.cwd}: {e}", "CloneRefused", mem_reservation)
     try:
-        prep = _prepare_store(ns, a, command, run_id, run_dir, env_map)
+        prep = _prepare_store(ns, a, command, run_id, run_dir, workload_env)
     except (ImportError, LookupError, TypeError) as e:
         print(f"research run: --cwd {a.cwd} / --tool {ns.tool}: {e}", file=sys.stderr)
         return 2
@@ -531,7 +539,7 @@ def _cmd_run(argv: list[str], clones: list[Path]) -> int:
     os.environ.update(prep["env"])
     # --env is the workload's: set for the harness (which spawns it with this environment), then restored so the store publish below
     # runs with the caller's environment (a workload-only AWS_* must not become the push credentials)
-    apply_env = {k: v for k, v in env_map.items() if not (ns.claimed and k == "PYTHONPATH")}   # launch_request composed it: tool, tree roots, then this
+    apply_env = {k: v for k, v in workload_env.items() if not (ns.claimed and k == "PYTHONPATH")}   # launch_request composed it: tool, tree roots, then this
     if ns.claimed and (remote_info or {}).get("gpus"):
         apply_env.pop("CUDA_VISIBLE_DEVICES", None)          # launch_request hid the GPUs (or gpu-lease names them): --env can't undo it
     apply_env = {**clone_env, **apply_env}
@@ -922,9 +930,9 @@ def unredact_key_params(command: list[str], redacted: list[str], key_params: set
 def _prepare_store(ns: argparse.Namespace, a: argparse.Namespace, command: list[str], run_id: str, run_dir: Path, env_map: dict[str, str] | None = None) -> dict:
     """Before launch: load the Tool (errors propagate: the user asked for it), collect conditions, resolve params and inputs to
     content identity, compute the closure manifest, derivation id and reuse_key, create --scratch dirs.  Everything after the
-    Tool load is best effort: a failure is recorded in the `store` section, never a reason not to run.  `env_map` (--env) is
-    recorded as `params.env`, values redacted where the NAME matches SECRET_KEY; it is not part of the derivation (a Tool that
-    depends on an environment variable declares it as a key param)."""
+    Tool load is best effort: a failure is recorded in the `store` section, never a reason not to run.  `env_map` (--env, over
+    every job's defaults: `result.env_defaults`) is recorded as `params.env`, values redacted where the NAME matches SECRET_KEY;
+    it is not part of the derivation (a Tool that depends on an environment variable declares it as a key param)."""
     import tempfile
 
     from . import env as E
@@ -1232,6 +1240,34 @@ def _run_queued(ns: argparse.Namespace, harness_opts: list[str], command: list[s
     return _run_remote(ns, run_id, root / run_id, harness_opts, command, queue=placed)
 
 
+#: a Lean records run (`lean_changed.py --records PKG`), which `_run_remote` sends the URLs of the Lean bundles its node may restore
+#: from, presigned by the shipped tree's `LEAN_AUDIT` (`url_file`), as `tools/verity/check/check.py --record` sends a check them
+LEAN_RECORDS = re.compile(r"lean_changed\.py\b.*\s--records\b")
+LEAN_AUDIT = "tools/verity/lean/lean_audit.py"
+
+
+def lean_records_urls(source: Path | None, command: list[str]) -> Path | None:
+    """For a Lean records run from the tree ``source``, that tree's `lean-deps-urls.json` (`url_file`), written in a temporary
+    directory: the presigned URLs of the newest recorded checks', mark audits' and records runs' artifact bundles
+    (`shared_bundles`) and of the pinned dependency bundles. None for any other run, a tree without `LEAN_AUDIT`, or a store
+    that signs nothing; a failure sends none, and the run then builds what its node lacks."""
+    if source is None or not LEAN_RECORDS.search(" ".join(command)) or not (source / LEAN_AUDIT).is_file():
+        return None
+    try:
+        spec = importlib.util.spec_from_file_location("research_lean_audit_urls", source / LEAN_AUDIT)
+        la = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(la)
+        urls = la.url_file(Path(tempfile.mkdtemp(prefix="research-lean-urls-")))
+        shared = urls and sum(k.startswith(la.SHARED) for k in json.loads(urls.read_text()))
+    except Exception as e:  # noqa: BLE001  (no URLs: the run builds what its node lacks)
+        print(f"research run: no Lean bundle URLs sent ({type(e).__name__}: {e})", file=sys.stderr)
+        return None
+    if urls:
+        print(f"research run: a Lean records run: sending presigned URLs for {shared} Lean artifact bundle(s) of recent checks, "
+              "mark audits and records runs", file=sys.stderr)
+    return urls
+
+
 def _run_remote(ns: argparse.Namespace, run_id: str, run_dir: Path, harness_opts: list[str], command: list[str],
                 queue: dict | None = None) -> int:
     if not ns.project:
@@ -1282,15 +1318,20 @@ def _run_remote(ns: argparse.Namespace, run_id: str, run_dir: Path, harness_opts
     if not custody:
         print(f"research run --on {ns.on}: --no-custody-r2: this run's records stay on the machine until `research fetch --all {run_id}`",
               file=sys.stderr)
+    source = Path(ns.source).expanduser() if ns.source else None
+    urls = lean_records_urls(source, command)
     try:
         rec = remote.launch(run_id=run_id, local_dir=run_dir, machine_name=ns.on, project=ns.project, command=command, harness_args=harness_args,
-                            source=Path(ns.source).expanduser() if ns.source else None, sends=[Path(s).expanduser() for s in ns.send],
+                            source=source, sends=[*(Path(s).expanduser() for s in ns.send), *([urls] if urls else [])],
                             cwd=None, env=env, exclusive=ns.exclusive, mem_gb=ns.mem_gb, mem_wait_s=ns.mem_wait,
                             custody_ttl=(ns.custody_ttl or "6h") if custody else None, preflight_tool=ns.preflight, queue=queue,
                             job_user=ns.job_user, gpus=None if queue else ns.gpus, store_read=ns.store_read)
     except remote.Refused as e:
         print(f"research run --on {ns.on}: refused: {e}", file=sys.stderr)
         return 3
+    finally:
+        if urls:
+            shutil.rmtree(urls.parent, ignore_errors=True)
     launch = rec.get("launch") or {}
     if rec["phase"] == "refused":
         print(f"research: run {run_id} refused on {ns.on} ({launch.get('fault') or 'Refused'}): {launch.get('refused')}  (recorded in {run_dir})", file=sys.stderr)
@@ -2013,6 +2054,10 @@ def main(argv: list[str] | None = None) -> int:
         from .lean_times import main as lean_times_main
 
         return lean_times_main(rest)
+    if cmd == "run-times":
+        from .run_times import main as run_times_main
+
+        return run_times_main(rest)
     if cmd == "agents":
         from .agents import main as agents_main
 
