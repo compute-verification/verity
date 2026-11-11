@@ -2551,6 +2551,7 @@
     {"file": "security/Proofs/Properties/Nci/RecordRead.lean", "count": 3},
     {"file": "security/Proofs/Properties/Nci/RecordWhole.lean", "count": 4},
     {"file": "security/Proofs/Properties/Nci/Resolve.lean", "count": 5},
+    {"file": "security/Proofs/Properties/Nci/ResolvePassed.lean", "count": 5},
     {"file": "security/Proofs/Properties/Nci/ResolveWithin.lean", "count": 3},
     {"file": "security/Proofs/Properties/Nci/Walk.lean", "count": 3},
     {"file": "security/Proofs/Properties/Nci/Width.lean", "count": 6},
