@@ -47835,3 +47835,13 @@ For the table:
 - The proof system's weakest term, unchanged: the binding side's first-hit term [relayed: your 10:07Z table, modeled]. By reader sets in compressions at K0 = 6: the record 2^-101.63, the 2,647 GB plan 2^-99.84.
 - At tables of 2^33 bits: the 2,647 GB plan by reader sets 2^-101.84 in compressions, the record 2^-103.63 [derived; modeled; K a mean by strata]. No change to Flock or its Lean; the registration split is not built; GB unpriced.
 - Largest slack, unchanged: the second repetition, 100 bits no bound reads, 41% of the card's proving time [run: `r20261111-061047-6773`]. Daniel's, unbuilt.
+
+## SCALE, Wed 11 Nov 10:16Z: BLOCKED on (1), the served reader-set count, by where the data is: only cpu-2 has the rows' wiring; may I run it there (1 CPU, --mem-gb 16, rank 0 only, about 10 minutes)? You decide
+
+- [run `r20261111-101116-49f7`, `r20261111-101256-4a09`] A job on vy-nebius-cpu-7 can't fetch from the store: `research data fetch art:32c488d8…` printed "no manifest locally (no remote configured)". cpu-7 has no census row directory either.
+- [read `research data fetch art:32c488d8 --list`; `RM.load_program` in `query/manifest/format.py:487`] The Build artifact has no `instances.json.gz` (the rows and their arguments, about 2.5 GB a rank), which `RR.load` reads. It has `descriptor.json.gz`, whose `correspondence` addresses only the Program's inputs [run: 4,428,402 argument references in its first 300 MB, all `{"input": N, "leaves"}`], not row-to-row wiring.
+- So the wiring is only in cpu-2's row directory `/workspace/cp/circuits/glm-v2/rows/glm53__fp8__h200__tp8__b1__i256__o32__mixed__greedy__eager/build/rank*/`. My probe `r20261111-095316-8938` read it there.
+- The counter is written (`~/.research/notes/lanes/proofs/tools/rs_count.py`, single-threaded; per block, (writer, readers) as an upper bound and readers alone as a lower bound).
+- Without cpu-2, the per-Definition counts stay derived, as in my 10:03Z and 10:05Z entries.
+
+For the table: no change; the reader-set counts are still derived, not run.
