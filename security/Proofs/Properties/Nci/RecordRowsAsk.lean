@@ -10,7 +10,7 @@ public import Proofs.Properties.Nci.RecordWired
 
 Statements only, each to be proved in a file of its own set: `RecordRows.lean` (R1 to R5) and `RecordInputs.lean`
 (I1 to I3). A statement here is the form the two assemblies read; a proof may take fewer hypotheses than it lists,
-never more.
+never more. What a unit of a primitive gives them is proved, in `RecordPrim.lean`: `prim_unit_operands`.
 -/
 
 @[expose] public section
@@ -24,17 +24,6 @@ open NciCheck.Properties.SecurityProofs
 open Lean (Json)
 
 variable {P : Prog} {rs : Array TRange} {W : Spot.Wires.Wiring} {S : Spot.Wires.Summary}
-
-/-! ## Assumed by name: in work, in `RecordPrim.lean` -/
-
-/-- **What the gate of a unit of a primitive reads are leaves of the unit's parameters.** -/
-theorem prim_unit_operands {ts : Array String} (hP : ReadProg P) (hO : NciCheck.Record.ownRows P = true)
-    (hrs : Flock.TemplateQuery.evaluate (Flock.TemplateQuery.Desc.ofProg P) ts = .ok rs) {tid : String} {u : ℕ}
-    {sc : Scope} (hu : UnitAt P rs tid u sc) (hp : (P.defs[sc.d]!).prim = true) {p : ℕ} {ops : Array ℕ}
-    {sc' : Scope} (h : P.gate sc.off = .ok (p, ops, sc')) :
-    ∀ o ∈ ops, ∃ i t, i < (P.defs[sc.d]!).params.size ∧ t < ((P.defs[sc.d]!).params[i]!).2.leaves ∧
-      Flock.Program.resolve P sc (⟨true, i, t⟩ : Ref) = .ok o := by
-  sorry
 
 /-! ## R: a unit's rows (`RecordRows.lean`) -/
 

@@ -11,11 +11,45 @@ public import Proofs.Properties.Nci.RecordWhole
 # The widths' and the bits' statements, asked
 
 Statements only, each to be proved in a file of its own set: `RecordWide.lean` (K1, K2) and `RecordAligned.lean`
-(K3, K4). A statement here is the form the two assemblies read; a proof may take fewer hypotheses than it lists,
-never more.
+(K3, K4), and one asked of `LeafWidthsResolve.lean` (`arg_wide`, which K1 reads at the root). A statement here is
+the form the two assemblies read; a proof may take fewer hypotheses than it lists, never more. What a unit of a
+primitive gives them is proved, in `RecordPrim.lean`: `unit_param_ok`, `outLeaf_prim`.
 -/
 
 @[expose] public section
+
+namespace NciCheck.Properties.SecurityProofs.LeafWidths
+open Flock.Program
+open NciCheck.Properties.SecurityProofs.Resolve (Good RefOk BodyOk)
+
+/-! ## Asked of the width check's soundness (`LeafWidthsResolve.lean`) -/
+
+/-- **A member's argument leaf is as wide as the callee's parameter leaf, for any callee.** Member `m` of node `k`
+of an activation's body reads leaf `j` of its parameter `i` at a reference of the node's argument `i`: reference
+`j` where the node is a call, reference `Resolve.memberIdx _ m j` where it is a batch. The leaf that reference
+names in the activation's body is as wide as leaf `j` of the callee's parameter, the callee a composite or a
+primitive: nothing here reads the callee's body. -/
+theorem arg_wide (P : Prog) (hroot : P.root < P.defs.size ∧ (P.defs[P.root]!).prim = false)
+    (hB : ∀ sc, Good P sc → BodyOk P sc.d) (hD : ∀ d < P.defs.size, BodiesOk.DefOk P.defs d P.defs[d]!)
+    (hW : ∀ d < P.defs.size, (P.defs[d]!).prim = false →
+      (P.defs[d]!).body.retType = (P.defs[d]!).ret ∧ BodyWide (P.defs[d]!).body)
+    (parent : Scope) (hp : Good P parent) (k : ℕ) (hk : k < (P.defs[parent.d]!).body.nodes.size) (m : ℕ)
+    (hm : m < ((P.defs[parent.d]!).body.nodes[k]!).members) (i : ℕ)
+    (hi : i < (P.defs[((P.defs[parent.d]!).body.nodes[k]!).fn]!).params.size) (j : ℕ)
+    (hj : j < ((P.defs[((P.defs[parent.d]!).body.nodes[k]!).fn]!).params[i]!).2.leaves) :
+    (((P.defs[parent.d]!).body.nodes[k]!).form = .call →
+      Widths.wAt (tyOf P parent ((((P.defs[parent.d]!).body.nodes[k]!).args[i]!).seq.get j))
+          ((((P.defs[parent.d]!).body.nodes[k]!).args[i]!).seq.get j).j =
+        Widths.wAt ((P.defs[((P.defs[parent.d]!).body.nodes[k]!).fn]!).params[i]!).2 j) ∧
+    (((P.defs[parent.d]!).body.nodes[k]!).form = .batch →
+      Widths.wAt (tyOf P parent ((((P.defs[parent.d]!).body.nodes[k]!).args[i]!).seq.get
+            (Resolve.memberIdx (((P.defs[parent.d]!).body.nodes[k]!).args[i]!) m j)))
+          ((((P.defs[parent.d]!).body.nodes[k]!).args[i]!).seq.get
+            (Resolve.memberIdx (((P.defs[parent.d]!).body.nodes[k]!).args[i]!) m j)).j =
+        Widths.wAt ((P.defs[((P.defs[parent.d]!).body.nodes[k]!).fn]!).params[i]!).2 j) := by
+  sorry
+
+end NciCheck.Properties.SecurityProofs.LeafWidths
 
 namespace NciCheck.Properties.Record.SecurityProofs
 
@@ -27,26 +61,6 @@ open NciCheck.Properties.SecurityProofs
 open Lean (Json)
 
 variable {P : Prog} {rs : Array TRange} {W : Spot.Wires.Wiring} {S : Spot.Wires.Summary}
-
-/-! ## Assumed by name: in work, in `RecordPrim.lean` -/
-
-/-- **A leaf of a unit's parameter resolves**, whatever the unit's Definition. -/
-theorem unit_param_ok {ts : Array String} (hP : ReadProg P) (hO : NciCheck.Record.ownRows P = true)
-    (hrs : Flock.TemplateQuery.evaluate (Flock.TemplateQuery.Desc.ofProg P) ts = .ok rs) {tid : String} {u : ℕ}
-    {sc : Scope} (hu : UnitAt P rs tid u sc) {i t : ℕ} (hi : i < (P.defs[sc.d]!).params.size)
-    (ht : t < ((P.defs[sc.d]!).params[i]!).2.leaves) :
-    ∃ g, Flock.Program.resolve P sc (⟨true, i, t⟩ : Ref) = .ok g := by
-  sorry
-
-/-- **The output rows of a unit of a primitive are one row of one leaf**: the unit's gate, at the bits of the
-value its Definition returns. -/
-theorem outLeaf_prim {ts : Array String} (hP : ReadProg P)
-    (hrs : Flock.TemplateQuery.evaluate (Flock.TemplateQuery.Desc.ofProg P) ts = .ok rs) {tid : String} {u : ℕ}
-    {sc : Scope} (hu : UnitAt P rs tid u sc) (hp : (P.defs[sc.d]!).prim = true) :
-    ∃ w, (P.defs[sc.d]!).ret = .value w ∧ OutLeaf P sc ("o" ++ toString 0) 0 sc.off 0 w ∧
-      ∀ out l g lo hi, OutLeaf P sc out l g lo hi →
-        out = "o" ++ toString 0 ∧ l = 0 ∧ g = sc.off ∧ lo = 0 ∧ hi = w := by
-  sorry
 
 /-! ## K1, K2: widths (`RecordWide.lean`) -/
 
