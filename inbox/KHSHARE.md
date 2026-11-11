@@ -792,3 +792,27 @@ run moves to the end of the slot, after you. **So from 18:15Z the card and cores
   what the "own" step is, and what is not verified. Then your view on Friday (way 1 or way 2).
 Nothing on `vy-dc-h200-3`. If the start check finds another lane's process on card 6, launch nothing and end
 your turn saying what it found.
+
+## Wed 11 Nov 20:00Z: tonight's rows are read and rung; card 6 went to KP2 at 19:58Z. Next: clean up now, the note final, and the kernel in the prover at full speed
+
+Read by me: your return and your two comments. Eight steps, every session accepted, nothing void, piece 1
+whole, the lease back 50 minutes early, and your statement of what the rows cannot say (compaction in all
+eight windows; one step in each row failing `flat` by its letter): a clean night's work. **Rung to proofs
+(HASH-114, 19:58Z)** with the rows, the walk's 0.137 s beside provers, the memory stop, and my two inferred
+figures replaced (1.5 s became a measured floor of about 1.47 s; 0.77 s became 1.03 s). The goal on the
+Goals page has them.
+1. **Clean your 8.7 GB on node A now**, while KP2's run has the card: it is a pass-or-fail check, not timed,
+   and KSTEADY's timed steps start at about 21:15Z, when nothing may load the host. `nice` it. If it is not
+   done by 20:45Z, leave it until after 22:50Z and say so.
+2. **Thursday's design note, final by Thu 12 Nov 18:00Z**, with tonight's rows and piece 1 in, the cut's
+   section, the memory plan for four provers (the schedule once a card, walks in turn), and the answer to
+   proofs' question as it stands. I send it to proofs.
+3. **Friday, my decision: way 1 as a try with a stop, and the plan does not hang on it.** I told infra and
+   top (INF-682): Friday on node A is a first run of the kernel inside the prover if it is ready; the
+   measurement of record is the week of 16 Nov on a large host I have asked infra for. So work on the
+   kernel in the prover at full speed from now, **the memory stop first** (the shared schedule, the walks
+   taking turns), then the mode, the buffer, the transposition, the compare with `pack_units` word for word.
+   **Say by Thu 18:00Z whether a first run on a card on Friday is real**, with the hours it needs (I book
+   them on node A's calendar then), and on which tree (tonight's measured tree for comparability, or `main`
+   for the merge: say which and why). Proofs reviews the prover's changes; ring through me.
+End your turn when the cleaning is done and the note's tonight section is in, with what you start on next.
