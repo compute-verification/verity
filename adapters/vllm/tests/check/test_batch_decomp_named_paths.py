@@ -17,7 +17,6 @@ from tests.check import test_batch_decomp_e2e as e2e
 from verity_vllm.check.match import batch_decomp as bd
 from verity_vllm.check.match import decomp_profile
 from verity_vllm.check.match import program_compare as C
-from verity_vllm.check.program_ops import Ops
 
 memory = e2e.memory                          # the toy's fixtures, under their own names
 derived_is_a_fold = e2e.derived_is_a_fold
@@ -59,7 +58,7 @@ def _inline_hook(calls):
         calls.append(len(items))
         return [fn(it) for it in items]
     rec = bd.record_ops()
-    return Ops(rec.name, rec.load_oracle, rec.load_derived, rec.projection, rec.compare_steps, rec.dag_hashes, rec.live_cone, run_all)
+    return type(rec)(rec.name, rec.load_oracle, rec.load_derived, rec.projection, rec.compare_steps, rec.dag_hashes, rec.live_cone, run_all)
 
 
 def _how_the_requests_ran(prof: dict) -> str:
