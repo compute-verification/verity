@@ -140,10 +140,7 @@ def ensure_distributed(vllm_config, backend: str = "gloo") -> str:
     if _DIST_READY:
         return "already"
     from vllm.config import set_current_vllm_config
-    from vllm.distributed import (
-        ensure_model_parallel_initialized,
-        init_distributed_environment,
-    )
+    from vllm.distributed import ensure_model_parallel_initialized, init_distributed_environment
     with set_current_vllm_config(vllm_config):
         for attempt in range(_PORT_TRIES):
             try:
@@ -247,9 +244,7 @@ class GreedyRequest(nn.Module):
         self.model, self.LP, self.T = model, LP, T
 
     def _step(self, ids: torch.Tensor, pos0: int, s: int) -> torch.Tensor:
-        from verity_vllm.program.frontend.rules.vllm_bindings.observations import (
-            launch_region,
-        )
+        from verity_vllm.program.frontend.rules.vllm_bindings.observations import launch_region
         with launch_region(s, "tokens"):
             positions = torch.arange(pos0, pos0 + ids.shape[0], dtype=torch.int64)
             hidden = self.model(ids, positions)
@@ -283,9 +278,7 @@ class ChunkedGreedyRequest(GreedyRequest):
                              f"launches of at least one")
 
     def forward(self, prompt: torch.Tensor) -> torch.Tensor:
-        from verity_vllm.program.frontend.rules.vllm_bindings.observations import (
-            launch_region,
-        )
+        from verity_vllm.program.frontend.rules.vllm_bindings.observations import launch_region
         a = 0
         for j, n in enumerate(self.chunks):
             with launch_region(j, "tokens"):
@@ -406,9 +399,7 @@ class StochasticRequest(nn.Module):
         self.S = int(S)
 
     def _step(self, ids: torch.Tensor, pos0: int, seed: torch.Tensor, s: int) -> torch.Tensor:
-        from verity_vllm.program.frontend.rules.vllm_bindings.observations import (
-            launch_region,
-        )
+        from verity_vllm.program.frontend.rules.vllm_bindings.observations import launch_region
         from verity_vllm.program.frontend.rules.vllm_iface import iface
         with launch_region(s, "tokens"):
             positions = torch.arange(pos0, pos0 + ids.shape[0], dtype=torch.int64)
@@ -468,7 +459,7 @@ def registered_policy_splits(sampling: dict) -> int:
     if g.get("num_sms") is None:
         raise ValueError(f"sampling.splits {S!r}: the policy's geometry declares no num_sms, so it has no registered split count")
     want = registered_splits(int(g["num_sms"]))
-    if type(S) is not int or want != S:
+    if type(S) is not int or S != want:
         raise ValueError(f"sampling.splits {S!r} is not the registered split count registered_splits({int(g['num_sms'])}) = {want}, "
                          f"the S the served engine pins")
     return S
@@ -580,7 +571,6 @@ def consulted_facts(vllm_config) -> dict:
 def no_fx_stack_traces():
     """Export without FX stack traces: nothing reads `node.meta["stack_trace"]`, and recording one per node was a tenth of a derive."""
     import torch.fx.config as fx_config
-
     from verity_vllm.engine import hooks
     with hooks.Hooks() as h:
         h.patch(fx_config, "do_not_emit_stack_traces", True)
@@ -595,7 +585,6 @@ def export_module(mod: nn.Module, inputs: tuple, vllm_config, num_tokens: int, s
     export context right after the export — what vLLM saw while the graph was produced (the driver refuses if it differs from the profile).
     Under a declared launch batch the graph keeps each node's `launch_region` tag."""
     import torch.fx.traceback as fxt
-
     from .export_compat import export_compat, read_back_applied
     from .rules.vllm_bindings.observations import launch_batch_declared
     from .triton_capture import intercept_triton_launches
@@ -741,7 +730,6 @@ def mean_dim_override_facts() -> dict | None:
     try:
         import hashlib
         import inspect
-
         from vllm.model_executor.determinism import batch_invariant as bi
         k = bi.mean_kernel
         fn = getattr(k, "fn", k)
