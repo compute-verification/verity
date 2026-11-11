@@ -109,7 +109,8 @@
 #     class circuit's units, the weights it serves under the committer's key, so each served as registered has the
 #     registration's root; its circuit.json less its run fields is held to the verifier's own window-circuit record at the
 #     class; then `records_audit.py audit --circuit --registered`, within V3C_AUDIT_TIMEOUT (default 30m), samples the
-#     registration's members (V3C_LAW, default subset:1, stratified:1 under H1_TIE) on V3C_CHALLENGER's coins (below,
+#     registration's members (V3C_LAW, default subset:1, stratified:1 under H1_TIE, work:1 under PEARLPLUS_TIE at
+#     V3C_FLOORS' floors, below) on V3C_CHALLENGER's coins (below,
 #     Coins; pinned on main's first-parent line: MAIN_FILE's, kept as $OUT/v3c-audit/main.txt, else MAIN_SHA's) and
 #     proves them, its composes made before it with V3C_WARM_JOBS (at `v3c_audit`), its sessions and Lean's checks side by
 #     side with V3C_POOL (records_audit.py's --session-jobs, --lean-jobs, --memory-budget-gb and --pool-memory, as one
@@ -293,7 +294,8 @@
 # BF16 checkpoint (REPO unsloth/Llama-3.2-1B, PRECISION bfloat16, the arm's), the BF16 B4 row's traced Build under
 # /workspace/research/vllm-pearlc-h200bf16 as ROW, LOAD=fixed at V3C_CLASS's load (SLOTS its slots, PROMPTS P:P at its
 # prompt P, WINDOW_STEPS its outputs: round s of W is the window's s-th step, the class's s-th output, and the cut circuit
-# reads Pearl+'s tables at those rows; the preflight refuses another), PEARLC_BF16_ROWS=0 and V3C_LAW stratified:1, and
+# reads Pearl+'s tables at those rows; the preflight refuses another), PEARLC_BF16_ROWS=0, V3C_LAW work:1 and
+# V3C_FLOORS 4/125,1/100, and
 # step 3's partition layer 0's RoPE heads, the BF16 1B's transfer gates of record, every one proved, beside its
 # SiluMul_v2 under work:2 at step 1 (llama32_1b_tg_l0_step1.json, PP_SETS rope-head/d64/bf16). The preflight refuses
 # another PRECISION or row (its id names __bf16__), a V3C_CLASS CLASSES doesn't count, vLLM's prefix cache (SERVE_ARGS'
@@ -302,7 +304,13 @@
 # PEARLPLUS_INODES inodes free (default 772388, two commits of the tied window at the class of record, three files a
 # member; 0 checks none), naming the shortfall; earlier runs' Pearl+ windows are deleted with `research retention rm`. Step
 # 3's window circuit at each class is the one cut at Pearl+'s linears (`window-circuit --pearl-tables`), the verifier's
-# own record of the circuit the window is committed as. The same record at V3C_CLASS is built before serve-openai starts,
+# own record of the circuit the window is committed as. Pearl+'s reader templates in it are a template a shape of
+# linear, each reading every round's and call's rows of its shape, so the window's sampling design is work:K (V3C_LAW)
+# over the work table that record states (`--reader-floors V3C_FLOORS`, EPS,DELTA each NUM/DEN: every template works 1,
+# Pearl+'s reader templates at the floors under which at most EPS of their units are wrong except with probability
+# DELTA, every other at floor 1), the table the commit states too (WINDOW-CIRCUIT-HELD) and R's design is expanded
+# under; the preflight refuses another design, or floors that aren't two such fractions.
+# The same record at V3C_CLASS is built before serve-openai starts,
 # under the lease, from what its serve.json will record of φ on this card (`prove_path.py serve-phi`, then `class-circuit`,
 # no advice: the circuit is the class's whatever the traffic), into the serve dir's pearlplus/circuit-record.json
 # (PEARLPLUS-CIRCUIT, within PEARLPLUS_CIRCUIT_TIMEOUT, default 30m), and step 3 says whether its record is that one.
@@ -325,7 +333,8 @@
 # before the first request and the WEIGHTS and DEPLOYMENT-REGISTRATION lines name: the developer's own record, whose
 # digest no auditor holds), so the log before R is that record and W, and runs `served_verdicts.sh pearl-tie`
 # (PEARLPLUS_TIE_CMD) before its coin: the window's
-# advice and `prove_path.py window-commit --window-registration W --pearl-passes DIR --law V3C_LAW`, the circuit cut at
+# advice and `prove_path.py window-commit --window-registration W --pearl-passes DIR --law V3C_LAW --reader-floors
+# V3C_FLOORS`, the circuit cut at
 # Pearl+'s linears and R chained right after W, in the serve dir's pearlplus/w<k>/; then `verify --tie W --class
 # V3C_CLASS` (PEARLPLUS_CLASS), which refuses passes that aren't the class's fixed load and publishes the work in its
 # grid form (the class's structural credit less the give-up on H1's window grid, the exact credit held). V3c then runs
@@ -524,7 +533,10 @@ EOF
 }
 V3C=${V3C_CLASS-4,32,4} v3c_ok=0
 [ "${1:-}" = v3c ] && V3C=${V3C:-4,32,4}
-[ -z "${H1_TIE:-}$PEARLPLUS_TIE" ] || V3C_LAW=${V3C_LAW:-stratified:1}
+[ -z "${H1_TIE:-}" ] || V3C_LAW=${V3C_LAW:-stratified:1}
+# under PEARLPLUS_TIE: work:K over the work table the cut circuit's record states, Pearl+'s reader templates at the
+# floors under which at most EPS of their units are wrong except with probability DELTA (V3C_FLOORS, EPS,DELTA)
+[ -z "$PEARLPLUS_TIE" ] || { V3C_LAW=${V3C_LAW:-work:1}; V3C_FLOORS=${V3C_FLOORS:-4/125,1/100}; }
 vtag=${V3C//,/-}
 PEARLPLUS_CIRCUIT=$D/pearlplus/circuit-record.json
 if [ "${1:-}" = v3c ]; then V3C_TIMEOUT=${V3C_TIMEOUT:-120m} V3C_AUDIT_TIMEOUT=${V3C_AUDIT_TIMEOUT:-180m}
@@ -726,6 +738,13 @@ EOF
 # default stratified:1), a stratum of each table's readers, so every table W registers has a sampled reader
 # (Record.checks), and V3C_PORTS defaults to the size of R's sample, its strata's k summed: at most a session for each
 # sampled proof block. The preflight refuses H1_TIE on a tree whose records_audit.py takes no --tie, or at another design.
+# Under PEARLPLUS_TIE the audit is tied to Pearl+'s W the same way, with no prefix (W's values are the circuit's own
+# names). Pearl+'s reader templates are a template a shape of linear, not a template a table, so its sampling design is
+# work:K (V3C_LAW, default work:1) over the work table R's circuit states, each of Pearl+'s reader templates at its floor
+# of V3C_FLOORS, and V3C_PORTS defaults the same way. A sample then opens some of W's values and not each one, so the
+# audit passes where the record's check of the registered values (one_stage's `registered`) takes the ones the sessions
+# opened, and is refused where it wants every registered value opened. The preflight refuses PEARLPLUS_TIE at another
+# design or without its floors.
 # With V3C_WARM_JOBS=N, `records_audit.py warm` first composes every template of the committed window into
 # $VW/compose-cache, N at a time, each in a process of its own, within V3C_WARM_TIMEOUT (default V3C_AUDIT_TIMEOUT): the
 # templates and their binding are public, so this precedes the audit's coins, and the audit, taking the cache, composes
@@ -877,7 +896,8 @@ pearl_tie() {  # served_pearlplus.sh's PEARLPLUS_TIE_CMD once Pearl+'s W is writ
   [ -f "$D/advice/w$K/private/advice.bin" ] || { echo "PEARL-TIE: no advice (verity-vllm advice exit $rc; the serve dir's advice.log)"; return 14; }
   mkdir -p "$dir" && cp "$3" "$dir/registration.json" || { echo "PEARL-TIE: W $3 can't be kept in $dir"; return 3; }
   why=$(window_commit "$dir/window-commit.json" "$dir/window-commit.err" --window-registration "$dir/registration.json" \
-    --pearl-passes "$4" --law "${V3C_LAW:-subset:1}") || { echo "PEARL-TIE: window-commit class $V3C $why"; return 16; }
+    --pearl-passes "$4" --law "${V3C_LAW:-subset:1}" --reader-floors "$V3C_FLOORS") \
+    || { echo "PEARL-TIE: window-commit class $V3C $why"; return 16; }
   why=$(pearl_tied) || { echo "PEARL-TIE: $why"; return 16; }
   echo "PEARL-TIE: window-commit class $V3C, its circuit cut at Pearl+'s linears: $why"
 }
@@ -891,7 +911,8 @@ pearl_circuit() {  # under PEARLPLUS_TIE, in serve() before serve-openai: the ci
   "$PY" "$TREE/benchmarks/prove_path/prove_path.py" serve-phi --model "$REPO" --revision "$REV" --out "$dir/serve-phi.json" \
     "${asy[@]}" > "$dir/serve-phi.log" 2>&1 \
     && timeout "${PEARLPLUS_CIRCUIT_TIMEOUT:-30m}" "$PY" "$TREE/benchmarks/prove_path/prove_path.py" class-circuit \
-      --serve "$dir/serve-phi.json" --class "$V3C" --pearl-tables "${PEARLPLUS_ARM#pouw:}" --out "$PEARLPLUS_CIRCUIT" \
+      --serve "$dir/serve-phi.json" --class "$V3C" --pearl-tables "${PEARLPLUS_ARM#pouw:}" --reader-floors "$V3C_FLOORS" \
+      --out "$PEARLPLUS_CIRCUIT" \
       > "$dir/circuit-record.count.json" 2> "$dir/circuit-record.err"
   rc=$?
   if [ "$rc" = 0 ]; then
@@ -1028,7 +1049,9 @@ circuit() {  # window K's circuit at class $1 within $2 (NAME=LIMIT), its line h
   local c=$1 head=$3 cls=() tag=record pins=() wp=$NO_WEIGHTS f rc tie=()
   [ "$c" = record ] || { cls=(--class "$c"); tag=${c//,/-}; }
   # under PEARLPLUS_TIE the verifier's own record of the circuit the window is committed as, cut at Pearl+'s linears
-  [ -z "$PEARLPLUS_TIE" ] || [ "$c" = record ] || { cls+=(--pearl-tables "${PEARLPLUS_ARM#pouw:}"); head+=", cut at Pearl+'s linears"; }
+  # and stating the verifier's work table, a floor for each of Pearl+'s reader templates (V3C_FLOORS)
+  [ -z "$PEARLPLUS_TIE" ] || [ "$c" = record ] \
+    || { cls+=(--pearl-tables "${PEARLPLUS_ARM#pouw:}" --reader-floors "$V3C_FLOORS"); head+=", cut at Pearl+'s linears"; }
   [ "${4:-}" = tie ] && tie=(--window-registration "$D/h1/w$K/registration.json") tag+=-tie
   [ -f "$WREG" ] && pins=(--pins "$WREG") wp="at the weights registration's pins"
   f=$D/window-circuit-w$K-$tag.json
@@ -1680,8 +1703,15 @@ if [ -n "${H1_TIE:-}$PEARLPLUS_TIE" ] && [ -z "$COMPOSE" ]; then  # V3c's audit 
   if [ -n "${H1_TIE:-}" ]; then TIED=H1_TIE WHOSE="H1's"; else TIED=PEARLPLUS_TIE WHOSE="Pearl+'s"; fi
   grep -q -- '"--tie"' "$TREE/benchmarks/prove_path/records_audit.py" \
     || { say "PREFLIGHT: under $TIED V3c's audit is tied to $WHOSE W, whose tables the circuit reads, with records_audit's --tie, which this tree's records_audit.py doesn't take"; exit 3; }
-  [[ ${V3C_LAW:-} == stratified:* ]] \
-    || { say "PREFLIGHT: under $TIED every table $WHOSE W registers needs a sampled reader, which only stratified:K, a stratum of each table's readers, gives: V3C_LAW is ${V3C_LAW:-unset}"; exit 3; }
+  if [ -n "${H1_TIE:-}" ]; then
+    [[ ${V3C_LAW:-} == stratified:* ]] \
+      || { say "PREFLIGHT: under $TIED every table $WHOSE W registers needs a sampled reader, which only stratified:K, a stratum of each table's readers, gives: V3C_LAW is ${V3C_LAW:-unset}"; exit 3; }
+  else  # Pearl+'s readers are a template a shape, so a floor a reader template holds the share of them a sample leaves wrong
+    [[ ${V3C_LAW:-} =~ ^work:[1-9][0-9]*$ ]] && [[ ${V3C_FLOORS:-} =~ ^[0-9]+/[1-9][0-9]*,[0-9]+/[1-9][0-9]*$ ]] \
+      || { say "PREFLIGHT: under $TIED the window's sampling design is work:K over a work table with a floor for each of Pearl+'s reader templates, a template a shape of linear, under which at most EPS of their units are wrong except with probability DELTA: pass V3C_LAW=work:K (default work:1) and V3C_FLOORS=EPS,DELTA, each NUM/DEN (default 4/125,1/100); V3C_LAW is ${V3C_LAW:-unset} and V3C_FLOORS is ${V3C_FLOORS:-unset}"; exit 3; }
+    grep -q -- '"--reader-floors"' "$TREE/benchmarks/prove_path/prove_path.py" \
+      || { say "PREFLIGHT: under $TIED the verifier's record and the commit state the work table with prove_path's --reader-floors, which this tree's prove_path.py doesn't take"; exit 3; }
+  fi
 fi
 if [ -n "${H1_TIE:-}" ] && [ "${1:-}" != v3c ] && [ -z "$COMPOSE" ]; then  # V3c's window commit at each H1 window's close, before its sample coin
   [ -n "$H1_GATE" ] && [ -n "${H1_CIRCUITS:-}" ] \
