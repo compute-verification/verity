@@ -1,5 +1,5 @@
 """The remote bandwidth session over the node's `NodeMemory`, inside the prover's process (the Commit's, or the serve
-driver's): `StoreBackend` is the backend `benchmarks/remote_session`'s `ProverSide` drives, the role
+driver's): `StoreBackend` is the backend PoUB's prover's `ProverSide` drives (`config.REMOTE_SESSION`), the role
 `device.GpuBackend` and `CpuBackend` play there, and `prove` connects it to a verifier at ``HOST:PORT`` (the row's ``REMOTE_VERIFIER``,
 `config.CommitConfig.remote_verifier`).
 
@@ -37,7 +37,7 @@ Commit's session is `CommitSession`: the binder on its engine from the build, th
 Commit's instrumented run (`Lockstep`: each pass's engine step is the run's next step, so the memory map's steps are
 the steps the Commit commits), its store's encode on the GPU by kv.cu (`KvDevice`).
 
-`benchmarks/remote_session` is not a package: `session_module` loads its ``prover.py`` from the source tree
+PoUB's prover is not a package: `session_module` loads its ``prover.py`` from the source tree
 (`config.REMOTE_SESSION`), and `prove` takes the wire from it. The verifier's side, the wire among it, is
 `verity.protocols.poub.verifier.session`.
 """
@@ -75,8 +75,8 @@ def address(value: str) -> tuple[str, int]:
 
 
 def session_module(name: str, directory: str | Path = config.REMOTE_SESSION) -> ModuleType:
-    """``benchmarks/remote_session``'s module ``name`` (``prover``, ``device``), loaded once from its file, as its own
-    scripts import it."""
+    """The module ``name`` of PoUB's prover in ``directory`` (``prover``, ``device``; ``paged``), loaded once from its
+    file, as its own scripts import it."""
     if name in sys.modules:
         return sys.modules[name]
     spec = importlib.util.spec_from_file_location(name, Path(directory) / f"{name}.py")
