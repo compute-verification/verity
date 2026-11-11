@@ -381,14 +381,15 @@ def call_receipts(call: Call, salt: bytes, base: int, root_a: bytes, root_b: byt
     ar = torch.arange(R, device=dev)
     if j10r and stream is None:
         stream = call_stream(call, salt, base, root_a, root_b, cubin)
+    j10r_stream = stream if j10r else None
     out = np.empty((len(pick),) + ((LANES,) if lanes else ()) + (2 * lay.sets,), dtype=np.uint32)
     for at in range(0, len(pick), chunk):
         part = pick[at:at + chunk]
         ri = torch.tensor([us[u][0] for u in part], device=dev)
         cj = torch.tensor([us[u][1] for u in part], device=dev)
-        if j10r:
+        if j10r_stream is not None:
             sigmas = [SD.receipt_seed(salt, base + u, root_a, root_b) for u in part]
-            noise = stream[j10r_counters(ri, cj, call.a.shape[0], k)]
+            noise = j10r_stream[j10r_counters(ri, cj, call.a.shape[0], k)]
         else:
             seeds, sigmas = unit_seeds(salt, [base + u for u in part], root_a, root_b)
             noise = noise_blocks(seeds, lay.blocks, dev, cubin)
@@ -673,7 +674,7 @@ class Receipts:
             else:
                 out = call_receipts(Call(a, b), salt, u0, ra, rb, self.cubin, j10r=j10r)
         if self._keep is not None and self._keep(call):
-            if a is None:
+            if a is None or b is None:
                 a, b = self.operands(call, codes, w)
             self.kept[call.index] = {"a": a.cpu(), "b": b.cpu(), "salt": salt, "base": u0, "roots": (ra, rb),
                                      "receipts": out.copy(), "m": m, "pub": self.public(call), "skip": self.skip_dead,
