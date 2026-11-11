@@ -1,10 +1,11 @@
-"""Advice v1's whole window charged: its decisions, the hits it sends past the pool bound and the arrival order's
-deviations, every count and every value as `code_v1` codes them, with the carry chained from window to window
-(`verity/core/protocols/certifier/protocol/charge-chain.md`, "The whole window").
+"""Advice v1's whole window charged: its decisions, the hits it sends past the pool bound, the arrival order's
+deviations and the requests' length terms, every count and every value as `code_v1` codes them, with the carry chained
+from window to window (`verity/core/protocols/certifier/protocol/charge-chain.md`, "The whole window").
 
-    ChargeCount_v2{N, H, O}  (book, carry, en[N], bit[N], hen[H], short[H], oen[O], p[O], r[O]) -> (ok, bits[CW], carry')
-    ChargeLink_v2{N, H, O}   (book, carry_in[160], carry_out[160], en[N], bit[N], hen[H], short[H], oen[O], p[O], r[O])
-                             -> (ok, bits[CW])
+    ChargeCount_v2{N, H, O, L}  (book, carry, en[N], bit[N], hen[H], short[H], oen[O], p[O], r[O], qen[L], mt[L],
+                                 olen[L]) -> (ok, bits[CW], carry')
+    ChargeLink_v2{N, H, O, L}   (book, carry_in[160], carry_out[160], en[N], bit[N], hen[H], short[H], oen[O], p[O],
+                                 r[O], qen[L], mt[L], olen[L]) -> (ok, bits[CW])
     carry = (n0[3], n1[3], run[2], pos[32], rank[25])
 
 `ChargeCount_v1` (`arith_encode`) charges a window that sends only decisions: it codes `window_code`'s four other
@@ -19,12 +20,23 @@ encoder (`arith_encode`, "The counting variant"), in `window_code`'s order:
 3. n_resumes, 0;
 4. n_order, then each entry's position gap and rank step;
 5. n_lag, 0;
-6. the finish. Its count is the window's charge, which the caller holds to c_w.
+6. the finish;
+7. the length terms, while the registration sends them (`codec.Registered.send_lengths`): each request whose body
+   lands in the window, in release order, as a plain tail after the segment (`window_code.Encoder.raw`,
+   `lengths.tails`), its output_len in width(max_tokens + 1) = bitlen(max_tokens) bits, then its finish in 1.
+The segment's count and the tail's widths are the window's charge, which the caller holds to c_w.
 
-**Slots.** N decision slots (en, bit), H hit slots (hen, and short, the value, 17 bits) and O order slots (oen; p, the
-arrival's position, 32 bits; r, its rank, 25 bits). Each field's enabled slots hold its values in order, and a disabled
-slot changes nothing. A field's count is its enabled slots. A field with no slots (H = 0, O = 0) has no inputs and
-its count is 0.
+**Slots.** N decision slots (en, bit), H hit slots (hen, and short, the value, 17 bits), O order slots (oen; p, the
+arrival's position, 32 bits; r, its rank, 25 bits) and L length slots (qen; mt, the request's certified max_tokens, and
+olen, the output_len it sends, 32 bits each). Each field's enabled slots hold its values in order, and a disabled slot
+changes nothing. A field's count is its enabled slots. A field with no slots (H = 0, O = 0, L = 0) has no inputs and
+its count is 0; with L = 0 the circuit is the one without length terms, gate for gate.
+
+**A length term** (mt, olen) costs `length_bits(mt)` = bitlen(mt) + 1 whatever its values, since every value of a
+fixed width is a string of it and the finish is one of two. Its finish is no input: nothing the charge computes reads it.
+The circuit reads bitlen(mt) from mt's prefix ORs, and its one-hot gives bitlen(mt) + 1 by XORs alone. It refuses an
+olen that doesn't fit its width (olen ≥ 2^bitlen(mt), which `BitWriter.uint` refuses), so at most 2^c values of a
+window's terms are charged c bits by them.
 
 **An integer** v ∈ [0, hi] is coded as `code.Binned.put(v, 0, hi)`. First its Exp-Golomb bin j = bitlen(v), the
 symbol (Σ_{i<j} f_i, f_j, total) of its table. Then its offset u = v − a_j, uniform over the bin's
@@ -44,7 +56,8 @@ table. n_j is a constant of the bin, so the one-hot selects the uniform step's t
 
 **Refusals** (ok = 0): `ChargeCount_v1`'s; a carry-in rank past 2^24 + 1; an enabled hit past 2^16; an enabled entry
 with p < pos, a gap past 2^24, r past 2^24 or p = 2^32 − 1 (its pos wouldn't fit); a selected cumulative frequency past
-2^16; any symbol the coder refuses.
+2^16; any symbol the coder refuses; an enabled length term whose olen doesn't fit bitlen(mt) bits (the reference also
+refuses an mt past 2^32 − 1, which no 32-bit input holds); a charge, the tail's included, past 2^CW − 1.
 
 **The book** (`window_book`) is the registered book's tables at the bins a window reaches, under v1's caps
 (`v1.TABLE_CAPS`): hit_units 2^16, gap and index 2^24, order_len 1, and count caps that cover each count's top bin.
@@ -54,12 +67,14 @@ rank: 149 bits in a 160-bit row (`ROW_BITS`), chained as `charge_chain` chains v
 `VALUE`. After each hit, and after each order entry's gap and its rank step, the carried words are committed, as after
 each decision, so the build stays linear in N + H + O.
 
-**Cost** (`size`, ANDs): `ChargeCount_v2{N, 0, 0}` is `ChargeCount_v1{N}` and 24 for the carry-in's rank check: 19,560
-at N = 2. A hit slot adds about 8,600: its bin step and one uniform step, about 4,000 each, and the bin's selection. An
-order slot adds about 25,800: the gap's bin and two uniform steps, the rank step's three, and their selections. A count
-over S ≥ 2 slots adds its offset step, as n_arrived does. `ChargeCount_v2{1, 1, 1}` is 53,287, {2, 2, 0} 39,803,
-{2, 0, 2} 74,901 and {4, 2, 2} 100,586; `ChargeLink_v2` adds 160 for the link (100,746 at {4, 2, 2}). A lowering adds
-the copies (`size`'s ``carry``).
+**Cost** (`size`, ANDs): `ChargeCount_v2{N, 0, 0, 0}` is `ChargeCount_v1{N}` and 24 for the carry-in's rank check:
+19,560 at N = 2. A hit slot adds about 8,600: its bin step and one uniform step, about 4,000 each, and the bin's
+selection. An order slot adds about 25,800: the gap's bin and two uniform steps, the rank step's three, and their
+selections. A count over S ≥ 2 slots adds its offset step, as n_arrived does. A length slot adds about 109: its
+width's prefix ORs, its refusal and its bits' sum; the first adds 12 more, the tail's sum into the charge and its check
+against `2^CW` (53,408 at {1, 1, 1, 1}). `ChargeCount_v2{1, 1, 1, 0}` is 53,287, {2, 2, 0, 0} 39,803, {2, 0, 2, 0}
+74,901 and {4, 2, 2, 0} 100,586;
+`ChargeLink_v2` adds 160 for the link (100,746 at {4, 2, 2, 0}). A lowering adds the copies (`size`'s ``carry``).
 """
 from __future__ import annotations
 
@@ -85,6 +100,9 @@ HIT_CAP, GAP_CAP, INDEX_CAP = 1 << 16, 1 << 24, 1 << 24
 ZIG_CAP = 2 * INDEX_CAP + 1
 #: the widths of a hit's value, an order entry's position and its rank
 HW, PW, RW = HIT_CAP.bit_length(), 32, INDEX_CAP.bit_length()
+#: the width of a length term's max_tokens and output_len, u32s of the certified body (`active.id_request`)
+MW = CC.LENGTH_BITS
+MT_CAP = (1 << MW) - 1
 #: `code_v1._window`'s integer symbols in its order, each a table of the book
 SYMBOLS = ("n_arrived", "n_hits", "hit", "n_resumes", "n_order", "order_gap", "order_index", "n_lag")
 _CHUNK = 15
@@ -200,20 +218,28 @@ def zigzag(v: int) -> int:
     return 2 * v if v >= 0 else -2 * v - 1
 
 
+def length_bits(mt: int) -> int:
+    """A length term's tail under `code_v1` (`lengths.widths`) for a request of max_tokens `mt`: its output_len in
+    width(mt + 1) = bitlen(mt) bits, then its finish in 1."""
+    return mt.bit_length() + 1
+
+
 def _code(st: Tally, symbols) -> Tally:
     for s in symbols:
         st = AE.reference_count_step(K_MAX, 0, CW, st, 1, s)
     return st
 
 
-def reference_window(N: int, H: int, O: int, book: WindowBook, carry: WindowCarry, en: Sequence[int],
+def reference_window(N: int, H: int, O: int, L: int, book: WindowBook, carry: WindowCarry, en: Sequence[int],
                      bits: Sequence[int], hen: Sequence[int] = (), short: Sequence[int] = (), oen: Sequence[int] = (),
-                     p: Sequence[int] = (), r: Sequence[int] = ()) -> tuple[int, int, WindowCarry]:
-    """(ok, bits, carry') of one window, `code_v1._window`'s segment counted by the references: its N decision slots
-    (en, bits), H hit slots (hen, short) and O order slots (oen, p, r); bits is the window's charge. A refusal returns
-    ok 0, and then only ok is specified."""
-    if (len(en), len(bits), len(hen), len(short), len(oen), len(p), len(r)) != (N, N, H, H, O, O, O):
-        raise ValueError(f"N = {N}, H = {H} and O = {O} slots")
+                     p: Sequence[int] = (), r: Sequence[int] = (), qen: Sequence[int] = (), mt: Sequence[int] = (),
+                     olen: Sequence[int] = ()) -> tuple[int, int, WindowCarry]:
+    """(ok, bits, carry') of one window, `code_v1._window`'s segment counted by the references and its length terms'
+    tail: its N decision slots (en, bits), H hit slots (hen, short), O order slots (oen, p, r) and L length slots
+    (qen, mt, olen); bits is the window's charge. A refusal returns ok 0, and then only ok is specified."""
+    if ((len(en), len(bits), len(hen), len(short), len(oen), len(p), len(r), len(qen), len(mt), len(olen))
+            != (N, N, H, H, O, O, O, L, L, L)):
+        raise ValueError(f"N = {N}, H = {H}, O = {O} and L = {L} slots")
     if [len(t[0]) for t in book.tables] != [b for _n, b in _bins(N, H, O)]:
         raise ValueError(f"a book for N = {N}, H = {H} and O = {O}")
     refused = 0, 0, carry
@@ -249,7 +275,12 @@ def reference_window(N: int, H: int, O: int, book: WindowBook, carry: WindowCarr
             pos, rank = pp + 1, rr + 1
     st = count(st, "n_lag", ())
     good, length = AE.reference_count_finish(CW, st, (1 << CW) - 1)
-    return ok & good, length, WindowCarry(counts, run, pos, rank)
+    for e, m, n in zip(qen, mt, olen):
+        if e:
+            if m > MT_CAP or n >> m.bit_length():
+                return refused
+            length += length_bits(m)
+    return ok & good & int(not length >> CW), length & ((1 << CW) - 1), WindowCarry(counts, run, pos, rank)
 
 
 # --- the row ----------------------------------------------------------------------------------------------------------
@@ -278,22 +309,23 @@ def carry_of(bits: Sequence[int]) -> WindowCarry:
     return WindowCarry(tuple(zip(f["n0"], f["n1"])), f["run"][0], f["pos"][0], f["rank"][0])
 
 
-def reference_link(N: int, H: int, O: int, book: WindowBook, row_in: Sequence[int], row_out: Sequence[int],
+def reference_link(N: int, H: int, O: int, L: int, book: WindowBook, row_in: Sequence[int], row_out: Sequence[int],
                    *slots: Sequence[int]) -> tuple[int, int]:
     """(ok, bits) of one window's charge from its carry rows: `reference_window` from `row_in`'s carry, and ok only if
     `row_out` is its carry' (`encode`)."""
-    ok, length, nxt = reference_window(N, H, O, book, carry_of(row_in), *slots)
+    ok, length, nxt = reference_window(N, H, O, L, book, carry_of(row_in), *slots)
     return int(bool(ok) and tuple(row_out) == encode(nxt)), length
 
 
-def session(N: int, H: int, O: int, book: dict, windows: Sequence[Sequence[Sequence[int]]]
+def session(N: int, H: int, O: int, L: int, book: dict, windows: Sequence[Sequence[Sequence[int]]]
             ) -> list[tuple[int, tuple[int, ...], tuple[int, ...]]]:
-    """The honest chain over a session's windows, each its slots (en, bits, hen, short, oen, p, r), under the
-    registered book (its JSON): each window's (bits, row_in, row_out). ValueError for a window the charge refuses."""
+    """The honest chain over a session's windows, each its slots (en, bits, hen, short, oen, p, r, qen, mt, olen),
+    under the registered book (its JSON): each window's (bits, row_in, row_out). ValueError for a window the charge
+    refuses."""
     wb, carry = window_book(book, N, H, O)
     out = []
     for w, slots in enumerate(windows):
-        ok, length, nxt = reference_window(N, H, O, wb, carry, *slots)
+        ok, length, nxt = reference_window(N, H, O, L, wb, carry, *slots)
         if not ok:
             raise ValueError(f"window {w}'s charge is refused")
         out.append((length, encode(carry), encode(nxt)))
@@ -337,9 +369,12 @@ def book_values(book: WindowBook) -> dict[str, list[int]]:
             for k, v in ((name, list(freqs)), (name + "_total", [total]))}
 
 
+SLOTS = ("en", "bit", "hen", "short", "oen", "p", "r", "qen", "mt", "olen")
+
+
 def _slots(S) -> list[tuple[str, int, int]]:
     return [("en", S.N, 1), ("bit", S.N, 1), ("hen", S.H, 1), ("short", S.H, HW), ("oen", S.O, 1), ("p", S.O, PW),
-            ("r", S.O, RW)]
+            ("r", S.O, RW), ("qen", S.L, 1), ("mt", S.L, MW), ("olen", S.L, MW)]
 
 
 def _window_in(S) -> list[tuple[str, int, int]]:
@@ -408,6 +443,23 @@ def _commit(C, words):
     return [SG.commit(C, x) for x in words]
 
 
+def _lengths(C, qen, mt, olen, oks):
+    """The length slots' tail, Σ over enabled slots of bitlen(mt) + 1, in bitlen(33·L) bits; an enabled olen that
+    doesn't fit bitlen(mt) bits appends a refusal to `oks`."""
+    C.phase = "lengths"
+    tail = [ZERO] * max((length_bits(MT_CAP) * len(qen)).bit_length(), 1)
+    for e, m, n in zip(qen, mt, olen):
+        t = list(m) + [ZERO]
+        for k in reversed(range(MW)):
+            t[k] = AE._or(C, m[k], t[k + 1])
+        oks.append(C.AND(e, or_reduce(C, [C.AND(n[k], t[k].inv()) for k in range(MW)])).inv())
+        hot = [t[0].inv()] + [t[j - 1] ^ t[j] for j in range(1, MW + 1)]
+        w = [C.AND(e, _xor(hot[j] for j in range(MW + 1) if (length_bits((1 << j) - 1) >> b) & 1))
+             for b in range(length_bits(MT_CAP).bit_length())]
+        tail = add(C, tail, w, width=len(tail))
+    return tail
+
+
 def _build_window(C, S, *elements):
     f = AE._split(_window_in(S), elements)
 
@@ -455,15 +507,21 @@ def _build_window(C, S, *elements):
         tally, pos, rank = _commit(C, tally), SG.commit(C, pos), SG.commit(C, rank)
     tally = AE._count(C, "n_lag", [], f["n_lag"], f["n_lag_total"][0], tally, oks)
     fin = AE._build_count_finish(C, SimpleNamespace(CW=CW), *tally, const_bits((1 << CW) - 1, CW))
+    charge = fin[1]
+    if S.L:
+        tail = _lengths(C, wires("qen"), f["mt"], f["olen"], oks)
+        total = add(C, charge, tail, width=max(CW, len(tail)) + 1)
+        oks.append(or_reduce(C, total[CW:]).inv())
+        charge = total[:CW]
     C.phase = "count"
     ok = and_reduce(C, oks + [fin[0][0]])
-    res = {"ok": [[ok]], "bits": [fin[1]], "n0": n0, "n1": n1, "run": [run], "pos": [pos], "rank": [rank]}
+    res = {"ok": [[ok]], "bits": [charge], "n0": n0, "n1": n1, "run": [run], "pos": [pos], "rank": [rank]}
     return AE._flat(_window_out(S), res)
 
 
 def _check_statics(S) -> None:
-    if not all(0 <= x < 1 << 16 for x in (S.N, S.H, S.O)):
-        raise ValueError(f"statics {dict(S.__dict__)}: 0 ≤ N, H, O < 2^16")
+    if not all(0 <= x < 1 << 16 for x in (S.N, S.H, S.O, S.L)):
+        raise ValueError(f"statics {dict(S.__dict__)}: 0 ≤ N, H, O, L < 2^16")
 
 
 def _sig_window(S):
@@ -506,38 +564,40 @@ def _sig_link(S):
 
 
 ChargeCount = _part(
-    "ChargeCount", ("N", "H", "O"), _sig_window, _build_window,
+    "ChargeCount", ("N", "H", "O", "L"), _sig_window, _build_window,
     "one window's charge under advice v1: code_v1's segment for the whole window counted, its decisions at the book's "
     "KT estimate for min(run, 2), its hits and its order entries' gaps and rank steps each an Exp-Golomb bin and a "
     "uniform offset, and every count, from the book's public tables, the KT counts, run and the last entry's position "
-    "and rank carried across windows (`window_charge.reference_window`)", version=2)
+    "and rank carried across windows, then its requests' length terms, bitlen(max_tokens) + 1 plain bits each "
+    "(`window_charge.reference_window`)", version=2)
 
 ChargeLink = _part(
-    "ChargeLink", ("N", "H", "O"), _sig_link, _build_link,
-    "one window's charge under advice v1 with its carry chained: ChargeCount_v2{N, H, O} from the carry in the "
+    "ChargeLink", ("N", "H", "O", "L"), _sig_link, _build_link,
+    "one window's charge under advice v1 with its carry chained: ChargeCount_v2{N, H, O, L} from the carry in the "
     "window's committed carry-in row, ok only if its carry' is the window's carry-out row, the next window's carry-in "
     "(`window_charge.reference_link`)", version=2)
 
 
-def charge_unit(N: int, H: int, O: int):
-    return bind(ChargeCount, N=N, H=H, O=O)
+def charge_unit(N: int, H: int, O: int, L: int):
+    return bind(ChargeCount, N=N, H=H, O=O, L=L)
 
 
-def link_unit(N: int, H: int, O: int):
-    return bind(ChargeLink, N=N, H=H, O=O)
+def link_unit(N: int, H: int, O: int, L: int):
+    return bind(ChargeLink, N=N, H=H, O=O, L=L)
 
 
-def build_link(C, N: int, H: int, O: int, book: Sequence, row_in: Sequence, row_out: Sequence, en: Sequence,
+def build_link(C, N: int, H: int, O: int, L: int, book: Sequence, row_in: Sequence, row_out: Sequence, en: Sequence,
                bits: Sequence, hen: Sequence = (), short: Sequence = (), oen: Sequence = (), p: Sequence = (),
-               r: Sequence = ()) -> tuple:
-    """`ChargeLink_v2{N, H, O}` inline in a caller's circuit: `book`, the elements of `book_fields(N, H, O)` in order;
+               r: Sequence = (), qen: Sequence = (), mt: Sequence = (), olen: Sequence = ()) -> tuple:
+    """`ChargeLink_v2{N, H, O, L}` inline in a caller's circuit: `book`, the elements of `book_fields(N, H, O)` in order;
     `row_in` and `row_out`, the window's carry rows' `ROW_BITS` wires each (its reads of `VALUE`'s rows 0 and 1); `en`,
-    `bits`, `hen` and `oen`, one wire per slot; `short`, `p` and `r`, one word per slot. Returns (ok, bits[CW]), bits
-    the window's charge, which the caller holds to c_w."""
-    S = SimpleNamespace(N=N, H=H, O=O)
+    `bits`, `hen`, `oen` and `qen`, one wire per slot; `short`, `p`, `r`, `mt` and `olen`, one word per slot. Returns
+    (ok, bits[CW]), bits the window's charge, which the caller holds to c_w."""
+    S = SimpleNamespace(N=N, H=H, O=O, L=L)
     words = {"en": [[e] for e in en], "bit": [[b] for b in bits], "hen": [[e] for e in hen],
              "short": [list(s) for s in short], "oen": [[e] for e in oen], "p": [list(x) for x in p],
-             "r": [list(x) for x in r]}
+             "r": [list(x) for x in r], "qen": [[e] for e in qen], "mt": [list(x) for x in mt],
+             "olen": [list(x) for x in olen]}
     slots = [e for name, n, _w in _slots(S) if n for e in words[name]]
     out = _build_link(C, S, *book, list(row_in), list(row_out), *slots)
     return out[0][0], out[1]
@@ -546,23 +606,24 @@ def build_link(C, N: int, H: int, O: int, book: Sequence, row_in: Sequence, row_
 # --- arguments and evaluation -----------------------------------------------------------------------------------------
 
 def _slot_values(slots: Sequence[Sequence[int]]) -> dict[str, list[int]]:
-    return dict(zip(("en", "bit", "hen", "short", "oen", "p", "r"), (list(s) for s in slots)))
+    return dict(zip(SLOTS, (list(s) for s in slots)))
 
 
-def window_arguments(N: int, H: int, O: int, book: WindowBook, carry: WindowCarry,
+def window_arguments(N: int, H: int, O: int, L: int, book: WindowBook, carry: WindowCarry,
                      *slots: Sequence[int]) -> list[list[int]]:
-    """`ChargeCount_v2{N, H, O}`'s arguments, each a flat bit list."""
-    S = SimpleNamespace(N=N, H=H, O=O)
+    """`ChargeCount_v2{N, H, O, L}`'s arguments, each a flat bit list."""
+    S = SimpleNamespace(N=N, H=H, O=O, L=L)
     vals = {**book_values(book), "n0": [c[0] for c in carry.counts], "n1": [c[1] for c in carry.counts],
             "run": [carry.run], "pos": [carry.pos], "rank": [carry.rank], **_slot_values(slots)}
     return AE._args(_window_in(S), vals)
 
 
-def evaluate_windows(N: int, H: int, O: int, cases: Sequence[tuple]) -> list[tuple[int, int, WindowCarry]]:
-    """`ChargeCount_v2{N, H, O}` on each (book, carry, en, bits, hen, short, oen, p, r), in one evaluation."""
-    S = SimpleNamespace(N=N, H=H, O=O)
-    args = [list(col) for col in zip(*(window_arguments(N, H, O, *c) for c in cases))]
-    out = evaluate_bits(charge_unit(N, H, O), *args)
+def evaluate_windows(N: int, H: int, O: int, L: int, cases: Sequence[tuple]) -> list[tuple[int, int, WindowCarry]]:
+    """`ChargeCount_v2{N, H, O, L}` on each (book, carry, en, bits, hen, short, oen, p, r, qen, mt, olen), in one
+    evaluation."""
+    S = SimpleNamespace(N=N, H=H, O=O, L=L)
+    args = [list(col) for col in zip(*(window_arguments(N, H, O, L, *c) for c in cases))]
+    out = evaluate_bits(charge_unit(N, H, O, L), *args)
     res = []
     for row_ in out.reshape(len(cases), -1).tolist():
         f = AE._fields(_window_out(S), row_)
@@ -571,29 +632,30 @@ def evaluate_windows(N: int, H: int, O: int, cases: Sequence[tuple]) -> list[tup
     return res
 
 
-def link_arguments(N: int, H: int, O: int, book: WindowBook, row_in: Sequence[int], row_out: Sequence[int],
+def link_arguments(N: int, H: int, O: int, L: int, book: WindowBook, row_in: Sequence[int], row_out: Sequence[int],
                    *slots: Sequence[int]) -> list[list[int]]:
-    """`ChargeLink_v2{N, H, O}`'s arguments, each a flat bit list."""
+    """`ChargeLink_v2{N, H, O, L}`'s arguments, each a flat bit list."""
     if len(row_in) != ROW_BITS or len(row_out) != ROW_BITS:
         raise ValueError(f"two {ROW_BITS}-bit rows")
-    S = SimpleNamespace(N=N, H=H, O=O)
+    S = SimpleNamespace(N=N, H=H, O=O, L=L)
     flat = AE._args(book_fields(N, H, O), book_values(book)) + [list(row_in), list(row_out)]
     return flat + AE._args([f for f in _slots(S) if f[1]], _slot_values(slots))
 
 
-def evaluate_links(N: int, H: int, O: int, cases: Sequence[tuple]) -> list[tuple[int, int]]:
-    """`ChargeLink_v2{N, H, O}` on each (book, row_in, row_out, en, bits, hen, short, oen, p, r), in one evaluation."""
-    args = [list(col) for col in zip(*(link_arguments(N, H, O, *c) for c in cases))]
-    out = evaluate_bits(link_unit(N, H, O), *args).reshape(len(cases), -1).tolist()
+def evaluate_links(N: int, H: int, O: int, L: int, cases: Sequence[tuple]) -> list[tuple[int, int]]:
+    """`ChargeLink_v2{N, H, O, L}` on each (book, row_in, row_out, en, bits, hen, short, oen, p, r, qen, mt, olen), in
+    one evaluation."""
+    args = [list(col) for col in zip(*(link_arguments(N, H, O, L, *c) for c in cases))]
+    out = evaluate_bits(link_unit(N, H, O, L), *args).reshape(len(cases), -1).tolist()
     return [(int(o[0]), sum(int(b) << j for j, b in enumerate(o[1:1 + CW]))) for o in out]
 
 
 # --- cost -------------------------------------------------------------------------------------------------------------
 
 @lru_cache(maxsize=None)
-def _staged(kind: str, N: int, H: int, O: int) -> dict[str, int]:
+def _staged(kind: str, N: int, H: int, O: int, L: int) -> dict[str, int]:
     sig, build = {"charge": (_sig_window, _build_window), "link": (_sig_link, _build_link)}[kind]
-    S = SimpleNamespace(N=N, H=H, O=O)
+    S = SimpleNamespace(N=N, H=H, O=O, L=L)
     C = Circuit(cse=True)
     params, _ = sig(S)
     ins = [C.input(f"p{i}e{j}", w) for i, (_n, t) in enumerate(params) for j, w in enumerate(BL.elements(t))]
@@ -601,16 +663,16 @@ def _staged(kind: str, N: int, H: int, O: int) -> dict[str, int]:
     return C.phase_counts()
 
 
-def size(kind: str = "charge", N: int = 1, H: int = 0, O: int = 0) -> dict[str, int]:
-    """`ChargeCount_v2{N, H, O}`'s (``charge``) or `ChargeLink_v2{N, H, O}`'s (``link``) ANDs by stage, traced on a
-    counting circuit. Its ``carry`` is no AND: the copies of the carried words, a row each in a lowering."""
-    out = dict(_staged(kind, N, H, O))
+def size(kind: str = "charge", N: int = 1, H: int = 0, O: int = 0, L: int = 0) -> dict[str, int]:
+    """`ChargeCount_v2{N, H, O, L}`'s (``charge``) or `ChargeLink_v2{N, H, O, L}`'s (``link``) ANDs by stage, traced on
+    a counting circuit. Its ``carry`` is no AND: the copies of the carried words, a row each in a lowering."""
+    out = dict(_staged(kind, N, H, O, L))
     out["ands"] = sum(v for k, v in out.items() if k != "carry")
     return out
 
 
-__all__ = ["ChargeCount", "ChargeLink", "GAP_CAP", "HIT_CAP", "INDEX_CAP", "ROW_BITS", "SYMBOLS", "VALUE", "Window",
-           "WindowBook", "WindowCarry", "ZIG_CAP", "binned_symbols", "book_fields", "book_values", "build_link",
-           "carry_of", "charge_unit", "check_chain", "commit_window", "encode", "evaluate_links", "evaluate_windows",
-           "first_carry", "link_arguments", "link_unit", "reads", "reference_link", "reference_window", "session",
-           "size", "start_opening", "window_arguments", "window_book", "zigzag"]
+__all__ = ["ChargeCount", "ChargeLink", "GAP_CAP", "HIT_CAP", "INDEX_CAP", "MT_CAP", "MW", "ROW_BITS", "SLOTS", "SYMBOLS",
+           "VALUE", "Window", "WindowBook", "WindowCarry", "ZIG_CAP", "binned_symbols", "book_fields", "book_values",
+           "build_link", "carry_of", "charge_unit", "check_chain", "commit_window", "encode", "evaluate_links",
+           "evaluate_windows", "first_carry", "length_bits", "link_arguments", "link_unit", "reads", "reference_link",
+           "reference_window", "session", "size", "start_opening", "window_arguments", "window_book", "zigzag"]

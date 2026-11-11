@@ -162,7 +162,8 @@ def _init(instr: str) -> None:
     _CTX["models"] = candidates(instr)
 
 
-def _eval_chunk(args):
+def _eval_chunk(args: tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray],
+                ) -> tuple[dict[str, np.ndarray], dict[str, np.ndarray]]:
     A, B, SA, SB, C = args
     outs, errs = {}, {}
     for name, model in _CTX["models"].items():
@@ -319,7 +320,7 @@ def families(rng: np.random.Generator, n_random: int,
     sk = SCALE_KIND[instr]
     nb = NBLK[instr]
 
-    def shared_meta(n):
+    def shared_meta(n: int) -> np.ndarray:
         return np.repeat(META_VALID[rng.integers(0, len(META_VALID), (n, 1, CHUNKS))], 16, axis=1)
 
     for name, A, Bt, SFA, SFB, C in P.families_nvf4(rng, n_random, sk):
@@ -329,12 +330,12 @@ def families(rng: np.random.Generator, n_random: int,
         np.put_along_axis(B, np.broadcast_to(logical_columns(meta[:, :1, :]), (n, 8, K_STORED)), Bt, axis=-1)
         yield name, A, B, meta, SFA, SFB, C, {"dense_on_compressed": (A, Bt, SFA, SFB, C, 1)}
 
-    def scales(shape):
+    def scales(shape: int | tuple[int, ...]) -> np.ndarray:
         if sk == "ue4m3":
             return P.UE4M3_VALID[rng.integers(0, len(P.UE4M3_VALID), shape)]
         return rng.integers(107, 148, shape).astype(np.uint8)
 
-    def acc(n, lo, hi):
+    def acc(n: int, lo: int, hi: int) -> np.ndarray:
         return P.f32_bits((rng.standard_normal((n, 16, 8)) * np.exp2(rng.integers(lo, hi, (n, 16, 8)))).astype(np.float32))
 
     for name, atoms in (("noise_atom_single", 1), ("noise_atom_pair", 2)):
@@ -359,7 +360,7 @@ def families(rng: np.random.Generator, n_random: int,
             twins["dense_two_atoms"] = (A, B, sa, sb, C, 2)
         yield name, As, B, meta, SFA, SFB, C, twins
 
-    def per_row(n):
+    def per_row(n: int) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
         return (rng.integers(0, 16, (n, 16, K_STORED)).astype(np.uint8), rng.integers(0, 16, (n, 8, K_LOGICAL)).astype(np.uint8),
                 META_VALID[rng.integers(0, len(META_VALID), (n, 16, CHUNKS))], scales((n, 16, nb)), scales((n, 8, nb)))
 
@@ -383,7 +384,8 @@ def families(rng: np.random.Generator, n_random: int,
 # --- driver ----------------------------------------------------------------------------------------------------------------------
 
 
-def _hexrec(acc, a, meta, b, d, sfa, sfb) -> dict:
+def _hexrec(acc: int | np.integer, a: np.ndarray, meta: np.ndarray, b: np.ndarray, d: int | np.integer, sfa: np.ndarray,
+            sfb: np.ndarray) -> dict:
     return {"acc": f"{int(acc):08x}", "a_stored": "".join(f"{int(x):x}" for x in a), "meta": "".join(f"{int(x):x}" for x in meta),
             "b": "".join(f"{int(x):x}" for x in b), "sfa": "".join(f"{int(x):02x}" for x in sfa),
             "sfb": "".join(f"{int(x):02x}" for x in sfb), "d": f"{int(d):08x}"}

@@ -10,7 +10,7 @@
                                                  # onto vy-nebius-2 from this checkout (kind agent-test: 4 CPUs, 16 GB, 60 min unless given;
                                                  # a suites.py run of named suites: their [tool.verity.tests] worker_gb and timeout_s),
                                                  # on whole cores of its own, waiting on the node while none are free; or, when it starts
-                                                 # sooner there, a slot of a CPU node's research pool (research/auto.py's SPILL)
+                                                 # sooner there, a slot of a CPU node's research pool (research/auto.py's `spill`: every CPU node)
   research run --on MACHINE --project P [--source GITDIR] [--send FILE ...] [--env K=V ...] [--exclusive] [--mem-gb N [--mem-wait S]]
                [--gpus N] [--custody-ttl 6h | --no-custody-r2] [--preflight TOOL] [...] -- CMD...   # run custody on the store's remote is the default
                                                  # where gpu-lease hands out the GPUs, only --gpus N (a FCFS wait for N) shows the run any
@@ -25,7 +25,7 @@
   research status [RUN] [--on NAME] [--runs-dir D] [--refresh] [--balance] [--all] [--json]
   research inspect <run-id|prefix|path> [--on NAME] [--runs-dir D] [--json | --py-spy]
                                                  # a full run id another VM launched (no local dir): found on --on NAME, else on
-                                                 # each ssh machine, and its records fetched here (remote.adopt)
+                                                 # each ssh machine but the auditor hosts, and its records fetched here (remote.adopt)
   research keeper set NAME --on NODE --project P --n N --until UTC [--gpus G] [--max-min M] [--source GITDIR] [...] -- CMD... {seed}
   research keeper stop NAME --on NODE [--cancel] | status [NAME] --on NODE [--json]
                                                  # a standing campaign target: the node keeps N chunks leased, a fresh seed each,
@@ -198,7 +198,12 @@ def _cmd_run(argv: list[str], clones: list[Path]) -> int:
     ap.add_argument("--on", default=None, metavar="MACHINE",
                     help="run on an existing authorized machine listed in the machines file; `auto`: an agent's suite or build, "
                          "queued onto vy-nebius-2 from this checkout, 4 CPUs, 16 GB and 60 min unless the run says otherwise, or "
-                         "a slot of a CPU node's research pool when it starts sooner there (research/auto.py's SPILL)")
+                         "a slot of a CPU node's research pool when it starts sooner there (research/auto.py's `spill`: every CPU node); the "
+                         "launch says where it went and when it should start")
+    ap.add_argument("--accept-wait", action="store_true",
+                    help="with --on auto: queue the run though it isn't expected to start within 10 minutes "
+                         "(research/auto.py's START_WITHIN_MIN). Such a launch is warned in one line, or refused once "
+                         "auto.REFUSE is on, and this is how it queues anyway")
     ap.add_argument("--project", default=None, help="ownership/resource boundary; required with --on (also recorded by the harness)")
     ap.add_argument("--source", default=None, metavar="GITDIR", help="with --on: ship `git archive HEAD` of this clean checkout; it becomes the source root "
                                                                        "and tree_sha (the workload still runs in its run dir unless --cwd source)")
@@ -284,7 +289,8 @@ def _cmd_run(argv: list[str], clones: list[Path]) -> int:
                     help="with --on: no run custody on the remote; the records stay on the machine until `research fetch --all`")
     ap.add_argument("--custody-ttl", default=None, metavar="TTL", help="with --custody-r2: the minted key's lifetime, <n>[s|m|h|d], a bare number in seconds "
                                                                        "(default 6h, at most 24h; it must outlast the run and its upload: a --timeout over "
-                                                                       "6h needs it, and one the --timeout outlives is refused)")
+                                                                       "6h needs it, and one the --timeout outlives is refused; a --pool run's default "
+                                                                       "also covers its wait for a slot)")
     ap.add_argument("--run-record", action="store_true",
                     help="a local run: the attempt also carries every run file (logs included; what custody keeps) as its run record, as an "
                          "--on run's custody does: for a pod whose run dir nothing else preserves (store.custody)")
@@ -321,12 +327,18 @@ def _cmd_run(argv: list[str], clones: list[Path]) -> int:
         except waitcap.OverCap as e:
             print(f"research run: {e}", file=sys.stderr)
             return 2
+    if (ns.on or ns.queue) and not ns.claimed and (why := _short_bare_timeout(harness_opts)):
+        print(f"research run: refused: {why}", file=sys.stderr)
+        return 2
+    if ns.accept_wait and ns.on != "auto":
+        print("research run: --accept-wait is for --on auto, whose launch it lets queue past its 10 minutes", file=sys.stderr)
+        return 2
     if ns.on == "auto" and (why := _auto_placement(ns, harness_opts)):
         print(f"research run --on auto: {why}", file=sys.stderr)
         return 2
     if getattr(ns, "auto", False):
         _auto_size(ns, harness_opts, command)
-        if (harness_opts := _auto_spill(ns, harness_opts)) is None:
+        if (harness_opts := _auto_spill(ns, harness_opts, command)) is None:
             return 2
     if ns.claimed:
         _survive_stray_signals()
@@ -361,6 +373,10 @@ def _cmd_run(argv: list[str], clones: list[Path]) -> int:
             harness_opts = [*harness_opts, "--timeout", f"{wait_s + timeout:g}"]
             print(f"research run: --pool {ns.pool}: --timeout {timeout:g} s counts from taking a slot (slot.py --run-max); it waits "
                   f"up to {wait_s / 60:g} min for one (--pool-wait), then exits 75 without running", file=sys.stderr)
+            if ns.custody_ttl is None and ns.custody_r2 is not False and (ttl := _pool_custody_ttl(wait_s + timeout)):
+                ns.custody_ttl = ttl
+                print(f"research run: --pool {ns.pool}: its custody key lives {ttl}, past the wait for a slot and the run after it "
+                      "(--custody-ttl gives another)", file=sys.stderr)
         if ns.mem_gb is not None:
             # the slot admits and reserves the run, not a launch-time reservation, which was held through the wait for a slot
             # beside the slot's once it ran, so a few waiting runs drove admission below zero; the slot takes the larger of its
@@ -417,6 +433,8 @@ def _cmd_run(argv: list[str], clones: list[Path]) -> int:
         if why:
             print(f"research run: {why}", file=sys.stderr)
             return 2
+        if note := _custody_ttl_warning(ns.custody_ttl, harness_opts):
+            print(f"research run: warning: {note}", file=sys.stderr)
     if ns.project:
         harness_opts = ["--project", ns.project, *harness_opts]
     root = R.runs_root(ns.runs_dir)
@@ -594,6 +612,24 @@ def _harness_timeout(harness_opts: list[str]) -> float | None:
     return None if v is None else float(v)
 
 
+SHORT_TIMEOUT_S = 300
+
+
+def _short_bare_timeout(harness_opts: list[str]) -> str | None:
+    """Why a run sent to a machine is refused for its ``--timeout``: a bare number under :data:`SHORT_TIMEOUT_S` reads as seconds,
+    and on a shared machine it is nearly always minutes meant (`--timeout 60` once killed each of a PR's runs 60 s after it took
+    its slot). A value with a unit (`90s`, `60m`) passes as written."""
+    v = remote.flag_value(harness_opts, "--timeout")
+    if v is None or not v.replace(".", "", 1).isdigit():
+        return None
+    n = float(v)
+    if n >= SHORT_TIMEOUT_S:
+        return None
+    return (f"--timeout {v} is {n:g} seconds (a bare number reads as seconds). For minutes write --timeout {v}m, or --max-min {v} "
+            f"with --on auto or --queue; a run that should really stop within {SHORT_TIMEOUT_S // 60} minutes says so with a unit, "
+            f"--timeout {v}s")
+
+
 def _normalize_timeout(harness_opts: list[str]) -> list[str]:
     """``--timeout 40m`` -> ``--timeout 2400``: the harness, the custody-key guard and the lease extension all read seconds.
     ValueError on a malformed value, so it is refused here and not by the machine after launch."""
@@ -609,9 +645,41 @@ def _normalize_timeout(harness_opts: list[str]) -> list[str]:
     return out
 
 
+#: what a run that outlives its custody key needs, since no key lives past `CUSTODY_TTL_CAP_S`
+CUSTODY_REPAIR = ("if the run outlives the key, publish its custody with a fresh one after it ends: "
+                  "`research data custody RUN --publish` (store README, custody)")
+
+
+def _custody_hours(timeout: float) -> int:
+    """The whole hours a custody key lives to outlast a run of ``timeout`` seconds and its upload, at most the cap's."""
+    return min(-(-int(timeout) // 3600) + 1, CUSTODY_TTL_CAP_S // 3600)
+
+
+def _pool_custody_ttl(total_s: float) -> str | None:
+    """The custody key's lifetime for a pool run that names none, where the default would refuse it. The key is minted at
+    launch, and ``total_s`` is the `--timeout` the launcher gives a pool run: its wait for a slot plus the run's own, a sum the
+    run never asked for. None where the default lifetime covers it, or no key does (past :data:`CUSTODY_TTL_CAP_S`, which
+    `_custody_ttl_problem` refuses with what to pass)."""
+    from research.store import credentials as C
+    from research.store.custody import DEFAULT_TTL
+
+    if total_s <= C.parse_ttl(DEFAULT_TTL) or total_s > CUSTODY_TTL_CAP_S:
+        return None
+    return f"{_custody_hours(total_s)}h"
+
+
+def _custody_ttl_warning(custody_ttl: str | None, harness_opts: list[str]) -> str | None:
+    """A launch whose ``--timeout`` is past :data:`CUSTODY_TTL_CAP_S`, with a key at the cap: allowed, and told the repair."""
+    timeout = _harness_timeout(harness_opts)
+    if timeout is not None and timeout > CUSTODY_TTL_CAP_S and custody_ttl:
+        return f"--timeout {timeout:g} s is past the custody key's {custody_ttl}: {CUSTODY_REPAIR}"
+    return None
+
+
 def _custody_ttl_problem(custody_ttl: str | None, harness_opts: list[str]) -> str | None:
     """Why a custody launch is refused: an explicit ``--custody-ttl`` over :data:`CUSTODY_TTL_CAP_S`, or a ``--timeout`` longer than
-    the key's lifetime, the explicit ``--custody-ttl``'s or the default's (the key would expire before the run's upload)."""
+    the key's lifetime, the explicit ``--custody-ttl``'s or the default's (the key would expire before the run's upload). A
+    ``--timeout`` past the cap takes a key at the cap, and the run that outlives it is repaired after (`_custody_ttl_warning`)."""
     from research.store import credentials as C  # noqa: PLC0415
     from research.store.custody import DEFAULT_TTL  # noqa: PLC0415
 
@@ -620,10 +688,14 @@ def _custody_ttl_problem(custody_ttl: str | None, harness_opts: list[str]) -> st
     except C.MintError as e:
         return str(e)
     if custody_ttl and ttl > CUSTODY_TTL_CAP_S:
-        return f"--custody-ttl {custody_ttl} is over the {CUSTODY_TTL_CAP_S // 3600} h cap"
+        return (f"--custody-ttl {custody_ttl} is over the {CUSTODY_TTL_CAP_S // 3600} h cap: pass at most "
+                f"--custody-ttl {CUSTODY_TTL_CAP_S // 3600}h, and {CUSTODY_REPAIR}")
     timeout = _harness_timeout(harness_opts)
-    if timeout is not None and timeout > ttl:
-        hours = -(-int(timeout) // 3600) + 1
+    if timeout is not None and timeout > CUSTODY_TTL_CAP_S and ttl < CUSTODY_TTL_CAP_S:
+        return (f"--timeout {timeout:g} s is past the {CUSTODY_TTL_CAP_S // 3600} h a custody key lives at most: pass "
+                f"--custody-ttl {CUSTODY_TTL_CAP_S // 3600}h, and {CUSTODY_REPAIR}")
+    if timeout is not None and CUSTODY_TTL_CAP_S >= timeout > ttl:
+        hours = _custody_hours(timeout)
         if custody_ttl:
             return (f"--timeout {timeout:g} s outlives --custody-ttl {custody_ttl} ({ttl} s; a bare number is seconds): the upload "
                     f"would fail; pass a longer one, at most {CUSTODY_TTL_CAP_S // 3600}h, such as --custody-ttl {hours}h")
@@ -989,7 +1061,8 @@ def _publish_attempt(run_dir: Path, prep: dict, *, run_record: bool = False) -> 
             pres = f"  local only ({out.get('preserve_skipped', 'no remote')}; `research data push {run_dir.name}` with credentials preserves it)"
         print(f"research: attempt published: {out['n_outputs']} outputs drv={out['derivation']} reuse={out['reuse_key'] or '-'}{pres}", file=sys.stderr)
     else:
-        print(f"research: attempt not published: {out.get('error')}  (store_publish_error.json in the run dir; `research data attempt publish` retries)",
+        retry = f"research data custody {run_dir} --publish" if run_record else "research data attempt publish"
+        print(f"research: attempt not published: {out.get('error')}  (store_publish_error.json in the run dir; `{retry}` retries)",
               file=sys.stderr)
 
 
@@ -1034,24 +1107,45 @@ def _auto_placement(ns: argparse.Namespace, harness_opts: list[str]) -> str | No
     return None
 
 
-def _auto_spill(ns: argparse.Namespace, harness_opts: list[str]) -> list[str] | None:
+def _auto_spill(ns: argparse.Namespace, harness_opts: list[str], command: list[str] = ()) -> list[str] | None:
     """`--on auto` once sized: queued onto AUTO_NODE as `_auto_placement` set it, or, where research.auto finds it starts sooner,
     a CPU-phase run of AUTO_KIND sent to a pool instead (`--on MACHINE --pool POOL`, under `--as`, else `auto`), with the
-    kind's time as its --timeout. The harness options it runs with, or None when it is refused (`auto.Unplaceable`)."""
+    kind's time as its --timeout. It then says when the run should start (`auto.expect`): a late one is warned in one line,
+    or under `auto.REFUSE` refused unless --accept-wait. The harness options it runs with, or None when it is refused (a late
+    run, `auto.Unplaceable`, or a GPU or quiet job while AUTO_NODE is down or held, `auto.closed`)."""
     from . import auto
 
     cpus = ns.cpus or AUTO_CPUS
     mem = ns.mem_gb if ns.mem_gb is not None else AUTO_MEM_GB
     gpu = ns.gpus or ns.gpu_model or ns.gpu_ids or ns.gpu_host or ns.quiet or ns.queue_phase == "gpu"
     target, why = None, "a GPU or quiet job, which only the queue books" if gpu else None
+    if gpu and (closed := auto.closed(auto.read(Path(ns.source), cpus, node_only=True).get(auto.AUTO_NODE))):
+        print(f"research run --on auto: refused: {closed}, and a GPU or quiet job runs on no other node", file=sys.stderr)
+        return None
+    told = None                                                # when it should start; a GPU job's wait is the queue's to say
     if why is None:
+        lean = auto.lean_pool(command, ns.env)
         try:
-            target, why = auto.choose(auto.read(Path(ns.source), cpus), cpus, mem)
+            docs = auto.read(Path(ns.source), cpus, **({"lean": True} if lean else {}))
+            target, why = auto.choose(docs, cpus, mem, lean_pool=lean)
         except auto.Unplaceable as e:
             print(f"research run --on auto: refused: {e}", file=sys.stderr)
             return None
+        wait = auto.expect(docs, target, cpus, mem, lean_pool=lean)
+        told = wait.told(f"{target[0]}'s {target[1]} pool" if target else auto.AUTO_NODE)
+        if wait.late:
+            told = f"it isn't expected to start within {auto.START_WITHIN_MIN} min: {told}"
+            cut = auto.smaller(docs, cpus, mem, lean_pool=lean)
+            cut = f"`--cpus {cut[0]} --mem-gb {cut[1]:g}` starts now on {cut[2][0]}'s {cut[2][1]} pool" if cut else None
+            if auto.REFUSE and not ns.accept_wait:
+                print(f"research run --on auto: refused: {told}. --accept-wait queues it there anyway"
+                      + (f"; {cut}" if cut else ""), file=sys.stderr)
+                return None
+            told = f"warning: {told}" + (f". {cut}" if cut else "")
     if target is None:
         print(f"research run --on auto: queued onto {auto.AUTO_NODE} as {ns.queue_kind}, from {ns.source} ({why})", file=sys.stderr)
+        if told:
+            print(f"research run --on auto: {told}", file=sys.stderr)
         return harness_opts
     machine, pool = target
     if remote.flag_value(harness_opts, "--timeout") is None:
@@ -1061,6 +1155,7 @@ def _auto_spill(ns: argparse.Namespace, harness_opts: list[str]) -> list[str] | 
     ns.mem_gb = mem     # --pool hands it to the slot, which reserves the larger of its mem= and this (a 40-GB slot alone holds a suite to 2 workers)
     ns.queue_kind, ns.queue_class, ns.queue_phase, ns.preemptible = "adhoc", "work", None, False
     print(f"research run --on auto: spilled to {machine}'s {pool} pool, from {ns.source} ({why})", file=sys.stderr)
+    print(f"research run --on auto: {told}", file=sys.stderr)
     return harness_opts
 
 
