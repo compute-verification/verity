@@ -222,8 +222,6 @@
     {"file": "verity_vllm/pipeline/program_graph.py", "kind": "or-empty", "symbol": "<module>", "detail": ".get(k) or [] / {}", "count": 4},
     {"file": "verity_vllm/pipeline/release_json.py", "kind": "schema-literal", "symbol": "<module>", "detail": "verity-sweep/release/v1"},
     {"file": "verity_vllm/pipeline/replay_bundle.py", "kind": "schema-literal", "symbol": "<module>", "detail": "verity-vllm/replay-bundle/v1"},
-    {"file": "verity_vllm/pipeline/replay_bundle.py", "kind": "schema-literal", "symbol": "deferred_records", "detail": "verity-sweep/boundary-linkage/v1"},
-    {"file": "verity_vllm/pipeline/replay_bundle.py", "kind": "schema-literal", "symbol": "deferred_records", "detail": "verity-sweep/sampled-replay/v1"},
     {"file": "verity_vllm/pipeline/replay_bundle.py", "kind": "or-empty", "symbol": "<module>", "detail": ".get(k) or [] / {}", "count": 4},
     {"file": "verity_vllm/pipeline/report.py", "kind": "schema-literal", "symbol": "<module>", "detail": "verity-gen/card/v1"},
     {"file": "verity_vllm/pipeline/report.py", "kind": "or-empty", "symbol": "<module>", "detail": ".get(k) or [] / {}", "count": 85},

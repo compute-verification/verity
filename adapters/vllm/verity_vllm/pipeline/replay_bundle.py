@@ -37,6 +37,8 @@ from pathlib import Path
 from types import SimpleNamespace
 from typing import Any
 
+from verity_vllm.check.replay.driver import SCHEMA as SAMPLED_REPLAY_SCHEMA
+from verity_vllm.check.replay.linkage import LINKAGE_SCHEMA
 from verity_vllm.commit import store_dump as SD
 from verity_vllm.log import init_logger
 from verity_vllm.pipeline import c2_replay as C2
@@ -67,9 +69,9 @@ def partial(out: str | os.PathLike, pair: int, *, rank: int | None = None) -> Pa
 def deferred_records(bundle: Path) -> tuple[dict[str, Any], dict[str, Any]]:
     """The Commit's sampled-replay and boundary-linkage records while their replay is deferred: not evaluated, named, with the bundle."""
     why = f"deferred: the C2 replay runs on CPU from the replay bundle {bundle} (`verity-vllm row stage replay`)"
-    return ({"schema": "verity-sweep/sampled-replay/v1", "method": "sampled-exact-replay", "result": None, "grade": "deferred", "why": why,
+    return ({"schema": SAMPLED_REPLAY_SCHEMA, "method": "sampled-exact-replay", "result": None, "grade": "deferred", "why": why,
              "deferred": {"bundle": str(bundle)}},
-            {"schema": "verity-sweep/boundary-linkage/v1", "result": None, "why": why, "pairs": 0, "linked": 0, "deferred": {"bundle": str(bundle)}})
+            {"schema": LINKAGE_SCHEMA, "result": None, "why": why, "pairs": 0, "linked": 0, "deferred": {"bundle": str(bundle)}})
 
 
 def refuse(args: Any) -> None:
