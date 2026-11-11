@@ -391,6 +391,9 @@ def test_a_mark_and_a_land_verdict_carry_across_a_restack():
     assert rows["Mark to `main`"]["day"] == "p50 95, p90 111 min (n=2); 1 of the heads a restack's, 1 marked before it"     # still 115 and 75
     assert rows["Marked and waiting now (the backlog)"]["now"].startswith("3 PRs: 1 with a land verdict, 2 without")           # #3 at n3
     assert rows["Marked heads with no land verdict now"]["now"].startswith("2: 1 held by a reviewer, 1 not looked at")
+    bare = dict(d, labels={k: v for k, v in d["labels"].items() if k != "3@h3"})    # #3 marked at h3 alone would need a verdict at n3
+    bare["labels"]["3@h3"] = [lab("ready", True, "01:00")]
+    assert {r["name"]: r for r in qt.table(bare)}["Marked heads with no land verdict now"]["now"].startswith("3: 1 held by a reviewer, 2 not looked at")
     one = {p["pr"]: p for p in qt.parts(d)}["1"]
     assert (one["total"], one["review"], one["to_build"]) == (115, 30, 20)          # the verdict at h1, the build of n1
     assert qt.carried(d["labels"], d["restacks"], "3", "n3") == d["labels"]["3@h3"] and qt.carried(d["labels"], {}, "3", "n3") == []
@@ -398,6 +401,8 @@ def test_a_mark_and_a_land_verdict_carry_across_a_restack():
     assert {r["name"]: r for r in qt.table(plain)}["Mark to `main`"]["day"] == "p50 72, p90 74 min (n=2)"
     d["labels"]["3@n3"] = [lab("ready", False, "02:00")]                            # a mark withdrawn at the new head is withdrawn
     assert {r["name"]: r for r in qt.table(d)}["Marked and waiting now (the backlog)"]["now"].startswith("2 PRs: 0 with a land verdict")
+    d["labels"]["1@h1"] = d["labels"]["1@n1"] = []                                  # a restack's head nobody marked was not marked before it
+    assert {r["name"]: r for r in qt.table(d)}["Mark to `main`"]["day"] == "p50 75, p90 75 min (n=1); 1 of the heads a restack's, 0 marked before it"
 
 
 def left() -> list[dict]:

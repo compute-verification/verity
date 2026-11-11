@@ -449,8 +449,8 @@ def _commits(shas: list[str]) -> dict[str, tuple[str, list[str]]]:
                  + " ".join(f'c{i}: object(oid: "{sha}") {{ {fields} }}' for i, sha in enumerate(part)) + " } }")
         try:
             p = subprocess.run(["gh", "api", "graphql", "-f", f"query={query}"], capture_output=True, text=True, timeout=90)
-            got = (json.loads(p.stdout).get("data") or {}).get("repository") or {}
-        except (OSError, ValueError, AttributeError, subprocess.SubprocessError) as e:
+            got = json.loads(p.stdout)["data"]["repository"]
+        except (OSError, ValueError, KeyError, TypeError, subprocess.SubprocessError) as e:
             print(f"research queue stats: GitHub gave no commits ({e!r}); {len(part)} heads count as not restacked", file=sys.stderr)
             return {}
         out = {}
@@ -725,8 +725,8 @@ def candidates(decisions: list[dict], runs: dict[str, dict], day_start: float, o
     """Each candidate built since ``day_start``: its build, verdict (the loop's first `judged pass` or `judged fail`), outcome
     (`green`: `main` moved to it; `red`: dropped for a failure, a member held over one, or infrastructure, with its kind;
     `dropped`: for another cause; `running`), its shards' runs (those the loop names, else the shard runs of its commit), and
-    for a red the first failure among them, the drop, and the next build after it. A failure is a suite's failed report or a failed step on the gate: a step in ``off_gate`` fails
-    without making its candidate red."""
+    for a red the first failure among them, the drop, and the next build after it. A failure is a suite's failed report or a
+    failed step on the gate: a step in ``off_gate`` fails without making its candidate red."""
     out: dict[str, dict] = {}
     builds = sorted(ts(r["at"]) for r in decisions if r["action"] == "build" and not r.get("shadow"))
     for r in decisions:
@@ -791,8 +791,8 @@ def gate_end(shard: dict, off_gate: tuple[str, ...]) -> float | None:
 
 def parts(doc: dict) -> list[dict]:
     """Where each PR landed in the long window spent its time, in minutes: `review` (mark to land verdict), `to_build` (that to the first
-    candidate holding it, at that head or one a restack made it from), `rework` (that build to the build of the candidate it landed in), `check` (that build to the
-    candidate's verdict) and `to_main` (the verdict to the move of `main`)."""
+    candidate holding it, at that head or one a restack made it from), `rework` (that build to the build of the candidate it
+    landed in), `check` (that build to the candidate's verdict) and `to_main` (the verdict to the move of `main`)."""
     decisions, labels, restacked = doc["control"].get("decisions") or [], doc["labels"], doc.get("restacks") or {}
     day = window_start(doc)
     built: dict[tuple[str, str], list[float]] = {}
@@ -909,8 +909,8 @@ def table(doc: dict, prev: dict | None = None, readings: list[dict] | tuple = ()
     def moved(since: float) -> str:
         """How many of the heads landed since ``since`` a restack made, and how many of those were marked before it."""
         made = [(at, pr, head) for at, pr, head in landings if at >= since and head in restacked]
-        early = sum(1 for at, pr, head in made if (mark_at(carried(labels, restacked, pr, head), at) or at)
-                    < (mark_at(labels.get(f"{pr}@{head}") or [], at) or at + 1))
+        early = sum(1 for at, pr, head in made if (first := mark_at(carried(labels, restacked, pr, head), at))
+                    and first < (mark_at(labels.get(f"{pr}@{head}") or [], at) or at + 1))
         return f"; {len(made)} of the heads a restack's, {early} marked before it" if made else ""
 
     def refusals(since: float) -> str:
@@ -950,15 +950,12 @@ def table(doc: dict, prev: dict | None = None, readings: list[dict] | tuple = ()
 
     # 2. mark to land verdict
     review: list[tuple[float, float | None]] = []
-    no_verdict = []
-    for key, labs in labels.items():
-        pr, head = key.split("@")
-        mark = mark_at(labs, now)
-        v, hold = verdict_at(labs)
+    for labs in labels.values():
+        mark, v = mark_at(labs, now), verdict_at(labs)[0]
         if mark and v:
             review.append((v, max(0.0, _m(v - mark))))
-        elif open_prs.get(pr) == head and pr in waiting and pr not in has_verdict and pr not in refused and not lowrisk.get(key):
-            no_verdict.append((_m(now - waiting[pr]), verdict_at(carried(labels, restacked, pr, head))[1]))
+    no_verdict = [(_m(now - mark), verdict_at(carried(labels, restacked, pr, open_prs[pr]))[1]) for pr, mark in waiting.items()
+                  if pr not in has_verdict and pr not in refused and not lowrisk.get(f"{pr}@{open_prs[pr]}")]
     unheld = [w for w, hold in no_verdict if not hold]
     admitted = sum(1 for low in lowrisk.values() if low)
     unknown = sum(1 for low in lowrisk.values() if low is None)
@@ -1311,9 +1308,12 @@ def rounds(doc: dict) -> list[dict]:
         st = step(ran(c, "pytest"), "lean-audit")
         return st.get("end") if st and st.get("state") == "passed" else None
 
-    def cell(st: dict | None) -> dict | None:
-        going = st and not st.get("end") and st.get("state") == "running" and st.get("start")
-        return st and {"state": st.get("state"), "seconds": now - st["start"] if going else st.get("seconds")}
+    def cell(shard: dict | None, name: str) -> dict | None:
+        st = step(shard, name)
+        if st and not st.get("end") and st.get("state") == "running" and st.get("start"):     # so far, by its node's clock
+            read = now if doc.get("until") else doc["nodes"][shard["node"]]["now"]
+            return {"state": "running", "seconds": max(0.0, read - st["start"])}
+        return st and {"state": st.get("state"), "seconds": st.get("seconds")}
 
     out = []
     for c in cands.values():
@@ -1333,8 +1333,8 @@ def rounds(doc: dict) -> list[dict]:
                     "first": first and {"node": first["node"], "id": first["id"]}, "shards": len(c["shards"]),
                     "outcome": c["outcome"], "why": c.get("kind") or c.get("cause"),
                     **{k + "_min": _m(c[k] - c["build"]) if c.get(k) else None for k in ("verdict", "landed", "dropped")},
-                    "steps": {"pytest": cell(step(first, "pytest")), "lean-audit": cell(step(first, "lean-audit")),
-                              "lean-changed": cell(step(third, "lean-changed")), "lean-suites": cell(step(third, "lean-suites"))},
+                    "steps": {"pytest": cell(first, "pytest"), "lean-audit": cell(first, "lean-audit"),
+                              "lean-changed": cell(third, "lean-changed"), "lean-suites": cell(third, "lean-suites")},
                     **reuse((first or {}).get("audit") or {}),
                     "pole": pole and {"shard": pole[1], "step": pole[2], "state": pole[3], "min": _m(pole[0] - c["build"])}})
     return out
