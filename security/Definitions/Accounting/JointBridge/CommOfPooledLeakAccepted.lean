@@ -53,9 +53,13 @@ monitoring period, where the realization beside this one is the reading per phas
 network certifier in `PooledLeakAccepted`'s form, and its trust, `trusted-host` (`Verity.Assumptions.TrustedHost`), is
 a field.
 
+The period's operator (`op`) is `PooledLeakAccepted`'s: fixed before the period, a function of the observations
+alone. Execution phase `i`'s operator at the record `o` is `op i (runsBefore o i)`, which reads only the execution
+phases closed before its own, and its own only through the observations before each step.
+
 `PhaseLeaks` names the second of the two inputs `PooledLeakAccepted` takes at each execution phase, the leak relation
-at the witness's incorrect set. The first, the miss probability given the earlier phases' coins, has its name among
-the network certifier's definitions.
+at the witness's incorrect set and at that phase's operator. The first, the miss probability given the earlier phases'
+coins, has its name among the network certifier's definitions.
 -/
 
 @[expose] public section
@@ -67,23 +71,28 @@ open Claims Claims.Sampling NetTiming
 /-- **The leak relation at each execution phase's own incorrect set**, the second input `PooledLeakAccepted` takes
 (its `hleak`): at each secret `z ∈ Zs`, over the monitoring period's coins `ω`, execution phase `i`'s audit accepts
 while its observations `obs z ω i` fail the leak relation at the incorrect set `W z ω i` (`LeakAt`) with probability
-at most `e' i`. The leak guarantee of one sampled audit, on live coins and at the incorrect set of the witness
-computed before the sample, is what gives it at an execution phase. It is the input the pooled bounds over checked
-inputs name for their leak relations, here for `LeakAt`. -/
+at most `e' i`. The relation is read at the phase's operator at the record's earlier phases,
+`op i (runsBefore (obs z ω) i)`: the period's operator `op` is fixed before the period, and execution phase `i`'s
+reads only the execution phases closed before its own. The leak guarantee of one sampled audit, on live coins and at
+the incorrect set of the witness computed before the sample, is what gives it at an execution phase. It is the input
+the pooled bounds over checked inputs name for their leak relations, here for `LeakAt`. -/
 def PhaseLeaks {L K S m : ℕ} {Ω Z : Type} [Fintype Ω] (lay : AuditStatement → BoundaryGates L S)
     (k : AuditStatement → ℕ) (reg : AuditStatement → Finset ℕ) (Dj : ℕ) (sw : Fin m → AuditStatement)
-    (Pw : Fin m → Partition) (ρ : Fin m → ℕ → Bool) (op : Fin m → ℕ → List (Obs L K S) → List Bool) (Zs : Set Z)
+    (Pw : Fin m → Partition) (ρ : Fin m → ℕ → Bool)
+    (op : Fin m → List (List (Obs L K S)) → ℕ → List (Obs L K S) → List Bool) (Zs : Set Z)
     (acc : Z → Fin m → (Fin m → Ω) → Ω → Prop) (W : Z → (Fin m → Ω) → Fin m → Finset ℕ)
     (obs : Z → (Fin m → Ω) → Fin m → List (Obs L K S)) (e' : Fin m → ℝ) : Prop :=
   ∀ z ∈ Zs, ∀ i, Pr (fun ω => acc z i ω (ω i) ∧
-    ¬LeakAt lay k reg Dj (sw i) (Pw i) (ρ i) (op i) (W z ω i) (obs z ω i)) ≤ e' i
+    ¬LeakAt lay k reg Dj (sw i) (Pw i) (ρ i) (op i (runsBefore (obs z ω) i)) (W z ω i) (obs z ω i)) ≤ e' i
 
 /-- **A period whose communication audit is the network certifier's monitoring period of `m` sampled audits,
 pooled**, at the public layouts `lay`, horizons `k`, registered inputs `reg`, jitter bound `Dj` and the bound `Fmax`
 on the period's incorrect proof blocks, with the claim at `K`. Every field is a property of the deployed run:
 
 * the period's execution phases, as `PooledLeakAccepted` takes them: each one's registration (`sw`), its partition
-  into proof blocks (`Pw`), its registered values (`ρ`) and its operator (`op`);
+  into proof blocks (`Pw`) and its registered values (`ρ`); and the period's operator (`op`), fixed before the period:
+  execution phase `i`'s operator at the record `o` is `op i (runsBefore o i)`, which reads only the execution phases
+  closed before its own;
 * the network audit's own coins are the `m` verification phases' coins, each a `Coin` (`coins`). Every field below
   reads the run at the other audits' coins `ξ` with the network audit's own set to the phases' coins `ω`
   (`Function.update ξ (r.own .network) (coins.symm ω)`, as an audit's guarantee, `Sound`, does), so nothing reads the
@@ -103,14 +112,15 @@ on the period's incorrect proof blocks, with the claim at `K`. Every field is a 
   and the miss probabilities would not multiply;
 * the network audit accepts only if every verification phase's audit does (`accepts_imp`);
 * the claim at `K` is the monitoring period's good event at those incorrect sets and the network certifier's record
-  (`comm_iff`): that is the event whose secrets `PooledLeakAccepted` counts, so `K` is the bits of that count, `log2`
+  (`comm_iff`), each execution phase's leak relation read at its operator at the record's earlier phases: that is the
+  event whose secrets `PooledLeakAccepted` counts, so `K` is the bits of that count, `log2`
   of the bound it gives. No field ties the number `K` to the count yet, and none holds the count's own parameters
   (each execution phase's number of proof blocks, the bits a proof block commits, the run's schedules and the most
   cells each gives a connection): they come with that tie.
 
 The two inputs that `PooledLeakAccepted` takes at each execution phase are not fields: the miss probability given the
 earlier phases' coins (`NetTiming.PeriodEscapes` at `acc` and `W`) and the leak relation at the witness's incorrect
-set (`PhaseLeaks` at `acc`, `W` and `record`), each at every value of the other audits' coins, are the premises of
+set (`PhaseLeaks` at `op`, `acc`, `W` and `record`), each at every value of the other audits' coins, are the premises of
 `Accounting.Guarantees.Bridge.CommOfPooledLeakAccepted` (`hesc`, `hleak`). -/
 structure RealizesCommOfPooledLeakAccepted {ι : Type} {d : Device ι} {α : Type} [Fintype α] {C : Verity.Circuit}
     {I : Type} {Ω : I → Type} [DecidableEq I] [∀ i, Fintype (Ω i)]
@@ -123,8 +133,9 @@ structure RealizesCommOfPooledLeakAccepted {ι : Type} {d : Device ι} {α : Typ
   Pw : Fin m → Partition
   /-- each execution phase's registered values at its registered inputs -/
   ρ : Fin m → ℕ → Bool
-  /-- each execution phase's operator: the ingress at each step, from the observations before it -/
-  op : Fin m → ℕ → List (Obs L Kₒ S) → List Bool
+  /-- the period's operator, fixed before the period: execution phase `i`'s, at the observations of the execution
+  phases closed before it, in order, gives the ingress at each step from the observations before that step -/
+  op : Fin m → List (List (Obs L Kₒ S)) → ℕ → List (Obs L Kₒ S) → List Bool
   /-- one verification phase's coins -/
   Coin : Type
   [coinFintype : Fintype Coin]

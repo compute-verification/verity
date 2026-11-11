@@ -65,10 +65,12 @@ period's good event at the bound `Fmax` on its incorrect proof blocks), given
   `(1 - q)^|W_i| + e i`, `W_i` the incorrect set of the witness computed from its registration and `q` the sampling
   design's detection probability of one incorrect proof block in an execution phase. SPOT's guarantee at each
   verification phase, given what came before it, is what gives it;
-* `hleak`, the leak relation at that incorrect set (`PhaseLeaks` at the realization's `acc`, `W` and `record`): over
-  the period's coins, execution phase `i`'s audit accepts while its observations in the network certifier's record
-  fail `LeakAt` at `W_i` with probability at most `e' i`. The leak guarantee of one sampled audit, on live coins and
-  at the incorrect set of the witness computed before the sample, is what gives it;
+* `hleak`, the leak relation at that incorrect set (`PhaseLeaks` at the realization's `op`, `acc`, `W` and `record`):
+  over the period's coins, execution phase `i`'s audit accepts while its observations in the network certifier's
+  record fail `LeakAt` at `W_i` with probability at most `e' i`. `LeakAt` is read at the phase's operator at the
+  record's earlier phases: the period's operator `R.op` is fixed before the period, and execution phase `i`'s reads
+  only the execution phases closed before its own. The leak guarantee of one sampled audit, on live coins and at the
+  incorrect set of the witness computed before the sample, is what gives it;
 
 for `e ≥ 0` and `0 ≤ q ≤ 1`, the network audit's `Sound` holds at `e^(−q·Fmax) + Σ_i e i + Σ_i e' i`: at any value of
 the other audits' coins, the network audit accepts while the period's good event fails with at most that probability

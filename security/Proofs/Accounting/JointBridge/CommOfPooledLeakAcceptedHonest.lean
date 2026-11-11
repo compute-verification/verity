@@ -44,12 +44,13 @@ import Proofs.Pouw.Prob
 earlier phases' coins and the leak relation at the witness's incorrect set, hold together at one run that realizes the
 network certifier's monitoring period (`Accounting.NetWitness.honestPooled`, among the definitions).
 
-The run has two execution phases of one step each. Its circuit negates its one ingress bit, its operator sends
-`false`, and the network certifier's record at each phase is the frame the circuit then puts on the link
-(`frameRecord`), so the record meets the leak relation with no incorrect proof block (`leakAt_honest`). The network
-audit accepts when both phases' records meet that relation, and its claim is the period's good event at the record.
-No proof block is incorrect, so the miss probability is bounded by `1` and the leak relation fails with probability
-`0`. The network certifier sees no connection, and its code is run as written.
+The run has two execution phases of one step each. Its circuit negates its one ingress bit, the period's operator
+sends `false` whatever the phases closed before it observed, and the network certifier's record at each phase is the
+frame the circuit then puts on the link (`frameRecord`), so the record meets the leak relation at that operator with
+no incorrect proof block (`leakAt_honest`). The network audit accepts when both phases' records meet that relation,
+and its claim is the period's good event at the record. No proof block is incorrect, so the miss probability is
+bounded by `1` and the leak relation fails with probability `0`. The network certifier sees no connection, and its
+code is run as written.
 -/
 
 @[expose] public section
@@ -102,8 +103,8 @@ theorem leakAt_honest (i : Fin 2) :
 
 /-- **`CommOfPooledLeakAccepted`'s two inputs hold together at `honestPooled`**, at detection probability `½`: no
 proof block is incorrect, so the miss probability given the earlier phases' coins is bounded by `(1 − ½)^0 = 1`, and
-each execution phase's record meets the leak relation at the empty incorrect set, so the leak relation fails with
-probability `0`. -/
+each execution phase's record meets the leak relation at the empty incorrect set and at the phase's operator, which
+sends `false` at every record of the earlier phases, so the leak relation fails with probability `0`. -/
 theorem CommOfPooledLeakAccepted_honest :
     PeriodEscapes Set.univ honestPooled.acc honestPooled.W (1 / 2) (fun _ => 0) ∧
       PhaseLeaks (fun _ => notLay) (fun _ => 1) (fun _ => ∅) 1 honestPooled.sw honestPooled.Pw honestPooled.ρ
