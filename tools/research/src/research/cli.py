@@ -75,6 +75,9 @@
                                                  # idle: `cluster usage` (infra/cluster usage.py) over the console's record on vy-nebius-1
   research lean-times [--hours 24] [--until T] [--over 15] [--json]   # each Lean task's wall time, from the store's attempts: records
                                                  # runs and checks' Lean steps, p50/p95/max per kind and package (research/lean_times.py)
+  research run-times [--hours 12] [--until T] [--over 10] [--on MACHINE,...] [--json]   # each run's wait to start, setup and run
+                                                 # time from its records on the machines, p50/p90/p95 by kind, machine and pool, and
+                                                 # each run that waited over 10 min with what it waited behind (research/run_times.py)
   research pods ssh TARGET [--print] [-- CMD...]  # TARGET = machines.toml name | pod id | pod name; the port is looked up, never hard-coded
   research pods sync TARGET [SRC] [--dest DIR]    # rsync the worktree's git-visible files (default /workspace/src), prune what it shipped before
   research notes checkpoint LANE STATE TEXT...   # CHECKPOINT <sha> (<HH:MM>Z) [open|blocked|final|superseded] line atop the report
@@ -1244,7 +1247,7 @@ LEAN_AUDIT = "tools/verity/lean/lean_audit.py"
 
 def lean_records_urls(source: Path | None, command: list[str]) -> Path | None:
     """For a Lean records run from the tree ``source``, that tree's `lean-deps-urls.json` (`url_file`), written in a temporary
-    directory: the presigned URLs of the newest recorded checks' and passing records runs' artifact bundles
+    directory: the presigned URLs of the newest recorded checks', mark audits' and records runs' artifact bundles
     (`shared_bundles`) and of the pinned dependency bundles. None for any other run, a tree without `LEAN_AUDIT`, or a store
     that signs nothing; a failure sends none, and the run then builds what its node lacks."""
     if source is None or not LEAN_RECORDS.search(" ".join(command)) or not (source / LEAN_AUDIT).is_file():
@@ -1259,8 +1262,8 @@ def lean_records_urls(source: Path | None, command: list[str]) -> Path | None:
         print(f"research run: no Lean bundle URLs sent ({type(e).__name__}: {e})", file=sys.stderr)
         return None
     if urls:
-        print(f"research run: a Lean records run: sending presigned URLs for {shared} Lean artifact bundle(s) of recent checks and "
-              "records runs", file=sys.stderr)
+        print(f"research run: a Lean records run: sending presigned URLs for {shared} Lean artifact bundle(s) of recent checks, "
+              "mark audits and records runs", file=sys.stderr)
     return urls
 
 
@@ -2050,6 +2053,10 @@ def main(argv: list[str] | None = None) -> int:
         from .lean_times import main as lean_times_main
 
         return lean_times_main(rest)
+    if cmd == "run-times":
+        from .run_times import main as run_times_main
+
+        return run_times_main(rest)
     if cmd == "agents":
         from .agents import main as agents_main
 

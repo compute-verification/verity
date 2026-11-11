@@ -21,7 +21,9 @@ after-landing run on `checked`'s tip.  It reports each step's real verdict; what
                                                             lean-audit repairs a lock's bookkeeping and the caps it breaks and
                                                             warns rather than failing (`lean_audit.py --bookkeeping warn`)
     ... --no-cache [--circuit-cache]                        reuse no pass, and run every job, those off the gate too (the
-                                                            nightly `audit-main`, which gates nothing); with --circuit-cache,
+                                                            nightly `audit-main`, which gates nothing), and unsharded and
+                                                            without --deferred the opt-in tests `OPT_IN` names, with their
+                                                            variables set, after their suites' runs; with --circuit-cache,
                                                             circuit-check alone still reuses and stores its per-target passes,
                                                             and only its entries of a pack are imported: drive's after-landing
                                                             run, where a cold `--all` (~4 h) outlasted every run
@@ -31,7 +33,8 @@ after-landing run on `checked`'s tip.  It reports each step's real verdict; what
                                                             `--deferred` and `--no-cache` run: an Attempt of the clean commit
                                                             checked out, the record `research merge` reads; with presigned URLs
                                                             for the pinned upstream build and inputs when the commit changes
-                                                            verity/protocols/flock/prover/ against --base REF (default origin/main; also
+                                                            verity/protocols/flock/ (but sigma/, a README.md or PROTOCOL.md)
+                                                            against --base REF (default origin/main; also
                                                             ratchet-gate's base unless --ratchet-base REF is given), the pinned
                                                             Lean dependency bundles and the newest recorded checks' verdict
                                                             packs (`verdict_url_file`), which the run fetches and the launch
@@ -178,7 +181,7 @@ doesn't name:
                     `verity.circuits.partition` (`unit_cut_agree.py`), then its agreement with upstream's Rust verifier (`ci.py`) on
                     the upstream build stored once and pinned by hash (`verity/protocols/flock/agreement/upstream.json`), which the step
                     fetches when the run was sent its presigned URLs (`agreement_url_file`); skipped by name without them.
-                    `research merge` requires it for a change under verity/protocols/flock/prover/ (`tool.py`)
+                    `research merge` requires it for a change under verity/protocols/flock/ (but sigma/, a README.md or PROTOCOL.md; `tool.py`)
     lean-suites     once lean-build has passed, beside the rest of the lean group: the suites that use Lean (`AFTER_LEAN`,
                     outcomes in `suites-lean.json`) on the verifier it built
     lean-audit      at once with the lean group: the audit of every Lake package with a `lean-audit.json` (`lean_audit.py`,
@@ -240,7 +243,8 @@ what its steps had passed.  `--record` declares it an output, so custody uploads
 leaves no result.json, and the pack is then in the attempt's run record alone (`attempt_pack` reads either).  Custody misses it only
 where it uploads nothing: `--no-custody-r2` and a run without `--on`, and a run whose runner is killed or whose machine is lost.
 `--record` without `--no-cache` (or with `--circuit-cache` beside it, for circuit-check's entries alone) sends presigned URLs of
-the newest recorded checks' packs, failed and cancelled ones' too, since a pack holds only passes, up to `GATHER_BYTES` of them
+the newest recorded checks' packs, failed and cancelled ones' too, since a pack holds only passes, up to `GATHER_BYTES` of them,
+with the packs the Lean audits of ready marks left (`PACKERS`), those of the marks of the PRs this checkout holds before the newest
 (`verdict_url_file`): the launcher fetches none, and the run fetches and imports each before its steps (`verdicts_fetched`),
 beside a `--verdicts-in` pack, never in its place, so every machine reuses every pass a recorded check earned; each pack imported
 is named in the result's `verdicts`.  The agreement's pinned upstream build and inputs go the same way (`agreement_url_file`):
@@ -259,7 +263,8 @@ fetched (Flock's `verifier/ci.py` hands the custody key to its store CLI too).
 
 The vLLM reference regression.  A recorded run's steps also get VERITY_REGRESSION=1, so adapters/vllm's suite runs
 `tests/regression`'s T0 tier against the frozen rows in the store (about four minutes of tests): every check but the manifest
-rebuilds, which take an hour and run after each train on main instead (`post_train.py`).  Under VERITY_STORE_REQUIRED=1 a row's
+rebuilds, which take an hour and run after each train on main instead (`post_train.py`).  The quick tier before a mark
+(`research queue ready`) and suites.py inside a `research run` set it too, so a PR that breaks a row fails there first.  Under VERITY_STORE_REQUIRED=1 a row's
 input or contract that doesn't resolve fails there; only a check `fixtures.toml` retires on a row, with its reason, skips.
 """
 from __future__ import annotations
@@ -919,8 +924,8 @@ def lean_steps(out: Path, cache: bool = True, urls: Path | None = None,
             return [("lean", f"the verifier is on this tree but its Lean package is not at {lean}", ROOT)]
         return [("lean", "skipped: verity/protocols/flock/verifier is not on this tree", ROOT)]
     verify = lean / ".lake" / "build" / "bin" / "flock-verify"
-    agreement: list[str] | str = ("skipped: the pinned upstream build was not sent (a merge changing verity/protocols/flock/prover/ or "
-                                  "verity/protocols/flock/verifier/ requires this step: `check.py --record` sends its URLs)")
+    agreement: list[str] | str = ("skipped: the pinned upstream build was not sent (a merge changing verity/protocols/flock/ "
+                                  "(but sigma/, a README.md or PROTOCOL.md) requires this step: `check.py --record` sends its URLs)")
     if UPSTREAM_PIN.exists() and agreement_urls is not None:
         try:
             got = agreement_sent(agreement_urls)
@@ -1343,7 +1348,7 @@ def record(argv: list[str]) -> int:
         sent = json.loads(urls.read_text())
         shared = sum(k.startswith("lean-artifacts/") for k in sent)
         print(f"check: sending presigned URLs for {len(sent) - shared} pinned Lean dependency bundle(s) and {shared} Lean artifact "
-              f"bundle(s) of recent checks and records runs")
+              f"bundle(s) of recent checks, mark audits and records runs")
         if on:
             cmd += ["--send", str(urls)]
         else:
@@ -1392,7 +1397,8 @@ def record(argv: list[str]) -> int:
         shutil.rmtree(d, ignore_errors=True)
 
 
-#: how many of the newest recorded checks' verdict packs a recorded check imports (`verdict_packs`)
+#: how many of the newest verdict packs of each kind of run (`PACKERS`) a recorded check imports (`verdict_packs`), beside
+#: those of the marks of the PRs its tree holds
 GATHER = 12
 #: the bytes of recorded checks' packs one check imports (`verdict_packs`): a pack that would take them past this is passed over
 #: by name, by the size the store lists, before anything fetches it, so what a run fetches and unpacks before its first step
@@ -1403,21 +1409,24 @@ GATHER_BYTES = 256 << 20
 VERDICT_URL_TTL_S = 6 * 3600
 
 
-def verdict_url_file(d: Path, store=None) -> Path | None:
+def verdict_url_file(d: Path, store=None, heads: list[str] | tuple[str, ...] | None = None) -> Path | None:
     """`VERDICT_URLS` in ``d`` (mode 600): the packs `verdict_packs` selects among those the store's remote holds, each with a GET
     of its blob that the remote signs for `VERDICT_URL_TTL_S`, for the run to fetch and import before its steps
-    (`verdicts_fetched`): the launcher lists and signs, and fetches nothing.  None, with the reason printed, when the store can't
-    be read, no remote here signs URLs or no recorded check published a pack: the run then reuses only its node's own passes and a
-    pack given."""
+    (`verdicts_fetched`): the launcher lists and signs, and fetches nothing.  ``heads`` are `verdict_packs`'; the launcher, which
+    gives neither them nor a ``store``, sends for the PRs this checkout's queue merges hold (`common.merged_heads`).  None, with
+    the reason printed, when the store can't be read, no remote here signs URLs or no recorded check published a pack: the run
+    then reuses only its node's own passes and a pack given."""
     from research.store.local import LocalStore, object_key
 
     try:
+        if heads is None:
+            heads = COMMON.merged_heads(ROOT) if store is None else ()
         store = store or LocalStore()
         if (sign := getattr(store.remote, "presign", None)) is None:
             print("check: verdicts: no store remote here signs URLs, so the run imports no recorded check's pack", flush=True)
             return None
         packs = [{"run": p["run"], "sha256": p["sha256"], "bytes": p["bytes"], "url": sign(object_key(p["sha256"]), VERDICT_URL_TTL_S)}
-                 for p in verdict_packs(store, remote=True)]
+                 for p in verdict_packs(store, remote=True, heads=heads)]
     except Exception as e:  # noqa: BLE001  (no URL: the check reuses only its node's passes and the one given)
         print(f"check: no verdict packs listed from the store ({type(e).__name__}: {e})", flush=True)
         return None
@@ -1454,40 +1463,54 @@ def attempt_pack(store, rid: str, d: Path, name: str = "verdicts.tar.gz") -> Pat
     """The verdict pack the attempt ``rid`` published (`pack_file`), fetched under ``d``, or None."""
     if (got := pack_file(store, rid, name)) is None:
         return None
-    return store.fetch(got[0], d / name.split(".", 1)[0] / rid, paths=[name]) / name
+    return store.fetch(got[0], d / Path(name).name.split(".", 1)[0] / rid, paths=[name]) / name
 
 
-def verdict_packs(store, limit: int = GATHER, remote: bool = False) -> list[dict]:
-    """{run, sha256, bytes} of the pack of each of the ``limit`` recorded checks that ended last and published one, newest first: a
-    failed or cancelled run's too, since its pack holds only the passes its steps stored, each under a key of everything it read.
-    One whose listed size would take them past `GATHER_BYTES` is passed over by name, unfetched, and with ``remote`` so is one the
-    store's remote doesn't hold, which no URL fetches.  When the store has a remote, the attempts started in the last
+#: the pack the Lean audit of a ready mark's merge leaves among its run's files (`tools/verity/lean/warm.py`'s `PACK`)
+MARK_PACK = COMMON.MARK_AUDIT_OUT + "verdicts.tar.gz"
+#: the runs `verdict_packs` lists packs of, each kind as (the store's attempts of it, its pack's path among its files): the
+#: recorded checks, and the audits of ready marks' merges, whose packs hold Lean verdicts alone
+PACKERS = ((COMMON.RECORDED_CHECKS, "verdicts.tar.gz"), (COMMON.MARK_AUDITS, MARK_PACK))
+
+
+def verdict_packs(store, limit: int = GATHER, remote: bool = False, heads: list[str] | tuple[str, ...] = ()) -> list[dict]:
+    """{run, sha256, bytes, path} of the pack of each of the ``limit`` runs of each kind of `PACKERS` that ended last and
+    published one, the recorded checks' first and each kind's newest first: a failed or cancelled run's too, since its pack holds
+    only the passes its steps stored, each under a key of everything it read.  Before the newest mark audits' come those of the
+    marks of ``heads`` (`common.lookups`), however old and beside the ``limit``, as `lean_audit.shared_bundles` lists their
+    bundles.  One whose listed size would take them past `GATHER_BYTES` is passed over by name, unfetched, and with ``remote`` so
+    is one the store's remote doesn't hold, which no URL fetches.  When the store has a remote, the attempts started in the last
     `common.RECENT_S` are refreshed from it first."""
     if store.remote is not None:
         store.refresh(attempts_only=True, since=COMMON.recent(time.time()))
-    rows = store.index.sql(f"SELECT id FROM attempts WHERE {COMMON.RECORDED_CHECKS} AND state IN ('done', 'failed', 'cancelled') "
-                           "ORDER BY julianday(start_utc) + COALESCE(wall_s, 0) / 86400.0 DESC LIMIT ?", (4 * limit,))
+    ended = ("state IN ('done', 'failed', 'cancelled') "
+             "ORDER BY julianday(start_utc) + COALESCE(wall_s, 0) / 86400.0 DESC LIMIT ?")
     packs, room = [], GATHER_BYTES
-    for (rid,) in rows:
-        if (got := pack_file(store, rid)) is None or (remote and not got[1].get("remote")):
-            continue
-        if (size := got[1]["bytes"]) > room:
-            print(f"check: verdicts: skipping {rid}'s pack: its {size / 2**20:.0f} MiB would take this check's packs past "
-                  f"{GATHER_BYTES / 2**20:.0f} MiB (GATHER_BYTES); its verdicts are recomputed", flush=True)
-            continue
-        packs.append({"run": rid, "sha256": got[1]["sha256"], "bytes": size})
-        room -= size
-        if len(packs) == limit:
-            break
+    for runs, name in PACKERS:
+        for which, args, most in COMMON.lookups(runs, limit, heads):
+            found = 0
+            for (rid,) in store.index.sql(f"SELECT id FROM attempts WHERE {which} AND {ended}", args):
+                if any(p["run"] == rid for p in packs):
+                    continue
+                if (got := pack_file(store, rid, name)) is None or (remote and not got[1].get("remote")):
+                    continue
+                if (size := got[1]["bytes"]) > room:
+                    print(f"check: verdicts: skipping {rid}'s pack: its {size / 2**20:.0f} MiB would take this check's packs past "
+                          f"{GATHER_BYTES / 2**20:.0f} MiB (GATHER_BYTES); its verdicts are recomputed", flush=True)
+                    continue
+                packs.append({"run": rid, "sha256": got[1]["sha256"], "bytes": size, "path": name})
+                room -= size
+                if (found := found + 1) == most:
+                    break
     return packs
 
 
 def gathered_packs(d: Path, store, limit: int = GATHER) -> list[tuple[str, Path]]:
-    """(attempt, pack) of the packs `verdict_packs` selects, fetched under ``d``, newest first, for a plan read here (`plan.py`,
-    `measure`); one import refuses is passed over by name."""
+    """(attempt, pack) of the newest packs `verdict_packs` selects (those of no PR's marks beside them), fetched under ``d``,
+    newest first, for a plan read here (`plan.py`, `measure`); one import refuses is passed over by name."""
     packs = []
     for p in verdict_packs(store, limit):
-        if (pack := attempt_pack(store, p["run"], d)) is None:
+        if (pack := attempt_pack(store, p["run"], d, p["path"])) is None:
             continue
         if why := VERDICTS.refusal(pack):
             print(f"check: verdicts: skipping {p['run']}'s pack, which import refuses ({why}); its verdicts are recomputed",
@@ -1570,6 +1593,60 @@ def verdicts_fetched(listed: list[dict], only: str | None = None) -> list[dict]:
 #: beside them, build only in trees of their own (tests/test_no_wall_clock.py holds every other suite to not skipping on them).
 #: `suites.py` run on its own builds the verifier before them itself; here it is told the build is done (`--lean-built`).
 AFTER_LEAN = SUITES.AFTER_LEAN
+
+#: The opt-in tests a cold check runs by name (`--no-cache`, unsharded and without `--deferred`: the nightly `audit-main`), each
+#: suite's in a `suites.py` run of its own with its variable set, in the step that runs the suite, after the suite's own run
+#: (`opt_in`): suite -> (the variable, the tests by node id in the suite).  Each skips in every other check by a mark in its own
+#: file that reads the variable (tests/test_opt_in_tests.py), so no candidate's check pays for it and no suite's key holds the
+#: variable; a test the variable turns on that this doesn't name, circuit-check's serial-report test of about 2.5 h, stays off.
+OPT_IN = {
+    "tools/verity/circuit_check": ("VERITY_CIRCUIT_CHECK_SLOW", (
+        "tests/test_circuit_check.py::test_every_call_the_suite_checks_is_partitioned",
+        "tests/test_circuit_check.py::test_a_call_whose_partition_is_unchecked_passes_call_status_to_its_callees")),
+    "verity/protocols/remote/verifier/composition": ("VERITY_SLOW", (
+        "tests/test_composition_difftest.py::test_remote_agrees",
+        "tests/test_composition_difftest.py::test_onsite_agrees",
+        "tests/test_composition_difftest.py::test_product_over_remotes_subprotocols_is_remote",
+        "tests/test_composition_difftest.py::test_a_reference_without_reject_dominance_is_caught")),
+}
+#: where a cold check's opt-in runs write each suite's outcome and log, apart from its steps' own (`suites.json`, `suites/`)
+OPT_IN_DIR = "opt-in"
+
+
+def then_opt_in(argv: list[str], out: Path, step: str, args: list[str]) -> str:
+    """``argv`` and then, whether or not it passed, the opt-in tests of ``step`` (`opt_in`, with suites.py's ``args``), as one
+    shell command that fails when either fails."""
+    them = [sys.executable, str(Path(__file__).resolve()), "--opt-in", str(out), step, *args]
+    return "rc=0; " + "; ".join(f"{shlex.join(c)} || rc=$?" for c in (argv, them)) + "; exit $rc"
+
+
+def opt_in(out: Path, step: str, args: list[str]) -> int:
+    """`check.py --opt-in OUT STEP ARGS...`, a cold check's opt-in tests (`OPT_IN`) of the suites step STEP runs (pytest: those not
+    in `AFTER_LEAN`; lean-suites: those in it; all: every one, on a tree without the verifier), each suite's in a `suites.py` run
+    of its own with ARGS, its variable set to 1 and its tests named, with its outcome and log in OUT's `OPT_IN_DIR`.  0 only when
+    each named test passed: one that skipped, or that its suite doesn't have, fails the step."""
+    if step not in ("pytest", "lean-suites", "all"):
+        print(f"check: --opt-in OUT STEP: STEP is pytest, lean-suites or all, not {step!r}", file=sys.stderr)
+        return 2
+    names = {s.path: s.name for s in SUITES.select(SUITES.discover(), list(OPT_IN))}
+    d = out / OPT_IN_DIR
+    d.mkdir(parents=True, exist_ok=True)
+    rc = 0
+    for path, (var, tests) in OPT_IN.items():
+        if step != "all" and (names[path] in AFTER_LEAN) != (step == "lean-suites"):
+            continue
+        j = d / f"{path.replace('/', '_')}.json"
+        j.unlink(missing_ok=True)
+        print(f"check: opt-in: {path} with {var}=1: {', '.join(t.partition('::')[2] for t in tests)}", flush=True)
+        ran = subprocess.run([sys.executable, str(ROOT / "tools" / "verity" / "check" / "suites.py"), path, "--json", str(j),
+                              "--logs", str(d), *args, "--", *tests], cwd=ROOT, env={**os.environ, var: "1"}).returncode
+        c = (next(iter(json.loads(j.read_text())), {}).get("counts") or {}) if j.exists() else {}
+        if ran or c.get("passed", 0) < len(tests) or any(c.get(k) for k in ("failed", "error", "skipped")):
+            why = ", ".join(f"{v} {k}" for k, v in c.items() if k != "passed" and v) or f"suites.py exited {ran}"
+            print(f"check: opt-in: {path}: {c.get('passed', 0)} of the {len(tests)} tests named with {var}=1 passed ({why}); "
+                  f"its log is in {d}", flush=True)
+            rc = 1
+    return rc
 
 
 #: what pytest and the Lean steps hold beside circuit-check in one run, in GiB: pytest and lean-audit have held 160 to 350
@@ -1793,14 +1870,19 @@ def groups(out: Path, n: int, cache: bool = True, urls: Path | None = None,
     held = {job: [p.partition(":")[2] for p in only or () if p.partition(":")[0] == job and p.partition(":")[2]]
             for job in SHARDS.SUITE_JOBS}
     after_lean: list[str] = []
+    # a cold check, unsharded and without --deferred, also runs the opt-in tests, by name with their variables set (`OPT_IN`)
+    cold = not cache and only is None
     if len(lean) > 1:
         after_lean = [x for s in AFTER_LEAN for x in ("--skip", s)]
         lean_suites = [*suites, *(suite_args(held["lean-suites"], splits, out) or AFTER_LEAN), "--lean-built",
                        "--json", str(out / "suites-lean.json"),
                        "--logs", str(out / "suites"), *tail]
-        lean.insert(3, ("lean-suites", ["bash", "-c", ELAN + shlex.join(lean_suites)], ROOT))
+        lean.insert(3, ("lean-suites", ["bash", "-c", ELAN + (then_opt_in(lean_suites, out, "lean-suites", ["--lean-built", *tail])
+                                                              if cold else shlex.join(lean_suites))], ROOT))
     pytest = [*suites, *suite_args(held["pytest"], splits, out), "--json", str(out / "suites.json"), "--logs", str(out / "suites"),
               *after_lean, *tail]
+    if cold:
+        pytest = ["bash", "-c", then_opt_in(pytest, out, "pytest" if len(lean) > 1 else "all", tail)]
     cc = [py, "-m", "circuit_check", "--all", "-q", "--jobs", str(b), "--out", str(out / "circuit-check.json"),
           *(["--cache", str(cache_dir() / "circuit-check"), "--catalog-units"] if circuit_cache else []),
           *(["--mem-gb", str(cc_mem_gb(slot_gb, beside, with_lean))] if slot_gb is not None else []),
@@ -3125,6 +3207,8 @@ def main(argv: list[str], script: bool = False) -> int:
         return lean_agreement(*map(Path, argv[1:]))
     if argv[:1] == ["--lean-agreement-urls"] and len(argv) == 3:
         return lean_agreement_urls(Path(argv[1]), Path(argv[2]))
+    if argv[:1] == ["--opt-in"] and len(argv) > 2:
+        return opt_in(Path(argv[1]), argv[2], argv[3:])
     if argv[:1] == ["--lean-slot"] and len(argv) > 1:
         cmd = lean_slot(argv[1:])
         os.execve(cmd[0], cmd, {**os.environ, "LEAN_SLOT_POOL": "check"})
