@@ -12,12 +12,13 @@ challenger on the auditor's host; its core answer in ``DIR/answer.json``.
 DIR``).
 
 1. **The weights**: ``serve.json``'s model at its revision, the snapshot under ``--hf-home``, each of its safetensors files
-   held to its sha256 in the int8 manifest (`PINS`), and the serve dir's weights registration, when it has one, naming the
-   same model. ``W`` is each decoder layer's four linears as vLLM's Llama holds them (`MERGED`), int8 [N, K] beside f32
-   [N, 1] scales, put on ``--device``: the weights the serve read from that snapshot, loaded again on the card after the
-   window's serve ended. The rest of the checkpoint is outside ``W`` (the profile's ``outside``), and so is what serving
-   adds: the KV cache's pages and the activations, which the weights-only obligation doesn't cover and an honest run
-   doesn't need.
+   held to its sha256 in the manifest that pins the model (`PINS`: the int8 pins', then the others'), and the serve dir's
+   weights registration, when it has one, naming the same model. ``W`` is each decoder layer's four linears as vLLM's
+   Llama holds them (`MERGED`), in the form the checkpoint has them, int8 [N, K] beside f32 [N, 1] scales or plain BF16
+   [N, K] with none, put on ``--device``: the weights the serve read from that snapshot, loaded again on the card after
+   the window's serve ended. The rest of the checkpoint is outside ``W`` (the profile's ``outside``), and so is what
+   serving adds: the KV cache's pages and the activations, which the weights-only obligation doesn't cover and an honest
+   run doesn't need.
 2. **Setup** by the vLLM adapter (`verity_vllm.protocols.pous`, ``pous:p2-16448/v4``, its registered point): the
    commitment to ``W``, then the salt, which the memory challenger samples after it from its own host's OS and logs under
    the window's binding (`binding`; `challenger_session.salt`, the gate's ``challenger_party`` verb on a salt request),
@@ -109,7 +110,8 @@ import served_case as SC
 
 pous = PO.adapter("pous")
 ROOT = Path(__file__).resolve().parents[2]
-PINS = ROOT / "adapters" / "vllm" / "manifests" / "checkpoints-int8.json"
+#: the manifests a served model's pin is read from, the first that names it at its revision
+PINS = tuple(ROOT / "adapters" / "vllm" / "manifests" / name for name in ("checkpoints-int8.json", "checkpoints.json"))
 ENTRY = f"pous:{pous.DEFAULT_SCHEME}"
 #: each linear as vLLM's Llama holds it, from the checkpoint's tensors concatenated by rows in this order
 MERGED = (("self_attn.qkv_proj", ("self_attn.q_proj", "self_attn.k_proj", "self_attn.v_proj")),
@@ -152,9 +154,12 @@ class _Unused:
 
 
 class Linear:
-    def __init__(self, weight: torch.Tensor, scale: torch.Tensor) -> None:
+    """A linear as the adapter reads one: its weight and, in the int8 form, its per-row scales."""
+
+    def __init__(self, weight: torch.Tensor, scale: torch.Tensor | None = None) -> None:
         self.weight = torch.nn.Parameter(weight, requires_grad=False)
-        self.weight_scale = torch.nn.Parameter(scale, requires_grad=False)
+        if scale is not None:
+            self.weight_scale = torch.nn.Parameter(scale, requires_grad=False)
         self.quant_method = _Unused()
 
 
@@ -171,7 +176,8 @@ class Model:
     def named_parameters(self):
         for n, m in self.layers.items():
             yield f"{n}.weight", m.weight
-            yield f"{n}.weight_scale", m.weight_scale
+            if hasattr(m, "weight_scale"):
+                yield f"{n}.weight_scale", m.weight_scale
 
     def named_buffers(self):
         return iter(())
@@ -225,12 +231,13 @@ def _read(path: Path) -> tuple[bytearray, str]:
     return buf, h.hexdigest()
 
 
-def _pin(repo: str, revision: str, pins: Path) -> dict[str, str]:
-    """Each safetensors file's sha256 in the manifest's entry for ``repo`` at ``revision``."""
-    for c in json.loads(pins.read_text())["checkpoints"]:
-        if (c.get("repo"), c.get("revision")) == (repo, revision):
-            return {f: e["sha256"] for f, e in c["files"].items() if f.endswith(".safetensors")}
-    raise Refusal(f"{pins.name} pins no {repo}@{revision}")
+def _pin(repo: str, revision: str, pins: Sequence[Path]) -> dict[str, str]:
+    """Each safetensors file's sha256 in the entry for ``repo`` at ``revision`` of the first of ``pins`` that has one."""
+    for manifest in pins:
+        for c in json.loads(manifest.read_text())["checkpoints"]:
+            if (c.get("repo"), c.get("revision")) == (repo, revision):
+                return {f: e["sha256"] for f, e in c["files"].items() if f.endswith(".safetensors")}
+    raise Refusal(f"{', '.join(p.name for p in pins)} pin no {repo}@{revision}")
 
 
 def checkpoint(snapshot: Path, pin: Mapping[str, str]) -> tuple[Checkpoint, list[str]]:
@@ -255,7 +262,8 @@ def checkpoint(snapshot: Path, pin: Mapping[str, str]) -> tuple[Checkpoint, list
 
 
 def linears(ck: Checkpoint, device: torch.device) -> tuple[Model, dict[str, Any]]:
-    """vLLM's linears of the checkpoint on ``device`` (`MERGED`), and the checkpoint's other tensors' bytes, by kind."""
+    """vLLM's linears of the checkpoint on ``device`` (`MERGED`), and the checkpoint's other tensors' bytes, by kind. A
+    linear is int8 [N, K] with an f32 [N, 1] scale beside each of its parts, or BF16 [N, K] with a scale beside none."""
     keys = set(ck.tensors)
     layers: dict[str, Linear] = {}
     used: set[str] = set()
@@ -264,15 +272,22 @@ def linears(ck: Checkpoint, device: torch.device) -> tuple[Model, dict[str, Any]
         p = f"model.layers.{i}."
         for merged, parts in MERGED:
             names = [p + s + ".weight" for s in parts]
-            missing = [k for k in names + [k + "_scale" for k in names] if k not in keys]
+            missing = [k for k in names if k not in keys]
             if missing:
                 raise ValueError(f"{p + merged}: the checkpoint has no {missing}")
+            scales = [k + "_scale" for k in names if k + "_scale" in keys]
+            dtypes = sorted({ck.tensors[k][1] for k in names})
+            int8 = dtypes == ["I8"] and len(scales) == len(names)
+            if not int8 and (dtypes != ["BF16"] or scales):
+                raise ValueError(f"{p + merged}: {'/'.join(dtypes)} parts with {len(scales)} of {len(names)} scales are "
+                                 "neither an int8 linear with its scales nor a plain BF16 one")
             w = torch.cat([ck.tensor(k) for k in names]).contiguous()
-            s = torch.cat([ck.tensor(k + "_scale") for k in names]).contiguous()
-            if w.dtype != torch.int8 or s.dtype != torch.float32 or s.shape != (w.shape[0], 1):
-                raise ValueError(f"{p + merged}: {w.dtype} {tuple(w.shape)} with {s.dtype} {tuple(s.shape)} scales is not "
-                                 "an int8 linear")
-            layers[p + merged] = Linear(w.to(device), s.to(device))
+            s = torch.cat([ck.tensor(k) for k in scales]).contiguous() if int8 else None
+            if w.dim() != 2 or (s is not None and (s.dtype != torch.float32 or s.shape != (w.shape[0], 1))):
+                raise ValueError(f"{p + merged}: {w.dtype} {tuple(w.shape)}"
+                                 + ("" if s is None else f" with {s.dtype} {tuple(s.shape)} scales")
+                                 + f" is not {'an int8' if int8 else 'a BF16'} linear")
+            layers[p + merged] = Linear(w.to(device), None if s is None else s.to(device))
             used.update(names)
     outside: dict[str, int] = {}
     for k in sorted(keys - used):
@@ -311,7 +326,7 @@ def _private(directory: Path, docs: Mapping[str, Any], digests: bytes) -> None:
 
 def run(serve_dir: Path, window: int, out: Path, *, hf_home: Path, device: str = "cuda", p2_lib: str | None = None,
         node: str | None = None, party: Side | None = None, trusted_sha512: str = TRUSTED_SHA512,
-        private: Path | None = None, pins: Path = PINS, schemes: Mapping[str, mc.Verify] = mc.SCHEMES,
+        private: Path | None = None, pins: Sequence[Path] = PINS, schemes: Mapping[str, mc.Verify] = mc.SCHEMES,
         protocol: str = period.PROTOCOL, rounds: int = ROUNDS, bw_party: str | None = None,
         bw_host: str = BW_PARTY_HOST, bw_request: Mapping[str, Any] | None = None, bw_out: Path | None = None,
         bw_private: Path | None = None, bw_case_exe: str | None = None,

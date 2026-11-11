@@ -184,7 +184,8 @@ def write(private: Path, case: Mapping[str, Any], answer: Mapping[str, Any]) -> 
 
 
 def reencode(repo: str, rev: str, published: R.Setup, point: R.Point, digests: bytes, *, hf_home: Path,
-             device: str = "cuda", p2_lib: str | None = None, pins: Path | None = None) -> period.SetupInputs:
+             device: str = "cuda", p2_lib: str | None = None,
+             pins: Sequence[Path] | None = None) -> period.SetupInputs:
     """Setup's own inputs encoded again as the piece encoded them (`served_piece.py`): the linears of ``repo``'s snapshot
     at ``rev`` held to the pin, committed (the vLLM adapter's ``W``), and ``C*`` encoded at the kept salt; refused unless
     they give the kept commitment to ``W``, point, root and table."""

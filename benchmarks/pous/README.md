@@ -156,7 +156,8 @@ window is served on, before its engine loads, with the memory challenger on vy-a
 key that isn't on the node, and kills nothing. Its header lists the challenger's settings. `tests/test_pous_served_wipe.py`
 runs it on a CPU, with one segment in host memory.
 
-`served_piece.sh` is PoUS's piece of a served window (`POUS_CMD`): `served_piece.py` holds the served weights as `C*` on
+`served_piece.sh` is PoUS's piece of a served window (`POUS_CMD`): `served_piece.py` holds the served weights (the
+decoder's linears as the model's pin has them, int8 with their scales or plain BF16) as `C*` on
 the card for one session with the memory challenger on vy-auditor-2, then runs PoUB-P2's session over the same store
 (`held_bandwidth.py`), whose answer the bandwidth piece collects. Each of the two cases is answered by its Lean verifier,
 `pous-run-protocol` and `remote-audit-p2-protocol`, which the script builds in a scratch copy of `verity/` before it asks

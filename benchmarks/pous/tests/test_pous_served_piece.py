@@ -1,7 +1,8 @@
 """`served_piece.py`, PoUS's piece of the composed served run, end to end on the CPU over a tiny int8 checkpoint.
 
 The checkpoint is a safetensors file of two decoder layers in the int8 pin's form (each linear int8 [N, K] beside its f32
-[N, 1] scale, a bf16 embedding and norms) in an HF cache, held to a manifest the test writes; P2 runs at the small point's
+[N, 1] scale, a bf16 embedding and norms) in an HF cache, held to a manifest the test writes; `served_bf16` is the same
+model in the BF16 pin's form, each linear bf16 [N, K] with no scale. P2 runs at the small point's
 1,024-bit blocks, 8 a segment (`pous._base`), so the adapter encodes it in milliseconds. The memory challenger's side is
 `challenger_party.serve` in a thread, signed by the PoUS tests' test signer on a counter clock, and the prover answers it
 over a socket pair, as `challenger_session.session` would across hosts. The answer is read back as the composed run reads it
@@ -42,6 +43,7 @@ from verity.commitments.identity import canonical_json_bytes
 torch = pytest.importorskip("torch")
 ROOT = Path(__file__).resolve().parents[3]
 REPO, REV = "verity-test/Tiny-INT8", "a1" * 20
+PLAIN_REPO, PLAIN_REV = "verity-test/Tiny-BF16", "b2" * 20
 NODE, AUDITOR = "gpu-node", "auditor-host"
 COINS = bytes(range(64))
 SMALL = P2Params(period.W, period.C0, 8)
@@ -73,7 +75,8 @@ BR = _load("pous_served_block_record", ROOT / "benchmarks" / "one_stage" / "inte
 pous = SP.pous
 
 
-def _tensors() -> dict[str, torch.Tensor]:
+def _tensors(plain: bool = False) -> dict[str, torch.Tensor]:
+    """The tiny checkpoint's tensors: each linear int8 beside its scale, or with ``plain`` bf16 and no scale."""
     g = torch.Generator().manual_seed(11)
     out = {"model.embed_tokens.weight": torch.randn(64, HIDDEN, generator=g).to(torch.bfloat16),
            "model.norm.weight": torch.ones(HIDDEN, dtype=torch.bfloat16)}
@@ -81,6 +84,9 @@ def _tensors() -> dict[str, torch.Tensor]:
         p = f"model.layers.{i}."
         out[p + "input_layernorm.weight"] = torch.ones(HIDDEN, dtype=torch.bfloat16)
         for name, (n, k) in SHAPES.items():
+            if plain:
+                out[p + name + ".weight"] = torch.randn(n, k, generator=g).to(torch.bfloat16)
+                continue
             out[p + name + ".weight"] = torch.randint(-127, 128, (n, k), dtype=torch.int8, generator=g)
             out[p + name + ".weight_scale"] = torch.rand(n, 1, generator=g) + 0.5
     return out
@@ -107,21 +113,35 @@ class Served:
     tensors: dict[str, torch.Tensor]
 
 
-@pytest.fixture
-def served(tmp_path, monkeypatch) -> Served:
-    monkeypatch.setattr(pous, "_base", lambda scheme: SMALL)
-    tensors = _tensors()
-    snap = tmp_path / "hf" / "hub" / f"models--{REPO.replace('/', '--')}" / "snapshots" / REV
+def _snapshot(tmp_path: Path, repo: str, rev: str, tensors: dict[str, torch.Tensor]) -> dict:
+    """``tensors`` as ``repo``'s snapshot at ``rev`` in the HF cache under ``tmp_path``; its manifest entry."""
+    snap = tmp_path / "hf" / "hub" / f"models--{repo.replace('/', '--')}" / "snapshots" / rev
     snap.mkdir(parents=True)
     blob = _safetensors(tensors)
     (snap / "model.safetensors").write_bytes(blob)
+    return {"repo": repo, "revision": rev, "files": {
+        "config.json": {"sha256": "00" * 32}, "model.safetensors": {"sha256": hashlib.sha256(blob).hexdigest()}}}
+
+
+def _served(tmp_path: Path, monkeypatch, repo: str, rev: str, precision: str, plain: bool) -> Served:
+    monkeypatch.setattr(pous, "_base", lambda scheme: SMALL)
+    tensors = _tensors(plain)
     pins = tmp_path / "pins.json"
-    pins.write_text(json.dumps({"checkpoints": [{"repo": REPO, "revision": REV, "files": {
-        "config.json": {"sha256": "00" * 32}, "model.safetensors": {"sha256": hashlib.sha256(blob).hexdigest()}}}]}))
+    pins.write_text(json.dumps({"checkpoints": [_snapshot(tmp_path, repo, rev, tensors)]}))
     serve = tmp_path / "serve"
     serve.mkdir()
-    (serve / "serve.json").write_text(json.dumps({"model": REPO, "revision": REV, "precision": "verity_int8"}))
+    (serve / "serve.json").write_text(json.dumps({"model": repo, "revision": rev, "precision": precision}))
     return Served(serve, tmp_path / "hf", pins, tmp_path / "pieces" / "pous", tmp_path / "private", tensors)
+
+
+@pytest.fixture
+def served(tmp_path, monkeypatch) -> Served:
+    return _served(tmp_path, monkeypatch, REPO, REV, "verity_int8", plain=False)
+
+
+@pytest.fixture
+def served_bf16(tmp_path, monkeypatch) -> Served:
+    return _served(tmp_path, monkeypatch, PLAIN_REPO, PLAIN_REV, "pin", plain=True)
 
 
 def _in_process_party(signer, log, keep=None, record=lambda request: request):
@@ -202,7 +222,7 @@ def _run(s: Served, tmp_path, monkeypatch, auditor: Auditor | None = None, **kw)
     kw.setdefault("trusted_sha512", hashlib.sha512(auditor.signer.public_key).hexdigest())
     answer = SP.run(s.serve, 3, s.out, hf_home=s.hf, device="cpu", node=NODE,
                     party=Side(AUDITOR, ("ssh", AUDITOR, "challenger_party"), ("192.0.2.36", 47610)),
-                    private=s.private, pins=s.pins, schemes=ts.SCHEMES, protocol=TEST_PROTOCOL, **kw)
+                    private=s.private, pins=[s.pins], schemes=ts.SCHEMES, protocol=TEST_PROTOCOL, **kw)
     return answer, auditor.calls
 
 
@@ -245,6 +265,26 @@ def test_an_honest_store_is_accepted_in_the_answer_the_composed_run_reads(served
     assert doc["key_sha512"] == hashlib.sha512(bytes.fromhex(run["public_key"])).hexdigest()
     assert run["point"]["k"] == 320 and run["rounds_answered"] == 320 and run["latency"]["late"] == 0
     assert run["warmups"] == CS.WARMUPS and run["host"] == AUDITOR
+
+
+def test_a_plain_bf16_checkpoint_is_held_as_its_linears_at_twice_the_bytes(served_bf16, tmp_path, monkeypatch):
+    """The BF16 pin's form: each linear bf16 [N, K] with no scale beside it, so ``W`` is the same linears at two bytes an
+    element, nothing outside it is a scale, and the session, the tie and the check run as over the int8 store."""
+    s = served_bf16
+    answer, calls = _run(s, tmp_path, monkeypatch)
+    assert answer["verdict"] == "accept", answer["reason"]
+    assert SV.piece_row("space", s.out.parent)["verdict"] == "accept"
+    prof = answer["profile"]
+    w_bytes = 2 * sum(n * k for n, k in SHAPES.values()) * LAYERS
+    assert prof["weights"] | {"held": None} == {
+        "model": PLAIN_REPO, "revision": PLAIN_REV, "covers": "linears", "linears": 4 * LAYERS, "bytes": w_bytes,
+        "used_blocks": 80, "blocks": 80, "checkpoint_bytes": 11360, "share": str(Fraction(w_bytes, 11360)), "held": None}
+    assert prof["outside"]["bytes"] == {"the embedding and the head": 2048, "the norms": 96}
+    assert calls[0][1]["blocks"] == 80
+    case = json.loads((s.private / "case.json").read_text())
+    assert json.loads((s.private / "answer.json").read_text())["verdict"] == "accept"
+    setup = json.loads(bytes.fromhex(case["evidence"]))["setup"]
+    assert len(bytes.fromhex(setup["evidence"])) == 4 + 4 * 10 + 80 * (4 + SMALL.block_bytes)
 
 
 def test_the_challenger_draws_the_salt_and_the_verdict_derives_the_session_id(served, tmp_path, monkeypatch):
@@ -388,6 +428,44 @@ def test_weights_that_are_not_the_pins_are_rejected_before_any_session(served, t
     assert calls == [] and SV.check_answer(answer)
 
 
+def test_the_pin_is_the_first_manifests_that_names_the_model(tmp_path):
+    """The served model's pin is read from the manifests in order, so one that only another manifest pins is found, and
+    a model none pins leaves no answer, naming each manifest read."""
+    first, second = tmp_path / "first.json", tmp_path / "second.json"
+    entry = lambda repo, sha: {"repo": repo, "revision": REV, "files": {  # noqa: E731
+        "config.json": {"size": 1}, "model.safetensors": {"sha256": sha}}}
+    first.write_text(json.dumps({"checkpoints": [entry(REPO, "aa" * 32)]}))
+    second.write_text(json.dumps({"checkpoints": [entry(REPO, "bb" * 32), entry(PLAIN_REPO, "cc" * 32)]}))
+    assert SP._pin(REPO, REV, [first, second]) == {"model.safetensors": "aa" * 32}
+    assert SP._pin(PLAIN_REPO, REV, [first, second]) == {"model.safetensors": "cc" * 32}
+    with pytest.raises(SP.Refusal, match=f"first.json, second.json pin no {PLAIN_REPO}@{PLAIN_REV}"):
+        SP._pin(PLAIN_REPO, PLAIN_REV, [first, second])
+    assert [p.name for p in SP.PINS] == ["checkpoints-int8.json", "checkpoints.json"]
+
+
+@pytest.mark.parametrize("plain, change, form", [
+    (False, lambda t, p: t.pop(p + "self_attn.k_proj.weight_scale"), "self_attn.qkv_proj: I8 parts with 2 of 3 scales"),
+    (False, lambda t, p: t.update({p + "mlp.down_proj.weight": t[p + "mlp.down_proj.weight"].to(torch.float32)}),
+     "mlp.down_proj: F32 parts with 1 of 1 scales"),
+    (False, lambda t, p: t.update({p + "mlp.up_proj.weight": t[p + "mlp.up_proj.weight"].to(torch.bfloat16)}),
+     "mlp.gate_up_proj: BF16/I8 parts with 2 of 2 scales"),
+    (True, lambda t, p: t.update({p + "self_attn.o_proj.weight_scale": torch.ones(HIDDEN, 1)}),
+     "self_attn.o_proj: BF16 parts with 1 of 1 scales"),
+])
+def test_a_linear_that_is_neither_int8_with_its_scales_nor_plain_bf16_is_refused_by_name(tmp_path, plain, change, form):
+    """A linear in a form no pin has: one of its parts' scales missing, another dtype, parts of two dtypes, or a bf16
+    one with a scale beside it. The piece holds none of it and names the linear and what it found."""
+    tensors = _tensors(plain)
+    change(tensors, "model.layers.1.")
+    entry = _snapshot(tmp_path, REPO, REV, tensors)
+    snap = tmp_path / "hf" / "hub" / f"models--{REPO.replace('/', '--')}" / "snapshots" / REV
+    ck, wrong = SP.checkpoint(snap, {"model.safetensors": entry["files"]["model.safetensors"]["sha256"]})
+    assert wrong == []
+    with pytest.raises(ValueError, match="neither an int8 linear with its scales nor a plain BF16 one") as e:
+        SP.linears(ck, torch.device("cpu"))
+    assert str(e.value).startswith("model.layers.1." + form)
+
+
 def test_a_weights_registration_of_another_model_is_rejected(served, tmp_path, monkeypatch):
     (served.serve / "weights_registration.json").write_text(json.dumps({"model": {"repo": "other/Model", "revision": REV}}))
     answer, calls = _run(served, tmp_path, monkeypatch)
@@ -405,7 +483,7 @@ def test_a_challenger_whose_side_does_not_start_leaves_the_period_undecided(serv
     """No retry and no exception: the answer says the challenger drew no salt for the setup, and why."""
     answer = SP.run(served.serve, 3, served.out, hf_home=served.hf, device="cpu", node=NODE, private=served.private,
                     party=Side(AUDITOR, (sys.executable, "-c", "import sys; sys.exit(3)"), ("127.0.0.1", 9)),
-                    pins=served.pins, schemes=ts.SCHEMES, protocol=TEST_PROTOCOL)
+                    pins=[served.pins], schemes=ts.SCHEMES, protocol=TEST_PROTOCOL)
     assert answer["verdict"] == "undecided" and answer["reason"].startswith(
         f"the memory challenger on {AUDITOR} drew no salt for the setup: ")
     assert SV.piece_row("space", served.out.parent)["verdict"] == "undecided"
@@ -618,7 +696,7 @@ def test_no_pous_session_leaves_the_bandwidth_piece_undecided_naming_why(served,
     """The challenger's side doesn't start: no store was bound, so no bandwidth session runs, and its answer says so."""
     SP.run(served.serve, 3, served.out, hf_home=served.hf, device="cpu", node=NODE, private=served.private,
            party=Side(AUDITOR, (sys.executable, "-c", "import sys; sys.exit(3)"), ("127.0.0.1", 9)),
-           pins=served.pins, schemes=ts.SCHEMES, protocol=TEST_PROTOCOL, bw_party="false")
+           pins=[served.pins], schemes=ts.SCHEMES, protocol=TEST_PROTOCOL, bw_party="false")
     bw = json.loads((served.out.parent / "bandwidth" / "answer.json").read_text())
     assert bw["verdict"] == "undecided" and bw["reason"].startswith("no PoUS session bound a store: the memory challenger")
     assert SV.piece_row("bandwidth", served.out.parent)["verdict"] == "undecided"
