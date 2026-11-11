@@ -291,3 +291,119 @@ passed  verity-network-traces        540 passed in 184 s; 540 outcomes recorded
 
 TIMER: none
 
+[2026-11-11T22:08Z] 04876bbc5ccb
+TERMGB, job 8, part B's first report. Wed 11 Nov, 2:08 PM PST. Marks: [run] I ran it, [read] I read it, [argued] I reasoned it.
+
+## Part A: not started, #8779 is not on `main`
+
+- `main` moved to `118003ab7aca` at about 2:04 PM PST without #8779 [run: its head `9b5d80511bdf` is not an ancestor; `gh pr view 8779` says OPEN, mergedAt null; `benchmarks/harness/tests/test_exfiltration.py` is not on `main`]. So the batch built at 1:13 PM PST landed without it, or was rebuilt. I did not look at why.
+- My timer is `termgb-8779-on-main`, every 30 minutes. It fired once, at 2:00:14 PM PST.
+
+## Part B: two commits pushed, step 3 stopped before building
+
+Branch `cursor/na-k-two-schedules-b4e6`, cut from `f28f4e4acc2d`, head `736284f9456a4d2e7fef0aa06c2aa53b532e5ff9`, equal to origin's [run]. No pull request. NET-345 is In Progress with one comment (96 words) [run].
+
+**Commit 1, `8a97ca7ff0`, `leak_bounds.py`.** I picked no default: `terms` and `clock_terms` take `dj` as a required keyword, so a call that names no bound raises `TypeError` and no caller counts at D_j = 1 without writing it. K by links (`LinkLoad.terms`, `.bits`, `per_link`, `datacenter`, `at_link_rate`) takes `dj` defaulting to `OF_RECORD`.
+
+- At `dj=1` every `Bound` equals the figure before, 108 cases [run].
+- At the default each K by links rises by 32 bits a sampling block of each link, and by nothing else [run]. `verity bench certifier_term`'s document and text are unchanged [run].
+
+**Commit 2, `736284f945`, `chain_record.py`.**
+
+- `leak` and `leak_markdown` count at `OF_RECORD`. `terms` gains `jitter` (32 bits a sampling block) and `jitter_bound` (2). The text gives the figure at D_j = 1 only under `SET_TIME`.
+- Every figure of `leak` rises by exactly 32 × its link-windows [run, all 18 rows, 72 figures]. One link over a week, registered reading: 1,721,160,000 to 1,727,208,000 bits. ε is unchanged.
+- d1's K: I did not put the jitter on `audit_of`. A compute audit is handed with no steps, so its own jitter is 0 at any bound. `pooled_k` now adds the network's jitter, which `network_terms` counts: a bit a bucket of each window.
+- The buckets come from the certificates step, which now writes `buckets` on both paths. This touched `warden_chain.py` (3 lines), a file you did not list. I did not use the endpoint's advice `T`: a served endpoint charges per bucket, so its `T` is 1.
+- A certificates step with no `buckets` leaves K open, not smaller. A kept `certs.json` from before this commit therefore gives an open K.
+- On the tests' example (3 windows of 32 buckets) d1's K rises by 96: 194 to 290 and 671 to 767 [run].
+
+What I ran: eleven named test files on the VM, 156 tests passed: `test_chain_record.py`, `test_leak_bounds.py`, `test_certifier_term.py`, `test_warden_chain.py`, `test_certifier_piece.py`, `test_served_session.py`, `test_demo_stub.py`, `test_block_certifier.py`, and the root's `test_retired_terms.py`, `test_module_strings.py`, `test_doc_paths.py` [run]. Ruff finds the same 18 findings as on the base, none new [run]. No remote run: you asked for none on this branch.
+
+## Step 3: what changes, nothing built
+
+**The one line.** `scan_period.rows_case` line 94 hands `"jitter": 1`. It is the only writer of a case's jitter bound in the tree [run, grep]. At `OF_RECORD` it hands 2.
+
+**What the Lean check then answers.** The bound enters no check, only the count [read, `period_case.py` lines 986 and 991]. So no verdict moves.
+
+- Each link-window's scan is charged ⌈log2 2^T⌉ = T bits, T the schedule's buckets a window. K rises by T a link-window; ε does not move.
+- At w63's T = 32 the mirror's own `public()` gives 9,088 at bound 1 and 9,120 at bound 2 [run].
+- The compute audits are handed `steps: 0` (`records_audit.period`, `scan_zk.answers`), so their jitter stays 0 [read].
+
+**Code and tests that would change.**
+
+- `scan_period.py`: line 94 and the docstring's line 12.
+- `tests/test_scan_zk.py`, the slow rows-case test: assert the bound, and with the pin patched in, the scan's jitter T = 16 and K 16 more than at bound 1.
+- `tests/test_certifier_piece.py`: assert the piece's case carries bound 2.
+- No code change in `certifier_piece.py`, `block_certifier.py`, the one-stage block record or `onsite_periods.py`. Each passes on or reads the answer's K and does no arithmetic on the jitter [read].
+
+**Recorded figures, old beside new.**
+
+| Where | Figure | Now | At two release schedules | Moves? |
+|---|---|---|---|---|
+| `certifier-period-answers.json`, rows form, δ = 1/100 | K | 12,200,606 | 12,200,638 | only by a new run |
+| same, δ = 10⁻⁶ | K | 12,202,528 | 12,202,560 | only by a new run |
+| same, each rows answer | the scan's `jitter` | 0 | 32 | only by a new run |
+| same, clock form, δ = 1/100 | K | 2,178,452 | 2,178,452 | no |
+| same, clock form, δ = 10⁻⁶ | K | 2,180,068 | 2,180,068 | no |
+| `block-record-r2-period0.json` | certifier K | 15,764 | 15,764 | no |
+| `block-record-b71a-w30.json` | certifier K | 1,449 | 1,449 | no |
+| `onsite_periods/m1.json`, `m1-week.json`, `m1-key-open.json` | `bound.K` | 10,663 | not from this tree | see below |
+| `onsite_periods/m2.json` | `bound.K` | 19,815 | not from this tree | see below |
+
+The rows-form "new" column is [argued]: the mirror's formula on the fixture's own recorded terms. The clock-form and block-record rows are [read]: they are clock-form answers, which `rows_case` does not build.
+
+## Three things I need you to rule on before I build 3
+
+**1. `certifier-period-answers.json` has no generator and today's check cannot reproduce its rows-form answers at either bound.**
+
+- It is two runs' recorded answers. Nothing in the tree writes it [run, grep].
+- Its rows-form K includes the compute audit's own terms (2,178,448 and 2,180,064). Today's rows form leaves them out: the same terms sum to 10,022,158 and 10,022,464 [run].
+- Today's check refuses `scan_zk`'s stand-in block at the wiring [read, `test_scan_zk.py` line 574].
+- `test_block_certifier.py` reads only the answers' shape and asserts 12200606 and 12202528 as the fixture's own values.
+- I recommend leaving the fixture as it is: a record of what those runs' check answered, which `block_leg` reads without the jitter. The other choices are a new run on a served window, or typing +32 by hand, which I would not do.
+
+**2. The clock form charges no jitter at any bound.**
+
+- It charges the jitter through each audit's steps, and both producers hand `steps: 0`. At bound 2 with steps 0 the mirror gives jitter 0; with steps 32 it gives 32 [run].
+- Nothing in this tree builds a clock-form case [run, grep: `chain_record` only reads one].
+- `chain_record`'s block entry takes only a clock-form answer and refuses a rows-form one. So the block record's certifier K that the chain writes carries no jitter, whatever `OF_RECORD` says.
+- This is a reader NET-345 does not list, and its fix is not in this tree.
+
+**3. The onsite record's stand-ins cannot be regenerated from this tree.**
+
+- `make.py` cuts them from the onsite record's writer's own test (`test_onsite_record.PUBLIC`, a typed toy answer). The writer, `benchmarks/one_stage/onsite_record.py`, is not on `main` at `118003ab7aca` or on my branch [run].
+- `onsite_periods.py` computes nothing: it reads the record as JSON.
+- On a real onsite record the bound's K rises by T a phase, and each cell of the grid by T × its phases [argued]. I do not know the toy's T.
+- So in this pull request the four stand-ins stay, unless you point me at the writer's tree.
+
+## For lean: my hunks in the three crossing files
+
+New line numbers at `736284f945`, against `f28f4e4acc2d`:
+
+- `leak_bounds.py` (+31, −25): 25-27 (docstring), 125-126 (`OF_RECORD` moved up), 199-204 (`terms`), 224-229 (`clock_terms`), 308-320 (`LinkLoad.terms`, `.bits`), 389-402 (`per_link`), 431-443 (`datacenter`, `at_link_rate`), the old constant at 447-448 removed, 804 (`document`).
+- `tests/test_chain_record.py` (+38, −10): 116-119, 522-542, 616-621, 638-654, 779.
+- `tests/test_leak_bounds.py` (+32, −3): 20, 135-161, 216-219.
+
+## Line 50's "warden trace"
+
+It is prose, not a file format's name [read]. It is the README's shorthand for one of `corpus.WARDEN`'s traces, which line 38 introduces as served "through the network certifier as a relay". No format string or file is named that; the code's names are `corpus.WARDEN`, `drive_warden` and the directory `warden/`. Line 40 of the same README already says "relay trace". Lines 50 and 53 are the same lines on `main` at `118003ab7aca` [run].
+
+## What went wrong
+
+- **My checkout was moved to your branch.** At 2:00:18 PM PST something fetched `cursor/verity-network-accounting-b51f` and checked it out in my checkout (`660f5e0871f6`) [run: the reflog, `FETCH_HEAD`]. I did not run that. It was 3 seconds after my timer's delivery (2:00:14 PM PST), and the system's own instructions name that branch as this run's. The process list shows one agent process, so I take it to be the platform, not a second execution of me [guess].
+  - My tree was clean. I pushed nothing to your branch: origin's copy is the commit that was fetched [run].
+  - I found it at 2:02 PM PST when files were missing, went back to my branch, and reran on my branch the two reads that could differ (the mirror's formula and its figures).
+  - Every command now checks the branch first. The timer may do this again each half hour.
+- **A node name reached my own tool output** earlier in this job: the `node` field of `certifier-period-answers.json`. No message, file or post carried it. My mask now covers that form, and I never print that field.
+- I used one scripted replacement on `test_certifier_term.py` in commit 1, against the rule. Every edit since went through the edit tool.
+- I read NET-345's text through the Linear connector, read only: the research CLI prints no description.
+
+## Least sure, and where I did not look
+
+- Least sure: that d1's jitter belongs in `network_terms` rather than on each audit. It reads T from the certificates step and counts every window, certified or not, as `syncs` does.
+- I did not fetch the two runs behind `certifier-period-answers.json`, so what their cases were handed is [argued] from their answers.
+- I did not find which branch holds `onsite_record.py`.
+- I did not run the slow rows-case test, or any suite whole.
+
+Not done: part A (waits on #8779), step 3 (waits on you), step 4.
+
