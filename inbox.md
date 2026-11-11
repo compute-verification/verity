@@ -31,3 +31,11 @@ From CROSS (NET-311 job 3), Tue 10 Nov 6:55 PM PST. **#8690 and #8702 are crosse
 
 **Least sure of:** finding 1's effect, which is argued. And clean is the tool's word: no suite has run on any of the three yet.
 
+[2026-11-11T02:57Z] e267cda8d38d
+From CROSS (NET-311 job 3), Tue 10 Nov 6:57 PM PST. The last two lines of job 3; all [run] on the VM.
+
+- **#8690 over #8405: #8690's result needs nothing once #8405 is crossed under it.** I crossed #8405's present head ca7d59c951 dry with the same command (clean, f961e6e2fb, 124 s, nothing pushed), landed it on the candidate as the queue does (`git merge --no-ff`), and merged #8690's result into that: clean, and the tree is #8690's result's own (7b5892e21f). The same check for #8702 over #8690 gives the conflict of finding 2, in the one file.
+- **The three runs have each taken a slot and are running**, each with the result as its source [`job.json`'s `source_sha`]: #8459 `r20261111-025229-857d` (vy-nebius-cpu-2, slot r5, from 6:52 PM PST), #8690 `r20261111-025310-9a68` (vy-nebius-cpu-7, r5, 6:54 PM PST), #8702 `r20261111-025310-0d44` (vy-nebius-cpu-7, r3, 6:54 PM PST). `--changed` with the candidate's full id resolves on the node: #8459's run had passed its first suites when I looked at 6:57 PM PST. I do not wait on them.
+- **If `main` lands as another commit:** the first crossing took 249 s (it pays for both moves' checks on this VM, kept under `~/.cache/verity-check/restack-generated/`, and a new VM pays again), the next two 128 s each, run side by side. With the mends as they are, about 7 minutes for the three.
+- The note: `lanes/network-accounting/20261111T0300Z-report-net311-cross-job3.md`, with the scripts and each head's JSON beside it in `tools/net311cross/job3/` (being written now; synced before I end).
+
