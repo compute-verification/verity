@@ -342,7 +342,8 @@ def build(tables: Path, ledger: Path, steps: Path, runs: dict[str, str], stamp: 
     """The panel and what it rests on: every candidate's ρ, binding and basis beside the table's at each policy it
     holds (`check`, `TABLE`) where the table is this te_core's (else `check_skipped` says whose it is), the candidates
     the scorer's rows don't give (`missing`) and the reached runs with no trace yet (`untraced`). The source names the
-    tables by `art` where given (within console's `SOURCE_MAX`), else by their time."""
+    tables by `art` where given (within console's `SOURCE_MAX`), else by their time: `art` is their art id, and where
+    that art holds more than one set of tables, the id with the set's path in it (art:ID/PATH)."""
     from te_core import algorithm_policy
 
     src = tables / "algorithm-policy" / "tables" / "algorithm-policy.json"
@@ -427,7 +428,7 @@ def build(tables: Path, ledger: Path, steps: Path, runs: dict[str, str], stamp: 
                 rows.append(labelled(at | row, label))
     p = {"id": PANEL, "title": "Red teaming by model size: standard training's rho and the frontier's least S = p*rho",
          "kind": "table", "updated_at": stamp,
-         "source": f"python islands/ladder-v3/size_scaling.py build (training's slowdown code {VERSION}; the scorer's "
+         "source": f"python islands/ladder-v3/size_scaling.py build (te_core {VERSION}; the scorer's "
                    f"algorithm-policy table {art or f'of {made}'}; steps traced in "
                    f"{', '.join(sorted(set(runs.values()))) or 'no run'})",
          "note": note(), "columns": COLUMNS, "rows": [[r.get(c) for c in COLUMNS] for r in rows]}
@@ -458,7 +459,8 @@ def main(argv=None) -> int:
     b.add_argument("--steps", type=Path, required=True, help="trace's DIR")
     b.add_argument("--out", type=Path, required=True)
     b.add_argument("--trace-runs", default=None, help="RUN, or NAME=RUN,...: the run that traced each size")
-    b.add_argument("--art", default=None, help="the tables' art id, for the source")
+    b.add_argument("--art", default=None, help="the tables' art id, for the source; art:ID/PATH where the art holds "
+                                               "more than one set of tables")
     u = sub.add_parser("put")
     u.add_argument("file", type=Path)
     u.add_argument("--dry", action="store_true", help="PUT nothing: what the put would send")
