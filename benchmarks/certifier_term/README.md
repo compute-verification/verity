@@ -3,7 +3,7 @@
 `verity bench certifier_term` prints the network certifier's term for GLM-5.3: the bits its accepted transcripts can
 carry over a monitoring period, at the load of a node, the census's reference datacenter and the world, in bits and
 GB, beside a target and one copy of the weights. Each row counts all its scope serves by its check's own rule, as
-the monitoring-period check charges it (`verity/core/protocols/network/lean/NetworkCheck/`, `rowsTerms` and `terms`).
+the monitoring-period check charges it (`verity/protocols/certifier/verifier/lean/NetworkCheck/`, `rowsTerms` and `terms`).
 Its code is the calculator of K, `benchmarks/network_traces/leak_bounds.py` (`table`, `document`, `render`); this
 directory holds its runner.
 
@@ -82,7 +82,7 @@ target.
 
 ## Where the scale comes from
 
-- The world is rho's world fleet (`benchmarks/rho/data/reference.toml`, `fleet.world-h200`): the census's inference
+- The world is rho's world fleet (`verity/protocols/inference_only/rho/data/reference.toml`, `fleet.world-h200`): the census's inference
   (`benchmarks/census/adversary.json`) on eight-GPU machines at the fleet's serving MFU. The datacenter is the census's
   reference datacenter (`benchmarks/census/deployments.json`).
 - The requests are counted of one request, by the rule `benchmarks/spot_figures/figure1.py` plans with, at the
@@ -97,7 +97,7 @@ target.
     scales with it.
 - The weights are the workload card's parameters at FP4's 4 bits each.
 - A bucket is the network certifier's default, and N2's #Σ_sync the most a calibration chooses by default
-  (`verity/core/protocols/certifier/calibration.py`).
+  (`verity/protocols/certifier/verifier/calibration.py`).
 
 The scaling by links (`leak_bounds.at_link_rate`, which `chain_record.py leak` reads on a run) is a different count:
 every link at the rate one run certified, whatever its scope serves.
