@@ -786,6 +786,7 @@ def run(specs: list[str], opts: CK.Options, *, everything: bool = False, as_call
                     rep["shard"] = SH.manifest(shard, ids, idx, request)
                 if group is not None:
                     rep.update(_read_sets(cache, {binding: idx}, ids, hit[0]["keys"], group))
+                rep["cache"]["unread"] = CC.unread()
                 return rep
     keep = None if shard is None else (lambda kind, label: SH.shard_of(kind, label, shard[1]) == shard[0])
     units = units and listed is not None and (fork or not isolated)
@@ -868,6 +869,8 @@ def run(specs: list[str], opts: CK.Options, *, everything: bool = False, as_call
         rep["shard"] = SH.manifest(shard, ids, only, request)
     if group is not None and plan is not None:
         rep.update(_read_sets(cache, {binding: only}, ids, keys, group))
+    if "cache" in rep:
+        rep["cache"]["unread"] = CC.unread()
     return rep
 
 
@@ -1105,7 +1108,7 @@ def combined(dirs: list[Path]) -> tuple[dict, dict]:
     rep["peaks"] = heaviest(rep["targets"])
     if caches := [m["cache"] for m in manifests if m.get("cache") is not None]:
         rep["cache"] = {"hits": sum(c["hits"] for c in caches), "stored": sum(c["stored"] for c in caches),
-                        **{k: [x for c in caches for x in c[k]] for k in ("untraced", "errors", "changed")},
+                        **{k: [x for c in caches for x in c[k]] for k in ("untraced", "errors", "changed", "unread")},
                         "task_list": [c.get("task_list") for c in caches] if all(c.get("task_list") for c in caches) else None,
                         "shards": caches}
     rep["combined"] = {"shards": len(manifests), "list": manifests[0]["list"],
@@ -1616,6 +1619,8 @@ def _cache_lines(rep: dict) -> None:
               f"unchanged), {c['stored']} stored, {len(c['untraced'])} not cacheable (the tracer could not see what they read), "
               f"{len(c['errors'])} not stored because the check raised, {len(c['changed'])} because the tree changed while they ran"
               + ("; the task list reused, so no Definition was built" if c.get("task_list") else ""))
+        for line in c.get("unread", ()):
+            print(f"circuit-check: unread entry {line}")
 
 
 def verdict(rep: dict, *, out: Path | None, fail_on_warnings: bool = False, what: str | None = None) -> int:
