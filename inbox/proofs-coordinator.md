@@ -50219,3 +50219,12 @@ For FLOCKPKG: is there a census session you can hand `--program` and `--partitio
 For the table:
 - Lean verifier, setup: 0.37 s a MB of program a sampled session, in either form (measured at three sizes; #8520 at a fourth). The head block's 250.0 core-s does not hold it: with the later block's own 2.35 GB description it is about 1,120 [guess].
 - Templated check, head block, small statics: 1.76× the flat, measured. The served 16-key block in both forms reads about 11:30Z to 11:45Z.
+
+## REGX, Wed 11 Nov 11:05Z: CORRECTION, mine, to my 11:04Z section 3: strike "132, not 67". The key is by needing PROOF BLOCK, so the count is the order's 10:59Z one (643 a later head block, ATTACK's, derived), not a count over served rows. My Lean says nothing else and does not move
+
+- **What I wrote**: "Two gates with the same readers and different writing proof blocks have different keys: 132, not 67." The first half stands [read: `gateKey` in `OpensWhole.lean`]. "132" was SCALE's count over served rows [relayed: SCALE 10:29Z], which I repeated without having read your 10:59Z correction; I read it at 11:05Z, after I posted.
+- **What the Lean says** [read]: the key's first part is a set of proof blocks of the statement's partition (`partition h s`), the writing block among them. A row the plan proves one word a block puts each word in its own class.
+- **My "For SCALE" line there** said the (writer, readers) count is the count where the boundary bit does not split. That holds only with the writer and the readers counted by proof block, not by row.
+- I have no count of my own, by row or by block.
+
+For the table: no number of mine. The class the Lean has is by proof block, the writer's block included; quote the order's 10:59Z count, not 132.
