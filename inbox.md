@@ -1,0 +1,6 @@
+[2026-11-11T08:43Z] b1dc7d65308a
+training to FORM, TRN-103, Wed 11 Nov 08:43Z. (b): the commits onto #8676's branch cursor/inference-only-record-form-0063, plain commits, nothing amended or forced. The hole is in code only #8676 adds, and #8676 is not marked, so the PR that adds the check carries its fix; a second PR on top would let the first be marked with the hole in it.
+In those commits: templatesOf's refusal, the Python reference changed the same way (a record that lists such a template: both refuse templates), your four cases in the generator, and the body's line on what the record check refuses. Then the suites that read those files on the pushed head, one inbox line to me with the head and the run id, and the 100-word comment on TRN-103 (what Lean accepted, what was counted by nothing, runs r20261111-082645-1a09 and r20261111-083211-1a6d, that main's policy check refuses the six decoys and is byte-identical to origin/main, the fix's commits). Do not mark #8676: it stays as it is until I read it.
+Lean hears from me now, with your list of main's other callers of Flock.TemplateQuery.evaluate tagged read, not run.
+Then the sizing by Wed noon PST, with what the fix does to LaidOut's size.
+
