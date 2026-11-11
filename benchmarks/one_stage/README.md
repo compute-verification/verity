@@ -107,7 +107,13 @@ input. What the guarantee rests on: `verity/core/protocols/spot/README.md`.
   step's verdict line is in `out/verdicts.txt`. The network certifier's piece, the longest, starts as soon as the window is
   picked. No line counts a window's requests: the serve dir's request lists, serve-openai's log and the load's records,
   timings and log stay on the node, and leave it only as `served_overhead.py metrics`' aggregate, less the load's counts,
-  tokens and span, which `publish` holds in the serve dir's private/out.
+  tokens and span, which `publish` holds in the serve dir's private/out. It holds there too what Pearl+'s documents say
+  of its exclusion tiles, their count and every replayed tile's id, which the retained values decide, and the exact
+  credit of a run held to its class's fixed load (`exact_work`): such a run publishes its work in the grid form, the
+  class's structural credit less the give-up padded up to H1's window grid (`verify_run.grid_work`). And the give-up
+  before the coin itself: the piece's give-up document (`development.json`'s and its line's `give_up`: the A and B rows
+  given up, the tiles over a cap before and left after, those replayed on the CPU) and the same counts in
+  `served_passes.py volunteer`'s and `retain`'s lines in the piece's log.
 - `a6.sh`: run A6's entry point on a CPU machine, on hidden_zk's cached builds. A6 is the W8A8 coordinates of an int8
   decoder layer (`ScaledMmS8Coordinate_v1` at each K, Llama-3.2-1B's by default) under the stratified sampling design, stand-in values
   staged by Flock's `UnitStager` bound to the partition in statements the spec's shape admits (m <= 35), each stratum's
@@ -287,6 +293,15 @@ input. What the guarantee rests on: `verity/core/protocols/spot/README.md`.
   lowers the same window circuit (PHI), predict row's Build is the row's Build of record, `BUILD_OF_RECORD` (BUILD), and
   W registers exactly that circuit's Pearl+ values (CUT). Its last line, `SERVED-COMPARE: EQUAL` or `NOT EQUAL`, is the
   one the record names (`served_verdicts.py record --served-compare`); `served_verdicts.sh served-compare K` reruns it.
+- `served_sources.py record`: a served run's record composed on another host from that host's copy of the serve dir,
+  each part from the source that produced its verdict. PoUW's row is the verdict `case_replay.sh`
+  (`benchmarks/pouw/pearl_c_vllm/`) took again there from the run's case, by Python and Lean, under the conditions of
+  record read live from the challenger's gate (its three read verbs alone); sampled proofs' is the audit of record's
+  own answer, never rerun; the inference-only verdict stays the served node's. It takes no composite accept and writes
+  no block record. Who controls the composing host is a required word (`developer` or `auditor`). The public record is
+  each row's judgment with its ε and δ: exact totals stay private unless `--exact-totals public`, a reason leaves as
+  its kind, PoUW's accept whose tie reads an audit that did not accept is `accept, tie unaudited`, and no hash of a
+  file published in redacted form leaves.
 
 Flock's circuit prover (`verity_flock.circuit`) is on `main`, but a run does not take it from its checkout:
 `pod.sh` takes `git archive`s of the circuit prover's tree and the Lean verifier's tree at pinned commits, and a captured input set, as

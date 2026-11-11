@@ -181,15 +181,42 @@ def version_of(w: Mapping[str, Any]) -> int:
     return VERSION
 
 
+#: the keys W's header names a declared day by, as a one-stage window's registration does (`serve_day.Day.naming`)
+NAMING = ("day", "declaration")
+
+
+def naming_of(w: Mapping[str, Any]) -> dict[str, Any] | None:
+    """What W's header states of a declared day (`NAMING`'s keys it holds), or None where it states none."""
+    head = w.get("window")
+    got = {k: head[k] for k in NAMING if k in head} if isinstance(head, Mapping) else {}
+    return got or None
+
+
+def _naming(naming: Mapping[str, Any] | None) -> dict[str, Any]:
+    if naming is None:
+        return {}
+    day, declaration = (naming.get(k) for k in NAMING) if set(naming) == set(NAMING) else (None, None)
+    if type(day) is not int or day < 0 or not isinstance(declaration, str) or len(declaration) != 128 \
+            or set(declaration) - set("0123456789abcdef"):
+        raise ValueError("W names a declared day by its number and its declaration's SHA-512 digest in lowercase hex "
+                         f"({', '.join(NAMING)}), nothing else")
+    return {"day": day, "declaration": declaration}
+
+
 def record(manifests: Sequence[Mapping[str, Any]], previous: str | None = None,
-           rounds: Sequence[int] | None = None, version: int = VERSION) -> dict[str, Any]:
+           rounds: Sequence[int] | None = None, version: int = VERSION,
+           naming: Mapping[str, Any] | None = None) -> dict[str, Any]:
     """W at ``version`` over passes' manifests in order, pass i round ``rounds[i]`` (default i), chained after
     ``previous`` (the digest of the prover's last one-stage record, `registration.digest`; None for its first): every
     call's entries, round by round, then at version 2 every weight's B rows, its header stating the version (version 1
-    states none and registers no weight). ValueError for no pass, rounds that aren't one a pass in order, passes of two
-    salts, a weight two passes commit as other rows, or a version that isn't one of `VERSIONS`."""
+    states none and registers no weight). With ``naming`` (a serve that declared a day's program: `serve_day.Day.naming`,
+    the day and its declaration's digest) the header names that day as a one-stage window's registration does (`NAMING`),
+    which the audit tied to W holds to the day it audits; without it the header states none. ValueError for no pass,
+    rounds that aren't one a pass in order, passes of two salts, a weight two passes commit as other rows, a version
+    that isn't one of `VERSIONS`, or a naming that isn't a day and a digest."""
     if version not in VERSIONS:
         raise ValueError(f"W is version {' or '.join(map(str, VERSIONS))}, not {version!r}")
+    named = _naming(naming)
     if not manifests:
         raise ValueError("W registers the calls of a run's retained rounds, and it retains none")
     head = manifests[0]
@@ -199,17 +226,18 @@ def record(manifests: Sequence[Mapping[str, Any]], previous: str | None = None,
     tied = version == VERSION
     return {"format": REG.FORMAT_V2, "protocol": REG.PROTOCOL,
             "window": {"kind": "served", "entry": head["entry"], "scheme": head["scheme"], "salt": head["salt"],
-                       **({"version": VERSION} if tied else {})},
+                       **({"version": VERSION} if tied else {}), **named},
             "registered": [*(e for s, m in zip(at, manifests) for e in entries(m, s)),
                            *(_weights(manifests, at) if tied else [])],
             "previous": previous}
 
 
 def write(path: str | Path, passes: Sequence[Mapping[str, Any]], rounds: Sequence[int],
-          previous: str | None = None) -> dict[str, Any]:
+          previous: str | None = None, naming: Mapping[str, Any] | None = None) -> dict[str, Any]:
     """W over the retained ``rounds`` (places among ``passes``, ``served.json``'s, with calls: the retention's) written to
-    ``path``, and returned. ValueError for a round that is no pass with calls, a warm-up's round (``timed`` false: W
-    lists only the timed call's rounds, so a tied run drops the warm-up's), or a round that retained no manifest."""
+    ``path``, chained after ``previous`` and naming the declared day ``naming`` (`record`), and returned. ValueError
+    for a round that is no pass with calls, a warm-up's round (``timed`` false: W lists only the timed call's rounds, so a
+    tied run drops the warm-up's), or a round that retained no manifest."""
     held = [p for p in passes if p.get("units")]
     manifests = []
     for s in rounds:
@@ -222,7 +250,7 @@ def write(path: str | Path, passes: Sequence[Mapping[str, Any]], rounds: Sequenc
         if not held[s].get("manifest"):
             raise ValueError(f"round {s} retained no manifest, which W reads: serve with the pouw setting 'transcript_dir'")
         manifests.append(json.loads(Path(held[s]["manifest"]).read_text()))
-    w = record(manifests, previous, rounds)
+    w = record(manifests, previous, rounds, naming=naming)
     out = Path(path)
     out.parent.mkdir(parents=True, exist_ok=True)
     out.write_text(json.dumps(w, indent=1) + "\n")
@@ -244,14 +272,15 @@ class Committed(G.Registered):
 
 def reuse(w: Mapping[str, Any], manifests: Sequence[Mapping[str, Any]],
           rows_of: Callable[[str, int, np.ndarray], np.ndarray], rounds: Sequence[int] | None = None) -> dict[str, Committed]:
-    """The calls' values W registers (``w``, the window record of ``manifests`` at ``rounds`` and at the version it states:
-    `record`, `version_of`; its B rows are no value of the audited circuit), each as the audited circuit's registered
+    """The calls' values W registers (``w``, the window record of ``manifests`` at ``rounds``, at the version it states
+    and naming the day it names: `record`, `version_of`, `naming_of`; its B rows are no value of the audited circuit), each
+    as the audited circuit's registered
     value: the rows ``rows_of(name, rows,
     empty)`` gives (`window_rows.Rows.value`: u16 words, an FP32 word's two low first, every row no proof block makes
     ``empty``, zero), each salted with `audit.hm96_salt` under its pass's ``hm96_salt_key`` at the call's index for A and
     `served_y.HM96_Y` past it for y. ValueError unless ``w`` is the record of ``manifests`` and each value's entry is W's:
     the proof blocks don't make the rows Pearl+ committed, or the key is another."""
-    if dict(w) != record(manifests, w.get("previous"), rounds, version_of(w)):
+    if dict(w) != record(manifests, w.get("previous"), rounds, version_of(w), naming_of(w)):
         raise ValueError("W is not the window record of these passes (`record`), whose calls' values the audited window reads")
     out: dict[str, Committed] = {}
     for s, man in zip(_rounds(manifests, rounds), manifests):
@@ -275,5 +304,6 @@ def reuse(w: Mapping[str, Any], manifests: Sequence[Mapping[str, Any]],
     return out
 
 
-__all__ = ["KEEP", "SERVED_SCHEMA", "UNKNOWN_VERSION", "VERSION", "VERSIONS", "WORD_BITS", "Committed", "a_value", "b_entries",
-           "b_value", "coins_of", "entries", "macs", "record", "reuse", "served_passes", "version_of", "write", "y_value"]
+__all__ = ["KEEP", "NAMING", "SERVED_SCHEMA", "UNKNOWN_VERSION", "VERSION", "VERSIONS", "WORD_BITS", "Committed", "a_value",
+           "b_entries", "b_value", "coins_of", "entries", "macs", "naming_of", "record", "reuse", "served_passes", "version_of",
+           "write", "y_value"]

@@ -74,7 +74,8 @@
 #   5. `served_verdicts.py pearlplus` writes the piece (PIECE_DIR/development.json): its verdict, with each pass's salt
 #      held to the serve's live session (`pearlplus_coins`: the session fetched through PEARLC_CHALLENGER_GATE, under
 #      H1_KEY_SHA512 and MAIN_FILE's line; with in-process coins it claims no verdict) and an accept to the published
-#      coin (`pearlplus_coin`), its load, the replay's node and the rounds dropped, Pearl+'s verdict's credit,
+#      coin (`pearlplus_coin`), its load, the replay's node and the rounds dropped, the give-up's document (which
+#      `served_verdicts.py publish` holds on the node, with its counts in this log's lines), Pearl+'s verdict's credit,
 #      its shares (with the unretained serve's beside them) and why it credits nothing (served_verdicts.PEARLPLUS_WHY: its
 #      passes are not the window sampled proofs audited, so WINDOW names nothing here).
 # With PEARLPLUS_TIE set (served_verdicts.sh's PEARLPLUS_TIE: the window itself served under serve-openai's Pearl+ arm,
@@ -82,11 +83,21 @@
 # takes the window serve's cubin (PEARLC_CUBIN) where it is set; step 2 takes window WINDOW's own epoch, passes/ a
 # symlink to SERVE_DIR/pearl/wWINDOW (its served.json, coins.json and owner-only pass-NNNNN/, round s the window's step
 # s), and goes no further unless that served.json says ok; steps 3 and 4 read and write there, `retain` writing Pearl+'s
-# window record W (`--window-record`, private/pearlplus/window-record.json, rounds dropped as above) and then, before the coin,
+# window record W (`--window-record`, private/pearlplus/window-record.json, rounds dropped as above), chained after the
+# serve's first registration record where the serve wrote one (`--previous-record`: SERVE_DIR/deployment-registration.json,
+# served_verdicts.sh's weights(), which registers the weights before the first request) and naming the day the serve
+# declared where it declared one (`--day-declaration`: SERVE_DIR/declaration.json, serve-openai's --day), and then, before the coin,
 # PEARLPLUS_TIE_CMD (`served_verdicts.sh pearl-tie SERVE_DIR WINDOW W PASSES`) committing the window tied to W, its
-# registration R chained right after W; step 4 is `verify --tie W`, which holds the passes to W, and under the gate it
-# draws only after the window serve's Pearl-C period (SERVE_DIR/pearlplus/period.json, the one its RULE line reads)
-# closed with the lane's reserves since its open the window's salt sessions alone. Its salt coin is the
+# registration R chained right after W, and where that commit fails, or `retain` wrote no W, the piece goes no further:
+# the commit is what holds the window to its class's fixed load, so without it there is no draw, no verdict and no
+# Pearl+ line, and step 5 writes a piece that rejects for want of one; step 4 is `verify --tie W`, which holds the
+# passes to W, and with
+# PEARLPLUS_CLASS (served_verdicts.sh's: V3C_CLASS, the class the window is committed at) `--class`, which refuses passes
+# that are not that class's fixed load, so the verdict's counts of passes, calls and tables are the class's, and whose
+# accept publishes its work in the grid form (verify_run.grid_work: the class's structural credit less the give-up padded
+# up to H1's window grid; the exact credit is the profile's exact_work, which `publish` holds on the node), and under
+# the gate it draws only after the window serve's Pearl-C period (SERVE_DIR/pearlplus/period.json, the one its RULE line
+# reads) closed with the lane's reserves since its open the window's salt sessions alone. Its salt coin is the
 # arm's: a live salt-only session of the window's own under the gate (`serve_pearl.live`), which step 5 holds each pass
 # to as above, else in-process, and the piece then claims no verdict. Step 5 gets W (`--tie W`): the piece is then the
 # window's own epoch, and why it credits nothing by itself names the Pearl-C period its salt session joined
@@ -297,6 +308,8 @@ if [ -n "$GO" ] && { [ -s "$Q/volunteer.json" ] || [ -n "$TIE" ]; }; then
   VA=()
   [ -s "$Q/volunteer.json" ] && VA=(--volunteer "$Q/volunteer.json")
   [ -z "$TIE" ] || VA+=(--window-record "$W")
+  [ -z "$TIE" ] || [ ! -s "$SD/deployment-registration.json" ] || VA+=(--previous-record "$SD/deployment-registration.json")
+  [ -z "$TIE" ] || [ ! -s "$SD/declaration.json" ] || VA+=(--day-declaration "$SD/declaration.json")
   "$VENV/bin/python" benchmarks/pouw/pearl_c_vllm/served_passes.py retain --passes "$Q/passes" "${VA[@]}" > "$Q/retain.log" 2>&1
   rc=$?
   say "retain: served_passes.py retain exit $rc: $(grep -m1 '^retain ' "$Q/retain.log" | cut -c1-400)"
@@ -311,8 +324,11 @@ if [ -n "$GO" ] && [ -n "$TIE" ]; then
       > "$Q/tie.log" 2>&1
     rc=$?
     say "tie: served_verdicts.sh pearl-tie exit $rc after $(took "$t"): $(tail -1 "$Q/tie.log" | cut -c1-600)"
+    [ "$rc" = 0 ] || { say "draw: refused before it: the window's commit tied to W failed (pearl-tie exit $rc), so" \
+      "nothing holds the passes to the window's class and no draw or Pearl+ line follows it"; GO=; }
   else
-    say "W: retain wrote no window record, so nothing ties the passes to the window"
+    say "W: retain wrote no window record, so nothing ties the passes to the window and no draw or Pearl+ line follows"
+    GO=
   fi
 fi
 
@@ -330,7 +346,7 @@ if [ -n "$GO" ]; then
   period close
   t=$(date +%s)
   TA=()
-  [ -n "$TIE" ] && [ -s "$W" ] && TA=(--tie "$W")
+  [ -z "$TIE" ] || TA=(--tie "$W" ${PEARLPLUS_CLASS:+--class "$PEARLPLUS_CLASS"})
   "$VENV/bin/python" benchmarks/pouw/pearl_c_vllm/served_passes.py verify --passes "$Q/passes" --out "$P/verify.json" \
     --answer "$P/pearlplus-answer.json" --jobs "${PEARLPLUS_JOBS:-$(nproc)}" ${PEARLPLUS_DRAWS:+--draws "$PEARLPLUS_DRAWS"} \
     ${PEARLPLUS_OVER_CAP:+--over-cap "$PEARLPLUS_OVER_CAP"} ${FAST:+--fast} ${TA[@]+"${TA[@]}"} > "$Q/verify.log" 2>&1 &

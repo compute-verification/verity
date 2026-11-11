@@ -12,12 +12,19 @@
 # one sampled member writes, in the form `one-stage`) and the inference-only case from the window's records audit
 # (SERVE_DIR/v3c-w*/audit; in a run without V3c whose H1 windows weren't tied, so with no SERVE_DIR/h1/log.jsonl,
 # `served_verdicts.sh`'s step 3's,
-# SERVE_DIR/sampled-proofs-served), the latter with the policy's α and Γ read off the case's own division
-# (`--from-division`), or ALPHA and GAMMA where both are set, and its log the serve's H1 log through R's previous record;
+# SERVE_DIR/sampled-proofs-served), the latter with the policy's α and Γ as the auditor's gate signed them before the
+# serve, where it did: POLICY_PIECE is PoUW's piece directory as the record read it (`served_verdicts.sh` sets it beside
+# its `record --pieces`), and `served_cases.py`'s `signed_policy` reads them there from the open the serve's session
+# joined, under the key pin H1_KEY_SHA512; the session is the live one the piece's own check held Pearl+'s passes to,
+# so no caller names it or the period. Where that open signed no policy, or the piece holds no such session or is
+# absent, a development run's ALPHA and GAMMA where both are set, which nobody signed; without either no
+# inference-only case is written, and none is read off the served window's division.
+# Its log is the serve's H1 log through R's previous record;
 # and PoUW's period case (`served_pouw.sh`'s SERVE_DIR/private/pouw/period) once every window of it names R as its
 # Commit record, refused otherwise, and Pearl+'s run case naming R from the parts its piece wrote
 # (`served_pearlplus.sh`'s SERVE_DIR/private/pearlplus/case). Each CASE line's protocol and verdict go to
-# OUT/verdicts.txt, and α and Γ, which count the block's gates, stay in the case's private policy.json. Then
+# OUT/verdicts.txt, the inference-only case's with whose policy its α and Γ are (the auditor's only where the signed
+# open names a policy vy-admin registered or is vy-admin's own); α and Γ stay in the case's private policy.json. Then
 # `composite.py` remote and onsite,
 # each with `--exe` its product's Lean (`remote`, `onsite`, built here), over the directories under SERVE_DIR/private
 # that hold a case.json and an answer.json whose protocol is one of that product's subprotocols (composite.py's
@@ -90,8 +97,10 @@ command -v systemd-run > /dev/null && systemd-run --user --scope --quiet --colle
 [ "$PRODUCT" != onsite ] || onsite_cases
 
 if [ -f benchmarks/one_stage/served_cases.py ]; then
-  ag=(--from-division)
+  ag=()
   [ -n "${ALPHA:-}" ] && [ -n "${GAMMA:-}" ] && ag=(--alpha "$ALPHA" --gamma "$GAMMA")
+  [ -z "${POLICY_PIECE:-}" ] || [ ! -d "$POLICY_PIECE" ] \
+    || ag+=(--policy-piece "$POLICY_PIECE" ${H1_KEY_SHA512:+--key-sha512 "$H1_KEY_SHA512"})
   where=(--serve-dir "$D")
   compgen -G "$D/v3c-w*/audit/window/case.json" > /dev/null || [ -f "$D/h1/log.jsonl" ] \
     || { [ -f "$D/sampled-proofs-served/window/case.json" ] && where=(--audit "$D/sampled-proofs-served"); }
@@ -102,7 +111,8 @@ import json, sys
 for line in sys.stdin:
     head, _, body = line.partition(" ")
     c = json.loads(body)
-    print("COMPOSITE", head, c["protocol"], *([c["verdict"]] if head == "CASE" else []))' \
+    print("COMPOSITE", head, c["protocol"], *([c["verdict"]] if head == "CASE" else []),
+          *(["(" + c["policy"] + ")"] if "policy" in c else []))' \
     | tee -a "$OUT/verdicts.txt"
   say "COMPOSITE CASES: served_cases.py exit $rc$([ "$rc" = 0 ] || echo ', its log on the node')"
 fi

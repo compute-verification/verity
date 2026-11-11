@@ -1,5 +1,5 @@
 """The served Pearl+ flow's Lean step end to end (`served_pearlplus.sh` step 4b) with the real Lean verifier of record,
-PouwCheck.PearlPlus's ``pouw-pearlplus`` (PR #7221's package, built here as its difftest builds it), and the row PoUW's
+PouwCheck.PearlPlus's ``pouw-pearlplus`` (its package, built here as its difftest builds it), and the row PoUW's
 compose then makes of the piece.
 
 A toy serve stands in for the GPU's: a warm-up pass and two timed passes of one epoch (the pouw suite's `proved_pass`, the
@@ -16,7 +16,7 @@ the coin record's dropped. The row then reaches the Lean condition and reads the
 none; with it, every condition up to the credit holds (the Lean's verdict, run, source and W) and the row stops at the
 last, the Lean's credit, since a test instance's passes credit nothing.
 
-What it catches that the pouw suite's stand-in tests can't: #7221's command line and printout as they are, so a head that
+What it catches that the pouw suite's stand-in tests can't: the executable's command line and printout as they are, so a head that
 changes either fails here."""
 from __future__ import annotations
 

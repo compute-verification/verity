@@ -3,14 +3,16 @@ form a composition of the window's subprotocols reads as a case: sampled proofs'
 sampled proofs case (one-stage v2's in the form ``one-stage``) and the inference-only case from its records audit,
 PoUW's period case held to the same record, Pearl+'s run case naming it, and with ``--v2`` one-stage v2's bare case too:
 
-    served_cases.py (--audit DIR | --serve-dir D) --private DIR [--alpha N/D --gamma G | --from-division]
+    served_cases.py (--audit DIR | --serve-dir D) --private DIR
+                    [--policy-piece DIR --key-sha512 HEX] [--alpha N/D --gamma G]
                     [--log FILE] [--period DIR] [--pearlplus DIR] [--v1-exe PATH] [--sampled-exe PATH]
                     [--inference-only-exe PATH] [--v2 [--v2-exe PATH]]
 
 ``--audit`` is the window's `records_audit.py audit --circuit --registered` out directory (`served_verdicts.sh`'s
 ``$VW/audit``); ``--serve-dir`` finds it as the one ``D/v3c-w*/audit`` that holds a case, and reads the serve's H1 log
-(``D/h1/log.jsonl``, `H1_LOG`), PoUW's period case (``D/private/pouw/period``, `PERIOD_PIECE`) and Pearl+'s case's
-parts (``D/private/pearlplus/case``, `PEARL_PLUS_PIECE`) where it holds them.
+(``D/h1/log.jsonl``, `H1_LOG`), PoUW's period case (``D/private/pouw/period``, `PERIOD_PIECE`), Pearl+'s case's
+parts (``D/private/pearlplus/case``, `PEARL_PLUS_PIECE`) and the serve's first registration record
+(``D/deployment-registration.json``, `DEPLOYMENT`) where it holds them.
 Every case commits to the same record R, ``window/case.json``'s commitment, the record the audit sampled against (under
 H1's tie, `served_verdicts.sh`'s H1_TIE, the record H1 named as the window's Commit record before its sample coin,
 `serve_tie`), and each must name R's digest, SHA-512(format ‖ 0 ‖ canon(record)) (`registration.digest`), or nothing is
@@ -29,12 +31,23 @@ written: that digest is what remote's record tie compares (`Core.Remote.windows`
   answer is `vstar-recursive sampled check` on the case and its blobs.
 * **The inference-only case** (`inference_only_case`, `INFERENCE_ONLY`: `verity/inference-only/v0`, the inference-only
   policy's check as a core protocol, `inference-only`):
-  - params: ``alpha`` and ``gamma`` (the policy's α and Γ: given, ``--alpha`` and ``--gamma``, or with
-    ``--from-division`` read off the case's own division, `division_policy`, so the check confirms that the division
-    complies and they're no security setting, which the case's private ``policy.json`` says beside them; without
-    either no case is written), ``log`` (the deployment's records before R, from its first, whose ``previous`` is
+  - params: ``alpha`` and ``gamma`` (the policy's α and Γ, as the auditor's gate signed them before the serve,
+    `signed_policy`: ``--policy-piece``, PoUW's piece directory as the compose holds it, with the gate's ledger as its
+    ``ledger`` verb gave it and the serve's session's tree, whose challenger key is held to the verifier's pin
+    ``--key-sha512``. The serve's session is the live one the piece's own check held Pearl+'s passes to
+    (`live_session`), which the record's Pearl+ row reads too, so no caller names it, and the open read is the one that
+    session joined: its prover's period open at its reserve, which must sign the registration θ is read from, the
+    digest of the first record of this case's log. α's pair is copied as signed, unreduced. Where that open signs no
+    policy, the piece holds no such session or no piece is given, a development run's ``--alpha`` and ``--gamma`` are
+    the case's, which nobody signed; beside a signed policy they are not read. The case's private
+    ``policy.json`` and its CASE line's ``policy`` say which, and whose choice a signed policy is (`AUDITORS`,
+    `LANES`, `UNSIGNED`); without either no case is written, and none is read off the served window's own
+    division), ``log`` (the deployment's records before R, from its
+    first, whose ``previous`` is
     null, as the policy's check reads them: ``--log``, else with ``--serve-dir`` the serve's H1 log through R's
-    ``previous``, `h1_log`, each window's registration W and record R up to the window's W; empty when R names no
+    ``previous``, `h1_log`, each window's registration W and record R up to the window's W; else, on a serve whose
+    window record is Pearl+'s, that W, which Pearl+'s case's parts hold, and before it the serve's first registration
+    record where W is chained after one, `pearl_log`; empty when R names no
     previous record), ``program`` (v1's params' Program as canonical text, the one the record's ``program`` names) and
     ``parameters`` (its program function's, which the descriptor doesn't carry: the population program rebuilt over its
     root's templates, and the registered values v1's own ``parameters`` name ahead of them, held to the record's
@@ -60,11 +73,14 @@ written: that digest is what remote's record tie compares (`Core.Remote.windows`
 * **Pearl+'s run case** (`pearlplus_case`, `PEARL_PLUS`: `verity/pouw/pearl-plus/v1`, the work subprotocol of remote's
   composite of record, `Core.Remote.V1`): from the parts Pearl+'s piece wrote on the served node (``--pearlplus``; with
   ``--serve-dir``, `PEARL_PLUS_PIECE` when it holds them: `served_passes.py case`), its params (the epoch's coin
-  commitment, the draws and the verifier's coin record), its commitment ``{"manifests", "record"}``, the retained passes'
-  manifests and R's digest, which remote ties to the policy's record (`Core.Remote.V1.run`), and its evidence, each
+  commitment, the draws and the verifier's coin record), its commitment ``{"manifests", "record", "window"}``, the
+  retained passes' manifests, R's digest, which remote ties to the policy's record (`Core.Remote.V1.run`), and the
+  window record W the passes are held to with its rounds and dropped rounds, whose digest remote ties to the record R is
+  chained right after (`Core.Remote.V1.window`), and its evidence, each
   pass's files the opened tiles read by the SHA-512 of the blob holding them, the blobs the parts' own. Its answer is the
-  Lean verdict of record's (`pouw-pearlplus` on the same passes, coins, draws and coin record, which the check of this
-  case runs on the blobs instead of the files) under the commitment's digest, SHA-512(`PEARL_PLUS_TAG` ‖ 0 ‖
+  Lean verdict of record's (`pouw-pearlplus` on the same passes, coins, draws, coin record and W, which the check of
+  this case runs on the blobs instead of the files, and at no class: its public is the exact work, `PEARL_PLUS_PUBLIC`)
+  under the commitment's digest, SHA-512(`PEARL_PLUS_TAG` ‖ 0 ‖
   commitment), since Pearl+'s package builds no executable of the protocol's form alone. The manifests carry the
   passes' salt key, so its commitment, unlike the others', is witness. Without the parts none is made.
 * **`verity/sampled-proofs/one-stage/v2`** (`v2_case`, only with ``--v2``): a5's ``window/case-v2.json``
@@ -78,16 +94,16 @@ written: that digest is what remote's record tie compares (`Core.Remote.windows`
 Each case goes to its own directory under ``--private`` (``sampled-proofs-v1/``, ``sampled-proofs/``,
 ``inference-only/``, ``pouw-period/``, ``pouw-pearl-plus/``, ``sampled-proofs-v2/``; 0700, files 0600): ``case.json``
 (``{"params", "commitment", "evidence"}``, hex commitment and evidence, and sampled proofs', v2's, the period's and
-Pearl+'s ``blobs``) and ``answer.json``, its Lean answer line (and, given ``--from-division``, the inference-only case's
-``policy.json``). A composition is handed only the directories whose answer's protocol is one of its product's
+Pearl+'s ``blobs``) and ``answer.json``, its Lean answer line (and the inference-only case's ``policy.json``, where its
+α and Γ come from). A composition is handed only the directories whose answer's protocol is one of its product's
 subprotocols: remote's are sampled proofs', the inference-only case's and the period's (v1's, Pearl+'s in the period's
 place), onsite's v1's among its own, and neither's v2's bare case. The Lean runs on files in a 0700 scratch directory
 under ``--private``; the period's answer is the one `pouw_piece.py` wrote, and Pearl+'s the Lean verdict of record's.
 This prints a ``CASE {"protocol", "verdict", "dir"}`` line per case written and
 a ``NOT_WRITTEN {"protocol", "reason"}`` line per case refused, and nothing of a case's params or evidence: not α and Γ
-either, which ``--from-division`` reads off the division, so on a one-block window they'd publish its block's gates
-and fresh-input bits. The lines go to a private log (a reason may quote a5's ``case-error.txt`` or
-``case-v2-error.txt``), of which only a line's ``protocol`` and ``verdict`` are public. Exit 0 when every case is
+either (the inference-only case's line says only whose policy they are, ``policy``). The lines go to a private log (a
+reason may quote a5's ``case-error.txt`` or ``case-v2-error.txt``), of which only a line's ``protocol`` and ``verdict``
+(and the inference-only case's ``policy``) are public. Exit 0 when every case is
 written, 1 when one is refused, 64 on a usage error.
 """
 from __future__ import annotations
@@ -107,8 +123,10 @@ from fractions import Fraction
 from pathlib import Path
 from typing import Any
 
+from verity.core.protocols.pouw import core_check as CC
 from verity.core.protocols.pouw import credit as Cr
 from verity.core.protocols.pouw import period_check as PC
+from verity.core.protocols.spot import challenger as Ch
 from verity.core.protocols.spot.one_stage import proofs as PF
 from verity.core.protocols.spot.one_stage import registration as R
 from verity.core.protocols.spot.one_stage import verifier as VF
@@ -132,7 +150,12 @@ PEARL_PLUS = "verity/pouw/pearl-plus/v1"
 #: what Pearl+'s commitment's digest hashes ahead of a zero byte and the commitment (`PouwCheck.PearlPlus.Protocol`)
 PEARL_PLUS_TAG = b"verity/pouw/pearl-plus/manifests/v1"
 #: the keys of `served_passes.py case`'s parts that make the case and its answer
-PEARL_PLUS_PARTS = {"params", "manifests", "evidence", "lean", "delta"}
+PEARL_PLUS_PARTS = {"params", "manifests", "window", "evidence", "lean", "delta"}
+#: the commitment's window (`PouwCheck.PearlPlus.Protocol.windowKeys`)
+PEARL_PLUS_WINDOW = {"dropped", "record", "rounds"}
+#: the work the protocol's check publishes (`PouwCheck.PearlPlus.Protocol.publicJson`, δ aside): the exact credit, which
+#: holds no class, so where the verdict of record printed the grid form, its exact work in that form's place
+PEARL_PLUS_PUBLIC = ("credited", "credited_tiles", "epsilon", "macs", "rho")
 DIRS = {V1: "sampled-proofs-v1", SAMPLED: "sampled-proofs", INFERENCE_ONLY: "inference-only", PERIOD: "pouw-period",
         PEARL_PLUS: "pouw-pearl-plus", V2: "sampled-proofs-v2"}
 #: Under ``--serve-dir``: the serve's H1 log, a line a record H1's tie wrote (`serve_tie.LOG`: ``{"window", "kind",
@@ -141,13 +164,19 @@ DIRS = {V1: "sampled-proofs-v1", SAMPLED: "sampled-proofs", INFERENCE_ONLY: "inf
 H1_LOG = Path("h1/log.jsonl")
 PERIOD_PIECE = Path("private/pouw/period")
 PEARL_PLUS_PIECE = Path("private/pearlplus/case")
+#: Under ``--serve-dir``: the serve's first registration record, where the serve wrote one before its first request
+#: (`served_verdicts.sh`'s weights step: every weight's root, chained after nothing)
+DEPLOYMENT = Path("deployment-registration.json")
 CASE_KEYS = {"commitment", "evidence", "params"}
 USAGE = 64
-#: α and Γ past any block's (its gates and its fresh-input bits are each under 2^64), at which the policy's check reports
-#: the case's own division.
-UNBOUNDED = (2**64, 2**64)
-#: Where ``--from-division``'s α and Γ come from, in the inference-only case's private ``policy.json``.
-FROM_DIVISION = "read off the honest division, so the check confirms it complies; not a security setting"
+#: The `by` of an open the auditor's operator made (the gate's sudoer), as the gate signs it.
+OPERATOR = "vy-admin"
+#: Whose choice the inference-only case's α and Γ are, in its private ``policy.json`` (``whose``) and on its CASE line
+#: (``policy``): the auditor's only where the signed open names a policy vy-admin registered (``policy_name``) or is
+#: vy-admin's own; a lane's own, which the gate only signed before the serve; or the command line's, signed by no one.
+AUDITORS = "the auditor's policy, signed by the gate before the serve"
+LANES = "policy given by the lane, signed by the gate before the serve"
+UNSIGNED = "policy given on the command line, signed by no one"
 
 
 class Refused(Exception):
@@ -264,14 +293,18 @@ def pearlplus_case(d: Path, digest: str) -> tuple[dict[str, Any], str, Any]:
     files, lean = (parts["evidence"] or {}).get("files"), parts["lean"] or {}
     _need(isinstance(files, list) and all(isinstance(f, dict) for f in files), "the parts' evidence is not each pass's files")
     _need(lean.get("verdict") in ("accept", "reject"), f"the parts' Lean verdict is {lean.get('verdict')!r}")
+    window = parts["window"]
+    _need(isinstance(window, dict) and set(window) == PEARL_PLUS_WINDOW and isinstance(window["record"], dict),
+          f"the parts' window is not {sorted(PEARL_PLUS_WINDOW)} with the window record W the passes are held to")
     blobs = [d / "blobs" / h for h in sorted({h for f in files for h in f.values()})]
     gone = [b for b in blobs if not b.is_file()]
     _need(not gone, f"the parts name {len(gone)} blob(s) that aren't files in {d / 'blobs'}")
-    commitment = codec.canonical_json({"manifests": parts["manifests"], "record": digest})
+    commitment = codec.canonical_json({"manifests": parts["manifests"], "record": digest, "window": window})
     accepted = lean["verdict"] == "accept"
+    work = {**(lean.get("work") or {}), **(lean.get("exact_work") or {})}
     answer = {"protocol": PEARL_PLUS, "verdict": lean["verdict"], "reason": lean.get("reason"),
               "commitment": hashlib.sha512(PEARL_PLUS_TAG + b"\0" + commitment).hexdigest(),
-              "public": {**(lean.get("work") or {}), "delta": parts["delta"]} if accepted else None,
+              "public": {**{k: work[k] for k in PEARL_PLUS_PUBLIC if k in work}, "delta": parts["delta"]} if accepted else None,
               "profile": {"draws": parts["params"].get("draws"), "drawn": lean.get("drawn"),
                           "passes": len(parts["manifests"])} if accepted else None}
     case = {"params": parts["params"], "commitment": commitment.hex(),
@@ -287,10 +320,86 @@ def _reference():
     return module
 
 
-def _ratio(x: Fraction | int | str) -> list[int]:
+def _ratio(x: Fraction | int | str | Sequence[int]) -> list[int]:
+    """α as the policy's check reads it, ``[N, D]``: a pair as it is (the one the gate signed, never reduced), anything
+    else as its reduced fraction."""
+    if isinstance(x, (list, tuple)):
+        _need(len(x) == 2 and all(type(v) is int and v >= 0 for v in x) and x[1] >= 1,
+              f"α is a pair of naturals [N, D] with D at least 1, not {x!r}")
+        return list(x)
     f = Fraction(x)
     _need(f >= 0, f"α is a nonnegative ratio, not {x}")
     return [f.numerator, f.denominator]
+
+
+def live_session(piece: Path) -> str | None:
+    """The serve's session as PoUW's piece directory ``piece`` holds it: the live session Pearl+'s piece's own check
+    held its passes with calls to (its document's ``coins.check``, `served_verdicts.pearlplus_coins`'), which is the
+    session the record's Pearl+ row reads there (`served_verdicts.pearlplus_of_record`, its first condition). None
+    where the piece wrote no document, is not Pearl+'s, took its coins from no live session, or its check held no
+    pass: no session of the gate's is then the serve's, so no open signed a policy for it."""
+    import served_verdicts as S
+
+    if not (piece / S.DEVELOPMENT).is_file():
+        return None
+    doc = _json(piece / S.DEVELOPMENT)
+    coins = doc.get("coins") if isinstance(doc, dict) else None
+    check = coins.get("check") if isinstance(coins, dict) else None
+    held = (isinstance(check, dict) and doc.get("piece") == "pearlplus" and doc.get("coin_source") == S.LIVE_SOURCE
+            and check.get("reason") is None and bool(check.get("passes")) and isinstance(check.get("session"), str))
+    return check["session"] if held else None
+
+
+def signed_policy(piece: Path, pin: str | None, first: str, verify: Ch.Verify = CC.lms_verify
+                  ) -> dict[str, Any] | None:
+    """The inference-only policy the auditor's gate signed before the serve, read where the compose holds the serve's
+    session: PoUW's piece directory ``piece``, as `served_verdicts.pearlplus_of_record` reads it, and its
+    `live_session`. The session's challenger key (``session/<id>/out/key.json``) is held to the verifier's pin ``pin``
+    (`challenger.pinned_key`); the gate's ledger (``ledger.jsonl``) is checked under it as every reader of the ledger
+    checks it (`challenger.ledger_head`); and the open is the one the session joined, its prover's period open at its
+    reserve (`served_verdicts._ledger_period`), so it precedes the serve's first coin and its α and Γ were not read
+    off what was served. None where the piece holds no live session or that open signs none of
+    `served_verdicts.PERIOD_POLICY`: the gate signed no policy for this serve. Otherwise it must sign all four, with
+    the policy's id `INFERENCE_ONLY` (another id's α and Γ are in another form) and with ``registration`` ``first``,
+    the digest of the first record of the case's log, so θ is read from the registration the auditor held before the
+    serve and from no other.
+
+    Returns ``alpha`` (the signed pair, unreduced) and ``gamma``, with what the case's ``policy.json`` keeps of where
+    they come from: the period, the session, ``by`` and ``policy_name`` as signed, and ``whose``, `AUDITORS` when the
+    open names a policy vy-admin registered or is vy-admin's own (`OPERATOR`), else `LANES`."""
+    import served_verdicts as S
+    from verity.core.protocols.spot import remote
+    from verity_vllm.protocols.pouw.h1 import challenger as PHC
+
+    session = live_session(piece)
+    if session is None:
+        return None
+    _need(pin is not None, "the gate's ledger is read under the verifier's key pin, and --key-sha512 is not given")
+    try:
+        key = PHC.pinned_key(piece / "session" / session / "out" / remote.KEY, pin)
+        lines = Ch.ledger_head([remote.ledger_lines(piece / "ledger.jsonl")], key, verify)
+    except Ch.CoinError as e:
+        raise Refused(f"the gate's ledger is refused under the pinned challenger key: {e}") from None
+    reserve, body = S._ledger_period(lines, session)
+    _need(reserve is not None, f"the gate's ledger holds no reserve of the serve's session {session}")
+    _need(body is not None, f"the serve's session {session} joined no period, so no open signed a policy before it")
+    period, signs = body.get("period"), [f for f in S.PERIOD_POLICY if f in body]
+    if not signs:
+        return None
+    missing = [f for f in S.PERIOD_POLICY if f not in body]
+    _need(not missing, f"period {period}'s open signs {', '.join(signs)} and no {', '.join(missing)}: an "
+          "inference-only policy is signed whole")
+    _need(body["policy"] == INFERENCE_ONLY, f"period {period}'s open signs α and Γ under {body['policy']!r}, another "
+          f"protocol's form than {INFERENCE_ONLY}'s")
+    alpha, gamma = _ratio(body["alpha"]) if isinstance(body["alpha"], list) else None, body["gamma"]
+    _need(alpha is not None and type(gamma) is int and gamma >= 0,
+          f"period {period}'s open signs no α [N, D] and natural Γ: {body['alpha']!r}, {gamma!r}")
+    _need(body["registration"] == first, f"period {period}'s open signs the registration "
+          f"{str(body['registration'])[:16]}…, and the case's log starts at {first[:16]}…: θ is read from the "
+          "registration the gate signed before the serve")
+    whose = AUDITORS if "policy_name" in body or body.get("by") == OPERATOR else LANES
+    return {"alpha": alpha, "by": body.get("by"), "gamma": gamma, "period": period, "policy": INFERENCE_ONLY,
+            "policy_name": body.get("policy_name"), "registration": first, "session": session, "whose": whose}
 
 
 def _chain(log: Sequence[Mapping[str, Any]], rec: Mapping[str, Any]) -> None:
@@ -326,6 +435,33 @@ def h1_log(path: Path, rec: Mapping[str, Any]) -> list[dict[str, Any]]:
             return log
     raise Refused("the record's previous is no record the serve's H1 log names, so its log doesn't chain from the "
                   "deployment's first record")
+
+
+def pearl_log(serve: Path | None, parts: Path | None, rec: Mapping[str, Any]) -> list[dict[str, Any]]:
+    """The deployment's records before ``rec``, oldest first, on a serve whose window record is Pearl+'s: the record W
+    Pearl+'s case's parts (``parts``, `pearlplus_of`) hold its passes to, which ``rec`` is chained right after (the tie
+    `Core.Remote.V1.window` checks), and before it the serve's first registration record (`DEPLOYMENT` under ``serve``)
+    where W is chained after one. Each is taken by the digest the record after it names, so a W or a first record that
+    isn't the one named is no part of the log, and the refusal says the log doesn't reach the deployment's first record.
+    Empty when ``rec`` names no previous record."""
+    held: dict[str, dict[str, Any]] = {}
+    if parts is not None:
+        w = (_json(parts / "parts.json").get("window") or {}).get("record")
+        if isinstance(w, dict):
+            held[R.digest(w)] = w
+    if serve is not None and (serve / DEPLOYMENT).is_file():
+        first = _json(serve / DEPLOYMENT)
+        if isinstance(first, dict):
+            held[R.digest(first)] = first
+    log: list[dict[str, Any]] = []
+    at = rec.get("previous")
+    while at is not None:
+        _need(at in held and len(log) < len(held),
+              "the record's previous records are not Pearl+'s window record and, before it, the serve's first "
+              "registration record, so its log doesn't chain from the deployment's first record (pass --log)")
+        log.insert(0, held[at])
+        at = held[at].get("previous")
+    return log
 
 
 def _values(given: Any, members: Sequence[tuple[Any, int]]) -> tuple[tuple[str, int, int], ...]:
@@ -379,8 +515,8 @@ def parameters(desc: Mapping[str, Any], root: Any, given: Any = None) -> list[li
                   + ", so its program function's parameters aren't known")
 
 
-def inference_only_case(v1: Mapping[str, Any], alpha: Fraction | int | str, gamma: int,
-                      log: Sequence[Mapping[str, Any]] = ()) -> dict[str, Any]:
+def inference_only_case(v1: Mapping[str, Any], alpha: Fraction | int | str | Sequence[int], gamma: int,
+                        log: Sequence[Mapping[str, Any]] = ()) -> dict[str, Any]:
     """The inference-only case (module docstring) from v1's case of the window's audit."""
     rec, _ = record_of(v1)
     desc = v1["params"].get("program") if isinstance(v1.get("params"), Mapping) else None
@@ -399,22 +535,6 @@ def inference_only_case(v1: Mapping[str, Any], alpha: Fraction | int | str, gamm
               "parameters": parameters(desc, root, v1["params"].get("parameters")), "program": text}
     evidence = {"owner": ["input" if i else 0 for i in inputs], "provenance": [], "theta": []}
     return {"commitment": v1["commitment"], "evidence": codec.canonical_json(evidence).hex(), "params": params}
-
-
-def division_policy(v1: Mapping[str, Any], log: Sequence[Mapping[str, Any]], exe: str | os.PathLike,
-                    scratch: Path) -> tuple[Fraction, int]:
-    """α and Γ read off the case's own division (``--from-division``): the policy's Lean check at no budget
-    (`UNBOUNDED`) profiles each block's gates and fresh-input bits; Γ is the largest block's gates and α the most bits a
-    gate of any block, so the check at them confirms that the division complies."""
-    answer, _ = lean_answer(exe, inference_only_case(v1, *UNBOUNDED, log), scratch)
-    profile = answer.get("profile")
-    blocks = profile.get("blocks") if isinstance(profile, Mapping) else None
-    _need(answer.get("verdict") == "accept",
-          f"the case's own division doesn't pass the check at no budget: {answer.get('reason')}")
-    _need(isinstance(blocks, list) and blocks != [] and all(
-        isinstance(b, list) and len(b) == 2 and all(type(x) is int for x in b) and b[0] > 0 for b in blocks),
-        "the check's profile isn't a nonempty list of [gates, bits] blocks with gates")
-    return max(Fraction(bits, gates) for gates, bits in blocks), max(gates for gates, _ in blocks)
 
 
 def lean_answer(exe: str | os.PathLike, case: Mapping[str, Any], scratch: Path,
@@ -514,7 +634,8 @@ def produce(a: argparse.Namespace) -> int:
 
     def written(id: str, case: Mapping[str, Any], line: str, verdict: Any) -> None:
         write(private / DIRS[id], case, line, kept.get(id))
-        print("CASE " + json.dumps({"dir": str(private / DIRS[id]), "protocol": id, "verdict": verdict},
+        whose = {"policy": kept[id]["policy.json"]["whose"]} if id == INFERENCE_ONLY else {}
+        print("CASE " + json.dumps({"dir": str(private / DIRS[id]), "protocol": id, "verdict": verdict, **whose},
                                    sort_keys=True), flush=True)
 
     def refused(id: str, e: Exception) -> None:
@@ -540,16 +661,25 @@ def produce(a: argparse.Namespace) -> int:
             log = _json(a.log)
         elif a.serve_dir is not None and (a.serve_dir / H1_LOG).is_file():
             log = h1_log(a.serve_dir / H1_LOG, rec)
+        elif pearlplus is not None:
+            log = pearl_log(a.serve_dir, pearlplus, rec)
         else:
             log = []
         _need(isinstance(log, list), "--log is a JSON list of registration records")
-        if not a.from_division:
-            _need(a.alpha is not None and a.gamma is not None, "α and Γ are the policy's, not the run's: pass --alpha "
-                  "and --gamma, or --from-division")
-            return inference_only_case(v1, a.alpha, a.gamma, log)
-        alpha, gamma = division_policy(v1, log, inference_only_exe(), private / "scratch")
-        kept[INFERENCE_ONLY] = {"policy.json": {"alpha": _ratio(alpha), "gamma": gamma, "read": FROM_DIVISION}}
-        return inference_only_case(v1, alpha, gamma, log)
+        policy = None
+        if a.policy_piece is not None:
+            _chain(log, rec)
+            policy = signed_policy(a.policy_piece, a.key_sha512, R.digest([*log, rec][0]))
+        if policy is None:
+            _need(a.alpha is not None and a.gamma is not None,
+                  "the gate signed no policy for this serve (PoUW's piece holds no live session, or the period it "
+                  "joined was opened with none), and the run gives no --alpha and --gamma of its own"
+                  if a.policy_piece is not None else
+                  "α and Γ are the policy's, not the run's: pass the piece holding the gate's ledger, where the gate "
+                  "signed them (--policy-piece, --key-sha512), or on a development run --alpha and --gamma")
+            policy = {"alpha": _ratio(a.alpha), "gamma": a.gamma, "whose": UNSIGNED}
+        kept[INFERENCE_ONLY] = {"policy.json": policy}
+        return inference_only_case(v1, policy["alpha"], policy["gamma"], log)
 
     one(INFERENCE_ONLY, inference_only, inference_only_exe)
     if period is not None:
@@ -579,10 +709,14 @@ def main(argv: Sequence[str] | None = None) -> int:
     where.add_argument("--audit", type=Path, help="the window's records_audit.py out directory")
     where.add_argument("--serve-dir", type=Path, help="the serve dir, whose one v3c-w*/audit is the audit")
     ap.add_argument("--private", type=Path, required=True, help="where each case's directory goes (0700)")
-    ap.add_argument("--alpha", type=Fraction, help="the policy's α, N/D: fresh-input bits a gate")
-    ap.add_argument("--gamma", type=int, help="the policy's Γ: gates an inference block")
-    ap.add_argument("--from-division", action="store_true",
-                    help="α and Γ read off the case's own division (division_policy) instead of given")
+    ap.add_argument("--policy-piece", type=Path, help="PoUW's piece directory as the compose holds it (its document, "
+                    "the gate's ledger.jsonl and the serve's session's tree), where the open the serve's session "
+                    "joined signed the policy's α and Γ before the serve (signed_policy)")
+    ap.add_argument("--key-sha512", help="with --policy-piece: the SHA-512 of the auditor's challenger key, the "
+                    "verifier's pin")
+    ap.add_argument("--alpha", type=Fraction, help="a development run's α, N/D: fresh-input bits a gate; signed by no "
+                    "one, and not read where the gate signed a policy")
+    ap.add_argument("--gamma", type=int, help="a development run's Γ: gates an inference block; signed by no one")
     ap.add_argument("--log", type=Path, help="the deployment's registration records before the window's, a JSON list "
                     "(default with --serve-dir: its H1 log's, h1_log)")
     ap.add_argument("--period", type=Path, help="PoUW's period case, pouw_piece.py period's --out (default with "
@@ -596,8 +730,6 @@ def main(argv: Sequence[str] | None = None) -> int:
     ap.add_argument("--v2", action="store_true", help="one-stage v2's case too (v2_case), in sampled-proofs-v2/")
     ap.add_argument("--v2-exe", help=f"{PF.V2_EXE}, with --v2 (default: built here)")
     a = ap.parse_args(argv)
-    if a.from_division and (a.alpha is not None or a.gamma is not None):
-        ap.error("--from-division reads α and Γ off the division: not with --alpha or --gamma")
     if a.v2_exe is not None and not a.v2:
         ap.error("--v2-exe is v2's Lean, which only --v2 runs")
     return produce(a)
