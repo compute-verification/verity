@@ -3,6 +3,7 @@ module
 public import Proofs.Flock.SamplingGeneric.Fails
 import Mathlib.Algebra.Order.BigOperators.Group.Finset
 import Mathlib.Algebra.BigOperators.Ring.Finset
+import Mathlib.Data.Fin.Embedding
 import Mathlib.Data.List.GetD
 
 /-!
@@ -83,7 +84,8 @@ theorem sum_sessions_le (L : Compiled Coin A) (x : Msg) (l : List ℕ) (needs : 
     intro j hj
     obtain ⟨i, -, hj⟩ := Finset.mem_biUnion.1 hj
     obtain ⟨u, hu, -, -⟩ := mem_sessSlots.1 (List.mem_toFinset.1 hj)
-    exact Finset.mem_range.2 (List.getElem?_eq_some_iff.1 hu).1
+    obtain ⟨hlt, -⟩ := List.getElem?_eq_some_iff.1 hu
+    exact Finset.mem_range.2 hlt
   rw [Finset.sum_comm]
   calc ∑ i ∈ F, ∑ g ∈ G, (if ∃ u ∈ L.sessBlocks x l i, g.val ∈ needs u then e i else 0)
       ≤ ∑ i ∈ F, (∑ j ∈ (L.sessSlots x l i).toFinset, (needs (l.getD j 0)).card) * emax :=
