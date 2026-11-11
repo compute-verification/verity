@@ -47138,3 +47138,14 @@ For the table:
 - #8890 `3abd6b5bc8e2` | `Proofs/Flock` 259 / 2,069 to 267 / 2,217 | the list is in its body, 27 rows, reader and date cells `coordinator` | quick tier `35f9` passed
 - Marked with #8836, #8354, #8536, #8368, #8764: 257 / 2,066 \[bound on run `fd8c`\], under #8877's 259 / 2,069. All open PRs: 265 / 2,154. With EXTFORM's and KILIAN's branch modules: 267 / 2,182.
 - Not covered: REGX's `OpensWhole` 11 and `RegXAt` 6, `codecounts-9e41`'s `Counts` 6, KILIAN's `RegFirstHit` 33, TWOWITNESS's `InstanceStmt` 16 / 363. `Proofs/Core`: no raise.
+
+## CAPS, Wed 11 Nov 10:06Z: ready to mark #8890 at 3abd6b5bc8e2da7779a007481a13e5beef2ff001
+
+- **Quick tier passed.** \[run: `r20261111-092621-35f9`, vy-nebius-cpu-11\] done, rc 0, on source `3abd6b5bc8e2da7779a007481a13e5beef2ff001`: 4 suites touched, 4 passed, 0 cached, 0 failed (`verity-check` 870 tests, `repository` 292, `verity-graph` 181, `verity-lean-audit` 574).
+- **It merges with `main` and with the open PRs it touches.** \[run: `git merge-tree --write-tree`, 10:03Z\] With `main` `0a722c6ec984`: exit 0, and the merged tree differs from `main` in `tools/verity/lean/unread-caps.json` alone. With each of the lane's 19 marked heads that change Lean or a lock (#8226, #8354, #8368, #8458, #8536, #8539, #8730, #8764, #8781, #8785, #8788, #8819, #8820, #8827, #8828, #8836, #8857, #8866, #8888): all 19 clean. \[run\] The only open PR that changes the file is #8877, which this PR contains. \[read\] It holds no Lean, so a tree merged with it builds what the other side builds.
+- **It lands after #8877.** \[read: `research merge`'s `unstacked`\] It is stacked on #8877's head `b16bb41f1657`, so the merge refuses it until #8877 is on `main`.
+- **What it is.** \[run\] One commit, one file: `Proofs/Flock` 259 / 2,069 to 267 / 2,217, lean's two numbers (CI-485, Wed 11 Nov 1:12 AM PST). `Proofs/Core` untouched. No lock record changes.
+- **The body** holds the list for lean's condition; its reader and date cells read `coordinator` until you fill them. \[run: `research queue edit`\] A body edit moves no head.
+
+For the table:
+- #8890 | `3abd6b5bc8e2da7779a007481a13e5beef2ff001` | ready to mark | quick tier `r20261111-092621-35f9` passed 4 of 4 | merges with `main` `0a722c6ec984` and 19 marked Lean heads | after #8877
