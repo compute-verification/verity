@@ -7,7 +7,6 @@ kernel's tile unsplit, causal when a sequence has more than one query row.  The 
 `set_params_splitkv` (vllm-flash-attn 506341a1)."""
 from __future__ import annotations
 
-import dataclasses
 import json
 
 import pytest
@@ -155,12 +154,9 @@ def test_fa2_unswapped_launch_runs_the_split_tile_unsplit() -> None:
 
 
 def test_fa2_swapped_launch_without_max_seqlen_k_is_refused() -> None:
-    """`device_of` binds no FA2 device without max_model_len, so no served launch lacks it; bindings made without it are refused
+    """`device_of` binds no FA2 device without max_model_len, so no served launch lacks it; a swapped launch given none is refused
     by name where the split count would read it, and an unswapped launch, which reads none, is what it is with one."""
-    with pytest.raises(Unmodelled, match="FA2's split count reads max_seqlen_k and the launch has none"):
+    with pytest.raises(Unmodelled, match="reads max_seqlen_k and the launch has none: a FULL graph's is the device's max_model_len"):
         SD.fa2_launch([1, 1, 1], NH=32, KVH=8, D=64, sms=SMS, batch=4, max_seqlen_k=None)
-    bare = dataclasses.replace(fa2_device(), max_model_len=None)
-    with pytest.raises(Unmodelled, match="max_model_len"):
-        SD.launch(bare, [1, 1, 1], [10, 300, 700], HEADS, mode="FULL", padded=4, split_cap=32, capture_sizes=[1, 2, 4])
-    assert (SD.launch(bare, [3, 1], [600, 600], HEADS, mode="FULL", padded=8, split_cap=32, capture_sizes=[8])
-            == SD.launch(fa2_device(), [3, 1], [600, 600], HEADS, mode="FULL", padded=8, split_cap=32, capture_sizes=[8]))
+    assert (SD.fa2_launch([3, 1], NH=32, KVH=8, D=64, sms=SMS, batch=8, max_seqlen_k=None)
+            == SD.fa2_launch([3, 1], NH=32, KVH=8, D=64, sms=SMS, batch=8, max_seqlen_k=4096))
