@@ -277,10 +277,9 @@ root's nodes (`Flock.TemplateQuery.evaluate`), with their units, rows and output
 are its own input gates, every wire lands whole, and every bit of a wired row is its writer's; no row the check
 holds has a writer; and `d` is the wired circuit, θ the rows the check holds and `𝓘` the slots.
 
-No clause asks that the text names its Program. Where a gate is computed or a row is held it does: the gate's unit
-has a slot and the row a declaration, and the text's readers give neither unless the text names the Program by its
-SHA-512 (`NciCheck.RecordText.templatesOf`). Where no gate is computed and no row is held, the circuit has nothing
-to count.
+No clause asks that the text names its Program: where a gate is computed or a row is held it does, since the gate's
+unit has a slot and the row a declaration and the text's readers give neither unless the text names the Program by
+its SHA-512 (`NciCheck.RecordText.templatesOf`), and where neither is, the circuit has nothing to count.
 
 Not tied to the text: that the check holds every row the text declares (one that holds fewer counts more bits as
 fresh); an opening's pin and its reader's roles, which are the check's (`Good`); which leaves of its parameter a
