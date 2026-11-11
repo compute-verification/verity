@@ -50917,3 +50917,130 @@ For the table:
 For the table:
 - #8905 `40b8e7d04736`: merges with `main` `08ad61db9432` and all 47 marked heads of ours [run 11:14Z]; one Lean file over #8882; its build with every marked Lean head is `r20261111-111743-8342`, out.
 - `ask ci for a verdict on #8893` (marked at `6f65951e0eb8`, no verdict, not low-risk).
+
+## CAPS, Wed 11 Nov 11:24Z: the third raise is #8932 at `6b619d26d08f`, UNMARKED: `Proofs/Flock` 269 / 2,238, `Proofs/Core` stays 6 / 144. Under #8890's caps you can mark every open PR of the by-class chain today; the first row over them is TWOPROVE's branch (268 modules). Its quick tier `r20261111-111152-772e` is running at 11:24Z, no verdict yet.
+
+Tags: [run] with the run or the command, [read] with the file or the ref, [derived] for a count from git put on a measured base. Every running total below is [derived] on a [run] base, and every add is [derived] from git at the head named (declarations by keyword with comments removed; a new file taken as wholly unread unless it declares a constant with a `SecurityProofs` component or its source's lock names one of its constants), unless a line says otherwise.
+
+### 1. The table, in landing order
+
+**The two bases.** `main` `08ad61db9432` is `Proofs/Flock` 236 / 1,801 and `Proofs/Core` 3 / 41 [run: the ratchet (`unread.check`) on the facts `main`'s recorded check published at `0a722c6ec984`; no `.lean`, lock, lakefile or caps file differs from there to `08ad61db9432`, read from `git diff --name-only`]. `main` with the candidate's eight Lean PRs (#8785, #8820, #8827, #8788, #8828, #8781, #8819, #8841) is **242 / 1,880** and Core 3 / 41 [run: `joined.py` at 11:09Z, the ratchet's analysis on run `r20261111-084347-fd8c`'s facts joined with `main`'s facts for the two modules that run's build left out, `Proofs.Properties.Verity.Recursive.Audit` and `Proofs.Pouw.PeriodJ10R.Binding`; both files are the same on `main` and on `86c03d1840cb`, read from `git diff`]. Run `fd8c`'s own count of the same tree is 247 / 1,916 [run: `r20261111-084347-fd8c`]: its build left `Audit.lean` out, so five modules under `Claims/Recursion/` (36 declarations) that `Audit.lean` uses counted as unread [run: the joined analysis reports all five `read`]. The two counts agree with `main`'s: 236 + 6 new unread modules = 242, and 1,801 + 79 = 1,880 [derived from the two runs]. I call 242 / 1,880 **the check's base** and 247 / 1,916 **fd8c's base**; the table gives both, the check's first. My 10:06Z entry called the check's base a [guess]; it is a [run] now. `86c03d1840cb` itself has no published facts [run: the lookup returned none], so nothing below `86c0`'s row is a measurement of that tree.
+
+| # | Row (worker) | Head | Marked [read: `research queue status`, 11:19Z] | `Proofs/Core` adds, total | `Proofs/Flock` adds | Flock total, the check's base | Flock total, fd8c's base |
+|---|---|---|---|---|---|---|---|
+| | `main` with the eight | | in `86c0` | 3 / 41 [run] | | 242 / 1,880 [run] | 247 / 1,916 [run] |
+| 1 | #8857 | `96985b18aafb` | in `86c0` | +0 (`FirstHit` 80 is read, below), 3 / 41 | +0 | 242 / 1,880 | 247 / 1,916 |
+| 2 | #8866 | `e19752e7b617` | in `86c0` | +0 | +0 / +1 (`Accepting`) | 242 / 1,881 | 247 / 1,917 |
+| 3 | #8888 | `746c43e0c848` | in `86c0` | +0 | +1 / +3 (`PublicRows`; `FirstReads` 15 is seeded) | 243 / 1,884 | 248 / 1,920 |
+| 4 | #8354 | `5591b15e3b35` | in `86c0` | +0 | +1 / +40 (`ScopeOf`) | 244 / 1,924 | 249 / 1,960 |
+| 5 | #8536 | `7c9387e95a73` | in `86c0` | +0 | +3 / +46 (`HidingDefs` 16, `HidingStatements` 12, `HidingWitnesses` 18) | **247 / 1,970 = `86c0`'s tree** | 252 / 2,006 |
+| 6 | #8836 | `ae8886e9a2fc` | yes | +1 / +10 (`RewindingCanon`), 4 / 51 | +2 / +25 (`RegCanon` 7, `RevealsOpen` 18) | 249 / 1,995 | 254 / 2,031 |
+| 7 | #8368 | `c833b3ff0a9b` | yes | +0 | +1 / +27 (`ScopeDesc`) | 250 / 2,022 | 255 / 2,058 |
+| 8 | #8764 | `8dfde58665a3` | yes | +0 | +2 / +8 (`VStarNetsStaged` 5, `UnitName` 3) | 252 / 2,030 | 257 / 2,066 |
+| 9 | #8870 | `e7d354135fbb` | yes | +0 | +0 (`SecondCount` 11 is seeded) | 252 / 2,030 | 257 / 2,066 |
+| 10 | #8874 | `b3fb5853faf8` | yes | +0 | +1 / +4 (`Drawn`) | 253 / 2,034 | 258 / 2,070 |
+| 11 | #8879 (KILIAN) | `9eb9f26cea4a` | yes | +0 | +1 / +18 (`TwoFirstHitAt`) | 254 / 2,052 | 259 / 2,088 |
+| 12 | #8871 (REGX) | `2d4670d64165` | yes | +0 | +1 / +20 (`NoAlways`) | 255 / 2,072 | 260 / 2,108 |
+| 13 | #8882 (KILIAN) | `da385b86ccd2` | yes | +0 | +0 / +7 (`TwoFirstHitAt` to 25) | 255 / 2,079 | 260 / 2,115 |
+| 14 | #8896 (DRAFT-CORE) | `6128ce8267e3` | yes | +0 | +1 / +6 (`Bridge/V5/QsRows`) | 256 / 2,085 | 261 / 2,121 |
+| 15 | #8873 (CONCRETE) | `676a777193e2` | yes, since your message | +0 | +1 / +11 (`NumbersFinder`) | **257 / 2,096 = everything marked** | 262 / 2,132 |
+| | #8862, #8899, #8907, #8867, #8891, #8885 | | | +0 | +0 (nothing under `security/Proofs`) | | |
+| 16 | #8139 | `c274cac9c132` | no | +0 | +1 / +6 (`CanonOk`) | 258 / 2,102 | 263 / 2,138 |
+| 17 | #8889 (TWOWITNESS) | `50b06ae65a50` | no | +0 | +1 / +7 (`SessCount`) | 259 / 2,109 | 264 / 2,145 |
+| 18 | #8892 (TWOWITNESS) | `5bbe4bd22803` | no | +0 | +1 / +6 (`Refused`) | 260 / 2,115 | 265 / 2,151 |
+| 19 | #8906 (EXTFORM), on #8827 | `e7b2e51d928b` | no | +1 / +19 (`FirstHitClass`), **5 / 70** | +1 / +21 (`TwoRegFirstHitClass`) | 261 / 2,136 | 266 / 2,172 |
+| 20 | #8905 (KILIAN), on #8882 | `40b8e7d04736` | no | +0 | +0 / +4 (`TwoFirstHitAt` to 29) | 261 / 2,140 | 266 / 2,176 |
+| 21 | #8916 (KILIAN), on #8906 and #8905 | `8784a105de5b` | no | +0 | +1 / +2 (`TwoFirstHitClassAt`) | 262 / 2,142 | 267 / 2,178 |
+| 22 | #8912 (REGX) | `62eb1fdc64de` | no | +0 | +1 / +17 (`SpotFlock/OpensWhole`) | 263 / 2,159 | **268 / 2,195: first over 267 on fd8c's base** |
+| 23 | #8922 (REGX), on #8912 and #8906 | `5b37c49d6a5c` | no | +0 | +1 / +1 (`SpotFlock/OpensClass`) | 264 / 2,160 | 269 / 2,196 |
+| 24 | #8924 (REGX), on #8922 and #8916 | `d025f81332e6` | no | +0 | +1 / +2 (`SpotFlock/FirstHitClassAt`) | 265 / 2,162 | 270 / 2,198 |
+| 25 | `cursor/proofs-hwit-5d1a` (REGX), no PR | `79dea74e2d99` | no | +0 | +0 / +2 (`OpensClass` to 3) | 265 / 2,164 | 270 / 2,200 |
+| 26 | #8919 (TWOWITNESS), on #8870 | `eb4dde919628` | no | +0 | +0 (`SecondStrata` 15 is seeded) | 265 / 2,164 | 270 / 2,200 |
+| 27 | `cursor/proofs-codecounts-9e41` (TWOWITNESS), no PR | `04def4644bc4` | no | +0 | +1 / +7 (`SpotFlock/Counts`) | 266 / 2,171 | 271 / 2,207 |
+| 28 | `cursor/proofs-clscounts-c7b6` (TWOPROVE), no PR; it merges row 27 | `2cc7decd36a6` | no | +0 | +2 / +11 (`TwoFirstHitClassCount` 9, `SpotFlock/ClassCounts` 2) | **268 / 2,182: first over 267 on the check's base** | 273 / 2,218 |
+| 29 | the reservation you asked for: `ClassCounts` to 25 | not written | | +0 | +0 / +23 | 268 / 2,205 | 273 / 2,241 |
+| 30 | `cursor/proofs-firsthit-7c3e` (KILIAN), no PR | `f7d5567807b6` | no | +0 | +1 / +33 (`RegFirstHit`) | **269 / 2,238 = #8932's pair** | 274 / 2,274 |
+
+**Where the caps are exceeded.** `Proofs/Core` never exceeds 6 / 144: it is 5 / 70 at most, from row 19 on [derived]. `Proofs/Flock`'s 2,217 declarations are first exceeded at row 30 on the check's base (2,238) and at row 28 on fd8c's (2,218) [derived]. Its 267 modules are first exceeded at row 28 on the check's base and at row 22 on fd8c's [derived].
+
+**Counted apart, not in the pair.** #8915 `e72d160dda87` (KILIAN's guarantee branch `cursor/proofs-firsthit-ks-2c8e`, Daniel's) is +1 / +3 at most, `TwoFirstHitKS` [derived]; its `SpotFirstHit.lean` declares `Flock.SecurityProofs.SpotFirstHitTwo` and imports `TwoFirstHitKS`, so it may be +0 [read: the import lines at that head]. `cursor/proofs-firsthit-clsks-8d21` `818e4e130b5d` (KILIAN, a guarantee branch) is +2 / +6, `SpotFirstHitAt` 4 and `SpotFirstHitClassAt` 2 [derived]. DRAFT-CORE's stage branches add +0 / +0 at `2b56fccd31e6` and `8a83edbd488f` [derived]; its 11:14Z entry names newer heads `bfb2b0f3ca51` and `d6b61a3a0549` with the same Lean [read: its entry], and the three modules its `For CAPS` line names (`Claims/Sampling/Reg`, `SamplingGeneric/TwoAt`, `SpotFlock/Coins`) are `read` in the report, so their 23 declarations cost nothing [run: the joined analysis's status of each].
+
+**TWOWITNESS's 16 `SpotFlock/InstanceStmt/` modules** (`cursor/proofs-twowitness-0d28` `ec022ecf7cec`) are +16 / +363 and would need 285 / 2,601 on top of #8932's pair [derived].
+
+**What becomes read as it lands.**
+- `Core/SamplingGeneric/FirstHit.lean` (80, #8857) is counted as read, and not because #8827 is below it: `TwoRegFirstHit.lean`, #8827's file that imports it, is itself wholly unread and reads nothing [run: `fd8c`'s report, status `unread`, 50 of 50]. The test's own rule: a constant that carries one of `SEED_FLAGS = ("meta", "unsafe", "partial", "defeq")` is a seed, and a module is wholly unread only when none of its declarations is read [read: `tools/verity/lean/unread.py` line 113 and lines 669 to 671]. In the candidate's facts 19 of `FirstHit`'s 137 constants carry such a flag, among them the equation lemmas `firstHit.eq_1`, `score.eq_1`, `firstIdx.eq_1` and `firstIdx.eq_2` with `defeq` [run: read from `fd8c`'s facts file at 11:10Z]. The report holds the module `read`: 80 declarations, 10 of them read and 70 unread, 3 of the 10 kept only by `defeq` [run: `fd8c`'s report; the joined analysis gives the same status and the same 70]. The file is byte for byte the same at #8857 `96985b18aafb` and at #8827 [read: `git diff`], and the flags are its own constants', so it is read with #8857 alone too [derived]. That case is not measured: `ee28015ba726` has no published facts [run: the lookup at 11:17Z returned none], and a build of it is an hour's run I did not launch.
+- So CROSS's 5 / 134 for `ee28` and "Core is over 6 / 144" both count `FirstHit` as unread, which the report does not [run].
+- When Daniel's #8915 lands, its guarantee may read `TwoFirstHitKS` (3), `TwoRegFirstHit` (50) and `RunExtAt` (11) through its imports, which would take up to 3 modules and 64 declarations off [derived from the import lines, not measured].
+- The table is an upper bound in four more places: `Claims/CanonOk` (6, #8139) is imported by three `Properties` modules, `VBridge/Family/UnitName` (3) and `Claims/Recursion/VStarNetsStaged` (5, #8764) by modules the move took them out of, and `HidingDefs` (16) and `HidingStatements` (12, #8536) by `Hiding.lean`, which is seeded [read: the import lines]. If each is used where it is imported, the true count is up to 5 modules and 42 declarations lower [derived].
+
+### 2. What you can mark today under #8890's caps (267 / 2,217), with no third raise
+
+On the check's base, **every open PR of the chain** [derived on run]. Starting from everything marked, 257 / 2,096:
+
+1. #8139, #8889, #8892, in any order: 260 / 2,115. They are #8890's own rows.
+2. #8906 (after #8827): 261 / 2,136, and Core 5 / 70.
+3. #8905 (after #8882): 261 / 2,140.
+4. #8916 (after #8906 and #8905): 262 / 2,142.
+5. #8912 (after #8827): 263 / 2,159.
+6. #8922 (after #8912 and #8906): 264 / 2,160.
+7. #8924 (after #8922 and #8916): 265 / 2,162.
+8. #8919 (after #8870): +0.
+
+That leaves 2 modules and 55 declarations [derived]. The stacking in each line is read from `git merge-base --is-ancestor` on the heads. `SpotFlock/Counts.lean` (row 27) fits after them, at 266 / 2,171, once it has a PR [derived].
+
+**What does not fit:** TWOPROVE's branch as it stands (row 28: it brings `Counts`, `TwoFirstHitClassCount` and `ClassCounts`, 268 modules), and `RegFirstHit` (row 30) [derived]. Those two are what #8932 is for.
+
+**The caution.** If a candidate's check counted as `fd8c`'s build did, only steps 1 to 4 would fit (267 / 2,178) and #8912 would be the first over [derived]. I do not expect it: `main`'s recorded check counts the five modules as read [run]. The first candidate check that holds #8836 or later will show which.
+
+### 3. The third caps PR
+
+- **#8932**, branch `cursor/proofs-caps3-5e7d`, head `6b619d26d08fa23108cc5a98c631a2206b175987`, one commit on #8890's head `3abd6b5bc8e2`, opened with `research queue open --by proofs --issue PRF-517`, **unmarked** [run: `research queue status` at 11:19Z gives it `waiting`].
+- **The pair: `Proofs/Flock` 269 / 2,238** (from 267 / 2,217); `Proofs/Core` untouched, 6 / 144 [read: the diff, 2 lines of `unread-caps.json`].
+- **How it is sized.** On the check's base, rows 1 to 30: the chain through `Counts` (266 / 2,171), TWOPROVE's two files as written (+2 / +11), your reservation for `ClassCounts` at 25 (+23), and `RegFirstHit` (+1 / +33) [derived]. Room left: 0 and 0.
+- **Two parts of it are not written code,** and the body says so. The 23 reserved declarations, and `RegFirstHit` (on a branch whose last commit is 05:24Z, with no PR, in none of KILIAN's open PRs [read: `git log`, `gh pr list`]). Without both, the chain needs **268 / 2,182**: one module over #8890's cap and no declarations over it. Say which you want and I change the two numbers in a new commit.
+- **If you want it safe on fd8c's base too,** the pair is 274 / 2,274 [derived].
+- **The body** has lean's table: 11 rows, each unread module of the chain with its declarations, its PR or branch and head, the theorem that uses it, and "no guarantee reads it; Daniel's" in the guarantee cell. The lemma reader of the chain is the by-class bound at the code, `SpotFlock.code_eventTwoX_le_cls_at_budget` in #8924 [read: #8924's body].
+- **It merges** cleanly with `main` `08ad61db9432`, with `ee28015ba726`, with `86c03d1840cb`, and with #8877 and #8890, the only open PRs that touch the file [run: `git merge-tree --write-tree` on each, 11:19Z].
+- **Quick tier:** `r20261111-111152-772e` on vy-nebius-cpu-5, `suites.py --changed 8201dacff26e --quick`, launched 11:12Z, running at 11:24Z, no verdict yet [run: `research status`]. The ready line follows when it passes.
+
+### 4. For PRF-517: #8890's modules, their readers and dates
+
+Declarations are [derived] from git at the head named; "used by" is [read] from the import lines at the newest heads; the quoted words are [read] from the PR bodies; marked is [read] from `research queue status` at 11:19Z. Post from the next line.
+
+#8890 raises `Proofs/Flock` to 267 modules and 2,217 declarations. Each module group it is for, what uses it, and the guarantee that would read it:
+
+1. `SamplingGeneric/RunExtAt` (11), `TwoRegFirstHit` (50): #8827, marked. Used by `TwoFirstHitAt` (#8879, marked) and `TwoRegFirstHitClass` (#8906). The guarantee on #8915, `Flock.SecurityProofs.SpotFirstHitTwo`, imports them through `TwoFirstHitKS`. #8915 is Daniel's to mark: no date.
+2. `SamplingGeneric/MaskedTrunc` (10): #8828, marked. No other module imports it and its PR names no reader. No guarantee reads it; Daniel's.
+3. `Bridge/QsRows` (3), `QsRows/Pos` (2), `QsRows/Split` (3): #8819. `Bridge/PublicRows` (3): #8888. `Bridge/V5/QsRows` (6): #8896. All marked; each is used by the next. #8819's body: "Whether that stream-length hypothesis enters a guarantee is a decision on a claim and is not made here." No guarantee reads it; Daniel's.
+4. `SpotFlock/Accepting` (+1, `ref_one_table`): #8866, marked. Its body: "a fact for the bound that reads a session's reruns to take". No guarantee reads it; Daniel's.
+5. `SamplingGeneric/RegCanon` (7), `SpotFlock/RevealsOpen` (18): #8836, marked. `RevealsOpen` is used by `Drawn` (#8874) and `NoAlways` (#8871). No guarantee reads it; Daniel's.
+6. `SpotFlock/ScopeOf` (40): #8354, marked. Used by `SpotFlock/ScopeDesc` (27): #8368, marked, which no other module imports. No guarantee reads it; Daniel's.
+7. `SampledGeneric/HidingDefs` (16), `HidingStatements` (12), `HidingWitnesses` (18): #8536, marked. The sampled audit's zero knowledge in a game model, "unlisted" by its title. Listing it is Daniel's: no date. `Hiding.lean`, which the ratchet reads, imports the first two, so they may count for nothing.
+8. `Claims/Recursion/VStarNetsStaged` (5), `VBridge/Family/UnitName` (3): #8764, marked, a pure move. The modules they were moved out of import them, so they may count for nothing; if they count, no guarantee is named.
+9. `Claims/CanonOk` (6): #8139, not marked. Three `Properties` modules import it, so it may count for nothing.
+10. `SpotFlock/NoAlways` (20): #8871, marked. No other module imports it. No guarantee reads it; Daniel's.
+11. `Claims/NumbersFinder` (11): #8873, marked. No other module imports it. No guarantee reads it; Daniel's.
+12. `SpotFlock/Drawn` (4): #8874, marked. Used by `SpotFlock/Counts` (a branch with no PR). No guarantee reads it; Daniel's.
+13. `SamplingGeneric/TwoFirstHitAt` (18 at #8879 and 25 at #8882, both marked; 29 at #8905, not marked). Used by `TwoFirstHitClassAt` (#8916) and through it by the by-class bound at the code (#8924, open today). No guarantee reads it; Daniel's.
+14. `SamplingGeneric/SessCount` (7): #8889. `Claims/Sampling/Refused` (6): #8892. Not marked. Used by `SpotFlock/Counts`. No guarantee reads it; Daniel's.
+15. `SamplingGeneric/TwoRegFirstHitClass` (21 at #8906; the list had 25 from an earlier branch), not marked. Used by #8916 and #8922, then by the by-class bound at the code (#8924, open today). No guarantee reads it; Daniel's.
+16. `SamplingGeneric/TwoFirstHitKS` (3): #8915, not marked. Its own PR's guarantee imports it, so it is read when #8915 lands. Daniel's to mark: no date.
+
+By the count the Lean check is expected to make, these come to 262 modules and 2,143 declarations, 5 modules and 74 declarations under the cap.
+
+(End of the part to post.) That last line is [derived] on the check's base: row 20 of the table (261 / 2,140), which holds every module of the list but `TwoFirstHitKS`, plus its 1 / 3.
+
+### What the lines and the brief got wrong
+
+- **Your marked bound, 259 / 2,099,** leaves out #8874's `Drawn` (+1 / +4) and #8879's `TwoFirstHitAt` (+1 / +18), which were unmarked when I wrote 257 / 2,066 [read: my 10:06Z entry]. On that base everything marked is 262 / 2,132 with #8873; on the check's base it is 257 / 2,096 [derived].
+- **EXTFORM's 10:50Z line** relays "Core's is over 6 / 144". It is not: 5 / 70 at most with #8836 and #8906 [derived on run]. #8906 need not wait for a third number.
+- **KILIAN's #8915 line** says +3 modules, +11 declarations. By the ratchet's rules it is +1 / +3 at most: `SpotFirstHit` (2) declares a `SecurityProofs` constant and the lock names `Claims/Witnesses/SamplingTwoFirstHit` (6) [derived].
+- **REGX's `OpensClass`** is 1 declaration at #8922 `5b37c49d6a5c`, whose branch is `cursor/proofs-opensclass-7b3e`, and 3 at `cursor/proofs-hwit-5d1a` `79dea74e2d99` [read: `git ls-remote`, `gh pr list`]. Your message names `hwit-5d1a` at `5b37c49d6a5c`. DRAFT-CORE's 11:14Z entry says the 3-theorem version declares `code_hpos` a second time beside #8924's [read: its entry].
+- **TWOWITNESS's `Counts.lean`** is 7 at `04def4644bc4`, not 6, and #8919's `SecondStrata` (15) needs no room, so no 1 / 15 reservation [derived].
+- **`cursor/proofs-firsthit-clsat-b3d7`** is PR #8916 at `8784a105de5b`; your message has `c6412ff63497` and no PR [read: `gh pr list`].
+- **TWOPROVE's file is written:** `cursor/proofs-clscounts-c7b6` `2cc7decd36a6`, pushed 11:04Z, holds `SpotFlock/ClassCounts.lean` (2) and EXTFORM's `TwoFirstHitClassCount.lean` (9, as EXTFORM's line said), and merges `Counts.lean`: 2 new modules where you reserved 1, 11 declarations where you reserved 25 [read: `git log`, derived counts].
+- **Mine:** my 10:06Z bound took `TwoRegFirstHitClass` at 25 from an earlier branch; #8906 has 21 [derived].
+
+For the table: third raise #8932 `6b619d26d08f` unmarked, `Proofs/Flock` 269 / 2,238, Core 6 / 144 untouched; quick tier `r20261111-111152-772e` running at 11:24Z, no verdict yet.
+For the table: markable today under #8890's 267 / 2,217, in order: #8139, #8889, #8892, #8906, #8905, #8916, #8912, #8922, #8924, #8919 (ends 265 / 2,162, Core 5 / 70) [derived on run]; first over: TWOPROVE's `cursor/proofs-clscounts-c7b6` (268 modules).
+For the table: everything marked is 257 / 2,096 on the check's base (262 / 2,132 by `fd8c`'s own count) [derived on run]; `FirstHit` (80) is read by the ratchet's `defeq` seed rule [run].
