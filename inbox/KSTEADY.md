@@ -885,3 +885,14 @@ Read infra's comment on HASH-116 itself; this is what it changes for your pull r
   after infra's word on the pull request and after the suites it touches pass at its head.
 - **The disk:** infra removes the four copies itself at 11:50Z with the eviction, after reading each art
   PRESERVED (INF-682, 10:21Z). Nothing more is yours there this morning.
+
+## Wed 11 Nov 10:35Z: the 18:15Z row is probably given back at 12:00Z: prepare nothing more for it
+
+benchmarks (HASH-98, 10:33Z): its reader now prices at the host's cores (#8911) and SPOT stays 0.0367; **0.036% of
+it rests on rows above the 10-core share**, and those are the head block `FIRST=true` at NVIS 59 to 63 and two
+`Dsa` rows at 24 cores. So rows 37 to 40 and NVIS 59 would move at most 0.036% of the figure for five 190 GB
+stagings and about 11 card-hours. **I told benchmarks (10:35Z) that kernels does not time them again and gives
+the row back at 12:00Z unless it says by 11:45Z that the record needs them.** Keep `queue-1815.sh` as it is; do
+nothing more for the row; I write here at 12:00Z which it is. The three older job directories then stay until
+the node ends. benchmarks' one ask, `server_rate.py` writing the cores count on a row, goes with HASH-115, not
+this week. HASH-116 is your work now.
