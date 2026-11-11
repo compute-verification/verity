@@ -222,10 +222,10 @@ private theorem templatesOf_ok {P : Prog} {doc : Json} {ts : List Tmpl} (h : tem
   simp (config := { iota := false }) only [bind, Except.bind, pure, Except.pure, throw, throwThe,
     MonadExceptOf.throw] at h
   repeat (split at h <;> try cases h)
-  refine ⟨_, _, ?dup, ?ev, ?eq, h⟩
-  case ev => assumption
-  case dup => simpa using (by assumption : ¬((_ : ℕ) != _) = true)
-  case eq => simpa using (by assumption : ¬((_ : Array (String × ℕ)) != _) = true)
+  rename_i tsp _ hdup _ rs₀ hev _ rs hrs hne
+  have hrs' : rs₀ = rs := Except.ok.inj hrs
+  exact ⟨tsp, rs, Classical.not_not.1 fun hc => hdup (bne_iff_ne.2 hc), by rw [← hrs']; exact hev,
+    Classical.not_not.1 fun hc => hne (bne_iff_ne.2 hc), h⟩
 
 /-- **The text's templates are the root's ranges.** Where the text's reader gives the templates `ts` and the template
 query gives the ranges `rs`, whatever templates it is asked for: no two ranges have one template, and `ts` are the
