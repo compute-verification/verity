@@ -2144,7 +2144,6 @@
     {"file": "verity_vllm/pipeline/global_program.py", "kind": "SIM115", "symbol": "build", "detail": "Use a context manager for opening files", "count": 3},
     {"file": "verity_vllm/pipeline/global_program.py", "kind": "SIM115", "symbol": "component_applicability", "detail": "Use a context manager for opening files"},
     {"file": "verity_vllm/pipeline/global_program.py", "kind": "SIM115", "symbol": "component_declared_target", "detail": "Use a context manager for opening files"},
-    {"file": "verity_vllm/pipeline/global_program.py", "kind": "SIM115", "symbol": "component_sampling", "detail": "Use a context manager for opening files"},
     {"file": "verity_vllm/pipeline/global_program.py", "kind": "SIM115", "symbol": "component_spec_histogram", "detail": "Use a context manager for opening files"},
     {"file": "verity_vllm/pipeline/global_program.py", "kind": "SIM115", "symbol": "stop_rule", "detail": "Use a context manager for opening files"},
     {"file": "verity_vllm/pipeline/global_program.py", "kind": "SIM115", "symbol": "weights_of_record_binding", "detail": "Use a context manager for opening files"},

@@ -88,7 +88,6 @@
     {"file": "verity_vllm/program/frontend/vllm_meta.py", "kind": "broad-except", "symbol": "export_facts", "detail": "except Exception", "count": 2},
     {"file": "verity_vllm/program/frontend/vllm_meta.py", "kind": "broad-except", "symbol": "instantiate_meta", "detail": "except Exception"},
     {"file": "verity_vllm/pipeline/global_program.py", "kind": "broad-except", "symbol": "component_declared_target", "detail": "except Exception"},
-    {"file": "verity_vllm/pipeline/global_program.py", "kind": "broad-except", "symbol": "component_sampling", "detail": "except Exception"},
     {"file": "verity_vllm/pipeline/global_program.py", "kind": "broad-except", "symbol": "component_spec_histogram", "detail": "except Exception"},
     {"file": "verity/definitions/numerics/_jit.py", "kind": "environ", "symbol": "build_dir", "detail": "VERITY_NUMERICS_BUILD_DIR"},
     {"file": "verity/definitions/numerics/_jit.py", "kind": "environ", "symbol": "build_dir", "detail": "XDG_CACHE_HOME"},

@@ -362,22 +362,6 @@ def workload_applicability(w: Workload, comps: dict) -> dict:
             "refusal": refusal}
 
 
-def component_sampling(d: str) -> dict:
-    """derive_step's `sampling` block for a component dir (result.json `sampling`, else the construction manifest's structural input)."""
-    for name, path in (("result.json", ("sampling",)), ("construction_manifest.json", ("structural_inputs", "sampling"))):
-        p = os.path.join(d, name)
-        if os.path.exists(p):
-            try:
-                j = json.load(open(p))
-            except Exception:  # noqa: BLE001
-                continue
-            for k in path:
-                j = (j or {}).get(k)
-            if j:
-                return j
-    return {}
-
-
 def sampler_geometry(app: dict, reqs: list[dict]) -> dict | None:
     """The workload Program's declaration of the top-p split geometry: every launch runs at the registered split count S =
     `topp_geometry.registered_splits(num_SMs)` whatever the live batch (`engine.topp_pin`), num_SMs the components' agreed target
