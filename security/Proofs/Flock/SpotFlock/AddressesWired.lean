@@ -33,10 +33,34 @@ which gates a unit needs and which roots each is opened under.
   interior record, and a wired reader's session reads the same entry as a registered read of the port named
   `portOf t p`; `Addresses` asked the slot's key and `sized` to be both.
 
-At the wiring that moves nothing and returns everything, the property is `Addresses`'s with the slot held as above.
+At the wiring that moves nothing and returns everything, `Addresses` gives the property (`addressesWired_id`): it asks
+no more than `Addresses` of a design with no wire.
 -/
 
 @[expose] public section
+
+namespace Claims.Sampling
+
+/-- A gate rewired by the map that moves nothing is itself. -/
+theorem BGate.rewire_id (x : BGate) : x.rewire id = x := by
+  cases x <;> simp [BGate.rewire]
+
+/-- **The wiring that moves nothing and returns everything leaves a program as it is.** -/
+theorem Prog.wired_id (C : Prog) : C.wired id (fun _ => true) = C := by
+  cases C with
+  | mk gates outs =>
+    have hg : gates.map (BGate.rewire id) = gates :=
+      (List.map_congr_left fun x _ => BGate.rewire_id x).trans (List.map_id _)
+    have ho : outs.filter (fun _ => true) = outs := List.filter_eq_self.2 fun _ _ => rfl
+    show (⟨gates.map (BGate.rewire id), outs.filter fun _ => true⟩ : Prog) = ⟨gates, outs⟩
+    rw [hg, ho]
+
+/-- The map that moves nothing removes no gate of a set. -/
+theorem cutBlock_id (u : List ℕ) : cutBlock id u = u := by
+  unfold cutBlock
+  exact List.filter_eq_self.2 fun g _ => decide_eq_true rfl
+
+end Claims.Sampling
 
 namespace SpotFlock
 
@@ -126,6 +150,57 @@ theorem entryAt_interior_port (roots : List Msg) (S : Slot) (t p : String) (hk :
     entryAt roots S = keyAt roots (.port (Spot.SecondStage.portOf (namedOf roots) t p)) := by
   rw [entryAt, hk]
   rfl
+
+/-! ## The wiring that moves nothing -/
+
+namespace CheckedRun
+
+variable {h} {r : CheckedRun h.stage}
+
+/-- **At the wiring that moves nothing and returns everything, the wired program opens a gate under the roots the
+members' programs side by side open it under** (`Reveal.rootsAt_eq`). -/
+theorem rootsWired_id (hr : r.Ok h) (g : ℕ) : r.rootsWired id (fun _ => true) g = r.roots h g := by
+  obtain ⟨Pt, d, spec, -, hP, h2, -, -, -, -, -, hρ, hrb, -⟩ := hr
+  have he : r.roots h g =
+      if g ∈ r.rb ∧ r.s.prog.Boundary r.rb g = false then iroots r.x r.seen r.ρ else r.s.roots :=
+    Reveal.rootsAt_eq (partition h) (two h) (iroots []) hP h2 hρ hrb
+  rw [he]
+  unfold rootsWired
+  rw [cutBlock_id, Prog.wired_id]
+
+/-- **An address that holds side by side holds at the wiring that moves nothing and returns everything**, at the
+gate itself: a slot whose key is the read's names the read's entry, and its leaf count is the entry's where it is
+not sized and its units' where it is. -/
+theorem addressHoldsWired_id (hr : r.Ok h) {S : Address} {g : ℕ} (hH : r.AddressHolds h S g) :
+    r.AddressHoldsWired h id (fun _ => true) S g g := by
+  obtain ⟨hn, hR, hrd⟩ := hH
+  have hroots := rootsWired_id hr g
+  refine ⟨hn, hR, hrd.imp ?_ ?_⟩
+  · rintro ⟨reg, hreg, hfirst, hrt, hkey, hsch, hsz, hleaf⟩
+    refine ⟨reg, hreg, hfirst, hroots.trans hrt, congrArg (keyAt (r.rootsWired id (fun _ => true) g)) hkey, hsch,
+      fun e he hl => ?_⟩
+    rw [hroots] at he ⊢
+    refine ⟨?_, fun t positions paths ht hent => hleaf t positions paths ht hent e he hl⟩
+    unfold leavesAt
+    rw [hsz]
+    exact hl
+  · rintro ⟨hnone, hc1, hq, hin, hkey, hsz, hpop⟩
+    refine ⟨hnone, hc1, hq, ?_, congrArg (keyAt (iroots r.x r.seen r.ρ)) hkey, fun pop hp => ?_⟩
+    · rw [cutBlock_id, Prog.wired_id]
+      exact hin
+    · obtain ⟨hs, hu, hl⟩ := hpop pop hp
+      refine ⟨hs, fun e he => ⟨?_, hl e he⟩⟩
+      unfold leavesAt
+      rw [hsz]
+      exact hu
+
+end CheckedRun
+
+/-- **Where `Addresses` holds, the property holds at the wiring that moves nothing and returns everything**, each
+gate at the address `Addresses` gives it. So the property asks no more than `Addresses` of a design with no wire. -/
+theorem addressesWired_id (hA : Addresses h) : AddressesWired h id (fun _ => true) :=
+  ⟨fun g => (hA g).choose, fun _ => ⟨rfl, rfl⟩, fun r hr i hi =>
+    CheckedRun.addressHoldsWired_id hr ((hA i).choose_spec r hr hi)⟩
 
 /-! ## A connected instance: the gates and their roots
 
