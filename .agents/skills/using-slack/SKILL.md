@@ -77,8 +77,8 @@ msg owners PATH...` names each path's owner (longest prefix).
   `ask` and `announce` warn past 60 words (150 for an announcement) and refuse past twice that: put the body in its issue
   (`research msg linear comment ISSUE --file BODY.md --as ME`) and post a line that links it.
 - **Alerts** in `#agent-alerts` take the same `pickup` and `close` from `@infra`, with `--channel agent-alerts`.
-- **Retract** a post sent by mistake with `research msg retract --as NAME --ts TS` (needs `SLACK_BOT_TOKEN`; the doorbells
-  it rang keep their copy).
+- **Retract** a post sent by mistake with `research msg retract --as NAME --ts TS` (the doorbells it rang keep their
+  copy).
 - **Announcing.** `--verify CMD` marks a required action and names the command that shows it took; an announcement that
   fetches or installs code needs a pin, `--ships URL#sha256=<64 hex>` or `git:<40-hex commit>`. An addressed handle runs
   `verify-author`, applies it at its next safe point (checking every pinned checksum first, and running nothing that
@@ -89,7 +89,8 @@ msg owners PATH...` names each path's owner (longest prefix).
 ## Setup and subscriptions
 
 `SLACK_BOT_TOKEN` is Verity's bot; never print it. Without it, `research msg` goes through Verity's Slack broker on your
-Cursor identity (slack.py's docstring says which calls need the token).
+Cursor identity, for every call: the broker allows `retract`'s edit, `groups sync --apply` and `chat` only by who asks
+(`BROKER_GUARDED` in slack.py).
 `RESEARCH_AGENT_URL=https://cursor.com/agents/<your bc id>` identifies you. Two Slack apps sit in every channel: Cursor's
 delivers wakes (`subscribe_slack_*`), Verity's bot posts and reads, so a subscription to a channel without Cursor's app
 never fires. `research msg subscriptions --as <your handle>` prints the subscribe calls to make (exit 2 while a channel
