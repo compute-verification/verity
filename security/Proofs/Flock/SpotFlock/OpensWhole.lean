@@ -4,6 +4,7 @@ public import Proofs.Flock.SpotFlock.Frame
 public import Proofs.Flock.SpotFlock.FrameIsBuilt
 public import Proofs.Flock.SpotFlock.KS
 public import Proofs.Flock.SamplingGeneric.Session
+public import Proofs.Flock.SamplingGeneric.TwoCount
 public import Proofs.Flock.Claims.ERep
 
 /-!
@@ -33,14 +34,18 @@ the code's reveal reads only a transcript's messages under `Built` (`reveal_out`
 
 * `reveal_passes`: at a checked unit whose session's view accepted and a witness `check` accepts at its statement,
   every opening of the code's reveal passes.
-* `reveal_class`: so an opening of the reveal has, at every other gate the unit needs whose roots are the same, an
-  opening of the same reveal under the same roots that passes. Over every transcript and witness this fails: the
-  commitment's check places the opening's value in the row and never compares it with the row's own bit there, so
-  only a witness the relation accepts ties the two.
-* `Reveal.rootsAt_same_side`, `reveal_has_class`: at every transcript and witness, the reveal holds an opening under
-  the same roots at every gate the unit needs on the same side of its replay block's boundary. With `reveal_passes`,
-  the gates with the same readers on the same side of one replay block's boundary are opened together or not at all.
-* `sessWit_reveal_passes`: the two halves composed at the compiled two-stage verifier.
+* `sessWit_reveal_passes`: the two halves composed at the compiled two-stage verifier. Over every transcript and
+  witness the statement fails: the commitment's check places the opening's value in the row and never compares it
+  with the row's own bit there, so only a witness the relation accepts ties the two.
+
+So the gates one reveal opens are opened together. Which openings of it share their roots is the class:
+
+* `gateKey`: a gate's key, the proof blocks that need it opened (the block that writes it among them), the replay
+  block that holds it, and whether it is on that block's boundary. Gates with one key are needed by the same units
+  (`gateKey_needs`), lie in one replay block (`gateKey_block`) and on one side of it (`gateKey_side`), so each unit's
+  reveal opens them under the same roots (`Reveal.rootsAt_same_side`).
+* `sessWit_reveal_key`: an opening of what an extracted witness reveals at a checked unit has, at every gate of its
+  gate's key, an opening of the same reveal under the same roots that passes.
 -/
 
 @[expose] public section
@@ -301,58 +306,6 @@ theorem reveal_passes (hB : Built h) (hS : Addresses h) {x : Msg} {s : AuditStat
   rw [hqq]
   exact hop
 
-/-- **One opening that passes brings its class**: at `reveal_passes`' premises, an opening of the reveal has, at
-every other gate `g'` the unit needs whose roots are its own, an opening of the same reveal under the same roots at
-`g'` that passes. -/
-theorem reveal_class (hB : Built h) (hS : Addresses h) {x : Msg} {s : AuditStatement} {Pt : Partition}
-    {d : Design.Two} (hx : parse h x = some s) (hP : partition h s = some Pt) (hd : two h s = some d)
-    (hin : InScopeTwo Pt d s) {Ω : Type} (P : Prover Ω) (ω : Ω) (r : Fin ((V h).k x) → FlockDeploy.Coin) {u : ℕ}
-    (hu : u ∈ (code h).checked x r) {xS : Msg} {vS : Seen}
-    (hsess : session h u (run FlockDeploy.sha512 P (V h) x ω r).seen = some (xS, vS)) (hacc : vS.out = .acc)
-    {wF : Claims.Flock.Wit}
-    (hck : Claims.Flock.check (FlockDeploy.parse true _root_.Flock.Readable.relation) xS wF = true) :
-    ∀ p ∈ (code h).reveal s u (run FlockDeploy.sha512 P (V h) x ω r).seen wF,
-      ∀ g' ∈ Reveal.needs (partition h) s u,
-        Reveal.rootsAt (partition h) (two h) (iroots []) s u (run FlockDeploy.sha512 P (V h) x ω r).seen g' =
-          p.1 →
-        ∃ p' ∈ (code h).reveal s u (run FlockDeploy.sha512 P (V h) x ω r).seen wF,
-          p'.1 = p.1 ∧ p'.2.pos = g' ∧
-            (SamplingDeploy.commit (code h)).Opens FlockDeploy.sha512 p'.1 p'.2 = true := by
-  intro p _ g' hg' hroots
-  have hmem : Reveal.openAt (partition h) (two h) (iroots []) (Reveal.frameAt h.frame) s u
-      (run FlockDeploy.sha512 P (V h) x ω r).seen wF g' ∈
-        (code h).reveal s u (run FlockDeploy.sha512 P (V h) x ω r).seen wF :=
-    (Reveal.mem_reveal (partition h) (two h) (iroots []) (Reveal.frameAt h.frame)).2 ⟨g', hg', rfl⟩
-  exact ⟨_, hmem, hroots, rfl, reveal_passes h hB hS hx hP hd hin P ω r hu hsess hacc hck _ hmem⟩
-
-/-! ## The reveal's classes -/
-
-/-- **Gates on the same side of the unit's replay block's boundary open under the same roots**, at every
-transcript: both under the block's interior roots, or both under the statement's. -/
-theorem Reveal.rootsAt_same_side (part : AuditStatement → Option Partition)
-    (two : AuditStatement → Option Design.Two) (ir : Seen → ℕ → List Msg) {s : AuditStatement} {u ρ g g' : ℕ}
-    {v : Seen} {P : Partition} {d : Design.Two} {rb : List ℕ} (hP : part s = some P) (hd : two s = some d)
-    (hρ : replayOf P d.part u = some ρ) (hrb : d.part.blocks[ρ]? = some rb)
-    (hside : (g ∈ rb ∧ s.prog.Boundary rb g = false) ↔ (g' ∈ rb ∧ s.prog.Boundary rb g' = false)) :
-    Reveal.rootsAt part two ir s u v g = Reveal.rootsAt part two ir s u v g' := by
-  rw [Reveal.rootsAt_eq part two ir hP hd hρ hrb (g := g), Reveal.rootsAt_eq part two ir hP hd hρ hrb (g := g')]
-  exact if_congr hside rfl rfl
-
-/-- **The reveal holds a class whole**, at every transcript and witness: an opening of unit `u`'s reveal has, at
-every other gate `g'` the unit needs on the same side of the unit's replay block's boundary, an opening of the same
-reveal at `g'` under the same roots. Nothing here says either passes; `reveal_passes` does, at its premises. -/
-theorem reveal_has_class {s : AuditStatement} {Pt : Partition} {d : Design.Two} (hP : partition h s = some Pt)
-    (hd : two h s = some d) {u ρ : ℕ} {rb : List ℕ} (hρ : replayOf Pt d.part u = some ρ)
-    (hrb : d.part.blocks[ρ]? = some rb) (v : Seen) (wF : Claims.Flock.Wit) :
-    ∀ p ∈ (code h).reveal s u v wF, ∀ g' ∈ Reveal.needs (partition h) s u,
-      ((p.2.pos ∈ rb ∧ s.prog.Boundary rb p.2.pos = false) ↔ (g' ∈ rb ∧ s.prog.Boundary rb g' = false)) →
-      ∃ p' ∈ (code h).reveal s u v wF, p'.1 = p.1 ∧ p'.2.pos = g' := by
-  intro p hp g' hg' hside
-  obtain ⟨g, -, hgp⟩ := (Reveal.mem_reveal (partition h) (two h) (iroots []) (Reveal.frameAt h.frame)).1 hp
-  rw [← hgp] at hside ⊢
-  exact ⟨_, (Reveal.mem_reveal (partition h) (two h) (iroots []) (Reveal.frameAt h.frame)).2 ⟨g', hg', rfl⟩,
-    (Reveal.rootsAt_same_side (partition h) (two h) (iroots []) (g := g) (g' := g') hP hd hρ hrb hside).symm, rfl⟩
-
 /-! ## The two halves, at the compiled verifier -/
 
 /-- **A slot's extraction keeps its whole reveal or nothing**: at SPOT[Flock]'s compiled two-stage verifier, under
@@ -379,5 +332,108 @@ theorem sessWit_reveal_passes (hB : Built h) (hS : Addresses h) {x : Msg} {s : A
       (two h) (rs h) (cap h)).toCompiled.RunsFixed FlockDeploy.sha512 := ⟨hSess.fixed, hSess.runs⟩
   obtain ⟨xS, vS, hsess, hacc, hck⟩ := Claims.SamplingGeneric.Compiled.sessWit_some hRF P ω r hu c hw
   exact reveal_passes h hB hS hx hP hd hin P ω r (List.mem_of_mem_take hu) hsess hacc hck
+
+/-! ## A gate's key -/
+
+/-- A unit that needs a gate opened is one of the partition's. -/
+theorem Reveal.lt_of_mem_needs (part : AuditStatement → Option Partition) {s : AuditStatement} {P : Partition}
+    {u g : ℕ} (hP : part s = some P) (hg : g ∈ Reveal.needs part s u) : u < P.blocks.length := by
+  cases hb : P.blocks[u]? with
+  | none => simp [Reveal.needs, hP, hb] at hg
+  | some b => exact (List.getElem?_eq_some_iff.1 hb).1
+
+/-- **Gates on the same side of the unit's replay block's boundary open under the same roots**, at every
+transcript: both under the block's interior roots, or both under the statement's. -/
+theorem Reveal.rootsAt_same_side (part : AuditStatement → Option Partition)
+    (two : AuditStatement → Option Design.Two) (ir : Seen → ℕ → List Msg) {s : AuditStatement} {u ρ g g' : ℕ}
+    {v : Seen} {P : Partition} {d : Design.Two} {rb : List ℕ} (hP : part s = some P) (hd : two s = some d)
+    (hρ : replayOf P d.part u = some ρ) (hrb : d.part.blocks[ρ]? = some rb)
+    (hside : (g ∈ rb ∧ s.prog.Boundary rb g = false) ↔ (g' ∈ rb ∧ s.prog.Boundary rb g' = false)) :
+    Reveal.rootsAt part two ir s u v g = Reveal.rootsAt part two ir s u v g' := by
+  rw [Reveal.rootsAt_eq part two ir hP hd hρ hrb (g := g), Reveal.rootsAt_eq part two ir hP hd hρ hrb (g := g')]
+  exact if_congr hside rfl rfl
+
+/-- **A gate's key** at the statement's partition `Pt` and two-stage design `d`: the proof blocks that need it opened
+(`Reveal.needs`: its readers, and the block that writes it where it leaves that block), the replay block that holds it
+(`gateBlock`), and whether it is on that replay block's boundary. -/
+noncomputable def gateKey (s : AuditStatement) (Pt : Partition) (d : Design.Two) (g : ℕ) :
+    Finset ℕ × Option ℕ × Bool :=
+  ((Finset.range Pt.blocks.length).filter fun v => g ∈ Reveal.needs (partition h) s v, gateBlock d.part g,
+    (gateBlock d.part g).any fun ρ => s.prog.Boundary (d.part.blocks.getD ρ []) g)
+
+/-- Gates with one key are needed by the same units. -/
+theorem gateKey_needs {s : AuditStatement} {Pt : Partition} (hP : partition h s = some Pt) {d : Design.Two}
+    {g g' : ℕ} (hk : gateKey h s Pt d g = gateKey h s Pt d g') {u : ℕ}
+    (hg : g ∈ Reveal.needs (partition h) s u) : g' ∈ Reveal.needs (partition h) s u := by
+  have h1 : ((Finset.range Pt.blocks.length).filter fun v => g ∈ Reveal.needs (partition h) s v) =
+      (Finset.range Pt.blocks.length).filter fun v => g' ∈ Reveal.needs (partition h) s v :=
+    congrArg Prod.fst hk
+  have hmem : u ∈ (Finset.range Pt.blocks.length).filter fun v => g ∈ Reveal.needs (partition h) s v :=
+    Finset.mem_filter.2 ⟨Finset.mem_range.2 (Reveal.lt_of_mem_needs (partition h) hP hg), hg⟩
+  rw [h1] at hmem
+  exact (Finset.mem_filter.1 hmem).2
+
+/-- Gates with one key lie in one replay block. -/
+theorem gateKey_block {s : AuditStatement} {Pt : Partition} {d : Design.Two} {g g' : ℕ}
+    (hk : gateKey h s Pt d g = gateKey h s Pt d g') : gateBlock d.part g = gateBlock d.part g' :=
+  congrArg (fun k : Finset ℕ × Option ℕ × Bool => k.2.1) hk
+
+/-- **Gates with one key lie on one side of each replay block's boundary**, where the replay blocks are disjoint: a
+gate of replay block `rb` off its boundary has its key only with gates of `rb` off its boundary. -/
+theorem gateKey_side {s : AuditStatement} {Pt : Partition} {d : Design.Two} (hnd : d.part.gates.Nodup) {g g' : ℕ}
+    (hk : gateKey h s Pt d g = gateKey h s Pt d g') {ρ : ℕ} {rb : List ℕ} (hrb : d.part.blocks[ρ]? = some rb)
+    (hg : g ∈ rb ∧ s.prog.Boundary rb g = false) : g' ∈ rb ∧ s.prog.Boundary rb g' = false := by
+  have hgb : gateBlock d.part g = some ρ := gateBlock_of_mem hnd hrb hg.1
+  have hgb' : gateBlock d.part g' = some ρ := (gateKey_block h hk).symm.trans hgb
+  have h3 : ((gateBlock d.part g).any fun ρ => s.prog.Boundary (d.part.blocks.getD ρ []) g) =
+      ((gateBlock d.part g').any fun ρ => s.prog.Boundary (d.part.blocks.getD ρ []) g') :=
+    congrArg (fun k : Finset ℕ × Option ℕ × Bool => k.2.2) hk
+  simp only [hgb, hgb', Option.any_some] at h3
+  obtain ⟨hr', hg'⟩ := gateBlock_some hgb'
+  have hrbeq : d.part.blocks.getD ρ [] = rb := Option.some.inj (hr'.symm.trans hrb)
+  rw [hrbeq] at h3 hg'
+  exact ⟨hg', h3.symm.trans hg.2⟩
+
+/-- **What an extracted witness reveals holds the classes of the key whole**: at SPOT[Flock]'s compiled two-stage
+verifier, under `Built` and `Addresses`, at a statement in the two-stage scope and every run, an opening of what a
+witness the session's extraction returns reveals at a checked unit `u` has, at every gate `g'` with its gate's key, an
+opening of the same reveal at `g'`, under the same roots, that passes the commitment's check. -/
+theorem sessWit_reveal_key (hB : Built h) (hS : Addresses h) {x : Msg} {s : AuditStatement} {Pt : Partition}
+    {d : Design.Two} (hx : parse h x = some s) (hP : partition h s = some Pt) (hd : two h s = some d)
+    (hin : InScopeTwo Pt d s) {Ω : Type} (P : Prover Ω) (ω : Ω) (r : Fin ((V h).k x) → FlockDeploy.Coin) {u : ℕ}
+    (hu : u ∈ (SamplingDeploy.compiledTwo (FlockDeploy.deployZk _root_.Flock.Readable.relation) (code h) iroots
+      (two h) (rs h) (cap h)).toCompiled.checked x r)
+    (c : (Claims.SamplingGeneric.Arg.ofFlock (FlockDeploy.deployZk _root_.Flock.Readable.relation)).EC
+      ((SamplingDeploy.compiledTwo (FlockDeploy.deployZk _root_.Flock.Readable.relation) (code h) iroots
+        (two h) (rs h) (cap h)).toCompiled.sh x u))
+    {w : Claims.Flock.Wit}
+    (hw : (((SamplingDeploy.compiledTwo (FlockDeploy.deployZk _root_.Flock.Readable.relation) (code h) iroots
+      (two h) (rs h) (cap h)).toCompiled.sessWit x u r
+        (run FlockDeploy.sha512 P (V h) x ω r).seen c).eval FlockDeploy.sha512
+          (run FlockDeploy.sha512 P (V h) x ω)).1 = some w) :
+    ∀ p ∈ (code h).reveal s u (run FlockDeploy.sha512 P (V h) x ω r).seen w, ∀ g' : ℕ,
+      gateKey h s Pt d p.2.pos = gateKey h s Pt d g' →
+      ∃ p' ∈ (code h).reveal s u (run FlockDeploy.sha512 P (V h) x ω r).seen w,
+        p'.1 = p.1 ∧ p'.2.pos = g' ∧
+          (SamplingDeploy.commit (code h)).Opens FlockDeploy.sha512 p'.1 p'.2 = true := by
+  intro p hp g' hk
+  obtain ⟨g, hg, hgp⟩ := (Reveal.mem_reveal (partition h) (two h) (iroots []) (Reveal.frameAt h.frame)).1 hp
+  have hpos : p.2.pos = g := congrArg (fun q : List Msg × Opening Bool => q.2.pos) hgp.symm
+  rw [hpos] at hk
+  have hg' : g' ∈ Reveal.needs (partition h) s u := gateKey_needs h hP hk hg
+  obtain ⟨ρ, hρ⟩ := Option.isSome_iff_exists.1 (hin.2.2.2.1 u (Reveal.lt_of_mem_needs (partition h) hP hg))
+  obtain ⟨rb, hrb⟩ := replay_block hρ
+  have hroots : Reveal.rootsAt (partition h) (two h) (iroots []) s u
+        (run FlockDeploy.sha512 P (V h) x ω r).seen g' =
+      Reveal.rootsAt (partition h) (two h) (iroots []) s u (run FlockDeploy.sha512 P (V h) x ω r).seen g :=
+    (Reveal.rootsAt_same_side (partition h) (two h) (iroots []) (g := g) (g' := g') hP hd hρ hrb
+      ⟨gateKey_side h hin.2.2.1 hk hrb, gateKey_side h hin.2.2.1 hk.symm hrb⟩).symm
+  have hmem : Reveal.openAt (partition h) (two h) (iroots []) (Reveal.frameAt h.frame) s u
+      (run FlockDeploy.sha512 P (V h) x ω r).seen w g' ∈
+        (code h).reveal s u (run FlockDeploy.sha512 P (V h) x ω r).seen w :=
+    (Reveal.mem_reveal (partition h) (two h) (iroots []) (Reveal.frameAt h.frame)).2 ⟨g', hg', rfl⟩
+  have hfst : (Reveal.openAt (partition h) (two h) (iroots []) (Reveal.frameAt h.frame) s u
+      (run FlockDeploy.sha512 P (V h) x ω r).seen w g').1 = p.1 := hroots.trans (congrArg Prod.fst hgp)
+  exact ⟨_, hmem, hfst, rfl, sessWit_reveal_passes h hB hS hx hP hd hin P ω r hu c hw _ hmem⟩
 
 end SpotFlock
