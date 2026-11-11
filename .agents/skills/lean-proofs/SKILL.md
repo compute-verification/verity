@@ -47,7 +47,7 @@ The rules are AGENTS.md "Lean"; the Lean check's reference is `tools/verity/lean
 - **Build on a CPU machine.** Never `lake update` or change an external dependency (a git `require` or its revision,
   Mathlib, ArkLib, `lean-toolchain`) in a feature PR; a `path` require between in-repo packages that AGENTS.md "Lean"
   allows may go in one, in its own commit with the regenerated `lake-manifest.json`, the requires acyclic. The full
-  check (`check.py PKG`) is the merge queue's; run it by hand only on a machine of your own.
+  check (`check.py PKG`) is the merge queue's; by hand only on your own machine.
 - **The fast path is for the lock and the mark**, once `verity lean try` passes: it regenerates PKG's records and its
   requirers', with the `--update` printout the landing DM carries and no build of your own (`lean_changed.py`'s
   docstring).
@@ -58,9 +58,9 @@ The rules are AGENTS.md "Lean"; the Lean check's reference is `tools/verity/lean
   ~~~
 
   `--on auto` places it: never name a node or race a run on two (cancel a duplicate). No `slot.py`: the runner
-  takes the slot. Commit each record kept under `lean-audit/record/` (its log says over what). Its result,
-  `lean-fast/v1`, no merge check accepts. It repairs a slot tree left mid-way: never delete or copy one.
-  `--allow CODE:ENTRY` leaves a finding ruled open red: exit 3, no pass, record in `allowed-record/`.
+  takes the slot. Commit each record kept in `lean-audit/record/` (its log says over what). No merge check accepts
+  its `lean-fast/v1` result. It repairs a slot tree left mid-way: never delete or copy one. `--allow CODE:ENTRY`,
+  for a finding cured before the mark: exit 3, no pass, record in `allowed-record/`.
 - **A full record**: `research run --on auto --mem-gb 32 --max-min 180 --project verity --source . --cwd clone --
   python3 tools/verity/lean/check.py --build --update PKG`, unwrapped, leaves it at
   `lean-audit/audit-TAG/lean-audit.json`.
@@ -73,7 +73,7 @@ The rules are AGENTS.md "Lean"; the Lean check's reference is `tools/verity/lean
   [Loogle](https://loogle.lean-lang.org). A lemma another package proves is imported or moved, not proved again.
 - **A slow declaration**: measure (`set_option profiler true in`; `#count_heartbeats in` in a Mathlib package), then fix
   the proof: `simp only [...]` outside terminal calls, a split-out lemma, a smaller `decide`. An override that stays has
-  its reason in a `--` comment on or above it.
+  its reason in a `--` comment on or above it (else the Lean bar warns; a new `maxHeartbeats 0` fails).
 - **`X.congr_simp is declared by a replayed module and by one it imports`**: `simp` realized a structure constructor's
   congruence lemma Mathlib had already. Don't unfold a `→+` or `→*` in `simp`; prove its `_apply` lemma by `rfl` and simp
   with that.
@@ -126,9 +126,9 @@ The rules are AGENTS.md "Lean"; the Lean check's reference is `tools/verity/lean
 
 ## Standards
 
-The checks in `tests/test_lean_packages.py` and `tests/test_retired_terms.py` print their fixes. Two they don't
-hold: Mathlib's names, and no binder `X` or `Y` where ArkLib is imported (its `notation3 "X"` and `"Y"` make each a
-token, and the parse error lands far from the binder).
+The checks in `tests/test_lean_packages.py`, `tests/test_retired_terms.py` and `tests/lint/test_lean_bar.py` print their
+fixes. Two they don't hold: Mathlib's names, and no binder `X` or `Y` where ArkLib is imported (its `notation3 "X"` and
+`"Y"` make each a token, and the parse error lands far from the binder).
 
 ## Before the PR
 
@@ -138,7 +138,7 @@ token, and the parse error lands far from the binder).
   them. It conflicts only where it can't vouch for the merge (AGENTS.md "Lean", the lock), and says why: do what it
   says.
 - Record your lock at your own head, then mark; a passing Lean check, a clean merge of `main` over a passing head, or a
-  commit of exactly the records a passing run kept needs no new run. Once your PR lands, drive's lock run regenerates
+  commit of exactly the records a passing run kept needs no new run. Your PR's candidate's records run regenerates
   records another PR moved; re-record only what it can't (a hand-written entry a merge warning says took theirs, `shape`, a
   move's map).
 

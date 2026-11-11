@@ -824,7 +824,8 @@ LEAN_SLOT_WRAP = [sys.executable, str(ROOT / "tools" / "verity" / "check" / "lea
 
 def lean_regenerates() -> bool:
     """Whether this tree's lean-audit job takes `--regenerate`: a package whose only failures are record differences passes,
-    and its report names the regenerated lock, which drive commits after its lock run (`research.drive.Driver._commit_locks`).
+    and its report names the regenerated lock, which the verified queue's loop commits after a candidate's records run
+    (`research.vqueue_records.commit`).
     Read from the job, so a tree from before it runs as it always did."""
     try:
         return '"--regenerate"' in (LEAN_JOBS / "lean_audit.py").read_text()
@@ -1355,7 +1356,7 @@ def record(argv: list[str]) -> int:
         sent = json.loads(urls.read_text())
         shared = sum(k.startswith("lean-artifacts/") for k in sent)
         print(f"check: sending presigned URLs for {len(sent) - shared} pinned Lean dependency bundle(s) and {shared} Lean artifact "
-              f"bundle(s) of recent checks")
+              f"bundle(s) of recent checks, mark audits and records runs")
         if on:
             cmd += ["--send", str(urls)]
         else:
