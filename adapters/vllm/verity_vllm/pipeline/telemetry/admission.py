@@ -424,8 +424,7 @@ def model_key_for_row(row_id: str) -> str:
 
 
 def row_config_from_workload(workload_path: str | dict[str, Any], row_id: str | None = None, pairs: int = 3, replay_workers: int | None = None,
-                             host_limit_bytes: int | None = None, snapshot_steps: str | None = None, snapshot_max_bytes: int | None = None,
-                             stages: str = "build,match,commit") -> RowScale:
+                             host_limit_bytes: int | None = None) -> RowScale:
     """Plan-time config from the sweep workload (workloads/<row>.json, or its parsed dict): the same facts row_pod.sh reads for B/I/O/LP/T."""
     w = workload_path if isinstance(workload_path, dict) else json.loads(workload_file(workload_path).read_text())
     sw = w.get("sweep") or {}
@@ -443,12 +442,6 @@ def row_config_from_workload(workload_path: str | dict[str, Any], row_id: str | 
     notes = []
     if key not in MODELS:
         notes.append(uncalibrated_model_note(key))
-    cfg = RowScale(model=key, requests=b, prompt_tokens=prompt, decode_rows=decode, steps=steps, max_context=int(ea.get("max_model_len") or (i_max + o_max)),
+    return RowScale(model=key, requests=b, prompt_tokens=prompt, decode_rows=decode, steps=steps, max_context=int(ea.get("max_model_len") or (i_max + o_max)),
                     pairs=pairs, replay_workers=replay_workers, host_limit_bytes=host_limit_bytes,
                     largest_request_rows=t_max, largest_request_ctx=lp_max + t_max, notes=notes)
-    cfg.prefill_rows = int(ea.get("max_num_batched_tokens") or prompt)
-    cfg.snapshot_steps = snapshot_steps or "0,1"
-    cfg.snapshot_max_bytes = snapshot_max_bytes
-    cfg.stages = stages
-    cfg.hf_model = w.get("model")
-    return cfg

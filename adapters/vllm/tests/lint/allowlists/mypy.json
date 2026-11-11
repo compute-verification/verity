@@ -2576,7 +2576,6 @@
     {"file": "verity_vllm/pipeline/telemetry/admission.py", "kind": "assignment", "symbol": "observe_increment_a", "detail": "", "count": 4},
     {"file": "verity_vllm/pipeline/telemetry/admission.py", "kind": "assignment", "symbol": "observe_r17", "detail": "", "count": 5},
     {"file": "verity_vllm/pipeline/telemetry/admission.py", "kind": "attr-defined", "symbol": "observe_r17", "detail": "", "count": 5},
-    {"file": "verity_vllm/pipeline/telemetry/admission.py", "kind": "attr-defined", "symbol": "row_config_from_workload", "detail": "", "count": 5},
     {"file": "verity_vllm/pipeline/telemetry/admission.py", "kind": "dict-item", "symbol": "peak_overlap", "detail": ""},
     {"file": "verity_vllm/pipeline/telemetry/admission.py", "kind": "operator", "symbol": "observe_increment_a", "detail": "", "count": 2},
     {"file": "verity_vllm/pipeline/telemetry/admission.py", "kind": "operator", "symbol": "peak_overlap", "detail": "", "count": 2},
