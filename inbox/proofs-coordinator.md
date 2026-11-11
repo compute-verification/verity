@@ -57768,3 +57768,80 @@ index 8fc47a1db8..ef7b1c9c97 100644
 For CAPS (no PR; if these go into one): `Proofs/Flock`: +4 modules, all wholly unread, no lock change: `Flock/SpotFlock/AddressesAt.lean` 23 declarations, `Flock/Claims/Sampling/Rewire.lean` 51, `Flock/SamplingGeneric/WiredScope.lean` 17, `Flock/SpotFlock/WiredAt.lean` 4.
 
 For the table: no number moves. (b)'s label gains nothing from this entry: no Lean statement at the code is behind it.
+
+## BENCHCROSS, Wed 11 Nov 14:50Z: #8984 at a15be818102f, second reading: HOLDS WITH 4 NOTES; --exe run (215b): Lean rejects the one real kept window for its age, not for the public digest; Part 2: the same defect as VLLM-180 for the row, a separate piece of work inside it
+
+**Part 1, the verdicts** (#8984, head `a15be818102f`, one commit on `72e4d46d9209`; detail below in the same order)
+1. **The diff does what you wrote, and nothing else: HOLDS.** Three files, all in `benchmarks/one_stage`: `v2_case.py` (+30 −9), `tests/test_v2_case.py` (+64 −1), `README.md` (+3 −1). Nothing outside it [run: `git diff --stat`].
+2. **The staged digest is taken before the sample on the path `run.sh` keeps: HOLDS.** One boundary, not this PR's: a caller that hands `audit` its sample stages after it.
+3. **The fallback's label: HOLDS WITH 2 NOTES.** It is in both docstrings, the README, the `V2CASE` line and `missing.json`. It is in no file of the written case. One untouched sentence (`a5.py:1143-1144`) still reads as if every caller's digest were staged before the sample.
+4. **The refusal: DOES NOT HOLD as "like the script's other refusals"; HOLDS for `kept_composite.sh:65`.** The script's designed refusal writes `missing.json` and exits 2; this one is an uncaught exception, exit 1, which the docstring gives to "reject". `kept_composite.sh` goes on and leaves v2 out of both products.
+5. **The two new tests fail on `main`'s `v2_case.py` and pass at the head; no clock, no sleep: HOLDS** [run].
+6. **Nothing reads the old key `circuit_file`: HOLDS** [run: `git grep -n -w circuit_file` at the head finds nothing].
+7. **`registered=None, tables=[]`: HOLDS.** Neither the body nor an edited doc claims more about the registered Program than the case checks, and the body's line on VLLM-180 is honest.
+8. **`--exe`: RUN by me, `r20261111-144438-215b`, done rc 0 in 79 s.** Lean has now answered two cases this script writes, one from a real kept window. Both reject, neither for the public digest. `kept_composite.sh` whole: NOT RUN.
+
+Tags as before: [run] a command I ran now, [read] a file or record I read now (place given), [relayed], [derived], [guess]. Times from `date -u`. `research` runs `main` at `72e4d46d9209`. My VM restarted again at 14:33Z; everything here is fetched or run after that. Lines are the head's unless said; `a5.py`, `a0.py` and `run.sh` there are `main`'s.
+
+### 1. The diff
+- `case` now passes `public=` (`v2_case.py:105`). It takes the kept file's SHA-512 (`PF.file_sha512`, `:97`), reads `params.proofs.public` from `window/case-v2.json` where that file exists (`:98`, by `.get`, so a v2 case from before `e254a53c31` gives none), and raises a `ValueError` naming both files and 16 hex digits of each digest where they differ (`:99-101`) [read].
+- Also in the diff, each small: `how` now covers both files; `missing.json`'s `why` carries it (`:116`); the `V2CASE` line's key is `files` (`:134`); the test file imports the fixture `RP` from `test_a5_case_v2.py` [read].
+- `PF.file_sha512` and `a0.sha512_file` are the same digest, hex SHA-512 of the file's bytes (`proofs.py:136-142`, `a0.py:50-51`) [read].
+
+### 2. Before the sample
+- `a5.py:762` is in the staging loop (`:706-763`), which ends at `summary["staging"] = {"before_draw_s": …}` (`:764`). The sample is taken at `:801-821` (`challenger_draw` at `:805`, or the stream's `coins_draw` at `:809`) [read].
+- `v2_proof` hands `st["public"]` on (`:1195`), `case_v2` puts it in `params.proofs.public` (`:1157`), and `write_case` writes `case-v2.json` beside `case.json` (`:1135`) [read].
+- The kept window is that directory: `records_audit.py:851` calls `A5.audit(a, sets, out / "window", …)` with no `drawn`, and `run.sh:120-124`'s `keep` leaves out only circuit files outside `window/m*/`, instance and private files, archives, builds and proof edits [read].
+- **The boundary:** `audit` takes a sample a caller drew (`drawn`, `a5.py:653, 666-669, 801-803`), and `two_stage/audit.py:270` passes one. There `:762` runs after that sample. No other caller passes it [run: `git grep -n "drawn="`]. `v2_case.py` cannot tell such a window's `case-v2.json` apart and would label it "before the sample" [derived].
+- `case-v2.json` is itself a kept file; the body says so.
+
+### 3. The label
+- Stated: the module's docstring (`v2_case.py:12-16`), `case`'s (`:81-86`), `README.md:135-137`, and `how`, which the `V2CASE` line prints and `missing.json` carries [read].
+- **Note 1:** `how` is not part of the case. `--out` holds `case.json`, `params.json`, `commitment.bin`, `evidence.json` and `answer.json`, and `params.proofs.public` reads the same for both sources. So do the `V2 … verdict` line and `composite.py`'s output. In `kept_composite.sh` the `V2CASE` line survives in `kept_composite.txt` and the case's directory is deleted, so the label is where that script's reader looks [read: `:25-26, 52, 65`].
+- **Note 2:** `case_v2`'s docstring, which the PR does not touch, says `public` is "the public file's, taken when it was staged before the sample" (`a5.py:1143-1144`). For `v2_case.py`'s fallback that is false. `OneStageZk.lean:5-6` ("the SHA-512s the auditor committed for the circuit and public files") reads the same way [read].
+- No sentence the PR adds reads as if the fallback's digest were fixed before the sample.
+
+### 4. The refusal
+- **The script's other endings** [read]: a blob with no file, a failed rebuild or a rebuilt file off the pin all clear `--out`, write `missing.json`, print the `V2CASE` line and exit 2 (`:110-118, 136-137`). No answer from `--exe` prints `V2 no answer` (`:143-145`). Unreadable kept files (no `case.json`, no `pub-*.bin`) are uncaught exceptions, exit 1. The new refusal is of the last kind, though it is intended.
+- **What differs from a `missing.json`:** exit 1 is the docstring's "reject" (`:27-28`), and the exit paragraph does not name the refusal. No `V2CASE` line is printed. A case already in `--out` stays, since the raise comes before `write` clears it.
+- **`kept_composite.sh:65`** [read, not run]: the script has no `set -e` (`:18`); `log` returns the exit and nobody reads it; `$P/v2` is fresh scratch and is never made; `composite.py:106` skips a `--cases` path that is no directory, so v2 is left out and the composite is Lean's rejection naming the missing case (`composite.py:29-31`). The traceback goes to `kept_composite.txt`. That is the same end as a `missing.json`.
+- **Optional change, small:** in `main`, catch the `ValueError`, clear `--out` and write `missing.json` with its text, exit 2. Or keep the raise and add to the docstring's exit paragraph: "a kept public file that is not the one the audit staged raises: exit 1, no case written".
+
+### 5. The tests
+- At the head: `pytest benchmarks/one_stage/tests/test_v2_case.py`: 5 passed in 1.24 s [run: on the VM, one file].
+- With the head's test file over `main`'s tree (a scratch worktree at `72e4d46d9209`, `v2_case.py` untouched): 2 failed, 3 passed; both failures are `TypeError: case_v2() missing 1 required keyword-only argument: 'public'` [run].
+- The test file has no `time`, `sleep`, `datetime` or `timeout` [run: `rg`].
+- `r20261111-141445-f504`: done, rc 0, at `a15be818102f`, clean; 4 suites passed, 0 cached: `benchmarks/one_stage` 508 with `test_v2_case.py` run whole, `benchmarks/prove_path` 143, `repository` 295 (with `test_no_wall_clock.py` and the retired-terms lint), `verity-graph` 207 [read: its `stdout.log`].
+- `r20261111-141627-c13e`: done, rc 0, at `a15be818102f`, clean; three arms each as wanted: no `case-v2.json` exit 0, a matching one exit 0, another digest exit 1 with the `ValueError` and no case [read: its `out/v2_case.txt`].
+
+### 6. The key
+- `git grep -n -w circuit_file` at the head: no match. `V2CASE` appears only in `v2_case.py:25, 134` and `tests/test_v2_case.py:109` [run]. I did not search the infra repository.
+
+### 7. `registered=None, tables=[]`
+- The body says "`case` still passes `registered=None` and `tables=[]`, whatever the kept `case-v2.json` names", and the docstring says `proofs: {circuit, public, registered: null}` [read].
+- That cannot make a case accept that should not: Lean refuses blobs whose pinned tables are not the circuit's (`tablesHeld`, `OneStageZk.lean:16-19`) and verifies the session against `--registered` the verifier's own (`:42-44`) [read; not run on a window that reads either].
+- On PRF-555's finding 2 the body says only that it is vllm's VLLM-180 and that `demos/onsite_served/`, `served_verdicts.py` and `served_integrity.py` are untouched. True of the diff. It gives the ownership as fact, without a tag.
+- The body also says "the kept composite still rests on the kept directory". That is right: the pin is the kept `compose.log`'s, and the case is v1's kept `case.json`.
+
+### 8. `--exe`
+- **A real kept window exists** [read: the store's listing]: `r20261027-201343-1b8e` (`served_verdicts.sh` on `vy-dc-h200`, 27 October) keeps `out/sampled-proofs/served/window/` with `case.json`, `partition.json`, `m0/compose.log`, `m0/pub-3.bin` and one session (2.2 MB). Its `compose.log` is byte for byte the tree's fixture [run]. It keeps no `m0/circuit.txt` and **no `case-v2.json`**, so it takes the fallback. That confirms the body's guess.
+- **The run** [run]: `r20261111-144438-215b`, `research run --on auto --as proofs --cwd clone`, at `a15be818102f`, clean, on `vy-nebius-cpu-3`, done rc 0, 79 s. It ran `v2_case.py` as `kept_composite.sh:65` does, on that window and on a stand-in. Output: `out/v2_exe.txt` of `art:b23a34efc50e92a30666b22f38ded4c2a4c5920bf6f921643ceafd26c8622825`. The window's files went to the node as the run's input, so that record holds a second copy of the kept case (its evidence is witness); the job printed only the script's lines, the first 16 digits of three digests and the answer's verdict and reason.
+  - The real window, no `--exe`: exit 0 in 16 s. The circuit file was rebuilt from `compose.log`'s command, its SHA-512 the pin (55,915,052 bytes). Five blobs, four case files. `files` says "public digest the kept file's own, taken after the audit: the window keeps none from staging".
+  - `lake build sampled-proofs-one-stage-zk`: exit 0 in 43 s.
+  - The real window with `--exe`: **`V2 verity/sampled-proofs/one-stage/v2 reject`**, exit 1. Reason: "params: the parameters name no challenger: the draw's coins are the auditor's challenger's signed release (challenger, with window_root), never the prover's record".
+  - The stand-in with `--exe`: reject, "params: the keys of the parameters are not anchors, delta, law, …".
+- **What that shows** [read: `OneStageZk.lean:188-196`]: Lean checks that `proofs` is exactly `{circuit, public, registered}` (`:192`) before it asks for the challenger (`:196`). So it took this script's `proofs` and then refused the 27 October case because its v1 params name no challenger. The rebuild, which neither of the PR's runs exercised, met the pin on a real window at today's tree.
+- **What it does not show:** an accept, or Lean reading the public file under `proofs.public`. The one kept window I found is older than the challenger in v1's params. **What it would take:** a `served_verdicts.sh` run at today's `main` on a GPU node (the 27 October one took 2,132 s on `vy-dc-h200`), then `v2_case.py --exe` on its window, which would also be the first with a `case-v2.json`.
+- **`kept_composite.sh` whole: not run.** On `1b8e`'s `out/` it needs `pieces/pouw/` (86 MB) and `H1_KEY_SHA512` for that period, which I do not have; without it the script stops at `:56`.
+
+For the table: #8984 at a15be818102f: second reading HOLDS WITH 4 NOTES. (1) The fallback's label is in no file of the written case, only in the `V2CASE` line, the docstrings and the README. (2) `a5.py:1143-1144` still says every caller's `public` was staged before the sample. (3) The refusal exits 1, the docstring's "reject", prints no `V2CASE` line and leaves a case already in `--out`; `kept_composite.sh` is unaffected. (4) "Before the sample" holds for the window `run.sh` keeps, not for an audit handed its sample (`two_stage/audit.py:270`). None blocks. Lean's own answer on the one real kept window is reject, for the window's age [run: `215b`].
+
+**Part 2, for your answer on PRF-555** (read at `origin/main` `1a59728741f9`; the files I read are byte-equal to `72e4d46d9209`'s [run: `git diff --stat`])
+1. `a5.py:720-733`, inside `a5.audit`: the verifier composes each member's circuit file itself, by the caller's composer or by `compose_circuit.py --template|--input-set … --partition <the partition's digest> --program <the Program's digest the partition names>`, from its own Definition (for vLLM's bit rows, `vllm_template`, `a5.py:224-229`) [read].
+2. `a5.py:742-749`, before the sample: it holds the staged public file to that circuit's pin, the circuit's META to the partition and to the Program's digest, and META's one `program_digests` entry to `program_digest(Program(defn))` of its own Definition (`a0.template_program_ok`, `a0.py:136-140`) [read].
+3. `a0.py:306-327` (`lean_verify`): Lean `flock-verify archive-put`, then `verify --archive --circuit --public --partition --program [--registered] --zk --session`, each file held by its SHA-512 [read].
+4. So the code does expand the verifier's own copy of the registered Program and run Lean on the outer proofs. The defect is where: all of it runs inside `a5.audit` on the prover's node, and `auditor-host` runs only `served_verdicts.py window` and `record` (`served_table.py:389, 396-398`), whose sampled-proofs row is `served_integrity.answer` reading `summary.json` and `window/audit.json` as the node wrote them (`served_integrity.py:59-81`) [read].
+5. **Same defect as VLLM-180 for the row; a separate piece of work inside it.** VLLM-180 [read: by the Linear connector; `research msg linear` has no command that prints an issue's text] asks that the record be composed "on a host the prover doesn't control, reading each piece's answer from the party that produced it", and lists "sampled proofs' Lean verdict" among the sources to name. `COMPOSED_FROM` (`served_verdicts.py:181-183`) is that defect's own label.
+6. What VLLM-180 does not say: for sampled proofs no party off the node produces the answer today, because the verifier itself runs on the node. Its "done when" is met for this row only if the composition, the checks before the sample and the Lean verify run on the auditor's host over the released proofs [derived from the two texts].
+7. **Whose code:** `a5.py`, `a0.py`, `served_integrity.py`, `served_verdicts.py` and `records_audit.py` are ours (`benchmarks/one_stage`, `benchmarks/prove_path`). What runs on `auditor-host` is decided in `demos/onsite_served/served_table.py`; whose that is I did not check [guess: vllm's]. No change to `adapters/vllm` is needed (the tree has no `integrations/vllm`), but the auditor's host must have it installed, since composing a bit-row member's circuit imports `verity_vllm.pipeline.serving_rows`.
+8. The nearest thing in the tree to that off-node check is the kept composite (`v2_case.py` and `sampled-proofs-one-stage-zk` on a CPU node), which #8984 repairs. It takes the circuit's pin from the kept `compose.log`; it does not compose from the auditor's own copy of the Program [read: `v2_case.py:87-96`].
