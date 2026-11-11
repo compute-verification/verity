@@ -64462,3 +64462,44 @@ Tags as before. This completes the table of my 20:25Z entry and corrects one fig
 **Still for you to decide (step 4):** the order of #8940 and #9043. They merge as text and will not elaborate together (#9043's `AddressesAt.lean` lines 171, 657, 658 and `WireMap.lean` name `CheckedRun` without its rounds). #8940 is unmarked until its records run ends, so no candidate can hold both before then. If #9043 lands first, say so and I restate its two files in #8940 before the mark.
 
 **Runs:** `r20261111-194200-2b66` rc 0; `r20261111-195502-f9ed` rc 0; `r20261111-195619-bdab` rc 0; `r20261111-194312-e4f6` rc 1 (the expected failure); `r20261111-194312-ca59` rc 0; `r20261111-195335-d960` rc 0; out: `r20261111-202714-f39c`, `r20261111-202725-3c3c`. Cancelled before starting: `r20261111-193920-c587`, `-7b17`, `-986e` (auto put them on cpu-9), `r20261111-194200-f41a` (moved to cpu-5), `r20261111-195619-08db` (redundant with `bdab` and the records run).
+
+## LAND2, Wed 11 Nov 20:51Z: #8878, #8893 and #8904 are merged with `main` and pushed; only the one test's call changed (its fan-out is `figure1.FANOUT`, read by name); six runs are out and waiting for slots; nothing is marked yet
+
+**The fan-out.** It is `figure1.FANOUT`, which is 1, and the test now reads it by name. I picked no number.
+- `main`'s `benchmarks/spot_figures/figure1.py` (lines 118–121 on the merge) defines `FANOUT = 1` as "the replay grain's fan-out F that a served window's registration verdict publishes (`Verdict.fanout`)", and its `lean_two` (line 616) already passes `fanout=FANOUT` to `plancheck.two`. [read: `figure1.py` at `main` `61f13c2275fb`]
+- The failing test stubs Lean's checker and compares what `lean_two` sent with a design the test builds through `plancheck.two`. The test built its design with no fan-out, which `main`'s `plancheck.two` refuses under a served cap. It now passes `fanout=f.FANOUT`, as `main`'s test beside it does (`test_lean_two_sends_the_planners_design_in_each_form`). [read: `tests/test_figure1.py` on `main` and on the merge]
+- The call is in the patterns' form (`union=True`), which `plancheck.two` refuses at any fan-out above 1, so 1 is also the only value that form takes. [read: `verity/protocols/spot/plancheck.py:105–111` on `main`]
+- That `FANOUT = 1` is right for the figures' served windows is `main`'s statement. I did not check it. [read, not verified]
+
+**Only the test's call changed: one line, in #8878.** `figure1.py` needed no change, because the merge keeps `main`'s `lean_two`. No other call of `plancheck.two` is in what the three pull requests add. [run: `git diff origin/main` on each merge, searched for `plancheck`, `served`, `fanout`]
+- Three planner tests the pull requests add (one each, in `verity/protocols/spot/verifier/tests/test_optimize.py`) call `two_stage_design` and `two_stage_exfil` with `served=4096.0, union=True` and no fan-out. I left them: on `main` those two functions keep a default fan-out of 1 and do not raise, `main`'s own test beside them calls them the same way, and the patterns' form takes only 1. [read]
+
+**No printed figure moves, by reading the code; I did not run the figures before and after.** [read]
+- Nothing outside tests calls `two_stage_design` with `widths`, `margin` or `kappas`. [run: `git grep` on #8904's merge, which holds all three]
+- At a whole-number `merged`, `split_cells` computes the strata by the expression it had, now in `optimize.two_stage_strata`; `_plan` differs only where `merged` is None.
+- #8893 adds a key `margin` to the planner's row. The figures' series carry only the keys of `figure1.PLAN`, which does not hold it.
+
+**No Lean and no lock** in any of the three: each differs from `main` in the same four Python files. [run: `git diff --stat origin/main...` on each] So no records run.
+
+**The three heads**, each pushed, each a merge commit, no conflict: [run]
+- #8878: `9fddbf3aa740d9adbe3a639c5fb60a3246c6e5d7` (merge of `main` at `61f13c2275fb`, then the one-line test commit).
+- #8893: `4d8451dfd83ed4fa57e6336d6f4128c338b1ec46` (merge of #8878's new head, which holds `main`).
+- #8904: `cb795dd94a730e385668c949343ea3cb1f2520e5` (merge of #8893's new head).
+
+**Runs out, all waiting for a slot at 20:50Z.** [run: `research status`] Suite is `suites.py benchmarks/spot_figures` (the whole suite, slow tests included); quick tier is `suites.py --changed 61f13c2275fb --quick`, which selects 57 suites because `optimize.py` is an input of that many.
+
+| pull request | suite | quick tier |
+|---|---|---|
+| #8878 | `r20261111-204710-dcca` (cpu-3) | `r20261111-204710-a702` (cpu-3) |
+| #8893 | `r20261111-204055-d357` (cpu-10) | `r20261111-204807-67b8` (cpu-11) |
+| #8904 | `r20261111-204055-4d5b` (cpu-10) | `r20261111-204807-f042` (cpu-8) |
+
+**Two things I decided.**
+1. **All three pull requests' runs at once, not one after another.** Every pool has a line of 13 to 25 minutes and the quick tier is 57 suites, so three in series would pass 23:00Z. The marks stay in order: #8878, then #8893, then #8904, each only when its own two runs ended with exit status 0. If #8878's fail, the other four are wasted.
+2. **I kept your first brief's rule of no Lean build on cpu-2, cpu-9, cpu-10 and cpu-13**, since you did not lift it. The quick tier runs `lake build` in the Flock verifier; the `spot_figures` suite does not. [read: `suites.py`, `AFTER_LEAN`] `--on auto` sent three quick tiers to cpu-10 and cpu-9; I cancelled each while it waited and pinned the quick tiers with `--on MACHINE --pool research`. Tell me if the rule no longer holds.
+
+**Runs I cancelled before they started** (each "its check never started", so no second copy ran): `r20261111-203856-e26b` and `r20261111-203900-6662` (#8878, on cpu-1, whose line is stalled on memory at its head); `r20261111-204100-aa49`, `r20261111-204347-5a8b` (#8893's quick tier, cpu-10 then cpu-9); `r20261111-204100-f199` (#8904's quick tier, cpu-10). [run]
+
+**Next.** I expect the suites to end by about 21:20Z and the quick tiers by about 21:50Z. [guess: the lines' estimates plus 57 suites] I mark #8878 when its two end with exit status 0, since no lock record and no printed figure moves. Then the other two the same way.
+
+**One thing that is yours.** These pull requests change `verity/protocols/spot/optimize.py`. Whether that keeps them off the low-risk rule, so that each needs a land verdict after its mark, I did not determine.
