@@ -1,6 +1,6 @@
 """served-session: the session of record, the network certifier in front of a served model, as jobs on the nodes
 (nothing reaches a node otherwise). The gate's scan rehearsal (`vy-challenger-gate warden-rehearse --scan --prompts`,
-`benchmarks/live_challenger/auditor.py`) runs against the endpoint on the peer's loopback, by default `PEER`'s
+`verity/composite/device/live_challenger/auditor.py`) runs against the endpoint on the peer's loopback, by default `PEER`'s
 `verity-vllm serve-openai` on 127.0.0.1:18782, inside the scan's class (`scan_zk.W63`: at most KI = 1,024 prompt ids and
 KO = 64 ids out a request). The session's prompts are of `PROMPT_IDS` = 256 ids, since prompts of 1,024 reach the
 network certifier late against its D = 2.7 s (about 1.2 s of ingress and 1.2 to 4 s of committed prefill), and each is
@@ -149,7 +149,7 @@ from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
 TREE = Path(__file__).resolve().parents[2]
-sys.path.insert(0, str(TREE / "benchmarks/live_challenger"))
+sys.path.insert(0, str(TREE / "verity/composite/device/live_challenger"))
 import auditor as A  # noqa: E402
 
 #: the scan's class (`scan_zk.W63`): at most KI prompt ids in, at most KO ids out a request
@@ -193,7 +193,7 @@ CERTIFIED = "certified-io.json"
 TRACED = ("arrive", "step", "finish")
 #: or a record with one of these fields: the trace's, requests.jsonl's and the certified I/O's request values
 VALUED = ("prompt_len", "sampling", "seed", "rows", "emitted", "prompt_ids", "streamed_ids", "prompt", "output")
-HAND_START = ("serve-openai run directly, not examples/vllm/serve.sh: serve.sh's serve-openai line (--required-manifest "
+HAND_START = ("serve-openai run directly, not demos/vllm/serve.sh: serve.sh's serve-openai line (--required-manifest "
               "ROW/manifest.json, the int8 B4 row's Build of record r20261026-182623-0d2a, with vy-dc-h200-2's own taps as "
               "--hidden-so and --norm-tap-so) plus the endpoint's flags, and --disk-floor-gb 40 (serve-openai's own default "
               "under --seal is 300 GB; 72 GB of seals then needs about 112 GB free at the start); serve.sh refuses on "
@@ -659,7 +659,7 @@ def endpoint(a: argparse.Namespace) -> int:
         raise Refused(f"--io: the warden run's I/O doesn't read whole off its cells: {io.get('violations', [])[:3]}")
     eos = [int(t) for t in a.eos_ids.split(",")]
     ep = rebuild(src, keep / "records", io["records"], eos)
-    sys.path[:0] = [str(TREE), str(TREE / "integrations" / "vllm"), str(HERE)]
+    sys.path[:0] = [str(TREE), str(TREE / "adapters" / "vllm"), str(HERE)]
     os.environ["PYTHONPATH"] = os.pathsep.join(filter(None, sys.path))
     import chain_record as CR
     rep = CR.served_endpoint(dep, io, ep, eos) | {"at": CR.SERVED_NODE}

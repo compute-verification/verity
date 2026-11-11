@@ -1,4 +1,4 @@
-"""warden-serve: the active warden (`verity.core.protocols.certifier.warden`) on one host, a relay in front of any TCP
+"""warden-serve: the active warden (`verity.protocols.certifier.verifier.warden`) on one host, a relay in front of any TCP
 server, and the offline check of what it published.
 
 **Topology.** Each client connection reaches the network certifier's listener. The network certifier opens one
@@ -23,14 +23,14 @@ its own, which it never reads; `warden.json` keeps its last line, the lost relea
 
 **What it can't enforce here.**
 - Run directly, the network certifier runs on the server's host (`trusted-host` stands for the auditor's host). The
-  gate's `warden-rehearse` (`benchmarks/live_challenger/auditor.py`) runs it on the auditor's host instead, the server
+  gate's `warden-rehearse` (`verity/composite/device/live_challenger/auditor.py`) runs it on the auditor's host instead, the server
   reached through an ssh tunnel to the peer's loopback. Either way the server's host can reach anyone by any other
   route, which nothing here sees.
 - TLS is not terminated: both legs are plain TCP.
 - The rehearsal's client is on the same host, so its link is loopback, and its arrival times are read on the network
   certifier's host clock (`origin_unix`).
 - The keys are LMS at H = `cs.HEIGHT` (2^10 one-time keys) unless `--height` says otherwise, where the deployed key's
-  is H = 20 (the auditor gate's default, `benchmarks/live_challenger/auditor.py`).
+  is H = 20 (the auditor gate's default, `verity/composite/device/live_challenger/auditor.py`).
 
 **Traffic** (`traffic`, `varied_traffic`): varied, as `certifier_serve`'s: Poisson arrivals at `--rate` a second,
 prompts of 16–1024 tokens (log-uniform; words at 0.75 a token, so approximately), `max_tokens` of 16 … `--max-tokens`
@@ -137,12 +137,12 @@ import active_replay as ar
 import certifier_serve as cs
 import load_relay as lr
 import stall_probe
-from verity.core.protocols.certifier import io_tie as IT, warden_rows as WR
-from verity.core.protocols.certifier.active import DATA, PAD, id_request
-from verity.core.protocols.certifier.certificate import CertifiedRecord, Direction, Issuer, LmsKey, record_head
-from verity.core.protocols.certifier.grid import GridParams, Record, Status, row_count
-from verity.core.protocols.certifier.release import WATERMARK_PATH
-from verity.core.protocols.certifier.warden import (EGRESS_FORMS, END, FAIL, INTEGER_FIELDS, REFUSED, Shim, Warden,
+from verity.protocols.certifier.verifier import io_tie as IT, warden_rows as WR
+from verity.protocols.certifier.verifier.active import DATA, PAD, id_request
+from verity.protocols.certifier.verifier.certificate import CertifiedRecord, Direction, Issuer, LmsKey, record_head
+from verity.protocols.certifier.verifier.grid import GridParams, Record, Status, row_count
+from verity.protocols.certifier.verifier.release import WATERMARK_PATH
+from verity.protocols.certifier.verifier.warden import (EGRESS_FORMS, END, FAIL, INTEGER_FIELDS, REFUSED, Shim, Warden,
                                                     WardenParams, audit, cells)
 
 HERE = Path(__file__).resolve().parent

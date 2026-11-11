@@ -29,10 +29,10 @@ from pathlib import Path
 
 import numpy as np
 
-from verity.ml.circuits.boolean import forms
-from verity.ml.circuits.defs import PrimitiveDefinition
-from verity.ml.circuits.evaluation.reference import resolve as resolve_target
-from verity.ml.circuits.layout import param_leaf, resolve
+from verity.circuits.boolean import forms
+from verity.circuits.defs import PrimitiveDefinition
+from verity.circuits.evaluation.reference import resolve as resolve_target
+from verity.circuits.layout import param_leaf, resolve
 from verity_flock import ir_lower as IL
 
 FLUSH = 1 << 21
