@@ -237,7 +237,9 @@ negatives.
   server is named for the row's answer (the report's `servers`, or its piece's records for the period check's answer
   a remote run takes) and it is the report's node: an answer about another server, an accept naming none, or an answer
   about the node whose source the report's `sources` or that piece says isn't `real` (an answer brought from a recorded
-  run, whatever it says), is missing, says which, and gives the record no figure.
+  run, whatever it says), is missing, says which, and gives the record no figure. A composite is read by the product
+  its `composite.json` states, one a product: where two state one product, or one states none, the record reads none
+  of them, and each verdict it would read from them is missing, naming the files.
   Sampled proofs' verdict is its leg in the composite of record, the outcome
   of remote's sampled proofs case there (one-stage v2), never the window report's integrity row, the records audit's
   one-stage v1 answer, which is no verdict: where the composite of record has no such case, it is not established, the

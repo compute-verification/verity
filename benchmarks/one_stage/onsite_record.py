@@ -41,6 +41,10 @@ run wrote no answer, ``missing`` and ``why``:
 * PoUS, the bandwidth audit and the wipe (`MEMORY`): ``record/verdicts.json``'s ``space``, ``bandwidth`` and ``wipe``
   rows, each listed as its row states it and missing where the run has no such row or its product drops it (`LISTED`).
 
+A composite is read by the product its composite.json states, one composite a product (`composites`): where two or more
+state one product the record reads none of them, and it reads none that states no product, and each verdict it would
+read from such a composite is missing, naming those files (`TWO_OF_ONE`, `NO_PRODUCT`).
+
 A verdict read from a row is ``accept`` only where a server is named for the row's answer and it is the window report's
 node (`off_node`), the server named being the report's ``servers`` entry and, for the row the network certifier's
 period check's answer gives where the report drops it, the one its piece names (`served_verdicts.piece_server`): an
@@ -1039,13 +1043,52 @@ def row_verdict(rows: Mapping[str, Any], key: str, src: str | None = None) -> di
     return out | ({"reason": r["reason"]} if r.get("reason") else {})
 
 
-def composites(out: Path) -> dict[str, tuple[str, dict[str, Any]]]:
-    """Each composite.json under OUT/composite, by the product it names: its path in OUT and its document."""
-    found: dict[str, tuple[str, dict[str, Any]]] = {}
+#: why the record reads no composite of a product: two or more composite.json under OUT/composite state it; and why
+#: it reads a composite.json for no product: it states none (`composites`)
+TWO_OF_ONE = ("the run has {n} composites stating the product {product} ({paths}): the record reads one composite of a "
+              "product, and of these it reads none")
+NO_PRODUCT = ("{paths} state{s} no product: the record reads a composite by the product it states, and reads "
+              "{these} for none")
+
+#: the composites the record reads, by product: each one's path in OUT and its document
+Found = Mapping[str, tuple[str, dict[str, Any]]]
+#: the composites it doesn't read: by the product two or more state, and under None those stating none, why
+#: (`TWO_OF_ONE`, `NO_PRODUCT`) and their documents
+Refused = Mapping[str | None, tuple[str, list[Any]]]
+
+
+def composites(out: Path) -> tuple[dict[str, tuple[str, dict[str, Any]]], dict[str | None, tuple[str, list[Any]]]]:
+    """The composite.json files under OUT/composite: those the record reads, by the product each states, its path in OUT
+    and its document, one composite a product; and those it doesn't (`Refused`): every one of a product two or more
+    state, since nothing says which is the run's, and each that states no product (not an object, or its ``product``
+    not a name), which is a composite of none. Nothing is read from a refused one but, for `of_record_composite`, which
+    subprotocols it composes."""
+    by: dict[str | None, list[tuple[str, Any]]] = {}
     for f in sorted((out / "composite").glob("*/composite.json")):
         doc = json.loads(f.read_text())
-        found[doc.get("product")] = (str(f.relative_to(out)), doc)
-    return found
+        product = doc.get("product") if isinstance(doc, Mapping) else None
+        stated = product if isinstance(product, str) and product else None
+        by.setdefault(stated, []).append((str(f.relative_to(out)), doc))
+    found = {p: xs[0] for p, xs in by.items() if p is not None and len(xs) == 1}
+    refused: dict[str | None, tuple[str, list[Any]]] = {}
+    for p, xs in by.items():
+        paths = ", ".join(path for path, _ in xs)
+        if p is None:
+            why = NO_PRODUCT.format(paths=paths, s="s" * (len(xs) == 1), these="it" if len(xs) == 1 else "them")
+        elif len(xs) > 1:
+            why = TWO_OF_ONE.format(n=len(xs), product=p, paths=paths)
+        else:
+            continue
+        refused[p] = (why, [doc for _, doc in xs])
+    return found, refused
+
+
+def unread(refused: Refused, product: str, none: str) -> str:
+    """Why the record reads no composite of ``product``: the run's composites of it are refused (`composites`), else
+    ``none``, that the run has none, and with it the files that state no product, where there are any."""
+    if product in refused:
+        return refused[product][0]
+    return none + (f"; {refused[None][0]}" if None in refused else "")
 
 
 def subprotocols(doc: Mapping[str, Any]) -> set[str]:
@@ -1053,12 +1096,14 @@ def subprotocols(doc: Mapping[str, Any]) -> set[str]:
     return {c.get("id") for c in doc.get("cases") or ()} | set(doc.get("missing") or ())
 
 
-def of_record_composite(found: Mapping[str, tuple[str, dict[str, Any]]]) -> tuple[str, bool]:
-    """The composite of record (`WITHOUT_POUW`) by its id, and whether it composes PoUW: the run's composite with the
-    network certifier's subprotocol and not PoUW's, else `ONSITE`. ValueError, naming them, where the run has more than
-    one such."""
-    without = sorted(str(p) for p, (_, doc) in found.items()
-                     if NETWORK in (ids := subprotocols(doc)) and POUW_ID not in ids)
+def of_record_composite(found: Found, refused: Refused) -> tuple[str, bool]:
+    """The composite of record (`WITHOUT_POUW`) by its id, and whether it composes PoUW: the product of the run's
+    composite with the network certifier's subprotocol and not PoUW's, else `ONSITE`. A product the run has two or more
+    composites of (``refused``) is that product where any of them is such a composite, so the record reads no composite
+    of record rather than another's. ValueError, naming them, where the run has more than one such product."""
+    docs = {p: [doc] for p, (_, doc) in found.items()} | {p: ds for p, (_, ds) in refused.items() if p is not None}
+    without = sorted(p for p, ds in docs.items()
+                     if any(NETWORK in subprotocols(d) and POUW_ID not in subprotocols(d) for d in ds))
     if len(without) > 1:
         raise ValueError(f"the run has {len(without)} composites of the network certifier without PoUW "
                          f"({', '.join(without)}): the record reads one composite of record")
@@ -1071,11 +1116,11 @@ def outcome(o: Mapping[str, Any], protocol: str, src: str) -> dict[str, Any]:
             **({"refusal": o["refusal"]} if o.get("refusal") else {})}
 
 
-def composite_verdict(found: Mapping[str, tuple[str, dict[str, Any]]], product: str, none: str) -> dict[str, Any]:
-    """The Lean verdict of ``product``'s composite, with the subprotocols it couldn't establish; missing (``none``) where
-    the run has no such composite."""
+def composite_verdict(found: Found, refused: Refused, product: str, none: str) -> dict[str, Any]:
+    """The Lean verdict of ``product``'s composite, with the subprotocols it couldn't establish; missing where the
+    record reads no such composite: the run has none (``none``) or its composites of it are refused (`unread`)."""
     if product not in found:
-        return missing(none)
+        return missing(unread(refused, product, none))
     src, doc = found[product]
     if doc.get("verdict") is None:
         return missing(f"its composite ran no Lean check ({src})", src)
@@ -1083,10 +1128,11 @@ def composite_verdict(found: Mapping[str, tuple[str, dict[str, Any]]], product: 
         {"not_established": list(doc["missing"])} if doc.get("missing") else {})
 
 
-def case_verdict(found: Mapping[str, tuple[str, dict[str, Any]]], product: str, case: str) -> dict[str, Any]:
-    """The outcome of ``case``'s own answer in ``product``'s composite."""
+def case_verdict(found: Found, refused: Refused, product: str, case: str) -> dict[str, Any]:
+    """The outcome of ``case``'s own answer in ``product``'s composite; missing where the record reads no such
+    composite (`unread`) or it has no such case."""
     if product not in found:
-        return missing(f"its case is read from {product}'s composite, and the run has none")
+        return missing(unread(refused, product, f"its case is read from {product}'s composite, and the run has none"))
     src, doc = found[product]
     for c in doc.get("cases") or ():
         if c.get("id") == case:
@@ -1094,12 +1140,11 @@ def case_verdict(found: Mapping[str, tuple[str, dict[str, Any]]], product: str, 
     return missing(f"{product}'s composite has no {case} case", src)
 
 
-def sampled_verdict(found: Mapping[str, tuple[str, dict[str, Any]]], composite: str,
-                    rows: Mapping[str, Any]) -> dict[str, Any]:
+def sampled_verdict(found: Found, refused: Refused, composite: str, rows: Mapping[str, Any]) -> dict[str, Any]:
     """Sampled proofs' verdict (`V1_UNREAD`): the outcome of `SAMPLED_ID`'s case in the composite of record
     ``composite``; where it has none, not established, the window report's row's answer beside it (``answer``), or
     missing where that row is missing too, as one that is no answer about the report's node is (`on_node`)."""
-    v = case_verdict(found, composite, SAMPLED_ID)
+    v = case_verdict(found, refused, composite, SAMPLED_ID)
     v1 = row_verdict(rows, ROWS["sampled proofs"])
     if v["verdict"] != "missing" or v1["verdict"] == "missing":
         return v
@@ -1803,7 +1848,7 @@ def completed_from(key: str, entry: Mapping[str, Any], public: Path) -> str | No
     return None
 
 
-def registered_files(found: Mapping[str, tuple[str, dict[str, Any]]], case: Path | None,
+def registered_files(found: Found, case: Path | None,
                      pin: Path | None = None) -> dict[str, Any]:
     """`CHECKED`'s auditor-listing, its registered-files condition: the files remote's sampled proofs case at ``case``
     (`SAMPLED_ID`'s, ``{"params", "commitment", "blobs", ...}``) registers, the circuit file and then the public file
@@ -2007,15 +2052,16 @@ def record(out: Path, advice_charge: Path | None = None, copy: str | None = None
         rows = {**rows, ROWS["the network certifier"]: net}
     rows = on_node(rows, {**at, ROWS["the network certifier"]: net_at}, report.get("node"),
                    {ROWS["the network certifier"]: net_src})
-    found = composites(out)
-    composite, with_pouw = of_record_composite(found)
+    found, refused = composites(out)
+    composite, with_pouw = of_record_composite(found, refused)
     unread = NOT_CLAIMED if with_pouw else NOT_CLAIMED_WITHOUT_POUW
-    v = {"sampled proofs": sampled_verdict(found, composite, rows), "PoUW": row_verdict(rows, ROWS["PoUW"])}
-    v["inference-only"] = case_verdict(found, REMOTE if with_pouw else composite, INFERENCE_ONLY)
-    v["remote"] = composite_verdict(found, REMOTE, "remote's composite didn't run: the run has no "
-                                                   "composite/remote/composite.json")
+    v = {"sampled proofs": sampled_verdict(found, refused, composite, rows),
+         "PoUW": row_verdict(rows, ROWS["PoUW"])}
+    v["inference-only"] = case_verdict(found, refused, REMOTE if with_pouw else composite, INFERENCE_ONLY)
+    v["remote"] = composite_verdict(found, refused, REMOTE, "remote's composite didn't run: the run has no "
+                                                            "composite/remote/composite.json")
     v["the network certifier"] = nv = row_verdict(rows, ROWS["the network certifier"], net_src)
-    v["onsite"] = composite_verdict(found, composite, f"the run has no composite of {composite}")
+    v["onsite"] = composite_verdict(found, refused, composite, f"the run has no composite of {composite}")
     v |= {k: row_verdict(rows, ROWS[k]) | {"listed": LISTED} for k in MEMORY}
     v = {k: v[k] for k in VERDICTS}
     v["inference-only"]["alpha_gamma"] = alpha_gamma(case_policy)

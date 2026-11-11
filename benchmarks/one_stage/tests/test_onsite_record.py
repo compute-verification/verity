@@ -2973,6 +2973,117 @@ def test_a_remote_run_whose_report_drops_the_certifier_takes_its_period_checks_a
     assert rec == record(accepted(tmp_path / "onsite")) | {"verdicts": rec["verdicts"]}
 
 
+#: the composite each run of record reads remote's verdict from and the one it reads as its composite of record: its
+#: directory under OUT/composite and the product it states
+READ_FROM = {"of record": {"remote": ("remote", OR.REMOTE), "of record": ("remote-network", OR.ONSITE)},
+             "of record without PoUW": {"remote": ("remote", OR.REMOTE),
+                                        "of record": ("remote-network-no-pouw", WITHOUT)}}
+
+
+def unread_composite(out: Path, name: str, how: str) -> list[str]:
+    """``out`` with its composite NAME one the record doesn't read, and the paths of the files that make it so, in the
+    order the record names them: a second composite.json stating its product, in composite/NAME-again (``two of one
+    product``), or its own stating none (``no product``)."""
+    f = out / "composite" / name / "composite.json"
+    if how == "no product":
+        f.write_text(json.dumps({k: x for k, x in json.loads(f.read_text()).items() if k != "product"}))
+        return [f"composite/{name}/composite.json"]
+    (out / "composite" / f"{name}-again").mkdir()
+    (out / "composite" / f"{name}-again" / "composite.json").write_text(f.read_text())
+    return [f"composite/{name}/composite.json", f"composite/{name}-again/composite.json"]
+
+
+def saying(x, instead: dict[str, str]):
+    """The JSON value ``x`` with each of ``instead``'s texts, wherever a string of it says one, replaced by its
+    other."""
+    if isinstance(x, str):
+        for old, new in instead.items():
+            x = x.replace(old, new)
+        return x
+    if isinstance(x, dict):
+        return {k: saying(v, instead) for k, v in x.items()}
+    return [saying(v, instead) for v in x] if isinstance(x, list) else x
+
+
+def test_the_composites_the_record_reads_are_one_a_product_each_stating_its_product(tmp_path):
+    """`OR.composites`: one composite a product is read, by the product it states, and none is refused; of a product
+    two state, neither is read; one that states no product, or isn't an object, is read for none; each refusal names
+    its files."""
+    out, _ = of_record_today(tmp_path, "of record")
+    found, refused = OR.composites(out)
+    assert {p: path for p, (path, _) in found.items()} == {
+        OR.REMOTE: "composite/remote/composite.json", OR.ONSITE: "composite/remote-network/composite.json"}
+    assert refused == {}
+    two = unread_composite(out, "remote", "two of one product")
+    found, refused = OR.composites(out)
+    assert set(found) == {OR.ONSITE} and set(refused) == {OR.REMOTE} and len(refused[OR.REMOTE][1]) == 2
+    assert refused[OR.REMOTE][0] == OR.TWO_OF_ONE.format(n=2, product=OR.REMOTE, paths=", ".join(two))
+    none = unread_composite(out, "remote-network", "no product")
+    found, refused = OR.composites(out)
+    assert found == {} and set(refused) == {OR.REMOTE, None}
+    assert refused[None][0] == OR.NO_PRODUCT.format(paths=none[0], s="s", these="it")
+    (out / "composite" / "x").mkdir()
+    (out / "composite" / "x" / "composite.json").write_text("[]")
+    assert OR.composites(out)[1][None][0] == OR.NO_PRODUCT.format(
+        paths=f"{none[0]}, composite/x/composite.json", s="", these="them")
+
+
+@pytest.mark.parametrize("run", list(READ_FROM))
+@pytest.mark.parametrize("which", ["remote", "of record"])
+@pytest.mark.parametrize("how", ["two of one product", "no product"])
+def test_a_composite_the_record_doesnt_read_gives_it_no_verdict_and_no_figure(tmp_path, run, which, how):
+    """A run of record whose remote composite, or whose composite of record, the record doesn't read (`OR.composites`):
+    the run has two composites stating that product, or its one states no product. The record is still written, and it
+    is the record of the same run without those files, each verdict that finds no composite of the product saying why
+    and naming the files: so no verdict and no figure is read from them. Only remote's under the composite without
+    PoUW, which that run doesn't read, leaves the run of record.
+
+    Two cases aren't the record of the run without the files, since which composite is the composite of record is read
+    from the composites. Two composites of the product without PoUW: that product stays the composite of record and
+    the record reads none of it. A composite without PoUW stating no product: the run has no composite stating that
+    product, so its composite of record is onsite's, as for a run with no composite without PoUW; no verdict is
+    missing, so none names the file."""
+    out, today = of_record_today(tmp_path, run)
+    base = record(out)
+    assert base["of_record"] == today and today["holds"]
+    name, product = READ_FROM[run][which]
+    paths = unread_composite(out, name, how)
+    rec = record(out)
+    two = how == "two of one product"
+    why = (OR.TWO_OF_ONE.format(n=2, product=product, paths=", ".join(paths)) if two
+           else OR.NO_PRODUCT.format(paths=paths[0], s="s", these="it"))
+    changed = {k: v["verdict"] for k, v in rec["verdicts"].items() if v != base["verdicts"][k]}
+    if (run, which) == ("of record without PoUW", "of record") and not two:
+        assert rec["of_record"]["composite"] == OR.ONSITE and why not in json.dumps(rec)
+        assert changed == {"sampled proofs": "accept", "inference-only": "reject", "remote": "reject",
+                           "onsite": "reject"}
+        assert not rec["of_record"]["holds"] and all(product not in str(v) for v in rec["verdicts"].values())
+        return
+    not_read = {"remote": ["remote"] + ["inference-only"] * (run == "of record"),
+                "of record": ["onsite"] + ["inference-only"] * (run != "of record")}[which]
+    beside = dict.fromkeys(("sampled proofs", "the network certifier"), OR.NOT_ESTABLISHED) if which != "remote" else {}
+    assert changed == dict.fromkeys(not_read, "missing") | beside
+    for k in not_read:
+        assert rec["verdicts"][k]["why"] == (why if two else f"{base_none(k, product)}; {why}")
+    assert all(p in rec["verdicts"][k]["why"] for p in paths for k in not_read)
+    assert which == "remote" or why in rec["verdicts"]["sampled proofs"]["why"]
+    assert rec["of_record"]["holds"] is ((run, which) == ("of record without PoUW", "remote"))
+    assert rec["of_record"].get("composite") == today.get("composite")
+    if (run, which) == ("of record without PoUW", "of record"):
+        return
+    for p in paths:
+        (out / p).unlink()
+    nones = {base_none(k, product) for k in (*not_read, "inference-only")}
+    assert rec == saying(record(out), {none: why if two else f"{none}; {why}" for none in nones})
+
+
+def base_none(name: str, product: str) -> str:
+    """What the verdict ``name``, read from ``product``'s composite, says where the run has no such composite."""
+    return {"remote": "remote's composite didn't run: the run has no composite/remote/composite.json",
+            "onsite": f"the run has no composite of {product}",
+            "inference-only": f"its case is read from {product}'s composite, and the run has none"}[name]
+
+
 #: what the period check's piece under OUT/pieces/certifier states of the server its answer is about, as
 #: `served_verdicts.piece_server` reads it: its `SERVED` record's server, else the node `pieces` ran it on (`RAN`)
 PIECE_NAMES = {
@@ -3001,8 +3112,8 @@ def remote_dropped(tmp_path: Path, verdict: str, names: dict[str, str], source: 
     f.write_text(json.dumps(report))
     refusal = {"protocol": OR.NETWORK, "verdict": "reject", "reason": REFUSAL, "commitment": "ab" * 64, "public": None,
                "profile": None}
-    said = {"accept": answer(PUBLIC), "reject": refusal, "error": {"protocol": OR.NETWORK, "verdict": "accept"}}[verdict]
-    (out / OR.CASE.parent / "answer.json").write_text(json.dumps(said))
+    said = {"accept": answer(PUBLIC), "reject": refusal, "error": {"protocol": OR.NETWORK, "verdict": "accept"}}
+    (out / OR.CASE.parent / "answer.json").write_text(json.dumps(said[verdict]))
     for name, server in names.items():
         stated = {"source": source} if source and name == SV.SERVED else {}
         (out / OR.CASE.parent / name).write_text(json.dumps({"server": server} | stated))
