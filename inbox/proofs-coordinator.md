@@ -45358,3 +45358,121 @@ For vllm:
 For the table:
 - Utilization at vllm's measured rate (`mfu_serve` 0.0143 to 0.0154, fleet held): (ii) 144.8 to 155.9 GB, the lever row 115.3 to 124.2; second reading holds; linear to 0.17%; only the requests move. Under 300 GB while the engine serves at most 370 tokens a GPU-second at the mix.
 - BREAKEVEN's 08:51Z report, HARMSEARCH's 08:47Z entry and FUSED's 12.0 GB a core-second: second readings hold.
+
+## PARAMS, Wed 11 Nov 09:32Z: DANIEL'S AND UNBUILT (two Lean probes of the error bounds pass; no PR, no prover change): the first-hit term is linear in a parameter that buys Flock nothing, the level-0 codeword's length; m = 35 on m = 31's tower takes the by-gates line from 2^-98.9..-98.3 to 2^-102.9..-102.3 a run in calls at the record, and the 2,647 GB plan from 2^-97.1..-96.5 to 2^-101.1..-100.5, at the same table error. The same 4 bits exist today, with no change, at 16 head blocks a statement. Where the prover pays for more: the second repetition, 100 bits no bound reads, 41% of the card's proving time
+
+This is the 10:45Z entry, early, because your 09:23Z update moved the line under it. Both recommended changes move a schedule two locks read, so both are Daniel's. Clock: `date -u` read 09:32Z before posting.
+
+**The base line, verbatim from your 09:23Z update:** "modeled; the first-hit term of #8827's lemma: 2^-100.9 per sampled replay block, 2^-98.9 to 2^-98.3 a run at 4 to 6 replay blocks, at T = 2^80 SHA-512 calls in every run (the prover's and the verifier's), one 2^35-bit table a session, under `SHA512CRExpected` at its two finders; K an upper bound, every block's input bits counted (K_mean <= 2^41.81)." Every first-hit figure below is that term with one input changed, e_max [derived: SCALE's formula and bounds; my script reproduces SCALE's 09:20Z table to 0.01 bit]. My 09:11Z entry's 2^-105.04 is replaced by it.
+
+**1. What the level-0 length is worth on the line.**
+- A session's extraction cost is `e_s = 1 + 210·⌈4·N₀/e⌉`, N₀ the level-0 codeword's length (`Claims/Numbers.lean:70`; `SpotFlock/Code.lean:584` takes it from the schedule's level 0) [read]. The first-hit term is linear in it.
+- Flock's own error does not read N₀'s size: the table bound holds at 2^18 and 2^19 as at 2^23 (probe, section 7).
+- So with m = 35 on a shorter tower (5a below), every row of SCALE's table moves by the same bits [derived; modeled; unbuilt]:
+
+| level 0 at m = 35 | e_s | record, by gates, calls, a run at K0 = 4 to 6 | 2,647 GB plan, the same | by gates, compressions, K0 = 6 (record) | by rows, compressions, K0 = 6 (record; 2,647 GB plan) |
+|---|---|---|---|---|---|
+| 2^23, 64 lanes (today) | 2^31.27 | −98.92 to −98.33 | −97.08 to −96.49 | −89.33 | −104.90; −102.83 |
+| 2^21, 256 lanes | 2^29.27 | −100.92 to −100.33 | −99.08 to −98.49 | −91.33 | −106.90; −104.83 |
+| 2^19, 1,024 lanes (m = 31's tower) | 2^27.27 | **−102.92 to −102.33** | **−101.08 to −100.49** | −93.33 | −108.90; −106.83 |
+| 2^18, 2,048 lanes (m = 30's tower) | 2^26.27 | −103.92 to −103.33 | −102.08 to −101.49 | −94.33 | −109.90; −107.83 |
+
+- **By gates in calls it reaches 2^-100 a run at the record and at the 2,647 GB plan, with no change of strata or κ.** By gates in compressions it still misses. Nothing here is the code's: no prover proves m = 35 on that tower.
+- **The same bits with nothing changed:** a statement of 2^31 bits (16 head blocks) is on that tower today, deployed and proved, and one of 2^33 bits (64 blocks) reads the second row. The line's "one 2^35-bit table a session" is a plan parameter, and it must hold for every template, since e_max is the largest. The price is the fixed work a statement, paid 16 or 4 times a 256 blocks: the verifier's comb is 5.68 CPU-s a statement whatever the block count [relayed: SERVEDCARD 07:48Z], on cores that bind at 23.3 CPU-s a statement. Unpriced; BREAKEVEN's (`statement_blocks`).
+
+**2. The deployed set at m = 35 with `--zk`.** The head block is k_log 27, the top of the covered range. Numbers are the Lean's own rational upper bounds, replicated in exact fractions, for any statement shape in range; the replica reproduces the deployed check `m1_check` [run: `lean_up.py`, in the lane's notes under `tools/`]. They replace my 08:25Z estimates, which were at the head block's own shape (nine regions) and read up to 3 bits better on the GF(2^128) terms.
+
+| Parameter | Deployed | Term it sets, one repetition | Cost |
+|---|---|---|---|
+| Repetitions | 2 on one level-0 root | squares it: 2^-102.51 to 2^-205.01 a table | the second: 0.278 of 0.675 s of `t.prove` [run: medians, 43 sessions of run `6773`] |
+| Queries a level | 218, 106, 71, 53, 43, 36, 32 | 2^-106.77, -104.48, -105.06, -104.49, -105.77, -105.96, -109.46; together 2^-102.60 | openings, proof bytes |
+| Proximity slack η = 1/200 | list bound 199 at level 0 | zerocheck and lincheck over GF(2^128): 2^-106.52 (2^-109.7 at nine regions [run: 08:25Z estimate]) | queries |
+| Fold field GF(2^256) | | 2^-187.3 | part of `t.ligerito`, 0.037 s |
+| Level-0 width `k0` = 6 | 2^22 columns, N₀ = 2^23 | none in Flock; e_s in the binding term | 13,979,648 leaves, 2.684 GB of salts, 268 MB of mask words |
+| Waits 210, cap 2^256 | | 2^-210 + 2k/K in a session's κ; e_s | none in the prover |
+| Mask lanes 4, pad 2·q₀ | hiding | none | in the leaves above |
+
+- A table is the link points, 2^-226.36, plus the repetition squared: 2^-205.01. A session's κ_F = 4·ε_table + 2^-210 + 2k/K + e^(-k/8) = 2^-203.00 [run: the replica; the Lean proves `≤ 2^-205` and `≤ 2^-190`].
+- Inside one repetition the queries are the weakest (2^-102.60), then the GF(2^128) terms (2^-106.41 together) [run].
+
+**3. What an audit uses, and the weakest term.**
+- κ_s enters the sampled bound once a run and linearly: `κ_δ = c²(δ + κ_s) + the waits' terms`, κ_s the largest κ_F over the run's sessions (`κ_le_of`, `κ_le`, `SpotFlock/Accepting.lean`) [read]. No bound I read takes a root of κ_s; the roots are on the binding events (`Definitions/Claims/SamplingGeneric.lean:612-617`) [read].
+- The waits' cap is 2^-126.0 on `main` and 2^-183.65 in #8885 [relayed: TWOPROVE 09:10Z].
+- **The weakest is the binding side's first-hit term (the line above). Flock's own κ is 100 bits beyond it.**
+
+**4. The slack, with its price** (a head-block statement, 256 blocks).
+
+| Parameter | Slack | What it costs | Verdict |
+|---|---|---|---|
+| The second repetition | 100 bits | card: 0.278 of 0.675 s of `t.prove` (41%) [run]; one of the verifier's two passes, about 0.8 s each [relayed: SERVEDCARD]; 2,795,520 leaves: 0.537 GB of salts, 25.2 M compressions [derived] | lever (5b) |
+| Level-0 length | no error of Flock's at stake | 16 times the leaves, salts and mask words of 2^19, and 4 bits of the binding term | lever (5a) |
+| Folds in GF(2^256) | 85 bits a repetition | under 0.037 s a repetition | null: the next field down is GF(2^128), where the fold term is 2^-59 [derived] |
+| Half the queries, two repetitions | a table would read 2^-100.9 [run] | openings only | null: no room, and it keeps the second commit, zerocheck and lincheck |
+| η, the rates, the salt's 192 bytes, the 64-byte digest | none found | | null (the last two are design rules) |
+| Waits 210 | 1 bit of the binding term a halving; 105 waits leave κ_F at 2^-105 [run: 08:25Z] | none in the prover | TWOPROVE's and EXTFORM's |
+
+**5. SHA-512 in a head-block statement.**
+- **On the card: at most 21% of proving, and no record splits it further.** SHA-512 sits in two phases: level 0's commitment (`t.encoding_commitment`, 0.066 s once a statement: the encode, the leaves, the tree) and each repetition's `t.ligerito` (0.037 s: the upper levels' encodes, trees, folds, openings). Together 0.140 s of 0.675 s, and 5.5% of the statement's 2.565 GPU-s [run: medians over 43 sessions, `rate/…-k1/prover-gpu3.log.slim.gz` of `r20261111-061047-6773`]. The log has no hashing-only timer [read: its `GPUPHASE` keys].
+- By count: 176.1 M compressions a statement, 125.8 M at level 0 (15 a leaf of 68 lanes, 8,388,608 leaves) and 50.3 M above (9 a leaf, 5,591,040 leaves, both repetitions) [derived from the schedule and the leaf's bytes; not counted on the card].
+- On the host: 2.684 GB of salts, 7.3 CPU-s [relayed: SALTS, measured in `6773`], and 268 MB of mask words (`Flock/Firewall/Level0.lean:123`) [read; derived].
+- In the circuit: 617 compressions, 54.0 M rows, 40.2% of the block [relayed: HEADCIRC 08:27Z]. HEADCIRC's.
+- From the parameters' side: (5a) takes the compressions to 73.9 M and the salts to a sixteenth; (5b) takes off 25.2 M and 0.537 GB. Digest length and arity are nulls.
+
+**6. Two recommendations. I have no third: the waits are TWOPROVE's, the statement's size is BREAKEVEN's to price.**
+
+**(5a) Wide level-0 leaves: m = 32 to 35 on m = 31's tower, `k0 = m − 25`.**
+- `fast100` already does this at m = 28, 29, 30: one tower `[17, 14, 11, 8, 5]` under `k0` = 4, 5, 6. From m = 31 it grows the tower and keeps 64 lanes (`Definitions/Flock/Accounting/Schedule.lean:86-93`) [read].
+- At m = 35, two repetitions [run: `frontier.py` on the exact replica; modeled]:
+
+| `k0` | N₀ | a table | salts | mask words | level-0 rows opened a session | compressions |
+|---|---|---|---|---|---|---|
+| 6 (today) | 2^23 | 2^-205.01 | 2.684 GB | 268 MB | 0.47 MB | 176.1 M |
+| 8 | 2^21 | 2^-205.04 | 0.671 GB | 67 MB | 1.81 MB | 94.4 M |
+| 10 | 2^19 | 2^-205.06 | 0.168 GB | 17 MB | 7.20 MB | 73.9 M |
+| 11 | 2^18 | 2^-205.32 | 0.084 GB | 8 MB | 14.38 MB | 70.5 M |
+
+- **Error terms before and after:** a table 2^-205.01 to 2^-205.06, inside the Lean's `≤ 2^-205` (probe). The first-hit term: section 1. Hiding: each lane is padded on its own, so I expect the lane count not to enter [guess: not checked against `Hid`].
+- **Gain besides the bits:** the salts' host time from 7.3 to 0.46 CPU-s a statement, the salts still the OS's: no seed, no new premise [modeled: SALTS's measured 7.3, scaled by the leaves]. On the card I claim nothing: 2.4 times fewer compressions and a transform a sixteenth as long at level 0, unmeasured.
+- **Cost:** the proof's wire goes from 2.66 to 9.39 MB a session [derived from `6773`'s `wire_sent`], and the verifier hashes 52,590 more compressions a session [derived]. A leaf is one call of 16,448 bytes, 129 compressions, under the 513 of the longest call, so the calls-to-compressions factor stays [derived].
+- **Why this is where the prover pays for less:** `fast100` sized level 0 for a small opening; the binding term pays for the length.
+
+**(5b) One repetition for a session of one table, with 8% more queries.**
+- Queries `[236, 115, 77, 58, 47, 39, 35]`, pad `t = q₀`, two mask lanes.
+- **Error terms before and after:** κ_F 2^-203.00 to 2^-104.38 at any shape in range [run: the replica; the probe proves `≤ 2^-106` before the factor 4]. As deployed, one repetition is 2^-102.51 (κ_F 2^-100.5). No query count passes 2^-106.5 at every shape: the GF(2^128) terms are the floor [run].
+- **What it does to a run:** today nothing visible: 2^-98.34 becomes 2^-98.32 [derived]. With (5a) the by-gates line reads −102.47 to −102.03 for −102.92 to −102.33. By rows in calls (−113.9) Flock's κ becomes the run's weakest term, 2^-104.4. Over a world year, at the 43.4 bits between TWOPROVE's audit and world-year figures [relayed: TWOPROVE 09:10Z], Flock's term reads 2^-61.0 where it reads 2^-159.6 [derived].
+- **It does not fit a session of many tables:** λ ≥ 201.98 − log₂ n today (`Claims/NumbersDeploy.lean:25-27`); with one repetition 104.4 − log₂ n, under 100 from 21 tables [derived]. The two-stage code's sessions are one table (#8866); the recursion's are not.
+- **Gain:** card 0.278 of 0.675 s of `t.prove`; the card's own 0.52 s a statement [relayed: kernels, through BREAKEVEN's lever table] would read about 0.31 s [guess: by `t.prove`'s proportion]. Host today about 4.2 of 23.3 CPU-s: 1.46 for the salts above level 0, 2.75 for the verifier's second pass [derived: `6773`'s split, SALTS's 7.3; modeled].
+
+**7. What is checked in Lean, and what is not.** Two scratch files on `origin/main`, pushed nowhere: a lemma about a schedule nobody deploys is not current truth for the tree, and it would add wholly unread modules. The files are in the lane's notes (`tools/params_WideProbe.lean.txt`, `tools/params_OneRepProbe.lean.txt`).
+- `WideProbe.lean`, `verity lean try` run `r20261111-090054-8186`: lean exit 0, 9 theorems, no axiom beyond the three [run]. `padTableError (wide18 m) st 438 2 ≤ 2^-205` for every m from 32 to 35 and every statement shape in range, and the same for m = 30's tower (`wide17`), through `padTableError_le_of_check`, the theorem the deployed bound uses; and the level-0 length is 2^19 (2^18).
+- `OneRepProbe.lean`, run `r20261111-090054-1852`: lean exit 0, 8 theorems, clean axioms [run]. `padLinkError + padRepError ≤ (1/2)^106` at the 8% schedule, `≤ (1/2)^102` at the deployed one.
+- Not checked: hiding, the verifier's code, the extractor's theorems at the new schedule, the prover, the card. No kernel replay beyond `decide +kernel` inside the files.
+
+**8. The work, by file. None of it is done.**
+- (5a) Lean:
+  - `verity/protocols/flock/verifier/Flock/Schedule.lean`: the `levels` and `k0` lines of `fast100`;
+  - `Flock/Zk.lean:40-46`: `queries0`, 219 from m = 28 to 35;
+  - `security/Definitions/Flock/Accounting/Schedule.lean:90-93`: four rows;
+  - `Proofs/Flock/Soundness/Accounting/PaddedNumbers.lean`: `m1Queries₀`, `m1SqrtUp` (the probe is this check);
+  - `Proofs/Flock/Soundness/Discharge/ZkHidden/Sched.lean:63-96`: `k0 ≤ 6` in `zkSchedFacts` and `len_le`. The pads' layout is at most `320 + 4·k0` long, so `len ≤ 400` holds to `k0` = 20 [derived from `Zk.lean:59-84`];
+  - 28 files under `Proofs/Flock` split on m with `interval_cases` [run: grep]. I have not built the change, so this list is not complete.
+- (5a) Prover: `prover/live/src/bin/flock-circuit.rs:99` (`log_batch_size`) and `:171` (`zk_queries0`); `prover/python/verity_flock/rec_algebra.py:96`; upstream's profile in the patched crate, which I have not read. The CUDA reads `P->initial_k` (`cuda_circuit_patch.py:65-74`) [read]; whether a kernel assumes 68-lane leaves is kernels' to say. A changed `fast100` breaks the agreement with upstream's verifier, so it is a new profile name.
+- (5a) Lock `reads` records, `security/lean-audit.json`: `Flock.fast100`, `FlockSoundness.Accounting.fast100`, `Flock.Zk.queries0`, `m1Queries₀`, `m1Schedule`, `Claims.Flock.zkLevel0`. The first and third are in `security/Properties/lean-audit.json` too [run: read both locks].
+- (5b) Lean: `Flock/Statement.lean:220` and `Flock/Tags.lean:116-205` (`reps`), `Flock/ZkProof.lean:40` (`EXTRA_LANES`), `Flock/Zk.lean` (`queries0`, the pad), `Definitions/Flock/Accounting/Bound.lean:165` (`tableError`), `Padded.lean:93` (`padTableError`), every `2^-205` and `2^-190` after them, and the masked model's two repetitions. A new statement version. Lock `reads`: `tableError`, `repError`, `EXTRA_LANES`, `queries0`, `m1Queries₀`.
+- The guarantees over these records are Flock's masked knowledge soundness and what is stated on it (`SampledKSTwo`, `SpotKSTwo`, `SpotExfilTwo`, the recursion's) [guess: I read the `reads` records, not each guarantee's closure].
+
+**Next, unless your mailbox says otherwise:** the Lean side of (5a) as a what-if in a scratch tree (the five files above, then one build of `Proofs/Flock` on the pool), to replace "28 files, not complete" with the list of what breaks. Pushed nowhere; the final entry carries it.
+
+For BREAKEVEN (modeled, unbuilt, Daniel's; neither is for a row of record):
+- (5a) at `k0` = 10: 6.8 host CPU-s off a head-block statement (salts 7.3 to 0.46), the salts still the OS's. It overlaps SALTS's rows 3 and 3a: with every salt from a seed, what is left for it is under 1.2 CPU-s. No card time claimed. It is also what lets the 2,647 GB plan read 2^-100 a run by gates in calls (section 1).
+- (5b): 0.278 of 0.675 s of the card's proving, and about 4.2 host CPU-s. The card's own 0.52 s would read about 0.31 s [guess: by proportion].
+- Statements of 64 head blocks for 256, every template at 2^33 bits or less: +2.00 bits on every row of the bits table with nothing built; the cost is the per-statement fixed work four times a block. Yours to price.
+
+For SCALE and CONCRETE: e_max by level-0 length at m = 35: 2,592,237,061, 648,059,371, 162,015,001, 81,007,501 (2^31.27, 29.27, 27.27, 26.27) at 2^23, 2^21, 2^19, 2^18. Only the first is the code's at a 2^35-bit table; the second and third are the code's today at tables of 2^33 and 2^31 bits. With one repetition κ_s is 2^-104.38 [run: the replica].
+
+For kernels (through you): does the level-0 leaf kernel take 1,028 lanes (16,448 bytes a leaf, 524,288 leaves), and what do `t.encoding_commitment` and `t.ligerito` read there? Is there a row of the head block at 64 and at 16 blocks a statement?
+
+For the table:
+- The proof system's weakest term: the binding side's first-hit term, 2^-98.9 to 2^-98.3 a run [relayed: your 09:23Z line; modeled; the first-hit term of #8827's lemma, at T = 2^80 SHA-512 calls in every run, K an upper bound]. Flock's own: a table 2^-205.01, a session's κ 2^-203.00 [run: exact replica of the Lean's bounds; the Lean proves 2^-205 and 2^-190].
+- Where the prover pays for less: the level-0 codeword's length. m = 35 on m = 31's tower: the same table error [Lean probe `r20261111-090054-8186`], 4.00 bits on the first-hit term (2^-102.9 to 2^-102.3 a run by gates in calls at the record) and the salts 2.684 to 0.168 GB a statement [derived; modeled], for 6.7 MB more proof a session. Daniel's, unbuilt.
+- The largest slack: the second repetition, 100 bits, 41% of the card's proving time a head-block statement [run: `6773`'s medians]. One repetition with 8% more queries reads κ 2^-104.4 a one-table session [Lean probe `r20261111-090054-1852`]. Daniel's, unbuilt.
