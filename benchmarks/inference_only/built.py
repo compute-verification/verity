@@ -45,7 +45,7 @@ MODEL = "verity-int8/Llama-3.2-1B-INT8"
 H200 = {"compute_capability": (9, 0), "num_sms": 132, "int8_exact": "linears"}
 DIVISIONS = ("session", "position", "proof block")
 #: the inference-only policy's check, a Lake package
-PACKAGE = P.ROOT / "verity/core/protocols/network/nci/lean"
+PACKAGE = P.ROOT / "verity/protocols/inference_only/verifier/nci/lean"
 
 
 def _declared() -> tuple[tuple[str, ...], str]:
@@ -113,7 +113,7 @@ def policy(doc: Mapping[str, Any], pins: Mapping[str, str]) -> dict[str, Any]:
     gate table and each template's gates a unit."""
     from verity_vllm.program.predict import block_counts as BC
 
-    from verity.ml.definitions.boolean import gate_table
+    from verity.definitions.boolean import gate_table
 
     fn, m, steps = BC.session(doc)
     table, unpriced = gate_table([fn])
@@ -136,7 +136,7 @@ def divisions(doc: Mapping[str, Any], pins: Mapping[str, str], gates: Mapping[st
     the largest block's fresh bits, and what that block's fresh bits are."""
     from verity_vllm.program.predict import block_counts as BC
 
-    from verity.ml.windows import interface as IF
+    from verity.commitments.windows import interface as IF
 
     units = {t: int(n) for t, n in doc["templates"]}
     lays = {t: IF.layout(BC.resolve(t)) for t in units}
@@ -216,8 +216,8 @@ def divisions(doc: Mapping[str, Any], pins: Mapping[str, str], gates: Mapping[st
 def instance(pol: Mapping[str, Any], c: int, k: int, n: int) -> dict[str, Any]:
     """The count's instance for the session policy: the session Definition activated once a slot, the gate table
     and the policy; no θ, and each block Definition one block."""
-    from verity.ml.circuits import codec
-    from verity.ml.circuits.population import population_program
+    from verity.circuits import codec
+    from verity.circuits.population import population_program
 
     text = codec.canonical_json(codec.encode_program(population_program(pol["fn"], pol["slots"]))).decode()
     return {"program": text, "theta": [], "blocks": [codec.descriptor_id(pol["fn"])], "table": pol["table"], "c": c,

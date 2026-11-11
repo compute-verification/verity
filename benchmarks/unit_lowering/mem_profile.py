@@ -28,7 +28,7 @@ from run import BIND
 
 HERE = Path(__file__).resolve().parent
 ROOT = HERE.parents[1]
-VLLM = ROOT / "integrations" / "vllm"
+VLLM = ROOT / "adapters" / "vllm"
 H1_PROVE = ROOT / "benchmarks" / "pouw" / "h1_prove"
 #: (phase, module attribute it wraps): what `UnitStager` runs for a flat unit, outermost first
 PHASES = (("unit_lowering", "CS.unit_lowering"), ("ir_lower.lower", "IL.lower"), ("ir_lower.standalone", "IL.standalone"),

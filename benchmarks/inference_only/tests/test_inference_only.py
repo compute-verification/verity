@@ -14,7 +14,7 @@ from rho import min_cut
 from verity_vllm.check.weights_of_record import PARAM
 from verity_vllm.program.predict import block_counts as BC
 
-from verity.ml.windows import interface as IF
+from verity.commitments.windows import interface as IF
 
 ROPE, SILU = "RoPEHead_v1{D=16}", "SiluMul_v2{I=8}"
 NORM = 'RMSNormTriton_v5{N=8,EPS={"f64":"0x1.4f8b588e368f1p-17"}}'

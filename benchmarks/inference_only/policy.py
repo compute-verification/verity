@@ -2,7 +2,7 @@
 
 A policy is `(c, k, n)`: blocks of at most `c` Boolean gates, each reading at most `k` bits from outside itself and
 outside θ, at most `n` of them (the Lean's `CompliesAtMost c k n`; `UNITS`). Its number is the slowdown `min_cut.bound` gives it
-(`benchmarks/rho/rho/min_cut.py`, the arithmetic of the Lean statement its `HE` names) on one block's work: `N` the block's work
+(`verity/protocols/inference_only/rho/rho/min_cut.py`, the arithmetic of the Lean statement its `HE` names) on one block's work: `N` the block's work
 in the policy's own MACs, `O = N o b` its output wires (`o` the output values a MAC of the model's forward matmuls,
 `Shape.outputs / Shape.macs`, and `b` a bf16 value's wires) and the circuit's size `c`. That is `max(1, N / limit)`, `limit`
 the most of such work one block of the policy finishes (`Bound.macs_a_block`): the number is 1 where the count lets a
@@ -10,7 +10,7 @@ block hold all of its own work as training.
 
 `stated` reads a policy's public numbers from a file (`served.toml`, whose keys README.md lists) and says what its `k`
 is made of; `built.py` builds a class's policy from this tree. `periods` sets a block's limit beside the blocks a fleet
-holds over a monitoring period, on the slowdown calculator's fleets and periods (`benchmarks/rho`).
+holds over a monitoring period, on the slowdown calculator's fleets and periods (`verity/protocols/inference_only/rho`).
 """
 from __future__ import annotations
 
@@ -22,7 +22,7 @@ from typing import Any
 
 HERE = Path(__file__).resolve().parent
 ROOT = HERE.parents[1]
-RHO = ROOT / "benchmarks" / "rho"
+RHO = ROOT / "verity" / "protocols" / "inference_only" / "rho"
 # first on the path: rho's `periods` imports rho's own `run`, not this benchmark's
 sys.path.insert(0, str(RHO))
 
@@ -105,7 +105,7 @@ def shape(model: str) -> Shape:
     (`b1.layer_weights_type`) and the LM head's, the embedding's where the two are tied."""
     from verity_vllm.program.model import config_of
 
-    from verity.ml.definitions.registry import b1
+    from verity.definitions.registry import b1
 
     C, _ = config_of(pinned(model)[1])
     weights = dict(b1.weights_type(C).fields)
