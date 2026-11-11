@@ -35,6 +35,8 @@ def _lakefile(name: str, lib: str) -> str:
     return f'name = "{name}"\ndefaultTargets = ["{lib}"]\n\n[[lean_lib]]\nname = "{lib}"\n'
 
 
+#: the package `pkg/a` fetches, which a root that requires `pkg/a` by path pins too, as Lake resolves it
+DEP = {"name": "dep", "type": "git", "rev": "abc"}
 #: a tree of three audited packages: `b` requires `a` by path and imports two of its modules, and `c` stands alone and
 #: names `b` as its prover
 FILES = {
@@ -42,11 +44,11 @@ FILES = {
     "tools/verity/lean/README.md": "", "tools/verity/lean/tests/test_x.py": "", "tools/verity/check/common.py": "",
     LA.CONTRACT: "", "docs/note.md": "",
     "pkg/a/lakefile.toml": _lakefile("a", "A"), "pkg/a/lean-toolchain": TOOLCHAIN, "pkg/a/lean-audit.json": "{}",
-    "pkg/a/lake-manifest.json": json.dumps({"name": "a", "packages": [{"name": "dep", "type": "git", "rev": "abc"}]}),
+    "pkg/a/lake-manifest.json": json.dumps({"name": "a", "packages": [DEP]}),
     "pkg/a/A.lean": "import A.Base\nimport A.Leaf\n", "pkg/a/A/Base.lean": "theorem a : True := trivial\n",
     "pkg/a/A/Leaf.lean": "import A.Base\n",
     "pkg/b/lakefile.toml": _lakefile("b", "B"), "pkg/b/lean-toolchain": TOOLCHAIN, "pkg/b/lean-audit.json": "{}",
-    "pkg/b/lake-manifest.json": json.dumps({"name": "b", "packages": [{"name": "a", "type": "path", "dir": "../a"}]}),
+    "pkg/b/lake-manifest.json": json.dumps({"name": "b", "packages": [{"name": "a", "type": "path", "dir": "../a"}, DEP]}),
     "pkg/b/B.lean": "import A.Base\nimport B.Top\n", "pkg/b/B/Top.lean": "import A.Leaf\n",
     "pkg/c/lakefile.toml": _lakefile("c", "C"), "pkg/c/lean-toolchain": TOOLCHAIN,
     "pkg/c/lean-audit.json": json.dumps({"proved_in": ["../b"]}),
@@ -123,6 +125,7 @@ def test_the_names_warm_reads_are_the_auditors_and_the_verdict_packs_own():
     (["pkg/a/A/Gone.lean"], ALL, 0),                            # removed: no longer among the tree's files, nor a module
     (["pkg/a/lakefile.toml"], ALL, 5),                          # its options: each of a's modules, in either build
     (["pkg/b/lean-toolchain"], ["pkg/b", "pkg/c"], 4),          # the env of every module b's build holds, a's two among them
+    (["pkg/a/lake-manifest.json"], ALL, 5),                     # a's env as a root, and which of b's pins a's modules take there
     (["pkg/a/A/Leaf.lean", "pkg/c/C.lean"], ALL, 5),
     (["tools/verity/lean/check.py"], ALL, 0),                   # the auditor is in every package's key and in no module's
     (["tools/verity/check/common.py"], ALL, 0),
