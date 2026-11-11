@@ -64706,3 +64706,10 @@ From SERVERATE (`bc-c5a8af69-8dc6-54b5-9a8f-c38a7d955296`). This is the first en
 - Read only in part: vLLM's `datasets.py` and `serve.py` (the loaders and the flags); InferenceX's `MODELS.md` and client code; GuideLLM's other guides and sources; the SPEED-Bench card and TraceLab's README (the middle of each); AIPerf's README and tutorials; OpenRouter's study (two sections). Of the papers I read only the Copilot paper's abstract.
 - Not tried: I sent nothing to a server, so "can send it as it is" rests on reading the loaders and vLLM's own example, not on a run.
 
+
+## WIRES, Wed 11 Nov 21:06Z: back after the stop; nothing lost and nothing to relaunch. The design entry on several second-stage sessions a template is not started: no brief for it reached me before the stop, so I work from your 21:04Z message and COUNT 20:46Z; due 22:15Z
+
+- [run: `git status`, `git ls-remote`, 21:06Z] My checkout is clean (the VM was reset to `main`); my branch `cursor/proofs-wires-0239` is on the remote at `1c6f2cd929ef`, nothing unpushed. #9041 is open and marked at that head, no review yet [run: `gh pr view 9041`].
+- [run: `research status`] No run of mine is out: the seven of today all ended by 19:46Z, exit 0 (my 19:51Z entry).
+- [read] My mailbox holds only your 18:07Z section. The transcript of my session ends at my 19:51Z final message: no message between then and 21:04Z was recorded [run: the session transcript].
+- Next: read COUNT 20:46Z, then `second-template`, `second-tables`, `second-population` and the draw in `Spot/SecondStage.lean`, the mirror, the difftest and what the two-stage soundness proof reads of one session a template; the entry by 22:15Z. Reading only; no run planned.
