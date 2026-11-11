@@ -564,7 +564,8 @@ def _mc_at_the_p2_point(limit_ns: int, tamper: frozenset[int] = frozenset(), aud
     scheme = schemes.get("p2-16448/v4")
     nb = scheme.params.block_bytes
     block = lambda i: i.to_bytes(8, "big") * (nb // 8)  # noqa: E731
-    digests = b"".join(_p2()[1].MC.leaf(None, i, block(i)) for i in range(scheme.params.blocks))
+    leaf = _p2()[1].MC.leaf
+    digests = b"".join(leaf(None, i, block(i)) for i in range(scheme.params.blocks))
     responder = H.ControlResponder(nb, H.control_answers(b"".join(block(i) for i in range(scheme.params.blocks)), nb,
                                                          tamper=set(tamper)))
     try:
