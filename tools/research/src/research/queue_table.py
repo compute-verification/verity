@@ -273,8 +273,11 @@ def slow(d):
 
 def audit(path):
     """The lines of a shard's Lean audit log that say what it reused and how long the audit itself ran, each the last of its
-    kind: where it staged `security/Proofs` from the artifact cache, the audit's seconds, and its verdict."""
+    kind: where it staged `security/Proofs` from the artifact cache, the audit's seconds, and its verdict.  Nothing for a
+    shard with no such log (it ran no Lean audit); `unread` says why a log that is there was not read to its end."""
     out = {}
+    if not os.path.isfile(path):
+        return out
     try:
         for line in open(path, errors="replace"):
             if "keyed modules restored from the artifact cache" in line and "/security/Proofs: " in line:
@@ -283,8 +286,8 @@ def audit(path):
                 out["verdict"] = line.strip()[:200]
             elif line.startswith("lean-audit: ") and " audited in " in line:
                 out["audited"] = line.strip()[-60:]
-    except OSError:
-        pass
+    except OSError as e:
+        out["unread"] = repr(e)[:120]
     return out
 
 s0, t0 = stat(), time.time()
@@ -436,23 +439,24 @@ def pr_files(pr: str) -> list[str] | None:
     return p.stdout.splitlines() if p.returncode == 0 else None
 
 
-def _commits(shas: list[str]) -> dict[str, tuple[str, list[str]]]:
-    """{commit: (its subject, its three nearest first-parent ancestors, nearest first)} from GitHub, `COMMITS_A_QUERY` a query;
-    a commit GitHub gave no answer for is left out."""
+def _commits(shas: list[str]) -> tuple[dict[str, tuple[str, list[str]]], list[str]]:
+    """({commit: (its subject, its three nearest first-parent ancestors, nearest first)}, what was not read) from GitHub,
+    `COMMITS_A_QUERY` a query.  What was not read is one line for each query that failed, with what it raised, one for the
+    commits GitHub has none for, and one for the names that are no commit's: each says how many heads it leaves out."""
     owner, name = REPO.split("/")
     up = "parents(first: 1) { nodes { oid %s } }"
     fields = "... on Commit { message " + up % (up % (up % "")) + " }"
-    shas = [s for s in shas if re.fullmatch(r"[0-9a-f]{40}", s)]
+    odd = [s for s in shas if not re.fullmatch(r"[0-9a-f]{40}", s)]
+    shas = [s for s in shas if s not in odd]
 
-    def ask(part: list[str]) -> dict[str, tuple[str, list[str]]]:
+    def ask(part: list[str]) -> tuple[dict[str, tuple[str, list[str]]], list[str]]:
         query = (f'query {{ repository(owner: "{owner}", name: "{name}") {{ '
                  + " ".join(f'c{i}: object(oid: "{sha}") {{ {fields} }}' for i, sha in enumerate(part)) + " } }")
         try:
             p = subprocess.run(["gh", "api", "graphql", "-f", f"query={query}"], capture_output=True, text=True, timeout=90)
             got = json.loads(p.stdout)["data"]["repository"]
         except (OSError, ValueError, KeyError, TypeError, subprocess.SubprocessError) as e:
-            print(f"research queue stats: GitHub gave no commits ({e!r}); {len(part)} heads count as not restacked", file=sys.stderr)
-            return {}
+            return {}, [f"GitHub: the commits of {len(part)} heads, which count as not restacked ({e!r:.160})"]
         out = {}
         for i, sha in enumerate(part):
             node, above = got.get(f"c{i}") or {}, []
@@ -461,11 +465,13 @@ def _commits(shas: list[str]) -> dict[str, tuple[str, list[str]]]:
                 above.append(node["oid"])
             if subject:
                 out[sha] = (subject, above)
-        return out
+        gone = [sha for sha in part if sha not in out]
+        return out, [f"GitHub: {len(gone)} heads it has no commit for, which count as not restacked (first {gone[0][:12]})"] if gone else []
 
     with ThreadPoolExecutor(4) as ex:
-        return {k: v for got in ex.map(ask, [shas[i:i + COMMITS_A_QUERY] for i in range(0, len(shas), COMMITS_A_QUERY)])
-                for k, v in got.items()}
+        answers = list(ex.map(ask, [shas[i:i + COMMITS_A_QUERY] for i in range(0, len(shas), COMMITS_A_QUERY)]))
+    unread = [f"GitHub: {len(odd)} heads whose name is no commit's, which count as not restacked (first {odd[0][:40]!r})"] if odd else []
+    return {k: v for got, _ in answers for k, v in got.items()}, unread + [line for _, why in answers for line in why]
 
 
 def restack_of(subject: str, above: list[str]) -> str | None:
@@ -475,18 +481,21 @@ def restack_of(subject: str, above: list[str]) -> str | None:
     return next((a for a in above if a.startswith(m.group(1))), None) if m else None
 
 
-def restacks(heads: list[str], commits=_commits) -> dict[str, str]:
-    """{head: the head a restack across a move made it from}, for each of ``heads`` that is a restack's last commit, and for
-    each head so found in turn (a restack across two moves is two). A head whose restack ended with a commit of its own (its
-    regenerated pins) is not one."""
+def restacks(heads: list[str], commits=_commits) -> tuple[dict[str, str], list[str]]:
+    """({head: the head a restack across a move made it from}, what ``commits`` did not read), for each of ``heads`` that is
+    a restack's last commit, and for each head so found in turn (a restack across two moves is two). A head whose restack
+    ended with a commit of its own (its regenerated pins) is not one, and neither is one whose commit was not read."""
     found: dict[str, str] = {}
+    unread: list[str] = []
     ask, seen = list(dict.fromkeys(heads)), set()
     while ask:
         seen.update(ask)
-        new = {sha: old for sha, (subject, above) in commits(ask).items() if (old := restack_of(subject, above))}
+        got, why = commits(ask)
+        unread += why
+        new = {sha: old for sha, (subject, above) in got.items() if (old := restack_of(subject, above))}
         found.update(new)
         ask = [old for old in dict.fromkeys(new.values()) if old not in seen]
-    return found
+    return found, unread
 
 
 def lowrisk_heads(open_prs: dict[str, str], labels: dict[str, list[dict]], now: float) -> dict[str, bool | None]:
@@ -551,7 +560,8 @@ def collect(store_root=None, sample_s: float = 5.0, nodes: list[str] | None = No
     counted = set(doc["open"].items()) | {(str(pr), head) for r in doc["control"].get("decisions", [])
                                           if r["action"] == "advance" and not r.get("shadow") and r["at"] >= day
                                           for pr, head in zip(r.get("members") or [], r.get("heads") or [])}
-    doc["restacks"] = restacks(sorted({head for _, head in counted}))
+    doc["restacks"], unread = restacks(sorted({head for _, head in counted}))
+    doc["errors"] += unread
     pairs = sorted(built | counted | {(pr, old) for pr, head in counted for old in chain(doc["restacks"], head)[1:]})
     labels = _labels(store_root, [label_target(int(pr), head) for pr, head in pairs])
     doc["labels"] = {f"{pr}@{head}": labels[label_target(int(pr), head)] for pr, head in pairs}
@@ -1276,13 +1286,15 @@ def largest(doc: dict) -> str:
 def reuse(audit: dict) -> dict:
     """What a shard's Lean audit log says (the lines `NODE_SCRIPT`'s `audit` keeps): `staged`, [modules of `security/Proofs`
     restored from the artifact cache, its keyed modules]; `reused`, [packages whose earlier pass was reused, packages];
-    `passed`; and `audit_s`, the audit's own seconds, without its wait for a Lean slot. None for a line the log lacks."""
+    `passed`; `audit_s`, the audit's own seconds, without its wait for a Lean slot; and `unread`, why the node did not read
+    the log to its end. None for a line the log lacks."""
     staged = re.search(r"(\d+) of (\d+) keyed modules restored", audit.get("staged") or "")
     verdict = re.search(r"lean-audit: (PASS|FAIL)(?: \([^)]*\))?: (\d+) of (\d+) packages reused", audit.get("verdict") or "")
     ran = re.search(r" audited in (\d+) s", audit.get("audited") or "")
     return {"staged": [int(staged[1]), int(staged[2])] if staged else None,
             "reused": [int(verdict[2]), int(verdict[3])] if verdict else None,
-            "passed": verdict[1] == "PASS" if verdict else None, "audit_s": int(ran[1]) if ran else None}
+            "passed": verdict[1] == "PASS" if verdict else None, "audit_s": int(ran[1]) if ran else None,
+            "unread": audit.get("unread")}
 
 
 def rounds(doc: dict) -> list[dict]:
@@ -1292,8 +1304,8 @@ def rounds(doc: dict) -> list[dict]:
     (when it was built, without one), down to the first that `main` had moved to, and `below_lean` adds up theirs: the Lean
     this round audits though it changed none of it.  The first shard is the one that ran `pytest`, which runs the audit of
     the `security` packages; `steps` gives `pytest` and `lean-audit` there and `lean-changed` and `lean-suites` in the shard
-    that ran `lean-changed`, each its state and seconds (so far, while it runs); `staged`, `reused`, `passed` and `audit_s`
-    are the first shard's audit log (`reuse`).  The pole is the step on the gate that ended last among its shards, or the
+    that ran `lean-changed`, each its state and seconds (so far, while it runs); `staged`, `reused`, `passed`, `audit_s`
+    and `unread` are the first shard's audit log (`reuse`).  The pole is the step on the gate that ended last among its shards, or the
     first that failed."""
     now, off_gate, lean = doc["now"], tuple(doc.get("off_gate") or OFF_GATE), doc.get("lean") or {}
     cands = {c["sha"]: c for c in candidates(doc["control"].get("decisions") or [], window_runs(doc), window_start(doc), off_gate)}
@@ -1369,14 +1381,15 @@ def render_rounds(rows: list[dict], doc: dict) -> str:
              "candidate's shards, or the first that failed.", "", "| " + " | ".join(cols) + " |", "|" + "---|" * len(cols)]
     for r in rows:
         st, pole = r["steps"], r["pole"]
+        no_line = f"log not read: {r['unread']}" if r["unread"] else "no line"
         lines.append("| " + " | ".join([
             f"`{r['sha']}` {datetime.fromtimestamp(r['build'], UTC):%m-%d %H:%MZ}", str(r["prs"]), count(r["lean"]),
             count(r["below_lean"]) + (f" ({', '.join(f'`{b[:4]}`' for b in r['below'])})" if r["below"] else ""),
             f"{r['first']['node'].replace('vy-nebius-', '')} `{r['first']['id']}`" if r["first"] else f"none of its {r['shards']} ran `pytest`",
             went(r), secs(st["pytest"]),
             secs(st["lean-audit"]) + (f" ({r['audit_s']:,})" if r["audit_s"] is not None else ""),
-            of(r["staged"], "nothing staged" if r["reused"] else "no line"),
-            of(r["reused"], "no line") + (", the audit failed" if r["passed"] is False else ""),
+            of(r["staged"], "nothing staged" if r["reused"] else no_line),
+            of(r["reused"], no_line) + (", the audit failed" if r["passed"] is False else ""),
             f"{secs(st['lean-changed'])} / {secs(st['lean-suites'])}",
             f"{pole['shard']} `{pole['step']}`" + (" failed" if pole["state"] == "failed" else "") + f" at {pole['min']:.1f}"
             + (" so far" if r["outcome"] == "running" else "") if pole else "none ended"]) + " |")
@@ -1421,18 +1434,25 @@ def saved(path: Path) -> tuple[list[dict], dict[str, list[int]]]:
         return [], {}
 
 
+def window_end(until: str, now: float) -> float:
+    """``until`` as a timestamp: a time written with its UTC offset, before ``now``. A ValueError says what else it is."""
+    at = datetime.fromisoformat(until.replace("Z", "+00:00"))
+    if at.tzinfo is None:
+        raise ValueError("it has no UTC offset")
+    if at.timestamp() >= now:
+        raise ValueError("it is not in the past")
+    return at.timestamp()
+
+
 def main(store_root=None, as_json: bool = False, sample_s: float = 5.0, short: bool = False, until: str | None = None,
          by_round: bool = False) -> int:
     """Print the table, or with ``by_round`` the rounds; ``until`` ends the windows at a past time, written with its offset."""
     end = None
     if until is not None:
         try:
-            at = datetime.fromisoformat(until.replace("Z", "+00:00"))
-            end = at.timestamp() if at.tzinfo and at.timestamp() < datetime.now(UTC).timestamp() else None
-        except ValueError:
-            pass
-        if end is None:
-            print(f"research queue stats: --until {until} is not a past time with its offset: write it like 2026-01-31T08:00:00Z "
+            end = window_end(until, datetime.now(UTC).timestamp())
+        except ValueError as e:
+            print(f"research queue stats: --until {until}: {e}. Write a past time with its offset, like 2026-01-31T08:00:00Z "
                   "or 2026-01-31T00:00:00-08:00", file=sys.stderr)
             return 2
     readings, lean = saved(STATE)

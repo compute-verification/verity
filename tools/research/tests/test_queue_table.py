@@ -1,4 +1,10 @@
 """`research queue stats` with no `--log`: the queue's table (`queue_table`), its pure parts on a small made-up day."""
+import ast
+import importlib.util
+import json
+import types
+
+import pytest
 from research import queue_table as qt
 
 DAY = "2026-11-10"
@@ -364,13 +370,41 @@ def test_restacks_follow_a_head_across_each_move_it_crossed():
 
     def commits(shas):
         asked.append(sorted(shas))
-        return {s: known[s] for s in shas if s in known}
+        return {s: known[s] for s in shas if s in known}, [f"no commit for {s}" for s in shas if s not in known]
 
-    made = qt.restacks(["n3", "h4", "gone"], commits)
+    made, unread = qt.restacks(["n3", "h4", "gone"], commits)
     assert made == {"n3": "abc1234" + "0" * 33, "abc1234" + "0" * 33: "def5678" + "1" * 33}
+    assert unread == ["no commit for gone"]                                                          # said, not dropped
     assert asked == [["gone", "h4", "n3"], ["abc1234" + "0" * 33], ["def5678" + "1" * 33]]         # each head once
     assert qt.chain(made, "n3") == ["n3", "abc1234" + "0" * 33, "def5678" + "1" * 33] and qt.chain(made, "h4") == ["h4"]
     assert qt.chain({"a": "b", "b": "a"}, "a") == ["a", "b"]                                         # never round a loop
+
+
+def test_the_commits_github_did_not_give_are_counted_with_what_went_wrong(monkeypatch):
+    a, b, c = "a1" * 20, "b2" * 20, "c3" * 20
+    subject = f"Merge cccccccccccc (the layout move) into {b}, restacked"
+    answer = {"data": {"repository": {
+        "c0": {"message": subject + "\n\nits body", "parents": {"nodes": [{"oid": b, "parents": {"nodes": [{"oid": c, "parents": {"nodes": []}}]}}]}},
+        "c1": None}}}
+    monkeypatch.setattr(qt.subprocess, "run", lambda argv, **kw: types.SimpleNamespace(stdout=json.dumps(answer)))
+    got, unread = qt._commits([a, c, "a-branch"])
+    assert got == {a: (subject, [b, c])}
+    assert unread == ["GitHub: 1 heads whose name is no commit's, which count as not restacked (first 'a-branch')",
+                      "GitHub: 1 heads it has no commit for, which count as not restacked (first c3c3c3c3c3c3)"]
+    monkeypatch.setattr(qt.subprocess, "run", lambda argv, **kw: types.SimpleNamespace(stdout="rate limited"))
+    assert qt._commits([a, c]) == ({}, ["GitHub: the commits of 2 heads, which count as not restacked "
+                                        "(JSONDecodeError('Expecting value: line 1 column 1 (char 0)'))"])
+    monkeypatch.setattr(qt.subprocess, "run", lambda argv, **kw: types.SimpleNamespace(stdout='{"data": null, "errors": []}'))
+    made, unread = qt.restacks([a])                                                # no restack is read from an answer that failed
+    assert made == {} and unread == ["GitHub: the commits of 1 heads, which count as not restacked "
+                                     "(TypeError(\"'NoneType' object is not subscriptable\"))"]
+
+    def down(argv, **kw):
+        raise FileNotFoundError(2, "No such file or directory: 'gh'")
+
+    monkeypatch.setattr(qt.subprocess, "run", down)
+    assert qt._commits([a])[1] == ["GitHub: the commits of 1 heads, which count as not restacked "
+                                   "(FileNotFoundError(2, \"No such file or directory: 'gh'\"))"]
 
 
 def restacked() -> dict:
@@ -461,17 +495,67 @@ def test_a_window_that_ended_is_cut_to_what_was_known_then():
 
 
 def test_a_windows_end_is_a_past_time_with_its_offset(capsys):
+    now = qt.ts(at("03:00"))
+    assert qt.window_end("2026-11-10T02:00:00Z", now) == qt.window_end("2026-11-09T18:00:00-08:00", now) == qt.ts(at("02:00"))
+    for until, why in (("2026-11-10T02:00:00", "it has no UTC offset"), ("2026-11-10T03:00:00Z", "it is not in the past"),
+                       ("soon", "Invalid isoformat string: 'soon'")):
+        with pytest.raises(ValueError, match=why):
+            qt.window_end(until, now)
+    # the command refuses each before it reads anything, saying which it is and the form to write
     assert qt.main(until="2026-11-10T02:00:00") == 2 and qt.main(until="9999-01-01T00:00:00Z") == 2 and qt.main(until="soon") == 2
-    assert capsys.readouterr().err.count("is not a past time with its offset") == 3
+    said = capsys.readouterr().err.splitlines()
+    assert [line.split(". Write a past time")[0] for line in said] == [
+        "research queue stats: --until 2026-11-10T02:00:00: it has no UTC offset",
+        "research queue stats: --until 9999-01-01T00:00:00Z: it is not in the past",
+        "research queue stats: --until soon: Invalid isoformat string: 'soon'"]
+    assert all(line.endswith("like 2026-01-31T08:00:00Z or 2026-01-31T00:00:00-08:00") for line in said)
 
 
 def test_an_audit_logs_lines_say_what_it_reused():
     log = {"staged": "security/Proofs: 857 of 4982 keyed modules restored from the artifact cache; missed: 3553 reads a module not restored",
            "audited": "security, security/Proofs, security/Properties audited in 3957 s (exit 0)", "verdict": "lean-audit: PASS: 0 of 3 packages reused"}
-    assert qt.reuse(log) == {"staged": [857, 4982], "reused": [0, 3], "passed": True, "audit_s": 3957}
+    assert qt.reuse(log) == {"staged": [857, 4982], "reused": [0, 3], "passed": True, "audit_s": 3957, "unread": None}
     failed = qt.reuse({"verdict": "lean-audit: FAIL (security, security/Properties): 1 of 3 packages reused"})
-    assert failed == {"staged": None, "reused": [1, 3], "passed": False, "audit_s": None}
-    assert qt.reuse({}) == {"staged": None, "reused": None, "passed": None, "audit_s": None}
+    assert failed == {"staged": None, "reused": [1, 3], "passed": False, "audit_s": None, "unread": None}
+    assert qt.reuse({}) == {"staged": None, "reused": None, "passed": None, "audit_s": None, "unread": None}
+
+
+def node_function(name: str, tmp_path, **given):
+    """One function of the script a node runs, as a module of its own under ``tmp_path``, with ``given`` in place of the
+    globals it would find."""
+    fn = next(n for n in ast.parse(qt.NODE_SCRIPT).body if isinstance(n, ast.FunctionDef) and n.name == name)
+    path = tmp_path / f"node_{name}.py"
+    path.write_text("import os\n\n\n" + ast.unparse(fn) + "\n")
+    spec = importlib.util.spec_from_file_location(path.stem, path)
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    for key, value in given.items():
+        setattr(module, key, value)
+    return getattr(module, name)
+
+
+def test_a_node_says_why_an_audit_log_that_is_there_was_not_read(tmp_path):
+    log = tmp_path / "lean-audit.log"
+    assert node_function("audit", tmp_path)(str(log)) == {}                 # a shard that ran no Lean audit has no log
+    log.write_text("stage: /scratch/x/security: 3 of 3 keyed modules restored from the artifact cache\n"
+                   "stage: /scratch/x/security/Proofs: 10 of 40 keyed modules restored from the artifact cache; missed: 30 its source\n"
+                   "lean-audit: security audited in 12 s (exit 0)\nlean-audit: PASS: 2 of 3 packages reused\n")
+    read = node_function("audit", tmp_path)(str(log))
+    assert read == {"staged": "security/Proofs: 10 of 40 keyed modules restored from the artifact cache; missed: 30 its source",
+                    "audited": "lean-audit: security audited in 12 s (exit 0)", "verdict": "lean-audit: PASS: 2 of 3 packages reused"}
+    assert qt.reuse(read) == {"staged": [10, 40], "reused": [2, 3], "passed": True, "audit_s": 12, "unread": None}
+
+    def broken(path, **kw):
+        raise OSError(5, "Input/output error")
+
+    unread = node_function("audit", tmp_path, open=broken)(str(log))
+    assert unread == {"unread": "OSError(5, 'Input/output error')"}
+    d = rounds_doc()
+    d["nodes"]["vy-nebius-cpu-1"]["runs"][0]["audit"] = unread
+    row = qt.rounds(d)[0]
+    assert (row["staged"], row["reused"], row["unread"]) == (None, None, "OSError(5, 'Input/output error')")
+    cell = "log not read: OSError(5, 'Input/output error')"
+    assert f"| 3,000 | 2,000 | {cell} | {cell} | not run / not run |" in qt.render_rounds(qt.rounds(d), d)
 
 
 def rounds_doc() -> dict:
