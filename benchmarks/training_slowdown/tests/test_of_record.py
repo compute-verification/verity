@@ -174,10 +174,13 @@ def held_to(root, entry: str, rec: dict):
     return root / "records", root / "held.toml"
 
 
+@pytest.mark.slow
 def test_the_command_names_each_expected_difference_and_exits_1_on_any_other(tmp_path, capsys):
     """A made-up run of record: the config's own counted step at two rows a forward, written as CUDA's counter
     writes it. The command divides its rows out, counts the config at one row a forward and names the four expected
-    differences; a config that trains another set, and one of another start, differ and exit 1."""
+    differences; a config that trains another set, beside a record of another start and length, differs and exits 1.
+    It counts and traces three steps, so slow; what the rules' own tests can't show is that a route's real step
+    produces the entries each rule names and that the command reads a record the way a job writes one."""
     reg = tiny_registry(tmp_path / "reg")
     budget, dials = {"steps": 3, "batch": 4}, {"trainable": "blocks.*,norm", "opt": "muon", "lr": 1e-2,
                                                "micro_batches": 2}
@@ -206,18 +209,54 @@ def test_the_command_names_each_expected_difference_and_exits_1_on_any_other(tmp
     assert json.loads((tmp_path / "out" / "a" / "run.json").read_text())["trace"]["tokens"] == 4 * CTX
 
     other = write_config(tmp_path / "b" / "a.toml", budget=budget, dials=dials | {"trainable": "blocks.*"})
-    assert of_record.main([str(other), *argv]) == 1
+    rec["start_record"]["digest"] = "e" * 64
+    records, held = held_to(tmp_path / "elsewhere", "a", rec | {"steps": rec["steps"] * 2})
+    assert of_record.main([str(other), "--records", str(records), "--held", str(held), "--starts", str(reg)]) == 1
     out = capsys.readouterr().out
     assert out.startswith("a, held to r-made-up (out/run/run.json): differs, ")
+    assert "  DIFFERS   the start: the config's is tiny (dddddddddddd), the record's tiny (eeeeeeeeeeee)" in out
+    assert "  DIFFERS   the steps: the config's 3, the record's 6" in out
     assert "  DIFFERS   updated, the record's step only: " in out and "1 entry: 0 equal, 1 differ" in out
     assert "  DIFFERS   log, the record's step only: fwd/updated _fused_rms_norm" in out
 
-    rec["start_record"]["digest"] = "e" * 64
-    records, held = held_to(tmp_path / "elsewhere", "a", rec | {"steps": rec["steps"] * 2})
-    assert of_record.main([str(path), "--records", str(records), "--held", str(held), "--starts", str(reg)]) == 1
+
+def test_a_difference_no_rule_names_is_printed_and_the_command_exits_1(tmp_path, capsys, monkeypatch):
+    """The command on a count made up here, so no step is counted: a step equal to its record's exits 0; a product
+    the record lacks, which no rule names, is printed as a difference and exits 1; so does a step the capture
+    refused, which is compared with nothing."""
+    reg = tiny_registry(tmp_path / "reg")
+    path = write_config(tmp_path / "a.toml")
+    cfg = config.load(path, starts.registry(reg))
+
+    def struct(*more) -> dict:
+        return {"updated": [[D * D, D, CTX * D * D, CTX, 16]],
+                "log": [[*e[:3], json.dumps(e[3]), *e[4:]] for e in (*BOTH, *more)]}
+
+    count = {"invalid": [], "trace": {"data_dependent": [], "carried_scalars": []}, "checkpoints": [{"e_bytes": 10}],
+             "steps": [{"struct": "s"}] * of_record.STEPS, "structures": {"s": struct()}}
+    monkeypatch.setattr(of_record, "counted", lambda cfg, rows, out: count)
+    rec = {"start_record": {"name": "tiny", "digest": cfg.start.digest}, "structures": {"s": struct()},
+           "steps": [{"struct": "s"}] * cfg.budget["steps"], "checkpoints": [{"format": "full", "e_bytes": 20}]}
+    records, held = held_to(tmp_path, "a", rec)
+    argv = [str(path), "--records", str(records), "--held", str(held), "--starts", str(reg)]
+    assert of_record.main(argv) == 0
     out = capsys.readouterr().out
-    assert "  DIFFERS   the start: the config's is tiny (dddddddddddd), the record's tiny (eeeeeeeeeeee)" in out
-    assert "  DIFFERS   the steps: the config's 3, the record's 6" in out
+    assert out.startswith("a, held to r-made-up (out/run/run.json): equal\n") and "DIFFERS" not in out
+    assert "  updated   1 of the record's 1 uses" in out and "  log       2 of the record's 2 products" in out
+    assert "  E         identity, 10 B after 2 steps; the record's full, 20 B after 3" in out
+
+    count["structures"]["s"] = struct(("fwd", "act", "matmul", [[CTX, D], [D, D]], 1, CTX * D * D))
+    assert of_record.main(argv) == 1
+    out = capsys.readouterr().out
+    assert out.startswith("a, held to r-made-up (out/run/run.json): differs, 1 difference\n")
+    assert "  DIFFERS   log, the config's step only: fwd/act matmul [[1024,16], [16,16]] x1, 262,144 MACs" in out
+    assert "1 entry: 0 equal, 1 differ, 0 refused." in out
+
+    count["trace"] = {"refused": {"reason": "dynamic_control_flow", "op": "aten.item", "message": "why"}}
+    assert of_record.main(argv) == 1
+    out = capsys.readouterr().out
+    assert out.startswith("a, held to r-made-up (out/run/run.json): refused: the capture refused the step")
+    assert "DIFFERS" not in out and "1 entry: 0 equal, 0 differ, 1 refused." in out
 
 
 def test_a_record_that_is_missing_or_another_file_is_refused_with_its_fetch_line(tmp_path):
