@@ -36562,3 +36562,38 @@ The columns are ecr, capped (`StrictBirthday`, R3.4) and S1, as log₂ of each b
 - Its due date stays Fri 13 Nov 18:00Z. Its PR comes after #8781 and route 3, and it needs the move's replay if it lands after the move.
 
 **7. Next:** route 3's records, then its commit, quick tier and PR; R3.4's two tries, then its records. If the move lands first, I replay #8781 at 03:45Z. S1 and part 2 are unchanged from 01:13Z.
+
+## CONCRETE, Wed 11 Nov 02:17Z: the cause of #8764's differing record is confirmed: `2 ^ 9` in `sparse9` elaborates through Mathlib's `Nat.instMonoid` on `main` and through core's `instPowNat` at lean's text; one import line restores `main`'s term, and I recommend it over taking the record
+
+This follows my 02:07Z entry (the record: `Security/lean-audit.json`, `reads`, `FlockDeploy.Concrete.sparse9`). Nothing is committed; the head is still `05c89e29e099ea9caf397bbc2be1fc498af72792`.
+
+**The probe** [run `r20261111-020940-ac82`, cpu-1, rc 0]: `def p (w : Nat -> Nat) : Nat := w (2 ^ 9)` printed with explicit instances, in the definitions package at the pinned Mathlib. `sparse9`'s `2 ^ 9` is the same case: the `width : Nat` argument of `Flock.Sparse.ofRows` [read].
+
+| the file imports | the `Pow` instance of `2 ^ 9` |
+|---|---|
+| nothing | `@instPowNat Nat instNatPowNat` |
+| `Mathlib` | `@NPow.toPow Nat (@Monoid.toNPow Nat Nat.instMonoid)` |
+| `Mathlib.Algebra.Group.Nat.Defs` | the same as under `Mathlib` |
+| `Mathlib.Algebra.Group.Defs` | a third: `@NPow.toPow Nat (@NPow.ofPow Nat (@instPowNat Nat instNatPowNat))` |
+
+- So the hashed term of `sparse9` depends on which Mathlib modules its file sees [run for `p`; for `sparse9` itself an inference: its other parts, `Sparse.ofRows`, `toOption`, `getD` and `default`, are the Flock package's and core's, and no file of that package imports Mathlib [read]].
+- `main` and my old head saw all of Mathlib there; lean's text sees none. That is the whole difference between `c5f4` (`pass`) and `2fc1` (`regenerated`), whose `Concrete/File.lean` is the same bytes.
+- The value is the same either way [guess: Mathlib defines the monoid's power on `Nat` as core's, from memory; every module that uses `sparse9` compiled in `2fc1`, which is weaker evidence].
+- `2 ^ ` occurs once in `Concrete/File.lean`, in `sparse9` [read].
+
+**What I recommend: keep the record** (way 2 of the 02:07Z entry)
+- One line in `Concrete/File.lean`: `public import Mathlib.Algebra.Group.Nat.Defs`, with a comment saying `sparse9`'s `2 ^ 9` takes its instance from it. Public, because `sparse9` is exposed and its body would name `Nat.instMonoid`.
+- Then no lock record changes, the PR stays a pure move, and nothing goes to Daniel.
+- It is a sixth commit on top of lean's five. lean's branch has the same file, so it needs the same line or the same record change; either way lean's text and `main`'s can stay one.
+- [guess] It restores `main`'s hash. Only a records run proves it. No extra run is needed for that: the records run already owed on the moved tree shows it, and if the record still differed there, that run's `--update` gives the lock to commit (way 1) at no further cost.
+- [guess] No cost to the build: that Mathlib module is prebuilt and small beside the file's own 654 s.
+
+**The other way: take the record** (way 1)
+- The term then uses core's instance, which no import can change. A record two witnesses read changes, with the reason above.
+- The lock from `2fc1` can't be copied as it is: `main`'s `Security/lean-audit.json` has moved by 454 lines since the branch's base [read], so it is regenerated after the merge of `main`, by the same owed run.
+
+**A cleanup for later, not for this PR** [guess]: a definition whose term depends on its file's imports will move again at the next import cut. Writing the literal so that no instance is chosen (`512`, or `Nat.pow 2 9`) fixes that once, at the price of one record change.
+
+**Also**: five completion notices of your other workers reached me at 02:00Z (PRF-536, PRF-537, PRF-530, PRF-541, PRF-529). I acted on none.
+
+**Left**: your and lean's pick (I wait for it, and do neither meanwhile); that commit; when the layout move is on `main` (it is not at `a930252c4993` [read 02:17Z]), the crossing; then one records run and the quick tier on the moved tree; then "ready to mark".
