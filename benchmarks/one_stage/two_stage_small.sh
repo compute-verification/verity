@@ -5,7 +5,8 @@
 # the second stage on a session of its own, a --zk session per member, Lean's verdicts, round 2 and the stream's outcome).
 # Exit 0 when the second stage is what today's record gives (two_stage_small.py expect): round 1 commits no port for the
 # block's return, so everything holds but the return's read. Records under $OUT (never a circuit, a prover file, a
-# private body or salts, or a challenger's key or secret).
+# private body or salts, or a challenger's key or secret); a record over 63 MiB (a served vocabulary's public bodies and
+# written window, a challenger host's ledger) is not kept, and large.txt lists its SHA-512, size and path.
 #   research run --on auto --cwd clone --cpus 16 --mem-gb 64 --max-min 120 -- bash benchmarks/one_stage/two_stage_small.sh
 #   SMALL_FLOCK_WORK=DIR keeps flock-circuit's build there across runs (default: scratch); SMALL_ARGS="--v 256" passes
 #   two_stage_small.py serve more; SMALL_FIRST and SMALL_SECOND="--firewall PATH" pass `first` and `second` more;
@@ -62,11 +63,13 @@ rc=0
   --out "$W/second" "${UNLINKED[@]}" ${SMALL_SECOND:-} > "$O/second.log" 2>&1 || rc=$?
 grep '^TWO ' "$O/second.log" || tail -30 "$O/second.log"
 echo "second rc=$rc" | tee -a "$O/machine.txt"
+RECORDS=(-type f ! -name circuit.txt ! -name 'inst-*' ! -name 'm*-inst-*' ! -name '*-private.bin' ! -name index.json
+         ! -name index-salt.bin ! -name salts.bin ! -path './*/archive/*' ! -path '*-work/*')
 for d in first second; do
   mkdir -p "$O/$d"
-  (cd "$W/$d" && find . -type f ! -name circuit.txt ! -name 'inst-*' ! -name 'm*-inst-*' ! -name '*-private.bin' \
-     ! -name index.json ! -name index-salt.bin ! -name salts.bin ! -path './*/archive/*' ! -path '*-work/*' -print0 \
-     | xargs -0 -r -I{} cp --parents {} "$O/$d/")
+  (cd "$W/$d" && find . "${RECORDS[@]}" -size -64M -print0 | xargs -0 -r -I{} cp --parents {} "$O/$d/")
+  (cd "$W/$d" && find . "${RECORDS[@]}" -size +63M -print0 | sort -z \
+     | xargs -0 -r -I{} sh -c 'printf "%s  %s  %s\n" "$(sha512sum < "$1" | cut -d" " -f1)" "$(stat -c %s "$1")" "$1"' _ {}) > "$O/$d/large.txt"
 done
 [ -f "$W/second/summary.json" ] || exit 2
 "${PY[@]}" benchmarks/one_stage/two_stage_small.py expect "$W/second/summary.json" "${UNLINKED[@]}" | tee "$O/expect.txt"
