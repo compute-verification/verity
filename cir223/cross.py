@@ -12,6 +12,8 @@ A SPEC is one of
     NAME=COMMIT@PARENT:onto  the child with `restack.py COMMIT --main STAGED --onto PARENT'S RESULT`, as it is
     NAME=COMMIT:named      the head as it is: `--move-commit` for each move of `--below`..STAGED it does not hold, and
                            `--onto STAGED` (with `@PARENT`, started when PARENT has ended)
+    NAME=COMMIT:named-attrs  as `:named`, with the vLLM lists' attribute lines of the commit below the first move (their
+                           old paths) given through `core.attributesFile`
     NAME=COMMIT:pins       restack.py's pins step alone, on a merge made by hand
 
 Specs with no parent run side by side, at most `--jobs` at a time; a child starts when its parent has ended.
@@ -30,6 +32,7 @@ import re
 import resource
 import subprocess
 import sys
+import tempfile
 import threading
 import time
 
@@ -76,12 +79,12 @@ def kept_files() -> set[str]:
     return {os.path.basename(p) for p in glob.glob(os.path.join(KEPT, "*.json"))}
 
 
-def restack(tag: str, args: list[str]) -> tuple[dict | None, float, int]:
+def restack(tag: str, args: list[str], env: dict | None = None) -> tuple[dict | None, float, int]:
     """Run restack.py with ``args``; its JSON's one record (None when it printed none), the seconds and its exit."""
     t = time.time()
     before = kept_files()
     with open(os.path.join(OUT, f"{tag}.json"), "w") as o, open(os.path.join(OUT, f"{tag}.err"), "w") as e:
-        rc = subprocess.run([sys.executable, RS, *args, "--kept", "--dry-run", "--json"], stdout=o, stderr=e, env=ENV).returncode
+        rc = subprocess.run([sys.executable, RS, *args, "--kept", "--dry-run", "--json"], stdout=o, stderr=e, env=env or ENV).returncode
     secs = time.time() - t
     try:
         with open(os.path.join(OUT, f"{tag}.json")) as f:
@@ -170,13 +173,26 @@ def plain(name: str, commit: str, main: str, base1: str) -> dict:
     return rec
 
 
-def named(name: str, commit: str, main: str, moves: list[str]) -> dict:
+def old_attributes(name: str, below: str) -> dict:
+    """ENV with `core.attributesFile` naming a file of the vLLM lists' lines of ``below``'s `.gitattributes` (the paths before
+    the move): restack.py merges with `git merge-tree` in this clone, whose own `.gitattributes` names the moved paths only,
+    so a list at its old path would get a text merge at the `base` step."""
+    lines = [x for x in git("show", f"{below}:.gitattributes").splitlines()
+             if x.startswith("integrations/vllm/") and "merge=vllm-allowlist" in x]
+    path = os.path.join(tempfile.mkdtemp(prefix="cir223-attrs-"), "attributes")
+    with open(path, "w") as f:
+        f.write("\n".join(lines) + "\n")
+    say(f"{name}: core.attributesFile holds {len(lines)} line(s) of {below[:12]}'s .gitattributes: {' | '.join(lines)}")
+    return {**ENV, "GIT_CONFIG_COUNT": "2", "GIT_CONFIG_KEY_1": "core.attributesFile", "GIT_CONFIG_VALUE_1": path}
+
+
+def named(name: str, commit: str, main: str, moves: list[str], attrs_from: str | None = None) -> dict:
     """A head as it is (not merged with the commit below the move), each move named: `--move-commit M... --onto MAIN`."""
     args = [commit, "--main", main, "--onto", main]
     for m in moves:
         if not holds(m, commit):
             args += ["--move-commit", m]
-    r, secs, rc = restack(name, args)
+    r, secs, rc = restack(name, args, old_attributes(name, attrs_from) if attrs_from else None)
     rec = {"name": name, "kind": "named", "commit": commit, "seconds": round(secs), "exit": rc, "restack": r}
     if r and r.get("status") == "conflicted" and r.get("step") == "base" and r.get("crossed"):
         # A stop at a later move's `base` names no commit: cross the moves it passed again, alone, for the head a mend starts from.
@@ -308,6 +324,8 @@ def main() -> int:
             with gate:
                 if s["how"] == "named":
                     rec = named(s["name"], s["commit"], main_sha, [m[0] for m in all_moves])
+                elif s["how"] == "named-attrs":
+                    rec = named(s["name"], s["commit"], main_sha, [m[0] for m in all_moves], attrs_from=base1)
                 elif s["how"] == "pins":
                     rec = pins(s["name"], s["commit"], main_sha)
                 elif not s["parent"]:
