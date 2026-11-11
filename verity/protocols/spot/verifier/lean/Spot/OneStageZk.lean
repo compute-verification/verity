@@ -56,7 +56,11 @@ v1 audit (`OneStage`) with the verdicts computed here, from the statement's file
 * **per member** (`checkMembersAt`): the form for a population of several members, a statement a drawn member. It
   accepts nothing (`MULTI_REFUSED`, `checkMembersAt_refuses`) until the guarantee for a sample over several members'
   statements under one draw is in the lock, and `protocol` does not read it: `paramsOfJson` and `evidenceOf` refuse
-  `proofs` of other keys than the one statement's. Its parameters' `proofs` is exactly `{"members"}` (`membersOf`), an
+  `proofs` of other keys than the one statement's, so their parameters name no members, their evidence no statements,
+  and the check at the coins (`checkBlobsAt`) is the one statement's (`checkOneAt`). The form's own parsers read it
+  (`membersParamsOfJson`, `membersEvidenceOf`; `paramsEitherOfJson` and `evidenceEitherOf` read either form), and on
+  parameters that name members with evidence that names statements `checkBlobsAt` is `checkMembersAt`; parameters of
+  one form with evidence of the other reject. Its parameters' `proofs` is exactly `{"members"}` (`membersOf`), an
   object from each member's name to exactly `{"circuit", "public", "registered", "units", "vus_per_block"}`: its
   statement's files, as the one statement's, its units as `[lo, hi)` ranges, ascending, no unit in two members', and
   its circuit's units a proof block. Its evidence's `proofs` is exactly `{"statements"}` (`statementsOf`), a list of
@@ -160,18 +164,37 @@ structure Own where
   pub : String
   registered : Option Json
 
+/-- A member of the per-member form: its name, its units as `[lo, hi)` ranges, ascending, its circuit's units a proof
+block (META `vus_per_block`) and its statement's own inputs. -/
+structure Member where
+  name : String
+  units : Array (Nat × Nat)
+  g : Nat
+  own : Own
+
+/-- The parameters: v1's, the verifier's own inputs, and in the per-member form (module docstring, **per member**)
+its members, `own` then holding the program and the partition every member's statement reads and no file. -/
 structure Params where
   base : OneStage.Params
   own : Own
+  members : Option (Array Member)
 
 structure RunFiles where
   name : String
   record : String
   reps : Array (String × String)
 
+/-- One statement of the per-member form's evidence: the member it proves and its sessions. -/
+structure StatementFiles where
+  member : Option String
+  sessions : Array RunFiles
+
+/-- The evidence: v1's and the sessions' files, in v1's `sessions`' order, and in the per-member form the statements
+those sessions are of, a drawn member each. -/
 structure Evidence where
   base : OneStage.Evidence
   sessions : Array RunFiles
+  statements : Option (Array StatementFiles)
 
 private def exactly (j : Json) (ks : Array String) (what : String) : V Unit :=
   if keys? j != some (sortStrings ks) then throw s!"the keys of {what} are not {", ".intercalate (sortStrings ks).toList}"
@@ -228,7 +251,8 @@ def paramsOfJson (j : Json) : V Params := do
   let some partition := base.verifier.partition
     | throw "partition is null: the sessions are verified against the verifier's own partition object"
   let programJ := getD rest "program"
-  pure { base, own := { programJ, program := (← Flock.canon programJ).toUTF8, partition, circuit, pub, registered } }
+  pure { base, own := { programJ, program := (← Flock.canon programJ).toUTF8, partition, circuit, pub, registered },
+         members := none }
 
 /-- The `verdicts` command's own inputs: exactly `{"circuit", "partition", "program", "public", "registered"}`, the
 program and partition objects. -/
@@ -264,7 +288,7 @@ def evidenceOf (b : ByteArray) : V Evidence := do
   unless Challenger.withinAt Challenger.LIMITS base.coins do throw Challenger.LIMITS.form
   let sessions ← proofsOf pr
   if sessions.map (·.name) != base.sessions then throw "proofs: the sessions are not the evidence's sessions, in order"
-  pure { base, sessions }
+  pure { base, sessions, statements := none }
 
 /-- `flock-verify`'s `checkIdentifier` without the verifier's own identifier: a public header that names one refuses. -/
 def checkIdentifier (st : Flock.Stmt) : V Unit :=
@@ -713,13 +737,13 @@ def orderHeld (p : Params) (c : OneStage.Commitment) (e : Evidence) : V Unit := 
   let lines ← linesOf e
   unless Challenger.sampleLinkFirst label c.digest lines.tail do throw s!"coins: {Challenger.SAMPLE_LINK_FIRST}"
 
-/-- The check at the coins `ξ` (module docstring, **check**): the evidence's one session (`oneSession`), its coins held
-to the trees the challenger logged in the order it must release them (`treesOf`, `orderHeld`, `treesHeld`), the
-registration's population held to the program (`popHeld`), the parameters' public file held to the registration
-(`publicHeld`), then the session's verdict on the blobs, then v1's `checkAt` at `ξ` on it. v1 accepts only verdicts
-that all accepted (`VerdictsAccept`); the run's own `all` says it again, so an acceptance reads the run rather than the
-verdicts' JSON. -/
-def checkBlobsAt (p : Params) (c : OneStage.Commitment) (ξ : ByteArray) (e : Evidence) (bs : Core.Blobs) :
+/-- The one statement's check at the coins `ξ` (module docstring, **check**): the evidence's one session
+(`oneSession`), its coins held to the trees the challenger logged in the order it must release them (`treesOf`,
+`orderHeld`, `treesHeld`), the registration's population held to the program (`popHeld`), the parameters' public file
+held to the registration (`publicHeld`), then the session's verdict on the blobs, then v1's `checkAt` at `ξ` on it. v1
+accepts only verdicts that all accepted (`VerdictsAccept`); the run's own `all` says it again, so an acceptance reads
+the run rather than the verdicts' JSON. -/
+def checkOneAt (p : Params) (c : OneStage.Commitment) (ξ : ByteArray) (e : Evidence) (bs : Core.Blobs) :
     Core.Outcome OneStage.Public Core.Integrity :=
   let r : V Run := do
     oneSession e.sessions
@@ -737,12 +761,6 @@ def checkBlobsAt (p : Params) (c : OneStage.Commitment) (ξ : ByteArray) (e : Ev
     | .accept pub prof => if r.all then .accept pub prof else .reject "proofs: a session's verifier did not accept"
     | o => o
 
-/-- The audit's check on the blobs: at the coins `coinsOf` reads (`checkBlobsAt`), refused with its reason when none
-read. -/
-def checkBlobs (p : Params) (c : OneStage.Commitment) (e : Evidence) (bs : Core.Blobs) :
-    Core.Outcome OneStage.Public Core.Integrity :=
-  Core.atCoins (coinsOf p c e) (fun ξ => checkBlobsAt p c ξ e bs)
-
 /-! ## The per-member form (module docstring, **per member**) -/
 
 /-- The refusal of the per-member form's acceptance: no guarantee in the lock yet covers a sample over several members'
@@ -750,19 +768,6 @@ statements under one draw. -/
 def MULTI_REFUSED : String :=
   "the per-member form (proofs.members) is refused until the guarantee for a sample over several members' " ++
     "statements under one draw is in the lock: verify one statement (proofs {circuit, public, registered})"
-
-/-- A member of the per-member form: its name, its units as `[lo, hi)` ranges, ascending, its circuit's units a proof
-block (META `vus_per_block`) and its statement's own inputs. -/
-structure Member where
-  name : String
-  units : Array (Nat × Nat)
-  g : Nat
-  own : Own
-
-/-- One statement of the per-member form's evidence: the member it proves and its sessions. -/
-structure StatementFiles where
-  member : Option String
-  sessions : Array RunFiles
 
 /-- The ranges ascend from `at_`: each `[lo, hi)` holds a unit and starts at or after the end of the one before. -/
 def ascending : Nat → List (Nat × Nat) → Bool
@@ -806,6 +811,46 @@ def statementsOf (pr : Json) : V (Array StatementFiles) := do
     if member.isEmpty then throw "proofs: a statement's member is not a member's name"
     let .arr rs := getD s "sessions" | throw "proofs: a statement's sessions is not a list"
     pure { member := some member, sessions := ← rs.mapM sessionOf }
+
+/-- A digest in the place of a file's the per-member form's parameters name none of (`membersParamsOfJson`). -/
+private def NO_FILE : String := "".pushn '0' 128
+
+/-- **The per-member form's parameters**: `proofs` exactly `{"members"}` (`membersOf`, on the program and the
+partition every member's statement reads), and everything else as the one statement's parameters hold it
+(`paramsOfJson`, read at `proofs` of no file): `own` is that program and partition, with no file. -/
+def membersParamsOfJson (j : Json) : V Params := do
+  let some pr := field? j "proofs" | throw "the parameters name no proofs (the members and their statements' files)"
+  exactly pr #["members"] "proofs"
+  let one := Json.mkObj [("circuit", Json.str NO_FILE), ("public", Json.str NO_FILE), ("registered", Json.null)]
+  let p ← paramsOfJson (Json.mkObj (without j "proofs" ++ [("proofs", one)]))
+  let own := { p.own with circuit := "", pub := "" }
+  pure { p with own, members := some (← membersOf own (getD pr "members")) }
+
+/-- **The parameters in either form**: the per-member form's where `proofs` is exactly `{"members"}`, else the one
+statement's. `protocol` reads `paramsOfJson`, which refuses the per-member form's. -/
+def paramsEitherOfJson (j : Json) : V Params :=
+  if (field? j "proofs").bind keys? == some #["members"] then membersParamsOfJson j else paramsOfJson j
+
+/-- **The per-member form's evidence**: `proofs` exactly `{"statements"}` (`statementsOf`), and everything else as the
+one statement's evidence holds it (`evidenceOf`, read at `proofs` of the statements' sessions in order), so its
+sessions are the statements', in v1's `sessions`' order. -/
+def membersEvidenceOf (b : ByteArray) : V Evidence := do
+  let j ← Core.canonicalJson b
+  let some pr := field? j "proofs" | throw "the evidence names no proofs (the statements' sessions' files)"
+  let statements ← statementsOf pr
+  let sessions := match getD pr "statements" with
+    | .arr ss => ss.flatMap fun s => match getD s "sessions" with | .arr rs => rs | _ => #[]
+    | _ => #[]
+  let one := Json.mkObj (without j "proofs" ++ [("proofs", Json.mkObj [("sessions", Json.arr sessions)])])
+  let e ← evidenceOf (← Flock.canon one).toUTF8
+  pure { e with statements := some statements }
+
+/-- **The evidence in either form**: the per-member form's where `proofs` is exactly `{"statements"}`, else the one
+statement's. `protocol` reads `evidenceOf`, which refuses the per-member form's. -/
+def evidenceEitherOf (b : ByteArray) : V Evidence :=
+  match Core.canonicalJson b with
+  | .ok j => if (field? j "proofs").bind keys? == some #["statements"] then membersEvidenceOf b else evidenceOf b
+  | .error why => .error why
 
 /-- A member's first unit, its lowest. Members' units are disjoint, so it orders them, in the registration's order. -/
 def Member.first (m : Member) : Nat := m.units.foldl (fun a x => min a x.1) ((m.units[0]?.map (·.1)).getD 0)
@@ -1184,6 +1229,45 @@ theorem checkMembersAt_refuses (p : Params) (ms : Array Member) (c : OneStage.Co
   · cases h
   · split at h <;> cases h
 
+/-- The refusal of parameters and evidence of two forms (`checkBlobsAt`). -/
+def FORMS : String :=
+  "proofs: the parameters' proofs and the evidence's are not of one form: one statement's files and its sessions, " ++
+    "or the members and their statements"
+
+/-- **The check at the coins `ξ`**, by the form of the parameters' `proofs` and the evidence's: the one statement's
+(`checkOneAt`), or the per-member form's (`checkMembersAt`, which accepts nothing); parameters of one form with
+evidence of the other reject (`FORMS`). -/
+def checkBlobsAt (p : Params) (c : OneStage.Commitment) (ξ : ByteArray) (e : Evidence) (bs : Core.Blobs) :
+    Core.Outcome OneStage.Public Core.Integrity :=
+  match p.members, e.statements with
+  | none, none => checkOneAt p c ξ e bs
+  | some ms, some sts => checkMembersAt p ms c ξ e sts bs
+  | _, _ => .reject FORMS
+
+/-- **What `checkBlobsAt` accepts, the one statement's check accepts**, on parameters and evidence of the one
+statement's form: the per-member form accepts nothing (`checkMembersAt_refuses`). -/
+theorem checkBlobsAt_accept {p : Params} {c : OneStage.Commitment} {ξ : ByteArray} {e : Evidence} {bs : Core.Blobs}
+    {pub : OneStage.Public} {prof : Core.Integrity} (h : checkBlobsAt p c ξ e bs = .accept pub prof) :
+    checkOneAt p c ξ e bs = .accept pub prof ∧ p.members = none ∧ e.statements = none := by
+  unfold checkBlobsAt at h
+  split at h
+  · rename_i hm hs
+    exact ⟨h, hm, hs⟩
+  · exact absurd h (checkMembersAt_refuses _ _ _ _ _ _ _ _ _)
+  · cases h
+
+/-- On parameters that name no members and evidence that names no statements, the check is the one statement's. -/
+theorem checkBlobsAt_one {p : Params} {c : OneStage.Commitment} {ξ : ByteArray} {e : Evidence} {bs : Core.Blobs}
+    (hm : p.members = none) (hs : e.statements = none) : checkBlobsAt p c ξ e bs = checkOneAt p c ξ e bs := by
+  unfold checkBlobsAt
+  simp only [hm, hs]
+
+/-- The audit's check on the blobs: at the coins `coinsOf` reads (`checkBlobsAt`), refused with its reason when none
+read. -/
+def checkBlobs (p : Params) (c : OneStage.Commitment) (e : Evidence) (bs : Core.Blobs) :
+    Core.Outcome OneStage.Public Core.Integrity :=
+  Core.atCoins (coinsOf p c e) (fun ξ => checkBlobsAt p c ξ e bs)
+
 def protocol : Core.BlobProtocol where
   id := PROTOCOL
   Params := Params
@@ -1343,6 +1427,46 @@ private def memberJ (units : List (Nat × Nat)) : Json :=
 #guard (statementsOf (Json.mkObj [("statements", Json.arr #[Json.mkObj [("member", Json.str ""),
   ("sessions", Json.arr #[])]])])).toOption.isNone
 #guard (statementsOf (Json.mkObj [("sessions", Json.arr #[])])).toOption.isNone
+
+private def paramsWhy (r : V Params) : String :=
+  match r with
+  | .error e => e
+  | .ok _ => ""
+
+private def evidenceWhy (r : V Evidence) : String :=
+  match r with
+  | .error e => e
+  | .ok _ => ""
+
+/-- Parameters of nothing but `proofs`: each parser refuses them, the one statement's past its `proofs`. -/
+private def proofsOnly (pr : Json) : Json := Json.mkObj [("proofs", pr)]
+
+private def oneProofs : Json :=
+  Json.mkObj [("circuit", Json.str NO_FILE), ("public", Json.str NO_FILE), ("registered", Json.null)]
+
+#guard paramsWhy (paramsOfJson (proofsOnly (Json.mkObj [("members", Json.mkObj [])]))) ==
+  "the keys of proofs are not circuit, public, registered"
+#guard paramsWhy (membersParamsOfJson (proofsOnly oneProofs)) == "the keys of proofs are not members"
+#guard paramsWhy (paramsOfJson (proofsOnly oneProofs)) != ""
+#guard paramsWhy (paramsOfJson (proofsOnly oneProofs)) != "the keys of proofs are not circuit, public, registered"
+#guard paramsWhy (membersParamsOfJson (proofsOnly (Json.mkObj [("members", Json.mkObj [])]))) ==
+  paramsWhy (paramsOfJson (proofsOnly oneProofs))
+#guard paramsWhy (paramsEitherOfJson (proofsOnly (Json.mkObj [("members", Json.mkObj [])]))) ==
+  paramsWhy (paramsOfJson (proofsOnly oneProofs))
+#guard paramsWhy (paramsEitherOfJson (proofsOnly oneProofs)) == paramsWhy (paramsOfJson (proofsOnly oneProofs))
+#guard paramsWhy (paramsEitherOfJson (proofsOnly (Json.mkObj [("statements", Json.arr #[])]))) ==
+  "the keys of proofs are not circuit, public, registered"
+#guard evidenceWhy (membersEvidenceOf "{\"proofs\":{\"sessions\":[]}}".toUTF8) ==
+  "the keys of the evidence's proofs are not statements"
+#guard evidenceWhy (evidenceOf "{\"proofs\":{\"sessions\":[]}}".toUTF8) != ""
+#guard evidenceWhy (evidenceOf "{\"proofs\":{\"statements\":[]}}".toUTF8) != ""
+#guard evidenceWhy (membersEvidenceOf "{\"proofs\":{\"statements\":[]}}".toUTF8) ==
+  evidenceWhy (evidenceOf "{\"proofs\":{\"sessions\":[]}}".toUTF8)
+#guard evidenceWhy (evidenceEitherOf "{\"proofs\":{\"statements\":[]}}".toUTF8) ==
+  evidenceWhy (evidenceOf "{\"proofs\":{\"sessions\":[]}}".toUTF8)
+#guard evidenceWhy (evidenceEitherOf "{\"proofs\":{\"sessions\":[]}}".toUTF8) ==
+  evidenceWhy (evidenceOf "{\"proofs\":{\"sessions\":[]}}".toUTF8)
+#guard evidenceWhy (evidenceEitherOf "not JSON".toUTF8) == evidenceWhy (evidenceOf "not JSON".toUTF8)
 
 private def memberT (name : String) (units : Array (Nat × Nat)) : Member := { name, units, g := 1, own := sharedT }
 
