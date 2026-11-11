@@ -163,4 +163,21 @@ theorem stop_wfJson2 : depthProbe2 .null = 0 := by decide +kernel
 theorem eq_tyPure : (Ty.ofJson (.arr #[.str "Tuple", .arr #[]])).toOption.isSome = true := by
   simp [Ty.ofJson, pure, Except.pure, Except.toOption]
 
+/-! ### Control: the same recursion, its order stated as the text's size, a number -/
+
+/-- `depthProbe`, by well-founded recursion on the text's size. -/
+def depthProbe3 (j : Json) : Nat :=
+  match j with
+  | .arr a => (Array.range a.size).attach.foldl
+    (fun n i => max n (1 + depthProbe3 (a[i.1]'(Array.mem_range.1 i.2)))) 0
+  | _ => 0
+termination_by sizeOf j
+decreasing_by exact sizeOf_lt_of_mem_arr (Array.getElem_mem _)
+
+theorem stop_wfSize : depthProbe3 .null = 0 := by decide +kernel
+
+theorem stop_wfSizeArr : depthProbe3 (.arr #[.null]) = 1 := by decide +kernel
+
+theorem stop_wfSizeStr : depthProbe3 (.arr #[.str "a", .arr #[.null]]) = 2 := by decide +kernel
+
 end Flock.Program.Closed
