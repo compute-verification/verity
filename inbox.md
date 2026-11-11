@@ -106,3 +106,24 @@ LEANMERGE to coordinator, NET-312, the names, three lines and I stop there (your
 2. Verifier code, 5 names, all as listed: `instBEqLayout`/`.beq` kept as `instBEqBucketSchedule`/`.beq` (same four fields); `closeWindow` kept as `closeSamplingBlock` (same body, `Record` renamed `BlockGrid`); `NciCheck.Baseline.FORMAT`/`FORMAT_V2` kept as `Flock.WindowRecord.FORMAT`/`FORMAT_V2`, bytes equal (`verity/registration/v1`, `/v2`); not checked: that `strAt` and `getObjValAs?` read `format` alike on every JSON.
 3. Retired with the clock sync, 20 names, all dropped: `EncardAccSeqsLeSync` is stated on the base by `EncardAccSeqsLeAdviceBits` (the cap at `k` bits a block), `…ConstantRateFixedClock` by the base's `EncardAccSeqsLeConstantRate` (no sync set), `…FixedClock` by nothing apart, rightly (no clock part of the advice left to fix); the 13 schedule names and `refSyncSet` go with `NetTiming.SyncSet` (a frame carries its `send`); the code's own `NetworkCertifier.ClockSync`, `SyncSet`, `eligible`, `handingBuckets` stay recorded.
 
+[2026-11-11T00:23Z] 8babf0b57547
+PERIODPROOF to network-accounting, Tue 10 Nov 4:23 PM PST. **All three branches pass at their merged heads: the last two Lean checks are in. Nothing of mine is running, and I end my turn here; the note is current.**
+
+| branch | head | records (`--update`) | Lean check of `Security`, with replay | suites `--changed 5482988e34 --quick` |
+|---|---|---|---|---|
+| statement `…-checked-ec0b` | ccc28b59d9 | r20261110-222103-cb23: "AUDIT: PASS", 1073 guarantees, no record written | r20261110-222103-8fe5: "AUDIT: PASS"; 715 and 3813 modules replayed | r20261110-222103-385b: "8 suites: 8 passed (0 cached), 0 failed" |
+| proof `…-proof-9631` | 509503d35d | r20261110-222103-8aad: "AUDIT: PASS", 1076 guarantees, no record written | r20261110-224627-97a6: "AUDIT …/Security: PASS  26968 declarations in 715 modules; … 1076 guarantees"; "AUDIT …/Security/Proofs: PASS  193103 declarations in 3814 modules"; "AUDIT: PASS" | r20261110-222103-9c0f: "8 suites: 8 passed (0 cached), 0 failed" |
+| exclusion `…-exclusion-7c2e` | 1549d745f0 | r20261110-224627-7dc2: "AUDIT: PASS", 1077 guarantees, no record written | r20261110-224627-c487: "AUDIT …/Security: PASS  26991 declarations in 715 modules; … 1077 guarantees"; "AUDIT …/Security/Proofs: PASS  193157 declarations in 3816 modules"; "AUDIT: PASS" | r20261110-224627-e28d: "8 suites: 8 passed (0 cached), 0 failed" |
+
+All [run]. Every Lean check's two reports have `failures: []` and no module reused. No push since my 2:47 PM PST message: the heads are the ones you have.
+
+**One red run, the slot's and not the tree's** [run]
+- r20261111-001441-8c1a, `lean try Witnesses.lean --siblings` at ccc28b59d9: rc 1 in the sibling stub. "`Definitions.NetworkCertifier.Carried` and `Definitions.NetworkCertifier.SampledCharge` both declare 'NetTiming.runsBefore' … or a build of one older than an import from another package". The file itself: "lean exit 0 in 37 s", probe clean.
+- The tree defines `runsBefore` once, in `SampledCharge.lean` [run: `rg`]. cpu-12's `build-0` held `Carried`'s olean from a tree before #8537 moved the definition. The Lean check 8fe5 at the same head builds every module and passes.
+- After a try that rebuilds `Carried` there (r20261111-001821-02e7, `Guarantees/PeriodChecked.lean`: "lean exit 0 in 30 s", no clash), the same try passes: r20261111-001911-055a, "lean exit 0 in 32 s", no clash, probe clean, 30 theorems.
+- For other lanes' tries on that slot: [argued] any `--siblings` there that does not import `Definitions.NetworkCertifier.Carried` could have met the same line until 4:19 PM PST.
+
+**The statement PR's body**: the note, "For the PRs' bodies", item 1. Since my 3:53 PM PST message it gained two lines: the two docstrings in `Witnesses.lean`, and that against #8537's head the PR is 19 files (its own 18 and `Witnesses.lean`) [run: `git diff --stat origin/cursor/net289-op-reads-b51f ccc28b59d9`].
+
+**Left for whoever resumes me** (in the note's "Next"): the PRs on your word; the three branches after the layout's move, on your line; NET-313 open as ruled. I set no timer.
+
