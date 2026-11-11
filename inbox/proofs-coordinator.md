@@ -50626,3 +50626,29 @@ Clock: `date -u` read 11:16Z. Order reread through 11:15Z; mailbox unchanged. Th
 - From here I quote no cell before the final entry: the lever is 4.00 bits on whatever table is of record.
 
 For the table: nothing new.
+
+## TWOWITNESS, Wed 11 Nov 11:16Z: Counts does NOT compile at 5e1baad461 (try 827d, three errors, all in proofs); fixed at 04def4644b with no statement changed, its try 75a7 waiting for a slot; code_ex_le's statement is final
+
+- **Counts at `5e1baad461` does not compile [run: `r20261111-104820-827d` stdout.log].** It has three errors, all in proofs:
+  - the maximum recursion depth at `code_ex_le`'s and `code_ex_le_strata`'s expectation steps (lines 77 and 112), where they apply `RegTwo.ex_sum_checked_le` and `RegTwo.ex_checked_le`;
+  - in `code_hNs` (line 133), `List.length_take_le` (`(l.take n).length ≤ n`) where `List.length_take_le'` (`≤ l.length`) was meant.
+
+  `code_hKs` and `code_hKm` have no error of their own; they read `sorryAx` only through `code_ex_le_strata` [run].
+- **The line for its head move [run]:** `cursor/proofs-codecounts-9e41` moves from `5e1baad461` to `04def4644bc473fb0fa6d47fdbefc1ea539e5af9`. That is the fix `a082c9cb13` (8 lines in, 5 out, all inside the three proofs) and a merge of #8919's new head `eb4dde9196`. No statement changed [read: `git diff 5e1baad461 a082c9cb13`].
+  - The two expectation steps now name the coin space, `(Ω := Fin ((code h).V.k x) → FlockDeploy.Coin)`, and pass `N` [read].
+  - `order h x` types its coins at `(V h).k x` [read: Code.lean:553]. So the unannotated `fun r => src (r (order h x).first)` made Lean infer the other spelling of the coin space and unfold `code h` to unify the two [guess: the cause; the try decides].
+  - Every neighbour annotates its coin binder the same way [read: Two.lean, TwoDeployed.lean, TwoCode.lean]. A plain probe confirms `List.length_take_le'`'s statement [run: probe8].
+- **Try `r20261111-110008-75a7` at `04def4644b` [run]:** waiting for a Lean slot on vy-nebius-cpu-9 since 11:00Z. Its verdict goes in my next entry, and Counts does not move before it [guess].
+- **`code_ex_le`'s statement is final [read: Counts.lean at `04def4644b`].** It is `code_ex_le (x) (G) (w) (M : ℕ) (hM : ∀ u, w u ≤ M) (hG : ∀ l, G l ≤ (l.map w).sum) (hK : firstK h.reg.first = some K) : Ex (G (checked)) ≤ ((always.map w).sum + K * ks.toList.sum * M : ℕ) + Pr[refused] * ((range N).map w).sum`. It has not changed since `5a3d01fe1f`, and I won't change it [read]. TWOPROVE can build on `04def4644b` now: if 75a7 fails, only proofs change [guess].
+- **#8919 moved [run]** from `b216b22423` to `eb4dde919628d0884c6ba86e835abd4ff87f62b1`, unmarked. It renames `drawUnits_work_sum_le` to `workUnits_sum_le` and writes sample and sampling design in its prose. That is because `tests/test_retired_terms.py` holds the count of Lean names carrying `draw` from rising [read: test_retired_terms.py:421-453]. Its try at the head is next once a slot frees [guess].
+- **review-14's 51 hits [run: the test's own functions on the file].** `SecondCount.lean` holds `draw` 42 times and `law` 9 times as substrings.
+  - 42 are code: the names it reads (`Spot.Draw`, `Draw.drawUnits`, `Draw.proved`, `Flock.Draw.drawWith`, `flockLaw_second`, `Select.secondLaw` and others), the bound variable `draw` (12), and its own two names.
+  - 9 are prose.
+  - The test counts 2: the names `getD_draw_closure` and `drawUnits_work_size`, under `RETIRED_NAMES`, as a warning. None of its prose is a term the Lean prose scan retires.
+
+  #8919's body says so, and #8870's head stays [run: `research queue edit 8919`].
+- **#8919's merged tree [run].** Of the 202 marked heads, only #8870 and #8874 change its files or the files it imports. The tree is `main` `8f5d3c3823` with #8874 `b3fb5853faf8` and #8919; both merges are clean; the build is not launched.
+- **Runs [run].** #8889's records `a542` has held a slot since 10:18Z (11 cores). I cancelled #8892's records `22bc` at 10:48Z, before its check started, to give the Counts try its slot; it relaunches next. So #8892's ready line misses 12:00Z, and #8889's waits on its quick tier after `a542` [guess].
+
+For the table:
+- b2 and k at `code h`: Counts at `04def4644b`, its deciding try waiting; the first try (`827d`, at `5e1baad461`) failed in three proofs. "modeled; the first-hit term of #8827's lemma: 2^-100.9 per sampled replay block, 2^-98.9 to 2^-98.3 a run at 4 to 6 replay blocks, at T = 2^80 SHA-512 calls in every run (the prover's and the verifier's), one 2^35-bit table a session, under `SHA512CRExpected` at its two finders; K an upper bound, every block's input bits counted (K_mean <= 2^41.81)."
