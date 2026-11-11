@@ -42056,3 +42056,78 @@ For the table:
 For BREAKEVEN: the two un-fused cells are measured [run: the reader's rows above]. On the census's own card price `MoeExpertFp8GemmW_v1{E=256,K=256,N=1,G=128,KB=128,SWAP=true,DOT={"fn":"HopperE4m3QgmmaDot32_v1"}}` at 0.0029068685816341713 s a block (verifier 0.0008240234375, the proof server's Rust one) and its `SWAP=false,DOT={"fn":"HopperE4m3MmaV2Dot32_v1"}` twin at 0.0028388444767441863 (0.0007896484375); they were 0.08124783171484375 (`single`) and 0.0033280365499229556 (steady rate) in `bench_prices.own.json` and `bench_prices.own_steady.json`, which are the 02:54Z read. A fresh `bench_prices.py` on labels pulled after 07:56Z gives them. `BlockGemm_v3` stays `k_log` until kernels times it: bound it by 0.0008320091 (steady rate) and 0.0023152264 (the fused block that holds its GEMM and a read; a guess, v3 against v4 not compared).
 For the table: the MoE blocks' proving is measured on both cuts: fused 2.3152 and 2.4065 ms a block (`r20261111-015527-0dcd`, `r20261111-015545-617c`), un-fused `GemmW` 2.9069 and 2.8388 ms a block (`r20261111-072106-5e46`, `r20261111-072117-1a7a`), each at one prover on one H200 with ten cores, accepted by Flock's Rust verifier in loopback, not Lean's.
 For the table: not measured: `MoeExpertFp8BlockGemm_v3{K=6144,N=1}` of today's cut (kernels is asked), worth a 4% range on today's figure and nothing on the cut of record's.
+
+## PARAMS, Wed 11 Nov 08:25Z: the cap is already 1 where a run is accepted (round 2 and the model's verifier both refuse a session of more than one table; 200 is only the constant the numbers were proved at), so 1 costs nothing against the priced rows; `ref_one_table` is built unmarked and moves no definition. Flock's weakest own term is one repetition's query error, 2^-102.6, and its largest slack is the second repetition: κ_s 2^-203.2 for 0.278 of 0.675 s of proving a head-block statement. Every lever below that changes a number a lock reads is Daniel's and unbuilt
+
+Nothing here changes a claim. Sources: [read] a file or run record, [run] my calculator `flock_terms.py` (it mirrors `Accounting/{Schedule,Bound,Padded}.lean` and `Claims.κ`; not in the tree), [relayed], [guess].
+
+**1. The cap on a session's tables (your 08:12Z line).**
+
+- **Where 200 lives: only in the proofs** [read]. `FlockDeploy.PlainIn.size_le` and `ZkIn.size_le` (`security/Proofs/Flock/Claims/NumbersDeploy.lean:434, 442`), `SpotFlock.zkOk` (`SpotFlock/Code.lean:102`), `Facts.lean:219, 444`, and `ref_numbers`, `tables_le`, `κF_le` (`SpotFlock/Accepting.lean`). `zkOk` and `ZkIn` are definitions the lock reads (`reads` of `Proofs.Flock.SpotFlock.Code` and `…Claims.NumbersDeploy`).
+- **What the code admits is 1** [read]:
+  - SPOT's round 2 reads one session of one table for each template and refuses any other with `second-tables` (`verity/protocols/spot/verifier/lean/Spot/SecondStage.lean:22-25, 223` `ONE_TABLE`; its mirror `second_stage.py:13-14`).
+  - The model's verifier does the same: `templateOk` holds each template's reference statement to one table, and `two h` is `none` without it, so every run is refused (`SpotFlock/Code.lean:319-328, 348-355`). `zkOk`'s 200 bounds statements that verifier never accepts.
+  - The card prover proves one table a session (`flock-circuit.rs:7572` refuses `--session-tables` above 1 with `--gpu`). Flock's own caps are 64 (`Flock/Tags.lean:85` `MAX_TABLES`; `flock-circuit.rs:59`).
+- **Built, unmarked, no PR yet:** `SpotFlock.ref_one_table` on `cursor/proofs-params-de8e` at `e19752e7b6173d6c5c806d10189c3b7e8469bd48`, one theorem beside `ref_numbers` in `Accepting.lean`: where the design evaluates (`two h s = some d`), template `t < h.ms.length` has one table, `n₀ h t ≤ 2^23` and `⌈4·n₀/e⌉ ≤ 12343986`. It adds no premise and changes no definition, so it is not a claim change; it is item (d) of D*1 as a lemma. `verity lean try --siblings` is running as `r20261111-081849-02f2` [run, no verdict yet]; it does not compile until that says so.
+- **What 32, 16 and 1 cost: tables the same, sessions more, and the session costs nothing measurable** [read; derived].
+  - A session of J tables is J tables "each with its own randomness, all J roots in one `Commit`" (`flock-circuit.rs:19-20`). They share the hello and the two link points: `h.setup` 0.005 s and `t.link` 0.0006 s a repetition, of 0.34 s [read: a `LIVE` line of `r20261111-061047-6773`].
+  - Every steady row is one table a session (the card prover has no other), and the planner prices a statement as one replay block's sampled blocks of one Definition, at most `statement_blocks` (`benchmarks/spot_figures/figure1.py:17-21`; `verity_bench/prove.py:393-399`). So a cap of 1 is the priced design: 0 GB.
+  - 16 or 32 would be new device work (kernels') to save about 2% of a statement's card time [derived], and would cost lg J = 4 or 5 bits through k.
+- **What is not built is many sessions a template, and it is not one constant** [read; the design is a guess].
+  - Round 2 has one part a template over all the sampled replay blocks' cells (`SecondStage.lean:162-184`) and refuses a second statement of a template (`second-template`). The model has `sessions := h.ms.length` (`Code.lean:612`). So a template's whole second-stage draw, `Kfirst·k_t` blocks, must fit one table of 2^35 bits: 256 head blocks [read: `stage.json` of `r20261111-061047-6773`, `n` 256, `k_log` 27].
+  - The priced sample is 5.5 million blocks a sampled request over 15 size classes [relayed: REPBREAK 02:53Z], so one request's blocks of one type are up to thousands of tables [derived].
+  - The cheapest split I see changes no verifier: **split the members at registration.** The second-stage law already draws `ks[t]` of `ns[t]` in each (template, replay block) cell (`Select.secondLaw`, `Spot/Select.lean:262-276`), and `Held.ms` pairs each member with its own units and takes its circuit from its own reference statement (`Code.lean:135-138`), so one circuit may be several members, each with `Kfirst·k_t·2^k_log ≤ 2^35`. Then round 2 and `SpotFlock.code` stand as they are. Not traced: whether `filesOk`, `scopeOk` and `Own.refs` take two members of one circuit, and what the member count (about 10^4 against 15 to 150) does to the rounds `off h ms.length + 1`, to γ_s and to the coin stream (DRAFT-CORE's).
+  - Cutting a member's draw by rank instead would make a unit's session depend on the coins; `Code.rounds x u` reads none, so that reaches the generic layer. In the code that route is `Spot/SecondStage.lean` (1,483 lines), `second_stage.py` (1,185) and their difftest; in Lean `templateOf`, `off`, `k₀`, `stmtAt` (77, 100, 43 and 50 uses across `security/Proofs/Flock/SpotFlock/`), all read by the lock: Daniel's.
+
+**2. The deployed parameter set and Flock's own terms (my 09:15Z item).** Set in `verifier/Flock/{Schedule,Zk,ZkProof,Merkle,Hm96,Statement}.lean`, mirrored by `prover/live/src/{lib.rs,zk_veil.rs,zk_hooks.rs}` and `prover/cuda/`, and by `security/Definitions/Flock/Accounting/` and `security/Proofs/Flock/Claims/Numbers.lean` [read].
+
+| parameter | deployed | what it buys |
+|---|---|---|
+| fields | coins GF(2^128), fold challenges GF(2^256) | every 1/\|F\| term |
+| code | Reed-Solomon, rate 2^-(ℓ+1) at level ℓ, 3 to 7 levels (7 at m = 34, 35) | the query terms' base √ρ + η |
+| queries a level | 218 (ZK level 0: 277, 242, 229 at m = 25 to 27, 219 to m = 31), 106, 71, 53, 43, 36, 32 | one repetition's error |
+| repetitions | 2 a table on one level-0 root (`Statement.lean:220`) | squares it |
+| grinding | none (nonces 0) | nothing |
+| Merkle | binary, SHA-512, 64-byte digests, 2 compressions a node; level-0 leaf 68 words of 16 bytes at `k0` = 6 | binding (SHA-512 alone) |
+| leaves | `hm96-sha512/v1`, 192-byte salt from the OS | statistical hiding |
+| ZK | `t_pad` = 2·q₀ a lane, 4 extra lanes, pads' inner proof (rate 1/8, 168 columns, 192 pad symbols) | hiding of the opened columns |
+| extractor | 210 waits of k = ⌈4·N₀/e⌉ accepted reruns, cap 2^256 (`Claims/Numbers.lean`) | κ's 2^-210, and e_max |
+
+At the head block (m = 35, `k_log` 27, 9 regions; m = 35 is also the largest statement `fast100` serves) [run; the Lean proves `padTableError ≤ 2^-205` and κ ≤ 2^-202.98]:
+
+| term | bits | against 100 |
+|---|---|---|
+| one repetition: the seven query terms (104.5 to 109.5 each) | 102.6 | |
+| one repetition: every GF(2^128) coin term | 109.7 (106.4 at 1,024 regions) | the floor of one repetition |
+| one repetition: GF(2^256) terms; out-of-domain pairs | 190.2; 222.9 | |
+| one repetition, all | 102.59 (103.05 at m = 25) | |
+| link, a session | 235.2 | |
+| table, two repetitions | 205.19 | +105 |
+| κ_s = 4·ε_table + 2^-210 + 2k/K + e^(-k/8) | 203.18 | +103 |
+| hiding, a session: N·2^-192 at N = 2^23.75 leaves | 168 | +68; 128 at 2^64 leaves under one key |
+| binding, an audit, through e_max = 1 + 210·12,343,986 = 2^31.27 | 105.0 at D*1 [relayed: SCALE 07:59Z, modeled] | +5; the weakest |
+
+**3. Where the prover pays for more than the claim uses (first estimates; the list with prices is my 10:45Z entry).**
+
+- **The second repetition** buys 103 bits nothing reads: κ_s enters the audit's bound once (`Compiled.κ`: `c²(δ + κ_s)`, the max over checked units) [read]. It costs 0.278 s of the 0.675 s of `t.prove` a head-block statement (41%) [read: medians over 43 sessions, `r20261111-061047-6773`, H200, one prover], 0.54 GB of the 2.69 GB of salts [derived], half the proof bytes and one of the verifier's two passes.
+  - One repetition as deployed is κ_s = 2^-100.59 (2^-100.51 at 1,024 regions): no margin. With 8% more queries a level it is 2^-107.4 at the head block and 2^-104.4 at 1,024 regions, the GF(2^128) floor [run]. A year of audits (15.7 bits) does not fit one repetition over GF(2^128).
+  - It moves `reps` in the verifier of record, `tableError` and every proved number: Daniel's, and kernels' prover. No switch exists, so nothing to measure on the CPU prover.
+- **The 210 waits** are the other half of that slack and cost the binding term, not the card: e_max is linear in them. 105 waits leave κ_s at 2^-105.0 with two repetitions and add 1.00 bit to binding at every design [run]. Lean only (`Claims.Flock.Numbers.waits`, which the lock reads): Daniel's.
+- **Table size is a bits lever nobody has priced:** k follows N₀, so statements of 2^34 bits add 1 bit, 2^32 add 3 [run]; the price is each statement's fixed seconds over half or an eighth of the blocks.
+- **The salt length is not slack:** 192 bytes is 2n + 512 bits, of which 128 bytes are the hash's own 2n [read: `verity/commitments/hm96/PROTOCOL.md`]. SALTS has the rest.
+
+For the table:
+- A session is one table wherever SPOT's verifier accepts (round 2's `second-tables`, the model's `templateOk`); 200 is the proofs' constant only. `ref_one_table` states it at k ≤ 12,343,986 [built at `e19752e7b617`, try `r20261111-081849-02f2` running].
+- Flock's weakest own term is one repetition's query error, 2^-102.6 at m = 35 [run]; two repetitions make a table 2^-205.2 and κ_s 2^-203.2. The weakest term the parameters feed is binding through e_max = 2^31.27 (2^-105.0 an audit at D*1 [relayed, modeled]).
+- Largest slack: 103 bits of κ_s, bought by the second repetition at 0.278 of 0.675 s of proving a head-block statement [read: `r20261111-061047-6773`], unbuilt and Daniel's.
+
+For BREAKEVEN:
+- The cap of one table a session: 0 GB, no row changes; it is what every steady row measured and what `statement_blocks` prices.
+- One repetition, head block (`SparseMlaHeadBlock_v2` NVIS 64, 256 blocks a statement): -0.278 s of 0.675 s `t.prove` a statement [measured: `r20261111-061047-6773`]; today the host binds, so the statement falls by less: about 4.3 of 23.2 host CPU-seconds (salts 1.45, verifier 2.8) [guess]. Unbuilt.
+- Statements of 2^34 bits: `statement_blocks` halved on every row, for +1 bit of binding [modeled].
+
+For SCALE:
+- e_max = 1 + waits·k. Waits 105 for 210: +1.00 bit at every row, κ_s 2^-105.0 [run]. Tables of 2^34, 2^33, 2^32 bits: k = 6,171,993, 3,085,997, 1,542,999, so +1, +2, +3 bits [run].
+
+For CONCRETE:
+- (d) at the code is `SpotFlock.ref_one_table`: `two h s = some d → t < h.ms.length → n₀ h t ≤ 2^23 ∧ ⌈4·n₀ h t/e⌉ ≤ 12343986`, on `cursor/proofs-params-de8e` at `e19752e7b6173d6c5c806d10189c3b7e8469bd48`, not yet compiled.
