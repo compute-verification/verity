@@ -244,13 +244,17 @@ of a run of the point itself also holds the point's timed and warm sessions, its
 run wrote of itself is never read. A point's passing run is the newest of: a run of the point (the tool
 `verity_bench.tool:STEADY_POINT` with the point's `identity`, at any commit) that ran to its end from a clean tree; or
 a row of the workload's steady-state record (`prove_records`' `flock-steady`: a labelled run, or a run a labelled art
-names), timed outside the harness. A labelled run is judged on its own row, or, where a labelled art holds its rows as
-completed after the run, on the art's (`steady_plan.completed_rows`): the art names that one run in its `runs`, carries
-how each field it added was derived from the run's own records (`derivation.json`) and isn't superseded. So a run from
-before the timing script wrote a field counts on its completed row, and one whose own row lacks the field and that
-has no such art is "cannot tell". A point without a passing run is timed again, and `plan` and `check` say why each run
-that could have been it isn't (`why`). The lookup pulls the remote's labels, and its
-attempts started since the spec's file was added.
+names), timed outside the harness. A labelled run is judged on its own row, or, where one labelled art holds its rows as
+completed after the run, on the art's (`steady_plan.completed_rows`, `completed`): the art names that one run in its
+`runs`, isn't superseded, and carries how each field it added was derived from the run's own records
+(`derivation.json`); each of its rows is one row of the run, keeps every field of it and changes only the fields the
+derivation names for that row. An art that changes anything else isn't taken, two standing arts that complete one run
+complete it for neither, and the run then counts on its own row, with the reason. So a run from before the timing
+script wrote a field counts on its completed row, and one whose own row lacks the field and that has no such art is
+"cannot tell". A point without a passing run is timed again, and `plan` and `check` say why each run that could have
+been it isn't (`why`), a run of the record whose rows can't be read among them. The lookup pulls the remote's labels of
+runs and arts, the targets a record's labels are on, and its attempts started since the spec's file was added, and
+says on stderr when it starts and what it pulled.
 
 **Run.** `verity-bench run SPEC --direct NODE` launches each point without a passing run as one recorded run on NODE
 through one of its GPU slots, which gives the run its cores; a steady-state spec has no queued form. The job is
@@ -268,9 +272,10 @@ harness run under), with the CUDA toolkit the prover was built with first on `PA
 3. after the lease has ended, so that its usage line is among the run's files, computes the verdict from the run's own
    files and writes `out/verdict.json`, `out/point.json` and `result.json`, whose validation passes with it.
 
-It exits 0 for a passed point, 3 for a point that was timed and didn't pass, and 4 where nothing was timed. Either is a
-run without a passed point, as is one that was preempted or that waited for a slot past its bound, so the next `run`
-launches the point again.
+It exits 0 for a passed point, 3 for a point that was timed and didn't pass, 4 where nothing was timed, and 143 where
+TERM or INT ended it (a cancel, a timeout): it then ends the command it was waiting for first and removes its scratch,
+the staged statement with it. Each is a run without a passed point, as is one that was preempted or that waited for a
+slot past its bound, so the next `run` launches the point again.
 
 ## Settings
 
