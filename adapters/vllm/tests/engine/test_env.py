@@ -212,8 +212,9 @@ def test_the_suites_guard_fails_the_test_that_leaves_a_switch_changed_and_no_tes
     """`conftest.py`'s Inductor guard on `inductor_guard_cases.py`, in a pytest of their own: a test that sets the switch, or puts a
     stand-in module in, with `monkeypatch` passes; the test that leaves the switch changed is an error at its teardown, by name,
     with the guard's message; and the test after it reads the pin again.  The same under the plugin `suites.py` loads into every
-    suite, loaded by name as it loads it: its autouse fixture sets `monkeypatch` up before any fixture of this suite, so
-    `monkeypatch` undoes a test's change after every other fixture is torn down."""
+    suite, loaded by name as it loads it and from where it loaded it into this run (skipped in a run it didn't start, which has
+    none): its autouse fixture sets `monkeypatch` up before any fixture of this suite, so `monkeypatch` undoes a test's change
+    after every other fixture is torn down."""
     import subprocess
     from pathlib import Path
 
@@ -224,7 +225,10 @@ def test_the_suites_guard_fails_the_test_that_leaves_a_switch_changed_and_no_tes
     runner = ("VERITY_SUITE_REPORT", "VERITY_SUITE_PART", "VERITY_SUITE_REUSE", "VERITY_SUITE_HEAVY")
     environ = {k: v for k, v in os.environ.items() if k not in runner}
     if plugin:
-        guard = Path(__file__).resolve().parents[4] / "tools" / "verity" / "check" / "guard"
+        loaded = sys.modules.get("verity_suite_guard")
+        if loaded is None:
+            pytest.skip("`suites.py` loads its plugin into the suites it runs, and it didn't start this run")
+        guard = Path(loaded.__file__).parent
         environ["PYTHONPATH"] = os.pathsep.join([*filter(None, environ.get("PYTHONPATH", "").split(os.pathsep)), str(guard)])
     r = subprocess.run([sys.executable, "-m", "pytest", cases, "-rA", "-p", "no:cacheprovider", f"--basetemp={tmp_path / 'b'}",
                         *(["-p", "verity_suite_guard"] if plugin else [])], cwd=Path(__file__).resolve().parents[2], env=environ,
