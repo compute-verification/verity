@@ -38,18 +38,42 @@ def test_a_steps_rows_and_their_kinds():
                      (torch.zeros(B, CTX, dtype=torch.long), torch.zeros(B, CTX, dtype=torch.long)))
     got = products.rows(g, k)
     assert (got["capture"], got["order"]) == (products.CAPTURE, "unknown")
-    assert got["gates"] == products.step_gates(g, "bfloat16") > 0 and all(r["count"] == 1 for r in got["rows"])
+    assert got["gates"] == products.step_gates(g) > 0 and all(r["count"] == 1 for r in got["rows"])
     assert sorted((r["phase"], work.product_kind(r)) for r in got["rows"]) == sorted(
         [("forward", "fresh"), ("forward", "expansion"), ("backward", "expansion")] + [("backward", "fresh")] * 3)
 
 
-def test_the_capture_is_frozen_at_4_12_9():
-    """Every published row was priced from a trace of the capture's 4.12.9 rows, and the grader reads beside that
-    capture, so moving it moves rows already traced."""
-    assert products.CAPTURE == "4.12.9", (
-        "the capture is frozen at 4.12.9: a later fix prices at read time, adds what it captures that is new, and "
-        "fails closed only for the runs it changes; moving products.CAPTURE needs a retrace of every row it moves "
-        "and the grader's CAPTURE moved with it")
+def test_the_capture_and_the_stored_records_capture_are_the_two_that_are_read():
+    """Every stored record was traced by the capture's 4.12.9 rows, which are read still, by that capture's rule
+    (`priced_dtype`); this capture's are the first whose products all have the job's dtype. Moving `CAPTURE` moves
+    the grader's with it, and dropping 4.12.9 from `READS` needs every stored record traced again."""
+    assert products.READS == ("4.12.9", products.CAPTURE) and products.CAPTURE == products.JOB_DTYPES_FROM == "4.23.0"
+
+
+def test_a_product_is_priced_in_its_traced_dtype_and_an_earlier_captures_wider_one_in_bf16():
+    """One rule: a product's price is its traced dtype's Definition, which is what the step's circuit counts it at.
+    The rule of the captures before `JOB_DTYPES_FROM` stays for their traces alone: a forward or backward product
+    they traced wider than bf16 (attention's, which those captures ran in float32) is priced in bf16, an optimizer's
+    in its own, and a trace that states no capture is read as theirs."""
+    from training_slowdown import gates
+
+    def row(phase: str, dtype: str) -> dict:
+        return {"count": 1, "phase": phase, "op": "bmm", "dims": {"batch": 2, "m": 4, "k": 8, "n": 4},
+                "token_dims": ["batch"], "dtypes": [dtype, dtype], "affected": [True, True], "widths": [32, 32],
+                "self": False, "gathered": [False, False], "rates": [32.0, 32.0]}
+
+    f32, bf16 = gates.per_mac("gemm/f32"), gates.per_mac("gemm/bf16")
+    assert f32 > bf16
+    for phase in ("forward", "backward", "optimizer"):
+        wide, narrow = row(phase, "float32"), row(phase, "bfloat16")
+        assert products.traced_dtype(wide) == products.priced_dtype(wide, products.CAPTURE) == "float32"
+        assert products.priced(wide, products.CAPTURE)["gates_per_mac"] == f32
+        assert all(products.priced(narrow, c)["gates_per_mac"] == bf16 for c in (*products.READS, None))
+        for earlier in ("4.12.9", "4.12.11", "4.22.0", None, "a tree's own"):
+            repriced = phase != "optimizer"
+            assert products.priced_dtype(wide, earlier) == ("bfloat16" if repriced else "float32")
+            assert products.priced(wide, earlier)["gates_per_mac"] == (bf16 if repriced else f32)
+    assert products.priced_dtype(row("forward", "float32"), "4.24.1") == "float32"
 
 
 RAW = {"count", "phase", "op", "dims", "token_dims", "dtypes", "affected", "widths", "self", "gathered", "rates"}
@@ -72,16 +96,17 @@ def test_a_raw_row_has_no_price_and_priced_makes_it_the_row_rows_states():
         b = products.rows(g, a["k"])
         assert set(a) >= {"k", "rows", "p_match"} and a["p_match"] == b["p_match"]
         assert all(set(r) == RAW and r["dtypes"] == ["float32", "float32"] for r in a["rows"])
-        assert [products.priced(r) for r in a["rows"]] == b["rows"]
+        assert [products.priced(r, raw["capture"]) for r in a["rows"]] == b["rows"]
+    assert raw["capture"] == products.CAPTURE
     for r in raw["rows"]:
-        d, got = r["dims"], products.priced(r)
+        d, got = r["dims"], products.priced(r, raw["capture"])
         assert set(got) == RAW - {"dtypes"} | PRICE
         assert (got["macs"], got["outputs"]) == (d["batch"] * d["m"] * d["k"] * d["n"], d["batch"] * d["m"] * d["n"])
         assert got["paid"] == [work.is_paid(x, w) for x, w in zip(r["rates"], r["widths"])]
         assert got["b_c"] == products.ACC_BITS
-        # an fp32 product of the forward or the backward is priced at the GEMM dtype, and at its own with none
-        assert products.priced(r, None)["gates_per_mac"] > got["gates_per_mac"] == products.priced(
-            r | {"dtypes": ["bfloat16", "bfloat16"]}, None)["gates_per_mac"]
+        # an fp32 product is priced in fp32, the dtype it was traced in
+        assert got["gates_per_mac"] > products.priced(r | {"dtypes": ["bfloat16", "bfloat16"]},
+                                                      raw["capture"])["gates_per_mac"]
 
 
 @pytest.mark.parametrize("wide, op, dtype", [
@@ -516,7 +541,7 @@ def test_a_bf16_steps_matrix_vector_products_are_priced_as_gemms():
     got = products.rows(g, policy.CONSOLE[1])
     mv = [r for r in got["rows"] if r["op"] == "mv"]
     assert mv and all(r["gates_per_mac"] == gates.per_mac("gemm/bf16") for r in mv)
-    assert {r["op"] for r in got["rows"]} == {"mm", "mv"} and got["gates"] == products.step_gates(g, "bfloat16") > 0
+    assert {r["op"] for r in got["rows"]} == {"mm", "mv"} and got["gates"] == products.step_gates(g) > 0
 
 
 class Packed(nn.Module):

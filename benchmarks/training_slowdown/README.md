@@ -43,7 +43,10 @@ The reference shapes are the lf model's (`adapters/vllm/tests/program/train_step
 `formalism.bound`) and the library's table call it, and `tests/test_one_calculator.py` fails on a second one. `policy`
 is a block's `c_gates` and `k_bits`; `step` is a step's record, a job's trace (`run.trace_step`'s) or the products
 stated from one (`work.products_of_trace`'s); `run` adds the run's `gates` (|C|; else the trace's own circuit's),
-`tau_bits` and `code_bits`. It returns `slowdown`, the calculator's bound of record on the work the record states (at
+`tau_bits` and `code_bits`. The work and the circuit it is divided by have one price: a trace's products are priced
+in the dtype its circuit counts them in, and a trace whose capture prices some in another (`work.repriced`: one of a
+capture before `capture.products.JOB_DTYPES_FROM`, with float32 attention products) has no slowdown over its own
+circuit, with the row and the fix in `why`. It returns `slowdown`, the calculator's bound of record on the work the record states (at
 least 1; None, with the reason in `why`, where the record gives none); `binds` (`products`, `none` or `unmeasured`);
 `term`, the count before the floor; `bound`, the calculator's bound with its theorem, least blocks, premises and the
 work it read; `figure`, the choice of that work; and `read`, what the record says of itself.
@@ -71,7 +74,9 @@ longer has two operands the update reaches. Frozen layers (`last-blocks`) leave 
 
 The command prints one row an entry (every entry, or the ones named): the share of the start's parameters its step
 trains, its slowdown under its policy and what binds. It trains nothing. It builds the entry's model at the start's
-shape, traces its step on a CPU as a job does after its last step (`run.traced_step`, on fake tensors), and reads the
+shape, traces its step on a CPU as a job does after its last step (`run.traced_step`, on fake tensors: the job's
+program, since a route's step runs under bf16 autocast on a CPU as on a GPU), prints the dtypes that step's circuit
+prices its matrix products in (`priced in`), and reads the
 slowdown on the traced step from the one entry point (`calculator.slowdown`): the least slowdown of any partition of
 that step into the policy's blocks, on the products whose two operands both depend on the update. `trains` is read from
 the trace, the parameters the step writes over the start's: an entry that trains less charges fewer products, so its
@@ -105,7 +110,9 @@ or here, one after another, with `--local`. It exits 0 when every job has its re
 one failed; a failed job is never run again.
 
 A job trains the config's start along its route and scores each checkpoint on its split. A route is a module of
-`routes/` with `VERSION`, `DIALS`, `build`, `step` and `plan` (the route contract, `routes/__init__.py`); the harness
+`routes/` with `VERSION`, `DIALS`, `build`, `step` and `plan` (the route contract, `routes/__init__.py`); the routes
+here run their forward under bf16 autocast on every device (`routes/subset.py`'s `step`), so a job on a CPU runs the
+program a job on a GPU does; the harness
 owns the loop, the batches, the checkpoints and each checkpoint's E, the weights that differ from θ encoded by the
 route's plan. A checkpoint's output model, the one scored, is what E rebuilds from θ: the trained weights under a
 plan that keeps them whole, and the model the kept bits give under one that keeps less. Everything a route computes
@@ -142,7 +149,11 @@ no score goes back in. The sandbox hides the paths the registry names and nothin
 After its last step a job traces its route's step once, outside the count, and its record's `trace` holds what the
 capture measures of it for the grade: the token axes, the forward's updated MAC nodes, and the product rows unpriced
 at each k of the console's dial (`capture.products.raw_on_dial`), which `capture.products.priced` prices where they
-are read. The capture takes the run's last three steps in one graph and measures the middle one (`capture_steps`),
+are read, each in the dtype it was traced in. That dtype is the job's: the capture runs attention on its math
+backend in its operands' dtype (`capture.trace`'s `_math_attention`, on every device), as the fused kernel a job
+runs does, so a step under bf16 autocast has its attention products in bf16. A trace of a capture before
+`capture.products.JOB_DTYPES_FROM` has them in float32, and that capture's rule prices them in bf16
+(`capture.products.priced_dtype`); the rule goes when the stored records it reads are traced again. The capture takes the run's last three steps in one graph and measures the middle one (`capture_steps`),
 so the measured step reads what the step before it wrote and the step after it reads what it makes; where the three
 aren't the run's first steps, the first of them reads the run's own weights, not θ's (`mid_run`). That gives the
 step a circuit, which the trace keeps as the capture measures it (`circuit`: the gradient's cut and a token group's
