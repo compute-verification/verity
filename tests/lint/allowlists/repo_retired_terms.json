@@ -2540,7 +2540,6 @@
     {"file": "security/Proofs/Properties/Nci/ReadsSet.lean", "count": 7},
     {"file": "security/Proofs/Properties/Nci/RecordBlockSize.lean", "count": 14},
     {"file": "security/Proofs/Properties/Nci/RecordBlocks.lean", "count": 4},
-    {"file": "security/Proofs/Properties/Nci/RecordCircuitAsk.lean", "count": 8},
     {"file": "security/Proofs/Properties/Nci/RecordCounts.lean", "count": 8},
     {"file": "security/Proofs/Properties/Nci/RecordForm.lean", "count": 5},
     {"file": "security/Proofs/Properties/Nci/RecordGates.lean", "count": 11},

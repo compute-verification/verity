@@ -1,6 +1,6 @@
 module
 
-public import Proofs.Properties.Nci.RecordCircuitAsk
+public import Proofs.Properties.Nci.RecordCircuit
 public import Proofs.Properties.Nci.RecordForm
 public import Proofs.Properties.Nci.RecordInputs
 public import Proofs.Properties.Nci.RecordRows
