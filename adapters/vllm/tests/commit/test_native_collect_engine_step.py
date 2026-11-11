@@ -7,6 +7,9 @@ the batch sends explicit seeds and no source owns them, each row's seed. A greed
 so their order is held here: every step's root is compared with the root of the same tensors packed in that order into one
 block. Also held: a dummy run and a call with no scheduled token begin no step, the next step ends a step whose ``sample``
 never came, and vLLM's ``execute_model`` runs on the committer's high-priority stream, fenced both ways.
+
+The committer patches neither method itself: it puts one part on the runner (`engine.runner_step`) at ``install`` and takes
+it off first at ``uninstall``, which is refused whole while another component's later patch covers the runner's two wraps.
 """
 from __future__ import annotations
 
@@ -21,6 +24,7 @@ import torch
 
 from verity_vllm.commit.committer import native_collect as NC
 from verity_vllm.commit.served_record import SAMPLED, SAMPLER_INPUTS, SamplerInputsSource
+from verity_vllm.engine import hooks, runner_step
 
 from tests.commit import test_native_collect_plan_cache as PC
 
@@ -28,7 +32,7 @@ SEED, POSITION = SAMPLER_INPUTS
 #: the sampler's seed of each request state slot, and the state slot of each row of the batch
 SEEDS, SLOTS = [11, 22, 33], [2, 0]
 ROW_SEEDS = torch.tensor([33, 11], dtype=torch.int64)
-DRAWS = "served.sampler/draws"
+EXTRA = "served.sampler/extra"
 
 #: a host tensor that reports a CUDA device, as the sampler's output does where it is served
 OnDevice: Any = type("OnDevice", (torch.Tensor,), {"device": property(lambda self: torch.device("cuda"))})
@@ -70,10 +74,10 @@ class Runner(PC._Runner):
         return SimpleNamespace(sampled_token_ids=self.sampled.as_subclass(OnDevice)), int(self.sampled.shape[0]), 0
 
 
-class Draws:
+class Extra:
     """A source of the sample's inputs that owns no name of the committer's: at each sample it commits one tensor of its own."""
 
-    short_name = "draws"
+    short_name = "extra"
 
     def __init__(self, com: NC.NativeCollectCommitter) -> None:
         self.com = com
@@ -93,7 +97,7 @@ class Draws:
         return torch.arange(3 * n, dtype=torch.float32).reshape(n, 3)
 
     def on_sample(self, input_batch: Any, n_sampled: int, job: Any) -> None:
-        self.com._acquire(DRAWS, self.tensor(n_sampled), job)
+        self.com._acquire(EXTRA, self.tensor(n_sampled), job)
 
 
 def committer(monkeypatch: pytest.MonkeyPatch) -> tuple[NC.NativeCollectCommitter, Runner]:
@@ -147,22 +151,20 @@ SCHED = PC.schedule(40, 2)
 
 
 @pytest.mark.parametrize("source, explicit, seeds_hashed", [
-    (None, True, 2), (None, False, 0), ("draws", True, 2), ("draws", False, 0), ("sampler inputs", True, 0)],
+    (None, True, 2), (None, False, 0), (Extra, True, 2), (Extra, False, 0), (SamplerInputsSource, True, 0)],
     ids=["explicit seeds", "no explicit seed", "a source, then the seeds", "a source alone", "a source that owns the seed"])
 def test_a_sample_hashes_the_sampled_ids_then_each_sources_inputs_then_the_seeds(monkeypatch, source, explicit, seeds_hashed):
     com, runner = committer(monkeypatch)
     runner.states.explicit = explicit
-    if source == "draws":
-        com.attach_source(Draws(com))
-    elif source:
-        com.attach_source(SamplerInputsSource(com))
+    if source:
+        com.attach_source(source(com))
     com.install()
     want = []
     for kv in SCHED:
         tensors = step(runner, kv)
-        if source == "draws":
-            tensors.append((DRAWS, Draws.tensor(len(kv))))
-        if source == "sampler inputs":
+        if source is Extra:
+            tensors.append((EXTRA, Extra.tensor(len(kv))))
+        if source is SamplerInputsSource:
             tensors += [(SEED, ROW_SEEDS), (POSITION, torch.tensor(kv))]
         elif explicit:
             tensors.append((SEED, ROW_SEEDS))
@@ -170,7 +172,7 @@ def test_a_sample_hashes_the_sampled_ids_then_each_sources_inputs_then_the_seeds
     roots, keys = commit(com, len(SCHED))
     assert roots == one_block(want, keys)
     assert getattr(com, "seed_bound_steps", 0) == seeds_hashed
-    assert runner.states.asked == ([] if source == "sampler inputs" else [SLOTS] * len(SCHED))
+    assert runner.states.asked == ([] if source is SamplerInputsSource else [SLOTS] * len(SCHED))
 
 
 def test_a_dummy_run_and_a_call_with_no_scheduled_token_begin_no_step(monkeypatch):
@@ -249,3 +251,46 @@ def test_vllms_execute_model_runs_on_the_high_priority_stream_fenced_both_ways(m
     assert com._cur is not None                                              # the step stays open
     com.uninstall()
     assert com._cur is None
+
+
+def patched(runner: Runner, entries: tuple[Any, ...]) -> list[str]:
+    """The runner's attributes that ``entries`` patch."""
+    return [e.name for e in entries if isinstance(e, hooks.Patch) and e.owner is runner]
+
+
+def test_install_puts_one_part_on_the_runner_and_uninstall_takes_it_off(monkeypatch):
+    com, runner = committer(monkeypatch)
+
+    def gather_batch_req_state(*a: Any, **kw: Any) -> tuple[None, None]:
+        return None, None
+
+    runner.gather_batch_req_state = gather_batch_req_state
+    before = hooks.live()
+    com.install()
+    part, = runner_step.parts(runner)
+    assert part.rank is runner_step.Rank.COMMIT
+    assert patched(runner, hooks.live(runner_step.TAG)) == ["execute_model", "sample"]
+    assert patched(runner, com._hooks.entries) == ["gather_batch_req_state"]         # that wrap is still the committer's own
+    com.install()
+    assert runner_step.parts(runner) == (part,)
+    step(runner, SCHED[0])
+    com.uninstall()
+    assert runner_step.parts(runner) == () and hooks.live() == before
+    assert not {"execute_model", "sample"} & set(vars(runner)) and runner.gather_batch_req_state is gather_batch_req_state
+    com.uninstall()
+
+
+def test_uninstall_is_refused_whole_while_a_later_patch_covers_the_runners_wraps(monkeypatch):
+    com, runner = committer(monkeypatch)
+    source = Extra(com)
+    com.attach_source(source)
+    com.install()
+    cover = hooks.wrap(runner, "execute_model", lambda inner: lambda *a, **kw: inner(*a, **kw))
+    with pytest.raises(RuntimeError, match="refused to uninstall"):
+        com.uninstall()
+    assert com.installed and source.uninstalls == 0 and len(runner_step.parts(runner)) == 1
+    want = [step(runner, kv) + [(EXTRA, Extra.tensor(len(kv))), (SEED, ROW_SEEDS)] for kv in SCHED]     # whole: it still commits
+    cover.uninstall()
+    roots, keys = commit(com, len(SCHED))
+    assert roots == one_block(want, keys)
+    assert not com.installed and source.uninstalls == 1 and runner_step.parts(runner) == ()
