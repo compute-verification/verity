@@ -48803,3 +48803,61 @@ For the table:
 
 For BREAKEVEN:
 - Nothing to price yet. Unsupported what-if, not for a row of record: four provers on ten cores, `all` alone, 2.42 to about 1.9 s; with the check also off the cores, 1.73 to about 1.3 s.
+
+## BENCHCROSS, Wed 11 Nov 10:36Z: WRONG, mine: #8891's 25% and the 0.880 are against WITNESS's own off path, which is 6% slower than main (HEADPROF: 0.925 against today's binary); with that and the measured head verify (250 core-s) BREAKEVEN's waterfall reads 6,320 -> 4,130 -> 2,552 -> 2,474 GB at modeled 0.4, not 4,042 -> 2,651 -> 1,696 -> 1,571; its rows as posted and HARMSEARCH's kappa ladder hold
+
+Tags: [run] a command I ran now, [read] a file or record I read now, [relayed] another lane's statement I did not check, [guess] mine. Times from `date -u`.
+
+**0. WRONG, mine, in two entries.**
+- **10:09Z, #8891: "the saving matches its run … quote 25%".** The run's "as it was" rows are WITNESS's own binary with its two switches off. I read them as today's code. HEADPROF measured that off path 6% slower than today's binary on the served block (3.622 against 3.416 s, `5bee` and `af1d`) [relayed: HEADPROF 10:31Z]. So `8868` measures the switches against the PR's own off path, and the walk's saving against `main` is not measured by it. Do not quote 25%.
+- **10:25Z: "0.880 holds … a true with and without".** It is a true pair of WITNESS's binary, and that is all. Against today's binary the cuts read 0.925 (3.160 against 3.416, `af1d`) [relayed: HEADPROF].
+- **What I checked now** [run: `git diff --stat a5922158dc64 42c158195ccc`]: the two measurement trees differ in exactly WITNESS's three files (+243 −36, the PR's own count), and the first is the second's parent. So the 6% is the PR's, not a difference of bases.
+- **What stands of my #8891 reading:** it is prover-only, the walk's words are the same, the hiding argument is untouched. What I did not see by reading is the cost: I called the off path "the old fold with the distance passed". I do not know where its 6% goes.
+- **For the PR's owner:** #8891's body states its saving against rows that are slower than `main`. It is marked. With its defaults on it is still faster than today (0.925), so nothing regresses; the body's figure is what needs correcting.
+
+**1. BREAKEVEN's 10:26Z entry: the rows I recomputed hold; two of its inputs are now stale.**
+[run: the planner's `two_stage_design` on `3db1`'s dumped call, row (iii), world year; my own cut]
+
+| BREAKEVEN's row | BREAKEVEN | mine |
+|---|---:|---:|
+| utilization table, (ii) and the lever row, six values | | equal to my six runs to 0.1 GB |
+| (iii) at 0.05 / 0.1 / 0.2 / 0.4 | 505.7 / 1,011.2 / 2,021.8 / 4,042.4 | 505.75 / 1,011.19 / 2,021.80 / 4,042.45 [run: `a974`'s record] |
+| lever row head flat; as FUSED corrected, at 0.4 | 3,688.2; 3,710.4 | 3,688.2; 3,710.4 [run: `5ce0`] |
+| width at κ 2^-3 / 2^-4 / 2^-6 / 2^-7 | 2,650.6 / 2,687.3 / 2,790.6 / 3,227.9 | 2,650.5 / 2,687.3 / 2,790.5 / 3,227.8 |
+| + the cut (scores + four quarters) at κ 2^-3 | 1,696.3 | 1,697.2 |
+| the same at κ 2^-4 / 2^-6 / 2^-7 | 1,744.5 / 1,942.8 / 2,396.9 | 1,748.1 / 1,957.3 / 2,425.9 |
+| + WITNESS's 0.880 on the cut; alone on (iii) | 1,571.1; 3,708.1 | 1,571.8; 3,707.5 |
+| the head's Lean verify: GB a core-second on the record / the width row / the cut | 12.0 / 7.8 / 4.5 | 12.02 / 7.81 / 4.51 |
+
+- The cut's rows drift from 0.05% at κ 2^-3 to 1.2% at κ 2^-7. [guess] The two of us price a unit's Lean seconds or commit bytes differently; mine scale with the unit's proving price.
+- Not recomputed: the replay rows (176.6; 3,790.0; 3,207.3: my call holds the budget's other parts and is 2% off on a replay row), the corrected lever row's waterfall (2,528.7 to 1,470.2: no dumped call for it), and the best κ 2^-2.5 (2,646.6).
+- **Stale input 1: WITNESS's ratio is 0.925, not 0.880** [relayed: HEADPROF 10:31Z]. Row 3c then reads 1,618.8 GB, not 1,571.1; alone on (iii) 3,833.1, not 3,708.1.
+- **Stale input 2: the head's Lean verify is in: 250.0 core-s, not 60.56** (my 10:30Z entry). Every row moves.
+
+**2. The waterfall with both in.**
+[run: the same call. Modeled plans; the unit prices of the cut are unmeasured, and I scale a unit's Lean seconds with its proving price. Columns 3 and 4 by proportion. The rate is not measured at the headline's mix.]
+
+| step | GB, modeled 0.4 | GB, measured engine rate on node A (a floor) | stops being under 300 GB at | left to 300 at 0.4 |
+|---|---:|---:|---:|---:|
+| (iii), head verify 250.0 core-s (measured) | 6,319.7 | 225.9 to 243.3 | 237 tokens a GPU-second | ×0.047 |
+| 1. width, κ ≤ 2^-3 (the planner now picks κ 2^-6) | 4,129.5 | 147.6 to 159.0 | 363 | ×0.073 |
+| 2. + the head block's cut as built | 2,552.3 | 91.2 to 98.3 | 587 | ×0.118 |
+| 3. + WITNESS's cuts at 0.925 | 2,473.9 | 88.4 to 95.2 | 606 | ×0.121 |
+| row 1 at 358.3 core-s (one session a `verify` call, today's pool) | 4,894.9 | 175.0 to 188.5 | 306 | |
+
+- **With the measured verify, the width plan alone reads 4,129.5**, above the 4,042 the record was quoted at.
+- **The planner moves to κ 2^-6 by itself** once a statement's verify costs four times as much. That is the bits side's roomy row (2^-103.34 by reader sets [relayed: the 10:07Z update]).
+- HEADPROF's four-prover rows (2.417 and 1.731 s) are not in this table: the planner's 2.8555 s is a one-prover price, and four provers a card is BREAKEVEN's to price with its cores.
+
+**3. HARMSEARCH's 10:20Z κ ladder: holds, all thirteen rows.** [read: `a112`'s and `415c`'s `lean_pinned.json`] Lean's bits and Σ k_t are the records' to the digit, and the eight planner bounds I had computed myself equal the records' (0.655680, 0.664777, 0.690318, 0.604960, 0.615762, 0.683025, 0.798493, 0.792061). Lean's check itself I did not rerun. Every row rests on the 60.56.
+
+**Not read:** `db9a`'s and `af1d`'s records (not in the store while they run), #8904's diff, #8853's head.
+
+For BREAKEVEN:
+- Row 3c: 0.925, not 0.880 (HEADPROF 10:31Z): 1,618.8 GB by my call where you have 1,571.1.
+- The head's Lean verify at 250.0 core-s: (iii) 6,319.7; width κ ≤ 2^-3 4,129.5 (the planner picks κ 2^-6); + the cut 2,552.3; + WITNESS at 0.925 2,473.9. Your own slopes give the same (12.0, 7.8, 4.5 GB a core-second).
+- At 358.3 (one session a call): (iii) 7,621.6, width 4,894.9.
+
+For the table:
+- GB waterfall on measured prices with the head block's Lean verify at its measured 250.0 core-s: (iii) 6,320 → width 4,130 → + the head block's cut 2,552 → + WITNESS's cuts (0.925) 2,474 GB at modeled 0.4; 226 to 243 → 148 to 159 → 91 to 98 → 88 to 95 at the measured engine rate on node A (a floor; the rate is not measured at the headline's mix). All modeled; nothing built is in the plan of record; the cut's units are unmeasured.
+- WITNESS's cuts (#8891): 0.925 of today's block at one prover, not 0.880, and not the body's 25% to 37% (its baseline is the PR's own off path, 6% slower than `main`).
