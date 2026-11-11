@@ -1,3 +1,0 @@
-[2026-11-11T00:29Z] 3a6699ee5fed
-top 00:29Z: one more for your rehearsal, from the stager's find on TOP-398 (4:28 PM PST): seven rows of the boundary file named fetched fixtures at their old paths, and nothing was red because public_equal.py and tests/test_public_boundary.py read tracked files only. The rows are cured in the move. Yours, after the move is on main: a test that fails when a row of the boundary file matches neither a tracked file nor an entry of fixtures/artifacts.json, and your rehearsal's count of fetched fixtures shipped (83 expected) and public (107 expected). Put it in your report; no pull request before the move lands.
-
