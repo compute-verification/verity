@@ -10,6 +10,7 @@ public import Proofs.Flock.SamplingGeneric.Count
 public import Proofs.Flock.SamplingGeneric.Bits
 public import Proofs.Flock.SamplingGeneric.KSAt
 public import Proofs.Flock.SamplingGeneric.Reg
+public import Proofs.Flock.SamplingGeneric.RegX
 public import Proofs.Flock.SamplingGeneric.Efficient
 public import Proofs.Flock.SamplingGeneric.Counter
 public import Proofs.Flock.SamplingGeneric.Deployed
@@ -48,7 +49,10 @@ opening checks' count, `Compiled.OpenCallsLe`, without which they fail (`Counter
 `SamplingGeneric/Counter.lean`). A session's coins in a compiled run, `coinsOf` and `place`, invert each other
 (`SamplingGeneric/Coins.lean`). The committed form, against the incorrect set of the plurality trace the prover's tape
 fixes, follows from the sessions' bound and the rewinding lemma (`SamplingGeneric/Reg.lean`: `compilerKSReg_of`), so
-**`CompilerKSReg` is proved** (`compilerKSReg`), and with it Flock's (`flockKSReg`).
+**`CompilerKSReg` is proved** (`compilerKSReg`), and with it Flock's (`flockKSReg`). The same form against the incorrect
+set of the trace read at the statement, the plurality over the prover's tape and the coins together, which no tape
+moves, follows from the same bound and the rewinding lemma over the tapes and the runs
+(`SamplingGeneric/RegX.lean`: `compilerKSRegX_of`), so **`CompilerKSRegX` is proved** (`compilerKSRegX`).
 
 `CompilerKSAt` reads `KS`'s two hash terms at a budget on the prover's whole SHA-512 work rather than at the calls the
 oracle logs: `KS` gives it at every budget, and `CompilerEfficient`'s expected reruns and own calls bound its binding
@@ -119,6 +123,10 @@ theorem compilerKSReg : CompilerKSReg := compilerKSReg_of sessionKSOf
 
 /-- **Flock's committed form**: the compiler's at `Arg.ofFlock`. -/
 theorem flockKSReg : FlockKSReg (Coin := Coin) (Col := Col) (T := T) := flockKSReg_of_compilerKSReg compilerKSReg
+
+/-- **The committed form at the trace read at the statement**: `CompilerKSRegX` from the sessions' bound
+(`compilerKSRegX_of`). -/
+theorem compilerKSRegX : CompilerKSRegX := compilerKSRegX_of sessionKSOf
 
 /-- **Bits**: `CompilerKS` and `CompilerEfficient` (`compilerBits_of`). -/
 theorem compilerBits : CompilerBits := compilerBits_of compilerKS compilerEfficient
