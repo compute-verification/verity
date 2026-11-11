@@ -7,9 +7,10 @@ It reads every module of every Lake package under ``--root`` (default this check
 fixtures aside) from the `.olean` files of one package's build (``--env``, default `security/Proofs`, whose `lake env`
 reaches the security analysis's three trees and the code packages they require): `Unread.lean`, compiled with that
 package's toolchain, writes each constant with what its type and value mention, and this holds the policy. ``--setup``
-first runs `setup.sh ENV`, and ``--build`` `lake build` there, with `@NAME` for each other analysis package
-(`ANALYSIS`). ``--facts FILE`` reads facts written before instead; given more than once, it joins them (`Facts`), as the
-Lean check's audits of `security` and `security/Proofs` each write their own (`check.py`'s `unread_facts`).
+first runs `setup.sh ENV`, and ``--build`` `lake build` there of what the Lean check builds of ENV and of each other
+analysis package (`ANALYSIS`, `@NAME`): its default targets and its lock's `roots` (`build`). ``--facts FILE`` reads
+facts written before instead; given more than once, it joins them (`Facts`), as the Lean check's audits of `security`
+and `security/Proofs` each write their own (`check.py`'s `unread_facts`).
 
 **The closure.** Starting from the seeds, it follows what each reached constant's type and value mention
 (`ConstantInfo.getUsedConstants`, an inductive type's constructors, `@[implemented_by]` and `@[csimp]`), and from any
@@ -220,14 +221,19 @@ def log(msg: str) -> None:
 
 
 def build(tree: Tree, env: str, setup: bool = True) -> None:
-    """`setup.sh ENV` (``setup``), then `lake build` there of its default targets and every other analysis package's
-    (`@NAME`)."""
+    """`setup.sh ENV` (``setup``), then `lake build` there of what the Lean check builds of ENV and of every other analysis
+    package (`@NAME`): its default targets, then the modules its lock lists under `roots` (`+MODULE`; `check.py`'s `build`
+    and `build-roots`). A root that no default target imports has an `.olean` only by the second, and without one it is
+    `unbuilt`: its declarations seed nothing, and what they alone read counts as unread here and as read on a check's
+    facts."""
     if setup:
         subprocess.run(["bash", str(HERE / "setup.sh"), str(tree.root / env)], check=True)
-    targets = [f"@{tree.names[p]}" for p in ANALYSIS if p in tree.names and p != env]
-    for t in [[], *([t] for t in targets)]:
-        log(f"lake build {' '.join(t)} in {env}")
-        subprocess.run(["lake", "build", *t], cwd=tree.root / env, check=True)
+    for pkg in [env, *(p for p in ANALYSIS if p in tree.names and p != env)]:
+        at = [] if pkg == env else [f"@{tree.names[pkg]}"]
+        roots = [f"{at[0]}/+{r}" if at else f"+{r}" for r in tree.locks.get(pkg, {}).get("roots", [])]
+        for targets in [at, roots] if roots else [at]:
+            log(f"lake build {' '.join(targets)} in {env}")
+            subprocess.run(["lake", "build", *targets], cwd=tree.root / env, check=True)
 
 
 def program(env_dir: Path, work: Path) -> Path:
@@ -1007,7 +1013,8 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--env", default="security/Proofs", help="the package whose `lake env` reads the modules")
     ap.add_argument("--out", type=Path, required=True)
     ap.add_argument("--setup", action="store_true", help="run setup.sh ENV first")
-    ap.add_argument("--build", action="store_true", help="lake build ENV and the other analysis packages first")
+    ap.add_argument("--build", action="store_true", help="lake build ENV and the other analysis packages first: each one's "
+                                                          "default targets and its lock's `roots`, as the Lean check does")
     ap.add_argument("--facts", type=Path, action="append",
                     help="read these facts instead of running Unread.lean (an audit's `unread-facts.jsonl.gz`; repeat to join)")
     ap.add_argument("--caps", type=Path, help="check the counts against this caps file (`unread-caps.json`): exit 1 when an "
