@@ -303,7 +303,7 @@ def sampled_replay_components(rows: list[dict], versions: dict) -> tuple[dict, d
     per_run = [{r_: {"sampled_replay": (c.get("sampled_replay") or {}).get("result"), "grade": (c.get("sampled_replay") or {}).get("grade"),
                      "boundary_linkage": (c.get("boundary_linkage") or {}).get("result")} for r_, c in p.items()} for p in pairs]
     sr_ok = len(srs) > 0 and all(s.get("result") is True for s in srs.values()) and all(all(v["sampled_replay"] is True for v in p.values()) for p in per_run)
-    lk_ok = len(lks) > 0 and all(l.get("result") is True for l in lks.values()) and all(all(v["boundary_linkage"] is True for v in p.values()) for p in per_run)
+    lk_ok = len(lks) > 0 and all(link.get("result") is True for link in lks.values()) and all(all(v["boundary_linkage"] is True for v in p.values()) for p in per_run)
     smp = {r_: (s.get("sample") or {}) for r_, s in srs.items()}
     popn = {r_: (s.get("population") or {}) for r_, s in srs.items()}
     keys = {r_: (s.get("strata_keys") or {}) for r_, s in srs.items()}
@@ -353,12 +353,12 @@ def sampled_replay_components(rows: list[dict], versions: dict) -> tuple[dict, d
                "per_rank": {r_: {k2: s.get(k2) for k2 in ("result", "grade", "why", "rank", "rank_note")} for r_, s in srs.items()},
                "per_run": per_run,
                "why": (None if sr_ok else "; ".join(f"rank {r_}: {s.get('grade')} {s.get('why') or s.get('error') or 'no result'}" for r_, s in srs.items() if s.get("result") is not True) or "a rank of an earlier pair failed")}
-    lk_comp = {"result": lk_ok if all(l for l in lks.values()) else None,
+    lk_comp = {"result": lk_ok if all(link for link in lks.values()) else None,
                "method": ("per rank, exhaustive over (engine step, request): committed input_token_ids at the arrival step == the declared prompt of the workload; "
                           "at every later step == that request's committed sampled_token_ids of the previous step (boundary_linkage on the rank's map)"),
-               "checked": sum(int(l.get("pairs") or 0) for l in lks.values()), "linked": sum(int(l.get("linked") or 0) for l in lks.values()),
-               "per_rank": {r_: {k2: l.get(k2) for k2 in ("result", "pairs", "linked", "why")} for r_, l in lks.items()},
-               "why": (None if lk_ok else "; ".join(f"rank {r_}: {l.get('why') or 'no result'}" for r_, l in lks.items() if l.get("result") is not True) or "a rank of an earlier pair failed")}
+               "checked": sum(int(link.get("pairs") or 0) for link in lks.values()), "linked": sum(int(link.get("linked") or 0) for link in lks.values()),
+               "per_rank": {r_: {k2: link.get(k2) for k2 in ("result", "pairs", "linked", "why")} for r_, link in lks.items()},
+               "why": (None if lk_ok else "; ".join(f"rank {r_}: {link.get('why') or 'no result'}" for r_, link in lks.items() if link.get("result") is not True) or "a rank of an earlier pair failed")}
     deferred = sorted({str(r_) for p in pairs for r_, c in p.items() if (c.get("sampled_replay") or {}).get("grade") == "deferred"}, key=int)
     if deferred:
         for comp in (sr_comp, lk_comp):

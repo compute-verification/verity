@@ -22,8 +22,9 @@ import os
 import sys
 import threading
 import time
+from collections.abc import Callable
 from types import SimpleNamespace
-from typing import Any, Callable
+from typing import Any
 
 from verity_vllm.engine import hooks
 from verity_vllm.pipeline import gpu_lease as GL

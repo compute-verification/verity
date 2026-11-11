@@ -40,10 +40,12 @@ from pathlib import Path
 from typing import Any
 
 from verity_vllm.config import option, workload_arg
-from verity_vllm.engine import engine_profile as prof, env as engine_env, handle
+from verity_vllm.engine import engine_profile as prof
+from verity_vllm.engine import env as engine_env
+from verity_vllm.engine import handle
 from verity_vllm.engine import vllm_adapter as va
-from verity_vllm.pipeline.tp.rank_worker import EXTENSION
 from verity_vllm.pipeline.tp import target as TT
+from verity_vllm.pipeline.tp.rank_worker import EXTENSION
 
 # The engine's pins, in the environment before `main` imports vLLM.  The imports above bring in torch first; the one pin
 # Inductor reads at its own import is checked before the engine is built (`engine_env.require_inductor`).

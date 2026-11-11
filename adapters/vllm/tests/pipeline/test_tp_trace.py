@@ -10,8 +10,8 @@ from types import SimpleNamespace
 import pytest
 
 from verity_vllm.acquire.committer_api import StepCommitment
-from verity_vllm.pipeline.tp.rank_worker import _commit_timing
 from verity_vllm.pipeline.tp import trace as TRACE
+from verity_vllm.pipeline.tp.rank_worker import _commit_timing
 
 
 class _Rank:

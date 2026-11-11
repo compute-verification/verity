@@ -8,7 +8,8 @@ from __future__ import annotations
 from types import SimpleNamespace
 from typing import Any
 
-from verity_vllm.engine import env as engine_env, served
+from verity_vllm.engine import env as engine_env
+from verity_vllm.engine import served
 
 
 def apply(target: Any, execution: str | None) -> tuple[dict[str, str], dict[str, Any]]:

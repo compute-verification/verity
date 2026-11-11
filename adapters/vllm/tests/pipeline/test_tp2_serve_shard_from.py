@@ -80,8 +80,8 @@ def test_a_replicated_parameter_has_no_other_ranks_shard(checkpoint):
 
 def test_repo_modules_loaded_names_this_process_imports_relative_to_the_repo():
     """The import path of record is written from the RUNNING process (sys.modules), not a static closure."""
-    from verity_vllm.pipeline.tp.rank_worker import repo_modules_loaded
     from verity_vllm.check import weights_of_record  # noqa: F401  -- imported here == must be listed
+    from verity_vllm.pipeline.tp.rank_worker import repo_modules_loaded
     r = repo_modules_loaded()
     assert r["method"].startswith("runtime:") and r["n"] == len(r["files"]) == len(set(r["files"]))
     assert "verity_vllm/pipeline/tp/rank_worker.py" in r["files"] and "verity_vllm/check/weights_of_record.py" in r["files"]

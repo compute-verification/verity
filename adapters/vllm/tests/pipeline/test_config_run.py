@@ -248,8 +248,9 @@ def test_the_tp_path_runs_a_config_run_at_worlds_2_4_and_8(W, tmp_path, monkeypa
 
 
 def _tp(tmp_path, *argv):
-    from tests.pipeline.test_row import TP_DENSE, _tp_row
     import os
+
+    from tests.pipeline.test_row import TP_DENSE, _tp_row
     t = _tp_row(tmp_path, TP_DENSE, *argv)
     os.makedirs(t.d, exist_ok=True)
     return t

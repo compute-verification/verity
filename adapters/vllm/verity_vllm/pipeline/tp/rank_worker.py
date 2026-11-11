@@ -47,6 +47,7 @@ def repo_modules_loaded() -> dict[str, Any]:
     the collector's JIT C++/CUDA sources when native_collect was loaded -- what RAN, written from the running process (not a static closure).
     Paths relative to the repo root; a module outside the repo (site-packages, vllm) is not listed."""
     import sys as _sys
+
     from verity_vllm.config import ROOT as root
     roots = [root, root / "vllm-poc"]
     files: set[str] = set()
@@ -173,9 +174,8 @@ def swap_label(label: str, sw: dict | None, step: int | None) -> str:
     does not -- a ranged swap never touches a step-less consumer)."""
     if not sw:
         return label
-    if sw.get("mode") == "steps":
-        if step is None or not (int(sw["lo"]) <= int(step) <= int(sw["hi"])):
-            return label
+    if sw.get("mode") == "steps" and (step is None or not (int(sw["lo"]) <= int(step) <= int(sw["hi"]))):
+        return label
     if label == sw["a"]:
         return sw["b"]
     if label == sw["b"]:

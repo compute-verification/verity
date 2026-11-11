@@ -19,13 +19,13 @@ parameter as a free input a rank-local Match alone would be trivially satisfiabl
 from __future__ import annotations
 
 import hashlib
-from concurrent.futures import ThreadPoolExecutor
 import json
 import os
 import subprocess
 import sys
 import threading
 import time
+from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any

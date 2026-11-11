@@ -16,9 +16,8 @@ from pathlib import Path
 
 import pytest
 
-from verity_vllm.pipeline import cli
+from verity_vllm.pipeline import cli, row_tp
 from verity_vllm.pipeline import row_records as R
-from verity_vllm.pipeline import row_tp
 from verity_vllm.pipeline.row_driver import Stop
 from verity_vllm.pipeline.row_tp import TpRow
 

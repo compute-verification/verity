@@ -16,22 +16,24 @@ from dataclasses import replace
 
 import numpy as np
 import pytest
+from verity.circuits.codec import descriptor_id
+from verity.circuits.defs import Builder, bind
+from verity.circuits.refs import Affine, Coll
+from verity.circuits.types import Array
+from verity.commitments.windows import interface as I
+from verity.commitments.windows import wiring as WI
+from verity.definitions.ops import gemm as GE
+from verity.definitions.registry import moe
+from verity.definitions.registry import tp_allreduce as TA
+from verity.definitions.registry.prims import BF16
 
 from tests.program.predict.test_steps import _mixed, _registered
-from tests.program.test_tp_binding import N, ROWS, rank_body
-from verity_vllm.pipeline.tp import grain as TG, wires as TW
+from tests.program.test_tp_binding import ROWS, N, rank_body
+from verity_vllm.pipeline.tp import grain as TG
+from verity_vllm.pipeline.tp import wires as TW
 from verity_vllm.program import tp_binding as TB
 from verity_vllm.program.predict.common import _Peers
 from verity_vllm.program.predict.tp_steps import compile_tp
-
-from verity.circuits.codec import descriptor_id
-from verity.circuits.defs import Builder, bind
-from verity.definitions.ops import gemm as GE
-from verity.circuits.refs import Affine, Coll
-from verity.circuits.types import Array
-from verity.definitions.registry import moe, tp_allreduce as TA
-from verity.definitions.registry.prims import BF16
-from verity.commitments.windows import interface as I, wiring as WI
 
 RUN, LAW, CAP, W = "ab" * 64, {"law": "stratified", "k": 2}, 4, 2
 #: the fused bodies' hidden row: four chunks of 64 (`grain.chunk`)

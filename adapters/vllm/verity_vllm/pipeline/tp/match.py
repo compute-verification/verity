@@ -34,11 +34,11 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
-from verity_vllm.engine.collectives import fused_norm as FN
+from verity_vllm import settings
 from verity_vllm.config import option, workload_arg
+from verity_vllm.engine.collectives import fused_norm as FN
 from verity_vllm.pipeline.build import read_tp_links, same_module_path
 from verity_vllm.pipeline.launch_context import rows_at
-from verity_vllm import settings
 
 
 def step_rows(tok: dict) -> dict[int, tuple[int, int]]:
@@ -129,27 +129,27 @@ def _check_main(args) -> int:
             res["fail"] = f"missing {p}"
             _write(run, res)
             return 1
-        recs[r] = [json.loads(l) for l in p.open() if l.strip()]
+        recs[r] = [json.loads(line) for line in p.open() if line.strip()]
     # the recorder files this check read, by digest: the provenance record below is bound to THESE rows (and
     # rank_match refuses a provenance record whose recorder digests are not those of the rows it loads itself)
     recorder_sha = {str(r): hashlib.sha256((cap / f"coll.rank{r}.jsonl").read_bytes()).hexdigest() for r in ranks}
     steps = sorted({x["step"] for r in ranks for x in recs[r]})
-    tok = json.load(open(cap / "tokens.json"))
+    tok = json.loads((cap / "tokens.json").read_text())
     sched = step_rows(tok)
     gens = [len(q["generated_token_ids"]) for q in tok["requests"]]
     # ---- 1. structure vs each rank's Build peer-input signature
     struct = {"pass": True, "per_rank": {}}
     for r, bdir in enumerate(builds):
         links = read_tp_links(str(Path(bdir) / "tp_links.json"))
-        sig = [(l["kind"], int(l["shape"][-1])) for l in links["links"]]
+        sig = [(ln["kind"], int(ln["shape"][-1])) for ln in links["links"]]
         # site identity per k: the link's module_path ('inner.model.<path> (<Class>)') must equal the record's
         # hooked module ('<path>'), so 96 width-H all-reduces are checked as the Program's SITES in the Program's ORDER, not as a
         # (kind, width) sequence that any interleaving / doubled hook / order swap would also produce.
-        sig_sites = [l.get("module") for l in links["links"]]     # recorder vocabulary, from the recorded model_root (read_tp_links)
+        sig_sites = [ln.get("module") for ln in links["links"]]     # recorder vocabulary, from the recorded model_root (read_tp_links)
         sites_exact = bool(links.get("model_root"))              # a v1 file has no recorded root: dotted-suffix identity (same_module_path)
         if int(links["rank"]) != r or int(links["world"]) != world:
             raise SystemExit(f"tp_links of build {bdir}: rank {links['rank']} world {links['world']} != rank {r} of world {world}")
-        if any(len(l["peers"]) != world - 1 for l in links["links"]):
+        if any(len(ln["peers"]) != world - 1 for ln in links["links"]):
             raise SystemExit(f"tp_links of rank {r}: a link does not name exactly world-1 = {world - 1} peers")
         per_step = {}
         bad = []

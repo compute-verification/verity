@@ -27,9 +27,9 @@ from tests.pipeline.test_gpu_lease import fake_lease, released
 from tests.pipeline.test_row import TP_DENSE, _tp_row
 from verity_vllm.acquire.committer_api import StepCommitment
 from verity_vllm.engine import hooks
-from verity_vllm.pipeline.tp.rank_worker import TP2CaptureWorkerExtension as _cls
 from verity_vllm.pipeline import gpu_lease as GL
 from verity_vllm.pipeline.tp import lease as TPL
+from verity_vllm.pipeline.tp.rank_worker import TP2CaptureWorkerExtension as _cls
 
 GPUS = ("4", "5")
 LAST = "work.pair0.instrumented"
@@ -313,8 +313,8 @@ def _pinned(com: _Com) -> None:
 
 @pytest.mark.parametrize("keep,why", [
     ({1: lambda c: setattr(c, "retain", "none")}, "rank 1: the openings after release replay the run on the engine"),
-    ({0: _pinned, 1: lambda c: setattr(c, "retain", "none")}, "rank 0: the retained bytes are in torch's pinned host memory "
-                                                              "(torch-pinned-pow2), which the CUDA context's end frees; rank 1: the openings"),
+    ({0: _pinned, 1: lambda c: setattr(c, "retain", "none")}, ("rank 0: the retained bytes are in torch's pinned host memory "
+                                                               "(torch-pinned-pow2), which the CUDA context's end frees; rank 1: the openings")),
 ], ids=["one-rank", "both-ranks"])
 def test_a_rank_that_still_needs_its_device_keeps_every_gpu_to_the_exit(lease, keep, why):
     for r, f in keep.items():
@@ -445,11 +445,11 @@ def test_the_tp_commit_takes_every_gpu_at_once_and_gives_them_back_together_whil
 
 @pytest.mark.parametrize("script,rc,kept", [
     ("raise SystemExit('the engine did not start')\n", 1, "the Commit ended before its release"),
-    ("from tests.pipeline.test_tp_gpu_lease import LAST, stand_ins\n"
-     "ev, llm = stand_ins(os.path.dirname(os.environ[GL.STARTED]))\n"
-     "llm.ranks[1]._tp2_commit['com']._stop_worker = lambda: 1 / 0\nllm.collective_rpc('tp2_commit_install')\n"
-     "TPL.finalize(llm, 60.0, LAST, last=True, wait=lambda s: None)\nprint('checks', [e[2:] for e in ev if e[1] == 'checks'], flush=True)\n"
-     "GL.run_main(lambda: sys.exit(5))\n", 5, "the ranks could not give their GPUs back: ZeroDivisionError"),
+    (("from tests.pipeline.test_tp_gpu_lease import LAST, stand_ins\n"
+      "ev, llm = stand_ins(os.path.dirname(os.environ[GL.STARTED]))\n"
+      "llm.ranks[1]._tp2_commit['com']._stop_worker = lambda: 1 / 0\nllm.collective_rpc('tp2_commit_install')\n"
+      "TPL.finalize(llm, 60.0, LAST, last=True, wait=lambda s: None)\nprint('checks', [e[2:] for e in ev if e[1] == 'checks'], flush=True)\n"
+      "GL.run_main(lambda: sys.exit(5))\n"), 5, "the ranks could not give their GPUs back: ZeroDivisionError"),
 ], ids=["before-its-engine", "a-rank-stuck-on-its-device"])
 def test_a_tp_commit_that_fails_holding_its_lease_frees_every_gpu_at_its_exit(tmp_path, script, rc, kept):
     got, rec, log = _run(tmp_path, script)
