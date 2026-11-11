@@ -20,13 +20,13 @@ and verified by the Lean verifier. Nothing on that path is replaced.
   first use (`one_stage.verifier.executable`): a checkout's first audit pays that build.
 
 Slow, and past a minute in `check`: about 150 s on a node, about 210 s where the audit builds the coins' Lean first,
-and about 5 GB at its peak. Of it the changed member's audit is about 50 s: it alone shows a false member stopped (the
-ZK server lets no proof of it out, and the Lean verifier refuses its session), where the audit's own negatives change
-the record around honest sessions. A pass is reused while the suite's inputs are unchanged, so it reruns only on a
-change to what `benchmarks/one_stage` reads. Every other test of the audit gives `a5.audit`, the prover or the verifier
-a stand-in, so none sees what only the real ones refuse: a rule the stream's service doesn't take, a statement the
-prover can't stage or the Lean verifier won't set up, a session the ZK server stops, or a record a later step can't
-read. A served window's audit finds those hours in."""
+and about 5 GB at its peak, which the suite's ``worker_gb`` declares. Of it the changed member's audit is about 50 s:
+it alone shows a false member stopped (the ZK server lets no proof of it out, and the Lean verifier refuses its
+session), where the audit's own negatives change the record around honest sessions. A pass is reused while the suite's
+inputs are unchanged, so it reruns only on a change to what `benchmarks/one_stage` reads. Every other test of the audit
+gives `a5.audit`, the prover or the verifier a stand-in, so none sees what only the real ones refuse: a rule the
+stream's service doesn't take, a statement the prover can't stage or the Lean verifier won't set up, a session the ZK
+server stops, or a record a later step can't read. A served window's audit finds those hours in."""
 from __future__ import annotations
 
 import hashlib
