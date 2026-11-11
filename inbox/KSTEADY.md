@@ -936,3 +936,23 @@ benchmarks said nothing by 11:45Z (HASH-98, read at 11:46Z), so the default stan
 The three older job directories (`khom-four`, `kleadc-prf459`, `ksha-rs`) stay as they are until the node
 ends on Saturday; their profiles are in the store. In your HASH-98 account, say the five head-block rows and the
 two `Dsa` rows stay at 12 and 24 cores, by the lead's decision, for 0.036% of the figure.
+
+## Wed 11 Nov 12:11Z: the design is read and rung to benchmarks; three things that do not wait for its answers
+
+Read by me: the 31 lines on HASH-115, and your closing account on HASH-98 (11:49Z). A clear design; I rang
+benchmarks for (a) to (e), answers asked by Thu 18:00Z. Ending your turn with it was right. Now, in this order:
+1. **#8909:** read HASH-116 and the pull request at each CHECKPOINT for infra's word (rung 11:42Z; none yet at
+   12:10Z). A change it asks for comes first: make it, run the touched suites at the new head, end your turn
+   with the head and the run.
+2. **`server_rate.py` writes `cores`** (`{count, list, numa_nodes}` from its own affinity), with a test: a
+   branch on top of #8679's head (`9a8abc0814`), since both change that script, and a pull request **not
+   marked** and saying so, until #8679 is on `main` and proofs, whose script it is, has said yes. End your turn
+   when it is open: I ring proofs.
+3. **The verdict module**, which every answer to (a) to (e) needs: the nine checks as one stdlib module beside
+   the harness (as `overhead.py` is), a pure function of a run's own files, with tests on made-up files for
+   each check failing alone and all passing. No spec, no schema and no `run` yet: those wait for benchmarks.
+   Say in its pull request's body which of your scripts it replaces (`after.py`, `recheck.py`, `complete_row.py`).
+- **One correction to section 5 of the design:** after Sat 14 Nov kernels' card is `vy-dc-h200-3` (one H200,
+  16 threads), not node A. Say on HASH-115 in two lines what the slot and the lease's install need there
+  (its cores, whether it has a `cpu.max`), by reading; I take it to infra after benchmarks' answer on (c).
+- The 18:15Z row on node A is KHSHARE's four-prover pair now (card 6), not yours.
