@@ -26,10 +26,12 @@ from typing import Any
 
 import verity_difftest as D
 from verity_difftest import protocol as P
+
 from verity.protocols.poub.verifier import audit, codec, coins, receipts, wire
 from verity.protocols.poub.verifier.audit import AuditRun, Params, SessionError
 from verity.protocols.poub.verifier.receipts import Plan
-from verity.protocols.spot.device.challenger import COIN_BYTES as LIVE_COIN_BYTES, HM96, LiveChallenger
+from verity.protocols.spot.device.challenger import COIN_BYTES as LIVE_COIN_BYTES
+from verity.protocols.spot.device.challenger import HM96, LiveChallenger
 
 HERE = Path(__file__).resolve().parent
 PACKAGE = HERE.parent

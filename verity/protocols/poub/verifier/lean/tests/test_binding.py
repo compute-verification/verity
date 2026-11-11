@@ -21,10 +21,10 @@ import shutil
 from pathlib import Path
 
 import pytest
-from hypothesis import strategies as st
-
 import ra_cases as M
 import verity_difftest as D
+from hypothesis import strategies as st
+
 from verity.protocols.poub.verifier import audit, codec, store
 
 pytestmark = pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain")
@@ -216,8 +216,8 @@ def test_each_refusal_of_a_pin_is_the_leans_word_for_word(server) -> None:
         (case(json.dumps(good | {"checkpoint": {**files, "config.json": "AB" * 64}})),
          f"the pin {p} is not {form} with a file name (no directory) a file"),
         (case(json.dumps({ROLE: {"files": {}}, "B": {}})),
-         f"the pin {p} is not {{ROLE: {{checkpoint_sha512, files: {{file: SHA-512 hex}}, ...}}}} with a file name (no "
-         "directory) a file"),
+         (f"the pin {p} is not {{ROLE: {{checkpoint_sha512, files: {{file: SHA-512 hex}}, ...}}}} with a file name (no "
+          "directory) a file")),
         (case(json.dumps(good | {"checkpoint_sha512": "cd" * 64})),
          f"the pin {p}'s checkpoint_sha512 is not the SHA-512 of its checkpoint's canonical JSON ({digest[:16]}...)"),
         (case(json.dumps(good)[:-1] + ', "checkpoint_sha512": "' + "ef" * 64 + '"}'),
@@ -498,15 +498,15 @@ def test_each_decision_of_a_hello_is_the_leans_word_for_word(server, tmp_path) -
     shown = "[('weights', 'hbm', 0, 6), ('filler', 'hbm', 6, 1), ('weights', 'hbm', 7, 6), ('filler', 'hbm', 13, 1)]"
     cases = [
         (base | {"payload_root": other},
-         f"the hello's payload root {other[:16]}... is not the pinned model {ROLE}'s store (2 arenas of 7 blocks, 6 of "
-         "weights each, then 2 host filler blocks) under this verifier's payload key, whose root is "
-         f"{want[:16]}...: register the store `remote_bandwidth.store` lays out, salted with the key the verifier sent",
+         (f"the hello's payload root {other[:16]}... is not the pinned model {ROLE}'s store (2 arenas of 7 blocks, 6 of "
+          "weights each, then 2 host filler blocks) under this verifier's payload key, whose root is "
+          f"{want[:16]}...: register the store `remote_bandwidth.store` lays out, salted with the key the verifier sent"),
          want),
         (base | {"payload_root": want, "blocks": 13},
          "the hello's store is 13 blocks, fewer than the pinned model's 2 arenas of 7", None),
         (base | {"payload_root": want, "layout": wider},
-         "the hello's layout [('weights', 'hbm', 0, 6), ('filler', 'hbm', 6, 2), ('weights', 'hbm', 8, 6), "
-         f"('filler', 'hbm', 14, 2)]... is not the pinned model {ROLE}'s {shown}...", None),
+         ("the hello's layout [('weights', 'hbm', 0, 6), ('filler', 'hbm', 6, 2), ('weights', 'hbm', 8, 6), "
+          f"('filler', 'hbm', 14, 2)]... is not the pinned model {ROLE}'s {shown}..."), None),
         (base | {"payload_root": want, "node": ""}, "a node's id is 1 to 64 bytes", None),
         (base | {"payload_root": want, "engines": 0},
          "a store is one or more arenas and no fewer than zero host blocks, not 0 and 0", None),
@@ -600,8 +600,8 @@ def test_each_decision_of_the_verifiers_binding_is_the_leans_word_for_word(serve
     cases = [
         (v | {"data": others}, f"the pin {p} is other's, not --model {ROLE}'s"),
         (v | {"data": json.dumps(good | {"checkpoint_sha512": "cd" * 64}).encode().hex()},
-         f"the pin {p}'s checkpoint_sha512 is not the SHA-512 of its checkpoint's canonical JSON "
-         f"({good['checkpoint_sha512'][:16]}...)"),
+         (f"the pin {p}'s checkpoint_sha512 is not the SHA-512 of its checkpoint's canonical JSON "
+          f"({good['checkpoint_sha512'][:16]}...)")),
         (v | {"data": (b"\xff" + json.dumps(good).encode()).hex()}, f"the pin {p} is not UTF-8"),
         (v | {"engines": 0}, "a store is one or more arenas and no fewer than zero host blocks, not 0 and 0"),
         (v | {"arena_blocks": 5}, "the weights take 6 blocks, more than an arena's 5"),

@@ -10,12 +10,12 @@ import functools
 import hashlib
 
 import pytest
-
 from remote_bandwidth_fakes import Clock, Entropy
-from verity.protocols.spot.verifier.profile import IntegrityProfile, Subset
+
 from verity.protocols.poub.verifier import audit, codec, coins, receipts, schedule
 from verity.protocols.poub.verifier.audit import AuditRun, Params
 from verity.protocols.poub.verifier.receipts import Plan
+from verity.protocols.spot.verifier.profile import IntegrityProfile, Subset
 
 N = 8
 CAP = 256

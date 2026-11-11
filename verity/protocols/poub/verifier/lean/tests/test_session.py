@@ -12,10 +12,10 @@ import json
 import shutil
 
 import pytest
-from hypothesis import strategies as st
-
 import ra_cases as M
 import verity_difftest as D
+from hypothesis import strategies as st
+
 from verity.protocols.poub.verifier import audit
 
 pytestmark = pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain")

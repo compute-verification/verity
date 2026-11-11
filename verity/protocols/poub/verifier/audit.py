@@ -101,11 +101,21 @@ from dataclasses import dataclass, field, replace
 from fractions import Fraction
 from typing import Any, Protocol
 
-from verity.protocols.spot.verifier.profile import WINDOW_DELTA, IntegrityProfile, Subset
-from verity.commitments import Commitment, CommitmentDomain, MerkleTree, Opening as MerkleOpening, RangeIndexedDomain
-from verity.commitments import verify_opening
-from verity.commitments.scheme import DIGEST_BYTES as _DIGEST_BYTES
+from verity.commitments import (
+    Commitment,
+    CommitmentDomain,
+    MerkleTree,
+    RangeIndexedDomain,
+    verify_opening,
+)
+from verity.commitments import Opening as MerkleOpening
 from verity.commitments.randomness import derive, frame
+from verity.commitments.scheme import DIGEST_BYTES as _DIGEST_BYTES
+from verity.protocols.spot.verifier.profile import (
+    WINDOW_DELTA,
+    IntegrityProfile,
+    Subset,
+)
 
 from . import codec, coins, receipts
 from . import pooled as _pooled

@@ -12,11 +12,11 @@ import sys
 import threading
 
 import pytest
+from remote_bandwidth_fakes import Clock, Entropy
 
 from verity.configuration.deploy.stream import Side
 from verity.protocols.poub.verifier import audit, codec, verifier_party
 from verity.protocols.poub.verifier import period as P
-from remote_bandwidth_fakes import Clock, Entropy
 
 STORE = hashlib.shake_256(b"a tiny MLP's weights").digest(3 * 4032 - 17)
 COINS = hashlib.sha512(b"the period's live coins").digest()
