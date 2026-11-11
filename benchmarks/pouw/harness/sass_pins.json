@@ -136,7 +136,7 @@
    },
    "exceptions": {
     "MUFU.EX2": {
-     "definition": "verity.ml.circuits.ops.mufu.MufuEx2Ftz (MufuEx2Ftz_v1, ex2.approx.ftz.f32: library table ex2, sha512 5cb768c1725369ad905e725437463729d5b6054ca9adc498e755247e2ba848b510e3325e1c3fecad1242832aca5fa0afd463b16002a7f34050a7b377ed107877, read inside its reduction rule)",
+     "definition": "verity.definitions.ops.mufu.MufuEx2Ftz (MufuEx2Ftz_v1, ex2.approx.ftz.f32: library table ex2, sha512 5cb768c1725369ad905e725437463729d5b6054ca9adc498e755247e2ba848b510e3325e1c3fecad1242832aca5fa0afd463b16002a7f34050a7b377ed107877, read inside its reduction rule)",
      "numeric": {
       "runs": [
        "r20261026-015355-aec6",
