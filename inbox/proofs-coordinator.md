@@ -35439,3 +35439,45 @@ The cost of replaying a sampled response with its inside values committed has ne
   - The quick tier reruns after its records commit.
 - **Part 2:** unchanged at `165eeb74ddcdfd9b5843049d09843bb9e9dddc1a` [run].
 - Candidate R (PRF-542): nothing changed for it.
+
+## CONCRETE, Wed 11 Nov 00:40Z: lean's five are on #8764's branch at `05c89e29e099ea9caf397bbc2be1fc498af72792`, both of lean's statements hold there, and one run compiles and records that head: `r20261111-003652-2fc1` on cpu-7, ETA about 02:00Z
+
+**The answer.** Picked head: `cursor/proofs-concrete-leaves-1ca7` at `05c89e29e099ea9caf397bbc2be1fc498af72792`, on `main` `2b869ed35db5` (still `main`'s tip at 00:40Z [run]). Not ready to mark: the compile and the records are one run, in its slot since 00:39Z. #8764 stays unmarked.
+
+**The pick** [run: git].
+- My two commits conflict with the five in `Names.lean` and `VStarNets.lean`, so the branch first reverts them, as two new commits: `22a60dba37`, `b1a11fce0b`. After them the tree is `main`'s, `8553944e7b73`.
+- Then the five in lean's order with `cherry-pick -x`, none with a conflict: `9e958f2efd` (`040d74b420`), `de75cf3719` (`9464d2740d`), `4cef47022f` (`505ca08879`), `25a8b4bc72` (`e66a3ffa30`), `05c89e29e0` (`9a4b388a88`).
+- The push was a fast-forward, `a6723b6558..05c89e29e0`. Nothing forced.
+- **lean's first statement holds:** no conflict.
+- **lean's second statement holds:** the head differs from `main` in 15 files, all Lean, no lock. 13 are HELDINLINE's blobs at `ad3fb8e7419f`. The other two are `Security/Proofs/Flock/Claims.lean` and `Security/Proofs/Properties/Verity/Sampled/Record/Reg.lean`; each differs from `main` by the one line lean's commit gives it (the import of `VStarNetsStaged`; `Names` to `UnitName`).
+
+**The run** [run]. `r20261111-003652-2fc1`, cpu-7, source `05c89e29e0`, launched 00:37Z, Lean slot `build/6` (22 cores) since 00:39Z.
+- It is `lean_changed.py --records Security/Proofs --update`: `check.py --build` of the whole package on the slot tree, then the records with `--update`'s review. So it is the one compile and the Lean check together.
+- What it must compile: 227 modules are at or above the 15 files [run: the import headers], 208 under `Proofs.Flock` and 19 under `Proofs.Properties.Verity` (`Recursive` and `Sampled.Record`), all under the package's roots. When it ends I check its build log against that list, as for `2263`.
+- I ran no `--try --siblings` first. A name declared twice shows at the package's roots in this build. Say so if you want the try as well.
+- **ETA about 02:00Z** [guess: `c5f4`, the same command on 22 cores, is 65 minutes in and not done]. Its cap is 02:39Z.
+
+**Checked by reading, before the run** [run: a script over the import headers of `main`, the head and `ad3fb8e7419f`].
+- 20 modules see fewer modules at the head than on `main`: 5 of the 15 files, and 15 files nobody edited (`ConcreteNet`, `Concrete` and ten modules under it, `SampledAuditNontrivial`, `ZkAnyHonest`, `ZkAnyNontrivial`). Four of the 20 (`ConcreteNet`, `Concrete.Public`, `Concrete.Setup`, `Concrete.Sizes`) no longer see any Mathlib module.
+- At `a6723b6558`, which compiled, these saw all of Mathlib through my `Text.lean`. So `2263` says nothing about them here.
+- Each of the 20 has, byte for byte, the text it has in HELDINLINE's tree, and sees every module it sees there but `Proofs.Flock.Soundness.Discharge.HiddenExec.PinnedCols`, which `main` does not have. `04df` built them there.
+- [guess] So no import is missing. 301 `Proofs` modules differ between the two trees, so only the run decides.
+
+**lean's build `r20261110-202347-04df`** [run: `research fetch --all`]. Ended 00:25:11Z, rc 0: "targets: lake build exit 0, 0 failed target(s), 0 error line(s), 3170 module(s) built, 2575 s". Source `ad3fb8e7419f`; targets `Proofs.Flock` and five modules outside it.
+
+**What of `r20261110-233505-c5f4` still holds.** At 00:38Z it was still running [run].
+- **As a verdict, nothing.** It checks `a6723b6558`. The head's tree differs from that one in `Names.lean` and `VStarNets.lean`, and has `UnitName.lean` and `VStarNetsStaged.lean` where that one has `Text.lean` and `VStarNetsThree.lean`. A pass is reused only while every input it read is unchanged.
+- **As evidence, two things** [guess on both]. `Concrete/File.lean` and `Concrete/Public.lean` are the same blobs at both heads, so a pass there says the `kernel_rfl'` rewrite gets through check.py once. And it shows whether a split of `VStarNets.lean` moves a record.
+- **The one record that could move** [read]. The locks name one split module: the `reads` entry `Proofs.Flock.Claims.Recursion.VStarNets` in `Security/lean-audit.json` (line 47974). Its five definitions (`fileLs`, `joinNl`, `netLs`, `rowsLs`, `secLs`) stay in `VStarNets.lean` at the head, and its digest is a hash of that map (`check.py`, `module_digest`). [guess] So it does not move at the head. HELDINLINE's hand-over lists that digest; `2fc1` says which.
+- I let it run rather than cancel it: a cancel leaves slot tree `build-2` half-built. Its printout goes here, marked as the old head's, not on the PR.
+
+**Two things you should know** [run].
+- This VM restarted at about 00:27Z and came back without `/tmp` and `~/.research`. I rebuilt the worktrees from `origin`. Lost: my checkpoint line of 00:21Z, nothing else.
+- At 00:21Z and 00:22Z three of your timers reached me (`proofs-1940Z-benchcross-38f3`, `proofs-sweep-30m-v42`, `proofs-2105Z-runs`), with eleven Slack events of 21:05Z to 21:13Z. I acted on none. If you were waiting on those fires, they did not reach you.
+
+**Left.**
+1. #8764's title and body still describe my split; I rewrite them for lean's text next (`research queue edit`).
+2. Read `2fc1`: the build against the 227, the outcome line, `--update`'s printout. A record that differs is named here before anything else.
+3. `c5f4`'s printout.
+4. When the layout move is on `main`: cross it (`tools/move/restack.py`, else the merge of `main`), say which and what it changed, then the records and the quick tier on the moved tree.
+5. "ready to mark #8764 at SHA".
