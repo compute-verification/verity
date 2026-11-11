@@ -42,7 +42,7 @@ def _skipped(world: World) -> list[str]:
 @pytest.mark.parametrize("files, low", [
     (["tools/research/src/research/drive.py", "README.md"], True),
     (["adapters/vllm/verity_vllm/serve.py", "verity/ml/flock/x.py", "verity/ml/definitions/y.py"], True),
-    (["Security/Proofs/Core/X.lean"], False),
+    (["security/Proofs/Core/X.lean"], False),
     (["docs/a.md", "verity/protocols/pous/lean/lean-audit.json"], False),
     (["verity/protocols/flock/verifier/lakefile.toml"], False),
     (["x/lean-toolchain"], False), (["x/lake-manifest.json"], False), (["x/TRUSTED.sha256"], False),
@@ -160,7 +160,7 @@ def test_the_lanes_merge_rebuilds_conflicted_pins_as_the_sync_does(world, monkey
     one = {**tree, f"{POUS}/lakefile.toml": "l1\n"}
     two = {**tree, f"{POUS}/lean-toolchain": "t1\n"}
     paths = ["lean-toolchain", "lakefile.toml", "Old.lean", UP]
-    exfil = ["Security/Proofs/lakefile.toml", "x.lean"]
+    exfil = ["security/Proofs/lakefile.toml", "x.lean"]
     a, b = _pinned(world, one, paths, exfil), _pinned(world, two, paths, exfil)
     _git(h.d.repo, "fetch", "-q", "origin", f"refs/dev/{a}", f"refs/dev/{b}")
     merged, why = h.d._clean_merge(a, b)
