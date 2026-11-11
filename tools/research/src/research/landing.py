@@ -68,9 +68,10 @@ ACTIVE = ("submitted", "waiting", "running", "unknown")
 #: check.py's exit for a twin that never took a slot
 NOT_STARTED = 75
 #: the steps of a whole check: every ci.toml job (`--deferred` takes jobs; the preflights are none), those off the merge gate
-#: (policy.toml's `off_gate`: circuit-check, ratchet-gate) among them; what the check that gates a candidate sends (`vqueue_slim.start`)
+#: (policy.toml's `off_gate`) among them; what the check that gates a candidate sends (`vqueue_slim.start`)
 AFTER_LANDING = tuple(s for s in CHECK_STEPS if not s.startswith("preflight-"))
 #: the steps of `AFTER_LANDING` a run may skip by name: lean-agreement when nothing it checks changed, lean-changed under --no-cache
+#: and in every shard (`shards.NO_SHARD`)
 AFTER_LANDING_OPTIONAL = ("lean-agreement", "lean-changed")
 #: the steps whose tasks run test suites, so a `suite NAME` failure may be either's (`vqueue_slim.failing`)
 SUITE_STEPS = ("lean-suites", "pytest")

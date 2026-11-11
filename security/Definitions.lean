@@ -18,7 +18,6 @@ public import Definitions.Core.Game.InterleaveBridge
 public import Definitions.Nci
 public import Definitions.Nci.Support
 public import Definitions.Nci.Reads
-public import Definitions.Nci.Transfers
 public import Definitions.Nci.Dark
 public import Definitions.Nci.Covering
 public import Definitions.Nci.Capability
