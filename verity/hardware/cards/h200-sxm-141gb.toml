@@ -51,7 +51,7 @@ bandwidth = { value = 4.916736e12, unit = "B/s", mark = "ceiling", source = "clo
 [weight]
 s8 = { value = 1, unit = "tensor unit/MAC", mark = "ceiling", source = "rate.tensor's unit" }
 u8 = { value = 1, unit = "tensor unit/MAC", mark = "ceiling", source = "the data sheet's INT8 rate, u8 as s8" }
-b1 = { value = 0.125, unit = "tensor unit/MAC", mark = "measurement", source = "measured: the H200's b1 MMA (BGMMA m64n256k256) runs 32764.6 b1 MACs a SM-clock, exactly 8 times s8's 4095.6 at the same instruction rate; no document gives a b1 peak" }
+b1 = { value = 0.125, unit = "tensor unit/MAC", mark = "measurement", source = "measured: the H200's b1 MMA (BGMMA m64n256k256) runs 32764.6 b1 MACs a SM-clock, exactly 8 times s8's 4095.6 at the same instruction rate (art:83dbd28b545b; both rows carry the probe's throttled tag); no document gives a b1 peak" }
 e4m3 = { value = 1, unit = "tensor unit/MAC", mark = "ceiling", source = "the H200 data sheet: FP8 1,979 dense TFLOPS, the INT8 rate" }
 e5m2 = { value = 1, unit = "tensor unit/MAC", mark = "ceiling", source = "as e4m3" }
 e2m1 = { value = 1, unit = "tensor unit/MAC", mark = "ceiling", source = "the card has no FP4 MMA: an op the card lacks only adds programs to the model" }
