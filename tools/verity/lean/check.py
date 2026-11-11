@@ -198,7 +198,7 @@ def cores() -> int:
     return n
 
 
-#: what auditing a package that pins ArkLib (Security/Proofs, and Security, which audits it beside itself) needs: its build
+#: what auditing a package that pins ArkLib (security/Proofs, and Security, which audits it beside itself) needs: its build
 #: of Flock's soundness peaks at 15–24 GB (the lean-proofs skill); `VERITY_LEAN_MEM_FLOOR_GIB` sets another floor, 0 none
 MEM_FLOOR_GIB = 24
 #: an audit of a spec whose guarantees an ArkLib package proves (Security): its whole replay peaks at about 145 GiB at
@@ -982,7 +982,7 @@ def program(pkg: Path, source: str) -> str:
 
 #: the packages whose audit writes `Unread.lean`'s facts (`unread_facts`) for `unread.py`'s ratchet, which `lean_audit.py`
 #: runs once both have passed in one run: the security analysis's spec and its proofs, which always share a shard
-UNREAD_FACTS = ("Security", "Security/Proofs")
+UNREAD_FACTS = ("security", "security/Proofs")
 
 
 def unread_facts(pkg: Path, modules: list[str], work: Path, sealed: "Sealed | None" = None) -> dict:
@@ -2048,7 +2048,7 @@ def listed_premises(policy: dict, domain: bool = True) -> dict:
 
 def assumption_homes(policy: dict) -> list[str]:
     """The modules `assumptions_module` names, where a named assumption is declared (or in a module under one): one
-    module, or a list of them, as in `Security/Properties`, whose assumptions stated over the code can't sit in the
+    module, or a list of them, as in `security/Properties`, whose assumptions stated over the code can't sit in the
     spec's."""
     home = policy.get("assumptions_module")
     return [home] if isinstance(home, str) else [h for h in home if isinstance(h, str)] if isinstance(home, list) else []
@@ -4228,7 +4228,7 @@ def setup(pkg: Path, toolchain: str, log: Path) -> tuple[int, str]:
 def dev_restore(pkg: Path, rc: int, text: str, log: Path) -> tuple[int, str]:
     """With `--dev-cache`, main's verified build of each package ``pkg`` requires by path too (`setup.sh` restores only
     ``pkg``'s): a rebuild of one isn't byte-identical to the published build, so every module above it would compile again
-    (most of Security/Proofs' modules). A failed restore leaves those to `lake build`."""
+    (most of security/Proofs' modules). A failed restore leaves those to `lake build`."""
     if not DEV_CACHE or rc != 0 or not (deps := path_deps(pkg)):
         return rc, text
     # `cache.py get` unstages from inside each package, so Lake needs that package's dependencies where it looks: a path
