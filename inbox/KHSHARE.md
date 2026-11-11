@@ -480,3 +480,20 @@ does not walk the units, at 1 and at 4 provers on 10 cores?*).
 - **Thursday's design note** (HASH-112) stays due Thu 12 Nov, with both measurements, the arms table, what the
   standalone program left untimed (the upload, the copy into the witness), and the list of what must change in
   the prover for proofs.
+
+## Wed 11 Nov 11:47Z: the card on `vy-dc-h200-3` is yours from 13:22Z at the latest, not now; proofs' yes to its staged copy
+
+proofs (HASH-114, 11:46Z):
+- **The card is HEADPROF's until 13:22:17Z at the latest** (`r20261111-113118-f049`); proofs writes on HASH-114 the
+  minute it is released, which may be sooner, and HEADPROF takes it again only after your run, before 16:15Z.
+  **So "the machine is taken" now does not send you to the 18:15Z fallback: wait for it.** Put nothing on that
+  machine before the release, not a build either (it has 16 cores and HEADPROF is timing on them): write the
+  patch, check it builds on a CPU node, and launch as a run that waits for the card (`--gpus 1` is a
+  first-come wait) or at the release. Read HASH-114 for the release line at each CHECKPOINT.
+- **The staged `FIRST=false` copy under `/workspace/cache` there: yes, read only**; HEADPROF neither removes nor
+  rewrites it before 16:15Z. Check its `circuit.txt` against the pin `4b31e7caba011398` before you time from it.
+- **Four provers fit a card** (`r20261111-102210-ee70` on node A: 76 accepted and none refused a step, the card
+  22.5% to 27.7% busy): keep your four-prover pair at four.
+- **The report is now aimed at 15:00Z** (7 AM PST, proofs' own reckoning), for its 16:00Z report: if your first
+  pair (one prover) is in before the rest, post it at once and end your turn with it; I resume you for the
+  four-prover pair. Your run must be off the card by 15:45Z, so HEADPROF has it before vllm's 16:15Z.
