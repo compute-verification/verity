@@ -1,0 +1,18 @@
+# `verity bench memory` (`run.py`): the share of a node's memory read rate one accepted PoUB session leaves uncertified,
+# at the data sheet's read bandwidth, read from the session's verifier's record. Not a package: the suite holds the
+# printer, the three ways in and the references to records built in the tests, with a stand-in for the evidence store
+# and one for the processes the command starts, so no session runs in it
+# (`uv run tools/verity/check/suites.py benchmarks/memory`).
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]
+
+[tool.verity.tests]
+# the number is held to the session harness's own summary of the same records (`summary.py`'s `gamma_spec`), and
+# settings.py is built on verity_config's registry
+inputs = [
+    "benchmarks/remote_session/summary.py",
+    "tools/config/verity_config",
+    "verity/__init__.py",
+    "verity/settings.py",
+]
