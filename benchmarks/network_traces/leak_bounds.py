@@ -56,13 +56,14 @@ rule, and never by requests what a check counts by capacity:
   counted by link whatever it serves; its parameters list no connection, so it has no fail cell; and the jitter is
   the scan's, a step a bucket;
 * the scan under each of `CHANGES`, the three changes to its check, and under all three: a response's length held to
-  its Program's output count, so that the schedules are 0 and the connections that fail are charged pooled over the
-  period (`failed`); the release times taken once, by the compute side's tick, so that the jitter is 0; and the
-  entries charged through the compute audit, whose own bound then stands in their place and is not counted here;
+  its Program's output count, and that count to its ids by a stop block, a proof block that checks where a response's
+  ids stop, sampled on a served audit, so that the schedules are 0 and the connections that fail are charged pooled
+  over the period (`failed`); the release times taken once, by the compute side's tick, so that the jitter is 0; and
+  the entries charged through the compute audit, whose own bound then stands in their place and is not counted here;
 * the design, which no run has behind it: head checks, a lengths unit on the network certifier's records, and a stop
-  block, a proof block that checks where a response's ids stop, sampled on a served audit. The lengths unit holds a
-  response's length to its Program's output count and the stop block holds that count to the ids, so the lengths are
-  held; the entries are the compute audit's; and its term is the jitter and the pooled failures;
+  block sampled on a served audit. The lengths unit holds a response's length to its Program's output count and the
+  stop block holds that count to the ids, so the lengths are held; the entries are the compute audit's; and its term
+  is the jitter and the pooled failures;
 * the design with no stop block, the same before a stop block has been sampled on a served audit: nothing holds the
   output count to the ids, so the server picks it and each connection is still charged its schedule, as the scan
   charges it. Its failed connections, jitter and entries are the design's.
@@ -141,9 +142,10 @@ STATEMENTS = {"per_period": "NetTiming.Guarantees.PeriodLeakAccepted",
               "datacenter": "the sum over links of each link's statement, each at δ / links: our composition, which no "
                             "Lean statement covers"}
 #: the three changes to the scan's check, by name, and what each zeroes of what the check charges today
-CHANGES = {"lengths": "a response's length held to its Program's output count: the schedules are 0, and the "
-                      "connections that fail are charged pooled over the period, which of them failed and where "
-                      "each one's stream ended",
+CHANGES = {"lengths": "a response's length held to its Program's output count, and that count held to its ids by a "
+                      "stop block, a proof block that checks where a response's ids stop, sampled on a served "
+                      "audit: the schedules are 0, and the connections that fail are charged pooled over the "
+                      "period, which of them failed and where each one's stream ended",
            "timing": "the release times taken once, by the compute side's tick: the jitter is 0",
            "entries": "the entries charged through the compute audit: the compute side's own bound stands in their "
                       "place, and is not counted here"}
@@ -475,7 +477,8 @@ ROWS = {
                "whatever it serves; no fail cell, its parameters listing no connection; and the jitter of each "
                "link's execution phase"),
     **{name: Kind("a change to the scan", (name,), what) for name, what in CHANGES.items()},
-    "all three": Kind("a change to the scan", tuple(CHANGES), "the three changes together"),
+    "all three": Kind("a change to the scan", tuple(CHANGES),
+                      "the three changes together, with the stop block the lengths' change rests on"),
     "design, no stop block": Kind(
         "a design with no run behind it", ("lengths", "entries"),
         "the design before a stop block, a proof block that checks where a response's ids stop, has been sampled on "

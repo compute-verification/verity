@@ -33,12 +33,13 @@ and each row says where it stands:
   Its parameters list no connection, so it has no fail cell. The jitter is the scan's.
 - `lengths`, `timing`, `entries` (each a change to the scan's check) and `all three`: the scan with a response's
   length held to its Program's output count, with the release times taken once by the compute side's tick, and with
-  the entries charged through the compute audit.
+  the entries charged through the compute audit. The schedules' 0 under `lengths` and `all three` rests on a stop
+  block, a proof block that checks where a response's ids stop, sampled on a served audit: it holds that output count
+  to the response's ids.
 - `design, no stop block` (no run behind it): the design, below, before a stop block has been sampled on a served
-  audit. A stop block is a proof block that checks where a response's ids stop. The lengths unit holds a response's
-  length to its Program's output count, but until a stop block holds that count to the ids the server picks it, so
-  each connection is still charged its schedule, as the scan charges it. Its failed connections' charge, its jitter
-  and its entries are the design's.
+  audit. The lengths unit holds a response's length to its Program's output count, but until a stop block holds that
+  count to the ids the server picks it, so each connection is still charged its schedule, as the scan charges it.
+  Its failed connections' charge, its jitter and its entries are the design's.
 - `design` (no run behind it): head checks, a lengths unit on the network certifier's records, and a stop block
   sampled on a served audit. The lengths are held, the stop block holding a response's output count to its ids, and
   the entries are the compute audit's, so its term is the jitter and the failed connections' charge.
@@ -49,8 +50,9 @@ cells, and nothing else.
 ## The terms
 
 - **schedules**: for the scan, ⌈log2(cells + 1)⌉ bits a connection, where cells is the most cells a response takes,
-  one more than the most ids it holds; 0 where the lengths are held, but for `design, no stop block`, which is
-  charged the scan's. For N2, ⌈log2 #Σ_sync^m⌉ over a link's m execution phases (`--syncs`).
+  one more than the most ids it holds; 0 where the lengths are held with a stop block (`lengths`, `all three`,
+  `design`), and the scan's where they are held without one (`design, no stop block`). For N2, ⌈log2 #Σ_sync^m⌉ over
+  a link's m execution phases (`--syncs`).
 - **cells**: the fail cells, the same bits again a connection. Where the lengths are held, with a stop block or
   without, it is the failed connections' charge instead, pooled over the period: which connections failed and where
   each one's stream ended, at most F·(log2(e·N / F) + log2(cells + 1)) bits for F failures among N connections, and

@@ -214,7 +214,8 @@ def test_only_the_lengths_change_reads_the_stop_block():
     """Under every set of the three changes, `terms` with a stop block is `terms` as it is called without the
     argument, and with none it differs only where the lengths are held, and there only in the schedules, which are
     each connection's as under no change. So the rows that have a stop block, every row but one, are not moved by
-    the one that has none."""
+    the one that has none. A row whose schedules read the stop block says so: the rows that hold the lengths name
+    it in their text, and no other row does."""
     given = {"cells": 65, "steps": 32, "dj": 2, "entries": 9_088, "failures": 1}
     scan = LB.terms(4, 1, **given)
     for size in range(len(LB.CHANGES) + 1):
@@ -227,6 +228,9 @@ def test_only_the_lengths_change_reads_the_stop_block():
             else:
                 assert bare == held
     assert LB.Kind("on main", (), "a row").stop
+    reads = {name for name, kind in LB.ROWS.items() if "lengths" in (kind.changes or ())}
+    assert reads == {"lengths", "all three", NO_STOP, "design"} == {
+        name for name, kind in LB.ROWS.items() if "stop block" in kind.counts}
 
 
 def test_the_scale_is_read_from_the_files_and_every_input_is_marked():
