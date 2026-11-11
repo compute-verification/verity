@@ -174,6 +174,9 @@ FROZEN = Path("/data/vqueue/live/frozen")
 #: the tests a candidate's check leaves out, one node id a line from the repository's root (`#` lines skipped), read at each
 #: launch (`vqueue_slim.deselection`); the nightly uncached check, which reads no list, runs them
 DESELECT = Path("/data/vqueue/live/deselect")
+#: the runs a cancel leaves running, one run id a line (`#` starts a comment), read at each cancel: a first shard whose Lean audit
+#: runs, which writes its node's module index only when it ends, so that a kill throws its compile away
+KEEP_RUNS = Path("/data/vqueue/live/keep-runs")
 #: the PRs whose Lean change is wide, its build expensive, one number a line as the priority file holds them: a candidate
 #: taking one takes no other Lean member, and one on a candidate holding one takes none until it is on `main` (`vqueue._wide`)
 WIDE = Path("/data/vqueue/live/wide")
@@ -252,6 +255,15 @@ def unstamp(s: object) -> float | None:
 
 def branch(sha: str) -> str:
     return f"refs/heads/queue/{sha[:12]}"
+
+
+def kept_runs(path: Path | None) -> frozenset[str]:
+    """The run ids ``path`` names (`KEEP_RUNS`): none while it is absent."""
+    try:
+        text = path.read_text() if path is not None else ""
+    except OSError:
+        return frozenset()
+    return frozenset(w for line in text.splitlines() if (w := line.partition("#")[0].strip()))
 
 
 def _digest(doc: object) -> str:
@@ -597,10 +609,11 @@ class World:
                  post: Callable[[str, tuple[str, ...]], bool] | None = None, now: Callable[[], float] = time.time,
                  labels_at: Callable[[], StoreLabels] | None = None, cache: Path | None = None, on: str = "",
                  frozen_file: Path | None = None, deselect_file: Path | None = None, wide_file: Path | None = None,
-                 pins_file: Path | None = None):
+                 pins_file: Path | None = None, keep_file: Path | None = None):
         self.q, self.labels, self.tasks, self.graph2, self.on = q, labels, tasks, tuple(graph2), on
         self.priority_file, self.now, self.repo, self.labels_at = priority_file, now, q.workdir, labels_at
-        self.frozen_file, self._frozen_told, self.wide_file, self.pins_file = frozen_file, set(), wide_file, pins_file
+        self.frozen_file, self._frozen_told, self.wide_file = frozen_file, set(), wide_file
+        self.pins_file, self.keep_file = pins_file, keep_file
         #: the tests each candidate's check leaves out (`DESELECT`, `vqueue_slim.deselection`)
         self.deselect_file = deselect_file
         self.keys = cache / "issuer-keys.json" if cache is not None else None
@@ -1322,8 +1335,12 @@ class World:
         return "cancelled" if r.returncode == 0 else f"cancel exited {r.returncode}: {(r.stderr or r.stdout).strip()[-200:]}"
 
     def cancel_runs(self, ids: Iterable[str], why: str) -> dict[str, str]:
-        """`research cancel` of runs ``ids``, as drive cancels a run beside a check: {run id: why} of each that failed."""
-        return cancel_runs(self.repo, list(ids), why)
+        """`research cancel` of runs ``ids``, as drive cancels a run beside a check: {run id: why} of each that failed, or that
+        ``keep_file`` names (`KEEP_RUNS`), which is left running."""
+        ids, keep = list(ids), kept_runs(self.keep_file)
+        rest = [i for i in ids if i not in keep]
+        return {**{i: f"left running: {self.keep_file} names it" for i in ids if i in keep},
+                **(cancel_runs(self.repo, rest, why) if rest else {})}
 
     def advance(self, sha: str, base: str) -> None:
         """origin's `main` fast-forwarded from ``base`` to ``sha``."""
@@ -2618,6 +2635,8 @@ def main(argv: list[str]) -> int:
     ap.add_argument("--deselect", type=Path, default=DESELECT, help=f"the tests a candidate's check leaves out, one node id a line "
                                                                     f"from the repository's root, read at each launch (default "
                                                                     f"{DESELECT})")
+    ap.add_argument("--keep-runs", type=Path, default=KEEP_RUNS, help=f"the runs a cancel leaves running, one run id a line, read "
+                                                                      f"at each cancel (default {KEEP_RUNS})")
     ap.add_argument("--graph2", default=shlex.join(GRAPH2), help="graph2's argv before its subcommand (default the control pod's)")
     ap.add_argument("--batch", type=int, default=BATCH, help=f"the most members a candidate holds (default {BATCH})")
     ap.add_argument("--depth", type=int, default=DEPTH, help=f"the most candidates stacked at once, each with the run beside "
@@ -2709,7 +2728,8 @@ def main(argv: list[str]) -> int:
         graph2 = tuple(shlex.split(a.graph2))
         world = World(q, labels, Executor(Transport(store, (*graph2, "enqueue"), a.repo)), graph2=graph2,
                       priority_file=a.priority_file, labels_at=labels_at, cache=a.log.parent, on=a.on,
-                      frozen_file=a.frozen, deselect_file=a.deselect, wide_file=a.wide_file, pins_file=a.pins_file)
+                      frozen_file=a.frozen, deselect_file=a.deselect, wide_file=a.wide_file, pins_file=a.pins_file,
+                      keep_file=a.keep_runs)
         loop = Loop(world, a.log, shadow=a.shadow, dry_run=a.dry_run, batch=a.batch, depth=a.depth, lean=a.lean,
                     pending_s=a.pending_hours * 3600, slim=slim, state=a.state, tree_ejects=a.tree_ejects, gate=a.gate,
                     shards=a.shards)
