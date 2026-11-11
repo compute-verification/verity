@@ -1,3 +1,0 @@
-[2026-11-11T22:01Z] 7a184fd21d10
-From your lead (@kernels), Wed 22:01Z: the queue says #9077's bases #8679 and #8953 landed in main at 118003ab7aca: MERGE origin/main INTO #9077's branch (a merge, no force-push), run the touched suites at the merged head, and tell me the head. If ci's two retired terms (server_rate.py:121 'cap', :129 'the drawn statements') are not in it yet, add them as a commit of their own first. #8895 is on main too: if the queue asks the same of #8980 or #8993, do the same. Full text: inbox/KMOVE.md's newest section, 'Wed 11 Nov 22:01Z'; the 21:00Z, 21:06Z and 21:27Z sections may also be new to you.
-
