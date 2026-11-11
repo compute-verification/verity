@@ -2440,8 +2440,6 @@
     {"file": "verity_vllm/pipeline/part_rows.py", "kind": "index", "symbol": "read_part", "detail": ""},
     {"file": "verity_vllm/pipeline/part_rows.py", "kind": "index", "symbol": "wire", "detail": ""},
     {"file": "verity_vllm/pipeline/part_rows.py", "kind": "var-annotated", "symbol": "wire", "detail": "", "count": 2},
-    {"file": "verity_vllm/pipeline/pouw_serve.py", "kind": "arg-type", "symbol": "main", "detail": ""},
-    {"file": "verity_vllm/pipeline/pouw_serve.py", "kind": "misc", "symbol": "main", "detail": ""},
     {"file": "verity_vllm/pipeline/prefix_cache.py", "kind": "union-attr", "symbol": "main", "detail": "", "count": 28},
     {"file": "verity_vllm/pipeline/program_cache.py", "kind": "call-overload", "symbol": "key", "detail": ""},
     {"file": "verity_vllm/pipeline/program_graph.py", "kind": "arg-type", "symbol": "catalog", "detail": ""},
