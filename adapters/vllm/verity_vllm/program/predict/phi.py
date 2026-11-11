@@ -96,7 +96,3 @@ def _cap(r: dict) -> int:
 
 def load_phi(path: str | Path) -> Phi:
     return Phi.from_json(json.loads(Path(path).read_text()))
-
-
-def save_phi(phi: Phi, path: str | Path) -> None:
-    Path(path).write_text(json.dumps(phi.to_json(), indent=1, sort_keys=True) + "\n")

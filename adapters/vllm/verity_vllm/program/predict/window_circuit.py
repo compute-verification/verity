@@ -698,7 +698,7 @@ class Lowered:
 
 
 def class_circuit(registered: Any, cls: WindowClass, programs: int | None = None, grain: Grain = _GRAIN,
-                  name: str = NAME, provable: bool = True, tables: Tables | None = None) -> IF.Circuit:
+                  provable: bool = True, tables: Tables | None = None) -> IF.Circuit:
     """``cls``'s circuit (module docstring): the class Program lowered once a slot, node by node, slot k reading its lane of the
     scan state row before its anchor (`WindowClass.anchor`), each allocation's slots side by side in its template; its blocks'
     slots are the slots. Its registered parameters are the weights (`window_builder.weight_param`) and ``SCAN_STATE``'s
@@ -706,10 +706,10 @@ def class_circuit(registered: Any, cls: WindowClass, programs: int | None = None
     tables (`Tables`). A window's circuit is every slot's; ``programs`` is the first slots only, a probe's census
     (`class_size`). Each unit is a proof block Flock's composer proves (`_Builder.settle`) unless not ``provable`` (a probe's,
     or a test's of too small a class)."""
-    return lower(registered, cls, programs, grain, name, provable=provable, tables=tables).circuit
+    return lower(registered, cls, programs, grain, provable=provable, tables=tables).circuit
 
 
-def lower(registered: Any, cls: WindowClass, programs: int | None = None, grain: Grain = _GRAIN, name: str = NAME,
+def lower(registered: Any, cls: WindowClass, programs: int | None = None, grain: Grain = _GRAIN,
           wired: bool = True, provable: bool = True, tables: Tables | None = None) -> Lowered:
     """`class_circuit`'s circuit with its lowering (`Lowered`); unless ``wired``, its units and registered reads alone, no
     wire or cut, whatever `settle` would refuse (the weights a registration commits, `window_weights`). With ``tables``,
@@ -745,7 +745,7 @@ def lower(registered: Any, cls: WindowClass, programs: int | None = None, grain:
                         tuple(openings), values=held)
     wires = tuple(IF.coalesce(b.wires))
     starts = {tid: [at - slot * n for at, n, slot, _step in runs] for tid, runs in b.spans.items()}
-    circuit = IF.Circuit(name, tuple((fn, b.units[tid]) for tid, fn in b.fns.items()),
+    circuit = IF.Circuit(NAME, tuple((fn, b.units[tid]) for tid, fn in b.fns.items()),
                          external=(f"{descriptor_id(scan)}/state", f"{progs[0].entry_unit[0]}/o0"),
                          wires=wires, cuts=b.cuts, registered=reg,
                          blocks=IF.Blocks(programs, cls.positions, tuple(inference(b.spans, programs))),
@@ -753,7 +753,7 @@ def lower(registered: Any, cls: WindowClass, programs: int | None = None, grain:
     return Lowered(circuit, fn, tuple(progs), b.spans)
 
 
-def window_circuit(registered: Any, compiled: Any, cls: WindowClass, grain: Grain = _GRAIN, name: str = NAME,
+def window_circuit(registered: Any, compiled: Any, cls: WindowClass, grain: Grain = _GRAIN,
                    placed: Sequence[tuple[int, int | None]] | None = None, provable: bool = True,
                    tables: Tables | None = None) -> IF.Circuit:
     """``compiled``'s window (`steps.Compiled`, of ``registered``) as ``cls``'s circuit, every slot's class Program whatever
@@ -763,7 +763,7 @@ def window_circuit(registered: Any, compiled: Any, cls: WindowClass, grain: Grai
     end unchecked. A last output past the window's end is the scan's to carry (module docstring). With ``tables``, H1's
     tables read (`Tables`), refused unless the window is the fixed load."""
     takes(compiled, cls, placed, tables)
-    return class_circuit(registered, cls, None, grain, name, provable, tables)
+    return class_circuit(registered, cls, None, grain, provable, tables)
 
 
 __all__ = ["CLASS_OF_RECORD", "CUTS", "FAMILIES", "Grain", "Lowered", "NAME", "Row", "Tables", "WindowClass",
