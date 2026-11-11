@@ -698,6 +698,11 @@ def test_the_sources_graph_and_the_build_s_disagreeing_is_a_failure_of_its_own(t
             "cross", "scans", "dropped", "dependency_scans", "anonymous", "dependencies", "heartbeats", "listings"}
         from_doc = A.audit_from_facts(pkg, tmp_path / f"{name}-b", doc, log=lambda *_: None)
         assert A.failures_json(from_doc["failures"]) == A.failures_json(full["failures"])
+        with monkeypatch.context() as uncompared:
+            uncompared.setattr(A, "source_graph_failures", lambda *a: [])
+            without = audit_of(pkg, tmp_path / f"{name}-c", uncompared, now, facts_out=tmp_path / f"{name}-c" / A.FACTS_DOC)
+        assert "sources.graph" not in without["failure_codes"]
+        assert (tmp_path / f"{name}-c" / A.FACTS_DOC).read_bytes() == doc.read_bytes()
 
     differing("fewer", CLEAN_IMPORTS | {"P.Thms": ["Init", "Init", "P.Assumptions"]},
               "P.Thms (it imports P.Defs only in the sources)")
