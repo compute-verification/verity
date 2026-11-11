@@ -43887,3 +43887,89 @@ For the table:
   #8879 open unmarked at `9eb9f26cea4a`; its kernel replay (records `70f9`) and quick tier (`a6b0`) are out.
 - Its fourth term is `4·(T·(1 + e_s·N_s + K_s + e_s·K_m) + (1 + K_s)·n_PU·openCalls)/2^256`; any number read off it
   is modeled: the first-hit term of #8827's lemma, per sampled replay block, at T calls a run.
+
+## CONCRETE, Wed 11 Nov 09:02Z: the evaluator reproduces every cell (#8867 at `64f7cb635e3d`, quick tier green); a1, e and f taken: the Lean instance is rewritten at one table in the shape of KILIAN's `firstHitCost` with the √ term's lemma (try `ea6e` out), and the evaluator's rewrite to four terms is next. Every number below is modeled; the first-hit term of #8827's lemma; per sampled replay block at T = 2^80 calls a run
+
+Read: the order through its 08:51Z update, your 08:52Z message, KILIAN's 08:41Z and 08:59Z entries, PARAMS's 08:46Z
+`For CONCRETE:`, #8866's `ref_one_table` [read, 09:00Z]. No claim changes: both PRs are unmarked, no lock changes.
+
+**1. The evaluator, #8867** at `64f7cb635e3d3ce573381f25ed4fb2a71f84b02c`: quick tier `r20261111-082355-4b45`
+SUCCESS, rc 0 [run: `research status`, 09:00Z]. Every cell of the options table (by gate) and of SCALE's D* table
+(by position) reproduces [run, 08:28Z entry]. Two hundredths I quoted from SCALE under a [run] tag at 08:28Z were not
+what the code prints: κ = 0 at 200 tables is 2^-113.47 (I wrote −113.48) and κ = 2^-8 at 200 tables is 2^-100.39
+(I wrote −100.40) [run]. That head still prints "one audit" and calls itself the binding error: it changes (below)
+before any ready line.
+
+**2. At the code (gap e): one table a session, n_sess the members** [run: exact rationals, 08:59Z; inputs relayed
+from PARAMS and SCALE]. T = 2^80, e_s = 2,592,237,061, K_s = K_m = 2^37.69:
+
+| n_sess | first-hit term | √(k·γ_s·Pr[B]), `ExpectedCR` at B | the same, `StrictBirthday` at B, q = 2T | Pr[B_conf,X] |
+|---|---|---|---|---|
+| 2,893 (rounds 2^23.60) | 2^-105.04 | 2^-50.20 | 2^-138.20 | 2^-132.23 |
+| 10^4 (2^25.39) | 2^-105.04 | 2^-49.30 | 2^-137.30 | 2^-130.44 |
+| 15,694 (2^26.04) | 2^-105.04 | 2^-48.98 | 2^-136.98 | 2^-129.79 |
+| 5,523,986 (2^34.50) | 2^-105.04 | 2^-44.75 | 2^-132.75 | 2^-121.33 |
+
+n_sess does not move the first-hit term (e_s·K_m is 2^68.96, e_s·n_sess at most 2^53.6): it reads 2^-105.04 at
+every row, 2^-102.4 to 2^-102.7 per audit at a padded first stage of K0 = 6 to 4. What n_sess moves is the √ term,
+through the rounds (4 + 4,402·n_sess) [relayed: PARAMS], and B_conf,X. The sum of the four is the √ term under
+`ExpectedCR` at B (2^-49 to 2^-50), and the first-hit term (2^-105.0) only under `StrictBirthday` at B.
+**Gap f, the run's own calls** c = n_PU·openCalls: its term is 4·(1 + K_s)·c/2^256 = 2^-156.3 at c = 2^60 and
+2^-136.3 at c = 2^80; the first-hit term stays 2^-105.04 to the fourth decimal at c = 2^80 [run]. Nobody has given
+me n_PU·openCalls at the code: [guess] below 2^60. PARAMS or KILIAN: one number, please.
+
+**3. The Lean, #8873** (head `c46f78371d46474ac823408515f3e5a14a934ad1` is the old 32-table shape; the new head
+follows the try). `security/Proofs/Flock/Claims/NumbersFinder.lean`, rewritten [run: written 08:58Z, try
+`r20261111-085855-ea6e` waiting for a slot on cpu-12]:
+- `firstHitBound T e Ns Ks Km c : ℚ := 4·(T·(1 + e·Ns + Ks + e·Km) + (1 + Ks)·c)/2^256`, KILIAN's `firstHitCost`
+  term by term; `firstHitBound_table1`: at (2^80, 2,592,237,061, 2^24, 2^42, 2^42, 2^80) it is ≤ 1/2^100, by
+  `norm_num` (the value is 2^-100.73 [run: Python fractions]).
+- `real_table1_le`: for reals 0 ≤ T ≤ 2^80, e ≤ 2,592,237,061, Ns ≤ 2^24, Ks ≤ 2^42, Km ≤ 2^42, c ≤ 2^80:
+  `4 * (T * (1 + e * Ns + Ks + e * Km) + (1 + Ks) * c) / 2 ^ (256 : ℝ) ≤ 2 ^ (-(100 : ℝ))`.
+- `sqrt_term_le_strict` (gap a1): for 0 ≤ γ, p, q, k ≤ 4 + 4402·2^24, γ ≤ 2^51 (real power, `γ_le_51`'s
+  conclusion), q ≤ 2·2^80, p ≤ q^2/2^513 (`StrictBirthday`'s conclusion at q): `Real.sqrt (k * γ * p) ≤ 2^-131`
+  (the value at those caps is 2^-131.95; at 15,694 members 2^-136.98).
+- Dropped: the 32-table instance (moot at the code) and my `k_le_of_one_table` (#8866's `ref_one_table` has it).
+It imports only `Proofs.Flock.Claims.Numbers` (on `main`), so it does not wait on #8827 or #8879; the merged build
+with #8879's head, with the composition as a scratch theorem, goes out when the try passes. The old head's merged
+co-import try with #8827 is `r20261111-084420-e962` (verdict unread; superseded by the new one).
+
+**4. The year (item 3)** [run: tree code at `64f7cb635e3d`, exact; audits 52,560 a year on one stream = 15.68 bits,
+a datacenter-year (12,500 machines) 29.29, a world-year (46.87 M machines) 41.16]. Per sampled replay block, by
+position, one table a session:
+
+| design | one | a year | a datacenter-year | a world-year |
+|---|---|---|---|---|
+| D*1 (K̄ = 2^37.69) | 2^-105.03 | 2^-89.35 | 2^-75.74 | 2^-63.87 |
+| κ = 2^-8 (K̄ = 2^34.69) | 2^-108.03 | 2^-92.35 | 2^-78.74 | 2^-66.87 |
+| κ = 0 (K̄ = 2^21.61) | 2^-121.11 | 2^-105.43 | 2^-91.82 | 2^-79.95 |
+
+Only κ = 0 keeps 2^-100 over a year on one stream; D*1 needs K̄ ≤ 2^26.98 for a year. [guess, mine] The bound is
+linear in T, so if 2^80 is the prover's budget over the whole period, a period's union bound equals one run's and
+the 15.7 bits are not paid; they are the price of reading 2^80 as a budget per run. Which reading is the claim is
+Daniel's. **The cap on the waits** (TWOPROVE's, a different term, [relayed] for the raised value): on `main`
+2^-126.0 an audit, 2^-110.3 a year, 2^-84.8 a world-year, 2^-82.6 over a world-year of link-windows; raised to
+2^192·k it is 2^-183.65 an audit, 2^-168.0 a year, 2^-142.5 a world-year, 2^-140.2 over link-windows. The first-hit
+finder's own cap M is not that cap: it drops under `ExpectedCR` at every cap.
+
+**Still to do, in order:** the try's verdict → push #8873's new head → records run of `security/Proofs`, quick tier,
+merged build with #8879; the evaluator's rewrite (four terms with premises, K0, own calls, PARAMS's inputs, no "an
+audit", no "binding error") → push → quick tier; both PR bodies in the 08:37Z order. #8873 was opened with
+`--issue PRF-523` (the tool warned it has no goal label), #8867 with `PRF-539`.
+
+For KILIAN: my lemma's left side is `4 * (T * (1 + e * Ns + Ks + e * Km) + (1 + Ks) * c) / 2 ^ (256 : ℝ)` over reals,
+which is `4 * L.toCompiled.firstHitCost x T Ns Ks Km / 2 ^ (256 : ℝ)` unfolded at `e := L.es x`,
+`c := (L.nPU x : ℝ) * L.openCalls x`, `T := (T : ℝ)`. If you reorder `firstHitCost`, tell me; I follow yours.
+
+For CAPS: Proofs/Flock: +1 modules, +9 declarations (2 definitions, 7 theorems) (#8873:
+`security/Proofs/Flock/Claims/NumbersFinder.lean`); the count is of the head the try is checking, not yet pushed, and
+I repeat this line with the ready line. #8873 changes no lock and does not edit `unread-caps.json`.
+
+For the table:
+- CONCRETE, the first-hit term at the code's design (one table a session, 2,893 to 15,694 members): 2^-105.04 per
+  sampled replay block, 2^-102.4 to 2^-102.7 per audit at a padded first stage of K0 = 6 to 4; modeled, computed by
+  exact rationals from KILIAN's expression, not yet by the tree's command (#8867 at `64f7cb635e3d` computes the
+  by-position form without the own calls: 2^-105.03).
+- The √ term beside it: 2^-49.0 to 2^-50.2 under `ExpectedCR` at B, 2^-137.0 to 2^-138.2 under `StrictBirthday` at B
+  with q = 2T; the Lean lemma for the second is written (≤ 2^-131 up to 2^24 members), its try out.
+- A year of audits on one stream costs 15.68 bits: of the one-table designs only κ = 0 keeps 2^-100 (2^-105.43).
