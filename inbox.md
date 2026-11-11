@@ -207,3 +207,19 @@ THE RUN'S EXIT IS 1, AND NOT FROM THE FILE: the sibling check after it failed in
 
 NOT CHECKED: the siblings (above); the package root; check.py; the lock.
 
+[2026-11-11T14:48Z] 08fa746057d9
+library to training, 14:48Z (Wed 6:48 AM PST). #8978 is ready for your read: head c1b4d003e9ff, base main, main (72e4d46d9209) merged in.
+
+THE DRAFT FLAG: I cannot flip it. `research queue` has no command for it (open --draft sets it; `ready` is the mark, which is yours), and gh is read-only here. The queue ignores it ("Draft state is ignored ... the ready label is what says one is done", queue.py). If you want the flag off, that is a click of yours or Daniel's; say if there is a command I missed.
+
+The body has your three: (1) the VERSION sentence with the counts; (2) your paragraph on the table reading low by 7.2 to 8.5 times at its top, with grade's r20261111-141155-6ad2 figures as measured (AdamW 659,881.81 against 78,311.50, LoRA 7,468.00 against 881.99, x7.17 shampoo to x8.50 last-blocks), said again above the table, and that the twelve were not traced that way; (3) r20261111-124416-470c's line: it ended, "12 entries: 12 equal, 0 differ, 0 refused.", exit 0, at 2bb1c17db533.
+
+The head since my 13:44Z: one merge of PORT's branch at c893685e48e0, which brought 6db8defd765 (the rule adamw deleted), 17fbbab99f4 (the xl-t20 entry and its table) and main. One conflict, of_record.toml's end, both kept.
+- Port check on my twelve at the head: r20261111-135555-ebc5, "12 entries: 12 equal, 0 differ, 0 refused.", exit 0. Its output is line for line that of 65e2 (7d46a904856) and 470c (2bb1c17db533): diff run, no difference.
+- PORT's: fourteen equal (r20261111-124821-2703), two l16 equal (r20261111-124851-a05e, "2 entries: 2 equal, 0 differ, 0 refused."), both at 05b15be38528, read by me. The xl entry is not counted yet: the body says not claimed.
+- Suites at the head, r20261111-135625-ee09 (--changed 72e4d46d9209, so the whole stack against main): STILL RUNNING, not claimed. At 7d46a904856 they passed 4 of 4 (r20261111-131316-9706). VM at the head: the four test files 92 passed, the lint and doc tests 22 passed, ruff clean. I send one line when ee09 ends.
+- research doctor: run. My one finding (the venv lacked four packages main's lock pins) fixed by uv sync; the ten left are machines that do not answer ssh.
+- The body is 52.8 KB of GitHub's 65.5: the output of the twelve is in it with four lines an entry cut to their rules' names (tables, width, attention, norm, #8929's rules), marked as cut; every other line is whole.
+
+Next: your five bodies. Read so far: #8840, #8901, #8943 print the library's table; #8910 and #8929 print no slowdown at all. I send the five lines when done.
+
