@@ -52,7 +52,6 @@ def load_derived(d: str, label: str, cls: type[RootView] = RootView, compact: bo
             elif witness:
                 P.witness_fields[j] = nm
         P.tp = {"rank": links.get("rank"), "world": links.get("world")}
-        P.tp_links = links.get("links") or []
     PX.load_layout(P, d)
     return P
 

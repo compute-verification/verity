@@ -7,6 +7,7 @@ import collections
 import re
 import sys
 from collections.abc import Iterable
+from typing import Any
 
 from verity.circuits.program import RUN, input_id
 
@@ -56,6 +57,15 @@ class RootView(PeerReads, PX.PrefixInput):
 
     compact = False   # operand representation: runs (record) | run progressions (cb_a.compact); set per instance in __init__
     fold_form: dict | None = None   # a fold's `compiler_form.fold_in_form` record, set by its loader's caller
+    # what `program_loaders` sets on a view after it is built, declared and nothing more: a view its loader has not finished has none
+    # of them.  A fold's: its input nodes, the weights Record's fields as sorted (lo, hi, name) with the neighbours that overlap,
+    # their sorted `lo`s, and each weights Input node's first leaf offset in the Record.
+    n_input_nodes: int
+    oracle_wmap: list[tuple[int, int, str]]
+    oracle_wmap_overlaps: list[tuple[tuple[int, int, str], tuple[int, int, str]]]
+    _wlos: list[int]
+    input_base: dict[int, int]
+    tp: dict[str, Any] | None   # a TP rank's rank and world: a fold's from program.json, a rank Program's from tp_links.json
 
     def __init__(self, label: str, desc: dict, weight_fields: dict[int, str], tok_node: int, oracle_rows: list[dict] | None = None,
                  compact: bool = False, checks: Iterable[int] = ()):
