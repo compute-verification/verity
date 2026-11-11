@@ -58385,3 +58385,38 @@ Tags: [run] a command I ran now, [read] a file or record I read now (place given
 - **MPS:** my transcript tonight has no `CUDA_MPS`, `nvidia-cuda-mps` or `mps-control` [read: a search of it]. I can't say from here which of the rows HEADPROF calls "SERVEDCARD's" ran under `server_rate.py`. Its own reading that `server_rate.py` starts each prover as a plain process [read: HEADPROF 15:37Z item 2(a)] is what covers them.
 
 For the table: no change.
+
+## HEADPROF, Wed 11 Nov 15:48Z: closing. The head block is 2.43 s a statement today and 1.36 s with every cut built tonight (0.56), four provers on node A; on six cores at two provers 3.02 to 3.13 s and 2.14 s (0.69), with 1.31 to 1.37 s as the floor with no walk; cut into scores + values it costs the same seconds, not fewer
+
+Every figure is GPU-seconds a statement of `SparseMlaHeadBlock_v2` NVIS 64 `FIRST=false` (256 units, pin `4b31e7caba011398`), from kernels' harness unchanged, each cut against today's binary in the same run; every timed step accepted every session [run: the runs named, read with `readers/steps.py`].
+
+| machine, provers | variant | GPU-s a statement | of today's | statements an hour a card | run |
+| --- | --- | --- | --- | --- | --- |
+| node A, 4 (ten cores) | today | 2.4302 quiet, 2.382 loaded | 1 | 1,481 | `r20261111-102210-ee70` |
+| node A, 4 | (a) salts `all` alone | 2.031 | 0.836 | 1,773 | `ee70` |
+| node A, 4 | (b) the check on cores 8-11 alone (WITNESS's tree with its cuts off; the baseline step sat in a compaction episode) | 1.731 against 2.417 | 0.716 | 2,080 | `r20261111-093701-db9a` |
+| node A, 4 | (c) + (e) every cut: salts `all`, #8891's two cuts, the check on 8-11 | 1.3574 quiet, 1.4023 loaded | 0.559, 0.589 | 2,652, 2,567 | `ee70` |
+| node A, 1 | today; the check moved; salts `all`; salts `upper` | 2.51 to 2.59; 0.944; 2.570 against 2.588; 2.494 | | | `ee70`, `r20261111-082337-c224`, `r20261111-091148-cb57` |
+| h200-3, 1 (six cores) | today | 3.416 to 3.456 | 1 | 1,042 to 1,054 | `af1d`, `f049`, `5832`, `c736` |
+| h200-3, 1 | (e) #8891's two cuts; WITNESS's follow-up | 3.160; 2.712 to 2.746 | 0.925; 0.79 | | `r20261111-101057-af1d`; `r20261111-115454-5832`, `r20261111-113118-f049` |
+| h200-3, 1 | floor: no walk at all (`FC_UNIT_REUSE=1`, salts `all`) | 1.862 to 1.865 over whole bursts | 0.54 | 1,930 to 1,933 | `r20261111-135122-c736` |
+| h200-3, 2 | today | 3.023 to 3.128 | 1 | 1,151 to 1,191 | `af1d`, `5832`, `c736` |
+| h200-3, 2 | (a) salts `all` alone | 2.554 | 0.830 | 1,410 | `af1d` |
+| h200-3, 2 | (a) + (e) follow-up with salts `all` | 2.1425 | 0.687 | 1,680 | `5832` |
+| h200-3, 2 | floor: no walk at all | 1.314 to 1.373 by where the window starts | 0.44 to 0.49 | 2,622 to 2,740 | `c736` |
+| h200-3, 1 | `FC_UNIT_WIDE=4` | 8.8740 against 3.4324 | 2.585 (a loss) | | `r20261111-135134-8799` |
+
+CPU-seconds and the card's busy share for each row are in the entry that reported it (10:38Z to 15:44Z); the two that matter: with every cut at four provers the check's four cores were full (3.94 of 4) and the prover's ten 9.15 busy [run: `ee70`]; with no walk the check is 9.1 to 9.5 of the 14.4 to 14.8 CPU-s a statement [run: `c736`].
+
+**The cut into scores + values (#8917), 256 blocks, two provers, six cores** [run: `6f08` with `fcd7`, `88e7`, `a5fc`, `64ca`]. One range for the head block's rows today (3.023 to 3.128 s) gives 1.34 to 1.39 (G = 128), 1.09 to 1.13 (G = 64), 1.02 to 1.06 (G = 32) as the code walks; my 15:44Z table line mixed two ranges (it wrote 1.35 to 1.39 and 1.09 to 1.12). With the follow-up, salts `all` and the host walking the values unit: 2.2596, 2.2144, 2.1378 s against 2.1425 s: 1.05, 1.03, 1.00.
+
+**What is left.**
+- Not run: cores a prover 20 and all (node A was closed to us from 11:45Z); salts `upper` alone and WITNESS's cuts alone at four provers; the follow-up, the no-walk floor and the cut at four provers (kernels times `aa23d1312dce` on node A tonight, 18:32Z to 20:10Z [relayed: your 14:05Z section]); `FIRST=true`.
+- Not established: why one session in four waits on level 0's salts with the walk gone (up to 16% of that row) [run: `c736`'s record; the cause is a guess].
+- Decisions that are not mine: `FC_SALTS_KEYED=all` is Daniel's claim, built and timed, unmarked; whether a values unit goes to the host by default (`HOST_UNIT_LEVELS`) is its owner's; the every-cut row uses 14 cores a card where node A's quota is 10.2.
+- On machines: vy-dc-h200-3 `/workspace/cache/proofs-headprof`, 20 GB (the `FIRST=false` staged statement, which you said not to remove before 16:15Z, the cut's four staged statements, four builds) [run: `du` at 15:46:40Z]; node A `/workspace/jobs/proofs-headprof`, 156 MB [run: a look at 15:32:51Z]. I removed neither; say if you want them gone and I or infra remove them.
+- My branch `cursor/proofs-headprof-2b18` (`2b1e316a19`) holds only the measurement trees (`a5922158dc`, `42c158195c`, `7b12b8825b39`, `aa23d1312dce`), not for merging [run: `git merge-base --is-ancestor` on each]. The rows are in one table at `/opt/cursor/artifacts/headprof-rows.md` on my VM and in this file's entries; the note is synced at `43f27ddd17`.
+
+For BREAKEVEN: `SparseMlaHeadBlock_v2` NVIS 64, node A, four provers: 2.4302 s a statement today; 2.031 s with salts `all`; 1.731 s (against 2.417 s) with the check on four other cores; 1.3574 s quiet and 1.4023 s loaded with every cut (measured, `r20261111-102210-ee70`, `r20261111-093701-db9a`).
+For BREAKEVEN: the same block on vy-dc-h200-3, two provers, six cores: 3.023 to 3.128 s today; 2.554 s salts `all`; 2.1425 s the follow-up with salts `all`; 1.314 to 1.373 s with no walk at all, a floor and not a served figure (measured, `af1d`, `5832`, `r20261111-135122-c736`).
+For the table: the head block's seconds today 2.43 (four provers, node A) and 1.36 with the cuts built tonight (0.56; 1.40 loaded, 0.59); the cut into scores + values costs the same seconds as the head block at G = 32 to 128 once the host walks the values unit (1.00 to 1.05), and 1.02 to 1.39 as the code walks today.
