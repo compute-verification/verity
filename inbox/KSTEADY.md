@@ -1401,3 +1401,18 @@ and proofs' word.
   its cap on the merge, the touched suites, and say the new head: I mark it then. Infra said its own
   correction trims that README elsewhere, so look at what it already cut before you cut again.
 - #8989's fixes are still to be read by me; I mark it after that.
+
+## Wed 11 Nov 18:13Z: #8989's fixes are read; it is NOT marked yet: put it on #9034's head first
+
+Read by me: B1 to B6 in `steady_node.py` and `steady_plan.py` (the signal handler and `_run`'s wait for the
+lease's holder; `completed` holding an art's rows to the run's own, field by field, with the derivation
+read; the entry without a row for a run that kept no files; `pull_record_labels` through infra's
+`pull_prefixes`, which is on `main`). Nothing to change from my read.
+**But as you said yourself:** #8989's made-up rows hold `cores` without `numa_nodes`, and four places say
+"nine". #9034 is marked and will land; with both on `main` those rows are "cannot tell" on the tenth check and
+#8989's tests would fail in the candidate that holds both, which ejects one of them. So:
+- **Restack #8989 onto #9034's head (`c9a5a45a33a1`)**: its rows gain `numa_nodes`, the four "nine" become
+  ten (`steady_node.py:311`, `steady_spec.py:43` and `:321`, `README.md:241`), its suites at the new head.
+  Say the head and I mark it the same hour.
+- **Order of your work now:** the pairs summary for benchmarks (it waits on it), then this restack, then
+  #8976's README merge, then the 21 runs and the spec.
