@@ -39144,3 +39144,22 @@ What that line rests on:
 **The PR's state.** Not open. [run] At `9a8a32c7c85b`: the try of `QsRows.lean` passed (`r20261111-035339-da0a`); the quick tier passed (`r20261111-041319-b167`, 4 suites); the lock is `main`'s byte for byte, 4,175,579 bytes, `Security/` on 6 lines, old paths on none. The records run `r20261111-041354-777f` (cpu-9) is running since 04:15Z; ETA 05:35 to 06:15Z [guess: TWOPROVE's guess for a run launched a minute later; 06:15Z is its cap]. The full check `r20261111-041222-0324` (cpu-9) runs until 07:15Z at the latest. The PR's body is drafted in the lane's notes, `drafts/qs-rows-pr-body-9a8a32c7.md`, with the records' and the check's lines left open.
 
 **Next.** When `777f` ends: its printout; if it regenerated the lock, one commit of exactly that file, the three lock checks and the quick tier again there; then `research queue open` unmarked and `ready to mark #N at <full sha>` here. If the cap cuts `777f` at 06:15Z I come to you before launching a second one.
+
+## TWOWITNESS, Wed 11 Nov 05:17Z: a layout probe for (D) is queued beside the try; (D) has a v2 route through `row_bc_tgt`
+
+**A second run, for (D)** [run]: `r20261111-051530-3bd6`, on vy-nebius-cpu-7's research pool, `--mem-gb 32`, 2 h cap, waiting for a slot at 05:16Z.
+- It runs `lean_changed.py --try` on a probe file. The file is sent with the run and copied into `security/Proofs/Flock/SpotFlock/InstanceStmt/LayoutProbe.lean` there, never committed. It is a non-module file, because `#eval` in a module file needs `public meta import` [run: a local plain-Lean probe].
+- It `#eval`s `Read.setup (ins r).read` at `r = ⟨"set", "bindI", "bindO"⟩` and prints the one table's layout. That is `m`, `kLog`, `pin`, the ranges, each net's `constPos`, `inWords` and port columns, the ports' midstates, `rowSlots`, the leaf maps and wires, the regions with their public bytes, and Δ (`da`, `db`) as runs of copies.
+- These are the facts the trace for `stX` states by `kernel_rfl'`, as Concrete's `pin_stW`, `deltaL_cW` and `ranges_cW` do.
+- It builds only `Inputs.lean`'s chain, not `InsSetup` or `Scope`.
+- ETA [guess]: 20 to 40 min after it takes a slot, the setup being interpreted.
+
+**What the reading settled for (D)** [read].
+- Concrete's region lemma `Hm.row_bc_setupH` takes v1 rows only (`hv1 : ∀ p ∈ st.c.ports.toList, p.v2 = false ∧ …`), and my rows are v2.
+- The hidden-output side has the lemma my rows need: `Hidden/Wide/RowBc.lean`'s `row_bc_tgt`. It gives a row's `b ‖ c` as `commitString (prefixOf port ++ its message bytes, its salt)` for a witness that satisfies the hidden table (`SatEx`). Its size conditions hold for both rows: `i0` with 64 words and one chunk, and `o0` with 1 word and no chunk.
+- `Hidden/LayoutP.lean`'s `hidden_layoutP` gives the `Layout` from a hidden setup's spec.
+- So (D)'s new part is the trace for `stX` and its row cases, as Concrete's `Trace.lean` has them, at my layout (two `hm96` slots).
+- The regions then follow from `row_bc_tgt` and the commit strings of the zero rows under the zero salt, against the public `bcI` and `bcO`.
+- `HonestSession`'s `small` is `x_small` (`Sizes.lean`). `sess` is `sessionOk_x`, wherever `Ref` makes `(held R …).xS₀ 0 = x r`.
+
+**Runs in flight**: `r20261111-050055-b652` (the moved tree's try, ETA about 2 h after it takes a slot) and `r20261111-051530-3bd6` (the layout probe). Both were waiting for cpu-7 slots at 05:16Z.
