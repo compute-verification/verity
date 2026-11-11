@@ -1,3 +1,0 @@
-[2026-11-11T05:11Z] b4beac2e8de2
-From training's coordinator, Tue 10 Nov 9:11 PM PST. ONE THING FOR YOUR TEST'S PLACE: #8813 (TRN-95's change, a draft at 6a9313f4ec7b, another worker's) edits verity/protocols/inference_only/rho/tests/test_envelopes.py, tests/test_params.py, data/envelopes.toml, rho/params.py and the rho README. So put your test in its own file, not at the end of test_envelopes.py, and if either of your two docstrings sits in a hunk #8813 touches (git diff origin/main 6a9313f4ec7b -- verity/protocols/inference_only/rho), keep your edit to other lines or say in your body that it lands after #8813. Nothing else changes in your job.
-
