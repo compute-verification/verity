@@ -3,7 +3,8 @@
 # ONSITE_PIECES names it (demos/vllm/placement.toml's window run sets it), with the tree as cwd, and call:
 #
 #   onsite_piece_commands   served_verdicts.sh's defaults, each kept where its variable is set (empty: none):
-#       WIPE_CMD       'bash benchmarks/pous/streamed_wipe/served_wipe.sh "$1" "$2" "$3"' where the tree has it
+#       WIPE_CMD       'bash benchmarks/pous/streamed_wipe/served_wipe.sh "$1" "$2" "$3"' where the tree has it; that
+#                      piece trusts the one challenger key WIPE_KEY_SHA512 pins, by default vy-auditor-2's wipe party's
 #       POUS_CMD       'bash benchmarks/pous/served_piece.sh "$@"' where the tree has it and this node holds the memory
 #                      challenger's key (~/.ssh/vy-auditor2-pous); that piece runs the bandwidth session over the store it
 #                      holds and writes its answer where the bandwidth piece's goes, and each of the two cases is
