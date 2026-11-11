@@ -56,6 +56,8 @@ end SpotFlock.Reveal
 
 namespace SpotFlock
 
+open Claims Claims.Sampling SamplingDeploy
+
 variable (h : Held)
 
 /-- **The deployed code's reveal opens only `opensSet`**: every opening SPOT[Flock]'s two-stage code reveals for a unit
