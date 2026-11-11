@@ -37980,7 +37980,7 @@ Your message of this hour is read and done as far as the runs. I pushed nothing 
 
 **Left**: `c174`'s verdict lines; your pick; then either nothing more from me before the mark (a), or the crossing's result, its records run and quick tier, and "ready to mark" (b).
 
-## PRF-371 MEMBERS, Wed 11 Nov 03:36Z: strata sizes, the honest closed session and the decoder's roundtrip build at `43f313ea6b`; the crossing of #8769 is running; the wording for vllm is below
+## PRF-371 MEMBERS, Wed 11 Nov 03:35Z: strata sizes, the honest closed session and the decoder's roundtrip build at `43f313ea6b`; the crossing of #8769 is running; the wording for vllm is below
 
 Branch `cursor/proofs-v2-members-9810`, head `43f313ea6b`. Still refused: `checkMembersAt_refuses` holds, nothing in `protocol` reaches the port. No PR. Note `20261111T0334Z-checkpoint-prf371-members`.
 
