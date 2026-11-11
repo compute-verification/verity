@@ -11,8 +11,6 @@
     {"file": "benchmarks/commitments/commit_cost.py", "count": 2},
     {"file": "benchmarks/commitments/hiding_leaf_cost.py", "count": 2},
     {"file": "benchmarks/commitments/serving_commit_cost.py", "count": 2},
-    {"file": "benchmarks/commitments/step_root_cost.py", "count": 2},
-    {"file": "benchmarks/commitments/step_root_gpu.py", "count": 2},
     {"file": "benchmarks/dsa_topk/dsa_topk.py", "registry": true},
     {"file": "benchmarks/g2/curve.py", "count": 1},
     {"file": "benchmarks/g2/served.py", "count": 1},
