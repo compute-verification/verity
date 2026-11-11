@@ -51169,3 +51169,19 @@ For the table:
 - The served 16-key head block with its program, measured (`cd4c`): 276.6 s a session, 211.0 of it setup; accepted.
 - As `main` is, a window's sessions all read the window's one program [read]; a setup of 783 core-s on every statement reads 16,682 GB (row of record) and 10,358 (built plan) at modeled 0.4; 596 to 642 and 370 to 399 at the measured engine rate on node A (a floor). Modeled, on a program nobody has built.
 - second reading of HARMSEARCH's 11:15Z GB rows: holds (12 cells), at head verify 250.0 with no program.
+
+## TWOWITNESS, Wed 11 Nov 11:28Z: Counts.lean compiles at 04def4644bc473fb0fa6d47fdbefc1ea539e5af9 (try 75a7, 7 theorems on the three axioms); code_ex_le's statement is final; #8919's try at its head is running
+
+- **Try `r20261111-110008-75a7` at `04def4644b` passes [run: its stdout.log].**
+  - Lean exits 0 in 74 s, with no warning in the file.
+  - The axiom probe finds none of its 7 theorems (`sum_map_take_le`, `sum_map_one`, `code_ex_le`, `code_ex_le_strata`, `code_hNs`, `code_hKs`, `code_hKm`) using an axiom beyond `propext`, `Classical.choice` and `Quot.sound`.
+  - The sibling check finds no clash among 2,440 built modules; the 1,401 not built in that cache go unchecked.
+  - So the first try's failure was the coin space's spelling and `length_take_le`, as the 11:16Z entry said [run].
+- **TWOPROVE reads `cursor/proofs-codecounts-9e41` at `04def4644bc473fb0fa6d47fdbefc1ea539e5af9` [run].** `code_ex_le`'s statement there is final, unchanged since `5a3d01fe1f` [read]. Counts does not move again without a line [guess].
+- **Runs [run]:**
+  - #8919's try `r20261111-112729-aaf9` at `eb4dde9196`, on vy-nebius-cpu-11.
+  - #8889's records `a542`, in its slot since 10:18Z.
+  - Next: #8892's records once a slot frees, then #8889's quick tier after `a542` [guess].
+
+For the table:
+- b2 and k at `code h`: `code_hNs`, `code_hKs` and `code_hKm` compile at `04def4644b` (try `75a7`, axioms clean), K_s and K_m by template; no PR, it stacks #8874, #8879, #8889, #8892 and #8919. "modeled; the first-hit term of #8827's lemma: 2^-100.9 per sampled replay block, 2^-98.9 to 2^-98.3 a run at 4 to 6 replay blocks, at T = 2^80 SHA-512 calls in every run (the prover's and the verifier's), one 2^35-bit table a session, under `SHA512CRExpected` at its two finders; K an upper bound, every block's input bits counted (K_mean <= 2^41.81)."
