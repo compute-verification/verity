@@ -463,7 +463,7 @@ theorem wired_row {tids : Array String} (hP : ReadProg P)
 
 /-! ## Aligned and Filled -/
 
-/-- **K3. Every wire lands whole** (`Aligned`), of a record whose wires pass the check's `unwhole`. -/
+/-- **Every wire lands whole** (`Aligned`), of a record whose wires pass the check's `unwhole`. -/
 theorem aligned (hP : ReadProg P) (hO : NciCheck.Record.ownRows P = true)
     (hrs : Flock.TemplateQuery.evaluate (Flock.TemplateQuery.Desc.ofProg P) (W.templates.map (·.1)).toArray = .ok rs)
     (hT : Templates P rs W) (hS : Spot.Wires.check W = .ok S) {doc : Json} {ts : List Tmpl}
@@ -508,7 +508,7 @@ theorem aligned (hP : ReadProg P) (hO : NciCheck.Record.ownRows P = true)
         hWr _ hl']
       exact hin2
 
-/-- **K4. A wired row is its writer's bits** (`Filled`), of a record whose wires pass the check's `unwhole`. -/
+/-- **A wired row is its writer's bits** (`Filled`), of a record whose wires pass the check's `unwhole`. -/
 theorem filled (hP : ReadProg P)
     (hrs : Flock.TemplateQuery.evaluate (Flock.TemplateQuery.Desc.ofProg P) (W.templates.map (·.1)).toArray = .ok rs)
     (hT : Templates P rs W) (hS : Spot.Wires.check W = .ok S) {doc : Json} {ts : List Tmpl}
