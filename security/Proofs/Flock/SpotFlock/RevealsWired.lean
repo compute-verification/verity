@@ -15,7 +15,8 @@ agree with the openings that pass make the block correct.
   program only where the block needs, side by side, a gate `i` with `ω i = g` (`Prog.needs_wired`). So the reveal
   holds one opening for each gate `i` the block needs side by side (`needsSide`), in that order: the frame's opening
   of `i`, at position `ω i`, under the roots the wired program opens `ω i` under (`rootsAtWired`). The reveal count
-  is the one side by side (`length_revealWired_le`).
+  is the one side by side (`length_revealWired_le`), and the reveal doesn't read the statement's program
+  (`revealWired_prog`), so a code whose statement holds the wired program reveals the same list.
 * **The frame** (`revealCodeWired`, `BuiltWired`): the base frame over the addresses, revealing that list.
 * **The openings pass** (`CheckedRun.opens_slot`, `CheckedRun.opens_at`, `CheckedRun.reveals_wired`). The opening of
   `i` holds the row the unit's session holds `i` in. Its place and its slot are read at position `ω i`, and are those
@@ -128,11 +129,19 @@ def rootsAtWired (s : AuditStatement) (u : ℕ) (v : Seen) (g : ℕ) : List Msg 
 
 /-- **What a session's witness reveals for unit `u` at the wired program**, at a frame `f`: the frame's openings, in
 the order of the gates the unit's proof block needs side by side (`needsSide`), the opening of gate `i` at position
-`ω i` and under the roots the wired program opens `ω i` under. -/
+`ω i` and under the roots the wired program opens `ω i` under. The frame is asked at the statement with the members'
+programs side by side, the one its session runs at, so the reveal reads the statement without its program
+(`revealWired_prog`). -/
 def revealWired (f : Code) (s : AuditStatement) (u : ℕ) (v : Seen) (wF : Claims.Flock.Wit) :
     List (List Msg × Opening Bool) :=
-  ((needsSide h s u).zip (f.reveal s u v wF)).map fun p =>
+  ((needsSide h s u).zip (f.reveal { s with prog := bitsProgs h.ms } u v wF)).map fun p =>
     (rootsAtWired h ω keep s u v (ω p.1), ({ p.2.2 with pos := ω p.1 } : Opening Bool))
+
+/-- **The reveal at the wired program doesn't read the statement's program**: it is one list at the statement the
+verifier parses, with the members' programs side by side, and at that statement with the wired program. -/
+theorem revealWired_prog (f : Code) (s : AuditStatement) (p : Prog) (u : ℕ) (v : Seen) (wF : Claims.Flock.Wit) :
+    revealWired h ω keep f { s with prog := p } u v wF = revealWired h ω keep f s u v wF :=
+  rfl
 
 /-- **The reveal at the wired program is no longer than the list of gates the proof block needs side by side**,
 whatever the frame: the reveal count is the one side by side. -/
@@ -146,7 +155,8 @@ theorem length_revealWired_le (f : Code) (s : AuditStatement) (u : ℕ) (v : See
 at a frame that reveals one opening a gate, each at the gate `ω` sends it to. -/
 theorem mem_revealWired {f : Code} {s : AuditStatement} {u : ℕ} {v : Seen} {wF : Claims.Flock.Wit}
     {R : ℕ → List Msg} {op : ℕ → Opening Bool}
-    (hG : f.reveal s u v wF = (needsSide h s u).map fun j => (R j, ({ op j with pos := ω j } : Opening Bool)))
+    (hG : f.reveal { s with prog := bitsProgs h.ms } u v wF =
+      (needsSide h s u).map fun j => (R j, ({ op j with pos := ω j } : Opening Bool)))
     {i : ℕ} (hi : i ∈ needsSide h s u) :
     (rootsAtWired h ω keep s u v (ω i), ({ op i with pos := ω i } : Opening Bool)) ∈
       revealWired h ω keep f s u v wF := by
@@ -408,10 +418,14 @@ theorem reveals_at (hr : r.Ok h) {addr : ℕ → Address} {c₀ : Code}
     ∃ q ∈ revealWired h ω keep h.frame r.s r.u r.seen r.wF,
       (SamplingDeploy.commit (code h)).Opens FlockDeploy.sha512 q.1 q.2 = true ∧ q.2.pos = ω i ∧
         q.2.val = decOf (layoutFor h) r.x r.m₁ (r.xS h) r.wF r.u i ∧ q.1 = r.rootsWired ω keep (ω i) := by
-  have hG : h.frame.reveal r.s r.u r.seen r.wF = (needsSide h r.s r.u).map fun j =>
+  have hs : ({ r.s with prog := bitsProgs h.ms } : AuditStatement) = r.s := by
+    obtain ⟨_, _, _, hx, -⟩ := hr
+    exact congrArg (fun p : Prog => ({ r.s with prog := p } : AuditStatement)) (parse_prog h hx).symm
+  have hG : h.frame.reveal { r.s with prog := bitsProgs h.ms } r.u r.seen r.wF = (needsSide h r.s r.u).map fun j =>
       (rootsAtWired h ω keep r.s r.u r.seen (ω j),
         ({ addressOp h (fun g => some (addr g)) r.s r.u r.seen r.wF j [] with pos := ω j } : Opening Bool)) :=
-    congrArg (fun f : Code => f.reveal r.s r.u r.seen r.wF) hf
+    (congrArg (fun t : AuditStatement => h.frame.reveal t r.u r.seen r.wF) hs).trans
+      (congrArg (fun f : Code => f.reveal r.s r.u r.seen r.wF) hf)
   have hm := mem_revealWired h ω keep (R := fun j => rootsAtWired h ω keep r.s r.u r.seen (ω j))
     (op := fun j => addressOp h (fun g => some (addr g)) r.s r.u r.seen r.wF j []) hG ((mem_needsSide hr).2 hi)
   obtain ⟨spec, hset⟩ : ∃ spec, FlockDeploy.setupOf true (unitStmt h r.m₂ r.u) = some (r.ins, spec, r.sts) := by
