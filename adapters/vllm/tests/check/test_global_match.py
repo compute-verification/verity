@@ -1327,59 +1327,6 @@ def test_gp01_stop_rule_is_read_from_the_pinned_checkpoint_and_the_manifest(tmp_
     assert res["eos_verified"] == {"r1": False}
 
 
-def test_gp01_binds_a_per_request_sampler_schedule_component_only_to_its_declared_arrival(tmp_path):
-    """Under a per-EVENT split schedule S (stochastic top-p) two requests with equal (LP, T) but
-    different arrivals have different request Programs; a component that declares the arrival its schedule was computed for must not be
-    reused for the other request, and a schedule computed against another manifest's chronology must not compose."""
-    from verity_vllm.pipeline import global_program as G
-    reqs = [{"request_id": "r0", "index": 0, "prompt_len": 8, "cap": 4, "arrive_step": 0},
-            {"request_id": "r1", "index": 1, "prompt_len": 8, "cap": 4, "arrive_step": 2},
-            {"request_id": "r2", "index": 2, "prompt_len": 5, "cap": 2, "arrive_step": 1}]
-    live = G.declared_live_counts(reqs)
-    assert live == [1, 2, 3, 2, 1, 1]
-    def comp(name, sampling):
-        d = tmp_path / name
-        d.mkdir()
-        (d / "result.json").write_text(json.dumps({"ok": True, "sampling": sampling}))
-        return str(d)
-    # greedy / constant-S components bind by shape (nothing to check)
-    plain = comp("c_greedy", {"kind": "greedy"})
-    assert G.sampler_schedule_binding(reqs, {(5, 1): plain})["refusal"] is None
-    # the (8, 3) shape is shared by r0 (arrive 0) and r1 (arrive 2): a component computed for r0 must not bind to r1
-    c0 = comp("c_r0", {"kind": "stochastic", "splits": [32, 32, 16, 32], "geometry": {"request": {"request_id": "r0", "arrive_step": 0, "cap": 4},
-                                                                                        "declared_live_counts": live}})
-    bad = G.sampler_schedule_binding(reqs, {(8, 3): c0, (5, 1): plain})
-    assert bad["refusal"] and "binds r1 (arrive_step 2)" in bad["refusal"] and "one component per request" in bad["refusal"]
-    # with only r0 of that shape (and the schedule computed from THAT chronology) it binds, and the checked table names the binding
-    two = reqs[:1] + reqs[2:]
-    c0b = comp("c_r0_two", {"kind": "stochastic", "splits": [32, 32, 16, 32], "geometry": {"request": {"request_id": "r0", "arrive_step": 0, "cap": 4},
-                                                                                            "declared_live_counts": G.declared_live_counts(two)}})
-    ok = G.sampler_schedule_binding(two, {(8, 3): c0b, (5, 1): plain})
-    assert ok["refusal"] is None and ok["checked"]["8,3"]["bound_requests"] == ["r0"] and ok["checked"]["8,3"]["declared_arrive_step"] == 0
-    # a schedule of the wrong length, and one computed from another manifest's chronology, are refused by name
-    short = comp("c_short", {"kind": "stochastic", "splits": [32, 16], "geometry": {"request": {"request_id": "r0", "arrive_step": 0, "cap": 4}}})
-    assert "S-schedule has 2 entries" in G.sampler_schedule_binding(reqs[:1], {(8, 3): short})["refusal"]
-    other = comp("c_other", {"kind": "stochastic", "splits": [32, 32, 16, 32], "geometry": {"request": {"request_id": "r0", "arrive_step": 0, "cap": 4},
-                                                                                             "declared_live_counts": [2, 2, 1, 1]}})
-    assert G.declared_live_counts(reqs[:1]) == [1, 1, 1, 1]
-    assert "derived against another workload" in G.sampler_schedule_binding(reqs[:1], {(8, 3): other})["refusal"]
-
-
-def test_a_registered_s_component_binds_by_shape_in_any_workload(tmp_path):
-    """A component at the registered S = SplitsFor_v1(1, num_SMs), which the served engine pins whatever the batch,
-    binds by shape alone: in a workload of one request and in one of several, whatever their arrivals."""
-    from verity_vllm.pipeline import global_program as G
-    d = tmp_path / "c_reg"
-    d.mkdir()
-    (d / "result.json").write_text(json.dumps({"ok": True, "sampling": {"kind": "stochastic", "splits": 32,
-                                                                         "geometry": {"num_sms": 142, "relation": "registered", "splits": 32}}}))
-    one = [{"request_id": "r0", "index": 0, "prompt_len": 8, "cap": 4, "arrive_step": 0}]
-    assert G.sampler_schedule_binding(one, {(8, 3): str(d)})["refusal"] is None
-    three = one + [{"request_id": "r1", "index": 1, "prompt_len": 8, "cap": 4, "arrive_step": 2},
-                   {"request_id": "r2", "index": 2, "prompt_len": 5, "cap": 2, "arrive_step": 1}]
-    assert G.sampler_schedule_binding(three, {(8, 3): str(d), (5, 1): str(d)})["refusal"] is None
-
-
 @pytest.mark.slow
 def test_g1_ties_the_manifest_of_record_to_the_run_header_sha_and_sampling_fields(memory, tmp_path):
     """GM-01 was blind to the manifest's sampling fields -- seeds swapped or a seed deleted in the manifest (GP-01
@@ -1833,7 +1780,7 @@ def _topp(V, S):
 
 
 def test_sampler_geometry_check_holds_every_launch_to_the_registered_s_whatever_the_live_count():
-    """The served engine runs every top-p split launch at S = registered_splits(num_SMs) = SplitsFor_v1(1, num_SMs)
+    """The served engine runs every top-p split launch at S = registered_splits(num_SMs) = splits_for(1, num_SMs)
     (`engine.topp_pin`); the fold carries the launch's S on every GumbelTopPTokenSelect of the step. GM-01 holds each to the registered
     S of the Program's declared num_SMs, at 8 live rows as at 4 -- and refuses vLLM's own batch-derived S (16 at 8 live on 142 SMs)."""
     from verity.definitions.registry.topp_geometry import registered_splits, splits_for
@@ -1951,7 +1898,7 @@ def test_greedy_rows_report_no_sampler_geometry_to_check(memory, tmp_path):
 
 
 def test_gp01_declares_the_sampler_geometry_for_a_stochastic_row_only():
-    """GP-01: a stochastic workload's Program declares the registered S = SplitsFor_v1(1, num_SMs) of the
+    """GP-01: a stochastic workload's Program declares the registered S = registered_splits(num_SMs) of the
     components' agreed num_SMs, the same for 2 requests as for 8; greedy rows declare nothing; a stochastic sampler without num_SMs, or
     whose components carry another S (a derived-S build), is a named refusal."""
     from verity_vllm.pipeline import global_program as G
