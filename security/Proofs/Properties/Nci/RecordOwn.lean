@@ -27,6 +27,61 @@ def runOf (P : Prog) : Part → Option (Nat × Nat × Nat)
     else none
   | _ => none
 
+/-- Two forms `==` holds of are one. -/
+theorem form_eq {a b : Form} (h : (a == b) = true) : a = b := by
+  cases a <;> cases b <;> first | rfl | cases (show false = true from h)
+
+/-- **A part that is a run** is an affine part over an input node of the root, a primitive or a batch. -/
+theorem runOf_some {P : Prog} {q : Part} {r : Nat × Nat × Nat} (h : runOf P q = some r) :
+    q = .affine false r.1 r.2.1 r.2.2 ∧ r.1 < (P.defs[P.root]!).body.nodes.size ∧
+      Desc.isInputNode P ((P.defs[P.root]!).body.nodes[r.1]!) = true ∧
+      (((P.defs[P.root]!).body.nodes[r.1]!).form = .prim ∨ ((P.defs[P.root]!).body.nodes[r.1]!).form = .batch) := by
+  cases q with
+  | affine p i base count =>
+    cases p with
+    | true => cases h
+    | false =>
+      simp only [runOf] at h
+      split at h
+      · rename_i hc
+        cases h
+        cases hn : (P.defs[P.root]!).body.nodes[i]? with
+        | none => simp [hn] at hc
+        | some n =>
+          have hi : i < (P.defs[P.root]!).body.nodes.size := by
+            rcases Nat.lt_or_ge i (P.defs[P.root]!).body.nodes.size with hlt | hge
+            · exact hlt
+            · rw [Array.getElem?_eq_none hge] at hn
+              cases hn
+          have hget : (P.defs[P.root]!).body.nodes[i]! = n := by
+            rw [getElem!_pos _ i hi]
+            rw [Array.getElem?_eq_getElem hi] at hn
+            exact Option.some.inj hn
+          simp only [hn, Option.map_some, Option.getD_some, Bool.and_eq_true, Bool.or_eq_true] at hc
+          exact ⟨rfl, hi, by rw [hget]; exact hc.1, by rw [hget]; exact hc.2.imp form_eq form_eq⟩
+      · cases h
+  | strided p i base inner os is count => cases h
+  | explicit items => cases h
+
+/-- Where `removeAxis` strips an axis of a type, `axisDims` has that axis' length. -/
+theorem axisDims_of_removeAxis : ∀ (ax : Nat) (t : Ty) {n : Nat} {mt : Ty}, t.removeAxis ax = some (n, mt) →
+    ∃ L, t.axisDims ax = some (n, L)
+  | 0, .array k e, n, mt, h => by
+    simp only [Ty.removeAxis, Option.some.injEq, Prod.mk.injEq] at h
+    exact ⟨e.leaves, by simp only [Ty.axisDims, h.1]⟩
+  | ax + 1, .array k e, n, mt, h => by
+    simp only [Ty.removeAxis, Option.map_eq_some_iff] at h
+    obtain ⟨⟨m, inner⟩, hm, heq⟩ := h
+    simp only [Prod.mk.injEq] at heq
+    obtain ⟨L, hL⟩ := axisDims_of_removeAxis ax e hm
+    exact ⟨L, by simp only [Ty.axisDims, hL, heq.1]⟩
+  | 0, .value _, _, _, h => by simp [Ty.removeAxis] at h
+  | 0, .tuple _, _, _, h => by simp [Ty.removeAxis] at h
+  | 0, .record _, _, _, h => by simp [Ty.removeAxis] at h
+  | _ + 1, .value _, _, _, h => by simp [Ty.removeAxis] at h
+  | _ + 1, .tuple _, _, _, h => by simp [Ty.removeAxis] at h
+  | _ + 1, .record _, _, _, h => by simp [Ty.removeAxis] at h
+
 /-- The root's nodes that are no input nodes. -/
 def unitsOf (P : Prog) : List Node :=
   (P.defs[P.root]!).body.nodes.toList.filter fun n => !Desc.isInputNode P n
