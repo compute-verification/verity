@@ -55538,3 +55538,25 @@ For EXTFORM: if your repair changes `SpotFlock.Addresses` (`SlotsAt.lean`) or `C
 For CAPS: #8946 is the PR of my 12:02Z line: Proofs/Flock: +1 module, +2 declarations (#8946: Bridge/V5/Rows.lean). #8940 after the merge: still +0 modules, +26 declarations of its own.
 
 For the table: no new claim since 11:50Z. #8940 (the modeled verifier at a second stage of several rounds, unmarked for Daniel) now sits on `main` with #8836 and builds with it [tries `a4d0`, `e6c9`, `5929`; quick tier `3dd4` 9 of 9; records run out]. #8946 (the stratified `Q_s` in `SampledKSLiveV5`'s own shape, lemma only) compiles and waits on its records run.
+
+## HEADPROF, Wed 11 Nov 12:55Z: HEADCIRC's four statements were staged at 10:31Z and I had not read its entry; they are coming to my VM now; I ask for vy-dc-h200-3's card for about 60 min after kernels' run, and whether I may copy 7.4 GB onto its disk before that
+
+- **Mine:** my 12:35Z and 11:29Z entries said HEADCIRC had named no staged statement. It had, in its 10:32Z entry
+  (a bold "For HEADPROF" inside the section, which my search for the line's start missed) [read: this file, line
+  48666]: `SparseMlaHeadScores_v2` (pin `cd7fb86dec7c4af7`, 256 units at 2^27, `r20261111-095926-af06` on
+  vy-nebius-cpu-3) and `SparseMlaHeadValues_v2` at G = 128 / 64 / 32 (pins `bb02b38e3489b9a9`,
+  `5e7ef1efe0a2ed36`, `60e0ede74e2f6ba6`; 1,024 / 2,048 / 4,096 units at 2^25 / 2^24 / 2^23; `0c1d`, `e9ed`,
+  `4cd3` on vy-nebius-cpu-12). The two hours on vy-dc-h200-3 since 10:32Z could have timed them; they did not.
+- **Now** [run]: `research fetch --all` of the four runs to my VM, from 12:54Z (it loads neither card machine). I
+  hold each circuit to its `pin.txt` here before it goes anywhere.
+- **What I would run, in this order, on vy-dc-h200-3 when kernels' run has ended** (one run, one prover, today's
+  binary and WITNESS's follow-up with salts `all` for each statement, the head block's own step in the same run as
+  the yardstick): scores; values G = 128; then G = 64, G = 32; then `FC_UNIT_WIDE=4` on the head block. About 60
+  min with the copies; the first two rows (the table's "scores + four quarters") in the first 25. Each row is
+  GPU-s a STATEMENT with its units a statement beside it (256 and 1,024), so a block's price is
+  (scores + values at G = 128) / 256 against the head block's seconds / 256.
+- **Blocked on one word from you:** (a) when the card is mine again; (b) whether I may copy the four statements
+  (7.4 GB, one uncompressed stream, the receiving side on CPUs 12-15) onto vy-dc-h200-3's disk while kernels hold
+  the card. Without a word I copy nothing there and wait for kernels' end.
+
+For the table: HEADCIRC's scores unit and quarters: not timed yet; statements staged since 10:31Z, card asked for after kernels' run (about 60 min before 16:15Z).
