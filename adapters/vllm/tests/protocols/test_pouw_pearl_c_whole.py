@@ -311,10 +311,10 @@ def test_a_replay_uploads_the_slots_the_last_one_staged_only_from_where_they_wer
     made: list[tuple] = []
     make = run.keys
 
-    def keys(*a):
+    def counted(*a):
         made.append(a[1:])
         return make(*a)
-    run.keys = keys
+    run.keys = counted
     calls = (PG.WholeCall(9, 32, 4096, 1024, 32, 8), PG.WholeCall(7, 32, 1024, 4096, 32, 32))
     run.whole_replay(calls)
     assert made == [(0, 32), (1, 32)]

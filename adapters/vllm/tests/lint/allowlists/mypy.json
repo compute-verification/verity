@@ -3056,7 +3056,7 @@
     {"file": "verity_vllm/protocols/pouw/__init__.py", "kind": "misc", "symbol": "install", "detail": ""},
     {"file": "verity_vllm/protocols/pouw/circuit.py", "kind": "arg-type", "symbol": "save_calls", "detail": ""},
     {"file": "verity_vllm/protocols/pouw/credit_gate.py", "kind": "union-attr", "symbol": "Trace.dispatch", "detail": "", "count": 2},
-    {"file": "verity_vllm/protocols/pouw/device.py", "kind": "arg-type", "symbol": "gate_call", "detail": "", "count": 2},
+    {"file": "verity_vllm/protocols/pouw/device.py", "kind": "arg-type", "symbol": "gate_call", "detail": ""},
     {"file": "verity_vllm/protocols/pouw/device.py", "kind": "assignment", "symbol": "device", "detail": ""},
     {"file": "verity_vllm/protocols/pouw/device.py", "kind": "assignment", "symbol": "fused", "detail": ""},
     {"file": "verity_vllm/protocols/pouw/device.py", "kind": "assignment", "symbol": "host", "detail": ""},

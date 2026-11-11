@@ -22,6 +22,7 @@ from collections.abc import Sequence
 from dataclasses import dataclass, field
 from functools import cache
 from pathlib import Path
+from typing import Any
 
 import numpy as np
 from verity.definitions.kernels import SHA512
@@ -366,7 +367,7 @@ def _stream(tag: str, n: int) -> np.ndarray:
     return np.frombuffer(hashlib.shake_256(b"verity/pouw-device/gate-call\0" + tag.encode()).digest(max(1, n)), np.uint8)[:n]
 
 
-def _values(tag: str, m: int, k: int, n: int) -> dict[str, np.ndarray]:
+def _values(tag: str, m: int, k: int, n: int) -> dict[str, Any]:
     """A call's inputs from `_stream`: int7 A and B uniform on [−64, 63], positive row and column scales, a BF16 bias about
     0 and n distinct column ids."""
     sizes = {"a": m * k, "b": n * k, "s": 2 * m, "t": 2 * n, "bias": 2 * n, "salt": 32, "cols": 4 * 4 * n}
