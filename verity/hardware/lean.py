@@ -1,8 +1,8 @@
 """The Lean card tables, generated from the card files.
 
-A GPU card file that names a Lean table (``lean``) gives one Lean module, ``<OUT>/<the table's name>.lean``: the
-namespace ``Verity.Accel.<name>`` with its ``clock``, its ``tensorClock`` where the card's tensor has a clock of its
-own, and its ``card : Card``. ``table`` is the table's numbers as exact rationals, and ``render`` is the module's text:
+A GPU card file that names a Lean table (``lean``, the module's path) gives that module: the namespace
+``Verity.Accel.<the file's name>`` with its ``clock``, its ``tensorClock`` where the card's tensor has a clock of its own,
+and its ``card : Card``. ``table`` is the table's numbers as exact rationals, and ``render`` is the module's text:
 each per-SM entry as ``SMs * the entry``, each rate as that times the name of its clock, and every other number as one
 numeral. A field of ℕ holds whole numbers and no division, since Lean's ℕ division truncates; a fraction is written
 ``p / q`` in ℚ≥0, where the division is exact. ``render`` refuses a card whose stores are not whole words, and an arm
@@ -26,8 +26,6 @@ from pathlib import Path
 from verity.errors import InvalidArtifact
 from verity.hardware.cards import CARDS, WORD, load, number, rate, skus
 
-#: The generated card tables' directory, from the repository's root: the one place that names it.
-OUT = "Security/Proofs/Core/Accel/Cards"
 #: The Lean module that declares ``Verity.Accel.Card``, which a card table imports.
 CARD = "Definitions.Core.Accel.Card"
 #: The one command that writes the generated modules: each module's header names it, and so does the test's failure.
@@ -35,8 +33,9 @@ COMMAND = "uv run python -m verity.hardware.lean --write"
 
 
 def root() -> Path:
-    """The repository's root: the nearest directory above this file that holds ``OUT``'s tree."""
-    top = OUT.split("/")[0]
+    """The repository's root, which a card file's ``lean`` is a path from: the nearest directory above this file that
+    holds the tree the first table is in."""
+    top = Path(load(tabled()[0])["lean"]).parts[0]
     for parent in Path(__file__).resolve().parents:
         if (parent / top).is_dir():
             return parent
@@ -141,7 +140,7 @@ def render(card: dict | str) -> str:
 
 def modules() -> dict[str, str]:
     """Every generated Lean module: its path from the repository's root, and its text."""
-    return {f"{OUT}/{Path(load(sku)['lean']).stem}.lean": render(sku) for sku in tabled()}
+    return {load(sku)["lean"]: render(sku) for sku in tabled()}
 
 
 def stale(top: Path | None = None) -> list[str]:

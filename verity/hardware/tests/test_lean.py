@@ -1,16 +1,12 @@
-"""The Lean card tables agree with the card files, number by number, and the generated ones are the generator's output.
+"""The Lean card tables are the generator's output, and agree with the card files number by number.
 
-A GPU card file names its Lean table (``lean``). Its ``clock``, ``tensorClock`` (``clock`` where the table has none) and
-``card`` definitions are evaluated as exact rationals (``^`` a power, ``/`` exact, and a natural-number field refused
-where Lean's division would truncate) and each arm is
-compared with what the card file gives (``verity.hardware.lean.table``), for every store, resource and format the ACCEL
-ops are priced in (``Security/Definitions/Core/Accel/Isa.lean``): a constructor added there fails here until the card
-files carry it. The B200 has no card table yet, and its data sheet (``Accounting.TS.Sheets.B200``) is held to its card
-file instead.
-
-Each such card also has a generated table (``verity.hardware.lean.render``, committed under ``lean.OUT``), held to the
-generator byte for byte and to the card file by the same evaluation: it declares the names its hand-written table
-declares, with the same numbers.
+A GPU card file names its Lean table (``lean``), which ``verity.hardware.lean`` writes: the committed module is held to
+``render`` byte for byte. Independently of the generator, its ``clock``, ``tensorClock`` (``clock`` where the table has
+none) and ``card`` definitions are evaluated as exact rationals (``^`` a power, ``/`` exact, and a natural-number field
+refused where Lean's division would truncate) and each arm is compared with what the card file gives
+(``verity.hardware.lean.table``), for every store, resource and format the ACCEL ops are priced in
+(``Security/Definitions/Core/Accel/Isa.lean``): a constructor added there fails here until the card files carry it. The
+B200 has no card table yet, and its data sheet (``Accounting.TS.Sheets.B200``) is held to its card file instead.
 """
 
 from __future__ import annotations
@@ -117,8 +113,8 @@ def disagreements(card: dict, text: str) -> list[str]:
 def test_lean_table_agrees_with_the_card_file(sku: str) -> None:
     card = load(sku)
     found = disagreements(card, (ROOT / card["lean"]).read_text(encoding="utf-8"))
-    assert not found, (f"{card['lean']} and verity/hardware/cards/{sku}.toml disagree; change the card file first, "
-                       "then its Lean table to match:\n" + "\n".join(found))
+    assert not found, (f"{card['lean']} and verity/hardware/cards/{sku}.toml disagree; change the card file or the "
+                       f"generator, then write the table: `{lean.COMMAND}`\n" + "\n".join(found))
 
 
 def test_the_gpu_cards_without_a_lean_table() -> None:
@@ -141,16 +137,15 @@ def test_the_b200_sheet_agrees_with_its_card_file() -> None:
 
 
 def test_a_changed_number_is_a_disagreement() -> None:
-    """The check above isn't vacuous: one changed rate, a changed default weight and a dropped arm are each reported."""
+    """The check above isn't vacuous: one changed rate, a changed weight and a dropped arm are each reported."""
     card = load("rtx-pro-6000-server")
     text = (ROOT / card["lean"]).read_text(encoding="utf-8")
     assert disagreements(card, text) == []
     faster = text.replace("188 * 1024 * clock", "188 * 1025 * clock")
     assert disagreements(card, faster) == [f"ρ tensor: Lean 188 * 1025 * clock = {188 * 1025 * 2430 * 10 ** 6}, "
                                          f"card file {188 * 1024 * 2430 * 10 ** 6}"]
-    default = text.replace("    | _ => 1\n", "    | _ => 2\n")
-    assert sorted(m.split(":")[0] for m in disagreements(card, default)) == [
-        f"weight {f}" for f in ("b1", "e2m1", "e4m3", "e5m2", "s8", "u8")]
+    heavier = text.replace("    | .tf32 => 4\n", "    | .tf32 => 5\n")
+    assert disagreements(card, heavier) == ["weight tf32: Lean 5 = 5, card file 4"]
     dropped = text.replace("    | .l2 => 188 * 5 * clock\n", "")
     assert disagreements(card, dropped) == ["ρ l2: Lean has no arm"]
 
@@ -182,22 +177,9 @@ def test_a_truncating_nat_division_is_refused() -> None:
 
 
 GENERATED = lean.modules()
-
-
-def values(text: str) -> tuple[dict[str, Fraction], dict[str, dict[str, Fraction] | Fraction]]:
-    """A Lean table's numbers: its clocks, each store's, resource's and format's arm (the default's where it has none),
-    and the model's ranges."""
-    clock, fields = card_table(text)
-    out: dict[str, dict[str, Fraction] | Fraction] = {}
-    for field, kinds, nat in (("size", "Store", True), ("ρ", "Res", False), ("weight", "Fmt", False)):
-        out[field] = {name: evaluate(fields[field].get(name, fields[field].get("_")), clock, nat)
-                      for name in constructors(kinds)}
-    return clock, out | {field: evaluate(fields[field], clock, nat=True) for field in ("exact", "text")}
-
-
-def declared(text: str) -> list[str]:
-    """What a Lean table declares: its namespace, then each definition's name."""
-    return re.findall(r"^(?:namespace|def|abbrev|theorem|lemma|instance|structure) (\S+)", text, re.M)
+#: What each table declares, its namespace first: the names its importers read.
+DECLARED = {"h200-sxm-141gb": ["Verity.Accel.H200", "clock", "tensorClock", "card"],
+            "rtx-pro-6000-server": ["Verity.Accel.Sm120", "clock", "card"]}
 
 
 @pytest.mark.parametrize("path", GENERATED)
@@ -210,28 +192,14 @@ def test_a_generated_table_is_the_generators_output(path: str) -> None:
         f"file or the generator, never this file, then write it: `{lean.COMMAND}`")
 
 
-def test_the_generated_directory_holds_only_generated_tables() -> None:
-    """Every file under ``lean.OUT`` is one the generator writes: no hand-written module sits beside the tables, and
-    the table of a card that no longer names one is deleted."""
-    found = sorted(p.relative_to(ROOT).as_posix() for p in (ROOT / lean.OUT).iterdir())
-    assert found == sorted(GENERATED), (
-        f"{lean.OUT} holds {sorted(set(found) - set(GENERATED))}, which `{lean.COMMAND}` does not write: delete them, "
-        "or keep a hand-written module elsewhere")
-
-
-@pytest.mark.parametrize("sku", LEAN)
-def test_a_generated_table_agrees_with_the_card_file(sku: str) -> None:
-    card = load(sku)
-    assert disagreements(card, lean.render(sku)) == []
-
-
-@pytest.mark.parametrize("sku", LEAN)
-def test_a_generated_table_is_the_hand_written_one(sku: str) -> None:
-    """The generated module declares the names the card's hand-written table declares, in its namespace, and every
-    number of it is that table's: an importer that changes tables changes its import and reads the same values."""
-    hand, text = (ROOT / load(sku)["lean"]).read_text(encoding="utf-8"), lean.render(sku)
-    assert declared(text) == declared(hand)
-    assert values(text) == values(hand)
+def test_a_generated_table_declares_the_names_its_importers_read() -> None:
+    """Each card's table is the module its card file names, a module of the definitions tree, and declares its
+    namespace, its clocks and ``card``: a renamed or dropped one fails here before a Lean build does."""
+    assert sorted(GENERATED) == sorted(load(sku)["lean"] for sku in LEAN)
+    assert all(path.startswith("Security/Definitions/") for path in GENERATED)
+    found = {sku: re.findall(r"^(?:namespace|def|abbrev|theorem|lemma|instance|structure) (\S+)", lean.render(sku), re.M)
+             for sku in LEAN}
+    assert found == DECLARED
 
 
 def test_a_generated_table_states_its_source_and_no_number_in_prose() -> None:
