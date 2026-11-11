@@ -1,5 +1,26 @@
 # datacenter
 
+## Interface
+
+- **Python**: the package `datacenter`, the distribution `verity-datacenter` (this directory's `pyproject.toml`; it
+  depends on `verity` alone). It is not a member of the uv workspace, so nothing installs it: an importer puts this
+  directory on `sys.path`.
+- **Importers**: `benchmarks/network_sim` alone (its `graph.py`, `mockdc.py`, `records.py` and `workload/`, and their
+  tests). No code under `verity/` imports it. What they import:
+  - from `datacenter`: `Datacenter`, `Fleet`, `Plan`, `Profile`, `Interval`, `Maintenance`, `Carried`, `Refused`,
+    `LinkEntry`, `Port`, `PortRecord`, `Cadence`, `Assumption`, `serve_time`, `check_records` and `account`;
+    `workload/accounting.py` imports the package whole;
+  - from `datacenter.examples`: `leaf_spine` and `two_sites`;
+  - from `datacenter.logical`: `binding`, `gates` and `layout`.
+- **Command**: `python -m datacenter.demo`, run from this directory; `benchmarks/network_sim/run.py` runs it and
+  keeps what it prints. There is no console script.
+- **Lean**: none. `physical` mirrors the Lean physical model, and no Lake package is here.
+- **Documents**: none. The package writes no file and defines no schema.
+- **Loads from**: `verity.circuits`, `verity.commitments`, `verity.definitions`, `verity.hardware` (`registration`),
+  `verity.protocols.spot.verifier` and PoUB's `timing` and `codec` (`verity.protocols.poub.verifier`).
+
+## Overview
+
 A datacenter as Verity accounts for it, in a small Python API: a Program, the hardware it runs on, the binding between
 them, the verifier's plan, a run with what the trusted devices record, the audit's claims, and the account.
 

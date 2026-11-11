@@ -135,6 +135,30 @@ def test_close_commits_every_unit_under_the_window_domain_rule():
     assert changed.close(salt_key=bytes(32)).roots[win.window.members[1].port("x")] != c.roots[m1.port("x")]
 
 
+def test_a_windows_salts_are_the_operating_systems_bytes_one_draw_a_port(monkeypatch):
+    """With no test key, `rows.commit` takes every row's salt from the OS generator, 192 bytes a row in one draw a port in
+    the ports' order, and stretches none from a key: each port's salts are the bytes the generator gave for it. Two closes
+    of one window draw other salts, so other roots; a test's key still gives its ChaCha20 stream (`rows.salts`), the
+    port's index its nonce."""
+    win, _ins, _outs = window()
+    ports = [m.port(p) for m in win.window.members for p, _ in m.all_rows]
+    drawn = []
+
+    def urandom(n: int) -> bytes:
+        drawn.append(hashlib.shake_256(b"os %d" % len(drawn)).digest(n))
+        return drawn[-1]
+
+    with monkeypatch.context() as mp:
+        mp.setattr(CS.os, "urandom", urandom)
+        c = win.close()
+    assert [c.salts[p] for p in ports] == drawn[:len(ports)]
+    assert all(len(c.salts[p]) == CS.SALT_BYTES * len(c.rows[p]) > 0 for p in ports)
+    one, two = win.close(), win.close()
+    assert all(one.salts[p] != two.salts[p] and one.roots[p] != two.roots[p] for p in ports)
+    keyed = win.close(salt_key=bytes(range(32)))
+    assert [keyed.salts[p] for p in ports] == [CS.salts(bytes(range(32)), k, len(keyed.rows[p])) for k, p in enumerate(ports)]
+
+
 def test_close_concatenates_each_templates_words_once(monkeypatch):
     """Every member's rows are views of one array per port, not each a copy of its whole template's words: close's memory
     was members × units (249 GB at the decoder's 353,092 units)."""
@@ -806,6 +830,33 @@ def test_a_history_tables_writer_commits_each_row_as_the_tables_leaf():
     assert table.bcs[:6] == strings["latent"]
     with pytest.raises(ValueError, match="holds no rows of"):
         HT.roots_of(CS.leaf_layer(bodies), HW.params(doc2, later.window, bodies, HW.pins(doc2, roots2)))
+
+
+def test_a_history_writers_rows_are_hashed_once_as_the_tables_strings(monkeypatch):
+    """A history writer's output rows reach `rows.commit` as their table's strings (``strings_of``), so the window hashes only
+    their leaves and tree, and its commitment is the one hashing the rows in full under the same salts makes; strings of
+    the wrong size, or for a port whose salts aren't given, are refused."""
+    seen, real = {}, CS.commit
+
+    def spy(window, data, **kw):
+        seen.update(window=window, data=data, kw=kw)
+        return real(window, data, **kw)
+
+    monkeypatch.setattr(CS, "commit", spy)
+    table = HT.HistoryTable("program", "latent", 8, 16)
+    _win, got, _publics = history_window(table)
+    window, data, kw = seen["window"], seen["data"], seen["kw"]
+    given = kw["strings_of"]
+    assert sorted(given) == sorted(m.port("o0") for m in window.members if m.template == G8ID)
+    assert b"".join(given[p] for p in sorted(given, key=lambda p: next(m.base for m in window.members if m.port("o0") == p))) \
+        == b"".join(table.bcs)
+    full = real(window, data, **{**kw, "strings_of": None})
+    assert full.roots == got.roots and full.bc == got.bc
+    port = next(iter(given))
+    with pytest.raises(ValueError, match="strings_of"):
+        real(window, data, **{**kw, "strings_of": {port: given[port][:-1]}})
+    with pytest.raises(ValueError, match="strings_of"):
+        real(window, data, **{**kw, "salts_of": {p: s for p, s in kw["salts_of"].items() if p != port}})
 
 
 def test_the_verifier_of_record_holds_the_registered_history_root_to_the_writers_strings():
