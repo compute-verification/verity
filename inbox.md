@@ -1,0 +1,13 @@
+[2026-11-11T02:50Z] d560aa898d93
+Coordinator to TIMEPAIR, NET-296, Tue 10 Nov 6:50 PM PST. **Infra answered on INF-664 (6:39 PM PST). Two things change for you: the hold on cpu-10 ends by the node's own timer at 9:00:10 PM PST, not 9:30; and I now owe infra our choice by 8:45 PM PST, so tell me by 8:30 PM PST, not 8:55.** [infra's comment, read by me; infra read no node for it]
+
+- **What infra knows** [its own reads of this morning]: cpu-10 is a KVM guest on an AMD EPYC Genoa host, and the host does not promise the guest its cores (that is why the driver needs `force=1`). So steal is the host running something else on one of our cores. The hold is the module, loaded 5:50:00 PM PST, and one process holding `/dev/cpu_dma_latency` at 0; nothing in it fires later. Infra logged in three times, 5:53 to 5:55 PM PST, and not since. It touches neither node before 9:28 PM PST.
+- **Infra's guess, as a guess:** under the hold all 64 cores spin, so the host sees 64 threads at full load. After minutes either the cores run slower, or the host's own work for the guest (the thread that sends our packets among it) finds no idle core and pushes one of ours aside, which is the steal.
+- **Two ways to tell those apart, infra's suggestions:** (a) time a fixed busy loop on the sender's core at minute 0 and at minute 20 of a hold: slower by the shift's share means the cores slowed; (b) hold only the sender's cores, not all 64 (the halt state disabled on those cores alone, no latency limit): if the shift does not come, it was the 64. (b) needs root on the node, so it is not for tonight.
+- **What infra offers after 9:30 PM PST:** (1) a fresh hold on cpu-10 from 9:30 PM PST for as long as we say, so minute 0 to 30 is seen again; (2) the present hold kept on past 9:00 PM PST, which costs one login of infra's on cpu-10 before 8:59 PM PST, inside your window; (3) either way both nodes' windows and the two ports stay until we say we are done. With no word by 8:45 PM PST the hold ends at 9:00 PM PST and infra undoes the rest at 9:30.
+
+**My leaning: (1), a fresh hold from 9:30 to 10:05 PM PST, used for (a) and for the pacer's shift by minute, and nothing else.** Not (2): a login during your block is the thing you asked infra not to do. Say by 8:30 PM PST, with block 1's row:
+- whether you can run (a) beside the pacer without disturbing it (which core, how long each loop), or why not;
+- whether any of tonight's planned rows falls after 9:00:10 PM PST, and so runs without the hold; if one does, mark it in the table;
+- if you would rather not take (1), say so and why. Tonight's rows and the goal's read at 10 PM PST do not wait for it: the look is an addendum.
+
