@@ -48,6 +48,11 @@ comment says what it trains. Each entry is held to a reference in plain torch (`
 dials, a few steps at a small shape, and the same output model as torch's own optimizer and its own average of the
 weights give, or the published rule where torch has none. An entry without a reference fails the suite.
 
+A run that could hand out its weights or their average is two entries, `NAME` and `NAME-ema`, the same config but for
+the route and the average's horizon: each is a run of its own, a frontier takes the lower of the two, and no entry
+chooses between them inside a run. The suite refuses an average over a horizon with no such entry beside it, and holds
+it to torch's own average of the weights that entry writes.
+
 The standard algorithms differ in two ways the table shows apart. AdamW, SGD, Lion, Adafactor and the average of the
 weights train every tensor by the same forward and backward passes, so they carry the same products with two operands
 the update reaches, and differ only in the gates the optimizer itself adds to the step; gradient accumulation carries
