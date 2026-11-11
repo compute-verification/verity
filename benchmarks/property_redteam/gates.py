@@ -571,6 +571,6 @@ def products(C: Builder) -> int:
 
 
 def nonlinear(C: Builder) -> int:
-    """`nonlinear`: the budgeted units (the count on main, `fixed=True`) and the data products, what the property's caps
-    bound: every operation but a linear map with coefficients fixed before the coins."""
+    """`nonlinear`: the budgeted units (the count on main, `fixed=True`) and the data products, what the property
+    bounds: every operation but a linear map with coefficients fixed before the coins."""
     return budgeted(C, fixed=True) + products(C)

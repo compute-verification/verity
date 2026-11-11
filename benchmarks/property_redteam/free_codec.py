@@ -176,7 +176,7 @@ def free_encode_word(n: int, c: int, rounds: int) -> tuple[Builder, list[int], d
     return b, out, slots
 
 
-def draw_inputs(n: int, c: int, cs: list[int], mask: int, tau: int, i: int, m: int) -> dict:
+def sample_inputs(n: int, c: int, cs: list[int], mask: int, tau: int, i: int, m: int) -> dict:
     """The slot values of a sample `(cs, mask, τ)` for word `i` with payload `m` (`Slot.value`)."""
     p, L = (1 << n) - c, n // 8
     t = tau * i % p

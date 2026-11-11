@@ -204,7 +204,7 @@ def test_the_whole_codec_word_is_free_at_6bs_fields():
         if key not in builds:
             builds[key] = FC.free_encode_word(n, c, len(cs))
         b, out, slots = builds[key]
-        vals, window, hold = b.evaluate(FC.draw_inputs(n, c, cs, K, tau, i, m))
+        vals, window, hold = b.evaluate(FC.sample_inputs(n, c, cs, K, tau, i, m))
         assert window and hold
         assert [vals[o] for o in out] == [(y // 2 * 2) >> (8 * l) & 255 for l in range(n // 8)]
     for b, out, slots in builds.values():
@@ -217,7 +217,7 @@ def test_the_whole_codec_word_is_free_at_6bs_fields():
         assert {b.bindings[i] for i, slot in b.slots.items() if slot[0] == "payload"} == {"registered"}
 
 
-def test_the_free_codec_word_is_right_on_every_draw_tried():
+def test_the_free_codec_word_is_right_on_every_sample_tried():
     rng = random.Random(3)
     n, c, k = 16, 17, 3
     p = (1 << n) - c
@@ -226,6 +226,6 @@ def test_the_free_codec_word_is_right_on_every_draw_tried():
         cs = [rng.randrange(p) for _ in range(k)]
         K, tau, i, m = rng.randrange(1 << n), rng.randrange(1, p), rng.randrange(1 << 20), rng.randrange(1 << n)
         y = FC.encode_word_ref(p, cs, K, tau * i % p, m)
-        vals, window, hold = b.evaluate(FC.draw_inputs(n, c, cs, K, tau, i, m))
+        vals, window, hold = b.evaluate(FC.sample_inputs(n, c, cs, K, tau, i, m))
         assert window and hold
         assert [vals[o] for o in out] == [(y // 2 * 2) >> (8 * l) & 255 for l in range(n // 8)]
