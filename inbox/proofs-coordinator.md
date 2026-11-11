@@ -43305,3 +43305,127 @@ For the table:
 - What the theorem says: for any compiled two-stage verifier and any prover at which `ExpectedCR` holds for its two first-hit finders at every cap, an accepted run samples a block incorrect at the committed trace with probability at most `κ_s + √(k·γ_s·Pr[B]) + Pr[B_conf,X] + 4·E[calls of a run with its extractions + Σ over the gates its sample needs of the calls to extract that gate]/2^256`. #8827 at `946b7b72f26d`: elaborated on the three axioms (try `f546`), no kernel replay, not on `main`, read by no guarantee.
 - What the table may say: "modeled, 2^-105.0 per sampled replay block at T = 2^80 calls a run: the first-hit term of #8827's lemma, evaluated on paper". And beside it what it rests on: `ExpectedCR` at three finders and `StrictBirthday` at `B`; `Addresses h`; three steps not in Lean (the cost of extracting a gate, the session count, the refused draw); a sample and a coin the code's model does not have.
 - What it may not say: "proved", "SPOT's binding error", "an audit" (2.0 to 2.6 bits at a padded first stage of 4 to 6), "at the code" (the model's 2^20-byte stage refuses D*1's draw and K is then every block), or that the lane took `AdaptiveBirthday` (no Lean has it).
+
+## BREAKEVEN, Wed 11 Nov 08:51Z: the head block holds 69% of the measured-price bound; every priced lever with it at 0.52 s gives 1,026.6 GB world year, 3.4 times 300 GB, and 1,234.0 under D*2; 300 GB also needs S, the prover's other seconds and the serving term halved (276.4 GB); none of that is built. #8853 takes #8779's three row keys
+
+Clock: `date -u` read before writing. Every GB figure below is GLM-5.3's at 10% all-things-considered compute, times 1.05 as the Goals page reads it, computed by two notes scripts: `lanes/proofs/tools/headline_world_waterfall.py` (the rows: run A's measured-price path with one input changed a variant) and `waterfall_read.py` (the 10% read, `breakeven_at_target.py`'s fit) [run]. The path is e0bd's: tree `a5e4e56a11`, the census's 192-stratum card, benchmarks' prices, the lever file's 128k volume, eight heads. Benchmarks' steady rows price 99.93% of the prover's and verifier's seconds a served token, the planner the rest [run]. So every figure is **modeled** (the planner's bound) **on measured prices**, and a row that changes an input says what it rests on. The base rows equal e0bd's `fix` rows: (ii) 4,043.8, (iii) 4,042.4 and the lever row 3,228.7 GB [run]. Your 4,047.3 and 3,233.3 are (iii) and the lever row with the verifier's margin added (+0.12% and +0.14%), which no row below carries. Runs: `r20261111-074241-ea13`, `r20261111-075513-b81d`, `r20261111-075149-d3fd`, `r20261111-080023-5b2b`, `r20261111-080256-717e`, `r20261111-081323-2b8f`, `r20261111-081428-2021`, `r20261111-082119-e76f`, `r20261111-083708-5b72`. Out: `r20261111-084525-8ee8`, `r20261111-084555-f168` (their rows below say so).
+
+**#8853 changes; #8779 does not** (BENCHCROSS's 08:18Z question).
+- #8853's rows now carry the three keys #8779's reader takes rows by: `world` (`ours`), `b10` (the pinned β, beside `beta`) and a step that begins `+ the verifier as measured`. That is commit `2e47293cc6` on `cursor/proofs-headline-driver-c41e`, with one quick test that pins the three [run]. The body's comparison section says so [run: `research queue edit`]. Nothing in #8779 changes.
+- I checked it with #8779's own reader at `dfe58c687820` (`at_share`, on the VM, under a second). On the in-tree run's rows as written (`r20261111-072105-40ee`) it takes no row. With the three keys it takes nine rows a scope and reads 14,228.6 GB at world year (d670's figure), 13,697.9 at datacenter year and 13,961.6 at world week, its own plan's pricing included [run].
+- So once both are on `main`, a run of the entry point can be the run of record, and `verity bench exfiltration` prints it with no change on benchmarks' side.
+
+**Ready to mark #8853 at `2e47293cc645d39b2148b02ec6f4dcc4f80c0043`** (the driver; I have not marked it).
+- Quick tier `r20261111-083343-0181`, on its merge with `main` `8201dacff26e` (tree `00a902bd665f`): 3 of 3 suites passed, none cached: `benchmarks/spot_figures` 102 (one more than at `4ab2b732df`, the new key test), `repository` 292, `verity-graph` 181 [run]. No Lean is touched.
+- At that head, `git merge-tree` is clean with `main` `8201dacff26e`, with its base #8568 `8fb2b94ee4b4` and with #8779 `dfe58c687820`, the one open PR in its package [run].
+- It is stacked on #8568, so it lands after it, retargeted to `main`. #8568 is in no candidate since 08:06Z, when its base was dropped [relayed: CROSS 08:37Z].
+- BENCHCROSS's whole-suite reading at `4ab2b732df`: 108 passed (`r20261111-081118-8d10`) [relayed]. The new commit only adds the keys, the prefix and one test, so no number moves.
+
+**1. The head block** (both 64-key types, `FIRST=true` scaled by the same ratio, since kernels' `r20261111-061056-d72e` is not in the store [run]). GB at 10%:
+
+| head-block statement | world week | world month | world year | datacenter week | datacenter month | datacenter year | with the three unbuilt: world year | datacenter year |
+|---|---|---|---|---|---|---|---|---|
+| 2.8555 s, today (measured) | 4,050.4 | 4,047.9 | 4,043.8 | 4,065.3 | 4,062.8 | 4,057.7 | 3,230.7 | 3,223.4 |
+| 1.8 s (modeled) | 3,000.6 | 3,000.6 | 3,000.5 | 3,002.9 | 3,002.1 | 3,001.1 | 2,241.6 | 2,233.4 |
+| 0.9 s (modeled) | 2,084.5 | 2,085.2 | 2,086.5 | 2,080.7 | 2,081.4 | 2,082.5 | 1,390.8 | 1,389.3 |
+| 0.52 s, the card's own work (modeled) | 1,689.8 | 1,690.9 | 1,692.6 | 1,684.4 | 1,685.4 | 1,687.0 | 1,027.7 | 1,024.0 |
+
+- The 2.8555 s is the labelled row's statement, `r20261111-051852-95c3`'s; kernels' profile `6773` measured 2.5654 at one prover [relayed: HEADPROF]. 1.8, 0.9 and 0.52 s are your what-ifs, so those rows are modeled. The last two columns put the templated check, the lifetime replay and the flat-column cut at their goals, which nobody has built, so they are assumed.
+- The week and month read within 0.19% of the year at every point [run: b81d].
+- SERVEDCARD's warning moves the first row; see the lever table.
+
+**2. The waterfall of (ii) honest, 4,043.8 GB world year.** A term's share of the bound is its elasticity at a 2% cut: ln(GB at ×0.98 ÷ GB) ÷ ln 0.98.
+- The bound is homogeneous of degree one in the three costs: cut together, they read 0.998 [run]. So at the design's optimum each cost's share is its share of the plan's spending [derived].
+- The serving terms are changed after the planner, in β* = (0.1 − F)/(1 + c), which the design does not read [read: `breakeven_at_target.py`].
+
+| term | its value | share of the bound | GB with it halved alone |
+|---|---|---|---|
+| the prover's GPU-seconds | | 0.747 | 2,501.5 |
+| of them, the two head blocks' price | | 0.687 | 2,624.6 |
+| of them, the two fused MoE blocks' price | | 0.030 | not run |
+| the Lean verifier's seconds (measured for FlashInfer K2048 and RMSNorm, the planner's model for the rest) |  | 0.196 | 3,645.1 |
+| the replay | 5,258 GPU-s a sampled request | 0.052 | 3,937.6 |
+| the re-proved hits | 13.86% more proving | 0.114 | 3,811.1 |
+| the served cap S (assumed) | 28,000 bits a request | 0.891 | 2,128.9 |
+| the serving term, all of it | 4.339% of compute | 0.768 | 2,906.8 |
+| its B128 edge's wait | 2.293% of compute | 0.408 | 3,350.9 |
+| its certified-tick rule | 1.626% of compute | 0.289 | 3,526.8 |
+| its deterministic top-k | 0.250% of compute | 0.045 | 3,954.6 |
+| its edge snapshot's pause | 0.163% of compute | 0.029 | 3,985.1 |
+| its commitments while serving (K/V page hashing) | 0.006% of compute | 0.001 | 4,041.6 |
+| the replay-only pool | 0.071% of compute | 0.013 | 4,018.0 |
+| the edge cut | 0.044% of compute | 0.008 | 4,027.7 |
+| the compile | 0.17% of β | 0.002 | 4,040.4 |
+| advice | none charged on this path | 0 | |
+
+**3. The top eight block types** by prover and verifier seconds a served token: the planner's last pricing call for (ii)'s world year at β 0.056, all priced by benchmarks' steady rows [run: ea13].
+
+| # | type | share of the seconds a served token | prover s a statement | verifier s a statement | share of the bound |
+|---|---|---|---|---|---|
+| 1 | fused embedding read + MoE FP8 GEMM, K=6144 | 44.97% | 2.371 | 0.476 | 0.0304 (the two fused MoE types) |
+| 2 | fused embedding read + MoE FP8 GEMM W, K=256 | 17.68% | 2.464 | 0.520 | (in the row above) |
+| 3 | SparseMlaHeadBlock, 64 keys, FIRST=false | 12.18% | 2.856 | 0.740 | 0.6869 (the two head types) |
+| 4 | ScaledMmFp8BlockSharedScale, K=6144 | 9.33% | 1.341 | 1.535 | 0.0034 (the two scaled MM types) |
+| 5 | ScaledMmFp8BlockSharedScale, K=2048 | 6.78% | 0.938 | 0.517 | (in the row above) |
+| 6 | BatchedGemm, K=192 | 1.69% | 0.903 | 0.740 | 0.0004 (the two batched GEMM types) |
+| 7 | BatchedGemm, K=512 | 1.52% | 0.744 | 0.740 | (in the row above) |
+| 8 | CublasSplitKGemmF32Out, K=6144, split 3 | 1.42% | 0.873 | 0.740 | 0.0003 (this type) |
+
+- The tenth is the `FIRST=true` head type, 0.62% of the seconds. Benchmarks' steady rows hold 99.93% of the seconds and the prover 76.05% [run].
+- **Kernels' 87.1% and 4.4% agree with these rows** once read as shares of the prover's spending. The two head types hold 12.8% of the seconds a served token but 0.687 of the bound, against the prover's 0.747: 92.0% of the prover's spending [derived], against kernels' 91.5% [relayed: HASH-114]. Split by their prover seconds a token (19.7 to 1), that is 87.5% and 4.4% [guess: the split assumes the plan samples both types alike].
+- No un-fused `GemmW_v1` or `BlockGemm_v3` type is on this path, so FUSED's new `GemmW` rows move (i) only: 4,566 to 4,762 GB at world year [relayed: FUSED; BENCHCROSS's second reading, to the GB]. (ii) and (iii) don't move [run: ea13's types].
+- **A smell, mine:** on this path the rows' `split` field holds the planner's own prices, not the measured ones. It reads X = 10,295.67 in the base, `h052` and `p50` rows alike [run]: `SC.LAST` is filled before the prices are replaced. The 2.5% head-block share I read from it earlier is wrong; read `types` or the elasticities.
+
+**4. Each term halved alone** is the waterfall's last column. In GB order: S, then the prover, the head blocks within it, the serving term (its wait, then its tick rule), the verifier, the re-proved hits and the replay. The rest move the bound under 1% each.
+
+**5. What reaches 300 GB, and the remainder.**
+- Every priced lever with the head block at 0.52 s reads 1,026.6 GB world year and 1,022.9 datacenter year [run: d3fd]. That is the lever row: the three unbuilt changes, the other three P5 goals (the prover's 4x, four dense provers a GPU, the front run) and warm 0.25. On measured prices the last four take only 1.1 GB more off. Nothing of it is built, so the figure is assumed.
+- Nothing priced so far reaches 300 GB; a factor of 3.42 is left.
+- At that point the bound's shares are [run: d3fd, 5b2b]:
+  - S 0.767;
+  - the serving term 0.732: its wait 0.399, its tick rule 0.283;
+  - the prover's seconds 0.711: the head blocks still 0.481, the fused MoE blocks 0.117, the scaled MMs 0.013;
+  - the verifier's 0.261, the re-proved hits 0.118.
+- Three more halvings reach it, none built or designed: S to 14,000 bits a request, the prover's seconds, and the serving term from 4.22% to 2.11% of compute. They give 276.4 GB world year and 274.1 datacenter year [run: 5b2b `SP50`, the serving term changed after the planner]. Halving the verifier's seconds in place of the serving term gives 308.2 [run].
+- So the remainder is, in about equal parts: S, the serving term's wait and tick rule, and the fused MoE and head blocks' prover seconds.
+
+**6. The running lever table**, world year. "Alone" is on (ii) honest; "cumulative" adds the levers in the order below. The head-block levers compose by kernels' rule: a statement is 2.8555 s × the host CPU-s left ÷ 23.2, floored at the card's own 0.52 s [relayed: kernels, SALTS]. The host's 23.2 CPU-s are the witness 8.7, the salts 7.3, the loopback Rust check 5.68 and 1.5 else [relayed: SALTS, SERVEDCARD].
+
+| lever | who | GB after it alone | GB cumulative | label |
+|---|---|---|---|---|
+| today: (ii) honest on measured prices | | 4,043.8 | 4,043.8 | modeled on measured prices (ea13) |
+| 1. the head block's Rust check counted once: its 5.68 CPU-s out, 2.8555 → 2.156 s. #8859 lets a steady row measure it so | SERVEDCARD; HEADPROF measures | 3,361.6 | 3,361.6 | modeled by kernels' rule (2021). If the check keeps cores of its own, add back 0.069 or 0.125 GPU-s a statement [relayed: BENCHCROSS, which one a guess]: 2.225 s gives 3,428.9 and 2.281 s gives 3,483.6 (5b72). SERVEDCARD's own reading, at most 0.62 s of 2.5654: 3,370.4 to 3,438.8 (2b8f) |
+| 2. the witness on the card: 8.7 CPU-s off the host; 1.78 s alone, 1.086 s after 1 | WITNESS: 0 CPU-s saved so far [relayed] | 2,980.3 | 2,279.0 | modeled (717e, 2021) |
+| 3a. the salts above level 0 from a seed: 2.9 CPU-s off; 2.50 s alone, 1.43 s with 2, 0.729 s after 1 and 2 | SALTS. No new premise but a new statement version, so Daniel's [relayed: SALTS; BENCHCROSS read it on `main`]. Its measurement branch expands on the host, not the card, so its row will be an upper bound [relayed: SALTS] | 3,695.5; with 2: 2,624.6 | 1,908.9 | modeled (5b72) |
+| 3. every salt from a seed, on the card: 7.3 CPU-s off; 1.96 s alone, the card's 0.52 s after 1 and 2 | SALTS. A claim: it reverses the ruling that salts come from the OS, though it adds no Lean Prop [relayed: SALTS 08:35Z], so Daniel's | 3,162.0 | 1,692.6 | modeled (717e, b81d) |
+| 4. the templated check at its goal: every type's Lean verifier seconds but the RMSNorm families' cut to 125/2,100 of today's, quant K6144's estimate taken for every type, the head blocks' included [read: `reprice.py` `VERIFY_TEMPLATED`, `templated_seconds`] | FUSED (TEMPLATED's job) | 3,569.7 | | modeled, unbuilt (2b8f). Part of its saving is on the head blocks, which #8771 doesn't help (the `_v2` block is staged flat as one net [relayed: SERVEDCARD]); the split is running (8ee8) |
+| 5. the replay over the lifetime at its goal | no worker named; vllm's replaycost sizes it | 3,734.2 | | modeled, unbuilt (2b8f) |
+| 6. the flat-column cut at its goal | no worker named | 3,928.7 | 1,027.7, 4 to 6 together after 1 to 3 | modeled, unbuilt (2b8f, b81d). 4 to 6 alone: 3,230.7 |
+| 7. the other three P5 goals (the prover's 4x, four dense provers a GPU, the front run) and warm 0.25 | no worker named | | 1,026.6 | assumed (d3fd). With 4 kept off the head blocks: running (f168) |
+| PARAMS: a session's tables capped at one | PARAMS | 0: the code already refuses a session of more than one table [relayed: PARAMS] | 1,026.6 | no row changes |
+| PARAMS: one repetition, not two: about 4.3 of the 23.2 host CPU-s off [guess: PARAMS]; 2.326 s alone | PARAMS. A number a lock reads, so Daniel's; unbuilt | 3,527.3 | | modeled on a guess (5b72) |
+| HEADCIRC: two heads a block, about a third fewer host CPU-s [guess: HEADCIRC]; 1.904 s alone | HEADCIRC | 3,105.1 | | modeled on a guess (5b72). Not local: the key read is what is paid eight times [relayed: HEADCIRC] |
+| D\*1: sessions of one table, under #8827's by-position bound | SCALE, KILIAN, TWOWITNESS | no parameter moves | 1,026.6 | the planner already prices a statement as one 2^35-bit table [relayed: SCALE] |
+| D\*2: κ ≤ 2^-8, where a session's tables can't be capped | SCALE | 5,483.4 (×1.356); with the three unbuilt 3,390.6 (×1.049) | at row 7's point: 1,234.0 (×1.202); datacenter year 1,223.7 | modeled (717e, e76f) |
+| κ ≤ 2^-9, the 64 KiB reading at one-table sessions | SCALE | 7,287.6 (×1.802); with the three unbuilt 3,669.1 (×1.136) | at row 7's point: 1,515.0 (×1.476); datacenter year 1,505.0 | modeled (2b8f, e76f) |
+| D\*3: κ = 0 | SCALE | no design near 10%: 1.18e+09 GB world year; at datacenter year the bound is the whole served output, 1.74e+07 GB, at every β up to 1 | | modeled (717e) |
+| vDSO `getrandom`: needs a host kernel of 6.11 or later, and node A runs 6.8 | SALTS | 3,833.5 (2.64 s); with the witness, 1.57 s: 2,768.2 | | modeled (717e) |
+| KECCAK[c=640]: proving ×0.97 to ×1.02 | WIDEHASH, via SCALE | 3,952.9 to 4,104.3 | | modeled (2b8f). Serve-time hashing ×1.28 and the 80-byte digest are not priced; the serving hash term holds 0.001 of the bound |
+| KECCAK[c=1024]: proving ×1.2 to ×1.4 | WIDEHASH, via SCALE | 4,649.2 to 5,254.7 | | modeled (2b8f), the same caveat |
+| the certifier's part: 13 bits a request for a free output | NET, network-accounting | not in these rows: the planner has no certifier term | | 28.9 million GB a world year [relayed: network-accounting, not on `main`]. Top's ruling prints both parts and their sum |
+
+- **SERVEDCARD's warning, priced:** the labelled head-block row holds Flock's Rust check, and the planner adds Lean's verification on top. Counting it once moves today's (ii) from 4,043.8 to 3,361.6 GB, and the three-unbuilt row from 3,230.7 to 2,575.6 [run: 2021, kernels' rule, modeled until HEADPROF measures it].
+- The FlashInfer slot prices may hold the same check, since they were measured on a proof server too [guess: I have not read whether those sessions ran the loopback check]. If they do, (i), the figure of record, counts it twice as well.
+- BENCHCROSS's reading of my earlier `vsteady` rows (the Rust check's wall seconds at its 2.74 measured cores): 3,329.08 and 3,040.86 GB, 1.6% over mine [relayed: `r20261111-080519-b479`]. I take theirs.
+- Not priced yet: HEADPROF's baseline row (`r20261111-082011-1416`, due about 08:47Z [relayed]) and FLOCKPKG's head-block Lean seconds (about 10:00Z; until then the planner's median, assumed [relayed]).
+- Datacenter year reads within 1.1% of world year in every row above [run]. A planner input I do not have: none for these.
+
+For vllm:
+- (1) The utilization is `mfu_serve` in `[fleet.world-h200]` of `verity/protocols/inference_only/rho/data/reference.toml` (line 49 on `main`): `{ value = 0.4, low = 0.2, high = 0.6, source = "the served work's MFU, prefill-heavy", status = "assumed" }`. `benchmarks/spot_figures/figure1.py` (line 240 on `main`) reads its `value` alone; `low` and `high` reach no figure. The world's `count` (4.687e7) is derived from it: the census's 9.36e30 FLOP ÷ (peak × year × `mfu_serve`), which `tests/test_hardware.py` holds. So a measured value moves the world's GPU-seconds as 1/MFU at fixed requests, and the datacenter's requests in proportion at fixed GPUs [read]. The form I take now: a line to me with the value, its low and high and the run id. I price each with my job's `WORLDS=label:count:mfu`, which rewrites that section's two fields, at the count held and re-derived. In the tree it becomes that entry with `status = "measured"` and its source.
+- (2) 28,000 bits a request is the figure's: 875 tokens, trace128's longest output, at 32 bits. It lives in #8853's `benchmarks/spot_figures/breakeven/headline.py` line 42 (`SERVED_BITS = 875 * 32.0`, label `trace128 max x32`), and in my notes script as `headline_rows.CAP32` (line 169) [read]. 144,000 (4,500 × 32) is figure 1's caption: 4,500 is the census's tokens a request, prefill, in `reference.toml`'s fleet comment. No GB row reads it. Measure against 28,000. The bound moves as about the cap's 0.89 power on today's path and its 0.77 power at row 7's point [run: the elasticities, ea13 and d3fd].
+- (3) The replay over the lifetime is on #8568's head (not `main`): `benchmarks/spot_figures/breakeven/sweep.py` line 397, `life = dict(replay=reprice.LIFETIME_128K, live=True, commit_write=True)`, taken at line 402 (`steps["N2"] = steps["N1"] | life`). `reprice.py` lines 458 to 461 give 458 GPU-s a sampled request at 128k for its lifetime alone, against 5,258 for every 600 s block its lifetime spans. In `Case.tax()` (lines 118 to 129), `live` is the replay reading the edge's state live, so no snapshot pause, and `commit_write` hashes every full K/V page when written. The honest rows revert it: #8853's `headline.py` lines 52 to 57 (`MEASURED`), my `headline_rows.py` lines 78 to 79. The −7.7% is (ii) with those three fields at the path's values: 3,734.2 against 4,043.8 GB, modeled (2b8f) [read, run].
+
+For the table:
+- On measured prices GLM-5.3's world-year bound at 10% is 4,043.8 GB (modeled), and the head block holds 69% of it. Counting its Rust check once gives 3,361.6 GB. The head block at the card's 0.52 s (the witness on the card and seeded salts, both unbuilt, the salts a claim) gives 1,692.6 GB, and with the three unbuilt changes 1,027.7 GB: 3.4 times 300 GB.
+- 300 GB needs S, the prover's other seconds and the serving term also halved (276.4 GB, assumed). D\*2 costs ×1.36 on today's path and ×1.20 at every lever (1,234.0 GB).
+- #8853 now carries #8779's three row keys, so `verity bench exfiltration` reads its runs as they are; #8779 is unchanged.
