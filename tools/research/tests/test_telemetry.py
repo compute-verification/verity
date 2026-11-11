@@ -1491,10 +1491,12 @@ def test_the_runner_ends_the_tasks_a_capped_slots_run_left_behind_and_leaves_a_s
 
     capped, plain = "r20261101-000000-aaaa", "r20261101-000000-bbbb"
     rc, pid, gate, marks, st = go(capped, {"state": "held", "slot": "g0", "scope": f"check-g0-{capped}.scope", "cap_gb": 32})
-    _gone(pid)                                  # nothing released its gate: it is gone because the runner ended it
-    gate.close()
+    try:
+        (m,) = marks                            # no mark: the runner left the task, and waiting for it to go would never end
+        _gone(pid)                              # nothing released its gate: it is gone because the runner ended it
+    finally:
+        gate.close()
     assert rc == 0 and st["state"] == "done" and not (tmp_path / f"{capped}.gate.released").exists()
-    (m,) = marks
     assert m["empty"] is True and any(x.startswith(f"{pid} ") for x in m["SIGTERM"]["pids"])
     assert st["scope_end"]["scopes"] == {f"{APP}/check-g0-{capped}.scope": f"the check slot scope of run {capped}, named by its slot record"}
 
