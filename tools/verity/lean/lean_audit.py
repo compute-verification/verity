@@ -59,7 +59,7 @@ The audit's `dependencies` check still compares their `.olean` files with the pa
 still covers the package's own modules and their whole import
 closure, the toolchain's, Mathlib's and ArkLib's modules included (`check.py --closure`): each module whose `.olean` files, and
 those of every module it imports, transitively, passed an earlier replay here or in a recorded check whose verdict pack this
-one imported (`check.gather_verdicts`) is reused (`check.py --replay-cache`, `lean-replay/` beside the passes, its
+one imported (`check.verdicts_fetched`) is reused (`check.py --replay-cache`, `lean-replay/` beside the passes, its
 `REPLAYS_KEPT` last used kept), so a change to a few modules replays those and what imports them, and a dependency's
 modules go through the kernel once per change of their `.olean` files. With `--fresh` the replay cache is
 the scratch tree's, so the packages of one run share it and nothing outlives the run. Lean gets this
@@ -1549,10 +1549,11 @@ def presigned(ttl_s: int = URL_TTL_S) -> dict[str, str]:
 def shared_bundles(store=None, limit: int = SHARED_LIMIT, records: int = RECORDS_LIMIT, now: float | None = None) -> list[str]:
     """The sha256 of each artifact bundle (`LakeArtifacts.bundle`) among the run files of the newest recorded checks, at most
     ``limit``, then of the newest records runs that passed (`RECORDS_RUNS`) and started within `RECORDS_MAX_AGE_S` of ``now``,
-    at most ``records``, each newest first. Only a recorded run's: a check's (`common.RECORDED_CHECKS`), as `gather_verdicts`
+    at most ``records``, each newest first. Only a recorded run's: a check's (`common.RECORDED_CHECKS`), as `check.verdict_packs`
     takes only theirs, a failed or cancelled one's too, since its bundle holds only modules of packages whose audit passed;
-    and a records run's, which bundles only what its passing sandboxed builds compiled. Empty when the store can't be read:
-    each node then reuses only what it built."""
+    and a records run's, which bundles only what its passing sandboxed builds compiled. When the store has a remote, the
+    attempts started in the last `common.RECENT_S` are refreshed from it first. Empty when the store can't be read: each node
+    then reuses only what it built."""
     from research.store.local import LocalStore
 
     since = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime((time.time() if now is None else now) - RECORDS_MAX_AGE_S))
@@ -1560,7 +1561,7 @@ def shared_bundles(store=None, limit: int = SHARED_LIMIT, records: int = RECORDS
     try:
         store = store or LocalStore()
         if store.remote is not None:
-            store.refresh(attempts_only=True)
+            store.refresh(attempts_only=True, since=COMMON.recent(time.time()))
         for where, args, n in ((f"{COMMON.RECORDED_CHECKS} AND state IN ('done', 'failed', 'cancelled')", (), limit),
                                (f"{RECORDS_RUNS} AND start_utc >= ?", (since,), records)):
             start = len(out)
