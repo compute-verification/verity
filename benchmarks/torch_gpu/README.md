@@ -35,6 +35,8 @@ with the same toolkit at the same path and the same host compiler (a `research r
   receipts beside it. `full.sh` holds every loaded tensor to the weights manifest's SHA-256 on an H200, and
   `bw.sh` the receipts to their fixture.
   The served path loads through it.
+- `units/`: `units.cu`, the kernels and helpers of the decoder's non-matmul ops, and `sweep.py`, each helper's reference
+  on every operand word. The directory holds no build, driver or test of them.
 - `attn_bf16/`: attention's QK^T and PV, a fast path and a reference path, each word `GemmCoordinate_v2`'s. `run.sh`
   runs every case under poison in each tiling of both paths, on an H200.
 - `s8_linear/`: the exact W8A8 linear that `ScaledMmS8Coordinate_v1` defines, three backends under one gate.
