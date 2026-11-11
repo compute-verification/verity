@@ -43,12 +43,13 @@ cost) or the exfiltration target (`ExfiltrationOptimum`'s law), and `sqrt_grain`
 form, `s* = √(w β h C / (o Λ))`, when `c(s) = f + o s` and every proof block commits `β` bytes.
 
 **Two-stage.**  A two-stage design (`Claims.Sampling.Design.Two`): serving commits only the replay blocks' boundaries, the
-first stage samples each replay block with probability q, the prover commits each sampled one's interior, and the second
+first stage samples exactly K of a verification phase's n replay blocks, uniformly (the rate q = K/n; the bound holds
+at that rate), the prover commits each sampled one's interior, and the second
 stage samples k_t of the n_t proof blocks of each stratum t in it with fresh coins.  It certifies exfiltration alone
 (compute credit isn't certified with deferred interiors), in `CompiledTwo.Exfil`'s form: Σ over the admissible sets T of
 incorrect proof blocks of 2^{b(T)}, each T charged its own blocks' committed bits.  `two_stage_exfil` bounds that count's
 log2 (a wholly incorrect replay block is charged all its bits, so the bound is near Λ/q of them), `two_stage_price`
-prices a sampled replay block's proving, each type's statements its own or its registration's, padded to a public cap
+prices a sampled replay block's proving, each type's statements its own or its verification phase's
 (`two_stage_statements`), and `two_stage_design` the design with the least bound at a budget, width-stratified
 (the public size classes up to a threshold in one stratum, each wider one in its own) or uniform (one stratum).
 """
@@ -58,7 +59,7 @@ import json
 from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass, field, replace
 from fractions import Fraction
-from math import ceil, exp, expm1, floor, fsum, inf, lgamma, log, log1p, log2, nextafter, sqrt
+from math import ceil, exp, expm1, floor, fsum, inf, lgamma, log, log1p, log2, nextafter, sqrt, ulp
 from pathlib import Path
 
 from verity.protocols.spot.verifier.profile import HARM_MARGIN, IntegrityProfile, Stratified, Stratum, neg_log_escape
@@ -1057,8 +1058,6 @@ KAPPAS = (0.0, *(2.0 ** e for e in range(-10, 5)))
 #: the tolerance in ln θ `two_stage_design` compares its designs at, each bound holding at any θ; the chosen one's is
 #: then taken to `two_stage_exfil`'s
 SCREEN = 1e-2
-#: the chance a registration samples more replay blocks than its statements' public cap holds, which refuses it
-OVERFLOW = 2.0 ** -40
 _LN2F = log(2.0)
 
 
@@ -1293,52 +1292,36 @@ def two_stage_rankin(cells: Iterable[Cell], k: Mapping[int, float], replay_block
     return (best / _LN2F, exp(u)) if best / _LN2F < every else (every, 0.0)
 
 
-def registration_cap(sampled: float, span: float) -> int:
-    """The public cap on the replay blocks the first stage samples of a registration of `span` of them, `sampled` = Q
-    = q·span expected: the least K0 >= 1 with P(K > K0) <= `OVERFLOW`, at most ⌈span⌉, by P(K >= j) <= Q^j/j! (C(n, j)
-    q^j <= Q^j/j!) and, for j > Q, <= e^{−Q}(eQ/j)^j (Chernoff's, Bin(n, q)'s moment generating function at most
-    Poisson(Q)'s).  Both are at least 1 for j <= Q and fall in j past it, so the least j is found by bisection."""
-    if not sampled > 0:
+def registration_count(q: float, registration: float) -> int:
+    """The replay blocks the first stage samples of a verification phase of `registration` of them at the rate q:
+    exactly ⌈q·registration⌉ (`Spot.Rate.count` at one table), so at least one at any positive rate and none at 0."""
+    if not 0 <= q <= 1 or not registration >= 1:
+        raise ValueError(f"a count needs 0 <= q <= 1 and a verification phase of at least one replay block: "
+                         f"{q}, {registration}")
+    if not q > 0:
         return 0
-    lam = log(OVERFLOW)
-
-    def past(j: int) -> bool:
-        tail = j * log(sampled) - lgamma(j + 1)
-        if j > sampled:
-            tail = min(tail, j - sampled + j * log(sampled / j))
-        return tail <= lam
-
-    lo, hi = 0, ceil(2 * sampled - 2 * lam) + 2
-    while not past(hi):
-        hi *= 2
-    while hi - lo > 1:
-        mid = (lo + hi) // 2
-        lo, hi = (lo, mid) if past(mid) else (mid, hi)
-    return min(max(1, hi - 1), ceil(span))
+    x = q * registration
+    return max(1, round(x) if abs(x - round(x)) <= 4 * ulp(x) else ceil(x))
 
 
-def two_stage_statements(cells: Iterable[Cell], k: Mapping[int, float], q: float = 0.0,
-                         registration: float = 0.0) -> list[dict]:
+def two_stage_statements(cells: Iterable[Cell], k: Mapping[int, float], sampled: int = 0) -> list[dict]:
     """Each cell's statements, a sampled replay block's share of them: its stratum t's share of min(k_t, n_t) proof
     blocks (`taken`), their `marginal` proving, and `prove`, with its statements' fixed costs.  A sampled replay block's
     own statements hold at most `cap` of a type's blocks, a statement's `fixed` cost paid once (below one block, at the
-    chance the type is sampled).  A registration of `registration` replay blocks sampled at q may instead hold a type's
-    blocks of all its sampled ones, the statement's shape fixed before any coin: padded to `registration_cap` replay
-    blocks' worth, split into sessions of at most `cap` blocks padded to one size, and paid by every registration,
-    whatever it samples, its padding proved.  A type takes the registration's where they cost less (`shared`), and
-    `padding` is its proving of padding."""
+    chance the type is sampled).  A verification phase that samples exactly `sampled` replay blocks may instead hold a
+    type's blocks of all of them, the statement's shape fixed before any coin because the count is: split into sessions
+    of at most `cap` blocks padded to one size.  A type takes the verification phase's where they cost less (`shared`),
+    and `padding` is its proving of padding.  With no `sampled`, every statement is a sampled replay block's own."""
     cells = list(cells)
     strata = _strata(cells, k)
-    sampled = q * registration
-    top = registration_cap(sampled, registration)
     out = []
     for c in cells:
         taken = c.n * min(1.0, k[c.stratum] / strata[c.stratum])
         marginal = taken * c.prove
         row = {"taken": taken, "marginal": marginal, "prove": marginal + c.fixed * taken / max(1.0, min(c.cap, taken)),
                "shared": False, "padding": 0.0}
-        if top and taken > 0:
-            blocks = ceil(top * taken - 1e-9)
+        if sampled and taken > 0:
+            blocks = ceil(sampled * taken - 1e-9)
             sessions = ceil(blocks / c.cap)
             padded = sessions * ceil(blocks / sessions) * c.prove / sampled
             if (shared := sessions * c.fixed / sampled + padded) < row["prove"]:
@@ -1347,27 +1330,35 @@ def two_stage_statements(cells: Iterable[Cell], k: Mapping[int, float], q: float
     return out
 
 
-def two_stage_price(cells: Iterable[Cell], k: Mapping[int, float], q: float = 0.0,
-                    registration: float = 0.0) -> tuple[float, float, float]:
+def two_stage_price(cells: Iterable[Cell], k: Mapping[int, float], sampled: int = 0) -> tuple[float, float, float]:
     """A sampled replay block's proved proof blocks, their marginal proving and its proving with its statements' fixed
     costs and padding (`two_stage_statements`)."""
-    rows = two_stage_statements(cells, k, q, registration)
+    rows = two_stage_statements(cells, k, sampled)
     return fsum(r["taken"] for r in rows), fsum(r["marginal"] for r in rows), fsum(r["prove"] for r in rows)
 
 
-def _registration_q(cells: list[Cell], k: Mapping[int, float], registration: float, replay: float, left: float,
-                    q: float) -> float:
-    """The most q at which a replay block costs at most `left`, q (`replay` + `two_stage_price`'s proving at q), its
-    proving rising with q: by bisection in ln q, from `q`, its own statements' (which cost at least as much), to the
-    q at which `replay` alone spends `left`."""
-    def fits(x: float) -> bool:
-        return x * (replay + two_stage_price(cells, k, x, registration)[2]) <= left
+def registration_sample(cells: list[Cell], k: Mapping[int, float], registration: float, replay: float,
+                        left: float) -> int:
+    """The most replay blocks K a verification phase of `registration` of them samples at a cost of at most `left` a
+    replay block of it: the largest whole K <= `registration` with K (`replay` + `two_stage_price`'s proving at K) <=
+    `left`·`registration`, that cost never falling in K, by bisection; 0 when one sampled replay block is over it.  The
+    first stage samples no fraction of a replay block and, at any positive rate, at least one
+    (`registration_count`), so below that cost no design fits."""
+    if not registration >= 1:
+        raise ValueError(f"a verification phase holds at least one replay block: {registration}")
 
-    if fits(1.0):
-        return 1.0
-    lo, hi = q, min(1.0, left / replay) if replay > 0 else 1.0
-    while hi > lo * (1 + 1e-9):
-        mid = sqrt(lo * hi)
+    def fits(x: int) -> bool:
+        return x * (replay + two_stage_price(cells, k, x)[2]) <= left * registration
+
+    if not fits(1):
+        return 0
+    lo, hi = 1, floor(registration)
+    if replay > 0:
+        hi = min(hi, floor(left * registration / replay))
+    if fits(hi):
+        return hi
+    while hi - lo > 1:
+        mid = (lo + hi) // 2
         lo, hi = (mid, hi) if fits(mid) else (lo, mid)
     return lo
 
@@ -1389,17 +1380,25 @@ def two_stage_design(cells: Iterable[Cell], replay_blocks: int, delta: float, *,
     most n_t, at b_t the stratum's widest bits, ℓ_t = log2(e R n_t) and B a replay block's bits: at κ = 1 one incorrect
     proof block of a stratum's widest, with its location, leaks as much a unit of escape as a wholly incorrect replay
     block does.  Under a served-output cap (`served`, `union` and `fanout`, as `two_stage_exfil` takes them) b_t is at
-    most the cap read at the fan-out and B is a replay block's capped charge, every T counted.  The first stage's q, at most 1, spends what
-    `boundary` (serving's boundary hashing) leaves of the budget on sampled replay blocks, each costing `replay`, its
-    interior's `commit_bytes` at `h` a byte, and
-    `two_stage_price`'s proving.  A statement holds one sampled replay block's proof blocks of one Definition, or with
-    `registration` (the replay blocks one interior registration spans) the registration's, padded to its public cap
-    where that costs less (`two_stage_statements`), q then the most the budget pays for (`_registration_q`).  Its row:
-    `merged` (the widest size class in stratum 0), `kappa`, `k`, `q`, `registration`, `registration_sample` (Q, the
-    replay blocks a registration samples), `registration_cap` (K0), `shared` and `padding` (their shares of proving),
+    most the cap read at the fan-out and B is a replay block's capped charge, every T counted.
+
+    The first stage is the one the verifier runs: of a verification phase's `registration` replay blocks it samples
+    exactly K, a whole number of at least one (`registration_count`), so the design is priced and bounded at the rate
+    q = K/`registration`, never at a rate between two counts.  K is the most (`registration_sample`) that what
+    `boundary` (serving's boundary hashing) leaves of the budget pays for, each sampled replay block costing `replay`,
+    its interior's `commit_bytes` at `h` a byte, and `two_stage_price`'s proving at K: a statement holds one sampled
+    replay block's proof blocks of one Definition, or the verification phase's K sampled ones' where that costs less
+    (`two_stage_statements`).  A κ at which one sampled replay block a verification phase is over the budget has no
+    design.  With no `registration`, one verification phase holds every replay block and every statement is a sampled
+    replay block's own.  Its row:
+    `merged` (the widest size class in stratum 0), `kappa`, `k`, `q`, `registration`, `registration_sample` (K, the
+    replay blocks a verification phase samples; 0 with no `registration`), `shared` and `padding` (their shares of
+    proving),
     `bound` (bits) and the Rankin `theta` it takes, `replay_sample`, `draws` (proved proof blocks), `prove`, `replay`,
     `boundary`, `interior`, `commit` (their sum), `total` and `fill` (proving over its marginal); None when the boundary
-    alone is over the budget."""
+    alone is over the budget or no κ has a design.  The bound's Lean takes the first stage through
+    `Claims.Sampling.AdmissibleTwoRankin` alone: it misses each set of replay blocks with probability at most the
+    product of 1 − q over them, which a uniform K of n does at q = K/n."""
     cells = list(cells)
     if not cells or not budget >= boundary:
         return None
@@ -1424,17 +1423,21 @@ def two_stage_design(cells: Iterable[Cell], replay_blocks: int, delta: float, *,
                 continue
             seen.add(key)
             left = (budget - boundary) / replay_blocks
-            per = replay + interior + two_stage_price(split, k)[2]
-            q = min(1.0, left / per) if per > 0 else 1.0
-            if registration and q < 1:
-                q = _registration_q(split, k, registration, replay + interior, left, q)
-            st = two_stage_statements(split, k, q, registration)
+            if registration:
+                count = registration_sample(split, k, registration, replay + interior, left)
+            else:
+                per = replay + interior + two_stage_price(split, k)[2]
+                count = floor(min(replay_blocks, left * replay_blocks / per)) if per > 0 else floor(replay_blocks)
+            if not count:
+                continue
+            q = count / (registration or replay_blocks)
+            st = two_stage_statements(split, k, count if registration else 0)
             blocks, marginal, prove = (fsum(r[x] for r in st) for x in ("taken", "marginal", "prove"))
             per = replay + interior + prove
             sampled = q * replay_blocks
             rows.append({"design": "stratified" if stratify else "uniform", "merged": merged, "kappa": kappa,
-                         "k": k, "q": q, "registration": registration, "registration_sample": q * registration,
-                         "registration_cap": registration_cap(q * registration, registration),
+                         "k": k, "q": q, "registration": registration,
+                         "registration_sample": count if registration else 0,
                          "shared": fsum(r["prove"] for r in st if r["shared"]) / prove if prove > 0 else 0.0,
                          "padding": fsum(r["padding"] for r in st) / prove if prove > 0 else 0.0, "split": split,
                          "bound": two_stage_exfil(split, k, replay_blocks, q, delta, served, union, SCREEN, fanout),
@@ -1442,6 +1445,8 @@ def two_stage_design(cells: Iterable[Cell], replay_blocks: int, delta: float, *,
                          "replay": sampled * replay, "boundary": boundary, "interior": sampled * interior,
                          "commit": boundary + sampled * interior, "total": boundary + sampled * per,
                          "fill": prove / marginal if marginal > 0 else 1.0})
+    if not rows:
+        return None
     best = min(rows, key=lambda r: (r["bound"], r["total"]))
     split = best.pop("split")
     bound, theta = two_stage_rankin(split, best["k"], replay_blocks, best["q"], delta, served, union, fanout=fanout)
@@ -1449,12 +1454,12 @@ def two_stage_design(cells: Iterable[Cell], replay_blocks: int, delta: float, *,
 
 
 __all__ = ["Candidate", "Commitment", "CostModel", "Grain", "HM96_ANDS", "LN_BITS", "LN_PREC", "LN_TERMS",
-           "OVERFLOW", "Objective", "PROVING_ONLY", "Plan", "PlanBounds", "ReplayGrain", "SHA512_ANDS", "SHA512_ROWS",
+           "Objective", "PROVING_ONLY", "Plan", "PlanBounds", "ReplayGrain", "SHA512_ANDS", "SHA512_ROWS",
            "TemplateCost",
            "CHORDS", "Cell", "KAPPAS", "acceptance_parts",
            "certify", "density_bound", "density_exact", "fill", "for_budget", "for_target",
            "frontier", "grain_costs", "grain_optimum", "leak_count", "leak_draws", "ln_bound", "ln_upper", "loc_bits",
            "max_harm", "max_harm_check", "met_replay", "needs_benchmark", "overlaps", "perturb", "pinned_ands",
-           "registration_cap", "replay_cost", "row_ands", "sensitivity", "sqrt_grain", "structure", "template_cost",
+           "registration_count", "registration_sample", "replay_cost", "row_ands", "sensitivity", "sqrt_grain", "structure", "template_cost",
            "touched", "two_stage_design", "two_stage_exfil", "two_stage_price", "two_stage_rankin", "two_stage_statements", "weigh",
            "work_draws", "work_law"]

@@ -14,7 +14,7 @@ from dataclasses import replace
 from fractions import Fraction
 from itertools import combinations, product
 from decimal import Decimal, localcontext
-from math import ceil, comb, exp, fsum, lgamma, log, log1p, log2, prod, ulp
+from math import ceil, comb, fsum, lgamma, log, log1p, log2, prod, ulp
 from pathlib import Path
 
 import pytest
@@ -28,7 +28,7 @@ from verity.protocols.spot.optimize import (HM96_ANDS, PROVING_ONLY, SHA512_ANDS
                                                            grain_costs, grain_optimum, leak_count, leak_draws, ln_bound,
                                                            ln_upper, loc_bits, max_harm, max_harm_check, met_replay,
                                                            needs_benchmark, overlaps, perturb, pinned_ands,
-                                                           OVERFLOW, registration_cap, replay_cost, row_ands,
+                                                           registration_count, registration_sample, replay_cost, row_ands,
                                                            sensitivity, sqrt_grain, template_cost, touched,
                                                            two_stage_design, two_stage_exfil, two_stage_price,
                                                            two_stage_statements, weigh, work_law)
@@ -697,69 +697,83 @@ def test_a_sampled_replay_block_proves_each_stratums_k_in_its_types_statements()
     assert two_stage_price(cells, {0: 1}) == pytest.approx((1.0, 0.8 + 0.6, 1.4 + 8.0 + 1.2))
 
 
-def test_a_registrations_cap_is_past_its_sample_but_for_the_overflow():
-    """The registration's public cap K0: the binomial count it samples is past it with probability at most `OVERFLOW`
-    (summed exactly), at least one, at most the registration, and within a few of the least such cap."""
-    def tail(n: int, q: float, j: int) -> float:
-        return fsum(exp(lgamma(n + 1) - lgamma(i + 1) - lgamma(n - i + 1) + i * log(q) + (n - i) * log1p(-q))
-                    for i in range(j, n + 1))
+def test_the_first_stage_samples_a_whole_count_of_a_verification_phase():
+    """`registration_count` is the verifier's count at a rate: ⌈q·n⌉ of a verification phase's n replay blocks, so at
+    least one at any positive rate, and the rate K/n gives K back.  `registration_sample` is the most K whose cost a
+    replay block of the verification phase is within what the budget leaves, and 0 when one is over it."""
+    for q, n, want in ((0.0, 7, 0), (1e-9, 7, 1), (0.5, 7, 4), (1.0, 7, 7), (3 / 7, 7, 3), (2.5e-7, 4e6, 1),
+                       (2.5e-7, 4.1e6, 2), (6 / 7219.04, 7219.04, 6), (17 / 9.02e7, 9.02e7, 17)):
+        assert registration_count(q, n) == want, (q, n)
+    for k, n in ((1, 3), (37, 10 ** 6), (10 ** 9, 10 ** 12)):
+        assert registration_count(k / n, n) == k and registration_count((k + 0.5) / n, n) == k + 1
+    for bad in ((-0.1, 5), (1.5, 5), (0.5, 0.5)):
+        with pytest.raises(ValueError, match="a count needs"):
+            registration_count(*bad)
+    cells = [Cell(8, 16.0, prove=1.0, fixed=10.0, cap=4), Cell(2, 16.0, prove=3.0, fixed=6.0, cap=4)]
+    k, n, replay = {0: 5}, 1000, 2.0
 
-    n = 4000
-    for sampled in (1e-6, 0.02, 1.0, 33.0, 600.0):
-        top = registration_cap(sampled, n)
-        assert 1 <= top <= n and tail(n, sampled / n, top + 1) <= OVERFLOW
-        least = next(j for j in range(n) if tail(n, sampled / n, j + 1) <= OVERFLOW)
-        assert top - max(1, least) <= max(3, 0.15 * least), (sampled, top, least)
-    assert registration_cap(0.0, n) == 0 and registration_cap(5.0, 3) == 3
+    def cost(x: int) -> float:
+        return x * (replay + two_stage_price(cells, k, x)[2])
+
+    assert registration_sample(cells, k, n, replay, cost(1) / n * (1 - 1e-9)) == 0
+    for most in (1, 2, 7, 64, 999, 1000):
+        assert registration_sample(cells, k, n, replay, cost(most) / n) == most
+        if most < n:
+            assert registration_sample(cells, k, n, replay, cost(most + 1) / n * (1 - 1e-9)) == most
+    assert registration_sample(cells, k, n, replay, 1e9) == n and registration_sample(cells, k, 7.9, replay, 1e9) == 7
+    assert all(cost(x) <= cost(x + 1) for x in range(1, 200))
 
 
-def test_a_registrations_statements_are_padded_to_its_cap_and_paid_whatever_it_samples():
-    """A type's registration statements hold K0 sampled replay blocks' blocks, split into sessions of at most its cap
-    padded to one size, their fixed costs and padded blocks paid by each registration and so over its Q sampled replay
-    blocks; a type takes them only where they cost less than its own, and without a registration it never does."""
+def test_a_verification_phases_statements_hold_its_whole_sample():
+    """A type's statements of a verification phase hold its blocks of all K sampled replay blocks, split into sessions
+    of at most its cap padded to one size, with no padding for the count, which is exact; a type takes them only
+    where they cost less than a sampled replay block's own, and with no count it never does."""
     cells = [Cell(8, 16.0, prove=1.0, fixed=10.0, cap=4), Cell(2, 16.0, prove=3.0, fixed=6.0, cap=4)]
     for k in ({0: 1}, {0: 5}, {0: 20}):
-        assert two_stage_price(cells, k, 0.5, 0.0) == two_stage_price(cells, k)
+        assert two_stage_price(cells, k, 0) == two_stage_price(cells, k)
     own = [r["prove"] for r in two_stage_statements(cells, {0: 1})]
     assert own == pytest.approx([0.8 + 8.0, 0.6 + 1.2])
-    for sampled in (0.02, 1.0, 100.0, 1e4):
-        top = registration_cap(sampled, 1e6)
-        for c, taken, mine, r in zip(cells, (0.8, 0.2), own, two_stage_statements(cells, {0: 1}, sampled / 1e6, 1e6)):
-            blocks = ceil(top * taken - 1e-9)
+    for sampled in (1, 2, 5, 100, 10 ** 4):
+        for c, taken, mine, r in zip(cells, (0.8, 0.2), own, two_stage_statements(cells, {0: 1}, sampled)):
+            blocks = ceil(sampled * taken - 1e-9)
             sessions = ceil(blocks / c.cap)
             shared = (sessions * c.fixed + sessions * ceil(blocks / sessions) * c.prove) / sampled
             assert r["shared"] == (shared < mine) and r["prove"] == pytest.approx(min(shared, mine))
             assert r["padding"] == (pytest.approx(shared - sessions * c.fixed / sampled - taken * c.prove)
                                     if r["shared"] else 0.0)
-    assert not any(r["shared"] for r in two_stage_statements(cells, {0: 1}, 0.02 / 1e6, 1e6))
-    assert all(r["shared"] for r in two_stage_statements(cells, {0: 1}, 1e4 / 1e6, 1e6))
+    assert not any(r["shared"] for r in two_stage_statements(cells, {0: 1}, 1))
+    assert all(r["shared"] for r in two_stage_statements(cells, {0: 1}, 10 ** 4))
 
 
-def test_a_registration_shares_statements_at_its_own_q():
-    """With a registration of many replay blocks, the design spends at most the budget at the most q it pays for, its
-    proving `two_stage_price`'s at that q and its cap the registration's; its types' statements shared, it samples
-    more replay blocks and bounds less than a statement per sampled replay block.  A registration of none, or too few
-    to pay for its padding, is that design."""
+def test_a_design_samples_a_whole_count_of_each_verification_phase():
+    """With a verification phase of n replay blocks, the design samples a whole K of them, the most the budget pays
+    for, at the rate K/n: its proving is `two_stage_price`'s at K, one more is over the budget, and its bound is the
+    one at K/n.  Its types' statements shared, it samples more replay blocks and bounds less than a statement per
+    sampled replay block.  A verification phase so small that one sampled replay block is over the budget has no
+    design; with no size given, one verification phase holds every replay block and each statement is a sampled replay
+    block's own."""
     delta, replay_blocks, budget = 2.0 ** -20, 10 ** 8, 1e7
     cells = [Cell(10 ** 5, 16.0, prove=1e-3, fixed=5.0, cap=1024, commit_bytes=2.0),
              Cell(4, 131072.0, prove=1e-3, fixed=5.0, cap=4, commit_bytes=2.0 ** 14)]
     kw = {"budget": budget, "replay": 1.0, "boundary": 1e5, "h": 1e-6}
+    left, interior = (budget - 1e5) / replay_blocks, 1e-6 * sum(c.n * c.commit_bytes for c in cells)
     alone = two_stage_design(cells, replay_blocks, delta, **kw)
-    assert alone["shared"] == alone["padding"] == 0.0 and alone["registration_cap"] == 0
+    assert alone["shared"] == alone["padding"] == 0.0 and alone["registration_sample"] == 0
+    assert alone["replay_sample"] == pytest.approx(round(alone["replay_sample"]), abs=1e-6)
     assert two_stage_design(cells, replay_blocks, delta, registration=0.0, **kw) == alone
-    few = two_stage_design(cells, replay_blocks, delta, registration=10.0, **kw)
-    assert few["shared"] == 0.0 and (few["q"], few["bound"]) == (alone["q"], alone["bound"])
-    shared = two_stage_design(cells, replay_blocks, delta, registration=10 ** 4, **kw)
-    q, sampled = shared["q"], shared["registration_sample"]
-    assert sampled == pytest.approx(q * 10 ** 4) and shared["registration_cap"] == registration_cap(sampled, 10 ** 4)
-    strata = [replace(c, stratum=0 if c.bits <= shared["merged"] else 131072) for c in cells]
-    assert shared["prove"] == pytest.approx(shared["replay_sample"] * two_stage_price(strata, shared["k"], q,
-                                                                                      10 ** 4)[2])
-    assert shared["total"] <= budget * (1 + 1e-12) and shared["shared"] == 1.0 and 0 < shared["padding"] < 0.01
-    over = q * (1 + 1e-6)
-    assert over * (1.0 + 1e-6 * sum(c.n * c.commit_bytes for c in cells)
-                   + two_stage_price(strata, shared["k"], over, 10 ** 4)[2]) > (budget - 1e5) / replay_blocks
-    assert q > alone["q"] and shared["bound"] < alone["bound"]
+    assert two_stage_design(cells, replay_blocks, delta, registration=10.0, **kw) is None
+    for n in (10 ** 3, 10 ** 4, 10 ** 6):
+        row = two_stage_design(cells, replay_blocks, delta, registration=n, **kw)
+        q, count = row["q"], row["registration_sample"]
+        assert count == int(count) >= 1 and q == count / n and registration_count(q, n) == count
+        strata = [replace(c, stratum=0 if c.bits <= row["merged"] else 131072) for c in cells]
+        assert registration_sample(strata, row["k"], n, 1.0 + interior, left) == count
+        assert row["prove"] == pytest.approx(row["replay_sample"] * two_stage_price(strata, row["k"], count)[2])
+        assert row["total"] <= budget * (1 + 1e-12)
+        assert (count + 1) * (1.0 + interior + two_stage_price(strata, row["k"], count + 1)[2]) > left * n
+        assert row["bound"] == pytest.approx(two_stage_exfil(strata, row["k"], replay_blocks, q, delta), rel=1e-6)
+    assert row["shared"] == 1.0 and 0 <= row["padding"] < 0.01
+    assert row["q"] > alone["q"] and row["bound"] < alone["bound"]
 
 
 def test_the_width_stratified_design_beats_the_uniform_one_when_proving_costs():
