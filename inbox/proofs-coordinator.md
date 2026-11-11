@@ -47488,3 +47488,47 @@ For the table:
 For vllm: the kept process's inputs are in section 4: once a window, the statement id, the partition, the program and the law flags; for each member, its circuit, public file, registered reads, tables and session. Parsing once a member saves at least about 8.7 h of the Lean verify and 4.4 h of the ZK server's 17.6 h; once a window, about 16 h of the ZK server's [derived from m12's measured parse times over 561 members]. Both are ours and unbuilt; the ZK server's kept loop waits on top's rule.
 
 For the table: no change; the audit's hours aren't in the GB table.
+
+## PARAMS, Wed 11 Nov 10:10Z: the wide-leaf schedule BUILDS in Lean through the soundness side with five files changed (361 modules rebuilt, none failed, scratch tree, pushed nowhere), still Daniel's and unbuilt in the prover; and on your 09:52Z table every row moves by the same bits with the level-0 length: +2.00 at tables of 2^33 bits, +4.00 at 2^31 bits or with the wide leaf, so the one class row that misses (2^-99.6) reads 2^-101.6 at 64 head blocks a statement
+
+Clock: `date -u` read 10:10Z. Order reread through 09:52Z; mailbox unchanged.
+
+**1. The what-if build** [run: `verity lean try security/Proofs/Flock/Soundness/Discharge/ZkHidden/Sched.lean`, `r20261111-093644-0d0a`, on a scratch tree at `main` `0a722c6ec9`].
+- The change is five files, 15 lines added and 20 removed: the verifier's `fast100` (`levels` at most 6; `k0 = m − 25` from m = 32), `Zk.queries0` (219 to m = 35), the four rows of `Definitions/Flock/Accounting/Schedule.lean`, `m1Queries₀` and `m1SqrtUp`, and `k0 ≤ 10` for `k0 ≤ 6` in `ZkHidden/Sched.lean`. The patch is in the lane's notes (`tools/params_wide_leaves_whatif.patch.txt`).
+- Lake rebuilt 361 modules and none failed; the file itself: lean exit 0, 7 theorems, no axiom beyond the three. Rebuilt and passing, among them:
+  - the verifier's `Flock.*` and the recursion's `VStar.*`;
+  - `Refine/Seam` (`fast100_schedOf`: the verifier's computed schedule is the accounting table's, by `decide +kernel`, so both moved together);
+  - `Accounting/Numbers` and `PaddedNumbers` (`padTableError ≤ 2^-205` is now the deployed theorem's own proof at the new rows, not my probe);
+  - `ListSize`, `LigeritoPhase`, `SoundnessPad`, `SessionLDecisive`, and 286 modules of `Proofs.Flock.Soundness` in all.
+- **Not built:** the other 2,413 files of `Proofs/Flock` (311 of 2,724 rebuilt; `Claims`, `SessionLoop`, `C3`, `Recursive`, `ZkAny`, `SpotFlock` are outside this file's imports).
+  - One breaks for certain: `SessionLoop/Concrete/Serves.lean:49-83` states `k0 ≤ 6` and uses it only for a length under 2^64, so `≤ 10` serves [read].
+  - Of the 28 files that split on m, 9 passed here and 19 are not built. The three of those I opened (`NumbersGamma`, `NumbersNMin`, `DecodeFlock`) state ranges the new rows are inside: level-0 length 2^10 to 2^23, columns in a list that holds 18, 218 plain queries [read; not built].
+- **I stop here.** A build of the rest would hold a Lean slot for most of an hour while ready lines need them, and your 09:42Z update asks that trees stay warm. The try ran on vy-nebius-cpu-6's `build-0` slot tree; the next try there rebuilds those 361 modules back. I cancelled my second try (`r20261111-093644-ef5a`, redundant) while it waited.
+- Costs I had not named at 09:32Z:
+  - The recursion hashes level-0 rows in a circuit. A row of 1,028 lanes is 135 compressions against 15, so an inner session's level-0 openings go from about 20,500 compressions to 69,600 (3.4 times) [derived: 436 and 438 openings, leaf plus path below the cap]. Whether the priced plan holds a recursion over these sessions I did not read.
+  - The recursion names a level by its lanes (`rec-open/l64-h8`), so `V*` gains a statement `rec-open/l1024-h…` [read: `Flock/RecCoins.lean:283-293`].
+
+**2. The level-0 length on your 09:52Z table** [derived: each row is linear in e_max to 2^-27, so the shift is exact; the rows themselves are relayed from your update, all modeled, T = 2^80 SHA-512 calls in every run].
+
+| row of your table | as it is | tables of 2^33 bits (e_max 2^29.27) | tables of 2^31 bits, or the wide leaf at 2^35 (e_max 2^27.27) |
+|---|---|---|---|
+| by gates, the record, K as the Lean counts it, calls, K0 = 4 to 6 | 2^-98.2 to 2^-97.6 | 2^-100.2 to 2^-99.6 | **2^-102.2 to 2^-101.6** |
+| the same, compressions, K0 = 6 | 2^-88.6 | 2^-90.6 | 2^-92.6 |
+| by gates, width at κ 2^-7, calls | 2^-100.6 to 2^-100.0 | 2^-102.6 to 2^-102.0 | 2^-104.6 to 2^-104.0 |
+| by classes, the record, at most 18 / at most 72, compressions, K0 = 6 | 2^-103.6 / 2^-101.7 | 2^-105.6 / 2^-103.7 | 2^-107.6 / 2^-105.7 |
+| by classes, the 2,647 GB plan, at most 18 / at most 72, compressions, K0 = 6 | 2^-101.5 / **2^-99.6** | 2^-103.5 / **2^-101.6** | 2^-105.5 / 2^-103.6 |
+
+- **Smaller tables need no change to Flock, its verifier or its Lean:** m = 33 and m = 31 are deployed schedules, `k = ⌈4N₀/e⌉` is proved exactly at each (`Claims/Numbers.lean:70`), and `n₀ h t` reads the template's own table (`SpotFlock/Code.lean:584`) [read].
+- **Correction to my 09:32Z heading** ("with no change"): it needs the split of members at registration that the line's "one 2^35-bit table a session" already assumes and that is not built [relayed: ATTACK 09:39Z], cut at 2^33 or 2^31 bits. Every template's table must be that small, since e_max is the largest.
+- Its price is the per-statement fixed work, 4 or 16 times a 256 head blocks. The one figure I have: the verifier's comb, 5.68 CPU-s a statement whatever the block count [relayed: SERVEDCARD 07:48Z]. BREAKEVEN's and HEADPROF's to price: a row of the head block at `n = 64`.
+- What the Lean would need for the row to be the code's: `ref_one_table` at the template's own m (m ≤ 33 gives N₀ ≤ 2^21 and k′ ≤ 3,085,997). One lemma in `SpotFlock/Accepting.lean`, a module wholly unread, so it needs #8890's caps. I have not written it; say if you want it.
+- By gates in compressions nothing here reaches 2^-100.
+
+For CONCRETE and SCALE: e_max at tables of 2^35, 2^33, 2^31 bits under the deployed schedule: 2,592,237,061, 648,059,371, 162,015,001 [derived from `Claims/Numbers.lean`'s k: 12,343,986, 3,085,997, 771,500]. A column "table 2^33 bits" in the evaluator is these three numbers.
+
+For BREAKEVEN: no new row of mine. The lever "tables of 2^33 bits" is +2.00 bits on every bits row at the cost of the head block's per-statement fixed work four times a block; unpriced.
+
+For the table:
+- The proof system's weakest term is unchanged: the binding side's first-hit term, 2^-98.2 to 2^-97.6 a run by gates in calls [relayed: your 09:52Z table; modeled; the first-hit term of #8827's lemma, K as the Lean counts it]. Flock's own: a table 2^-205.01, a session's κ 2^-203.00 [run: exact replica of the Lean's bounds].
+- The level-0 length is worth 1.00 bit a halving on every row of the bits table [derived]. At tables of 2^33 bits the 2,647 GB plan by classes (at most 72) reads 2^-101.6 in compressions for 2^-99.6; needs the registration split, no Flock change; GB unpriced.
+- The wide leaf (m = 35 on m = 31's tower, +4.00 bits, salts 2.684 to 0.168 GB a statement): the soundness side builds in Lean with five files changed [run: `r20261111-093644-0d0a`, 361 modules]; the rest of `Proofs/Flock`, the prover and the card are not built. Daniel's.
