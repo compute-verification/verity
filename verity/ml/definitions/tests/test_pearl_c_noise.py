@@ -7,16 +7,21 @@ A hash's Boolean version is a SHA-512 compression traced gate by gate, seconds e
 slow, as is the one that holds a code's Boolean version to its word form's steps on every input."""
 from __future__ import annotations
 
+import json
 import math
 import random
 import struct
 
+from pathlib import Path
+
 import numpy as np
 import pytest
 
-from verity.ml.circuits.defs import CompositeDefinition, bind
+from verity.ml.circuits.defs import REGISTRY, CompositeDefinition, bind
 from verity.ml.circuits.evaluation import evaluate
+from verity.ml.circuits.evaluation.bits import compile as compile_bits
 from verity.ml.circuits.evaluation.bits import evaluate_words
+from verity.ml.commitments.gates import sha512 as SHA
 from verity.ml.definitions.boolean import boolean_version, sigma_lift
 from verity.ml.definitions.registry import pearl_c_noise as N
 from verity.ml.protocols.pouw.schemes import pearl_c as C
@@ -34,11 +39,16 @@ LINE_FB = [71, 184, 67, 191, 192, 146, 201, 65, 181, 187, 72, 188, 201, 190, 194
 #: a line's norm by the BF16 word of 32 times it
 NORMS = {N.NORM_E: 256, N.NORM_F: 16}
 #: every pair of a word Definition and its Boolean version
-PAIRS = [(N.PearlCSeedB, N.PearlCSeedBV2), (N.PearlCRowSeed, N.PearlCRowSeedV2), (N.PearlCLineKey, N.PearlCLineKeyV2),
+PAIRS = [(N.PearlCSeedB, N.PearlCSeedBV2), (N.PearlCRowSeedHead, N.PearlCRowSeedHeadV2),
+         (N.PearlCRowSeedTail, N.PearlCRowSeedTailV2), (N.PearlCRowSeed, N.PearlCRowSeedV2), (N.PearlCLineKey, N.PearlCLineKeyV2),
          (N.PearlCLineRaw, N.PearlCLineRawV2), (N.PearlCLineInt, N.PearlCLineIntV2),
          (N.PearlCLineNormRoot, N.PearlCLineNormRootV2), (N.PearlCLineScale, N.PearlCLineScaleV2),
          (N.PearlCLineCode, N.PearlCLineCodeV2), (N.PearlCLineCodes, N.PearlCLineCodesV2),
          (N.PearlCNoiseLine, N.PearlCNoiseLineV2)]
+#: the size a Boolean Definition is lowered whole at (`circuit_check.checks.Options.lower_max_ands`), and the pins of this
+#: module's lowerings
+LOWERED_WHOLE = 1 << 16
+PINS = Path(N.__file__).with_suffix(".circuit-check.json")
 #: a line's hash at the ends of its integers and its norm root: every integer 1, 128, −128 or −1, one of magnitude 128 among
 #: 1s, alternating signs, and bytes on both sides of the sign bit
 EDGE_RAWS = [bytes(32), bytes([0x7F] * 32), bytes([0xFF] * 32), bytes([0x80] * 32), bytes([0x7F] + [0] * 31),
@@ -99,6 +109,13 @@ def raw_of(key: bytes, side: int, factor: int, line: int) -> bytes:
     return C.s512("line", key + bytes([side, factor]) + line.to_bytes(4, "little"))
 
 
+def head_state(salt: bytes, leaf: bytes, root: bytes) -> bytes:
+    """The chaining value of a row seed's hash after its message's first block, by `sha512.compress_ref` from the label's
+    block: its 64 bytes."""
+    cv = SHA.compress_ref(SHA.midstate(C.S512_LABELS["seed-A"]), SHA.words_be(salt + leaf + root[:32]))
+    return b"".join(w.to_bytes(8, "big") for w in cv)
+
+
 def lean_seeds() -> tuple[bytes, bytes]:
     """The Lean vectors' row seed and seed_B, by the reference."""
     return C.S512Seed(C.row_seed(SALT, C.row_digest(ROW), ROOT, UNIT, ROW_INDEX)), C.seed_b(SALT, ROOT)
@@ -130,6 +147,46 @@ def test_the_hashes_match_the_reference_on_words():
         assert bytes(word(N.PearlCLineKey, seed_b)) == C.line_key(seed_b)
     for key, side, factor, line in lines(6, 2):
         assert bytes(word(N.PearlCLineRaw, key, side, factor, line)) == raw_of(key, side, factor, line)
+
+
+def test_the_row_seed_is_its_two_compressions_on_words():
+    """`PearlCRowSeedHead` is the hash's chaining value after the first block of its message, `PearlCRowSeedTail` of it the
+    reference's seed, at the Lean vector, the ends of a unit's and a row's range and random inputs; and the tail reads a state
+    as any 64 bytes, as SHA-512 continued from it."""
+    for salt, leaf, root, unit, row in seeds(6, 11):
+        state = word(N.PearlCRowSeedHead, salt, leaf, root[:32])
+        assert bytes(state) == head_state(salt, leaf, root)
+        assert bytes(word(N.PearlCRowSeedTail, state, root[32:], unit, row)) == C.row_seed(salt, leaf, root, unit, row)
+    rng = random.Random(12)
+    for _ in range(4):
+        state, tail, unit, row = (bytes(rng.randrange(256) for _ in range(64)), bytes(rng.randrange(256) for _ in range(32)),
+                                  rng.randrange(1 << 32), rng.randrange(1 << 32))
+        block = tail + row.to_bytes(4, "little") + unit.to_bytes(4, "little") + SHA.pad_tail(128 + 168)
+        want = SHA.compress_ref(SHA.words_be(state), SHA.words_be(block))
+        assert bytes(word(N.PearlCRowSeedTail, state, tail, unit, row)) == b"".join(w.to_bytes(8, "big") for w in want[:4])
+
+
+def test_each_unit_of_a_definition_over_the_whole_lowering_is_pinned():
+    """Each unit `UNITS` names has a pin of its lowering (the module's sidecar), which circuit-check holds it to: the
+    Definitions over the size one is lowered whole at have none of their own."""
+    pins = json.loads(PINS.read_text())["definitions"]
+    assert set(N.UNITS) == {"PearlCRowSeed_v2", "PearlCNoiseLine_v2"} and not set(N.UNITS) & set(pins)
+    assert all(u in pins for units in N.UNITS.values() for u in units)
+
+
+@pytest.mark.slow
+def test_a_definition_over_the_whole_lowering_is_calls_of_its_units_each_under_it():
+    """Each Boolean Definition `UNITS` names is, on bits, one Call of each of its units in order and no gate of its own, so
+    every AND of it is in a unit: 112,691 for a row seed's two compressions and 73,459 for a noise line's hash and codes, each
+    over the 65,536 ANDs a Boolean Definition is lowered whole at, and each unit under it."""
+    ands = lambda fid: compile_bits(bind(REGISTRY.defs[fid])).counts["and"]  # noqa: E731
+    for whole, units in N.UNITS.items():
+        nodes = bind(REGISTRY.defs[whole]).body.nodes
+        assert [(n.form, n.fn.id) for n in nodes] == [("call", u) for u in units], whole
+        each = [ands(u) for u in units]
+        assert all(a <= LOWERED_WHOLE for a in each), (whole, each)
+        assert ands(whole) == sum(each) > LOWERED_WHOLE, whole
+    assert ands("PearlCRowSeed_v2") == 112_691 and ands("PearlCNoiseLine_v2") == 73_459
 
 
 def test_the_lean_vectors_on_words():
@@ -220,13 +277,20 @@ def test_seed_b_and_the_line_key_on_bits():
 
 
 @pytest.mark.slow
-def test_the_row_seed_on_bits():
+def test_the_row_seed_and_its_two_compressions_on_bits():
     cases = seeds(6, 9)
     want = [C.row_seed(*c) for c in cases]
     assert want[0][:8] == bytes([90, 99, 57, 103, 5, 175, 11, 41])
     got = on_bits(N.PearlCRowSeedV2, [list(c[0]) for c in cases], [list(c[1]) for c in cases], [list(c[2]) for c in cases],
                   [c[3] for c in cases], [c[4] for c in cases])
     assert got == [list(s) for s in want]
+    states = [head_state(*c[:3]) for c in cases]
+    heads = on_bits(N.PearlCRowSeedHeadV2, [list(c[0]) for c in cases], [list(c[1]) for c in cases],
+                    [list(c[2][:32]) for c in cases])
+    assert heads == [list(s) for s in states]
+    tails = on_bits(N.PearlCRowSeedTailV2, [list(s) for s in states], [list(c[2][32:]) for c in cases],
+                    [c[3] for c in cases], [c[4] for c in cases])
+    assert tails == [list(s) for s in want]
 
 
 @pytest.mark.slow

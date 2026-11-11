@@ -5,7 +5,8 @@
 
     s512(ℓ, m)  = the first 32 bytes of SHA-512(pearl-c/h3s/ℓ\\0, zero-padded to 128 bytes ‖ m)
     seed_B      = s512("seed-B", salt ‖ root_B)                                          PearlCSeedB
-    seed_A      = s512("seed-A", salt ‖ leaf ‖ root_B ‖ u64le(unit · 2^32 + row))        PearlCRowSeed
+    seed_A      = s512("seed-A", salt ‖ leaf ‖ root_B ‖ u64le(unit · 2^32 + row))        PearlCRowSeed: its two compressions
+                                                                                         PearlCRowSeedHead, PearlCRowSeedTail
     key         = s512("noise-line", seed)                                               PearlCLineKey
     raw         = s512("line", key ‖ side ‖ factor ‖ u32le(line))                        PearlCLineRaw
     x_p         = (raw_p mod 128) + 1, negated when raw_p >= 128                         PearlCLineInt
@@ -24,10 +25,16 @@ tests hold a line to it.
 A byte string is an ``Array<n, Value<8>>`` in byte order, an index a ``Value<32>``. Each Definition has a word form (``_v1``)
 and a Boolean version (``_v2``) whose word view it is; on bits a byte is 8 bits, least significant first.
 
-Each hash is one compression of its message from its label's midstate, a constant (`PearlCRowSeed` is two), written with
+Each hash is one compression of its message from its label's midstate, a constant, written with
 `verity.ml.commitments.gates.sha512`: `compress_gadget` on bits, `compress_ref` on words. A word gate returns one value, so a
-hash's word form is 32 gates of one primitive, byte ``at`` of the hash (``PearlCSeedBByte_v1`` and its like), each fed its
-index as a constant; no Boolean version computes one byte alone.
+compression's word form is one gate a byte of one primitive, byte ``at`` of its value (``PearlCSeedBByte_v1`` and its like),
+each fed its index as a constant; no Boolean version computes one byte alone.
+
+A Boolean Definition is a proof unit only up to 65,536 ANDs, the size circuit-check lowers one whole at, and a compression is
+about 56,000. So a Definition of more than one compression is a composition of units under that size, each lowered and pinned
+on its own, and its Boolean version the σ of the composition (`sigma_lift`): `PearlCRowSeed` is its two compressions,
+`PearlCRowSeedTail` of `PearlCRowSeedHead`, and `PearlCNoiseLine` its hash and its codes, `PearlCLineCodes` of
+`PearlCLineRaw`. `UNITS` names each such Definition's units.
 """
 from __future__ import annotations
 
@@ -52,14 +59,13 @@ from verity.ml.definitions.boolean import sigma_lift
 __all__ = ["BYTES32", "BYTES64", "NORM_E", "NORM_F", "ROLES", "PearlCLineCode", "PearlCLineCodeV2", "PearlCLineCodes",
            "PearlCLineCodesV2", "PearlCLineInt", "PearlCLineIntV2", "PearlCLineKey", "PearlCLineKeyByte", "PearlCLineKeyV2",
            "PearlCLineNormRoot", "PearlCLineNormRootV2", "PearlCLineRaw", "PearlCLineRawByte", "PearlCLineRawV2",
-           "PearlCLineScale", "PearlCLineScaleV2", "PearlCNoiseLine", "PearlCNoiseLineV2", "PearlCRowSeed", "PearlCRowSeedByte",
-           "PearlCRowSeedV2", "PearlCSeedB", "PearlCSeedBByte", "PearlCSeedBV2", "label", "s512"]
+           "PearlCLineScale", "PearlCLineScaleV2", "PearlCNoiseLine", "PearlCNoiseLineV2", "PearlCRowSeed", "PearlCRowSeedHead",
+           "PearlCRowSeedHeadByte", "PearlCRowSeedHeadV2", "PearlCRowSeedTail", "PearlCRowSeedTailByte", "PearlCRowSeedTailV2",
+           "PearlCRowSeedV2", "PearlCSeedB", "PearlCSeedBByte", "PearlCSeedBV2", "UNITS", "label", "s512"]
 
 U8, BF16, U32 = Value(8), Value(16), Value(32)
 #: a seed, a line key, a line's hash or its 32 codes; and a SHA-512 digest (a root, a row's leaf)
 BYTES32, BYTES64 = Array(32, U8), Array(64, U8)
-#: a hash byte's index
-AT = Value(5)
 #: the roles -h3's hashes are labelled by
 ROLES = ("seed-A", "seed-B", "noise-line", "line")
 #: the BF16 words of 32 times a line's norm: an E line's 256 and an F line's 16
@@ -94,14 +100,23 @@ def s512(role: str, message: bytes) -> bytes:
     return b"".join(w.to_bytes(8, "big") for w in cv[:4])
 
 
+def _words(data: list[list]) -> list[list]:
+    """Bytes of circuit bits as 64-bit words, eight bytes each: a word is big-endian, so its low bits are its last byte's."""
+    return [[f for b in reversed(data[i:i + 8]) for f in b] for i in range(0, len(data), 8)]
+
+
+def _word_bytes(words: list[list]) -> list[list]:
+    """Words of circuit bits as their bytes, each word big-endian: a chaining value's or a digest's bytes."""
+    return [w[8 * j:8 * j + 8] for w in words for j in range(7, -1, -1)]
+
+
 def _s512_bits(C, role: str, message: list[list]) -> list[list]:
-    """`s512` over bytes of circuit bits: its 32 bytes. A block's words are big-endian, so a word's low bits are its last
-    byte's."""
+    """`s512` over bytes of circuit bits: its 32 bytes."""
     data = list(message) + [const_bits(b, 8) for b in pad_tail(128 + len(message))]
     cv = [const_bits(v, 64) for v in _midstate(role)]
     for i in range(0, len(data), 128):
-        cv = compress_gadget(C, cv, [[f for b in reversed(data[i + 8 * k:i + 8 * k + 8]) for f in b] for k in range(16)])
-    return [w[8 * j:8 * j + 8] for w in cv[:4] for j in range(7, -1, -1)]
+        cv = compress_gadget(C, cv, _words(data[i:i + 128]))
+    return _word_bytes(cv[:4])
 
 
 def _le32(x: int) -> bytes:
@@ -113,51 +128,113 @@ def _bytes(word: list) -> list[list]:
     return [word[i:i + 8] for i in range(0, len(word), 8)]
 
 
-def _hash(name: str, role: str, params: tuple, message: Callable, message_bits: Callable, rule: str, reference: str,
-          compressions: str) -> tuple[PrimitiveDefinition, CompositeDefinition, CompositeDefinition]:
-    """A hash of -h3 over ``params``: (its byte primitive, its word form, its Boolean version). ``message`` gives the hashed
-    bytes from the parameters' words, ``message_bits`` the same bytes from the parameters' elements on bits."""
+def _compression(name: str, params: tuple, n: int, value: Callable, value_bits: Callable, rule: str, reference: str,
+                 on_bits: str) -> tuple[PrimitiveDefinition, CompositeDefinition, CompositeDefinition]:
+    """A value of ``n`` bytes that SHA-512 compressions make of ``params``: (its byte primitive, its word form, its Boolean
+    version). ``value`` gives the bytes from the parameters' words, ``value_bits`` the same bytes from a circuit and the
+    parameters' elements on bits."""
     held = f"protocol-defined; equal to `{reference}` on its vectors ({_TESTS})"
+    at_type, ret = Value((n - 1).bit_length()), Array(n, U8)
+    cached = lru_cache(maxsize=4096)(lambda x: value(list(x)))
     byte = PrimitiveDefinition(
-        f"{name}Byte", 1, (*params, ("at", AT)), U8, lambda *x: s512(role, message([int(v) for v in x[:-1]]))[int(x[-1])],
+        f"{name}Byte", 1, (*params, ("at", at_type)), U8, lambda *x: cached(tuple(int(v) for v in x[:-1]))[int(x[-1])],
         doc=f"Byte ``at`` of {rule}: {name}_v1's gates.", conformance="protocol-defined")
 
     def body(B, S, *args):
-        at = array_of([B.call(const(AT.w, i)) for i in range(32)])
+        at = array_of([B.call(const(at_type.w, i)) for i in range(n)])
         return B.batch(byte, *args, at, axes=(None,) * len(args) + (0,))
 
-    word = CompositeDefinition(name, 1, (), lambda S: (params, BYTES32), body, conformance=held,
-                               doc=f"{rule}, its 32 bytes: `{reference}`.")
-    bits = definition(name, 2, lambda C, *el: _s512_bits(C, role, message_bits(el)),
-                      tuple((n, BL.bit_type(t)) for n, t in params), BL.bit_type(BYTES32), word=bind(word), conformance=held,
-                      doc=f"{rule} on bits ({compressions} from the label's midstate): {name}_v1")
+    word = CompositeDefinition(name, 1, (), lambda S: (params, ret), body, conformance=held,
+                               doc=f"{rule}, its {n} bytes: `{reference}`.")
+    bits = definition(name, 2, lambda C, *el: value_bits(C, el), tuple((p, BL.bit_type(t)) for p, t in params),
+                      BL.bit_type(ret), word=bind(word), conformance=held, doc=f"{rule} on bits ({on_bits}): {name}_v1")
     return byte, word, bits
+
+
+def _hash(name: str, role: str, params: tuple, message: Callable, message_bits: Callable, rule: str, reference: str
+          ) -> tuple[PrimitiveDefinition, CompositeDefinition, CompositeDefinition]:
+    """A hash of -h3 over ``params`` whose message fits one block, so one compression: (its byte primitive, its word form,
+    its Boolean version). ``message`` gives the hashed bytes from the parameters' words, ``message_bits`` the same bytes from
+    the parameters' elements on bits."""
+    return _compression(name, params, 32, lambda x: s512(role, message(x)),
+                        lambda C, el: _s512_bits(C, role, message_bits(el)), rule, reference,
+                        "one SHA-512 compression from the label's midstate")
 
 
 PearlCSeedBByte, PearlCSeedB, PearlCSeedBV2 = _hash(
     "PearlCSeedB", "seed-B", (("salt", BYTES32), ("root", BYTES64)), bytes, list,
     'seed_B = s512("seed-B", salt ‖ root), the seed of a fixed operand\'s noise from the epoch\'s salt and the operand\'s root',
-    "pearl_c.seed_b", "one SHA-512 compression")
-
-PearlCRowSeedByte, PearlCRowSeed, PearlCRowSeedV2 = _hash(
-    "PearlCRowSeed", "seed-A", (("salt", BYTES32), ("leaf", BYTES64), ("root", BYTES64), ("unit", U32), ("row", U32)),
-    lambda x: bytes(x[:160]) + _le32(x[161]) + _le32(x[160]),
-    lambda el: [*el[:160], *_bytes(el[161]), *_bytes(el[160])],
-    'seed_A = s512("seed-A", salt ‖ leaf ‖ root ‖ u64le(unit · 2^32 + row)), the seed of a row\'s E line from the salt, the '
-    "row's 64-byte digest, the fixed operand's root and the row's place",
-    "pearl_c.row_seed", "two SHA-512 compressions")
+    "pearl_c.seed_b")
 
 PearlCLineKeyByte, PearlCLineKey, PearlCLineKeyV2 = _hash(
     "PearlCLineKey", "noise-line", (("seed", BYTES32),), bytes, list,
     'key = s512("noise-line", seed), the key of a seed\'s lines',
-    "pearl_c.line_key", "one SHA-512 compression")
+    "pearl_c.line_key")
 
 PearlCLineRawByte, PearlCLineRaw, PearlCLineRawV2 = _hash(
     "PearlCLineRaw", "line", (("key", BYTES32), ("side", U8), ("factor", U8), ("line", U32)),
     lambda x: bytes(x[:34]) + _le32(x[34]),
     lambda el: [*el[:34], *_bytes(el[34])],
     'raw = s512("line", key ‖ side ‖ factor ‖ u32le(line)), the 32 bytes a noise line is made from',
-    "pearl_c.sample_line", "one SHA-512 compression")
+    "pearl_c.sample_line")
+
+
+# ---- the row seed, a compression a unit ------------------------------------------------------------------------------------
+#
+# A row seed's message is 168 bytes, two blocks after the label's, so two compressions: 112,691 ANDs in one circuit, where a
+# Boolean Definition is lowered whole only up to 65,536. Each compression is a Definition of its own, and the row seed their
+# composition: the head takes the first block (the salt, the row's digest and the root's first half) from the label's
+# midstate to the chaining value, the tail takes that and the second block (the root's second half, the row's place and the
+# padding of a 296-byte message) to the seed.
+
+#: the length SHA-512 pads a row seed's message to: the label's block and the 168 bytes
+_ROW_SEED_BYTES = 128 + 168
+
+
+def _state(cv: list[int]) -> bytes:
+    """A chaining value as its 64 bytes, each word big-endian."""
+    return b"".join(w.to_bytes(8, "big") for w in cv)
+
+
+def _row_seed_tail(x: list[int]) -> bytes:
+    """`PearlCRowSeedTail_v1`'s 32 bytes from its parameters' words: the state's 64 bytes, the root's last 32, the unit and
+    the row."""
+    block = bytes(x[64:96]) + _le32(x[97]) + _le32(x[96]) + pad_tail(_ROW_SEED_BYTES)
+    return _state(compress_ref(words_be(bytes(x[:64])), words_be(block)))[:32]
+
+
+def _row_seed_tail_bits(C, el: list) -> list[list]:
+    block = [*el[64:96], *_bytes(el[97]), *_bytes(el[96]), *(const_bits(b, 8) for b in pad_tail(_ROW_SEED_BYTES))]
+    return _word_bytes(compress_gadget(C, _words(el[:64]), _words(block))[:4])
+
+
+PearlCRowSeedHeadByte, PearlCRowSeedHead, PearlCRowSeedHeadV2 = _compression(
+    "PearlCRowSeedHead", (("salt", BYTES32), ("leaf", BYTES64), ("root_head", BYTES32)), 64,
+    lambda x: _state(compress_ref(list(_midstate("seed-A")), words_be(bytes(x)))),
+    lambda C, el: _word_bytes(compress_gadget(C, [const_bits(v, 64) for v in _midstate("seed-A")], _words(list(el)))),
+    "the chaining value of a row seed's hash after its message's first block, salt ‖ leaf ‖ the root's first 32 bytes",
+    "pearl_c.row_seed", "the first of its two SHA-512 compressions, from the label's midstate")
+
+PearlCRowSeedTailByte, PearlCRowSeedTail, PearlCRowSeedTailV2 = _compression(
+    "PearlCRowSeedTail", (("state", BYTES64), ("root_tail", BYTES32), ("unit", U32), ("row", U32)), 32,
+    _row_seed_tail, _row_seed_tail_bits,
+    "seed_A from the chaining value `PearlCRowSeedHead_v1` leaves and its message's second block, the root's last 32 bytes "
+    "‖ u64le(unit · 2^32 + row) and the padding of a 296-byte message",
+    "pearl_c.row_seed", "the second of its two SHA-512 compressions")
+
+_SEED = f"protocol-defined; equal to `pearl_c.row_seed` on its vectors ({_TESTS})"
+
+
+@composite("PearlCRowSeed", 1, [], lambda S: ((("salt", BYTES32), ("leaf", BYTES64), ("root", BYTES64), ("unit", U32),
+                                                ("row", U32)), BYTES32), conformance=_SEED)
+def PearlCRowSeed(B, S, salt, leaf, root, unit, row):
+    """seed_A = s512("seed-A", salt ‖ leaf ‖ root ‖ u64le(unit · 2^32 + row)), the seed of a row's E line from the salt, the
+    row's 64-byte digest, the fixed operand's root and the row's place, its 32 bytes (`pearl_c.row_seed`): its hash's two
+    compressions, `PearlCRowSeedTail_v1` of `PearlCRowSeedHead_v1`."""
+    return B.call(PearlCRowSeedTail, B.call(PearlCRowSeedHead, salt, leaf, root[:32]), root[32:], unit, row)
+
+
+PearlCRowSeedV2 = sigma_lift(PearlCRowSeed, 2)
 
 
 # ---- a line from its hash --------------------------------------------------------------------------------------------------
@@ -288,3 +365,8 @@ def PearlCNoiseLine(B, S, key, side, factor, line, norm32):
 
 
 PearlCNoiseLineV2 = sigma_lift(PearlCNoiseLine, 2)
+
+#: the Boolean Definitions over the size one is lowered whole at (65,536 ANDs), each with the units its body Calls and no
+#: gate besides: every AND of it is in one of them, and each is under that size with its lowering pinned
+UNITS = {"PearlCRowSeed_v2": ("PearlCRowSeedHead_v2", "PearlCRowSeedTail_v2"),
+         "PearlCNoiseLine_v2": ("PearlCLineRaw_v2", "PearlCLineCodes_v2")}
