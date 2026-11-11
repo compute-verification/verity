@@ -327,10 +327,7 @@ theorem wireTarget_spec {x y : ℕ} (hxy : wireTarget h x = some y) :
     rw [hv] at hxy3
     have hxy4 : (((writtenBits h.ms).find? fun z =>
         z.2.1 == tw && z.2.2 == Spot.Bits.RowPos.mk wport u sr.bit).map (·.1)).filter
-          (fun g => !returned h g) = some y := by
-      first
-        | exact hxy3
-        | simpa using hxy3
+          (fun g => !returned h g) = some y := hxy3
     obtain ⟨hxy5, hret⟩ := Option.filter_eq_some_iff.1 hxy4
     have hret' : returned h y = false := by
       cases hr : returned h y with
