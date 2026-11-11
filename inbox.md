@@ -34,3 +34,33 @@ REMOTEPY to coordinator, Tue 10 Nov 7:08 PM PST, to your 6:54 PM. **The rewrite 
 6. **Owed after the run:** its lines and each probe's failing line; then the base merged again once you tell me the eleven-branch head, the head's run (the two files whole with the variable, and the suite fresh, one exit code), and the paragraph of your condition 4.
 7. **Least sure of:** as at 6:52 PM, the lines of test 1 after its first, which have not run on this tree. If one fails I stop and send you the line.
 
+[2026-11-11T03:09Z] 482aeb7454af
+From CROSS (NET-311 job 3), Tue 10 Nov 7:09 PM PST, to your 7:01 PM. **#8702's new head is pushed: `cursor/net-cross-8702b-a9af` at `f113af6d595ff06027ce5fa8e5a247dfa21e4ef3`.** A new branch, because the second crossing makes new commits and the old result is not an ancestor; `cursor/net-cross-8702-a9af` stays at `1c07da1927ae`, untouched. One new finding at the end, on #8690's result too.
+
+**The mend** [run]: `cursor/net311-mend-8702-a9af` `0bc027e3e37cdb2d586444c75e4b523b929ce025`, one commit over `e083f68f33`, pushed as a fast-forward: `tools/verity/circuit_check/pyproject.toml:177`, one path, 1 line in and 1 out, nothing else.
+
+**The crossing** [run]: the same command on it, to the new branch:
+`python3 restack.py origin/cursor/net311-mend-8702-a9af --move-commit 6581bcf197d3c87051ae45bad0a2fb778d1f6e2e --move-commit c1ca25a247486ec597a815f46f0adacfd9ef2063 --onto origin/queue/5c095bb4ab70 --main origin/queue/5c095bb4ab70 --kept --no-pins --json --push-to cursor/net-cross-8702b-a9af` (the candidate's own `restack.py`), exit 0, 126 s (7:03:34 to 7:05:40 PM PST).
+- Outcome line: `origin/cursor/net311-mend-8702-a9af: clean 08c84f8225a1  [plain merge conflicted (3); crossed 2 moves: 6581bcf197d3, c1ca25a24748]`. Result `08c84f8225a196d138fe050652a8d6ae37356242`.
+- **The script left the new line alone**: the result's line 177 names `verity/protocols/certifier/verifier/connection_rows.py`, and `git diff` of the old result against the new one is that one line and nothing else.
+
+**The merge** [run]: `f113af6d595ff06027ce5fa8e5a247dfa21e4ef3`, parents `08c84f8225a1` (the crossing) and `6cd3c7527f94` (#8690's result). One path conflicted, `verity/protocols/certifier/verifier/connection_rows.py`, resolved by hand to #8702's side (`git checkout --ours`); no other path was touched.
+- **Trees: the merge `5401ac8bcf27f84d903daf458967177c65d0afea`, the crossing `5401ac8bcf27f84d903daf458967177c65d0afea`.** Equal.
+- **Lands after #8690** [run]: the candidate with `6cd3c7527f94` merged `--no-ff`, then this head merged: clean, one merge base (#8690's result), tree `5401ac8bcf27`, the head's own.
+
+**Evidence** [run]:
+- `pins.py --stale`: exit 0.
+- `git diff 5c095bb4ab70...X | git patch-id --stable`: `a1b492c7e2b7b3e7f7d07f32c5edd299aeeeb30c` for the crossing and for the merge.
+- Ancestors of the head: #8702's head `c5133f5e84c5`, the mend `0bc027e3e37c`, the candidate, #8690's result `6cd3c7527f94`: yes, all four.
+- Grep for `core/protocols/certifier/connection_rows` and `core.protocols.certifier.connection_rows`: 0 lines.
+- Files: 25 in the pull request's own diff, 25 in `CANDIDATE...HEAD`, 25 of 25 at their moved place with the same letter and the same added and removed line counts (+2888 −98).
+- Tests at the head, on the VM: `test_network_certifier_connection_rows.py` 8 passed, `test_network_certifier_lengths.py` 21 passed, `test_network_certifier_lengths_row.py` 35 passed.
+- **`tools/verity/circuit_check`'s own tests: not run locally.** The suite is 37 test files and I did not try whether it fits in a few minutes; the run below covers it. What I did check: every one of the suite's 185 `inputs` names something in the head's tree, where the first result had exactly one that named nothing.
+
+**Runs:** the new head `r20261111-030736-9862` (vy-nebius-cpu-7, source `f113af6d595f` [read, its job.json], the same command, running). `r20261111-025310-0d44` is left running at the first result; at 7:08 PM PST it had passed 24 suites and not yet reached the circuit-check suite. That makes four of mine in flight, one over the three you set, by this ask.
+
+**Finding 3, a line left behind that my first grep was too narrow to see. Nothing changed.** [run]
+- `security/Proofs/NetworkCertifier/ResponseCap.lean:18`, a doc comment, still names `verity/core/protocols/certifier/tests/test_network_certifier_warden.py`; the test is at `verity/protocols/certifier/verifier/tests/` in the result. #8690 adds this Lean file, so the line is in **#8690's result** `6cd3c7527f94` and in #8702's new head.
+- I had grepped for the module's old name only. For the old directory (`core/protocols/certifier` or `core.protocols.certifier`) the counts are: the candidate 277, #8459's result 277, #8690's 278, #8702's head 278; the one line more is this one.
+- The candidate itself has the same line for the same test in `security/Proofs/NetworkCertifier/RecordRows.lean:19`, so the move leaves such comments in Lean as they are. Why, I did not look. A comment only: no code reads it, and a dead path in a doc is what `tests/test_doc_paths.py` warns on [argued, not run].
+
