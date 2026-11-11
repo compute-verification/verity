@@ -70,7 +70,6 @@
     {"file": "tests/pipeline/test_global_program_regress.py", "kind": "F841", "symbol": "test_single_weights_input_node_baseline_still_passes", "detail": "Local variable `HREC_REPR` is assigned to but never used"},
     {"file": "tests/pipeline/test_gp01_moe_construction.py", "kind": "F401", "symbol": "<module>", "detail": "`os` imported but unused"},
     {"file": "tests/pipeline/test_gpu_lease.py", "kind": "E731", "symbol": "test_the_lease_record_dates_the_release_and_names_its_stage_or_why_it_was_kept", "detail": "Do not assign a `lambda` expression, use a `def`"},
-    {"file": "tests/pipeline/test_hot_commit.py", "kind": "F401", "symbol": "<module>", "detail": "`subprocess` imported but unused"},
     {"file": "tests/pipeline/test_memory_map.py", "kind": "F841", "symbol": "test_the_commits_map_is_the_records_at_the_engines_pages", "detail": "Local variable `pi` is assigned to but never used"},
     {"file": "tests/pipeline/test_replay_bundle.py", "kind": "E731", "symbol": "test_the_commit_pass_is_none_only_while_every_failure_is_absent", "detail": "Do not assign a `lambda` expression, use a `def`"},
     {"file": "tests/pipeline/test_run_config_dry_run.py", "kind": "F401", "symbol": "<module>", "detail": "`os` imported but unused"},

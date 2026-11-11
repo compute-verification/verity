@@ -80,7 +80,7 @@ from verity_vllm.pipeline.c2_replay import rss_kb  # noqa: E402
 from verity_vllm.pipeline.report import bootstrap_ci  # noqa: E402
 from verity_vllm.pipeline import commit_coins as CC, remote_session as RS  # noqa: E402
 
-# automatic stage telemetry of THIS process: hot/cold, engine built or reused (+ reason), warm-up, arms, validation
+# automatic stage telemetry of THIS process: the engine's build, warm-up, arms, validation
 TL = Timeline.from_env("commit_delta", hot=False)
 
 
@@ -348,66 +348,6 @@ def baseline_state(engine: va.Engine) -> dict:
             "wrapped_forwards": sum(1 for _, m in model.named_modules() if "forward" in m.__dict__),
             "sampler_hooks": (len(smp._forward_hooks) + len(smp._forward_pre_hooks)) if isinstance(smp, torch.nn.Module) else 0,
             "cuda_alloc_mib": int(torch.cuda.memory_allocated() >> 20) if torch.cuda.is_available() else 0}
-
-
-def _process_state() -> dict[str, Any]:
-    import threading
-    st: dict[str, Any] = {"threads": threading.active_count(), "gc_enabled": gc.isenabled(), "gc_threshold": list(gc.get_threshold()),
-                          "gc_count": list(gc.get_count()), "gc_tracked_objects": len(gc.get_objects()), "gc_frozen": gc.get_freeze_count(),
-                          "switch_interval_s": sys.getswitchinterval(), "torch_threads": torch.get_num_threads(),
-                          "torch_interop_threads": torch.get_num_interop_threads()}
-    with contextlib.suppress(Exception):
-        st["affinity_cores"] = len(os.sched_getaffinity(0))
-    with contextlib.suppress(Exception):
-        with open("/proc/self/status") as f:
-            for line in f:
-                if line.startswith(("VmRSS", "Threads")):
-                    k, v = line.split(":", 1)
-                    st[k.strip().lower()] = v.strip()
-    return st
-
-
-def cuda_census() -> dict[int, tuple[int, str]]:
-    """{storage data_ptr: (nbytes, tensor type)} of every CUDA tensor the Python gc can see (the hot worker's post-job residue audit
-    diffs this against the census taken right after the engine build; storage held only from C++ is invisible here, so a residue that shows
-    in torch.cuda.memory_allocated but not in the census points at a native holder)."""
-    out: dict[int, tuple[int, str]] = {}
-    for o in gc.get_objects():
-        try:
-            if isinstance(o, torch.Tensor) and o.is_cuda and o.numel() > 0:
-                st = o.untyped_storage()
-                p = int(st.data_ptr())
-                if p not in out:
-                    out[p] = (int(st.nbytes()), type(o).__name__)
-        except Exception:  # noqa: BLE001
-            pass
-    return out
-
-
-def cuda_residue(base: dict[int, tuple[int, str]], now: dict[int, tuple[int, str]], top: int = 6) -> dict:
-    """Python-visible CUDA storages present now but absent from the baseline census: count, MiB, the largest few with their holders."""
-    new = {p: v for p, v in now.items() if p not in base}
-    largest = sorted(new.items(), key=lambda kv: -kv[1][0])[:top]
-    holders = []
-    if largest:
-        want = {p for p, _ in largest}
-        for o in gc.get_objects():
-            try:
-                if isinstance(o, torch.Tensor) and o.is_cuda and int(o.untyped_storage().data_ptr()) in want:
-                    refs = []
-                    for r in gc.get_referrers(o)[:6]:
-                        if isinstance(r, dict):          # an instance __dict__: name the owner
-                            owners = [type(x).__name__ for x in gc.get_referrers(r) if getattr(x, "__dict__", None) is r]
-                            refs.append("dict<-" + (owners[0] if owners else "?"))
-                        else:
-                            refs.append(type(r).__name__)
-                    holders.append({"mib": round(o.untyped_storage().nbytes() / 2**20, 1), "shape": list(o.shape), "dtype": str(o.dtype), "referrers": refs})
-                    want.discard(int(o.untyped_storage().data_ptr()))
-                    if not want:
-                        break
-            except Exception:  # noqa: BLE001
-                pass
-    return {"count": len(new), "mib": round(sum(v[0] for v in new.values()) / 2**20, 1), "largest": holders}
 
 
 def make_committer(kind: str, engine: va.Engine, args: Options, run_id: str):
@@ -886,45 +826,6 @@ def openings_after_release(com, rc, eng, reqs, sampling, base, args, pair: int, 
     return res
 
 
-# hot-engine reuse: `verity_vllm.pipeline.hot serve` sets _HOT = {"jobs": n, "restart_reason": why} and calls
-# main(argv) once per Commit job.  The first job builds the engine and parks it here (with the exact kwargs set and the pristine baseline
-# taken BEFORE any committer); later jobs reuse it when `engine_kwargs_for` yields the same kwargs / env flags / checkpoint (else the job is
-# refused with HOT-KEY-MISMATCH and the worker restarts, reason recorded).  Every committer built in a job is registered in _HOT["coms"] so
-# the worker can close it (uninstall + worker stop + pool shutdown) and re-check the engine is pristine after the job.  _HOT is None in a
-# plain (cold) process: nothing below changes.
-_HOT: dict[str, Any] | None = None
-
-HOT_UNSAFE = ("compiled_taps", "arms", "only_arm", "late_read", "value_check", "arena_unchecked", "profile_hooks", "moe_source")
-
-
-def hot_unsafe_reasons(args: Options) -> list[str]:
-    """Why a job must run in a fresh (cold) process: flags that mutate module/process state beyond the committer's lifetime."""
-    why = []
-    if args.compiled_taps != "off":
-        why.append(f"--compiled-taps {args.compiled_taps} (Inductor hooks / runner patches are process-wide)")
-    if args.arms:
-        why.append("--arms (multi-committer arms)")
-    if args.only_arm == "control" or (args.only_arm and args.compiled_taps != "off"):
-        why.append(f"--only-arm {args.only_arm} (paired-process protocol)")
-    if args.late_read:
-        why.append("--late-read (mutates native_collect.GATHER_FLUSH_LEAVES)")
-    if args.value_check:
-        why.append("--value-check (reference taps)")
-    if args.arena_mb and args.arena_unchecked:
-        why.append("--arena-unchecked (negative test)")
-    if args.moe_source == "on":
-        why.append("--moe-source on")
-    if str(args.committer).startswith("plugin:"):
-        why.append("plugin committer")
-    if settings.VERITY_FAULT:
-        why.append(f"VERITY_FAULT={settings.raw('VERITY_FAULT')!r} (deliberate fault: negative test)")
-    if settings.raw("VERITY_SWITCH"):
-        why.append("VERITY_SWITCH (interpreter switch interval is process-wide)")
-    if args.remote_verifier:
-        why.append("--remote-verifier (the store binder goes on the engine at its build)")
-    return why
-
-
 def resolve_staging(args: Options) -> Options:
     """The collector's staging defaults made explicit before anything reads them (the replay planner, the collector record, the
     replay's ring): an omitted --window-mb is `native_collect.window_mb_default` when every committer kind is the windowed worker
@@ -1055,17 +956,8 @@ class Options:
     only_arm: str | None = option("--only-arm", choices=["control", "instrumented"], default=None, help="run only this arm (`--pairs` runs of it); the paired summary is produced by compiled_commit.sh from both processes")
 
 
-def main(args: Options, argv: list[str] | None = None) -> None:
-    global TL
+def main(args: Options) -> None:
     _rs = RS.session_of(args)
-    if settings.VERITY_HOT_SUBMIT and _HOT is None:
-        # route this invocation through the pod's hot Commit worker (verity_vllm/pipeline/hot.py) -- lets an unchanged harness
-        # (the e2e negatives in tests/test_commit_fail_closed.py, ad-hoc timing pairs) exercise engine reuse; the worker refuses HOT-UNSAFE
-        # jobs and the client falls back to a cold process with the reason on record, so nothing runs that would not run cold.
-        from verity_vllm.pipeline import hot as _HC
-        sys.exit(_HC.submit(sys.argv[2:] if argv is None else list(argv), root=Path(settings.HOT_ROOT),
-                            idle_s=settings.HOT_IDLE, timeout_s=settings.HOT_TIMEOUT))
-    TL = Timeline.from_env("commit_delta", hot=_HOT is not None)      # hot worker: the job's VERITY_TIMELINE (per row attempt), not the worker's
     if (tracedump := settings.VERITY_TRACEDUMP) is not None:
         # diagnostics: dump every thread's Python stack to stderr every N seconds (hang isolation on pods without ptrace)
         import faulthandler
@@ -1086,11 +978,6 @@ def main(args: Options, argv: list[str] | None = None) -> None:
     print(f"[delta] source identity OK: " + " ".join(f"{k}={(v.get('git_sha') or '-')[:9]}" for k, v in source_identity_doc["packages"].items())
           + f" tree={source_identity_doc['requested_root']}", flush=True)
     settings.put("VERITY_WEIGHTS_HASH", args.weights_hash)       # read by native_host.register_weights (this process and the forked replay)
-    if _HOT is not None:
-        _unsafe = hot_unsafe_reasons(args)
-        if _unsafe:
-            # the worker records this as the restart reason and the client re-runs the job in a fresh process; the engine stays untouched
-            raise SystemExit("HOT-UNSAFE: " + "; ".join(_unsafe))
     args = resolve_staging(args)
     _planner = RB.prepare(args)
     compiled_src = None
@@ -1158,8 +1045,7 @@ def main(args: Options, argv: list[str] | None = None) -> None:
     settings.setdefault("VERITY_COLLECT_WATCHDOG_MARKER", str(out / "COLLECTOR_DEAD_HUNG.json"))
     wl = va.load_workload(args.workload)
     engine_args = {**(wl.get("engine_args_required") or {}), **va.parse_engine_args(args.engine_arg)}
-    TL.event("startup.imports", "end", s=round(time.time() - _T_PROCESS0, 3), label=args.label, workload=str(args.workload),
-             hot_job=(_HOT or {}).get("jobs"))
+    TL.event("startup.imports", "end", s=round(time.time() - _T_PROCESS0, 3), label=args.label, workload=str(args.workload))
     # `--arms k1,k2,...` runs several committers as separate treatment arms in ONE process against the same control, interleaved
     # (control, k1, k2, ...) with the order rotated every round so every arm takes every position; single-committer mode is unchanged
     # (a control-only process has no committer at all: nothing installed, nothing compiled in)
@@ -1185,36 +1071,13 @@ def main(args: Options, argv: list[str] | None = None) -> None:
                       f"{ {k: v[:2] for k, v in sorted(_hd['members'].items())[:6]} }", flush=True)
     GL.acquire(TL)            # a leased Commit's GPU from here to its last run's GL.release (pipeline.gpu_lease); the target below reads the device
     _settings = PO.own_auditor(args.protocols_config or wl.get("protocols_config"), va.target_of_workload(wl, args.target))   # PoUW's coins: this process's challenger (the Commit is its run's own auditor)
-    _ekw = dict(checkpoints=args.checkpoints, max_num_seqs=args.max_num_seqs, case=va.case_of(wl, args.case), engine_args=engine_args, target=PO.commit_guard(va.target_of_workload(wl, args.target), hot=_HOT is not None, settings=_settings, commit_scheme=args.commit_scheme), execution=va.execution_of_workload(wl))
-    _rs is not None and _rs.before_build(_ekw)      # the hot worker refuses --remote-verifier: the session's engine is built here
-    _live = (_HOT or {}).get("eng")
-    if _live is not None:
-        # hot worker with a live engine: reuse iff THIS job would build exactly the same engine (kwargs set + env flags +
-        # checkpoint record, `engine_kwargs_for` = the same code path build_engine takes).  Anything else is a genuine restart trigger.
-        _kw, _envf, _cp = va.engine_kwargs_for(_ekw["checkpoints"], max_num_seqs=_ekw["max_num_seqs"], case=_ekw["case"], engine_args=_ekw["engine_args"],
-                                               target=_ekw["target"], execution=_ekw["execution"])
-        _want = {"kwargs": _kw, "env_flags": _envf, "checkpoint": _cp}
-        _have = {"kwargs": dict(_live.kwargs), "env_flags": dict(_live.env_flags), "checkpoint": dict(_live.cp)}
-        if json.dumps(_want, sort_keys=True, default=str) != json.dumps(_have, sort_keys=True, default=str):
-            _diff = sorted(k for k in set(_want["kwargs"]) | set(_have["kwargs"]) if _want["kwargs"].get(k) != _have["kwargs"].get(k))
-            raise SystemExit(f"HOT-KEY-MISMATCH: live engine differs from the job's engine (kwargs keys {_diff or 'same'}; env_flags "
-                             f"{_want['env_flags'] == _have['env_flags']}; checkpoint {_want['checkpoint'] == _have['checkpoint']})")
-        eng = _live
-        TL.event("engine.reuse", "mark", model=eng.cp["repo"], enforce_eager=eng.kwargs.get("enforce_eager"), engine_reused=True,
-                 hot_job=_HOT["jobs"], build_s_saved=round(eng.build_s, 3), engine_age_s=round(time.time() - _HOT.get("t_built", time.time()), 1))
-        print(f"[delta] HOT: engine reused (job {_HOT['jobs']} of this worker; saves the {eng.build_s:.1f}s build; engine age "
-              f"{time.time() - _HOT.get('t_built', time.time()):.0f}s; {eng.cp['repo']} max_num_seqs {eng.kwargs.get('max_num_seqs')})", flush=True)
-    else:
-        TL.start("engine.build", case=_ekw["case"], max_num_seqs=args.max_num_seqs, execution=_ekw["execution"])
-        eng = va.build_engine(_ekw["checkpoints"], max_num_seqs=_ekw["max_num_seqs"], case=_ekw["case"], engine_args=_ekw["engine_args"],
-                              target=_ekw["target"], execution=_ekw["execution"])     # the row's execution decides enforce_eager (header: versions.json)
-        TL.end("engine.build", build_s=round(eng.build_s, 3), model=eng.cp["repo"], enforce_eager=eng.kwargs.get("enforce_eager"),
-               engine_reused=False, restart_reason=((_HOT or {}).get("restart_reason") or settings.raw("VERITY_HOT_RESTART_REASON")
-                                                    or "fresh process (one commit_delta per Commit stage)"))
-        if _HOT is not None:
-            gc.collect()
-            torch.cuda.synchronize()
-            _HOT.update(eng=eng, t_built=time.time(), base0=baseline_state(eng), cuda0=cuda_census())   # pristine baseline BEFORE any committer of any job
+    _ekw = dict(checkpoints=args.checkpoints, max_num_seqs=args.max_num_seqs, case=va.case_of(wl, args.case), engine_args=engine_args, target=PO.commit_guard(va.target_of_workload(wl, args.target), settings=_settings, commit_scheme=args.commit_scheme), execution=va.execution_of_workload(wl))
+    _rs is not None and _rs.before_build(_ekw)
+    TL.start("engine.build", case=_ekw["case"], max_num_seqs=args.max_num_seqs, execution=_ekw["execution"])
+    eng = va.build_engine(_ekw["checkpoints"], max_num_seqs=_ekw["max_num_seqs"], case=_ekw["case"], engine_args=_ekw["engine_args"],
+                          target=_ekw["target"], execution=_ekw["execution"])     # the row's execution decides enforce_eager (header: versions.json)
+    TL.end("engine.build", build_s=round(eng.build_s, 3), model=eng.cp["repo"], enforce_eager=eng.kwargs.get("enforce_eager"),
+           engine_reused=False, restart_reason="fresh process (one commit_delta per Commit stage)")
     # the attention implementation the engine executes (FA2 / FA3) -- selects the hidden class the verdict requires and the tap class
     fa_version = va.observed_flash_attn_version(eng.model)
     if not required_classes_cli and served is not None:
@@ -1229,24 +1092,14 @@ def main(args: Options, argv: list[str] | None = None) -> None:
             required_classes = tuple("compiled_kernel_buffers" if c == "instance_outputs_native" else c for c in required_classes)
             print(f"[delta] required classes (P_compiled): {required_classes}", flush=True)
     print(f"[delta] engine attention: vllm_flash_attn_version={fa_version}; required classes {','.join(required_classes)}", flush=True)
-    print(f"[delta] engine {'REUSED (hot; originally built' if _live is not None else 'built'} in {eng.build_s:.1f}s{')' if _live is not None else ''} "
-          f"(case {eng.case}, {eng.cp['repo']}), env {eng.env_flags}", flush=True)
+    print(f"[delta] engine built in {eng.build_s:.1f}s (case {eng.case}, {eng.cp['repo']}), env {eng.env_flags}", flush=True)
     _rs is not None and _rs.check(eng.llm, eng.runner)
     versions = va.versions_doc(eng)
     versions["served"] = SV.require(eng.llm, wl, _ekw["target"], out)
     flip_weight_rec: dict | None = None                    # --flip-weight NEGATIVE TEST record (set once, before register_weights)
     versions["git_head"] = git_head()
     versions["source_identity"] = source_identity_doc      # resolved_path / repo_root / git_sha per package + sys.path[0]
-    versions["argv"] = list(argv) if argv is not None else sys.argv
-    # hot/cold process + engine reused or restarted (+ reason) in the record itself, not only on the timeline
-    versions["hot"] = {"hot_process": _HOT is not None, "engine_reused": _live is not None,
-                       "restart_reason": None if _live is not None else ((_HOT or {}).get("restart_reason") or settings.raw("VERITY_HOT_RESTART_REASON")
-                                                                          or "fresh process (one commit_delta per Commit stage)"),
-                       "worker_job": (_HOT or {}).get("jobs"), "worker_pid": os.getpid() if _HOT is not None else None,
-                       "engine_built_utc": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime((_HOT or {}).get("t_built") or time.time())),
-                       # process state that decides the speed of the CPU-bound phases (register_weights, forked replay): a hot worker measured
-                       # ~+5 s on each vs a cold process -- these numbers are for locating the cause, not a verdict field
-                       "process_state": _process_state()}
+    versions["argv"] = sys.argv
     versions["engine_kwargs"] = {k: v for k, v in eng.kwargs.items() if k not in ("model", "tokenizer")}
     # the RESOLVED async-scheduling mode (scheduler_config after the build), same fact the RunHeader attests
     versions["engine_kwargs"]["async_scheduling"] = va.resolved_async_scheduling(eng.llm)
@@ -1315,8 +1168,6 @@ def main(args: Options, argv: list[str] | None = None) -> None:
     for kind in kinds:
         TL.start("prep.committer_setup", kind=kind)
         com = make_committer(kind, eng, args, run_id)
-        if _HOT is not None:
-            _HOT.setdefault("coms", []).append(com)          # closed after the job (hot worker)
         if compiled_kernels is not None:
             if not hasattr(com, "_nc") or not hasattr(com, "attach_source"):
                 raise SystemExit(f"--compiled-taps kernels needs the native_collect committer (got {kind})")
@@ -1803,7 +1654,7 @@ def main(args: Options, argv: list[str] | None = None) -> None:
                 # binding map + identity coverage against the collector-independent expected population, and openings sampled
                 # from that population (the map and its digest are fixed here, before either challenge is derived from them)
                 _rb_started = RB.start(out, pair, com, rc, args, protocols)
-                GL.release(TL, eng, list(coms.values()), args, last=pair == args.pairs - 1 and k == len(order) - 1 and _HOT is None, after=_wstage, bundle=_rb_started is not None)   # nothing below reads the device
+                GL.release(TL, eng, list(coms.values()), args, last=pair == args.pairs - 1 and k == len(order) - 1, after=_wstage, bundle=_rb_started is not None)   # nothing below reads the device
                 TL.start("validate.binding_coverage", pair=pair)
                 try:
                     row["commit"]["binding"] = binding_record(com, rc, reqs, sampling, args, pair, served_tokens=r["tokens"], stop=stop_of_record, finish_reasons=r.get("finish_reasons"))

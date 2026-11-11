@@ -162,7 +162,7 @@ def engine_kwargs_for(checkpoints: str | Path = "manifests/checkpoints.json", *,
                       engine_args: dict[str, Any] | None = None, target: Any = None, execution: str | None = None,
                       env: dict[str, str] | None = None) -> tuple[dict[str, Any], dict[str, Any], dict[str, Any]]:
     """The exact `LLM(**kw)` keyword set `build_engine` would build from these inputs (+ the env flags it applies and the
-    checkpoint record), WITHOUT building: a hot worker compares it with its live engine's `kwargs` to decide reuse vs restart.  Applies the
+    checkpoint record), WITHOUT building.  Applies the
     same environment knobs as `build_engine` (idempotent), ``env`` (an engine class's, `engine_classes.env`) last, over the process's.
     Refusals (unknown execution, contradicting enforce_eager, an Inductor that read a fixed switch otherwise:
     `engine_env.require_inductor`) are the same."""
@@ -213,7 +213,7 @@ def build_engine(checkpoints: str | Path = "manifests/checkpoints.json", *, max_
     # so an eager engine can never serve a `__bi-compiled` workload (and vice versa) under a green-looking header.
     # `kernel_config.enable_flashinfer_autotune=False` by construction (the autotune dummy run must not depend on the shell's PATH);
     # explicit CLI engine args override last and are recorded in versions.json/run.json.  All of it in
-    # `engine_kwargs_for` (the hot worker computes the same keyword set to decide reuse vs restart).
+    # `engine_kwargs_for`.
     env0 = engine_env.snapshot()
     kw, env_flags, cp = engine_kwargs_for(checkpoints, max_num_seqs=max_num_seqs, case=case, engine_args=engine_args, target=target,
                                           execution=execution, env=env)

@@ -32,7 +32,6 @@
     {"file": "verity_vllm/pipeline/gpu_lease.py", "kind": "vllm-internals", "symbol": "_shut_down", "detail": "llm_engine"},
     {"file": "verity_vllm/pipeline/gpu_lease.py", "kind": "vllm-internals", "symbol": "kept_reason", "detail": "engine_core", "count": 2},
     {"file": "verity_vllm/pipeline/gpu_lease.py", "kind": "vllm-internals", "symbol": "kept_reason", "detail": "llm_engine"},
-    {"file": "verity_vllm/pipeline/hot.py", "kind": "vllm-internals", "symbol": "serve", "detail": "llm_engine"},
     {"file": "verity_vllm/pipeline/serve_openai.py", "kind": "vllm-internals", "symbol": "main", "detail": "llm_engine"},
     {"file": "verity_vllm/pipeline/served_match.py", "kind": "vllm-internals", "symbol": "facts_of", "detail": "llm_engine"},
     {"file": "verity_vllm/pipeline/tp/capture.py", "kind": "vllm-LLM", "symbol": "main", "detail": "vllm.LLM"},

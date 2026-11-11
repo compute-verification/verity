@@ -215,7 +215,7 @@ oracle_tests = [
 # vLLM's tests of the code identity and the code version, which read the run store's closure and code directories: the public
 # release refuses them by name (`config.run_store`), and `test_run_store_absent.py` holds it to that
 run_store_tests = [
-    "adapters/vllm/tests/pipeline/test_{boundary_plan,commit_tree_of_record,experiment_index,hot_commit}.py",
+    "adapters/vllm/tests/pipeline/test_{boundary_plan,commit_tree_of_record,experiment_index}.py",
 ]
 # vLLM's test of the vLLM demo's workload (`demos/vllm/workloads`), which the public tree doesn't hold
 demo_tests = ["adapters/vllm/tests/pipeline/test_demo_workload_file.py"]

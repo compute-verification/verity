@@ -693,7 +693,6 @@ class CommitConfig:
                                      help="extra Commit flags appended after --program-digest, verbatim")
     replay_args: str | None = option("--replay-args", env="REPLAY_ARGS", default=None, help="extra replay flags, verbatim")
     replay_workers: int = option("--replay-workers", env="REPLAY_WORKERS", type=int, default=32, help="TP: replay workers")
-    hot_engine: str = option("--hot-engine", env="HOT_ENGINE", default="0", help="1 = run the Commit on the pod's hot worker")
     commit_timeout: int | None = option("--commit-timeout", env="COMMIT_TIMEOUT", type=int, default=None,
                                         help="seconds (default scales with B and the envelope; TP: 7200)")
     vu_export: str = option("--vu-export", env="VU_EXPORT", default="1",
@@ -752,8 +751,6 @@ class RunEnv:
     hidden_so_fa3_guarded: str = option("--hidden-so-fa3-guarded", help="the guarded-max FA3 tap build (ops/pod_fa3_tap.sh, FA3_TAP_ROW_GUARD=1), used unless --guarded-max-tap 0")
     norm_tap_so: str = option("--norm-tap-so", help="the norm-scale tap op (ops/pod_norm_tap.sh), used unless --norm-tap 0")
     router_tap_so: str = option("--router-tap-so", help="the router-softmax tap op (ops/pod_router_tap.sh), used unless --router-tap 0")
-    hot_root: str = option("--hot-root", env="HOT_ROOT")
-    hot_idle: str = option("--hot-idle", env="HOT_IDLE", default="900")
     timeline: str | None = option("--timeline", env="VERITY_TIMELINE", default=None,
                                   help="stage telemetry file (default: <row dir>/timeline.jsonl)")
     verity_tree: str | None = option("--verity-tree", env="VERITY_TREE", default=None,

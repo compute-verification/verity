@@ -316,7 +316,6 @@ class SingleRow(Row):
         to = self.derive_timeout(self.LP, self.T)
         t0 = int(time.time())
         self.tl("stage.build", "start")
-        self.gpu_exclusive("build")
         follow = self.follow_compose(to) if self.B > 1 else None
         rc1, rc2 = self.derive_all(to)
         wall = int(time.time()) - t0
@@ -445,7 +444,6 @@ class SingleRow(Row):
             self.form_b()
         t0 = int(time.time())
         self.tl("stage.match", "start")
-        self.gpu_exclusive("match")
         if self.leased and cm.match_phase == "all":
             rcg = self.run_gpu("match.gpu", to, f"{d}/match_gpu.log", self.match_cmd("gpu"), lease_dir=f"{d}/match/lease",
                                kept=GL.MATCH_LEG_KEPT)
@@ -725,16 +723,10 @@ class SingleRow(Row):
         return to, cmd, man
 
     def commit(self) -> None:
-        d, ck = self.d, self.ck_
+        d = self.d
         to, cmd, man = self.commit_prepare()
         t0 = int(time.time())
-        if ck.hot_engine == "1" and not self.leased:
-            self.log(f"HOT_ENGINE=1: Commit on the hot worker (root {self.env.hot_root}, idle {self.env.hot_idle}s)")
-            rck = self.run_tl("commit.commit_delta", to, f"{d}/commit.log",
-                              self.cli("hot", "submit", "--root", self.env.hot_root, "--idle", self.env.hot_idle, "--", *cmd[4:]))
-        else:
-            self.gpu_exclusive("commit-cold")
-            rck = self.run_gpu("commit.commit_delta", to, f"{d}/commit.log", cmd)
+        rck = self.run_gpu("commit.commit_delta", to, f"{d}/commit.log", cmd)
         wall = int(time.time()) - t0
         if self.config_run:
             self.replay_pending = RC.commit_verdict(self, rck, wall)
