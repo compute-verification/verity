@@ -373,6 +373,25 @@ def test_without_v2_no_v2_case_is_made(tmp_path, capsys):
     assert not (tmp_path / "sampled.seen").exists()
 
 
+def test_on_a_tree_without_the_policy_the_inference_only_case_is_refused_by_name(tmp_path, capsys, monkeypatch):
+    """Where the tree leaves the inference-only policy out (the public release: no module `SC.POLICY`, which names the
+    policy's Lean package and the Python its check is held to), the inference-only case is refused saying so, never
+    skipped, its Lean never runs, and v1's and sampled proofs' cases are still written; a caller that asks for the
+    package is refused the same way."""
+    program, query = toy()
+    v1 = v1_case(program, query)
+    private = tmp_path / "private"
+    monkeypatch.setattr(SC, "POLICY", "a_module_this_tree_leaves_out")
+    rc, cases, refused, out = run(capsys, "--audit", audit_dir(tmp_path, v1), "--private", private,
+                                  "--alpha", "1", "--gamma", 1, *stand_ins(tmp_path, v1))
+    assert rc == 1 and [c["protocol"] for c in cases] == [V1, SAMPLED], out
+    assert [r["protocol"] for r in refused] == [INF] and "is not on this tree" in refused[0]["reason"], refused
+    assert sorted(p.name for p in private.iterdir()) == ["sampled-proofs", "sampled-proofs-v1", "scratch"]
+    assert not (tmp_path / "reg.seen").exists()
+    with pytest.raises(SC.Refused, match="is not on this tree"):
+        SC.build(*SC.INFERENCE_ONLY_LEAN)
+
+
 @lean
 @pytest.mark.parametrize("accepted, verdict", [(True, "accept"), (False, "reject")])
 def test_v1s_lean_checks_the_audits_case_and_names_the_records_digest(tmp_path, capsys, v1_exe, accepted, verdict):
