@@ -25,8 +25,16 @@ with one select a position from the last position down (T + 1 when none), and th
 the first length that reaches ``max_tokens`` is ``max_tokens``, and the first that reaches the model's length is
 ``max_model_len - prompt_len``, at least 1.  A position costs NSTOP equality tests and a select of small constants.
 
+`StopRule16_v1{T, NSTOP}`, T at most 8,191, is the same rule on the same inputs with one output, a 16-bit word: n in bits 0
+to 12 and the finish code in bits 13 to 15, so the word is n + finish * 8192 (`reference16`).  n is at most T, so 13 bits
+hold it, and three bits hold the finish codes 0 to 3 (`FINISH`).  Its body (`stop16`) is `stop` and then the packing, which
+the word layer writes without a shift or a low-half primitive: a word added to itself is the word doubled, so 13 doublings
+of finish and the sum with n give the packed i32, 16 more move its low half to the high half, and `U32Hi16` returns that
+half.  On gates a doubling is wires, so `boolean_stop_rule.StopRule16_v2` adds to `stop`'s gates only the sum's two carries.
+
 Registered functions:
-  StopRule{T,NSTOP}  (ids: T i32, max_tokens: i32, stops: NSTOP i32, prompt_len: i32, max_model_len: i32) -> (n: i32, finish: i32)
+  StopRule{T,NSTOP}    (ids: T i32, max_tokens: i32, stops: NSTOP i32, prompt_len: i32, max_model_len: i32) -> (n: i32, finish: i32)
+  StopRule16{T,NSTOP}  (ids: T i32, max_tokens: i32, stops: NSTOP i32, prompt_len: i32, max_model_len: i32) -> u16
 """
 from __future__ import annotations
 
@@ -35,7 +43,7 @@ from types import SimpleNamespace
 
 from verity.circuits.defs import composite
 from verity.definitions.ops.prims import const
-from verity.definitions.ops.scalar import BitAnd, BitNot, BitOr, I32Eq, I32Le, SelectI32
+from verity.definitions.ops.scalar import U16, BitAnd, BitNot, BitOr, I32Add, I32Eq, I32Le, SelectI32, U32Hi16
 from verity.circuits.refs import Coll, concat
 from verity.circuits.types import Array, Tuple
 from verity.definitions.registry import dsa as D
@@ -46,10 +54,14 @@ M32 = 0xFFFFFFFF
 #: the finish reasons, by `StopRule_v1`'s code
 FINISH = {0: None, 1: "stop", 2: "length", 3: "model-length"}
 
-#: the element type of a signature: this word, and its bits in `boolean_stop_rule`
-WORDS = SimpleNamespace(I32=I32)
+#: `StopRule16_v1`'s word holds n in its low N_BITS bits and the finish code in the three above
+N_BITS = 13
 
-WORD = {"isub": I32Sub, "ile": I32Le, "ieq": I32Eq, "isel": SelectI32, "band": BitAnd, "bnot": BitNot, "bor": BitOr}
+#: the element types of a signature: these words, and their bits in `boolean_stop_rule`
+WORDS = SimpleNamespace(I32=I32, U16=U16)
+
+WORD = {"isub": I32Sub, "ile": I32Le, "ieq": I32Eq, "isel": SelectI32, "band": BitAnd, "bnot": BitNot, "bor": BitOr,
+        "iadd": I32Add, "hi16": U32Hi16}
 
 
 def word_ops(B) -> D.Ops:
@@ -63,9 +75,22 @@ def refuse(S: dict) -> str | None:
     return None
 
 
+def refuse16(S: dict) -> str | None:
+    """`refuse`, and T past what the word's n holds."""
+    why, t = refuse(S), S.get("T", 1)
+    if why is None and t >> N_BITS:
+        why = (f"T must be at most {(1 << N_BITS) - 1}: n is at most T, and the 16-bit word holds n in {N_BITS} bits, under "
+               f"the finish code's three (got T={t!r})")
+    return why
+
+
 def stop_sig(T):
     return lambda S: ((("ids", Array(S.T, T.I32)), ("max_tokens", T.I32), ("stops", Array(S.NSTOP, T.I32)),
                        ("prompt_len", T.I32), ("max_model_len", T.I32)), Tuple(T.I32, T.I32))
+
+
+def stop16_sig(T):
+    return lambda S: (stop_sig(T)(S)[0], T.U16)
 
 
 def _signed(x: int) -> int:
@@ -86,6 +111,15 @@ def reference(ids: Sequence[int], max_tokens: int, stops: Sequence[int], prompt_
     return n, 1 if s <= cap else 2 if mt <= n else 3
 
 
+def reference16(ids: Sequence[int], max_tokens: int, stops: Sequence[int], prompt_len: int, max_model_len: int) -> int:
+    """`StopRule16_v1{T, NSTOP}`'s function on i32 encodings, T = len(ids): the word n + finish * 8192 of `reference`'s
+    (n, finish)."""
+    if len(ids) >> N_BITS:
+        raise ValueError(f"StopRule16 holds n in {N_BITS} bits: at most {(1 << N_BITS) - 1} ids (got {len(ids)})")
+    n, finish = reference(ids, max_tokens, stops, prompt_len, max_model_len)
+    return n + (finish << N_BITS)
+
+
 def stop(o, S, ids: list, max_tokens, stops: list, prompt_len, max_model_len) -> tuple:
     """`StopRule_v1`'s body: (n, finish) of the module docstring."""
     room = o.isub(max_model_len, prompt_len)
@@ -104,6 +138,19 @@ def stop(o, S, ids: list, max_tokens, stops: list, prompt_len, max_model_len) ->
     return o.isel(done, n, o.word(S.T)), o.isel(done, finish, o.word(0))
 
 
+def doubled(o, w, k: int):
+    """``w`` * 2^k modulo 2^32: k times, the word added to itself (the word layer's shift left)."""
+    for _ in range(k):
+        w = o.iadd(w, w)
+    return w
+
+
+def stop16(o, S, ids: list, max_tokens, stops: list, prompt_len, max_model_len):
+    """`StopRule16_v1`'s body: `stop`'s (n, finish) as the 16-bit word n + finish * 8192, the low half of that i32."""
+    n, finish = stop(o, S, ids, max_tokens, stops, prompt_len, max_model_len)
+    return o.hi16(doubled(o, o.iadd(n, doubled(o, finish, N_BITS)), 16))
+
+
 @composite("StopRule", 1, ["T", "NSTOP"], stop_sig(WORDS), refuse=refuse,
            conformance="model-untested: read from vLLM d9105ea8's check_stop (the last id against the stop ids, then "
                        "max_tokens and max_model_len) and held to the network encodings' derived stop rule; no capture of "
@@ -114,3 +161,12 @@ def StopRule(B, S, ids, max_tokens, stops, prompt_len, max_model_len):
     n, finish = stop(word_ops(B), S, [ids[i] for i in range(S.T)], max_tokens, [stops[j] for j in range(S.NSTOP)],
                      prompt_len, max_model_len)
     return Coll(ret, concat([n.refs, finish.refs]))
+
+
+@composite("StopRule16", 1, ["T", "NSTOP"], stop16_sig(WORDS), refuse=refuse16,
+           conformance="model-untested: StopRule_v1's (n, finish), read from vLLM d9105ea8's check_stop, as the one word "
+                       "n + finish * 8192; no capture of vLLM's finish yet")
+def StopRule16(B, S, ids, max_tokens, stops, prompt_len, max_model_len):
+    """A request's END position and finish reason from its first T emitted ids, as one 16-bit word (the module docstring)."""
+    return stop16(word_ops(B), S, [ids[i] for i in range(S.T)], max_tokens, [stops[j] for j in range(S.NSTOP)],
+                  prompt_len, max_model_len)
