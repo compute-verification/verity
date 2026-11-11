@@ -11,7 +11,7 @@ from pathlib import Path
 import pytest
 
 POUW = Path(__file__).resolve().parents[1]
-sys.path.insert(0, str(POUW / "receipts"))
+sys.path.insert(0, str(Path(__file__).resolve().parents[3] / "benchmarks/pouw/receipts"))
 
 import receipt_conform as C  # noqa: E402
 
