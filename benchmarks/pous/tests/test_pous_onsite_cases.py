@@ -6,7 +6,7 @@ script is run (the encoder's build and the old case step are stand-ins too, and 
 and nothing under the private directory changes but its own log and its list of what it left out. A piece that left no
 case or no answer is ``NOT_WRITTEN`` by its protocol; a case served_composite.sh would compose that is not its piece's
 with its Lean's answer is ``LEFT_OUT`` and its directory goes into ``ONSITE_SKIP``, named as that script's scan names
-it; either way the step goes on to the products. Only cases it can't read stop it."""
+it; either way the step goes on to the products. Only its own failure (a Python that fails) stops it."""
 
 from __future__ import annotations
 

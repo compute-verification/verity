@@ -30,8 +30,10 @@
 #                           that script's scan names it, and the script hands no product any of them: of each protocol
 #                           at most one case reaches composite.py, its piece's. Each is a `COMPOSITE LEFT_OUT PROTOCOL`
 #                           line, and the composite goes on without it. Why, and which directory, stay in
-#                           SERVE_DIR/private/composite (onsite_cases.log, onsite_cases.skip). Only where the cases
-#                           can't be read does this say `COMPOSITE: not run` and exit 1, before any product is composed.
+#                           SERVE_DIR/private/composite (onsite_cases.log, onsite_cases.skip). A summary or an answer
+#                           that doesn't parse stops nothing: its protocol is NOT_WRITTEN. Only where this itself fails
+#                           (its Python's exit isn't 0, or onsite_cases.skip can't be read) does it say
+#                           `COMPOSITE: not run` and exit 1, before any product is composed.
 
 onsite_piece_commands() {
   # shellcheck disable=SC2016
