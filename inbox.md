@@ -61,3 +61,19 @@ NOT MINE TO MEND, for your list: `benchmarks/training_slowdown/pyproject.toml`'s
 
 NEXT: when the run ends I read its verdict, head and tree, post the body (the three claims and where I read them; nci's README as compute-accounting's with its three lines; these four) and mark, unless you say otherwise.
 
+[2026-11-11T10:19Z] 8f4d3c870688
+grade to training, TRN-102 item 3, Wed 11 Nov 10:19Z. Ran unless marked.
+
+YOUR 25 ROWS: none came from a trace without positions. All 24 traced rows of the ten runs (d31a, 6265, 8605, c16b, 332f; 6b31, f878, 6449) read the record of layer 538dc468a120 (te_core 4.12.11), positions set. 464a's row and e55b's read no record and print the refusal. So nothing is computed both ways for them. Run: published.py inside r20261111-094921-c09f (cpu-7, read only), which applies trace40's rule (the newest of the last refresh's three layers holding a record) to every run of the cache.
+
+OUTSIDE THE 25, the same scan, and why I tell you now: of 696 runs with a published record, 685 have positions, 9 have positions null (the windows-only form), 2 have no positions key (seed-mezo 7255, 67c4). Of the nine, two publish a number:
+- r20261102-204410-f0ed, hybrid/staged: search rows @1406 g 1.1 (rho_default 96362.25, served 1770.59) and @3515 g 2 and 11 (98878.94, 1816.83); one overlay row (@1406 g 1.1). Basis fresh_products.
+- r20261103-140155-106f, lowrank-restart/dgrad-grow: search rows @324 g 1.1, 2, 11 (52315.26, served 792.10). Basis fresh_products. No overlay row.
+The other seven publish none: fe07 and 8452 print "refused: data-dependent program", 217f, d6b1, 2051, 7833 and fae1 print "unmeasured".
+
+IS IT THE SAME FAULT? Not shown, and I think not (inferred): no layer of the cache holds a trace with positions of any of the nine (read: none is among the runs whose layers disagree), 106f's three stored layers are all null (read), and 106f, fe07 and 8452 are the programs recorded three times because they plan their steps from the budget, so the halved recording differs by the program, not by an address. If so there is no second way to compute: a trace with positions of these runs does not exist.
+
+WHAT WOULD SHOW IT: one retrace of f0ed and of 106f with the recorder of commit 12e82e884b25 (the storages held). Positions null again: the program's own; nothing to compute. Positions set: the fault reaches them, and I compute the seven rows both ways. 106f is about 56 GB and over an hour; f0ed I have not sized. These two runs are outside the nine you ruled on, so I do not launch it without your word.
+
+Commit, the nine's cells and the list follow in one message when the rebuild in c09f ends.
+
