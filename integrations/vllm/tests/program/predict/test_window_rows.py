@@ -312,7 +312,7 @@ def test_a_chunks_best_is_its_first_maximum_above_minus_infinity():
     nan, inf, ninf = 0x7FC0, 0x7F80, 0xFF80
     assert WR.chunk_best(_bf16([1.0, 3.0, 3.0, 2.0])) == (int(_bf16(3.0)), 1)
     assert WR.chunk_best(np.array([nan, *_bf16([-2.0, -1.0])], dtype=np.uint16)) == (int(_bf16(-1.0)), 2)
-    assert WR.chunk_best(np.array([ninf, nan, ninf], dtype=np.uint16)) == (WR.NEG_INF_BF16, 0)
+    assert WR.chunk_best(np.array([ninf, nan, ninf], dtype=np.uint16)) == (ninf, 0)
     assert WR.chunk_best(np.array([ninf, inf], dtype=np.uint16)) == (inf, 1)
 
 
