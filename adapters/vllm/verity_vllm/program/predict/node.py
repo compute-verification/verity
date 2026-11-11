@@ -10,8 +10,8 @@ Builder, one rank at a time in rank order, each up to its next collective. Colle
 rows at k, in rank order, as `tp_links.json`'s `binding` states the rank's peer Inputs. Joined call by call, the ranks' Programs
 would be a cycle: a rank's collective k reads the other ranks' partials from the middle of their own forwards.
 
-Its parameters are the prompt (and a stochastic request's seed and splits) once, then each rank's weights, one parameter per
-field of its weights record
+Its parameters are the prompt (and a stochastic request's seed) once, then each rank's weights, one parameter per field of its
+weights record
 (`rank<r>.weights[i]`, as a workload Program's `shared.weights[i]` are), bound at registration and marked θ. It returns every
 rank's samples, rank-major: each rank samples from the same gathered logits and feeds its own sample to its next forward.
 
@@ -188,12 +188,9 @@ def node_parameters(phi: Phi, wrapper: str, *, LP: int | None = None, T: int | N
     phis = [Phi.from_json({**phi.to_json(), "tp": {**phi.tp, "rank": r}}) for r in range(world)]
     nets = [decoder(p, M, pos0 + M if wrapper == "step" else int(LP) + int(T)) for p in phis]
     n = M if wrapper == "step" else int(LP)
-    events = 1 if wrapper == "step" else int(T) + 1
     params: list[tuple[str, Type]] = [("prompt", Array(n, I32))]
     if kind == "stochastic":
         params.append(("seed", Array(1, I64)))
-        if phi.sampling["splits"] == "derived":
-            params.append(("splits", Array(events, I32)))
     leaves = [net.leaves() for net in nets]
     weights_at = []
     for r, ls in enumerate(leaves):
@@ -220,8 +217,8 @@ def build_node_program(phi: Phi, wrapper: str, *, LP: int | None = None, T: int 
     if kind == "stochastic":
         from verity_vllm.program.frontend.rules.vllm_sampling import f32_bits
         s = phi.sampling
-        policy = _Stochastic(seed=Coll(I64, Affine("p", 1, 0, 1)), splits=Coll(params[2][1], Affine("p", 2, 0, events)) if s["splits"] == "derived" else None,
-                             S=s["splits"], temperature_bits=f32_bits(s["temperature"]), top_p_bits=f32_bits(s.get("top_p", 1.0)))
+        policy = _Stochastic(seed=Coll(I64, Affine("p", 1, 0, 1)), S=int(s["splits"]), temperature_bits=f32_bits(s["temperature"]),
+                             top_p_bits=f32_bits(s.get("top_p", 1.0)))
     batch = launch_batch(phis[0], LP, T) if wrapper == "request" else None
     lockstep = _Lockstep(B, world)
     peers = [_Joined(lockstep, r) for r in range(world)]

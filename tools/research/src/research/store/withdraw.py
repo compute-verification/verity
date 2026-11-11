@@ -8,18 +8,24 @@ is not deleted: deleting it would break that artifact, and holding the same byte
 and the caller withdraws it too or decides otherwise.  Every manifest is read (through gc's cache) to find those holders.
 
 With `paths` only the files under those prefixes of the withdrawn arts' trees go (a run's `out/sampled-proofs/served/` in its
-attempt record, say); a blob one of their other files also holds is kept and named like any other holder's.
+attempt record, say); a blob one of their other files also holds is kept and named like any other holder's.  The label's value
+is then `"<reason> (only <prefix>, ...)"` (`label_value`); `withdrawals` reads it back, so `research data preserved` reports
+those files withdrawn rather than lost, and `research data put --tree` refuses to put them back (`refused`).
 """
 from __future__ import annotations
 
 import json
+import re
 import sqlite3
 import tempfile
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Callable
 
+from . import vocab
 from .gc import JOBS, MANIFEST_KEY, GcError, Reader, _parse_manifest
+
+_ONLY = re.compile(r"(?P<reason>.*) \(only (?P<paths>[^()]+)\)", re.S)
 
 
 @dataclass
@@ -50,6 +56,74 @@ def _files(remote: Any, h: str, tmp: Path) -> list[tuple[str, str, int]]:
 
 def _under(path: str, prefixes: list[str]) -> bool:
     return any(path == p.rstrip("/") or path.startswith(p.rstrip("/") + "/") for p in prefixes)
+
+
+def label_value(reason: str, paths: list[str] | None) -> str:
+    """The `withdrawn` label's value: the reason, and with `--path` the prefixes it covers."""
+    return f"{reason} (only {', '.join(paths)})" if paths else reason
+
+
+def withdrawals(st: Any, art_id: str) -> list[dict[str, Any]]:
+    """Each `withdrawn` label on `art_id` in this store's labels, oldest first: {reason, paths (None: the whole art), by, ref, ts}.
+    Pull the remote's first (`labels_sync.read_through`): a withdrawal is made on another machine."""
+    out = []
+    for lab in st.labels(art_id, key=vocab.WITHDRAWN):
+        v = lab.value if isinstance(lab.value, str) else json.dumps(lab.value)
+        m = _ONLY.fullmatch(v)
+        out.append({"reason": m["reason"] if m else v, "paths": m["paths"].split(", ") if m else None, "by": lab.by, "ref": lab.ref,
+                    "ts": lab.ts})
+    return out
+
+
+def covering(ws: list[dict[str, Any]], path: str) -> dict[str, Any] | None:
+    """The newest of `withdrawals` that covers the payload file `path`, or None."""
+    return next((w for w in reversed(ws) if w["paths"] is None or _under(path, w["paths"])), None)
+
+
+def file_paths(manifest: Any) -> dict[str, list[str]]:
+    """{blob hex: the payload paths holding it} (a file payload's path is its name)."""
+    p = manifest.payload
+    if p is None:
+        return {}
+    if p.type == "file":
+        return {p.sha256: [p.name]}
+    out: dict[str, list[str]] = {}
+    for f in p.files or []:
+        out.setdefault(f.sha256, []).append(f.path)
+    return out
+
+
+def refused(st: Any, run_id: str, paths: list[str], warn: Callable[[str], None]) -> list[tuple[str, str, dict[str, Any]]]:
+    """(path, art, withdrawal) for each of `paths` that a `withdrawn` label of an artifact of run `run_id` covers: the arts its
+    attempt names and the catalog's arts with `meta.run_id` = `run_id`, their labels pulled from the remote first.  A label
+    without `(only ...)` covers the paths that art's payload holds."""
+    from . import labels_sync as LS  # noqa: PLC0415
+    from .preserved import attempt_artifacts  # noqa: PLC0415
+
+    arts = [r["id"] for r in st.index.select_artifacts(where={"run_id": run_id})]
+    try:
+        doc = st.get_attempt(run_id)
+    except Exception as e:  # noqa: BLE001  an unreachable remote: the catalog's arts still answer
+        warn(f"attempt {run_id}: {type(e).__name__}: {e}; checking only this catalog's artifacts of the run")
+        doc = None
+    arts = list(dict.fromkeys(arts + list(attempt_artifacts(doc).values() if doc else [])))
+    if not arts:
+        return []
+    LS.read_through(st, arts, warn)
+    out = []
+    for a in arts:
+        if not (ws := withdrawals(st, a)):
+            continue
+        held: set[str] = set()
+        if any(w["paths"] is None for w in ws):
+            try:
+                held = {q for qs in file_paths(st.get_manifest(a)).values() for q in qs}
+            except Exception as e:  # noqa: BLE001
+                warn(f"{a} is withdrawn whole, but its manifest is unreadable here ({type(e).__name__}: {e}); its paths are not checked")
+        for path in paths:
+            if w := next((w for w in reversed(ws) if (path in held if w["paths"] is None else _under(path, w["paths"]))), None):
+                out.append((path, a, w))
+    return out
 
 
 def _hex(art: str) -> str:

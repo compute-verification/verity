@@ -24,7 +24,10 @@
                      ``Options.random_budget``: a lowering on random ones added to the vectors (`floored`), a kernel on
                      those its own sampler samples in its domain (`_sampled`); a target no realization compared on a random
                      vector is a warning, ``vectors/edge-only`` when one compared it on all-edge vectors only, else
-                     ``vectors/none`` (`vector_class`)
+                     ``vectors/none`` (`vector_class`).  Each correspondence and word view records how many of its vectors
+                     have every input leaf finite and how many give every output leaf finite (``finite_inputs``,
+                     ``finite_outputs``; `vectors.finite_words`), and fewer finite inputs than `FINITE_FLOOR` and than the
+                     vectors' finite share (`vectors.finite_share`) is a warning, ``vectors/few-finite``
     ports            a Definition's declared return intervals (`verity.circuits.ports`, PROTOCOL.md §12), which the Build takes
                      as facts about a primitive: its reference on edge and random operands, each leaf of a bounded parameter
                      folded into its bound, returns every leaf within its interval; and a primitive's transfer, on sampled
@@ -95,7 +98,7 @@ from verity.circuits.defs import PrimitiveDefinition, conformance_label
 
 from . import bodies as BD
 from . import sidecars as SC
-from .vectors import edge_count, flat, instance_args, vectors
+from .vectors import edge_count, finite_args, finite_rows, finite_share, finite_words, flat, instance_args, vectors
 
 SCHEMA = "verity-circuit-check/v1"
 PINS = SC.SHARED_PINS
@@ -247,6 +250,27 @@ def reference_outputs(t: Any, params: Sequence, arrays: Sequence[np.ndarray]) ->
     return out, raised
 
 
+#: the vectors with every input leaf finite a comparison is to have, or all of its finite share (`vectors.finite_share`) when
+#: that is fewer: short of it is a warning (``vectors/few-finite``), never a failure
+FINITE_FLOOR = 64
+
+
+def _finite_outputs(t: Any, ref: Sequence[tuple[int, ...] | None]) -> int:
+    """How many of the reference's outputs ``ref`` (None where it raised) are finite in every leaf (`vectors.finite_words`)."""
+    widths = signature_of(t)[1].leaf_widths()
+    rows = [r for r in ref if r is not None]
+    return int(finite_words(np.asarray(rows, dtype=object).reshape(len(rows), len(widths)), widths).sum()) if rows else 0
+
+
+def _finite(rec: dict, t: Any, via: str, inputs: int, outputs: int, share: int, F: Findings) -> None:
+    """``rec`` with its counts of vectors whose inputs and whose outputs are all finite, and the warning when the inputs are
+    fewer than `FINITE_FLOOR` and than the ``share`` sampled finite."""
+    rec["finite_inputs"], rec["finite_outputs"] = int(inputs), int(outputs)
+    if inputs < min(FINITE_FLOOR, share):
+        F.warn("vectors", "few-finite", t.id, 1, f"[{via}]: {inputs} of its {rec.get('vectors', rec.get('compared'))} vectors have "
+               f"every input leaf finite, fewer than {FINITE_FLOOR} and than the {share} sampled finite", via=via)
+
+
 def _probed_correspondence(t: Any, params: Sequence, probe: Any, opts: Options, F: Findings) -> tuple[dict, None, list]:
     """The reference on the vectors of a Definition that reads a registered table: its other parameters' edge and random
     vectors and the probes (`vectors.table_instances`), every vector reading the table lazily.  No kernel takes it."""
@@ -266,6 +290,8 @@ def _probed_correspondence(t: Any, params: Sequence, probe: Any, opts: Options, 
     other = [pt for j, pt in enumerate(params) if j != probe.param]
     rec: dict[str, Any] = {"vectors": len(instances), "edge_vectors": min(n, edge_count(other)), "reference_raised": len(raised),
                            "realizations": [], "table": table}
+    _finite(rec, t, "correspondence", sum(finite_args(params, a) for a in instances), _finite_outputs(t, ref),
+            len(finite_share(n, rec["edge_vectors"])), F)
     if raised:
         F.fail("correspondence", "reference-not-total", t.id, f"raised on {len(raised)} of {len(instances)} vectors",
                examples=raised[:_EXAMPLES])
@@ -363,13 +389,18 @@ def _wide_correspondence(t: Any, params: Sequence, wide: Sequence[int], opts: Op
     total = n + len(probes)
     ref: list[tuple[int, ...] | None] = []
     raised: list[dict] = []
+    finite_in = 0
     for i in range(total):
         args: list[Any] = [None] * len(params)
-        for j, a in zip(rest, small(i)):
+        row = small(i)
+        for j, a in zip(rest, row):
             args[j] = a
+        finite = finite_args(other, row)
         for j in wide:
-            args[j] = RegisteredTable(f"operand:{names[j]}", lazily(j, wide_words(params[j], i, n_edge, opts.seed, j)),
-                                      params[j].leaves, _wide_holder(f"operand:{names[j]}"))
+            words = wide_words(params[j], i, n_edge, opts.seed, j)
+            finite = finite and words.finite
+            args[j] = RegisteredTable(f"operand:{names[j]}", lazily(j, words), params[j].leaves, _wide_holder(f"operand:{names[j]}"))
+        finite_in += finite
         try:
             ref.append(tuple(evaluate(t, *args)))
         except Exception as e:  # noqa: BLE001  (a partial reference: the finding)
@@ -378,6 +409,7 @@ def _wide_correspondence(t: Any, params: Sequence, wide: Sequence[int], opts: Op
     rec: dict[str, Any] = {"vectors": total, "edge_vectors": n_edge, "reference_raised": len(raised), "realizations": [],
                            "wide": [{"param": j, "name": names[j], "leaves": params[j].leaves,
                                      "width": params[j].homogeneous_width(), "reads": reads[j]} for j in wide]}
+    _finite(rec, t, "correspondence", finite_in, _finite_outputs(t, ref), len(finite_share(n, n_edge)), F)
     if probes:
         rec["probes"] = probes
     if raised:
@@ -466,6 +498,7 @@ def correspondence(t: Any, opts: Options, F: Findings, *, lower_whole: bool = Tr
     arrays = vectors(params, n, opts.seed, edge)
     ref, raised = reference_outputs(t, params, arrays)
     rec: dict[str, Any] = {"vectors": n, "edge_vectors": edge, "reference_raised": len(raised), "realizations": []}
+    _finite(rec, t, "correspondence", finite_rows(params, arrays, n).sum(), _finite_outputs(t, ref), len(finite_share(n, edge)), F)
     if raised:
         if isinstance(t, ScalarReference):
             rec["partial_domain"] = f"{t.id} is a ScalarReference with a declared domain; {len(raised)} of {n} vectors are outside it"
@@ -683,8 +716,10 @@ def word_view(t: Any, opts: Options, F: Findings) -> dict | None:
         F.fail("correspondence", "word-mismatch", t.id, f"[{word.id}]: {len(bad)} of {n} vectors", via=f"word:{word.id}",
                examples=[{"instance": i, "args": _short(instance_args(pw, arrays, i)), "word": _short(got[i].tolist()),
                           "boolean": _short(boolean[i].tolist())} for i in bad[:_EXAMPLES]])
-    return {"via": f"word:{word.id}", "compared": n, "edge_vectors": min(n, edge), "random": n - min(n, edge),
-            "mismatches": len(bad)}
+    rec = {"via": f"word:{word.id}", "compared": n, "edge_vectors": min(n, edge), "random": n - min(n, edge), "mismatches": len(bad)}
+    _finite(rec, t, rec["via"], finite_rows(pw, arrays, n).sum(), finite_words(got, rw.leaf_widths()).sum(),
+            len(finite_share(n, rec["edge_vectors"])), F)
+    return rec
 
 
 # --- Boolean circuits -------------------------------------------------------------------------------------------------------
@@ -1650,24 +1685,17 @@ def check_subcircuit(sub: Any, opts: Options = DEFAULTS, *, instance_statics: Se
 # --- one served workload ------------------------------------------------------------------------------------------------------
 
 def check_row(path: str | Path, opts: Options = DEFAULTS, *, memo: dict | None = None, pins: dict | None = None) -> dict:
-    """A served workload's request Program (a Build's ``instances.json.gz``, or its directory): `word.check_query` over its Calls (the
-    cross-Call conditions: every Value a Call reads or returns is committed) and every check on each distinct Definition."""
-    from types import SimpleNamespace
-
-    from verity_vllm.correspondence.reader_for_query import Correspondence
+    """A served workload's request Program (a Build's ``instances.json.gz``, or its directory), as the sidecar of the package
+    that writes it reads it (`targets.request_program`): `word.check_query` over its Calls (the cross-Call conditions: every
+    Value a Call reads or returns is committed) and every check on each distinct Definition."""
     from verity.definitions import word as W
-    from verity_vllm.query.module_body import literal_calls
-    from verity_vllm.query.program_view import from_instances, iter_instance_rows
-    from verity_vllm.query.required import population
+
+    from .targets import request_program
 
     memo = {} if memo is None else memo
     pins = load_pins() if pins is None else pins
     p = Path(path)
-    inst = p / "instances.json.gz" if p.is_dir() else p
-    P = from_instances(str(inst))
-    corr = Correspondence(P)
-    pop = population(P, corr)
-    Q = SimpleNamespace(required=pop.required, literals=literal_calls(P), program_path=corr.module_of)
+    P, Q, rows = request_program(str(p))
     F = Findings()
     r = W.check_query(P, Q, opts.X, opts.W, opts.extras, strict=False)
     for v in r["violations"]:
@@ -1680,7 +1708,7 @@ def check_row(path: str | Path, opts: Options = DEFAULTS, *, memo: dict | None =
     except ImportError:
         out["cross_call"] = {"checked": False, "reason": "verity.definitions.cross_call is not on this tree"}
     else:
-        x = cross_call.check_program(lambda: iter_instance_rows(str(inst)), strict=False)
+        x = cross_call.check_program(rows, strict=False)
         out["cross_call"] = {"checked": True, **{k: x[k] for k in ("check", "ok", "calls", "recomputed_gates", "unrefined")}}
         for a in x["recomputes"]:
             F.fail("partition", "cross-call-recompute", a["definition"], f"({a['level']}: {a['calls']} Call(s) compute {a['gates']} "

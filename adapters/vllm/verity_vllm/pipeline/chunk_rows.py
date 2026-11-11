@@ -3,10 +3,11 @@
 (`chunk_cap`, a partition file's ``chunk_cap``), and a template's units read once cut into its chunks (`split`).  The window's
 chunks (`serving_rows.members`) are laid out by `unit_rows`, and the verifier's circuit
 (``benchmarks/one_stage/compose_circuit.py --template``) by `unit_rows` and `statement`.  Each function takes the template as
-`serving_rows.template` reads it."""
+`serving_rows.template` reads it.  `zk_refusal` is why ``verify --zk`` refuses a statement's form, and `zk_check` refuses a
+partition file whose ``zk`` says its window is for such sessions and that names a template of that form."""
 from __future__ import annotations
 
-from collections.abc import Sequence
+from collections.abc import Iterable, Mapping, Sequence
 from pathlib import Path
 from typing import Any
 
@@ -32,17 +33,24 @@ SLOT_ROWS = ("Attention_v5", "Attention_v18", "AttnBlockFirst_v1", "AttnBlock_v5
 
 
 def reads(tp: Any) -> str:
-    """How `UnitStager` lays out chunked template ``tp``'s MUFU table reads: in lookup slots (`read_slots`, each table folded
-    once per statement) for a ``CHAINS`` key block of a whole block (NVIS = BN), for a whole attention row (``SLOT_ROWS``) and
-    for its heads' per-key-block Calls: inline, their EX2 and RCP reads outnumber the rest of their nonzeros, so the build and
-    the prover's memory grow with the reads, while in slots each table is folded once. Everything else reads inline, where its
-    reads are few beside the rest: a key block of fewer keys than BN, a ``CHAINS`` end, column end and combine, and the RMSNorm
-    rows (``RMSNormTriton_v5``, ``RMSNormFusedCuda_v2``) at their served shapes. A ``STAGES`` stage reads in slots: a stats
-    part or a probabilities block reads EX2 a lane, thousands of them. A ``_v2`` body reads no table (its EX2 is gates), so it
-    lowers flat either way."""
+    """How `UnitStager` lays out chunked template ``tp``'s MUFU table reads: flat for a ``STAGES`` stage on bits (its
+    Boolean version, `boolean_topp_stages`: its MUFU operations are gates, so it reads no table and its unit returns its
+    own outputs, the one form `verify --zk` takes, `one_stage.proofs.ks_form_why`); else in lookup slots (`read_slots`,
+    each table folded once per statement) for a ``CHAINS`` key block of a whole block (NVIS = BN), for a whole attention
+    row (``SLOT_ROWS``) and for its heads' per-key-block Calls: inline, their EX2 and RCP reads outnumber the rest of
+    their nonzeros, so the build and the prover's memory grow with the reads, while in slots each table is folded once.
+    Everything else reads inline, where its reads are few beside the rest: a key block of fewer keys than BN, a
+    ``CHAINS`` end, column end and combine, and the RMSNorm rows (``RMSNormTriton_v5``, ``RMSNormFusedCuda_v2``) at
+    their served shapes. A ``STAGES`` stage reads in slots: a stats part or a probabilities block reads EX2 a lane,
+    thousands of them. A Boolean template's reads are inline whatever its layout, a key block's Boolean body
+    (``SparseMlaHeadBlock_v2``) at every key count among them: a body whose MUFU is gates has no table to read, and one
+    that still read a table would keep it in its own rows, so its unit returns its own outputs, the one form
+    ``verify --zk`` takes (`zk_refusal`, `one_stage.proofs.ks_form_why`)."""
     from verity_vllm.pipeline import chain_rows as CH
     from verity_vllm.query.program_view import spec_base, spec_statics
 
+    if tp.id != tp.word:
+        return "inline"
     if tp.layout == "row":
         return "slots" if spec_base(tp.id) in SLOT_ROWS else "inline"
     if tp.layout == "stage":
@@ -54,12 +62,87 @@ def reads(tp: Any) -> str:
 
 
 def statement(tp: Any) -> dict[str, Any]:
-    """`UnitStager`'s statement arguments for chunked template ``tp``: a table read's (``read``) the templated statement at
+    """`UnitStager`'s statement arguments for chunked template ``tp``: a table read's (``read``, ``history``) the templated statement at
     `READ_LAYOUT` of the verifier's read template (``structural``: `verity_flock.read_tmpl`, the one template
     `Flock.ReadNet.check` accepts); every other template's flat statement, its table reads laid out as `reads` says."""
-    if tp.layout == "read":
+    if tp.layout in ("read", "history"):
         return {"layout": READ_LAYOUT, "structural": True}
     return {"reads": reads(tp)}
+
+
+_PIECE_TABLES: dict[str, frozenset[str]] = {}
+
+
+def _piece_tables(prim: Any) -> frozenset[str]:
+    """The tables a lookup slot holds (`read_slots.split`'s ``slot``) that primitive ``prim``'s Flock piece reads, the piece
+    lowered once on free operands as `ir_lower.definition_ands` counts it; none for a gate, a primitive with no piece, and a
+    piece that lowers only on a constant operand (wiring)."""
+    if prim.id not in _PIECE_TABLES:
+        import inspect
+
+        from verity.circuits.evaluation.reference import signature_of
+        from verity_flock import ir_lower as IL, read_slots as RS, tail as TL
+
+        tables: frozenset[str] = frozenset()
+        if prim.params and prim.id in IL.PIECES and getattr(inspect.unwrap(IL.PIECES[prim.id]), "ands", None) is None:
+            C = IL.Circuit()
+            params, _ = signature_of(prim)
+            IL.lower(C, prim, [C.input(f"in{j}", w) for j, w in enumerate(w for pt in params for w in pt.leaf_widths())])
+            tables = frozenset(t for t, idx, w in C.lookups if RS.SLOT_TABLES.get(t) == len(idx) and w <= TL.VALUE_BITS)
+        _PIECE_TABLES[prim.id] = tables
+    return _PIECE_TABLES[prim.id]
+
+
+def slot_tables(fn: Any) -> tuple[str, ...]:
+    """The tables a lookup slot holds that Definition ``fn``'s unit reads, sorted: what `UnitStager` splits out of the unit
+    under ``reads="slots"``.  Read off the Definition and never lowered: each specialized Definition's body is walked once
+    and each primitive's piece lowered once (`_piece_tables`).  None for a body whose MUFU is gates."""
+    from verity.circuits.defs import PrimitiveDefinition
+    from verity.circuits.evaluation.reference import resolve
+
+    memo: dict[int, frozenset[str]] = {}
+
+    def tables(f: Any) -> frozenset[str]:
+        if isinstance(f, PrimitiveDefinition):
+            return _piece_tables(f)
+        if id(f) not in memo:
+            body = getattr(f, "body", None)
+            called = {} if body is None else {id(nd.fn): nd.fn for nd in body.nodes}
+            memo[id(f)] = frozenset().union(*(tables(g) for g in called.values()))
+        return memo[id(f)]
+
+    return tuple(sorted(tables(resolve(fn))))
+
+
+def zk_refusal(tp: Any) -> str | None:
+    """Why `verify --zk` refuses chunked template ``tp``'s `statement` for its form, known before anything is staged; None
+    for a form it takes.  A flat statement whose unit reads a table a lookup slot holds (`slot_tables`), laid out in slots
+    (`reads`), returns its outputs from its last tail stage, and the unit's form the sampled audit's knowledge soundness
+    covers has the unit return them (`one_stage.proofs.ks_form_why`, `Flock.ProvedScope.scopeOkH`).  Only a word template's
+    reads are in slots (`reads`), and the reason names it, the tables and, where one is registered, the Boolean version to
+    name in its place."""
+    if statement(tp).get("reads") != "slots" or not (tables := slot_tables(tp.fn)):
+        return None
+    from verity.circuits.codec import descriptor_id
+    from verity.definitions import boolean as BB
+
+    try:
+        fix = f"name its Boolean version {descriptor_id(BB.boolean_version(tp.fn))}"
+    except BB.NoBooleanVersion:
+        fix = "no Boolean version of it is registered"
+    return (f"{tp.id}: its statement reads {', '.join(tables)} in lookup slots and returns its outputs from a tail stage, a "
+            f"form `verify --zk` refuses (`ProvedScope.scopeOkH`); {fix}")
+
+
+def zk_check(partition: Mapping[str, Any], tps: Iterable[Any]) -> None:
+    """A partition file's ``zk: true`` says its window is for ``verify --zk`` sessions: of the window's chunked templates
+    ``tps``, the first whose statement is a form ``--zk`` refuses (its table reads in lookup slots, `zk_refusal`) is refused
+    by name (ValueError), with the Boolean version to name in its place.  `serving_rows.population` calls it before any row
+    is read."""
+    if partition.get("zk"):
+        for tp in tps:
+            if (why := zk_refusal(tp)) is not None:
+                raise ValueError(f"a partition for --zk sessions names {why}")
 
 
 def unit_rows(tp: Any) -> tuple[list[tuple[str, str, int, list[str]]], list[tuple[str, tuple[int, ...]]]]:
@@ -76,7 +159,8 @@ def unit_rows(tp: Any) -> tuple[list[tuple[str, str, int, list[str]]], list[tupl
     if tp.layout == "s8":
         bits = 16 * s8_words(int(spec_statics(tp.id)["K"]))
         return [("x", SEG, bits, ["x", "sx"]), ("w", V2, bits, ["wrow", "sw"])], [(V2, (0,))]
-    if tp.layout not in ("coord", "cols", "slice", "kchunk", "row", "part", "chain", "stage", "slots", "read", "expert", "fused"):
+    if tp.layout not in ("coord", "cols", "slice", "kchunk", "row", "part", "chain", "stage", "slots", "read", "history", "expert",
+                         "fused"):
         raise ValueError(f"{tp.id}: its layout {tp.layout!r} is not a chunked one")
     g = {nm: k for k, (nm, _ty) in enumerate(tp.fn.signature()[0])}
 

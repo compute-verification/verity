@@ -50,7 +50,7 @@ def test_compare_steps_carries_the_window_only_when_truncated(monkeypatch):
             self.label, self.digest, self.inputs = label, label, {}
             self.inst = [{"spec": s, "form": "f", "args": [], "out": "o"} for s in specs]
             self.steps = [list(range(len(specs)))]
-            self.splits_values, self.splits_nodes = {}, set()
+            self.splits_values = {}
 
         def is_pad(self, i):
             return False

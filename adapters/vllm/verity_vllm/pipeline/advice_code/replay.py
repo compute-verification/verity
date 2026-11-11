@@ -319,6 +319,7 @@ class Replay:
     admitted: list[int | None]      # the executed step each request was first visible at
     forced: list[bool]              # it arrived into a quiet engine
     asked: list[list[int]]          # the open steps it was asked about, its admission last
+    clock: list[int]                # under the certified tick, T after each executed step (µs); else empty
 
 
 Emitted = list[dict[int, int]]     # per executed step, in order: request -> the index of the output it emitted there
@@ -410,7 +411,8 @@ def replay(engine: Engine, requests: Sequence[RequestIO], *, admit: Sequence[int
     Under the tick, T starts at 0; before each iteration of the engine core's loop, when nothing is running or waiting T
     jumps to the next request's bucket close, and every request whose bucket has closed by T ((a + 1)·τ_b ≤ T) is added,
     except at an iteration that only frees finished requests (nothing running or waiting), which adds none; after each
-    step that schedules a token, T advances by τ_sat if the waiting queue is nonempty and by τ_free if it is empty."""
+    step that schedules a token, T advances by τ_sat if the waiting queue is nonempty and by τ_free if it is empty
+    (`Replay.clock` keeps T after each such step)."""
     n = len(requests)
     if (admit is not None) + (decide is not None) + (tick is not None) != 1:
         raise ValueError("give exactly one of admit, decide and tick")
@@ -427,7 +429,8 @@ def replay(engine: Engine, requests: Sequence[RequestIO], *, admit: Sequence[int
         if any(type(a) is not int or a < 0 for a in released) or any(released[k] > released[k + 1] for k in range(n - 1)):
             raise ValueError("release buckets are ints ≥ 0, nondecreasing in release order")
     s = Scheduler(engine, requests)
-    out = Replay(steps=[], finish=[None] * n, admitted=[None] * n, forced=[False] * n, asked=[[] for _ in range(n)])
+    out = Replay(steps=[], finish=[None] * n, admitted=[None] * n, forced=[False] * n, asked=[[] for _ in range(n)],
+                 clock=[])
     nxt = 0
     T = 0
     queue: Queue = deque()
@@ -480,6 +483,7 @@ def replay(engine: Engine, requests: Sequence[RequestIO], *, admit: Sequence[int
             out.steps.append(step)
             if tick is not None:
                 T += tick.sat_us if (s.waiting or s.skipped) else tick.free_us
+                out.clock.append(T)
         return step, samples
 
     def executed(step: Step, samples: dict[int, bool]) -> None:

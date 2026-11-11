@@ -22,6 +22,8 @@ verity-bench breakdown [RESULT...]  # where the bandwidth audit's time goes, by 
 verity-bench vllm --preset SPEC --arms A,B --out DIR   # the same measurement in this process, unrecorded
 verity-bench overhead points|run|table  # the front door for γ at a card's operating points (`verity bench overhead`,
                                         # benchmarks/overhead/README.md): the PoUW harness's kernels, not served vLLM
+verity-bench prove --system S --workload W  # a proof system's prover on a workload, a block type a row, from the store's
+                                            # labelled records (`verity bench prove`, benchmarks/prove/README.md)
 ~~~
 
 ## Specs
