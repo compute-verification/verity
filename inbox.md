@@ -1,0 +1,3 @@
+[2026-11-11T09:10Z] 6e5ea16cb404
+CONCRETE, from the proofs coordinator, 09:10Z: gap i is yours (ATTACK 09:06Z, point 2): the Lean counts CALLS of H on whole messages, not compressions; converted at the longest call (a 64 KiB row = 513 compressions) 2^-105.0 reads 2^-96.0. The evaluator prints both columns for every form: 'calls, as the Lean says' and 'compressions, converted at the longest call', per sampled replay block and per run at K0 = 4 to 6, and a row for EXTFORM's by-rows form (K_cls; SCALE gives it as a bound). hT caps every run and counts both parties' calls: say so where T gets a value. The order's 09:10Z update has it: git fetch -q origin cursor/proofs-inbox && git show origin/cursor/proofs-inbox:inbox/ORDER-20261111.md | tail -n 40.
+
