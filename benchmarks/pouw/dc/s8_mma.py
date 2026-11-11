@@ -1,5 +1,5 @@
 """The integer tensor-core step on Hopper (sm_90a) and datacenter Blackwell (sm_100a) against
-``verity.ml.circuits.silicon.integer``, one instruction per tile (`probes/s8_mma.cu`).
+``verity.definitions.silicon.integer``, one instruction per tile (`probes/s8_mma.cu`).
 
     s8_mma.py gen --family F --out CASES --meta META     the case file s8_mma.cu reads for family F (mma, wg, wg64, wg128,
                                                          wg256 or tc)
@@ -247,8 +247,8 @@ def sass_kernels(text: str) -> dict[str, dict]:
 def check_words(family: str, A, B, C, meta, device: dict[str, np.ndarray]) -> tuple[dict, dict, bool]:
     """Each form's words (``device[form]``, (t, M, N) u32) against the sm_120 model at the form's formats and saturation:
     (report of the forms, the clamp tiles' words by pattern, every form exact)."""
-    from verity.ml.circuits.silicon.integer import BLACKWELL_SM120_S8_M16N8K32 as SAT
-    from verity.ml.circuits.silicon.integer import BLACKWELL_SM120_S8_M16N8K32_WRAP as WRAP
+    from verity.definitions.silicon.integer import BLACKWELL_SM120_S8_M16N8K32 as SAT
+    from verity.definitions.silicon.integer import BLACKWELL_SM120_S8_M16N8K32_WRAP as WRAP
 
     t, m, n = C.shape
     Cv = as_s32(C)
@@ -351,7 +351,7 @@ def evidence(args) -> int:
     """The ``tc-evidence/v1`` meta (``benchmarks/tc_probe/trust.py``'s nested ``tc_evidence``) of one family's s8.s8 .satfinite
     form in a run's outputs: its families with their word and mismatch counts against the registry instruction's model, and
     its SASS."""
-    from verity.ml.circuits.silicon.instructions import INSTRUCTIONS
+    from verity.definitions.silicon.instructions import INSTRUCTIONS
 
     out = Path(args.out_dir)
     ins = INSTRUCTIONS[args.instruction]

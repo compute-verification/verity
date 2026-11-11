@@ -32,8 +32,8 @@ from collections import Counter
 from multiprocessing import Pool
 from pathlib import Path
 
-from verity.ml.circuits.silicon import models as S, term as T
-from verity.ml.circuits.silicon.errors import InvalidArtifact
+from verity.definitions.silicon import models as S, term as T
+from verity.definitions.silicon.errors import InvalidArtifact
 from verity_numerical.reference import hawkeye_close as H
 from wp1_cases import (
     Case,
