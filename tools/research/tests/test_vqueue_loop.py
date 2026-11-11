@@ -500,6 +500,25 @@ def test_a_move_pr_with_a_land_verdict_is_built_by_its_merge_and_advances_main_a
     assert _acts(loop.tick()) == ["advance", "on_main"] and env.main() == sha
 
 
+def test_a_head_below_a_move_main_landed_is_left_out_until_it_is_crossed(env):
+    """A merge of a head based below a layout move leaves its own lines naming the paths the move retired, however clean: the
+    loop takes only a head that holds every move `main` landed, and tells the rest to cross."""
+    base = env.main()
+    renamed = env.o.change({"c.txt": None, "moved/c.txt": "c\n"})
+    tree = _git(env.o.dev, "rev-parse", f"{renamed}^{{tree}}")
+    move = _git(env.o.dev, "commit-tree", tree, "-p", base, "-m", "move c\n\nLayout-move: tools/move/x_map.toml")
+    _git(env.o.dev, "push", "-q", "origin", f"{move}:refs/dev/{move}")
+    _git(env.o.origin, "update-ref", "refs/heads/main", move)
+    env.listed(move, {})
+    below = env.o.change({"b.txt": "below\n"}, base=base)
+    env.o.gh.put(1, below)
+    crossed = env.put(2, {"d.txt": "crossed\n"})
+    loop = env.loop(policy)
+    builds = [r for r in loop.tick() if r["action"] == "build"]
+    assert [(r["members"], r["heads"]) for r in builds] == [([2], [crossed])], builds
+    assert loop.world.left[1][0] == below and loop.world.left[1][1].startswith(f"it lacks the move {move[:12]} "), loop.world.left
+
+
 @pytest.mark.parametrize("lowrisk", [False, True])
 def test_a_move_pr_without_a_land_verdict_is_not_built_even_where_the_low_risk_rule_builds_another_on_its_mark(env, lowrisk):
     if lowrisk:
