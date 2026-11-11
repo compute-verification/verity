@@ -6,21 +6,21 @@ public import Definitions.Pouw.Guarantees.Dither
 public import Definitions.Core.Assumptions.Accel
 
 /-!
-# The headline on the H200 and the RTX PRO 6000 at θ (trusted)
+# The headline on a card table at θ (trusted)
 
 `WorkSoundAtX c pb hr x` is `Definitions.Pouw.Guarantees.Dither.WorkSound` read on the card table `c` at the open
 parameters `x`, with its public best methods `pb` and its node's hosts `hr`, on every period's devices (`Devices`: `n`
 cards and the other devices) and every accelerator `G` that is those devices (`OnCard`) with its oracle calls at a
-public compression (`CallsAtPub`), with the network certifier's counts and the auditor's clocks in the verdict.
+public compression (`CallsAtPub`), with the network certifier's counts and the auditor's clocks in the verdict. Its
+conclusion is `Pouw.Dither.WorkBound` at that verdict.
 
-* `WorkSoundAt c pb hr`: at every `x` meeting (P1) and (P2); `WorkSoundH200`, `WorkSoundSm120`.
-* `WorkSoundOnCard c pb hr`: at the card's own `x`, the one `Assumptions.CardWithinAccel` gives with the card's runs as
-  its model's (`CardRunsAt`); `WorkSoundOnCardH200`, `WorkSoundOnCardSm120`. This is where the card premise (the card
-  can do no more than its model) and the product form enter the headline.
+* `WorkSoundAt`: at every card table, every menu of public best methods, every host row and every `x` meeting (P1) and
+  (P2). The table, the menu and the row are the statement's variables: no table is named here.
 
-`WorkSound` gives each (`Proofs.Pouw.DitherInstance`). Like `WorkSound`, each is stated over any round protocol, and
-the only ones the Lean defines are the no-fold round's, so none covers Dither v3.2's proof block, which no guarantee
-states yet.
+`WorkSound` gives it (`Proofs.Pouw.DitherInstance`), and with it the headline at the card's own `x`, the one
+`Assumptions.CardWithinAccel` gives, which is a corollary there and no statement here. Like `WorkSound`, it is stated
+over any round protocol, and the only ones the Lean defines are the no-fold round's, so it doesn't cover Dither v3.2's
+proof block, which no guarantee states yet.
 -/
 
 @[expose] public section
@@ -84,7 +84,7 @@ other work `z` fits on the devices beside its sampling blocks' timed work with
 selected blocks' honest answers and operand roots at full weight, and `η_w` is the rate per priced cost,
 `η q/W_reg`. Every period the verdict accepts did its sampling blocks' commit phases and work within the period's
 capacity (`TimedWorkFits`) and ran its selected answers within the period (`AnswersFit`), which is what the deadlines
-buy.
+buy. The three together are `WorkBound` at the counted and timed verdict.
 
 The other devices are resources of `G` at their rates in 𝓜: the honest optimum and the capacity count
 them, and `SAKMatmul` and `SAKSha` hold at the dual price over them too. That they are all of the processors the
@@ -118,63 +118,22 @@ def WorkSoundAtX (c : Verity.Accel.Card) (pb : PubBest c) (hr : HostRow) (x : Ve
     CertifierSeesImports G P nsb dev cin cout → CommitAfterWork G P nsb dev t opArrive →
     RootAfterCoin G P nsb dev t arrive → AnswerAfterWork G P nsb dev sel t ansAt →
     ExtractAdv G P nsb Reg sel Q Badv ξ κx →
-    FreedSound G P nsb (Timed (Counted verdict cin cout Ein Eout) Pd Δ opArrive t arrive sel τans tc ansAt) dev Pd 1
+    WorkBound G P nsb (Timed (Counted verdict cin cout Ein Eout) Pd Δ opArrive t arrive sel τans tc ansAt) dev Pd
       (fun A => epsWorkSound (fun b => Wmm b + Wsha b + Wans b)
           (fun b => pubCost e μ pb.mm (macs b)) (fun b => pubCost e μ pb.sha (comps b)) ηw δ
           (nmax * Wmac) (Ein + Eout) +
         (∑ r, μ r * ξ A r) / ∑ b, (Wmm b + Wsha b + Wans b))
       (∑ r, μ r * (1 * Pd.hon r))
-      (fun A => δ + κS + κx A + κsha A + nsb * (κdmm (Badv A) + κdsha (Badv A))) ∧
-    TimedWorkFits G P nsb (Timed (Counted verdict cin cout Ein Eout) Pd Δ opArrive t arrive sel τans tc ansAt) dev
-      Pd ∧
-    AnswersFit G P nsb (Timed (Counted verdict cin cout Ein Eout) Pd Δ opArrive t arrive sel τans tc ansAt) dev sel Pd
+      (fun A => δ + κS + κx A + κsha A + nsb * (κdmm (Badv A) + κdsha (Badv A))) sel
 
-/-- **The headline on the card table `c` at θ**: `WorkSoundAtX` at every semantics `x` meeting (P1), the table's
-exactness range (`c.Exact`), and (P2), the product form (`AccelProductForm`). Like `WorkSound`, it is stated over any
-round protocol, and the only ones the Lean defines are the no-fold round's, so it doesn't cover Dither v3.2's proof
-block, which no guarantee states yet. -/
-def WorkSoundAt (c : Verity.Accel.Card) (pb : PubBest c) (hr : HostRow) : Prop :=
-  ∀ (x : Verity.Accel.Open), c.Exact x → Verity.Assumptions.AccelProductForm x → WorkSoundAtX c pb hr x
-
-/-- **The headline on the card itself**: if the card can do no more than its accelerator model (the card premise,
-`Assumptions.CardWithinAccel c can`, for the card's computations `can`), then
-at some semantics `x` both hold: `x` meets (P1) and (P2) and the card's runs are the machine `⟨c, x⟩`'s programs
-(`CardRunsAt`), and the headline holds at `x` (`WorkSoundAtX`). So the `x` the headline is read at is the card's own,
-the one its runs refine to, and the card premise is a hypothesis of the theorem and in the lock. Like `WorkSound`, it
-is stated over any round protocol, and the only ones the Lean defines are the no-fold round's, so it doesn't cover
-Dither v3.2's proof block, which no guarantee states yet.
-
-Open: `G` is still any accelerator that is the devices at `x` (`OnCard`), not the canonical card-level accelerator
-whose programs are exactly the card's; the witness that `SAKMatmul` and `SAKSha` hold at such a `G`, with free
-guesses, is `Proofs.Pouw.DitherWitness`'s. A sampling block's commitment reads the oracle, which the card has no
-instruction for (the realization premise `Assumptions.ShaRealize`). -/
-def WorkSoundOnCard (c : Verity.Accel.Card) (pb : PubBest c) (hr : HostRow) : Prop :=
-  ∀ can : (c.Mem → c.Mem) → ℚ≥0 → (c.Mem → Prop) → Prop,
-    Verity.Assumptions.CardWithinAccel c can →
-    ∃ x, c.Exact x ∧ Verity.Assumptions.AccelProductForm x ∧ CardRunsAt c x can ∧ WorkSoundAtX c pb hr x
-
-/-- **The headline on the H200 SXM at θ**: `WorkSoundAt` on `Verity.Accel.H200.card`, with `pubBestH200`'s public
-bests on the H200 and the H200 node's hosts. Like `WorkSoundAt`, it is stated over any round protocol, and the only
-ones the Lean defines are the no-fold round's, so it doesn't cover Dither v3.2's proof block, which no guarantee states
-yet. -/
-def WorkSoundH200 : Prop := WorkSoundAt Verity.Accel.H200.card pubBestH200 hostH200
-
-/-- **The headline on the RTX PRO 6000 (sm_120) at θ**: `WorkSoundAt` on `Verity.Accel.Sm120.card`, with
-`pubBestSm120`'s public bests on the RTX PRO 6000 and its node's hosts. Like `WorkSoundAt`, it is stated over any
-round protocol, and the only ones the Lean defines are the no-fold round's, so it doesn't cover Dither v3.2's proof
-block, which no guarantee states yet. -/
-def WorkSoundSm120 : Prop := WorkSoundAt Verity.Accel.Sm120.card pubBestSm120 hostSm120
-
-/-- **The headline on the H200 SXM itself**: `WorkSoundOnCard` on `Verity.Accel.H200.card`, at the semantics
-`card-within-accel(H200)` gives, with `pubBestH200`'s public bests on the H200 and the H200 node's hosts. Like
-`WorkSoundOnCard`, it is stated over any round protocol, and the only ones the Lean defines are the no-fold round's, so
+/-- **The headline on a card table at θ**: `WorkSoundAtX` at every card table `c`, every menu `pb` of public best
+methods on it, every host row `hr` and every semantics `x` meeting (P1), the table's exactness range (`c.Exact`), and
+(P2), the product form (`AccelProductForm`). The table, the menu and the row are variables: what makes them a
+deployment's is the statement's hypotheses on them (`OnCard`, `CallsAtPub`, `HostsCounted`), and no table is named.
+Like `WorkSound`, it is stated over any round protocol, and the only ones the Lean defines are the no-fold round's, so
 it doesn't cover Dither v3.2's proof block, which no guarantee states yet. -/
-def WorkSoundOnCardH200 : Prop := WorkSoundOnCard Verity.Accel.H200.card pubBestH200 hostH200
-
-/-- **The headline on the RTX PRO 6000 (sm_120) itself**: `WorkSoundOnCard` on `Verity.Accel.Sm120.card`, at the
-semantics `card-within-accel(RTX PRO 6000)` gives, with `pubBestSm120`'s public bests on it and its node's hosts.
-Like `WorkSoundOnCard`, it is stated over any round protocol, and the only ones the Lean defines are the no-fold
-round's, so it doesn't cover Dither v3.2's proof block, which no guarantee states yet. -/
-def WorkSoundOnCardSm120 : Prop := WorkSoundOnCard Verity.Accel.Sm120.card pubBestSm120 hostSm120
+def WorkSoundAt : Prop :=
+  ∀ (c : Verity.Accel.Card) (pb : PubBest c) (hr : HostRow) (x : Verity.Accel.Open),
+    c.Exact x → Verity.Assumptions.AccelProductForm x → WorkSoundAtX c pb hr x
 
 end Pouw.Guarantees.DitherInstance
