@@ -238,7 +238,8 @@ theorem mergeStep_period (S : Nat) : ∀ (gs acc : List Grid), (∀ g ∈ acc, g
   | [], _, ha, _ => ha
   | g :: gs, acc, ha, hg => by
     rw [List.foldl_cons]
-    refine mergeStep_period S gs (mergeStep acc g) (fun x hx => ?_) fun x hx => hg x (List.mem_cons_of_mem _ hx)
+    refine mergeStep_period S gs (mergeStep acc g) (fun x hx => ?_) fun x hx =>
+      hg x (List.mem_cons_of_mem _ hx)
     cases acc with
     | nil =>
       simp only [mergeStep, List.mem_singleton] at hx
@@ -318,7 +319,8 @@ theorem gridsOf_period {ts : List Tmpl} {doc : Json} {S : Nat} {per : List (Stri
   · cases he
     intro g hg
     rw [merged_eq] at hg
-    refine mergeStep_period _ _ [] (fun _ hx => by cases hx) (fun x hx => ?_) g (List.mem_reverse.1 hg)
+    refine mergeStep_period _ _ [] (fun _ hx => by cases hx) (fun x hx => ?_) g
+      (List.mem_reverse.1 hg)
     obtain ⟨y, hy, rfl⟩ := List.mem_map.1 (List.mem_mergeSort.1 hx)
     obtain ⟨e, -, he⟩ := (Json.mapM_ok _ _ _ hgs y).1 (List.mem_filter.1 hy).1
     exact gridOf_period (tid := y.1) he
