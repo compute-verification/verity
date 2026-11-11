@@ -376,6 +376,7 @@ def test_record_document_states_the_stored_form_it_loaded_like_the_fast_one(tmp_
 
     from tests.check import test_global_match as T
     from verity_vllm.check.match import global_match_fast as GMF
+    from verity_vllm.check.match import program_loaders as PL
     from verity_vllm.pipeline import cli
     from verity_vllm.pipeline import match as RC
     monkeypatch.delenv(RC.INSTANCES_FORM_ENV, raising=False)
@@ -384,6 +385,7 @@ def test_record_document_states_the_stored_form_it_loaded_like_the_fast_one(tmp_
     gp2, o2 = T.assemble([T.R0, T.R1_LATE], tmp_path / "v2")
     monkeypatch.delenv(RC.INSTANCES_FORM_ENV, raising=False)
     docs = {}
+    PL.LOAD_NOTES.clear()               # fold_load copies the process's loads so far: start from none, as a command's process does
     for impl in ("record", "fast"):
         monkeypatch.setenv(GMF.FLAG, impl)
         for tag, (gp, o) in (("v1", (gp1, o1)), ("v2", (gp2, o2))):
