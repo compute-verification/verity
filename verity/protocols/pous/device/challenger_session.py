@@ -1,5 +1,5 @@
 """The memory challenger's session as PoUS runs it: the wire both sides speak, the prover's side, the request and the id
-a session runs under, and how the leg starts the challenger's side and talks to it. The challenger's side is the
+a session runs under, and how PoUS starts the challenger's side and talks to it. The challenger's side is the
 auditor-trusted device (`challenger_party`, on a host the developer doesn't control: the challenger host, `trusted-host`),
 which imports this module and which this module never imports; how it runs a session is its docstring's.
 
@@ -21,11 +21,11 @@ A request that names no audit runs under the id the auditor designates from its 
 `session_id(audit, commitment, salt)`, of the commitment and salt the challenger logged for the audit, which the
 verifier computes from the audit's binding and what setup published, never from the report; it carries setup's published
 outputs and P2's parameters (`PARAMS`), which `setup_of` reads back. The challenger keeps each session it completes on
-its own host under `SETUPS`, from which the remote bandwidth audit's verifier on the same host builds its registration
-(`remote_bandwidth.p2_party --pous-record`).
+its own host under `SETUPS`, from which PoUB's verifier on the same host builds its registration
+(`verity.protocols.poub.verifier.p2_party --pous-record`).
 
 `side_of(period, node, device)` is where `period.json` puts the challenger's side (`stream.Side`, started by `command`),
-`salt(side, audit, commitment)` asks it for a salt, and `session(side, request, respond)` is the leg's: it starts the
+`salt(side, audit, commitment)` asks it for a salt, and `session(side, request, respond)` is PoUS's: it starts the
 side, connects to it and answers each index with `respond(index)` (`answer`). `placement` says which host ran each
 party and whether `trusted-host`'s premise holds.
 """

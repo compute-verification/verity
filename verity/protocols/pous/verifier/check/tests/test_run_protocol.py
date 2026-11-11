@@ -317,7 +317,7 @@ def test_a_run_committed_to_another_setup_is_refused(deployed_server) -> None:
 
 
 @pytest.mark.slow
-def test_drawn_runs_agree(test_server) -> None:
+def test_sampled_runs_agree(test_server) -> None:
     """`test_run`'s sampled runs over honest setups (`SETUPS`) as cases under `--test`, and under one edit of the case's
     framing or of its setup's commitment and evidence."""
     rs = runs(stores=SETUPS)
@@ -360,7 +360,7 @@ def test_320_reads_certify_alike(certify_server) -> None:
         assert got["profile"]["certificate"]["delta"] == "1/100"
 
 
-def test_drawn_points_certify_alike(certify_server) -> None:
+def test_sampled_points_certify_alike(certify_server) -> None:
     """`CERTIFY_POINTS`, about every certificate's edges: the Lean's `certify` and profile are the Python's on each, and
     on a point `P2Params` refuses both refuse."""
     stats = D.run(CERTIFY, examples=300, server=certify_server)
