@@ -160,7 +160,7 @@ theorem readRoots_of_readsInterior {x m₁ : Msg} {c₀ c₁ : FlockDeploy.Coin}
   unfold readRoots
   rw [hx, hm, hd]
   dsimp only
-  exact if_pos hri
+  exact ite_eq_left hri
 
 /-- **The code's proof blocks stand side by side**: at the members' programs side by side and the members' units,
 each unit's gates read only that unit's gates and constants, and no unit holds a constant. -/
@@ -194,7 +194,7 @@ theorem roots_of_boundary (hr : r.Ok h) {g : ℕ} (hB : r.s.prog.Boundary r.rb g
       if g ∈ r.rb ∧ r.s.prog.Boundary r.rb g = false then iroots r.x r.seen r.ρ else r.s.roots :=
     Reveal.rootsAt_eq (partition h) (two h) (iroots []) hP h2 hρ hrb
   rw [he]
-  exact if_neg fun hc => absurd (hB.symm.trans hc.2) (by decide)
+  exact ite_eq_right fun hc => absurd (hB.symm.trans hc.2) (by decide)
 
 /-- **`not_readsInterior`**: at a gate on its replay block's boundary no address reads the interior record. -/
 theorem not_readsInterior {S : Address} {g : ℕ} (hB : r.s.prog.Boundary r.rb g = true) :
@@ -282,7 +282,7 @@ theorem addresses_not_readsInterior (hcl : SideBySide h) (hA : Addresses h) (hr 
       readsInterior (ownOf h st rec draw r.c₀) (h.names.getD (templateOf h.ms r.u) "") reg.name reg.value =
         false := by
   obtain ⟨S, hH, reg, hreg, -, hne⟩ := addresses_reads hcl hA hr hg
-  refine ⟨S, hH, reg, hreg, eq_false_of_ne_true fun hri => ?_⟩
+  refine ⟨S, hH, reg, hreg, Bool.eq_false_of_ne_true fun hri => ?_⟩
   exact hne (readRoots_of_readsInterior h hx hm hd r.ρ (templateOf h.ms r.u) reg.name reg.value hri)
 
 /-- **`Addresses` fails where round 2 reads a checked unit's registered reads off the interior record**: where the
