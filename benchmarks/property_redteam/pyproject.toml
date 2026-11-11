@@ -47,4 +47,7 @@ inputs = ["verity/__init__.py", "verity/errors.py", "verity/ml/__init__.py", "ve
           "adapters/vllm/verity_vllm/program/rmsnorm_fused_sweep.py",
           "adapters/vllm/verity_vllm/program/gemm_target_correspondence.py",
           "adapters/vllm/verity_vllm/program/compiled_relations.py",
-          "adapters/vllm/verity_vllm/program/compiled_norm_literal.py"]
+          "adapters/vllm/verity_vllm/program/compiled_norm_literal.py",
+          "verity/definitions/circuits", "verity/definitions/ops", "verity/definitions/silicon", "verity/protocols/__init__.py", "verity/protocols/poub/__init__.py",
+          "verity/protocols/pouw/__init__.py",
+          "verity/hardware/__init__.py", "verity/protocols/spot/__init__.py", "verity/protocols/spot/device/__init__.py"]
