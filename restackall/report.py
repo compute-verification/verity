@@ -125,6 +125,11 @@ def main(argv: list[str]) -> int:
         say(f"| {owner} | {len(rs)} | " + " | ".join(cell(rs, k) for k in ORDER) + " |")
     say(f"| all | {len(rows)} | " + " | ".join(str(tot[k]) for k in ORDER) + " |")
     say("")
+    carried = [r for r in rows.values() if r["class"] in ORDER[:2] and r.get("plain_staged") is not None]
+    plain = sum(1 for r in carried if r["plain_staged"].get("files"))
+    say(f"for comparison, an ordinary `git merge` of the staged tree (after `git merge main`, no script) stops on {plain} of "
+        f"the {len(carried)} heads `restack.py` carries, and on every head that stops at the layout.")
+    say("")
     left = [r for r in rows.values() if r.get("left_behind")]
     say(f"clean, with files of its own left in a directory the layout emptied: {len(left)}: "
         + ", ".join(f"#{r['n']} ({r['owner']}, {len(r['left_behind'])})" for r in sorted(left, key=lambda r: r["n"])))

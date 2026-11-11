@@ -22,6 +22,14 @@
     was not run on it.
   - **stops at the layout**: `restack.py` stops. Its step is named: `base` (the merge of a move's base), `script`
     (the base's `layout.py` on the branch) or `moved` (the merge of the moved tree).
+- The runs: second round r20261111-002554-0164, r20261111-002642-ac2f, r20261111-002733-3cb5, r20261111-002825-926f,
+  r20261111-002909-46cb, r20261111-002945-e3ce (266 heads and the control); first round, cancelled, whose 33 final
+  records are kept (each stopped before the pins step): r20261111-000738-014f, r20261111-000910-9644,
+  r20261111-001342-07c6, r20261111-001418-0622, r20261111-001605-2076, r20261111-001843-2eb9; the control with the
+  pins step: r20261111-003521-5d6d. Each run's `out/heads/N.json` is one head's record; `out/results-*.json` and
+  `out/results-*.bundle` hold each clean head's restacked commit (`refs/restackall/result/N`).
+- The driver and this report's script: `restackall/run.py` and `restackall/report.py` on `cursor/top-restackall-7c3e`
+  (scratch; it lands nowhere).
 - A restack ends at its first stop, so a head's files are those of its first stop only. A later step may stop it too.
 
 ## What was not measured
