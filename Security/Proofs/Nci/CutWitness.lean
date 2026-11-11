@@ -453,4 +453,17 @@ theorem toyZ_premises :
   ⟨by decide, toyZ_reads, toyZ_hardness_asInputs, toyZ_exports 1, toyZ_values, toyZ_noSharedPair,
     fun _ _ hw hx k => asInputs_hH_false dZ TZ WZ valZ hw hx (Or.inl toyZ_word) toyZ_kappa k⟩
 
+/-- **`Untied.bound_asInputs_he` at `CZ`.** The bound's conclusion at the toy's arguments, with every block in `G`,
+costs 1 and `e = 1`, from the conjuncts of `toyZ_premises`: a premise added to the bound breaks this proof. It shows
+that the premises hold together on a work that multiplies by a word of `T`, and no more. The bound is slack there, 1 MAC
+against `m k + |T| = 2` before the square roots, and (E) holds only because no output is ever in the clear
+(`toyZ_clear`): the toy does not show the bound tight. -/
+theorem toyZ_bound :
+    (WZ.N : ℝ) ≤ (∑ u ∈ (univ : Finset (Fin 1))ᶜ, ∑ a, (inBlock (PZ.asInputs TZ) WZ u a).card : ℕ) +
+        (1 * 1 + TZ.card : ℕ) +
+      1 / 2 * √((∑ u : Fin 1, (1 + (TZ ∩ PZ.gates u).card) ^ 2 : ℕ) * outOn (PZ.asInputs TZ) WZ univ / (1 * 1)) +
+      1 / 2 * √((∑ u : Fin 1, (1 + (TZ ∩ PZ.gates u).card) ^ 2 : ℕ) * (1 * 1 + TZ.card : ℕ) / (1 * 1 * 1)) := by
+  obtain ⟨hT, hk, hH, hE, hval, hshare, -⟩ := toyZ_premises
+  exact Untied.bound_asInputs_he dZ PZ TZ hT WZ valZ hk univ one_pos one_pos one_pos hval hshare (fun _ _ => hH _) hE
+
 end Nci.Cut.SecurityProofs
