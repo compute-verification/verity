@@ -50171,3 +50171,51 @@ Tags: [run] a command I ran now, [read] a file or record I read now, [relayed] a
 For the table:
 - Plan of record on `main`: `art:3a2991b6…02ca6` (run `3bbf`), q 1.4244e-07, 1,365.9 GB at λ 1; supersedes `art:2ea6f506…` once you label it.
 - Replay a sampled request at 128k: 458 / 5,258 GPU-s at vLLM's defaults (c343) and 1,160 / 5,960 at the registered settings (b00b). Both are measured from each serve's own trace; the row of record should read the registered pair.
+
+## FUSED, Wed 11 Nov 11:04Z: the head block's 250.0 core-s is a session WITHOUT the verifier's program. With one, which an accepted session needs, Lean's setup costs 0.37 s a MB of program a session, in either form (measured at 33, 152 and 152 MB; #8520 read 0.35 at 2,228 MB): about 870 s more for the 64-key later block's own description, about +10,400 GB by my slope [guess]. And at small statics the templated head block costs MORE than the flat (38.4 against 21.8 core-s)
+
+**1. The setup law** [run: Lean's own `setup (drawn)` line, three runs a cell, wall seconds; the program's bytes are `canonical_json(encode_program(mixed_population_program([(fn, 1)])))`, what `m1_unit.py` writes as `program.json`, computed on this VM at `8201dacff26e`].
+
+| block | program | setup, flat | setup, templated | s a MB |
+|---|---|---|---|---|
+| head block `_v2` at DR=16, DV=16, BN=16 | 33,195,144 bytes | 12.3, 12.1, 12.0 (`cd4c`) | 12.2, 12.2, 12.1 (`0163`) | 0.36 to 0.37 |
+| fused, K=6144 | 151,837,810 | 56.7, 56.6, 60.2 (`7268`) | 72.3, 66.4, 62.4 (`a3e0`) | 0.37 to 0.48 |
+| fused, K=256, N=32 | 151,907,317 | 57.8, 57.7, 57.0 (`7268`) | 63.7, 58.1, 59.2 (`a3e0`) | 0.38 to 0.42 |
+| 64-key first block in the program, a stand-in session [read: #8520's body] | 2,228 MB | 783 | | 0.35 |
+
+- It is paid once a sampled session: `verifyCmd` sets a drawn session up at its own sample and never reuses it, and hands `setupOf` the program as bytes; the circuit, by contrast, is parsed once for every setup (`FlockVerify.lean` 1073 to 1135, `buildSessionOf`) [read].
+- #8520's row was a small stand-in session whose program merely held the block [read]. So any session pays for every traced body its program holds, not only for its own block.
+
+**2. What 250.0 is** [read: FLOCKPKG's 10:24Z entry]. Its sessions are kernels' census sessions: "session `k1` (its setup, 2.4 s, included)", and each verdict is the refusal "a session without the verifier's program (--program)". So 250.0 is the fold over the flat circuit with no program at all, and its 108.3 s read is without one too (#8520's read with the 2,228 MB program was 196 s). Nothing is wrong in it; it is not yet the seconds of a session Lean accepts.
+
+**3. What that does to the head block's row** [guess: a measured fold plus a law measured at four sizes, not one run; the GB by my 09:05Z slope, 12.0 GB a core-second a statement, which reproduces BENCHCROSS's 6,320 at 250.0 and is extrapolated past 606 s].
+
+| head block's Lean verify, core-s a statement | modeled 0.4 | measured engine rate on node A (a floor), by proportion | status |
+|---|---|---|---|
+| 250.0 (the row of record since 10:49Z) | 6,316 by the slope (BENCHCROSS's planner run: 6,320) | 225 to 243 | measured, no program |
+| 250.0 + 870 (setup over the later block's own 2.35 GB description) | about 16,750 | about 597 to 644 | guess |
+
+- 2.35 GB is what `9c37` wrote after its bind and before the stager [run; its `program.json`, by the code's order]. If the program holds more traced bodies (step 16's grows by 2.8 GB under #8520 [read]) the setup is larger still, and it then falls on that step's other sessions too.
+- The same law on the two fused kinds is 57 s a session. The planner's 38.92 and 42.55 core-s a statement are below that setup alone, so they do not hold it: about +36 GB by the fused slope (0.63 GB a core-second) [guess].
+- **What decides it, and it is not mine to say:** which program the audit's verifier is handed for a statement, and how many sessions one `verify` call takes. As the code is, every sampled session pays. A setup that reads the program once a call (the twin of what `buildSessionOf` does for the circuit, with its equality lemma) would move it from every session to every call [guess: I did not profile setup; that it is equal in both forms and linear in the program's bytes says it is the program].
+
+**4. The head block at small statics, both forms** [run: `r20261111-103330-0163` templated, `r20261111-103344-cd4c` flat; both cpu-1, EPYC-Genoa, the same `flock-verify` `7f5ec4ce43a913b5`; `SparseMlaHeadBlock_v2{DR=16,DV=16,NVIS=16,FIRST=false,BN=16}`, one block, accepted 3 of 3 in each].
+
+| form | Lean core-s | inputs | setup | proof check | ANDs | matrix entries | circuit file |
+|---|---|---|---|---|---|---|---|
+| flat | 22.1, 21.8, 21.5 | 5.8, 5.7, 5.6 | 12.3, 12.1, 12.0 | 3.5, 3.4, 3.4 | 476,025 | 21,777,114 | 207 MB |
+| templated | 38.4, 38.3, 38.6 | 7.8, 7.7, 7.8 | 12.2, 12.2, 12.1 | 17.8, 17.9, 18.1 | 656,240 | 5,055,998 | 86 MB |
+
+Templated is 1.76× the flat here: its proof check is five times the flat's though its template is 14,757 rows. Whether that grows with the unit or stays is what the served 16-key block says.
+
+**5. Running** [run, 10:58Z]: the served 16-key block `{DR=64,DV=512,NVIS=16,FIRST=true,BN=64}` in both forms: `0163` bound it (22,862,396 word gates, 37.5 GB) and is building its template; `cd4c` got its slot at 10:50Z and is binding it. Both about 11:30Z to 11:45Z [guess]. That pair also gives the setup law on a head block at about 540 MB.
+
+For BREAKEVEN:
+- The head block's 250.0 (and the fused rows from census sessions) are sessions with no `--program`. A session Lean accepts also pays `setup (drawn)`: 0.37 s a MB of the program it is handed, once a sampled session, measured in either form at 33.2, 151.8 and 151.9 MB (`cd4c`, `0163`, `7268`, `a3e0`) and read at 2,228 MB in #8520. Until someone says which program a statement's verifier holds, print the head rows as "no program".
+- Small head block, templated against flat: 38.4 against 21.8 core-s (1.76×), measured (`0163`, `cd4c`). The templated check is not a lever on the head block as far as measured.
+
+For FLOCKPKG: is there a census session you can hand `--program` and `--partition` to, so one run reads a head session Lean accepts? My one-block sessions do (they are `m1_unit.py`'s), and the 16-key block's is out; the 64-key one needs about 160 GB to bind and three hours, which I have not launched.
+
+For the table:
+- Lean verifier, setup: 0.37 s a MB of program a sampled session, in either form (measured at three sizes; #8520 at a fourth). The head block's 250.0 core-s does not hold it: with the later block's own 2.35 GB description it is about 1,120 [guess].
+- Templated check, head block, small statics: 1.76× the flat, measured. The served 16-key block in both forms reads about 11:30Z to 11:45Z.
