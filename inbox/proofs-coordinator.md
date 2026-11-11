@@ -54686,3 +54686,32 @@ For the table: head block with WITNESS's follow-up and salts `all` at full cores
 
 For the table:
 - #8912 (`OpensWhole.lean`, `gateKey`): ready at `62eb1fdc64de`; quick tier, records and the merged-tree build at `main` `86c03d1840cb` pass; the build at `main` `967b722429f3` is out (`f321`). A lemma, true as stated; its reveal theorems are under `Addresses h`, false as defined at a registration with a checked interior row.
+
+## TWOWITNESS, Wed 11 Nov 12:36Z: ready to mark #8889 at 50b06ae65a50038de9c9a9731c7c0dec26c9a00a; the merged-tree build for all four of my files passes (8084); #8892's and #8919's records runs are running
+
+ready to mark #8889 at 50b06ae65a50038de9c9a9731c7c0dec26c9a00a
+- **Quick tier `r20261111-114529-9352` (`--changed 8201dacff26e --quick`, remote) passes [run: its stdout.log].** 4 of 4 suites passed, none cached, 0 failed (repository, verity-graph, verity/definitions/ops, verity/protocols/pouw/verifier). The 2 skips in `verity/definitions/ops` also appear in #8870's passing quick tier `23c6` and in `e31b` [run].
+- **Records `r20261111-100009-a542` at the head passes [run].** `security/Proofs`, `security` and `security/Properties` each check.py exit 0, and the lock is unchanged (`regenerated: {}`).
+- **Merged tree `r20261111-115228-8084` passes [run: its stdout.log].**
+  - The tree is `main` `08ad61db94` with the twelve marked heads that touch my files' aggregators (#8354, #8368, #8781, #8785, #8820, #8827, #8828, #8836, #8871, #8874, #8879, #8882). Then come #8889 at this head, #8892 `5bbe4bd228`, #8919 `eb4dde9196` and Counts `04def4644b`. Every merge is clean.
+  - The build: 12370 jobs, `security/Proofs` exit 0 in 2404 s, `"failed": {}, "skipped": {}`.
+  - `SessCount`, `Refused`, `SecondCount`, `SecondStrata`, `Drawn` and `Counts` each built. No warning or error line names any of my four files.
+- **`main` `86c03d1840` merges cleanly with that tree [run: `git merge-tree`].** In `SamplingGeneric.lean`, the aggregator this PR adds to, it only moves `RegX`'s import. None of the 15 Lean files it brings declares a name of mine.
+- The body says all of this [run: `research queue edit 8889`]. Kernel replay is not run (`lean-fast/v1`), and no second reader has read it.
+
+For CAPS: Proofs/Flock: +1 modules, +7 declarations (#8889: SamplingGeneric/SessCount.lean)
+
+- **#8892 at `5bbe4bd228035d5841de7e7f70169fc73747d699` [run].**
+  - Its records run `r20261111-121530-eb26` has run on vy-nebius-cpu-3 since 12:15Z.
+  - Its quick tier (`--changed 0a722c6ec984`) goes next, when a slot frees.
+  - `8084` is its merged tree, and it built the head's `Refused.lean` with no warning. The try `f6a7` was two tactics earlier.
+- **#8919 at `eb4dde919628d0884c6ba86e835abd4ff87f62b1` [run].**
+  - Its records run `r20261111-123424-84cc` has run on vy-nebius-cpu-1 since 12:34Z.
+  - Its quick tier (`--changed 8201dacff26e`) follows.
+  - Its try `aaf9` and merged tree `8084` pass.
+- **The by-stratum count's place in Counts is built.** `code_ex_le_strata` (`Counts.lean`) builds against #8919's `sum_checked_le_strata` in the merged tree, beside #8874's `Drawn` and #8870's `SecondCount` [run: 8084].
+
+For the table:
+- By stratum: #8919 (unmarked, at `eb4dde9196`). Try aaf9 and merged tree 8084 pass; records 84cc and the quick tier are pending. M_t is a hypothesis, so the count serves line (a) and line (b) alike.
+- (c1) and b2/k inputs: #8892 (Pr[refused]) has records eb26 running and merged tree 8084 passing. #8889 (sessions by block) is ready to mark.
+- The bits line, at a registration with no always-checked block, by gates (#8827 as it is, no class count): "modeled; the first-hit term of #8827's lemma: 2^-100.9 per sampled replay block, 2^-98.9 to 2^-98.3 a run at 4 to 6 replay blocks, at T = 2^80 SHA-512 calls in every run (the prover's and the verifier's), one 2^35-bit table a session, under `SHA512CRExpected` at its two finders; K an upper bound, every block's input bits counted (K_mean <= 2^41.81)."
