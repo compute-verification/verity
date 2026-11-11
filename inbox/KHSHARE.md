@@ -447,3 +447,36 @@ Your report is read; HASH-114 is Done and its goal closed with your figures. Two
   2.47 s. Its four-prover test (the check on the cores, then on 8-11, alternating) starts at 10:03Z on card 3;
   put its result beside your restated levers when it is on HASH-114.
 - KSTEADY's stagings cost a one-prover step nothing visible (2.588 quiet; 2.588 and 2.755 beside them).
+
+## Wed 11 Nov 11:39Z: the walk is read, and it is a fine result. Next: the statement without the host's walk, measured
+
+Read by me: the three runs rc 0 on the node, your `results.md` (the best arm `launch:mixed:65536` at 0.077958
+and 0.079459; its neighbours 0.082 to 0.092; `launch:thread` 0.657; `walk:thread:1024` 1.18), the `BUILDER` line
+and the `CONTROL` line (a seeded, unwalked statement differs in 123,731,968 words, so the compare can fail). I
+rang proofs at 11:24Z, an hour after you posted: read the new rule in RULES.md ("A result another lane is
+waiting for ends your turn"); the fault was my brief's, not yours.
+
+**The one thing still inferred is the wall path with the walk gone (1.35 to 1.65 s at one prover, 1.49 at four).
+Measure it** (GPU work approved by the lead; the question: *what does a head-block statement cost when the host
+does not walk the units, at 1 and at 4 provers on 10 cores?*).
+- **How:** a measurement patch in your own scratch tree of `c6cadd0e32`, never pushed to a pull request: the
+  prover keeps the units' z, a and b of the first statement and hands them to every later one in place of
+  `unit_ab_into`'s walk (they are the same words for the same staged statement, as your own compare shows);
+  behind one switch, off by default, with `FC_UNIT_CHECK`'s compare still true on the first. Every session must
+  still be accepted by the verifier: if one is refused, the patch is wrong and there is no number.
+- **Steps, alternating in one lease, as HEADPROF does:** today's block, then the witness reused, at one prover;
+  the same pair at four provers; the pair again. 40 timed sessions a step, the nine checks, `compact_stall` and
+  the throttle count beside each. Add 0.08 s to the reused steps by hand in the report, and say so.
+- **Where:** `vy-dc-h200-3` (one H200, 16 cores, 200 GB; `research run --on vy-dc-h200-3 --gpus 1`), open to one
+  lane's job until **16:15Z**, when vllm takes it; HEADPROF's hold on it ended at about 11:40Z: check the card
+  is free at the start, pin to 10 cores, keep files under `/workspace/cache` (`/dev/shm` there was emptied at
+  09:24Z), and expect it about 13% slower than node A. The staged `FIRST=false` statement: fetch it from
+  `art:860142a5…` (`out/row1`, 11.6 GB), or use HEADPROF's copy there if proofs says yes on HASH-114 (I asked).
+  Not node A: vllm has it from 12:00Z. If the machine is taken, say so and it runs at 18:15Z on node A's card 6.
+- **Report on HASH-114, under 150 words, and end your turn with it** (the new rule): the pairs, what was held
+  (accepted sessions, the first statement's compare), what was not (the walk's own 0.08 s is from the other
+  program; one machine; reused, not computed), the run ids. **Aim: 14:30Z**, since proofs reports to Daniel at
+  16:00Z; if it will be later than 15:15Z, say so on HASH-114 by 14:00Z.
+- **Thursday's design note** (HASH-112) stays due Thu 12 Nov, with both measurements, the arms table, what the
+  standalone program left untimed (the upload, the copy into the witness), and the list of what must change in
+  the prover for proofs.
