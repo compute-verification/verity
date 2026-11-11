@@ -14,3 +14,4 @@ lr = 2e-3
 weight_decay = 0.05
 warmup = 0.02
 decay = 0.4
+fused = true
