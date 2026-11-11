@@ -39,9 +39,9 @@ from verity.protocols.pouw.verifier.credit import DELTA
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
-from checked_strip import W_RE, CellGrid, cross_ranks  # noqa: E402
-from exact_kit.checks import Checks  # noqa: E402
-from narrow_u import NarrowBlock, planes  # noqa: E402
+from checked_strip import W_RE, CellGrid, cross_ranks
+from exact_kit.checks import Checks
+from narrow_u import NarrowBlock, planes
 
 INSTANCES = ("zero", "P = 0", "V = 0", "one-hot P", "uniform P", "random")
 #: SHA-512's output bits a compression in counter mode (one block a counter value).

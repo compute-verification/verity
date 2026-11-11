@@ -95,7 +95,10 @@ def key_sets(n, rng, per):
     """Structured key pairs at width n: KJ19-bad, g3-chains' open-shape condition (a1 = +-1 mod 2^(r+2), r the smaller
     rotation, which the reduced KJ19 at mod 2^(n-2) still admits when r + 2 < n - 2), key_ok_r11, near-inverse."""
     m = (1 << n) - 1
-    odd = lambda: int(rng.integers(0, 1 << n)) | 1
+
+    def odd():
+        return int(rng.integers(0, 1 << n)) | 1
+
     t = 1 << (n - 2)
     near1 = sorted({(s * t + e) & m for s in range(4) for e in (1, -1)})
     sets = {"kj19-bad": [], "open-shape a1": [], "key_ok_r11": [], "near-inverse": []}

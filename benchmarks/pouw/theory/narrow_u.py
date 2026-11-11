@@ -37,9 +37,9 @@ import numpy as np
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
-from checked_strip import (MASK, TS_SHAPES, CellGrid, co32c_words, cross_ranks, instance, n_digits,  # noqa: E402
-                           o_routes, s32, ts_best)
-from exact_kit.checks import Checks  # noqa: E402
+from checked_strip import (TS_SHAPES, CellGrid, co32c_words, cross_ranks, instance, n_digits, o_routes, s32,
+                           ts_best)
+from exact_kit.checks import Checks
 
 WIDTHS = (8, 16, 32, 64)
 MEASURED_X = 10.66
@@ -122,8 +122,10 @@ def main():
         z6 = rng.integers(0, 2, (m6 - 1, r6, nz))
         Pz, Vz = np.zeros((nz, k6), np.int64), np.zeros((k6, nz), np.int64)
         Pr, Vr = rng.integers(P_rng[0], P_rng[1] + 1, (nz, k6)), rng.integers(-128, 127, (k6, nz))
-        served = lambda Op, D: s32(Op.astype(np.int64) - sum(Dd.astype(np.int64) << (7 * (d + 1))
-                                                             for d, Dd in enumerate(D)))
+
+        def served(Op, D):
+            return s32(Op.astype(np.int64) - sum(Dd.astype(np.int64) << (7 * (d + 1)) for d, Dd in enumerate(D)))
+
         T6, D6, Op6 = co32c_words(Pz, Vz, U6, c6, b6, z6, r6, L, m6)
         Tr, Dr, Opr = co32c_words(Pr, Vr, U6, c6, b6, z6, r6, L, m6)
         draws = 64

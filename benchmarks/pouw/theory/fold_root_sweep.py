@@ -90,7 +90,10 @@ def jobs_for(kind: str, n: int, rng: random.Random, nkeys: int, nrand: int, word
     if kind == "recut":
         return [tuple(map(int, p[1:7])) for p in (line.split() for line in Path(src).read_text().splitlines())
                 if p and p[0] == "S" and p[-1] == "1"]
-    rw = lambda: tuple(rng.randrange(1 << n) for _ in range(4))
+
+    def rw():
+        return tuple(rng.randrange(1 << n) for _ in range(4))
+
     odd = range(1, 1 << n, 2)
     if kind == "all":
         return [(a0, a1) + (word or rw()) for a0 in odd for a1 in odd]

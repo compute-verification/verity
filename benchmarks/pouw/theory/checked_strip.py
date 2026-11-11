@@ -339,7 +339,10 @@ def sat_products(targets, nb, S, budget=None):
         if not res:
             return False, None
         mod = {abs(x): x > 0 for x in sv.get_model()}
-    val = lambda lit: mod.get(abs(lit), False) == (lit > 0)
+
+    def val(lit):
+        return mod.get(abs(lit), False) == (lit > 0)
+
     L_ = [[val(x) for x in ell[s]] for s in range(S)]
     M_ = [[val(x) for x in m[s]] for s in range(S)]
     G_ = [[val(g[w][s]) for s in range(S)] for w in range(len(targets))]
@@ -773,7 +776,10 @@ def main():
     T6, D6, Op6 = co32c_words(*Z6, U6, c6, b6, z6, r6, L, m6)
     Pr, Vr = rng.integers(-63, 63, (nz, k6)), rng.integers(-128, 127, (k6, nz))
     Tr, Dr, Opr = co32c_words(Pr, Vr, U6, c6, b6, z6, r6, L, m6)
-    served = lambda Op, D: s32(Op.astype(np.int64) - sum(Dd.astype(np.int64) << (7 * (d + 1)) for d, Dd in enumerate(D)))
+
+    def served(Op, D):
+        return s32(Op.astype(np.int64) - sum(Dd.astype(np.int64) << (7 * (d + 1)) for d, Dd in enumerate(D)))
+
     checks.check("A7 committed digits: the served output O = O′ − Σ 128^d D_d in s32 (random and zero instance); at "
                  "A = B = 0 D_1 = U·z_0 (Y < 128 there), a fresh word, nonzero in ≥ 95% of 256 cells",
                  np.array_equal(served(Opr, Dr), s32((Pr + c6) @ (Vr + b6))) and np.array_equal(served(Op6, D6),
@@ -781,7 +787,9 @@ def main():
                  f"m = {m6}, D_1 nonzero in {np.count_nonzero(D6[0])} of {nz * nz} cells")
 
     # ------------------------------------------------------------ B
-    one = lambda k, r, L: ((k // L) * min(r, L), r)
+    def one(k, r, L):
+        return ((k // L) * min(r, L), r)
+
     want = {"dither": one, "checked1": one, "co": lambda k, r, L: (k, k + r), "co_p2": lambda k, r, L: (k, k + r)}
     rank_tab = {}
     for (kk, rr, LL) in [(128, 32, 32), (64, 32, 32), (96, 16, 32)]:
@@ -983,7 +991,6 @@ def main():
                  "Dither mean ½ΣP, variance ΣP²/4", bad == 0, f"{bad} mismatches over 6 instances (every coin point)")
     EV2 = Fraction(sum(v * v for v in range(-128, 127)), 255)
     EP2 = Fraction(sum(p * p for p in range(-63, 63)), 126)
-    EV2_7 = Fraction(sum(v * v for v in range(-64, 63)), 127)
     ratios = {"uniform entries, 8-bit served": float((EV2 + EP2 + Fraction(3, 4)) / EP2),
               "same rms in LSBs on both sides": 2.0,
               "served rms half the peeled rms (outlier-heavy activations)": 1.25}
@@ -1276,7 +1283,10 @@ def main():
                 pv_ts[f"{key} eps adopted P·V at a one-hot P, its served output checked"] = acc[6] / acc[8] - 1
                 pv_ts[f"{key} gamma adopted P·V over plain int8"] = acc[6] / acc[3]
     out["ts_pv"] = {k_: (f"{v:.4%}" if " eps " in k_ else f"{v:.4f}") for k_, v in pv_ts.items()}
-    sel = lambda tail: [v for k_, v in pv_ts.items() if k_.endswith(tail)]
+
+    def sel(tail):
+        return [v for k_, v in pv_ts.items() if k_.endswith(tail)]
+
     checks.check("P7 TS model, P·V prefill (Llama-3.1 8B and 70B, 2K–32K; past 8K every 8th query block, weighted) at "
                  "the measured digit and epilogue costs: with the sums, digits and served output given to the cheater "
                  "free ε < 4.5% (< 1.4% from 8K), with the served output checked downstream < 2.3% (< 0.75% from 8K); "
