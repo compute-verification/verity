@@ -58,7 +58,7 @@ it, and fast-forwards `main` only to a candidate whose check passed every step o
   its own diff, whitespace too, is unchanged (`git patch-id --verbatim`), as after merging `main`.
   `research queue status` says what each PR waits for and lists the PRs naming no issue. The mark's preflight refuses a
   head that conflicts or that drive.toml's `landing_gates` refuse; a Markdown file over its cap only warns (trim it in
-  your next PR). A `hold` label keeps a PR out. A PR from a fork, or by an author outside the organization but for the
+  your next PR), as does the vLLM integration's ratchet gate on the merge, which can read a moved line as a new violation. A `hold` label keeps a PR out. A PR from a fork, or by an author outside the organization but for the
   team's Apps and Daniel, is refused at its mark and at admission.
 - Before marking, run the Lean check of the packages you touched and the suites your change touches (the testing skill's
   pre-mark run), plus a suite's slow tier when you changed its core. Prefer small PRs.
