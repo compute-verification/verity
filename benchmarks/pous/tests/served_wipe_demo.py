@@ -16,11 +16,11 @@ import sys
 import tempfile
 from pathlib import Path
 
-from verity.core.deploy.stream import Side
-from verity.core.protocols.pous import wipe_party as WP
-from verity.core.protocols.pous import wipe_period as W
+from verity.configuration.deploy.stream import Side
+from verity.protocols.pous.verifier import wipe_party as WP
+from verity.protocols.pous.verifier import wipe_period as W
 
-SIDE = Path(__file__).resolve().parents[3] / "verity" / "core" / "protocols" / "pous" / "tests" / "wipe_side.py"
+SIDE = Path(__file__).resolve().parents[3] / "verity" / "protocols" / "pous" / "verifier" / "tests" / "wipe_side.py"
 
 
 def main(argv: list[str]) -> int:
