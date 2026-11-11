@@ -1,0 +1,316 @@
+module
+
+public import Proofs.Flock.SpotFlock.WiredCode
+public import Proofs.Flock.SamplingGeneric.TwoCount
+
+/-!
+# SPOT[Flock]'s two-stage knowledge soundness at the connected program
+
+`ksTwo_spot` (`KS`) is `CompiledTwo.KS` at `code h`, over the members' programs side by side. This file proves it
+at `codeWired h ω keep ok` (`WiredCode`), over the members' programs wired by `ω`, from the same facts of the
+code: each is `code h`'s, carried to the wired program by what a map that rewires the members' programs keeps
+(`Prog.Rewires`, `cell_cut`, `replayOf_cut`, `scope_rewired`).
+
+* `wired_stmt`: a statement, partition and design the wired code evaluates are `code h`'s, wired.
+* `units_wired`, `nPU_wired`, `checked_wired`: the wired code has `code h`'s units and checks `code h`'s.
+* `refusesTwo_wired`, `regMatchesTwo_wired`, `replayCap_wired`, `sessionRunsTo_wired`: the code facts.
+* `run_checked`: what an accepted run of `V h` that checks a unit and shows its session passed: the session
+  statements' check, at the unit's statement.
+* `sessionOpensTwo_wired`: the sessions' openings at the wired code, from the session statements' openings there
+  (`StmtOpensWired`).
+* `ksTwo_wired`, `ksTwo_refused`: `CompiledTwo.KS` at the wired code where the check passes, from `StmtOpensWired`,
+  and where it fails, with no premise: the verifier refuses every run and no statement is in scope.
+* `ksTwo_connected`, `exfilTwo_connected`: at the code's own wiring (`codeConnected h`), from SPOT's own frame
+  there and the addresses (`BuiltWired`, `AddressesWired`).
+-/
+
+@[expose] public section
+
+namespace Claims.Sampling
+
+/-- **The proof blocks in sampled replay blocks are those of the partitions without the gates `ω` moves**, where
+no gate is in two replay blocks, every proof block has a gate `ω` leaves alone and a replay block. -/
+theorem sampleBlocks_cut {Pt Pρ : Partition} (ω : ℕ → ℕ) (hnd : Pρ.gates.Nodup)
+    (hne : ∀ u ∈ Pt.blocks, ∃ g ∈ u, ω g = g) (hall : ∀ v < Pt.blocks.length, (replayOf Pt Pρ v).isSome)
+    (S : List ℕ) : sampleBlocks (Pt.cut ω) (Pρ.cut ω) S = sampleBlocks Pt Pρ S := by
+  unfold sampleBlocks
+  rw [Partition.length_blocks_cut]
+  refine Finset.filter_congr fun v hv => ?_
+  rw [replayOf_cut_eq ω hnd hne (hall v (Finset.mem_range.1 hv))]
+
+end Claims.Sampling
+
+namespace SpotFlock
+
+open Claims Claims.Sampling SamplingDeploy Properties.Spot Finset
+
+variable (h : Held) (ω : ℕ → ℕ) (keep : ℕ → Bool)
+
+/-! ## The wired code's statement, units and checked units -/
+
+/-- **What the wired code evaluates is `code h`'s, wired**: a statement the wired code parses, with its partition
+and its design where the check passes, is a statement `code h` parses in the two-stage scope with its design, the
+program wired by `ω` and each proof block and replay block without the gates `ω` moves. -/
+theorem wired_stmt {x : Msg} {s' : AuditStatement} {Pt' : Partition} {d' : Design.Two}
+    (hx : parseWired h ω keep x = some s') (hP : partitionWired h ω s' = some Pt')
+    (hd : twoGated h ω true s' = some d') :
+    ∃ s d, parse h x = some s ∧ two h s = some d ∧ InScopeTwo (membersPart h.ms) d s ∧
+      s' = { s with prog := (bitsProgs h.ms).wired ω keep } ∧ Pt' = (membersPart h.ms).cut ω ∧
+      d' = { d with part := d.part.cut ω } := by
+  obtain ⟨s, hs, rfl⟩ := Option.map_eq_some_iff.1 hx
+  have hd' : (two h s).map (fun d : Design.Two => ({ d with part := d.part.cut ω } : Design.Two)) = some d' := hd
+  obtain ⟨d, h2, rfl⟩ := Option.map_eq_some_iff.1 hd'
+  have hP' : some ((membersPart h.ms).cut ω) = some Pt' := hP
+  obtain ⟨l, -, -, -, hsc, -⟩ := two_eq h h2
+  exact ⟨s, d, hs, h2, scopeOk_sound hsc s (parse_prog h hs), rfl, (Option.some.inj hP').symm, rfl⟩
+
+/-- **The wired code has `code h`'s units.** -/
+theorem units_wired (ok : Bool) (x : Msg) :
+    units ((baseWired h ω keep ok).atOrder (orderWired h ω keep ok)) x = units ((base h).atOrder (order h)) x := by
+  unfold SamplingDeploy.units
+  have hp : ((baseWired h ω keep ok).atOrder (orderWired h ω keep ok)).parse x =
+      (parse h x).map fun s => { s with prog := (bitsProgs h.ms).wired ω keep } := rfl
+  have hq : ((base h).atOrder (order h)).parse x = parse h x := rfl
+  rw [hp, hq]
+  cases parse h x with
+  | none => rfl
+  | some s => exact Partition.length_blocks_cut (membersPart h.ms) ω
+
+/-- **The wired code's record has `code h`'s count of proof blocks.** -/
+theorem nPU_wired (rel : _root_.Flock.Readable.Parsed → _root_.Flock.Readable.Relation) (ok : Bool) (x : Msg) :
+    Claims.Sampling.nPU (deploy rel (codeWired h ω keep ok)) x = Claims.Sampling.nPU (deploy rel (code h)) x := by
+  unfold Claims.Sampling.nPU
+  have hp : (deploy rel (codeWired h ω keep ok)).parse x =
+      (parse h x).map fun s => { s with prog := (bitsProgs h.ms).wired ω keep } := rfl
+  have hq : (deploy rel (code h)).parse x = parse h x := rfl
+  rw [hp, hq]
+  cases parse h x with
+  | none => rfl
+  | some s => exact Partition.length_blocks_cut (membersPart h.ms) ω
+
+/-- **The wired code checks the units `code h` checks.** -/
+theorem checked_wired (x : Msg) (r : Fin ((code h).V.k x) → FlockDeploy.Coin) :
+    (codeWired h ω keep true).checked x r = (code h).checked x r := by
+  show ((reg h x).map fun g =>
+    g.checked (units ((baseWired h ω keep true).atOrder (orderWired h ω keep true)) x) _ _).getD [] = _
+  rw [units_wired h ω keep true x]
+  rfl
+
+/-- A unit the wired code checks at a slot is one `code h` checks at that slot. -/
+theorem checked_slot_wired (rel : _root_.Flock.Readable.Parsed → _root_.Flock.Readable.Relation) {x : Msg}
+    {r : Fin ((code h).V.k x) → FlockDeploy.Coin} {u : ℕ}
+    (hu : ∃ p : Fin (Claims.Sampling.nPU (deploy rel (codeWired h ω keep true)) x),
+      ((deploy rel (codeWired h ω keep true)).checked x r)[p.val]? = some u) :
+    ∃ p : Fin (Claims.Sampling.nPU (deploy rel (code h)) x),
+      ((deploy rel (code h)).checked x r)[p.val]? = some u := by
+  obtain ⟨p, hp⟩ := hu
+  have hlt : p.val < Claims.Sampling.nPU (deploy rel (code h)) x := by
+    have := p.isLt
+    rwa [nPU_wired h ω keep rel true x] at this
+  have hp' : ((codeWired h ω keep true).checked x r)[p.val]? = some u := hp
+  rw [checked_wired h ω keep x r] at hp'
+  exact ⟨⟨p.val, hlt⟩, hp'⟩
+
+/-! ## The code facts -/
+
+variable {ω keep}
+
+/-- **Refuses at two stages** at the wired code where the check passes: an accepting run is `V h`'s, whose statement
+is in the two-stage scope side by side (`refusesTwo`), and so at the wired program (`scope_rewired`). -/
+theorem refusesTwo_wired (hW : (bitsProgs h.ms).Rewires (membersPart h.ms) ω keep) (H : Msg → Msg) :
+    ((baseWired h ω keep true).atOrder (orderWired h ω keep true)).RefusesTwo H (twoGated h ω true) := by
+  intro x Ω P w r hacc
+  obtain ⟨s, Pt, d, hx, hP, hd, hin⟩ := refusesTwo h H x Ω P w r hacc
+  have hx' : parse h x = some s := hx
+  obtain rfl : Pt = membersPart h.ms := partition_eq h hP
+  have e := scope_rewired h hx' rfl hW hin
+  rw [parse_prog h hx'] at e
+  exact ⟨{ s with prog := (bitsProgs h.ms).wired ω keep }, (membersPart h.ms).cut ω,
+    { d with part := d.part.cut ω },
+    congrArg (Option.map fun s : AuditStatement =>
+      ({ s with prog := (bitsProgs h.ms).wired ω keep } : AuditStatement)) hx', rfl,
+    congrArg (Option.map fun d : Design.Two => ({ d with part := d.part.cut ω } : Design.Two)) hd, e⟩
+
+/-- **The registration is the statement's two-stage design** at the wired code where the check passes
+(`regMatchesTwo`): the partitions without the gates `ω` moves have the partitions' shapes, strata and cells. -/
+theorem regMatchesTwo_wired (hW : (bitsProgs h.ms).Rewires (membersPart h.ms) ω keep) :
+    SamplingDeploy.RegMatchesTwo ((baseWired h ω keep true).atOrder (orderWired h ω keep true)) (reg h)
+      (twoGated h ω true) := by
+  intro x s' Pt' d' hx hP hd _
+  obtain ⟨s, d, hs, h2, hin, rfl, rfl, rfl⟩ := wired_stmt h ω keep hx hP hd
+  obtain ⟨g, l, hg, hl, hshape, hsd, hT, hk, hcl⟩ := regMatchesTwo h x s (membersPart h.ms) d hs rfl h2 hin
+  have hlen := Partition.length_strata_cut (membersPart h.ms) ω
+  have hcell : ∀ ρ t, cell ((membersPart h.ms).cut ω) (d.part.cut ω) ρ t = cell (membersPart h.ms) d.part ρ t :=
+    cell_cut ω hin.2.2.1 hW.stays hin.2.2.2.1
+  refine ⟨g, l, hg, hl, (Partition.shape_cut d.part ω).trans hshape, hsd, hT.trans hlen.symm,
+    fun t ht => hk t (lt_of_lt_of_eq ht hlen), fun ρ b hb => ?_⟩
+  rcases hcl ρ b hb with ⟨hu, hc⟩ | ⟨hu, hc⟩
+  · refine Or.inl ⟨hu, fun t ht => ?_⟩
+    obtain ⟨hinj, hce⟩ := hc t (lt_of_lt_of_eq ht hlen)
+    exact ⟨hinj, (hcell ρ t).trans hce⟩
+  · refine Or.inr ⟨hu, fun t v hv => hc t v ?_⟩
+    rw [← hcell ρ t]
+    exact hv
+
+/-- **The replay cap holds** at the wired code where the check passes (`replayCap`): the proof blocks in the sampled
+replay blocks are the same blocks. -/
+theorem replayCap_wired (hW : (bitsProgs h.ms).Rewires (membersPart h.ms) ω keep) (H : Msg → Msg) :
+    ((baseWired h ω keep true).atOrder (orderWired h ω keep true)).ReplayCap H (twoGated h ω true)
+      (rsWired h ω keep true) (cap h) := by
+  intro x s' Pt' d' hx hP hd _ Ω P w r e hacc
+  obtain ⟨s, d, hs, h2, hin, rfl, rfl, rfl⟩ := wired_stmt h ω keep hx hP hd
+  have hc := replayCap h H x s (membersPart h.ms) d hs rfl h2 hin Ω P w r e hacc
+  have hsb : sampleBlocks ((membersPart h.ms).cut ω) (d.part.cut ω) (rs h x r) =
+      sampleBlocks (membersPart h.ms) d.part (rs h x r) :=
+    sampleBlocks_cut ω hin.2.2.1 hW.stays hin.2.2.2.1 _
+  show (sampleBlocks ((membersPart h.ms).cut ω) (d.part.cut ω) (rs h x r)).card ≤ cap h x
+  rw [hsb]
+  exact hc
+
+variable (ω keep)
+
+/-- **The wired code's sessions are Flock runs** (`sessionRunsTo`): its verifier, its sessions and their rounds are
+`code h`'s, and it checks the units `code h` checks. -/
+theorem sessionRunsTo_wired (rel : _root_.Flock.Readable.Parsed → _root_.Flock.Readable.Relation) (H : Msg → Msg) :
+    SessionRunsTo H (deploy rel (codeWired h ω keep true)) := by
+  intro x Ω P w r u hu
+  exact sessionRunsTo h rel H x Ω P w r u (checked_slot_wired h ω keep rel hu)
+
+/-- **Every session of the wired code is in its unit's scope** (`sessionsIn_code`): the sessions and their numbers
+are `code h`'s. -/
+theorem sessionsIn_wired : SamplingDeploy.SessionsIn (codeWired h ω keep true) := sessionsIn_at h
+
+/-! ## The sessions' openings -/
+
+/-- **An accepted run that checks a unit and shows its session passed the session statements' check at the unit's
+statement**: its transcript is `seenAt` of its first three messages and the coins of rounds 0 and 1, `stmtOk` held at
+them, the session's statement is the unit's as round 2 states it, and the unit is one the two stages check on those
+coins. -/
+theorem run_checked {Ω : Type} (P : Prover Ω) (x : Msg) (w : Ω)
+    (r : Fin ((deploy _root_.Flock.Readable.relation (code h)).V.k x) → FlockDeploy.Coin) {s : AuditStatement}
+    (hx : parse h x = some s) {u : ℕ} {xS : Msg} {vS : Seen}
+    (hacc : (run FlockDeploy.sha512 P (deploy _root_.Flock.Readable.relation (code h)).V x w r).out = .acc)
+    (hu : ∃ p : Fin (Claims.Sampling.nPU (deploy _root_.Flock.Readable.relation (code h)) x),
+      ((deploy _root_.Flock.Readable.relation (code h)).checked x r)[p.val]? = some u)
+    (hsess : (deploy _root_.Flock.Readable.relation (code h)).session x u
+      (run FlockDeploy.sha512 P (deploy _root_.Flock.Readable.relation (code h)).V x w r).seen = some (xS, vS)) :
+    ∃ m₀ m₁ m₂ rest,
+      (run FlockDeploy.sha512 P (deploy _root_.Flock.Readable.relation (code h)).V x w r).seen =
+        seenAt m₀ m₁ m₂ (r ⟨0, k_pos h x⟩) (r ⟨1, one_lt_k h x⟩) rest ∧
+      stmtOk h x m₁ m₂ (r ⟨0, k_pos h x⟩) (r ⟨1, one_lt_k h x⟩) = true ∧ xS = unitStmt h m₂ u ∧
+      u ∈ h.reg.checked (units (base h) x) (src (r ⟨0, k_pos h x⟩)) (src (r ⟨1, one_lt_k h x⟩)) := by
+  obtain ⟨m₀, m₁, m₂, rest, hseen, hok⟩ := run_seenAt h FlockDeploy.sha512 P x w r hacc
+  obtain ⟨ms, rest', hms, hlen, hses⟩ := (seq h _root_.Flock.Readable.relation).session_acc FlockDeploy.sha512 x P w
+    r u ((seq h _root_.Flock.Readable.relation).idx_lt x r u hu) hacc
+  have h3 : (ms.take 3).map Prod.fst = [m₀, m₁, m₂] := by
+    have hl : 3 ≤ ms.length := hlen ▸ three_le_off h _
+    have hms' : (run FlockDeploy.sha512 P (V h) x w r).msgs = ms ++ rest' := hms
+    have hm : (run FlockDeploy.sha512 P (V h) x w r).msgs =
+        (seenAt m₀ m₁ m₂ (r ⟨0, k_pos h x⟩) (r ⟨1, one_lt_k h x⟩) rest).msgs := congrArg Seen.msgs hseen
+    rw [← List.take_append_of_le_length hl (l₂ := rest'), ← hms', hm]
+    all_goals rfl
+  have hxS : xS = unitStmt h m₂ u := by
+    have e : (deploy _root_.Flock.Readable.relation (code h)).session x u
+        (run FlockDeploy.sha512 P (deploy _root_.Flock.Readable.relation (code h)).V x w r).seen =
+          some (stmtAt h (((ms.take 3).map Prod.fst).getD 2 []) (templateOf h.ms u),
+            cutSeen [] (k₀ h (templateOf h.ms u)) rest') := hses
+    rw [hsess, h3] at e
+    exact (Prod.mk.inj (Option.some.inj e)).1
+  obtain ⟨st, hst⟩ : ∃ st, decode x = some st := by
+    cases hdx : decode x with
+    | none => simp [SpotFlock.parse, hdx] at hx
+    | some st => exact ⟨st, rfl⟩
+  obtain ⟨p, hp⟩ := hu
+  exact ⟨m₀, m₁, m₂, rest, hseen, hok, hxS,
+    (congrArg (u ∈ ·) (checked_eq h x hst r)).mp (List.mem_of_getElem? hp)⟩
+
+variable {ω keep}
+
+/-- **The wired code's session opens each checked proof block at its replay block**: `SessionOpensTwo` at the wired
+code where the check passes, from the session statements' openings at the wired program (`StmtOpensWired`). The
+reveal is the frame's at the statement side by side, each opening at the gate `ω` sends it to. -/
+theorem sessionOpensTwo_wired (hW : (bitsProgs h.ms).Rewires (membersPart h.ms) ω keep)
+    (hs : StmtOpensWired h ω keep) :
+    Claims.SamplingGeneric.SessionOpensTwo FlockDeploy.sha512
+      (deploy _root_.Flock.Readable.relation (codeWired h ω keep true)) (twoGated h ω true) iroots := by
+  intro x s' Pt' d' Ω P w r u xS vS wF hx hP hd _ hacc hu hsess hck
+  obtain ⟨s, d, hx0, h2, hin, rfl, rfl, rfl⟩ := wired_stmt h ω keep hx hP hd
+  obtain ⟨m₀, m₁, m₂, rest, hseen, hok, hxS, hum⟩ :=
+    run_checked h P x w r hx0 hacc (checked_slot_wired h ω keep _root_.Flock.Readable.relation hu) hsess
+  have hseen' : (run FlockDeploy.sha512 P (deploy _root_.Flock.Readable.relation (codeWired h ω keep true)).V x w
+      r).seen = seenAt m₀ m₁ m₂ (r ⟨0, k_pos h x⟩) (r ⟨1, one_lt_k h x⟩) rest := hseen
+  rw [hxS] at hck
+  obtain ⟨b, ρ, rb, hb, hρ, hrb, hcor⟩ := hs x s (membersPart h.ms) d m₀ m₁ m₂ (r ⟨0, k_pos h x⟩)
+    (r ⟨1, one_lt_k h x⟩) rest wF u hx0 rfl h2 hin hok hum hck
+  have hseq : ({ s with prog := bitsProgs h.ms } : AuditStatement) = s :=
+    congrArg (fun p => ({ s with prog := p } : AuditStatement)) (parse_prog h hx0).symm
+  refine ⟨cutBlock ω b, ρ, cutBlock ω rb,
+    (Partition.cut_getElem? (membersPart h.ms) ω u).trans (congrArg (Option.map (cutBlock ω)) hb),
+    replayOf_cut ω hin.2.2.1 hW.stays hρ,
+    (Partition.cut_getElem? d.part ω ρ).trans (congrArg (Option.map (cutBlock ω)) hrb), fun val ι hv => ?_⟩
+  rw [hseen'] at hv
+  have e := hcor val ι fun q hq hop => by
+    have hq' : q ∈ revealWired h ω keep h.frame { s with prog := bitsProgs h.ms } u
+        (seenAt m₀ m₁ m₂ (r ⟨0, k_pos h x⟩) (r ⟨1, one_lt_k h x⟩) rest) wF := by
+      rw [hseq]
+      exact hq
+    exact hv q hq' hop
+  rw [parse_prog h hx0] at e
+  exact e
+
+/-! ## Knowledge soundness -/
+
+/-- **Two-stage knowledge soundness at the wired code, where the check passes**: `ksTwo_atOrder` at
+`codeWired h ω keep true`, from the map's rewiring the members' programs and the session statements' openings at the
+wired program. -/
+theorem ksTwo_wired (hW : (bitsProgs h.ms).Rewires (membersPart h.ms) ω keep) (hs : StmtOpensWired h ω keep) :
+    (SamplingDeploy.compiledTwo (FlockDeploy.deployZk _root_.Flock.Readable.relation) (codeWired h ω keep true) iroots
+      (twoGated h ω true) (rsWired h ω keep true) (cap h)).KS FlockDeploy.sha512 :=
+  SamplingDeploy.ksTwo_atOrder (baseWired h ω keep true) (reg h) (twoGated h ω true) (fun _ => L) (fun _ => L)
+    (orderWired h ω keep true) (fun _ => coinByte) (fun _ => coinByte) iroots (cap h) callsUniform callsUniform
+    (regMatchesTwo_wired h hW) (refusesTwo_wired h hW _) (replayCap_wired h hW _) (interiorFixed h _)
+    (sessionRunsTo_wired h ω keep _root_.Flock.Readable.relation FlockDeploy.sha512) (sessionsIn_wired h ω keep)
+    (sessionOpensTwo_wired h hW hs)
+
+variable (ω keep)
+
+/-- **Two-stage knowledge soundness at the wired code, where the check fails**: the design does not evaluate, so no
+statement is in scope. -/
+theorem ksTwo_refused :
+    (SamplingDeploy.compiledTwo (FlockDeploy.deployZk _root_.Flock.Readable.relation) (codeWired h ω keep false) iroots
+      (twoGated h ω false) (rsWired h ω keep false) (cap h)).KS FlockDeploy.sha512 := by
+  intro δ _ x hx
+  obtain ⟨s, Pt, d, -, -, h2, -⟩ := hx
+  have h2' : twoGated h ω false s = some d := h2
+  rw [twoGated_false] at h2'
+  cases h2'
+
+/-- **SPOT[Flock]'s two-stage knowledge soundness at the connected program**: `CompiledTwo.KS` at the code's own
+wiring, behind its check. Where the check passes, the wiring map rewires the members' programs
+(`rewires_of_wiredOk`) and the sessions open the wired program from SPOT's own frame there and the addresses
+(`stmtOpensWired`); where it fails, the verifier refuses every run. -/
+theorem ksTwo_connected (hB : BuiltWired h (wireMap h) (returned h))
+    (hA : AddressesWired h (wireMap h) (returned h)) :
+    (SamplingDeploy.compiledTwo (FlockDeploy.deployZk _root_.Flock.Readable.relation) (codeConnected h) iroots
+      (twoConnected h) (rsConnected h) (cap h)).KS FlockDeploy.sha512 := by
+  have key : ∀ ok : Bool, wiredOk h = ok →
+      (SamplingDeploy.compiledTwo (FlockDeploy.deployZk _root_.Flock.Readable.relation)
+        (codeWired h (wireMap h) (returned h) ok) iroots (twoGated h (wireMap h) ok)
+        (rsWired h (wireMap h) (returned h) ok) (cap h)).KS FlockDeploy.sha512 := by
+    intro ok hok
+    cases ok with
+    | false => exact ksTwo_refused h (wireMap h) (returned h)
+    | true =>
+      have hW := rewires_of_wiredOk h hok
+      exact ksTwo_wired h hW (stmtOpensWired h (wireMap h) (returned h) hB hA hW)
+  exact key (wiredOk h) rfl
+
+/-- **SPOT[Flock]'s two-stage exfiltration bound at the connected program**: `CompiledTwo.Exfil` from
+`ksTwo_connected` (`CompiledTwo.exfil_of_ks`). -/
+theorem exfilTwo_connected (hB : BuiltWired h (wireMap h) (returned h))
+    (hA : AddressesWired h (wireMap h) (returned h)) :
+    (SamplingDeploy.compiledTwo (FlockDeploy.deployZk _root_.Flock.Readable.relation) (codeConnected h) iroots
+      (twoConnected h) (rsConnected h) (cap h)).Exfil FlockDeploy.sha512 :=
+  Claims.SamplingGeneric.CompiledTwo.exfil_of_ks (ksTwo_connected h hB hA)
+
+end SpotFlock

@@ -66,7 +66,7 @@ noncomputable def baseWired (ok : Bool) : Code :=
     rounds := fun _ u => univ.filter fun t =>
       off h (templateOf h.ms u) ≤ t.val ∧ t.val < off h (templateOf h.ms u) + k₀ h (templateOf h.ms u)
     session := fun _ u v => session h u v
-    reveal := revealWired h ω keep h.frame
+    reveal := fun s u v wF => revealWired h ω keep h.frame { s with prog := bitsProgs h.ms } u v wF
     reveals := Reveal.reveals (partition h) (parse h)
     sessions := fun _ => h.ms.length
     tables := fun _ => ((List.range (h.ms.length + 1)).map fun t => (shapeOf (h.xS₀ t)).length).foldr max 0
