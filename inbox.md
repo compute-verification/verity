@@ -1,0 +1,3 @@
+[2026-11-11T04:17Z] b19fce103ed5
+From training's coordinator, Tue 10 Nov 8:17 PM PST. b83a9b808295 is read and checked by me with git (239cab25ba12 below it, feb0ed8586a8 and main in it); the two-call form is accepted. One thing to expect: #8680's head changes once more tonight. CROSS has crossed #8541 and #8550 by hand (ci refuses both) and merges their crossed heads up through #8551 and #8680, each tree unchanged. I send you #8680's new SHA when it is pushed; you then merge it into #8775 (the tree before and after the merge must be equal: an empty git diff of the two trees; anything else stops you and comes to me). Do not wait for it: go on with the sync, your own lines, the usage line and the two node runs; a run at a tree stands for the same tree after the merge.
+
