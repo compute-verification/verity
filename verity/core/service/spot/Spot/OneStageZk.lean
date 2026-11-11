@@ -878,7 +878,7 @@ def scopeOf (I : Flock.Witness.Inputs) (rd : Reads) : V Unit := do
 /-- **What `step` reads of one statement**: its inputs, the verifier's registered reads, the scope, files and
 population checks its sessions' verdicts run, and its program's digest against the partition object's program. Nothing
 of it reads a session's record, coins or sample. -/
-structure Statement where
+structure StepAt where
   I : Flock.Witness.Inputs
   rd : Reads
   scope : V Unit
@@ -888,13 +888,13 @@ structure Statement where
   want : Json
 
 /-- One session's `step` at the statement `a`, on the blobs `bs`, after the run `r`. -/
-def Statement.step (a : Statement) (bs : Core.Blobs) (r : Run) (s : RunFiles) : V Run :=
+def StepAt.step (a : StepAt) (bs : Core.Blobs) (r : Run) (s : RunFiles) : V Run :=
   OneStageZk.step a.I a.rd bs a.scope a.ksFiles a.population a.programSha a.want r s
 
 /-- The statement at the verifier's own inputs `p`, the tags `tags0`, the circuit and public files, the blobs' lookup
 tables and the registered reads `rd`, as `run` builds its own, with `population` its population check. -/
-def Statement.ofOwn (p : Own) (tags0 : Flock.Tags) (circuitB pubB : ByteArray) (bs : Core.Blobs) (rd : Reads)
-    (population : V Unit) : Statement :=
+def StepAt.ofOwn (p : Own) (tags0 : Flock.Tags) (circuitB pubB : ByteArray) (bs : Core.Blobs) (rd : Reads)
+    (population : V Unit) : StepAt :=
   let I := inputsOf tags0 p circuitB pubB bs
   { I, rd, scope := scopeOf I rd
     ksFiles := Flock.PortRoots.checkOf (Flock.ProvedScope.circuitOf (Flock.Witness.zkTags I) I.circuitFile I.tables)
@@ -906,9 +906,9 @@ def Statement.ofOwn (p : Own) (tags0 : Flock.Tags) (circuitB pubB : ByteArray) (
 /-- **The statement the sessions at the inputs `p` are held to, read off the blobs before any session**: `run`'s own
 checks in `run`'s order (the blobs' lookup tables the circuit's, the statement's tags with hiding leaves, registered
 values read only with the verifier's registered file, the circuit and public files, each length within a statement's
-word, the registered reads), then `Statement.ofOwn` with the population check `population` on the public file. A
+word, the registered reads), then `StepAt.ofOwn` with the population check `population` on the public file. A
 refusal where `run` refuses. -/
-def statementOf (p : Own) (population : ByteArray → V Unit) (bs : Core.Blobs) : V Statement :=
+def statementOf (p : Own) (population : ByteArray → V Unit) (bs : Core.Blobs) : V StepAt :=
   tablesHeld p bs >>= fun _ =>
   match Flock.Tags.find? STATEMENT with
   | none => throw s!"the statement {STATEMENT} is not known"
@@ -926,17 +926,17 @@ def statementOf (p : Own) (population : ByteArray → V Unit) (bs : Core.Blobs) 
         match fitsWhy WORD circuitB pubB (tablesOf bs) (some p.program) (some p.partition) p.registered with
         | some what => throw s!"{what}: {FITS}"
         | none =>
-          readsOf p.registered >>= fun rd => pure (Statement.ofOwn p tags0 circuitB pubB bs rd (population pubB))
+          readsOf p.registered >>= fun rd => pure (StepAt.ofOwn p tags0 circuitB pubB bs rd (population pubB))
 
 /-- **The statement a member's session is held to**: `statementOf` at the member's own inputs, its population check the
 member's (`Member.population`), and its circuit's units a proof block the parameters' (`Member.blockHeld`). -/
-def Member.statement (m : Member) (bs : Core.Blobs) : V Statement :=
+def Member.statement (m : Member) (bs : Core.Blobs) : V StepAt :=
   statementOf m.own m.population bs >>= fun a =>
   m.blockHeld (Flock.ProvedScope.circuitOf (Flock.Witness.zkTags a.I) a.I.circuitFile a.I.tables) >>= fun _ => pure a
 
 /-- **One statement's sessions, after the sessions the run `r` holds**: the statement `st`, read before any session,
 then `step` on each session in order. -/
-def runFrom (st : V Statement) (sessions : Array RunFiles) (bs : Core.Blobs) (r : Run) : V Run :=
+def runFrom (st : V StepAt) (sessions : Array RunFiles) (bs : Core.Blobs) (r : Run) : V Run :=
   st >>= fun a => sessions.foldlM (fun r s => a.step bs r s) r
 
 /-- One statement's run after the run `r`: its sessions at its member's statement (`runFrom`), a refusal naming the
