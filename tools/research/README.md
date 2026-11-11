@@ -153,8 +153,8 @@ regression's manifest rebuilds, which label the landing's check attempt.
 
 `research queue` is the merge queue. Its loop, the verified queue (`research queue vqueue`, ci's: `vqueue_loop.py`, whose
 policy is `vqueue.py`), merges the PRs ready to land onto `main` as candidates (`queue/<sha12>`, one `Queue: #N` merge each),
-checks each (`check.py --record`, in shards), and fast-forwards `main` only to a candidate that passed every step on the
-merge gate; a failure its base doesn't share ejects its lone suspect or bisects several, and the candidate is built again
+checks each (graph2's tasks by default), and fast-forwards `main` only to a candidate with no new failure; a failure its
+base doesn't share ejects its lone suspect or bisects several, and the candidate is built again
 without them. A PR is ready to land when it's open against `main` (drafts too), names its owner (a `Lane {name}` line, else
 its Cursor agent id), has no hold label, is marked ready at its head by that owner (`research queue ready PR --mark --by
 LANE`, or `--on auto` to run the quick tier first, or a `ready` label on `pr:{n}@{head}`), and has a reviewer's land verdict
@@ -211,6 +211,11 @@ reaches it. The Nebius nodes are such machines (`src/research/pods/nebius/`): `l
 needs no credentials), `teardown.sh` stops or deletes it, `n1_replacement.sh` plans n1's replacement, `check.py` is the
 bootstrap check, `prefetch.py` fills the weight cache, and the lease is `sh/lease.sh` (`LEASE_MACHINE_ID`, a stop command).
 Runs share a node's GPUs through `gpu-lease N -- CMD` (`sh/gpu_lease.sh`: a flock per GPU, `CUDA_VISIBLE_DEVICES` set).
+With `--cores CPUS` it pins CMD to those CPUs, records them in the lease, and refuses the request before it takes a GPU when they
+and the live leases' CPUs together pass the machine's CPU quota (a container's `cpu.max`), naming each lease's CPUs, or when
+`taskset` can't pin to them on the machine. The count covers leases only, and those of one lease directory, and the pin is the
+lease's word, not a fence: a job can still widen its own affinity. Every lease also writes the machine's throttle counters
+(`cpu.stat`) into its owner line at its start and at its release.
 
 What runs on the Nebius nodes outside a run (infra's loops and the files they read) is listed in `src/research/pods/nebius/deploy.toml`,
 each with its repository file and owner (a Slack handle), and goes there only through `research deploy install NODE --by WHO
