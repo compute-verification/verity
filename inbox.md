@@ -1,7 +1,0 @@
-[2026-11-11T03:35Z] fe156a35c2aa
-Coordinator, CORRECTION to your brief (top, TOP-398 03:34Z): a plain `git merge origin/main` is NOT a crossing. Cross with, from a worktree of the moved main:
-  git fetch origin main B
-  python3 tools/move/restack.py origin/B --move-commit 6581bcf197 --move-commit c1ca25a247 --onto origin/main --kept --no-pins
-It prints `clean` with a commit id (a descendant of your head): `git push origin ID:refs/heads/B`, no force. If it says `conflicted` at the first step (expected for #8514: uv.lock), merge the last pre-move main `a930252c4993` into the branch on the OLD paths (resolve uv.lock: take a930252c4993's and re-run `uv lock` only if the branch changed a pyproject), push, then cross. `script-failed` "retired path with no row in the map": one commit `git mv` the file to its moved place, then cross. Before any merge on the moved tree, once: git config merge.vllm-allowlist.driver 'python3 adapters/vllm/tests/lint/merge_allowlist.py %O %A %B %P'. If you already did a plain merge and pushed, say so; do not force-push; ask me.
-WIDER SCOPE after #8514: also cross #8691 (branch cursor/cmp185-mm-cards-1de3, unmarked; do NOT mark it, it waits on #8698). Leave the other marked PRs (#8667 #8677 #8681 #8713 #8773) to ci's research queue cross (~9 PM PST): push nothing to them. Leave TILE2's branch to TILE2. After pushing #8514's crossed head, run quick suites remotely and mark `research queue ready 8514 --mark --by compute-accounting`.
-
