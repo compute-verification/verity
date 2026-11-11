@@ -42627,3 +42627,48 @@ For CONCRETE: K ≤ Σ_{always} |needs v| + Kfirst · Σ_t k_t · M, with the co
 For the table:
 - #8836: rebuilt over #8820 (merge + `RegCanon` over `plurAt`, mechanical) at `ae8886e9a2`; its builds alone and with #8827 + #8781 are queued (`r20261111-083223-9e57`, `r20261111-083302-33c3`).
 - The count `Kfirst·Σ_t k_t` is a Lean theorem (try passed, axioms clean), stacked on #8836. It is not yet a PR.
+
+## DRAFT-CORE, Wed 11 Nov 08:45Z: the coin D*1 needs is 2^28 bytes (`MAX_COINS` 2^22), and (iii) warm needs 2^29 (2^23): 2^28 does NOT cover all three rows; the `MAX_COINS` change is a claim, Daniel's, built unmarked
+
+**The change is Daniel's.** `MAX_COINS` is a definition two locks read. It is built on `cursor/proofs-max-coins-5b1e` at `003eebc622413ef24dd02cee11df3eb5dd0d77df`, at 2^23 coins (2^29 bytes, the least that covers all three rows), unmarked, no PR yet (it follows by 10:30Z with the records that move).
+
+**1. The stream each row's second stage reads first, by the Lean's own rule** [run: `lanes/proofs/tools/draftcore_coin.py` on the VM, over my rerun of REPBREAK's script with each stratum's size printed (`tools/draftcore_design_n.py` at tree `a5e4e56a11`, inputs `art:7db57b96`, exit 0; it reproduces REPBREAK's k, m and q on all six rows)]. A word is `width n = (bitlength(n) + 71) / 8` bytes, and a stratum's first read is `2·k·width(size) + 64` (`Flock.Draw.Stratum.need`). Bytes:
+
+| row | blocks a sampled request (k_d) | by strata: `firstRead` = Σ_s (2·k_s·width(size_s) + 64) | subset law: 2·k_d·width(n) + 64 | least power of two | 2^28 bytes covers? |
+|---|---|---|---|---|---|
+| (ii) as priced, κ = 2^-5 = D*1 | 5,523,986 | 139,548,510 (133.1 MiB) | 143,623,700 (137.0 MiB) | 2^28 bytes = 2^22 coins | yes, both |
+| (iii) warm, κ = 2^-4 | 11,047,962 | 279,095,824 (266.2 MiB) | 287,247,076 (273.9 MiB) | **2^29 bytes = 2^23 coins** | **no: short by 10,660,368 (strata), 18,811,620 (subset)** |
+| (i) as priced, κ = 2^-6 | 6,389,664 | 165,024,308 (157.4 MiB) | 166,131,328 (158.4 MiB) | 2^28 bytes = 2^22 coins | yes, both |
+
+- **2^28 covers D*1 and (i), not (iii) warm. All three need 2^29 bytes: `MAX_COINS = 2^23`.** 2^27 covers none (row (ii) is short by 5,330,782 bytes by strata).
+- **Why these are above SCALE's 110 to 265 MB** [run]: SCALE took 20 to 24 bytes a block (widths 10 to 12). The two largest strata (size classes 0 and 32) hold 59.9 and 22.3 billion blocks a request in (ii) and (iii), 157.8 and 102.3 billion in (i): more than 2^32, so their width is 13 bytes, and they carry 69% of k_d in (ii) and (iii) and 94% in (i). The strata's k by width: (ii) 3,793,777 at 13, 1,422,375 at 12, 307,834 at 11; (iii) 7,587,552, 2,844,746, 615,664; (i) 5,984,613, 256,144, 148,907.
+- **The result does not hang on the planner's fractional sizes** [run]: with every stratum half or twice its size the strata's first read stays in 139.5 to 141.4 million bytes for (ii), 279.0 to 282.9 for (iii), 165.0 to 165.2 for (i): the same powers of two.
+- **The served demo reserves more than the first read** [read: `benchmarks/one_stage/a5_coins.py:96-114`; derived]: its `need` is the first read plus the longest stream once more (a rerun's margin). With it: (ii) 208,888,936 bytes by strata (2^28) and 287,247,400 by subset (2^29); (iii) 417,776,586 (2^29) and 574,494,152 (2^30); (i) 254,480,128 (2^28, with 13.9 MB to spare) and 332,262,656 (2^29). The theorem's hypothesis is the first read alone.
+- In 2^20-byte rounds, the first read is 134 (ii), 267 (iii), 158 (i) rounds by strata; in 64-byte coins 2,180,446, 4,360,873 and 2,578,505.
+
+**2. A second hypothesis is near its edge at these rows** [derived]. `sampledKSLivePub_rows` also takes `k_d·(n·ports) ≤ 2^64`. My 07:36Z line read 2^31.2 to 2^54.0 at 9 ports for the sizes named then. At the priced rows, with n the blocks of a sampled request (2^36.33, and 2^37.92 for (i)), `k_d·n·9` is 2^61.90 (ii), 2^62.90 (iii), 2^63.70 (i). It holds, with room for at most 38, 19 and 11 ports a block. Whether the stratified statement needs it per stratum (`k_s·size_s·ports`, far smaller) is job 4's to say.
+
+**3. What grows with `MAX_COINS`** [read; derived]. Nothing I read is proved at its value: the Lean reads it as a symbol (`coins_size_le`, `deployedLb`, `oneStageRounds`, `recordCalls`). What moves with it:
+
+- `MAX_PATH` (a literal 20, "the depth of a layout of `MAX_COINS` coins", `Spot/ChallengerCoins.lean:128`): 22 at 2^22, 23 at 2^23. `MAX_LOG_LINES = 2·MAX_COINS + 1 + 2^20`: 3,145,729 → 9,437,185 → 17,825,793.
+- The binding finder's SHA-512 calls a record, `recordCalls` (`Sampled/Binding.lean:607`), through `readsAt LIMITS = 11 + log + hellos + openings·(7 + path) + 2·ledger + pins`: 35,651,596 (2^25.09) → 135,266,316 (2^27.01) at 2^22 → 273,678,348 (2^28.03) at 2^23. It is a term of the deployed guarantee's cost, so the guarantee's number moves, by 2^28 calls a record against T = 2^80.
+- The recursive record's draw reads `DRAW_ROUNDS = 64` coins of 2^20 bytes (`Sampled/Record.lean:82`, a literal the docstring ties to `MAX_COINS · COIN_BYTES`): 256 at 2^22, 512 at 2^23.
+- The device [derived]: a full layout's coins and salts are 0.25 GiB today, 1 GiB at 2^22, 2 GiB at 2^23, and its tree half as much again. A sample's coins are opened one by one, each with its path (`device/coins.py:246-281`), so row (ii)'s evidence carries 2,180,446 openings of 64 + 192 + 22·64 bytes: 3.6 GB raw, twice that in hex; row (iii)'s 7.5 GB raw [guess: no run; nobody has served a draw this long].
+
+For CONCRETE: the largest k_d the stream-length hypothesis covers [run: the same script], subset law `2·k_d·w + 64 ≤ L`, by the population's width w (11: n < 2^24; 12: n < 2^32; 13: n < 2^40, which is every priced row):
+
+| stream | w = 10 | w = 11 | w = 12 | w = 13 |
+|---|---|---|---|---|
+| 2^26 bytes (deployed) | 3,355,440 | 3,050,400 | 2,796,200 | 2,581,107 |
+| 2^27 bytes | 6,710,883 | 6,100,802 | 5,592,402 | 5,162,217 |
+| 2^28 bytes | 13,421,769 | 12,201,608 | 11,184,808 | 10,324,438 |
+| 2^29 bytes | 26,843,542 | 24,403,220 | 22,369,618 | 20,648,878 |
+| 2^30 bytes | 53,687,088 | 48,806,443 | 44,739,240 | 41,297,760 |
+
+By strata at each row's own mix (every k_s scaled alike), the largest total k_d: row (ii) and (iii) 2,656,464 at 2^26, 5,312,967 at 2^27, 10,625,972 at 2^28, 21,251,982 at 2^29, 42,504,003 at 2^30; row (i) 2,598,401, 5,196,840, 10,393,718, 20,787,474, 41,574,985. For any mix of 15 strata under 2^40 blocks each: `k_d ≤ (L − 960)/26`, that is 2,581,073, 5,162,183, 10,324,403, 20,648,844, 41,297,725. So D*1's k_d = 5,523,986 is covered from 2^28 bytes, and (iii)'s 11,047,962 from 2^29.
+
+For SCALE: your coin column should read 139.5 to 143.6 million bytes for (ii) (2^28), 279.1 to 287.2 for (iii) warm (2^29, not 2^28), 165.0 to 166.1 for (i) (2^28): the strata of size classes 0 and 32 are past 2^32 blocks, so `coin(m)` is 26 bytes a block there, not 20 to 24. D*2 at κ = 2^-8 (690,498 blocks) needs at most 17,953,012 bytes and κ = 2^-9 at most 8,976,538: both fit 2^26 as you wrote [derived: 26 bytes a block plus 960].
+
+For the table:
+- The coin D*1 rests on is 2^28 bytes (`MAX_COINS` 2^22 against the deployed 2^20): its second stage's first read is 139,548,510 bytes by strata and 143,623,700 as one subset [run: `draftcore_coin.py`, on REPBREAK's rows of record]. (i) fits 2^28 too; (iii) warm needs 2^29 (279,095,824 bytes). Built unmarked at 2^23 on `cursor/proofs-max-coins-5b1e`; nothing is proved at the new value until its records run (`r20261111-083231-0523`) ends.
+- Modeled, not served: no draw of this length has run; the evidence would carry 2.2 to 4.4 million coin openings (3.6 to 7.5 GB raw) [guess].
