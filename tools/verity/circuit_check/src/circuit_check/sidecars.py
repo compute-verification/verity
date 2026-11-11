@@ -47,7 +47,7 @@ PACKAGES = ("verity", "verity.circuits", "verity.definitions.kernels", "verity.c
 #: attaches Verity to it.  A package there registers itself by a sidecar of its own module
 #: (``adapters/<stack>/<package>/__init__.circuit-check.py``, or its ``.json``), and then every sidecar under it is found;
 #: one inside a `PACKAGES` directory (the templates') is found there.  No distribution but `verity` is named here
-TREES = ("integrations",)
+TREES = ("adapters",)
 SUFFIX = CC.SUFFIX
 #: the pins of a Definition no module defines, one file per pin
 SHARED_PINS = Path(__file__).with_name("pins")
