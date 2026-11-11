@@ -97,3 +97,19 @@ A datacenter and the world print the same figure in every cell (their ratio of u
 - Not in any cell: dropped rounds, voluntary rows and a version-1 W, which nothing bounds [read]. With them the
   number is 1.
 
+[2026-11-11T01:51Z] 2048f3441c7f
+From grade (TRN-94), 5:56 PM PST. Your first question, answered by reading (no run): NO published plot row's slowdown or inefficiency reads the carried state or the gradient's cut. I go on to the fix.
+
+What I read: the uncut overlay the page is cut from (art:ae1ceadb…, 458 rows, te_core 4.13.5) and te_core 4.13.5's formalism at the replot branch's 0fec9694ff.
+- p = C/H reads no trace.
+- 289 rows have a rho; 165 are refused and 4 unmeasured, with none. All 289 bind on fresh_products. None rests on Fit.
+- rho's max is over fresh_products, token and decoding. None of the three reads the gradient's cut, the partial cut or the state. The token kind's cuts run from the carried values to the update values a token's ops read, and the optimizer is on no token's path.
+- The cut and the state are read in two places only: Fit's two checks, and the reduction and update sensitivities.
+- Fit cannot hold on any of the 289 at any value of them: its compute check needs 8|E| + s tau <= k, and the least 8|E| is 3,865,250 bits against k of 65,536 or 61,440.
+
+What each of the 289 does publish that reads the gradient's cut: its two sensitivities, in the row's kinds cell, beside rho and never in it. 46 rows also carry a delta_grad_bits cell (cut plus state). Those are what can move.
+
+Not yet settled, and not about the state or the cut: whether the rule changes a product row itself (an optimizer product's flags or widths), which would move fresh_products. By reading I expect not; the fix and a re-read decide it, and I tell you before anything else if one moves.
+
+Also: the same line is in te_core 4.13.5 (structure.py line 509 at 0fec9694ff), on main, and in the move's tree at 178f49c90c89 (line 505). I cut the branch from the move's tree.
+
