@@ -29,7 +29,7 @@ from verity_vllm.pipeline import serving_templates as ST
 
 N, G, EPS, BLOCK, WORLD = 512, 64, 1e-5, 32, 4
 LAYER, FINAL = "model.layers.{L}.input_layernorm", "model.norm"
-CAPS_SUMSQ, CAPS_APPLY = 1, 16
+CHUNK_SUMSQ, CHUNK_APPLY = 1, 16
 
 
 def _rsqrt():
@@ -128,10 +128,10 @@ def templates(family: str) -> tuple[str, str]:
     return descriptor_id(sumsq(True)), descriptor_id(apply(True))
 
 
-def wired(tmpls: list[str], caps: dict[str, int]):
+def wired(tmpls: list[str], chunk_units: dict[str, int]):
     """The window's members as `serving_rows.population` cuts and wires them, without its population program."""
     rows, _defs, counts = SRW.member_rows({"r0": {}}, tmpls)
-    return PR.wire(SRW.members(tmpls, rows, counts, caps), tmpls, rows, SRW.row_units), rows
+    return PR.wire(SRW.members(tmpls, rows, counts, chunk_units), tmpls, rows, SRW.row_units), rows
 
 
 @pytest.mark.parametrize("family", list(FAMILIES))
@@ -155,7 +155,7 @@ def test_the_sum_of_squares_then_the_apply_blocks_compute_the_row_s_outputs(serv
     x = served(family, ops=(None, None))
     _fn, groups, members, sumsq, apply, _op = FAMILIES[family]
     TS, TA_ = templates(family)
-    ms, rows = wired([TS, TA_], {TS: CAPS_SUMSQ, TA_: CAPS_APPLY})
+    ms, rows = wired([TS, TA_], {TS: CHUNK_SUMSQ, TA_: CHUNK_APPLY})
     ts, ta = SRW.template(TS), SRW.template(TA_)
     sums, blocks = [m for m in ms if m.template == TS], [m for m in ms if m.template == TA_]
     nh = N // G
@@ -216,6 +216,6 @@ def test_a_partition_without_the_sum_of_squares_is_refused(served):
     TS, TA_ = templates(family)
     with pytest.raises(ValueError, match=r"row 7 \(.*\) reads its r, which its part DsaRMSNormSumSq_v1 returns: name that part's "
                                          r"template in the partition"):
-        wired([TA_], {TA_: CAPS_APPLY})
+        wired([TA_], {TA_: CHUNK_APPLY})
     with pytest.raises(ValueError, match=rf"{TS}: its units are joined by a wire of row 7's r, and are no chunks"):
-        wired([TS, TA_], {TA_: CAPS_APPLY})
+        wired([TS, TA_], {TA_: CHUNK_APPLY})
