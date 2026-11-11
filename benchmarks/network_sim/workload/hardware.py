@@ -1,4 +1,4 @@
-"""The hardware a placement runs on, in the shape of Lean's `Accounting.Hardware` (`Security/Definitions/Accounting/Physical.lean`).
+"""The hardware a placement runs on, in the shape of Lean's `Accounting.Hardware` (`security/Definitions/Accounting/Physical.lean`).
 
 Leaves are devices, numbered in order (`L = Nat`). A *unit* is a block: a set of leaves behind one boundary (`units`).
 Links (`E`) each join two leaves (`ends`) with a capacity `beta` in bits a tick each way. A link is certified when one of

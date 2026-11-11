@@ -24,8 +24,8 @@ fixtures = [
 [public]
 # SPOT: the generic sampling claim, its proofs, and sampled proofs' protocol and service
 spot = [
-    "Security/Definitions/Claims/SamplingGeneric.lean",
-    "Security/Proofs/Flock/SamplingGeneric*",
+    "security/Definitions/Claims/SamplingGeneric.lean",
+    "security/Proofs/Flock/SamplingGeneric*",
     "verity/protocols/spot",
     "verity/protocols/spot/verifier/lean",
 ]
@@ -33,18 +33,18 @@ spot = [
 flock = [
     "verity/protocols/flock/prover",
     "verity/protocols/flock/verifier",
-    "Security/Proofs/Properties/Flock{,.lean}",
-    "Security/*/Flock{,.lean}",
-    "Security/Definitions/Assumptions/Flock.lean",
+    "security/Proofs/Properties/Flock{,.lean}",
+    "security/*/Flock{,.lean}",
+    "security/Definitions/Assumptions/Flock.lean",
 ]
 ml = ["verity/ml/{circuits,definitions,commitments,crypto,randomness,windows,kernels,private_circuits}"]
 # PoUW: the integrity profile, the protocol, and its part of the security analysis (the accounting it reads is `needed`)
 pouw = [
     "{verity/protocols/spot/verifier/profile.py,verity/protocols/pouw/verifier}",
     "verity/protocols/pouw/prover",
-    "Security/*/Pouw{,.lean}",
-    "Security/Proofs/Properties/Pouw{,.lean}",
-    "Security/Definitions/Assumptions/Pouw.lean",
+    "security/*/Pouw{,.lean}",
+    "security/Proofs/Properties/Pouw{,.lean}",
+    "security/Definitions/Assumptions/Pouw.lean",
 ]
 # the network certifier: the protocol, its Lean program, the certificate's and the records' checks, its prover's units, the
 # device, and its part of the security analysis
@@ -52,14 +52,14 @@ certifier = [
     "{verity/protocols/certifier,verity/protocols}",
     "verity/protocols/certifier/prover",
     "verity/protocols/certifier/device",
-    "Security/*/NetworkCertifier{,.lean}",
-    "Security/Proofs/Properties/NetworkCertifier{,.lean}",
+    "security/*/NetworkCertifier{,.lean}",
+    "security/Proofs/Properties/NetworkCertifier{,.lean}",
 ]
 # the firewall (the ZK server's release side) and the recursion
 firewall = [
     "verity/protocols/recursion/verifier/firewall",
-    "Security/*/Flock/Claims/{ZK,Recursion}{,.lean}",
-    "Security/**/RecGeneric*",
+    "security/*/Flock/Claims/{ZK,Recursion}{,.lean}",
+    "security/**/RecGeneric*",
     "verity/protocols/recursion/verifier/vstar_cli",
 ]
 # the vLLM integration, and its advice format (advice v0: vLLM's serving decisions as one canonical bit string), which the
@@ -79,18 +79,18 @@ shared = [
     "verity/hardware/{__init__.py,pyproject.toml,README.md,cards,tests/test_cards.py}",
     # the vLLM endpoint's load generator, which the served run's requests come from
     "demos/vllm/serve_load.py",
-    "Security/Properties/Spot/{Draw,Bits}.lean",
-    "Security/Proofs/Properties/Accounting/Remote/Sort.lean",
+    "security/Properties/Spot/{Draw,Bits}.lean",
+    "security/Proofs/Properties/Accounting/Remote/Sort.lean",
     # the second stage's law (`SecondMisses`), which the public sampling proofs import: an entry of its own, apart from
     # Draw.lean's
-    "Security/Properties/Spot/Second.lean",
+    "security/Properties/Spot/Second.lean",
     # an audit's members side by side as the claims' program (`bitsProgs`, `membersPart`, `filesReplay`) and the lemmas on
     # Bits' program, which the bridge (`Bridge.Members`) and SPOT[Flock]'s code import: entries of their own
-    "Security/Properties/Spot/Members.lean",
-    "Security/Proofs/Properties/Spot/Bits.lean",
+    "security/Properties/Spot/Members.lean",
+    "security/Proofs/Properties/Spot/Bits.lean",
 ]
 # the repository's structure the public tests and the Lean check read
-structure = ["ruff.toml", "Security/lean-audit.json", "Security/Proofs/lean-audit.json", "fixtures/artifacts.json"]
+structure = ["ruff.toml", "security/lean-audit.json", "security/Proofs/lean-audit.json", "fixtures/artifacts.json"]
 # the benchmarks the demonstration runs: of `one_stage`, the files the remote demo's launch runs, but the served window's
 # launcher (`served_verdicts.sh`), which runs the private served window and `benchmarks/prove_path`
 benchmarks = [
@@ -127,11 +127,11 @@ protocols = [
     "verity/protocols/certifier/verifier/network/tests/test_{lean_audit,network_records_protocol}.py",
     "verity/protocols/certifier/verifier/network/tests/fixtures/slot_entry.json",
     "verity/protocols/pous/prover",
-    "Security/*/{Nci,NciDesc}{,.lean}",
-    "Security/Proofs/Properties/Nci{,.lean}",
+    "security/*/{Nci,NciDesc}{,.lean}",
+    "security/Proofs/Properties/Nci{,.lean}",
     # the table of domain separators' own entries: the other protocols' (its PoUW and shared parts are `needed`)
     "verity/commitments/identity/Identity/Domains.lean",
-    "Security/{Properties,Proofs/Properties}/Identity{,.lean}",
+    "security/{Properties,Proofs/Properties}/Identity{,.lean}",
     # vLLM's PoUB session tests run PoUB's verifier side in process
     "adapters/vllm/tests/protocols/remote_bandwidth/{test_remote_session,test_in_place_gpu}.py",
     "adapters/vllm/tests/pipeline/test_registration_log.py",
@@ -142,7 +142,7 @@ protocols = [
     # vLLM's PoUS option test runs the memory challenger's party in process
     "adapters/vllm/tests/protocols/test_pous_option.py",
     # J10-R's binding reads PoUS's model, through Accounting's remote draw and sampler
-    "Security/Proofs/Pouw/PeriodJ10R/Binding.lean",
+    "security/Proofs/Pouw/PeriodJ10R/Binding.lean",
     # PoUB's opening unit's test, which holds it to PoUB's Python verifier
     "verity/commitments/tests/test_block_check.py",
 ]
@@ -250,7 +250,7 @@ flock_bench = [
 # an entry pulled in may pull in the rest of that entry.
 [[needed]]
 why = "the shared vocabulary (AGENTS.md \"One vocabulary\": Core and Hash) and the claims' ids"
-paths = ["Security/*/{Core,Claims,Hash}{,.lean}", "Security/{Definitions,Models}.lean"]
+paths = ["security/*/{Core,Claims,Hash}{,.lean}", "security/{Definitions,Models}.lean"]
 from = "*"
 
 [[needed]]
@@ -266,7 +266,7 @@ from = "*"
 
 [[needed]]
 why = "the challenger and service code SPOT needs"
-paths = ["verity/core", "Security/{Properties,Proofs/Properties}/{Spot,Challenger}{,.lean}"]
+paths = ["verity/core", "security/{Properties,Proofs/Properties}/{Spot,Challenger}{,.lean}"]
 from = ["spot"]
 
 [[needed]]
@@ -277,7 +277,7 @@ from = "*"
 
 [[needed]]
 why = "the accounting PoUW needs"
-paths = ["Security/*/Accounting{,.lean}", "Security/Proofs/Properties/Accounting{,.lean}"]
+paths = ["security/*/Accounting{,.lean}", "security/Proofs/Properties/Accounting{,.lean}"]
 from = ["pouw"]
 
 [[needed]]
@@ -287,7 +287,7 @@ from = ["certifier"]
 
 [[needed]]
 why = "the identity hash's properties' proofs, which the network certifier's checks' proofs read"
-paths = ["Security/Proofs/Properties/Hash"]
+paths = ["security/Proofs/Properties/Hash"]
 from = ["certifier"]
 
 # Known residue: what the export copies knowing it still carries the process's words, each until the change that removes it
@@ -299,8 +299,8 @@ pattern = '\bperiod\b[^\n]*\blane\b|\blane\b[^\n]*\bperiod\b'
 paths = [
     "{verity/protocols/spot,verity/protocols/pouw/verifier}",
     "verity/protocols/spot/verifier/lean",
-    "Security/*/Pouw",
-    "Security/Proofs/Properties/Pouw",
+    "security/*/Pouw",
+    "security/Proofs/Properties/Pouw",
     "adapters/vllm",
     "benchmarks/one_stage",
 ]
