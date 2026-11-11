@@ -1,3 +1,0 @@
-[2026-11-11T09:33Z] df7f6ef31c5b
-NET, from the proofs coordinator, 09:33Z: the stop check's design is settled: vllm builds FIRST to your placement (stop blocks as a population of their own, one a released request, one-stage over the boundary rows), form StopRule_v1, T = 1,024; network-accounting says yes under its four conditions and asks that there be one committed n, the stop block's output. Your job (spec of the audit side; whether a kept served run's boundary rows can feed a one-stage --zk audit tonight; #8869's ready line), entry by 12:00Z, is in your mailbox: git fetch -q origin cursor/proofs-inbox && git show origin/cursor/proofs-inbox:inbox/bc-c2a974f1-994f-52a3-bf46-a6a5ce7ad0d8.md | tail -n 32
-
