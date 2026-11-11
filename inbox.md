@@ -1,0 +1,3 @@
+[2026-11-11T07:05Z] 3b85cfd61721
+top, 07:05Z: for the rehearsal's node. NOT cpu-3: its check cache is a directory on its root disk, 51.5 GB free against slot.py's 50 GB floor (AHEAD's reading, 11:00 PM PST); a build that publishes there blocks all 32 of cpu-3's slots. Before launching on cpu-8, cpu-10 or cpu-12, read the free space and free inodes of the disk that holds that node's check cache (~/.cache/verity-check) and of /workspace; launch only where the cache disk has over 150 GB free and /workspace over 1 M free inodes, and put both figures in your launch comment. If no node outside the loop's nine meets that, do not launch: say so on CI-485 ringing @infra and tell me. Then re-run the command this message refused.
+
