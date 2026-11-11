@@ -1,11 +1,11 @@
 module
 
+public import Proofs.Properties.Nci.RecordAligned
 public import Proofs.Properties.Nci.RecordCircuit
 public import Proofs.Properties.Nci.RecordForm
 public import Proofs.Properties.Nci.RecordInputs
 public import Proofs.Properties.Nci.RecordRows
 public import Proofs.Properties.Nci.RecordTemplates
-public import Proofs.Properties.Nci.RecordWideAsk
 public import Proofs.Properties.Nci.RecordWired
 
 /-!
@@ -84,7 +84,7 @@ theorem served_of_read {j tr : Json} {c : NciCheck.Record.Case} (h : NciCheck.Re
   exact ⟨Verity.RegisteredCircuit.ofPartition D θ hθ c.S U, c.f.P, c.f.doc, text, c.wired, rs, at_,
     decode_of_read h, (inst_of_read h).2, htext, hcuts, hwires, slot_of_read h,
     fun r hd hh => declared_of_heldAt h hh, hS, hrs, hT, hO, aligned hP hown hrs hT hS hts hwh,
-    filled hP hown hrs hT hS hts hwh, fun r hh => held_unwired h r hh, hL, hN, hD⟩
+    filled hP hrs hT hS hts hwh, fun r hh => held_unwired h r hh, hL, hN, hD⟩
 
 end NciCheck.Properties.Record.SecurityProofs
 
