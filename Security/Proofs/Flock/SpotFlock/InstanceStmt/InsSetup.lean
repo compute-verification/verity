@@ -139,11 +139,11 @@ theorem cO_name (ls lh : HmNets.Laid) (H C : ByteArray) (A B A' B' : Sparse) (s1
 fwd_def setX setup_X (r : Run) (ls lh : HmNets.Laid) (H C : ByteArray) (A B A' B' : Sparse)
     (s1 s3 s4 s5 s6 : String) (hello : ByteArray → Nat → String) (s : Ins)
     (hr : s.read = rX r ls lh H C) (hreg : s.registered = some regPorts) (hst : s.stmtTags = t0)
-    (hT : Read.tags (rX r ls lh H C) = tz)
+    (hT : Read.tags (rX r ls lh H C) = tz) (hCe : C.isEmpty = false)
     (hS : Read.setup (rX r ls lh H C) = .ok ((tabX r ls lh H C A B A' B' s1 s3 s4 s5 s6 hello).1,
       (tabX r ls lh H C A B A' B' s1 s3 s4 s5 s6 hello).2)) :
     Ins.setup s by
-  [hr, hreg, hst, hT, hS, FlockDeploy.Concrete.forIn_one, FlockDeploy.Concrete.forM_one,
+  [hr, hreg, hst, hT, hCe, hS, FlockDeploy.Concrete.forIn_one, FlockDeploy.Concrete.forM_one,
     shapeOk_stX r ls lh H C A B A' B' s1 s3 s4 s5 s6 hello, cO_name ls lh H C A B A' B' s1,
     FlockDeploy.Concrete.open_none, FlockDeploy.Concrete.res_none, FlockDeploy.Concrete.sparse_none,
     FlockDeploy.Concrete.opening_none]
@@ -159,7 +159,7 @@ theorem setupOf_x (hn : FixedNetsBuild) {r : Run} (hr : r.Plain) :
   have hs := setup_X r (HmNets.shaLaid ()) (HmNets.hmLaid ()) circuitHash classHash AF BF AF' BF' s1X
     (s3X (hexOf classHash)) (s4X r (hexOf circuitHash) (hexOf classHash))
     (s5X r cF (hexOf circuitHash) (hexOf classHash)) s6X helloX (ins r) rfl rfl rfl (tags_rX _ _ _ _ _)
-    (setup_x hn hr)
+    (classOfB_isEmpty (HmNets.shaLaid ()) (HmNets.hmLaid ())) (setup_x hn hr)
   exact FlockDeploy.setupOf_of (insOf_x hn hr) hs
 
 end SpotFlock.InstanceStmt
