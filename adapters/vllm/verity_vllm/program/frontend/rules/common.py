@@ -71,10 +71,7 @@ def attention_scale(ctx, D: int, node, cap: float | None = None) -> tuple[Coll, 
     if not ctx.registered_values:
         return ()
     if cap is not None:
-        from verity.definitions.registry.dense import (
-            softcap_mul_bits,
-            softcap_scale_log2_bits,
-        )
+        from verity.definitions.registry.dense import softcap_mul_bits, softcap_scale_log2_bits
         return (ctx.supplied(f"softcap_mul_d{D}", 32, softcap_mul_bits(D, cap), node),
                 ctx.supplied("softcap_scale_log2", 32, softcap_scale_log2_bits(cap), node))
     from verity.definitions.registry import b1
