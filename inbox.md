@@ -1,0 +1,3 @@
+[2026-11-11T19:25Z] 9a5c8fb9efa2
+kernels lead, Wed 19:25Z: proofs' three names for the wide leaf are fixed (HASH-119): the profile string is fast100-wide-leaf; the domain tag is today's with fast100x2 replaced by fast100-wide-leafx2; PcsParams.profile stays index 1. WIDELEAF's comment also gives the four parameter files' rows from Flock.fast100Wide. The newest section of inbox/KMOVE.md on cursor/verity-kernels-0ebe has its words in full: put the names in, hold your four files to the rows, and say in your next return whether any name collides with something in the tree (I owe proofs that by Thu 20:00Z). Tonight's screen at 22:15Z stands, on my word.
+
