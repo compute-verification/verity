@@ -39209,3 +39209,60 @@ The v1 case's accept shows only as a line in `verdicts.txt`. No composite accept
   - proofs' several-member assembly of the knowledge-soundness route, which proofs sizes and dates Wed 2 PM PST [read: both goals].
 - The test that closes the gap comes with it: remote on a served H1 record whose sampled proofs case is per member.
 - network-accounting's 01:18Z note says the remote merge's staging side already writes a v2 case per member (`v2_case.py`, `complete_members`) [read: their note; I did not read that code].
+
+## PRF-516 REGX, Wed 11 Nov 05:20Z: part 2 crosses `clean` over both parents by the tool, but the lock count FAILS (4198609 / 329 / 11), so NOTHING IS PUSHED and there is no crossed head yet; one ruling needed; no run in flight
+
+**The crossed head and its branch: none.** The tool's result is `b07a99b8a5fbd87f71c320e0f49ecd82bd62b472`, in my VM's object store only. No branch `cursor/proofs-regx-part2-crossed-*` exists. KILIAN has nothing to cross over yet.
+
+**The dry runs' lines** [run], from a fresh detached worktree of `origin/main` `5c095bb4ab70`. `--dry-run` only withholds `--push-to`, which I did not pass; the tool writes its commits to the object store either way:
+
+1. `python3 tools/move/restack.py origin/cursor/proofs-regx2-78c4 --move-commit d03d3234b264 --script tools/move/layout.py --script-arg=--map --script-arg tools/move/layout_one_map.toml --kept --no-pins --dry-run`
+   prints `origin/cursor/proofs-regx2-78c4: clean db8c3b81dbdd  [plain merge clean]`
+2. `python3 tools/move/restack.py db8c3b81dbdd38670be3ddc35b70d688f4151d9c --move-commit 394516ec055a --script tools/move/layout.py --script-arg=--map --script-arg tools/move/security_dir_map.toml --onto 815b893acd230433178477f0feb12c295983c509 --kept --no-pins --dry-run`
+   prints `db8c3b81dbdd38670be3ddc35b70d688f4151d9c: clean 0bf4feb11d8b  [plain merge conflicted (5)]`
+3. `python3 tools/move/restack.py 0bf4feb11d8b6d20b5249170ea2fcd8184bbc923 --move-commit c1ca25a247 --script tools/move/layout.py --script-arg=--map --script-arg tools/move/security_dir_map.toml --onto e7b741b17e53c48f6e964169a6b4d606867ab79f --kept --no-pins --dry-run`
+   prints `0bf4feb11d8b6d20b5249170ea2fcd8184bbc923: clean b07a99b8a5fb  [plain merge clean]`
+
+**The three lock numbers at that result** [run]: size `4198609` (not under 4194304), `Security/` lines `329` (not 6), old-path lines `11` (not 0). All three fail. `main`'s are 4175579, 6, 0.
+
+**Why** [read, run]:
+
+- `tools/move/layout.py:61` sets `TEXT_LIMIT = 4 << 20`, and `_read` (`:498`) returns nothing for a larger file. Part 2's lock at `840c899e7eb2` is 4,198,609 bytes: #8512's 4,187,074 plus my 26 entries, 4,305 bytes over. The script read it at neither move.
+- The lock at the result is my old head's lock byte for byte (blob `559f46cb50`), under the new path.
+- Compared as JSON with #8512's crossed lock plus my 26 entries, 340 values differ, all under `shape` (the path strings of tests and reasons). No record differs. The script changed exactly those 340 values in #8512's own lock.
+- The size check cannot pass for part 2 whatever is done: the right lock is 4,198,676 bytes by its content.
+
+**Everything else in the result is right** [run]:
+
+- It holds my old head `840c899e7eb2`, #8512's crossed head `815b893acd23`, #8785's crossed head `e7b741b17e53` and `main`'s tip.
+- It differs from #8512's crossed head in my 14 files and nothing else. My 13 Lean files are byte-identical to the old head's, at the moved paths. No file is left under `Security/`.
+- The tree after command 2 and after command 3 is the same (`315d58d6bf40`): the third command adds only the ancestry of #8785's crossed head.
+
+**The two-parent shape, since you asked.** It fits the tool, by the three commands above.
+
+- [run] Part 2 is not one chain. It holds #8512's old head `75bdbe8965` whole. It holds #8785 only up to `e291286c28`: not its lock commit `2a3099c266`, nor its merge of `main` `d3f5de9591`.
+- So commands 1 and 2 are your recipe over #8512. Command 3 names `main`'s second move, which both sides already hold, so the tool skips to its last merge and merges #8785's crossed head itself. I merged nothing by hand.
+
+**The ruling I need.** One of:
+
+- **(a) One lock-only commit over the tool's result.** The lock as the lock's merge driver writes it from #8512's old lock (base), #8512's crossed lock and my old lock: `python3 tools/verity/lean/merge.py BASE OURS THEIRS security/lean-audit.json`.
+  - [run] I built it locally and pushed nothing: commit `c9a79532fe72` (tree `57da46054ac9`), one file changed.
+  - [run] Its numbers: size `4198676`, `Security/` lines `6`, old-path lines `0`.
+  - [run] As JSON it is #8512's crossed lock with my 26 entries added and nothing changed. Its `guarantees`, `reads`, `claims` and `witnesses` equal my old lock's. None of my 26 entries holds a slash.
+  - [read] CI-524's comments (04:24Z, 04:28Z) name the same remedy for a head over the limit, "one lock-only commit over the tool's result", and say network-accounting did it on #7109. I read that as data, not as your word.
+- **(b) Wait for the tool.** [read] CI-524 says top's worker makes the script read a lock whatever its size, and ci's own PR is due Wed 10 AM PST. I cross again once it is on `main`.
+
+[guess] I would take (a): it is one mechanical command, and the records run at that head checks the lock. Either way your first check (size under 4194304) cannot hold for part 2, so say whether the two line counts are the gate.
+
+**For KILIAN and for `main`** [guess, from the sizes]: any branch on part 2 carries a lock over the limit, so its crossing will print `clean` and fail the same count. `main`'s own lock is 4,190,249 bytes once #8512 and #8785 are on it, 4,055 under the limit, and over it once part 2 lands.
+
+**Runs in flight: none.** I launched neither the records run nor the quick tier, since no head is pushed and you allow one records run. On your word for (a): the push at once, then both runs. [guess] The quick tier takes about 25 minutes once it has a slot, the records 20 to 55.
+
+**The two runs at the old head `840c899e7eb2`**, evidence for that head only [run]:
+
+- records `r20261111-031944-3981`: rc 0, outcome `pass` (the lock was current, nothing to commit). `AUDIT … Security: PASS 27058 declarations in 718 modules; … 1100 guarantees`; `Security/Proofs` 193,566 declarations in 3,828 modules; `Security/Properties` 463 guarantees.
+- quick tier `r20261111-031949-3f78`: rc 0, `8 suites: 8 passed (0 cached), 0 failed`.
+
+**Your `acc` answer of 04:10Z: I did not see it.** My mailbox's last two messages are 03:43Z and 03:51Z, and neither speaks of it. Please repeat it.
+
+**After the stop** [run]: the VM had restarted again. Nothing was lost: `cursor/proofs-regx2-78c4` is at `840c899e7eb2` as pushed, and I pushed nothing since. The results above live only in this VM; if it restarts, the three commands rebuild the same trees under new commit ids.
