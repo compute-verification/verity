@@ -60489,3 +60489,134 @@ Branch `cursor/proofs-keptverify-604f` at `3bd4e3e017` (on a branch, not on main
 - Mailbox absent, #8789, #8949, #9005 open, the one-parse PR not opened (18:22Z).
 
 **Not done**: the tier at the head; `e9e4`; the records run's later requirers; the PR.
+
+## SERVERATE, Wed 11 Nov 18:26Z: the brief is `note:20261111T1824Z-draft-serving-rate-brief` (synced). Read the goal at a tuned stock server's rate at a latency bound, the way MLPerf Server measures it, with speculative decoding measured beside it. On public numbers utilization 0.4 is 6 to 9 times too high and 279.5 is 2 to 3 times too low. The vLLM lane has not answered yet
+
+**What is new since my 18:04Z entry**
+
+- The public comparison exists, for this model's predecessor on these cards. SemiAnalysis's InferenceX has GLM-5 (744 billion parameters) on H200 in FP8 with the SGLang engine, 8,000 tokens in and 1,000 out, at 788 tokens a second per GPU at 30 tokens a second per user, 572 at 50, 395 at 75, and a peak of 852; runs of 19 Mar to 19 May 2026 [read: https://inferencex.semianalysis.com/run/glm-5-1-on-h200, fetched whole]. Its "tokens" are prompt plus output tokens: $1.22 a GPU-hour over 572 × 3,600 tokens is the page's $0.59 a million "total tokens" [run: my division]. It disables prefix caching and sends random tokens [read: its v2 article, line "benchmarks on random data and disables prefix caching"].
+- So the factor of 18 splits [run: my arithmetic, a script over the cards and these figures]: 4,993.9 / 852 = 5.9 and 852 / 279.47 = 3.05. At the `workload` card's lighter operations a token the first factor is 9.1, hence "six to nine". On a like shape (our 8,192 tokens in, 128 out, run `r20261111-121433-6a11`: 298 tokens a GPU-second at 2 in flight, 363 at 16 and still rising) the second factor is 2.3 to 2.6, hence "two to three". In utilization: 852 is 4.4% at the card's operations a token and 6.8% at the long-context mix's.
+- My 18:04Z [guess] that 0.4 is above what public benchmarks show is now [read] for GLM-5 on H200. For DeepSeek-R1 on H200 the same site's peak over all its configurations is 3,370 tokens a second per GPU [read: https://inferencex.semianalysis.com/run/deepseek-r1-on-h200], which is utilization about 13% if R1 has 37 billion active parameters [memory for the 37 billion; my arithmetic]. I left R1 out of the brief.
+- By proportion the 300 GB goal is met only below 275 to 440 tokens a GPU-second [run: 4,993.9 × 300 / 5,445 and / 3,406]. The public rates for GLM-5 on these cards are above that.
+- vLLM's recipe for GLM-5 serves FP8 on eight H200s with `--speculative-config.method mtp --speculative-config.num_speculative_tokens 3`, labels the feature "Spec Decoding (for low latency & small batch size)", and lists as tuning `max-num-batched-tokens = 8192` ("a common sweet spot"), `max-num-seqs = 256`, `gpu-memory-utilization = 0.95` and an experimental Rust frontend [read: https://recipes.vllm.ai/zai-org/GLM-5, fetched whole]. Our run had 8,192, 256, 0.92 and no speculative decoding [read: the run's server log]. Whether our run used the Rust frontend: not read. The brief says "matches that recipe closely"; these are the differences.
+- MLPerf's rules allow speculative decoding "only for certain LLM workloads including - DeepSeek-r1-Interactive, GPT-OSS-120B-Interactive, Qwen3.6-27B Edge-Agentic", with the model's own layer and three steps [read: the rules file, fetched raw, lines 763 and 1209 to 1224]. The bound in `benchmarks/serve_tax` (2.0 s, 0.08 s) equals MLPerf's Server bound for DeepSeek-R1 [read: both]. Ours counts the share of requests inside it, MLPerf the 99th percentile; the brief does not say that difference.
+- vLLM's current release is 0.33.0 of 2 Nov 2026; our pin is `0.28.1rc1.dev472+gd9105ea80` [run: PyPI's JSON; read: the run's server log].
+- VLLM-339 [read at 18:24Z]: no answer to your three questions yet. The lane's lead put a worker (`vllm-rateconfig`) on them at 18:20Z, due 19:30Z. The lead's own line on the run, theirs and matching my reading of the record: "stock GLM-5.3 at TP8 on the eight H200s, context limit 131,072, `--max-num-seqs 256`, the plan's first 651 requests a pass, one rep a rate; 4x the planned rate gave 2,172,672 computed tokens in 971.8 s on 8 GPUs, 51 of 651 unfinished after the 600 s wait, 23 preemptions".
+
+**Where the brief departs from what was asked, and what in it is not mine**
+
+- Length: about 950 words outside the table and the sources, where you asked for about 900 [run: a count].
+- Daniel said "we probably should use speculative decoding". The brief's answer: measure the stock server with it now, and read the goal with it only once the audited circuit covers it, because by proportion the figure assumes the circuit does not change. If the measured gain on our workload is under a tenth it stays out [guess: the threshold is mine].
+- The 3,406 to 5,445 GB at utilization 0.4 are yours [relayed: your brief to me; I found them in `tools/entry_1800_body.md`, row "+ #8917's cut and every head cut, G = 128", and did not recompute]. Every other GB cell is that range times a ratio of rates [run: my arithmetic], which holds on the cost model's own workload ("within 0.8% in the planner", your morning note [read]) and is an assumption on any other.
+- What speculative decoding touches is the vLLM lane's account on PRF-461 [relayed]. Only the replay code's refusal is [read] (`verity/protocols/certifier/verifier/replay_step.py`, "Not modeled").
+- The hours of the eight-H200 machine in rows C and D are [guess], from the measured run's 34 minutes for two rates. That the machine ends Sat 14 Nov 12:07 AM PST with no eight-card machine after it is yours [relayed].
+- Web pages marked "(excerpt)" in the sources I read through the search tool's excerpt, not whole; the vLLM documentation page timed out three times when fetched [run].
+- Words to check before Daniel reads it: "the vLLM lane", "the SPOT scope" (inside the lane's quoted answer), "audited circuit", "the cost model".
+
+**Next:** I read VLLM-339 again at 19:30Z and append the lane's answer, quoted as theirs, with any change to the note, by 19:45Z.
+
+**The brief, whole** (headings lowered two levels to stay inside this section; the note has them as written)
+
+### Which serving rate the 300 GB goal is read at, and how to measure it
+
+Draft, Wed 11 Nov 2026.
+
+#### Recommendation
+
+Read the 300 GB goal at the highest rate at which a tuned, unmodified vLLM server holds a stated latency bound, as MLPerf's Server test measures it, on our production-like workload and one public workload, and quote its rate with no latency bound beside it as the ceiling. Measure the same server with speculative decoding on, as vLLM's recipe for this model has it, and let the measured gain decide whether it comes into the audited circuit, which cannot express it today.
+
+#### 1. Our two numbers
+
+**Assumed: utilization 0.4.** One field of the cost model, marked "assumed", range 0.2 to 0.6, set on 26 Oct. No measurement is behind it. For GLM-5.3 on an H200 it implies 4,994 tokens a GPU-second (my arithmetic from the cost model's inputs, which are partly modeled).
+
+**Measured: 279.5 tokens a GPU-second.**
+
+- Server: our eight-H200 machine, unmodified vLLM at its defaults, one copy of GLM-5.3 (FP8 weights) split across all eight cards, context limit 131,072 tokens.
+- Prefix caching on (repeated prompt beginnings are not recomputed), long prompts processed 8,192 tokens at a time, speculative decoding off.
+- Workload: 651 requests modeled on production traffic. Prompts: median 58 tokens, mean 3,433, longest 130,808. Outputs: mean 286.
+- Load: random arrivals at 1.6 requests a second, four times the rate the server had kept up with. "Saturation" meant that doubling the arrival rate computed no more. Counted: every prompt and output token computed.
+- **No latency bound was held.** The median request waited 330 seconds for its first token. 0.15% met the benchmark's own bound, MLPerf's for DeepSeek-R1: first token within 2 seconds, 80 ms per output token.
+
+**The gap.** The measured run is utilization 2.2% (my arithmetic), 18 times below 0.4. SemiAnalysis's public benchmark has GLM-5, the same-sized predecessor, on eight H200s at 572 to 852 tokens a GPU-second (8,000-token prompts, 1,000-token outputs, the SGLang engine), which is utilization 4% to 7% (my arithmetic). So 0.4 is six to nine times above the best public rate, and our server two to three times below it. Both factors are rough: engine, model revision and workload differ. Neither number should be quoted alone.
+
+#### 2. What a performance engineer would want to see
+
+**Metrics**
+
+- Throughput at a stated latency bound, never alone. The latencies are time to first token and time per output token. MLPerf Server reports the highest random-arrival rate at which the 99th percentile of each stays inside the bound. SemiAnalysis reports tokens a second per GPU at a stated output speed per user.
+- The curve from light load to saturation, with the no-bound rate (MLPerf Offline) as its ceiling.
+- Goodput: requests a second that met the bound.
+
+**Workload**
+
+- Public and named. MLPerf: long documents (mean 9,400 tokens in, 680 out). SemiAnalysis: random tokens, 1,000 in and 1,000 out, or 8,000 and 1,000. vLLM's benchmark command: recorded chats (ShareGPT, BurstGPT) or random tokens.
+
+**Serving configuration**
+
+- Engine and version, precision, how the model is split across cards, context limit, batch limits, prefix caching, speculative decoding, repetitions.
+- Evidence of tuning: the engine's published recipe, or a sweep.
+
+#### 3. Speculative decoding
+
+A small part of the model guesses the next few tokens; the full model checks them in one pass and keeps the matches.
+
+- **vLLM.** The version we pin and the current release (0.33) support it, and GLM-5.3 ships the guessing layer. vLLM's recipe for GLM-5 on eight H200s uses three guessed tokens, "for low latency & small batch size". Otherwise our run matches that recipe closely.
+- **Measurements.** SemiAnalysis, GLM-5 on H200, 1,000 tokens in and out: 329 tokens a GPU-second with it against 145 without, at the same 41 tokens a second per user. Gains shrink as load grows. The vLLM lane's estimate for our workload at saturation, nothing run: 0.95 to 1.15 times the requests a second.
+- **Who serves with it.** Google says AI Overviews does. SemiAnalysis writes that "most frontier labs" have enabled it for DeepSeek's model. MLPerf allows it in its Interactive test only.
+- **Our earlier decision.** On 7 Nov you asked the vLLM lane to "either include it or state why it's excluded and what it would change." It answered on 8 Nov: "exclude it from the SPOT scope and say so in the post. Nothing on our side can express it today." I found no ruling of yours since.
+- **What it touches** (the vLLM lane's account, not checked by me). A new registered circuit: the guessing layer, and steps that check several tokens at once. The count of accepted guesses is computed from committed values or charged as advice. With sampling, the accept test draws from the request's seed. The replay code refuses such a step today (I read that). How proof blocks would be drawn: not read.
+
+#### 4. Options
+
+Exfiltration figures are GB a year over the world's compute at an audit budget of 10%, for the best designed configuration (not built). They follow the rate in proportion. Each range runs from the verifier with two changes not yet landed to the verifier as it is.
+
+| Rate the goal is read at | What it measures | For and against, from a performance engineer | Exfiltration figure | What it takes to run | Main risk |
+|---|---|---|---|---|---|
+| **A. Assumed utilization 0.4** (4,994 tokens a GPU-second) | Nothing. | For: none. Against: no source, and at least six times the best public rate for this model family on these cards. | 3,406 to 5,445 GB (the cost model's, modeled) | Nothing. | We report missing the goal 11 to 18 times over, at a rate no server reaches. |
+| **B. Saturation, no latency bound, vLLM's defaults** (279.5, measured) | The most tokens this server computed, whatever the wait. | For: a real run, and MLPerf Offline is the same idea. Against: 0.15% of requests inside the bound, no tuning, one repetition, two to three times below the public rate. | 191 to 305 GB (my arithmetic) | Done. | It meets the goal only because the server is slow. |
+| **C. Latency bound as MLPerf Server defines it, vLLM's defaults** | The highest random-arrival rate at which the 99th percentile of both latencies stays inside the bound. | For: the field's standard, and what production holds. Against: still not tuned. A 130,000-token prompt cannot start in 2 seconds, so the bound must grow with the prompt (MLPerf gives its long documents 6 seconds). | Below 124 to 198 GB (my arithmetic, from our run at 182 tokens a GPU-second, where a third of requests met the bound) | A search over arrival rates with no audit attached: a few hours of the eight-H200 machine (my estimate). | The lowest rate of all, so it flatters us most. |
+| **D. Tuned server at a latency bound, on our workload and one public workload, with speculative decoding measured beside it** (recommended) | The rate an engineer would recognise and can set beside public tables. | For: answers "is it tuned?", follows vLLM's recipe, and already assumes a full server all year. Against: more runs, and with speculative decoding on it is a server our audit cannot check yet. | 390 to 930 GB if we reach the public 572 to 852 (my arithmetic; another engine and workload). With speculative decoding: no figure, because the circuit changes. | The same search on two workloads, twice: six to eight hours of the machine (my estimate). It ends Sat 14 Nov 12:07 AM PST, no other eight-card machine is planned, and the audit's own runs need it too. | vLLM at our version may not start with speculative decoding (untested). We then say in the open that the goal is missed by 1.3 to 3 times. |
+
+**What would change the recommendation**
+
+- If the goal must hold for batch jobs too: read it at the tuned server's rate with no latency bound, which is higher.
+- If the machine has no free hours before it ends: quote the range 190 to 930 GB.
+- If speculative decoding adds under a tenth on our workload: leave it out and say so. If much more: read the goal with it on, which needs the new circuit first.
+
+#### 5. What I could not establish
+
+- Who chose 0.4, and from what.
+- What limits our server, the cards' arithmetic or the engine's scheduling. Nobody has profiled it.
+- Any rate at which our workload meets a latency bound, any run with speculative decoding, a second repetition.
+- What a top lab's own servers reach. None publish it.
+- Whether the figure stays proportional to the rate on another workload. Every "my arithmetic" cell assumes it.
+- Which configuration the vLLM lane would defend as tuned. Asked this morning; no answer yet.
+
+#### Sources
+
+Repository, run records and issues (read Wed 11 Nov 2026; `main` at `cc6ee74462`):
+
+- Utilization: `GLOSSARY.md`; `verity/protocols/inference_only/rho/data/reference.toml`, field `mfu_serve`; commit `845155df5a` of 26 Oct 2026.
+- Cost model: `benchmarks/spot_figures/figure1.py`, `cards/workload.glm-5.3.json`, `cards/serving_rate.glm-5.3.json`, `breakeven/reprice.py`; `benchmarks/census/hardware.json`.
+- The measured run: `r20261111-125507-9911` (its server log, settings and table). The same workload at its own rate: `r20261109-185220-0dea`. Workload lengths: `benchmarks/serve_tax/prefix_plan.jsonl`; what the mix is: note `vllm/20261107T2026Z-report-ctx128k`.
+- The vLLM lane's account of the run: Linear VLLM-321. Your request and the lane's answer on speculative decoding: Linear PRF-461, item 8 and the comments of 8 Nov. The coordinator's questions: Linear VLLM-339.
+- Code that refuses speculative decoding: `verity/protocols/certifier/verifier/replay_step.py`; `adapters/vllm/manifests/capture-maps/glm-moe-dsa-eager-hopper-tp8-v0.json`.
+- The exfiltration figures at utilization 0.4: the proofs coordinator's entry of 18:00Z. I did not recompute them.
+- vLLM's releases: https://pypi.org/pypi/vllm/json
+
+Web (read Wed 11 Nov 2026; "excerpt" means I read the search tool's excerpt of the page, not the whole page):
+
+- MLPerf's rules, with the scenarios, the latency bounds and the speculative decoding appendix: https://github.com/mlcommons/inference_policies/blob/master/inference_rules.adoc
+- MLPerf v6.0, GPT-OSS and DeepSeek-R1: https://mlcommons.org/2026/03/mlperf-inference-gpt-oss/
+- MLPerf's long-document workload: https://mlcommons.org/2025/04/llm-inference-v5/ (excerpt)
+- SemiAnalysis InferenceX, formerly InferenceMAX. GLM-5 on H200: https://inferencex.semianalysis.com/run/glm-5-1-on-h200 . With and without speculative decoding: https://inferencex.semianalysis.com/compare-spec-decode/glm-5-1-h200-fp8-mtp-vs-none . Method, and the sentence on frontier labs (9 Oct 2025): https://inferencex.semianalysis.com/blog/inferencemax-open-source-inference-benchmarking . Gains at high load (16 Feb 2026): https://inferencex.semianalysis.com/blog/inferencex-v2-nvidia-blackwell-vs-amd-vs-hopper
+- vLLM's recipe for GLM-5: https://recipes.vllm.ai/zai-org/GLM-5
+- vLLM on speculative decoding ("reduce inter-token latency under medium-to-low QPS"): https://docs.vllm.ai/en/latest/features/speculative_decoding/ (excerpt)
+- vLLM's benchmark command, its datasets, arrivals and goodput: https://docs.vllm.ai/en/stable/cli/bench/serve/ and https://docs.vllm.ai/en/stable/benchmarking/cli/ (excerpts)
+- NVIDIA AIPerf, the successor of GenAI-Perf. It reports time to first token, time between tokens, request latency, output tokens a second and goodput: https://developer.nvidia.com/blog/benchmarking-llm-inference-at-scale-with-aiperf/ and https://docs.nvidia.com/aiperf/reference/ai-perf-metrics-reference (excerpts)
+- GuideLLM. It sweeps from one request at a time to saturation and the rates between: https://github.com/vllm-project/guidellm (excerpt)
+- LLMPerf, archived. A fixed number of requests in flight; its time between tokens includes the wait for the first: https://github.com/ray-project/llmperf and https://developer.nvidia.com/blog/llm-benchmarking-fundamental-concepts/ (excerpts)
+- Artificial Analysis. Live endpoints at prompts of about 1,000, 10,000 and 100,000 tokens, and a load test that adds requests in flight until output stops rising: https://artificialanalysis.ai/methodology/performance-benchmarking and https://artificialanalysis.ai/methodology/system-load-test (excerpts)
+- SpecDecode-Bench, on gains shrinking with load: https://specdecode-bench.github.io/ (excerpt)
+- Google, on serving with speculative decoding (6 Dec 2024): https://research.google/blog/looking-back-at-speculative-decoding/ (excerpt)
+
