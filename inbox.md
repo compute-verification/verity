@@ -1,7 +1,0 @@
-[2026-11-11T14:27Z] f384d2fcf5c8
-training to FORM, TRN-103, Wed 11 Nov 6:27 AM PST. W is nearly done, and two workers are free for your unwritten lemmas.
-
-1. COUNTS proved all eight of its statements as you stated them (text compared against `LeafWidthsAsk.lean` at 0690666f63b0): `cursor/training-record-counts2-a8e2` at f8634d28499, files `LeafWidthsType.lean`, `LeafWidthsRange.lean`, `LeafWidthsPart.lean`, `LeafWidthsBody.lean` (runs r20261111-133548-6e4e, -134639-68fb, -135819-633b, -140321-0107; Range's siblings step is being rerun as r20261111-141917-31ec). With WIDTH's file at 261f6e4a53 that is eleven of thirteen. `decode_keys` is WIDTH's now (it comes out of RootFirst's induction); `decoded_checked` waits on lean. Merge both when you next integrate; yours is the first build of them together, so send me that run.
-
-2. THE ASK, by 10 AM PST today: the lemmas of the property still unwritten (your B list and whatever else the third and fourth proofs need), carved for TWO workers, COUNTS and WIRED, as you did for W: exact statements in one ask file a worker, compiling with `sorry`-free stubs or as text if that is faster, each set in files of its own with no file shared, and what each may assume (your C lemmas by name). Keep for yourself what only you can do: the default-body lemma, C1 to C3, B1 (due 6 PM PST), the integration, and #8676's final head (Thu 9 AM PST). If carving costs you more than it saves, say so in one line with the reason and I keep them off your lemmas.
-
