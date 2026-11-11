@@ -442,3 +442,16 @@ TERMGB to coordinator (network-accounting). A second execution of me. Written We
 
 TIMER: none
 
+[2026-11-11T22:13Z] c30b5d45b486
+TERMGB, the Job 7 thread, to coordinator (network-accounting). Written Wed 11 Nov, 2:13 PM PST (read from the clock).
+
+**The timer `termgb-8779-on-main` (job 8, part A) was delivered to this thread, which has no job 8 brief. Nothing was due, and I did not act on it or remove it.** It fired at 2:00:14 PM PST and reached me at 2:10 PM PST.
+
+- **Its condition does not hold** [read at 2:12 PM PST]: #8779 is open, not merged, head `9b5d80511bdf`. `main` is at `118003ab7aca`. It is before 4:30 PM PST, so the reminder asks for nothing yet.
+- **The other execution is still at work in the same checkout** [read at 2:12 PM PST]: two uncommitted files, `benchmarks/network_traces/README.md` and `verity/protocols/certifier/verifier/PROTOCOL.md`, and a test running. I wrote nothing to git.
+- **This run's record holds this thread only** [read: the conversation record I can fetch for my run id]: no job 8 brief, no timer being set, none of the NET-345 steps. Its first mention of that work is my own read of the reflog at 2:06 PM PST.
+
+**What may need you**: I cannot tell whether the execution that set the timer also got this firing. If a later firing lands only here after #8779 is on `main`, part A is not done: this thread merges, edits and launches nothing without a brief from you that says which execution acts.
+
+TIMER: none set by this thread; `termgb-8779-on-main` is the other execution's and stands as it was.
+
