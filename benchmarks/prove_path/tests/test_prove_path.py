@@ -1606,9 +1606,9 @@ def _fused_args(c: dict, **over) -> argparse.Namespace:
 
 def _same_commitment(a: Path, b: Path) -> None:
     """Windows ``a`` and ``b`` commit one thing: one population program, partition, law and port domains (which bind the run
-    root), one circuit record and index, the same registered roots, in every member the same committed rows on the ports its
-    own file holds, and the same rows of each registered value under the same salts (a table's are the committer's, under its
-    key).  Each window salts its own rows, so its members' tree roots are its own."""
+    root), one circuit record and index, the same registered roots, and in every member the same committed rows on the ports
+    its own file holds, among them each unit's opening of its table (the table's row, its salt and its path, the committer's
+    under its key).  Each window salts its own rows, so its members' tree roots are its own."""
     ra, rb = _registered(a), _registered(b)
     same = ("format", "program", "query", "law", "partition", "population", "scheme")
     assert {k: ra[k] for k in same} == {k: rb[k] for k in same}
@@ -1619,14 +1619,11 @@ def _same_commitment(a: Path, b: Path) -> None:
     wa, wb = (json.loads((d / "window.json").read_text()) for d in (a, b))
     assert [(m["name"], m["template"], m["n"], m["ports"]) for m in wa["members"]] == [
         (m["name"], m["template"], m["n"], m["ports"]) for m in wb["members"]]
-    assert wa["value_rows"].keys() == wb["value_rows"].keys() and wa["value_rows"]
     ba, bb = CS.Bodies(a, wa), CS.Bodies(b, wb)
     for k in range(len(wa["members"])):
         oa, ob = ba.own(k), bb.own(k)
-        assert oa.keys() == ob.keys()
+        assert oa.keys() == ob.keys() and oa
         assert all((oa[q][0] == ob[q][0]).all() for q in oa), k
-    for name in wa["value_rows"]:
-        assert all((x == y).all() for x, y in zip(ba.value(name), bb.value(name), strict=True)), name
 
 
 def test_a_served_windows_fused_cut_is_the_row_drivers_window_given_the_tables_and_the_checkpoint(fused, tmp_path):
@@ -1660,6 +1657,8 @@ def test_a_served_windows_fused_cut_is_refused_without_the_tables_or_the_checkpo
 
 
 def test_a_tp_ranks_window_is_handed_the_tables_and_the_checkpoint(monkeypatch, tmp_path):
+    assert PP.tables_of(argparse.Namespace(serving_rows_tables=None, serving_rows_tables_key="k")) is None
+    assert PP.checkpoint_of(argparse.Namespace(checkpoint_dir=None)) is None
     got = {}
     monkeypatch.setattr(PP, "compiler_of_args", lambda a: "compiler")
     monkeypatch.setattr(PP, "checkpoint_of", lambda a: ("checkpoint", a.checkpoint_dir))
@@ -1670,5 +1669,3 @@ def test_a_tp_ranks_window_is_handed_the_tables_and_the_checkpoint(monkeypatch, 
     assert PP.commit_rank((a, 3, [], {})) == {"run": "x", "forged": None}
     assert got == {"at": ("c", 3, "p", str(tmp_path / "rank3"), "compiler"), "workers": 1,
                    "tables": {"key": "k", "registration": "t-rank{rank}.json"}, "checkpoint": ("checkpoint", "ck")}
-    assert PP.tables_of(argparse.Namespace(serving_rows_tables=None, serving_rows_tables_key="k")) is None
-    assert PP.checkpoint_of(argparse.Namespace(checkpoint_dir=None)) is None

@@ -46,7 +46,7 @@ def _doc(d: Path, name: str) -> dict:
 def same_commitment(a: Path, b: Path) -> None:
     """Windows ``a`` and ``b`` commit one thing: one population program, partition, law and port domains (which bind the run
     root), one circuit record and index, the same registered roots, and in every member the same committed rows on the ports
-    its own file holds and the same rows of each registered value under the same salts (a table's are the committer's, drawn
+    its own file holds, among them each unit's opening of its table (the table's row, its salt and its path, the committer's
     under its key).  Each window salts its own rows, so the roots of its members' trees are its own."""
     ra, rb = _doc(a, "registration.json"), _doc(b, "registration.json")
     assert {k: ra[k] for k in SAME} == {k: rb[k] for k in SAME}
@@ -59,16 +59,13 @@ def same_commitment(a: Path, b: Path) -> None:
     def shape(w: dict) -> list:
         return [(m["name"], m["template"], m["n"], m["ports"], m.get("value_rows"), m.get("registered")) for m in w["members"]]
 
-    assert shape(wa) == shape(wb) and wa["value_rows"].keys() == wb["value_rows"].keys()
+    assert shape(wa) == shape(wb)
     ba, bb = CS.Bodies(a, wa), CS.Bodies(b, wb)
     for k in range(len(wa["members"])):
         oa, ob = ba.own(k), bb.own(k)
-        assert oa.keys() == ob.keys()
+        assert oa.keys() == ob.keys() and oa
         for p in oa:
             assert np.array_equal(oa[p][0], ob[p][0]), (k, p)
-    for name in wa["value_rows"]:
-        for x, y in zip(ba.value(name), bb.value(name), strict=True):
-            assert np.array_equal(x, y), name
 
 
 def test_the_layers_rows_sit_at_the_moe_blocks_planes():
