@@ -1,7 +1,7 @@
 # Benchmarks
 
 `benchmarks/` holds measurement only: each directory measures something, or holds the data measurements are computed
-against. A benchmark is never a verifier of record, writes no verdict and computes no number a guarantee reads, and
+against. A benchmark is never the verifier, writes no verdict and computes no number a guarantee reads, and
 nothing outside `benchmarks/` reads it. End-to-end demos, what a person runs to serve and audit a workload, are in
 `demos/`. This file is the directory's interface: its entry points, the shared harness, what a benchmark may import
 and write, and the index of every directory.
@@ -15,7 +15,7 @@ says. These are the directories that have one:
 | Command | What it runs |
 | --- | --- |
 | `verity bench bool_build_cost` | a workload's Boolean Build against its word Build: the descriptor's size and each Definition's proof-block rule, timed |
-| `verity bench circuit_properties` | the reference circuits' fan-out, fan-in and s_×, counted exactly, beside `rho`'s shape-derived ones |
+| `verity bench circuit_properties` | its circuits' fan-out, fan-in and s_×, counted exactly, beside `rho`'s shape-derived ones |
 | `verity bench codec_tensor` | the tensor-core wide-word codec's gates and timings on one GPU |
 | `verity bench compile_cost` | wall time and peak memory, by phase, of compiling a class-G window's Programs |
 | `verity bench compute` | the compute audit's number: the share of a served model's MACs that Pearl+ credits over the tokens a served run served, from the verifier's side of a recorded run's record |
@@ -37,7 +37,7 @@ says. These are the directories that have one:
 | `verity bench remote_session` | PoUB's sessions: a verifier's and a prover's process over TCP, end to end |
 | `verity bench replay_determinism` | whether a served MoE window's recorded schedule, replayed, gives its served bytes, op by op |
 | `verity bench replay_ladder` | the same replay across a ladder of dense and MoE models, with the per-model status table |
-| `verity bench route_capture` | what a model served like production executes, step by step, and the routes class G's Definitions don't cover |
+| `verity bench route_capture` | what a model executes when served, step by step, and the routes class G's Definitions don't cover |
 | `verity bench serve_tax` | what each change to serving costs vLLM's own server against stock compiled vLLM, at three loads |
 | `verity bench served_commit` | served vLLM against served vLLM with every value committed, interleaved, through `verity-bench vllm` |
 | `verity bench tensor_duty` | the tensor-duty sweep on one H200: dense tensor MACs a second by duty cycle, against the card's tensor clock |
@@ -75,7 +75,7 @@ only when every point has one, `compare` and `table` accept results only when th
   run publishes them to the evidence store, and tables are rendered from the store on demand. Results, tables and
   plots are not committed (`tests/test_repository.py`); the tree keeps code, the parameters code reads and small
   fixtures beside their generators.
-- **It writes no verdict.** Whether an audit passed is the verifier of record's to say. A benchmark that runs a
+- **It writes no verdict.** Whether an audit passed is the verifier's to say. A benchmark that runs a
   verifier records what the verifier returned, and its own gates say only whether its measurement stands.
 
 Some files here still break these rules: a kernel or a store the integration loads, a probe whose rate a card file
@@ -143,7 +143,7 @@ GPU code held bit for bit to its reference or Definition before it is timed.
 | `proof_throughput/` | the proof blocks a second Flock proves and the Lean verifier accepts on GLM-5.3's dot products, over the batch size | maintained |
 | `commitments/` | the commitment schemes' cost: hashing leaves and building the tree, hiding leaves per row, and serving's per-step row tables | maintained |
 | `sampling_plan/` | the sampling plan for one served workload: a cost model fitted to proving measurements, and ε at δ over the verification overhead (a model, not a measurement) | maintained |
-| `spot_figures/` | the SPOT post's Figures 1-3 for a model from its cards (`spot-card/v1`) and the sampled-proofs planner: what an adversary serving it on all of a scope's compute can exfiltrate, infiltrate or skip against total cost (each server configuration's serve tax plus the share of compute for verification) and against proof overhead, proof overhead per proof-block type, and the serve-time commitment's cost over fast serving (a model, not a measurement) | maintained |
+| `spot_figures/` | the SPOT post's Figures 1-3 for a model from its cards (`spot-card/v1`) and SPOT's planner: what an adversary serving it on all of a scope's compute can exfiltrate, infiltrate or skip against total cost (each server configuration's serve tax plus the share of compute for verification) and against proof overhead, proof overhead per proof-block type, and the serve-time commitment's cost over fast serving (a model, not a measurement) | maintained |
 | `verifier_cost/` | a verifier's time against the size of the circuit description it reads and of the circuit that description unrolls to | maintained |
 | `recursion_e2e/` | recursive witness zero knowledge, timed step by step: the inner proof, V* proved with `--zk`, and the Lean verifier | maintained |
 | `recursion_figures/` | a recursion bench result's session scaled over the census's fleets and the monitoring periods: its cost, knowledge-soundness error and stop-leak bound per window and pooled | maintained |
@@ -156,7 +156,7 @@ GPU code held bit for bit to its reference or Definition before it is timed.
 | `bool_build_cost/` | a workload's Boolean Build against its word Build: the descriptor's size and each Definition's proof-block rule | maintained |
 | `compile_cost/` | what compiling a class-G window's Programs costs (`predict.steps.compile_steps`, GLM-5.3 at TP8 on one rank): wall time and peak RSS, by phase, its digests held to their pins | maintained |
 | `circuit_properties/` | structural properties of a Boolean circuit's counted operations, measured exactly: fan-out, fan-in, their count and s_× | maintained |
-| `route_capture/` | what a model served like production executes: every engine step's launch-shape class under CUDA-graph serving, and the kernels of the first steps of each class; and the gap: every (route, statics) pair the captured steps need that class G's registered Definitions don't cover, with its owner | maintained |
+| `route_capture/` | what a model executes when served: every engine step's launch-shape class under CUDA-graph serving, and the kernels of the first steps of each class; and the gap: every (route, statics) pair the captured steps need that class G's registered Definitions don't cover, with its owner | maintained |
 | `unit_lowering/` | writing a PoUW H1 circuit file (a leaf's lane and combine, or the whole tile unit, at any tile R × C): peak memory and wall time by K, the file's AND rows, bytes and block (k_log), its SHA-512 held to a reference, and where the memory goes | maintained |
 
 ### Compute
