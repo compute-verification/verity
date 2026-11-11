@@ -258,8 +258,55 @@ fn fill_salts(key: Option<&[u8; 32]>, id: u64, b: &mut [u8]) {
                 s[64 * j..64 * j + 64].copy_from_slice(&chacha20_block(key, 3 * i as u64 + j as u64, id));
             }
         }),
-        None => os_fill(b),
+        None => match measured_salts() {
+            MeasuredSalts::Os => os_fill(b),
+            MeasuredSalts::Seed => seed_fill(id, b),
+            MeasuredSalts::SeedAboveLevel0 if id & ((1 << TABLE_SHIFT) - 1) == 0 => os_fill(b),
+            MeasuredSalts::SeedAboveLevel0 => seed_fill(id, b),
+            MeasuredSalts::Zero => b.par_chunks_mut(OS_PIECE).for_each(|p| p.fill(0)),
+        },
     }
+}
+
+/// A measurement switch, never a proving configuration: `FC_MEASURE_SALTS` in the prover's environment says where a
+/// tree's salts come from, to time what the OS's generator costs a statement. Under any value but `os` the identity's
+/// `salt_source` is untrue of the proof, and under `zero` the commitment hides nothing.
+#[derive(Clone, Copy)]
+enum MeasuredSalts {
+    /// The OS's bytes: every proving build, and the switch unset.
+    Os,
+    /// `seed`: every tree's salts expanded from a 32-byte OS seed of its own ([`seed_fill`]).
+    Seed,
+    /// `seed-above-level0`: level 0's salts from the OS, every later tree's expanded from a 32-byte OS seed of its own.
+    SeedAboveLevel0,
+    /// `zero`: every salt byte zero, the cost with no generator at all.
+    Zero,
+}
+
+fn measured_salts() -> MeasuredSalts {
+    static MODE: std::sync::OnceLock<MeasuredSalts> = std::sync::OnceLock::new();
+    *MODE.get_or_init(|| match std::env::var("FC_MEASURE_SALTS").as_deref() {
+        Err(_) | Ok("" | "os") => MeasuredSalts::Os,
+        Ok("seed") => MeasuredSalts::Seed,
+        Ok("seed-above-level0") => MeasuredSalts::SeedAboveLevel0,
+        Ok("zero") => MeasuredSalts::Zero,
+        Ok(other) => panic!("FC_MEASURE_SALTS={other}: os, seed, seed-above-level0 or zero"),
+    })
+}
+
+/// Tree `id`'s salts as ChaCha20 stream `id` of a 32-byte seed read from the OS for this tree alone, in [`OS_PIECE`]-byte
+/// pieces on rayon's threads, each piece from its own position of the stream.
+fn seed_fill(id: u64, b: &mut [u8]) {
+    use rayon::prelude::{IndexedParallelIterator, ParallelIterator, ParallelSliceMut};
+    let mut seed = [0u8; 32];
+    os_fill(&mut seed);
+    b.par_chunks_mut(OS_PIECE).enumerate().for_each(|(i, p)| {
+        let mut r = ChaCha20Rng::from_seed(seed);
+        r.set_stream(id);
+        r.set_word_pos((i * (OS_PIECE / 4)) as u128);
+        r.fill_bytes(p);
+    });
+    zero(&mut seed);
 }
 
 /// Reads a table's trees before the prover samples them ([`LeafSalts::ahead`]), so the device's tree callbacks find their salts
