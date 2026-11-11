@@ -727,7 +727,9 @@ def test_the_first_stage_samples_a_whole_count_of_a_verification_phase():
 def test_a_verification_phases_statements_hold_its_whole_sample():
     """A type's statements of a verification phase hold its blocks of all K sampled replay blocks, split into sessions
     of at most its cap padded to one size, with no padding for the count, which is exact; a type takes them only
-    where they cost less than a sampled replay block's own, and with no count it never does."""
+    where they cost less than a sampled replay block's own, and with no count it never does.  Each type's `sessions`
+    are a sampled replay block's share of them, so K times it is the phase's whole number of sessions where the
+    statements are the phase's, and one a sampled replay block of a type whose blocks fit one statement."""
     cells = [Cell(8, 16.0, prove=1.0, fixed=10.0, cap=4), Cell(2, 16.0, prove=3.0, fixed=6.0, cap=4)]
     for k in ({0: 1}, {0: 5}, {0: 20}):
         assert two_stage_price(cells, k, 0) == two_stage_price(cells, k)
@@ -741,6 +743,8 @@ def test_a_verification_phases_statements_hold_its_whole_sample():
             assert r["shared"] == (shared < mine) and r["prove"] == pytest.approx(min(shared, mine))
             assert r["padding"] == (pytest.approx(shared - sessions * c.fixed / sampled - taken * c.prove)
                                     if r["shared"] else 0.0)
+            assert r["sessions"] * sampled == pytest.approx(sessions if r["shared"] else sampled * taken)
+    assert [r["sessions"] for r in two_stage_statements(cells, {0: 10})] == [8.0 / 4, 1.0]
     assert not any(r["shared"] for r in two_stage_statements(cells, {0: 1}, 1))
     assert all(r["shared"] for r in two_stage_statements(cells, {0: 1}, 10 ** 4))
 
@@ -772,7 +776,9 @@ def test_a_design_samples_a_whole_count_of_each_verification_phase():
         assert row["total"] <= budget * (1 + 1e-12)
         assert (count + 1) * (1.0 + interior + two_stage_price(strata, row["k"], count + 1)[2]) > left * n
         assert row["bound"] == pytest.approx(two_stage_exfil(strata, row["k"], replay_blocks, q, delta), rel=1e-6)
-    assert row["shared"] == 1.0 and 0 <= row["padding"] < 0.01
+        assert row["sessions"] == pytest.approx(
+            count * sum(r["sessions"] for r in two_stage_statements(strata, row["k"], count)))
+    assert row["shared"] == 1.0 and 0 <= row["padding"] < 0.01 and row["sessions"] == round(row["sessions"]) >= 2
     assert row["q"] > alone["q"] and row["bound"] < alone["bound"]
 
 

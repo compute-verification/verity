@@ -1311,21 +1311,26 @@ def two_stage_statements(cells: Iterable[Cell], k: Mapping[int, float], sampled:
     chance the type is sampled).  A verification phase that samples exactly `sampled` replay blocks may instead hold a
     type's blocks of all of them, the statement's shape fixed before any coin because the count is: split into sessions
     of at most `cap` blocks padded to one size.  A type takes the verification phase's where they cost less (`shared`),
-    and `padding` is its proving of padding.  With no `sampled`, every statement is a sampled replay block's own."""
+    and `padding` is its proving of padding.  With no `sampled`, every statement is a sampled replay block's own.
+    `sessions` is the type's sessions, a sampled replay block's share of them: the verifier's second stage reads one
+    session a template of a verification phase (`Spot.SecondStage`, `second-template`), so a type with more than one
+    in a phase is priced in sessions it refuses."""
     cells = list(cells)
     strata = _strata(cells, k)
     out = []
     for c in cells:
         taken = c.n * min(1.0, k[c.stratum] / strata[c.stratum])
         marginal = taken * c.prove
-        row = {"taken": taken, "marginal": marginal, "prove": marginal + c.fixed * taken / max(1.0, min(c.cap, taken)),
-               "shared": False, "padding": 0.0}
+        own = taken / max(1.0, min(c.cap, taken))
+        row = {"taken": taken, "marginal": marginal, "prove": marginal + c.fixed * own, "shared": False,
+               "padding": 0.0, "sessions": own}
         if sampled and taken > 0:
             blocks = ceil(sampled * taken - 1e-9)
             sessions = ceil(blocks / c.cap)
             padded = sessions * ceil(blocks / sessions) * c.prove / sampled
             if (shared := sessions * c.fixed / sampled + padded) < row["prove"]:
-                row |= {"prove": shared, "shared": True, "padding": max(0.0, padded - marginal)}
+                row |= {"prove": shared, "shared": True, "padding": max(0.0, padded - marginal),
+                        "sessions": sessions / sampled}
         out.append(row)
     return out
 
@@ -1396,7 +1401,8 @@ def two_stage_design(cells: Iterable[Cell], replay_blocks: int, delta: float, *,
     replay block's own.  Its row:
     `merged` (the widest size class in stratum 0), `kappa`, `k`, `q`, `registration`, `registration_sample` (K, the
     replay blocks a verification phase samples; 0 with no `registration`), `shared` and `padding` (their shares of
-    proving),
+    proving), `sessions` (a verification phase's sessions, `two_stage_statements`'s, over all its sampled replay
+    blocks),
     `bound` (bits) and the Rankin `theta` it takes, `replay_sample`, `draws` (proved proof blocks), `prove`, `replay`,
     `boundary`, `interior`, `commit` (their sum), `total` and `fill` (proving over its marginal); None when the boundary
     alone is over the budget or no κ has a design.  The bound's Lean takes the first stage through
@@ -1447,7 +1453,8 @@ def two_stage_design(cells: Iterable[Cell], replay_blocks: int, delta: float, *,
                          "k": k, "q": q, "registration": registration,
                          "registration_sample": count if registration else 0,
                          "shared": fsum(r["prove"] for r in st if r["shared"]) / prove if prove > 0 else 0.0,
-                         "padding": fsum(r["padding"] for r in st) / prove if prove > 0 else 0.0, "split": split,
+                         "padding": fsum(r["padding"] for r in st) / prove if prove > 0 else 0.0,
+                         "sessions": count * fsum(r["sessions"] for r in st), "split": split,
                          "bound": two_stage_exfil(split, k, replay_blocks, q, delta, served, union, SCREEN, fanout),
                          "replay_sample": sampled, "draws": sampled * blocks, "prove": sampled * prove,
                          "replay": sampled * replay, "boundary": boundary, "interior": sampled * interior,
