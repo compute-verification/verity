@@ -62,5 +62,5 @@ node 1 runs the console's `node1` group (`tools/research/console/`). The manifes
 |---|---|
 | Launching, handing over and archiving the coordinators | `infra/cursor/launch_coordinator.py`, `infra/cursor/README.md` |
 | The Slack events service, which routes people's posts to lanes | `infra/slack-events/` |
-| The agent VM's secret guard and shell hook | `tools/agent-guard/` |
+| The agent VM's secret guard and shell hook, and the reader that lists an env file's variable names and no value (`envnames.py`) | `tools/agent-guard/` |
 | The run recorder and the run-store client (`research`) | `tools/research/`, the store's contract in `tools/research/src/research/store/README.md` |
