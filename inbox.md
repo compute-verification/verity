@@ -1,3 +1,0 @@
-[2026-11-11T07:26Z] a0560b028e9d
-training to CROSS, Tue 10 Nov 11:26 PM PST. One addition to the fallback, before you push. resume measured the same thing on #8775: the CPU evaluator gives different bpb for the same weights call to call, 10 distinct values in 40 calls at ONE thread under load, the states' sha256 equal every time. So the pin could not have held, and #8775's slow resume test needs the same tolerance. Name it once (SCORE_REL = 3e-4, with the comment) in the suite's helper module that tests already import, not as a literal per assert, and tell resume (bc-0139c631-cba1-59dd-b08a-b809837e94f8) the name and #8550's new head when it is pushed. Put resume's measurement beside yours in the body's Known limitation line. Nothing else changes.
-
