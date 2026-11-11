@@ -13,21 +13,21 @@ untraced = ["tests/test_tick_job.py"]
 # (`serve_admit`, `tick_plugin`), whose release headers, watermark and feed the stand-in network certifier speaks, and
 # the modules they import
 inputs = [
-    "integrations/vllm/verity_vllm/__init__.py",
-    "integrations/vllm/verity_vllm/engine/__init__.py",
-    "integrations/vllm/verity_vllm/engine/hooks.py",
-    "integrations/vllm/verity_vllm/pipeline/__init__.py",
-    "integrations/vllm/verity_vllm/pipeline/serve_admit.py",
-    "integrations/vllm/verity_vllm/pipeline/tick_plugin.py",
-    "integrations/vllm/verity_vllm/settings.py",
-    # `verity.core.protocols.certifier.release` (tests/test_tick_corpus.py): the release headers and the watermark as
+    "adapters/vllm/verity_vllm/__init__.py",
+    "adapters/vllm/verity_vllm/engine/__init__.py",
+    "adapters/vllm/verity_vllm/engine/hooks.py",
+    "adapters/vllm/verity_vllm/pipeline/__init__.py",
+    "adapters/vllm/verity_vllm/pipeline/serve_admit.py",
+    "adapters/vllm/verity_vllm/pipeline/tick_plugin.py",
+    "adapters/vllm/verity_vllm/settings.py",
+    # `verity.protocols.certifier.verifier.release` (tests/test_tick_corpus.py): the release headers and the watermark as
     # the network certifier makes them, which the server's feed reads in a warden trace under `--admit tick`, and its
     # packages
     "verity/__init__.py",
     "verity/core/__init__.py",
     "verity/core/protocols/__init__.py",
-    "verity/core/protocols/certifier/__init__.py",
-    "verity/core/protocols/certifier/release.py",
+    "verity/protocols/certifier/verifier/__init__.py",
+    "verity/protocols/certifier/verifier/release.py",
 ]
 
 # What these test files read that their source doesn't name (a tree a test walks, a module it loads by a name it computes,

@@ -17,9 +17,9 @@ import pytest
 
 torch = pytest.importorskip("torch")
 
-from verity.ml.circuits.evaluation import evaluate_batch  # noqa: E402
-from verity.ml.definitions.registry import tp_allreduce as TA  # noqa: E402
-from verity.ml.definitions.registry import tp_allreduce_check as K  # noqa: E402
+from verity.circuits.evaluation import evaluate_batch  # noqa: E402
+from verity.definitions.registry import tp_allreduce as TA  # noqa: E402
+from verity.definitions.registry import tp_allreduce_check as K  # noqa: E402
 
 HERE = Path(__file__).resolve().parents[1]
 W, T, H, EPS, STEP, LAYER = 8, 2, 256, 1e-5, 0, 3
