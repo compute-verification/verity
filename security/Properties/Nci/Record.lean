@@ -175,7 +175,9 @@ def InLeaf (P : Prog) (sc : Scope) (k : ℕ) (port : String) (row l g lo hi : �
     Flock.Program.resolve P sc (⟨true, i, (inRow (P.defs[sc.d]!) i k row).1 + l⟩ : Ref) = .ok g ∧
     lo = bitAt (inRow (P.defs[sc.d]!) i k row).2 l ∧ hi = lo + (inRow (P.defs[sc.d]!) i k row).2[l]!
 
-/-- Leaf `l` of output row `out` of the activation `sc` is Program gate `g`, at bits `[lo, hi)` of the row. -/
+/-- Leaf `l` of output row `out` of the activation `sc` is Program gate `g`, at bits `[lo, hi)` of the row. An
+activation of a primitive has the default body, whose `ret` resolves to the activation's own gate: the one leaf of its
+one output row `o0` is that gate. -/
 def OutLeaf (P : Prog) (sc : Scope) (out : String) (l g lo hi : ℕ) : Prop :=
   ∃ f, out = "o" ++ toString f ∧ f < (fieldsOf (P.defs[sc.d]!).ret).length ∧
     l < (outRow (P.defs[sc.d]!) f).2.size ∧
@@ -189,7 +191,8 @@ def RowLeaf (P : Prog) (rs : Array TRange) (W : Spot.Wires.Wiring) (r : Row) (l 
 /-- **`t` is Definition `d`'s template.** No two of `d`'s parameters have one name, and each is whole 16-bit words;
 `t`'s rows are `d`'s parameters by name, each with its words and its outer length; and `t`'s outputs are `d`'s output
 rows `o<f>`, each with its bits rounded up to whole words, never down: a row wired to an output has the output's
-words (`Spot.Wires.check`), so it is no fewer bits than the output it reads. -/
+words (`Spot.Wires.check`), so it is no fewer bits than the output it reads. It does not ask that a parameter or an
+output has a bit, which `NciCheck.RecordText.templatesOf` asks of every template it gives. -/
 def TemplateOf (d : Defn) (t : Spot.Wires.Template) : Prop :=
   (∀ i i', i < d.params.size → i' < d.params.size → d.params[i]!.1 = d.params[i']!.1 → i = i') ∧
     (∀ i, i < d.params.size → 16 ∣ bitsOf d.params[i]!.2) ∧
