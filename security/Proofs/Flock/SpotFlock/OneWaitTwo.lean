@@ -11,7 +11,7 @@ import Proofs.Flock.Claims.Prob
 
 `Flock.SecurityProofs.SpotOneWaitTwo : Flock.Guarantees.SpotOneWaitTwo` is the two-stage committed form at the
 boundary trace that an extraction of one wait a session fixes (`CompiledTwo.OneWaitTwoXAt`), at SPOT[Flock]'s code
-(`SpotFlock.code`), at `SpotKSTwo`'s registration, interior roots, design, replay sample and replay cap, at SHA-512,
+(`SpotFlock.code`), at `SpotKSTwo`'s registration, interior roots, design and replay sample, at SHA-512,
 under the two facts of the frame `SpotKSTwo` takes (`SpotFlock.Built`, `SpotFlock.Addresses`).
 
 Its error is `SpotFlock.εoneWaitAt`,
@@ -112,7 +112,7 @@ open Claims
 
 /-- **SPOT[Flock]'s two-stage verifier meets the committed form at the boundary trace an extraction of one wait a
 session fixes, at SHA-512, at its own frame, where each value has one address.** At `L`, the compiled two-stage
-verifier at `SpotKSTwo`'s registration, code, interior roots, design, replay sample and replay cap, at a statement
+verifier at `SpotKSTwo`'s registration, code, interior roots, design and replay sample, at a statement
 in scope (`CompiledTwo.Scope`) and every prover: where SHA-512 meets the linear expected-time bound
 (`Claims.ExpectedCR`) at the one-wait compiled verifier's `B_conf,X` and at its two by-class finders, under the
 statement's roots and under the interior roots, at every number `K` of tries they stop at, an accepted run samples
