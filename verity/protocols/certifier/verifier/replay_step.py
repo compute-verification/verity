@@ -38,7 +38,8 @@ synchronous or async scheduling, FCFS, one full-attention KV group, as `replay._
   its `CacheStep_v1` calls (a running row's one, an admitted row's second), a kept slot without one keeps its own, and
   a preempted or stopped request drops its own, since it resumes as an admitting row from the root. The step also
   says which candidates' lookups it read (`looked`): each waiting slot its loop reaches, the one whose allocation ends
-  the loop included, and each arrival it checks for an ask. Past the pool bound advice v1 sends one shortfall for each.
+  the loop included, and each arrival it checks for an ask. Past the pool bound each one's hit is the block pool's
+  (`CacheStep_v2`), and advice v1 sends none.
 
 **Statics** (all public): the size class R running slots, W waiting slots and A arrivals looked ahead; the engine's
 max_num_seqs M, max_num_batched_tokens T, max_model_len L, block_size B (a power of 2), long_prefill_token_threshold

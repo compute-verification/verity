@@ -69,3 +69,12 @@ Prove times (results go to `$RESEARCH_RUN_DIR/out`, the build and stagings to `F
 research run --on NODE --cwd source -- bash benchmarks/served_units/prove_time.sh \
   PT_UNITS="fp8-coord:K=6144 fp8-coord:K=6144+public-weights" PT_NS="16 64" PT_DEVICE=gpu SM=120
 ~~~
+
+## Interface
+
+- **Provides:** `stage.py`, which stages a served proof block's statement, and the runners and scripts around it.
+- **Loaded by:** `benchmarks/one_stage`, which imports `stage`. Nothing else.
+- **Loads:** `verity.definitions`, `verity.circuits` with the primitive circuits (`verity.definitions.ops`),
+  `verity.commitments`, `verity.protocols.spot.verifier`, `verity.hardware`, Flock (`verity_flock`),
+  `circuit_check.targets` and `verity_vllm.pipeline`; the scripts build and run Flock's circuit prover and its Lean
+  verifier.
