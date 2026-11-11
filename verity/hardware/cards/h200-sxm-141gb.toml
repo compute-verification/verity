@@ -14,8 +14,10 @@ vbios = "96.00.A5.00.03"
 lean = "security/Definitions/Core/Accel/H200.lean"
 nodes = "two H200 nodes (art:72daa20de42c, art:28ff838a63c9: identical apart from the current clocks)"
 
+# count: the SMs. warps: the most warps resident on an SM at once.
 [sm]
 count = { value = 132, unit = "SM", mark = "ceiling", source = "H100 whitepaper V1.04 Table 3 (H100 SXM5: 132 SMs; the H200 is the same GH100 with HBM3e)" }
+warps = { value = 64, unit = "warp/SM", mark = "ceiling", source = "CUDA C++ Programming Guide 12.9 section 18.2 Table 28, 'Maximum number of resident warps per SM', CC 9.0: 64 (and 2048 resident threads, 32 a warp); store.reg_extra counts its uniform registers and predicates at this many" }
 
 [clock]
 sm = { value = 1980, unit = "MHz", mark = "ceiling", source = "art:72daa20de42c, art:28ff838a63c9 (nvidia-smi -q: max, application, default application and max customer boost clocks 1980 MHz); art:d10829e5b08e (SM and memory clock offset ranges [0, 0], supported clocks top at 1980 and 3201); H100 whitepaper V1.04 Table 3, 'GPU Boost Clock ... 1980 MHz', footnote 2 'GPU Peak Clock and GPU Boost Clock are synonymous'" }

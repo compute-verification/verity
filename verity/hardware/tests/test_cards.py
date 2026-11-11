@@ -4,6 +4,7 @@ others."""
 from __future__ import annotations
 
 import copy
+import math
 import re
 from fractions import Fraction
 
@@ -77,6 +78,15 @@ def test_derived_gpu_numbers(sku: str) -> None:
     card = load(sku)
     assert value(card, "memory.bandwidth") == (value(card, "clock.memory") * 10 ** 6 * value(card, "memory.transfers")
                                                * value(card, "memory.bus") / 8)
+
+
+@pytest.mark.parametrize("sku", skus("gpu"))
+def test_the_extra_registers_cover_the_resident_warps(sku: str) -> None:
+    """`sm.warps` is the most warps resident on an SM, and `store.reg_extra` holds at least their uniform registers (63
+    a warp) and their predicates (7 bits a thread at 32 threads a warp, and 7 bits a warp), in 32-bit words."""
+    card = load(sku)
+    warps = value(card, "sm.warps")
+    assert value(card, "store.reg_extra") >= 63 * warps + 7 * warps + math.ceil(7 * warps / 32)
 
 
 @pytest.mark.parametrize("sku", skus("gpu"))

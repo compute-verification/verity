@@ -13,8 +13,10 @@ board = "692-2G525-0220-000"
 vbios = "97.00.D9.00.35"
 nodes = "a B200 node: one card a VM (art:a597e0beaf00: nvidia-smi -q and the clock trials; art:986044d82e9b)"
 
+# count: the SMs. warps: the most warps resident on an SM at once.
 [sm]
 count = { value = 148, unit = "SM", mark = "ceiling", source = "the SMs the firmware enables, as the device reports them: cudaDeviceProp.multiProcessorCount 148, and each of the DC-100 census's 43 probes ran its 148 blocks on 148 distinct SMs, on this board and vBIOS (art:175d28515b3b); no NVIDIA document read gives the B200's count (Technical Brief V2.1 Table 3 says only '16 Blackwell Die for 8 GPUs')" }
+warps = { value = 64, unit = "warp/SM", mark = "ceiling", source = "CUDA C++ Programming Guide 12.9 section 18.2 Table 28, 'Maximum number of resident warps per SM', CC 10.x: 64 (and 2048 resident threads, 32 a warp); store.reg_extra counts its uniform registers and predicates at this many" }
 
 [clock]
 sm = { value = 1965, unit = "MHz", mark = "ceiling", source = "art:a597e0beaf00 (nvidia-smi -q: max, application, default application and max customer boost clocks 1965 MHz; NVML GPC and memory clock VF offset ranges [0, 0]; supported graphics clocks top at 1965; every lock, application clock and offset above 1965 MHz clamped or refused); no NVIDIA document states a B200 clock" }

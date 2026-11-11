@@ -14,8 +14,10 @@ vbios = "98.02.8D.00.01"
 lean = "security/Definitions/Core/Accel/Sm120.lean"
 nodes = "an RTX PRO 6000 node: eight cards, all this SKU and vBIOS (art:0620926423e6; the SKU first read in art:f8da67c39f76)"
 
+# count: the SMs. warps: the most warps resident on an SM at once.
 [sm]
 count = { value = 188, unit = "SM", mark = "ceiling", source = "NVIDIA RTX PRO Blackwell GPU Architecture whitepaper v1.1, Appendix A, Table 4: 188 SMs (the Workstation Edition, the same GB202)" }
+warps = { value = 48, unit = "warp/SM", mark = "ceiling", source = "CUDA C++ Programming Guide 12.9 section 18.2 Table 28, 'Maximum number of resident warps per SM', CC 12.0: 48 (and 1536 resident threads, 32 a warp); store.reg_extra counts its uniform registers and predicates at this many" }
 
 [clock]
 sm = { value = 2430, unit = "MHz", mark = "ceiling", source = "art:0620926423e6 (nvidia-smi -q, all eight cards: max, application, default application and max customer boost clocks 2430 MHz); art:529e118ea9ea (NVML: SM and memory clock offset ranges [0, 0], supported graphics clocks top at 2430); art:198a12d9c2e8 (every lock, application clock and offset above 2430 MHz refused or clamped)" }
