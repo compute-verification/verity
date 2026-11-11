@@ -1,7 +1,6 @@
 module
 
 public import Definitions.Accounting.Assumptions.CreditedWords
-public import Definitions.Accounting.JointBridge.H200
 public import Mathlib.CategoryTheory.Types.Basic
 public import Mathlib.RingTheory.WittVector.IsPoly
 public import Mathlib.Tactic.Polynomial.Basic

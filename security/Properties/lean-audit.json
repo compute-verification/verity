@@ -2095,7 +2095,7 @@
   "Properties.Accounting.JointBridge.WorkOfH1CheckedCreditPeriod": {
    "imports": ["Definitions.Accounting", "Definitions.Accounting.Assumptions", "Properties.Pouw.Period"],
    "except": [],
-   "why": "a joint period's audit bridge is stated over the joint period (`Definitions.Accounting.JointPeriod`), the bridge's realization and the H200's price (`Definitions.Accounting.JointBridge`), its named premises (`Definitions.Accounting.Assumptions.CreditedWords`) and the source protocol's period statement (`Properties.Pouw.Period`), never a proof"
+   "why": "a joint period's audit bridge is stated over the joint period (`Definitions.Accounting.JointPeriod`), the bridge's realization (`Definitions.Accounting.JointBridge`), its named premises (`Definitions.Accounting.Assumptions.CreditedWords`) and the source protocol's period statement (`Properties.Pouw.Period`), never a proof"
   },
   "Properties.Pouw.PeriodJ10R": {
    "imports": ["Definitions.Accounting", "Definitions.Accounting.Assumptions", "PouwCheck", "Properties.Pouw.Period"],

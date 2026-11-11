@@ -131,11 +131,11 @@ def fast : Sched → Bool
 
 end Sched
 
-/-! ## The cards' atoms (`b1` at `Open.b1 = 1/8`) -/
+/-! ## The cards' atoms (`b1` at the H200's weight 1/8) -/
 
 /-- INT8 MMA, s32 accumulate: weight 1, all 256 values. -/
 def s8 : Atom := ⟨8, 256, none⟩
-/-- Binary MMA (AND/XOR-popcount) on `{0, 1}`, at `Open.b1 = 1/8`. -/
+/-- Binary MMA (AND/XOR-popcount) on `{0, 1}`, at the H200's weight 1/8 (`Accel.H200.card`'s `weight .b1`). -/
 def b1 : Atom := ⟨1, 2, none⟩
 
 /-- The H200 SXM at its data sheet's instruction `k` (f16 and bf16 at 8, tf32 at 4): s8, e4m3, e5m2, f16, bf16,
@@ -145,7 +145,9 @@ def h200Sheet : List Atom :=
     ⟨32, 4097, some (4, 24)⟩, b1]
 
 /-- The RTX PRO 6000 (sm_120) at its data sheet's `k`: s8, e4m3, e5m2, e2m1, nvf4 (`k = 64`, weight 1/2), f16,
-bf16, tf32, b1. -/
+bf16, tf32, b1. Its `b1` is at the H200's weight 1/8, where the card's own file, `rtx-pro-6000-server.toml`, has 1
+(`Accel.Sm120.card`'s `weight .b1`): the lighter atom makes this the more permissive table, on purpose, so that a
+lower bound on it holds at the card's own weight too. -/
 def rtx6000Sheet : List Atom :=
   [s8, ⟨8, 33, some (32, 24)⟩, ⟨8, 17, some (32, 24)⟩, ⟨8, 9, some (32, 24)⟩, ⟨4, 9, some (64, 24)⟩,
     ⟨16, 4097, some (8, 24)⟩, ⟨16, 513, some (8, 24)⟩, ⟨32, 4097, some (4, 24)⟩, b1]
@@ -180,10 +182,11 @@ or Winograd somewhere costs at least naive tiled's `8^(l+1)` plus 32, i.e. `1 + 
 
 The guarantee (`Verity.Guarantees.NaiveBeatsStrassenAny`) states it at `L = 12` on every table that `rtx6000Sheet`
 dominates (`Packed.Dom`). Served inner and outer dimensions are at most 65536 (DeepSeek-V4's and Llama-3.1-70B's
-MLPs), and a leaf is at least 16: sm_120 has no `wgmma`, its `mma.sync` tiles are 16 wide, and the H200 is taken at
-`Open.sync = 1`. So a recursion on a served product is at most `log₂(65536 / 16) = 12` deep. Deeper schedules pad past
-the served size, and the size form `NaiveBeatsStrassenUpTo` at `c = 4096` bounds them at every depth. Both are about
-int8 operands at `(256, 256)`.
+MLPs), and a leaf is at least 16: sm_120 has no `wgmma`, its `mma.sync` tiles are 16 wide, and the H200's 16-wide
+`mma.sync` tiles are priced at its `wgmma`'s weight, the most permissive price (an atom's weight is its format's
+alone), which allows a leaf of 16 there too. So a recursion on a served product is at most `log₂(65536 / 16) = 12`
+deep. Deeper schedules pad past the served size, and the size form `NaiveBeatsStrassenUpTo` at `c = 4096` bounds them
+at every depth. Both are about int8 operands at `(256, 256)`.
 
 The exact tables hold further on three of the four card tables: to depth 13 on the H200 (both `k`) and the RTX PRO
 6000 at the measured `k`. On the RTX PRO 6000's data sheet they stop at 12: with b1 at `1/8`, a schedule reaches

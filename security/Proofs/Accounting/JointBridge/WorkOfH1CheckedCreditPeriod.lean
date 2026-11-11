@@ -1,6 +1,7 @@
 module
 
-public import Definitions.Accounting.JointBridge.H200
+public import Definitions.Accounting.Device
+public import Definitions.Pouw.PearlC.W1
 public import Properties.Accounting.JointBridge.WorkOfH1CheckedCreditPeriod
 import Mathlib.Algebra.Order.Floor.Extended
 import Mathlib.Algebra.Order.Interval.Basic
@@ -44,12 +45,27 @@ import Std.Tactic.BVDecide.Normalize.Prop
 `Properties.Pouw.Period.SecurityProofs.h1CheckedCreditPeriod` at the source's instance there bounds the play's
 acceptance with `n` times its fixed words below the check's credit, which is the bound the bridge takes, read through
 `Pouw.pr` (`pr_le_prob_of_equiv` at the identity). The H200's instance is it at `Accounting.h200S8Price`, the H200's
-price with INT8, which is stated here, `receiptWordMacs R C` multiply-adds a word and `receiptUnitMacs K R C` a unit.
+price with INT8, `receiptWordMacs R C` multiply-adds a word and `receiptUnitMacs K R C` a unit.
+
+That price is stated here, with `Accounting.w1Price`, which it is an instance of. `Accounting.Price` prices the device
+model's three op classes; W1 (`Pouw.PearlC.W1.W1Prices`) prices each tensor-core format's multiply-add and each
+CUDA-core instruction, in one dense E4M3 multiply-add. `w1Price pr f` reads the first off the second for a run whose
+tensor-core multiply-adds are of format `f`, and a card's price is it at that card's W1 prices and a format.
 -/
 
 @[expose] public section
 
 namespace Accounting
+
+open Pouw.PearlC.W1 in
+/-- **The device model's price at W1's prices `pr`**, for tensor-core multiply-adds of format `f`: a tensor-core
+multiply-add at `f`'s W1 price, a CUDA-core op at the cheaper of W1's FP32 and INT32 instructions, and an oracle query
+at one SHA-512 compression, each rounded up to a whole unit (one dense E4M3 multiply-add). -/
+def w1Price (pr : W1Prices) (f : Fmt) : Price := fun o =>
+  match o with
+  | .tc => ⌈pr.mac f⌉₊
+  | .cuda => ⌈min pr.fp32 pr.int32⌉₊
+  | .oracle => ⌈pr.sha512⌉₊
 
 /-- **The H200's price with INT8**: `W1Device.s8H100`'s prices (`W1Prices.h100`, the H100's and the H200's, one GH100)
 for S8 multiply-adds: an INT8 tensor-core multiply-add at W1's S8 price, `1`; a CUDA-core op at FP32's `32` (INT32's

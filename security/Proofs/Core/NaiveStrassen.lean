@@ -5,20 +5,21 @@ public import Definitions.Core.Guarantees.NaiveStrassen
 public import Proofs.Core.NaiveStrassen.Eval
 
 /-!
-# Naive tiled against Strassen: the statements, their witnesses and the four card tables
+# Naive tiled against Strassen: the two statements' proofs, their witnesses and the four card tables
 
 Theorem 1 at `L = 12` and its size form at `c = 4096` are proved on every atom table that the RTX PRO 6000 data
-sheet's dominates (`Packed.Dom`), from one table, that sheet's. The table is computed and checked by
+sheet dominates (`Packed.Dom`), from one table, that sheet's. The table is computed and checked by
 `decide +kernel` (`NaiveStrassen/Eval.lean`): a pure kernel check, with no `native_decide` and no compiled code. Its
 soundness is the induction on `Sched` in `NaiveStrassen/Sound.lean`.
 
 Each statement has two witnesses. Its honest one: the sheet dominates the H200's data sheet, and one Winograd at
-depth 1 (`winogradOnce`) is a schedule there that the statement is about, at Theorem 1's bound exactly. Its
-nontrivial one: a table of one free atom is not dominated, and on it the bound fails.
+depth 1 (`winogradOnce`) is a schedule there that the statement is about: it costs Theorem 1's bound exactly, and in
+size it loses to naive tiled at `l = b = n = 1`. Its nontrivial one: a table of one free atom is not dominated, and
+on it the bound fails.
 
 The four card tables, each card at its data sheet's and at its measured instruction `k`, are dominated, so both
 statements hold on each (`naive_beats_strassen`, `naive_beats_strassen_up_to`). The two measured tables are written
-here, beside those corollaries, which alone read them.
+here, beside those corollaries: nothing outside this file reads them.
 
 Theorem 2 (root CRT, `NaiveBeatsCrtStrassen`) is open: its statement stays in `Definitions/Core/NaiveStrassen.lean`,
 with its hypotheses' witness `crt_hypotheses` here, and nothing cites it.
@@ -91,7 +92,8 @@ def h200Measured : List Atom :=
   [s8, ⟨8, 33, some (32, 14)⟩, ⟨8, 17, some (32, 14)⟩, ⟨16, 4097, some (16, 24)⟩, ⟨16, 513, some (16, 24)⟩,
     ⟨32, 4097, some (8, 24)⟩, b1]
 
-/-- The RTX PRO 6000 at the measured `k` (f16 and bf16 at 16, f16 at 8 at twice the weight, tf32 at 4). -/
+/-- The RTX PRO 6000 at the measured `k` (f16 and bf16 at 16, f16 at 8 at twice the weight, tf32 at 4), its `b1`
+`rtx6000Sheet`'s, at the H200's weight 1/8. -/
 def rtx6000Measured : List Atom :=
   [s8, ⟨8, 33, some (32, 24)⟩, ⟨8, 17, some (32, 24)⟩, ⟨8, 9, some (32, 24)⟩, ⟨4, 9, some (64, 24)⟩,
     ⟨16, 4097, some (16, 24)⟩, ⟨32, 4097, some (8, 24)⟩, ⟨16, 513, some (16, 24)⟩, ⟨32, 4097, some (4, 24)⟩, b1]
