@@ -81,6 +81,8 @@ from pathlib import Path
 from typing import Any
 
 import numpy as np
+from verity.circuits.defs import bind
+from verity.circuits.evaluation import evaluate
 from verity.definitions.numerics import dsv4_decode_metadata_twin as T
 from verity.definitions.registry import dsv4_decode_metadata as R
 
@@ -516,9 +518,6 @@ def observe(work: Path, case: str, ops: dict[str, Any], rows: dict[str, dict[str
 # ------------------------------------------------------------------------------------------------------------------ comparisons
 def compare_swa(job: dict[str, Any], rec: dict[str, Any]) -> None:
     """Tokens [lo, hi): each window row and its length against the twin, the reference `Dsv4SwaIndices_v1` on every ref_every-th."""
-    from verity.circuits.defs import bind
-    from verity.circuits.evaluation import evaluate
-
     a = _load(job["paths"])
     lo, hi = job["rows"]
     st = job["statics"]
@@ -544,9 +543,6 @@ def compare_swa(job: dict[str, Any], rec: dict[str, Any]) -> None:
 def compare_c128(job: dict[str, Any], rec: dict[str, Any]) -> None:
     """Decode tokens [lo, hi): each row and its length against the twin, the reference `Dsv4C128aGlobalTopk_v1` on every
     ref_every-th."""
-    from verity.circuits.defs import bind
-    from verity.circuits.evaluation import evaluate
-
     a = _load(job["paths"])
     lo, hi = job["rows"]
     st = job["statics"]
@@ -622,8 +618,6 @@ def ptx(triton_cache: Path, outdir: Path) -> dict[str, Any]:
 
 def bind_check() -> dict[str, Any]:
     """The Programs bind at DeepSeek-V4-Pro's statics and the edge width."""
-    from verity.circuits.defs import bind
-
     out = {}
     for case in CASES_L:
         fn = R.Dsv4SwaIndices if PHASE[case] == "swa" else R.Dsv4C128aGlobalTopk

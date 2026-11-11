@@ -125,7 +125,14 @@ from pathlib import Path
 from typing import Any
 
 import numpy as np
+from verity.circuits.codec import descriptor_id
+from verity.circuits.defs import bind
+from verity.circuits.evaluation import evaluate
+from verity.circuits.evaluation.batch import type_shape
+from verity.definitions.boolean import boolean_version
 from verity.definitions.numerics import marlin_moe_rows as MR
+from verity.definitions.numerics.derived_rows import f2fp_bf16
+from verity.definitions.registry import marlin_moe as MM
 
 from tests.properties import fa2_target_capture_gpu as C
 from tests.properties import fa_tap_exactness_gpu as G
@@ -891,11 +898,6 @@ def reference_job(spec: dict[str, Any], statics: list[int]) -> dict[str, Any]:
 def compare_reference(job: dict[str, Any]) -> dict[str, Any]:
     """The plain-integer reference against the twin at the launch's statics: the schedule on its first four blocks, two pairs' sampled
     coordinates, and for the w2 launch one coordinate through the expert gather over every expert's rows."""
-    from verity.circuits.defs import bind
-    from verity.circuits.evaluation import evaluate
-    from verity.definitions.numerics.derived_rows import f2fp_bf16
-    from verity.definitions.registry import marlin_moe as MM
-
     TK, TN, GRID = job["statics"]
     K, N, E, P, par = job["K"], job["N"], job["E"], job["pairs"], job["par"]
     KT, NT = K // TK, N // TN
@@ -972,12 +974,6 @@ def model(served: dict[str, dict[str, list[int] | None]], sms: int) -> dict[str,
 def bind_check(served: set[tuple[str, int, int, int]]) -> dict[str, Any]:
     """`MarlinMoeExpertGemm(W)_v1` bind at every served (kind, TK, TN, GRID): the weight slabs [E][N][K] and [E][N][K / 32], and the
     Boolean version each names."""
-    from verity.circuits.codec import descriptor_id
-    from verity.circuits.defs import bind
-    from verity.circuits.evaluation.batch import type_shape
-    from verity.definitions.boolean import boolean_version
-    from verity.definitions.registry import marlin_moe as MM
-
     out: dict[str, Any] = {}
     for kind, TK, TN, GRID in sorted(served):
         K, N = shape(kind)

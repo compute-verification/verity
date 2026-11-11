@@ -57,6 +57,8 @@ from pathlib import Path
 from typing import Any
 
 import numpy as np
+from verity.circuits.defs import bind
+from verity.circuits.evaluation import evaluate
 from verity.definitions.numerics import derived_rows as DR
 from verity.definitions.numerics.dsv4_moe_twin import (
     clamp_twin,
@@ -571,8 +573,6 @@ _PROGRAMS: dict[str, Any] = {}
 
 
 def _program(path: str):
-    from verity.circuits.defs import bind
-
     if path not in _PROGRAMS:
         _PROGRAMS[path] = (bind(D.MoeRouterSqrtSoftplus, E=E, SCALE=SCALE) if path == "router" else
                            bind(D.MoeRouterHash, E=E, SCALE=SCALE) if path == "hash" else
@@ -600,8 +600,6 @@ def program_outputs(path: str, got: dict[str, np.ndarray], i: int) -> list[int]:
 
 def program_row(job: tuple[str, list[int]]) -> list[int]:
     """The Program of a path on one row's input words (the reference evaluator)."""
-    from verity.circuits.evaluation import evaluate
-
     path, words = job
     return [int(v) for v in evaluate(_program(path), words)]
 

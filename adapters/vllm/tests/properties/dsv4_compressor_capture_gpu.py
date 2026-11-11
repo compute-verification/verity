@@ -68,10 +68,13 @@ from types import SimpleNamespace
 from typing import Any, NamedTuple
 
 import numpy as np
+from verity.circuits.defs import bind
+from verity.circuits.evaluation import evaluate
 from verity.definitions.numerics import dsv4_compressor_twin as T
 from verity.definitions.numerics import flashmla_twin as FT
 from verity.definitions.registry import dsv4_compressor as R
 from verity.definitions.registry import dsv4_indexer as I
+from verity.definitions.registry import flashmla as F
 
 from tests.properties import dsv4_flashmla_capture_gpu as FX
 from tests.properties import fa2_target_capture_gpu as C
@@ -355,8 +358,6 @@ def entries_twin(layer: str, kv: np.ndarray, score: np.ndarray, nrows: np.ndarra
 
 
 def entry_fn(layer: str, rows: int):
-    from verity.circuits.defs import bind
-
     if layer == "c4":
         return bind(R.Dsv4MlaCompressC4, ROWS=rows, D=D, QB=QB, EPS=EPS)
     return bind(R.Dsv4MlaCompressC128, W=W128, R=R128, D=D, QB=QB, EPS=EPS)
@@ -576,9 +577,6 @@ def _flat_out(y) -> list[int]:
 def compare_score(job: dict[str, Any], rec: dict[str, Any]) -> None:
     """State rows [lo, hi): their score words against `fadd(score, ape)`, the reference `Dsv4CompressorScore_v1{W}` on every
     ref_every-th."""
-    from verity.circuits.defs import bind
-    from verity.circuits.evaluation import evaluate
-
     a = _load(job["paths"])
     lo, hi = job["rows"]
     want = FT.fadd(a["score"][lo:hi], a["ape"][lo:hi])
@@ -593,8 +591,6 @@ def compare_score(job: dict[str, Any], rec: dict[str, Any]) -> None:
 def compare_entries(job: dict[str, Any], rec: dict[str, Any]) -> None:
     """Cache rows [lo, hi): every word against the twin, the reference `Dsv4MlaCompressC4_v1{ROWS,...}` or
     `Dsv4MlaCompressC128_v1{8,16,...}` on every ref_every-th."""
-    from verity.circuits.evaluation import evaluate
-
     a = _load(job["paths"])
     lo, hi = job["rows"]
     layer = job["layer"]
@@ -612,9 +608,6 @@ def compare_entries(job: dict[str, Any], rec: dict[str, Any]) -> None:
 def compare_columns(job: dict[str, Any], rec: dict[str, Any]) -> None:
     """Ratio-128 columns of tokens [lo, hi): every word against `c128_columns`, the reference `Dsv4MlaC128Column_v1{8,16}` on every
     column of every ref_every-th."""
-    from verity.circuits.defs import bind
-    from verity.circuits.evaluation import evaluate
-
     a = _load(job["paths"])
     lo, hi = job["rows"]
     kv, sc = (np.swapaxes(np.asarray(a[x][lo:hi]), -1, -2) for x in ("kv", "score"))
@@ -698,9 +691,6 @@ def ptx(outdir: Path) -> dict[str, Any]:
 
 def bind_check() -> dict[str, Any]:
     """The Programs bind at DeepSeek-V4-Pro's statics, and the decode's row reader at the row they write."""
-    from verity.circuits.defs import bind
-    from verity.definitions.registry import flashmla as F
-
     row = {"D": D, "QB": QB, "EPS": EPS}
     targets = {
         "Dsv4CompressorScore_v1{W=1024}": lambda: bind(I.Dsv4CompressorScore, W=LAYERS["c4"].width),

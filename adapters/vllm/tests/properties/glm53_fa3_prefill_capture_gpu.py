@@ -50,6 +50,15 @@ from pathlib import Path
 from typing import Any
 
 import numpy as np
+from verity.circuits.defs import bind
+from verity.circuits.evaluation.reference import evaluate
+from verity.definitions.numerics import derived_rows as DR
+from verity.definitions.numerics import fa2_relation
+from verity.definitions.numerics import fa3_model as FM
+from verity.definitions.numerics import fa3_split_twins as TW
+from verity.definitions.registry import attention_vocab, hopper
+from verity.definitions.registry import fa3_check_inf as F3
+from verity.definitions.registry import fa3_split as FS
 
 from tests.properties import fa2_target_capture_gpu as C
 from tests.properties import fa_tap_exactness_gpu as G
@@ -95,8 +104,6 @@ def case_list(quick: bool = False) -> list[dict[str, Any]]:
 
 def plan(seqlens: list[int], num_splits: int) -> dict[str, Any]:
     """The launch's split count and each sequence's (`fa3_model.split_plan` for the served `num_splits = 0`; 1 for a pinned launch)."""
-    from verity.definitions.numerics import fa3_model as FM
-
     if num_splits == 1:
         return {"static": 1, "dynamic": [1] * len(seqlens)}
     static, dyn = FM.split_plan(seqlens, NH, NH, D, num_sms=NUM_SMS, Dv=DV)
@@ -264,11 +271,6 @@ def compare(job: dict[str, Any]) -> dict[str, Any]:
 def split_twin(q, k, v, rows, L: int, ns: int) -> tuple[np.ndarray, np.ndarray]:
     """``rows`` of a sequence of L rows the plan runs as ``ns`` splits through `fa3_split_twins.head_split_rows`, the 8 heads of a
     row at once: (out [rows, NH, DV], nonfinite [rows, NH])."""
-    from verity.definitions.numerics import derived_rows as DR
-    from verity.definitions.numerics import fa3_split_twins as TW
-    from verity.definitions.registry import attention_vocab
-    from verity.definitions.registry import fa3_split as FS
-
     twin = {"dot16": DR.TC_DOT16_BY_PRIM["HopperBF16WgmmaDot16_v1"], "inv": DR.INV_SUM_BY_PRIM["Fa3InvSum_v1"]}
     out: np.ndarray = np.empty((len(rows), NH, DV), dtype=np.uint16)
     nf: np.ndarray = np.zeros((len(rows), NH), dtype=bool)
@@ -281,15 +283,6 @@ def split_twin(q, k, v, rows, L: int, ns: int) -> tuple[np.ndarray, np.ndarray]:
 
 
 def _compare(job: dict[str, Any]) -> dict[str, Any]:
-    from verity.circuits.defs import bind
-    from verity.circuits.evaluation.reference import evaluate
-    from verity.definitions.numerics import derived_rows as DR
-    from verity.definitions.numerics import fa2_relation
-    from verity.definitions.numerics import fa3_model as FM
-    from verity.definitions.registry import attention_vocab, hopper
-    from verity.definitions.registry import fa3_check_inf as F3
-    from verity.definitions.registry import fa3_split as FS
-
     from verity_vllm.program.frontend import targets as TG
     from verity_vllm.program.frontend.rules import vllm_dsa_dense
     from verity_vllm.program.frontend.rules.vocab import PROFILE_B1_EAGER_V3

@@ -90,6 +90,8 @@ from pathlib import Path
 from typing import Any, SupportsInt
 
 import numpy as np
+from verity.circuits.defs import bind
+from verity.circuits.evaluation import evaluate
 from verity.definitions.numerics import flashmla_prefill_twin as PT
 from verity.definitions.numerics import flashmla_twin as T
 from verity.definitions.numerics.fp8_twins import np_f32_to_e4m3_sat
@@ -836,9 +838,6 @@ def compare_twin(job: dict[str, Any], rec: dict[str, Any]) -> None:
 
 def compare_ref(job: dict[str, Any], rec: dict[str, Any]) -> None:
     """One token's real heads: `FlashMlaDecode_v1{NH=16,...}` (the reference) against the twin."""
-    from verity.circuits.defs import bind
-    from verity.circuits.evaluation import evaluate
-
     a = _load(job["paths"])
     metas, ns = _metas(a)
     t = job["token"]
@@ -859,9 +858,6 @@ def compare_gather(job: dict[str, Any], rec: dict[str, Any]) -> None:
     """Every word of the GPU's workspace against `workspace` (the twin's rows where the gathers write, the sentinel elsewhere);
     `FlashMlaGatherRow_v1` (the reference) against the twin on each request's last window row, request 1's window positions 4096
     and 4097 and request 0's first five compressed rows (`edge`'s special rows)."""
-    from verity.circuits.defs import bind
-    from verity.circuits.evaluation import evaluate
-
     a = _load(job["paths"])
     want, got = workspace(a, SENTINELS[0]), np.asarray(a["kv"], dtype=np.uint16)
     bad: np.ndarray = np.argwhere(want != got)
@@ -903,9 +899,6 @@ def compare_prefill_twin(job: dict[str, Any], rec: dict[str, Any]) -> None:
 
 def compare_prefill_ref(job: dict[str, Any], rec: dict[str, Any]) -> None:
     """One token's real heads: `FlashMlaPrefill_v1{NH=16,NP,...}` (the reference) against the twin."""
-    from verity.circuits.defs import bind
-    from verity.circuits.evaluation import evaluate
-
     a = _load(job["paths"])
     t = job["token"]
     x, y = prefill_twin_out(a, t)
@@ -938,8 +931,6 @@ def bind_check() -> dict[str, Any]:
     """The Programs bind at DeepSeek-V4-Pro's statics: a window-only token (two blocks, one split), a full compressed token cut in
     two, the lone token's split, combine and head shapes, the combine of the most splits any batch gives a request (127), the KV
     row; the prefill's gather row and a token of one pair, of a full C4 row's nine and of a full W-8192 C128 row's 65."""
-    from verity.circuits.defs import bind
-
     st = {k: v for k, v in F.FLASHMLA_DSV4.items() if k != "NH"}
     blk = {"D": D, "BN": BN, "DOT": F.FLASHMLA_DSV4["DOT"], "SCALE": SCALE}
     targets = {

@@ -80,7 +80,10 @@ from types import SimpleNamespace
 from typing import Any
 
 import numpy as np
+from verity.circuits.defs import bind
+from verity.circuits.evaluation import evaluate
 from verity.definitions.numerics.dsv4_indexer_twin import OPS, heads_twin, score_twin
+from verity.definitions.registry import dsa
 from verity.definitions.registry import dsv4_indexer as I
 
 from tests.properties import fa2_target_capture_gpu as C
@@ -735,8 +738,6 @@ def _ref_rows(lo: int, hi: int, every: int) -> list[int]:
 
 
 def _reference(rec: dict[str, Any], fn, want: np.ndarray, lo: int, rows: list[int], args) -> None:
-    from verity.circuits.evaluation import evaluate
-
     for i in rows:
         y = evaluate(fn, *args(i))
         rec["reference"] += 1
@@ -745,8 +746,6 @@ def _reference(rec: dict[str, Any], fn, want: np.ndarray, lo: int, rows: list[in
 
 def compare_score(job: dict[str, Any], rec: dict[str, Any]) -> None:
     """State rows [lo, hi): their score words against the twin, the reference `Dsv4CompressorScore_v1{256}` on every ref_every-th."""
-    from verity.circuits.defs import bind
-
     a = _load(job["paths"])
     lo, hi = job["rows"]
     want = score_twin(a["score"][lo:hi], a["ape"][lo:hi])
@@ -758,8 +757,6 @@ def compare_score(job: dict[str, Any], rec: dict[str, Any]) -> None:
 def compare_entries(job: dict[str, Any], rec: dict[str, Any]) -> None:
     """Cache entries [lo, hi): bytes and scale against the twin, the reference `Dsv4IndexerCompress_v1{128,64,1e-06}` on every
     ref_every-th."""
-    from verity.circuits.defs import bind
-
     a = _load(job["paths"])
     lo, hi = job["rows"]
     q, s = entries_twin(a["kv"][lo:hi], a["score"][lo:hi], a["w"], a["cs"][lo:hi])
@@ -775,8 +772,6 @@ def compare_entries(job: dict[str, Any], rec: dict[str, Any]) -> None:
 def compare_heads(job: dict[str, Any], rec: dict[str, Any]) -> None:
     """(token, head)s [lo, hi) (id = token * 16 + head): bytes and scales against the twin, the reference
     `Dsv4InvRopeQuantHead_v1{4,128,64}` on every ref_every-th."""
-    from verity.circuits.defs import bind
-
     a = _load(job["paths"])
     lo, hi = job["rows"]
     q, s = heads_twin(a["x"][lo:hi], a["cs"][lo:hi], QG, ROPE)
@@ -789,8 +784,6 @@ def compare_heads(job: dict[str, Any], rec: dict[str, Any]) -> None:
 
 def compare_fill(job: dict[str, Any], rec: dict[str, Any]) -> None:
     """Fill rows [lo, hi) against the twin, the reference `Dsv4ShortContextTopK_v1{1024,4}` on every ref_every-th."""
-    from verity.circuits.defs import bind
-
     a = _load(job["paths"])
     lo, hi = job["rows"]
     pos = np.asarray(a["pos"][lo:hi], dtype=np.int64)
@@ -802,10 +795,6 @@ def compare_fill(job: dict[str, Any], rec: dict[str, Any]) -> None:
 
 def compare_logits(job: dict[str, Any], rec: dict[str, Any]) -> None:
     """Entries [a, b) of the prefill or decode logits: the twin against the kernel's words, `DsaMqaLogit_v3{64,128}` on the first two."""
-    from verity.circuits.defs import bind
-    from verity.circuits.evaluation import evaluate
-    from verity.definitions.registry import dsa
-
     a = _load(job["paths"])
     kr, kc, kg = job["keys"]
     lo, hi = job["range"]
@@ -878,9 +867,6 @@ def ptx(triton_cache: Path, outdir: Path) -> dict[str, Any]:
 
 def bind_check() -> dict[str, Any]:
     """The Programs bind at DeepSeek-V4-Pro's statics."""
-    from verity.circuits.defs import bind
-    from verity.definitions.registry import dsa
-
     targets = {f"Dsv4CompressorScore_v1{{W={STATE_W}}}": lambda: bind(I.Dsv4CompressorScore, W=STATE_W),
                f"Dsv4CompressColumn_v1{{ROWS={ROWS}}}": lambda: bind(I.Dsv4CompressColumn, ROWS=ROWS),
                f"Dsv4IndexerNormRope_v1{{D={D},ROPE={ROPE},EPS={EPS}}}": lambda: bind(I.Dsv4IndexerNormRope, D=D, ROPE=ROPE, EPS=EPS),

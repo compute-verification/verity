@@ -35,6 +35,11 @@ from pathlib import Path
 from typing import Any
 
 import numpy as np
+from verity.circuits.defs import bind
+from verity.circuits.evaluation.reference import evaluate
+from verity.definitions.numerics import derived_rows as DR
+from verity.definitions.registry import attention_vocab, hopper
+from verity.definitions.registry import fa3_check_inf as F3
 
 from verity_vllm.commit.hidden_stream import StreamLayout
 from verity_vllm.properties.fa_tap_exactness import (
@@ -181,12 +186,6 @@ def out_vs_ir(c: dict[str, Any], D: int, t: dict[str, Any], out, geo: dict[str, 
     the reference evaluator (`AttentionHead_v4`, gate by gate).  `decode`: each row against the decode-shaped Definition instead, the
     one-row decode's tile (`decode_tile`) and `MASKED_FROM` (its row 0's).  Mismatched rows are counted, those of a token whose every score
     is special (`SPECIAL`) apart, with the fewest keys a mismatched row sees."""
-    from verity.circuits.defs import bind
-    from verity.circuits.evaluation.reference import evaluate
-    from verity.definitions.numerics import derived_rows as DR
-    from verity.definitions.registry import attention_vocab, hopper
-    from verity.definitions.registry import fa3_check_inf as F3
-
     q, k, v, o = _words(t["q"]), _words(t["k"]), _words(t["v"]), _words(out)
     bt = t["block_table"].cpu().numpy()
     H, Hk = c["H"], c["Hk"]

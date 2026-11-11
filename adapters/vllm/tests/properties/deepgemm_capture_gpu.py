@@ -69,6 +69,7 @@ __models__ = ("zai-org/GLM-5.3", "deepseek-ai/DeepSeek-V4-Pro")
 import argparse
 import contextlib
 import glob
+import importlib
 import json
 import multiprocessing
 import os
@@ -81,7 +82,14 @@ from pathlib import Path
 from typing import Any
 
 import numpy as np
+from verity.circuits.defs import bind
+from verity.circuits.evaluation import evaluate
+from verity.circuits.evaluation.batch import type_shape
 from verity.definitions.numerics import deepgemm_schedule as S
+from verity.definitions.numerics import deepgemm_twins as T
+from verity.definitions.numerics import derived_rows as R
+from verity.definitions.registry import deepgemm as DG
+from verity.definitions.registry import fp8 as F
 
 from tests.properties import fa2_target_capture_gpu as C
 from tests.properties import fa_tap_exactness_gpu as G
@@ -264,8 +272,6 @@ class Taps:
         self.calls: list[dict[str, Any]] = []
 
     def __enter__(self):
-        import importlib
-
         self.mod = importlib.import_module(self.module)
         self.inner = {n: getattr(self.mod, n) for n in self.names}
         for n in self.names:
@@ -433,10 +439,6 @@ def _tally(rec: dict[str, Any], want: np.ndarray, nf: np.ndarray, got: np.ndarra
 
 def _reference_coords(rec: dict[str, Any], K: int, xq, sx, w, ws, want, nf, got, columns) -> None:
     """`ScaledMmFp8BlockCoordinate_v1{K,128}` at ``columns``: the twin's word where it is finite, else the GPU's."""
-    from verity.circuits.defs import bind
-    from verity.circuits.evaluation import evaluate
-    from verity.definitions.registry import fp8 as F
-
     fn = bind(F.ScaledMmFp8BlockCoordinate, K=K, G=GROUP)
     for n in sorted(columns):
         y = evaluate(fn, np.asarray(xq).tolist(), np.asarray(sx).tolist(), np.asarray(w[n]).tolist(), np.asarray(ws[n // GROUP]).tolist())
@@ -451,12 +453,6 @@ def _reference_coords(rec: dict[str, Any], K: int, xq, sx, w, ws, want, nf, got,
 def compare_linear(job: dict[str, Any]) -> dict[str, Any]:
     """Rows [r0, r1) of one linear launch: DeepGEMM's branch, the quant twin against the kernel's (q, s) and the GEMM twin over them;
     FlashInfer's, the linear's twin; the references on the sampled rows."""
-    from verity.circuits.defs import bind
-    from verity.circuits.evaluation import evaluate
-    from verity.definitions.numerics import deepgemm_twins as T
-    from verity.definitions.numerics import derived_rows as R
-    from verity.definitions.registry import deepgemm as DG
-
     a = B._load(job["paths"])
     K, N, deep, rmap = job["K"], job["N"], job["branch"] == "deepgemm", job["row_map"]
     rec: dict[str, Any] = {**{k: 0 for k in TOTALS}, "first_mismatch": None}
@@ -487,8 +483,6 @@ def compare_linear(job: dict[str, Any]) -> dict[str, Any]:
 
 def compare_weights(job: dict[str, Any]) -> dict[str, Any]:
     """Weight-block rows [b0, b1) of one processed weight against the twin of its processing, block by block."""
-    from verity.definitions.numerics import deepgemm_twins as T
-
     a = B._load(job["paths"])
     N, (b0, b1) = job["N"], job["block_rows"]
     r0, r1 = b0 * GROUP, min(N, b1 * GROUP)
@@ -579,8 +573,6 @@ def einsum_launches(work: Path, Ms: tuple[int, ...], seed: int) -> tuple[list[di
 def compare_einsum(job: dict[str, Any]) -> dict[str, Any]:
     """Tokens [r0, r1) of one einsum launch: every group's words against the grouped twin over the einsum's own operands, the
     reference on the sampled tokens."""
-    from verity.definitions.numerics import deepgemm_twins as T
-
     a = B._load(job["paths"])
     H, K, N, rmap = job["H"], job["K"], job["N"], job["row_map"]
     w = np.asarray(a["w"]).reshape(H, N, K)
@@ -672,10 +664,6 @@ def jit(cache: Path, predicted: list[list[str]]) -> dict[str, Any]:
 
 def bind_check() -> dict[str, Any]:
     """The Programs bind at every shape, with the weight-scale rows each reads."""
-    from verity.circuits.defs import bind
-    from verity.circuits.evaluation.batch import type_shape
-    from verity.definitions.registry import deepgemm as DG
-
     out: dict[str, Any] = {}
     for shapes, _, _ in MODELS.values():
         for _, K, N in shapes:

@@ -68,10 +68,14 @@ from pathlib import Path
 from typing import Any
 
 import numpy as np
+from verity.circuits.defs import bind
+from verity.circuits.evaluation import evaluate
 from verity.definitions.numerics import derived_rows as DW
 from verity.definitions.numerics import dsv4_qnorm_insert_twin as W
 from verity.definitions.numerics import flashmla_twin as FT
+from verity.definitions.registry import dsa as Dsa
 from verity.definitions.registry import dsv4_qnorm_insert as R
+from verity.definitions.registry import flashmla as F
 
 from tests.properties import dsv4_flashmla_capture_gpu as M
 from tests.properties import fa2_target_capture_gpu as C
@@ -410,9 +414,6 @@ def compare_cache(job: dict[str, Any], rec: dict[str, Any]) -> None:
 
 def compare_insert_ref(job: dict[str, Any], rec: dict[str, Any]) -> None:
     """One token: `Dsv4QNormRopeKvInsert_v1{NH=16,...}` (the reference) against the twin, every output word."""
-    from verity.circuits.defs import bind
-    from verity.circuits.evaluation import evaluate
-
     a = _load(job["paths"])
     t = job["token"]
     y = np.concatenate([np.asarray(v, dtype=np.int64).reshape(-1) for v in insert_twin(a, t, t + 1)])
@@ -437,9 +438,6 @@ def compare_iq(job: dict[str, Any], rec: dict[str, Any]) -> None:
 
 def compare_indexer_ref(job: dict[str, Any], rec: dict[str, Any]) -> None:
     """One token: `Dsv4IndexerQ_v1{H=64,...}` (the reference) against the twin."""
-    from verity.circuits.defs import bind
-    from verity.circuits.evaluation import evaluate
-
     a = _load(job["paths"])
     t = job["token"]
     q8, w = indexer_twin(a, t, t + 1)
@@ -659,10 +657,6 @@ def launch_indexer(work: Path, case: str, quick: bool) -> tuple[dict[str, Any], 
 def bind_check() -> dict[str, Any]:
     """The Programs bind at DeepSeek-V4-Pro's statics, and the seams: the insert's row is `FlashMlaKvRow_v1{448, 64, 64}`'s
     input, the indexer's outputs `DsaMqaLogit_v1{H=64, D=128}`'s q and w."""
-    from verity.circuits.defs import bind
-    from verity.definitions.registry import dsa as Dsa
-    from verity.definitions.registry import flashmla as F
-
     def row_seam() -> bool:
         out = bind(R.Dsv4QNormRopeKvInsert, **R.DSV4_INSERT).signature()[1].fields
         (_, nope), (_, scale), (_, rope), _ = bind(F.FlashMlaKvRow, DN=DN, DR=DR, QT=QB).signature()[0]

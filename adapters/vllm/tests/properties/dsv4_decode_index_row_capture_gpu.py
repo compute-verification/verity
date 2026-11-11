@@ -66,6 +66,8 @@ from pathlib import Path
 from typing import Any
 
 import numpy as np
+from verity.circuits.defs import bind
+from verity.circuits.evaluation import evaluate
 from verity.definitions.numerics import dsv4_decode_indices_twin as T
 from verity.definitions.registry import dsv4_decode_indices as R
 
@@ -331,9 +333,6 @@ def observe(work: Path, case: str, ops: dict[str, Any], rows: dict[str, dict[str
 def compare_row(job: dict[str, Any], rec: dict[str, Any]) -> None:
     """Tokens [lo, hi): each row of slots and its length against the twin, the reference `Dsv4GlobalTopk_v1` on every
     ref_every-th."""
-    from verity.circuits.defs import bind
-    from verity.circuits.evaluation import evaluate
-
     a = _load(job["paths"])
     lo, hi = job["rows"]
     st = job["statics"]
@@ -406,8 +405,6 @@ def ptx(triton_cache: Path, outdir: Path) -> dict[str, Any]:
 
 def bind_check() -> dict[str, Any]:
     """The Program binds at DeepSeek-V4-Pro's statics."""
-    from verity.circuits.defs import bind
-
     out = {}
     for case in CASES_L:
         st = statics(case)

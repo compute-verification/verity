@@ -57,6 +57,17 @@ from pathlib import Path
 from typing import Any
 
 import numpy as np
+from verity.circuits.defs import bind
+from verity.circuits.evaluation import evaluate
+from verity.definitions.numerics import derived_rows as DR
+from verity.definitions.numerics.derived_rows import (
+    add_rn,
+    f2fp_bf16,
+    fma_rn,
+    mul_rn,
+)
+from verity.definitions.ops import fp32, prims
+from verity.definitions.registry import fp8 as F
 
 from tests.properties import fa2_target_capture_gpu as C
 from tests.properties import fa_tap_exactness_gpu as G
@@ -133,13 +144,6 @@ def block_row(xq, sx, w, ws, *, G: int, KB: int, form: str = "triton", dot: str 
         mul_add       acc = FADD(FMUL(d, FMUL(a, b)), acc), unfused (no kernel computes it: a discriminator)
 
     from acc = +0; then acc = FMUL(acc, g) when g is given, and `cvt.rn.bf16.f32`."""
-    from verity.definitions.numerics.derived_rows import (
-        add_rn,
-        f2fp_bf16,
-        fma_rn,
-        mul_rn,
-    )
-
     if form not in FORMS:
         raise ValueError(f"unknown scale form {form!r}")
     xq = np.asarray(xq, dtype=np.uint8).reshape(-1)
@@ -184,8 +188,6 @@ def reference_word(xq, sx, wrow, wsrow, *, G: int, KB: int, form: str, g: int | 
     """`block_row`'s word at one output coordinate (`dot` Blackwell's) as the plain-integer chain of the registered primitives
     `BlackwellE4m3QmmaDot32_v1`, `F32Mul_v1`, `F32Fma_v1`, `F32Add_v1` and `F2fpBf16_v1`; wrow the coordinate's weight row, wsrow its
     weight-scale row."""
-    from verity.definitions.ops import fp32, prims
-
     xq, wrow = [int(v) for v in np.asarray(xq).reshape(-1)], [int(v) for v in np.asarray(wrow).reshape(-1)]
     sx, wsrow = [int(v) for v in np.asarray(sx).reshape(-1)], [int(v) for v in np.asarray(wsrow).reshape(-1)]
     _check(len(xq), G, KB)
@@ -221,11 +223,6 @@ def _row_operands(a: dict[str, np.ndarray], job: dict[str, Any], i: int):
 def compare_gemm(job: dict[str, Any]) -> dict[str, Any]:
     """Rows [i0, i1) of one GEMM launch against `block_row` at the job's statics; on its reference rows the plain-integer chain on
     three coordinates and every alternative on all of them; on a dense launch the activation quant it received, too."""
-    from verity.circuits.defs import bind
-    from verity.circuits.evaluation import evaluate
-    from verity.definitions.numerics import derived_rows as DR
-    from verity.definitions.registry import fp8 as F
-
     a = H._load(job["paths"])
     K, N, Gs, KB, form = job["K"], job["N"], job["G"], job["KB"], job["form"]
     rec = _zero()
@@ -265,11 +262,6 @@ def compare_gemm(job: dict[str, Any]) -> dict[str, Any]:
 
 def compare_quant(job: dict[str, Any]) -> dict[str, Any]:
     """Rows [i0, i1) of one quant call: (q, scale) against `Fp8GroupQuant_v1{K,G}`'s twin, the reference on the job's rows."""
-    from verity.circuits.defs import bind
-    from verity.circuits.evaluation import evaluate
-    from verity.definitions.numerics import derived_rows as DR
-    from verity.definitions.registry import fp8 as F
-
     a = H._load(job["paths"])
     K, Gq = job["K"], job["G"]
     rec = _zero()

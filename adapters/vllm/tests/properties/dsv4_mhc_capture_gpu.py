@@ -83,7 +83,10 @@ from pathlib import Path
 from typing import Any
 
 import numpy as np
+from verity.circuits.defs import bind
+from verity.circuits.evaluation import evaluate
 from verity.definitions.numerics import mhc_twin as W
+from verity.definitions.registry import mhc as R
 from verity.definitions.silicon.models import GroupSum
 
 from tests.properties import fa2_target_capture_gpu as C
@@ -675,9 +678,6 @@ def compare_layer(job: dict[str, Any], rec: dict[str, Any]) -> None:
 def reference_call(job: dict[str, Any], a: dict[str, np.ndarray]):
     """The piece's Definition at the job's statics and its arguments on token ``job["token"]``, and the kernel's words it
     states."""
-    from verity.circuits.defs import bind
-    from verity.definitions.registry import mhc as R
-
     S, NS, t, piece = job["statics"], job["NS"], job["token"], job["piece"]
     hc, h = S["HC"], S["H"]
     out = hc * (2 + hc)
@@ -706,8 +706,6 @@ def reference_call(job: dict[str, Any], a: dict[str, np.ndarray]):
 
 def compare_ref(job: dict[str, Any], rec: dict[str, Any]) -> None:
     """One piece through the evaluator on one token's kernel words."""
-    from verity.circuits.evaluation import evaluate
-
     d, args, want = reference_call(job, _load(job["paths"]))
     y = np.array(evaluate(d, *[np.asarray(v).reshape(-1).astype(np.int64).tolist() for v in args]), dtype=np.int64)
     w = np.concatenate([np.asarray(v).reshape(-1).astype(np.int64) for v in want])
@@ -765,9 +763,6 @@ def sources(outdir: Path) -> dict[str, Any]:
 
 
 def served_bindings() -> dict[str, Any]:
-    from verity.circuits.defs import bind
-    from verity.definitions.registry import mhc as R
-
     norm = {"REPEAT": REPEAT, "EPS": EPS, "HC_EPS": HC_EPS}
     out: dict[str, Any]
     out = {"HopperTf32WgmmaDot8_v1": lambda: R.HopperTf32WgmmaDot8, "MhcSigmoid_v1": lambda: bind(R.MhcSigmoid),

@@ -51,8 +51,13 @@ from pathlib import Path
 from typing import Any
 
 import numpy as np
+from verity.circuits.defs import bind
+from verity.circuits.evaluation import evaluate
+from verity.definitions import boolean as SW
 from verity.definitions.numerics import derived_rows as DR
 from verity.definitions.numerics import dsa_norm_rows as NR
+from verity.definitions.registry import dsa_norm as DN
+from verity.definitions.registry.prims import bits_of
 
 from tests.properties import fa2_target_capture_gpu as C
 from tests.properties import fa_tap_exactness_gpu as G
@@ -122,9 +127,6 @@ def model_r(x: np.ndarray, eps: float, layout: str = "strided", chains: str = "o
     8-element vector added in order (`chains` "one" / "per_vector"), each warp's butterfly, the CTA's two adds ("02_13" =
     (w0 + w2) + (w1 + w3), "01_23" = (w0 + w1) + (w2 + w3)), then `epilogue` "rsqrt" (RsqrtApprox(eps + DivFull(sum, N))) or
     "sqrt" (`RMSNormTriton_v1`'s DivFull(1, MufuSqrtFtz(fma(DivFullRcp(N), sum, eps))))."""
-    from verity.definitions.registry import dsa_norm as DN
-    from verity.definitions.registry.prims import bits_of
-
     R, N = x.shape
     E = N // DN.THREADS
     regs = DN.layout(N) if layout == "strided" else [list(range(E * t, E * t + E)) for t in range(DN.THREADS)]
@@ -346,10 +348,6 @@ def ptx(triton_cache: Path, outdir: Path) -> dict[str, Any]:
 
 
 def bind_check() -> dict[str, Any]:
-    from verity.circuits.defs import bind
-    from verity.definitions import boolean as SW
-    from verity.definitions.registry import dsa_norm as DN
-
     out: dict[str, Any] = {}
     for _, N, _, _ in NORMS:
         try:
@@ -370,10 +368,6 @@ def compare(job: dict[str, Any]) -> dict[str, Any]:
 
 
 def _compare(job: dict[str, Any]) -> dict[str, Any]:
-    from verity.circuits.defs import bind
-    from verity.circuits.evaluation import evaluate
-    from verity.definitions.registry import dsa_norm as DN
-
     (r0, r1), N = job["span"], job["N"]
     a = DS._load(job["paths"])
     x, w, got = np.ascontiguousarray(a["x"][r0:r1]), np.ascontiguousarray(a["w"]), np.ascontiguousarray(a["out"][r0:r1])

@@ -85,6 +85,7 @@ from __future__ import annotations
 __models__ = ("zai-org/GLM-5.3",)
 
 import argparse
+import bisect
 import itertools
 import json
 import multiprocessing
@@ -101,6 +102,9 @@ from pathlib import Path
 from typing import Any
 
 import numpy as np
+from verity.circuits.defs import bind
+from verity.circuits.evaluation import evaluate
+from verity.circuits.evaluation.batch import type_shape
 from verity.definitions.numerics import derived_rows as DR
 from verity.definitions.registry import tp_allreduce as T
 from verity.definitions.registry import tp_allreduce_check as K
@@ -976,9 +980,6 @@ def compare(job: dict[str, Any]) -> dict[str, Any]:
 
 
 def _compare_fused(job: dict[str, Any], rec: dict[str, Any], ops: dict[str, np.ndarray]) -> dict[str, Any]:
-    from verity.circuits.defs import bind
-    from verity.circuits.evaluation import evaluate
-
     got = _rank_words(job, ("normed", "residual"))
     rec["rank_mismatch"] = sum(int((g[n] != got[0][n]).sum()) for g in got[1:] for n in ("normed", "residual"))
     if not job["model"]:
@@ -1027,11 +1028,6 @@ def nccl_sample(size: int, dec: dict[str, Any]) -> list[int]:
 def reference_word(job: dict[str, Any], parts: np.ndarray, e: int) -> int | None:
     """The plain-integer reference of element `e` of the Definition the job's launch binds; None for an NCCL element whose run's
     tree no Definition states (bf16 adds off a chain)."""
-    import bisect
-
-    from verity.circuits.defs import bind
-    from verity.circuits.evaluation import evaluate
-
     size = parts.shape[1]
     if job["model"] == "mnnvl":
         d = bind(T.AllReduceMnnvlCoordinate, WORLD=WORLD, SHOT=job["shot"])
@@ -1109,9 +1105,6 @@ def jobs_of(cases_: list[dict[str, Any]], trees: Sequence[Any] | None = None, ft
 def bind_check(cases_: list[dict[str, Any]], trees: list | None, ftz: bool | None) -> dict[str, Any]:
     """Every Definition a launch of `cases_` binds binds at its statics, its operands at the served shapes; the multimem one at
     the probes' trees and FTZ (a chain and IEEE adds when they are not pinned, which states only the shape)."""
-    from verity.circuits.defs import bind
-    from verity.circuits.evaluation.batch import type_shape
-
     geoms = sorted({(c["shot"], c["cluster"]) for c in cases_ if c.get("path") == FUSED})
     targets = [(bind(T.AllReduceRmsNormMnnvl, WORLD=WORLD, N=HIDDEN, SHOT=s, CLUSTER=c, EPS=EPS, FMA=f),
                 [[WORLD, HIDDEN], [HIDDEN], [HIDDEN], [2 * HIDDEN]]) for s, c in geoms for f in (False, True)]
