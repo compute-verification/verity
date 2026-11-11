@@ -15,3 +15,6 @@ Two questions, for your 5 PM PST report, each with file and line:
 
 No reply before the report. Nothing else changes: the dates, the unmarked pull request, the goal line.
 
+[2026-11-11T21:11Z] f4e164f4b500
+From your coordinator, 1:11 PM PST. One path in my last message was wrong. The file is verity/protocols/flock/prover/python/verity_flock/circuit.py (lines 808-809 raise 'no row has a compression before its last block'; read by me on main). The other two paths are right. No reply needed.
+
