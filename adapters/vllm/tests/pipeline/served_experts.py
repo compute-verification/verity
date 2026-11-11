@@ -45,6 +45,9 @@ OP = f"moe/L{LAYER}"
 BLOCKS = {"w13": 4, "w2": 8}
 #: the window's units by projection: its scale-row reads (a row a G-block of each pair) and its fused blocks
 UNITS = {"w13": (NV * 2 * I // G, NV * 2 * I // BLOCKS["w13"]), "w2": (NV * H // G, NV * H // BLOCKS["w2"])}
+#: the most units of a template a member holds here: a small number set by hand so a template's units are several members, not
+#: the units one flock-circuit statement holds (`serving_rows.chunk_caps`, which stages the template with the verifier's tools)
+CAP = 48
 REPO, REV = "test/fp8-moe-served", "abc"
 KEY = bytes(range(32))
 REQUEST = "r0"
@@ -232,8 +235,8 @@ def weights_tree(served: dict[str, np.ndarray]) -> dict[str, Any]:
 
 def partition() -> dict[str, Any]:
     """The fused cut's partition of the layer: each projection's scale-row read, then its fused block of ``BLOCKS`` rows (of the
-    pair row's unit templates, `serving_rows.unit_templates`), each template's members at most the units its statement holds.
-    The router's slots stay out of the window."""
+    pair row's unit templates, `serving_rows.unit_templates`), each template's members at most ``CAP`` units.  The router's
+    slots stay out of the window."""
     from verity.circuits.codec import descriptor_id
     from verity.commitments.gates.embedding import read
     from verity_vllm.pipeline import serving_rows as SRW
@@ -247,7 +250,7 @@ def partition() -> dict[str, Any]:
         if len(fused) != 1:
             raise ValueError(f"{spec}: {len(fused)} fused blocks of {BLOCKS[proj]} rows bind, not one")
         tmpls += [descriptor_id(read(E, 2 * K // G)), fused[0]]
-    return {"templates": tmpls, "law": LAW, "scope": {"op_path_prefix": OP}, "chunk_cap": SRW.chunk_caps(tmpls)}
+    return {"templates": tmpls, "law": LAW, "scope": {"op_path_prefix": OP}, "chunk_cap": dict.fromkeys(tmpls, CAP)}
 
 
 def commit(root: Path, *, seed: int = 23) -> dict[str, Any]:
