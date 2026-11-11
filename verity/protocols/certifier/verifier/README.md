@@ -8,8 +8,8 @@ accepted audit leaves the certified traffic outside what that Program accepts, a
 of bits of such a sender's secrets a decoder recovers from the client's view.
 
 The guarantee is `NetTiming.Guarantees.PeriodLeakAccepted`
-(`Security/Definitions/NetworkCertifier/Guarantees/Period.lean`), proved as
-`NetTiming.SecurityProofs.PeriodLeakAccepted` (`Security/Proofs/NetworkCertifier/Period.lean`). Over a monitoring
+(`security/Definitions/NetworkCertifier/Guarantees/Period.lean`), proved as
+`NetTiming.SecurityProofs.PeriodLeakAccepted` (`security/Proofs/NetworkCertifier/Period.lean`). Over a monitoring
 period of n execution phases (the Lean's windows), execution phase i audited by the compiled sampled verifier at its
 registered statement, with one network certifier on the server's uplink running its code on schedules in `Ss`:
 
@@ -30,7 +30,7 @@ It bounds each execution phase's failure on its own: the union over the monitori
 and `WindowGood` adds a condition no proof gives, the registration's values at the prover's registered inputs. It is a
 statement about the network certifier's code (`recordingCode`), not about runs of the network check's Lean
 (`lean`, `NetworkCheck`), which is the verifier's code and states no bound.
-`NetTiming.Guarantees.PooledLeakAccepted` (`Security/Definitions/NetworkCertifier/Guarantees/PooledLeak.lean`) is the
+`NetTiming.Guarantees.PooledLeakAccepted` (`security/Definitions/NetworkCertifier/Guarantees/PooledLeak.lean`) is the
 pooled count, with the incorrect proof blocks paid for once over the monitoring period,
 `#Ss · ∏_c (cap_c + 1) · (N + 1)^Fmax · 2^(b · Fmax) · ∏_i 2^#(freeInputs_i \ reg_i) · Dj^k_i` at `Fmax ≥ ln(1/δ)/q`
 (N the period's proof blocks, b each one's committed bits, q the per-execution-phase detection probability), failing
@@ -38,7 +38,7 @@ with probability at most `δ + Σ_i e_i + Σ_i e'_i`. It is conditional on two p
 discharged (`hesc`, the conditional escape; `hleak`, the leak relation at the witness's incorrect set), so it is not
 yet the deployed system's bound over a monitoring period.
 
-What `PeriodLeakAccepted` takes, as its record in the lock (`Security/lean-audit.json`, `guarantees`) lists it. Named
+What `PeriodLeakAccepted` takes, as its record in the lock (`security/lean-audit.json`, `guarantees`) lists it. Named
 assumptions: none. A premise that is part of what it says (`domain`):
 
 - `Claims.Sampling.CommitmentScheme.Binds`: the trace's commitment binds, a break giving an explicit collision.
@@ -65,11 +65,11 @@ Open premises (`open`):
   `live_challenger`, `mempool` and `compile_cost`. `../../spot`, `verity/protocols` and `verity/protocols/flock/prover` import none.
 - **Command**: `network-certifier-calibrate` (`calibration:main`), a console script of the root `pyproject.toml`.
 - **Lean here**: `lean/`, the certifier program, is the Lake package `certifier_program`, whose library
-  `NetworkCertifier` the packages at `lean`, `../device/lean` and `Security/Proofs` require by
+  `NetworkCertifier` the packages at `lean`, `../device/lean` and `security/Proofs` require by
   path. Its executables (`lake exe`): `certifier-difftest`, `certifier-charge-difftest` and `certifier-window-difftest`,
   each `INSTANCES PYTHON N`. The Lean check runs each `../device/program/lean/scripts` script, then its difftest (`../device/program/lean/lean-audit.json`).
 - **Lean beside it**: `lean` is the Lake package `network_check`, whose library `NetworkCheck` the
-  packages at `../device/lean`, `../../onsite/verifier` and `Security/Properties` require by path. Its executables:
+  packages at `../device/lean`, `../../onsite/verifier` and `security/Properties` require by path. Its executables:
   - `network-check`, `network-records` and `network-period`, each `id | check PARAMS COMMITMENT EVIDENCE | serve`: the
     core protocols `verity/network-certificate/v4`, `verity/network-records/v3` and `verity/certifier/v0`;
   - `network-records verdicts`, the process `lean_audit` starts and `service` asks (`VERITY_NETWORK_RECORDS_EXE` names
@@ -397,7 +397,7 @@ The certificate's signature scheme is a parameter: the certifier's
 The Boolean Definitions above that core doesn't import (`advice_check`, `cache_step_v2`, `cache_step_v3`, `compile_slice_v2`,
 `compile_slice_v3`, `compile_slice_v4`, `compile_slice_v5`, `compile_slice_v6`, `compile_slice_v7`, `egress`, `ingress_scan`, `io_ids`, `served_statics`, `served_tie`, `window_charge`) are in
 `verity.protocols.certifier.prover`, stated over the ones here.
-`PROTOCOL.md` has the semantics and the correspondence to the Lean analysis (`Security/`, area `NetworkCertifier`).
+`PROTOCOL.md` has the semantics and the correspondence to the Lean analysis (`security/`, area `NetworkCertifier`).
 
 The coin link (`coin_link`, run by `verity/composite/device/live_challenger/coin_link.py`) carries a window's session
 between the prover and the challenger: it re-cuts every frame into cells and re-clocks both directions on their own
@@ -463,7 +463,7 @@ they differ in the accept bit, the public outputs or the digest, or which the Le
 - every proving run of N2 recorded before the switch replayed through both to the verdict it recorded, negative
   controls included.
 - the Python keeps running beside the Lean as the reference.
-- the Lean's verdict has its property in `Security/Properties/NetworkCertifier/Check/LinkWindow.lean`
+- the Lean's verdict has its property in `security/Properties/NetworkCertifier/Check/LinkWindow.lean`
   (`Properties.NetworkCertifier.LinkWindowAcceptMeans`, proved): an accepted execution phase was proved, opened to the
   word 0b11, certified on both ends and synced within Σ_sync (a network certifier link's syncs are not asked of), and
   its public outputs are verdict 1 and deadline 1.
