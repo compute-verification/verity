@@ -88,6 +88,7 @@ def alone(cmd: list[str], args: list[str], out: str) -> dict:
 def kept(cmd: list[str], once: list[str], lines: list[bytes], out: str) -> tuple[dict, list[dict]]:
     """One `verify-members` on `lines`: the process, and an answer a member reached (its lines up to `MEMBER`, its wall)."""
     answers: list[dict] = []
+    closed = None
     t0 = time.monotonic()
     with open(f"{out}.err", "wb") as e:
         p = subprocess.Popen([*cmd, "verify-members", *once], stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=e)
@@ -97,7 +98,8 @@ def kept(cmd: list[str], once: list[str], lines: list[bytes], out: str) -> tuple
             try:
                 p.stdin.write(line)
                 p.stdin.flush()
-            except BrokenPipeError:
+            except BrokenPipeError as e:
+                closed = f"its input closed before member {len(answers)}'s line was written ({e})"
                 break
             answer: list[bytes] = []
             while (got := p.stdout.readline()):
@@ -109,12 +111,13 @@ def kept(cmd: list[str], once: list[str], lines: list[bytes], out: str) -> tuple
             answers.append({"lines": answer, "wall_s": round(time.monotonic() - t1, 3)})
         try:
             p.stdin.close()
-        except BrokenPipeError:
-            pass
+        except BrokenPipeError as e:
+            closed = closed or f"its input closed before its end ({e})"
         rest = p.stdout.read()
         rc, rss = reaped(p)
     Path(f"{out}.out").write_bytes(b"".join(b"".join(a["lines"]) for a in answers) + rest)
-    return {"exit": rc, "wall_s": round(time.monotonic() - t0, 3), "max_rss_kb": rss, "answered": len(answers)}, answers
+    return {"exit": rc, "wall_s": round(time.monotonic() - t0, 3), "max_rss_kb": rss, "answered": len(answers),
+            "closed": closed}, answers
 
 
 def median(xs: list[float]) -> float | None:
@@ -162,9 +165,9 @@ def main() -> int:
         got = stages(Path(f"{out}/r{r}.kept.err").read_text(errors="replace"))
         processes.append({"round": r, "load": load, **process})
         print(f"FM {json.dumps({'way': 'kept-process', **processes[-1]})}", flush=True)
-        if process["exit"] != 0 or len(answers) != a.members or len(got) != a.members:
+        if process["exit"] != 0 or process["closed"] or len(answers) != a.members or len(got) != a.members:
             failures.append(f"round {r}: the kept process exited {process['exit']} with {len(answers)} of {a.members} members "
-                            f"answered and {len(got)} `inputs:` lines")
+                            f"answered and {len(got)} `inputs:` lines" + (f"; {process['closed']}" if process["closed"] else ""))
         for i, answer in enumerate(answers):
             verdict, last = b"".join(answer["lines"][:-1]), answer["lines"][-1]
             want = b'MEMBER {"exit":%d,"index":%d}\n' % (singles[i]["exit"], i)
