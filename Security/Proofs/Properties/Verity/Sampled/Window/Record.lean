@@ -18,14 +18,17 @@ that trace decodes against the record the verifier read for that session, clause
   opens, the tree's first opening is of its stream named the session's, answers the SHA-512 of the record's link
   message and releases the record's link coins; each later opening of it is of a round the record gives its stream,
   answers that round's digest and releases that round's coins; the log opens every round the record gives a stream;
-  each stream the record gives rounds of is a stream of the tree; and the tree is the session's coin tree. It is the
-  several-session form of what `MovesReach.lean` derives from the one-session read (`verdict_read`, `hans`,
-  `OpenedRecorded`, `keyAt_of_record`, `SetsUp.helloSpec_session`), stated on the log alone.
+  each stream the record gives rounds of is a stream of the tree; the tree is the session's coin tree; and each of
+  its openings asks for the count of coins the record gives there, a coin a 16 bytes of the link's points and a
+  round's `n`. It is the several-session form of what `MovesReach.lean` and `CountsLayout.lean` derive from the
+  one-session read (`verdict_read`, `hans`, `OpenedRecorded`, `keyAt_of_record`, `SetsUp.helloSpec_session`,
+  `Trees.session_counted`), stated on the log alone.
 * **A stop's messages off the misses** (`stop_modes_tape`): at a position that keeps the invariant, on a tape through
   it that misses nowhere, a round fixed there decodes the message the play reveals for it, where the cuts are at the
   bytes the release answers and the message has that SHA-512.
 * **The roots** (`session_rootB`, clause (ii)) and **the link points** (`session_pts`, clause (iii)) at a session's
-  first stop, and **an answered stop's round** (`session_stop_round`, `session_answered`) and **the rep rounds**
+  first stop, and **an answered stop's message and round** (`session_stop_msg`, `session_stop_round`,
+  `session_answered`) and **the rep rounds**
   (`session_reps`, clause (iv)): the rounds the session's answered stops submit on a rep of its one table, in order,
   are the record's rounds of that stream (`session_stream_rounds`, `SessionRead.openedOf_le`).
 -/
@@ -230,7 +233,10 @@ session's record `text`, parsed as `J` and decoded as `sess`, and the session's 
   stream, answers that round's digest, and releases that round's coins where the record gives any;
 * `full`: the log opens every round the record gives a stream of the tree;
 * `key`: each stream the record gives rounds of is a stream of the tree;
-* `tree`: the tree is sampled with the session's coin tree. -/
+* `tree`: the tree is sampled with the session's coin tree;
+* `linkCount`: the tree's first opening asks for a coin a 16 bytes of the record's link coins;
+* `roundCount`: each later opening of the tree, of a stream other than the session's, asks for the `n` of the round
+  the record gives there. -/
 structure SessionRead (Lg : List Release) (tables : Array String) (u : ℕ) (text : String) (J : Json)
     (sess : Flock.RunRecord) : Prop where
   parse : Flock.JsonParse.parse text = .ok J
@@ -254,6 +260,12 @@ structure SessionRead (Lg : List Release) (tables : Array String) (u : ℕ) (tex
   key : ∀ name, 0 < recordRounds J name → ∀ i, (openedTrees Lg)[u]? = some i →
     ∃ s : ℕ, ((helloSpecs Lg)[i]?.bind fun sp => sp.streams[s]?) = some name
   tree : ∀ i, (openedTrees Lg)[u]? = some i → (helloSpecs Lg)[i]? = some (Flock.Zk.coinSpec tables)
+  linkCount : ∀ L₁ x L₂ i s n, Lg = L₁ ++ x :: L₂ → x.frame = .opening i s n → i ∉ openedTrees L₁ →
+    (openedTrees L₁).length = u → ∀ b, recordRound J TREE_SESSION 0 = some b → n = b.size / 16
+  roundCount : ∀ L₁ x L₂ i s n name, Lg = L₁ ++ x :: L₂ → x.frame = .opening i s n →
+    (openedTrees L₁)[u]? = some i → ((helloSpecs L₁)[i]?.bind fun sp => sp.streams[s]?) = some name →
+    (name == TREE_SESSION) = false → ∀ st, sess.streams.find? (·.name == name) = some st →
+      openedOf L₁ i s < st.rounds.size → n = st.rounds[openedOf L₁ i s]!.n
 
 /-- **A log a session's read holds opens each rep stream of the session's tree at most the rounds the record gives
 it** (`openedOf_le_recordRounds`, at a session of a window). -/
@@ -355,14 +367,74 @@ theorem session_pts {R : ℕ} {tables : Array String} (ht : tables.toList.Nodup)
 
 /-! ## The rep rounds, stop by stop -/
 
-/-- **An answered stop's round is its session's record's** (`stop_round`, at a session of a window): at a window's
-readings at one table, at a position `q` that keeps the invariant, on a tape through it off the misses, where `q`
-fixes round `j`'s cut, round `k` of rep `ρ` of session `u`, at the most likely message `w`, the device's log has the
-coins `cs` of `w`'s count released at the opening of the `u`-th tree's stream `s`, named that rep's, after the log
-`m` at which the cuts `q` fixes are at the bytes that opening answers and which opened that stream `k` times: where
-the verifier's read holds the log to session `u`'s record (`SessionRead`) and `Flock.Zk.verify` accepts the record
-under retained rounds and SHA-512 digests, the record's stream so named has round `k`, and it is the round `roundOf`
-makes of `w` and `cs`. -/
+/-- **An answered stop's message is its session's record's** (`stop_round`'s message, at a session of a window): at a
+window's readings at one table, at a position `q` that keeps the invariant, on a tape through it off the misses,
+where `q` fixes round `j`'s cut, round `k` of rep `ρ` of session `u`, at the most likely message `w`, and the
+device's log has an opening of the `u`-th tree's stream `s`, named that rep's, after the log `m` at which the cuts
+`q` fixes are at the bytes that opening answers and which opened that stream `k` times: where the verifier's read
+holds the log to session `u`'s record (`SessionRead`) and `Flock.Zk.verify` accepts the record under retained rounds
+and SHA-512 digests, the record's stream so named has round `k`, whose message is `w`. -/
+theorem session_stop_msg {V : Vocab d α} {θ : ByteArray} {F : Array ByteArray} {c : ByteArray} {R : ℕ}
+    {tb : String} (per : ℕ) (record₀ : Exchange → Option Claims.Msg) (recordDigest : Claims.Msg) {rd : Reading R}
+    (hrd : rd = windowReadingAt #[tb] per (sessionReveal #[tb]) record₀ recordDigest)
+    {σ : Strategy (V.game θ F c)} {q : Pos (V.game θ F c) σ Claims.Msg (Fin R)}
+    (hq : q.Inv (roundCuts V θ F c rd)) {z : CoinTape (V.game θ F c) σ} (hz : ∃ y, z = q.back y)
+    (hn : NoMiss V θ F c rd σ z) {j : Fin R} {u : ℕ} {ρ : Fin 2} {k : ℕ}
+    (hLj : slotAt (j.val % per) = .rep 0 ρ k) (hju : j.val / per = u) (hj : (q.Ks j).isHere = true)
+    {w : Claims.Msg} (hw : q.modes j = some w) {bits : List Bool} {m L' : List Release} {i s n : ℕ}
+    {b : ByteArray} (hlog : (CoinTape.run (V.game θ F c) σ z).log = m ++ ⟨.opening i s n, b, bits⟩ :: L')
+    (hcut : CutsAt rd.reveal q m (CoinTape.run (V.game θ F c) σ z).log)
+    (hτ : (openedTrees m)[u]? = some i) (hk : openedOf m i s = k)
+    (hname : ((helloSpecs m)[i]?.bind fun sp => sp.streams[s]?) = some (repStreamName tb ρ.val))
+    {text : String} {J : Json} {spec : Flock.SessionSpec} {tabs : Array Flock.Setup} {proofs : Array ByteArray}
+    {sess : Flock.RunRecord} (hrec : sentRecordAt u (CoinTape.run (V.game θ F c) σ z).sent = some text)
+    (hR : SessionRead (CoinTape.run (V.game θ F c) σ z).log #[tb] u text J sess)
+    (hd : Flock.Record.decode spec text = .ok sess) (hv : Flock.Zk.verify spec tabs text proofs = .ok ())
+    (hret : spec.retainRounds = true) (h512 : spec.sha512Digests = true) (htab : spec.tables = #[tb]) :
+    ∃ st, sess.streams.find? (·.name == repStreamName tb ρ.val) = some st ∧ k < st.rounds.size ∧
+      roundMsg text (repStreamName tb ρ.val) k = some w := by
+  subst hrd hk
+  have h0 : tb = spec.tables[0]! := by
+    rw [htab]
+    all_goals rfl
+  subst h0
+  have hnT := repStreamName_ne spec.tables[0]! ρ.val
+  obtain ⟨h0t, sch, tPad, cap, -, hrep⟩ := verifyRep_of_accepted hv hd ρ
+  obtain ⟨st, _, _, _, hst, -⟩ := FlockSoundness.Discharge.ZkExec.zk_verifyRep_ok _ _ _ _ _ _ _ _ _ hrep
+  have hst' : sess.streams.find? (·.name == repStreamName spec.tables[0]! ρ.val) = some st := hst
+  have hrr : recordRounds J (repStreamName spec.tables[0]! ρ.val) = st.rounds.size :=
+    recordRounds_decode hd hR.parse hnT hst'
+  obtain ⟨hlt, hans, -⟩ := hR.round m _ L' i s n _ hlog rfl hτ hname hnT
+  have hkR : openedOf m i s < st.rounds.size := by
+    rw [hrr] at hlt
+    exact hlt
+  obtain ⟨cs', -, -, hsha⟩ := recordRound_decode hd hR.parse hnT hst' hkR
+  obtain ⟨bb, hbb, hmsg⟩ := roundMsg_decode hd hret hst' hkR
+  have hdg512 : spec.dg bb = Flock.Sha512.hash bb := by simp [Flock.SessionSpec.dg, h512]
+  have hyans : b = st.rounds[openedOf m i s].sha := by
+    have h : b = st.rounds[openedOf m i s]!.sha := hans st hst' hkR
+    rw [getElem!_pos st.rounds (openedOf m i s) hkR] at h
+    exact h
+  have hrev : (windowReadingAt #[spec.tables[0]!] per (sessionReveal #[spec.tables[0]!]) record₀
+      recordDigest).reveal j (CoinTape.run (V.game θ F c) σ z) = some bb.data.toList := by
+    show sessionReveal #[spec.tables[0]!] (j.val / per) (slotAt (j.val % per))
+      (CoinTape.run (V.game θ F c) σ z) = some bb.data.toList
+    rw [hLj, hju]
+    refine (sessionReveal_rep #[spec.tables[0]!] u 0 ρ (openedOf m i s) (CoinTape.run (V.game θ F c) σ z)
+      (a := spec.tables[0]!) rfl).trans ?_
+    rw [hrec, Option.bind_some]
+    exact hmsg
+  have hmode := stop_modes_tape hq hz hn hcut hlog hj hrev (by
+    show sha512Msg bb.data.toList = b.data.toList
+    rw [hyans, hsha bb hbb, hdg512]
+    all_goals rfl)
+  have hwb : w = bb.data.toList := Option.some.inj (hw.symm.trans hmode)
+  rw [hwb]
+  exact ⟨st, hst', hkR, hmsg⟩
+
+/-- **An answered stop's round is its session's record's** (`stop_round`, at a session of a window): at
+`session_stop_msg`'s stop, where the opening released the coins `cs` of `w`'s count, the record's stream named the
+rep's has round `k`, and it is the round `roundOf` makes of `w` and `cs`. -/
 theorem session_stop_round {V : Vocab d α} {θ : ByteArray} {F : Array ByteArray} {c : ByteArray} {R : ℕ}
     {tb : String} (per : ℕ) (record₀ : Exchange → Option Claims.Msg) (recordDigest : Claims.Msg) {rd : Reading R}
     (hrd : rd = windowReadingAt #[tb] per (sessionReveal #[tb]) record₀ recordDigest)
@@ -384,45 +456,20 @@ theorem session_stop_round {V : Vocab d α} {θ : ByteArray} {F : Array ByteArra
     (hdg : spec.dg = dg) (htab : spec.tables = #[tb]) :
     ∃ st, sess.streams.find? (·.name == repStreamName tb ρ.val) = some st ∧
       ∃ hk : k < st.rounds.size, roundOf dg ⟨w.toArray⟩ (tailCount w) cs = st.rounds[k] := by
-  subst hrd hk
+  obtain ⟨st, hst', hkR, hmsg⟩ := session_stop_msg per record₀ recordDigest hrd hq hz hn hLj hju hj hw hlog hcut hτ
+    hk hname hrec hR hd hv hret h512 htab
+  subst hk
   have h0 : tb = spec.tables[0]! := by
     rw [htab]
     all_goals rfl
   subst h0
   have hnT := repStreamName_ne spec.tables[0]! ρ.val
-  obtain ⟨h0t, sch, tPad, cap, -, hrep⟩ := verifyRep_of_accepted hv hd ρ
-  obtain ⟨st, _, _, _, hst, -⟩ := FlockSoundness.Discharge.ZkExec.zk_verifyRep_ok _ _ _ _ _ _ _ _ _ hrep
-  have hst' : sess.streams.find? (·.name == repStreamName spec.tables[0]! ρ.val) = some st := hst
   have hrr : recordRounds J (repStreamName spec.tables[0]! ρ.val) = st.rounds.size :=
     recordRounds_decode hd hR.parse hnT hst'
-  obtain ⟨hlt, hans, hcoin⟩ := hR.round m _ L' i s n _ hlog rfl hτ hname hnT
-  have hkR : openedOf m i s < st.rounds.size := by
-    rw [hrr] at hlt
-    exact hlt
+  obtain ⟨-, -, hcoin⟩ := hR.round m _ L' i s n _ hlog rfl hτ hname hnT
   obtain ⟨b', hb'⟩ := Option.isSome_iff_exists.1
     (hR.coins (repStreamName spec.tables[0]! ρ.val) (openedOf m i s) (by rw [hrr]; exact hkR))
-  obtain ⟨cs', hrr', hf', hsha⟩ := recordRound_decode hd hR.parse hnT hst' hkR
-  obtain ⟨bb, hbb, hmsg⟩ := roundMsg_decode hd hret hst' hkR
-  have hdg512 : spec.dg bb = Flock.Sha512.hash bb := by simp [Flock.SessionSpec.dg, h512]
-  have hyans : b = st.rounds[openedOf m i s].sha := by
-    have h : b = st.rounds[openedOf m i s]!.sha := hans st hst' hkR
-    rw [getElem!_pos st.rounds (openedOf m i s) hkR] at h
-    exact h
-  have hrev : (windowReadingAt #[spec.tables[0]!] per (sessionReveal #[spec.tables[0]!]) record₀
-      recordDigest).reveal j (CoinTape.run (V.game θ F c) σ z) = some bb.data.toList := by
-    show sessionReveal #[spec.tables[0]!] (j.val / per) (slotAt (j.val % per))
-      (CoinTape.run (V.game θ F c) σ z) = some bb.data.toList
-    rw [hLj, hju]
-    refine (sessionReveal_rep #[spec.tables[0]!] u 0 ρ (openedOf m i s) (CoinTape.run (V.game θ F c) σ z)
-      (a := spec.tables[0]!) rfl).trans ?_
-    rw [hrec, Option.bind_some]
-    exact hmsg
-  have hmode := stop_modes_tape hq hz hn hcut hlog hj hrev (by
-    show sha512Msg bb.data.toList = b.data.toList
-    rw [hyans, hsha bb hbb, hdg512]
-    all_goals rfl)
-  have hwb : w = bb.data.toList := Option.some.inj (hw.symm.trans hmode)
-  subst hwb
+  obtain ⟨cs', hrr', hf', -⟩ := recordRound_decode hd hR.parse hnT hst' hkR
   have hbits : Verity.bitsOfBytes b' = roundBits fieldEnc cs := by
     by_cases hc : Verity.bitsOfBytes b' = []
     · have hrc : _root_.Spot.Challenger.recordCoins? (.arr cs') = some b' := hrr'.symm.trans hb'
@@ -440,7 +487,7 @@ theorem session_stop_round {V : Vocab d α} {θ : ByteArray} {F : Array ByteArra
   obtain ⟨hB', hS', hN', hsz, hC'⟩ := answered_of_record hd hR.parse hret hnT hst' hkR hmsg hb' hbits
   have hcoins : (Array.ofFn fun a => (cs a).val) = st.rounds[openedOf m i s].coins := by
     refine Array.ext (by rw [Array.size_ofFn, hsz]) fun a h₁ h₂ => ?_
-    have ha : a < tailCount bb.data.toList := by simpa using h₁
+    have ha : a < tailCount w := by simpa using h₁
     rw [Array.getElem_ofFn, hC' ⟨a, ha⟩, getElem!_pos _ a h₂]
   refine ⟨st, hst', hkR, ?_⟩
   have e : st.rounds[openedOf m i s] =
@@ -613,7 +660,10 @@ theorem session_reps {V : Vocab d α} {θ : ByteArray} {F : Array ByteArray} {c 
       omega
     refine (session_stream_rounds
       (fun a : Pos (V.game θ F c) σ Claims.Msg (Fin R) × ((s : SubmitJ J) × (Fin s.n → 𝔽)) => a.2.1.tab)
-      (fun a => a.2.1.rep) (fun a => roundOf dg a.2.1.bytes a.2.1.n a.2.2) (by simp) per (sessionReveal #[tb])
+      (fun a : Pos (V.game θ F c) σ Claims.Msg (Fin R) × ((s : SubmitJ J) × (Fin s.n → 𝔽)) => a.2.1.rep)
+      (fun a : Pos (V.game θ F c) σ Claims.Msg (Fin R) × ((s : SubmitJ J) × (Fin s.n → 𝔽)) =>
+        roundOf dg a.2.1.bytes a.2.1.n a.2.2)
+      (by simp) per (sessionReveal #[tb])
       record₀ recordDigest hτ hF' hpw hcov hL₀ hS hnd hfirst ⟨0, htv⟩ ρ hs hcovL (fun k => st.rounds[k]!) hf).trans ?_
     rw [hlen, map_range_getElem!, hRR]
   · have hzero : st.rounds.size = 0 := by omega
@@ -633,7 +683,10 @@ theorem session_reps {V : Vocab d α} {θ : ByteArray} {F : Array ByteArray} {c 
     have hnil : st.rounds.toList = [] := List.eq_nil_of_length_eq_zero (by simpa using hzero)
     refine (foldl_addRoundJ
       (fun a : Pos (V.game θ F c) σ Claims.Msg (Fin R) × ((s : SubmitJ J) × (Fin s.n → 𝔽)) => a.2.1.tab)
-      (fun a => a.2.1.rep) (fun a => roundOf dg a.2.1.bytes a.2.1.n a.2.2) as (fun _ _ => []) ⟨0, htv⟩ ρ).trans ?_
+      (fun a : Pos (V.game θ F c) σ Claims.Msg (Fin R) × ((s : SubmitJ J) × (Fin s.n → 𝔽)) => a.2.1.rep)
+      (fun a : Pos (V.game θ F c) σ Claims.Msg (Fin R) × ((s : SubmitJ J) × (Fin s.n → 𝔽)) =>
+        roundOf dg a.2.1.bytes a.2.1.n a.2.2)
+      as (fun _ _ => []) ⟨0, htv⟩ ρ).trans ?_
     rw [hfil, hRR, hnil]
     all_goals rfl
 
