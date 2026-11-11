@@ -29,6 +29,8 @@
 # WITH="OUT_DIR ..." adds earlier jobs' arms to the cost: a load they served and this job didn't joins the number.
 # The number is not given without the row on a repeated prefix under it, which is load prefix's, served in a job of its
 # own (--loads prefix --arms "compiled no-prefix-cache two-stage": its cost is the row alone) and joined with WITH.
+# That load is four requests unless --dataset prefix=FILE names a table of its requests: the full size is
+# benchmarks/serve_tax/prefix_plan.jsonl, each request sent at its arrival time, a pass of 25 minutes.
 # PRIVATE is where the arms keep what never leaves the node, each in PRIVATE/<arm>: a boundary commitment's classes, whose
 # files hold the requests' tokens and the salts (OUT keeps each class's public commit.json, a line of
 # <arm>/server/boundary.PID.jsonl), the history tables and the top-k's counters. It is a directory outside every run's.

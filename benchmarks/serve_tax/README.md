@@ -128,22 +128,35 @@ research run --on NODE --source . --cwd source -- bash benchmarks/serve_tax/run.
 - **The row on a repeated prefix** (`serve_tax.prefix_row`) is directly under the number's line and directly after
   the JSON's `run` (`prefix`): what the arm costs over stock on load `prefix`, which the number's loads say nothing
   of, since stock serves a repeated prefix from its cache and an arm with the cache off computes it again. It has no
-  target and no verdict. The load is four planned requests (`serve_tax.PAIRS`): two prompts near the engines' context
-  limit of 131,072 tokens, each sent again with another ending, so half of the prompt tokens repeat, all of them on
-  the second and fourth request. The client's `timed_trace` dataset sends them from a file of lengths and block ids
-  that the arm writes (`<arm>/prefix.trace.jsonl`; a block is 64 tokens, and two prompts share the tokens of the
-  blocks whose ids they share), each prompt as the synthetic token ids the client draws for its blocks, in the
-  file's order with one request in flight, so each repeat follows the request it repeats (`--loads` takes no rungs
-  for it). The row is labelled `scaled down` while the load is those four requests alone: half of their prompt
-  tokens repeat, which is this load's share and no serve's, where such pairs arrive among requests that repeat
-  nothing.
-  With one request in flight the cost is stock's output tokens a second over the arm's, less one, by the same paired
-  ratio; beside it the row gives how much longer the arm's time to the first token and its 99th-percentile gap
-  between tokens are, the share of the prompt tokens each side's prefix cache served by the engine's own counters
+  target and no verdict. The load is planned requests, each a prompt's and an output's length, and its size is a
+  parameter. The client's `timed_trace` dataset sends them from a file of lengths and block ids that the arm writes
+  (`<arm>/prefix.trace.jsonl`; a block is 64 tokens, and two prompts share the tokens of the blocks whose ids they
+  share), each prompt as the synthetic token ids the client draws for its blocks, in the file's order. Beside its
+  cost the row gives the share of the prompt tokens each side's prefix cache served by the engine's own counters
   beside the share planned to repeat, whether each side served every request, and the same for `no-prefix-cache`
   over stock where that arm served the load: what the cache alone is worth there. The load is served in a job of
   its own (`--loads prefix`), since one engine serves a job's loads and this one's context limit would be the others'
   too; that job's cost is the row alone, and `WITH=` joins it to the number's job.
+  - **Scaled down**, the default, for a pull request and every development run: four requests
+    (`serve_tax.PAIRS`), two prompts near the engines' context limit of 131,072 tokens, each sent again with another
+    ending, so half of the prompt tokens repeat, all of them on the second and fourth request. One request is in
+    flight, so each repeat follows the request it repeats (`--loads` takes no rungs for it), and the cost is stock's
+    output tokens a second over the arm's, less one, by the number's paired ratio, with how much longer the arm's
+    time to the first token and its 99th-percentile gap between tokens are beside it. The row is labelled `scaled
+    down`: half of its prompt tokens repeat, which is this load's share and no serve's, where such pairs arrive
+    among requests that repeat nothing.
+  - **Full size**, for the run of record: `--dataset prefix=benchmarks/serve_tax/prefix_plan.jsonl`, a table of
+    requests, a line each (`serve_tax.read_plan`: `at_s`, `prompt`, `output`, and `after` and `blocks` on a request
+    that begins as an earlier one does; no token and no text). It is the same two pairs among the chat, multi-turn
+    and long-context requests of 25 minutes of mixed traffic at 0.4 requests a second, and the client sends each
+    request at its arrival time (rung 0, `prefix@0`: it holds no concurrency and has no rate of its own), so a
+    repeat finds its prefix only if the engine has computed it by then. An arm **kept up** with the arrivals where
+    it served every request and each pass ended within a tenth of the arrivals' span after the last one
+    (`serve_tax.KEPT_UP`); the row says so for each arm, with its pass's length. Where stock kept up, it serves the
+    tokens as fast as they arrive whatever an arm costs, so its tokens a second over the arm's, less one, is
+    printed and is no cost: the cost is the two latencies (`cost` is `latency`, and the row's `value` is null).
+    Where stock did not keep up, the row says so and is read as the number is (`cost` is `tokens`). Any other table
+    in that format is served the same way; one whose arrival times are all 0 is sent with one request in flight.
 - **The verdict** of a load against the model's target (`Model.target`, or `--target PERCENT`) is `meets` where the
   whole interval is at or under the target, `misses` where all of it is over, else `cannot tell`. The output says
   what the target rests on (`Model.target_basis`: `modelled` for a cost model's share, `given` for `--target`).
