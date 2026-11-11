@@ -57400,3 +57400,116 @@ Two lines of my 14:27Z entry said "not run". Both are run now; no verdict change
 - **1, the uncut select with a block's and a statement's seconds both scaled** [run]: +0.0021% at the entry's prices, +0.0085% at 4 times, +0.034% at 16 times with no program; +0.0102%, +0.0123%, +0.021% at +990. So 16 times dearer moves the row of record by 1.3 GB in either column [derived], not "by under 0.1 GB", and by 0.03% at most. The verdict stands: no row moves by 1%.
 
 For the table: BENCHCROSS | one machine's window at κ 2^-9 and 2^-10, by the planner on the plan's cells | 165.9 GB at 45.6 / 101.2 budgets; 331.8 GB at 34.9 / 67.2 (no program / as `main` is) [run] | HARMSEARCH's 164 and 327 hold to 1.5%.
+
+## REGX, Wed 11 Nov 14:32Z: ω from `h.wires` and `h.links` is defined from `h` alone at a wired port and compiles; a link names no writer, so ω is the identity at a linked port and which record that read is under is the run's. ATTACK's (ii), (iii), (iv) answered; the model's verifier never runs the design check, so every condition on the wires is a scope condition on `h`
+
+**About what a guarantee says or rests on (Daniel's). Scratch: no PR, nothing marked, no lock change, no aggregator imports it.**
+
+**Branch and head:** `cursor/proofs-wiremap-5e7b` at `24b588e7fed5526523774b3d24fa0c75123a9a14`. Cut from EXTFORM's `cursor/proofs-addresses-3f5a` at `9185c3ec77f4`; EXTFORM's head `70986393974218b96c1bda2504aea8f8a101f02a` is merged in (merge commit `51768d21bac4`, its two files untouched by me) so that `Prog.wired` is there. One new file, `security/Proofs/Flock/SpotFlock/WireMap.lean` [run: `git push`].
+
+**What compiles** [run; each is `verity lean try --siblings`: lean exit, axiom probe, sibling check; no kernel replay, no second reader of a compiled head]:
+- `r20261111-132839-12f8` at `b7d8e2420e3f`: lean exit 0, 14 theorems, none on an axiom beyond `propext`, `Classical.choice`, `Quot.sound`; siblings no clash (3,735 imported, 115 unchecked).
+- `r20261111-133147-1e18` at `29ba2e5b6cab` (the head ATTACK read at 13:46Z and found no run for): lean exit 0, 16 theorems, same axioms (1,163 imported, 2,687 unchecked).
+- `r20261111-134511-90b0` at `7b3cafffb3fd`: lean exit 0, 17 theorems, same axioms (21 imported, 3,829 unchecked).
+- `r20261111-140153-a170` at `a168b9b10ca0` (after the merge): **lean exit 1.** Two uses of `find?_some` under an expected type the unifier split wrongly; `wireCell_ne_self`, `wireUnit_ne_self` and `wireTarget_spec` were on `sorryAx` there. Fixed in the next commit.
+- `r20261111-141641-a2a3` at `c7f7580b3003`: lean exit 0, 25 theorems, same axioms (362 imported, 3,489 unchecked).
+- `r20261111-141933-5008` at `24b588e7fed5` (**the head**): lean exit 0, 26 theorems, same axioms; siblings no clash (1,161 imported, 2,690 unchecked). One linter warning: a fallback tactic in `wireTarget_spec` that never runs.
+
+### ATTACK's four points (13:46Z), a line each
+
+- **(i) The order: EXTFORM's.** From ω's side only: `wireUnit` sends a unit to a unit of the first template named `w.writer` (`heldWriter`), so "each wire's writer template is listed before its reader's" is a Boolean on `h.wires` and `h.names`. I state no such condition.
+- **(ii) A wired source bit that ω leaves: of the four cases only the first is empty at a registration `stmtOk` accepts; the other three need a condition on `h`** [read; the condition compiles]. The condition is `wiresMove h`, decided from `h` alone: every source bit at a port a wire names and no link names has a gate to go to; `wireTarget_of_wiresMove` is its use. By case:
+  - *the port has no rows, or the wire's writer is no template's name:* empty at each registered read of an accepted run (`wired_read` concludes both), and `second-read` asks that every port a wire names for the template is among its registered reads (`wiredRead`, `Spot/SecondStage.lean:845-846`, `:924-925`) [read; that last step not chained in Lean].
+  - *the cell position has no row* (`rowAt` gives none, or a row `≥ per`): an accepted run checks rows only at the slots it reads (`placedOk`, `:781-791`). That the runs hold every position is `fits` (`:431`), asked by `placed` (`:599-602`), which only `linksOk` and `wiresOk` call (`:605-617`; `gather`, `:455`, asks it where the copies are derived), and **the model's verifier never runs them**: `stmtOk` runs `interiorOrderOk` and `stmtCodes` a statement (`SpotFlock/Code.lean:445-489`), and `designOk`, `linksOk`, `wiresOk` occur as whole words nowhere under `security/` [run: `rg -w` at this head]. At `code h`, `h.links`, `h.wires` and `h.rows` are copies nothing holds to the Definition.
+  - *no written bit matches* (the writer's file has no output row port of that name, fewer bits, or `Bits.outGate` gives none): nothing in round 2 reads a row's format (the gates' item of section 1).
+  - *the boundary record holds the writer's gate* (a link names the writer's output port, or another output port of the unit exposes the same gate): the returned-and-wired case, which ω leaves on purpose. EXTFORM's `wiresOk` line refuses it by the port's name; `noReturnedWired h` is that line as a condition on `h`.
+- **(iii) Now two theorems** [run]: `wireTarget_spec`: if ω moves `x` to `y`, then `x` is member `t`'s source bit at commitment position `r`, `wireUnit h t r.row r.leaf = some (tw, wport, u)`, no link names `(tw, wport)`, `y` is `tw`'s written bit at row `wport`, leaf `u`, bit `r.bit`, and `returned h y = false`. `wireRow_unit`: where the wiring gives slot `j` the row `row`, the slot's cell position is wired to position `x` of `tw`'s cell at `wport`, `row = p.span j * n_tw + x`, and the unit `wireUnit` names for the slot's unit of replay block `ρ` is `ρ * n_tw + x`. So the gate and the row are one cell position of the writer, in the slot's replay block. **Still a reading:** `ρ = S[p.span j]` for the slot's unit (`RegTwo.blockAt`, `filesOk`), and that leaf `i·n_w + x` of the interior port is the writer's unit `S[i]·n_w + x`'s row (the writer's own session, `rowsOk` at `fun u => some (u - p.lo)`, `:833`). And nothing says a gate's value is its row's bit: that is the opening (`RowAt`).
+- **(iv) Done for the signature and for piece 2's `keep w = false`; a condition for `htgt`** [run]: `wiredProg h = (bitsProgs h.ms).wired (wireMap h) (returned h)`. `returned_wireMap`: `wireMap h x ≠ x → returned h (wireMap h x) = false`. It holds by how ω is defined: ω leaves a source bit whose writer's gate the boundary record holds any written bit at, so the two reads are kept apart at the gate and not only at the port's name (two output ports of one unit may expose one gate). "No unit is wired to itself" is `noSelfWire h`, decided from `h` (no cell position of a template reads, at a wired port, that position of the same template), with `wireUnit_ne_self`: under it, `wireUnit h t port u ≠ some (t, wport, u)`. **Not chained:** from that (units) to `htgt` (gates of a block `u`); it needs that a member's unit's source bits and written bits are in that unit's block of `membersPart`, which I read and did not prove.
+
+### The list for 16:00Z, my half
+
+- **Compiled** (`r20261111-141933-5008`, the head; no second reader of this head, no kernel replay): ω as a definition from `h` alone (`wireTarget`, `wireMap`, `wiredProg` on `Prog.wired` at `returned h`); an accepted run's registered read at a wired port is of the interior record's writer port, in a tree of `q·n_w` rows, each slot at the row the wiring names (`wired_read`), and at a linked port of the link's value in the boundary port or in the interior record's value of that name (`linked_read`); the gate ω picks is the writer unit's written bit at the wire's port and bit, and none the boundary record holds (`wireTarget_spec`, `returned_wireMap`), at the same writer cell position as the row (`wireRow_unit`); three conditions decided from `h`, each with the lemma that uses it: `noReturnedWired`, `wiresMove`, `noSelfWire`; and `addresses_one_way` (section 3, item 1).
+- **A reading, no theorem:** ω meets `hin`, `hnc`, `hw` (ATTACK's reading, mine the same); a slot's unit and replay block (`blockAt`); the writer's own row in the interior port; that the reader's and the writer's row formats are one; from "no unit is wired to itself" to `htgt` (a unit's bits are in its block); the application of `addresses_one_way` to a wire's gate.
+- **A verifier change, or a scope condition on `h`** (the second is enough at `code h`, since the model's verifier does not run `wiresOk`; the served verifier does): no returned output is wired inside (EXTFORM's `wiresOk` line; `noReturnedWired h`); every wired source bit moves (`wiresMove h`: the rows' runs fit, rows `< per`, one row format on both ends); no unit is wired to itself (`noSelfWire h`); the order (EXTFORM's (i)); EXTFORM's "no unit reads one writer bit at two inputs". And one that is the run's and no condition on `h`: item 4 of section 3.
+
+### 1. Is ω defined from `h` alone? At a wired port yes. At a linked port there is no writer, and three things are the run's
+
+**The wire arm: yes**, from `h.wires`, `h.rows`, `h.names`, `h.reg.ns` and `h.ms` [read `Spot/SecondStage.lean:826-830` (`readOk`'s wire arm), `:802-804` (`wiredRow`), `:624` (`writerOf`), `:595` (`rowsOf`); `SpotFlock/Code.lean:400` (`partAt`), `:434` (`ownOf`), `:282` (`filesOk`); `Properties/Spot/Members.lean:179` (`filesBlockOf`)].
+- **Units.** Member `t`'s unit `c + ρ·n_t` is position `c` of replay block `ρ`'s cell. At a port a wire `w` names it reads unit `ρ·n_w + x` of the first template named `w.writer`, with `x = rowAt r.runs c`, `x < r.per`, `r` the port's rows: `wireUnit`, and `wireUnit_block` is that sentence, compiled. The same replay block, because `wiredRow` multiplies by the reader's own cell index `p.span u` [read `:804`].
+- **What the run adds is placement only:** the interior port's leaf is `i·per + x`, `i` the place in the sample of replay block `S[i]`, and `S` is `h.reg.sample` of the coin [read `Code.lean:434-437`].
+- **Three facts round 2 checks in the run, each a function of `h`:** the wire's writer is a template's name, the port has rows, `n_writer = r.per` [read `:827-829`]. They are conclusions of `wired_read`, not hypotheses on `h`. Whether `h.names` are held distinct I did not read [not read]; `writerOf` and `heldWriter` both take the first of the name.
+- **Gates.** ω needs the inverse of `Bits.outRowBit`: the writer member's gate at row `w.wport`, the writer's unit, the same bit of the leaf. `wireTarget` finds it in `writtenBits h.ms` (`Bits.writers` with the member kept and no VU renaming). **Two things I could not settle from what I read:** (i) a written leaf bit may have no gate (`Bits.outGate` is none where the leaf's column is not a computed row, `Bits.lean:224-230`); (ii) that bit `b` of the reader's leaf is bit `b` of the writer's leaf, and that the writer's file names its output row port `w.wport`: the reader's bit is `8·byte + bit` of its port's row, the writer's `16·(word − first) + t` of its output row port (`Bits.lean:582`, `:620`), and `readOk` holds roots, domains, leaf counts and rows (`sameAt`, `placedOk`), not a row's format [read `:760-791`, `:814-838`; not read: `portBinding`, `heldPort`].
+
+**The link arm: `h.links` names a boundary port and a row, never a writer** [read `:817-825`, `:795-798` (`linkedRow`), `:474-488` (`nodeLinks`: a reader's parameter to the replay block's parameter), `:505-519` (`returnLinks`: a writer's `o0` to the boundary's `o<j>`)].
+- The boundary port is no gate of `bitsProgs h.ms` and no link says which unit writes it. So ω is the identity on a linked port's gates, and the link is an address, not a wire: `linkUnit` gives the boundary port's name and the row `ρ·per + x` (`linkedRow`'s `b·per + x`, `b = S[i]`).
+- **What needs the run, exactly** [read `:818-825`]:
+  1. **Which record the read is under.** `readOk` holds a linked read to the interior record's registered value of the link's name where the round-1 message registers one (`registeredEntry own.interior v`), and to the boundary port only where it registers none. The interior record is the prover's message; nothing of `h` decides it. `linked_read` states both cases.
+  2. **The boundary's `population`** `m` (the tree has `m·per` rows): the statement's.
+  3. **A port's name** in the interior record (`portOf (byTemplate rec)`): the record's naming, nothing else.
+- So "the registration does not determine a writer for a port" holds at every linked port, by construction: its value comes from outside the replay block (a parameter) or is the replay block's return.
+
+**A returned output wired inside (your 13:17Z).** ω keeps the two reads apart: where a link names the writer's output port for the writer's template, or the boundary record holds any written bit at the writer's gate, `wireTarget` is none and the reader's source bit stays (`returned_wireMap`). `noReturnedWired h` is the condition at the ports' names, decided from `h` alone; `writer_not_linked` is its use. **It is not a hypothesis of `wired_read`**, which is about the reader's entry and holds with or without it. I read the same as EXTFORM [relayed: 13:19Z]: keeping the reads apart repairs nothing there, so the condition is a check or a scope.
+
+### 2. The lemma, as compiled
+
+"Accepted" is the code's round-2 statement check, `stmtOk`. The read is the statement's registered-reads entry `e` at `port` (slot `reads_from + k` reads row `reads[k]`).
+
+```lean
+theorem wired_read {x m₁ m₂ : Msg} {c₀ c₁ : FlockDeploy.Coin} (hok : stmtOk h x m₁ m₂ c₀ c₁ = true) {t : ℕ}
+    (ht : t < h.ms.length) :
+    ∃ st rec draw w S, decode x = some st ∧ jsonMsg m₁ = some rec ∧ secondDraw h c₀ c₁ = some draw ∧
+      FlockDeploy.decode (stmtAt h m₂ t) = some w ∧ stmtJsonOf h t w = some S ∧
+      ∀ port e wr, (port, e) ∈ Spot.entries (Spot.getD S.registered "ports") →
+        heldLink h (h.names.getD t "") port = none → heldWire h (h.names.getD t "") port = some wr →
+        ∃ tw r xe, heldWriter h wr.writer = some tw ∧ heldRows h (h.names.getD t "") port = some r ∧
+          h.reg.ns.getD tw 0 = r.per ∧
+          Spot.getD e "value" =
+            .str (Spot.SecondStage.portOf (Spot.SecondStage.byTemplate rec) wr.writer wr.wport) ∧
+          (Spot.SecondStage.portOf (Spot.SecondStage.byTemplate rec) wr.writer wr.wport, xe) ∈
+            Spot.Record.byPort rec ∧
+          Spot.SecondStage.sameAt e xe = true ∧
+          Spot.SecondStage.placedOk (h.reg.sample (src c₀)).size (partAt h (h.reg.sample (src c₀)).size t) e
+            ((h.reg.sample (src c₀)).size * h.reg.ns.getD tw 0)
+            (wireRow h t port (partAt h (h.reg.sample (src c₀)).size t)) = true
+```
+
+- `wireRow h t port p j = (wireCell h t port (p.unit j)).map fun y => p.span j * h.reg.ns.getD y.1 0 + y.2.2`.
+- `linked_read`, the same prefix, at a port a link `l` names: `Spot.getD e "value" = .str l.value`, the port has rows `r`, and either the interior record registers `l.value` as `xe` with `sameAt e xe` and `placedOk q p e (q * r.per) (linkRowIn h t port p)`, or it registers none, the boundary record has port `l.value` as `b` and population `m`, with `sameAt e b` and `placedOk q p e (m * r.per) (linkRow h t port (h.reg.sample (src c₀)) p)`.
+- The two that tie the gate to that row:
+
+```lean
+theorem wireTarget_spec {x y : ℕ} (hxy : wireTarget h x = some y) :
+    ∃ t r tw wport u, (x, t, r) ∈ sourceBits h.ms ∧ wireUnit h t r.row r.leaf = some (tw, wport, u) ∧
+      heldLink h (h.names.getD tw "") wport = none ∧
+      (y, tw, Spot.Bits.RowPos.mk wport u r.bit) ∈ writtenBits h.ms ∧ returned h y = false
+
+theorem returned_wireMap {x : ℕ} (hx : wireMap h x ≠ x) : returned h (wireMap h x) = false
+
+theorem wireRow_unit {t : ℕ} {port : String} {p : Spot.SecondStage.Part} {j row : ℕ} (ρ : ℕ)
+    (hc : p.unit j < h.reg.ns.getD t 0) (hrow : wireRow h t port p j = some row) :
+    ∃ tw wport x, wireCell h t port (p.unit j) = some (tw, wport, x) ∧
+      row = p.span j * h.reg.ns.getD tw 0 + x ∧
+      wireUnit h t port (p.unit j + ρ * h.reg.ns.getD t 0) = some (tw, wport, ρ * h.reg.ns.getD tw 0 + x)
+```
+
+- **Not said by any of them** [not compiled]: they are at the statement's entry; that a session header's positions (`Registered.entry`, what `ReadsRegistered` reads) are that entry's `reads` is not chained here.
+
+### 3. What (A) still needs after this
+
+1. **A slot a unit, not a gate** [run: `addresses_one_way` compiles; its application to a wire's gate is derived, not compiled; read `SlotsAt.lean:130-160`, `RevealAt.lean:172-175`]. `Address` has one `slot` a gate and a `port` a unit. `ReadsRegistered` asks `S.slot.sized = false`, `ReadsInterior` asks `sized = true`. `addresses_one_way`: under `Addresses h`, every accepted run that needs a gate reads it as a registered value, or every one reads it off the interior record. At a wire's gate after the cut, the writer's unit needs it (in its block, read outside it) and its session reads it at its own published port, where no registered read is named like it; the reader's unit needs it and its session reads it as a registered read. So `Addresses` read at the wired program is false wherever a wire's writer unit and reader unit both have an accepted run: by the definition, not by round 2. (A) needs `Address.slot` a unit, as `port` is, or `ReadsRegistered` restated for a sized slot. **EXTFORM to confirm**: it is its definition, and the application is my reading.
+2. **The gate facts about ω** that are still readings (the list above), and the order (EXTFORM's).
+3. **The three conditions on `h`** in scope, or as checks: `noReturnedWired`, `wiresMove`, `noSelfWire`.
+4. **The inputs ω cannot move that round 2 reads off the interior record** [read `:818-820`, `:835`]: a linked read where the round-1 message registers a value of the link's name, and a registered value only the interior record registers. Both stay input gates at the wired program, on every boundary. Neither is decided by `h`: (A)'s scope refuses them in the run, by a check on the round-1 message, or the statement says them.
+5. **Cost.** `sourceBits`, `writtenBits`, `wireTarget` and `wiresMove` walk every gate with `find?`: a statement's form, not code a verifier runs. The wiring itself is per template port (`wireCell`, `linkCell`: the descriptor's size), so if the verifier decides these conditions it should decide them per template port and cell position.
+6. Which program the guarantee is about is Daniel's.
+
+### 4. `needs_io_of_closed` and `needs_committed_of_closed`: left; there is nothing to merge on this branch
+
+`BlocksClosed C Pt` is the conjunction of my lemma's two hypotheses [read `AddressesAt.lean:54-62`], so EXTFORM's is the one lemma and this branch has only it. Mine is on `cursor/proofs-onekey-6a2d` (`b40674d790c9`) alone, whose base has no `AddressesAt.lean`; delete it for EXTFORM's when that branch is rebased. No code moved.
+
+**Correction of my 12:12Z:** I would have wired through `Bits.wiresOf`. It is not round 2's map [read `Spot/Bits.lean:667-673`: it takes the first written bit at a source bit's row name and leaf at the partition's VUs and reads neither `h.wires` nor `h.links`]. Nothing on this branch reads it.
+
+**Not run:** any suite, the Lean check, a kernel replay.
+
+For the table: no number moves. The by-class and by-gate lines at `code h` keep the 12:53Z label.
+For (A)'s line: "ω is defined from the registration alone at a wired port, and an accepted run's wired read is at the row of the writer cell position ω's gate is at (compiled, try `r20261111-141933-5008`; no second reader of that head, no kernel replay). At a linked port the record a read is under is the run's. The model's verifier does not run the design check, so (A)'s conditions on the wires (no returned output wired inside, every wired bit moves, no unit wired to itself, the order) are scope conditions on the auditor's copies. (A) also needs a slot a unit at a wire's gate, and a scope for inputs read off the interior record."
