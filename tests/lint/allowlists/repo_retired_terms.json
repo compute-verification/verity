@@ -384,7 +384,6 @@
     {"file": "security/Definitions/Spot/Oblivious.lean", "count": 1},
     {"file": "security/Definitions/Spot/Partition.lean", "count": 2},
     {"file": "security/Definitions/Spot/SamplePressure.lean", "count": 5},
-    {"file": "security/Models.lean", "count": 27},
     {"file": "security/Proofs/Accounting.lean", "count": 26},
     {"file": "security/Proofs/Accounting/Actual.lean", "count": 11},
     {"file": "security/Proofs/Accounting/Actual/Bridges.lean", "count": 6},
