@@ -62208,3 +62208,47 @@ Two steps left this list since 18:28Z. Step 13: since 18:46Z a proofs worker wri
 - If it were accepted, one machine's verification phase is still too small (the first paragraph): `main` draws at least one replay block every verification phase, one machine's 600-second phase holds about 7,219 replay blocks at utilization 0.4, and one sampled replay block of it costs 487 times the 10% budget on the partition `main` defines and 257 times at the best designed configuration, both as `main` reads the program [relayed: line 61265; run `r20261111-183448-041d`]. That is about 26 to 49 times the cost of the serving itself [mine].
 - What such a run would bound, if that cost were paid: for the partition `main` defines with the rate by width, 21.2 GB a year, at 197 times the budget with no read of the program and 593 times as `main` reads it [read: line 58888, section 5; runs `r20261111-163515-2cd7`, `r20261111-163535-e72a`, `r20261111-163555-77a6`]. That is a different design from the two above, so the multiples differ.
 - For the partition the engine serves today, and for the design vLLM's command can express (one count for every kind of proof block), no run prices one machine's phase [guess: I found none]. At the measured serving rate a machine's phase holds about 404 replay blocks [mine: 7,219 times 0.0560]; no run prices that either.
+
+## WIRED, Wed 11 Nov 19:18Z: #9043 is open at `e24f98904a29`, not marked: its five files' tries passed, and its one records run and the quick suites are out, both waiting for a slot. (b) is made and the wiring map's theorem is written on a second branch, in its first try. The select's shape meets the condition by that theorem, under two hypotheses on `h`
+
+**1. Pull request 1: [#9043](https://github.com/compute-verification/verity/pull/9043), head `e24f98904a29`, linked to PRF-528, not marked** [run: `research queue open`].
+
+- The five files' tries passed: Lean exits 0 on each, none of their theorems uses an axiom beyond the three, and no built module of the package that does not import them declares a name they declare [run: `r20261111-181132-e740`, exit 0, 56 minutes].
+- The records run is `r20261111-191030-82a2` (`lean_changed.py --records security/Proofs --update`, on vy-nebius-cpu-9), and the quick suites are `r20261111-191230-3423` (on vy-nebius-cpu-5). Both were waiting for a slot at 19:14Z [run: `research status`]. The records run takes an hour or more once it has a slot [guess: the tries' two cold builds took 23 minutes each].
+- I mark it when both pass. If the records run is red on the unread cap alone, the cap's new figure goes in this pull request, as you ruled at 18:31Z.
+- `main` has not moved since the branch was made: it is `cc6ee74462` [run: `git fetch`, 19:09Z].
+- Two things for you, neither stops me. `research queue open` warned that PRF-528 carries no label naming a live goal (its labels: `from:proofs`), so the body's `Goal proofs/spot-bind-term` is not matched [run]; I do not write to Linear. The common brief's `--records Security/Proofs` names no package: the three are `security`, `security/Proofs` and `security/Properties` [run: `lean_audit.packages`], and I used `security/Proofs`.
+
+**2. (b) is made, on `cursor/proofs-wired-e3fd`, head `908b5b25a783`: two commits on #9043's head** [run: pushed 19:08Z]. Nothing on it has compiled yet.
+
+- `0e6470d121`: `Prog.Rewires` loses its field `inj` and has eight fields; `Prog.Rewires.of_earlier` loses the matching hypothesis and has seven. `Prog.exists_correct_wired`, `Prog.Rewires.exists_correct`, `decoded_wired` and `decoded_rewired` take instead that the values agree at any two gates of the block the map sends to one gate (for `decoded_rewired`: `∀ i j, s.prog.Touches b i → s.prog.Touches b j → ω i = ω j → decOf … i = decOf … j`) [read: my diff].
+- `908b5b25a7`: a new file, `security/Proofs/Flock/SpotFlock/WireMapRewires.lean`, 505 lines, with pull request 2's theorem [read: the file]:
+
+```lean
+-- a template name's place among round 2's parts: the first template of the name, the members' count where none has it
+def heldPos (name : String) : ℕ := (heldWriter h name).getD h.ms.length
+
+-- each wire's writer's part is before its reader's, decided
+def writersFirst : Bool :=
+  (h.wires.getD #[]).all fun w => decide (heldPos h w.writer < heldPos h w.template)
+
+theorem rewires_wireMap (hfit : ∀ ci ∈ h.ms, Flock.Bridge.Members.MemberFits ci) (hfirst : writersFirst h = true) :
+    (bitsProgs h.ms).Rewires (membersPart h.ms) (wireMap h) (returned h)
+```
+
+- Its try is `r20261111-191303-4631`, the three edited files and the new one in turn, running on vy-nebius-cpu-11 since 19:15Z, no verdict [run: `research status`]. I launched it before #9043's records verdict because it is another head's first step and reads nothing that run decides; say if you read the order of steps otherwise.
+- `MemberFits` is the hypothesis `SpotFlock`'s scope theorems already take of the members (`ScopeOf.lean:506`), and `writersFirst` is WIRES's second conjunct at the held copies [read: WIRES 18:51Z; I have not read #9041's Lean]. A lemma from the design check to `writersFirst` can follow once #9041 is on `main`.
+
+**3. Your 18:31Z question: `wireMap`, `wireTarget` and the seven hypotheses at the select's shape.** Yes to all, and the seven by theorem once the try passes, since `rewires_wireMap` is for every `Held` with the two hypotheses of section 2.
+
+- **`wireMap` and `wireTarget` send each of the combine's wired bits to the writer unit the design's rows name** [read: `WireMap.lean:94-136`, `SecondStage.lean:428-437`]. The wire is found by the reader's template and port (`heldWire`), so twenty wires from twenty reader ports to one writer port are twenty lookups that do not meet. `rowAt` gives position `c` of a run `Run(unit 0, count 256, row j, step 20)` the row `j + 20c`, and `wireUnit` sends the combine's unit `c + 256ρ` to writer unit `ρ·n_w + j + 20c`. The target is the writer's written bit at that unit, the wire's writer port and the same bit.
+- **Six of the seven hypotheses do not read the wires' shape** [read: the proof in `WireMapRewires.lean`]: a gate the map moves is an input gate; its target is an AND gate, so no input and no constant; the members' programs return the target; members are in order of position; the wired program returns no moved gate; a proof block has a gate that is no input and its gates and reads are one member's.
+- **The seventh, that a target is an earlier member's, is `writersFirst`**: the chunk templates' parts before the combine's. GATHER reads that it holds on the select and on its changed form [relayed: GATHER 19:03Z section 3, "both chunk templates' parts come before the combine's"].
+- **The map is injective on each proof block of that shape** [derived from the wires you listed; not compiled]: a combine unit's ports go to distinct writer units or distinct writer ports. So the agreement hypothesis is empty there, and it is needed only for a unit that reads one output at two of its ports.
+- **Not covered by the theorem:** that the map moves every wired bit. A source bit moves only where the writer has a written bit at that row, unit and bit, no link names the writer's port and the boundary record holds no written bit at the gate (`wireTarget`); a reader port wider than its writer's leaves bits unmoved, as input gates [read: `WireMap.lean:276-282`]. FRAME lists this as a condition on `h` (`wiresMove`) [relayed: FRAME 18:57Z section 5]. It is pull request 3's, with the small connected instance of the select's shape.
+
+**4. FRAME's 18:57Z section 8, answered** [relayed: that entry]. FRAME defines `partitionWired`, `twoWired` and `revealWired`; I define none of the three and read FRAME's in pull request 3. The wired program is `SpotFlock.wiredProg h`, in `WireMap.lean`, already in #9043. FRAME's derivation that `decoded_rewired`'s agreement comes out of the sessions' openings matches the hypothesis as I restated it in section 2.
+
+**5. Your 19:10Z section is read.** The Thu 02:00Z entry carries the two restated statements in the form they have now and, if it fits in about an hour, the committed-trace statement with your three points; if it does not, the entry says so and gives it a time.
+
+**6. Next.** Fix what the try of pull request 2 reports; mark #9043 when its two runs pass; then the two restated statements, read against FRAME's file at `b66d9cd53c4b`.
