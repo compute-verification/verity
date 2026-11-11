@@ -51492,3 +51492,20 @@ For the table:
 For the table:
 - `967b722429f3` (11:22:29Z, on `847136846dae`): #8836, #8226, #8539, #8764, #8368 at their marked heads; Lean inputs equal my scratch `d71b3d372596` key for key [run]; covered in the Lean by `dc0b` (pass) and exactly by `r20261111-113118-d12b`, out.
 - My passed runs `3dd5`, `2b3b`, `dc0b` (and `515d`) ran the Lean tools of `main` before #8515: they show the Lean builds and the records pass, not a pass under the candidates' keys.
+
+## SERVEDCARD, Wed 11 Nov 11:33Z: BENCHCROSS's "+783 core-s on every statement" (11:27Z) is the cost PRF-548's hoist removes: parsed once a window in a kept process, it falls toward the "no program" row; parsed once a member, to about half (about +370) [derived]; both ours and unbuilt (my 10:10Z)
+
+Tags: [run] a command I ran now, [read] a file I read now (place given), [relayed] another lane's statement I did not check, [derived] my arithmetic on cited figures, [guess] mine, unchecked. Times from `date -u`.
+
+- **The setup BENCHCROSS prices is the program's.**
+  - Its law is 0.35 to 0.39 s a MB of program across six runs [relayed: FUSED 11:04Z, BENCHCROSS 11:23Z and 11:27Z].
+  - At the audit window's 299 MB that reads 105 to 117 s a member [derived], against the 107 s I measured on m12 for the three parses `FlockVerify` makes of the one program [relayed: my 09:09Z and 10:10Z entries]: `programDigest` 28 s, `Desc.parse` 33 s, `Program.decode` 46 s.
+  - So nearly all of the setup is parsing the program, which the hoist moves [derived; the law's intercept is not given, so "nearly" is a guess].
+- **Once a member** (the smaller half: one front half, then both builds from it): 107 to about 51 s a member at m12 [derived, 10:10Z]. On BENCHCROSS's 783 that is about 373 core-s a statement [derived: 783 × 51/107]. That changes proofs but no statement in a lock (10:10Z).
+- **Once a window** (a kept process handed a window's members): the program is parsed once for all of them. On the audit window's 561 distinct members that is about 1.4 core-s a statement [derived: 783 / 561]. So the row approaches BENCHCROSS's "no program" row (3,821.5 GB at modeled 0.4 for the wanted plan) [relayed], with each session's own check (65.5 s in `cd4c`) left.
+  - Whether a kept loop is "one ZK server pass a statement" is top's [relayed: the coordinator, 09:21Z].
+- **BENCHCROSS's "a call of N sessions" rows are the same lever, partly pulled**: 5,728.4 at 4 sessions and 4,298.2 at 16 [relayed]. A window is hundreds of members.
+
+For BREAKEVEN: the +783 a statement is the program's parse [derived from FUSED's law and my m12 split]. Parsed once a member (unbuilt, proofs') it is about +373; parsed once a window in a kept process (unbuilt, proofs' Lean, vllm's driver), about +1.4 on the audit window's 561 members, so near the "no program" row. Label both "unbuilt, the hoist of PRF-548".
+For vllm: BENCHCROSS's 11:27Z table puts a number on PRF-548's hoist: for the wanted plan (width + margin, κ 2^-4, the writer at N = 64), +783 core-s on every statement reads 10,397.0 GB against 3,821.5 at no program (modeled 0.4) [relayed]; the hoist once a window is what closes most of that gap [derived].
+For the table: no change.
