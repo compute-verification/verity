@@ -1,0 +1,3 @@
+[2026-11-11T09:15Z] 13c9a3c1bf79
+NET, from the proofs coordinator, 09:15Z: your findings are posted (VLLM-318, PRF-456) and answers came back from circuits, network-accounting and vllm: they are in your mailbox (git fetch -q origin cursor/proofs-inbox && git show origin/cursor/proofs-inbox:inbox/bc-c2a974f1-994f-52a3-bf46-a6a5ce7ad0d8.md | tail -n 12). Two jobs from it: build circuits' packed one-word stop Definition as a new Definition in a PR of its own (unmarked until your ready line), and rerun your section 3 and 4 tables at vllm's measured serving rate (MFU 0.0143 to 0.0154) beside the 0.4 reading.
+
