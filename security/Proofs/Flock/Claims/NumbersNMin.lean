@@ -193,15 +193,21 @@ theorem zk_nMin_gt_len {m : ℕ} (hm : m ∈ [25, 26, 27]) :
     2 ^ (((m1Schedule wideLeaf m).levels.headD default).logCols + 1) <
       johnsonCount (2 ^ ((m1Schedule wideLeaf m).levels.headD default).logCols + m1Pad wideLeaf m) agree₀ := by
   obtain ⟨hlo, hhi⟩ := agree₀_sq_bounds
+  have key : ∀ w : Bool,
+      (((m1Schedule w 25).levels.headD default).logCols = 12 ∧ m1Pad w 25 = 554) ∧
+      (((m1Schedule w 26).levels.headD default).logCols = 13 ∧ m1Pad w 26 = 484) ∧
+      (((m1Schedule w 27).levels.headD default).logCols = 14 ∧ m1Pad w 27 = 458) := by
+    intro w; cases w <;> decide
+  obtain ⟨⟨c25, p25⟩, ⟨c26, p26⟩, c27, p27⟩ := key wideLeaf
   simp only [List.mem_cons, List.not_mem_nil, or_false] at hm
   rcases hm with rfl | rfl | rfl
-  · rw [show ((m1Schedule wideLeaf 25).levels.headD default).logCols = 12 by decide, show m1Pad wideLeaf 25 = 554 by decide,
+  · rw [c25, p25,
       johnsonCount_eq_of (J := 9172) (by norm_num) (by norm_num) hlo hhi (by norm_num) (by norm_num)]
     norm_num
-  · rw [show ((m1Schedule wideLeaf 26).levels.headD default).logCols = 13 by decide, show m1Pad wideLeaf 26 = 484 by decide,
+  · rw [c26, p26,
       johnsonCount_eq_of (J := 17112) (by norm_num) (by norm_num) hlo hhi (by norm_num) (by norm_num)]
     norm_num
-  · rw [show ((m1Schedule wideLeaf 27).levels.headD default).logCols = 14 by decide, show m1Pad wideLeaf 27 = 458 by decide,
+  · rw [c27, p27,
       johnsonCount_eq_of (J := 33215) (by norm_num) (by norm_num) hlo hhi (by norm_num) (by norm_num)]
     norm_num
 
