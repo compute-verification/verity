@@ -1,5 +1,5 @@
 {
- "generator": "verity/core/protocols/spot/tests/test_history_read.py",
+ "generator": "verity/protocols/spot/verifier/tests/test_history_read.py",
  "program": "446e221399379948e27cd8a3113640e1755ac841af266e5c25016f8b8b21168a918ef78870b6bfb8f9df286068cf99f6f8e11bd67ee50fea48727ed948dce3b0",
  "table": {
   "name": "layer",
