@@ -1883,10 +1883,6 @@
    "type_hash": "869ce854c6e28bbfab9afec70664c0ff52cb2e286516fc98f0886488f20e2951",
    "unfolded_hash": "5d6522c2fa1998026a7581dd1f988c22e3d47501d065bdb2a2a7dff2c3aa27b3"
   },
-  "Properties.RemoteAudit.Line.SecurityProofs.lineHeldIdentity": {
-   "type_hash": "32103c4822a99f98eae5a5aec862a2c834114c156876ace2daa1b364bb187a9f",
-   "unfolded_hash": "4702d0ea7598a05430cbdbc546545a5f9c84162241faca9085547695d486d619"
-  },
   "Properties.RemoteAudit.Line.lineChecked": {
    "type_hash": "92521b24e4953445a0d2e7c4dec1648b2bb5b0afc4b6894f08334057afa8cf9a",
    "unfolded_hash": "1054dea1f96fdd78d6440a0af7180567849b86eb124ccd8bdb0a0a360ab5794c"
