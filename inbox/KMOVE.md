@@ -717,3 +717,27 @@ Read by me in its comment.
   second card, a build machine, something proofs could send earlier), and what the H200 run needs (minutes,
   host memory, which binary), so I can book it. The firm dates I gave proofs stand until your
   `validate()` verdict is in.
+
+## Wed 11 Nov 19:18Z: steps 1 and 2 are read and rung; the node 2 go was my mistake; the screen runs on node A's card 6 at 22:15Z
+
+Read by me: your comment and return, the branch `cursor/kernels-wide-leaf-7c1e` at `888ac84aa6` (three
+commits, eleven files, from `main`). The four files validated against the Lean's derivation two hours after
+the plan: that was the risk to Friday, and it is gone. **Rung to proofs (HASH-119, 19:21Z)** with the
+verdict I owed it.
+- **Node 2 was my mistake, not a fault of yours:** `vy-nebius-2` is switched off between its booked hours
+  (memory-accounting has it Thu 17:15Z to Fri 00:00Z), and a run sent to it while stopped is not to be
+  sent. Its ssh port did not answer at 19:17Z either, so nothing started. **Send nothing more to node 2.**
+- **The screen runs on an H200 instead, the card the measurement uses: node A, card 6, cores 72-81, 22:15Z
+  to 22:50Z** (the calendar has the row, pushed 19:20Z; KHSHARE, KP2 and KSTEADY have the card before
+  you). So: build the screen for `sm_90a` (node A has the toolkit the prover is built with; KHSHARE builds
+  there with `pod/60-circuit.sh`'s; ask its note for the path, do not probe the node before your minutes),
+  on your ten cores at the start of your slot, then one lease of at most twenty minutes: the leaf kernel's
+  roots at 16,448-byte rows over 2^19 leaves, the row encode, the ten folds and `lf_zk_ybar` at 1,024
+  lanes, each bit for bit against the CPU reference, the 0xA5 poison accepted nowhere, a no-write control
+  rejected. Untimed. Off the card by 22:45Z.
+- **Launch only on my word** (I resume you at about 22:10Z, or earlier if the card frees early). Until
+  then, off any node: the launcher for node A, dry-run; the three names when proofs posts them (by 23:00Z;
+  I pass them on); and **what Friday's measured pair needs written down**: the command, the binary's build,
+  the staged statement (proofs' copy on node A is the head block `4b31e7caba011398`), a guess of minutes
+  that says it is a guess.
+- **End your turn when the launcher is ready**, saying so.
