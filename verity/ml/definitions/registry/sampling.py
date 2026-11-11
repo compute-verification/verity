@@ -177,11 +177,13 @@ def _i32(u: int) -> int:
     return u - (1 << 32) if u & 0x80000000 else u
 
 
-def nv_logf(a: int) -> int:
-    """libdevice `__nv_logf` on an fp32 word (FTZ)."""
+def nv_logf(a: int, ftz: bool = True) -> int:
+    """libdevice `__nv_logf` on an fp32 word (FTZ); with `ftz` False its build without flush-to-zero, whose 2^23 scaling of an
+    input below FLT_MIN is ``mul.rn.f32`` (exact), so a subnormal's log is finite. No later operand or result of either build is
+    subnormal, so the builds differ only in that scaling."""
     a &= M32
     small = _f(a) < _f(FLT_MIN_BITS)
-    a2 = mul_ftz(a, TWO_P23_BITS) if small else a
+    a2 = (mul_ftz(a, TWO_P23_BITS) if ftz else _u(_f(a) * 8388608.0)) if small else a
     i0 = 0xC1B80000 if small else 0
     ai = _i32(a2)
     e = (ai - 1059760811) & -8388608
@@ -215,9 +217,10 @@ def _gpu_nan(u: int) -> int:
     return LOG_NAN if (u & 0x7F800000) == 0x7F800000 and (u & 0x7FFFFF) else u
 
 
-def nv_logf_gpu(a: int) -> int:
-    """`nv_logf` with every NaN result `LOG_NAN`, the GPU's (`NvLogf_v2`); every other word is `nv_logf`'s."""
-    return _gpu_nan(nv_logf(a))
+def nv_logf_gpu(a: int, ftz: bool = True) -> int:
+    """`nv_logf` with every NaN result `LOG_NAN`, the GPU's (`NvLogf_v2`; without `ftz`, `NvLogf_v4`); every other word is
+    `nv_logf`'s."""
+    return _gpu_nan(nv_logf(a, ftz))
 
 
 def nv_log1pf_gpu(a: int) -> int:
@@ -321,6 +324,12 @@ GumbelNoiseLaneV2 = PrimitiveDefinition(
     "GumbelNoiseLane", 2, (("key", U32), ("v", I32)), F32, lambda key, v: noise_lane_gpu(key, v),
     doc="`GumbelNoiseLane_v1` through `NvLogf_v2`'s logs (every NaN result of __nv_logf / __nv_log1pf the GPU's 0x7FFFFFFF): the same "
         "word on every lane, since the noise never reaches those results; for the re-baseline that moves the logs to `_v2`.",
+    conformance="exact-model-tested")
+
+NvLogfV4 = PrimitiveDefinition(
+    "NvLogf", 4, (("a", F32),), F32, lambda a: nv_logf_gpu(a, ftz=False),
+    doc="libdevice `__nv_logf` without flush-to-zero on an fp32 word, every NaN result 0x7FFFFFFF (`nv_logf_gpu(a, ftz=False)`): "
+        "torch.log's f32 CUDA kernel, whose capture `gumbel_boolean.NvLogfV5`, its Boolean version, cites.",
     conformance="exact-model-tested")
 
 
@@ -637,6 +646,6 @@ def GumbelArgmaxTempBf16(B, S, logits):
 __all__ = ["SEMANTIC_ID", "GumbelStreamKey", "GumbelNoiseLane", "F32Eq", "BitOr", "BitNot", "TemperatureLane", "TemperatureScale",
            "GumbelSelectStep", "GumbelSelectF32", "GumbelTokenSelect", "stream_key", "noise_lane", "nv_logf", "nv_log1pf", "fma_ftz",
            "add_rz_ftz", "f32_bits", "topp_mask_word", "bit_at", "TopPMaskStep", "TopPMask", "GumbelTopPTokenSelect", "NEG_INF_BITS",
-           "SPLIT_COUNTS", "LOG_NAN", "GumbelNoiseLaneV2", "nv_logf_gpu", "nv_log1pf_gpu", "noise_lane_gpu",
+           "SPLIT_COUNTS", "LOG_NAN", "GumbelNoiseLaneV2", "NvLogfV4", "nv_logf_gpu", "nv_log1pf_gpu", "noise_lane_gpu",
            # the static-seed forms
            "GumbelArgmaxStep", "GumbelArgmaxBf16", "GumbelArgmaxTempStep", "GumbelArgmaxTempBf16"]
