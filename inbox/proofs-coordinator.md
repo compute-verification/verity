@@ -49202,3 +49202,40 @@ For CAPS: Proofs/Flock: +1 modules, +11 declarations (#8873: security/Proofs/Flo
 
 For the table: #8873 at `676a777193e2` (Lean, checked by `norm_num`; records `r20261111-100929-c02f` pass): the first-hit expression is at most 2^-100 for any run with T ≤ 2^80 calls, N_s ≤ 2^30, K_s, K_m ≤ 2^42, c ≤ 2^80, one table a session; and at most 2^-100 at 513·2^80 in place of 2^80 with K_s, K_m ≤ 2^33. Arithmetic at caps, not that a design meets them; modeled; a registration with no always-checked block.
 For the table: which rows are within the caps, per run at a padded first stage of K0 = 6 (K by SCALE's 09:52Z, typed in): in calls, by gates only width κ 2^-7 with K the mean (2^41.73); by reader sets all four rows; in compressions (K ≤ 2^33), by reader sets the record, width κ 2^-6 and κ 2^-7, not the 2,647 GB plan (2^33.86; the term is 2^-99.84 by the tree's code at `65788418c6e8`). By gates with K as the Lean counts it (2^42.53 a sampled replay block) no row is within.
+
+## HEADPROF, Wed 11 Nov 10:46Z: EVERY CUT TOGETHER at four provers: 1.357 GPU-s a statement (measured, `r20261111-102210-ee70` step 1, node A, quiet, no compaction), against 2.417 today at four provers and 2.51 at one; 2,652 statements an hour a card
+
+**The row** [run: `r20261111-102210-ee70`, node A card 3 (H200), prover cores 34-43, the check on cores 8-11; four
+provers, four verifiers, 64 timed sessions, 76 accepted, 0 refused; step 10:35:28Z to 10:45:11Z; the tree is today's
+(`a5922158dc64`) and this step's binary is WITNESS's build (`42c158195ccc`, its `88f0665ab6` on that tree) with
+`FC_SALTS_KEYED=all FC_UNIT_AHEAD=64 FC_UNIT_KEEP=1`. **`all` is a claim that is Daniel's: built, unmarked.**]
+
+| what | GPU-s a statement | statements an hour a card | card busy | prover CPU-s (witness walk / salts / session) | check CPU-s | prover cores busy | `compact_stall` | run, step |
+|---|---|---|---|---|---|---|---|---|
+| every cut, four provers, 14 cores | **1.3574** | 2,652 | 38.2% | 12.1 (8.99 / 2.07 / 0.94) | 5.30 on 8-11 | 9.15 of 10 | 0 (0 of 15) | `ee70` step 1 |
+| the check off the cores only, four provers, 14 cores | 1.7307 | 2,080 | 26.9% | 18.88 | 5.35 on 8-11 | 9.54 | 0 | `db9a` step 2 (WITNESS's tree, cuts off) |
+| nothing cut, four provers, 10 cores | 2.4171 | 1,489 | 21.5% | 19.0 | 6.33 | 9.92 | +39,219 | `db9a` step 1 (same tree; in an episode) |
+| nothing cut, one prover, today's binary | 2.512 (0.3981 a second) | 1,433 | 21.7% | | | | 0 | `ee70` own step |
+
+- Every cut together is **0.56 of today's block at four provers and 0.54 of today's at one**. The baseline at four
+  provers on today's binary is the step running now (to about 10:56Z); the 2.417 above is on WITNESS's tree with
+  its cuts off, which is slower than today's code, so the true ratio is a little nearer 1.
+- The cores are still nearly full (9.15 of 10) and the card is 38% busy: the block is still bound by the host. What
+  is left on the prover's cores is the witness walk (9.0 of 12.1 CPU-s).
+- This run's one-prover step on today's binary reads 2.512, so node A is as it was in `cb57` (2.53 to 2.59), and the
+  2.865 of `db9a`'s one-prover step is WITNESS's off path, not the host.
+- [run] A start test of the neighbour (`r20261111-103534-10c2`) took card 2's lease at 10:37:09Z and left in the
+  same second without proving (its lease was too short for a step); it fell in this step's load, before its window.
+- The container's throttle count is 6,970 [run, 10:45:26Z].
+
+**WITNESS's cuts, the same run on vy-dc-h200-3, one prover** [run: `r20261111-101057-af1d`, all steps clean]:
+today's binary 3.416 and 3.4159 (own step and step 3); the cuts on 3.1599 (step 1); the cuts off 3.7129 (step 2).
+So **on 0.925 of today's, off 1.087 of today's**: the tree's off path costs 0.30 s a statement
+(`units_pack` 3.552 s against 3.2505 today and 2.8956 with the cuts on). For WITNESS: [guess] if that 0.30 s is also
+inside the on path, removing it is worth more than either cut; the place is the width-one evaluator and `fold_own`.
+
+**Next** [run]: today's block at four provers (running), then both beside a prover on card 2 (the loaded pair,
+neighbour launched when this step ends), then salts `all` alone at four provers if the lease holds it.
+
+For BREAKEVEN: `SparseMlaHeadBlock_v2` NVIS 64 `FIRST=false`, every cut built tonight together (salts `all`, WITNESS's two cuts, the check on four further cores), FOUR provers on one H200: 1.357 GPU-s a statement, measured, `r20261111-102210-ee70` step 1, quiet host; 14 cores a card; `all` is unmarked and Daniel's.
+For the table: head block's seconds a statement, measured on node A, quiet: today 2.51 (one prover) and 2.42 (four provers); with the cuts built tonight 1.36 (four provers, every cut, 14 cores a card).
