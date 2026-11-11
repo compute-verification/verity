@@ -8,7 +8,8 @@ import Mathlib.Algebra.Order.Field.Basic
 
 `complies_of`: the rate rule on a record's circuit (`Complies`) from four statements about the check, that a record it
 reads carries its instance's fields (`Owns`) and lays out a circuit (`LaidOut`), that its summary counts every block
-(`Counts`), and that its rate rule is the policy's on a summary (`Rates`).
+(`Counts`), and that its rate rule is the policy's on a summary (`Rates`). `NciCheck.SecurityProofs.ServedComplies` is
+that theorem as the guarantee `NciCheck.Guarantees.ServedComplies` states it.
 
 `pinnedOpens_of`: what a pinned reader opens (`PinnedOpens`) from the closure digest's pin (`DigestPins`), the
 check's provenance (`Provenance`) and a layout that reads a Definition's signature alone (`LayoutReads`).
@@ -305,3 +306,13 @@ theorem unitAt_iff {P : Prog} {doc : Json} {ts : List Tmpl} {tids : Array String
     exact ⟨i, u, hi, hti, by rw [← htu]; exact hu, by rw [hzero i hi hti, Nat.zero_add], hsc⟩
 
 end NciCheck.Properties.Record.SecurityProofs
+
+namespace NciCheck.SecurityProofs
+
+open NciCheck.Properties.Record
+
+theorem ServedComplies : NciCheck.Guarantees.ServedComplies := by
+  intro F hown hlaid hcount hrate
+  exact NciCheck.Properties.Record.SecurityProofs.complies_of hown hlaid hcount hrate
+
+end NciCheck.SecurityProofs

@@ -60,7 +60,7 @@ counts more bits as fresh.
 **The rate rule** (`Complies`): where the check accepts, the instance's fields are the ones it judged by, the record
 lays out a circuit, and every circuit it lays out meets the policy block by block at the instance's `Γ` and `α`, so
 it complies (`Nci.CompliesRate`). It follows from four statements about the check, `Owns`, `LaidOut`, `Counts` and
-`Rates` (`Proofs.Properties.Nci.Record`).
+`Rates`: that it does is the guarantee `NciCheck.Guarantees.ServedComplies` (`Proofs.Properties.Nci.Record`).
 
 **Provenance** (`Provenance`): the run's own record names this Program and this record by their SHA-512s, and every
 row the check holds is a registered read or a table read of a parameter that the log's first record registers under
@@ -479,3 +479,17 @@ def PinnedOpens (F : Form) : Prop :=
         Collides j₀ pj key
 
 end NciCheck.Properties.Record
+
+namespace NciCheck.Guarantees
+
+open NciCheck.Properties.Record
+
+/-- **Accepting a served record gives the rate rule on its circuit**, of any check that meets the four statements
+about it: a record it reads carries its instance's fields (`Owns`) and lays out a circuit (`LaidOut`), its summary
+counts every block of every circuit the record lays out (`Counts`), and its rate rule bounds a summary (`Rates`).
+Then where the check accepts, every circuit the record lays out complies with the inference-only policy at the
+instance's `Γ` and `α` (`Complies`). The four are premises here, each a statement about the check's own functions. -/
+def ServedComplies : Prop :=
+  ∀ F : Form, Owns F → LaidOut F → Counts F → Rates F → Complies F
+
+end NciCheck.Guarantees
