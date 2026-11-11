@@ -15,7 +15,8 @@ sender's handle (a coordinator's own, a worker's launcher's, for a run whose sen
 often it is called, with `--to` the watch's resolved handle for all but a coordinator's own run. A worker's run that ended rc 0
 is posted but rings no one: the watch resumes the worker itself, and rings its coordinator only if it stays idle (run
 ends were 47% of all doorbells, most of them workers' successes). The run at whose end the watch placed its sender, which no
-handle owned, as a lane's worker by the issue key its name starts with (the record's `placed_by` and `issue`) rings that lane
+handle owned, as a lane's worker by the issue key or the handle its name starts with (the record's `placed_by`: `name`, with
+its `issue`, or `handle`) rings that lane
 whatever its result and its sender's status, and says how the lane was found, so a wrong placement shows where it rings; the
 worker's later runs are any worker's. The runs of one read whose sender
 no handle owns, and no name places, are one post that leads with infra's handle, naming each run's sender, rung as an alert. A record this relay can't render
@@ -176,11 +177,18 @@ def unknown(rec: dict) -> str:
             if is_worker(rec) and lane_of(rec) is None else "")
 
 
+def found(rec: dict) -> str:
+    """How the watch placed a run's sender by its name (`placed_by`): its issue key (and, for a team several lanes share,
+    the handle it names too), or the handle it starts with; "" for a run that placed nobody."""
+    return {"name": f"by its name's issue key {rec.get('issue')}" + (" and the handle it names" if rec.get("named") else ""),
+            "handle": "by its name's leading handle"}.get(rec.get("placed_by"), "")
+
+
 def placed(rec: dict) -> str:
     """What a worker's run end says when the watch placed the worker by its name at this run (`placed_by`), so the lane knows
     why it is rung and a wrong placement is put right."""
-    return (f" No handle owned this worker until now: the watch placed it under @{rec.get('handle')} by its name's issue key "
-            f"{rec.get('issue')} (if it is another lane's, tell @{UNROUTED})." if rec.get("placed_by") == "name" else "")
+    return (f" No handle owned this worker until now: the watch placed it under @{rec.get('handle')} {how} (if it is another "
+            f"lane's, tell @{UNROUTED})." if (how := found(rec)) else "")
 
 
 def woke(rec: dict) -> str:
@@ -304,7 +312,7 @@ def ring_run(rec: dict, to: str, ts: str) -> None:
     one line and link. `--to` is the watch's handle for all but a coordinator's own run, which ring-run finds by the agent's
     route; a former coordinator, which no route holds any more, is rung again with `--to`. A run that placed its sender by
     its name says so."""
-    how = f"; its sender placed under @{to} by its name's issue key {rec.get('issue')}" if rec.get("placed_by") == "name" else ""
+    how = f"; its sender placed under @{to} {by}" if (by := found(rec)) else ""
     one = (f"{rec.get('what')} {rec.get('state') or 'ended'} after {rec.get('after')} on {rec.get('node')}{how}: "
            f"{slack.permalink(REG, ALERTS, ts)}")
     argv = [*RING_RUN, "--run", str(rec["run"]), "--rc", str(rec["rc"] if rec.get("rc") is not None else rec.get("state")),
