@@ -272,9 +272,10 @@ EDGE_PORTS = (("edge.kv", "prefix"), ("edge.kv_c", "prefix_kv_c"), ("edge.kv_pe"
 EDGE_LATENT = (("prefix",), ("prefix_kv_c", "prefix_kv_pe"))
 # request-LOCAL wrapper parameter groups: a component's own inputs, positions may differ per component (TP rank Programs carry
 # `peers_<k>` = the received collective values, one per site x step, so K differs per (LP, T) shape); a stochastic
-# wrapper's `seed` and `splits` are its request's own, like the prompt, and so are a warm or carried request's history (`EDGE_PORTS`'
-# groups: its latent rows, on the sparse-attention decoder with its index-K slots and scales) and a resumed request's `last_token`
-_REQUEST_LOCAL_GROUPS = ("prompt", "seed", "splits", *(g for _, g in EDGE_PORTS))
+# wrapper's `seed`, its seed rule's inputs (`seed_rule.PARAMS`, the window's salt each request's own copy) and `splits` are its
+# request's own, like the prompt, and so are a warm or carried request's history (`EDGE_PORTS`' groups: its latent rows, on the
+# sparse-attention decoder with its index-K slots and scales) and a resumed request's `last_token`
+_REQUEST_LOCAL_GROUPS = ("prompt", "seed", "seeded", "body_seed", "seed_salt", "user", "splits", *(g for _, g in EDGE_PORTS))
 _REQUEST_LOCAL_PREFIXES = ("peers",)
 
 

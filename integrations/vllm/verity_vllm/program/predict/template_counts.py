@@ -98,7 +98,9 @@ class TemplateCounts(StepNeeds):
                 batch: list | None = None, edge: Sequence[str] = (), stop: Mapping[str, Any] | None = None) -> Counter[str]:
         """n_t of the request Program `build.build_program` writes for (LP, T) under `policy` (φ's `sampling`, greedy without one)
         after C rows of history, in its prefill `chunks` at its launch `batch` (else φ's workload's, `common.launch_batch`), with its
-        `edge` groups and length rule `stop`, in the registered compiler's form: descriptor id -> instances."""
+        `edge` groups, its seed rule where `policy` is stochastic (at its ``rid``) and length rule `stop`, in the registered
+        compiler's form: descriptor id -> instances."""
+        from verity_vllm.program.frontend import seed_rule as SEED
         from verity_vllm.program.frontend import stop_rule as SR
         net, NL, TOPK = self.net, int(self.C["NL"]), self.index_topk
         _, chunks, rows, sampled = request_passes("request", LP, T, 1, C, tuple(chunks or ()), False, bool(edge))
@@ -142,6 +144,8 @@ class TemplateCounts(StepNeeds):
                 add([(self._cublas(P.S, "lm_head"), 1), (self.kind("all_gather", WORLD=self.W, N=V), 1),
                      *self._select(policy, V * self.W, P.p + P.m - 1)])
                 events += 1
+        if (policy or {}).get("kind") == "stochastic":
+            add([(self._named("seed", SEED.definition(SEED.rid_in(policy))), 1)])
         if stop:
             add([(self._named("stop", SR.definition(events, stop)[0]), 1)])
         add([(self.kind("const", W=w, BITS=bits), words) for w, bits, words in sorted(pads)])
