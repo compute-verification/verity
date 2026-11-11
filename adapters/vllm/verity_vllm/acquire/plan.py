@@ -248,7 +248,7 @@ def value_classes(manifest: Mapping[str, Any], padding_identities: Iterable[Mapp
     """One Value class per (op_path, output_member, family).  `padding_identities`: the manifest identities OUTSIDE their request's executed
     prefix of record (a runtime fact known at finalize): those are PRESCRIBED -- materialised by
     enablement, no runtime producer.  A row may also declare it (`boundary_class: padding`)."""
-    rows = manifest.get("identities") or manifest.get("entries") or manifest.get("rows") or []
+    rows = manifest["identities"]
     padded = {_identity_key(p) for p in padding_identities}
     out: dict[tuple[str, str, str], ValuePlan] = {}
     for r in rows:
@@ -264,7 +264,7 @@ def value_classes(manifest: Mapping[str, Any], padding_identities: Iterable[Mapp
         v.identities += 1
         if r.get("promoted"):
             v.promoted = True
-        for c in (r.get("consumers") or []):
+        for c in r.get("consumers", ()):
             if str(c) not in v.consumers:
                 v.consumers.append(str(c))
         sp = r.get("spec")
@@ -549,4 +549,4 @@ def load_plan(path: str | Path) -> dict[str, Any]:
 
 
 def hooks_of_doc(doc: Mapping[str, Any]) -> list[tuple[str, str, str]]:
-    return [(h["module"], h["kind"], h["slot"]) for h in doc.get("hooks") or []]
+    return [(h["module"], h["kind"], h["slot"]) for h in doc["hooks"]]

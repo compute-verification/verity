@@ -63,7 +63,7 @@ def expert_plans(keys: set[str], configs: dict[str, dict[str, dict[str, Any]]]) 
         out = {}
         for key in sorted(keys):
             E, K, N, r = map(int, key.split(","))
-            if (configs.get(str(m)) or {}).get(str(bool(r))) is None:
+            if configs.get(str(m), {}).get(str(bool(r))) is None:
                 raise Unmodelled(f"no fused_moe_kernel launch at {m} rows (MUL_ROUTED_WEIGHT {bool(r)}) was recorded")
             out[key] = expert_definition(E, K, N, bool(r))
         return out
@@ -140,4 +140,4 @@ def expand(wired: dict[str, Any], moe: dict[str, Any] | None) -> tuple[dict[str,
                 raise Unmodelled(f"{pn}: a value of the piece already has the name of a fused-MoE plane")
             values[pn] = {"width": width, "piece": val["piece"]}
         values[name] = val
-    return {**wired, "calls": calls, "values": values}, expert_plans(keys, moe.get("configs") or {})
+    return {**wired, "calls": calls, "values": values}, expert_plans(keys, moe["configs"])

@@ -217,7 +217,7 @@ def launch_config(record: dict[str, Any] | None, source: str) -> dict[str, Any]:
     rec = (record or {}).get(source_sha256(source))
     if rec is None:
         raise Unmodelled(f"no launch config recorded for kernel source {source_sha256(source)[:16]}")
-    cands, ran = rec.get("candidates") or [], rec.get("executed") or []
+    cands, ran = rec["candidates"], rec["executed"]
     if len(ran) != 1 or (cands and ran[0] not in cands):
         raise Unmodelled(f"kernel source {source_sha256(source)[:16]}: {len(cands)} candidate configs, its autotuners hold {ran}; one "
                          f"config every instance ran is required")
@@ -271,7 +271,7 @@ def instantiate(name: str, t: Template, lit: dict[str, Any], config: dict[str, A
     if t.config:
         if config is None:
             raise Unmodelled(f"{name} ({t.name}): its launch config is a static and none was given")
-        kw = config.get("kwargs") or {}
+        kw = config["kwargs"]
         lit.update(XBLOCK=kw.get("XBLOCK"), R0_BLOCK=kw.get("R0_BLOCK"), NUM_WARPS=config.get("num_warps"))
     calls = []
     for c in t.calls:
