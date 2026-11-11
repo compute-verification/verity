@@ -17,7 +17,7 @@ from __future__ import annotations
 
 import bisect
 import re
-from typing import Any
+from typing import Any, Literal
 
 import torch
 from verity.circuits.refs import Affine, Coll, Concat, Strided, prefix_runs
@@ -148,7 +148,7 @@ def _arg_runs(refs) -> tuple[list[tuple[str, int, int, int]] | None, Any, int]:
     return _runs(refs), None, 0
 
 
-def _locate_shared(index: dict, rs: list[tuple[str, int, int, int]], log, s: int, memo: dict) -> tuple[int, int] | None | bool:
+def _locate_shared(index: dict, rs: list[tuple[str, int, int, int]], log, s: int, memo: dict) -> tuple[int, int] | None | Literal[False]:
     """`_locate_runs(index, rs)` when the first `s` runs of `rs` are `log`'s shared runs: their spans are located once per
     (index, log) and kept in `memo`, so a longer cut of the same log locates only its own runs."""
     st = memo.get((id(index), id(log)))
@@ -206,7 +206,7 @@ def _all_located(inputs: list, rs: list[tuple[str, int, int, int]], log, s: int,
     return (st[3] is None or st[3] >= s) and all(held(*r) for r in rs[s:])
 
 
-def _locate_runs(index: dict, rs: list[tuple[str, int, int, int]]) -> tuple[int, int] | None | bool:
+def _locate_runs(index: dict, rs: list[tuple[str, int, int, int]]) -> tuple[int, int] | None | Literal[False]:
     """Every run of `rs` inside one collection: its contiguous flat range, `None` if covered but not contiguous, False if not covered."""
     spans: list[tuple[int, int]] = []
     for space, i, lo, hi in rs:
@@ -340,7 +340,7 @@ def emit_correspondence(ctx, body, *, rank: tuple[int, int] | None = None) -> di
     collectives = 0
     occurrences: list[dict] = []
     occ_index: dict[Any, int] = {}
-    occ_inputs: list[list[tuple[Any, dict]]] = []      # per occurrence: (fx arg node, interval index of its value AS READ)
+    occ_inputs: list[list[tuple[Any, Any, dict | None]]] = []   # per occurrence: (fx arg node, its value, interval index of its value AS READ)
     occ_outputs: list[dict] = []                        # per occurrence: interval index over its produced / written collections, tagged by port
     bindings: dict[Any, dict] = getattr(ctx, "occurrence_bindings", {})
     index_memo: dict[int, tuple[Any, dict | None]] = {}   # id(refs) -> (refs kept alive, its interval index): a cache read by many
@@ -429,7 +429,8 @@ def emit_correspondence(ctx, body, *, rank: tuple[int, int] | None = None) -> di
         occ_outputs.append(out_index)
 
     # -- calls: Call k -> occurrence + return slots + argument slots --------------------------------------------------------------
-    calls, located = [], {}   # located: (id(index), id(PartLog)) -> the log's shared runs located in that index (`_locate_shared`)
+    calls: list[dict] = []
+    located: dict = {}        # (id(index), id(PartLog)) -> the log's shared runs located in that index (`_locate_shared`)
     held: dict = {}           # (id(inputs), id(PartLog)) -> how far the log's shared runs lie in the occurrence's inputs (`_all_located`)
     for k, nd in enumerate(body.nodes):
         fx = node_fx.get(k)
@@ -483,7 +484,7 @@ def emit_correspondence(ctx, body, *, rank: tuple[int, int] | None = None) -> di
                 # the Call's argument spans SEVERAL fx inputs (a collective's operand is `own ++ peer`): resolve run by run
                 spans: list[dict] = []
                 for space, i, lo, hi in rs:
-                    hit = None
+                    hit: dict[str, Any] | None = None
                     for j, (_fx_arg, _v, index) in enumerate(occ_inputs[o]):
                         r = _locate(index, space, i, lo, hi) if index else None
                         if r is not None:

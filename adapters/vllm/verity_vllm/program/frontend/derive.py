@@ -524,7 +524,7 @@ def derive_report(source, example_inputs: Sequence[Any], *, mode: str, profile: 
         flat_sd, ctx = _derive_flat(source, example_inputs, mode=mode, profile=profile, config=config, allowed_dims=allowed_dims,
                                     name=name, ruleset=ruleset, vocab=vocab, _ctx_holder=holder, exported=exported,
                                     registered_values=registered_values)
-        head = (dict(prov), dict(ctx.unresolved_module_paths)) if session is not None else None
+        head = (dict(prov), dict(ctx.unresolved_module_paths))
         rep = _finish_report(flat_sd, ctx, prov, mode=mode, ruleset=ruleset, rank=rank, check_registry=check_registry, dead_free=dead_free, correspondence=correspondence, theta=theta)
         if session is not None:
             session.append(DerivationTail(flat_sd, ctx, *head, name, mode, ruleset, check_registry, rank, rep.family, dead_free, theta))
@@ -551,7 +551,7 @@ def _finish_report(flat_sd: SpecializedDefinition, ctx: Ctx, prov: dict, *, mode
     prov["mutation_effects"] = ctx.mutation_effects
     prov["returned_inputs"] = ctx.returned_inputs
     prov["rules_applied"] = sorted({a["rule"] for a in ctx.applications})
-    if ctx.registered_values:
+    if ctx.registered_inputs is not None:
         prov["supplied"] = ctx.registered_inputs.layout()
     if ctx.run_inputs is not None:
         prov["run_inputs"] = ctx.run_inputs.layout()
@@ -565,7 +565,7 @@ def _finish_report(flat_sd: SpecializedDefinition, ctx: Ctx, prov: dict, *, mode
     holes = {"survey_holes": ctx.state["survey_holes"]} if ctx.state.get("survey_holes") else {}
     flat_program = Program(flat_sd, annotations={"derive": prov, "node_hints": {str(k): v for k, v in hints.items()},
                                                  **({} if corr_doc is None else {_CORR: corr_doc}), **holes},
-                           registered=ctx.registered_inputs.names if ctx.registered_values else (),
+                           registered=ctx.registered_inputs.names if ctx.registered_inputs is not None else (),
                            theta=(() if ctx.weights_param is None else (flat_sd.signature()[0][ctx.weights_param][0],)) + theta)
     check_identity(flat_program, check_registry=check_registry)
     flat_digest = program_digest(flat_desc := encode_program(flat_program))
@@ -666,7 +666,7 @@ def _weights_of(module: torch.nn.Module | None) -> tuple[list[WeightLeaf], dict[
     leaves: list[WeightLeaf] = []
     by_id: dict[int, int] = {}
     fqn_to_leaf: dict[str, int] = {}
-    items = [(n, p, "parameter") for n, p in module.named_parameters(remove_duplicate=False)]
+    items: list[tuple[str, torch.Tensor, str]] = [(n, p, "parameter") for n, p in module.named_parameters(remove_duplicate=False)]
     items += [(n, b, "buffer") for n, b in module.named_buffers(remove_duplicate=False)]
     for fqn, t, kind in items:
         key = id(t)

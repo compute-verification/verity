@@ -401,7 +401,7 @@ class TargetProfile:
 
     @property
     def int8_parts(self) -> tuple[str, ...]:
-        return self.INT8_EXACT_SCOPES.get(self.int8_exact, ())
+        return () if self.int8_exact is None else self.INT8_EXACT_SCOPES.get(self.int8_exact, ())
 
     @property
     def execution_label(self) -> str:
@@ -788,12 +788,12 @@ def parse_target_arg(s: str | None, *, base: TargetProfile | None = None) -> Tar
             base = TargetProfile.from_device() if torch.cuda.is_available() else TargetProfile.default()
         except Exception:                                   # no torch on this host: the documented default
             base = TargetProfile.default()
-    base = base.to_json()
+    doc = base.to_json()
     unknown = set(d) - set(TargetProfile.__dataclass_fields__)   # the fields, not the serialised keys (`compilation` / `fp8_block_gemm` are omitted when None)
     if unknown:
         raise ValueError(f"unknown TargetProfile fields: {sorted(unknown)}")
-    base.update(d)
-    return TargetProfile.from_json(base)
+    doc.update(d)
+    return TargetProfile.from_json(doc)
 
 
 __all__ = ["TargetProfile", "DEFAULT_TARGET", "ArtifactIdentity", "ApplicabilityError", "canonical_bytes", "sha256_hex", "profile_mismatches",

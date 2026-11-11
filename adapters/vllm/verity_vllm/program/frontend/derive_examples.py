@@ -347,6 +347,7 @@ class HFRMSNorm(nn.Module):
 class HFRotaryEmbedding(nn.Module):
     """transformers `LlamaRotaryEmbedding` (default rope type) at the op interface: `inv_freq` non-persistent buffer,
     `forward(x, position_ids) -> (cos, sin)` as `[B, T, D]` tables in x's dtype (`cat(freqs, freqs)`, `attention_scaling`)."""
+    inv_freq: torch.Tensor
 
     def __init__(self, D: int, base: float = 10000.0, attention_scaling: float = 1.0) -> None:
         super().__init__()

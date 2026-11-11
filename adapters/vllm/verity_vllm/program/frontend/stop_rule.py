@@ -33,9 +33,10 @@ def spec(stops: Iterable[int], *, max_tokens: int, prompt_len: int, max_model_le
     """The rule's config: the stop ids, the request's max_tokens, prompt length and the model's length, its outputs through the
     Program's last, and the finish code there (`stop_rule.FINISH`: 0 where it runs on); a ValueError where `StopCheck_v1` has
     no check for it."""
-    s = {"stops": [int(x) for x in stops], "max_tokens": max_tokens, "prompt_len": prompt_len, "max_model_len": max_model_len,
+    ids = [int(x) for x in stops]
+    s = {"stops": ids, "max_tokens": max_tokens, "prompt_len": prompt_len, "max_model_len": max_model_len,
          "outputs": outputs, "finish": finish}
-    if not (type(outputs) is int and outputs >= 1) or (why := SC.refuse({"STOP": tuple(s["stops"]), "MAX_TOKENS": max_tokens,
+    if not (type(outputs) is int and outputs >= 1) or (why := SC.refuse({"STOP": tuple(ids), "MAX_TOKENS": max_tokens,
                                                                          "PROMPT_LEN": prompt_len, "MAX_MODEL_LEN": max_model_len,
                                                                          "FINISH": finish})):
         raise ValueError(f"the stop rule's config {s}: {why or 'outputs must be a positive integer'}")
