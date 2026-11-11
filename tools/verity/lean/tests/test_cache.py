@@ -790,6 +790,100 @@ def test_a_tree_compiles_no_module_version_another_tree_of_its_node_compiled(tmp
         "the trees and the cache hold one file by hard links, and no build moved its time past the `.hash` beside it"
 
 
+WORD = '@[noinline] def Toy.word (n : Nat) : String := s!"version {tag} {n}"\n'
+#: a package with an executable: `Toy.Word`, which `Toy` imports and `Main` (the executable `toy`'s root) calls
+TOY = {"lakefile.toml": 'name = "toy"\ndefaultTargets = ["Toy", "toy"]\n\n[[lean_lib]]\nname = "Toy"\n\n'
+                        '[[lean_exe]]\nname = "toy"\nroot = "Main"\n',
+       "lake-manifest.json": json.dumps({"version": "1.2.0", "packagesDir": ".lake/packages", "packages": [], "name": "toy",
+                                         "lakeDir": ".lake", "fixedToolchain": False}),
+       "Toy.lean": "import Toy.Word\n", "Toy/Word.lean": WORD.replace("{tag}", "A"),
+       "Main.lean": "import Toy\n\ndef main : IO Unit := IO.println (Toy.word 1)\n"}
+
+
+def toy(pkg: Path) -> Path:
+    """`TOY` at ``pkg``, on the fixtures' toolchain."""
+    for name, text in TOY.items():
+        (pkg / name).parent.mkdir(parents=True, exist_ok=True)
+        (pkg / name).write_text(text)
+    shutil.copy(HERE / "fixtures" / "control" / "lean-toolchain", pkg / "lean-toolchain")
+    return pkg
+
+
+def held(pkg: Path) -> dict[str, str]:
+    """{file: its sha256} of everything ``pkg``'s build holds but what names the tree's own path (a trace's log, the
+    linker's arguments, a module's `setup.json`), and {trace: the outputs it names}."""
+    b = pkg / ".lake" / "build"
+    return {f.relative_to(b).as_posix(): json.dumps(json.loads(f.read_text())["outputs"]) if f.suffix == ".trace"
+            else hashlib.sha256(f.read_bytes()).hexdigest()
+            for f in sorted(b.rglob("*")) if f.is_file() and f.suffix not in (".rsp", ".json")}
+
+
+@pytest.mark.skipif(LAKE is None, reason="no lake")
+def test_a_tree_that_held_another_version_ends_with_every_output_object_and_executable_of_the_cache_s(tmp_path, monkeypatch):
+    """A tree holds a module in one version, with its trace, its `.hash` files, its object and the executable linked from
+    it, and the cache holds another. The stage step takes the module's trace (`settle`), and Lake, finding none, removes
+    every output of the module before it restores them, then compiles the object again from the restored `.c`, whose hash
+    the object's trace doesn't name, and links again. So each file of the build is, by digest, what a tree that compiled
+    that version holds, the executable prints the new version, and the same holds for a version the cache lacks, which
+    is compiled. An output kept from the earlier version under the new trace would differ here."""
+    LC, LA = (_load(f"exe_trees_{n}", HERE.parent / f"{n}.py") for n in ("check", "lean_audit"))
+    MK = LA.MK
+    store = tmp_path / "artifacts"
+    monkeypatch.setattr(LC, "ARTIFACTS", store)
+    trees = [toy(tmp_path / n / "toy") for n in ("build-0", "build-1", "apart")]
+    mods = {"Main", "Toy", "Toy.Word"}
+    n = iter(range(99))
+
+    def lake(pkg: Path, pre: list[str]) -> set[str]:
+        r = subprocess.run(LC.in_sandbox(pkg, [*pre, "lake", "build"]), cwd=pkg, check=True, capture_output=True, text=True,
+                           env=LC.lake_env())
+        return {m for m, *_ in LC.BUILT.findall(r.stdout + r.stderr)}
+
+    def build(pkg: Path) -> tuple[set[str], dict, int]:
+        """`check.py`'s build: staged and settled, built in the sandbox, then put."""
+        cache = store / MK.STAGE / f"test-{next(n)}"
+        got, said = LC.stage_build(MK, pkg, ["Toy", "Main"], cache)
+        compiled = lake(pkg, ["env", "-u", "LAKE_ARTIFACT_CACHE", f"LAKE_CACHE_DIR={cache}"])
+        assert MK.misrestored(got, pkg) == [] and said["left"] == 0
+        shutil.rmtree(cache)
+        return compiled, said["took"], LA.LakeArtifacts(store).put({pkg: {"sandbox": True}})
+
+    def edit(pkg: Path, tag: str) -> None:
+        (pkg / "Toy" / "Word.lean").write_text(WORD.replace("{tag}", tag))
+
+    def says(pkg: Path) -> str:
+        return subprocess.run([str(pkg / ".lake" / "build" / "bin" / "toy")], check=True, capture_output=True,
+                              text=True).stdout.strip()
+
+    assert build(trees[0]) == (mods, {}, 3) and says(trees[0]) == "version A 1"
+    a = held(trees[0])
+    assert {"bin/toy", "ir/Toy/Word.c", "ir/Toy/Word.c.hash", "ir/Toy/Word.c.o.export", "ir/Toy/Word.c.o.export.hash",
+            "ir/Toy/Word.c.o.export.trace", "lib/lean/Toy/Word.olean", "lib/lean/Toy/Word.ilean",
+            "lib/lean/Toy/Word.trace"} <= set(a)
+    edit(trees[1], "B")
+    assert build(trees[1]) == (mods, {}, 3) and says(trees[1]) == "version B 1"
+    b = held(trees[1])
+    assert {f for f in a if a[f] != b[f]} >= {"bin/toy", "ir/Toy/Word.c", "ir/Toy/Word.c.o.export", "lib/lean/Toy/Word.olean"}
+
+    edit(trees[0], "B")
+    assert build(trees[0]) == (set(), {MK.REPLACED: 1}, 0), "the tree that compiled A restores B"
+    assert held(trees[0]) == b and says(trees[0]) == "version B 1"
+    edit(trees[1], "A")
+    assert build(trees[1]) == (set(), {MK.REPLACED: 1}, 0), "and the tree that compiled B restores A"
+    assert held(trees[1]) == a and says(trees[1]) == "version A 1"
+    edit(trees[0], "A")
+    assert build(trees[0]) == (set(), {MK.REPLACED: 1}, 0), "a tree whose own traces are restores, back again"
+    assert held(trees[0]) == a and says(trees[0]) == "version A 1"
+
+    for pkg in trees[1:]:
+        edit(pkg, "C")
+    assert lake(trees[2], []) == mods                                   # a tree apart, which reads no cache
+    c = held(trees[2])
+    assert build(trees[1]) == (mods, {MK.ABSENT: 1}, 3), "a version the cache lacks is compiled"
+    assert held(trees[1]) == c and says(trees[1]) == "version C 1"
+    assert build(trees[0]) == (set(), {}, 0) and held(trees[0]) == a, "and nothing changes where the source did not"
+
+
 @pytest.mark.skipif(LAKE is None, reason="no lake")
 def test_a_module_file_above_a_private_import_is_stored_and_another_tree_restores_it(tmp_path, monkeypatch):
     """Through Lake, on `module` files: `Modular` imports `Modular.Uses`, which imports `Modular.Hidden` and
