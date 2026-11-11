@@ -17,9 +17,10 @@ names them, so that the check and the statement read one definition.
   (none where it states none) and its `wires`, with no template and no order. A record's templates are not the
   text's to state: they are the Program's (`templatesOf`).
 * **The templates** (`templatesOf`): the text names the Program by its SHA-512, and its `templates`, `[id, units]`
-  each, are the root's nodes that are no input, in order; a root node of a composite keyed as an input id is
-  refused (`keyedAsInput`). Each template's input ports are its Definition's parameters, each whole 16-bit words,
-  and its outputs the fields of its return type, each its bits rounded up to whole words (`tmplOf`).
+  each, are the root's nodes that are no input, in order; a root node whose callee's key and kind disagree, a
+  composite keyed as an input id or a primitive keyed as none, is refused (`miskeyed`), so every unit is a
+  composite's. Each template's input ports are its Definition's parameters, each whole 16-bit words, and its
+  outputs the fields of its return type, each its bits rounded up to whole words (`tmplOf`).
 * **A unit's block** (`slot`): the text's `blocks.inference` lays each template's units out by entries, one digit of
   each the slot (`gridsOf`); a unit's block is the slot of the entry that holds it (`slotIn`).
 * **What a row is declared to hold** (`declared`): the text's `registered` reads, table reads and openings and its
@@ -113,20 +114,22 @@ def tmplOf (P : Prog) (r : Flock.TemplateQuery.TRange) : Except String Tmpl := d
   if names.eraseDups.length != names.length then throw "templates"
   return { tid := r.template, defn := d, units := r.count, rows, outs }
 
-/-- Whether a root node of `P` calls a composite whose key reads as an input id (`Flock.Program.isInputId`). The
-decoder takes such a key for a composite, whose gates are computed; the template query passes over a root node by
-its callee's key alone (`Flock.TemplateQuery.isInput`), so that node would be no template's unit and its gates no
-unit's. -/
-def keyedAsInput (P : Prog) : Bool :=
-  (P.defs[P.root]!).body.nodes.any fun n => !(P.defs[n.fn]!).prim && isInputId (P.defs[n.fn]!).key
+/-- Whether a root node of `P` is miskeyed: its callee is a primitive and its key reads as no input id
+(`Flock.Program.isInputId`), or a composite and its key reads as one. The decoder takes a key that reads as an
+input id for a composite, whose gates are computed; the template query passes over a root node by its callee's key
+alone (`Flock.TemplateQuery.isInput`), so that node would be no template's unit and its gates no unit's. And a
+primitive has no body: a unit of one would have no return for its output rows to be read from. Where no root node
+is miskeyed, a root node is an input node or a unit of a composite. -/
+def miskeyed (P : Prog) : Bool :=
+  (P.defs[P.root]!).body.nodes.any fun n => (P.defs[n.fn]!).prim != isInputId (P.defs[n.fn]!).key
 
 /-- The record's templates, held to the Program: the record names the Program, and its `templates`, `[id, units]`
 each, are the root's nodes that are no input, each a call or a batch of a template of its own, in order. A root
-node is no input where its callee is no input primitive: a Program with a root node of a composite keyed as an
-input id is refused (`keyedAsInput`), listed or not. -/
+node is no input where its callee is no input primitive: a Program with a miskeyed root node, one of a composite
+keyed as an input id or of a primitive keyed as none, is refused (`miskeyed`), listed or not. -/
 def templatesOf (P : Prog) (doc : Json) : Except String (List Tmpl) := do
   if stringAt doc "program" != some (Flock.hexOf P.sha512) then throw "templates"
-  if keyedAsInput P then throw "templates"
+  if miskeyed P then throw "templates"
   let .arr tsJ := valueAt doc "templates" | throw "templates"
   let ts ← tsJ.mapM fun t => match t with
     | .arr #[.str tid, n] => match nat? n with

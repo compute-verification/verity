@@ -192,14 +192,15 @@ class Template:
 
 def templates_of(program, rec: dict, digest: str) -> list[Template]:
     """The record's templates, held to the Program: the record names the Program, and its templates are the root's
-    nodes that are no input, each a call or a batch of a template of its own, in order. A root node of a composite
-    keyed as an input id is refused, listed or not (`RecordText.keyedAsInput`)."""
+    nodes that are no input, each a call or a batch of a template of its own, in order. A miskeyed root node, one of
+    a composite keyed as an input id or of a primitive keyed as none, is refused, listed or not
+    (`RecordText.miskeyed`): every unit is a composite's."""
     ts = rec.get("templates")
     if rec.get("program") != digest or not (isinstance(ts, list) and all(
             isinstance(t, list) and len(t) == 2 and isinstance(t[0], str) and _nat(t[1]) and t[1] >= 1 for t in ts)):
         raise Malformed("templates")
     nodes = [n for n in program.root.body.nodes if not is_input(n.fn)]
-    if any(input_id(codec.descriptor_id(n.fn)) is not None for n in nodes):
+    if any(isinstance(n.fn, PrimitiveDefinition) or input_id(codec.descriptor_id(n.fn)) is not None for n in nodes):
         raise Malformed("templates")
     if any(n.form not in ("call", "batch") for n in nodes) or len({t for t, _ in ts}) != len(ts) \
             or [[codec.descriptor_id(n.fn), n.n if n.form == "batch" else 1] for n in nodes] != ts:
