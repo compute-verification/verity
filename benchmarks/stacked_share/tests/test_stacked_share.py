@@ -11,10 +11,11 @@ from pathlib import Path
 import pytest
 
 from verity.circuits.defs import CompositeDefinition, PrimitiveDefinition, bind
-from verity.definitions.ops import fp32, prims, scalar
 from verity.circuits.program import Program
 from verity.circuits.refs import array_of, tuple_of
-from verity.circuits.types import Array, Tuple as TupleT, Value
+from verity.circuits.types import Array, Value
+from verity.circuits.types import Tuple as TupleT
+from verity.definitions.ops import fp32, prims, scalar
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 

@@ -55,12 +55,13 @@ import json
 import sys
 import time
 from collections import Counter, deque
+from collections.abc import Callable, Hashable, Iterable, Mapping, Sequence
 from dataclasses import dataclass
 from fractions import Fraction
 from math import lcm
 from numbers import Rational
 from pathlib import Path
-from typing import Any, Callable, Hashable, Iterable, Mapping, Sequence
+from typing import Any
 
 #: |c|: the bits of one encoded word
 WORD_BITS = 1024
@@ -359,9 +360,9 @@ def from_program(program: Any, ends: Sequence[int] | None = None, *, doc: Mappin
     (default: a value a Call of the window makes that a later step reads). ``registered``: root inputs the Build binds as
     run inputs that are fixed before the coins all the same (the census's 8B Build binds its weights so): their values
     carry no bits and no product reads them as data, so a weight's MACs stay linear maps."""
+    from verity.circuits.program import RUN, input_id, is_input
     from verity.definitions.circuits import stacking as P
     from verity.definitions.circuits.census import census, step_of
-    from verity.circuits.program import RUN, input_id, is_input
 
     if str(REDTEAM) not in sys.path:
         sys.path.insert(0, str(REDTEAM))
@@ -371,10 +372,11 @@ def from_program(program: Any, ends: Sequence[int] | None = None, *, doc: Mappin
         P.Step.acc = True
     nodes = program.root.body.nodes
     doc = census(program, list(ends) if ends is not None else None) if doc is None else doc
-    I = doc["inputs"]
+    n_inputs = doc["inputs"]
     fixed = frozenset(registered)
-    if not fixed <= set(range(I)):
-        raise ValueError(f"registered names root inputs, nodes 0..{I - 1}, not {sorted(fixed - set(range(I)))[:5]}")
+    if not fixed <= set(range(n_inputs)):
+        raise ValueError(f"registered names root inputs, nodes 0..{n_inputs - 1}, "
+                         f"not {sorted(fixed - set(range(n_inputs)))[:5]}")
     step = step_of(doc)
     S = len(doc["steps"]["ends"])
     win = range(S) if window is None else window
@@ -397,8 +399,8 @@ def from_program(program: Any, ends: Sequence[int] | None = None, *, doc: Mappin
         unproven.update(t.unproven)
     wide = {g: b for g, (cls, b) in sorted(p.shapes.items())
             if cls in P.BUDGETED and b > P.OPERAND_BITS and not P._column(g)}
-    before = frozenset(k for k in range(I, len(nodes)) if step(k) < win.start)
-    after = {k for k in range(I, len(nodes)) if step(k) >= win.stop}
+    before = frozenset(k for k in range(n_inputs, len(nodes)) if step(k) < win.start)
+    after = {k for k in range(n_inputs, len(nodes)) if step(k) >= win.stop}
     for k in after | before:
         work[k] = 0
         products[k] = 0
@@ -413,27 +415,27 @@ def from_program(program: Any, ends: Sequence[int] | None = None, *, doc: Mappin
             continue
         rs = sorted((set(reads) | cand.get(v, set())) - after)
         allr = sorted(set(reads) | cand.get(v, set()))
-        inp = j < I
+        inp = j < n_inputs
         w = (writes(v, j, allr) if writes is not None else any(step(r) > step(j) for r in allr)) and not inp and j not in before
         values.append(Value(j, bits, tuple(rs), dyns[j], w, inp))
-    names = [f"{k}:{nd.fn.id}" + (f"@{step(k)}" if k >= I else "") for k, nd in enumerate(nodes)]
-    inputs = frozenset(k for k in range(I) if input_id(nodes[k].fn.id)[0] == RUN and k not in fixed)  # type: ignore[index]
+    names = [f"{k}:{nd.fn.id}" + (f"@{step(k)}" if k >= n_inputs else "") for k, nd in enumerate(nodes)]
+    inputs = frozenset(k for k in range(n_inputs) if input_id(nodes[k].fn.id)[0] == RUN and k not in fixed)  # type: ignore[index]
     by_callee: Counter = Counter()
     for k, n in enumerate(products):
         if n:
             by_callee[nodes[k].fn.id] += n
     input_bits: Counter = Counter()
     for x in values:
-        if x.producer < I:
+        if x.producer < n_inputs:
             input_bits[x.producer] += x.bits
     total = sum(w for w in work if w is not None)
-    info = {"nodes": len(nodes), "inputs": I, "steps": S, "window": [win.start, win.stop], "values": len(values),
+    info = {"nodes": len(nodes), "inputs": n_inputs, "steps": S, "window": [win.start, win.stop], "values": len(values),
             "writes": sum(x.write for x in values), "work_units": total, "budgeted_units": total - sum(products),
             "products": sum(products), "products_by_callee": dict(by_callee.most_common(12)),
             "run_inputs": {names[k]: input_bits[k] for k in sorted(inputs)},
             "registered_inputs": len(fixed), "unknown_work_nodes": sum(w is None for w in work), "refused": dict(refused),
             "operand_bits": {"B": P.OPERAND_BITS, "past_B": wide}, "s8_unproven": dict(unproven)}
-    assert all(is_input(nodes[k].fn) for k in range(I))
+    assert all(is_input(nodes[k].fn) for k in range(n_inputs))
     return Graph(work, values, names, inputs, before), info
 
 
