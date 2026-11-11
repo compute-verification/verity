@@ -2644,6 +2644,7 @@ pub fn unit_ab_into_at(net: &IrUnitNet, ni: usize, uw: usize, ins: &[Vec<F128>],
                 lanes_into(&aa, grp.len(), dst, 4 * uw, 0, 2 * uw);
                 lanes_into(&bq, grp.len(), dst, 4 * uw, 2 * uw, 2 * uw);
             }
+            [zz, aa, bq].into_iter().for_each(u64::give);
             prof.out(tw);
             ok
         }).into_iter().all(|ok| ok)
@@ -2664,6 +2665,7 @@ fn unit_zab(net: &IrUnitNet, ni: usize, uw: usize, ins: &[Vec<F128>], n: usize) 
         prof.each_group(net, ni, n * ti, slots, |gi, grp, (zz, aa, bq)| {
             let tl = Instant::now();
             let (z, a, b) = (lanes(&zz, grp.len(), uw), lanes(&aa, grp.len(), uw), lanes(&bq, grp.len(), uw));
+            [zz, aa, bq].into_iter().for_each(u64::give);
             prof.out(tl);
             z.into_iter().zip(a).zip(b).enumerate().map(|(l, ((z, a), b))| (64 * gi + l, z, a, b)).collect::<Vec<_>>()
         }).into_iter().flatten()
@@ -2692,7 +2694,7 @@ struct GroupProf {
 
 /// The first `n` groups' words of `v`'s rows, each group's in its own vector, `v` read once.
 fn by_group<W: RowWord>(v: &[W], n: usize) -> Vec<Vec<u64>> {
-    let mut out: Vec<Vec<u64>> = (0..n).map(|_| Vec::with_capacity(v.len())).collect();
+    let mut out: Vec<Vec<u64>> = (0..n).map(|_| u64::take(v.len())).collect();
     for w in v {
         for (g, o) in out.iter_mut().enumerate() {
             o.push(w.word(g));

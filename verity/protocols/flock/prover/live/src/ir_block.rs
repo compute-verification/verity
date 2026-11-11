@@ -10,7 +10,7 @@
 //! each opened at two verifier points sampled after the commitment (both reps). The verifier computes their values from its
 //! own instance file, so the statement is the relation on public inputs and outputs (no commitment scheme binds them).
 
-use std::sync::OnceLock;
+use std::sync::{Mutex, OnceLock, PoisonError, atomic::{AtomicBool, Ordering}};
 
 use flock_core::{
     lincheck::{CscCircuit, LincheckCircuit, SparseMatrixCircuit, pack_z_lincheck_from_packed},
@@ -235,10 +235,78 @@ pub trait RowWord: Copy + PartialEq + std::fmt::Debug + Send + Sync {
     fn set(&mut self, g: usize, w: u64);
     fn xor(self, o: Self) -> Self;
     fn and(self, o: Self) -> Self;
+    /// `n` rows of zero, an empty vector with room for `n` rows, and a vector a walk is done with: a `u64` row's are the
+    /// kept ones ([`keep_rows`]).
+    fn zeroed(n: usize) -> Vec<Self> {
+        vec![Self::splat(0); n]
+    }
+    fn take(n: usize) -> Vec<Self> {
+        Vec::with_capacity(n)
+    }
+    fn give(_: Vec<Self>) {}
+}
+
+/// Row vectors walks are done with, kept for the walks after them. A statement's walk writes z, a and b for every lane
+/// group, each as long as the unit has rows. On a large unit each is a mapping of its own, which the kernel faults in a
+/// page at a time (the device prover's pages are small ones, [`crate::huge_pages`]) and takes back when the vector is
+/// dropped, statement after statement. A kept vector is faulted in once.
+static KEPT: Mutex<Vec<Vec<u64>>> = Mutex::new(Vec::new());
+/// The most vectors kept: z, a and b of eight lane groups, the most a pass walks.
+const KEPT_MAX: usize = 24;
+static KEEP: OnceLock<AtomicBool> = OnceLock::new();
+
+fn keep() -> &'static AtomicBool {
+    KEEP.get_or_init(|| AtomicBool::new(std::env::var("FC_UNIT_KEEP").as_deref() != Ok("0")))
+}
+
+/// Whether walks keep their row vectors for the walks after them; `FC_UNIT_KEEP=0`: none is kept, each walk maps its own.
+pub fn keep_rows() -> bool {
+    keep().load(Ordering::Relaxed)
+}
+
+/// Sets [`keep_rows`]; turned off, the kept vectors are dropped.
+pub fn set_keep_rows(on: bool) {
+    keep().store(on, Ordering::Relaxed);
+    if !on {
+        let kept = std::mem::take(&mut *KEPT.lock().unwrap_or_else(PoisonError::into_inner));
+        drop(kept);
+    }
+}
+
+/// The smallest kept vector with room for `n` rows, empty.
+fn kept(n: usize) -> Option<Vec<u64>> {
+    let mut kept = KEPT.lock().unwrap_or_else(PoisonError::into_inner);
+    let best = kept.iter().enumerate().filter(|(_, v)| v.capacity() >= n).min_by_key(|(_, v)| v.capacity()).map(|(i, _)| i);
+    best.map(|i| kept.swap_remove(i))
 }
 
 impl RowWord for u64 {
     const N: usize = 1;
+    fn zeroed(n: usize) -> Vec<u64> {
+        match kept(n) {
+            Some(mut v) => {
+                v.resize(n, 0);
+                v
+            }
+            None => vec![0; n],
+        }
+    }
+    fn take(n: usize) -> Vec<u64> {
+        kept(n).unwrap_or_else(|| Vec::with_capacity(n))
+    }
+    /// Kept where it is a mapping of its own (glibc's largest mmap threshold); past [`KEPT_MAX`] it takes the place of a
+    /// smaller one.
+    fn give(mut v: Vec<u64>) {
+        v.clear();
+        if keep_rows() && v.capacity() * 8 >= crate::huge_pages::MIN_BYTES {
+            let mut kept = KEPT.lock().unwrap_or_else(PoisonError::into_inner);
+            if kept.len() < KEPT_MAX {
+                kept.push(v);
+            } else if let Some(small) = kept.iter_mut().min_by_key(|k| k.capacity()).filter(|k| k.capacity() < v.capacity()) {
+                std::mem::swap(small, &mut v);
+            }
+        }
+    }
     #[inline(always)]
     fn splat(w: u64) -> Self {
         w
@@ -503,7 +571,7 @@ impl IrUnitNet {
         }
         let (u, cp, first) = (self.useful, self.const_pos, self.in_words * WORD);
         let (zero, one) = (W::splat(0), W::splat(!0));
-        let (mut z, mut a, mut b) = (vec![zero; u], Vec::with_capacity(u), Vec::with_capacity(u));
+        let (mut z, mut a, mut b) = (W::zeroed(u), W::take(u), W::take(u));
         for i in 0..first {
             let (oa, ob) = (own_row(&self.a, i), own_row(&self.b, i));
             if oa {
@@ -1215,6 +1283,25 @@ mod tests {
         let flat: Vec<[Vec<u64>; 3]> = (0..8).map(|g| net.eval64_flat(|col| input(g, col)).into()).collect();
         let alone = pin((0..3).flat_map(|v| flat.iter().flat_map(move |t| t[v].iter().copied())));
         assert_eq!((wide.as_str(), alone.as_str()), (WALK_PIN, WALK_PIN), "the walk's z, a and b words: eight groups a pass, each alone");
+    }
+
+    /// A kept vector comes back clean: z all zero, a and b empty, whatever the walk before left in it. Vectors large enough
+    /// to be kept are given back full of ones, and the walks after them (this test's and, in the same process, every other
+    /// test's) must still write `eval64`'s words.
+    #[test]
+    fn a_kept_vector_comes_back_clean() {
+        let n = crate::huge_pages::MIN_BYTES / 8;
+        (0..6).for_each(|_| u64::give(vec![!0u64; n]));
+        let net = random_net(7, 2, 30_000);
+        let input = |col: usize| (col as u64 + 5).wrapping_mul(0x9e37_79b9_7f4a_7c15);
+        for _ in 0..3 {
+            let (z, a, b) = net.eval_wide(input).expect("a one-pass net");
+            assert!((z.clone(), a.clone(), b.clone()) == net.eval64(input), "a walk on kept vectors");
+            [z, a, b].into_iter().for_each(u64::give);
+        }
+        let (z, a) = (u64::zeroed(n), u64::take(n));
+        assert!(z.len() == n && z.iter().all(|&w| w == 0), "a kept z is zero");
+        assert!(a.is_empty() && a.capacity() >= n, "a kept a is empty and holds the rows");
     }
 
     const WALK_PIN: &str = "c084c17e7a051c6e213039b613738958";
