@@ -16,7 +16,7 @@ NOW = datetime(2026, 10, 28, 12, 0, tzinfo=UTC)
 POOLED = ["env", "CHECK_SLOTS=/workspace/research/locks/research/slots", "python3", "tools/verity/check/slot.py", "--by", "proofs",
           "--wait-max", "1800", "--", "nice", "-n", "19"]
 QUICK = [*POOLED, "bash", "-lc", "uv sync -q && uv run tools/verity/check/suites.py --changed abc --quick"]
-RECORDS = [*POOLED, "python3", "tools/verity/lean/lean_changed.py", "--records", "Security"]
+RECORDS = [*POOLED, "python3", "tools/verity/lean/lean_changed.py", "--records", "security"]
 SHARD = ["python3", "tools/verity/check/slot.py", "--priority", "--rank", "3", "--", "uv", "run", "--locked", "python",
          "tools/verity/check/check.py", "--keep-going"]
 DIRECT = ["bash", "-lc", "python3 measure.py"]
