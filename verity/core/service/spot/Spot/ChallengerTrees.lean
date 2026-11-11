@@ -403,17 +403,17 @@ def openOf (l : String) : Option (String × Bool) :=
     else none
   | .error _ => none
 
-/-- `membersOrder`'s scan: `roots` the trees opened so far, each when a round of it follows another tree's, and
-`closed` whether the last of them has had a second round of its stream `TREE_SESSION` opened. -/
-def membersOrderFrom : Array String → Bool → List String → Option (Array String)
-  | roots, _, [] => some roots
-  | roots, closed, l :: ls =>
+/-- `membersOrder`'s scan: `roots` the trees opened so far, each when a round of it follows another tree's, `last`
+the last of them, and `closed` whether it has had a second round of its stream `TREE_SESSION` opened. -/
+def membersOrderFrom : Array String → Option String → Bool → List String → Option (Array String)
+  | roots, _, _, [] => some roots
+  | roots, last, closed, l :: ls =>
     match openOf l with
-    | none => membersOrderFrom roots closed ls
+    | none => membersOrderFrom roots last closed ls
     | some (root, session) =>
-      if roots.back? == some root then
-        if closed then none else membersOrderFrom roots session ls
-      else if closed || roots.isEmpty then membersOrderFrom (roots.push root) false ls
+      if last = some root then
+        if closed then none else membersOrderFrom roots last session ls
+      else if closed ∨ last = none then membersOrderFrom (roots.push root) (some root) false ls
       else none
 
 /-- **The members' sessions one after another**, in the release log's lines `log`: the trees it opens rounds of, in
@@ -421,28 +421,28 @@ the order it first opens each, where every round it opens is of the tree opened 
 round of its stream `TREE_SESSION` (its closing round), or the first of the next tree, after it; `none` where a round
 of a tree is opened before the closing round of the tree opened before it, or after its own. A tree opened again
 after another is listed again, so a list without a tree twice shows each tree's rounds together. O(the log's lines). -/
-def membersOrder (log : List String) : Option (Array String) := membersOrderFrom #[] false log
+def membersOrder (log : List String) : Option (Array String) := membersOrderFrom #[] none false log
 
 /-- **The members' sessions' coins, each session closed before the next begins**: why the members' `--zk` sessions
 `records`, each its name, its tables with their `root_B` lengths, its record and its evidence's SHA-512, don't show
 their coins to be the ones the release log `log` shows sampled and opened (`trees`, `coinTreesOf`'s of it), one tree a
-session, the sessions one after another in the order given; `none` when they do. In order, each session's coins its
-tree's and its closing round after its evidence (`memberTreeReason`), a tree no earlier session's (`SHARED_TREE`);
-then every tree a session's (`UNUSED_TREE`); then the log opens the sessions' trees one after another in the
-sessions' order, each tree's closing round before the next tree's first round (`membersOrder`, `MEMBERS_ORDER`). -/
+session, the sessions one after another in the order given; `none` when they do. The first session whose coins are
+not its tree's or whose closing round is not after its evidence (`memberTreeReason`); then no tree two sessions'
+(`SHARED_TREE`); then every tree a session's (`UNUSED_TREE`); then the log opens the sessions' trees one after another
+in the sessions' order, each tree's closing round before the next tree's first round (`membersOrder`,
+`MEMBERS_ORDER`). -/
 def membersTreeReason (trees : Array LoggedTree) (log : List String)
-    (records : Array (String × Array (String × Option Nat) × Json × String)) : Option String := Id.run do
-  let mut used : Array String := #[]
-  for (name, tables, record, evidence) in records do
-    let root := strOf (getD (getD record "coin_tree") "root")
-    let why := memberTreeReason trees tables record evidence <|> if used.contains root then some SHARED_TREE else none
-    if let some w := why then
-      return some s!"session {name}'s coins are not the challenger's: {w}"
-    used := used.push root
-  unless used.size == trees.size do
-    return some s!"the challenger's release log shows {trees.size} coin trees and the sessions use {used.size}: {UNUSED_TREE}"
-  unless membersOrder log == some used do return some MEMBERS_ORDER
-  return none
+    (records : Array (String × Array (String × Option Nat) × Json × String)) : Option String :=
+  let used := records.map fun x => strOf (getD (getD x.2.2.1 "coin_tree") "root")
+  match records.find? fun x => (memberTreeReason trees x.2.1 x.2.2.1 x.2.2.2).isSome with
+  | some x =>
+    (memberTreeReason trees x.2.1 x.2.2.1 x.2.2.2).map (s!"session {x.1}'s coins are not the challenger's: {·}")
+  | none =>
+    if ¬ distinct used.toList then some s!"two sessions' coins are one tree's: {SHARED_TREE}"
+    else if used.size ≠ trees.size then
+      some s!"the challenger's release log shows {trees.size} coin trees and the sessions use {used.size}: {UNUSED_TREE}"
+    else if membersOrder log ≠ some used then some MEMBERS_ORDER
+    else none
 
 private def openAtT (tree stream : String) : String :=
   "{\"after\":\"cd\",\"coins\":\"ef\",\"event\":\"tree-open\",\"n\":1,\"round\":0,\"stream\":\"" ++ stream ++
@@ -502,11 +502,13 @@ private def memberLogT (c : Char) (evidence : String) : List String :=
       (sha512Hex (bytesT pointsT)),
     roundT c "t/rep0" 0 1 (hexT 'e' 128) (sha512Hex (bytesT (hexT '3' 32))),
     roundT c TREE_SESSION CLOSING_ROUND 0 evidence (sha512Hex ByteArray.empty)]
-private def membersReasonT (log : List String) (evA evB : String) : Option String :=
+private def membersT (log : List String) (members : List (Char × String)) : Option String :=
   match coinTreesOf log with
   | .ok trees => membersTreeReason trees log
-      #[("a", #[("t", some 8)], memberRecordT 'a', evA), ("b", #[("t", some 8)], memberRecordT 'b', evB)]
+      (members.toArray.map fun (c, ev) => (String.singleton c, #[("t", some 8)], memberRecordT c, ev))
   | .error why => some why
+private def membersReasonT (log : List String) (evA evB : String) : Option String :=
+  membersT log [('a', evA), ('b', evB)]
 private def oneReasonT (log : List String) : Option String :=
   match coinTreesOf log with
   | .ok trees => sessionsTreeReason trees #[("a", #[("t", some 8)], memberRecordT 'a')]
@@ -524,6 +526,10 @@ private def closedT (c : Char) : List String := memberLogT c (evidenceT (String.
   (closedT 'a').drop 2 ++ (closedT 'b').drop 1) (evidenceT "a") (evidenceT "b") == some MEMBERS_ORDER
 #guard membersReasonT ([helloT 'a', helloT 'b'] ++ closedT 'b' ++ closedT 'a') (evidenceT "a") (evidenceT "b") ==
   some MEMBERS_ORDER
+#guard membersT ([helloT 'a'] ++ closedT 'a') [('a', evidenceT "a"), ('a', evidenceT "a")] ==
+  some s!"two sessions' coins are one tree's: {SHARED_TREE}"
+#guard membersT ([helloT 'a', helloT 'b'] ++ closedT 'a') [('a', evidenceT "a")] ==
+  some s!"the challenger's release log shows 2 coin trees and the sessions use 1: {UNUSED_TREE}"
 #guard oneReasonT ([helloT 'a'] ++ (closedT 'a').dropLast) == none
 #guard oneReasonT ([helloT 'a'] ++ closedT 'a') == some s!"session a's coins are not the challenger's: {EXTRA_OPENING}"
 
