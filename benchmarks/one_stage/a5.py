@@ -54,8 +54,8 @@ against, is SHA-512 too (`weights_sha512`: rows-sha512's registration, `step_row
   window is the population program and partition over the served Programs, the sampling design and the run of record. The verifier composes
   each member's circuit itself from an input set of its template under `--template-sets` (the lowering is all it reads; the values
   are never used), or, for a member of bit rows in chunks (`serving_rows.chunked`: a MoE pair GEMM's coordinate,
-  `COORDS`, a MoeSum or all-reduce column block, `COLS`, a w13 coordinate's K-chunk, `KCHUNKS`, a sparse-MLA row's split part or
-  combine, `SPLITS`, or a row template the partition's `chunk_cap` names), by Flock's `UnitStager` on the rows the window lays out
+  `COORDS`, a MoeSum or all-reduce column block, `COLS`, a w13 coordinate's K-chunk, `KCHUNKS`, a sparse-MLA row's key block,
+  end, column end or combine, `CHAINS`, or a row template the partition's `chunk_cap` names), by Flock's `UnitStager` on the rows the window lays out
   (`compose_circuit.py --template`, once per template, every chunk on that circuit, read and hashed once,
   `flock_inputs.flock_circuit`), bound to its partition and program. It holds every public file to that circuit, its unit indices and classes, and
   the registered roots and served domains. Then R1-R7 run over the registration with the leaf layer over the public bodies it holds
@@ -154,8 +154,8 @@ against, is SHA-512 too (`weights_sha512`: rows-sha512's registration, `step_row
   bodies the leaf layer binds (`wiring.check_drawn`, Lean's `Wires.Summary.drawnOk`: the two rows' strings are one), and a
   sampled chunk's ``acc`` is then the committed output of the chunk that wrote it, sampled or not. A unit whose wired row is
   not its writer's is incorrect in the wired flattening, so the sampled proof blocks' wires are the check; every unit's
-  (`wiring.check`) is recorded beside it as the reference (``wiring_reference``), never gating. A sparse-MLA row's combine reads its splits' partials and lses the same way
-  (`pipeline.split_rows`, `a5_sparse_mla.py` its stand-in). The negatives (`wiring_negatives`) wire a unit to another unit, swap
+  (`wiring.check`) is recorded beside it as the reference (``wiring_reference``), never gating. A sparse-MLA row's key blocks read the state before them, and its combines its splits' partials and lses, the same way
+  (`pipeline.chain_rows`, `a5_sparse_mla.py` its stand-in). The negatives (`wiring_negatives`) wire a unit to another unit, swap
   two of a combine's slots, and flip a wired row's string in its reader's public body.
 * **Values tied to an earlier registration** (``a.tie``, records_audit's ``--tie``): a window whose population program takes
   values ahead of its templates' parameters (`program_values`, a served window's H1 tables) registers them as the values of
@@ -1445,7 +1445,7 @@ def main() -> int:
     ap.add_argument("--session-timeout", type=float, default=14400,
                     help="each drawn member's prover limit in seconds, and each template's compose: one firewalled session of a MoE "
                          "w2 coordinate chunk (MoeExpertFp8GemmW_v2{N=1}, k_log 26) takes ~8 min, and over an hour on a loaded "
-                         "machine, as does composing the 64-key SparseMlaSplitPart_v1 in lookup slots")
+                         "machine, as does composing a 64-key SparseMlaHeadBlock_v1 in lookup slots")
     ap.add_argument("--challenger", help="with --tp-commit: draw each rank from the auditor's challenger's coins, one session on the TP "
                     "run root (a5_coins): local (a development session on this machine), or gate:USER@HOST (vy-challenger-1 through "
                     "infra's gate, with --peer and --challenger-key)")
