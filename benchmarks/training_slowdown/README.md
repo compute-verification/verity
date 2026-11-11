@@ -15,7 +15,7 @@ measures bumps `VERSION` (`training_slowdown/__init__.py`), which every record c
 | `run.py` | one job of an attack config: `Harness`, what a route's code is counted inside, the route loop (`train`) and the record's trace (`trace_step`, `retrace`); `block_c`, a start's c |
 | `config.py` | an attack config: its schema, its digest and its jobs (`Job.label`), each refusal by name |
 | `sandbox.py` | the training job's sandbox: namespaces with no network and an empty directory over each final set (`enter`), and what a process can still reach of either (`refusals`) |
-| `routes/` | the routes a config names, and the route contract (`routes/__init__.py`); `subset`, the parameters a pattern names trained with AdamW or Muon, E the tensors in full or their deltas in codes |
+| `routes/` | the routes a config names, and the route contract (`routes/__init__.py`); `subset`, the parameters a pattern names trained with the optimizer its `opt` dial names (AdamW, SGD, Lion, Adafactor, Muon, Shampoo; the ones torch lacks in `_optimizers`), E the tensors in full or their deltas in codes; `ema`, `subset`'s step with the output an exponential average of the weights; `lora`, the start frozen and a low-rank adapter trained beside each matrix a pattern names, the output the start with the adapters merged in |
 | `flops.py` | `Counter`, the dispatch-mode count of every op's multiply-adds and their provenance; `guard_exits`, token data read out of torch; `flags`, work the count can't vouch for; `forward_macs_per_token` |
 | `opnames.py` | the op-name sets the counter, the capture and the gate prices share |
 | `gates.py` | each counted op's price in Boolean gates, from the circuits' Definitions |
@@ -24,6 +24,7 @@ measures bumps `VERSION` (`training_slowdown/__init__.py`), which every record c
 | `formalism.py` | a record's quantities (`of_record`, `measure`), Fit and Slowdown at (c, k) (`at`), the one bound and its sensitivities (`bound`), the products term (`he_products`, `he_figure`) and the published ρ with what it rests on (`published`) |
 | `policy.py` | a start's reference shapes and the (c, k) grid; the console's policy (`CONSOLE`), one session of the 45M reference model; `named`, the one place a config's policy name becomes (c, k) |
 | `grade.py` | the grade: a config's slowdown S = p·ρ from its jobs' records and its honest config's, printed and written as `slowdown.json` (below) |
+| `library.py` | the library's table: each entry of `attacks/` with its step traced on a CPU, its slowdown at its policy (the calculator's bound of record on that step) and what binds, and its planned run over each fleet and period |
 | `calculator.py` | the slowdown calculator (`verity/protocols/inference_only/rho`) as this package reads it, and the one module here that does: a fixed policy's numbers, the fleets and periods a figure is presented over, the bound of record and the bound's own terms (β(k), F, α) |
 | `counterexample.py` | a run's counterexample families: their writer and the sampled bit-for-bit rebuild check |
 | `codecs/` | update codes: identity, low rank, sparse mask, quantized delta, scaled quantized delta, seed replay and their composition |
@@ -33,6 +34,42 @@ measures bumps `VERSION` (`training_slowdown/__init__.py`), which every record c
 | `model.py` | the starts' architecture, the lf dense decoder |
 
 The reference shapes are the lf model's (`adapters/vllm/tests/program/train_step_lf.py`), which the suite checks.
+
+## The library of training algorithms
+
+~~~text
+python -m training_slowdown.library [ENTRY ...] [--starts starts.toml] [--out DIR]
+~~~
+
+The library is the configs of `attacks/`. An entry is a route and its dials at a start, with the policy it is read
+under: there is one kind of entry, whatever its route computes. A new entry is a config of a route
+`routes/` has, or a new route (the route contract, `routes/__init__.py`) and a config of it; its config's first
+comment says what it trains. Each entry is held to a reference in plain torch (`tests/test_entries.py`): its own
+dials, a few steps at a small shape, and the same output model as torch's own optimizer and its own average of the
+weights give, or the published rule where torch has none. An entry without a reference fails the suite.
+
+The standard algorithms differ in two ways the table shows apart. AdamW, SGD, Lion, Adafactor and the average of the
+weights train every tensor by the same forward and backward passes, so they carry the same products with two operands
+the update reaches, and differ only in the gates the optimizer itself adds to the step; gradient accumulation carries
+those products in several passes, which write more outputs. The rest change those products. Muon and Shampoo have no
+rule for the embedding, so their entries leave it untrained, and the output head, whose weight is the embedding, no
+longer has two operands the update reaches. Frozen layers (`last-blocks`) leave more products out, and adapters
+(`lora`) reach a matrix only through a rank-wide product.
+
+The command prints one row an entry (every entry, or the ones named): the share of the start's parameters its step
+trains, its slowdown under its policy and what binds. It trains nothing. It builds the entry's model at the start's
+shape, traces its step on a CPU as a job does after its last step (`run.traced_step`, on fake tensors), and reads the
+calculator's bound of record on the traced step (`calculator.bound`): the least slowdown of any partition of that
+step into the policy's blocks, on the products whose two operands both depend on the update. `trains` is read from
+the trace, the parameters the step writes over the start's: an entry that trains less charges fewer products, so its
+slowdown is not its optimizer's. Where a step has dense linear algebra (Shampoo's roots), which the capture counts at
+n³ MACs a matrix and not as the gates of the algorithm that computes it, the row says what share of the step's gates
+that count is. Below the rows it prints each statement with what it rests on, each entry's planned run at its
+slowdown (the config's steps times the traced step's gates) as a share of one datacenter's and of the world's compute
+over a window, a week, a month and a year, and which parts are traced, approximated, proved, premises and scaled;
+`--out` writes all of it to `DIR/library.json`. A row has no slowdown, and says why, where the capture
+refuses the step, where the bound can't read it, and where the entry's E keeps less than the trained weights: a
+weight then costs at most E's bits a trained weight, which only a run's record has, so the grade reads that entry.
 
 ## Running an attack
 
