@@ -33,7 +33,6 @@ public import Proofs.Nci.RemotePeriod
 public import Proofs.Nci.Capability
 public import Proofs.Nci.Verdict
 public import Proofs.Nci.DescVerdict
-public import Proofs.Nci.Activations
 public import Proofs.Nci.Covering
 public import Proofs.Nci.CoveringWitness
 public import Proofs.Nci.CoveringTwoCosts

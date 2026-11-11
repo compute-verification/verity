@@ -112,31 +112,6 @@ theorem bound_T1 (k : ℝ) (hk : 0 ≤ k) : T1.bound k (1 / 2) 1 0 = k / 2 := by
   rw [max_eq_right (by positivity)]
   ring
 
-theorem entersAtMost_T1 : Assumptions.EntersAtMost T1 1 := by
-  unfold Assumptions.EntersAtMost
-  decide
-
-theorem drawsAtLeast_noLinks {r : RegisteredCircuit} (T : Threading r) (dd : ℕ) :
-    Assumptions.DrawsAtLeast (noLinks T) dd :=
-  fun _ h => absurd h (by simp [noLinks])
-
-theorem activations_T1 : Assumptions.ActivationsIncompressibleAll D T1 (noLinks T1) 2 1 (1 / 2) (1 / 2) := by
-  have key : ∀ R : Finset (Fin 4), R ⊆ C.computed →
-      (T1.weightsUsed R).card + (T1.actsUsed R).card ≤ 2 * novelReads D R := by decide
-  intro R hR
-  rw [filter_true_of_mem fun a _ h => by simp [Threading.Links.Whole, noLinks] at h]
-  have h' : ((T1.weightsUsed R).card : ℝ) + (T1.actsUsed R).card ≤ 2 * novelReads D R := by
-    exact_mod_cast key R hR.1
-  linarith
-
-theorem entersAtMost_T0 (r : RegisteredCircuit) : Assumptions.EntersAtMost (T0 r) 0 :=
-  fun _ => (card_le_card (filter_subset _ _)).trans (by simp [T0])
-
-theorem activations_T0 (r : RegisteredCircuit) (c : ℕ) (k b_w b_a : ℝ) :
-    Assumptions.ActivationsIncompressibleAll r (T0 r) (noLinks (T0 r)) c k b_w b_a := by
-  intro R _
-  simp [Threading.weightsUsed, Threading.actsUsed, Threading.mults, T0]
-
 theorem readFactor_ge {K b_w b_a d : ℝ} (hK : 0 < K) (hw : 0 ≤ b_w) (ha : 0 ≤ b_a) (hd : 0 ≤ d) :
     min (9 / 4 * b_w * b_a * d / K) (3 / 4 * b_a * √(b_w / K)) ≤ readFactor K b_w b_a d := by
   unfold readFactor
@@ -383,24 +358,6 @@ theorem ThreadedThrottledDarkSlots_nontrivial : Guarantees.ThreadedThrottledDark
   refine ⟨by norm_num, by norm_num, by norm_num, by norm_num, compliesRate_Dθ, not_theta_Dθ, T1_threaded,
     T1_weightsSlots, ?_⟩
   rw [card_T1, dark_Mθ]
-  norm_num
-
-theorem ActivationsBoundOn_honest : Guarantees.ActivationsBoundOn_honest :=
-  ⟨compliesRate_D, theta_id D, entersAtMost_T1, drawsAtLeast_noLinks _ _, activations_T1⟩
-
-theorem ActivationsBoundOn_nontrivial : Guarantees.ActivationsBoundOn_nontrivial := by
-  refine ⟨by norm_num, by norm_num, by norm_num, by norm_num, by norm_num, compliesRate_Dθ, not_theta_Dθ,
-    entersAtMost_T1, drawsAtLeast_noLinks _ _, activations_T1, ?_⟩
-  rw [show (T1.M ∩ Mθ.S).card = 1 by decide]
-  norm_num
-
-theorem ActivationsTrainingOn_honest : Guarantees.ActivationsTrainingOn_honest :=
-  ⟨compliesRate_D, theta_id D, entersAtMost_T1, drawsAtLeast_noLinks _ _, activations_T1, coverage_T1⟩
-
-theorem ActivationsTrainingOn_nontrivial : Guarantees.ActivationsTrainingOn_nontrivial := by
-  refine ⟨by norm_num, by norm_num, by norm_num, by norm_num, by norm_num, compliesRate_D, theta_id D,
-    entersAtMost_T0 _, drawsAtLeast_noLinks _ _, activations_T0 _ _ _ _ _, not_coverage_T0, ?_⟩
-  rw [bound_T0, size_D, dark_id]
   norm_num
 
 theorem LayeredTraining_honest : Guarantees.LayeredTraining_honest :=
