@@ -67,6 +67,20 @@ env_files = ["/root/.config/verity/relay.env", "/root/.config/verity/r2.env"]
 needs = ["{dir}/preflight-tree/.git"]
 env = { RESEARCH_STORE = "/root/watchers-preflight-store" }
 
+# the nightly check of main (nightly_check.py): once a day from --hour UTC, one uncached check of origin/main's tip recorded on
+# --on in a slot of its --pool, then its outcome posted to #agent-alerts and labelled on the commit. The node, the pool, the run's
+# timeout and the hour are set here and nowhere else. Its clone and worktrees are on the pod's own disk (--work: on /data's NFS a
+# tree takes minutes to add and remove) and so is its store's index, as the preflight probe's; the launch's temp dirs (check's
+# check-lean-deps-*, several GiB) are on the volume (--tmp). It posts and labels as lane infra. monitors-relay's `nightly-check`
+# reads --state, and rings infra when it shows no outcome for 36 h
+[[loop]]
+name = "nightly-check"
+argv = ["python3.12", "-s", "{src}/infra/control/nightly_check.py", "--on", "vy-nebius-cpu-8", "--pool", "nightly",
+        "--timeout", "36000", "--hour", "9", "--work", "/root/fast/nightly-check", "--state", "{dir}/nightly-check.json",
+        "--tmp", "{dir}/nightly-check/tmp"]
+env_files = ["/root/.config/verity/relay.env", "/root/.config/verity/r2.env"]
+env = { RESEARCH_STORE = "/root/watchers-nightly-store", RESEARCH_LANE = "infra" }
+
 # top's asks relay (top_watch.py asks, every 15 min; top's Cursor timer asks-relay-v4). It waits for a Notion connection's token
 # shared on the Asks for Daniel database ({dir}/notion.env: NOTION_API_KEY=..., root 0600), and for its seeded state
 [[loop]]
