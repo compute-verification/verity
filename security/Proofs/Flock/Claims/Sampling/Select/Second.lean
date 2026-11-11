@@ -17,8 +17,8 @@ import Proofs.Flock.Claims.Sampling.Select.Take
 
 * `flockLaw_second`: `secondLaw`'s Flock law is the work law at `k = 1`, its strata the cells in order, template by
   template and in each by sampled replay block (`cellPairs`), cell `(t, i)` exactly
-  `[off_t + i·n_t, off_t + (i+1)·n_t)` sampling `k_t` (`cellOf`); `flockLaw_second_strata`: each stratum whole
-  (`cellStratum`: its template, unit work and its floor `k_t` too).
+  `[off_t + i·n_t, off_t + (i+1)·n_t)` sampling `k_t` (`cellOf`), and each stratum whole (`cellStratum`: its
+  template, unit work and its floor `k_t` too).
 * `selectSecond_ok`: an accepted second stage passed `secondProblem`, drew its units from the coins under that sampling
   design, and proves each of them.
 * `positions_second`: the cells, in order, are the units `[0, |sample|·Σ n_t)`; `sizes_second`: cell `(t, i)` is `n_t`
@@ -146,8 +146,8 @@ def cellStratum (sample ns ks : Array ℕ) (z : ℕ × ℕ) : Flock.Draw.WorkStr
       cellOff sample.size ns z.1 + (z.2 + 1) * ns.getD z.1 0)],
     k := ks.getD z.1 0, work := 1, floor := ks.getD z.1 0 }
 
-/-- **`secondLaw`'s Flock law, stratum by stratum**: the work law at `k = 1`, its strata the cells' in order
-(`cellStratum` over `cellPairs`). -/
+/-- **The second stage's sampling design as Flock parses it, stratum by stratum**: the work design at `k = 1`, its
+strata the cells' in order (`cellStratum` over `cellPairs`). -/
 theorem flockLaw_second_strata (sample ns ks : Array ℕ) (m : ℕ) (parsed : Flock.Draw.Law)
     (h : Draw.flockLaw (Select.secondLaw sample ns ks) m = .ok parsed) :
     ∃ ws : Array Flock.Draw.WorkStratum, parsed = .work 1 ws ∧
