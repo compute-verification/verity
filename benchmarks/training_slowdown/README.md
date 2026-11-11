@@ -24,6 +24,7 @@ measures bumps `VERSION` (`training_slowdown/__init__.py`), which every record c
 | `formalism.py` | a record's quantities (`of_record`, `measure`), Fit and Slowdown at (c, k) (`at`), the one bound and its sensitivities (`bound`), the products term (`he_products`, `he_figure`) and the published ρ with what it rests on (`published`) |
 | `policy.py` | a start's reference shapes and the (c, k) grid; the console's policy (`CONSOLE`), one session of the 45M reference model; `named`, the one place a config's policy name becomes (c, k) |
 | `grade.py` | the grade: a config's slowdown S = p·ρ from its jobs' records and its honest config's, printed and written as `slowdown.json` (below) |
+| `library.py` | the library's table: each entry of `attacks/` with its step traced on a CPU, its slowdown at its policy (the calculator's bound of record on that step) and what binds, and its planned run over each fleet and period |
 | `calculator.py` | the slowdown calculator (`verity/protocols/inference_only/rho`) as this package reads it: a fixed policy's numbers, the fleets and periods a figure is presented over, and the bound of record |
 | `counterexample.py` | a run's counterexample families: their writer and the sampled bit-for-bit rebuild check |
 | `codecs/` | update codes: identity, low rank, sparse mask, quantized delta, scaled quantized delta, seed replay and their composition |
@@ -33,6 +34,27 @@ measures bumps `VERSION` (`training_slowdown/__init__.py`), which every record c
 | `model.py` | the starts' architecture, the lf dense decoder |
 
 The reference shapes are the lf model's (`adapters/vllm/tests/program/train_step_lf.py`), which the suite checks.
+
+## The library of training algorithms
+
+~~~text
+python -m training_slowdown.library [ENTRY ...] [--starts starts.toml] [--out DIR]
+~~~
+
+The library is the configs of `attacks/`. An entry is a route and its dials at a start, with the policy it is read
+under: a standard training algorithm and a covert one are the same kind of thing. A new entry is a config of a route
+`routes/` has, or a new route (the route contract, `routes/__init__.py`) and a config of it.
+
+The command prints one row an entry (every entry, or the ones named): its slowdown under its policy and what binds.
+It trains nothing. It builds the entry's model at the start's shape, traces its step on a CPU as a job does after its
+last step (`run.trace_step`, on fake tensors), and reads the calculator's bound of record on the traced step
+(`calculator.bound`): the least slowdown of any partition of that step into the policy's blocks, on the products
+whose two operands both depend on the update. Below the rows it prints each statement with what it rests on, each
+entry's planned run at its slowdown (the config's steps times the traced step's gates) as a share of one datacenter's
+and of the world's compute over a window, a week, a month and a year, and which parts are traced, proved, premises
+and scaled; `--out` writes all of it to `DIR/library.json`. A row has no slowdown, and says why, where the capture
+refuses the step, where the bound can't read it, and where the entry's E keeps less than the trained weights: a
+weight then costs at most E's bits a trained weight, which only a run's record has, so the grade reads that entry.
 
 ## Running an attack
 
