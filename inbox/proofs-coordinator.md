@@ -57210,3 +57210,40 @@ It is a pure addition with equality lemmas: what the verifier accepts and refuse
 - **Left:** #8789's three open runs (`8b4a`'s requirers, `fad7`, the six quick-tier runs); the allocator entry, next; (B) after #8789 lands.
 
 For the table: #8949 ready at `c14e4bd284b1641f1ec52d426bfd271de1da34ff`: records `260d` pass, agreement `5dd9` pass, 60 suites pass; the hoist as built, setup 0.69 to 0.70 of `main`'s [measured, `8ab3`].
+
+## FLOCKPKG, Wed 11 Nov 14:18Z: a fifth to a third of the Lean verifier's seconds on the head block is the allocator handing freed pages back to the kernel and faulting them in again; one environment variable on the verifier's process removes it (head session 0.55 to 0.63, the fused block's call 0.91); measured, unbuilt: no driver sets it
+
+**What it is.** The Lean runtime's allocator (mimalloc) returns freed pages to the kernel after a short delay and takes page faults when it reuses them. `MIMALLOC_PURGE_DELAY=-1` in the verifier's environment turns that off. It changes no byte the verifier reads, computes or prints; the price is peak memory. No file of the tree sets it [run: `git grep -i mimalloc origin/main`, no line].
+
+**Head block** [measured: `r20261111-103117-a3a2`, `SparseMlaHeadBlock` NVIS 64 `FIRST=false`, no program, one session a call, one core of a loaded node; every call refused only at the last check, as in `d4ef`]:
+
+| variant | `inputs` s | session s | user s | system s | page faults | peak RSS |
+|---|---|---|---|---|---|---|
+| as `main` runs it | 212.0 | 484.1 | 520.7 | 156.8 | 4.93 M | 42.9 GB |
+| the same again | 184.8 | 338.3 | 413.6 | 109.6 | 4.47 M | 42.9 GB |
+| huge pages allowed (`MIMALLOC_ALLOW_LARGE_OS_PAGES=1`) | 190.1 | 431.2 | 476.3 | 143.9 | 4.76 M | 42.9 GB |
+| `MIMALLOC_PURGE_DELAY=-1` | 197.3 | 207.5 | 396.7 | 8.3 | 74.8 K | 47.8 GB |
+| both | 188.4 | 214.4 | 395.5 | 7.6 | 73.7 K | 47.8 GB |
+| `MIMALLOC_ARENA_EAGER_COMMIT=1 MIMALLOC_PURGE_DELAY=-1` | 184.5 | 185.2 | 362.5 | 7.3 | 71.3 K | 47.8 GB |
+
+- The session (the check itself) is 185 to 214 s against 338 and 484: 0.55 to 0.63 of the better base call. A call is 370 to 405 core-s against 523 and 677. System time goes from 110 to 157 s to 7 to 8 s and page faults from 4.5 to 4.9 million to 71 to 75 thousand; those two are the robust part. `inputs` does not move. Peak memory +11%.
+- **How sure:** one run on a loaded node; its two base calls differ by 30% between themselves, the three calls with the setting by 14%. On a quieter node (`r20261111-081919-d4ef`) the same block's three-session call was 599 s user and 306 s system, so a third of that call was kernel time [measured]; the setting was not tried there. An interleaved rerun on a quiet node needs 260 GB for about two hours (staging the head); not launched tonight, say if you want it.
+
+**Fused MoE block with its program** [measured: `r20261111-132340-5ef7`, K = 6144, program 152 MB, the one-parse verifier, accepted sessions, one core]:
+
+| variant | `inputs` s | setup s | session s | call, user + system s | peak RSS |
+|---|---|---|---|---|---|
+| as `main` runs it (two calls) | 33.3, 33.3 | 17.8, 17.8 | 39.1, 38.5 | 74.7, 74.0 | 9.08 GB |
+| `MIMALLOC_PURGE_DELAY=-1` (two calls) | 31.5, 31.6 | 16.7, 16.7 | 34.2, 34.2 | 67.8, 67.8 | 9.59 GB |
+| with `MIMALLOC_ARENA_EAGER_COMMIT=1` too (two calls) | 31.5, 31.5 | 16.6, 16.8 | 34.2, 34.2 | 67.7, 67.8 | 9.59 GB |
+
+- 0.91 of the call, repeatable to 0.1 s; +5.6% peak memory. The gain grows with the call's memory: 9 GB here, 43 GB at the head.
+
+**What it would take** [read: `main` `72e4d46d9209`]: the variable in the environment of each process that runs `flock-verify`: `benchmarks/one_stage/a0.py:346` (`lean_verify`'s `run(...)`, which takes `env=`), `server_rate.py:214`'s Lean pool, and `verity/protocols/spot/verifier/one_stage/proofs.py:421`. Three lines and one constant; no Lean. The files are benchmarks' and the trusted Python's, not mine: I have not built it. It needs a statement's peak memory to fit with the +6 to +11%.
+
+**Also done since 13:33Z:** (B) #8814's records run `r20261111-112420-2a07` passed (done, rc 0) [run]; its quick tier waits for #8789 on `main`.
+
+**Left:** #8789's open runs (`8b4a`'s requirers about 15:25Z, the six quick-tier runs about 15:15Z, `fad7` about 15:50Z); the digest's second pair not before 15:00Z; (B) and M6 after #8789 lands.
+
+For BREAKEVEN: head block (`SparseMlaHeadBlock` NVIS 64): the check 185 to 214 s a statement with `MIMALLOC_PURGE_DELAY=-1` against 338 to 484 s without, same run, loaded node [measured, `a3a2`]; by that ratio (0.55 to 0.63) the 250.6 s of `d4ef` reads 137 to 158 s [modeled by proportion from one run]. Fused MoE block with program: the whole call 0.91 [measured, `5ef7`]. Label: unbuilt, no driver sets it; fixed seconds (`inputs`) do not move, the gain is in the seconds that grow with the statement's blocks.
+For the table: Lean verifier, allocator setting: head check 0.55 to 0.63, fused call 0.91 [measured `a3a2`, `5ef7`]; +6 to +11% peak memory; unbuilt (three driver lines).
