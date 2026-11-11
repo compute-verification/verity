@@ -153,7 +153,8 @@ theorem parse_roots {x : Msg} {s : AuditStatement} (hs : parse h x = some s) :
 statement decodes, its round-1 message is a record and its second stage's sample evaluates, a registered read of
 value `v` at template `t`'s port `port` that round 2 reads off the interior record (`readsInterior`) is read under the
 replay block's interior roots. -/
-theorem readRoots_of_readsInterior {x m₁ : Msg} {c₀ c₁ : FlockDeploy.Coin} {st : Roots} {rec smp : Json}
+theorem readRoots_of_readsInterior {x m₁ : Msg} {c₀ : FlockDeploy.Coin} {c₁ : Stage h} {st : Roots}
+    {rec smp : Json}
     (hx : decode x = some st) (hm : jsonMsg m₁ = some rec) (hd : secondDraw h c₀ c₁ = some smp) (ρ t : ℕ)
     (port v : String) (hri : readsInterior (ownOf h st rec smp c₀) (h.names.getD t "") port v = true) :
     readRoots h x m₁ c₀ c₁ ρ t port v = irootsOf m₁ ρ := by
@@ -168,7 +169,7 @@ def SideBySide : Prop := BlocksClosed (bitsProgs h.ms) (membersPart h.ms)
 
 namespace CheckedRun
 
-variable {h} {r : CheckedRun}
+variable {h} {r : CheckedRun h.stage}
 
 /-! ## At a checked unit of an accepted run -/
 

@@ -537,8 +537,8 @@ theorem readOk_linked {own : Spot.SecondStage.Own} {named : Bool} {p : Spot.Seco
 /-- **Round 2 passes every registered read of an accepted run**: template `t`'s session statement, as round 2 reads
 it, has each entry of its registered reads pass `SecondStage.readOk` against the template's part, at what the
 verifier holds of the run. -/
-theorem readOk_of_stmtOk {x m₁ m₂ : Msg} {c₀ c₁ : FlockDeploy.Coin} (hok : stmtOk h x m₁ m₂ c₀ c₁ = true) {t : ℕ}
-    (ht : t < h.ms.length) :
+theorem readOk_of_stmtOk {x m₁ m₂ : Msg} {c₀ : FlockDeploy.Coin} {c₁ : Stage h}
+    (hok : stmtOk h x m₁ m₂ c₀ c₁ = true) {t : ℕ} (ht : t < h.ms.length) :
     ∃ st rec smp w S, decode x = some st ∧ jsonMsg m₁ = some rec ∧ secondDraw h c₀ c₁ = some smp ∧
       FlockDeploy.decode (stmtAt h m₂ t) = some w ∧ stmtJsonOf h t w = some S ∧
       ∀ port e, (port, e) ∈ Spot.entries (Spot.getD S.registered "ports") →
@@ -563,8 +563,8 @@ auditor's copies names and no link does read the writer's output port of the int
 root, domain and leaves: the writer `tw` is the first template of the wire's writer's name, its cell size is the
 rows' `per`, the tree holds that many rows a sampled block, and each slot that reads is one of the template's part
 and reads the row `wireRow` names, its writer's position in the same sampled block's cell. -/
-theorem wired_read {x m₁ m₂ : Msg} {c₀ c₁ : FlockDeploy.Coin} (hok : stmtOk h x m₁ m₂ c₀ c₁ = true) {t : ℕ}
-    (ht : t < h.ms.length) :
+theorem wired_read {x m₁ m₂ : Msg} {c₀ : FlockDeploy.Coin} {c₁ : Stage h}
+    (hok : stmtOk h x m₁ m₂ c₀ c₁ = true) {t : ℕ} (ht : t < h.ms.length) :
     ∃ st rec smp w S, decode x = some st ∧ jsonMsg m₁ = some rec ∧ secondDraw h c₀ c₁ = some smp ∧
       FlockDeploy.decode (stmtAt h m₂ t) = some w ∧ stmtJsonOf h t w = some S ∧
       ∀ port e wr, (port, e) ∈ Spot.entries (Spot.getD S.registered "ports") →
@@ -602,8 +602,8 @@ auditor's copies names read the link's value: where the interior record `rec` re
 value, each reading slot at the row `linkRowIn` names; else the boundary port of that name of the run's statement,
 `per` rows a replay block of its population, each reading slot at the row `linkRow` names, its replay block's. Which
 of the two holds is the interior record's, not the auditor's copies'. -/
-theorem linked_read {x m₁ m₂ : Msg} {c₀ c₁ : FlockDeploy.Coin} (hok : stmtOk h x m₁ m₂ c₀ c₁ = true) {t : ℕ}
-    (ht : t < h.ms.length) :
+theorem linked_read {x m₁ m₂ : Msg} {c₀ : FlockDeploy.Coin} {c₁ : Stage h}
+    (hok : stmtOk h x m₁ m₂ c₀ c₁ = true) {t : ℕ} (ht : t < h.ms.length) :
     ∃ st rec smp w S, decode x = some st ∧ jsonMsg m₁ = some rec ∧ secondDraw h c₀ c₁ = some smp ∧
       FlockDeploy.decode (stmtAt h m₂ t) = some w ∧ stmtJsonOf h t w = some S ∧
       ∀ port e l, (port, e) ∈ Spot.entries (Spot.getD S.registered "ports") →
@@ -651,8 +651,8 @@ registered value, or every one reads it off the interior record. An address has 
 not sized and the interior record's port sized; so no address holds at a gate one unit's session reads as a registered
 value and another's off the interior record. -/
 theorem addresses_one_way (hA : Addresses h) (g : ℕ) : ∃ S : Address,
-    (∀ r : CheckedRun, r.Ok h → r.s.prog.Needs r.b g → r.ReadsRegistered h S g) ∨
-      ∀ r : CheckedRun, r.Ok h → r.s.prog.Needs r.b g → r.ReadsInterior h S g := by
+    (∀ r : CheckedRun h.stage, r.Ok h → r.s.prog.Needs r.b g → r.ReadsRegistered h S g) ∨
+      ∀ r : CheckedRun h.stage, r.Ok h → r.s.prog.Needs r.b g → r.ReadsInterior h S g := by
   obtain ⟨S, hS⟩ := hA g
   refine ⟨S, ?_⟩
   by_cases hs : S.slot.sized = true

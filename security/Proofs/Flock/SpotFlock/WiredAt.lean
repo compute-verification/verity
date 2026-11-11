@@ -39,9 +39,10 @@ two-stage scope, session statements `m₂` the verifier's check passes and a Flo
 `u`'s proof block, cut, is correct at the statement's program wired by `ω`. `S` holds the block's gates and the wires
 they read, and the unit's decoded values agree at any two gates of `S` that `ω` sends to one gate. -/
 theorem decoded_wired {ω : ℕ → ℕ} {keep : ℕ → Bool} {x : Msg} {s : AuditStatement} {Pt : Partition}
-    {d : Design.Two} {m₁ m₂ : Msg} {c₀ c₁ : FlockDeploy.Coin} {wF : Claims.Flock.Wit} {u ρ : ℕ} {b rb : List ℕ}
+    {d : Design.Two} {m₁ m₂ : Msg} {c₀ : FlockDeploy.Coin} {c₁ : Stage h} {wF : Claims.Flock.Wit} {u ρ : ℕ}
+    {b rb : List ℕ}
     (hx : parse h x = some s) (hP : partition h s = some Pt) (h2 : two h s = some d) (hsc : InScopeTwo Pt d s)
-    (hok : stmtOk h x m₁ m₂ c₀ c₁ = true) (hu : u ∈ h.reg.checked (units (base h) x) (src c₀) (src c₁))
+    (hok : stmtOk h x m₁ m₂ c₀ c₁ = true) (hu : u ∈ h.reg.checked (units (base h) x) (src c₀) (stageSrc c₁))
     (hck : Claims.Flock.check (FlockDeploy.parse true _root_.Flock.Readable.relation) (unitStmt h m₂ u) wF = true)
     (hb : Pt.blocks[u]? = some b) (hρ : replayOf Pt d.part u = some ρ) (hrb : d.part.blocks[ρ]? = some rb)
     (hin : ∀ i, ω i ≠ i → s.prog.gates[i]? = some .input)
@@ -83,9 +84,10 @@ programs (`Prog.Rewires`) and the unit's decoded values agree at any two gates i
 `ω` sends to one gate: there are values, equal through `ω` to the unit's decoded values at every gate the block holds
 or reads, on which the block, cut, is correct at the wired program. -/
 theorem decoded_rewired {ω : ℕ → ℕ} {keep : ℕ → Bool} {x : Msg} {s : AuditStatement} {Pt : Partition}
-    {d : Design.Two} {m₁ m₂ : Msg} {c₀ c₁ : FlockDeploy.Coin} {wF : Claims.Flock.Wit} {u ρ : ℕ} {b rb : List ℕ}
+    {d : Design.Two} {m₁ m₂ : Msg} {c₀ : FlockDeploy.Coin} {c₁ : Stage h} {wF : Claims.Flock.Wit} {u ρ : ℕ}
+    {b rb : List ℕ}
     (hx : parse h x = some s) (hP : partition h s = some Pt) (h2 : two h s = some d) (hsc : InScopeTwo Pt d s)
-    (hok : stmtOk h x m₁ m₂ c₀ c₁ = true) (hu : u ∈ h.reg.checked (units (base h) x) (src c₀) (src c₁))
+    (hok : stmtOk h x m₁ m₂ c₀ c₁ = true) (hu : u ∈ h.reg.checked (units (base h) x) (src c₀) (stageSrc c₁))
     (hck : Claims.Flock.check (FlockDeploy.parse true _root_.Flock.Readable.relation) (unitStmt h m₂ u) wF = true)
     (hb : Pt.blocks[u]? = some b) (hρ : replayOf Pt d.part u = some ρ) (hrb : d.part.blocks[ρ]? = some rb)
     (hW : (bitsProgs h.ms).Rewires (membersPart h.ms) ω keep)
