@@ -50,14 +50,15 @@
   }
  },
  "domain": {
+  "Accounting.JointBridge.PhaseLeaks": {
+   "owner": "@lean",
+   "digest": "635427c5425f51a5f943ee237bd56f2ad1abb9a0c6e8da402361d861b4f3860d",
+   "why": "The layer below's guarantee at each execution phase: the leak relation (LeakAt) at the incorrect set of the witness computed before the sample, which a live sampled leak guarantee would give, as PooledLeakAccepted takes it."
+  },
   "Claims.Complete": {
    "owner": "@proofs",
    "digest": "36546a7c38e65c525a4f4b8db6da802965f6664707603f801b0c17145ff31f16",
    "why": "The proof system for proof blocks is complete: `CompilerComplete` is stated for such a system and says the compiled verifier inherits its completeness. (met by `compilerComplete_honest`)"
-  },
-  "Accounting.JointBridge.PhaseLeaks": {
-   "owner": "@lean",
-   "why": "The layer below's guarantee at each execution phase: the leak relation (LeakAt) at the incorrect set of the witness computed before the sample, which a live sampled leak guarantee would give, as PooledLeakAccepted takes it."
   },
   "Claims.Encodings.CodeScheme.ColBinds": {
    "owner": "@proofs",
@@ -6806,10 +6807,41 @@
    "type_hash": "c1b7923fe9ff1dfff3cbf7b4d6a79d0cf258959cd51aa8320806b66047fbf9e3"
   },
   "Accounting.SecurityProofs.Bridge.CommOfPooledLeakAccepted": {
-   "owner": "@lean"
+   "owner": "@lean",
+   "signature": [
+    "Accounting.SecurityProofs.Bridge.CommOfPooledLeakAccepted : Accounting.Guarantees.Bridge.CommOfPooledLeakAccepted"
+   ],
+   "assumptions": [],
+   "premises": {
+    "assumptions": [],
+    "domain": ["Accounting.JointBridge.PhaseLeaks", "NetTiming.PeriodEscapes"],
+    "open": ["Verity.Assumptions.TrustedHost"],
+    "reads": []
+   },
+   "type_hash": "56ecf9af8afb53251911aea700781c2738ad57ec354c7d037c266e4eb78f4769",
+   "unfolded_hash": "2ed441db1d7f34908252b1f67b52116c8b7db01a4222edde5709ca2d5de1755d"
   },
   "Accounting.SecurityProofs.Bridge.CommOfPooledLeakAccepted_honest": {
-   "owner": "@lean"
+   "owner": "@lean",
+   "signature": [
+    "Accounting.SecurityProofs.Bridge.CommOfPooledLeakAccepted_honest :",
+    "  And",
+    "    (NetTiming.PeriodEscapes Set.univ Accounting.NetWitness.honestPooled.acc Accounting.NetWitness.honestPooled.W",
+    "      (1 / 2) fun x => 0)",
+    "    (Accounting.JointBridge.PhaseLeaks (fun x => NetTiming.Witness.notLay) (fun x => 1)",
+    "      (fun x => Finset.instEmptyCollection.emptyCollection) 1 Accounting.NetWitness.honestPooled.sw",
+    "      Accounting.NetWitness.honestPooled.Pw Accounting.NetWitness.honestPooled.ρ Accounting.NetWitness.honestPooled.op",
+    "      Set.univ Accounting.NetWitness.honestPooled.acc Accounting.NetWitness.honestPooled.W",
+    "      Accounting.NetWitness.honestPooled.record fun x => 0)"
+   ],
+   "assumptions": [],
+   "premises": {
+    "assumptions": [],
+    "domain": [],
+    "open": [],
+    "reads": ["Verity.Assumptions.TrustedHost"]
+   },
+   "type_hash": "419d27415071fcd7ff0ab9c180eb721c62fc0f1b3d4c47b9a9c93a2c4b5aa2e0"
   },
   "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityBlock": {
    "owner": "@lean",
@@ -30333,6 +30365,12 @@
     "Accounting.Guarantees.Bridge.CommOfPeriodLeakAccepted": "1697c19b20073bbb1e97850bd2cb5cdc3fbc9e6ea06a73f7f5c02d2425517c81"
    }
   },
+  "Definitions.Accounting.Guarantees.JointBridge.CommOfPooledLeakAccepted": {
+   "digest": "e10c4332a3b04c7561725ae3245fe98c6b7583ac1b53d5aec92e1c36af05e4ec",
+   "definitions": {
+    "Accounting.Guarantees.Bridge.CommOfPooledLeakAccepted": "f0177da08c4f4820bd3c24fa22a5ad798405caaf7787ba0f4e8e6a89f4a1f319"
+   }
+  },
   "Definitions.Accounting.Guarantees.JointLive": {
    "digest": "4a73505ba6e7b52d8e8f772f80e2861eb9a8f0aadef6e2833b639451318a3894",
    "definitions": {
@@ -30894,6 +30932,43 @@
     "Accounting.JointBridge.RealizesCommOfPeriodLeakAccepted.stmt": "17977ef04eaff3e7ae9b9fd090e9e318574d119b34ddac9a54ad20dbf384f2fa",
     "Accounting.JointBridge.RealizesCommOfPeriodLeakAccepted.tapeFintype": "89a6cb6fa17c08421df2c8da2cf26f0d6c1706385461e5866d0c48893267937a",
     "Accounting.JointBridge.RealizesCommOfPeriodLeakAccepted.tops": "a9df0f43400422aa420c7a4f55693c9608bedd5edb487c5b0dcf883a58ae3c7e"
+   }
+  },
+  "Definitions.Accounting.JointBridge.CommOfPooledLeakAccepted": {
+   "digest": "2be7ee95c210921462a3943550851d1de9a316f1e0eb45a428ceeb81417550c5",
+   "definitions": {
+    "Accounting.JointBridge.PhaseLeaks": "635427c5425f51a5f943ee237bd56f2ad1abb9a0c6e8da402361d861b4f3860d",
+    "Accounting.JointBridge.RealizesCommOfPooledLeakAccepted": "09890d853187fee363501248707dadb16d0e3e216b82ce62d46e1b24996aa1b1",
+    "Accounting.JointBridge.RealizesCommOfPooledLeakAccepted.Cell": "2baaa3faf94482a65957296038ba8db7384e8c7ddbc457b50ea5ecff4fd6062c",
+    "Accounting.JointBridge.RealizesCommOfPooledLeakAccepted.Coin": "a0bf1ebfb2162d89a1c8aebd18c68ac4d030d587777ebc57a860708d1f9472ec",
+    "Accounting.JointBridge.RealizesCommOfPooledLeakAccepted.Conn": "38dfba569783b23f47ba2933662d20e6aa27489cdc9a377034b81b609ecddb16",
+    "Accounting.JointBridge.RealizesCommOfPooledLeakAccepted.Dev": "77889fbf93ca3d21661475a75b24886f4196c2fc14952506676782e30996996f",
+    "Accounting.JointBridge.RealizesCommOfPooledLeakAccepted.Pw": "faf1e543b9a8984b56b69d9b3ca7bd2811237d03fadf218f6477e8bbd52b7fb5",
+    "Accounting.JointBridge.RealizesCommOfPooledLeakAccepted.Srv": "f827d42c418e103b72c8318c80da0fc5d74ce82dedbe6977ad847a93be1a9dc7",
+    "Accounting.JointBridge.RealizesCommOfPooledLeakAccepted.W": "81dc6df25131f8b58d3a1b166225a455e5ecb6eefbf3c17e317cd4aa67332dcc",
+    "Accounting.JointBridge.RealizesCommOfPooledLeakAccepted.acc": "0910b67234515a5bf44ebeb2f6942c11375e6abfb69d7f57b760ffbb238a1913",
+    "Accounting.JointBridge.RealizesCommOfPooledLeakAccepted.coinFintype": "8037d035e70f4bfe438128ad5b1c658e85b5328bd5786e91b42c40e98a06eedf",
+    "Accounting.JointBridge.RealizesCommOfPooledLeakAccepted.coins": "a83e7ac5fab5a8e386557597f66f5cb29513b2ef2419a4db816525b737661785",
+    "Accounting.JointBridge.RealizesCommOfPooledLeakAccepted.device": "1fba36b8b9b827e63f2bafd5f2d6a00786c5f3d6762ab8258f52008c70c8c0ea",
+    "Accounting.JointBridge.RealizesCommOfPooledLeakAccepted.op": "e590c57e39a01175cb65badda4c3c64f269ddf3fa0a4e7aeef191a1288540828",
+    "Accounting.JointBridge.RealizesCommOfPooledLeakAccepted.record": "233ade81cee4a3626952dc10cb99651242d1954ea5b14b576c3d4c1418edfced",
+    "Accounting.JointBridge.RealizesCommOfPooledLeakAccepted.run": "7a6cfc025b0a913d60aef28cd9ca322b5b472c8a1b3436c1711dc5355d451dc3",
+    "Accounting.JointBridge.RealizesCommOfPooledLeakAccepted.sched": "b03210acc3ded7f947816ee05d78b82c0a6065e927f64010f624918524713c44",
+    "Accounting.JointBridge.RealizesCommOfPooledLeakAccepted.srv": "8094b68df6ee21278546d822830871d2424bc859761b1eaf28d6de6dfce3bf10",
+    "Accounting.JointBridge.RealizesCommOfPooledLeakAccepted.sw": "54bffc008ff119c7a55e10fa4002b5f811f4546210abdb326413b62ad1cdc019",
+    "Accounting.JointBridge.RealizesCommOfPooledLeakAccepted.ρ": "fc7fe3e26d1a762fb322bf3174f4314f3a449dd534f700c82eff36dd4e4c2417"
+   }
+  },
+  "Definitions.Accounting.JointBridge.CommOfPooledLeakAcceptedWitness": {
+   "digest": "7a19d3b94cca07088b9eff436826d36fe878be14fd34e869ee7166d60c2e5e1e",
+   "definitions": {
+    "Accounting.NetWitness.frameObs": "713d1e76a7db869e76b74ade72bc1ccea6b9c5f3fad5b12df1838d609b66a48d",
+    "Accounting.NetWitness.frameRecord": "9320a460210b563cdaa43be45d9a18465045b5d3466c7bbef8e11ecd08c6157a",
+    "Accounting.NetWitness.honestFmt": "16a76270a9981241a8d084f6a35fef628be420d6b9df80bf93dd1a7cc7e4f3be",
+    "Accounting.NetWitness.honestNet": "c213ab7876c7d70313f5e30026e5c1512a3523a8f005cbdcb4d4185cf8b4aef5",
+    "Accounting.NetWitness.honestPooled": "556c83ab9a3a1e055d22d7836fba41197256b68436e13293ab63f81aee6b12fa",
+    "Accounting.NetWitness.negPart": "ded8d495bfd4edc0d51829cbb4013054e22009e0b19dee74507457bb89ec1b05",
+    "Accounting.NetWitness.negStmt": "04c46931a2c2d6560393b3d6898417d4c0fc39bc0896109a709c9afbe1b4e2c3"
    }
   },
   "Definitions.Accounting.JointBridge.H200": {
