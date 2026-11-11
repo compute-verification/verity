@@ -1,10 +1,13 @@
 module
 
+public import Proofs.Properties.Nci.RecordBlockSize
 public import Proofs.Properties.Nci.RecordLaidOut
+public import Proofs.Properties.Nci.RecordRowBits
 public import Proofs.Properties.Nci.RecordSameSlot
 public import Proofs.Properties.Nci.RecordSlots
 public import Proofs.Properties.Nci.RecordTakes
 public import Proofs.Properties.Nci.RecordTally
+public import Proofs.Properties.Nci.RecordWired
 
 /-!
 # What the record check's own form counts
@@ -15,5 +18,7 @@ summary tries reach every slot's tally, so its fresh bits are at least every slo
 `inSlot` and `tally` count what they say: the units of a rectangle in a slot, and the bits of each kind a slot's
 rows hold (`RecordTally`). And a wire the check calls inside a block has every row it covers read from a writer of
 the reader's slot (`RecordSameSlot`). What the landing bound and the wired circuit take of the Program and the wires,
-each a statement, is `RecordTakes`.
+each a statement, is `RecordTakes`. Of those statements: a row is its leaves' bits in leaf order (`RecordRowBits`),
+a block's size is its units' gates (`RecordBlockSize`), and where the wires rank the units the gates no wire covers
+are a circuit's (`RecordWired`).
 -/
