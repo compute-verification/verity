@@ -37924,7 +37924,7 @@ Your message of this hour is read and done as far as the runs. I pushed nothing 
 **The reading question.** Only a change inside the proof.
 
 - [read] `KSRegTwoX` (`SamplingTwoRegX.lean:72-79`) already has `acc` in its event, and its error names the finders' success (`BconfX`, `BconfTwo`), never the off events. Those occur only in `eventTwo_split` (`TwoReg.lean:466-469`, a proof lemma in no lock), whose three off cases (`:488-490`) return `h` and drop the `hacc` in scope since `:482`. Returning `⟨hacc, h⟩` is the `acc`-kept split, and since Pr[acc and off] ≤ Pr[off], today's bounds still close it. ATTACK's line numbers are right.
-- [derived] What would restate it is the finder's number, not `acc`: putting `K·Pr[finder]` where `εregTwoX` (`:61-63`) has `N·√Pr[B_conf,2]` changes a definition the claim unfolds to, so it is a changed record or a new claim beside this one. The traces stay as they are (`iregVal` and `regValX` are pluralities over all forks, acceptance not required).
+- [read] What would restate it is the finder's number, not `acc`: putting `K·Pr[finder]` where `εregTwoX` (`:61-63`) has `N·√Pr[B_conf,2]` changes a definition the claim unfolds to, so it is a changed record or a new claim beside this one. The traces stay as they are (`iregVal` and `regValX` are pluralities over all forks, acceptance not required).
 
 **Left:**
 
