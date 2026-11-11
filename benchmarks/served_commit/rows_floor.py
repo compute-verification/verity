@@ -24,12 +24,12 @@ from pathlib import Path
 from typing import Any
 
 import torch
-from verity.ml.kernels import ROW_COMMIT
+from verity.definitions.kernels import ROW_COMMIT
 from verity_vllm.commit import step_rows
 from verity_vllm.commit.committer.native_jit import CUDA_CFLAGS
 
 ROOT = Path(__file__).resolve().parents[2]
-SRC = ROOT / "integrations/vllm/verity_vllm/commit/committer/native_rows.cu"
+SRC = ROOT / "adapters/vllm/verity_vllm/commit/committer/native_rows.cu"
 #: the directory of the headers SRC includes by name (the JIT stages them beside it)
 KERNELS = ROW_COMMIT.parent
 COMMIT_GPU = ROOT / "benchmarks/pouw/commit_gpu/commit_gpu.cu"

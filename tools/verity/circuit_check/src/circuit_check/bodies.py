@@ -1,7 +1,7 @@
 """A composite's evaluation and its non-constant gates, body by body.
 
-The reference (`verity.ml.circuits.evaluation.evaluate`) walks a composite's standalone call gate by gate
-(`verity.ml.circuits.evaluation.evaluate_region`), and finds each gate and each of its operands from the root
+The reference (`verity.circuits.evaluation.evaluate`) walks a composite's standalone call gate by gate
+(`verity.circuits.evaluation.evaluate_region`), and finds each gate and each of its operands from the root
 (`layout.Circuit.gate`, `layout.resolve_gate`); that search is most of what checking a large Definition costs. `evaluate`
 here compiles each specialized Definition's body once into local wires (its parameters' leaves, then each node's output
 leaves) and runs it per activation: the same gates, in the same canonical order, on the same operands, through the same
@@ -30,14 +30,14 @@ from itertools import repeat
 from operator import and_, xor
 from typing import Any, Callable, Sequence
 
-from verity.ml.circuits import boolean as BL
-from verity.ml.circuits.defs import PrimitiveDefinition, SpecializedDefinition
-from verity.ml.circuits.evaluation import MissingValue
-from verity.ml.circuits.evaluation.reference import RegisteredTable, _flat, resolve, standalone_call
-from verity.ml.circuits.evaluation.reference import evaluate as reference
-from verity.ml.circuits.layout import WIDE_FAN_IN
-from verity.ml.circuits.refs import runs
-from verity.ml.circuits.types import axis_runs, remove_axis
+from verity.circuits import boolean as BL
+from verity.circuits.defs import PrimitiveDefinition, SpecializedDefinition
+from verity.circuits.evaluation import MissingValue
+from verity.circuits.evaluation.reference import RegisteredTable, _flat, resolve, standalone_call
+from verity.circuits.evaluation.reference import evaluate as reference
+from verity.circuits.layout import WIDE_FAN_IN
+from verity.circuits.refs import runs
+from verity.circuits.types import axis_runs, remove_axis
 
 #: a body of more nodes than this is left to the reference: its compiled steps would hold several hundred bytes a gate
 MAX_NODES = 1 << 22
@@ -473,7 +473,7 @@ def compiled(t: Any) -> Body | None:
 
 
 def evaluate(target: Any, *args: Any) -> tuple[int, ...]:
-    """`verity.ml.circuits.evaluation.evaluate`, a composite run body by body: the same output leaves, or the same first
+    """`verity.circuits.evaluation.evaluate`, a composite run body by body: the same output leaves, or the same first
     exception."""
     t = resolve(target)
     body = None if any(isinstance(a, RegisteredTable) for a in args) else compiled(t)
