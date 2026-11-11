@@ -1,4 +1,4 @@
-"""PoUW's H1 + fx1 tile against the circuit model's census: `Security/Proofs/Accounting/Gates/Rows.lean`'s `h1Rows`.
+"""PoUW's H1 + fx1 tile against the circuit model's census: `security/Proofs/Accounting/Gates/Rows.lean`'s `h1Rows`.
 
 The Lean is the definition and this file mirrors it on the tile's Program (`h1tile.PouwH1Tile` with `EXACT` the s8
 accumulator over `BlackwellS8ImmaDot32_v2`, on the full grid). A row's dot steps and their MACs (`census.dotMacs`) are the
@@ -33,7 +33,7 @@ from verity.circuits.program import Program, input_id
 from verity.protocols.pouw.prover.circuit import h1tile as H
 
 pytestmark = pytest.mark.skipif(H.SG is None, reason="H1's receipts (circuit.segment) are not on this tree")
-ROWS = Path(__file__).resolve().parents[5] / "Security" / "Proofs" / "Accounting" / "Gates" / "Rows.lean"
+ROWS = Path(__file__).resolve().parents[5] / "security" / "Proofs" / "Accounting" / "Gates" / "Rows.lean"
 #: the lanes' Boolean segment dots, s8-family steps in property/v1's table (`PouwSegDot0` is `PouwSegDot` from 0)
 LANE = ("PouwSegDot_v2", "PouwSegDot0_v2")
 #: the tile's versions on this tree: v1, the one-stream v3, the gated v4 and J10-R's v5 and v6 (v1's and v3's
