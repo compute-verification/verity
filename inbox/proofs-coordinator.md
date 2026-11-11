@@ -41526,3 +41526,66 @@ For the table:
 - The fused MoE blocks' steady seconds are measured and of record (runs `r20261111-015527-0dcd`, `r20261111-015545-617c`: 2.37 and 2.46 GPU-s a statement of 1,024 blocks, one prover, ten cores), and the 4,042 GB already reads them.
 - The un-fused MoE blocks served today are measured since 07:56Z (runs `r20261111-072106-5e46`, `r20261111-072117-1a7a`: 2.91 and 2.84 ms a block), so today's cut on measured prices is about 4,570 to 4,760 GB (modeled from measured rows; was 4,654 to 20,679), and the fused cut is worth 11 to 15% on measured prices.
 - No card but node A answers tonight; one kind (`MoeExpertFp8BlockGemm_v3{K=6144,N=1}`) is left for kernels before 11:45Z.
+
+## MEMBERS, Wed 11 Nov 08:10Z: #8862 is open and unmarked at `23e96bd37477a08445bfe1551e2898d75aaa4a16` (the per-member form wired behind its refusal, with the two locks `735a` wrote: two `reads` entries move in each of two locks, five definitions a lock reads change and each accepts the same, no guarantee's own record moves); `79f0` passed 65 of 65 at the head less the two lock files; the head's own quick tier and records are out; one red of mine on a warn step (the ratchet gate); gap 1 and the bases check are pushed on a branch of their own, unopened
+
+Clock: `date -u` read 08:09:27Z before writing. I wrote nothing to Linear; `research queue open` requires `--issue`, and its own link of #8862 to PRF-371 is the only thing that reached Linear. I read the order (`ORDER-20261111.md`), its 07:59Z update and your 07:28Z and 07:52Z sections.
+
+### 1. The lock commit, `23e96bd374` (one commit, the two files as `735a` wrote them)
+
+- **`r20261111-064547-735a` ended, outcome `regenerated`** [run; a `lean-fast/v1` result: no kernel replay, no tests]. The Spot package passes (5,553 declarations in 49 modules, axioms clean). `security/Proofs` passes: 193,505 declarations in 3,821 modules, axioms clean, **no orphan**. `security` and `security/Properties` each print "every failure is a record difference", and pass after `--update`.
+- **My 06:52Z list against `735a`'s records: the same** [run, a JSON comparison section by section]. Against the base's locks, each lock differs only in `reads.Spot.ChallengerTrees` (its `digest`, 10 definitions new) and `reads.Spot.OneStageZk` (its `digest`, 63 new, 5 changed: `Evidence`, `Params`, `checkBlobsAt`, `evidenceOf`, `paramsOfJson`). The `guarantees` sections are equal entry for entry. As data `735a`'s two records are `46f7`'s: `security/Properties` byte for byte, `security` in another order of `unwitnessed` only.
+- **The numbers you asked for** [run]. `security/lean-audit.json`: **4,183,153 bytes** (on `main` 4,175,579; +7,574); `grep -c 'Security/'` prints **6** (on `main` 6); the old-path grep (`verity/core/|verity/ml/|benchmarks/nci/|integrations/vllm`) prints **0**. `security/Properties/lean-audit.json`: 1,760,919 bytes (+7,574); 0; 0. `sha256` `c98dee50…27e4` and `f51f11a8…a1ef`, as the run's `result.json` names them.
+- **Lines moved, equal as data** [run]: the written `security` lock puts two entries of `unwitnessed` (`Verity.SecurityProofs.ServingBlockSum`, `NetTiming.SecurityProofs.PooledLeakCarried`) and one of `shape.inline` (`Verity.SecurityProofs.RefineIncorrect`) in the writer's order. `46f7` had left `unwitnessed` in `main`'s order, so the writer's order is not the same from run to run; I committed `735a`'s bytes and edited nothing by hand.
+- `main`'s three locks are my base's (`git diff --quiet 5c095bb4ab70 origin/main`, at `main` `8201dacff26e`) [run]. `tests/test_lean_packages.py` at the head: 31 passed, with the same five cap warnings as without the lock commit [run on my VM].
+- **A fact worth keeping** [run]: a docstring-only change of `Spot.OneStageZk` does not move a lock. `46f7` (at `e31324f9a3`) and `735a` (at `b1ab2981bb`) wrote equal data, and `67e665a554` between them changed `classHeld`'s docstring.
+
+### 2. #8862, open, unmarked
+
+- https://github.com/compute-verification/verity/pull/8862, head `23e96bd37477a08445bfe1551e2898d75aaa4a16`, no label, GitHub says mergeable [run, `gh pr view`]. Body: `Lane proofs`, `Goal proofs/sampled-audits-sound`, `Refs PRF-371`; "What stays refused"; "What the lock records" (section 2 of my 06:52Z entry: no guarantee's own record, the two `reads`, the 1 and the 29 readers, the five definitions each with what shows it accepts the same), and the four checks of the new proofs: elaborates **yes**, axioms clean **yes**, kernel replay **no**, red-teamed **no**.
+- **`79f0`'s verdict** (quick tier at `b1ab2981bb`): **65 suites, 65 passed (0 cached), 0 failed**, 162.2 minutes of test time [run].
+- **The head is `b1ab2981bb` and the two lock files.** At the head itself, launched 08:03Z: `r20261111-080302-a139` (records again; it should find nothing to regenerate) on vy-nebius-cpu-3, and `r20261111-080306-3938` (quick tier, `--changed 5c095bb4ab70 --quick`) on vy-nebius-cpu-7. ETA 09:20Z [guess, from `79f0`'s 72 minutes].
+- **The pairs** [run, `git merge-tree --write-tree`, exit 0 each, at 08:05Z]: `23e96bd374` merges with `main` `8201dacff26e` and with each marked or ready head of ours: #8568 `8fb2b94ee4b4`, #8539 `984a73968ccd`, #8517 `620badf31958`, #8819 `9a8a32c7c85b`, #8764 `8dfde58665a3`, #8785 `e7b741b17e53`, #8820 `f1a8ef0141ff`, #8226 `f8a3b83aa0f0`, #8454 `4d87c7899a6d`, #8553 `650593be39af` (each still its PR's head, `gh pr view`). No pair fails. Five of them write a lock mine writes (#8539 both; #8764, #8785, #8820, #8226 `security/lean-audit.json`); in each merged lock every key is the side's that changed it, and no key is changed by both [run, a three-way comparison of the merged tree's JSON].
+- **Not yet a ready line.** I write "ready to mark #8862 at `23e96bd37477a08445bfe1551e2898d75aaa4a16`" when `3938` and `a139` pass at that sha. If you take `79f0` as the quick tier, since the head differs from its tree by the two lock files only, everything else a ready line needs is in this section.
+
+### 3. A red of mine that the quick tier does not run: the ratchet gate
+
+- **Run on my VM** [run]: `python adapters/vllm/tools/ratchet_gate.py 5c095bb4ab70 b1ab2981bb` prints "1 change(s), 1 failed: adds 17 retired-term site(s) to the files it changes": `Spot/OneStageZk.lean` 83 → 95 and `MemberForm/Evidence.lean` 0 → 5. The term is "draw", which the glossary retires for the sample.
+- **What the step is** [read, the gate's docstring and `tools/verity/check/drive.toml:39`]: the check's `ratchet-gate`, off the merge gate and one of `warn_steps`. It holds nothing and reverts nothing; after landing it names #8862 and rings us once, and the fix goes in our next PR.
+- **What the 17 are** [run, the lint's own `sites` on base and head]: 9 in text I wrote (8 docstring lines and the refusal string `MULTI_REFUSED`); 3 uses in code of names that exist (`Draw.ranges?` once, `Flock.Draw.beNat` twice); and `Evidence.lean`'s 5, all `Flock.Draw.beNat` (2 docstring lines, 3 proof lines).
+- **It cannot pass on this PR without changing code** [read, `counted_lint`, `ratchet_gate.py:767-812`]: the gate counts per file, a new file starts at 0, and the decoder reads its words with `Flock.Draw.beNat`, so any proof file that names that function fails it.
+- **What I did:** left #8862's head alone, and reworded on the branch of section 4, where `OneStageZk.lean` is back at 83, the base's count [run].
+- **Your call, and I recommend no:** the 8 docstring lines could go on #8862 before the mark with no lock change (the fact at the end of section 1), but the head moves, so the quick tier and the records run again (about 75 minutes), and the gate still fails on `Evidence.lean`.
+
+### 4. Gap 1's per-member half and the bases check: `cursor/proofs-v2-members-held-9810` at `56b5dd3c6dd20906d50da1e4cc29375a3f0be1ec`, pushed, no PR
+
+Three commits above #8862's head, one file, `Spot/OneStageZk.lean` (+213/−41). `Record.checks` and `checksFast` are not touched; `checkMembersAt_refuses` is unchanged, so the form stays refused.
+
+- **`3f7ef9be7e`, gap 1, the per-member half** (your 07:18Z item 4). `classHeld ms rec` (:1161), in its one pass over the parameters' members: the first port of each value the registration registers must be the record's `registered` entry of that value in its root, leaves, words where the port names them, word bits (16 where the entry names none) and domain (`entryDiff?` :1108, `entriesOf` :1099, a value's last entry, the one `Record.registeredRoots` reads); every later port of the value equals the first, as before. A port of a value the registration does not register is held to the members' other ports alone. Seven new guards: the honest ports, the last entry of a value, and a refusal for each of root, leaves, word bits, domain and an entry with no root.
+- **`5c014c7bd2`, the swapped bases** (your 06:05Z ruling 4). `strataHeld ms strata` (:1067), called in `membersRun` after `laidHeld` with `Partition.strata` of the registration's program and query (:1349): every member is named `<template>/c<j>` (`chunkOf` :1027), its template is a stratum, and each stratum's members in the order of their chunks `0, 1, …`, none missing, lie one after another through the stratum's units, none left out (`tiles` :1038). So a member's first unit is fixed by its name, the strata and the counts of the chunks before it. Guards: the honest layout of one and of two strata, a stratum of two ranges, two members of one count with their first units swapped (refused), chunks out of order, a missing chunk, a stratum not covered, a member of no stratum, a name that is no chunk.
+- **`56b5dd3c6d`**: the rewording of section 3, docstrings and the two refusal strings `MULTI_REFUSED` and `stratumLaid`.
+- **What ran** [run]: `lean try` of the file at each commit's content: `r20261111-073251-20dc` (gap 1), `r20261111-074235-d279` (the bases), `r20261111-075837-b3ea` (the tip): each `lean exit 0`, every `#guard` holds, and the axiom probe finds only the three axioms under the file's 4 theorems. **Nothing else is built on that branch:** no package that imports the file, no records run, no quick tier. Its locks are stale by construction, since it changes definitions `security` and `security/Properties` read under `Spot.OneStageZk` (`classHeld`, `membersRun`, `MULTI_REFUSED`'s text, and new ones); a records run and a lock commit come before it opens. I spend no slot on that tonight unless you say.
+- **Two things the bases check makes part of the form** [read]:
+  1. The member's name. It must be `<template>/c<j>`, as `_members` writes it (`verity/commitments/windows/interface.py:1549`); until now the port read a name only as a key.
+  2. **For vllm, through you:** `_members` restarts `j` at each root-node range of a template (`nxt, j = 0, 0` at :1536, inside `for _k, tid, lo, n in ranges` at :1528). A program with one template at two root nodes would get two members named `T/c0`; the Lean check wants one numbering through the stratum's ranges. I ran no such program [guess: none is served, each template is one batch node]. If one is, the writer's fix is to keep `j` across a template's ranges.
+
+### 5. Two corrections to my 07:10Z entry (PRF-548 question 4)
+
+- Its header says 07:10Z; I pushed it at 07:07Z.
+- **Its question 2 is answered by the code, and its citation was incomplete** [read]: I cited `members` (`interface.py:1410-1421`) and asked which line cuts a merged template's members at each call's rows. `_members` (:1505-1551) does: its `ends` include `*index.ends(tid)`, every registered read's ends, and its docstring says "A registered read covers whole members (`_reads_of`), so they are cut at every read's ends". Drop that question from what goes to compute-accounting.
+
+### 6. Runs
+
+| run | what, at which head | verdict or ETA |
+|---|---|---|
+| `r20261111-064547-735a` | records with `--update`, `b1ab2981bb` | `regenerated`; no orphan; record differences only [run] |
+| `r20261111-064653-79f0` | quick tier, `b1ab2981bb` | 65 of 65 passed [run] |
+| `r20261111-080302-a139` | records, `23e96bd374` (#8862's head) | out, ETA 09:00Z to 09:20Z [guess] |
+| `r20261111-080306-3938` | quick tier, `23e96bd374` | out, ETA 09:20Z [guess] |
+| `r20261111-073251-20dc`, `r20261111-074235-d279`, `r20261111-075837-b3ea` | `lean try` of `OneStageZk.lean` on the held branch's three commits | each `lean exit 0`, axioms clean [run] |
+
+- **I wait on:** `3938` and `a139` for the ready line. Meanwhile I write the 20:00Z entry (the sizes of piece (1) and (i-a), the writer (c)'s size and date), reading only.
+
+For the table:
+- #8862 (PRF-371, the per-member form wired behind its refusal; nothing the verifier accepts changes): open, unmarked, `23e96bd37477`; quick tier 65 of 65 at the head less its two lock files (`79f0`); the head's own quick tier `3938` and records `a139` out, ready line about 09:20Z.
+- Gap 1's per-member half and the swapped-bases check: on `cursor/proofs-v2-members-held-9810` `56b5dd3c6dd2`, unopened; the file elaborates with its guards (`b3ea`); no records run.
