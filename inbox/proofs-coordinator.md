@@ -57276,3 +57276,30 @@ For the table: Lean verifier, allocator setting: head check 0.55 to 0.63, fused 
 For BREAKEVEN: `SparseMlaHeadValues_v2{G=128}` (1,024 units a statement), vy-dc-h200-3, two provers: 2.2027 s a statement today, 2.2712 s with the follow-up and salts `all` (measured, `r20261111-135111-fcd7`); one prover 2.2612 and 2.3228. The card's walk binds it (99.0% busy at two provers).
 For BREAKEVEN: the cut's block (scores + four values units at G = 128), 256 blocks: 4.2070 s today, 3.5784 s with tonight's cuts, two provers (measured, `6f08` + `fcd7`), against the head block's 3.1174 s and 2.1425 s (measured, `5832`): 1.35 and 1.67 of the head block's card seconds.
 For the table: head block 3.12 s today and 2.14 s with the cuts built tonight; cut into scores + values G = 128 it is 4.21 s and 3.58 s for the same 256 blocks (two provers, vy-dc-h200-3, measured: `5832`, `6f08`, `fcd7`). The values unit is walked on the card by default; the host-walk row is queued (`88e7`).
+
+## HEADPROF, Wed 11 Nov 14:24Z: values at G = 64 is 1.52 s a statement and at G = 32 1.29 s (one prover, today); with scores a block is 1.09 to 1.10 and 1.02 to 1.03 of the head block's seconds there; the reused words' row began 14:22Z
+
+- `SparseMlaHeadValues_v2`, one prover on vy-dc-h200-3, each step 0 refused, `compact_stall` 0, throttled 0 [run: `readers/steps.py`; the card's walk from each prover's `GPUPHASE` lines, medians]:
+
+| G | units a statement | run | today's binary | follow-up with salts `all` | card busy, today | the card's walk a statement |
+|---|---|---|---|---|---|---|
+| 128 | 1,024 | `r20261111-135111-fcd7` | 2.2612 | 2.3228 (1.027) | 88.0% | 0.86 + 0.82 s |
+| 64 | 2,048 | `r20261111-135114-d43c` | 1.5171 | 1.5320 (1.010) | 80.5% | 0.49 + 0.46 s |
+| 32 | 4,096 | `r20261111-135118-9130` | 1.2889 | 1.2481 (0.968) | 70.4% | 0.37 + 0.28 s |
+
+- All three run with `host_units` false, so the host cuts move none of them by more than 3% [run].
+- **A block with the cut, one prover, s for 256 blocks** (scores `6f08` + values; the head block's rows are other runs on this machine: today 3.416 to 3.456, the follow-up without salts 2.712 to 2.746) [run]:
+
+| G | today's binary | of the head block | follow-up with salts `all` | of the head block's follow-up row |
+|---|---|---|---|---|
+| 128 | 2.2423 + 2.2612 = 4.5035 | 1.30 to 1.32 | 1.5951 + 2.3228 = 3.9179 | 1.43 to 1.44 |
+| 64 | 2.2423 + 1.5171 = 3.7594 | 1.09 to 1.10 | 1.5951 + 1.5320 = 3.1271 | 1.14 to 1.15 |
+| 32 | 2.2423 + 1.2889 = 3.5312 | 1.02 to 1.03 | 1.5951 + 1.2481 = 2.8432 | 1.04 to 1.05 |
+
+  G = 64 and G = 32 have no two-prover row yet.
+- **Queued behind the seventh run** [run: launched 14:22Z]: `r20261111-142208-a5fc` (G = 64) and `r20261111-142211-64ca` (G = 32), each with `FC_HOST_UNITS=1` at one prover (today's binary; the follow-up with salts `all`), then the follow-up row and today's default at two provers. They take what is left before 15:53Z and drop first.
+- The reused words' row, `r20261111-135122-c736`, took the card at 14:22:29Z for at most 46 minutes and is building `aa23d1312dce` [run: its `job.log`, 14:23Z].
+
+For BREAKEVEN: `SparseMlaHeadValues_v2{G=64}` (2,048 units a statement) 1.5171 s a statement today, 1.5320 s with the follow-up and salts `all`; `{G=32}` (4,096 units) 1.2889 s and 1.2481 s; one prover, vy-dc-h200-3 (measured, `r20261111-135114-d43c`, `r20261111-135118-9130`). Walked on the card, as G = 128.
+For BREAKEVEN: the cut's 256 blocks at one prover today: 4.5035 s (G = 128), 3.7594 s (G = 64), 3.5312 s (G = 32), against the head block's 3.416 s to 3.456 s (measured; `6f08` with `fcd7`, `d43c`, `9130`; head `af1d`, `f049`, `5832`).
+For the table: the cut's block at one prover today is 1.31, 1.10 and 1.03 of the head block's seconds at G = 128, 64, 32 (vy-dc-h200-3, measured). The values unit is walked on the card at every G.
