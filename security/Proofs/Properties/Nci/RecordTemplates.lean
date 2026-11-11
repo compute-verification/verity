@@ -253,7 +253,7 @@ theorem evaluate_wiring {P : Prog} {doc : Json} {ts : List Tmpl} (hts : template
   obtain ⟨-, hmap⟩ := templatesOf_ranges hts hev
   refine ⟨rs, evaluate_congr (fun t => ?_) hev⟩
   apply Bool.eq_iff_iff.2
-  rw [Array.contains_iff_mem, Array.contains_iff_mem, htids, List.mem_toArray]
+  rw [Array.contains_iff_mem, Array.contains_iff_mem, htids]
   constructor
   · intro ht
     have h1 : t ∈ ts.map (·.tid) := by
@@ -262,9 +262,9 @@ theorem evaluate_wiring {P : Prog} {doc : Json} {ts : List Tmpl} (hts : template
       exact List.mem_map.2 ⟨r, Array.mem_toList_iff.2 hr, he⟩
     obtain ⟨tm, htm, rfl⟩ := List.mem_map.1 h1
     obtain ⟨t', ht'⟩ := hp2 tm htm
-    exact List.mem_map.2 ⟨(tm.tid, t'), ht', rfl⟩
+    exact List.mem_toArray.2 (List.mem_map.2 ⟨(tm.tid, t'), ht', rfl⟩)
   · intro ht
-    obtain ⟨⟨tid, t'⟩, hm, he0⟩ := List.mem_map.1 ht
+    obtain ⟨⟨tid, t'⟩, hm, he0⟩ := List.mem_map.1 (List.mem_toArray.1 ht)
     have he0' : tid = t := he0
     subst he0'
     obtain ⟨tm, htm, he⟩ := hp1 tid t' hm
