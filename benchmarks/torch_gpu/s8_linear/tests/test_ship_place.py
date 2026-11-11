@@ -6,17 +6,16 @@ respells it. A probe shows the placements are ones nvcc follows: nvcc names a ke
 its source's path, so nvcc itself gives the probe two cubins and ship_nvcc.sh one. And a header that uses __FILE__ is
 refused by name before the device compiler runs.
 
-These need the toolkit (nvcc 12.8 or later at $CUDA, /usr/local/cuda-13.0 or /usr/local/cuda, as the ship builds find it)
-and a kernel that lets a process turn address randomization off, and skip with the reason where either is missing.
+These need what a ship build needs: a kernel that lets a process turn address randomization off, and the toolkit (nvcc
+12.8 or later at $CUDA, /usr/local/cuda-13.0 or /usr/local/cuda, found by ship.sh's own rule). Where either is missing
+they skip, with ship.sh's reason.
 test_ship_nvcc.py holds what ship_nvcc.sh hands the device compiler, and its refusals, on every machine. The frame builds
 under a directory of its own in /tmp, whose path has one length, and removes it."""
 from __future__ import annotations
 
-import os
-import platform
 import re
+import shutil
 import subprocess
-from functools import cache
 from pathlib import Path
 
 import pytest
@@ -27,10 +26,20 @@ FRAME = KERNEL.parent
 FRAME_FILES = ("ship.sh", "ship_nvcc.sh", "ship_clock.c")
 TOOLKITS = ("/usr/local/cuda-13.0", "/usr/local/cuda")
 
+#: the toolkit a ship build would compile with, by ship.sh's own rule (ship.sh, then the toolkits to try): its path, or
+#: nothing; ship.sh's frame refuses first where it can't build
+FIND = """set -euo pipefail
+. "$1"
+shift
+ship_find_cuda "$@"
+ship_nvcc_ok "$CUDA" && echo "$CUDA"
+"""
+
 #: build.sh's cubin step for one source: ROOT, the source's directory from it, `ship` (ship_nvcc.sh) or `nvcc` (the
-#: toolkit's own), the source's name and the cubin
+#: toolkit's own), the source's name, the cubin and the toolkit
 DRIVER = """set -euo pipefail
 . "$1/benchmarks/torch_gpu/ship.sh"
+CUDA=$6
 ship_cuda
 ship_cubin_flags sm_90a
 ship_stage "$2"
@@ -55,25 +64,21 @@ PROBE_CUH = "__device__ inline unsigned mix(unsigned x) { return x * 2654435761u
 USES_FILE = 'inline const char *where() { return __FILE__; }\n'
 
 
-@cache
-def toolkit() -> str | None:
-    """CUDA, else the first of TOOLKITS, whose nvcc is 12.8 or later (ship.sh's ship_find_cuda); None when there is none."""
-    for c in filter(None, (os.environ.get("CUDA"), *TOOLKITS)):
-        nvcc = Path(c) / "bin" / "nvcc"
-        if nvcc.is_file() and re.search(r"release 12\.[89]|release 1[3-9]\.", subprocess.run(
-                [str(nvcc), "--version"], capture_output=True, text=True, check=False).stdout):
-            return c
-    return None
+def toolkit(tmp: Path) -> tuple[str, str]:
+    """The toolkit a ship build finds here, or "" and why it finds none."""
+    (tmp / "find.sh").write_text(FIND)
+    r = subprocess.run(["bash", str(tmp / "find.sh"), str(FRAME / "ship.sh"), *TOOLKITS], capture_output=True, text=True,
+                       check=False)
+    found = r.stdout.strip()
+    return found, "" if found else r.stderr.strip() or f"no nvcc 12.8 or later at $CUDA or {' or '.join(TOOLKITS)}"
 
 
-@pytest.fixture()
-def cuda() -> str:
-    if toolkit() is None:
-        pytest.skip(f"no nvcc 12.8 or later at $CUDA or {' or '.join(TOOLKITS)}: a ship build's placements are compiled where "
-                    "CUDA's toolkit is (about a minute)")
-    if subprocess.run(["setarch", platform.machine(), "-R", "true"], capture_output=True, check=False).returncode:
-        pytest.skip("setarch -R is refused here, and ship.sh builds only with address randomization off")
-    return toolkit()
+@pytest.fixture(scope="session")
+def cuda(tmp_path_factory: pytest.TempPathFactory) -> str:
+    found, why_not = toolkit(tmp_path_factory.mktemp("toolkit"))
+    if not found:
+        pytest.skip(f"{why_not}: a ship build's placements are compiled where a ship builds")
+    return found
 
 
 def copy(tmp: Path, where: tuple[str, str, str], source: str, text: str, header: str, header_text: str) -> tuple[Path, str]:
@@ -82,7 +87,7 @@ def copy(tmp: Path, where: tuple[str, str, str], source: str, text: str, header:
     root, own, beside = tmp / where[0], where[1], where[2]
     (root / "benchmarks/torch_gpu").mkdir(parents=True)
     for f in FRAME_FILES:
-        (root / "benchmarks/torch_gpu" / f).write_bytes((FRAME / f).read_bytes())
+        shutil.copy(FRAME / f, root / "benchmarks/torch_gpu" / f)
     (root / own / beside).mkdir(parents=True)
     assert text.count(f'#include "{header}"') == 1
     (root / own / source).write_text(text.replace(f'#include "{header}"', f'#include "{beside}{header}"'))
@@ -93,8 +98,8 @@ def copy(tmp: Path, where: tuple[str, str, str], source: str, text: str, header:
 
 def build(cuda: str, root: Path, own: str, source: str, cc: str = "ship") -> tuple[subprocess.CompletedProcess, Path]:
     out = root / f"{cc}.cubin"
-    r = subprocess.run(["bash", str(root / "build.sh"), str(root), own, cc, source, str(out)], env={**os.environ, "CUDA": cuda},
-                       capture_output=True, text=True, check=False)
+    r = subprocess.run(["bash", str(root / "build.sh"), str(root), own, cc, source, str(out), cuda], capture_output=True,
+                       text=True, check=False)
     return r, out
 
 
