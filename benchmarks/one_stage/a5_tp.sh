@@ -13,8 +13,8 @@
 #     of record, without its shard sha256 (each tensor read is held to the committed weights root).
 #   The stand-in (no A5_TP): the CPU TP Commit tests/pipeline/served_tp, world 2, once per STANDIN entry I:LAW (its SiluMul_v2{I}
 #     rows, its partition's law); with A5_WINDOWS=bundles it is served_tp --deferred and its windows come from its bundles.
-#     The STANDIN entry sparse-mla is a5_sparse_mla.py: test_serving_rows_splits' window (one SparseMlaSplit row's split parts
-#     and combines, each combine slot wired to its part), run as the entry row-tables is.
+#     The STANDIN entry sparse-mla is a5_sparse_mla.py: test_serving_rows_splits' window (one SparseMlaSplit row's key blocks,
+#     column ends and combines, each read row wired to the unit that wrote it), run as the entry row-tables is.
 #     The STANDIN entry row-tables is a5_row_tables.py: test_row_tables' window (ScaledMmS8Coordinate chunks whose x rows link
 #     its row tables) as rank 0 of a one-rank step, on a local challenger's coins (it needs A5_CHALLENGER for --main).
 #     The STANDIN entries warden and warden:KIND are a5_warden.py: transfer-gate chunks whose ports open the bucket rows of
