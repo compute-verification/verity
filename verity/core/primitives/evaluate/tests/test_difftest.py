@@ -86,7 +86,7 @@ from verity.ml.definitions.registry import topp_word_gates as TW
 pytestmark = pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain")
 
 PKG = Path(__file__).resolve().parents[1]
-ADDER = Path(__file__).resolve().parents[4] / "ml/circuits/tests/boolean_vectors.json"
+ADDER = Path(__file__).resolve().parents[5] / "verity/ml/circuits/tests/boolean_vectors.json"
 BIT = BL.BIT
 #: seeds of the random composites the strategy samples from (each Program is built once), and the examples a run samples
 RANDOM_SEEDS = 256
@@ -915,7 +915,7 @@ def test_float_words_out_of_range_are_refused(server):
     assert agree(server, cases) == (0, len(cases)) == (0, 3 * 80)
 
 
-FIXTURES = Path(__file__).resolve().parents[4] / "ml/circuits/ops/tests/fixtures"
+FIXTURES = Path(__file__).resolve().parents[5] / "verity/ml/circuits/ops/tests/fixtures"
 #: the GPU NaN probe's instructions (its `fp32_ops.json`) by the `_v2` primitive each is
 GPU_OPS = {"add.rn.f32": FP.F32AddV2, "add.rn.ftz.f32": FP.F32AddFtzV2, "sub.rn.f32": VP.F32SubV2, "sub.rn.ftz.f32": FP.F32SubFtzV2,
            "mul.rn.f32": FP.F32MulV2, "mul.rn.ftz.f32": FP.F32MulFtzV2, "div.rn.f32": FP.F32DivV2, "fma.rn.f32": FP.F32FmaV2,
@@ -1285,7 +1285,7 @@ def test_the_sm120_captures(server):
     assert total == 38_912 + 73_728
 
 
-AUTOPROOF = Path(__file__).resolve().parents[4] / "ml/circuits/silicon/captures/autoproof-probe-vectors.json"
+AUTOPROOF = Path(__file__).resolve().parents[5] / "verity/ml/circuits/silicon/captures/autoproof-probe-vectors.json"
 
 
 @pytest.mark.skipif(not AUTOPROOF.exists(), reason="autoproof's RTX 5090 vectors are a fetched fixture")
@@ -1718,7 +1718,7 @@ MUFU_SWEEP = tuple(sorted({*F32_SWEEP, *(s | ((e << 23) + (k << j) + d) & 0x7FFF
                                         for s in (0, 1 << 31)),
                            *(struct.unpack("<I", struct.pack("<f", float(n)))[0] + d & 0xFFFFFFFF for n in range(-160, 161)
                              for d in (-1, 0, 1))}))
-TEST_MUFU = Path(__file__).resolve().parents[4] / "ml/circuits/ops/tests/test_mufu.py"
+TEST_MUFU = Path(__file__).resolve().parents[5] / "verity/ml/circuits/ops/tests/test_mufu.py"
 
 
 def _test_mufu_literals(*names: str) -> dict:

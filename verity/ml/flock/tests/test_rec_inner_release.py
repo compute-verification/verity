@@ -10,14 +10,14 @@ from pathlib import Path
 import pytest
 from verity_flock import firewall as FW
 
-POD = Path(__file__).resolve().parents[1] / "pod"
+REC_INNER = Path(__file__).resolve().parents[4] / "verity/ml/flock/pod/rec_inner.py"
 UNITS = ["rec-open/l32-h11", "rec-open/l16-h10", "rec-open/l16-h8", "rec-residuals/m29-k26-c6-p0",
          "rec-residuals/m29-k26-c6-p1", "rec-cap/n128-l1", "rec-cap/n64-l2", "rec-cap/n128"]
 PARTS = ["L0", "L1", "L2", "alg-p0", "alg-p1", "cap-L1", "cap-L2", "cap"]
 
 
 def _rec_inner():
-    spec = importlib.util.spec_from_file_location("rec_inner", POD / "rec_inner.py")
+    spec = importlib.util.spec_from_file_location("rec_inner", REC_INNER)
     mod = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(mod)
     return mod
