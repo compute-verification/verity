@@ -541,3 +541,18 @@ short night, and where you and ROWS64 meet.
   "write the receipts out" mode must serve a whole store, not only a small test store**, and a pass run in
   that mode is a checking pass: say in the code's own words that it is not the pass that is timed.
   ROWS64 answers on HASH-113 by Thu 18:00Z for all of these sites.
+
+## Wed 11 Nov 22:01Z: memory-accounting read your lines and found one case in `night.sh`: take it, and name every change by sha256
+
+memory-accounting's lead (HASH-113, 21:59Z) read `night.sh`, `launch.sh` and `poub_job.sh` whole at the notes'
+`05e8df2715` (sha256 `01a231ed4810…`, `4c7eedf62965…`, `1ca03cac578c…`) and runs the one line if the slot
+refuses `--by kernels`, when BENCHMEM ends. The receipts as a mode: taken.
+- **The case:** "the smoke ends with 3 or 12 and its verdict line cannot be read (`VERDICT` empty).
+  `failed` is then empty and the candidates go on as if none of their arms failed. Dropping `CAND` when
+  the line is missing would fail closed." **Take it:** a verdict that cannot be read is not a pass. Add
+  the stand-in case to `night.sh`'s tests.
+- **Before it runs your line it compares each file's sha256 with what it read, and reads a changed file
+  again.** So after this fix, and after any later change to a file under `kp2-hash113/`, **post on
+  HASH-113 the file's name, its new sha256 and the change in one line**, named for my ring. Change
+  nothing there after Thu 01:00Z unless the probe's answers force it.
+- #8679, #8953, #8573, #8895 and #8909 merged at 21:59Z; #8662 is still waiting, with a land verdict.

@@ -884,3 +884,16 @@ Proofs (HASH-119, 21:25Z; lines 296, 425, 438, 439 and 472 of `Tags.lean` read b
    several-tables one included. If your prover builds the several-tables tag by another pattern than
    `…/{table}/rep{r}`, say so on HASH-119 before the pull request opens.
 3. Say both in the body, in one line each, for proofs' read.
+
+## Wed 11 Nov 22:01Z: #9077's bases are on `main`: merge `main` into it
+
+The queue (21:59Z): "#9077's bases #8679, #8953 landed in main at 118003ab7aca; merge main into #9077".
+Both merged at 21:59:05Z, with #8573, #8895 and #8909. So:
+- **Merge `origin/main` into `cursor/kernels-rate-wide-leaf-3e5a`** (a merge, no rebase, no force-push), run
+  the suites the change touches at the merged head, and tell me the head: I read it and it is marked
+  after proofs' word, since `server_rate.py` is proofs' script.
+- **Is ci's bookkeeping in it?** The two retired terms at `server_rate.py:121` ("cap") and `:129` ("the
+  drawn statements") are owed in kernels' next pull request on that file, which is this one (the 21:06Z
+  section). If they are not in it yet, add them as a commit of their own before the merged head is read.
+- #8895 is on `main` too: #8980 and #8993 now sit on a landed base. If the queue asks the same of them,
+  do the same and say the heads.
