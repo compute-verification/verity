@@ -31,6 +31,14 @@ and Path are READ's; `READ_PORTS` its parameters.  The body is three stages, eac
 So where every ok is 1, kv[j] is the row the table holds at the mask's j-th member: today's long row's kv when the table holds
 the history (`DsaButterflyRowsPad_v1` over the counted mask's settings), which the definitions' tests hold it to.  `values` is
 the index units' twin.
+
+`DsaPositionsMerge_v1` is one traced circuit, so its description is every gate of it.  ``DsaPositionsMerge_v2{M,K}`` is the
+same function written as Calls, with `_v1`'s signature and its ANDs: a block's kept list is a batch of `DsaPositionsKeep_v1`
+over its slots, on the bits of `DsaRowValid_v1{K}`; each stage of its shift is a batch of `DsaPositionsShift_v1` over the
+slots that have one the stage's distance below and one of `DsaPositionsShiftIn_v1` over the rest; the offsets are
+`DsaPositionsFirstOffset_v1{K}` and `DsaPositionsOffset_v1{K}`; and the lists are XORed a gate a bit.  Its description is those
+rows and the pieces, of which only `DsaRowValid_v1{K}` grows with K, an AND a slot.  The cut names `_v1`; a `_v2` serves only a
+caller that binds it.
 """
 from __future__ import annotations
 
