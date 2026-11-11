@@ -534,6 +534,24 @@ def test_p_reads_one_split_and_a_record_out_of_place_is_refused():
     assert not bad["reached"] and bad["why"] == "no scored checkpoint: invalid: foreign op"
 
 
+def test_the_block_says_how_the_bound_of_record_stands_to_rho():
+    """ρ's products term and the bound of record are one theorem's on one work, the traced step's N, O, β_w, β_x, b_y
+    and F: the term is `formalism.he_rho`'s closed form, and the bound is the count solved for the fewest blocks
+    (`min_cut.blocks_at_least`) times c/|C|. So the term is never above the bound, the block says so under the
+    bound, and S is p times ρ, not times the bound."""
+    s = graded([job([OVER, UNDER], 0), traced([OVER, UNDER])], [job([UNDER])])
+    w, got = s["rho"]["work"], s["bound_of_record"]
+    c, k = policy.CONSOLE
+    closed = F.he_rho(w["N"], w["O"], w["beta_w"], w["beta_x"], w["b_y"], w["F"], c, k, w["C_gates"])
+    solved = calculator._min_cut().blocks_at_least(w["N"], w["O"], k, w["beta_w"] * w["beta_x"], w["b_y"], w["F"])
+    assert s["rho"]["binding_kind"] == "products" and s["rho"]["rho"] == s["rho"]["terms"]["products"] == closed
+    assert got["blocks"] == pytest.approx(solved) and got["slowdown"] == pytest.approx(solved * c / w["C_gates"])
+    assert 1 < closed < got["slowdown"] and s["S"]["any"] == pytest.approx(s["p"]["any"]["p"] * closed)
+    assert f"\n  {'':<17} {G.BOUND_BESIDE}\n" in G.text(s) and "this attack pays" not in G.text(s)
+    assert "formalism.he_rho" in G.BOUND_BESIDE and "min_cut.blocks_at_least" in G.BOUND_BESIDE
+    assert "never above the solved count" in G.BOUND_BESIDE and "overhead" not in G.text(s)
+
+
 def test_the_bound_of_record_is_the_calculators_beside_s_and_never_in_it(monkeypatch):
     """The bound of record is the calculator's `min_cut.bound` at the policy's (c, k) on the traced step's N, O, β_w,
     β_x, b_y, F and |C|, with no n; S is p·ρ either way. Without a traced step, or on one whose M is empty (no
