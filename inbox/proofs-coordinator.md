@@ -42908,3 +42908,98 @@ For SCALE: nothing changes in the number: +0 bits on K mean at D*1 (2^37.69 [rel
 For the table:
 - K's always-checked term is 0; the lemma is proved at the old head (try `f3d0` [run]) and restacked on #8827 at `7517af48adb5`, try out.
 - #8871 is superseded by the restack; the new PR number follows with its runs.
+
+## PARAMS, Wed 11 Nov 08:46Z: the split at registration goes through the Lean as it stands (`filesOk`, `scopeOk` and `Own.refs` compare no circuits; only the template's key must differ), it is the same change as PRF-477's member split, and it moves no error term; one sampled request is about 2,900 (row (ii)) to 15,700 (row (i)) one-table members, and what refuses first is not `MAX_COINS` but the challenger's release log: `MAX_TREE_LINES` = 2^20 holds about 3,256 sessions (Daniel's: two locks read it). #8866: quick tier passed, records and the merged build are running
+
+Nothing here is built. Every count below is at one sampled replay block an audit (Q = 1) [relayed: REPBREAK 02:55Z, "one audit's sample is one replay block's"].
+
+**1. Do the checks take two members of one circuit? Yes, all three; what must differ is the key.**
+- `scopeOk` (`SpotFlock/Code.lean:228-233`) reads the program's topology, the partition, the design's rules, and `d.k.length == Pt.strata.length && d.k.all (1 ≤ ·)`. It compares no circuits. Each member must draw at least 1 in each cell [read].
+- `filesOk` (`Code.lean:282-292`) asks `g.ns.size == ms.length`, `k[t] == g.ks[t]`, and for every population slot ρ that member t has room, `(ρ + 1)·n_t ≤ ms[t].2.size`, and that the registration's block is `filesBlockOf ms ns ρ t p`. It compares no circuits [read].
+- The members' program is the members side by side, each its own copy: `bitsProgs ms = sideBySide (ms.map fun ci => memberProg ci.1 ci.2.size)` (`Properties/Spot/Members.lean:78-79`), and `Held.ms` takes member t's circuit from its own reference statement (`Code.lean:137`). Two members of one circuit are two disjoint copies of it [read].
+- `Own.refs`: `refOf` finds the reference header by the template's key (`SecondStage.lean:668`), and `atRun` places it in the run with `set = served/<run>/m<k>` and the bindings of the ports `<key>/<port>` (`:678, 701-706`), so each key has its own set name and its own ports. `templateCircuits` (`Run.lean:134-146`) wants each of the check's keys once, in order, each with a circuit digest: nothing asks two keys' digests to differ [read; TWOPROVE 08:27Z read the same].
+- **What does merge two members is the key.** `Flock.Draw.strataOf` (`Flock/Draw.lean:94-105`) makes one stratum a template key and merges its ranges; `replayCells` (`Select.lean:252-258`) wants the replay block's keys "each once, in the order of its first instance"; round 2 allows one statement a part (`second-template`) and a part is a stratum of one range (`partOf`, `SecondStage.lean:178-181`) [read].
+- So the split is: the replay block's Definition calls one circuit under J keys, each key holding a fixed share of the instances, and the auditor's params name the J keys with the same circuit digest and reference header. The reference statement's shape fixes each member's table (`sessionOk`: `shapeOf xS == shapeOf (h.xS₀ t)`), so J_t = ⌈Q·k_t·2^k_log / 2^35⌉ is known at registration [derived].
+- Not read: whether the circuit description takes two keys with one body (a static the body ignores, or a wrapper), and vllm's `interior_window`. That is the adapter's side [guess].
+
+**2. What about 10^4 members does to each number.**
+
+| what | where it is read | at 1 member | at 2,893 (row (ii)) | at 10^4 | at 15,694 (row (i)) | label |
+|---|---|---|---|---|---|---|
+| verifier rounds, proved bound | `V.k = off h ms.length + 1`, `off = sessOff 3 k₀` (`SessionSlots.lean:39-41`), `k₀ ≤ 4,402` a one-table session (`NumbersDeploy.lean:134-136`) | 4,406 | 12.7 M (2^23.6) | 44.0 M (2^25.4) | 69.1 M (2^26.0) | derived from read |
+| verifier rounds, at the measured 320 a session | `verdict.rounds` of `r20261111-061047-6773`'s head-block session, m = 35, a `--zk` session (its `coin_tree`; `ZKL0` in the prover's log) | 320 | 0.93 M | 3.2 M | 5.0 M | derived from run |
+| κ_δ | `κ_le` takes the largest session's κ_F (`maxBelow_le`, `Accepting.lean:235-238`), not a sum | (1 + 2^-9)·δ + 2^-125 | same | same | same | read |
+| γ_s | a session's, not the audit's: `γ ≤ 2^51` at one table (4,402 rounds, weight 2^33), `2^105` at 200 (`NumbersDeploy.lean:28, 134-137, 497-501`) | 2^51 | 2^51 | 2^51 | 2^51 | read |
+| `n_sess` in D*'s `4·T·(1 + n_sess·e_max + (1 + e_max)·K_mean)/2^256` | SCALE 07:59Z took `n_sess ≤ m` = 5,523,986 | | 2^-26.2 of the `K_mean` term (2^37.69) | 2^-24.4 | 2^-27.9 (row (i)'s `K_mean`, 2^41.82) | derived |
+| second-stage draw, coin bytes | Σ k_t is unchanged; the law has one cell a member a sampled replay block (`secondLaw`, `Select.lean:273-276`) | | 2^27 [relayed: DRAFT-CORE] | | 2^27 to 2^28 [relayed] | relayed |
+| sessions' coins | one coin tree a session; 42,368 bytes opened a session (1,324 F128 a repetition) in `6773` | 42 KB | 123 MB | 424 MB | 665 MB | derived from run |
+| release-log lines | one line a tree and one a round opened; `MAX_TREE_LINES = 2^20` (`challenger.py:247, 1842`; `Spot/ChallengerSession.lean:85`) | 322 | 0.93 M, 89% of the cap | 3.2 M, 3.1 × the cap | 5.1 M, 4.8 × | derived from run and read |
+
+- **No error term reads the member count** [read, derived]. κ_δ is a maximum over sessions. `n_sess` at 10^4 members is 2^-24 of D*'s `K_mean` term, so no digit of SCALE's table moves; at SCALE's own `n_sess ≤ m` it was already 2^-15.3 of it.
+- **γ_s gains 54 bits from one-table sessions**, not from the split: 2^105 was proved at 200 tables and 2^51 at one [read]. If D*'s γ_s is this `Claims.Flock.γ`, that is 27 bits in `√(k·γ_s·Pr[B])` [guess: I did not read which γ SCALE's term takes].
+- **What refuses first is the release log** [read]. `LiveChallenger._tree_line` raises once the log holds 2^20 coin-tree lines. At 322 lines a session (one tree, 320 rounds, the link's) that is 3,256 sessions; at the proved 4,402 rounds a session it is 238. So row (ii)'s 2,893 members fit one log with 11% to spare at full m = 35 tables, and row (i)'s do not [derived].
+- `Spot.ChallengerSession.MAX_TREE_LINES` is a definition two locks read (`security/lean-audit.json`, `security/Properties/lean-audit.json`, as `MAX_COINS` is) [run: `rg -c`], and `security/Properties/Verity/Game.lean:353-374` models it. A new value is Daniel's. It needs 2^23 for row (i) at the measured rounds and 2^27 at the proved bound [derived].
+- I found no cap on the round count in `SpotFlock/` [run: `rg`]. The replay cap (`Cap.lean:167-170`) counts proof blocks, `K·Σ_t n_t`, which the split leaves alone [read].
+
+**3. One sampled request of the priced design as members.**
+- **Row (i), by size class** [derived from the tree's `benchmarks/spot_figures/cards/workload.glm-5.3.json` (154 strata, each with `out_bits`, `per_token`, `k_log`) and REPBREAK's k by class at κ = 2^-6; each class's draw split among its block types by population]:
+
+| size class | k | block types | mean block | 2^35 tables | members |
+|---|---|---|---|---|---|
+| merged, ≤ 16 bits | 3,440,606 | 24 | 2^25.61 | 5,121.9 | 5,136 |
+| 32 | 2,544,007 | 7 | 2^26.99 | 9,889.1 | 9,892 |
+| 64 to 1,024 (five classes) | 5,833 | 33 | 2^21.1 to 2^24.3 | 0.6 | 33 |
+| 2,048 | 161,929 | 29 | 2^24.22 | 92.2 | 121 |
+| 4,096 to 16,384 (three) | 89,201 | 5 | 2^22.0 to 2^24.6 | 46.0 | 48 |
+| 32,768 | 86,016 | 35 | 2^26.37 | 217.6 | 237 |
+| 65,536 | 38,623 | 16 | 2^26.70 | 122.2 | 136 |
+| 131,072 | 2,666 | 4 | 2^26.25 | 6.2 | 9 |
+| 262,144 | 20,783 | 1 | 2^27.00 | 81.2 | 82 |
+| **all 15** | **6,389,664** | **154** | | **15,577.1** | **15,694** |
+
+- 96% of the tables are two classes: the blocks that commit at most 32 bits and are 2^25.6 to 2^27 cells each [derived].
+- **Row (ii)** [derived from BREAKEVEN's price card `bench_prices.json` (192 block types with `k_log` and `per_token`, no `out_bits`), the draw split by population over all types, not by class]: m = 5,523,986 blocks at a mean of 2^24.01 cells is 2,725 tables and 2,893 members; 1,225 of the tables are `MoeExpertFp8ReadGemm_v1{…H=3072}` and 459 its `W` twin. The limits are 337 (every block 2^21) and 21,578 (every block 2^27) [derived]. SCALE's 8,000 to 170,000 was a guess at 2^25.6 to 2^27 a block; these replace it for rows (i) and (ii).
+- A member that is not a whole table is a short statement: at most one a block type, so at most 154 of 15,694 for row (i) and 192 of 2,893 for row (ii) [derived]. The planner's `fixed_seconds/statement_blocks` prices whole statements only.
+
+**4. PRF-477 and this are one change** [derived from the reads above and TWOPROVE's 08:27Z].
+- vllm's wall is `m = 22 + ⌈log₂(units/2)⌉ ≤ 35` for one member a template over every sampled span [relayed]. Mine is `Q·k_t·2^k_log ≤ 2^35` for one member a template. Both say a template's whole draw must fit one table, because round 2 has one statement a part and the verifier refuses a second table.
+- One change serves both: the replay block's Definition names a template's instances under J keys (vllm's `interior_window` and the auditor's params; 38 keys for `p256-o256`'s one span [relayed: TWOPROVE]). The Lean reads what it reads now.
+- Three things come with it and are not vllm's: the planner's counts become a key's (k_t/J and n_t/J, each k ≥ 1; SCALE's and BREAKEVEN's), `MAX_TREE_LINES` and `MAX_COINS` (Daniel's), and the driver opens one session a key.
+- It is not the cap on a session's tables: that is already 1 (#8866's `ref_one_table`).
+
+**5. SALTS's "one salt a block of 16 columns at level 0", weighed.**
+- The argument holds as SALTS states it, with one condition: the pad must cover every column of every opened block, so `t_pad` goes from `2·q₀` to `32·q₀` (6,976 at m = 35). The four plain digests an opening shows are then functions of columns the pad already makes jointly uniform [my reading; not checked against the padding lemma in Lean].
+- A larger pad raises level 0's rate, and the query term pays [run: my calculator, a Python copy of the Lean's `padQueryError`; modeled]:
+
+| m (level-0 columns a lane) | level 0's query term today | with blocks of 16, same queries | queries that restore it |
+|---|---|---|---|
+| 35 (2^22) | 2^-106.77 at 218 | 2^-106.52 | 219 |
+| 34 (2^21) | 2^-106.75 at 218 | 2^-106.27 | 220 |
+| 32 (2^19) | 2^-106.65 at 218 | 2^-104.72 | 223 |
+| 28 to 31 (2^17) | 2^-106.75 at 219 | 2^-99.10 | 238 |
+| 27 (2^14) | 2^-107.65 at 229 | 2^-51.50 | none; blocks of 4 need 268 |
+| 25, 26 (2^12, 2^13) | 2^-110.51 at 277, 2^-108.59 at 242 | no bound (2^-3.07 at m = 26) | none |
+
+- So it is worth having for full tables, which is nearly every priced statement: 0.25 bit of one term at m = 35, or one more query. It is not one design for every size: at m = 28 to 32 it costs 2% to 9% more level-0 queries, and at m ≤ 27 the pad no longer fits. The hiding term gains 4 bits (2^19 hm96 nodes in place of 2^23).
+- It moves `queries0` and `t_pad = 2 q_0` (`Flock/Zk.lean:40, 49, 401`), a locked schedule, and the zero-knowledge model's `Hid` [relayed: SALTS]: Daniel's, as SALTS says.
+
+**6. #8866 (`ref_one_table`), head `e19752e7b6173d6c5c806d10189c3b7e8469bd48`, unmarked.**
+- Quick tier `r20261111-082632-bb35`: 4 suites, 4 passed, 0 failed [run].
+- Records run `r20261111-082627-438f`: running.
+- The merged build: my head merged with #8827's head `946b7b72f26d` (which holds #8820), `verity lean try` on `Accepting.lean`, `r20261111-083940-ba63`: waiting for a slot. Neither #8827, #8820 nor #8836 changes `SpotFlock/Accepting.lean`, `Code.lean` or `Facts.lean` [run: `git diff --name-only`]. The ready line follows when both pass.
+
+For the table:
+- Many sessions a template: no Lean change is needed for a split at registration (`filesOk`, `scopeOk`, `Own.refs` compare no circuits [read]); one sampled request is 2,893 (row (ii), by population) to 15,694 (row (i), by size class) one-table members [derived]; no error term reads the count. Unbuilt: the adapter's keys, the planner's counts a key.
+- The cap that refuses first: `MAX_TREE_LINES` = 2^20 coin-tree lines a release log, 3,256 sessions at the measured 320 rounds [derived from run `6773`]; 2^23 covers row (i). Two locks read it: Daniel's.
+- Flock's weakest proved term is unchanged: one table 2^-205.19, a session's κ 2^-203.18 [run: calculator, 08:25Z]. The largest slack is unchanged: the second repetition, 0.278 of 0.675 s `t.prove` a head-block statement [read: run `6773`].
+
+For SCALE:
+- `n_sess` = 2,893 at row (ii) and 15,694 at row (i) [derived], against your `n_sess ≤ m`. D*'s term moves by less than 0.0001 bit either way. γ_s at one-table sessions is at most 2^51, not 2^105 (`NumbersDeploy.lean:134-137`) [read].
+- The split makes each class's k a key's: k_t/J_t of n_t/J_t in each cell, each at least 1. The table in section 3 is the J_t.
+
+For CONCRETE:
+- Inputs at one-table members: `n_sess` 2,893 or 15,694; γ_s ≤ 2^51; e_max ≤ 2,592,237,061 (`ref_one_table`, #8866); rounds ≤ 4 + 4,402·`n_sess`.
+
+For BREAKEVEN:
+- The split at registration: 0 GB [derived: a statement is already priced as one table]. Not priced: at most one short statement a block type a sampled request, at most 154 of 15,694 (row (i)) and 192 of 2,893 (row (ii)) [derived].
+- Lever "one salt a block of 16 columns at level 0" (SALTS's, unbuilt, Daniel's): at m = 35 it costs 1 query in 218 at level 0 or 0.25 bit of that term [modeled]; SALTS's seconds stand as SALTS gave them.
