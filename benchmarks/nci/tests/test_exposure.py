@@ -21,11 +21,15 @@ def test_every_parameter_has_a_range_around_its_default_inside_its_slider():
 
 
 def test_the_defaults_give_the_statements_numbers():
+    """At today's sparse samples the closed-form chi is above 1: the pool of injecting proof blocks, each the widest
+    public size class of output bits, is worth more than the fleet's capacity, and ``evaluate`` stops its share at 1."""
     t = X.terms(T.DEFAULTS)
     assert t["R_wipe_gb"] == pytest.approx(166, rel=0.01)
     assert t["mu"] == pytest.approx(278, rel=0.01)
     assert t["nu"] == pytest.approx(1.04e-3, rel=0.01)
-    assert t["chi"] == pytest.approx(1.73e-3, rel=0.01)
+    assert t["chi"] == pytest.approx(1.73e-3 * T.DEFAULTS["step_bits"] / 16, rel=0.01)
+    assert T.evaluate(T.DEFAULTS, T.TIERS["T5"])["cheat"] == 1.0
+    assert X.terms(T.DEFAULTS | X.BATCHED)["chi"] == pytest.approx(9.46e-4, rel=0.01)
     assert t["eta_T4"] == pytest.approx(0.329, rel=0.01)
 
 
