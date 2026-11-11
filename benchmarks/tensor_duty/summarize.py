@@ -92,15 +92,15 @@ def join(r: dict, smi: list) -> None:
     r["smi_reasons"] = f"0x{reasons:x}"
 
 
-def fmt(x, nd=1):
+def fmt(x: float | None, nd: int = 1) -> str:
     return "-" if x is None else f"{x:.{nd}f}"
 
 
-def at(r) -> str:
+def at(r: dict) -> str:
     return f"{r['fill']} / {r['burst']} / {r['duty']:.0f}{' warm' if r['warm'] else ''}"
 
 
-def where(r) -> str:
+def where(r: dict) -> str:
     return f"clock {r['clock']}, {r['arm']} {r['class']}, fill / burst / duty {at(r)}"
 
 
@@ -192,7 +192,7 @@ def report(pts: list[dict], sku: str = SKU) -> tuple[str, list[str], dict]:
     return v, L, doc
 
 
-def main(argv=None) -> int:
+def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     ap.add_argument("outs", nargs="+", type=Path)
     ap.add_argument("--json", type=Path)
