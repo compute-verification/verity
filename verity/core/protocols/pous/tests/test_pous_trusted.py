@@ -15,9 +15,14 @@ from pathlib import Path
 
 import pytest
 
+ROOT = Path(__file__).parents[5]
 LEAN = Path(__file__).parents[1] / "lean"
+#: the suite's `pyproject.toml`, whose directory and declared inputs the read guard allows
+PYPROJECT = ROOT / "verity/core/protocols/pous/pyproject.toml"
+#: how deep `lean/` is below the root, which a copy of it under another root keeps
+DEPTH = len(LEAN.relative_to(ROOT).parts)
 #: the trusted layer's directory as TRUSTED.sha256 names it, relative to `lean/` (the grader and its driver are here)
-SECURITY = "../../../../../Security/"
+SECURITY = "../" * DEPTH + "Security/"
 COMMAND = re.compile(r"^(sha256sum ([^$\n]*)\$\(find ([^)\n]*) -name '\*\.lean' \| LC_ALL=C sort -u\) > TRUSTED\.sha256)$", re.M)
 LINE = re.compile(r"([0-9a-f]{64})  (\S.*)")
 
@@ -73,15 +78,15 @@ def test_trusted_hashes_are_current():
 
 
 def declared_inputs() -> list[str]:
-    return tomllib.loads((LEAN.parent / "pyproject.toml").read_text())["tool"]["verity"]["tests"]["inputs"]
+    return tomllib.loads(PYPROJECT.read_text())["tool"]["verity"]["tests"]["inputs"]
 
 
 def undeclared(pkg: Path, inputs: list[str]) -> list[str]:
     """The files the command hashes (`trusted`) that the suite's read guard refuses its tests reading, as paths from the
     root: those outside the suite's directory and ``inputs``.  The suite declares no `[project]`, so no dependency's
     directory is among what the guard allows."""
-    root = pkg.parents[4]
-    allowed = [pkg.parent.relative_to(root).as_posix(), *inputs]
+    root = pkg.parents[DEPTH - 1]
+    allowed = [PYPROJECT.parent.relative_to(ROOT).as_posix(), *inputs]
     files = [Path(os.path.normpath(pkg / f)).relative_to(root).as_posix() for f in trusted(pkg)]
     return [f for f in files if not any(f == p or f.startswith(p.rstrip("/") + "/") for p in allowed)]
 
@@ -97,7 +102,7 @@ def copy(tmp: Path) -> Path:
     """The files `stale` reads, copied from `lean/` and the trusted layer into ``tmp`` at their places under `verity/` (so
     `SECURITY` names the copy), with `TRUSTED.sha256` regenerated there: the regressions start clean even when `lean/` is
     stale."""
-    base = LEAN.parents[4]
+    base = ROOT
     pkg = tmp / LEAN.relative_to(base)
     _, named, trees = command(LEAN)
     for rel in ["README.md", *named, *trees]:

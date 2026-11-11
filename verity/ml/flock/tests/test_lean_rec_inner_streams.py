@@ -30,6 +30,7 @@ import pytest
 from test_rec_outer import BIN
 
 HERE = Path(__file__).resolve().parent
+ROOT = Path(__file__).resolve().parents[4]
 C3 = HERE / "fixtures" / "rec-c3-inner"
 PLAIN = HERE / "fixtures" / "rec-coins" / "16-16-8-n64" / "inner-honest"
 
@@ -46,7 +47,7 @@ C3_STREAMS = [{"commits": 77, "stream": "circuit/rep0", "tops": [128, 64, 64, 32
 
 def _fixture(d: Path) -> Path:
     assert (d / "public.json").is_file(), (
-        f"{d} is not fetched: `uv run research data fetch-fixtures {d.relative_to(HERE.parents[3])}`")
+        f"{d} is not fetched: `uv run research data fetch-fixtures {d.relative_to(ROOT)}`")
     return d
 
 

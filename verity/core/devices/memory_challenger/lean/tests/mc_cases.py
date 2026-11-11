@@ -29,7 +29,7 @@ from verity.ml.crypto import lms
 
 HERE = Path(__file__).resolve().parent
 PACKAGE = HERE.parent
-ROOT = HERE.parents[5]
+ROOT = Path(__file__).resolve().parents[6]
 
 
 def _test_signer():

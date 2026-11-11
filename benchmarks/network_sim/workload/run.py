@@ -28,7 +28,7 @@ from .block import Context, MemoryNet
 from .hardware import OUTSIDE, DeviceGraph
 
 HERE = Path(__file__).resolve().parent
-DATACENTER = str(HERE.parents[1] / "datacenter")
+DATACENTER = str(Path(__file__).resolve().parents[3] / "benchmarks/datacenter")
 
 
 def declaration(spec: str):

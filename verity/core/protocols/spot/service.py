@@ -971,9 +971,10 @@ class _Entry:
     program: Program
     work_table: Mapping[str, Any] | None = None
     #: what `register` handed R1-R7 besides the record: (ports, leaf_layer, anchors, the log's records, registered,
-    #: supplied, pinned, schemas, window_root, held, outputs), and its window's seed salt
+    #: supplied, pinned, schemas, window_root, held, outputs), its window's seed salt and its history tables
     copies: tuple[Any, ...] = ()
     seed_salt: str | None = None
+    history: Mapping[str, Any] | None = None
     read: bytes | None = None
     closure: Mapping[int, Sequence[int]] | None = None
     draw: Draw | None = None
@@ -982,11 +983,12 @@ class _Entry:
     outcome: Outcome | None = None
     session: Session | None = None
     #: under a two-stage design: the interior registration, its population program and what `register_interiors`
-    #: handed R1-R7 (as `copies`), then the second stage's sample and the coins it read
+    #: handed R1-R7 (as `copies`, `seed_salt` and `history`), then the second stage's sample and the coins it read
     interior: WindowCommitmentRecord | None = None
     interior_program: Program | None = None
     interior_copies: tuple[Any, ...] = ()
     interior_seed_salt: str | None = None
+    interior_history: Mapping[str, Any] | None = None
     second: Draw | None = None
     second_read: bytes | None = None
 
@@ -1471,6 +1473,12 @@ class Fleet:
                 self._streams[j]._halt(d["ok"]["cause"])
 
 
+def _stream_values(values: Sequence[Any]) -> tuple[Any, ...]:
+    """A stream's values as tuples, each width a tuple where it is a leaf type's shape."""
+    return tuple(tuple(tuple(x) if isinstance(x, list) else x for x in v) if isinstance(v, (list, tuple)) else v
+                 for v in values)
+
+
 class Stream:
     """One protocol's stream for one `Spec`, held by the challenger.
 
@@ -1517,8 +1525,9 @@ class Stream:
     history (`_earlier`), with the verdicts the whole log gives.
 
     A window's stream may take `values`, the values its mixed population takes ahead of its templates' parameters
-    (`partition.mixed_population_program`'s, `(name, leaves, width)` each), which a registration registers as its
-    program's (R7); the stream's digest names them. Or a window's stream takes `program`, the challenger's own copy of
+    (`partition.mixed_population_program`'s, `(name, leaves, width)` each, `width` an integer or a leaf type's shape, a
+    `Digest`'s `(8, 64, 1)`), which a registration registers as its program's (R7, which reads each by its type: a
+    supplied value of `Digest`s in Digest order); the stream's digest names them. Or a window's stream takes `program`, the challenger's own copy of
     the window's Program where it is another form than the mixed population (the network certifier's scan in its
     generator form, one batch a template reading a shared input, say): its proof blocks under the check's query are the
     templates', one range each, in the window's order, and it is each registration's population program, a registration
@@ -1532,14 +1541,19 @@ class Stream:
     template's (n_t, `replay_cells`) and `counts` the second stage's in each of its cells (k_t, `second_counts`). A
     registration is then the boundary commitment and its `select` the first stage; `register_interiors` takes the
     interior registration (`interior_program`), a second `select` on it is the second stage, and `deliver` and
-    `outcome` take that sample (the module docstring). A window's `values` are then the interior's.
+    `outcome` take that sample (the module docstring). A window's `values` are then the interior's, and so are its
+    `span_values`, `(name, leaves, width)` each in `values`' form with `leaves` a sampled span's: the interior program
+    over a replay sample of Q takes each at `leaves * Q`, after `values`, since under a rate sampling design Q is what the
+    first stage's coins chose (a table read's supplied root, one `Digest` a sampled span, say); the stream's digest names
+    them.
     """
 
     def __init__(self, spec: Spec, unit: SpecializedDefinition | Sequence[SpecializedDefinition], *, budget: int, delta: float, challenger: str,
                  coins: ChallengerCoins | None = None, clock: Callable[[], float] = time.monotonic,
                  sampler: Sampler | None = None, rounds: int = 1, prover: str | None = None,
-                 values: Sequence[tuple[str, int, int]] = (), log: Sequence[Mapping[str, Any]] = (),
-                 replay: SpecializedDefinition | None = None, program: Program | None = None) -> None:
+                 values: Sequence[tuple[str, int, int | Sequence[int]]] = (), log: Sequence[Mapping[str, Any]] = (),
+                 replay: SpecializedDefinition | None = None, program: Program | None = None,
+                 span_values: Sequence[tuple[str, int, int | Sequence[int]]] = ()) -> None:
         if isinstance(spec.selection, Sequential):
             raise ValueError("the service doesn't run a Sequential selection yet")
         if spec.check.window is not None or spec.check.deadline is not None:
@@ -1569,12 +1583,15 @@ class Stream:
             raise ValueError("a stream drawing from the challenger's coins takes no sampler, which would draw instead")
         if not (isinstance(coins, ChallengerCoins) or sampler is not None or isinstance(spec.selection, All)):
             raise ValueError(NO_OWN_COINS)
-        values = tuple(tuple(v) if isinstance(v, (list, tuple)) else v for v in values)
+        values, span_values = _stream_values(values), _stream_values(span_values)
         if values and isinstance(unit, SpecializedDefinition):
             raise ValueError("a stream of one template's instances takes no values: a window with values is a mixed "
                              "population of its templates (give its unit as a sequence of them)")
-        if values:
-            P.mixed_population_program([(u, 1) for u in units], values=values)
+        if span_values and (isinstance(unit, SpecializedDefinition) or replay is None):
+            raise ValueError("a stream's per-span values are a two-stage window's interior values: give its unit as a "
+                             "sequence of templates and its replay block")
+        if values or span_values:
+            P.mixed_population_program([(u, 1) for u in units], values=values + span_values)
         if program is not None:
             if isinstance(unit, SpecializedDefinition) or values or replay is not None:
                 raise ValueError("a stream's program is a window's, of its templates, given in place of their mixed "
@@ -1603,13 +1620,14 @@ class Stream:
         self.spec, self.unit, self.budget, self.delta, self.challenger = spec, unit, budget, delta, challenger
         self.query = spec.selection.grain if isinstance(spec.selection, TwoStage) else spec.check.query
         self.templates = None if isinstance(unit, SpecializedDefinition) else units
-        self.rounds, self.values, self.program = rounds, values, program
+        self.rounds, self.values, self.span_values, self.program = rounds, values, span_values, program
         self._coins, self._clock, self._sampler = coins, clock, sampler
         self.digest = _sha512({"format": STREAM, "spec": spec.digest(), "budget": budget, "delta": delta,
                                "challenger": challenger, **({"rounds": rounds} if rounds > 1 else {}),
                                **({"prover": prover} if prover is not None else {}),
                                **({"coins": "challenger"} if isinstance(coins, ChallengerCoins) else {}),
                                **({"values": [list(v) for v in values]} if values else {}),
+                               **({"span_values": [list(v) for v in span_values]} if span_values else {}),
                                **({"program": P.program_digest(program)} if program is not None else {})})
         self.binding = None if prover is None else R._binding({"stream": self.digest, "prover": prover})
         self._params = {"budget": budget, "rounds": rounds,
@@ -1845,7 +1863,8 @@ class Stream:
                  pinned: Mapping[str, str] | None = None, schemas: Mapping[str, str] | None = None,
                  window_root: str | None = None, held: Sequence[str] | None = None,
                  counts: Mapping[str, int] | None = None,
-                 outputs: Mapping[str, Mapping[str, str]] | None = None) -> WindowCommitmentRecord:
+                 outputs: Mapping[str, Mapping[str, str]] | None = None,
+                 history: Mapping[str, Any] | None = None) -> WindowCommitmentRecord:
         """Receive a registration: the public-items rule (`check_public`), then one-stage's R1-R7 (`registration.check`),
         each by the verifier (`verifier.check_public`, `verifier.check`), against the challenger's own copies:
         the population program it builds from `unit` and the record's N (a window's: the mixed population of its
@@ -1854,7 +1873,7 @@ class Stream:
         the check's query, the selection rule's sampling
         design, `SCHEME`, the stream's log (the records of it R6 and R7 read, `_earlier`), and the per-registration
         copies given here (`ports`, `leaf_layer`, `anchors`, `registered`, `work_table`, `supplied`, `pinned`,
-        `schemas`, `window_root`, `held` and `outputs`, as `registration.check` takes them). Then the receipt. Under
+        `schemas`, `window_root`, `held`, `outputs` and `history`, as `registration.check` takes them). Then the receipt. Under
         `Check.registration_deadline` the challenger first reads its clock (`received_at`): a registration received more
         than the deadline after the salt's release, or before any salt, is refused (`late-registration`, with both
         readings) whatever it holds, logged, and ends the epoch; an on-time one carries both readings
@@ -1901,7 +1920,7 @@ class Stream:
                 earlier = self._earlier(record, supplied, outputs)
                 v = V.check(record, program, self.query, law, SCHEME, ports, leaf_layer, anchors, earlier, None,
                             table, registered, supplied, pinned, self.binding, schemas, window_root, held,
-                            outputs=outputs, seed_salt=seed_salt)
+                            outputs=outputs, seed_salt=seed_salt, history=history)
                 if v.ok and bernoulli(law):
                     v = _refuse("bernoulli", {"law": law, "reason": BERNOULLI}).verdict
                 if v.ok and not P.in_order(program, self.query, n):
@@ -1931,7 +1950,7 @@ class Stream:
         program, law = got["program"], got["law"]
         self._entries.append(_Entry(reg, D.derive(program, self.query, law, got["table"]), program, work_table,
                                     (ports, leaf_layer, anchors, earlier, registered, supplied, pinned, schemas,
-                                     window_root, held, outputs), seed_salt))
+                                     window_root, held, outputs), seed_salt, history))
         if deadline is not None:
             self._epoch_log.append({"event": "registration", "order": reg.order, "registration": reg.digest,
                                     "salted_at": reg.salted_at, "received_at": reg.received_at})
@@ -2012,7 +2031,8 @@ class Stream:
                            registered: Mapping[str, int] | None = None, supplied: Mapping[str, Any] | None = None,
                            pinned: Mapping[str, str] | None = None, schemas: Mapping[str, str] | None = None,
                            window_root: str | None = None, held: Sequence[str] | None = None,
-                           outputs: Mapping[str, Mapping[str, str]] | None = None) -> WindowCommitmentRecord:
+                           outputs: Mapping[str, Mapping[str, str]] | None = None,
+                           history: Mapping[str, Any] | None = None) -> WindowCommitmentRecord:
         """Receive a two-stage design's interior registration, once, after the first stage `draw` and before its second
         stage: the interiors of the replay sample's Q replay blocks, over their Q·n_rho proof blocks, template-major
         (`interior_program`): template t's Q·n_t from off_t = Q·Σ_{t'<t} n_t', replay block `draw.units[i]`'s instances
@@ -2021,8 +2041,8 @@ class Stream:
         (`interior_program`, the check's query, `subset:Q·n_rho`, every one committed, `SCHEME`, the log, whose last
         record is the registration it follows, and the copies given here, as `register` takes them), and
         `population-order`. Its receipt follows the log as a registration's does, and it is logged; it reads no clock.
-        It names no links or wires: the verifier derives them from the replay block's Definition
-        (`second_stage.replay_links`, `second_stage.replay_wires`).
+        It names no links, wires or rows: the verifier derives them from the replay block's Definition
+        (`second_stage.replay_links`, `second_stage.replay_wires`, `second_stage.replay_rows`).
         Raises `Refused`: `rule` (a one-stage stream), `unknown`, `not-drawn`, `final`, `delivered`,
         `interior-registered` (it has one), or either check failing."""
         first = draw.replay_sample or draw
@@ -2041,7 +2061,7 @@ class Stream:
                 earlier = self._earlier(record, supplied, outputs)
                 v = V.check(record, program, query, {"law": "subset", "k": m}, SCHEME, ports, leaf_layer, anchors,
                             earlier, None, None, registered, supplied, pinned, self.binding, schemas, window_root, held,
-                            outputs=outputs, seed_salt=seed_salt)
+                            outputs=outputs, seed_salt=seed_salt, history=history)
                 if v.ok and not P.in_order(program, query, m):
                     v = _refuse("population-order", {"population": m}).verdict
                 got.update(program=program, earlier=earlier)
@@ -2060,17 +2080,20 @@ class Stream:
         e.interior, e.interior_program = reg, got["program"]
         e.interior_copies = (ports, leaf_layer, anchors, earlier, registered, supplied, pinned, schemas, window_root, held,
                              outputs)
-        e.interior_seed_salt = seed_salt
+        e.interior_seed_salt, e.interior_history = seed_salt, history
         return reg
 
     def interior_program(self, q: int) -> Program:
         """The challenger's interior program over a replay sample of `q`: `unit`'s Q·n_rho instances, or a window's mixed
         population of its templates at Q·n_t each, in the check's order, taking the stream's `values` (which its proof
-        blocks read as registered values, an earlier record's among them: `register_interiors`' `outputs`)."""
+        blocks read as registered values, an earlier record's among them: `register_interiors`' `outputs`), then its
+        `span_values`, each at its leaves times Q."""
         assert self.n_rho is not None
         if self.templates is None:
             return P.population_program(self.unit, q * self.n_rho)
-        return P.mixed_population_program([(t, q * n) for t, n in zip(self.templates, self.cells)], values=self.values)
+        spans = tuple((name, leaves * q, width) for name, leaves, width in self.span_values)
+        return P.mixed_population_program([(t, q * n) for t, n in zip(self.templates, self.cells)],
+                                          values=self.values + spans)
 
     def _drawn_op(self, draw: Draw) -> dict[str, Any]:
         """What an op names a sample by: its registration's order and token and its token; for a two-stage design's
@@ -2343,7 +2366,7 @@ class Stream:
                       self.challenger, reg.receipt["received"], e.read, e.closure, e.sessions, verdicts, outputs,
                       statement, self.delta, *asked, served, session_roots, supplied=supplied, pinned=pinned,
                       binding=self.binding, schemas=schemas, window_root=window_root, held=held, coins=coins,
-                      value_outputs=given, seed_salt=e.seed_salt)
+                      value_outputs=given, seed_salt=e.seed_salt, history=e.history)
             if not v.ok:
                 rec = _run_failed(rec, v)
         return rec, public
@@ -2356,8 +2379,9 @@ class Stream:
                    ) -> tuple[dict[str, Any], dict[str, Any], dict[str, Any]]:
         """`outcome`'s audit records under a two-stage design, once the verdicts hold: the interior registration's over
         the second stage's sample, with round 2's check of `statements` (`second_stage.check`, over the parts the
-        interior program's strata make, the design's links and wires, which it derives from the replay block's
-        Definition (`second_stage.replay_links`, `second_stage.replay_wires`), the reads the verdicts report, what they
+        interior program's strata make, the design's links and wires and their rows, which it derives from the replay
+        block's Definition (`second_stage.replay_links`, `second_stage.replay_wires`, `second_stage.replay_rows`), the
+        reads the verdicts report, what they
         name of each session they accepted
         (`second_stage.verified_of`), and the reference header and registered reads the params `proofs` give each
         template, `template_circuits`), and the registration's
@@ -2384,8 +2408,9 @@ class Stream:
                      SS.replay_links(e.program, descriptor_id(self.replay), reg.record),
                      A.session_registered(verdicts), SS.verified_of(verdicts),
                      tuple((t, h) for t, _c, h, _r in named), tuple((t, r) for t, _c, _h, r in named),
-                     wires=SS.replay_wires(e.program, descriptor_id(self.replay)))
-        rec = SS.attach(rec, SS.check(SS.FORM, own, statements))
+                     wires=SS.replay_wires(e.program, descriptor_id(self.replay)),
+                     rows=SS.replay_rows(e.program, descriptor_id(self.replay)))
+        rec = SS.attach(rec, SS.check(SS.FORM, own, statements), SS.interior_reads(own, statements or ()))
         boundary = V.audit_record(reg.record, reg.receipt, first.draw, first.law, replayed, len(replayed), statement,
                                   verdicts, self.delta, e.sessions, None, replay_session_roots, own_reads=True)
         accepted = rec["accepted"] and boundary["accepted"]
@@ -2406,10 +2431,10 @@ class Stream:
                       [p.item for p in self.spec.public], self.challenger, reg.receipt["received"], e.read, e.closure,
                       e.sessions, verdicts, outputs, statement, self.delta, None, None, None, replay_session_roots,
                       supplied=supplied, pinned=pinned, binding=self.binding, schemas=schemas, window_root=window_root,
-                      held=held, coins=coins, value_outputs=given, seed_salt=e.seed_salt,
+                      held=held, coins=coins, value_outputs=given, seed_salt=e.seed_salt, history=e.history,
                       interior={"program": e.interior_program, "query": self.spec.check.query,
                                 "law": {"law": "subset", "k": ireg.record["population"]}, "copies": e.interior_copies,
-                                "seed_salt": e.interior_seed_salt,
+                                "seed_salt": e.interior_seed_salt, "history": e.interior_history,
                                 "replay": Program(self.replay),
                                 "values": [(x.name, x.registered) for x in self._values(interior=True)],
                                 "record": ireg.record, "received": ireg.receipt["received"], "read": e.second_read,

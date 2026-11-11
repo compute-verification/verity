@@ -3,7 +3,12 @@ steps, `measure`) of synthetic loads at the class's engine (NB = 5,000, B = 64, 
 measured parts (`measured`: `cache_step_v3`'s PoolSlot_v1, PoolEntry_v1 and PoolEnd at the class's widths, and
 `block_key`'s BlockKey_v1 and KeyPrint_v1) plus the in-circuit hash of their witness.
 
-    python3 cost.py [--json OUT] [--quick] [--from REPORT]
+    python3 cost.py [--json OUT] [--quick] [--from REPORT] [--served NAME=RAW@CONFIG@STEPS]... [--only]
+
+A served run is a load too (``--served``, `served_load`): the hook's record of it (RAW, the trace's ``raw/`` directory:
+`requests.PID.jsonl.gz` and `steps.PID.jsonl.gz`) replayed under the scheduler's configuration (CONFIG, a JSON object as
+a step trace's header records it, `replay.Engine.from_header`), its busiest STEPS consecutive steps the window. ``--only``
+prices the served loads alone.
 
 The pricing (ANDs; `window_cost`):
 - the stream: a window's calls run in U slots, U the accesses its operations make (STREAM: each kind's accesses, at
@@ -40,8 +45,10 @@ from __future__ import annotations
 
 import argparse
 import dataclasses
+import gzip
 import json
 import random
+import resource
 from collections import Counter
 from pathlib import Path
 from types import SimpleNamespace
@@ -52,9 +59,9 @@ import stream as ST
 from pool_ram import RP
 
 from verity.core.protocols.certifier.head_check import ands
-from verity.ml.circuits.defs import bind
+from verity.ml.circuits.defs import REGISTRY, bind
 from verity.ml.commitments.gates import block_key as BK
-from verity.ml.protocols.certifier import cache_step_v3 as V3, compile_slice_v5 as V5, compile_slice_v6 as V6
+from verity.ml.protocols.certifier import cache_step_v3 as V3, compile_slice_v6 as V6
 
 MUL = 2187
 SHA_BLOCK = 58120
@@ -124,13 +131,46 @@ def glm_load(seed: int, *, kind: str, steps: int = 3000, NB: int = 5000, B: int 
     return eng, reqs, admit
 
 
+def served_load(raw: Path, config: dict[str, Any]) -> tuple[RP.Engine, list[RP.RequestIO], list[int], dict[str, int]]:
+    """A served run from its hook's record under the scheduler's configuration `config`: its requests in the order the
+    engine first scheduled them, each visible from that step (FCFS schedules new requests in arrival order), its prompt
+    and outputs its tokens, and only steps that scheduled a token counted, as `replay.read_corpus_trace` takes them; and
+    the served steps and tokens, which the replay of it should give again."""
+    def rows(kind: str) -> list[dict[str, Any]]:
+        [p] = raw.glob(f"{kind}.*.jsonl.gz")
+        with gzip.open(p, "rt") as f:
+            return [json.loads(line) for line in f]
+
+    reqs = {r["id"]: r for r in rows("requests")}
+    steps = [s for s in rows("steps") if s["total_num_scheduled_tokens"]]
+    first: dict[str, int] = {}
+    for k, s in enumerate(steps):
+        for r in s["new"]:
+            if not r.get("resumed"):
+                first.setdefault(r["id"], k)
+    eng = RP.Engine.from_header(config)
+    out = []
+    for rid in first:
+        r = reqs[rid]
+        p, o = r["prompt_ids"], r["output_ids"]
+        if r["finish_reason"] not in ("stop", "length"):
+            raise ValueError(f"request {rid}: finish {r['finish_reason']!r}; the replay models stop and length only")
+        if max(p + o) >> CTW:
+            raise ValueError(f"request {rid}: a token past CTW = {CTW} bits")
+        max_tokens = r.get("max_tokens")
+        out.append(RP.RequestIO(len(p), eng.max_model_len - len(p) if max_tokens is None else int(max_tokens), len(o),
+                                r["finish_reason"] == "stop", tuple(p) + tuple(o)))
+    served = {"steps": len(steps), "tokens": sum(s["total_num_scheduled_tokens"] for s in steps), "requests": len(out)}
+    return eng, out, list(first.values()), served
+
+
 def accesses(c: Counter) -> int:
     return sum(PR.SHAPE[k] * n for k, n in c.items() if k in PR.SHAPE)
 
 
-def busiest(per: list[int]) -> tuple[int, int, int]:
-    """The P_STEPS consecutive steps (all, if fewer) with the largest sum: (sum, first step, steps)."""
-    n = min(P_STEPS, len(per))
+def busiest(per: list[int], steps: int = P_STEPS) -> tuple[int, int, int]:
+    """The `steps` consecutive steps (all, if fewer) with the largest sum: (sum, first step, steps)."""
+    n = min(steps, len(per))
     run = sum(per[:n])
     best, s0 = run, 0
     for s in range(1, len(per) - n + 1):
@@ -140,26 +180,26 @@ def busiest(per: list[int]) -> tuple[int, int, int]:
     return best, s0, n
 
 
-def stream_window(eng: RP.Engine, reqs: list[RP.RequestIO], admit: list[int]) -> dict[str, Any]:
+def stream_window(eng: RP.Engine, reqs: list[RP.RequestIO], admit: list[int], steps: int = P_STEPS) -> dict[str, Any]:
     """The load's stream with the head-of-line memo: `stream.py`'s `Stream` beside the replay's pool (each call's results
     held to the pool's, the pools compared at the end), in windows of 2^16 slots (each starts with no memo kept), and the
-    P_STEPS consecutive steps with the most slots."""
+    `steps` consecutive steps with the most slots."""
     m = ST.run(eng, reqs, {"decide": lambda i, k, o: admit[i] <= k}, 1 << 16, check=False, every=0)
-    best, s0, n = busiest([c["slots"] for c in m.steps])
+    best, s0, n = busiest([c["slots"] for c in m.steps], steps)
     c = m.pool.counts
     return {"slots": best, "steps": [s0, s0 + n], "hits": c["hit"], "memo hits": c["memo hits"],
             "re-walks": c["re-walks"], "all slots": m.pool.total}
 
 
-def measure(eng: RP.Engine, reqs: list[RP.RequestIO], admit: list[int]) -> dict[str, Any]:
-    """The load's busiest window: the P_STEPS consecutive steps with the most accesses (the whole replay if shorter),
+def measure(eng: RP.Engine, reqs: list[RP.RequestIO], admit: list[int], steps: int = P_STEPS) -> dict[str, Any]:
+    """The load's busiest window: the `steps` consecutive steps with the most accesses (the whole replay if shorter),
     found on a first replay; a second, identical one collects the sparse addresses that window touches. Its requests are
     those that arrive before it ends and run at or past its start (step s of the count is the replay's step s − 1), and
     its ragged blocks each touched request's blocks up to the last whose key it reads."""
     how = {"every": 10**9, "keep": False, "decide": lambda i, k, o: admit[i] <= k}
     m = PR.run(eng, reqs, **how)
     per = [accesses(c) for c in m.steps]
-    best, s0, n = busiest(per)
+    best, s0, n = busiest(per, steps)
     window = range(s0, s0 + n)
     w = PR.run(eng, reqs, window=window, **how)
     assert [accesses(c) for c in w.steps] == per, "the replay is not deterministic"
@@ -230,23 +270,38 @@ def compile_statics(load: dict[str, Any], engine: dict[str, Any], lookups: str) 
 
 #: `compile_slice_v6.parts`' order for each unit, each part's term
 UNIT_TERMS = {
-    "compile": ("load", "steps (CompileStep)", "arrivals' ids (CompileIds)", "calls row (CallsEq)",
-                "verdict (CallsVerdict)"),
+    "compile": ("cut (CompileCut)", "load", "steps (CompileStep)", "edge (CompileEdge)", "arrivals' ids (CompileIds)",
+                "calls row (CallsEq)", "verdict (CallsVerdict)"),
     "pool": ("bus records (CompileBus)", "arrivals' counts (PoolCounts)", "pool row digests in and out",
              "key prints in and out", "stream slots (PoolSlot)", "open steps (PoolOpen)", "touched list (PoolEntry)",
              "ragged keys (RaggedKey)", "pool end", "close steps (PoolClose)", "M run copies (PoolCopies)",
              "verdict (PoolVerdict)")}
 
 
-def unit_cost(st: dict[str, Any], memo: dict) -> dict[str, dict[str, float]]:
+def _drop_traces() -> None:
+    """Drops every part's trace and every bound Definition's body: the step's at R = 256 and a pool row digest's at NB
+    blocks each hold gigabytes."""
+    for d in list(REGISTRY.defs.values()):
+        if hasattr(getattr(d, "traced", None), "cache_clear"):
+            d.traced.cache_clear()
+        for sp in getattr(d, "_cache", {}).values():
+            sp.set_body(None)
+
+
+def unit_cost(st: dict[str, Any], memo: dict, rss: dict[str, float] | None = None) -> dict[str, dict[str, float]]:
     """ANDs of CompileSlice_v6 and PoolWindow_v1 at statics `st`: each part's ANDs times its calls, and for the pool window
-    SHA-512 over its checked witness; `memo` holds each part's ANDs across calls (`head_check.ands`)."""
+    SHA-512 over its checked witness; `memo` holds each part's ANDs across calls (`head_check.ands`), so each part's
+    trace is dropped once it is counted. `rss`, if given, gets the process's peak resident GiB after each part."""
     out: dict[str, dict[str, float]] = {}
     for unit, ps in V6.parts(**st).items():
-        out[unit] = {term: n * ands(p, memo) for term, (p, n) in zip(UNIT_TERMS[unit], ps, strict=True)}
-        for d in (*V5.PARTS, *V6.PARTS):
-            d.traced.cache_clear()  # a part's trace is dropped once counted: the step's at R = 256 holds gigabytes
-    out["pool"]["checked witness hash"] = SHA_BIT * V6.data_bits(SimpleNamespace(**st))["chk"]
+        out[unit] = {}
+        for term, (p, n) in zip(UNIT_TERMS[unit], ps, strict=True):
+            out[unit][term] = n * ands(p, memo)
+            _drop_traces()
+            if rss is not None:
+                rss[f"{unit}: {term}"] = resource.getrusage(resource.RUSAGE_SELF).ru_maxrss / 2**20
+    bits = V6.data_bits(SimpleNamespace(**st))
+    out["pool"]["checked witness hash"] = SHA_BIT * (bits["chk"] + bits["src"])
     for unit in ("compile", "pool"):
         out[unit]["total"] = sum(out[unit].values())
     return out
@@ -273,6 +328,11 @@ def main() -> None:
                     help="report each window's ANDs as a ratio of ANDS, a budget the caller states with its source")
     ap.add_argument("--node-share", action="append", default=[], metavar="NAME=SHARE@ANDS",
                     help="the share of the node a window of ANDS ANDs takes under proving setting NAME, scaled to each window")
+    ap.add_argument("--served", action="append", default=[], metavar="NAME=RAW@CONFIG@STEPS",
+                    help="a served run's hook record RAW replayed under the scheduler configuration CONFIG (a JSON file), "
+                         "its busiest STEPS consecutive steps the window")
+    ap.add_argument("--only", action="store_true", help="price the --served loads alone")
+    ap.add_argument("--lookups", nargs="+", default=["walked", "certified", "memo"], choices=("walked", "certified", "memo"))
     a = ap.parse_args()
     against, shares = _stated(a.against, False), _stated(a.node_share, True)
 
@@ -289,28 +349,39 @@ def main() -> None:
         loads = {k: (v["load"], v.get("engine")) for k, v in json.loads(a.src.read_text())["loads"].items()}
     else:
         loads = {}
-        for kind, seed in [("chat", 1), ("pressure", 2)] if not a.quick else [("chat", 1)]:
+        for kind, seed in [] if a.only else [("chat", 1), ("pressure", 2)] if not a.quick else [("chat", 1)]:
             eng, reqs, admit = glm_load(seed, kind=kind, **({"steps": 300, "NB": 800, "R": 16} if a.quick else {}))
             loads[kind] = ({**measure(eng, reqs, admit), "stream": stream_window(eng, reqs, admit)},
                            dataclasses.asdict(eng))
+    for item in a.served:
+        name, _, spec = item.partition("=")
+        raw, config, steps = spec.split("@")
+        eng, reqs, admit, served = served_load(Path(raw), json.loads(Path(config).read_text()))
+        loads[name] = ({**measure(eng, reqs, admit, int(steps)), "stream": stream_window(eng, reqs, admit, int(steps)),
+                        "served": served}, dataclasses.asdict(eng))
     memo: dict = {}
     for kind, (load, engine) in loads.items():
         NB = load.get("NB", 5000)
         print(kind, json.dumps(load))
         report["loads"][kind] = {"load": load, "engine": engine}
-        for how in ("walked", "certified", "memo"):
-            cost = window_cost(load, m if NB == 5000 else measured(NB), NB=NB, lookups=how)
+        mk = m if NB == 5000 else measured(NB)
+        _drop_traces()
+        for how in a.lookups:
+            cost = window_cost(load, mk, NB=NB, lookups=how)
             report["loads"][kind][how] = {"window ANDs": cost, **compared(cost["total"])}
             print(kind, how, {k: f"{v:.3g}" for k, v in cost.items()}, report["loads"][kind][how]["vs"],
                   report["loads"][kind][how]["node share"])
             if a.no_compile or engine is None or "requests" not in load["window"]:
                 continue
             st = compile_statics(load, engine, how)
-            uc = unit_cost(st, memo)
+            rss: dict[str, float] = {}
+            uc = unit_cost(st, memo, rss)
             total = uc["compile"]["total"] + uc["pool"]["total"]
             report["loads"][kind][how]["proved units"] = {
                 "statics": {k: st[k] for k in ("R", "W", "A", "K", "P", "CU", "NB", "NS", "NM", "NRB", "NRK")},
-                "CompileSlice_v6": uc["compile"], "PoolWindow_v1": uc["pool"], "total": total, **compared(total)}
+                "CompileSlice_v6": uc["compile"], "PoolWindow_v1": uc["pool"], "total": total, **compared(total),
+                "peak GiB after each part": rss}
+            print(kind, how, "peak GiB after each part", {k: round(v, 1) for k, v in rss.items()}, flush=True)
             for name, c in (("CompileSlice_v6", uc["compile"]), ("PoolWindow_v1", uc["pool"])):
                 print(kind, how, name, {k: f"{v:.3g}" for k, v in c.items()}, flush=True)
             print(kind, how, "both", f"{total:.3g}", report["loads"][kind][how]["proved units"]["node share"], flush=True)

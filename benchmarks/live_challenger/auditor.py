@@ -4,7 +4,9 @@ tree, one session a window, each recorded in a signed append-only ledger before 
     vy-challenger-gate reserve --peer NAME --scheme S --families JSON [--epoch E] [--minutes M] [--for LANE] [--withhold]
     vy-challenger-gate open --session S --root R
     vy-challenger-gate period-open --name P --cap N --circuit SHA512 [--draw-k K] [--rows T] [--model M | --weights-root W]
-                                   [--circuit-files JSON] [--length JSON] [--lane LANE] | period-close --name P
+                                   [--circuit-files JSON] [--length JSON]
+                                   [--policy ID --alpha N/D --gamma G --registration SHA512] [--lane LANE]
+    vy-challenger-gate period-close --name P
     vy-challenger-gate model-register --model M --circuit SHA512 --descriptor FILE --checkpoint DIR
     vy-challenger-gate model-key --model M --circuit SHA512 [--weights-root W]
     vy-challenger-gate certifier-rehearse --peer NAME --port PORT --minutes M [--tamper late|extra|drop|token]
@@ -108,7 +110,15 @@ tree, one session a window, each recorded in a signed append-only ledger before 
   descriptor digests; an open without it commits none), and with `--length JSON` the fixed length its windows serve (`length`,
   `{"max_tokens": [n, ...], "stop": "fixed"}`: each request's public max_tokens, served to that cap whatever it samples,
   which PoUW's credit holds each window's served rows to; an open without it commits none, and credit counts none of
-  its windows). Its windows are exactly the reserves (and one-step v2 opens) whose prover (`for`, else `by`) is its
+  its windows). An inference-only period's open also commits the policy its check holds the serve to and the
+  registration θ is read from, all four or none (part of them is refused): `--policy ID` (`policy`), the id of the
+  protocol whose params read α and Γ, which names their form and unit (`POLICIES`; another id is refused);
+  `--alpha N/D` (`alpha`, ``[N, D]``) and `--gamma G` (`gamma`), naturals as those params read them
+  (`NciCheck.Protocol`), signed as given, with no default; and `--registration SHA512` (`registration`), the digest of
+  the deployment's first registration record (`NciCheck.Baseline.digest`), the one θ's provenance cites. The open's
+  `by` is who gave them, the lane's key or vy-admin; an open with none of the four commits no policy. Its windows are
+  exactly the
+  reserves (and one-step v2 opens) whose prover (`for`, else `by`) is its
   lane between its open and its close, at most `cap` (the next reserve is refused); every one counts. The close is
   refused while one of them is reserved and unexpired or still runs, and lists each, in order, as {root, session,
   complete} (root null for a reserve never opened; complete when its end is in the ledger and complete), with `complete` true only when it lists at least one window and all are: an
@@ -293,7 +303,7 @@ from pathlib import Path
 from typing import Any, Callable, Iterator
 
 HERE = Path(__file__).resolve().parent
-TREE = HERE.parents[1]
+TREE = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(TREE))
 
 from verity.core.protocols.spot.challenger import (DECLARATION, LEDGER_ROLE as ROLE,  # noqa: E402
@@ -319,6 +329,11 @@ TEMPLATE = re.compile(r"k[1-9][0-9]{0,7}|live")
 LEAF_FILE = re.compile(r"(lane|combine)([1-9][0-9]{0,7})")
 #: beside a lanes-form K's files, each one's leaf Program's descriptor digest, PoUW's `credit.LEAF_PROGRAMS`
 LEAF_PROGRAMS = "leaf_programs"
+#: the inference-only policies a period-open may name, each the id of the protocol whose params read its α and Γ
+#: (`NciCheck.Protocol.protocolId`): the id fixes their form and their unit, so another form or unit is another id
+POLICIES = ("verity/inference-only/v0",)
+#: a natural as an inference-only policy's α and Γ are given: plain decimal, at most 39 digits, no sign or leading zero
+NATURAL = re.compile(r"0|[1-9][0-9]{0,38}")
 NAME = re.compile(r"[A-Za-z0-9][A-Za-z0-9._:-]{0,63}")
 SCHEME = re.compile(r"[a-z0-9][a-z0-9/._-]{0,127}")
 #: a declared block's descriptor key: 1 to 256 printable ASCII characters but space and comma
@@ -666,14 +681,62 @@ def length_of(s: str) -> dict:
     return v
 
 
+def policy_of(s: str) -> str:
+    """A period-open's policy (`--policy`, written as `policy`): the id of the inference-only protocol whose params read
+    the open's α and Γ, one of `POLICIES`, or Refused. It names their form and unit, so a line is never read under
+    another's."""
+    if s not in POLICIES:
+        raise Refused(f"--policy {s[:200]!r}: the id of the inference-only protocol whose params read α and Γ, one "
+                      f"of {', '.join(POLICIES)}")
+    return s
+
+
+def alpha_of(s: str) -> list[int]:
+    """A period-open's α (`--alpha N/D`, written as `alpha`, ``[N, D]``): the most novel bits a gate the inference-only
+    policy lets an isolation unit read, as its check's params read it (`NciCheck.Protocol`: naturals, D at least 1). It
+    is signed as given, never reduced; or Refused."""
+    n, slash, d = s.partition("/")
+    if not (slash and NATURAL.fullmatch(n) and NATURAL.fullmatch(d) and int(d)):
+        raise Refused(f"--alpha {s[:200]!r}: the inference-only policy's α as N/D, two naturals in plain decimal of at "
+                      "most 39 digits with no sign or leading zero, D at least 1")
+    return [int(n), int(d)]
+
+
+def gamma_of(s: str) -> int:
+    """A period-open's Γ (`--gamma`, written as `gamma`): the most gates the inference-only policy lets an isolation
+    unit hold, a natural as its check's params read it (`NciCheck.Protocol`), or Refused."""
+    if not NATURAL.fullmatch(s):
+        raise Refused(f"--gamma {s[:200]!r}: the inference-only policy's Γ, a natural in plain decimal of at most 39 "
+                      "digits with no sign or leading zero")
+    return int(s)
+
+
+def registration_of(s: str) -> str:
+    """A period-open's registration (`--registration`, written as `registration`): the digest of the deployment's first
+    registration record, the one that registers θ and that θ's provenance cites (`NciCheck.Baseline.digest`: SHA-512
+    of the record's format, a zero byte and its canonical JSON), in lowercase hex, or Refused."""
+    if not ROOT.fullmatch(s):
+        raise Refused(f"--registration {s[:200]!r}: the digest of the deployment's first registration record, which "
+                      "registers θ, a SHA-512 digest in 128 lowercase hex")
+    return s
+
+
 #: a period-open's optional fields, as the gate hands them to `period` (``FIELD=VALUE``) and its open records them; `model`
 #: and `weights_root` name a model registry entry, whose root and model the open signs (`models.resolve`)
 PERIOD_FIELDS = {"draw_k": draw_k_of, "rows": rows_of, "weights_root": weights_root_of, "circuit_files": circuit_files_of,
-                 "model": model_of, "length": length_of}
+                 "model": model_of, "length": length_of, "policy": policy_of, "alpha": alpha_of, "gamma": gamma_of,
+                 "registration": registration_of}
+#: what an inference-only period's open signs, all of it or none, each with its flag: the policy its check holds the
+#: serve to (its id, α and Γ), and the registration θ is read from
+POLICY_FIELDS = {"policy": "--policy ID", "alpha": "--alpha N/D", "gamma": "--gamma G",
+                 "registration": "--registration SHA512"}
 
 
 def field_text(v: Any) -> str:
-    """A period-open field's value as the gate hands it to `period`: a JSON object canonical, anything else as is."""
+    """A period-open field's value as the gate hands it to `period`: a JSON object canonical, α's pair as N/D, anything
+    else as is."""
+    if isinstance(v, list):
+        return "/".join(map(str, v))
     return json.dumps(v, sort_keys=True, separators=(",", ":")) if isinstance(v, dict) else str(v)
 
 
@@ -1476,7 +1539,7 @@ def _after_load(spent: int) -> str:
 
 def _load_relay():
     """`benchmarks/network_traces/load_relay.py`, the load's store, relay and commit, imported when a verb needs it."""
-    if (here := str(TREE / "benchmarks" / "network_traces")) not in sys.path:
+    if (here := str((TREE / "benchmarks/network_traces/load_relay.py").parent)) not in sys.path:
         sys.path.insert(0, here)
     import load_relay
     return load_relay
@@ -1668,7 +1731,8 @@ USAGE = ("verbs: reserve --peer NAME --scheme S --families JSON [--epoch E] [--m
          "[--withhold] "
          "| open --session S --root R "
          "| period-open --name P --cap N --circuit SHA512 [--draw-k K] [--rows T] [--model M | --weights-root W] [--circuit-files JSON] "
-         "[--length JSON] [--lane LANE: vy-admin's] "
+         "[--length JSON] [--policy ID --alpha N/D --gamma G --registration SHA512: an inference-only period's, all "
+         "four] [--lane LANE: vy-admin's] "
          "| period-close --name P "
          "| declare --program SHA512 [--blocks K,...] [--day D] [--for LANE: vy-admin's] "
          "(a lane's own gate key, or vy-admin) "
@@ -1703,6 +1767,10 @@ def parse_period(verb: str, argv: list[str], *, lane: str | None) -> tuple[str, 
         p.add_argument("--circuit-files", dest="circuit_files", default=None)
         p.add_argument("--model", dest="model", default=None)
         p.add_argument("--length", dest="length", default=None)
+        p.add_argument("--policy", dest="policy", default=None)
+        p.add_argument("--alpha", dest="alpha", default=None)
+        p.add_argument("--gamma", dest="gamma", default=None)
+        p.add_argument("--registration", dest="registration", default=None)
 
     def refuse(why: object) -> None:
         raise Refused(f"{verb}: {why}; {' '.join(p.format_usage().split())}")
@@ -1924,13 +1992,15 @@ def admit(host: Host, session: str, *, signer, pinned: str, now: datetime, activ
 
 def period(host: Host, args: list[str], *, signer, pinned: str, now: datetime, active: Callable[[str], bool],
            tree: Path = TREE) -> dict:
-    """`period-open NAME LANE BY CAP CIRCUIT [draw_k=K] [rows=T] [weights_root=W] [circuit_files=JSON]` or `period-close NAME LANE|- BY` (LANE - for
-    vy-admin's close of any lane's period): the signed entry, or Refused. A period's name is used once and a lane has one
+    """`period-open NAME LANE BY CAP CIRCUIT [FIELD=VALUE ...]` (each FIELD one of `PERIOD_FIELDS`, once) or
+    `period-close NAME LANE|- BY` (LANE - for vy-admin's close of any lane's period): the signed entry, or Refused. A
+    period's name is used once and a lane has one
     period open at a time; its open commits the most windows it may hold (`cap`), its circuit and, when given, its sample
     K (`draw_k`) and table rows (`rows`), its model (`models.opened`: the registry's weights' root and model for the circuit, or for a circuit
     the registry has no entry of the model alone, from core's pin in `tree`), its fixed length (`length`) and each K's
     circuit file's SHA-512
-    (`circuit_files`); it closes once none of its windows
+    (`circuit_files`), and an inference-only period's policy and registration (`policy`, `alpha`, `gamma`,
+    `registration`: all four or none, `POLICY_FIELDS`); it closes once none of its windows
     still runs, its close listing each window with its outcome."""
     if len(args) not in (range(6, 6 + len(PERIOD_FIELDS) + 1) if args[:1] == ["period-open"] else (4,)):
         raise Refused(f"period: {args}")
@@ -1942,6 +2012,11 @@ def period(host: Host, args: list[str], *, signer, pinned: str, now: datetime, a
         if len(fields) != len(args) - 6 or not set(fields) <= set(PERIOD_FIELDS):
             raise Refused(f"period: {args}")
         given = {f: PERIOD_FIELDS[f](fields[f]) for f in PERIOD_FIELDS if f in fields}
+        missing = [flag for f, flag in POLICY_FIELDS.items() if f not in given]
+        if 0 < len(missing) < len(POLICY_FIELDS):
+            raise Refused(f"period-open {name}: {' and '.join(missing)} missing: an inference-only period's open signs "
+                          f"its policy and its registration together ({', '.join(POLICY_FIELDS.values())}), and a "
+                          "period that is not inference-only none of them")
         model, root = given.pop("model", None), given.pop("weights_root", None)
         if model is not None or root is not None:
             M = registry()
@@ -2232,7 +2307,7 @@ def certifier_command(req: dict, out: Path, url: str, tree: Path = TREE) -> list
     prompts = ["--prompts-file", str(out.parent / WITNESS / PROMPTS)] if varied and req.get("prompts") else []
     traffic = ["--traffic", "varied", "--name", req["run"]] if varied else \
         ["--profile", req.get("profile", CERTIFIER_PROFILES[0])]
-    return [sys.executable, str(tree / "benchmarks" / "network_traces" / "certifier_serve.py"), "rehearse",
+    return [sys.executable, str(tree / "benchmarks/network_traces/certifier_serve.py"), "rehearse",
             "--upstream", url, "--out", str(out), *height_argv(req), "--requests", str(req["requests"]), *given,
             *prompts, *sampling_argv(req), *traffic, "--strategies", req["tamper"] or "honest"]
 
@@ -2486,7 +2561,7 @@ def main(argv: list[str] | None = None) -> int:
             (host.root / "pubkey.json").write_text(json.dumps(doc, indent=1, sort_keys=True) + "\n")
             print(json.dumps(doc))
         else:
-            print("usage: auditor.py gate VERB ... | reserve SESSION | admit SESSION | run SESSION | period-open NAME LANE BY CAP CIRCUIT [DRAW_K] "
+            print("usage: auditor.py gate VERB ... | reserve SESSION | admit SESSION | run SESSION | period-open NAME LANE BY CAP CIRCUIT [FIELD=VALUE ...] "
                   "| period-close NAME LANE|- BY | declare LANE BY PROGRAM BLOCKS DAY|- | certifier-run RUN "
                   "| pinned COMMIT MAIN | keygen", file=sys.stderr)
             return 2

@@ -11,8 +11,10 @@ public import Proofs.Flock.Bridge.Draw
 `replayCap`: at SPOT[Flock]'s code, the replay sample of record at outer coins some second-stage fork of which is
 accepted has at most `cap h` proof blocks (`Code.ReplayCap`):
 
-* an accepted fork passed round 2 (`stmtOk`), so its second stage accepted the replay sample, which is then not empty:
-  the first stage accepted, and the sample of record is the slots `Slots.checked` keeps of the units it proved;
+* an accepted fork passed round 2 (`stmtOk`), whose reads check at template `0` reads the second stage's draw
+  (`stmtOk_draw`), so its second stage accepted the replay sample, which is then not empty: the first stage accepted,
+  and the sample of record is the slots `Slots.checked` keeps of the units it proved. With no template there is no
+  proof block;
 * each population slot `ρ` it keeps is unit `ρ`, whose cell of each template `t` is `blockOf ρ t` on `[0, n_t)`, and
   every proof block of an input slot is always checked (`regMatchesTwo`), so the sample has at most `|proved| · Σ_t n_t`
   proof blocks of population slots (`perBlock`) and always checked ones besides;
@@ -167,8 +169,28 @@ def cap (_ : Msg) : ℕ :=
   | some K => min (nBlocks h) (K * perBlock h + ((range (nBlocks h)).filter fun v => h.reg.always v = true).card)
   | none => nBlocks h
 
+/-- **Round 2 passes only at coins whose second stage draws**, where there is a template: template `0`'s statement
+check reads the second stage's draw (`readsOk`). -/
+theorem stmtOk_draw {x m₁ m₂ : Msg} {c₀ c₁ : FlockDeploy.Coin} (hok : stmtOk h x m₁ m₂ c₀ c₁ = true)
+    (hm : 0 < h.ms.length) : ∃ draw, secondDraw h c₀ c₁ = some draw := by
+  obtain ⟨s, hp⟩ : ∃ s, parse h x = some s := by
+    cases hp : parse h x with
+    | none => simp [stmtOk, hp] at hok
+    | some s => exact ⟨s, rfl⟩
+  obtain ⟨xs, hx⟩ : ∃ xs, stmtsOf m₂ = some xs := by
+    cases hx : stmtsOf m₂ with
+    | none => simp [stmtOk, hp, hx] at hok
+    | some xs => exact ⟨xs, rfl⟩
+  simp only [stmtOk, hp, hx, Bool.and_eq_true, beq_iff_eq, List.all_eq_true, List.mem_range] at hok
+  have hr := (hok.2 0 hm).2
+  unfold readsOk at hr
+  split at hr
+  · exact ⟨_, ‹secondDraw h c₀ c₁ = some _›⟩
+  · simp at hr
+
 /-- **The replay cap holds** at SPOT[Flock]'s code (`Code.ReplayCap`): an accepted fork's second stage accepted the
-first stage's sample, whose replay blocks' proof blocks `regMatchesTwo` counts. -/
+first stage's sample, whose replay blocks' proof blocks `regMatchesTwo` counts. With no template there is no proof
+block to count. -/
 theorem replayCap (H : Msg → Msg) : ((base h).atOrder (order h)).ReplayCap H (two h) (rs h) (cap h) := by
   intro x s Pt d hs hPt hd hin Ω P ω r e hacc
   have hs' : parse h x = some s := hs
@@ -181,58 +203,6 @@ theorem replayCap (H : Msg → Msg) : ((base h).atOrder (order h)).ReplayCap H (
   have hPteq : Pt = membersPart h.ms := partition_eq h (s := s) hPt
   obtain ⟨g, l, hg, hl, -, -, hT, -, hcl⟩ := regMatchesTwo h x s Pt d hs hPt hd hin
   obtain rfl : g = h.reg := Option.some.inj (hg.symm.trans hreg)
-  obtain ⟨r', hr'⟩ : ∃ r', r' = forkOn (((base h).atOrder (order h)).stage2 x) r e := ⟨_, rfl⟩
-  rw [← hr'] at hacc
-  obtain ⟨as, has, hne⟩ := run_acc_coins H P ((base h).atOrder (order h)).V x ω r' 3 (by omega)
-    (fun as cs hl h3 => next_short h H x as cs hl h3) hacc
-  obtain ⟨a₀, m₁, xS, rfl⟩ := List.length_eq_three.1 has
-  have hl3 : (List.range 3).map (coinSeq r') = [coinSeq r' 0, coinSeq r' 1, coinSeq r' 2] := rfl
-  rw [hl3] at hne
-  change ((next h x [a₀, m₁, xS] [coinSeq r' 0, coinSeq r' 1, coinSeq r' 2]).eval H).1 ≠ .rej at hne
-  have hok : stmtOk h x m₁ xS (coinSeq r' 0) (coinSeq r' 1) = true := by
-    cases hk : stmtOk h x m₁ xS (coinSeq r' 0) (coinSeq r' 1) with
-    | false =>
-      unfold next at hne
-      simp [OC.eval, hk] at hne
-    | true => rfl
-  have hc0 : coinSeq r' 0 = r (order h x).first := by
-    have h0 : 0 < ((base h).atOrder (order h)).V.k x := by show 0 < 3 + k₀ h; omega
-    have e0 : coinSeq r' 0 = r' ⟨0, h0⟩ := dite_eq_left h0
-    have hnot : (⟨0, h0⟩ : Fin _) ∉ ((base h).atOrder (order h)).stage2 x := fun hm =>
-      lt_irrefl _ (mem_filter.1 hm).2
-    rw [e0, hr']
-    exact ite_eq_right hnot
-  have hr : readsOk h s m₁ xS (coinSeq r' 0) (coinSeq r' 1) = true := by
-    simp only [stmtOk, hs', Bool.and_eq_true] at hok
-    exact hok.2
-  obtain ⟨draw₂, hd₂⟩ : ∃ draw, secondDraw h (coinSeq r' 0) (coinSeq r' 1) = some draw := by
-    unfold readsOk at hr
-    split at hr
-    · rename_i it draw ins spec sts w hit hd hset hdec
-      exact ⟨draw, hd⟩
-    · simp at hr
-  obtain ⟨q, hq⟩ : ∃ q, Spot.Select.selectSecond (h.reg.sample (src (coinSeq r' 0))) h.reg.ns h.reg.ks
-      (src (coinSeq r' 1)) = .ok q := by
-    unfold secondDraw at hd₂
-    cases hq : Spot.Select.selectSecond (h.reg.sample (src (coinSeq r' 0))) h.reg.ns h.reg.ks (src (coinSeq r' 1)) with
-    | error e => simp [hq] at hd₂
-    | ok q => exact ⟨q, rfl⟩
-  have hne0 := (selectSecond_sample hq).1
-  obtain ⟨draw₁, proved, read₁, hS⟩ : ∃ draw proved read,
-      Spot.Select.select h.reg.first.rule h.reg.first.program h.reg.first.query h.reg.first.table
-        h.reg.first.closure (src (coinSeq r' 0)) = .ok (draw, proved, read) := by
-    cases hS : Spot.Select.select h.reg.first.rule h.reg.first.program h.reg.first.query h.reg.first.table
-        h.reg.first.closure (src (coinSeq r' 0)) with
-    | error e => exact absurd (by simp [RegTwo.sample, hS]) hne0
-    | ok t => exact ⟨t.1, t.2.1, t.2.2, rfl⟩
-  have hrs : rs h x r = (Spot.Slots.checked l proved).toList := by
-    show ((reg h x).map fun g => g.first.checked (bytesOf (coinByte (r (order h x).first)))).getD [] = _
-    rw [hreg]
-    show (drawChecked h.reg.first.rule h.reg.first.program h.reg.first.query h.reg.first.table h.reg.first.closure
-      h.reg.first.layout (src (r (order h x).first))).toList = _
-    rw [← hc0]
-    unfold drawChecked
-    simp only [slots_select_of _ _ _ _ _ _ hl hS]
   have hN : nBlocks h = Pt.blocks.length := by
     rw [hPteq]
     rfl
@@ -243,6 +213,57 @@ theorem replayCap (H : Msg → Msg) : ((base h).atOrder (order h)).ReplayCap H (
   | some K =>
     dsimp only
     refine le_min hle ?_
+    rcases Nat.eq_zero_or_pos h.ms.length with hm0 | hm
+    · have hN0 : nBlocks h = 0 := by
+        unfold nBlocks
+        rw [List.length_eq_zero_iff.1 hm0]
+        rfl
+      exact (Nat.le_zero.1 (hN0 ▸ hle)).trans_le (Nat.zero_le _)
+    obtain ⟨r', hr'⟩ : ∃ r', r' = forkOn (((base h).atOrder (order h)).stage2 x) r e := ⟨_, rfl⟩
+    rw [← hr'] at hacc
+    obtain ⟨as, has, hne⟩ := run_acc_coins H P ((base h).atOrder (order h)).V x ω r' 3 (by omega)
+      (fun as cs hl h3 => next_short h H x as cs hl h3) hacc
+    obtain ⟨a₀, m₁, m₂, rfl⟩ := List.length_eq_three.1 has
+    have hl3 : (List.range 3).map (coinSeq r') = [coinSeq r' 0, coinSeq r' 1, coinSeq r' 2] := rfl
+    rw [hl3] at hne
+    change ((next h x [a₀, m₁, m₂] [coinSeq r' 0, coinSeq r' 1, coinSeq r' 2]).eval H).1 ≠ .rej at hne
+    have hok : stmtOk h x m₁ m₂ (coinSeq r' 0) (coinSeq r' 1) = true := by
+      cases hk : stmtOk h x m₁ m₂ (coinSeq r' 0) (coinSeq r' 1) with
+      | false =>
+        unfold next at hne
+        simp [OC.eval, hk] at hne
+      | true => rfl
+    have hc0 : coinSeq r' 0 = r (order h x).first := by
+      have h0 : 0 < ((base h).atOrder (order h)).V.k x := by show 0 < off h h.ms.length + 1; omega
+      have e0 : coinSeq r' 0 = r' ⟨0, h0⟩ := dite_eq_left h0
+      have hnot : (⟨0, h0⟩ : Fin _) ∉ ((base h).atOrder (order h)).stage2 x := fun hm' =>
+        lt_irrefl _ (mem_filter.1 hm').2
+      rw [e0, hr']
+      exact ite_eq_right hnot
+    obtain ⟨draw₂, hd₂⟩ := stmtOk_draw h hok hm
+    obtain ⟨q, hq⟩ : ∃ q, Spot.Select.selectSecond (h.reg.sample (src (coinSeq r' 0))) h.reg.ns h.reg.ks
+        (src (coinSeq r' 1)) = .ok q := by
+      unfold secondDraw at hd₂
+      cases hq : Spot.Select.selectSecond (h.reg.sample (src (coinSeq r' 0))) h.reg.ns h.reg.ks
+          (src (coinSeq r' 1)) with
+      | error e => simp [hq] at hd₂
+      | ok q => exact ⟨q, rfl⟩
+    have hne0 := (selectSecond_sample hq).1
+    obtain ⟨draw₁, proved, read₁, hS⟩ : ∃ draw proved read,
+        Spot.Select.select h.reg.first.rule h.reg.first.program h.reg.first.query h.reg.first.table
+          h.reg.first.closure (src (coinSeq r' 0)) = .ok (draw, proved, read) := by
+      cases hS : Spot.Select.select h.reg.first.rule h.reg.first.program h.reg.first.query h.reg.first.table
+          h.reg.first.closure (src (coinSeq r' 0)) with
+      | error e => exact absurd (by simp [RegTwo.sample, hS]) hne0
+      | ok t => exact ⟨t.1, t.2.1, t.2.2, rfl⟩
+    have hrs : rs h x r = (Spot.Slots.checked l proved).toList := by
+      show ((reg h x).map fun g => g.first.checked (bytesOf (coinByte (r (order h x).first)))).getD [] = _
+      rw [hreg]
+      show (drawChecked h.reg.first.rule h.reg.first.program h.reg.first.query h.reg.first.table h.reg.first.closure
+        h.reg.first.layout (src (r (order h x).first))).toList = _
+      rw [← hc0]
+      unfold drawChecked
+      simp only [slots_select_of _ _ _ _ _ _ hl hS]
     have hsize : proved.size = K := select_subset_size hK hS
     have hsub : sampleBlocks Pt d.part (rs h x r) ⊆
         (proved.toList.toFinset.biUnion fun ρ => (range h.reg.ns.size).biUnion fun t =>

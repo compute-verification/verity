@@ -19,8 +19,7 @@ its releases aren't isolated, or some honest-use party `Ou.withString ch s` stea
 each (`theftServed_isolated`). Local releases are isolated (`Served.isolated_of_local`), which gives `TheftServed`.
 
 `card_servedChannel_le` counts the served channel's covert strings,
-`|Adv|^T · |Tick|^T · (Σ_{j ≤ K} C(T·|O|, j)) · |V|^K · (T + 1)`, the overwrites by the Hamming-ball count
-`Population.Exfil.card_devBall_le`, and `card_servedChannel_le_rpow` bounds that by two to `servedBits`, the names of
+`|Adv|^T · |Tick|^T · (Σ_{j ≤ K} C(T·|O|, j)) · |V|^K · (T + 1)`, the overwrites by `card_overwrites_le`, and `card_servedChannel_le_rpow` bounds that by two to `servedBits`, the names of
 the overwritten values by `(T·|O| + 1)^K`, which gives `TheftServedReq`. The witnesses are proved at the toy
 deployment. -/
 
@@ -297,6 +296,32 @@ theorem value_leak {Ω R Θ X Y M Θ' α : Type} [Fintype Ω] [Fintype R] (C : �
     _ = avg (fun z => value (Bad z) (g z)) + ENNReal.ofReal (Fintype.card ch.S * p) := by
         rw [sum_const, card_univ, nsmul_eq_mul, ENNReal.ofReal_mul (Nat.cast_nonneg _), ENNReal.ofReal_natCast]
 
+/-- **Overwrites of at most `K` of the positions `P`** number at most `Σ_{j ≤ K} C(|P|, j) · |V|^K`, by the
+Hamming-ball count `Population.Exfil.card_devBall_le`. -/
+theorem card_overwrites_le (P V : Type) [Fintype P] [DecidableEq P] [Fintype V] [Nonempty V] (K : ℕ) :
+    Fintype.card {d : P → Option V // (univ.filter fun p => d p ≠ none).card ≤ K} ≤
+      (∑ j ∈ range (K + 1), (Fintype.card P).choose j) * Fintype.card V ^ K := by
+  classical
+  refine le_trans ?_ (Population.Exfil.card_devBall_le P V K)
+  let img : {d : P → Option V // (univ.filter fun p => d p ≠ none).card ≤ K} → Population.Exfil.Dev P V :=
+    fun d => ⟨univ.filter fun p => d.1 p ≠ none, fun p => (d.1 p.1).getD (Classical.arbitrary V)⟩
+  have hrec : ∀ d, (fun p => if h : p ∈ (img d).1 then some ((img d).2 ⟨p, h⟩) else none) = d.1 := by
+    intro d
+    funext p
+    by_cases hp : d.1 p = none
+    · have : p ∉ (img d).1 := by simp [img, hp]
+      rw [dite_eq_right this, hp]
+    · have hm : p ∈ (img d).1 := by simp [img, hp]
+      rw [dite_eq_left hm]
+      obtain ⟨v, hv⟩ := Option.ne_none_iff_exists'.1 hp
+      simp [img, hv]
+  rw [← card_univ]
+  refine card_le_card_of_injOn img (fun d _ => ?_) (fun d _ d' _ h => ?_)
+  · simp only [Finset.mem_coe, Population.Exfil.devBall, mem_sigma, mem_filter, mem_univ, true_and, and_true]
+    exact d.2
+  · exact Subtype.ext ((hrec d).symm.trans ((congrArg (fun D : Population.Exfil.Dev P V =>
+      fun p => if h : p ∈ D.1 then some (D.2 ⟨p, h⟩) else none) h).trans (hrec d')))
+
 /-- **The served channel's covert strings**: advice and a bucket per window, an overwrite of at most `K` of the `T · |O|`
 values, and the halt. -/
 theorem card_servedChannel_le (R Q Adv O V Tick : Type) [Fintype Adv] [Fintype O] [DecidableEq O] [Fintype V]
@@ -307,28 +332,8 @@ theorem card_servedChannel_le (R Q Adv O V Tick : Type) [Fintype Adv] [Fintype O
   classical
   have hsub : Fintype.card {d : Fin T × O → Option V // (univ.filter fun p => d p ≠ none).card ≤ K} ≤
       (∑ j ∈ range (K + 1), (T * Fintype.card O).choose j) * Fintype.card V ^ K := by
-    have hball := Population.Exfil.card_devBall_le (Fin T × O) V K
-    rw [Fintype.card_prod, Fintype.card_fin] at hball
-    refine le_trans ?_ hball
-    let img : {d : Fin T × O → Option V // (univ.filter fun p => d p ≠ none).card ≤ K} →
-        Population.Exfil.Dev (Fin T × O) V :=
-      fun d => ⟨univ.filter fun p => d.1 p ≠ none, fun p => (d.1 p.1).getD (Classical.arbitrary V)⟩
-    have hrec : ∀ d, (fun p => if h : p ∈ (img d).1 then some ((img d).2 ⟨p, h⟩) else none) = d.1 := by
-      intro d
-      funext p
-      by_cases hp : d.1 p = none
-      · have : p ∉ (img d).1 := by simp [img, hp]
-        rw [dite_eq_right this, hp]
-      · have hm : p ∈ (img d).1 := by simp [img, hp]
-        rw [dite_eq_left hm]
-        obtain ⟨v, hv⟩ := Option.ne_none_iff_exists'.1 hp
-        simp [img, hv]
-    rw [← card_univ]
-    refine card_le_card_of_injOn img (fun d _ => ?_) (fun d _ d' _ h => ?_)
-    · simp only [Finset.mem_coe, Population.Exfil.devBall, mem_sigma, mem_filter, mem_univ, true_and, and_true]
-      exact d.2
-    · exact Subtype.ext ((hrec d).symm.trans ((congrArg (fun D : Population.Exfil.Dev (Fin T × O) V =>
-        fun p => if h : p ∈ D.1 then some (D.2 ⟨p, h⟩) else none) h).trans (hrec d')))
+    have h := card_overwrites_le (Fin T × O) V K
+    rwa [Fintype.card_prod, Fintype.card_fin] at h
   calc Fintype.card (servedChannel R Q Adv O V Tick T K).S
       = Fintype.card ((Fin T → Adv) × (Fin T → Tick) ×
           {d : Fin T × O → Option V // (univ.filter fun p => d p ≠ none).card ≤ K} × Fin (T + 1)) :=
@@ -480,8 +485,8 @@ theorem TheftServedReq : Guarantees.TheftServedReq := by
     exact zero_le
 
 theorem TheftServedMinEntropy : Guarantees.TheftServedMinEntropy := by
-  intro Ω R Θ Q Adv U W Tick Θ' _ _ _ _ _ _ _ _ _ _ C gen Stolen K Ou T L F M δ run hhon hesc
-  have h := TheftServedReq C gen Stolen Set.univ ((2 : ℝ) ^ (-K)) Ou T L F M δ run hhon
+  intro Ω R Θ Q Adv U W Tick Θ' _ _ _ _ _ _ _ _ _ _ C gen Stolen H Ou T L F M δ run hhon hesc
+  have h := TheftServedReq C gen Stolen Set.univ ((2 : ℝ) ^ (-H)) Ou T L F M δ run hhon
     (fun _ => Set.mem_univ _) hesc
   rwa [← Real.rpow_add two_pos, ← sub_eq_add_neg] at h
 
@@ -493,19 +498,25 @@ theorem card_W : Fintype.card (W × Unit) = 256 := by simp [W]
 
 theorem honest_C (θ : W) : honest C θ = honest C (0, 0) := rfl
 
-/-- Honest use of the toy's served function reveals nothing: every party's output is one fixed guess. -/
-theorem guess_le (P : Outsider Unit (Unit × Unit) (Unit → Fin 16) W) :
-    Claims.Pr (fun z : W × Unit => Stolen (gen z.1) (P.model z.2 (honest C (gen z.1)) 2)) ≤ 1 / 256 := by
-  calc Claims.Pr (fun z : W × Unit => Stolen (gen z.1) (P.model z.2 (honest C (gen z.1)) 2))
-      ≤ Pouw.pr (fun z : W × Unit => z.1 = P.model () (honest C (0, 0)) 2) := Pouw.pr_mono fun z h => by
+/-- Honest use of a served function that reads no weight reveals nothing: every party's output is one fixed guess. -/
+theorem guess_le_of {Y : Type} (C' : W → Unit × Unit → Y) (hc : ∀ θ, honest C' θ = honest C' (0, 0))
+    (P : Outsider Unit (Unit × Unit) Y W) :
+    Claims.Pr (fun z : W × Unit => Stolen (gen z.1) (P.model z.2 (honest C' (gen z.1)) 2)) ≤ 1 / 256 := by
+  calc Claims.Pr (fun z : W × Unit => Stolen (gen z.1) (P.model z.2 (honest C' (gen z.1)) 2))
+      ≤ Pouw.pr (fun z : W × Unit => z.1 = P.model () (honest C' (0, 0)) 2) := Pouw.pr_mono fun z h => by
         obtain ⟨θ, ⟨⟩⟩ := z
-        have h' : P.model () (honest C θ) 2 = θ := h
-        rw [honest_C] at h'
+        have h' : P.model () (honest C' θ) 2 = θ := h
+        rw [hc] at h'
         exact h'.symm
     _ = 1 / 256 := by
-        rw [Pouw.pr_eq_card _ {(P.model () (honest C (0, 0)) 2, ())} fun z => by simp [Prod.ext_iff], card_singleton,
-          card_W]
+        rw [Pouw.pr_eq_card _ {(P.model () (honest C' (0, 0)) 2, ())} fun z => by simp [Prod.ext_iff],
+          card_singleton, card_W]
         norm_num
+
+/-- Honest use of the toy's served function reveals nothing: every party's output is one fixed guess. -/
+theorem guess_le (P : Outsider Unit (Unit × Unit) (Unit → Fin 16) W) :
+    Claims.Pr (fun z : W × Unit => Stolen (gen z.1) (P.model z.2 (honest C (gen z.1)) 2)) ≤ 1 / 256 :=
+  guess_le_of C honest_C P
 
 /-- The honest run's audit leaves no incorrect proof block undetected. -/
 theorem honest_undetected : Served.UndetectedLe 1 0 WeightSecurity.ToyServed.honestRun := by

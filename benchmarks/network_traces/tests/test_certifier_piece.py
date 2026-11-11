@@ -40,7 +40,7 @@ import jsonschema
 import pytest
 
 HERE = Path(__file__).resolve().parents[1]
-ROOT = HERE.parents[1]
+ROOT = Path(__file__).resolve().parents[3]
 sys.path[:0] = [str(HERE), str(Path(__file__).resolve().parent), str(ROOT / "benchmarks" / "one_stage")]
 
 import certifier_piece as CP  # noqa: E402
@@ -149,7 +149,8 @@ def _piece_cmd(tmp_path: Path, chain: Path, answer: dict, cmd: str | None = None
                         f"cat {shlex.quote(str(tmp_path / 'lean-answer.json'))}\n")
         lean.chmod(0o755)
     cmd = cmd or f'mkdir -p "$RESEARCH_RUN_DIR" && cp -r {shlex.quote(str(chain / "out"))} "$RESEARCH_RUN_DIR/"'
-    return (f"{shlex.quote(sys.executable)} {shlex.quote(str(HERE / 'certifier_piece.py'))} piece \"$@\" "
+    piece = ROOT / "benchmarks/network_traces/certifier_piece.py"
+    return (f"{shlex.quote(sys.executable)} {shlex.quote(str(piece))} piece \"$@\" "
             f"--lean {shlex.quote(str(lean))} --chain-cmd {shlex.quote(cmd)}")
 
 

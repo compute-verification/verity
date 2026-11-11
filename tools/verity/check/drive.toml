@@ -40,12 +40,10 @@ warn_steps = ["ratchet-gate"]
 # how `next` lands: "review", each member on a reviewer's land verdict (`research queue review`), a Lean change as any other;
 # the only landing there is. With `land_into = "checked"`, `main` holds only fully checked commits
 land = "review"
-# the branch the review landing fast-forwards and `next` is built on: "checked", whose tip drive's full check (`train.sh TIP
-# MACHINES`, recorded) checks after each landing; `main` moves only to a commit of `checked` whose check passed every
-# step on the merge gate (not circuit-check, `off_gate` in policy.toml), and a red step's culprit, unless fixed forward within
-# 30 min or a warn step's, is reverted on `checked`, never on `main`. "main" lands on `main` and checks it after. Only drive's App
-# pushes `checked`
-land_into = "checked"
+# the landing branch: "main", where the verified queue's loop lands each batch once its candidate's check passed. A mark's
+# preflight and `research queue status` judge a head's merges of an old `next` against it, so a head that merged `main` is
+# marked. "checked" was drive's: its review landing fast-forwarded `checked`, and `main` followed to a fully checked commit
+land_into = "main"
 # the after-landing run reuses every pass whose declared inputs are unchanged, as any check does: it gates `main`, and a cold
 # run, every step from nothing, holds every landing for as long as it runs; circuit-check reuses its per-target passes either
 # way. The nightly `audit-main` (`--no-cache`, no circuit cache) checks every part cold, so it checks that reuse daily
@@ -79,12 +77,13 @@ executor = "shadow"
 # one that gains its verdict goes after those already moved, so none below it is merged again. A held member goes to `next`'s
 # top every sync, this on or not
 verdict_first = true
-# the verdict carry (`research.carry`): a member with no land verdict at its head takes its PR's newest verdict at an older head,
-# a land by a non-owner, when each commit since merges, as the queue would, commits on `checked` or `main` or another member's
-# head with a land verdict and no hold, or changes only what the checks regenerate (pins, lock records); a hold at the head, or
-# one newer than that land, keeps it. "off"; "shadow", drive logs `would carry #N's land from OLD to NEW (why)` or `would not
-# carry ...` and writes nothing; "on", it writes the land verdict at the head as ci's, its ref naming both heads
-verdict_carry = "shadow"
+# the verdict carry (`research.carry`): a PR marked ready at its head with no land verdict there takes its newest verdict at an
+# older head, a land by a non-owner, when each commit since merges, as the queue would, commits on `checked` or `main` or another
+# PR's head with a land verdict and no hold, or changes only what the checks regenerate (pins, lock records); a hold at the head,
+# or one newer than that land, keeps it. "off"; "shadow", the verified queue (`research queue vqueue`, `World._carry`) and drive
+# log `would carry #N's land from OLD to NEW (why)` or `would not carry ...` and write nothing; "on", the verified queue counts
+# the PR as reviewed and writes nothing, and drive writes the land verdict at the head as ci's, its ref naming both heads
+verdict_carry = "on"
 # who drive rings while `next`'s lowest member waits at its head for a land verdict, holding every landing above it, and the
 # minutes it waits before each ring (`Driver._bottom`; by default `DriveFlags`' two handles after 30): the reviewer pool reviews
 # `next`'s bottom as it comes, so drive rings only the pool's owner, and only when the pool falls behind

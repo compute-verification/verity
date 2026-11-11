@@ -26,7 +26,7 @@ from pathlib import Path
 import pytest
 
 HERE = Path(__file__).resolve().parent
-ROOT = HERE.parents[2]
+ROOT = Path(__file__).resolve().parents[3]
 RS = ROOT / "benchmarks" / "remote_session"
 PACKAGING = ROOT / "tools" / "research" / "src" / "research" / "pods" / "nebius" / "verifier"
 sys.path.insert(0, str(HERE.parent))

@@ -2216,6 +2216,132 @@ def test_pages_lists_the_lanes_recent_asks_with_status_decision_and_newest_comme
     assert rc == 0 and json.loads(out)[0]["decision"] == "Option B, and restate gamma"
 
 
+PAGE_ID = PAGE_URL.rsplit("/", 1)[1]
+FAKE_NOW = datetime.fromtimestamp(1700000100, NOW.tzinfo)               # when the fake Slack's messages are recent
+LANE_CARD = {"status": "decided", "choice": "a", "source": "lane", "decided_at": "2026-10-26T16:10:59Z"}
+
+
+def ask_page(status: str, decision: str = "", choose: str = "") -> dict:
+    return {"last_edited_time": "2026-10-26T17:00:00Z",
+            "properties": {"Status": {"type": "status", "status": {"name": status}},
+                           "Decision": {"type": "rich_text", "rich_text": [{"plain_text": decision}] if decision else []},
+                           "Choose": {"type": "select", "select": {"name": choose} if choose else None}}}
+
+
+def paged_card(fake, route, status: dict, in_thread: bool = True) -> dict:
+    """A card the route answers `status` for, its page linked in its asker's mention in the thread, or on the card itself."""
+    blocks = [{"type": "section", "text": {"type": "mrkdwn", "text": "`DEFAULT` *Adopt it?*"}},
+              *([] if in_thread else [{"type": "actions", "elements": [{"type": "button", "url": PAGE_URL}]}]),
+              {"type": "context", "elements": [{"type": "mrkdwn", "text": "asked by <https://cursor.com/agents/bc-x|infra> (agent `bc-x`)"}]}]
+    card = fake.add(ASK, text="Adopt it?", username="Verity", bot_id=BOT, blocks=blocks)
+    if in_thread:
+        fake.add(ASK, text=f"<@UDANIEL> a decision for you: Adopt it? Read it, comment or decide on its page: {PAGE_URL} (card `42`)",
+                 username="infra", bot_id=BOT, thread_ts=card["ts"])
+    route.statuses = [{**status, "ts": card["ts"], "channel": ASK}]
+    return card
+
+
+def test_status_reports_the_page_not_the_card_once_the_page_contradicts_the_cards_choice(route, notion, fake, registry, routes_dirs,
+                                                                                        capsys, monkeypatch):
+    """A card its lane decided `a`, whose page says Decided otherwise with Daniel's Decision: `status` prints and rings the
+    page's Status and Decision, names the card's choice on one `differs:` line, and never gives `a` as the decision.  An
+    earlier ring of `a` in top's inbox doesn't stop the ring that corrects it."""
+    monkeypatch.setattr(slack, "_now", lambda: FAKE_NOW)
+    top = inbox(fake, routes_dirs, "top")
+    fake.add(COORD, text="from ask-daniel, card `42` decided: `a` (lane, 2026-10-26T16:10:59Z) on: Adopt it?", username="router",
+             bot_id=BOT, thread_ts=top)
+    paged_card(fake, route, LANE_CARD)
+    notion.pages = {PAGE_ID: ask_page("Decided otherwise", "Neither: keep the premise out until the schedule is checked.")}
+    rc, out, err = run(capsys, "ask-daniel", "status", "42")
+    assert rc == 0 and "unreadable" not in err and out.splitlines() == [
+        f"page Decided otherwise: Neither: keep the premise out until the schedule is checked. {PAGE_URL}",
+        "differs: the card records `a` (lane, 2026-10-26T16:10:59Z); its page says Decided otherwise"]
+    _, bell = bells(fake, top)
+    assert bell["text"].startswith("from ask-daniel, card `42` differs from its page: its page says Decided otherwise: Neither: keep "
+                                   f"the premise out until the schedule is checked. ({PAGE_URL}); the card records `a` (lane, "
+                                   "2026-10-26T16:10:59Z) on: Adopt it?; asked by infra")
+    assert "decided: `a`" not in bell["text"]
+    rc, out, _ = run(capsys, "ask-daniel", "status", "42", "--json")
+    got = json.loads(out)
+    assert rc == 0 and got["choice"] == "a" and got["differs"] == "the card records `a` (lane, 2026-10-26T16:10:59Z)"
+    assert got["page"]["status"] == "Decided otherwise" and got["page"]["url"] == PAGE_URL and len(bells(fake, top)) == 2   # once
+
+
+def test_status_keeps_the_cards_answer_while_its_page_still_waits_on_daniel(route, notion, fake, registry, routes_dirs, capsys, monkeypatch):
+    monkeypatch.setattr(slack, "_now", lambda: FAKE_NOW)
+    top = inbox(fake, routes_dirs, "top")
+    paged_card(fake, route, {"status": "decided", "choice": "yes", "source": "button", "decided_at": "2026-09-30T22:00:05Z"}, in_thread=False)
+    notion.pages = {PAGE_ID: ask_page("Waiting on Daniel")}
+    rc, out, err = run(capsys, "ask-daniel", "status", "42")
+    assert rc == 0 and out == "decided yes button 2026-09-30T22:00:05Z\n" and "unreadable" not in err
+    assert ("GET", f"/v1/pages/{PAGE_ID}") in [r[:2] for r in notion.requests]
+    (bell,) = bells(fake, top)
+    assert bell["text"].startswith("from ask-daniel, card `42` decided: `yes` (button, 2026-09-30T22:00:05Z) on: Adopt it?")
+    route.statuses = [{**route.statuses[0], "status": "pending", "choice": None}]
+    assert run(capsys, "ask-daniel", "status", "42")[:2] == (1, "pending - button 2026-09-30T22:00:05Z\n")
+
+
+@pytest.mark.parametrize("why", ["no-key", "notion-404"])
+def test_status_with_an_unreadable_page_reports_the_card_and_says_the_page_was_unreadable(route, notion, fake, registry, routes_dirs,
+                                                                                         capsys, monkeypatch, why):
+    monkeypatch.setattr(slack, "_now", lambda: FAKE_NOW)
+    top = inbox(fake, routes_dirs, "top")
+    paged_card(fake, route, LANE_CARD)
+    if why == "no-key":
+        monkeypatch.delenv("NOTION_API_KEY")
+    rc, out, err = run(capsys, "ask-daniel", "status", "42")                              # the fake has no such page: Notion's 404
+    assert rc == 0 and out == "decided a lane 2026-10-26T16:10:59Z\n"
+    assert "ask-daniel: the ask's page is unreadable (" in err and "this is the card alone, unchecked against its page" in err
+    assert ("no $NOTION_API_KEY" if why == "no-key" else "Notion can't see it") in err and bool(notion.requests) == (why != "no-key")
+    (bell,) = bells(fake, top)
+    assert bell["text"].startswith("from ask-daniel, card `42` decided: `a` (lane, 2026-10-26T16:10:59Z); its page was unreadable, "
+                                   "so this is the card's choice alone on: Adopt it?")
+
+
+def test_status_shows_an_answered_page_under_a_card_that_agrees_with_it(route, notion, fake, registry, routes_dirs, capsys, monkeypatch):
+    monkeypatch.setattr(slack, "_now", lambda: FAKE_NOW)
+    top = inbox(fake, routes_dirs, "top")
+    paged_card(fake, route, {"status": "decided", "choice": "a", "source": "thread", "decided_at": "2026-09-30T22:00:05Z"})
+    notion.pages = {PAGE_ID: ask_page("Approved", "Approved by Daniel (Approve ticked)")}
+    rc, out, _ = run(capsys, "ask-daniel", "status", "42")
+    assert rc == 0 and out.splitlines() == ["decided a thread 2026-09-30T22:00:05Z", f"page Approved: Approved by Daniel (Approve ticked) {PAGE_URL}"]
+    (bell,) = bells(fake, top)
+    assert bell["text"].startswith(f"from ask-daniel, card `42` decided: its page says Approved: Approved by Daniel (Approve ticked) ({PAGE_URL}) on:")
+
+
+def test_wait_stops_once_the_page_is_answered_though_the_card_is_still_pending(route, notion, fake, registry, routes_dirs, capsys, monkeypatch):
+    monkeypatch.setattr(slack, "_now", lambda: FAKE_NOW)
+    slept: list[float] = []
+    monkeypatch.setattr(slack, "_sleep", lambda s: (slept.append(s), notion.pages.update({PAGE_ID: ask_page("Approved", "Approved by Daniel")})))
+    top = inbox(fake, routes_dirs, "top")
+    paged_card(fake, route, {"status": "pending"})
+    notion.pages = {PAGE_ID: ask_page("Waiting on Daniel")}
+    rc, out, _ = run(capsys, "ask-daniel", "status", "42", "--wait", "--every", "60")
+    assert rc == 0 and slept == [60] and out.splitlines() == [f"page Approved: Approved by Daniel {PAGE_URL}",
+                                                             "differs: the card is pending; its page says Approved"]
+    (bell,) = bells(fake, top)
+    assert bell["text"].startswith("from ask-daniel, card `42` differs from its page: its page says Approved: Approved by Daniel")
+
+
+@pytest.mark.parametrize("card, page, differs", [
+    ({**LANE_CARD, "choice": "b"}, ask_page("Decided otherwise", "Daniel chose B", "B"), True),       # the lane's choice isn't Daniel's Decision
+    ({**LANE_CARD, "source": "default"}, ask_page("Decided otherwise", "his words"), True),
+    ({**LANE_CARD, "source": "thread"}, ask_page("Decided otherwise", "Daniel chose B", "B"), True),   # a letter other than Choose
+    ({**LANE_CARD, "source": "thread", "choice": "b"}, ask_page("Decided otherwise", "Daniel chose B", "B"), False),
+    ({**LANE_CARD, "source": "thread", "choice": "hold"}, ask_page("Decided otherwise", "Daniel chose B", "B"), False),   # no letter to compare
+    (LANE_CARD, ask_page("Decided by lane", "Provisionally accepted", "A"), False),
+    (LANE_CARD, ask_page("Revising"), True),                                                           # the page records no decision
+    ({"status": "pending"}, ask_page("Revising"), False),
+    ({"status": "withdrawn"}, ask_page("Withdrawn"), False),
+    ({"status": "overdue"}, ask_page("Default applied", "Default applied"), True)])
+def test_a_card_differs_from_its_page_by_what_is_decided_who_decided_it_or_its_letter(card, page, differs):
+    class One:
+        def call(self, method, path):
+            return page
+
+    assert bool(slack.card_differs(card, slack.page_state(One(), PAGE_ID))) == differs
+
+
 @pytest.mark.parametrize("to", ["@daniel", "daniel"])
 def test_ask_to_daniel_makes_his_page_and_card_as_ask_daniel_page_does(route, notion, fake, registry, tmp_path, capsys, to):
     """One `ask` verb whose target picks the store: a handle's Linear team, or the Asks for Daniel database."""

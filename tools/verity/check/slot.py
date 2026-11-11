@@ -83,6 +83,7 @@ import shlex
 import subprocess
 import sys
 import time
+from collections.abc import Callable
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
@@ -107,6 +108,10 @@ SCOPE_ENV = "CHECK_SCOPE_UNIT"
 #: the GB (10^9 bytes) a run asks of its slot (`research run --pool --mem-gb`): a slot whose mem= is smaller waits for and reserves
 #: this instead (reserving only the slot's mem= would under-report the run in the ledger)
 RUN_MEM_ENV = "CHECK_RUN_MEM_GB"
+#: a lane waiter that asks at most this many GB (RUN_MEM_ENV) passes the lane waiters ahead of it that only memory keeps from
+#: starting: a 448 GB run at the head held 7 idle slots and every small check behind it. Small runs end and free
+#: their memory soon, so passing the head costs it little
+BACKFILL_MAX_GB = 32
 USAGE = "usage: slot.py [--priority [--rank N]] [--by NAME] [--twin PAIR[@HOME]] [--wait-max SECONDS] [--run-max SECONDS] -- CMD..."
 #: the claims of twins (`--twin`), one directory per pair, beside SLOTS on the machine that holds them; a week old, removed
 TWINS = "twins"
@@ -400,10 +405,7 @@ def window_text(w: dict) -> str:
 
 def asking(slots: list[dict]) -> list[dict]:
     """``slots`` with each mem= raised to what the run asks (RUN_MEM_ENV, GB), in GiB as mem= is; unchanged without it."""
-    try:
-        gb = float(os.environ.get(RUN_MEM_ENV) or 0)
-    except ValueError:
-        gb = 0.0
+    gb = asked_gb()
     want = -(-int(gb * 1e9) // 2 ** 30) if gb > 0 else 0
     return [{**s, "mem": max(s.get("mem") or 0, want)} if want else s for s in slots]
 
@@ -468,7 +470,7 @@ def asker(by: str | None = None, twin: str | None = None) -> dict:
     """Who asked for a slot: this process, the run it belongs to, the tree it checks and its commit (RESEARCH_SOURCE_SHA, the
     shipped tree's: a run's clone of it is <root>/scratch/<run id>/tree, which names none), who (--by, else RESEARCH_AGENT_URL),
     and its pair when it is a twin."""
-    return {"pid": os.getpid(), "run": run_id(), "tree": os.getcwd(),
+    return {"pid": os.getpid(), "run": run_id(), "tree": os.getcwd(), **({"mem_gb": gb} if (gb := asked_gb()) else {}),
             **({"commit": c} if (c := os.environ.get("RESEARCH_SOURCE_SHA")) else {}),
             "by": by or os.environ.get("RESEARCH_AGENT_URL"), **({"twin": twin} if twin else {})}
 
@@ -524,6 +526,15 @@ def options(opts: list[str]) -> tuple[bool, str | None, float | None, float | No
 def run_id() -> str | None:
     """The `research run` this process is part of (RESEARCH_RUN_ID), or None."""
     return os.environ.get("RESEARCH_RUN_ID")
+
+
+def asked_gb() -> float:
+    """The GB this waiter's run asks (RUN_MEM_ENV), 0 when it names none; a value that isn't a number stops the waiter."""
+    v = os.environ.get(RUN_MEM_ENV) or "0"
+    try:
+        return max(float(v), 0.0)
+    except ValueError:
+        sys.exit(f"slot: {RUN_MEM_ENV}={v!r} isn't a number of GB; set it to one, or unset it")
 
 
 def min_mem_gb() -> int | None:
@@ -718,9 +729,12 @@ def join(lock_dir: Path, priority: bool = False, who: dict | None = None, line: 
     return d / name, fd
 
 
-def ahead(ticket: Path) -> int:
-    """How many live waiters came before `ticket`'s; a dead waiter's ticket is removed."""
-    n = 0
+def ahead(ticket: Path, free_gb: float | Callable[[], float] | None = None) -> int:
+    """How many live waiters came before `ticket`'s; a dead waiter's ticket is removed. With `free_gb` (the GiB free now, or a
+    function read once, the first time a ticket ahead names an ask), a lane waiter whose ticket asks more than that is not
+    counted: only memory keeps it from starting, so it holds no one behind it (BACKFILL_MAX_GB). A priority waiter, or a ticket
+    that names no ask, always counts."""
+    n, free = 0, None
     for p in sorted(ticket.parent.iterdir()):
         if p.name >= ticket.name:
             break
@@ -734,10 +748,23 @@ def ahead(ticket: Path) -> int:
             fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
             p.unlink(missing_ok=True)
         except BlockingIOError:
-            n += 1
+            asks = _asks(fd) if free_gb is not None and not p.name.startswith(PRIORITY) else 0.0
+            if asks and free is None:
+                free = free_gb() if callable(free_gb) else free_gb
+            n += 0 if asks and asks > free else 1
         finally:
             os.close(fd)
     return n
+
+
+def _asks(fd: int) -> float:
+    """The GiB (memory_gb's unit) a waiter's ticket (its open descriptor) says its run asks, 0 when it says none."""
+    try:
+        return float(json.loads(os.pread(fd, 4096, 0) or b"{}").get("mem_gb") or 0) * 1e9 / 2 ** 30
+    except (ValueError, OSError, AttributeError) as e:
+        print(f"slot: a waiter's ticket is unreadable ({type(e).__name__}: {e}); it stays ahead, as if it asked no memory",
+              file=sys.stderr)
+        return 0.0
 
 
 def allowed() -> set[int]:
@@ -915,6 +942,8 @@ def main(argv: list[str], now=lambda: datetime.now(timezone.utc), sleep=time.sle
             if state == "taken":
                 return gone(f"its twin took a slot first ({describe(info) or 'claimed'})")
         n = ahead(ticket)
+        if n and not priority and asked_gb() <= BACKFILL_MAX_GB:
+            n = ahead(ticket, free_gb=lambda: memory_gb() - reserved_gb())
         got = None if n else take([s for s in slots if (priority or not s["trains"]) and holds(s, min_mem)], SLOTS.parent, now(),
                                   priority)
         if got and pair:

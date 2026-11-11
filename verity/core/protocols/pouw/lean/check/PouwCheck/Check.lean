@@ -5,12 +5,12 @@ public import PouwCheck.WindowSalt
 /-!
 # PoUW's rule (`core_check.py`, "the check")
 
-`registered` holds the registration to PoUW's rule: a served execution phase in the verifier's context registering exactly
-`window.REGISTERED` (a registration of `window.LEGACY_REGISTERED`, made before the fixed-length rule, is not of record),
+`registered` holds the window commitment record to PoUW's rule: a served execution phase in the verifier's context registering exactly
+`window.REGISTERED` (a record of `window.LEGACY_REGISTERED`, made before the fixed-length rule, is not of record),
 its `length` item a fixed-length execution phase's at the verifier's max_tokens (`window.length_problem`: no EOS-keyed row, each
 slot served its max_tokens), a work level whose tiles lie in the declared range, each item the verifier's own at that level, the
 population N = point(level + 1), the sampling design subset:K′ with K′ the execution phase's exact `k_prime`, and the check's query and
-scheme. `outcome` then holds the service's answer to it: one-stage's, for this registration's digest, and on acceptance
+scheme. `outcome` then holds the service's answer to it: one-stage's, for this record's digest, and on acceptance
 a profile and sample of the registered partition's N units sampled subset:K′ at the execution phase's δ, and a live execution phase's salt its
 live coin's (`windowSaltReason`; a seeded execution phase's answer carries none). Every refusal is the first rule it breaks, in
 this order, with `core_check.py`'s reason.
@@ -39,7 +39,7 @@ def registeredSorted : List String := (PouwWindow.registered.toArray.qsort (· <
 /-- `sorted(window.LEGACY_REGISTERED)`. -/
 def legacySorted : List String := (PouwWindow.legacyRegistered.toArray.qsort (· < ·)).toList
 
-/-- What a registration that keeps PoUW's rule fixes: the level's work, the sampling item and K′, and `root_W`. -/
+/-- What a window commitment record that keeps PoUW's rule fixes: the level's work, the sampling item and K′, and `root_W`. -/
 structure Fixed where
   work : Work
   sampling : Sampling
@@ -64,8 +64,8 @@ def levelOf (items : Json) : Option Nat := PouwWindow.field? (get items "work") 
 def wrongItems (p : Params) (items : Json) (f : Fixed) : List String :=
   ((expected p f).filter fun (k, v) => cs (get items k) ≠ cs v).map (·.1)
 
-/-- PoUW's rule over the registration. -/
-def registered (p : Params) (c : Registration) : Except String Fixed :=
+/-- PoUW's rule over the window commitment record. -/
+def registered (p : Params) (c : WindowCommitmentRecord) : Except String Fixed :=
   let win := c.window
   let ks := (keys win.items).getD []
   let bits := p.gridBits
@@ -137,8 +137,8 @@ instance instDecidableUnitsOk (units : Array Nat) (k n : Nat) : Decidable (Units
 
 def drawnJson (drawn : Array (String × Nat)) : Json := Json.mkObj (drawn.toList.map fun (k, v) => (k, Json.num v))
 
-/-- The service's answer to a registration that keeps PoUW's rule. -/
-def outcome (p : Params) (c : Registration) (f : Fixed) (e : Evidence) : Core.Outcome Public Core.Integrity :=
+/-- The service's answer to a window commitment record that keeps PoUW's rule. -/
+def outcome (p : Params) (c : WindowCommitmentRecord) (f : Fixed) (e : Evidence) : Core.Outcome Public Core.Integrity :=
   let d := Flock.hexOf c.digest
   let k := f.sampling.k
   let n := f.work.n
@@ -169,7 +169,7 @@ def outcome (p : Params) (c : Registration) (f : Fixed) (e : Evidence) : Core.Ou
       if why.isSome then .reject s!"salt: {why.getD ""}"
       else .accept ⟨p.check, f.work, f.sampling, p.maxTokens, f.rootW, draw.units⟩ prof
 
-def check (p : Params) (c : Registration) (e : Evidence) : Core.Outcome Public Core.Integrity :=
+def check (p : Params) (c : WindowCommitmentRecord) (e : Evidence) : Core.Outcome Public Core.Integrity :=
   match registered p c with
   | .error r => .reject r
   | .ok f => outcome p c f e

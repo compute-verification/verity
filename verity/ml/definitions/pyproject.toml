@@ -8,6 +8,8 @@ markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]
 untraced = ["tests/test_cublas_train.py"]
 # The catalog's test loads every registry module, which reads `verity.ml`.
 inputs = ["verity"]
+# its tests are independent, and in one process the suite is among the longest of a check's
+parallel = true
 
 # What these test files read that their source doesn't name (a tree a test walks, a module it loads by a name it computes,
 # what a program it starts reads): the graph's test-file tasks are keyed on it.

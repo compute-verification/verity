@@ -44,22 +44,46 @@ verity bench rho --out DIR    # every scenario; writes rho.md, rho.json and figu
 `verity bench rho` runs `run.py`, which prints Markdown and, with `--out DIR`, writes `rho.md`, `rho.json` and
 `figures/` there. `run.py` takes `--scenario NAME` (repeatable), `--target X` and `--set KEY=VALUE` (any registry key, for the whole run).
 `periods.py` gives the same per monitoring period, over one datacenter and over the world's compute, with each scenario's
-range, its parts by kind and its premises ranked; `periods.py --measured CIRCUIT` evaluates them with a measured training
-step's design in place of the FLOP model, after a table of the step beside it (`circuits.py`).
+range, its parts by kind and its premises ranked; each row says what it assumes about proofs, and the remote scenario
+with proofs sampled at the registry's share stands beside the one where every unit is proved. The ranking shows a
+proof block's output bits over the public size classes as the size class's limit, not as a premise. `periods.py
+--measured CIRCUIT` evaluates them with a measured training step's design in place of the FLOP model, after a table of
+the step beside it (`circuits.py`). `periods.py --bounds CLASS` (repeatable) bounds each scenario by that class alone,
+and its header says what such a row's figure covers:
+
+~~~sh
+uv run python benchmarks/rho/periods.py --bounds min-cut --scenario reference-onsite-h200 \
+    --scenario reference-remote-h200    # onsite and remote on the min-cut bound alone
+~~~
 
 ## Inputs
 
 - `data/*.toml`, the registry (`params.py`): every number the model reads, addressed by a dotted key, each with
   `value`, `unit`, a plausible range (`low`, `high`, which the sweeps span), `source` and `status` (`datasheet`,
-  `measured`, `declared`, `assumed`, `ruled`, `conjecture`, `derived`). `data/scenarios*.toml` and
+  `measured`, `declared`, `assumed`, `ruled`, `conjecture`, `derived`). What another file states is read from it,
+  never restated in a file (`params.sourced`). From `verity`: the monitoring periods; the output bits an accepted
+  incorrect proof block injects (`step_bits`), the widest public size class of a block's outputs, a power of two from
+  16 to 262,144 bits (`verity.ml.circuits.partition_v2`); the per-window δ (`verity.core.protocols.profile`), once
+  for a window's coins and for SPOT's sample and twice for the window's cryptography; and the reporting δs
+  the incorrect-outputs row reports at. From `benchmarks/nci/calibrations.json`: the calibrated policy's `K`, with
+  the least and the greatest calibrated `K` as its range, and `Γ`; the session policy's `K` is a ruling
+  `data/reference.toml` states, and only its range is read (`params.ranges`). The census's numbers are the exception:
+  `verity` takes them as parameters, so the registry reads no census. `data/` states the reference datacenter's
+  machines (the count of each reference fleet of 8-GPU servers), the world's active parameters and the session
+  policy's `Γ` at the world's model, each naming the census entry it is, and the tests hold each equal to
+  `benchmarks/census`. `data/scenarios*.toml` and
   `data/reference.toml` name the scenarios; `data/premises.toml` says where each assumption stands and up to what
-  block size; `data/circuits.toml` holds training steps measured as Boolean circuits (the census's gates, ANDs and
+  block size, and holds (H)'s `β` for an activation by block size (`premise.training-cut-hardness.beta`);
+  `data/circuits.toml` holds training steps measured as Boolean circuits (the census's gates, ANDs and
   counted products, and `circuit_properties`' `s_×`, `a_out` and `a_in`).
 - The Lean locks (`Security/lean-audit.json`, `Security/Properties/lean-audit.json`), which `lean.py` reads for each
   citation's status.
-- `benchmarks/census` (devices and the world fleets) and `benchmarks/nci` (the remote regime's terms in `tiers.py`, its
-  algorithms and their traits), which the tests hold the data to; `Security/Definitions/Nci/Remote.lean`, whose
-  `remoteDampener` `tests/test_envelopes.py` holds `theorem.multiple_bound` to.
+- `benchmarks/census` (devices, the reference datacenter and the world) and `benchmarks/nci` (the remote regime's
+  terms in `tiers.py`, its algorithms and their traits), which the tests hold the data to;
+  `Security/Definitions/Nci/Remote.lean`, whose
+  `remoteDampener` `tests/test_envelopes.py` holds `theorem.multiple_bound` to; and the Lean files that define the
+  min-cut bound's `alphaHE` and `shareF` and state its `HE` and `HEShared`, found through the lock, which
+  `tests/test_min_cut.py` holds `min_cut.py` to.
 
 ## The model
 
@@ -104,6 +128,25 @@ structure (`structure.train-step-v1`, SmolLM2-135M's training step) is `s_×` in
 `units.gates_per_flop` counted on the same design, where `G` no longer cancels and a gate holds `u/w = 2G / (κ s_×)` of
 the reference's weight.
 
+**The min-cut bound.** `min_cut.py` is the one place that computes Lean's `HE` and `HEShared` (`min_cut.HE`,
+`min_cut.HE_SHARED`), each function one side of an inequality they conclude or that inequality solved for one term; it
+is standard library only, so another benchmark loads it by path. A work of `N` MACs with `O` output wires needs at
+least `m` blocks of at most `k` fresh input bits with `N ≤ m (k + F α) + F (k/2) √(m O / q)`, `α = ½ √(k³ / (q b))`,
+under (H) at `q = β_w β_x` and (E) at `b` (`training-cut-hardness`, `training-cut-exports`: conjectures).
+
+- `min_cut.bound(c, k, n, N=…, O=…, size=…)` is the bound at a policy `(c, k, n)` on a circuit's own MACs, output
+  wires and gates: the least blocks, the most MACs a block, the slowdown `m c / size` (at least 1) and what it rests
+  on. `N` and `O` are the caller's: it converts no count. Defaults: `β_w` and `b` a bf16 word's 16 bits, the most (H)
+  and (E) can hold at, since a word's own wires are a cut; `β_x` the rows' `beta(k)`, and no bound past their last
+  `k`; `F = 1` (`HE`: at most two of forward, input-gradient and weight-gradient products), `share(3)` for all
+  three (`HEShared`).
+- The class `min-cut` in `CLASSES` is `min_cut.macs_a_block` on the profile's own counted products, the trained
+  weights' forward and input-gradient products: a weight value at `b_w`, an activation value at `β(k)` and at most
+  `b_a`, an output at `b_a`, and `outputs_per_product` from the model's shape. It bounds the declared inference
+  blocks only, so where they hold little of the rate a figure it sets is the uncertified routes' and the
+  unregistered pool's (`periods.py --bounds min-cut` says the share). That the work's MACs are disjoint, its values
+  distinct words and no two of its matmuls share both operands' values is assumed, not checked.
+
 ## Modules
 
 Each module is one interface with interchangeable implementations: a different assumption is a different
@@ -113,14 +156,15 @@ implementation, or different numbers in `data/`, never an edit to the modules ar
 |---|---|
 | `theorem.py` | `Budget`, `Blocks`, `Cut`, `ServerBlock`, `Partition`; `Cap`; `local`, `aggregate`, `overhead`, `padded`, `multiple_bound` |
 | `classes.py` | `Argument.allowance(Profile) → Allowance`, raising `Outside`; `per_block`, `weight_per_gate`; `premise_status`; `Structure` |
+| `min_cut.py` | `alpha`, `share`, `macs_at_most`, `blocks_at_least`, `slowdown_at_least`, `macs_a_block`, `beta`; `bound(c, k, n, N, O, size) → Bound` |
 | `attacks.py` | the same `Argument`, side `attack`, on a server block's layout |
 | `profile.py` | `Profile`: every field a class reads, named as in Lean |
 | `families.py` | `Family.profile(Model, Run) → Profile`, for each algorithm family and any `benchmarks/nci` algorithm by its traits |
-| `instances.py` | `Model`, `Run` (a target and its kind) |
+| `instances.py` | `Model`, `Run` (a target and its kind); `models`, every model's shape, which `benchmarks/nci/kappa.py` and `benchmarks/circuit_properties` read |
 | `circuits.py` | `Circuit` (a measured training step), `compare → Comparison` with the FLOP model, `in_place` |
 | `hardware.py` | `Units`, `Location`, `Fleet`, `MonitoringPeriod` |
 | `envelopes.py` | `Pouw`, `Detection`, `Wipe`, `Certifier`; `Regime.partition`, `Regime.delta`; `Policy` |
-| `params.py` | `Registry`: dotted keys over `data/*.toml` and core's monitoring periods (`PERIODS`), `override`, `fields` |
+| `params.py` | `Registry`: dotted keys over `data/*.toml` and what another file states (`sourced`: core's monitoring periods, `PERIODS`, per-window δ and reporting δs, a proof block's widest output size class, `BLOCK_OUTPUT_BITS`, and the calibrations' `K` and `Γ`; `ranges`: a range read for a value a file states), `override`, `fields` |
 | `scenario.py` | `build`, `evaluate → Result`, `seconds` |
 | `analysis.py` | `sweep`, `tornado`, `threshold`, `dangers`, `rescues`, `corner`, `margins`, `phase`, `frontier`, `attribution`, `upto` |
 | `operating.py` | `work`, `exfil`, `points`, `incorrect` |
@@ -150,7 +194,8 @@ intermediate, not the slowdown. The glossary's `ρ` is the ACCEL model's resourc
   it reads in `Profile`.
 - **An attack**: an `Argument` with side `attack` in `attacks.ATTACKS`.
 - **An algorithm family**: a table in `data/families.toml` of an existing kind, or a new kind in `families.KINDS`.
-- **A model or run**: a table in `data/models.toml`.
+- **A model or run**: a table in `data/models.toml`, the one place a model's shape is stated: another benchmark reads
+  it through `instances.models` and states none.
 - **Hardware, a fleet**: a table in `data/hardware.toml`.
 - **An envelope**: a dataclass with `slack` or `state` and `delta` in `envelopes.PARTS`, held by a regime.
 - **A regime**: a dataclass with `partition` and `delta` in `envelopes.KINDS` and its table in `data/envelopes.toml`.

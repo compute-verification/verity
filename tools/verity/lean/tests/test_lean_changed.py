@@ -967,6 +967,48 @@ def test_try_keeps_dependencies_no_records_run_took_and_leaves_them_out_of_links
     assert calls["link"] == [] and LC.read_links(tree) == {"Sec": "k"}, "a later --records run never drops them"
 
 
+def test_a_tree_s_builds_and_links_follow_a_layout_move_before_the_packages_are_synced(tmp_path, monkeypatch):
+    """A slot's tree is keyed by package paths, and a move renames tracked files only: the build of `Old/Proofs` would stay
+    there while `new/Proofs` compiled every module again and took its dependencies again. Under the tree's lock the build
+    directories and their `LINKS` entries move with their packages, and the former directory's stale copies go: where the
+    step takes the lock itself, and in `hold_tree` for every other run, before its caller reads the tree."""
+    def a_tree(name: str) -> Path:
+        tree = tmp_path / name
+        for pkg, built in (("Old", "spec"), ("Old/Proofs", "proofs"), ("code", "code")):
+            (tree / pkg / ".lake" / "build").mkdir(parents=True)
+            (tree / pkg / ".lake" / "build" / "olean").write_text(built)
+            (tree / pkg / "A.lean").write_text("-- a copy the last run synced\n")
+        LC.write_links(tree, {"Old": "k0", "Old/Proofs": "k1", "code": "k2"})
+        return tree
+
+    def carried(tree: Path) -> bool:
+        return (LC.read_links(tree) == {"new": "k0", "new/Proofs": "k1", "code": "k2"} and not (tree / "Old").exists()
+                and [(tree / p / ".lake" / "build" / "olean").read_text() for p in ("new", "new/Proofs", "code")]
+                == ["spec", "proofs", "code"])
+
+    monkeypatch.setattr(LC._moved(), "recorded", lambda root: [{"Older/": "Old/"}, {"Old/": "new/"}])
+    checkout = tmp_path / "checkout"
+    for f in ("new/lakefile.toml", "new/A.lean", "new/Proofs/lakefile.toml", "code/lakefile.lean", "README.md"):
+        (checkout / f).parent.mkdir(parents=True, exist_ok=True)
+        (checkout / f).write_text("")
+    monkeypatch.setattr(LC, "ROOT", checkout)
+    tree, said = a_tree("step"), []
+    LC.carry_builds(tree, said.append)
+    assert carried(tree) and len(said) == 2 and "new/Proofs: its build directory moved with it from Old/Proofs" in said[1]
+    LC.carry_builds(tree, said.append)
+    assert carried(tree) and len(said) == 2, "nothing to carry the next time"
+
+    tree, said = a_tree("records"), []
+    with open(tree / ".lock", "w") as held:
+        assert LC.hold_tree(held, tree, said.append) and carried(tree) and len(said) == 2
+    (checkout / "new" / "Proofs" / "lakefile.toml").unlink()
+    tree = a_tree("no-package")
+    with open(tree / ".lock", "w") as held:
+        assert LC.hold_tree(held, tree, said.append)
+    assert (tree / "Old" / "Proofs" / ".lake").is_dir() and (tree / "new" / ".lake").is_dir(), \
+        "a build whose path the checkout has no package at stays, and its directory with it"
+
+
 def test_try_refuses_without_a_build_slot_naming_the_machines_whose_slots_have_one(trying, tmp_path, monkeypatch):
     _, calls = trying
     monkeypatch.setattr(LC.LEAN_SLOT, "hold", refuse)

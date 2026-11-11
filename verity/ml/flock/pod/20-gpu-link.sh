@@ -3,6 +3,7 @@
 # prover) and run it. Run from the verity tree (research run --source . --cwd source).
 # env: MODE=all|build|selftest|serve|prove  VUS="8 64" (selftest) SESS_VUS=4096 RUNS=3 VERIFIER=host:port (prove; empty =
 #      a loopback verifier process) LISTEN=0.0.0.0:7300 SESSIONS=N (serve) OPERATOR=lane  GPU=1 (0: CPU-only build)  SM=90
+#      DRV (the driver's major version; set, a GPU build runs no nvidia-smi, as beside another lane's GPU work)
 set -uxo pipefail
 SRC=$(pwd); SM=${SM:-90}; MODE=${MODE:-all}; GPU=${GPU:-1}
 W=${FLOCK_WORK:-/workspace}/flock-gpu-link; F=$W/flock; O=${RESEARCH_RUN_DIR:-/tmp/fgl}/out; mkdir -p $W $O
@@ -12,14 +13,14 @@ TH=$([ "$Q" = max ] && nproc || echo $(( Q / PER ))); export RAYON_NUM_THREADS=$
 export DEBIAN_FRONTEND=noninteractive
 C13=${CUDA_TK:-/usr/local/cuda-13.3}   # CUDA_TK: a toolkit the pod's driver runs natively (no compat), e.g. an R550 host's 12.4
 if [ "$GPU" = 1 ]; then
-  nvidia-smi --query-gpu=name,driver_version,memory.total --format=csv | tee $O/gpu.txt
+  [ -n "${DRV:-}" ] || nvidia-smi --query-gpu=name,driver_version,memory.total --format=csv | tee $O/gpu.txt
   if [ ! -x $C13/bin/nvcc ]; then
     . /etc/os-release; REPO=ubuntu${VERSION_ID/./}
     dpkg -s cuda-keyring >/dev/null 2>&1 || { wget -q https://developer.download.nvidia.com/compute/cuda/repos/$REPO/x86_64/cuda-keyring_1.1-1_all.deb && dpkg -i cuda-keyring_1.1-1_all.deb; }
     apt-get update -qq
     apt-get install -y -qq --no-install-recommends cuda-nvcc-13-3 cuda-cudart-dev-13-3 >/dev/null || exit 1
   fi
-  DRV=$(nvidia-smi --query-gpu=driver_version --format=csv,noheader | head -1 | cut -d. -f1)
+  DRV=${DRV:-$(nvidia-smi --query-gpu=driver_version --format=csv,noheader | head -1 | cut -d. -f1)}
   [ "$DRV" -lt 580 ] && [ -z "${CUDA_TK:-}" ] && { apt-get install -y -qq cuda-compat-13-3 >/dev/null || exit 1; }
   export PATH=$C13/bin:$PATH NVCC=$C13/bin/nvcc LD_LIBRARY_PATH=$C13/compat:$C13/lib64:${LD_LIBRARY_PATH:-}
 fi

@@ -35,6 +35,9 @@ else
       {"command": "python3 $dest/task_hook.py", "matcher": "Task", "timeout": 10},
       {"command": "python3 $dest/task_hook.py", "matcher": "CallDynamicTool", "timeout": 10},
       {"command": "python3 $dest/task_hook.py", "matcher": "^MCP:", "timeout": 10}
+    ],
+    "stop": [
+      {"command": "python3 $dest/stop_hook.py", "timeout": 60}
     ]
   }
 }
@@ -45,6 +48,40 @@ EOF
   grep -qxF /.cursor/hooks.json "$exclude" 2>/dev/null || echo /.cursor/hooks.json >> "$exclude"
   echo "agent-guard: wrote $ws/.cursor/hooks.json (excluded), running $dest/shell_hook.py"
 fi
+# A Task-launched cloud agent's workspace root is /agent, with this repository checked out under /agent/repos/, and Cursor
+# reads the root's hooks (a daemon started with --hook-repo-path also reads that checkout's), so the checkout's tracked
+# hooks.json may run nothing there. Each root in AGENT_GUARD_ROOTS that isn't itself a checkout gets a hooks.json running the
+# first checkout's hook.sh under it, else DEST's copy. Cursor strips `/*...*/` and `//...` from hooks.json as comments, inside
+# strings too, so no command may hold either: the glob is `?*`, not `*`.
+for root in ${AGENT_GUARD_ROOTS:-/agent}; do
+  [ -d "$root" ] && [ ! -e "$root/.git" ] || continue
+  f=$(mktemp)
+  if ! python3 - "$root" "$dest" > "$f" <<'PY'
+import json, sys
+root, dest = sys.argv[1:]
+run = (f"sh -c 'for h in {root}/repos/?*/tools/agent-guard/hook.sh; do [ -f \"$h\" ] && exec sh \"$h\" \"$1\"; done; "
+       f"exec python3 {dest}/\"$1\"' guard ")
+hook = lambda name, timeout=10, **kw: {"command": run + name, "timeout": timeout, **kw}
+out = json.dumps({"version": 1, "hooks": {
+    "beforeShellExecution": [hook("shell_hook.py", failClosed=True)],
+    "preToolUse": [hook("task_hook.py", matcher=m) for m in ("Task", "CallDynamicTool", "^MCP:")],
+    "stop": [hook("stop_hook.py", timeout=60)]}}, indent=2)
+if "/*" in out or "//" in out:
+    sys.exit(f"agent-guard: a hooks.json for {root} would hold `/*` or `//`, which Cursor strips as a comment")
+print(out)
+PY
+  then
+    rm -f "$f"
+    continue
+  fi
+  if { mkdir -p "$root/.cursor" && cp "$f" "$root/.cursor/hooks.json"; } 2>/dev/null \
+      || { sudo -n mkdir -p "$root/.cursor" && sudo -n cp "$f" "$root/.cursor/hooks.json"; }; then
+    echo "agent-guard: wrote $root/.cursor/hooks.json, running $root/repos/*/tools/agent-guard/hook.sh"
+  else
+    echo "agent-guard: could not write $root/.cursor/hooks.json: no hook runs for an agent rooted at $root" >&2
+  fi
+  rm -f "$f"
+done
 tmp=$(mktemp -d)
 trap 'rm -rf "$tmp"' EXIT
 if git -C "$ws" fetch -q origin main && git -C "$ws" archive origin/main tools/agent-guard | tar -x -C "$tmp"; then

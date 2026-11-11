@@ -413,6 +413,9 @@ def test_gpu_lease_hands_out_disjoint_gpus_and_frees_them_when_the_holder_exits(
     assert [ln.split()[:2] for ln in lines[-3:]] == [["0", "held"], ["1", "held"], ["2", "free"]] and "run=r-test" in lines[-3]
     after = subprocess.run(["bash", str(GPU_LEASE), "status"], env=env, capture_output=True, text=True).stdout.split("\n")
     assert [ln.split()[:2] for ln in after if ln] == [["0", "free"], ["1", "free"], ["2", "free"]]
+    for i in range(3):      # an ended lease's line says so, and still names the run that held the GPU last
+        line = (tmp_path / "gl" / f"{i}.owner").read_text()
+        assert re.match(r"released=\d{4}-\d\d-\d\dT\d\d:\d\d:\d\dZ pid=\d+ run=r-test ", line), line
 
 
 @needs_flock

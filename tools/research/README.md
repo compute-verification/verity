@@ -20,7 +20,7 @@ src/research/
 ├── remote.py       --on: machines file, tool/source snapshots, request, claim-by-run-id, exclusive lock, fetch, preservation manifest
 ├── disk.py         --disk-gb admission (--queue): held on the machine while the disk would pass 80%, released at 75%
 ├── mem.py          --mem-gb admission: cgroup limit - in use - live /workspace/ramlock reservations; MemoryNotAvailable
-├── auto.py         --on auto: a CPU node's research pool (cpu-1, cpu-5, cpu-3) or node 2's queue
+├── auto.py         --on auto: a CPU node's research pool or node 2's queue, and when the run should start there
 ├── jobuser.py      --job-user: the workload as an unprivileged user in a sandboxed system unit
 ├── env.py          conditions(): the one baseline of an attempt's conditions (source, runtime, hardware, execution); ONE SKU->family map
 ├── store/          the evidence store (`research data`; README.md there is the contract): tool, tools_registry, derivation, attempt,
@@ -84,7 +84,7 @@ research fetch RUN [--all]               # records only, or every file sha256-ve
 research status [RUN] [--refresh] [--all] [--json]   # under each active run, a `mem` line per cgroup it executes in (scopemem.py):
                                          # current, peak, cap, growth from its own samples, NEAR CAP within 10%; remote: with RUN or --refresh
 research inspect RUN [--json|--py-spy]   # fetch, status RUN and inspect take a run another VM launched (a full id): found on
-                                         # --on NAME, else on each ssh machine, and its records fetched here
+                                         # --on NAME, else on each ssh machine but the auditor hosts, and its records fetched here
 research data SUBCOMMAND ...             # the store: put/show/fetch/select/... and lookup / pull / attempt publish
 research pods create --name N --max-hours H ... | list | terminate | check-part    # RunPod lifecycle (pods/runpod.py, pods/part.py)
 research pods extend TARGET --hours H | lease TARGET                               # the pod's lease (pods/lease.py)
@@ -412,8 +412,11 @@ called PRESERVED without a remote; nothing in the store is ever overwritten.
   and writes the attempt manifest (write-once). One line reports it:
   `research: attempt published: N outputs drv=... reuse=...`. A publish failure
   never changes the run's exit status: it is written to
-  `store_publish_error.json` and `research data attempt publish RUN` retries
-  (also the way to publish old run dirs; `--all --runs-dir DIR` sweeps a runs
+  `store_publish_error.json` and `research data attempt publish RUN` retries;
+  a run whose attempt names its run record (run custody, `--run-record`)
+  retries with `research data custody RUN --publish`, since an attempt is
+  write-once and `attempt publish` leaves the record out (it refuses a run with
+  run custody) (also the way to publish old run dirs; `--all --runs-dir DIR` sweeps a runs
   root and prints `published / already present / refused (not terminal) /
   errors` with one line per error class). A configured-but-unusable remote
   (credential env vars unset here) does not stop a local publish: the attempt
@@ -447,7 +450,7 @@ is written for it, and a sidecar wins.
 research keep PATH --owner @LANE --expires DATE|never|7d --priority P [--regenerate CMD] [--art ART | --preserve] [--why T] [--by URL]
 research keep show PATH                      # the record covering PATH, explicit or implicit, as JSON
 research retention report [--root /workspace] [--depth 2] [--json]
-research retention gc [--root /workspace] [--force] [--high-pct 80] [--low-pct 75] [--jobs-dir D]... [--json] [--apply]
+research retention gc [--root /workspace] [--force] [--high-pct 80] [--low-pct 75] [--max-paths 200] [--jobs-dir D]... [--store S] [--json] [--apply]
 research retention rm PATH... --approved-by @OWNER --ref REF [--by URL] [--root /workspace] [--jobs-dir D]... [--json] [--apply]
 ~~~
 
@@ -455,15 +458,16 @@ research retention rm PATH... --approved-by @OWNER --ref REF [--by URL] [--root 
 a failed push records nothing. The report walks with `os.scandir` and `lstat`, never into a recorded path. It lists every recorded
 path and every area in the top `--depth` levels with no record beneath it (`unowned`): unowned and expired first, then totals.
 
-Policy `default` (`default/v0`) acts only over `--high-pct` (vy-disk-guard's 80%) or with `--force`. It deletes the lowest priority,
-then the oldest expiry, until the filesystem is under `--low-pct` (75%). A path qualifies only when its record is valid, of this node,
-expired, `low` or `normal`, and preserved or regenerable, it holds no nested record, and no file in `/workspace/pouw/fill/queue`,
-`/workspace/pouw/fill/running` or a `--jobs-dir` names it. Just before `--apply` deletes a path, its record and the job scripts are
-read again. A preserved path also needs its artifact to hold every file now under it at its size, so files custody trimmed never
-count as preserved, and `preserved.check` in head mode must find the artifact PRESERVED. An implicit record's marker must still vouch
-for the run dir (the store README's §10.1). A path without a record is never deleted. Without `--apply` gc deletes nothing and reads
-no remote; either way it prints every deletion and every skip with its reason. The failure it prevents: hundreds of GiB of unowned,
-unpreserved files on a node that nobody can decide to delete.
+Policy `default` (`default/v0`) acts only over `--high-pct` (vy-disk-guard's 80%) of blocks or inodes, or with `--force`. It deletes
+the lowest priority, then the oldest expiry, until the filesystem is under `--low-pct` (75%), at most `--max-paths` paths a pass. A
+path qualifies only when its record is valid, of this node, expired, `low` or `normal`, and preserved or regenerable, it holds no
+nested record, and no file in `/workspace/pouw/fill/queue`, `/workspace/pouw/fill/running` or a `--jobs-dir` names it. Just before
+`--apply` deletes a path, its record and the job scripts are read again. A preserved path also needs its artifact to hold every file
+now under it at its size, so files custody trimmed never count as preserved, and its stored copy `verified`, `expired` or
+`withdrawn` on the remote; one that can't be asked about fails the pass (`retention.STORED`). An implicit record's marker must still
+vouch for the run dir (the store README's §10.1). A path without a record is never deleted. Without `--apply` gc deletes nothing and
+reads no remote; either way it prints every deletion and every skip with its reason. The failure it prevents: hundreds of GiB of
+unowned, unpreserved files on a node that nobody can decide to delete.
 
 `rm` is the one way to delete data you don't own on a node, for a cleanup the policy doesn't reach. It deletes a path only when a
 record covers it (its own or an ancestor's), and that record and every record beneath it (sidecars and implicit ones) name the

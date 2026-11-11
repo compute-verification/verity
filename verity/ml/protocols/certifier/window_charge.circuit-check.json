@@ -1,16 +1,12 @@
 {
  "definitions": {
-  "ChargeCount_v2{N=1,H=1,O=1}": {
-   "and": 53734,
-   "type": "f0a2b7c414bb614a23ac8d2fc46e47a5bd3fd73245c454a9ffab3a3fa02f98c76e25a4d87386207130bc7b2e9a777b277d9ed0c74ed144a27a131f45b20992f2"
+  "ChargeCount_v2{N=2,H=2,O=0,L=2}": {
+   "and": 40508,
+   "type": "70ae7fa4be93ed7aa73b312099b287d0c8cf6e6bae70d80c4870b782625a903c5b8dc8eda7ce06d96fcc7ed9376736bc13b301b999d64c065c5ab60c977a3a28"
   },
-  "ChargeCount_v2{N=2,H=2,O=0}": {
-   "and": 40280,
-   "type": "538d1d426d9ab1a0760a03159b94c6389b0f21a38114396827cd305f9dbd33a537143737543b01b2caebb90d4d2c7f7d60465513f01fe2ca46669b9622a17eb0"
-  },
-  "ChargeLink_v2{N=1,H=1,O=1}": {
-   "and": 53894,
-   "type": "9f517757a3753446f127be998a1452e64e2d17de1748040e7077f32d14f78d6a44debf6876976dca381760bbc52b3a77ca36fea702090b559e658eeaa98dce87"
+  "ChargeLink_v2{N=1,H=1,O=1,L=1}": {
+   "and": 54015,
+   "type": "33aa21e7aa487d6c49ccd5a29ce57036ee4c505c06d9b784a976e07585b448c482db51bccba54fcab16b9fb1d630a0f7bc4093cf7bff1b53a076ca8e656ad81c"
   }
  }
 }

@@ -66,7 +66,9 @@ lister, its kinds' runners, its tests and its own `tasks.toml` table, and edits 
   `pyproject.toml`; `lean`: every `lean-toolchain` and `lake-manifest.json`; `rust`: `verity/ml/flock/check_build.sh`, which
   pins the Rust toolchain and the Flock commit.
 - Tasks are sorted by id. An id is `<kind>:<name>`, unique in the graph.
-- `argv` defaults to `["verity", "graph", "run", "<id>"]`; `vars` is `{name: string}`.
+- `argv` defaults to `["verity", "graph", "run", "<id>"]`; `vars` is `{name: string}`. Both are in the key, so a lister puts in
+  `vars` what a run depends on of the tree beyond its inputs' bytes: the circuit-binding family's `lookups` is the digest of
+  what the tree answers each path its runs look for, so a module file added there reruns them.
 - `inputs` are files of the tree, sorted. The core adds the kind's runner (`runners/<kind>.py` and `runners/__init__.py`) to
   every task's inputs, so a runner's change reruns every task of its kind.
 - `reads` name another task's output; `outputs` are files, by relative path in the task's work directory.
@@ -166,7 +168,7 @@ runs them, one task a step:
 | `lean-build:verity/core/service/flock` | lean | `lake build` there (`suites.LAKE_BUILD`) | the package's files but its `lean-audit.json` | each `lean_exe` of its `defaultTargets`, at `.lake/build/bin/<exe>` |
 | `lean-unit-cut:verity/ml/flock/verifier/unit_cut_agree.py` | py | `unit_cut_agree.py --lean VERIFY --out WORK/lean-unit-cut` | the script and its import closure (the test-file family's `Imports`) | `lean-unit-cut/result.json`, the cuts and how many agreed |
 | `lean-agreement:verity/ml/flock/verifier` | py | `check.py --lean-agreement WORK UPSTREAM INPUTS VERIFY` | that directory, and what `check.py` reads as it starts (`families/build.py`'s `CHECK_READS`) | `flock-agreement/ci/sets.json`, ci.py's verdicts per set |
-| `lean-suites:SUITE`, `lean-suites:SUITE:K/M` | py | `suites.py SUITE --lean-built --json ... --timeouts --jobs N --mem-gb G` on each suite of `suites.AFTER_LEAN`, or with `--files K/M` on each part of one `families/build.py`'s `PARTS` splits; a parallel suite on the family's slot, another in one process | the whole tree, as tasks/v1 keys a job that declares no inputs: those suites build and run Lake packages, which no tracer follows | `suites-lean.json`, suites.py's report |
+| `lean-suites:SUITE`, `lean-suites:SUITE:K/M` | py | `suites.py SUITE --lean-built --json ... --timeouts --jobs N --mem-gb G` on each suite of `suites.AFTER_LEAN`, or with `--files K/M` on each part of one `families/build.py`'s `PARTS` splits by test file, or of one that declares `parts`, by test id; a parallel suite on the family's slot, another in one process | the whole tree, as tasks/v1 keys a job that declares no inputs: those suites build and run Lake packages, which no tracer follows | `suites-lean.json`, suites.py's report |
 | `flock-circuit-build:verity/ml/flock/live` | rust | `verity/ml/flock/check_build.sh` | the script, its patches and the live crate (`check.rust_tests_inputs`) | none: `cargo check` builds nothing a reader runs |
 | `flock-rust-tests:verity/ml/flock/live` | rust | `check_build.sh test`, cargo's jobs and test threads at the task's cores | as flock-circuit-build's | none |
 

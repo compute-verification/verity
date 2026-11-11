@@ -2,15 +2,16 @@
 embedding backward on f32 words (`numerics.torch_kernels`, written from the kernels as they run: chunks led by their first
 token, or sort, partials and scatter), on ids with a run of 25 tokens across chunks, entries no token has and ids outside the
 vocabulary, and gradients with NaN, ±inf, ±0, subnormals and the f32 extremes. The model is torch CPU's word for word where the
-kernels' orders meet the CPU's. The CUDA kernels themselves are `test_torch_training_gpu.py`'s; no GPU capture holds the f32
-model yet."""
+kernels' orders meet the CPU's. A cc 12.0 capture holds the feature kernel to the f32 model (the Definitions' conformance); no
+capture holds the sort kernels."""
 from __future__ import annotations
 
 import numpy as np
 import pytest
 
-from verity.ml.circuits.defs import bind
+from verity.ml.circuits.defs import bind, conformance_label
 from verity.ml.circuits.evaluation import evaluate_batch
+from verity.ml.definitions.evidence import EVIDENCE
 from verity.ml.definitions.numerics import torch_kernels as TK
 from verity.ml.definitions.registry import torch_embedding as TE
 from verity.ml.definitions.registry import torch_embedding_f32 as TF
@@ -76,3 +77,16 @@ def test_bind_refuses_statics_outside_the_kernels_range(d, statics) -> None:
     """Every static in its range, and sort keys of at most 31 bits (position_bits(M) + id_bits(V))."""
     with pytest.raises(ValueError, match="refuses this binding"):
         bind(d, **statics)
+
+
+def test_conformance_is_the_feature_kernels_capture() -> None:
+    """Each Definition is exact-model-tested on the cc 12.0 capture of the feature kernel, whose run records it cites, and says
+    that no capture holds the sort kernels."""
+    ev = EVIDENCE["cc12_embedding_backward_capture"]
+    for name in TF.__all__:
+        d = getattr(TF, name)
+        if not hasattr(d, "conformance"):
+            continue
+        assert conformance_label(d.conformance) == "exact-model-tested", name
+        assert ev["run_record"] in d.conformance and ev["fit"] in d.conformance, name
+        assert "sort kernels) only the model" in d.conformance, name

@@ -91,7 +91,7 @@ def saltReason (p : Params) (t : Option Tile) (salt : Option ByteArray) : Option
 
 /-- `window_domain`: the execution phase root's domain, one-stage's execution phase domain (`registration.window_domain`) of the
 registered program and partition over the check's P entries in the execution phase's context. -/
-def windowDomain? (p : Params) (c : Registration) : Except String Domain := do
+def windowDomain? (p : Params) (c : WindowCommitmentRecord) : Except String Domain := do
   let n := p.check.entries
   let binding ← Identity.identityDigestSha512 SERVED_DOMAIN (Json.mkObj [("program", c.program),
     ("partition", c.partition), ("port", PouwWindow.port), ("schema", entrySchema), ("leaves", n), ("run", p.context)])
@@ -151,8 +151,8 @@ def header? (pub : ByteArray) : Option (Json × ByteArray) := do
 
 /-- `opening`: none when the proof's public file `pub` opens unit `unit`'s rows under the registered execution phase root, else
 why not, `core_check.opening`'s reason. `salt` is a certified execution phase's salt (`certified_salt`). -/
-def opening (p : Params) (c : Registration) (units : Option (List Int)) (unit : Int) (pub : ByteArray) (op : Json)
-    (salt : Option ByteArray := Option.none) : Except String (Option String) := do
+def opening (p : Params) (c : WindowCommitmentRecord) (units : Option (List Int)) (unit : Int) (pub : ByteArray)
+    (op : Json) (salt : Option ByteArray := Option.none) : Except String (Option String) := do
   if let some us := units then
     if !us.contains unit then return some s!"unit {unit} is not drawn"
   let t := tile? p.check.template

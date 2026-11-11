@@ -12,7 +12,7 @@ from verity.ml.circuits import partition_object as PO
 from verity.ml.circuits import ports as P
 from verity.ml.circuits.codec import decode_program, descriptor_id, encode_program, program_digest
 from verity.ml.circuits.defs import CompositeDefinition, PrimitiveDefinition, Registry, bind
-from verity.ml.circuits.population import mixed_population_program
+from verity.ml.circuits.population import leaf_type, mixed_population_program
 from verity.ml.circuits.refs import runs as ref_runs
 from verity.ml.circuits.types import Array, Value
 
@@ -77,6 +77,24 @@ def test_the_template_query_and_the_ports_see_the_members_alone():
     assert [(lo, hi, o.sink) for lo, hi, o, _w in pb.ret] == [(lo, hi, o.sink) for lo, hi, o, _w in pa.ret] == [(2, 5, True)]
 
 
+def test_a_value_of_a_leaf_type_is_an_array_of_it_and_decodes_to_itself():
+    """A value whose width is a shape (`leaf_type`): two `Digest`s, ``(8, 64, 1)``, are ``Array(2, Digest)``, the binding
+    record holds the shape as a list (given as a list or a tuple, one program), and the population decodes to itself.
+    An integer width is ``Value(width)``, its binding record unchanged."""
+    prog = mixed_population_program(MEMBERS, values=(("hist", 2, (8, 64, 1)), *VALUES))
+    assert prog.fn.signature()[0][:2] == (("hist", Array(2, Array(8, Array(64, Value(1))))),
+                                          ("row-table/0/k2048", Array(6, Value(16))))
+    assert ',values=[["hist",2,[8,64,1]],["row-table/0/k2048",6,16],' in descriptor_id(prog.fn)
+    assert program_digest(mixed_population_program(MEMBERS, values=(("hist", 2, [8, 64, 1]), *VALUES))) == \
+        program_digest(prog)
+    assert leaf_type(16) == Value(16) and leaf_type((4, 16)) == Array(4, Value(16))
+    registry = Registry()
+    for prim in (TAdd, TKeyFold):
+        registry.add(prim)
+    decoded = decode_program(json.loads(json.dumps(encode_program(prog))), registry)
+    assert program_digest(decoded) == program_digest(prog)
+
+
 @pytest.mark.parametrize("values, version", [
     (VALUES, 0),
     ((("t", 1, 16), ("t", 2, 16)), 1),
@@ -86,6 +104,10 @@ def test_the_template_query_and_the_ports_see_the_members_alone():
     ((("t", True, 16),), 1),
     ((("", 1, 16),), 1),
     (((3, 1, 16),), 1),
+    ((("t", 1, (16,)),), 1),
+    ((("t", 1, ()),), 1),
+    ((("t", 1, (8, 0)),), 1),
+    ((("t", 1, (8, True)),), 1),
 ])
 def test_a_value_that_is_no_new_name_of_a_leaf_and_a_bit_or_of_a_v0_population_is_refused(values, version):
     with pytest.raises(ValueError):

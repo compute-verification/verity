@@ -6,9 +6,10 @@ public import Proofs.Flock.Claims.Sampling.Session
 # `SessionRunsTo`: a unit's session runs as Flock runs, with the run's acceptance implying the session's
 
 `SessionRunsTo H D` is `SessionRuns H D` with the acceptance clause one way: where coins off a unit's session rounds are
-fixed, the sampled run accepts only where the session's Flock run accepts. It is what a sampled verifier that runs several
-sessions in sequence, and accepts only where every session accepted, gives: a session that accepts leaves the run free to
-refuse in a later session, so the run's acceptance is not the session's. `SessionRuns.to` reads it off `SessionRuns`.
+fixed, the sampled run accepts only where the session's Flock run accepts. It is what a sampled verifier that runs
+several sessions in sequence, and accepts only where every session accepted, gives: a session that accepts leaves the
+run free to refuse in a later session, so the run's acceptance is not the session's. `SessionRuns.to` reads it off
+`SessionRuns`.
 -/
 
 @[expose] public section
