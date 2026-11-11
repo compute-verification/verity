@@ -20,12 +20,12 @@ export PATH=$HOME/.local/bin:$HOME/.cargo/bin:$PATH PYTHONDONTWRITEBYTECODE=1
 command -v uv >/dev/null || curl -LsSf https://astral.sh/uv/install.sh | sh >/dev/null 2>&1
 uv sync -q --all-packages --extra torch-cpu > "$O/sync.log" 2>&1 || { tail -20 "$O/sync.log"; exit 5; }
 PY=$REPO/.venv/bin/python
-export PYTHONPATH=$REPO:$REPO/verity/ml/flock/python:$REPO/integrations/vllm:$REPO/tools/verity/circuit_check/src:$REPO/benchmarks/numerical/python
+export PYTHONPATH=$REPO:$REPO/verity/protocols/flock/prover/python:$REPO/adapters/vllm:$REPO/tools/verity/circuit_check/src:$REPO/benchmarks/numerical/python
 read -ra UNITS <<< "${WALK_UNITS:-gq:K=2048}"
 SLOTS=${WALK_SLOTS:-2048} WIDE=${WALK_WIDE:-1,8,4,2} THREADS=${WALK_THREADS:-$(nproc),4} REPS=${WALK_REPS:-2}
 log "unit-walk: source $(git rev-parse HEAD), units ${UNITS[*]}, builds in $W"
 mkdir -p "$O/m0-build"
-RESEARCH_RUN_DIR=$O/m0-build FLOCK_WORK=$W MODE=build GPU=0 bash verity/ml/flock/pod/60-circuit.sh > "$O/m0-build/build.log" 2>&1 &
+RESEARCH_RUN_DIR=$O/m0-build FLOCK_WORK=$W MODE=build GPU=0 bash verity/protocols/flock/pod/60-circuit.sh > "$O/m0-build/build.log" 2>&1 &
 pids=($!)
 for i in "${!UNITS[@]}"; do
   "$PY" benchmarks/served_units/stage.py "${UNITS[$i]}" 2 "$W/u$i" > "$O/stage-$i.log" 2>&1 &
