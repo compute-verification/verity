@@ -11,9 +11,9 @@ import pytest
 from verity_vllm.observe.fold import fold as fold_mod
 from verity_vllm.check import gates as G
 from verity_vllm.observe.events import StepLink
-from verity_vllm.observe.fold.fold import FoldError, fold, instance_nodes, summarize
+from verity_vllm.observe.fold.fold import FoldError, fold, summarize
 from tests.observe import test_fold_synthetic as toy
-from tests.observe.test_fold_synthetic import Ids, REQ, SAMPLED, preamble, step_events, toy_profile
+from tests.observe.test_fold_synthetic import Ids, REQ, SAMPLED, instance_nodes, preamble, step_events, toy_profile
 from tests.check.test_gates_fixtures import by_id, passing_artifacts, write_run
 
 memory = toy.memory  # the fixture (real memory model when importable, else the in-test stub)

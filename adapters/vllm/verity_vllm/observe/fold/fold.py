@@ -1312,21 +1312,3 @@ class _Fold:
                         "request_index": ri, "leaves": self.peers_leaves[ri],
                         "fields": [{k: v for k, v in f.items() if k != "type"} for f in self.peers_fields[ri]]})
         return out
-
-
-def instance_nodes(result: FoldResult, *, spec_prefix: str | None = None, step: int | None = None, layer: int | None = None,
-                   row: int | None = None) -> list[dict]:
-    """Navigation: the instance records matching the filters (spec id prefix, step, layer from the hint, row)."""
-    out = []
-    for m in result.instances:
-        if spec_prefix is not None and not m["spec"].startswith(spec_prefix):
-            continue
-        if step is not None and m["step"] != step:
-            continue
-        if layer is not None and _layer_of(m["hint"]) != layer:
-            continue
-        if row is not None and m["row"] != row:
-            continue
-        out.append(m)
-    return out
-

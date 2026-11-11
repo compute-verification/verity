@@ -15,7 +15,7 @@ import pytest
 from verity_vllm.observe.fold import fold as fold_mod
 from verity_vllm.observe.events import (DispatchEnter, DispatchExit, Root, RunHeader, SampleEnd, StepEnd, StepLink, StepStart,
                                    StorageAlloc, TritonLaunch, ViewDesc)
-from verity_vllm.observe.fold.fold import FoldError, fold, instance_nodes
+from verity_vllm.observe.fold.fold import FoldError, fold
 from verity_vllm.observe.fold.memory import MemoryStats, Unresolved
 from verity_vllm.observe.fold.patterns.norms import eps_input
 from verity_vllm.observe.fold.resolver import Compute, Gather, GatherMany, Group, PerRow, Profile, Shared, Supplied, Transparent
@@ -196,6 +196,12 @@ def toy_log(ids_dtype: str = I32D, extra_unknown_op: bool = False, skip_norm0: b
     evs += step_events(0, [0, 1], ids, 20, SAMPLED[0], ids_dtype, extra_unknown_op, skip_norm0)
     evs += step_events(1, [2], ids, 40, SAMPLED[1], ids_dtype)
     return evs
+
+
+def instance_nodes(result, *, spec_prefix: str | None = None, step: int | None = None) -> list[dict]:
+    """The fold result's instance records whose spec id starts with `spec_prefix` and whose step is `step`."""
+    return [m for m in result.instances
+            if (spec_prefix is None or m["spec"].startswith(spec_prefix)) and (step is None or m["step"] == step)]
 
 
 # ---------------------------------------------------------------------------------------------------------
