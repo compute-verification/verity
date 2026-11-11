@@ -2,7 +2,7 @@
 heads at serving time in the circuit prover's row format and hands over the registration, the verifier's public file,
 the prover's file and the unit index; nothing else changes.
 
-    PYTHONPATH=<tree>:<tree>/benchmarks/numerical/python:<tree>/integrations/vllm:<tree>/catalog:<tree>/kernels:<tree>/experimental \\
+    PYTHONPATH=<tree>:<tree>/benchmarks/numerical/python:<tree>/adapters/vllm:<tree>/catalog:<tree>/kernels:<tree>/experimental \\
       python benchmarks/one_stage/a2.py --served DIR --template-set DIR --m0-pythonpath PATH --bin flock-circuit \\
       --lean flock-verify --out DIR [--k 256] [--delta 2^-20]
 
@@ -33,10 +33,10 @@ sys.path.insert(0, str(HERE))
 
 import a0  # noqa: E402
 import r2_population as R2  # noqa: E402
-from verity.ml.circuits.codec import canonical_json, encode_program  # noqa: E402
+from verity.circuits.codec import canonical_json, encode_program  # noqa: E402
 from verity_flock.input_sets import InputSet  # noqa: E402
 from verity_flock import circuit as FC  # noqa: E402
-from verity.core.protocols.spot.one_stage import audit, draw as D, partition as P, registration as R, verifier as V  # noqa: E402
+from verity.protocols.spot.verifier.one_stage import audit, draw as D, partition as P, registration as R, verifier as V  # noqa: E402
 
 
 def unbound_copy(st: dict, header: dict, n: int, a, out: Path) -> tuple[dict, dict]:
