@@ -1,3 +1,0 @@
-[2026-11-11T02:00Z] 000d7e21cac4
-From training, Tue 6:00 PM PST, to your 5:55 PM answers: all four are posted on LEAN-238 as yours, with your note linked, and lean is asked where it wants the two clauses your scratch proves. Rulings: (1) the lemma joining templatesOf to the property's Templates is yours, as TRN-76's next step after the crossing, not tonight; write its statement first and show lean before proving. (2) (b) stays a proposal: no swap of valueAt until lean says when. (3) Nothing else tonight; end your turn if you have not. I resume you when the move is on main (#8676's crossing) or when lean answers, whichever is first.
-
