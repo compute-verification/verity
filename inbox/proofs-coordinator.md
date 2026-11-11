@@ -60072,3 +60072,76 @@ Page 2:
 **Ask 4.** Dropped, no page. One thing from my reading that the two workers landing them may want: #8915's body says "no premise on SHA-512" and lists four hypotheses inside the form that are not in the lock's premise lists; your Notion page's line on it ("adds premises: collision resistance in expected time") does not match that body.
 
 **Page 3.** I draft it now so that it is ready for your word: three readings (2^80 compressions; 2^80 calls under a premise counted in calls, which is what the Lean says; 2^80 calls each charged 513 compressions, which is what your tables use), 9.0 bits between the first and the third, and the default you gave (compressions, for one verification phase, with what a year reads). By 04:00Z.
+
+## SERVERATE, Wed 11 Nov 18:04Z: first entry. The 0.4 is an assumption with no measurement behind it; the 279.5 is stock vLLM at its defaults with no latency bound held (0.15% of its requests met the run's own bound); speculative decoding was excluded on the vLLM lane's recommendation of Sun 8 Nov, and I find no ruling of Daniel's on it
+
+Web tools are available to me [run: the tool list]; nothing below is from the web yet. `main` read at `cc6ee7446278`, which holds #8926 and #8974 [run: `git log origin/main --grep`]. I read VLLM-339 and my mailbox at 18:01Z: no answer on VLLM-339 yet [read].
+
+**1. The assumed number**
+
+- **Where it is set.** One field: `verity/protocols/inference_only/rho/data/reference.toml`, `[fleet.world-h200] mfu_serve = { value = 0.4, low = 0.2, high = 0.6, source = "the served work's MFU, prefill-heavy", status = "assumed" }` [read].
+- **Where it came from.** Commit `845155df5a` of 26 Oct 2026, "rho: Daniel's reference datacenter", whose message says the file "carries the spec Daniel set on 25 Oct" [run: `git log --follow`, `git show`]. The message lists what he set (the model, the session policy, the two fleets, the wipe, the side channels) and does not name the 0.4 among it, so who chose 0.4 I could not establish. The same commit sets training's figure to the same 0.4 ("frontier pretraining MFU"). No run, card or citation is behind either [read: the file]. Its status has been "assumed" since.
+- **What it means.** The Glossary: utilization is "the registered programs' operations per second over the card's ceiling (their MFU)" [read: `GLOSSARY.md` line 74]. The cost model uses it in one product: tokens a GPU-second = utilization × the card's ceiling / (2 × the registered circuit's multiply-accumulates a token) [read: `benchmarks/spot_figures/figure1.py`, `token_seconds`, `scopes`, `reading`].
+- **The ceiling** is 1.9789e15 operations a second, the H100 SXM5's data-sheet peak for dense FP8 products, taken for the H200 ("one die, one clock") [read: `benchmarks/census/hardware.json` `h100-sxm5-80gb/e4m3`; `figure1.py` `PEAK`].
+- **What it implies for GLM-5.3 on an H200** [my arithmetic, a short script over the cards; it matches the vLLM lane's figures on VLLM-321]:
+  - on the long-context mix the measured run served (7.925e10 multiply-accumulates a computed token, modeled): **4,994 tokens a GPU-second**, 39,951 a machine of eight;
+  - on the `workload` card's own request of 256 prompt and 32 output tokens (5.126e10 a token): 7,722 tokens a GPU-second.
+  - The 7.925e10 is the card's 5.126e10 plus the sparse attention's key search at long context, which is modeled, not counted from a circuit: 35% of the total [read: `benchmarks/spot_figures/breakeven/reprice.py` `workload`, `INDEXER_AT_MAX = 2.2`; my arithmetic].
+
+**2. The measured number** (run `r20261111-125507-9911`, node A, today 12:55Z to 13:29Z; I fetched its record `art:78a8d096cd6b…` and read `out/compiled/meta.json`, both passes' `meta.json`, `out/table.md`, `out/engine_env.txt`, `stdout.log` and the start-up lines of `out/compiled/server/server.log`) [read, all of this section unless tagged]
+
+- **Machine and model.** Eight H200s, one engine across all eight (tensor-parallel 8). GLM-5.3 at `aca966e4`, 753 billion parameters, FP8 weights (755.7 GB) [read: the `workload` card]. Its weights alone fill more than five of the eight cards, so two copies cannot share this machine and one engine across all eight is the only layout [my arithmetic: 755.7 GB over 141 GB a card].
+- **Engine.** vLLM `0.28.1rc1.dev472+gd9105ea80`, torch 2.13.0. Its whole command line beyond the model: `--tensor-parallel-size 8 --max-model-len 131072 --max-num-seqs 256 --seed 0`. Everything else is vLLM's default: `quantization=fp8`, `dtype=bfloat16`, `kv_cache_dtype=auto`, **`speculative_config=None`**, **prefix caching on**, **chunked prefill on with at most 8,192 tokens a step**, CUDA graphs captured. FlashInfer's FP8 linear kernel, the sparse flash-attention backend, the Triton FP8 mixture-of-experts backend (chosen out of twelve listed). KV pool 401,408 tokens, which is 3.06 requests of 131,072 tokens at once.
+  - The engine's start-up line prints compilation mode `NONE`, though the benchmark calls this configuration "compiled (torch.compile, CUDA graphs)". Whether torch.compile ran I could not tell from the log.
+- **Workload.** The first 651 requests of the vLLM lane's long-context plan: a mix modeled on production traffic (ShareGPT chat, multi-turn, prompts of 8,000 to 32,000 tokens) plus 16 long prompts cut from public-domain books and 2 follow-ups on the same books [read: `note:vllm/20261107T2026Z-report-ctx128k`; `benchmarks/serve_tax/README.md`]. By length [run: a count over `benchmarks/serve_tax/prefix_plan.jsonl`, the plan's table of lengths, whose prompt total equals the run's]:
+  - prompts: median 58 tokens, mean 3,433, longest 130,808; 46 of the 651 are longer than 8,192 tokens and carry 95% of all prompt tokens; 8 are longer than 100,000 and carry 45%;
+  - outputs: mean 286 tokens, longest 875; 12 prompt tokens for each output token.
+  - Sampling: the plan's own settings a request; the record says `greedy` at the run's level. Not checked further.
+- **Arrivals.** Open loop: requests sent at a fixed rate with random gaps, however many are in flight. Two passes, one repetition each: 1.6 requests a second (four times the plan's 0.4) and 3.2 (eight times). After the last arrival the run waits 600 s and cancels what is unfinished. The prefix cache is emptied between passes.
+- **What was counted.** The engine's own count of tokens it computed: prompt tokens (2,235,146) less those the prefix cache served (240,576) plus output tokens (178,102) = 2,172,672, over 971.79 s on 8 GPUs = **279.47 tokens a GPU-second** [my arithmetic on the record's fields; the card says the same]. 92% of those tokens are prompt tokens. Output alone: 163 tokens a second for the whole machine, 20 a GPU-second.
+- **What "saturated" meant.** Arrivals outran the engine in both passes: 51 and 265 of 651 requests were cancelled unfinished, and doubling the arrival rate computed 0.985 of the tokens a second (275.33). It does not mean a tuned engine's limit: the card's own text says the record "does not tell the GPUs' arithmetic from the scheduler's step budget" [read: the card on `main`].
+- **No latency bound was held.** The run's own table: time to first token 330 s at the median and 576 s at the 99th percentile; gap between output tokens 117 ms at the median and 3.9 s at the 99th percentile; **0.15% of requests** inside the benchmark's bound (first token within 2 s and 80 ms a token).
+- **What held it** [relayed: vllm-utilization, VLLM-321, 13:34Z and 14:46Z; not checked by me]: a request was waiting in 97% and 98% of samples; the KV pool was under 80% full two thirds of that time; at most 211 of 256 sequences ran; in two thirds of each pass a step took a median 3.0 s, and "while a long prompt is prefilled, each of the about 80 running requests gets one output token a 3 s step".
+
+**3. The utilization the measured run works out to, and the factor of 18**
+
+- 279.47 tokens a GPU-second is a utilization of **2.24%** at the mix's multiply-accumulates a token, 1.45% at the `workload` card's [my arithmetic; VLLM-321 has the same two figures]. 279.47 / 4,993.9 = 0.0560, a factor of 17.9.
+- **Why they differ, as far as the repository shows.** Three things, none of which settles it alone:
+  1. The 0.4 was never a measurement of inference. It is a pretraining-style figure applied to serving.
+  2. The measured server is not one a performance engineer would call tuned. It is vLLM's defaults; it held no latency bound; a long prompt's prefill stalls every other request for seconds; and nobody has profiled what a 3-second step spends its time on.
+  3. The denominator counts modeled operations. A third of the mix's multiply-accumulates a token is the modeled key search, so the "utilization" of a real run moves by ×0.65 with that choice alone.
+- [guess, to be checked on the web for the brief] Both are true: 0.4 of the dense peak is above what public benchmarks show for a mixture-of-experts model of this size on H200s, and our server is also slow on this mix.
+
+**4. Three other measured rates on node A that the brief will use** [read: each run's `out/table.md`, fetched now; tokens a GPU-second from VLLM-321's tables, relayed]
+
+| load, stock GLM-5.3 on eight H200s | how sent | computed tokens a GPU-second | output tokens a second, whole machine | requests inside the bound (first token ≤ 2 s, ≤ 80 ms a token) |
+|---|---|---:|---:|---:|
+| chat (ShareGPT first turns, 215 in and 221 out), 16 in flight, `r20261111-121433-6a11` | vLLM's own benchmark client, closed loop | 64 | 260 | 99% |
+| the same, 24 in flight | the same | 73 | 295 | 80.5% |
+| the same, 96 in flight (still rising, not saturated) | the same | 131 | 531 | 0% |
+| the long-context plan at its own 0.4 requests a second, `r20261109-185220-0dea` (stock plus a step recorder), kept up | open loop | 182 | 124 | 33% |
+| the long-context plan at 1.6 a second (the card's value) | open loop | 279.5 | 163 | 0.15% |
+
+So on chat, the highest rate measured with 99% of requests inside the bound is 64 computed tokens a GPU-second, and on the long-context plan no measured rate holds that bound.
+
+**5. Earlier decisions on speculative decoding** (searched: `rg -i speculat` over `main`; the friction skill, AGENTS.md, ARCHITECTURE.md, GLOSSARY.md: no hit in any of the four; the notes; PRF-461 and its comments) [run, read]
+
+- **Sat 7 Nov, Daniel, PRF-461 item 8** (the issue is created by him): "Speculative decoding. If GLM-5.3 ships a multi-token-prediction head that vLLM supports, either include it or state why it's excluded and what it would change. Owner: vllm."
+- **Sun 8 Nov 00:07Z, the vLLM lane's worker on PRF-461:** "Yes: GLM-5.3 at aca966e4 ships one MTP layer, and vLLM at d9105ea80 can serve it. Recommendation: exclude it from the SPOT scope and say so in the post. Nothing on our side can express it today. Including it is a new circuit, a new advice class and a new schedule model, for a throughput gain only." And: "Our served-throughput figures are without MTP. A production GLM-5 deployment would likely run MTP, so a throughput or overhead figure measured against plain vLLM is against a slower baseline than production. The post should say that."
+- **Sun 8 Nov 00:28Z, the same worker, an estimate with nothing run:** one draft token gives 1.05 to 1.45 times the decode tokens a second at saturation, and 0.95 to 1.15 times the requests a second there, "because long-prompt prefill dominates our plan".
+- **Sun 8 Nov 02:00Z, proofs' note `20261108T0200Z-report-nondeterminism-audit`:** "Speculative decoding (MTP). It is refused, and stays out of SPOT's scope (vllm, item 8)."
+- **Today, the goal `proofs/spot-checks-closed`:** "speculative decoding is excluded with a reason, which the post has to state".
+- **In the code** [read]: the adapter refuses the option by name (`adapters/vllm/tests/pipeline/test_llm.py`, "an unsupported option raises"); GLM-5.3's capture map says `"mtp": "num_nextn_predict_layers 1 is not built: no speculative decoding in the serve command"`; the certifier's advice format lists speculative decoding as out of scope (`verity/protocols/certifier/verifier/protocol/advice-v0.md`, `replay_step.py`). One file holds a two-model draft-and-verify program for greedy decoding from an earlier trial with a small draft model (`verity/definitions/registry/spec.py`; `adapters/vllm/manifests/checkpoints.json` names its draft checkpoint) [read: the docstring and the manifest line; relayed from a vllm survey note: nothing but its tests uses it].
+- **So:** it was excluded by the lane's recommendation, recorded by proofs, and I found no ruling by Daniel beyond his item 8, which asked for "include it or state why".
+
+**6. Questions for the vLLM lane** (yours to ask; VLLM-339 already asks the first three in general form)
+
+1. Is the run's server what you would defend as tuned? Named settings: the prefill chunk of 8,192 tokens a step with no limit on how much of a step one long prompt takes; the Triton mixture-of-experts backend against the others the engine listed; compilation mode `NONE` in the start-up line; `--max-num-seqs 256`; the KV pool's size.
+2. What does a 3-second step spend its time on: the GPUs' arithmetic, the key search over 130,000 keys, the all-reduce between the eight cards, or the host? Is a profile of one long prefill step possible before node A ends?
+3. Has vLLM's own recipe for GLM-5 been run on node A, with or without its multi-token-prediction drafts? If not, what stops a stock run with `--speculative-config '{"method":"mtp",…}'`: does it start at this pin on eight cards?
+4. On the long-context plan, what is the highest arrival rate at which a stated latency bound holds (for example 99% of requests at 80 ms a token, with the first-token bound scaled to the prompt's length)? Between 0.4 and 1.6 requests a second nothing is measured.
+5. On chat, where does the rate stop rising? The ladder ended at 96 in flight, still rising 22% a rung.
+6. Which hours of all eight cards are free on node A before Sat 14 Nov 08:07Z, after the two-stage runs?
+7. Sampling in the measured passes: greedy for every request, or the plan's half at temperature 0.7?
+
+**Next:** the web part (the benchmarks, vLLM's documentation on speculative decoding at the pin and now, public rates for comparable models), then the brief as a note and in my entry by 19:45Z. I read VLLM-339 again before I write it.
