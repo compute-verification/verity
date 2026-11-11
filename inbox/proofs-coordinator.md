@@ -59607,3 +59607,146 @@ For the table:
 - PR #9027, head `eaf97a9393c0`, unmarked: `Rule.over` gets `Select.strataSizes v.program v.query`; `whole_run.sh desc` passes [run `r20261111-171253-222c`]; merges with #8999 without conflict.
 - Open: `whole_run.sh run` still fails on `main` and at #9027, in `whole_run.py:59` (a fixed-count law the Python mirror refuses since #7918). One line; needs a choice of rate law.
 - Cause of both: #7918 landed after the benchmark, and nothing on the merge gate builds or runs the benchmark.
+
+## 17:29Z HUNKS: proofs' 15 hunks are closed on `cursor/proofs-crossread-closes-7c3e` at `115b297b8c19cbe5e426283003d052065f44d90b`: `main` 1, the branch 0, both 14, all [sure]; four more conflicted Lean files carry proofs' #8539 on `main`'s side and are not on the list
+
+Tags: [run] a command I ran now, [read] a file or diff I read now. Times from `date -u`. "The branch" is the remote merge's branch (`c08d034460b0`), `main` is `493f49485e50`, "the crossed tree" is `c094f1ef8a0f`. Written to paste to the lean lane as it is.
+
+**The closes.** Branch `cursor/proofs-crossread-closes-7c3e` at `115b297b8c19cbe5e426283003d052065f44d90b`: one commit on `c094f1ef8a0f`, the 12 files below and nothing else. Take files from it by `git checkout 115b297b8c19 -- <path>`; never merge it. By word: `main` 1, the branch 0, both 14. All 15 are [sure].
+
+**The list against the branch** [run: `git grep -c '^<<<<<<<'` at `c094f1ef8a0f`]. The 12 files hold 15 hunks, each file's count as listed. Not on the list: four conflicted Lean files whose `main` side is proofs' #8539 (R8) and no other PR: `verity/protocols/spot/verifier/lean/Spot/Registration.lean` (6 hunks), `Spot/Partition.lean` (1), `security/Properties/Spot.lean` (3) and `security/Proofs/Properties/Spot.lean` (9). I closed none of them, since they need a Lean build. What I read of them is under "The four Lean files" below.
+
+**Each hunk.** The line is where `main`'s side begins on `main`.
+
+1. `benchmarks/one_stage/README.md` line 30: **both**, closed lines. `main`'s sentence (#8566: the run's record holds no file of `commit/`) with the branch's parenthesis on the replay (`6259c56ff3`, never on `main`). The replay is still a step of `a5_llama1b_h200.sh`. [sure]
+   ```
+     a `served` window under the 64-byte run root. Then the Commit's CPU replay (the prover's pre-flight check, on the node), and
+     `a5.sh` with `WINDOW=served` on the bundle and that window, whose private bodies stay on the node with the row dir: the
+     run's record holds no file of the row's `commit/`, whose records, bundle and slim keep hold values.
+   ```
+2. `benchmarks/one_stage/README.md` line 80: **`main`**. Both sides rewrote one sentence about `demos/vllm/commit.sh`: `main` in #8566 (`0ac21012b7`), the branch in `df5dcb427d`. `main`'s text (the row dir stays on the node, the only copy of its bundle) is true however that script's four hunks close. The branch's clause is true only if they close to the branch's `publish()`. [sure]
+3. `benchmarks/one_stage/pyproject.toml` line 52: **both: `main` first**. `main`'s clause names `demos/vllm/commit.sh` for `test_commit_records` (#8566, `2f8a644463`). The branch's lines name the compose gate (`d960ba0e21`), `test_served_pearlplus_lean` (`7a534e4302`) and `prove_path.py` (`36cff04513`), none ever on `main`. Every file they name is in the crossed tree, and the `inputs` list under the comment already holds both sides' entries [run: `git ls-tree`]. [sure]
+   ```
+   # demo's endpoint (`test_vllm_example`); `demos/vllm/commit.sh`: the demo's Commit, which `test_commit_records` runs
+   # through bash in a toy tree. `verity/protocols/poub/device/live_verifier/host.py`: the compose gate, which `gate-compose`'s tests
+   # send a hand-off through.
+   ```
+   then the branch's next five lines as they are, ending `# `benchmarks/spot_proved/stage.py`: its allreduce and cuBLAS GEMM staging on fake captures,`.
+4. `benchmarks/one_stage/served_verdicts.sh` line 722: **both**, closed lines. The branch's four new sub-commands (`pearl-tie` `cfae0bc597`, `inference-policy` and `inference-only` `a16da58442`, `block-counts` `bbc5d62d20`) with `main`'s `circuits` line. #8839 deleted `measure()` and the crossed file defines none, so the branch's `circuits` line would call a function that isn't there. [sure]
+   ```
+   if [ "${1:-}" = pearl-tie ]; then shift; pearl_tie "$@"; exit $?; fi
+   if [ "${1:-}" = circuits ]; then K=${2:?served_verdicts.sh circuits WINDOW}; circuits; exit $?; fi
+   if [ "${1:-}" = inference-policy ]; then mkdir -p "$D" && inference_policy; exit $?; fi
+   if [ "${1:-}" = inference-only ]; then K=${2:?served_verdicts.sh inference-only WINDOW}; inference_only; exit $?; fi
+   if [ "${1:-}" = block-counts ]; then K=${2:?served_verdicts.sh block-counts WINDOW}; block_counts; exit $?; fi
+   ```
+5. `benchmarks/one_stage/served_verdicts.sh` line 1033: **both**, closed lines. The branch's two lines (`COMPOSE_OFF_NODE`, `b22fc3620c`) without its `measure` line (#8839). [sure]
+   ```
+   [ -n "$DEFER" ] || [ "$COMPOSE_OFF_NODE" = 1 ] || [ -z "${COMPOSITE-1}" ] \
+     || TPY=$TPY bash benchmarks/one_stage/served_composite.sh "$D" "$OUT" || comp=1
+   ```
+6. `benchmarks/sampling_plan/pyproject.toml` line 15: **both: the branch's comment, then `main`'s `inputs` line**. The comment is the branch's `2ecd0fd052`, never on `main`, and `inputs.cap` and `verity/commitments/windows/interface.py` are in the crossed tree. `main`'s line is #8769's: the crossed tree has no `verity/core/` [run: `git ls-tree`]. [sure]
+   ```
+   # (`verity.protocols.reporting`); a statement's cap (`inputs.cap`) reads C-Flock's composer's sizes
+   # (verity.commitments.windows.interface).
+   inputs = ["verity/__init__.py", "verity/errors.py", 
+   ```
+7. `verity/README.md` line 19: **both: `main`'s first and third rows, the branch's second**. `main` changed the `verity.commitments.randomness` and `verity.definitions.kernels` rows (#8794, the moved paths). The branch changed the `verity.commitments.windows` row to "its proof and inference blocks" (`5171c0dfe3`). The crossed `verity/commitments/windows/interface.py` has no server blocks and its own docstring says "its proof and inference blocks" [read], so `main`'s "proof, inference and server blocks" would be false there. [sure]
+8. `verity/protocols/spot/verifier/lean/tests/test_difftest.py` line 675: **both**, closed lines. Every argument either side passes. `p.get("link_members", ())` stays positional: it is `members`, the parameter after `held` in the crossed `registration.check` (`…, held, members, day, declarations, seed_salt, pool, tied, history`) [run: `inspect.signature`]. `tied=` and the `_registration` wrapper are #8539's. [sure]
+   ```
+                      p.get("link_members", ()), seed_salt=p.get("seed_salt"), pool=p.get("pool"), tied=p.get("tied"))
+   ```
+   then `main`'s four lines (two blank, `def _registration(p: dict, rec) -> tuple[str, ...]:`, `    return _registration_verdict(p, rec).codes`).
+9. `verity/protocols/spot/verifier/one_stage/registered.py` line 677: **both**, the union in the list's own order: the branch's `"bind_ports"` (`4d9641c2b0`) and `main`'s `"held_gates"` (#8539). Both functions are defined in the crossed file [run]. [sure]
+   ```
+              "bind_ports", "bit_words", "bytes_leaves", "digest_leaves", "digests", "domain", "held_gates", "leaf", "log_base", "parameter_gates", "reads", "reads_file", "registered_entries",
+   ```
+10. `verity/protocols/spot/verifier/one_stage/registration.py` line 276 (the docstring): **both: `main` first**, closed lines. `main`'s eight lines on R8 and `tied` (#8539), then the branch's `members` sentence (proofs' #7295, on the branch as `de69355c9b`), reflowed, with "after R7" now "after R8" to match the code below. [sure]
+    ```
+        or `held` names, or one whose gates aren't one interval of run Input nodes (`R8-tied`).  `members`: the per-member
+        form's members, each its units (`[lo, hi)` ranges) and its circuit's units a proof block; after R8, `link-points`
+        refuses the record when a member's fewest and most sampled units give different link points
+        (`link_points.refused`), no sample under the sampling design ends (`link_points.NEVER_ENDS`), or the members or the
+        sampling design are not well formed over the population."""
+    ```
+    These five lines follow `main`'s first seven, which are unchanged.
+11. `verity/protocols/spot/verifier/one_stage/registration.py` line 406 (the end of `check`): **both: `main` first**. The R8 block, then the branch's `if members:` block, then `main`'s return; `_readers` and `_tied` follow as on `main`. [sure], on one condition about the Lean, stated after the block.
+    ```
+        # R8
+        if bad:
+            c.fail("R8-tied", {"tied": bad, "why": TIED_WHY})
+        if shared:
+            c.fail("R8-shared-input", {"inputs": shared, "why": SHARED_WHY})
+        if members:
+            try:
+                refused = LP.refused(*LP.law_of(program, query, law, work_table), members)
+            except (P.QueryRefused, ValueError) as e:
+                c.fail("link-points", str(e))
+            else:
+                if refused:
+                    c.fail("link-points", {"members": refused})
+        return c.verdict(fanout=fan, rests_on_period_check=through)
+    ```
+    - **Why R8 goes first.** The codes then read "R1 to R8 in order, then `link-points`". That keeps `main`'s statement (R1 to R8 in order) and the branch's (then `link-points`) both true.
+    - **Why either order is safe for both checks.** The two blocks read nothing of each other. R8 reads `bad`, `shared`, `fan` and `through`, computed before the record's keys are read. `link-points` reads the program, the query, the sampling design and the members. Neither returns early. So the order decides only the order of the codes [run: one call on the closed file gives `('R8-tied', 'R8-shared-input', 'link-points')`].
+    - **The condition.** The Lean must add the codes in the same order, in `check` and in `checkRef`: `c := r8Codes v c`, then `return if linkRefused v then addCode c "link-points" else c`. If the lean lane closes the Lean the other way, swap the two blocks here and put "after R7" back in the docstring.
+    - **The return is `main`'s.** The branch's `return c.verdict()` would drop the fan-out F and the tied names the verdict publishes.
+12. `verity/protocols/spot/verifier/profile.py` line 646: **both: the branch's classes, then the union `__all__`**. [sure]
+    - **The classes are the branch's own.** `WorkStratum` and `Work` were never on `main`, in any file [run: `git log -S'class WorkStratum' origin/main` over the whole history, empty]. They are the branch's `0b144871b0` (the work sampling design) and `7a47f3114d` (`Draw` renamed `SamplingDesign`).
+    - **`main`'s two lines alone break the module.** The merged body already reads the classes outside the hunk (`isinstance(d, (Stratified, Work))`, `Mapping[str, SamplingDesign]`), and `pouw/verifier/core_check.py` and `one_stage/audit.py` import them.
+    - **The `__all__`** is `main`'s (#8841: `ESCAPE_TERMS`, `HARM_WHOLE`, `neg_log_escape`) with `"Draw"` replaced by `"SamplingDesign"`. The crossed file binds no `Draw` (the merge took the branch's rename), and nothing in the crossed tree imports `Draw` from it [run: `git grep`].
+    ```
+    __all__ = ["ESCAPE_TERMS", "HARM_MARGIN", "HARM_WHOLE", "MARGIN", "WINDOW_DELTA", "Bernoulli", "IntegrityProfile",
+               "SamplingDesign", "Stratified", "Stratum", "Subset", "neg_log_escape", "neg_log_ratio"]
+    ```
+    Above it: the branch's lines from `@dataclass(frozen=True, slots=True)` down to `SamplingDesign = Bernoulli | Subset | Stratified | Work`, as they are.
+13. `verity/protocols/spot/verifier/tests/test_one_stage.py` line 17: **both**, closed lines. The branch's `DefinitionTable` (its rename of `Registry`, `33e93b6380`; the crossed `verity/circuits/defs.py` defines only `DefinitionTable`) and `main`'s `is_input` and `array_of`, which #8539's tests use. [sure]
+    ```
+    from verity.circuits.defs import REGISTRY, CompositeDefinition, PrimitiveDefinition, DefinitionTable, bind
+    from verity.circuits.program import Program, is_input
+    from verity.circuits.refs import array_of, tuple_of
+    ```
+14. `verity/protocols/spot/verifier/tests/test_optimize.py` line 25: **both**, closed lines. The branch's `TensorCommit` (its rename of `Commitment`, `f1cbe7a272`; the crossed `optimize.py` defines only `TensorCommit`) and `main`'s `MISS_TERMS` and `_log_miss` (#8841, `f4f1b50570`). [sure]
+    ```
+                                                               Cell, TensorCommit, CostModel, Grain, Objective, ReplayGrain,
+                                                               MISS_TERMS, TemplateCost, _hit, _log_miss, _miss, certify, density_bound, density_exact,
+    ```
+15. `verity/protocols/tests/tests/test_profile.py` line 23: **both**, the union. `main`'s `ESCAPE_TERMS` and `neg_log_escape` (#8841) and the branch's `Work`, `WorkStratum` and `work_k` (`0b144871b0`). The file uses every one [run: ruff F on the closed file, clean]. [sure]
+    ```
+    from verity.protocols.spot.verifier.profile import (ESCAPE_TERMS, HARM_MARGIN, MARGIN, Bernoulli, IntegrityProfile, Stratified,
+                                                        Stratum, Subset, Work, WorkStratum, neg_log_escape, work_k)
+    ```
+
+**Branch lines dropped**, with what they were for. No other branch line is dropped.
+- README line 80, all three lines, from `` `commit/replay_bundle_p0/` (a single-GPU workload defers only as a config run), and its replay on CPU. The workload dir, ``. They said the workload dir, bundle included, stays on the node, which `main`'s text says too, and that the run publishes the stages' records (`research-outputs write`), which is the branch's `publish()` in `demos/vllm/commit.sh`. Put that clause back only if that script's hunks close to the branch's side.
+- `served_verdicts.sh` line 722: of the branch's `circuits` line, `rc=$?; measure; exit "$rc"`. Line 1033: the line `measure`. Both ran the class of record's measurement step, which #8839 removed.
+- `sampling_plan/pyproject.toml` line 15: of the branch's `inputs` line, `"verity/core/__init__.py", "verity/core/protocols/__init__.py",`. Two files the layout deleted.
+- `registration.py` line 406: `    return c.verdict()`, replaced by `main`'s return. Line 276: the words "after R7".
+- `test_difftest.py` line 675: `.codes` at the end of the branch's call. `main` moved it into `_registration`.
+- `profile.py` line 646: the branch's own two `__all__` lines, replaced by the union. From `main`'s side there, `"Draw"` is dropped.
+- `test_one_stage.py` and `test_optimize.py`: nothing of the branch's. `main`'s names `Registry` and `Commitment` are dropped, since the crossed tree has neither.
+
+**(x) `served_composite.sh`'s `e=$(exe …)` line: right.** `main` did not change the file since the text before both, and the crossed file is the branch's whole [run: `git diff c1ca25a24748 493f49485e50` and `git diff c08d034460b0 c094f1ef8a0f` on it, both empty]. On the branch `products` can be `remote-v1` (its line 71). That executable is a `lean_exe` of `verity/protocols/remote/verifier/lakefile.toml`, `RemoteV1Main.lean` is in that directory, and neither side has `verity/protocols/remote-v1/` [run: `git ls-tree`]. `${x%-v1}` leaves `remote` and `onsite` as they are.
+
+**(y) The three pin fixtures: no reason against; regenerate them.** `main` did not touch them since the text before both, and the branch changed one line in each, the manifest's digest, so no vector differs between the sides [run: `git diff`]. Every other input they record matches the crossed tree [run: sha256 of each]. Neither side's line is right as text: the crossed `security/Proofs/lake-manifest.json` hashes to `1c96a39168721368…`, the branch's line says `d0585bd649e2aa74…` and `main`'s `3c09da0b9dd0e28e…`. So only the commands can write them (`bash verity/protocols/spot/verifier/tests/lean/generate.sh`, `bash verity/protocols/flock/prover/tests/lean/generate.sh`). The regenerated files should differ from the branch's in that one line each. If a vector changes, that is a Lean change to look at, not a pin. Their readers are `test_consumers.py` and `test_randomness_spec.py`, which hold each recorded digest to the tree and the Python to the vectors, and `tests/test_pins.py`.
+
+**(z) `a5_llama1b_h200.sh`: right, take `main`'s deletion of all four lines.** It is #8566's rule: no file of `commit/` goes to `$OUT`, which the run publishes. The branch's two remaining lines copy `commit/`'s top-level files there. I ran `main`'s own test's steps (`test_commit_records.py`, in the crossed tree) on both closings: with `main`'s deletion no file holding a planted value reaches `$OUT`; with the branch's two lines `commit/tokens_p0.json` and `commit/sampled_replay_p0.json` do [run].
+
+**The four Lean files** (a reading, nothing built; they are yours to close).
+- Every one of their 19 hunks is both sides adding at one place: the branch adds the per-member form's link points (`members`, `linkRefused`, `RL`, `unitGatesFast`), `main` adds R8 (`tied`, `r8Codes`, `R8`, `once`, `runs`, `fanout`).
+- For hunk 11's order: in `Spot/Registration.lean`, `check` and `checkRef` end `c := r8Codes v c` then `return if linkRefused v then addCode c "link-points" else c`, and the docstring reads "R1–R8 in order, then `link-points`". In `security/Properties/Spot.lean` the conjunction ends `… ∧ R8 v ∧ RL v`.
+- `check_eq_checkRef`'s `simp` step limit (the branch's 800000, `main`'s 400000) only a build can settle.
+
+**One more file, not proofs' and not asked.** `demos/vllm/commit.sh`'s four hunks decide README line 80's dropped clause. `main`'s `test_commit_records.py` reads that script's function named `records`; the branch's side names it `publish`.
+
+**What I ran** [run].
+- The checks asked for: `py_compile` on the 7 closed `.py` files, `bash -n` on `served_verdicts.sh`, `tomllib` on the two `pyproject.toml`, and no marker left in the 12 at `115b297b8c19`.
+- `ruff check --select F,E9` on the 7 `.py` files: clean (no undefined name, no unused import).
+- In the closes' worktree, with `main`'s environment and no suite: `test_profile.py` 304 passed; `test_one_stage.py` 64 passed and `test_optimize.py` 52 passed (both without the slow tests); `test_difftest.py` collects, 111 tests, not run.
+
+**What I did not check.**
+- No suite and no Lean. The tests above ran on a tree with markers in 30 other files, so they are not a check of the crossed head. The difftest needs the Lean build and did not run.
+- `benchmarks/one_stage/tests/test_served_verdicts.py` and the two `pyproject.toml`'s read guards: not run.
+- Bookkeeping on the closed files (retired terms, doc caps, ruff's style). The branch's comment in `sampling_plan/pyproject.toml` says "C-Flock", as a comment in `main`'s own `inputs` list there already does.
+- Outside my hunks, as the merge left it: `sampling_plan/pyproject.toml`'s `inputs` names `"verity/commitments/windows"` twice (the branch's side does too). I left it.
+- The branch's history before the crossing only through `git log --follow -S`: I read no PR page.
