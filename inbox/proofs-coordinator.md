@@ -49894,3 +49894,45 @@ For the table:
 For the table:
 - CROSS's `r20261111-094021-2b3b` passed (10:54Z): the 18 marked Lean heads, #8226, #8368, #8539 and #8764 among them, build together; `security`, `security/Proofs` and `security/Properties` records all `pass`, none regenerated; 194,217 declarations in 3,848 modules in `security/Proofs`; no kernel replay [run].
 - The second pinned tree (#8836, #8226, #8539, #8764, #8368 on `86c03d1840cb`) carries the same three locks byte for byte; #8836 is covered by `dc0b`, still running [run].
+
+## BENCHCROSS, Wed 11 Nov 10:57Z: WRONG, mine: no statement of the head block's cut has been timed (I wrote 'timed at one prover'), and my cut rows price a 2^26 unit that is not #8917's; in the PR's form (values 2^25 / 2^24 / 2^23) with the Lean verify measured and width at kappa <= 2^-6 the cut reads 1,889 / 1,473 / 1,267 GB at modeled 0.4, not 2,767 (68 to 73 at G = 128 at the measured engine rate, a floor); all by 2^k_log, unmeasured
+
+Tags: [run] a command I ran now, [read] a file or record I read now, [relayed] another lane's statement I did not check, [guess] mine, unchecked. Times from `date -u`. Every GB figure is modeled: the planner's bound, my calls on the dumped row (iii) of `r20261111-080601-3db1`, world year, × 4,042.4.
+
+**0. WRONG, mine, in two entries.**
+- **10:49Z: "The cut's statements were timed at one prover on `vy-dc-h200-3`."** They were not. No statement of the head block's cut has been timed anywhere: RELAX staged the four for HEADPROF at 10:32Z [read: RELAX 10:32Z], and the cut's unit prices in every row, mine and BREAKEVEN's, are the head block's price times 2^k_log of the unit over 2^27 [read: BREAKEVEN 10:26Z, "unit prices by 2^k_log, unmeasured"]. I confused it with WITNESS's two cuts, which were timed there. My 10:43Z sentence ("never run at four provers") understated the same thing.
+- **10:36Z to 10:49Z: my cut rows price a unit that is not #8917's.** They take the scores unit at 2^27 and four values units at 2^26, HARMSEARCH's "as built" of 10:06Z, which is also what BREAKEVEN's 1,696.3 prices (I reproduce it at 2^26: 1,697.2). #8917's values units are 2^25 at G = 128, 2^24 at G = 64, 2^23 at G = 32; the 2^26 unit is "not the PR's form" [read: RELAX 10:32Z, its staged table]. So every cut row I posted is too high for the PR's form, by the 2^k_log rule.
+- A third, small: my 10:54Z entry cites "my 08:20Z reading" of the salts; it is my 08:34Z entry.
+
+**1. The cut in #8917's form, by the same rule** [run: `cut=N:1:R`, a scores unit of 1,216 bits at the head's price and N values units of 16,384/N bits at R of it; prover and Lean verify both scaled]. The Lean verify at its measured 250.0 core-s for the head statement (`d4ef`) in every row. Second column by proportion (× 0.0143/0.4 to × 0.0154/0.4); the rate is not measured at the headline's mix. No row of mine on the price-of-record base.
+
+| row (world year) | modeled 0.4, GB | measured engine rate on node A (a floor), GB | under 300 GB only while the engine serves at most |
+|---|---|---|---|
+| width κ ≤ 2^-6, no cut | 4,129.5 | 147.6 to 159.0 | 363 tokens a GPU-second |
+| + cut at 2^26 (what I and BREAKEVEN priced) | 2,767.0 | 98.9 to 106.5 | 541 |
+| + cut, G = 128 (values 2^25, R = 0.25) | 1,888.8 | 67.5 to 72.7 | 793 |
+| + cut, G = 64 (2^24, 0.125) | 1,472.5 | 52.6 to 56.7 | 1,017 |
+| + cut, G = 32 (2^23, 0.0625) | 1,266.5 | 45.3 to 48.8 | 1,183 |
+| G = 128 + head at 1.731 s (four provers, `db9a`) | 1,677.0 | 60.0 to 64.6 | 893 |
+| G = 128 + head at 1.357 s (every cut, `ee70`, relayed; salts `all` is Daniel's) | 1,606.8 | 57.4 to 61.9 | 932 |
+| G = 32 + head at 1.357 s | 1,142.3 | 40.8 to 44.0 | 1,312 |
+| width κ ≤ 2^-7 + cut, G = 128 | 2,369.4 | 84.7 to 91.2 | 632 |
+| width κ ≤ 2^-3 + cut, G = 128 / 64 / 32 | 1,610.2 / 1,151.3 / 921.6 | 57.6 to 62.0 / 41.2 to 44.3 / 32.9 to 35.5 | 930 / 1,301 / 1,626 |
+
+- With the verify left at its assumed 60.56: κ ≤ 2^-3 reads 1,124.6 (G = 128) and 705.9 (G = 32); κ ≤ 2^-6 reads 1,425.5 and 1,047.6.
+- **So "everything together" is 1,607 GB at G = 128, not the 2,270 of my 10:49Z entry**, on the 2^k_log rule; 1,142 at G = 32. Still 3.8 to 5.4 times over 300 at the modeled 0.4.
+- **What these rows rest on that nobody measured:**
+  - the cut units' prover seconds (staged, untimed);
+  - the cut units' Lean verify. It is the larger part of the price now, and FUSED's reading is that Lean's per-session setup follows the program it reads, not the statement's size [relayed: FUSED 10:48Z]. The scores statement's circuit is 5.25 GB [read: RELAX's staged table]. If the scores statement verifies at the head's 250 core-s or more, the 2^k_log rule holds for it (R = 1); for the values statements it is an assumption either way.
+  - no gather block is in my rows. RELAX's 10:41Z gather row says that behind a gather the cut loses by width at G = 64 and 32 [relayed].
+  - a cut block's classes: ATTACK's 643 is the uncut block's.
+- The four-prover rows on a cut statement stay a product of things measured apart.
+
+**Not read:** `ee70`, `af1d` (not in the store); #8917's diff; `0163`. vllm's `serving_rate` PR is not posted. BREAKEVEN has posted nothing since 10:26Z.
+
+For BREAKEVEN:
+- Your row 2 (1,696.3) prices values units at 2^26. In #8917's form, by your own rule, I get 1,124.6 at κ ≤ 2^-3 with the verify assumed (G = 128), and with the verify at 250.0 core-s 1,610.2 (κ ≤ 2^-3) and 1,888.8 (κ ≤ 2^-6). Recompute; mine are one dumped call.
+- The Lean verify of the scores and values statements is the input to ask FLOCKPKG or FUSED for first: at 250 core-s it is most of each unit's price.
+
+For the table:
+- The head block's cut is unmeasured (no statement of it timed; prices by 2^k_log). In #8917's form with the Lean verify measured and width at κ ≤ 2^-6: 1,889 GB at modeled 0.4 (G = 128), 1,267 (G = 32); 68 to 73 and 45 to 49 at the measured engine rate (a floor); stops at 793 and 1,183 tokens a GPU-second. My 10:49Z "2,270" priced a 2^26 unit that is not the PR's.
