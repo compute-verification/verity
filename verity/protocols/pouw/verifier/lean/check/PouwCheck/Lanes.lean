@@ -187,7 +187,7 @@ def parsed? (descriptor : ByteArray) : Option Json := do
 
 /-- `credit.leaf_of`: whether `leaf` (descriptor bytes) is `h1window.leaf_program`'s at K = `k` for `kind`: its program
 function `LEAF_FN[kind]{UNIT={"fn": unit},K=k}`, its definition of `unit` the composite `LEAF_UNIT[kind]` bound to the
-TILE its id spells, and its root's nodes other than inputs one call of `unit`. -/
+TILE its id spells, and its root's nodes other than inputs (`Credit.inputNode`) one call of `unit`. -/
 def leafOf (leaf : ByteArray) (unit : String) (k : Nat) (kind : String) : Bool := Id.run do
   let some d := parsed? leaf | return false
   let some u := (Spot.PyJson.canonical (Json.mkObj [("fn", Json.str unit)])).toOption | return false
@@ -211,8 +211,9 @@ def leafOf (leaf : ByteArray) (unit : String) (k : Nat) (kind : String) : Bool :
   let .arr nodes := get body "nodes" | return false
   let some fns := nodes.toList.mapM (fun x => if isObj x then (nat? (get x "fn")).filter (· < callees.size) else none)
     | return false
+  let desc := Credit.inputsOf callees defs
   let calls := (nodes.toList.zip fns).filterMap fun (x, f) =>
-    if Flock.Program.isInputId callees[f]! then none else some (callees[f]!, get x "form")
+    if Credit.inputNode desc f then none else some (callees[f]!, get x "form")
   return match calls with
     | [(c, f)] => c == unit && f == Json.str "call"
     | _ => false

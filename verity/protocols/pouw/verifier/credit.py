@@ -218,6 +218,7 @@ from verity.protocols.spot.verifier.one_stage import proofs as PF
 from verity.protocols.spot.verifier.one_stage import registered as G
 from verity.circuits.codec import _checked_refs
 from verity.circuits.defs import _Widths
+from verity.circuits.program import is_input_entry
 from verity.circuits.refs import Coll, Concat, refs_from_json
 from verity.circuits.types import type_from_json
 from verity.commitments import domains
@@ -368,7 +369,6 @@ SHARED_J10R = (*SHARED, "call", "blocks")
 #: `GemmAccumulatorS8` binds (its 32-wide step, and `S8_K_LIMIT`, where an s8 sum can leave s32)
 TILE_K_STEP = 32
 TILE_K_LIMIT = 1 << 17
-_INPUT = re.compile(r"(?:Registered)?Input[1-9][0-9]*_v1")
 DESCRIPTOR_FORM = ("the window's descriptor is not a verity-ir/descriptor/v1 descriptor in canonical JSON (keys sorted, "
                    "compact, ASCII: the bytes program_digest hashes) with its callees, definitions, program function and "
                    "root")
@@ -976,8 +976,9 @@ def layout_of(descriptor: Any) -> tuple[dict | None, tuple[str, str] | None]:
     `h1window.template`'s, whose A and B rows give R and C, at a K its tile's proof covers (else ``tile-k``, `tile_k`: a
     multiple of `TILE_K_STEP` below `TILE_K_LIMIT`, checked before K's template), and the root's nodes other than inputs
     are each call's (M/R)·(n/C) instances of its K's template, in the calls' order: a call one instance and a batch its
-    members, as the template query counts units (`Q_template_instances`). Its cost is the descriptor's bytes, never the
-    gates its nodes unroll to. The Lean reads the descriptor through Flock's decoder (`Credit.programOf`), so it also
+    members, as the template query counts units (`Q_template_instances`). An input is a node whose callee is a
+    primitive under an input id (`program.is_input_entry`): a composite under such an id is a node like any other. Its
+    cost is the descriptor's bytes, never the gates its nodes unroll to. The Lean reads the descriptor through Flock's decoder (`Credit.programOf`), so it also
     refuses (`DESCRIPTOR_FORM`) a descriptor that decoder refuses; this checks its form (`_parsed`) and that no
     composite the decoder reads names a word at another width (`_reinterprets`)."""
     def no(why: str) -> tuple[None, tuple[str, str]]:
@@ -1030,7 +1031,7 @@ def layout_of(descriptor: Any) -> tuple[dict | None, tuple[str, str] | None]:
         if not (isinstance(x, dict) and _nat(x.get("fn")) and x["fn"] < len(callees)):
             return no(BODY)
         t = callees[x["fn"]]
-        if _INPUT.fullmatch(t):
+        if is_input_entry(t, defs.get(t)):
             continue
         n = 1 if x.get("form") == "call" else x.get("n") if x.get("form") == "batch" else None
         if not (_nat(n) and n >= 1):
@@ -1833,8 +1834,8 @@ def leaf_of(leaf: Any, unit: str, k: int, kind: str) -> bool:
     """Whether `leaf` (descriptor bytes) is `h1window.leaf_program`'s at K = `k` for `kind`: canonical JSON of `SCHEMA`
     whose program function is ``LEAF_FN[kind]{UNIT={"fn": unit},K=k}``, whose definition of `unit` is the composite
     ``LEAF_UNIT[kind]`` bound to the TILE its id spells, and whose root, the wrapper's one call inlined, is one call of
-    `unit`. A specialization's id spells its bindings, so this is the derivation's own Program, checked over the
-    descriptor's bytes."""
+    `unit` beside its inputs (`program.is_input_entry`). A specialization's id spells its bindings, so this is the
+    derivation's own Program, checked over the descriptor's bytes."""
     d = _parsed(leaf)
     fn = f"{LEAF_FN[kind]}{{UNIT={_canonical({'fn': unit})},K={k}}}"
     if d is None or d["program_fn"] != fn:
@@ -1849,7 +1850,8 @@ def leaf_of(leaf: Any, unit: str, k: int, kind: str) -> bool:
     if type(nodes) is not list or not all(isinstance(x, dict) and _nat(x.get("fn")) and x["fn"] < len(d["callees"])
                                           for x in nodes):
         return False
-    calls = [(d["callees"][x["fn"]], x.get("form")) for x in nodes if not _INPUT.fullmatch(d["callees"][x["fn"]])]
+    calls = [(c, x.get("form")) for x in nodes for c in [d["callees"][x["fn"]]]
+             if not is_input_entry(c, d["definitions"].get(c))]
     return calls == [(unit, "call")]
 
 
@@ -2176,7 +2178,8 @@ def live_of(descriptor: Any) -> tuple[dict | None, tuple[str, str] | None]:
     annotations), ``{T, S, prefix, unit}``, and None; or None and the refusal (``live``, and why). T, S and the prefix are
     its program function's record (`LIVE_FN`'s ``T``, ``S`` and ``PREFIX``), its template ``unit`` is
     ``PouwLiveSlots_v2{T=<T>}``, a composite of id `LIVE_UNIT` bound to T alone, and its root's nodes other than inputs
-    are S calls of it, unit s round s's. Its cost is the descriptor's bytes, never the gates its nodes unroll to."""
+    (`program.is_input_entry`) are S calls of it, unit s round s's. Its cost is the descriptor's bytes, never the gates
+    its nodes unroll to."""
     def no(why: str) -> tuple[None, tuple[str, str]]:
         return None, (LIVE, why)
 
@@ -2210,7 +2213,7 @@ def live_of(descriptor: Any) -> tuple[dict | None, tuple[str, str] | None]:
     for x in nodes:
         if not (isinstance(x, dict) and _nat(x.get("fn")) and x["fn"] < len(callees)):
             return no(LIVE_BODY)
-        if _INPUT.fullmatch(callees[x["fn"]]):
+        if is_input_entry(callees[x["fn"]], defs.get(callees[x["fn"]])):
             continue
         if not (x.get("form") == "call" and callees[x["fn"]] == unit):
             return no(LIVE_BODY)

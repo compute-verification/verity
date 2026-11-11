@@ -57,6 +57,15 @@ def input_id(fid: str) -> tuple[str, int] | None:
     return None
 
 
+def is_input_entry(fid: Any, entry: Any) -> bool:
+    """`is_input` of a definition as a descriptor writes it, ``definitions[fid] = entry``, for a reader that doesn't decode
+    the descriptor: `fid` is an input id and `entry` is a primitive's. A composite under an input id is no input: its gates
+    are computed. A node is an input node when its callee's definition is one (the Lean
+    `Flock.TemplateQuery.Desc.isInputNode`)."""
+    return (type(fid) is str and input_id(fid) is not None and isinstance(entry, dict)
+            and entry.get("form") == "primitive")
+
+
 def input_prim(w: int, binding: str = RUN) -> PrimitiveDefinition:
     """`Input<w>` (``run``) or `RegisteredInput<w>` (``registration``): a zero-operand gate whose value is prescribed (asserted
     equal to the claimed input), never held by the program."""
