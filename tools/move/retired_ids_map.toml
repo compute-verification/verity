@@ -9,7 +9,7 @@
 # - The binding error: the premise `LinkSound`, with `LinkSoundIn` and `zk_rowsLinkSoundC`, is ε_bind's, `BindSound`,
 #   and its module moves with it.
 # - The acceptance probability: `effEscape` is P̄_a, `effAcceptProb`, and its lemmas follow.
-# - The trace: `ExecutionTranscript`, one run's value for every gate, is `Trace`, as `terms_map.toml` has it.
+# - The trace: `ExecutionTranscript`, one run's value for every gate, is `Trace`, as GLOSSARY.md's older names have it.
 # - Unregistered hardware: `benchmarks/rho`'s `eps_dark` is ε_unreg's, `eps_unreg`.
 # - Chunks of a counter-mode stream: `noiseBlock` is `noiseChunk`.
 # - The proof block: `LinkWindows.proof_unit` and `IngressTie.proof_unit` are `proof_block`.
