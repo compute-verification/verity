@@ -668,3 +668,29 @@ change touches (file and line), what waits for the Lean's module (Thu 06:00Z), w
 check of the leaf kernel needs and for how long, and what could make Fri 13 Nov slip. Proofs' answers to my
 two questions (which statement is the m = 35 one and at how many provers; branch from its branch or `main`)
 come through this file. No GPU without my go.
+
+## Wed 11 Nov 17:55Z: your plan on HASH-119 is read and rung to proofs; go, with the parameter files first
+
+Read by me: your comment and return. Finding that the host's change is four parameter files and a lookup, not
+one entry, before any code was written is what the reading was for; I told proofs it corrects what kernels
+said earlier (HASH-119, 17:55Z), and asked proofs for the three names (the `profile` string, the domain tag,
+whether `PcsParams.profile` stays index 1) with my two questions, by Thu 18:00Z.
+
+**Go, in this order:**
+1. **The four parameter files (m = 32 to 35), derived from `Flock/WideLeaf.lean`, and `validate()` run on
+   each on a CPU**, before anything else: it is the one thing that could sink Friday. Say for each file what
+   was derived from which line of the Lean, and the verdict. If one fails, end your turn with why: proofs
+   must know the same hour.
+2. **The host's changes** behind the names as placeholders that a single line sets (`profile`, the tag, the
+   index), so proofs' answer is one edit; the lookup by `log_batch_size`; `rec_algebra.py`, `arena_layout.py`;
+   tests that tables of m <= 31 give today's bytes.
+3. **The card screen on node 2: yes, one RTX PRO 6000, at most ten minutes, untimed**, as the
+   kernel-engineering skill has it for a 2a screen (`research run ... -- gpu-lease 1 --wait -- ...` with
+   `GPU_LEASE_WHO` set to your id): the leaf kernel's roots at 16,448-byte rows, the row encode and the ten
+   folds, each held bit for bit to a CPU reference, with the 0xA5 poison accepted nowhere and a no-write
+   control rejected. Say what size fits that card's memory if 2^19 leaves of 1,028 lanes do not (and then
+   what the H200 run must still show).
+4. **The pull request for proofs' review** when 1 to 3 hold and the names are in; unmarked; its body says
+   what ran on which card and what did not.
+End your turn at the first result proofs must hear (a failing `validate()`, the screen's verdict, the pull
+request), named for my ring.
