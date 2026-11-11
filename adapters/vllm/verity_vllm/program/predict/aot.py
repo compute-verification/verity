@@ -116,7 +116,7 @@ def emit(phi: Phi, wrapper: str, trace: str, out: str, *, M: int = 1, pos0: int 
     desc = {**r.desc, "annotations": S.load_descriptor(os.path.join(trace, "descriptor.json.gz")).get("annotations") or {}}
     raw = json.dumps(desc, sort_keys=True).encode()
     if (got := (hashlib.sha256(raw).hexdigest(), correspondence_digest(desc))) != (traced.get("descriptor_sha256"), traced.get("correspondence_digest")):
-        raise UsageError(f"{trace}: the predicted descriptor under the trace's annotations is {got[0][:16]}… (correspondence {got[1][:16]}…), "
+        raise UsageError(f"{trace}: the predicted descriptor under the trace's annotations is {got[0][:16]}… (correspondence {str(got[1])[:16]}…), "
                          f"the trace's {str(traced.get('descriptor_sha256'))[:16]}… ({str(traced.get('correspondence_digest'))[:16]}…)")
     names, params = traced_names(r.program, desc, trace)
     os.makedirs(out, exist_ok=True)
@@ -215,6 +215,14 @@ def _manifest_facts(path: Path) -> dict[str, Any]:
     return {"manifest_digest": m.manifest_digest, "program_digest": m.program_digest, "identities": len(m.identities)}
 
 
+def _request_shape(name: str, where: str) -> tuple[int, int]:
+    """(LP, T) of a predicted request Program's name, `build_request_LP<n>_T<n>` as `write_row` names it."""
+    m = REQUEST.fullmatch(name)
+    if m is None:
+        raise UsageError(f"{where}: {name!r} is no predicted request Program's name (build_request_LP<n>_T<n>)")
+    return int(m[1]), int(m[2])
+
+
 def compare_row(row_dir: str, predicted: str, traced: dict | None = None) -> dict[str, Any]:
     """A predicted row's Build (`write_row`, under `predicted`) against the traced Build of the same row under `row_dir`: each
     request Program and the workload by digest, and the required-value manifest by its digest (over its identities), Program
@@ -226,7 +234,7 @@ def compare_row(row_dir: str, predicted: str, traced: dict | None = None) -> dic
     p, rec = traced["0"], PredictedRow.of(json.loads((path := Path(predicted, FILE)).read_text()), str(path))
     by_shape = {s: p["requests"][n] for n, s in _traced_shapes(row_dir, "0", p).items()}
     parts = {"workload": (p["workload"], rec.workload_digest),
-             **{n: (by_shape.get(tuple(int(x) for x in REQUEST.fullmatch(n).groups())), d) for n, d in rec.requests.items()}}
+             **{n: (by_shape.get(_request_shape(n, str(path))), d) for n, d in rec.requests.items()}}
     out: dict[str, Any] = {n: {"traced": t, "predicted": q, "equal": bool(t) and t == q} for n, (t, q) in parts.items()}
     t, q = _manifest_facts(Path(row_dir, "manifest.json")), _manifest_facts(Path(predicted, "manifest.json"))
     out["manifest"] = {"traced": t, "predicted": q, "equal": bool(t["manifest_digest"]) and t == q}
@@ -245,12 +253,13 @@ def write_row(row: str, out: str, *, config: str | None = None, jobs: int = 1, l
     w = json.loads(workload_file(row_file(row)).read_text())
     if PP.prefix_caching(w):
         raise UsageError(f"{row}: the row serves with prefix caching, and its workload Program's cached components are not predicted")
-    config = config or pinned_hf_config(w["model"], RowEngine.of(w).revision)
-    if config is None:
-        raise UsageError(f"{row}: no pinned config.json for {w['model']}@{RowEngine.of(w).revision}; pass --config")
+    revision = RowEngine.of(w).revision
+    found = config or pinned_hf_config(w["model"], str(revision))
+    if found is None:
+        raise UsageError(f"{row}: no pinned config.json for {w['model']}@{revision}; pass --config")
     if os.path.exists(os.path.join(out, "build_summary.json")):
         raise UsageError(f"{out} is a traced row's dir: a predicted row's Build is written into a dir of its own")
-    phi = S.phi_of({"row": row, "workload": w}, config=str(config))
+    phi = S.phi_of({"row": row, "workload": w}, config=str(found))
     os.makedirs(out, exist_ok=True)
     t0, comps, requests = time.time(), {}, {}
     for LP, T in phi.request_shapes():
@@ -271,7 +280,7 @@ def write_row(row: str, out: str, *, config: str | None = None, jobs: int = 1, l
     Path(out, "manifest.json").write_bytes(raw)
     if MN.incomplete_rc(man):
         raise UsageError(f"{row}: the predicted Build's manifest is incomplete (named above), so it has no {FILE}")
-    rec = PredictedRow(row=row, config=str(config), code_version=S.code_version(), requests=requests, workload_digest=wl.digest,
+    rec = PredictedRow(row=row, config=str(found), code_version=S.code_version(), requests=requests, workload_digest=wl.digest,
                        lag=wl.lag, manifest_digest=man["manifest_digest"], manifest_sha256=hashlib.sha256(raw).hexdigest(),
                        program_digest=man["program_digest"], identities=man["populations"]["identities"],
                        secs=round(time.time() - t0, 1))

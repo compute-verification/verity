@@ -87,7 +87,7 @@ class Phi:
 def _prompt_len(r: dict) -> int:
     if r.get("prompt_token_ids") is not None:
         return len(r["prompt_token_ids"])
-    return int(r.get("prompt_len") or r.get("input_len"))
+    return int(r.get("prompt_len") or r["input_len"])
 
 
 def _cap(r: dict) -> int:

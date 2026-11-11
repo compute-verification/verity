@@ -37,7 +37,7 @@ def phi_of(rec: dict, *, hf_home: str | None = None, config: str | None = None) 
         raise Unexpressible(f"row {rec['row']}: no declared workload manifest at {rec.get('workload_path')}")
     repo = w.get("model")
     rev = RowEngine.of(w).revision
-    cp = config or hf_config_path(str(hf_home), repo, rev)
+    cp = config or hf_config_path(str(hf_home), repo, str(rev))
     if not os.path.exists(cp):
         raise Unexpressible(f"no config.json for {repo}@{rev} under {hf_home}")
     hf = json.loads(Path(cp).read_text())

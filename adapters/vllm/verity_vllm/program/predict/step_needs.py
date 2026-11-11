@@ -53,8 +53,11 @@ def workload_phi(row: str, case: str) -> Phi:
 
     from . import score as S
     w = json.loads(row_file(row).read_text())
+    revision = RowEngine.of(w).revision
+    if revision is None:
+        raise ValueError(f"{row}: its engine block states no checkpoint revision, which names its snapshot's dir")
     home = Path(tempfile.mkdtemp(prefix="step-needs-hf-"))
-    cp = Path(S.hf_config_path(str(home), w["model"], RowEngine.of(w).revision))
+    cp = Path(S.hf_config_path(str(home), w["model"], revision))
     cp.parent.mkdir(parents=True, exist_ok=True)
     cp.write_bytes((HF_CONFIG_DIR / f"{case}.config.json").read_bytes())
     return S.phi_of({"row": row, "workload": w}, hf_home=str(home))
@@ -223,7 +226,7 @@ class StepNeeds:
         out.append((self.kind("moe_router_sigmoid_bias", E=E, TOPK=TOPK, RSF=float(C["ROUTED_SCALING_FACTOR"]), KERNEL=kernel), n)
                    if kernel else (Need("sigmoid-router", _id("grouped-topk", E=E, M=M), "no capture", "at other statics"), n))
         out.append((self.kind("fp8_group_quant_ue8m0", K=H, G=G), n))
-        cfg = fused_moe_config(E, INTER, self.net.device, "fp8_w8a8", (G, G), M)
+        cfg = fused_moe_config(E, INTER, str(self.net.device), "fp8_w8a8", (G, G), M)
         why: str | None
         if cfg is None:
             why = f"no tuned fused-MoE config at M={M}"

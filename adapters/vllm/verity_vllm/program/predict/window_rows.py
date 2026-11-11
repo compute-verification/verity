@@ -178,29 +178,32 @@ class Slot:
         if served is not None and served[0] != descriptor_id(node.fn):
             pin = f"its Definition's value on its operands (served as {served[0]})"
         got = None if served is None else served[1]
-        want = self._evaluate(node, fields, what) if got is None or pin else None
-        if got is not None:
-            if len(got) != len(fields):
-                raise ValueError(f"{what}: served as {len(got)} members, not its {len(fields)} return fields")
-            got = [_cast(a, ty, f"{what}, served") for a, ty in zip(got, fields)]
-            if want is not None and not all(np.array_equal(a, b) for a, b in zip(got, want)):
-                raise ValueError(f"{what}: served as {got[0][:4].tolist()}..., not {pin}")
-        self.values.append(got if got is not None else want)
-        self.source.append(SERVED if got is not None else COMPUTED)
+        if got is None:
+            self.values.append(self._evaluate(node, fields, what))
+            self.source.append(COMPUTED)
+            return
+        want = self._evaluate(node, fields, what) if pin else None
+        if len(got) != len(fields):
+            raise ValueError(f"{what}: served as {len(got)} members, not its {len(fields)} return fields")
+        got = [_cast(a, ty, f"{what}, served") for a, ty in zip(got, fields)]
+        if want is not None and not all(np.array_equal(a, b) for a, b in zip(got, want)):
+            raise ValueError(f"{what}: served as {got[0][:4].tolist()}..., not {pin}")
+        self.values.append(got)
+        self.source.append(SERVED)
 
     def _token(self, p: int, tok: Any) -> None:
         """Position ``p``'s token (`window_circuit._Program._token`): the first position's its slot row's first id, below the
         prompt cap `TokenFeed_v1`'s of the slot carried and the previous select, past it the previous select."""
         NP = self.cls.prompt
-        if p == 0:
-            slot, sel = self.row[1:], None
-        else:
-            sel = int(self.operand(tok)[0])
-            slot = self.carried[-1]
+        sel = None if p == 0 else int(self.operand(tok)[0])
+        slot = self.row[1:] if p == 0 else self.carried[-1]
+        nxt: list[int] | None = None
         if p < NP:
+            assert slot is not None, f"position {p}'s token is below the prompt cap, and position {p - 1} carried no slot"
             t, nxt = IO.feed_reference(slot, sel, NP)
         else:
-            t, slot, nxt = sel, None, None
+            assert sel is not None, "a first position past the prompt cap has no previous select"
+            t, slot = sel, None
         self.tokens.append(int(t))
         self.slots.append(slot)
         self.carried.append(nxt)
@@ -450,9 +453,10 @@ class Rows:
                 ins["salt"][r.unit] = _be_words(table.salts[t])
                 ins["path"][r.unit] = _be_words(table.path(t))
             if feed is not None:
-                tid, unit = feed
+                (tid, unit), nxt = feed, S.carried[p]
+                assert nxt is not None, f"{P.name}: position {p} has a token feed unit, and its slot carries nothing on"
                 self._put(tid, unit, "o0", _i32([t]), EVALUATED)
-                self._put(tid, unit, "o1", _i32(S.carried[p]), EVALUATED)
+                self._put(tid, unit, "o1", _i32(nxt), EVALUATED)
         picks = []
         for j, (groups, x0) in P.selects.items():
             logits = S.operand(nodes[j].args[0])

@@ -355,6 +355,7 @@ class _Program:
             rows = self.rows(tok.refs)
         else:
             tid, u = self.b.unit(bind(IO.TokenFeed, NP=NP, FIRST=False))
+            assert self.slot is not None, f"{self.name}: position {p}'s token before position 0's, which carries its slot"
             self.b.feed(tid, "slot", u, 1, (self.slot,))
             self.b.feed(tid, "sel", u, 1, self.rows(tok.refs))
             self.tokens.append((tid, u))
@@ -644,7 +645,7 @@ class _Program:
             tid, u = self.b.unit(bind(TokenSelectGroupsV1, C=C, G=GROUP))
             self.b.feed(tid, "x", u, 1, self.rows(logits.refs.slice(lo, lo + C)))
             parts.append((tid, u))
-        ctid, cu = self._collect(V)
+        ctid, cu = self._collect(V, self.head, self.occ)
         self.b.feed(ctid, "best", cu, 1, [Row(t, u, "o0", n) for t, u in parts])
         self.b.feed(ctid, "idx", cu, 1, [Row(t, u, "o1", 2 * n) for t, u in parts])
         (_, lm, lo, _), = self.segments(logits.refs.slice(0, 1))
@@ -659,7 +660,7 @@ class _Program:
             self.outs[j] = [(0, 2, Row(ctid, cu, "o0", 2))]
         self.selects[j] = (tuple(parts), (xtid, xu))
 
-    def _collect(self, V: int) -> tuple[str, int]:
+    def _collect(self, V: int, head: Row, occ: Row) -> tuple[str, int]:
         """The position's combine unit, the slot's outputs collected on with its select (`io_shell.SelectCollect_v1`, its
         state the next position's ``state``: the first's reads its lane's head), and at the last position the slot's entry
         too (`io_shell.SelectEntry_v1`, reading its occupancy word), whose select is no row: its one output is the entry. With
@@ -675,9 +676,11 @@ class _Program:
         else:
             fn = bind(IO.SelectCollect, **at)
         ctid, cu = self.b.unit(fn)
-        self.b.feed(ctid, "head" if p == 0 else "state", cu, 1, (self.head if p == 0 else self.collect,))
+        state = head if p == 0 else self.collect
+        assert state is not None, f"{self.name}: position {p}'s select before position {p - 1}'s, which collects on to it"
+        self.b.feed(ctid, "head" if p == 0 else "state", cu, 1, (state,))
         if last:
-            self.b.feed(ctid, "occ", cu, 1, (self.occ,))
+            self.b.feed(ctid, "occ", cu, 1, (occ,))
             self.entry_unit = (ctid, cu)
         else:
             self.collect = Row(ctid, cu, "o1", 2 * (KO + 2))
@@ -760,8 +763,10 @@ def lower(registered: Any, cls: WindowClass, programs: int | None = None, grain:
                         tuple(openings), values=held)
     wires = tuple(IF.coalesce(b.wires))
     starts = {tid: [at - slot * n for at, n, slot, _step in runs] for tid, runs in b.spans.items()}
+    entry_unit = progs[0].entry_unit
+    assert entry_unit is not None, f"{progs[0].name}: no select at its last position, whose unit makes the slot's entry"
     circuit = IF.Circuit(NAME, tuple((fn, b.units[tid]) for tid, fn in b.fns.items()),
-                         external=(f"{descriptor_id(scan)}/state", f"{progs[0].entry_unit[0]}/o0"),
+                         external=(f"{descriptor_id(scan)}/state", f"{entry_unit[0]}/o0"),
                          wires=wires, cuts=b.cuts, registered=reg,
                          blocks=IF.Blocks(programs, cls.positions, tuple(inference(b.spans, programs))),
                          order=IF.ordered(b.units, wires, starts) if wires else None)
