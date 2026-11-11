@@ -48,7 +48,6 @@
     {"file": "tests/acquire/test_served_moe.py", "kind": "I001", "symbol": "<module>", "detail": "Import block is un-sorted or un-formatted"},
     {"file": "tests/acquire/test_stage.py", "kind": "I001", "symbol": "<module>", "detail": "Import block is un-sorted or un-formatted"},
     {"file": "tests/acquire/test_tp_partial_match_oracle.py", "kind": "I001", "symbol": "<module>", "detail": "Import block is un-sorted or un-formatted"},
-    {"file": "tests/acquire/test_tp_partial_source_mid_module.py", "kind": "I001", "symbol": "<module>", "detail": "Import block is un-sorted or un-formatted"},
     {"file": "tests/acquire/test_x03_plane_classes.py", "kind": "I001", "symbol": "<module>", "detail": "Import block is un-sorted or un-formatted", "count": 2},
     {"file": "tests/check/adversarial.py", "kind": "E741", "symbol": "catalogue.m03", "detail": "Ambiguous variable name: `I`"},
     {"file": "tests/check/adversarial.py", "kind": "E741", "symbol": "catalogue.m06", "detail": "Ambiguous variable name: `I`"},
