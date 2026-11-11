@@ -34,7 +34,7 @@ class Challenger(subprocess.Popen):
 def _env(d: Path, work: Path | None = None) -> dict:
     """The environment `challenger.sh` runs in: this process's, where CHALLENGER_REPO and CHALLENGER_PY default to this
     tree and this interpreter, and the challenger's work directory ``work``."""
-    return ({"CHALLENGER_REPO": str(SH.parents[4]), "CHALLENGER_PY": sys.executable} | dict(os.environ)
+    return ({"CHALLENGER_REPO": str(SH.parents[5]), "CHALLENGER_PY": sys.executable} | dict(os.environ)
             | ({"CHALLENGER_WORK": str(work)} if work is not None else {}))
 
 
