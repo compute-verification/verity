@@ -114,9 +114,8 @@ theorem stepWith_three_msg (c₀ c₁ : Msg) (ok : Msg → Msg → Bool) (hv1 : 
       have e₂ : (vn ([a₀, a₁] ++ [((P.next x [(a₀, c₀), (a₁, c₁)] ω).eval H).1])).eval H = (.rej, []) := by
         rw [List.cons_append, List.singleton_append, hv3, hok]; rfl
       exfalso
-      first
-        | (simp only [stepWith, e₂] at h2; simp at h2)
-        | simp [stepWith, hv3, hok, OC.eval] at h2
+      simp only [stepWith, e₂] at h2
+      simp at h2
     | true =>
       rw [stepWith_succ_msg H P x ω vn (m := []) (lo := [])
         (by rw [List.cons_append, List.singleton_append, hv3, hok]; rfl)]
@@ -140,15 +139,11 @@ theorem answered_two {l : List (Msg × Out)} {n : ℕ} (hn : 3 ≤ n) (hlen : n 
     omega
   · obtain ⟨n', rfl⟩ : ∃ n', n = n' + 3 := ⟨n - 3, by omega⟩
     cases o with
-    | msg y => exact ⟨m, y, by first | rfl | simp⟩
+    | msg y => exact ⟨m, y, rfl⟩
     | acc =>
-      first
-        | simp [List.take_succ_cons, answered] at hall
-        | exact absurd (List.all_eq_true.1 hall (m, Out.acc) (by simp [List.take_succ_cons])) (by simp [answered])
+      simp [List.take_succ_cons, answered] at hall
     | rej =>
-      first
-        | simp [List.take_succ_cons, answered] at hall
-        | exact absurd (List.all_eq_true.1 hall (m, Out.rej) (by simp [List.take_succ_cons])) (by simp [answered])
+      simp [List.take_succ_cons, answered] at hall
 
 variable (h : Held)
 
@@ -239,9 +234,10 @@ theorem reveal_out (hB : Built h) (s : AuditStatement) (u : ℕ) (ms : List (Msg
     exact congrArg (fun op' : Opening Bool =>
       (Reveal.rootsAt (partition h) (two h) (iroots []) s u ⟨ms, o'⟩ g, ({ op' with pos := g } : Opening Bool)))
       (hop g (Reveal.rootsAt (partition h) (two h) (iroots []) s u ⟨ms, o'⟩ g))
-  have hfr : ∀ g R, Reveal.frameAt h.frame s u ⟨ms, o⟩ wF g R = Reveal.frameAt h.frame s u ⟨ms, o'⟩ wF g R :=
-    fun g R => congrArg (fun l : List (List Msg × Opening Bool) =>
-      ((l.find? fun q => q.2.pos == g && q.1 == R).map Prod.snd).getD ⟨g, false, []⟩) hinner
+  have hfr : ∀ g R, Reveal.frameAt h.frame s u ⟨ms, o⟩ wF g R = Reveal.frameAt h.frame s u ⟨ms, o'⟩ wF g R := by
+    intro g R
+    unfold Reveal.frameAt
+    rw [hinner]
   show (Reveal.needs (partition h) s u).map
       (Reveal.openAt (partition h) (two h) (iroots []) (Reveal.frameAt h.frame) s u ⟨ms, o⟩ wF) =
     (Reveal.needs (partition h) s u).map
