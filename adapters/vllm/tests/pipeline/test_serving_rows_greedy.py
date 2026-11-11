@@ -1,11 +1,12 @@
 """A greedy select row cut into its stages (`pipeline.serving_rows`' ``stage`` layout, `stage_rows`): a ``TokenSelect_v1{V}`` row
-holds the units `greedy_stages.plan` lists (at GLM-5.3's V = 154,880 and at V = 200, 20 of 3 Definitions), and a window of
-a V = 200 row's every stage template:
+holds the units `greedy_stages.plan` lists (at GLM-5.3's V = 154,880 and at V = 200, 20 of 20 Definitions, a chunk position
+its own), and a window of a V = 200 row's every stage template:
 
-* reads each unit's logits lanes off the row (the combine's, the last chunk's) and the combine's pairs off the twin, whose token
-  is the row's served one, so each unit's Definition on its rows, parsed as Flock's stager parses them, is its committed output;
-* wires every combine pair to the output row of the chunk that wrote it, and refuses a row whose served token is not the twin's
-  and a partition that leaves out a chunk's template.
+* reads each unit's logits lanes off the row (the combine's, the last chunk's) and the combine's chunk results off the twin, whose
+  token is the row's served one, so each unit's Definition on its rows, parsed as Flock's stager parses them, is its committed
+  output;
+* wires every combine parameter to the output row of the chunk that wrote it, and refuses a row whose served token is not the
+  twin's and a partition that leaves out a chunk's template.
 
 At the served statics each unit is a proof block Flock's composer takes (`interface.check_proof_block`).  A chunk lowers flat to
 a circuit linear in its lanes (`test_a_chunk_lowers_linearly_in_its_width`), so the served one's AND rows hold a small share of
@@ -102,28 +103,29 @@ def places(ms, tmpls, rows: int = 1, v: int = V) -> dict[int, tuple[int, tuple]]
 
 
 def test_a_greedy_row_holds_its_stages():
-    """The units `greedy_stages.cut` cuts the row into, each a ``stage`` template of 16-bit ports, and at GLM-5.3's vocabulary
-    20 of 3; the combine reads the last chunk's 10 lanes as one row and each other chunk's best and index as rows of their
-    own, and its one output row is the token's two words."""
+    """The units `greedy_stages.cut` cuts the row into, each a ``stage`` template of 16-bit ports and one unit a row, and at
+    GLM-5.3's vocabulary 20 of 20; the combine reads the last chunk's 10 lanes as one row and each other chunk's result,
+    its three words, as one row, and its one output row is the token's two words."""
     cut = [(descriptor_id(d), n) for d, n in G.cut(bind(b1.TokenSelect, V=V))]
-    assert SRW.unit_templates(ROW) == ((ROW, 1), *cut) and len(cut) == 3 and sum(n for _t, n in cut) == len(G.plan(V)) == 20
+    assert SRW.unit_templates(ROW) == ((ROW, 1), *cut) and cut == [(descriptor_id(u.defn), 1) for u in G.plan(V)] and len(cut) == 20
     assert {(SRW.template(t).layout, SRW.template(t).word == t, SRW.template(t).packed, CR.reads(SRW.template(t)))
             for t in TMPLS} == {("stage", True, None, "slots")}
     served = SRW.unit_templates(descriptor_id(bind(b1.TokenSelect, V=SERVED_V)))[1:]
-    assert len(served) == 3 and sum(n for _t, n in served) == 20
+    assert len(served) == 20 and {n for _t, n in served} == {1}
     combine = descriptor_id(G.plan(V)[-1].defn)
-    pairs = [(f"in{1 + 2 * c + j}", V2, 16, [f"{'bi'[j]}{c}"]) for c in range(19) for j in (0, 1)]
-    assert CR.unit_rows(SRW.template(combine)) == ([("in0", V2, 160, ["logits"]), *pairs], [(V2, (0,))])
-    assert [w for _q, w in SRW.members(TMPLS, [Served().rows] * 3, None, PER_CHUNK)[-1].outs] == [2]
+    results = [(f"in{1 + c}", V2, 48, [f"r{c}"]) for c in range(19)]
+    assert CR.unit_rows(SRW.template(combine)) == ([("in0", V2, 160, ["logits"]), *results], [(V2, (0,))])
+    assert CR.unit_rows(SRW.template(TMPLS[3])) == ([("in0", V2, 160, ["logits"])], [(V2, (0,))])
+    ms = SRW.members(TMPLS, [Served().rows] * len(TMPLS), None, PER_CHUNK)
+    assert [[w for _q, w in m.outs] for m in ms] == [[3]] * 19 + [[2]]
 
 
 def test_every_served_unit_s_proof_block_composes():
     """At GLM-5.3's vocabulary every unit of the cut is a proof block Flock's composer takes (`interface.check_proof_block`):
     a chunk's logits are a row past 111 bytes, and so are the combine's, the last chunk's 7,744 lanes, beside its chunks'
-    2-byte pairs, which alone it would refuse; a chunk's rows fit 2^24 bits and the combine's 2^25."""
+    6-byte results, which alone it would refuse; a chunk's rows fit 2^24 bits, at every position, and the combine's 2^25."""
     got = {descriptor_id(d): IF.check_proof_block(d) for d, _n in G.cut(bind(b1.TokenSelect, V=SERVED_V))}
-    assert got == {"GreedyChunk_v1{N=7744,FIRST=true}": 24, "GreedyChunk_v1{N=7744,FIRST=false}": 24,
-                   "GreedyCombine_v2{V=154880,N=7744}": 25}
+    assert got == {**{f"GreedyChunk_v2{{N=7744,OFF={c * 7744}}}": 24 for c in range(19)}, "GreedyCombine_v2{V=154880,N=7744}": 25}
 
 
 def test_verify_zk_takes_every_served_unit():
@@ -172,7 +174,7 @@ def test_the_units_read_the_twin_s_words_whose_token_is_the_served_row():
     t = TMPLS[0]
     g = next(g for m, (g, _e) in zip(ms, got) if m.template == t)
     with pytest.raises(AssertionError, match="outputs are not the IR reference's"):     # an output its unit does not compute
-        stager(t).reference_check(g["rows"], {**g["outs"], "o1": g["outs"]["o1"] ^ np.uint16(1)})
+        stager(t).reference_check(g["rows"], {**g["outs"], "o0": g["outs"]["o0"] ^ np.uint16(1)})
 
 
 def test_a_row_whose_served_token_is_not_the_twin_s_is_refused():
@@ -186,17 +188,17 @@ def test_a_row_whose_served_token_is_not_the_twin_s_is_refused():
 def test_a_partition_without_a_chunk_s_template_is_refused():
     s = Served()
     later = descriptor_id(G.plan(V)[1].defn)
-    with pytest.raises(ValueError, match=re.escape("row 9's b1 is the output of its stage ('chunk', 1), whose template the "
+    with pytest.raises(ValueError, match=re.escape("row 9's r1 is the output of its stage ('chunk', 1), whose template the "
                                                    "partition does not name")):
         members(s, [t for t in TMPLS if t != later])
     assert all(m.wired == () for m in members(s, [descriptor_id(G.plan(V)[0].defn)]))
 
 
 def _flat(N: int) -> tuple[int, int, int]:
-    """``GreedyChunk_v1{N, FIRST=false}``'s flat lowering (`ir_lower`): its ANDs, their operands' bits (the AND rows' nonzeros)
+    """``GreedyChunk_v2{N, OFF=N}``'s flat lowering (`ir_lower`): its ANDs, their operands' bits (the AND rows' nonzeros)
     and the widest operand."""
     Cc = Circuit()
-    IL.lower(Cc, bind(G.GreedyChunk, N=N, FIRST=False), [Cc.input(f"x{j}", 16) for j in range(N)])
+    IL.lower(Cc, bind(G.GreedyChunk, N=N, OFF=N), [Cc.input(f"x{j}", 16) for j in range(N)])
     ops = [len(f.s) for k, d in zip(Cc.kind, Cc.data) if k == "and" for f in d]
     return len(ops) // 2, sum(ops), max(ops)
 
