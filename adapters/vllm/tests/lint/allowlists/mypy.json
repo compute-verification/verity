@@ -1634,8 +1634,6 @@
     {"file": "verity_vllm/acquire/served.py", "kind": "union-attr", "symbol": "main", "detail": "", "count": 16},
     {"file": "verity_vllm/acquire/served_device.py", "kind": "arg-type", "symbol": "device_of", "detail": ""},
     {"file": "verity_vllm/acquire/served_device.py", "kind": "arg-type", "symbol": "launch", "detail": ""},
-    {"file": "verity_vllm/acquire/sources/attention_source.py", "kind": "arg-type", "symbol": "AttentionSource._cache_rows", "detail": "", "count": 2},
-    {"file": "verity_vllm/acquire/sources/attention_source.py", "kind": "union-attr", "symbol": "AttentionSource.__init__", "detail": ""},
     {"file": "verity_vllm/acquire/sources/compiled_source.py", "kind": "assignment", "symbol": "CompiledGraphSource.wrap_model", "detail": ""},
     {"file": "verity_vllm/acquire/sources/compiled_source.py", "kind": "attr-defined", "symbol": "_install_inductor_lowering", "detail": ""},
     {"file": "verity_vllm/acquire/sources/hidden_source.py", "kind": "arg-type", "symbol": "HiddenM1Source._buffer", "detail": ""},
