@@ -14,7 +14,6 @@ from fractions import Fraction
 import pytest
 
 from verity.protocols.poub.verifier import audit, ledger, receipts, timing
-from verity.protocols.spot.verifier.profile import IntegrityProfile, Subset
 from verity.commitments import MerkleTree, scheme
 from verity.commitments.randomness import derive
 
@@ -146,8 +145,7 @@ def one_pass_session(blocks: int, passes: int, span_ns: int, samples: int) -> au
     """What the memory line's δ reads of a paced session that reserved no append coins: `passes` one-pass windows over
     `blocks` blocks, `samples` openings a window, at the profile's δ, spread evenly over `span_ns`.  Its registration
     and coins are zeros, which no part of δ reads."""
-    profile = IntegrityProfile(("receipt",), (blocks,), {"receipt": Subset(samples)}, audit.DELTA,
-                               drawn={"receipt": samples})
+    profile = audit.window_profile((blocks,), samples, audit.DELTA)
     at = [span_ns * t // passes for t in range(passes + 1)]
     return audit.Record(bytes(64), bytes(64), blocks, timing.BLOCK_BYTES, tuple(
         audit.WindowRecord(t, (blocks,), at[t], at[t + 1], at[t + 1], profile) for t in range(passes)),
@@ -158,10 +156,11 @@ def test_the_outside_factor_multiplies_the_queries_the_bound_charges() -> None:
     """Grinding reads no block, so `sketch_failure` charges Q = F·C, C the node's compressions and F the
     outside-compute factor, 2^20 by default.  At gate run 8's session 0 (C = 12,708,215,084,432 over 226.9 s, P = 2,118,
     N = 97,517,568, 48 openings a window, its recorded δs 2^-51.59 at F = 1) F = 2^10 gives 2^-41.59, the red team's
-    reading, and 2^20 gives 2^-31.59; 64 rows give 2^-129.94 at F = 2^20.  The memory line's δ there is asserted from
-    the ledger and typed nowhere as a formula: every `Line.delta` of `ledger.memory` is the sum of `ledger.delta_parts`
-    at `Node.stated(sketch_outside=F)`, AuditRO's slack in it at `audit.SLACK_LOG2` a pass.  The typed 2^-39.99 at
-    F = 1 and 2^-31.59 at F = 2^20 are a second check of that sum and are the ledger's own numbers, and
+    reading, and 2^20 gives 2^-31.59; 64 rows give 2^-129.94 at F = 2^20.  The memory line's δ of a record of those
+    counts is the ledger's, typed nowhere as a formula: every `Line.delta` of `ledger.memory` is the sum of
+    `ledger.delta_parts` at `Node.stated(sketch_outside=F)`, AuditRO's slack in it at `audit.SLACK_LOG2` a pass (the
+    run's own record states no slack, so its line is read at `UNRECORDED_SLACK_LOG2` and is another number).  The typed
+    2^-39.99 at F = 1 and 2^-31.59 at F = 2^20 are a second check of that sum and are the ledger's own numbers, and
     `timing.SKETCH_OUTSIDE`'s docstring must carry every number the ledger returns here."""
     assert timing.SKETCH_OUTSIDE == 2 ** 20
     c, p, n, span_ns, samples = 12_708_215_084_432, 2118, 97_517_568, 226_932_412_222, 48
