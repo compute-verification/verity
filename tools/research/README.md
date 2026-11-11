@@ -24,9 +24,9 @@ src/research/
 ├── auto.py         --on auto: a CPU node's research pool or node 2's queue, and when the run should start there
 ├── jobuser.py      --job-user: the workload as an unprivileged user in a sandboxed system unit
 ├── env.py          conditions(): the one baseline of an attempt's conditions (source, runtime, hardware, execution); ONE SKU->family map
-├── merge.py, queue.py, drive.py, vqueue.py   landing: the merge gate, the merge queue, drive, and the verified queue, which
+├── merge.py, queue.py, vqueue.py   landing: the merge gate, the merge queue and the verified queue, which
 │                   tools/verity/landq replays
-├── policy.py       drive's policy over tools/verity/check/policy.toml: what is off the merge gate and what may stay red
+├── policy.py       the landing's policy over tools/verity/check/policy.toml: what is off the merge gate and what may stay red
 ├── checkview.py    `research status RUN` on a check run; tools/verity/check's live view reads its targets
 ├── goals.py        `research goals`: the Goals page (the writing-goals skill)
 ├── linear.py       asks as Linear issues, and the audit the control pod's top watch runs
