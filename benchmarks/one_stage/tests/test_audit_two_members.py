@@ -1,23 +1,23 @@
 """Two sampled members of a tiny committed window through the records audit as a served window's audit runs it
 (`served_verdicts.sh`'s ``v3c_audit``): ``records_audit.py audit`` in a process of its own, which samples on its stream
-and hands `a5.audit` the members, each proved by C-Flock's prover (`flock-circuit`, the CPU build) behind the ZK server
-(Lean's `flock-firewall`) and verified by the Lean verifier (`flock-verify`). Nothing on that path is replaced.
+and hands `a5.audit` the members, each proved by Flock's prover (`flock-circuit`, the CPU build) behind the ZK server
+and verified by the Lean verifier. Nothing on that path is replaced.
 
 * **The window** (`_window`): two templates of one proof block each, `ScaledMmS8Coordinate` at K = 128 and K = 256 (the
-  smallest whose rows give C-Flock's composer a compression before a row's last block), recorded, committed and written
+  smallest whose rows give Flock's composer a compression before a row's last block), recorded, committed and written
   through the interface as serving writes one, under ``stratified:1``. A template is a stratum, so the sample always
   holds both proof blocks, one a member, and the audit runs two sessions.
 * **The coins** are a challenger's: ``--challenger local`` starts a development session of the auditor host's own
   service on this machine (`a5_coins.Local`: `live_challenger`'s reserve, admit, run and `serve.py`), pinned on
   this checkout's first-parent line. `test_a5_reserve` opens one the same way under a stub of the Lean verifier's coins;
-  here its `serve.py` runs the Lean (`sampled-proofs-verifier`). Its key is the session's own, so its coins show the path
-  and are no auditor's.
-* **The binaries.** `flock-verify` and `flock-firewall` are what check's lean-build step builds before this suite
-  (`AFTER_LEAN`, the suite's ``artifacts``), and the tests skip without them. `flock-circuit` is built by
+  here its `serve.py` runs SPOT's Lean verifier itself. Its key is the session's own, so its coins show the path and
+  are no auditor's.
+* **The binaries.** The Lean verifier and the ZK server's Lean are what check's lean-build step builds before this
+  suite (`AFTER_LEAN`, the suite's ``artifacts``), and the tests skip without them. `flock-circuit` is built by
   `check_build.sh bin` on the Flock checkout check's flock-circuit-build step leaves on a machine. That build fetches
   nothing: on a machine with no checkout, not its Rust toolchain or not its crates the tests skip, saying so. The
-  stream's and the challenger's Lean (`sampled-proofs-verifier`) is its own package's, which the audit builds with
-  `lake` on first use (`one_stage.verifier.executable`): a checkout's first audit pays that build.
+  stream's and the challenger's Lean, SPOT's verifier, is its own package's, which the audit builds with `lake` on
+  first use (`one_stage.verifier.executable`): a checkout's first audit pays that build.
 
 Slow, and past a minute in `check`: about 150 s on a node, about 210 s where the audit builds the coins' Lean first,
 and about 5 GB at its peak. Of it the changed member's audit is about 50 s: it alone shows a false member stopped (the
@@ -58,7 +58,7 @@ BUILD = ROOT / "verity" / "protocols" / "flock" / "prover" / "check_build.sh"
 NOTHING_TO_BUILD_ON = 3
 KS = (128, 256)
 TEMPLATES = tuple(bind(G.ScaledMmS8Coordinate, K=k, **G.GEMM_SM120_S8) for k in KS)
-LAW = "stratified:1"
+DESIGN = "stratified:1"
 RULE = "stratified-rate:1/2"
 RUN = "ab" * 64
 #: what the steps after a served window's audit read of its record (`served_verdicts.sh`'s hand-off, `records_audit.period`)
@@ -72,7 +72,7 @@ pytestmark = pytest.mark.slow
 def _window(d: Path, flipped: bool = False) -> Path:
     """The window (module docstring) written to ``d``. ``flipped``: the K = 256 proof block's committed output has bit 0
     of its first word flipped, and is committed as consistently as an honest one."""
-    win = IF.Window(IF.Circuit("two-members", tuple((t, 1) for t in TEMPLATES)), RUN, D.parse_design(LAW), 4)
+    win = IF.Window(IF.Circuit("two-members", tuple((t, 1) for t in TEMPLATES)), RUN, D.parse_design(DESIGN), 4)
     rng = np.random.default_rng(0)
     for t, k in zip(TEMPLATES, KS):
         x, w = (rng.integers(-128, 128, (1, k)).astype(np.int8) for _ in range(2))
@@ -109,7 +109,7 @@ def _audit(tmp: Path, window: Path, binaries: dict[str, Path], *flags: str) -> t
     m0 = os.pathsep.join(str(ROOT / p) for p in ("", "benchmarks/numerical/python",
                                                  "verity/protocols/flock/prover/python", "adapters/vllm"))
     argv = [sys.executable, str(ROOT / "benchmarks" / "prove_path" / "records_audit.py"), "audit", "--window", str(window),
-            "--law", LAW, "--circuit", hashlib.sha512((window / "circuit.json").read_bytes()).hexdigest(), "--run", RUN,
+            "--law", DESIGN, "--circuit", hashlib.sha512((window / "circuit.json").read_bytes()).hexdigest(), "--run", RUN,
             "--challenger", "local", "--main", str(main), "--m0-pythonpath", m0, *(x for k, p in binaries.items()
                                                                                     for x in (f"--{k}", str(p))),
             "--ports", "2", "--out", str(out), *flags]
@@ -127,9 +127,9 @@ def test_two_sampled_members_pass_the_audit_on_the_real_prover_and_verifier(tmp_
     the rate the audit makes of the window's design (`records_audit.rule_of`), which the service takes where it refuses the
     design's fixed count, and the stream sampled by it accepts its outcome on the challenger's coins."""
     window = _window(tmp_path / "window")
-    assert RA.rule_of(D.parse_design(LAW), len(TEMPLATES)) == RULE and S.Law(RULE).text == RULE
+    assert RA.rule_of(D.parse_design(DESIGN), len(TEMPLATES)) == RULE and S.Law(RULE).text == RULE
     with pytest.raises(ValueError, match="a fixed count"):
-        S.Law(LAW)
+        S.Law(DESIGN)
     rc, row, out, said = _audit(tmp_path, window, binaries)
     assert rc == 0 and row.get("ok") is True, said
     assert row["refused"] is None and row["population"] == 2 and row["draw"] == [0, 1], row
@@ -146,7 +146,7 @@ def test_two_sampled_members_pass_the_audit_on_the_real_prover_and_verifier(tmp_
         assert json.loads(session.read_text())["verdict"]["accepted"] is True
     missing = [f for f in RECORD if not (out / f).is_file()]
     assert not missing, missing
-    # v2's case is one table's session, so an audit of two members writes why it has none, which sampled proofs' row reads
+    # v2's case is one table's session, so an audit of two members writes why it has none, which SPOT's row reads
     assert not (out / "window" / "case-v2.json").exists()
     assert "this audit drew 2 members" in (out / "window" / "case-v2-error.txt").read_text()
 
