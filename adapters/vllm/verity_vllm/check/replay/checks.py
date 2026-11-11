@@ -16,7 +16,12 @@ import numpy as np
 
 from verity_vllm.check.replay.compare import _interior_slice
 from verity_vllm.check.replay.evaluate import evaluated
-from verity_vllm.check.replay.index import SAMPLER_OP, SEED_PARAM, ProgramIndex, row_args
+from verity_vllm.check.replay.index import (
+    SAMPLER_OP,
+    SEED_PARAM,
+    ProgramIndex,
+    row_args,
+)
 from verity_vllm.check.replay.opening import CommittedStore
 from verity_vllm.commit.opened import opened_check
 from verity_vllm.query.manifest import format as RM

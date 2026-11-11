@@ -6,13 +6,18 @@ from __future__ import annotations
 from collections import Counter
 from typing import Any
 
-from verity_vllm.query import norm_scales as NS
-from verity_vllm.query.manifest import format as RM
-from verity_vllm.check.replay.replay_codes import NOT_YET
 from verity.definitions.numerics.rows import EVALUATORS
+
 from verity_vllm.check.replay.index import _MOE_LAYER_RE, SAMPLER_OP, ProgramIndex
 from verity_vllm.check.replay.opening import alias_table, resolve_op_path
-from verity_vllm.check.replay.population import ATTENTION_ROW_FAMILIES, EXECUTED_PREFIX_RULE, NOT_EXECUTED_SCOPE
+from verity_vllm.check.replay.population import (
+    ATTENTION_ROW_FAMILIES,
+    EXECUTED_PREFIX_RULE,
+    NOT_EXECUTED_SCOPE,
+)
+from verity_vllm.check.replay.replay_codes import NOT_YET
+from verity_vllm.query import norm_scales as NS
+from verity_vllm.query.manifest import format as RM
 from verity_vllm.records.fields import RecordError
 from verity_vllm.records.required_manifest import RequiredManifest
 

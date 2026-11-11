@@ -11,13 +11,16 @@ import re
 from typing import Any, Iterable
 
 import numpy as np
-
-from verity_vllm.check.replay import cached_prefix as CP
-from verity_vllm.query.manifest import format as RM
-from verity_vllm.query.manifest.format import moe_plane_kind
-from verity_vllm.program.compact import expanded_file_args, p_item_indices, runs_from_file_items
 from verity.definitions.numerics.rows import SAMPLED_MEMBER
 
+from verity_vllm.check.replay import cached_prefix as CP
+from verity_vllm.program.compact import (
+    expanded_file_args,
+    p_item_indices,
+    runs_from_file_items,
+)
+from verity_vllm.query.manifest import format as RM
+from verity_vllm.query.manifest.format import moe_plane_kind
 
 SAMPLER_OP = "runner.sampler"
 IDS_MEMBER = "in"
@@ -154,8 +157,8 @@ class ProgramIndex:
         self._v2_module: dict[int, str] = {}
         self._v2_fault: dict[int, str] = {}
         from verity_vllm.correspondence.reader_for_query import Correspondence
-        from verity_vllm.query.program_view import from_instances
         from verity_vllm.query import norm_scales as NS
+        from verity_vllm.query.program_view import from_instances
         from verity_vllm.query.required import population
         # a manifest built under the norm-scale policy spells an ATen norm's rsqrt as `<norm module>/norm_scale`, not a Call boundary
         population = NS.population if norm_scales else population

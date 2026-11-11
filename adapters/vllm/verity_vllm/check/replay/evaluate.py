@@ -6,17 +6,29 @@ from __future__ import annotations
 from typing import Any, Callable
 
 import numpy as np
-
-from verity_vllm.query.manifest import format as RM
-from verity_vllm.check.replay.replay_dump import dump_row_words
-from verity_vllm.commit.opened import OpeningNotVerified, opened_check
 from verity.definitions.numerics.kernel_registry import Declined
 from verity.definitions.numerics.rows import EVALUATORS, ROWS
-from verity_vllm.check.replay.index import IDS_MEMBER, SAMPLER_OP, SEED_PARAM, ProgramIndex, const_word, row_args
-from verity_vllm.check.replay.opening import _ITEMSIZE, CommittedStore
-from verity_vllm.check.replay.compare import _interior_slice, _tp_member_alias, lifted_compare, padded_slot_enable
+
+from verity_vllm.check.replay.compare import (
+    _interior_slice,
+    _tp_member_alias,
+    lifted_compare,
+    padded_slot_enable,
+)
 from verity_vllm.check.replay.delegate import DELEGATES, Place
+from verity_vllm.check.replay.index import (
+    IDS_MEMBER,
+    SAMPLER_OP,
+    SEED_PARAM,
+    ProgramIndex,
+    const_word,
+    row_args,
+)
+from verity_vllm.check.replay.opening import _ITEMSIZE, CommittedStore
+from verity_vllm.check.replay.replay_dump import dump_row_words
+from verity_vllm.commit.opened import OpeningNotVerified, opened_check
 from verity_vllm.program.compact import is_file_prog
+from verity_vllm.query.manifest import format as RM
 
 TOPP_SPLITS_OPERAND = 5     # a sampler select's 6th operand: the top-p select's split count S, the one select with six
 

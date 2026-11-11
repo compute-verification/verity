@@ -7,8 +7,8 @@ from typing import Any
 
 import numpy as np
 
-from verity_vllm.query.manifest import format as RM
 from verity_vllm.check.replay.opening import CommittedStore
+from verity_vllm.query.manifest import format as RM
 
 
 def _tp_member_alias(got: dict[str, Any], member: str) -> Any | None:

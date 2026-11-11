@@ -32,8 +32,9 @@ _KERNEL_CHECKS: dict[str, list[str]] = {}
 
 def evaluated_specs(rows: Iterable[dict[str, Any]]) -> list[str]:
     """The specializations of the rows the replay evaluates: a family with a row kernel (`rows.ROWS`) or a protocol's delegate."""
-    from verity_vllm.check.replay.delegate import DELEGATES
     from verity.definitions.numerics.rows import ROWS
+
+    from verity_vllm.check.replay.delegate import DELEGATES
     from verity_vllm.query.manifest.format import spec_family
 
     return sorted({str(r["spec"]) for r in rows if spec_family(str(r["spec"])) in ROWS or spec_family(str(r["spec"])) in DELEGATES})
@@ -58,9 +59,10 @@ def of_record(dirs: dict[str, str], digs: dict[str, str], rows: dict[str, list[d
 def kernel_refusal(specs: Iterable[str]) -> str | None:
     """Why a row kernel this tree grades ``specs`` by is not its family's Definition, or None: each family's row kernel against
     the reference by core `self_check` (`kernel_registry.check`; module docstring), once a family per process."""
-    from verity_vllm.commit import challenge as CH
     from verity.definitions.numerics import kernel_registry as KR
     from verity.definitions.numerics.rows import KERNEL, ROWS
+
+    from verity_vllm.commit import challenge as CH
     from verity_vllm.query.manifest.format import spec_family
 
     bad: list[str] = []

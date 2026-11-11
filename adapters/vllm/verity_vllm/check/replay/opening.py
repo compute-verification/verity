@@ -10,9 +10,11 @@ from typing import Any, Callable
 
 import numpy as np
 
-from verity_vllm.check.oracle_compare import entry_read_name as _entry_read_name, same_name_invocations as _same_name_invocations
+from verity_vllm.check.oracle_compare import entry_read_name as _entry_read_name
+from verity_vllm.check.oracle_compare import (
+    same_name_invocations as _same_name_invocations,
+)
 from verity_vllm.records.required_manifest import RequiredManifest
-
 
 #: the binding map's `encoding.dtype` is the collector's torch dtype name; the manifest's short names are accepted too
 _ITEMSIZE = {"u8": 1, "bf16": 2, "f16": 2, "u16": 2, "i32": 4, "u32": 4, "f32": 4, "i64": 8, "u64": 8,

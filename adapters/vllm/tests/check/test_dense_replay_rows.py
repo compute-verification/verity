@@ -3,18 +3,18 @@ unit of the replay population, and each dense row's words are the IR reference's
 from __future__ import annotations
 
 import numpy as np
+from verity.circuits.defs import bind
+from verity.circuits.evaluation import evaluate
+from verity.definitions.call_scope import specialization
+from verity.definitions.numerics import ir_rows
+from verity.definitions.numerics.rows import EVALUATORS, ROWS
+from verity.definitions.registry import dense
 
 from tests.acquire.call_boundary_programs import DENSE, LP, PF, build_dir, dense_program
-from verity.circuits.evaluation import evaluate
-from verity.circuits.defs import bind
 from verity_vllm.check.replay import coverage as COV
 from verity_vllm.check.replay.driver import manifest_query
 from verity_vllm.check.replay.index import ProgramIndex
 from verity_vllm.check.replay.population import population
-from verity.definitions.numerics import ir_rows
-from verity.definitions.numerics.rows import EVALUATORS, ROWS
-from verity.definitions.registry import dense
-from verity.definitions.call_scope import specialization
 from verity_vllm.query.manifest import format as RM
 from verity_vllm.query.manifest.format import spec_family
 from verity_vllm.query.program_view import spec_statics
@@ -104,6 +104,7 @@ def test_a_one_output_row_is_compared_under_its_one_member_however_the_module_sp
     """The ATen norm's rsqrt is `<norm module>/norm_scale` and its residual narrow `<norm module>/1`: the relation's one output is compared
     under that member, equal and unequal alike; a row requiring two members of a one-output relation is not evaluated, by name."""
     from types import SimpleNamespace
+
     from verity_vllm.check.replay import evaluate as E
 
     words = np.arange(4, dtype=np.uint32)

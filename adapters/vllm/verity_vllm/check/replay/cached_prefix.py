@@ -14,8 +14,9 @@ import os
 import re
 from typing import Any
 
-from verity_vllm.program.compact import expanded_file_args
 from verity.definitions.numerics.kernel_registry import Declined
+
+from verity_vllm.program.compact import expanded_file_args
 from verity_vllm.query.manifest import format as RM
 
 PREFIX_FILE = "prefix_cache.json"
