@@ -145,4 +145,12 @@ def census(lowered: Any) -> list[dict[str, Any]]:
     return out
 
 
-__all__ = ["Linears", "ROW_FORMAT", "UNTIED", "census", "cut_linear", "cut_values", "linears"]
+def readers(circuit: IF.Circuit) -> dict[str, int]:
+    """Pearl+'s reader templates of ``circuit``, each with its units: the `LinearARow_v1{K, R}` and `LinearOut_v1{N, W}` of
+    each shape its cut linears take (`cut_linear`), whose units read the window's registered A rows and y. Empty for a
+    circuit not cut."""
+    return {tid: n for (fn, n), tid in zip(circuit.templates, circuit.ids)
+            if fn.name in (LC.LinearARow.name, LC.LinearOut.name)}
+
+
+__all__ = ["Linears", "ROW_FORMAT", "UNTIED", "census", "cut_linear", "cut_values", "linears", "readers"]
