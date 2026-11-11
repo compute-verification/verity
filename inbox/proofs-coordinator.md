@@ -36180,3 +36180,59 @@ Head `05c89e29e099ea9caf397bbc2be1fc498af72792`, run `r20261111-003652-2fc1` (cp
 **Other** [read]: `main` is now `a930252c4993` (170 commits past the branch's base); the layout move is not in it (`Security/` is at the root); `git merge-tree` of it with the branch has no conflict; `sparse9`'s entry there is unchanged. My VM restarted again at about 02:00Z; scratch rebuilt from my store.
 
 **Left**: your and lean's pick of 1 or 2; that commit (and for 2 a rerun); a probe of the cause if you want it (one scratch file printing `sparse9` with explicit instances at both heads); then the crossing of the layout move, the records and the quick tier on the moved tree, and "ready to mark".
+
+## PRF-522 PUBUNITS, Wed 11 Nov 02:09Z: not ready yet: the cures branch is at `0d3b99b9ee21`, which holds the base's new head `eb56c217f831`; its run `bd1b` is out (ETA 02:30Z); and I withdraw item 1 of my 01:12Z entry: the layout move does not break `served_composite.sh` on `main`
+
+**Withdrawn: item 1 of my 01:12Z entry.** I had dry-run `main`'s map, which is not the one being landed. At #8769's staged head `178f49c90c89` [read by me]:
+
+- `benchmarks/one_stage/served_composite.sh:87` is `e=$(exe "$x" "verity/protocols/$x/verifier")`.
+- `verity/protocols/remote/verifier/` and `verity/protocols/onsite/verifier/` hold the Lake packages. `verity/composite/` holds `__init__.py` and `device` only. The path I named, `verity/composite/verifier/`, does not exist there.
+- The generated commit `6581bcf197` wrote `verity/protocols/$x`, and the hand commit `028691fdb0` added `/verifier`. So the line was caught and fixed before I wrote. Nothing goes to top.
+
+**Your two runs, read** [each log read by me]. Same job at both commits, each in its own clone, Lean's toolchain on the PATH, both on vy-nebius-cpu-1, both rc 0:
+
+| | the old base `f63a7b76334d` (`r20261111-011802-375e`) | the cures at `bed355f3a6ab` (`r20261111-011800-6620`) |
+|---|---|---|
+| root suite, `--quick` | 275 passed, 6 failed | 276 passed, 5 failed |
+| `benchmarks/one_stage` suite, `--quick` | 875 passed, 0 skipped | 876 passed, 0 skipped |
+| the tool's edges | 29, 11 under `benchmarks/one_stage` | 27, 9 under `benchmarks/one_stage` |
+
+- **The head fails no test the base passes.** Its five are five of the base's six; the sixth, `test_gate_paths`, passes. The five: the environment reads and `test_flock_json` (both cured on the new base by other branches), `test_literal_addresses` (one line left, memory-accounting's, cured on the new base), `test_public_boundary`, `test_vllm_boundary` (network-accounting's).
+- **The one more test in `one_stage` is the new one**, the refusal on a tree without the policy's file. No test was skipped, so the tests that build the policy's Lean executable through `SC.INFERENCE_ONLY_LEAN` ran and passed.
+- **`benchmarks/prove_path` selected nothing:** every test of `test_remotetie.py` and `test_pearltie.py` is marked `slow`, and I ran `--quick`. Same at both commits. So network-accounting's caller at `test_remotetie.py:432` is still not run.
+
+**Your three calls.**
+
+- **Call 2, `served_cases.py:128`: done**, as its own commit with its test, `bed355f3a6` (my 01:19Z entry). The run above is its node run.
+- **Call 3, `whole_run/Main.lean:86`: committed**, `787b24fe30`. The line now reads `rule.over n (Select.strataSizes v.program v.query)`, the expression `Run.run` registers by (`Spot/Run.lean:247`) [read]. It is wrapped over two lines, which the build of 00:28Z did not have; run `bd1b` builds it.
+- **Your 01:58Z message: done.** `0d3b99b9ee21021001fb1b450c0033df839a172a` is a merge of the base's new head `eb56c217f831f53084645527c9fa90181582edce` into the branch. No conflict. Pushed, not forced. Eight files differ from that base, all ours: the seven of before and `benchmarks/verifier_cost/whole_run/Main.lean` [`git diff --stat`, by me].
+- **Call 1, the proposal for ci: not posted yet.** It waits on run `bd1b` for the tool's counts on a node. On my VM at `0d3b99b9ee21` the tool reports 15 edges: our 9 and vllm's 6 [run].
+
+**Out now: `r20261111-020627-bd1b`** on vy-nebius-cpu-1, at `0d3b99b9ee21`. It took a slot at 02:06Z. **ETA 02:30Z (6:30 PM PST)** [guess]; it stops itself at 90 minutes.
+
+- The root suite, `benchmarks/one_stage` and `benchmarks/live_challenger`, each whole with `--quick`. My three tests are in the root suite.
+- The tool's edges with the list as committed, then with the proposal applied in the clone (three lines), then `tests/test_public_boundary.py` on that; the list is put back before the other suites run.
+- The one slow test that reads the policy's package through `served_cases` (`test_nci_check_counts_the_verdicts_gates_on_the_session_program`).
+- `whole_run.sh run toy 146`: it builds `whole-run-time` and times one accepted run.
+- The control for the suites is lean's own run at `eb56c217f831`, `r20261111-004734-05e3` [`out/suites.json` read by me]: root 277 passed and 4 failed, `one_stage` 875, `live_challenger` 654.
+- `r20261111-015316-50b1` was the same job on vy-nebius-cpu-4. It waited 14 minutes behind two checks and never started, so I cancelled it by its id at 02:08Z.
+
+**The move and the remote merge's tree: read with the move's own script, before it lands** [run `r20261111-020220-f99b`, vy-nebius-cpu-1, rc 0]. In a scratch clone of `0d3b99b9ee21` I put `tools/move/` as at `b5354b9c23`, the parent of the staged move commit, and ran `layout.py --report-splits --map tools/move/layout_one_map.toml --no-lock`, as `restack.py` does on a branch. Nothing is committed or pushed.
+
+1. **The script refuses the tree as it is** [run `r20261111-015657-74df`]: "tracked files under a retired path with no row in the map". Five files, all the remote merge's, none ours, none ever on `main`: `verity/core/protocols/network/README.md`, `verity/ml/commitments/keyed.py`, and `verity/ml/commitments/gates/sha512_stream.py` with its two `circuit-check` files. This is for lean and top, when the base crosses the move. I have told nobody but you.
+2. **With those five taken out of the scratch clone, it runs.** In our files:
+   - `served_composite.sh:69` becomes `verity/protocols/remote/verifier/RemoteV1Main.lean`, which is a file there. Right.
+   - `served_composite.sh:112` becomes `"verity/protocols/${x%-v1}"`. That directory holds only `verifier/`; the lakefiles are in `verity/protocols/remote/verifier` and `verity/protocols/onsite/verifier`. So the line needs `/verifier`, as `main`'s got by hand.
+   - `inference_only_lean.py` names `verity/protocols/inference_only/verifier/nci/lean`, a directory there, with `scripts/nci_reference.py`. Right.
+   - `benchmarks/live_challenger/pyproject.toml` goes to `verity/composite/device/live_challenger/`, its inputs rewritten.
+3. **Line 112 cannot pass silently** [guess, from reading `restack.py`'s step 3]: `main` and the base both changed that line, so the merge of the moved `main` conflicts on it. Whoever resolves it writes `"verity/protocols/${x%-v1}/verifier"`.
+4. **I changed nothing for it**, as you said. After the move is on `main` I check that its map and script are these (sha256 `e3bda7e8ec01…` and `6d4bd98867fd…`); if they are, this reading stands.
+
+**What is left**, for whoever continues:
+
+- Read `bd1b`: `research fetch --all r20261111-020627-bd1b`, then `out/verdicts.txt`, `out/*.failed.txt`, `out/proposal.diff`, `out/whole_run.jsonl`. Expected: root 279 passed and 2 failed (`test_public_boundary`, `test_vllm_boundary`); `one_stage` 876; `live_challenger` 654; edges 15 as committed and 6 with the proposal, none under `benchmarks/one_stage`; `whole_run` rc 0 with rows.
+- Then the one comment on LEAN-249: the branch and head for lean, and the proposal for ci with the list's lines before and after. Draft: `/opt/cursor/artifacts/lean249-comment-draft.md` on my VM (it predates the new base; the numbers must be `bd1b`'s).
+- Then the entry that says whether the branch is ready for a PR.
+- After the move lands on `main` (about 03:45Z): item 4 above. The replay of this branch across the move is the replay of the whole remote merge, which needs `main` merged first; that merge is lean's, and I do not make it.
+
+Mailbox read at 02:08Z: no file for me. The base is `eb56c217f831`. `main` is `a930252c49` and holds no move commit.
