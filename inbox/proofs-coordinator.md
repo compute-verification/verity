@@ -53137,3 +53137,38 @@ For the table:
 
 For the table: the Lean verifier's program term is paid once a SESSION on `main` and is the POPULATION's program in `prove_leg` (one `program.json` for all members), one session a call; the read-once cut is built at `d302096c54b2` (unmarked, no PR yet, try `ad83` passes), measured by `744d` at about 12:45Z.
 For BREAKEVEN: "as `main` is": a statement's Lean seconds = no-program seconds + 0.36 s × (MB of the population program) × (sessions), measured law [relayed: FUSED, BENCHCROSS; my reading of `7268`]; with the cut ("the hoist, built, unmarked, unmeasured"): + (0.36 − 0.11) s a MB for a call's first session and about 0 for each further session of the call [guess from m12's 28/33/46 until `744d`]. The MB is the population's, not the block's.
+
+## TWOWITNESS, Wed 11 Nov 12:05Z: #8919's try passes at its head and #8889's records leave the lock unchanged; the one merged-tree build for #8889, #8892, #8919 and Counts is running (8084); no ready line yet
+
+- **#8919's try `r20261111-112729-aaf9` at `eb4dde919628d0884c6ba86e835abd4ff87f62b1` passes [run: its stdout.log].**
+  - Lean exits 0 in 76 s.
+  - None of its 15 theorems uses an axiom beyond `propext`, `Classical.choice` and `Quot.sound`.
+  - No built module declares one of its names (2,050 checked).
+- **#8889's records run `r20261111-100009-a542` at `50b06ae65a50038de9c9a9731c7c0dec26c9a00a` passes and rewrites no lock [run: its `audit.json`, `regenerated: {}`].**
+- **The merged tree [run].** `/tmp/twowit/wt-merged3` at `18ae6ce949` is `main` `08ad61db94` with the twelve marked heads that touch my four files' aggregators (#8354, #8368, #8781, #8785, #8820, #8827, #8828, #8836, #8871, #8874, #8879, #8882). On top come #8889, #8892, #8919 and Counts at the heads named here. Every merge is clean.
+  - Its build of `security/Proofs/Flock.lean`, which reaches all four files, is `r20261111-115228-8084`. It has run on vy-nebius-cpu-9 since 11:52Z.
+- **`main` `86c03d1840` [run: `git merge-tree`, `git diff`].** It merges cleanly with that tree.
+  - Beyond the tree, it brings 15 Lean files of #8819, #8888, #8536 and #8866, plus the `security` lock.
+  - In `SamplingGeneric.lean`, the aggregator #8889 adds to, `main` only moves `RegX`'s import below `RegAt`.
+  - None of the 15 files declares a name that my files declare.
+  - So 8084 stands as the merged-tree build at `main` too, though that exact tree is not built [guess].
+- **No `main` merge into #8889, #8892 or #8919 [read: order 11:58Z].** Their runs are at their heads and no head moves. None of the three contains #8781, #8785, #8820, #8827, #8828 or #8354. #8919's only open base is #8870, which is not on `main` [run: `git merge-base --is-ancestor`].
+- **Lines (a) and (b) [read: the statements at the heads; order 11:40Z §1].**
+  - #8919's `RegTwo.sum_checked_le_strata` and Counts' `code_hKs` and `code_hKm` take each stratum's bound `M t` as the hypothesis `hM`, over any `needs`. They prove nothing about its value.
+  - So the by-stratum right-hand side, the always term plus `K0 · Σ_t k_t · M t`, stands under both lines:
+    - under line (a), `M t = 1`, if ATTACK's one class a block at `code h` holds;
+    - under line (b), `M t` is up to 2,049 at the plan's cut, or 139 at the recut.
+  - Discharging `hM` at `code h` is not in these PRs.
+- **Runs [run]:**
+  - `r20261111-114529-9352`, #8889's quick tier (`--changed 8201dacff26e`), waits on vy-nebius-cpu-1, with 1 check ahead at 12:03Z.
+  - 8084 is running.
+  - Next, as each frees a slot: #8892's records and quick tier, then #8919's.
+- My mailbox has nothing new since 05:24Z; I have read the order through 11:58Z [read].
+
+For CAPS: Proofs/Flock: +1 modules, +7 declarations (no PR: `cursor/proofs-codecounts-9e41` at `04def4644b`, SpotFlock/Counts.lean)
+- CAPS's row 27 (11:24Z) has +1 / +7, but group 21 of PRF-517's 11:53Z table has +1 / +9 [read]. The file declares 7 theorems at every head since `5e1baad461`, and 6 at `5a3d01fe1f` [run: a keyword count on `git show`].
+- My other three files stand as CAPS has them: #8889 +1 / +7, #8892 +1 / +6, and #8919 +0, since `SecondStrata`'s 15 are seeded [read: CAPS 11:24Z, rows 17, 18 and 26].
+
+For the table:
+- By stratum: #8919 (unmarked, at `eb4dde9196`), `RegTwo.sum_checked_le_strata`, the always term plus K0 · Σ_t k_t · M_t. Try aaf9 is clean; its records, quick tier and merged tree (8084) are pending. M_t is a hypothesis, so the count serves line (a) and line (b) alike.
+- The bits line, at a registration with no always-checked block: "modeled; the first-hit term of #8827's lemma: 2^-100.9 per sampled replay block, 2^-98.9 to 2^-98.3 a run at 4 to 6 replay blocks, at T = 2^80 SHA-512 calls in every run (the prover's and the verifier's), one 2^35-bit table a session, under `SHA512CRExpected` at its two finders; K an upper bound, every block's input bits counted (K_mean <= 2^41.81)." It is by gates (#8827 as it is), so it reads no class count, and neither line (a) nor line (b) enters it.
