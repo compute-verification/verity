@@ -272,6 +272,42 @@ def test_a_failure_no_allowance_names_beside_an_allowed_one_fails_the_run(lane, 
     assert not keys(root, S) & set(doc["passes"])
 
 
+def test_a_sampled_mismatch_beside_an_allowed_failure_is_still_compiled_again_and_audited_once_more(lane, tmp_path,
+                                                                                                    monkeypatch):
+    """check.py's sampled recompile can fail a package (a module the slot tree kept compiles to other outputs, which
+    Lean's nondeterminism does) whose only other failure is one `--allow` names. The run then forgets the module and
+    audits the package once more, as it does beside a record difference, and the second audit's failures are the
+    package's: the allowed one alone, so the run ends `allowed`, the first audit's reports apart from the verdict.
+    Without the allowance that failure is one like any other, and nothing is audited again."""
+    root, run_dir, calls, standing, _ = lane
+    sampled = AUDIT.Failure("sampled", "S.M", "sampled: S.M: the build's S/M.olean differs from what its source compiles to")
+    fake, left = LC.subprocess.run, []
+
+    def run(argv, **kw):
+        got = fake(argv, **kw)
+        if argv[1:2] == [str(LC.AUDIT_PY)] and sampled in standing.get(S, []) and Path(argv[-1]).name == S:
+            doc = json.loads((f := Path(argv[argv.index("--out") + 1]) / "audit.json").read_text())
+            doc["packages"][0]["sampled"] = {"mismatched": {"S.M": doc["packages"][0]["package"]}}
+            f.write_text(json.dumps(doc) + "\n")
+            standing[S] = left
+        return got
+
+    monkeypatch.setattr(LC.subprocess, "run", run)
+    standing[S], left[:] = [READS, sampled], [READS]
+    said = []
+    assert LC.audit_records(S, tmp_path / "deps", log=said.append, allow=["trees.reads:Proofs.Sampled"]) == LC.ALLOWED_RC
+    assert calls == [(S, False), (S, False), (P, False)], "one audit more of the package, never a third"
+    aside = json.loads((run_dir / "lean-audit" / "mismatched" / "s" / "audit.json").read_text())["packages"][0]
+    assert aside["failure_codes"] == ["trees.reads", "sampled"]
+    doc = result(run_dir)
+    assert doc["records"][S]["outcome"] == LC.ALLOWED and doc["stale_allowances"] == [] and not keys(root, S) & set(doc["passes"])
+    assert any("audits s once more" in s for s in said)
+    calls.clear()
+    standing[S], left[:] = [READS, sampled], [READS, sampled]
+    assert LC.audit_records(S, tmp_path / "deps", log=lambda _s: None, rebuild=True) == 1
+    assert calls[:2] == [(S, False), (P, False)], "without the allowance the other failure keeps it from a second audit"
+
+
 def test_an_allowance_names_a_failure_by_its_code_and_entry_never_its_text(lane, tmp_path):
     """The same code about another entry is not the failure allowed, nor is another code about the same entry; and a report
     that lists no entries (an older check.py's) matches nothing."""
