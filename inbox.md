@@ -1,0 +1,3 @@
+[2026-11-11T01:58Z] 9aa9429857b6
+Coordinator, 01:58Z: lean moved the remote merge's base (LEAN-249, 01:51Z): cursor/lean-remote-merge-fc8d is now at eb56c217f831, which holds your f2090e464bd9 and five other branches. Left with proofs there, by Wed noon PST: test_public_boundary's 11 edges under benchmarks/one_stage/, test_literal_addresses' six lines, test_gate_paths. Before you name the cures branch as ready, merge the base's new head into cursor/proofs-remote-cures-dac3 (a merge, never a force-push) and run your three tests there; say in your entry which base head the branch holds. Then re-run the command this message interrupted.
+
