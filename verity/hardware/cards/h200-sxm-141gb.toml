@@ -57,9 +57,9 @@ b1 = { value = 0.125, unit = "tensor unit/MAC", mark = "measurement", source = "
 e4m3 = { value = 1, unit = "tensor unit/MAC", mark = "ceiling", source = "the H200 data sheet: FP8 1,979 dense TFLOPS, the INT8 rate" }
 e5m2 = { value = 1, unit = "tensor unit/MAC", mark = "ceiling", source = "as e4m3" }
 e2m1 = { value = 1, unit = "tensor unit/MAC", mark = "ceiling", source = "the card has no FP4 MMA: an op the card lacks only adds programs to the model" }
-f16 = { value = 2, unit = "tensor unit/MAC", mark = "ceiling", source = "the H200 data sheet: FP16 989.5 dense TFLOPS, half the FP8 rate" }
-bf16 = { value = 2, unit = "tensor unit/MAC", mark = "ceiling", source = "the H200 data sheet: BF16 989.5 dense TFLOPS" }
-tf32 = { value = 4, unit = "tensor unit/MAC", mark = "ceiling", source = "the H200 data sheet: TF32 494.5 dense TFLOPS" }
+f16 = { value = 2, unit = "tensor unit/MAC", mark = "ceiling", source = "the H200 data sheet: FP16 989.5 dense TFLOPS, half the FP8 rate; measured at this weight on wgmma m64n256k16 (2047.8 MACs a SM-clock) and at 1344 on mma.sync m16n8k16 (art:83dbd28b545b, art:9ed5ca6ccddd; the rows carry the probe's throttled tag); mma.sync m16n8k8 is not timed" }
+bf16 = { value = 2, unit = "tensor unit/MAC", mark = "ceiling", source = "the H200 data sheet: BF16 989.5 dense TFLOPS; measured as f16: wgmma m64n256k16 2047.8 MACs a SM-clock, mma.sync m16n8k16 1344 (art:83dbd28b545b, art:9ed5ca6ccddd)" }
+tf32 = { value = 4, unit = "tensor unit/MAC", mark = "ceiling", source = "the H200 data sheet: TF32 494.5 dense TFLOPS; measured at this weight on wgmma m64n256k8 (1023.9 MACs a SM-clock) and at 672 on mma.sync m16n8k8 (art:83dbd28b545b, art:9ed5ca6ccddd; the rows carry the probe's throttled tag); mma.sync m16n8k4 is not timed" }
 nvf4 = { value = 1, unit = "tensor unit/MAC", mark = "ceiling", source = "as e2m1: no FP4 MMA on the card" }
 mxf4 = { value = 1, unit = "tensor unit/MAC", mark = "ceiling", source = "as e2m1: no FP4 MMA on the card" }
 f64 = { value = 29.5, unit = "tensor unit/MAC", mark = "ceiling", source = "H200 data sheet: 'FP64 Tensor Core 67 TFLOPS', which over 132 SMs at the 1980 MHz boost clock the H100 whitepaper V1.04 Table 3 gives FP64 tensor operations is 128.2 DMMA MACs a SM-clock there (the whitepaper's own 'Peak FP64 Tensor TFLOPS' 66.9 is 128.0); 128 a SM-clock there is, at clock.tensor, 4096 / 128 x 1830 / 1980 = 29.58 units a MAC, rounded down so the table's FP64 rate, 67.08 TFLOPS, stays at or above both figures; 32 at clock.sm's 1980 MHz" }
