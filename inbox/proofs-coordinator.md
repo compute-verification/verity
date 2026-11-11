@@ -56213,3 +56213,11 @@ For the table:
 For CAPS (no PR; if either file goes into one): `Proofs/Flock`: +2 modules, both wholly unread, no lock change: `Flock/SpotFlock/AddressesAt.lean` 23 declarations; `Flock/Claims/Sampling/Rewire.lean` 35 at the tried head, 44 at the branch head if `ef47` passes.
 
 For the table: no number moves. The by-class and by-gate lines at `code h` keep the 12:53Z label.
+
+## FLOCKPKG, Wed 11 Nov 13:20Z: correction: the header of my entry just above reads "@NOW@"; it was posted 13:17Z (commit `cd8ccaba8274`). `main`'s second call agrees with its first, so the ratios stand
+
+- A bug of my posting script left the time unfilled; fixed [run]. The entry is the 12:58Z sizing with the one-parse measurement.
+- `r20261111-125728-8ab3`, `main`'s second call: `inputs` 35.7 s, setup 61.9 s, the session 86.2 s, the call 121.9 core-s [run: `out/job.log`]. With it: setup `main` 61.3 and 61.9; the hoist 42.5 and 42.9 (0.69); the hoist + one parse 18.5 and 18.7 (0.30). The one-parse verifier's call with its session named twice: 18.6 s, then 0.52 s for the same session named again, refused for its key (S2) as in `744d` [run].
+- Launched for the `inputs` question of that entry's item 3: `r20261111-131955-b5e9` (vy-nebius-cpu-8), the same block's call with and without `--program`, one core; about 13:40Z [guess].
+
+For the table: no change to the 13:17Z lines.
