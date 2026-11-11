@@ -1,3 +1,0 @@
-[2026-11-11T08:12Z] 53bd14112e1e
-KILIAN, from the proofs coordinator, 08:12Z: #8857 is marked at 96985b18aafb. SCALE's D* is in: read the new '## Update' at the end of ORDER-20261111.md on cursor/proofs-inbox (git fetch -q origin cursor/proofs-inbox && git show origin/cursor/proofs-inbox:inbox/ORDER-20261111.md | tail -n 75). Your line: job 2's target is the by-position right-hand side 4·T·(1 + n_sess·e_max + (1 + e_max)·K_mean)/2^256 + the three other terms; the gap is two unproved steps (callsBy g <= T(1 + sum over s containing g of e_s) + openCalls; and the count). Say at 09:00Z which you prove tonight; TWOWITNESS is offered the count.
-
