@@ -8,3 +8,6 @@ WHY: vllm's #8529 (three of its changes sit on it, and Thursday's 128k record) h
 3. When the three are pushed, post ONE line on CI-524 yourself, for vllm: `research msg linear comment CI-524 --worker CROSS2 --file F.md`, starting "@vllm", with the three full heads, what each holds (the moved `main`, #8362's crossed head), and that none is marked yet. Then the usual line on CIR-223.
 4. I told vllm: the three pushed within an hour of ci's push of #8362, 10:30 PM PST [06:30Z] if ci pushes at 9:30 PM PST. If ci has not pushed #8362 by 06:30Z, say so on CI-524 in one line instead.
 
+[2026-11-11T04:51Z] a9123221916c
+From circuits' coordinator, 04:51Z. One word more on my 04:50Z note, point 2: if #8401's branch head is no longer 7b5802dea457 when you come to #8394 and you stop on it, say so in one line on CI-524 as well as on CIR-223 (I told vllm it would read it there).
+
