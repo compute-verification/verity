@@ -49,6 +49,8 @@ import f8_model as FM  # noqa: E402
 if TYPE_CHECKING:
     from numpy.typing import ArrayLike
 
+    from verity.ml.circuits.silicon.term import Format
+
 M_T, N_T, K_STEP = 128, 32, 32
 SEED = 20261019
 BULK_SEED = 20261020
@@ -71,7 +73,7 @@ RECORD_ONLY = {"specials"}
 # --- formats ---------------------------------------------------------------------------------------------------------------
 
 
-def _fmt_info(fmt: str):
+def _fmt_info(fmt: str) -> tuple[Format, np.ndarray, np.ndarray]:
     F = FM.FORMATS[fmt]
     vals = np.full(256, np.nan)
     finite = np.zeros(256, bool)
@@ -170,7 +172,7 @@ def prod_max(t: Tiles, fa: str, fb: str, s: int = 0) -> np.ndarray:
     return pm * sa[:, :, None] * sb[:, None, :]
 
 
-def _pmax_loop(pa, pb):
+def _pmax_loop(pa: np.ndarray, pb: np.ndarray) -> np.ndarray:
     out = np.zeros((pa.shape[0], M_T, N_T))
     for i in range(0, pa.shape[0], 64):
         out[i:i + 64] = np.einsum("nik,njk->nijk", pa[i:i + 64], pb[i:i + 64]).max(-1)
@@ -204,7 +206,7 @@ def fam_uniform_bits(rng: np.random.Generator, n: int, fa: str, fb: str, scaled:
     return t
 
 
-def _one_hot(rng, t, fa, fb, nprod):
+def _one_hot(rng: np.random.Generator, t: Tiles, fa: str, fb: str, nprod: int) -> None:
     n = t["A"].shape[0]
     ks = np.stack([rng.permutation(K_STEP)[:nprod] for _ in range(n * M_T)]).reshape(n, M_T, nprod)
     for j in range(nprod):
@@ -279,7 +281,7 @@ def fam_subnormal_operands(rng: np.random.Generator, n: int, fa: str, fb: str, s
     t = blank(n, scaled=scaled, rng=rng)
     Fa, Fb = FM.FORMATS[fa], FM.FORMATS[fb]
 
-    def low(fmt, F, shape):
+    def low(fmt: str, F: Format, shape: tuple[int, ...]) -> np.ndarray:
         e = np.where(rng.random(shape) < 0.6, 0, rng.integers(1, 3, shape))
         c = code_of(fmt, rng.integers(0, 2, shape), e, rng.integers(0, 1 << F.man_bits, shape))
         mix = rng.random(shape) < 0.25
@@ -338,7 +340,7 @@ def fam_enable0(rng: np.random.Generator, n: int, fa: str, fb: str, scaled: bool
     return t
 
 
-def _chain(rng, n, fa, fb, scaled, steps):
+def _chain(rng: np.random.Generator, n: int, fa: str, fb: str, scaled: bool, steps: int) -> Tiles:
     t = blank(n, steps, scaled=scaled, rng=rng)
     t["A"], t["B"] = codes(rng, fa, t["A"].shape), codes(rng, fb, t["B"].shape)
     h = n // 2
@@ -617,7 +619,7 @@ class Lib:
         return D
 
 
-def _small_ints(rng, fmt, shape):
+def _small_ints(rng: np.random.Generator, fmt: str, shape: int | tuple[int, ...]) -> tuple[np.ndarray, np.ndarray]:
     vals = {"e4m3": {0: 0, 1: 0x38, 2: 0x40, 3: 0x44, 4: 0x48, 6: 0x4C, 8: 0x50},
             "e5m2": {0: 0, 1: 0x3C, 2: 0x40, 3: 0x42, 4: 0x44, 6: 0x46, 8: 0x48}}[fmt]
     keys = np.array(sorted(vals))
@@ -703,7 +705,7 @@ def expand(z: dict, i: int, j: int) -> tuple[np.ndarray, np.ndarray, np.ndarray,
     return c, a, b, sa, sb, en
 
 
-def _eval_job(job):
+def _eval_job(job: tuple[Path, str, str, int, int, list[str]]) -> tuple[str, str, dict]:
     scratch, kind, fam, i, j, names = job
     kk, fa, fb = KINDS[kind]
     z = load_set(scratch, kind, fam)
@@ -732,7 +734,7 @@ def _eval_job(job):
     return kind, fam, res
 
 
-def _merge(acc, res):
+def _merge(acc: dict, res: dict) -> dict:
     if not acc:
         return res
     for k in ("outputs", "unwritten", "neg_zero", "subnormal", "inf", "nan", "asserted"):

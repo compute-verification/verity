@@ -12,7 +12,7 @@ import pytest
 
 THEORY = Path(__file__).resolve().parents[1] / "theory"
 sys.path.insert(0, str(THEORY))
-sys.path.insert(0, str(THEORY.parent / "receipts"))
+sys.path.insert(0, str(Path(__file__).resolve().parents[3] / "benchmarks/pouw/receipts"))
 
 import duo_kernel_sweep as dk
 import receipt_folds as rf

@@ -60,7 +60,7 @@ import torch
 HERE = Path(__file__).resolve().parent
 ROOT = HERE.parents[1]
 sys.path.insert(0, str(HERE))
-sys.path.insert(0, str(HERE / "clear"))
+sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "benchmarks/pouw/clear"))
 sys.path.insert(0, str(ROOT / "verity" / "core" / "protocols" / "pouw" / "tests"))
 import clear_work as CW  # noqa: E402
 import epoch_coins as EC  # noqa: E402

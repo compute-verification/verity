@@ -87,10 +87,10 @@ charges only a window that sends decisions alone. Advice v1 sends two of them:
   ingress.
 
 The other two are always 0 under v1. The replay derives preemptions and the certified O forces each lag row, so the
-advice code (`advice_code.codec`) refuses a window that sends resumes or lag bits. `ChargeCount_v2{N, H, O}` charges the
-whole window, its decisions and both counts with their values, as one `window_code` segment with one count and one
-finish. With H = O = 0 its charge, counts
-and run are `ChargeCount_v1{N}`'s; the tests check this on the fixture's windows and on random ones.
+advice code (`advice_code.codec`) refuses a window that sends resumes or lag bits. `ChargeCount_v2{N, H, O, L}` charges
+the whole window: its decisions and both counts with their values, as one `window_code` segment with one count and one
+finish, then its length terms' plain tail. With H = O = L = 0 its charge, counts and run are `ChargeCount_v1{N}`'s; the
+tests check this on the fixture's windows and on random ones.
 
 **The symbols**, in `window_code.code_window`'s order. Each is a (cum, freq, total) step of code.py's 32-bit `ArithEncoder`,
 counted by `ArithCountStep_v1{18, BIN, 20}`:
@@ -106,9 +106,14 @@ counted by `ArithCountStep_v1{18, BIN, 20}`:
    no bits.
 5. n_lag = 0.
 6. `ArithCountFinish_v1{20}`.
+7. The length terms, while the registration sends them (`send_lengths`, on until a proof holds the length rule): each
+   request whose body lands in the window, in release order, as a plain tail after the segment
+   (`window_code.Encoder.raw`, `lengths.tails`). A term with max_tokens m sends its output_len n in bitlen(m) =
+   ⌈log2(m + 1)⌉ bits, then its finish in 1, so it is charged bitlen(m) + 1 (`length_bits`), whatever n and the finish
+   are.
 
-The window's charge is the bits counted, the length of `code_v1`'s segment for the window. pos and rank are
-`window_code.CoderState`'s step and index, each + 1, so they start at 0.
+The window's charge is the bits counted, the length of `code_v1`'s segment for the window, and its tail's. pos and rank
+are `window_code.CoderState`'s step and index, each + 1, so they start at 0. The length terms carry nothing.
 
 **An integer** v ∈ [0, hi] under its table's frequencies f is `code.Binned.put(v, 0, hi)` (`binned_symbols`):
 - **The bin.** Let j = bitlen(v), with bitlen(0) = 0, and top = bitlen(hi). The table is restricted to bins 0 … top,
@@ -144,6 +149,8 @@ each.
 - (cum, freq) are selected from the table's 22-bit prefix sums.
 - The uniform step's total and enable are constants of the bin, selected by XORs.
 - A bin wider than 2^16 takes the second step.
+- A length term's width bitlen(m) is a one-hot from m's prefix ORs (m is 32 bits, `MW`), and bitlen(m) + 1 is selected
+  by XORs. The tail is the enabled terms' sum, added to the segment's count after its finish.
 
 A disabled slot changes nothing. A field's count is its enabled slots, and a field with no slots has no inputs and a
 count of 0.
@@ -155,9 +162,9 @@ run 0, pos 0 and rank 0. The carry is chained as `replay-charge`'s above, under 
 - window 0's carry-in under the value's public salt;
 - the verifier's `CH-first`, `CH-carry` and `CH-rows` (`window_charge.check_chain`).
 
-`ChargeLink_v2{N, H, O}` is `ChargeCount_v2` run from row 0, and its ok also requires that carry' is row 1. After each
-decision, each hit, and each order entry's gap and rank step, the carried words are committed. So no AND operand
-widens with the slots before it, and the build is linear in N + H + O.
+`ChargeLink_v2{N, H, O, L}` is `ChargeCount_v2` run from row 0, and its ok also requires that carry' is row 1. After
+each decision, each hit, and each order entry's gap and rank step, the carried words are committed. So no AND operand
+widens with the slots before it, and the build is linear in N + H + O + L.
 
 **Refusals** (ok = 0):
 - `ChargeCount_v1`'s: a model's, the coder's (a zero frequency, cum + freq past the total, more than 18 scalings) and
@@ -165,11 +172,14 @@ widens with the slots before it, and the build is linear in N + H + O.
 - a carry-in run past 2 or rank past 2^24 + 1;
 - an enabled hit past 2^16;
 - an enabled entry with p < pos, a gap past 2^24, r past 2^24, or p = 2^32 − 1, whose pos wouldn't fit;
-- a selected cumulative frequency past 2^16.
+- an enabled length term whose output_len doesn't fit bitlen(m) bits (n ≥ 2^bitlen(m)), or whose max_tokens is past
+  2^32 − 1, which its 32 bits can't hold;
+- a selected cumulative frequency past 2^16;
+- a charge, the segment's and the tail's, of 2^20 bits or more.
 
-**The bound.** The proof block's charge is `code_v1`'s segment length for the whole window, so "The bound" (PROTOCOL.md) covers
-every advice v1 window, not just decisions-only ones: `encode` is injective on the values and its strings are
-prefix-free. The sampled leak bound takes the count this gives, at most `2^c` advice values charged `c` or less, as its
+**The bound.** The proof block's charge is `code_v1`'s length for the whole window, its segment and its tail, so "The bound"
+(PROTOCOL.md) covers every advice v1 window, not just decisions-only ones: `encode` is injective on the values and its
+strings are prefix-free. The sampled leak bound takes the count this gives, at most `2^c` advice values charged `c` or less, as its
 premise (`hAs` in `Security/Definitions/NetworkCertifier/Guarantees/SampledCharge.lean`). It rests on two facts:
 - *Each count's code is prefix-free under a public prior.* The prior is the registered table, fixed before the session.
   The ideal length of v is ℓ(v) = −log2(f_j / T) + log2 m_j. Here m_j is n_j when n_j ≤ 2^16, and
@@ -189,37 +199,51 @@ premise (`hAs` in `Security/Definitions/NetworkCertifier/Guarantees/SampledCharg
   So `window_code.code_window` decodes the symbols back one by one, and no window's sequence is a proper prefix of another's.
   At each step the coder splits its interval among the alphabet in proportion to the frequencies, which sum to at most
   the total: bins 0 … bitlen(S) of a count's table reach at most T.
+- *The tail is a fixed-width code given the record.* Its terms and their max_tokens are the certified record's, fixed
+  before the advice, so each term's 2^(bitlen(m) + 1) values each take exactly bitlen(m) + 1 bits: appended after the
+  segment, the tail keeps the window's code prefix-free and its Kraft sum unchanged.
 
 The Lean definitions (`Security/Definitions/NetworkCertifier/WindowCharge.lean`) mirror `reference_window` one for one,
 and the window difftest holds them to it: the certifier program's `NetworkCertifier.WindowCharge`, proved equal to them
-(`CodeChargesWhole`), gives what `reference_window` gives on 4,000 random instances (`lean/scripts/window_vectors.py`).
+(`CodeChargesWhole`), gives what `reference_window` gives on 4,000 instances (`lean/scripts/window_vectors.py`), among
+them a window whose length terms charge 2^20 − 1 bits and one charging 2^20, which it refuses.
 
 **The slice.** The compile slice's class runs inside the pool bound with the network certifier's ingress, so its windows send no
-hits and no order entries. It keeps `ChargeLink_v1{D}` over `replay-charge` as above, and nothing in its wiring changes.
-A class whose windows send hits or order entries does the following:
-- It calls `window_charge.build_link(C, N, H, O, book, row_in, row_out, en, bits, hen, short, oen, p, r)` over
-  `window-charge`'s rows (`window_charge.reads()`), in place of `charge_chain.build_link` over `replay-charge`'s.
-- Its `hen` and `oen` are the replay's, as `en` is (en_i = i < `count`): a hit slot for each lookup past the pool
-  bound, an order slot for each arrival out of release order, enabled slots first, never the prover's. Nothing reads a
-  disabled slot's value: the charge counts only enabled slots, so a slot arrangement or a disabled value the prover
-  chose would pass log2(C(H, h) · C(O, o)) bits and those values uncharged (`test_network_certifier_window_charge_slots.py`:
-  every arrangement and disabled values past every cap give one charge and one carry).
+hits and no order entries. `CompileSlice_v1` keeps `ChargeLink_v1{D}` over `replay-charge` as above, which counts no
+length terms. `CompileSlice_v7` (`compile_slice_v7`, the served windows' slice) charges them with
+`ChargeLink_v2{D, 0, 0, K}`: a length slot for each of ``cert``'s K arrival slots, qen its ``a_valid``, mt its certified
+max_tokens ``a_mt`` and olen its certified output length, so no slot is free witness. What holds ``cert`` to the
+certified record is a stand-in, the honest cert row under the certifier's salt, until max_tokens is read from the
+certified body; the circuit bounds max_tokens only from above, so a lower one the output still fits passes at a lower
+charge until then. A class whose windows send hits, order entries or length terms does the following:
+- It calls `window_charge.build_link(C, N, H, O, L, book, row_in, row_out, en, bits, hen, short, oen, p, r, qen, mt,
+  olen)` over `window-charge`'s rows (`window_charge.reads()`), in place of `charge_chain.build_link` over
+  `replay-charge`'s.
+- Its `hen`, `oen` and `qen` are the replay's, as `en` is (en_i = i < `count`): a hit slot for each lookup past the pool
+  bound, an order slot for each arrival out of release order, a length slot for each request whose body lands in the
+  window, enabled slots first, never the prover's. Its `mt` are the certified max_tokens. Nothing reads a disabled
+  slot's value: the charge counts only enabled slots, so a slot arrangement or a disabled value the prover chose would
+  pass log2(C(H, h) · C(O, o) · C(L, l)) bits and those values uncharged
+  (`test_network_certifier_window_charge_slots.py`: every arrangement and disabled values past every cap give one
+  charge and one carry).
 - It holds the returned bits to c_w as now. The tests check this inline: c_w equal to the charge accepts, and one bit
   less refuses.
-- Its H and O are fixed per class, like D. A window that sends more hits or entries than its slots can't be charged,
-  so that window's proof block fails.
+- Its H, O and L are fixed per class, like D. A window that sends more hits, entries or length terms than its slots
+  can't be charged, so that window's proof block fails.
 
 **Cost** (`size`, ANDs). `window_charge.circuit-check.json` pins Flock's lowering, which adds one row for each commit
-copy of the carry: 53,734 at `{1, 1, 1}` and 40,280 at `{2, 2, 0}`.
+copy of the carry: 40,508 at `{2, 2, 0, 2}`, and 54,015 for the link at `{1, 1, 1, 1}`.
 
 | proof block | ANDs |
 |---|---|
-| `ChargeCount_v2{2, 0, 0}` | 19,560 (`ChargeCount_v1{2}` and 24 for the rank check) |
-| `ChargeCount_v2{1, 1, 1}` | 53,287 |
-| `ChargeCount_v2{2, 2, 0}` | 39,803 |
-| `ChargeCount_v2{2, 0, 2}` | 74,901 |
-| `ChargeCount_v2{4, 2, 2}` | 100,586 |
+| `ChargeCount_v2{2, 0, 0, 0}` | 19,560 (`ChargeCount_v1{2}` and 24 for the rank check) |
+| `ChargeCount_v2{1, 1, 1, 0}` | 53,287 |
+| `ChargeCount_v2{1, 1, 1, 1}` | 53,408 |
+| `ChargeCount_v2{2, 2, 0, 0}` | 39,803 |
+| `ChargeCount_v2{2, 0, 2, 0}` | 74,901 |
+| `ChargeCount_v2{4, 2, 2, 0}` | 100,586 |
 | `ChargeLink_v2` | the count's and 160 for the link |
 
 A hit slot costs about 8,600 (two steps of about 4,000 each and its selection). An order slot costs about 25,800 (six
-steps and their selections). A count over two or more slots adds its offset step.
+steps and their selections). A count over two or more slots adds its offset step. A length slot costs about 109 (its
+width's prefix ORs, its refusal and its bits' sum), and the first 12 more for adding the tail to the count.
