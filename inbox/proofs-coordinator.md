@@ -52183,3 +52183,91 @@ For REGX: #8912 / #8922 / #8924 and #8871 compile on the half with `OpensWhole.l
 For TWOWITNESS: `Counts.lean` at `04def4644bc4` compiles on the half after 13 textual replacements [`r20261111-112315-610e`, 7 theorems]; if you open its PR before #8940 lands, nothing changes for you.
 
 For CAPS: Proofs/Flock: +0 modules, +23 declarations (#8934: Claims/Sampling/Reg.lean, SamplingGeneric/TwoAt.lean, SpotFlock/Coins.lean). Proofs/Flock: +0 modules, +26 declarations (#8940: twenty files under SpotFlock/, none new).
+
+## TWOPROVE, Wed 11 Nov 11:50Z: the composition COMPILES on the first try. `SpotFlock.code_eventTwoX_le_cls_at_caps` is REGX's by-class bound at the code with NO count hypothesis: `N_s`, `K_s` and `K_m` are in closed form, and the caps stay `M t` by template, as your 11:39Z asks. The one-cap case `code_eventTwoX_le_cls_at_cap` is one line. Try `71a5` rc 0 on the three axioms. PR #8941 is open, unmarked, at b29929d015e42b416ea992929c70873f45537676 on `cursor/proofs-clscomp-a7d2`. #8931's quick tier passes; its records run is still out
+
+No claim: no premise, no guarantee, no lock record, nothing under `Definitions/` or `Models/` [read: the commit adds `security/Proofs/Flock/SpotFlock/FirstHitClassCaps.lean` and one import line in `security/Proofs/Flock.lean`, nothing else].
+
+**1. The theorem in plain words** [read: the file at `b29929d015e4`, and the definitions it reads at that head].
+- **What is bounded.** Take the deployed SPOT[Flock] verifier at a registration `h` and a statement `x`, for any prover. The event is that the run accepts AND one of the proof blocks it checks is incorrect at the boundary trace read at the statement, its replay block's interior taken as committed (`FregTwoX`). The probability is over the prover's tape and the verifier's live coins.
+- **By what:** `εclsAt = κ_s + √(k(x) · γ_s · Pr[B]) + (2 · runCost + 4 · firstHitCost) / 2^256`. Its pieces:
+  - `κ_s` is the largest proof block's knowledge error (Flock's `κ_F` at a frozen record), and `γ_s` the sessions' `γ` per round.
+  - `k(x)` is the verifier's rounds at `x`.
+  - `Pr[B]` is the probability that the fork finder `B` outputs a SHA-512 collision. `B` is two runs on one tape with forked coins, and its cost is both runs' calls, at most `2T` under `hT` [derived]. It stays a probability: no hypothesis here bounds it.
+  - `runCost = T · (1 + e_s · N_s) + n_PU · openCalls`.
+  - `firstHitCost = T · (1 + e_s · N_s + K_s + e_s · K_m) + (1 + K_s) · n_PU · openCalls`.
+  - `e_s` is the sessions' expected reruns (the largest `1 + m′·k`), `n_PU` the statement's proof blocks, and `openCalls` the SHA-512 calls one opening's check costs.
+  - **The counts, now in closed form:**
+    - `N_s = |always| + K₀ · Σ_{t < ks.size} k_t + Pr[refused] · N`, the sum over every entry of `ks` (`h.reg.ks.toList.sum`);
+    - `K_s = K_m = Σ_{always u} |clsNeeds u| + K₀ · Σ_{t < ns.size} k_t · M_t + Pr[refused] · Σ_{u < N} |clsNeeds u|`.
+  - `N` is `SamplingDeploy.units ((base h).atOrder (order h)) x`, the statement's units. `k_t` is `h.reg.ks.getD t 0`, the second stage's draws of template `t`. `|clsNeeds u|` is the number of classes among the gates `u` needs.
+- **Numbers from outside Lean:**
+  - **the caps `M t`, by template** (`hM`): every block of template `t` that the second stage can draw needs at most `M t` classes;
+  - **`K₀`, the first stage's count** (`hK : firstK h.reg.first = some K₀`), read off the registration;
+  - **the budget `T`** (`hT`): every run of the prover calls SHA-512 at most `T` times, both parties' calls counted.
+- **Premises:** the linear expected-time bound `ExpectedCR`, under which a finder outputs a SHA-512 collision with probability at most its expected calls over 2^256. It is taken at three finders:
+  - `hBc` at `B_conf,X`: two independent runs, and the first collision among their extractions' own calls;
+  - `hX` at the by-class first-hit finder at the boundary trace (`finderXCls … K`), for every cap `K`;
+  - `hI` at the by-class first-hit finder at the committed interiors (`finderICls … K`), for every cap `K`.
+- **Also left, word for word as #8924 takes them:**
+  - `hB : Built h`: the registration's frame is SPOT's own.
+  - `hS : Addresses h`: every gate's value has one address, fixed before the run, that holds at every accepted run's checked unit that needs it. Its docstring calls it "the premise `SlotsAt` rests on", and no theorem in the tree concludes it [read: grep]. It is a premise on the registration.
+  - `hL`: `L` is the deployed verifier.
+  - `hx`, `hP`, `hd`: `x` parses, and its partition and two-stage design evaluate.
+  - `hin`: the two-stage scope.
+  - `hneeds`, `hcls`: REGX's needs and classes.
+- **The refusal term is a TERM, not a hypothesis.** It is `Pr[refused] · N` in `N_s`, and `Pr[refused] · Σ_{u<N} |clsNeeds u|` in `K_s` and `K_m`. `Pr[refused]` is the probability, over the two stages' coins, that `Spot.Select.selectSecond` refuses, in which case every block below `N` is checked.
+  - Nothing in Lean bounds that probability at `selectSecond` today [relayed: ATTACK 10:48Z].
+  - At the model's 2^20-byte stage it is 1 at D*1's sizes [relayed: ATTACK 10:48Z]. There the term is the whole weight, so `N_s ≥ N` and `K_s, K_m ≥ Σ_{u<N} |clsNeeds u|`, and the bound is no better than checking every block [derived].
+
+**2. The statement and the proof** [read].
+- `code_eventTwoX_le_cls_at_caps` takes #8924's binders word for word, minus `Ns Ks Km` and `hNs hKs hKm`, plus `(M : ℕ → ℕ) (hM …) {K₀ : ℕ} (hK …)`. Here `hM` is #8931's, at `L.nG x`. The count is named `K₀` because `hX` and `hI` bind `∀ K`.
+- **The proof:** `subst hL`, then `code_eventTwoX_le_cls_at_budget h hB hS rfl hx hP hd hin P hneeds hcls T hT`, applied to:
+  - `code_hNs h F x hK`;
+  - `code_hKs_cls h F x needs cls M hM hK`;
+  - `code_hKm_cls h F x needs cls (by subst hcls; exact Compiled.clsOf_idem _) M hM hK`;
+  - then `hBc hX hI`.
+  Here `F = FlockDeploy.deployZk Flock.Readable.relation`.
+- **One cap:** `code_eventTwoX_le_cls_at_cap` takes `(M : ℕ)` and `hM … ≤ M`, and its right-hand side has `Σ_{t < ns.size} k_t · M`. Its proof is one line, `code_eventTwoX_le_cls_at_caps … (fun _ => M) hM hK hBc hX hI`.
+  - It is not rewritten to `K₀ · M · Σ_t k_t`, because `Σ_{t < ns.size} k_t` is `ks.toList.sum` only when `ks` is no longer than `ns` [derived].
+
+**3. Checks** [run].
+- **Try `r20261111-113439-71a5`** (vy-nebius-cpu-9, check slot r4): `lean_changed.py --try security/Proofs/Flock/SpotFlock/FirstHitClassCaps.lean --siblings`.
+  - Its 11,083 build jobs completed. #8924's `FirstHitClassAt`, `OpensClass` and `OpensWhole` and #8931's `ClassCounts` and `Counts` are among them.
+  - lean exit 0 in 167 s, with no warning in the file.
+  - `'SpotFlock.code_eventTwoX_le_cls_at_caps' depends on axioms: [propext, Classical.choice, Quot.sound]`, and the same for `code_eventTwoX_le_cls_at_cap`.
+  - No name clash among the 2,235 imported modules; 1,615 more are left to the records run.
+- **Two earlier launches of the same try**, each cancelled by its id before it started (rc 143, `CANCELLED_MANUAL`):
+  - `r20261111-112617-4717` waited on vy-nebius-cpu-11, whose memory was 139 GB below zero free;
+  - `r20261111-113040-6072` had 8 checks ahead of it on vy-nebius-cpu-6, after a burst of launches.
+  - `--on auto` placed the third on cpu-9. No two of them ran at once.
+
+**4. The PR.** #8941 (https://github.com/compute-verification/verity/pull/8941) is open and unmarked at `b29929d015e42b416ea992929c70873f45537676`, with `Lane proofs` in the body and no label. The open command linked it to PRF-523 [run].
+- **It stands on these open PRs**, each an ancestor of the head [run: `git merge-base --is-ancestor` over the heads of all 380 open PRs]: #8931, #8924, #8922, #8919, #8916, #8912, #8906, #8905, #8892, #8889, #8882, #8879, #8874, #8870, #8836, #8827, #8820, #8785 and #8512.
+- It also stands on TWOWITNESS's `cursor/proofs-codecounts-9e41` at `04def4644bc4`, which has no PR [run].
+- `git merge-tree --write-tree` exits 0 with `main` `08ad61db9432` [run].
+- Records and quick tier at this head are not launched: this job asks for the try. I launch them on your word [read: your 11:21Z].
+
+**5. #8931 at `2cc7decd36a6`.**
+- **Quick tier `r20261111-111625-a1ca` PASSES:** "9 suites: 9 passed (0 cached), 0 failed; 27.4 min of test time" [run].
+- **Records `r20261111-111617-debb`** is running on vy-nebius-cpu-9 in check slot r8, with Lean build slot 0 of 4 [run].
+- **Neither sat unstarted to 12:00Z.** `debb` took its slot at about 11:33Z and `a1ca` at about 11:36Z [derived: each log's line "the run's timeout is now … from its start"]. So I moved neither.
+- Its ready line follows as its own entry when `debb` passes.
+
+**6. Your 11:39Z: the M = 1 corollary, NOT written** [read: your 11:39Z, and ATTACK's 11:35Z item 4].
+- **Nothing changed for it.** The composition takes the caps `M t` as a hypothesis, so either reading of the classes instantiates it [read: the file].
+- **What it would be:** `code_eventTwoX_le_cls_at_cap … (M := 1) hM1 hK hBc hX hI`, one line. Its right-hand side is the one-cap one at `M = 1` [derived].
+- **What it needs from REGX's lemma, exactly** [derived]. It is the cap at every unit, at the code's `needs` and `cls`, under hypotheses among `hx hP hd hin` (and at most `hB`, `hS`):
+  - `∀ u, (Claims.SamplingGeneric.Compiled.clsNeeds ((compiledTwo (FlockDeploy.deployZk _root_.Flock.Readable.relation) (code h) iroots (two h) (rs h) (cap h)).nG x) (Verity.FirstHit.clsOf fun g => gateKey h s Pt d g.val) (fun u => (Reveal.needs (partition h) s u).toFinset) u).card ≤ 1`.
+  - Then `hM1 := fun ρ t i _ _ => lemma (h.reg.blockOf ρ t i)`, after `subst hneeds hcls`.
+- **The key form needs one more lemma** [derived]. If REGX's lemma is stated at the key, `∀ u g g', g ∈ Reveal.needs (partition h) s u → g' ∈ Reveal.needs (partition h) s u → gateKey h s Pt d g = gateKey h s Pt d g'`, the corollary also needs a generic lemma the tree doesn't have [read: no `card_le_one` in `SamplingGeneric/` or `SpotFlock/`]:
+  - `(∀ g g' : Fin N, g.val ∈ needs u → g'.val ∈ needs u → key g = key g') → (Compiled.clsNeeds N (clsOf key) needs u).card ≤ 1`;
+  - its proof is `card_clsNeeds`, `Finset.card_le_one` and `clsOf_eq_iff`, about five lines [derived].
+  - ATTACK's reading, "`gateKey` of every gate a block needs is ({the block}, its replay block, true)", is this form [relayed].
+- **What it still takes:** every hypothesis of `code_eventTwoX_le_cls_at_cap` but `hM`. That includes `hS : Addresses h`, the open premise ATTACK names, so it is not free of premises on the registration [derived]. If REGX's lemma needs more (on `h.ms` or `blockOf`), the corollary takes that too [derived].
+- **At every unit, `K_s, K_m ≤ N_s`** [derived]. With the cap at every `u`, `|clsNeeds u| ≤ 1`, and `Σ_{t<ns.size} k_t ≤ Σ_{t<ks.size} k_t`. Writing `N_s` in all three places would also need `εclsAt` to be monotone in `K_s` and `K_m`, which I did not look for [guess: likely a short lemma].
+- **CAPS if it lands:** +1 declaration in this file, or +2 with the generic lemma [derived]. The line below is the file as it stands.
+
+For CONCRETE: `SpotFlock.code_eventTwoX_le_cls_at_caps` (one cap: `SpotFlock.code_eventTwoX_le_cls_at_cap`), branch `cursor/proofs-clscomp-a7d2` at `b29929d015e42b416ea992929c70873f45537676`; evaluate `κ_s + √(k(x)·γ_s·Pr[B]) + (2·(T·(1 + e_s·N_s) + n_PU·openCalls) + 4·(T·(1 + e_s·N_s + K_s + e_s·K_m) + (1 + K_s)·n_PU·openCalls))/2^256` at `N_s = |always| + K₀·Σ_{t<ks.size} k_t + Pr[refused]·N` and `K_s = K_m = Σ_{always u} |clsNeeds u| + K₀·Σ_{t<ns.size} k_t·M_t + Pr[refused]·Σ_{u<N} |clsNeeds u|` (one cap: `M_t = M`); `Pr[B]` and `Pr[refused]` are probabilities that no hypothesis here bounds [read: the file at `b29929d015e4`]
+
+For CAPS: Proofs/Flock: +1 module, +2 declarations (#8941: SpotFlock/FirstHitClassCaps.lean 2)
