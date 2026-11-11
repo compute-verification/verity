@@ -48,7 +48,7 @@ and `clock.sm` where it doesn't, for the rest `clock.sm`, or the clock `mhz` nam
 given, and device memory's `memory.bandwidth` in words. A benchmark that quotes a peak calls it rather than multiplying
 the card's numbers itself, and `tests/test_lean.py` holds it to each Lean table.
 
-**The Lean tables are generated** (`verity.hardware.lean`). A GPU card file that names a Lean table (`lean`) gives
+**The Lean tables are generated** (`verity/hardware/lean.py`). A GPU card file that names a Lean table (`lean`) gives
 that module: `render(card)` is its text, the card file's numbers (`table(card)`) under the namespace, `clock`,
 `tensorClock` and `card` its importers read, and nobody edits it. The text's shape is fixed (the module's docstring
 gives it): the Lean check's record of a definition digests the term, so a number written another way, or an arm moved,

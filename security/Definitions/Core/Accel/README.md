@@ -30,7 +30,7 @@ Both cards' firmware refuses or clamps every clock above these, and both report 
 its data sheet quotes the tensor peaks at: 9.894 · 10¹⁴ `s8` MACs a second, and 1.0705 · 10¹⁵ on the second reading,
 the 1980 MHz SM clock the driver reports. The card file (`verity/hardware/cards/h200-sxm-141gb.toml`, `clock.tensor`)
 states both readings and names the 1830 MHz reading's falsification test, `benchmarks/tensor_duty/`. The tables are
-generated from the card files (`verity.hardware.lean`) and nobody edits them. Every rate is a ceiling, not a clock a
+generated from the card files (`verity/hardware/lean.py`) and nobody edits them. Every rate is a ceiling, not a clock a
 loaded card holds: under its power limit it holds less. The table also gives the device model's limits (`Card.toDevice`,
 `Accounting.Device`). A run that fits the model stays within them summed over a window (`fits_toDevice`), and no
 per-tick `Accounting.Schedule` is built from a run.

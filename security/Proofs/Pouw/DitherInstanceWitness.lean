@@ -37,7 +37,7 @@ open Pouw.RelativeSecurity Pouw.Dither Pouw.Assumptions Pouw.Guarantees.DitherIn
 
 open scoped NNRat
 
-section Period
+section HalfPd
 
 /-- One second of the devices `G`: the one other job runs every resource at its rate for a second and is worth its use
 at `μ`, and the credited work uses half of every resource. -/
@@ -94,7 +94,7 @@ theorem halfPd_not_freed (G : Accel) (r₀ : G.Res) (hρ : ∀ r, 0 < G.rate r) 
   rw [e1, e2, e3] at hval
   nlinarith
 
-end Period
+end HalfPd
 
 section Instance
 

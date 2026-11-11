@@ -260,7 +260,7 @@ def pubBestSm120 : PubBest Verity.Accel.Sm120.card := ⟨pubMmSm120, pubShaSm120
 /-- **An oracle call costs a public SHA-512 compression on the card**: `G`'s oracle-call step (G3)
 uses, on the card's resources, the units of one compression of one of the public schedules
 `pb.sha`, and nothing of the other devices. A call is one evaluation of a tree input: a leaf's is one compression and
-a node's (two digests) two, so one compression is the floor, and a card resource the schedule uses caps the calls at
+a node's (two digests) two, so one compression is the floor, and a card resource the schedule uses bounds the calls by
 its capacity over the schedule's use of it (WorkSound's `cap_r ≤ Q callUse_r`). Host CPUs that hash are other work's
 devices; their calls are priced there. -/
 def CallsAtPub (G : Accel) {c : Verity.Accel.Card} {D : Devices c} (e : G.Res ≃ Verity.Accel.Res ⊕ D.oth.Res)
