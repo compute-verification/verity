@@ -34,7 +34,7 @@ dram = { value = 151397597184, unit = "B", mark = "ceiling", source = "H200 data
 
 # The resources' rates, each a SM-clock (the Lean's rho is SMs x this x clock.sm, the tensor's x clock.tensor).
 [rate]
-tensor = { value = 4096, unit = "s8 MAC/SM-clock", mark = "ceiling", source = "the H200 data sheet's 1,979 dense INT8 TOPS over 2 x 132 SMs at the 1830 MHz tensor boost clock (Accounting.TS.Sheets.H200 A3), taken at clock.tensor, 989.4 T MACs a second (1070.5 T at clock.sm's 1980 MHz); measured 4095.6 (wgmma N >= 64, art:83dbd28b545b, art:9ed5ca6ccddd) and 4096 (art:50daf54f471b), a SM-clock each" }
+tensor = { value = 4096, unit = "s8 MAC/SM-clock", mark = "ceiling", source = "the H200 data sheet's 1,979 dense INT8 TOPS over 2 x 132 SMs at the 1830 MHz tensor boost clock (Accounting.TS.Sheets.H200 A3), taken at clock.tensor, 989.4 T MACs a second (1070.5 T at clock.sm's 1980 MHz); measured 4095.6 (wgmma N >= 64, art:83dbd28b545b, art:9ed5ca6ccddd) and 4096 (art:50daf54f471b), a SM-clock each; mma.sync reaches less: m16n8k32 (IMMA.16832.S8.S8) measured at 2687 a SM-clock, 65.6% of wgmma's, in the first two records" }
 issue = { value = 4, unit = "warp instruction/SM-clock", mark = "ceiling", source = "H100 whitepaper, 'H100 SM Architecture': four partitions, each a warp scheduler dispatching one warp instruction a clock" }
 alu = { value = 64, unit = "lane/SM-clock", mark = "ceiling", source = "CUDA C++ Programming Guide 12.9 section 6.4.1 Table 7, CC 9.0: 32-bit integer add, compare, min, max, logic and shift 64" }
 imad = { value = 64, unit = "lane/SM-clock", mark = "ceiling", source = "CUDA C++ Programming Guide 12.9 section 6.4.1 Table 7, CC 9.0: 32-bit integer multiply and multiply-add 64" }
