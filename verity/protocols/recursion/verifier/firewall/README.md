@@ -14,7 +14,10 @@ Its Lean is two packages, code and not analysis:
   `Flock.Firewall.Contract`, that decision as a core protocol (`core-firewall`), and the release side around the session
   loop on the record's files (`core-firewall session`, which `flock-circuit`'s `--firewall-state` runs). Its tests hold
   it to Python's `verity_flock.firewall` and to the frozen cases of the Rust reference it replaced, and the rules it
-  runs are proved properties (`security/Properties/Firewall.lean`).
+  runs are proved properties (`security/Properties/Firewall.lean`). It also holds the port of the honest worker's
+  requests in an inner session (`firewall-honest-difftest`), which `verity/protocols/flock/prover/tests/test_honest_reqs.py` holds to
+  `rec_live`'s requests on a real prover's recorded session, and `test_honest_session.py` to every request `rec_live`
+  relayed to Lean's live ZK server on a recorded honest session.
 
 ## The reference deployment
 
