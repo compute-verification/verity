@@ -19,7 +19,9 @@ weight that differs by template sums over them to at most `|sample| · Σ_t k_t 
 (`subset_spec`), so each in the cell (`stratum_unit`), and the stratified draw returns the strata's draws together
 (`stratifiedWith_sum_le`). At a registration, a unit's proof block is `RegTwo.blockAt`, which on template `t`'s cells
 is a block of template `t` (`RegTwo.blockAt_cell`), so a weight on blocks at most `M_t` on template `t`'s blocks sums
-over the proved units' blocks to at most `|sample| · Σ_t k_t · M_t` (`RegTwo.sum_proved_blockAt_le`).
+over the proved units' blocks to at most `|sample| · Σ_t k_t · M_t` (`RegTwo.sum_proved_blockAt_le`), and over the
+checked blocks of an accepted second stage, with a replay sample of at most `K0` blocks, to at most the always-checked
+blocks' weight plus `K0 · Σ_t k_t · M_t` (`RegTwo.sum_checked_le_strata`).
 -/
 
 @[expose] public section
@@ -30,15 +32,6 @@ namespace Properties.Spot.SecurityProofs
 
 open Lean (Json)
 open FlockSoundness FlockSoundness.Audit
-
-theorem sum_le_length_mul (l : List ℕ) (c : ℕ) (h : ∀ y ∈ l, y ≤ c) : l.sum ≤ l.length * c := by
-  induction l with
-  | nil => simp
-  | cons a l ih =>
-    rw [List.sum_cons, List.length_cons, Nat.succ_mul]
-    have h1 := h a (List.mem_cons_self ..)
-    have h2 := ih fun y hy => h y (List.mem_cons_of_mem _ hy)
-    omega
 
 /-- A stratum's unit weighs at most the largest weight on its units. -/
 theorem le_sup_unit (W : ℕ → ℕ) (s : Flock.Draw.Stratum) {j : ℕ} (hj : j < s.size) :
@@ -102,8 +95,8 @@ theorem stratifiedWith_sum_le (src : ByteArray) (strata : Array Flock.Draw.Strat
           obtain ⟨j', hj', rfl⟩ := List.mem_map.1 hu
           obtain ⟨t, ht, rfl⟩ := (hmem j').1 (Array.mem_toList_iff.1 hj')
           exact le_sup_unit W _ (hπ t (by omega))
-        have hs := sum_le_length_mul _ _ hb
-        rw [List.length_map, Array.length_toList, Array.size_map, subset_size hst.2.2.1] at hs
+        have hs := List.sum_le_length_nsmul _ _ hb
+        rw [List.length_map, Array.length_toList, Array.size_map, subset_size hst.2.2.1, smul_eq_mul] at hs
         simp only [Array.toList_append, List.map_append, List.sum_append, List.map_cons, List.sum_cons]
         omega
   rw [StateT.run_bind] at h
@@ -280,5 +273,54 @@ theorem RegTwo.sum_proved_blockAt_le (g : RegTwo) (sample : Array ℕ) (src : By
     show w (g.blockAt sample (cellOff sample.size g.ns t + i * g.ns.getD t 0 + j)) ≤ M t
     rw [g.blockAt_cell sample ht hi hj]
     exact hM _ t j ht hj
+
+theorem sum_toFinset_le (l : List ℕ) (w : ℕ → ℕ) : ∑ v ∈ l.toFinset, w v ≤ (l.map w).sum := by
+  induction l with
+  | nil => simp
+  | cons a l ih =>
+    rw [List.toFinset_cons, List.map_cons, List.sum_cons]
+    by_cases ha : a ∈ l.toFinset
+    · rw [Finset.insert_eq_of_mem ha]; omega
+    · rw [Finset.sum_insert ha]; omega
+
+/-- The units below `N` that some `j ∈ P` maps to weigh at most the weight summed over `P`'s images. -/
+theorem sum_filter_hit_le (N : ℕ) (P : Array ℤ) (f : ℤ → ℕ) (w : ℕ → ℕ) :
+    (((List.range N).filter fun v => P.any fun j => f j == v).map w).sum ≤ (P.toList.map fun j => w (f j)).sum := by
+  have hsub : ((List.range N).filter fun v => P.any fun j => f j == v).toFinset ⊆ (P.toList.map f).toFinset := by
+    intro v hv
+    obtain ⟨-, hq⟩ := List.mem_filter.1 (List.mem_toFinset.1 hv)
+    rw [← Array.any_toList] at hq
+    obtain ⟨j, hj, hjv⟩ := List.any_eq_true.1 hq
+    exact List.mem_toFinset.2 (List.mem_map.2 ⟨j, hj, beq_iff_eq.1 hjv⟩)
+  rw [← List.sum_toFinset w (List.nodup_range.filter _)]
+  refine (Finset.sum_le_sum_of_subset hsub).trans ?_
+  have := sum_toFinset_le (P.toList.map f) w
+  rw [List.map_map] at this
+  exact this
+
+/-- **The checked proof blocks by template, at a registration**: on an accepted second stage over a replay sample of
+at most `K0` blocks, a weight `w` on blocks, at most `M t` on template `t`'s, sums over the checked blocks below `N` to
+at most the always-checked blocks' weight plus `K0 · Σ_t k_t · M t`. -/
+theorem RegTwo.sum_checked_le_strata (g : RegTwo) (N : ℕ) (src₁ src₂ : ByteArray) {draw : Json} {n : ℕ}
+    (hsel : Spot.Select.selectSecond (g.sample src₁) g.ns g.ks src₂ = .ok (draw, n)) (w M : ℕ → ℕ)
+    (hM : ∀ ρ t i, t < g.ns.size → i < g.ns.getD t 0 → w (g.blockOf ρ t i) ≤ M t) {K0 : ℕ}
+    (hK : (g.sample src₁).size ≤ K0) :
+    ((g.checked N src₁ src₂).map w).sum ≤
+      (((List.range N).filter fun v => g.always v).map w).sum +
+        K0 * ((List.range g.ns.size).map fun t => g.ks.getD t 0 * M t).sum := by
+  have hc : g.checked N src₁ src₂ = (List.range N).filter fun v =>
+      g.always v || (Spot.Draw.proved draw).any fun j => g.blockAt (g.sample src₁) j.toNat == v := by
+    unfold RegTwo.checked
+    rw [hsel]
+  have hor : ∀ (xs : List ℕ) (p q : ℕ → Bool),
+      ((xs.filter fun v => p v || q v).map w).sum ≤ ((xs.filter p).map w).sum + ((xs.filter q).map w).sum := by
+    intro xs p q
+    induction xs with
+    | nil => simp
+    | cons a xs ih => by_cases hp : p a <;> by_cases hq : q a <;> simp [hp, hq] <;> omega
+  rw [hc]
+  refine (hor _ _ _).trans (Nat.add_le_add_left ?_ _)
+  exact (sum_filter_hit_le N _ _ w).trans ((g.sum_proved_blockAt_le _ src₂ hsel w M hM).trans
+    (Nat.mul_le_mul_right _ hK))
 
 end SamplingDeploy
