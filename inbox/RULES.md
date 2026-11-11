@@ -90,8 +90,14 @@ newest section of your own inbox file (`inbox/<NAME>.md` on this branch) wins ov
   torch-cpu && uv run tools/verity/check/suites.py SUITE [SUITE...]'`. It reserves 16 GB and starts at once. Not
   cpu-4 or cpu-5 for a run over 30 minutes. Your own VM runs no suite, no build and no nvcc.
 - **A run that waits for a slot on cpu-3 or cpu-6 waits on reserved memory** (infra, Tue 23:45Z, CI-485): cancel it
-  and launch it again with `--on vy-nebius-cpu-12` (free slots, no line; `--on auto` never picks it yet). A build
-  that needs CUDA 13.0 still goes where CUDA 13.0 is.
+  and launch it again on a pool with free slots and no line, naming the pool: `--on vy-nebius-cpu-12 --pool research
+  --as kernels` (or cpu-7; `--on auto` reads cpu-12's pool too since Wed). A build that needs CUDA 13.0 still goes
+  where CUDA 13.0 is.
+- **A CPU node has pools and no check slots, so `research queue ready N --on vy-nebius-cpu-K` runs nothing there**
+  (Wed 07:35Z, the lead's four runs: `slot: /workspace/research/locks/slots lists no slots`, exit 1 after 0 s, which
+  `ready` prints as "the quick tier failed"; nothing was wrong with the heads). The quick tier takes `--on auto`
+  only. Kernels' way stays: the suites the change touches as a pool run at the head (`suites.py --changed BASE
+  --quick`), then the lead's `--mark`.
 - Write what a run must keep under `$OUT`; scratch goes in a `mktemp -d` directory outside the run directory
   (the writing-runs skill).
 
