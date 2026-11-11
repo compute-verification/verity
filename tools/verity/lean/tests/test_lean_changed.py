@@ -1774,18 +1774,17 @@ def test_a_dependency_with_a_lakefile_lean_and_no_lake_directory_gets_an_empty_o
     assert read_only(tmp_path, [packages, none_fetched], ["true"], monkeypatch)[0] == 0 and held() == after, "and stays as it is"
 
 
-@pytest.mark.parametrize("copy", [False, True])
-def test_a_lake_directory_made_in_a_tree_never_appears_in_the_dependencies_the_node_keeps(tmp_path, monkeypatch, copy):
-    """`link` fills a tree's `.lake/packages` from the node's kept dependencies with hard links to their files (a try and
-    `--records`: a copy), and a directory is the tree's own either way: the `.lake` made there is not in the kept ones,
-    which every tree of the node is filled from and only the audit writes."""
+def test_a_lake_directory_made_in_a_tree_never_appears_in_the_dependencies_the_node_keeps(tmp_path, monkeypatch):
+    """`link` fills a tree's `.lake/packages` with a copy of the node's kept dependencies, files and directories the tree's
+    own: the `.lake` made there is not in the kept ones, which every tree of the node is filled from and only the audit
+    writes."""
     monkeypatch.setattr(LC.LA, "deps_key", lambda _: "k")
     deps, tree, links = tmp_path / "deps", tmp_path / "tree", {}
     (deps / "k" / "leansqlite").mkdir(parents=True)
     (deps / "k" / "leansqlite" / "lakefile.lean").write_text("package leansqlite")
-    assert LC.link("pkg", tree, deps, links, log=lambda _: None, copy=copy) and links == {"pkg": "k"}
+    assert LC.link("pkg", tree, deps, links, log=lambda _: None) and links == {"pkg": "k"}
     packages = tree / "pkg" / ".lake" / "packages"
-    assert (packages / "leansqlite" / "lakefile.lean").samefile(deps / "k" / "leansqlite" / "lakefile.lean") == (not copy)
+    assert not (packages / "leansqlite" / "lakefile.lean").samefile(deps / "k" / "leansqlite" / "lakefile.lean")
     assert read_only(tmp_path, [packages], ["true"], monkeypatch)[0] == 0 and (packages / "leansqlite" / ".lake").is_dir()
     assert sorted(p.relative_to(deps).as_posix() for p in (deps / "k").rglob("*")) == ["k/leansqlite", "k/leansqlite/lakefile.lean"]
 
