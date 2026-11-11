@@ -39716,3 +39716,52 @@ The VM was reset again at about 05:34Z. The brief and your 05:24Z section are in
 - **Gate:** (i) 6, (ii) 0, (iii) 26 added, 0 removed, 0 changed against `815b893acd23`'s lock, all on the pushed head. (iv) waits for `9694`. [run]
 - **Not done:** "ready to mark" waits for both runs. If `9694` regenerates a record I add one commit of exactly that file, redo (i) to (iii), rerun the quick tier, and write the new head here before anything else.
 - **Could not do:** nothing. I end my turn here; resume me when the runs end.
+
+## CROSS, Wed 11 Nov 05:51Z: ready to mark #8539 and #8517; #8226's records run regenerated the lock in entry order only, so its head is now f8a3b83aa0f0 with the quick tier running there
+
+**ready to mark #8539 at `984a73968ccdd00ccbcbee982fbe2a11aa8048ef`** `[run]`
+
+- Records run `r20261111-042342-57e5`, at that commit: `"outcome": "pass"`; `security`, `security/Properties` and
+  `security/Proofs` each `pass`; `lean-records: security: check.py exit 0 in 3819 s`,
+  `security/Properties: check.py exit 0 in 453 s`. No record regenerated, no commit added.
+- Quick tier `r20261111-042416-5ab4`, at that commit: `68 suites: 68 passed (0 cached), 0 failed`, with
+  `passed  repository  280 passed in 426 s`.
+- Merges clean with `main` at `c4290f5b74e2`. Body edited (section added, 53 old paths rewritten, the line that said
+  `r20261111-015538-3293` was running now gives its verdict).
+- Still true: `verity/protocols/spot/verifier/README.md` is 49,321 bytes against its 49,152 cap, warn only.
+
+**ready to mark #8517 at `620badf319583c1915523cf2f7710b45baa4b2a1`** `[run]`
+
+- No records run: it changes no Lean file and no lock.
+- Quick tier `r20261111-052052-ca90`, at that commit: `3 suites: 3 passed (0 cached), 0 failed`
+  (`benchmarks/spot_figures`, `verity-graph`, and `passed  repository  280 passed in 318 s`).
+- Merges clean with `main` at `c4290f5b74e2`. Body edited (section added; it named no old path).
+
+**#8226: the records run regenerated the lock; one record commit added; not ready yet** `[run]`
+
+- `r20261111-041602-67ce` at `354f604cfdd1`: `"outcome": "regenerated"` for `security` (`check.py exit 0 in 3725 s`),
+  `security/Properties` and `security/Proofs` `pass`. `record_sha256` `b2f5c6c6443f…35fb`.
+- **It is entry order only.** The record parses to the same JSON as the head's lock, and has the same 4,175,579 bytes.
+  26 lines move, in two sections: `unwitnessed` and `shape.inline`.
+- **It is `main`'s lock, not the crossing and not this PR** `[derived]`. #8226's lock was `main`'s byte for byte. `main`'s
+  lock has held this order since before the move (`a930252c4993` has it). The six heads of ours whose lock is already
+  in the regenerated order are #8512, #8527, #8785, #8539, #8139 and #8406, and the three of them whose records runs
+  have ended all passed without a regeneration.
+- **New head: `f8a3b83aa0f0f4e3ed59ef571f2ebfdbc5f3e255`**, pushed 05:49Z as a fast-forward of `354f604cfdd1`. It is one
+  commit that changes only `security/lean-audit.json` (+13 −13); the file's sha256 is the run's `record_sha256`. Lock
+  count on it: 4,175,579 bytes, 6, 0. `pins.py --stale` exits 0. CI-524 and the mailbox were read first.
+- Quick tier at that commit: `r20261111-054926-06c4` (cpu-1), launched 05:49Z. ETA 06:20Z to 06:50Z `[guess]`: the lock
+  is an input of more suites than the two Lean files were.
+- **Expect the same at #8368** `[derived]`: its lock is `main`'s byte for byte and it adds Lean, so `r20261111-052916-1e61`
+  should come out `regenerated` in order only. I commit that record the same way and rerun its quick tier.
+
+**#8339: I also run its guard at the crossed head** `[run]`. The quick tier does not reach it: the fixture's line touches
+six suites, and `benchmarks/two_stage`, which reads the fixture, is not one. The PR's own body says a guard run does
+not carry across a change to `main`'s Lean. So `r20261111-054119-7600` (cpu-1, launched 05:41Z) runs the
+`benchmarks/two_stage` suite, the fixture's sha256 and `guard_node.py --pytest` at `9fd291257ffc`, as
+`r20261110-214445-9e11` did at the old head (that one passed: 3 tests in 2,211 s). ETA 06:30Z to 07:00Z `[guess]`.
+A first launch, `r20261111-054025-965c`, I cancelled before it took a slot: its time limit was 60 minutes.
+
+Still out, read 05:46Z `[run]`: records `79af`, `c513` (#8512), `f230` (#8139), `7aba` (#8406), `1e61` (#8368); quick
+`76af` (#8139), `2ba5` (#8339), `e003` (#8406), `61dd` (#8414), `e5b6` (#8454), `cd1f` (#8368), `8e00` (#8553), `06c4`
+(#8226).
