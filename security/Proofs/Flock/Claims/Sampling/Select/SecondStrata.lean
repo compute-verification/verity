@@ -15,8 +15,8 @@ import Proofs.Flock.Soundness.ExecDraw
 
 `size_proved_selectSecond` counts an accepted second stage's proof blocks, `|sample| · Σ_t k_t`, every one alike. A
 weight that differs by template sums over them to at most `|sample| · Σ_t k_t · M_t`, where `M_t` bounds it on template
-`t`'s cells: each cell's stratum draws `k_t` of its units (`subset_size`), each below the stratum's size
-(`subset_spec`), so each in the cell (`stratum_unit`), and the stratified draw returns the strata's draws together
+`t`'s cells: each cell's stratum samples `k_t` of its units (`subset_size`), each below the stratum's size
+(`subset_spec`), so each in the cell (`stratum_unit`), and the stratified sample returns the strata's samples together
 (`stratifiedWith_sum_le`). At a registration, a unit's proof block is `RegTwo.blockAt`, which on template `t`'s cells
 is a block of template `t` (`RegTwo.blockAt_cell`), so a weight on blocks at most `M_t` on template `t`'s blocks sums
 over the proved units' blocks to at most `|sample| · Σ_t k_t · M_t` (`RegTwo.sum_proved_blockAt_le`), and over the
@@ -40,8 +40,8 @@ theorem le_sup_unit (W : ℕ → ℕ) (s : Flock.Draw.Stratum) {j : ℕ} (hj : j
   rw [stratum_unit, List.getD_eq_getElem?_getD, List.getElem?_eq_getElem hj, Option.getD_some]
   exact Finset.le_sup (List.mem_toFinset.2 (List.getElem_mem hj))
 
-/-- **A stratified draw's weights**: the units a run of `stratifiedWith` on `take` returns weigh at most each stratum's
-`k` times the largest weight on its units, summed over the strata. -/
+/-- **A stratified sample's weights**: the units a run of `stratifiedWith` on `take` returns weigh at most each
+stratum's `k` times the largest weight on its units, summed over the strata. -/
 theorem stratifiedWith_sum_le (src : ByteArray) (strata : Array Flock.Draw.Stratum) (p p' : ℕ) (D : Array ℕ)
     (h : (Flock.Draw.stratifiedWith (fun _ need => Draw.take src need) strata).run p = .ok (some D, p'))
     (W : ℕ → ℕ) :
@@ -116,9 +116,9 @@ theorem stratifiedWith_sum_le (src : ByteArray) (strata : Array Flock.Draw.Strat
     rw [Array.toList_empty, List.map_nil, List.sum_nil, Nat.zero_add]
     exact sum_range'_getElem! strata fun s => s.k * (expand s.units.toList).toFinset.sup W
 
-/-- **A work law's draw by stratum**: `units` weighs at most each stratum's `k` times the largest weight on its units,
-summed over the strata. -/
-theorem drawUnits_work_sum_le {K n read : ℕ} {ws : Array Flock.Draw.WorkStratum} {src : ByteArray}
+/-- **A work sampling design's sample by stratum**: `units` weighs at most each stratum's `k` times the largest weight
+on its units, summed over the strata. -/
+theorem workUnits_sum_le {K n read : ℕ} {ws : Array Flock.Draw.WorkStratum} {src : ByteArray}
     {units : Array ℕ} (h : Draw.drawUnits (.work K ws) n src = .ok (units, read)) (W : ℕ → ℕ) :
     (units.toList.map W).sum ≤ (ws.toList.map fun s => s.k * (expand s.units.toList).toFinset.sup W).sum := by
   unfold Draw.drawUnits at h
@@ -197,7 +197,7 @@ theorem sum_proved_selectSecond_le {sample ns ks : Array ℕ} {src : ByteArray} 
   obtain ⟨-, parsed, units, hp, hu, hdu, hdc⟩ := selectSecond_units h
   obtain ⟨ws, rfl, hmap⟩ := flockLaw_second sample ns ks _ parsed hp
   rw [sum_proved_of_units hdu hdc W]
-  refine (drawUnits_work_sum_le hu W).trans ?_
+  refine (workUnits_sum_le hu W).trans ?_
   have hws : (ws.toList.map fun s => s.k * (expand s.units.toList).toFinset.sup W) =
       (cellPairs sample.size ns.size).map fun z =>
         (cellOf sample.size ns ks z).2 * (expand (cellOf sample.size ns ks z).1.toList).toFinset.sup W := by
