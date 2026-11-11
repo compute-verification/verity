@@ -28,8 +28,8 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 sys.path.insert(0, str(Path(__file__).resolve().parents[3]))
 
 import auditor_line as al  # noqa: E402
-from verity.core.protocols.remote_bandwidth.session import lean_verifier as lv  # noqa: E402
-from verity.core.protocols.remote_bandwidth import audit, codec, line, receipts  # noqa: E402
+from verity.protocols.poub.verifier.session import lean_verifier as lv  # noqa: E402
+from verity.protocols.poub.verifier import audit, codec, line, receipts  # noqa: E402
 
 FIXTURES = Path(__file__).parent / "fixtures"
 OLD = {"4.4e+09": line.TIME_HELD, "5.4e+10": line.LINK_CHARGED}
