@@ -1,4 +1,4 @@
-"""The cross-rank leg's refusals that no other test reaches (`verity_vllm.check.match.rank_match`): for each, the smallest
+"""The cross-rank check's refusals that no other test reaches (`verity_vllm.check.match.rank_match`): for each, the smallest
 change to an input that passes, held to the check's name and to the failure's words.  `cross_rank_check` fails by name, so
 a refusal that moves to another check, or loses its text, fails here; `commit_binding` states its failures in `failures`."""
 from __future__ import annotations
@@ -117,7 +117,7 @@ def test_a_provenance_record_is_not_bound_without_the_recorder_files_digests():
     bound = RM.cross_rank_check(colls, recorder=recorder, provenance=provenance, recorder_sha256={0: "h0", 1: "h1"})
     assert bound["verdict"] == "PASS", bound["failed"]
     res = RM.cross_rank_check(colls, recorder=recorder, provenance=provenance)
-    _only(res, "provenance", "the recorder files' digests were not given to this leg (recorder_sha256=None)")
+    _only(res, "provenance", "(recorder_sha256=None): the provenance record cannot be bound to the rows loaded")
 
 
 # --- commit_binding -----------------------------------------------------------------------------------------------------------

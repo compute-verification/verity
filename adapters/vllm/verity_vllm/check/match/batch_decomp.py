@@ -126,8 +126,8 @@ class _Owners:
 
 
 @dataclass(frozen=True)
-class _LegReads:
-    """What a request's leg reads: the fold and its attribution, the derived dirs by shape, the components decoded so far (by shape
+class _RequestReads:
+    """What one request's comparison reads: the fold and its attribution, the derived dirs by shape, the components decoded so far (by shape
     in this run, by dir with the caller), the operations and the within-step criterion."""
     fold: _Fold
     own: _Owners
@@ -200,7 +200,7 @@ def decompose(oracle_dir: str, derived_dirs: list[str], log_path: str | None = N
                            "requests": [], "missing_derived": []}
     missing: set[tuple[int, ...]] = set()
     all_equal = True
-    outs = _run_legs(_LegReads(fold, own, derived, A_cache, components, ops, within_step, profiling, force_dag), run_prof)
+    outs = _compare_requests(_RequestReads(fold, own, derived, A_cache, components, ops, within_step, profiling, force_dag), run_prof)
     for ent, miss in outs:
         if profiling:
             p = ent.pop("_profile", None)   # the sidecar's, never the document's
@@ -345,7 +345,7 @@ def _shape_of(fold: _Fold, rid: str, idxs: list[int]):
     return PP.shape(LP, n_ts - chunks, PX.cached_rows(header, steps, rid))
 
 
-def _leg(reads: _LegReads, item) -> tuple:
+def _compare_request(reads: _RequestReads, item) -> tuple:
     """X-09 for ONE request: its Projection of the fold, the comparison with its component (sequence + DAG criteria),
     its cross-request reads.  Reads the shared fold / components / attribution, writes nothing shared: the record's loop body,
     returning (entry, missing shape | None) instead of appending.  Runs in this process, or on a forked worker (fast path)."""
@@ -456,11 +456,11 @@ def _leg(reads: _LegReads, item) -> tuple:
     return ent, None
 
 
-def _run_legs(reads: _LegReads, run_prof: dict) -> list[tuple]:
-    """Every request's leg, in request order: in this process, or through the operations' legs hook after its components are loaded."""
+def _compare_requests(reads: _RequestReads, run_prof: dict) -> list[tuple]:
+    """Every request's comparison, in request order: in this process, or through the operations' hook after its components are loaded."""
     steps, per_req, shared_idx = reads.fold.steps, reads.own.per_req, reads.own.shared_idx
     ops, derived, components, profiling = reads.ops, reads.derived, reads.components, reads.profiling
-    shape_of, leg = functools.partial(_shape_of, reads.fold), functools.partial(_leg, reads)
+    shape_of, leg = functools.partial(_shape_of, reads.fold), functools.partial(_compare_request, reads)
     if shared_idx:
         # a weight-only instance of engine step s belongs to the projection of every request with rows in s (the
         # request's own derive computes that node inside its forward at that step); a request with no rows in s does not see it.

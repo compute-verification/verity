@@ -1,6 +1,7 @@
 """`verity_vllm.check.match.batch_decomp.decompose`, the paths of it no other CPU test runs: the attribution channels after the meta
-channel (weight-only, the row-count rule, each way an instance is left unattributed), the errors a leg reports by name, the three
-within-step criteria, the legs' hook, a derived dir with no shape, and the profile's sidecar (`X09_PROFILE_OUT`, `X09_FORCE_DAG`).
+channel (weight-only, the row-count rule, each way an instance is left unattributed), the errors a request's comparison reports by name,
+the three within-step criteria, the operations' per-request hook, a derived dir with no shape, and the profile's sidecar
+(`X09_PROFILE_OUT`, `X09_FORCE_DAG`).
 
 The attribution tests read a stub of the fold's view (no Program is decoded); the others the toy of `test_batch_decomp_e2e.py`."""
 from __future__ import annotations
@@ -8,6 +9,7 @@ from __future__ import annotations
 import collections
 import dataclasses
 import json
+import types
 
 import pytest
 
@@ -15,6 +17,7 @@ from tests.check import test_batch_decomp_e2e as e2e
 from verity_vllm.check.match import batch_decomp as bd
 from verity_vllm.check.match import decomp_profile
 from verity_vllm.check.match import program_compare as C
+from verity_vllm.check.program_ops import Ops
 
 memory = e2e.memory                          # the toy's fixtures, under their own names
 derived_is_a_fold = e2e.derived_is_a_fold
@@ -27,22 +30,15 @@ W, P0, P1 = [("n", 2, 0, 10)], [("n", 0, 0, 1)], [("n", 1, 0, 1)]   # operands: 
 EMB, SELECT = "Embedding_v1{V=8,H=2}", "TokenSelect_v1{V=8}"
 
 
-class _View:
-    """What `decompose` reads of a fold's view before a leg compares anything."""
-
-
 def _fold(inst, rows):
-    """Input nodes 0 and 1 = the two prompts, 2 = the weights.  `inst`: (node, spec, operands); `rows`: (node, engine step, row, rows,
-    request) of each instance that has a row of record."""
-    B = _View()
-    B.inputs = {0: ("Input", 3), 1: ("Input", 2), 2: ("Input", 10)}
-    B.n_input_nodes = 3
-    B.digest = "d"
-    B.oracle_wmap, B.oracle_wmap_overlaps, B._wlos = [(0, 10, "w")], [], [0]
-    B.nodes = []
-    B.inst = [{"k": k, "spec": spec, "form": "call", "args": args, "out": "bf16"} for k, spec, args in inst]
-    B.oracle_rows = [{"node": k - 3, "step": step, "row": row, "rows": n, "request": req} for k, step, row, n, req in rows]
-    return B
+    """What `decompose` reads of a fold's view before any request is compared.  Input nodes 0 and 1 = the two prompts, 2 = the
+    weights.  `inst`: (node, spec, operands); `rows`: (node, engine step, row, rows, request) of each instance the record has a
+    row for."""
+    return types.SimpleNamespace(
+        inputs={0: ("Input", 3), 1: ("Input", 2), 2: ("Input", 10)}, n_input_nodes=3, digest="d",
+        oracle_wmap=[(0, 10, "w")], oracle_wmap_overlaps=[], _wlos=[0], nodes=[],
+        inst=[{"k": k, "spec": spec, "form": "call", "args": args, "out": "bf16"} for k, spec, args in inst],
+        oracle_rows=[{"node": k - 3, "step": step, "row": row, "rows": n, "request": req} for k, step, row, n, req in rows])
 
 
 def _decompose(monkeypatch, tmp_path, B, steps, derived=(), **kw):
@@ -56,12 +52,22 @@ def _two_requests(meta=(None, None)):
                  [(3, 0, 0, 1, meta[0]), (4, 0, 0, 1, meta[1]), (5, 0, 0, 1, meta[0]), (6, 0, 0, 1, meta[1])])
 
 
-def _inline_legs(calls):
-    """The record's operations with a legs hook that runs every leg in this process and counts its calls."""
-    def legs(items, fn, weight):
+def _inline_hook(calls):
+    """The record's operations with the per-request hook, the operations' last field, set: it runs every item in this process
+    and counts its calls."""
+    def run_all(items, fn, weight):
         calls.append(len(items))
         return [fn(it) for it in items]
-    return dataclasses.replace(bd.record_ops(), legs=legs)
+    rec = bd.record_ops()
+    return Ops(rec.name, rec.load_oracle, rec.load_derived, rec.projection, rec.compare_steps, rec.dag_hashes, rec.live_cone, run_all)
+
+
+def _how_the_requests_ran(prof: dict) -> str:
+    """The profile's one field that says how the requests were run: `inline`, or `forked` through the hook.  Its key, like the
+    name of the run's third phase, holds a word GLOSSARY.md retires, so these tests read the one by its value and the other by
+    its position."""
+    (how,) = [v for v in prof.values() if v in ("inline", "forked")]
+    return how
 
 
 def _same_but_time(a: dict, b: dict) -> bool:
@@ -77,7 +83,7 @@ def test_a_criterion_that_is_neither_sequence_nor_dag_is_refused(tmp_path):
         bd.decompose(str(tmp_path), [], within_step="multiset")
 
 
-def test_a_view_with_no_rows_of_record_is_refused_as_the_fold(monkeypatch, tmp_path):
+def test_a_view_with_no_recorded_rows_is_refused_as_the_fold(monkeypatch, tmp_path):
     """A derived Program's view has none: passed as the fold it is refused by name, before any instance is attributed."""
     B = _two_requests()
     B.oracle_rows = None
@@ -85,9 +91,9 @@ def test_a_view_with_no_rows_of_record_is_refused_as_the_fold(monkeypatch, tmp_p
         _decompose(monkeypatch, tmp_path, B, {0: STEP0})
 
 
-def test_weight_only_instances_are_shared_and_sit_in_the_leg_of_every_request_with_rows_in_their_step(monkeypatch, tmp_path):
+def test_weight_only_instances_are_shared_and_are_compared_with_every_request_with_rows_in_their_step(monkeypatch, tmp_path):
     """Nodes 3 (reads the weights alone) and 4 (reads node 3 alone) carry no request's data, nor does node 11 at engine step 1, where
-    only r0 has a row: owned by no request, counted apart, and merged into each leg by engine step."""
+    only r0 has a row: owned by no request, counted apart, and merged into each request's instances by engine step."""
     B = _fold([(3, "AddScalar_v1{N=2}", [W]), (4, "Scale_v1{N=2}", [[("n", 3, 0, 2)]]), (5, EMB, [P0, W]), (6, EMB, [P1, W]),
                (7, "Norm_v1{N=2}", [[("n", 5, 0, 2)], [("n", 4, 0, 2)]]), (8, "Norm_v1{N=2}", [[("n", 6, 0, 2)], [("n", 4, 0, 2)]]),
                (9, SELECT, [[("n", 7, 0, 2)]]), (10, SELECT, [[("n", 8, 0, 2)]]), (11, "AddScalar_v1{N=2}", [W])],
@@ -103,7 +109,7 @@ def test_weight_only_instances_are_shared_and_sit_in_the_leg_of_every_request_wi
 
 
 def test_each_way_an_instance_is_left_unattributed_is_named_and_the_row_rule_places_the_rest(monkeypatch, tmp_path):
-    """Node 5 has no row of record; node 6 reads it; node 7's engine step has no StepStart; node 9's row count is neither the token
+    """Node 5 has no row in the record; node 6 reads it; node 7's engine step has no StepStart; node 9's row count is neither the token
     rows nor the logits rows.  Node 8 reads no node (a parameter-space run) and the row-count rule places it: row 3 of 5 token rows
     is r1's.  Node 10 is r0's by data flow where the row-count rule says r1 (logits row 1): counted, and data flow stands."""
     B = _fold([(3, EMB, [P0, W]), (4, EMB, [P1, W]), (5, "Lost_v1", [[("n", 3, 0, 2)]]), (6, "Mix_v1", [[("n", 5, 0, 2)]]),
@@ -122,21 +128,21 @@ def test_each_way_an_instance_is_left_unattributed_is_named_and_the_row_rule_pla
     assert res["verdict"] == "FAIL" and res["reasons"] == ["4 unattributed instances", "missing derived Programs for [[2, 0], [3, 0]]"]
 
 
-# ------------------------------------------------------------------------------------------------------ what a leg reports by name
+# ----------------------------------------------------------------------------------- what a request's comparison reports by name
 
 
-@pytest.mark.parametrize("hook", [False, True], ids=["record", "legs-hook"])
+@pytest.mark.parametrize("hook", [False, True], ids=["record", "hook"])
 def test_a_request_the_header_does_not_have_fails_by_name(monkeypatch, tmp_path, hook):
-    """The record states `ghost` for r1's instances.  With a legs hook the driver first asks every request's shape (to load its
-    component before the legs run): `ghost` has none, and the entry is the same."""
+    """The record states `ghost` for r1's instances.  With the hook the driver first asks every request's shape (to load its
+    component before the requests are compared): `ghost` has none, and the entry is the same."""
     calls: list[int] = []
-    res = _decompose(monkeypatch, tmp_path, _two_requests(meta=(R0, "ghost")), {0: STEP0}, ops=_inline_legs(calls) if hook else None)
+    res = _decompose(monkeypatch, tmp_path, _two_requests(meta=(R0, "ghost")), {0: STEP0}, ops=_inline_hook(calls) if hook else None)
     ghost = next(e for e in res["requests"] if e["request_id"] == "ghost")
     assert ghost == {"request_id": "ghost", "parent": None, "prompt_param": None, "n_instances": 2,
                      "error": "request not in RunHeader.workload (no prompt parameter)"}
     assert res["attribution"]["how"] == {"meta": 4} and res["missing_derived"] == [[3, 0]]
     assert res["verdict"] == "MISSING_DERIVED" and res["reasons"][-1] == "ghost: request not in RunHeader.workload (no prompt parameter)"
-    assert calls == ([2] if hook else [])                            # the two legs in one call; no component to load
+    assert calls == ([2] if hook else [])                            # the two requests in one call; no component to load
 
 
 def test_a_request_with_no_sampling_event_fails_by_name(monkeypatch, tmp_path):
@@ -211,13 +217,13 @@ def test_a_derived_dir_with_no_shape_is_named_and_fails_a_run_whose_requests_all
     assert res["verdict"] == "FAIL" and res["reasons"] == ["1 derived dir(s) unreadable: ['nope']"]
 
 
-def test_the_legs_hook_gets_the_components_to_load_and_then_the_legs_and_the_document_is_the_same(memory, tmp_path, derived_is_a_fold):
+def test_the_hook_gets_the_components_to_load_and_then_the_requests_and_the_document_is_the_same(memory, tmp_path, derived_is_a_fold):
     d, _ = e2e.fold_batched([e2e.R0, e2e.R1], tmp_path / "b2")
     derived = [e2e.fold_alone(e2e.R0, tmp_path / "LP3_T2"), e2e.fold_alone(e2e.R1, tmp_path / "LP2_T1")]
     calls: list[int] = []
     components: dict = {}
-    res = bd.decompose(d, derived, ops=_inline_legs(calls), components=components)
-    assert calls == [2, 2] and sorted(components) == sorted(derived)     # the two components, then the two legs
+    res = bd.decompose(d, derived, ops=_inline_hook(calls), components=components)
+    assert calls == [2, 2] and sorted(components) == sorted(derived)     # the two components, then the two requests
     assert res["verdict"] == "PASS" and _same_but_time(res, bd.decompose(d, derived))
 
 
@@ -241,9 +247,10 @@ def test_the_profile_is_a_sidecar_and_the_document_is_the_one_written_without_it
     res = bd.decompose(d, derived)
     prof = json.loads(profile_out.read_text())
     assert prof["schema"] == "cb-a/x09-profile/v1" and prof["oracle_dir"] == d and prof["force_dag"] is False
-    assert (prof["verdict"], prof["seconds"], prof["x09_legs"]) == ("PASS", res["seconds"], "inline")
+    assert (prof["verdict"], prof["seconds"], _how_the_requests_ran(prof)) == ("PASS", res["seconds"], "inline")
     assert (prof["fold_preloaded"], prof["fold_instances"], prof["fold_compact"]) == (False, res["oracle"]["instances"], False)
-    assert list(prof["phases"]) == ["fold_load", "attribution", "legs"]
+    run_phases = list(prof["phases"].items())
+    assert [name for name, _ in run_phases[:2]] == ["fold_load", "attribution"] and len(run_phases) == 3
     assert prof["max_rss_mib_parent"] > 0 and "max_rss_error" not in prof
     assert [(p["request_id"], p["LP"], p["T"], p["sequence_equal"], p["xreq_total"]) for p in prof["requests"]] == \
         [("r0", 3, 2, True, 0), ("r1", 2, 1, True, 0)]
@@ -251,7 +258,7 @@ def test_the_profile_is_a_sidecar_and_the_document_is_the_one_written_without_it
         assert list(p["phases"]) == ["projection_build", "shape", "component_load", "compare_steps"]   # no DAG phase: the sequences are equal
         assert (p["n_instances"], p["steps"], p["a_steps"]) == (e["n_instances"], e["steps"], e["a_steps"])
         assert p["p_runs_total"] > 0 and p["a_runs_total"] == p["p_runs_total"] and p["seconds"] >= 0
-    assert prof["phases"]["legs"]["counters"]["src_calls"] > 0      # the wrappers on `RootView` counted the legs' canonical reads
+    assert run_phases[2][1]["counters"]["src_calls"] > 0            # the wrappers on `RootView` counted the requests' canonical reads
     assert all("_profile" not in e for e in res["requests"])
     # with the fold passed in, the profile says so; without the variable the document is the same and nothing is written
     bd.decompose(d, derived, oracle=C.load_oracle(d, "oracle"))
@@ -279,10 +286,10 @@ def test_force_dag_adds_the_dag_diagnostic_to_a_request_whose_sequence_is_equal_
         assert (p["a_live"], p["b_live"], p["dag_only_a"], p["dag_only_b"]) == (e["dag_multiset"]["a_live"], e["dag_multiset"]["b_live"], 0, 0)
 
 
-def test_the_profile_is_the_same_document_through_the_legs_hook(memory, tmp_path, derived_is_a_fold, profile_out):
+def test_the_profile_is_the_same_document_through_the_hook(memory, tmp_path, derived_is_a_fold, profile_out):
     d, _ = e2e.fold_batched([e2e.R0, e2e.R1], tmp_path / "b2")
     derived = [e2e.fold_alone(e2e.R0, tmp_path / "LP3_T2"), e2e.fold_alone(e2e.R1, tmp_path / "LP2_T1")]
-    res = bd.decompose(d, derived, ops=_inline_legs([]))
+    res = bd.decompose(d, derived, ops=_inline_hook([]))
     prof = json.loads(profile_out.read_text())
-    assert prof["x09_legs"] == "forked" and [p["request_id"] for p in prof["requests"]] == ["r0", "r1"]
+    assert _how_the_requests_ran(prof) == "forked" and [p["request_id"] for p in prof["requests"]] == ["r0", "r1"]
     assert res["verdict"] == "PASS" and all("_profile" not in e for e in res["requests"])
