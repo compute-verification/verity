@@ -15,6 +15,7 @@ A SPEC is one of
     NAME=COMMIT:named-attrs  as `:named`, with the vLLM lists' attribute lines of the commit below the first move (their
                            old paths) given through `core.attributesFile`
     NAME=COMMIT:pins       restack.py's pins step alone, on a merge made by hand
+    NAME=COMMIT:given=RESULT  nothing is run: COMMIT was crossed by someone else as RESULT, which its children are crossed over
 
 Specs with no parent run side by side, at most `--jobs` at a time; a child starts when its parent has ended.
 
@@ -322,7 +323,14 @@ def main() -> int:
             if s.get("after"):
                 events[s["after"]].wait()
             with gate:
-                if s["how"] == "named":
+                if s["how"].startswith("given="):
+                    # a head someone else crossed and pushed: its result is taken as it is, as its children's parent result
+                    got = git("rev-parse", f"{s['how'][6:]}^{{commit}}")
+                    rec = {"name": s["name"], "kind": "given", "commit": s["commit"], "result": got, "given": True,
+                           "restack": {"status": "given"}}
+                    say(f"{s['name']}: given: {s['commit'][:12]} crossed as {got}; it holds that head: {holds(s['commit'], got)}; "
+                        f"holds main: {holds(main_sha, got)}; holds each move: {[holds(m[0], got) for m in all_moves]}")
+                elif s["how"] == "named":
                     rec = named(s["name"], s["commit"], main_sha, [m[0] for m in all_moves])
                 elif s["how"] == "named-attrs":
                     rec = named(s["name"], s["commit"], main_sha, [m[0] for m in all_moves], attrs_from=base1)
@@ -361,6 +369,7 @@ def main() -> int:
                 f"{holds(rec['parent_result'], rec['result'])}; holds its own head {rec['commit'][:12]}: "
                 f"{holds(rec['commit'], rec['result'])}; holds main {main_sha[:12]}: {holds(main_sha, rec['result'])}")
     refs, excl = [], {main_sha, *(s["commit"] for s in specs)}
+    excl |= {rec["result"] for rec in done.values() if rec.get("given")}
     for name, rec in done.items():
         tips = {"": rec.get("result")}
         r = rec.get("restack") or {}
