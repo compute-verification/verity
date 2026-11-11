@@ -15,7 +15,12 @@ Neither bundle carries a registered weight: a window made from one composes the 
 writes both with ``OUT/row`` (the Program of record), ``OUT/ckpt`` and ``OUT/checkpoints.json`` (the checkpoint and its shard's
 pin), ``OUT/tables-rank0.json`` and ``OUT/tables.key`` (the per-expert tables' registration and the committer's key),
 ``OUT/partition.json`` (each projection's scale-row reads and fused blocks) and ``OUT/hook``, and prints their paths as one
-JSON line.  No Build made the Program: its digest is the SHA-512 of its parameters and rows as written here."""
+JSON line.  No Build made the Program: its digest is the SHA-512 of its parameters and rows as written here.
+
+    python -m tests.pipeline.served_experts --same A B
+
+exits 0 where the windows in directories ``A`` and ``B`` commit one thing (`same_commitment`), and else says what differs: how
+a suite outside the integration holds its window of the layer to the hook's."""
 from __future__ import annotations
 
 import argparse
@@ -23,6 +28,7 @@ import gzip
 import hashlib
 import json
 import math
+import shutil
 import sys
 from pathlib import Path
 from types import SimpleNamespace
@@ -30,6 +36,7 @@ from typing import Any
 
 import numpy as np
 
+from verity.commitments.windows import rows as CS
 from verity_vllm.commit import step_rows
 from verity_vllm.pipeline import cpu_replay as CPU
 from verity_vllm.pipeline import replay_bundle as RB
@@ -345,10 +352,59 @@ def serve(c: dict[str, Any], d: Path) -> dict[str, Any]:
                           code="test", engine_of_record={"vllm": "test"}, extras=ss.extras_of(com, rc))
 
 
+#: what the registrations of two windows that commit one thing agree on, beside their ports' domains (`same_commitment`)
+SAME = ("format", "program", "query", "law", "partition", "population", "scheme")
+
+
+def same_commitment(a: Path, b: Path) -> None:
+    """Windows ``a`` and ``b`` commit one thing, or an AssertionError naming what differs: one population program, partition,
+    law and port domains (which bind the run root), one circuit record and index, the same registered roots, and in every
+    member the same committed rows on the ports its own file holds, among them each unit's opening of its table (the table's
+    row, its salt and its path, the committer's under its key).  Each window salts its own rows, so the roots of its members'
+    trees are its own."""
+    a, b = Path(a), Path(b)
+    (ra, wa), (rb, wb) = (tuple(json.loads((d / f).read_text()) for f in ("registration.json", "window.json")) for d in (a, b))
+    for k in SAME:
+        assert ra[k] == rb[k], f"the registrations' {k}: {ra[k]!r} and {rb[k]!r}"
+    assert [(x["port"], x["domain"]) for x in ra["roots"]] == [(x["port"], x["domain"]) for x in rb["roots"]], "the ports' domains"
+    for k in ("registered_roots", "circuit"):
+        assert ra["window"][k] == rb["window"][k], f"the windows' {k}"
+    for name in ("partition.json", "circuit.json", "index.json"):
+        assert (a / name).read_bytes() == (b / name).read_bytes(), name
+
+    def shape(w: dict) -> list:
+        return [(m["name"], m["template"], m["n"], m["ports"], m.get("value_rows"), m.get("registered")) for m in w["members"]]
+
+    assert shape(wa) == shape(wb), "the members"
+    ba, bb = CS.Bodies(a, wa), CS.Bodies(b, wb)
+    for k, m in enumerate(wa["members"]):
+        oa, ob = ba.own(k), bb.own(k)
+        assert oa and oa.keys() == ob.keys(), f"member {m['name']}: the ports its own file holds"
+        for q in oa:
+            assert np.array_equal(oa[q][0], ob[q][0]), f"member {m['name']}: the rows of port {q}"
+
+
+def flipped(window: Path, out: Path) -> Path:
+    """A copy of the window in ``window`` at ``out`` whose first member's first committed row differs in one bit: what
+    `same_commitment` must refuse."""
+    shutil.copytree(window, out)
+    body = out / "m0-private.bin"
+    raw = bytearray(body.read_bytes())
+    raw[0] ^= 1
+    body.write_bytes(bytes(raw))
+    return out
+
+
 def main(argv: list[str]) -> int:
     ap = argparse.ArgumentParser()
-    ap.add_argument("out")
+    ap.add_argument("out", nargs="?")
+    ap.add_argument("--same", nargs=2, metavar=("A", "B"), help="hold the windows in A and B to one commitment, and write nothing")
     a = ap.parse_args(argv)
+    if a.same:
+        same_commitment(*a.same)
+        return 0
+    if not a.out:
+        ap.error("give OUT, or --same A B")
     root = Path(a.out)
     root.mkdir(parents=True, exist_ok=True)
     c = commit(root)

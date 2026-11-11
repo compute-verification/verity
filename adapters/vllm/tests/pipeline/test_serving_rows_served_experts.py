@@ -5,7 +5,7 @@ registration with its key and the checkpoint of record, which holds the expert w
 
 * The layer's rows sit at the MoE block's planes, as the replay index reads a Build's.
 * The hook's window is both projections' scale-row reads and fused blocks, ``served``, its tables' roots the registered ones.
-* The command's window over the bundle is the hook's (`same_commitment`), a stand-in linked to the record.
+* The command's window over the bundle is the hook's (`served_experts.same_commitment`), a stand-in linked to the record.
 * Without the tables a read or a fused block is refused, a registration without its key before the bundle is opened, and
   without the checkpoint the expert weights by name.
 
@@ -17,10 +17,8 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-import numpy as np
 import pytest
 
-from verity.commitments.windows import rows as CS
 from verity_vllm.check import weights_of_record as WR
 from verity_vllm.check.replay.index import ProgramIndex
 from verity_vllm.commit import step_rows
@@ -29,8 +27,6 @@ from verity_vllm.pipeline import deferred_rows as DRW
 from verity_vllm.pipeline import replay_bundle as RB
 
 from tests.pipeline import served_experts as SX
-
-SAME = ("format", "program", "query", "law", "partition", "population", "scheme")
 
 
 @pytest.fixture(scope="module")
@@ -58,31 +54,6 @@ def deferred(served, tmp_path_factory) -> Path:
 
 def _doc(d: Path, name: str) -> dict:
     return json.loads((Path(d) / name).read_text())
-
-
-def same_commitment(a: Path, b: Path) -> None:
-    """Windows ``a`` and ``b`` commit one thing: one population program, partition, law and port domains (which bind the run
-    root), one circuit record and index, the same registered roots, and in every member the same committed rows on the ports
-    its own file holds, among them each unit's opening of its table (the table's row, its salt and its path, the committer's
-    under its key).  Each window salts its own rows, so the roots of its members' trees are its own."""
-    ra, rb = _doc(a, "registration.json"), _doc(b, "registration.json")
-    assert {k: ra[k] for k in SAME} == {k: rb[k] for k in SAME}
-    assert [(x["port"], x["domain"]) for x in ra["roots"]] == [(x["port"], x["domain"]) for x in rb["roots"]]
-    assert ra["window"]["registered_roots"] == rb["window"]["registered_roots"] and ra["window"]["circuit"] == rb["window"]["circuit"]
-    for name in ("partition.json", "circuit.json", "index.json"):
-        assert (Path(a) / name).read_bytes() == (Path(b) / name).read_bytes(), name
-    wa, wb = _doc(a, "window.json"), _doc(b, "window.json")
-
-    def shape(w: dict) -> list:
-        return [(m["name"], m["template"], m["n"], m["ports"], m.get("value_rows"), m.get("registered")) for m in w["members"]]
-
-    assert shape(wa) == shape(wb)
-    ba, bb = CS.Bodies(a, wa), CS.Bodies(b, wb)
-    for k in range(len(wa["members"])):
-        oa, ob = ba.own(k), bb.own(k)
-        assert oa.keys() == ob.keys() and oa
-        for p in oa:
-            assert np.array_equal(oa[p][0], ob[p][0]), (k, p)
 
 
 def test_the_layers_rows_sit_at_the_moe_blocks_planes():
@@ -118,11 +89,13 @@ def test_the_hooks_window_is_the_fused_cut_served_under_the_registered_tables(se
 
 
 @pytest.mark.slow
-def test_the_deferred_commits_bundle_commits_the_hooks_window_given_the_tables_and_the_checkpoint(served, deferred):
+def test_the_deferred_commits_bundle_commits_the_hooks_window_given_the_tables_and_the_checkpoint(served, deferred, tmp_path):
     """A second window, the command's over the sealed bundle (about a minute more). It catches what no test of one window
     can: a bundle's window that differs from the one the Commit itself made of the same step, in its program, its partition,
-    its registered roots or any unit's committed rows, its table's opening among them."""
-    same_commitment(served["hook"], deferred)
+    its registered roots or any unit's committed rows, its table's opening among them. One flipped bit of one row is refused."""
+    SX.same_commitment(served["hook"], deferred)
+    with pytest.raises(AssertionError, match="the rows of port"):
+        SX.same_commitment(served["hook"], SX.flipped(deferred, tmp_path / "flipped"))
     man, root = RB.open_bundle(RB.path(served["out"], 1))["manifest_sha256"], served["run_root"]
     mine, hook = (_doc(d, "registration.json")["window"] for d in (deferred, served["hook"]))
     assert DRW.source(mine, root, man, step_rows.NAME) == {"kind": True, "run": True, "commitment": True, "of": True, "link": True}

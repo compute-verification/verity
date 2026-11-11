@@ -35,6 +35,7 @@ import hashlib
 import json
 import random
 import re
+import shutil
 import socket
 import subprocess
 import sys
@@ -1605,25 +1606,12 @@ def _fused_args(c: dict, **over) -> argparse.Namespace:
 
 
 def _same_commitment(a: Path, b: Path) -> None:
-    """Windows ``a`` and ``b`` commit one thing: one population program, partition, law and port domains (which bind the run
-    root), one circuit record and index, the same registered roots, and in every member the same committed rows on the ports
-    its own file holds, among them each unit's opening of its table (the table's row, its salt and its path, the committer's
-    under its key).  Each window salts its own rows, so its members' tree roots are its own."""
-    ra, rb = _registered(a), _registered(b)
-    same = ("format", "program", "query", "law", "partition", "population", "scheme")
-    assert {k: ra[k] for k in same} == {k: rb[k] for k in same}
-    assert [(x["port"], x["domain"]) for x in ra["roots"]] == [(x["port"], x["domain"]) for x in rb["roots"]]
-    assert ra["window"]["registered_roots"] == rb["window"]["registered_roots"] and ra["window"]["circuit"] == rb["window"]["circuit"]
-    for name in ("partition.json", "circuit.json", "index.json"):
-        assert (a / name).read_bytes() == (b / name).read_bytes(), name
-    wa, wb = (json.loads((d / "window.json").read_text()) for d in (a, b))
-    assert [(m["name"], m["template"], m["n"], m["ports"]) for m in wa["members"]] == [
-        (m["name"], m["template"], m["n"], m["ports"]) for m in wb["members"]]
-    ba, bb = CS.Bodies(a, wa), CS.Bodies(b, wb)
-    for k in range(len(wa["members"])):
-        oa, ob = ba.own(k), bb.own(k)
-        assert oa.keys() == ob.keys() and oa
-        assert all((oa[q][0] == ob[q][0]).all() for q in oa), k
+    """Windows ``a`` and ``b`` commit one thing, as the fixture's own module holds two windows of its layer to one commitment
+    (``tests.pipeline.served_experts --same``): one population program, partition, law, port domains, circuit record and index,
+    the same registered roots, and the same committed rows in every member, each unit's opening of its table among them."""
+    p = subprocess.run([sys.executable, "-m", "tests.pipeline.served_experts", "--same", str(a), str(b)], cwd=VLLM, capture_output=True,
+                       text=True)
+    assert p.returncode == 0, p.stderr[-3000:]
 
 
 @pytest.mark.slow
@@ -1633,12 +1621,19 @@ def test_a_served_windows_fused_cut_is_the_row_drivers_window_given_the_tables_a
     committed step.  Minutes: a window of this cut builds its templates' gates once a process, here and in the fixture's, and
     its registration walks them at each write.  It catches what the adapter's test of `deferred_rows.from_bundle` can't:
     this command's own window maker, on a sealed window that names no Programs, committing other rows, tables or weights
-    than the Commit's own window of the step."""
+    than the Commit's own window of the step.  A copy of the window with one bit of one row flipped is refused."""
     a, compiler = _fused_args(fused), PP.Capped(OfRecord(program_dir=fused["program_dir"]))
     bound = AW.binding(compiler, "ad" * 64, 8)
     got = PP.commit1(a, compiler, [], bound, tmp_path / "w")
     assert got["run"] == fused["run_root"] and got["population"] == sum(n for pair in fused["units"].values() for n in pair)
     _same_commitment(Path(fused["hook"]), tmp_path / "w")
+    flipped = tmp_path / "flipped"
+    shutil.copytree(tmp_path / "w", flipped)
+    raw = bytearray((flipped / "m0-private.bin").read_bytes())
+    raw[0] ^= 1
+    (flipped / "m0-private.bin").write_bytes(bytes(raw))
+    with pytest.raises(AssertionError, match="the rows of port"):
+        _same_commitment(Path(fused["hook"]), flipped)
     hook, mine = _registered(Path(fused["hook"]))["window"], _registered(tmp_path / "w")["window"]
     assert (hook["kind"], hook["run"]) == ("served", fused["run_root"]) and "of" not in hook and "link" not in hook
     assert mine["kind"] == "stand-in" and mine["of"]["bundle_manifest_sha256"] == fused["served"]["manifest_sha256"]
