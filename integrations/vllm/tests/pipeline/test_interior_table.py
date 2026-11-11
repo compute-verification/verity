@@ -273,6 +273,7 @@ def test_an_interior_opens_the_tables_round_1_served_and_the_challenger_resolves
                        supplied=IR.sources(LINKS, Q, names), schemas=formats).digest
 
 
+@SHARED
 @pytest.mark.slow
 def test_round_2_derives_no_links_from_a_block_that_returns_a_read_of_two_outputs(staged):
     """A block's links are all or none (`second_stage.link_runs`), and its return links take a template of one output:
@@ -285,6 +286,7 @@ def test_round_2_derives_no_links_from_a_block_that_returns_a_read_of_two_output
         IR.links(_boundary().program, descriptor_id(BLOCK), rec, MEMBER, CELLS, dict.fromkeys(IR.TABLE))
 
 
+@SHARED
 @pytest.mark.slow
 def test_round_2_reads_root_and_domain_at_the_name_the_served_records_ports_give_their_links(staged, honest):
     """Round 2's read check (`second_stage._read_ok`) on the reads' ``root`` and ``domain`` ports, under a round-1 record
