@@ -64260,3 +64260,104 @@ The Lean function will take the records as a chain of pairs (an earlier record a
 - **The 8 theorems** [read, `stdout.log`:9900-9911]: `Claims.Flock.Numbers.hashBound_oneWait_513`, `hashBound_oneWait_513_k40`, `two_mul_cast_two_pow_neg_103`, `Claims.SamplingGeneric.Compiled.oneWait_es_le`, `CompiledTwo.εclsOneWait_le_of_caps`, `CompiledTwo.εclsOneWait_le_513`, `CompiledTwo.eventTwoX_oneWait_le_cls_of_caps`, `CompiledTwo.eventTwoX_oneWait_le_cls_513`.
 - **The imports compiled with it.** The build of its dependencies includes the one-wait branch's `TwoOneWaitAt.lean` and what that imports; the log has no error and no warning naming a `*OneWait*` file [run, `rg` over `stdout.log`]. So `TwoOneWaitAt.lean` at `902844d032` builds on the cluster as a dependency [run]; that is a build, not a one-file try with its own axiom probe.
 - **What this is and is not.** Elaborated, with the axiom probe, and no name clash among the built modules [run]. Not replayed through the kernel by a full check, not in the aggregator, in no lock, and no pull request from me, as told. The commit to take is `f4ef9d0d49` (one new file, nothing else touched).
+
+## EXTFORM, Wed 11 Nov 20:41Z: piece (1)'s statement, before its proof has compiled. The period pays one δ and the verification phases' `P̄_a` multiply; the 19:40Z entry's reading of `period_prod` HOLDS at best interiors and would not at the committed interiors; it is stated from each phase's bound on the event, with no `A.KS`; and it needed one step more than was asked, a form that survives a rejected phase, stated here too
+
+Branch `cursor/proofs-twoperiod-4e7a` at `1d491c5db5` (from `origin/main` `61f13c2275fb`), two new files beside `TwoRegPeriod.lean`: `security/Proofs/WeightSecurity/TwoProd.lean` (definitions and statements, 216 lines) and `TwoProdPeriod.lean` (proofs, 348 lines). **Nothing below has compiled**: the first one-file try is `r20261111-203754-1732`, queued at 20:38Z behind six runs, so every Lean line here is [guess: written by reading, not elaborated] until its verdict. Beside `TwoRegPeriod.lean` rather than beside `Joint/` because it reads `twoGame` and `Served` of that directory and is the two-stage sibling of `PeriodTwoReg`; `Joint/` is Flock's one-table sessions. No file of the one-wait branch, of #8915 or of #9043 is touched [run, `git diff --stat origin/main`: the two new files].
+
+### 1. The statement
+
+```lean
+-- the escape a verification phase's strategy fixes: P̄_a at the boundary values' footprint at best interiors
+noncomputable def escAt (L : CompiledTwo Coin A) (x : Msg) (val : ℕ → Option Bool) : ℝ≥0∞ :=
+  match L.parse x with
+  | none => 1
+  | some s =>
+    match L.partition s, L.two s with
+    | some Pt, some d => if InScopeTwo Pt d s then ENNReal.ofReal (d.PaBestAt s Pt val) else 1
+    | _, _ => 1
+
+-- the event's probability: the run accepts and its sample holds a proof block incorrect at `val` and the committed interiors
+noncomputable def acceptedSampledAt (H : Msg → Msg) (L : CompiledTwo Coin A) (x : Msg) (P : Prover Unit)
+    (val : ℕ → Option Bool) : ℝ :=
+  Pr fun r : Fin (L.V.k x) → Coin =>
+    (run H P L.V x () r).out = .acc ∧ ∃ u ∈ L.checked x r, u ∈ L.FregTwoAt H P x () val r
+
+def PeriodTwoProd (H : Msg → Msg) (Lv : ℕ → CompiledTwo Coin A)
+    (val : (t : ℕ) → Msg → Prover Unit → ℕ → Option Bool) : Prop :=
+  ∀ (T : ℕ) (ε : ℕ → ℝ) (s : Strategy (periodG (fun t => twoGame (Lv t) ((O → V) × Tick × Adv)) 0 T)),
+    (∀ t τ, PeriodPlays (fun t => twoGame (Lv t) ((O → V) × Tick × Adv)) 0 T s t τ → (Lv t).Scope τ.2.1.1 →
+      acceptedSampledAt H (Lv t) τ.2.1.1 τ.2.1.2 (val t τ.2.1.1 τ.2.1.2) ≤ ε t) →
+    ∀ δ : ℝ, Verity.Game.value
+        (fun l : List (ServedEsc O V Tick Adv) =>
+          (∀ r ∈ l, r.accepted) ∧ (l.map ServedEsc.escape).prod < ENNReal.ofReal δ)
+        (twoAtRun H Lv val T s) ≤
+      ENNReal.ofReal δ + ∑ t ∈ Finset.range T, ENNReal.ofReal (ε t)
+
+-- the theorem: the two-stage contract at every phase, and nothing else
+theorem periodTwoProd_of (H : Msg → Msg) (Lv : ℕ → CompiledTwo Coin A)
+    (val : (t : ℕ) → Msg → Prover Unit → ℕ → Option Bool) (hS : ∀ t, (Lv t).Sessions H) :
+    PeriodTwoProd H Lv val
+```
+
+What the names are [read, my file]: `twoGame` is `main`'s verification phase (`Proofs/WeightSecurity/Two.lean:49`: the datacenter sends the release, then the statement `x` and a prover `P` with no tape, then the verifier flips all of the run's coins); `τ.2.1.1` and `τ.2.1.2` are that `x` and `P`. `val t x P` is the boundary trace read at phase `t`, a parameter. `FregTwoAt` is `main`'s `FregTwo` with the boundary values a parameter (the interiors are the committed ones, `iregVal`). `twoAtRun` records each phase as a `Served` plus one field, `escape := escAt (Lv t) x (val t x P)`. `PaBestAt` is `Design.Two.Pa` at `val`'s footprint at interiors that maximize each replay block's escape; the proof file shows every such interiors give one number (`Design.Two.paBestAt_eq`).
+
+**In plain words.** Take a period of T verification phases of the two-stage design, played by one adversary that may choose each phase's statement and prover after seeing every earlier phase's coins. Suppose that in each phase, on a statement in scope, the probability that the run is accepted while its sample holds a proof block that is wrong at the boundary trace is at most ε_t. Then, for every δ, the probability that every phase is accepted and the phases' acceptance probabilities P̄_a (each at its boundary trace's footprint, at the interiors most favourable to the prover) multiply to less than δ is at most δ + Σ_t ε_t. The sampling term is δ once, however many phases the period has.
+
+### 2. Every premise, and where it is met
+
+| premise | where met |
+| --- | --- |
+| `(Lv t).Sessions H` at every phase: the two-stage compiler's contract (the two stages' draw laws, the refusal of what is out of scope) | **not yet**: `Claims.SamplingGeneric.CompiledTwo.Sessions` is in the lock's `open` section (`security/lean-audit.json:1697`, issue LEAN-186, due 30 Nov) [read]. It is a premise of `CompilerPeriodTwoReg` and `CompilerKSRegTwo` on `main` already; nothing new is assumed. |
+| the event's bound ε_t, at the committed boundary trace (`val t x P := (Lv t).regVal H P x ()`), the 210-wait trace `main` has | **proved on `main`** from `A.KS H`, `commit.Binds H` and the contract: `CompiledTwo.eventTwo_le` (`Proofs/Flock/SamplingGeneric/TwoReg.lean:498`) with ε = `εregTwo H x P`, at every finite tape, so at the tape `Unit` [read]. My `periodTwoProd_regVal` is the theorem at that trace with `CompilerPeriodTwoReg`'s premises word for word [branch, not compiled]. `Arg.KS` is itself in the lock's `open` section (`lean-audit.json:1661`) [read]. |
+| the same at the boundary trace read at the statement (`regValX`) | **proved on `main`**: `eventTwoX_le` (`TwoRegX.lean:64`) and its numeric forms (`eventTwoX_le_cls_table1_513`, `TwoFirstHitClassNumbers.lean:294`), same premises [read]. No instance written yet on my branch; it is `FregTwoX_eq` (`TwoRegX.lean:52`) and `Pr_unit`. |
+| the same at the one-wait trace | **on the one-wait branch, not `main`**: `eventTwoX_oneWait_le_cls_at_budget` (its `TwoOneWaitAt.lean:83`) concludes the event at `L.oneWait.FregTwoX` [read]. My theorem applies at `Lv t := (L t).oneWait`, `val t x P := (L t).oneWait.regValX H P x`: `L.oneWait` has `L`'s `V`, `parse`, `partition`, `two`, `checked` (its `OneWait.lean:43-72`), so the game and every `escAt` are `L`'s; and the contract moves by its `CompiledTwo.Sessions.oneWait` (`OneWait.lean:94`) [read]. **It needs no `A.oneWait.KS`**: `periodTwoProd_of` takes no `KS` at all. |
+| each ε_t "at every strategy the run plays phase t with" | the same form `PeriodTwoReg` has on `main`. A number for it needs the finders' collision bounds at each such prover, `Claims.ExpectedCR` and `Claims.StrictBirthday`, both in the lock's `trust.base` (`lean-audit.json:3356-3357`) [read]. |
+
+Not premises: no rate `r₁`, `r₂`, no `0 < δ`, no bound on T.
+
+### 3. Does the 19:40Z entry's reading hold? Yes, at best interiors, and only there
+
+`period_prod` (`Proofs/Flock/EndToEnd/Joint/Prod.lean:28`) asks, at each strategy τ that plays a phase: one finite number `e` that every outcome's record carries (`∀ b, esc (rec i τ b) = e`), with the phase's miss probability at most `e` [read]. Both hold [guess until the run: by reading]:
+- **Fixed before the coins.** In `twoGame` the strategy has sent `x` and `P` before any coin of the run, and `P` has no tape. `escAt (Lv t) x (val t x P)` reads `x` and `val t x P` only. At `main`'s trace `regVal H P x ()` is the value the extractions open most often over the run's and the extractor's coins, a function of `x` and `P`.
+- **It bounds the miss.** `CompiledTwo.pr_missTwo_le_Pa` (`TwoRegMiss.lean:138`) at the tape `()`: over all of the run's coins, the sample holds no proof block incorrect at `val` and the committed interiors with probability at most `P̄_a` at `val`'s footprint at best interiors. It takes the contract only.
+- **Why "at best interiors" is forced.** The committed interiors (`iregVal`) read the first stage's coins, so the footprint at the committed interiors is not fixed by τ and `period_prod` cannot take it. The footprint at best interiors is, and it bounds the other cell by cell (`pr_missTwo_fork_le`, `TwoRegMiss.lean:112`). So the product that multiplies is of `P̄_a` at the boundary trace's footprint **at the interiors most favourable to the prover**, which is what `KSRegTwo` and `HeadlineTwo` already read for one phase.
+- **The one condition.** The boundary trace must be a function of the phase's statement and prover. `regVal` at the tape `Unit` and `regValX` are; a trace that read the run's coins would not be.
+
+### 4. What it does not give
+
+1. **Not what is served** [read]. `escAt` reads `val`, the trace the extractions open, a definition of the proof. Nothing here ties it to the released bytes. That is piece (3).
+2. **Not a count or a number of bits.** The conclusion is "the phases' `P̄_a` multiply to at least δ". Turning that into "at most K incorrect replay blocks, or B bits, over the period" is piece (2). One consequence is immediate from `main`'s `Design.Two.Pa_le_pow` (`TwoCap.lean:96`): at rates `r₁`, `r₂` each `P̄_a ≤ (1 − r₁r₂)^{n_t}`, `n_t` the replay blocks wrong at phase t's boundary, so Σ_t n_t ≤ ln(1/δ)/ln(1/(1 − r₁r₂)). That is `compilerPeriodTwoReg`'s shape again, no better; the gain the cost model counts on is in weighing each cell at its own rate, which is piece (2) [guess, not written].
+3. **Nothing about a run in which a phase is rejected.** "Every phase accepted" is `JointStratifiedHorizon`'s event, and what you asked for. But the datacenter releases before each verdict and halts only after a rejection, so an adversary willing to be caught in phase k has already released phases 1 to k − 1, and this statement is silent on that run. Section 5 has the form that is not.
+4. **Σ_t ε_t grows with T.** At a verification phase of 600 s a year has 52,560 phases, so the event's term costs log₂ 52,560 = 15.7 bits against one phase's ε over a year, 12.1 over a month, 10.0 over a week [run, python]. With `main`'s per-phase 2^-95.87 that is 2^-80.2 over a year [modeled from my 19:56Z figure, not a Lean statement].
+5. **The design is not judged.** A statement whose design samples nothing has `P̄_a = 1` and the conclusion says nothing; the rates enter where the product is turned into a count.
+6. **Strictness.** It bounds "product < δ", so outside it the product is ≥ δ; `M̄_δ` on `main` is `δ < P̄_a`. Same as `JointStratifiedHorizon`. The non-strict form follows by a limit and is not written.
+
+### 5. The form a capacity figure needs, one step past what was asked
+
+```lean
+-- the escapes of the phases before the first whose sample holds an incorrect proof block, multiplied
+noncomputable def ServedEsc.leadEscape : List (ServedEsc O V Tick Adv) → ℝ≥0∞
+  | [] => 1
+  | w :: l => if w.sampledIncorrect then 1 else w.escape * leadEscape l
+
+def ServedEsc.UndetectedBelow (δ : ℝ) (l : List (ServedEsc O V Tick Adv)) : Prop :=
+  (∃ w ∈ l, w.accepted ∧ w.sampledIncorrect) ∨ leadEscape l < ENNReal.ofReal δ
+
+def PeriodTwoLead (H) (Lv) (val) : Prop :=
+  ∀ T ε s, (the same hypothesis on the event) →
+    ∀ δ : ℝ, Verity.Game.value (ServedEsc.UndetectedBelow δ) (twoAtRun H Lv val T s) ≤
+      ENNReal.ofReal δ + ∑ t ∈ Finset.range T, ENNReal.ofReal (ε t)
+```
+
+In plain words: except with probability δ + Σ_t ε_t, no accepted phase's sample holds a proof block wrong at its boundary trace, and the phases **before the first phase whose sample does hold one** have `P̄_a` that multiply to at least δ, whatever happens after. It is `PeriodTwoReg` (`Served.Undetected`, `Served.lead`) with the escapes multiplied in place of one rate raised to a count; it implies `PeriodTwoProd`; and its premises are the same. The proof is `period_lead`'s induction (`Proofs/WeightSecurity/Stop.lean:31`) with `period_prod`'s budget `c / e` passed down: a new lemma `period_leadEscape`, about 55 lines, on the branch, not compiled. **I think this, not the all-accepted form, is the statement the 300 GB figure should rest on**; your call, and Daniel's.
+
+### 6. Three things kept apart
+
+- **The cost model's figure** (5,202 to 20,114 GB a year) is modeled [relayed, the 19:40Z entry]. No Lean statement gives it.
+- **`main` proves**, for the two-stage design over several phases: `two_undetected` (a δ and a cap in each phase) and `compilerPeriodTwoReg` (δ once, every incorrect replay block at the least rate of any cell) [read, `Two.lean:236`, `TwoRegPeriod.lean:131`]. For the one-stage stratified design, `JointStratifiedHorizon` [read].
+- **My branch states, and has not compiled**: the product form for the two-stage design at any boundary trace a phase's strategy fixes (sections 1 and 5). Even compiled it gives a constraint on the boundary traces, not gigabytes: pieces (2) and (3) stand between it and the figure.
+
+### 7. Next
+
+The run's verdict (it should start about 20:50Z; I expect errors on a first elaboration of 560 unbuilt lines and will fix and rerun, one run at a time). Then the 23:00Z entry: how far it compiled, what is still a hypothesis, and the statements and sizes of pieces (2) and (3). Mailbox read at 20:33Z: the 20:32Z rule on `unread-caps.json` is noted for the day a pull request is opened; none is.
