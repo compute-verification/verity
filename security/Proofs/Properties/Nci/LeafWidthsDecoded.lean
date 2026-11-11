@@ -19,12 +19,6 @@ three: every composite body of a decoded Program reads every leaf at its width.
 namespace NciCheck.Properties.SecurityProofs.LeafWidths
 open Flock.Program
 
-theorem partInner_of {q : Part} (h : BodiesOk.PartInner q) : PartInner q := by
-  cases q <;> exact h
-
-theorem bodyInner_of {B : Body} (h : BodiesOk.BodyInner B) : BodyInner B :=
-  ⟨fun k hk a ha q hq => partInner_of (h.1 k hk a ha q hq), fun q hq => partInner_of (h.2 q hq)⟩
-
 /-- **Every body of a decoded Program is `BodyInner`, and the width check passed it.** -/
 theorem decoded_inner (bytes : ByteArray) (P : Prog) (h : decode bytes = .ok P) :
     ∀ d < P.defs.size, BodyInner (P.defs[d]!).body ∧
@@ -33,7 +27,7 @@ theorem decoded_inner (bytes : ByteArray) (P : Prog) (h : decode bytes = .ok P) 
   have hok : ∀ i < P.defs.size, BodiesOk.DefOk P.defs i P.defs[i]! := by rw [hP]; exact hinv.1
   intro d hd
   obtain ⟨-, -, -, ps, -, -, hI, hrun⟩ := hok d hd
-  exact ⟨bodyInner_of hI, hrun⟩
+  exact ⟨hI, hrun⟩
 
 /-- **The decoder ran the width check**: a composite Definition of a decoded Program returns its body's return type,
 its body is `BodyInner`, and the width check passed it. -/
