@@ -573,6 +573,7 @@ def main(argv=None) -> int:
                                     "table, uncut, and the finals table it read",
                             "rows": len(p["rows"]), "source": p["source"]})
     q = body(art)
+    (args.out / "console").mkdir(exist_ok=True)
     (args.out / "console" / f"{ap.NAME}.json").write_bytes(console.body(q))
     status = console.put(q)
     print(f"{datetime.now(UTC).strftime('%H:%M:%SZ')} PUT {console.PANELS_URL}/{ap.PANEL}: {status} ({art}; "
