@@ -9,7 +9,8 @@
 #                         $OUT/steps.txt, and the exit status is 0 only where every step's is. The steps: this tree's
 #                         environment (uv sync); the filter around a stand-in harness (a made-up secret, an exit status
 #                         carried, a TERM waited out); the settings file as `serve` holds it; `serve` around a stand-in
-#                         harness (the deferral's copy asked once, only after a serve that exited 0); the class's
+#                         harness (the deferral's copy asked once, only after a serve that exited 0); `audit` around a
+#                         stand-in harness (V3C_POOL handed on as the run set it, and none where it set none); the class's
 #                         circuit cut at Pearl+'s linears from the serve's phi (a stand-in for `serve-phi`, which
 #                         reads the card: the H200's compute capability and SMs); the harness's own policy step,
 #                         which fixes the limits and states what they prove; the policy's Lean check on the class's
@@ -29,14 +30,17 @@
 #                         the follow-on, at the deferral's settings. PP_PEER is this node's name in the gate's peers
 #                         file. MAIN_FILE and PP_CHALLENGER_KEY default to the run's sent main.txt and
 #                         challenger-key.json, V3C_AUDIT_TIMEOUT to 46h, and V3C_ARCHIVE_LINK to 1: each member's circuit
-#                         file is linked into its archive, not copied (`a0.lean_verify`). PREFLIGHT_ONLY=1 stops after
-#                         the harness's preflight.
+#                         file is linked into its archive, not copied (`a0.lean_verify`). The sessions run one at a
+#                         time unless the run sets V3C_POOL, the audit's pool's options as one string (`a5_pool`:
+#                         "--session-jobs N --lean-jobs N --memory-budget-gb GB --pool-memory FILE"), which goes to
+#                         the harness as it is. PREFLIGHT_ONLY=1 stops after the harness's preflight.
 #   rehearsal.sh compose  a node that holds the compose hand-off alone, D its copy: `served_verdicts.sh compose` inside
 #                         one memory scope of its own (COMPOSE_MEM_GB, default 64, no swap). Each Lean check it starts
 #                         runs in a scope of its own and is not started past its blob limit (`served_cases.py`:
 #                         CHECK_MEM_GB, CHECK_BLOBS_GB); on a node that makes no user scope the verb is refused.
-#   rehearsal.sh filter CMD...   CMD through the filter alone, with its exit status (`filter-test DIR`, `settings FILE`
-#                         and `serve-test DIR` are `check`'s three steps of those names).
+#   rehearsal.sh filter CMD...   CMD through the filter alone, with its exit status (`filter-test DIR`, `settings FILE`,
+#                         `serve-test DIR` and `audit-test DIR` are `check`'s steps filter, settings, serve-copy and
+#                         audit-pool).
 #
 # A follow-on's settings come from the serve dir (deferred.env, compose.env), which carry no POUW: `audit` and `compose`
 # set POUW=pearlplus, the rehearsal's.
@@ -106,6 +110,13 @@ audit() {
     MAIN_FILE=${MAIN_FILE:-${RESEARCH_RUN_DIR:-.}/inputs/main.txt} \
     PP_CHALLENGER_KEY=${PP_CHALLENGER_KEY:-${RESEARCH_RUN_DIR:-.}/inputs/challenger-key.json} \
     V3C_AUDIT_TIMEOUT=${V3C_AUDIT_TIMEOUT:-46h} V3C_ARCHIVE_LINK=${V3C_ARCHIVE_LINK:-1}
+  if [ -n "${V3C_POOL:-}" ]; then
+    export V3C_POOL
+    echo "REHEARSAL: the audit's sessions and Lean's checks run side by side, at V3C_POOL: $V3C_POOL"
+  else
+    unset V3C_POOL
+    echo "REHEARSAL: V3C_POOL is unset: the audit's sessions run one at a time"
+  fi
   filtered bash "$HARNESS" v3c
 }
 
@@ -182,6 +193,33 @@ EOF
   try "a copy that exits 5" 5 2 DEFERS=1 COPY_RC=5 COPY_TO=host:dir
   return "$ok"
 }
+audit_test() {  # `audit` around a stand-in harness: it is asked for `v3c` once an audit, at the audit's settings, with
+  # V3C_POOL as the run set it and with none where the run set none or an empty one
+  local scr=$1 rc ok=0 pool="--session-jobs 4 --lean-jobs 4 --memory-budget-gb 440 --pool-memory $1/peaks.json"
+  mkdir -p "$scr/d/private/deferred"
+  : > "$scr/d/private/deferred/deferred.env"
+  export SCR=$scr
+  cat > "$scr/harness.sh" <<'EOF'
+#!/usr/bin/env bash
+printf '%s|%s|%s|%s|%s\n' "$*" "${V3C_POOL-unset}" "${V3C_ARCHIVE_LINK-unset}" "${V3C_AUDIT_TIMEOUT-unset}" "${POUW-unset}" >> "$SCR/asked"
+EOF
+  : > "$scr/asked"
+  try() {  # WHAT WANT SAYS ENV...: one audit under ENV; WANT is the stand-in harness's line, SAYS a part of the wrapper's
+    local what=$1 want=$2 says=$3
+    shift 3
+    env -u V3C_POOL -u V3C_ARCHIVE_LINK -u V3C_AUDIT_TIMEOUT D="$scr/d" PP_PEER=here HARNESS="$scr/harness.sh" "$@" \
+      bash "$SELF" audit > "$scr/log" 2>&1; rc=$?
+    echo "$what: the wrapper exits $rc; the harness was asked $(tail -1 "$scr/asked") (want $want); the wrapper says" \
+      "\"$says\": $(grep -c -F "$says" "$scr/log")"
+    [ "$rc" = 0 ] && [ "$(tail -1 "$scr/asked")" = "$want" ] && [ "$(grep -c -F "$says" "$scr/log")" = 1 ] || ok=1
+  }
+  try "an audit with no V3C_POOL" "v3c|unset|1|46h|pearlplus" "run one at a time"
+  try "an audit with an empty V3C_POOL" "v3c|unset|1|46h|pearlplus" "run one at a time" V3C_POOL=
+  try "an audit with V3C_POOL and a 60 h limit" "v3c|$pool|1|60h|pearlplus" "side by side, at V3C_POOL: $pool" \
+    V3C_POOL="$pool" V3C_AUDIT_TIMEOUT=60h
+  [ "$(grep -c . "$scr/asked")" = 3 ] || { echo "the harness was asked $(grep -c . "$scr/asked") times in 3 audits"; ok=1; }
+  return "$ok"
+}
 
 check() {
   local OUT=${OUT:-${RESEARCH_RUN_DIR:-.}/out} MEM_GB=${MEM_GB:-64}
@@ -221,6 +259,7 @@ check() {
   cp "$OUT/logs/filter.log" "$OUT/filter.txt"
   step settings 1m bash "$SELF" settings "$SETTINGS"
   step serve-copy 1m env SETTINGS="$SETTINGS" bash "$SELF" serve-test "$scratch/serve-copy"
+  step audit-pool 1m bash "$SELF" audit-test "$scratch/audit-pool"
 
   # the class's circuit from phi, as PEARLPLUS-CIRCUIT's command makes it on the serve node
   D=$scratch/serve
@@ -341,5 +380,6 @@ case ${1:-} in
   filter-test) filter_test "${2:?a scratch directory}" ;;
   settings) settings_ok "${2:?a settings file}" ;;
   serve-test) serve_test "${2:?a scratch directory}" ;;
+  audit-test) audit_test "${2:?a scratch directory}" ;;
   *) refuse "rehearsal.sh check|serve|audit|compose|filter CMD..., not ${1:-nothing}" ;;
 esac
