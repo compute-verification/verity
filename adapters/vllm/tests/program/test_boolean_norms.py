@@ -131,7 +131,7 @@ def _bf16_rows(rng, n: int, N: int) -> np.ndarray:
     return (x.view(np.uint32) >> 16).astype(np.uint64)
 
 
-def _rand_f32(rng, n: int) -> np.ndarray:
+def _rand_f32(rng, n: int | tuple[int, ...]) -> np.ndarray:
     return rng.integers(0, 1 << 32, n, dtype=np.uint64)
 
 
