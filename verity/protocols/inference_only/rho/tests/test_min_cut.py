@@ -69,7 +69,7 @@ def he_shared(m, c, size, n, o, k, q, b, w):
 #: session policy's at a profile's costs
 POINTS = ((2.0e9, 3.0e7, 5.0e12, 1.0e9, 6.5e4, 15.9, 15.9, 16.0),
           (7.2986e14, 3.5673e11, 1.2017e19, 4.6566e14, 65_536, 15.9, 15.9, 16.0),
-          (3.6e10, 2.8e8, 1.4e13, 1.4e13, 4.2e8, 16.0, 1.02, 16.0),
+          (3.6e10, 2.8e8, 1.4e13, 1.4e13, 4.2e8, 16.0, 0.37, 16.0),
           (1.0e18, 2.7e14, 3.0e21, 2.45e19, 2.0e7, 2.5, 4.0, 4.0))
 
 
@@ -111,9 +111,11 @@ def test_the_least_blocks_and_the_macs_a_block_are_the_count_solved():
     assert min_cut.slowdown_at_least(n, o, size, c, k, bw * bx, b) < 0 < min_cut.blocks_at_least(n, o, k, bw * bx, b)
 
 
-def test_beta_is_the_hardness_rows_and_there_is_none_past_the_last():
+def test_beta_is_the_hardness_rows_the_next_rows_between_two_and_there_is_none_past_the_last():
     """The rows are `premise.training-cut-hardness.beta`'s, with a source; `k` rises and `β` falls along them; (H) is
-    credible up to the last row's `k`, and past it there is no `β`."""
+    credible up to the last row's `k`, and past it there is no `β`. A `k` strictly between two rows reads the next
+    row's `β`, a step: a row is the least ratio found up to its `k`, so the rows allow no more between them, and
+    nothing between two rows reads above the next one."""
     p = REG.param("premise.training-cut-hardness.beta")
     assert min_cut.BETA == tuple(map(tuple, p.value)) and p.source and p.status == "assumed"
     ks, betas = zip(*min_cut.BETA, strict=True)
@@ -121,8 +123,10 @@ def test_beta_is_the_hardness_rows_and_there_is_none_past_the_last():
     assert REG["premise.training-cut-hardness.credible_bits"] == ks[-1]
     assert min_cut.beta(1) == min_cut.beta(ks[0]) == betas[0]
     for (k0, b0), (k1, b1) in itertools.pairwise(min_cut.BETA):
-        assert min_cut.beta(k1) == b1
-        assert min_cut.beta(math.sqrt(k0 * k1)) == pytest.approx((b0 + b1) / 2, rel=1e-12)
+        assert min_cut.beta(k0) == b0 > b1 == min_cut.beta(k1)
+        for k in (math.nextafter(k0, math.inf), k0 + 1, math.sqrt(k0 * k1), (k0 + k1) / 2, math.nextafter(k1, 0)):
+            assert k0 < k < k1 and min_cut.beta(k) == b1
+    assert "next row" in p.source and "linear" not in p.source
     assert min_cut.beta(ks[-1] * (1 + 1e-9)) is None and min_cut.beta(1e12) is None
 
 
@@ -135,21 +139,21 @@ WORDS = 16 * (2 * 2048 + 2 * 512 + 2 * 8192 + 2048) + 128_256
 
 
 def test_the_bound_at_the_served_policy_is_one():
-    """A block of the served policy may finish about 1.8e13 MACs of the served model's forward, one bf16 output word
-    per 2,447 MACs, and holds 3.6e10: one block does it, and the slowdown is 1. At the first row's `k` a block may
-    finish under a million MACs."""
+    """A block of the served policy may finish about 5.0e13 MACs of the served model's forward, one bf16 output word
+    per 2,447 MACs, and holds 3.6e10: one block does it, and the slowdown is 1. Its `k` is between the last two rows,
+    so its `β` is the last row's. At the first row's `k` a block may finish under a million MACs."""
     assert (POSITION, WORDS) == (1_235_746_816, 505_088)
     o = WORDS * 16 / POSITION
     r = min_cut.bound(C, K, N_OUT, N=MACS, O=MACS * o, size=C)
     assert r.slowdown == 1 and r.blocks == pytest.approx(MACS / r.macs_a_block) and r.blocks < 1
     assert r.statement == min_cut.HE and r.premises == (min_cut.HARDNESS, min_cut.EXPORTS)
-    assert (r.beta_w, r.b, r.F) == (16, 16, 1) and r.beta_x == min_cut.beta(K) == pytest.approx(1.017, rel=1e-3)
+    assert (r.beta_w, r.b, r.F) == (16, 16, 1) and r.beta_x == min_cut.beta(K) == min_cut.BETA[-1][1] == 0.37
     assert r.alpha == min_cut.alpha(K, 16 * r.beta_x, 16)
     per_block = min_cut.macs_a_block(K, o, 16 * r.beta_x, 16)
-    assert r.macs_a_block == pytest.approx(per_block) and per_block == pytest.approx(1.845e13, rel=5e-4)
-    assert min_cut.macs_a_block(K, o, 16 * r.beta_x, 16, min_cut.share(3)) == pytest.approx(2.450e13, rel=5e-4)
+    assert r.macs_a_block == pytest.approx(per_block) and per_block == pytest.approx(5.012e13, rel=5e-4)
+    assert min_cut.macs_a_block(K, o, 16 * r.beta_x, 16, min_cut.share(3)) == pytest.approx(6.666e13, rel=5e-4)
     assert min_cut.macs_a_block(145_568, o, 16 * min_cut.beta(145_568), 16) == pytest.approx(9.383e5, rel=5e-4)
-    assert all(s in r.rests_on for s in (min_cut.HE, min_cut.HARDNESS, min_cut.EXPORTS, "β_x = 1.017"))
+    assert all(s in r.rests_on for s in (min_cut.HE, min_cut.HARDNESS, min_cut.EXPORTS, "β_x = 0.37"))
     assert min_cut.bound(C, K, N=MACS, O=MACS * o, size=C) == min_cut.bound(C, K, None, N=MACS, O=MACS * o, size=C) == r
 
 
@@ -195,8 +199,8 @@ def test_the_class_is_the_macs_a_block_at_the_profiles_costs_and_shape():
     assert premise_status(arg.cites, 2e7) == "assumed" and premise_status(arg.cites, 1e9) == "contested"
     _, p = reference_profile()
     a = arg.allowance(p)
-    assert min_cut.beta(4e8) < p.b_a < min_cut.beta(2e7)
-    for k, beta in ((1e5, p.b_a), (2e7, p.b_a), (4e8, min_cut.beta(4e8))):
+    assert min_cut.beta(4e8) < min_cut.beta(2e7) < p.b_a < min_cut.beta(8e6)
+    for k, beta in ((1e5, p.b_a), (8e6, p.b_a), (2e7, min_cut.beta(2e7)), (4e8, min_cut.beta(4e8))):
         assert a(FlopBudget(1e30, k)) == min_cut.macs_a_block(k, p.outputs_per_product * p.b_a, p.b_w * beta, p.b_a)
     assert a(FlopBudget(1e30, 8e8)) < math.inf and a(FlopBudget(1e30, 8.1e8)) == math.inf
     with pytest.raises(Outside, match="outputs_per_product"):
