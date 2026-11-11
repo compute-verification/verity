@@ -35,7 +35,8 @@ class BoundaryCommit:
     index: str                                        # the prover's index's hiding leaf
     index_rule: str                                   # how that leaf hashes the index
     seconds: float                                    # how long the commit took
-    stop: Mapping[str, Any] | None = None             # the stop rule its replay blocks hold a block of (`Layout.stop`)
+    stop: Mapping[str, Any] | None = None             # the serve's registered stop rule (`Layout.stop`)
+    stopped: bool | None = None                       # under one: whether it is a stop class, with `b.stop` (`Layout.held`)
 
     @classmethod
     def of(cls, doc: Any, where: str) -> BoundaryCommit:
@@ -58,4 +59,4 @@ KINDS: dict[str, type | tuple[type, ...]] = {"window": int, "run": str, "prompt"
                                              "replay": str, "program": str, "partition": str, "schema": str,
                                              "values": Mapping, "index": str, "index_rule": str, "seconds": (int, float)}
 #: what a writer writes only where it holds one
-OPTIONAL: dict[str, type | tuple[type, ...]] = {"stop": Mapping}
+OPTIONAL: dict[str, type | tuple[type, ...]] = {"stop": Mapping, "stopped": bool}

@@ -16,10 +16,8 @@ def _inlined_roots() -> list[Any]:
 
 
 def _stop_roots() -> list[Any]:
-    """`ServedStop_v1` at a small class with two stop ids and with none, and at 32 outputs with GLM-5.3's three stop ids
-    and a model of 131,072 ids; and `ReplayStopped_v1`: a replay block of two inlined `TokenSelect_v4` with the stop block
-    beside them."""
-    from verity_vllm.pipeline.boundary_rows import served_stop, stopped
+    """`EgressStop_v1` at a small class with two stop ids and with none, and at a cap of 1,024 ids with GLM-5.3's three
+    stop ids and a model of 131,072 ids."""
+    from verity_vllm.pipeline.boundary_rows import egress_stop
 
-    return [served_stop(4, (3, 7), 64), served_stop(4, (), 64), served_stop(32, (154820, 154827, 154829), 131072),
-            stopped(_inlined_roots()[0], served_stop(4, (3, 7), 64))]
+    return [egress_stop(4, (3, 7), 64), egress_stop(4, (), 64), egress_stop(1024, (154820, 154827, 154829), 131072)]
