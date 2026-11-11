@@ -60145,3 +60145,45 @@ So on chat, the highest rate measured with 99% of requests inside the bound is 6
 7. Sampling in the measured passes: greedy for every request, or the plan's half at temperature 0.7?
 
 **Next:** the web part (the benchmarks, vLLM's documentation on speculative decoding at the pin and now, public rates for comparable models), then the brief as a note and in my entry by 19:45Z. I read VLLM-339 again before I write it.
+
+## ATTACK, Wed 11 Nov 18:10Z: #9027 is now `ff8f3ea94705`: the generator's law is `stratified-rate:2/P`, and `whole_run.sh run toy 146` exits 0 with the Lean accepting [run `r20261111-180120-8b3c`]; `desc` and the pre-mark suites are running; one fact in the brief is wrong (the old law drew 1, 2, 1, not one a stratum)
+
+**Pushed.** `cursor/proofs-wholerun-fix-f55e`, head `ff8f3ea94705122b37810a4ecde5ed7a7b18bbfe`, one commit on `eaf97a9393c0`: `benchmarks/verifier_cost/whole_run.py` (the law at `:60-61`, and the docstring's sentence about it) and `benchmarks/verifier_cost/README.md:122-127` [read]. Not marked yet.
+
+**The rate: `stratified-rate:2/P`**, P the population the input registers (147 at N = 146) [read: `whole_run.py:60`].
+
+**Why, and the fact that corrects the brief.** The old law `{"k": 3, "law": "stratified"}` did not draw one unit a stratum. A stratum draws max(1, round(K n_s / P)) (`verity/protocols/spot/verifier/one_stage/draw.py:178-180`) [read], and the toy's strata are 1:6:3, so K = 3 drew 1 PAIR, 2 TRIPLEs and 1 QUAD, four units, at N = 146 and at N = 1000 [run locally: `draw.derive` on the generator's program]. The generator's docstring said "one draw per stratum"; it was wrong, and I rewrote that sentence.
+
+- `stratified-rate:2/P` names `stratified:3` again: `strat_k(2, P, sizes, P)` = 3 and every stratum's count equals the old law's, for every toy N from 6 to 100,000 [run locally: a sweep of `draw.strat_k` and `draw.stratum_k`, `tools/attack_9027_sweep.py` in the notes].
+- So the form allows the old sample exactly, and more: the registration record written under the rate equals, as an object, the record under the old law, at N = 146 and N = 1000 [run locally: `R.record` under both]. The Python reference accepts both inputs with the draw 1, 2, 1 [run locally: `whole_run.py … --check`, 0.6 s].
+- Your tie rule: `3/P` gives the same K and sample (from N = 3); I took `2/P` as the simpler fraction. `4/P` gives K = 6 at N = 146 and K = 5 at 1000, 10,000 and 50,000 [run locally].
+- The alternative you may have meant: `stratified-rate:1/P` gives K = 1, one unit of each template, three units, at every N [run locally at four N; derived for the rest: every stratum's ceil(n_s / P) is 1]. That is what the docstring said and your brief's words say, and not what the benchmark ran. It changes the record's K and drops one TRIPLE unit. I did not take it, since your rule is "what the old law drew"; it is one character if you want it, and then a new head.
+
+**What the rate changes in what is measured.** The sample and the record are the old ones, so the one new piece of work is `Rule.over` reading the strata sizes, one partition evaluation. In the run below `partition.evaluate` is 15 µs and the whole `run` step 100,163 µs, so under a tenth of a percent [derived from those two rows]. I have no timing under the old law to set beside it: the old law runs on no commit of `main` since #7918. NOT CHECKED: a before-and-after timing.
+
+**Run mode, at `ff8f3ea94705`: `r20261111-180120-8b3c`**, `whole_run.sh run toy 146` (the command of `r20261111-165740-b3dc`), cpu-9, a clone, a Lean build slot: done, exit 0, 72.8 s from start to end [run]. It prints the generator's line and 20 rows, the first two:
+
+~~~text
+{"shape": "toy", "n": 146, "units": 147, "ports": 20, "roots": 20, "program_bytes": 3663, "python_s": 0.1}
+{"shape":"toy","n":146,"codes":null,"hwm_mb":94,"ms":100,"refused":null,"step":"run","symbol":"accept","us":100163}
+~~~
+
+then one row each for `params`, `queryDigest`, `checkPublic`, `registration`, `partition.evaluate` (`"ranges":3`), `partition.unitGates`, `slots.inputGates` (`"gates":470`), `slots.layout`, `popOk`, `receipt`, `derive`, `resolve`, `select`, `coinsHold` (139 ms), `checkDraw`, `checkVerdicts`, `record.inputOf`, `record.record`, `canonical` [run: `stdout.log`].
+
+- That is the evidence the Lean line executes: `"symbol":"accept"` is `Run.run` on the input, and the rows from `registration` on come after line 86 of `Main.lean`, which throws if `rule.over` gives nothing (`Main.lean:86-87`) [read].
+- The script's exit 0 alone would not show it: it prints a `timeout-or-error` row and goes on when the executable fails (`whole_run.sh:48-50`) [read]. There is no such row, and `stderr.log` has no `not ok` line (four lines, the slot's) [run].
+
+**Desc mode: `r20261111-180205-c07f`**, `whole_run.sh desc toy 146 1000`, cpu-9: waiting for a slot at 18:09Z (the node's memory is reserved by other lanes' runs). Once it starts it is about a minute: the same command took 55.8 s in `r20261111-171253-222c` [run]. ETA 18:25Z [guess].
+
+**The pre-mark run: `r20261111-180601-e67a`**, `suites.py --changed 493f49485e50 --quick` at `ff8f3ea94705` (`493f49485e50` is the branch's merge base with `main`), cpu-3, `--cwd source`: running since 18:06Z. The change touches two suites, `repository` and `verity-graph`; `verity-graph` passed (207 tests, 25 s) and `repository` is running [run: `stdout.log` at 18:09Z]. ETA 18:30Z [guess].
+
+**Merge.** `git merge-tree` of `ff8f3ea94705` with `main` at `cc6ee7446278` and with #8999's head `fef48ce41a13` each give a tree with no conflict, so I merge nothing [run].
+
+**For the guard report** (due 19:45Z) I measured one thing: `r20261111-180404-d956` at `ff8f3ea94705`, cpu-1: `lake build Spot` in a fresh clone 47.3 s (229 jobs), then `lake env lean benchmarks/verifier_cost/whole_run/Main.lean` 0.77 s, 0.76 s and 0.78 s, and `registration/Main.lean`, the other benchmark that imports Spot, 0.66 s; all exit 0 [run].
+
+Next: when `-c07f` and `-e67a` are done and pass, the body gains your line and the runs, then `research queue ready 9027 --mark --by proofs` at `ff8f3ea94705` and `research queue status`.
+
+For the table:
+- #9027 head `ff8f3ea94705`, not marked yet. Law `stratified-rate:2/P`: the same K = 3, record and sample (1, 2, 1) as the old `stratified:3`.
+- `whole_run.sh run toy 146`: exit 0, `"symbol":"accept"` [run `r20261111-180120-8b3c`]. `desc`: `r20261111-180205-c07f`, waiting for a slot. Pre-mark suites: `r20261111-180601-e67a`, running.
+- Correction: the old law drew 1, 2, 1 on the toy, four units, not one a stratum; `1/P` would give one a stratum. Your call if you want that instead.
