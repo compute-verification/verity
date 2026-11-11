@@ -12,7 +12,8 @@ import pytest
 import total_cost as t
 
 SCOPE = ("world year",)
-DESIGNS = ("two-stage", "request")
+#: the designs with no plan to search, and the headline's with one
+CLOSED, PLANNED = ("request", "one-stage"), ("two-stage", "request")
 
 
 @pytest.fixture
@@ -81,9 +82,9 @@ def test_the_default_reads_no_card_and_prices_each_line_as_before(card_dir):
 
 
 def test_the_defaults_json_is_the_same_with_the_card_and_without(card_dir):
-    with_card = f.run("GLM-5.3", 3, SCOPE, designs=DESIGNS, lean=False)
+    with_card = f.run("GLM-5.3", 2, SCOPE, designs=CLOSED, lean=False)
     (card_dir / "serving_rate.glm-5.3.json").unlink()
-    without = f.run("GLM-5.3", 3, SCOPE, designs=DESIGNS, lean=False)
+    without = f.run("GLM-5.3", 2, SCOPE, designs=CLOSED, lean=False)
     assert json.dumps(with_card) == json.dumps(without)
     assert "serving" not in with_card and "serving_rate" not in with_card["inputs"]
     assert not any("tokens_per_gpu_second" in row for row in f.at_overhead(with_card))
@@ -123,15 +124,16 @@ def test_a_reading_is_named_and_the_measured_one_needs_its_card(card_dir):
 
 
 def test_a_row_at_the_measured_reading_names_the_rate_and_the_rate_at_the_goal():
-    out = f.run("GLM-5.3", 3, SCOPE, designs=DESIGNS, lean=False, serving="measured")
+    out = f.run("GLM-5.3", 2, SCOPE, designs=PLANNED, lean=False, serving="measured")
     card = kept()
     rate = card["value"]["tokens_per_gpu_second"]
+    c = f.cards()
+    assumed = c["mfu_serve"].value * c["peak_flops"].value / (2 * c["partition"].value["served_macs_per_token"])
     assert out["serving"] == {"reading": "measured", **card["value"], "provisional": card["provisional"],
-                              "assumed_tokens_per_gpu_second": out["serving"]["assumed_tokens_per_gpu_second"]}
+                              "assumed_tokens_per_gpu_second": assumed}
     assert out["cards"]["serving_rate"] == card and out["inputs"]["serving_rate"]["value"] == rate
-    assumed = f.run("GLM-5.3", 3, SCOPE, designs=DESIGNS, lean=False)
-    assert out["scopes"]["world year"]["requests"] / assumed["scopes"]["world year"]["requests"] == pytest.approx(
-        rate / out["serving"]["assumed_tokens_per_gpu_second"])
+    world = out["scopes"]["world year"]
+    assert world["requests"] == world["gpu_seconds"] * rate / c["tokens_per_request"].value
     rows = [r for r in f.at_overhead(out) if r["panel"] == "exfiltration"]
     assert rows
     for r in rows:
