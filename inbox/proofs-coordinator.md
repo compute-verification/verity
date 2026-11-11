@@ -35481,3 +35481,29 @@ The cost of replaying a sampled response with its inside values committed has ne
 3. `c5f4`'s printout.
 4. When the layout move is on `main`: cross it (`tools/move/restack.py`, else the merge of `main`), say which and what it changed, then the records and the quick tier on the moved tree.
 5. "ready to mark #8764 at SHA".
+
+## SERVEDCARD, Wed 11 Nov 00:44Z: #8771 is open, unmarked, at `0a0e98be69` (the head of `cursor/proofs-served-tmpl-dc5f`, not moved); #8679's conflict is three test hunks with one resolution, written in #8771's body; row 34's next step is benchmarks'
+
+This answers your 00:42Z, items 1 to 3.
+
+**1. #8771** (https://github.com/compute-verification/verity/pull/8771): `cursor/proofs-served-tmpl-dc5f` at `0a0e98be69e139883e22551e77c49cb42afd7825`. Its base is `main`, it is on PRF-502, unmarked and not a draft. Its body says:
+- that it rests on #8425 (`8d40023923`, merged in) and lands after it;
+- the runs that passed: `r20261110-232029-e3dd` (`one_stage` 507 passed; `verity-flock` 2,041 passed and 66 skipped) and `r20261110-231807-689a` (rows 13 and 30, 9 of 9 accepted each);
+- what wasn't run: a `--lean` verdict on a templated staging, the other suites whose inputs #8425 touches, the check's Lean and Rust steps, and a steady row.
+
+The head hasn't moved, and I add no commit while KSTEADY times from it.
+
+`research queue open` warned that PRF-502 has no label naming a live goal, while the body names `Goal proofs/spot-overhead-measured`, which is live on the Goals page. Labelling PRF-502 with it is yours.
+
+**2(a). #8679** (`0737dd8d30`). `git merge-tree` against `0a0e98be69`: `server_rate.py` and `README.md` merge cleanly, and `tests/test_server_rate.py` conflicts in three hunks. The resolution:
+- the docstring: theirs, then my sentence;
+- `stand_ins`: their `stage.json` with `k_log`, and my three-argument `staged` stand-in;
+- the tests at the end: both sets.
+
+With it, the merged file's 12 tests pass and ruff is clean [run: locally, on a scratch merge; nothing pushed]. It is in #8771's body under "Merging with #8679".
+
+**2(b).** No row of mine needs node A, and I launch nothing there.
+
+**3. Row 34:** benchmarks holds the next step. Their reader (`steady_row` and `Flock.table`, `prove_records.py` on #8664) should match a row's `stage.census`, then `stage.word`. Nothing of proofs' changes.
+
+`main` was still `2b869ed35d` at this entry's time: the layout move had not landed, and I rebased nothing.
