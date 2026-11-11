@@ -1,7 +1,7 @@
 module
 
 public import Definitions.Accounting.Guarantees.JointBridge.CommOfPooledLeakAccepted
-public import Definitions.Accounting.NetWitness
+public import Definitions.Accounting.JointBridge.CommOfPooledLeakAcceptedWitness
 public import Proofs.NetworkCertifier.Witnesses
 import Mathlib.Algebra.Order.Floor.Extended
 import Mathlib.Algebra.Order.Interval.Basic
@@ -35,13 +35,14 @@ import Mathlib.Tactic.NormNum.Prime
 import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Topology.Sheaves.Init
 import Proofs.Pouw.Prob
+
 /-!
 # The pooled bridge's two inputs hold at an honest run (witness)
 
 `Accounting.SecurityProofs.Bridge.CommOfPooledLeakAccepted_honest`: the two inputs that
 `Accounting.Guarantees.Bridge.CommOfPooledLeakAccepted` takes at each execution phase, the miss probability given the
 earlier phases' coins and the leak relation at the witness's incorrect set, hold together at one run that realizes the
-network certifier's monitoring period (`honestPooled`).
+network certifier's monitoring period (`Accounting.NetWitness.honestPooled`, among the definitions).
 
 The run has two execution phases of one step each. Its circuit negates its one ingress bit, its operator sends
 `false`, and the network certifier's record at each phase is the frame the circuit then puts on the link
@@ -55,13 +56,9 @@ No proof block is incorrect, so the miss probability is bounded by `1` and the l
 
 namespace Accounting.SecurityProofs.Bridge
 
-open Claims Claims.Sampling NetTiming Accounting.JointBridge
-open Accounting.PouwWitness Accounting.NetWitness
+open Claims Claims.Sampling NetTiming Accounting.JointBridge Accounting.NetWitness
 open NetTiming.Witness (notLay obs1 notLay_fits notProg_val)
-open Claims.Witness.SamplingGeneric (notProg notStmt notPart)
-
-/-- The network certifier's record of two execution phases of one step each: a frame on the link at each. -/
-def frameRecord : Fin 2 → List (Obs 1 1 1) := fun _ => [obs1]
+open Claims.Witness.SamplingGeneric (notProg)
 
 /-- At ingress `false` the circuit that negates its ingress puts a frame of no bits on its link. -/
 theorem notProg_row (a : ℕ → Bool) (ℓ σ : Fin 1) :
@@ -86,73 +83,16 @@ theorem accepted_obs1 (a : ℕ → Bool) :
 
 /-- **Each execution phase's record meets the leak relation with no incorrect proof block**: the layout fits the
 circuit, the record has the phase's one step and jitter `0`, and the circuit's Program accepts it at the advice
-`false` with no gate held. -/
+`false` with no gate held. The registration `negStmt` and the frame `frameObs` are the witnesses' `notStmt` and
+`obs1`, written out among the definitions. -/
 theorem leakAt_honest (i : Fin 2) :
-    LeakAt (fun _ => notLay) (fun _ => 1) (fun _ => ∅) 1 notStmt notPart (fun _ => false) (fun _ _ => [false]) ∅
+    LeakAt (fun _ => notLay) (fun _ => 1) (fun _ => ∅) 1 negStmt negPart (fun _ => false) (fun _ _ => [false]) ∅
       (frameRecord i) := by
   refine ⟨notLay_fits, rfl, fun y hy => ?_, fun _ => false,
     ⟨fun g hg _ => absurd hg (Finset.notMem_empty g), fun _ _ => rfl⟩, fun _ => none,
     fun _ _ h => absurd h.symm (Option.some_ne_none _), accepted_obs1 _⟩
-  obtain rfl : y = obs1 := by simpa [frameRecord] using hy
+  obtain rfl : y = frameObs := by simpa [frameRecord] using hy
   exact Nat.one_pos
-
-/-- A period run on `nullDevice` over `emptyCircuit`, idle, on the coins of two verification phases: its every audit
-accepts when both execution phases' records meet the leak relation with no incorrect proof block, and the network
-certifier's claim is the period's good event at that record. -/
-def honestNet : PeriodRun nullDevice Unit emptyCircuit (fun _ : Unit => Fin 2 → Bool) where
-  units := 0
-  parts := ⟨fun g => g.elim0, fun g => g.elim0⟩
-  own _ := ()
-  acct _ := ()
-  win := ⟨0, 1⟩
-  schedule _ _ := idleStep
-  fits _ := by
-    intro t
-    simp [Step.Fits, idleStep, nullDevice]
-  trace _ g := g.elim0
-  commWithin _ _ := PooledGood (fun _ => notLay) (fun _ => 1) (fun _ => ∅) 1 (fun _ => notStmt) (fun _ => notPart)
-    (fun _ _ => false) (fun _ _ _ => [false]) 1 (fun _ => ∅) frameRecord
-  accepts _ _ := ∀ i, LeakAt (fun _ => notLay) (fun _ => 1) (fun _ => ∅) 1 notStmt notPart (fun _ => false)
-    (fun _ _ => [false]) ∅ (frameRecord i)
-
-/-- The record format of a network certifier that sees no connection and writes `frameRecord`. -/
-def honestFmt : RecordFormat Empty Unit (Fin 2 → List (Obs 1 1 1)) where
-  record _ _ _ := frameRecord
-  read _ _ c := c.elim
-  fits _ := True
-  read_record _ _ _ := funext fun c => c.elim
-
-/-- **`honestNet` realizes the network certifier's monitoring period of two sampled audits, pooled**: the audit's
-coins are the two verification phases' coins, the network certifier's device runs its code as written, each
-verification phase's audit accepts when its execution phase's record meets the leak relation with no incorrect proof
-block, and no proof block is incorrect. -/
-def honestPooled : RealizesCommOfPooledLeakAccepted honestNet 0 1 1 1 (fun _ => notLay) (fun _ => 1) (fun _ => ∅) 1 2 1
-    where
-  sw _ := notStmt
-  Pw _ := notPart
-  ρ _ _ := false
-  op _ _ _ := [false]
-  Coin := Bool
-  coins := Equiv.refl _
-  Conn := Empty
-  Cell := Unit
-  Srv := Unit
-  Dev := Unit
-  arr _ c := c.elim
-  fmt := honestFmt
-  device := ()
-  run _ p := recordingCode honestFmt p.1 fun c => c.elim
-  trusted _ := rfl
-  sched _ := ⟨0, 0, Empty.elim, Empty.elim⟩
-  srv _ := ()
-  fits _ := trivial
-  acc _ i _ _ := LeakAt (fun _ => notLay) (fun _ => 1) (fun _ => ∅) 1 notStmt notPart (fun _ => false)
-    (fun _ _ => [false]) ∅ (frameRecord i)
-  acc_prefix _ _ _ _ _ := rfl
-  W _ _ _ := ∅
-  W_prefix _ _ _ _ _ := rfl
-  accepts_imp _ _ h := h
-  comm_iff _ _ := Iff.rfl
 
 /-- **`CommOfPooledLeakAccepted`'s two inputs hold together at `honestPooled`**, at detection probability `½`: no
 proof block is incorrect, so the miss probability given the earlier phases' coins is bounded by `(1 − ½)^0 = 1`, and

@@ -5773,7 +5773,8 @@
    "except": [
     "Definitions.Accounting.Bandwidth.Game",
     "Definitions.Accounting.JointBridge.CommOfPeriodLeakAccepted",
-    "Definitions.Accounting.JointBridge.CommOfPooledLeakAccepted"
+    "Definitions.Accounting.JointBridge.CommOfPooledLeakAccepted",
+    "Definitions.Accounting.JointBridge.CommOfPooledLeakAcceptedWitness"
    ],
    "why": "resource accounting's definitions are trusted text: the device model, a joint audit's run and the bandwidth and rate audits' games read PoUW's and PoUS's uniform probability and, for the compute audit's embedding, PoUW's game and Pearl-C's; the tensor-core sketch reads the sm_120 E4M3 step's definitions (Definitions.Pouw.Fp8Atom, Definitions.Pouw.PearlC.Sm120); lemma M reads PoUS's audit model (Definitions.Pous.Model.Audit, Definitions.Pous.Model.SampledAudit); the actual circuit is core's circuit placed in space and time (Definitions.Core.Circuit), its runtime's region a declaration (Definitions.Core.Declaration); the actual circuit is core's circuit placed in space and time (Definitions.Core.Circuit), its runtime's region a declaration (Definitions.Core.Declaration), its provers' cost model PoUW's (Definitions.Pouw.Game); B2's responder and lemma M's vocabulary read PoUS's audit game (Definitions.Pous); they import no assumption, guarantee or proof; the bandwidth audit's game reads PoUS's uniform probability under its own layer (Definitions.Accounting.Bandwidth); the remote audit's receipts are the served row leaf in frame-v3-sha512 trees, and their binding event is a collision among the two openings' checks (Definitions.Hash); a period of the causal game reads its subprotocols' collision finders and their success (Definitions.Claims' Finder, Finder.Pr), as the claims state them"
   },
@@ -5897,6 +5898,15 @@
    ],
    "except": [],
    "why": "the network certifier's pooled bridge to the joint period reads the period run (Definitions.Accounting.JointPeriod), the monitoring period's good event and leak relation (Definitions.NetworkCertifier.PooledLeak), the named input for the miss probability given the earlier phases' coins (Definitions.NetworkCertifier.Checked), and the deployed network certifier's code and record format (Definitions.NetworkCertifier.Tap) with its trust, trusted-host (Definitions.Core.Assumptions), which the run carries as a field; it imports no guarantee or proof"
+  },
+  "Definitions.Accounting.JointBridge.CommOfPooledLeakAcceptedWitness": {
+   "imports": [
+    "Definitions.Accounting.JointBridge.CommOfPooledLeakAccepted",
+    "Definitions.Accounting.NetWitness",
+    "Definitions.NetworkCertifier.Witness"
+   ],
+   "except": [],
+   "why": "the honest run the pooled bridge's witness is stated at reads the realization it instances (Definitions.Accounting.JointBridge.CommOfPooledLeakAccepted), the idle period run's device and circuit (Definitions.Accounting.NetWitness) and the network certifier's witness layout (Definitions.NetworkCertifier.Witness); it imports no guarantee or proof"
   },
   "Definitions.WeightSecurity": {
    "imports": ["Mathlib", "Definitions.Core", "Definitions.WeightSecurity", "Definitions.Spot.Dataflow"],
