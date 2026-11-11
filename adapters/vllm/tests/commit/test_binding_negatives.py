@@ -18,7 +18,8 @@ import random
 
 import pytest
 
-from verity_vllm.commit import binding as B, step_rows
+from verity_vllm.commit import binding as B
+from verity_vllm.commit import step_rows
 from verity_vllm.commit.committer.native_host import NativeHostCommitter
 
 CHUNK = step_rows.ROW_BYTES
@@ -582,7 +583,8 @@ def test_load_required_manifest_accepts_a_one_request_manifest_whose_engine_step
     subscript ('int' object is not subscriptable -> every B=1 Commit 'binding map not built').  The loader must keep the numbers, declare NO composition, and composition_check must skip (named) on that header."""
     p, doc = _b8_doc(tmp_path)
     doc["global"] = False
-    doc.pop("requests_declared"); doc.pop("composition_reference")
+    doc.pop("requests_declared")
+    doc.pop("composition_reference")
     doc["engine_steps"] = [0, 1, 2]                                        # what `build` writes for one request arriving at engine step 0
     p1 = _write(tmp_path, "b1_numbers.json", doc)
     pop, hdr = B.load_required_manifest(p1, PD, requests=[f"r{k}" for k in range(8)], steps=max(B8_CAP), arrivals={f"r{k}": 0 for k in range(8)})

@@ -123,24 +123,39 @@ class StreamLayout:
         if word >= o["total"] or word < 0:
             raise ValueError("word outside the layout")
         if word < o["P"]:
-            i = word - o["S"]; sr, col = divmod(i, self.N); slab, row = divmod(sr, self.M)
+            i = word - o["S"]
+            sr, col = divmod(i, self.N)
+            slab, row = divmod(sr, self.M)
             return {"cls": "S", "slab": slab, "row": row, "col": col}
         if word < o["RP"]:
-            i = word - o["P"]; sr, col = divmod(i, self.N); slab, row = divmod(sr, self.M)
+            i = word - o["P"]
+            sr, col = divmod(i, self.N)
+            slab, row = divmod(sr, self.M)
             return {"cls": "P", "slab": slab, "row": row, "col": col}
         if word < o["ROW"]:
-            i = word - o["RP"]; sr, cw = divmod(i, self.N // 2); slab, row = divmod(sr, self.M)
+            i = word - o["RP"]
+            sr, cw = divmod(i, self.N // 2)
+            slab, row = divmod(sr, self.M)
             return {"cls": "RP", "slab": slab, "row": row, "col": 2 * cw}
         if word < o["O"]:
-            i = word - o["ROW"]; srb, f = divmod(i, 8); sr, block = divmod(srb, self.NB); slab, row = divmod(sr, self.M)
+            i = word - o["ROW"]
+            srb, f = divmod(i, 8)
+            sr, block = divmod(srb, self.NB)
+            slab, row = divmod(sr, self.M)
             return {"cls": "ROW", "slab": slab, "row": row, "block": block, "field": f}
         if word < o["FIN"]:
-            i = word - o["O"]; srb, d = divmod(i, self.D); sr, block = divmod(srb, self.NB); slab, row = divmod(sr, self.M)
+            i = word - o["O"]
+            srb, d = divmod(i, self.D)
+            sr, block = divmod(srb, self.NB)
+            slab, row = divmod(sr, self.M)
             return {"cls": "O", "slab": slab, "row": row, "block": block, "d": d}
         if self.ms and word >= o["MS"]:
-            sr, block = divmod(word - o["MS"], self.NB); slab, row = divmod(sr, self.M)
+            sr, block = divmod(word - o["MS"], self.NB)
+            slab, row = divmod(sr, self.M)
             return {"cls": "MS", "slab": slab, "row": row, "block": block}
-        i = word - o["FIN"]; sr, f = divmod(i, 4); slab, row = divmod(sr, self.M)
+        i = word - o["FIN"]
+        sr, f = divmod(i, 4)
+        slab, row = divmod(sr, self.M)
         return {"cls": "FIN", "slab": slab, "row": row, "field": f}
 
     def digest(self) -> bytes:
@@ -154,7 +169,7 @@ class StreamLayout:
 
 # ------------------------------------------------------------------ leaf framing (shared with the kernel's H1 leaf)
 def pack_words(words: list[int]) -> bytes:
-    return struct.pack("<%dI" % len(words), *[w & 0xFFFFFFFF for w in words])
+    return struct.pack(f"<{len(words)}I", *[w & 0xFFFFFFFF for w in words])
 
 
 def thread_of(row: int, col_or_d: int) -> tuple[int, int, int]:

@@ -48,8 +48,8 @@ PROTOCOL SUMMARY (Commit phase: the execution extent check (`executed_prefix`) -
 """
 from __future__ import annotations
 
-from collections.abc import Mapping
-from typing import Any, Iterable
+from collections.abc import Iterable, Mapping
+from typing import Any
 
 from verity_vllm.records.commit_binding import CommitBinding
 
@@ -438,7 +438,7 @@ def reconcile_not_executed(commit_class: dict[str, Any] | None, population: dict
     expected = expected_cells_from_population(manifest_identities, population) if manifest_identities is not None else None
     pop_kind = population.get("kind_by_family") or {}                                      # the population names each family's kind
     pop_batch = population.get("batch_level") or {}                                        # batch_level[fam].cells_not_executed
-    fams = set((cc.get("by_family") or {})) | set(totals)
+    fams = set(cc.get("by_family") or {}) | set(totals)
     for fam in sorted(fams):
         mine = int((cc.get("by_family") or {}).get(fam, 0))
         theirs = totals.get(fam) or {}
