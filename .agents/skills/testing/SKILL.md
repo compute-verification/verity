@@ -29,8 +29,8 @@ $R "$S"                         # every suite whose inputs changed since it last
 $R "$S flock verity"            # these suites (a package name, a directory, or a unique part of one)
 $R "$S flock -- -k tanh -x"     # arguments after -- go to pytest
 $R "$S --quick"                 # without the tests marked slow
-$R "$S --changed $(git fetch -q origin main && git merge-base HEAD FETCH_HEAD) --quick"   # only the suites your change touches: the pre-mark run
-$R "$S --fresh"                 # ignore the cache
+$R "$S --changed $(git fetch -q origin main && git merge-base HEAD FETCH_HEAD) --quick"   # the pre-mark run; the mark's tier runs it on the head merged onto main
+$R "$S --fresh"                 # ignore the cache, Lake's artifact cache too: what the suites test is compiled
 uv run tools/verity/check/suites.py --list                    # each suite's inputs, and whether a pass is cached (local: reads only)
 ~~~
 
@@ -48,12 +48,13 @@ A pass is cached under a hash of the suite's inputs (its directory, its workspac
 the lock and installed distributions, the environment), uncommitted edits included; a passing test is also cached alone,
 under its module's key, which leaves out the test modules it can't reach (`suites.py`'s docstring has both keys). So a
 test depends on another test module only by importing or naming it, never through what that module does at import. The
-nightly `audit-main` job (`check.py --no-cache`) names any cached pass a fresh run contradicts. `suites.py --explain
+nightly `audit-main` job (`check.py --no-cache`) names any cached pass a fresh run contradicts, among every pass the commit's
+recorded checks hold, which it imports first. `suites.py --explain
 SUITE` says why a suite would run, and `lean_audit.py --explain PKG` the same for a Lean package.
 
 A failed test is reported failed, whoever is fixing it: no runner tolerates a red. To let one stand while its fix lands, add
 an allowance to `tools/verity/check/policy.toml` (`suite NAME::TEST`, the owner's handle, a UTC expiry and a reason) in a
-reviewed change: drive and the quick tier take that failure as not red until it expires, then ring its owner.
+reviewed change: the verified queue and the quick tier take that failure as not red until it expires.
 
 ## Where a test goes
 
@@ -93,11 +94,14 @@ untraced`, which keys it on the suite's whole tree. A test that builds or runs a
 
 - **A test over about 5 s gets `@pytest.mark.slow`**, which `--quick` and `-m "not slow"` skip and `check` runs; the
   runner lists slower tests without the mark. A suite's quick tier should finish in about a minute: make slow tests
-  smaller before marking more.
+  smaller before marking more. The pre-mark run (`--changed REV --quick`, also the tier `research queue ready` runs before a
+  mark) keeps the slow tests of each test module the change adds or modifies, or that imports one or a changed helper by
+  name; those of the code under test run in `check`.
 - **Minutes-long or machine-bound checks are opt-in**, skipping unless a variable asks (`VERITY_POUS_SLOW`,
-  `FLOCK_IR_SLOW`, `VERITY_BENCH_FULL`, `VERITY_REGRESSION`). Name it `VERITY_{PACKAGE}_...`, and say in the skip reason
-  how long it takes. A test that leaves `check` this way but must still run goes in `check.py`'s `OPT_IN`, which the
-  nightly cold check (`--no-cache`) runs by name with its variable set; `tests/test_opt_in_tests.py` holds it to its mark.
+  `FLOCK_IR_SLOW`, `VERITY_BENCH_FULL`, `VERITY_REGRESSION`, which `check`, the quick tier and `suites.py` inside a
+  `research run` set). Name it `VERITY_{PACKAGE}_...`, and say in the skip reason how long it takes. A test that leaves
+  `check` this way but must still run goes in `check.py`'s `OPT_IN`, which the nightly cold check (`--no-cache`) runs by
+  name with its variable set; `tests/test_opt_in_tests.py` holds it to its mark.
 - **A check far past ten minutes cold** stays out of `check` and runs as a recorded run on the change that needs it:
   adapters/vllm's heavy circuit-neutrality tier, `verity-vllm neutrality --tier heavy` on a 256-CPU node (`research
   pods list`; `adapters/vllm/verity_vllm/pipeline/neutrality.py`), on a change under `adapters/vllm/verity_vllm/program/`,
@@ -129,7 +133,10 @@ untraced`, which keys it on the suite's whole tree. A test that builds or runs a
   open: `tools/research/tests/waits.py`), and inject the clock the code measures with (`monkeypatch.setattr(mod,
   "clock", ...)`). No result may depend on load, a shared machine or what holds it (GPU leases, check slots, pods), ports
   and sockets, a race between processes, or an outside service. `suites.py` reports a test that passed and failed under
-  one key as `nondeterministic`: it is deleted, not fixed or rerun.
+  one key as `nondeterministic`: it is deleted, not fixed or rerun. On a CPU with AMX (a cloud VM), oneDNN's AMX kernel
+  now and then returns a preempted bf16 matrix product wrong, so the runner starts every suite's process, and `research
+  run` every job, with `ONEDNN_MAX_CPU_ISA=AVX512_CORE_BF16` unless the environment already names it (`ONEDNN_ISA`). A
+  script run outside both sets it itself, before torch's first primitive, which is when oneDNN reads it.
 - **Isolated:** write only under `tmp_path`, and change the environment, `sys.path` or a module only through
   `monkeypatch`; the runner fails a run whose tests changed a repository file, naming it.
 - **Exact:** compare bit-exact code's words, digests and pinned vectors, not approximations; a negative checks that the
@@ -140,7 +147,7 @@ untraced`, which keys it on the suite's whole tree. A test that builds or runs a
 - **Fixtures:** small ones sit in the suite's own `fixtures/`, shared ones under the root `fixtures/`, registered in
   `fixtures/artifacts.json`. One over the 256 KiB cap is registered there and gitignored instead: `research data put
   --kind fixture/v1 --file|--tree PATH --preserve`, its id and path into the registry and its path into `.gitignore`.
-  The control pod exports `next`'s registry every 5 minutes, so the fixture needs no ask. `suites.py` fetches it before the suites that read it (`research data fetch-fixtures` by hand, as before
+  The control pod exports `main`'s registry every 5 minutes, so the fixture needs no ask. `suites.py` fetches it before the suites that read it (`research data fetch-fixtures` by hand, as before
   `cargo test`), checks every byte against its id, and keys the suite on the id. A verifier's fixtures are the prover's
   bytes, never regenerated in its test; when a test can recompute an expected output, pin its digest, not the file. A
   fixture its test module rewrites from the tree (``python MODULE --write``) is a `Writer` in `tools/verity/check/pins.py`,
@@ -156,5 +163,5 @@ and false-positive rulings live in its dashboard, not the repository.
 
 ## Before a PR
 
-The suites your change touches pass with no read outside their inputs (the pre-mark run, AGENTS.md "Lanes"), and a new or
+The suites your change touches pass with no read outside their inputs (the pre-mark run, the team skill), and a new or
 changed circuit passes `circuit-check` (AGENTS.md "Circuits").

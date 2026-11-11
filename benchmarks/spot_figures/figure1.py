@@ -111,6 +111,10 @@ CAP_STATUS = {"sets": "card_influenceTwo_le_served_min", "patterns": "card_influ
 SERVED_STATUS = "card_influenceTwo_le_min"
 #: what puts the patterns' form there: on any statement the influence set has at most 2^|outs| members
 OUTS_STATUS = "card_influenceTwo_le_two_pow_outs"
+#: the replay grain's fan-out F that a served window's registration verdict publishes (`Verdict.fanout`), the capped
+#: form's N: its program is a population program, each instance reading only its own share of each Input node
+#: (`partition.fanout`)
+FANOUT = 1
 #: a request's tokens: the census's mean, or the `workload` card's request
 REQUESTS = ("census", "workload")
 #: the deployment each panel assumes: what serving commits, and the replay block
@@ -535,7 +539,7 @@ def lean_two(cells: Sequence[Cell], replay_blocks: float, row: dict, delta: floa
     certifies, rounded up to a float, at the θ it finds from the planner's, with the planner's bits and that θ beside
     them; a point Lean refuses is an error."""
     d = plancheck.two(split_cells(cells, row["merged"]), row["k"], replay_blocks, row["q"], delta, served, union,
-                      row["theta"])
+                      row["theta"], fanout=FANOUT)
     ((bits, theta),) = plancheck.check([d])
     if bits is None:
         raise plancheck.LeanError(f"Lean refuses the planner's two-stage point: {d}")
