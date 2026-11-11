@@ -47,7 +47,8 @@ def test_the_unpruned_request_in_the_compilers_form_is_the_builds_request_progra
     built, ran = descriptors
     A = RootView("built", built, {}, tok_node=0, compact=compact)
     B = RootView("ran", ran, {}, tok_node=0, compact=compact)
-    assert not compare_steps(A, B)["canonical_sha256"]["equal"]
+    # a view is put in the form before any comparison reads it, so the comparison before the form reads a view of its own
+    assert not compare_steps(A, RootView("ran", ran, {}, tok_node=0, compact=compact))["canonical_sha256"]["equal"]
     ran_spec = {r["k"]: r["spec"] for r in B.inst}
     facts = B.to_compiler_form()
     assert facts == {"sampling_events": 4, "dead": DEAD,
