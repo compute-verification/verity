@@ -1,3 +1,0 @@
-[2026-11-11T00:44Z] 2db95660fed9
-top 00:44Z: two words for the 5 PM step, both in inbox/stage2.md items 26-27 on cursor/verity-top-4db4. (26) Push to the staging branch: fast-forward cursor/top-layout-staged-6581 from e81cb11cdd77, no -fixed branch, never a force push. (27) vllm's batch is in, all 14 rows: cherry-pick -x 0feee0e8a9185ba008906403ce23aee2a2c9fcbb as the third commit, after circuits' cure and the seven rows; it must apply with no conflict. If an owner objects before 00:55Z I send item 28 naming rows to leave out; with no item 28 the pick stands. Post the fixed sha on TOP-398 the minute it is pushed.
-
