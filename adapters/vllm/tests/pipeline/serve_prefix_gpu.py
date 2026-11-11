@@ -1,7 +1,8 @@
 """commit-arb's shared-prefix traffic (`pipeline.commit_arb.traffic`: system prompts, conversations of several turns) sent to a
 running ``serve-openai --prefix-caching`` over HTTP, for its GPU arm: one thread a conversation, each turn a streamed
 ``/v1/completions`` of token ids with ``return_token_ids``, the next turn's prompt this turn's prompt, its streamed ids and the
-next question. ``top_p`` is left out (serve-openai refuses it below 1).
+next question, and its request id the body's ``user`` (the id an unseeded stochastic turn's seed derives from). ``top_p`` is
+left out (serve-openai refuses it below 1).
 
     python -m tests.pipeline.serve_prefix_gpu --url URL --out FILE [--requests 32] [--seed 0] [--prompt-range 16:512]
         [--tokens 64] [--system-prompts 4] [--system-tokens 384] [--turns 2] [--max-model-len 2048]
@@ -27,8 +28,8 @@ def post(url: str, body: dict) -> Any:
     return urllib.request.urlopen(req)
 
 
-def complete(url: str, model: str, prompt: list[int], sampling: dict) -> dict[str, Any]:
-    body = {"model": model, "prompt": prompt, "stream": True, "return_token_ids": True,
+def complete(url: str, model: str, prompt: list[int], sampling: dict, user: str) -> dict[str, Any]:
+    body = {"model": model, "prompt": prompt, "stream": True, "return_token_ids": True, "user": user,
             **{k: v for k, v in sampling.items() if k != "top_p"}}
     ids, http_id, finish = [], None, None
     with post(url + "/v1/completions", body) as r:
@@ -64,7 +65,7 @@ def serve(url: str, model: str, chain: list[dict], max_model_len: int, sink: lis
         if len(prompt) + q["sampling"]["max_tokens"] > max_model_len:
             sink.append({"request_id": q["request_id"], "turn": t, "skipped": "past --max-model-len"})
             return
-        got = complete(url, model, prompt, q["sampling"])
+        got = complete(url, model, prompt, q["sampling"], q["request_id"])
         streamed = got["streamed_ids"]
         sink.append({"request_id": q["request_id"], "turn": t, "prompt_ids": prompt, **got})
 

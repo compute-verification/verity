@@ -16,7 +16,6 @@ public import Definitions.Nci.Support
 public import Definitions.Nci.Reads
 public import Definitions.Nci.Transfers
 public import Definitions.Nci.Dark
-public import Definitions.Nci.Packed
 public import Definitions.Nci.Covering
 public import Definitions.Nci.Capability
 public import Definitions.Nci.Cut
@@ -33,6 +32,7 @@ public import Definitions.NetworkCertifier.Guarantees.SampledAudit
 public import Definitions.NetworkCertifier.Guarantees.SampledCharge
 public import Definitions.NetworkCertifier.WindowCharge
 public import Definitions.NetworkCertifier.Warden
+public import Definitions.NetworkCertifier.ResponseCap
 public import Definitions.NetworkCertifier.Tap
 public import Definitions.NetworkCertifier.RecordRows
 public import Definitions.NetworkCertifier.Period
@@ -47,7 +47,10 @@ public import Definitions.Claims.RecursionGeneric
 public import Definitions.Claims.RecursionLin
 public import Definitions.Claims.Sampling
 public import Definitions.Claims.SamplingGeneric
+public import Definitions.Claims.SamplingGenericX
 public import Definitions.Claims.SamplingTwo
+public import Definitions.Claims.SamplingTwoReg
+public import Definitions.Claims.SamplingTwoRegX
 public import Definitions.Claims.SamplingServed
 public import Definitions.Claims.Guarantees.SamplingTwo
 public import Definitions.Claims.SamplingTwoRankin
@@ -70,8 +73,6 @@ public import Definitions.Nci.Guarantees.Capability
 public import Definitions.Accounting.Guarantees.Coverage
 public import Definitions.Nci.Guarantees.Fmt2
 public import Definitions.Nci.Guarantees.Training
-public import Definitions.Nci.Guarantees.PackedTraining
-public import Definitions.Nci.Guarantees.Activations
 public import Definitions.Nci.Guarantees.Covering
 public import Definitions.Nci.Guarantees.CoveringTwoCosts
 public import Definitions.Nci.Guarantees.Cut
@@ -101,7 +102,9 @@ public import Definitions.Hash.Guarantees
 public import Definitions.NetworkCertifier.Guarantees.Period
 public import Definitions.NetworkCertifier.Guarantees.PooledLeak
 public import Definitions.NetworkCertifier.Guarantees.Checked
+public import Definitions.NetworkCertifier.Guarantees.ResponseCap
 public import Definitions.NetworkCertifier.Guarantees.Carried
+public import Definitions.NetworkCertifier.Guarantees.PeriodChecked
 public import Definitions.WeightSecurity.Assumptions
 public import Definitions.WeightSecurity.Guarantees
 public import Definitions.WeightSecurity
