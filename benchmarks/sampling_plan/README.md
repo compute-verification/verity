@@ -1,6 +1,6 @@
 # sampling_plan
 
-The sampling plan for one served workload under Flock, from the planner in `verity.core.protocols.spot`
+The sampling plan for one served workload under Flock, from the planner in `verity.protocols.spot.verifier`
 (`optimize`, `candidates`, `costfit`): the cost model fitted from proving measurements, the cuts the candidate generator
 finds, the frontier of ε (at δ = 2^-40, against the workload's MACs, W_ref's proxy) over the verification overhead B, the
 break-even granularity, and how the plan moves with each input. A model, not a measurement: every input carries its
@@ -60,7 +60,7 @@ their floor.
   execution phase length in blocks that proves within its own GPU time, and the incorrect ANDs (`Stratified.harm_bound`, not a Lean
   guarantee). `--card h200` prices it with the `h200` card's fit instead of the RTX PRO 6000's.
 - `demo_a.py`: Demo A's frontier on one H200: plain INT8 weights, no P2 decode, a block of 16,384 requests at a
-  6.35 s step, 32 steps a request, on the Definition map (`examples/h200/e2e_h200/plan.py`: every subcircuit a
+  6.35 s step, 32 steps a request, on the Definition map (`archive/examples/h200/e2e_h200/plan.py`: every subcircuit a
   Definition Flock stages, at its measured ANDs and staged k_log) with PoUW's tiles as one more subcircuit at each K
   (J10-R's per-call lane units, `PouwH1LaneZy_v2` over v5, at their traced ANDs), and statements shared per subcircuit
   per execution phase. The harm is half skipped work (each unit's own ANDs), half leaked output bits, each half
@@ -114,7 +114,7 @@ uv run python benchmarks/sampling_plan/cpu_budget.py --plan PLAN.json --slots 17
 - `recursion.py`: one recursive session's cost per monitoring period. It reads a `benchmarks/recursion_e2e` result's
   measured parts (the inner run, V*'s staging, V*'s ZK-served releases and the Lean step), with the same units'
   non-recursive `--zk` session beside them, and scales them to every machine-window of the census's datacenter
-  (`dc-12500-machines-600s`) and of the world (`benchmarks/rho`'s `world-h200` fleet, in the datacenter's windows,
+  (`dc-12500-machines-600s`) and of the world (`verity/protocols/inference_only/rho`'s `world-h200` fleet, in the datacenter's windows,
   assumed) over a week, a month and a year: sessions, node-hours and nodes kept busy, prover's and auditor's
   (`recursion-periods.json`, `recursion-periods.md`).
 
