@@ -68,8 +68,11 @@ def kind_of(scheme: str) -> str:
 class Rows(Protocol):
     """A weight's int7 rows (int8) and FP32 scale encodings (uint32), quantized when read."""
 
-    n: int
-    k: int
+    @property
+    def n(self) -> int: ...
+
+    @property
+    def k(self) -> int: ...
 
     def rows(self, lo: int, hi: int) -> tuple[np.ndarray, np.ndarray]: ...
 
@@ -417,7 +420,7 @@ CALLS_DATA_FILE = "pouw-ncp-v2-calls.npz"
 
 def save_calls(path: str | Path, records: Sequence[CallRecord]) -> None:
     """Every call's A, s, bias, row and column ids, salt and anchored fields, by index."""
-    arrays: dict[str, np.ndarray] = {}
+    arrays: dict[str, Any] = {}         # each an array; Any, since mypy offers ``**arrays`` to ``allow_pickle`` as well
     for r in records:
         c, p = r.call, f"c{r.index}_"
         arrays.update({p + "a": c.a, p + "s": c.s, p + "bias": c.bias, p + "rowids": c.rowids, p + "colids": c.colids,
