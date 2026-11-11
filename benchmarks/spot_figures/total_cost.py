@@ -680,6 +680,9 @@ def _run(model_name: str, scope_names: tuple[str, ...] | None, request: str, eac
     tokens = c["tokens_per_request"].value
     refs = f1.references(c, model_name, sc.get("references", []))
     notes = f1.reference_notes(sc.get("references", []), refs)
+    if serving == "measured":
+        for panel in PANELS:
+            notes.setdefault(panel, []).append(f1.reading_note(f1.reading(sc, c, part)))
     chosen = [s for s in f1.scopes(c, part) if scope_names is None or s.name in scope_names]
     series: dict[str, list[dict]] = {p: [] for p in PANELS}
     bases, plans = {}, []

@@ -15,8 +15,9 @@ proof blocks as the card has them; the captions give the share of MACs in no pro
 That is the `assumed` reading of serving's rate, the default.  Under `serving="measured"` (`SERVING`) a scope serves
 at the model's `serving_rate` card's computed tokens a GPU-second instead: its requests are its GPU-seconds times the
 rate over a request's tokens, a replay takes the request's tokens over the rate, and no MACs a token enters either;
-the scope's GPUs stay rho's.  The output then says which rate it read (`serving`), and each exfiltration row names it
-beside the rate at which its bound would reach `SERVING_GOAL` (`at_reading`).
+the scope's GPUs stay rho's.  The output then says which rate it read (`serving`), every caption says so too
+(`reading_note`), and each exfiltration row names the rate beside the rate at which its bound would reach `SERVING_GOAL`
+(`at_reading`).
 
 **Costs**, in the scope's GPU-seconds: a replay costs the `replay` card's factor times its request served at serving's
 MFU; proving a proof block takes the marginal proof overhead (the x-axis) times its FLOP at the dense peak, plus its
@@ -438,6 +439,17 @@ def reading(sc: dict, c: dict[str, InputCard], part: TokenBlocks) -> dict:
             "assumed_tokens_per_gpu_second": c["mfu_serve"].value * c["peak_flops"].value / (2 * part.served_macs)}
 
 
+def reading_note(serving: dict) -> str:
+    """The sentence every caption at the measured reading carries: the rate the figure was planned at, whether it is
+    a floor, and what it stands in place of."""
+    rate, assumed = serving["tokens_per_gpu_second"], serving["assumed_tokens_per_gpu_second"]
+    what = ("above which the engine computed no more" if serving["saturated"]
+            else "a lower bound: no rate above it was served")
+    return (f"Serving is planned at the measured {rate:,.5g} computed tokens a GPU-second ({what}), not at rho's "
+            f"fleet utilization, {assumed:,.5g} on this circuit: the scope's GPUs are the same, and its requests "
+            f"{rate / assumed:.2g} of that reading's.")
+
+
 def at_reading(serving: dict | None, bound: float) -> dict:
     """What an exfiltration row at the measured reading names beside its bound: the rate, whether a rate above it gave
     no more, and the rate at which the bound would reach `SERVING_GOAL`.  That rate is by proportion: a scope's requests
@@ -837,6 +849,9 @@ def _run(model_name: str, points: int, scope_names: tuple[str, ...] | None, requ
     notes = reference_notes(sc.get("references", []), refs)
     for panel, sentences in c["notes"].value.items():
         notes.setdefault(panel, []).extend(sentences)
+    if serving == "measured":
+        for panel in ("exfiltration", "exfiltration_appendix", "infiltration", "skipped_work"):
+            notes.setdefault(panel, []).append(reading_note(reading(sc, c, part)))
     shown = {panel: [r for r in rows if r["main"]] for panel, rows in refs.items()}
     shown["exfiltration_appendix"] = [r for r in refs["exfiltration"] if not r["main"]]
     chosen = [s for s in scopes(c, part) if scope_names is None or s.name in scope_names]

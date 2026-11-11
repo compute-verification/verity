@@ -87,6 +87,7 @@ def test_the_defaults_json_is_the_same_with_the_card_and_without(card_dir):
     without = f.run("GLM-5.3", 2, SCOPE, designs=CLOSED, lean=False)
     assert json.dumps(with_card) == json.dumps(without)
     assert "serving" not in with_card and "serving_rate" not in with_card["inputs"]
+    assert not any("Serving is planned" in caption for caption in with_card["scopes"]["world year"]["captions"].values())
     assert not any("tokens_per_gpu_second" in row for row in f.at_overhead(with_card))
 
 
@@ -134,6 +135,9 @@ def test_a_row_at_the_measured_reading_names_the_rate_and_the_rate_at_the_goal()
     assert out["cards"]["serving_rate"] == card and out["inputs"]["serving_rate"]["value"] == rate
     world = out["scopes"]["world year"]
     assert world["requests"] == world["gpu_seconds"] * rate / c["tokens_per_request"].value
+    note = f.reading_note(out["serving"])
+    assert f"{rate:,.5g} computed tokens a GPU-second (a lower bound" in note
+    assert all(note in caption for caption in world["captions"].values())
     rows = [r for r in f.at_overhead(out) if r["panel"] == "exfiltration"]
     assert rows
     for r in rows:
