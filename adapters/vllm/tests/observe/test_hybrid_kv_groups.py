@@ -178,6 +178,7 @@ def test_a_group_without_a_slot_mapping_covers_no_row():
     se = step_events(events)
     rc = next(n for n in se.roots for n in n.walk() if n.op.startswith("_C_cache_ops.reshape_and_cache_flash"))
     bare = dataclasses.replace(rc, enter=dataclasses.replace(rc.enter, module=LAYER, parent=None), children=[])
+    absent: dict
     for absent in ({}, {"slot_mapping": None}, {"slot_mapping": []}):
         g0, g1 = _groups(start, this_layer_group=1)
         g1 = {**{k: v for k, v in g1.items() if k != "slot_mapping"}, **absent}

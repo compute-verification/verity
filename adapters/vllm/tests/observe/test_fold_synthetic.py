@@ -508,6 +508,7 @@ def test_the_header_supplies_the_configuration_a_profile_does_not_state(memory):
     import dataclasses
 
     own = fold(toy_log(), toy_profile(), strict=True, with_program=False)
+    config: dict | None
     for config in (None, {}):
         r = fold(toy_log(), dataclasses.replace(toy_profile(), config=config), strict=True, with_program=False)
         assert r.weights_type == own.weights_type == b1.weights_type(C) and r.report.by_spec == own.report.by_spec
@@ -529,6 +530,8 @@ def test_a_header_reads_alike_without_children_sampling_and_a_tensor_parallel_no
 
     hdr = toy_log()[0]
     own = fold(toy_log(), toy_profile(), strict=True, with_program=False)
+    more: dict
+    notes: dict | None
     for more in ({}, {"children": None, "sampling": None}, {"children": [], "sampling": {}}):
         for notes in (None, {}, {"tp2": None}, {"tp2": {}}, {"tp2": {"world_size": 1}}):
             evs = toy_log()

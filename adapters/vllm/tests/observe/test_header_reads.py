@@ -133,6 +133,7 @@ def test_the_all_reduce_settings_and_device_a_capture_recorded():
     recorded = {"disable_custom_all_reduce": True, "anything": 1}
     assert allreduce_settings(header(notes={"allreduce_settings": recorded, "tp2": None})) == recorded
     facts = {"parallel_config": {"disable_custom_all_reduce": False}}
+    more: dict
     for more in ({}, {"nccl_env": None}, {"nccl_env": {}}):
         for profile in (None, *_absent("engine_flags")):
             assert allreduce_settings(header(profile, {"tp2": {"facts": {**facts, **more}}})) == tp_allreduce.settings_of(False, {})
@@ -149,6 +150,7 @@ def test_a_kv_group_without_a_block_table_for_the_request_is_a_geometry_error():
     _events, start = decode_step()
     layer, tables = "model.layers.0.self_attn.attn", dict(start.block_tables)
     request = next(iter(tables))
+    held: dict
     for held in ({}, {"block_tables": None}, {"block_tables": {}}, {"block_tables": {"other": tables[request]}}):
         groups = [{"layers": [layer], "block_size": start.block_size, **held}, {"layers": ["other"], "block_size": start.block_size}]
         with pytest.raises(GeometryError, match="no block table for request"):
