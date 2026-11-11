@@ -199,12 +199,12 @@ SPOT_PYTHON = ("core.protocols.spot",)
 SPOT_TREES = ("verity/protocols/spot", "verity/protocols/spot/verifier/lean", "verity/protocols/flock/verifier",
               "verity/protocols/flock/prover", "verity/protocols/flock/pod", "verity/protocols/flock/agreement", "verity/protocols/flock/tool.py")
 SPOT_LEAN = ("verity/protocols/spot/verifier/lean", "verity/protocols/flock/verifier")
-SPOT_SECURITY = ("Security/*/Flock", "Security/*/Flock.lean", "Security/*/Spot", "Security/*/Spot.lean",
-                 "Security/Definitions/Claims/Sampling*")
+SPOT_SECURITY = ("security/*/Flock", "security/*/Flock.lean", "security/*/Spot", "security/*/Spot.lean",
+                 "security/Definitions/Claims/Sampling*")
 CERTIFIER_PYTHON = ("core.protocols.certifier", "ml.protocols.certifier")
 CERTIFIER_MODULES = ("verity.protocols.certifier.verifier", "verity.protocols.certifier.prover", "verity.protocols.certifier.device")
 CERTIFIER_LEAN = ("verity/protocols/certifier/device/program/lean", "verity/protocols/certifier/device/lean",
-                  "verity/protocols/certifier/verifier/lean", "Security/*/NetworkCertifier", "Security/*/NetworkCertifier.lean")
+                  "verity/protocols/certifier/verifier/lean", "security/*/NetworkCertifier", "security/*/NetworkCertifier.lean")
 SPOT_NOT_CERTIFIER = ("SPOT[Flock] never imports the network certifier, which composes with it only above both and whose "
                       "stamp SPOT reads as a certified input")
 #: Files outside ``infra/`` that import a package of it, each with why.
@@ -629,11 +629,11 @@ def test_a_spot_import_of_the_certifier_is_found() -> None:
     parent = _lean_reach(["s/A.lean"], lambda f: imports.get(f, ()), files_of)
     found = [_chain(parent, f) for f in sorted(parent) if _covered(f, CERTIFIER_LEAN)]
     assert found == ["verity/protocols/certifier/device/program/lean/C.lean <- s/B.lean <- s/A.lean"], found
-    assert _covered("Security/Proofs/Properties/NetworkCertifier/Check/Bytes.lean", CERTIFIER_LEAN)
-    assert not _covered("Security/Proofs/Flock/Bytes.lean", CERTIFIER_LEAN)
-    modules = _lean_modules(["Security/Proofs/Flock/Bytes.lean", "verity/protocols/flock/verifier/Flock/Bytes.lean"],
-                            ["Security/Proofs/lakefile.toml", "verity/protocols/flock/verifier/lakefile.toml"])
-    assert modules == {"Proofs.Flock.Bytes": ["Security/Proofs/Flock/Bytes.lean"],
+    assert _covered("security/Proofs/Properties/NetworkCertifier/Check/Bytes.lean", CERTIFIER_LEAN)
+    assert not _covered("security/Proofs/Flock/Bytes.lean", CERTIFIER_LEAN)
+    modules = _lean_modules(["security/Proofs/Flock/Bytes.lean", "verity/protocols/flock/verifier/Flock/Bytes.lean"],
+                            ["security/Proofs/lakefile.toml", "verity/protocols/flock/verifier/lakefile.toml"])
+    assert modules == {"Proofs.Flock.Bytes": ["security/Proofs/Flock/Bytes.lean"],
                        "Flock.Bytes": ["verity/protocols/flock/verifier/Flock/Bytes.lean"]}, modules
 
 
