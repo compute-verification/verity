@@ -273,17 +273,17 @@ def unitCount (x : Msg) : ℕ :=
 theorem units_eq_unitCount (x : Msg) : units (base h) x = unitCount h x := rfl
 
 /-- **A checked unit of a run, with its session's setup**: the values `SlotsAt` quantifies over. The run's statement
-`x` and its parse `s`, its messages of rounds 0, 1 and `stage + 1`, round 0's coin and the second stage's, the rest of
-its transcript, the session witness `wF`, the unit `u`, its proof block `b`, its replay block `ρ` with gates `rb`, and
-its session's setup. -/
-structure CheckedRun where
+`x` and its parse `s`, its messages of rounds 0, 1 and `stage + 1`, round 0's coin and the second stage's `R` coins,
+the rest of its transcript, the session witness `wF`, the unit `u`, its proof block `b`, its replay block `ρ` with
+gates `rb`, and its session's setup. -/
+structure CheckedRun (R : ℕ) where
   x : Msg
   s : AuditStatement
   m₀ : Msg
   m₁ : Msg
   m₂ : Msg
   c₀ : FlockDeploy.Coin
-  c₁ : Stage h
+  c₁ : Fin R → FlockDeploy.Coin
   rest : List (Msg × Out)
   wF : Claims.Flock.Wit
   u : ℕ
@@ -295,7 +295,7 @@ structure CheckedRun where
 
 namespace CheckedRun
 
-variable (r : CheckedRun h)
+variable (r : CheckedRun h.stage)
 
 /-- **The run is accepted and `u` is one of its checked units**: `SlotsAt`'s premises. -/
 def Ok : Prop :=
@@ -310,7 +310,7 @@ abbrev xS : Msg := unitStmt h r.m₂ r.u
 
 variable {h} in
 /-- The run's transcript. -/
-abbrev seen : Seen := seenAt r.m₀ r.m₁ r.m₂ r.c₀ r.c₁ r.rest
+abbrev seen : Seen := seenAt (h := h) r.m₀ r.m₁ r.m₂ r.c₀ r.c₁ r.rest
 
 variable {h} in
 /-- The session statement as the verifier parses it. -/
