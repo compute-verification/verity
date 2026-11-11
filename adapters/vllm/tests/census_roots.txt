@@ -54,10 +54,9 @@ verity_vllm.pipeline.edge      # a replay block's edge values and `follows`: a l
 verity_vllm.pipeline.interior_rows      # a two-stage audit's interior registration from replay: a library entry point (`Replay`, `span`, `interior`), for the two-stage driver
 verity_vllm.pipeline.serve_h1      # a served window's PoUW H1 release: a library entry point (`config_of`), read by benchmarks/one_stage/served_verdicts.py
 verity.definitions.numerics.twins      # the twins register their kernels with core on import: a library entry point, imported by circuit-check's targets and check's prebuild
-# the engine's seams and stock pieces: library entry points (tests/test_vllm_public_api.py's PUBLIC), which general plugins and
-# code outside the package call
+# the engine core's seam and the stock engine: library entry points (tests/test_vllm_public_api.py's PUBLIC), which general plugins
+# and code outside the package call
 verity_vllm.engine.core_gate      # the engine core's seam between steps: general plugins add their gates and edges to its SEAM
-verity_vllm.engine.plugins      # the distribution's general plugins (PLUGINS) and the environment that loads the ones a run names (env)
 verity_vllm.engine.stock      # a stock engine at the pin with no protocol on, which benchmarks/replay_determinism builds
 # the protocol options, each module a root: the adapters are imported by name when a run enables their protocol
 # (protocol_options.adapter)

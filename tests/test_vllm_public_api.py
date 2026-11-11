@@ -46,8 +46,6 @@ PUBLIC = {
     "verity_vllm.engine.served_seed": "I1: the served engine's public default seed, which a served registration fixes",
     "verity_vllm.engine.moe_align": "I1: the served Marlin MoE path's moe_align_block_size, each expert's pairs in pair-index "
                                     "order: its reference, kernels and install, which benchmarks/moe_align checks and times",
-    "verity_vllm.engine.plugins": "I1: the distribution's vLLM general plugins (PLUGINS), which pyproject.toml declares, and "
-                                  "the environment that loads exactly the ones a run names (env)",
     "verity_vllm.engine.step_trace": "I2: the scheduler's step trace of an in-process engine core (StepTrace) and its "
                                      "reader, which serve-openai records and benchmarks/serve_tax times and replays",
     "verity_vllm.engine.sampler_capture": "I2: chosen requests' logits rows and ids at a replaying engine's sampler, held "
