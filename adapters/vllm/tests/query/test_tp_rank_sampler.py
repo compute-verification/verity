@@ -1,16 +1,14 @@
 """A TP rank's stochastic Program is the TP1 Program under the rank wrapper's `inner` scope (`vllm_meta.WithPeers` calls the TP1 wrapper
 as its submodule `inner`): its selector is `inner/gumbel_topp_token_select[0]`, not `gumbel_topp_token_select[0]` at the root.  The
-selector's seed and splits reads are the sampler's (`runner.sampler/seed`, `runner.sampler/splits`), never token ids a module body
-consumes: a stochastic TP2 B8 manifest (phi4-14b) required an `input_token_ids` identity `inner/in` per sampling event, which
-no collector binds, and the composition took it as its reference for the token ids."""
+selector's seed read is the sampler's (`runner.sampler/seed`), never token ids a module body consumes: a stochastic TP2 B8 manifest
+(phi4-14b) required an `input_token_ids` identity `inner/in` per sampling event, which no collector binds, and the composition took it
+as its reference for the token ids."""
 
 from __future__ import annotations
 
 import dataclasses
 
-import pytest
-
-from tests.query.test_literal_operands import RES, constant_s_program, sampler_program
+from tests.query.test_literal_operands import RES, sampler_program
 from verity_vllm.query.units import ValueRef
 from verity_vllm.correspondence.reader_for_query import Correspondence
 from verity_vllm.query.program_view import ProgramView
@@ -39,11 +37,10 @@ def _identities(P: ProgramView, res: dict, **kw) -> list[tuple]:
     return sorted((x["family"], x["step"], x["op_path"], x["output_member"], tuple(x["element_range"])) for x in man["identities"])
 
 
-@pytest.mark.parametrize("program", [sampler_program, constant_s_program])
-def test_a_tp_ranks_sampler_requires_the_tp1_identities(program):
-    P = program()
+def test_a_tp_ranks_sampler_requires_the_tp1_identities():
+    P = sampler_program()
     R = under_rank_wrapper(P)
-    assert Correspondence(R).module_of(5 if program is sampler_program else 6) == "inner"
+    assert Correspondence(R).module_of(6) == "inner"
     tp1 = _identities(P, RES)
     assert not any(op == "inner" for _f, _s, op, _m, _r in tp1)
     assert _identities(R, dict(RES, tp={"world": 2, "rank": 0}), rank=0, ranks=2) == tp1

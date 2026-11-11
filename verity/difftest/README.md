@@ -1,7 +1,7 @@
 # verity/difftest: the Lean against the Python that mirrors it
 
 Lean is the definition and the verifier (root `AGENTS.md`, "Design rules"), and Python mirrors it for the
-prover's speed. Each piece of core in executable Lean (`verity/core/<core path>`, a Lake package of its own) and its
+prover's speed. Each piece of executable Lean (a Lake package of its own, beside the code it defines under `verity/`) and its
 Python are held together by a differential test: Hypothesis samples inputs, invalid ones included, and each goes to the
 Python (the harness's `reference`) and to the Lean executable, which must agree exactly. Until a protocol's verifier
 switches to its Lean (on evidence, by the procedure in `.agents/skills/friction/SKILL.md`), its Python verifier

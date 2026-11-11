@@ -4,7 +4,8 @@ packages whose passes can't be reused, with dependencies kept warm.
     python tools/verity/lean/lean_audit.py --out DIR [--cache DIR] [--deps DIR] [--fresh] [--urls FILE] [--export DIR] [--package PKG]...
                                                       (only those packages: a shard's share, `check.py --shard`)
                                                       [--regenerate] (the Lean check of `next`: record differences pass,
-                                                      and audit.json's `regenerated` names the records drive commits)
+                                                      and audit.json's `regenerated` names the records drive commits,
+                                                      `rekeyed` the passes kept for that commit)
                                                       [--bookkeeping warn] (with --regenerate, drive's lock run: the
                                                       bookkeeping repaired and warned, `repaired` the caps drive commits)
                                                       [--bundle] (a recorded check: the module versions it built, for other nodes)
@@ -15,8 +16,10 @@ packages whose passes can't be reused, with dependencies kept warm.
 
 A package's verdict is reused while everything its audit reads is unchanged, wherever the package is. Its key hashes content,
 each file under its path relative to its package (a module's is its name), never the package's own path:
-- the tracked files of the package, less the Lake packages nested in it (`audit.lean_modules` skips them), its
-  `lean-toolchain`, `lake-manifest.json` and `lean-audit.json` among them;
+- the tracked files of the package, its `lean-toolchain`, `lake-manifest.json` and `lean-audit.json` among them, less the
+  Lake packages nested in it (`audit.lean_modules` skips them) and the files `UNREAD_NAMES` names, which no audit reads:
+  its `*.md`, `.gitignore`, `pyproject.toml`, `test_*.py` and `conftest.py`, so a README or a pytest file changed inside
+  a package audits nothing again. The scratch tree leaves them out too, so a read of one would fail;
 - each package its `proved_in` names (`provers`), whose build the audit reads its guarantees from, by its content (which
   names the packages it requires by theirs), under its path;
 - the same for each package it requires by path (`audit.path_deps`), under the name its manifest gives it. Where the
@@ -46,6 +49,18 @@ stored under its key, and a failure is never stored. One read is outside the scr
 in `lean-audit.json`) reads this checkout (`check.py --repo`). Its output is used only with the SHA-256 the record holds for
 it, and the key covers the record, so it cannot pass a test on other data. The package's own Python tests check that the
 generator still writes that data.
+
+A lock run (`--regenerate`) passes a package on its regenerated lock, the lock of another tree: the commit drive makes of
+the regenerated locks, where that package, each package requiring it by path and the spec it proves have other keys, so
+no pass of the run answers there. After a whole lock run passes, each such package it audited is judged on that tree
+from the facts document its own audit stored (`keep_regenerated`: `check.py --facts-from` with every regenerated lock in
+place, every check that reads the live locks and no build), and where that leaves nothing its pass is stored under the
+new key (audit.json's `rekeyed`): the audit of the lock commit reuses it and builds nothing. A pass is kept only where
+each regenerated lock the package's audit reads agrees with the lock it replaces on all the build, the seal, `Facts.lean`,
+the replay and the tests take from a lock (`check.py`'s `build_inputs`), so those steps would run on the same inputs
+there. That holds for a build and tests that read their lock only through the audit, as every package's do; one that
+read its own `lean-audit.json` would be a read its pass does not cover, which the nightly uncached check shows as a
+disagreement, as it does a read outside a key.
 
 A package's fetched dependencies (`.lake/packages`: Mathlib's cache, ArkLib's build) are kept on this machine under
 `lake-manifest.json` plus `lean-toolchain`. They're moved into the scratch package's own `.lake` before its build (the only place
@@ -92,9 +107,13 @@ from __future__ import annotations
 import argparse
 import base64
 import fcntl
+import fnmatch
+import functools
 import gzip
 import hashlib
+import http.client
 import importlib.util
+import itertools
 import json
 import os
 import re
@@ -132,21 +151,17 @@ SETTINGS = _module(Path(__file__).resolve().parent / "settings.py", "lean_settin
 CONTRACT = "tools/verity/graph/verity_graph/contract.py"
 
 
+@functools.cache
+def lean_check():
+    """`check.py` beside this file, loaded once: the auditor, for the functions of it this job calls itself."""
+    return _module(Path(__file__).resolve().parent / "check.py", "lean_check_for_lean_audit")
+
+
 def sandboxed() -> bool:
     """Whether check.py builds in its sandbox on this node, by its own probe (`check.sandboxed`). Outside it a build's
     compile-time code runs as the user and may leave any output, and the sampled recompile, which binds a restored module to
     its source, doesn't run, so nothing a build restores would be checked."""
-    return _check().sandboxed()
-
-
-_CHECK: list = []
-
-
-def _check():
-    """check.py, loaded once."""
-    if not _CHECK:
-        _CHECK.append(_module(Path(__file__).resolve().parent / "check.py", "lean_check_for_lean_audit"))
-    return _CHECK[0]
+    return lean_check().sandboxed()
 
 
 def runs_code(pkg: Path) -> str | None:
@@ -160,7 +175,7 @@ def runs_code(pkg: Path) -> str | None:
     its trace, which nothing then tells from Lake's. A passing audit says there is no such code in the package it
     audits (`check.scans`); the artifact cache takes builds no audit passed, so `LakeArtifacts.put` asks it of every
     build, the sources being the ones the build read: the sandbox lets no build write them."""
-    a = _check()
+    a = lean_check()
     for d in [pkg.resolve(), *a.path_deps(pkg)]:
         try:
             if (d / "lakefile.lean").exists():
@@ -187,11 +202,24 @@ def packages(files: list[str]) -> list[str]:
     return sorted({f.rsplit("/", 1)[0] for f in files if f.endswith("/lean-audit.json") and not f.startswith(LEAN_TOOL)})
 
 
+#: the files of a package no audit reads, by name, each with what does: out of the package's key and of the scratch tree,
+#: where a read of one fails the audit. Nothing goes by directory: a generator, its helpers, data and fixtures stay in
+#: wherever they sit, `tests/` included (a `runs` entry may run a generator kept there)
+UNREAD_NAMES = {
+    "*.md": "the package's README and other prose, for readers",
+    ".gitignore": "git, which never checks out what it lists",
+    "pyproject.toml": "the settings of the package's Python suite, which its suite reads",
+    "test_*.py": "the package's pytest files, which its suite runs",
+    "conftest.py": "pytest's fixtures for those files",
+}
+
+
 def own_files(pkg: str, files: list[str]) -> list[str]:
-    """The package's tracked files, less those of the Lake packages nested in it."""
+    """The package's tracked files, less those of the Lake packages nested in it and those `UNREAD_NAMES` names."""
     nested = {f.rsplit("/", 1)[0] + "/" for f in files if f.startswith(pkg + "/") and f.rsplit("/", 1)[-1] in ("lakefile.toml", "lakefile.lean")
               and f.rsplit("/", 1)[0] != pkg}
-    return [f for f in files if f.startswith(pkg + "/") and not any(f.startswith(n) for n in nested)]
+    return [f for f in files if f.startswith(pkg + "/") and not any(f.startswith(n) for n in nested)
+            and not any(fnmatch.fnmatchcase(f.rsplit("/", 1)[-1], p) for p in UNREAD_NAMES)]
 
 
 def path_deps(pkg: str) -> list[str]:
@@ -223,6 +251,7 @@ FLAGS = ["--build", "--closure"]
 #: the files of `tools/verity/lean/` no audit reads, each with what does: out of every key, and of the scratch tree, where a
 #: read of one fails the audit
 NOT_READ = {
+    "axiom_probe.py": "the axiom probe of `verity lean try`, which `lean_changed.py` and the CLI load",
     "lean-deps.json": "the dependency bundles' pins, which preflight reads",
     "lean_changed.py": "check's lean-changed step and the Lean fast path, which run beside the audit",
     "merge.py": "git's merge driver for lean-audit.json",
@@ -232,6 +261,7 @@ NOT_READ = {
     "unread.py": "the ratchet on wholly unread modules, which `run` runs after the audits on the facts they wrote",
     "unread-caps.json": "the ratchet's caps, which `unread.py` reads",
     "unread_gate.py": "drive's landing gate on the seeds the ratchet reads, which runs `main`'s copy of this tool",
+    "warm.py": "the audit of a ready mark's merge, which starts `lean_audit.py` for the packages a change reaches",
     "pyproject.toml": "the tools/verity/lean suite's settings",
 }
 
@@ -399,10 +429,15 @@ def tool_files(files: list[str]) -> list[str]:
     return sorted({*tool, "tools/verity/check/common.py", CONTRACT})
 
 
+def read_packages(pkg: str) -> list[str]:
+    """The packages whose files an audit of ``pkg`` can read: itself, those it requires by path, and each package its
+    `proved_in` names with those that one requires."""
+    return list(dict.fromkeys([pkg, *path_deps(pkg), *(d for q in provers(pkg) for d in (q, *path_deps(q)))]))
+
+
 def inputs(pkg: str, files: list[str]) -> list[str]:
     """Every tracked file an audit of ``pkg`` can read."""
-    pkgs = [pkg, *path_deps(pkg), *(d for q in provers(pkg) for d in (q, *path_deps(q)))]
-    own = [f for p in dict.fromkeys(pkgs) for f in own_files(p, files)]
+    own = [f for p in read_packages(pkg) for f in own_files(p, files)]
     return sorted({*own, *tool_files(files)})
 
 
@@ -450,24 +485,28 @@ WHERE = "(where the package is)"
 CONFIG = ("lakefile.toml", "lakefile.lean", "lake-manifest.json", "lean-toolchain", "lean-audit.json")
 
 
-def content(pkg: str, files: list[str], _memo: dict | None = None) -> dict[str, str]:
+def content(pkg: str, files: list[str], _memo: dict | None = None, locks: dict[str, bytes] | None = None) -> dict[str, str]:
     """{path relative to the package: sha256} of its own files, so that the package moved to another directory with the same
     content has the same map. Its lakefile and manifest name each package it requires by path by that package's own content
     (`content_key`), not by where it is: moving the required package and rewriting the paths to it keeps the map too. A package
     that may read beyond its directory by a relative path keeps its path in the map (`WHERE`): a `..` left in a file Lake or
-    the audit read paths from, or a module's `include_str`."""
+    the audit read paths from, or a module's `include_str`. ``locks`` ({a lock's path in the repository: its bytes}) stand
+    for those files' bytes here: the map of the tree with them written (`keep_regenerated`)."""
     memo = {} if _memo is None else _memo
     spelled = _required(pkg, files)
     out, escapes = {}, False
     for f in own_files(pkg, files):
         rel, p = f[len(pkg) + 1:], ROOT / f
-        if not p.is_file():
+        if locks and f in locks:
+            text = locks[f]
+        elif not p.is_file():
             out[rel] = "-"
             continue
-        text = p.read_bytes()
+        else:
+            text = p.read_bytes()
         if rel in ("lakefile.toml", "lake-manifest.json") and spelled:
             text, out[rel] = _spelled_as(text, "path" if rel == "lakefile.toml" else "dir", spelled,
-                                         lambda d: content_key(d, files, memo))
+                                         lambda d: content_key(d, files, memo, locks))
         else:
             out[rel] = hashlib.sha256(text).hexdigest()
         escapes |= (b".." in text) if rel in CONFIG else rel.endswith(".lean") and b"include_str" in text
@@ -476,10 +515,10 @@ def content(pkg: str, files: list[str], _memo: dict | None = None) -> dict[str, 
     return out
 
 
-def content_key(pkg: str, files: list[str], _memo: dict | None = None) -> str:
+def content_key(pkg: str, files: list[str], _memo: dict | None = None, locks: dict[str, bytes] | None = None) -> str:
     memo = {} if _memo is None else _memo
     if pkg not in memo:
-        memo[pkg] = hashlib.sha256(json.dumps(sorted(content(pkg, files, memo).items())).encode()).hexdigest()
+        memo[pkg] = hashlib.sha256(json.dumps(sorted(content(pkg, files, memo, locks).items())).encode()).hexdigest()
     return memo[pkg]
 
 
@@ -492,15 +531,16 @@ def _lake_name(pkg: str, dep: str) -> str:
     return dep
 
 
-def components(pkg: str, files: list[str], flags: list[str]) -> dict:
+def components(pkg: str, files: list[str], flags: list[str], locks: dict[str, bytes] | None = None) -> dict:
     """What a package's key hashes, none of it a path of the package: the schema, the audit's flags, the package's `content`,
     that of each package it requires by path (under the name its manifest gives it), that of each package its `proved_in`
     names (under its path, which the policy already holds), and each of the auditor's files at its
-    path in the repository. A pass keeps them beside it, so `--explain` can say what a miss changed."""
+    path in the repository. A pass keeps them beside it, so `--explain` can say what a miss changed. With ``locks``
+    (`content`), those of the tree with those locks written: the commit drive makes of a lock run's regenerated records."""
     memo: dict = {}
-    return {"schema": SCHEMA, "flags": flags, "files": content(pkg, files, memo),
-            "requires": {_lake_name(pkg, d): content(d, files, memo) for d in path_deps(pkg)},
-            "proved_in": {q: content(q, files, memo) for q in provers(pkg)},
+    return {"schema": SCHEMA, "flags": flags, "files": content(pkg, files, memo, locks),
+            "requires": {_lake_name(pkg, d): content(d, files, memo, locks) for d in path_deps(pkg)},
+            "proved_in": {q: content(q, files, memo, locks) for q in provers(pkg)},
             "tool": {f: (_sha(ROOT / f) if (ROOT / f).is_file() else "-") for f in tool_files(files)}}
 
 
@@ -795,9 +835,10 @@ class WarmBuilds:
     """Each package's own `.lake/build`, kept under its `build_key` by the last run whose audit of it passed, so an auditor
     change, or a change to one module, doesn't rebuild every module. An audited package's is moved in and back only when its
     audit passed: its compile-time code may write in it. A package in the tree only as a path dependency gets a copy, which
-    never comes back. The audit still checks every statement against these `.olean` files and replays every declaration
-    through the kernel, and compiles a random sample of the modules its build kept again (`check.sampled_recompile`). The
-    newest `kept` by use stay (`evict`)."""
+    never comes back; a module of it that the artifact cache lacks is compiled by the first build that reaches it, and
+    indexed with that build's (`module_keys.settle`). The audit still checks every statement against these `.olean`
+    files and replays every declaration through the kernel, and compiles a random sample of the modules its build kept
+    again (`check.sampled_recompile`). The newest `kept` by use stay (`evict`)."""
 
     def __init__(self, store: Path, kept: int = BUILDS_KEPT, max_gb: float | None = BUILDS_MAX_GB):
         self.store, self.kept, self.max_gb = store, kept, max_gb
@@ -987,18 +1028,35 @@ def prune_replays(cache: Path, kept: int | None = None) -> int:
     return n
 
 
-#: the disk the artifact cache may hold beyond what kept builds share with it (hard links), before its oldest go
-ARTIFACTS_CAP = 20 << 30
+#: the disk the artifact cache may hold beyond what kept builds share with it (hard links), before its oldest go: more
+#: than the largest package's build, with room for the versions before it, since what a tree held is the cache's alone
+#: once that tree is swept (a stopped audit's), and `prune` then cuts to three quarters of this
+ARTIFACTS_CAP = 64 << 30
 ARTIFACT = MK.ARTIFACT
 #: a bundle's members: the index's entries and the artifacts they name, nothing else
 MEMBER = re.compile(r"artifacts/[0-9a-f]{16}\.[a-z.]+|" + MK.INDEX + r"/[0-9a-f]{128}\.json")
-#: what one run's bundle (`LakeArtifacts.bundle`) holds at most, uncompressed: a run's files over 4 GiB upload without resume
+#: what one bundle (`LakeArtifacts.bundle`) holds at most, uncompressed: a run's files over 4 GiB upload without resume. A
+#: run that added more writes as many bundles as that takes (`LakeArtifacts.bundle_into`)
 BUNDLE_CAP = 3 << 30
-#: a key of `lean-deps-urls.json` naming a recorded check's bundle by its sha256 (`shared_bundles`)
+#: a key of `lean-deps-urls.json` naming a bundle of one of `PUBLISHERS`' runs by its sha256 (`shared_bundles`)
 SHARED = "lean-artifacts/"
-#: a run's file that is a bundle (`LakeArtifacts.bundle_into` in the run's `lean-audit/`), the path `shared_bundles` lists
-BUNDLE_FILE = re.compile(r"lean-audit/lean-artifacts(-\d+)?\.tar\.gz")
-#: how many of the newest recorded checks' bundles the launcher sends
+#: a bundle's name in the directory its audit writes it in (`LakeArtifacts.bundle_into`)
+BUNDLE_NAME = r"lean-artifacts(-\d+)?\.tar\.gz"
+#: a recorded check's or a records run's file that is a bundle, in the run's `lean-audit/`
+BUNDLE_FILE = re.compile("lean-audit/" + BUNDLE_NAME)
+#: the store's attempts of records runs (`lean_changed.py --records`), by the command `research run` recorded
+RECORDS_RUNS = "manifest_json LIKE '%tools/verity/lean/lean_changed.py%--records%'"
+#: the runs `shared_bundles` lists bundles of, each kind as (the store's attempts of it, a bundle's path among its files,
+#: which of the attempt's outputs list its files): a recorded check lists its own among its run's files; the audit of a
+#: ready mark's merge (`warm.py`) leaves its in the `--out` its caller gave it, which a caller that doesn't list its files
+#: still has in its run record; a records run writes its where a recorded check does (`lean_changed.audit_records`)
+PUBLISHERS = ((COMMON.RECORDED_CHECKS, BUNDLE_FILE, ("run_files",)),
+              (COMMON.MARK_AUDITS, re.compile(re.escape(COMMON.MARK_AUDIT_OUT) + BUNDLE_NAME), ("run_files", "run_record")),
+              (RECORDS_RUNS, BUNDLE_FILE, ("run_files",)))
+#: how many of the newest runs of each kind the launcher sends the bundles of, every bundle of each: a candidate's shards end
+#: by the dozen, and counted with them a mark's bundles would be gone before the candidate that holds its change is built.
+#: The marks of the PRs the launcher's tree holds are sent beside these, however old (`shared_bundles`' ``heads``). Runs
+#: are counted and not bundles, or the count would cut a run's later bundles off its first
 SHARED_LIMIT = 12
 #: how many bundles `LakeArtifacts.take` downloads at once, ahead of the one it unpacks
 AHEAD = 4
@@ -1027,10 +1085,11 @@ class LakeArtifacts:
     every declaration through the kernel, and compiles a random sample of the modules it restored again, failing on any
     output that differs (`check.sampled_recompile`), which is what binds a restored `.olean` to its source.
 
-    Between nodes, the module versions a recorded check's audit added travel as one bundle in its run's files (`bundle`); the
-    launcher sends a URL for each of the newest (`shared_bundles`), and a node takes in each it hasn't yet (`take`). A records
-    run (`lean_changed.py --records`) bundles what it added the same way, which `shared_bundles` doesn't list yet. A bundle is
-    trusted as far as its source, as a verdict pack is (`verdicts.py`): a recorded run."""
+    Between nodes, the module versions a recorded check's audit added travel as bundles in its run's files (`bundle_into`), as
+    do those the audit of a ready mark's merge added (`warm.py`) and those a records run added (`lean_changed.py
+    --records`); the launcher of a check, and `research run` for a records run, sends a URL for each of the newest of each
+    and for those of the marks of the PRs its tree holds (`shared_bundles`), and a node takes in each it hasn't yet (`take`).
+    A bundle is trusted as far as its source, as a verdict pack is (`verdicts.py`): a recorded run."""
 
     def __init__(self, store: Path, cap: int = ARTIFACTS_CAP):
         self.store, self.cap = store, cap
@@ -1049,6 +1108,9 @@ class LakeArtifacts:
         one Lake restored) under its key; the number of entries new to the index. Whether the run passed is not read: a
         key names what a compile read, and a failed or killed run's compile of those is the compile a passing run's is,
         given the two things a passing audit said of the build, which are asked here of every build instead.
+        Of a build that names the modules Lake said it built (`"compiled"`: one that read Lake's own cache, where an
+        archive of main's published build unpacks to outputs, fresh `.hash` files and the publisher's trace, which nothing
+        in the build tells from a compile), only those go in.
         Only a build that says it ran in the sandbox (`"sandbox": true`) goes in: outside it, compile-time
         code runs as the user and could leave any outputs, traces and `setup.json` it chose in the build, each then indexed
         as its module's. And only a build none of whose sources runs code while it compiles, outside a reviewed listing
@@ -1061,11 +1123,13 @@ class LakeArtifacts:
         the entry naming them, one the cache holds already kept only with the same bytes. A newer build replaces the entry
         under the same key, so the entries of a module and its imports stay one build's. A module the run compiled whole
         and that still can't go in (not `indexable`, a module it loads not indexed, an artifact's name taken) is recorded
-        under its key (`module_keys.UNSTORED`), so the next build leaves it to Lake rather than compile it again for
-        nothing (`module_keys.settle`), and so is each module of a build refused for the code its sources run. Only what
-        the compiled modules load is read, so a build that compiled nothing costs its traces' `stat`s. A report that
-        names the modules its build compiled (`"compiled"`, check.py's publish) has only those indexed: in one check.py,
-        another package's build, which may fail, can compile a module of a path dependency the two share."""
+        under its key (`module_keys.UNSTORED`) with why, whatever loads it, so the next build leaves it to Lake rather than
+        compile it again for nothing (`module_keys.settle`) and its stage step gives that reason, and so is each module of
+        a build refused for the code its sources run. The log says how many compiled modules `indexable` refused and
+        names the first few with its words. Only what
+        the compiled modules load is read, so a build that compiled nothing costs its traces' `stat`s. check.py's publish
+        names what its build compiled (`"compiled"`) too: in one check.py, another package's build, which may fail, can
+        compile a module of a path dependency the two share."""
         with self._lock():
             n = 0
             for pkg in sorted(reports):
@@ -1083,11 +1147,11 @@ class LakeArtifacts:
                 keyed, owners = MK.keys(pkg, MK.policy_roots(pkg)), {}
                 with ThreadPoolExecutor(max_workers=8) as ex:
                     built = dict(zip(keyed, ex.map(lambda m: self._built(m, keyed, ws[0], since, owners), keyed)))
-                if rep.get("compiled") is not None:
-                    only = set(rep["compiled"])
-                    built = {m: b if m in only or isinstance(b, str) else "compiled by another build of this check.py"
-                             for m, b in built.items()}
-                need, todo = set(), [m for m, b in built.items() if not isinstance(b, str)]
+                if isinstance(only := rep.get("compiled"), list):
+                    built = {m: b if isinstance(b, str) and not isinstance(b, Unindexable) or m in only
+                             else "not compiled by this run: Lake didn't say it built it" for m, b in built.items()}
+                refusals = {m: b for m, b in built.items() if isinstance(b, Unindexable)}
+                need, todo = set(), [m for m, b in built.items() if not isinstance(b, str) or m in refusals]
                 while todo:
                     if (m := todo.pop()) not in need:
                         need.add(m)
@@ -1098,7 +1162,7 @@ class LakeArtifacts:
                 outs = MK.read_digests({m: k for m, k in keyed.items() if m in need},
                                        {(m, a.split(".", 1)[1]): d for m, b in built.items() if not isinstance(b, str)
                                         for a, (_, d) in b[2].items()})
-                indexed: set[str] = set()
+                indexed, recorded = set(), 0
                 for mod, k in keyed.items():
                     if mod not in need:
                         continue
@@ -1114,6 +1178,11 @@ class LakeArtifacts:
                         self._unstored(mod, key, k.package.name, refused or (b if isinstance(b, str) else next(
                             (f"it loads {i}, which is not indexed" for i in loaded if i not in indexed),
                             "the cache holds an artifact of its name with other bytes")))
+                        recorded += mod in refusals
+                if refusals:
+                    log(f"lean-audit: {pkg}: {len(refusals)} modules this run compiled can't be indexed (`indexable`), "
+                        f"{recorded} recorded under their keys: "
+                        + "; ".join(f"{m}: {why}" for m, why in sorted(refusals.items())[:3]))
             self.prune()
         return n
 
@@ -1208,24 +1277,31 @@ class LakeArtifacts:
             tmp.write_text(json.dumps({"key": key}))
             os.replace(tmp, f)
 
-    def bundle(self, dest: Path, cap: int = BUNDLE_CAP) -> int:
-        """Write the entries `added` as a gzipped tar at ``dest``, each with every artifact it names, the entries before the
-        artifacts, up to ``cap`` bytes uncompressed; the number of entries written (none: no file)."""
+    def bundle(self, dest: Path, cap: int = BUNDLE_CAP, start: int = 0) -> tuple[int, int]:
+        """Write the entries `added` from its index ``start`` on as a gzipped tar at ``dest``, each with every artifact it
+        names, the entries before the artifacts, up to ``cap`` bytes uncompressed: (the number of entries written (none: no
+        file), the index in `added` of the first entry this bundle had no room for, where the next one starts). A bundle
+        is whole in itself: an artifact that entries of two bundles name is in both. An entry that is gone from the
+        cache, or that with its artifacts is more than a bundle holds, is in no bundle, and the entries after it still are."""
         with self._lock():
-            todo, size, names = [], 0, set()
-            for entry, outs in self.added:
+            todo, size, names, stop = [], 0, set(), len(self.added)
+            for i in range(start, len(self.added)):
+                entry, outs = self.added[i]
                 try:
                     more = sum((self.store / "artifacts" / n).stat().st_size for n in outs if n not in names)
                     more += (self.store / entry).stat().st_size
                 except OSError:
                     continue
                 if size + more > cap:
-                    break
+                    if todo:
+                        stop = i
+                        break
+                    continue
                 todo.append((entry, outs))
                 names.update(outs)
                 size += more
             if not todo:
-                return 0
+                return 0, stop
             tmp = dest.with_name(f".{dest.name}.tmp")
             with tarfile.open(tmp, "w:gz", compresslevel=1) as t:
                 for entry, _ in todo:
@@ -1233,20 +1309,29 @@ class LakeArtifacts:
                 for n in sorted(names):
                     t.add(self.store / "artifacts" / n, arcname=f"artifacts/{n}", recursive=False)
             os.replace(tmp, dest)
-        return len(todo)
+        return len(todo), stop
 
-    def bundle_into(self, out: Path) -> tuple[Path, int]:
-        """`bundle` at the first free name `shared_bundles` lists in ``out`` (`lean-artifacts.tar.gz`, then `-2`, ...):
-        (that path, the number of entries written)."""
-        dest = next(out / f"lean-artifacts{'' if i == 1 else f'-{i}'}.tar.gz" for i in range(1, 99)
-                    if not (out / f"lean-artifacts{'' if i == 1 else f'-{i}'}.tar.gz").exists())
-        return dest, self.bundle(dest)
+    def bundle_into(self, out: Path, cap: int = BUNDLE_CAP) -> tuple[list[Path], int]:
+        """Every entry `added` in bundles of at most ``cap`` bytes each (`bundle`), as many as that takes, at the free
+        names `shared_bundles` lists in ``out`` in their order (`lean-artifacts.tar.gz`, then `-2`, ...), the entries
+        added first in the first: (those paths, the number of entries written)."""
+        free = (d for i in itertools.count(1)
+                if not (d := out / f"lean-artifacts{'' if i == 1 else f'-{i}'}.tar.gz").exists())
+        dests, n, at = [], 0, 0
+        while at < len(self.added):
+            wrote, at = self.bundle(dest := next(free), cap, at)
+            if wrote:
+                dests.append(dest)
+                n += wrote
+        return dests, n
 
     def take(self, urls: dict[str, str], log=print, budget: int | None = None) -> int:
         """Take in each bundle ``urls`` names (`SHARED` + its sha256) that this node hasn't: downloaded, checked against its
         sha256, and unpacked member by member (`_unpack`). The number of entries added. A bundle that fails is skipped,
-        and its modules are built; one whose bytes fail (not the sha256 named, or not unpackable) is marked taken, since they
-        never change. The URL is never logged: it grants a read until it expires.
+        and its modules are built. One whose bytes are the ones named and can't be unpacked is marked taken, since they
+        never change. One whose download gave other bytes is not: a response that ends early, with an error or without
+        one, gives those too, so a later run fetches it again, for as long as the launcher lists it (`shared_bundles`).
+        The URL is never logged: it grants a read until it expires.
 
         The bundles are unpacked one at a time in the order ``urls`` names them, which is the launcher's, newest first
         (`shared_bundles`), until the bytes written to the cache reach ``budget``: a quarter of the cap unless given. A
@@ -1280,9 +1365,9 @@ class LakeArtifacts:
                         f.write(chunk)
                 if d.hexdigest() == h:
                     return part
-                log(f"lean-audit: artifact bundle {h[:12]} is not the one named; skipped")
-                (taken / h).touch()
-            except OSError as e:
+                log(f"lean-audit: artifact bundle {h[:12]}: what was fetched is not the one named (other bytes, or a download "
+                    f"that ended early); skipped, and a later run fetches it again")
+            except (OSError, http.client.HTTPException) as e:
                 log(f"lean-audit: artifact bundle {h[:12]} could not be fetched ({getattr(e, 'code', None) or type(e).__name__})")
             part.unlink(missing_ok=True)
             return None
@@ -1532,18 +1617,35 @@ def transient(rep: dict) -> bool:
     return bool(fs) and all(f.startswith(("setup:", "build:")) and any(t in f for t in TRANSIENT) for f in fs)
 
 
+def keep_pass(cache: Path, pkg: str, k: str, rep: dict, comps: dict | None, out: Path, log=print) -> bool:
+    """Store ``pkg``'s pass, its report ``rep``, in ``cache`` under its key ``k``, with what the key hashes (``comps``)
+    beside it; for a package of `UNREAD_FACTS`, first the facts its audit wrote under ``out`` (`keep_facts`), without which
+    (logged) no pass is stored.  Whether it is stored."""
+    if pkg in UNREAD_FACTS and not keep_facts(cache, pkg, k, rep, out):
+        log(f"lean-audit: {pkg}: its pass is not stored: its audit wrote no facts for the ratchet (`unread_facts`)")
+        return False
+    cache.mkdir(parents=True, exist_ok=True)
+    tmp = cache / f".{k}.tmp"
+    tmp.write_text(json.dumps({"schema": SCHEMA, "package": pkg, "key": k, "report": rep, "components": comps}))
+    os.replace(tmp, cache / f"{k}.json")
+    return True
+
+
 def _audit(missed: list[str], files: list[str], keys: dict, reports: dict, out: Path, cache: Path, deps: Path, fresh: bool,
            log, urls: dict[str, str] | None = None, comps: dict | None = None,
-           regenerate: bool = False, bundle: bool = False, bookkeeping: bool = False) -> tuple[list[str], list[str]]:
+           regenerate: bool = False, bundle: bool = False, bookkeeping: bool = False,
+           documents: Path | None = None) -> tuple[list[str], list[str]]:
     """Audit ``missed`` on a scratch tree of their inputs (the packages they require by path included), and store each pass.
     ``regenerate`` (`check.py --regenerate`, the Lean check of `next`) passes a package whose every failure is a record
-    difference; such a pass is never stored, since its lock changes when drive commits the record.  What each package's build
-    compiled in the sandbox goes into the artifact cache once its build steps and sampled recompile pass, before its audit
-    goes on (check.py's `publish`), and with ``bundle`` (a recorded check) check.py writes those module versions to ``out``
-    for other nodes then, with the replay entries its kernel had accepted beside them (`--bundle`). What a build compiled
-    whose package failed before that, or whose check.py was killed, goes into this node's cache alone afterwards (`built`,
-    `LakeArtifacts.put`), and into no bundle.  Where builds aren't sandboxed (`sandboxed`) none of that happens and no
-    kept build or artifact cache is read: every package builds cold.  Returns (the failed, the audited)."""
+    difference; such a pass is never stored here, since its lock changes when drive commits the record (`keep_regenerated`
+    stores the pass of the tree with that lock, from the facts document this audit leaves in ``documents``, `check.py
+    --facts-cache`).  What each package's build compiled in the sandbox goes into the artifact cache once its build steps
+    and sampled recompile pass, before its audit goes on (check.py's `publish`), and with ``bundle`` (a recorded check)
+    check.py writes those module versions to ``out`` for other nodes then, with the replay entries its kernel had
+    accepted beside them (`--bundle`). What a build compiled whose package failed before that, or whose check.py was
+    killed, goes into this node's cache alone afterwards (`built`, `LakeArtifacts.put`), and into no bundle.  Where
+    builds aren't sandboxed (`sandboxed`) none of that happens and no kept build or artifact cache is read: every
+    package builds cold.  Returns (the failed, the audited)."""
     deps.mkdir(parents=True, exist_ok=True)
     # beside the dependencies: moves, not copies. Resolved, because check.py names each package by its resolved path, and a
     # cache reached through a symlink would otherwise match no report to its package
@@ -1581,6 +1683,7 @@ def _audit(missed: list[str], files: list[str], keys: dict, reports: dict, out: 
                             *([] if fresh or cold else ["--artifacts", str(artifacts.store)]),
                             *(["--bundle", str(out)] if bundle and not fresh and not cold else []),
                             *(["--regenerate"] if regenerate else []), *(["--bookkeeping", "warn"] if bookkeeping else []),
+                            *(["--facts-cache", str(documents)] if documents else []),
                             "--repo", str(ROOT), "--out", str(out)], cwd=work, env=env)
         log(f"lean-audit: {', '.join(audited)} audited in {time.monotonic() - t0:.0f} s (exit {r.returncode})")
         doc = json.loads((out / "audit.json").read_text()) if (out / "audit.json").exists() else {"failed": ["check.py"]}
@@ -1588,16 +1691,10 @@ def _audit(missed: list[str], files: list[str], keys: dict, reports: dict, out: 
         for rep in doc.get("packages", []):
             p = os.path.relpath(rep["package"], work)
             rep["package"] = p
+            rep.pop("facts_document", None)             # a path under ``documents``, gone with this run; `facts_key` names it
             reports[p] = rep
             if not rep["failures"] and not rep.get("settled") and r.returncode in (0, 1) and p in keys and not fresh:
-                if p in UNREAD_FACTS and not keep_facts(cache, p, keys[p], rep, out):
-                    log(f"lean-audit: {p}: its pass is not stored: its audit wrote no facts for the ratchet (`unread_facts`)")
-                    continue
-                cache.mkdir(parents=True, exist_ok=True)
-                tmp = cache / f".{keys[p]}.tmp"
-                tmp.write_text(json.dumps({"schema": SCHEMA, "package": p, "key": keys[p], "report": rep,
-                                           "components": (comps or {}).get(p)}))
-                os.replace(tmp, cache / f"{keys[p]}.json")
+                keep_pass(cache, p, keys[p], rep, (comps or {}).get(p), out, log)
         if r.returncode not in (0, 1) and not failed:
             failed = [f"check.py exit {r.returncode}"]
         # a pass vouches for its dependencies; so does a failure only in fetching them (Lake clones every dependency, each at
@@ -1624,6 +1721,126 @@ def _audit(missed: list[str], files: list[str], keys: dict, reports: dict, out: 
     return failed, audited
 
 
+#: under a lock run's ``--out``: the judgments of the tree with its regenerated locks written (`keep_regenerated`), each
+#: package's report and log. Not ``--out`` itself, where a second audit of a package removes the lock the first regenerated
+LOCK_COMMIT = "lock-commit"
+#: what a full audit's report holds of the build, the seal, the kernel replay and the tests, which `check.py --facts-from`
+#: runs none of (`audit_from_facts`): a pass `keep_regenerated` keeps has them from the lock run's own audit of the package
+BUILT = ("sandbox", "build_threads", "staged", "sampled", "replay", "replay_cache", "pipeline", "proved_in", "unread_facts",
+         "peak_gib", "facts_key")
+
+
+def stored_document(documents: Path, k: str, schema: str) -> tuple[Path | None, str]:
+    """(The facts document `check.py --facts-cache` stored in ``documents`` under the facts key ``k``, "") when its sidecar
+    names ``schema``, that key and the SHA-256 its bytes have (`check.py`'s `read_cached_facts`, without decoding it); else
+    (None, why not)."""
+    doc, side = documents / f"{k}.json.gz", documents / f"{k}.json"
+    try:
+        meta = json.loads(side.read_text())
+        named = meta.get("schema") == schema and meta.get("key") == k and _sha(doc) == meta.get("sha256")
+    except (OSError, ValueError, AttributeError) as e:
+        return None, f"{type(e).__name__}: {e}"
+    return (doc, "") if named else (None, f"{side.name} names another schema, key or SHA-256 than {doc.name} has")
+
+
+def keep_regenerated(pkgs: list[str], files: list[str], keys: dict, reports: dict, regenerated: dict[str, str],
+                     audited: set[str], documents: Path, out: Path, cache: Path, log=print) -> dict[str, str]:
+    """After a lock run that passed: store the passes of the tree with its regenerated locks written, the commit drive
+    makes of them, so that commit's audit reuses them and builds nothing.  {package: its key on that tree} for each kept.
+
+    A lock run's pass on a regenerated lock is of another tree than the one audited, so `_audit` stores none, and the
+    regenerated lock moves the key of its package, of each package requiring it by path and of the spec it proves.  Each
+    such package is judged here on that tree from the facts document its own audit in this run stored (``documents``,
+    `check.py --facts-cache`): `check.py --facts-from` on a scratch tree of its inputs with every regenerated lock in
+    place, which runs every check of a full audit that reads the live locks (`audit_from_facts`) and no build.  Its pass
+    is stored under the new key only when that leaves nothing (no failure, nothing settled or regenerated again), and its
+    report is that judgment's with the lock run's record of the build, the replay and the tests (`BUILT`, `seconds`).
+
+    That is a full audit's verdict of the new tree only if everything before the judge would run the same there, so a
+    package keeps no pass unless each regenerated lock its audit reads (`read_packages`) agrees with the lock it replaces
+    on `check.py`'s `build_inputs`: a lock that newly lists a premise, a guarantee or an inline name changes what
+    `Facts.lean` walks, and that package is audited in full on the new tree, as before.  Nor does a package this run
+    reused from the cache (no facts of this run), one whose audit stored no document (a node without the sandbox, a
+    tamper), or any package of a run that failed or audited a shard (`run` calls this for neither)."""
+    try:
+        locks = {f"{p}/lean-audit.json": Path(f).read_bytes() for p, f in regenerated.items()}
+    except OSError as e:
+        log(f"lean-audit: no pass kept for the commit of the regenerated records: {type(e).__name__}: {e}")
+        return {}
+    new = {p: components(p, files, FLAGS, locks) for p in pkgs}
+    moved = [p for p in pkgs if key_of(new[p]) != keys[p]]
+    chk = lean_check()
+
+    def same_build(p: str) -> bool:
+        """Whether ``p``'s regenerated lock gives every step before the judge what its lock gives; a lock that can't be
+        read, or has no `roots`, gives none of them anything."""
+        try:
+            return chk.build_inputs(chk.load(ROOT / p)) == chk.build_inputs(chk.load(Path(regenerated[p]).parent))
+        except (OSError, ValueError, KeyError, TypeError, AttributeError):
+            return False
+
+    same = {p: same_build(p) for p in regenerated}
+    todo: dict[str, Path] = {}
+    for p in moved:
+        rep = reports.get(p) or {}
+        doc, missing = stored_document(documents, str(rep.get("facts_key")), chk.FACTS_SCHEMA)
+        if p not in audited:
+            why = "this run reused its pass, so it has no facts of this run to judge from"
+        elif rep.get("failures") != []:
+            why = "its audit here did not pass"
+        elif doc is None:
+            why = f"its audit stored no facts document to judge from ({rep.get('facts_cache') or missing})"
+        elif differ := [d for d in read_packages(p) if d in regenerated and not same[d]]:
+            why = (f"the regenerated lock of {', '.join(differ)} changes what the build, the facts or the tests read "
+                   f"(`check.py`'s `build_inputs`: a guarantee, a premise or an inline name it newly lists or drops)")
+        else:
+            todo[p] = doc
+            continue
+        log(f"lean-audit: {p}: no pass kept for the commit of the regenerated records, whose audit runs in full: {why}")
+    if not todo:
+        return {}
+    kept: dict[str, str] = {}
+    dest = out / LOCK_COMMIT
+    dest.mkdir(parents=True, exist_ok=True)
+    tree = Path(tempfile.mkdtemp(prefix=f"{SCRATCH}{os.getpid()}-", dir=documents.parent)).resolve()
+    try:
+        union = sorted({f for p in todo for f in inputs(p, files)})
+        scratch_tree(tree, union)
+        for f, data in locks.items():
+            if f in union:
+                (tree / f).write_bytes(data)
+        for p, doc in todo.items():
+            t0 = time.monotonic()
+            (dest / "audit.json").unlink(missing_ok=True)
+            # its output goes to a file: an `AUDIT pkg: PASS|FAIL` line in this job's log is the lock run's own verdict
+            r = subprocess.run([sys.executable, str(tree / "tools" / "verity" / "lean" / "check.py"), str(tree / p),
+                                "--facts-from", str(doc), "--repo", str(ROOT), "--out", str(dest)], cwd=tree,
+                               capture_output=True, text=True)
+            (dest / f"{re.sub(r'[^A-Za-z0-9]+', '_', p)}.log").write_text(r.stdout + r.stderr)
+            took = round(time.monotonic() - t0, 1)
+            try:
+                (rep,) = json.loads((dest / "audit.json").read_text())["packages"]
+            except (OSError, ValueError, KeyError, TypeError):
+                rep = {"failures": [f"check.py --facts-from exit {r.returncode} with no report"]}
+            if r.returncode or rep.get("failures") != [] or rep.get("settled") or rep.get("regenerated") \
+                    or os.path.relpath(str(rep.get("package")), tree) != p:
+                log(f"lean-audit: {p}: no pass kept for the commit of the regenerated records, whose audit runs in full: "
+                    f"judged on that tree from this run's facts, it fails (exit {r.returncode}, "
+                    f"{len(rep.get('failures') or []) + len(rep.get('settled') or [])} failures; {dest})")
+                continue
+            was, k = reports[p], key_of(new[p])
+            rep = rep | {"package": p} | {f: was[f] for f in BUILT if f in was} | {
+                "seconds": {**was.get("seconds", {}), "regenerated-lock": took}, "judged_from": keys[p]}
+            if keep_pass(cache, p, k, rep, new[p], out, log):
+                kept[p] = k
+                log(f"lean-audit: {p}: PASS kept for the commit of the regenerated records ({k[:12]}): judged on that tree "
+                    f"from this run's facts in {took:.0f} s with no build, nothing left")
+    finally:
+        shutil.rmtree(tree, ignore_errors=True)
+        shutil.rmtree(dest / "tool", ignore_errors=True)
+    return kept
+
+
 def select(pkgs: list[str], only: list[str] | None) -> list[str]:
     """``pkgs`` less those ``only`` (`--package`, a shard's share) leaves out; ValueError naming one ``only`` has and ``pkgs``
     lacks."""
@@ -1637,6 +1854,21 @@ def select(pkgs: list[str], only: list[str] | None) -> list[str]:
 def run(out: Path, cache: Path, deps: Path, fresh: bool = False, log=print, urls: dict[str, str] | None = None,
         export: Path | None = None, only: list[str] | None = None, regenerate: bool = False, bundle: bool = False,
         bookkeeping: bool = False) -> int:
+    """The job (the module's docstring).  With ``regenerate`` and a cache, the audits leave their facts documents in a
+    directory of this run's own beside the scratch trees (outside all a build writes, in no verdict pack, swept with them
+    if this process is killed), from which `keep_regenerated` judges the tree with the regenerated locks."""
+    if not regenerate or fresh:
+        return _run(out, cache, deps, fresh, log, urls, export, only, regenerate, bundle, bookkeeping, None)
+    deps.mkdir(parents=True, exist_ok=True)
+    documents = Path(tempfile.mkdtemp(prefix=f"{SCRATCH}{os.getpid()}-facts-", dir=deps.parent)).resolve()
+    try:
+        return _run(out, cache, deps, fresh, log, urls, export, only, regenerate, bundle, bookkeeping, documents)
+    finally:
+        shutil.rmtree(documents, ignore_errors=True)
+
+
+def _run(out: Path, cache: Path, deps: Path, fresh: bool, log, urls: dict[str, str] | None, export: Path | None,
+         only: list[str] | None, regenerate: bool, bundle: bool, bookkeeping: bool, documents: Path | None) -> int:
     files = COMMON.tracked_files(ROOT)
     if files is None:
         log("lean-audit: the tree's files cannot be listed; nothing is cached")
@@ -1651,10 +1883,13 @@ def run(out: Path, cache: Path, deps: Path, fresh: bool = False, log=print, urls
         log(f"lean-audit: FAIL: --bookkeeping warn holds the caps to every package's lock, and --package leaves out "
             f"{', '.join(left)}: drive's lock run audits every package")
         return 1
+    if fresh or len(pkgs) != len(packages(files)):      # nothing is cached; a shard: another's regenerated locks move its keys
+        documents = None
     comps = {p: components(p, files, FLAGS) for p in pkgs}
     keys = {p: key_of(c) for p, c in comps.items()}
     out.mkdir(parents=True, exist_ok=True)
     reports, cached, facts = {}, {}, {}
+    ran: set[str] = set()
     for p, k in keys.items():
         entry = cache / f"{k}.json"
         if not fresh and entry.is_file():
@@ -1671,7 +1906,8 @@ def run(out: Path, cache: Path, deps: Path, fresh: bool = False, log=print, urls
         if not todo:
             break
         now, audited = _audit(todo, files, keys, reports, out, cache, deps, fresh, log, urls, comps, regenerate, bundle,
-                              bookkeeping)
+                              bookkeeping, documents)
+        ran |= set(audited)
         failed = [f for f in failed if f not in audited] + now
         retry = [p for p in audited if p in now and transient(reports.get(p, {}))]
         if not retry or attempt == len(RETRIES):
@@ -1682,7 +1918,7 @@ def run(out: Path, cache: Path, deps: Path, fresh: bool = False, log=print, urls
     failed += [p for p in pkgs if p not in reports and p not in failed]
     regenerated = {p: reports[p]["regenerated"] for p in pkgs if reports.get(p, {}).get("settled")}
     for p, f in regenerated.items():
-        log(f"lean-audit: {p}: passed on its regenerated record ({f}), which drive commits over {p}/lean-audit.json")
+        log(f"lean-audit: {p}: passed on its regenerated record ({f}), which the queue commits over {p}/lean-audit.json")
     for rep in reports.values():                        # a pass cached before check.py reported codes has none to list
         rep.setdefault("failure_codes", [None] * len(rep.get("failures", [])))
     for p in UNREAD_FACTS:
@@ -1713,9 +1949,17 @@ def run(out: Path, cache: Path, deps: Path, fresh: bool = False, log=print, urls
                 warned += lines
     for w in warned:
         log(f"lean-audit: WARN: {w}")
+    rekeyed: dict[str, str] = {}
+    if documents and regenerated and not failed:
+        try:                                            # it changes no verdict of this run, so its own error fails none
+            rekeyed = keep_regenerated(pkgs, files, keys, reports, regenerated, ran, documents, out, cache, log)
+        except (OSError, EOFError, ValueError, LookupError, TypeError, AttributeError, ImportError, SyntaxError) as e:
+            log(f"lean-audit: WARN: no pass kept for the commit of the regenerated records, whose audit runs in full: "
+                f"{type(e).__name__}: {e}")
     (out / "audit.json").write_text(json.dumps({"passed": not failed, "failed": failed, "cached": cached,
                                                 "packages": [reports[p] for p in pkgs if p in reports],
                                                 "regenerated": regenerated, "unread": unread} | (
+                                                    {"rekeyed": rekeyed} if regenerate else {}) | (
                                                     {"repaired": repaired, "bookkeeping": warned} if bookkeeping else {}),
                                                indent=1) + "\n")
     log(f"lean-audit: {'PASS' if not failed else 'FAIL (' + ', '.join(failed) + ')'}: {len(cached)} of {len(pkgs)} packages reused")
@@ -1740,38 +1984,60 @@ def presigned(ttl_s: int = URL_TTL_S) -> dict[str, str]:
     if not hasattr(r, "presign"):
         return {}
     return {**{k: r.presign(object_key(v["sha256"]), ttl_s) for k, v in sorted(pinned.items())},
-            **{SHARED + h: r.presign(object_key(h), ttl_s) for h in shared_bundles()}}
+            **{SHARED + h: r.presign(object_key(h), ttl_s) for h in shared_bundles(heads=COMMON.merged_heads(ROOT))}}
 
 
-def shared_bundles(store=None, limit: int = SHARED_LIMIT) -> list[str]:
-    """The sha256 of each artifact bundle (`LakeArtifacts.bundle`) among the newest recorded checks' run files, newest first, at
-    most ``limit``: only a recorded run's (`common.RECORDED_CHECKS`), as `check.verdict_packs` takes only theirs, a failed or
-    cancelled run's too, since its bundle holds only modules compiled in the sandbox, each under the key of what its
-    compile read (`LakeArtifacts.put`). When the store has a remote, the attempts started in the last `common.RECENT_S`
-    are refreshed from it first. Empty when the store can't be read: each node then reuses only what it built."""
+def shared_bundles(store=None, limit: int = SHARED_LIMIT, heads: list[str] | tuple[str, ...] = ()) -> list[str]:
+    """The sha256 of each artifact bundle (`LakeArtifacts.bundle`) among the files of the newest runs of each kind of
+    `PUBLISHERS`, the recorded checks' first, each kind's newest first and at most ``limit`` runs with a bundle, every
+    bundle of each in the order its run wrote them (`LakeArtifacts.bundle_into`; a node takes them in this order up to
+    its budget, `LakeArtifacts.take`): only a recorded run's, as
+    `check.verdict_packs` takes only theirs, a failed or cancelled run's too, since its bundle holds only modules compiled
+    in the sandbox, each under the key of what its compile read (`LakeArtifacts.put`). Before the newest mark audits' come
+    those of the marks of ``heads`` (`common.lookups`; the launcher gives the heads of the PRs its tree holds,
+    `common.merged_heads`), however old and beside the ``limit``: a PR waits hours between its mark and its candidate,
+    newer marks push its bundle out of the newest, and a tree whose kept build is in use compiles every module above one
+    its node lacks. When the store has a remote, the attempts started in the last `common.RECENT_S` are refreshed from it
+    first. Empty when the store can't be read: each node then reuses only what it built."""
     from research.store.local import LocalStore
 
+    ended = "state IN ('done', 'failed', 'cancelled') ORDER BY start_utc DESC LIMIT ?"
     out: list[str] = []
     try:
         store = store or LocalStore()
         if store.remote is not None:
             store.refresh(attempts_only=True, since=COMMON.recent(time.time()))
-        rows = store.index.sql(f"SELECT id FROM attempts WHERE {COMMON.RECORDED_CHECKS} AND state IN ('done', 'failed', 'cancelled') "
-                               "ORDER BY start_utc DESC LIMIT ?", (4 * limit,))
-        for (rid,) in rows:
-            art = ((store.get_attempt(rid) or {}).get("outputs") or {}).get("run_files")
-            for f in store.listing(art) if art else []:
-                if BUNDLE_FILE.fullmatch(f["path"]) and f["remote"] and f["sha256"] not in out:
-                    out.append(f["sha256"])
-            if len(out) >= limit:
-                break
+        for runs, bundle, listed in PUBLISHERS:
+            for which, args, most in COMMON.lookups(runs, limit, heads):
+                found: list[str] = []
+                taken = 0
+                for (rid,) in store.index.sql(f"SELECT id FROM attempts WHERE {which} AND {ended}", args):
+                    outputs = (store.get_attempt(rid) or {}).get("outputs") or {}
+                    mine: dict[str, int] = {}
+                    for art in dict.fromkeys(a for a in map(outputs.get, listed) if a):
+                        for f in store.listing(art):
+                            if (m := bundle.fullmatch(f["path"])) and f["remote"] and f["sha256"] not in (*out, *found):
+                                mine.setdefault(f["sha256"], int(m[1][1:]) if m[1] else 1)
+                    found += sorted(mine, key=mine.__getitem__)
+                    taken += bool(mine)
+                    if most and taken >= most:
+                        break
+                out += found
     except Exception as e:  # noqa: BLE001  (no bundle: each node reuses only what it built)
         print(f"lean-audit: no artifact bundles listed from the store ({type(e).__name__}: {e})", file=sys.stderr)
-    return out[:limit]
+    return out
+
+
+def bundled(dests: list[Path], n: int, added: int) -> str:
+    """What a run says of the bundles it wrote (`LakeArtifacts.bundle_into`'s, and how many entries it had ``added``)."""
+    return (f"{n} of the {added} module version(s) it added bundled for other nodes "
+            f"({', '.join(d.name for d in dests) or 'no bundle'})"
+            + ("" if n == added else f"; {added - n} in none: gone from the cache since, or more than a bundle holds"))
 
 
 def url_file(dest: Path, ttl_s: int = URL_TTL_S) -> Path | None:
-    """`presigned` written as ``dest/lean-deps-urls.json`` (mode 600), the name `check.py` looks for among a run's inputs."""
+    """`presigned` written as ``dest/lean-deps-urls.json`` (mode 600), the name `check.py` and a records run
+    (`lean_changed.sent_urls`) look for among a run's inputs."""
     if not (urls := presigned(ttl_s)):
         return None
     p = dest / URLS
@@ -1888,7 +2154,8 @@ def main(argv: list[str]) -> int:
                     "every failure is a record difference passes and audit.json's `regenerated` names its record; not in the "
                     "cache key, and such a pass is never stored")
     ap.add_argument("--bundle", action="store_true", help="a recorded check's audit: as each build passes, write the module "
-                    "versions it added to the artifact cache as lean-artifacts*.tar.gz in --out, for other nodes to take "
+                    "versions it added to the artifact cache as lean-artifacts.tar.gz in --out, and as "
+                    "lean-artifacts-2.tar.gz and so on when one bundle can't hold them, for other nodes to take "
                     "(`shared_bundles`), with the replay entries the kernel had accepted beside them (`check.py --bundle`)")
     ap.add_argument("--bookkeeping", choices=["warn"], help="with --regenerate, drive's lock run after a landing: "
                     "`check.py --bookkeeping warn`, so a package that fails only on its lock's bookkeeping passes on the lock "

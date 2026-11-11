@@ -84,13 +84,14 @@ is in `RLeakCarried` (`rLeak_of_rLeakCarried`, `leakL_noRLeak`). -/
 theorem SampledLeakCarried_nontrivial :
     ¬ KSLinOn FlockDeploy.sha512 (leakL Bool).V
       (fun x => ScopeAcc (leakL Bool) (fun _ => notLay) (fun _ => 1) x ∧
-        CheckedWitness FlockDeploy.sha512 (leakL Bool) (fun _ _ => True) (fun _ => 0) x)
+        CheckedWitness FlockDeploy.sha512 (leakL Bool) (traceRun FlockDeploy.sha512 (leakL Bool).commit)
+          (fun _ _ => True) (fun _ => 0) x)
       (RLeakCarried FlockDeploy.sha512 (leakL Bool).commit (leakL Bool).parse (leakL Bool).partition 1 1 1
         (fun _ => notLay) (fun _ => 1) 0 (fun _ => ∅) (fun _ _ => True) (fun _ => []) (fun _ => []) 1)
       (leakL Bool).E (fun x => (leakL Bool).κ 0 x + 0) (leakL Bool).γ (fun _ => 1)
       (Bext FlockDeploy.sha512 (leakL Bool).V (leakL Bool).E) := by
   intro h
-  have hb := h [] ⟨leakL_scopeAcc [], checkedWitness_true _ _ []⟩ Unit silentP
+  have hb := h [] ⟨leakL_scopeAcc [], checkedWitness_true _ _ _ []⟩ Unit silentP
   refine leakL_bound_fails FlockDeploy.sha512 _ ((leakL Bool).κ 0 [] + 0) [] ?_
     (by linarith [leakL_κ (Coin := Bool) []]) hb
   exact fun w hw => leakL_noRLeak FlockDeploy.sha512 _ [] w (rLeak_of_rLeakCarried hw)

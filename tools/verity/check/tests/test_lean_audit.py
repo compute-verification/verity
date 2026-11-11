@@ -3,6 +3,7 @@ guard, and dependencies kept warm across runs."""
 from __future__ import annotations
 
 import ast
+import fnmatch
 import hashlib
 import importlib.util
 import io
@@ -14,7 +15,9 @@ import signal
 import subprocess
 import sys
 import tarfile
+import threading
 import types
+from http.server import BaseHTTPRequestHandler, HTTPServer
 from pathlib import Path
 
 import pytest
@@ -142,13 +145,14 @@ def test_the_audit_replays_the_import_closure_against_the_kept_cache_and_a_fresh
 
 
 #: a stand-in for check.py that knows `--regenerate`: a package whose policy says "stale" fails on a record difference, or with
-#: the flag passes on the record it writes under --out (`check.py`'s `settled` and `regenerated`)
+#: the flag passes on the record it writes under --out (`check.py`'s `settled` and `regenerated`). It stores no facts
+#: document (`--facts-cache`), as check.py on a node without the sandbox
 REGEN_AUDIT = r'''
 import json, sys
 from pathlib import Path
 a = sys.argv[1:]
 root, out = Path.cwd(), Path(a[a.index("--out") + 1])
-named = [Path(x) for i, x in enumerate(a) if not x.startswith("--") and not (i and a[i - 1] in ("--out", "--repo", "--replay-cache", "--artifacts", "--bundle"))]
+named = [Path(x) for i, x in enumerate(a) if not x.startswith("--") and not (i and a[i - 1] in ("--out", "--repo", "--replay-cache", "--artifacts", "--bundle", "--facts-cache"))]
 out.mkdir(parents=True, exist_ok=True)
 reps, failed = [], []
 for pkg in named:
@@ -199,7 +203,7 @@ import json, sys
 from pathlib import Path
 a = sys.argv[1:]
 root, out = Path.cwd(), Path(a[a.index("--out") + 1])
-named = [Path(x) for i, x in enumerate(a) if not x.startswith("--") and not (i and a[i - 1] in ("--out", "--repo", "--replay-cache", "--artifacts", "--bundle", "--bookkeeping"))]
+named = [Path(x) for i, x in enumerate(a) if not x.startswith("--") and not (i and a[i - 1] in ("--out", "--repo", "--replay-cache", "--artifacts", "--bundle", "--bookkeeping", "--facts-cache"))]
 out.mkdir(parents=True, exist_ok=True)
 reps, failed = [], []
 for pkg in named:
@@ -258,6 +262,262 @@ def test_the_lock_runs_audit_repairs_bookkeeping_and_the_caps_the_repaired_locks
     assert any("--package leaves out" in s for s in logged), logged
     with pytest.raises(SystemExit):
         LA.main(["--out", str(tmp_path / "out5"), "--bookkeeping", "warn"])
+
+
+#: a stand-in for check.py as a lock run and the audit of its lock commit run it. A package's build is its `.lean` files'
+#: bytes, and its lock records their hash for each guarantee it lists; a record that differs is a record difference, which
+#: `--regenerate` settles on the lock it writes under --out. `--facts-cache DIR` stores each audit's facts document (the
+#: hash) and sidecar under its facts key, as check.py does where builds are sandboxed. `--facts-from FILE` judges the named
+#: package's lock from that document, with no build, and notes the locks it read of the packages it requires by path. A
+#: lock's `regenerates_as` (a record) and `regenerates_with` (sections) say what its regenerated lock holds instead
+LOCK_AUDIT = r'''
+import gzip, hashlib, json, sys
+from pathlib import Path
+a = sys.argv[1:]
+root, out = Path.cwd(), Path(a[a.index("--out") + 1])
+named = [Path(x) for i, x in enumerate(a) if not x.startswith("--") and not (i and a[i - 1] in (
+    "--out", "--repo", "--replay-cache", "--artifacts", "--bookkeeping", "--facts-cache", "--facts-from"))]
+out.mkdir(parents=True, exist_ok=True)
+docs = Path(a[a.index("--facts-cache") + 1]) if "--facts-cache" in a else None
+judged = Path(a[a.index("--facts-from") + 1]) if "--facts-from" in a else None
+if judged is None:
+    (out / "argv.json").write_text(json.dumps(a))
+reps, failed = [], []
+for pkg in named:
+    lock, rel = json.loads((pkg / "lean-audit.json").read_text()), str(pkg.relative_to(root))
+    with open(out / ("ran.txt" if judged is None else "judged.txt"), "a") as f:
+        f.write(rel + "\n")
+    if judged is None:
+        built = hashlib.sha256(b"".join(p.read_bytes() for p in sorted(pkg.glob("*.lean")))).hexdigest()[:12]
+        rep = {"package": str(pkg), "failures": [], "replay": {"checked": 1}, "seconds": {"replay": 1.0, "total": 2.0}}
+        if docs is not None and not lock.get("unsandboxed"):
+            docs.mkdir(parents=True, exist_ok=True)
+            data = gzip.compress(json.dumps({"schema": "FACTS_SCHEMA", "built": built}).encode(), mtime=0)
+            key = hashlib.sha256(rel.encode() + data).hexdigest()
+            (docs / f"{key}.json.gz").write_bytes(data)
+            (docs / f"{key}.json").write_text(json.dumps({"schema": "FACTS_SCHEMA", "key": key,
+                                                          "sha256": hashlib.sha256(data).hexdigest()}))
+            rep |= {"facts_key": key, "facts_document": str(docs / f"{key}.json.gz")}
+    else:
+        built = json.loads(gzip.decompress(judged.read_bytes()))["built"]
+        rep = {"package": str(pkg), "failures": [], "seconds": {"total": 0.5}}
+        (out / f"saw-{pkg.name}.json").write_text(json.dumps({
+            d["dir"]: json.loads((pkg / d["dir"] / "lean-audit.json").read_text())
+            for d in json.loads((pkg / "lake-manifest.json").read_text())["packages"] if d["type"] == "path"}))
+    stale = [f"guarantees: {n}'s record differs from the build" for n, r in sorted(lock.get("guarantees", {}).items())
+             if r != built]
+    if stale and judged is None and "--regenerate" in a:
+        rec = out / f"audit-{pkg.name}" / "lean-audit.json"
+        rec.parent.mkdir(parents=True, exist_ok=True)
+        rec.write_text(json.dumps(lock | {"guarantees": {n: lock.get("regenerates_as", built) for n in lock["guarantees"]},
+                                          "format": 1} | lock.get("regenerates_with", {})))
+        rep |= {"settled": stale, "regenerated": str(rec)}
+    else:
+        rep["failures"] = stale
+    if rep["failures"]:
+        failed.append(str(pkg))
+    reps.append(rep)
+(out / "audit.json").write_text(json.dumps({"passed": not failed, "failed": failed, "packages": reps}))
+sys.exit(1 if failed else 0)
+'''.replace("FACTS_SCHEMA", AUDIT.FACTS_SCHEMA)
+LOCK_PACKAGES = ["pkg/a", "pkg/b", "pkg/c", "pkg/p", "pkg/s"]
+
+
+def _lock_tree(tmp: Path, monkeypatch, locks: dict[str, dict] | None = None) -> Path:
+    """A tree under `LOCK_AUDIT` whose every lock records its build: `pkg/a`, `pkg/b` which requires it by path, `pkg/c`
+    which requires nothing, and a spec `pkg/s` whose guarantees `pkg/p`, which requires it, proves. ``locks`` ({package
+    name: sections}) are laid over those locks: a guarantee recorded as anything else is a record difference."""
+    def package(name: str, requires: tuple[str, ...] = (), **sections) -> dict[str, str]:
+        source = f"theorem {name} : True := trivial\n"
+        lock = {"roots": [name.upper()], "guarantees": {f"{name.upper()}.t": hashlib.sha256(source.encode()).hexdigest()[:12]}}
+        return {f"pkg/{name}/lakefile.toml": "", f"pkg/{name}/lean-toolchain": "v1\n", f"pkg/{name}/{name.upper()}.lean": source,
+                f"pkg/{name}/lake-manifest.json": json.dumps({"packages": [{"name": r, "type": "path", "dir": f"../{r}"}
+                                                                           for r in requires]}),
+                f"pkg/{name}/lean-audit.json": json.dumps(lock | sections | (locks or {}).get(name, {}))}
+    return _tree(tmp, monkeypatch, {"tools/verity/lean/check.py": LOCK_AUDIT, **package("a"), **package("b", ("a",)),
+                                    **package("c"), **package("s", proved_in=["../p"]), **package("p", ("s",))})
+
+
+def _lock_run(tmp: Path, name: str, **flags) -> tuple[int, Path, dict, list[str]]:
+    """`LA.run` into ``tmp``'s ``name``, on the caches every run of a test shares: (its exit, its --out, its audit.json,
+    its log)."""
+    out, logged = tmp / name / "lean-audit", []
+    rc = LA.run(out, tmp / "cache" / "lean-audit", tmp / "cache" / "lean-deps", log=logged.append, **flags)
+    return rc, out, json.loads((out / "audit.json").read_text()), logged
+
+
+def _lines(path: Path) -> list[str]:
+    return sorted(path.read_text().split()) if path.exists() else []
+
+
+def _commit_locks(root: Path, doc: dict) -> None:
+    """The commit drive makes of a lock run's regenerated locks: each over its package's own."""
+    for p, f in doc["regenerated"].items():
+        shutil.copyfile(f, root / p / "lean-audit.json")
+
+
+def test_the_audit_of_the_lock_commit_reuses_the_lock_runs_passes_and_builds_nothing(tmp_path, monkeypatch):
+    """A lock run judges, from the facts its own audits stored, every package whose key its regenerated locks move, on the
+    tree with those locks in place: the packages regenerated, the one requiring one of them by path, and the spec whose
+    prover's lock changed. Each judgment that leaves nothing is kept as that package's pass under its key on that tree,
+    so the audit of the commit drive makes of the locks reuses every pass and runs no build. A kept pass is a full
+    audit's: the judgment of the committed lock with the lock run's replay, which `check.lean_fast` requires of a pass."""
+    root = _lock_tree(tmp_path, monkeypatch, {"a": {"guarantees": {"A.t": "stale"}}, "p": {"guarantees": {"P.t": "stale"}}})
+    before = {p: LA.key(p, LA.COMMON.tracked_files(root), LA.FLAGS) for p in LOCK_PACKAGES}
+    stale = (root / "pkg/a/lean-audit.json").read_text()
+    rc, out, doc, logged = _lock_run(tmp_path, "lock-run", regenerate=True)
+    assert rc == 0 and sorted(doc["regenerated"]) == ["pkg/a", "pkg/p"] and _lines(out / "ran.txt") == LOCK_PACKAGES
+    assert sorted(doc["rekeyed"]) == ["pkg/a", "pkg/b", "pkg/p", "pkg/s"], logged
+    assert _lines(out / LA.LOCK_COMMIT / "judged.txt") == sorted(doc["rekeyed"]), "each judged once, and only those"
+    assert _lines(out / "ran.txt") == LOCK_PACKAGES, "the judgments build nothing"
+    # judged on the tree with the regenerated locks in place, which is never this checkout
+    regenerated = json.loads(Path(doc["regenerated"]["pkg/a"]).read_text())
+    assert json.loads((out / LA.LOCK_COMMIT / "saw-b.json").read_text()) == {"../a": regenerated}
+    assert (root / "pkg/a/lean-audit.json").read_text() == stale
+    # the lock run's own verdict and reports are as before: its pass on a regenerated lock is no pass of this tree
+    a = next(r for r in doc["packages"] if r["package"] == "pkg/a")
+    assert a["settled"] and a["failures"] == [] and not (tmp_path / "cache" / "lean-audit" / f"{before['pkg/a']}.json").exists()
+    # the facts documents were the run's own, outside all a build writes, and are gone with it
+    argv = json.loads((out / "argv.json").read_text())
+    documents = Path(argv[argv.index("--facts-cache") + 1])
+    assert documents.name.startswith(LA.SCRATCH) and not documents.exists()
+    assert AUDIT.build_roots_over(documents, [Path(x) for x in argv if x.endswith(tuple(LOCK_PACKAGES))]) == []
+    assert not list((tmp_path / "cache").glob(LA.SCRATCH + "*")) and not (out / LA.LOCK_COMMIT / "tool").exists()
+
+    _commit_locks(root, doc)
+    after = {p: LA.key(p, LA.COMMON.tracked_files(root), LA.FLAGS) for p in LOCK_PACKAGES}
+    assert doc["rekeyed"] == {p: k for p, k in after.items() if k != before[p]}, "the keys of the tree drive commits"
+    rc, out2, doc2, _ = _lock_run(tmp_path, "lock-commit")
+    assert rc == 0 and doc2["cached"] == after and doc2["regenerated"] == {}
+    assert _lines(out2 / "ran.txt") == [] and not (out2 / LA.LOCK_COMMIT).exists(), "no build and no judgment: only reuse"
+    for r in doc2["packages"]:
+        assert r["failures"] == [] and "settled" not in r and "regenerated" not in r and "facts_document" not in r
+        assert r["replay"] == {"checked": 1} and r["seconds"]["replay"] == 1.0
+        assert r.get("judged_from") == (before[r["package"]] if r["package"] in doc["rekeyed"] else None)
+    assert CHECK.lean_fast(out2.parent) is None
+
+
+def test_a_regenerated_lock_that_fails_its_judgment_keeps_no_pass(tmp_path, monkeypatch):
+    """A package whose regenerated lock fails when it is judged on the tree with the locks in place keeps no pass under
+    that tree's key, so the audit of the lock commit audits it in full (and fails it, as the judgment did). The lock run
+    itself passes as before, and a package whose own judgment there leaves nothing still keeps its pass."""
+    root = _lock_tree(tmp_path, monkeypatch, {"a": {"guarantees": {"A.t": "stale"}, "regenerates_as": "not the build's"}})
+    rc, out, doc, logged = _lock_run(tmp_path, "lock-run", regenerate=True)
+    assert rc == 0 and list(doc["regenerated"]) == ["pkg/a"] and list(doc["rekeyed"]) == ["pkg/b"]
+    assert _lines(out / LA.LOCK_COMMIT / "judged.txt") == ["pkg/a", "pkg/b"]
+    assert [s for s in logged if s.startswith("lean-audit: pkg/a: no pass kept") and "it fails (exit 1, 1 failures" in s], logged
+    assert (out / LA.LOCK_COMMIT / "pkg_a.log").is_file(), "a judgment's output goes to a file, not into the lock run's log"
+    _commit_locks(root, doc)
+    rc, out2, doc2, _ = _lock_run(tmp_path, "lock-commit")
+    assert rc == 1 and doc2["failed"] == ["pkg/a"] and _lines(out2 / "ran.txt") == ["pkg/a"]
+    assert sorted(doc2["cached"]) == ["pkg/b", "pkg/c", "pkg/p", "pkg/s"]
+
+
+def test_a_package_whose_key_the_regenerated_locks_leave_is_untouched(tmp_path, monkeypatch):
+    """A package that reads no regenerated lock has the same key on the tree with them: the lock run judges it no second
+    time and writes nothing for it, and its pass, stored by its audit or reused from an earlier one, answers on the lock
+    commit as it is."""
+    root = _lock_tree(tmp_path, monkeypatch, {"a": {"guarantees": {"A.t": "stale"}}})
+    cache = tmp_path / "cache" / "lean-audit"
+    keys = {p: LA.key(p, LA.COMMON.tracked_files(root), LA.FLAGS) for p in LOCK_PACKAGES}
+    rc, out, doc, _ = _lock_run(tmp_path, "lock-run", regenerate=True)
+    assert rc == 0 and sorted(doc["rekeyed"]) == ["pkg/a", "pkg/b"]
+    assert _lines(out / LA.LOCK_COMMIT / "judged.txt") == ["pkg/a", "pkg/b"]
+    kept = {p: (cache / f"{keys[p]}.json").read_bytes() for p in ("pkg/c", "pkg/p", "pkg/s")}
+    assert all(json.loads(e)["report"]["seconds"] == {"replay": 1.0, "total": 2.0} and "judged_from" not in json.loads(e)["report"]
+               for e in kept.values()), "the passes their own audits stored"
+    assert sorted(f.name for f in cache.glob("*.json")) == sorted(
+        f"{k}.json" for k in [*(keys[p] for p in kept), keys["pkg/b"], *doc["rekeyed"].values()])
+    # a second lock run reuses them, and those it reused are as untouched
+    rc, again, doc, _ = _lock_run(tmp_path, "lock-run-again", regenerate=True)
+    assert rc == 0 and sorted(doc["cached"]) == ["pkg/b", "pkg/c", "pkg/p", "pkg/s"] and _lines(again / "ran.txt") == ["pkg/a"]
+    assert {p: (cache / f"{keys[p]}.json").read_bytes() for p in kept} == kept
+    _commit_locks(root, doc)
+    assert {p: LA.key(p, LA.COMMON.tracked_files(root), LA.FLAGS) for p in kept} == {p: keys[p] for p in kept}
+    rc, out2, doc2, _ = _lock_run(tmp_path, "lock-commit")
+    assert rc == 0 and _lines(out2 / "ran.txt") == [] and {p: doc2["cached"][p] for p in kept} == {p: keys[p] for p in kept}
+
+
+def test_a_regenerated_lock_that_changes_what_the_build_reads_keeps_no_pass(tmp_path, monkeypatch):
+    """The facts a lock run stored are the facts of the tree with the regenerated locks only while every step before the
+    judge reads the same of both locks (`check.py`'s `build_inputs`). A regenerated lock that newly lists a premise, which
+    `Facts.lean` then walks, is no such lock: its package and the one whose audit reads that lock keep no pass, though a
+    judgment from the old facts would leave nothing, and the lock commit audits both in full."""
+    root = _lock_tree(tmp_path, monkeypatch, {"a": {"guarantees": {"A.t": "stale"},
+                                                    "regenerates_with": {"assumptions": {"A.H": {"owner": "@lean"}}}}})
+    rc, out, doc, logged = _lock_run(tmp_path, "lock-run", regenerate=True)
+    assert rc == 0 and list(doc["regenerated"]) == ["pkg/a"] and doc["rekeyed"] == {}
+    assert not (out / LA.LOCK_COMMIT).exists(), "nothing is judged"
+    for p in ("pkg/a", "pkg/b"):
+        assert [s for s in logged if s.startswith(f"lean-audit: {p}: no pass kept") and "the regenerated lock of pkg/a" in s
+                and "build_inputs" in s], logged
+    _commit_locks(root, doc)
+    rc, out2, doc2, _ = _lock_run(tmp_path, "lock-commit")
+    assert rc == 0 and _lines(out2 / "ran.txt") == ["pkg/a", "pkg/b"] and sorted(doc2["cached"]) == ["pkg/c", "pkg/p", "pkg/s"]
+
+    # a lock `build_inputs` can't read (it names no roots) agrees with no lock, itself included
+    root = _lock_tree(tmp_path / "unread", monkeypatch)
+    (root / "pkg/a/lean-audit.json").write_text(json.dumps({"guarantees": {"A.t": "stale"}}))
+    rc, out, doc, logged = _lock_run(tmp_path / "unread", "lock-run", regenerate=True)
+    assert rc == 0 and list(doc["regenerated"]) == ["pkg/a"] and doc["rekeyed"] == {} and not (out / LA.LOCK_COMMIT).exists()
+    assert len([s for s in logged if "no pass kept" in s and "the regenerated lock of pkg/a" in s]) == 2, logged
+
+
+def test_only_a_whole_run_keeps_a_pass_and_only_of_a_package_it_audited_with_a_stored_document(tmp_path, monkeypatch):
+    """What keeps no pass for the lock commit, each leaving that commit's audit to run in full as before: a package the
+    lock run reused from the cache (it has no facts of this run), one whose audit stored no facts document (a node without
+    the sandbox), a shard's run (another shard's regenerated locks move its keys too) and a `--fresh` run (nothing is
+    cached). Neither of the last two asks check.py for documents."""
+    stale = {"a": {"guarantees": {"A.t": "stale"}}}
+    _lock_tree(tmp_path / "reused", monkeypatch, stale)
+    rc, _, doc, _ = _lock_run(tmp_path / "reused", "check")           # a fails on its record; the others' passes are kept
+    assert rc == 1 and doc["failed"] == ["pkg/a"]
+    rc, out, doc, logged = _lock_run(tmp_path / "reused", "lock-run", regenerate=True)
+    assert rc == 0 and sorted(doc["cached"]) == ["pkg/b", "pkg/c", "pkg/p", "pkg/s"] and list(doc["rekeyed"]) == ["pkg/a"]
+    assert [s for s in logged if s.startswith("lean-audit: pkg/b: no pass kept") and "reused its pass" in s], logged
+
+    _lock_tree(tmp_path / "unsandboxed", monkeypatch, {"a": stale["a"] | {"unsandboxed": True}})
+    rc, out, doc, logged = _lock_run(tmp_path / "unsandboxed", "lock-run", regenerate=True)
+    assert rc == 0 and list(doc["regenerated"]) == ["pkg/a"] and list(doc["rekeyed"]) == ["pkg/b"]
+    assert [s for s in logged if s.startswith("lean-audit: pkg/a: no pass kept") and "stored no facts document" in s], logged
+
+    _lock_tree(tmp_path / "partial", monkeypatch, stale)
+    for name, flags in (("shard", {"only": ["pkg/a", "pkg/b"]}), ("fresh", {"fresh": True})):
+        rc, out, doc, _ = _lock_run(tmp_path / "partial", name, regenerate=True, **flags)
+        assert rc == 0 and list(doc["regenerated"]) == ["pkg/a"] and doc["rekeyed"] == {}
+        assert "--facts-cache" not in json.loads((out / "argv.json").read_text()) and not (out / LA.LOCK_COMMIT).exists()
+    assert "rekeyed" not in _lock_run(tmp_path / "partial", "check")[2], "only a run that regenerates lists them"
+
+
+def test_a_facts_document_is_judged_from_only_as_its_sidecar_names_it(tmp_path):
+    """`stored_document` gives the document a lock run's audit stored under a facts key only when its sidecar names the
+    schema, that key and the SHA-256 the document's bytes have: never one whose bytes changed since, one filed under
+    another key, one of another schema, or one without its sidecar (`check.py`'s `read_cached_facts`). Without the
+    document it says why, which the lock run's log carries."""
+    def store(name: str, data: bytes, **meta) -> None:
+        (tmp_path / f"{name}.json.gz").write_bytes(data)
+        (tmp_path / f"{name}.json").write_text(json.dumps({"schema": "s/v1", "key": name,
+                                                           "sha256": hashlib.sha256(data).hexdigest()} | meta))
+
+    def refused(name: str, schema: str = "s/v1") -> str:
+        doc, why = LA.stored_document(tmp_path, name, schema)
+        assert doc is None and why
+        return why
+
+    store("good", b"facts")
+    assert LA.stored_document(tmp_path, "good", "s/v1") == (tmp_path / "good.json.gz", "")
+    assert "another schema" in refused("good", "s/v2") and refused("absent").startswith("FileNotFoundError")
+    (tmp_path / "good.json.gz").write_bytes(b"other facts")
+    assert "SHA-256" in refused("good"), "its bytes changed"
+    store("misfiled", b"facts", key="another")
+    assert "key" in refused("misfiled")
+    store("bare", b"facts")
+    (tmp_path / "bare.json").unlink()
+    assert refused("bare").startswith("FileNotFoundError")
+    (tmp_path / "bare.json").write_text("[1]")
+    assert refused("bare").startswith("AttributeError") and refused("None").startswith("FileNotFoundError")
+    (tmp_path / "bare.json").write_text("not json")
+    assert refused("bare").startswith("JSONDecodeError")
 
 
 def test_held_caps_sets_each_broken_cap_to_its_count_and_leaves_the_rest():
@@ -420,6 +680,39 @@ def test_the_controls_and_the_docs_are_no_input(tmp_path, monkeypatch):
     rc, _ran, doc = _run(tmp_path, 99)
     assert rc == 1 and doc["failed"] == ["pkg/b"]
     assert doc["packages"][1]["failures"] == [f"reads tools/verity/lean/{n}" for n in sorted(LA.NOT_READ)]
+
+
+def test_a_packages_prose_and_pytest_files_are_no_input(tmp_path, monkeypatch):
+    """No audit reads a package's `*.md`, `.gitignore`, `pyproject.toml`, `test_*.py` or `conftest.py` (`UNREAD_NAMES`), so
+    an edit to one audits no package again: two READMEs and a pytest file inside packages audited all three `security`
+    packages cold in a candidate that changed no Lean. A generator, a data file or a fixture the package keeps, under
+    `tests/` too, still audits it again. The dropped files stay out of the scratch tree, so an audit that read one fails."""
+    unread = {"pkg/a/README.md": "", "pkg/a/docs/NOTES.md": "", "pkg/a/.gitignore": "", "pkg/a/pyproject.toml": "",
+              "pkg/a/tests/test_a.py": "", "pkg/a/tests/conftest.py": ""}
+    kept = {"pkg/a/gen.py": "", "pkg/a/tests/difftest_vectors.py": "", "pkg/a/tests/fixtures/vectors.json": "{}",
+            "pkg/a/models.json": "{}", "pkg/a/TRUSTED.sha256": ""}
+    root = _tree(tmp_path, monkeypatch, {**unread, **kept})
+    (root / "pkg/b/lean-audit.json").write_text("{}")
+    assert _run(tmp_path, 1)[0] == 0
+    files = LA.COMMON.tracked_files()
+    got = LA.inputs("pkg/b", files)
+    assert not set(unread) & set(got) and set(kept) <= set(got)
+    keys = {p: LA.key(p, files, LA.FLAGS) for p in ("pkg/a", "pkg/b")}
+    for i, f in enumerate(sorted(unread), 2):
+        (root / f).write_text(f"edited {i}\n")
+        assert {p: LA.key(p, files, LA.FLAGS) for p in keys} == keys, f
+        rc, ran, doc = _run(tmp_path, i)
+        assert rc == 0 and ran == [] and sorted(doc["cached"]) == ["pkg/a", "pkg/b"], f
+    for i, f in enumerate(sorted(kept), 20):
+        k = LA.key("pkg/a", files, LA.FLAGS)
+        (root / f).write_text(f"edited {i}\n")
+        assert LA.key("pkg/a", files, LA.FLAGS) != k, f
+        rc, ran, _doc = _run(tmp_path, i)
+        assert rc == 0 and {r.split()[0] for r in ran} == {"pkg/a", "pkg/b"}, f
+    (root / "pkg/b/lean-audit.json").write_text(json.dumps({"reads": sorted(unread)}))
+    rc, _ran, doc = _run(tmp_path, 99)
+    assert rc == 1 and doc["failed"] == ["pkg/b"]
+    assert doc["packages"][1]["failures"] == [f"reads {f}" for f in sorted(unread)]
 
 
 def test_a_passing_audit_keeps_its_build(tmp_path, monkeypatch):
@@ -775,6 +1068,23 @@ def test_a_module_a_build_compiled_and_the_cache_could_not_index_is_recorded_und
         "P.B's compile was stopped: the next run's repair has it compiled again, and nothing is recorded of it"
 
 
+def test_a_module_indexable_refuses_is_recorded_with_its_words_though_no_module_loads_it(tmp_path):
+    """A build `indexable` refuses is compiled again by every build that finds no record of it, and `P`, the top of its
+    build, is loaded by no module `put` indexes. It is recorded under its key with `indexable`'s words all the same, and
+    the log counts and names it; a refused module Lake didn't say it built (`"compiled"`) is not recorded."""
+    pkg = _package(tmp_path)
+    setup = pkg / ".lake/build/ir/P.setup.json"
+    setup.write_text(json.dumps(json.loads(setup.read_text()) | {"importArts": {}}))
+    store, said, keys = tmp_path / "store", [], _keys(pkg)
+    assert LA.LakeArtifacts(store).put({pkg: SANDBOXED | {"compiled": ["P.A", "P.B"]}}, log=said.append) == 2
+    assert not (store / LA.MK.UNSTORED).exists() and said == []
+    assert LA.LakeArtifacts(store).put({pkg: SANDBOXED}, log=said.append) == 0
+    why = "Lake imports [] and not ['P.A', 'P.B'] of the workspace"
+    assert json.loads((store / LA.MK.UNSTORED / Path(keys["P"]).name).read_text())["why"] == why
+    assert said == [f"lean-audit: {pkg}: 1 modules this run compiled can't be indexed (`indexable`), 1 recorded under "
+                    f"their keys: P: {why}"]
+
+
 def test_a_build_outside_the_sandbox_indexes_nothing(tmp_path):
     """Where `unshare` is missing, check.py builds without the sandbox, and compile-time code runs as the user: it could
     leave in the build any outputs, traces and `setup.json` it chose, which `put` would index under a module's key for
@@ -844,7 +1154,7 @@ def _bundle_of(tmp: Path, pkg: Path) -> tuple[Path, str]:
     arts = LA.LakeArtifacts(tmp / "node-a")
     arts.put({pkg: SANDBOXED})
     dest = tmp / "lean-artifacts.tar.gz"
-    assert arts.bundle(dest) == len(arts.added) > 0
+    assert arts.bundle(dest) == (len(arts.added), len(arts.added)) and arts.added
     return dest, hashlib.sha256(dest.read_bytes()).hexdigest()
 
 
@@ -881,8 +1191,107 @@ def test_a_bundle_carries_the_module_versions_one_node_added_to_another_and_noth
     j = hashlib.sha256(junk.read_bytes()).hexdigest()
     seen = len(logged)
     assert b.take({LA.SHARED + j: junk.as_uri()}, logged.append) == 0 and "could not be unpacked" in logged[seen]
-    assert b.take({LA.SHARED + j: junk.as_uri(), LA.SHARED + "0" * 64: dest.as_uri()}, logged.append) == 0
-    assert len(logged) == seen + 2                         # bytes that failed once are never fetched again
+    assert b.take({LA.SHARED + j: junk.as_uri()}, logged.append) == 0
+    assert len(logged) == seen + 2                         # the bytes named, which can't be unpacked: never fetched again
+
+
+def test_a_bundle_whose_download_gave_other_bytes_than_those_named_is_fetched_again_by_a_later_run(tmp_path, monkeypatch):
+    """A response that ends before its length does so without an error, and what arrived has another sha256 than the one
+    named. Such a bundle was marked taken, so the node never fetched it again and built its modules for as long as the
+    launcher listed it. Nothing tells those bytes from a bundle that is wrong where it is kept, so neither is marked: only
+    bytes that are the ones named are. A chunked response that ends early raises an error that is no `OSError`, which
+    ended the take and the bundles after it."""
+    pkg = _package(tmp_path)
+    dest, h = _bundle_of(tmp_path, pkg)
+    data, asked = dest.read_bytes(), []
+
+    class Short(BaseHTTPRequestHandler):
+        def log_message(self, *a):
+            pass
+
+        def do_GET(self):
+            asked.append(self.path)
+            self.send_response(200)
+            if self.path == "/chunked":
+                self.send_header("Transfer-Encoding", "chunked")
+                self.end_headers()
+                self.wfile.write(f"{len(data):x}\r\n".encode() + data[:len(data) // 2])
+            else:
+                self.send_header("Content-Length", str(len(data)))
+                self.end_headers()
+                self.wfile.write(data[:len(data) // 2] if asked.count(self.path) == 1 else data)
+
+    monkeypatch.setenv("no_proxy", "127.0.0.1")
+    srv = HTTPServer(("127.0.0.1", 0), Short)
+    threading.Thread(target=srv.serve_forever, daemon=True).start()
+    try:
+        at = f"http://127.0.0.1:{srv.server_address[1]}"
+        b, logged = LA.LakeArtifacts(tmp_path / "node-b"), []
+        assert b.take({LA.SHARED + h: at + "/bundle"}, logged.append) == 0 and "is not the one named" in logged[0]
+        assert not list((tmp_path / "node-b").glob("taken-*/*")), "not marked taken: a later run fetches it again"
+        assert not list((tmp_path / "node-b").glob(".*.part"))
+        assert b.take({LA.SHARED + h: at + "/chunked"}, logged.append) == 0 and "could not be fetched (IncompleteRead)" in logged[2]
+        assert b.take({LA.SHARED + h: at + "/bundle"}, logged.append) == 3, "the next run fetches it whole and takes it"
+        assert b.take({LA.SHARED + h: at + "/bundle"}, logged.append) == 0 and asked == ["/bundle", "/chunked", "/bundle"]
+        other = LA.LakeArtifacts(tmp_path / "node-c")
+        for _ in range(2):
+            assert other.take({LA.SHARED + "0" * 64: dest.as_uri()}, logged.append) == 0 and "is not the one named" in logged[-2]
+    finally:
+        srv.shutdown()
+        srv.server_close()
+
+
+def test_a_run_that_added_more_than_one_bundle_holds_writes_as_many_as_that_takes_and_another_node_takes_them_all(tmp_path):
+    """A bundle has a largest size, since a larger file of a run uploads without resume, and a cold build of a large
+    package adds more than that: what was past it was in no bundle, and every other node compiled it again. So a run
+    writes as many bundles as its additions take, none larger than that and each whole in itself (its entries, and every
+    artifact they name), the entries added first in the first; a node that takes them all restores every module. An
+    entry that is larger than a bundle alone is in none, and those after it still travel."""
+    pkg = _package(tmp_path)
+    entries = _keys(pkg)
+    a = tmp_path / "node-a"
+    arts = LA.LakeArtifacts(a)
+    arts.put({pkg: SANDBOXED})
+    assert [e for e, _ in arts.added] == [entries[m] for m in ("P.A", "P.B", "P")]
+    sizes = [(a / e).stat().st_size + sum((a / "artifacts" / o).stat().st_size for o in outs) for e, outs in arts.added]
+    room = sizes[0] + sizes[1]
+    assert max(sizes) <= room < sum(sizes), "room for the first two, not for all three"
+    out = tmp_path / "out"
+    out.mkdir()
+    dests, n = arts.bundle_into(out, room)
+    assert [d.name for d in dests] == ["lean-artifacts.tar.gz", "lean-artifacts-2.tar.gz"] and n == 3
+    assert all(LA.BUNDLE_FILE.fullmatch(f"lean-audit/{d.name}") for d in dests), "the names the launcher lists"
+    held = []
+    for d in dests:
+        with tarfile.open(d) as t:
+            members = t.getmembers()
+            mine = [json.loads(t.extractfile(m).read()) for m in members if m.name.startswith("keys/")]
+        assert sum(m.size for m in members) <= room, "no bundle holds more"
+        assert [m.name.split("/")[0] for m in members] == ["keys"] * len(mine) + ["artifacts"] * (3 * len(mine))
+        assert {m.name for m in members if m.name.startswith("artifacts/")} == {f"artifacts/{o}" for e in mine for o in e["digests"]}
+        held.append([e["module"] for e in mine])
+    assert held == [["P.A", "P.B"], ["P"]]
+    urls = {LA.SHARED + hashlib.sha256(d.read_bytes()).hexdigest(): d.as_uri() for d in dests}
+    b, said = LA.LakeArtifacts(tmp_path / "node-b"), []
+    assert b.take(urls, said.append) == 3 and "taken from 2 of 2 artifact bundle(s)" in said[0]
+    hashes = {m: hashlib.sha256(m.replace(".", "/").encode()).hexdigest()[:16] for m in entries}
+    assert LA.MK.stage(tmp_path / "node-b", pkg, [], tmp_path / "cache-b")[0] == {("p", hashes[m]): m for m in entries}, \
+        "every module the run added is restored on another node's tree"
+    c = LA.LakeArtifacts(tmp_path / "node-c")
+    assert c.take(dict(list(urls.items())[:1]), lambda s: None) == 2
+    assert sorted(LA.MK.stage(tmp_path / "node-c", pkg, [], tmp_path / "cache-c")[0].values()) == ["P.A", "P.B"], \
+        "the first bundle alone restores what it holds"
+    again = LA.LakeArtifacts(a)
+    again.added = arts.added[2:]
+    dests, n = again.bundle_into(out, room)
+    assert [d.name for d in dests] == ["lean-artifacts-3.tar.gz"] and n == 1, "a later audit of the run: the next free name"
+    assert LA.bundled(dests, n, 1) == "1 of the 1 module version(s) it added bundled for other nodes (lean-artifacts-3.tar.gz)"
+    alone = tmp_path / "alone"
+    alone.mkdir()
+    dests, n = arts.bundle_into(alone, sizes[2] - 1)
+    assert sizes[0] < sizes[1] < sizes[2] and (len(dests), n) == (2, 2), "P alone is more than such a bundle holds; P.A and P.B travel"
+    assert LA.bundled(dests, n, 3).endswith("; 1 in none: gone from the cache since, or more than a bundle holds")
+    assert arts.bundle_into(alone, 1) == ([], 0) and len(list(alone.iterdir())) == 2, "nothing fits: no file"
 
 
 def test_one_run_takes_the_newest_bundles_up_to_a_quarter_of_the_cache_s_cap_and_a_later_run_the_rest(tmp_path):
@@ -974,11 +1383,16 @@ def test_the_launcher_sends_the_newest_recorded_checks_bundles(tmp_path, monkeyp
             "r1": [("lean-audit/lean-artifacts.tar.gz", "a" * 64, True), ("lean-audit/lean-artifacts-2.tar.gz", "d" * 64, True),
                    ("lean-audit/x/lean-artifacts.tar.gz", "e" * 64, True)]}
     store = types.SimpleNamespace(
-        remote=None, index=types.SimpleNamespace(sql=lambda q, a: [(r,) for r in runs]),
+        remote=None, index=types.SimpleNamespace(sql=lambda q, a: [] if LA.RECORDS_RUNS in q else [(r,) for r in runs]),
         get_attempt=lambda r: {"outputs": {"run_files": f"art:{r}"}},
         listing=lambda art: [{"path": p, "sha256": h, "remote": on} for p, h, on in runs[art[4:]]])
     assert LA.shared_bundles(store) == ["c" * 64, "a" * 64, "d" * 64]
     assert LA.shared_bundles(store, limit=1) == ["c" * 64]
+    assert LA.shared_bundles(store, limit=2) == ["c" * 64, "a" * 64, "d" * 64], "runs are counted: every bundle of the second"
+    runs["r0"] = [("lean-audit/lean-artifacts-10.tar.gz", "3" * 64, True), ("lean-audit/lean-artifacts-2.tar.gz", "2" * 64, True),
+                  ("lean-audit/lean-artifacts.tar.gz", "1" * 64, True)]
+    assert LA.shared_bundles(store)[3:] == ["1" * 64, "2" * 64, "3" * 64], "a run's in the order it wrote them, however listed"
+    del runs["r0"]
     refreshed: list[dict] = []
     store.remote, store.refresh = object(), lambda **kw: refreshed.append(kw)
     monkeypatch.setattr(LA.COMMON, "recent", lambda now: f"r-since-{now > 1.7e9}")
@@ -996,6 +1410,34 @@ def _attempts(tmp: Path, rows: list[tuple[str, str, str, list[str]]]):
         db.execute("INSERT INTO attempts VALUES (?, ?, ?, ?, ?, ?)",
                    (rid, tool, state, f"2026-10-26T{20 - i:02d}:00:00Z", 60.0, json.dumps({"id": rid, "params": {"argv": argv}})))
     return types.SimpleNamespace(sql=lambda q, a=(): db.execute(q, a).fetchall())
+
+
+#: a records run as `research.queue.RECORDS_COMMAND` starts it, and one a lane wrote by hand
+RECORDS_RUN = ["python3", "tools/verity/lean/lean_changed.py", "--records", "security", "--update"]
+RECORDS_BY_HAND = ["bash", "-lc", "uv sync -q && python3 tools/verity/lean/lean_changed.py --records security/Proofs"]
+
+
+def test_the_launcher_also_sends_the_newest_records_runs_bundles(tmp_path):
+    """A records run (`lean_changed.py --records`) bundles the modules its sandboxed builds compiled, and nothing listed
+    them: each node compiled again what another's records run had. `shared_bundles` lists them as one more kind of
+    `PUBLISHERS`, after the recorded checks', newest first and at most ``limit``: a failed run's too, whose compile is
+    worth what a passing run's is (`LakeArtifacts.put`), but not an unfinished one's or another `lean_changed.py` run's."""
+    index = _attempts(tmp_path, [("r-new", "python3", "done", RECORDS_RUN), ("r-check", "check", "done", ["check"]),
+                                 ("r-failed", "python3", "failed", RECORDS_RUN), ("r-running", "python3", "running", RECORDS_RUN),
+                                 ("r-hand", "python3", "done", RECORDS_BY_HAND),
+                                 ("r-try", "python3", "done", ["python3", "tools/verity/lean/lean_changed.py", "--try", "x"]),
+                                 ("r-old", "python3", "cancelled", RECORDS_RUN)])
+    sha = {"r-new": "n", "r-check": "c", "r-failed": "f", "r-running": "u", "r-hand": "h", "r-try": "t", "r-old": "o"}
+    runs = {r: [("lean-audit/lean-artifacts.tar.gz", s * 64, True)] for r, s in sha.items()}
+    runs["r-hand"].append(("lean-audit/lean-artifacts-2.tar.gz", "2" * 64, True))
+    runs["r-old"] = [("lean-audit/lean-artifacts.tar.gz", "o" * 64, False)]            # not on the remote: no node could fetch it
+    store = types.SimpleNamespace(remote=None, index=index, get_attempt=lambda r: {"outputs": {"run_files": f"art:{r}"}},
+                                  listing=lambda art: [{"path": p, "sha256": h, "remote": on} for p, h, on in runs[art[4:]]])
+    assert LA.shared_bundles(store) == ["c" * 64, "n" * 64, "f" * 64, "h" * 64, "2" * 64]
+    assert LA.shared_bundles(store, limit=2) == ["c" * 64, "n" * 64, "f" * 64]
+    assert LA.shared_bundles(store, limit=1) == ["c" * 64, "n" * 64]
+    assert LA.PUBLISHERS[2][0] == LA.RECORDS_RUNS and LA.PUBLISHERS[2][1].fullmatch("lean-audit/lean-artifacts.tar.gz"), \
+        "where `lean_changed.audit_records` writes it"
 
 
 #: drive's Lean check as the store records it: `slot.py` runs the check, so its tool is `python3`
@@ -1018,6 +1460,136 @@ def test_a_slot_wrapped_check_is_a_recorded_check_whose_bundle_and_verdicts_are_
     monkeypatch.setattr(CHECK, "attempt_pack", lambda store, rid, d, name="verdicts.tar.gz": d / rid)
     monkeypatch.setattr(CHECK.VERDICTS, "refusal", lambda pack: None)
     assert [rid for rid, _ in CHECK.gathered_packs(tmp_path, store)] == ["r-lean", "r-check"]
+
+
+def _tier(audit: bool, head: str = "a" * 40, merged: str | None = None) -> list[str]:
+    """`research queue ready`'s quick tier of the PR head ``head`` as the store records it (`env` runs `slot.py`, which runs
+    the tier), with the Lean audit of the merge when ``audit``; run on the merge ``merged`` of that head onto `main` when
+    given, as a head behind `main` is."""
+    uv = "uv run --locked --all-packages --extra torch-cpu python"
+    lean = f" --lean-audit '{uv} tools/verity/lean/warm.py'" if audit else ""
+    at = f"--head {merged} --base {'b' * 40} --merged {head}" if merged else f"--head {head} --base {'b' * 40}"
+    return ["env", "CHECK_SLOTS=/workspace/research/locks/research/slots", "python3", "tools/verity/check/slot.py", "--by", "ci", "--",
+            "sh", "-c", f'exec python3 "$RESEARCH_RUN_DIR/inputs/quick_tier.py" {at}{lean} -- '
+                        f"{uv} tools/verity/check/suites.py --quick"]
+
+
+def test_the_audit_of_a_ready_marks_merge_publishes_its_bundle_and_verdicts_as_a_recorded_check_does(tmp_path):
+    """A change's modules are built at its ready mark so that no candidate builds them: unlisted, the mark's bundle and
+    verdict pack stay on the node that ran it, and the candidate that holds the change builds it again on another. The mark's
+    run is no recorded check (its tool is `env`) and keeps the audit's files under `out/lean-audit/`, in its run record when
+    its result lists no files. Each kind of run has its own count, since a candidate's shards end by the dozen."""
+    bundle, pack = "out/lean-audit/lean-artifacts.tar.gz", "out/lean-audit/verdicts.tar.gz"
+    files = {
+        "r-mark-new": {"run_files": [("out/logs/suite.log", "0" * 64, True)], "run_record": [(bundle, "1" * 64, True), (pack, "2" * 64, True)]},
+        "r-check": {"run_files": [("lean-audit/lean-artifacts.tar.gz", "3" * 64, True), ("verdicts.tar.gz", "4" * 64, True)]},
+        # a tier whose command names no audit publishes nothing, whatever its files are called
+        "r-tier": {"run_files": [(bundle, "5" * 64, True), (pack, "6" * 64, True)]},
+        "r-mark-old": {"run_files": [(bundle, "7" * 64, True), ("out/lean-audit/lean-artifacts-2.tar.gz", "8" * 64, False),
+                                     ("lean-audit/lean-artifacts.tar.gz", "9" * 64, True), ("verdicts.tar.gz", "a" * 64, True),
+                                     (pack, "b" * 64, True)]},
+        "r-mark-running": {"run_files": [(bundle, "c" * 64, True), (pack, "d" * 64, True)]},
+    }
+    index = _attempts(tmp_path, [("r-mark-new", "env", "done", _tier(True)), ("r-check", "check", "done", ["check"]),
+                                 ("r-tier", "env", "done", _tier(False)), ("r-mark-old", "env", "failed", _tier(True)),
+                                 ("r-mark-running", "env", "running", _tier(True))])
+    store = types.SimpleNamespace(
+        remote=None, index=index, get_attempt=lambda r: {"outputs": {kind: f"{kind}:{r}" for kind in files[r]}},
+        listing=lambda art: [{"path": p, "sha256": h, "remote": on, "bytes": 1} for p, h, on in files[art.split(":")[1]][art.split(":")[0]]])
+    assert LA.shared_bundles(store) == ["3" * 64, "1" * 64, "7" * 64]
+    assert LA.shared_bundles(store, limit=1) == ["3" * 64, "1" * 64]
+    assert [(p["run"], p["path"], p["sha256"]) for p in CHECK.verdict_packs(store)] == [
+        ("r-check", "verdicts.tar.gz", "4" * 64), ("r-mark-new", pack, "2" * 64), ("r-mark-old", pack, "b" * 64)]
+    assert [p["run"] for p in CHECK.verdict_packs(store, limit=1)] == ["r-check", "r-mark-new"]
+    spec = importlib.util.spec_from_file_location("lean_warm_for_test_lean_audit", ROOT / "tools" / "verity" / "lean" / "warm.py")
+    warm = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(warm)
+    assert CHECK.MARK_PACK == LA.COMMON.MARK_AUDIT_OUT + warm.PACK == pack, "the pack is listed where the audit writes it"
+    assert LA.PUBLISHERS[1][1].fullmatch(LA.COMMON.MARK_AUDIT_OUT + "lean-artifacts.tar.gz"), "and the bundle where `--bundle` does"
+
+
+def test_a_launch_sends_the_mark_audits_of_the_prs_its_tree_holds_however_old(tmp_path, monkeypatch):
+    """A PR waits hours between its mark and the candidate that holds it, and each newer mark's audit pushes its bundle and
+    pack down the newest: once past them, the candidate compiled the change again, on a node that had not run the mark. The
+    marks of the heads the launcher's tree merged are listed before a kind's newest and beside its count, whether the tier
+    ran on the head or on its merge onto `main`, and only the audits: a head's other runs, and other heads' marks, are not."""
+    bundle, pack = "out/lean-audit/lean-artifacts.tar.gz", "out/lean-audit/verdicts.tar.gz"
+    mine, behind, other = "1" * 40, "2" * 40, "3" * 40
+    rows = [("r-new", "env", "done", _tier(True, other)), ("r-check", "check", "done", ["check"]),
+            ("r-mine-tier", "env", "done", _tier(False, mine)),                       # a mark of this head that audited nothing
+            ("r-mine-running", "env", "running", _tier(True, mine)),
+            ("r-old", "env", "done", _tier(True, other)), ("r-mine", "env", "failed", _tier(True, mine)),
+            ("r-behind", "env", "done", _tier(True, behind, merged="4" * 40))]
+    files = {r: [(bundle, f"{i:x}" * 64, True), (pack, f"{i + 8:x}" * 64, True)] for i, (r, *_) in enumerate(rows)}
+    files["r-check"] = [("lean-audit/lean-artifacts.tar.gz", "c0" * 32, True), ("verdicts.tar.gz", "c1" * 32, True)]
+    store = types.SimpleNamespace(
+        remote=None, index=_attempts(tmp_path, rows), get_attempt=lambda r: {"outputs": {"run_files": f"art:{r}"}},
+        listing=lambda art: [{"path": p, "sha256": h, "remote": on, "bytes": 1} for p, h, on in files[art[4:]]])
+
+    def bundles(**kw) -> list[str]:
+        by = {files[r][0][1]: r for r in files}
+        return [by[h] for h in LA.shared_bundles(store, **kw)]
+
+    def packs(**kw) -> list[str]:
+        return [p["run"] for p in CHECK.verdict_packs(store, **kw)]
+
+    assert bundles(limit=1) == packs(limit=1) == ["r-check", "r-new"], "past the newest, a member's mark was not sent"
+    assert bundles(limit=1, heads=[mine, behind]) == packs(limit=1, heads=[mine, behind]) == ["r-check", "r-mine", "r-behind", "r-new"]
+    assert bundles(heads=[mine, behind]) == packs(heads=[mine, behind]) == ["r-check", "r-mine", "r-behind", "r-new", "r-old"], \
+        "each run once, a member's first"
+    assert bundles(limit=1, heads=["5" * 40]) == packs(limit=1, heads=["5" * 40]) == ["r-check", "r-new"]
+    # the launcher reads the heads from its own checkout: a caller that gives a store gives its heads too
+    monkeypatch.setattr(CHECK.COMMON, "merged_heads", lambda at: [behind] if at == CHECK.ROOT else [])
+    monkeypatch.setattr(pytest.importorskip("research.store.local"), "LocalStore", lambda: store)
+    store.remote, store.refresh = types.SimpleNamespace(presign=lambda key, ttl: f"https://r2/{key}"), lambda **kw: None
+
+    def sent(*given) -> list[str]:
+        return [p["run"] for p in json.loads(CHECK.verdict_url_file(tmp_path, *given).read_text())]
+
+    assert sent() == ["r-check", "r-behind", "r-new", "r-old", "r-mine"]
+    assert sent(store) == ["r-check", "r-new", "r-old", "r-mine", "r-behind"]
+    assert sent(store, [mine]) == ["r-check", "r-mine", "r-new", "r-old", "r-behind"]
+    files["r-mine"][1] = (pack, files["r-mine"][1][1], False)
+    assert packs(limit=1, heads=[mine], remote=True) == ["r-check", "r-new"], "a pack the remote lacks is sent to no node"
+    assert LA.COMMON.lookups(LA.COMMON.RECORDED_CHECKS, 2, [mine]) == [(LA.COMMON.RECORDED_CHECKS, (8,), 2)], "a head names no check"
+    assert len(LA.COMMON.lookups(LA.COMMON.MARK_AUDITS, 2, [mine])) == 2 and len(LA.COMMON.lookups(LA.COMMON.MARK_AUDITS, 2)) == 1
+
+
+def test_the_heads_a_tree_holds_are_those_the_queues_commits_name_the_newest_first(tmp_path):
+    """`common.merged_heads` reads the PRs a candidate holds from the commits the verified queue made of them on its
+    first-parent line, each naming the PR's head in its `Head` trailer: a merge of that head, or the one commit of a move the
+    queue regenerated, which has no second parent. A tier names that head, so its mark's audit is found by it. A PR's own
+    merge of a branch and a commit that only quotes a trailer are no member."""
+    def git(*args: str) -> str:
+        return subprocess.run(["git", "-C", str(tmp_path), "-c", "user.name=t", "-c", "user.email=t@t", "-c", "commit.gpgsign=false",
+                               *args], check=True, capture_output=True, text=True).stdout.strip()
+
+    def pr(n: int) -> str:
+        git("checkout", "-q", "-b", f"pr-{n}", "main")
+        git("commit", "-q", "--allow-empty", "-m", f"pr {n}")
+        head = git("rev-parse", "HEAD")
+        git("checkout", "-q", "main")
+        return head
+
+    def trailers(n: int, head: str) -> str:
+        return f"PR: #{n}\nHead: {head}\nOwner: lane\n"
+
+    git("init", "-q", "-b", "main")
+    assert LA.COMMON.merged_heads(tmp_path) == [], "no commit yet"
+    git("commit", "-q", "--allow-empty", "-m", "root")
+    assert LA.COMMON.merged_heads(tmp_path) == []
+    first = pr(1)
+    git("merge", "-q", "--no-ff", "-m", f"Queue: #1 one\n\n{trailers(1, first)}", "pr-1")
+    other = pr(2)
+    git("merge", "-q", "--no-ff", "-m", f"Merge branch 'pr-2'\n\n{trailers(2, other)}", "pr-2")
+    git("commit", "-q", "--allow-empty", "-m", f"Lock records regenerated for #1\n\nHead: {other}")
+    moved = pr(3)
+    git("commit", "-q", "--allow-empty", "-m", f"Queue: #3 a move\n\nregenerated by drive\n\n{trailers(3, moved)}Move: tools/move/m.toml\n")
+    last = pr(4)
+    git("merge", "-q", "--no-ff", "-m", f"Queue: #4 four\n\n{trailers(4, last)}", "pr-4")
+    assert LA.COMMON.merged_heads(tmp_path) == [last, moved, first]
+    assert LA.COMMON.merged_heads(tmp_path, limit=2) == [last, moved]
+    assert LA.COMMON.merged_heads(tmp_path / "no-checkout") == []
 
 
 def test_only_a_recorded_check_bundles_its_built_modules_for_other_nodes(tmp_path, monkeypatch):
@@ -1367,6 +1939,8 @@ def test_the_real_packages_and_their_inputs():
     assert {"tools/verity/lean/upstream.py", "tools/verity/lean/setup.sh", "tools/verity/lean/cache.py"} <= set(got)
     assert not {f"tools/verity/lean/{n}" for n in LA.NOT_READ} & set(got)
     assert {f"tools/verity/lean/{n}" for n in LA.NOT_READ} <= set(files), "an entry of NOT_READ names no file: remove it"
+    assert not [f for f in got if not f.startswith(LA.LEAN_TOOL)
+                and any(fnmatch.fnmatchcase(f.rsplit("/", 1)[-1], p) for p in LA.UNREAD_NAMES)]
     assert "tools/verity/lean/Unread.lean" in got and set(LA.UNREAD_FACTS) <= set(pkgs)
     lean_check = (ROOT / "tools" / "verity" / "lean" / "check.py").read_text()
     assert ast.literal_eval(re.search(r"^UNREAD_FACTS = (.+)$", lean_check, re.M).group(1)) == LA.UNREAD_FACTS, \
@@ -1612,7 +2186,8 @@ def test_the_launcher_signs_only_this_trees_pinned_bundles(tmp_path, monkeypatch
     signed = []
     remote = types.SimpleNamespace(presign=lambda key, ttl: signed.append((key, ttl)) or f"https://r2/{key}?sig")
     monkeypatch.setattr(pytest.importorskip("research.store.remote"), "load_remote", lambda: remote)
-    monkeypatch.setattr(LA, "shared_bundles", lambda: ["ef" * 32])
+    monkeypatch.setattr(LA.COMMON, "merged_heads", lambda at: [f"merged in {at.name}"])
+    monkeypatch.setattr(LA, "shared_bundles", lambda heads: ["ef" * 32] if heads == ["merged in repo"] else [])
     p = LA.url_file(tmp_path, ttl_s=60)
     assert json.loads(p.read_text()) == {k: f"https://r2/objects/sha256/{'ab' * 32}?sig",
                                          LA.SHARED + "ef" * 32: f"https://r2/objects/sha256/{'ef' * 32}?sig"}
