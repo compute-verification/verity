@@ -57,7 +57,7 @@ from verity.commitments import history as HT
 from verity.definitions.numerics.rows import SAMPLED_MEMBER
 from verity.definitions.numerics.token_select_rows import token_select_chunk_bests
 from verity.definitions.registry.dead_free import CHUNK
-from verity.commitments.windows import rows as CS
+from verity.commitments.windows import links as LK, rows as CS
 from verity_vllm.check.replay import evaluate as EV
 from verity_vllm.check.replay.compare import _tp_member_alias
 from verity_vllm.check.replay.index import IDS_MEMBER, SAMPLER_OP, ProgramIndex, node_runs
@@ -388,6 +388,12 @@ def named(m: CS.Member) -> CS.Member:
     return replace(m, rows=tuple((names[r], w) for r, w in m.rows), schemas=tuple((names.get(r, r), s) for r, s in m.schemas))
 
 
+def member(template: str, n: int = 1) -> CS.Member:
+    """``n`` units of template ``template`` as an interior window lays them out: its bit rows as Flock stages a unit
+    (`chunk_rows.unit_member`), each row named after its parameter (`named`)."""
+    return named(CR.unit_member(SRW.template(template), n))
+
+
 def pieces(s: Span, c: int | None = None) -> tuple[Span, Span]:
     """A token select's span ``s`` as the units Flock proves it by, as `TokenSelect_v4` calls them: each token's V / c
     `TokenSelectChunk_v2{C=c}` units, one a chunk of its logits row, then its `TokenSelectCombine_v2{V, C=c}` unit over
@@ -412,12 +418,24 @@ def pieces(s: Span, c: int | None = None) -> tuple[Span, Span]:
               [s.data["outs"][out]]))
     got = []
     for t, units, ins, outs in split:
-        m = named(CR.unit_member(SRW.template(t), units))
+        m = member(t, units)
         data = {"rows": {p: a.astype(np.uint16) for (p, _w), a in zip(m.rows, ins, strict=True)},
                 "outs": {p: a.astype(np.uint16) for (p, _w), a in zip(m.outs, outs, strict=True)}}
         scale = units // n
         got.append(Span(s.rid, m, data, [[e[0] * scale, e[1] * scale, *e[2:]] for e in s.entries], s.program, group=scale))
     return got[0], got[1]
+
+
+def whole(s: Span) -> Span:
+    """A token select's span ``s`` (`captured`) as its template's own units, one a served token, where the class's replay
+    block is the check's instances and not their bodies (`boundary_rows.Layout.inline` off): its member the template's
+    layout as an interior window's (`member`), its output ``o0``, as round 2 names a link's port."""
+    m = member(s.member.template, s.n)
+    ((port, words),), ((out, wide),) = s.member.rows, s.member.outs
+    if [w for _p, w in m.rows] != [words] or [w for _p, w in m.outs] != [wide]:
+        raise ValueError(f"{s.member.template}: a unit of rows {list(m.rows)} and outputs {list(m.outs)}, not the span's one "
+                         f"row of {words} words and one output of {wide}")
+    return replace(s, member=m, data={"rows": {m.rows[0][0]: s.data["rows"][port]}, "outs": {m.outs[0][0]: s.data["outs"][out]}})
 
 
 def interior_run(boundary: str, sample: Sequence[int]) -> str:
@@ -540,7 +558,7 @@ def interior(spans: Sequence[Span | Sequence[Span]], n_rho: Cells, boundary: str
              replay: str | None = None, previous: str | None = None, kind: str = "served",
              salt_key: bytes | None = None, device: DeviceCommit | None = None, wires: Sequence[Any] = (),
              tables: Sequence[HT.HistoryTable] = (), served: Mapping[str, Any] | None = None,
-             positions: int | None = None, links: Sequence[Link] = ()) -> Interior:
+             positions: int | None = None, links: Sequence[Link] = (), window_root: str | None = None) -> Interior:
     """The replay sample's spans (``spans[i]`` replay block ``sample[i]``'s: one template's span, or one a template in the
     check's order, as `pieces` gives a token select's), template t's each padded to its n_t units (``n_rho``, as
     `interior_window` takes it) by whole instances (`Span.padded`), committed template-major and registered after
@@ -562,7 +580,8 @@ def interior(spans: Sequence[Span | Sequence[Span]], n_rho: Cells, boundary: str
     record registers: `supplied`'s for a `Supply`, and for an `Operand` the rows its units replayed there. A replayed
     unit whose row there is not the value's at its place (a `Supply`'s row, or the row another unit replayed for the
     same row of an `Operand`) is refused before anything is committed. Several ports may read one value, each its own
-    link."""
+    link. ``window_root``: the open root of the challenger session the second stage samples on, where the stream
+    registers the interior under one (`Stream.register_interiors`' ``window_root``): each `Operand`'s domain binds it."""
     if not spans or len(spans) != len(sample):
         raise ValueError(f"{len(spans)} spans for a replay sample of {len(sample)}")
     per = [(s,) if isinstance(s, Span) else tuple(s) for s in spans]
@@ -636,7 +655,7 @@ def interior(spans: Sequence[Span | Sequence[Span]], n_rho: Cells, boundary: str
         for name, x in IL.values(links).items():
             if isinstance(x, Operand):
                 reads = [(rows, at) for rows, (y, _k, at) in zip(took, placed, strict=True) if y.value == name]
-                given[name] = IL.operand(prog, x, reads, q, schemas[name], salt_key)
+                given[name] = IL.operand(prog, x, reads, q, schemas[name], salt_key, window_root)
         held = {name: np.asarray(v.rows, dtype=np.uint16) for name, v in given.items()}
         for rows, (x, k, at) in zip(took, placed, strict=True):
             v = given[x.value]
@@ -660,6 +679,35 @@ def interior(spans: Sequence[Span | Sequence[Span]], n_rho: Cells, boundary: str
     return Interior(rec, ports, layer, c, [[s.entries for s in p] for p in per], tcs)
 
 
+def write(it: Interior, directory: str | Path) -> dict[str, Any]:
+    """``it``'s window files under ``directory`` as the one-stage audit reads a window (`ml.windows.rows.write`), its
+    registration the one `interior` made but for the index's hiding leaf, which the written record's window names:
+    -> that record, the one to register (`register`'s ``record``). Each member's header names every port's rows, so a
+    session's registered reads cover its circuit: a port given as rows of a value the interior registers (a link's), that
+    value's rows with their paths to its root; any other, the rows of the port holding it (its own, or a wired port's
+    writer's output) with their paths. ``index.json`` is the spans' index entries (`Interior.entries`), prover only."""
+    c, w = it.committed, it.committed.window
+    held: dict[str, LK.Port] = {}
+    registered: dict[str, dict[str, Any]] = {}
+    for k, m in enumerate(w.members):
+        given, entry = c.by_value(k), {}
+        for p, _w in m.all_rows:
+            if p in given:
+                v, at = given[p].value, [int(x) for x in given[p].positions]
+                entry[p] = {"value": v.value, "positions": at, "paths": [v.path(x).hex() for x in at]}
+            else:
+                port = w.held(m, p)
+                if port not in held:
+                    held[port] = LK.Port.of(c, port)
+                entry[p] = held[port].header(w.held_leaves(m, p))
+        registered[m.key] = entry
+    window = {k: v for k, v in it.record["window"].items() if k not in ("kind", "run")}
+    CS.write(c, directory, window, {"interior": True, "members": [m.key for m in w.members], "entries": it.entries},
+             kind=it.record["window"]["kind"], registered=registered, registrar=R, previous=it.record["previous"],
+             entries=it.record.get("registered", ()))
+    return json.loads((Path(directory) / "registration.json").read_text())
+
+
 def register(stream: Any, first: Any, it: Interior, **copies: Any) -> Any:
     """``it`` on the two-stage ``stream`` after its first stage ``first``, with the challenger's ports and leaf layer
     (``copies`` override them, and pass `Stream.register_interiors`' other copies): its logged registration."""
@@ -669,5 +717,5 @@ def register(stream: Any, first: Any, it: Interior, **copies: Any) -> Any:
 
 __all__ = ["DIGEST", "HELD", "INDEX", "MOVED", "READ", "TABLE", "DeviceCommit", "Interior", "Link", "Operand", "Replay", "Span",
            "Supply", "captured", "committed", "gather", "history", "interior", "interior_ports", "interior_run",
-           "interior_window", "kept_table", "link_schemas", "link_values", "link_words", "links", "named", "pieces",
-           "port_map", "register", "sources", "span", "span_values", "supplied", "table_reads"]
+           "interior_window", "kept_table", "link_schemas", "link_values", "link_words", "links", "member", "named",
+           "pieces", "port_map", "register", "sources", "span", "span_values", "supplied", "table_reads", "whole", "write"]

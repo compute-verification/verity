@@ -289,11 +289,12 @@ def placed(ms: Sequence[CS.Member], cells: Sequence[int], q: int,
 
 
 def operand(program: str, x: Operand, reads: Sequence[tuple[np.ndarray, Sequence[int]]], q: int, schema: str,
-             salt_key: bytes | None) -> Any:
+             salt_key: bytes | None, window: str | None = None) -> Any:
     """`Operand` ``x``'s value for ``q`` sampled spans, committed as core's `Registered` under ``program`` in its ports'
     row format ``schema``: row ``at[u]`` the row unit u replayed at a port that reads it (``reads``: each port's rows
     and ``at``), a row no unit reads the zero row, each under a fresh salt (``salt_key``: tests only, the salts derived
-    from it and the value's name)."""
+    from it and the value's name). ``window``: the interior window's open root, which its domain binds where the
+    challenger names one (`Stream.register_interiors`' ``window_root``: a value registered afresh each window)."""
     own = np.zeros((q * x.per, x.words), dtype=np.uint16)
     for rows, at in reads:
         own[list(at)] = rows
@@ -302,7 +303,7 @@ def operand(program: str, x: Operand, reads: Sequence[tuple[np.ndarray, Sequence
     if salt_key is not None:
         ys = CS.salts(hashlib.sha512(bytes(salt_key) + x.value.encode()).digest()[:32], 0, n)
         salts = [ys[i * CS.SALT_BYTES:(i + 1) * CS.SALT_BYTES] for i in range(n)]
-    return RG.Registered.commit(program, x.value, own.tolist(), salts, schema=schema)
+    return RG.Registered.commit(program, x.value, own.tolist(), salts, schema=schema, window=window)
 
 
 def history(boundary: Mapping[str, Any], names: Sequence[str], words: int, positions: int,
