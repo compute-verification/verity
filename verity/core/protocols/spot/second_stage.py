@@ -20,7 +20,10 @@ another template reads that writer's output port for the field, one value the in
 ``second-read`` holds a wired port to its writer's port at its writer unit's row and `at_run` binds it by that port
 (`_held_port`). A template may have several callers in the body, a batch's members among them, its units theirs in
 body order; each port a link or a wire names reads, unit by unit, the row its caller names (`replay_rows`,
-`SecondStage.replayRows`), summarized once per Definition as runs (`Run`) and never unrolled.
+`SecondStage.replayRows`), summarized once per Definition as runs (`Run`) and never unrolled. A port a link names reads
+the boundary port the link names or, where the interior registration registers a value of the link's name (a value its
+verifier supplies, say), that value and never the boundary port, at its unit's row of its cell's sampled block
+(`_read_ok`).
 
 Each statement's header is held to the reference header the auditor's params give its template (`Own.refs`, from
 ``proofs.templates``: `service.template_circuits`), the registered reference statement's, fixed before the run, placed
@@ -907,7 +910,9 @@ def _wired_row(p: Part, r: Rows, u: int) -> int | None:
 def _read_ok(own: Own, named: bool, p: Part, port: str, e: Any) -> bool:
     """`SecondStage.readOk`: template ``p.template``'s session port `port` may read registered-reads entry `e`: a port a
     link names, only the boundary port it names, of its rows' `per` a replay block, each slot only its unit's row of its
-    cell's replay block's (`_linked_row`); a port a wire names, only its writer's output port of the interior record, of
+    cell's replay block's (`_linked_row`), or, where the interior registration registers a value of the link's name,
+    only that value and never the boundary port, of its rows' `per` a sampled block, each slot only its unit's row of
+    its cell's (`_wired_row`); a port a wire names, only its writer's output port of the interior record, of
     the writer's units a block, each slot only its unit's writer unit's row in its cell's replay block (`_wired_row`);
     any other, its own port of the interior record, each slot only its own first row, or a value either registration
     registers, never a boundary port. Each at its root, domain and leaves, at most `MAX_LEAVES` of them."""
@@ -916,8 +921,14 @@ def _read_ok(own: Own, named: bool, p: Part, port: str, e: Any) -> bool:
         return False
     link = _link_of(own, p.template, port)
     if link is not None:
-        b, m, r = _by_port(own.boundary).get(v), _get(own.boundary, "population"), _rows_of(own, p.template, port)
-        if not (v == link.value and b is not None and _nat(m) and r is not None):
+        if v != link.value:
+            return False
+        x, r = _registered_entry(own.interior, v), _rows_of(own, p.template, port)
+        if x is not None:
+            ir = r
+            return ir is not None and _same_at(e, x) and _placed_ok(q, p, e, q * ir.per, lambda u: _wired_row(p, ir, u))
+        b, m = _by_port(own.boundary).get(v), _get(own.boundary, "population")
+        if not (b is not None and _nat(m) and r is not None):
             return False
         lr = r
         return _same_at(e, b) and _placed_ok(q, p, e, m * lr.per, lambda u: _linked_row(own, p, lr, u))
@@ -1053,17 +1064,26 @@ def statement_reads(ss: Sequence[Any]) -> dict[str, Any]:
 
 def interior_reads(own: Own, ss: Sequence[Any]) -> list[dict[str, str]]:
     """`SecondStage.interiorReads`: the reads of statements `ss` that `_read_ok` takes at a value only the interior
-    registration registers: at a port no link or wire names, of a value that is no port of either record and that the
+    registration registers: at a port a link names, of the link's value where the interior registers it (never the
+    boundary port then); or at a port no link or wire names, of a value that is no port of either record and that the
     boundary doesn't register. Each is ``{"template", "port", "value"}``, in statement and port order. These reads rest
-    on the interior's own values (a history table the interior registers, say), and the attached record names them
-    (`attach`)."""
+    on the interior's own values (a history table the interior registers, or a value its verifier supplies, say), and
+    the attached record names them (`attach`)."""
     out = []
     for s in map(_stmt, ss):
         for port, e in sorted(_entries(_get(s.registered, "ports")), key=lambda pe: pe[0]) if s is not None else ():
             v = _get(e, "value")
-            if (isinstance(v, str) and _link_of(own, s.template, port) is None and _wire_of(own, s.template, port) is None
-                    and v not in _by_port(own.interior) and v not in _by_port(own.boundary)
-                    and _registered_entry(own.boundary, v) is None and _registered_entry(own.interior, v) is not None):
+            if not isinstance(v, str):
+                continue
+            link = _link_of(own, s.template, port)
+            if link is not None:
+                on_interior = link.value == v and _registered_entry(own.interior, v) is not None
+            else:
+                on_interior = (_wire_of(own, s.template, port) is None
+                               and v not in _by_port(own.interior) and v not in _by_port(own.boundary)
+                               and _registered_entry(own.boundary, v) is None
+                               and _registered_entry(own.interior, v) is not None)
+            if on_interior:
                 out.append({"template": s.template, "port": port, "value": v})
     return out
 
