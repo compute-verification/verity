@@ -115,6 +115,9 @@ OPEN_ISSUE, OPEN_DUE = re.compile(r"[A-Z][A-Z0-9]*-[0-9]+"), re.compile(r"[0-9]{
 #: the kinds a guarantee's `premises` record lists: the named assumptions it rests on, the open premises it takes, and the
 #: definitions of an assumptions module it reads without taking them
 PREMISE_KINDS = ("assumptions", "domain", "open", "reads")
+#: a premise of each kind, as a review's line says it
+PREMISE_NAMES = {"assumptions": "a named assumption", "domain": "a domain hypothesis", "open": "open",
+                 "reads": "read, not taken"}
 
 
 class Failure(str):
@@ -4036,8 +4039,9 @@ def review(old: dict, new: dict, facts: dict, sources: dict[str, Path], renames:
     """What an `--update` changed: each changed guarantee's signature before and after, and each changed definition a
     guarantee reads, with the guarantees that read it in the build (none for one gone) and its source as it is now.  A
     guarantee whose statement is the same but prints differently (a toolchain's printer, notation) gets one line, and so
-    does one whose 32-bit record is rewritten with SHA-256 while the 32-bit hash still matches; read groups rewritten that
-    way are counted on one line, and so are
+    does one whose 32-bit record is rewritten with SHA-256 while the 32-bit hash still matches, unless its record takes a
+    premise as another kind than it did: then its line names each such premise (`premise_changes`) and heads a statement
+    change; read groups rewritten that way are counted on one line, and so are
     records whose declarations are unchanged but whose generated constants `group_keys` groups differently.
     Definitions are compared by name, whichever module reads them.  A guarantee lifted into a `Guarantees` definition that
     says what its record says (`lifted_into`) gets one line, and the definition, new and read by nothing else, needs no
@@ -4065,7 +4069,9 @@ def review(old: dict, new: dict, facts: dict, sources: dict[str, Path], renames:
                 a["type_hash"] == facts["pins"].get(name, {}).get("type_hash")
             if a and b and (rehashed or a.get("type_hash") == b.get("type_hash")) and \
                     a.get("assumptions") == b.get("assumptions"):
-                out.append(f"guarantee {name}: {REHASHED if rehashed else REPRINTED}")
+                rests = premise_changes(a, b, new)
+                out.append(Change("guarantees", name, f"guarantee {name}: {'; '.join(rests)}") if rests else
+                           f"guarantee {name}: {REHASHED if rehashed else REPRINTED}")
                 continue
         mv, th = moved.get(name, {}), a.get("type_hash")
         head = None if th == mv.get("sha256") else lifted_into(a, b, facts["pins"].get(name, {}), mv, renames if moves else None)
@@ -4147,6 +4153,31 @@ def review(old: dict, new: dict, facts: dict, sources: dict[str, Path], renames:
     return out
 
 
+def premise_changes(a: dict, b: dict, new: dict) -> list[str]:
+    """What a guarantee rests on that its record ``b`` holds otherwise than its record ``a`` (their `premises`), one
+    phrase for each premise whose kind (`PREMISE_KINDS`) changed, a domain hypothesis with its `why` in the lock
+    ``new``: an open premise is a gap to discharge and a domain hypothesis is part of what the guarantee says, so the
+    statement changed though its type hash did not.  None where a record holds no `premises`: it says nothing of them."""
+    x, y = a.get("premises"), b.get("premises")
+    if not isinstance(x, dict) or not isinstance(y, dict):
+        return []
+    was, now = ({p: k for k in PREMISE_KINDS for p in d.get(k) or []} for d in (x, y))
+    domain = new.get("domain") if isinstance(new.get("domain"), dict) else {}
+    out = []
+    for p in sorted(set(was) | set(now)):
+        k, before = now.get(p), was.get(p)
+        if k == before:
+            continue
+        verb = "reads" if (k or before) == "reads" else "takes"
+        if k is None:
+            out.append(f"no longer {verb} {p} (was {PREMISE_NAMES[before]})")
+            continue
+        why = (domain.get(p) or {}).get("why") if k == "domain" else None
+        out.append(f"{verb} {p}" + (f" as {PREMISE_NAMES[k]}" if k != "reads" else " without taking it")
+                   + f" ({'was ' + PREMISE_NAMES[before] if before else 'new'})" + (f": {why}" if why else ""))
+    return out
+
+
 def assumption_changes(old: dict, new: dict) -> list[str]:
     """A line for each listed premise whose `digest` changed, or that has one where its record held none, and that no
     `reads` record holds (a definition there gets its own line): its statement or a definition it reads changed; and one
@@ -4164,7 +4195,6 @@ def assumption_changes(old: dict, new: dict) -> list[str]:
         return next((k for k in ("assumptions", "domain", "open") if a in (policy.get(k) if isinstance(policy.get(k), dict)
                                                                           else {})), "assumptions")
 
-    names = {"assumptions": "a named assumption", "domain": "a domain hypothesis", "open": "open"}
     opened = new.get("open") if isinstance(new.get("open"), dict) else {}
     before_open = old.get("open") if isinstance(old.get("open"), dict) else {}
     held = {d for rec in new.get("reads", {}).values() for d in definitions(rec)}
@@ -4181,9 +4211,9 @@ def assumption_changes(old: dict, new: dict) -> list[str]:
             out.append(Change(k, a, f"domain hypothesis {a}" + (f", taken by {', '.join(by)}" if by else "")
                               + f": new: {entry.get('why')}" + (f", citing {entry['cites']}" if entry.get("cites") else "")))
         if a in was and k != (b := kind(old, a)):
-            now_is = f"open, {rec.get('issue') or 'no issue'} due {rec.get('due')}" if k == "open" else names[k] + (
-                f": {rec.get('why')}" if k == "domain" else "")
-            out.append(Change(k, a, f"{what} {a}: {now_is} (was {names[b]})"))
+            now_is = f"open, {rec.get('issue') or 'no issue'} due {rec.get('due')}" if k == "open" else (
+                PREMISE_NAMES[k] + (f": {rec.get('why')}" if k == "domain" else ""))
+            out.append(Change(k, a, f"{what} {a}: {now_is} (was {PREMISE_NAMES[b]})"))
         elif k == "domain" and a in was and ((rec or {}).get("why"), (rec or {}).get("cites")) != (
                 (was[a] or {}).get("why"), (was[a] or {}).get("cites")):
             out.append(Change(k, a, f"domain hypothesis {a}: {rec.get('why')}"

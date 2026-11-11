@@ -367,8 +367,8 @@ warning naming the entry and its owner, in audit.json's `bookkeeping`; a package
 Lean lane and each owner they name; the next PR fixes them. No other check takes the flag.
 
 When the change lands on `main`, the landing DM (`research.spec_alert`) lists each new, removed or changed guarantee and
-each changed definition; nobody approves it first. A statement that only prints differently (the same type hash and named
-assumptions: a toolchain bump, notation) gets one line, "printed differently", and stays out of the DM; a definition read
+each changed definition; nobody approves it first. A statement whose type hash, named assumptions and premises are the
+same (a toolchain bump, notation) gets one line, "printed differently", and stays out of the DM; a definition read
 from another module with the same content is counted on one line.
 
 **A lift is not a change.** Lifting a guarantee into the spec, `theorem X (xs) : e` becoming `theorem X (xs) : G as` with

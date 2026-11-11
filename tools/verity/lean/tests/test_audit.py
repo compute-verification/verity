@@ -829,20 +829,30 @@ def test_a_changed_premise_is_listed_under_its_section_with_its_owner():
          "line": "open premise P.Leaves: changed (its statement or a definition it reads)"}]
 
 
+SCOPE = "the compiled circuits the bound is stated over"
+
+
+def domain_by_hand() -> tuple[dict, dict, dict, dict, dict]:
+    """(`witnessed`'s facts; its lock with `P.Compiled` open; that lock without the entry; that one with the entry written
+    under `domain` by hand, P.sound's record still taking it as open; and the lock an `--update` of that writes)."""
+    pol, f = witnessed()
+    opened = A.judge(pol | {"open_seed": {"P.Defs": {"issue": "LEAN-1", "due": "2026-11-30"}}}, f, FILES, update=True)[1]
+    unlisted = {k: v for k, v in opened.items() if k != "open"}
+    entry = {k: v for k, v in opened["open"]["P.Compiled"].items() if k not in ("issue", "due")} | {"owner": "@amy"}
+    hand = unlisted | {"domain": {"P.Compiled": entry | {"why": SCOPE}}}
+    dom = A.judge(hand, f, FILES, update=True)[1]
+    assert A.judge(dom, f, FILES)[0] == [] and dom["guarantees"]["P.sound"]["premises"]["domain"] == ["P.Compiled"]
+    return f, opened, unlisted, hand, dom
+
+
 def test_a_domain_hypothesis_the_lock_did_not_list_gets_a_line_with_its_why_and_its_takers():
     """A premise under `domain` that the lock before listed under none of `assumptions`, `domain` and `open` gets one line
     of the review, with its `why` and the guarantees whose records take it: a statement change, and an item of `changes`
     under `domain` with its entry's owner.  So does the one an update lists itself, another listed guarantee's statement,
     with the guarantee it cites.  One that was open keeps the line that says so, and one the lock before lists the same
     way gets none: the review compares two locks, and an entry written into the first is in both."""
-    scope = "the compiled circuits the bound is stated over"
-    pol, f = witnessed()
-    opened = A.judge(pol | {"open_seed": {"P.Defs": {"issue": "LEAN-1", "due": "2026-11-30"}}}, f, FILES, update=True)[1]
-    unlisted = {k: v for k, v in opened.items() if k != "open"}
-    entry = {k: v for k, v in opened["open"]["P.Compiled"].items() if k not in ("issue", "due")} | {"owner": "@amy"}
-    hand = unlisted | {"domain": {"P.Compiled": entry | {"why": scope}}}
-    dom = A.judge(hand, f, FILES, update=True)[1]
-    assert A.judge(dom, f, FILES)[0] == [] and dom["guarantees"]["P.sound"]["premises"]["domain"] == ["P.Compiled"]
+    scope = SCOPE
+    f, opened, unlisted, hand, dom = domain_by_hand()
     line = f"domain hypothesis P.Compiled, taken by P.sound: new: {scope}"
     assert A.assumption_changes(unlisted, dom) == [line]
     notes = A.review(unlisted, dom, f, {})
@@ -860,6 +870,37 @@ def test_a_domain_hypothesis_the_lock_did_not_list_gets_a_line_with_its_why_and_
     before = POLICY | {"guarantees": {"P.t": {"owner": "@lean"}, "P.u": {"owner": "@lean"}}}
     assert A.assumption_changes(before, cited()[1]) == [
         "domain hypothesis P.Guarantees.U, taken by P.t: new: P.u's statement, another listed guarantee, citing P.u"]
+
+
+def test_a_premise_a_record_takes_as_another_kind_is_named_on_its_guarantee_s_line_a_statement_change():
+    """A record that takes a premise as another kind than it did (`premises`), at the same type hash and named assumptions,
+    is no reprint: its guarantee's line names the premise, how it is taken now and how it was, a domain hypothesis with
+    its `why`, and is a statement change under `guarantees` with the guarantee's owner.  It reads the records, so the
+    update of a lock whose `domain` entry a person wrote by hand, which changes no listed premise, prints it too.
+    Records with equal `premises`, or one that holds none, still print as the same statement."""
+    f, opened, unlisted, hand, dom = domain_by_hand()
+    line = f"guarantee P.sound: takes P.Compiled as a domain hypothesis (was open): {SCOPE}"
+    notes = A.review(hand, dom, f, {})
+    assert notes == [line] == A.statement_changes(notes) and A.assumption_changes(hand, dom) == []
+    assert A.changes(notes, hand, dom) == [{"entry": "P.sound", "kind": "guarantees", "owners": ["@lean"], "line": line}]
+    assert A.review(opened, dom, f, {}) == [line, f"domain hypothesis P.Compiled: a domain hypothesis: {SCOPE} (was open)"]
+    assert A.review(dom, opened, f, {})[0] == "guarantee P.sound: takes P.Compiled as open (was a domain hypothesis)"
+
+    def taking(lock: dict, **premises: list[str]) -> dict:
+        rec = lock["guarantees"]["P.sound"]
+        return lock | {"guarantees": lock["guarantees"] | {"P.sound": rec | {"premises": rec["premises"] | premises}}}
+    assert A.review(taking(hand, open=[]), dom, f, {}) == [
+        f"guarantee P.sound: takes P.Compiled as a domain hypothesis (new): {SCOPE}"]
+    assert A.review(dom, taking(dom, domain=[], reads=["P.Compiled"]), f, {}) == [
+        "guarantee P.sound: reads P.Compiled without taking it (was a domain hypothesis)"]
+    assert A.review(dom, taking(dom, domain=[], assumptions=[]), f, {}) == [
+        "guarantee P.sound: no longer takes P.Compiled (was a domain hypothesis); no longer takes P.Hyp (was a named "
+        "assumption)"]
+    reprinted = dom["guarantees"]["P.sound"] | {"signature": ["P.sound, printed otherwise"]}
+    same = [f"guarantee P.sound: {A.REPRINTED}"]
+    assert A.review(dom, dom | {"guarantees": dom["guarantees"] | {"P.sound": reprinted}}, f, {}) == same
+    bare = {k: v for k, v in reprinted.items() if k != "premises"}
+    assert A.review(dom | {"guarantees": dom["guarantees"] | {"P.sound": bare}}, dom, f, {}) == same
 
 
 TICKET = {"issue": "LEAN-186", "due": "2026-11-14", "owner": "@lean"}
