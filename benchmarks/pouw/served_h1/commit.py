@@ -1,8 +1,8 @@
-"""served_h1's tables: hm96-sha512 hiding leaves (`verity.ml.commitments.hm96.SHA512`, its pinned key) under
+"""served_h1's tables: hm96-sha512 hiding leaves (`verity.commitments.hm96.SHA512`, its pinned key) under
 hm96-sha512/row-seg/v1, in a frame-v3-sha512 tree per (step, linear) call and kind:
 
     a-table   slot row i: its K s8 bytes, then its f32 scale LE (`s8_rows`), committed as AROW's row table
-              (`s8_table`, `verity.ml.commitments.row_table`); an empty slot is a zero row with scale 0 (a served row's
+              (`s8_table`, `verity.commitments.row_table`); an empty slot is a zero row with scale 0 (a served row's
               scale is at least the quantizer's floor, so never 0)
     b-table   weight row j of a linear: its K s8 bytes, then its f32 weight scale LE, the same format (`s8_table`)
     weights   the linears' B-table roots in linear order (`step_root`): the weights' root, registered before every salt
@@ -10,7 +10,7 @@ hm96-sha512/row-seg/v1, in a frame-v3-sha512 tree per (step, linear) call and ki
               once AROW computes it at serve time (the same tree over the same tables)
     receipts  unit u: its receipt's 2 (KS + m) u32 words LE (`receipt_rows`)
 
-Stdlib, numpy and `verity.ml.commitments` only, so pool workers start light.
+Stdlib, numpy and `verity.commitments` only, so pool workers start light.
 
 A tree's domain is `domain(fields, count, kind)`: identity_digest_sha512("verity/pouw/served-h1/<kind>/v0", fields), owner -1,
 ranks 0 .. count - 1.  A leaf's 192-byte hm96 salt is ``salt(key, label, i)``: SHA-512(SALT_TAG ‖ key ‖ u32be len(label) ‖
@@ -24,12 +24,12 @@ from typing import Sequence
 
 import numpy as np
 
-from verity.ml.commitments import hm96
-from verity.ml.commitments import row_table as RT
-from verity.ml.commitments.identity import identity_digest_sha512
-from verity.ml.commitments.indexed import RangeIndexedDomain
-from verity.ml.commitments.merkle import CommitmentDomain, merkle_depth, tree_levels
-from verity.ml.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_SEG, row_leaf, sha512_row_seg_digest
+from verity.commitments import hm96
+from verity.commitments import row_table as RT
+from verity.commitments.identity import identity_digest_sha512
+from verity.commitments.indexed import RangeIndexedDomain
+from verity.commitments.merkle import CommitmentDomain, merkle_depth, tree_levels
+from verity.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_SEG, row_leaf, sha512_row_seg_digest
 
 INST = hm96.SHA512
 KEY = INST.default_key

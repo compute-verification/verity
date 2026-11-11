@@ -46,7 +46,7 @@ from typing import Any
 HERE = Path(__file__).resolve().parent
 ROOT = HERE.parents[1]
 SERVE_TAX = ROOT / "benchmarks/serve_tax"
-CHECKPOINTS = ROOT / "integrations/vllm/manifests/checkpoints.json"
+CHECKPOINTS = ROOT / "adapters/vllm/manifests/checkpoints.json"
 sys.path.insert(0, str(SERVE_TAX))
 import inductor_pin as P  # noqa: E402 (beside this file, on sys.path when it runs and when its tests import it)
 import replay as R  # noqa: E402 (serve_tax's, put on sys.path above)

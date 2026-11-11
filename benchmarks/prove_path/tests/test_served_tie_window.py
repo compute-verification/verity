@@ -9,14 +9,14 @@ import sys
 from pathlib import Path
 from types import SimpleNamespace
 
-from verity.core.protocols.certifier import compile_slice as CS
-from verity.ml.protocols.certifier import served_tie as ST
+from verity.protocols.certifier.verifier import compile_slice as CS
+from verity.protocols.certifier.prover import served_tie as ST
 
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE.parent))
 import served_tie_window as STW  # noqa: E402
 
-FIXTURE = HERE.parents[2] / "verity/core/protocols/certifier/tests/fixtures/compile_slice_smallkv.json"
+FIXTURE = HERE.parents[2] / "verity/protocols/certifier/verifier/tests/fixtures/compile_slice_smallkv.json"
 WINDOW = [((0, 1, 0, 0, 5), (1, 2, 0, 0, 3)), ((0, 1, 1, 5, 1), (1, 2, 1, 3, 1)), ((0, 1, 1, 6, 1), (1, 2, 1, 4, 1))]
 SEQS = {1: list(range(101, 111)), 2: list(range(201, 211))}
 

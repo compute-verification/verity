@@ -194,14 +194,14 @@ def test_lean_agreement_is_required_for_a_change_its_merge_requires_covers_in_th
     root = tmp_path / "repo"
     (root / "tools" / "verity" / "check").mkdir(parents=True)
     (root / "tools" / "verity" / "check" / "ci.toml").write_text(
-        '[[job]]\nname = "lean-agreement"\nmerge_requires = ["verity/ml/flock/", "!README.md"]\n')
+        '[[job]]\nname = "lean-agreement"\nmerge_requires = ["verity/protocols/flock/prover/", "!README.md"]\n')
     _git(root, "init", "-q")
     base = _commit(root, "rule")
-    (root / "verity" / "ml" / "flock").mkdir(parents=True)
-    (root / "verity" / "ml" / "flock" / "README.md").write_text("x\n")
+    (root / "verity" / "protocols" / "flock" / "prover").mkdir(parents=True)
+    (root / "verity" / "protocols" / "flock" / "prover" / "README.md").write_text("x\n")
     prose = _commit(root, "prose")
     assert not P.required_agreement(prose, base, root)
-    (root / "verity" / "ml" / "flock" / "x.py").write_text("x = 1\n")
+    (root / "verity" / "protocols" / "flock" / "prover" / "x.py").write_text("x = 1\n")
     code = _commit(root, "code")
     assert P.required_agreement(code, base, root) and P.required_agreement(code, prose, root)
     assert not P.required_agreement(code, None, root)

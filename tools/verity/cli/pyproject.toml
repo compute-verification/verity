@@ -27,12 +27,12 @@ markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]
 # test files that start a program the read guard can't trace (git, lake, a compiler, a shell): keyed on the suite's whole tree
 untraced = ["tests/test_lean_try.py", "tests/test_onsite_served.py", "tests/test_run.py"]
 # `verity run` and `verity config` (`tests/test_run.py`): `verity`, the configuration's checks
-# (`verity.core.deploy.config`), what step 0's declarations read (`WardenParams`, the law parser) and the core parties
+# (`verity.configuration.deploy.config`), what step 0's declarations read (`WardenParams`, the law parser) and the core parties
 # the test's table (`tests/step0.py`) runs. The served window's onsite configuration and its table
-# (`tests/test_onsite_served.py`): `examples/onsite_served`, and the piece scripts whose existence its dry run checks.
+# (`tests/test_onsite_served.py`): `demos/onsite_served`, and the piece scripts whose existence its dry run checks.
 # `verity lean try` (`tests/test_lean_try.py`): the axiom probe it loads, and `siblings.py` (with the `headers.py` it
 # loads), which gives every try its package's Lean options.
-inputs = ["verity", "examples/onsite_served", "tools/verity/lean/axiom_probe.py", "tools/verity/lean/siblings.py",
+inputs = ["verity", "demos/onsite_served", "tools/verity/lean/axiom_probe.py", "tools/verity/lean/siblings.py",
           "tools/verity/lean/headers.py",
           "benchmarks/one_stage/served_verdicts.sh", "benchmarks/one_stage/served_verdicts.py", "benchmarks/pous/served_piece.sh",
           "benchmarks/pous/streamed_wipe/served_wipe.sh", "benchmarks/network_traces/certifier_piece.py"]

@@ -37,7 +37,7 @@ sys.path.insert(0, str(HERE))
 sys.path.insert(0, str(HERE.parent / "hidden_zk"))
 
 import h1unit as U  # noqa: E402
-from verity.core.protocols.spot.one_stage import partition as P  # noqa: E402
+from verity.protocols.spot.verifier.one_stage import partition as P  # noqa: E402
 
 NAME = "unit/pouw-h1-tile"
 
@@ -53,7 +53,7 @@ def _ports(ps) -> list:
 def check_against_reference(rows: dict, outs: dict, r: int = U.TILE[0], c: int = U.TILE[1]) -> None:
     """Each instance's staged receipt and ok words are `h1zy.reference`'s (over v3's tile under ``H1_TILE=v3``) on its
     rows' codes and scales (`h1unit.split_row`), its record (`h1unit.split_record`), salt, position and roots."""
-    from verity.ml.protocols.pouw.circuit import h1zy as Z
+    from verity.protocols.pouw.prover.circuit import h1zy as Z
     salt, units, roots = bytes(rows["salt"]), rows["units"], rows["roots"]
     for i, u in enumerate(units):
         a = [U.split_row(rows[f"w_a{x}"][i]) for x in range(r)]

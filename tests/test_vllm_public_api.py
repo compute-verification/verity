@@ -1,4 +1,4 @@
-"""Outside `integrations/vllm/`, code imports the vLLM integration (`verity_vllm`) only through its public interfaces.
+"""Outside `adapters/vllm/`, code imports the vLLM integration (`verity_vllm`) only through its public interfaces.
 
 ``PUBLIC`` names each public module and the interface it is. Outside code may import it, and from it only the names its
 ``__all__`` lists. Each public module states ``__all__`` as a literal, binds every name in it (at top level, or under
@@ -25,7 +25,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
-INTEGRATION = "integrations/vllm/"
+INTEGRATION = "adapters/vllm/"
 PACKAGE = "verity_vllm"
 PACKAGE_DIR = ROOT / INTEGRATION / PACKAGE
 MODULE_ATTR = re.compile(r"[A-Za-z_]\w*(?:\.[A-Za-z_]\w*)*:[A-Za-z_]\w*")
@@ -56,6 +56,9 @@ PUBLIC = {
                                  "calls it and put back (pin_op, Pin)",
     "verity_vllm.engine.step_trace": "I2: the scheduler's step trace of an in-process engine core (StepTrace) and its "
                                      "reader, which serve-openai records and benchmarks/serve_tax times and replays",
+    "verity_vllm.engine.sampler_capture": "I2: chosen requests' logits rows and ids at a replaying engine's sampler, held "
+                                          "across ranks and written as a token select's span, which benchmarks/serve_tax's "
+                                          "replay and rebuild take",
     "verity_vllm.engine.core_gate": "I2: the engine core's one seam between steps (EngineCoreGate): gates that hold its "
                                     "input loop and edges that act between two steps once nothing is in flight",
     "verity_vllm.engine.step_end": "I2: the scheduler's one seam at each step's end (StepSeam): observers that see each "
@@ -199,6 +202,9 @@ KNOWN = frozenset({
     "verity_vllm.program.frontend.derive",
     "verity_vllm.program.frontend.derive_examples",
     "verity_vllm.program.frontend.kernel_readback",
+    # archive/integrations/vllm/tools/train_step_census.py imports these two: they go when the archived file is deleted
+    "verity_vllm.program.frontend.rules",
+    "verity_vllm.program.frontend.rules.training",
     "verity_vllm.program.frontend.rules.family",
     "verity_vllm.program.frontend.rules.vocab",
     "verity_vllm.program.frontend.targets",

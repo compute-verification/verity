@@ -92,7 +92,11 @@ its clone's local `credential.helper` being `gh_app_token.sh git`; if `watch.log
 | `/data/watchers` | | the watchers supervisor: `run.sh`, `watchers.toml`, `vm_stop.toml`, `src`, `log/`, `status.json`, each loop's state (`vm_stop.json`, `fleet/`, `monitors/`, `agent-watch-offset`, `preflight-probe.json` with `preflight-tree` (its store index is `/root/watchers-preflight-store`, on the pod's own disk), `top-asks.json`, `top-sweep.json`, `challenger/` with `publish.sh` and its `state`), `repo` (a clone without a working tree, for `research deploy drift`'s `RESEARCH_DEPLOY_REPO`; drift fetches it each run), `bin/gh` (GitHub's CLI release, checksum-checked, on every loop's `PATH`; it reads `relay.env`'s `GH_TOKEN`), `extra.d/`, `known_hosts`; `notion.env` (`NOTION_API_KEY`, for `top-asks`) and `nebius-stop.env` (a Nebius account that may stop instances, for `vm-stop`) once placed (root, 0600) |
 | `/data/backup`, `/data/tmp` | | backups and transfer bundles |
 
-Secrets stay on the volume and never in git: this README names the files, never their contents.
+Secrets stay on the volume and never in git: this README names the files, never their contents. To see which variables an env
+file here sets, run `research pods ssh vy-control-verity -- python3 - FILE... < tools/agent-guard/envnames.py` from a checkout: it
+prints the names and nothing of a file that isn't an env file, so `'/root/.config/verity/*'`, which also matches `panels.key`, is
+safe to pass. Never `cat`, `sed` or `cut` these files, which the shell hook refuses; check a key with `stat`, `sha256sum` or
+`openssl pkey -in FILE -pubout`.
 
 ## Deploy
 

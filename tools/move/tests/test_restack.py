@@ -182,6 +182,26 @@ def test_a_real_content_conflict_after_the_move(repo, monkeypatch, capsys):
     assert "pr: conflicted at moved (1)" in capsys.readouterr().out
 
 
+def test_a_clone_without_the_merge_drivers_gets_them_registered_or_nothing_runs_and_the_command_is_named(repo, monkeypatch,
+                                                                                                        capsys):
+    """A checkout whose `.gitattributes` names merge drivers its clone defines none of has them registered before any branch
+    (`DRIVERS`), since without them a lock merges as text and the restack stops where its owner's merge wouldn't. When the
+    interpreter can't register them, no branch is restacked, the exit is 2, and the refusal names each driver and the command
+    that registers them."""
+    commit(repo, "attributes", {".gitattributes": "lean-audit.json merge=lean-audit\n*.lean merge=lean-imports\n"})
+    monkeypatch.chdir(repo)
+    assert RS.missing_drivers() == ["lean-audit", "lean-imports"]
+    monkeypatch.setattr(RS, "DRIVERS", "raise SystemExit('no research here')")
+    assert RS.main(["pr", "--move-commit", "move", "--dry-run"]) == 2
+    out = capsys.readouterr()
+    assert out.out == "" and "lean-audit, lean-imports" in out.err and "(no research here)" in out.err
+    assert "uv run python -c" in out.err
+    monkeypatch.setattr(RS, "DRIVERS", "import subprocess\nfor n in ('lean-audit', 'lean-imports'):\n"
+                                       "    subprocess.run(['git', 'config', f'merge.{n}.driver', 'true'], check=True)")
+    assert RS.drivers(RS.sys.executable) is None and RS.missing_drivers() == []
+    assert RS.drivers("/nonexistent/python") is None                       # a clone that has them registers nothing
+
+
 def test_a_conflict_only_in_lean_locks_takes_ontos_and_leaves_them_stale(repo, monkeypatch, capsys):
     on(repo, "pr", ("edit util and lock", {"app/util.py": edit(UTIL, "return 5", "return 50"),
                                            "pkg/lean-audit.json": '{"reads": "branch"}\n'}))

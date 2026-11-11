@@ -1,6 +1,6 @@
 """The Definitions circuit-check checks whole whose Flock block (``block``, `checks.block_range`) is past C-Flock's proved
 range of 2^27 bits and that the report holds rather than fails (`checks.summarize`), each with why: none stages it whole
-as one Flock unit, or it is served and its calls are moving to a chunked form, named with the PR that moves them.
+as one Flock unit, or it is served and serving stages it in units that fit, or its calls are to move to a chunked form.
 
 The report reads this list, no target's check: an edit to it reruns no target.  It only shrinks: `MAX` is its length, a
 test holds it there, a held Definition whose block fits (a Call its module cuts, `checks.cut_of`: each unit of the cut) fails
@@ -11,15 +11,12 @@ from __future__ import annotations
 _GLM53_TREES = ",".join(["((((((0,(1,2)),3),5),6),4),7)"] * 8)
 
 TP_ROW = ("a GLM-5.3 TP8 all-reduce route call (tp_allreduce.circuit-check.py's served roots) staged as its whole row, past the "
-          "block from one row of 6,144: its half-row column blocks (serving_templates.COLS) and tp_combine's chunks (#8073, "
-          "#8082) each fit, and #8063 is to stage those for every such call (CIR-188)")
+          "block from one row of 6,144: its half-row column blocks (serving_templates.COLS) and tp_combine's chunks each fit, "
+          "and a chunked staging of every such call is to come")
 GEMM_SLICED = ("a served GEMM row whole over its N weight rows: serving stages it as its N = 1 slices "
-               "(serving_templates.SLICES), each a sixth of the block at K = 6,144")
-GEMM_UNSLICED = ("a served GEMM row whole over its N weight rows, which serving stages whole: GemmF32Out_v1 is not in "
-                 "serving_templates.SLICES as CublasSplitKGemmF32Out_v1 is, and its N = 1 slices fit (CIR-188)")
-SPLIT = "a served row that serving stages as its split parts and combine (serving_templates.SPLITS), never whole"
+               "(serving_templates.SLICES), which fit, a sixth of the block at K = 6,144")
 UNCUT = ("a served Call with no cut in serving_templates, past the block whole even at these statics: no partition may name it "
-         "until it has a chunked form (CIR-188)")
+         "until its chunked form, which is to come")
 MOE = ("the FP8 MoE expert GEMM's whole coordinate over every expert's K weights (benchmarks/one_stage/a9.py's unit), or its "
        "row: serving stages its K-chunks (serving_templates.KCHUNKS) or per-expert blocks (serving_templates.EXPERTS) instead")
 MOE_GEMM = ("one of GLM-5.3's served FP8 MoE expert GEMMs whole (fp8_moe_experts.circuit-check.py's served roots): serving "
@@ -42,8 +39,6 @@ HELD: dict[str, str] = {
         "CublasSplitKGemm_v1{K=6144,N=160,SPLIT_K=3,DOT=HopperBF16WgmmaDot16_v1}",
         "CublasSplitKGemm_v1{K=6144,N=160,SPLIT_K=4,DOT=HopperBF16WgmmaDot16_v1}",
         "Gemm_v2{K=6144,N=160,DOT=HopperBF16WgmmaDot16_v1}",
-    ], GEMM_SLICED),
-    **dict.fromkeys([
         "GemmF32Out_v1{K=1536,N=160,DOT=HopperBF16WgmmaDot16_v1}",
         "GemmF32Out_v1{K=1536,N=256,DOT=HopperBF16WgmmaDot16_v1}",
         "GemmF32Out_v1{K=2048,N=160,DOT=HopperBF16WgmmaDot16_v1}",
@@ -51,8 +46,7 @@ HELD: dict[str, str] = {
         "GemmF32Out_v1{K=3072,N=160,DOT=HopperBF16WgmmaDot16_v1}",
         "GemmF32Out_v1{K=3072,N=256,DOT=HopperBF16WgmmaDot16_v1}",
         "GemmF32Out_v1{K=6144,N=256,DOT=HopperBF16WgmmaDot16_v1}",
-    ], GEMM_UNSLICED),
-    "SparseMlaSplit_v1{T=130,NS=2,NH=8,DR=64,DV=512,BN=64,DOT=HopperBF16WgmmaDot16_v1,INV=Fa3InvSum_v1,SCALE=0.0625}": SPLIT,
+    ], GEMM_SLICED),
     **dict.fromkeys([
         "Dsv4MlaCompressC4_v1{ROWS=8,D=512,QB=64,EPS=1e-06}",
         "Dsv4QNormRopeKvInsert_v1{NH=16,NHP=64,DN=448,DR=64,QB=64,EPS=1e-06}",
@@ -98,11 +92,10 @@ HELD: dict[str, str] = {
         "ScaledMmFp8_v1{K=256,N=512,BIAS=True}",
         "ServeFp8_v1{C={bbdad8e23e0c},LP=2,STEPS=1}",
         "ServeSpec_v1{C={31c87bbeabe0},CD={4284b55c5ab3},LP=3,K=2,A=(2,2)}",
-        "SparseMlaHeadSplit_v1{T=130,NS=2,DR=64,DV=512,BN=64,DOT=HopperBF16WgmmaDot16_v1,INV=Fa3InvSum_v1,SCALE=0.0625}",
         "TableRead27x2_v1",
         "TanhF32Rn_v2",
         "TopPMaskWordx64_v1",
         "TopPMask_v1{V=64}",
     ], INSIDE),
 }
-MAX = 123
+MAX = 121

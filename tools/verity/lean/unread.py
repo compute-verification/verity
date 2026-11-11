@@ -4,12 +4,12 @@
                                        [--caps FILE [--update-caps]] [--rev REV]
 
 It reads every module of every Lake package under ``--root`` (default this checkout; `modules.packages`, the auditor's
-fixtures aside) from the `.olean` files of one package's build (``--env``, default `Security/Proofs`, whose `lake env`
+fixtures aside) from the `.olean` files of one package's build (``--env``, default `security/Proofs`, whose `lake env`
 reaches the security analysis's three trees and the code packages they require): `Unread.lean`, compiled with that
 package's toolchain, writes each constant with what its type and value mention, and this holds the policy. ``--setup``
 first runs `setup.sh ENV`, and ``--build`` `lake build` there, with `@NAME` for each other analysis package
 (`ANALYSIS`). ``--facts FILE`` reads facts written before instead; given more than once, it joins them (`Facts`), as the
-Lean check's audits of `Security` and `Security/Proofs` each write their own (`check.py`'s `unread_facts`).
+Lean check's audits of `security` and `security/Proofs` each write their own (`check.py`'s `unread_facts`).
 
 **The closure.** Starting from the seeds, it follows what each reached constant's type and value mention
 (`ConstantInfo.getUsedConstants`, an inductive type's constructors, `@[implemented_by]` and `@[csimp]`), and from any
@@ -66,8 +66,8 @@ exits 1 when an area's count rose above its cap (an area the file doesn't list h
 ``full``: no chains or `kept_only_by`). Neither this file nor the caps is in an audit's key (`lean_audit.NOT_READ`), so
 changing them reruns no audit, and nor are the seeds outside Lean (`cited_kind`, `lock_docs`): drive's landing gate
 (`unread_gate.py`) runs the ratchet on a change to them before it lands, from the facts a check of its Lean left
-(`lean_audit.facts_file`). Those facts come from the builds of `Security` and `Security/Proofs` alone: a module of
-`Security/Properties` that `Security/Proofs` doesn't import has no `.olean` there and is reported `unbuilt`, so a spec
+(`lean_audit.facts_file`). Those facts come from the builds of `security` and `security/Proofs` alone: a module of
+`security/Properties` that `security/Proofs` doesn't import has no `.olean` there and is reported `unbuilt`, so a spec
 definition that only such a module reads counts as unread. None does today (``--build`` builds all three trees). Stdlib
 only.
 """
@@ -102,7 +102,7 @@ MODULES = _load("modules")
 HEADERS = _load("headers")
 
 #: the security analysis's packages: the spec (Definitions), the proofs, the properties. Every other package is code.
-ANALYSIS = ("Security", "Security/Proofs", "Security/Properties")
+ANALYSIS = ("security", "security/Proofs", "security/Properties")
 #: the lock sections that name modules, every declaration of which is a seed
 MODULE_SECTIONS = ("roots", "runs", "exempt", "compile_time")
 #: the lock sections that name no seed: what the guarantees read (reached from them anyway) and the pinned builds
@@ -200,12 +200,12 @@ class Tree:
         return self.module_package.get(mod) in ANALYSIS
 
     def area(self, mod: str) -> str:
-        """`Proofs/Flock`, `Definitions/Pouw`, `Definitions` for the analysis's modules (the path under `Security/`, two
+        """`Proofs/Flock`, `Definitions/Pouw`, `Definitions` for the analysis's modules (the path under `security/`, two
         parts at most); a code package's path for its own."""
         pkg = self.module_package.get(mod, "?")
         if pkg not in ANALYSIS:
             return pkg
-        rel = Path(self.module_file[mod]).relative_to("Security").with_suffix("").parts
+        rel = Path(self.module_file[mod]).relative_to("security").with_suffix("").parts
         return "/".join(rel[:2])
 
     def lines(self, mod: str) -> int:
@@ -989,8 +989,8 @@ def markdown(rep: dict, rev: str | None) -> str:
             "read (`checks`), or when a file outside Lean or a lock names it. A path code builds from string literals "
             "(`LEAN / \"Prims\" / \"Vectors.lean\"`) names it; one it computes otherwise (a glob, a bare file name "
             "under a variable) does not.",
-            "- The ratchet reads the facts the audits of Security and Security/Proofs write: there a module of "
-            "Security/Properties that Security/Proofs doesn't import is `unbuilt`, so a spec definition only such a "
+            "- The ratchet reads the facts the audits of Security and security/Proofs write: there a module of "
+            "security/Properties that security/Proofs doesn't import is `unbuilt`, so a spec definition only such a "
             "module reads counts as unread (none does today). `--build` builds all three trees.",
             "- A module with no read declaration that gives an instance or `simp` attribute to another module's constant is "
             "kept (`attributes`), and a module no package root imports is `unbuilt`, reported but not read.",
@@ -1004,7 +1004,7 @@ def markdown(rep: dict, rev: str | None) -> str:
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     ap.add_argument("--root", type=Path, default=ROOT)
-    ap.add_argument("--env", default="Security/Proofs", help="the package whose `lake env` reads the modules")
+    ap.add_argument("--env", default="security/Proofs", help="the package whose `lake env` reads the modules")
     ap.add_argument("--out", type=Path, required=True)
     ap.add_argument("--setup", action="store_true", help="run setup.sh ENV first")
     ap.add_argument("--build", action="store_true", help="lake build ENV and the other analysis packages first")

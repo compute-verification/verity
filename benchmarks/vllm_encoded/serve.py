@@ -622,7 +622,7 @@ def main() -> None:
         from verity_vllm.protocols.remote_bandwidth.registry import NodeMemory
         window = {}
         if args.store_window:
-            from verity.core.protocols.remote_bandwidth.audit import NoiseTiles
+            from verity.protocols.poub.verifier.audit import NoiseTiles
             sigma = lambda t: hashlib.sha512(b"vllm_encoded store window" + t.to_bytes(8, "big")).digest()[:32]
             window = {"messages": Every(args.store_window, sigma), "reader": lambda segments: bytes(64),
                       "tiles": NoiseTiles()}

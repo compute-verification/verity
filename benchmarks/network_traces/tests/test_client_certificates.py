@@ -17,9 +17,9 @@ from fractions import Fraction
 from pathlib import Path
 
 import pytest
-from verity.core.protocols.certifier import active
-from verity.core.protocols.certifier.certificate import Certificate, Direction, Issuer, clock_commitment
-from verity.core.protocols.certifier.schedule import ClockSync
+from verity.protocols.certifier.verifier import active
+from verity.protocols.certifier.verifier.certificate import Certificate, Direction, Issuer, clock_commitment
+from verity.protocols.certifier.verifier.schedule import ClockSync
 
 HERE = Path(__file__).resolve().parents[1]
 TOKENS, REQUESTS = 4, 8

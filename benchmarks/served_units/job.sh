@@ -3,8 +3,8 @@
 # (`flock-verify`). Run from the source tree's root; results go to
 # $RESEARCH_RUN_DIR/out, scratch to a `mktemp -d` directory the job removes, builds and stagings to $SU_CACHE (kept, keyed by their
 # inputs) or the scratch directory. The builds, the run and the selftest controls are hidden_zk's (its job.sh, sourced):
-#   1. builds flock-circuit twice from Flock b684b12 and verity/ml/flock's patches (the proving build; the selftest build, with
-#      seed-injection), the Lean flock-verify from verity/core/service/flock, and a venv with numpy and blake3
+#   1. builds flock-circuit twice from Flock b684b12 and verity/protocols/flock/prover's patches (the proving build; the selftest build, with
+#      seed-injection), the Lean flock-verify from verity/protocols/flock/verifier, and a venv with numpy and blake3
 #   2. per UNIT in SU_UNITS (stage.py's TYPE[:S=V,...]): stage N inputs of its Q_word proof block from synthetic values, one loopback
 #      --zk run sampling all N (subset:N) with the proving build, the selftest build's recorded controls sampled the same way,
 #      and the Lean verifier on all of them:
@@ -23,13 +23,13 @@ SRC=$(pwd)
 export HZ_CONFIGS=${SU_UNITS:?} HZ_N=${SU_N:-4} HZ_MEM_GB=${SU_MEM_GB:?} HZ_RUNS=${SU_RUNS:-1} HZ_WARM=${SU_WARM:-0}
 export HZ_CASES=${SU_CASES:-honest output_row_committed_false output_claim_false unit_internal_bit_flipped}
 [ -n "${SU_CACHE:-}" ] && export HZ_CACHE=$SU_CACHE
-export PYTHONPATH=$SRC:$SRC/verity/ml/flock/python:$SRC/integrations/vllm:$SRC/tools/verity/circuit_check/src${PYTHONPATH:+:$PYTHONPATH}
+export PYTHONPATH=$SRC:$SRC/verity/protocols/flock/prover/python:$SRC/adapters/vllm:$SRC/tools/verity/circuit_check/src${PYTHONPATH:+:$PYTHONPATH}
 source benchmarks/pouw/hidden_zk/job.sh
 SU=$SRC/benchmarks/served_units
 
 stage_one() {   # stage_one SPEC D O: D holds the proof block's staged files, from the stage cache or staged now
   local spec=$1 D=$2 O=$3 key S rc=0
-  key=$(tree_key benchmarks/served_units/stage.py verity/ml/flock/python verity integrations/vllm/verity_vllm/program \
+  key=$(tree_key benchmarks/served_units/stage.py verity/protocols/flock/prover/python verity adapters/vllm/verity_vllm/program \
     tools/verity/circuit_check/src)
   S=${HZ_CACHE:-$W/cache}/stage/$(basename "$D")-n$N-$(basename "$(dirname "$(dirname "$PY")")")-$key
   mkdir -p "$(dirname "$S")"

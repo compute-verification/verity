@@ -9,8 +9,8 @@ The census counts them over input families built to trigger each, under Pearl-sh
 promotion from +0 every 4 atoms (G4). A cell is in Pi's domain when G4 is used, or when the chain is pure and k/delta^2 <= 2^15.
 The census passes when every in-domain cell's skippable share is at most 1/400.
 
-The atom is verity.ml.circuits.silicon's HOPPER_E4M3_K32 with a nonzero accumulator (one group of 32, the accumulator
-truncated to 14 bits and joined to the group), vectorized here and checked against verity.ml.circuits.silicon by --selftest.
+The atom is verity.definitions.silicon's HOPPER_E4M3_K32 with a nonzero accumulator (one group of 32, the accumulator
+truncated to 14 bits and joined to the group), vectorized here and checked against verity.definitions.silicon by --selftest.
 The noise is Pearl's shape, simplified: per row, y = x + delta*rms(x)*Z with Z a rank-32 row of unit RMS (lines of
 entries +-(1..128)); alpha = 448/max|y|; codes = RNE_E4M3(alpha*y). Seeds are the tuple (run, unit index, side), so duplicated units get independent noise.
 
@@ -49,9 +49,9 @@ FIN = MAG[:0x7F]
 Q_MAX = 448.0
 SIG = np.array([(c & 7) | (8 if c >> 3 else 0) for c in range(128)], dtype=np.int64)
 EXP1 = np.array([max(c >> 3, 1) for c in range(128)], dtype=np.int64)
-OFF, PSHIFT = -14, 17        # verity.ml.circuits.silicon.term.E4M3: product_exponent_offset, product_shift
+OFF, PSHIFT = -14, 17        # verity.definitions.silicon.term.E4M3: product_exponent_offset, product_shift
 
-# The accumulator step's adder width and exponent floor (`verity.ml.circuits.silicon.models.GroupSum`, one group of 32): HOPPER_E4M3_K32, or
+# The accumulator step's adder width and exponent floor (`verity.definitions.silicon.models.GroupSum`, one group of 32): HOPPER_E4M3_K32, or
 # the RTX PRO 6000's BLACKWELL_SM120_E4M3_M16N8K32 (mma.sync kind::f8f6f4 m16n8k32).
 ATOMS = {"hopper": (14, -139), "sm120": (26, -133)}
 ATOM = "hopper"
@@ -65,7 +65,7 @@ def set_atom(name: str) -> None:
 
 
 def reference_atom(name: str):
-    from verity.ml.circuits.silicon.models import HOPPER_E4M3_K32, GroupSum
+    from verity.definitions.silicon.models import HOPPER_E4M3_K32, GroupSum
     if name == "hopper":
         return HOPPER_E4M3_K32
     width, zero = ATOMS[name]

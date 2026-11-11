@@ -312,7 +312,9 @@ def test_export_copies_every_entry_and_verify_url_reads_it_all_back(tmp_path, se
     for art in a.values():
         assert (root / manifest_key(art.split(":")[1])).is_file()
     again = F.export(st, repo, FsRemote(root), srcs=[private])
-    assert again["ok"] and again["uploaded"] == 0 and again["skipped"] == rep["uploaded"]
+    assert again["ok"] and again["uploaded"] == again["skipped"] == 0 and again["known"] == rep["uploaded"]
+    other = F.export(_store(tmp_path, "other"), repo, FsRemote(root), srcs=[private])
+    assert other["ok"] and other["uploaded"] == 0 and other["skipped"] == rep["uploaded"]
     ver = F.verify_url(repo, url)
     assert ver["ok"] and ver["manifests"] == 3 and not ver["missing"]
     obj = next((root / "objects" / "sha256").iterdir())
@@ -353,6 +355,141 @@ def test_export_recovers_superseded_ids_from_history_and_warns_on_lost_ones(tmp_
     rep = F.export(_store(tmp_path, "exporter"), repo, dest, srcs=[private])
     assert rep["ok"] and not rep["errors"] and len(rep["warnings"]) == 1 and lost in rep["warnings"][0]
     assert (tmp_path / "public" / manifest_key(old.split(":")[1])).is_file()        # the committed old version, from git history
+
+
+class _WriteOnlyS3:
+    """An S3 endpoint as R2 treats the public export's key: HEAD, GET and listing answer 401; PUT honours `If-None-Match: *` (412
+    when the key exists).  With `writable=False` the key may not write either, and a PUT answers 401 before any precondition is
+    looked at.  `log` holds (method, key, conditional?) in arrival order."""
+
+    def __init__(self, writable: bool = True):
+        self.objects: dict[str, bytes] = {}
+        self.log: list[tuple[str, str, bool]] = []
+        self.lock = threading.Lock()
+        state = self
+
+        class H(http.server.BaseHTTPRequestHandler):
+            def log_message(self, *a):
+                pass
+
+            def _reply(self, code: int, body: bytes = b""):
+                self.send_response(code)
+                self.send_header("Content-Length", str(len(body)))
+                self.end_headers()
+                if self.command != "HEAD":
+                    self.wfile.write(body)
+
+            def _refuse(self):
+                with state.lock:
+                    state.log.append((self.command, self.path.split("/bkt/", 1)[-1], False))
+                self._reply(401, b"<Error><Code>Unauthorized</Code></Error>")
+
+            do_HEAD = do_GET = _refuse
+
+            def do_PUT(self):
+                key = self.path.split("/bkt/", 1)[1]
+                body = self.rfile.read(int(self.headers["Content-Length"]))
+                cond = self.headers.get("If-None-Match") == "*"
+                with state.lock:
+                    state.log.append(("PUT", key, cond))
+                    if not writable:
+                        return self._reply(401, b"<Error><Code>Unauthorized</Code></Error>")
+                    if cond and key in state.objects:
+                        return self._reply(412, b"<Error><Code>PreconditionFailed</Code></Error>")
+                    state.objects[key] = body
+                self._reply(200)
+
+        self.srv = http.server.ThreadingHTTPServer(("127.0.0.1", 0), H)
+        self.thread = threading.Thread(target=self.srv.serve_forever, kwargs={"poll_interval": 0.02}, daemon=True)
+        self.thread.start()
+
+    def remote(self):
+        from research.store.remote_s3 import S3Remote
+
+        return S3Remote(f"http://127.0.0.1:{self.srv.server_address[1]}", "bkt", "dummy", "dummy")
+
+    def close(self) -> None:
+        self.srv.shutdown()
+        self.srv.server_close()
+        self.thread.join()
+
+
+@pytest.fixture
+def write_only():
+    made: list[_WriteOnlyS3] = []
+
+    def make(**kw) -> _WriteOnlyS3:
+        made.append(_WriteOnlyS3(**kw))
+        return made[-1]
+
+    yield make
+    for s in made:
+        s.close()
+
+
+def test_export_with_a_write_only_key_never_reads_the_bucket(tmp_path, write_only):
+    """New objects go up as conditional PUTs, blobs before manifests; one already there answers 412 and counts as already there;
+    a second pass from the same store sends nothing, and one from another store meets a 412 for each object."""
+    origin, private = _store(tmp_path, "origin"), FsRemote(tmp_path / "private")
+    repo, a = _repo(tmp_path, origin, private)
+    s3 = write_only()
+    h = origin.get_manifest(a["big"]).blobs()[0][0]
+    s3.objects[object_key(h)] = origin.object_path(h).read_bytes()
+    st = _store(tmp_path, "exporter")
+    rep = F.export(st, repo, s3.remote(), srcs=[private], jobs=4)
+    total = rep["blobs"] + rep["manifests"]
+    assert rep["ok"] and rep["skipped"] == 1 and rep["uploaded"] == total - 1 and rep["known"] == 0, rep["errors"]
+    assert {m for m, _, _ in s3.log} == {"PUT"} and all(c for _, _, c in s3.log)
+    kinds = [k.split("/")[0] for _, k, _ in s3.log]
+    assert kinds == sorted(kinds, key=lambda k: k == "manifests") and len(s3.log) == total
+    assert set(s3.objects) == {k for _, k, _ in s3.log}
+    s3.log.clear()
+    again = F.export(st, repo, s3.remote(), srcs=[private])
+    assert again["ok"] and again["known"] == total and again["uploaded"] == again["skipped"] == 0 and s3.log == []
+    other = F.export(_store(tmp_path, "other"), repo, s3.remote(), srcs=[private])
+    assert other["ok"] and other["skipped"] == total and other["uploaded"] == 0
+    assert len(s3.log) == total and {m for m, _, _ in s3.log} == {"PUT"}
+    fresh = F.export(st, repo, s3.remote(), srcs=[private], fresh=True)
+    assert fresh["ok"] and fresh["skipped"] == total and fresh["known"] == 0
+
+
+def test_an_export_whose_key_may_not_write_reports_every_object_and_records_none(tmp_path, write_only):
+    origin, private = _store(tmp_path, "origin"), FsRemote(tmp_path / "private")
+    repo, _ = _repo(tmp_path, origin, private)
+    s3 = write_only(writable=False)
+    st = _store(tmp_path, "exporter")
+    rep = F.export(st, repo, s3.remote(), srcs=[private], jobs=4)
+    total = rep["blobs"] + rep["manifests"]
+    assert not rep["ok"] and rep["uploaded"] == rep["skipped"] == 0 and len(rep["errors"]) == total
+    assert all("HTTP Error 401" in e for e in rep["errors"]), rep["errors"]
+    assert {m for m, _, _ in s3.log} == {"PUT"} and not F.landed_path(st, s3.remote()).exists()
+
+
+def test_the_dry_run_reads_nothing_from_the_export_and_its_write_check_is_one_conditional_put(tmp_path, write_only):
+    origin, private = _store(tmp_path, "origin"), FsRemote(tmp_path / "private")
+    repo, _ = _repo(tmp_path, origin, private)
+    s3 = write_only()
+    st = _store(tmp_path, "exporter")
+    dry = F.export(st, repo, s3.remote(), srcs=[private], dry_run=True)
+    assert dry["ok"] and dry["uploaded"] == dry["blobs"] + dry["manifests"] and dry["write_check"] is None and s3.log == []
+    checked = F.export(st, repo, s3.remote(), srcs=[private], dry_run=True, write_check=True)
+    smallest = min((n, object_key(h)) for art in F.entries(F.load_map(repo)) for h, n in st.get_manifest(art).blobs())[1]
+    assert checked["ok"] and checked["write_check"] == {"key": smallest, "action": "created"} and s3.log == [("PUT", smallest, True)]
+    again = F.export(st, repo, s3.remote(), srcs=[private], dry_run=True, write_check=True)
+    assert again["write_check"]["action"] == "exists"
+    refused = F.export(st, repo, write_only(writable=False).remote(), srcs=[private], dry_run=True, write_check=True)
+    assert not refused["ok"] and refused["write_check"]["action"].startswith("error:") and "write check" in refused["errors"][0]
+
+
+def test_create_refuses_an_object_above_the_single_put(tmp_path, write_only):
+    s3 = write_only()
+    r = s3.remote()
+    r.single_put_max = 10
+    f = tmp_path / "f"
+    f.write_bytes(b"x" * 11)
+    with pytest.raises(ValueError, match="single PUT"):
+        r.create("objects/sha256/" + "0" * 64, f)
+    assert s3.log == []
 
 
 def test_the_export_is_never_the_stores_own_bucket(tmp_path, monkeypatch):

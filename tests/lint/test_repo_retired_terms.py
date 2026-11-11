@@ -23,7 +23,7 @@ config, and Markdown), identifiers, strings and prose alike, outside what ``SKIP
 what the word maps of ``tools/move/`` keep: a domain tag or format id (``verity/flock-netlist/v1``), and ``note:``,
 ``art:``, branch and lane names.  Sites are counted per file: an entry ``{"file", "count"}`` allows ``count`` sites in its
 file, a file with more fails, and ``--prune`` lowers what the tree no longer holds.  The ratchet gate
-(``integrations/vllm/tools/ratchet_gate.py``) refuses a change that adds a site to a file it touches, grows this list, or
+(``adapters/vllm/tools/ratchet_gate.py``) refuses a change that adds a site to a file it touches, grows this list, or
 leaves a renamed file's entry behind; it loads this module alone from the change's base, so the module imports only the
 standard library and reads ``GLOSSARY.md`` from the tree it runs in.
 
@@ -355,7 +355,7 @@ def test_what_is_a_retired_term() -> None:
 
 
 def test_it_reads_what_lane_text_reads_and_skips_what_it_says() -> None:
-    assert holds("verity/a.py") and holds("Security/A.lean") and holds("README.md") and holds("a/b.toml")
+    assert holds("verity/a.py") and holds("security/A.lean") and holds("README.md") and holds("a/b.toml")
     assert not holds("x.json") and not holds("archive/a.md") and not holds(GLOSSARY) and not holds("tools/move/x_map.toml")
     assert not holds("a/tests/fixtures/b.py") and not holds("a/CHANGELOG.md") and not holds(f"tests/lint/test_{NAME}.py")
     assert sites("C-Flock", "x.json") == []

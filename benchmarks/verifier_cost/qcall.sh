@@ -10,11 +10,11 @@ O=${OUT:?run under research run, which sets OUT}
 cfg=${1:?usage: qcall.sh CONFIG X...}
 shift
 uv sync -q --all-packages --extra torch-cpu
-{ (cd verity/core/service/flock && lake build flock-verify) && \
-  (cd verity/core/service/spot && lake build sampled-proofs-difftest); } > "$O/build.log" 2>&1 \
+{ (cd verity/protocols/flock/verifier && lake build flock-verify) && \
+  (cd verity/protocols/spot/verifier/lean && lake build sampled-proofs-difftest); } > "$O/build.log" 2>&1 \
   || { tail -40 "$O/build.log" >&2; exit 1; }
-FV=$PWD/verity/core/service/flock/.lake/build/bin/flock-verify
-SP=$PWD/verity/core/service/spot/.lake/build/bin/sampled-proofs-difftest
+FV=$PWD/verity/protocols/flock/verifier/.lake/build/bin/flock-verify
+SP=$PWD/verity/protocols/spot/verifier/lean/.lake/build/bin/sampled-proofs-difftest
 d=$(mktemp -d)
 trap 'rm -rf "$d"' EXIT
 uv run python - "$cfg" "$d" "$O" <<'EOF'
@@ -22,7 +22,7 @@ import json, sys
 from pathlib import Path
 sys.path.insert(0, "benchmarks/verifier_cost")
 import run
-from verity.ml.circuits import partition_object as PO
+from verity.circuits import partition_object as PO
 cfg, d, o = sys.argv[1], Path(sys.argv[2]), Path(sys.argv[3])
 prog = run.serve(cfg, "word")
 text = run.text_of(prog)

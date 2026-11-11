@@ -27,7 +27,7 @@ A ratio counts by curve.py's rules (`curve.Measure.counts`; `of_record` for f, s
 is rows-sha512, the run's GPU is its preset's, and a ratio with a compiled arm ran pinned: the run's `out/pin_check.txt`
 (`served_arm.sh` PIN_BUILD: every arm's process compiled into one Inductor dir seeded with the Build of record's autotune
 winners) says the dir's winners are the Build's. An uncounted ratio is mechanism evidence, its reason in the tables. The
-RTX PRO 6000's Builds of record are `integrations/vllm/verity_vllm/pins/served/*.NVIDIA_RTX_PRO_6000_Blackwell_Server_Edition.json`'s
+RTX PRO 6000's Builds of record are `adapters/vllm/verity_vllm/pins/served/*.NVIDIA_RTX_PRO_6000_Blackwell_Server_Edition.json`'s
 (Llama-3.2-1B, Qwen3-8B); the served Build has no FP8 path, so no FP8 compiled ratio counts.
 
     uv run --no-project --with matplotlib python3 benchmarks/g2/served.py RUN... [--tail RUN=FIXED]... [--runs-dir DIR] [--out DIR]

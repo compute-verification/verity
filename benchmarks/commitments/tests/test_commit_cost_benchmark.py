@@ -76,7 +76,7 @@ def test_hiding_leaf_cost_writes_a_valid_result(tmp_path: Path) -> None:
 def test_the_ripple_carry_model_counts_spot_sha512_ands() -> None:
     """hiding_leaf_cost's model of a SHA-512 compression (80 rounds of 7 additions, Ch and Maj, 64 schedule words of 3
     additions and 8 feed-forward additions, a w-bit addition w - 1 ANDs at w = 64) gives the count it reads."""
-    from verity.core.protocols.spot.optimize import SHA512_ANDS
+    from verity.protocols.spot.optimize import SHA512_ANDS
 
     add64 = 63
     assert 80 * (7 * add64 + 64 + 64) + 64 * 3 * add64 + 8 * add64 == SHA512_ANDS

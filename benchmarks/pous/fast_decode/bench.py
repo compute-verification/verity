@@ -33,7 +33,7 @@ import subprocess
 import sys
 from pathlib import Path
 
-from verity.core.protocols.pous.schemes.p2 import POINT, P2Params
+from verity.protocols.pous.verifier.schemes.p2 import POINT, P2Params
 
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE.parent))
