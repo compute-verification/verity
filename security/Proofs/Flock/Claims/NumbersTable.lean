@@ -138,7 +138,7 @@ theorem εtable_zk {F : Type} [Field F] [Fintype F] [DecidableEq F] {mPts : ℕ}
   have hb : εInner T.N F T.q T.δ ≤ ENNReal.ofReal (innerUp : ℝ) := by
     rw [hq]
     exact εInner_le_innerUp hF hN hδ
-  have hc := Rat.cast_le (K := ℝ) |>.2 (m1_check_zk m h1 h2)
+  have hc := Rat.cast_le (K := ℝ) |>.2 (m1_check_zk (wideLeaf := wideLeaf) m h1 h2)
   push_cast at hc
   have hi := innerUp_nonneg
   unfold TabZK.bound
