@@ -46,5 +46,6 @@ are replayed against.
   (`verity/protocols/inference_only/verifier/nci/lean/scripts/difftest_vectors.py`); `circuit-check`, which imports each
   module that has a sidecar; the vLLM integration (`verity_vllm`); and benchmarks. Tests across the tree import it too,
   verifiers' tests among them. No verifier loads it.
-- **Loads:** `verity.circuits` (its types, its Boolean forms and `silicon`) and numpy, and `verity.definitions.kernels.tc`,
-  whose batch kernels `gemm`, `moe` and `prims` register.
+- **Loads:** `verity.circuits` (its types and its Boolean forms), `verity.definitions.silicon`, the census and the library
+  of `verity.definitions.circuits`, and numpy, and `verity.definitions.kernels.tc`, whose batch kernels `gemm`, `moe` and
+  `prims` register.
