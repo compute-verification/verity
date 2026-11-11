@@ -32,6 +32,8 @@ from verity_vllm.commit.opened import OpeningNotVerified, opened_check
 from verity_vllm.program.compact import is_file_prog
 from verity_vllm.query.manifest import format as RM
 
+__all__ = ["DELEGATES", "EVALUATION_TAPS", "ROW_EVALUATORS", "evaluate", "plane_ports", "replay_vu"]
+
 TOPP_SPLITS_OPERAND = 5     # a sampler select's 6th operand: the top-p select's split count S, the one select with six
 
 

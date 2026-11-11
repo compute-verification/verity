@@ -40,6 +40,8 @@ from verity_vllm.check.replay.delegate import DELEGATES
 from verity_vllm.commit import challenge as CH
 from verity_vllm.query.manifest.format import spec_family
 
+__all__ = ["of_record"]
+
 SHOWN = 5
 #: family -> why its row kernel is not its Definition in this tree ([] when it is), checked once a process
 _KERNEL_CHECKS: dict[str, list[str]] = {}

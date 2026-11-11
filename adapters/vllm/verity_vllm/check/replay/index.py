@@ -27,6 +27,8 @@ from verity_vllm.query.manifest.format import moe_plane_kind
 from verity_vllm.query.program_view import from_instances
 from verity_vllm.query.required import population
 
+__all__ = ["DEFAULT_QUERY", "SAMPLER_OP", "SEED_PARAM", "ProgramIndex", "const_word", "index_of", "parse_struct", "row_args"]
+
 SAMPLER_OP = "runner.sampler"
 IDS_MEMBER = "in"
 SEED_PARAM = "seed"                     # the stochastic Program's seed input (Param name; committed as runner.sampler/seed per (step, request))

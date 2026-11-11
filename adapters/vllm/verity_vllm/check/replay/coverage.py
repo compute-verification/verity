@@ -23,6 +23,8 @@ from verity_vllm.query.manifest import format as RM
 from verity_vllm.records.fields import RecordError
 from verity_vllm.records.required_manifest import RequiredManifest
 
+__all__ = ["form_b_families"]
+
 #: what `query_population` names a manifest it was handed (the replay is handed the parsed JSON, not its path)
 HANDED = "the required-value manifest the replay was handed"
 

@@ -20,6 +20,8 @@ from verity.definitions.numerics.kernel_registry import Declined
 from verity_vllm.program.compact import expanded_file_args
 from verity_vllm.query.manifest import format as RM
 
+__all__ = ["layout_of"]
+
 PREFIX_FILE = "prefix_cache.json"
 _LAYER = re.compile(r"layers\.(\d+)")
 _KV_STATICS = ("T", "KVH", "D")

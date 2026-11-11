@@ -26,6 +26,8 @@ from verity_vllm.check.replay.replay_codes import NOT_YET, why_class
 from verity_vllm.program.lifting.continuation import executed_prefix_by_rule
 from verity_vllm.query.manifest import format as RM
 
+__all__ = ["phase_anchor", "population", "split_not_executed"]
+
 #: the attention families whose ROW the replay evaluates; their block interiors are Q_fine_v1 units
 ATTENTION_ROW_FAMILIES = ("Attention_v3", "Attention_v2", "Attention_v4", "Attention_v5", "Attention_v18", "AttentionSoftcap_v2")
 

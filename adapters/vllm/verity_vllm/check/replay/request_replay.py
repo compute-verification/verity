@@ -28,6 +28,8 @@ from verity_vllm.check.replay.index import (
 from verity_vllm.check.replay.opening import _ITEMSIZE, _NPDTYPE
 from verity_vllm.query.manifest import format as RM
 
+__all__ = ["Replay"]
+
 Given = Callable[[int, str, str, int, int], tuple[np.ndarray | None, str]]
 
 

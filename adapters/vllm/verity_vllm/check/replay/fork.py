@@ -25,6 +25,8 @@ import threading
 from collections.abc import Iterator
 from multiprocessing.pool import Pool
 
+__all__ = ["die_with_parent", "fork_pool"]
+
 PR_SET_PDEATHSIG = 1
 
 

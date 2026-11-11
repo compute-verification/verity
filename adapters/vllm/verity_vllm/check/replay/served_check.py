@@ -60,6 +60,8 @@ from verity_vllm.query.manifest.format import SERVED_LOGITS as LOGITS
 from verity_vllm.query.manifest.format import SERVED_POSITIONS as POSITIONS
 from verity_vllm.query.manifest.format import SERVED_SAMPLED as SAMPLED
 
+__all__ = ["ROWS", "ServedCheck", "Step", "population"]
+
 #: the rows of a request a GEMM or an attention op is evaluated on: all of a request's rows up to this many, else its first, its
 #: last and evenly spread ones
 ROWS = 16

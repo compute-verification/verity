@@ -106,8 +106,9 @@ from verity_vllm.program.compact import p_item_weight_span
 from verity_vllm.query import norm_scales
 from verity_vllm.query.required import QUERIES
 
-__all__ = ["arrivals_of_record", "boundary_linkage", "challenge_seed", "engine_facts_of_record", "executed_prefix_of_record",
-           "linkage_horizon", "model_weights_provider", "ProgramIndex", "sampled_replay", "SCHEMA", "V2_QUERY"]
+__all__ = ["arrivals_of_record", "boundary_linkage", "challenge_seed", "default_workers", "engine_facts_of_record",
+           "executed_prefix_of_record", "keep_population", "linkage_horizon", "manifest_query", "model_weights_provider", "populate",
+           "PoolDoesNotFit", "ProgramIndex", "sampled_replay", "SCHEMA", "take_population", "V2_QUERY"]
 
 
 SCHEMA = "verity-sweep/sampled-replay/v1"
