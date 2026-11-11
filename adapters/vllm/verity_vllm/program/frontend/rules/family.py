@@ -561,6 +561,8 @@ DecoderLayerT = CompositeDefinition("DeriveOracleDecoderLayer", 1, ("C", "L0", "
 
 
 def _layer_binder(flat_sd, ctx):
+    # imported here: the rule needs torch, which a derivation has and this module's import does not
+    from verity_vllm.program.frontend.rules.profile import RotaryEmbeddingRule
     C = ctx.config
     if not all(k in C for k in ("H", "NL", "NH", "KVH", "D", "I", "QKV", "GU", "EPS", "MAX_POS")):
         return None
@@ -577,7 +579,7 @@ def _layer_binder(flat_sd, ctx):
     T0 = 0
     for a in ctx.applications:
         pos = a.get("preconditions_checked", {}).get("positions")
-        if a["rule"].startswith("RotaryEmbedding") and pos:
+        if a["rule"] == RotaryEmbeddingRule.info.rule_id and pos:
             T0 = pos[0]
             break
     return {"C": C, "L0": L0, "T": h_t.n, "T0": T0}
