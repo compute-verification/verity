@@ -28,8 +28,8 @@ from typing import Any
 import numpy as np
 import torch
 
-from verity.core.protocols.pouw import core_check as CC
-from verity.ml.protocols.pouw.circuit import h1tile as HT
+from verity.protocols.pouw.verifier import core_check as CC
+from verity.protocols.pouw.prover.circuit import h1tile as HT
 from verity_vllm.protocols.pouw.h1 import receipts as RC
 
 HERE = Path(__file__).resolve().parent

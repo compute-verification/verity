@@ -1,6 +1,6 @@
-"""Every demo states its doneness on both axes and carries the evidence for each (`examples/README.md`).
+"""Every demo states its doneness on both axes and carries the evidence for each (`demos/README.md`).
 
-Each `examples/<name>/` has a `demo.toml` that parses, with a known protocol, workload and placement, a `run` (moved, runs,
+Each `demos/<name>/` has a `demo.toml` that parses, with a known protocol, workload and placement, a `run` (moved, runs,
 placed) and a `proof` (none, stated, proved, measured), and the evidence every step up to each needs on its own axis, in the
 form that can be checked offline: run-id format, a guarantee listed in a `lean-audit.json`, lemma and proof names declared in
 the tracked `.lean` files (`verity_cli.examples`). The failure says what to add. The negatives hold the checker to refusing
@@ -23,12 +23,12 @@ LOCAL = {"prover": "local", "verifier": "local"}
 
 
 def test_there_are_demos():
-    assert ALL, "examples/ holds no demo"
+    assert ALL, "demos/ holds no demo"
 
 
 @pytest.mark.parametrize("ex", ALL, ids=lambda e: e.name)
 def test_demo_has_what_it_claims(ex):
-    assert not (p := E.problems(ex, ROOT)), f"examples/{ex.name}/demo.toml:\n  " + "\n  ".join(p)
+    assert not (p := E.problems(ex, ROOT)), f"demos/{ex.name}/demo.toml:\n  " + "\n  ".join(p)
 
 
 def _ex(run: str = "moved", proof: str = "none", /, **evidence) -> E.Demo:

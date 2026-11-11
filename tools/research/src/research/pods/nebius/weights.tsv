@@ -1,6 +1,6 @@
 # The Nebius server's weight cache: what prefetch.sh downloads into $HF_HOME/hub (HF_HOME=/workspace/hf, the integration's default).
 # group        repo                                  revision                                  format  GB (safetensors, HF API 2026-09-30)  role
-# bf16-sweep: the 16 BF16 models of the sm_120 sweep (docs: vllm-config-sweep-plan), revisions pinned by integrations/vllm/manifests/checkpoints.json
+# bf16-sweep: the 16 BF16 models of the sm_120 sweep (docs: vllm-config-sweep-plan), revisions pinned by adapters/vllm/manifests/checkpoints.json
 bf16-sweep	HuggingFaceTB/SmolLM2-135M	93efa2f097d58c2a74874c7e644dbc9b0cee75a2	bf16	0.3	B0
 bf16-sweep	HuggingFaceTB/SmolLM2-360M	f8027fd0eaeea54caa13c31d31b9fdc459c38b49	bf16	0.7	SMOL360
 bf16-sweep	EleutherAI/pythia-160m	50f5173d932e8e61f858120bcb800b97af589f46	bf16	0.8	PYTHIA160M
@@ -17,7 +17,7 @@ bf16-sweep	unsloth/mistral-7b-v0.3	9ea1b83f5ced5663c5fa89c300fe59f9bdcd2b10	bf16
 bf16-sweep	Qwen/Qwen2.5-7B	d149729398750b98c0af14eb82c78cfe92750796	bf16	15.2	B7
 bf16-sweep	Qwen/Qwen1.5-MoE-A2.7B-Chat	ec052fda178e241c7c443468d2fa1db6618996be	bf16	28.6	M1
 bf16-sweep	Qwen/Qwen3-30B-A3B	ad44e777bcd18fa416d9da3bd8f70d33ebb85d39	bf16	61.1	QWEN3_30B_A3B
-# grid-models: the 20 ungated BF16 checkpoints the overnight grid adds (circuits-grid-models, 2026-10-01), revisions pinned by integrations/vllm/manifests/checkpoints.json
+# grid-models: the 20 ungated BF16 checkpoints the overnight grid adds (circuits-grid-models, 2026-10-01), revisions pinned by adapters/vllm/manifests/checkpoints.json
 grid-models	Qwen/Qwen2.5-3B	3aab1f1954e9cc14eb9509a215f9e5ca08227a9b	bf16	6.2	QWEN25_3B
 grid-models	Qwen/Qwen2.5-0.5B-Instruct	7ae557604adf67be50417f59c2c2f167def9a775	bf16	1.0	QWEN25_05B_INSTRUCT
 grid-models	Qwen/Qwen2.5-Coder-1.5B	df3ce67c0e24480f20468b6ef2894622d69eb73b	bf16	3.1	QWEN25_CODER_15B
