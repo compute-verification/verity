@@ -4,6 +4,7 @@
                                           none"""
 from __future__ import annotations
 
+import argparse
 import tomllib
 from collections import Counter
 from pathlib import Path
@@ -304,13 +305,13 @@ def render(data: Path = DATA, sections: list[str] | None = None) -> str:
     return "\n\n".join(out) + "\n"
 
 
-def add(sub) -> None:
+def add(sub: argparse._SubParsersAction) -> None:
     r = sub.add_parser("render")
     r.add_argument("sections", nargs="*", metavar="SECTION",
                    help=f"the sections to print, of {', '.join(SECTIONS)} (default: all)")
 
 
-def run(args) -> int:
+def run(args: argparse.Namespace) -> int:
     if bad := [s for s in args.sections if s not in SECTIONS]:
         raise SystemExit(f"render: no section {', '.join(bad)}; the sections are {', '.join(SECTIONS)}")
     print(render(args.data, args.sections), end="")

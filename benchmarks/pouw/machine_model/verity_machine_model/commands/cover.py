@@ -8,12 +8,14 @@
                                           only; --check prints what fails the table and exits 1 if anything does"""
 from __future__ import annotations
 
+import argparse
+
 from verity_machine_model import cover as C
 from verity_machine_model import theta as T
 from verity_machine_model.model import device
 
 
-def add(sub) -> None:
+def add(sub: argparse._SubParsersAction) -> None:
     c = sub.add_parser("cover")
     c.add_argument("--card", choices=C.DEVICES, help="one card (default: both)")
     g = c.add_mutually_exclusive_group()
@@ -57,7 +59,7 @@ def _counts(c: C.Cover, dev: str, proposed: bool) -> str:
             f"{total:,} corpus instructions: {insts}")
 
 
-def run(args) -> int:
+def run(args: argparse.Namespace) -> int:
     c = C.load()
     ps = C.problems(c)
     if args.check:

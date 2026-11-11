@@ -502,8 +502,8 @@ def lean(s: Sheet, data: Path) -> str:
             "  simp [Sheet.machine, census]", ""]
     # The tensor row's case split unfolds `Kind.form` in every class's case, so its cost grows with the square of the
     # class count: 200000 ran out at 50 classes on sm_90 and 52 on sm_100.
-    out += ["-- the case split unfolds `Kind.form` in every class's case: its cost grows with the square of the class "
-            "count",
+    out += [("-- the case split unfolds `Kind.form` in every class's case: its cost grows with the square of the class "
+             "count"),
             "set_option maxHeartbeats 1000000 in",
             *_doc("The tensor row: each class's MACs over a quarter of its type's peak is its census line."),
             "theorem machine_tensor (k : Kind) : sheet.machine.a .tensor k = census .tensor k := by",
@@ -528,8 +528,8 @@ def lean(s: Sheet, data: Path) -> str:
     for c, v in s.clocks.items():
         under = v.value < s.fmax.value
         out += [*_doc(f"The {s.labels[c]} is {'under' if under else 'at most'} f_max."),
-                f"theorem {clock[c]}_{'lt' if under else 'le'}_fmaxMHz : {clock[c]} {'<' if under else '≤'} fmaxMHz "
-                ":= by", f"  norm_num [{clock[c]}, fmaxMHz]", ""]
+                (f"theorem {clock[c]}_{'lt' if under else 'le'}_fmaxMHz : {clock[c]} {'<' if under else '≤'} fmaxMHz "
+                 ":= by"), f"  norm_num [{clock[c]}, fmaxMHz]", ""]
     for ty, p in s.peaks.items():
         dense, tol = p.dense
         figure = (f"{_dec(p.sheet)} with sparsity, dense {_dec(dense)} ± {_dec(tol)}" if p.sparse

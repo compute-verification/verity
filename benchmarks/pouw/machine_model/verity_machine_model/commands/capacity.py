@@ -8,20 +8,21 @@
                                           load, with each group's placement-attested σ beside it"""
 from __future__ import annotations
 
+import argparse
 import json
 
 from verity_machine_model import capacity as C
 from verity_machine_model import eps as E
 
 
-def add(sub) -> None:
+def add(sub: argparse._SubParsersAction) -> None:
     k = sub.add_parser("capacity")
     k.add_argument("groups", nargs="+", metavar="GROUP")
     k.add_argument("--vector", help="the vector whose rows are Π (default: model.toml's current)")
     k.add_argument("--json", action="store_true")
 
 
-def run(args) -> int:
+def run(args: argparse.Namespace) -> int:
     pi = E.machine(args.vector or "", args.data)
     groups = []
     for g in args.groups:

@@ -25,6 +25,7 @@ SMSP-cycle in its class mix.
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+from pathlib import Path
 
 from scipy.optimize import linprog
 
@@ -37,7 +38,7 @@ TENSOR_CYCLES = 16.0  # every MMA kind holds the tensor pipe 16 SMSP-cycles (row
 USEFUL = {MMA: 1.0, "IMAD": 128 / 4096, "HFMA2": 64 / 4096, "FFMA": 32 / 4096}
 
 
-def useful_of(data=DATA) -> dict[str, float]:
+def useful_of(data: Path = DATA) -> dict[str, float]:
     """USEFUL with each honest profile's MMA class in `data` at its MACs a warp instruction over 4096. A device whose
     tensor class isn't sm_120's MMA (UTCIMMA_M128_N256 on sm_100, 256 slots; IGMMA_S8_N256 on sm_90, 32) would
     otherwise offer a hidden program no tensor pipe at all."""
