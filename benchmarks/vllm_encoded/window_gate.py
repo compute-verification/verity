@@ -51,7 +51,7 @@ from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
-sys.path[:0] = [str(HERE.parents[1]), str(HERE.parents[1] / "integrations" / "vllm")]
+sys.path[:0] = [str(HERE.parents[1]), str(HERE.parents[1] / "adapters" / "vllm")]
 
 import paged as P  # noqa: E402
 from paged import K, KB  # noqa: E402
