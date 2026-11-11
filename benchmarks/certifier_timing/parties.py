@@ -65,7 +65,7 @@ LOOPBACK = "127.0.0.1"
 OBSERVERS = ("plain", "spin")
 #: how long before a time the server stops sleeping and spins on the clock
 SPIN_S = 0.003
-#: a cell's header, `verity.core.protocols.certifier.active.HEADER`'s size: the certifier checks it at its start
+#: a cell's header, `verity.protocols.certifier.verifier.active.HEADER`'s size: the certifier checks it at its start
 HEADER_BYTES = 9
 #: what the observer sends, a request of no meaning
 HELLO = b"go\n"
@@ -471,8 +471,8 @@ async def network(cfg: dict) -> dict:
     `before` ms ahead of each release to `after` ms past it: the server's bytes for the next interval wait in the
     kernel. Returns each tick's lateness, and from a paced one each bucket's release start and write end after its
     time."""
-    from verity.core.protocols.certifier.active import HEADER
-    from verity.core.protocols.certifier.warden import Warden as Certifier, WardenParams as Parameters, cells
+    from verity.protocols.certifier.verifier.active import HEADER
+    from verity.protocols.certifier.verifier.warden import Warden as Certifier, WardenParams as Parameters, cells
 
     plan = plan_of(cfg)
     if HEADER.size != HEADER_BYTES:
