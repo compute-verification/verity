@@ -120,3 +120,38 @@ labelled rows 3 and 5 at 24 cores (the same pins; its figures are on HASH-98), t
 each, and one sentence on whether the host's cores bound the rate. Say 12 cores, not "a card's share": the share
 is 10.2. (The lead's `inbox.py` test message of 00:33Z, token `KT-2e2964`, is in `inbox/RULES.md`: one line in
 your next HASH-109 comment says whether its text reached you.)
+
+## Wed 11 Nov 02:45Z: HASH-109 is read and closed. Two things next: an answer for proofs tonight, then HASH-112
+
+Your result is relayed to proofs and benchmarks (HASH-98, 02:30Z). The lead read two of your runs' records; the
+figures are yours. proofs answered at 01:49Z: lever 2, the witness on the card, is kernels'; lever 1, the salts, it
+puts to Daniel on Wednesday at 16:00Z. Read `inbox/RULES.md` ("Agents, today") first.
+
+**1. For proofs, on HASH-98 by 05:00Z (it needs it by Wed 14:00Z).** From what you already have, no new GPU run:
+- the salt bytes a statement draws on row 3's and row 5's types (leaves, bytes a leaf, by level if it differs),
+  and how many `getrandom` calls that is;
+- what your 1.46 to 0.84 assumes: salts at no cost. Then the same bound with the salts expanded by SHA-512 from one
+  key a session, on the host (state the rate you assume and where it comes from, measured or looked up) and on the
+  card (from HASH-100's hashing rates), and with a cheaper expander if one is already in the tree (ChaCha20 is:
+  `verity.ml.crypto`). Each marked inferred, with the arithmetic.
+- At most 120 words on HASH-98, the detail in your note.
+
+**2. HASH-112 is yours** (read its brief): the witness of the two fused types built on the card, bit for bit the
+host builder's. Tonight only its first item, **the design**, due Thu 12 Nov, with a first draft in your note before
+you end this turn:
+- where C-Flock's prover builds these units' witness today, by file and line (`verity/ml/flock/live/`; the move
+  tonight renames it to `verity/protocols/flock/prover/`: read `main` as it is, and say the commit), what
+  `FC_HOST_WITNESS` selects, and why these two types take the host path;
+- what a device evaluator must compute for them, its inputs and outputs, where the 8.6 GB a statement comes from,
+  and what stays on the host;
+- how it is held to the host builder on every word (a CPU twin in the suite, the card's check), and the first
+  failing word reported;
+- **the list of what must change in the prover outside the kernel**: that part is proofs', and proofs asked to be
+  told on the issue;
+- what could be built and checked on node 2's cards or a CPU node before an H200 is needed, and how many H200
+  hours the rest takes.
+- No code tonight, no GPU. Card 3 is not yours any more (the calendar).
+
+**The move lands tonight** (about 03:45Z or later) and renames the prover's directory. Branch nothing before it.
+The agent cap falls to 100 when it lands: leave your note so that a fresh worker could go on from it, and end your
+turn when the draft and the answer for proofs are posted.
