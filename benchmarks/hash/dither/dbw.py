@@ -83,7 +83,7 @@ class Side:
     def end(self, k: int) -> dict:
         ev = self.expect("ended")
         if ev["k"] != k:
-            raise SideError(f"session {ev['k']} ended, not {k}")
+            raise SideError(f"run {ev['k']} ended, not {k}")
         return ev | {"passes_at_ns": self.passes_at.get(k)}
 
     def stop(self) -> dict:
@@ -151,7 +151,7 @@ def stats(xs: list[float]) -> dict | None:
     if not xs:
         return None
     s = sorted(xs)
-    def at(q):
+    def at(q: float) -> float:
         return s[min(len(s) - 1, int(q * len(s)))]
     return {"n": len(s), "mean": round(statistics.fmean(s), 4), "p50": round(at(0.5), 4), "p90": round(at(0.9), 4),
             "p99": round(at(0.99), 4), "max": round(s[-1], 4)}

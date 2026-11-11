@@ -24,8 +24,8 @@ AGENTS.md states the code's layout and rules. This skill states how the team tha
 
   ~~~text
   research run --on auto --cwd source -- bash -lc 'uv sync -q --all-packages --extra torch-cpu && uv run tools/verity/check/suites.py'  # --quick: no slow tests
-  research run --on auto --cwd source -- bash -lc 'uv sync -q --all-packages --extra torch-cpu && uv run --extra torch-cpu verity check'
-  research status RUN  # check back on a run; --wait only for one under 20 min
+  uv run python tools/verity/check/check.py --record --on auto --pool research  # the whole check, recorded (the testing skill)
+  research status RUN  # check back on a run; research run --wait only under 20 min
   ~~~
 
 - **No tool call blocks more than 20 minutes.** Every `--wait` stops there, cancels nothing and exits 79 naming the
@@ -38,8 +38,9 @@ AGENTS.md states the code's layout and rules. This skill states how the team tha
   `budgets.toml`) and runs preserve their results from the pod. The lane whose budget line pays for a machine stops it
   when its work there ends.
 - **Secrets.** The shell hook (`.cursor/hooks.json`, `tools/agent-guard/shell_hook.py`) refuses a command that would
-  print the environment or every process's command line; on a VM booted without it, run origin/main's
-  `tools/agent-guard/boot.sh`. A secret is stored as one line (a key as base64, `NAME_B64`).
+  print the environment, every process's command line, or a key or env file (its names: `envnames.py` beside the
+  hook); on a VM booted without it, run origin/main's `tools/agent-guard/boot.sh`. A secret is stored as one line (a
+  key as base64, `NAME_B64`).
 
 ## Landing
 
@@ -56,27 +57,27 @@ AGENTS.md states the code's layout and rules. This skill states how the team tha
   refusal (fix it with `research queue edit N --body-file F`). A new head needs a new mark and a new review unless
   its own diff, whitespace too, is unchanged (`git patch-id --verbatim`), as after merging `main`.
   `research queue status` says what each PR waits for and lists the PRs naming no issue. The mark admits a PR: the
-  sync's own merge onto `next` is the only check before it joins, so a conflict there keeps it out, as a `hold` label
-  does; a Markdown file over its cap only warns (trim it in your next PR). A PR from a fork, or by an author outside the
-  organization but for the team's Apps and Daniel, is refused at its mark and at admission.
-- Before marking, run the Lean check of the packages you touched and the suites your change touches, `research run --on
-  auto --cwd source -- bash -lc "uv sync -q --all-packages --extra torch-cpu && uv run tools/verity/check/suites.py
-  --changed $(git rev-parse origin/main) --quick"`, plus a suite's slow tier when you changed its core. Prefer small PRs.
+  sync's own merge onto `next` is the only check before it joins, so a conflict there or a `landing_gates` refusal
+  keeps it out, as a `hold` label does; a Markdown file over its cap only warns (trim it in your next PR). A PR from a
+  fork, or by an author outside the organization but for the team's Apps and Daniel, is refused at its mark and at
+  admission.
+- Before marking, run the Lean check of the packages you touched and the suites your change touches (the testing skill's
+  pre-mark run), plus a suite's slow tier when you changed its core. Prefer small PRs.
 - Drive stacks admitted PRs on `next`. Reviewers ci staffs, never the owner, record a verdict at
   the head (`research queue review N --land|--hold REASON --by LANE`); no other per-head grant exists. Drive
   fast-forwards `checked` (`land_into`) to the longest reviewed prefix whose merges are clean and whose `.py` files compile; each sync
   moves reviewed members below those awaiting a verdict, so a PR waiting for review holds only itself; a
   held PR, and any PR containing it, goes to the top of `next` at each sync, so a hold holds only itself too. A change to a
-  `lean-audit.json` lock, to the spec (Lean under `Security/Definitions/`, `Security/Models.lean` and `Security/`'s Lake
-  files) or to Lean that runs as code (a `.lean` outside `Security/`) lands on its verdict like any other. Drive then runs
-  `lean-audit` alone on `checked`'s tip (the lock run), commits the records it regenerated there as `Lock records
-  regenerated for #N...`, and checks that commit, so `main` moves only to one whose records are the regenerated ones; a
-  lock run that fails is a red like any other. A PR whose merge onto `checked` changes nothing drive.toml's
+  `lean-audit.json` lock, to the spec (Lean under `Security/Definitions/`, `Security/Definitions.lean` and `Security/`'s
+  Lake files) or to Lean that runs as code (a `.lean` outside `Security/`) lands on its verdict like any other. Drive
+  then runs `lean-audit` alone on `checked`'s tip (the lock run), commits the records it regenerated as `Lock
+  records regenerated for #N...`, and checks that commit, so `main` moves only to one whose records are the regenerated
+  ones; a lock run that fails is a red like any other. A PR whose merge onto `checked` changes nothing drive.toml's
   `lowrisk_excludes` names (Lean, locks, Lake files, `verity/core/`, the soundness-path Python) lands on its ready mark alone,
-  with no verdict (the low-risk lane: up to `lowrisk_per_tick` a tick).
+  with no verdict (the low-risk lane).
 - One run checks `checked`'s tip after each landing (circuit-check is off the merge gate). A red's culprit, the one landing
   touching what its failure names (never bisected), is rung to fix it forward: mark a fix (its new head, or a PR whose
-  body names it or says `fixes suite NAME`) within 2 h, or drive reverts it on `checked`, unless the red is ratchet-gate's
+  body names it or says `fixes suite NAME`) in 30 min, or drive reverts it on `checked`, unless the red is ratchet-gate's
   (fix that in your next PR); if several touch it, each is rung with @ci and @top, none reverted. A shard whose failures
   name no failing test or error line first runs again once on other machines, ringing @infra. The next run waits up to
   45 min after its mark for a marked low-risk fix of a red with no culprit to land. Until circuit-check passes on
@@ -132,13 +133,14 @@ does no lane work. Launching, handing over and archiving coordinators: `infra/cu
   `cursor/<lane>-<topic>-<hex>` from `origin/main` and push only there, and names an inbox branch it reads hourly
   (`git show origin/B:inbox/<agent-id>.md`); larger changes go in when you resume it. It opens its own PR, or reports
   its branch and SHA for its launcher to.
-- **Pick a subagent's effort by how conceptually heavy its task is**, and pass it as `Task`'s `model`
-  (`claude-opus-5-5-<effort>`; `inherit` runs it at your own effort), a standing request for every agent here: `max` for
-  the hardest conceptual work, `xhigh` for conceptually heavy work, `high` for slightly heavy work, `medium` for routine
-  execution, `low` for trivial lookups.
+- **Every agent runs Claude Fable 5.2.** Pick a subagent's effort by how conceptually heavy its task is, and pass it
+  as `Task`'s `model` (`claude-fable-5-2-<effort>`; `inherit` only when you run Fable 5.2 yourself), a standing
+  request for every agent here: `max` for the hardest conceptual work, `xhigh` for conceptually heavy work, `high` for
+  slightly heavy work, `medium` for routine execution, `low` for trivial lookups.
 - **Reach a running agent** on any VM through its shell commands, since it never rereads a shared file mid-run:
   `python3 tools/agent-guard/inbox.py send AGENT_ID --text '…'` from a checkout pushes to origin's `inbox/AGENT_ID`, and
-  its shell hook delivers it within about a minute (`--local`: a subagent on your VM, at once).
+  its shell hook delivers it within about a minute or as its turn ends (`--local`: a subagent on your VM, at once);
+  `inbox.py selftest` checks your own VM end to end.
 - **Stay reachable.** Push and write a one-line checkpoint note at least every 60 minutes; when you'd wait on a run, end
   your turn naming its id and ETA, and your launcher resumes you. The control pod's agent watch flags a stalled or
   stopped agent and an out-of-memory kill. A worker resumed twice, whose base branch is gone, or silent past the watch's

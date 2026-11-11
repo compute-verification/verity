@@ -1,6 +1,6 @@
 # Node 1's job store to the remote: `research data pending` (MODE=pending) or `research data push --pending` (MODE=push) on
 # RESEARCH_STORE, from a pod, because the pods' Secret `research-r2` holds the only R2 credentials on node 1: neither host user has
-# a store remote (circuits, 2 Oct 07:57Z). Once a run's files are on the remote, the hourly `vy-store-evict` can drop their local
+# a store remote. Once a run's files are on the remote, the hourly `vy-store-evict` can drop their local
 # copies. The pod runs as uid 1000, ubuntu, the job store's owner, with `research` from the item's tree (`tree`, a commit's
 # /workspace/research/src/<sha>). Its report is /workspace/jobs/store-push/<MODE>-<UTC stamp>.json. The push takes no attempt
 # without a run record (--skip-record-less): R2's write-once key would keep it without its logs, and n1_custody.sh holds those until

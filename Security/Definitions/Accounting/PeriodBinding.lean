@@ -1,6 +1,6 @@
 module
 
-public import Definitions.Accounting.ComposePeriod
+public import Definitions.Accounting.ComposeMonitoringPeriod
 public import Definitions.Accounting.TS.Hashed
 
 /-!
@@ -90,11 +90,11 @@ def acceptAllOutcomes : Outcomes Bool (Equiv.Perm (Fin 1) × Unit) 1 1 1 1 Bool 
   right _ _ _ _ := True
 
 /-- `onePeriod`'s period layer at `honestOutcomes`. -/
-def honestLayer : DrawnLayer Bool (Equiv.Perm (Fin 1) × Unit) 1 1 1 (Fin 1) ℕ (Fin 1 × ℕ) Bool :=
+def honestLayer : SampledLayer Bool (Equiv.Perm (Fin 1) × Unit) 1 1 1 (Fin 1) ℕ (Fin 1 × ℕ) Bool :=
   onePeriod.periodLayer Nat.one_pos le_rfl honestOutcomes
 
 /-- `onePeriod`'s period layer at `acceptAllOutcomes`. -/
-def acceptAllLayer : DrawnLayer Bool (Equiv.Perm (Fin 1) × Unit) 1 1 1 (Fin 1) ℕ (Fin 1 × ℕ) Bool :=
+def acceptAllLayer : SampledLayer Bool (Equiv.Perm (Fin 1) × Unit) 1 1 1 (Fin 1) ℕ (Fin 1 × ℕ) Bool :=
   onePeriod.periodLayer Nat.one_pos le_rfl acceptAllOutcomes
 
 end PeriodBinding

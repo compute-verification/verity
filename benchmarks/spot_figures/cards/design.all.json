@@ -13,14 +13,11 @@
   "overheads": [1.0, 1e14],
   "token_bytes": 4,
   "main_lines": {
-   "exfiltration": {"{model}'s weights": "solid", "Advice cap 6 bits/req": "dashed"}
+   "exfiltration": {"{model}'s weights": "solid", "Advice today": "solid", "Advice once the length rule": "dashed"}
   },
   "notes": {
-   "exfiltration": [
-    "The advice line (dashed) is a registered cap of 6 bits a request, the most accepted advice is charged, with the KV pool in the circuit, under which every traced window fits; the pool is designed, not built at session scale. Certified ticks make the advice 0 bits, so they have no line, and the tick rule isn't built either. The charges are vLLM's scheduler serving Llama 3 models, not measured on the served model."
-   ],
    "exfiltration_appendix": [
-    "Each advice line is a registered cap, the most accepted advice is charged; batch-invariant Definitions and certified ticks make the advice 0 bits and have no line."
+    "The advice cap here is a registered cap a 600 s machine window on the scheduler's advice without the certified tick, measured with prefix caching on and so pending, times the scope's machine windows, the most any accepted advice is charged. With the tick, certified arrivals (the run with the real network certifier is pending) and prefix caching off, today's advice is the response length, charged until a circuit checks the stop rule; once one does, and with batch-invariant Definitions, it is 0 bits."
    ]
   }
  }

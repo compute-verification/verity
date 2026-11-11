@@ -101,7 +101,7 @@ def _load(name: str):
 MODULES = _load("modules")
 HEADERS = _load("headers")
 
-#: the security analysis's packages: Definitions and Models, the proofs, the properties. Every other package is code.
+#: the security analysis's packages: the spec (Definitions), the proofs, the properties. Every other package is code.
 ANALYSIS = ("Security", "Security/Proofs", "Security/Properties")
 #: the lock sections that name modules, every declaration of which is a seed
 MODULE_SECTIONS = ("roots", "runs", "exempt", "compile_time")
@@ -200,8 +200,8 @@ class Tree:
         return self.module_package.get(mod) in ANALYSIS
 
     def area(self, mod: str) -> str:
-        """`Proofs/Flock`, `Definitions/Pouw`, `Models` for the analysis's modules (the path under `Security/`, two parts at
-        most); a code package's path for its own."""
+        """`Proofs/Flock`, `Definitions/Pouw`, `Definitions` for the analysis's modules (the path under `Security/`, two
+        parts at most); a code package's path for its own."""
         pkg = self.module_package.get(mod, "?")
         if pkg not in ANALYSIS:
             return pkg

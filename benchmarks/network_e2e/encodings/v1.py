@@ -28,7 +28,7 @@ from verity.core.protocols.certifier import advice as I1
 from verity_vllm.pipeline.advice_code.codec import (
     advice_of_replay as advice_of_replay, AdviceCodeError, arrival_order as arrival_order, bits_by_window, book_of, CAPS as CAPS,
     charged as charged, check_record as check_record, Decision as Decision, decode as decode,
-    decode_bits as decode_bits, decode_full, encode, Record, Registered, release_order as release_order,
+    decode_bits as decode_bits, decode_full, encode, length_tails, Record, Registered, release_order as release_order,
     replay_record as replay_record, Request, residual, streams, string_of, TICK_CAPS as TICK_CAPS, windows,
 )
 
@@ -134,8 +134,10 @@ INGRESS = ("client", "warden")
 
 
 def _trace(path: str, stop_ids: Sequence[int], ingress: str = "client") -> tuple[Any, Record, I1.Advice]:
+    """A trace-corpus trace, its certified record and its I1 v0 advice; a tick-served trace's record is on its own
+    certified tick's buckets, 100 ms buckets otherwise."""
     tr = R.read_corpus_trace(path, ingress=ingress)
-    rec = record_of(tr, stop_ids)
+    rec = record_of(tr, stop_ids, **({} if tr.releases is None else {"bucket_s": tr.releases.tick.bucket_us / 1e6}))
     return tr, rec, advice_of(tr, rec)
 
 
@@ -182,8 +184,9 @@ def measure(label: str, path: str, stop_ids: Sequence[int], T: int = 600, ingres
         t1 = time.monotonic()
         got = decode_full(data, rec, reg)
         by = bits_by_window(data, rec, reg)
-        unordered = sum(string_of([CV.Window(w.arrived, w.hits) for w in wins], reg)[1])
-        untimed = sum(string_of([CV.Window(hits=w.hits) for w in wins], reg)[1])
+        tails = length_tails(rec, reg)
+        unordered = sum(string_of([CV.Window(w.arrived, w.hits) for w in wins], reg, tails)[1])
+        untimed = sum(string_of([CV.Window(hits=w.hits) for w in wins], reg, tails)[1])
         row[name] = {"bits": sum(by.values()), "by_window": by, "max_window": max(by.values()),
                      "order_bits": sum(by.values()) - unordered, "timing_bits": sum(by.values()) - untimed,
                      "bytes": len(data), "round_trip": got.advice == adv and got.streams == streams(adv, rec),
@@ -256,7 +259,8 @@ def main(argv: Sequence[str] | None = None) -> int:
     ap.add_argument("traces", nargs="+", help="LABEL=DIR: a trace's directory (steps.jsonl, requests.jsonl, meta.json, "
                                               "server.log)")
     ap.add_argument("--stops", default="128001", help="the registered stop ids, comma-separated, EOS first")
-    ap.add_argument("--T", type=int, default=600, help="the window, in 100 ms buckets")
+    ap.add_argument("--T", type=int, default=600, help="the window, in the trace's certified buckets: its tick's τ_b, "
+                                                          "100 ms without the tick")
     ap.add_argument("--ingress", choices=INGRESS, default="client",
                     help="the certified order's stand-in: the client's send (client; on a .released view, the warden's "
                          "release), or the engine's own arrival stamp (warden: no deviations)")

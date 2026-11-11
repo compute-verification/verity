@@ -69,6 +69,8 @@ SETTINGS: dict[str, Setting] = _declare(
     # ---- check's own knobs
     S("CHECK_CACHE", str, None, WHERE, "check's caches: circuit-check's reports, the Lean audits, the agreement's passes; unset, "
       "~/.cache/verity-check (`common.cache_dir`)", "a kept verdict is reused only under its inputs' hash"),
+    S("CHECK_AGREEMENT_URLS", str, None, WHERE, "a file of the agreement's pinned upstream build and inputs and their presigned "
+      "URLs, for a local recorded run (`check.agreement_url_file`)", "each file is held to its sha256 in the pin"),
     S("CHECK_LEAN_DEPS_URLS", str, None, WHERE, "a file of the Lean dependency bundles' presigned URLs, for a run sent none "
       "(`--lean-deps-files`)", "each bundle is pinned by its hash (`lean-deps.json`)"),
     S("CHECK_MIN_MEM_GB", str, "", WHERE, "slot.py takes only a slot whose mem= is at least this many GB (`check.py --record "
@@ -89,6 +91,8 @@ SETTINGS: dict[str, Setting] = _declare(
       "take slots in"),
     S("CHECK_STORE_CUSTODY", str, None, WHERE, "the recording run's custody dir, which check gives its steps in place of the "
       "RESEARCH_* that named the store (`store_io`)", "where the store's key is, not what a step computes"),
+    S("CHECK_VERDICT_URLS", str, None, WHERE, "a file of the newest recorded checks' verdict packs and their presigned URLs, "
+      "for a local recorded run (`check.verdict_url_file`)", "each pack is held to its sha256, and a pass to its key"),
     S("RESEARCH_STORE_CONFIG", str, None, WHERE, "the evidence store's config: set, the suites' fixture fetch uses it, not the "
       "run's custody key (`suites.fetch_env`)", "which store serves a fetch; every byte is checked against its id"),
     # ---- the Lean slots (lean_slot.py)
@@ -107,8 +111,6 @@ SETTINGS: dict[str, Setting] = _declare(
       "a kept pass is reused only under its inputs' hash"),
     S("VERITY_TEST_CACHE_MIN_S", str, None, WHERE, "keep per-test passes only of tests whose call took at least this many "
       "seconds (`suites.py --per-test-min-s`)", "which passes are kept, not what they say"),
-    S("FLOCK_AGREEMENT_INPUTS", str, None, WHERE, "a directory check also looks in for the agreement's pinned upstream build "
-      "and inputs (a local recorded run's launcher sets it)", "each is found by its sha256 in the pin"),
     S("PYTHONPATH", str, "", VALUE, "where Python imports from: check hands its steps the entries inside this tree"),
     S("PATH", str, "", WHERE, "where programs are", "which tools a suite finds is keyed (`suites.TOOLS`), their versions pinned"),
     S("CUDA_VISIBLE_DEVICES", str, None, VALUE, "the GPUs a step may use: set and empty, none (`research run` hides gpu-lease's), "
@@ -119,6 +121,8 @@ SETTINGS: dict[str, Setting] = _declare(
       "`suites.py` refuses another checkout's environment"),
     S("XDG_CACHE_HOME", str, None, WHERE, "the cache root under which VERITY_TEST_CACHE defaults", "as VERITY_TEST_CACHE"),
     S("TMPDIR", str, None, WHERE, "scratch: train.sh's worktrees and logs; unset, /tmp", "scratch space"),
+    S("LD_LIBRARY_PATH", str, None, WHERE, "where the loader looks first: neutrality_tier.sh puts the driver's libcuda it "
+      "unpacks there, on a node with none", "vLLM only loads it at import; neutrality hides every device"),
     # ---- the run this one is part of (`research run` sets them)
     S("RESEARCH_RUN_ID", str, None, WHERE, "the research run this process is part of: a check inside one is recorded, a run of "
       "record", "it names the run"),

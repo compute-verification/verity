@@ -32,8 +32,8 @@ from verity.core.protocols.pouw import window as Wd
 from verity.core.protocols.pouw.audit import Workload, salt_of, weights_root
 from verity.core.protocols.pouw.coins import Challenger
 from verity.core.protocols.pouw.protocol import DomainError, Matmul, Shape
-from verity.core.protocols.sampled_proofs import challenger as LC
-from verity.core.protocols.sampled_proofs import remote as R
+from verity.core.protocols.spot import challenger as LC
+from verity.core.protocols.spot import remote as R
 from verity.ml.crypto import lms
 from verity_vllm import protocols as PO
 from verity_vllm.engine import hooks

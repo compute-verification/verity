@@ -17,7 +17,7 @@ import numpy as np
 
 from verity.ml.windows import rows as CS
 from verity_vllm.pipeline import slice_rows as SL
-from verity_vllm.pipeline.serving_templates import COORDS, PART_STATICS, PARTS, part, template
+from verity_vllm.pipeline.serving_templates import COORDS, PART_STATICS, PARTS, coord_width, part, template
 
 _LAYER = re.compile(r"\.layers\.(\d+)\.")
 Row = tuple[str, Any, dict, dict]
@@ -57,19 +57,22 @@ def output_name(d: dict, j: int | str) -> str:
 
 def read_coord(m: CS.Member, rows: Sequence[Row], store: Any, weights: Callable, arrivals: dict[str, int] | None,
                slices: Callable, packed: Callable) -> tuple[dict[str, Any], list[list[Any]]]:
-    """A ``COORDS`` template's units (the ``coord`` layout), row by row, then coordinate: unit (row, n) reads the row's leading
-    operands whole and, for its last two, ``w`` ([E][N][K]) and ``ws`` ([E][cdiv(N, G)][K/G]), ``w[:, n, :]`` and
-    ``ws[:, n // G, :]`` of every expert, which are the template's ``w`` and ``ws`` at N = 1; its output is the row's output
-    word n.  A family whose statics have no E or G takes ``COORDS``' (FlashInfer's linear: one expert, 128-wide blocks).  On a
+    """A ``COORDS`` template's units (the ``coord`` layout), row by row, then coordinate: unit (row, j) of a template c outputs
+    wide (`coord_width`: 1 at N = 1, its N for a ``WIDE_COORDS`` one) reads the row's leading operands whole and, for its last
+    two, ``w`` ([E][N][K]) and ``ws`` ([E][cdiv(N, G)][K/G]), ``w[:, jc:(j + 1)c, :]`` and ``ws[:, jc // G, :]`` of every
+    expert, which are the template's ``w`` and ``ws`` at N = c (c divides G); its output is the row's output words
+    [jc, (j + 1)c).  A row whose N is no multiple of c is refused.  A family whose statics have no E or G takes ``COORDS``'
+    (FlashInfer's linear: one expert, 128-wide blocks).  On a
     row it is a part of (``PARTS``), its operands are the row's argument groups and committed outputs the part names, in its
     order, at the row's statics and its ``PART_STATICS``, and its output the one the part returns (DeepGEMM's linear: its
     committed q and s, then w and ws -> y); an intermediate it reads (FlashInfer's linear: q and s) is its twin's (``MIDS``),
     and the twin of the row's output on them is held to the row's served output.  Every port is its elements' bytes
-    (``Template.packed``).  One index entry per row, the range of its N units.  A weight stack is read once per distinct slice
-    group."""
+    (``Template.packed``).  One index entry per row, the range of its N / c units.  A weight stack is read once per distinct
+    slice group."""
     from verity_vllm.query.program_view import spec_base
 
     tp = template(m.template)
+    c = coord_width(tp.word)
     bits = tp.packed or (16,) * (len(m.rows) + 1)
     cols: dict[str, list[np.ndarray]] = {p: [] for p, _ in m.rows + m.outs}
     (port, _w), = m.outs
@@ -93,6 +96,9 @@ def read_coord(m: CS.Member, rows: Sequence[Row], store: Any, weights: Callable,
         S = {**COORDS[spec_base(tp.word)], **d["statics"], **(PART_STATICS.get(spec_base(r["spec"]), {}) if p else {})}
         E, K, N, G = (int(S[k]) for k in ("E", "K", "N", "G"))
         NB, KG = -(-N // G), K // G
+        if N % c:
+            raise ValueError(f"row {r['i']} ({d['op_path']}): N = {N} outputs are no whole coordinates of {c} (member {m.key})")
+        U = N // c
         srcs = p[1] if p else tuple(("arg", g) for g in range(len(r["args"])))
         if len(srcs) != len(m.rows):
             raise ValueError(f"row {r['i']} ({d['op_path']}): {len(srcs)} operands, not member {m.key}'s {len(m.rows)} ports")
@@ -115,27 +121,27 @@ def read_coord(m: CS.Member, rows: Sequence[Row], store: Any, weights: Callable,
         y, why = store.words(rid, arrive + d["step"], d["op_path"], member, d["row"] * N, (d["row"] + 1) * N)
         if y is None:
             raise LookupError(f"row {r['i']} output {member}: {why}")
-        y = packed([np.asarray(y)], bits[-1], f"row {r['i']} output {member}").reshape(N, -1)
+        y = packed([np.asarray(y)], bits[-1], f"row {r['i']} output {member}").reshape(U, -1)
         if mid:
             got = MIDS[spec_base(r["spec"])][3](mid, W[0], WS[0], G)
             if not np.array_equal(np.asarray(got, dtype=np.uint16).reshape(-1), y.reshape(-1)):
                 raise ValueError(f"row {r['i']} ({d['op_path']}): the twin's output on its intermediates {sorted(mid)} is not "
                                  f"the row's served {member} words")
-        wcol = np.ascontiguousarray(W.transpose(1, 0, 2)).reshape(N, -1).view("<u2")
-        scol = np.ascontiguousarray(WS[:, np.arange(N) // G, :].transpose(1, 0, 2)).reshape(N, -1).view("<u2")
+        wcol = np.ascontiguousarray(W.reshape(E, U, c, K).transpose(1, 0, 2, 3)).reshape(U, -1).view("<u2")
+        scol = np.ascontiguousarray(WS[:, np.arange(U) * c // G, :].transpose(1, 0, 2)).reshape(U, -1).view("<u2")
         got = [a.size for a in ops] + [wcol.shape[1], scol.shape[1], y.shape[1]]
         if got != [w for _, w in m.rows + m.outs]:
             raise ValueError(f"row {r['i']} ({d['op_path']}): a coordinate's ports of {got} words, not member {m.key}'s "
                              f"{list(m.rows)} and {list(m.outs)}")
         for k, a in enumerate(ops):
-            cols[f"in{k}"].append(np.broadcast_to(a.reshape(1, -1), (N, a.size)))
+            cols[f"in{k}"].append(np.broadcast_to(a.reshape(1, -1), (U, a.size)))
         cols[f"in{len(ops)}"].append(wcol)
         cols[f"in{len(ops) + 1}"].append(scol)
         cols[port].append(y)
         layer = _LAYER.search(d["op_path"])
-        entries.append([lo, lo + N, rid, arrive + int(d["step"]), int(layer.group(1)) if layer else None, d["op_path"], str(member),
+        entries.append([lo, lo + U, rid, arrive + int(d["step"]), int(layer.group(1)) if layer else None, d["op_path"], str(member),
                         int(d["row"]), int(r["i"])])
-        lo += N
+        lo += U
     if lo - m.base != m.n:
         raise ValueError(f"{m.key}: its rows hold {lo - m.base} units, not its {m.n} (a chunk is read with its template's others, "
                          f"`read_all`)")

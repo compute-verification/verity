@@ -36,7 +36,9 @@ proved.
   (``Population.Exfil.tail_cumPrev``), where A, the luck factor, turns incorrect outputs into skipped work. A block that
   injects a chosen output fails its proof whenever it is sampled, so luck doesn't multiply those: ln(1/delta) / q of them
   inject their output bits into the inference block that holds them (the width form needs no bits for where), each bit
-  worth at most ``chord``, the steepest secant from K of one inference block's thread bound.
+  worth at most ``chord``, the steepest secant from K of one inference block's thread bound. A block's outputs fit its
+  Definition's public size class, so each injects at most the widest (``step_bits``, ``partition_v2.UNIT_CLASS_MAX``);
+  the share stops at 1, the fleet's whole capacity.
 
 The four terms bound counted multiplications relative to the reference recipe. A private recipe g times better in counted
 multiplications per unit of loss is a compute amplifier, multiplying eta by g; it cancels when verification is compared on
@@ -57,6 +59,8 @@ from __future__ import annotations
 import argparse
 import json
 import math
+
+from verity.ml.circuits import partition_v2
 
 YEAR = 3.156e7
 GB = 8e9
@@ -94,8 +98,9 @@ NODE_FLOPS = 8 * GPU_FLOPS
 #: the deployed proof-of-space audit (k = 111 rounds at delta = 1/100; the slack counts the floor once) and the memory
 #: the fill doesn't reach (3.05 GB on-chip, 18.4 GB GPU reserve, 29.5 GB host gap, about 7 GB of DPU, BMC and flash); disks
 #: unplugged; today's uncharged export; the declared computation's novel intake at alpha F (once the network's count check is in
-#: the ZK flow; line rate until then); sampled proofs at 1% on top of serve-time commitments, at today's sparse-draw cost
-#: (about 35 GPU-s a sample), delta = 2^-40 and luck A = 8; the structural d = 1, what Lean certifies for a run that trains
+#: the ZK flow; line rate until then); SPOT at 1% on top of serve-time commitments, at today's sparse-sample cost
+#: (about 35 GPU-s a sample), delta = 2^-40 and luck A = 8, an incorrect proof block injecting the widest public size
+#: class of output bits (``partition_v2.UNIT_CLASS_MAX``); the structural d = 1, what Lean certifies for a run that trains
 #: its embedding, with ReferenceThreaded's e for a reference circuit written in Dot16 steps, as the declarations are, in
 #: products (``REFERENCE_THREADED`` is the conditional (d, e)); injected bits valued with (d, e)-threading no further than
 #: ThreadedOfLayered certifies any at ReferenceLayered's bf16 embedding columns, and every gate of a block countable
@@ -108,7 +113,7 @@ DEFAULTS = {
     "host_gb": 1900.0, "disk_gb": 0.0,
     "tau": 860.0, "export": 4.4e9, "nic": 3.2e12,
     "share": 0.01, "overhead": 4.8e12, "replay": 1.1e5, "step_flop": 1.43e4, "p_evade": 2.0 ** -40, "identities": 1.0,
-    "luck": 8.0, "step_bits": 16.0, "intake_x": 1.0, "lag_s": 3600.0, "g": 1.0, "mfu": 0.4, "m": 1.0,
+    "luck": 8.0, "step_bits": float(partition_v2.UNIT_CLASS_MAX), "intake_x": 1.0, "lag_s": 3600.0, "g": 1.0, "mfu": 0.4, "m": 1.0,
     "floor_steps": 1.0,
     "K": 2e7, "Gamma": 6.4e16, "d": 1.0, "e": 37248.0, "kappa": 0.6, "thread_bits": 4.46e7, "block_mults": 1.0,
     "kappa_chain": 0.0, "d_chain": 1536.0, "e_chain": 12288.0, "b_p": 32.0,
@@ -141,19 +146,19 @@ SPEC = [
     {"key": "tau", "label": "Certified timing channel per server (the network appendix's program format: about 860)", "unit": "bit/s", "min": 1, "max": 1e5, "log": True, "zero": True},
     {"key": "export", "label": "Export per server: committed values readable outside the declared computation (today 4.4e9; under the export rule about 2.5e6)", "unit": "bit/s", "min": 1, "max": 1e12, "log": True, "zero": True},
     {"key": "nic", "label": "Line rate per server, without network accounting", "unit": "bit/s", "min": 1e9, "max": 1e13, "log": True},
-    {"key": "share", "label": "Sampled proofs: compute share", "unit": "", "min": 1e-4, "max": 0.5, "log": True},
-    {"key": "overhead", "label": "Sampled proofs: proving cost per unit of step work (sparse draws today 4.8e12; 512 per statement 1.7e10; batched throughput 1.6e8)", "unit": "x", "min": 1, "max": 1e14, "log": True},
-    {"key": "replay", "label": "Sampled proofs: replay cost per drawn step", "unit": "x", "min": 1, "max": 1e7, "log": True},
-    {"key": "step_flop", "label": "Sampled proofs: work per step", "unit": "FLOP", "min": 1e3, "max": 1e15, "log": True},
-    {"key": "p_evade", "label": "Sampled proofs: certificate failure probability delta (planner 2^-40)", "unit": "", "min": 1e-15, "max": 0.99, "log": True},
-    {"key": "luck", "label": "Sampled proofs: luck factor F/(1-p) (spec sheet 8)", "unit": "x", "min": 1, "max": 100, "log": True},
-    {"key": "step_bits", "label": "Sampled proofs: output bits per step (16, or one 32-bit gate)", "unit": "bit", "min": 1, "max": 64, "log": True},
+    {"key": "share", "label": "SPOT: compute share", "unit": "", "min": 1e-4, "max": 0.5, "log": True},
+    {"key": "overhead", "label": "SPOT: proving cost per unit of step work (sparse draws today 4.8e12; 512 per statement 1.7e10; batched throughput 1.6e8)", "unit": "x", "min": 1, "max": 1e14, "log": True},
+    {"key": "replay", "label": "SPOT: replay cost per drawn step", "unit": "x", "min": 1, "max": 1e7, "log": True},
+    {"key": "step_flop", "label": "SPOT: work per step", "unit": "FLOP", "min": 1e3, "max": 1e15, "log": True},
+    {"key": "p_evade", "label": "SPOT: certificate failure probability delta (planner 2^-40)", "unit": "", "min": 1e-15, "max": 0.99, "log": True},
+    {"key": "luck", "label": "SPOT: luck factor F/(1-p) (spec sheet 8)", "unit": "x", "min": 1, "max": 100, "log": True},
+    {"key": "step_bits", "label": "SPOT: output bits per proof block (a block's outputs fit its Definition's public size class: the widest, to the smallest, the literal limit)", "unit": "bit", "min": partition_v2.UNIT_CLASSES[0], "max": partition_v2.UNIT_CLASS_MAX, "log": True},
     {"key": "intake_x", "label": "Declared novel intake, as a multiple of alpha F (1 once the count check is in the ZK flow; line rate is about 1.3e6)", "unit": "x", "min": 1, "max": 1e7, "log": True},
     {"key": "m", "label": "Recipe multiplier m: frontier progress per counted multiplication of the developer's best recipe under the mechanisms, against the unconstrained recipe (central 1, adversarial 3)", "unit": "x", "min": 0.1, "max": 10, "log": True},
     {"key": "mfu", "label": "Model-FLOP utilization of an unconstrained frontier run (Llama 3 405B: 38-43%)", "unit": "", "min": 0.1, "max": 1, "log": False},
     {"key": "lag_s", "label": "Verdict lag: from a first incorrect proof block to the halt, a window plus the verdict delay (1 hour assumed)", "unit": "s", "min": 1, "max": 1e7, "log": True, "zero": True},
-    {"key": "identities", "label": "Sampled proofs: identities a detection doesn't end", "unit": "", "min": 1, "max": 1e6, "log": True},
-    {"key": "floor_steps", "label": "Sampled proofs: steps in a class drawn at a floor of one", "unit": "", "min": 1, "max": 1e17, "log": True},
+    {"key": "identities", "label": "SPOT: identities a detection doesn't end", "unit": "", "min": 1, "max": 1e6, "log": True},
+    {"key": "floor_steps", "label": "SPOT: steps in a class drawn at a floor of one", "unit": "", "min": 1, "max": 1e17, "log": True},
     {"key": "K", "label": "NCI: novel bits per inference block", "unit": "bit", "min": 1e5, "max": 1e10, "log": True},
     {"key": "Gamma", "label": "NCI: gates per inference block", "unit": "", "min": 1e14, "max": 1e19, "log": True},
     {"key": "d", "label": "Model: entry fee d (thread reads below which a value's fan-out is at most e). 1 is what Lean certifies for a training run from structure alone: its embedding table is updated weights, which Layered's lookups (columns of novel inputs) can't read. ReferenceThreaded gives 10 for Kimi K2 at S = 2e7 (a Dot16 step's 17 legs less E = 7 bf16 embedding columns) under the open conjecture ReferenceLayered, which holds for a training run only once lookups may read weight columns", "unit": "", "min": 1, "max": 65536, "log": True},

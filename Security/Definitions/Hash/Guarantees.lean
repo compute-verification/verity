@@ -2,6 +2,7 @@ module
 
 public import Definitions.Hash
 public import Definitions.Hash.EmbeddingRead
+public import Definitions.Hash.HistoryTable
 import Mathlib.Algebra.Order.Floor.Extended
 import Mathlib.Algebra.Order.Interval.Basic
 import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
@@ -41,13 +42,16 @@ Each is proved by a theorem `Hash.SecurityProofs.G : Hash.Guarantees.G` in `Secu
 deterministic and assume nothing about the hash: each conclusion is the property, or a collision among
 the messages the two openings' checks themselves hashed, never an advantage bound. So no proof takes an assumption.
 
-* `RowBinding`: two openings of one root at one rank, in the hm96 bit-row leaf format the verifier holds (frame-v3-sha512
-  tree, frame leaf, hm96-sha512 leaf under the verifier's key, and a `sha512/row-seg/v1` or `sha512/row/v2` row digest),
-  carry the same row, or the checks hashed a collision. It covers row-seg and row/v2 leaves, not `hm96-sha512/row/v1`.
+* `RowBinding`: two openings of one root at one rank, in the hm96 row leaf format the verifier holds (frame-v3-sha512
+  tree, frame leaf, hm96-sha512 leaf under the verifier's key, and a `sha512/row-seg/v1`, `sha512/row/v2` or
+  `sha512/row/v1` row digest), carry the same row, or the checks hashed a collision.
 * `TreeBinding`: two openings of one frame-v3 root at one rank carry the same leaf digest, or the path checks hashed a
   collision of node messages.
 * `EmbeddingReadBinding`: when `EmbeddingRead_v1` returns ok for a token in the vocabulary, the row it returns is the
   registered table's row at that token, or the checks hashed a collision. It is `RowBinding` at rank `tok`.
+* `HistoryReadBinding`: when `EmbeddingRead_v1` returns ok at an index below the count, against the root the verifier
+  computes from the rows' public commit strings (`HistoryTable.root`), the row it returns is the row behind the string
+  at that index, under any salt that string commits it with, or the checks hashed a collision.
 
 SHA-512 is the served hash, not BLAKE3. A probability read from
 any of them is per prover: the collision comes from that prover's (extracted) openings, so it is a bound on that
@@ -61,10 +65,11 @@ none of them discharges a constant over all provers such as `Pouw.Assumptions.Se
 namespace Hash.Guarantees
 
 /-- **Row binding, as a break tied to the run.** Two openings of one root at one rank, each accepted by the verifier of the
-hm96 bit-row leaf in its format (`RowLeaf.accepts`: a frame-v3 tree over the verifier's domain, its frame leaf binding the
+hm96 row leaf in its format (`RowLeaf.accepts`: a frame-v3 tree over the verifier's domain, its frame leaf binding the
 domain id, rank, position and the format's schema, its nodes their level and index; the hm96-sha512 leaf under the
 verifier's key, bound through `H(key)` in its prefix; the format's row digest binding the row's bit length and its bits,
-each segment's under `sha512/row-seg/v1`; every part length-framed or fixed-width), carry the same row, or two different
+each segment's under `sha512/row-seg/v1`, and under `sha512/row/v1` a row of whole words whose bytes give its length;
+every part length-framed or fixed-width), carry the same row, or two different
 messages that `H` hashed in the two checks have one digest, or two different messages that `G` hashed in the two row
 digests have one digest.
 
@@ -75,9 +80,9 @@ Scope:
 * **Leaves.** The verifier's format (`RowLeaf.Format`): `hm96-sha512/row-seg/v1` leaves (`seg`: PoUW's per-call A rows,
   the vLLM row tables, A6's `x` port, the clear sampled audit's rows) or `hm96-sha512/row/v2` leaves (`v2`: H1's tables
   and registered weights, serving's step rows, the chunked templates' `w`, `in<g>` and `o0` rows, the remote audit's
-  receipts). A row cut into several leaves (H1's chunk rows past K = 4096, n leaves a row) is bound leaf by leaf, at each
-  leaf's rank; which leaves form a row is the layout's. Leaves under `hm96-sha512/row/v1` (Flock's default ports, M0's
-  serving rows) are outside it: a row/v1 format adds role, word width and word count to the prefix.
+  receipts) or `hm96-sha512/row/v1` leaves (`v1`: Flock's default ports, the registered values, M0's serving rows,
+  each a row of 16-bit words). A row cut into several leaves (H1's chunk rows past K = 4096, n leaves a row) is bound
+  leaf by leaf, at each leaf's rank; which leaves form a row is the layout's.
 * **Domain.** `V.domain` is free, and RowBinding holds for every domain. It does not say that a root is a rows tree. The
   schema doesn't separate them: PoUW's tile-digest trees write `hm96-sha512/row-seg/v1` too, with `x` the 64-byte digest
   itself, and there a row's leaf equals the leaf of its own row-seg digest with no collision. Only the domain's binding
@@ -133,5 +138,31 @@ def EmbeddingReadBinding : Prop :=
           RowLeaf.outerHashed H G (EmbeddingRead.verifier domain key) tok o₀) ∨
         CollisionIn G (RowLeaf.innerHashed G (EmbeddingRead.verifier domain key) o ++
           RowLeaf.innerHashed G (EmbeddingRead.verifier domain key) o₀)
+
+/-- **A history table's read binds the row its writer committed, as a break tied to the run.** When `EmbeddingRead_v1`
+returns ok on the witness opening `o` at an index `tok` below the domain's count, against the root of the history table
+whose rank `r` holds the public commit string `s r` (`HistoryTable.root`, which the verifier computes and the prover
+never supplies), the row it returns is `row` for every row-seg row `row` and 192-byte salt `salt` whose commit string is
+`s tok`, or two different messages that `H` hashed in the read's check and in the check of that row's opening at `tok`
+(`HistoryTable.opening`, the tree's own path) have one digest, or two different messages that `G` hashed in their row
+digests have one digest.
+
+Scope:
+* **What the strings are.** `s` is the verifier's: a writer unit's committed `b ‖ c` at each position its program's wiring
+  gives, below the table's length, and the placeholder's (`HistoryTable.placeholder`) past it. A read at an index past the
+  length returns the zero row then, the placeholder's own opening, or the checks collided.
+* **What it is about.** The reference's outputs, as for `EmbeddingReadBinding`; the domain, key and count are the
+  read's template's and the table's, which the verifier holds. -/
+def HistoryReadBinding : Prop :=
+  ∀ (H G : Msg → Digest) (domain : Tree.Domain) (key : Msg) (s : ℕ → Msg) (words tok : ℕ) (o : RowLeaf.Opening),
+    EmbeddingRead.ok H G domain key (HistoryTable.root H domain key s) domain.count tok o →
+    ∀ (row : Row) (salt : Msg), tok < domain.count → row.length < 2 ^ 64 → salt.length = Hm96.SALT_BYTES →
+      Hm96.commitString H key (RowLeaf.Format.seg.digest G row) salt = s tok →
+      EmbeddingRead.h domain.count words tok o = row ∨
+        CollisionIn H (RowLeaf.outerHashed H G (EmbeddingRead.verifier domain key) tok o ++
+          RowLeaf.outerHashed H G (EmbeddingRead.verifier domain key) tok
+            (HistoryTable.opening H domain key s row salt tok)) ∨
+        CollisionIn G (RowLeaf.innerHashed G (EmbeddingRead.verifier domain key) o ++
+          RowLeaf.innerHashed G (EmbeddingRead.verifier domain key) (HistoryTable.opening H domain key s row salt tok))
 
 end Hash.Guarantees

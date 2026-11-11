@@ -72,13 +72,6 @@ Its gates as Lean code, `PousCheck.Verdict.prog` (`check/PousCheck/Verdict.lean`
 (`Security/Proofs/Pous/Continuous/VerdictCode.lean`), and `check/tests/test_verdict_difftest.py` holds the Definition's
 compiled circuit to that code.
 
-As an auditor party with a device identity, the challenger reports its sessions under its party's per-period root
-instead (`period_reports`, on `verity.core.attest`): each session is an execution phase whose one public output is its
-liveness record, and the period's root is signed once at its close, for the prover only. The party starts its
-attachment on its key once (`lms.PartyKey.start`), so a challenger restarted within the attachment signs no more of its
-sessions. `period_reports.PERIOD` is not in `memory_challenger.SCHEMES` until `PousCheck.RunProtocol` reads
-`Attest.accepts`.
-
 ~~~python
 from verity.ml.crypto import lms
 from verity.core.protocols.pous import memory_challenger as mc
@@ -149,7 +142,7 @@ On a GPU, `period.json`'s `wipe` puts the fill in device memory (`wipe_store`: t
 before the fill, with host memory as its CPU stand-in) and has the challenger stream it natively (`wipe_stream.c`, built
 and gated on the challenger's host by `wipe_stream`); `benchmarks/pous/streamed_wipe/demo.sh` runs it on one H200. Its
 `foreign_bytes` makes the prover the cheat that keeps prior content in place of the fill's first labels (`fM`: one label
-past the published figure, which must reject), its `reads` the reads the wipe expects, and its `placement` `simulated` names a challenger on the prover's node the stand-in for
+past the published figure, which must reject), its `reads` the reads the wipe expects, and its `placement` `simulated` names a challenger on the developer's node the stand-in for
 one on its own host. The wipe's record names what the bound doesn't cover (`uncertified`): the links leaving the node that
 no network certifier counts (the placement's `links`: `wipe.links`, and the challenger's as the prover connected to it),
 the node's memory outside the declared tier (`undeclared_tiers`: the device's past the declared tier, which a GPU's wipe

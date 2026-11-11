@@ -335,8 +335,12 @@ def parse_launch_context(spec: str | int | list | dict | None) -> dict[str, Any]
                              -> per request step s: every sequence the engine step schedules, its query rows and the position of its
                                 first row (`batch_by_step`); max_seqlen_q follows from it.  Without batch invariance every
                                 token-count-dependent kernel choice reads it (`launch_tokens`, `launch_keys`)
+        dict {"batch": ..., "chunks": [n0, n1, ...]}
+                             -> the same, for a request whose prefill ran in launches of n0, n1, ... rows in turn (`chunks`; the
+                                chunked request wrapper, `vllm_meta.ChunkedGreedyRequest`): its steps are its chunks, then its decodes
         "conflict"           -> {"conflict": True}        requests of this shape have DIFFERENT contexts: refused where the tile rule reads it
-    Returns {"max_seqlen_q_by_step": {int: int}, "conflict": bool, "declared": True} (+ "batch_by_step": {int: [(rows, start), ...]})."""
+    Returns {"max_seqlen_q_by_step": {int: int}, "conflict": bool, "declared": True} (+ "batch_by_step": {int: [(rows, start), ...]},
+    + "chunks": [int, ...])."""
     if spec is None or spec == "":
         return None
     if isinstance(spec, str):
@@ -360,7 +364,10 @@ def parse_launch_context(spec: str | int | list | dict | None) -> dict[str, Any]
         if spec.get("conflict"):
             return {"max_seqlen_q_by_step": {}, "conflict": True, "declared": True}
         if "batch" in spec:
-            return _launch_batch(spec["batch"])
+            return _launch_batch(spec["batch"], spec.get("chunks"))
+        if "chunks" in spec:
+            raise ValueError("launch context: prefill chunks without their launch batch (on a batch-invariant target a chunked prefill "
+                             "is the request wrapper's Program)")
         src = spec.get("max_seqlen_q_by_step", spec)
         by = {int(k): int(v) for k, v in src.items()}
     else:
@@ -370,7 +377,7 @@ def parse_launch_context(spec: str | int | list | dict | None) -> dict[str, Any]
     return {"max_seqlen_q_by_step": by, "conflict": False, "declared": True}
 
 
-def _launch_batch(steps) -> dict[str, Any]:
+def _launch_batch(steps, chunks=None) -> dict[str, Any]:
     if not isinstance(steps, list) or not steps:
         raise ValueError(f"launch context: batch must be a non-empty list of steps, got {steps!r}")
     batch: dict[int, list[tuple[int, int]]] = {}
@@ -379,8 +386,14 @@ def _launch_batch(steps) -> dict[str, Any]:
         if not seqs or any(n < 1 or p < 0 for n, p in seqs):
             raise ValueError(f"launch context: step {s} schedules {seqs}: every step holds sequences of >= 1 rows at positions >= 0")
         batch[s] = seqs
-    return {"max_seqlen_q_by_step": {s: max(n for n, _ in seqs) for s, seqs in batch.items()}, "batch_by_step": batch, "conflict": False,
-            "declared": True}
+    out = {"max_seqlen_q_by_step": {s: max(n for n, _ in seqs) for s, seqs in batch.items()}, "batch_by_step": batch, "conflict": False,
+           "declared": True}
+    if chunks:
+        if not isinstance(chunks, list) or len(chunks) < 2 or len(chunks) > len(steps) or any(int(n) < 1 for n in chunks):
+            raise ValueError(f"launch context: chunks must list a prefill's two or more launches of >= 1 rows, one a step of its batch, "
+                             f"got {chunks!r} over {len(steps)} steps")
+        out["chunks"] = [int(n) for n in chunks]
+    return out
 
 
 class LaunchContextInvalid(ValueError):
@@ -434,6 +447,31 @@ def graph_tokens(n: int, capture_sizes: tuple[int, ...] = ()) -> int:
     capture size of at least n, or n past the largest (vLLM's dispatcher runs that step uncaptured); n without graphs."""
     fits = [s for s in capture_sizes if s >= n]
     return min(fits) if fits else int(n)
+
+
+def graph_launch(n: int, uniform_decode: bool, capture_sizes, max_num_seqs: int) -> tuple[str, int]:
+    """vLLM d9105ea80's CUDA-graph dispatch of a step of `n` tokens under FULL_AND_PIECEWISE (`CudagraphDispatcher.dispatch`):
+    (FULL | PIECEWISE | NONE, the tokens its forward runs at).  Past the largest capture size it runs uncaptured at n; otherwise at
+    its `graph_tokens`, as a FULL graph where it is a uniform decode (one row a sequence) padded to at most `max_num_seqs` (the FULL
+    decode keys are the capture sizes up to it), else as PIECEWISE graphs.  Both modes pad alike, so no launch's token count reads
+    the mode; what does is the attention and DSA indexer, eager breaks on the real batch under PIECEWISE but captured at the padded
+    batch under FULL (`gpu_model_runner`'s `pad_attn`), the padding rows without keys."""
+    sizes = tuple(int(s) for s in capture_sizes)
+    if not sizes or n > max(sizes):
+        return "NONE", int(n)
+    padded = graph_tokens(n, sizes)
+    return ("FULL" if uniform_decode and padded <= max_num_seqs else "PIECEWISE"), padded
+
+
+def launch_graph(own_rows: int, step: int, launch: dict[str, Any] | None, capture_sizes, max_num_seqs: int) -> tuple[str, int]:
+    """`graph_launch` of the step a request's `own_rows` run in at its request `step` (the declared batch's sequences, or the request
+    alone without one): its mode and the tokens its forward runs at (`launch_tokens`)."""
+    seqs = launch_sequences(step, launch)
+    rows = [int(own_rows)] if seqs is None else [int(r) for r, _ in seqs]
+    tokens = launch_tokens(own_rows, step, launch, capture_sizes=tuple(capture_sizes))
+    mode, padded = graph_launch(sum(rows), all(r == 1 for r in rows), capture_sizes, max_num_seqs)
+    assert padded == tokens, (padded, tokens)
+    return mode, padded
 
 
 def launch_tokens(own_rows: int, step: int, launch: dict[str, Any] | None, *, sampled: bool = False,
@@ -568,7 +606,7 @@ def rmsnorm_fused_spec(profile, N: int, EPS: float | None = None, eps_input: boo
     if not profile.batch_invariant:
         if eps_input:
             raise UnregisteredTarget("fused_add_rms_norm without batch invariance has no registered-epsilon twin of "
-                                     "RMSNormFusedCudaVector8_v1")
+                                     "RMSNormFusedCudaVector8_v3")
         return bind(CR.RMSNormFusedCudaVector8, N=int(N), EPS=EPS,
                     BLOCK=CR.launch_block(int(M), int(N), fused=True))
     if eps_input:

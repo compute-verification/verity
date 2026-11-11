@@ -81,10 +81,10 @@ submit() {
   { read -r tree; read -r row; read -r repo; read -r rev; read -r mem; read -r max_min; } < <(item_get "$item" tree ROW REPO REVISION mem max_min)
   [ "$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1])).get("template"))' "$item")" = config-run ] \
     || { echo "ITEM: a config-run item" >&2; exit 2; }
-  # node 2 caps a guest with MemoryMax at the item's request, in 64-256: node 1's Builds peaked at 4-29 GB against 47-108 GB requests
-  # (container_memory_working_set_bytes over 6 h, 2026-09-30 21:15Z)
-  # A node-1 request is no limit there, so an MoE item's 66 GB request OOM-killed Qwen3-30B-A3B's Build on node 2 eight times
-  # (node2-ops 1 Oct 03:40Z): MoE checkpoints take the cap, the class table's moe row
+  # node 2 caps a guest with MemoryMax at the item's request, in 64-256: node 1's Builds peak far under their requests
+  # (container_memory_working_set_bytes)
+  # A node-1 request is no limit there, so an MoE item's request is too small on node 2 (Qwen3-30B-A3B's Build at 66 GB is
+  # OOM-killed): MoE checkpoints take the cap, the class table's moe row
   [[ $repo =~ -A[0-9]+B|OLMoE|[Mm]o[Ee] ]] && mem=256
   mem=${VY_N2_MEM_GB:-$(( ${mem:-96} < 64 ? 64 : ${mem:-96} > 256 ? 256 : ${mem:-96} ))} max_min=${VY_MAX_MIN:-${max_min:-130}}
   # the queue's placement on node 2, with the item's research question (n2_commit.sh's `place`): a refusal keeps the Build on

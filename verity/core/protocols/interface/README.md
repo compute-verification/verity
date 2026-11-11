@@ -80,7 +80,7 @@ kind under `schema` (the protocol's entry schema and version), `session` its ses
 `seq = i` and `prev` the SHA-512 of entry `i - 1`'s line (`Record.ZERO` first). `sig` signs `Record.message role I d`,
 SHA-512 of the protocol's role, the signer's LMS identifier and `d`, the schema's tagged SHA-512 of the entry without its
 sig (`Record.unsigned`). `Record.ofJson` reads the form; what a protocol accepts beyond it (its schemas, kinds, bodies,
-signer and sessions) is its own check. The auditor's ledger (`SampledProofs.Challenger.ledgerEntry?`, schemas
+signer and sessions) is its own check. The auditor's ledger (`Spot.Challenger.ledgerEntry?`, schemas
 `verity/challenger-auditor/v1|v2`) reads its entries through it. `verity/core/protocols/record.py` is its Python.
 
 ## The profile (`CoreProtocol/Profile.lean`)
@@ -135,7 +135,7 @@ A protocol's properties go in `Security/Properties/<Protocol>.lean`, stated agai
 actual parameters, every input covered and assumptions as named `Prop`s. They, not the
 port, are what makes a verifier proven. All protocols share one Lake package for them, `security_properties`, with the statements in
 `Properties.<Protocol>` and the proofs in `Proofs.Properties.<Protocol>`:
-- It requires `security` (Definitions and Models) and, by path, the code it states properties of. It never requires
+- It requires `security` (the spec, Definitions) and, by path, the code it states properties of. It never requires
   `security_proofs`, so code requires nothing, `security` requires no code, and nothing pulls in ArkLib.
 - A result whose proof needs `security_proofs` keeps its statement in `Properties.<Protocol>`, and its proof goes in
   `security_proofs` as `Proofs.<Protocol>`, which may require `security_properties`. Sampled proofs' `audit_profile`

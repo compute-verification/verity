@@ -62,7 +62,7 @@ def hexOrNull (j : Json) (k : String) : Except String (Option ByteArray) :=
 
 def openingOf (j : Json) : Except String Json := do
   let p ← paramsOf (← get j "params")
-  let c ← registrationOf (← hex j "commitment")
+  let c ← recordOf (← hex j "commitment")
   let units ← match ← get j "units" with
     | .null => pure Option.none
     | .arr a => some <$> a.toList.mapM fun u => need "units" (PouwWindow.strictInt? u)
@@ -87,12 +87,12 @@ def passOf (j : Json) : Except String Json := do
   let .str context ← get j "context" | throw "the input's context is not a string"
   refusal (fun how => Json.mkObj [("how", how)])
     (passEpoch (← get j "coins") raw context (← flag j "recorded") (← hexOrNull j "reveal") (← hexOrNull j "committed")
-      (← hexOrNull j "stream") (← hexOrNull j "prover") (SampledProofs.getD j "live"))
+      (← hexOrNull j "stream") (← hexOrNull j "prover") (Spot.getD j "live"))
 
 def drawOf (j : Json) : Except String Json := do
   let f := get j
   refusal (fun _ => Json.null) (drawCheck (← f "coins") (← flag j "recorded") (← f "opening") (← f "stream")
-    (← f "registration") (← f "receipt") (← f "k") (← f "population") (← f "units") (SampledProofs.getD j "key"))
+    (← f "registration") (← f "receipt") (← f "k") (← f "population") (← f "units") (Spot.getD j "key"))
 
 def saltOf (j : Json) : Except String Json := do
   let f := get j
@@ -111,7 +111,7 @@ def roundsOf (j : Json) : Except String Json := do
 
 def registeredOf (j : Json) : Except String Json := do
   let p ← paramsOf (← get j "params")
-  let c ← registrationOf (← hex j "commitment")
+  let c ← recordOf (← hex j "commitment")
   pure (Json.mkObj [("reason", match registered p c with
     | .ok _ => Json.null
     | .error r => .str r)])

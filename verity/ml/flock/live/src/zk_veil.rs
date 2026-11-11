@@ -26,6 +26,8 @@
 //! ([`SelfCheck`]), before `τ`'s commitment: the simulation covers runs whose constraint holds, and `Y` of a failing one
 //! gives away `⟨c, h⟩ + t`.
 
+use crate::circuit::BlockCircuit;
+use crate::session_verify::{comb_structured, structured_at, Lincheck};
 use flock_core::{
     lincheck::{LincheckCircuit, QuirkyPoint, SkipPoint, build_quirky_eq_table_from_weights},
     pcs::ring_switch::{build_claim_weights_from_skip, claim_check},
@@ -666,12 +668,13 @@ pub struct Replayed {
 /// `verifier::verify_core_inner`; Fast100: grinding disabled) on the masked proof, absorbing exactly what they absorb and
 /// sampling exactly their coins, with every message-dependent quantity an affine form in the pads. `own_comb`: the prover's own
 /// replay passes its lincheck's folded `comb` (upstream's `comb_partial`) instead of folding again; a verifier passes `None`
-/// and folds its own (a proof's field is never read). `c0_identity` keeps `r1cs.c0_is_identity()` (a pass over its 2^k rows)
-/// once computed, for the statement's later replays.
+/// and computes its own as the plain verifier does under `lincheck` (`session_verify::Lincheck`: the structured comb after the
+/// rounds, flat where it doesn't cover the circuit, or both, rejecting when they differ; a proof's field is never read).
+/// `c0_identity` keeps `r1cs.c0_is_identity()` (a pass over its 2^k rows) once computed, for the statement's later replays.
 #[allow(clippy::too_many_arguments)]
 pub fn replay<Ch: Challenger>(r1cs: &BlockR1cs, c0_identity: &OnceLock<bool>, zc: &ZerocheckProof, lc: &LincheckProof,
-                              circuit: &dyn LincheckCircuit, lay: &Layout, root: &[u8; 64], own_comb: Option<&[F128]>, ch: &mut Ch)
-                              -> Result<Replayed, String> {
+                              circuit: &BlockCircuit, lay: &Layout, root: &[u8; 64], own_comb: Option<&[F128]>, lincheck: Lincheck,
+                              ch: &mut Ch) -> Result<Replayed, String> {
     let s = lay.len();
     let m = r1cs.m;
     if !*c0_identity.get_or_init(|| r1cs.c0_is_identity()) || r1cs.k_skip != K_SKIP || m < K_SKIP + N_INNER {
@@ -739,16 +742,16 @@ pub fn replay<Ch: Challenger>(r1cs: &BlockR1cs, c0_identity: &OnceLock<bool>, zc
         return Err("zk: the prover's folded comb has the wrong length".into());
     }
     let own = own_comb.is_some();
-    let mut comb_vec = if own {
-        Vec::new()
-    } else {
-        let eq_inner = build_quirky_eq_table_from_weights(&x_ab.z_skip.weights(K_SKIP), &x_ab.x_inner_rest);
-        circuit.fold_alpha_batched(alpha, &eq_inner)
-    };
+    let ws = x_ab.z_skip.weights(K_SKIP);
+    let xr = &x_ab.x_inner_rest;
+    let structured = !own && lincheck != Lincheck::Flat && structured_at(circuit, &ws, xr, K_SKIP);
+    let flat = !own && (lincheck != Lincheck::Partial || !structured);
+    let mut comb_vec = if flat { circuit.fold_alpha_batched(alpha, &build_quirky_eq_table_from_weights(&ws, xr)) } else { Vec::new() };
     let mut running = a.scale(alpha).add(&b);
+    let mut beta = F128::ZERO;
     if let Some(col) = circuit.const_pin_col() {
-        let beta = ch.sample_f128();
-        if !own {
+        beta = ch.sample_f128();
+        if flat {
             comb_vec[col] += beta;
         }
         running = running.add_const(beta);
@@ -763,7 +766,7 @@ pub fn replay<Ch: Challenger>(r1cs: &BlockR1cs, c0_identity: &OnceLock<bool>, zc
         let e0 = running.add(&e1);
         let c1 = e0.add(&e1).add(&einf);
         running = einf.scale(rr * rr).add(&c1.scale(rr)).add(&e0);
-        if !own {
+        if flat {
             let half = comb_vec.len() / 2;
             for i in 0..half {
                 comb_vec[i] = comb_vec[i] + rr * (comb_vec[i + half] + comb_vec[i]);
@@ -771,6 +774,13 @@ pub fn replay<Ch: Challenger>(r1cs: &BlockR1cs, c0_identity: &OnceLock<bool>, zc
             comb_vec.truncate(half);
         }
         r_rounds.push(rr);
+    }
+    if structured {
+        let cp = comb_structured(circuit, alpha, beta, &ws, xr, &r_rounds.iter().rev().copied().collect::<Vec<_>>());
+        if flat && cp != comb_vec {
+            return Err("FC_LINCHECK=both: the structured comb differs from the flat".into());
+        }
+        comb_vec = cp;
     }
     if let Some(c) = own_comb {
         comb_vec = c.to_vec();
@@ -1412,7 +1422,7 @@ mod tests {
     /// each rep's `ybar`, the pair's masked sums `e'` and, conservatively, all of `y_1'`) is F128-linear in the witness lanes
     /// and the prover's randomness (every lane's padding, the extra lanes, `e`'s pads), so it is independent of the witness
     /// exactly when the witness's images lie in the span of the randomness's. Built from the protocol's own `lane_codeword`,
-    /// `pad_codeword`, `ybar` and `enforced_extra`; the verifier's row check holds on it.
+    /// `pad_codeword_at`, `ybar` and `enforced_extra`; the verifier's row check holds on it.
     mod exact {
         use flock_core::pcs::ligerito::zk::{self as z0, EXTRA_LANES, Level0Zk};
         use flock_field::{F128, F256};
@@ -1467,7 +1477,7 @@ mod tests {
             } else {
                 z0::lane_codeword(&mu[l], Some(&r[l - W]), LOG_MSG, 1)
             }).collect();
-            let z = Level0Zk { queries0: 0, t_pad, rep: 0, extra: std::array::from_fn(|j| r[j].clone()), pads: mu.clone(), tamper: 0 };
+            let z = Level0Zk { queries0: 0, t_pad, rep: 0, extra: r.clone().into(), pads: mu.clone(), tamper: 0 };
             let mut positions: Vec<usize> = c.q.concat();
             positions.sort();
             positions.dedup();
@@ -1479,11 +1489,11 @@ mod tests {
                 let (eq, rho) = (&c.eq[rep], c.rho[rep]);
                 let y1: Vec<F256> = (0..L).map(|i| (0..W).fold(rho[0] * r[a][i] + rho[1] * r[b][i], |acc, l| acc + eq[l] * p[l][i])).collect();
                 let ybar = z0::ybar(&zr, W, eq, rho);
-                let padcw = z0::pad_codeword(&ybar, LOG_MSG, 1);
                 let [e0, e1] = [enc(&y1.iter().map(|y| y.c0).collect::<Vec<_>>()), enc(&y1.iter().map(|y| y.c1).collect::<Vec<_>>())];
                 for &q in &c.q[rep] {
                     let row: Vec<F128> = cw.iter().map(|l| l[q]).collect();
-                    let lhs = (0..W).fold(z0::enforced_extra(&[row.clone()], &[q], &[F128::ONE], W, pair[rep], rho, &padcw), |acc, l| acc + eq[l] * row[l]);
+                    let padq = z0::pad_codeword_at(&ybar, &[q], LOG_MSG, 1);
+                    let lhs = (0..W).fold(z0::enforced_extra(&[row.clone()], &[F128::ONE], W, pair[rep], rho, &padq), |acc, l| acc + eq[l] * row[l]);
                     ok &= lhs == F256::new(e0[q], e1[q]);
                 }
                 let e = [a, b].map(|j| (0..L).fold(F256::ZERO, |acc, i| acc + c.b[rep][i] * r[j][i]));

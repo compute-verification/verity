@@ -38,7 +38,7 @@ open scoped ENNReal
 
 theorem Pr_eq_card {α : Type} [Fintype α] (p : α → Prop) [DecidablePred p] :
     Pr p = (Fintype.card {a // p a} : ℝ) / Fintype.card α := by
-  unfold Pr
+  unfold Pr Claims.prUniform
   rw [Fintype.card_subtype]
   congr 3
   exact Finset.filter_congr_decidable _ _ _
@@ -116,7 +116,7 @@ theorem PrENNReal_eq {α : Type} [Fintype α] (p : α → Prop) :
 
 theorem PrENNReal_toReal {α : Type} [Fintype α] (p : α → Prop) : (PrENNReal p).toReal = Pr p := by
   classical
-  rw [PrENNReal_eq, ENNReal.toReal_mul, ENNReal.toReal_inv, ENNReal.toReal_natCast, ENNReal.toReal_natCast, Pr,
+  rw [PrENNReal_eq, ENNReal.toReal_mul, ENNReal.toReal_inv, ENNReal.toReal_natCast, ENNReal.toReal_natCast, Pr, Claims.prUniform,
     div_eq_inv_mul]
 
 theorem PrENNReal_ne_top {α : Type} [Fintype α] (p : α → Prop) : PrENNReal p ≠ ⊤ := by
@@ -194,7 +194,7 @@ theorem card_unmatched [Fintype β] :
 open Classical in
 theorem Pr_comp_eq [Fintype β] (E : β → Prop) :
     Pr (fun a => E (g a)) = (∑ b ∈ Finset.univ.filter E, (Fintype.card {a // g a = b} : ℝ)) / Fintype.card α := by
-  unfold Pr
+  unfold Pr Claims.prUniform
   congr 1
   rw [Finset.card_eq_sum_card_fiberwise (f := g) (t := Finset.univ.filter E) (fun a ha => by simpa using ha)]
   push_cast
@@ -463,7 +463,7 @@ theorem Pr_runC_le_hm96 {Coin Ω B Y C T₀ : Type} [Fintype Coin] [Inhabited Co
     [AddGroup B] [Fintype B] [Fintype Y] [Nonempty Y] [Fintype T₀] [Nonempty T₀] (H : Msg → Msg) (V : Verifier Coin)
     (x : Msg) (T : Hm96Tree Coin B Y C T₀ (V.k x)) {δ₁ : ℝ≥0∞} (hH : Hm96Hiding T.My T.cs δ₁) (hδ : δ₁ ≠ ⊤)
     (ans : Coin → Msg) (hans : Function.Injective ans) (hV : AnswersCoin H V x ans) (P : CProver Ω) :
-    ∃ S : OnlineSim, ∀ Ev : Ω → (Fin (V.k x) → Coin) → Trace → Prop,
+    ∃ S : OnlineSim, ∀ Ev : Ω → (Fin (V.k x) → Coin) → Transcript → Prop,
       Pr (fun p : Ω × (Fin (V.k x) → Coin) × (Fin (V.k x) → Y) × T₀ =>
           Ev p.1 p.2.1 (runC H P V x T.tree p.1 p.2.1 p.2.2)) ≤
         Pr (fun p : (Ω × S.Tape) × (Fin (V.k x) → Coin) => Ev p.1.1 p.2 (run H (simProver S V.k P) V x p.1 p.2)) +
@@ -497,7 +497,7 @@ theorem Pr_runC_le_deploy {Ω B Y C T₀ : Type} [Fintype Ω] [Nonempty Ω] [Add
     [Nonempty Y] [Fintype T₀] [Nonempty T₀] (zk : Bool) (H : Msg → Msg) (x : Msg)
     (T : Hm96Tree FlockDeploy.Coin B Y C T₀ ((FlockDeploy.V zk).k x)) {δ₁ : ℝ≥0∞} (hH : Hm96Hiding T.My T.cs δ₁)
     (hδ : δ₁ ≠ ⊤) (P : CProver Ω) :
-    ∃ S : OnlineSim, ∀ Ev : Ω → (Fin ((FlockDeploy.V zk).k x) → FlockDeploy.Coin) → Trace → Prop,
+    ∃ S : OnlineSim, ∀ Ev : Ω → (Fin ((FlockDeploy.V zk).k x) → FlockDeploy.Coin) → Transcript → Prop,
       Pr (fun p : Ω × (Fin ((FlockDeploy.V zk).k x) → FlockDeploy.Coin) × (Fin ((FlockDeploy.V zk).k x) → Y) × T₀ =>
           Ev p.1 p.2.1 (runC H P (FlockDeploy.V zk) x T.tree p.1 p.2.1 p.2.2)) ≤
         Pr (fun p : (Ω × S.Tape) × (Fin ((FlockDeploy.V zk).k x) → FlockDeploy.Coin) =>

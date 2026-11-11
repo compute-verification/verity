@@ -18,14 +18,17 @@ settings registries it marks, ``{"file", "registry": true}``, a declaration rath
 counted) and ``test_repo_silent_excepts.py`` its except handlers that swallow what they catch
 (``allowlists/repo_silent_excepts.json``); ``test_repo_lane_text.py`` holds the prose of every file its ``holds`` takes
 (comments, docstrings, Lean comments and Markdown, the integration's too, outside ``archive/``) to a count per file of its
-lane text (``allowlists/repo_lane_text.json``); its slugs stay apart from the integration's.  A change is judged when it touches a
+lane text (``allowlists/repo_lane_text.json``), and ``test_repo_retired_terms.py`` the whole text of the same files to a count
+per file of the terms ``GLOSSARY.md``'s older names retire (``allowlists/repo_retired_terms.json``); its slugs stay apart from
+the integration's.  A change is judged when it touches a
 ratchet, a ``*.py`` file under ``integrations/vllm/tests/lint/`` or ``tests/lint/`` (the lints' code) or a ruff lint's config:
-``integrations/vllm/ruff.toml``, the root ``ruff.toml`` (both ruff lints') and the ruff the root ``dev`` group pins.  It passes
+``integrations/vllm/ruff.toml``, the root ``ruff.toml`` (both ruff lints'), ``integrations/vllm/tests/lint/ruff_vllm.toml``
+(the integration's lint with vLLM's rules, ``test_ruff_vllm.py``) and the ruff the root ``dev`` group pins.  It passes
 when:
 
-* in each ratchet, no kind whose entries record counts (an entry's ``count``: typed_records' or-empty per package, P07's)
+* in each ratchet, no kind whose entries record counts (an entry's ``count``: typed_records' or-empty per file, P07's)
   holds more in total after it than before.  A key may rise, or a new one appear, when the same kind's other keys fall by
-  at least as much, so a move from one package to another passes.  A repository list
+  at least as much, so a move from one file to another passes.  A repository list
   (``repo_ruff``'s and each counted lint's, ``CATCH_UP``) may also raise a key, in any file, up to what its lint, as the
   change's base has it, finds there in the base's tree: a list that records what its base already holds adds no finding,
   so a list behind its tree catches up, while growth past the base's own findings is held as before.  A change that edits
@@ -49,9 +52,10 @@ when:
   lint directory to run and both ``ruff.toml`` files are replaced by the base's, each allowlist there holding the top's
   entries for its slug (none for a deleted one), P16's the top's public commands too, and the ``test_no_new*`` tests
   of each lint whose code or allowlist changed (every lint's in a directory whose shared code did) run without pytest, the ruff
-  lints with the base's pin.  A counted lint reads those replaced files too, as the base has them, so its violations in one
-  are counted again on the change's own copy, against the change's list: a lint module whose prose the change cleans, with
-  its entry dropped, passes, and one that keeps its sites without its entry fails, naming the change's own sites.
+  lints with the base's pin.  A counted lint, and each ruff lint, reads those replaced files too, as the base has them, so
+  its violations in one are counted again on the change's own copy (ruff's per rule, with the base's configs and pin),
+  against the change's list: a lint module whose prose or ruff finding the change cleans, with its entry dropped, passes,
+  and one that keeps its sites without its entry fails, naming the change's own sites.
   So loosening a lint to drop its entries (raising P10's cap, skipping a kind, ignoring a ruff rule, deleting the lint)
   fails, naming each violation the base's lint still finds, while tightening one passes once the change fixes what it
   finds.
@@ -87,7 +91,7 @@ the whole-tree run of a change that touches a lint.
 
 A counted lint with ``holds`` reads each file its ``holds`` takes, of any kind, rather than each ``*.py`` file, and counts it
 by its path too: the repository's lane text, in the prose of code, Lean and Markdown, whose fix says where the text goes (history
-to git, work to Linear, rulings to Notion, results to the store).
+to git, work to Linear, rulings to Notion, results to the store), and its retired terms, whose fix is the term the glossary gives.
 
 Exempt: a revert (each commit's subject ``Revert "``, or a queue merge whose PR title starts ``Revert``) and a pure move that
 BASE's ``tools/verity/check/move_check.py`` certifies.
@@ -167,7 +171,8 @@ REPO_RUFF_LIST = f"{REPO_LINT}/allowlists/{REPO_RUFF_LINT}.json"
 #: with ``holds`` chooses the files it reads, any kind, and its sites function takes the file's path after its text.
 COUNTED = (("repo_env_reads", "reads", "direct environment read"),          # S1: configuration in one place
            ("repo_silent_excepts", "handlers", "silent except handler"),    # S4: recorded outcomes
-           ("repo_lane_text", "sites", "lane-text site"))                   # S5: what is true now
+           ("repo_lane_text", "sites", "lane-text site"),                   # S5: what is true now
+           ("repo_retired_terms", "sites", "retired-term site"))            # one vocabulary (GLOSSARY.md)
 #: the repository's lists whose keys may rise to what the change's base holds (``held``)
 CATCH_UP = (REPO_RUFF_LINT, *(s for s, *_ in COUNTED))
 #: a git tree entry's modes that are a file ruff reads (a symlink or a submodule isn't)
@@ -179,8 +184,14 @@ LINTS = (LINT, REPO_LINT)
 CALLERS_MODULE = f"{LINT}/test_p16_cli_callers.py"
 CALLERS_LIST = f"{LINT}/allowlists/p16_cli_callers.json"
 PUBLIC = "public"
+#: the integration's lint with vLLM's rules (``test_ruff_vllm.py``) and its config, which extends nothing and sits in its lint
+#: directory, so the base's copy comes with the directory
+RUFF_VLLM_LINT = "ruff_vllm"
+RUFF_VLLM_CONFIG = f"{LINT}/ruff_vllm.toml"
 #: each ruff lint's directory and the configs it reads: the integration's extends the root's
-RUFF_LINTS = {RUFF_LINT: (LINT, (RUFF_CONFIG, REPO_RUFF_CONFIG)), REPO_RUFF_LINT: (REPO_LINT, (REPO_RUFF_CONFIG,))}
+RUFF_LINTS = {RUFF_LINT: (LINT, (RUFF_CONFIG, REPO_RUFF_CONFIG)), RUFF_VLLM_LINT: (LINT, (RUFF_VLLM_CONFIG,)),
+              REPO_RUFF_LINT: (REPO_LINT, (REPO_RUFF_CONFIG,))}
+RUFF_CONFIGS = (RUFF_CONFIG, REPO_RUFF_CONFIG, RUFF_VLLM_CONFIG)
 MOVE_CHECK = "tools/verity/check/move_check.py"
 QUEUE_SUBJECT = re.compile(r"^Queue: #(\d+) ?(.*)$")
 RULE_NUMBER = re.compile(r"^p\d+_")
@@ -192,6 +203,8 @@ HUNK = re.compile(r"^@@ -\d+(?:,\d+)? \+(\d+)(?:,(\d+))? @@", re.MULTILINE)
 CHEAPEST = 12
 #: a violation that names a file, and maybe its line, as `violations` writes it: ``lint: file:line what``, ``lint: file: ...``
 SITE = re.compile(r"^[^:]+: ([^\s:]+):(?:(\d+)\b)?")
+#: a violation of the repository's ruff lint that names its (file, rule) pair: ``repo_ruff: file [RULE]: N found, M allowed``
+RUFF_PAIR = re.compile(r"^[^:]+: ([^\s:]+) \[([^\]]+)\]: ")
 #: the ratchets whose ``count`` measures one site (P10's is a size in lines) rather than counting findings, so never pooled
 MEASURES = {"size"}
 
@@ -633,19 +646,21 @@ def blobs(shas: set[str]) -> dict[str, bytes]:
     return out
 
 
-def ruff_findings(ruff: list[str], config: str, files: dict[str, bytes]) -> list[tuple[str, str, int, str]]:
+def ruff_findings(ruff: list[str], configs: dict[str, str], files: dict[str, bytes]) -> list[tuple[str, str, int, str]]:
     """(file, rule, line, message) of each finding ``ruff`` makes on ``files`` (path: content), laid out as in the tree with
-    ``config`` as the root ``ruff.toml``, as the repository's ruff lint runs it."""
+    ``configs`` (path: text), run from the first config's directory and given that config, as the ruff lint that reads it
+    runs it (``RUFF_LINTS``: the repository's, ``{REPO_RUFF_CONFIG: text}``)."""
     if not files:
         return []
     with tempfile.TemporaryDirectory(prefix="ratchet-gate-ruff-") as d:
         root = Path(d).resolve()
-        for path, data in files.items():
+        for path, data in {**files, **{p: t.encode() for p, t in configs.items()}}.items():
             (root / path).parent.mkdir(parents=True, exist_ok=True)
             (root / path).write_bytes(data)
-        (root / REPO_RUFF_CONFIG).write_text(config, encoding="utf-8")
-        r = subprocess.run([*ruff, "check", "--config", REPO_RUFF_CONFIG, "--no-cache", "--exit-zero", "--output-format",
-                            "json", "--", *sorted(files)], cwd=root, capture_output=True, text=True, stdin=subprocess.DEVNULL)
+        at = (root / next(iter(configs))).parent
+        r = subprocess.run([*ruff, "check", "--config", next(iter(configs)).rpartition("/")[2], "--no-cache", "--exit-zero",
+                            "--output-format", "json", "--", *(os.path.relpath(root / f, at) for f in sorted(files))],
+                           cwd=at, capture_output=True, text=True, stdin=subprocess.DEVNULL)
         try:
             found = json.loads(r.stdout) if r.returncode == 0 else None
         except ValueError:
@@ -670,7 +685,7 @@ def source_lint(c: Change, base: str) -> tuple[list[str], list[str], list[str]]:
     c.linted = [path for path, *_ in sources]
     if not sources:
         return [], [], []
-    config = git("show", f"{base}:{REPO_RUFF_CONFIG}")
+    config = {REPO_RUFF_CONFIG: git("show", f"{base}:{REPO_RUFF_CONFIG}")}
     data = blobs({b for *_, lo, hi in sources for b in (lo, hi) if b})
     ruff = [*python_for(ruff_pin(base), [REPO_RUFF_LINT]), "-m", "ruff"]
     was = Counter((f, rule) for f, rule, *_ in ruff_findings(ruff, config, {p: data[lo] for p, _, lo, _ in sources if lo}))
@@ -816,7 +831,7 @@ def findings_at(rev: str, s: str, files: set[str]) -> Counter:
         if (left := left_out(rev)) is None:
             return Counter()
         ruff = [*python_for(ruff_pin(rev), [REPO_RUFF_LINT]), "-m", "ruff"]
-        found = ruff_findings(ruff, git("show", f"{rev}:{REPO_RUFF_CONFIG}"),
+        found = ruff_findings(ruff, {REPO_RUFF_CONFIG: git("show", f"{rev}:{REPO_RUFF_CONFIG}")},
                               tree_files(rev, {f for f in files if not f.startswith(left)}))
         return Counter(key({"file": f, "rule": rule}) for f, rule, *_ in found)
     _, sites, noun = next(c for c in COUNTED if c[0] == s)
@@ -976,22 +991,63 @@ def replaced(c: Change, lints: Iterable[str]) -> set[str]:
     return {f for f in out.split("\0") if f and not is_ratchet(f)}
 
 
+def own_ruff(c: Change, s: str, f: str) -> list[str] | None:
+    """Ruff lint ``s``'s violations (``RUFF_LINTS``) on the change's own copy of ``f``, ruff run with the configs and pin of
+    the change's base, at each rule it finds there more often than the change's list allows (the integration's entries of
+    that file and rule, the repository's (file, rule) count): none when the copy is within the list, or the change deletes
+    it; None when the base has no config for that lint, so the base's own copy's violations stand."""
+    _, configs = RUFF_LINTS[s]
+    texts = {p: git("show", f"{c.lo}:{p}") for p in configs if git("ls-tree", "--name-only", c.lo, "--", p).strip()}
+    if configs[0] not in texts:
+        return None
+    own = tree_files(c.hi, {f})
+    found = ruff_findings([*python_for(ruff_pin(c.lo), [s]), "-m", "ruff"], texts, own) if own else []
+    name = f.removeprefix(f"{INTEGRATION}/") if s == RUFF_LINT else f
+    if s == RUFF_LINT:
+        try:
+            doc = json.loads(git("show", f"{c.hi}:{LINT}/allowlists/{RUFF_LINT}.json"))
+        except (GitError, ValueError):
+            doc = {}
+        listed: Counter = Counter()
+        for e in doc.get("entries", []) if isinstance(doc, dict) else []:
+            if isinstance(e, dict) and e.get("file") == name:
+                listed[e.get("kind")] += count(e)
+    else:
+        listed = Counter({rule: n for (g, rule), n in repo_list(c.hi).items() if g == f})
+    now = Counter(rule for _, rule, *_ in found)
+    out = []
+    for rule in sorted(r for r in now if now[r] > listed[r]):
+        out += [f"{s}: {name}: {now[rule]} {rule} found, {listed[rule]} allowed"] + [
+            f"{s}: {name}:{line} [{rule}] {message}" for _, r, line, message in sorted(found) if r == rule]
+    return out
+
+
 def own_copies(c: Change, lints: Iterable[str], found: list[str]) -> tuple[list[str], list[str]]:
-    """(``found``, each counted lint's violations at a file `replaced` names judged on the change's own copy; the
-    violations that leave, as found).  A counted lint reads every file the worktree holds, so in a lint directory or a ruff
-    config it reads the base's text, which the change's tree doesn't hold: the change's copy is counted as the base's lint
-    counts it, against the change's list, and within it, its violations go; past it, the change's own sites replace them.
-    Another lint's violations there stay as found."""
+    """(``found``, each counted or ruff lint's violations at a file `replaced` names judged on the change's own copy; the
+    violations that leave, as found).  A counted lint, and ruff, reads every file the worktree holds, so in a lint directory
+    or a ruff config it reads the base's text, which the change's tree doesn't hold: the change's copy is counted as the
+    base's lint counts it (ruff per rule, `own_ruff`), against the change's list, and within it, its violations go; past it,
+    the change's own sites replace them.  Another lint's violations there stay as found."""
     at, names = replaced(c, lints), {s for s, *_ in COUNTED}
     out, by = [], {}
     for v in found:
-        s, m = v.partition(": ")[0], SITE.match(v)
-        if m and m[1] in at and s in names:
-            by.setdefault((s, m[1]), []).append(v)
+        s, m = v.partition(": ")[0], SITE.match(v) or RUFF_PAIR.match(v)
+        f = m and (f"{INTEGRATION}/{m[1]}" if s == RUFF_LINT else m[1])
+        if m and f in at and (s in names or s in RUFF_LINTS):
+            by.setdefault((s, f), []).append(v)
         else:
             out.append(v)
     gone = []
     for (s, f), vs in by.items():
+        if s in RUFF_LINTS:
+            own = own_ruff(c, s, f)
+            if own is None:
+                out += vs
+            elif own:
+                out += own
+            else:
+                gone += vs
+            continue
         _, sites, noun = next(x for x in COUNTED if x[0] == s)
         if (lint := counted_lint_at(c.lo, s, sites, noun)) is None:
             out += vs
@@ -1047,13 +1103,13 @@ def added_by(rev: str, items: list[str]) -> str:
 
 def judge(c: Change, base: str) -> None:
     diff = git("diff", "--no-renames", "--name-only", "-z", c.lo, c.hi).split("\0")
-    c.touched = sorted(f for f in diff if f and (is_ratchet(f) or is_lint_code(f) or f in (RUFF_CONFIG, REPO_RUFF_CONFIG)
+    c.touched = sorted(f for f in diff if f and (is_ratchet(f) or is_lint_code(f) or f in RUFF_CONFIGS
                                                  or f == PYPROJECT and ruff_pin(c.lo) != ruff_pin(c.hi)))
     new_noqa, c.noqa_added, c.noqa_removed = noqa_change(c.lo, c.hi, diff)
     noqa = [f"{c.noqa_added} `# noqa` line(s) added, {c.noqa_removed} removed"] if c.noqa_added or c.noqa_removed else []
     if not c.touched and not noqa:
         c.verdict, c.why = "untouched", (f"changes no ratchet, no lint code under {' or '.join(f'{x}/' for x in LINTS)}, no "
-                                         f"{RUFF_CONFIG} or {REPO_RUFF_CONFIG}, no ruff pin and no `# noqa` under {INTEGRATION}/")
+                                         f"{', '.join(RUFF_CONFIGS)}, no ruff pin and no `# noqa` under {INTEGRATION}/")
         return
     grown, added, bad, found, uncalled, public = [], [], [], [], [], []
     if c.touched:
@@ -1084,7 +1140,7 @@ def judge(c: Change, base: str) -> None:
             + ([f"the base's lint code ({', '.join(c.lints)}) finds {len(inherited)} violation(s) its own tree already holds, "
                 f"which aren't this change's: {added_by(c.lo, inherited)}"] if inherited else [])
             + ([f"the base's lint code ({', '.join(c.lints)}) finds {len(based)} violation(s) in the base's copy of "
-                f"{', '.join(sorted({SITE.match(v)[1] for v in based}))}, which it runs in place of the change's, and the "
+                f"{', '.join(sorted({(SITE.match(v) or RUFF_PAIR.match(v))[1] for v in based}))}, which it runs in place of the change's, and the "
                 f"change's own copy is within its list"] if based else []))
         return
     if is_revert(c):

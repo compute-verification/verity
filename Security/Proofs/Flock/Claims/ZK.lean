@@ -14,6 +14,7 @@ public import Proofs.Flock.Claims.ZK.GKExp
 public import Proofs.Flock.Claims.ZK.CoinCheck
 public import Proofs.Flock.Claims.ZK.CoinBind
 public import Proofs.Flock.Claims.ZK.Prefix
+public import Proofs.Flock.Claims.ZK.GKOneSided
 public import Proofs.Flock.Claims.ZK.Shvzk
 public import Proofs.Flock.Claims.ZK.Flock
 public import Proofs.Flock.Claims.ZK.Hypotheses
@@ -82,6 +83,7 @@ public import Proofs.Flock.Claims.ZK.Server
 public import Proofs.Flock.Claims.ZK.Blind
 public import Proofs.Flock.Claims.ZK.Release
 public import Proofs.Flock.Claims.ZK.Refine
+public import Proofs.Flock.Claims.ZK.OwnHistAny
 public import Proofs.Flock.Claims.ZK.CoinPass
 public import Proofs.Flock.Claims.ZK.Os
 public import Proofs.Flock.Claims.ZK.FrameTape
@@ -189,6 +191,7 @@ public import Proofs.Flock.Claims.ZK.RepReplay
 public import Proofs.Flock.Claims.ZK.RepInner
 public import Proofs.Flock.Claims.ZK.RepCutFw
 public import Proofs.Flock.Claims.ZK.RepRet
+public import Proofs.Flock.Claims.ZK.RepCons
 
 /-!
 # Flock's zero knowledge against a malicious verifier
@@ -237,6 +240,10 @@ public import Proofs.Flock.Claims.ZK.RepRet
   first `K + 1` messages (`run_prefix`) and determines what the extraction run passes on (`view0_run`); so
   `PrefixHides` follows from a bound on the strategy's runs (`Proto.prefixHides_of_runs`), which Lemma C gives at
   `2·|L|·δ₁` (`Proto.runs_close_hm96`).
+* `GKOneSided`: **`Proto.gkE_go`**, the same simulator for a prover that sends `abort` last where its values fail: its
+  messages at a coin vector at most the simulator's on every test that does not grow when the last message becomes
+  `abort` (`SHVZKLe`) bound the real run's going on at its last round (`goesOnAt`) and doing `Ev` by the simulator's `Ev`,
+  at `gkE_zk`'s error (`gkE_go_pow` at `M = t·3^t`), through one-sided rewinds (`rewinds_le`, `Model.hyb₁_le_sim`).
 * `Shvzk`: `SHVZK` at every coin vector: from Lemma B where the prover goes on (`Proto.shvzk_at_hm96`, `2·n_hid·δ₁`,
   with `InnerHolds`), and from Lemma C at fixed answers where it refuses, the simulator sending the dummy-witness
   prover's messages (`Proto.shvzk_refused_hm96`, `2·|L|·δ₁`).
@@ -547,6 +554,10 @@ public import Proofs.Flock.Claims.ZK.RepRet
   (`LeanRelease.checkIs_coinLayer`). The released bytes are read only through `LiveRoundEq`, `FillRoundEq`,
   `FinalRoundEq` (from `FrameAdmits` and `FinishIs`), `LinkRoundEq` (from `LinkIs`) and `ProgReads`, none of them yet
   proved about the live path, so the deployed ZK server is not yet proved zero-knowledge.
+* `OwnHistAny`: the deferred server's own histories (`ZkServer.OwnHist`, closed under prefixes: `OwnHist.take`; each
+  the own history on its answers: `OwnHist.eq_ownOf`), their messages at the Lean frame's live and stand-in rounds
+  (`LeanRelease.ownHist_msg_live`, `ownHist_msg_fill`): what the proofs of `LeanRelease.LiveRoundEqOwn` (`Refine`,
+  `LiveRoundEq` at the own histories only) share.
 * `SessionLean`: the release at the session loop (`LeanRelease.loop`): its `Hello`, its coin check's reading of it and its
   requests are the loop's pure functions at the statement's setup (`Flock.Firewall.Session.helloOf`, `planOf`, `reqAt`),
   so `HelloIs`, `HelloParses` and `ReqsFollow` hold at every statement and `Finish` is one past the last coin
