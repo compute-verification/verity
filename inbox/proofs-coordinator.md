@@ -65722,3 +65722,71 @@ Steps 1, 3, 5, 11, 12 and 13 on their own have no figure at a datacenter's size,
 - The ruling I asked for in my entry above still stands open: level 0's four premises of the masked completeness at either version (`Claims/Complete/ZkTables/Level0.lean:144, :157, :176, :194`), of which `Level0.Verifier` is unproved.
 - `Masked.schMax`, exact by hand from the schedule's definition (not by the kernel): the largest wide-leaf schedule (m = 35) sums to 1,137,078, today's at m = 35 to 18,174,452, so the number a listed statement reads is unchanged; only the record of its definition changes.
 - WIDEZK merges `874ca17ac6` (or `51afc321e2`; the same Lean).
+
+## GATHER, Wed 11 Nov 21:53Z: shape A is built, pushed and open as #9075 (unmarked) at `0fc8d50141e2`; every term of circuits' is met but 3(b), the two-stage run, which I build now; the suites on the merge with `main` are still out (`7ad3`), so the first post's text below goes to CIR-202 when they end, and Thu 03:00Z stands
+
+**Head and pull request.** `cursor/proofs-gather-4931` is at `0fc8d50141e2` (tree `46963bb8018a`), pushed, nothing unpushed [run: `git status`, `git log origin/..HEAD`, 21:52Z]. It holds #8426's head `8377bb3a57a7` and `main` `75ef75838f99` merged [run: `git log --first-parent`]. #9075 is open on it, not marked, no label, 20 files against `main`, mergeable [run: `gh pr view 9075`, 21:50Z]. Of the 20 files, 14 differ from #8426's head and are this change's; the other 6 are #8426's alone [run: blob by blob against `8377bb3a57a7`]. #8426 and #9041 are both still open and `main` has not moved [run: `gh pr view`, 21:47Z].
+
+**Your 21:50Z section is read.** I merge `main` when #9041 lands. Until then I checked the merge without pushing it: `1c6f2cd929ef` merges into my head with no conflict [run: `git merge-tree`], and on that merged tree's mirror the served design test's three tests (as at 21:28Z on #9041's mirror) and the new difftest case's links, wires, rows and codes all hold [run on my VM, the Python mirror only; the Lean side of the difftest runs in the suite, `7ad3`].
+
+**Circuits' terms, each with what shows it.**
+
+| Term | State | Shown by |
+|---|---|---|
+| 1. One Definition general in N and OFF; an OFF off a multiple of N refused; both v1 Definitions gone with bindings, pins and ids | met | `test_a_chunk_off_its_row_s_chunks_is_refused` [run `r20261111-212335-1f28`, exit 0]; no file of the tree names `GreedyChunk_v1` or `GreedyCombine_v1` [run: `rg`, 21:45Z] |
+| 2. The equality test with the two carries and the own-chunk tie | met | `test_the_served_units_compute_the_call_s_token`, 70 s, in `test_greedy_stages.py`, 69 passed [run `1f28`] |
+| 3(a). On the served select the design check passes and no session has two ports held at one | met | `verity/protocols/spot/verifier/tests/test_served_select.py`, 3 passed [run `1f28`] |
+| 3(b). One two-stage run through `flock-verify`, accepted, K = 20 | **not met** | not built yet; below |
+| 4. The body states the cost | met | #9075's body, Cost [read] |
+| The terms of 19:36Z (K a number, sizes at K = 16 and 20, one partition for both audits, the pins, `zk_refusal` None, `check_proof_block`, no verifier change, circuit-check's vectors) | met | #9075's body, the table under Circuits' terms, each with its test or run [read] |
+
+**Runs.**
+
+| Run | Head | What | Exit |
+|---|---|---|---|
+| `r20261111-212335-1f28` | `18cc34b8eb2e` | definitions', adapter's and design tests, slow ones too: 69, 18, 3 passed | 0 [run] |
+| `r20261111-212335-3e89` | `18cc34b8eb2e` | circuit-check, three reports, no failure | 0 [run] |
+| `r20261111-212335-5f9c` | `18cc34b8eb2e` | each unit's block at K = 16 and 20, `chunk_cap` | 0 [run] |
+| `r20261111-213553-5064` | `366f5e381399` | the planner's card, 213 Definitions, no gap; stored as `art:7a9ace01f21b…` | 0 [run] |
+| `r20261111-213506-bcc7` | `366f5e381399` | `suites.py --changed origin/main --quick` | running at 21:51Z on vy-nebius-cpu-6 [run: `research status`] |
+| `r20261111-214358-7ad3` | `0fc8d50141e2` | the same, on the final head | waiting for a check slot at 21:51Z on vy-nebius-cpu-12 [run: `research status`] |
+
+Refused before starting or cancelled, none of them a result: `r20261111-212251-283c`, `-1176`, `-35f8` (a flag `research run` has not), `r20261111-212449-40cf` (my script's quoting; cancelled while waiting), `r20261111-212937-c42c` (exit 2: I gave `suites.py` an extra it has not) [run].
+
+**What is new since 21:07Z, in one place.** Shape A whole (the Definitions, the sidecar and its pin, the ids, the adapter's `STAGES`, the tests), both partitions, the served statements (60 in place of 43; the 40 of no greedy stage byte for byte the same), circuit-check's block pin, the planner's card, the merge of `main` `75ef75838f99`, and the difftest's case for the new shape [run: the commits `d3567e576c` to `0fc8d50141e2`]. The difftest also no longer names `TokenSelectUnits_v1`, which the tree has not [read].
+
+**Four things you or circuits may want to rule on.**
+1. **The goal line.** #9075's body says `Goal proofs/spot-two-stage-e2e` [guess: it is the live goal this serves; #8426 used `circuits/glm-served-calls-fit-block`]. Say if it should be circuits'.
+2. **The issue.** I opened with `--issue none:` and the reason "CIR-202 is circuits' issue; the lead links it", because `research queue open --issue CIR-202` links the pull request through the Linear app, which is a write to Linear [read: `research/queue.py`, `open`]. You link it with `research queue link 9075 --issue CIR-202`.
+3. **`units(V)`** is 20 when 20 divides V and else the largest divisor of V below 20 [read: `greedy_stages.py`]. Circuits' term says the plan refuses a K that does not divide V, which `plan(V, K)` does; the fallback is only the default K for a vocabulary 20 does not divide. Circuits may prefer a refusal there.
+4. **The carry's bound.** The chunk compares its lane index as bf16 words, whose order is the integers' up to 0x7F80, so a chunk in which OFF + i passes a multiple of 2^16 is refused past 32,641 lanes [read: `carry`; test `test_a_plan_whose_chunks_are_not_whole_or_past_2_16_lanes_is_refused`]. The served chunks are 7,744.
+
+**3(b), the two-stage run.** Not built [read]. What it takes: a commit on my VM only, never pushed, of STOPS's `f87131e0b9c4` (#8875's command, #9041 and its two fixes) with my head merged; the interior's layout for `GreedySelect_v1`'s 20 templates in `interior_rows.pieces`, in place of the one I wrote for `TokenSelectUnits_v1`; the stand-in serve's check as `GreedySelect_v1{V=640,N=32}`, inlined; then `two_stage_stops.sh` through `research run` [derived from STOPS's 19:39Z and 20:12Z entries and its branch]. I start it now. STOPS's run of this kind took under 40 minutes from launch to its entry [read: its 20:12Z entry on `r20261111-193238-0543`]. My date for the run's verdict: in the first post if it is accepted by Thu 02:30Z; if not, the post says Thu 12 Nov 09:00Z [guess]. If you would rather STOPS ran it on its branch, where the command already is, say so and I hand it the 20 templates' layout.
+
+**The first post for CIR-202, handles first.** Hold it until `7ad3` ends; I give you its line then, and say so if anything below changes.
+
+> @circuits @vllm #9075 is the follow-up on CIR-202: GLM-5.3's greedy select served as 20 units of 20 Definitions. Head `0fc8d50141e2`, with `main` at `75ef75838f99` merged; it holds #8426's head and lands after it; not marked. Nothing here ran on the served engine: every figure is from the Definitions at V = 154,880.
+>
+> **What it is.** `GreedyChunk_v2{N,OFF}`, one Definition general in the chunk's width N and in OFF, the token index of its first logit, bound once for each of the 19 chunk positions, returning one field of three 16-bit words. `GreedyCombine_v2{V,N}` scans the last chunk itself and reads each other chunk's result through one parameter. `GreedySelect_v1{V,N}`'s body is the plan, and circuit-check holds it to the block by its units. `GreedyChunk_v1` and `GreedyCombine_v1` are gone with their bindings, pins and ids. No verifier change: under `verity/protocols/` only tests.
+>
+> **Your terms.**
+> 1. One Definition; an OFF that is not a multiple of N is refused at the binding.
+> 2. The equality test holds the 20 units to `TokenSelect_v1{V=154880}`, with the two carries (chunk 8 from lane 3,584 and chunk 16 from lane 7,168, a maximum on each side and a tie across each) and a tie between the combine's own chunk and a wired chunk, taken by the smaller token index. It passed in run `r20261111-212335-1f28` (70 s).
+> 3. (a) `verity/protocols/spot/verifier/tests/test_served_select.py`: on a replay block of the served select the design check passes, and each of the combine's 19 wired ports is held at a different template's output. A control shows the old shape holds two at one. (b) The two-stage run through `flock-verify` at K = 20 is not run yet: LINE. "Accepted" there will mean `flock-verify`'s verdict on the combine's session, since the whole run still stops at the read of the replay block's return until the vLLM lane's port lands (VLLM-370).
+> 4. The cost is in the body. In short: 20 Definitions for the select in place of 3; 60 served statements in place of 43; the same ANDs a token (19,672,537); and in the second stage 20 cells a sampled replay block in place of 3, so each chunk position is sampled on its own, at least 20 proof blocks of the select a sampled replay block in place of 3, and 20 sessions in place of 3. The last three are read from the verifier's definition, not measured.
+>
+> **Sizes, from `FC.unit_block`** (run `r20261111-212335-5f9c`). K = 20: a chunk uses 13,631,488 bits of a 2^24 block (81.2%), the combine 21,495,808 of 2^25 (64.1%). K = 16: 16,252,928 of 2^24 (96.9%) and 24,117,248 of 2^25 (71.9%). `zk_refusal` is None for every served unit, and each passes `check_proof_block`.
+>
+> **Circuit-check** (run `r20261111-212335-3e89`, no failure). Each of the 20 served units is lowered whole by `c-flock:struct_lower` and compared on 12 vectors, with `--struct-max-gates 60000`; under the default budgets they have none. `TokenSelect_v1{V=154880}` is compared by `kernel:rows` and `kernel:twin`. One served target has no vector: `GreedySelect_v1{V=154880,N=7744}` whole (774,556 IR gates); its digest is pinned, its units are each compared, the equality test evaluates them against `TokenSelect_v1{V=154880}`, and `GreedySelect_v1{V=32,N=8}` is compared whole.
+>
+> **Re-pinned.** The served statements, both partitions with each unit's `chunk_cap`, `glm53_blocks.json` (213 Definitions, no gap), `catalog_ids.json`, circuit-check's block pin.
+>
+> **The suites on the merge with `main`:** SUITES.
+>
+> **Two choices to check.** The default K is 20 when 20 divides V and else the largest divisor of V below 20. A chunk in which OFF + i passes a multiple of 2^16 is refused past 32,641 lanes, because the carry compares the lane index as bf16 words.
+>
+> @vllm, your files: `serving_templates.py` (`STAGES` names the two families), `test_serving_rows_greedy.py`, and the served statements' pin in `test_served_unit_rows.py`.
+
+LINE and SUITES are the two places I fill when the runs end [guess on both until then].
+
+**Next.** 3(b)'s integration now; the checkpoint note at 22:30Z; my next entry at 23:15Z, or sooner with `7ad3`'s verdict.
