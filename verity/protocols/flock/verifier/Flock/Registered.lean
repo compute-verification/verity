@@ -642,49 +642,6 @@ def namesOnce (c : Circuit) : V Unit :=
   | some q => throw s!"registered reads: the circuit names port {c.ports[q]!.name} twice, and a registered read names one port"
   | none => pure ()
 
-/-- `checkProgram`, the program read by `readDesc`. -/
-def checkProgramBy (readDesc : ByteArray → V TemplateQuery.Desc)
-    (program : Option ByteArray) (registered : Bool) : V Unit :=
-  match program, registered with
-  | none, _ => .ok ()
-  | some _, true => .ok ()
-  | some b, false =>
-    match readDesc b with
-    | .error e => .error e
-    | .ok d =>
-      match (programInputs d)[0]? with
-      | none => .ok ()
-      | some id =>
-        .error s!"registered reads: the verifier's program reads a registered value ({id}), and the verifier holds no registered roots (--registered): its rows would be committed afresh, whatever the statement's public file names"
-
-theorem checkProgram_eq_by (program : Option ByteArray) (registered : Bool) :
-    checkProgram program registered = checkProgramBy TemplateQuery.Desc.parse program registered :=
-  rfl
-
-/-- `checkCover`, the program read by `readProg`. -/
-def checkCoverBy (readProg : ByteArray → V Program.Prog)
-    (c : Circuit) (program : Option ByteArray) (partition : Option Json) (own : Option (Array Port))
-    (params : Array String) : V Unit :=
-  match program, own with
-  | some b, some _ =>
-    match readProg b with
-    | .error e => .error e
-    | .ok P =>
-      if !regRoots P then .ok ()
-      else match templatePartition partition, HmRow.queryTemplate c with
-        | false, _ => .error "registered reads (cover): the verifier's program reads a registered value, and its partition is not a template query: a registered value is read by a template query's instances, whose parameters the verifier holds to its registered reads"
-        | true, none => .error "registered reads (cover): META program_digests does not name the circuit's one template, whose parameters the verifier holds to its registered reads"
-        | true, some (t, _) =>
-          match coverMiss P t params with
-          | none => .ok ()
-          | some (name, _) => .error s!"registered reads (cover): parameter {name} of {t} reads a registered input of the verifier's program, and no port of the verifier's registered reads reads it: its rows would be committed afresh"
-  | _, _ => .ok ()
-
-theorem checkCover_eq_by (c : Circuit) (program : Option ByteArray) (partition : Option Json) (own : Option (Array Port))
-    (params : Array String) :
-    checkCover c program partition own params = checkCoverBy Program.decode c program partition own params :=
-  rfl
-
 end Registered
 
 /-- An hm96 statement's registered reads (`Registered.check`), and with the verifier's own, a circuit that names each port
