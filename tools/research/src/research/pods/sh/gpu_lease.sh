@@ -508,21 +508,24 @@ def fmt(cpus):
     return ",".join(f"{a}-{b}" if b > a else f"{a}" for a, b in runs)
 
 
-def tree(pid, kids={}):
+KIDS = {}                           # each process's children, read once
+
+
+def tree(pid):
     """pid and its descendants, from every process's parent in its stat"""
-    if not kids:
+    if not KIDS:
         for p in os.listdir(proc):
             if p.isdigit():
                 try:
                     with open(f"{proc}/{p}/stat") as fh:
                         s = fh.read()
-                    kids.setdefault(s[s.rindex(")") + 2:].split()[1], []).append(p)
+                    KIDS.setdefault(s[s.rindex(")") + 2:].split()[1], []).append(p)
                 except (OSError, ValueError, IndexError):
                     pass
     out, todo = [], [pid]
     while todo:
         out.append(todo.pop())
-        todo += kids.get(out[-1], [])
+        todo += KIDS.get(out[-1], [])
     return out
 
 
