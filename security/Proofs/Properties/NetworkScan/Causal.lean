@@ -551,6 +551,7 @@ theorem scanOf_facts {j : Lean.Json} {program : String} {s : Schedule} {sc : Sca
   obtain ⟨_, -, h⟩ := Fits.bind_ok h
   obtain ⟨_, hret, h⟩ := Fits.bind_ok h
   obtain ⟨_, -, h⟩ := Fits.bind_ok h
+  obtain ⟨_, -, h⟩ := Fits.bind_ok h
   obtain ⟨_, hwalk, h⟩ := Fits.bind_ok h
   obtain ⟨_, -, h⟩ := Fits.bind_ok h
   obtain ⟨_, -, h⟩ := Fits.bind_ok h
