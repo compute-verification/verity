@@ -970,7 +970,6 @@ EXTRA = ('@[noinline] def Toy.extra (n : Nat) : Nat := n + 41\n'
 CALLS_EXTRA = "import Toy\n\ndef main : IO Unit := IO.println (Toy.word (Toy.extra 1))\n"
 
 
-@pytest.mark.skipif(LAKE is None, reason="no lake")
 def publish(LC, pkg: Path, out: Path, own: Path) -> None:
     """A published build of ``pkg`` in the Lake cache ``own``, as `cache.py` builds, stages and restores one."""
     writable = {**LC.lake_env(), "LAKE_ARTIFACT_CACHE": "true", "LAKE_CACHE_DIR": str(out / "lake-cache")}
@@ -981,6 +980,7 @@ def publish(LC, pkg: Path, out: Path, own: Path) -> None:
     assert any(f.suffix == ".ltar" for f in (out / "stage").iterdir())
 
 
+@pytest.mark.skipif(LAKE is None, reason="no lake")
 def test_a_module_lake_unpacked_from_a_published_build_is_not_indexed_as_one_the_build_compiled(tmp_path):
     """A `--try` or `--build` build reads Lake's own cache, which holds main's published build as `.ltar` archives. Where
     a tree compiled a module before (its `setup.json` is there) and a repair has cleared its `.hash` files, Lake unpacks
@@ -1021,6 +1021,7 @@ def test_a_module_lake_unpacked_from_a_published_build_is_not_indexed_as_one_the
     assert put("as-said", compiled=LCH.compiled(out)) == []
 
 
+@pytest.mark.skipif(LAKE is None, reason="no lake")
 def test_a_repair_leaves_no_object_of_an_earlier_source_for_lake_to_take_as_built(tmp_path, monkeypatch):
     """A slot tree sees three kinds of build: a records run's (`repair`, stage, the default targets, put), a `--build`
     run's (`repair`, then the changed modules alone, read from Lake's own cache where it holds them) and a build of the
