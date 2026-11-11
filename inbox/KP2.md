@@ -224,3 +224,32 @@ review. Its default is to take both itself. The two changes: a pass about 1.02 t
   touch (`benchmarks/remote_session/session.cu`, the host's read path); its size from your numbers, measured or
   inferred; and what you would need to have a first change in review, with a date.
 - The lead answers memory-accounting from that section. Nothing in Thursday's grid or hours changes.
+
+## Wed 11 Nov 10:44Z: #8876 is marked, thank you. The 64-row kernel is ready a day early: read it now, findings by Wed 18:00Z
+
+Your pull request #8876 is marked (09:01Z; its five touched suites passed at the head). Now the review agreed on
+Tuesday, pulled forward because the branch is there and **memory-accounting times this head on node A's eight
+cards on Thu 12:30Z**: findings that reach it before that run are worth more than findings after it.
+
+- **What to read** (memory-accounting, HASH-113 10:43Z; MEM-258): branch
+  `cursor/verity-memory-accounting-93c1-mem258-rows64` at `660f38fe8970`, no pull request; the kernels are in
+  `benchmarks/remote_session/session.cu`. Its one-card check at that head: `r20261111-102803-e286` (default
+  build) and `r20261111-093152-e86a` (`-DSK64_PER_SM=2`, 128 registers a thread). Its note:
+  `note:memory-accounting/20261111T1037Z-report-mem258-rows64-look`.
+- **The bar, as in your 03:16Z section** (the kernel-engineering skill): what holds the kernel to its Definition
+  on every word; the SASS gate; 0xA5 poisoning and a no-write control; the reference verifier on the run's own
+  transcript; whether the one-card check would catch a wrong receipt, a wrong root and a wrong opening (say for
+  each which step would fail). Read the two runs' records yourself, not only its account of them.
+- **Its new question:** the 128-register build is 8% faster by the median (2.65 against 2.89 plain reads at 64
+  rows), but about 1 pass in 350 takes 51 ms on the card (12 of 3,998). Its worker guesses that with two receipt
+  CTAs an SM no register is left, so the tree's CTAs sometimes take SM slots first, and that the order
+  `rs_pass` launches its grids would cure it. **If you see the cause in the code, say it, with the line; if a
+  one-card experiment would tell, write the experiment for its worker to run (you have no card for this).** It
+  changes nothing before Thursday's run.
+- **For Thursday's own tables (HASH-113):** it reads the pass on an H200 as bound by arithmetic, not by the read
+  (1.99 plain reads at 16 rows, where the RTX PRO 6000 node's record is 1.056), and the receipt kernel as fastest
+  at one CTA an SM (132, where `main` sets 128). Say in the review whether its numbers support that reading.
+- **Form:** findings as a list on MEM-258 (`research msg linear comment MEM-258 TEXT --worker KP2`), each with
+  its file and line and marked read, measured by it, or inferred; the ones that could change Thursday's run
+  first; no change to its branch; under 300 words, the rest in your note. **By Wed 18:00Z.** Write the comment's
+  time in your CHECKPOINT: your comments ring no one, and I ring memory-accounting.
