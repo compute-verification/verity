@@ -68,8 +68,11 @@ lister, its kinds' runners, its tests and its own `tasks.toml` table, and edits 
 - Tasks are sorted by id. An id is `<kind>:<name>`, unique in the graph.
 - `argv` defaults to `["verity", "graph", "run", "<id>"]`; `vars` is `{name: string}`. Both are in the key, so a lister puts in
   `vars` what a run depends on of the tree beyond its inputs' bytes: the circuit-binding family's `lookups` is the digest of
-  what the tree answers each path its runs look for, so a module file added there reruns them; a binding's run that looks
-  somewhere circuit-check's `reads/` doesn't declare of it reports that path as an undeclared read.
+  the names, not the bytes, of the paths where its runs can look (every path under circuit-check's declared inputs, and the
+  module names at the root, each workspace member's import-path entry and each directory above a declared input: the var
+  `places`), so a path added, removed or renamed there reruns them and an edit reruns none. Its runner judges each run by
+  the run's own report: a file read outside the task's inputs, a probe or listing outside `places`, or a library git
+  doesn't have is an undeclared read.
 - `inputs` are files of the tree, sorted. The core adds the kind's runner (`runners/<kind>.py` and `runners/__init__.py`) to
   every task's inputs, so a runner's change reruns every task of its kind.
 - `reads` name another task's output; `outputs` are files, by relative path in the task's work directory.
