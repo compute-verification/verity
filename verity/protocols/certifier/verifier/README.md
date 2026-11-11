@@ -232,7 +232,7 @@ A spec-level reference for network accounting's timing channel:
 - the compile slice charging the length terms (`compile_slice_v7`): `CompileSlice_v7`, `CompileSlice_v1` with
   `ChargeLink_v2{D, 0, 0, K}` in place of `ChargeLink_v1{D}`, a length slot for each certified arrival read from
   ``cert`` (its output length and its certified max_tokens), so a window's charge covers `code_v1`'s segment and its
-  length tail. It is the served windows' slice (vLLM's `serve_commit.SERVED_SLICE`), and
+  length tail. vLLM's served windows name it (`serve_commit.SERVED_SLICE`), except under `--admit tick`, and
   `benchmarks/network_traces/compile_slice_zk.py` proves it in zero knowledge (and plain, ``--plain``);
 - the served rows (`served_rows`): the step rows a served window ran, from the server's kept rows, committed before the
   sample under the run root as a hiding-commitment registration, a row each block of G steps (G = P unless given: a window's row,
