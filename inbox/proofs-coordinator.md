@@ -37487,3 +37487,21 @@ theorem code_reveal_iroots (x : Msg) {s : AuditStatement} {P : Partition} {d : D
 - On paper: `|proved draw| ≤ |sample|·Σ_t k_t` with `|sample| ≤ Kfirst`, because no Lean lemma bounds `selectSecond`'s draw.
 
 Checkpoint at 03:55Z or at the run's verdict, whichever is first.
+
+## ATTACK, Wed 11 Nov 02:55Z: addendum to my 02:51Z entry; TWO-STAGE FINDER: HOLDS stands; three "not reached" items read; "the largest k" of the numbers is one table, and the code admits 200 (+7.64 on that column)
+
+To append to the comment text for PRF-533, handle-free; I have not posted it.
+
+**Addendum to TWO-STAGE FINDER: HOLDS.** The verdict stands. Three of the items I had not reached are now read, and item 7's right-hand column gets one caveat.
+
+- [read] Item 6, `O_ref` = 0, is now read rather than derived:
+  - a session's view is the second part of `session` (`view`, `Security/Definitions/Claims/SamplingGeneric.lean:292-293`);
+  - at a run refused before the session, `session` gives `refusedSeen` (`Security/Proofs/Flock/SpotFlock/Code.lean:575-581`), whose verdict is `.rej` (`:559`);
+  - every proof system's extractor is `ERep` by definition (`Arg.ext`, `SamplingGeneric.lean:180-183`), and `ERep` returns nothing where the judged view rejected (`Security/Definitions/Core/Interaction.lean:254-258`).
+  - [derived] Its reruns replace only the session's rounds, so each is refused too. No opening passes at refused coins.
+- [read] Item 1, the deployed order of release. An opening is bound to the root the verifier recorded for it, but that the coin was released after that root "is a trust assumption on the auditor-trusted challenger (`trusted-host`), not something this checks" (`verity/core/service/spot/Spot/Challenger.lean:15-17`). So in the deployment "c1 after the interior registration" rests on `trusted-host`; in the Lean game it is the verifier's type. The derivation is about the Lean game and does not change [derived].
+- [read] Items 2 and 7, `e_s`. `rerunsExp_le` gives `1 + waits*k` expected reruns at every prover and tape (`Security/Proofs/Flock/SamplingGeneric/Efficient.lean:179-181`), and the code's `waits` is 210 (`SpotFlock/Accepting.lean:83-85`). So `e_s = 1 + 210k` is the Lean's.
+- [read, derived, run] Item 7, a caveat on "the largest k". 12,343,986 is `ceil(4*2^23/e)`: a session of one table of 2^23. The code admits up to 200 tables a session, `N_0 <= 200*2^23` (`ref_numbers`, `SpotFlock/Accepting.lean:48-51`), so k up to 2,468,797,139. At that corner, with d = 167, each right-hand cell is 7.64 higher: -104.00 (uncapped), -98.60 (capped sets), -91.90 and -88.60 (capped patterns). The formula is unchanged. Which k the registered design's sessions have is the design's [relayed, not checked].
+- [not reached, still] `Addresses h` and always-checked units; REPBREAK's m and K; which design the cost rows price.
+
+**For Daniel's sentence:** the range is -132 to -96 if the largest session holds one table of 2^23, and its worst corner is -88.6 if a session can hold the 200 tables the code admits [run].
