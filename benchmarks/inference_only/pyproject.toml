@@ -18,7 +18,7 @@ inputs = ["verity/protocols/inference_only/rho", "benchmarks/one_stage/served_sh
           "adapters/vllm/verity_vllm", "adapters/vllm/manifests", "verity",
           "verity/protocols/inference_only/verifier/nci/lean/scripts/nci_reference.py",
           "verity/protocols/inference_only/verifier/nci/lean/lakefile.toml",
-          "Security/lean-audit.json", "Security/Properties/lean-audit.json",
+          "security/lean-audit.json", "security/Properties/lean-audit.json",
           "benchmarks/census/hardware.json", "benchmarks/census/adversary.json", "benchmarks/census/deployments.json",
           "verity/protocols/inference_only/nci/tiers.py", "verity/protocols/inference_only/nci/slowdown.py", "verity/protocols/inference_only/nci/catalog.py",
           "verity/protocols/inference_only/nci/algorithms.json", "verity/protocols/inference_only/nci/calibrations.json", "verity/configuration/config/verity_config"]
