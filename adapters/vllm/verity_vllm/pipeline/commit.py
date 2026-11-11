@@ -947,13 +947,12 @@ class Options:
     required_manifest: str | None = option("--required-manifest", default=None, help="the Program/query-derived required-value manifest (verity_vllm.pipeline.cli build ...): every " "identity it lists (step, invocation, op_path, output_member, element range, request, rank) must be covered by a committed " "tensor of every instrumented run (coverage_check); replaces the counts+classes source, which is the labelled fallback")
     tensor_digests: bool = option("--tensor-digests", default=False, action="store_true", help="diagnostic: per-tensor digests of the retained host bytes per instrumented run, diffed across pairs")
     moe_source: str = option("--moe-source", choices=["auto", "on", "off"], default="auto", help="[MOE-03] attach the fused-MoE block source (router_w/ids, up, act, down, sum per MoE layer per step; class moe_block_stream, " "added to the required classes): auto = when the model has MoE-runner modules (the default), on = refuse if it has none, off = never")
-    compiled_taps: str = option("--compiled-taps", choices=["off", "on", "kernels", "served"], default="off", help="served = the "
+    compiled_taps: str = option("--compiled-taps", choices=["off", "kernels", "served"], default="off", help="served = the "
                                 "served-compiled row: every value of every engine step at vLLM's defaults (ServedCompiledSource), the served Build "
                                 "(--required-manifest, verity-vllm served-match) checked word for word on the committed values (served_check) with a "
                                 "seed drawn after commitment, the Build rederived in this process (build_rebuilt.json); control: --compiled-taps off "
-                                "--only-arm control (verity_vllm/ops/served_commit.sh).  kernels = P_compiled: acquire every non-weight buffer of every Inductor kernel launch through Inductor's " "wrapper-level hook seam (kernels/fusion untouched; captured pieces copy into preallocated slots at graph capture, drained per step; " "verity_vllm/acquire/sources/compiled_kernel_source.py); requires --required-manifest from compiled_manifest.py. " "on = [withdrawn as the workload's path] record ops compiled INTO the graphs (graph-replay-safe " "staging ring; verity_vllm/acquire/sources/compiled_source.py) for Execution=compiled rows (enforce_eager=false). " "The op nodes live in the graphs for the whole process, so the paired control must be a separate process with " "`--compiled-taps off --only-arm control` and the same engine args (verity_vllm/ops/compiled_commit.sh)")
-    compiled_ring_rows: int = option("--compiled-ring-rows", type=int, default=0, help="rows per staging slot; 0 = auto: the engine's largest CUDA graph capture size (larger, uncaptured steps use the direct path)")
-    only_arm: str | None = option("--only-arm", choices=["control", "instrumented"], default=None, help="run only this arm (`--pairs` runs of it); the paired summary is produced by compiled_commit.sh from both processes")
+                                "--only-arm control (verity_vllm/ops/served_commit.sh).  kernels = P_compiled: acquire every non-weight buffer of every Inductor kernel launch through Inductor's " "wrapper-level hook seam (kernels/fusion untouched; captured pieces copy into preallocated slots at graph capture, drained per step; " "verity_vllm/acquire/sources/compiled_kernel_source.py); requires --required-manifest from compiled_manifest.py. " "The hooks live in the generated wrappers for the whole process, so the paired control is a separate process with " "`--compiled-taps off --only-arm control` and the same engine args")
+    only_arm: str | None = option("--only-arm", choices=["control", "instrumented"], default=None, help="run only this arm (`--pairs` runs of it); the paired summary is produced by `verity-vllm compiled-merge` from both processes")
 
 
 def main(args: Options) -> None:
@@ -980,7 +979,6 @@ def main(args: Options) -> None:
     settings.put("VERITY_WEIGHTS_HASH", args.weights_hash)       # read by native_host.register_weights (this process and the forked replay)
     args = resolve_staging(args)
     _planner = RB.prepare(args)
-    compiled_src = None
     fault = settings.VERITY_FAULT
     compiled_kernels = None
     if args.compiled_taps == "kernels":
@@ -997,19 +995,6 @@ def main(args: Options) -> None:
         compiled_kernels = CompiledKernelSource(fault=fault if fault.startswith("compiled_") else None)
         compiled_kernels.install_hooks()                       # before vLLM compiles: the generated wrappers carry the hook lines
         print(f"[delta] COMPILED KERNEL TAPS (P_compiled): Inductor wrapper hooks {compiled_kernels.hooks_info}, fault {compiled_kernels.fault!r}", flush=True)
-    if args.compiled_taps == "on":
-        if args.only_arm == "control":
-            raise SystemExit("--compiled-taps on is the treatment process; the control process runs with --compiled-taps off --only-arm control")
-        if args.arms:
-            raise SystemExit("--compiled-taps on: single committer only (no --arms)")
-        from verity_vllm.engine import engine_profile as _prof
-        from verity_vllm.acquire.sources.compiled_source import CompiledGraphSource
-
-        _prof.apply_env()                                    # before any vllm import (build_engine does the same, idempotent)
-        compiled_src = CompiledGraphSource(rows=args.compiled_ring_rows)
-        compiled_src.prepare()
-        print(f"[delta] COMPILED TAPS: record ops will be compiled into the graphs (ring rows {args.compiled_ring_rows}, fault {compiled_src.fault!r}, "
-              f"runner patches {compiled_src.stats.get('patched_runners')}); vLLM compile cache disabled", flush=True)
     served = None
     if args.compiled_taps == "served":
         if args.only_arm == "control" or args.arms or not args.required_manifest:
@@ -1038,8 +1023,6 @@ def main(args: Options) -> None:
 
     out = Path(args.out)
     out.mkdir(parents=True, exist_ok=True)
-    if compiled_src is not None:
-        compiled_src.use_plan(required_manifest, out / "compiled_source_plan")     # [v2 acquire] the engine build's wrap_model wraps the plan's boundaries
     # the collector's fail-fast watchdog writes this marker (then _exit(3)) when a "collector dead" run does not fail
     # closed within VERITY_COLLECT_DEAD_GRACE_S; row_pod reads rc 3 as COMMIT FAIL, and a present marker names the hang in the row evidence.
     settings.setdefault("VERITY_COLLECT_WATCHDOG_MARKER", str(out / "COLLECTOR_DEAD_HUNG.json"))
@@ -1105,7 +1088,7 @@ def main(args: Options) -> None:
     versions["engine_kwargs"]["async_scheduling"] = va.resolved_async_scheduling(eng.llm)
     versions["enforce_eager"] = eng.kwargs.get("enforce_eager")
     # what is actually compiled / graphed in THIS process (CompilationMode, CUDAGraphMode, capture sizes, splitting ops):
-    # recorded for every attempt, control and treatment alike -- the paired processes must agree (compiled_commit.sh checks)
+    # recorded for every attempt, control and treatment alike -- the paired processes must agree (compiled_merge checks)
     from verity_vllm.acquire.sources.compiled_source import compile_settings as _compile_settings
 
     versions["compilation"] = _compile_settings(eng.llm)
@@ -1118,7 +1101,7 @@ def main(args: Options) -> None:
         # Inductor output code of every compiled piece (wrapper module = one piece: its launch program `call()` and the Triton kernel sources
         # it embeds) is digested from THIS process's Inductor cache dir (kernel_identity.collect, W1c's rule: kernel_set_sha256 = sha256 of the
         # sorted {(kernel name, source sha256)}); control and treatment record it, compiled_merge compares the two kernel sets.  Requires a
-        # per-process TORCHINDUCTOR_CACHE_DIR and VLLM_DISABLE_COMPILE_CACHE=1 (compiled_commit.sh sets both), else the dir is shared/empty.
+        # per-process TORCHINDUCTOR_CACHE_DIR and VLLM_DISABLE_COMPILE_CACHE=1 (ops/served_commit.sh sets both), else the dir is shared/empty.
         gk = va.generated_kernels_of_this_process()                    # same helper as the record path (RunHeader.compilation.generated_kernels)
         versions["compilation"]["generated_kernels"] = gk
         if gk.get("error"):
@@ -1139,15 +1122,6 @@ def main(args: Options) -> None:
         versions.update(served.engine(eng))
         print(f"[delta] served source: slots {len(served.src.slots)} plans {len(served.src.plans)} written at graph capture, "
               f"{len(served.src.modules)} identities every step", flush=True)
-    if compiled_src is not None:
-        if compiled_src.model is None:
-            raise SystemExit(f"--compiled-taps on: the model was not wrapped before compilation (runner patch missed; errors {compiled_src.errors})")
-        if compiled_src.errors:
-            raise SystemExit(f"--compiled-taps on: errors while wrapping/renumbering: {compiled_src.errors}")
-        versions["compiled_source"] = compiled_src.summary()
-        print(f"[delta] compiled source: {len(compiled_src.wrapped)} modules wrapped before compile; renumber {compiled_src.renumber}; slots {len(compiled_src.slots)} "
-              f"({compiled_src.stats['slot_bytes'] >> 20} MiB) written during warm-up/capture: capture calls {compiled_src.stats['capture_calls']}, eager calls "
-              f"{compiled_src.stats['eager_calls']}, captured keys {len(compiled_src.captured_keys)}", flush=True)
     (out / "versions.json").write_text(json.dumps(versions, indent=1, default=str) + "\n")
 
     base = baseline_state(eng)
@@ -1177,11 +1151,6 @@ def main(args: Options) -> None:
         if served is not None:
             served.attach(com)                               # the committer wraps nothing: the source acquires every value of the Build
             com.program_digest = SR.program_field(required_manifest["program_digest"])   # the served Build's digest binds the roots
-        if compiled_src is not None:
-            if not hasattr(com, "_nc") or not hasattr(com, "attach_source"):
-                raise SystemExit(f"--compiled-taps on needs the native_collect committer (got {kind})")
-            compiled_src.attach(com)                         # sets com.external_acquisition: the committer does not wrap the compiled forwards
-            print(f"[delta] compiled source attached -> committer {com.name}", flush=True)
         _att = attach_of_record(com, eng, args, required_manifest, out, kind=kind, required_classes=required_classes,
                                 required_classes_cli=required_classes_cli, hidden_family=hidden_family if not required_classes_cli else None,
                                 fa_version=fa_version, cb_plan=cb_plan, served=served)
@@ -1546,8 +1515,6 @@ def main(args: Options) -> None:
             _lock = _rs.begin() if _rs is not None and arm != "control" and _rs.lockstep is None else None
             if arm != "control":
                 com.reset()
-                if compiled_src is not None:
-                    compiled_src.stats_reset_step_counters()
                 if served is not None:
                     served.src.begin_run()
                 com.install()
@@ -1863,31 +1830,6 @@ def main(args: Options) -> None:
                     vc_methods.insert(0, "sampled-exact-replay (the served Build's Program on the committed values; served_check.py) + boundary linkage")
                     vc_result = _sc2["ok"] if vc_result is None else (vc_result and _sc2["ok"])
                     print(f"[delta] SERVED C2 (pair {pair}): {_sc2['line']}", flush=True)
-                if compiled_src is not None:
-                    # C2 under graph replay: no Python tap can observe a value inside a replayed graph, so correspondence is
-                    # checked from the committed bytes alone (Linear re-execution from committed inputs, lm_head(norm) == logits, greedy
-                    # argmax == sampled ids, embed-in(s+1) == sampled(s)); a late drain (VERITY_FAULT=compiled_late_drain) fails here
-                    from verity_vllm.check.compiled_value_check import CompiledValueCheck
-
-                    row["commit"]["compiled_source"] = compiled_src.summary()
-                    row["commit"]["compilation"] = versions["compilation"]
-                    try:
-                        cvc = CompiledValueCheck(com, eng.model, eng.runner, sampling).run()
-                    except Exception as e:  # noqa: BLE001
-                        cvc = {"ok": False, "error": repr(e)[:300], "checked": 0}
-                    row["commit"]["value_correspondence"]["compiled_check"] = cvc
-                    row["commit"]["value_correspondence"]["method"] += " + compiled_value_check (committed-bytes relations; compiled_value_check.py)"
-                    vc_result = bool(cvc.get("ok")) if vc_result is None else (vc_result and bool(cvc.get("ok")))
-                    row["commit"]["value_correspondence"]["result"] = vc_result
-                    cs = row["commit"]["compiled_source"]["stats"]
-                    print(f"[delta] COMPILED (pair {pair}): steps {cs['steps']} replay-drains {cs['replay_drains']} eager-drains {cs['eager_drains']} direct-steps {cs['direct_steps']} "
-                          f"direct-calls {cs['direct_calls']} unwritten-skipped {cs['unwritten_skipped']} refused-capture-alloc {cs['refused_capture_alloc']} shape-mismatch {cs['shape_mismatch']}; "
-                          f"VALUE CHECK {'OK' if cvc.get('ok') else 'FAIL'}: reexec {cvc.get('reexec_equal')}/{cvc.get('reexec_checked')} logits {cvc.get('logits_equal')}/{cvc.get('logits_checked')} "
-                          f"argmax {cvc.get('argmax_equal')}/{cvc.get('argmax_checked')} chain {cvc.get('chain_equal')}/{cvc.get('chain_checked')} "
-                          f"mismatch {cvc.get('reexec_mismatch', [])[:2]} {cvc.get('chain_mismatch', [])[:2]} {cvc.get('error', '')}", flush=True)
-                    components["root_compare"] = {"result": vc_result, "run_root": rc.run_root.hex(), "expect_root": args.expect_root,
-                                                  "reference": "--expect-root (caller-pinned root; independent only if produced by another tree/pod)",
-                                                  "why": None if vc_result else f"run root {rc.run_root.hex()[:16]} != expected root {str(args.expect_root)[:16]} (--expect-root)"}
                 row["commit"]["value_correspondence"] = {"method": " + ".join(vc_methods), "result": vc_result, "components": components, "why": None,
                                                          "note": "coverage + openings cannot see a late read or a relabel (brief §4); live evidence = the Match oracle of this attempt / an independent pinned root / replay"}
                 if compiled_kernels is not None:
@@ -2031,15 +1973,6 @@ def main(args: Options) -> None:
                     if not scc.get("ok"):
                         row["commit"]["commit_pass"], row["commit"]["commit_fail_reason"] = False, (f"served C2 FAIL: {scc.get('equal')}/{scc.get('checked')} values exact, "
                                                                                                     f"steps unrun {scc.get('steps_unrun')} {scc.get('error') or ''}")
-                if compiled_src is not None and row["commit"]["commit_pass"]:
-                    # the compiled boundary's own fail-closed conditions (C2 value relations; no refused/mis-shaped in-graph acquisition)
-                    cvc = row["commit"]["value_correspondence"]["compiled_check"]
-                    cs = row["commit"]["compiled_source"]["stats"]
-                    if not cvc.get("ok"):
-                        row["commit"]["commit_pass"], row["commit"]["commit_fail_reason"] = False, f"compiled value check FAIL: {cvc.get('equal')}/{cvc.get('checked')} relations hold ({cvc.get('error', '')})"
-                    elif cs["refused_capture_alloc"] or cs["shape_mismatch"] or cs["oversize_in_capture"]:
-                        row["commit"]["commit_pass"], row["commit"]["commit_fail_reason"] = False, (f"compiled ring refused acquisitions: refused_capture_alloc {cs['refused_capture_alloc']} "
-                                                                                                    f"shape_mismatch {cs['shape_mismatch']} oversize_in_capture {cs['oversize_in_capture']}")
                 if not row["commit"]["commit_pass"]:
                     print(f"[delta] COMMIT {'FAIL' if row['commit']['commit_pass'] is False else 'PENDING'} (pair {pair}, {arm}): {row['commit']['commit_fail_reason']}", flush=True)
                 row["root_equal_expected"] = (rc.run_root.hex() == args.expect_root) if args.expect_root else None
@@ -2093,7 +2026,7 @@ def main(args: Options) -> None:
         print(f"[delta] the challenger session did not close (no ledger end: its coins credit nothing): {_why}", flush=True)
     TL.start("closure.summary")
     if args.only_arm:
-        # one arm per process: the paired summary (delta, CI) is produced by compiled_commit.sh from both runs.jsonl files
+        # one arm per process: the paired summary (delta, CI) is produced by compiled_merge from both runs.jsonl files
         summary = {"schema": SCHEMA + "/only-arm", "only_arm": args.only_arm, "runs": len(rows), "versions": versions, "declaration": decl,
                    "wall_s": [r["wall_s"] for r in rows], "commit_pass": (RB.pass_of(rows) if args.only_arm == "instrumented" else None),
                    "table_md": f"only-arm {args.only_arm}: {len(rows)} runs, wall {[round(r['wall_s'], 4) for r in rows]}", "utc": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())}

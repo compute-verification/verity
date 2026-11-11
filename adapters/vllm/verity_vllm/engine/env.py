@@ -64,7 +64,7 @@ EXPORT = {
 COMPILE_FRESH = {"VLLM_DISABLE_COMPILE_CACHE": "1", "TORCHINDUCTOR_FX_GRAPH_CACHE": "0", "TORCHINDUCTOR_AUTOGRAD_CACHE": "0"}
 
 #: Set by whoever gave this process its own TORCHINDUCTOR_CACHE_DIR (``prepare_compiled_process_cache``,
-#: ``ops/compiled_commit.sh``).
+#: ``ops/served_commit.sh``).
 INDUCTOR_DIR_MARK = "VERITY_INDUCTOR_DIR_PER_PROCESS"
 #: ``MODE:PAGED_SO``: the int8 attention's credited read every engine of this process installs at its build (`engine.int8_credited_env`)
 INT8_CREDITED_READ = "VERITY_INT8_CREDITED_READ"
@@ -177,7 +177,7 @@ def disable_compile_cache() -> None:
 
 def prepare_compiled_process_cache() -> dict[str, Any]:
     """Before a COMPILED engine is built: make this process's Inductor output code identifiable.  (1) A fresh,
-    empty TORCHINDUCTOR_CACHE_DIR unless the caller already exported one it marks as per-process (compiled_commit.sh) -- torch's default
+    empty TORCHINDUCTOR_CACHE_DIR unless the caller already exported one it marks as per-process (ops/served_commit.sh) -- torch's default
     /tmp/torchinductor_<user> is shared by every process on the pod, so a pin read from it would digest other workloads' kernels; (2)
     VLLM_DISABLE_COMPILE_CACHE=1 -- a vLLM compile-cache hit replays another process's artifacts and emits no output code here (the pin
     would be null: a compiled record without positive evidence of compilation).  Costs one Inductor compilation per process (~70 s for
