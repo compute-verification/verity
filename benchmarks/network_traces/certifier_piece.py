@@ -50,7 +50,7 @@ the active network certifier in front of serve-openai there (its ``CERTIFIER_FRO
   4. The period's link-window is the scan's (``answers.json``'s one window): every window request's release and
      streamed ids lie in it, else reject.
   5. The period check: `scan_period.rows_case` of the warden run and the chain's scan, checked by ``network-period``
-     (``--lean``, else built in verity/core/protocols/network/lean); its answer is the piece's, an accept's profile
+     (``--lean``, else built in verity/protocols/certifier/verifier/lean); its answer is the piece's, an accept's profile
      with its ``placement`` (`placement`): the certifier on the gate's host, and the chain, the period check and
      their proofs' coins in this piece on the developer's node, so `trusted-host` is assumed with the auditor's devices
      not placed.
@@ -131,7 +131,7 @@ CASE = "case.json"
 #: `served_verdicts.py` writes, the period check's three input files and `PUBLIC`'s
 PIECE_FILES = ("answer.json", "piece.log", "period/commitment.bin", "period/evidence.json", "period/params.json",
                *(f"chain/{rel}" for rel in PUBLIC))
-LEAN_DIR = TREE / "verity" / "core" / "protocols" / "network" / "lean"
+LEAN_DIR = TREE / "verity" / "protocols" / "certifier" / "verifier" / "lean"
 #: the window circuit's class (4 slots, prompts of at most 32 ids, 4 outputs) and the scan's lanes
 PROMPTS, PROMPT_IDS, TOKENS = 4, 24, 4
 HEIGHT = 10
