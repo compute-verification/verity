@@ -50818,3 +50818,79 @@ For CAPS: #8789 adds 23 `.lean` files, none under `security/Proofs`: `verity/cir
 
 For the table:
 - #8789: ready to mark at `5124b2689c75ec9d405fcd50ddd1c5e8c3777a21`; quick tier 95 of 95, records `r20261111-093436-4233` pass; merge with `main` `8f5d3c3823f0` clean, that merge's tier: 60 of 95 suites passed so far, 5 of 8 runs ended, 1 of the passes on its rerun; its records: in flight; `verity/circuits/base` exit 0, `verity/protocols/flock/verifier` exit 0, `verity/protocols/certifier/verifier/lean` exit 0.
+
+## BENCHCROSS, Wed 11 Nov 11:23Z: second reading of FUSED's 11:04Z setup law at cd4c, 0163, 7268, a3e0 and #8520's 5813: holds (0.35 to 0.37 s a MB of program, once a drawn session in verifyCmd as on main, 2.4 s with no program). TOO GOOD if it stays a session: the row of record is 15,670 to 16,698 GB at modeled 0.4, not 6,320, and the built plan 9,301 to 9,914, not 3,781 (planner, modeled: no head block was verified with its program). Once a call it is 250 + 1,086/k core-s at k sessions a call
+
+Second reading of FUSED's 11:04Z setup law at `cd4c`, `0163`, `7268`, `a3e0` and #8520's `5813`: **holds**. Read against the records, not against FUSED. Every time is from `date -u`; written 11:19Z to 11:23Z.
+
+**1. The setup lines, from each run's own files**
+
+| run | what | program handed to Lean | Lean's `setup (drawn)` | s a MB (10^6 bytes) |
+|---|---|---|---|---|
+| `r20261111-103344-cd4c` | small head block `_v2` (DR=16, DV=16, NVIS=16), flat | 33,195,144 bytes | 12,265 / 12,146 / 11,971 ms | 0.361 to 0.369 |
+| `r20261111-103330-0163` | the same, templated | 33,195,144 bytes | 12,237 / 12,208 / 12,144 ms | 0.366 to 0.369 |
+| `r20261111-085313-7268` | the two fused kinds, flat, reps 2 and 3 | 151.8 MB [relayed] | 56,593 / 60,175 and 57,719 / 56,971 ms | 0.373 to 0.396 |
+| `r20261111-085245-a3e0` | the same, templated, reps 2 and 3 | 151.8 MB [relayed] | 66,360 / 62,439 and 58,081 / 59,162 ms | 0.382 to 0.437 |
+| `r20261110-050332-5813` (#8520) | one stand-in session (275,155 ANDs, k_log 22), program of 46,922 bytes | 46,922 bytes | 45 ms | |
+| the same run | the same session, the 64-key first block's description added to the program | 2,228,325,393 bytes | 783,398 ms | 0.3516 |
+| `r20261111-081919-d4ef` (the 250.0) | head block at 2^27, no `--program` | none | 2,356 to 2,435 ms | |
+
+- [run: `research fetch --all` of `cd4c` and `0163`, `find` for `program.json`, the `verify-time.rep*.out` and `lean-verify.log` lines; my copies of `7268` and `a3e0` from 10:43Z; `get.sh` of `5813`, its `v2.f64.*.lean-verify.log` and `v2.f64.json`; `d4ef`'s `.err` files.] Fifteen of FUSED's nineteen setup values are in files I hold, and each is what it wrote. I do not hold `7268`'s or `a3e0`'s `program.json` or their rep 1 lines: the 151.8 MB is FUSED's computation.
+- `5813` is the clean one: the same session and circuit twice, only the program differs. The program alone moves `setup (drawn)` from 0.045 s to 783.4 s, `inputs` from 1.8 s to 196.3 s, the call from 3.85 s to 982.05 s (981.9 CPU-s) and peak memory from 0.5 GB to 79.4 GB. Lean accepted both.
+- `d4ef` gives the other end: with no program a head block's setup is 2.4 s. So the law is the program's bytes and nothing else: 0.35 to 0.37 s a MB a session (to 0.40 on the fused flat, 0.44 templated), and 0.087 s a MB once a call on `inputs`.
+
+**2. Which program, and do other units' Lean seconds hold a setup**
+
+- **2.35 GB: I cannot read it.** `9c37` was cancelled and its record holds logs only, no `program.json` [run: `research fetch --all`, `find`]. It agrees with two PR bodies: #8520's 76 bytes an AND times #8917's 30,909,225 ANDs is 2,349 MB [read, arithmetic]. The first block's 2,228,325,393 bytes is in `5813`'s record [run].
+- **It is the least a later head block's session can be handed, not what the audit hands.** `adapters/vllm/verity_vllm/pipeline/serving_rows.py:450` on `main` builds one population program over every template the row's partition names [read; I did not trace which sessions of a served window share one file]. #8520's body puts step 16's program at 2,766 MB with both first-block templates and about 2.3 GB more with a later block [read]. By `5813` a session pays for what its program holds, not for its own block: a 275,155-AND session paid 783 s.
+- **No head block at the served 64-key statics has been verified with its program by anyone** [read: #8520's body, "A key block's own session at the served statics was not run"; FUSED's 11:04Z]. So 250 + 783 is a sum of two measurements, not a run.
+- `cd4c`'s served 16-key first block (7,287,471 ANDs, k_log 25, one block, flat, with its program): the first verify call took 274.94 user + 93.65 system = 368.6 CPU-s in 6:02.95, 24.6 GB, exit 0 [run: `HEAD16K-n1-j1.verify-time`]. Its setup line is not out; rep 2 shows `inputs: 72888 ms` so far. #8520's row for that program (538 MB) on the stand-in session was 246.1 s [read].
+- **Other units, from the tree:**
+  - The `verifier_cost` card on `main` (`08ad61db94`): its 11 types were each one block verified with `--partition --program`, setup included, accepted [read: the card's `source`]. Those hold a setup, over their own one-unit program.
+  - The fused kinds: 38.92 and 42.55 are `reprice.VERIFY_FAST`'s 48.2 and 52.7 times 0.80742 (`headline.py`'s `V_OTHER`) [run: arithmetic]. 48.2 and 52.7 are "a full statement in the proof server's verdict pool" [read: `reprice.py:98`], and that pool's Lean call passes no `--program` [read: `server_rate.py` 226 to 228 in `art:dc13d785…`; `git grep '"--program"'` finds none in it on `main`]. **They hold no setup.** With its program one block took 111.0 to 116.6 core-s, 56.6 to 60.2 of it setup [run: `7268`].
+  - The head block and every type at 60.56: the card's median 75.0 times 0.80742, assumed [run: arithmetic]. It holds what a word-described median type's does, which is small.
+
+**3. Once a session, in `verifyCmd` as on `main`** [read: `FlockVerify.lean` at `origin/main` `08ad61db94`, the same file as the checkout I read]
+
+- Lines 1123 to 1135: inside the loop over sessions, `st := setupOf draw` runs for every session whose record has a draw; the result is kept (`population`) only for a session without one. `setupOf` hands `buildSessionOf` the program as `Option ByteArray` (lines 255 to 257, 331 to 335, 1091), and the circuit as `parsed`, parsed once before the loop.
+- [run: `d4ef`'s `saved-rep1.err`] One `verify` call, three drawn sessions (k1, k2, k4): one `inputs` line (108,273 ms) and three `setup (drawn)` lines (2,427 / 2,379 / 2,435 ms). So the record shows it too: inputs once a call, setup once a drawn session.
+- Lines 1149 to 1182: `ProvedScope.programHeld` (line 1175) is one of the `refusals`, which run only on a session whose `checked` passed (`checked.map refusals`). So `d4ef`'s refused sessions ran the whole proof check [read; this was relayed in my 10:30Z entry]. 250.0 is a full check less everything a program adds.
+
+**4. GB, from the planner**
+
+[run: `optimize.two_stage_design` on `3db1`'s dumped call for row (iii), world year; the head strata's Lean seconds times 250.0/60.56, then N core-s more a statement on the named strata at 81.82 core-s a GPU-second (`plan_levers.py`'s new term `A:PREFIX=CORE_S`; `A:…=0` returns 6,319.7 and `+783` equals the factor 17.058 to 0.2 GB). All modeled plans. The measured-rate columns are by proportion; the rate is not measured at the headline's mix and is a floor, so it cannot show 300 GB is met. "Stops" is the engine rate in tokens a GPU-second above which the row is over 300 GB. Base: measured prices (`3db1`'s 4,042.4). The price of record on `main` (14,228.6 at 0.4; 501 to 547 at the measured rate) has no dumped call, so I cannot put the setup on it from the planner.]
+
+| what a head statement's Lean verify holds | core-s a statement | row of record, modeled 0.4 | measured engine rate on node A (a floor) | stops | built plan (width + margin 1/8), modeled 0.4 | measured engine rate (a floor) | stops | width held to κ ≤ 2^-6 |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|
+| no program (of record since 10:49Z; measured, `d4ef`) | 250.0 | 6,319.7 | 226 to 243 | 237 | 3,781.0 | 135 to 146 | 396 | 4,129.5 |
+| **a session**: + setup over the first block's 2,228 MB (measured, `5813`) | 1,033 | **15,670.2** | 560 to 603 | 96 | **9,300.7** | 333 to 358 | 161 | 9,663.6 |
+| **a session**: + 870 over the later block's 2.35 GB (FUSED's, relayed) | 1,120 | **16,697.7** | 597 to 643 | 90 | **9,913.9** | 354 to 382 | 151 | 10,278.5 |
+| the same, on the two 64-key types only | 1,120 | 16,636.7 | 595 to 641 | 90 | 9,889.6 | 354 to 381 | 151 | 10,217.5 |
+| the same on every head type, and + 57 on each fused statement | 1,120 | 16,732.6 | 598 to 644 | 90 | 9,953.6 | 356 to 383 | 151 | 10,313.6 |
+| + 870 on every statement of every type (one program for all) | | 17,822.5 | 637 to 686 | 84 | 11,089.2 | 396 to 427 | 135 | 11,395.5 |
+| one session a call, today's pool: 358.3 + 194.6 + 783.4 | 1,337 | 19,260.6 | 689 to 742 | 78 | 11,443.6 | 409 to 441 | 131 | 11,812.2 |
+| **a call** of 4 sessions: 250 + (108.3 + 194.6 + 783.4)/4 | 521.8 | 9,587.0 | 343 to 369 | 156 | 5,697.1 | 204 to 219 | 263 | 6,050.5 |
+| **a call** of 16 sessions | 317.9 | 7,135.9 | 255 to 275 | 210 | 4,259.7 | 152 to 164 | 352 | 4,609.4 |
+| **a call**, many sessions | 250.0 | 6,319.7 | 226 to 243 | 237 | 3,781.0 | 135 to 146 | 396 | 4,129.5 |
+| fused + 57 alone | 250.0 | 6,355.2 | 227 to 245 | 236 | 3,820.6 | 137 to 147 | 392 | |
+
+- FUSED's "about 16,750" by its slope is 16,697.7 by the planner: holds to 0.3%. Its "+36 GB" for the fused kinds is +35.5 (row of record) and +39.6 (built plan): holds.
+- **Once a session, as `main` is: the row of record and the built plan are too good by 2.5 to 2.6 times.** The row of record is 15,670 to 16,698 and the built plan 9,301 to 9,914 at modeled 0.4. At the measured engine rate (a floor) the built plan reads 333 to 382, over 300.
+- **Once a call, the answer is the number of sessions a call**, which the planner does not hold: 4 sessions give 9,587 and 5,697, 16 give 7,136 and 4,260, and only many give back 6,320 and 3,781. `d4ef` measured calls of 1 and 3 sessions. Today's pool calls one session a call [read: `server_rate.py`'s `Lean.__call__`, one `--session`].
+- With κ held to 2^-6 (what your 10:59Z table needs at 643 classes; it is also the planner's own pick with width and no margin) every built-plan cell is the last column, 310 to 370 GB higher.
+- **Not priced, and not asked [guess, mine]:** memory. `CORE_PER_GPU` prices a core with 8 GiB. The head block's verify call held 42.9 GB with no program (`d4ef`) and a call with the 2,228 MB program held 79.4 GB on a small session (`5813`) [run, both]. At the card's own list prices a core with 122 GB costs about 8.8 cores. Nobody has run the two together.
+
+**5. Also read since 10:57Z** (held for this entry)
+
+- second reading of #8917's sizes at `9be334719521` (body only, not the diff): they are the sizes my 10:57Z cut rows price (scores 2^27; values 2^25 / 2^24 / 2^23). The body says the small values blocks hold only while the chain has no writer of the key rows; with one a values unit's block is 2^26 or 2^27 at every G [read]. Then the row is my 10:49Z one (2,767.0 at κ ≤ 2^-6), not 1,888.8.
+- second reading of FLOCKPKG's 10:52Z rows at `d4ef`: holds [run: its `.time`, `.err`, `.out`]. One block 262.37 s a session and 106.37 s inputs; two blocks 293.30 s and 111.66 s; user + system a call 368.9 / 409.6 / 390.2 (one block), 405.2 / 554.0 (two), 861.0 (three sessions); system share 25% to 33%; 42.9 GB. Every one of its verdicts is the `--program` refusal, exit 1.
+- Every cut row I posted (10:36Z to 10:57Z) is at 250.0 or 60.56 a head statement, no program. A cut statement's program holds its own units' descriptions; nobody has measured one. They are all unsupported until section 4's question is decided.
+
+For BREAKEVEN:
+- Print the head rows under three labels, each from the planner: "no program" 6,319.7 / 3,781.0; "setup once a session (as `main` is)" 15,670.2 / 9,300.7 at the first block's measured 783 s, 16,697.7 / 9,913.9 at +870; "setup once a call" 250 + 1,086.3/k core-s a statement at k sessions a call (k = 4: 9,587.0 / 5,697.1; k = 16: 7,135.9 / 4,259.7).
+- The term is in `~/.research/notes/lanes/proofs/tools/part3/plan_levers.py`: `"V:SparseMlaHeadBlock_v1{=4.1283+A:SparseMlaHeadBlock_v1{=783"`; add `+widths=1+margin=0.125` for the built plan.
+- The fused kinds' 38.92 and 42.55 hold no setup: + 57 core-s a statement is +35.5 GB on the row of record.
+
+For the table:
+- Lean's setup: 0.35 to 0.37 s a MB of the program, once a drawn session as `main` is; second reading holds on five runs. With it the row of record reads 15,670 to 16,698 GB at modeled 0.4 (560 to 643 at the measured engine rate on node A, a floor) and the built plan 9,301 to 9,914 (333 to 382), modeled: a sum of two measurements, no head block was verified with its program.
+- If the setup moves to once a call: 250 + 1,086/k core-s a statement at k sessions a call; k = 16 reads 7,136 and 4,260. Which program a session is handed, and k, are not decided by anything in the tree I read.
