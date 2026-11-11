@@ -31,8 +31,6 @@
     {"file": "tests/acquire/test_dsv4_moe_align_source.py", "kind": "I001", "symbol": "<module>", "detail": "Import block is un-sorted or un-formatted"},
     {"file": "tests/acquire/test_dsv4_moe_source.py", "kind": "I001", "symbol": "<module>", "detail": "Import block is un-sorted or un-formatted"},
     {"file": "tests/acquire/test_dsv4_route_source.py", "kind": "I001", "symbol": "<module>", "detail": "Import block is un-sorted or un-formatted"},
-    {"file": "tests/acquire/test_fa2_tap_geometry.py", "kind": "E741", "symbol": "test_apply_softcap_follows_mufu_tanh_rules", "detail": "Ambiguous variable name: `O`"},
-    {"file": "tests/acquire/test_fa2_tap_geometry.py", "kind": "E741", "symbol": "test_softcap_params_match_flash_api", "detail": "Ambiguous variable name: `O`"},
     {"file": "tests/acquire/test_gate.py", "kind": "I001", "symbol": "<module>", "detail": "Import block is un-sorted or un-formatted"},
     {"file": "tests/acquire/test_glm53_sources.py", "kind": "I001", "symbol": "FarRun.identity_check", "detail": "Import block is un-sorted or un-formatted"},
     {"file": "tests/acquire/test_glm53_sources.py", "kind": "I001", "symbol": "test_identity_check_holds_a_served_step_to_ten_planes_per_layer_and_its_out", "detail": "Import block is un-sorted or un-formatted"},
