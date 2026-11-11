@@ -54290,3 +54290,34 @@ No claim moves: #8927 has no `.lean` file and no lock in its diff [run: `git dif
 
 For the table:
 - #8927 `403c8aed979c`: ready to mark; quick tier at the head `64c5` 70/70, on the head merged onto `main` 8f5d3c3823f0 `a480` 71/71, suite `5605` passes; merges clean with `main` 86c03d1840cb and the chain's 967b722429f3; no Lean, no lock, 0 of 4 checks apply; untested with #8539 until `494b` ends.
+
+## FLOCKPKG, Wed 11 Nov 12:27Z: the hoist is built and measured: a call's second session sets up in 0.56 s where `main` takes 65.0 s, and the first in 43 to 46 s where `main` takes 60 to 64 s; PR #8949 (unmarked), `lean-agreement` passes
+
+**Measured, one node, one core, one accepted session of the fused MoE block K = 6144 with its 151.8 MB program** [run: `r20261111-120009-744d`, cpu-3, load 83 to 115; this head's verifier and `main`'s, built from the same tree, in turn on the one staged session]:
+
+| call | `inputs` s | session 1: setup / whole | session 2: setup / whole | user CPU s | peak RSS |
+|---|---|---|---|---|---|
+| `main`, one session | 35.6, 34.6 | 60.4 / 87.6, 61.3 / 84.1 | | 103.6, 100.7 | 9.12 GB |
+| the cut, one session | 36.1 (and 54.9, a node outlier) | 43.4 / 66.0 (and 64.5 / 96.5 in the outlier) | | 89.1 (130.8) | 9.84 GB |
+| `main`, the session named twice | 37.2 | 64.3 / 87.7 | **65.0 / 65.0** | 155.3 | 9.12 GB |
+| the cut, the session named twice | 37.6 | 45.8 / 69.2 | **0.56 / 0.58** | 93.3 | 9.84 GB |
+
+- The second session is refused for its reused coin key AFTER its setup in both verifiers, so its line is the setup's cost alone; both verifiers accept the first and refuse the second with the same text [run].
+- **By the MB of program:** `main` 0.40 to 0.42 s a session on this node (FUSED's 0.37 on its own); the cut **0.29 to 0.30 s once a call, then 0.004 s a further session**. The check itself (session minus setup) is 23 s in both.
+- **A call of one session saves 17 to 18 s of 119 to 125 (14%)**: one `Desc.parse` of three readings, as read. A call of k sessions pays the readings once.
+- **Memory:** +0.72 GB of peak at a 152 MB program (+8%), the two readings kept for the call.
+- One pinned pair is an outlier (the cut's first call: `inputs` 54.9 s, the same work in both verifiers), so I read the node, not the cut, there. The by-stage profile got no samples (my `perf script` line asked for symbols without addresses); the whole-call symbols of `main`'s verifier: freeing objects 10%, SHA-512's compression 7.4%, the allocator 11%, the JSON parser's functions about 7%, `canon` 2%. The by-stage split for both verifiers is `r20261111-122537-e806` (cpu-4), ETA 12:45Z [guess].
+
+**PR #8949** (unmarked), `cursor/proofs-progonce-5d2a` at `d302096c54b2247cfffaff7697baf6b99c87c3a3`. Not ready: the checks below are not all in.
+- `lean-agreement` `r20261111-120234-6afc`: **passed** in 514 s (`preflight-lock`, `preflight-lints`, `preflight-fixtures`, `lean-build`, `lean-agreement`) [run].
+- Try `r20261111-115710-ad83`: exit 0, axioms clean [run]. Records `r20261111-120108-98a7`: the verifier's package and the certifier's exit 0; in `security` now (about 13:15Z) [run]. Quick tier, 60 suites in six runs (`cac5`, `6fa7`, `32bd`, `ecfc`, `efe4`, `5034`), launched 12:12Z.
+- It needs a second reader before any mark, as you said; SERVEDCARD reads.
+
+**Correction to my 12:06Z entry: four run ids had the wrong time part.** They are `r20261111-103102-ea6b` (ScaledMm, the no-program setups), `r20261111-081919-d4ef` (the 64-key head), `r20261111-111442-c1da` and `r20261111-111456-c112` (the two I cancelled). The four-hex ends were right.
+
+**#8789:** `a770`'s `security` ended exit 0 after 4,561 s; `security/Properties` is last (about 8 min at the head). The line follows.
+
+**What is left:** `e806`'s by-stage profile (item 2, measured); `98a7` and the six tier runs, then #8949's ready line with the merged tree's build; `a770`'s line; then the next pure step (one JSON parse shared by the digest and both decoders) if the profile says the parse dominates.
+
+For the table: the hoist is built (PR #8949, unmarked, `d302096c54b2`): measured on one accepted session with its 151.8 MB program, a call's further sessions set up in 0.56 s where `main` takes 65.0 s, the first in 43 to 46 s where `main` takes 60 to 64 s [`744d`]; `lean-agreement` passes [`6afc`].
+For BREAKEVEN: "the hoist, built, unmarked": Lean seconds a call = no-program seconds + (0.29 to 0.30 s) × (MB of the population program) once a CALL + 0.004 s a MB for each further session, measured [`r20261111-120009-744d`]; "as `main` is" on the same node: 0.40 to 0.42 s a MB a SESSION (FUSED: 0.37). Both verifiers' `inputs` also holds one more reading of the program (`programDigest`), about 0.11 s a MB once a call [guess: `inputs` minus the circuit's read at 10.3 ns a byte].
