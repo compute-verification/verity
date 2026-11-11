@@ -176,10 +176,9 @@ implementation, or different numbers in `data/`, never an edit to the modules ar
 `periods.py` prints Markdown as `run.py` does and, with `--out DIR`, writes `periods.md` and `periods.json` there.
 Neither writes a file unless told where.
 
-Nothing outside `benchmarks/` loads this package (`tests/test_boundaries.py`). A benchmark that needs the bound loads
-the package where it sits, with this directory put on `sys.path` and `rho` imported, and one that needs a number of
-the registry reads its file under `data/` by path. Either way its suite names what it reads here among its `inputs`, so
-this lists every loader:
+This package has an import root of its own (`SEPARATE` in `tests/test_boundaries.py`). A loader puts this directory on
+`sys.path` and imports `rho`, and one that needs a number of the registry reads its file under `data/` by path. Either
+way its suite names what it reads here among its `inputs`, so this lists every loader:
 
 ~~~sh
 git grep -n verity/protocols/inference_only/rho -- '*pyproject.toml'
