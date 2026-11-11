@@ -40812,3 +40812,29 @@ the guard's modules and is in its three tests. Its ready line follows when that 
 > No published figure went through the search, and none moves: the figures use the two-stage closed form (0 calls to the search under `figure1.run`). At deployment sizes the wrong range is reachable through `IntegrityProfile.harm_bound` and its consumers, `optimize.certify`, `transformer.py` and `h200.py --share`; no configuration the tree sets reaches it. The fix is #8841: the search is now right at any population rather than refused, with a float risk never above the exact one by more than 2^-38. Its test at n = 1e18, k = 1e7 and at the first-stage sizes fails on `main` in 16 of 20 cases. The same PR fixes the location term, which was under the count of sets past about 1e17 blocks (6 bits of 349 at 1e18).
 
 Logs are on my VM under `/opt/cursor/artifacts/prf547/`; the checkpoint notes of 05:43Z and 06:41Z are in the notes repository.
+
+## CROSS, Wed 11 Nov 07:24Z: runs launched at ci's three crossed heads (#8781, #8458, #8730); nothing pushed to them
+
+Your 07:18Z is read. All six runs are `--as proofs`, from detached worktrees at the heads you named. `[run]`
+
+| PR | head | records run | quick tier |
+|---|---|---|---|
+| #8781 | `b7c268c7c1fef9f4f4ef92b11cb4891a037c957e` | `r20261111-071943-dd8f` | `r20261111-072018-0f55` |
+| #8458 | `81c162ded6fac6b473ebea32e7ea13d43511bebd` | `r20261111-072126-2a70` | `r20261111-072101-e7c3` |
+| #8730 | `f612d5d5897dd3ff2fc5018e9d6c9397b7bc0310` | `r20261111-072235-51ef` | `r20261111-072205-89cd` |
+
+- **Locks.** `[read]` #8781 changes `security/lean-audit.json` (4,178,666 bytes; 6 and 0 on the two counts) and six
+  Lean files under `security/`. #8458 and #8730 change no lock: each one's `security/lean-audit.json` is `main`'s
+  file byte for byte (blob `0f64c31e8a62`).
+- **Why #8458 and #8730 have a records run anyway.** `[read]` Each changes two Lean files of the SPOT verifier
+  (`Spot/SecondStage.lean`, `Spot/SecondStageExamples.lean`), which `security/Proofs` builds on, and the mark's
+  preflight skipped the Lean build. Your 04:59Z rule was a records run where the change touches Lean. `[guess]` Both
+  will say `regenerated` in entry order only, as every head whose lock is `main`'s does; I compare the JSON and
+  commit nothing. Say so if you would rather I cancelled the two.
+- **ETA.** The three quick tiers by about 08:00Z. The three records runs are all on `vy-nebius-cpu-1` and take its
+  Lean slots in turn: `dd8f` by about 08:30Z, the other two by about 09:30Z.
+- Each of the three merges clean with `main` at `8201dacff26e` and with each other `[run]` (`git merge-tree`; #8458
+  and #8730 change the same four files and still merge).
+
+**#8406:** held as you say; no ready line now. Its guard `6e01` is still in its tests; I report its verdict when it
+ends, and merge `main` in by hand (the one line) once #8339 is on `main`. **#8552:** noted, after #8539.
