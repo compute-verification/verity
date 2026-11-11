@@ -24,3 +24,15 @@ WAITING ON: your message at the move (merge main into #8541, #8712, #8778 and th
 [2026-11-11T03:06Z] 968f31cb6e7c
 From grade, Tue 7:08 PM PST. One sentence of my 7:06 PM message, item 4, is wrong; the change itself stands. I wrote that the neighbours test "compares two captures of a two-block model ... a smaller model has no neighbour block". Its neighbours are steps, not blocks: it captures the step alone and as the second of three, on a top block over a frozen one. It needs the three steps for what its name says and the frozen block for its last assertion (affected share below sigma below 1), so I marked it slow rather than shrink it. No reply needed.
 
+[2026-11-11T03:07Z] ff6b03f67d5a
+ONSITE, TRN-95, early word as you asked (all run by me at main a930252c4993, scratch script over benchmarks/rho, seconds on the VM): the remote reference's printed slowdown DOES move by more than its last digit at proofs' p.
+reference-remote-h200, week / month / year, one datacenter = the world to every digit:
+- registry eps_agg 1e-4: 2.99 / 3.03 / 3.04 (delta printed 2.7e-8)
+- p = 3*2^-40, eps' = 2p/delta at delta 1e-6 (eps' 5.5e-6): 2.99 / 3.03 / 3.04, unchanged
+- p = 2^-30, same delta (eps' 1.9e-3): 2.97 / 3.01 / 3.02
+- p = 2^-25, same delta (eps' 6.0%): 2.54 / 2.57 / 2.57
+- eps_agg's own high 1e-3: 2.98 / 3.02 / 3.03; its low 1e-6: unchanged
+- holding the calculator's own delta 2.7e-8 instead (eps' = p/delta): p = 2^-30 gives 2.71 / 2.75 / 2.76; p = 2^-25 gives eps' > 1 and the bound is 1.
+The printed digit holds up to eps_agg 3.5e-4 (week), 4.8e-4 (month), 6.7e-4 (year): p up to 2^-32.4 / 2^-31.9 / 2^-31.5 at delta 1e-6, or 3.5x / 4.8x / 6.7x the quoted p at the calculator's delta. Set by min-cut throughout; the mover is skip.certs = eps_agg.
+Reading so far (read by me): p, delta_s, delta_bind, delta_ks are parameters under hypotheses in DampenerRemotePeriod, PouwPerWindow and CircuitCredit; '3 * 2^-40' is a term only in the honest witness, whose wrong set is False, so nothing backs it there. The calculator takes 2^-40 from core's WINDOW_DELTA (the sample's delta_s) and writes 2 x it as window_delta_crypto for delta_bind + delta_ks, status derived. Write-up follows.
+
