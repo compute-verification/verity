@@ -30,6 +30,7 @@ untraced = [
     "tests/test_deploy.py",
     "tests/test_drive_sh.py",
     "tests/test_keeper.py",
+    "tests/test_vqueue_unit.py", "tests/test_nightly_check.py",
     "tests/test_watchers.py",
 ]
 # deploy installs research's pod tooling and reads its pods/nebius/deploy.toml, the environment files and units it names and the
@@ -54,7 +55,13 @@ inputs = ["tools/research/src/research/pods", ".agents/skills/using-slack/regist
           "infra/control/top_watch.py", "infra/control/deadman/api/deadman.py", "infra/control/deadman/vercel.json",
           # drive's loop, whose checkout per verb is tested here
           "infra/control/drive.sh",
-          "tools/research/src/research/__init__.py", "tools/research/src/research/telemetry/__init__.py"]
+          "tools/research/src/research/__init__.py", "tools/research/src/research/telemetry/__init__.py",
+          # the App's token helper, which the verified queue's token oneshot runs on its node
+          "infra/control/gh_app_token.sh",
+          # the nightly check's loop, tested here: it reads a run as the dispatcher reads a check's, writes the state the
+          # monitors' nightly-check reads, and pushes its label as the queue pushes a ready mark
+          "infra/control/nightly_check.py", "tools/research/src/research/jobs", "tools/research/src/research/monitors.py",
+          "tools/research/src/research/store/labels_sync.py"]
 parallel = true
 
 # What these test files read that their source doesn't name (a tree a test walks, a module it loads by a name it computes,
@@ -65,5 +72,5 @@ tests = ["tests/test_keeper.py"]
 paths = ["tools/research/src/research/pods/nebius"]
 
 [[tool.verity.tests.reads]]
-tests = ["tests/test_top_watch.py"]
+tests = ["tests/test_top_watch.py", "tests/test_nightly_check.py"]
 paths = ["tools/research/src/research"]
