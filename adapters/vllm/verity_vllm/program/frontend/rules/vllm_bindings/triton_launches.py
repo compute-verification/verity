@@ -13,7 +13,7 @@ from verity_vllm.program.frontend.rules.base import InPlaceRule, RuleInfo
 from verity_vllm.program.frontend.rules.common import (
     dtype_is,
     from_rows,
-    known_shape,
+    known,
     norm_kind,
     row_value,
     rows_of,
@@ -82,7 +82,7 @@ class TritonRmsNormRule(InPlaceRule):
             return "output is not an allocation/value"
         if str(ctx.dtype_of(out)) != RMS_PINS["dtype"]:
             return f"numerics_unregistered: output dtype {ctx.dtype_of(out)}; RMSNormTriton_v1 is the bf16 kernel"
-        xs = known_shape(ctx, x)
+        xs = known(shape(ctx, x))
         if len(xs) != 2 or shape(ctx, w) != (xs[1],) or shape(ctx, out) != xs:
             return f"shapes input {xs} weight {shape(ctx, w)} output {shape(ctx, out)}"
         if sc.get("n_cols") != xs[1]:
@@ -187,7 +187,7 @@ class FusedQKvRmsNormRule(InPlaceRule):
                 return r
             if not isinstance(ctx.val(out), Alloc) or not dtype_is(ctx, out, BF16):
                 return f"{name} output is not an unwritten bf16 allocation"
-            N, xs = sc[size_key], known_shape(ctx, x)
+            N, xs = sc[size_key], known(shape(ctx, x))
             if len(xs) != 2 or xs[1] != N or shape(ctx, w) != (N,) or shape(ctx, out) != xs or (T is not None and xs[0] != T):
                 return f"{name} shapes {xs}, weight {shape(ctx, w)}, output {shape(ctx, out)} vs {size_key}={N}"
             T = xs[0]
@@ -274,7 +274,7 @@ class TritonGemmRule(InPlaceRule):
             return "c is not an allocation/value"
         if str(ctx.dtype_of(c)) != GEMM_PINS["dtype"]:
             return f"numerics_unregistered: c dtype {ctx.dtype_of(c)}; Gemm_v1 is the bf16 kernel"
-        as_, bs, cs = known_shape(ctx, a), known_shape(ctx, b), known_shape(ctx, c)
+        as_, bs, cs = known(shape(ctx, a)), known(shape(ctx, b)), known(shape(ctx, c))
         if len(as_) != 2 or len(bs) != 2 or len(cs) != 2:
             return f"ranks a{as_} b{bs} c{cs}"
         M, K = as_
@@ -390,6 +390,6 @@ def _bias_add_reader(launch, c, ctx, M: int, N: int):
         return None
     if not (dtype_is(ctx, bn, BF16) and dtype_is(ctx, add, BF16)) or _bias_shape(shape(ctx, bn)) != N or shape(ctx, add) != (M, N):
         return None
-    if len(known_shape(ctx, bn)) > 2:
+    if len(known(shape(ctx, bn))) > 2:
         return None
     return add, bn

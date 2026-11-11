@@ -11,7 +11,7 @@ import torch
 from verity.circuits.refs import array_of
 
 from verity_vllm.program.frontend.rules.base import OpRule, RuleInfo
-from verity_vllm.program.frontend.rules.common import known_shape, shape
+from verity_vllm.program.frontend.rules.common import known, shape
 from verity_vllm.program.frontend.rules.patterns import Consumed
 from verity_vllm.program.frontend.rules.vllm_bindings.observations import (
     active_target_profile,
@@ -42,7 +42,7 @@ class MlaAbsorbBmmRule(OpRule):
             return r
         if (r := _value(ctx, x, BF16, (None, None, None), "x")):
             return r
-        B, _, K = known_shape(ctx, x)
+        B, _, K = known(shape(ctx, x))
         if (r := _value(ctx, w, BF16, (B, K, None), "W")):
             return r
         from verity_vllm.program.frontend import targets as TG
@@ -55,8 +55,8 @@ class MlaAbsorbBmmRule(OpRule):
     def emit(self, node, ctx):
         from verity_vllm.program.frontend import targets as TG
         x, w = node.args[0], node.args[1]
-        B, M, K = known_shape(ctx, x)
-        N = known_shape(ctx, w)[2]
+        B, M, K = known(shape(ctx, x))
+        N = known(shape(ctx, w))[2]
         DOT = TG.tensor_core_dot(active_target_profile())
         fn = ctx.kind("batched_gemm", node, B=B, K=K, N=N, DOT=DOT)
         where = ctx.module_path(node)
@@ -81,7 +81,9 @@ def _single_data_user(node):
 def _transpose_01(node, ctx) -> bool:
     if not isinstance(node, torch.fx.Node) or node.target is not aten.transpose.int or len(shape(ctx, node) or ()) != 3:
         return False
-    d0, d1 = int(node.args[1]), int(node.args[2])
+    d0, d1 = node.args[1], node.args[2]
+    if not isinstance(d0, int) or not isinstance(d1, int):
+        return False
     d0 = d0 + 3 if d0 < 0 else d0
     d1 = d1 + 3 if d1 < 0 else d1
     return {d0, d1} == {0, 1}
@@ -127,10 +129,10 @@ class MlaAbsorbTransposePatternRule(OpRule):
         w = bmm.args[1]
         if ctx.weight_of(w) is None:
             return "the right operand is not a parameter"
-        M, B, K = known_shape(ctx, x)
+        M, B, K = known(shape(ctx, x))
         if (r := _value(ctx, w, BF16, (B, K, None), "W")):
             return r
-        N = known_shape(ctx, w)[2]
+        N = known(shape(ctx, w))[2]
         if shape(ctx, bmm) != (B, M, N) or shape(ctx, out) != (M, B, N):
             return f"the bmm / trailing transpose shapes are {shape(ctx, bmm)} / {shape(ctx, out)}, not {(B, M, N)} / {(M, B, N)}"
         if (r := _missing(ctx, ["batched_gemm"])):

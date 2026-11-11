@@ -35,7 +35,7 @@ from verity.definitions.registry.flashmla import FLASHMLA_DSV4
 
 from verity_vllm.program.frontend.derive import refuse
 from verity_vllm.program.frontend.rules.base import OpRule, RuleInfo, StateRule
-from verity_vllm.program.frontend.rules.common import call_args, known_shape, shape
+from verity_vllm.program.frontend.rules.common import call_args, known, shape
 from verity_vllm.program.frontend.rules.vllm_bindings.observations import (
     active_target_profile,
     launch_sequences_of,
@@ -99,7 +99,7 @@ class Dsv4QNormRopeKvInsertRule(OpRule):
         T = len(pos)
         if (r := _value(ctx, a["q"], BF16, (T, None, None), "q")):
             return r
-        _, NH, D = known_shape(ctx, a["q"])
+        _, NH, D = known(shape(ctx, a["q"]))
         DR = (shape(ctx, a["cos_sin"]) or (0, 0))[-1]
         if (r := _value(ctx, a["kv"], BF16, (T, D), "kv") or _table(ctx, a["cos_sin"], DR, pos, "cos_sin", F32)):
             return r
@@ -118,8 +118,8 @@ class Dsv4QNormRopeKvInsertRule(OpRule):
         a = call_args(node)
         pos = ctx.static_index(a["positions"]).flat()
         T, h = len(pos), ctx.hint_name(node)
-        _, NH, D = known_shape(ctx, a["q"])
-        DR = known_shape(ctx, a["cos_sin"])[1]
+        _, NH, D = known(shape(ctx, a["q"]))
+        DR = known(shape(ctx, a["cos_sin"]))[1]
         S = {"NH": NH, "NHP": a["padded_heads"], "DN": D - DR, "DR": DR, "QB": a["quant_block"], "EPS": float(a["eps"])}
         fn = ctx.kind("dsv4_qnorm_rope_kv_insert", node, **S)
         q, kv, cs = _rows(ctx, a["q"], 16), _rows(ctx, a["kv"], 16), ctx.coll(a["cos_sin"])
@@ -152,14 +152,14 @@ class Dsv4CompressorStateRule(OpRule):
             return "a negative position"
         if (r := _value(ctx, a["ape"], F32, (None, None), "ape")):
             return r
-        W = known_shape(ctx, a["ape"])[1]
+        W = known(shape(ctx, a["ape"]))[1]
         return _value(ctx, a["kv_score"], F32, (len(pos), 2 * W), "kv_score") or True
 
     def emit(self, node, ctx):
         a = call_args(node)
         pos = ctx.static_index(a["positions"]).flat()
         h = ctx.hint_name(node)
-        R, W = known_shape(ctx, a["ape"])
+        R, W = known(shape(ctx, a["ape"]))
         fn = ctx.kind("dsv4_compressor_score", node, W=W)
         rows, ape = _rows(ctx, a["kv_score"], 32), ctx.coll(a["ape"])
         score = [ctx.call(fn, rows[i][W:], ape[p % R], node=node, rule=self, name=f"{h}[t={p}]") for i, p in enumerate(pos)]
@@ -259,7 +259,7 @@ class Dsv4SparseAttnRule(StateRule):
             return f"numerics_unregistered: the FlashMLA Definitions are its cc 9.0 kernels; the target is cc {tp.capability_str}"
         if (r := _value(ctx, a["q"], BF16, (T, None, None), "q")):
             return r
-        _, NHP, D = known_shape(ctx, a["q"])
+        _, NHP, D = known(shape(ctx, a["q"]))
         DR = (shape(ctx, a["rope"]) or (0, 0))[-1]
         G = FLASHMLA_GEOMETRY.get((D, DR))
         if G is None:
@@ -302,8 +302,8 @@ class Dsv4SparseAttnRule(StateRule):
         mp, h = ctx.module_path(node), ctx.hint_name(node)
         pos = ctx.static_index(a["positions"]).flat()
         T = len(pos)
-        _, NHP, D = known_shape(ctx, a["q"])
-        DR = known_shape(ctx, a["rope"])[1]
+        _, NHP, D = known(shape(ctx, a["q"]))
+        DR = known(shape(ctx, a["rope"]))[1]
         G = FLASHMLA_GEOMETRY[(D, DR)]
         DN, QT, BN, DOT = D - DR, G["QT"], G["BN"], G["DOT"]
         owner = ctx.state.setdefault("dsv4_owner", {})

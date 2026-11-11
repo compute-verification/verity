@@ -27,7 +27,7 @@ from verity.circuits.refs import array_of
 from verity.definitions.numerics.mhc_twin import tf32_num_split
 
 from verity_vllm.program.frontend.rules.base import OpRule, RuleInfo
-from verity_vllm.program.frontend.rules.common import call_args, known_shape, shape
+from verity_vllm.program.frontend.rules.common import call_args, known, shape
 from verity_vllm.program.frontend.rules.vllm_bindings.observations import (
     active_target_profile,
     launch_tokens_of,
@@ -250,7 +250,7 @@ class MhcPostRule(OpRule):
 
     def emit(self, node, ctx):
         a = call_args(node)
-        T, HC, H = known_shape(ctx, a["residual"])
+        T, HC, H = known(shape(ctx, a["residual"]))
         h = ctx.hint_name(node)
         fn = ctx.kind("mhc_post", node, HC=HC, N=H)
         x, res, post, comb = _rows(ctx, a["x"], 16), _rows(ctx, a["residual"], 16), _post_rows(ctx, a, T, HC), _rows(ctx, a["comb_res_mix"], 32)
@@ -289,7 +289,7 @@ class HcHeadRule(OpRule):
 
     def emit(self, node, ctx):
         a = call_args(node)
-        T, HC, H = known_shape(ctx, a["hs_flat"])
+        T, HC, H = known(shape(ctx, a["hs_flat"]))
         h = ctx.hint_name(node)
         S = {"HC": HC, "H": H, "TH": MHC_GEOMETRY[H]["TH_HEAD"], "EPS": float(a["rms_eps"]), "HC_EPS": float(a["hc_eps"])}
         fn = ctx.kind("hc_head", node, **S)

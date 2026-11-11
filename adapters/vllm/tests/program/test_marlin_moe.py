@@ -85,7 +85,7 @@ def _template_cuts(KT: int, NT: int, GRID: int, blk: int, par: int) -> np.ndarra
             j2, row = divmod(pos, KT)
             starts.add((j2, row))
             pos += min(end - pos, KT - row)
-    out = np.zeros((NT, KT - 1), dtype=bool)
+    out: np.ndarray = np.zeros((NT, KT - 1), dtype=bool)
     for J in range(NT):
         j2 = blk * NT + J - (G - p2)
         if j2 >= 0:

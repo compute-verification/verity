@@ -32,7 +32,7 @@ from verity_vllm.program.frontend.rules.base import InPlaceRule, OpRule, RuleInf
 from verity_vllm.program.frontend.rules.common import (
     call_args,
     from_rows,
-    known_shape,
+    known,
     rows_of,
     shape,
 )
@@ -95,7 +95,7 @@ class GroupedTopkRule(OpRule):
         for nm, t in (("scores", scores), ("bias", bias)):
             if not isinstance(t, torch.fx.Node) or not isinstance(ctx.val(t), Coll) or ctx.dtype_of(t) != torch.float32:
                 return f"{nm} is not an f32 value collection"
-        ss = known_shape(ctx, scores)
+        ss = known(shape(ctx, scores))
         if len(ss) != 2 or shape(ctx, bias) != (ss[1],):
             return f"scores {ss} vs bias {shape(ctx, bias)}"
         if not isinstance(topk, int) or not 1 <= topk <= min(32, ss[1]):
@@ -108,7 +108,7 @@ class GroupedTopkRule(OpRule):
         a = self._args(node)
         scores, TOPK, scale, bias = a["scores"], a["topk"], a["routed_scaling_factor"], a["bias"]
         rows, lead = rows_of(ctx.coll(scores))
-        M, E = known_shape(ctx, scores)
+        M, E = known(shape(ctx, scores))
         kernel = router_kernel(E, launch_tokens_of(node, M), TOPK)
         fn = ctx.kind("moe_router_sigmoid_bias", node, E=E, TOPK=TOPK, RSF=float(scale), KERNEL=kernel)
         b = ctx.coll(bias)
@@ -158,7 +158,7 @@ class TopkSoftplusSqrtHashRule(InPlaceRule):
         logits, toks, table = a["gating_output"], a["input_ids"], a["tid2eid"]
         if not (_value(ctx, logits, torch.float32) and _value(ctx, toks, torch.int32) and _value(ctx, table, torch.int32)):
             return "logits, input_ids and tid2eid are not f32, i32 and i32 value collections"
-        ls, vs = known_shape(ctx, logits), known_shape(ctx, table)
+        ls, vs = known(shape(ctx, logits)), known(shape(ctx, table))
         if len(ls) != 2 or shape(ctx, toks) != ls[:1] or len(vs) != 2 or vs[1] != DSV4_TOPK:
             return f"logits {ls}, input_ids {shape(ctx, toks)}, tid2eid {vs} (need [M, E], [M], [V, {DSV4_TOPK}])"
         for nm, dt in (("topk_weights", torch.float32), ("topk_indices", torch.int32), ("token_expert_indices", torch.int32)):
@@ -170,7 +170,7 @@ class TopkSoftplusSqrtHashRule(InPlaceRule):
     def emit(self, node, ctx):
         a = call_args(node)
         logits, toks, table = (ctx.coll(a[k]) for k in ("gating_output", "input_ids", "tid2eid"))
-        (M, E), V, SCALE = known_shape(ctx, a["gating_output"]), known_shape(ctx, a["tid2eid"])[0], float(a["routed_scaling_factor"])
+        (M, E), V, SCALE = known(shape(ctx, a["gating_output"])), known(shape(ctx, a["tid2eid"]))[0], float(a["routed_scaling_factor"])
         gather, route = ctx.kind("gather_i32", node, V=V), ctx.kind("moe_router_hash", node, E=E, SCALE=SCALE)
         cols = [Coll(Array(V, I32), strided_view(table, k, V, V * DSV4_TOPK, DSV4_TOPK, V)) for k in range(DSV4_TOPK)]
         name = ctx.hint_name(node)
@@ -219,7 +219,7 @@ class Dsv4TopkRule(InPlaceRule):
             return f"tensor arguments {_DSV4_TOPK_TENSORS} not all present"
         if not (_value(ctx, x, torch.float32) and _value(ctx, b, torch.float32)):
             return "gating_output and correction_bias are not f32 value collections"
-        xs, E = known_shape(ctx, x), meta["scalars"]["NUM_EXPERTS"]
+        xs, E = known(shape(ctx, x)), meta["scalars"]["NUM_EXPERTS"]
         if len(xs) != 2 or xs[1] != E or shape(ctx, b) != (E,) or _strides(x) != (E, 1) or _strides(b) != (1,):
             return f"gating_output {xs} strides {_strides(x)}, correction_bias {shape(ctx, b)} strides {_strides(b)}: not packed [M, {E}], [{E}]"
         for nm, t, dt in (("topk_weights", w, torch.float32), ("topk_ids", ids, torch.int32)):
@@ -236,7 +236,7 @@ class Dsv4TopkRule(InPlaceRule):
     def emit(self, node, ctx):
         meta = launch_meta(node)
         x, b, w, ids = (launch_tensor(node, meta, n) for n in _DSV4_TOPK_TENSORS)
-        (M, E), SCALE = known_shape(ctx, x), float(meta["scalars"]["routed_scaling_factor"])
+        (M, E), SCALE = known(shape(ctx, x)), float(meta["scalars"]["routed_scaling_factor"])
         fn = ctx.kind("moe_router_sqrtsoftplus", node, E=E, SCALE=SCALE)
         rows, lead = rows_of(ctx.coll(x))
         bias = ctx.coll(b)

@@ -61,7 +61,7 @@ class _ToyRankLM(nn.Module):
         return self.lm.lm_head(hidden)
 
 
-def _wrapper(kind: str, sampling: dict, bus: CollectiveBus | None):
+def _wrapper(kind: str, sampling: dict | None, bus: CollectiveBus | None):
     with torch.device("meta"):
         return vm.make_wrapper(kind, _ToyRankLM(_config(), bus), pos0=LP, M=1, LP=LP, T=T, sampling=sampling)
 

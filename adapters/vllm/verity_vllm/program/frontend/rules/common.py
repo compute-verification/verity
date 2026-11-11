@@ -118,12 +118,11 @@ def shape(ctx, a) -> tuple[int, ...] | None:
     return ctx.shape_of_node(a) if isinstance(a, torch.fx.Node) else None
 
 
-def known_shape(ctx, a) -> tuple[int, ...]:
-    """`shape` of an operand its rule has matched as a tensor: a TypeError where the export gave it none, as indexing or
+def known(s: tuple[int, ...] | None) -> tuple[int, ...]:
+    """`shape`'s answer for an operand its rule has matched as a tensor: a TypeError where there is none, as indexing or
     unpacking the absent shape was."""
-    s = shape(ctx, a)
     if s is None:
-        raise TypeError(f"{a!r} has no static shape")
+        raise TypeError("the operand has no static shape")
     return s
 
 
@@ -152,7 +151,7 @@ def and_mul_operands(node, ctx):
         return r
     if not isinstance(ctx.val(out), (Alloc, Coll)):
         return "out is not an allocation/value"
-    xs, os_ = known_shape(ctx, x), shape(ctx, out)
+    xs, os_ = known(shape(ctx, x)), shape(ctx, out)
     if xs[-1] % 2 or os_ != xs[:-1] + (xs[-1] // 2,):
         return f"out {os_} vs x {xs}"
     return True
@@ -165,4 +164,4 @@ def call_args(node) -> dict:
             **node.kwargs}
 
 
-__all__ = ["rows_of", "from_rows", "dtype_is", "shape", "known_shape", "call_args"]
+__all__ = ["rows_of", "from_rows", "dtype_is", "shape", "known", "call_args"]

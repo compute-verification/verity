@@ -12,7 +12,7 @@ from verity_vllm.program.frontend.derive import Alloc, refuse
 from verity_vllm.program.frontend.rules.base import RuleInfo, StateRule
 from verity_vllm.program.frontend.rules.common import (
     attention_scale,
-    known_shape,
+    known,
     kv_logs,
     row_value,
     shape,
@@ -82,7 +82,7 @@ class KvCacheUpdateRule(StateRule):
             refuse("side_input", node, ctx.module_path(node), f"two KV writes to {layer_name!r} without an attention read between them")
         pending[layer_name] = _KvWrite(layer_name, k, v, node)
         ctx.env[node] = pending[layer_name]
-        ctx.record(self, node, {"layer_name": layer_name, "rows": known_shape(ctx, k)[0]}, emitted="(pending KV write; no gates)")
+        ctx.record(self, node, {"layer_name": layer_name, "rows": known(shape(ctx, k))[0]}, emitted="(pending KV write; no gates)")
 
 
 class UnifiedAttentionWithOutputRule(StateRule):
@@ -132,7 +132,7 @@ class UnifiedAttentionWithOutputRule(StateRule):
             return r
         if oscale is not None or obscale is not None:
             return "numerics_unregistered: output_scale / output_block_scale set (fp8 output) — no registered kind"
-        qs, ks, vs, os_ = known_shape(ctx, q), known_shape(ctx, k), shape(ctx, v), shape(ctx, out)
+        qs, ks, vs, os_ = known(shape(ctx, q)), known(shape(ctx, k)), shape(ctx, v), shape(ctx, out)
         if qs[0] != ks[0] or ks != vs:
             return f"row counts differ q{qs} k{ks} v{vs}"
         if os_ != qs:

@@ -36,7 +36,7 @@ from verity_vllm.program.frontend.rules.base import InPlaceRule, RuleInfo
 from verity_vllm.program.frontend.rules.common import (
     dtype_is,
     from_rows,
-    known_shape,
+    known,
     rows_of,
     shape,
 )
@@ -189,7 +189,7 @@ class FusedMoeKernelFp8Rule(FusedMoeKernelRule):
         mrw, top_k, nv, G, KB, SWAP = sc["MUL_ROUTED_WEIGHT"], sc["top_k"], sc["num_valid_tokens"], sc["group_k"], sc["BLOCK_SIZE_K"], sc["SWAP_AB"]
         BM, BN = sc["BLOCK_SIZE_M"], sc["BLOCK_SIZE_N"]
         WARPS = (meta.get("geometry") or {}).get("num_warps", sc.get("num_warps"))
-        E, N, K = known_shape(ctx, b)
+        E, N, K = known(shape(ctx, b))
         a_rows, _ = rows_of(ctx.coll(a))
         s_rows, _ = rows_of(ctx.coll(a_s))
         bc, bsc = ctx.coll(b), ctx.coll(b_s)
@@ -206,7 +206,7 @@ class FusedMoeKernelFp8Rule(FusedMoeKernelRule):
             t = p // top_k
             args = (a_rows[t], s_rows[t], ids[p]) + ((ws[p],) if ws is not None else ()) + (bc, bsc)
             outs.append(ctx.call(fn, *args, node=node, rule=self, name=f"{hint}[{p}]"))
-        ctx.rebind(c, from_rows(outs, tuple(known_shape(ctx, c)[:-1])), self, what="c")
+        ctx.rebind(c, from_rows(outs, tuple(known(shape(ctx, c))[:-1])), self, what="c")
         ctx.bind_weight_role(b, self, "moe.expert_weight", E=E, K=K, N=N)
         ctx.bind_weight_role(b_s, self, "moe.expert_weight_scale", E=E, K=K, N=N, G=G)
         wl, sl = ctx.weight_of(b), ctx.weight_of(b_s)
@@ -248,7 +248,7 @@ class SiluAndMulPerBlockQuantRule(InPlaceRule):
             return "input is not a value collection"
         if not dtype_is(ctx, x, torch.bfloat16):
             return f"numerics_unregistered: input dtype {ctx.dtype_of(x)} (the Definition reads bf16 [gate || up])"
-        xs = known_shape(ctx, x)
+        xs = known(shape(ctx, x))
         if len(xs) != 2 or xs[1] % 2:
             return f"input {xs} is not [rows, 2I]"
         rows, INTER = xs[0], xs[1] // 2

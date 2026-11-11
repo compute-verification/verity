@@ -26,7 +26,7 @@ from verity.definitions.registry import fa3_split
 
 from verity_vllm.program.frontend.derive import refuse
 from verity_vllm.program.frontend.rules.base import RuleInfo, StateRule
-from verity_vllm.program.frontend.rules.common import known_shape, shape
+from verity_vllm.program.frontend.rules.common import known, shape
 from verity_vllm.program.frontend.rules.vllm_bindings.observations import (
     _OBSERVED,
     active_target_profile,
@@ -192,8 +192,8 @@ class DsaDenseMhaRule(StateRule):
         mp, h = ctx.module_path(node), ctx.hint_name(node)
         pos = ctx.static_index(a["positions"]).flat()
         T = len(pos)
-        _, NH, P = known_shape(ctx, a["q_nope"])
-        D = P + known_shape(ctx, a["k_pe"])[-1]
+        _, NH, P = known(shape(ctx, a["q_nope"]))
+        D = P + known(shape(ctx, a["k_pe"]))[-1]
         hist, P0 = _open_history(ctx, node, layer, pos, has)
         if P0:
             refuse("numerics_unregistered", node, mp, f"{layer!r}: a dense-MHA prefill of {T} rows after {P0} history rows runs over a "
@@ -207,7 +207,8 @@ class DsaDenseMhaRule(StateRule):
         v = _rows(ctx, a["v"], 16)
         head = Array(1, Array(D, Value(16)))
         klogs, vlogs = [PartLog() for _ in range(NH)], [PartLog() for _ in range(NH)]
-        outs, masked, pers = [], [], []
+        outs, masked = [], []
+        pers: list = []
         for i in range(T):
             masked.append(TG.fa3_masked_from(tp, i + 1, NH, NH, D, T, i))
             split = {} if ns == 1 else {"PER": fa3_split.split_per(T, i, BM, geom["BN"], ns)}

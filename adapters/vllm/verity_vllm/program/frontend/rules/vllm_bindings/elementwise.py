@@ -13,7 +13,7 @@ from verity_vllm.program.frontend.rules.common import (
     call_args,
     dtype_is,
     from_rows,
-    known_shape,
+    known,
     row_value,
     rows_of,
     scalar_kind,
@@ -75,7 +75,7 @@ class ScalarTensorMulRule(OpRule):
         fn = ctx.kind("scale_tensor", node, N=N)
         outs = [ctx.call(fn, r, scol, node=node, rule=self, name=f"{ctx.hint_name(node)}[{i}]") for i, r in enumerate(rows)]
         ctx.define(node, from_rows(outs, lead))
-        ctx.record(self, node, {"N": N, "rows": len(rows), "scalar_shape": list(known_shape(ctx, sc))}, emitted=f"{fn.id} x{len(rows)}")
+        ctx.record(self, node, {"N": N, "rows": len(rows), "scalar_shape": list(known(shape(ctx, sc)))}, emitted=f"{fn.id} x{len(rows)}")
 
 
 class GeluTanhAndMulRule(InPlaceRule):

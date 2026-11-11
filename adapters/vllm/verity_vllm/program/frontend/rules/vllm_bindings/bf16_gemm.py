@@ -17,7 +17,7 @@ from verity.definitions.registry import bf16_gemm_check
 from verity_vllm.program.frontend.rules.base import OpRule, RuleInfo
 from verity_vllm.program.frontend.rules.common import (
     from_rows,
-    known_shape,
+    known,
     rows_of,
     shape,
 )
@@ -87,7 +87,7 @@ class CublasLinearRule(OpRule):
         from verity_vllm.program.frontend import targets
 
         x, w = node.args[:2]
-        N, K = known_shape(ctx, w)
+        N, K = known(shape(ctx, w))
         rows, lead = rows_of(ctx.coll(x))
         M = launch_tokens_of(node, len(rows))
         kernel, statics = bf16_gemm_check.default_cublas_route("linear", M, K, N)
@@ -148,8 +148,8 @@ class LlBf16GemmRule(OpRule):
         from verity_vllm.program.frontend import targets
 
         x, w = node.args
-        rows_n, K = known_shape(ctx, x)
-        M, N = launch_tokens_of(node, rows_n), known_shape(ctx, w)[0]
+        rows_n, K = known(shape(ctx, x))
+        M, N = launch_tokens_of(node, rows_n), known(shape(ctx, w))[0]
         kernel, statics = bf16_gemm_check.dispatch_sm90(M, K, N)
         if kernel == "dotprod":
             fn = ctx.kind(
@@ -245,9 +245,11 @@ class CublasRouterRule(OpRule):
         from verity_vllm.program.frontend import targets
 
         x, wt = node.args[:2]
-        rows_n, K = known_shape(ctx, x)
-        M, N = launch_tokens_of(node, rows_n), known_shape(ctx, wt)[1]
-        phase, role, statics = f32out_route(M, K, N)
+        rows_n, K = known(shape(ctx, x))
+        M, N = launch_tokens_of(node, rows_n), known(shape(ctx, wt))[1]
+        route = f32out_route(M, K, N)
+        assert not isinstance(route, str), route  # `applies` refused a launch with no route
+        phase, role, statics = route
         kernel = "splitk" if role == "cublas_splitk_gemm_f32out" else "non_split"
         DOT = targets.tensor_core_dot(active_target_profile())
         fn = ctx.kind(role, node, K=K, N=N, DOT=DOT, **statics)

@@ -45,6 +45,7 @@ DECLARED construction (`vllm_bindings.active_target_profile().effective_moe_cons
 from __future__ import annotations
 
 import math
+from typing import Any
 
 import torch
 from verity.circuits.refs import Coll
@@ -56,7 +57,7 @@ from verity_vllm.program.frontend.rules.base import InPlaceRule, RuleInfo, ViewR
 from verity_vllm.program.frontend.rules.common import (
     dtype_is,
     from_rows,
-    known_shape,
+    known,
     rows_of,
     shape,
 )
@@ -79,7 +80,7 @@ logger = init_logger(__name__)
 #: the fused_moe_kernel launch fields pinned to the bf16 unquantized path the Definitions model.  `src_sha256` is the kernel body of the
 #: pinned vLLM (recorded from the cp-moe export; another body with the same name refuses).  Tile constexprs are geometry the f32 accumulator
 #: is invariant to along K only in k16 chunks (BLOCK_SIZE_K % 16 == 0, checked), so they are recorded, not pinned.
-MOE_GEMM_PINS = {
+MOE_GEMM_PINS: dict[str, Any] = {
     "kernel": "vllm.model_executor.layers.fused_moe.fused_moe.fused_moe_kernel",
     "src_sha256": "90674f19ec8363c7321df3e29e29ad1e2137720c2005b561e087ddb5e823e48b",  # vLLM d9105ea80 fused_moe_kernel.src (cp-moe)
     "constexprs": {"SPLIT_K": 1, "HAS_BIAS": False, "SWAP_AB": False, "USE_TD": False, "use_fp8_w8a8": False, "use_int8_w8a8": False,
@@ -200,7 +201,7 @@ def _topk_softmax_checks(node, ctx) -> str | None:
     dt = ctx.dtype_of(logits)
     if dt not in TOPK_SOFTMAX_VPT:
         return f"numerics_unregistered: logits dtype {dt}"
-    ls = known_shape(ctx, logits)
+    ls = known(shape(ctx, logits))
     if len(ls) != 2:
         return f"logits rank {len(ls)}"
     M, E = ls
@@ -213,12 +214,12 @@ def _topk_softmax_checks(node, ctx) -> str | None:
             return f"{nm} is not an allocation/value"
         if ctx.dtype_of(t) != want:
             return f"{nm} dtype {ctx.dtype_of(t)} is not {want}"
-        ts = known_shape(ctx, t)
+        ts = known(shape(ctx, t))
         if len(ts) != 2 or ts[0] != M:
             return f"{nm} shape {ts} vs logits [{M}, {E}]"
     if shape(ctx, w) != shape(ctx, ids):
         return f"w {shape(ctx, w)} vs ids {shape(ctx, ids)}"
-    TOPK = known_shape(ctx, w)[1]
+    TOPK = known(shape(ctx, w))[1]
     if not 1 <= TOPK <= E:
         return f"TOPK={TOPK} vs E={E}"
     return None
@@ -245,8 +246,8 @@ class TopkSoftmaxRule(InPlaceRule):
     def emit(self, node, ctx):
         w, ids, tei, logits = node.args[:4]
         rows, lead = rows_of(ctx.coll(logits))
-        M, E = known_shape(ctx, logits)
-        TOPK = known_shape(ctx, w)[1]
+        M, E = known(shape(ctx, logits))
+        TOPK = known(shape(ctx, w))[1]
         VPT = TOPK_SOFTMAX_VPT[ctx.dtype_of(logits)]
         # renormalize=True (Qwen3-MoE / Mixtral norm_topk_prob) is the same kernel with the lead thread's 1/sum epilogue:
         # MoeRouterTopKNorm_v1 (registry.moe); the ids are unchanged, the weights are the normalised probabilities.
@@ -283,7 +284,7 @@ class MoeAlignBlockSizeRule(InPlaceRule):
             return "ids is not a value collection"
         if ctx.dtype_of(ids) != torch.int32:
             return f"ids dtype {ctx.dtype_of(ids)} is not int32"
-        if len(known_shape(ctx, ids)) != 2:
+        if len(known(shape(ctx, ids))) != 2:
             return f"ids shape {shape(ctx, ids)}"
         if not isinstance(E, int) or not isinstance(bm, int) or E <= 0 or bm <= 0:
             return f"num_experts={E!r} block_size={bm!r} are not static positive ints"
@@ -294,7 +295,7 @@ class MoeAlignBlockSizeRule(InPlaceRule):
 
     def emit(self, node, ctx):
         ids, E, bm, sorted_ids, expert_ids, npp = node.args[:6]
-        M, TOPK = known_shape(ctx, ids)
+        M, TOPK = known(shape(ctx, ids))
         sched = MoeSchedule(ids, E, bm, M * TOPK)
         ctx.rebind(sorted_ids, sched, self, what="sorted_token_ids")
         ctx.rebind(expert_ids, DeadOutput("expert_ids (block schedule)"), self, what="expert_ids")
@@ -350,7 +351,7 @@ class FusedMoeKernelRule(InPlaceRule):
             return "c is not an allocation/value"
         if ctx.dtype_of(c) != torch.bfloat16:
             return f"numerics_unregistered: c dtype {ctx.dtype_of(c)}"
-        as_, bs, cs = known_shape(ctx, a), known_shape(ctx, b), known_shape(ctx, c)
+        as_, bs, cs = known(shape(ctx, a)), known(shape(ctx, b)), known(shape(ctx, c))
         if len(as_) != 2 or len(bs) != 3 or len(cs) < 2:
             return f"ranks a{as_} b{bs} c{cs}"
         rows, K = as_
@@ -382,7 +383,7 @@ class FusedMoeKernelRule(InPlaceRule):
                 return "naive_block_assignment with a sorted_token_ids_ptr"
             if ids_t is None or not isinstance(ctx.val(ids_t), Coll) or ctx.dtype_of(ids_t) != torch.int32:
                 return "naive schedule: expert_ids_ptr is not an i32 value collection"
-            if math.prod(known_shape(ctx, ids_t)) != nv:
+            if math.prod(known(shape(ctx, ids_t))) != nv:
                 return f"naive schedule: expert_ids {shape(ctx, ids_t)} is not {nv} pairs"
         else:
             if sorted_t is None or not isinstance(ctx.val(sorted_t), MoeSchedule):
@@ -396,7 +397,7 @@ class FusedMoeKernelRule(InPlaceRule):
             w_t = launch_tensor(node, meta, "topk_weights_ptr")
             if w_t is None or not isinstance(ctx.val(w_t), Coll) or ctx.dtype_of(w_t) != torch.float32:
                 return "MUL_ROUTED_WEIGHT: topk_weights_ptr is not an f32 value collection"
-            if math.prod(known_shape(ctx, w_t)) != nv:
+            if math.prod(known(shape(ctx, w_t))) != nv:
                 return f"topk_weights {shape(ctx, w_t)} is not {nv} pairs"
         return None
 
@@ -405,7 +406,7 @@ class FusedMoeKernelRule(InPlaceRule):
         sc = meta["scalars"]
         a, b, c = (launch_tensor(node, meta, n) for n in ("a_ptr", "b_ptr", "c_ptr"))
         mrw, top_k, nv = sc["MUL_ROUTED_WEIGHT"], sc["top_k"], sc["num_valid_tokens"]
-        E, N, K = known_shape(ctx, b)
+        E, N, K = known(shape(ctx, b))
         a_rows, _ = rows_of(ctx.coll(a))
         bc = ctx.coll(b)
         if sc.get("naive_block_assignment") is True:
@@ -423,7 +424,7 @@ class FusedMoeKernelRule(InPlaceRule):
             x = a_rows[p // top_k]
             args = (x, ids[p]) + ((ws[p],) if ws is not None else ()) + (bc,)
             outs.append(ctx.call(fn, *args, node=node, rule=self, name=f"{hint}[{p}]"))
-        cs = known_shape(ctx, c)
+        cs = known(shape(ctx, c))
         ctx.rebind(c, from_rows(outs, tuple(cs[:-1])), self, what="c")
         ctx.bind_weight_role(b, self, "moe.expert_weight", E=E, K=K, N=N)
         wl = ctx.weight_of(b)
@@ -454,7 +455,7 @@ class MoeSumRule(InPlaceRule):
             return "input is not a value collection"
         if not dtype_is(ctx, y, torch.bfloat16):
             return f"numerics_unregistered: input dtype {ctx.dtype_of(y)}"
-        ys = known_shape(ctx, y)
+        ys = known(shape(ctx, y))
         if len(ys) != 3:
             return f"input shape {ys} is not [M, TOPK, H]"
         if not isinstance(out, torch.fx.Node) or not isinstance(ctx.val(out), (Alloc, Coll)):
@@ -465,7 +466,7 @@ class MoeSumRule(InPlaceRule):
 
     def emit(self, node, ctx):
         y, out = node.args[:2]
-        M, TOPK, H = known_shape(ctx, y)
+        M, TOPK, H = known(shape(ctx, y))
         from verity.definitions.registry.prims import BF16
         yc = ctx.coll(y).reshape(Array(M, Array(TOPK, Array(H, BF16))))
         fn = ctx.kind("moe_sum", node, TOPK=TOPK, H=H)
@@ -567,8 +568,8 @@ class PaddedTopkSoftmaxRule(InPlaceRule):
     def emit(self, node, ctx):
         w, ids, tei, logits = node.args[:4]
         rows, _lead = rows_of(ctx.coll(logits))
-        M, E = known_shape(ctx, logits)
-        TOPK = known_shape(ctx, w)[1]
+        M, E = known(shape(ctx, logits))
+        TOPK = known(shape(ctx, w))[1]
         VPT = TOPK_SOFTMAX_VPT[ctx.dtype_of(logits)]
         route = PaddedRoute(logits, rows, M, E, TOPK, VPT)
         ctx.rebind(w, PaddedStage("topk_weights", route), self, what="topk_weights")
@@ -659,7 +660,7 @@ class PaddedFusedMoeKernelRule(InPlaceRule):
             return f"numerics_unregistered: b is not a bf16 value collection ({ctx.dtype_of(b)})"
         if not isinstance(ctx.val(c), (Alloc, Coll)) or ctx.dtype_of(c) != torch.bfloat16:
             return f"c is not a bf16 allocation/value ({ctx.dtype_of(c)})"
-        bs, cs = known_shape(ctx, b), known_shape(ctx, c)
+        bs, cs = known(shape(ctx, b)), known(shape(ctx, c))
         if len(bs) != 3 or len(cs) < 2:
             return f"ranks b{bs} c{cs}"
         E, N, K = bs
@@ -686,7 +687,7 @@ class PaddedFusedMoeKernelRule(InPlaceRule):
                 return f"up launch top_k {top_k} != the route's TOPK {route.TOPK}"
             if not isinstance(ctx.val(a), Coll) or not dtype_is(ctx, a, torch.bfloat16):
                 return f"up launch: a is not a bf16 value collection ({type(ctx.val(a)).__name__})"
-            as_ = known_shape(ctx, a)
+            as_ = known(shape(ctx, a))
             if len(as_) != 2 or as_ != (route.M, K):
                 return f"up launch: a{as_} is not the route's [M={route.M}, H={K}] hidden rows"
             if N % 2:
@@ -735,7 +736,7 @@ class PaddedFusedMoeKernelRule(InPlaceRule):
         sc = meta["scalars"]
         a, b, c = (launch_tensor(node, meta, n) for n in ("a_ptr", "b_ptr", "c_ptr"))
         mrw, nv = sc["MUL_ROUTED_WEIGHT"], sc["num_valid_tokens"]
-        E, N, K = known_shape(ctx, b)
+        E, N, K = known(shape(ctx, b))
         route = self._route(node, ctx, meta, sc, nv)
         sched = "naive" if sc.get("naive_block_assignment") is True else "sorted"
         ctx.bind_weight_role(b, self, "moe.expert_weight", E=E, K=K, N=N, construction=PADDED)
@@ -783,7 +784,7 @@ class PaddedViewRule(ViewRule):
 
     def emit(self, node, ctx):
         ctx.define(node, ctx.val(node.args[0]), view_of=node.args[0])
-        ctx.record(self, node, {"marker": type(ctx.val(node)).__name__, "from": list(known_shape(ctx, node.args[0])), "to": list(known_shape(ctx, node))},
+        ctx.record(self, node, {"marker": type(ctx.val(node)).__name__, "from": list(known(shape(ctx, node.args[0]))), "to": list(known(shape(ctx, node)))},
                    emitted="(view of a padded-block marker; no gates)")
 
 

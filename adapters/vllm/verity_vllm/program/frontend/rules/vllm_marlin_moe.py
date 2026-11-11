@@ -34,8 +34,9 @@ from verity_vllm.program.frontend.rules.base import OpRule, RuleInfo
 from verity_vllm.program.frontend.rules.common import (
     call_args,
     from_rows,
-    known_shape,
+    known,
     rows_of,
+    shape,
 )
 from verity_vllm.program.frontend.rules.vllm_bindings.observations import (
     active_target_profile,
@@ -106,7 +107,7 @@ class MarlinMoeAlignRule(OpRule):
         E, BM = a["num_experts"], a["moe_block_size"]
         if not (isinstance(E, int) and isinstance(BM, int) and E > 0 and BM > 0):
             return f"num_experts={E!r} moe_block_size={BM!r} are not static positive ints"
-        M = known_shape(ctx, a["topk_ids"])[0]
+        M = known(shape(ctx, a["topk_ids"]))[0]
         if (L := launch_tokens_of(node, M)) != M:
             return (f"numerics_unregistered: the launch routes {L} tokens, {L - M} of them other requests': moe_align_block_size sorts "
                     f"every pair of the launch, so this request's blocks and the launch's block count read their routing")
@@ -114,7 +115,7 @@ class MarlinMoeAlignRule(OpRule):
 
     def emit(self, node, ctx):
         a = call_args(node)
-        M, TOPK = known_shape(ctx, a["topk_ids"])
+        M, TOPK = known(shape(ctx, a["topk_ids"]))
         S = {"E": a["num_experts"], "P": M * TOPK, "BM": a["moe_block_size"]}
         ranks, blocks = ctx.kind("marlin_moe_rank", node, **S), ctx.kind("marlin_moe_align", node, P=S["P"], BM=S["BM"])
         ids = ctx.coll(a["topk_ids"]).reshape(Array(S["P"], I32_WORD))
@@ -153,16 +154,16 @@ class MarlinMoeGemmRule(OpRule):
             return r
         if (r := _value(ctx, a["topk_ids"], I32, (None, None), "topk_ids")):
             return r
-        (M, TOPK), top_k, mul, BM = known_shape(ctx, a["topk_ids"]), a["top_k"], a["mul_topk_weights"], a["moe_block_size"]
+        (M, TOPK), top_k, mul, BM = known(shape(ctx, a["topk_ids"])), a["top_k"], a["mul_topk_weights"], a["moe_block_size"]
         if (top_k, mul) not in ((TOPK, False), (1, True)):
             return f"numerics_unregistered: top_k={top_k!r}, mul_topk_weights={mul!r} is neither the w13 launch (top_k {TOPK}) nor w2 (top_k 1)"
         P = M * TOPK
         if (r := _value(ctx, a["x"], BF16, (P // top_k, None), "x")):
             return r
-        K = known_shape(ctx, a["x"])[1]
+        K = known(shape(ctx, a["x"]))[1]
         if (r := _value(ctx, a["w"], U8, (None, None, K // 2), "w")):
             return r
-        E, N, _ = known_shape(ctx, a["w"])
+        E, N, _ = known(shape(ctx, a["w"]))
         if (r := _value(ctx, a["w_scale"], U8, (E, N, K // MM.GROUP), "w_scale") or _value(ctx, a["blk"], I32, (P,), "blk")
                 or _value(ctx, a["par"], I32, (1,), "par") or (mul and _value(ctx, a["topk_weights"], F32, (M, TOPK), "topk_weights"))):
             return r
@@ -180,11 +181,13 @@ class MarlinMoeGemmRule(OpRule):
 
     def emit(self, node, ctx):
         a = call_args(node)
-        M, TOPK = known_shape(ctx, a["topk_ids"])
+        M, TOPK = known(shape(ctx, a["topk_ids"]))
         P, top_k, mul = M * TOPK, a["top_k"], a["mul_topk_weights"]
-        K = known_shape(ctx, a["x"])[1]
-        E, N, _ = known_shape(ctx, a["w"])
-        TK, TN, GRID = served_config(E, TOPK, K, N, top_k, launch_tokens_of(node, M))
+        K = known(shape(ctx, a["x"]))[1]
+        E, N, _ = known(shape(ctx, a["w"]))
+        cfg = served_config(E, TOPK, K, N, top_k, launch_tokens_of(node, M))
+        assert not isinstance(cfg, str), cfg  # `applies` refused a launch with no served configuration
+        TK, TN, GRID = cfg
         S = {"E": E, "K": K, "N": N, "TK": TK, "TN": TN, "GRID": GRID}
         fn = ctx.kind(self._role(a), node, **S, DOT=MM.DOT)
         x, _ = rows_of(ctx.coll(a["x"]))
