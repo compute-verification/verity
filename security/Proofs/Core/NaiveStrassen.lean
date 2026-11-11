@@ -8,7 +8,7 @@ public import Proofs.Core.NaiveStrassen.Eval
 # Naive tiled against Strassen: the statements, their witnesses and the four card tables
 
 Theorem 1 at `L = 12` and its size form at `c = 4096` are proved on every atom table that the RTX PRO 6000 data
-sheet's dominates (`Packed.Dom`), from one table, that sheet's. The table is computed and checked by
+sheet dominates (`Packed.Dom`), from one table, that sheet's. The table is computed and checked by
 `decide +kernel` (`NaiveStrassen/Eval.lean`): a pure kernel check, with no `native_decide` and no compiled code. Its
 soundness is the induction on `Sched` in `NaiveStrassen/Sound.lean`.
 
