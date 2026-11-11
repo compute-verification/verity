@@ -2,7 +2,7 @@
 linears' y checked bit for bit against steps.py's CPU oracle, int8_exact on the CPU, a GPU rerun and every row alone) with
 `exactlin.install()` first, so every linear serves from the two Triton kernels.  The bodies count their calls, written to
 OUT/exactlin_calls.json, so a run where they never served shows it.  Arguments are int8_exact_gpu's, plus `--scratch`
-(ignored), as served.sh passes it; run from integrations/vllm.  `--at` and `--by` are the pin entry's resolved_at and
+(ignored), as served.sh passes it; run from adapters/vllm.  `--at` and `--by` are the pin entry's resolved_at and
 resolved_by.
 
     SERVED_SCRIPT=benchmarks/hash/exactlin/values.py SERVED_KGATE=1 bash benchmarks/hash/exactlin/served.sh \
@@ -14,15 +14,19 @@ import argparse
 import json
 import sys
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import exactlin as X
 
+if TYPE_CHECKING:
+    from collections.abc import Callable
+
 CALLS = {"row_quant": 0, "product": 0}
 
 
-def counted(name: str, f):
-    def body(*args):
+def counted(name: str, f: Callable[..., object]) -> Callable[..., object]:
+    def body(*args: object) -> object:
         CALLS[name] += 1
         return f(*args)
     return body

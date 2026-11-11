@@ -35,7 +35,7 @@ One instance per tile at position ``(r % M, (r // M) % 8)`` with the rest of the
 other output word must come back ``+0`` (``other_positions_nonzero``).  Step ``s`` of every instance is one launch; the hardware's own
 D of step ``s`` is the C of step ``s + 1`` -- a mismatch propagates, as it would in a real chain, and is located at its first step.
 
-Domain check (``verity.ml.circuits.targets.target``: finite operands and finite accumulators at every step; a saturation *inside the last*
+Domain check (``verity.definitions.circuits.targets.target``: finite operands and finite accumulators at every step; a saturation *inside the last*
 transition is a valid output, D8): instances with a non-finite operand word or a non-finite hardware accumulator before the last step
 are ``out of domain``.  Positive tiers must have none; the negative tier's ``reject`` rows must trip it (its ``wrong`` rows must
 have ``hardware != claimed`` and ``hardware == correct``).
@@ -62,6 +62,7 @@ import sys
 import time
 from dataclasses import dataclass
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 import numpy as np
 from verity_config.settings import SHARED
@@ -69,9 +70,12 @@ from verity_config.settings import SHARED
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 import tc_probe as P  # sibling module: kernels, formats, instruction table, SASS check, result envelope
-from verity.ml.circuits.silicon import models as S
-from verity.ml.circuits.silicon.cast import f32_to_bf16_word
-from verity.ml.circuits.targets import target as T
+from verity.definitions.silicon import models as S
+from verity.definitions.silicon.cast import f32_to_bf16_word
+from verity.definitions.circuits.targets import target as T
+
+if TYPE_CHECKING:
+    from collections.abc import Callable
 
 REPO = Path(__file__).resolve().parents[2]
 N = P.N
@@ -204,7 +208,7 @@ def load_bench_instances(tier: str, root: Path | None, manifest_path: Path, lo: 
     return InstanceSet(tier=tier, a=x, b=w, c0=c0, acc=None, y=y.copy(), epilogue=EPILOGUE_BF16, negative=neg, **common)
 
 
-def fp8_random_finite_operands(rng: np.random.Generator, shape) -> np.ndarray:
+def fp8_random_finite_operands(rng: np.random.Generator, shape: tuple[int, ...]) -> np.ndarray:
     """Uniform E4M3 bytes without the NaN codes (``archive.direct.ligero.fp8.witness.random_finite_operands``, verbatim)."""
 
     w = rng.integers(0, 256, size=shape, dtype=np.int64)
@@ -213,7 +217,7 @@ def fp8_random_finite_operands(rng: np.random.Generator, shape) -> np.ndarray:
     return w
 
 
-def bf16_random_finite_operands(rng: np.random.Generator, shape) -> np.ndarray:
+def bf16_random_finite_operands(rng: np.random.Generator, shape: tuple[int, ...]) -> np.ndarray:
     """Finite BF16 words with exponent fields in [96, 160), one in ten a signed zero, one in ten a subnormal
     (``archive.direct.ligero.relations.random_finite_bf16``, verbatim)."""
 
@@ -240,7 +244,7 @@ class Synthetic:
     relation: str          # the digest prefix
     target: str
     instruction: str
-    model: object          # verity.ml.circuits.silicon.models.GroupSum
+    model: object          # verity.definitions.silicon.models.GroupSum
     operands: object       # (rng, shape) -> int64 words
     dtype: object          # the operand word dtype
     epilogue: str | None
@@ -311,7 +315,7 @@ def fp8_instances_digest(n: int, seed: int = FP8_ADA_SEED) -> str:
     return FP8_ADA_SYNTHETIC.digest(n, seed)
 
 
-def _synthetic_worker(job: tuple[str, int]):
+def _synthetic_worker(job: tuple[str, int]) -> tuple[int, np.ndarray, np.ndarray, np.ndarray]:
     spec, i = job
     syn = SYNTHETIC[spec]
     a, b, accs = syn.instance(i)
@@ -369,7 +373,7 @@ DATASETS = {
 }
 
 
-def load_instances(spec: str, args) -> InstanceSet:
+def load_instances(spec: str, args: argparse.Namespace) -> InstanceSet:
     if spec not in DATASETS:
         raise SystemExit(f"unknown input set {spec!r}; known: {', '.join(DATASETS)}")
     dataset, _, tier = spec.rpartition("/")
@@ -401,7 +405,7 @@ def epilogue_words(name: str | None, acc: np.ndarray) -> np.ndarray:
     raise ValueError(f"unknown epilogue {name!r}")
 
 
-def replay(probe, ins: P.Instruction, inst: InstanceSet, log=print) -> dict:
+def replay(probe: P.Probe, ins: P.Instruction, inst: InstanceSet, log: Callable[[str], None] = print) -> dict:
     """Run every instance of ``inst`` through ``probe`` (one instruction per step per tile) and compare every word."""
 
     M, K, fmt = ins.m, ins.k, ins.fmt

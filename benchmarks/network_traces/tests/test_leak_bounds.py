@@ -29,7 +29,7 @@ import pytest
 HERE = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(HERE))
 import leak_bounds as LB  # noqa: E402
-from verity.ml.protocols.certifier import ingress_scan as IS  # noqa: E402
+from verity.protocols.certifier.prover import ingress_scan as IS  # noqa: E402
 
 CENSUS = HERE.parents[1] / "benchmarks" / "census"
 #: the scan class of a window class of KO 1 at 4 lanes, a timestep every 16 buckets (`scan_state.scan_class(4, 1, 16)`)

@@ -125,7 +125,7 @@ record = "/workspace/research/deploy/record.jsonl"
 managed = ["/etc/systemd/system/user-1001.slice.d/50-vy-headroom.conf", "/etc/systemd/system/session-.scope.d/50-vy-job-memory.conf",
            "/etc/systemd/system/user@1001.service.d/50-vy-oom.conf", "/etc/systemd/system/ssh.service.d/50-vy-memory.conf"]
 
-# cpu-13 (a train slot and a proofs pool): only the verified queue's loop is deploy's there so far
+# cpu-13 (a train slot and a proofs pool): only the verified queue's loop and the retention collector are deploy's there so far
 [nodes.vy-nebius-cpu-13]
 record = "/workspace/research/deploy/record.jsonl"
 managed = ["/usr/local/sbin/vy-vqueue-*", "/usr/local/lib/vy-vqueue/*", "/usr/local/lib/vy-vqueue/bin/*", "/etc/systemd/system/vy-vqueue*"]
@@ -285,12 +285,12 @@ owner = "infra"
 
 # ---- the auditor host: no `research run` (/etc/vy/auditor lists no command: research.remote refuses every one, and slot_only.py
 # --auditor stops one from an older tree); after installing, `sudo systemctl enable --now vy-auditor-only.timer`. The challenger runs
-# through vy-challenger-gate (benchmarks/live_challenger/auditor.py): once installed, `sudo vy-challenger-setup GATE_KEYS --lock`
+# through vy-challenger-gate (verity/composite/device/live_challenger/auditor.py): once installed, `sudo vy-challenger-setup GATE_KEYS --lock`
 # (GATE_KEYS: `LANE TYPE BASE64 [COMMENT]` a line, each lane's own key, LANE `-` for a key that reads only; setup.sh), then
-# `git archive COMMIT verity benchmarks/live_challenger benchmarks/network_traces integrations/vllm/manifests/checkpoints-int8.json
+# `git archive COMMIT verity verity/composite/device/live_challenger benchmarks/network_traces adapters/vllm/manifests/checkpoints-int8.json
 # | ssh vy-admin@HOST sudo
 # vy-challenger-pin COMMIT`, then `sudo runuser -u
-# auditor -- python3 -I /opt/vy-challenger/current/benchmarks/live_challenger/auditor.py keygen` once.
+# auditor -- python3 -I /opt/vy-challenger/current/verity/composite/device/live_challenger/auditor.py keygen` once.
 # Its /etc/vy/peers is its own: it reaches the serving nodes over their public addresses with the auditor's tunnel key.
 
 [[file]]
@@ -356,10 +356,10 @@ nodes = ["vy-challenger-1"]
 owner = "infra"
 
 # ---- the verifier's auditor host, vy-auditor-1, an auditor host as above (/etc/vy/auditor, vy-auditor-only.timer). The verifier runs
-# through vy-verifier-gate (benchmarks/live_verifier/host.py): once installed, `sudo vy-verifier-setup GATE_KEYS TUNNEL_KEYS --lock`
+# through vy-verifier-gate (verity/protocols/poub/device/live_verifier/host.py): once installed, `sudo vy-verifier-setup GATE_KEYS TUNNEL_KEYS --lock`
 # (GATE_KEYS: `LANE TYPE BASE64 [COMMENT]` a line, LANE `-` for a key that reads only; TUNNEL_KEYS: `prover|challenger ADDRESS TYPE
 # BASE64 [COMMENT]`, the audited node's tunnel key and vy-challenger-1's; setup.sh), `sudo systemctl reload ssh`, then
-# `git archive COMMIT verity benchmarks/remote_session benchmarks/live_verifier tools/research/src/research
+# `git archive COMMIT verity benchmarks/remote_session verity/protocols/poub/device/live_verifier tools/research/src/research
 # tools/research/store.pod.toml | ssh vy-admin@HOST sudo vy-verifier-pin COMMIT`. /etc/vy/verifier.json is the host's challenger
 # and each audited node's capacities; the store's credential is infra's, in /etc/vy/verifier-store.env (root's, 0600).
 
@@ -442,7 +442,9 @@ run = ["systemd:vy-oom-order.timer"]
 owner = "infra"
 
 # The Lean check cache's caps: lean_audit.py --prune hourly as research, so a node's records trees stay at the 3 last
-# used, or one per `build` Lean slot where lean-slots has more (uncapped, they fill a node's /). lean_audit.py loads common.py by its repository path, so both keep that layout.
+# used, or one per `build` Lean slot where lean-slots has more (uncapped, they fill a node's /). lean_audit.py loads its modules
+# by their repository paths, so each keeps that layout: common.py, module_keys.py, settings.py, and module_keys's headers.py and
+# the task graph's contract.py (test_lean_prune runs the prune from these files alone).
 # After installing, `sudo systemctl enable --now vy-lean-prune.timer`.
 [[file]]
 path = "/usr/local/lib/vy-monitoring/lean-audit/tools/verity/lean/lean_audit.py"
@@ -454,6 +456,34 @@ owner = "infra"
 [[file]]
 path = "/usr/local/lib/vy-monitoring/lean-audit/tools/verity/check/common.py"
 src = "tools/verity/check/common.py"
+nodes = ["vy-nebius-1", "vy-nebius-2", "vy-nebius-cpu-1", "vy-nebius-cpu-2", "vy-nebius-cpu-3", "vy-nebius-cpu-4", "vy-nebius-cpu-5", "vy-nebius-cpu-6",
+         "vy-nebius-cpu-7", "vy-nebius-cpu-9", "vy-nebius-cpu-11", "vy-nebius-cpu-12"]
+owner = "infra"
+
+[[file]]
+path = "/usr/local/lib/vy-monitoring/lean-audit/tools/verity/lean/module_keys.py"
+src = "tools/verity/lean/module_keys.py"
+nodes = ["vy-nebius-1", "vy-nebius-2", "vy-nebius-cpu-1", "vy-nebius-cpu-2", "vy-nebius-cpu-3", "vy-nebius-cpu-4", "vy-nebius-cpu-5", "vy-nebius-cpu-6",
+         "vy-nebius-cpu-7", "vy-nebius-cpu-9", "vy-nebius-cpu-11", "vy-nebius-cpu-12"]
+owner = "infra"
+
+[[file]]
+path = "/usr/local/lib/vy-monitoring/lean-audit/tools/verity/lean/settings.py"
+src = "tools/verity/lean/settings.py"
+nodes = ["vy-nebius-1", "vy-nebius-2", "vy-nebius-cpu-1", "vy-nebius-cpu-2", "vy-nebius-cpu-3", "vy-nebius-cpu-4", "vy-nebius-cpu-5", "vy-nebius-cpu-6",
+         "vy-nebius-cpu-7", "vy-nebius-cpu-9", "vy-nebius-cpu-11", "vy-nebius-cpu-12"]
+owner = "infra"
+
+[[file]]
+path = "/usr/local/lib/vy-monitoring/lean-audit/tools/verity/lean/headers.py"
+src = "tools/verity/lean/headers.py"
+nodes = ["vy-nebius-1", "vy-nebius-2", "vy-nebius-cpu-1", "vy-nebius-cpu-2", "vy-nebius-cpu-3", "vy-nebius-cpu-4", "vy-nebius-cpu-5", "vy-nebius-cpu-6",
+         "vy-nebius-cpu-7", "vy-nebius-cpu-9", "vy-nebius-cpu-11", "vy-nebius-cpu-12"]
+owner = "infra"
+
+[[file]]
+path = "/usr/local/lib/vy-monitoring/lean-audit/tools/verity/graph/verity_graph/contract.py"
+src = "tools/verity/graph/verity_graph/contract.py"
 nodes = ["vy-nebius-1", "vy-nebius-2", "vy-nebius-cpu-1", "vy-nebius-cpu-2", "vy-nebius-cpu-3", "vy-nebius-cpu-4", "vy-nebius-cpu-5", "vy-nebius-cpu-6",
          "vy-nebius-cpu-7", "vy-nebius-cpu-9", "vy-nebius-cpu-11", "vy-nebius-cpu-12"]
 owner = "infra"
@@ -709,17 +739,23 @@ nodes = ["vy-nebius-1", "vy-nebius-2", "vy-nebius-cpu-1", "vy-nebius-cpu-2", "vy
 run = ["systemd:vy-store-evict-research.timer"]
 owner = "infra"
 
-[[file]]  # hourly `research retention gc --apply` while /workspace is over 80% (the evictors alone can leave a disk there with terabytes collectable)
+# The retention collector: hourly `research retention gc --apply` while /workspace is over 80% of its blocks or its inodes, on every
+# node that holds research runs: vy-store-evict-research's nodes and the nodes whose research pool `--on auto` places runs in
+# (auto.spill: every CPU node). The evictors alone can leave a disk there with terabytes collectable. After a node's first install,
+# `sudo systemctl daemon-reload && sudo systemctl enable --now vy-retention-gc.timer`.
+[[file]]
 path = "/etc/systemd/system/vy-retention-gc.service"
 src = "tools/research/src/research/pods/nebius/sky/retention_gc.service"
-nodes = ["vy-nebius-1", "vy-nebius-2", "vy-nebius-cpu-1", "vy-nebius-cpu-4", "vy-nebius-cpu-5"]
+nodes = ["vy-nebius-1", "vy-nebius-2", "vy-nebius-cpu-1", "vy-nebius-cpu-2", "vy-nebius-cpu-3", "vy-nebius-cpu-4", "vy-nebius-cpu-5",
+         "vy-nebius-cpu-6", "vy-nebius-cpu-7", "vy-nebius-cpu-9", "vy-nebius-cpu-11", "vy-nebius-cpu-12", "vy-nebius-cpu-13"]
 run = ["systemd:vy-retention-gc.timer"]
 owner = "infra"
 
 [[file]]
 path = "/etc/systemd/system/vy-retention-gc.timer"
 src = "tools/research/src/research/pods/nebius/sky/retention_gc.timer"
-nodes = ["vy-nebius-1", "vy-nebius-2", "vy-nebius-cpu-1", "vy-nebius-cpu-4", "vy-nebius-cpu-5"]
+nodes = ["vy-nebius-1", "vy-nebius-2", "vy-nebius-cpu-1", "vy-nebius-cpu-2", "vy-nebius-cpu-3", "vy-nebius-cpu-4", "vy-nebius-cpu-5",
+         "vy-nebius-cpu-6", "vy-nebius-cpu-7", "vy-nebius-cpu-9", "vy-nebius-cpu-11", "vy-nebius-cpu-12", "vy-nebius-cpu-13"]
 run = ["systemd:vy-retention-gc.timer"]
 owner = "infra"
 

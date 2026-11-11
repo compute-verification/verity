@@ -1,4 +1,4 @@
-"""flock-rust-tests: `verity/ml/flock/check_build.sh test` as check's flock-rust-tests step runs it, with cargo's build jobs and
+"""flock-rust-tests: `verity/protocols/flock/prover/check_build.sh test` as check's flock-rust-tests step runs it, with cargo's build jobs and
 the test threads at the task's cores: on the Flock checkout the script pins and keeps (`$FLOCK_CHECKOUT`), with this tree's
 patches and live crate, the Rust tests in release.  It fails when its log shows the tree at fault: a patch that doesn't apply or a
 crate that doesn't compile (`flock_circuit_build.FAILS`), or a test that failed (libtest's summary); any other failing exit is the

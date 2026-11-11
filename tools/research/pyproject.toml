@@ -18,11 +18,15 @@ packages = ["src/research"]
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]
+# a passed test's tmp_path is removed when it ends: its tests' git repositories, all kept, reach about 400,000 files at once,
+# and a check node with 8 million inodes runs out under a few of these runs
+tmp_path_retention_policy = "failed"
 
 [tool.verity.tests]
 # test files that start a program the read guard can't trace (git, lake, a compiler, a shell): keyed on the suite's whole tree
 untraced = [
     "tests/test_agents.py",
+    "tests/test_at_main.py",
     "tests/test_auto.py",
     "tests/test_binprov.py",
     "tests/test_bucket_index.py",
@@ -44,6 +48,7 @@ untraced = [
     "tests/test_drive_config.py",
     "tests/test_drive_executor.py",
     "tests/test_drive_hold_lift.py",
+    "tests/test_drive_locks.py",
     "tests/test_drive_lowrisk.py",
     "tests/test_drive_moves.py",
     "tests/test_drive_policy.py",
@@ -55,10 +60,12 @@ untraced = [
     "tests/test_evict_src.py",
     "tests/test_evict_src_local.py",
     "tests/test_fixture_fetch.py",
+    "tests/test_fleet.py",
     "tests/test_gates.py",
     "tests/test_holds.py",
     "tests/test_jobs_dispatch.py",
     "tests/test_jobuser.py",
+    "tests/test_labelauth.py", "tests/test_lean_prune.py",
     "tests/test_mem_admission.py",
     "tests/test_merge_gate.py",
     "tests/test_merge_shards.py",
@@ -88,6 +95,7 @@ untraced = [
     "tests/test_queue_ported.py",
     "tests/test_record_driver.py",
     "tests/test_record_result.py",
+    "tests/test_records_short_head.py",
     "tests/test_remote_adopt.py",
     "tests/test_remote_cwd.py",
     "tests/test_remote_local.py",
@@ -113,14 +121,17 @@ untraced = [
     "tests/test_store_vllm_tools.py",
     "tests/test_telemetry.py",
     "tests/test_undeclared_derivation.py",
+    "tests/test_vqueue_compare.py",
+    "tests/test_vqueue_loop.py",
+    "tests/test_vqueue_slim.py",
 ]
 # Test-only, and to move: some tests exercise this repository's Tools, workspace and fixtures rather than the tool itself.
-# test_store_vllm_tools loads the vLLM stage Tools and hashes their closure (integrations/vllm, verity,
+# test_store_vllm_tools loads the vLLM stage Tools and hashes their closure (adapters/vllm, verity,
 # catalog, kernels, core);
 # test_store_prov loads the tc_probe declaration (benchmarks/tc_probe), content-resolves a golden
-# fixture (verity/ml/circuits/ops/tests/fixtures) and git-archives benchmarks/tc_probe and verity/ml/circuits/silicon;
-# test_repo_replicas hashes every tracked fixture fixtures/artifacts.json registers (today under fixtures, integrations/vllm
-# and verity/ml/circuits/ops/tests/fixtures). test_pythonpath and test_notes derive every workspace member's import root from the
+# fixture (verity/definitions/ops/tests/fixtures) and git-archives benchmarks/tc_probe and verity/definitions/silicon;
+# test_repo_replicas hashes every tracked fixture fixtures/artifacts.json registers (today under fixtures, adapters/vllm
+# and verity/definitions/ops/tests/fixtures). test_pythonpath and test_notes derive every workspace member's import root from the
 # workspace's pyproject.toml files (research/pythonpath.py) and find each package in an untraced child, so those files are
 # listed: moving a member's root selects this suite. tools/verity/check/tool.py stays: the train gate parses it on main, and
 # test_jobs_vectors checks that it still can. infra/cluster: the console computes its usage rows with cluster.usage, and
@@ -137,9 +148,9 @@ untraced = [
 # and the files its `--inputs-key` loads (lean_audit.py, settings.py, module_keys.py, headers.py, check.py, siblings.py, axiom_probe.py,
 # tools/verity/check/common.py, slot.py, lean_slot.py, tools/verity/graph/verity_graph/contract.py): test_queue commits them
 # into its origin, so the records gate keys each commit's Lean inputs with its own code (`lean_keys`).
-inputs = [".agents/skills", "verity/README.md", ".gitignore", "fixtures", "infra/ops", "integrations/vllm", "verity", "verity/ml/circuits", "verity/ml/kernels",
-          "verity/core", "tools/verity/check/lean_slot.py", "tools/verity/check/slot.py", "tools/verity/check/tool.py", "tools/verity/check/drive.toml", "benchmarks/tc_probe",
-          "pyproject.toml", "tools/config/pyproject.toml", "verity/ml/flock/pyproject.toml", "benchmarks/numerical/pyproject.toml",
+inputs = [".agents/skills", "verity/README.md", ".gitignore", "fixtures", "infra/ops", "adapters/vllm", "verity", "verity/circuits", "verity/definitions/kernels",
+          "tools/verity/check/lean_slot.py", "tools/verity/check/slot.py", "tools/verity/check/tool.py", "tools/verity/check/drive.toml", "benchmarks/tc_probe",
+          "pyproject.toml", "verity/configuration/config/pyproject.toml", "verity/protocols/flock/prover/pyproject.toml", "benchmarks/numerical/pyproject.toml",
           "benchmarks/harness/pyproject.toml", "benchmarks/commitments/pyproject.toml", "benchmarks/network_traces/pyproject.toml",
           "benchmarks/pouw/pyproject.toml", "tools/verity/check/pyproject.toml", "tools/verity/check/settings.py",
           "tools/verity/circuit_check/pyproject.toml",
@@ -149,7 +160,8 @@ inputs = [".agents/skills", "verity/README.md", ".gitignore", "fixtures", "infra
           "tools/verity/check/move_check.py", "tools/verity/graph/tests/key_vectors.json", "tools/verity/lean/lean_changed.py",
           "tools/verity/lean/lean_audit.py", "tools/verity/lean/module_keys.py", "tools/verity/lean/headers.py",
           "tools/verity/lean/siblings.py", "tools/verity/lean/axiom_probe.py", "tools/verity/lean/settings.py", "tools/verity/check/common.py",
-          "tools/verity/graph/verity_graph/contract.py"]
+          "tools/verity/graph/verity_graph/contract.py",
+          "tools/verity/graph/verity_graph/__init__.py"]
 parallel = true
 # What the suites of packages depending on research read of it, and so key on in place of this directory: the store and its
 # telemetry, running and recording a run (`python -m research`, its CLI's other commands imported only when run), the merge
@@ -250,6 +262,12 @@ tests = [
 paths = ["tools/research/src/research/pods/nebius"]
 
 [[tool.verity.tests.reads]]
+tests = ["tests/test_lean_prune.py", "tests/test_retention.py"]
+paths = ["tools/research/src/research/pods/nebius/deploy.toml", "tools/research/src/research/pods/nebius/vy-lean-prune.service",
+         "tools/verity/lean/lean_audit.py", "tools/verity/lean/module_keys.py", "tools/verity/lean/settings.py",
+         "tools/verity/lean/headers.py", "tools/verity/check/common.py", "tools/verity/graph/verity_graph/contract.py"]
+
+[[tool.verity.tests.reads]]
 tests = ["tests/test_nebius_lockout.py"]
 paths = ["tools/research/src/research/pods/nebius/lockout"]
 
@@ -259,8 +277,8 @@ paths = ["tools/research/src/research/pods/nebius/monitoring"]
 
 [[tool.verity.tests.reads]]
 tests = ["tests/test_nebius_sky.py"]
-paths = ["integrations/vllm/verity_vllm/pipeline"]
+paths = ["adapters/vllm/verity_vllm/pipeline"]
 
 [[tool.verity.tests.reads]]
 tests = ["tests/test_store_vllm_tools.py"]
-paths = ["integrations/vllm", "verity"]
+paths = ["adapters/vllm", "verity"]

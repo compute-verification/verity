@@ -5,7 +5,7 @@ description: >
   scratch probes with #print axioms, exact?, trace_state; a slow proof), records, the fast path and check.py,
   stating a guarantee (counted extractors, what proved means), assumptions as named Props, listing, freezing and
   moving guarantees in lean-audit.json, a property's shape, upstream.py watches, parallel Lean lanes, and the standing
-  Lean rulings. Use when adding or changing Lean proofs, definitions or packages (verity/core/service/flock, Security
+  Lean rulings. Use when adding or changing Lean proofs, definitions or packages (verity/protocols/flock/verifier, Security
   and its Proofs and Properties, a protocol's lean/), when a Lean build or proof is slow or runs out of memory, editing
   a lean-audit.json or an ASSUMPTIONS.md ledger, bumping a Lean dependency, or preparing a Lean PR.
 ---
@@ -99,11 +99,12 @@ The rules are AGENTS.md "Lean"; the Lean check's reference is `tools/verity/lean
 
 ## Assumptions and guarantees
 
-- **An assumption** (AGENTS.md "Lean") is declared in `Definitions/Assumptions.lean`, the lock's `assumptions_module`,
-  or in a module under it when the public export copies its area (`Assumptions/Flock.lean`, since the root module
+- **An assumption** (AGENTS.md "Lean") is declared in `Definitions/Assumptions.lean`, the lock's `assumptions_module`
+  (a module or a list of them: `security/Properties` also lists `Properties/Assumptions.lean`, for one stated over the
+  code, which the spec can't import), or in a module under it when the public export copies its area (`Assumptions/Flock.lean`, since the root module
   reads Nci); an area's other premises live in its `Definitions/<Area>/Assumptions` (Flock's in
   `Proofs/Flock/Soundness/Assumptions` for now), each owner in the lock. Its docstring opens with its claim id
-  (`verity.core.claims`) and gives its rationale; a ledger points to it. `--update` digests every in-repo premise and
+  (`verity.claims`) and gives its rationale; a ledger points to it. `--update` digests every in-repo premise and
   the assumptions it mentions, so strengthening one changes a record.
 - **List what you cite**: a guarantee a ledger, table or PR cites as proved is in `guarantees`, its record committed with
   the proof.
@@ -184,7 +185,7 @@ Their history is in the decisions log.
   false in Lean: state it over random inputs or as a reduction. A claim resting on a falsified premise says nothing.
 - Probability and games are our own minimal definitions over Mathlib's `PMF`; soundness bridges to VCVio where needed.
 - What a physical region reads is not a premise: it follows from the circuit's regions and causality
-  (`width_into_region_le`; `Links`, `Covered` in `Security/Definitions/Accounting/Physical.lean`). A bound per
+  (`width_into_region_le`; `Links`, `Covered` in `security/Definitions/Accounting/Physical.lean`). A bound per
   server block is stated on `Accounting.Placed` with `WindowsAt`.
 - Verifier code compares `Json` by a match the kernel reduces, never by `BEq Json`'s `==`, a `partial def` no proof can
   read. A string is compared by `Spot.jsonStrIs`, which `Properties.Pouw.LiveSalt.jsonStrIs_eq` reads back.

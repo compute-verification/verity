@@ -324,6 +324,27 @@ def test_the_newest_published_ancestor_is_restored(s3, tmp_path, lake):
     assert "no cached build of an ancestor" in lines[-1]
 
 
+def test_a_build_published_before_a_layout_move_restores_at_the_packages_new_path(s3, tmp_path, lake):
+    """A record is keyed by the package's directory. A move renames it and changes no byte Lake hashes, so until
+    integration publishes a commit after the move, the package's build is the one under its former path."""
+    b, url = s3
+    r, rev = repo(tmp_path)
+    s = stage(tmp_path)
+    C.publish_one(r, rev, "pkg", tmp_path / "out", client(url), plat=PLAT, log=lambda m: None)
+    sh("git", "mv", "pkg", "moved", cwd=r)
+    lines = []
+    args = (client(url, READ), ["2" * 40, rev], [], lines.append, env(url, tmp_path), PLAT, lake[0])
+    assert not C.restore(r, "moved", *args) and "no cached build of an ancestor" in lines[-1], "no move is recorded"
+    record = r / "tools" / "research" / "src" / "research" / "store" / "moves.json"
+    record.parent.mkdir(parents=True)
+    record.write_text(json.dumps({"moves": [{"paths": {"older/": "pkg/"}}, {"paths": {"pkg/": "moved/"}}]}))
+    assert C.restore(r, "moved", *args)
+    assert f"main's build at {rev[:12]} (published as pkg, before a layout move) restored (1 artifacts;" in lines[-1]
+    assert {p.name: p.read_bytes() for p in lake[1].iterdir()} == {p.name: p.read_bytes() for p in s.iterdir()}
+    assert not C.restore(r, "moved", client(url, READ), [rev], [f"main/leanprover--lean4---v4.34.0/{PLAT}/pkg"],
+                         lines.append, env(url, tmp_path), PLAT, lake[0]), "a quarantined scope stays out"
+
+
 def test_a_tampered_blob_restores_nothing(s3, tmp_path, lake):
     b, url = s3
     r, rev = repo(tmp_path)
@@ -637,7 +658,7 @@ def _load(name: str, path: Path):
 @pytest.mark.skipif(LAKE is None, reason="no lake")
 def test_a_module_version_a_passing_audit_built_is_restored_on_another_tree(tmp_path, monkeypatch):
     """A kept build holds one tree's modules per package per node, so a check whose node's kept build came from an older tree
-    would rebuild over half of `Security/Proofs`' modules (most of the check's time). Lake,
+    would rebuild over half of `security/Proofs`' modules (most of the check's time). Lake,
     reading the cache in the build sandbox, restores each module version it holds instead of compiling it."""
     LC, LA = (_load(f"artifacts_{n}", HERE.parent / f"{n}.py") for n in ("check", "lean_audit"))
     pkg = tmp_path / "control"
@@ -994,7 +1015,7 @@ def test_the_daily_run_publishes_nothing_after_a_probe_a_refusal_an_unclean_tree
 
 def test_a_dependency_whose_name_lean_escapes_counts_as_fetched(tmp_path):
     """Lake writes a name Lean must escape as `«doc-gen4»` in the manifest and `doc-gen4` on disk; reading the manifest's
-    name raw made every package depending on doc-gen4 (Security/Proofs) look unfetched, and the cache built it from source."""
+    name raw made every package depending on doc-gen4 (security/Proofs) look unfetched, and the cache built it from source."""
     (tmp_path / "lake-manifest.json").write_text(json.dumps({"packages": [
         {"name": "«doc-gen4»", "type": "git"}, {"name": "Arklib", "type": "git"}, {"name": "security", "type": "path"}]}))
     (tmp_path / ".lake" / "packages" / "Arklib").mkdir(parents=True)

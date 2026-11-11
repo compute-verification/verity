@@ -31,7 +31,7 @@ from research.store import custody as CU
 
 NEBIUS = Path(registry.__file__).resolve().parent / "nebius"
 GPU_LEASE = Path(registry.__file__).resolve().parent / "sh" / "gpu_lease.sh"
-CHECKPOINTS = Path(__file__).resolve().parents[3] / "integrations" / "vllm" / "manifests" / "checkpoints.json"
+CHECKPOINTS = Path(__file__).resolve().parents[3] / "adapters" / "vllm" / "manifests" / "checkpoints.json"
 HOST = "203.0.113.7"
 
 
@@ -413,6 +413,9 @@ def test_gpu_lease_hands_out_disjoint_gpus_and_frees_them_when_the_holder_exits(
     assert [ln.split()[:2] for ln in lines[-3:]] == [["0", "held"], ["1", "held"], ["2", "free"]] and "run=r-test" in lines[-3]
     after = subprocess.run(["bash", str(GPU_LEASE), "status"], env=env, capture_output=True, text=True).stdout.split("\n")
     assert [ln.split()[:2] for ln in after if ln] == [["0", "free"], ["1", "free"], ["2", "free"]]
+    for i in range(3):      # an ended lease's line says so, and still names the run that held the GPU last
+        line = (tmp_path / "gl" / f"{i}.owner").read_text()
+        assert re.match(r"released=\d{4}-\d\d-\d\dT\d\d:\d\d:\d\dZ pid=\d+ run=r-test ", line), line
 
 
 @needs_flock
@@ -2574,10 +2577,10 @@ def test_n2_commit_keeps_a_row_whose_plans_are_keyed_to_other_code_on_node_1(tmp
     """A Build whose plans came from a job tree a redeploy then replaced has a Commit that, on node 2, runs from the new tree, finds
     the plans' code key differing and derives both with its GPU held at 0% for whole leases. submit refuses such a row
     before it touches node 2, so node 1's leased Commit derives the plans before it takes a GPU. The job tree is a stand-in whose
-    source_identity hashes one file (integrations/vllm's own tests cover code_identity)."""
+    source_identity hashes one file (adapters/vllm's own tests cover code_identity)."""
     row_name = "gemma2-9b__bf16__rtxpro6000__tp1__b8__i1024__o128__mixed__greedy__bi-eager"
     tree, row, bin_, log = tmp_path / "tree", tmp_path / "sweep" / row_name, tmp_path / "bin", tmp_path / "ssh.log"
-    pipeline = tree / "integrations" / "vllm" / "verity_vllm" / "pipeline"
+    pipeline = tree / "adapters" / "vllm" / "verity_vllm" / "pipeline"
     for d in (pipeline, row / "plan", bin_):
         d.mkdir(parents=True)
     (pipeline.parent / "__init__.py").write_text("")

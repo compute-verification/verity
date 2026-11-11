@@ -276,8 +276,8 @@ def test_a_record_that_holds_a_trust_for_the_first_time_is_tallied_and_sends_not
     new = _trust(_doc({"A.G": _g("G", "h1")}), ["A.G"], {"A.G": ["P1"]}, {"C.CR": "collision resistance"})
     assert spec._entries(old, new) == [] and [k for _, k, _ in spec._across({"x": old}, {"x": new})] == ["trust"]
     repo = _repo(tmp_path)
-    a = _commit(repo, "Security/lean-audit.json", old, "a")
-    b = _commit(repo, "Security/lean-audit.json", new, "b")
+    a = _commit(repo, "security/lean-audit.json", old, "a")
+    b = _commit(repo, "security/lean-audit.json", new, "b")
     assert spec.message(repo, a, b) is None
 
 
@@ -371,6 +371,20 @@ def test_a_record_that_moved_with_its_package_is_compared_at_its_old_path(tmp_pa
     edited = _commit(repo, "p/lean/lean-audit.json", _doc({"P.t": _g("P.t : C", H3), "P.u": _g("P.u : B", H2)}), "m")
     text = spec.message(repo, old, edited)
     assert "*p/lean*\n• changed guarantee `P.t`" in text and "new guarantee" not in text and "P.u" not in text
+
+
+def test_a_fixture_of_the_audits_tests_is_no_record(tmp_path):
+    """A layout move renamed a test fixture named `lean-audit.json` under the audit's directory, whose `reads` are lists:
+    read as a record it failed the DM, and Daniel was told the records couldn't be read."""
+    repo = _repo(tmp_path)
+    toy = {"guarantees": {"Core.G": {"owner": "@lean"}}, "reads": {"Core.G": ["Core.helper"]}}
+    old = _commit(repo, "tools/verity/lean/tests/fixtures/unread/Old/lean-audit.json", toy, "base")
+    subprocess.run(["git", "-C", str(repo), "mv", "tools/verity/lean/tests/fixtures/unread/Old",
+                    "tools/verity/lean/tests/fixtures/unread/new"], check=True)
+    moved = _commit(repo, "tools/verity/lean/tests/fixtures/unread/new/lean-audit.json", toy, "Layout move (#9)")
+    assert spec._records_changed(repo, old, moved) == [] and spec.message(repo, old, moved) is None
+    edited = _commit(repo, "tools/verity/lean/tests/fixtures/unread/new/lean-audit.json", {**toy, "roots": ["A"]}, "m")
+    assert spec.message(repo, moved, edited) is None
 
 
 def test_records_that_moved_between_lock_files_are_matched_by_name_and_tallied_as_moves(tmp_path):

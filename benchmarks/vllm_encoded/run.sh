@@ -34,7 +34,7 @@ MODEL=${MODEL:-$WORK/models/llama-3.1-8b-instruct}
 [ -x "$PY" ] && [ -f "$WORK/ready.json" ] || { echo "no $WORK/ready.json: run benchmarks/pouw/pearl_c_vllm/setup.sh"; exit 3; }
 export PATH=/usr/local/cuda-13.0/bin:$WORK/venv312/bin:$PATH FLASHINFER_CUDA_ARCH_LIST=12.0f HF_HOME=${HF_HOME:-/workspace/hf}
 . benchmarks/pouw/pearl_c_vllm/flashinfer_env.sh
-export PYTHONPATH=$PWD:$PWD/integrations/vllm CUDA_DEVICE_ORDER=PCI_BUS_ID VLLM_ENABLE_V1_MULTIPROCESSING=0
+export PYTHONPATH=$PWD:$PWD/adapters/vllm CUDA_DEVICE_ORDER=PCI_BUS_ID VLLM_ENABLE_V1_MULTIPROCESSING=0
 VE=benchmarks/vllm_encoded
 B=$(mktemp -d /tmp/vllm-encoded.XXXXXX); trap 'rm -rf "$B"' EXIT
 CU=(-O3 -gencode arch=compute_120a,code=sm_120a -std=c++17 -Xcompiler -fPIC -shared -Xptxas -v)

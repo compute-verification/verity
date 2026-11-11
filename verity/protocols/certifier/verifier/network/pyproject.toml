@@ -1,0 +1,33 @@
+# The network certificate check's port (`lean/`, `network-check serve`) against `audit.py`: a suite of `verity`'s tests,
+# run in the workspace's environment against the editable `verity`, after `check`'s Lean steps (`AFTER_LEAN`), since it
+# skips without `lake`. `lake` builds `lean/` and, through its path requires, the core protocol interface, the certifier
+# program, the LMS port and Flock's verifier, all under `verity/`.
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]
+
+[tool.verity.tests]
+# test files that start a program the read guard can't trace (git, lake, a compiler, a shell): keyed on the suite's whole tree
+untraced = [
+    "tests/test_lean_audit.py",
+    "tests/test_network_check_protocol.py",
+    "tests/test_network_period_protocol.py",
+    "tests/test_network_records_protocol.py",
+]
+inputs = ["verity"]
+
+# What these test files read that their source doesn't name (a tree a test walks, a module it loads by a name it computes,
+# what a program it starts reads): the graph's test-file tasks are keyed on it.
+
+[[tool.verity.tests.reads]]
+tests = ["tests/test_nci_baseline_difftest.py"]
+paths = ["verity/circuits", "verity/commitments", "verity/definitions", "verity/protocols/flock/prover", "verity/protocols/flock/pod", "verity/protocols/flock/agreement", "verity/protocols/flock/tool.py", "verity/protocols/certifier/prover", "verity/protocols/pous/prover", "verity/protocols/pouw/prover", "verity/protocols/poub/verifier/commitments", "verity/commitments/windows"]
+
+[[tool.verity.tests.reads]]
+tests = [
+    "tests/test_nci_desc_difftest.py",
+    "tests/test_nci_desc_fuzz.py",
+    "tests/test_nci_desc_liveness.py",
+    "tests/test_nci_lean_difftest.py",
+]
+paths = ["verity"]

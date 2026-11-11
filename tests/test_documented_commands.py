@@ -46,13 +46,13 @@ ROOT = Path(__file__).resolve().parents[1]
 #: (file, the command as parsed) -> "owner: why", each a documented command line that didn't parse when this test landed
 KNOWN = {
     ("benchmarks/commitments/README.md", "verity bench commitments"): "proofs: says it doesn't apply (no run.py or run.sh)",
-    ("examples/README.md", "verity demo dither_full_util"): "top: says it runs nothing yet (no runner on main)",
-    ("examples/dither_full_util/README.md", "verity demo dither_full_util"): "compute-accounting: says it runs nothing yet",
+    ("demos/README.md", "verity demo dither_full_util"): "top: says it runs nothing yet (no runner on main)",
+    ("demos/dither_full_util/README.md", "verity demo dither_full_util"): "compute-accounting: says it runs nothing yet",
     ("tools/research/README.md", "research keeper set NAME --on NODE"):
         "infra: names set, stop and status at once, and `set` takes its command after `--`",
     ("tools/research/src/research/slack.py", "research msg router"): "comms: a subcommand to come, named as one",
-    ("verity/core/protocols/remote/README.md", "verity verify proof"): "soundness: a command to come, named as one",
-    ("verity/core/protocols/remote/README.md", "verity verify remote"): "soundness: a command to come, named as one",
+    ("verity/protocols/remote/verifier/README.md", "verity verify proof"): "soundness: a command to come, named as one",
+    ("verity/protocols/remote/verifier/README.md", "verity verify remote"): "soundness: a command to come, named as one",
 }
 
 SPAN = re.compile(r"`([^`\n]+)`")
@@ -301,6 +301,7 @@ def _child() -> None:
     import research.cli
     import research.remote
     import research.store.local
+    import research.store.remote
     import verity_cli
 
     def acting(owner, name: str, why: str) -> None:
@@ -313,11 +314,12 @@ def _child() -> None:
 
         setattr(owner, name, wrapped)
 
-    # Resolving a machine, opening the evidence store or finding a program on PATH reads the operator's state, past the
-    # parse: `check.py --record --on auto` resolves a machine before it parses, `check.py --agreement-files` fetches from
-    # the store, and `check.py --preflight` runs uv when there is one.
+    # Resolving a machine, opening the evidence store or its remote, or finding a program on PATH reads the operator's state,
+    # past the parse: `check.py --record --on auto` resolves a machine before it parses, `check.py --agreement-files` signs
+    # URLs with the store's remote, and `check.py --preflight` runs uv when there is one.
     acting(research.remote, "load_machines", "reads the machine registry")
     acting(research.store.local.LocalStore, "__init__", "opens the evidence store")
+    acting(research.store.remote, "load_remote", "reads the store's remote config")
     acting(shutil, "which", "looks for a program to run")
 
     def enter(argv: list[str]):
