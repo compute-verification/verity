@@ -395,7 +395,7 @@ def retained(tmp_path_factory):
     np = pytest.importorskip("numpy")
     torch = pytest.importorskip("torch")
     GP = _passes_module()
-    sys.path.insert(0, str(HERE.parent / "clear"))
+    sys.path.insert(0, str(Path(__file__).resolve().parents[3] / "benchmarks/pouw/clear"))
     import clear_work as CW
     from clear_audit import Prover
     from verity_vllm.protocols.pouw import pearl_c as PPD
