@@ -16,7 +16,7 @@ BF16 = torch.bfloat16
 def _strides(n) -> tuple[int, ...] | None:
     """The exported operand's strides (fx `val` meta), or None."""
     v = n.meta.get("val") if isinstance(n, torch.fx.Node) else None
-    return tuple(int(s) for s in v.stride()) if hasattr(v, "stride") else None
+    return tuple(int(s) for s in v.stride()) if v is not None and hasattr(v, "stride") else None
 
 
 def _untransposed(ctx, b, K: int, N: int, hint: str) -> Coll:

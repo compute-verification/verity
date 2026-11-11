@@ -9,7 +9,7 @@ from verity.circuits.types import Array, Value
 from verity_vllm.program.frontend.derive import refuse
 from verity_vllm.program.frontend.rules.base import RuleInfo, StateRule
 from verity_vllm.program.frontend.rules.common import CACHED_PREFIX as STATE
-from verity_vllm.program.frontend.rules.common import dtype_is, shape
+from verity_vllm.program.frontend.rules.common import dtype_is, known_shape
 from verity_vllm.program.frontend.rules.vllm_bindings.operands import BF16
 
 
@@ -33,7 +33,7 @@ class KvPrefixRule(StateRule):
         prefix = node.args[0]
         if not isinstance(prefix, torch.fx.Node) or not isinstance(ctx.val(prefix), Coll) or not dtype_is(ctx, prefix, BF16):
             return "prefix is not a bf16 value collection"
-        s = shape(ctx, prefix)
+        s = known_shape(ctx, prefix)
         if len(s) != 4 or s[1] != 2 or s[2] < 1:
             return f"prefix has shape {s}, not [L, 2, C >= 1, KVH*D]"
         if ctx.state.get("kv_history") or ctx.state.get(STATE):
@@ -41,7 +41,7 @@ class KvPrefixRule(StateRule):
         return True
 
     def emit(self, node, ctx):
-        L, _, C, rl = shape(ctx, node.args[0])
+        L, _, C, rl = known_shape(ctx, node.args[0])
         coll = ctx.coll(node.args[0]).reshape(Array(L, Array(2, Array(C, Array(rl, Value(16))))))
         ctx.record(self, node, {"layers": L, "rows": C, "row_leaves": rl}, emitted="(pending cached prefix; no gates)",
                    cached_prefix={"C": C, "row_leaves": rl, "layers": []})

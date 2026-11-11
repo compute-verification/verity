@@ -25,6 +25,7 @@ from verity_vllm.program.frontend.rules.common import (
     attention_scale,
     dtype_is,
     from_rows,
+    known_shape,
     kv_logs,
     norm_kind,
     refuse_cached_prefix,
@@ -101,7 +102,7 @@ class ArgmaxTokenSelectRule(OpRule):
         r = row_value(ctx, node.args[0], "logits")
         if r:
             return r
-        shp = shape(ctx, node.args[0])
+        shp = known_shape(ctx, node.args[0])
         dim = node.args[1] if len(node.args) > 1 else node.kwargs.get("dim")
         keep = node.args[2] if len(node.args) > 2 else node.kwargs.get("keepdim", False)
         if keep:
@@ -264,8 +265,8 @@ class RmsNormRule(InPlaceRule):
             return r
         if not isinstance(ctx.val(out), (Alloc, Coll)):
             return "out is not an allocation/value"
-        if shape(ctx, w) != (shape(ctx, x)[-1],):
-            return f"weight {shape(ctx, w)} vs hidden {shape(ctx, x)[-1]}"
+        if shape(ctx, w) != (known_shape(ctx, x)[-1],):
+            return f"weight {shape(ctx, w)} vs hidden {known_shape(ctx, x)[-1]}"
         if shape(ctx, out) != shape(ctx, x):
             return "out shape differs from x"
         if not isinstance(eps, float):
@@ -307,7 +308,7 @@ class FusedAddRmsNormRule(InPlaceRule):
             return "x/residual is an unwritten allocation"
         if shape(ctx, x) != shape(ctx, res):
             return "x and residual differ in shape"
-        if shape(ctx, w) != (shape(ctx, x)[-1],):
+        if shape(ctx, w) != (known_shape(ctx, x)[-1],):
             return "weight shape vs hidden size"
         if not isinstance(eps, float):
             return "eps is not a static float"
@@ -365,10 +366,10 @@ class RotaryEmbeddingRule(InPlaceRule):
                 return r
         if not is_neox:
             return "numerics_unregistered: GPT-J (interleaved) rotation has no registered kind"
-        cs = shape(ctx, cache)
+        cs = known_shape(ctx, cache)
         if len(cs) != 2 or cs[1] != head_size:
             return f"cos_sin_cache {cs} vs head_size {head_size}"
-        qs = shape(ctx, q)
+        qs = known_shape(ctx, q)
         if qs[-1] % head_size and (len(qs) < 2 or qs[-1] != head_size):
             return f"query last dim {qs[-1]} not a multiple of head_size"
         T = ctx.val(pos).shape[0] if ctx.val(pos).shape else 1
@@ -463,7 +464,7 @@ class UnifiedAttentionRule(StateRule):
                 return f"{nm} is an unwritten allocation"
         if not isinstance(layer_name, str):
             return "layer_name is not a static string"
-        qs, ks, vs = shape(ctx, q), shape(ctx, k), shape(ctx, v)
+        qs, ks, vs = known_shape(ctx, q), known_shape(ctx, k), shape(ctx, v)
         if qs[0] != ks[0] or ks != vs:
             return f"row counts differ q{qs} k{ks} v{vs}"
         return True

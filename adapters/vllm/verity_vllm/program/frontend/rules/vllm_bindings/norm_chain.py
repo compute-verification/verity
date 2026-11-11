@@ -9,6 +9,7 @@ from verity_vllm.program.frontend.rules.base import OpRule, RuleInfo, ViewRule
 from verity_vllm.program.frontend.rules.common import (
     dtype_is,
     from_rows,
+    known_shape,
     rows_of,
     scalar_kind,
     shape,
@@ -106,7 +107,7 @@ class WidenBf16ToF32Rule(ViewRule):
     def emit(self, node, ctx):
         x = node.args[0]
         ctx.define(node, ctx.coll(x), view_of=x)
-        ctx.record(self, node, {"shape": list(shape(ctx, x)), "widened_words": 16}, emitted="transparent widening (no gates; readers bind *Bf16 kinds)")
+        ctx.record(self, node, {"shape": list(known_shape(ctx, x)), "widened_words": 16}, emitted="transparent widening (no gates; readers bind *Bf16 kinds)")
 
 
 class NarrowF32ToBf16Rule(OpRule):
@@ -235,14 +236,14 @@ class MeanDimBIRule(OpRule):
             return "numerics_unregistered: mean of a widened bf16 view has no Definition (MeanTriton_v1 reads f32)"
         dims = node.args[1] if len(node.args) > 1 else node.kwargs.get("dim")
         keep = node.args[2] if len(node.args) > 2 else node.kwargs.get("keepdim", False)
-        rank = len(shape(ctx, x))
+        rank = len(known_shape(ctx, x))
         if not isinstance(dims, (list, tuple)) or len(dims) != 1 or int(dims[0]) not in (-1, rank - 1):
             return f"dim {dims!r} is not the last axis"
         if keep is not True:
             return "keepdim is not True"
         if node.kwargs.get("dtype") is not None or (len(node.args) > 3 and node.args[3] is not None):
             return "an explicit dtype argument is not the modelled call"
-        if shape(ctx, node) != tuple(shape(ctx, x)[:-1]) + (1,):
+        if shape(ctx, node) != tuple(known_shape(ctx, x)[:-1]) + (1,):
             return f"output shape {shape(ctx, node)} is not [.., 1]"
         return self._dispatch_ok() or True
 
@@ -396,7 +397,7 @@ class MulF32Rule(OpRule):
             r = _f32_rows(ctx, a, nm)
             if r:
                 return r
-        sx, sy = shape(ctx, x), shape(ctx, y)
+        sx, sy = known_shape(ctx, x), known_shape(ctx, y)
         if len(sx) < 2:
             return f"x {sx} has no rows (rank >= 2 needed)"
         N = sx[-1]

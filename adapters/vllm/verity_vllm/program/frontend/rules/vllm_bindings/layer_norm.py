@@ -8,6 +8,7 @@ from verity.definitions.registry import layer_norm as _LN
 from verity_vllm.program.frontend.rules.base import OpRule, RuleInfo
 from verity_vllm.program.frontend.rules.common import (
     from_rows,
+    known_shape,
     norm_kind,
     row_value,
     rows_of,
@@ -55,7 +56,7 @@ class LayerNormAtenRule(OpRule):
                 return f"{nm} is not a value collection"
         if isinstance(eps, bool) or not isinstance(eps, (int, float)):
             return f"eps {eps!r} is not a static number"
-        xs = shape(ctx, x)
+        xs = known_shape(ctx, x)
         N = xs[-1]
         if not isinstance(ns, (list, tuple)) or tuple(ns) != (N,):
             return f"normalized_shape {ns} is not the last dim of x {xs}"

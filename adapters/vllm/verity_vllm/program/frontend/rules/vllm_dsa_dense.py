@@ -26,7 +26,7 @@ from verity.definitions.registry import fa3_split
 
 from verity_vllm.program.frontend.derive import refuse
 from verity_vllm.program.frontend.rules.base import RuleInfo, StateRule
-from verity_vllm.program.frontend.rules.common import shape
+from verity_vllm.program.frontend.rules.common import known_shape, shape
 from verity_vllm.program.frontend.rules.vllm_bindings.observations import (
     _OBSERVED,
     active_target_profile,
@@ -192,8 +192,8 @@ class DsaDenseMhaRule(StateRule):
         mp, h = ctx.module_path(node), ctx.hint_name(node)
         pos = ctx.static_index(a["positions"]).flat()
         T = len(pos)
-        _, NH, P = shape(ctx, a["q_nope"])
-        D = P + shape(ctx, a["k_pe"])[-1]
+        _, NH, P = known_shape(ctx, a["q_nope"])
+        D = P + known_shape(ctx, a["k_pe"])[-1]
         hist, P0 = _open_history(ctx, node, layer, pos, has)
         if P0:
             refuse("numerics_unregistered", node, mp, f"{layer!r}: a dense-MHA prefill of {T} rows after {P0} history rows runs over a "

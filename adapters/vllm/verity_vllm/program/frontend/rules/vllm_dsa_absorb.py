@@ -11,7 +11,7 @@ import torch
 from verity.circuits.refs import array_of
 
 from verity_vllm.program.frontend.rules.base import OpRule, RuleInfo
-from verity_vllm.program.frontend.rules.common import shape
+from verity_vllm.program.frontend.rules.common import known_shape, shape
 from verity_vllm.program.frontend.rules.patterns import Consumed
 from verity_vllm.program.frontend.rules.vllm_bindings.observations import (
     active_target_profile,
@@ -42,7 +42,7 @@ class MlaAbsorbBmmRule(OpRule):
             return r
         if (r := _value(ctx, x, BF16, (None, None, None), "x")):
             return r
-        B, _, K = shape(ctx, x)
+        B, _, K = known_shape(ctx, x)
         if (r := _value(ctx, w, BF16, (B, K, None), "W")):
             return r
         from verity_vllm.program.frontend import targets as TG
@@ -55,8 +55,8 @@ class MlaAbsorbBmmRule(OpRule):
     def emit(self, node, ctx):
         from verity_vllm.program.frontend import targets as TG
         x, w = node.args[0], node.args[1]
-        B, M, K = shape(ctx, x)
-        N = shape(ctx, w)[2]
+        B, M, K = known_shape(ctx, x)
+        N = known_shape(ctx, w)[2]
         DOT = TG.tensor_core_dot(active_target_profile())
         fn = ctx.kind("batched_gemm", node, B=B, K=K, N=N, DOT=DOT)
         where = ctx.module_path(node)
@@ -127,10 +127,10 @@ class MlaAbsorbTransposePatternRule(OpRule):
         w = bmm.args[1]
         if ctx.weight_of(w) is None:
             return "the right operand is not a parameter"
-        M, B, K = shape(ctx, x)
+        M, B, K = known_shape(ctx, x)
         if (r := _value(ctx, w, BF16, (B, K, None), "W")):
             return r
-        N = shape(ctx, w)[2]
+        N = known_shape(ctx, w)[2]
         if shape(ctx, bmm) != (B, M, N) or shape(ctx, out) != (M, B, N):
             return f"the bmm / trailing transpose shapes are {shape(ctx, bmm)} / {shape(ctx, out)}, not {(B, M, N)} / {(M, B, N)}"
         if (r := _missing(ctx, ["batched_gemm"])):
