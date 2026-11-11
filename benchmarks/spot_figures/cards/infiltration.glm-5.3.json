@@ -14,7 +14,7 @@
   "form": "write",
   "unit": "bit",
   "caption": "Deferred interiors at a layer of a token (solid): serving commits each layer's residual stream, MLA K/V and indexer keys (1.05 MB a token, hashed at 2.1% of the scope's compute, outside the budget); a replay block is one layer of one token (its footprint at most 6,691 proof blocks), and a statement holds one replay block's sampled proof blocks of one Definition. The bound is the write form (infiltration_bound): the output bits of the incorrect proof blocks, the committed values the prover wrote in place of what the circuit computes, served or not, so no output size caps it. One steering vector (one token, one layer) is 98,304 bits. This is not the exfiltration panel's design: two-stage there commits only tokens and certifies infiltration only through the served outputs, and under this design exfiltration is at most this curve plus which blocks are wrong. Advice is not a write, so the curves hold in every advice regime.",
-  "consumer": "verity.core.protocols.spot.consumers.infiltration_bound",
+  "consumer": "verity.protocols.spot.verifier.consumers.infiltration_bound",
   "cap_bits_per_block": 107804.30769230769,
   "replay_blocks_per_token": 78,
   "boundary_bytes_per_token": 1051092.0,

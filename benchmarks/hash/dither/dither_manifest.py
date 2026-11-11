@@ -29,7 +29,7 @@ import dither_one as DO
 from dither_fused import CM, CO
 
 if TYPE_CHECKING:
-    from verity.core.protocols.spot.challenger import ChallengerKey
+    from verity.protocols.spot.device.challenger import ChallengerKey
 
 SCHEMA = "verity/dither-so/window-manifest/v1"
 TAIL_KIND, FINAL_KIND, LATE_KIND, MANIFEST_KIND = "receipt-tail", "round-final", "round-late", "window-manifest"

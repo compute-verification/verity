@@ -5,12 +5,12 @@ and `python tests/test_walkthrough.py` prints what the guide prints.
 """
 from __future__ import annotations
 
-from verity.ml.circuits.boolean import BIT
-from verity.ml.circuits.defs import CompositeDefinition, bind
-from verity.ml.circuits.ops.boolean.gemm import GEMM_AMPERE, Gemm
-from verity.ml.circuits.program import Program
-from verity.ml.circuits.refs import tuple_of
-from verity.ml.circuits.types import Array, Tuple
+from verity.circuits.boolean import BIT
+from verity.circuits.defs import CompositeDefinition, bind
+from verity.definitions.ops.boolean.gemm import GEMM_AMPERE, Gemm
+from verity.circuits.program import Program
+from verity.circuits.refs import tuple_of
+from verity.circuits.types import Array, Tuple
 
 from datacenter import (FLEET_CLOSED, Accounts, Append, Assumption, Cadence, Carried, Challenge, Credit, Datacenter,
                         Deviation, DeviceEntry, Fleet, Interval, LinkEntry, Maintenance, Plan, Port, ReadWindow,
