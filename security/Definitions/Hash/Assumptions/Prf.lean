@@ -27,7 +27,7 @@ message block; the inputs are `Q` public strings `xs i`, none a prefix of anothe
 digests do (a random function's answers at `Q` distinct inputs), plus `ε t Q`, where `t` is the test's time and `Q`
 (`Fintype.card ι`) its queries. The test has uniform coins of its own (`Y`), as a randomized distinguisher does.
 
-What it assumes of SHA-512 is what the `prf/sha-512` claim names (`verity.core.claims`): its compression function is a
+What it assumes of SHA-512 is what the `prf/sha-512` claim names (`verity.claims`): its compression function is a
 PRF keyed by its chaining value, which makes the cascade a PRF on prefix-free inputs (Bellare, Canetti and Krawczyk
 1996), and a dual PRF keyed by the secret bytes of its first message block, as the HMAC analyses use. Prefix-free
 inputs keep length extension out: no padded input is a prefix of another. `ε` is the claim's advantage function, the

@@ -16,7 +16,7 @@ resource audit shares:
   at which tick each device begins each engine step (`ticks`). A value is placed at the tick its device begins its step
   (`Placement.tick`).
 * **Store.** The registered store with the memory map beside it (I3, `memory-map/v1` of
-  `verity/core/protocols/remote_bandwidth/memory_map.py`): `N` registered blocks, the fresh indices each serving step
+  `verity/protocols/poub/verifier/memory_map.py`): `N` registered blocks, the fresh indices each serving step
   wrote and those it freed, and each block's payload. A block is written once, complete and encoded, so its payload is
   a function of its index. Step `s`'s record takes effect after step `s`'s reads: a block is written in the record of
   the step before its first encoded read, readable from the step after, and freed in the record of a step no earlier
@@ -24,8 +24,8 @@ resource audit shares:
 
 A step is always an **engine step**: the engine's `s`-th step, never a device tick.
 
-`verity/ml/circuits/requirement.py` (`Placement`, `Store`) and its code-Lean port
-`verity/core/primitives/requirement/CircuitRequirement.lean` are their executable forms.
+`verity/definitions/circuits/requirement.py` (`Placement`, `Store`) and its code-Lean port
+`verity/definitions/requirement/CircuitRequirement.lean` are their executable forms.
 -/
 
 @[expose] public section

@@ -77,7 +77,7 @@ and the registration piece publishes, beside the fan-out, the tied names it let 
 acceptance rests on that later check.
 
 A verifier of the per-member form (`OneStageZk`) names its members (`members`: each its units and its circuit's units a
-proof block, META `vus_per_block`), and after R7 the check refuses a member whose fewest and most sampled proof blocks under the
+proof block, META `vus_per_block`), and after R8 the check refuses a member whose fewest and most sampled proof blocks under the
 sampling design the sample runs on, over the samples that end, give different link points, a sampling design it can't sample on, or one no sample of
 which ends (`link-points`, `linkRefused`): some sample ends, a sample that ends gives each member one count, and one that
 runs out of coins fails the window (`OneStageZk.RAN_OUT`).

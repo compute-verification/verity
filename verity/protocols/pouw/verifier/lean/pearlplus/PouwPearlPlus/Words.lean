@@ -11,7 +11,7 @@ public import PouwPearlPlus.Records
 # A tile's words under Pearl-C v1 -h3 on the H100 (`pearl_c.PearlC.encode`, `checked`, `leaf`)
 
 The words a drawn tile's openings determine, each step in the Python's order and exact semantics (`pearl_c`, `pearl_kw`;
-FP32 steps `verity.ml.circuits.silicon.fp32`, here `Evaluate.Fp32`'s; the FP8 atom and BF16 step the H100's,
+FP32 steps `verity.definitions.silicon.fp32`, here `Evaluate.Fp32`'s; the FP8 atom and BF16 step the H100's,
 `HOPPER_E4M3_K32` and `HOPPER_BF16_WGMMA_K16`, here `Evaluate.TC`'s):
 
 * **Noise.** -h3's `s512(ℓ, m)` is the first 32 bytes of SHA-512 over `pearl-c/h3s/ℓ\0` zero-padded to 128 bytes, then `m`.

@@ -5,7 +5,7 @@ public import Definitions.Core.Transport
 /-!
 # The transport's named assumptions
 
-The premises on a channel between an auditor party and the prover (`verity.ml.crypto.transport`). The two placement
+The premises on a channel between an auditor party and the prover (`verity.commitments.crypto.transport`). The two placement
 premises say who can read a channel's bytes in transit, and nothing proves them; the two cryptographic ones are what the
 key schedule and the record layer give, and are theorem targets from the claims their docstrings name.
 `WitnessPathPrivateOrChannelHides` names the one hypothesis a guarantee takes when either of two of them serves, and is

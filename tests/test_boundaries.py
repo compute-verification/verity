@@ -135,6 +135,7 @@ PLACE: dict[str, tuple[str, ...]] = {
     "core.attest": ("commitments/attest",),
     "core.claims": ("claims",),
     "core.deploy": ("configuration/deploy",),
+    "core.periods": ("periods",),
     "core.devices.memory_challenger": ("protocols/pous/device",),
     "core.protocols.certifier": ("protocols/certifier/verifier",),
     "core.protocols.pous": ("protocols/pous/verifier", "protocols/pous/device/challenger_session.py",

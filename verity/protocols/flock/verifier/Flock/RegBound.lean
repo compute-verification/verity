@@ -57,7 +57,7 @@ def ofJson (j : Json) : V (Array Bound) := do
     if root.size != 64 || domain.size != 64 then throw s!"{ctx}: bound port {name}: a 64-byte root and domain"
     return { name, root, domain }
 
-/-- The format of a window's registered circuit record (`verity.ml.windows.interface.CIRCUIT`), the interface whose
+/-- The format of a window's registered circuit record (`verity.commitments.windows.interface.CIRCUIT`), the interface whose
 registered reads declare which ports read registered values. -/
 def INTERFACE : String := "verity/window-circuit/v1"
 

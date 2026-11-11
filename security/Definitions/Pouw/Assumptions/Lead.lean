@@ -9,7 +9,7 @@ public import Definitions.Core.Assumptions
 
 The premises `Pouw.Guarantees.Lead.G` reads, beside `H32` (`Pouw.Dimension.H100.H32`, reused). Each is a named
 `Prop` about `Real`, the strategies the node can run on a call, or about the protocol's devices. Each docstring opens
-with its claim id; a `(proposed)` id is not yet in `verity.core.claims`.
+with its claim id; a `(proposed)` id is not yet in `verity.claims`.
 
 The device and model premises:
 * `W1`: the node's instructions are `MH100w`'s, priced by the W1 table, with no free value at a coin value.

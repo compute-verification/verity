@@ -6,8 +6,8 @@ public import CoreProtocol.Period
 /-!
 # The periods difftest: `CoreProtocol.Period`'s functions behind `Difftest.serve`
 
-`core-periods-difftest` serves `table` to the core difftest harness (`verity/core/difftest`), whose Python half
-(`verity/core/periods/tests/test_periods_difftest.py`) holds each function to `verity.core.periods`:
+`core-periods-difftest` serves `table` to the core difftest harness (`verity/difftest`), whose Python half
+(`verity/periods/tests/test_periods_difftest.py`) holds each function to `verity.periods`:
 
 * `span`: a span read from its JSON, and its stop;
 * `within`: whether span `inner` lies within span `outer`;
