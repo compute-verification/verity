@@ -34,7 +34,6 @@ from pathlib import Path
 from verity_difftest import Server, build, canonical
 
 HERE = Path(__file__).resolve().parent
-ROOT = Path(__file__).resolve().parents[5]
 
 
 def _generator():
@@ -110,7 +109,7 @@ def _lean_side(server: Server, fn: str, value) -> str:
 def compare() -> tuple[list[dict], int]:
     """Every transcript with both outputs, and how many vectors the files hold."""
     gen = _generator()
-    reference, wire, _ = py = gen._python(ROOT)
+    reference, wire, _ = py = gen._python()
     doc = json.loads(reference.VECTORS.read_bytes())
     if hashlib.sha512(reference.VECTORS.read_bytes()).hexdigest() != reference.VECTORS_SHA512:
         raise SystemExit("vectors.json is not the file reference.VECTORS_SHA512 pins")

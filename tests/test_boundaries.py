@@ -186,7 +186,7 @@ _LISTED = {*_UNIT_AT, *NO_UNIT}
 #: below, which are no unit's (a ``SEPARATE`` tree, a grouping's own tests, a file beside a unit): what else is ml's, and
 #: what else is core's, from ``verity/``.
 ML_TREES = ("protocols/flock/agreement", "protocols/flock/pod", "protocols/flock/prover", "protocols/flock/tool.py",
-            "protocols/poub/verifier/commitments/gates/block_check.circuit-check.py")
+            "protocols/poub/prover", "protocols/poub/verifier/commitments/gates/block_check.circuit-check.py")
 CORE_TREES = ("commitments/identity", "commitments/lms", "definitions/evaluate", "definitions/requirement", "difftest",
               "protocols/certifier/device", "protocols/flock/sigma", "protocols/inference_only/verifier",
               "protocols/recursion", "protocols/remote", "protocols/tests")
@@ -202,10 +202,12 @@ DEPENDENCIES = {"numpy"}
 #: Trees under ``verity/`` with import roots of their own: Flock's distribution (``verity_flock``) and its verifier's
 #: scripts, the differential test of the Lean against its Python (``verity_difftest``, which their tests import, on
 #: Hypothesis), and the PoUS Lean check (``pous-check``), whose Python is run by path beside ``benchmarks/pous``: its difftest generator, which its ``lean-audit.json`` runs, and ``interop.py``,
-#: which holds it to the wire's Python reference through ``verity_difftest``.
+#: which holds it to the wire's Python reference through ``verity_difftest``.  PoUB's prover and PoUS's P2 prover run on a
+#: GPU through torch, which ``verity`` never imports: each is loaded by path under its own names (``prover``, ``device``,
+#: ``kv``, ``paged``; the package ``p2_store``), by the vLLM adapter and by its harness in ``benchmarks/``.
 SEPARATE = ("protocols/flock/agreement", "protocols/flock/pod", "protocols/flock/prover", "protocols/flock/tool.py",
             "difftest", "protocols/pous/verifier/check", "configuration/config", "protocols/inference_only/rho",
-            "protocols/inference_only/nci")
+            "protocols/inference_only/nci", "protocols/poub/prover", "protocols/pous/prover/p2")
 #: Source subtrees that must stay stdlib-only, the scalar references, and within them what may use numpy.
 NUMPY_FREE = ("circuits", "definitions/circuits", "definitions/silicon", "commitments/randomness", "claims", "hardware")
 NUMPY_USERS = ("circuits/evaluation", "circuits/boolean/forms.py")
@@ -235,6 +237,12 @@ ML_IMPORTS_CORE = {
     "protocols/pouw/prover/*": "PoUW's circuits and schemes, which its verifier doesn't read, are stated over the protocol's "
                            "parameters, records and Python references in core (`pouw.protocol`, `registration`, `window`, "
                            "`spot.one_stage`, ...); they shrink as those references leave core",
+    "protocols/poub/prover/*": "PoUB's prover answers its verifier over the verifier's own wire, coins, receipts, codec, "
+                           "store layout and memory map (`poub.verifier.session.wire`, `coins`, `receipts`, `codec`, "
+                           "`store`, `memory_map`, `audit`), so the two can't disagree on a format",
+    "protocols/pous/prover/p2/*": "P2's store encodes under the verifier's setup, labels, layout and scheme "
+                              "(`pous.verifier.setup`, `labels`, `layout`, `schemes.p2`) and is held to its reference "
+                              "decode (`pous.verifier.p2_v1.reference`)",
     "protocols/certifier/prover/*": "the certifier's Boolean Definitions that core doesn't read extend the ones it does "
                                 "(`head_check`'s gates, `cache_step`, `compile_slice`, `replay_chain`, `arith_encode`, "
                                 "`io_tie`, ...) and are stated over its advice and link-window layout in core (`advice`, "
@@ -288,13 +296,8 @@ INFRA_IMPORTERS = {
 #: uses it.  It only shrinks.
 BENCHMARKS_IMPORTERS = {
     # the served path: verity_vllm runs benchmarks' code
-    "adapters/vllm/verity_vllm/protocols/pous.py": "memory-accounting: P2's store (`benchmarks/pous/p2_v1`) and the "
-                                                       "staging decode (`benchmarks/torch_gpu/p2_stage`), through "
-                                                       "`config.P2_POUS` and `config.P2_STAGE`",
-    "adapters/vllm/verity_vllm/protocols/remote_bandwidth/remote.py": "circuits (vllm): the remote session's processes "
-                                                                          "(`benchmarks/remote_session`, "
-                                                                          "`config.REMOTE_SESSION`) and `paged.py` "
-                                                                          "(`benchmarks/vllm_encoded`)",
+    "adapters/vllm/verity_vllm/protocols/pous.py": "memory-accounting: P2's staging decode "
+                                                       "(`benchmarks/torch_gpu/p2_stage`), through `config.P2_STAGE`",
     # Flock's measurement campaign, its tests, and the frozen instance sets `instances` reads
     **dict.fromkeys((
         "verity/protocols/flock/pod/gemm_hill.py", "verity/protocols/flock/pod/read_gadget.py",
@@ -311,10 +314,8 @@ BENCHMARKS_IMPORTERS = {
     # tests and vector scripts that check against a benchmark's reference
     "verity/protocols/pouw/verifier/lean/window/tests/test_known_rows.py": "proofs: H1's known rows "
                                                                        "(`benchmarks/pouw/h1_lanes/run.py`)",
-    **dict.fromkeys(("verity/protocols/pous/verifier/check/scripts/difftest_vectors.py",
-                     "verity/protocols/pous/verifier/check/tests/test_timed_audit.py"),
-                    "memory-accounting: P2's reference and wire (`benchmarks/pous/p2_v1`) and the harness's control "
-                    "responder (`benchmarks/pous/band_gpu/harness.py`)"),
+    "verity/protocols/pous/verifier/check/tests/test_timed_audit.py": "memory-accounting: the harness's control "
+                                                                      "responder (`benchmarks/pous/band_gpu/harness.py`)",
     "verity/definitions/ops/tests/test_tc_probe_families.py": "circuits: the tensor-core probe's families "
                                                               "(`benchmarks/tc_probe`)",
     **dict.fromkeys(("adapters/vllm/tests/protocols/pouw_h1_circuits.py", "adapters/vllm/tests/protocols/pouw_h1_gpu.py"),
