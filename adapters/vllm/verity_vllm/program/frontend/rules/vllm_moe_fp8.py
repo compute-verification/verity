@@ -237,14 +237,14 @@ class SiluAndMulPerBlockQuantRule(InPlaceRule):
         xs = shape(ctx, x)
         if len(xs) != 2 or xs[1] % 2:
             return f"input {xs} is not [rows, 2I]"
-        rows, I = xs[0], xs[1] // 2
-        if not isinstance(G, int) or isinstance(G, bool) or G <= 0 or G & (G - 1) or I % G:
-            return f"numerics_unregistered: group_size {G!r} is not a power of two dividing I={I}"
+        rows, INTER = xs[0], xs[1] // 2
+        if not isinstance(G, int) or isinstance(G, bool) or G <= 0 or G & (G - 1) or INTER % G:
+            return f"numerics_unregistered: group_size {G!r} is not a power of two dividing I={INTER}"
         if a.get("scale_ub") is not None:
             return "numerics_unregistered: scale_ub is set (the scale clamp is a different numeric)"
         if a.get("is_scale_transposed", False) is not False:
             return f"numerics_unregistered: is_scale_transposed={a.get('is_scale_transposed')!r} (the Definition writes [rows, I/G] row-major)"
-        for nm, dt, want in (("out", FP8_E4M3, (rows, I)), ("scales", torch.float32, (rows, I // G))):
+        for nm, dt, want in (("out", FP8_E4M3, (rows, INTER)), ("scales", torch.float32, (rows, INTER // G))):
             t = a[nm]
             if not isinstance(ctx.val(t), Alloc):
                 return f"{nm} is not an unwritten allocation ({type(ctx.val(t)).__name__})"
@@ -257,12 +257,12 @@ class SiluAndMulPerBlockQuantRule(InPlaceRule):
     def emit(self, node, ctx):
         a = self._args(node)
         rows, lead = rows_of(ctx.coll(a["input"]))
-        I, G = rows[0].type.n // 2, int(a["group_size"])
-        fn = ctx.kind("silu_mul_fp8_block_quant", node, I=I, G=G)
+        INTER, G = rows[0].type.n // 2, int(a["group_size"])
+        fn = ctx.kind("silu_mul_fp8_block_quant", node, I=INTER, G=G)
         outs = [ctx.call(fn, r, node=node, rule=self, name=f"{ctx.hint_name(node)}[{i}]") for i, r in enumerate(rows)]
         ctx.rebind(a["out"], from_rows([o[0] for o in outs], lead), self, what="out")
         ctx.rebind(a["scales"], from_rows([o[1] for o in outs], lead), self, what="scales")
-        ctx.record(self, node, {"I": I, "G": G, "rows": len(rows)}, emitted=f"{fn.id} x{len(rows)}")
+        ctx.record(self, node, {"I": INTER, "G": G, "rows": len(rows)}, emitted=f"{fn.id} x{len(rows)}")
 
 
 VLLM_MOE_FP8_RULES = [FusedMoeKernelFp8Rule(), SiluAndMulPerBlockQuantRule()]

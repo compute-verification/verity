@@ -404,11 +404,11 @@ class SiluAndMulRule(InPlaceRule):
     def emit(self, node, ctx):
         out, x = node.args[:2]
         rows, lead = rows_of(ctx.coll(x))
-        I = rows[0].type.n // 2
-        fn = ctx.kind("silu_mul", node, I=I)
+        INTER = rows[0].type.n // 2
+        fn = ctx.kind("silu_mul", node, I=INTER)
         outs = [ctx.call(fn, r, node=node, rule=self, name=f"{ctx.hint_name(node)}[{i}]") for i, r in enumerate(rows)]
         ctx.rebind(out, from_rows(outs, lead), self, what="out")
-        ctx.record(self, node, {"I": I, "rows": len(rows)}, emitted=f"{fn.id} x{len(rows)}")
+        ctx.record(self, node, {"I": INTER, "rows": len(rows)}, emitted=f"{fn.id} x{len(rows)}")
 
 
 # -- state: attention over the request's KV history ------------------------------------------------------------

@@ -55,7 +55,7 @@ def takes_dense_mha(layer, T: int, rows: int, topk: int) -> bool:
     cfg = getattr(getattr(layer, "_vllm_config", None), "attention_config", None)
     if getattr(layer, "prefill_backend", None) is None or getattr(cfg, "sparse_mla_force_mqa", False):
         return False
-    return T > DECODE_THRESHOLD.get(int(layer.num_heads), DECODE_THRESHOLD_DEFAULT) and rows <= topk
+    return DECODE_THRESHOLD.get(int(layer.num_heads), DECODE_THRESHOLD_DEFAULT) < T and rows <= topk
 
 
 class DsaDenseMhaRule(StateRule):
@@ -116,9 +116,9 @@ class DsaDenseMhaRule(StateRule):
         limit = _decode_threshold(layer)
         if isinstance(limit, str):
             return limit
-        if T <= limit:
+        if limit >= T:
             return f"a call of {T} query rows is a decode (decode threshold {limit}), which takes the top-k MQA path"
-        if T > topk:
+        if topk < T:
             return f"a prefill of {T} rows reaches past TOPK {topk} keys, which vLLM serves by sparse MQA, not dense MHA"
         NH, P = (shape(ctx, a["q_nope"]) or (0, 0, 0))[1:3]
         R = (shape(ctx, a["k_pe"]) or (0, 0))[-1]

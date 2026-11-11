@@ -149,7 +149,7 @@ def _coverage(parts, node, ctx, *, fused: bool = False):
     M = launch_tokens_of(node, n)
     setting, route = tp_allreduce.served_route(settings, M, N)
     if fused:
-        route = "fused" if bool(settings.get("flashinfer")) and M <= tp_allreduce.fused_max_tokens(N, W) else "unfused"
+        route = "fused" if bool(settings.get("flashinfer")) and tp_allreduce.fused_max_tokens(N, W) >= M else "unfused"
     if setting is None:
         return None, f"tp_allreduce.covered(): switches {settings!r} do not name a captured setting"
     target = active_target_profile()

@@ -23,8 +23,8 @@ is by construction the registered one; provenance records the verified isomorphi
 from __future__ import annotations
 
 import time
+from collections.abc import Callable
 from dataclasses import dataclass, field
-from typing import Callable
 
 from verity.circuits.codec import descriptor_id
 from verity.circuits.defs import Body, CompositeDefinition, SpecializedDefinition
@@ -600,7 +600,7 @@ def _layer_binder(flat_sd, ctx):
         return None
     ids = {n.fn.base_id for n in flat_sd.body.nodes if isinstance(n.fn, SpecializedDefinition)}
     L0 = "RMSNormTriton_v1" in ids
-    if L0 != (len(params) == 2):
+    if (len(params) == 2) != L0:
         return None
     T0 = 0
     for a in ctx.applications:

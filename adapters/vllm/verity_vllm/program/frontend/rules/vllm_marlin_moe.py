@@ -158,7 +158,7 @@ class MarlinMoeGemmRule(OpRule):
                 or _value(ctx, a["par"], I32, (1,), "par") or (mul and _value(ctx, a["topk_weights"], F32, (M, TOPK), "topk_weights"))):
             return r
         L = launch_tokens_of(node, M)
-        if BM != MR.moe_block(L, TOPK, E):
+        if MR.moe_block(L, TOPK, E) != BM:
             return f"moe_block_size {BM!r} is not fused_marlin_moe's at {L} tokens over {E} experts ({MR.moe_block(L, TOPK, E)})"
         cfg = served_config(E, TOPK, K, N, top_k, L)
         if isinstance(cfg, str):

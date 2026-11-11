@@ -29,6 +29,8 @@ and vLLM V1's model-level attention entry point (vllm/attention/layer.py):
 
 from __future__ import annotations
 
+import contextlib
+
 import torch
 
 from verity_vllm.log import init_logger
@@ -272,10 +274,8 @@ def targets_for(name: str) -> set:
     C = real_C()
     if C is not None and hasattr(C, name):
         out.add(getattr(C, name).default)
-    try:
+    with contextlib.suppress(AttributeError, RuntimeError):
         out.add(getattr(torch.ops.vllm, name).default)
-    except (AttributeError, RuntimeError):
-        pass
     return out
 
 

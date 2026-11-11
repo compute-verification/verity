@@ -498,8 +498,8 @@ class PaddedSchedule:
 class PaddedUp:
     """The up/gate `fused_moe_kernel` (MUL_ROUTED_WEIGHT=False) under the padded construction: the hidden rows and W13 it read."""
 
-    def __init__(self, route: PaddedRoute, x_rows: list, w13_node, w13: Coll, H: int, I: int, schedule: str) -> None:
-        self.route, self.x_rows, self.w13_node, self.w13, self.H, self.I, self.schedule = route, x_rows, w13_node, w13, H, I, schedule
+    def __init__(self, route: PaddedRoute, x_rows: list, w13_node, w13: Coll, H: int, INTER: int, schedule: str) -> None:
+        self.route, self.x_rows, self.w13_node, self.w13, self.H, self.I, self.schedule = route, x_rows, w13_node, w13, H, INTER, schedule
 
     def __repr__(self) -> str:
         return f"PaddedUp(H={self.H}, I={self.I}, {self.schedule} schedule, {self.route!r})"
@@ -711,7 +711,7 @@ class PaddedFusedMoeKernelRule(InPlaceRule):
             if v.num_valid != nv or v.block_m != sc.get("BLOCK_SIZE_M"):
                 return f"schedule {v} vs launch num_valid_tokens={nv} BLOCK_SIZE_M={sc.get('BLOCK_SIZE_M')}"
             route = v.route
-        if route.M * route.TOPK != nv:
+        if nv != route.M * route.TOPK:
             return f"route pairs {route.M}x{route.TOPK} != num_valid_tokens {nv}"
         return route
 
@@ -727,7 +727,7 @@ class PaddedFusedMoeKernelRule(InPlaceRule):
         wl = ctx.weight_of(b)
         if not mrw:
             x_rows, _lead = rows_of(ctx.coll(a))
-            ctx.rebind(c, PaddedUp(route, x_rows, b, ctx.coll(b), H=K, I=N // 2, schedule=sched), self, what="c")
+            ctx.rebind(c, PaddedUp(route, x_rows, b, ctx.coll(b), H=K, INTER=N // 2, schedule=sched), self, what="c")
             emitted = "PaddedUp marker (W13 bound; the M calls are emitted at moe_sum)"
         else:
             ctx.rebind(c, PaddedDown(ctx.val(a), b, ctx.coll(b)), self, what="c")
@@ -846,13 +846,13 @@ class PaddedMoeSumRule(InPlaceRule):
         y, out = node.args[:2]
         dn = ctx.val(y)
         up, route = dn.act.up, dn.act.up.route
-        M, E, TOPK, VPT, H, I = route.M, route.E, route.TOPK, route.VPT, up.H, up.I
-        fn = ctx.kind("moe_ffn_fixed", node, E=E, TOPK=TOPK, VPT=VPT, H=H, I=I)
+        M, E, TOPK, VPT, H, INTER = route.M, route.E, route.TOPK, route.VPT, up.H, up.I
+        fn = ctx.kind("moe_ffn_fixed", node, E=E, TOPK=TOPK, VPT=VPT, H=H, I=INTER)
         hint = ctx.hint_name(node)
         outs = [ctx.call(fn, up.x_rows[t], route.rows[t], up.w13, dn.w2, node=node, rule=self, name=f"{hint}[{t}]") for t in range(M)]
         ctx.rebind(out, from_rows(outs, (M,)), self, what="output")
         w13, w2 = ctx.weight_of(up.w13_node), ctx.weight_of(dn.w2_node)
-        ctx.record(self, node, {"E": E, "TOPK": TOPK, "VPT": VPT, "H": H, "I": I, "rows": M, "schedule": up.schedule, "moe_construction": PADDED,
+        ctx.record(self, node, {"E": E, "TOPK": TOPK, "VPT": VPT, "H": H, "I": INTER, "rows": M, "schedule": up.schedule, "moe_construction": PADDED,
                                 "W13_is_parameter": w13.name if w13 else None, "W2_is_parameter": w2.name if w2 else None,
                                 "lift_of_record": "LMoeFfnL_v1 (hand-authored; registry.lifted.register_hand_lift)"},
                    emitted=f"{fn.id} x{M}")

@@ -86,11 +86,11 @@ class GeluTanhAndMulRule(InPlaceRule):
     def emit(self, node, ctx):
         out, x = node.args[:2]
         rows, lead = rows_of(ctx.coll(x))
-        I = rows[0].type.n // 2
-        fn = ctx.kind("gelu_tanh_mul", node, I=I)
+        INTER = rows[0].type.n // 2
+        fn = ctx.kind("gelu_tanh_mul", node, I=INTER)
         outs = [ctx.call(fn, r, node=node, rule=self, name=f"{ctx.hint_name(node)}[{i}]") for i, r in enumerate(rows)]
         ctx.rebind(out, from_rows(outs, lead), self, what="out")
-        ctx.record(self, node, {"I": I, "rows": len(rows)}, emitted=f"{fn.id} x{len(rows)}")
+        ctx.record(self, node, {"I": INTER, "rows": len(rows)}, emitted=f"{fn.id} x{len(rows)}")
 
 
 
@@ -122,11 +122,11 @@ class SiluAndMulWithClampRule(InPlaceRule):
     def emit(self, node, ctx):
         a = call_args(node)
         rows, lead = rows_of(ctx.coll(a["input"]))
-        I, LIMIT = rows[0].type.n // 2, float(a["limit"])
-        fn = ctx.kind("silu_mul_clamp", node, I=I, LIMIT=LIMIT)
+        INTER, LIMIT = rows[0].type.n // 2, float(a["limit"])
+        fn = ctx.kind("silu_mul_clamp", node, I=INTER, LIMIT=LIMIT)
         outs = [ctx.call(fn, r, node=node, rule=self, name=f"{ctx.hint_name(node)}[{i}]") for i, r in enumerate(rows)]
         ctx.rebind(a["result"], from_rows(outs, lead), self, what="out")
-        ctx.record(self, node, {"I": I, "LIMIT": LIMIT, "rows": len(rows)}, emitted=f"{fn.id} x{len(rows)}")
+        ctx.record(self, node, {"I": INTER, "LIMIT": LIMIT, "rows": len(rows)}, emitted=f"{fn.id} x{len(rows)}")
 
 class Bf16ScalarChainRule(OpRule):
     """bf16 row-wise ops with a static Python-float constant: `aten.div.Tensor(x, C)` -> `bf16_div_scalar{N,C}`,

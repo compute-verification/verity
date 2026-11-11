@@ -176,7 +176,7 @@ class UnifiedAttentionWithOutputRule(StateRule):
         if opened:
             cached[layer_name] = KP.seed(ctx, node, layer_name, krow_list, vrow_list, KVH, D)
         P0 = len(krow_list)
-        prefill = P0 == cached.get(layer_name, 0)
+        prefill = cached.get(layer_name, 0) == P0
         if not prefill:
             KP.require_consumed(ctx, node)
         for i in range(T):
@@ -247,7 +247,7 @@ class UnifiedAttentionWithOutputRule(StateRule):
         statics = {} if scale else extra
         for i in range(T):
             P = P0 + i + 1
-            if window is not None and P > window:
+            if window is not None and window < P:
                 refuse("numerics_unregistered", node, mp, f"layer {layer_name!r} has an OBSERVED sliding window of {window} keys and position {P - 1} "
                        f"has {P} keys in its history: the window is active and no windowed attention kind is registered "
                        f"(positions < {window} are exact under the unwindowed kind)")

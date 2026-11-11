@@ -131,7 +131,8 @@ def test_3_the_signed_stage2_block_is_unchanged_by_the_factoring():
                       "52de640566245b7f": "SHA-512", "cb0b7ed7255cfe06": "router step ArgmaxStepF32"}
     assert d[:16] in STAGE2_DIGESTS, d
     if os.path.exists(STAGE2_EVIDENCE):
-        ev = json.load(open(STAGE2_EVIDENCE))["program_digest"]
+        with open(STAGE2_EVIDENCE) as f:
+            ev = json.load(f)["program_digest"]
         assert ev[:16] in STAGE2_DIGESTS and (ev == d or STAGE2_DIGESTS[ev[:16]] != STAGE2_DIGESTS[d[:16]])
     dl = program_digest(encode_program(Program(bind(MP.LMoeBlockL, E=E, TOPK=2, VPT=VPT, H=H, I=I))))
     assert dl != d
