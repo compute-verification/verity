@@ -31,9 +31,11 @@ it contains. Your checkout and your prompt can be older than `main`: `git show o
 - `benchmarks/`: the measuring side: reproducible workloads and measurements, among them `one_stage/`, the one-stage audit
   end to end, GPU probes, and `benchmarks/census/`, data that `verity` only takes as parameters.
 - `tools/verity/`: the `verity` command, `check/` (the one check), `circuit_check/` and `lean/` (the Lean check).
-- `fixtures/artifacts.json`: every replicated fixture by `art:` id. `tests/`: invariants of the whole tree. The archived
-  proof systems (A-GKR, B-Ligero, D-SP1, the VOLE prover) were deleted in `2091252fe3`; `git checkout 2091252fe3^ --
-  archive` restores them.
+- `fixtures/artifacts.json`: every replicated fixture by `art:` id. `tests/`: invariants of the whole tree. The tree
+  keeps no archive directory: code that is retired is deleted, and history keeps every file. The archived proof systems
+  (A-GKR, B-Ligero, D-SP1, the VOLE prover) were deleted in `2091252fe3`; `git checkout 2091252fe3^ -- archive` restores
+  them. The H200 demo and the rest of what the layout set aside went with the directory: `git log --diff-filter=D -1
+  --format=%h -- archive/AGENTS.md` names that commit, and `git checkout COMMIT^ -- archive` restores them.
 - The team's own tooling and machines, which nothing in `verity/` reads: `tools/research/` (runs, the evidence store,
   messaging, pods), `tools/agent-guard/`, `tools/move/` and `infra/` (the team skill). They stay here and are never
   exported to the public repository; new infra goes here too. compute-verification/infra holds the website, the executor
