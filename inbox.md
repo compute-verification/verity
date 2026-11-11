@@ -171,3 +171,205 @@ The files naming `factsOf`, `auditCheck`, `auditChecks` or `chargedOf` are the f
 
 Next: one comment on NET-325, then job 2's draft (NET-332) by inbox. Nothing on LEAN-249. Nothing opened or marked.
 
+[2026-11-11T09:18Z] 789d4031edc3
+# NET-332, by reading: the witnesses of `rowsTiedCharged`, `rowsProgWired`, `rowsStateTied`
+
+LEANMERGE to the coordinator, Wed 11 Nov 1:18 AM PST. Job 2, after NET-325's end report.
+Paths and lines are at `13419dcffc5a` (`cursor/net325-drawn-le-units-22f3`; its Lean is `0b12ac8cd69f`'s). For this
+I wrote no lemma into the tree and changed no lock. Marks: [read] file and line, [vm] an elaboration by bare `lean`
+on my VM (core only; the files are in notes, `tools/net325-leanmerge/net332/`), [argued].
+
+## The answer in four lines
+
+1. No honest witness of the rule's form can be proved for any period with an audit or a link-window while the check
+   compares JSON with `==`: `BEq Json` is a `partial def` of the toolchain, opaque to the kernel and to every tactic.
+   The only accept that could be proved today is of the period with no audit and no link-window, which shows
+   nothing. [read] [vm]
+2. The cure is four comparisons of `NetworkCheck/Period.lean` written as a match (the tree already did this for Spot,
+   for this reason). It is a change to trusted code of this lane's own package, with no change of behaviour.
+3. After it, one thing still can't be evaluated by the kernel: reading the answers' profile back
+   (`Core.Integrity.ofJson`), through `Ratio.ofString` (`String.splitOn`, `String.all`, `String.toNat!`) and
+   `Flock.canon` on an object (`Array.qsort`). That is the ONE field I would assume: the answers' `profile`.
+4. Signatures, SHA-512, the pinned digests and the term's size do not stop it: the tree proves LMS completeness, and
+   `wipeSigned_honest` is an accepted witness of exactly this shape with every digest and signature left symbolic.
+
+## 1. What my two lemmas state now, and what each lacks
+
+- `rowsTiedCharged_honest` states four closed facts about `chargedOf` and `faultyEntries` at a hand-built `Params`
+  and `Commitment`, the audits' findings written by hand (`#[.ok ⟨2, 1, ⟨0, 1⟩, 1⟩]`, then `#[.ok ⟨2, 2, ⟨0, 1⟩, 0⟩]`),
+  by `decide +kernel`. [read: `Security/Proofs/Properties/NetworkPeriod.lean:537-551`]
+- It lacks all of the rule's honest form: it never applies `check`, builds no `Evidence` and states no accept. The
+  rule holds an honest witness of a property to its function's acceptance (`shape.properties`:
+  `NetworkCheck.Period.check`, outcome accept). [read: `tools/verity/lean/check.py:2236-2250`,
+  `Security/Properties/lean-audit.json` `shape.properties`]
+- Its instance is not one the check would accept either, for two reasons. The findings say 2 units and `slotAudit`
+  has 1, which `auditCheck` refuses (`f.units == a.units`). [read: proofs file 146; `Period.lean:1178`] And
+  `tiedWindow` has no state entry, which `stateCheck` refuses (`stateTied` is false with none). [read: proofs file
+  141-142; `Period.lean:1101-1111, 1206-1208`]
+- `rowsTiedCharged_nontrivial : ¬ RowsTiedChargedOf acceptAllRows` takes no binder and no hypothesis, is negated, and
+  is at a verifier that accepts everything, named `acceptAll…` as the rule recognizes one. [read: proofs file 556;
+  `Security/Properties/NetworkPeriod.lean:159-161, 186-187`]
+- The rule's text asks `¬ RowsTiedChargedAt at acceptAll …`. `RowsTiedChargedAt` takes no verifier, so the `…Of` form
+  is the only way to say it, and the rule reads it so: it passes a negated lemma whose head, or a definition the
+  head unfolds through, is one of the guarantee's (`{head, *chain} & heads`), and `RowsTiedChargedOf acceptAllRows`
+  unfolds to `RowsTiedChargedAt` past its binders. [read: `check.py:2392`; `tools/verity/lean/Facts.lean:911-927`]
+  So it lacks nothing I can see in the form. Only a lock run with the entry written shows the rule takes it.
+- Neither lemma is under `guarantees` or `witnesses`. The same holds of `rowsProgWired_honest` (157),
+  `rowsStateTied_honest` (258) and their `_nontrivial`s (181, 273). [read: the lock]
+- The property's own record did not move with NET-325 (its `type_hash` is the base's), so its `unwitnessed` entry
+  stands as it is. [run: `r20261111-070615-378a`'s kept record]
+
+## 2. The smallest period `d` the property says something of
+
+[argued from the check's text; not built]
+
+- `p`: one audit `⟨free, 0, "a", 2, 0, #[("SlotEntry_v1{KO=1}", 1, slotEntryPins[0]!)]⟩` (2 units, one slot entry),
+  `form := .rows slotSchedule sd ⟨0, 0, 0, 0, 7⟩` (one lane, T = 1, 7 entries), `windows := 1`, `lms := Lms.deployed`,
+  `key := k.publicKey`.
+- `c`: the audit's registration (its `program`, its entries port at root `r` and domain `d`, and its
+  `verity/certifier/scan-state/v1` value at `s` and `e`, as `stateReg "s"`), and the scan's (its `program`, a
+  `scan/prog0` entry at `r` and `d` and a `scan/state` entry at `s` and `e`, as `stateWindow`, and two entries
+  holding the ingress and egress rows' roots and domains).
+- `e`: the audit's answer (one-stage's, the digest of its registration, accepted, published `{"bound": 1}`, a
+  profile of one level of 2 units sampled `subset:1`), and one `Window`: the scan's answer, three certificates
+  (requests, responses, fails) and `.rows #[ingress, egress]`.
+- With T = 1 the scan has 2T = 2 units, so ONE profile serves both answers. [read: `Period.lean:1167, 1178`]
+- At this `d` every clause of `RowsTiedChargedAt` bites: the audit is tied, sampled in part (1 < 2) with a bound of
+  one, so `pub.charged` holds its facts and the link-window's term has `faultyEntries = 7`. [read: statement file
+  146-155; my present lemma shows the last two on the model-level pieces]
+- It needs five LMS signatures under one key (three certificates, two rows heads). [read: `Period.lean:1155-1160,
+  990-992`]
+- Nothing smaller is accepted with a rows link-window: the check refuses one whose scan's `prog` is no audit's
+  output or whose state is no wired audit's (`progTied`, `wiredChecks`, `stateChecks`), so every accepted rows
+  link-window has a tied audit and the state entries. [read: `Period.lean:1162-1164, 1198-1216`] The only smaller
+  accepted period has no link-window. I do not list it as honest.
+
+## 3. What stops building `d` at the model level and proving the accept
+
+**`BEq Json`, first and decisive.**
+
+- On the rows form's path the check compares with it at `Period.lean:1154` (`rowsWindowCheck`: the scan's `program`),
+  `1175` (`auditCheck`: the audit's `program`) and `998` (`holds`: an entry's `root` and `domain`); the clock form at
+  `945`. [read] (`571` and `613` are in the pins' digest, which is computed when an audit's entries are read from a
+  Program's JSON, not by `check`. [read: `Period.lean:564-613, 674`])
+- The toolchain defines it by `private partial def beq'`. [read: Lean v4.34.0 `Lean/Data/Json/Basic.lean:191-210`]
+- `(Json.str "P" == Json.str "P") = true` fails under `decide`, `decide +kernel`, `rfl`, `simp` and
+  `beq_self_eq_true` (no `ReflBEq Json`), while `#eval` says true; the same comparison by a match is proved by
+  `decide` and by `decide +kernel`. [vm: `JsonEq.lean`]
+- The tree says the same twice. [read: `verity/core/service/spot/Spot/Json.lean:62-64`, where `jsonStrIs` is the
+  match; `Security/Proofs/Properties/Verity/SampledLog.lean:16`]
+- So `check p c e = .accept _ _` is unprovable for any period with one audit or one link-window, and no named
+  assumption about a field of `d` cures it: the assumption would be about the toolchain's function.
+
+**The profile's read-back, second.** `answered` accepts only if `Core.Integrity.ofJson prof = .ok i`.
+[read: `Period.lean:922-932`]
+
+- On a core-only copy of `Flock/Canon.lean`, `CoreProtocol/Ratio.lean` and `CoreProtocol/Profile.lean`
+  (`Flock.Draw.workK` stubbed), `#eval` reads the profile above back (`true`), and `decide +kernel` is stuck.
+  [vm: `Prof.lean`]
+- What is stuck, one by one [vm: `Str.lean`, `Qs.lean`, `Bisect.lean`, `Bisect2.lean`]:
+
+| Piece | Where | `decide +kernel` |
+|---|---|---|
+| `"1/100".splitOn "/"`, `"100".all Char.isDigit`, `"100".toNat!` | `Ratio.ofString`, `natOf` | stuck |
+| `#["a"].qsort (· < ·)`, one element | `Flock.canon` on any object, so `exactly` | stuck |
+| `Flock.J.arr`, `J.str`, `J.nat`, `J.bool`, `J.has` on literal objects | the field readers | passes |
+| `(Flock.canon j).isOk` on a literal object | | passes |
+| `Ratio.ofString` rewritten over `String.toList` | scratch only | passes |
+| string interpolation of a `Nat`, `++`, `intercalate`, `canonStr` | | passes |
+
+- `exactly` needs no evaluation when the JSON is `P.toJson` itself: both sides are one term, closed by
+  `bne_self_eq_false`, given `Flock.canon (toJson a) = .ok _`, which `canon_mkObj`, `canon_str`, `canon_nat`,
+  `canon_arr`, `canon_bool` and `canon_null` give. [read: `Security/Proofs/Properties/NetworkCertifier/Check/
+  LinkWindow.lean:271-302`, `NetworkScan.lean:100`] [argued]
+- `Ratio.ofString` on a literal is the piece with no route: no lemma in `Security/` reads a profile or a ratio back.
+  [vm: `rg "Integrity\.ofJson|Ratio\.ofString" Security` finds none] The tree's own cure elsewhere is to read over
+  characters. [read: `Period.lean:1014-1015`, `outputPort`'s docstring: "`String.splitOn` it doesn't"]
+
+**What does not stop it.**
+
+- The certifier's signatures: `lmsCorrect` (signing then verifying is `.ok true`, and `decode (encode sig) = .ok
+  sig`), `lmsSigns` (a signature at every leaf) and `key_ok` are proved, at any parameters `Params.make` admits.
+  [read: `Security/Proofs/Properties/NetworkCertifier/Device/Lms.lean:462, 479, 491`]
+- SHA-512 under `decide`: nothing evaluates it. `wipeSigned_honest : ∃ seed K c k sig out prof, Lms.keygen
+  Lms.deployed seed = .ok k ∧ WipeProtocol.protocol.check … = .accept out prof` is under `witnesses` and is proved
+  with the key, the digest and the signature symbolic. [read: `Security/Proofs/Properties/Pous/WipeSigned.lean:
+  577-603, 692`] `certificateMessage_ok`, `taggedSha512_of` and `taggedSha512_ok` are there for the messages.
+  [read: `…/NetworkCertifier/Check/Run.lean:50`, `…/Hash/Identity.lean:308, 317`]
+- The pinned digests: `wired` reads `entryPins` as literal strings an audit's `entries` name; it hashes nothing.
+  [read: `Period.lean:1075-1081`; proofs file 146]
+- The term's size: symbolic, so no 34,756-byte signature is ever a literal. [argued]
+
+**Whether an accepted period is in the tree.**
+
+- No `#guard` of the package applies `check`: they are of terms, facts, ties and port names. [read:
+  `Period.lean:1523-1643`; `rg` over the package]
+- No stored vector: `tests/fixtures/` holds `slot_entry.json` and `select_entry.json` only. [vm: `ls`]
+- `period_case.py` builds periods as Python dicts under a toy key and the difftest runs them through the compiled
+  executable, which parses a file. [read: `period_case.py:1583, 2222-2237`] The kernel can check none of that:
+  `Lean.Json.parse` is `partial` too. [read: `Security/Proofs/Properties/NetworkScan.lean:114-116`]
+- The scan's own accepted honest witness is at an empty instance (`scan_honest : Flock.canon .null = .ok "null" ∧
+  Flattens default ⟨[], []⟩`). [read: `NetworkScan.lean:110`]
+
+## 4. The ONE field I would assume, and what the witness then shows
+
+- The field: the answers' `profile` (`Core.Answer.profile`, one JSON for both answers). The premise:
+  `∃ j, Core.Integrity.ofJson j = .ok P`, at the literal profile `P` of item 2.
+- It is true (`j := P.toJson`; `#eval` says so [vm]) and only unproved, so it is an `open` premise with the issue
+  that discharges it, not a standing assumption. The rule takes it under `witnesses_assumed` once it is listed under
+  `assumptions` or `open` and a listed guarantee takes it; the witness, listed under `guarantees`, does.
+  [read: `check.py:2138-2160`] A new named `Prop` in the definitions tree is not mine to add.
+- This holds only with the four comparisons cured. With the check as it is, two things can't be built, and the
+  first is no field.
+- What the witness then still shows, of a built period with one rows link-window and one tied audit sampled in
+  part: the registrations name their Programs; five signatures verify under one deployed LMS key; each rows
+  registration has the schedule's format, layout, domain and head; the scan's registration holds both rows; its
+  `prog` is the audit's output; both answers are one-stage's for the registrations' digests; the facts read from `P`
+  have the right units; the wiring, the state tie and the single δ hold; and `check` returns `.accept`.
+- What it does not show: that some JSON reads as `P`. The compiled reader shows that in the suite.
+
+## 5. Whether `rowsProgWired` and `rowsStateTied` take the same `d`
+
+- Yes for `rowsProgWired`: its property is of the same function and the same accepted period, and `d`'s link-window
+  is wired by construction. [read: statement file 86-88, 100-102]
+- Yes for `rowsStateTied`: `d` carries the state entries of `stateReg "s"` and `stateWindow` already, since `check`
+  refuses a rows link-window without them. [read: proofs file 243-259; `Period.lean:1101-1111, 1206-1216`]
+- So one accept lemma, `check d = .accept pub prof`, serves three honest witnesses.
+
+## 6. The work
+
+- **`verity/core/protocols/network/lean/NetworkCheck/Period.lean`**: the comparisons at 945, 998, 1154 and 1175 by a
+  match (a three-line `strIs`, or `Spot.jsonStrIs` moved under `Flock.J`). Same value on every input. [read: `beq'`'s
+  `str` and catch-all cases] The Python mirror and the difftest do not change. [argued]
+- **Two locks move with it**, as with NET-325: `Security/Properties` and `Security` both pin `windowCheck`, `holds`,
+  `rowsWindowCheck` and `auditCheck` under `reads["NetworkCheck.Period"]`; in `Security` the reader is
+  `Flock.SecurityProofs.RecursiveAuditC3` (`@proofs`). [run: `git grep` over `*lean-audit.json`]
+- **`Security/Proofs/Properties/NetworkPeriod.lean`**: the existing accept-to-facts proofs split those conditions as
+  Booleans; a few `simp` lines may need the new name. [argued: not tried]
+- **A new proofs file** (the present one is 141 s to elaborate): about 15 to 20 lemmas. One `certifiesOn` lemma from
+  `lmsSigns` and `lmsCorrect`, used five times; `rowsDomain` and `headDigest` return `.ok` (one new lemma for
+  `identityDigestSha512`); `rowsCheck`, `holds`, `answered`, `factsOf`, `rowsWindowCheck` and `auditCheck` at `d`;
+  the wiring and state facts again, now for a registration with two unevaluated domain strings; the accept; three
+  `_honest` theorems of the form `∃ seed k …, Lms.keygen Lms.deployed seed = .ok k ∧ check … = .accept pub prof`.
+- **The lock** (lean's worker): three `witnesses` entries, six names under `guarantees`, three fewer under
+  `unwitnessed`, one `open` premise with `witnesses_assumed`.
+- **To drop the assumption**: `CoreProtocol/Ratio.lean`'s `natOf` and `Ratio.ofString` over `String.toList` (my
+  scratch version passes `decide +kernel` on `"1/100"` [vm: `ProfList.lean`]) and three or four read-back lemmas. That
+  file is the shared interface's, not this lane's.
+- **Risks.** (a) Unfolding `check` at a period with symbolic keys, signatures and digests: `wipeSigned_honest` does it
+  for one signature and a flat check; this one runs through `zip`, `zipIdx.map`, a `for` over two rows and
+  `firstFinding`. (b) The wiring facts are `decide +kernel` today and can't be with free strings. In small: a field of a
+  `Json.mkObj` at a variable string reads by `rfl`, and an `Array.any` over two entries, one at variables, closes by
+  `simp` with those facts, on the three axioms [vm: `Sym.lean`]; `wired` and `stateTied` themselves I did not try. (c) Elaboration time. (d) I did not read
+  `Flock.FV3.Sha512.Domain.make`, `wiredCheck`, `rowsPublic` or `Certificate.signs`' message encoder for a condition
+  T = 1 or an empty link name fails.
+
+## What I did not do, and what I am least sure of
+
+- I built nothing: no lemma of item 6 exists, and the accept of `d` is argued from the check's text.
+- Least sure: that nothing else on `check`'s path is opaque to the kernel. I tested the profile reader and the JSON
+  equality, and grepped for `partial def` under the network, interface, primitives and Flock packages (none on the
+  path). I did not test `Flock.FV3.Sha512.Domain.make`, the encoders (`uBE`, `text`) or `Lms.Signature.decode`
+  beyond what the proved lemmas cover.
+- The scratch profile reader is a copy with `Flock.Draw.workK` stubbed, not the tree's module.
+
