@@ -71,8 +71,11 @@ run names one and bundles the branch into its outputs, and the lead pushes it fr
     research fetch RUN --all && git fetch ~/.research/runs/RUN/out/move.bundle BRANCH:BRANCH && git push -u origin BRANCH
 
 If `main` moves before the move lands, the lead stages it again on the new `main`: the map reruns over whatever landed
-since. A move's PR, whose body says `Move: tools/move/NAME.toml`, goes through the queue as any PR does, on a land
-verdict (the team skill's "Landing"); once it lands, each open branch crosses it with `restack.py`.
+since. A stage on the day's `main` runs `python3 tools/move/resolve_check.py PARENT COMMIT` on each commit of a word map
+and stops on any issue: where a `[[words_in]]` row renames a Lean declaration that a file outside the row still spells,
+`move_check.py` certifies the move and only a build would find the file. A move's PR, whose body says
+`Move: tools/move/NAME.toml`, goes through the queue as any PR does, on a land verdict (the team skill's "Landing"); once
+it lands, each open branch crosses it with `restack.py`.
 
 `stage.py` refuses (exit 1) a map outside this directory or missing at the commit it would run on, a map with both
 `[words]` and `[paths]` or neither (a move that needs both stages two maps), a map with `[[words_in]]` and no `[words]`
@@ -103,7 +106,9 @@ is what its script writes on its base, which takes as long as the script. With `
 check's cache (under `~/.cache/verity-check/restack-generated/`), so on one machine only the first restack across a move
 runs it. A word move that renames declarations a lock records leaves
 those records for a commit of their own: `tools/verity/lean/check.py --update --moved` with the map `rename.py --moves`
-prints.
+prints. A stage's records run takes each package whose lock the move's commit changes and each whose lock holds a name
+that map's rows rename, lowest first: `tools/verity/lean/lean_changed.py --records PKG` audits PKG and the packages that
+require it, never one it requires.
 
 A layout map is written from `main`'s tree, so a file only a branch has gets a row only where a directory row carries it.
 Where the branch holds such a file under a path the map retires (`[retired]`: a directory the map empties, which
