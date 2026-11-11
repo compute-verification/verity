@@ -17,6 +17,7 @@ from verity.commitments import rowleaf
 from verity.commitments.crypto import lms
 from verity.protocols.pous.device import memory_challenger as mc
 from verity.protocols.pous.verifier import schemes
+from verity.protocols.pous.verifier.schemes import p2
 
 BLOCKS, K, BLOCK_BYTES, LIMIT = 1 << 10, 12, 64, 854_000
 SOURCE, SESSION = b"challenger secret", hashlib.sha512(b"session").digest()[:32]
@@ -358,8 +359,6 @@ def test_the_test_signer_leaves_nothing_outside_basetemp(tmp_path_factory, monke
 
 
 def test_the_certificate_covers_p2_v4_at_the_cap():
-    from verity.protocols.pous.verifier.schemes import p2
-
     scheme = schemes.get("p2-16448/v4")
     limit = 500_000 + p2.RTT_ALLOWANCE_CAP_NS
     assert limit == 854_000 < p2.ROOT_CALL_NS
