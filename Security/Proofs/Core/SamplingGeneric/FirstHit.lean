@@ -1092,4 +1092,32 @@ theorem pr_off_sample_le_of_coll {T : Type} [Fintype T] [Nonempty T] [Fintype Ω
   pr_off_sample_le_of_expectedCR H op hv chk hw c K _
     (fun q h => outOf_collision H (op q.1) (coll q.1) (hc q.1) (hs q.1) h) hCR
 
+/-- A bound with `n/(K + 1)` to spare at every `K` holds with nothing to spare. -/
+theorem le_of_forall_cap {a b n : ℝ} (h : ∀ K : ℕ, a ≤ b + n / ((K : ℝ) + 1)) : a ≤ b := by
+  refine le_of_forall_pos_le_add fun ε hε => ?_
+  obtain ⟨K, hK⟩ := exists_nat_gt (n / ε)
+  have hK1 : (0 : ℝ) < (K : ℝ) + 1 := by positivity
+  have h1 := h K
+  have h2 : n / ((K : ℝ) + 1) ≤ ε := by
+    rw [div_lt_iff₀ hε] at hK
+    rw [div_le_iff₀ hK1]
+    nlinarith
+  linarith
+
+/-- **The off-plurality mass at the sample's size, under `ExpectedCR` at the finder of every cap**:
+`2·(1 + w)·E[c]/2^256`, with no term for the cap, whose expected cost doesn't depend on it. -/
+theorem pr_off_sample_le_of_forall_coll {T : Type} [Fintype T] [Nonempty T] [Fintype Ω] [Nonempty Ω] [Fintype P]
+    [DecidableEq V] (H : Msg → Msg) (op : T → Ω → P → Option V) {vstar : T → P → V}
+    (hv : ∀ t, IsPlurality (op t) (vstar t)) (chk : Ω → P → Bool)
+    (hchk : ∀ (t : T) (ω : Ω) (p : P), (op t ω p).isSome → chk ω p = true) {w : ℕ}
+    (hw : ∀ ω, #(univ.filter fun p : P => chk ω p) ≤ w) (c : T → Ω → ℕ)
+    (coll : T → Ω → Ω → Option (Msg × Msg))
+    (hc : ∀ (t : T) (ω ω' : Ω) (p : P), ConflictAt (op t) (ω, ω') p → (coll t ω ω').isSome)
+    (hs : ∀ (t : T) (ω ω' : Ω) (u v : Msg), coll t ω ω' = some (u, v) → Collision H u v)
+    (hCR : ∀ K : ℕ, ExpectedCR H
+      (sampleFinder op chk c K fun q : T × (Ω × (Fin K → Ω)) => outOf (op q.1) (coll q.1) K q.2.1 q.2.2)) :
+    Pr (fun q : T × Ω => ∃ p, Off (op q.1) (vstar q.1) q.2 p) ≤
+      2 * ((1 + (w : ℝ)) * Ex (fun q : T × Ω => (c q.1 q.2 : ℝ))) / 2 ^ (256 : ℝ) :=
+  le_of_forall_cap fun K => pr_off_sample_le_of_coll H op hv chk hchk hw c K coll hc hs (hCR K)
+
 end Verity.FirstHit

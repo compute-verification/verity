@@ -176,6 +176,23 @@ theorem pr_offReg_le_sample {H : Msg → Msg} {L : Compiled Coin A} (hbind : L.c
   rw [Fintype.card_fin] at h
   exact hoff.trans h
 
+/-- `pr_offReg_le_sample` under `ExpectedCR` at the finder of every cap: `2·(1 + w)·E[c]/2^256`, with no term for the
+cap. -/
+theorem pr_offReg_le_sample_forall {H : Msg → Msg} {L : Compiled Coin A} (hbind : L.commit.Binds H) {x : Msg}
+    {s : AuditStatement} (hs : L.parse x = some s) {Ω : Type} [Fintype Ω] [Nonempty Ω] (P : Prover Ω)
+    (chk : (Fin (L.V.k x) → Coin) × L.SlotEC x → Fin (L.nG x) → Bool)
+    (hchk : ∀ (ω : Ω) (rc : (Fin (L.V.k x) → Coin) × L.SlotEC x) (g : Fin (L.nG x)),
+      (L.opTable H P x ω rc g).isSome → chk rc g = true) {w : ℕ}
+    (hw : ∀ rc, #(univ.filter fun g : Fin (L.nG x) => chk rc g) ≤ w)
+    (hCR : ∀ K : ℕ, ExpectedCR H (Verity.FirstHit.sampleFinder (L.opTable H P x) chk (L.runCost H P x s) K
+      fun q : Ω × (((Fin (L.V.k x) → Coin) × L.SlotEC x) × (Fin K → (Fin (L.V.k x) → Coin) × L.SlotEC x)) =>
+        Verity.FirstHit.outOf (L.opTable H P x q.1) (L.collAt H P x s q.1) K q.2.1 q.2.2)) :
+    Pr (fun q : Ω × ((Fin (L.V.k x) → Coin) × L.SlotEC x) => L.OffReg H P x q.1 q.2.1 q.2.2) ≤
+      2 * ((1 + (w : ℝ)) *
+          Ex (fun q : Ω × ((Fin (L.V.k x) → Coin) × L.SlotEC x) => (L.runCost H P x s q.1 q.2 : ℝ))) /
+        2 ^ (256 : ℝ) :=
+  Verity.FirstHit.le_of_forall_cap fun K => pr_offReg_le_sample hbind hs P chk hchk hw K (hCR K)
+
 /-! ## The sample, from what the reveals open -/
 
 /-- `pr_offReg_le_sample` at the positions any reveal opens under the statement's roots (`opensAt_isSome_mem`): the
@@ -214,7 +231,7 @@ theorem opensAt_isSome_mem_checked (H : Msg → Msg) (L : Compiled Coin A) {Ω :
   simp only [Bool.and_eq_true, beq_iff_eq] at hpred
   obtain ⟨q, hq, hqo⟩ := List.mem_filterMap.1 (List.mem_of_find?_eq_some ho)
   by_cases hr : q.1 = s.roots
-  · rw [if_pos hr] at hqo
+  · rw [ite_eq_left hr] at hqo
     obtain rfl := Option.some.inj hqo
     rw [← hpred.1]
     unfold runExt at hq
@@ -232,7 +249,7 @@ theorem opensAt_isSome_mem_checked (H : Msg → Msg) (L : Compiled Coin A) {Ω :
         exact ⟨u', List.mem_of_getElem? hj,
           hpos _ _ _ q (Sampling.checkRevealed_mem H _ L.commit _ q hu').1 hr⟩
     · simp [RP.eval] at hiu
-  · rw [if_neg hr] at hqo
+  · rw [ite_eq_right hr] at hqo
     exact absurd hqo (by simp)
 
 /-- **The off-trace mass at what one run's sample opens.** Where the reveals for a proof block `u` open, under the
@@ -258,7 +275,7 @@ theorem pr_offReg_le_needs {H : Msg → Msg} {L : Compiled Coin A} (hbind : L.co
   pr_offReg_le_sample hbind hs P (fun rc g => decide (∃ u ∈ L.checked x rc.1, g.val ∈ needs u))
     (fun ω rc g hg => decide_eq_true (opensAt_isSome_mem_checked H L P x ω hs needs hpos rc.1 rc.2 g hg))
     (fun rc => (le_of_eq (congrArg Finset.card
-      (Finset.filter_congr fun g _ => decide_eq_true_iff))).trans (hw rc.1)) K hCR
+      (Finset.filter_congr fun _ _ => decide_eq_true_iff))).trans (hw rc.1)) K hCR
 
 end Compiled
 
