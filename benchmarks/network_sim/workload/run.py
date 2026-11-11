@@ -21,7 +21,7 @@ import subprocess
 import sys
 from pathlib import Path
 
-from verity.ml.circuits.codec import program_digest
+from verity.circuits.codec import program_digest
 
 from . import model as M
 from .block import Context, MemoryNet

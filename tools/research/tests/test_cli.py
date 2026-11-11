@@ -398,7 +398,7 @@ def test_on_auto_sizes_a_suites_run_of_named_suites_from_their_declared_worker_g
     _node_2_read(monkeypatch)
     repo = tmp_path / "repo"
     for path, body in {".": '[project]\nname = "verity"\n[tool.pytest.ini_options]\n',
-                       "integrations/vllm": '[project]\nname = "verity_vllm"\n[tool.pytest.ini_options]\n'
+                       "adapters/vllm": '[project]\nname = "verity_vllm"\n[tool.pytest.ini_options]\n'
                                             '[tool.verity.tests]\nworker_gb = 8\ntimeout_s = 14400\nparallel = true\n',
                        "verity/core": '[project]\nname = "verity-core"\n[tool.pytest.ini_options]\n[tool.verity.tests]\ntimeout_s = 1800\n',
                        "tools/x": '[project]\nname = "x"\n'}.items():
@@ -416,7 +416,7 @@ def test_on_auto_sizes_a_suites_run_of_named_suites_from_their_declared_worker_g
     suites = ["uv", "run", "tools/verity/check/suites.py"]
     for extra, cmd, want in (
             ([], [*suites, "verity-vllm", "--quick"], (None, 32, 15000)),
-            (["--cpus", "8"], [*suites, "--jobs", "2", "integrations/vllm"], (8, 16, 15000)),     # 2 workers x 8 GB: the kind's 16
+            (["--cpus", "8"], [*suites, "--jobs", "2", "adapters/vllm"], (8, 16, 15000)),     # 2 workers x 8 GB: the kind's 16
             (["--cpus", "8"], [*suites, "vllm", "verity-core"], (8, 64, 14400 + 1800 + 600)),
             (["--mem-gb", "20"], [*suites, "vllm"], (None, 20, 15000)),
             (["--timeout", "2h"], [*suites, "vllm"], (None, 32, 7200)),
@@ -436,7 +436,7 @@ def test_on_auto_sizes_a_suites_run_of_named_suites_from_their_declared_worker_g
             ([], [*suites, "nosuch"], (None, None, None)),
             ([], [*suites, "verity_vllm"], (None, None, None)),             # suites.py's names are normalized: it matches none
             ([], [*suites, "verity"], (None, None, None)),                  # in two: suites.py refuses it
-            ([], ["pytest", "integrations/vllm"], (None, None, None)),
+            ([], ["pytest", "adapters/vllm"], (None, None, None)),
             (["--kind", "adhoc-x"], [*suites, "vllm"], (None, None, None))):
         specs.clear()
         assert C.main([*runs, *extra, "--", *cmd]) == 3, (extra, cmd)
