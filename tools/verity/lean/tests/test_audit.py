@@ -5529,6 +5529,35 @@ def test_with_the_node_s_artifact_cache_each_build_step_reads_a_cache_staged_for
     assert not (lib / "P" / "Q.trace").exists() and not cache.exists()
 
 
+def test_an_audit_has_its_build_settle_only_the_path_dependencies_its_run_does_not_audit(tmp_path, monkeypatch):
+    """A path dependency this run audits is sealed and settled by its own build; the build of one it doesn't audit (in
+    an audit's tree, a copy of a kept build) is settled by the builds that require it, or the modules the cache lacks
+    there are never indexed (`stage_build`'s ``unaudited``)."""
+    d, pkg, given = tmp_path / "d", tmp_path / "p", []
+    for at, name, requires in ((d, "D", []), (pkg, "P", [{"type": "path", "name": "d", "dir": "../d"}])):
+        at.mkdir()
+        (at / A.POLICY).write_text(json.dumps({"roots": [name]}))
+        (at / "lean-toolchain").write_text("leanprover/lean4:v4.34.0\n")
+        (at / "lakefile.toml").write_text(f'name = "{name.lower()}"\ndefaultTargets = ["{name}"]\n\n[[lean_lib]]\nname = "{name}"\n')
+        (at / "lake-manifest.json").write_text(json.dumps({"name": name.lower(), "packages": requires}))
+        (at / f"{name}.lean").write_text("")
+
+    def stage_build(mk, pkg, roots, dest, unaudited=()):
+        given.append(list(unaudited))
+        return {}, {"modules": 0, "keyed": 0, "missed": {}, "first": {}, "took": {}, "left": 0}
+
+    monkeypatch.setattr(A, "sandboxed", lambda: True)
+    monkeypatch.setattr(A, "in_sandbox", lambda pkg, argv: argv)
+    monkeypatch.setattr(A, "setup", lambda pkg, toolchain, log: (0, ""))
+    monkeypatch.setattr(A, "run", lambda argv, cwd, log=None, timeout=0: (1, "fake build"))
+    monkeypatch.setattr(A, "ARTIFACTS", tmp_path / "store")
+    monkeypatch.setattr(A, "stage_build", stage_build)
+    A.audit(pkg, tmp_path / "out", build=True, runs=False)
+    A.audit(pkg, tmp_path / "out", build=True, runs=False, ready=lambda q: True)
+    A.audit(pkg, tmp_path / "out", build=True, runs=False, ready=lambda q: False)
+    assert given == [[d.resolve()], [], []]
+
+
 def test_before_its_first_build_step_an_audit_leaves_whether_its_builds_run_in_the_sandbox(tmp_path, monkeypatch):
     """What a build compiled goes into the node's artifact cache only on check.py's word that it ran in the sandbox. A
     check.py that is killed writes no report, so that word is in the package's work directory from before the first

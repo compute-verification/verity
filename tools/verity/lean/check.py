@@ -48,7 +48,7 @@ import textwrap
 import threading
 import time
 import tomllib
-from collections.abc import Callable
+from collections.abc import Callable, Iterable
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
@@ -4324,24 +4324,34 @@ def build_roots_over(path: Path, pkgs) -> list[Path]:
     return sorted({r for q in pkgs for r in (d.resolve() for d in writable(q)) if p.is_relative_to(r) or r.is_relative_to(p)})
 
 
-def stage_build(mk, pkg: Path, roots: list[str], dest: Path) -> tuple[dict[tuple[str, str], str], dict]:
+#: (a path dependency's directory, module) of each module a `stage` step of this process reached in the build of a package
+#: this run doesn't audit (`stage_build`'s ``unaudited``): the first build to reach one settles it, and no later one takes
+#: its trace (`module_keys.settle`)
+RUN_SETTLED: set[tuple[Path, str]] = set()
+
+
+def stage_build(mk, pkg: Path, roots: list[str], dest: Path,
+                unaudited: Iterable[Path] = ()) -> tuple[dict[tuple[str, str], str], dict]:
     """A Lake cache directory at ``dest`` for ``pkg``'s build (and its ``roots``, `lake build +R`): each module of it that
     the node's artifact cache (`ARTIFACTS`) indexes under its key, its artifacts checked (``mk``: `module_keys`,
     `stage`). Each build step reads it with `LAKE_CACHE_DIR` and `LAKE_ARTIFACT_CACHE` unset, under which Lake reads a
     package's cache and never writes it, and inside the sandbox, where `ARTIFACTS` is read-only. The staged directories of
     processes that are gone go first. Returns (the modules staged, as `stage` gives them, the report's `staged`: how many
     of how many keyed, why each other one isn't, by reason (`missed`, with the `first` module of each), the traces it took
-    from ``pkg``'s own build so that Lake restores or compiles those modules (`took`, `module_keys.settle`) and how many
+    so that Lake restores or compiles those modules (`took`, `module_keys.settle`) and how many
     modules it `left` to Lake, and the error where staging failed, which leaves ``dest`` empty and everything to be built).
-    Staging writes nothing in the build of a package ``pkg`` requires by path: `main` seals that build before ``pkg`` is
-    staged, and other audits read it meanwhile. The caller holds the build (`writing`), and stores what the build compiles
+    It takes traces from ``pkg``'s own build and from the build of each package of ``unaudited`` it requires by path: one
+    this run doesn't audit, whose build in this tree no build of its own settles (`lean_audit.WarmBuilds` gives it a copy
+    of a kept build), each module there once a run (`RUN_SETTLED`). Staging writes nothing in the build of any other
+    package ``pkg`` requires by path: `main` seals that build before ``pkg`` is staged, and other audits read it
+    meanwhile. The caller holds the builds (`writing`), and stores what the build compiles
     when it ends (`lean_audit.LakeArtifacts.put`): a module whose trace is taken is compiled again by every build until
     one stores it."""
     try:
         mk.sweep(ARTIFACTS)
         shutil.rmtree(dest, ignore_errors=True)
         why: dict = {}
-        staged, keyed = mk.stage(ARTIFACTS, pkg, roots, dest, report=why, settled=True)
+        staged, keyed = mk.stage(ARTIFACTS, pkg, roots, dest, report=why, settled=True, also=unaudited, seen=RUN_SETTLED)
         return staged, {"modules": len(staged), "keyed": keyed, **why}
     except OSError as e:
         shutil.rmtree(dest, ignore_errors=True)
@@ -5372,7 +5382,8 @@ def audit(pkg: Path, out: Path, build: bool = False, update: bool = False, repla
     """Audit one package; returns its report (`failures` empty when it passes). With ``build``, a random sample of the
     modules the build didn't compile is compiled again and compared with what the build holds (`sampled_recompile`; the
     report's `sampled`) before the seal. ``built`` is called once its build has passed, before anything reads it; ``ready`` (a package its `proved_in` names) returns once that package's build has
-    ended, False when it did not pass (`proved`); the report's `seconds` holds that wait as `proved-in-wait`, apart from
+    ended, False when it did not pass (`proved`), and None for a package this run doesn't audit, whose build, where the
+    package is required by path, is settled with this one's (`stage_build`); the report's `seconds` holds that wait as `proved-in-wait`, apart from
     `audit`, and within `audit` the package's facts (`facts`) and the provers' (`proved-in`). ``runs`` runs the package's
     tests (`tests`), ``repo`` the checkout their data's
     `generate` reads. ``moved`` ({old name: new name}, with ``update``) renames the record's guarantees, and the review compares
@@ -5448,10 +5459,11 @@ def audit(pkg: Path, out: Path, build: bool = False, update: bool = False, repla
                                ("build-roots", in_sandbox(pkg, [*jobs, "lake", "build", *(f"+{r}" for r in policy["roots"])]))):
                 if step == "stage":
                     if cache:
-                        # it takes traces from this build and from those of the packages it requires by path
+                        # it takes traces from this build and from those of the path dependencies this run doesn't audit
+                        unaudited = [d for d in path_deps(pkg) if d != pkg and ready(d) is None]
                         with writing(pkg, log):
                             s = time.monotonic()
-                            staged, rep["staged"] = stage_build(mk, pkg, policy["roots"], cache)
+                            staged, rep["staged"] = stage_build(mk, pkg, policy["roots"], cache, unaudited)
                             rep["seconds"][step] = round(time.monotonic() - s, 1)
                         log(f"stage: {pkg}: {staged_line(rep['staged'])}")
                     continue
@@ -5983,8 +5995,8 @@ def main(argv: list[str]) -> int:
     ap.add_argument("--artifacts", type=Path, metavar="DIR", help="the node's Lake artifact cache (`lean_audit.LakeArtifacts`): "
                     "each build restores the modules it indexes under their keys (`module_keys.py`), and never writes it "
                     "(`stage_build`). A module of the package that its build holds and the cache lacks is compiled again, so "
-                    "the caller stores what the build compiled when it ends (`LakeArtifacts.put`); the build of a package it "
-                    "requires by path is left as it is")
+                    "the caller stores what the build compiled when it ends (`LakeArtifacts.put`); so is one of a package it "
+                    "requires by path that this run doesn't audit, and the build of one it audits is left as it is")
     ap.add_argument("--closure", action="store_true", help="the replay also checks every module of the import closure, the "
                     "toolchain's, Mathlib's and ArkLib's included, that has not passed it under its key (with --replay-cache, "
                     "a warm run checks only what changed; `replay_step`)")

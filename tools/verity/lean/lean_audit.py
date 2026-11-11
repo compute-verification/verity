@@ -832,9 +832,10 @@ class WarmBuilds:
     """Each package's own `.lake/build`, kept under its `build_key` by the last run whose audit of it passed, so an auditor
     change, or a change to one module, doesn't rebuild every module. An audited package's is moved in and back only when its
     audit passed: its compile-time code may write in it. A package in the tree only as a path dependency gets a copy, which
-    never comes back. The audit still checks every statement against these `.olean` files and replays every declaration
-    through the kernel, and compiles a random sample of the modules its build kept again (`check.sampled_recompile`). The
-    newest `kept` by use stay (`evict`)."""
+    never comes back; a module of it that the artifact cache lacks is compiled by the first build that reaches it, and
+    indexed with that build's (`module_keys.settle`). The audit still checks every statement against these `.olean`
+    files and replays every declaration through the kernel, and compiles a random sample of the modules its build kept
+    again (`check.sampled_recompile`). The newest `kept` by use stay (`evict`)."""
 
     def __init__(self, store: Path, kept: int = BUILDS_KEPT, max_gb: float | None = BUILDS_MAX_GB):
         self.store, self.kept, self.max_gb = store, kept, max_gb

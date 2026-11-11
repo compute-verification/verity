@@ -884,6 +884,79 @@ def test_a_tree_that_held_another_version_ends_with_every_output_object_and_exec
     assert build(trees[0]) == (set(), {}, 0) and held(trees[0]) == a, "and nothing changes where the source did not"
 
 
+#: a root package `top` (library `Top`) requiring `dep` (library `Dep`) by path: `Top` imports `Dep`, which imports `Dep.Word`
+PAIR = {"dep/lakefile.toml": 'name = "dep"\ndefaultTargets = ["Dep"]\n\n[[lean_lib]]\nname = "Dep"\n',
+        "dep/lake-manifest.json": json.dumps({"version": "1.2.0", "packagesDir": ".lake/packages", "packages": [],
+                                              "name": "dep", "lakeDir": ".lake", "fixedToolchain": False}),
+        "dep/Dep.lean": "import Dep.Word\n", "dep/Dep/Word.lean": '@[noinline] def Dep.word (n : Nat) : String := s!"word {n}"\n',
+        "top/lakefile.toml": 'name = "top"\ndefaultTargets = ["Top"]\n\n[[require]]\nname = "dep"\npath = "../dep"\n\n'
+                             '[[lean_lib]]\nname = "Top"\n',
+        "top/lake-manifest.json": json.dumps({"version": "1.2.0", "packagesDir": ".lake/packages", "packages": [
+            {"type": "path", "scope": "", "name": "dep", "manifestFile": "lake-manifest.json", "inherited": False,
+             "dir": "../dep", "configFile": "lakefile.toml"}], "name": "top", "lakeDir": ".lake", "fixedToolchain": False}),
+        "top/Top.lean": "import Dep\n\ndef Top.says : String := Dep.word 1\n"}
+
+
+def pair(tree: Path) -> tuple[Path, Path]:
+    """`PAIR` under ``tree``, on the fixtures' toolchain: (`top`, `dep`)."""
+    for name, text in PAIR.items():
+        (tree / name).parent.mkdir(parents=True, exist_ok=True)
+        (tree / name).write_text(text)
+    for pkg in ("top", "dep"):
+        shutil.copy(HERE / "fixtures" / "control" / "lean-toolchain", tree / pkg / "lean-toolchain")
+    return tree / "top", tree / "dep"
+
+
+@pytest.mark.skipif(LAKE is None, reason="no lake")
+def test_a_copied_kept_build_the_cache_lacks_is_compiled_once_and_indexed_with_the_package_that_requires_it(tmp_path, monkeypatch):
+    """An audit that doesn't audit `dep` takes a copy of the node's kept build of it for `top`'s tree
+    (`lean_audit.WarmBuilds.take`). The kept build was compiled by a build that indexed nothing, so the cache lacks its
+    modules. Left alone, the copy keeps its traces, Lake compiles none of it, `put` indexes none of it and records `Top`,
+    which loads it, as a module it could not index: in every tree that takes such a copy, for as long as the node keeps
+    that build. Named to the stage step as a package the run doesn't audit, the copy is settled with `top`'s own build:
+    its modules are compiled once and indexed with `Top`, and a second tree with a fresh copy compiles nothing and
+    leaves nothing unstored. Each build is `check.py`'s: staged and settled, built in the sandbox, then put."""
+    LC, LA = (_load(f"copied_{n}", HERE.parent / f"{n}.py") for n in ("check", "lean_audit"))
+    MK = LA.MK
+    kept = pair(tmp_path / "kept")[1]
+    subprocess.run(LC.in_sandbox(kept, ["lake", "build"]), cwd=kept, check=True, capture_output=True, env=LC.lake_env())
+    since = max(t.stat().st_mtime for t in (kept / ".lake" / "build").rglob("*.trace"))     # every run here starts later
+    n = iter(range(99))
+
+    def tree(name: str) -> tuple[Path, Path]:
+        """A tree of the two packages whose `dep` holds a copy of the kept build."""
+        top, dep = pair(tmp_path / name)
+        shutil.copytree(kept / ".lake" / "build", dep / ".lake" / "build", symlinks=True)
+        return top, dep
+
+    def build(store: Path, top: Path, unaudited: list[Path]) -> tuple[set[str], dict, int, int]:
+        """(the modules Lake compiled, the traces the stage step took, the module versions new in the cache, the modules
+        it recorded as ones it could not index)."""
+        monkeypatch.setattr(LC, "ARTIFACTS", store)
+        cache = store / MK.STAGE / f"test-{next(n)}"
+        got, said = LC.stage_build(MK, top, ["Top"], cache, unaudited)
+        r = subprocess.run(LC.in_sandbox(top, ["env", "-u", "LAKE_ARTIFACT_CACHE", f"LAKE_CACHE_DIR={cache}", "lake", "build"]),
+                           cwd=top, check=True, capture_output=True, text=True, env=LC.lake_env())
+        assert MK.misrestored(got, top) == []
+        shutil.rmtree(cache)
+        new = LA.LakeArtifacts(store).put({top: {"sandbox": True}}, since)
+        return ({m for m, *_ in LC.BUILT.findall(r.stdout + r.stderr)}, said["took"], new,
+                len(list((store / MK.UNSTORED).glob("*.json"))))
+
+    alone = tmp_path / "left-alone"
+    for name in ("alone-0", "alone-1"):
+        top, dep = tree(name)
+        assert build(alone, top, []) == ({"Top"}, {}, 0, 1), "the copy left as it is: `Top` is compiled in each tree, never indexed"
+
+    store = tmp_path / "artifacts"
+    top, dep = tree("first")
+    assert build(store, top, [dep]) == ({"Dep.Word", "Dep", "Top"}, {MK.ABSENT: 2}, 3, 0)
+    top, dep = tree("second")
+    assert build(store, top, [dep]) == (set(), {}, 0, 0), "a fresh copy in another tree: nothing compiled, nothing unstored"
+    assert json.loads((top / ".lake" / "build" / "lib" / "lean" / "Top.trace").read_text())["synthetic"], "`Top` is restored"
+    assert not (store / MK.UNSTORED).exists()
+
+
 #: `Toy.Word` with a function the other versions lack, and the `Main` that calls it
 EXTRA = ('@[noinline] def Toy.extra (n : Nat) : Nat := n + 41\n'
          '@[noinline] def Toy.word (n : Nat) : String := s!"version B {Toy.extra n}"\n')
