@@ -38222,3 +38222,65 @@ def SampledKSLivePubRows : Prop :=
 **(b) For the SPOT draft, "what is checked today"** (54 words): "Lean checks, for one `flock-verify --zk` session on one block type with a uniform `k_d`-block sample and at most `2^40` committed bits: acceptance with `K₀` or more incorrect blocks has probability at most the sample's miss plus `2^-100`, against `2^81` SHA-512 evaluations, assuming collision resistance and uniform verifier bytes; open premises: `RecordCustodyZKJPLaw`, `Built`, `TagsOkZHJ`."
 
 **Next, on your word.** With the hypothesis as 2b: build `Proofs.Flock.Bridge` and run the Lean check of `Security/Proofs` at the crossed head, then `research queue open` unmarked. Nothing is running now.
+
+## FLOCKPKG, Wed 11 Nov 04:01Z: the cut's PR is #8789; it is crossed over the move, head `631e3d733ce7` (pushed 03:58Z); not ready to mark (pins commit and quick tier missing, ETA about 06:15Z); TRN-96 answer inside
+
+**1. The PR and its head.** #8789, https://github.com/compute-verification/verity/pull/8789, opened 03:22Z at `35d9ac53ac58` by `research queue open`, unmarked, `Lane proofs`, `Goal proofs/flock-verifier-split`, `Refs PRF-514` [run]. Two warnings at open: PRF-514 carries no goal label (its labels: `from:proofs`), so the body's goal line names a goal no label of the issue names; the label is a Linear write, yours [run]. Head now **`631e3d733ce7e0c9609054eb501bbc8b6dd0c8f6`**, pushed 03:58:56Z, a descendant of the old head and of `main` `5c095bb4ab70`, no force [run]. Its commits above `35d9ac53ac58`:
+
+- `f243535724b5`: merge of `a930252c4993`, the last `main` before the move (two conflicts, `tools/verity/check/check.py`'s docstring and its test, both sides' lines kept) [run].
+- `5165c370fa1c`: the crossing, a merge of `5c095bb4ab70`, tree `3c9e5695ecc5` [run].
+- `18535a46df`: `benchmarks/pouw/h1_lanes/served.sh` builds the ZK server frame from the moved tarball layout (`--strip-components=1`, `protocols/flock/verifier`); found reading the crossed diff, not by a test: the rehearsal missed it [run: the tarball's four directories resolve every `path`].
+- `e5f4a20400`: my two doc lines (`AGENTS.md`, `verity/README.md`) name `verity/circuits/base`, `verity/circuits/lean`, `verity/commitments/lean`.
+- `64cb78ae00`: `tests/lint/allowlists/repo_retired_terms.json` is `main`'s in `main`'s order with the cut's entries, by the list's own merge driver (the lint: 4 passed) [run].
+- `631e3d733ce7`: the PoUS `TRUSTED.sha256` by its command (one digest, `security/Proofs/lake-manifest.json`) [run].
+
+**2. How it crossed, and what `restack.py` printed.** `tools/move/restack.py origin/cursor/proofs-flockpkg-1539 --move-commit 6581bcf197 … --no-pins --dry-run --json` (03:30Z, on `f243535724b5`): **`script-failed`**, step `script`, "tracked files under a retired path with no row in the map", naming the cut's three new directories and `verity/ml/flock/pod/lake_closure.py` [run; output kept as `flockpkg-work/cross/restack-test.out`]. Your 03:43Z recipe for that is a `git mv` commit first. I did not take it, and say so for you to overrule: the three directories are packages that 17 lakefiles and manifests require by relative path and that scripts, tests and docs name, and a `git mv` leaves each of those references on a name no map row rewrites. The crossing is instead restack's own steps with the cut's four rows in the map, as rehearsed (entries of 01:29Z and 01:43Z): merge the move's parent; `layout.py --map tools/move/layout_one_map.toml --no-lock`; merge the hand commits with the first move as base; `layout.py --map tools/move/security_dir_map.toml --no-lock`; merge `main` with the second move as base; then the rows go (`tools/move/layout_maps.py`, the generated map and the store's `moves.json` are `main`'s). No plain merge of `main` was made. **The tree it gives is byte for byte the rehearsal's, `3c9e5695ecc5`** [run: `git diff` of each step against the rehearsal's commit is empty], so the rehearsal's two runs are runs of the crossing commit's tree. The scripts are `flockpkg-work/cross/STEPS.sh` with `resolve.py`, `res_step3.py`, `res_step5.py`, `handfix.py`. Your layout rows of `a257b31a29` are not needed any more and are gone from the head.
+
+- `cursor/proofs-flockpkg-m6-7a3e` (`703053d91aa7`, no PR): **not crossed**. It sits on the cut, so it crosses after the cut, over the cut's crossed head. Not started.
+- `cursor/proofs-flockpkg-layers-<hex>` ((B)): does not exist yet; it is cut from the crossed cut.
+
+**3. Can it be marked before the move: no.** The move reached `main` at 03:26Z, four minutes after the PR opened [read: `gh pr view 8769`, `mergedAt 2026-11-11T03:26:13Z`]. I cancelled the two runs I had started at the pre-move head (`r20261111-032849-8dbb` records, `r20261111-032924-c6ae` suites; 7 minutes each) as no verdict for the crossed head [run]. What a mark needs at `631e3d733ce7`, and what there is:
+
+- **Records, five packages: there, by key.** `r20261111-013519-eb3d` (`lean_changed.py --records verity/circuits/base --update`, rc 0, `"outcome": "pass"`, validation passed, nothing regenerated) ran on the scratch commit `85a21e2b69` of tree `3c9e5695ecc5`. Its `passes` list the Lean inputs key **at `631e3d733ce7`** of `verity/circuits/base`, `verity/protocols/flock/verifier`, `verity/protocols/certifier/verifier/lean`, `security` and `security/Properties` [run: `lean_changed.py --inputs-key … --head 631e3d733ce7` against its `result.json`; the keys of all 17 packages are equal at the crossing commit and at the head]. The locks on the head are the ones the records runs wrote before the move (commits `9e0354382b`, `2b80033f6512`, `3ef4745e5d69`), carried by the mover; no record was regenerated on the moved tree.
+- **Records, twelve packages: missing.** The PR changes 17 locks against `main`; the other twelve hold no guarantee (their change is `layers`, and for two `exempt` and `roots`) and no run lists a pass of them. Twelve `--records PKG --update` runs, one a package, each reusing the five passes above from the store [guess: a few minutes each]. Launching now.
+- **Lean check of the code packages: there.** `r20261111-012616-5b02`, rc 0, `DONE packages=32 failures=0` (`check.py --build` on every package but security's three, and two copy-and-builds), same tree.
+- **Pins: three stale**, the Lean vector fixtures (`randomness_lean.json`, `exfiltration_lean.json`, `exfiltration_two_lean.json`: `security/Proofs/lake-manifest.json`'s digest, and for the first the moved sources) [run: `pins.py --stale`]. Their commands build Lean, so a node run regenerates them and I commit exactly its three files. `ready`'s preflight refuses a stale pin, so no mark before that commit.
+- **Quick tier: never run on the moved tree** (the rehearsal ran Lean only). I start `suites.py --changed 5c095bb4ab70 --quick` at `631e3d733ce7` now, to learn of failures early; three suites are expected to fail on the stale pins [guess]. The tier that counts runs at the pins commit, which changes no Lean input.
+
+So: **not ready to mark.** Missing: the pins commit (ETA 04:45Z [guess]), the twelve small records runs (ETA 04:45Z [guess]), the quick tier at the pins commit (ETA 06:15Z [guess: `f129` took 81 min]). Nothing is merged after the records: the four commits above the crossing change no Lean input. Run ids follow in my next entry, in minutes.
+
+**4. Every run and its verdict line.**
+
+| run | what, on which commit | verdict |
+|---|---|---|
+| `r20261110-225335-dafa` | records, tree of `106f87c52611` | rc 0, `"outcome": "regenerated"`; its records are `2b80033f6512`, `3ef4745e5d69` [read: my 00:49Z entry] |
+| `r20261110-225444-1fdb` | `suites.py --changed 2b869ed35db5 --quick`, same tree | rc 0, "90 suites: 90 passed (4 cached), 0 failed" [read] |
+| `r20261110-225443-0369` | 29 package checks, same tree | 26 of 29; the three failed on their locks only [read] |
+| `r20261111-005824-f0a7` | 29 package checks and two copy-and-builds, `35d9ac53ac58` | rc 0, "DONE failures=0" [run] |
+| `r20261111-010042-f129` | `suites.py --changed 3ef4745e5d69 --quick`, `35d9ac53ac58` | rc 0, "65 suites: 65 passed (4 cached), 0 failed; 150.0 min of test time" [run] |
+| `r20261111-004418-5df3` | `suites.py --changed 106f87c52611 --quick`, `3ef4745e5d69` | **no verdict**: cancelled rc 143 by its slot's limit (9000 s) on an 8-core slot, 8 passed, 0 failed, 58 not run [run] |
+| `r20261111-012616-5b02` | package checks, scratch `85a21e2b69` = tree `3c9e5695ecc5` | rc 0, "DONE packages=32 failures=0" [run] |
+| `r20261111-013519-eb3d` | records, same scratch commit | rc 0, `"outcome": "pass"` [run] |
+| `8dbb`, `c6ae` | records and suites at `f243535724b5` | cancelled by me at 03:36Z, superseded by the move |
+
+All of them but the last three rows are runs of pre-move trees: evidence for the old heads only.
+
+**5. TRN-96, the answer (handle-free, eight lines).**
+
+1. Yes: one definition of reading a string field, read by both.
+2. After the cut it belongs in the module `Base.JsonParse` (package `core_base`, `verity/circuits/base/Base/JsonParse.lean`), whose declarations keep `namespace Flock.JsonParse`. The module `Flock.JsonParse` is only a re-export of it until the forwarders go, so new code imports `Base.JsonParse`.
+3. The inference-only check's package already reaches it (it requires `core_circuits`, which requires `core_base`): no new requirement, and no Flock verifier.
+4. It is not there today. `strOf?`, `strAt` and the `getD` they read are declared in `NciCheck.Baseline`; `Base.JsonParse` holds the parser only. So it needs a change of ours.
+5. Ours, one PR after the cut (#8789) is on `main`, since the cut is a pure move and takes no definition: the three definitions move to `Base.JsonParse` with their bodies unchanged, and `NciCheck.Baseline` exports them, so `NciCheck.Baseline.strAt` still resolves and no line under `security/` changes.
+6. Its locks go by `check.py --update --moved`: the properties that read `strAt` (`Properties/Remote.lean`, `Properties/Nci/Baseline.lean`) get the read renamed, and none should change.
+7. Then training's: its record module imports `Base.JsonParse` and drops `stringOf?`, `stringAt` and `valueAt`. If its PR lands first it keeps its copies and drops them later; neither PR waits on the other.
+8. Replacing `getD` by core's `Json.getObjValD` is a separate change: it changes `strAt`'s body, so every record that reads it changes rather than moves.
+
+[read: `NciCheck/Baseline.lean:82-95`, `Base/JsonParse.lean`, the check's lakefile, `git grep` of the readers, TRN-96 and its comment, LEAN-238's comments of 01:06Z, 01:59Z, 02:44Z. guess: line 5's `export` under the module system, and line 6's "none should change", until a build and a records run.]
+
+**6. What is left, for whoever continues.**
+
+1. Launch (next entry names the ids): the pins run (`pins.py --regen` in a clone, the three files to `$OUT`), the suites run at `631e3d733ce7`, twelve `--records PKG --update` runs.
+2. Commit exactly the pins run's three files; rerun the quick tier at that head (`suites.sh 5c095bb4ab70`); fix what the suites find on the moved tree, each as its own commit; then write "ready to mark #8789 at SHA" and update the PR body's Checks (`research queue edit 8789 --body-file`).
+3. PRF-546's assessment, entry by Thu 12 Nov 02:00Z. Not read yet.
+4. After the cut: (B)'s branch and unmarked PR; M6 crossed over the cut; one before and after cold build on like slots; the Done-when 3 items.
