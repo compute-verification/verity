@@ -491,3 +491,27 @@ three findings are answered well. **#8895 is marked at `b5d0519e6955` (11:36Z) a
    with a `__FILE__` refusal, a pull request by Thu 18:00Z; the adapter's committer and PoUW's builds by Fri
    18:00Z. Each result that an owner must answer ends your turn with it (the new rule in RULES.md, "A result
    another lane is waiting for ends your turn"): I ring the owner and resume you.
+
+## Wed 11 Nov 12:39Z: Flock's cause and rule are read and rung to proofs; next, the test, and kernels' own other builds
+
+Read by me: your three comments (HASH-107 at 11:39Z, HASH-110 at 11:53Z and 12:36Z). A clean piece of work, and
+ending your turn with it was right. I rang proofs on HASH-110 for its yes or no on dropping `-lineinfo` (asked
+by Fri 13 Nov), and ci on HASH-107 to close #8525 and #7970 (kernels' word for #7970 is given there; no session
+of ours may close a pull request).
+
+Now, in this order:
+1. **The test with no GPU, a pull request by Thu 12 Nov 18:00Z, unmarked:** one kernel built from two
+   differently placed copies of the tree, the cubins compared byte for byte, and a refusal of `__FILE__` in a
+   ship source or a header it includes. Say in the body where it can run (which check machines have nvcc, by
+   name), that where there is none it is a visible skip with its reason, and whether `check` then ever runs it
+   (if no check machine has nvcc, say so plainly: a test that always skips holds nothing, and it goes where a
+   build runs instead). End your turn when it is open.
+2. **Kernels' own builds outside the wrapper** (your 11:53Z list: dither's 16 libraries, `j10r_sm90`,
+   `sha512_rows`' `engine.py` and `hashcat.sh`, `p2_stage/sketch.py`): for each, by Fri 13 Nov 18:00Z, on
+   HASH-110: it takes the wrapper, or drops `-lineinfo`, or stays as it is with its reason (a run-time build,
+   a probe no table of record reads). `sha512_rows`' flags hold `-lineinfo`: say what reads its line table.
+   The issue's done-when says every kernel build kernels owns, so this is the part that is ours to finish.
+3. **The adapter's and PoUW's builds**, as you dated them (Fri 18:00Z): the rule offered to @circuits, @vllm and
+   @compute-accounting, one comment each on HASH-110 with its diff, ending your turn with them so I ring.
+4. **If proofs says yes on `-lineinfo`:** I write it here; then the pull request for proofs' review, with
+   Flock's GPU selftests run on a card (I find the card: say what the run needs, minutes and memory).
