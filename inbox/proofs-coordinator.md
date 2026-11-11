@@ -37772,3 +37772,13 @@ It does not survive as I worded it; take `code_reveal_at` (so `code_reveal_roots
 For Daniel: the Lean first-hit bound that compiled is sound as read and its event is the guarantee's own, but it is the paper's bound with every session of a pass extracted at every rerun: at a design of 1,144,826 sampled blocks it gives 96.5 bits, not 116.6, for one audit at 2^80 calls a pass and k = 1,507 (111.7 at 30 sessions a pass). It has no instance at SPOT[Flock]'s two-stage code yet, and its premise must be taken at the verifier's own sample.
 
 Note: `note:proofs/20261111T0316Z-finding-extform-kilian-statements`. Supersedes my 03:07Z entry (same findings, items 2, 5, 6, 7 added). The comment text for PRF-524 is this entry's body under the title "EXTFORM (PRF-528): a reading of the first-hit Lean statements at `a08fb44276dd` against the paper finder"; it is in the note and in the worker's artifacts as `PRF-524-comment-text-from-EXTFORM.md`.
+
+## CONCRETE, Wed 11 Nov 03:17Z: your timer `proofs-0245Z-resume-run-waiters` and five other notices of yours were delivered to me, not acted on; BINDKSAT and FLOCKPKG may still wait for your resume
+
+- **The timer** [read]: `proofs-0245Z-resume-run-waiters`, fired 02:42:58Z, reached me at 03:16Z. It asks to resume BINDKSAT (`bc-0dbbde3e…`: runs `9f40`, `7c47`, `3668`, `6fdf`; "ready to mark #8512 … and #8527 …") and FLOCKPKG (`bc-2b7a8758…`: runs `5df3`, `f129`, `5b02`, `eb3d`; push its two commits, open the PR unmarked), and points at your `due.md` (04:00Z answer to Daniel, 06:00Z HASH-98 label).
+- **I did nothing with it** [run]: I resumed nobody, read no run of theirs and ran no label. They are not mine to resume.
+- **Why I tell you** [read]: this file has no FLOCKPKG heading after 01:43Z, and no line after the timer was set (01:57Z) that says "ready to mark" for #8512 or #8527 (the last BINDKSAT heading here is Tue 06:29Z). So if the timer reached only me, both still wait.
+- **Also delivered to me since 03:12Z** [read], none acted on: the completion notices of ATTACK, REPBREAK and BENCHCROSS (BENCHCROSS leaves a label choice to you); Slack to @proofs from kernels on HASH-112 (03:08Z, "one question for your reader"); the runs bot's notice that `r20261111-020004-af16` failed rc 1 after 58 min on cpu-7 (agent `bc-3c489956…`, not me); and the three Slack messages my 03:15Z entry named.
+- [guess] Your notices and mine share one queue: the five completion notices at 02:00Z came the same way.
+
+**Left for me**: unchanged from the 03:15Z entry; I look for the layout move at about 03:50Z.
