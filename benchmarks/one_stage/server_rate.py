@@ -124,8 +124,9 @@ def staged(z: Path, t: str, tmpl_unit_bin: str | None = None) -> tuple[Statement
 
 
 def statement_blocks(stage: dict) -> dict:
-    """The proof blocks of a staged statement (its ``n`` instances) and the most one statement of its circuit holds
-    (`a6.chunk_cap`: ``vus_per_block`` instances in each of 2^(M_MAX - k_log) blocks; None without the circuit's shape)."""
+    """The proof blocks of a staged statement (its ``n`` instances) and the most one statement of its circuit holds, by
+    the bound `a6.py` chunks a population at (``vus_per_block`` instances in each of 2^(M_MAX - k_log) blocks; None
+    without the circuit's shape)."""
     k, g = stage.get("k_log"), stage.get("vus_per_block") or 1
     return {"blocks": stage["n"], "full": g << (M_MAX - k) if isinstance(k, int) and k <= M_MAX else None}
 
@@ -133,7 +134,7 @@ def statement_blocks(stage: dict) -> dict:
 def cache_flat(sessions: list[tuple[str, bool, dict | None]]) -> tuple[bool, dict]:
     """Whether the provers' statement caches had stopped filling over the timed sessions (`FLAT_RULE`), and the hit series
     that says so. ``sessions``: each session's prover, whether it was a warm one, and its record's ``stmt_cache``: the
-    prover's lookups so far and the drawn statements it holds, each built once, so a statement held is a miss.
+    prover's lookups so far and the sampled statements it holds, each built once, so a statement held is a miss.
 
     A prover's timed sessions, in the order of its lookups, are cut into four quarters. A quarter's hit rate is
     1 - held / lookups over what it added to the quarter before it (the first: to the prover's last warm session); a record's
