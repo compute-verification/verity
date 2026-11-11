@@ -965,6 +965,14 @@ def test_the_post_goes_to_agent_alerts_as_infra_and_a_ring_to_the_inbox_of_the_h
         assert kw["channel"] == slack.channel_id_for(p.reg, slack.FRONT_DOOR)
         assert kw["text"] == slack.doorbell("infra", POSTED, POSTED, f"{words} {link}"), "the relay's doorbell, from infra"
 
+    del p.api.calls[:]                               # a post longer than a doorbell carries: cut so that its link is still in it
+    long = words + SAID_AGREED + "".join(f"\n\u2022 suite `pkg/s{i}`: failed here; passed in `{SHARDS[0]}`" for i in range(9))
+    p.ring(POSTED, long, "ci")
+    text = p.api.calls[0][1]["text"]
+    assert len(slack.plain(f"{long} {link}")) > slack.DOORBELL_MAX and text.endswith(f"\u2026 {link}") and "the rest" not in text
+    assert text.startswith(f"from infra, thread {POSTED}: @infra *Nightly check of `main` failed* at `{COMMIT[:12]}`")
+    assert len(text.split(": ", 1)[1]) <= slack.DOORBELL_MAX
+
     del p.api.calls[:]
     p.routes = type("Closed", (), {"resolve": lambda self, name: (name, {**Routes.route, "closed": "2026-10-18T21:00Z"})})()
     assert "ci has no open inbox" in p.ring(POSTED, words, "ci") and p.api.calls == []

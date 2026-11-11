@@ -656,9 +656,12 @@ class Pod:
         to, r = (self.routes or slack.Routes()).resolve(name)
         if not r or r.get("closed"):
             return f"{name} has no open inbox: the post stands in #agent-alerts, unrung"
+        said, link = slack.plain(words), slack.permalink(self.reg, self.alerts, ts)
+        if len(said) + 1 + len(link) > slack.DOORBELL_MAX:      # what a doorbell carries of a post: the link stays inside it
+            said = said[:slack.DOORBELL_MAX - len(link) - 2].rstrip() + "\u2026"
         self.api.call("chat.postMessage", channel=r.get("channel") or slack.channel_id_for(self.reg, slack.FRONT_DOOR),
                       thread_ts=r["inbox_ts"], username="router", unfurl_links="false", unfurl_media="false",
-                      text=slack.doorbell("infra", ts, ts, f"{words} {slack.permalink(self.reg, self.alerts, ts)}"))
+                      text=slack.doorbell("infra", ts, ts, f"{said} {link}"))
         return f"rang @{to}"
 
     def label(self, commit: str, outcome: str, run: str | None) -> str:
