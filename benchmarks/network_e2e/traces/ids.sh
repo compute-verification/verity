@@ -8,8 +8,9 @@
 # record of each id request in LOG (default $RESEARCH_RUN_DIR/out/front.jsonl under research run, else none). PY is an
 # interpreter with numpy: the node's vLLM venv's python, or "uv run python" in a synced tree.
 # With CMD, once the front listens it runs CMD ARG..., the network certifier's side through LISTEN on this host (a process
-# beside the server, not a device of the auditor's), then stops the front and exits with CMD's status. Without CMD the
-# front serves until SIGTERM, for a network certifier that runs elsewhere and reaches LISTEN.
+# beside the server, not a device of the auditor's), and exits with CMD's status; the front is stopped when the job ends,
+# however it ends. Without CMD the front serves until SIGTERM, for a network certifier that runs elsewhere and reaches
+# LISTEN.
 set -uo pipefail
 UPSTREAM=${UPSTREAM:?UPSTREAM: HOST:PORT of the server}
 LISTEN=${LISTEN:-127.0.0.1:18746}; CELL_BYTES=${CELL_BYTES:-4096}
@@ -21,10 +22,8 @@ front=("${py[@]}" -m verity_vllm.pipeline.cli ids-front --upstream "$UPSTREAM" -
 [ $# -gt 0 ] || exec "${front[@]}"
 exec 3< <(exec "${front[@]}")
 pid=$!
+trap 'kill "$pid" 2>/dev/null; wait "$pid" 2>/dev/null' EXIT
+trap 'exit 143' TERM INT HUP
 IFS= read -r listening <&3 || { echo "ids: the front ended before it listened"; exit 1; }
 echo "ids: the front $listening before $UPSTREAM at $(date -u +%H:%M:%SZ)"
 "$@"
-rc=$?
-kill "$pid" 2>/dev/null
-wait "$pid" 2>/dev/null
-exit "$rc"

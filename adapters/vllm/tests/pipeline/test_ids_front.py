@@ -14,7 +14,6 @@ import urllib.request
 from typing import Any
 
 import pytest
-
 from verity.protocols.certifier.verifier import io_tie as IT
 from verity.protocols.certifier.verifier import release as REL
 
