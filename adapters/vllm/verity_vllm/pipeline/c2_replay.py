@@ -345,8 +345,13 @@ def executed_prefix_kw(s: ReplaySources, _epr_r: dict, lk: dict, _arr: dict, _rl
 
 
 def live_only(s: ReplaySources) -> str | None:
+    """`live_only_entry` of the run's protocols."""
+    return live_only_entry(s.protocols)
+
+
+def live_only_entry(protocols: Any) -> str | None:
     """The protocol entry whose replay reads the live run (`pouw_circuit.around`): such a run's C2 cannot be deferred to a bundle."""
-    entries = getattr(s.protocols, "entries", None) or ()
+    entries = getattr(protocols, "entries", None) or ()
     if not entries:
         return None
     from verity_vllm.check.replay import pouw_circuit as PWC

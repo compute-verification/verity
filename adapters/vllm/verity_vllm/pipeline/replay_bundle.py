@@ -34,7 +34,6 @@ from collections.abc import Callable
 from concurrent.futures import Future, ThreadPoolExecutor
 from dataclasses import dataclass
 from pathlib import Path
-from types import SimpleNamespace
 from typing import Any
 
 from verity_vllm.check.replay.driver import SCHEMA as SAMPLED_REPLAY_SCHEMA
@@ -103,7 +102,7 @@ def start(out: Path, pair: int, com: Any, rc: Any, args: Any, protocols: Any) ->
     facts of record are read here, before it returns.  None when `defer` would not write the full store from here: no deferral, a slim
     one (its reads come from the challenge), a live-only replay, a retention other than host, or a store over the cap."""
     if (not args.replay_deferred or args.replay_deferred == "slim" or not getattr(args, "replay_bundle_overlap", 1)
-            or C2.live_only(SimpleNamespace(protocols=protocols)) or C2.retention_of(com, args) != "host"
+            or C2.live_only_entry(protocols) or C2.retention_of(com, args) != "host"
             or SD.nbytes(com) > float(getattr(args, "replay_bundle_cap_gb", 300)) * 1e9):
         return None
     from verity_vllm.check.replay.driver import engine_facts_of_record
@@ -166,10 +165,10 @@ def defer(out: Path, pair: int, com: Any, rc: Any, args: Any, *, tl: Any, arm: s
                 tl.end("validate.replay_bundle", pair=pair, ok=False)
                 print(f"[delta] REPLAY BUNDLE (pair {pair}): no plan ({e!r:.300}); the C2 replay runs in this process", flush=True)
                 return False
-            sr_p = planned.get("replay") or {}
-            slim = {"bytes": t.nbytes(), "picked": sr_p.get("picked"), "unresolved_n": sr_p.get("unresolved_n"), "unresolved": sr_p.get("unresolved"),
+            sr_p, read = planned.get("replay") or {}, t.nbytes()
+            slim = {"bytes": read, "picked": sr_p.get("picked"), "unresolved_n": sr_p.get("unresolved_n"), "unresolved": sr_p.get("unresolved"),
                     "linkage": planned.get("linkage"), "plan_s": round(time.perf_counter() - t0, 3)}
-            print(f"[delta] REPLAY BUNDLE (pair {pair}): slim -- {slim['picked']} picks + linkage read {slim['bytes'] >> 20} MiB of the store "
+            print(f"[delta] REPLAY BUNDLE (pair {pair}): slim -- {slim['picked']} picks + linkage read {read >> 20} MiB of the store "
                   f"in {slim['plan_s']} s (unresolved {slim['unresolved_n']})", flush=True)
         size, cap = t.nbytes() if t is not None else SD.nbytes(com), float(getattr(args, "replay_bundle_cap_gb", 300)) * 1e9
         if size > cap:

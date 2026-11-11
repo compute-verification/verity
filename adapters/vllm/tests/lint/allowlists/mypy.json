@@ -2430,8 +2430,6 @@
     {"file": "verity_vllm/pipeline/program_graph.py", "kind": "var-annotated", "symbol": "with_word_rules", "detail": ""},
     {"file": "verity_vllm/pipeline/release_json.py", "kind": "union-attr", "symbol": "main", "detail": "", "count": 39},
     {"file": "verity_vllm/pipeline/remote_session.py", "kind": "union-attr", "symbol": "accepted", "detail": "", "count": 2},
-    {"file": "verity_vllm/pipeline/replay_bundle.py", "kind": "arg-type", "symbol": "start", "detail": ""},
-    {"file": "verity_vllm/pipeline/replay_bundle.py", "kind": "operator", "symbol": "defer", "detail": "", "count": 2},
     {"file": "verity_vllm/pipeline/replay_plan.py", "kind": "arg-type", "symbol": "_serve", "detail": "", "count": 2},
     {"file": "verity_vllm/pipeline/research_outputs.py", "kind": "arg-type", "symbol": "program_digest", "detail": ""},
     {"file": "verity_vllm/pipeline/research_outputs.py", "kind": "assignment", "symbol": "_collect", "detail": ""},
