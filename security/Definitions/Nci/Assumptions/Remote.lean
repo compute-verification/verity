@@ -22,13 +22,16 @@ open Nci.Dampener
 /-- **PoUW's certificates are sound** ([POUW-SOUND]; PoUW's `CircuitCredit`): over the outcomes `Ω` of a
 deployment, sampled from `μ` (the verifier's coins, the developer's strategy fixed), the certificate of each of the `N`
 windows is wrong (`wrong ω i`: it credits more of that window's work than ran, beyond its deficit `ε`) with probability
-at most `p`, `3 · 2⁻⁴⁰` per window. It bounds each window's marginal only: it says nothing about how windows depend on
-one another.
+at most `p`, a parameter: no guarantee gives a deployment's `p` a value. It bounds each window's marginal only: it says
+nothing about how windows depend on one another.
 
-What backs `p` is `Accounting.Guarantees.Compose.CircuitCredit`: a certificate is accepted with the window's time below
-`(1 − ε)·T_cred` with probability at most `δ_s + δ_bind + δ_ks`, `3 · 2⁻⁴⁰` at `2⁻⁴⁰` each, `ε` being 0.744%. Nothing
-bounds how likely a certificate is to credit up to `ε` of its window that did not run, so that share is not `wrong`
-and belongs in the residual, through the certified work `W`. -/
+What would back `p` is `Accounting.Guarantees.Compose.CircuitCredit`: a certificate is accepted with the window's time
+below `(1 − ε)·T_cred` with probability at most `δ_s + δ_bind + δ_ks`, `ε` being 0.744% at `δ_s = 2⁻⁴⁰`. `δ_bind` and
+`δ_ks` are parameters of `CircuitCredit`, bounding its premises on commitment binding (`MovedIn`) and on the proof
+system's knowledge soundness (`JointSound`): PoUW's binding has no deployed bound and `ProofSystemSound` is
+undischarged, so neither has a value and `p` has none. Nothing bounds how likely a certificate is to credit up to `ε`
+of its window that did not run, so that share is not `wrong` and belongs in the residual, through the certified work
+`W`. -/
 def PouwSound {Ω : Type} [Fintype Ω] (μ : PMF Ω) {N : ℕ} (wrong : Ω → Fin N → Prop) (p : ℝ) : Prop :=
   ∀ i, prob μ (fun ω => wrong ω i) ≤ p
 

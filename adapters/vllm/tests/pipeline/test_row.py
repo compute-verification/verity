@@ -88,7 +88,7 @@ def test_the_match_of_record_is_the_default_and_the_caller_can_choose_the_audit(
 
 def test_machine_paths_are_defaults_that_the_environment_and_flags_override(tmp_path):
     o = _opts(tmp_path, environ={"HF_HOME": "/elsewhere/hf"})
-    assert o.env.hf_home == "/elsewhere/hf" and o.env.hot_root == cli.MACHINE["RunEnv.hot_root"] and o.env.sweep_dir == str(tmp_path)
+    assert o.env.hf_home == "/elsewhere/hf" and o.env.norm_tap_so == cli.MACHINE["RunEnv.norm_tap_so"] and o.env.sweep_dir == str(tmp_path)
     assert _opts(tmp_path, "--hf-home", "/flag/hf", environ={"HF_HOME": "/elsewhere/hf"}).env.hf_home == "/flag/hf"
     assert o.env.environ["HF_HOME"] == "/elsewhere/hf"
 
@@ -422,7 +422,7 @@ def _batch_build(tmp_path, monkeypatch, summary: str = "PASS", compose_rc: int =
         Path(f"{r.d}/build_request/instances.json.gz").write_bytes(b"")
         return 0, 0
 
-    for name, fn in (("gpu_exclusive", lambda why: None), ("follow_compose", follow_compose), ("derive_all", derive_all),
+    for name, fn in (("follow_compose", follow_compose), ("derive_all", derive_all),
                      ("guarded", lambda what, fn, *a: summary), ("target_family", lambda *a, out: (0, "TARGET-FAMILY-OK")),
                      ("required_manifest", required_manifest), ("run_tl", run_tl), ("call_boundaries", lambda to, cmd=None: None)):
         monkeypatch.setattr(r, name, fn)
@@ -499,7 +499,7 @@ def _built(r: SingleRow, monkeypatch, **kw) -> dict:
         Path(f"{r.d}/build_workload/workload_program.json").write_text(json.dumps({"workload_digest": "w" * 64}))
         return 0
 
-    for name, fn in (("prepare", lambda: None), ("gpu_exclusive", lambda why: None), ("derive_all", lambda to: (0, 0)),
+    for name, fn in (("prepare", lambda: None), ("derive_all", lambda to: (0, 0)),
                      ("guarded", lambda what, fn, *a: "PASS"), ("target_family", lambda *a, out: (0, "TARGET-FAMILY-OK")),
                      ("required_manifest", lambda stage: 0), ("run_tl", child), ("timeline_report", lambda: None)):
         monkeypatch.setattr(r, name, fn)
@@ -650,7 +650,6 @@ def test_a_passing_commit_verifies_the_manifest_it_ran_over(tmp_path, monkeypatc
         verified.append(m)
         raise Stop(0)
     monkeypatch.setattr(r, "manifest_of_record", lambda stage="commit": man)
-    monkeypatch.setattr(r, "gpu_exclusive", lambda what: None)
     monkeypatch.setattr(r, "run_gpu", lambda *a: 0)
     monkeypatch.setattr(r, "manifest_verify", verify)
     with pytest.raises(Stop):

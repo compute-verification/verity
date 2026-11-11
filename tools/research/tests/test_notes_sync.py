@@ -515,7 +515,7 @@ def test_sync_warns_once_pushed_on_a_citation_the_store_lacks(machines, tmp_path
     assert NS.sync(a, secrets=[], now=NOW)["warn"] == []
 
 
-# ---- RESEARCH_NOTES_TOKEN: past a cloud VM's global insteadOf --------------------------------------------------------------------------
+# ---- the notes token: past a cloud VM's global insteadOf ------------------------------------------------------------------------------
 
 TOKEN = "dummy-notes-token"
 EXPLICIT = "https://x-access-token@github.com/compute-verification/research-notes.git"
@@ -593,7 +593,7 @@ def broker(monkeypatch):
     srv = http.server.HTTPServer(("127.0.0.1", 0), Handler)
     threading.Thread(target=srv.serve_forever, daemon=True).start()
     monkeypatch.setattr(NS, "GITHUB_BROKER", f"http://127.0.0.1:{srv.server_address[1]}/api/agent-github/token")
-    monkeypatch.setattr(NS, "_BROKER_REFUSED", [])
+    monkeypatch.setattr(NS, "clock", lambda: BROKER_NOW)
     monkeypatch.setattr(slack, "oidc_token", lambda aud: f"oidc-for-{aud.rsplit('/', 1)[-1]}")
     for k in (NS.TOKEN_ENV, NS.SOURCE_ENV, NS.EXPIRES_ENV):         # notes_token sets them in os.environ: undone after
         monkeypatch.setenv(k, "")
@@ -609,9 +609,37 @@ def test_a_cursor_agent_gets_the_notes_token_from_the_broker_without_the_secret(
     assert NS.os.environ[NS.TOKEN_ENV] == "broker-token-1", "in the environment, where git's helper reads it"
     assert NS.notes_token(now=BROKER_NOW + 60) == "broker-token-1" and len(broker["seen"]) == 1, "an hour's token is reused"
     assert NS.notes_token(now=BROKER_NOW + 3600 - NS.REFRESH_S + 1) == "broker-token-2", "minted again before it expires"
+    assert NS.token_source() == ("broker", "the GitHub broker's token, by this agent's Cursor identity")
+
+
+def test_on_a_cursor_agent_the_brokers_token_is_used_whatever_the_variable_held(broker, monkeypatch):
+    """A VM that still injects a notes token no longer depends on it: the agent's notes access outlives that token's expiry
+    and the secret's removal."""
     monkeypatch.setenv(NS.TOKEN_ENV, TOKEN)
-    monkeypatch.delenv(NS.SOURCE_ENV)
-    assert NS.notes_token(now=BROKER_NOW + 7200) == TOKEN and len(broker["seen"]) == 2, "a token set by hand wins, never replaced"
+    assert NS.notes_token() == "broker-token-1" and broker["seen"] == [("Bearer oidc-for-token", {"scope": "notes"})]
+    assert (NS.os.environ[NS.TOKEN_ENV], NS.os.environ[NS.SOURCE_ENV]) == ("broker-token-1", "broker"), "what git's helper reads"
+    source, said = NS.token_source()
+    assert source == "broker" and said.endswith(f"; {NS.TOKEN_ENV} is set here too and is not used: a Cursor agent no longer needs it")
+    assert TOKEN not in said and "broker-token" not in said and len(broker["seen"]) == 1
+
+
+def test_without_a_cursor_identity_the_variable_is_used_as_it_was_set(monkeypatch):
+    """A laptop or the control pod (conftest: no Cursor identity socket here) asks no broker: the variable, else git's own."""
+    assert NS.notes_token() is None and NS.broker_why() == NS.NO_IDENTITY
+    assert NS.token_source() == (None, f"git's own: there is no notes token (no Cursor identity here, and {NS.TOKEN_ENV} is not set)")
+    monkeypatch.setenv(NS.TOKEN_ENV, TOKEN)
+    assert NS.notes_token() == TOKEN and NS.os.environ[NS.TOKEN_ENV] == TOKEN and NS.SOURCE_ENV not in NS.os.environ
+    assert NS.token_source() == ("env", f"{NS.TOKEN_ENV}, since the GitHub broker gave no token (no Cursor identity here)")
+
+
+def test_a_broker_that_gives_no_token_leaves_the_variable_as_it_was_set(broker, monkeypatch):
+    monkeypatch.setenv(NS.TOKEN_ENV, TOKEN)
+    broker["status"] = 503
+    assert NS.notes_token(now=BROKER_NOW) == TOKEN and NS.broker_why() == "the broker answered HTTP 503"
+    assert NS.token_source() == ("env", f"{NS.TOKEN_ENV}, since the GitHub broker gave no token (the broker answered HTTP 503)")
+    broker["status"] = 200
+    assert NS.notes_token(now=BROKER_NOW + NS.BROKER_RETRY_S - 1) == TOKEN and len(broker["seen"]) == 1, "not asked again at once"
+    assert NS.notes_token(now=BROKER_NOW + NS.BROKER_RETRY_S) == "broker-token-2" and NS.broker_why() is None
 
 
 def test_a_broker_that_refuses_leaves_no_token_and_is_not_asked_again_at_once(broker):
@@ -636,10 +664,8 @@ def test_sync_with_the_token_goes_past_the_bots_insteadof(cloud_vm, monkeypatch)
     (a / "lanes" / "x" / "report.md").write_text("CHECKPOINT none (20:00Z) [open] started\n")
     rep = NS.sync(a, secrets=[])
     assert rep["rc"] == 1 and "git fetch origin failed" in rep["error"], "unset: the plain URL is the bot's, refused as before"
-    assert f"{NS.TOKEN_ENV} is empty in this shell" in rep["error"] and "Cloud Agents > Secrets" in rep["error"], rep["error"]
-    monkeypatch.setenv("CLOUD_AGENT_INJECTED_SECRET_NAMES", f"OTHER,{NS.TOKEN_ENV}")
-    err = NS.sync(a, secrets=[])["error"]
-    assert NS.FRESH_SHELL in err and "Cloud Agents" not in err, "a secret this VM injects is lost from the shell, not unconfigured"
+    assert "no notes token here (no Cursor identity here), so git used this machine's own credentials" in rep["error"], rep["error"]
+    assert rep["error"].endswith(f"where there is no Cursor identity, set {NS.TOKEN_ENV}")
     monkeypatch.setenv(NS.TOKEN_ENV, TOKEN)
     seen = _argv_log(monkeypatch)
     rep = NS.sync(a, secrets=[])
@@ -657,7 +683,98 @@ def test_a_refused_fetch_with_the_token_says_so_without_the_token(cloud_vm, tmp_
     (a / "kb" / "new.md").write_text("new\n")
     rep = NS.sync(a, secrets=[])
     assert rep["rc"] == 1 and "git fetch origin failed" in rep["error"] and TOKEN not in rep["error"]
-    assert f"{NS.TOKEN_ENV} is empty" not in rep["error"], "set but refused: not the empty-token hint"
+    assert "no notes token here" not in rep["error"], "set but refused: not the hint for having none"
+
+
+GITHUB_SAYS = {
+    401: "remote: Invalid username or token. Password authentication is not supported for Git operations.\n"
+         "fatal: Authentication failed for 'https://github.com/compute-verification/research-notes.git/'",
+    403: "remote: Permission to compute-verification/research-notes.git denied to someone.\n"
+         "fatal: unable to access 'https://github.com/compute-verification/research-notes.git/': The requested URL returned error: 403",
+}
+SAID = f"notes: {NS.TOKEN_ENV} was refused by GitHub: it is expired or revoked; "
+
+
+def _github_refuses(monkeypatch, verb: str, status: int, token: str | None = TOKEN) -> list[list[str]]:
+    """GitHub refusing `token` (None: any token) for a fetch, pull, push or clone of the notes with `status`, as git says it;
+    every other git command runs. The refused commands."""
+    run, refused = subprocess.run, []
+
+    def github(cmd, *args, **kw):
+        if verb in cmd and EXPLICIT in cmd and token in (None, NS.os.environ.get(NS.TOKEN_ENV)):
+            refused.append(list(cmd))
+            return subprocess.CompletedProcess(cmd, 128, "", GITHUB_SAYS[status])
+        return run(cmd, *args, **kw)
+
+    monkeypatch.setattr(NS.subprocess, "run", github)
+    return refused
+
+
+def _given_while_the_broker_is_out(broker, monkeypatch) -> None:
+    """The variable as the VM injected it, in use because the broker gave no token a moment ago; it gives one when asked again."""
+    monkeypatch.setenv(NS.TOKEN_ENV, TOKEN)
+    broker["status"] = 503
+    assert NS.notes_token() == TOKEN
+    broker["status"] = 200
+
+
+@pytest.mark.parametrize("verb, status", [("fetch", 401), ("push", 403)])
+def test_a_sync_whose_given_token_github_refuses_says_so_in_one_line_and_goes_on_with_the_brokers(cloud_vm, broker, monkeypatch, capsys,
+                                                                                                 verb, status):
+    """The token a VM injects expires or is revoked while agents run: their sync must name the variable, not only git's
+    refusal, and still publish, by the broker."""
+    origin, a, _ = cloud_vm
+    _given_while_the_broker_is_out(broker, monkeypatch)
+    refused = _github_refuses(monkeypatch, verb, status)
+    (a / "kb" / "new.md").write_text("new\n")
+    rep = NS.sync(a, secrets=[])
+    assert (rep["rc"], rep["pushed"], rep["attempts"]) == (0, True, 1) and _git(origin, "show", "main:kb/new.md") == "new\n", rep
+    out, err = capsys.readouterr()
+    assert err == SAID + "going on with the GitHub broker's token\n" and out == "", "one line, once"
+    assert len(refused) == 1 and len(broker["seen"]) == 2 and NS.os.environ[NS.TOKEN_ENV] == "broker-token-2"
+    assert not any(t in err + str(rep) for t in (TOKEN, "broker-token"))
+    assert NS.token_source()[0] == "broker" and NS.sync(a, secrets=[])["rc"] == 0 and capsys.readouterr().err == "", "said once"
+
+
+def test_a_refused_given_token_with_no_broker_to_go_on_with_fails_as_before_and_names_the_variable(cloud_vm, monkeypatch, capsys):
+    _, a, _ = cloud_vm
+    monkeypatch.setenv(NS.TOKEN_ENV, TOKEN)                                   # conftest: no Cursor identity here
+    refused = _github_refuses(monkeypatch, "fetch", 401)
+    (a / "kb" / "new.md").write_text("new\n")
+    rep = NS.sync(a, secrets=[])
+    assert (rep["rc"], rep["attempts"]) == (1, 1) and "git fetch origin failed" in rep["error"] and "Authentication failed" in rep["error"]
+    assert "no notes token here" not in rep["error"] and len(refused) == 1, "refused once, not asked again with the same token"
+    err = capsys.readouterr().err
+    assert err == SAID + "the GitHub broker gave no token to go on with (no Cursor identity here)\n"
+    assert TOKEN not in err + str(rep) and NS.os.environ[NS.TOKEN_ENV] == TOKEN
+
+
+def test_a_refusal_of_the_brokers_own_token_is_not_laid_on_the_variable_nor_asked_again(cloud_vm, broker, monkeypatch, capsys):
+    _, a, _ = cloud_vm
+    monkeypatch.setenv(NS.TOKEN_ENV, TOKEN)
+    refused = _github_refuses(monkeypatch, "fetch", 403, token=None)
+    (a / "kb" / "new.md").write_text("new\n")
+    rep = NS.sync(a, secrets=[])
+    assert rep["rc"] == 1 and "git fetch origin failed" in rep["error"] and len(refused) == 1 and len(broker["seen"]) == 1
+    assert capsys.readouterr().err == "" and "broker-token" not in str(rep)
+
+
+def test_a_pull_and_a_clone_whose_given_token_github_refuses_go_on_with_the_brokers_too(cloud_vm, broker, tmp_path, monkeypatch, capsys):
+    origin, a, b = cloud_vm
+    (b / "kb" / "from-b.md").write_text("b\n")
+    assert NS.sync(b, secrets=[])["pushed"]
+    _given_while_the_broker_is_out(broker, monkeypatch)
+    refused = _github_refuses(monkeypatch, "pull", 401)
+    assert NS.pull(a).returncode == 0 and (a / "kb" / "from-b.md").is_file() and len(refused) == 1
+    assert capsys.readouterr().err == SAID + "going on with the GitHub broker's token\n"
+    for k in (NS.TOKEN_ENV, NS.SOURCE_ENV, NS.EXPIRES_ENV):
+        monkeypatch.delenv(k)
+    _given_while_the_broker_is_out(broker, monkeypatch)
+    refused = _github_refuses(monkeypatch, "clone", 403)
+    root = tmp_path / "home" / ".research" / "notes"
+    assert NS.ensure_clone(root) == f"notes: cloned {NS.NOTES_URL} into {root}" and len(refused) == 1
+    assert _git(root, "rev-parse", "HEAD") == _git(origin, "rev-parse", "main")
+    assert capsys.readouterr().err == SAID + "going on with the GitHub broker's token\n"
 
 
 def test_the_standby_pull_uses_the_token_and_updates_the_tracking_branch(cloud_vm, monkeypatch):

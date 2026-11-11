@@ -3,7 +3,9 @@ And/Xor/Not circuits.
 
     GumbelStreamKey_v2      (seed, pos: Array<64>) -> Array<32>                          word view: GumbelStreamKey_v1
     NvLogf_v3               (a: Array<32>) -> Array<32>                                  word view: NvLogf_v2
+    NvLogfQuietNan_v1       (a: Array<32>) -> Array<32>                                  word view: NvLogf_v1
     NvLogf_v5               (a: Array<32>) -> Array<32>                                  word view: NvLogf_v4
+    GumbelNoiseLane_v3      (key, v: Array<32>) -> Array<32>                             word view: GumbelNoiseLane_v1
     GumbelSelectF32_v2{V}   (logits: Array<V, Array<32>>, seed, pos: Array<64>, temp: Array<32>) -> Array<32>
                                                                                          word view: GumbelSelectF32_v1{V}
 
@@ -12,6 +14,8 @@ And/Xor/Not circuits.
 ``__nv_log1pf`` and ``__nv_logf`` with FTZ (`nv_log1pf`, `nv_logf`: `softmax`'s FTZ f32 operations step for step, the
 toward-zero add `fp.f32_add`'s ``rz``; ``f32(e) * 2^-23`` and ``fma(f32(e), 2^-23, i0)`` written as the integers they equal
 exactly), every NaN result 0x7FFFFFFF as `NvLogf_v2`'s: the noise never reaches one, so it is `GumbelNoiseLane_v1`'s.
+`NvLogfQuietNan_v1` is the same circuit with `NvLogf_v1`'s NaN results (`nv_logf` without ``gpu``): a name of its own, since
+it is no later version of `NvLogf_v3`'s function.
 `NvLogf_v5` is libdevice's ``__nv_logf`` without flush-to-zero, which torch's CUDA `log` calls: `nv_logf` with the 2^23
 scaling of an input below FLT_MIN `fp.f32_mul`'s, so a subnormal's log is finite; its word view `NvLogf_v4` is its reference
 alone, registered nowhere.
@@ -21,7 +25,13 @@ trace of ten rounds holds gigabytes of them. The stream key and the lane are the
 cut where the next piece reads every output, so no gate one trace would prune is kept: the key's rounds 0-4 with the key
 words rounds 5-9 read, and rounds 5-9 (`GumbelStreamKeyHead_v1`, `GumbelStreamKeyTail_v1`), and the lane's rounds 0-2, 3-7
 (the counter words round 9's word 0 reads), and 8-9 with the uniform, the logs and the add (`GumbelLaneHead_v1`,
-`GumbelLaneRounds_v1`, `GumbelLaneTail_v1`).
+`GumbelLaneRounds_v1`, `GumbelLaneTail_v1`). A lowering that runs the builders (Flock's flat one) has rows, where a trace has
+gates: there each round commits the words it returns (`philox_round`), a row a bit, so a round's ANDs read the round before
+as columns and not as its forms; a trace's commit is the word itself, so no Definition's gates read it.
+
+`GumbelNoiseLane_v3` is one lane on its own operands, for a body that Calls `GumbelNoiseLane_v1` a lane (the top-p stages'
+select chunks): its Philox word is the stream key's function of (key, 0) and (v, 0), so `GumbelStreamKey_v2`, and the uniform
+and the logs one more Call (`GumbelWordNoise_v1`). It shares nothing between lanes, which `GumbelNoise_v1{V}` does.
 
 `GumbelSelectF32_v2{V}` is `GumbelSelectF32_v1{V}` (the first index of the maximum of ``logits[v] + g(key)[v]``, or of the
 logits when ``temp`` is zero; NaN never taken, index 0 when lane 0 is a NaN) as a chain of Calls a partition query cuts at any
@@ -49,7 +59,7 @@ from verity.circuits.defs import CompositeDefinition, bind
 from verity.circuits.refs import Coll, Explicit, concat
 from verity.circuits.types import Array, Tuple
 from verity.definitions.silicon import fp
-from verity.circuits.boolean.forms import NOT, OR, ZERO, add, and_reduce, const_bits, multiply, mux, or_reduce, sub
+from verity.circuits.boolean.forms import NOT, ONE, OR, ZERO, add, and_reduce, const_bits, multiply, mux, or_reduce, sub
 from verity.definitions.ops.boolean.scalar import gt_u, select
 from verity.definitions.ops.boolean.softmax import f32_add_ftz, f32_fma_ftz, f32_mul_ftz, ftz
 from verity.circuits.boolean.trace import definition
@@ -58,10 +68,11 @@ from verity.definitions.registry import sampling as SM
 from verity.definitions.registry import topp_word_gates as TG
 from verity.definitions.registry.sampling_boolean import F32ArgmaxStage, G, GB, argmax_calls, traced_family
 
-__all__ = ["LANE_ROUNDS", "GumbelLane", "GumbelLaneHead", "GumbelLaneRounds", "GumbelLaneTail", "GumbelNoise", "GumbelNoiseGroup", "GumbelSelectF32",
-           "GumbelSetup", "GumbelStreamKey", "GumbelStreamKeyHead", "GumbelStreamKeyTail", "NvLogf", "NvLogfV5",
-           "gumbel_noise", "gumbel_select_calls", "lane_keys", "lane_products", "lane_rounds", "nv_log1pf", "nv_logf",
-           "nv_logf_no_ftz", "philox_round", "round2_lows", "stream_keys", "tl_rand"]
+__all__ = ["LANE_ROUNDS", "GumbelLane", "GumbelLaneHead", "GumbelLaneRounds", "GumbelLaneTail", "GumbelNoise", "GumbelNoiseGroup",
+           "GumbelNoiseLane", "GumbelSelectF32", "GumbelSetup", "GumbelStreamKey", "GumbelStreamKeyHead", "GumbelStreamKeyTail",
+           "GumbelWordNoise", "NvLogf", "NvLogfQuietNan", "NvLogfV5", "gumbel_noise", "gumbel_select_calls", "lane_keys",
+           "lane_products", "lane_rounds", "nv_log1pf", "nv_logf", "nv_logf_no_ftz", "philox_round", "round2_lows", "stream_keys",
+           "tl_rand"]
 
 BIT = BL.BIT
 U32 = Array(32, BIT)
@@ -110,12 +121,14 @@ def _times(C, x, k: int):
 
 def philox_round(C, c, k0, k1, pa=None, pb=None):
     """One round of `sampling.philox4x32_10_word0` on the counter words ``c``; ``pa`` is ``c[0] * PHILOX_ROUND_A`` and ``pb``
-    is ``c[2] * PHILOX_ROUND_B`` when the caller has them."""
+    is ``c[2] * PHILOX_ROUND_B`` when the caller has them. The four words it returns are committed (`forms.Circuit.commit`):
+    each is a sum of its product's adders, the counter and the key, which the next round's adders would otherwise read as
+    forms that grow round over round."""
     if pb is None:
         pb = _times(C, c[2], SM.PHILOX_ROUND_B)
     if pa is None:
         pa = _times(C, c[0], SM.PHILOX_ROUND_A)
-    return [_xor(_xor(pb[32:64], c[1]), k0), pb[:32], _xor(_xor(pa[32:64], c[3]), k1), pa[:32]]
+    return [C.commit(w) for w in (_xor(_xor(pb[32:64], c[1]), k0), pb[:32], _xor(_xor(pa[32:64], c[3]), k1), pa[:32])]
 
 
 def stream_keys(C, seed):
@@ -207,9 +220,11 @@ def _poly(C, coeffs, f):
     return f32_fma_ftz(C, r, f, f)
 
 
-def nv_logf(C, a, ftz: bool = True):
-    """`sampling.nv_logf_gpu` (`NvLogf_v2`): libdevice ``__nv_logf`` with FTZ, every NaN result 0x7FFFFFFF; with `ftz` False its
-    build without flush-to-zero (`NvLogf_v4`), whose 2^23 scaling of an input below FLT_MIN is `fp.f32_mul`'s."""
+def nv_logf(C, a, gpu: bool = True, ftz: bool = True):
+    """`sampling.nv_logf_gpu` (`NvLogf_v2`): libdevice ``__nv_logf`` with FTZ, every NaN result 0x7FFFFFFF. Without ``gpu``,
+    `sampling.nv_logf` (`NvLogf_v1`), whose NaN results are a NaN operand's own word quieted and, for any other operand
+    below zero, 0xFFC00000; every other word is the same. With `ftz` False its build without flush-to-zero (`NvLogf_v4`),
+    whose 2^23 scaling of an input below FLT_MIN is `fp.f32_mul`'s."""
     s, e = a[31], a[23:31]
     nan = C.AND(and_reduce(C, e), or_reduce(C, a[:23]))
     small = mux(C, s, [NOT(nan)], [NOT(or_reduce(C, e))])[0]      # a < FLT_MIN as values (every negative, +0, subnormals)
@@ -222,9 +237,13 @@ def nv_logf(C, a, ftz: bool = True):
     s2, e2_max, m2_any = a2[31], and_reduce(C, a2[23:31]), or_reduce(C, a2[:23])
     big = OR(C, s2, e2_max)                                          # a2 >= 0x7F800000: -inf + inf (a NaN) unless a2 = +inf
     pinf = C.AND(C.AND(NOT(s2), e2_max), NOT(m2_any))
-    r = select(C, big, select(C, pinf, _c(INF), _c(SM.LOG_NAN)), r)
+    if gpu:
+        special = select(C, pinf, _c(INF), _c(SM.LOG_NAN))
+    else:
+        special = select(C, C.AND(e2_max, m2_any), a2[:22] + [ONE] + a2[23:], select(C, s2, _c(SM.LOG_INVALID_NAN), _c(INF)))
+    r = select(C, big, special, r)
     r = select(C, NOT(OR(C, or_reduce(C, a2[23:31]), m2_any)), _c(NEG_INF), r)
-    return _canon_nan(C, r)
+    return _canon_nan(C, r) if gpu else r
 
 
 def nv_log1pf(C, a):
@@ -253,6 +272,12 @@ def gumbel_noise(C, u):
 
 NvLogf = definition("NvLogf", 3, nv_logf, (("a", F32),), F32, word=TG.NvLogfV2,
                     doc="libdevice __nv_logf (FTZ) on bits: NvLogf_v2 (every NaN result 0x7FFFFFFF)")
+NvLogfQuietNan = definition("NvLogfQuietNan", 1, lambda C, a: nv_logf(C, a, gpu=False), (("a", F32),), F32, word=TG.NvLogf,
+                            doc="libdevice __nv_logf (FTZ) on bits: NvLogf_v1 (a NaN operand quieted, any other operand below "
+                                "zero 0xFFC00000)")
+GumbelWordNoise = definition("GumbelWordNoise", 1, lambda C, w: gumbel_noise(C, tl_rand(C, w)), (("w", U32),), F32,
+                             doc="A lane's Gumbel noise from its Philox word: tl.rand's uniform (at least 2^-31'), then "
+                                 "g = -logf(-log1pf(-u)) (FTZ)")
 
 
 def nv_logf_no_ftz(C, a):
@@ -286,6 +311,19 @@ GumbelStreamKey = CompositeDefinition(
     "GumbelStreamKey", 2, (), lambda S: ((("seed", I64), ("pos", I64)), U32), _stream_key, conformance="exact-model-tested",
     doc="tl.randint(seed, pos) on bits: GumbelStreamKey_v1 (Philox4x32-10 word 0), its rounds 0-4 and 5-9 one Call each")
 GumbelStreamKey.word = SM.GumbelStreamKey  # type: ignore[attr-defined]
+
+
+def _noise_lane(B, S, key, v):
+    high = Explicit((B.call(BL.constant(0)).refs[0],) * 32)
+    w = B.call(GumbelStreamKey, Coll(I64, concat([key.refs, high])), Coll(I64, concat([v.refs, high])))
+    return B.call(GumbelWordNoise, w)
+
+
+GumbelNoiseLane = CompositeDefinition(
+    "GumbelNoiseLane", 3, (), lambda S: ((("key", U32), ("v", I32)), F32), _noise_lane, conformance="exact-model-tested",
+    doc="One lane's Gumbel noise on bits: GumbelNoiseLane_v1 (g[v] of the stream key). Its Philox word (counter (v, 0, 0, 0), "
+        "key (key, 0)) is GumbelStreamKey_v2 of (key, 0) and (v, 0), and the noise from it one Call")
+GumbelNoiseLane.word = SM.GumbelNoiseLane  # type: ignore[attr-defined]
 
 
 # --- GumbelSelectF32_v2{V} as separable stages -------------------------------------------------------------------------------
