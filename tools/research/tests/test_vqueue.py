@@ -745,8 +745,8 @@ def test_a_records_commit_whose_records_are_stale_still_fails_as_any_candidate_w
     """Its check found what its records run didn't settle: an ordinary fail, ejected as any is."""
     c = replace(cand("c1r", MAIN, 1, state=FAIL, failed=(stale(),)), repairs="c1")
     assert decide(snap(c, ready=[lean(1)], records=True)) == [
-        Eject(1, "h1", "lean-lock:Security failed, and its changed files meet their inputs, no other member's", (stale(),)),
-        Drop("c1r", "failed: lean-lock:Security", Outcome((1,), heads(1), FAIL, (1,), MAIN))]
+        Eject(1, "h1", "lean-lock:security failed, and its changed files meet their inputs, no other member's", (stale(),)),
+        Drop("c1r", "failed: lean-lock:security", Outcome((1,), heads(1), FAIL, (1,), MAIN))]
 
 
 # ---- 3. fill --------------------------------------------------------------------------------------------------------------------

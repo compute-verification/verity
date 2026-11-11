@@ -3472,8 +3472,8 @@ class Runs:
              rc: int | None = None, plan: tuple[tuple[str, ...], ...] = PLAN) -> str:
         """Shard ``shard`` of the newest check of ``sha`` has failed so far, its run ``rc`` None still running: pytest's
         suites ``rows`` (its suites.failed.json, each suite's log beside it last written at ``at``), or ``step``, which ended
-        failed at ``at`` with ``log``; its state says so, as `drive.run_states` reads it.  The run's id."""
-        from research.drive import LIVE, failing
+        failed at ``at`` with ``log``; its state says so, as `landing.run_states` reads it.  The run's id."""
+        from research.landing import LIVE, failing
 
         n = [n for n, (c, *_) in enumerate(self.launches, 1) if c == sha][-len(plan):][shard - 1]
         (d := self.tmp / f"c-{n}").mkdir(parents=True, exist_ok=True)
@@ -3639,7 +3639,7 @@ def test_under_gate_check_a_step_killed_while_the_shards_run_is_no_early_red(env
     """lean-audit fails in one shard while the others run.  Its log saying a process of its own was killed (`KILLED_SAYS`,
     the kernel replay's exit 137) is what the reading at the check's end takes as infra, so the early reading waits for the
     end; a failure that says no such thing is an early red, and the lone member's is run again."""
-    from research.drive import KILLED_SAYS
+    from research.landing import KILLED_SAYS
 
     main = env.main()
     env.put(1, {"1.txt": "1\n"})
