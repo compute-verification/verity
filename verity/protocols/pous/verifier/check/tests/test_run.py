@@ -22,9 +22,9 @@ from pathlib import Path
 from typing import Any
 
 import pytest
+import verity_difftest as D
 from hypothesis import strategies as st
 
-import verity_difftest as D
 from verity.protocols.pous.device import memory_challenger as mc
 from verity.protocols.pous.verifier import period, run
 from verity.protocols.pous.verifier import setup as pous_setup

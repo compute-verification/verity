@@ -28,6 +28,7 @@ from pathlib import Path
 from typing import Any
 
 import verity_difftest as D
+
 from verity.protocols.pous.verifier import streamed_wipe as sw
 
 PACKAGE = Path(__file__).resolve().parent

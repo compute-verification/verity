@@ -80,8 +80,8 @@ def _live(limit_ns: int, wrong=lambda i: False):
 
     sys.path.insert(0, str(ta.ROOT / "benchmarks" / "pous"))
     from band_gpu import harness as H
-    from verity.protocols.pous.device import timed_audit as live
 
+    from verity.protocols.pous.device import timed_audit as live
     from verity.protocols.pous.verifier import schemes
     from verity.protocols.pous.verifier.verifier import VerifierKey, leaf_hash
 

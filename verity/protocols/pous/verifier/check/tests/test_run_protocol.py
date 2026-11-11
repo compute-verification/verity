@@ -26,14 +26,26 @@ import os
 import shutil
 
 import pytest
-from hypothesis import strategies as st
-
 import verity_difftest as D
-from test_run import INVALID, LEAN, WIDTHS, M, Run, _decode_session, _decode_setup, _point_of, _Port, documents, runs
+from hypothesis import strategies as st
+from test_run import (
+    INVALID,
+    LEAN,
+    WIDTHS,
+    M,
+    Run,
+    _decode_session,
+    _decode_setup,
+    _point_of,
+    _Port,
+    documents,
+    runs,
+)
 from test_setup_difftest import _commitment as _setup_commitment
 from test_setup_difftest import _evidence as _setup_evidence
 from test_setup_difftest import _evidence_bytes, honest, setup_port, setup_protocol
 from verity_difftest import protocol as P
+
 from verity.protocols.pous.device import memory_challenger as mc
 from verity.protocols.pous.verifier import period
 from verity.protocols.pous.verifier import setup as pous_setup
@@ -242,8 +254,8 @@ def test_a_small_periods_answers_agree(deployed_server, test_server) -> None:
         got[name] = json.loads(D.replay(DEPLOYED, p.case, deployed_server)[1])
     assert {n: a["verdict"] for n, a in got.items()} == {"honest": "accept", "zeros": "reject"}, got
     assert got["honest"]["public"] == {"certified": False, "eps": "0", "s_bits": 0}, got
-    assert got["honest"]["profile"]["gaps"] == [f"P2 has no certificate at (w, c0, blocks) = "
-                                                f"({period.W}, {period.C0}, {got['honest']['profile']['blocks']})"]
+    assert got["honest"]["profile"]["gaps"] == [("P2 has no certificate at (w, c0, blocks) = "
+                                                 f"({period.W}, {period.C0}, {got['honest']['profile']['blocks']})")]
     for name, p in test.items():
         assert _part(TEST.reference(p.case)) == _part(p.answer), name
         assert json.loads(D.replay(TEST, p.case, test_server)[1])["verdict"] == {"honest": "accept", "zeros": "reject"}[name]

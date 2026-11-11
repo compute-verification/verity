@@ -26,16 +26,16 @@ from pathlib import Path
 
 import numpy as np
 import pytest
-from hypothesis import strategies as st
-
 import verity_difftest as D
-from verity.protocols.pous.device import memory_challenger as mc
-from verity.protocols.pous.prover import verdict_circuit as V
+from hypothesis import strategies as st
+from verity_difftest import protocol as P
+
 from verity.circuits import boolean as BL
 from verity.circuits.defs import bind
 from verity.circuits.evaluation import bits as EB
 from verity.circuits.evaluation.reference import standalone_call
-from verity_difftest import protocol as P
+from verity.protocols.pous.device import memory_challenger as mc
+from verity.protocols.pous.prover import verdict_circuit as V
 
 LEAN = Path(__file__).resolve().parents[1]
 pytestmark = pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain")

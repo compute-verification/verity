@@ -16,10 +16,10 @@ import hashlib
 from dataclasses import dataclass
 from typing import Any
 
-from hypothesis import strategies as st
-
 import mc_cases as M
 import verity_difftest as D
+from hypothesis import strategies as st
+
 from verity.protocols.pous.device import memory_challenger as mc
 from verity.protocols.pous.verifier import streamed_wipe as sw
 
