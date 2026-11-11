@@ -52,7 +52,7 @@ whichever gate it waits for: it extracts every session of a further run.
   further run, extracts for each gate it waits for only the sessions with a proof block that needs the gate
   (`Proofs.Flock.SamplingGeneric.RunExtAt`). Its term is `2·E[c + Σ_{g ∈ sample} c_g]/2^256`: `c` the first run's
   calls, read whole, and `c_g` a run's calls with only those sessions extracted. It is at most the whole-run term
-  (`ex_callsBy_le`).
+  (`ex_runCost_callsBy_le`).
 
 **What the bound is small under.** Three premises: the linear expected-time bound at the first-hit finder
 (`ExpectedCR`, a hypothesis of each statement here); the same at `B_conf`, whose success `Pr[B_conf]` is a term of the
@@ -648,7 +648,7 @@ theorem pr_offReg_le_needs_at {H : Msg → Msg} {L : Compiled Coin A} (hbind : L
 
 /-- **The by-position expectation is at most the whole-run one**: `E[c + Σ_{g ∈ sample} c_g] ≤ E[(1 + |sample|)·c]`,
 a run's calls at one gate being at most its calls with every session extracted (`callsBy_le`). -/
-theorem ex_callsBy_le (H : Msg → Msg) (L : Compiled Coin A) {Ω : Type} [Fintype Ω] (P : Prover Ω) (x : Msg)
+theorem ex_runCost_callsBy_le (H : Msg → Msg) (L : Compiled Coin A) {Ω : Type} [Fintype Ω] (P : Prover Ω) (x : Msg)
     (s : AuditStatement) (needs : ℕ → Finset ℕ) :
     Ex (fun q : Ω × ((Fin (L.V.k x) → Coin) × L.SlotEC x) =>
         ((L.runCost H P x s q.1 q.2 +
@@ -684,7 +684,7 @@ proof block of the committed trace's incorrect set with probability at most
   that have a proof block needing gate `g` extracted (`callsBy`): what a further run at those coins costs the finder
   for a gate it waits for.
 * The expectation is over the prover's tape, the run's coins and the extractor's, joint in the sample and the calls.
-  It is at most `E[(1 + |sample|)·c]`, `pr_regHit_le_needs_ex_cap`'s (`ex_callsBy_le`).
+  It is at most `E[(1 + |sample|)·c]`, `pr_regHit_le_needs_ex_cap`'s (`ex_runCost_callsBy_le`).
 * The premises the bound is small under are `pr_regHit_le_needs_ex_cap`'s, with the linear expected-time bound at
   this finder in place of that one's. -/
 theorem pr_regHit_le_needs_at_cap {H : Msg → Msg} {L : Compiled Coin A} (hbind : L.commit.Binds H)
