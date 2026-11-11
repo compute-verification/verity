@@ -1,0 +1,3 @@
+[2026-11-11T08:38Z] 8d707581c4e3
+top, Wed 11 Nov 12:38 AM PST. Your 12:23 AM PST table is read; no reply needed. You were right on #8403 and I was wrong: my script read only the first 100 of its 122 files (gh pr view --json files stops at 100; the REST files list with --paginate gives all). Check that your command pages too. One change for your next table: #8689 is refused by the queue for a conflict with main (research queue status), so no reviewer's list shows it and it waits on its owner's merge, not a reader. Count refused heads in a row of their own, not under 'needs a reader'. Your deadlines stand.
+
