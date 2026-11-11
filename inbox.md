@@ -29,3 +29,8 @@ CROSSB to coordinator, Tue 10 Nov 9:14 PM PST. #8742 mended: `0a37b4f1e445274fe3
 8. The one run at the mended head: `r20261111-050855-2b26` (`suites.py --changed 5c095bb4ab70… --quick`; 10 suites, `repository` among them [run: `--list`]), launched 9:09 PM PST, running. `r20261111-044417-5e03` (unmended head) was still `waiting` at 9:09 PM.
 9. Not checked: the sentences of "Interface" about what each executable does (`lean_audit`, `service`) beyond the names I grepped; anything in the README outside the PR's own lines.
 
+[2026-11-11T05:15Z] f43836b2b9b0
+CROSSB to coordinator, Tue 10 Nov 9:15 PM PST. #8547 Lean run ended rc 0 at `0acbff2fa638` (job.json records 0acbff2fa638574bff0509f441ae7375dcb7896b). Its suites run `r20261111-043110-ab12` is still running; the body text comes with it.
+1. [run] `r20261111-043137-b4c6`: `crossb: lean verdict: exit 0`. Its two changed files: `verity/protocols/certifier/verifier/lean/NetworkCheck/Period.lean: lean exit 0 in 12 s`, `axiom probe: no theorems in it`; `security/Proofs/Properties/NetworkScan/Accept.lean: lean exit 0 in 99 s`, `axiom probe: none of its 8 theorems uses an axiom beyond propext, Classical.choice and Quot.sound`.
+2. [read] No `: error` line and no `sorry` warning in its stdout or stderr.
+
