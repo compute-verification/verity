@@ -45,7 +45,7 @@ from verity.protocols.poub.verifier import codec as RB
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
-import codec  # noqa: E402
+import codec
 
 DOMAIN = b"verity/word-codec/wide/v0\0"
 SEED_BYTES = 32
@@ -85,7 +85,7 @@ class Field(RB.Field):
 
     def check_payload(self, payload: int | None) -> int:
         b = self.payload if payload is None else payload
-        if not 8 <= b or ((1 << b) > self.p and not self.full_width(b)):
+        if b < 8 or ((1 << b) > self.p and not self.full_width(b)):
             raise ValueError(f"{self.name}: a payload is under {self.p.bit_length() - 1} bits, or the word's full width")
         return b
 
