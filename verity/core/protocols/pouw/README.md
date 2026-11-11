@@ -136,7 +136,7 @@ reads. Proved:
   and Pearl-C4's at 8192³, `Pouw.SecurityProofs.PearlC.EpsFp4Sm120_8192` (ε = 9875013901/1366788186099, 0.723%). Each
   follows from its gap form below. Neither Pearl-C figure is the served point's. What is served is Llama 3.2 1B on an
   H200, credited under the H100 record at an inert-work share of 1/400, and its gap is a lemma, not yet a listed
-  guarantee: `Pouw.PearlC.pearlCGapH100Rev1_llama32_1b` (`Security/Proofs/Pouw/PearlC/ServedH100Rev1Gap.lean`), under
+  guarantee: `pearlCGapH100Rev1_llama32_1b` (`Security/Proofs/Pouw/PearlC/ServedH100Rev1Gap.lean`), under
   `TTOutPearlCH100Rev1`, g = 69533/10736000 (0.648%) on the model's four linears in one layout, which is `down`'s
   (n = 2048, K = 8192); as an advantage, ε = g/(1 − g) = 69533/10666467 (0.652%). This is the assumption's gap alone:
   sampling's ε_s at δ_s multiplies in as (1 + ε)/(1 − ε_s), and the assumption's own δ adds.
