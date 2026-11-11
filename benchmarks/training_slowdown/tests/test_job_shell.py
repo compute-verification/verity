@@ -87,7 +87,7 @@ def test_a_queued_jobs_environment_is_its_runs_own_under_tmp_and_gone_when_it_en
     before = sorted(p.relative_to(root) for p in root.rglob("*"))
     up, tell = os.pipe()
     p = subprocess.Popen(["bash", "-c", script], cwd=root, pass_fds=(tell,), start_new_session=True,
-                         env={"PATH": f"{bin_}{os.pathsep}{os.environ['PATH']}", "OUT": str(out), "UP": str(tell),
+                         env={"PATH": f"{bin_}{os.pathsep}{os.defpath}", "OUT": str(out), "UP": str(tell),
                               "STANDIN": standin})
     os.close(tell)
     with open(up, "rb") as said:
