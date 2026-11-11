@@ -2538,7 +2538,7 @@
     {"file": "verity_vllm/program/frontend/rules/vocab.py", "kind": "E741", "symbol": "_dense_kinds", "detail": "Ambiguous variable name: `I`"},
     {"file": "verity_vllm/program/frontend/rules/vocab.py", "kind": "E741", "symbol": "_moe_ffn_fixed", "detail": "Ambiguous variable name: `I`"},
     {"file": "verity_vllm/program/frontend/rules/vocab.py", "kind": "E741", "symbol": "_silu_mul_fp8_block_quant", "detail": "Ambiguous variable name: `I`"},
-    {"file": "verity_vllm/program/frontend/rules/vocab.py", "kind": "I001", "symbol": "<module>", "detail": "Import block is un-sorted or un-formatted", "count": 2},
+    {"file": "verity_vllm/program/frontend/rules/vocab.py", "kind": "I001", "symbol": "<module>", "detail": "Import block is un-sorted or un-formatted"},
     {"file": "verity_vllm/program/frontend/rules/vocab.py", "kind": "UP035", "symbol": "<module>", "detail": "Import from `collections.abc` instead: `Callable`"},
     {"file": "verity_vllm/program/frontend/schemas.py", "kind": "I001", "symbol": "<module>", "detail": "Import block is un-sorted or un-formatted"},
     {"file": "verity_vllm/program/frontend/schemas.py", "kind": "UP035", "symbol": "<module>", "detail": "Import from `collections.abc` instead: `Callable`"},

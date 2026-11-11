@@ -36,6 +36,12 @@ from verity.definitions.registry import pouw_rows as _pouw_rows
 from verity_vllm.program.frontend import targets as _targets
 from verity.definitions.registry import value_inputs as _vi
 from verity_vllm.program.frontend.rules import ref_kinds as R
+from verity.definitions.registry import ref_prims as RP
+from verity.definitions.registry import b1_tp2 as TP2
+from verity.definitions.registry import pad_prims as PP
+from verity.definitions.registry import prims as P
+from verity.definitions.registry import topp_words as _topp_words  # the keep word as word gates at a constant S
+from verity.definitions.registry import layer_norm as _LN
 
 
 @dataclass
@@ -162,7 +168,6 @@ PROFILE_B1_EAGER = Vocabulary(
 # The reference kinds define the arithmetic (sequential f32 chains, one DT rounding at stated points); agreement with torch
 # CPU is measured over a tested domain (docs/data/ref-prims/), never assumed. The vocabulary version pins NUMERIC's
 # `REF_VOCAB_VERSION` and `ref_vocab_digest()` (a hash over every reference kind's evaluator/body source).
-from verity.definitions.registry import ref_prims as RP
 
 
 def _ref_doc(d) -> str:
@@ -210,13 +215,6 @@ REFERENCE_CPU_F32 = Vocabulary(
 
 # -- profile "b1-eager-v2": the same Ampere eager profile over the v2 skeleton (`Serve_v2`/`Serve_v3`: `Gemm_v2{K,N,DOT}`,
 # `Attention_v2{..,BN,DOT,INV}`, the `NORM` bundle) + the `pad-serve@1` kinds of the padded circuit (`serve3.py`) ------------
-from verity.definitions.registry import b1_tp2 as TP2
-from verity.definitions.registry import pad_prims as PP
-from verity.definitions.registry import prims as P
-from verity.definitions.registry import topp_words as _topp_words  # the keep word as word gates at a constant S
-from verity.definitions.registry import layer_norm as _LN
-
-
 PROFILE_B1_EAGER_V2 = Vocabulary(
     "b1-eager-v2", "profile", "b1-eager-v2",
     kinds={
@@ -572,7 +570,6 @@ PROFILE_B1_EAGER_V3 = Vocabulary(
                             "gemm_bias_dot (registry.targets.gemm_bias_spec)",
            "attention_dot": "Attention_v2{T,NH,KVH,D,BN,DOT,INV}: FA2/FA3 causal GQA with the target's step, block size and epilogue "
                             "(registry.targets.attention_spec)",
-           "attention": "Attention_v3{T,NH,KVH,D,BN=fa2_kblock_n(D)}: FA2 causal GQA, kBlockN as a declared static (b1.AttentionV3)",
            "moe_router_topk": "MoeRouterTopK_v1{E,TOPK,VPT}: _moe_C.topk_softmax(renormalize=False) per token row — f32 softmax (NvExpf, kernel "
                               "reduction geometry E/VPT threads x VPT), TOPK rounds of lowest-index argmax; -> (weights f32[TOPK], ids i32[TOPK])",
            "moe_router_topk_norm": "MoeRouterTopKNorm_v1{E,TOPK,VPT}: the same kernel with renormalize=True -- the TOPK probabilities summed in slot order, "
