@@ -1023,6 +1023,32 @@ def test_with_its_row_in_the_branchs_rows_file_the_file_moves_and_the_result_hol
     assert RS.restack(r["result"], RS.moves_on("main", "pr", str(real))[0][0], "main", cwd=str(real))["status"] == "up-to-date"
 
 
+def test_a_crossing_that_skipped_a_move_and_stops_at_files_with_no_row_says_both(late, monkeypatch, capsys):
+    """The two rules together: the outcome is the stop's, `no-row` with its files and its fix, and the move skipped before it
+    stays named under it, in the text and in `--json`. There is no result, so nothing is pushed and no command to confirm
+    the skip with is given: the rows file comes first, and the crossing after it is the one that says `clean-skipped`."""
+    repo, first, second = late["repo"], late["first"], late["second"]
+    run, said = RS.run_script, "no row for 1 tracked file under a path the map retires: a row in the rows file\n  app/added.py"
+
+    def no_row(merged, base, python, cwd):
+        if merged != base:                                     # the branch's tree: the move's own check runs on its base
+            raise RS.NoRow(said)
+        return run(merged, base, python, cwd)
+
+    monkeypatch.setattr(RS, "run_script", no_row)
+    monkeypatch.chdir(repo)
+    assert RS.main(["pr", "--main", "main", "--push-to", "pr-crossed", "--json"]) == 1
+    out = capsys.readouterr()
+    [r] = json.loads(out.out)
+    assert (r["status"], r["step"], r["files"], r["move"]) == ("no-row", "script", ["app/added.py"], second)
+    assert ([s["move"] for s in r["skipped"]], r["crossed"]) == ([first], []) and not {"result", "confirm", "pushed"} & set(r)
+    assert "--push-to pr-crossed: pr is no-row; nothing pushed" in out.err
+    text = RS.line(r)
+    assert text.startswith("pr: no-row  [plain merge ") and "\n    no row for 1 tracked file " in text
+    assert f"\n      app/added.py\n    skipped the move {first[:12]} (tools/move/layout.py --map " in text
+    assert text.endswith("Look for that map's old names in what the branch adds.")
+
+
 def test_a_row_of_the_rows_file_that_contradicts_a_row_of_the_map_is_refused(real):
     """A branch's rows add to the map and never change it: a row sending a file the map moves somewhere else stops the
     crossing, as a failed script whose output names the row and where the map sends the file."""
