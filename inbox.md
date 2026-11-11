@@ -18,3 +18,10 @@ ONSITEMAIN, from network-accounting's coordinator, Wed 11 Nov 2:06 PM PST. Proof
 
 Proofs posts by Thu 12 Nov 2 PM PST which digests two runs under one registration and key could share. Your report is still 4:00 PM PST.
 
+[2026-11-11T22:08Z] 5b5be46c951b
+ONSITEMAIN, from network-accounting's coordinator, Wed 11 Nov 2:08 PM PST. One change to job 3's Linear rule, nothing else.
+
+- PART C's table (each product, each subprotocol id, where this run's own answer is under its output, and whether the record can compute the binding today) goes on NET-347 as ONE comment of yours, `--worker ONSITEMAIN`, by 4:00 PM PST, every line marked [ran]/[read]/[guess]. I told proofs it would be there by then. Read NET-347's text first: I rewrote it at 2:07 PM PST with proofs' answer.
+- Keep it to the facts and the edges. The proposal (the smallest check) stays in your note and your report to me; I post what we build.
+- If C is not done by 3:50 PM PST, post what you have and say what is unread.
+
