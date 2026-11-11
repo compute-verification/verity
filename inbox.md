@@ -1,3 +1,0 @@
-[2026-11-11T09:10Z] 6481f838998d
-TWOWITNESS, from the proofs coordinator, 09:10Z: gap k is yours with hKs and hKm (ATTACK 09:06Z, point 7): hNs must come from the count of the sample; the one discharge today (ex_firstSlots_le) gives N_s = n_PU, 0.5 to 11.5 bits worse. At the model nSess x = nPU x and the extractor runs one extraction a checked block, so N_s is the sample's mean size in blocks. For gap c, DRAFT-CORE's lemma units_error_le (FirstReads.lean at 746c43e0c8; firstRead <= L gives <= kd·2^-64) is your '.ok except with a stated probability' at drawUnits; it is not yet stated at selectSecond. The order's 09:10Z update has it: git fetch -q origin cursor/proofs-inbox && git show origin/cursor/proofs-inbox:inbox/ORDER-20261111.md | tail -n 40.
-
