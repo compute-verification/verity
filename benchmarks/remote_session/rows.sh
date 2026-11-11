@@ -7,7 +7,8 @@
 # session.cu (default: the commit this one's branch left `origin/main` at; else the file sent as
 # inputs/main-session.cu) the new build holds instruction for instruction (`same_sass.py`, out/same_sass.json): at 16
 # rows the pass runs those. BUILD_ONLY=1 ends there, so a machine with no GPU checks that it compiles (TOOLKIT=1
-# assembles CUDA 12.9's nvcc first, `benchmarks/pouw/harness/jobs/toolkit.sh`).
+# assembles CUDA 12.9's nvcc first, `benchmarks/pouw/harness/jobs/toolkit.sh`). DEFS are session.cu's own nvcc
+# arguments (-DSK64_PER_SM=2: the 64-row receipt kernels at 128 registers a thread).
 #
 # Then each of STEPS under a lease of its own on CARDS, of at most LEASE_MIN minutes and taken without waiting: a card
 # whose lock is held, or with a compute process or more than a GiB in use on it, ends the run (exit 75) with nothing
@@ -88,7 +89,8 @@ ln -s "$TREE/verity" "$B/base/verity"
 BASE=$B/base/$RS/session.cu
 { [ -n "$BASE_REV" ] && git -C "$TREE" show "$BASE_REV:$RS/session.cu" > "$BASE" 2> /dev/null; } \
   || cp "${RESEARCH_RUN_DIR:-.}/inputs/main-session.cu" "$BASE" 2> /dev/null || rm -f "$BASE"
-"$NVCC" "${FLAGS[@]}" -o "$B/session.so" $RS/session.cu > "$O/session.ptxas" 2>&1 & S=$!
+# shellcheck disable=SC2086
+"$NVCC" "${FLAGS[@]}" ${DEFS:-} -o "$B/session.so" $RS/session.cu > "$O/session.ptxas" 2>&1 & S=$!
 "$NVCC" "${FLAGS[@]}" -DKV_FIELD=1024 -DKV_MASK=1 -o "$B/kv.so" benchmarks/word_codec/kv.cu > "$O/kv.ptxas" 2>&1 & K=$!
 M=
 [ -f "$BASE" ] && { "$NVCC" "${FLAGS[@]}" -o "$B/base.so" "$BASE" > "$O/base.ptxas" 2>&1 & M=$!; }

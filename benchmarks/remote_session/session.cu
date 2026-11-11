@@ -250,6 +250,14 @@ __device__ __forceinline__ void sk16_prologue(u32 *sg, const u32 *__restrict__ p
 constexpr int SK64_PACK = 4 * SK64_SIGNS;   // the packed signs' words
 static_assert(SK64_PACK == SK16_PACK * (SK64_ROWS / 16), "64 rows pack four words a lane where 16 pack one");
 
+// The receipt CTAs an SM that a 64-row receipt kernel's registers are bounded for: at 1 ptxas takes what it asks for
+// (as reader.cu's sketch64_receipts_kernel), at 2 a thread is held to 128 registers, and an SM then holds two receipt
+// CTAs or one beside a consumer CTA (`pass_consumer_kernel`).
+#ifndef SK64_PER_SM
+#define SK64_PER_SM 1
+#endif
+#define SK64_BOUNDS __launch_bounds__(32 * SK64R_WARPS, SK64_PER_SM)
+
 // sk16_tile_of at 64 rows: S the warp's staging (32 · SK64_ROWS int32) and sg the packed signs, in shared memory or,
 // for a consumer's own tile, where the pass keeps them.
 template <class Load, class Index>
@@ -530,10 +538,8 @@ __global__ void __launch_bounds__(32 * SK16_WARPS, 2) mapped16_receipts_kernel(c
 }
 
 // mapped16_receipts_kernel at 64 rows.
-__global__ void __launch_bounds__(32 * SK64R_WARPS, 1) mapped64_receipts_kernel(const u64 *__restrict__ addrs,
-                                                                                const u64 *__restrict__ js, u64 n,
-                                                                                const uint4 *__restrict__ pk,
-                                                                                u64 *__restrict__ ys) {
+__global__ void SK64_BOUNDS mapped64_receipts_kernel(const u64 *__restrict__ addrs, const u64 *__restrict__ js, u64 n,
+                                                     const uint4 *__restrict__ pk, u64 *__restrict__ ys) {
   extern __shared__ uint4 smem[];
   int *st = sk64_prologue(smem, pk);
   const int lane = threadIdx.x & 31, warp = threadIdx.x >> 5;
@@ -597,10 +603,9 @@ __device__ __forceinline__ void pass64_tile(const uint4 *__restrict__ data, u64 
   if (!lane) atomicAdd(ready + tile / tiles_per, 1u);
 }
 
-__global__ void __launch_bounds__(32 * SK64R_WARPS, 1) sketch64_pass_kernel(const uint4 *__restrict__ data, u64 n,
-                                                                            u64 base, const uint4 *__restrict__ pk,
-                                                                            u64 *__restrict__ ys, unsigned *ctr,
-                                                                            unsigned tiles_per, unsigned *started) {
+__global__ void SK64_BOUNDS sketch64_pass_kernel(const uint4 *__restrict__ data, u64 n, u64 base,
+                                                 const uint4 *__restrict__ pk, u64 *__restrict__ ys, unsigned *ctr,
+                                                 unsigned tiles_per, unsigned *started) {
   extern __shared__ uint4 smem[];
   if (!threadIdx.x) atomicExch(started, 1u);
   int *st = sk64_prologue(smem, pk);
@@ -819,11 +824,9 @@ __device__ __forceinline__ void mapped_pass64_tile(const u64 *__restrict__ addrs
   if (!lane) atomicAdd(ready + tile / MAPPED_READY_TILES, 1u);
 }
 
-__global__ void __launch_bounds__(32 * SK64R_WARPS, 1) mapped64_pass_kernel(const u64 *__restrict__ addrs,
-                                                                            const u64 *__restrict__ js, u64 n,
-                                                                            const uint4 *__restrict__ pk,
-                                                                            u64 *__restrict__ ys, unsigned *ctr,
-                                                                            unsigned *started) {
+__global__ void SK64_BOUNDS mapped64_pass_kernel(const u64 *__restrict__ addrs, const u64 *__restrict__ js, u64 n,
+                                                 const uint4 *__restrict__ pk, u64 *__restrict__ ys, unsigned *ctr,
+                                                 unsigned *started) {
   extern __shared__ uint4 smem[];
   if (!threadIdx.x) atomicExch(started, 1u);
   int *st = sk64_prologue(smem, pk);
@@ -1021,10 +1024,9 @@ __global__ void __launch_bounds__(32 * SK16_WARPS, 2) subtree_receipts_kernel(co
 }
 
 // subtree_receipts_kernel at 64 rows.
-__global__ void __launch_bounds__(32 * SK64R_WARPS, 1) subtree64_receipts_kernel(const uint4 *__restrict__ data,
-                                                                                 u64 base, const u64 *__restrict__ c,
-                                                                                 int h0, const uint4 *__restrict__ pk,
-                                                                                 u64 *__restrict__ ys, u64 tiles) {
+__global__ void SK64_BOUNDS subtree64_receipts_kernel(const uint4 *__restrict__ data, u64 base,
+                                                      const u64 *__restrict__ c, int h0, const uint4 *__restrict__ pk,
+                                                      u64 *__restrict__ ys, u64 tiles) {
   extern __shared__ uint4 smem[];
   int *st = sk64_prologue(smem, pk);
   const int lane = threadIdx.x & 31, warp = threadIdx.x >> 5;
