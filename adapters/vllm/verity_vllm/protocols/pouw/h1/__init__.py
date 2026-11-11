@@ -69,33 +69,44 @@ import bisect
 import json
 import os
 from collections import Counter, deque
+from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass
 from fractions import Fraction
 from functools import lru_cache
 from pathlib import Path
-from typing import Any, Callable, Mapping, Sequence
+from typing import Any
 
 import numpy as np
-from verity.protocols.pouw.verifier.audit import HM96_WEIGHTS, weight_binding
-from verity.protocols.pouw.prover.circuit import compile as C, h1tile as H
-from verity.protocols.pouw.verifier import credit as CR
-from verity.protocols.pouw.verifier.credit import CREDIT
-from verity.protocols.spot.device.challenger import CoinError
 from verity.circuits import boolean as BL
 from verity.circuits.defs import CompositeDefinition, bind
-from verity.definitions.ops.boolean import gemm as BG
 from verity.circuits.program import Program
 from verity.circuits.refs import Affine, Coll, Refs, Strided, concat
 from verity.circuits.types import Array
+from verity.definitions.ops.boolean import gemm as BG
+from verity.protocols.pouw.prover.circuit import compile as C
+from verity.protocols.pouw.prover.circuit import h1tile as H
+from verity.protocols.pouw.verifier import credit as CR
+from verity.protocols.pouw.verifier.audit import HM96_WEIGHTS, weight_binding
+from verity.protocols.pouw.verifier.credit import CREDIT
+from verity.protocols.spot.device.challenger import CoinError
 
 from verity_vllm.protocols.pouw import credit_gate as CG
-from verity_vllm.protocols.pouw.h1 import (commit as CT, prover as PV, records as ZR, requests as RQ,
-                                             tables_device as TD)
+from verity_vllm.protocols.pouw.h1 import commit as CT
+from verity_vllm.protocols.pouw.h1 import prover as PV
+from verity_vllm.protocols.pouw.h1 import records as ZR
+from verity_vllm.protocols.pouw.h1 import requests as RQ
+from verity_vllm.protocols.pouw.h1 import tables_device as TD
 from verity_vllm.protocols.pouw.h1.commit import calls_root
 from verity_vllm.protocols.pouw.h1.names import SALT_TAG, program_salt
 from verity_vllm.protocols.pouw.h1.records import numpy_of
 from verity_vllm.protocols.pouw.h1.requests import slots
-from verity_vllm.protocols.pouw.h1.static import FILL, Static, bind_all, graph_pad, utilization
+from verity_vllm.protocols.pouw.h1.static import (
+    FILL,
+    Static,
+    bind_all,
+    graph_pad,
+    utilization,
+)
 
 SCHEME = H.SCHEME
 TILE = (32, 32)
@@ -146,6 +157,8 @@ def _body(B: Any, S: Any, x: Coll, sx: Coll, w: Coll, sw: Coll) -> Coll:
 
     def pad(p: int, scale: bool) -> Refs:
         # contiguous leaves of its own, not one leaf repeated: compile keys a row by its runs, one per repeat
+        if zero is None:
+            raise ValueError(f"pad row {p} of a call with no pad rows")
         return zero.slice(p * (L + F) + (L if scale else 0), p * (L + F) + (L + F if scale else L))
 
     rows = [x.refs.slice(i * L, (i + 1) * L) for i in range(S.M)] + [pad(p, False) for p in range(mp - S.M)]
@@ -317,7 +330,8 @@ class H1Run:
         self.shapes_, self.rows, self.steps = [(int(n), int(k)) for n, k in shapes], int(rows), int(steps)
         self.offs, self.u_step = layout(self.shapes_, self.rows)
         #: the calls at their indices s·L + w; per step, how many are in; the step's linears as they came; step 0's
-        self.calls, self._in, self._came, self._order = list[Call](), Counter[int](), list[int](), None
+        self.calls, self._in, self._came = list[Call](), Counter[int](), list[int]()
+        self._order: list[int] | None = None
         self.listeners: list[Listener] = []
         self.bound: dict[int, Mapping[str, Any]] = {}
         self.refused: list[dict[str, int]] = []
@@ -399,6 +413,8 @@ class H1Run:
                                        or RQ.request_table(None, 0, self.rows, self.admitted.get(0, []), self._key))
             requests = self._requests0(table.commitment.root)
             try:
+                if self._opener is None:
+                    raise TypeError(f"{self.entry}: a window with neither a salt nor an opener")
                 salt, self.rounds, self.draw, commits = self._opener(requests)
             except Exception as e:
                 self._unopened = self.details["unopened"] = str(e)
