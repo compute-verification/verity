@@ -9,8 +9,9 @@ public import Proofs.Flock.SamplingGeneric.Masked
 At the deployed masked record each wait of a session's `E^rep` gives up only after `2^256` reruns, so the sessions'
 strict reruns `ρ_s`, and with them `B_conf`'s cost on every coin, are above `2^256`, where the strict birthday bound
 (`KSRegAtSB`) says nothing. With each wait giving up after `K₀ > 0` reruns (`FlockDeploy.deployZkAt`), Flock's masked
-KS holds with no other premise (`FlockDeploy.KS.zk_KS_untrim_at`), `κ`'s term `2k/K` is `2k/K₀`, and
-`ρ_s ≤ 1 + 210·K₀` (`ρs_compiledTrunc_le`). The sampled record whose sessions run that record (`deployTrunc`) meets the
+KS holds with no other premise (`FlockDeploy.KS.zk_KS_untrim_at`), each session's `κ` is at most
+`t·2^{−203} + 2^{−210} + 2k/K₀ + 2^{−250}` at `t` tables (`κs_compiledTrunc_le`), and `ρ_s ≤ 1 + 210·K₀`
+(`ρs_compiledTrunc_le`). The sampled record whose sessions run that record (`deployTrunc`) meets the
 contract wherever the deployed one does, since its sessions' runs, scope and openings don't read the truncation
 (`sessions_compiledTrunc`), so its compiled verifier is knowledge sound in the committed form at the strict birthday
 bound (`ksRegAtSB_maskedTrunc`).
@@ -58,6 +59,26 @@ truncated at `K₀`. -/
 theorem ρs_compiledTrunc_le (x : Claims.Msg) :
     (compiledTrunc K₀ c iroots).ρs x ≤ 1 + Claims.Flock.Numbers.waits * K₀ :=
   Claims.SamplingGeneric.maxBelowN_le fun _ _ => le_rfl
+
+/-- **Each session's knowledge error at the truncation**: `κ_s ≤ t·2^{−203} + 2^{−210} + 2k/K₀ + 2^{−250}` where the
+statement's sessions set up at most `t` tables at `N₀ ≥ 2^10`, `k = ⌈4N₀/e⌉`: `κ_F`'s terms at the record, as
+Flock's `κ` at a truncation `K₀` is bounded, at `ε_table = t·2^{−205}`. -/
+theorem κs_compiledTrunc_le (x : Claims.Msg) (hN : 2 ^ 10 ≤ c.innerN₀ x) :
+    (compiledTrunc K₀ c iroots).κs x ≤ (c.tables x : ℝ) * 2 ^ (-(203 : ℝ)) + 2 ^ (-(210 : ℝ)) +
+      2 * (⌈4 * c.innerN₀ x / Real.exp 1⌉₊ : ℝ) / K₀ + 2 ^ (-(250 : ℝ)) := by
+  have hk := Claims.Flock.Numbers.exp_neg_k_le (Claims.Flock.Numbers.k_ge hN)
+  have h4 : 4 * ((c.tables x : ℝ) * 2 ^ (-(205 : ℝ))) = (c.tables x : ℝ) * 2 ^ (-(203 : ℝ)) := by
+    have : (2 : ℝ) ^ (-(203 : ℝ)) = 4 * 2 ^ (-(205 : ℝ)) := by
+      rw [show (-(203 : ℝ)) = 2 + -(205 : ℝ) by norm_num, Real.rpow_add (by norm_num)]; norm_num
+    rw [this]; ring
+  have hw : (2 : ℝ) ^ (-(Claims.Flock.Numbers.waits : ℝ)) = 2 ^ (-(210 : ℝ)) := by
+    unfold Claims.Flock.Numbers.waits; norm_num
+  refine Claims.SamplingGeneric.maxBelow_le (by positivity) fun u _ => ?_
+  have hb : (compiledTrunc K₀ c iroots).κb x u = 4 * ((c.tables x : ℝ) * 2 ^ (-(205 : ℝ))) +
+      2 ^ (-(Claims.Flock.Numbers.waits : ℝ)) + 2 * (⌈4 * c.innerN₀ x / Real.exp 1⌉₊ : ℝ) / K₀ +
+      Real.exp (-(⌈4 * c.innerN₀ x / Real.exp 1⌉₊ : ℝ) / 8) := rfl
+  rw [hb, h4, hw]
+  linarith
 
 /-- **The inner numbers are Flock's** at the truncation: the waits, `N₀`, `ε_table` and weight as at the deployed
 record (`innerNumbers_deploy`), the truncation by definition. -/
