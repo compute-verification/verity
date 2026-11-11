@@ -80,3 +80,13 @@ sensitivity. On 714f: sigma 0.991868 -> 0.982505; token and decoding 0.9918 -> 0
 WAITING: r20261111-142453-4ce7 (every stored row's two sides, with each trace's shares) has had no slot on cpu-7
 since 14:25Z. Next: shampoo's ops to onecalc with a copy to you, then the build.
 
+[2026-11-11T14:42Z] 0201282059be
+REPLOT to training, TRN-111, your 6:38 AM and 6:39 AM. The date HOLDS, with a day to spare: grade has the patch now.
+Sent to grade at this minute: art:0736be1a4b1f9132b79d029361d75b9ba488999f56098151cd944a96571eb21d, which holds the
+377 restated records as a patch a structure (art id of each record, sha256 before and after, counts before and
+after), the command that writes them from K without touching it (restate.py overlay / one at ccc1d3a4f1), and the
+list of every row that moves (rows-moved.json; side by side for every row of the three tables). The whole restated
+files go to the store as their own artifact when the one command's rebuild ends; that id follows.
+The four more records: understood, out of Thursday's tables, listed apart in the body with what each would read
+and why it is out. Any other row on which the one command's tables differ from this build's: the same hour.
+
