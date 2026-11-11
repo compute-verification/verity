@@ -23,9 +23,9 @@ resource's, `memory` device memory's), `store` (each store's size; `smem` is the
 `rate` (each resource's units a SM-clock), `memory` (device memory's bus, transfers and bandwidth), `weight` (the tensor
 units a MAC of each format uses) and `model` (`Accel.Card`'s `exact` and code space). A host card's are `cpu` (the
 server's sockets and cores, and `vm_cores`, the cores a GPU that a node's VM gives: a measurement of our nodes, not a
-number of the server), `clock`, `rate` (AMX MACs and the host's op peak), `memory` (DRAM's channels, speed, bandwidth,
-measured read and write ceiling) and `store` (its caches and allowances, and `chip`, the host's on-chip bytes in
-S_chip).
+number of the server), `clock`, `rate` (AMX MACs and SHA-512 compressions a cycle a core, and the host's op peak),
+`memory` (DRAM's channels, speed, bandwidth, measured read and write ceiling) and `store` (its caches and allowances,
+and `chip`, the host's on-chip bytes in S_chip).
 
 ~~~python
 from verity.hardware.cards import load, skus

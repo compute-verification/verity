@@ -23,6 +23,7 @@ priority_turbo = { value = 4.6, unit = "GHz", mark = "ceiling", source = "Intel 
 
 [rate]
 amx = { value = 1024, unit = "INT8 MAC/cycle/core", mark = "ceiling", source = "Intel Optimization Reference Manual 248966-049 section 20.3 Table 20-2 (TDPBSSD, 16,384 MACs, 16-cycle throughput); measured 1,024.1, art:1f22137354a4" }
+sha512 = { value = 0.007722, unit = "compression/cycle/core", mark = "placeholder", source = "not measured on this host and in no Intel document. A count, neither a measurement nor a ceiling: eight compressions in 1,036 cycles, 2,072 512-bit operations (80 rounds of 17, 64 schedule words of 11, 8 feed-forward adds) on two 512-bit vector units (Intel ARK 243691: '# of AVX-512 FMA Units 2'; no document read gives Redwood Cove's vector ALUs). The 8468 host's measured 0.007522 is 97% of the same count. Open until an AVX-512 SHA-512 kernel runs on an RTX PRO 6000 node's host" }
 ops = { value = 1.0452992e15, unit = "op/s", mark = "ceiling", source = "2 ops a MAC x rate.amx x cpu.sockets x (cpu.priority_cores x clock.priority_turbo + (cpu.cores - cpu.priority_cores) x clock.turbo), 1.0453e15 (1.0224e15 without Priority Core Turbo)" }
 
 # The host's DRAM: R's host tier (verity/core/protocols/remote_bandwidth/timing.py's HOST_ figures).
