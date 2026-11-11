@@ -16,7 +16,8 @@
 # Then each of STEPS (`rows session` unless given) under a lease of its own on CARDS, of at most LEASE_MIN minutes and
 # taken without waiting: a card whose lock is held, or with a compute process or more than a GiB in use on it, ends
 # the run (exit 75) with nothing started there. No step starts after NOT_AFTER (`date -d` syntax), so a run stays
-# inside its booked hours.
+# inside its booked hours. out/STEP.node.txt lists the compute processes on every card of the machine as the step
+# starts and as it ends: whether anything shared the node with a timed row.
 #
 #   rows      rows.py: at each of ROWS in turn on one store of GIB GiB across CARDS, the device's gates, the store's
 #             openings and the calibration (CAL chained passes each, over the plain read); out/rows.json. CTAS_AT
@@ -152,6 +153,13 @@ export PYTORCH_CUDA_ALLOC_CONF=${PYTORCH_CUDA_ALLOC_CONF:-expandable_segments:Tr
 LEASE=$TREE/tools/research/src/research/pods/sh/gpu_lease.sh
 command -v gpu-lease > /dev/null && LEASE=$(command -v gpu-lease)
 
+others() {  # into out/$1.node.txt: the compute processes on every card of the machine, at the step's $2
+  { echo "$(date -u +%H:%M:%SZ) $2: card, memory used; then each compute process (card's uuid, pid, memory, name)"
+    nvidia-smi --query-gpu=index,uuid,memory.used --format=csv,noheader
+    nvidia-smi --query-compute-apps=gpu_uuid,pid,used_memory,process_name --format=csv,noheader
+  } >> "$O/$1.node.txt" 2>&1
+}
+
 leased() {  # step $1 under one lease of CARDS: the rest is its command, its output out/$1.log
   local name=$1 uuids busy used rc; shift
   if [ -n "${NOT_AFTER:-}" ] && [ "$(date -u +%s)" -gt "$(date -u -d "$NOT_AFTER" +%s)" ]; then
@@ -165,9 +173,11 @@ leased() {  # step $1 under one lease of CARDS: the rest is its command, its out
     say "$name: not started, cards $CARDS are in use: ${busy:-no process listed}; MiB used: ${used:-under 1024}"
     return 75
   fi
+  others "$name" start
   GPU_LEASE_WHO=${GPU_LEASE_WHO:-memory-accounting-rows64} bash "$LEASE" "$N" --on "$CARDS" --max-min "$LEASE_MIN" \
     --mem-gb "$LEASE_MEM_GB" -- "$@" > "$O/$name.log" 2>&1
   rc=$?
+  others "$name" end
   tail -n 40 "$O/$name.log"
   say "$name: exit $rc$([ $rc = 75 ] && echo ": the lease on cards $CARDS was not free, so nothing started")"
   return $rc
