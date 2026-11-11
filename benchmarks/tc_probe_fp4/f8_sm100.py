@@ -41,7 +41,7 @@ import numpy as np
 
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
-sys.path.insert(0, str(HERE.parents[1] / "tools" / "config"))
+sys.path.insert(0, str(HERE.parents[1] / "verity" / "configuration" / "config"))
 from verity_config.settings import SHARED  # noqa: E402
 
 import f8_model as FM  # noqa: E402
@@ -49,7 +49,7 @@ import f8_model as FM  # noqa: E402
 if TYPE_CHECKING:
     from numpy.typing import ArrayLike
 
-    from verity.ml.circuits.silicon.term import Format
+    from verity.definitions.silicon.term import Format
 
 M_T, N_T, K_STEP = 128, 32, 32
 SEED = 20261019
