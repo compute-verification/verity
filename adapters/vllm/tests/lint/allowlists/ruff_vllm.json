@@ -92,6 +92,7 @@
     {"file": "tests/check/test_stoch_draw_ledger.py", "kind": "I001", "symbol": "test_the_rule_is_pads_recurrence_and_the_slot_to_position_map_is_the_records_first_draw_at_prompt_len_minus_1", "detail": "Import block is un-sorted or un-formatted"},
     {"file": "tests/check/test_stoch_draw_ledger_of_record.py", "kind": "ISC004", "symbol": "test_the_two_b8_stoch_records_of_record_carry_a_clean_ledger_every_request_to_its_cap_r5_not_exercised", "detail": "Unparenthesized implicit string concatenation in collection"},
     {"file": "tests/check/test_stoch_draw_ledger_of_record.py", "kind": "SIM115", "symbol": "test_the_two_b8_stoch_records_of_record_carry_a_clean_ledger_every_request_to_its_cap_r5_not_exercised", "detail": "Use a context manager for opening files"},
+    {"file": "tests/check/test_weights_of_record_dsv4_experts.py", "kind": "E741", "symbol": "<module>", "detail": "Ambiguous variable name: `I`"},
     {"file": "tests/commit/test_binding_moe_b2.py", "kind": "I001", "symbol": "<module>", "detail": "Import block is un-sorted or un-formatted"},
     {"file": "tests/commit/test_binding_negatives.py", "kind": "E702", "symbol": "test_load_required_manifest_accepts_a_one_request_manifest_whose_engine_steps_are_numbers", "detail": "Multiple statements on one line (semicolon)"},
     {"file": "tests/commit/test_binding_negatives.py", "kind": "I001", "symbol": "<module>", "detail": "Import block is un-sorted or un-formatted"},
