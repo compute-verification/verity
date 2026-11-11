@@ -255,7 +255,7 @@ Lean's jobs in `check` and the tools around the audit:
 - `siblings.py`, `axiom_probe.py`: what `verity lean try` runs beside lean: the sibling check and the axiom probe.
 - `unread.py`, `unread-caps.json`, `unread_gate.py`: the Lean nothing reads, its ratchet's caps, and drive's landing
   gate on its seeds.
-- `trusted_size.py`: the size of a package's trusted text, per area.
+- `trusted_size.py`: the size of a package's spec, per area.
 - `tool.py`: the store's declarations of the scheduled runs.
 - `tests/`: the suite `verity-lean-audit`, the controls' fixtures among it.
 
