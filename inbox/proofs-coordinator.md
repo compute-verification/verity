@@ -38925,3 +38925,20 @@ Tags: [run] ran on my VM since 05:02Z, logs kept; [read] read at `main` `5c095bb
 > **The fix makes the search right there** (a lower bound on the risk, so the error is on the safe side); it is on `cursor/proofs-harmsearch-c7e2`, in review as a PR by Wed 4 AM PST.
 
 Logs: `search-main-vs-branch-vs-closed.log`, `spy-*.log`, `reach-planner-into-optimize.log`, `demo-a-pin-main-vs-branch.log` (my run's artifacts, `prf547/`).
+
+## DRAFT-CORE, Wed 11 Nov 05:10Z: resumed on a fresh VM; the 04:10Z brief is NOT in my context, so I do not know what Part 2 or the two questions are: please resend them; the turn's three runs at `9a8a32c7c85b` are found (quick tier passed; records and a full check still running); I launch nothing more
+
+**What I need from you.** The text of Part 2 and of the two questions from your 04:10Z brief. [read] My transcript ends at my 03:56Z final message; the 04:10Z turn is not in it, and this VM booted at 05:01Z with no `/tmp/work`, no run records and no notes of that turn. The brief is not in `inbox/bind100-swarm.md` (last entry 02:38Z), not on my inbox branch (`inbox/bc-bcfdf895-…` holds only your 04:12Z Linear notice, taken 04:26Z), not on PRF-540 and not in the lane's notes. Send it with `inbox.py send bc-bcfdf895-c9eb-585e-9a43-2290a581a99f` or resume me with it; I read my inbox before each step. Until then I do what your 04:59Z message itself states: the line on the hypothesis, and the PR.
+
+**The branch.** [run: `git ls-remote`, `git diff --stat origin/main...`] `cursor/proofs-qs-rows-c41e` at `9a8a32c7c85bd5cb4c91c28c7e62b72cc71069bc`, unchanged since 03:52Z: five files, 728 lines added, over `origin/main` `5c095bb4ab70`. The pre-move branch `cursor/proofs-qs-rows-8b3c` is at `33764f3f43`. No PR.
+
+**Runs the lost turn launched**, all at `9a8a32c7c85b`. [run: found on the nodes by the tree's sha in each run's `job.json`, then `research inspect`]
+
+| run | node | command | state at 05:08Z |
+|---|---|---|---|
+| `r20261111-041319-b167` | cpu-11 | `suites.py --changed 5c095bb4ab70 --quick` | done, rc 0, 680 s: "4 suites: 4 passed (0 cached), 0 failed" |
+| `r20261111-041354-777f` | cpu-9 | `lean_changed.py --records security/Proofs --update` | running since 04:15Z; its cap ends it by 06:15Z |
+| `r20261111-041222-0324` | cpu-9 | `check.py --build --update security/Proofs` (the full check, kernel replay) | running since 04:14Z; its cap ends it by 07:14Z |
+
+- I launch no second records run. `0324` holds a check slot and a Lean audit slot beside it; I do not know why that turn launched it (your 02:33Z condition for a PR was "the Lean check of `Security/Proofs` passes at your head"). It is 55 minutes in, so I leave it; say the word and I cancel it.
+- Linear: [read: PRF-540's comments] my last comment there is 02:19Z, and every comment of mine is by `Verity Asks`, so none went through the connector. What the lost turn did there I can only read off that list: nothing.
