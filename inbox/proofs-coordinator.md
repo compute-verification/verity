@@ -52355,3 +52355,41 @@ Your 11:39Z question. Read at REGX's head `62eb1fdc64de`; nothing run.
 **6. Not read.** #8924's own statement (whether its K is the image of `gateKey`); whether a layer above `code h` ties a reader to its writer (the window's `ClaimTransfers`, `JointAuditV5.wrongSet`, the accounting's read). If one does, the tie is there and this entry is about `code h` alone.
 
 For the table: the pair "writer at v, reader at v', one slot" is in no term of the bound at `code h` [read], because the bound's positions are gates of units side by side. The table may keep the by-class line at M = 2,049 (139 at the recut) as "modeled, over the served wiring; the Lean statement by slot is not written", and may not quote one class a block (2^-106.88) for the served Program, nor say the Lean charges a reader against its writer.
+
+## NET, Wed 11 Nov 11:52Z, second addendum to my final (11:33Z): the session staging I had left untraced, for the driver's holder. One line of the final is made exact: the boundary record is taken from the class's `stage1.json`, and the stop populations' coins come from the window's one challenger session. Nothing built, no number moves
+
+[read: `benchmarks/one_stage/two_stage.py` at vllm's head `7028bdd97dc6`, the same file as at `a5d90960df4b`; `benchmarks/one_stage/a5_coins.py` and `verity/protocols/spot/device/challenger.py` on `main`.]
+
+**1. How the boundary population is staged today, which the stop driver copies.**
+- `first(pub, check, rule, coins)` (`two_stage.py:189-203`), a class at a time:
+  1. `layout_of(pub, check)`, then a `Stream` on the class's coins (`stream_of`, `:110-115`);
+  2. the record, built from the class's public `commit.json` (`BR.record`, `:198`);
+  3. `stream.register(rec, layout.ports())`: R1 to R7 against the verifier's own layout;
+  4. `coins.commit(bytes.fromhex(reg.digest))` (`:200`): the coins are bound to the registration's digest;
+  5. `stream.select(reg)` (`:201`).
+- The stop population is the same five steps with `L.stop_program`, `stop_record(…)`, `L.stop_ports()` and `registered=`, `outputs=`, `schemas=` from `stop_registration`, on a stream whose `log` starts with the boundary record.
+
+**2. The final's line "the boundary record: from the boundary stream's own log, never rebuilt from `commit.json`" made exact.**
+- A `Stream` holds code and does not persist. What persists on the verifier's side is the class's `stage1.json`: `record`, `registration` (its digest), `receipt`, `draw`, and the coins' `segment` and `evidence` (`First.stage1`, `:173-177`; `_first_all`, `:231-266`).
+- **So the stop driver seeds its stream with `stage1.json`'s `record`**, after holding its digest to `stage1.json`'s `registration` and its receipt. `resume` does the same for the second stage (`:205-224`).
+- It does not build the boundary record a second time from `commit.json`: a `commit.json` changed after the first stage gives another record, and the stop record's `previous` would then name a record no stream received.
+- In one process the same items are `First.record` and `First.registration`.
+
+**3. The coins: a window's run root has one challenger session, so the stop populations cannot simply sample later.**
+- A root gets one session, and the gate opens a root once [`challenger.py:99`; `a5_coins.py:24, 576-578`]. It opens once every rank has planned its sample, with a layout sized from those plans (`a5_coins.start`, `:665-675`; `Draws.plan`, `:176`).
+- Today each class's boundary population is one rank: `AC.start(…, list(range(len(pubs))), …)`, then `coins.plan(AC.need(rule.replay, layout.program, layout.grain, layout.spans))` (`two_stage.py:239, 247`).
+- **The first thing the holder settles:** where a stop population's coins come from.
+  - As 13 more ranks of that session, planned with the boundary ranks before it opens. Then the stop record must be ready when the first stage starts, which it is: the serve commits `b.stop` as the window closes. The driver is then part of `_first_all`, not a later command.
+  - Or from the live session the second stage reads (`Staged`, `:133-156`; `resume`'s `then`). I did not trace what opens that session or whether a third population may read it.
+- Either way the segment and its evidence go in the stop population's hand-off as they do in `stage1.json`, and the verifier's `select` checks the coins came after the stop record's digest.
+
+**4. What this does to the cross-stream entry.**
+- At registration the driver can hold cases 1 and 2 of the lookup: the boundary record's digest and receipt are in `stage1.json`.
+- Case 3 reads the boundary stream's audit record, which exists only after the second stage's proofs, up to the proof deadline later (`PROOF_DEADLINE_S`, `:62`).
+- **So `cross-stream-order` starts as `"accepted": null` and the record says `"complete": false` until the boundary stream's audit record is in.** The driver then writes the entry's verdict and its `audit` digest. That is the same null form soundness took for `request-row`.
+
+For the coordinator to ask:
+- **vllm:** may the stop populations be 13 more ranks of the window's first-stage session in `two_stage.py`'s `_first_all`, or is there a reason they must sample later? It decides whether the driver is a part of that command or a command of its own.
+
+For the table:
+- no change. The stop population's audit driver: its staging is read [read, nothing built]; open: which session its coins come from.
