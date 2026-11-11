@@ -67,6 +67,10 @@ untraced = [
 # before and after vllm's layout move.
 # test_pearl_c_sm90_overhead_arm reads the overhead door's schemes and linears (verity_bench's overhead.py), which name
 # pearl_c_sm90's arm.
+# test_proved_ticks_placed places PoUW's compiled Program on a block of the datacenter model (benchmarks/datacenter's
+# package, on pytest's `pythonpath`), with what that package imports of core: the registration log (registration.py, over
+# site and wire) and PoUB's block size (its codec.py); its census imports the Boolean versions' lookup
+# (verity/definitions' boolean.py), which loads no registry module for a Program already Boolean.
 inputs_only = true
 inputs = ["verity/__init__.py", "verity/settings.py", "verity/errors.py", 
           "verity/claims/__init__.py",
@@ -163,11 +167,15 @@ inputs = ["verity/__init__.py", "verity/settings.py", "verity/errors.py",
           "benchmarks/hash/dither/settings.py", "benchmarks/hash/exactlin/exactlin.py",
           "benchmarks/served_units/summarize.py", "benchmarks/harness/verity_bench/overhead.py",
           "adapters/vllm/verity_vllm/protocols/pouw/h1/tables_device.py",
-          "adapters/vllm/verity_vllm/protocols/pouw/h1/words.py",
-          "verity/definitions/circuits", "verity/definitions/ops", "verity/definitions/silicon", "verity/protocols/__init__.py", "verity/protocols/pouw/__init__.py",
-          "verity/definitions/__init__.py", "benchmarks/harness/verity_bench/__init__.py",
-          "verity/protocols/pouw/clear/clear_audit.py", "verity/protocols/pouw/clear/clear_work.py",
-          "verity/protocols/pouw/clear/__init__.py"]
+          "adapters/vllm/verity_vllm/protocols/pouw/h1/words.py", "verity/definitions/circuits",
+          "verity/definitions/ops", "verity/definitions/silicon", "verity/protocols/__init__.py",
+          "verity/protocols/pouw/__init__.py", "benchmarks/datacenter/datacenter", "verity/hardware/registration.py",
+          "verity/protocols/poub/__init__.py", "verity/protocols/poub/verifier/__init__.py",
+          "verity/protocols/poub/verifier/codec.py", "verity/hardware/site/__init__.py",
+          "verity/configuration/__init__.py", "verity/configuration/wire/__init__.py", "verity/definitions/__init__.py",
+          "benchmarks/harness/verity_bench/__init__.py", "verity/protocols/pouw/clear/clear_audit.py",
+          "verity/protocols/pouw/clear/clear_work.py", "verity/protocols/pouw/clear/__init__.py",
+          "verity/definitions/boolean.py"]
 # one process: 2,100 s beside a loaded check, too near suites.py's SUITE_TIMEOUT_S
 timeout_s = 7200
 # Build outputs the served challenger's checks of record run or skip on (`check` runs this suite after its Lean steps).
@@ -177,6 +185,8 @@ artifacts = ["verity/protocols/pouw/verifier/lean/check/.lake/build/bin/pouw-che
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+# test_proved_ticks_placed imports `datacenter` (not an installed package) by path.
+pythonpath = ["../datacenter"]
 markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]
 
 # What these test files read that their source doesn't name (a tree a test walks, a module it loads by a name it computes,
