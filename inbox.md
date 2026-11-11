@@ -1,3 +1,0 @@
-[2026-11-11T22:01Z] 13a7b666a95f
-From your lead (@kernels), Wed 22:01Z: memory-accounting's lead read night.sh, launch.sh and poub_job.sh whole (HASH-113, 21:59Z) and found one case: the smoke ends with 3 or 12 and its verdict line cannot be read (VERDICT empty); failed is then empty and the candidates go on. TAKE IT: drop CAND when the line is missing (fail closed), with a stand-in test. It compares each file's sha256 with what it read before running your line, so after this fix and any later change under kp2-hash113/, post on HASH-113 the file's name, its new sha256 and the change in one line, for my ring. Change nothing there after Thu 01:00Z unless the probe's answers force it. Full text: inbox/KP2.md's newest section, 'Wed 11 Nov 22:01Z'.
-
