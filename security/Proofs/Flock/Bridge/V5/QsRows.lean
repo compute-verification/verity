@@ -89,7 +89,7 @@ theorem vbP_pos_io (u : Fin n)
         (Finset.mem_singleton_self u) hg h1 h0 hp)
     · subst hx
       obtain ⟨rfl, -, -⟩ := Discharge.Layout.keyPubOf_wire (Discharge.Layout.outsOfP c hU n pi) x hp
-      exact Or.inr (Or.inr ⟨rfl, q, t, hp⟩)
+      exact Or.inr (Or.inr ⟨rfl, q, t, rfl⟩)
   · left
     subst hx
     have hu := HiddenExec.rowOfHP_wire_unit (Discharge.Layout.outsOfP c hU n pi) x hr
