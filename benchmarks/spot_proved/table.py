@@ -35,7 +35,7 @@ from pathlib import Path
 
 import numpy as np
 
-from verity.ml.definitions.registry.dsa_topk import canonical_ok
+from verity.definitions.registry.dsa_topk import canonical_ok
 
 DTYPES = {"torch.bfloat16": "<u2", "torch.float32": "<u4", "torch.int32": "<i4"}
 #: each file's dtype: the cache's and attention's bf16 rows, the f32 scores the counted mask ranks, the i32 top-k

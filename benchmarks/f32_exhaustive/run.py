@@ -1,12 +1,12 @@
-"""Every binary32 input of a reference primitive of `verity.ml.definitions.registry.ref_prims`, in one of two modes.
+"""Every binary32 input of a reference primitive of `verity.definitions.registry.ref_prims`, in one of two modes.
 
     uv run --with gmpy2 benchmarks/f32_exhaustive/run.py log --out DIR [--procs N] [--lo U --hi U]
     uv run benchmarks/f32_exhaustive/run.py boolean F32Sqrt --out DIR [--procs N] [--lo U --hi U]
 
 ``log`` and ``exp`` run a correctly rounded evaluator (`f32_log_rn_bits`, `f32_exp_rn_bits`) against MPFR's correctly rounded
 result at 24 bits (gmpy2, emin -148, emax 128, subnormalized, nearest even), NaN canonical 0x7FC00000. ``boolean WORD`` runs the
-Boolean version of `ref_prims.WORD` (`verity.ml.definitions.boolean.boolean_version`), bit-sliced
-(`verity.ml.circuits.evaluation.bits.evaluate_words`), against the word primitive's own evaluator; WORD takes one 32-bit word
+Boolean version of `ref_prims.WORD` (`verity.definitions.boolean.boolean_version`), bit-sliced
+(`verity.circuits.evaluation.bits.evaluate_words`), against the word primitive's own evaluator; WORD takes one 32-bit word
 and gives one.
 
 Writes DIR/exhaustive-<fn>.json (``exhaustive-boolean-WORD.json``): the inputs checked, the mismatches (up to 1000, each the
@@ -45,7 +45,7 @@ def _mpfr_word(fn: str, u: int) -> int:
 
 
 def _evaluator(fn: str):
-    from verity.ml.definitions.registry import ref_prims as RP
+    from verity.definitions.registry import ref_prims as RP
 
     return {"log": RP.f32_log_rn_bits, "exp": RP.f32_exp_rn_bits}[fn].__wrapped__
 
@@ -53,8 +53,8 @@ def _evaluator(fn: str):
 @cache
 def _boolean(name: str):
     """(`ref_prims`' word primitive ``name``, its Boolean version), refused unless it maps one 32-bit word to one."""
-    from verity.ml.definitions.boolean import boolean_version
-    from verity.ml.definitions.registry import ref_prims as RP
+    from verity.definitions.boolean import boolean_version
+    from verity.definitions.registry import ref_prims as RP
 
     word = getattr(RP, name)
     params, ret = word.signature()
@@ -68,7 +68,7 @@ def _chunk(args: tuple[str, str | None, int, int]) -> tuple[int, int, list[tuple
     if fn == "boolean":
         import numpy as np
 
-        from verity.ml.circuits.evaluation.bits import evaluate_words
+        from verity.circuits.evaluation.bits import evaluate_words
 
         word, bits = _boolean(name)
         got = evaluate_words(bits, np.arange(lo, hi, dtype=np.uint64).reshape(-1, 1)).reshape(-1).tolist()
