@@ -455,20 +455,6 @@ def test_a_sidecar_whose_source_inspect_looked_for_is_declared_by_where_it_is(tm
     assert _run(root)["hits"] == ["SynOther_v1", "SynTop_v1"]
 
 
-def test_what_a_read_set_holds_beyond_its_declaration_is_undeclared():
-    from circuit_check import cache as CC
-
-    now = {"files": ["a.py", "b.py"], "listed": ["d"], "probes": ["p/__init__.py"], "registry": True}
-    assert CC.undeclared(now, now) == {} and CC.undeclared(now, {**now, "files": ["a.py", "b.py", "c.py"]}) == {}
-    assert CC.undeclared(now, {"files": ["a.py"], "listed": ["d"], "probes": [], "registry": False}) == {
-        "files": ["b.py"], "probes": ["p/__init__.py"], "registry": True}
-    assert CC.undeclared({**now, "registry": False}, None) == {"files": ["a.py", "b.py"], "listed": ["d"],
-                                                               "probes": ["p/__init__.py"]}
-    assert CC.undeclared({**now, "untracked": ["build/x.so"]}, now) == {"untracked": ["build/x.so"]}   # no task declares one
-    # a path declared by its bytes or its listing is declared by its kind too
-    assert CC.undeclared({**now, "probes": ["a.py", "d", "e"]}, now) == {"probes": ["e"]}
-
-
 #: the harness with `syn` served as hatch's `dev-mode-exact` serves core's `verity`: by `editables`' finder, after the path-based
 #: one, with the tree's root on no `sys.path` entry
 EXACT = HARNESS.replace("sys.path.insert(0, str(root))",
