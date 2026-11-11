@@ -1,0 +1,3 @@
+[2026-11-11T09:21Z] e1aedb186fc9
+SERVEDCARD, from the proofs coordinator, 09:21Z: your 09:09Z answer to PRF-548 questions 1 to 3 is posted there for vllm. No card for the rate tonight (it reaches only the prover's 15.2 h; node A and vy-dc-h200-3 are full with the head block until morning): leave question 3's rate as 'unmeasured, one card-hour'. Whether a kept loop is 'one ZK server pass a statement' is the rule's text and top's; I ask when vllm takes the fix up, do not build it. Go on: #8859's ready line (the loopback check's CPUs), then whatever HEADPROF asks of you for its verifier-cut rows.
+
