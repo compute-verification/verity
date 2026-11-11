@@ -5,6 +5,8 @@
 
     s512(ℓ, m)  = the first 32 bytes of SHA-512(pearl-c/h3s/ℓ\\0, zero-padded to 128 bytes ‖ m)
     seed_B      = s512("seed-B", salt ‖ root_B)                                          PearlCSeedB
+    leaf        = sha512/row-seg/v1 of the row's FP32 words, little-endian               PearlCRowDigest: its compressions
+                                                                                         PearlCRowBlock, PearlCShaBlock
     seed_A      = s512("seed-A", salt ‖ leaf ‖ root_B ‖ u64le(unit · 2^32 + row))        PearlCRowSeed: its two compressions
                                                                                          PearlCRowSeedHead, PearlCRowSeedTail
     key         = s512("noise-line", seed)                                               PearlCLineKey
@@ -14,9 +16,11 @@
     scale       = bf16(f32(norm32) / f32(bf16(root)))                                    PearlCLineScale
     code_p      = e4m3(f32(bf16(f32(bf16(x_p)) · f32(scale))))                           PearlCLineCode, PearlCLineCodes
     line        = the codes of raw                                                       PearlCNoiseLine
+    E_A,i       = the line (side 0, factor 0, line 0, norm 256) of row i's seed_A         PearlCRowLine
 
-``leaf`` is the row's 64-byte `sha512/row-seg/v1` digest (`pearl_c.row_digest`; in gates
-`verity.ml.commitments.gates.rowleaf`'s `Sha512RowSeg_v1`), and ``norm32`` the BF16 word of 32 times the line's norm:
+``leaf`` is the row's 64-byte `sha512/row-seg/v1` digest (`pearl_c.row_digest`, the digest its hm96 leaf in A's tree hides;
+on a bit row `verity.ml.commitments.gates.rowleaf`'s `Sha512RowSeg_v1`, which has no word form and whose segment is one
+circuit of up to nine compressions), and ``norm32`` the BF16 word of 32 times the line's norm:
 `NORM_E` for an E line (norm 256), `NORM_F` for an F line (norm 16). bf16 is `F2fpBf16_v1`, the product `F32Mul_v2`, the
 quotient `F32Div_v2` and e4m3 `F32ToE4m3Sat_v1`, so a line is total on every encoding. `pearl_c.sample_line` rejects a
 non-finite step; at the two norms none is (a root is 181 to 23,170, a product at most 128 times the scale), and there the
@@ -34,7 +38,9 @@ A Boolean Definition is a proof unit only up to 65,536 ANDs, the size circuit-ch
 about 56,000. So a Definition of more than one compression is a composition of units under that size, each lowered and pinned
 on its own, and its Boolean version the σ of the composition (`sigma_lift`): `PearlCRowSeed` is its two compressions,
 `PearlCRowSeedTail` of `PearlCRowSeedHead`, and `PearlCNoiseLine` its hash and its codes, `PearlCLineCodes` of
-`PearlCLineRaw`. `UNITS` names each such Definition's units.
+`PearlCLineRaw`. `UNITS` names each such Definition's units. A row's digest is a compression a Call: `PearlCRowBlock` on each
+32 words of a segment and its padding and `PearlCShaBlock` on each block of the segments' digests, from each prefix's
+midstate; and a row's line, `PearlCRowLine`, is the digest, the seed, the key and the line, so it has no gate that is not in one of those.
 """
 from __future__ import annotations
 
@@ -53,19 +59,25 @@ from verity.ml.circuits.ops.prims import Bf16ToF32, F2fpBf16, F32ToE4m3Sat, S32T
 from verity.ml.circuits.refs import array_of
 from verity.ml.circuits.silicon import fp
 from verity.ml.circuits.types import Array, Value
+from verity.ml.commitments import rowleaf
 from verity.ml.commitments.gates.sha512 import compress_gadget, compress_ref, midstate, pad_tail, words_be
 from verity.ml.definitions.boolean import sigma_lift
 
-__all__ = ["BYTES32", "BYTES64", "NORM_E", "NORM_F", "ROLES", "PearlCLineCode", "PearlCLineCodeV2", "PearlCLineCodes",
+__all__ = ["BLOCK", "BYTES32", "BYTES64", "NORM_E", "NORM_F", "ROLES", "ROW_WORDS", "PearlCLineCode", "PearlCLineCodeV2", "PearlCLineCodes",
            "PearlCLineCodesV2", "PearlCLineInt", "PearlCLineIntV2", "PearlCLineKey", "PearlCLineKeyByte", "PearlCLineKeyV2",
            "PearlCLineNormRoot", "PearlCLineNormRootV2", "PearlCLineRaw", "PearlCLineRawByte", "PearlCLineRawV2",
-           "PearlCLineScale", "PearlCLineScaleV2", "PearlCNoiseLine", "PearlCNoiseLineV2", "PearlCRowSeed", "PearlCRowSeedHead",
+           "PearlCLineScale", "PearlCLineScaleV2", "PearlCNoiseLine", "PearlCNoiseLineV2", "PearlCRowBlock", "PearlCRowBlockByte",
+           "PearlCRowBlockV2", "PearlCRowDigest", "PearlCRowDigestV2", "PearlCRowLine", "PearlCRowLineV2", "PearlCRowSeed",
+           "PearlCRowSeedHead",
            "PearlCRowSeedHeadByte", "PearlCRowSeedHeadV2", "PearlCRowSeedTail", "PearlCRowSeedTailByte", "PearlCRowSeedTailV2",
-           "PearlCRowSeedV2", "PearlCSeedB", "PearlCSeedBByte", "PearlCSeedBV2", "UNITS", "label", "s512"]
+           "PearlCRowSeedV2", "PearlCSeedB", "PearlCSeedBByte", "PearlCSeedBV2", "PearlCShaBlock", "PearlCShaBlockByte",
+           "PearlCShaBlockV2", "UNITS", "label", "s512"]
 
 U8, BF16, U32 = Value(8), Value(16), Value(32)
 #: a seed, a line key, a line's hash or its 32 codes; and a SHA-512 digest (a root, a row's leaf)
 BYTES32, BYTES64 = Array(32, U8), Array(64, U8)
+#: one SHA-512 block as its bytes, and as the 32 words of a row it holds
+BLOCK, ROW_WORDS = Array(128, U8), Array(32, U32)
 #: the roles -h3's hashes are labelled by
 ROLES = ("seed-A", "seed-B", "noise-line", "line")
 #: the BF16 words of 32 times a line's norm: an E line's 256 and an F line's 16
@@ -237,6 +249,72 @@ def PearlCRowSeed(B, S, salt, leaf, root, unit, row):
 PearlCRowSeedV2 = sigma_lift(PearlCRowSeed, 2)
 
 
+# ---- a row's digest, a compression a unit ----------------------------------------------------------------------------------
+#
+# sha512/row-seg/v1 hashes each 1 KiB segment of a row from its prefix's midstate, then the segments' digests from the outer
+# prefix's (`verity.ml.commitments.rowleaf`). A prefix is one block, and a row of FP32 words in whole blocks is 32 words a
+# block (a segment's padding starts on a word and ends a block, so it is words too), so every compression after a midstate
+# is one of two Definitions: `PearlCRowBlock` on 32 words, the row's or the padding's, and `PearlCShaBlock` on a block of
+# bytes, the outer hash's digests and padding.
+
+PearlCRowBlockByte, PearlCRowBlock, PearlCRowBlockV2 = _compression(
+    "PearlCRowBlock", (("state", BYTES64), ("x", ROW_WORDS)), 64,
+    lambda x: _state(compress_ref(words_be(bytes(x[:64])), words_be(b"".join(_le32(w) for w in x[64:])))),
+    lambda C, el: _word_bytes(compress_gadget(C, _words(el[:64]), _words([b for w in el[64:] for b in _bytes(w)]))),
+    "the chaining value of SHA-512 after one block, 32 words of a row little-endian, from the chaining value ``state``",
+    "sha512.compress_ref", "one SHA-512 compression")
+
+PearlCShaBlockByte, PearlCShaBlock, PearlCShaBlockV2 = _compression(
+    "PearlCShaBlock", (("state", BYTES64), ("block", BLOCK)), 64,
+    lambda x: _state(compress_ref(words_be(bytes(x[:64])), words_be(bytes(x[64:])))),
+    lambda C, el: _word_bytes(compress_gadget(C, _words(el[:64]), _words(list(el[64:])))),
+    "the chaining value of SHA-512 after one block of 128 bytes, from the chaining value ``state``",
+    "sha512.compress_ref", "one SHA-512 compression")
+
+
+def _refuse_row(b: dict) -> str | None:
+    return None if b.get("K", 1) >= 1 else "a row has at least one word"
+
+
+def _row_digest(B, S, x):
+    consts: dict = {}
+
+    def lit(w: int, v: int):
+        if (w, v) not in consts:
+            consts[(w, v)] = B.call(const(w, v))
+        return consts[(w, v)]
+
+    def state_of(prefix: bytes):
+        return array_of([lit(8, b) for b in _state(midstate(prefix))])
+
+    segments = rowleaf.sha512_row_seg_segments(32 * S.K)
+    digests, at = [], 0
+    for j, m in enumerate(segments):
+        pad = pad_tail(128 + m // 8)
+        words = [x[t] for t in range(at, at + m // 32)]
+        words += [lit(32, int.from_bytes(pad[i:i + 4], "little")) for i in range(0, len(pad), 4)]
+        state = state_of(rowleaf.sha512_row_seg_segment_prefix(j, len(segments), m))
+        for lo in range(0, len(words), 32):
+            state = B.call(PearlCRowBlock, state, array_of(words[lo:lo + 32]))
+        digests.append(state)
+        at += m // 32
+    state = state_of(rowleaf.sha512_row_seg_prefix(32 * S.K))
+    message = [d[i] for d in digests for i in range(64)] + [lit(8, b) for b in pad_tail(128 + 64 * len(digests))]
+    for lo in range(0, len(message), 128):
+        state = B.call(PearlCShaBlock, state, array_of(message[lo:lo + 128]))
+    return state
+
+
+PearlCRowDigest = CompositeDefinition(
+    "PearlCRowDigest", 1, ("K",), lambda S: ((("x", Array(S.K, U32)),), BYTES64), _row_digest, refuse=_refuse_row,
+    conformance=f"protocol-defined; equal to `pearl_c.row_digest` on its vectors ({_TESTS})",
+    doc="A row's digest, its 64 bytes: sha512/row-seg/v1 of the row's K FP32 words little-endian (`pearl_c.row_digest`, "
+        "`rowleaf.sha512_row_seg_digest`), a compression a Call: each segment from its prefix's midstate through "
+        "`PearlCRowBlock_v1` on each 32 words of it and of its padding, then the segments' digests and their padding "
+        "through `PearlCShaBlock_v1` from the outer prefix's midstate.")
+PearlCRowDigestV2 = sigma_lift(PearlCRowDigest, 2)
+
+
 # ---- a line from its hash --------------------------------------------------------------------------------------------------
 
 _LINE = f"protocol-defined; equal to `pearl_c.sample_line` on its vectors ({_TESTS})"
@@ -365,6 +443,22 @@ def PearlCNoiseLine(B, S, key, side, factor, line, norm32):
 
 
 PearlCNoiseLineV2 = sigma_lift(PearlCNoiseLine, 2)
+
+
+@composite("PearlCRowLine", 1, ["K"], lambda S: ((("salt", BYTES32), ("x", Array(S.K, U32)), ("root", BYTES64), ("unit", U32),
+                                                   ("row", U32)), BYTES32), refuse=_refuse_row,
+           conformance=f"protocol-defined; equal to `pearl_c.sample_line` of `pearl_c.row_seed` on its vectors ({_TESTS})")
+def PearlCRowLine(B, S, salt, x, root, unit, row):
+    """-h3's noise line E_A of row ``row`` of unit ``unit``, its 32 E4M3 codes, from the salt, the row's K FP32 words and the
+    fixed operand's root: `PearlCNoiseLine_v1` (side 0, factor 0, line 0, norm 256) under `PearlCLineKey_v1` of the row's
+    `PearlCRowSeed_v1` over its `PearlCRowDigest_v1`; `pearl_c.sample_line(row_seed(salt, row_digest(x), root, unit, row),
+    0, 0, 0)`."""
+    seed = B.call(PearlCRowSeed, salt, B.call(bind(PearlCRowDigest, K=S.K), x), root, unit, row)
+    zero = B.call(const(8, 0))
+    return B.call(PearlCNoiseLine, B.call(PearlCLineKey, seed), zero, zero, B.call(const(32, 0)), B.call(const(16, NORM_E)))
+
+
+PearlCRowLineV2 = sigma_lift(PearlCRowLine, 2)
 
 #: the Boolean Definitions over the size one is lowered whole at (65,536 ANDs), each with the units its body Calls and no
 #: gate besides: every AND of it is in one of them, and each is under that size with its lowering pinned

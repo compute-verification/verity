@@ -1,12 +1,13 @@
 """-h3's noise derivation as registered Definitions (`verity.ml.definitions.registry.pearl_c_noise`), word and Boolean,
-against PoUW's reference (`schemes.pearl_c`: `seed_b`, `row_seed`, `line_key`, `sample_line`) on random and edge inputs, and
-on the vectors the Lean specification proves of its own noise (`Pouw.PearlC.W1Checks`: `seedB_vec`, `rowSeed_vec`,
-`lineEA_vec`, `lineFB_vec`).
+against PoUW's reference (`schemes.pearl_c`: `seed_b`, `row_digest`, `row_seed`, `line_key`, `sample_line`) on random and
+edge inputs, and on the vectors the Lean specification proves of its own noise (`Pouw.PearlC.W1Checks`: `seedB_vec`,
+`rowDigest_vec`, `rowSeed_vec`, `lineEA_vec`, `lineFB_vec`).
 
 A hash's Boolean version is a SHA-512 compression traced gate by gate, seconds each, so the tests that evaluate one are
 slow, as is the one that holds a code's Boolean version to its word form's steps on every input."""
 from __future__ import annotations
 
+import hashlib
 import json
 import math
 import random
@@ -44,7 +45,8 @@ PAIRS = [(N.PearlCSeedB, N.PearlCSeedBV2), (N.PearlCRowSeedHead, N.PearlCRowSeed
          (N.PearlCLineRaw, N.PearlCLineRawV2), (N.PearlCLineInt, N.PearlCLineIntV2),
          (N.PearlCLineNormRoot, N.PearlCLineNormRootV2), (N.PearlCLineScale, N.PearlCLineScaleV2),
          (N.PearlCLineCode, N.PearlCLineCodeV2), (N.PearlCLineCodes, N.PearlCLineCodesV2),
-         (N.PearlCNoiseLine, N.PearlCNoiseLineV2)]
+         (N.PearlCNoiseLine, N.PearlCNoiseLineV2), (N.PearlCRowBlock, N.PearlCRowBlockV2),
+         (N.PearlCShaBlock, N.PearlCShaBlockV2)]
 #: the size a Boolean Definition is lowered whole at (`circuit_check.checks.Options.lower_max_ands`), and the pins of this
 #: module's lowerings
 LOWERED_WHOLE = 1 << 16
@@ -116,6 +118,20 @@ def head_state(salt: bytes, leaf: bytes, root: bytes) -> bytes:
     return b"".join(w.to_bytes(8, "big") for w in cv)
 
 
+def row_of(k: int, seed: int) -> list[int]:
+    """A row of k FP32 words: the Lean vector's at its 15, else random."""
+    rng = random.Random(seed)
+    return list(struct.unpack("<15I", ROW)) if k == 15 else [rng.getrandbits(32) for _ in range(k)]
+
+
+def row_bytes(x: list[int]) -> bytes:
+    return b"".join(struct.pack("<I", w) for w in x)
+
+
+def state_bytes(cv: list[int]) -> bytes:
+    return b"".join(w.to_bytes(8, "big") for w in cv)
+
+
 def lean_seeds() -> tuple[bytes, bytes]:
     """The Lean vectors' row seed and seed_B, by the reference."""
     return C.S512Seed(C.row_seed(SALT, C.row_digest(ROW), ROOT, UNIT, ROW_INDEX)), C.seed_b(SALT, ROOT)
@@ -137,6 +153,8 @@ def test_each_word_definition_has_its_boolean_version():
     """`boolean_version` of each word Definition is its ``_v2``, so the σ of a body that calls one calls its Boolean version."""
     for w, b in PAIRS:
         assert boolean_version(bound(w)).id == bound(b).id == bound(w).id.replace("_v1", "_v2")
+    for w, b in ((N.PearlCRowDigest, N.PearlCRowDigestV2), (N.PearlCRowLine, N.PearlCRowLineV2)):
+        assert boolean_version(bind(w, K=40)).id == bind(b, K=40).id == bind(w, K=40).id.replace("_v1", "_v2")
 
 
 def test_the_hashes_match_the_reference_on_words():
@@ -166,12 +184,77 @@ def test_the_row_seed_is_its_two_compressions_on_words():
         assert bytes(word(N.PearlCRowSeedTail, state, tail, unit, row)) == b"".join(w.to_bytes(8, "big") for w in want[:4])
 
 
+def test_a_block_is_one_sha512_compression_on_words():
+    """`PearlCShaBlock` from the initial value on a padded message of one block is hashlib's SHA-512, and from any state
+    `sha512.compress_ref`; `PearlCRowBlock` is `PearlCShaBlock` on its 32 words' bytes, little-endian."""
+    iv = state_bytes(SHA.IV)
+    for n in (0, 1, 55, 111):
+        message = bytes(range(n))
+        assert bytes(word(N.PearlCShaBlock, iv, message + SHA.pad_tail(n))) == hashlib.sha512(message).digest()
+    rng = random.Random(13)
+    for _ in range(4):
+        state, x = bytes(rng.randrange(256) for _ in range(64)), [rng.getrandbits(32) for _ in range(32)]
+        want = state_bytes(SHA.compress_ref(SHA.words_be(state), SHA.words_be(row_bytes(x))))
+        assert bytes(word(N.PearlCRowBlock, state, x)) == bytes(word(N.PearlCShaBlock, state, row_bytes(x))) == want
+
+
+@pytest.mark.parametrize("k", [1, 15, 27, 28, 32, 33, 60, 256, 288, 520, 2048])
+def test_a_rows_digest_on_words(k):
+    """`pearl_c.row_digest` of the row's bytes: a row short of a block, one whose padding takes a block of its own (28
+    words), whole blocks, a whole segment, and segments with a short last one; at 15 words the Lean's `rowDigest_vec`."""
+    x = row_of(k, k)
+    digest = word(bind(N.PearlCRowDigest, K=k), x)
+    assert bytes(digest) == C.row_digest(row_bytes(x))
+    if k == 15:
+        assert digest[:8] == [225, 54, 37, 2, 134, 5, 77, 26]
+
+
+#: a row's digest in compressions: (k, those of its segments, those of the outer hash)
+COMPRESSIONS = [(15, 1, 1), (28, 2, 1), (32, 2, 1), (256, 9, 1), (288, 11, 2), (2048, 72, 5), (8192, 288, 17)]
+
+
+def compressions(digest, k: int) -> list[str]:
+    """The Definitions a row's digest Calls, in order, but for its constants."""
+    return [n.fn.id for n in bind(digest, K=k).body.nodes if not n.fn.id.startswith("Const")]
+
+
+@pytest.mark.parametrize("k,row_blocks,outer_blocks", COMPRESSIONS)
+def test_a_rows_digest_is_a_compression_a_call(k, row_blocks, outer_blocks):
+    """A row's digest Calls one block Definition a compression and nothing else but constants: nine compressions a whole
+    segment and the outer hash's, 77 at k = 2,048 and 305 at k = 8,192, `Sha512RowSeg_v1`'s count."""
+    assert compressions(N.PearlCRowDigest, k) == ["PearlCRowBlock_v1"] * row_blocks + ["PearlCShaBlock_v1"] * outer_blocks
+
+
+@pytest.mark.slow
+def test_a_rows_digest_on_bits_is_a_compression_a_call_each_under_the_whole_lowering():
+    """The same Calls on bits, of the block Definitions' Boolean versions, each within the size a Definition is lowered
+    whole at: every AND of a row's digest is in a pinned unit."""
+    for k, row_blocks, outer_blocks in COMPRESSIONS:
+        assert compressions(N.PearlCRowDigestV2, k) == ["PearlCRowBlock_v2"] * row_blocks + ["PearlCShaBlock_v2"] * outer_blocks
+    each = [compile_bits(bind(d)).counts["and"] for d in (N.PearlCRowBlockV2, N.PearlCShaBlockV2)]
+    assert each == [57_947, 57_947] and max(each) <= LOWERED_WHOLE
+
+
+@pytest.mark.parametrize("k", [15, 32, 288])
+def test_a_rows_line_on_words(k):
+    """`PearlCRowLine` is `pearl_c.sample_line` of the row's `row_seed` over its `row_digest`; at 15 words the Lean's
+    `lineEA_vec`."""
+    for salt, _leaf, root, unit, row in seeds(2, k)[:1] + seeds(2, k)[3:]:
+        x = row_of(k, k + row)
+        seed = C.row_seed(salt, C.row_digest(row_bytes(x)), root, unit, row)
+        assert word(bind(N.PearlCRowLine, K=k), salt, x, root, unit, row) == C.sample_line(seed, 0, 0, 0)
+    if k == 15:
+        assert word(bind(N.PearlCRowLine, K=k), SALT, row_of(15, 0), ROOT, UNIT, ROW_INDEX) == LINE_EA
+
+
 def test_each_unit_of_a_definition_over_the_whole_lowering_is_pinned():
     """Each unit `UNITS` names has a pin of its lowering (the module's sidecar), which circuit-check holds it to: the
     Definitions over the size one is lowered whole at have none of their own."""
     pins = json.loads(PINS.read_text())["definitions"]
     assert set(N.UNITS) == {"PearlCRowSeed_v2", "PearlCNoiseLine_v2"} and not set(N.UNITS) & set(pins)
     assert all(u in pins for units in N.UNITS.values() for u in units)
+    assert "PearlCRowBlock_v2" in pins and "PearlCShaBlock_v2" in pins
+    assert not any(i.startswith(("PearlCRowDigest_v2", "PearlCRowLine_v2")) for i in pins)
 
 
 @pytest.mark.slow
@@ -308,3 +391,30 @@ def test_a_noise_line_on_bits():
                   [c[2] for c in sampled], [c[3] for c in sampled], [c[4] for c in sampled])
     assert got[:2] == [LINE_EA, LINE_FB]
     assert got == [C.sample_line(s, side, factor, t, NORMS[n]) for s, side, factor, t, n in sampled]
+
+
+@pytest.mark.slow
+def test_a_rows_digest_and_its_blocks_on_bits():
+    """Each block Definition on bits is its word form, and the digest of a row of 40 words on bits (two blocks of the
+    segment, the second the row's last 8 words and the padding, and the outer hash's one) is `pearl_c.row_digest`."""
+    rng = random.Random(14)
+    states = [list(state_bytes(SHA.IV))] + [[rng.randrange(256) for _ in range(64)] for _ in range(3)]
+    xs = [[0] * 32] + [[rng.getrandbits(32) for _ in range(32)] for _ in range(3)]
+    assert on_bits(N.PearlCRowBlockV2, states, xs) == [word(N.PearlCRowBlock, s, x) for s, x in zip(states, xs)]
+    blocks = [list(row_bytes(x)) for x in xs]
+    assert on_bits(N.PearlCShaBlockV2, states, blocks) == [word(N.PearlCShaBlock, s, b) for s, b in zip(states, blocks)]
+    rows = [row_of(40, i) for i in range(3)] + [[0] * 40, [0xFFFFFFFF] * 40]
+    assert on_bits(bind(N.PearlCRowDigestV2, K=40), rows) == [list(C.row_digest(row_bytes(x))) for x in rows]
+
+
+@pytest.mark.slow
+def test_a_rows_line_on_bits():
+    """`PearlCRowLine_v2`, the σ of the word form, on the Lean vector's row and place (its `lineEA_vec`) and on others: six
+    compressions and a line's codes in one circuit, which no cheaper test evaluates together."""
+    cases = [(SALT, row_of(15, 0), ROOT, UNIT, ROW_INDEX)] + [(salt, row_of(15, 20 + i), root, unit, row)
+                                                             for i, (salt, _leaf, root, unit, row) in enumerate(seeds(2, 15)[1:])]
+    got = on_bits(bind(N.PearlCRowLineV2, K=15), [list(c[0]) for c in cases], [c[1] for c in cases],
+                  [list(c[2]) for c in cases], [c[3] for c in cases], [c[4] for c in cases])
+    assert got[0] == LINE_EA
+    assert got == [C.sample_line(C.row_seed(salt, C.row_digest(row_bytes(x)), root, unit, row), 0, 0, 0)
+                   for salt, x, root, unit, row in cases]
