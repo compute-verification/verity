@@ -1,6 +1,6 @@
 """Each Definition module's circuit-check bindings and pins, in sidecar files beside it.
 
-    fp8.py                    a Definition module (`verity.ml.definitions.registry.fp8`)
+    fp8.py                    a Definition module (`verity.definitions.registry.fp8`)
     fp8.circuit-check.py      its bindings, in `targets.py`'s forms: root functions (``_boolean_roots``, any ``_X_roots``,
                               `targets.root_functions`), `_model_roots` entries and ``TEMPLATE_PARAMS`` entries; a Program
                               root too large to build whole goes in ``_by_calls_roots``, checked by its calls (`by_calls`);
@@ -42,10 +42,10 @@ from . import entries as E
 
 REPO = Path(__file__).resolve().parents[5]
 #: `verity`'s packages whose modules may have a sidecar: the ones that define Definitions (`targets._authored`)
-PACKAGES = ("verity", "verity.ml.circuits", "verity.ml.kernels", "verity.core")
+PACKAGES = ("verity", "verity.circuits", "verity.definitions.kernels", "verity.core")
 #: the repository's directories of other distributions' packages, one directory per serving stack holding the package that
 #: attaches Verity to it.  A package there registers itself by a sidecar of its own module
-#: (``integrations/<stack>/<package>/__init__.circuit-check.py``, or its ``.json``), and then every sidecar under it is found;
+#: (``adapters/<stack>/<package>/__init__.circuit-check.py``, or its ``.json``), and then every sidecar under it is found;
 #: one inside a `PACKAGES` directory (the templates') is found there.  No distribution but `verity` is named here
 TREES = ("integrations",)
 SUFFIX = CC.SUFFIX
@@ -78,7 +78,7 @@ def discover() -> dict[str, dict[str, Path]]:
     it has from the top of the regular packages it is in (``__init__.py`` all the way down), so a package inside another's
     tree names its own (`verity_flock`'s is inside `verity`'s).  One counts only where Python imports that top directory as
     the package of its name: a copy of a package behind a directory without ``__init__.py`` would name modules that another
-    directory owns (``verity.ml.flock.python.verity_flock.rec_open``), and importing it registers their Definitions twice."""
+    directory owns (``verity.protocols.flock.prover.python.verity_flock.rec_open``), and importing it registers their Definitions twice."""
     out: dict[str, dict[str, Path]] = {}
     imported: dict[Path, bool] = {}
     with CC.internal():
@@ -250,13 +250,13 @@ def composite_lift(fid: str) -> Any | None:
     """`lifted.lift_composite` of the registered composite a ``Lifted[<composite>]_v<k>`` id wraps (the lift a body calling it
     makes, or its hand lift), whatever version the id writes; None when the id wraps no registered composite.  The on-demand
     ``Lifted[...]`` families lift primitives only."""
-    from verity.ml.circuits.defs import REGISTRY, CompositeDefinition
+    from verity.circuits.defs import REGISTRY, CompositeDefinition
 
     m = re.fullmatch(r"Lifted\[(.+)\]_v\d+", fid)
     inner = REGISTRY.defs.get(m[1]) if m else None
     if not isinstance(inner, CompositeDefinition):
         return None
-    from verity.ml.definitions.registry import lifted as L
+    from verity.definitions.registry import lifted as L
 
     return L.lift_composite(inner)
 
@@ -264,11 +264,11 @@ def composite_lift(fid: str) -> Any | None:
 def named(fid: str) -> Any | None:
     """The Definition ``fid`` names, made from the id alone: one a loaded module binds at its top level (`_index`), else a
     registered composite's lift (`composite_lift`, when its id is ``fid``), else one an on-demand family makes from it
-    (`verity.ml.circuits.codec.lookup_primitive` with nothing registered, so the family's own factory whoever asked for it first).
+    (`verity.circuits.codec.lookup_primitive` with nothing registered, so the family's own factory whoever asked for it first).
     None for one made only inside another Definition's body (`boolean_gather`'s tree levels) or by nothing, built in this process
     or not."""
-    from verity.ml.circuits.codec import lookup_primitive
-    from verity.ml.circuits.defs import Registry
+    from verity.circuits.codec import lookup_primitive
+    from verity.circuits.defs import Registry
 
     if not _NAMED:
         _NAMED.update({v.id: v for v, _mod in _index().values()})
@@ -321,7 +321,7 @@ HANDED: dict[str, str] = {}
 def _index() -> dict[int, tuple[Any, str]]:
     """{id(Definition): (it, module)} for every Definition a loaded module of `packages` binds at its top level other than by
     import; where two do, the one its functions are defined in, else the first by name."""
-    from verity.ml.circuits.defs import CompositeDefinition, PrimitiveDefinition
+    from verity.circuits.defs import CompositeDefinition, PrimitiveDefinition
 
     from . import targets
 

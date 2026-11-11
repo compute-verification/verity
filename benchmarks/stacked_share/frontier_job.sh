@@ -7,7 +7,7 @@
 #   bash benchmarks/stacked_share/frontier_job.sh      # on a CPU node, from the source tree's root
 set -euo pipefail
 SRC=$(pwd)
-export PYTHONPATH=$SRC:$SRC/integrations/vllm:$SRC/tools/research/src
+export PYTHONPATH=$SRC:$SRC/adapters/vllm:$SRC/tools/research/src
 if [ -z "${PY:-}" ]; then
   W=$(mktemp -d)
   trap 'rm -rf "$W"' EXIT

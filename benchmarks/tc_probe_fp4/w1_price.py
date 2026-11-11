@@ -67,7 +67,7 @@ import probe as P  # noqa: E402
 import sparse as S  # noqa: E402
 
 # isort: split
-# verity_config is importable once probe has put tools/config on sys.path
+# verity_config is importable once probe has put verity/configuration/config on sys.path
 from verity_config.settings import SHARED  # noqa: E402
 
 SOURCE = "w1_price.cu"

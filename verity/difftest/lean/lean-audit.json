@@ -1,0 +1,38 @@
+{
+ "roots": ["Difftest", "DifftestExample", "AnnotDifftest", "FlockJsonDifftest", "FirewallHonestDifftest"],
+ "exempt": {
+  "FlockJsonDifftestMain": "the flock-json-difftest server's entry point, one line: Difftest.serve of FlockJsonDifftest.table, which tests/test_flock_json_port.py drives against the Python mirror; audited under FlockJsonDifftest (a root beside DifftestExample, which declares `main` too)",
+  "FirewallHonestDifftestMain": "the firewall-honest-difftest server's entry point, one line: Difftest.serve of FirewallHonestDifftest.table, which verity/protocols/flock/prover/tests/test_honest_reqs.py drives against rec_live's requests; audited under FirewallHonestDifftest",
+  "AnnotDifftestMain": "the annot-difftest executable's entry point, one line: Difftest.serve AnnotDifftest.table, audited under AnnotDifftest; a root of its own would put a second `main` beside DifftestExample's"
+ },
+ "layers": {
+  "Difftest": {
+   "imports": ["Lean", "Flock.Canon"],
+   "except": [],
+   "why": "the harness is code: Lean core and C-Flock's canonical JSON, no Mathlib and nothing of Security (Daniel's layout ruling, 5 Oct)"
+  },
+  "DifftestExample": {
+   "imports": ["Difftest"],
+   "except": [],
+   "why": "the example port reaches Lean only through the harness, as a port does"
+  },
+  "FlockJsonDifftest": {
+   "imports": ["Difftest", "Flock.JsonParse"],
+   "except": [],
+   "why": "C-Flock's JSON parser's port reads the parser it holds to its Python mirror, and Lean core's parser through the harness"
+  },
+  "FirewallHonestDifftest": {
+   "imports": ["Difftest", "Flock.Firewall.Honest"],
+   "except": [],
+   "why": "the honest worker's requests' port reads C-Flock's Flock.Firewall.honestReqs and what the firewall's load check takes, through the harness"
+  },
+  "AnnotDifftest": {
+   "imports": ["Lean", "Difftest", "Flock.Annot", "Flock.AnnotExpand"],
+   "except": [],
+   "why": "the annotation check's port reaches Lean through the harness and C-Flock's Flock.Annot and its per-gate reference, as a port does"
+  }
+ },
+ "dependencies": {
+  "toolchain": "9861e83df7e59cd690a56f1b1123a7d6cfeca7df65d05a986f3a0c9794f60079"
+ }
+}

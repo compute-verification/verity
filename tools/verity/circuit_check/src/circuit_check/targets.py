@@ -35,7 +35,7 @@ from typing import Any, Callable, Iterable, Iterator
 
 import numpy as np
 
-from verity.ml.definitions.tiny import TINY
+from verity.definitions.tiny import TINY
 
 from . import cache as CC
 
@@ -74,17 +74,17 @@ def load_registries() -> None:
     global _LOADED
     if _LOADED:
         return
-    from verity.ml.circuits.defs import REGISTRY
+    from verity.circuits.defs import REGISTRY
 
     from . import sidecars as SC
 
     for mod in SC.discover():
         importlib.import_module(mod)
-    import verity.ml.definitions.registry as R
+    import verity.definitions.registry as R
     for m in pkgutil.iter_modules(R.__path__):
         if m.name != "quarantine":
             importlib.import_module(f"{R.__name__}.{m.name}")
-    from verity.ml.definitions.numerics import rows, twins  # noqa: F401  (their kernels register with core)
+    from verity.definitions.numerics import rows, twins  # noqa: F401  (their kernels register with core)
     CC.registries(SC.discover())
     REGISTERED[:] = sorted(i for i, d in REGISTRY.defs.items() if _authored(d))
     _LOADED = True
@@ -100,7 +100,7 @@ BY_CALLS: set[str] = set()
 def declare_by_calls() -> None:
     """Every binding file's by-calls roots (``_by_calls_roots``), made as the catalog makes them (`_produce`), into `BY_CALLS`:
     each a complete composite specialization, else the binding file is refused by name."""
-    from verity.ml.circuits.defs import SpecializedDefinition
+    from verity.circuits.defs import SpecializedDefinition
 
     BY_CALLS.clear()
     for units, make in _root_bindings(BY_CALLS_ROOTS):
@@ -158,7 +158,7 @@ def _value(s: str) -> Any:
     return (v,) if s.startswith("(") and not isinstance(v, tuple) else v    # an id prints a tuple of one as `(7)`
 
 
-#: a Definition-valued static with statics of its own, as an id prints it (`verity.ml.circuits.defs._fmt_static`): its own id
+#: a Definition-valued static with statics of its own, as an id prints it (`verity.circuits.defs._fmt_static`): its own id
 _DEFINITION = re.compile(r"[A-Za-z_][^{}()\[\],=\s]*(?:\[[^{}()=\s]*\][^{}()\[\],=\s]*)?\{.*\}", re.S)
 #: a bare Definition id (no statics), as it stands in a tuple
 _BARE = re.compile(r"[A-Za-z_][\w.]*(?:\[[^{}()=\s]*\][\w.]*)?")
@@ -183,7 +183,7 @@ def _static(text: str) -> Any:
 def _element(text: str) -> Any:
     """A tuple element (`_static`), a bare id among them the registered Definition it names, as `call_scope.specialization`
     resolves a function-valued static, else its text."""
-    from verity.ml.definitions import word as W
+    from verity.definitions import word as W
 
     v = _static(text)
     if v is not text or not _BARE.fullmatch(text):
@@ -194,7 +194,7 @@ def _element(text: str) -> Any:
         return text
 
 
-#: a record (dict-valued) static as a Definition id prints it, a prefix of its digest (`verity.ml.circuits.defs`): the record itself is
+#: a record (dict-valued) static as a Definition id prints it, a prefix of its digest (`verity.circuits.defs`): the record itself is
 #: not in the id, so it is looked up among the records the catalog's Definitions are bound to
 _RECORD = re.compile(r"\{[0-9a-f]{12}\}")
 _RECORDS: dict[str, Any] = {}
@@ -258,7 +258,7 @@ def definition(spec: str) -> Any:
     one a body calling it binds), or else the suite's target of that id: a Definition that only tracing the catalog's roots
     registers, such as `boolean_gather.gather_bf16(n)`'s gathers, or one whose id writes a dict static as its digest, such as
     `gf2k.GfResiduals`'s schema."""
-    from verity.ml.definitions import word as W
+    from verity.definitions import word as W
 
     load_registries()
     m = re.fullmatch(r"([^{]+)(?:\{(.*)\})?", spec.strip())
@@ -325,8 +325,8 @@ ROW_READER = "request_program"
 
 def request_program(path: str) -> tuple[Any, Any, Callable[[], Iterator[Any]]]:
     """A row target's request Program, read by the one binding file that defines `ROW_READER`: the Program's view, its
-    population as `verity.ml.definitions.word.call_groups` reads one, and its instance rows, from the first at each call
-    (`verity.ml.definitions.cross_call.check_program`)."""
+    population as `verity.definitions.word.call_groups` reads one, and its instance rows, from the first at each call
+    (`verity.definitions.cross_call.check_program`)."""
     readers = {prefix: ns[ROW_READER] for prefix, ns in binding_files() if ns is not globals() and ROW_READER in ns}
     if len(readers) != 1:
         raise ValueError(f"{path}: a request Program is read by the one sidecar that defines `{ROW_READER}`, and "
@@ -457,7 +457,7 @@ def templates() -> list[tuple[str, Any, list[dict]]]:
 
 
 def _kernel_roots() -> list[Any]:
-    from verity.ml.definitions.numerics import kernel_registry as KR
+    from verity.definitions.numerics import kernel_registry as KR
 
     out = []
     for r in KR.registered():
@@ -467,7 +467,7 @@ def _kernel_roots() -> list[Any]:
 
 def _tanh_rn_probe(reads: Callable[[int], Any]) -> Any:
     """`tanh_rn` (2^27 entries of two words) as parameter 1, probed at its ends and its regions' edges (`TANH_RN_REGIONS`)."""
-    from verity.ml.definitions.registry import tables
+    from verity.definitions.registry import tables
 
     from .vectors import TableProbe
 
@@ -476,7 +476,7 @@ def _tanh_rn_probe(reads: Callable[[int], Any]) -> Any:
 
 def _tanh_rn_word(i: int) -> int:
     """The word of `tanh_rn`'s region whose low 27 bits are entry ``i`` (past HI where no region word has them)."""
-    from verity.ml.definitions.registry import tables
+    from verity.definitions.registry import tables
 
     return 0x38000000 | i if (0x38000000 | i) >= tables.TANH_RN_LO else 0x40000000 | i
 
@@ -541,14 +541,14 @@ OPERAND_PROBES: dict[str, Callable[[dict], list[dict[str, int]]]] = {
 
 def lazy_operands(fn: Any) -> tuple[str, ...]:
     """The names of ``fn``'s parameters `LAZY_OPERANDS` lists."""
-    from verity.ml.circuits.evaluation.reference import key_of
+    from verity.circuits.evaluation.reference import key_of
 
     return LAZY_OPERANDS.get(key_of(fn), ())
 
 
 def operand_probes(fn: Any) -> list[dict[str, int]]:
     """``fn``'s `OPERAND_PROBES` at its statics."""
-    from verity.ml.circuits.evaluation.reference import key_of, statics_of
+    from verity.circuits.evaluation.reference import key_of, statics_of
 
     make = OPERAND_PROBES.get(key_of(fn))
     return [] if make is None else make(statics_of(fn))
@@ -611,13 +611,13 @@ def _kinds_and_templates() -> list[Any]:
 
 
 def word_call_families() -> set[str]:
-    """The word Call families of a served Program: the replay's row families (`verity.ml.definitions.numerics.rows.ROWS`), every
+    """The word Call families of a served Program: the replay's row families (`verity.definitions.numerics.rows.ROWS`), every
     frontend vocabulary kind's Definition and every template's.  Their bindings build in seconds, without the catalog.  A kind that
     doesn't bind is refused by name: left out, its family's partition would be judged as no Call's.  So is a path no binding file
     binds a vocabulary on (``_vocabulary_roots``, in a sidecar of the frontend's package): every kind would be left out."""
     if "words" not in _SHORT:
         load_registries()
-        from verity.ml.definitions.numerics import rows
+        from verity.definitions.numerics import rows
 
         made = _kinds_and_templates()
         if _BOUND["unbound"]:
@@ -735,8 +735,8 @@ def boolean_call_candidates(word_calls: set[str]) -> set[str]:
     Definition whose ``word`` is a Definition of such a family, or whose ``word`` is a function of its bindings, whose name is
     such a family's name and whose statics a binding of that family could give (each one of the family's statics or one its word
     computes, ``word_statics``: the by-name lookup reads no other).  Each candidate it returns is one of those Definitions, bound."""
-    from verity.ml.circuits.defs import REGISTRY, CompositeDefinition, bind
-    from verity.ml.definitions.boolean import _load
+    from verity.circuits.defs import REGISTRY, CompositeDefinition, bind
+    from verity.definitions.boolean import _load
 
     exact, by_name, _errors = _load()
     statics: dict[str, list[set[str] | None]] = {}
@@ -752,18 +752,18 @@ def boolean_call_candidates(word_calls: set[str]) -> set[str]:
 
 
 def on_demand_boolean_families(word_calls: set[str]) -> set[str]:
-    """The Boolean version's family of each word Call family made on demand, by its id (`verity.ml.definitions.boolean.
+    """The Boolean version's family of each word Call family made on demand, by its id (`verity.definitions.boolean.
     made_on_demand`: `Const<w>[0x..]`, `GatherBf16x{V}`, `GatherI32x{V}`, `GatherF32x{V}`).  No module registers such a family's members ahead,
     so these come from the families' own patterns, not from the catalog.  Made in sorted order: making one registers it, and
     the registry's order is then the same in every process, whatever its hash seed or what it did before."""
-    from verity.ml.definitions.boolean import made_on_demand
+    from verity.definitions.boolean import made_on_demand
 
     return {family(d) for f in sorted(word_calls) if (d := made_on_demand(f)) is not None}
 
 
 def _registered() -> list[Any]:
     """The catalog's first roots: every registered primitive and static-free composite (bound)."""
-    from verity.ml.circuits.defs import REGISTRY, CompositeDefinition, PrimitiveDefinition, bind
+    from verity.circuits.defs import REGISTRY, CompositeDefinition, PrimitiveDefinition, bind
 
     roots: list[Any] = []
     for d in list(REGISTRY.defs.values()):
@@ -780,9 +780,9 @@ def certified_boolean_calls(word_calls: set[str], only: set[str] | None = None) 
     most `MAX_GATES` gates, each a catalog root `select` keeps, so the suite holds it whatever else the catalog reaches.  A root's
     gates are counted (its body built) only when its Boolean version is of a family asked for; a whole model's root is of no word
     Call family, so its body (most of the catalog's build) never is.  With them, `on_demand_boolean_families` (in ``only``)."""
-    from verity.ml.circuits import boolean as BL
-    from verity.ml.circuits.defs import PrimitiveDefinition, SpecializedDefinition
-    from verity.ml.definitions.boolean import boolean_version
+    from verity.circuits import boolean as BL
+    from verity.circuits.defs import PrimitiveDefinition, SpecializedDefinition
+    from verity.definitions.boolean import boolean_version
 
     linked: dict[str, list[Any]] = {}
     for fn in binding_roots():
@@ -807,11 +807,11 @@ def certified_boolean_calls(word_calls: set[str], only: set[str] | None = None) 
 
 
 def boolean_call_families(word_calls: set[str], found: dict[str, Any] | None = None) -> set[str]:
-    """Sigma's image of the word Call families ``word_calls``: the family of `verity.ml.definitions.boolean.boolean_version` (the
+    """Sigma's image of the word Call families ``word_calls``: the family of `verity.definitions.boolean.boolean_version` (the
     switch's table of `word=` links) of each catalog specialization of a word Call family that has one, and of each word Call
     family made on demand (`on_demand_boolean_families`)."""
-    from verity.ml.circuits.evaluation import ScalarReference
-    from verity.ml.circuits import boolean as BL
+    from verity.circuits.evaluation import ScalarReference
+    from verity.circuits import boolean as BL
     out: set[str] = on_demand_boolean_families(word_calls)
     for fn in (suite() if found is None else found).values():
         if family(fn) not in word_calls or isinstance(fn, ScalarReference) or BL.is_boolean(fn):
@@ -822,8 +822,8 @@ def boolean_call_families(word_calls: set[str], found: dict[str, Any] | None = N
 
 
 def boolean_family(fn: Any) -> str | None:
-    """The family of ``fn``'s Boolean version (`verity.ml.definitions.boolean.boolean_version`), or None when it has none."""
-    from verity.ml.definitions.boolean import NoBooleanVersion, boolean_version
+    """The family of ``fn``'s Boolean version (`verity.definitions.boolean.boolean_version`), or None when it has none."""
+    from verity.definitions.boolean import NoBooleanVersion, boolean_version
 
     try:
         return family(boolean_version(fn))
@@ -832,10 +832,10 @@ def boolean_family(fn: Any) -> str | None:
 
 
 def boolean_links() -> tuple[dict[str, set[str]], dict[str, set[str]]]:
-    """The Boolean table's two lookups (`verity.ml.definitions.boolean._load`) as families: each word Definition's descriptor id
+    """The Boolean table's two lookups (`verity.definitions.boolean._load`) as families: each word Definition's descriptor id
     with the Boolean families linked to it exactly, and each name with the Boolean families whose word is a function of their
     bindings.  `boolean_family` of a Definition is among those of its descriptor id and of its name, or None."""
-    from verity.ml.definitions.boolean import _load
+    from verity.definitions.boolean import _load
 
     exact, by_name, _errors = _load()
     return ({k: {f"{d.name}_v{d.version}" for d in ds} for k, ds in exact.items()},
@@ -896,8 +896,8 @@ def catalog(by_unit: list | None = None) -> list[Any]:
 def reachable(roots: Iterable[Any]) -> dict[str, Any]:
     """Every Definition (primitive, complete specialisation) or reference reachable from ``roots``, by id; a by-calls root
     (`is_by_calls`) without what its body calls, which it doesn't build."""
-    from verity.ml.circuits.evaluation import ScalarReference
-    from verity.ml.circuits.defs import PrimitiveDefinition, SpecializedDefinition
+    from verity.circuits.evaluation import ScalarReference
+    from verity.circuits.defs import PrimitiveDefinition, SpecializedDefinition
 
     out: dict[str, Any] = {}
     stack = list(roots)
@@ -944,7 +944,7 @@ def select(found: dict[str, Any], max_gates: int | None = None, pinned: Iterable
     smallest otherwise, with its smallest Boolean one too when the smallest is not (a Boolean family bound at a word MUFU and at
     its Boolean version, which the Program on bits calls); every one whose id is ``pinned`` (`pinned`), whatever its size; and
     every by-calls root (`is_by_calls`), whose gates are never counted."""
-    from verity.ml.circuits import boolean as BL
+    from verity.circuits import boolean as BL
 
     max_gates = MAX_GATES if max_gates is None else max_gates
     pinned = frozenset(pinned)
