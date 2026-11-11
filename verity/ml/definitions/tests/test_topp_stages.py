@@ -5,7 +5,8 @@
   computes the twin's outputs, and the twin's token is the Call's in both its forms, as the circuit evaluator computes them: on
   rows with ties, -inf and NaN lanes, at temperature 0, 0.7 and 1, at every split count;
 * a select chunk of `SELECT_N` lanes that a slice ends inside counts its ties as the row does, on rows where that count
-  decides the Call's token;
+  decides the Call's token, and gives a lane past the end its new slice's warp half, on a row where a tie's probability is
+  its half's;
 * the twin's keep bits are `topp_keep`'s at every split count on the edge rows (NaN and +inf lanes, a few finite lanes, a
   uniform row, p = 0 and 1);
 * `plan` wires each parameter to an earlier unit's output of its type and `cut` counts its units, at small and served statics;
@@ -121,6 +122,34 @@ def test_a_select_chunk_counts_its_ties_across_a_slice_s_end():
             bad = [u.key for u in sel if [int(v) for v in evaluate(u.defn, *unit_args(u, lg, {**ops, "splits": S}, outs))]
                    != [int(v) for f in outs[u.key] for v in f]]
             assert (got, bad) == (tok, []), (top_p, S)
+
+
+@pytest.mark.slow
+def test_a_lane_past_a_slice_s_end_inside_a_chunk_takes_its_new_slice_s_warp_half():
+    """The two warp halves hold values of Z an ulp apart when the slices' exp sums round differently in the halves' two orders
+    (`topp_geometry.z_group`); a tie's probability is then its half's, and a lane counts as a tie only at its own half's.  On
+    such a row of V = 1000 (a lone top lane, seven ties under it, a floor in steps of 1/64), lane 504 is a tie past a slice's
+    end inside its chunk at split counts 4, 8 and 16, in the other half than its offset would have in the slice that ended.
+    Every select chunk computes the twin's words, each split count's tie count among them, and the twin's token is the Call's:
+    a chunk that took the half of its lanes past the end from the slice they left carries a tie count one off at all three
+    split counts, which the rows of equal ties above don't see, their halves' Z being one word.  A quarter of a minute."""
+    V, lane, ties = 1000, 504, [3, 470, 504, 600, 700, 800, 900]
+    x = ((np.arange(V) * 5 % 257) / 64 - 2).astype(np.float32)
+    x[ties], x[40] = 8.0, 9.0
+    lg = bf16_row(x)
+    sel = [u for u in T.plan(V) if u.key[0] == "select"]
+    at = sel[lane // T.SELECT_N]
+    ops = {"top_p": f32(0.5), "seed": 0x1234_5678_9ABC_DEF0, "pos": 42, "temp": f32(0.7)}
+    for S in (4, 8, 16):
+        geo, off = T.Geo(V, S), lane % T.Geo(V, S).L
+        assert at.lanes[0] < lane - off <= lane < at.lanes[1] and geo.h1(off) != geo.h1(off + geo.L), S
+        got, outs = TW.stage_rows(V, lg, splits=S, **ops)
+        pr = {v: int(w) for u in T.plan(V) if u.key[:2] == ("probs", S) for v, w in zip(range(*u.lanes), outs[u.key][0])}
+        assert len({pr[t] for t in ties}) == 2, S
+        assert evaluate(bind(SA.GumbelTopPTokenSelect, V=V), [int(v) for v in lg], *(ops[o] for o in OPERANDS[:4]), S) == (got,)
+        bad = [u.key for u in sel if [int(v) for v in evaluate(u.defn, *unit_args(u, lg, {**ops, "splits": S}, outs))]
+               != [int(v) for f in outs[u.key] for v in f]]
+        assert bad == [], S
 
 
 EDGE = ["ties", "nan", "few", "uniform", "posinf", "plain", "neginf"]
