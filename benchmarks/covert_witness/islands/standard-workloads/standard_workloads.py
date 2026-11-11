@@ -4,6 +4,7 @@ te_core and priced by te_core.formalism at its own session (the headline), the c
 serving block, beside the workloads no run here measures, each priced on te_core.workloads' model of it (`MODELLED`).
 
     python islands/standard-workloads/standard_workloads.py --out DIR [--rows FILE] [--served FILE] [--base REV]
+                                                            [--restated PLAN.json]
     python islands/standard-workloads/standard_workloads.py --put DIR/console/standard-workloads.json --served FILE
 
 The build is a research run on a node (the agent VM only edits), from benchmarks/covert_witness with `--out` under the
@@ -91,11 +92,20 @@ where its note cites no stored tables; then it GETs the panel and compares it wi
 the command at this checkout's commit and the integrator's commit it builds on (`commits`: `--base`, else their merge
 base on origin, which a node's checkout hasn't), refused where te_core or the island has uncommitted changes, which
 neither commit holds.
+
+`--restated PLAN.json` (the scorer's restate.py plan) reads each run the plan restates with its record's tokens a step
+restated (`restated`): the record is restate.py's, refused unless it is the record the plan read and its restating the
+plan's, and each stored trace of the run is read against the restated count of its step, its `step_tokens` and its
+products block's `tokens` that count and its `token_factor` the trace's own tokens over it, the three fields in which
+a trace of the restated record differs from a trace of the record as it is. The row's details say so (`restated` in
+what it read).
 """
 from __future__ import annotations
 
 import argparse
+import copy
 import dataclasses
+import hashlib
 import json
 import math
 import os
@@ -401,14 +411,52 @@ def past_last(structures: dict[str, dict], last: int) -> tuple[dict[str, dict], 
     return out, after
 
 
-def measured(row: dict, traced: dict[int, dict]) -> tuple[formalism.Measured, dict, dict]:
+def restated(raw: bytes, entry: dict, traced: dict[int, dict]) -> tuple[dict, dict[int, dict]]:
+    """A run's record (`raw`, its run.json's bytes) with its tokens a step restated by the run's `entry` of a plan
+    (the scorer's restate.py), and the run's stored traces read against it (module docstring). Refused where `raw`
+    isn't the record the plan read, or its restating isn't the plan's."""
+    sys.path.insert(0, str(CW / "scorer"))
+    try:
+        import restate
+    finally:
+        sys.path.remove(str(CW / "scorer"))
+    if hashlib.sha256(raw).hexdigest() != entry["before_sha256"]:
+        raise SystemExit(f"{PANEL}: --restated: the stored record isn't the one the plan read")
+    record = json.loads(raw)
+    restate.restate(record, entry["factor"], entry["tokens"])
+    if hashlib.sha256(restate.encode(record)).hexdigest() != entry["after_sha256"]:
+        raise SystemExit(f"{PANEL}: --restated: the restated record isn't the plan's")
+    tokens = {s["step"]: s.get("tokens") for s in record["steps"]}
+    out = {}
+    for step, t in traced.items():
+        t = copy.deepcopy(t)
+        for f in (t["trace"].get("formalism"), (t["trace"].get("structure") or {}).get("formalism"), t.get("measured")):
+            if not isinstance(f, dict) or "step_tokens" not in f:
+                continue
+            block = f.get("products")
+            if isinstance(block, dict) and "tokens" in block:
+                if block["tokens"] != f["step_tokens"]:
+                    raise SystemExit(f"{PANEL}: --restated: step {step}'s products block counts {block['tokens']} "
+                                     f"tokens, not the record's {f['step_tokens']}")
+                block["tokens"] = tokens[step]
+            f["step_tokens"] = tokens[step]
+            f["token_factor"] = f["tokens"] / tokens[step] if tokens[step] and f.get("tokens") else 1.0
+        out[step] = t
+    return record, out
+
+
+def measured(row: dict, traced: dict[int, dict], entry: dict | None = None) -> tuple[formalism.Measured, dict, dict]:
     """A row's quantities: its run's last checkpoint, or its rounds (`rounds`; a learner row's with its training
     steps), ingested with the run's `traced` steps' structures, each structure's its latest traced step's
     (`structures` in what the row read); the start's shape and what the row read, a distillation run's student's shape
     among it (`student`, from the run's notes), a rounds row's traced rounds' tokens beside their forward positions
     (`axis`) and a learner row's parts, their shares of its gates (`part_names`, `shares`) and its learner's tokens."""
     root = fetch(row["art"], "run/run.json", "meta.json")
-    record = json.loads((root / "run" / "run.json").read_text())
+    raw = (root / "run" / "run.json").read_bytes()
+    if entry is None:
+        record = json.loads(raw)
+    else:
+        record, traced = restated(raw, entry, traced)
     meta = json.loads((root / "meta.json").read_text())
     shape, tensors = start(record["start"]["name"])
     notes = meta.get("notes") or {}
@@ -424,7 +472,8 @@ def measured(row: dict, traced: dict[int, dict]) -> tuple[formalism.Measured, di
     read = {"traces": [{"step": step, "struct": by_step[step], "art": t["from"], "te_core": t["te_core"],
                         "measured": {k: t["measured"].get(k) for k in TRACE_FACTS}}
                        for step, t in sorted(traced.items())], "structures": latest} | (
-        {"past_last_step": after} if after else {})
+        {"past_last_step": after} if after else {}) | (
+        {} if entry is None else {"restated": {"record_sha256": entry["after_sha256"], "factor": entry["factor"]}})
     learner, at = bool(row.get("learner")), round_at(notes) if row.get("rounds") else {}
     if row.get("rounds"):
         if not traced:
@@ -635,9 +684,10 @@ def source(revs: tuple[str, str, str]) -> str:
     return f"python islands/{NAME}/{Path(__file__).name} at {head} (te_core {VERSION}, on {branch} at {base})"
 
 
-def build(spec: dict, revs: tuple[str, str, str], stamp: str | None = None) -> tuple[dict, list[dict]]:
+def build(spec: dict, revs: tuple[str, str, str], stamp: str | None = None,
+          plan: dict | None = None) -> tuple[dict, list[dict]]:
     """The panel and each row's details (module docstring) from the rows file's `spec`, its source at `revs`
-    (`commits`'s)."""
+    (`commits`'s); a run with an entry in `plan` (a restate.py plan's `restated`) is read restated."""
     tr = traces(spec.get("traces", []))
     rows, details = [], []
     for r in spec["rows"]:
@@ -650,7 +700,9 @@ def build(spec: dict, revs: tuple[str, str, str], stamp: str | None = None) -> t
             read = {"modelled": r["modelled"], "derived": model.derived}
             run = f"{MODELLED} ({r['modelled']})"
         else:
-            m, shape, read = measured(r, tr.get(r["run"], {}))
+            entry = (plan or {}).get(r["run"])
+            m, shape, read = (measured(r, tr.get(r["run"], {})) if entry is None
+                              else measured(r, tr.get(r["run"], {}), entry))
             fwd = read.get("forward_positions")
             if bad := (token_dials(r["dials"], read["learner_tokens"], "its learner's tokens are", fwd)
                        if r.get("learner") else token_dials(r["dials"], m.tokens) if fwd is None else
@@ -832,13 +884,17 @@ def main(argv=None) -> int:
                     help="the panels the route served when the build launched (te_core.console.served()'s, as JSON)")
     ap.add_argument("--base", help="the commit of the integrator's branch this checkout builds on (default: their "
                                    "merge base on origin)")
+    ap.add_argument("--restated", type=Path, metavar="PLAN",
+                    help="read each run this plan restates (the scorer's restate.py plan) with its record's tokens a "
+                         "step restated, and its stored traces against the restated count")
     a = ap.parse_args(argv)
     sent = json.loads(a.served.read_text()) if a.served else None
     if a.put:
         if sent is None:
             raise SystemExit(f"{PANEL}: --put needs --served, the panels the route served when the build launched")
         return put(a.put, sent)
-    p, details = build(json.loads(a.rows.read_text()), commits(a.base))
+    plan = json.loads(a.restated.read_text())["restated"] if a.restated else None
+    p, details = build(json.loads(a.rows.read_text()), commits(a.base), plan=plan)
     q = p | {"note": note(p, cite(a.out), details)}
     if bad := refused(q):
         raise SystemExit(f"{PANEL}: the panels route refuses it: {'; '.join(bad[:5])}")

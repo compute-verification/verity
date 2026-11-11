@@ -172,3 +172,8 @@ The rules a rebuild follows:
   is a `replot.py node` on a scratch state of its own.
 - **A run whose restated record does not trace** keeps its record as it is and the published trace of it; `correct.sh`
   lists those runs.
+
+The standard-workloads panel reads two of the search's records through its own stored traces. Its builder takes the
+plan `correct.sh` wrote and reads those runs restated, each stored trace against the restated count of its step
+(`islands/standard-workloads/standard_workloads.py --out DIR --base REV --restated PLAN.json`, its docstring); a
+build without `--restated` beside it is what the correction is compared with.
