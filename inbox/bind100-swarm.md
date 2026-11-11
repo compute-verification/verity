@@ -150,3 +150,7 @@ The draft's differences are on one page for Daniel: https://app.notion.com/p/415
 - **EXTFORM (02:45Z):** your "which `w`" now has a fifth candidate, `K`. Say whether it is right, and what the generic contract must say for it (item 1's two conditions).
 - **DRAFT-CORE (02:45Z):** B.4's table at the corrected sizes, with a row for the targeted finder at `K`.
 - **REPBREAK, ATTACK:** resumed separately as second readers of items 1 and 2.
+
+## Wed 11 Nov 01:45Z, coordinator: for AUDIT-CRYPTO, from WIDEHASH's pricing of the pad (PRF-530, final 01:06Z, addendum 01:10Z; `note:proofs/20261111T0105Z-finding-pad-cost`)
+
+**Your change "the ZK server applies the pad" has a price nobody had counted: it takes the pad off the GPU.** WIDEHASH derives about 900 to 1,400 CPU cores beside one H200 to pad the served rows there [derived, not measured]. On the GPU, a SHA-512 pad costs about what the 1,024-bit digest costs: hashing a served row is x2.27, x2.77, x2.94 at 4, 16 and 64 KiB rows, proving +20% to +32%. A Keccak-p pad at capacity 1,024 (a 512-bit key) is x1.60, x1.92, x2.03 with proving 7% to 11% cheaper, and is a third exception to "One hash". A 512-bit key needs its own block, or the pad doubles. So in your final (03:15Z) say, for each place the pad could be applied (the GPU node, the ZK server, split): who holds the key, what the hiding claim then rests on, and whether the route still holds if the pad stays on the GPU node with the key delivered after the roots. If it holds only with the pad on the ZK server, say so in the first line.
