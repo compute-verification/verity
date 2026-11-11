@@ -10,6 +10,9 @@ It is idempotent and reruns on any later main: a file still at an old path moves
 rewritten, and what is already moved is left alone. It refuses a dirty worktree, and it fails when a tracked file under a
 retired directory has no destination, so a file that lands on main later gets a row in the map rather than a guess.
 
+A text file is one with no NUL in its first 8 KiB. One of more than `TEXT_LIMIT` bytes is not read, and the move stops and
+names it rather than leave its lines as they were, until the map excludes it; a Lean lock is read whatever its size.
+
 What it rewrites, in every tracked text file the map doesn't exclude:
 - paths: root-relative ones (`packages/verity/src/verity/ir/cut.py`, also after `{ROOT}/`, `$ROOT/` or `~/verity/`, and
   after each prefix the map lists as standing for the root: [rewrite] root_prefixes, `/opt/vy-verifier/current/`),
@@ -47,8 +50,9 @@ not run by path (`tests/`, `lean/`), gets an `__init__.py` in each directory fro
 left where a package held more and now holds only such files is deleted with the package. It appends [paths] to research's
 `moves.json` (once), each row whose path the tree has, and never rewrites the moves recorded there.
 
-It fails on a rewritten reference to a directory the map splits across destinations (`backends/flock/` to `verity/ml/flock/`
-with its `verifier/lean/` to `verity/core/service/flock/`): the rewrite follows the larger part, so a gate that named the
+It fails on a rewritten reference to a directory the map splits across destinations (`verity/ml/flock/` to
+`verity/protocols/flock/prover/` with its `verifier/` to `verity/protocols/flock/agreement/`): the rewrite follows the
+larger part, so a gate that named the
 whole would no longer cover the part that left. [split] acknowledges each one it may let through, by file and directory,
 with the reason; one that no longer occurs is an error too. Where the file means another part, the row names it
 (`"old file: old directory" = { to = "verity/core/service/flock", why = "..." }`), and the file's references to the
@@ -76,7 +80,9 @@ from pathlib import Path
 HERE = Path(__file__).resolve().parent
 _ROOT_JOIN = "\x00root\x00"
 IDENT = re.compile(r"[A-Za-z_]\w*\Z")
+#: the largest text file the rewrite reads, a Lean lock apart, which it reads whatever its size
 TEXT_LIMIT = 4 << 20
+LOCK = "lean-audit.json"
 #: old paths that the move empties, when the map has no [retired]; a tracked file left under one has no row in the map
 RETIRED = ("packages/", "protocols/", "census/", "backends/gkr/", "backends/direct/", "backends/ligero-verify/",
            "backends/ligerito-verify/", "backends/sp1/", "backends/vole/", "backends/redteam/", "backends/shared/",
@@ -415,6 +421,24 @@ def alternation(words) -> str:
     return regex(trie)
 
 
+def oversize(src: Path) -> bool:
+    """Whether `src` is left unread for its size alone: more than `TEXT_LIMIT` bytes of text (no NUL in its first 8 KiB) that
+    is no Lean lock. A move never leaves such a file as it is without saying so: it stops and names it (`refuse_unread`)."""
+    if src.name == LOCK or src.stat().st_size <= TEXT_LIMIT:
+        return False
+    with open(src, "rb") as f:
+        return b"\0" not in f.read(8192)
+
+
+def refuse_unread(unread: dict[str, int]):
+    """Stop a move that would leave `unread` (path -> bytes, the text files `oversize` names) with every line as it was."""
+    if unread:
+        raise SystemExit(f"text files over {TEXT_LIMIT} bytes, which the move would leave unread, with every path and name in "
+                         "them as it was:\n" + "".join(f"  {p} ({n} bytes)\n" for p, n in sorted(unread.items()))
+                         + "exclude in the map one that names nothing the move changes, or raise TEXT_LIMIT in "
+                         "tools/move/layout.py")
+
+
 # ------------------------------------------------------------------------------------------------------------- the run
 
 class Run:
@@ -428,6 +452,7 @@ class Run:
         self.dropped: list[str] = []                # old paths of the files [drop] deletes
         self.leftover: list[str] = []               # the `__init__.py` files left alone in the packages the move empties
         self.splits: dict[str, str] = {}            # "old file: old directory" -> a rewrite of a split directory's reference
+        self.unread: dict[str, int] = {}            # old path -> bytes, for the text files left unread for their size alone
 
     def note(self, kind: str, what: str):
         self.notes[kind].append(what)
@@ -671,11 +696,15 @@ class Run:
         return json.dumps([d.get("guarantees"), d.get("reads")], sort_keys=True)
 
     def _read(self, p: str) -> str | None:
+        """The text of `p` as it will be written, or None for a file that isn't text (a NUL in its first 8 KiB, or not UTF-8)
+        or is over `TEXT_LIMIT` and no Lean lock: one `oversize` names goes to `unread`, unless the map excludes it."""
         if p in self.texts:
             return self.texts[p]
         src = self.root / (p if not self.dry else self.old_of.get(p, p))
         try:
-            if src.stat().st_size > TEXT_LIMIT:
+            if (size := src.stat().st_size) > TEXT_LIMIT and src.name != LOCK:
+                if oversize(src) and not self.L.excluded(old := self.old_of.get(p, p), p):
+                    self.unread[old] = size
                 return None
             raw = src.read_bytes()
         except OSError:
@@ -1936,6 +1965,7 @@ def main(argv: list[str] | None = None) -> int:
     run.move(moves)
     run.create()
     run.rewrite_all()
+    refuse_unread(run.unread)
     unacknowledged, stale = run.unacknowledged_splits()
     if a.report_splits:
         for x in unacknowledged:

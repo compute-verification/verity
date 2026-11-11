@@ -33,7 +33,8 @@ after-landing run on `checked`'s tip.  It reports each step's real verdict; what
                                                             `--deferred` and `--no-cache` run: an Attempt of the clean commit
                                                             checked out, the record `research merge` reads; with presigned URLs
                                                             for the pinned upstream build and inputs when the commit changes
-                                                            verity/protocols/flock/ against --base REF (default origin/main; also
+                                                            verity/protocols/flock/ (but sigma/, a README.md or PROTOCOL.md)
+                                                            against --base REF (default origin/main; also
                                                             ratchet-gate's base unless --ratchet-base REF is given), the pinned
                                                             Lean dependency bundles and the newest recorded checks' verdict
                                                             packs (`verdict_url_file`), which the run fetches and the launch
@@ -180,7 +181,7 @@ doesn't name:
                     `verity.circuits.partition` (`unit_cut_agree.py`), then its agreement with upstream's Rust verifier (`ci.py`) on
                     the upstream build stored once and pinned by hash (`verity/protocols/flock/agreement/upstream.json`), which the step
                     fetches when the run was sent its presigned URLs (`agreement_url_file`); skipped by name without them.
-                    `research merge` requires it for a change under verity/protocols/flock/ (`tool.py`)
+                    `research merge` requires it for a change under verity/protocols/flock/ (but sigma/, a README.md or PROTOCOL.md; `tool.py`)
     lean-suites     once lean-build has passed, beside the rest of the lean group: the suites that use Lean (`AFTER_LEAN`,
                     outcomes in `suites-lean.json`) on the verifier it built
     lean-audit      at once with the lean group: the audit of every Lake package with a `lean-audit.json` (`lean_audit.py`,
@@ -262,7 +263,8 @@ fetched (Flock's `verifier/ci.py` hands the custody key to its store CLI too).
 
 The vLLM reference regression.  A recorded run's steps also get VERITY_REGRESSION=1, so adapters/vllm's suite runs
 `tests/regression`'s T0 tier against the frozen rows in the store (about four minutes of tests): every check but the manifest
-rebuilds, which take an hour and run after each train on main instead (`post_train.py`).  Under VERITY_STORE_REQUIRED=1 a row's
+rebuilds, which take an hour and run after each train on main instead (`post_train.py`).  The quick tier before a mark
+(`research queue ready`) and suites.py inside a `research run` set it too, so a PR that breaks a row fails there first.  Under VERITY_STORE_REQUIRED=1 a row's
 input or contract that doesn't resolve fails there; only a check `fixtures.toml` retires on a row, with its reason, skips.
 """
 from __future__ import annotations
@@ -924,7 +926,7 @@ def lean_steps(out: Path, cache: bool = True, urls: Path | None = None,
         return [("lean", "skipped: verity/protocols/flock/verifier is not on this tree", ROOT)]
     verify = lean / ".lake" / "build" / "bin" / "flock-verify"
     agreement: list[str] | str = ("skipped: the pinned upstream build was not sent (a merge changing verity/protocols/flock/ "
-                                  "requires this step: `check.py --record` sends its URLs)")
+                                  "(but sigma/, a README.md or PROTOCOL.md) requires this step: `check.py --record` sends its URLs)")
     if UPSTREAM_PIN.exists() and agreement_urls is not None:
         try:
             got = agreement_sent(agreement_urls)
