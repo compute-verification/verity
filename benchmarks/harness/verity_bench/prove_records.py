@@ -58,7 +58,7 @@ REPORTS, TYPES = "*/server-k*/server.json", "types.json"
 ROW_FIELDS = ("statements_per_s", "provers", "warm", "sessions", "accepted", "refused_n", "exits", "flat", "gpus",
               "stage.k_log", "stage.blocks", "stage.full")
 #: each fleet's assumed serving MFU
-FLEETS = Path("benchmarks/rho/data/reference.toml")
+FLEETS = Path("verity/protocols/inference_only/rho/data/reference.toml")
 SYSTEMS = ("flock", "spot")
 #: the block types with no figure the rendered table names, the most blocks first; `--json` names every one
 MISSING_NAMED = 8
