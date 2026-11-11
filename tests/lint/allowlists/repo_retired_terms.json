@@ -2555,6 +2555,7 @@
     {"file": "security/Proofs/Properties/Nci/RecordRead.lean", "count": 3},
     {"file": "security/Proofs/Properties/Nci/RecordRowBits.lean", "count": 7},
     {"file": "security/Proofs/Properties/Nci/RecordSameSlot.lean", "count": 4},
+    {"file": "security/Proofs/Properties/Nci/RecordServed.lean", "count": 20},
     {"file": "security/Proofs/Properties/Nci/RecordSlots.lean", "count": 4},
     {"file": "security/Proofs/Properties/Nci/RecordTakes.lean", "count": 4},
     {"file": "security/Proofs/Properties/Nci/RecordTally.lean", "count": 4},
