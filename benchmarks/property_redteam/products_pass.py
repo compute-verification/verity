@@ -9,7 +9,7 @@ and a bitwise codec computes any function with them for free otherwise, `Account
 EncodeChainRefuted`, `bitwise_codec.py`). Every other nonlinear op is a budgeted unit, as property/v1 counts it.
 `Property` caps the data products per certified byte read, beside the budgeted classes.
 
-`ProductsPass` is property/v1's pass (`verity.ml.circuits.stacking`) that also counts each family step's data products,
+`ProductsPass` is property/v1's pass (`verity.definitions.circuits.stacking`) that also counts each family step's data products,
 lane by lane, under ``units["products"]``. A lane reads one leaf of each multiplicand, whose run dependence is its
 producer's (a node's output segment) or, for a leaf of the Definition's parameter, the parameter's, as the pass reads
 parameters. A batch or scan of a family step, which the int8 Definitions don't have, counts all its lanes when both
@@ -30,9 +30,9 @@ from __future__ import annotations
 import json
 from typing import Any, Sequence
 
-from verity.ml.circuits import stacking as P
-from verity.ml.circuits.defs import CompositeDefinition, PrimitiveDefinition, bind
-from verity.ml.circuits.program import is_input
+from verity.definitions.circuits import stacking as P
+from verity.circuits.defs import CompositeDefinition, PrimitiveDefinition, bind
+from verity.circuits.program import is_input
 
 #: (Definition, statics, which parameters depend on a run input): the served shapes measured, Llama-3.1-8B's head dim
 SHAPES: tuple[tuple[str, dict, tuple[bool, ...]], ...] = (
@@ -95,7 +95,7 @@ def census(fn: Any, dyn: Sequence[bool], ranges: Sequence[P.Range] | None = None
 
 def int8_census(shapes: Sequence[tuple[str, dict, tuple[bool, ...]]] = SHAPES) -> dict[str, dict]:
     """`census` of each exact-int8 Definition at its shape, with property/v1's own class counts beside it (`stacking.count`)."""
-    from verity.ml.definitions.registry import int8_exact as I8
+    from verity.definitions.registry import int8_exact as I8
 
     out = {}
     for name, statics, dyn in shapes:
