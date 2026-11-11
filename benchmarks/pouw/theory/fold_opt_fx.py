@@ -175,7 +175,10 @@ def fx_chain(w: int, n: int, tile: int = 0, e: int = 0) -> int:
     t = w & M32
     for i in range(n):
         c = (4 * tile + e) * 32 + i
-        t = u32(t * key_mul(1, c)) if (n - i) % 2 == 1 else u32(t ^ key_xor(1, c))
+        if (n - i) % 2 == 1:
+            t = u32(t * key_mul(1, c))
+        else:
+            t = u32(t ^ key_xor(1, c))
     return t
 
 
