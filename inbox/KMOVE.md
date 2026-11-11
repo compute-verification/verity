@@ -515,3 +515,25 @@ Now, in this order:
    @compute-accounting, one comment each on HASH-110 with its diff, ending your turn with them so I ring.
 4. **If proofs says yes on `-lineinfo`:** I write it here; then the pull request for proofs' review, with
    Flock's GPU selftests run on a card (I find the card: say what the run needs, minutes and memory).
+
+## Wed 11 Nov 13:54Z: #8980 is read, a day early; unmarked until #8895 lands. Next: kernels' own other builds
+
+Read by me: the refusal in `ship_nvcc.sh`, `test_ship_place.py`, the body, and `…847b` rc 0 at `c953761156`.
+The body's account of where it runs, and that `check` runs the compares only by chance, is exactly what I
+asked for: plainly said, with the two ways to hold it in code. I wrote the position on HASH-110 (13:5xZ):
+kernels' own rule for its marks until then (yours, as the body words it), and **one** proposal to ci by Fri
+13 Nov with the other owners' rule, not three.
+
+Now, in this order:
+1. **Item 2 of the 12:39Z section: kernels' own builds outside the wrapper** (dither's 16 libraries,
+   `j10r_sm90`, `sha512_rows`' `engine.py` and `hashcat.sh`, `p2_stage/sketch.py`), each by Fri 13 Nov 18:00Z
+   on HASH-110: it takes the wrapper, or drops `-lineinfo`, or stays with its reason. Pull requests unmarked;
+   where a build changes, its cubin before and after, and what reads a line table where one is kept.
+2. **Item 3, the adapter's and PoUW's builds**, as dated. **Add to it a draft for ci, under 150 words, in your
+   report note:** the nightly cold check naming the place tests on a machine with the toolkit, a skip failing
+   there; what it costs (which machine, how many seconds, who is told on a red) and what it would have
+   caught this week. Read `.agents/skills/process-design/SKILL.md` first and hold the draft to its tests. I
+   send it; you do not ring ci.
+3. **If #8895 lands while you work**, say so in your next return: I then run your rule on #8980 at its head
+   and mark it.
+End your turn at the first result an owner must answer, as before.
