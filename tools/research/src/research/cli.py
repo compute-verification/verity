@@ -557,6 +557,14 @@ def _cmd_run(argv: list[str], clones: list[Path]) -> int:
     if ns.claimed and (remote_info or {}).get("gpus"):
         apply_env.pop("CUDA_VISIBLE_DEVICES", None)          # launch_request hid the GPUs (or gpu-lease names them): --env can't undo it
     apply_env = {**clone_env, **apply_env}
+    store_toml, key_env = None, ()
+    if ns.job_user and ns.store_read_dir:
+        # --store-read's key, for a unit that sees no launch request: its store.toml is copied into the run's control/
+        # (jobuser.prepare) and named there, and its variables pass like the run's own --env
+        from .store import custody as CU
+
+        store_toml, key_env = Path(ns.store_read_dir) / CU.STORE_TOML, CU.KEY_ENV
+        apply_env = {"RESEARCH_STORE_CONFIG": os.path.join(job_dir, jobuser.STORE_CONFIG), **apply_env}
     saved_env = {k: os.environ.get(k) for k in apply_env}
     os.environ.update(apply_env)
     spawn, mode, unsafe = command, None, []
@@ -564,12 +572,12 @@ def _cmd_run(argv: list[str], clones: list[Path]) -> int:
         # inside a queued GPU phase's lease (the request's workload wrap), so gpu-lease and its bookkeeping stay the runner's
         wrap = list(_request(ns.remote_json).get(remote.QUEUE_WORKLOAD_WRAP) or []) if ns.claimed else []
         n = len(wrap) if wrap and command[: len(wrap)] == wrap else 0
-        spawn = [*command[:n], *jobuser.spawn_argv(command[n:], ns.job_user, jobuser.unit_name(run_id), list({**clone_env, **env_map}),
-                                                   ns.job_namespaces)]
+        spawn = [*command[:n], *jobuser.spawn_argv(command[n:], ns.job_user, jobuser.unit_name(run_id),
+                                                   list({**clone_env, **env_map, **dict.fromkeys(key_env)}), ns.job_namespaces)]
     print(f"research: run {run_id} -> {run_dir}" + (f"  cwd={a.cwd}" if a.cwd else ""), file=sys.stderr)
     try:
         if ns.job_user:
-            mode = jobuser.prepare(job_dir)
+            mode = jobuser.prepare(job_dir, store_toml)
         rc = harness_run(a, spawn)
     finally:
         if mode is not None:            # before anything reads the run dir

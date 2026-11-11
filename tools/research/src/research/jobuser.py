@@ -22,6 +22,11 @@ kernel's rules it gains nothing over the host by them: the mounts the unit made 
 namespace owns (mount_namespaces(7)), so nothing hidden comes back and nothing read-only turns writable, a new network
 namespace has no way out, and every other property of the unit holds as before.
 
+With `--store-read` the workload's read-only store key reaches the unit: its variables (store.custody.KEY_ENV) pass like the
+run's own --env, and its store.toml, staged among the launch requests the unit doesn't see, is copied into the runner's
+control/ (prepare; finish removes it), where RESEARCH_STORE_CONFIG then names it.  Without it no AWS_ name passes unless the
+run's --env names it.
+
 The runner opens its run dir and its out/ to the job (prepare: sticky and world-writable, so the kernel's protected_symlinks and
 protected_regular keep it from following or opening what the job leaves at the top) and, once the harness returns and before
 anything reads the run dir, finish() waits for the unit to be gone, deletes as root every entry the job left that is neither a
@@ -36,6 +41,7 @@ import grp
 import os
 import pwd
 import re
+import shutil
 import signal
 import stat
 import subprocess
@@ -49,6 +55,7 @@ from .telemetry.run import OUT_DIR
 SUDO = ("sudo", "-n")
 UNIT_PREFIX = "research-job-"
 ENV_FILE = Path("control") / "job.env"          # run-dir relative, in the runner's control/ (the job can't write there)
+STORE_CONFIG = Path("control") / "store.toml"   # beside it: a --store-read run's store.toml, which holds no secret, for the job to read
 #: the namespace types a run may ask its unit to allow (--job-namespaces), as RestrictNamespaces= spells them; none by default
 NAMESPACES = ("mnt", "net", "user")
 SYSTEM_PATH = "/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
@@ -246,13 +253,20 @@ def supervise(argv: list[str], unit: str, popen=subprocess.Popen, run=subprocess
     return rc, (got[0] if got else None)
 
 
-def prepare(run_dir: str) -> int:
-    """Runner side, before the harness: the runner's control/ in place, then the run dir and its out/ ($OUT) opened to the job.
-    Returns the run dir's mode."""
+def prepare(run_dir: str, store_config: str | Path | None = None) -> int:
+    """Runner side, before the harness: the runner's control/ in place, with a copy of `store_config` (a --store-read run's staged
+    store.toml) for the job to read as STORE_CONFIG, then the run dir and its out/ ($OUT) opened to the job.  Returns the run
+    dir's mode."""
     st = os.lstat(run_dir)
     if not stat.S_ISDIR(st.st_mode) or st.st_uid != os.getuid():
         raise Refused(f"{run_dir} is not a directory this user owns")
-    os.makedirs(os.path.join(run_dir, "control"), exist_ok=True)    # the harness's timeout control and the env file
+    control = os.path.join(run_dir, "control")
+    os.makedirs(control, exist_ok=True)                             # the harness's timeout control and the env file
+    if store_config:
+        copy = os.path.join(run_dir, STORE_CONFIG)
+        shutil.copyfile(store_config, copy)
+        os.chmod(control, 0o755)                                    # whatever the runner's umask: the job reads the copy, and
+        os.chmod(copy, 0o644)                                       # writes neither it nor anything beside it
     os.makedirs(os.path.join(run_dir, OUT_DIR), exist_ok=True)
     for d in (run_dir, os.path.join(run_dir, OUT_DIR)):
         os.chmod(d, 0o1777)
@@ -265,7 +279,8 @@ def finish(run_dir: str, unit: str, user: str, uid: int, mode: int, run=subproce
     the rest to this user, and give the run dir and its out/ that mode back.  Returns what was deleted and what the job user still
     owns."""
     run([*SUDO, "systemctl", "stop", unit], capture_output=True)            # waits out a stop in progress; a no-op once gone
-    (Path(run_dir) / ENV_FILE).unlink(missing_ok=True)
+    for p in (ENV_FILE, STORE_CONFIG):
+        (Path(run_dir) / p).unlink(missing_ok=True)
     r = run([*SUDO, "find", "-P", run_dir, "-mindepth", "1", "-user", user, "!", "-type", "d", "!", "-type", "f", "-print",
              "-delete"], capture_output=True, text=True)
     removed = [os.path.relpath(p, run_dir) for p in (r.stdout or "").splitlines() if p]

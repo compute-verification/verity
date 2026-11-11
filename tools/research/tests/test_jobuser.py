@@ -1,7 +1,8 @@
 """`research run --job-user USER`: the workload runs as USER in a transient system unit (no new privileges, no home, an empty /run,
 a clean environment), the runner keeps its records as itself, and nothing reads the run dir until the unit is gone and what the
-job left there is safe to read.  The unit makes no namespace but the types `--job-namespaces` lists, of user, mnt and net only.
-No test needs a real job user or systemd: the command runner is injected and each argv asserted."""
+job left there is safe to read.  The unit makes no namespace but the types `--job-namespaces` lists, of user, mnt and net only,
+and a `--store-read` key reaches it.  No test needs a real job user or systemd: the command runner is injected and each argv
+asserted."""
 from __future__ import annotations
 
 import dataclasses
@@ -17,6 +18,7 @@ from types import SimpleNamespace
 import pytest
 
 from research import cli, jobuser, remote
+from research.store import custody as CU
 
 PY = sys.executable
 SRC = str(Path(remote.__file__).resolve().parents[1])
@@ -339,8 +341,8 @@ def test_a_tree_that_predates_job_users_is_refused_before_anything_ships(tmp_pat
 
 @pytest.fixture
 def local(tmp_path, monkeypatch):
-    """A local `research run --job-user vyjob`: its harness a stand-in that records what it was given to spawn and how open the run
-    dir was then, and finish()'s root commands recorded."""
+    """A local `research run --job-user vyjob`: its harness a stand-in that records what it was given to spawn, in what environment,
+    how open the run dir was then and the store.toml the job would find there, and finish()'s root commands recorded."""
     monkeypatch.setattr(jobuser, "check_user", lambda name: passwd(name))
     monkeypatch.setattr(jobuser, "UNREACHABLE", ())
     monkeypatch.setattr(cli, "_survive_stray_signals", lambda: None)
@@ -351,7 +353,9 @@ def local(tmp_path, monkeypatch):
     def harness(a, cmd):
         from research.telemetry.job import set_status
 
-        got.update(cmd=cmd, mode=stat.S_IMODE(Path(a.attempt_dir).stat().st_mode))
+        cfg = Path(a.attempt_dir) / jobuser.STORE_CONFIG
+        got.update(cmd=cmd, mode=stat.S_IMODE(Path(a.attempt_dir).stat().st_mode), env=dict(os.environ),
+                   store_config=(stat.S_IMODE(cfg.stat().st_mode), cfg.read_text()) if cfg.exists() else None)
         set_status(Path(a.attempt_dir), "done", rc=0, signal=None)
         return 0
 
@@ -417,6 +421,38 @@ def test_a_run_on_a_machine_hands_the_launch_its_namespaces(tmp_path, monkeypatc
     base = ["run", "--runs-dir", str(tmp_path / "runs"), "--on", "m", "--project", "p", "--job-user", "vyjob"]
     assert cli.main([*base, "--job-namespaces", "user,net,mnt", "--", "true"]) == 0 and cli.main([*base, "--", "true"]) == 0
     assert seen == [("vyjob", NAMESPACES), ("vyjob", ())]
+
+
+def test_a_store_read_key_reaches_the_unit_and_without_one_no_aws_name_passes(local, tmp_path, monkeypatch):
+    """The machine's runner holds the key as launch_request left it: the three variables in its environment and a store.toml among
+    the launch requests, which the unit doesn't see."""
+    runs_root, got, _ = local
+    staged = tmp_path / "root" / "requests" / "q1"
+    read = staged / remote.STORE_READ_DIR
+    read.mkdir(parents=True)
+    toml = f'[remote]\ntype = "fs"\npath = "{tmp_path / "vault"}"\n'
+    (read / CU.STORE_TOML).write_text(toml)
+    (read / CU.STORE_TOML).chmod(0o600)
+    (staged / "request.json").write_text(json.dumps({"env": {}}))
+    key = dict.fromkeys(CU.KEY_ENV, "dummy")
+    for k, v in {**key, "RESEARCH_STORE_CONFIG": str(read / CU.STORE_TOML)}.items():
+        monkeypatch.setenv(k, v)
+    base = ["run", "--runs-dir", str(runs_root), "--claimed", "--remote-json", json.dumps({"request": str(staged / "request.json")}),
+            "--job-user", "vyjob", "--no-sampler"]
+    for run_id in ("q1", "q2"):
+        (runs_root / run_id).mkdir(parents=True)
+    (read / CU.CRED_FILE).write_text("{}")
+    assert cli.main([*base, "--id", "q1", "--store-read-dir", str(read), "--", "true"]) == 0
+    passed = [got["cmd"][i + 1] for i, x in enumerate(got["cmd"]) if x == "--pass"]
+    assert passed == sorted(CU.KEY_ENV)
+    assert got["store_config"] == (0o644, toml), "a copy in the runner's control/, which the job reads and can't write"
+    env = jobuser.job_env(got["env"], passed)
+    assert {k: env[k] for k in key} == key and env["RESEARCH_STORE_CONFIG"] == str(runs_root / "q1" / "control" / "store.toml")
+    assert not (runs_root / "q1" / "control" / "store.toml").exists() and not (read / CU.CRED_FILE).exists(), "gone with the workload"
+    assert os.environ["RESEARCH_STORE_CONFIG"] == str(read / CU.STORE_TOML), "the runner's own environment is back"
+    assert cli.main([*base, "--id", "q2", "--", "true"]) == 0
+    assert "--pass" not in got["cmd"] and got["store_config"] is None
+    assert not [k for k in jobuser.job_env(got["env"], []) if k.startswith("AWS_")], "what the runner holds stays the runner's"
 
 
 def test_a_run_dir_the_job_user_still_owns_part_of_is_not_published(local, monkeypatch, capsys):
