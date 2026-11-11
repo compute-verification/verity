@@ -126,4 +126,13 @@ file that would change what the map says (a row for a path the map sends elsewhe
 path the map names, a module the map renames another way) and a row no tracked file is at or under. A file under a
 directory the map does not retire is not stopped: it stays unless a directory row or a row of the rows file moves it.
 
+A branch that shares with `main` a commit a move's base lacks is based after that move, whose script never runs on it:
+the move's last merge would bring those commits in a second time. Where a later move's base contains that move, it is
+skipped and named (`skipped`): the later move's base merge brings it in, as a merge of `main` would, and the owner looks
+for its map's old names in what the branch adds. A crossing that skipped a move reports `clean-skipped`, never `clean`,
+pushes nothing and exits 1, and prints the command that crosses the same moves named (`--move-commit` for each, `--onto`),
+which skips none: running it is the owner saying the skip is right. The last move, one no later move's base contains, and
+one named with `--move-commit` are never skipped: the branch is refused (`based-after`), and its owner merges `main`
+instead.
+
     uv run tools/verity/check/suites.py tools/move     # the tests (remotely: AGENTS.md "Tests")
