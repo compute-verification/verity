@@ -1,4 +1,4 @@
-"""The fixture of Flock's forged-proof negatives (`verity/ml/flock/tests/test_lean_forged_proofs.py`): M0 `--zk` sessions on
+"""The fixture of Flock's forged-proof negatives (`verity/protocols/flock/prover/tests/test_lean_forged_proofs.py`): M0 `--zk` sessions on
 one small A8 unit, staged by Flock's `UnitStager` bound to a template query's partition as A8's members are, N instances
 with every unit sampled (subset:N), each case's statement on the one circuit:
 
@@ -11,7 +11,7 @@ A tampered statement's rows and b || c agree with the outputs it commits, so onl
 with its self-check skipped (``FC_ZK_SELF_CHECK=skip``) and sends the proofs of the false witness; with the check, it sends
 none, and Lean refuses the session for want of a proof (A8's negative).
 
-    PYTHONPATH=<tree>:<tree>/verity/ml/flock/python:<tree>/integrations/vllm:<tree>/tools/verity/circuit_check/src:\\
+    PYTHONPATH=<tree>:<tree>/verity/protocols/flock/prover/python:<tree>/adapters/vllm:<tree>/tools/verity/circuit_check/src:\\
       <tree>/benchmarks/numerical/python python benchmarks/one_stage/forged_proofs.py --bin flock-circuit --lean flock-verify \\
       --work DIR --fixture DIR
 
@@ -37,11 +37,11 @@ sys.path.insert(0, str(HERE))
 
 import a0  # noqa: E402
 from circuit_check import targets as TG  # noqa: E402
-from verity.ml.circuits.codec import canonical_json, encode_program  # noqa: E402
-from verity.ml.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_V2 as V2  # noqa: E402
+from verity.circuits.codec import canonical_json, encode_program  # noqa: E402
+from verity.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_V2 as V2  # noqa: E402
 from verity_flock import circuit as FC  # noqa: E402
 from verity_flock import class_statement as CS  # noqa: E402
-from verity.core.protocols.spot.one_stage import partition as P  # noqa: E402
+from verity.protocols.spot.verifier.one_stage import partition as P  # noqa: E402
 
 #: A8's LlBf16DotprodGemm unit (K=6144 there) at the smallest K: x then w, K bf16 leaves each, one row of both
 K = 128

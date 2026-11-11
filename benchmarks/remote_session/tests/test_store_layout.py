@@ -26,13 +26,13 @@ sys.path.insert(0, str(HERE.parent))
 sys.path.insert(0, str(HERE.parents[2]))
 sys.path.insert(0, str(HERE))
 
-from verity.core.protocols.remote_bandwidth import store as rstore  # noqa: E402
+from verity.protocols.poub.verifier import store as rstore  # noqa: E402
 
 import engine  # noqa: E402
 import prover  # noqa: E402
 import store_layout as sl  # noqa: E402
-from verity.core.protocols.remote_bandwidth.session import verifier  # noqa: E402
-from verity.core.protocols.remote_bandwidth.session import wire  # noqa: E402
+from verity.protocols.poub.verifier.session import verifier  # noqa: E402
+from verity.protocols.poub.verifier.session import wire  # noqa: E402
 from test_session import P512, run  # noqa: E402
 
 ROLE = "synthetic-bf16"
