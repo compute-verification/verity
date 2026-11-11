@@ -14,17 +14,19 @@ forms are the planner's.
 ~~~sh
 uv run python benchmarks/spot_figures/figures.py --model GLM-5.3 --out DIR   # figure{1,1_overhead,2,3}.json, PNGs, SVGs
                                                        # [--request workload] [--workers N] [--points N] [--no-lean]
+                                                       # [--serving measured]
 uv run python benchmarks/spot_figures/total_cost.py render DIR/figure1.json  # Figure 1, from the JSON
 uv run python benchmarks/spot_figures/render.py DIR/figure1_overhead.json   # the bounds against proof overhead
 uv run python benchmarks/spot_figures/figure4.py DIR/figure1.json            # Figure 4 (figures.py writes it too)
 uv run python benchmarks/spot_figures/figure5.py SURFACE.json... [--path P] [--headline CARD]  # Figure 5
 uv run python benchmarks/spot_figures/figure6.py --advice A.json [--points P...] [--old-rule POINT...] --out DIR
 research data put --kind spot-figure/v1 --tree DIR --preserve                # for the console
+uv run python benchmarks/spot_figures/record.py stamp META.json [--out DIR]  # a serve's stamp: the switches it has off
 ~~~
 
 - **Cards** (`cards.py`, schema `spot-card/v1`): every number the figures read arrives as one JSON card in a slot
   (`workload`, `proof_overhead`, `commitment`, `replay`, `design`, `references`, `infiltration`,
-  `commit_hillclimb`, `serve_tax`, `partition`, `verifier_cost`, `headline`), for a model or for every model. `cards.py` holds each slot's fields and checks a card against
+  `commit_hillclimb`, `serve_tax`, `partition`, `verifier_cost`, `headline`, `serving_rate`), for a model or for every model. `cards.py` holds each slot's fields and checks a card against
   them. A card is published to the evidence store and kept in `cards/SLOT.MODEL.json` with its art id; a model's
   `references` cards add up, each kept as `cards/references.MODEL.ART.json`:
 
@@ -57,11 +59,34 @@ research data put --kind spot-figure/v1 --tree DIR --preserve                # f
   its parts. `total_cost.py priced-card` prices one from the model's cards; a measured value replaces a priced one
   configuration by configuration, and the figure plots a priced tax hollow.
 
+  A `serving_rate` card is the engine's measured computed tokens, prompt and output, a GPU-second on the mix its
+  `plan` names. It is `saturated` only where a rate above it was served and computed no more; a lower bound is
+  `saturated` false on a provisional card, and `bound` says what held the rate (compute, the KV pool, or unknown). No
+  figure reads it by its presence. `--serving measured` plans every scope at it: a scope's requests are its
+  GPU-seconds times the rate over a request's tokens, a replay takes its request's tokens over the rate, the scope's
+  GPUs stay rho's, and each exfiltration row names the rate and the rate at which its bound would reach 300 GB by
+  proportion (`tokens_per_gpu_second_at_goal_by_proportion`: the bound is taken to go as the requests, which a line
+  planned again at that rate need not do). Under a rate that is a lower bound each caption says its bounds are lower
+  bounds too. Every row priced at a rate, assumed or measured, holds at a registration of 1/q requests, q its sampling
+  rate: the plan counts q·n sampled of a registration's n replay blocks (`optimize.registration_cap`), and the first
+  stage draws at least ⌈q·n⌉ of them, never fewer than one (`Spot.Rate`'s `count`). None is what serving costs at a
+  smaller registration, and a caption at the measured reading says so. Every JSON that read the rate names it under
+  `serving` (Figure 1's two forms, Figure 3, Figure 4 and the break-even, whose table starts with the same sentence),
+  and `figures.py` and `total_cost.py breakeven` write a measured reading into `measured/` under `--out`, never over
+  the default's files. Without it every figure is planned at rho's fleet utilization, as before the card. The
+  `serve_tax` card stays as priced; `total_cost.py priced-card --serving measured` prices one at the card's rate.
+
   A `partition` card is another cut of the model's circuit: its strata take the place of the `workload` card's strata
   of the kinds it `replaces`, each with the k_log it is staged at, and its `label` says how far it has got.
 
   A `verifier_cost` card gives the verifier's core-seconds a statement by proof-block type (and its peak memory where
   measured), how a family's other types scale, and the core-seconds that cost one GPU-second.
+- **The post's configuration** (`record.json`, `record.py`): the 22 switches the post's claim fixes, each with the
+  value the post claims and the run that sets it (a serve, the proving run or the planner). `record.py stamp` reads a
+  serve's `meta.json` and writes its stamp, `{digest, observed, off}`: the SHA-512 of `record.json`, the serve's value
+  of each switch its `meta.json` shows, and the switches a serve sets that it does not show at the post's value (one at
+  another value, one shown only in part, one nothing in `meta.json` gives). It holds configuration only, so it is
+  published where the serve's own record is private.
 - **Figure 1** (`total_cost.py`): what an adversary serving the model on all of a scope's compute over a monitoring
   period can exfiltrate or infiltrate while evading detection with probability above δ, against total cost as a share
   of serving compute, the serve tax plus β (the share spent on replays, interior commitments, proofs of the sampled
@@ -202,6 +227,11 @@ research data put --kind spot-figure/v1 --tree DIR --preserve                # f
   ~~~sh
   uv run python benchmarks/spot_figures/breakeven/sweep.py --out DIR [--workers N] [--scopes all] [--only NAME...]
   ~~~
+
+  `--steady ROWS.json` (a case's `steady`) prices each block type the file holds a steady-state row of at what the
+  row measured (`reprice.steady`: a statement's GPU-seconds, its blocks, its provers and the run or art that holds
+  it), in place of the tables' price for it. Each priced stratum then names its basis, that record or the table that
+  priced it, and each proof-server case's row gives every basis's share of its proving (`basis`).
 - **Figure 6** (`figure6.py`), the certified tick's trade-off:
   - (a) a timeline of continuous admission against tick admission, with the network certifier stamping release
     buckets as its own layer;

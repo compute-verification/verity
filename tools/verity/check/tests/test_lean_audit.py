@@ -1243,7 +1243,7 @@ def test_the_launcher_sends_the_newest_recorded_checks_bundles(tmp_path, monkeyp
             "r1": [("lean-audit/lean-artifacts.tar.gz", "a" * 64, True), ("lean-audit/lean-artifacts-2.tar.gz", "d" * 64, True),
                    ("lean-audit/x/lean-artifacts.tar.gz", "e" * 64, True)]}
     store = types.SimpleNamespace(
-        remote=None, index=types.SimpleNamespace(sql=lambda q, a: [(r,) for r in runs]),
+        remote=None, index=types.SimpleNamespace(sql=lambda q, a: [] if LA.RECORDS_RUNS in q else [(r,) for r in runs]),
         get_attempt=lambda r: {"outputs": {"run_files": f"art:{r}"}},
         listing=lambda art: [{"path": p, "sha256": h, "remote": on} for p, h, on in runs[art[4:]]])
     assert LA.shared_bundles(store) == ["c" * 64, "a" * 64, "d" * 64]
@@ -1265,6 +1265,34 @@ def _attempts(tmp: Path, rows: list[tuple[str, str, str, list[str]]]):
         db.execute("INSERT INTO attempts VALUES (?, ?, ?, ?, ?, ?)",
                    (rid, tool, state, f"2026-10-26T{20 - i:02d}:00:00Z", 60.0, json.dumps({"id": rid, "params": {"argv": argv}})))
     return types.SimpleNamespace(sql=lambda q, a=(): db.execute(q, a).fetchall())
+
+
+#: a records run as `research.queue.RECORDS_COMMAND` starts it, and one a lane wrote by hand
+RECORDS_RUN = ["python3", "tools/verity/lean/lean_changed.py", "--records", "security", "--update"]
+RECORDS_BY_HAND = ["bash", "-lc", "uv sync -q && python3 tools/verity/lean/lean_changed.py --records security/Proofs"]
+
+
+def test_the_launcher_also_sends_the_newest_records_runs_bundles(tmp_path):
+    """A records run (`lean_changed.py --records`) bundles the modules its sandboxed builds compiled, and nothing listed
+    them: each node compiled again what another's records run had. `shared_bundles` lists them as one more kind of
+    `PUBLISHERS`, after the recorded checks', newest first and at most ``limit``: a failed run's too, whose compile is
+    worth what a passing run's is (`LakeArtifacts.put`), but not an unfinished one's or another `lean_changed.py` run's."""
+    index = _attempts(tmp_path, [("r-new", "python3", "done", RECORDS_RUN), ("r-check", "check", "done", ["check"]),
+                                 ("r-failed", "python3", "failed", RECORDS_RUN), ("r-running", "python3", "running", RECORDS_RUN),
+                                 ("r-hand", "python3", "done", RECORDS_BY_HAND),
+                                 ("r-try", "python3", "done", ["python3", "tools/verity/lean/lean_changed.py", "--try", "x"]),
+                                 ("r-old", "python3", "cancelled", RECORDS_RUN)])
+    sha = {"r-new": "n", "r-check": "c", "r-failed": "f", "r-running": "u", "r-hand": "h", "r-try": "t", "r-old": "o"}
+    runs = {r: [("lean-audit/lean-artifacts.tar.gz", s * 64, True)] for r, s in sha.items()}
+    runs["r-hand"].append(("lean-audit/lean-artifacts-2.tar.gz", "2" * 64, True))
+    runs["r-old"] = [("lean-audit/lean-artifacts.tar.gz", "o" * 64, False)]            # not on the remote: no node could fetch it
+    store = types.SimpleNamespace(remote=None, index=index, get_attempt=lambda r: {"outputs": {"run_files": f"art:{r}"}},
+                                  listing=lambda art: [{"path": p, "sha256": h, "remote": on} for p, h, on in runs[art[4:]]])
+    assert LA.shared_bundles(store) == ["c" * 64, "n" * 64, "f" * 64, "h" * 64, "2" * 64]
+    assert LA.shared_bundles(store, limit=2) == ["c" * 64, "n" * 64, "f" * 64]
+    assert LA.shared_bundles(store, limit=1) == ["c" * 64, "n" * 64]
+    assert LA.PUBLISHERS[2][0] == LA.RECORDS_RUNS and LA.PUBLISHERS[2][1].fullmatch("lean-audit/lean-artifacts.tar.gz"), \
+        "where `lean_changed.audit_records` writes it"
 
 
 #: drive's Lean check as the store records it: `slot.py` runs the check, so its tool is `python3`

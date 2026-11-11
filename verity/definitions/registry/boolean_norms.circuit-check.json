@@ -36,6 +36,10 @@
    "and": 37920,
    "type": "0e8fbd600a2a90d138321d442bc1887603a3b8bc3c18ac9db6b255e63ae28baca69890d7f4a8b09dadeb802bddd8af32b7e1206bd1c1584b9ca413b29f73a071"
   },
+  "RMSNormOutRowCuda_v1{N=8}": {
+   "and": 18960,
+   "type": "d7c058a48f57d48c5c413108edba70a009d594d683d2b155ad01dac6af2bed392e0c853b815bdc9266500e633760bcc2914bc24e0704f6e4fc4f1b5dde93ced2"
+  },
   "RMSNormOutRowTriton_v1{N=16}": {
    "and": 38176,
    "type": "ed4d45cbe9e08ceb2a00d7d207b6adbb90984ca3872cb996cb10db6c08891e3ca3ec7a95256ce40009646eed2b45c95218e328098797d661cd78a4efca53be12"
