@@ -2,8 +2,7 @@
 
 The port of `verity/protocols/pouw/verifier/window.py`, on Lean core and PoUW's commitments (`pouw_commit`: its frame-v3-sha512
 domains, Flock's SHA-512 and hm96, core's tagged identity), and the proof system's challenger for a live execution phase's
-coins (`core_spot`). Once its properties are proven it moves, as a
-pure move, to the same path under `verity/core/`; the Python keeps running until then.
+coins (`core_spot`). Once its properties are proven it takes over from the Python, which keeps running until then.
 
 Tokens served past the honest run's end-of-sequence are not useful work, so a workload of record serves at a public
 fixed length, ignore_eos at each slot's public max_tokens, which the execution phase registers and the verifier checks
