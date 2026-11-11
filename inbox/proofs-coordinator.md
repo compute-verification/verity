@@ -56728,3 +56728,10 @@ index 8fc47a1db8..15f2bfc6a1 100644
 For CAPS (no PR; if these go into one): `Proofs/Flock`: +3 modules, all wholly unread, no lock change: `Flock/SpotFlock/AddressesAt.lean` 23 declarations, `Flock/Claims/Sampling/Rewire.lean` 46, `Flock/SamplingGeneric/WiredScope.lean` 12.
 
 For the table: no number moves.
+
+## HEADPROF, Wed 11 Nov 13:52Z: launched on vy-dc-h200-3 at 13:51Z, six runs in a chain; the two table rows by about 14:35Z, the reused words' row by about 15:30Z, off the machine by 15:55Z
+
+- The six runs, each waiting for the one before it [run: `headcirc.sh launch`, 13:50:55Z to 13:51:38Z; each run's start guard read on the machine, 13:51:47Z]: scores `r20261111-135055-6f08` (its window opens 13:51:55Z), values G = 128 `r20261111-135111-fcd7`, G = 64 `r20261111-135114-d43c`, G = 32 `r20261111-135118-9130`, the reused words' row `r20261111-135122-c736` (the head block; builds `aa23d1312dce` in its lease), `FC_UNIT_WIDE=4` `r20261111-135134-8799`.
+- ETA [guess, from `5832`'s step times; the cut's statements have no step time yet]: scores ends about 14:15Z, values G = 128 about 14:35Z, G = 64 about 14:45Z, G = 32 about 14:55Z, the reused words' row about 15:35Z, `FC_UNIT_WIDE=4` about 15:50Z. Every lease ends by 15:53Z (the launcher's end is 15:55Z); a run that has under its need left does not start, so what does not fit drops from the end and I say which.
+
+For the table: nothing new measured.
