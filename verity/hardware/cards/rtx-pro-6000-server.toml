@@ -1,7 +1,7 @@
 # The NVIDIA RTX PRO 6000 Blackwell Server Edition: the one source of its numbers (verity/hardware/README.md).
 # Each number is { value, unit, mark, source }. mark: "ceiling" (no program on this SKU and firmware exceeds it, what the
 # model's premises need), "measurement" (a measured value, so only a lower bound on the ceiling) or "placeholder"
-# (neither, open). Per-SM rates are a SM-clock's. Security/Definitions/Core/Accel/Sm120.lean is held to this file. The
+# (neither, open). Per-SM rates are a SM-clock's. security/Definitions/Core/Accel/Sm120.lean is held to this file. The
 # host the card sits in is its own card (xeon-6776p-2s.toml on our node).
 
 kind = "gpu"
@@ -11,7 +11,7 @@ die = "GB202"
 arch = "sm_120a"
 board = "900-2G153-0000-000"
 vbios = "98.02.8D.00.01"
-lean = "Security/Definitions/Core/Accel/Sm120.lean"
+lean = "security/Definitions/Core/Accel/Sm120.lean"
 nodes = "an RTX PRO 6000 node: eight cards, all this SKU and vBIOS (art:0620926423e6; the SKU first read in art:f8da67c39f76)"
 
 [sm]
@@ -34,7 +34,7 @@ dram = { value = 103079215104, unit = "B", mark = "ceiling", source = "product p
 [rate]
 tensor = { value = 1024, unit = "s8 MAC/SM-clock", mark = "ceiling", source = "whitepaper v1.1, Table 4: FP8 1007.6 dense TFLOPS over 2 x 188 SMs at its 2617 MHz boost is 1024 MACs a SM-clock; IMMA.16832 runs s8 at the same rate, 4096 MACs in 16 tensor cycles of a sub-partition (measured 1023.8, art:ecfc88319554)" }
 issue = { value = 4, unit = "warp instruction/SM-clock", mark = "ceiling", source = "whitepaper v1.1: four sub-partitions, one warp scheduler each, one warp instruction a clock" }
-alu = { value = 64, unit = "lane/SM-clock", mark = "measurement", source = "the DS-120 SASS census: LOP3 at two cycles a warp instruction on a sub-partition; CUDA C++ Programming Guide 12.9 section 6.4.1 Table 7, CC 12.0, gives 32-bit integer add 128 (IADD3 at 128 is open in Security/Definitions/Core/Accel/README.md)" }
+alu = { value = 64, unit = "lane/SM-clock", mark = "measurement", source = "the DS-120 SASS census: LOP3 at two cycles a warp instruction on a sub-partition; CUDA C++ Programming Guide 12.9 section 6.4.1 Table 7, CC 12.0, gives 32-bit integer add 128 (IADD3 at 128 is open in security/Definitions/Core/Accel/README.md)" }
 imad = { value = 64, unit = "lane/SM-clock", mark = "ceiling", source = "CUDA C++ Programming Guide 12.9 section 6.4.1 Table 7, CC 12.0: 32-bit integer multiply and multiply-add 64 (the DS-120 census measures IMAD at 64)" }
 shfl = { value = 32, unit = "lane/SM-clock", mark = "ceiling", source = "CUDA C++ Programming Guide 12.9 section 6.4.1 Table 7: warp shuffle 32" }
 f64 = { value = 2, unit = "lane/SM-clock", mark = "ceiling", source = "CUDA C++ Programming Guide 12.9 section 6.4.1 Table 7, CC 12.0: 64-bit floating-point multiply-add 2" }
