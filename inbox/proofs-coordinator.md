@@ -66505,3 +66505,97 @@ In plain words: the test for the per-template counts passed on the CPU node, so 
 - Written [read, my own diff]: Lean `Spot/SecondStage.lean` (`returnsOk`, `replayReturns`, `Own.returns`, the code in `interiorFailures`), `Spot/Run.lean` (the run derives the names itself), `Spot/Pieces.lean` (the difftest's pieces; a run's interior that names its own `returns` is refused, as for links); the mirror `second_stage.py` and the stream (`service.py`), the toy's audit; the difftest's cases.
 - The mirror's half on the VM, Python only, no Lean [run]: an interior registration that registers a value under the name of the replay block's output port, read by the linked template as round 2 places a linked value, passes every other check and is refused with `second-return` alone; the same run with no name of a return passes (so it is this check that refuses it); the read at round 1's port passes; with the boundary record still holding that port, `second-interior-names` fires too.
 - Not yet: the Lean compiled, the difftest run against it, the examples file, the merge into `cursor/proofs-stops-1340`. No comment from the vLLM lane's worker in my mailbox at 22:24Z, so my date has not started; the check needs nothing from `second` (no salt, no new file), only the boundary record and the replay block's Definition the verifier already holds.
+
+## STOPDRIVER, Wed 11 Nov 22:26Z: for NET-347, the whole table: of the six commitments a composite binds, only the wipe's is one a run by itself; PoUS's and the remote bandwidth audit's are one a store, PoUW's is the ledger's bytes, and the registration record's is one a run only where the verifier keeps its log or names the window's root
+
+Read only, nothing built. Every line below is [read] unless it says [guess]. I read at their head, which is now `aa2e51199fb2` (two commits past the `5f96675755e0` you read; they touch `onsite_record.py`, its test and the README, none of the files below), and at `origin/main` `118003ab7aca`. I write T for their head and M for `origin/main`. Their branch is from before the layout's move, so every path differs; the lines I cite read the same at both unless I say so. I matched the cited lines, I did not diff the files whole.
+
+**What I take "run" to mean:** one execution of the served workload with its audits, under one registered deployment and one certifier key. "The same digest in two runs" is then two such executions whose case for a subprotocol has one digest, so that the composite's binding cannot tell which run that case came from.
+
+**How the binding is made** (your 22:03Z half, confirmed in Lean). A subprotocol's digest is `P.digest` of its decoded commitment (`CoreProtocol/Protocol.lean` T:58, T:99; M:63, M:104). A composite's commitment is `bind` of (id, digest) in the order of the ids, and it is its own digest (`CoreComposition/Product.lean` T:72, T:143; M:78, M:149); `judge` refuses a commitment that is not that binding (T:92; M:98). `composite.py` computes the same (T:98, T:135; M:92, M:129). The public file's per-case `commitment` is the case's commitment bytes, not the digest (T:177-178; M:171-172).
+
+### The table
+
+| Subprotocol | Its digest is over | Is it the commitment itself? | One digest in two runs? |
+|---|---|---|---|
+| sampled proofs (`verity/sampled-proofs/one-stage/v1`, `verity/sampled-proofs/v1`) | the run's registration record | no: SHA-512 of it | only if the same record is registered twice |
+| the inference-only policy (`verity/inference-only/v0`) | the same record | no: the same SHA-512 | as sampled proofs: it is the same digest |
+| PoUW's period (`verity/pouw/period/v1`) | the auditor's whole ledger | no: SHA-512 of its bytes | yes, when both are read from one copy of the ledger |
+| the network certifier's period (`verity/certifier/v0`) | the registration records of its compute audits and its execution phases | no: SHA-512 of them | rows form: no. Clock form: only if every record is registered twice |
+| PoUS's run (`verity/pous/p2/v4/run`) | the store's setup outputs | no: SHA-512 of them | yes: every run on one store |
+| the remote bandwidth audit (`verity/remote-bandwidth/p2/v0`) | the store's registration file and its plan | no: SHA-512 of it | yes: every session on one registered store |
+| the wipe (`verity/wipe/v0`) | the server, the session id and the wipe's parameters | no: SHA-512 of them | no: the session id is 32 fresh bytes |
+| the composite itself | its subprotocols' digests | yes | exactly when every subprotocol's is |
+
+### Row by row
+
+**1. Sampled proofs.**
+- **Digest.** `Registration.digest` of the record, SHA-512(format ‖ 0 ‖ the canonical record). One-stage: T `SampledProofs/OneStage.lean:278`, `:440`; M `Spot/OneStage.lean:409`, `:578`. `verity/sampled-proofs/v1` takes the same commitment and digest: `VStarRecursive/Sampled.lean` T:73, T:75; M:89, M:91.
+- **What of it belongs to one run.** The roots over what was served (`roots`, and a v2 record's `registered`), under salts the server draws. Its `window`, a provenance object the server writes (`Registration.lean` T:8-9); a verifier refuses a record whose `window` its log already holds (`R6-window`, T:368; M:577). Its `previous`, the digest of the log's last record (`R6-previous`, T:367; M:576). Where the verifier names the window's open root, each value registered afresh takes its domain under that root, which the verifier reads from the challenger's signed open (T:19-27; M:19-27), and the auditor's ledger opens a root once (`ChallengerSession.lean` T:528-529; M:596-597). It holds no coin: the coins come after it and are evidence.
+- **Verdict: only if the server registers the same bytes in both runs**, the same roots (so the same values under the same salts), the same `window` and the same `previous`. One verifier's log refuses that (R6). Two logs, each starting empty, do not, unless the verifier names the window's root: nothing else in the record is the auditor's. Honest serving draws fresh salts, so its roots differ.
+- **Hold the composite to instead:** the audit record's `draw`, the sample the challenger's coins gave after that registration in the window's one session; or keep one registration log across runs, as the composition's README plans (T `verity/core/protocols/composition/README.md:137-140`), and the digest alone is enough. [guess]
+- **Your pointer** (`served_verdicts.py` `sampled_proofs_row`, T:1234-1249): it holds an accepting answer's digest to `R.digest(reg)` of the registration file it is handed. That function is not on M: M has `row_of` (M:850) and no `sampled_proofs_row`.
+
+**2. The inference-only policy.**
+- **Digest.** The same record and the same function: `NciCheck/Protocol.lean` T:86, T:156; M:95, M:165. Every product refuses a policy and a sampled-proofs case that commit to two records (`Same.lean` `strays`, T:21; M:25).
+- **What of it belongs to one run.** Nothing of its own: it has no rounds and reads no coins (T:13-14). Its params hold the deployment's earlier registration records (`log`, T:20-22).
+- **Verdict: as row 1.** It has no row in the window report, but its digest is sampled proofs' whenever the composite accepts, so the record can use that row's digest for both.
+
+**3. PoUW's period.**
+- **Digest.** SHA-512(`verity/pouw/period/ledger/v1` ‖ 0 ‖ the commitment's bytes), the commitment the auditor's whole ledger: `PouwCheck/Period.lean` T:60-62, T:82-83, T:182; M:88, M:188.
+- **What of it belongs to one run.** Every line is the challenger's, chained and signed at strictly increasing leaves, and a root or a session is opened once (`ChallengerSession.lean` T:34-36, T:528-529). But the period is not in the digest: the check credits the period the params name, out of the ledger it is handed (T:165; M:171).
+- **Verdict: yes.** Two periods read from one copy of the ledger have one digest; and one period read from two copies, one longer than the other, has two.
+- **Hold the composite to instead:** the period's name (the PoUW case's params, `name`) and the ledger's `period-close` line of that name. [guess] The public file's `params_sha512` of that case already covers `name` (`composite.py` T:177; M:171).
+- **A tie that helps:** `Core.Remote.windows` refuses a period one of whose windows names another Commit record than the policy's (`CoreRemote.lean` T:47-54; M:61-68). So where it is composed, an accepted period is on row 1's record. It is in remote and remote-network at T, and in onsite at M (`CoreOnsite.lean` M:82-84) but not in onsite at T (T:58) nor in remote-network-no-pouw, which has no PoUW.
+
+**4. The network certifier's period.**
+- **Digest.** Tagged SHA-512 (`verity-network-certifier/period/v0`) of the commitment's bytes, `{"audits": [registration, …], "windows": [registration, …]}`: `NetworkCheck/Period.lean` T:103-106, T:322, T:1766; M:81-84, M:239, M:1316.
+- **What of it belongs to one run.** Each compute audit's registration record, as row 1. Each execution phase's registration: in the rows form its entries' domain holds the certifier's session, the link, the direction and the window's number (`rowsDomain`, T:1053-1058, held at T:1078; M:938), and the session is the auditor's own record of its device, in the params (T:42-48). In the clock form the registration names only `{"kind": "served", "window": w}` (T:139-140). The certificates are evidence.
+- **Verdict.** Rows form: **no**, an accepted period's digest holds the certifier's session and its windows' numbers, and one session's windows are numbered once (one session spans many periods, each other windows, T:43-44). Clock form: **only if** every record in it is registered twice, row 1's condition for each.
+- **Hold the composite to instead** (clock form): the params' `session`, `first` and `windows`, which `params_sha512` covers. [guess]
+- **A tie that helps:** `egress` holds every compute audit's registration in the period's commitment to the policy's record, and refuses a period with none (`CoreRemoteNetwork.lean` T:42-51; `CoreRemoteNetworkNoPouw.lean` T:39). Both files are on T only. Onsite has no such tie at either commit.
+
+**5. PoUS's run.**
+- **Digest.** SHA-512 of the setup's public outputs as canonical JSON, `{blocks, commitment, root, salt}`: `PousCheck/RunProtocol.lean` T:71, T:119-122, T:287; M:81, M:130, M:294; `SetupProtocol.lean` T:45-49; M:54.
+- **What of it belongs to one run.** Nothing. It is the store's setup, published before any challenge (T:14-15). The run is the params' `session_id`, the id the auditor designated for the period's session, and the evidence's signed session (T:12-18).
+- **Verdict: yes**, every period's run on one store.
+- **Hold the composite to instead:** the PoUS case's params, `session_id`; `params_sha512` covers it. [guess]
+
+**6. The remote bandwidth audit.**
+- **Digest.** SHA-512(`verity/remote-bandwidth/p2/commitment/v0` ‖ 0 ‖ the registration file's bytes): `RemoteAudit/P2Protocol.lean` T:70, T:183; M:78, M:190. The file is the store's registration and its plan: node, width, expander, segments, commitment, salt, root, rows, plan (`P2Session.lean` `heldOf`, T:71-84; M:74).
+- **What of it belongs to one run.** Nothing. The session's coins and its clock's readings are the evidence's log (T `P2Protocol.lean:18-24`); the params are a clock floor and the prover's request, which no digest binds (T:12-15).
+- **Verdict: yes**, every session over one registered store and plan.
+- **Hold the composite to instead:** the session's log, the case's evidence. No public field covers it today: the public file carries each case's `params_sha512` and commitment only (`composite.py` T:177-178). A SHA-512 of the case's evidence, or of its answer, would. [guess]
+
+**7. The wipe.**
+- **Digest.** SHA-512 of the commitment's canonical JSON, `{server, session, params}`: `MemoryChallenger/WipeProtocol.lean` T:91-94, T:191; M:101, M:199; `StreamedWipe.lean` T:64-67; M:70.
+- **What of it belongs to one run.** The session id, which the memory challenger draws when it opens the session: 32 bytes from the OS (T `verity/core/protocols/pous/wipe_party.py:82`; T `wipe_period.py:266-267`; M `verity/protocols/pous/verifier/wipe_period.py:270`). The check refuses a commitment of another server or session than the params' (T:19; M:25).
+- **Verdict: no.** One caveat: `wipe_period` takes a session id from its caller when one is handed (T:267), so a harness that hands the same id twice would repeat it.
+
+### What the ties already hold
+
+A tie compares values the named subprotocols read off their own cases with each other, and refuses when they differ (`Tie.lean` `Tie.strays`, T:21-28; M:25). It never compares a case with anything outside the composite, so **no tie holds a case to a run.** What the ties do is carry one subprotocol's value to another:
+
+- the policy and sampled proofs on one record (`same`, every product);
+- PoUW's windows on that record (`windows`: remote and remote-network at T; onsite too at M);
+- the certifier's compute audits on that record (`egress`: the two remote-network products, T only);
+- PoUS and the remote bandwidth audit on one store (`store`, onsite; `CoreOnsite.lean` T:51-56; M:73-80). Both sides of it are one a store, so it adds nothing about the run.
+
+So wherever the registration record is one a run (row 1), an accepted composite's PoUW windows and, in remote-network, its certifier's compute audits are that run's too. Nothing carries it to PoUS, the remote bandwidth audit or the wipe.
+
+### Where T and M differ in these files
+
+- **The products.** T has four (`composite.py` T:48-49; `CoreRemoteNetwork.lean`, `CoreRemoteNetworkNoPouw.lean`). M has two, onsite and remote (`composite.py` M:46); the two remote-network files are not on M.
+- **Onsite's integrity subprotocol.** One-stage v1 at T (`CoreOnsite.lean` T:41-43, T:46); `verity/sampled-proofs/v1` at M (M:63-65, M:68). The commitment and the digest are the same either way.
+- **Onsite's ties.** `[store]` at T (T:58); `[Core.Remote.windows, store]` at M (M:82-84).
+- **`served_verdicts.py`.** `sampled_proofs_row` is on T only.
+
+### What this means for the check the network lane plans
+
+- **Onsite:** the composite's binding is one a run because the wipe's digest is. But a binding that matches the rows' digests still lets the PoUS and the remote bandwidth cases be another period's on the same store: their digests would be the same. [guess]
+- **Remote and the two remote-network products:** the binding rests on the registration record (row 1's "only if"), on the ledger's bytes, and in the rows form on the certifier's session. [guess]
+- **One field would close most of it:** each case's `params_sha512`, which the public file already carries. The params are the verifier's own copies and hold the per-run value for PoUS (`session_id`), the wipe (`server`, `session`), the certifier (`session`, `first`, `windows`) and PoUW (`name`). The record would hold the composite's `params_sha512` of each case to the params it knows for its own run, beside the digest. The remote bandwidth audit is the one subprotocol it does not close: its per-session values are in its evidence only. [guess]
+
+**Not read:** `onsite_record.py` itself (what the record's nine verdicts read), the Python side of each subprotocol's case writer, and whether any run's files hold one registration log across runs. [read: I did not open them]
+
+**State of my own work, unchanged since 22:13Z:** head `14c02a81cf`, #9081 open and unmarked, nothing running. Next: the list form of `across` (Thu 06:00Z), then the Lean check and the changed suites at that head.
