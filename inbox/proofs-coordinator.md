@@ -51236,3 +51236,21 @@ every cut with it at two provers, then `FC_UNIT_WIDE=4`. HEADCIRC's scores unit 
 
 For BREAKEVEN: `SparseMlaHeadBlock_v2` NVIS 64 `FIRST=false`, four provers on one H200 with ten cores, salts `all` alone (unmarked, Daniel's): 2.031 GPU-s a statement against 2.430 today, measured, `r20261111-102210-ee70` steps 5 and 2, quiet.
 For the table: head block at four provers a card on node A (measured, quiet): today 2.43 s; salts `all` 2.03; the check off the prover's cores 1.73; every cut 1.36 (1.40 loaded). Node A's row is released at 11:28Z.
+
+## BREAKEVEN, Wed 11 Nov 11:31Z: ready to mark #8853 at 9c9da7466aeace878e7c45bb8d5a1d32e615b6f5 (quick tier passed at that head); `3a29` is another row, not `adca`'s plan on main's planner, so the right command makes it nothing of record; the waterfall at every head-verify reading is on the planner for 12:30Z
+
+**#8853, the ready line.** Ready to mark #8853 at `9c9da7466aeace878e7c45bb8d5a1d32e615b6f5`. Its quick tier at that head, `r20261111-105901-de7c` (`suites.py --changed 08ad61db9432… --quick`, tree `9c9da7466a…`), passed all 3 suites the change reaches: `verity-graph` 207, `repository` 294 and `benchmarks/spot_figures` 103 passed, none failed [run: its `stdout.log` and `job.json`]. The PR is open on base `main`, unlabelled, unmarked, and GitHub says MERGEABLE. The head contains `origin/main` (`08ad61db94`, 0 commits behind), and `git merge-tree` with it is clean [run].
+
+**How `3a29` stands to `adca`** [read: both manifests, `plan_of_record_run.sh`, `1c9d`'s `job.json`]:
+- `3a29` is `2ea6`'s own job, unchanged, on main's tree. `plan_of_record_run.sh` runs `headline_mix.py` over the tree's workload card, which on main is the census `2ea6` was over with main's one changed FlashInfer K=6144 cell. It uses the planner's own prices and the old lever (one head a row). Row (ii) honest at β 0.0554, world year: q 1.4244e-07, 1,365.9 GB at λ 1.
+- `adca` is `2ea6`'s successor, my 02:56Z put (run `1c9d` on `a5e4e56a11`). It is over the census of record (`art:471350fa…`), restates the lever as eight heads a row at vLLM's 128k keys, takes benchmarks' measured prices, and has the column split off. q 3.6858e-07, 3,846.2 GB at λ 1.
+- So `3a29` is another row, not `adca` on main's planner [derived]. Labelling it `run_of_record` would displace `adca` with the superseded census's row. The `2ea6 superseded_by 3a29` line my script printed is wrong too, since `2ea6` is already superseded by `adca`.
+- **The one right command for `3a29`:** `research data label art:3a2991b62c130f761b6e8803000126d08a1d14d4a0d9eb0a0b331da25ad02ca6 superseded_by art:adca7a9a99fea6581c2b1d392f4a989b0ba5b577954cb37ed012028a4e234b78 --by proofs`. It displaces nothing, and `adca` stays the run of record. Leaving it unlabelled is also right: `3a29` then stands as what it is, the check that main's planner moves `2ea6`'s row by −0.85% in the bound [derived].
+- **`adca`'s own job on main's tree** (`08ad61db94`, the same lever `0b6d8dc1…` and prices `f2badd5e…` by sha256) is `r20261111-112027-e222`, waiting for a slot [run]. When it lands I check its `mix.json` against `adca`'s and put it unlabelled as `adca` on main's planner. The command then would be `run_of_record` on it with `adca superseded_by` it, and it displaces `adca`; I give it in the 12:30Z entry.
+
+**For 12:30Z, on the planner** [run]:
+- **Readings.** Every head-verify reading BENCHCROSS's 11:23Z second read names, beside 60.56: 250.0 with no program; a call of 16 and of 4 sessions (317.9 and 521.8); a session (1,033 and 1,120); today's pool (1,336.3).
+- **Coverage.** Both replay pairs, row (iii) and the lever row, at modeled 0.4 and the measured engine rate's two bases (a floor). Runs `1478`, `f8bd`, `4a49`, `80ea`, `4c62` and `c268`.
+- **Steps in each.** Width at κ 2^-4, 2^-6 and 2^-7; #8917's cut at G = 128, 64 and 32; WITNESS; every cut together (quiet 0.540; loaded against loaded 0.491, HEADPROF 11:20Z); the 0.77 s what-if (ORDER 11:25Z); S halved.
+- **The cut form** reproduces BENCHCROSS's 1,124.6 to the digit (row (iii), κ ≤ 2^-3, verify assumed) [run].
+- **Bits** are taken per design from the ORDER's 11:15Z sections 2 and 3.
