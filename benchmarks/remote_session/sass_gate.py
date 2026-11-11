@@ -3,19 +3,23 @@ SASS of those eight, through the harness's `mma_gate` (benchmarks/pouw/harness/s
 the build is held to the base's, instruction for instruction, by `same_sass.py`. Refuses (exit 1, the reasons on
 stderr):
 
-- one of the eight missing from the build or from the listing, compiled for another arch, or with a ptxas warning;
+- one of the eight missing from the build or from the listing, compiled for another arch, an arch this gate has no
+  table for (`ARCHS`: sm_90a and sm_120a, each as read from its build), or with a ptxas warning;
 - a sketching kernel (`SKETCHING`, the six that compute σ) whose tensor-core instructions aren't the int8 form alone,
   IMMA.16832.S8.S8 (mma.m16n8k32 on s8 operands into s32), in a multiple of 4 (64 rows are four of its 16), and any
   tensor-core instruction in the other two;
-- local memory (a stack frame, a spill, LDL or STL) beyond `LOCAL_OK`'s bytes: none in the pass's receipt grid and
-  the opening's receipts; the consumers' and the two once-a-pass kernels' frames as they are; and in the two in-place
-  kernels none, or 16 bytes where the build caps them at 128 registers (`CAPPED`), which is what that build gives up;
-- floating point: an .FTZ that isn't integer division's truncation, a MUFU that isn't the reciprocal of an integer
-  divisor, or any float arithmetic. The compiler's unsigned division by a runtime divisor (a tile's group, a
-  subtree's chunk) is the only floating point these kernels hold, and it never sees a block's byte.
+- local memory (a stack frame, a spill, LDL or STL) beyond the arch's bytes for the kernel (`local`): none in the
+  pass's receipt grid, the opening's receipts and the in-place pass's two; the consumers' and the two once-a-pass
+  kernels' frames as they are. A build that caps the receipt kernels at 128 registers (-DSK64_PER_SM=2) may add the
+  arch's `capped` bytes to a kernel it holds to that, which is what that build gives up;
+- floating point: any instruction that reads or writes a float outside the compiler's unsigned division by a
+  runtime divisor, whole (`DIV`: its forms by the divisor's width, each a reciprocal's seed and its truncation), and
+  the constants sm_120a loads through HFMA2 (`-RZ, RZ` and two immediates). A division's operands are counts and
+  positions (a tile's group, a subtree's chunk), never a block's byte.
 
-OUT_JSON holds each kernel's record: its registers, stack frame and spills, its instructions and the counts above.
-With --listings, DIR gets each kernel's listing, a line an entry as `same_sass.py` reads it.
+OUT_JSON holds each kernel's record: its registers, stack frame and spills, its instructions, its tensor-core
+instructions, its float instructions by mnemonic (`float`) and the divisions they make (`divisions`). With
+--listings, DIR gets each kernel's listing, a line an entry as `same_sass.py` reads it.
 
   python3 sass_gate.py PTXAS_TXT SASS_TXT OUT_JSON [--arch sm_90a] [--listings DIR]
 """
@@ -24,6 +28,7 @@ from __future__ import annotations
 import argparse
 import importlib.util
 import re
+from collections import Counter
 import sys
 from pathlib import Path
 from typing import TYPE_CHECKING
@@ -55,16 +60,31 @@ SKETCHING = {"sketch64_pass_kernel", "pass_consumer_kernel<64>", "subtree64_rece
 #: a pass's packed signs from its seed, and a chained pass's seed and signs: one launch a pass
 ONCE = {"signs_kernel<64>", "chain_prepare_kernel<64>"}
 WANT = SKETCHING | ONCE
-#: the bytes of stack frame or spill a kernel may hold. The consumers run at the register limit, as their 16-row
-#: instances do; the once-a-pass kernels keep a SHA-512 schedule on the stack, as theirs do.
-LOCAL_OK = {"pass_consumer_kernel<64>": 224, "mapped_consumer_kernel<64>": 288, "signs_kernel<64>": 256,
-            "chain_prepare_kernel<64>": 304}
-#: the in-place kernels a build may cap at CAP registers (two CTAs an SM), where each spills up to SPILL bytes
-CAPPED, CAP, SPILL = {"mapped64_pass_kernel", "mapped64_receipts_kernel"}, 128, 16
-COUNTS = {"LDL": r"\bLDL\b", "STL": r"\bSTL\b", "FTZ": r"\.FTZ\b", "INT_DIV": r"\bF2I\.FTZ\.U32\.TRUNC\.NTZ\b",
-          "MUFU": r"\bMUFU\.\w+", "MUFU_RCP": r"\bMUFU\.RCP\b", "I2F_RP": r"\bI2F\.U(?:32|64)\.RP\b",
-          "FP": r"\b(?:F(?:ADD|MUL|FMA|CMP|SET|SETP|MNMX|CHK|SWZADD)|F2F|F2FP|D(?:ADD|MUL|FMA)|H(?:ADD|MUL|FMA)2)\b"}
-_INSTRUCTION = re.compile(r"\s*/\*[0-9a-f]{4,}\*/\s+\S")
+#: by arch, as CUDA 12.9's ptxas builds them: `local`, the bytes of stack frame or spill a kernel holds (a kernel it
+#: doesn't name, none): the consumers run at the register limit, as their 16-row instances do, and the once-a-pass
+#: kernels keep a SHA-512 schedule on the stack, as theirs do; and `capped`, what a kernel held to CAP registers (two
+#: receipt CTAs an SM) may hold beside
+ARCHS = {
+    "sm_90a": {"local": {"pass_consumer_kernel<64>": 224, "mapped_consumer_kernel<64>": 288, "signs_kernel<64>": 256,
+                         "chain_prepare_kernel<64>": 304},
+               "capped": {"mapped64_pass_kernel": 16, "mapped64_receipts_kernel": 16}},
+    "sm_120a": {"local": {"pass_consumer_kernel<64>": 160, "mapped_consumer_kernel<64>": 136, "signs_kernel<64>": 368,
+                          "chain_prepare_kernel<64>": 352},
+                "capped": {"sketch64_pass_kernel": 32, "mapped64_pass_kernel": 32, "mapped64_receipts_kernel": 40}},
+}
+CAP = 128
+COUNTS = {"LDL": r"\bLDL\b", "STL": r"\bSTL\b"}
+#: the float instructions of the compiler's unsigned division by a runtime divisor, by the divisor's width; a form's
+#: truncation (`DIV_OF`) is in no other. A uniform register's instruction (UI2F, UFMUL) counts as its plain one.
+DIV = {"u32": {"I2F.U32.RP": 1, "MUFU.RCP": 1, "F2I.FTZ.U32.TRUNC.NTZ": 1},
+       "u64": {"I2F.U64.RP": 1, "MUFU.RCP": 1, "F2I.U64.TRUNC": 1},
+       "u16": {"I2F.U16": 1, "I2F.U16.RZ": 1, "MUFU.RCP": 1, "FMUL": 2, "FMUL.RZ": 1, "FSEL": 2, "FSETP.GEU.AND": 1,
+               "FSETP.GT.AND": 1, "F2I.U32.TRUNC.NTZ": 1}}
+DIV_OF = {"u32": "F2I.FTZ.U32.TRUNC.NTZ", "u64": "F2I.U64.TRUNC", "u16": "F2I.U32.TRUNC.NTZ"}
+_OP = re.compile(r"\s*/\*[0-9a-f]{4,}\*/\s+(?:@!?U?P\w+\s+)?([A-Z][\w.]*)\s*([^;]*?)\s*;")
+_FLOAT = re.compile(r"U?(?:I2FP?|F2[IF]P?|MUFU|F(?:ADD|MUL|FMA|CMP|SETP?|SEL|MNMX|CHK|SWZADD|RND)|"
+                    r"D(?:ADD|MUL|FMA|SETP|MNMX)|H(?:ADD|MUL|FMA|SETP?|MNMX)2)(?:\.|$)")
+_CONSTANT = re.compile(r"HFMA2 U?R\d+, -RZ, RZ, [-+.\de]+, [-+.\de]+$")
 _COMPILING = re.compile(r"Compiling entry function '(\w+)'")
 
 
@@ -82,7 +102,29 @@ def _atom(name: str, form: str, r: dict) -> bool:
 
 
 def _line(r: dict, text: str) -> None:
-    r["instructions"] += bool(_INSTRUCTION.match(text))
+    m = _OP.match(text)
+    if not m:
+        return
+    r["instructions"] += 1
+    op, operands = m.groups()
+    if _FLOAT.match(op):
+        constant = bool(_CONSTANT.match(f"{op} {operands}"))
+        r["constants"] += constant
+        if not constant:
+            r["float"][op] = r["float"].get(op, 0) + 1
+
+
+def divisions(census: dict) -> dict | None:
+    """The whole divisions (`DIV`) a kernel's float instructions make, by form; None if they are anything else."""
+    have = Counter()
+    for op, n in census.items():
+        have[op.removeprefix("U")] += n
+    made = {form: have[DIV_OF[form]] for form in DIV}
+    want = Counter()
+    for form, n in made.items():
+        for op, each in DIV[form].items():
+            want[op] += n * each
+    return made if +have == +want else None
 
 
 def _check(name: str, r: dict) -> list[str]:
@@ -91,9 +133,9 @@ def _check(name: str, r: dict) -> list[str]:
         return [f"{k}: no listing"]
     if k in SKETCHING and (r["IMMA"] < 4 or r["IMMA"] % 4):
         out.append(f"{k}: {r['IMMA']} {ATOM} (want a multiple of 4, at least 4)")
-    if r["FTZ"] != r["INT_DIV"] or r["MUFU"] != r["MUFU_RCP"] or r["MUFU"] != r["I2F_RP"] or r["FP"]:
-        out.append(f"{k}: floating point other than integer division's: "
-                   f"{({c: r[c] for c in ('FTZ', 'INT_DIV', 'MUFU', 'MUFU_RCP', 'I2F_RP', 'FP')})}")
+    r["divisions"] = divisions(r["float"])
+    if r["divisions"] is None:
+        out.append(f"{k}: floating point other than integer division's: {r['float']}")
     return out
 
 
@@ -107,13 +149,18 @@ def gate(ptxas: str, sass: str, arch: str = "sm_90a") -> tuple[dict, list[str]]:
         keep = m.group(1) in mine if m else keep
         kept += [line] if keep else []
     report = "\n".join(kept)
+    table = ARCHS.get(arch)
+    if table is None:
+        return {}, [f"no table for {arch}: read its build's listings (--listings) and add one to ARCHS ({sorted(ARCHS)})"]
     regs, _ = H.ptxas_report(report, arch)
-    local_ok = {n: LOCAL_OK.get(short(n), 0) for n in mine}
-    local_ok.update({n: SPILL for n in mine if short(n) in CAPPED and (regs.get(n, {}).get("regs") or CAP + 1) <= CAP})
+    local_ok = {n: table["local"].get(short(n), 0) for n in mine}
+    for n in mine:
+        if short(n) in table["capped"] and (regs.get(n, {}).get("regs") or CAP + 1) <= CAP:
+            local_ok[n] = table["capped"][short(n)]
     funcs, problems = H.mma_gate(
         report, "\n".join(f"Function : {n}\n" + "\n".join(listed[n]) for n in sorted(mine) if n in listed), mine,
         arch=arch, counts=COUNTS, atom=_atom, line=_line, check=_check, local_ok=local_ok, unreported=True,
-        record={**dict.fromkeys(COUNTS, 0), "IMMA": 0, "instructions": 0, "other_mma": []},
+        record={**dict.fromkeys(COUNTS, 0), "IMMA": 0, "instructions": 0, "constants": 0, "float": {}, "other_mma": []},
         allowed=lambda name: ATOM if short(name) in SKETCHING else "none")
     missing = sorted(WANT - {short(n) for n in mine})
     if missing:
