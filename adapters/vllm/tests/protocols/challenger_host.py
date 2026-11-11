@@ -459,10 +459,10 @@ class Host:
         """The gate's open of the window's sample session `session` on its sample root `root`, withheld unless not
         `withhold`: reserved in this host's ledger, served by a `Host` of its own (`draw`) over a sample session's coins
         (`window.draw_challenger`), and reached at `DRAW_PORT` (the answer's ``port``)."""
-        draw = self.draw = Host(self.directory.parent / f"{self.directory.name}-draw",
+        host = self.draw = Host(self.directory.parent / f"{self.directory.name}-draw",
                                 Wd.draw_challenger(0, entropy(self.seed + 0x100)), self.seed, session, self.leaves,
                                 self.ledger, gated=True, withhold=withhold)
-        return {**draw.open(session, root), "port": DRAW_PORT}
+        return {**host.open(session, root), "port": DRAW_PORT}
 
     def ended(self) -> str | None:
         """Join the session once its client has ended it, and the ledger ends it, then its sample session's (`draw`), if
