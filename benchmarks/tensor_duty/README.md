@@ -1,7 +1,7 @@
 # tensor_duty: the H200's tensor MAC rate by duty cycle
 
 The falsification test of the H200 card's tensor clock (`clock.tensor` in `verity/hardware/cards/h200-sxm-141gb.toml`,
-`tensorClock` in `Security/Definitions/Core/Accel/H200.lean`): whether one H200, with its power limit at the board's
+`tensorClock` in `security/Definitions/Core/Accel/H200.lean`): whether one H200, with its power limit at the board's
 maximum, ever moves more dense tensor MACs a second than the card's tensor rate, 132 SMs x 4096 MACs a clock at
 `clock.tensor`'s 1830 MHz (9.894e14; 1.0705e15 at the 1980 MHz SM clock, the card's second reading). A run above it
 refutes the card. A full tensor pipe is not the only case: a pipe busy part of the time, with the rest idle or
