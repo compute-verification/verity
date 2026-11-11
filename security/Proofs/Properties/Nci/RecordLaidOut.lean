@@ -16,6 +16,7 @@ public import Proofs.Properties.Nci.RecordTemplates
 public import Proofs.Properties.Nci.RecordUnits
 public import Proofs.Properties.Nci.RecordWhole
 public import Proofs.Properties.Nci.RecordWide
+public import Proofs.Properties.Nci.RecordWireRead
 public import Proofs.Properties.Nci.ResolveRows
 
 /-!
@@ -42,5 +43,6 @@ is its writer's (`RecordAligned`). Every unit has a slot, and a wired circuit ha
 (`RecordCircuit`). `RecordServed` puts them together: `form_laidOut`.
 
 Of the count: a gate a block reads from outside itself, that θ does not hold, is one a read of a row of the block's
-slot lands on (`RecordReads`).
+slot lands on (`RecordReads`); and every wire of the text has a step for each digit and no digit of radix zero
+(`RecordWireRead`).
 -/
