@@ -1,5 +1,6 @@
-"""`capture_step` / `capture_fn` on toy models against hand counts: every GEMM's MACs, phase and role as a multiset
-derived from the architecture alone, the upstream counts, φ and the cut, the token dims, and the refusals."""
+"""`capture_step` / `capture_fn` / `capture_steps` on toy models against hand counts: every GEMM's MACs, phase and role
+as a multiset derived from the architecture alone, the upstream counts, φ and the cut, the token dims, a measured
+step's circuit among its neighbours, and the refusals."""
 from __future__ import annotations
 
 from collections import Counter
@@ -10,7 +11,7 @@ import torch
 import torch.nn.functional as F
 
 from models import TinyLM, conv_net, lm_loss, lora, mlp
-from training_slowdown.capture import CaptureRefused, capture_fn, capture_step, phase
+from training_slowdown.capture import CaptureRefused, capture_fn, capture_step, capture_steps, phase, products
 
 B, S, V, H, NH, I, L, R = 2, 4, 32, 16, 2, 32, 2, 2
 T = B * S
@@ -279,6 +280,55 @@ def test_upstream_sums_are_exact_over_a_wide_bitset(big):
     want = sum((Fraction(macs[b], tokens[b]) for b in range(k) if b % 5 != 2), Fraction(0))
     total = _bit_sums(macs, tokens)
     assert total(m) == want and total(0) == 0 and total(1 << (k - 1)) == Fraction(macs[-1], tokens[-1])
+
+
+# --- consecutive steps, one measured -----------------------------------------------------------------------------------
+
+def standard(m, batch, opts):
+    for o in opts:
+        o.zero_grad(set_to_none=True)
+    lm_loss(m, batch).backward()
+    for o in opts:
+        o.step()
+
+
+def top_block():
+    model = TinyLM(V, H, NH, I, L)
+    model.requires_grad_(False)
+    model.blocks[-1].requires_grad_(True)
+    return model, torch.optim.AdamW(model.blocks[-1].parameters())
+
+
+def test_a_step_among_its_neighbours_is_the_step_alone_with_its_circuit():
+    """Three standard steps training the top block under AdamW, the second measured. Its GEMMs and their roles, its
+    updated MACs, its cut and its raw product rows are the step's captured alone. What the step alone lacks, it has:
+    a step circuit, on which the gradient's cut and one token group's partial are the block's dW at the accumulator's
+    32 bits an element, the carried values no token op reads are AdamW's two moments, the update's profile ends at the
+    block's weights at their 32 bits, and a token reads its id and its label."""
+    model, opt = top_block()
+    alone = capture_fn(standard, model, lm_batch(), optimizers=opt)
+    assert alone.circuit is None and alone.formalism is None
+    g = capture_steps([standard] * 3, model, lm_batch(), measured=1, optimizers=opt)
+    assert roles(g) == roles(alone) and g.structure()["updated"] == alone.structure()["updated"]
+    assert (g.tokens, g.axes, g.cut_bits, g.beta) == (alone.tokens, alone.axes, alone.cut_bits, alone.beta)
+    assert products.raw_on_dial(g) == products.raw_on_dial(alone)
+    weights = 4 * H + 4 * H2 + 2 * HI   # the block's two norms, q k v o, up and down
+    f = g.formalism
+    assert g.circuit is not None and f["region"] == 1
+    assert f["grad_cut_bits"] == f["partial_cut_bits"] == f["u1_bits"] == 32 * weights
+    assert f["state_bits"] == 2 * 32 * weights and f["delta_grad_bits"] == 3 * 32 * weights
+    assert (f["tokens"], f["token_factor"], f["tau_ids"], f["tau_other_bits"]) == (T, 1, 2, 0)
+    assert 0 < f["affected_share"] < f["sigma"] < 1   # the frozen block's token work reads no update
+
+
+def test_the_first_of_the_steps_reads_no_update():
+    """Measured at the first step, nothing it reads is the run's own: no affected work and no update to read. A step
+    that isn't one of them is refused."""
+    model, opt = top_block()
+    f = capture_steps([standard] * 3, model, lm_batch(), measured=0, optimizers=opt).formalism
+    assert f["region"] == 0 and f["affected_share"] == 0 and f["u1_bits"] == 0
+    with pytest.raises(ValueError, match="measured is 3"):
+        capture_steps([standard] * 3, model, lm_batch(), measured=3, optimizers=opt)
 
 
 # --- refusals ----------------------------------------------------------------------------------------------------------
