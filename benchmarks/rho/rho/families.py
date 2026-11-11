@@ -28,7 +28,9 @@ from it, the same for every kind:
 
 * the counted sets: `kappa_forward = κ · forward / counted` (`benchmarks/nci/kappa.py`: `κ` counts the forward and, at
   `c = 2`, the Dgrad of the active weights outside the embedding and the LM head, and the LM head's Dgrad), and
-  `kappa_wgrad` the same set's weight gradients (none without a backward);
+  `kappa_wgrad` the same set's weight gradients (none without a backward); `outputs_per_product` the counted
+  products' output values over their number, where the kind counts whole matrices' products (`outputs`: full,
+  low-comm, distill), unknown otherwise;
 * depth: `layers` the layers the trained set spans, `layer_weights` per layer (`instances.layer_weights`), `layer_bits`
   the trained parameters' update at `b_w` over the layers (a state that doesn't split, over the layers whole);
 * the shard: `token_state_bits` a token's trained weights at `b_w` and, with a backward, a `grad_bits` accumulator
@@ -100,8 +102,9 @@ class Trained:
     a token uses, its part of each matrix (`size`), the `layers` it spans, the products per token `κ` counts (`counted`)
     and their forward ones, each (weight, token) pair once (`forward`); whether its state splits across shards (else
     `layer_bits` and the token's state are the whole state), a `decode` cost, a `backward` (gradient accumulators, a
-    second crossing), the data tokens per token (`data`), the tile's matrix where `instances.tile_shape` isn't it, and
-    whether the first layers are trained (`instances.shared_run`'s first run)."""
+    second crossing), the data tokens per token (`data`), the tile's matrix where `instances.tile_shape` isn't it,
+    whether the first layers are trained (`instances.shared_run`'s first run), and the counted products' output
+    values per token (`outputs`; `None` where the kind doesn't state them)."""
 
     params: float
     per_token: float
@@ -115,6 +118,7 @@ class Trained:
     data: float = 1.0
     tile: tuple[float, float] | None = None
     prefix: bool = True
+    outputs: float | None = None
 
 
 def layered(model: Model, c: float, size: Size = instances.whole) -> tuple[float, float]:
@@ -123,6 +127,15 @@ def layered(model: Model, c: float, size: Size = instances.whole) -> tuple[float
     n = sum(size(m) * m.active for m in model.group(LAYERED))
     head = sum(size(m) * m.active for m in model.group(["head"]))
     return c * n + (c - 1) * head, n
+
+
+def outputs(model: Model, c: float) -> float:
+    """The output values per token of whole matrices' products, at `c` products a parameter (the forward's first, then
+    its input gradient's): a matrix's forward product gives `d_out` values a token, each a sum over `d_in`, and its
+    input gradient `d_in`, the head's among them."""
+    forward = sum(m.d_out * m.active for m in model.group(LAYERED))
+    back = sum(m.d_in * m.active for m in model.group([*LAYERED, "head"]))
+    return min(c, 1) * forward + max(c - 1, 0) * back
 
 
 @dataclass(frozen=True, kw_only=True)
@@ -193,6 +206,7 @@ def _shaped(model: Model, v: Mapping[str, Any], t: Trained, grad_bits: float | N
     rows, cols = t.tile or instances.tile_shape(model, t.size)
     return {
         "kappa_forward": kappa * t.forward / t.counted, "kappa_wgrad": kappa * t.forward / t.counted if t.backward else None,
+        "outputs_per_product": None if t.outputs is None else t.outputs / t.counted,
         "layers": t.layers, "layer_weights": instances.layer_weights(model, t.size), "layer_bits": layer_bits,
         "map_width": model.d_model, "map_width_min": model.d_model,
         "token_state_bits": token, "shared_state_bits": shared, "flops_per_token": 2 * t.counted / kappa,
@@ -216,8 +230,10 @@ class Full(Premises):
     state_bits_per_param: float
 
     def trained(self, model: Model) -> Trained:
-        counted, forward = layered(model, self.per_param or 2)
-        return Trained(model.n_total, model.n_active, instances.whole, model.layers, counted, forward)
+        c = self.per_param or 2
+        counted, forward = layered(model, c)
+        return Trained(model.n_total, model.n_active, instances.whole, model.layers, counted, forward,
+                       outputs=outputs(model, c))
 
     def profile(self, model: Model, run: Run) -> Profile:
         return self.premised(model, run, kappa=self.kappa, state_bits=model.n_total * self.state_bits_per_param,
@@ -394,9 +410,10 @@ class Distill(Premises):
         if self.teacher is not None:
             student = 2 * (self.per_param or 2) * model.n_active / self.kappa
             kappa = self.kappa * student / (student + self.overhead * 2 * self.teacher.n_active)
-        counted, forward = layered(model, self.per_param or 2)
+        c = self.per_param or 2
+        counted, forward = layered(model, c)
         trained = Trained(model.n_total, model.n_active, instances.whole, model.layers, counted, forward,
-                          data=self.data_tokens_per_token)
+                          data=self.data_tokens_per_token, outputs=outputs(model, c))
         return self.premised(model, run, kappa=kappa, state_bits=model.n_total * self.state_bits_per_param,
                              trained=trained)
 
