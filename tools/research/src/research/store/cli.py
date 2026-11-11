@@ -10,7 +10,11 @@
                                                    --skip-record-less pushes no attempt that names no run record
   research data labels-sync [--push-only|--pull-only|--from-backup ART|--from-dir DIR] [--jobs N] [--json]
                                                    union labels/ with the remote's labels/<target>/<content sha256>.json (nothing overwritten, ever);
-                                                   --from-backup unions a labels-backup/v1 tarball, --from-dir another store's labels/
+                                                   --from-backup unions a labels-backup/v1 tarball, --from-dir another store's labels/;
+                                                   a pull of more than 5,000 takes the labels pack first, one request for all it holds
+  research data labels-pack [--every S] [--jobs N] [--json]
+                                                   pull every remote assertion, then rebuild the labels pack (all of them as one tarball,
+                                                   packs/labels/latest.tar.gz beside latest.json) and replace the remote's; --every repeats
   research data fetch ART [--to DIR] [--path GLOB]... [--list [--json]]
                                                    materialise the payload (file or tree, or just the files matching --path); prints the path;
                                                    --list prints the tree's files (path, bytes, local/remote) and fetches nothing
@@ -94,6 +98,7 @@ import json
 import os
 import sqlite3
 import sys
+import time
 from pathlib import Path
 from typing import Any, Callable
 
@@ -703,9 +708,35 @@ def cmd_labels_sync(argv: list[str]) -> int:
     if ns.json:
         _dump(rep)
     else:
-        print(f"labels: {rep['local']} local, {rep['remote_before']} on {rep['remote']}: {len(rep['pushed'])} pushed, {len(rep['pulled'])} pulled, "
-              f"{rep['already']} already on both" + (f", {len(rep['bad'])} bad remote key(s) skipped" if rep["bad"] else ""))
+        print(f"labels: {rep['local']} local, {rep['remote_before']} on {rep['remote']}: {len(rep['pushed'])} pushed, {len(rep['pulled'])} pulled"
+              + (f" ({rep['pack']} from the labels pack)" if rep["pack"] else "")
+              + f", {rep['already']} already on both" + (f", {len(rep['bad'])} bad remote key(s) skipped" if rep["bad"] else ""))
     return 1 if rep["bad"] else 0
+
+
+def cmd_labels_pack(argv: list[str]) -> int:
+    """Rebuild the labels pack and replace the remote's (`labels_sync.publish_pack`): pull every assertion the remote lists into this
+    store, then upload them as one tarball at a fixed key, which a `labels-sync` that lacks most of them takes in one request before
+    it pulls the rest.  `--every S` repeats, S seconds after each pass; a pass that fails ends the command."""
+    from . import labels_sync as LS
+
+    ap = _ap("labels-pack")
+    ap.add_argument("--every", type=float, metavar="S", help="repeat, S seconds after each pass")
+    ap.add_argument("--jobs", type=int, default=LS.SYNC_JOBS, metavar="N")
+    ap.add_argument("--json", action="store_true")
+    ns = ap.parse_args(argv)
+    st = LocalStore(ns.store)
+    warn = None if ns.json else (lambda s: print(s, file=sys.stderr, flush=True))
+    while True:
+        rep = LS.publish_pack(st, jobs=max(1, ns.jobs), log=warn)
+        if ns.json:
+            print(json.dumps(rep, sort_keys=True), flush=True)
+        else:
+            print(f"labels-pack: {rep['labels']} labels in {rep['bytes']} bytes at {LS.PACK_KEY} (sha256 {rep['sha256']}), {rep['pulled']} pulled first"
+                  + (f", {rep['bad']} bad remote key(s) left out" if rep["bad"] else ""), flush=True)
+        if ns.every is None:
+            return 0
+        time.sleep(ns.every)
 
 
 def cmd_vocab(argv: list[str]) -> int:
@@ -1536,7 +1567,7 @@ COMMANDS: dict[str, Callable[[list[str]], int]] = {
     "snapshot": cmd_snapshot,
     "labels": cmd_labels, "label": cmd_label, "reindex": cmd_reindex, "index": cmd_index, "sql": cmd_sql, "push": cmd_push, "mint-credential": cmd_mint_credential,
     "vocab": cmd_vocab, "refresh-fixtures": cmd_refresh_fixtures, "fetch-fixtures": cmd_fetch_fixtures, "export": cmd_export,
-    "doctor": cmd_doctor, "evict": cmd_evict, "labels-sync": cmd_labels_sync,
+    "doctor": cmd_doctor, "evict": cmd_evict, "labels-sync": cmd_labels_sync, "labels-pack": cmd_labels_pack,
     "catalog": cmd_catalog, "vocab-check": cmd_vocab_check, "pending": cmd_pending, "refresh": cmd_refresh,
     "parity": cmd_parity, "reconcile-attempts": cmd_reconcile_attempts, "gc": cmd_gc, "withdraw": cmd_withdraw,
 }
