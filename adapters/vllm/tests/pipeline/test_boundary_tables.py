@@ -3,7 +3,7 @@ hook on a stand-in for vLLM's Model Runner V2 reading each MLA layer's rows at t
 across chunked prefill, decode, padding and a recompute after a preemption; the builder's tables over them under the
 class's names and domains, refused for a request whose rows don't match its lengths or after a step the hook couldn't
 read; a cache that doesn't hold bf16 latent rows refused; the channel between the two processes; and the window's boundary
-commitment (`boundary_rows.BoundaryWindows`) waiting for each class's tables' roots and listing them beside its values,
+commitment (`boundary_windows.BoundaryWindows`) waiting for each class's tables' roots and listing them beside its values,
 registered by both verifiers from public items alone; every table of a class filled to its C rows, so that no published
 string shows a request's length; and what round 2 opens, kept on the node, a served table loaded by its name."""
 
