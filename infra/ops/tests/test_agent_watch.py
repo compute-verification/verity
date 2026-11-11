@@ -712,6 +712,97 @@ def test_a_run_behind_a_full_page_of_runs_cancelled_on_arrival_is_still_followed
     assert reads == [None, "50"], "it pages until a run that started, and no further"
 
 
+#: (run, made, started, ended), in seconds after the list's first hour, newest first: follow-ups that wait in CREATING for the
+#: run going, each starting when the one ahead ends, and two short runs (run-f, run-p) that started the second they were made,
+#: ahead of the ones waiting, and so sit in front of the run that was going by then
+QUEUED = [("run-d", 5190, None, None), ("run-f", 4586, 4586, 4907), ("run-c", 3938, None, None), ("run-b", 1904, 6477, None),
+          ("run-a", 280, 4907, 6476), ("run-p", -1200, -1200, -900), ("run-0", -3600, -900, 4586)]
+#: how many runs cancelled on arrival were made after each of QUEUED and before the next one up (the newest 40 by second
+#: 6900), which the list holds in front of it
+ARRIVALS = [40, 25, 0, 50, 50, 20, 60]
+
+
+def queue_at(api, t0, s):
+    """Give `api`'s one agent the runs it has `s` seconds after `t0`: those of QUEUED and ARRIVALS made by then, each in the
+    state it is in then."""
+    runs, ids, newer = {}, [], 6900
+    for (rid, made, start, end), n in zip(QUEUED, ARRIVALS):
+        for i in range(n):
+            at = newer - (i + 1) * (newer - made) / (n + 1)
+            if at <= s:
+                runs[f"{rid}-x{i}"] = {"status": "CANCELLED", "createdAt": W.iso(t0 + at), "updatedAt": W.iso(t0 + at)}
+                ids.append(f"{rid}-x{i}")
+        if made <= s:
+            if start is None or s < start:
+                runs[rid] = {"status": "CREATING", "createdAt": W.iso(t0 + made), "updatedAt": W.iso(t0 + made)}
+            elif end is None or s < end:
+                runs[rid] = {"status": "RUNNING", "createdAt": W.iso(t0 + made), "updatedAt": W.iso(t0 + start)}
+            else:
+                runs[rid] = {"status": "FINISHED", "createdAt": W.iso(t0 + made), "updatedAt": W.iso(t0 + end),
+                             "durationMs": (end - start) * 1000}
+            ids.append(rid)
+        newer = made
+    api._runs, api._agents[0]["latestRunId"], api.older = runs, ids[0], {api._agents[0]["id"]: ids[1:]}
+
+
+def test_a_follow_up_waiting_behind_a_run_further_back_than_the_newest_that_started_is_not_stuck(tmp_path):
+    """A follow-up made while a run is going waits in CREATING for it, hundreds more are cancelled on arrival, and a short
+    run that started ahead of the queue finishes in front of the run going. Reading back only to that finished run, the
+    watch never saw the run going, followed nothing, and recorded each follow-up as stuck once it had waited 10 min. Before
+    it records one, it reads on for a run to follow, and judges that."""
+    clock = Clock()
+    t0 = clock.t
+    api = FakeApi([{"id": "bc-v", "name": "a coordinator", "status": "ACTIVE", "latestRunId": ""}], {})
+    get, reads = api.get, []
+    api.get = lambda path, **p: reads.append(p.get("cursor")) or get(path, **p)
+    w, started = W.Watch(api, tmp_path / "events.jsonl", clock), []
+
+    def sweep_at(s):
+        clock.t = t0 + s
+        queue_at(api, t0, s)
+        reads.clear()
+        w.sweep(started.append)
+        return list(reads)
+
+    assert sweep_at(600) == [None], "no run CREATING for 10 min yet: back to the newest that started, and no further"
+    assert sweep_at(2382) == [None, "50", "100"] and [r.run for r in started] == ["run-0"], \
+        "run-a has waited 35 min behind run-0, which lies behind the finished run-p: read on to, and followed"
+    assert sweep_at(3127) == [None, "50", "100", "150"] and [r.run for r in started] == ["run-0"], "run-b too, 20 min"
+    assert sweep_at(6317) == [None, "50", "100", "150"] and [r.run for r in started] == ["run-0", "run-a"], \
+        "run-d has waited 18 min; run-a, its turn come, runs at place 157, behind the finished run-f at place 54"
+    assert sweep_at(6900) == [None, "50", "100"] and [r.run for r in started] == ["run-0", "run-a", "run-b"], \
+        "run-b, its turn come, runs behind run-f"
+    assert [(i, x["id"], x["status"]) for i, x in enumerate(api.get("/v1/agents/bc-v/runs")["items"], 1)
+            if x["status"] != "CANCELLED"][:5] == [(41, "run-d", "CREATING"), (67, "run-f", "FINISHED"), (68, "run-c", "CREATING"),
+                                                   (119, "run-b", "RUNNING"), (170, "run-a", "FINISHED")]
+    assert records(tmp_path) == [] and api.posts == [], "nothing recorded at any of them: each waits its turn"
+
+
+def test_a_run_creating_with_no_run_going_in_what_the_watch_may_read_is_still_recorded_stuck_once(tmp_path):
+    """A zombie CREATING run, which the API refuses to cancel: nothing runs or waits on background work behind it, only runs
+    that finished and hundreds cancelled on arrival. The watch reads on for a run to follow, `RUNS_PAGES` pages at most,
+    records the run once, and from then on reads back to the newest that started as before."""
+    clock = Clock()
+    made = W.iso(clock.t - 20 * 60)
+    arrivals = [f"run-x{i}" for i in range(W.RUNS_PAGE * W.RUNS_PAGES + 60)]
+    runs = {i: {"status": "CANCELLED", "updatedAt": made} for i in arrivals}
+    runs.update({"run-c": {"status": "CREATING", "createdAt": made, "updatedAt": made},
+                 "run-f": {"status": "FINISHED", "durationMs": 32532}, "run-far": {"status": "RUNNING"}})
+    api = FakeApi([{"id": "bc-m", "name": "a coordinator", "status": "ACTIVE", "latestRunId": arrivals[0]}], runs,
+                  older={"bc-m": [*arrivals[1:3], "run-c", *arrivals[3:63], "run-f", *arrivals[63:], "run-far"]})
+    get, reads = api.get, []
+    api.get = lambda path, **p: reads.append(p.get("cursor")) or get(path, **p)
+    w, started = W.Watch(api, tmp_path / "events.jsonl", clock), []
+    w.sweep(started.append)
+    assert reads == [None, *(str(W.RUNS_PAGE * i) for i in range(1, W.RUNS_PAGES))], "every page it may read, and no more"
+    assert [(r["kind"], r["run"], r["status"], r["minutes"]) for r in records(tmp_path)] == [("stuck", "run-c", "CREATING", 20)]
+    assert started == [], "a run going further back than the watch may read is not one it finds"
+    reads.clear()
+    clock.t += 60
+    w.sweep(started.append)
+    assert reads == [None, "50"] and len(records(tmp_path)) == 1, "recorded once, and read on for only once"
+
+
 def test_a_stream_that_ends_is_followed_again(tmp_path):
     """The stream returns on 400, 404 or 410 (410 stream_expired past the retention window); the run stayed followed with
     nothing feeding it and was never judged again."""

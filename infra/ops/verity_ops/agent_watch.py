@@ -7,7 +7,8 @@ person pressing Stop frees one. Every `POLL_S` the watch lists the agents (`GET 
 it keeps those whose `repos` name compute-verification/verity; ACTIVE ones, and IDLE ones changed in the last `IDLE_RECENT_S`,
 since an ERROR leaves an agent IDLE). For each ACTIVE agent it lists its runs (`GET .../runs`),
 page by page back to the newest that started: its `latestRunId` is often a run cancelled on arrival, created and cancelled
-within half a second while the run doing the work is older (one agent had 52 such runs in 50 min). It follows the event stream (`GET .../runs/{run}/stream`,
+within half a second while the run doing the work is older (one agent had 52 such runs in 50 min); with a run it would
+record as stuck among those, it reads on to one it can follow (below). It follows the event stream (`GET .../runs/{run}/stream`,
 server-sent events) of the agent's newest run that is RUNNING or WAITING_FOR_BACKGROUND_WORK, until that run ends or another
 takes its place. Events carry no time, so it times them as they arrive. A heartbeat counts as nothing, and so does the `status`
 the API re-sends on every reconnection. Each simple event (`assistant`, `thinking`, `tool_call`) has an `interaction_update`
@@ -54,7 +55,9 @@ background wait any call, finishing whose start the watch didn't see (it lay bef
 A run among an agent's newest left in CREATING for 10 min by the API's own `updatedAt` with no newer run started (only ones
 cancelled on arrival) and no run followed (a run queued behind a followed one waits its turn, and that one is judged), or a followed background wait with nothing at all streamed for 2 h while its agent's `updatedAt` moves, is recorded once as **stuck**: runs sit in CREATING behind a
 held one or a goal run while every later one is cancelled on arrival, and the API refuses
-to cancel a CREATING run. A goal run (`run-goal-...`) can't be read or streamed on its own (400), so it is never followed; an
+to cancel a CREATING run. The run a queued one waits behind can lie further back than the newest that started: a run can
+start ahead of older ones still CREATING, and when it ends the oldest of those starts, behind it in the list. So before it records a CREATING run, and only then, the watch reads on past the finished and cancelled
+runs for one to follow (`runs_of`, `RUNS_PAGES` pages in all at most); with none in what it may read, the run is recorded. A goal run (`run-goal-...`) can't be read or streamed on its own (400), so it is never followed; an
 agent whose latest run the API won't read is recorded once as unreadable, and again, with `since`, once it has been for
 `UNREADABLE_S`.
 
@@ -225,7 +228,8 @@ UNREADABLE_S = 3600         # a latest run the API won't read this long is recor
 IDLE_RECENT_S = 6 * 3600    # an IDLE agent is read only if it changed this recently (an ERROR leaves an agent IDLE)
 DROPPED_S = 5 * 60          # an IDLE agent changed this long after its latest run ended, with none newer, was dropped
 RUNS_PAGE = 50              # an ACTIVE agent's runs are read a page at a time, back to the newest that started
-RUNS_PAGES = 10             # (an agent can have 52 runs cancelled on arrival in 50 min), at most this many pages
+RUNS_PAGES = 10             # (an agent can have 52 runs cancelled on arrival in 50 min), or, before a CREATING run is
+#                             recorded as stuck, to one the watch can follow; at most this many pages
 FOLLOW = {"RUNNING": HELD_S, "WAITING_FOR_BACKGROUND_WORK": HELD_BG_S}
 TERMINAL = {"FINISHED", "ERROR", "CANCELLED", "EXPIRED"}
 # recorded once, never cancelled: a run CREATING this long by its `updatedAt`, a followed background wait with nothing streamed
@@ -794,6 +798,25 @@ def verity(a: dict) -> bool:
 def started(x: dict) -> bool:
     """Whether a run record ever ran: a run cancelled on arrival reads CANCELLED with no `durationMs`."""
     return x.get("status") not in ("CREATING", "CANCELLED") or bool(x.get("durationMs"))
+
+
+def followed(runs: list[dict]) -> dict | None:
+    """The run of `runs` (newest first) the watch follows: the newest RUNNING or waiting on background work, a goal run
+    apart, whose stream can't be read."""
+    return next((x for x in runs if x.get("status") in FOLLOW and not str(x.get("id")).startswith(GOAL)), None)
+
+
+def overdue(runs: list[dict], t: float) -> list[tuple[dict, float]]:
+    """(run, since when) for each of `runs` (newest first) left in CREATING for `STUCK["CREATING"]` by the API's `updatedAt`
+    with no newer run started: one that started after it shows it blocks nothing."""
+    out = []
+    for x in runs:
+        if started(x):
+            break
+        since = epoch(x.get("updatedAt") or x.get("createdAt"))
+        if x.get("status") == "CREATING" and since is not None and t - since >= STUCK["CREATING"]:
+            out.append((x, since))
+    return out
 
 
 class Api:
@@ -1460,9 +1483,12 @@ class Watch:
             self.final[run] = info
         return info
 
-    def runs_of(self, a: dict, t: float) -> list[dict] | None:
+    def runs_of(self, a: dict, t: float, stuck: bool = False) -> list[dict] | None:
         """The agent's newest runs, newest first, back to the newest that started: an ACTIVE agent's paged from the list, else
-        its latest, paged behind only when that was cancelled on arrival. None when the list fails."""
+        its latest, paged behind only when that was cancelled on arrival. With `stuck` (the sweep, which records a run left
+        in CREATING), while those hold a run it would record (`overdue`, not recorded yet) and none it can follow, it reads on
+        past the finished and cancelled ones to the first it can follow (`followed`), which that run may be queued behind.
+        `RUNS_PAGES` pages at most either way. None when the list fails."""
         latest = a["latestRunId"]
         runs: list[dict] = []
         if a.get("status") != "ACTIVE":
@@ -1475,7 +1501,8 @@ class Watch:
                 page = self.api.get(f"/v1/agents/{a['id']}/runs", limit=RUNS_PAGE, cursor=cursor)
                 listed += page.get("items") or []
                 cursor = page.get("nextCursor")
-                if not cursor or any(started(x) for x in listed):
+                waits = stuck and not followed(listed) and any(x["id"] not in self.done for x, _ in overdue(listed, t))
+                if not cursor or (any(started(x) for x in listed) and not waits):
                     break
         except (urllib.error.URLError, OSError, ValueError) as e:
             print(f"{iso(t)} runs of {a['id']}: {type(e).__name__}: {e}", file=sys.stderr, flush=True)
@@ -2166,19 +2193,15 @@ class Watch:
         errored: list[tuple[dict, str]] = []            # (agent, its latest run) ended in ERROR, restarted after the pass
         for a in live.values():
             latest = a["latestRunId"]
-            if (runs := self.runs_of(a, t)) is None:
+            if (runs := self.runs_of(a, t, stuck=True)) is None:
                 continue
             if pushed := set().union(*(pushed_branches(x) for x in runs)):
                 self.branches[a["id"]] = pushed
-            follow = next((x for x in runs if x.get("status") in FOLLOW and not str(x.get("id")).startswith(GOAL)), None)
-            newer_started = False                       # a CREATING run with a newer one started after it blocks nothing,
-            for x in runs if follow is None else ():    # and one behind a followed run waits for it, judged in its place
-                since = epoch(x.get("updatedAt") or x.get("createdAt"))
-                if (x.get("status") == "CREATING" and not newer_started and since is not None
-                        and t - since >= STUCK["CREATING"] and self.once(x["id"], t)):
+            follow = followed(runs)                     # a CREATING run behind it waits its turn: it is judged in its place
+            for x, since in () if follow else overdue(runs, t):
+                if self.once(x["id"], t):
                     self.record("stuck", Run(a["id"], x["id"], a.get("name") or ""), status="CREATING", since=iso(since),
                                 minutes=int((t - since) // 60))
-                newer_started |= started(x)
             last = next((x for x in runs if x.get("id") == latest), None)
             if follow:
                 current[follow["id"]] = (a, follow)
