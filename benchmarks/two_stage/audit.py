@@ -248,7 +248,8 @@ def round_two(sample: list[int], window: T.CS.Binding, irec: dict, brec: dict, d
                  refs=tuple((e["template"], e["header"]) for e in proofs["templates"]),
                  ref_reads=tuple((e["template"], e["registered"]) for e in proofs["templates"]),
                  wires=SS.replay_wires(replay, descriptor_id(T.REPLAY)),
-                 rows=SS.replay_rows(replay, descriptor_id(T.REPLAY)))
+                 rows=SS.replay_rows(replay, descriptor_id(T.REPLAY)),
+                 returns=SS.replay_returns(replay, descriptor_id(T.REPLAY), brec))
     return SS.check(True, own, stmts).to_json()
 
 
