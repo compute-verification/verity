@@ -22,7 +22,7 @@ from research.vqueue import (FAIL, INFRA, LIST_FAILED, PASS, PENDING, STATES, Ad
                              Red, Snapshot, Verdict, _inherited, decide, meets)
 from research.vqueue_slim import (BUILD, CHECK, OWN_TRAIN, WHOLE, abandon, audit_failures, based, combine, failures,
                                   judge, key, reads, shard_count, start, step_test, unnamed)
-from test_drive_policy import LIVE, TEST
+from test_policy import LIVE, TEST
 from test_landing import GATED_TREE, LINT_LOG, PREFLIGHTS, Harness, _main, _move_main, _plan_doc, _policy, _slim
 from test_queue import World, _git
 
@@ -226,7 +226,7 @@ def test_start_needs_the_queues_machines(world, monkeypatch):
     nothing: `start` says so rather than launch it."""
     h, base, sha, _ = _harness(world, monkeypatch)
     h.d.on = ""
-    with pytest.raises(ValueError, match="build the Landing with drive.toml's `on`"):
+    with pytest.raises(ValueError, match=r"build the Landing with drive.toml's `on` \(`research\.queue\.flags_at\(repo, main\)\.on`\)"):
         start(h.d, sha, base)
     assert h.posted == []
 

@@ -151,7 +151,7 @@ def start(driver: Landing, sha: str, base: str, shards: int | str = 0, deselect:
     shard's alike; the nightly uncached check, which reads no list, runs them."""
     if not driver.on:
         raise ValueError("the run beside a candidate's check needs the queue's machines: build the Landing with drive.toml's `on` "
-                         "(`research.queue.drive_flags(q.workdir)[0].on`)")
+                         "(`research.queue.flags_at(repo, main).on`)")
     n, auto = shard_count(shards)
     kw, skip, flags = driver.beside_args(sha, base)
     if left := deselection(driver, deselect):

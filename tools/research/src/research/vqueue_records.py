@@ -101,7 +101,7 @@ def start(driver: Landing, sha: str) -> dict | None:
     launches nothing (a dry run, or its queue's shadow)."""
     if not driver.on:
         raise ValueError("a candidate's records run needs the queue's machines: build the Landing with drive.toml's `on` "
-                         "(`research.queue.drive_flags(q.workdir)[0].on`)")
+                         "(`research.queue.flags_at(repo, main).on`)")
     what = f"train.sh {sha[:12]} {driver.on} --deferred {LEAN_STEP}, the records run of candidate {sha[:12]}"
     if driver.dry_run or driver.q.shadow:
         driver.q.log(f"research queue vqueue: would launch {what}")

@@ -840,13 +840,12 @@ class World:
         return [Ready(n, entries[n].pr.head, *chosen[n][:2], rank=i, conflict=chosen[n][2]) for i, n in enumerate(placed)]
 
     def _carry(self, landed: list[str], entries: dict[int, Entry], why: dict[int, str | None], mode: str) -> set[int]:
-        """drive's verdict carry (`Driver._carry_verdicts`), as drive.toml's `verdict_carry` at `main` says: an admitted PR
-        with no land verdict at its head (``why``, `queue.unreviewed`'s) takes the newest at another of its heads with verdicts
-        of their own when `Landing._carried_from` says so, trusting ``landed`` (`main`, and the old path's `checked` while
-        origin has it, as drive trusts both) and the heads of the admitted PRs judged before it that land on their verdicts or
-        carry one, a PR judged after those it contains (`Entry.after`), as drive's chain has them.  Each decision is kept in
-        `carried`, which the loop logs once a head.  With "on" the PRs carried (returned) count as reviewed; with "shadow"
-        none does.  No verdict is written."""
+        """The verdict carry (`carry`), as drive.toml's `verdict_carry` at `main` says: an admitted PR with no land verdict at
+        its head (``why``, `queue.unreviewed`'s) takes the newest at another of its heads with verdicts of their own when
+        `Landing._carried_from` says so, trusting ``landed`` (`main`, and the old path's `checked` while origin has it) and the
+        heads of the admitted PRs judged before it that land on their verdicts or carry one, a PR judged after those it contains
+        (`Entry.after`).  Each decision is kept in `carried`, which the loop logs once a head.  With "on" the PRs carried
+        (returned) count as reviewed; with "shadow" none does.  No verdict is written."""
         self.carried = {}
         if mode not in ("shadow", "on"):
             return set()

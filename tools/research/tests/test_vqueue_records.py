@@ -95,7 +95,7 @@ def test_start_launches_nothing_in_a_dry_run_and_none_without_the_queues_machine
     h.d.launch_locks = lambda repo, tip, machines: ([], "train: no slot")
     assert start(h.d, sha) is None and any(x.endswith("registered no run: train: no slot") for x in world.logs)
     h.d.on = ""
-    with pytest.raises(ValueError, match="the queue's machines"):
+    with pytest.raises(ValueError, match=r"the queue's machines: .*\(`research\.queue\.flags_at\(repo, main\)\.on`\)"):
         start(h.d, sha)
 
 
