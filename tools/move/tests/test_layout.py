@@ -545,8 +545,8 @@ def test_a_list_entry_naming_a_directory_the_map_empties_becomes_the_cover_of_wh
     all of them: beside `lib/commit/` that is `verity/` whole, alone it is the two parts, and so it is beside an entry
     below it, since no row gives it a place. An entry naming the deleted `__init__.py` becomes the package levels above
     what the move wrote anew in its list (`marks`), and goes where the list names nothing the move wrote (`bare`). What
-    is no such list stays as it was: a tuple that an assignment unpacks or that is a row of a table, and a word of a
-    command that takes one directory."""
+    is no such list stays as it was: a tuple that an assignment unpacks or that is a row of a table, a word of a
+    command that takes one directory, and a list in a test's file, which may name a stand-in tree."""
     r, p = _run(tmp_path, {
         "lib/core/__init__.py": "", "lib/core/wire/__init__.py": "", "lib/core/wire/frames.py": "X = 1\n",
         "lib/core/proto/check.py": "Y = 1\n", "lib/core/claims.py": "Z = 1\n", "lib/commit/c.py": "C = 1\n",
@@ -555,6 +555,7 @@ def test_a_list_entry_naming_a_directory_the_map_empties_becomes_the_cover_of_wh
                        'levels = ["lib/core/", "lib/core/wire/"]\nmarks = [\n    "lib/core/__init__.py",\n    "lib/core/claims.py",\n]\n'
                        'bare = ["lib/core/__init__.py", "docs/a.md"]\n'),
         "tools/lists.py": 'ROOTS = ("lib/core", "other")\nA, B = "lib/core", "docs"\nROWS = [("lib/core", "why")]\n',
+        "tools/tests/test_lists.py": 'ROOTS = ("lib/core", "other")\n',
         "job.sh": "#!/bin/sh\ngit rev-parse HEAD:lib/core HEAD:other\ncd lib/core\n",
     }, COVER_MAP)
     assert p.returncode == 0, p.stderr
@@ -564,6 +565,7 @@ def test_a_list_entry_naming_a_directory_the_map_empties_becomes_the_cover_of_wh
         '    "verity/__init__.py", "verity/config/__init__.py",\n    "verity/config/claims.py",\n]\nbare = ["docs/a.md"]\n')
     assert (r / "tools/lists.py").read_text() == (
         'ROOTS = ("verity/config", "verity/protocols/proto", "other")\nA, B = "lib/core", "docs"\nROWS = [("lib/core", "why")]\n')
+    assert (r / "tools/tests/test_lists.py").read_text() == 'ROOTS = ("lib/core", "other")\n'
     assert (r / "job.sh").read_text() == "#!/bin/sh\ngit rev-parse HEAD:verity/config HEAD:verity/protocols/proto HEAD:other\ncd lib/core\n"
     assert "gates.toml: lib/core/ -> verity\n" in p.stdout and "gates.toml: lib/core/__init__.py -> nothing" in p.stdout
 

@@ -752,12 +752,13 @@ class Run:
         import still runs each. An entry left with nothing to write goes, and a line left empty goes with it. A directory
         with a row, and another entry of the list above or below it, is not read so: such a list names levels, and the
         row says which the directory is. Neither is a workspace's `members`, each one distribution's directory, which
-        `_members` keeps. Returns the text with a mark where each rewritten entry was, and what each mark stands for, so
-        that no later rewrite reads the new paths as old ones."""
+        `_members` keeps, nor any list of a file under a `tests/` directory, where a list is as often the files of a
+        stand-in tree as the tree's own and nothing in it says which. Returns the text with a mark where each rewritten
+        entry was, and what each mark stands for, so that no later rewrite reads the new paths as old ones."""
         if not hasattr(self, "_parts_re"):
             names = [p for p in (*self.old_dirs, *self.dropped, *self.leftover) if self._parts(p)]
             self._parts_re = re.compile(alternation(names)) if names else None
-        if self._parts_re is None or not self._parts_re.search(text):
+        if self._parts_re is None or "tests" in path.split("/")[:-1] or not self._parts_re.search(text):
             return text, {}
         edits, marks = [], {}
         members = {m.start("body") - 1 for m in MEMBERS.finditer(text)} if posixpath.basename(path) == "pyproject.toml" else ()
