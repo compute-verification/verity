@@ -13,7 +13,8 @@ import pytest
 import torch
 
 from verity_vllm import target_family as tf
-from verity_vllm.engine import env as engine_env, hooks
+from verity_vllm.engine import env as engine_env
+from verity_vllm.engine import hooks
 from verity_vllm.engine.profiles import devices
 from verity_vllm.pipeline import build as B
 from verity_vllm.pipeline import gc_tuning
@@ -148,7 +149,7 @@ def vllm_without_nvml(tmp_path, monkeypatch):
     yield
     for p in hooks.live():
         o = getattr(p, "owner", None)
-        if (getattr(o, "__module__", None) or getattr(o, "__name__", "")).startswith("vllm"):
+        if (getattr(o, "__module__", "") or getattr(o, "__name__", "")).startswith("vllm"):
             p.uninstall()
     for name in [m for m in sys.modules if m == "vllm" or m.startswith("vllm.")]:
         del sys.modules[name]
@@ -191,8 +192,9 @@ def test_a_build_without_a_declared_target_resolves_the_platform_as_before(tmp_p
 
 
 def test_the_selection_answers_an_imported_but_unresolved_vllm_keeps_a_cuda_platform_and_refuses_a_non_cuda_one(vllm_without_nvml):
-    from verity_vllm.program.frontend.export_compat import select_cuda_platform
     import vllm.platforms as P
+
+    from verity_vllm.program.frontend.export_compat import select_cuda_platform
     P._current_platform = None
     assert select_cuda_platform() == "NonNvmlCudaPlatform"
     P._current_platform = P.NvmlCudaPlatform()

@@ -474,7 +474,6 @@
     {"file": "tests/pipeline/test_cpu_replay.py", "kind": "list-item", "symbol": "test_a_keep_replays_only_under_the_draw_it_was_kept_for", "detail": ""},
     {"file": "tests/pipeline/test_cpu_replay.py", "kind": "var-annotated", "symbol": "<module>", "detail": ""},
     {"file": "tests/pipeline/test_cpu_replay.py", "kind": "var-annotated", "symbol": "test_every_servable_tensor_opens_against_the_committed_root_and_is_served_as_its_words", "detail": ""},
-    {"file": "tests/pipeline/test_declared_build_target.py", "kind": "union-attr", "symbol": "vllm_without_nvml", "detail": ""},
     {"file": "tests/pipeline/test_derive_step_identity.py", "kind": "arg-type", "symbol": "_source", "detail": ""},
     {"file": "tests/pipeline/test_derive_step_identity.py", "kind": "type-var", "symbol": "_source", "detail": "", "count": 2},
     {"file": "tests/pipeline/test_fallback_reads.py", "kind": "func-returns-value", "symbol": "test_main_serves_the_manifest_s_model_else_the_role_s", "detail": ""},

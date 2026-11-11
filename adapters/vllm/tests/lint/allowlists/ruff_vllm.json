@@ -537,8 +537,6 @@
     {"file": "tests/pipeline/test_compose_follow.py", "kind": "I001", "symbol": "<module>", "detail": "Import block is un-sorted or un-formatted"},
     {"file": "tests/pipeline/test_compose_follow.py", "kind": "SIM115", "symbol": "_request_dir", "detail": "Use a context manager for opening files", "count": 2},
     {"file": "tests/pipeline/test_config_run.py", "kind": "I001", "symbol": "_tp", "detail": "Import block is un-sorted or un-formatted"},
-    {"file": "tests/pipeline/test_declared_build_target.py", "kind": "I001", "symbol": "<module>", "detail": "Import block is un-sorted or un-formatted"},
-    {"file": "tests/pipeline/test_declared_build_target.py", "kind": "I001", "symbol": "test_the_selection_answers_an_imported_but_unresolved_vllm_keeps_a_cuda_platform_and_refuses_a_non_cuda_one", "detail": "Import block is un-sorted or un-formatted"},
     {"file": "tests/pipeline/test_done_source.py", "kind": "SIM115", "symbol": "_swept", "detail": "Use a context manager for opening files", "count": 2},
     {"file": "tests/pipeline/test_engine_spec.py", "kind": "I001", "symbol": "<module>", "detail": "Import block is un-sorted or un-formatted"},
     {"file": "tests/pipeline/test_expert_tables.py", "kind": "E741", "symbol": "<module>", "detail": "Ambiguous variable name: `I`"},
