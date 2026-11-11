@@ -1,0 +1,11 @@
+{
+ "census": "art:cdef90831b5febd5308ec0f81cc2b5f20901197a94acad0779352d9bef53411b",
+ "cut": "art:2d327277e283621804f48ee35e21067a09ea3fa799d0f6e32e18ae8405c99a3e",
+ "flock-single": "art:aa8fed9b5c0b8ca147e9013c5bdd7cdfb9249e5910f197178675bb3f8943fde0",
+ "flock-steady": [
+  "r20261108-045435-b9cb",
+  "r20261108-060840-1189",
+  "r20261108-065439-34fb"
+ ],
+ "spot-sampling": "art:f12d8f2d2f4e1e4fc4d267242f86de062cca7adc3673e5857b27d9f5df44a906"
+}

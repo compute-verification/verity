@@ -3,7 +3,13 @@ name = "verity-pouw-benchmarks"
 version = "0.0.0"
 description = "PoUW's benchmarks and their tests."
 requires-python = ">=3.12"
-dependencies = ["research", "verity", "verity-vllm", "verity-difftest", "verity-exact-kit", "numpy", "blake3>=1.0", "scipy==1.18.1", "z3-solver>=4.13"]
+dependencies = ["verity", "verity-vllm", "verity-difftest", "numpy", "blake3>=1.0", "scipy==1.18.1", "z3-solver>=4.13"]
+
+[project.optional-dependencies]
+# The team's run and store tool and the exact kit, which the suite's tests and the theory scripts use and the public tree
+# doesn't hold (Pearl-C's kernels, which it does, need neither); the workspace installs both with every member.
+research = ["research"]
+exact-kit = ["verity-exact-kit"]
 
 # Not an installable package: a workspace member so that its tests run in the workspace environment.
 [tool.uv]
@@ -62,13 +68,13 @@ untraced = [
 # test_pearl_c_sm90_overhead_arm reads the overhead door's schemes and linears (verity_bench's overhead.py), which name
 # pearl_c_sm90's arm.
 inputs_only = true
-inputs = ["verity/__init__.py", "verity/settings.py", "verity/errors.py", "verity/core/__init__.py", "verity/core/protocols/__init__.py",
+inputs = ["verity/__init__.py", "verity/settings.py", "verity/errors.py", 
           "verity/claims/__init__.py",
           "verity/hardware/record.py",
           "verity/protocols/spot/verifier/profile.py", "verity/protocols/pouw/verifier", "verity/protocols/spot",
-          "verity/ml/protocols/__init__.py", "verity/protocols/pouw/prover", "verity/protocols/certifier/prover",
+          "verity/protocols/pouw/prover", "verity/protocols/certifier/prover",
           "verity/protocols/certifier",
-          "verity/difftest", "verity/ml/__init__.py", "verity/circuits", "verity/commitments", "verity/commitments/crypto",
+          "verity/difftest", "verity/circuits", "verity/commitments", "verity/commitments/crypto",
           "verity/definitions/kernels", "verity/commitments/randomness", "verity/protocols/flock/prover/python", "verity/commitments/windows",
           "verity/hardware",
           "verity/configuration/config/verity_config",
