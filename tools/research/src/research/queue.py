@@ -4069,18 +4069,21 @@ def _own_onto(repo: Path, onto: str, commit: str) -> str | None:
 def mapped_change(repo: Path, head: str, onto: str, moves: list[tuple[str, list[str]]], restack: Path) -> tuple[str | None, str]:
     """(``head``'s own change once it has crossed ``moves`` (`moves_between`: those ``onto`` has and it lacks) as
     `tools/move/restack.py` carries a branch, from its merge base with ``onto``, ''), or (None, why it can't): it refuses a head
-    with a commit of ``onto``'s that came after a move's parent, as the restack does (`based-after`); before each move it merges
+    with a commit of ``onto``'s that came after the last move's parent, as the restack does (`based-after`), and skips an
+    earlier move such a head is based after, as a restack naming only the moves after it crosses; before each move it merges
     the move's parent when it lacks it, a merge that must leave its own change as it was (as a merge of `main` must, to keep a
     mark: `StoreLabels`), then the move's script runs on it (`mapped_tree`, ``restack`` the directory holding main's
     `restack.py`), and the result takes the move as a second parent.  What a restack of ``head`` gives for its own change, when
     `main` since the last move touched none of it."""
     x = head
-    for move, parents in moves:
+    for i, (move, parents) in enumerate(moves):
         if len(parents) != 1:
             return None, f"the move {move[:12]} has {len(parents)} parents"
         base = parents[0]
         if late := next((mb for mb in _git(repo, "merge-base", "--all", x, onto, check=False).stdout.split()
                          if _git(repo, "merge-base", "--is-ancestor", mb, base, check=False).returncode), None):
+            if i < len(moves) - 1:
+                continue
             return None, (f"it has {late[:12]}, which came after {base[:12]}, the base of the move {move[:12]}: restack.py "
                           "refuses it (based-after)")
         if _git(repo, "merge-base", "--is-ancestor", base, x, check=False).returncode:
