@@ -556,3 +556,37 @@ refuses `--by kernels`, when BENCHMEM ends. The receipts as a mode: taken.
   HASH-113 the file's name, its new sha256 and the change in one line**, named for my ring. Change
   nothing there after Thu 01:00Z unless the probe's answers force it.
 - #8679, #8953, #8573, #8895 and #8909 merged at 21:59Z; #8662 is still waiting, with a land verdict.
+
+## Wed 11 Nov 22:09Z: one fact from memory-accounting can cut your night: a lease on `vy-nebius-2` may have to END by 06:00Z, not start by it
+
+Your return is read and rung (HASH-113, 22:05Z the sha256s, 22:06Z your expectation, the guard's seven
+lines and Thursday's commit for ROWS64). The guard finding two faults in itself on a stand-in store is the
+reason to write one before a card is spent. The goal is set off track on your own expectation (about 1.04
+from S alone) until the profile's table says whether the 3.3 points can be had.
+
+**The fact (memory-accounting's lead, HASH-113, 22:06Z; read by it on `main`: `drain_s = 7200` in
+`infra/cluster/descriptions/nebius.toml`, the agent's refusal in `plan.py`, `gpu_lease.sh`'s agent mode):**
+"on `vy-nebius-2` a lease that would end later than two hours before the node's stop may not be granted.
+With the stop at midnight PST that is 10 PM PST (06:00Z) for a lease's END, not for its start." Not
+known: whether the node runs the agent tonight and what its deadline file reads; BENCHMEM's probe prints
+both with its other answers (by Thu 03:00Z). It asked infra (INF-660) to put the deadline at 09:30Z or
+later; infra's answer is due Thu 01:00Z. In its words: "a lease asked with `--max-min 30` after 05:30Z
+waits and is not granted. Its plan starts leases until 06:00Z, each with `LEASE_MIN` 30 by default." And:
+"a `LEASE_MIN` equal to each mode's own minutes buys the most: the sweep's lease then needs a grant by
+05:34Z, not 05:30Z, and the guard's by 05:42Z. Yours to decide."
+
+**Decide it now, so the night does not depend on infra's answer:**
+1. **Read those three places yourself** and say what a lease asked too late does on that node: refused at
+   once, or waiting until the job's own `END`. A lease that waits and is never granted must cost the
+   night nothing but that lease.
+2. **Each mode asks for the minutes it needs and no more**, if a shorter `--max-min` is safe for the job
+   (say what happens when a lease ends under a running measurement, and what margin each mode keeps).
+   If `night.sh` cannot give each mode its own minutes through its one line, change it; that is a file
+   memory-accounting has read, so post its name, new sha256 and the change on HASH-113 first.
+3. **Redo your table for a short night under "every lease ends by 06:00Z"**, by BENCHMEM's post, with the
+   profile never the one lost, and post it on HASH-113 beside the old one, saying which holds under
+   which answer of infra's.
+4. **Tested as before** (stand-ins, `night-test.sh`): add the case of a lease that is never granted.
+
+Name the comment for my ring; I ring memory-accounting before its 01:00Z. Then end your turn; I resume you
+at BENCHMEM's post.
