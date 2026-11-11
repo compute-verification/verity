@@ -555,6 +555,14 @@ def test_broker_failures_are_clear_exit_2_and_never_show_the_identity(broker, re
     assert waits == ([30.0] * slack.RATE_RETRIES if getattr(fail, "code", None) == 429 else [])
 
 
+def test_a_guarded_calls_refusal_says_who_may_make_it():
+    assert set(slack.GUARDED_WHO) == set(slack.BROKER_GUARDED)
+    says = slack.broker_error("chat.update", http_error(403, {"error": "forbidden_caller"}))
+    assert says.endswith("(HTTP 403 forbidden_caller): only an edit to a post made as a name this agent holds or posts as "
+                         "(its route's holder or posters)")
+    assert "@top's and @console's" in slack.broker_error("conversations.create", http_error(403, {"error": "forbidden_caller"}))
+
+
 def test_a_long_thread_is_paged_by_oldest_so_no_reply_at_a_page_boundary_is_lost():
     """Slack's cursor for conversations.replies skips the message at each page boundary, so paging by cursor would lose a
     doorbell in a long inbox read."""

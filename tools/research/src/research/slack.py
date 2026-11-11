@@ -147,6 +147,10 @@ CHAT_METHODS = ("bookmarks.add", "conversations.archive", "conversations.create"
 BROKER_GUARDED = ("chat.update", "usergroups.create", "usergroups.disable", "usergroups.enable", "usergroups.update",
                   *CHAT_METHODS)
 #: exactly what the broker's route allows: every Web API method this module calls (the tests check it)
+#: who the broker lets make each guarded call, for its refusal
+GUARDED_WHO = {"chat.update": "only an edit to a post made as a name this agent holds or posts as (its route's holder or posters)",
+               **{m: "only @comms' and @top's holders sync the user groups" for m in BROKER_GUARDED if m.startswith("usergroups.")},
+               **{m: "only @top's and @console's holders open and close people's chats" for m in CHAT_METHODS}}
 BROKER_METHODS = ("auth.test", "chat.getPermalink", "chat.postMessage", "conversations.history", "conversations.replies",
                   "reactions.add", "usergroups.list", *BROKER_GUARDED)
 BROKER_MAX_BODY = 65536                                                   # bytes of request JSON; the route refuses more (413)
@@ -767,6 +771,8 @@ def broker_error(method: str, e: urllib.error.HTTPError) -> str:
     why = f"HTTP {e.code}{_code(e)}"
     if e.code == 401:
         return f"{method}: the Slack broker rejected this agent's Cursor identity ({why}); set SLACK_BOT_TOKEN or ask @infra"
+    if e.code == 403 and method in BROKER_GUARDED:
+        return f"{method}: the Slack broker refused the call ({why}): {GUARDED_WHO[method]}"
     if e.code == 403:
         return f"{method}: the Slack broker refused the call ({why}): it serves compute-verification/verity's agents and BROKER_METHODS only"
     if e.code == 413:
