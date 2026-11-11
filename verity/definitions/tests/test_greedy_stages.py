@@ -251,6 +251,10 @@ def test_the_served_cut_s_units():
     assert G.plan(SERVED_V)[-1].lanes == (147136, 154880)
     assert descriptor_id(G.select(SERVED_V)) == "GreedySelect_v1{V=154880,N=7744}"
     assert b1.CUTS["TokenSelect_v1"] == G.__name__
+    assert G.CUTS["GreedySelect_v1"](G.select(SERVED_V)) == cut
+    assert [(descriptor_id(d), n) for d, n in G.cut(G.select(SERVED_V, 16))] == [
+        ("GreedyChunk_v1{N=9680,FIRST=true}", 1), ("GreedyChunk_v1{N=9680,FIRST=false}", 14),
+        ("GreedyCombine_v2{V=154880,N=9680}", 1)]
 
 
 @pytest.mark.parametrize("V,K", [(SERVED_V, 18), (SERVED_V, 3), (16, 3), (200, 0), (65537, None), (65537, 1), (1 << 18, 2)])

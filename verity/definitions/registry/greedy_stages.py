@@ -188,8 +188,10 @@ def plan(V: int, K: int | None = None) -> tuple[Unit, ...]:
 
 
 def cut(t) -> list[tuple[SpecializedDefinition, int]]:
-    """The units a binding of `TokenSelect_v1{V}` is cut into, each Definition bound and how many of it (`b1.CUTS`)."""
-    n = Counter(u.defn for u in plan(int(t.bindings["V"])))
+    """The units a binding of `TokenSelect_v1{V}` is cut into, each Definition bound and how many of it (`b1.CUTS`); a binding
+    of `GreedySelect_v1{V,N}`'s are its body's, at its own chunks (`CUTS`)."""
+    V, N = int(t.bindings["V"]), t.bindings.get("N")
+    n = Counter(u.defn for u in plan(V, None if N is None else V // int(N)))
     return list(n.items())
 
 
@@ -214,6 +216,9 @@ def GreedySelect(B, S, logits):
 def select(V: int, K: int | None = None) -> SpecializedDefinition:
     """`GreedySelect_v1` at `plan(V, K)`'s chunks."""
     return bind(GreedySelect, V=V, N=plan(V, K)[-1].defn.bindings["N"])
+
+
+CUTS = {"GreedySelect_v1": cut}  # held to the block as its units, which its body calls (`checks.cut_of`)
 
 
 # --- the twin ------------------------------------------------------------------------------------------------------------------
