@@ -184,8 +184,11 @@ def test_the_command_names_each_expected_difference_and_exits_1_on_any_other(tmp
     path = write_config(tmp_path / "a.toml", budget=budget, dials=dials)
     cfg = config.load(path, starts.registry(reg))
     cpu = of_record.counted(cfg, 1, tmp_path / "count")
-    assert cpu["invalid"] == [] and cpu["new_weights"] == [] and [c["step"] for c in cpu["checkpoints"]] == [1]
+    assert cpu["invalid"] == [] and cpu["checkpoints"][-1]["step"] == 1
     first, second = cpu["steps"]
+    tables = [kind for _, kind, op, shapes, *_ in cpu["structures"][second["struct"]]["log"]
+              if op == "mul" and json.loads(shapes)[-1] == [CTX, 4]]
+    assert set(tables) == {"theta", "grad"}  # a product with a position table is θ's, as the records count it
     rec = cpu | {"steps": [first, second, second], "start_record": {"name": "tiny", "digest": cfg.start.digest},
                  "structures": cpu["structures"] | {
                      second["struct"]: as_cuda(cpu["structures"][second["struct"]], rows=2, gains=3)}}

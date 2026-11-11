@@ -68,7 +68,7 @@ PARTS = {
 def entries(names: list[str] = ()) -> list[Path]:
     """The entries' config files: each of `names` (a file, or a name in `ENTRIES`), or every entry by name."""
     if not names:
-        return sorted(ENTRIES.glob("*.toml"))
+        return sorted(ENTRIES.glob("*.toml"), key=lambda p: p.stem)
     out = []
     for name in names:
         path = next((p for p in (Path(name), ENTRIES / f"{name}.toml") if p.is_file()), None)

@@ -194,7 +194,7 @@ def norm(cfg: dict, rec: dict, shape: dict) -> dict | None:
     if fused not in rec or cfg.get(mul) != rec[fused]:
         return None
     inside = [k for k in cfg if k in (frozen, scale) or k[:2] == ("bwd", "grad") and k[2] in ("mul", "div")
-              and all(o in (x, s, g) for o in json.loads(k[3]))]
+              and k[3] != "[]" and all(o in (x, s, g) for o in json.loads(k[3]))]
     if cfg.get(scale, [0])[0] != cfg[mul][0] + cfg.get(frozen, [0])[0] or any(k in rec for k in inside):
         return None
     found = {"rule": "norm", "record_macs": rec[fused][1], "config_macs": cfg[mul][1] + sum(cfg[k][1] for k in inside),
