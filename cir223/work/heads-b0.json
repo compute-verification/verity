@@ -1,0 +1,132 @@
+{
+ "8520": {
+  "headRefName": "cursor/verity-circuits-6f04",
+  "headRefOid": "141593ac72167d5fbc3292295a16118e0b4147cd",
+  "number": 8520
+ },
+ "8765": {
+  "headRefName": "cursor/circuits-cir215-calls-form-6f04",
+  "headRefOid": "31d8a67e25a65c960f64017ac0ca2efe0e2ddecb",
+  "number": 8765
+ },
+ "8362": {
+  "headRefName": "cursor/circuits-table-read-6f04",
+  "headRefOid": "3e6afe88d753186aa047dc7ffd068d0452381da4",
+  "number": 8362
+ },
+ "8447": {
+  "headRefName": "cursor/circuits-split-ports-6f04",
+  "headRefOid": "1a0c5ede5503f940f7bea01052c0fceabed298a8",
+  "number": 8447
+ },
+ "8534": {
+  "headRefName": "cursor/circuits-mask-words-6f04",
+  "headRefOid": "b44c6651d71bb79f77e6453e0b264bcde7e8c18c",
+  "number": 8534
+ },
+ "8397": {
+  "headRefName": "cursor/cir198-norm-split",
+  "headRefOid": "46293b329a1281b55a9d1fe30ba4690c300dc12d",
+  "number": 8397
+ },
+ "8394": {
+  "headRefName": "cursor/compile-cost-dsatable",
+  "headRefOid": "18832bfe182275f51a797d561d328aa36e29ea78",
+  "number": 8394
+ },
+ "8432": {
+  "headRefName": "cursor/circuits-combine-struct-6f04",
+  "headRefOid": "f4b3bfc5cd521e6d58e55df797e605db4041c1fb",
+  "number": 8432
+ },
+ "8451": {
+  "headRefName": "cursor/circuits-struct-slots-6f04",
+  "headRefOid": "22316ab8535bbef0aa95a286c1092a91cbbca927",
+  "number": 8451
+ },
+ "8594": {
+  "headRefName": "cursor/circuits-topp-gates-6f04",
+  "headRefOid": "3dc6495f745fc94c68637f5c027075242e9d5e96",
+  "number": 8594
+ },
+ "8774": {
+  "headRefName": "cursor/circuits-topp-select-6f04",
+  "headRefOid": "5faa5af4bed6257cf4be94293668e89cb8709b1a",
+  "number": 8774
+ },
+ "8618": {
+  "headRefName": "cursor/circuits-slice-readmes-6f04",
+  "headRefOid": "cabf272e0151f291fcbb57691d1f05e466a42d37",
+  "number": 8618
+ },
+ "8673": {
+  "headRefName": "cursor/circuits-cc-reads-6f04",
+  "headRefOid": "552cf2cd7bc5bad3ae5c12c5f358c65c08badd70",
+  "number": 8673
+ },
+ "8599": {
+  "headRefName": "cursor/circuits-cc-pack-6f04",
+  "headRefOid": "143408665f6d68524a2436645f21ecfa5f942fa8",
+  "number": 8599
+ },
+ "8426": {
+  "headRefName": "cursor/circuits-cir202-greedy-select-6f04",
+  "headRefOid": "0a76ecd405ddd5c8e2a8356cd6b26f348b6aa42b",
+  "number": 8426
+ },
+ "8370": {
+  "headRefName": "cursor/circuits-chunk-rows-docstring-6f04",
+  "headRefOid": "8e57e1d07c9635e02a2a9ad71d99dd130e6bdd9c",
+  "number": 8370
+ },
+ "8651": {
+  "headRefName": "cursor/circuits-slice-delete-6f04",
+  "headRefOid": "604d77b99d66c625c374fc5e867bd8d97358613b",
+  "number": 8651
+ },
+ "8694": {
+  "headRefName": "cursor/circuits-served-units-key-guard-6f04",
+  "headRefOid": "224da3f20d7c7de273fa4150d5775f216c5b6bfd",
+  "number": 8694
+ },
+ "8430": {
+  "headRefName": "cursor/circuits-reads-undeclared-6f04",
+  "headRefOid": "f9fb6cc291ba7847f1333960780fc79304c8cc24",
+  "number": 8430
+ },
+ "8463": {
+  "headRefName": "cursor/circuits-versions-a3f7",
+  "headRefOid": "a7f45a95b647a7b1406306b638a88c6f139d55fe",
+  "number": 8463
+ },
+ "8464": {
+  "headRefName": "cursor/circuits-cc-alone-3b7e",
+  "headRefOid": "4740cbd794ceb9881eebd489863338c87a749684",
+  "number": 8464
+ },
+ "8461": {
+  "headRefName": "cursor/circuits-bench-del-6f04",
+  "headRefOid": "61f74eb1b376a5841350c42c90cd05120652cad5",
+  "number": 8461
+ },
+ "8466": {
+  "headRefName": "cursor/circuits-bench-del2-6f04",
+  "headRefOid": "bcd9f40b5b0e3e31c69eb45a9cd2a3abc746543e",
+  "number": 8466
+ },
+ "8441": {
+  "headRefName": "cursor/vllm-benchdel-circuits-a2ed",
+  "headRefOid": "9de18ea2906983ed3271dd61f08c1786a1b12054",
+  "number": 8441
+ },
+ "8054": {
+  "headRefName": "cursor/circuits-stacking-nosplits-6f04",
+  "headRefOid": "166fecef6ac8abe41769c24493310a722d3fffd3",
+  "number": 8054
+ },
+ "8763": {
+  "headRefName": "cursor/circuits-cir227-worker-mem-6f04",
+  "headRefOid": "0e673a6ff18d13ca9826cf475425f93f79acaa09",
+  "number": 8763
+ }
+}
