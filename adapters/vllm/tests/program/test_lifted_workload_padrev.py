@@ -6,16 +6,29 @@ this module's own."""
 from __future__ import annotations
 
 import pytest
-
 from verity.circuits import Program
-from verity_vllm.program import workload as W
 from verity.circuits.codec import encode_program
 from verity.circuits.defs import REGISTRY
-from verity.definitions.registry import b1, lifted as L
-from verity_vllm.program.lifting import lifted_compose
-from tests.program import test_lifted_mixed as PM
-from tests.program.test_lifted_mixed import BOUNDARY, CAP, EOS, LP, TINY, _inputs, _inputs_for, _prompt_b, _request_outs, _requests, _run
 from verity.circuits.types import Array, Value
+from verity.definitions.registry import b1
+from verity.definitions.registry import lifted as L
+
+from tests.program import test_lifted_mixed as PM
+from tests.program.test_lifted_mixed import (
+    BOUNDARY,
+    CAP,
+    EOS,
+    LP,
+    TINY,
+    _inputs,
+    _inputs_for,
+    _prompt_b,
+    _request_outs,
+    _requests,
+    _run,
+)
+from verity_vllm.program import workload as W
+from verity_vllm.program.lifting import lifted_compose
 
 I32 = Value(32)
 

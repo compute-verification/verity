@@ -11,14 +11,19 @@ record can key on the colliding id.  Tests that need the exemption skip BY NAME 
 from __future__ import annotations
 
 import pytest
-
-from verity_vllm.program import workload as W
 from verity.circuits.codec import encode_program, program_digest
-from verity.circuits.defs import REGISTRY, CompositeDefinition, IdentityConflict, PrimitiveDefinition
+from verity.circuits.defs import (
+    REGISTRY,
+    CompositeDefinition,
+    IdentityConflict,
+    PrimitiveDefinition,
+)
 from verity.circuits.program import Program
 from verity.circuits.refs import coll_concat
-from tests.program.test_workload_program import _WP, _desc, _wl
 from verity.circuits.types import Array, Value
+
+from tests.program.test_workload_program import _WP, _desc, _wl
+from verity_vllm.program import workload as W
 
 _ADD = PrimitiveDefinition("PadrevCmpAdd16", 1, (("a", Value(16)), ("b", Value(16))), Value(16), lambda a, b: (a + b) & 0xFFFF)
 _SRC = {"class": "ToyForCausalLM", "mode": "profile", "inputs": [[3]], "config_sha256": "c" * 16}   # no T: derive.py's SRC shape

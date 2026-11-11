@@ -9,7 +9,6 @@ __models__ = ("unsloth/Llama-3.2-1B",)
 
 import numpy as np
 import pytest
-
 from verity.circuits.defs import bind
 from verity.circuits.evaluation.reference import evaluate
 from verity.definitions.numerics import inductor_rows as TW

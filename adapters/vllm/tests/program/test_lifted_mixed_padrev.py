@@ -22,11 +22,12 @@ from verity.circuits import Program
 from verity.circuits.defs import composite
 from verity.circuits.layout import resolve
 from verity.circuits.refs import Coll, concat
-from verity.definitions.registry import lifted as L
-from verity.definitions.numerics import serve3_reference as ref
-from verity.definitions.registry.b1 import weights_type
-from tests.program.test_serve3 import D_MAX, EOS_FOR, LP, TINY, _inputs
 from verity.circuits.types import Array, Value
+from verity.definitions.numerics import serve3_reference as ref
+from verity.definitions.registry import lifted as L
+from verity.definitions.registry.b1 import weights_type
+
+from tests.program.test_serve3 import D_MAX, EOS_FOR, LP, TINY, _inputs
 
 I32 = Value(32)
 

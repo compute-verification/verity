@@ -23,8 +23,8 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
 from verity.circuits import Program, bind
 from verity.circuits.codec import program_digest
-from verity.definitions.registry import b1, serve3
 from verity.definitions.numerics import serve3_reference as ref
+from verity.definitions.registry import b1, serve3
 from verity.definitions.registry.b1 import weights_type
 
 TINY = {"model": "tiny", "revision": None, "H": 32, "NL": 2, "NH": 2, "KVH": 1, "D": 16, "I": 32, "V": 64,

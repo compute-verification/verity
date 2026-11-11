@@ -34,11 +34,15 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 from verity.circuits import Program, bind
 from verity.circuits.codec import decode_program, encode_program, program_digest
 from verity.circuits.defs import REGISTRY, PrimitiveDefinition
-from verity.definitions.registry import b1, lifted as L, pad_prims as PP, prims as P, serve3
-from verity.definitions.numerics import serve3_reference as ref
-from verity.definitions.registry.b1 import weights_type
-from tests.program.test_serve3 import D_MAX, EOS_FOR, LP, TINY, Y_RAW, _inputs, _v1
 from verity.circuits.types import Array, RecordType, Tuple, Value
+from verity.definitions.numerics import serve3_reference as ref
+from verity.definitions.registry import b1, serve3
+from verity.definitions.registry import lifted as L
+from verity.definitions.registry import pad_prims as PP
+from verity.definitions.registry import prims as P
+from verity.definitions.registry.b1 import weights_type
+
+from tests.program.test_serve3 import D_MAX, EOS_FOR, LP, TINY, Y_RAW, _inputs, _v1
 
 I32, BF16, F32 = Value(32), Value(16), Value(32)
 N_EVENTS = D_MAX + 1  # prefill event + D_MAX decode events (the Serve_v2 skeleton; SPEC R3 maps this to Workload_v1's T = cap−1)
