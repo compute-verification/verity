@@ -22,9 +22,9 @@ releases the `u`-th session's rounds pick.
 * **What the walk has answered is the sessions before the `u`-th** (`SessDone`): it holds with nothing answered
   (`sessDone_nil`); while it holds and the `u`-th tree is opened, not every pick is answered (`SessDone.not_all`);
   the next release picked is the `u`-th session's link's (`SessDone.first_stop`), the ones a session's trace answers
-  after it are the `u`-th session's other rounds' (`SessDone.rep_stop`), and where the trace ends after the session's
-  last round, at the play's end or at a stop a link round picks, the sessions before the `u + 1`-th are answered
-  (`SessDone.next`).
+  after it are the `u`-th session's other rounds' (`SessDone.rep_stop`), the stop after them is the session's closing
+  round's or another of its rounds' (`SessDone.close_stop`), and past the closing round, the tree's last opening, the
+  sessions before the `u + 1`-th are answered (`SessDone.closed`).
 -/
 
 @[expose] public section
@@ -32,6 +32,10 @@ releases the `u`-th session's rounds pick.
 namespace Verity.Sampled
 
 theorem slotAt_zero : slotAt 0 = .link := rfl
+
+/-- A session's first place holds the link's slot, at more than one round a session. -/
+theorem slotOf_zero (T : ℕ) {per : ℕ} (hper : 1 < per) : slotOf T per 0 = .link :=
+  (slotOf_of_ne T (by omega)).trans slotAt_zero
 
 /-! ## The trees a log opens, and the release that first opens each -/
 
@@ -276,113 +280,111 @@ theorem SessDone.rep_stop (hS : SessionPicks P su lk Lg) {done : List (List Rele
     · have := (hD j₁ L₁ hp).1 h
       omega
 
-/-- **A session's walk answers the session**: where the sessions before the `u`-th are answered (`SessDone`), the
-next release picked is after `L₀`, longer than every answered log, the releases picked after it are after the logs
-`ms`, each by a round that is no link's, and the walk stands, with those answered too (`Walked`), after the session's
-last round (`per ≤ ms.length + 1`, the session's rounds `per`), at the play's end, or at a stop a link round picks,
-the sessions before the `u + 1`-th are answered, where an opening of a tree opened before is of the last tree opened
-(`OpensLast`). -/
-theorem SessDone.next (hS : SessionPicks P su lk Lg) (hO : OpensLast Lg) {done : List (List Release)} {u : ℕ}
-    (hD : SessDone P su Lg done u) {j₀ : Fin R} {L₀ : List Release} (h₀ : PicksIn P Lg j₀ L₀)
-    (hlt : ∀ L₁ ∈ done, L₁.length < L₀.length) {ms : List (List Release)}
-    (hms : ∀ m ∈ ms, ∃ j, ¬ lk j ∧ PicksIn P Lg j m) (hgt : ∀ m ∈ ms, L₀.length < m.length) (hnd : ms.Nodup)
-    {done' : List (List Release)} (hd' : ∀ L₁, L₁ ∈ done' ↔ L₁ = L₀ ∨ L₁ ∈ ms ∨ L₁ ∈ done)
-    {pre' : List Release} {a' : Fin R → Prop} (hW : Walked P Lg pre' a' done') {per : ℕ} (e : Fin per → Fin R)
-    (he : ∀ j, su j = u → ∃ j', e j' = j)
-    (hend : per ≤ ms.length + 1 ∨ ∃ L, NoPick P a' pre' L ∧ (Lg = pre' ++ L ∨
-      ∃ x L' j, Lg = (pre' ++ L) ++ x :: L' ∧ a' j ∧ lk j ∧ P j (pre' ++ L) x.frame)) :
-    (lk j₀ ∧ su j₀ = u) ∧ (∀ m ∈ ms, ∀ j, PicksIn P Lg j m → ¬ lk j ∧ su j = u) ∧
-      SessDone P su Lg done' (u + 1) := by
-  have hL₀ : L₀ ∈ done' := (hd' L₀).2 (Or.inl rfl)
-  have hF₁ : ∀ j L₁, PicksIn P Lg j L₁ → L₁.length < L₀.length → L₁ ∈ done := fun j L₁ hp hl => by
-    have h1 := (hW.picked L₀ hL₀).1
-    rcases (hd' L₁).1 (hW.before j L₁ hp (by omega)) with rfl | h | h
-    · exact absurd hl (Nat.lt_irrefl _)
-    · have := hgt L₁ h
+/-- **The stop after a session's answered rounds is its closing round's, or another of its rounds'**: where the
+sessions before the `u`-th are answered (`SessDone`), session `u`'s link's pick is answered, the walk stands
+(`Walked`) with the closing round `jc` of session `u` picking after a log `Lc` not answered, and from where the walk
+stands no live round picks through `L`, after which the play ends or a live round picks, the play does not end there:
+a live round picks, and it is `jc`, picking after `Lc`, or another round of session `u` that is no link's. An
+opening of a tree opened before is of the last tree opened (`OpensLast`), so no later session's round picks before
+`Lc`. -/
+theorem SessDone.close_stop (hS : SessionPicks P su lk Lg) (hO : OpensLast Lg) {done : List (List Release)} {u : ℕ}
+    (hD : SessDone P su Lg done u) {j₀ : Fin R} {L₀ : List Release} (h₀ : PicksIn P Lg j₀ L₀) (hl₀ : lk j₀)
+    (hu₀ : su j₀ = u) {done' : List (List Release)} (hd : ∀ L₁ ∈ done, L₁ ∈ done') (hL₀ : L₀ ∈ done')
+    {pre' : List Release} {a' : Fin R → Prop} (hW : Walked P Lg pre' a' done') {jc : Fin R} {Lc : List Release}
+    (hc : PicksIn P Lg jc Lc) (hcl : ¬ lk jc) (hcu : su jc = u) (hcd : Lc ∉ done') {L : List Release}
+    (hNP : NoPick P a' pre' L)
+    (hstop : Lg = pre' ++ L ∨ ∃ x L' j, Lg = (pre' ++ L) ++ x :: L' ∧ a' j ∧ P j (pre' ++ L) x.frame) :
+    ∃ x L' j, Lg = (pre' ++ L) ++ x :: L' ∧ a' j ∧ P j (pre' ++ L) x.frame ∧
+      ((j = jc ∧ pre' ++ L = Lc) ∨ (su j = u ∧ ¬ lk j ∧ j ≠ jc)) := by
+  rcases hstop with hLg | ⟨x, L', j, hLg, haj, hPj⟩
+  · exfalso
+    obtain ⟨r, L₂, he, -⟩ := id hc
+    have hl' := congrArg List.length (he.symm.trans hLg)
+    rw [List.length_append, List.length_cons, List.length_append] at hl'
+    exact hcd (hW.seg hS.once hNP (L₃ := []) (by rw [List.append_nil]; exact hLg) hc (by omega))
+  · refine ⟨x, L', j, hLg, haj, hPj, ?_⟩
+    have hps : PicksIn P Lg j (pre' ++ L) := ⟨x, L', hLg, hPj⟩
+    have hnd : pre' ++ L ∉ done' := fun h => hW.live j _ h hps haj
+    by_cases hjc : j = jc
+    · refine Or.inl ⟨hjc, ?_⟩
+      rw [hjc] at hps
+      exact hS.once jc _ _ hps hc
+    refine Or.inr ?_
+    have hle : (pre' ++ L).length ≤ Lc.length := by
+      by_contra hlt
+      have hseg : Lg = pre' ++ (L ++ x :: L') := by rw [hLg, List.append_assoc]
+      rw [List.length_append] at hlt
+      exact hcd (hW.seg hS.once hNP hseg hc (by omega))
+    have hge : ¬ su j < u := fun h => hnd (hd _ ((hD j _ hps).2 h))
+    obtain ⟨xc, Lc₂, ic, sc, nc, hec, hxc, htc⟩ := hS.rep jc Lc hcl hc
+    have hcnt := hO Lc xc Lc₂ ic sc nc hec hxc (su jc) htc
+    obtain ⟨d, hd'⟩ := prefix_le (hec.symm.trans hLg) hle
+    have hmono : (openedTrees (pre' ++ L)).length ≤ (openedTrees Lc).length := by
+      obtain ⟨e, he⟩ := openedTrees_append (pre' ++ L) d
+      rw [hd', he, List.length_append]
       omega
-    · exact h
-  obtain ⟨hl₀, hu₀⟩ := hD.first_stop hS h₀ hF₁ hlt
-  have hrep : ∀ m ∈ ms, ∀ j, PicksIn P Lg j m → ¬ lk j ∧ su j = u := fun m hm j hj =>
-    hD.rep_stop hS h₀ hu₀ hms hlt hgt hm hj fun j' L₁ hp hl => by
-      have h1 := (hW.picked m ((hd' m).2 (Or.inr (Or.inl hm)))).1
-      exact (hd' L₁).1 (hW.before j' L₁ hp (by omega))
-  refine ⟨⟨hl₀, hu₀⟩, hrep, fun j L₁ hp => ⟨fun h => ?_, fun h => ?_⟩⟩
-  · rcases (hd' L₁).1 h with rfl | h | h
-    · obtain rfl := hS.unique j j₀ L₁ hp h₀
-      omega
-    · have := (hrep L₁ h j hp).2
-      omega
-    · have := (hD j L₁ hp).1 h
-      omega
-  · by_cases hju : su j < u
-    · exact (hd' L₁).2 (Or.inr (Or.inr ((hD j L₁ hp).2 hju)))
-    have hju : su j = u := by omega
     by_cases hl : lk j
-    · obtain rfl := hS.link_inj j j₀ hl hl₀ (hju.trans hu₀.symm)
-      exact (hd' L₁).2 (Or.inl (hS.once j L₁ L₀ hp h₀))
-    by_cases hlen : L₁.length < pre'.length
-    · exact hW.before j L₁ hp hlen
-    rcases hend with hend | ⟨L, hNP, hLg | ⟨x, L', js, hLg, haj, hlj, hPj⟩⟩
-    · obtain ⟨j', rfl⟩ := he j hju
-      obtain ⟨j₀', rfl⟩ := he j₀ hu₀
-      have hU' : PicksOnce (fun j' => P (e j')) Lg := fun j L₁ L₁' h h' => hS.once (e j) L₁ L₁' h h'
-      have hpick : ∀ m ∈ ms, ∃ j, PicksIn (fun j' => P (e j')) Lg j m := fun m hm => by
-        obtain ⟨j₃, -, hp₃⟩ := hms m hm
-        obtain ⟨j₃', rfl⟩ := he j₃ (hrep m hm j₃ hp₃).2
-        exact ⟨j₃', hp₃⟩
-      rcases covers_of_length hU' (j₀ := j₀') h₀ hpick hgt hnd hend j' L₁ hp with h | h
-      · exact (hd' L₁).2 (Or.inl h)
-      · exact (hd' L₁).2 (Or.inr (Or.inl h))
-    · obtain ⟨r, L₂, he₁, -⟩ := id hp
-      have hl' := congrArg List.length (he₁.symm.trans hLg)
-      rw [List.length_append, List.length_cons, List.length_append] at hl'
-      exact hW.seg hS.once hNP (L₃ := []) (by rw [List.append_nil]; exact hLg) hp (by omega)
-    · have hseg : Lg = pre' ++ (L ++ x :: L') := by rw [hLg, List.append_assoc]
-      by_cases hlen' : L₁.length < pre'.length + L.length
-      · exact hW.seg hS.once hNP hseg hp hlen'
-      exfalso
-      have hps : PicksIn P Lg js (pre' ++ L) := ⟨x, L', hLg, hPj⟩
-      obtain ⟨x₁, L₂, i, s, n, he₁, hx₁, hti⟩ := hS.rep j L₁ hl hp
-      obtain ⟨d, hd⟩ := prefix_le (he₁.symm.trans hLg) (by rw [List.length_append]; omega)
+    · exfalso
+      obtain ⟨x₁, L₂, i, s, n, he₁, hx₁, hni, hcn⟩ := hS.link j _ hl hps
+      have hxx : x₁ = x := (List.cons.inj (List.append_cancel_left (he₁.symm.trans hLg))).1
+      rw [hxx] at hx₁
       cases d with
       | nil =>
-        rw [List.append_nil] at hd
-        rw [hd] at hp
-        exact hl (hS.unique j js _ hp hps ▸ hlj)
+        rw [List.append_nil] at hd'
+        rw [← hd'] at hps
+        exact hjc (hS.unique j jc Lc hps hc)
       | cons y d =>
         have hy : y = x := by
-          rw [hd, List.append_assoc, List.cons_append] at he₁
-          exact (List.cons.inj (List.append_cancel_left (he₁.symm.trans hLg))).1
-        subst hy
-        obtain ⟨xs, Ls, is, ss, ns, hes, hxs, hnis, hcs⟩ := hS.link js (pre' ++ L) hlj hps
-        obtain rfl : xs = y := (List.cons.inj (List.append_cancel_left (hes.symm.trans hLg))).1
-        have h1 := (openedTrees_new_at hxs hnis d).2
-        rw [← hd] at h1
-        have h2 := hO L₁ x₁ L₂ i s n he₁ hx₁ (su j) hti
-        obtain ⟨x₀, L₂₀, i₀, s₀, n₀, he₀, hx₀, hni₀, hc₀⟩ := hS.link j₀ L₀ hl₀ h₀
-        have h3 := (hW.picked L₀ hL₀).1
-        have hlt₀ : L₀.length < (pre' ++ L).length := by
-          rw [List.length_append]
-          by_cases hL : L₀.length = pre'.length + L.length
-          · have hLe : L₀ = pre' ++ L :=
-              (List.append_inj (he₀.symm.trans hLg) (by rw [List.length_append]; exact hL)).1
-            rw [← hLe] at hps
-            exact absurd haj (hW.live js L₀ hL₀ hps)
-          · omega
-        obtain ⟨d₀, hd₀⟩ := prefix_le (hLg.symm.trans he₀) (Nat.le_of_lt hlt₀)
-        cases d₀ with
-        | nil =>
-          rw [List.append_nil] at hd₀
-          rw [hd₀] at hlt₀
-          exact Nat.lt_irrefl _ hlt₀
-        | cons y₀ d₀ =>
-          have hy₀ : y₀ = x₀ := by
-            rw [hd₀, List.append_assoc, List.cons_append] at hLg
-            exact (List.cons.inj (List.append_cancel_left (hLg.symm.trans he₀))).1
-          subst hy₀
-          have h4 := (openedTrees_new_at hx₀ hni₀ d₀).2
-          rw [← hd₀] at h4
-          omega
+          rw [hd', List.append_assoc, List.cons_append] at hec
+          exact (List.cons.inj (List.append_cancel_left (hec.symm.trans hLg))).1
+        rw [hy] at hd'
+        have h1 := (openedTrees_new_at hx₁ hni d).2
+        rw [← hd'] at h1
+        have hju : su j = u := by omega
+        have hjj := hS.link_inj j j₀ hl hl₀ (hju.trans hu₀.symm)
+        rw [hjj] at hps
+        have e := hS.once j₀ _ _ hps h₀
+        rw [e] at hnd
+        exact hnd hL₀
+    · obtain ⟨x₁, L₂, i, s, n, he₁, hx₁, hti⟩ := hS.rep j _ hl hps
+      have h1 := (List.getElem?_eq_some_iff.1 hti).1
+      exact ⟨by omega, hl, hjc⟩
+
+/-- **Past a session's closing round the session is answered**: where the sessions before the `u`-th are answered
+(`SessDone`), the answered logs are those, the one session `u`'s link's round picks after, the logs `ms` rounds of
+session `u` pick after and the one `Lc` its closing round `jc` picks after, the walk stands at `Lc` with those
+answered (`Walked`), and no round of session `u` picks after a log longer than `Lc`, the sessions before the
+`u + 1`-th are answered. -/
+theorem SessDone.closed (hS : SessionPicks P su lk Lg) {done : List (List Release)} {u : ℕ}
+    (hD : SessDone P su Lg done u) {j₀ : Fin R} {L₀ : List Release} (h₀ : PicksIn P Lg j₀ L₀) (hu₀ : su j₀ = u)
+    {ms : List (List Release)} (hrep : ∀ m ∈ ms, ∀ j, PicksIn P Lg j m → su j = u) {jc : Fin R}
+    {Lc : List Release} (hc : PicksIn P Lg jc Lc) (hcu : su jc = u) {done'' : List (List Release)}
+    (hd'' : ∀ L₁, L₁ ∈ done'' ↔ L₁ = Lc ∨ L₁ = L₀ ∨ L₁ ∈ ms ∨ L₁ ∈ done) {a'' : Fin R → Prop}
+    (hW : Walked P Lg Lc a'' done'')
+    (hlast : ∀ j L₁, PicksIn P Lg j L₁ → su j = u → L₁.length ≤ Lc.length) :
+    SessDone P su Lg done'' (u + 1) := by
+  intro j L₁ hp
+  refine ⟨fun h => ?_, fun h => ?_⟩
+  · rcases (hd'' L₁).1 h with h | h | h | h
+    · rw [h] at hp
+      have := hS.unique j jc _ hp hc
+      rw [this, hcu]
+      exact Nat.lt_succ_self u
+    · rw [h] at hp
+      have := hS.unique j j₀ _ hp h₀
+      rw [this, hu₀]
+      exact Nat.lt_succ_self u
+    · rw [hrep L₁ h j hp]
+      exact Nat.lt_succ_self u
+    · exact Nat.lt_succ_of_lt ((hD j L₁ hp).1 h)
+  · by_cases hju : su j < u
+    · exact (hd'' L₁).2 (Or.inr (Or.inr (Or.inr ((hD j L₁ hp).2 hju))))
+    have hle := hlast j L₁ hp (by omega)
+    by_cases hlt : L₁.length < Lc.length
+    · exact hW.before j L₁ hp hlt
+    · obtain ⟨r, L₂, he, -⟩ := id hp
+      obtain ⟨rc, Lc₂, hec, -⟩ := id hc
+      exact (hd'' L₁).2 (Or.inl (List.append_inj (he.symm.trans hec) (by omega)).1)
 
 end Sessions
 
@@ -390,23 +392,25 @@ end Sessions
 
 /-- **The window's readings' rounds are the sessions' rounds** (`SessionPicks`) in a log that serves each opening,
 whose trees each name their streams distinctly and are no more than the sessions the readings' rounds hold: round `j`
-is session `j / per`'s, the link's at the layout's first slot. -/
-theorem sessionPicks_windowReadingAt {R : ℕ} {tables : Array String} (ht : tables.toList.Nodup) {per : ℕ}
-    (hper : 0 < per) (reveal : ℕ → Slot → Exchange → Option Claims.Msg) (record : Exchange → Option Claims.Msg)
-    (recordDigest : Claims.Msg) {Lg : List Release} (hn : ∀ sp ∈ helloSpecs Lg, sp.streams.toList.Nodup)
-    (hS : LogServed Lg) (hR : (openedTrees Lg).length * per ≤ R) :
+is session `j / per`'s, the link's at the session's first place. The closing round's pick, as a rep round's, is an
+opening of the tree the session's link opened. -/
+theorem sessionPicks_windowReadingAt {R : ℕ} {tables : Array String} (ht : tables.toList.Nodup)
+    (hT : 0 < tables.size) {per : ℕ} (hper : 1 < per) (reveal : ℕ → Slot → Exchange → Option Claims.Msg)
+    (record : Exchange → Option Claims.Msg) (recordDigest : Claims.Msg) {Lg : List Release}
+    (hn : ∀ sp ∈ helloSpecs Lg, sp.streams.toList.Nodup) (hS : LogServed Lg)
+    (hR : (openedTrees Lg).length * per ≤ R) :
     SessionPicks (windowReadingAt (R := R) tables per reveal record recordDigest).round (fun j => j.val / per)
-      (fun j => slotAt (j.val % per) = .link) Lg where
+      (fun j => slotOf tables.size per (j.val % per) = .link) Lg where
   link j L₁ hl := by
     rintro ⟨x, L₂, he, hp⟩
-    have hp' : sessionRound tables (j.val / per) (slotAt (j.val % per)) L₁ x.frame := hp
+    have hp' : sessionRound tables (j.val / per) (slotOf tables.size per (j.val % per)) L₁ x.frame := hp
     rw [hl] at hp'
     obtain ⟨i, s, n, hfr, -, hni, hc⟩ := hp'
     exact ⟨x, L₂, i, s, n, he, hfr, hni, hc⟩
   rep j L₁ hl := by
     rintro ⟨x, L₂, he, hp⟩
-    have hp' : sessionRound tables (j.val / per) (slotAt (j.val % per)) L₁ x.frame := hp
-    cases hσ : slotAt (j.val % per) with
+    have hp' : sessionRound tables (j.val / per) (slotOf tables.size per (j.val % per)) L₁ x.frame := hp
+    cases hσ : slotOf tables.size per (j.val % per) with
     | link => exact absurd hσ hl
     | rep t r k =>
       rw [hσ] at hp'
@@ -418,22 +422,25 @@ theorem sessionPicks_windowReadingAt {R : ℕ} {tables : Array String} (ht : tab
     have h2 : ((openedTrees L₁).length + 1) * per ≤ (openedTrees Lg).length * per := Nat.mul_le_mul_right per h1
     rw [Nat.succ_mul] at h2
     have hlt : (openedTrees L₁).length * per < R := by omega
-    have hdiv : (openedTrees L₁).length * per / per = (openedTrees L₁).length := Nat.mul_div_cancel _ hper
+    have hper0 : 0 < per := by omega
+    have hdiv : (openedTrees L₁).length * per / per = (openedTrees L₁).length := Nat.mul_div_cancel _ hper0
     have hmod : (openedTrees L₁).length * per % per = 0 := Nat.mul_mod_left _ _
     refine ⟨⟨(openedTrees L₁).length * per, hlt⟩, ?_, hdiv, x, L₂, he, ?_⟩
-    · show slotAt ((openedTrees L₁).length * per % per) = .link
+    · show slotOf tables.size per ((openedTrees L₁).length * per % per) = .link
       rw [hmod]
-      exact slotAt_zero
+      exact slotOf_zero _ hper
     · show sessionRound tables ((openedTrees L₁).length * per / per)
-        (slotAt ((openedTrees L₁).length * per % per)) L₁ x.frame
-      rw [hdiv, hmod, slotAt_zero]
+        (slotOf tables.size per ((openedTrees L₁).length * per % per)) L₁ x.frame
+      rw [hdiv, hmod, slotOf_zero _ hper]
       exact ⟨i, s, n, hx, hS L₁ x L₂ i s n he hx, hni, rfl⟩
   unique j j' L₁ := by
     rintro ⟨x, L₂, he, hp⟩ ⟨x', L₂', he', hp'⟩
     obtain rfl : x = x' := (List.cons.inj (List.append_cancel_left (he.symm.trans he'))).1
-    exact windowReadingAt_unique ht per reveal record recordDigest hp hp'
+    exact windowReadingAt_unique ht hT (by omega) reveal record recordDigest hp hp'
   link_inj j j' hl hl' hsu := by
-    have hm : j.val % per = j'.val % per := slotAt_injective (hl.trans hl'.symm)
+    have hper0 : 0 < per := by omega
+    have hm : j.val % per = j'.val % per :=
+      slotOf_inj hT (Nat.mod_lt _ hper0) (Nat.mod_lt _ hper0) (hl.trans hl'.symm)
     have hd : j.val / per = j'.val / per := hsu
     exact Fin.ext (by rw [← Nat.div_add_mod j.val per, ← Nat.div_add_mod j'.val per, hd, hm])
   once := picksOnce_windowReadingAt tables per reveal record recordDigest hn
