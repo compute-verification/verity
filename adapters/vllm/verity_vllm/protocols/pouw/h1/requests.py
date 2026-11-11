@@ -101,7 +101,9 @@ SLOTS_NONCE = REQUESTS_NONCE + (1 << 40)
 TABLES_NONCE = REQUESTS_NONCE + (1 << 41)
 #: a call's hiding tables under the run's salt key (`pouw_h1.H1Run`): A's T slot rows and scales, z's records
 #: (`pouw_h1_records`)
-TABLE_TAGS = {"a": "verity/pouw/h1/a-table/v1", "z": "verity/pouw/h1/z-table/v2"}
+A_TABLE_TAG = "verity/pouw/h1/a-table/v1"
+Z_TABLE_TAG = "verity/pouw/h1/z-table/v2"
+TABLE_TAGS = {"a": A_TABLE_TAG, "z": Z_TABLE_TAG}
 TABLE_NONCES = {"a": 0, "z": 2}    # j of each table's hm96 nonces
 ROUND_TAG = "verity/pouw/h1/round/v3"
 STEP_TAG = "verity/pouw/h1/step-calls/v1"
@@ -238,6 +240,13 @@ def _root64(h: Any) -> bool:
         return False
 
 
+def table_root(row: Mapping[str, Any], name: str) -> Any:
+    """Manifest row `row`'s root of its call's table `name` (its ``tables``' ``a`` or ``z``, `pouw_h1.H1Run.manifest`);
+    None for a row that carries no ``tables`` object."""
+    tables = row.get("tables")
+    return tables.get(name) if isinstance(tables, Mapping) else None
+
+
 def tables_reason(salt: bytes, log: Sequence[Mapping[str, Any]], rows: Sequence[Mapping[str, Any]]) -> str | None:
     """Why a slot of some round's slot table names an A-table leaf that no round root commits, given the window's round log
     and its manifest rows (`pouw_h1.H1Run.manifest`): a call at a step no round of the log closes, a logged round whose step
@@ -256,7 +265,7 @@ def tables_reason(salt: bytes, log: Sequence[Mapping[str, Any]], rows: Sequence[
         r, got = x.get("round"), steps.get(x.get("round"), [])
         if not got:
             return f"round {r}'s step has no call, so its slot table names leaves of no committed A table"
-        bare = next((m for m in got if not _root64((m.get("tables") or {}).get("a"))), None)
+        bare = next((m for m in got if not _root64(table_root(m, "a"))), None)
         if bare is not None:
             return (f"call {bare.get('index')} of step {r} has no A table root, so round {r}'s slot table names A-table "
                     "leaves that no round root commits")
@@ -472,4 +481,4 @@ __all__ = ["ADMISSIONS", "EMPTY_REQUEST", "EMPTY_SLOT", "HM96_SALT", "HidingTabl
            "TABLE_TAGS", "UNENTERED", "batch_order", "draw_root", "first_ids", "hiding_rows", "late_admission",
            "new_requests", "receipts_digest", "request_reason", "request_table", "requests_binding", "round_reason", "round_root",
            "round_row", "rounds_reason", "slot_leaf", "slot_owner", "slot_reason", "slot_table", "slots_binding",
-           "sort_batch_req_ids", "step_digest", "table_leaves", "tables_reason"]
+           "sort_batch_req_ids", "step_digest", "table_leaves", "table_root", "tables_reason"]

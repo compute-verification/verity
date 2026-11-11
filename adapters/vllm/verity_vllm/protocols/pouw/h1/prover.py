@@ -359,7 +359,7 @@ def open_call(directory: str | Path, record: Mapping[str, Any], index: int, salt
     def table(name: str, leaves: list[bytes]) -> Any:
         tree = RQ.hiding_rows(tagged(RQ.TABLE_TAGS[name], salt, index), index, leaves, key,
                               RQ.TABLES_NONCE + 3 * index + RQ.TABLE_NONCES[name])
-        if tree.commitment.root.hex() != (row.get("tables") or {}).get(name):
+        if tree.commitment.root.hex() != RQ.table_root(row, name):
             raise ValueError(f"call {index}'s {name} table, rebuilt from the prover's directory, is not the one its "
                              "manifest row carries")
         return tree

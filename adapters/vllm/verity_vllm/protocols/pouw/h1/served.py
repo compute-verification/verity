@@ -303,8 +303,8 @@ class Served:
     def key(self, commits: Mapping[str, Any]) -> bytes:
         if self.window is not None:
             return self.window
-        session = commits.get("session") or {}
-        need = (commits.get("weights_root"), commits.get("requests_root"), session.get("session"))
+        session = commits.get("session")
+        need = (commits.get("weights_root"), commits.get("requests_root"), None if session is None else session.get("session"))
         if None in need:
             raise ValueError("the window has no key: neither one given nor a window-open root (its weights' root, round 0's "
                              "request table and the session)")

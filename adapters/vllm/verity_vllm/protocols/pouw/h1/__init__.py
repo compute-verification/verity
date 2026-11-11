@@ -695,7 +695,7 @@ class H1Run:
         (`request_gaps`), whose coins aren't the challenger's (`IN_PROCESS`) or, with the Commit, whose A tables or input
         ids aren't the Commit's (`pouw_h1_commit.UNTIED`, ``details.roots1``)."""
         out = {c.index: self.verdict(c) for c in self.calls if c.m}
-        untied = bool((self.details.get("roots1") or {}).get("reason"))
+        untied = "roots1" in self.details and bool(self.details["roots1"]["reason"])
         for why, on in ((RQ.UNENTERED, bool(self.request_gaps())), (IN_PROCESS, self.coin_source != CHALLENGER),
                         (CT.UNTIED, untied)):
             out = {i: {**v, "credit": False, "reason": why} if on and v["credit"] else v for i, v in out.items()}
@@ -704,8 +704,8 @@ class H1Run:
     def credit_bits(self) -> dict[int, bool]:
         """Each call's credit bit, its manifest row's `credit.CREDIT` under calls_root (so fixed before `draw_root`): its
         `gated` verdict, true only for a served call with a z table."""
-        gated = self.gated()
-        return {c.index: c.index in gated and gated[c.index]["credit"] and (self.tables.get(c.index) or {}).get("z") is not None
+        gated, tables = self.gated(), self.tables
+        return {c.index: c.index in gated and gated[c.index]["credit"] and c.index in tables and tables[c.index]["z"] is not None
                 for c in self.calls}
 
     def credit(self) -> dict[str, Any]:
