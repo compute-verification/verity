@@ -29,6 +29,9 @@ alone (`cutBlock`).
 * `Prog.correct_wired`: so a proof block correct in `C` on the values read through `ω` is correct, cut, at the wired
   program, where `ω` moves only input gates, to returned gates that are no constants and are outside the blocks that
   read them.
+* `Prog.correct_wired_of_agree`: the same at a decoder: values that make the block correct in `C` give values that
+  make it correct, cut, at the wired program, where the two agree through `ω` at the block's gates and the wires they
+  read.
 * `Prog.needs_rewire`, `Prog.needs_wired`: a gate a cut proof block's correctness reads at the wired program is the
   image, under `ω`, of a gate the block's correctness reads in `C`.
 * `Prog.topological_rewire`, `Prog.topological_wired`: the wired program is topologically ordered where `C` is and
@@ -512,6 +515,26 @@ theorem Prog.correct_wired {C : Prog} {ω : ℕ → ℕ} {keep : ℕ → Bool} {
         fun b hb => h2.trans (h1.symm.trans hb)⟩
   · exact Prog.boundary_of_boundary_rewire (fun o ho => (List.mem_filter.1 ho).1) hw
       (fun g' hg'u hg'u' => hin g' fun h => hg'u' (mem_cutBlock.2 ⟨hg'u, h⟩)) hb
+
+/-- **The bridge at a decoder**: where values `v₀` make a proof block `u` correct in `C`, values `v` make it correct,
+cut, at the wired program, where `v` at the gate `ω` gives each gate of `u` and each wire `u` reads is `v₀` there. Such
+a `v` exists exactly where `v₀` agrees at any two of those gates `ω` sends to one gate: the tie between a reader's
+input and its writer's output, which the wired program states and `C` does not. -/
+theorem Prog.correct_wired_of_agree {C : Prog} {ω : ℕ → ℕ} {keep : ℕ → Bool} {u : List ℕ} {v₀ v : ℕ → Bool}
+    (hin : ∀ i, ω i ≠ i → C.gates[i]? = some .input)
+    (hnc : ∀ i, ω i ≠ i → ∀ c, C.gates[ω i]? ≠ some (.const c))
+    (hw : ∀ i, ω i ≠ i → ω i ∈ C.outs)
+    (htgt : ∀ g ∈ u, ∀ x : BGate, C.gates[g]? = some x → ∀ i ∈ x.reads, ω i ≠ i → ω i ∉ u)
+    (hu : ∀ g ∈ u, v (ω g) = v₀ g)
+    (hr : ∀ g ∈ u, ∀ x : BGate, C.gates[g]? = some x → ∀ i ∈ x.reads, i ∉ u → v (ω i) = v₀ i)
+    (hc : C.Correct (fun g => some (v₀ g)) u) :
+    (C.wired ω keep).Correct (fun g => some (v g)) (cutBlock ω u) := by
+  refine Prog.correct_wired hin hnc hw htgt
+    (C.correct_of_congr (fun g hg => ?_) (fun g hg x hx i hi hiu => ?_) hc)
+  · show some (v₀ g) = some (v (ω g))
+    rw [hu g hg]
+  · show some (v₀ i) = some (v (ω i))
+    rw [hr g hg x hx i hi hiu]
 
 /-- **What a cut proof block needs at the wired program** is the image of what the block needs in `C`
 (`Prog.needs_rewire`). -/
