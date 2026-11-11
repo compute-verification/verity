@@ -175,6 +175,18 @@ digest and sections), with the template's size against the unrolled unit's (rows
 through the calls) into stmt.jsonl; `--base REV` first times the same `flock-tmpl` built against REV's verifier on the
 same staged statement (stmt-base.jsonl).
 
+`table_root/table_root.sh` measures the Lean verifier's SHA-512 rate and what a history table's root costs it at the
+pinned capacity (`Spot.HistoryTable.CAPACITY`, `2^17` ranks): `table_root/Main.lean`, built in a scratch Lake package
+against the checkout's verifier, times `Flock.Sha512.hash` at the message lengths the verifier hashes and at 1 MiB, the
+frame-v3 node, leaf and tree leaf, `FV3.root` over `2^17` leaves, and whole table roots (`Spot.HistoryTable.rootAt`)
+at the lengths given, each over `--tables` distinct tables. `$OUT` gets table_root.jsonl (one row per phase: calls, ns a
+call, calls a second, milliseconds, peak RSS), cpu.txt and the build's log.
+
+~~~sh
+research run --as proofs --project verity --on vy-nebius-cpu-1 --source . --pool proofs --cwd clone -- \
+  bash benchmarks/verifier_cost/table_root/table_root.sh [--tables T] [--lengths 4096,40960,131072]
+~~~
+
 `qcall.sh CONFIG X...` measures `Q_call` v1 (`Flock.Qcall`, an open walk in `tests/test_verifier_cost.py`) on one Serve_v1
 config's word-level descriptor: `flock-verify qcall-program` at each X, with the output's SHA-256 so two commits' outputs
 compare, a `perf` profile at the first X, and the one-stage `partition` piece under `Q_call` v1 at X = 16. Its header has
