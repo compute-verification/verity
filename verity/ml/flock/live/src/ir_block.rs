@@ -533,9 +533,24 @@ pub fn schedule(net: &IrUnitNet) -> UnitSched {
     schedule_of(net, &net.a, &net.b)
 }
 
+/// [`schedule`] with `seeds`' rows read as level 0: a row is one level past its deepest operand that is no seed. A seed's z
+/// is known before the walk, from outside it, so the rows that read it wait for none of the rows before it; the seed keeps
+/// its own place in the schedule, where its a and b are computed as any row's and its z is held to the one given.
+pub fn schedule_seeded(net: &IrUnitNet, seeds: &[u32]) -> UnitSched {
+    schedule_cut(net, &net.a, &net.b, seeds)
+}
+
 /// [`schedule`] of `net`'s layout with its rows `a` and `b` read through [`RowRead`].
 pub(crate) fn schedule_of<R: RowRead + ?Sized>(net: &IrUnitNet, a: &R, b: &R) -> UnitSched {
+    schedule_cut(net, a, b, &[])
+}
+
+fn schedule_cut<R: RowRead + ?Sized>(net: &IrUnitNet, a: &R, b: &R, seeds: &[u32]) -> UnitSched {
     let (u, first, cpos) = (net.useful, net.in_words * WORD, net.const_pos);
+    let mut seeded = vec![false; u];
+    for &r in seeds {
+        seeded[r as usize] = true;
+    }
     let rows_of = |g: &Group| -> Vec<u32> { (0..g.bits.iter().sum::<usize>()).map(|j| (g.col * WORD + j) as u32).collect() };
     let mut late_rows: Vec<u32> = net.in_groups.get(1).map(rows_of).unwrap_or_default();
     let mut cut_rows: Vec<u32> = if late_rows.is_empty() { vec![] } else { net.out_groups.last().map(rows_of).unwrap_or_default() };
@@ -565,7 +580,7 @@ pub(crate) fn schedule_of<R: RowRead + ?Sized>(net: &IrUnitNet, a: &R, b: &R) ->
             if i == cpos || late[i] != phase {
                 continue;
             }
-            let l = 1 + a.row_cols(i).chain(b.row_cols(i)).filter(|&c| c != i && c != cpos && late[c] == phase && c >= first).map(|c| level[c]).max().unwrap_or(0);
+            let l = 1 + a.row_cols(i).chain(b.row_cols(i)).filter(|&c| c != i && c != cpos && late[c] == phase && c >= first && !seeded[c]).map(|c| level[c]).max().unwrap_or(0);
             level[i] = l;
             max = max.max(l);
         }
@@ -1269,6 +1284,35 @@ mod tests {
             assert!(x.late_rows.iter().all(|&r| level[r as usize] == 0) && x.cut_rows.iter().all(|&r| level[r as usize] <= x.levels0),
                     "net {seed}: a cut output past the first phase");
             assert!(x.levels() > 3, "net {seed}: a schedule of under three levels");
+        }
+    }
+
+    #[test]
+    fn a_seeded_schedule_reads_its_seeds_as_level_0() {
+        for (seed, in_words, useful) in [(3u64, 1usize, 600usize), (99, 3, 40_000)] {
+            let net = random_net(seed, in_words, useful);
+            let (first, cp, full) = (in_words * WORD, net.const_pos, schedule(&net));
+            let none = schedule_seeded(&net, &[]);
+            assert_eq!((&none.level_off, &none.order), (&full.level_off, &full.order), "net {seed}: no seed, the schedule");
+            let all: Vec<u32> = (first..cp).map(|r| r as u32).collect();
+            let flat = schedule_seeded(&net, &all);
+            assert_eq!((flat.levels(), flat.level(0)), (1, all.as_slice()), "net {seed}: every row a seed, one level");
+            // the rows of every fifth level of the schedule as seeds
+            let seeds: Vec<u32> = (0..full.levels()).filter(|l| l % 5 == 4).flat_map(|l| full.level(l).iter().copied()).collect();
+            let x = schedule_seeded(&net, &seeds);
+            let mut rows = x.order.clone();
+            rows.sort_unstable();
+            assert!(rows.iter().map(|&r| r as usize).eq(first..cp), "net {seed}: every row past the inputs once, the seeds among them");
+            let (mut level, mut seeded) = (vec![0usize; useful], vec![false; useful]);
+            seeds.iter().for_each(|&r| seeded[r as usize] = true);
+            for l in 0..x.levels() {
+                x.level(l).iter().for_each(|&r| level[r as usize] = l + 1);
+            }
+            for i in first..cp {
+                let deepest = net.a.row_cols(i).chain(net.b.row_cols(i)).filter(|&c| c != i && c != cp && !seeded[c]).map(|c| level[c]).max().unwrap_or(0);
+                assert_eq!(level[i], deepest + 1, "net {seed}: row {i}, its deepest operand that is no seed at {deepest}");
+            }
+            assert!(x.levels() < full.levels(), "net {seed}: {} levels after a cut at every fifth of {}", x.levels(), full.levels());
         }
     }
 
