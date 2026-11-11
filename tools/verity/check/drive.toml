@@ -110,8 +110,8 @@ lowrisk_per_tick = 20
 # runs with the control pod's or every agent's credentials once it is on main: infra/, the research tool (tools/research/),
 # the agent guard and its hooks (tools/agent-guard/, .cursor/), and the environment (pyproject.toml, uv.lock)
 lowrisk_excludes = ["*.lean", "lean-audit.json", "lakefile.*", "lean-toolchain", "lake-manifest.json", "TRUSTED.sha256",
-                    "verity/core/", "verity/ml/circuits/", "verity/ml/kernels/", "verity/ml/commitments/",
-                    "verity/ml/crypto/", "verity/ml/randomness/",
+                    "verity/core/", "verity/circuits/", "verity/definitions/kernels/", "verity/commitments/",
+                    "verity/commitments/crypto/", "verity/commitments/randomness/",
                     "tools/verity/lean/", "tests/", "tools/verity/check/", "tools/verity/graph/", ".gitattributes", "drive.py",
                     "queue.py",
                     "infra/", "tools/research/", "tools/agent-guard/", ".cursor/", "pyproject.toml", "uv.lock"]
