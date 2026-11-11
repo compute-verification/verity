@@ -136,11 +136,11 @@ HALF = {**TOY, "DV": 64}
 #: and the two-split combine of one
 UNITS = [scores(16, HALF), scores(None, HALF), scores(8, HALF), values(16, HALF), values(None, HALF), values(8, HALF),
          split_end(HALF), comb(2, HALF, G=32)]
-UNITS_CAPS = dict(zip(UNITS, (3, 4, 4, 3, 4, 4, 5, 4)))
+UNITS_CHUNK = dict(zip(UNITS, (3, 4, 4, 3, 4, 4, 5, 4)))
 #: ``UNITS`` with each scores and values unit its Boolean body
 UNITS_BITS = [scores(16, HALF, True), scores(None, HALF, True), scores(8, HALF, True), values(16, HALF, True),
               values(None, HALF, True), values(8, HALF, True), *UNITS[6:]]
-UNITS_BITS_CAPS = dict(zip(UNITS_BITS, UNITS_CAPS.values()))
+UNITS_BITS_CHUNK = dict(zip(UNITS_BITS, UNITS_CHUNK.values()))
 #: ``UNITS``' places in a head's chain (`chain_rows.places`), past the six of its whole key blocks: the scores units, then per
 #: scores unit its values units on column blocks 0 and 1, each split's ends on them, and the combines
 UNITS_PLACES = dict(zip(UNITS, ([6], [7], [8], [9, 10], [11, 12], [13, 14], [15, 16, 17, 18], [19, 20])))
@@ -500,7 +500,7 @@ def test_each_scores_and_values_unit_is_wired_to_the_units_that_wrote_what_it_re
     """A later scores unit reads the scores unit before it; a values unit its own block's scores unit and, past the first,
     the values unit of its column block before it; a split's end the last scores unit and the last values unit of its column
     block; a combine each split's end on its column block."""
-    ms = members(Served(row(HALF), n=2), UNITS, UNITS_CAPS)
+    ms = members(Served(row(HALF), n=2), UNITS, UNITS_CHUNK)
     assert sum(m.n for m in ms) == 2 * 2 * 15
     unit = units(ms, UNITS, UNITS_PLACES, rows=2)
     at = {u: key for key, u in unit.items()}
@@ -518,7 +518,7 @@ def test_each_scores_and_values_unit_is_wired_to_the_units_that_wrote_what_it_re
                       (UNITS[5], "block 0 (visit order) of split 1's O on column block 0 is the output of a values template"),
                       (UNITS[6], "split 0's end column block 0 is the output of a column end template")):
         with pytest.raises(ValueError, match=re.escape(f"{why} the partition does not name")):
-            members(s, [t for t in UNITS if t != left], UNITS_CAPS)
+            members(s, [t for t in UNITS if t != left], UNITS_CHUNK)
 
 
 def test_the_scores_and_values_units_read_the_twin_s_and_their_combines_are_the_served_row():
@@ -527,7 +527,7 @@ def test_the_scores_and_values_units_read_the_twin_s_and_their_combines_are_the_
     Definition on its rows (as Flock's stager parses them) computes its committed outputs, and the combines' outputs, column
     block by column block, are the served row."""
     s = Served(row(HALF), n=2)
-    ms = members(s, UNITS, UNITS_CAPS)
+    ms = members(s, UNITS, UNITS_CHUNK)
     got = read(s, ms, UNITS)
     ws = committed(ms, got)
     S, pl = HALF, CH.places(HALF)
@@ -561,7 +561,7 @@ def test_the_scores_and_values_units_read_the_twin_s_and_their_combines_are_the_
 
 def test_the_scores_and_values_units_boolean_bodies_are_the_same_units_rows_and_wires():
     s = Served(row(HALF), n=2)
-    ms, bits = members(s, UNITS, UNITS_CAPS), members(s, UNITS_BITS, UNITS_BITS_CAPS)
+    ms, bits = members(s, UNITS, UNITS_CHUNK), members(s, UNITS_BITS, UNITS_BITS_CHUNK)
     of = dict(zip(UNITS, UNITS_BITS))
     assert [(of[m.template], m.rows, m.outs, m.n, m.base, m.wired) for m in ms] == [
         (m.template, m.rows, m.outs, m.n, m.base, m.wired) for m in bits]
@@ -590,14 +590,14 @@ def test_a_combine_of_64_columns_reads_each_split_s_end_from_the_unit_the_partit
     assert m.wired == tuple((f"in{g}.{sp}", o, tuple(unit[(0, h, 18 + 2 * sp + c)] for h in range(2) for c in range(2)))
                             for g, o in ((0, "o1"), (1, "o0")) for sp in range(2))
     assert committed(ms, read(s, ms, tmpls))[m.port("o0")].reshape(-1).tolist() == s.y.tolist()
-    caps = dict.fromkeys([*whole, *tmpls, values(16, WIDE, G=32)], 64)
+    chunk = dict.fromkeys([*whole, *tmpls, values(16, WIDE, G=32)], 64)
     for both, ways in (([*whole[:5], *tmpls], f"whole ({whole[0]}) and as scores and values units ({tmpls[0]})"),
                        ([*tmpls[3:], *ends], f"whole ({ends[0]}) and as values units of 64 columns ({tmpls[3]})"),
                        ([*tmpls[:4], values(16, WIDE, G=32)],
                         f"as values units of 32 columns ({values(16, WIDE, G=32)}) and as values units of 64 columns ({tmpls[3]})")):
         with pytest.raises(ValueError, match=re.escape(f"row 5: the partition names its key blocks {ways}; a row's key blocks "
                                                        f"are served one way")):
-            members(s, both, caps)
+            members(s, both, chunk)
     with pytest.raises(ValueError, match=re.escape("split 0's end column block 0 is the output of a column end template the "
                                                    "partition does not name")):
         members(s, [*tmpls[:6], c2], dict.fromkeys(tmpls, 64))
@@ -655,7 +655,7 @@ def test_every_served_scores_and_values_unit_composes_and_verify_zk_takes_it():
 
 def test_a_window_of_scores_and_values_units_commits_and_its_wires_hold():
     s = Served(row(HALF))
-    w = window(s, UNITS, UNITS_CAPS)
+    w = window(s, UNITS, UNITS_CHUNK)
     got = read(s, w.members, UNITS)
     c = CS.commit(w, [g for g, _e in got], salt_key=bytes(32))
     publics = {m.key: c.public_body(k) for k, m in enumerate(w.members)}
