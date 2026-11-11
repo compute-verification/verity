@@ -111,7 +111,7 @@ def pairs(run: Path, dep: dict) -> tuple[list[tuple], list]:
 def certificates(run: Path, deployed: bool = False) -> dict:
     """The certificates' check on the run (the module docstring's `certificates`), one row an execution phase: certified
     when each of its three records is, complete. ``deployed`` refuses a key that isn't LMS at `lms.DEPLOYED`."""
-    dep, _ = deployment(run)
+    dep, params = deployment(run)
     wit = witness(run)
     check = WS.check(wit)
     _, refused = WS.read_certified(wit / "certified.jsonl")
@@ -125,6 +125,7 @@ def certificates(run: Path, deployed: bool = False) -> dict:
                                           for x in public.read_text().splitlines() if x.strip()]
     key = dep["key"]
     out = {"warden_run": dep["run_id"], "link": dep["link"], "session": dep["session"], "windows": dep["windows"],
+           "buckets": params.window,
            "key": {"params": list(key["params"]), "key_id": key.get("key_id"),
                    "public": cs.read_public(key).public.hex(),
                    "deployed": tuple(key["params"]) == (lms.DEPLOYED.N, lms.DEPLOYED.W, lms.DEPLOYED.H)},

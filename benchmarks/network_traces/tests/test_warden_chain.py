@@ -62,6 +62,9 @@ def test_a_warden_runs_certificates_io_and_link_are_its_own(tmp_path):
     assert (got["verdict"], got["why"], got["certified_windows"], got["windows"]) == ("accepted", None, sz.W63.windows,
                                                                                     sz.W63.windows)
     assert got["public_is_the_records"] is True and got["clock_certificates"] == 0 and got["sync_bits"] == 0.0
+    # a record's buckets, the schedule's: what d1's K charges the jitter by, a bit a bucket at two release schedules
+    assert got["buckets"] == sz.W63.params.window == 32
+    assert cr.network_terms(got, {})["jitter"] == sz.W63.windows * 32
     assert got["warden_run"] == "00" * 32 and got["warden_check"]["accepted"]
     io = WC.io(run)
     assert io["accepted"] and io["requests"] == len(sz.W63.prompts) and not io["violations"]

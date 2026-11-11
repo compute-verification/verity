@@ -113,6 +113,10 @@ def test_certs_accepts_the_kept_files(honest):
     assert got["clocks_by"] == "lean" and got["clocks_refused"] == 0
     assert got["client_check"]["records_are_the_clients"] and got["client_check"]["clocks_are_the_clients"]
     assert got["signed_are_declared"] and not got["key"]["deployed"]
+    # the egress window's buckets, which d1's K charges the jitter by
+    setup = sys.modules["certifier_serve"].ar.Setup(json.loads((honest / "calibration.json").read_text()))
+    assert got["buckets"] == setup.egress_params.buckets >= 1
+    assert cr.network_terms(got, {})["jitter"] == got["windows"] * got["buckets"]
     assert cr.certs(honest, honest / "client", deployed=True)["verdict"] == "refused"
 
 
@@ -515,15 +519,27 @@ def test_leak_counts_the_scans_terms_on_the_warden_run(tmp_path):
     assert doc["widths"] == {"NS": 149_648, "NE": 1_136, "entries": 8, "NV": 4_832, "egress_row": 65_536}
     assert doc["terms"]["b"] == 154_480 and doc["terms"]["fmax"] == {"0.01": 5, "1e-06": 14}
     assert doc["terms"]["schedules_per_request"] == doc["terms"]["cells_per_request"] == 7
+    # the jitter at two release schedules, the term of record's bound: a bit a bucket, 32 bits a sampling block
+    lb = sys.modules["leak_bounds"]
+    assert (doc["terms"]["jitter_bound"], doc["terms"]["jitter"]) == (lb.OF_RECORD, 32) == (2, 32)
+    md = cr.leak_markdown(doc)
+    assert md.count("(the jitter at two release schedules, D_j = 2, 32 bits a sampling block, assumed (J)):") == 2
+    assert f"{lb.SET_TIME.capitalize()} the jitter is 0, and each K is less by 32 bits a sampling block" in md
+    assert sum("D_j = 1" in c for c in doc["conditions"]) == 1 == sum(
+        "two release schedules (D_j = 2)" in c and f"0 at D_j = 1 {lb.SET_TIME}" in c for c in doc["conditions"])
     assert doc["links"] == {"link": 1, "datacenter": 12_500, "world": 46_870_000}
-    assert doc["weights"]["label"] == "GLM-5.3 in FP4" and "GLM-5.3 in FP4" in cr.leak_markdown(doc)
+    assert doc["weights"]["label"] == "GLM-5.3 in FP4" and "GLM-5.3 in FP4" in md
     assert any("leak_bounds.at_link_rate" in c and "not the scope's K" in c for c in doc["conditions"])
     json.dumps(doc)
     rows = {(r["period"], r["scope"], r["prog"]): r for r in doc["rows"]}
     week = {p: rows["week", "link", p] for p in ("registered", "anchors")}
     lw, rate, cap = 604_800 / 3.2, 100 / 75, 2 * 7
-    assert week["registered"]["per_period"] == pytest.approx(lw * (8 * 1_136 + rate * cap))
-    assert week["anchors"]["per_link_window"] == pytest.approx(rate * (1_121 + cap))
+    assert week["registered"]["per_period"] == pytest.approx(lw * (8 * 1_136 + rate * cap + 32))
+    assert week["anchors"]["per_link_window"] == pytest.approx(rate * (1_121 + cap) + 32)
+    link = lb.link(sz.CLASS, Fraction(100, 75) / Fraction(32, 10), T=32, tau=Fraction(1, 10), egress_cells=65)
+    for (period, scope, reading), r in rows.items():
+        card = lb.at_link_rate(link, doc["links"][scope], period, reading, dj=1)
+        assert r["per_period"] - card.bits == pytest.approx(32 * r["link_windows"])
     assert week["anchors"]["pooled"]["0.01"] - week["anchors"]["per_period"] == pytest.approx(
         5 * (154_480 + math.log2(lw * 64 + 1)))
     assert Fraction(week["anchors"]["eps"]) == Fraction(189_000, 2 ** 20)
@@ -597,9 +613,12 @@ def test_a_refused_report_names_each_failing_step_and_its_why_and_a_scan_that_ex
 
 def test_k_counts_the_audits_draw_and_free_inputs_and_the_networks_terms_once_a_period(tmp_path):
     h = cr.pooled_k([{"units": 6, "drawn": 6, "free": 2, "jitter": 4}], Fraction(1, 100),
-                     {"advice": 8, "syncs": 0, "cells": 6})
-    assert (h["Fmax"], h["terms"]["faulty_sets"], h["K"]) == (5, 15, 8 + 6 + 80 + 15 + 2 + 4)
-    assert h["conditional"] == cr.POOLED_CONDITION
+                     {"advice": 8, "syncs": 0, "cells": 6, "jitter": 96})
+    assert (h["Fmax"], h["terms"]["faulty_sets"], h["K"]) == (5, 15, 8 + 6 + 96 + 80 + 15 + 2 + 4)
+    assert h["terms"]["jitter"] == 96 + 4 and h["conditional"] == cr.POOLED_CONDITION
+    with pytest.raises(KeyError, match="jitter"):
+        cr.pooled_k([{"units": 6, "drawn": 6, "free": 2, "jitter": 4}], Fraction(1, 100),
+                    {"advice": 8, "syncs": 0, "cells": 6})
     circuit = {"templates": [["T", 4]], "external": ["T/y"], "wires": [],
                "statements": {"T": {"in_rows": [["x", 0, 8, ["x"]], ["y", 1, 16, ["y"]]]}}}
     assert cr.free_inputs(circuit) == 4 * (8 + 16)
@@ -616,14 +635,23 @@ def test_k_counts_the_audits_draw_and_free_inputs_and_the_networks_terms_once_a_
     (tmp_path / "registration.json").write_text(json.dumps({"population": 4, "law": {"law": "subset", "k": 2}}))
     audit = cr.audit_of(tmp_path)
     assert (audit["units"], audit["drawn"], audit["free"], audit["jitter"]) == (4, 2, 96, 0)
-    cert = {"sync_bits": 7.0, "rows": [{"window": w, "certified": True} for w in range(3)]}
-    assert cr.network_terms(cert, {"advice_bits": {"derived": 40, "v0_total": 90}}) == {"advice": 40, "syncs": 21,
-                                                                                        "cells": 0}
+    # 3 windows of 32 buckets each: 7 bits of sync a window, and at two release schedules a bit of jitter a bucket.
+    # The buckets are the certificates step's, never the advice's T, which a served endpoint charges per bucket
+    cert = {"sync_bits": 7.0, "buckets": 32, "rows": [{"window": w, "certified": True} for w in range(3)]}
+    assert cr.network_terms(cert, {"advice_bits": {"derived": 40, "v0_total": 90, "T": 1}}) == {
+        "advice": 40, "syncs": 21, "cells": 0, "jitter": 3 * 32}
     assert cr.network_terms(cert, {"advice_bits": {"derived": None, "v0_total": 90}})["advice"] == 90
     d1 = cr.d1_terms(cert, {}, {}, {}, {"advice_bits": {"derived": 40}}, [audit])
     k = d1["K"][f"{2.0 ** -20:.3g}"]
     assert k["Fmax"] == math.ceil(20 * math.log(2) * 2) and k["K"] == sum(k["terms"].values())
+    assert d1["jitter_bound"] == 2 and k["terms"]["jitter"] == 96 and k["K"] == 40 + 21 + 96 + 96 + (
+        k["terms"]["faulty_bits"] + k["terms"]["faulty_sets"])
     assert "open" in cr.d1_terms(cert, {}, {}, {}, {"advice_bits": {"derived": 40}})["K"]
+    # a certificates step that names no buckets leaves the jitter uncounted, and K open rather than less by it
+    bare = {k: v for k, v in cert.items() if k != "buckets"}
+    assert cr.network_terms(bare, {"advice_bits": {"derived": 40, "T": 32}})["jitter"] is None
+    assert "'jitter': None" in cr.d1_terms(bare, {}, {}, {}, {"advice_bits": {"derived": 40, "T": 32}}, [audit])[
+        "K"]["open"]
     assert cr.free_inputs(circuit, PIN, PIN) == 4 * (8 + 16)
 
 
@@ -748,7 +776,7 @@ def test_an_audit_leaves_out_the_registered_rows_its_registration_records_at_the
         got = cr.audit_of(tmp_path, pins)
         assert (got["free"], got["inputs"]["registered"], got["held"]) == (4 * (256 + 4096), 0, [])
         assert got["drawn"] == held["drawn"]
-    network = {"advice": 8, "syncs": 0, "cells": 0}
+    network = {"advice": 8, "syncs": 0, "cells": 0, "jitter": 32}
     before, after = (cr.pooled_k([a], Fraction(1, 100), network) for a in (cr.audit_of(tmp_path), held))
     assert before["K"] - after["K"] == 4 * 4096 and after["terms"]["free"] == 4 * 256
     (tmp_path / "registration.json").write_text(json.dumps({"population": 4, "law": {"law": "subset", "k": 2},

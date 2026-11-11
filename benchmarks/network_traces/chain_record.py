@@ -65,7 +65,8 @@
 * **leak**: K per monitoring period (week, month, year) on the certifier's gate run, pooled at δ = 1% and 10⁻⁶ and in the
   per-period form, each beside its share of one copy of the weights (`leak`), computed by `leak_bounds`' scaling by
   links: one link at the run's rate, and as many of it summed as the census's reference datacenter and the world
-  have machines. The network certifier's term at a scope's own load is `verity bench certifier_term`.
+  have machines, the jitter charged at two release schedules (`leak_bounds.OF_RECORD`), as d1's K charges it. The
+  network certifier's term at a scope's own load is `verity bench certifier_term`.
 """
 from __future__ import annotations
 
@@ -158,9 +159,11 @@ REHEARSAL_ACCEPTS = ("honest", "token")
 SCAN_ACCEPTS = ("honest", "block")
 #: a proof block's outputs, at most 16 bits: an incorrect proof block's leak
 OUT_BITS = 16
-#: K's jitter term, 0 at D_j = 1: J (`NetTiming.JitterBounded`) assumes it, not met there until a run shows the written
-#: buckets tell a receiver no more than an idle one. The warden hands each bucket to a pacer that releases it at a time
-#: fixed before the bucket is made (`warden.Warden(paced=…)`), as the served proxy does (`active.Proxy(paced=…)`)
+#: K's jitter term, counted at two release schedules (D_j = `leak_bounds.OF_RECORD`), a bit a bucket: J
+#: (`NetTiming.JitterBounded`) assumes the bound. At D_j = 1 the term is 0, which rests on a set-time card
+#: (`leak_bounds.SET_TIME`) and is not met until a run shows the written buckets tell a receiver no more than an idle
+#: one. The warden hands each bucket to a pacer that releases it at a time fixed before the bucket is made
+#: (`warden.Warden(paced=…)`), as the served proxy does (`active.Proxy(paced=…)`)
 JITTER = "assumed (J)"
 #: what `pooled_k`'s K rests on until its two per-window inputs are discharged
 POOLED_CONDITION = ("NetTiming.Guarantees.PooledLeakAccepted is conditional: its per-window inputs hesc "
@@ -247,7 +250,7 @@ def certs(run: Path, client: Path, deployed: bool = False) -> dict:
                          "deployed": tuple(dep["certifier_key"]["params"]) == (lms.DEPLOYED.N, lms.DEPLOYED.W,
                                                                                lms.DEPLOYED.H)},
                  "session": dep["session"], "link": lw.link, "sync_bits": lw.charge,
-                 "in_the_clear": CLEAR["certificates"]}
+                 "buckets": setup.egress_params.buckets, "in_the_clear": CLEAR["certificates"]}
     if records is None or out["clocks_file"] is None or not kept.is_file() or not kept_clocks.is_file():
         return out | {"verdict": "refused", "why": f"{client}: the client kept no certificates.jsonl or clocks.jsonl, "
                                                    f"or {run} holds no certified.jsonl or clocks.jsonl"}
@@ -679,7 +682,8 @@ def audit_of(d: Path, pins: dict | None = None) -> dict:
     `NetworkCheck.Period` counts them), the
     least rate it samples a unit at (``q``: ``k/n``, or the least stratum's ``k/n``) and its free inputs with the terms
     taken out of them (`input_terms`, the registered rows at the verifier's ``pins`` the registration's window records as
-    its ``registered_roots``); its jitter term 0 at D_j = 1, `JITTER`: N2 holds the egress counts
+    its ``registered_roots``); its own jitter term is 0 at any jitter bound, since it has no steps of its own: the
+    link's buckets are the network's, whose jitter `network_terms` counts. N2 holds the egress counts
     exactly, and J the offsets within a bucket. A window holding a pin must bind ``circuit.json`` by its SHA-512
     (``window.circuit``), as `NetworkCheck.Period.auditCheck` refuses a count on a circuit its registration doesn't
     bind."""
@@ -735,15 +739,17 @@ def power_bits(m: int, f: int, exact_below: int = 1 << 16) -> int:
 def pooled_k(audits: list[dict], delta: Fraction, network: dict) -> dict:
     """`NetTiming.Guarantees.PooledLeakAccepted`'s K over one monitoring period: the incorrect proof blocks paid once
     over the period, ``Fmax = ⌈ln(1/δ)/q⌉`` with ``q`` the least ``k_i/n_i`` of its compute audits (a stratified audit's
-    least stratum's, `audit_of`'s ``q``), so K = the network's own terms (``network``: the advice's and the syncs' bits,
-    and the cells') + ``Fmax·16 + ⌈log2 (N + 1)^Fmax⌉ + Σ_i (free_i + jitter_i)``, ``N = Σ_i n_i``, except with
-    probability ``δ + Σ_i (e_i + e'_i)``. `PooledLeakAccepted` is conditional on its per-window inputs, so this K is
+    least stratum's, `audit_of`'s ``q``), so K = the network's own terms (``network``, `network_terms`: the advice's
+    and the syncs' bits, the cells' and the jitter's at two release schedules) + ``Fmax·16 + ⌈log2 (N + 1)^Fmax⌉ +
+    Σ_i (free_i + jitter_i)``, ``N = Σ_i n_i``, except with probability ``δ + Σ_i (e_i + e'_i)``. Its ``jitter`` is the
+    network's and the audits' own summed. `PooledLeakAccepted` is conditional on its per-window inputs, so this K is
     cited as conditional, and its jitter term as `JITTER` (``jitter_term``)."""
     q = min(Fraction(a["q"]) if "q" in a else Fraction(a["drawn"], a["units"]) for a in audits)
     fmax = math.ceil(math.log(1 / float(delta)) / float(q) * (1 + 1e-12))
     n = sum(a["units"] for a in audits)
     terms = {**network, "faulty_bits": OUT_BITS * fmax, "faulty_sets": power_bits(n + 1, fmax),
-             "free": sum(a["free"] for a in audits), "jitter": sum(a["jitter"] for a in audits)}
+             "free": sum(a["free"] for a in audits),
+             "jitter": network["jitter"] + sum(a["jitter"] for a in audits)}
     k = sum(terms.values())
     return {"delta": str(delta), "q": str(q), "Fmax": fmax, "units": n, "terms": terms, "K": k,
             "share": k / (OUT_BITS * n), "eps": f"{delta} + Σ_i (e_i + e'_i) over {len(audits)} audits",
@@ -753,15 +759,20 @@ def pooled_k(audits: list[dict], delta: Fraction, network: dict) -> dict:
 def network_terms(cert: dict, endpoint: dict) -> dict:
     """The network's own terms of K, charged once a period: the advice's residual bits (`advice_bits`; its v0 bits
     when it wasn't rebuilt from the certified I/O), each window's declared sync, log2 #Σ_sync (`LinkWindows.charge`),
-    and no cell: no connection passes the certifier but the link, whose counts the advice fixes."""
+    no cell: no connection passes the certifier but the link, whose counts the advice fixes; and the jitter at two
+    release schedules, the clock form's (`leak_bounds.clock_terms` at `leak_bounds.OF_RECORD`): a bit a bucket of each
+    window, its buckets the certificates step's (``cert``'s ``buckets``), and None where that step names none."""
+    import leak_bounds as LB
     bits, syncs = endpoint.get("advice_bits") or {}, cert.get("sync_bits")
     advice = bits.get("derived") if bits.get("derived") is not None else bits.get("v0_total")
-    return {"advice": advice, "syncs": None if syncs is None else math.ceil(len(cert.get("rows") or []) * syncs),
-            "cells": 0}
+    windows, T = len(cert.get("rows") or []), cert.get("buckets")
+    return {"advice": advice, "syncs": None if syncs is None else math.ceil(windows * syncs), "cells": 0,
+            "jitter": None if T is None else LB.clock_terms(1, windows, syncs=1, steps=T, dj=LB.OF_RECORD).jitter}
 
 
 def d1_terms(cert: dict, n2: dict, scan: dict, custody_doc: dict, endpoint: dict | None = None,
              audits: list[dict] | None = None) -> dict:
+    import leak_bounds as LB
     rows = cert.get("rows") or []
     honest = (n2.get("members") or {}).get("honest") or {}
     acc = [bool(r.get("certified")) and bool(honest.get("network_accepted")) for r in rows]
@@ -774,7 +785,7 @@ def d1_terms(cert: dict, n2: dict, scan: dict, custody_doc: dict, endpoint: dict
     else:
         k = {f"{d:.3g}": pooled_k(audits, Fraction(d), network) for d in DELTAS} | {"audits": audits}
     return {"theorem": "NetTiming.Guarantees.PeriodLeakAccepted, KS as hypothesis",
-            "K": k,
+            "K": k, "jitter_bound": LB.OF_RECORD,
             "sum": "NetTiming.periodLeak_le_sum: Pr[every window accepted ∧ total > a + Σ_w b_w] ≤ Σ_w ε_w",
             "windows": len(rows), "acc": acc, "all_accepted": bool(acc) and all(acc),
             "eps_w": "δ + ε_ks + ε_bind per window (KSLinOn), plus the draw's term at δ (eps_at_delta)",
@@ -810,7 +821,8 @@ def leak(run: Path, scan: dict | None = None, weights=None) -> dict:
     and as the world fleet has (`leak_bounds.world_links`), whatever those scopes serve. Each count is in both forms,
     the per-period form (`PeriodLeakAccepted`'s count) and the pooled one (`PooledLeakAccepted`'s at q = 1), in both
     readings of the sampling block's free inputs (`leak_bounds.READINGS`), and beside ε, its scans' δ summed, and its
-    share of ``weights`` (`leak_bounds.WEIGHTS`)."""
+    share of ``weights`` (`leak_bounds.WEIGHTS`). Every count charges the jitter at two release schedules, the term of
+    record's bound (`leak_bounds.OF_RECORD`): its ``terms`` name the bound and the jitter's bits a sampling block."""
     import leak_bounds as LB
     import scan_zk as SZ
     from verity.protocols.certifier.prover import ingress_scan as IS
@@ -833,11 +845,13 @@ def leak(run: Path, scan: dict | None = None, weights=None) -> dict:
     per_s = Fraction(v["requests"], v["windows"]) / (T * at["tau"])
     link = LB.link(cls, per_s, **at)
     links = {"link": 1, "datacenter": LB.datacenter_links(), "world": LB.world_links()}
+    dj = LB.OF_RECORD
+    jitter = int(link.terms(link.block_s, "registered", dj).jitter)
 
     def bound(scope: str, period: str, reading: str, delta: Fraction | None = None) -> LB.Bound:
         if scope == "link":
-            return LB.per_link(cls, per_s, period, reading, delta, **at, weights=weights, dj=1)
-        return LB.at_link_rate(link, links[scope], period, reading, delta, weights=weights, dj=1)
+            return LB.per_link(cls, per_s, period, reading, delta, **at, weights=weights, dj=dj)
+        return LB.at_link_rate(link, links[scope], period, reading, delta, weights=weights, dj=dj)
 
     rows = []
     for period, s in LB.PERIODS.items():
@@ -850,7 +864,7 @@ def leak(run: Path, scan: dict | None = None, weights=None) -> dict:
                              "requests": rate * lw, "prog": reading, "pooled": {d: b.bits for d, b in pooled.items()},
                              "pooled_share": {d: b.share for d, b in pooled.items()},
                              "per_period": per.bits, "per_period_share": per.share, "eps": str(per.eps),
-                             "per_link_window": link.bits(link.block_s, reading, dj=1)})
+                             "per_link_window": link.bits(link.block_s, reading, dj=dj)})
     free = {reading: {"link_window": f["block"], "request": f["request"]}
             for reading, f in ((r, link.free(r)) for r in LB.READINGS)}
     split = "; ".join(f"the {scope}'s F = {LB.fmax(d / links[scope])} at δ = {float(d):g}"
@@ -862,7 +876,8 @@ def leak(run: Path, scan: dict | None = None, weights=None) -> dict:
             "run": {"link_windows": v["windows"], "requests": v["requests"], "requests_per_link_window": rate,
                     "link_window_s": window_s, "accepted": v.get("accepted")},
             "terms": {"schedules_per_request": link.cell, "cells_per_request": link.cell,
-                      "cap_per_request": link.cap, "free": free, "faulty": 0, "jitter": 0, "jitter_term": JITTER,
+                      "cap_per_request": link.cap, "free": free, "faulty": 0, "jitter": jitter, "jitter_bound": dj,
+                      "jitter_term": JITTER,
                       "b": link.b, "fmax": {f"{float(d):g}": LB.fmax(d) for d in LB.DELTAS},
                       "scan_delta": str(link.scan_delta)},
             "links": links, "weights": weights._asdict(), "rows": rows, "theorems": dict(LB.STATEMENTS),
@@ -872,8 +887,9 @@ def leak(run: Path, scan: dict | None = None, weights=None) -> dict:
                 "each connection's cap is its lane's egress_cells, which the network certifier holds a lane to and "
                 "NetworkCheck.Period doesn't check; the schedules and the fail cells are charged at that cap, "
                 "⌈log2(cap + 1)⌉ each a request, as its rows form charges them",
-                f"the jitter term is 0 at D_j = 1, {JITTER}, not met until a run shows the paced warden's written "
-                "buckets tell a receiver no more than an idle one",
+                f"the jitter is counted at two release schedules (D_j = {dj}), a bit a bucket, {jitter} bits a "
+                f"sampling block, {JITTER}; it is 0 at D_j = 1 {LB.SET_TIME}, not met until a run shows the paced "
+                "warden's written buckets tell a receiver no more than an idle one",
                 "the scan proves sampling block 0 of the warden run; a monitoring period's terms are its "
                 "per-sampling-block and per-request terms at the run's request rate",
                 "the datacenter's rows sum as many identical links as the census's reference datacenter has machines, "
@@ -897,10 +913,11 @@ def leak_markdown(doc: dict) -> str:
     d1, d2 = (f"{float(d):g}" for d in LB.DELTAS)
     bits = lambda x: f"{x / 10 ** (e := math.floor(math.log10(x))):.3g}·10^{e}" if x >= 1e6 else f"{x:,.0f}"
     share = lambda x: f"{100 * x:.3g}%" if x < 1 else f"{x:.3g}×" if x < 100 else f"{x:,.0f}×"
-    lines = []
+    t, lines = doc["terms"], []
     for reading, title in LB.READINGS.items():
         lines += [f"**{title}**, bits, the share of one copy of the weights ({doc['weights']['label']}) and ε, the "
-                  f"scans' δ summed (the jitter term 0, {JITTER}):", "",
+                  f"scans' δ summed (the jitter at two release schedules, D_j = {t['jitter_bound']}, {t['jitter']} "
+                  f"bits a sampling block, {JITTER}):", "",
                   "| period | links | K pooled, δ = 1% | K pooled, δ = 1e-6 | K per period | ε | a sampling block |",
                   "|---|---|---|---|---|---|---|"]
         lines += [f"| {r['period']} | {r['scope']}, {r['links']:,} | {bits(r['pooled'][d1])} "
@@ -909,6 +926,8 @@ def leak_markdown(doc: dict) -> str:
                   f"{r['per_link_window']:,.0f} |"
                   for r in doc["rows"] if r["prog"] == reading]
         lines.append("")
+    lines += [f"{LB.SET_TIME.capitalize()} the jitter is 0, and each K is less by {t['jitter']} bits a sampling "
+              "block of each of its links.", ""]
     return "\n".join(lines)
 
 
@@ -1144,7 +1163,7 @@ def markdown(r: dict) -> str:
         if isinstance(h, dict) and "K" in h:
             lines.append(f"- K at δ = {delta}: {h['K']} bits, {h['share']:.3g}× the {h['units']} units' "
                          f"{OUT_BITS * h['units']} output bits; Fmax {h['Fmax']} at q = {h['q']}, terms {h['terms']}, "
-                         f"the jitter term {JITTER}; {h['conditional']}")
+                         f"the jitter term at D_j = {d['jitter_bound']}, {JITTER}; {h['conditional']}")
     lines += ["- uncovered:"] + [f"  - {u}" for u in d["uncovered"]]
     b = r.get("block") or {}
     if b.get("written"):
