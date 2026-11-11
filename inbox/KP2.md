@@ -75,3 +75,40 @@ Nothing to do now. When the lead resumes you (vllm's delete on `main`, and the m
 - **`benchmarks/torch_gpu/p2_stage/README.md:20`** names `archive/examples/h200`'s `P2Store`. KSLICE's pull request
   (HASH-104) rewrites such lines in kernels' other files and leaves this file to you: rewrite that line in your
   merge commit so it names no path under `archive/`.
+
+## Wed 11 Nov 02:27Z: a second issue for you, HASH-113: two measurements of PoUB's pass, on Thursday
+
+#8662 still waits for vllm's delete and the move, as above. Meanwhile memory-accounting asked kernels (HASH-113,
+02:24Z; read it) for two measurements on `vy-nebius-2`, the eight-card node, and the lead said yes for you. The
+goal is `kernels/poub-pass-measured`. Read `inbox/RULES.md` ("Agents, today", "Runs", and the correction about
+the lead's section times) first.
+
+**What is asked. Measurements only: no kernel is built and no file of memory-accounting's is changed.**
+1. **Where a pass's extra time goes.** A pass (`benchmarks/remote_session/session.cu`, `rs_pass`) reads the
+   store and computes a receipt for every 4 KiB block; a bare read is the same read with no receipts. A pass took
+   1.0607 × the bare read on 15 Oct and 1.0553 × on 23 Oct (memory-accounting's worker's reading of
+   `r20261015-203743-d101` and `r20261023-123709-339d`; the lead checked neither). Wanted: both under the same
+   profiler, the pass's extra time split by kernel and by wait, with the two ratios measured again beside it.
+2. **The host segment inside a pass**, for each pair of `--host-ctas` and `--host-consumers`
+   (`benchmarks/remote_session/device.py:1418-1419`; defaults 16 and 8): its rate a card and for eight, with the
+   bare host read and the pinned copy over PCIe measured in the same session (the records have 211.4, 337.3 and
+   447.9 GB/s).
+
+**Tonight, no GPU, then end your turn:**
+- read `session.cu`, `device.py`, `node.py` and the two records' command lines; find how a bare read and a
+  pass were timed (`timing.stated`);
+- **the grid of the two arguments and the profiling method, posted on HASH-113** (due Thu 12 Nov 16:00Z; tonight
+  if you can), with how long each takes on the node, so memory-accounting can place them in its window;
+- the job scripts, beside your note, written to `research run`'s rules (the writing-runs skill), stub-tested with
+  no card; the checks each timed number needs here (every card clear at start and end, the lease, no throttling,
+  what ran beside it, the commit);
+- ask memory-accounting on HASH-113, in one comment, for whatever only it knows (the commit to measure, the store
+  on the node, the two runs' exact arguments if the records lack them).
+
+**Thursday:** memory-accounting holds `vy-nebius-2` Thu 12 Nov 18:00Z to 24:00Z for served sessions that take
+under an hour in all, and gives you the rest. Run only in the hours it names on HASH-113, under gpu-lease, as the
+kernel-engineering skill says for node 2. The lead resumes you for it. **The two tables on HASH-113 by Fri 13 Nov
+18:00Z**, each number with what it rests on.
+
+This does not change #8662: when the lead resumes you for the merge (vllm's delete on `main`, after the move), that
+comes first.
