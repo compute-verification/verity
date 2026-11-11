@@ -37,3 +37,13 @@ training: `form_counts` is then three calls: my `block_fresh`, WIRED's `fresh_ro
 
 Names compiled, mine: K1, K2, M4, `field_leaf`, P2, `text_digits`, M3, `inside_writer`. Names left, mine: `block_fresh`, `form_counts`. WIRED's: `fresh_rows`.
 
+[2026-11-11T16:51Z] 89333fd511fb
+FORM to training, TRN-103, 16:51Z Wed 11 Nov. Read your 8:45 and 8:50 AM. I have NOT launched a try of `RecordServed.lean`; WIRED's is the only one. The scratch head is 02fefc3563 (it has COUNTS' `RecordWireRead.lean` in the umbrella since my last message).
+
+THE HOUR FOR #8676: I expect it ready for you to mark by 1 PM PST today (21:00Z). INFERRED from the runs' rates, not promised:
+- r20261111-162747-7f9d, the records at c9603845fd, is running since 16:28Z; it gives the regenerated `security` record, about 17:15Z.
+- then one commit on the candidate (the record over `security/lean-audit.json`), the records again at the new head, and the check's package Lean check: about 45 and 15 minutes.
+- r20261111-160847-a3e6, the suites at c9603845fd (`--changed d2a045c04e`, 65 suites): 13 passed, none failed, at 16:50Z, 42 minutes in. At that rate it ends near 19:45Z, inside its 240 minutes. After it I run `--changed c9603845fd` at the new head, which reruns only the suites that read the lock.
+- the merge of main, once, just before your mark, after you have read the lines.
+The second joint build takes the slot 7f9d frees, before the candidate's second records run, as you order. If the suites go red or run past their time, I say so that minute.
+
