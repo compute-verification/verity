@@ -535,3 +535,29 @@ LEAST SURE
 4. The README is 16 bytes under its cap: the next change to it by anyone goes over.
 5. Your inbox id comes from the lane's notes. `inbox.py status` said your VM was not pulling at 2:09 PM PST (7 lines unpulled), so my final message carries all of this too.
 
+[2026-11-11T22:16Z] 6b2dc85b4d3d
+TERMGB, job 8, part B, second report (Wed 11 Nov, 2:16 PM PST). It adds to the report of 2:08 PM PST; nothing in that one is withdrawn.
+
+NET-345's branch `cursor/na-k-two-schedules-b4e6`: head `95ba862a3fb4f64c18d3876b0d382f4bcf0ed2b8`, pushed, local equals origin [run]. #8777's head is unchanged, `f28f4e4acc2de821ea2d4d13fae0ef7aba50fa7c` [run].
+
+STEP 4 (text) IS DONE, in two commits:
+- `0b4c736afb`: `benchmarks/network_traces/README.md` and the certifier's `PROTOCOL.md`.
+  - README: 28,060 bytes before, 28,864 after (cap 49,152) [run]. Four places in "The leak bound": K by links charges the jitter at the term of record's two release schedules unless its caller names another bound, and `terms`/`clock_terms` have no default; d1's K charges it once as a network term, open where the certificates step names no buckets; the jitter's term is stated at D_j = 2 (`leak_bounds.OF_RECORD`) and the figure at D_j = 1 only under "with a set-time card (not yet tested)"; the conditions list says the same (`leak_bounds.SET_TIME`).
+  - PROTOCOL.md: 212,811 bytes before, 213,510 after [run]. Six places that stated a bound under J at D = 1 (lines 987, 990, 991, 1057-1060, 1066-1067, 1215-1217 now): the shipped schedule's 7 bits a window is 7 + T at D = 2 and 7 with a set-time card; the fixed clock's 0 bits is T bits a window at D = 2; ingress carries `log2 D/τ_in` of jitter, a bit a bucket at D = 2; the egress paragraph; the ingress count's `D^T` is `2^T`; A6 names the bound D = 2 at the term of record. I read the Lean statements they cite (`EncardAccSeqsLeSync`, `EncardAccSeqsLeFixedClock`, `EncardIngressObsDecodableLe`, `...PerWindow`): each is for all D, so the text changes which D is named and no theorem [read]. Six Lean docstrings still say J is D = 1 (`security/Definitions/NetworkCertifier/Guarantees.lean` lines 77, 103, 146, 192, 233 and 263: "nothing at all under J (`D = 1`)", "none under J's `D = 1`", "1 under J") [read]. I did not touch them: no Lean. They are text of the old way that NET-345 leaves standing; whose they are is yours to say.
+- `95ba862a3f`: one line of `verity/protocols/certifier/verifier/protocol/arbitrary-serving-attacks.md` (a part of the certifier's PROTOCOL.md that you did not name; attack 3 said "Jitter is n·log2 D, which is 0 under J"). Say if you want it out.
+- None of the three files lean is crossing changed in step 4 [run: the diff of the three between `736284f945` and the head is empty]. The line numbers I gave at 2:08 PM PST stand.
+
+TESTS [run, on the VM, named files only]: `tests/test_retired_terms.py`, `test_doc_paths.py`, `test_repository.py`, `test_protocol_specs.py`, `test_documented_commands.py`: 49 passed, no warning names either file; the Markdown caps' warning names neither. Eight files of `benchmarks/network_traces/tests` that read the changed modules (not slow): 126 passed; `test_out_request_values.py` and `test_leak_guard.py`: 25 passed; `benchmarks/prove_path/tests/test_kept_scan.py`: 6 passed. Ruff on the six code files: the same 18 findings as the base.
+
+NO REMOTE RUN of NET-345's head: you ordered none. The whole suites and the slow tests have not run on it. Say if you want one before the pull request is opened.
+
+ONE MORE READER FOUND, not in NET-345's list and not changed: `verity/protocols/certifier/verifier/capacity.py`, `accepted_bound_bits(content_bits, sync_bits, windows, jitter_classes: int = 1, steps: int = 0)`. It is a count's formula that defaults D to 1; only its own tests call it [read: grep]. A fourth question beside the three of 2:08 PM PST: leave it (it is a formula, and no K of record reads it) or give it no default.
+
+STEP 3 IS NOT BUILT. It waits on your ruling on the three questions of 2:08 PM PST (the answers fixture has no generator and today's check cannot reproduce its rows-form answers; the clock form charges no jitter while audits are handed `steps: 0`; the onsite stand-ins cannot be regenerated from this tree).
+
+PART A: #8779 is OPEN and not on `main` (`118003ab7aca`) at 2:13 PM PST [run]. Timer `termgb-8779-on-main`, every 30 minutes, next about 2:30 PM PST.
+
+THE CHECKOUT: no second move since 2:00:18 PM PST [run: reflog]. The tree is committed and pushed before the timer's next delivery, and I check the branch first on every wake.
+
+LEAST SURE: that PROTOCOL.md's ingress row should name the jitter per bucket of the certifier and not per link (the Lean bound is `D^n` over the run, one factor a step for all links; `leak_bounds` charges a bit a bucket of each link, which is no less) [read]. I did not look at any other document under `verity/protocols/certifier` than `PROTOCOL.md`, the `protocol/` parts and the two READMEs for a statement at D = 1.
+
