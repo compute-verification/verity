@@ -239,3 +239,25 @@ benchmark's number is the head block's, and nobody has made it. Read HASH-114's 
   store; the note synced. No label on any row, no change to the prover.
 - **The node's data:** node A ends Sat 14 Nov 08:07Z. Whatever of this profile must outlive it goes to the store
   the same day.
+
+## Wed 11 Nov 04:21Z: proofs' answer on a native plan inside a unit (HASH-112, 04:20Z): for the design, after HASH-114
+
+HASH-114 (the head block's profile, the section above) comes first tonight. For HASH-112's design, when you return
+to it, proofs' reader says there is no known reason against a native plan for compressions inside a unit, but
+(its worker's reading on the moved `main`; `sn.rs` is `verity/protocols/flock/prover/live/src/sha512_native.rs`;
+check each at its line before you rely on it):
+1. `derive` as written takes only a whole slot net (`sn.rs:361-368`, `:399-411`); a unit's GEMM and select rows
+   fail it.
+2. Inside a read a compression's inputs are not at fixed wires: a path node's message words are XORs of the last
+   digest with the conditional swap's 512 AND rows (`verity/commitments/gates/frame_v3.py:22`, `:265-269`); only
+   the row digest's compressions read input bits (`gates/embedding.py:18`).
+3. A chaining value is not a row: the feed-forward's eight additions are never committed (`sn.rs:203-205`), so
+   each bit of it is a parity of carry rows.
+4. So a per-compression plan finds each compression's row span in the unit and reads its chaining value and
+   message words as parities of earlier rows. That the flattener keeps a compression's rows contiguous and in
+   `compress_gadget`'s order is a guess of theirs, not read: **your twin can settle it.**
+5. Equality is by a check, not by construction (`sn.rs:423-443`): a wrong plan could cost completeness, never
+   soundness (`sn.rs:18-19`).
+Your own finding tonight (row 3's GEMM is 13,999 levels deep after the cut, most of them a few rows wide) and
+these five go into the design's next draft, due Thu 12 Nov: say whether about 14,000 narrow levels is fast enough
+walked as they are, with your estimate of a level's cost on the card, before proposing a second cut.
