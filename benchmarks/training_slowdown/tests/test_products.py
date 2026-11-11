@@ -76,6 +76,23 @@ def test_a_product_is_priced_in_its_traced_dtype_and_an_earlier_captures_wider_o
     assert products.priced_dtype(row("forward", "float32"), "4.24.1") == "float32"
 
 
+def test_a_products_traced_dtype_is_its_results_by_the_counters_rule():
+    """One rule with the counter (`flops.dtype_of`): the dtype a product computes in is its result's. A raw row holds
+    its operands' dtypes, and torch computes a product in its operands' one dtype, so the row's dtype is operand A's
+    wherever the two agree; a row whose operands differ is in the dtype torch promotes them to, the wider, whichever
+    operand is first; and a kernel that casts its result (`_scaled_mm`) is in its first operand's."""
+    def row(op: str, a: str, b: str) -> dict:
+        return {"phase": "forward", "op": op, "dtypes": [a, b]}
+
+    assert products.traced_dtype(row("mm", "bfloat16", "bfloat16")) == "bfloat16"
+    assert products.traced_dtype(row("mm", "float32", "bfloat16")) == "float32"
+    assert products.traced_dtype(row("mm", "bfloat16", "float32")) == "float32"
+    assert products.traced_dtype(row("_scaled_mm", "float8_e4m3fn", "float8_e5m2")) == "float8_e4m3fn"
+    a, b = torch.ones(2, 3, dtype=torch.bfloat16), torch.ones(3, 2)
+    with pytest.raises(RuntimeError, match="dtype"):
+        a @ b
+
+
 RAW = {"count", "phase", "op", "dims", "token_dims", "dtypes", "affected", "widths", "self", "gathered", "rates"}
 PRICE = {"macs", "outputs", "paid", "b_c", "gates_per_mac", "cell_gates"}
 
