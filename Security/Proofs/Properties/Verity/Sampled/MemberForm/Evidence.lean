@@ -22,7 +22,8 @@ as lists of bytes (`bs`):
 namespace Verity.Sampled.MemberForm
 
 open Flock (be64)
-open Properties.NetworkCertifier.Bytes (bs bs_append bs_length bs_inj be64_bs be64_size byte_toNat)
+open Properties.NetworkCertifier.Bytes (bs bs_append bs_length bs_inj be64_bs be64_size byte_toNat toNat_toUInt8 ofBytes
+  ofBytes_be)
 
 /-! ## Lists -/
 
@@ -73,22 +74,31 @@ theorem beNat_bs (b : ByteArray) (off len : ℕ) (h : off + len ≤ b.size) :
   rw [e, List.foldl_map]
   rfl
 
+/-- A byte of a word is that byte of its value. -/
+theorem byte_eq (x : UInt64) (k : ℕ) (hk : k < 64) : (x >>> (UInt64.ofNat k)).toUInt8 = (x.toNat >>> k).toUInt8 := by
+  apply UInt8.toNat_inj.mp
+  rw [byte_toNat x k hk, toNat_toUInt8, Nat.shiftRight_eq_div_pow]
+
 /-- **A word's bytes fold to its value.** -/
 theorem word_value (x : UInt64) : (bs (be64 x)).foldl (fun acc y => acc * 256 + y.toNat) 0 = x.toNat := by
-  rw [be64_bs]
-  simp only [List.foldl_cons, List.foldl_nil]
-  have a0 : ((x >>> 56).toUInt8).toNat = x.toNat / 2 ^ 56 % 256 := byte_toNat x 56 (by omega)
-  have a1 : ((x >>> 48).toUInt8).toNat = x.toNat / 2 ^ 48 % 256 := byte_toNat x 48 (by omega)
-  have a2 : ((x >>> 40).toUInt8).toNat = x.toNat / 2 ^ 40 % 256 := byte_toNat x 40 (by omega)
-  have a3 : ((x >>> 32).toUInt8).toNat = x.toNat / 2 ^ 32 % 256 := byte_toNat x 32 (by omega)
-  have a4 : ((x >>> 24).toUInt8).toNat = x.toNat / 2 ^ 24 % 256 := byte_toNat x 24 (by omega)
-  have a5 : ((x >>> 16).toUInt8).toNat = x.toNat / 2 ^ 16 % 256 := byte_toNat x 16 (by omega)
-  have a6 : ((x >>> 8).toUInt8).toNat = x.toNat / 2 ^ 8 % 256 := byte_toNat x 8 (by omega)
-  have a7 : ((x >>> 0).toUInt8).toNat = x.toNat / 2 ^ 0 % 256 := byte_toNat x 0 (by omega)
-  simp only [a0, a1, a2, a3, a4, a5, a6, a7]
-  have hx := x.toNat_lt
-  simp only [Nat.reducePow] at hx ⊢
-  omega
+  have b0 : (x >>> 56).toUInt8 = (x.toNat >>> 56).toUInt8 := byte_eq x 56 (by omega)
+  have b1 : (x >>> 48).toUInt8 = (x.toNat >>> 48).toUInt8 := byte_eq x 48 (by omega)
+  have b2 : (x >>> 40).toUInt8 = (x.toNat >>> 40).toUInt8 := byte_eq x 40 (by omega)
+  have b3 : (x >>> 32).toUInt8 = (x.toNat >>> 32).toUInt8 := byte_eq x 32 (by omega)
+  have b4 : (x >>> 24).toUInt8 = (x.toNat >>> 24).toUInt8 := byte_eq x 24 (by omega)
+  have b5 : (x >>> 16).toUInt8 = (x.toNat >>> 16).toUInt8 := byte_eq x 16 (by omega)
+  have b6 : (x >>> 8).toUInt8 = (x.toNat >>> 8).toUInt8 := byte_eq x 8 (by omega)
+  have b7 : (x >>> 0).toUInt8 = (x.toNat >>> 0).toUInt8 := byte_eq x 0 (by omega)
+  have l : [(x >>> 56).toUInt8, (x >>> 48).toUInt8, (x >>> 40).toUInt8, (x >>> 32).toUInt8,
+      (x >>> 24).toUInt8, (x >>> 16).toUInt8, (x >>> 8).toUInt8, (x >>> 0).toUInt8] =
+      [(x.toNat >>> 56).toUInt8, (x.toNat >>> 48).toUInt8, (x.toNat >>> 40).toUInt8, (x.toNat >>> 32).toUInt8,
+        (x.toNat >>> 24).toUInt8, (x.toNat >>> 16).toUInt8, (x.toNat >>> 8).toUInt8, (x.toNat >>> 0).toUInt8] := by
+    rw [b0, b1, b2, b3, b4, b5, b6, b7]
+  have e : bs (be64 x) = (List.range 8).map fun i => (x.toNat >>> (8 * (8 - 1 - i))).toUInt8 :=
+    (be64_bs x).trans (l.trans rfl)
+  have hx : x.toNat < 2 ^ (8 * 8) := x.toNat_lt
+  rw [e]
+  exact ofBytes_be 8 x.toNat hx
 
 /-- A length under `2^64` is its word's value. -/
 theorem toNat_size {n : ℕ} (h : n < 2 ^ 64) : n.toUInt64.toNat = n := by
