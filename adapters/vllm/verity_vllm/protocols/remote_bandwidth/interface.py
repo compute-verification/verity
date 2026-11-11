@@ -35,6 +35,8 @@ from typing import Any, Protocol, runtime_checkable
 
 from verity.commitments.merkle import Opening
 
+__all__ = ["PageLayout"]
+
 TIERS = ("hbm", "host")
 KINDS = ("weights", "kv", "filler", "activations")
 
