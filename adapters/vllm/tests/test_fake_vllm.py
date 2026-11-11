@@ -1,0 +1,117 @@
+"""The stand-in for vLLM (`tests.fake_vllm`): it holds vLLM's surface and nothing else, and leaves no trace."""
+from __future__ import annotations
+
+import importlib
+import sys
+import types
+
+import pytest
+
+from tests import fake_vllm
+from tests.lint.vllm_surface import SURFACE
+
+
+def _vllm_modules() -> dict[str, types.ModuleType]:
+    return {n: m for n, m in sys.modules.items() if n.split(".")[0] == "vllm"}
+
+
+def _import(key: str) -> object:
+    """What the import statement entry ``key`` stands for binds: the module, or its name, which may be a submodule."""
+    module, name = fake_vllm.split(key)
+    imported = importlib.import_module(module)
+    if not name:
+        return imported
+    try:
+        return getattr(imported, name)
+    except AttributeError:
+        return importlib.import_module(f"{module}.{name}")
+
+
+def test_every_import_of_the_surface_works_under_the_stand_in(monkeypatch):
+    fake = fake_vllm.install(monkeypatch)
+    assert len(SURFACE) > 50
+    for key in SURFACE:
+        module, name = fake_vllm.split(key)
+        bound = _import(key)
+        if not name:
+            assert bound is fake[module] is sys.modules[module], key
+        elif f"{module}.{name}" in fake.modules:
+            assert bound is fake[f"{module}.{name}"], key
+        else:
+            assert isinstance(bound, fake_vllm.Unset) and repr(bound) == f"<{key}, not set>", key
+
+
+def test_a_module_is_one_object_however_it_is_reached(monkeypatch):
+    fake = fake_vllm.install(monkeypatch)
+    import vllm
+    import vllm.distributed.parallel_state as by_path
+    from vllm import envs
+    from vllm.distributed import parallel_state
+
+    assert envs is vllm.envs is fake["vllm.envs"]
+    assert parallel_state is by_path is vllm.distributed.parallel_state is fake["vllm.distributed.parallel_state"]
+    fake["vllm.envs"].VLLM_BATCH_INVARIANT = True
+    assert vllm.envs.VLLM_BATCH_INVARIANT is True
+
+
+def test_vllm_is_as_it_was_once_the_test_is_over():
+    before = _vllm_modules()
+    with pytest.MonkeyPatch.context() as mp:
+        mp.setitem(sys.modules, "vllm.left_by_another_stub", types.ModuleType("vllm.left_by_another_stub"))
+        fake = fake_vllm.install(mp)
+        assert _vllm_modules() == fake.modules
+    assert _vllm_modules() == before
+
+
+def test_an_import_the_surface_lacks_fails_as_where_vllm_is_absent(monkeypatch):
+    fake_vllm.install(monkeypatch)
+    with pytest.raises(ModuleNotFoundError, match="vllm.no_such_module"):
+        _import("vllm.no_such_module")
+    with pytest.raises(ModuleNotFoundError, match="vllm.envs.no_such_module"):
+        _import("vllm.envs.no_such_module")
+    with pytest.raises(ImportError, match="NoSuchName"):
+        _import("vllm:NoSuchName")
+
+
+def test_a_name_the_test_did_not_set_refuses_every_use_and_names_its_entry(monkeypatch):
+    fake_vllm.install(monkeypatch)
+    from vllm import LLM
+
+    def subclass() -> None:
+        class Mine(LLM):
+            pass
+
+    for use in (lambda: LLM(model="m"), lambda: LLM.generate, subclass, lambda: isinstance(1, LLM),
+                lambda: issubclass(int, LLM)):
+        with pytest.raises(AssertionError, match=r"vllm:LLM was .*fake\.set\('vllm:LLM', value\)"):
+            use()
+    assert not hasattr(LLM, "__wrapped__")
+
+
+def test_a_test_sets_only_names_and_reads_only_modules_of_the_surface(monkeypatch):
+    fake = fake_vllm.install(monkeypatch)
+
+    class LLM:
+        pass
+
+    fake.set("vllm:LLM", LLM)
+    fake.set("vllm.distributed:get_tensor_model_parallel_rank", lambda: 3)
+    from vllm import LLM as bound
+    from vllm.distributed import get_tensor_model_parallel_rank
+
+    assert bound is LLM and get_tensor_model_parallel_rank() == 3
+    for key in ("vllm:NoSuchName", "vllm.no_such_module:name", "vllm.envs"):
+        with pytest.raises(AssertionError, match="is no name of vLLM's surface"):
+            fake.set(key, 1)
+    with pytest.raises(AssertionError, match="vllm.no_such_module is no module of vLLM's surface"):
+        fake["vllm.no_such_module"]
+
+
+def test_a_script_outside_the_library_names_its_own_imports(monkeypatch):
+    fake = fake_vllm.install(monkeypatch, extra=["vllm.scalar_type:scalar_types", "vllm.models.common.ops"])
+    fake.set("vllm.scalar_type:scalar_types", types.SimpleNamespace(float4_e2m1f="e2m1"))
+    from vllm.scalar_type import scalar_types
+
+    assert scalar_types.float4_e2m1f == "e2m1" and _import("vllm.models.common.ops") is fake["vllm.models.common.ops"]
+    with pytest.raises(AssertionError, match="not vLLM's"):
+        fake_vllm.install(monkeypatch, extra=["torch.nn:Module"])
