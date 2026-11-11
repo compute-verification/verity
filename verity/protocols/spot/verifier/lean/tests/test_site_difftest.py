@@ -363,3 +363,22 @@ def test_a_device_models_its_bounding_figures(server):
     views = ref_views(j)
     assert views["ids"]["gpu9"]["device"]["rate"]["tc"] == 68 and views["ids"]["gpu0"]["device"]["rate"]["tc"] == 64
     assert server.call("site_views", j) == ("output", D.canonical(views))
+
+
+def test_a_rational_of_4301_digits(server):
+    """A clock, a tolerance and a tick whose numerator and denominator have 4,301 digits each, one more than Python's
+    `int` and `str` convert by default: both sides read them, write the sheet stating one under the same digest, accept
+    it at that tolerance, and round a device's rate up over that tick."""
+    n = 10 ** 4300 + 1
+    over = "1" + "0" * 4299 + "2/1" + "0" * 4299 + "1"
+    sheet = figures(SHEET_A, clock=Fraction(n + 1, n))
+    log = first("onsite")
+    log = log.append(Entry(log.head, (sheet,), (Loc("gpu9", "device", "node0", sheet=sheet.digest()),)))
+    j = {"auditor": replace(AUDITOR["onsite"], tolerance=Fraction(n + 1, n)).to_json(), "log": log.to_json()}
+    assert j["auditor"]["tolerance"] == over == sheet.to_json()["figures"]["clock"]
+    assert ref_check(j) == {"head": log.head, "site": Site.of_log(log).to_json()}
+    assert server.call("site_check", j) == ("output", D.canonical(ref_check(j)))
+    j["tick"] = over
+    views = ref_views(j)
+    assert views["ids"]["gpu9"]["device"]["rate"]["tc"] == 64 * GHZ + 1 and views["ids"]["gpu9"]["sheet"] == sheet.to_json()
+    assert server.call("site_views", j) == ("output", D.canonical(views))

@@ -123,7 +123,8 @@ REFUSED_KINDS = frozenset({"lean-fast/v1"})
 #: what `check.py --record --on` puts before the declared command (its `slot_wrap`): one of the machine's check slots, then
 #: slot.py's options (`SLOT_FLAGS`, `SLOT_OPTS`), each at most once and in any order, then `--`
 SLOT_WRAP = ("python3", "tools/verity/check/slot.py")
-#: slot.py's options (its `parse`): which slot a check waits for, and how long, never what it runs
+#: slot.py's options a recorded check may carry: which slot it waits for, and how long, never what it runs (not `--budget-gb`,
+#: which changes how much CMD starts at once)
 SLOT_FLAGS, SLOT_OPTS = ("--priority",), ("--rank", "--by", "--twin", "--wait-max", "--run-max")
 #: check.py's own flags, as its `main` reads them in a recorded run: these anywhere, `--verdicts-in PACK` once, and then nothing
 #: or `--cores N`; `--no-cache --circuit-cache` reuses less than a cached check does
