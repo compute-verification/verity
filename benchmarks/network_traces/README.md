@@ -44,9 +44,9 @@ to end. Each driver's docstring says what it runs, what it publishes and what it
   runbook (below).
 - **The weights' load:** `load_relay.py` and `load_commit.py` (below).
 - **A memory wipe's egress:** `wipe_gate.sh` and `wipe_egress.py` (below).
-- **A cheating server.** `served_cheats.py` runs four cheats against a served record (`--stand-in`: an in-process
-  GLM-5.3 token endpoint), each refused or charged, and prints what the audit was expected to do and what it did
-  (below).
+- **A cheating server.** `served_cheats.py` runs four cheats of a server (tokens, length, timing, failures) in a dry
+  run on stand-in responses of GLM-5.3's tokens, and prints for each what the audit was expected to do and what it
+  did (below).
 - `tool.py`: the harness's store declarations.
 
 ## The demo's load
@@ -126,21 +126,32 @@ does the rest of the chain's out/ but what `PUBLIC` names (the report's verdicts
 report.md, the report's other keys and the steps' summaries count the window's requests and outputs and the advice's
 bits. The leak guard (`--public`) moves any file the piece doesn't declare out of its directory.
 
-## A cheating server against a served record
+## A cheating server
 
-`served_cheats.py` runs four cheats of a served record, each a switch, and prints per switch what the network
-certifier's audit was expected to do and what it did (`negatives.py` is the catalogue of what each check refuses).
-`--stand-in` (the dry run) builds every record from an in-process endpoint that streams GLM-5.3's tokens on an
-injected clock, so it needs no GPU or served model; the served run points the same switches at a kept served GLM-5.3
-record (`served_session.py`). Each switch is refused or charged:
+`served_cheats.py` runs four cheats of a server, each a switch, and prints per switch what the network certifier's
+audit was expected to do and what it did (`negatives.py` is the catalogue of what each check refuses). Only
+`--stand-in`, the dry run, is wired: it builds every record in process on an injected clock from responses of
+GLM-5.3's tokens, so it needs no GPU or served model, and no switch reads a kept served record. The four switches:
 
-    uv run benchmarks/network_traces/served_cheats.py --stand-in --switch tokens    # ids of the server's own choosing: the I/O tie refuses; count-only N2 does not
-    uv run benchmarks/network_traces/served_cheats.py --stand-in --switch length    # a response ended early or late: N2's counts refuse
-    uv run benchmarks/network_traces/served_cheats.py --stand-in --switch timing    # the release-time jitter channel: its bits an interval, under the budget (certifier_timing)
-    uv run benchmarks/network_traces/served_cheats.py --stand-in --switch failures  # connections failed on purpose: accepted, each charged in the schedule (leak_bounds)
+    uv run benchmarks/network_traces/served_cheats.py --stand-in --switch tokens
+    uv run benchmarks/network_traces/served_cheats.py --stand-in --switch length
+    uv run benchmarks/network_traces/served_cheats.py --stand-in --switch timing
+    uv run benchmarks/network_traces/served_cheats.py --stand-in --switch failures
 
-`--switch all` runs the four with an honest baseline. Its report is read from the run's published Attempt, never from
-this README.
+- `tokens`: ids of the server's own choosing in a response, its frame counts honest's. It runs the proxy
+  (`certifier_serve.py`'s recipe, which builds the Lean verifier) and reports what N2's counts say; the I/O tie, which
+  reads the frames' tokens, is not run.
+- `length`: a response ended late or early. It runs the proxy and reports what N2's counts say on `--profile`.
+- `timing`: an interval's bytes written in a burst around the release time. It runs `benchmarks/certifier_timing`'s
+  burst attack for `--timing-intervals` intervals and reports its figure and ceiling against its budget. It reads the
+  wall clock and measures its host, so it runs on a team machine.
+- `failures`: servers that send part of a response and withhold the rest. It runs the relay (`warden_serve.py`'s
+  recipe) with those connections failed and with none, its control, and reports the relay's record, its offline
+  check and what the leak bound's table charges the fail cells.
+
+`--switch all` runs the four, the proxy's honest run first. The command exits 0 when every control ran as an honest
+run does and no switch errored: what a cheat's row says is its finding. Its report is read from the run's published
+Attempt, never from this README.
 
 ## The chain's run of record
 
