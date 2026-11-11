@@ -42592,3 +42592,38 @@ For BREAKEVEN: no new number yet; the 08:00Z rows stand, all modeled except toda
 For the table:
 - The nine result PRs merged in ci's order: Lean build `r20261111-083411-3dd5` running, ETA about 10:00Z \[guess\].
 - #8788 `65a2d97d9387` is marked with a land verdict but lacks the layout move, so the queue's loop leaves it out and #8828 waits on it; crossed head `37079664740c` is built with its runs out (`a26f`, `4e2a`), not pushed until the coordinator says so.
+
+## SCALE, Wed 11 Nov 08:38Z: #8836's fix is mechanical and pushed (`ae8886e9a2`); three builds queued; the count Kfirst·Σ_t k_t is proved in Lean (try passed)
+
+**#8836 (your 08:28Z job).**
+- [run] On #8836's branch I merged #8820's head `f1a8ef0141ff` (plain merge, clean) and restated `RegCanon.lean` over #8820's `plurAt`. I changed no file of #8820's.
+- The restatement is mechanical [read]: after #8820, `Compiled.opTable` was the only missing name. Its `plur`, `regVal_eq_plur`, `OffReg`, `Conflict`, `selReg_some`, `reg_split`, `pr_unfound_le`, `pr_inConf_le` and `pr_conflict_le` keep the arguments `RegCanon.lean` passes.
+- New `pr_off_le_canon_on` over any finite space at `plurAt`: #8820's `pr_off_le` with `Verity.Rewinding.prBad_le_canon_on`.
+- `Compiled.pr_offReg_le_canon_on` is now its instance at one tape's runs, as #8820's `pr_offReg_le` is of `pr_off_le`. No statement changes.
+- [run] Pushed: `cursor/proofs-canonical-node-331e` at `ae8886e9a2fcab9816239411ca928bf6f826fc72`. It is unmarked; I write the ready line once it builds.
+- [run] `RevealsOpen.lean` does not import `RegCanon`; only the aggregator `Proofs/Flock/SamplingGeneric.lean` does.
+- [run] Builds launched at 08:32–08:33Z. All three were waiting for check slots at 08:37Z:
+  - the head: `verity lean try RegCanon.lean --siblings`, run `r20261111-083223-9e57` (vy-nebius-cpu-6);
+  - the combined tree: the head merged with #8827 `946b7b72f26d` and #8781 `b7c268c7c1fe` (both merges clean, local tree `2bc9818dfa`):
+    - `verity lean try security/Proofs/Flock.lean --siblings`, which builds every Flock module including `RegCanon`, `RevealsOpen` and #8827's and #8781's: run `r20261111-083302-33c3`;
+    - `verity lean try security/Proofs/WeightSecurity.lean`: run `r20261111-083302-134b`.
+  - Earlier comparable tries took about 5 minutes once they had a slot [run].
+- Next: the head's records run (`lean_changed.py --records`, the `security/Proofs` package) and the quick tier, then the ready line with the combined build's run id. The body gets "lands after #8820".
+
+**The count (after the frontier, now second).**
+- [run] Branch `cursor/proofs-kfirst-count-208e`, one new file `security/Proofs/Flock/SpotFlock/Drawn.lean` plus one import line. Try `r20261111-082228-9db5`:
+  - lean exit 0;
+  - axiom probe: none of the 11 theorems uses an axiom beyond `propext`, `Classical.choice` and `Quot.sound`;
+  - siblings: no name clash.
+- What it proves:
+  - `selectSecond_proved_size`: an accepted second stage proves exactly `|sample|·Σ_t k_t` proof blocks. This is an equality: `k_t` in each of template `t`'s cells, one cell per sampled replay block, and no closure.
+  - `RegTwo.sample_size_le`, `RegTwo.proved_size_le`: under `firstK g.first = some K`, a uniform `K`-subset first stage and the hypothesis `Cap.lean`'s replay cap reads, the count is at most `K·Σ_t k_t`.
+  - `RegTwo.card_biUnion_checked_le_count` and `SpotFlock.code_card_biUnion_le_count`: `|∪ needs(checked)| ≤ Σ_always |needs| + K·Σ_t k_t·M`, at the registration and at the deployed code `code h`, with #8836's `hsel`.
+- It was built on #8836's old head `1fab3dfa6a`. I merge the new head into it and retry before opening the PR (unmarked, `Goal proofs/spot-bind-term`).
+- Not covered: a stratified, work, Bernoulli or closure-map first stage (no `firstK`). `RegTwo.always` is still a free field, so the always-checked term stays.
+
+For CONCRETE: K ≤ Σ_{always} |needs v| + Kfirst · Σ_t k_t · M, with the count Kfirst·Σ_t k_t exact (equality at an accepted second stage) [run: try `r20261111-082228-9db5`]. Hypotheses: `firstK = some Kfirst` and the second stage accepted (`hsel`).
+
+For the table:
+- #8836: rebuilt over #8820 (merge + `RegCanon` over `plurAt`, mechanical) at `ae8886e9a2`; its builds alone and with #8827 + #8781 are queued (`r20261111-083223-9e57`, `r20261111-083302-33c3`).
+- The count `Kfirst·Σ_t k_t` is a Lean theorem (try passed, axioms clean), stacked on #8836. It is not yet a PR.
