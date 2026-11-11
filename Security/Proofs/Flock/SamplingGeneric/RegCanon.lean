@@ -28,7 +28,9 @@ variable {Coin : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin] {A : Arg 
 of the program off the committed trace with probability at most `√(#S·Pr[conflict])`, at any set `S` of gates holding
 every gate some run's extractions open. -/
 theorem pr_offReg_le_canon_on (H : Msg → Msg) (L : Compiled Coin A) {Ω : Type} (P : Prover Ω) (x : Msg) (ω : Ω)
-    (S : Finset (Fin (L.nG x))) (hS : ∀ rc g, (L.opensAt H P x ω rc.1 rc.2 g).isSome → g ∈ S) :
+    (S : Finset (Fin (L.nG x)))
+    (hS : ∀ (rc : (Fin (L.V.k x) → Coin) × L.SlotEC x) (g : Fin (L.nG x)),
+      (L.opensAt H P x ω rc.1 rc.2 g).isSome → g ∈ S) :
     Pr (fun rc : (Fin (L.V.k x) → Coin) × L.SlotEC x => L.OffReg H P x ω rc.1 rc.2) ≤
       Real.sqrt (#S * Pr fun rr : ((Fin (L.V.k x) → Coin) × L.SlotEC x) × ((Fin (L.V.k x) → Coin) × L.SlotEC x) =>
         L.Conflict H P x ω rr) := by
@@ -96,7 +98,9 @@ set_option synthInstance.maxSize 1024 in
 `pr_offReg_le_canon_on` in place of `pr_offReg_le`. -/
 theorem pr_regHit_le_canon_on {H : Msg → Msg} {L : Compiled Coin A} (hbind : L.commit.Binds H) (hS : L.Sessions H)
     (hSK : L.SessionKS H) {x : Msg} (hsc : L.Scope x) (Ω : Type) [Fintype Ω] [Nonempty Ω] (P : Prover Ω)
-    (S : Finset (Fin (L.nG x))) (hSo : ∀ ω rc g, (L.opensAt H P x ω rc.1 rc.2 g).isSome → g ∈ S) :
+    (S : Finset (Fin (L.nG x)))
+    (hSo : ∀ (ω : Ω) (rc : (Fin (L.V.k x) → Coin) × L.SlotEC x) (g : Fin (L.nG x)),
+      (L.opensAt H P x ω rc.1 rc.2 g).isSome → g ∈ S) :
     Pr (fun p : Ω × (Fin (L.V.k x) → Coin) => (run H P L.V x p.1 p.2).out = .acc ∧
         ∃ u ∈ L.checked x p.2, u ∈ L.Freg H P x p.1) ≤
       L.κs x + Real.sqrt (L.V.k x * L.γs x * PrB H L.V P x) + Real.sqrt (#S * (Bconf H L Ω P x).Pr H) +
