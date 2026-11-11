@@ -106,4 +106,10 @@ runs it. A word move that renames declarations a lock records leaves
 those records for a commit of their own: `tools/verity/lean/check.py --update --moved` with the map `rename.py --moves`
 prints.
 
+A branch that shares with `main` a commit a move's base lacks is based after that move, whose script never runs on it:
+the move's last merge would bring those commits in a second time. Where a later move's base contains that move, it is
+skipped and named (`skipped`): the later move's base merge brings it in, as a merge of `main` would, and the owner looks
+for its map's old names in what the branch adds. The last move, one no later move's base contains, and one named with
+`--move-commit` are never skipped: the branch is refused (`based-after`), and its owner merges `main` instead.
+
     uv run tools/verity/check/suites.py tools/move     # the tests (remotely: AGENTS.md "Tests")

@@ -6,8 +6,8 @@ With no `--move-commit`, the moves are every commit `--main` (default origin/mai
 has a move line, oldest first: `Move: MAP` runs `tools/move/rename.py --map MAP`, as drive and `stage.py` write it, and
 `Layout-move: MAP` (with `--no-lock` when the move ran so) runs `tools/move/layout.py --map MAP`, as `stage.py` writes it.
 The branch crosses each in turn as below, the last merging `--onto` (default `--main`), so one command carries it across a
-window's moves. A `--move-commit` without `--script` runs its own move line's script, else `layout.py`; with `--script`,
-that script and its `--script-arg`s.
+window's moves; one of them it is based after may be skipped (below). A `--move-commit` without `--script` runs its own
+move line's script, else `layout.py`; with `--script`, that script and its `--script-arg`s.
 
 A layout move is one commit M that `python3 tools/move/layout.py` (with its map, `tools/move/layout_map.toml`) wrote by running at
 the root of a checkout of its parent B. Because the move is a deterministic, idempotent codemod, a branch is migrated by the
@@ -32,9 +32,14 @@ restack across a move pays for the check and the rest don't. The file's key is e
 (`generated_key`); a file that is unreadable, malformed or of another key counts for nothing, and the script runs.
 
 A branch that already contains M skips to step 3. A branch that doesn't but shares a commit after B with `--onto` or `--main`
-(default origin/main) is `based-after`, and nothing runs: step 3 would bring main's commits since B in a second time and still
-report clean (duplicate imports and lock entries). Its owner merges main instead (`git merge origin/main`); the
-restack is for branches based at or before B. The branch, its ref and the caller's checkout are never changed: the
+(default origin/main) is `based-after` M: step 3 would bring main's commits since B in a second time and still report
+clean (duplicate imports and lock entries), so M's script never runs on it. A `--move-commit` it is based after refuses
+it, and so does the last of the moves found on `--main`: there is no result, and its owner merges main instead (`git merge
+origin/main`); the restack is for branches based at or before B. An earlier one of the moves found is skipped where a
+later one's base contains it, and named (`skipped`, and a line of the output): that later move's step 1 merges it in on
+main's side, as its owner's merge of main would, so M's script is not run on the branch's own lines, and its owner looks
+for M's map's old names in what the branch adds. Where no later move's base contains it, no merge of a base brings M in,
+and the branch is refused as above. The branch, its ref and the caller's checkout are never changed: the
 commits go to the object store, and the scratch worktree is removed. Each branch's outcome is `clean` (with the result's
 id), `up-to-date`, `conflicted` (the step and the files), `script-failed` (the script's exit code and the tail of its
 output), `locks-stale` (the last merge's only conflicts were Lean locks, `lean-audit.json`: the result takes `--onto`'s,
@@ -499,20 +504,30 @@ def moves_on(ref: str, head: str, cwd: str | None) -> list[tuple[str, str, tuple
 
 
 def carry(branch: str, moves: list[tuple[str, str, tuple[str, ...]]], onto: str | None = None, base: str | None = None,
-          python: str = sys.executable, cwd: str | None = None, pins: bool = True, main: str | None = None) -> dict:
+          python: str = sys.executable, cwd: str | None = None, pins: bool = True, main: str | None = None,
+          found: bool = False) -> dict:
     """``branch`` restacked across each of ``moves`` in order, each with its own script and arguments, the last merging
-    ``onto``: the last step's outcome (`restack`'s), or the first that isn't clean, with `crossed`, the moves it crossed."""
+    ``onto``: the last step's outcome (`restack`'s), or the first that isn't clean, with `crossed`, the moves it crossed.
+
+    With ``found`` (the moves are `moves_on`'s, none of them named), a move the branch is `based-after` is skipped, and
+    named in `skipped`, where a later move's base contains it: crossing that later move starts by merging its base, which
+    is the merge of main the refusal asks of the owner, up to that base. A skipped move is then in the base of a move that
+    is crossed, or the carry stops before a result: the later move is crossed, or skipped under the same rule, or stops it.
+    The last move has no later one, so it still refuses."""
     global SCRIPT, SCRIPT_ARGS
-    head, tip, crossed, locks = rev(branch, cwd), branch, [], []
+    head, tip, crossed, skipped, locks = rev(branch, cwd), branch, [], [], []
     if not moves:
-        return {"branch": branch, "head": head, "crossed": [], "status": "no-moves", "plain": {"status": "clean", "files": []},
-                "error": f"no move to cross: merge {main or onto} as usual"}
+        return {"branch": branch, "head": head, "crossed": [], "skipped": [], "status": "no-moves",
+                "plain": {"status": "clean", "files": []}, "error": f"no move to cross: merge {main or onto} as usual"}
     for i, (move, script, args) in enumerate(moves):
         SCRIPT, SCRIPT_ARGS = script, tuple(args)
         last = i == len(moves) - 1
         r = restack(tip, move, onto if last else None, base if len(moves) == 1 else None, python, cwd,
                     pins=pins and last, main=main)
-        r = {**r, "branch": branch, "head": head, "crossed": crossed}
+        r = {**r, "branch": branch, "head": head, "crossed": crossed, "skipped": skipped}
+        if found and r["status"] == "based-after" and any(contains(move, move_base(m, cwd), cwd) for m, *_ in moves[i + 1:]):
+            skipped = [*skipped, {"move": r["move"], "script": script, "args": list(args)}]
+            continue
         if r["status"] not in ("clean", "up-to-date", "locks-stale"):
             return r
         crossed = [*crossed, move]
@@ -524,7 +539,7 @@ def carry(branch: str, moves: list[tuple[str, str, tuple[str, ...]]], onto: str 
         r = {**r, "status": "locks-stale", "files": locks,
              "error": f"the Lean locks {', '.join(locks)} took the moves' side: regenerate them on the result "
                       "(tools/verity/lean/check.py --update) before marking it"}
-    return {**r, "crossed": crossed}
+    return {**r, "crossed": crossed, "skipped": skipped}
 
 
 def push(result: str, new: str, remote: str, cwd: str | None) -> None:
@@ -539,12 +554,17 @@ def line(r: dict) -> str:
         plain += f"; crossed {len(r['crossed'])} moves: {', '.join(c[:12] for c in r['crossed'])}"
         if r["status"] not in ("clean", "up-to-date", "locks-stale"):
             plain += f"; stopped at the move {r['move'][:12]}"
+    skipped = "".join(
+        f"\n    skipped the move {s['move'][:12]} ({shlex.join([s['script'], *s['args']])}): {r['branch']} is based after its "
+        "base, so its script was NOT run on the branch's own lines, and the base merge of a later move carries it. Look for "
+        "that map's old names in what the branch adds." for s in r.get("skipped", []))
     if r["status"] in ("clean", "up-to-date"):
-        return f"{r['branch']}: {r['status']} {r['result'][:12]}  [{plain}]"
+        return f"{r['branch']}: {r['status']} {r['result'][:12]}  [{plain}]" + skipped
     if r["status"] in ("script-failed", "pins-stale", "locks-stale", "based-after", "no-moves"):
         at = f" {r['result'][:12]}" if r["status"] not in ("script-failed", "based-after", "no-moves") else ""
-        return f"{r['branch']}: {r['status']}{at}  [{plain}]\n    " + r["error"].replace("\n", "\n    ")
-    return f"{r['branch']}: conflicted at {r['step']} ({len(r['files'])})  [{plain}]\n" + "".join(f"    {f}\n" for f in r["files"])
+        return f"{r['branch']}: {r['status']}{at}  [{plain}]\n    " + r["error"].replace("\n", "\n    ") + skipped
+    return (f"{r['branch']}: conflicted at {r['step']} ({len(r['files'])})  [{plain}]\n"
+            + "".join(f"    {f}\n" for f in r["files"]) + skipped.lstrip("\n"))
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -558,8 +578,9 @@ def main(argv: list[str] | None = None) -> int:
                     help="what to merge last: the moved main (default: the last --move-commit, else --main)")
     ap.add_argument("--base", metavar="REF", help="the tree one --move-commit ran on (default: its parent)")
     ap.add_argument("--main", default="origin/main", metavar="REF",
-                    help="main, when it resolves: a branch that shares a commit after the move's base with it or --onto is "
-                         "refused (default origin/main)")
+                    help="main, when it resolves: a branch that shares a commit after a move's base with it or --onto is based "
+                         "after that move, and refused; where the move is one found here, and a later one's base contains "
+                         "it, it is skipped and named instead (default origin/main)")
     ap.add_argument("--python", default=sys.executable, help="the interpreter that runs the move's script")
     ap.add_argument("--script", help=f"one --move-commit's script, under {SCRIPT_DIR}/ (default: its move line's, else "
                                      f"{SCRIPT}; a rename move's is tools/move/rename.py)")
@@ -590,7 +611,8 @@ def main(argv: list[str] | None = None) -> int:
     results = []
     for b in a.branches:
         moves = named or moves_on(a.main, b, None)
-        r = carry(b, moves, a.onto or (None if named else a.main), a.base, a.python, pins=not a.no_pins, main=a.main)
+        r = carry(b, moves, a.onto or (None if named else a.main), a.base, a.python, pins=not a.no_pins, main=a.main,
+                  found=not named)
         results.append(r)
         if not a.json:
             print(line(r), flush=True)
