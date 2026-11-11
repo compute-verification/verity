@@ -2849,6 +2849,8 @@ out = Path(a[a.index("--out") + 1])
 assert a[a.index("--class") + 1] == "{W63K4}"
 # with W the circuit reads H1's tables, in the verifier's record and the commit alike
 tables = {{"tables": "h1"}} if "--window-registration" in a else {{}}
+# a circuit cut at Pearl+'s linears states its work table, in the verifier's record and the commit alike
+assert ("--reader-floors" in a) == ("--pearl-tables" in a or "--pearl-passes" in a), a
 if a[0] == "window-circuit":
     if tables:
         open(os.environ["ORDER"] + ".circuit", "w").write(json.dumps([out.name, *a[a.index("--window-registration"):]]))
@@ -3589,8 +3591,9 @@ def _pearl_tie(tmp_path: Path, **extra: str) -> tuple[subprocess.CompletedProces
 def test_under_pearlplus_tie_the_pieces_tie_commits_the_window_cut_at_pearls_linears_chained_right_after_its_w(tmp_path):
     """Pearl+'s piece, once `retain --window-record` wrote W and before its coin, runs `pearl-tie`: the window's advice
     where step 3 reads it, W kept in the serve dir's pearlplus/w<k>/ (where V3c's audit reads it), and window-commit at
-    V3C_CLASS on W with the window's passes (``--pearl-passes``, its circuit cut at Pearl+'s linears) and V3c's law, whose
-    registration R it holds chained right after W. It says nothing in $OUT; its commit's answer stays in the serve dir."""
+    V3C_CLASS on W with the window's passes (``--pearl-passes``, its circuit cut at Pearl+'s linears), V3c's law, work:1,
+    and the floors its work table gives Pearl+'s reader templates (``--reader-floors``, V3C_FLOORS), whose registration R
+    it holds chained right after W. It says nothing in $OUT; its commit's answer stays in the serve dir."""
     run, order = _pearl_tie(tmp_path)
     d = tmp_path / "serve"
     w = REG.digest(PEARL_WREC)
@@ -3602,9 +3605,11 @@ def test_under_pearlplus_tie_the_pieces_tie_commits_the_window_cut_at_pearls_lin
     assert json.loads((vw / "registration.json").read_text())["previous"] == w
     assert (tmp_path / "order.commit").read_text().split() == [
         "--window-registration", str(d / "pearlplus" / "w7" / "registration.json"), "--pearl-passes",
-        str(tmp_path / "piece" / "passes"), "--law", "stratified:1"]
+        str(tmp_path / "piece" / "passes"), "--law", "work:1", "--reader-floors", "4/125,1/100"]
     assert json.loads((d / "pearlplus" / "w7" / "window-commit.json").read_text())["population"] == 37
     assert not (tmp_path / "tie-out" / "verdicts.txt").exists()
+    _run, _order = _pearl_tie(tmp_path / "other", V3C_LAW="work:3", V3C_FLOORS="3/100,1/100")
+    assert (tmp_path / "other" / "order.commit").read_text().split()[-4:] == ["--law", "work:3", "--reader-floors", "3/100,1/100"]
 
 
 @pytest.mark.parametrize("extra, rc, said", [
@@ -3715,8 +3720,9 @@ def test_under_pearlplus_tie_the_window_serve_serves_pearl_c_on_its_one_engine(t
     calls, d = (tmp_path / "calls").read_text().splitlines(), tmp_path / "serve" / "pearlplus"
     assert [c.split("prove_path/prove_path.py ", 1)[-1] for c in calls[-4:-2]] == [
         f"serve-phi --model unsloth/Llama-3.2-1B --revision 9535bd9b1d1dea6acafbdc4813b728796aeb28da --out {d}/serve-phi.json",
-        f"class-circuit --serve {d}/serve-phi.json --class 4,32,4 --pearl-tables pearl-c-h100-v1-h3 --out "
-        f"{d}/circuit-record.json"] and "inference_only.py policy" in calls[-2] and "serve-openai" in calls[-1], calls
+        f"class-circuit --serve {d}/serve-phi.json --class 4,32,4 --pearl-tables pearl-c-h100-v1-h3 --reader-floors "
+        f"4/125,1/100 --out {d}/circuit-record.json"] and "inference_only.py policy" in calls[-2] \
+        and "serve-openai" in calls[-1], calls
     _rc, default = _serve_argv(tmp_path / "default", {k: v for k, v in {**PEARL_TIES, **cubin}.items()
                                                       if k != "PEARLC_CHALLENGER_GATE"})
     assert default[default.index("--challenger-gate") + 1] == (
@@ -3852,36 +3858,45 @@ def test_under_pearlplus_tie_the_inference_only_policy_states_serve_phis_phi_cut
                       "--out", str(tmp_path / "out" / "inference-only-policy.json")]]
 
 
+#: R's sample in `_pearl_tied_commit`: work:1 over a work table of work 1, two reader templates at floors 3 and 2 and
+#: another template at floor 1, each stratum sampling its floor
+PEARL_TIED_LAW = {"law": "work", "k": 1, "strata": [{"template": t, "units": [[4 * i, 4 * i + 4]], "work": 1, "floor": f, "k": f}
+                                                    for i, (t, f) in enumerate((("a@0", 3), ("y@0", 2), ("rest@0", 1)))]}
+
+
 def _pearl_tied_commit(tmp_path: Path, chained: bool = True) -> None:
     """Window 7's commit as Pearl+'s piece left it: W in the serve dir's pearlplus/w7/, its answer beside it, and the
-    registration R (chained right after W unless not ``chained``) and circuit in V3c's window dir."""
+    registration R (chained right after W unless not ``chained``; its sample `PEARL_TIED_LAW`) and circuit in V3c's window
+    dir."""
     d = tmp_path / "serve"
     vw = d / f"v3c-w7-{W63K4.replace(',', '-')}" / "window"
     vw.mkdir(parents=True)
     (d / "pearlplus" / "w7").mkdir(parents=True)
     (d / "pearlplus" / "w7" / "registration.json").write_text(json.dumps(PEARL_WREC))
     (d / "pearlplus" / "w7" / "window-commit.json").write_text(json.dumps({"run": "ab", "circuit": "cd", "population": 37}))
-    r = {"format": "toy", "previous": REG.digest(PEARL_WREC) if chained else "ef" * 64, "law": TIED_LAW}
+    r = {"format": "toy", "previous": REG.digest(PEARL_WREC) if chained else "ef" * 64, "law": PEARL_TIED_LAW}
     (vw / "registration.json").write_text(json.dumps(r))
     (vw / "circuit.json").write_text(json.dumps({"run": "ab"}))
 
 
 def test_under_pearlplus_tie_v3c_audits_the_commit_tied_to_pearls_w_with_records_audits_tie(tmp_path):
     """V3c makes no commit of its own: it holds the piece's R to W (chained right after it), and audits it tied to W with
-    no prefix (Pearl+'s values are W's own names) at stratified:1 on a port a sampled block, saying the audit's tie. The
-    verifier's own window-circuit record it holds the commit's circuit to is the circuit cut at Pearl+'s linears, and it
-    leaves that record beside R in the tie the record reads, for the period's circuit."""
+    no prefix (Pearl+'s values are W's own names) at work:1 on a port a sampled block (R's strata's k summed, each its
+    floor), saying the audit's tie. The verifier's own window-circuit record it holds the commit's circuit to is the
+    circuit cut at Pearl+'s linears, stating the work table of V3C_FLOORS' floors, and it leaves that record beside R in
+    the tie the record reads, for the period's circuit."""
     _pearl_tied_commit(tmp_path)
     rc, lines, order, _limits = _v3c(tmp_path, **PEARL_TIES, CERTIFIER_CHAIN_CMD=None, CERTIFIER_PERIOD_CMD=None)
     assert rc == 0 and "window-commit" not in order and "audit" in order, (lines, order)
     circuit = (tmp_path / "order.circuit").read_text().split("\n")
     assert circuit[circuit.index("--pearl-tables") + 1] == "pearl-c-h100-v1-h3", circuit
+    assert circuit[circuit.index("--reader-floors") + 1] == "4/125,1/100", circuit
     assert any(x.startswith(f"WINDOW-CIRCUIT class {W63K4}, cut at Pearl+'s linears: ") for x in lines), lines
     w = REG.digest(PEARL_WREC)
     assert lines[2].startswith(f"WINDOW-COMMIT class {W63K4} in Pearl+'s piece, its registration chained right after "
                                f"Pearl+'s window record W before Pearl+'s coin (W {w[:16]}…, R "), lines
-    assert _audited(tmp_path) == {"--law": "stratified:1", "--tie": str(tmp_path / "serve" / "pearlplus" / "w7" / "registration.json"),
-                                  "--tie-prefix": None, "--ports": "3"}
+    assert _audited(tmp_path) == {"--law": "work:1", "--tie": str(tmp_path / "serve" / "pearlplus" / "w7" / "registration.json"),
+                                  "--tie-prefix": None, "--ports": "6"}
     assert f"V3C-TIE: the audit read its records tied to W {'cd' * 8}…, R chained right after it: PASS" in lines
     d, tag = tmp_path / "serve", W63K4.replace(",", "-")
     assert any(x.endswith("window-circuit record: PASS") for x in lines), lines
@@ -4122,6 +4137,38 @@ def test_the_preflight_refuses_h1_tie_on_a_tree_whose_audit_takes_no_tie_or_at_a
     refuses: in the serve's run and in `served_verdicts.sh v3c` alike, before anything runs."""
     rc, lines, order, _limits = _v3c(tmp_path, args, records_audit=records_audit, **extra)
     assert (rc, lines, order) == (3, [line], [])
+
+
+def _no_floors(law: str, floors: str) -> str:
+    return ("PREFLIGHT: under PEARLPLUS_TIE the window's sampling design is work:K over a work table with a floor for each "
+            "of Pearl+'s reader templates, a template a shape of linear, under which at most EPS of their units are wrong "
+            "except with probability DELTA: pass V3C_LAW=work:K (default work:1) and V3C_FLOORS=EPS,DELTA, each NUM/DEN "
+            f"(default 4/125,1/100); V3C_LAW is {law} and V3C_FLOORS is {floors}")
+
+
+NO_FLOORS = ("PREFLIGHT: under PEARLPLUS_TIE the verifier's record and the commit state the work table with prove_path's "
+             "--reader-floors, which this tree's prove_path.py doesn't take")
+
+
+@pytest.mark.parametrize("args", [(), ("v3c",)])
+@pytest.mark.parametrize("extra, prove_path, line", [
+    ({"V3C_LAW": "stratified:1"}, FAKE_V3C_PROVE_PATH, _no_floors("stratified:1", "4/125,1/100")),
+    ({"V3C_LAW": "subset:1"}, FAKE_V3C_PROVE_PATH, _no_floors("subset:1", "4/125,1/100")),
+    ({"V3C_LAW": "work:0"}, FAKE_V3C_PROVE_PATH, _no_floors("work:0", "4/125,1/100")),
+    ({"V3C_FLOORS": "0.032,0.01"}, FAKE_V3C_PROVE_PATH, _no_floors("work:1", "0.032,0.01")),
+    ({"V3C_LAW": "work:2", "V3C_FLOORS": "4/125"}, FAKE_V3C_PROVE_PATH, _no_floors("work:2", "4/125")),
+    ({}, FAKE_V3C_PROVE_PATH.replace('"--reader-floors"', '"--floors"'), NO_FLOORS),
+])
+def test_the_preflight_refuses_pearlplus_tie_at_a_design_other_than_work_or_without_its_floors(
+        tmp_path, args, extra, prove_path, line):
+    """Under PEARLPLUS_TIE Pearl+'s reader templates are a template a shape of linear, so a sample has no reader of every
+    value W registers: the design is work:K over a work table with a floor for each reader template, made from
+    V3C_FLOORS' EPS and DELTA, which the verifier's record and the commit state (prove_path's --reader-floors). Another
+    design, floors that aren't two fractions, or a tree whose prove_path.py takes no --reader-floors is refused, saying
+    what to pass, in the serve's run and in `served_verdicts.sh v3c` alike, before anything runs."""
+    rc, lines, order, _limits = _v3c(tmp_path, args, prove_path=prove_path, **PEARL_TIED, **extra)
+    assert (rc, lines, order) == (3, [line], [])
+    assert "sampled reader" not in line
 
 
 VTAG = W63K4.replace(",", "-")
