@@ -12,9 +12,17 @@
    "and": 247,
    "type": "fb3ab78ab108e1dd515c6c5294f757f6447226dfcc96946b5a094637e2d6afa48ba6180876c58f9303a756efd8f65870b5cd971be6aefe7eb796f21975fe9766"
   },
+  "DotTf32_v2{K=16}": {
+   "and": 12750,
+   "type": "f9b5f6df6914e598699fc70b9968b9c4e3ba108e622c1a70487aea69697d79e072502fc055aca169e46880feb86109e7425214c404a868f910e5256227c963ea"
+  },
   "EmbeddingShard_v2{VS=16,H=2,START=16}": {
    "and": 1519,
    "type": "fe3f564c0304139a697fe4e4c2b460667fb22b5306cb43e3da62c1326c35d742fdeaac43b9da3259d9666ab5060eb9199c677ea22069046ed847bd0be306bd1e"
+  },
+  "GemmTf32_v2{K=16,N=2}": {
+   "and": 25500,
+   "type": "38ad79fea8e0baba766f8f5bb9a6dbe55f53e493a40f94d0df6a3d3c233344ae9781d6b9260eb896b88ddf8e9a7994c371d897a934e9ad93e14aba2090cb00a2"
   },
   "InductorRoPE_v2{NHEADS=1,D=4}": {
    "and": 11864,

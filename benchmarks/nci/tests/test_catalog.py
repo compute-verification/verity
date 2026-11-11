@@ -8,10 +8,11 @@ NCI = HERE.parent
 sys.path.insert(0, str(NCI))
 
 import catalog  # noqa: E402
+import kappa  # noqa: E402
 import render  # noqa: E402
 import slowdown  # noqa: E402
 
-LOCK = NCI.parents[1] / "Security" / "lean-audit.json"
+LOCK = Path(__file__).resolve().parents[3] / "Security" / "lean-audit.json"
 
 
 def test_catalog_has_no_problems():
@@ -49,15 +50,17 @@ def test_a_calibration_quotes_its_models_fanout():
 
 
 def test_kimi_k2_fanout_covers_every_activation_but_the_lm_head():
-    """From Kimi K2's config.json: an MoE input value multiplies the router's 384 rows and gate and up (2048 each) of
-    the shared expert and 8 routed experts; layer 0's dense MLP input multiplies gate and up (18432 each); a kv latent
-    value multiplies 64 heads of k_nope and v (128 each). One final hidden value multiplies all 163840 LM-head rows,
-    which ``fanout`` does not cover."""
+    """At Kimi K2's shape (``kappa.MODELS``): an MoE input value multiplies the router's rows and gate and up of the
+    shared expert and the routed experts a token uses; layer 0's dense MLP input multiplies gate and up; a kv latent
+    value multiplies every head's k_nope and v. One final hidden value multiplies all the LM head's rows, which
+    ``fanout`` does not cover."""
     kimi = {m["id"]: m for m in json.loads((NCI / "models.json").read_text())}["kimi-k2"]
-    moe_input = 384 + 2 * 2048 * (1 + 8)
-    dense_mlp_input = 2 * 18432
-    kv_latent = 64 * (128 + 128)
-    assert max(moe_input, dense_mlp_input, kv_latent) <= kimi["fanout"] < 163840
+    m = kappa.MODELS["kimi-k2"]
+    a = m["attention"]
+    moe_input = m["experts"] + 2 * m["expert_ffn"] * (m["shared"] + m["active"])
+    dense_mlp_input = 2 * m["ffn"]
+    kv_latent = a["heads"] * (a["nope"] + a["v"])
+    assert max(moe_input, dense_mlp_input, kv_latent) <= kimi["fanout"] < m["vocab"]
     assert "LM head" in kimi["note"]
 
 

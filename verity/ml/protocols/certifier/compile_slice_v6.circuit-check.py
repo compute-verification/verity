@@ -21,6 +21,14 @@ def _network_compile_slice_v6_roots() -> list[Any]:
     return [compile_unit(**st), pool_unit(**st)]
 
 
+def _network_page_copy_v1_roots() -> list[Any]:
+    """One copy block of a carried page at CB = 8 bits: the block written to the window's carried port held to the
+    window's own write, the previous carried port's or zero, as the block's source picks."""
+    from verity.ml.protocols.certifier.compile_slice_v6 import copy_unit
+
+    return [copy_unit(8)]
+
+
 def _network_pool_chain_v1_roots() -> list[Any]:
     """Two consecutive windows at the demonstration class (`compile_slice_v6.demo`): window 1's compile slice and pool
     window, then window 2's, the output root window 1's pool window commits the input root window 2's opens, one input

@@ -14,6 +14,7 @@ public import Flock.CoinTree
 public import Flock.Hash
 public import Flock.Hm96
 public import Lms.Verify
+public import Properties.Verity.Sha512
 
 /-!
 # Soundness as a causal game at a composite's compiled verifier, and each subprotocol's target
@@ -519,9 +520,6 @@ def closeThen {β : Type} (f : List Release → Game β) (t : Game.Strategy (f [
 def requestThen (fs : List (String × ℕ)) (D : Signer) (θ : ByteArray) (F : Array ByteArray) (c a : ByteArray)
     (t : Game.Strategy (finish D θ F c a [])) : Game.Strategy (play fs D θ F c) :=
   ⟨a, closeThen (finish D θ F c a) t (frames fs) fs []⟩
-
-/-- SHA-512, the compiled one (`Flock.Sha512.hash`), as a 64-byte digest. -/
-def sha512 (m : Hash.Msg) : Hash.Digest := fun i => (Flock.Sha512.hash ⟨m.toArray⟩).data.getD i.val 0
 
 /-- SHA-512, the compiled one, as the message-to-message hash `Claims.Finder.Pr` and `ecr/sha-512`
 (`Claims.ExpectedCR`) read. -/

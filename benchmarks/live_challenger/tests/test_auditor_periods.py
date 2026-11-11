@@ -4,6 +4,7 @@ reserve, open and end in order, and of each close's list."""
 
 from __future__ import annotations
 
+import itertools
 import json
 import shlex
 import sys
@@ -408,6 +409,79 @@ def test_a_period_open_refuses_a_length_it_cant_check(host, signer, length):
                   "hash")
     assert rc == 3 and "--length" in out["refused"]
     assert A.read_ledger(host.ledger) == []
+
+
+REGISTRATION = "7d" * 64
+V0 = "verity/inference-only/v0"
+POLICY = {"policy": f"--policy {V0}", "alpha": "--alpha 3/1000", "gamma": "--gamma 4096",
+          "registration": f"--registration {REGISTRATION}"}
+
+
+def test_an_inference_only_periods_open_commits_its_policy_and_registration_as_given_and_another_open_none(host, signer):
+    """The inference-only check's params read α as ``[N, D]`` and Γ as a natural (`NciCheck.Protocol`), and θ's
+    provenance cites the deployment's first registration record by its digest: an inference-only period's open signs
+    them before window 0's first coin under the id of the protocol that reads them, as whoever opened it gave them
+    (`by`), α never reduced and no natural rounded; an open with none of them signs no policy, and the ledger's check
+    reads both as it read them before."""
+    body = ok(ssh(host, signer, f"period-open --name p1 --cap 2 --circuit {CIRCUIT} --draw-k 27 "
+                                f"{' '.join(POLICY.values())}", "hash"))["body"]
+    assert (body["policy"], body["alpha"], body["gamma"], body["registration"]) == (V0, [3, 1000], 4096, REGISTRATION)
+    assert (body["by"], body["draw_k"]) == ("hash", 27)
+    line = A.read_ledger(host.ledger)[0]
+    assert b'"alpha":[3,1000],' in line and b'"gamma":4096,' in line and f'"policy":"{V0}",'.encode() in line
+    ok(ssh(host, signer, "period-close --name p1", "hash"))
+    most = 10 ** 39 - 1
+    body = ok(admin(host, signer, f"period-open --name k1 --lane kernels --cap 1 --circuit {CIRCUIT} --alpha 0/{most} "
+                                  f"--registration {REGISTRATION} --gamma {most} --policy {V0}"))["body"]
+    assert (body["policy"], body["alpha"], body["gamma"], body["by"]) == (V0, [0, most], most, "vy-admin")
+    assert f'"gamma":{most},'.encode() in A.read_ledger(host.ledger)[2]
+    body = ok(ssh(host, signer, f"period-open --name v1 --cap 1 --circuit {CIRCUIT} --policy {V0} --alpha 2/4 "
+                                f"--gamma 0 --registration {REGISTRATION}", "vllm"))["body"]
+    assert (body["alpha"], body["gamma"]) == ([2, 4], 0)
+    plain = ok(ssh(host, signer, f"period-open --name p2 --cap 1 --circuit {CIRCUIT} --draw-k 27", "hash"))["body"]
+    assert not set(A.POLICY_FIELDS) & set(plain) and set(A.POLICY_FIELDS) == set(POLICY)
+    assert {k: (p["lane"], p["cap"], p["circuit"], p["windows"]) for k, p in checked(host).items()} == {
+        "p1": ("hash", 2, CIRCUIT, []), "k1": ("kernels", 1, CIRCUIT, []), "v1": ("vllm", 1, CIRCUIT, []),
+        "p2": ("hash", 1, CIRCUIT, [])}
+
+
+@pytest.mark.parametrize("given", [c for n in (1, 2, 3) for c in itertools.combinations(POLICY, n)], ids="+".join)
+def test_a_period_open_with_part_of_an_inference_only_periods_policy_and_registration_is_refused(host, signer, given):
+    """No period signs part of a policy: α and Γ without the id of the protocol that reads them, one without the
+    other, the policy without the registration θ is read from, or the registration without the policy. The refusal
+    names each flag that is missing, and it is the signing step's, so no caller of `period` gets one signed."""
+    missing = " and ".join(A.POLICY_FIELDS[f] for f in A.POLICY_FIELDS if f not in given) + " missing"
+    for key in ("hash", None):
+        lane = "" if key else " --lane hash"
+        rc, doc = call(host, signer, f"period-open --name p1 --cap 2 --circuit {CIRCUIT}{lane} --draw-k 27 "
+                                     f"{' '.join(POLICY[f] for f in given)}", key)
+        refused((rc, doc), f"period-open p1: {missing}: an inference-only period's open signs")
+    fields = {f: f"{f}={POLICY[f].split()[1]}" for f in given}
+    with pytest.raises(A.Refused, match=missing):
+        A.period(host, ["period-open", "p1", "hash", "hash", "2", CIRCUIT, *fields.values()], signer=signer, pinned=PIN,
+                 now=T0, active=lambda s: False)
+    assert A.read_ledger(host.ledger) == []
+
+
+@pytest.mark.parametrize("flag, value", [
+    ("--policy", "nci/v0"), ("--policy", "verity/inference-only/v1"), ("--policy", V0.upper()), ("--policy", V0 + "/"),
+    ("--policy", f"'{V0} '"), ("--policy", "''"),
+    ("--alpha", "3"), ("--alpha", "3/0"), ("--alpha", "/1000"), ("--alpha", "3/"), ("--alpha", "3/1000/7"),
+    ("--alpha", "03/1000"), ("--alpha", "3/01000"), ("--alpha", "+3/1000"), ("--alpha", "3/-1000"), ("--alpha", "0.003"),
+    ("--alpha", "3e-3/1"), ("--alpha", "'3 / 1000'"), ("--alpha", "[3,1000]"), ("--alpha", "3/" + "9" * 40),
+    ("--alpha", "''"), ("--gamma", "''"), ("--gamma", "04096"), ("--gamma", "+4096"), ("--gamma", "4096.0"),
+    ("--gamma", "4e3"), ("--gamma", "0x1000"), ("--gamma", "many"), ("--gamma", "9" * 40),
+    ("--registration", "7D" * 64), ("--registration", "7d" * 63), ("--registration", "7d" * 65),
+    ("--registration", "''"), ("--registration", "verity/registration/v2"),
+])
+def test_a_period_open_refuses_a_policy_or_a_registration_it_cant_read(host, signer, flag, value):
+    """The policy's id is one the gate knows, so no line's α and Γ are read in a form or unit it wasn't given in. α
+    and Γ are signed exactly as given, so each is one plain decimal form or refused: no sign, no leading zero, no
+    fraction or exponent, a denominator of at least 1, at most 39 digits; the registration is a SHA-512 in lowercase."""
+    args = {**POLICY, flag.removeprefix("--"): f"{flag} {value}"}
+    rc, doc = ssh(host, signer, f"period-open --name p1 --cap 2 --circuit {CIRCUIT} {' '.join(args.values())}", "hash")
+    refused((rc, doc), f"{flag} {shlex.split(value)[0][:200]!r}: ")
+    assert "\n" not in doc["refused"] and A.read_ledger(host.ledger) == []
 
 
 @pytest.mark.parametrize("args", [

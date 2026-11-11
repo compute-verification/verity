@@ -16,8 +16,8 @@ section of the proof stream (fc_write_zk).
 """
 import pathlib
 
-here = pathlib.Path(__file__).resolve().parent
-src = (here / "cuda" / "prove_chunk.cuh").read_text()
+root = pathlib.Path(__file__).resolve().parents[3]
+src = (root / "verity/ml/flock/cuda/prove_chunk.cuh").read_text()
 start = src.index("int flock_cuda_prove_chunk(")
 end = src.rindex("}  // extern \"C\"")
 body = src[start:end].rstrip()
@@ -106,12 +106,13 @@ for gone in ("C->comp_slots", "C->units", "C->unit_log", "C->unit_pos0", "C->mod
     assert gone not in body, f"{gone} left in the circuit prover"
 
 g = pathlib.Path("cuda-ghash")
-text = (here / "cuda" / "prove_circuit.cuh").read_text() + "\nextern \"C\" {\n\n" + body + "\n\n}  // extern \"C\"\n"
+text = ((root / "verity/ml/flock/cuda/prove_circuit.cuh").read_text()
+        + "\nextern \"C\" {\n\n" + body + "\n\n}  // extern \"C\"\n")
 (g / "prove_circuit.cuh").write_text(text)
 # M1: the F256 ladder's hiding step (ligerito_zk.cuh) and its five call points in run_ligerito_f256
-(g / "ligerito_zk.cuh").write_text((here / "cuda" / "ligerito_zk.cuh").read_text())
-(g / "arena_bytes.h").write_text((here / "cuda" / "arena_bytes.h").read_text())
-(g / "csc_share.cuh").write_text((here / "cuda" / "csc_share.cuh").read_text())
+(g / "ligerito_zk.cuh").write_text((root / "verity/ml/flock/cuda/ligerito_zk.cuh").read_text())
+(g / "arena_bytes.h").write_text((root / "verity/ml/flock/cuda/arena_bytes.h").read_text())
+(g / "csc_share.cuh").write_text((root / "verity/ml/flock/cuda/csc_share.cuh").read_text())
 lg = g / "ligerito_f256.cuh"
 t = lg.read_text()
 if '#include "ligerito_zk.cuh"' not in t:
@@ -242,7 +243,7 @@ if "launch_glue_split" not in t:
             if (q) LFCK(A.release(q));""")
     lg.write_text(t)
 # level 0's folds with the messages that follow them, the first with level 0's last OOD glue (ligerito_folds.cuh)
-(g / "ligerito_folds.cuh").write_text((here / "cuda" / "ligerito_folds.cuh").read_text())
+(g / "ligerito_folds.cuh").write_text((root / "verity/ml/flock/cuda/ligerito_folds.cuh").read_text())
 t = lg.read_text()
 if "lf_fold_base_pair_msg" not in t:
     t = put(t, "#define LF_MAX_BLOCKS 2048\n#endif\n", '#define LF_MAX_BLOCKS 2048\n#endif\n\n#include "ligerito_folds.cuh"\n')

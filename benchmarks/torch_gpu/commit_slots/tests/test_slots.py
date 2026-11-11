@@ -23,7 +23,7 @@ KEY = bytes(range(100, 132))
 #: FAMILIES' shared-row layout at 1 KiB rows, fetched with commitments' layout fixtures, its sha256,
 #: slots' digest of it (the artifact's ``layout_digest``), ``commitments.layout``'s ``json_digest`` of it, and a step root
 #: over it, from the loader slots had before ``commitments.layout``
-FAMILIES = (Path(__file__).resolve().parents[4] / "verity" / "ml" / "commitments" / "tests" / "fixtures" / "layouts"
+FAMILIES = (Path(__file__).resolve().parents[4] / "verity/ml/commitments/tests/fixtures/layouts"
             / "families-shared-1024b.layout.json")
 FAMILIES_SHA256 = "15fd14be19dea4d4d70b18771d0e185881894c3d5e480db35a9dbe4eb5141cd8"
 FAMILIES_DIGEST = ("eb7937f19e2e8e3a0daf9f7b85f33d837b267a079cd0c5c60d3581e8c2b1675b"

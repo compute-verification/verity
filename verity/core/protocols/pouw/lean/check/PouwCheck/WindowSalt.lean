@@ -81,7 +81,7 @@ def valuesRoot? (g : Json) : Option ByteArray := do
 binds, or why it names none. W is its `W` root, a SHA-512 digest, or, when it registers none, the root of its registered
 weights' entries (`window.registered`); an execution phase with both names no one W. X is the root of the activations it
 committed after serving (`window.activations`). -/
-def windowAnchors (c : Registration) : Except String (ByteArray × ByteArray) := do
+def windowAnchors (c : WindowCommitmentRecord) : Except String (ByteArray × ByteArray) := do
   let port := (c.roots.find? (·.port == "W")).map (·.root)
   let w := match c.window.registered with
     | none => (port.filter isHexDigest).bind fun h => (PouwCommit.pyFromHex h).toOption
@@ -113,7 +113,7 @@ def saltEpoch (key ledger pins main session : Json) (r : ByteArray) : R (Audited
 
 /-- The steps of `core_check.window_salt` on a live execution phase's answer's salt `s`, under the verifier's `live` inputs and the
 execution phase's registration `c`. -/
-def windowSaltCheck (live : Json) (c : Registration) (s : Json) : R Unit := do
+def windowSaltCheck (live : Json) (c : WindowCommitmentRecord) (s : Json) : R Unit := do
   unless keys s == some WINDOW_SALT_KEYS do throw ("salt", WINDOW_SALT_FORM)
   let (w, x) ← (windowAnchors c).mapError (("salt", ·))
   let some k := (PouwWindow.natOf? (at? s "epoch")).filter (· < 2 ^ 64) | throw ("salt", WINDOW_EPOCH)
@@ -131,7 +131,7 @@ def windowSaltCheck (live : Json) (c : Registration) (s : Json) : R Unit := do
 
 /-- `core_check.window_salt`: why the salt an accepted execution phase's answer carries (`none` when it carries none) is not its
 live salt, or `none`. -/
-def windowSaltReason (p : Params) (c : Registration) (salt : Option Json) : Option String :=
+def windowSaltReason (p : Params) (c : WindowCommitmentRecord) (salt : Option Json) : Option String :=
   if p.check.coins != some "live" then
     if salt.isSome then some SEEDED_SALT else none
   else match salt with

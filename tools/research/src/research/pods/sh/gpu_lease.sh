@@ -77,7 +77,10 @@
 # grant comes within $GPU_LEASE_AGENT_WAIT_S seconds (default 10).  Once agent.lock is free (the agent stopped or died), the next
 # poll falls back to the rules above, keeping its place in the queue.
 # A lease's owner lines are written as soon as its locks are taken (the UUIDs and the memory scope are looked up before), so a
-# held lock never shows the previous holder's line for longer than that.
+# held lock never shows the previous holder's line for longer than that.  When CMD ends, still holding the locks, the lease
+# prefixes each of its lines with `released=TIME`, so a reader of the file sees it ended (a node's lines once named a run for
+# hours after its locks were free); the line stays, for the run that last held the GPU (gpu_adopt, the keeper's grants).
+# A lease killed outright leaves its line unmarked: `status` reports a free lock as free whatever its owner file says.
 #
 # Foreign memory: a free lock is not a free GPU.  A run's process that outlives its lease (vLLM's TP rank workers, which
 # hold no lock, after a cancel) leaves the GPU's memory taken, and the next holder fails
@@ -671,6 +674,11 @@ trap 'kill -TERM "$child" 2> /dev/null' TERM INT HUP
 rc=0; wait "$child" || rc=$?
 while kill -0 "$child" 2> /dev/null; do rc=0; wait "$child" || rc=$?; done
 trap - TERM INT HUP
+released=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+for i in "${TAKEN[@]}"; do
+  line=$(cat "$dir/$i.owner" 2>/dev/null) || continue
+  case "$line" in "pid=$$ "*) echo "released=$released $line" > "$dir/$i.owner" ;; esac
+done
 for fd in "${FDS[@]}"; do exec {fd}>&-; done
 rm -f "$dir/grant.$$"
 report_usage "$rc"

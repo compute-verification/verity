@@ -7,7 +7,8 @@ until it ends; one in the background doesn't. Local workers also share the coord
 cloud workers where the Task tool offers them, background always). So for an agent that holds a handle (its id is in a `holder`
 of the Slack registry, `.agents/skills/using-slack/registry.json`) it refuses a local Task call in the foreground, unless it is
 one of the short read-only lookups in `LOOKUPS`. Cloud and background calls pass, and so does every other agent's. Reads
-Cursor's hook JSON on stdin and prints its verdict as JSON on stdout; an input it can't read passes. Each verdict is appended to
+Cursor's hook JSON on stdin and prints its verdict as JSON on stdout; an input it can't read passes, and so does another
+step's event, unlogged. Each verdict is appended to
 $AGENT_GUARD_TASK_LOG (default /tmp/agent-guard-task.jsonl) with the call's environment, subagent type and background flag,
 never its prompt.
 
@@ -23,6 +24,8 @@ import os
 import re
 import sys
 from pathlib import Path
+
+from settings import record_event
 
 REGISTRY = Path(os.environ.get("AGENT_GUARD_REGISTRY",
                                Path(__file__).resolve().parents[2] / ".agents/skills/using-slack/registry.json"))
@@ -102,6 +105,10 @@ def main() -> int:
     except ValueError:
         event = {}
     event = event if isinstance(event, dict) else {}
+    record_event("task_hook.py", event)
+    if event.get("hook_event_name") not in (None, "preToolUse"):
+        print(json.dumps({"permission": "allow"}))
+        return 0
     if why := linear_write(event):
         print(json.dumps({"permission": "deny", "agent_message": why, "user_message": why}))
         return 0

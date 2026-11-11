@@ -8,9 +8,9 @@ binds) on every head.  The device gate runs first and nothing else runs when it 
   gate     `fa2_target_capture_gpu.gate`.
   binary   `fa2_target_capture_gpu.binary`: the SASS and PTX `_vllm_fa2_C` and `_C` carry.
   mufu     `fa2_target_capture_gpu.mufu`: ex2 / rcp tables and reduction rule on all 2^32 inputs, JIT compute_80 PTX and native.
-  tanh     `program/kernels/cuda/tanh_probe.cu` built as compute_80 PTX (JIT-compiled by the driver, as FA2 is): `tanh.approx.f32` on
-           every 32-bit word against `MufuTanh_v1`'s three rules and its measured table, and its odd symmetry.  A mismatch keeps the
-           device's table over the shard (`tanh_sm*.bin`), the table another MufuTanh version would pin.
+  tanh     `verity/ml/definitions/numerics/cuda/tanh_probe.cu` built as compute_80 PTX (JIT-compiled by the driver, as FA2 is):
+           `tanh.approx.f32` on every 32-bit word against `MufuTanh_v1`'s three rules and its measured table, and its odd symmetry.
+           A mismatch keeps the device's table over the shard (`tanh_sm*.bin`), the table another MufuTanh version would pin.
   launch   `fa2_target_capture_gpu.launch_geometry` of every case (torch.profiler).
   cases    at head dims 128 and 256, `fa_tap_exactness.cases(2)` with a softcap (the sliding window (4095, 0) is wider than every key
            length, so the kernel runs causal), a `wide` case (every operand word scaled by 2^U(-8, 8)), and a mixed and a decode launch at
@@ -50,7 +50,7 @@ SCHEMA = "verity-vllm/fa2-softcap-capture/v1"
 RECORD = "fa2_softcap_capture.json"
 HDIMS = (128, 256)
 CAP = 50.0
-TANH_SRC = Path(__file__).resolve().parents[2] / "verity/ml/definitions/numerics/cuda/tanh_probe.cu"
+TANH_SRC = C.REPO_ROOT / "verity/ml/definitions/numerics/cuda/tanh_probe.cu"
 #: (heads, KV heads, head dim) of the pinned Gemma-2 checkpoints whose selector scale is D^-0.5 (`query_pre_attn_scalar == head_dim`)
 MODELS = {"gemma-2-2b": (8, 4, 256), "gemma-2-9b": (16, 8, 256)}
 #: finite heads per launch the reference evaluator also runs (the twin's own check)

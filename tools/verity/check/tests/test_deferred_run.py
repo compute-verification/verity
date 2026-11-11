@@ -2,6 +2,7 @@
 those ci.toml jobs and what they need, inside a recorded run that is no check, so no gate reads it."""
 from __future__ import annotations
 
+import hashlib
 import importlib.util
 import json
 import subprocess
@@ -139,7 +140,7 @@ def test_record_of_a_deferred_run_launches_it_without_the_check_tool_and_without
     monkeypatch.setattr(CHECK, "lean_deps_url_file", lambda d: (_ for _ in ()).throw(AssertionError("Lean dependencies sent")))
     monkeypatch.setattr(CHECK, "landable", lambda base: True)
     monkeypatch.setattr(CHECK, "slot_wrap", lambda priority: ["slot", *(["--priority"] if priority else [])])
-    monkeypatch.setattr(CHECK, "gather_verdicts", lambda d, given=None: None)
+    monkeypatch.setattr(CHECK, "verdict_url_file", lambda d: None)
     assert CHECK.record(["--base", "HEAD", "--on", "vy-x", "--priority", "--keep-going", "--deferred", "pytest,circuit-check"]) == 0
     [cmd] = launched
     head, tail = cmd[:cmd.index("--")], cmd[cmd.index("--") + 1:]
@@ -166,19 +167,26 @@ def _pack(tmp_path: Path, monkeypatch) -> Path:
     return pack
 
 
+@pytest.mark.parametrize("sent", [False, True])
 @pytest.mark.parametrize("circuit_cache", [False, True])
-def test_the_after_landing_run_reuses_circuit_checks_passes_alone(monkeypatch, tmp_path, circuit_cache):
+def test_the_after_landing_run_reuses_circuit_checks_passes_alone(monkeypatch, tmp_path, circuit_cache, sent, capsys):
     """Drive's after-landing run (`train.sh --deferred STEPS --no-cache --circuit-cache`): its suites, Lean and steps reuse no
-    pass, and circuit-check its per-target ones, imported from the gathered pack (its entries alone) and packed again as the run
-    stores them; `--no-cache` alone, the nightly `audit-main`, imports and packs nothing."""
+    pass, and circuit-check its per-target ones, imported from the recorded checks' packs sent or a pack given (their entries
+    alone) and packed again as the run stores them; `--no-cache` alone, the nightly `audit-main`, imports and packs nothing.
+    The packs' URLs leave its inputs either way, and a run sent none fetches none and says nothing of them."""
     pack = _pack(tmp_path, monkeypatch)
     monkeypatch.setenv("CHECK_CACHE", str(tmp_path / "here" / "check"))
     monkeypatch.setenv("VERITY_TEST_CACHE", str(tmp_path / "here" / "tests"))
     run_dir, got = tmp_path / "run", {}
-    run_dir.mkdir()
+    (run_dir / "inputs").mkdir(parents=True)
+    urls = run_dir / "inputs" / CHECK.VERDICT_URLS
+    if sent:
+        urls.write_text(json.dumps([{"run": "r-earned", "sha256": hashlib.sha256(pack.read_bytes()).hexdigest(),
+                                     "bytes": pack.stat().st_size, "url": pack.as_uri()}]))
     monkeypatch.setenv("RESEARCH_RUN_ID", "r20261027-000000-abcd")
     monkeypatch.setenv("RESEARCH_RUN_DIR", str(run_dir))
     monkeypatch.delenv("VERITY_SKIP_STORE", raising=False)
+    monkeypatch.delenv(CHECK.VERDICT_URLS_ENV, raising=False)
     monkeypatch.setattr(CHECK.SUITES, "foreign", lambda members, env: None)
 
     def run(out, n, cache, keep_going, only, packs, reused, regenerate, circuit_cache=None, live=None, splits=None):
@@ -187,9 +195,10 @@ def test_the_after_landing_run_reuses_circuit_checks_passes_alone(monkeypatch, t
 
     monkeypatch.setattr(CHECK, "run", run)
     argv = ["--deferred", "pytest,circuit-check", "--keep-going", "--no-cache", *(["--circuit-cache"] if circuit_cache else []),
-            "--no-regenerate", "--verdicts-in", str(pack)]
+            "--no-regenerate", *([] if sent else ["--verdicts-in", str(pack)])]
     assert CHECK.main(argv) == 0
     assert got == {"cache": False, "circuit_cache": circuit_cache, "packs": circuit_cache, "reused": circuit_cache}
     assert sorted(CHECK.VERDICTS.entries()) == (["check/circuit-check/v1/d/t.json"] if circuit_cache else [])
     doc = json.loads((run_dir / "result.json").read_text())
-    assert ("only" in (doc.get("verdicts") or {}).get("in", {})) is circuit_cache
+    assert [x.get("only") for x in (doc.get("verdicts") or {}).get("in", [])] == [CHECK.CIRCUIT_ENTRIES] * circuit_cache
+    assert not urls.exists() and ("recorded checks' packs" in capsys.readouterr().out) == (sent and circuit_cache)

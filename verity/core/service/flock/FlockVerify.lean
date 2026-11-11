@@ -79,7 +79,8 @@ to the branch that reads it. -/
   Task.spawn fun _ => hexOf (Sha512.hash b) == hex
 
 /-- `ARCHIVE/sha512/<hex>`: the verifier's own copy of an object, by content, its key's bytes, and whether it hashes to its
-key, still hashing (`archiveGetSha` waits for it). -/
+key, still hashing (`archiveGetSha` waits for it). Once it does, the key's bytes are the object's SHA-512
+(`Hex.unhex_eq_of_hexOf`). -/
 def archiveGetTask (archive hex : String) : IO (Except String (ByteArray × ByteArray × Task Bool)) := do
   if hex.length != 128 || !hex.all (fun c => c.isDigit || ('a' ≤ c && c ≤ 'f')) then
     return .error s!"archive: {hex} is not a SHA-512 digest"

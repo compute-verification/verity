@@ -2,7 +2,20 @@ module
 
 public import Definitions.Accounting.ReadUnit
 public import Proofs.Flock.Soundness.Discharge.Hm.Gadget
-public import Properties.Verity.Game
+public import Properties.Composition
+public import Properties.Flock.Circuit.CircuitOf
+public import Properties.Verity.Sha512
+public import Definitions.Accounting.JointLive
+public import Definitions.Core.Blocks
+public import Definitions.Core.Game
+public import Definitions.Core.Site
+public import Definitions.Hash.Assumptions
+public import Definitions.Hash.RowLeaf
+public import Definitions.Nci
+public import Flock.CoinTree
+public import Flock.Hash
+public import Flock.Hm96
+public import Lms.Verify
 import Mathlib.Algebra.Order.Floor.Extended
 import Mathlib.Algebra.Order.Interval.Basic
 import Mathlib.Analysis.Complex.UpperHalfPlane.Basic

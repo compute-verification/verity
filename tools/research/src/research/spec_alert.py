@@ -439,7 +439,9 @@ def web(repo: Path, remote: str) -> str | None:
 
 
 def _is_record(path: str) -> bool:
-    return path == RECORD or path.endswith("/" + RECORD)
+    """Whether ``path`` is a package's record. The audit's own directory holds none: a `lean-audit.json` there is a fixture
+    of its tests, in whatever form the test needs, and a layout move that renames one says nothing about the spec."""
+    return (path == RECORD or path.endswith("/" + RECORD)) and not path.startswith(AUDIT_DIR)
 
 
 def _records_changed(repo: Path, old: str, new: str) -> list[tuple[str, str]]:

@@ -5,10 +5,12 @@ from pathlib import Path
 
 import pytest
 from rho import envelopes, hardware, lean
-from rho.envelopes import Certifier, Context, Detection, Onsite, Remote
+from rho.envelopes import Certifier, Context, Detection, Onsite, Remote, Wipe
 from rho.params import Param, Registry
 from rho.scenario import build, evaluate_named
 from rho.theorem import Budget, multiple_bound, overhead
+
+from verity.core.protocols.profile import WINDOW_DELTA
 
 ROOT = Path(__file__).resolve().parents[3]
 REG = Registry.load()
@@ -66,19 +68,28 @@ def test_the_remote_uncertified_share_is_tiers_residual_term():
 
 
 def test_with_spot_it_adds_tiers_escape_and_cheating_shares():
+    """At today's sparse samples the bits the accepted incorrect blocks inject, each the widest public size class of a
+    block's outputs, are worth more than tiers' fleet, and both stop the cheating share at 1; at the proving cost's low
+    end, batched throughput, it is below 1."""
     ctx = tiers_context()
-    p = tiers_params(ctx)
-    sampled = envelopes.regime(REG, "remote-sampled")
-    t5 = T.evaluate(p, T.TIERS["T5"])
-    slack = sampled.slack(ctx)
-    assert sampled.detection.injected() == pytest.approx(t5["cheat_bits"], rel=1e-12)
-    assert sampled.detection.chord == pytest.approx(T.chord(p, t5["cheat_bits"]), rel=1e-7)
-    assert math.fsum(v for k, v in slack.items() if k != "exfil.incorrect") == pytest.approx(t5["residual"], rel=1e-9)
-    assert slack["exfil.incorrect"] == pytest.approx(t5["cheat"], rel=1e-7)
+    cost = REG.param("regime.remote-sampled.overhead")
+    shares = []
+    for proving in (cost.value, cost.low):
+        p = tiers_params(ctx) | {"overhead": proving}
+        sampled = envelopes.regime(REG.override({cost.key: proving}), "remote-sampled")
+        t5 = T.evaluate(p, T.TIERS["T5"])
+        slack = sampled.slack(ctx)
+        assert sampled.detection.injected() == pytest.approx(t5["cheat_bits"], rel=1e-12)
+        assert sampled.detection.chord == pytest.approx(T.chord(p, t5["cheat_bits"]), rel=1e-7)
+        assert math.fsum(v for k, v in slack.items() if k != "exfil.incorrect") == pytest.approx(t5["residual"], rel=1e-9)
+        assert slack["exfil.incorrect"] == pytest.approx(t5["cheat"], rel=1e-7)
+        shares.append(slack["exfil.incorrect"])
+    assert shares[0] == 1 > shares[1] > 0
 
 
 def test_with_nothing_else_bounding_the_padded_size_ratio_is_lean_dampener_remote_at_full_capacity():
-    """Lean's `DampenerRemote` with no declared products (ν_T = 0) and χ = 0 is `max(1, 1/(s + (1 − s) u / MFU₀))`,
+    """Lean's `DampenerRemote` with no declared products (the declared share `ν = 0`) and χ = 0 is
+    `max(1, 1/(s + (1 − s) u / MFU₀))`,
     against an unencumbered trainer at `MFU₀`. The bound counts every gate at capacity against the reference at
     capacity, so its padded size ratio is `DampenerRemote`'s `ρ` at `MFU₀ = 1` (where at least 1), and the slowdown is
     that `ρ` at the reference's MFU."""
@@ -387,9 +398,11 @@ def test_pouws_delta_splits_into_coins_and_cryptography():
     ctx = context("reference-h200")
     remote, sampled = envelopes.regime(REG, "remote"), envelopes.regime(REG, "remote-sampled")
     d = remote.delta(ctx)
-    assert d.coin == pytest.approx(2**-40 / remote.pouw.eps_agg, rel=1e-2)
-    assert d.crypto == pytest.approx(2 * d.coin, rel=1e-2)
-    assert d.coin + d.crypto == pytest.approx(3 * 2**-40 / 1e-4, rel=1e-2)
+    window = float(WINDOW_DELTA)
+    assert d.coin == pytest.approx(window / remote.pouw.eps_agg)
+    assert d.crypto == pytest.approx(2 * d.coin)
+    assert d.coin + d.crypto == pytest.approx(3 * window / 1e-4)
+    assert sampled.detection.p_evade == window
     assert sampled.delta(ctx).coin == pytest.approx(d.coin + sampled.detection.p_evade)
     assert (envelopes.regime(REG, "unmonitored").delta(ctx).coin, envelopes.regime(REG, "unmonitored").delta(ctx).crypto) \
         == (0.0, 0.0)
@@ -406,9 +419,21 @@ def test_delta_sums_every_subprotocol_and_the_wipe_per_server_and_per_wipe(scena
     d = r.delta(ctx)
     assert set(d.by) == {"pouw", "detection", "wipe", "certifier"}
     games = ctx.fleet.count * getattr(ctx.location, per) * ctx.period.seconds / r.wipe.wipe_s
-    assert d.by["wipe"] == pytest.approx((games * 2**-128, games * r.wipe.prf_advantage))
+    assert r.wipe.game_delta_coin == REG["regime.onsite.game_delta_coin"] > 0
+    assert d.by["wipe"] == pytest.approx((games * r.wipe.game_delta_coin, games * r.wipe.prf_advantage))
     assert d.by["pouw"] == pytest.approx(r.pouw.delta(ctx)) and d.by["certifier"] == (0.0, 0.0)
     assert d.coin == pytest.approx(math.fsum(c for c, _ in d.by.values()))
     assert d.crypto == pytest.approx(math.fsum(x for _, x in d.by.values()))
-    assert d.coin == pytest.approx(r.pouw.window_delta_coin / r.pouw.eps_agg + games * 2**-128)
+    assert d.coin == pytest.approx(r.pouw.window_delta_coin / r.pouw.eps_agg + games * r.wipe.game_delta_coin)
     assert d.json()["by"]["wipe"]["coin"] == d.by["wipe"][0]
+
+
+def test_a_wipe_games_failure_is_stated_once_in_the_registry():
+    """The retention game fails with the coins' probability plus `Adv_PRF`. `Wipe` restates neither (a wipe not given
+    them adds nothing), and the registry sets each once, at `regime.onsite`, which every regime with a wipe inherits."""
+    assert (Wipe().game_delta_coin, Wipe().prf_advantage) == (0.0, 0.0)
+    for leaf in ("game_delta_coin", "prf_advantage"):
+        assert [p.key for p in REG.params() if p.key.rpartition(".")[2] == leaf] == [f"regime.onsite.{leaf}"]
+    stated = (REG["regime.onsite.game_delta_coin"], REG["regime.onsite.prf_advantage"])
+    wiped = [r for r in (envelopes.regime(REG, name) for name in REG.names("regime")) if isinstance(r, Onsite)]
+    assert wiped and all((r.wipe.game_delta_coin, r.wipe.prf_advantage) == stated for r in wiped) and min(stated) > 0

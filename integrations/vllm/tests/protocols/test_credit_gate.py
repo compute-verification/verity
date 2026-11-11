@@ -850,7 +850,7 @@ def test_round_0s_input_ids_bind_the_windows_session(periodic, monkeypatch, othe
     c = _record(run)["commitment"]
     why = CR._registration(c["session"]["root"], run.served.program_digest, "h1/", c["served"]["entries"], [],
                            CR.layout_of(_descriptor())[0], 1, [], auditor.session_id)
-    assert why == (("registration", CR.other_registration("h1/ids@0")) if other else None), why
+    assert why == (("registration", CR.other_record("h1/ids@0")) if other else None), why
 
 
 def test_the_serving_process_credits_nothing_in_a_window_off_the_commit(auditor):

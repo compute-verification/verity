@@ -30,13 +30,16 @@ describes, where each of its gates sits, and each unit's gates and inputs. The s
   constants `κ` fix it to `b`. Gate `g` sits at `posOf`, its last lowered gate.
 * `unitOf`, `unitGates`, `owner`, `insOf`, `blockOf`: unit `u`'s lowered gates, the input gates it owns (the unfixed
   inputs whose first reader it is) and its proof block, the first then the second's positions.
+* `owners`, `insOfAt`: every gate's `owner` from one pass a unit, and `insOf` reading it, equal to them (`getD_owners`).
 * `offs`, `offAt`, `posAt`, `lowerAt`, `unitGatesAt`, `blockOfAt`, `progFast`, `blockOfFast`: every gate's `off` from
-  one pass and `prog` and `blockOf` reading it, equal to them (`offAt_offs`) and compiled in their place (`@[csimp]`).
+  one pass and `prog` and `blockOf` reading it (`blockOf` the owners too), equal to them (`offAt_offs`) and compiled in
+  their place (`@[csimp]`).
 * `inBit`, `outBit`: the claims position of a bit of an instance's input port or returned output leaf, the instance
   `(u, k)` being unit `u`'s template instance `k < upv`.
 * `RowPos`, `rowBit`, `outRowBit`: a commitment position (a registered row, its leaf and a bit), where a source gate
   reads and where an output bit is committed.
-* `consts`: the key program's constants, its constant set, and its zero and every input gate no unit reads clear.
+* `consts`: the key program's constants, its constant set, and its zero and every input gate no unit reads clear;
+  `constsAt` is its answer reading the owners (`constsAt_owners`), which a caller asking at many gates builds once.
 * `Members`, `base`, `wiresOf`: an audit's members, each a statement on a circuit file over some of the partition's VUs,
   side by side, and each source bit's wire to the first claims position at its commitment position, compared at the
   partition's VUs: the writer's output bit, else the first copy.
@@ -303,12 +306,139 @@ def insOf (kp : KeyProg) (κ : Nat → Option Bool) (u : Nat) : List Nat :=
 def blockOf (kp : KeyProg) (κ : Nat → Option Bool) (u : Nat) : List Nat :=
   unitGates kp u ++ (insOf kp κ u).map (posOf kp)
 
+/-! ## The owners in one pass
+
+`owner kp g` scans every gate of each unit up to `g`'s owner, so `insOf` as stated, which asks it at every gate, takes
+time quadratic in the program's gates for each unit. `owners kp` holds every gate's `owner` from one pass a unit
+(`getD_owners`): unit `u`'s pass marks each gate its gates read `some u`, and the passes run from the last unit to the
+first, so a gate keeps the first unit that reads it. `insOfAt` is `insOf` reading it. -/
+
+/-- Each gate of `L` marked `some u` in `t`. -/
+def markArgs (u : Nat) (L : List Nat) (t : Array (Option Nat)) : Array (Option Nat) :=
+  L.foldl (fun t g => t.setIfInBounds g (some u)) t
+
+/-- One step of `markUnit`: the gates gate `h` reads marked `some u` when `h` is one of unit `u`'s gates. -/
+def markStep (kp : KeyProg) (u : Nat) (t : Array (Option Nat)) (h : Nat) : Array (Option Nat) :=
+  if unitOf kp h == some u then markArgs u (args kp h) t else t
+
+/-- **Unit `u`'s pass**: each gate one of unit `u`'s gates reads marked `some u`, the others as `t` has them. -/
+def markUnit (kp : KeyProg) (u : Nat) (t : Array (Option Nat)) : Array (Option Nat) :=
+  (List.range kp.size).foldl (markStep kp u) t
+
+/-- **Every gate's `owner`, in one pass a unit**: entry `g` is `owner kp g` for each `g < kp.size` (`getD_owners`). -/
+def owners (kp : KeyProg) : Array (Option Nat) :=
+  (List.range kp.units).foldr (markUnit kp) (Array.replicate kp.size none)
+
+/-- `insOf kp κ u` read from the owners `ow`. -/
+def insOfAt (ow : Array (Option Nat)) (kp : KeyProg) (κ : Nat → Option Bool) (u : Nat) : List Nat :=
+  (List.range kp.size).filter fun g => (kp.row? g).isNone && (κ g).isNone && ow.getD g none == some u
+
+theorem getD_setIfInBounds (t : Array (Option Nat)) (i j : Nat) (v : Option Nat) (hj : j < t.size) :
+    (t.setIfInBounds i v).getD j none = if i = j then v else t.getD j none := by
+  rw [Array.getD_eq_getD_getElem?, Array.getD_eq_getD_getElem?, Array.getElem?_setIfInBounds]
+  by_cases h : i = j
+  · subst h
+    simp [hj]
+  · simp [h]
+
+theorem size_markArgs (u : Nat) (L : List Nat) (t : Array (Option Nat)) : (markArgs u L t).size = t.size := by
+  induction L generalizing t with
+  | nil => rfl
+  | cons g L ih =>
+    show (markArgs u L (t.setIfInBounds g (some u))).size = t.size
+    rw [ih]
+    simp
+
+theorem getD_markArgs (u j : Nat) (L : List Nat) (t : Array (Option Nat)) (hj : j < t.size) :
+    (markArgs u L t).getD j none = if L.contains j then some u else t.getD j none := by
+  induction L generalizing t with
+  | nil => simp [markArgs]
+  | cons g L ih =>
+    have hj' : j < (t.setIfInBounds g (some u)).size := by simpa using hj
+    show (markArgs u L (t.setIfInBounds g (some u))).getD j none = _
+    rw [ih _ hj', getD_setIfInBounds _ _ _ _ hj]
+    by_cases hg : g = j
+    · subst hg
+      simp
+    · have hg' : ¬ j = g := fun h => hg h.symm
+      simp [hg, hg']
+
+theorem size_markStep (kp : KeyProg) (u : Nat) (t : Array (Option Nat)) (h : Nat) :
+    (markStep kp u t h).size = t.size := by
+  unfold markStep
+  split
+  · exact size_markArgs _ _ _
+  · rfl
+
+theorem getD_foldl_markStep (kp : KeyProg) (u j : Nat) (hs : List Nat) (t : Array (Option Nat)) (hj : j < t.size) :
+    (hs.foldl (markStep kp u) t).getD j none =
+      bif hs.any (fun h => unitOf kp h == some u && (args kp h).contains j) then some u else t.getD j none := by
+  induction hs generalizing t with
+  | nil => rfl
+  | cons h hs ih =>
+    rw [List.foldl_cons, ih (markStep kp u t h) (by rw [size_markStep]; exact hj)]
+    show (bif _ then some u else (markStep kp u t h).getD j none) =
+      bif (unitOf kp h == some u && (args kp h).contains j) ||
+          hs.any (fun x => unitOf kp x == some u && (args kp x).contains j)
+        then some u else t.getD j none
+    unfold markStep
+    cases unitOf kp h == some u with
+    | false => first | rfl | simp
+    | true =>
+      show (bif _ then some u else (markArgs u (args kp h) t).getD j none) = _
+      rw [getD_markArgs _ _ _ _ hj]
+      cases (args kp h).contains j <;>
+        cases hs.any (fun x => unitOf kp x == some u && (args kp x).contains j) <;> first | rfl | simp
+
+theorem size_foldl_markStep (kp : KeyProg) (u : Nat) (hs : List Nat) (t : Array (Option Nat)) :
+    (hs.foldl (markStep kp u) t).size = t.size := by
+  induction hs generalizing t with
+  | nil => rfl
+  | cons h hs ih => rw [List.foldl_cons, ih, size_markStep]
+
+theorem size_foldr_markUnit (kp : KeyProg) (us : List Nat) (t : Array (Option Nat)) :
+    (us.foldr (markUnit kp) t).size = t.size := by
+  induction us with
+  | nil => rfl
+  | cons u us ih => rw [List.foldr_cons, markUnit, size_foldl_markStep, ih]
+
+theorem getD_foldr_markUnit (kp : KeyProg) (j : Nat) (us : List Nat) (hj : j < kp.size) :
+    (us.foldr (markUnit kp) (Array.replicate kp.size none)).getD j none =
+      us.find? fun u => (List.range kp.size).any fun h => unitOf kp h == some u && (args kp h).contains j := by
+  induction us with
+  | nil =>
+    simp only [List.foldr_nil, List.find?_nil]
+    first
+      | simp [Array.getD_eq_getD_getElem?, hj]
+      | simp [Array.getD, hj]
+  | cons u us ih =>
+    have hj' : j < (us.foldr (markUnit kp) (Array.replicate kp.size none)).size := by
+      rw [size_foldr_markUnit, Array.size_replicate]
+      exact hj
+    rw [List.foldr_cons, markUnit, getD_foldl_markStep _ _ _ _ _ hj', ih]
+    first
+      | rw [List.find?_cons]
+        cases (List.range kp.size).any (fun h => unitOf kp h == some u && (args kp h).contains j) <;> rfl
+      | cases hr : (List.range kp.size).any (fun h => unitOf kp h == some u && (args kp h).contains j) <;>
+          simp [List.find?, hr]
+
+/-- **The table is `owner`**: entry `g` of `owners kp` is `owner kp g`, at every gate `g` of the program. -/
+theorem getD_owners (kp : KeyProg) {g : Nat} (hg : g < kp.size) : (owners kp).getD g none = owner kp g :=
+  getD_foldr_markUnit kp g (List.range kp.units) hg
+
+theorem insOfAt_owners (kp : KeyProg) (κ : Nat → Option Bool) (u : Nat) :
+    insOfAt (owners kp) kp κ u = insOf kp κ u := by
+  unfold insOfAt insOf
+  refine List.filter_congr fun g hg => ?_
+  simp only [getD_owners kp (List.mem_range.1 hg)]
+
 /-! ## The offsets in one pass
 
 `off kp g` sums the lowered sizes of the gates before `g` at every call, so `prog` and `blockOf` as stated take time
 quadratic in the program's gates. `offs kp` holds every gate's `off` from one pass (`offAt_offs`); `progFast` and
-`blockOfFast` are `prog` and `blockOf` reading it, built once. `@[csimp]` compiles them in `prog`'s and `blockOf`'s
-place, so evaluation runs them while every theorem reads `prog` and `blockOf`, and `off` stays their specification. -/
+`blockOfFast` are `prog` and `blockOf` reading it, `blockOf` the owners too, built once. `@[csimp]` compiles them in
+`prog`'s and `blockOf`'s place, so evaluation runs them while every theorem reads `prog` and `blockOf`, and `off` and
+`owner` stay their specification. -/
 
 /-- One step of `offs`: entry `g + 1`, where gate `g + 1`'s lowered gates start, is entry `g` plus gate `g`'s size. -/
 def offsStep (kp : KeyProg) (t : Array Nat) (g : Nat) : Array Nat := t.push (t.getD g 0 + gateSize kp g)
@@ -333,17 +463,20 @@ def unitGatesAt (t : Array Nat) (kp : KeyProg) (u : Nat) : List Nat :=
   (List.range kp.size).flatMap fun g =>
     if unitOf kp g == some u then (List.range (gateSize kp g)).map (offAt t kp g + ·) else []
 
-/-- `blockOf kp κ u` read from the table `t`, which a caller builds once for all of `kp`'s units. -/
-def blockOfAt (t : Array Nat) (kp : KeyProg) (κ : Nat → Option Bool) (u : Nat) : List Nat :=
-  unitGatesAt t kp u ++ (insOf kp κ u).map (posAt t kp)
+/-- `blockOf kp κ u` read from the offsets `t` and the owners `ow`, which a caller builds once for all of `kp`'s
+units. -/
+def blockOfAt (t : Array Nat) (ow : Array (Option Nat)) (kp : KeyProg) (κ : Nat → Option Bool) (u : Nat) :
+    List Nat :=
+  unitGatesAt t kp u ++ (insOfAt ow kp κ u).map (posAt t kp)
 
 /-- `prog`, its offsets built once (`prog_eq_progFast`). -/
 def progFast (kp : KeyProg) (κ : Nat → Option Bool) : List LGate × List Nat :=
   let t := offs kp
   ((List.range kp.size).flatMap (lowerAt t kp κ), kp.outs.map (posAt t kp))
 
-/-- `blockOf`, its offsets built once (`blockOf_eq_blockOfFast`). -/
-def blockOfFast (kp : KeyProg) (κ : Nat → Option Bool) (u : Nat) : List Nat := blockOfAt (offs kp) kp κ u
+/-- `blockOf`, its offsets and owners built once (`blockOf_eq_blockOfFast`). -/
+def blockOfFast (kp : KeyProg) (κ : Nat → Option Bool) (u : Nat) : List Nat :=
+  blockOfAt (offs kp) (owners kp) kp κ u
 
 theorem filter_range_lt (n g : Nat) : (List.range n).filter (· < g) = List.range (min g n) := by
   induction n with
@@ -400,8 +533,8 @@ theorem unitGatesAt_offs (kp : KeyProg) (u : Nat) : unitGatesAt (offs kp) kp u =
   simp only [unitGatesAt, unitGates, offAt_offs]
 
 theorem blockOfAt_offs (kp : KeyProg) (κ : Nat → Option Bool) (u : Nat) :
-    blockOfAt (offs kp) kp κ u = blockOf kp κ u := by
-  rw [blockOfAt, blockOf, unitGatesAt_offs, posAt_offs]
+    blockOfAt (offs kp) (owners kp) kp κ u = blockOf kp κ u := by
+  rw [blockOfAt, blockOf, unitGatesAt_offs, posAt_offs, insOfAt_owners]
 
 @[csimp] theorem prog_eq_progFast : @prog = @progFast := by
   funext kp κ
@@ -458,10 +591,25 @@ def rowBit (c : Flock.Circuit) (n g : Nat) : Option RowPos :=
   else srcPos c ((g - 2) / B) (srcKey c (Index.of c) ((g - 2) % B))
 
 /-- **The key program's constants**, for `n` units: gate 0, the constant, set; gate 1, the zero, and every other input
-gate no unit reads (`owner`), clear; no other gate fixed. Bound at `c` and `n`, it builds the key program once. -/
+gate no unit reads (`owner`), clear; no other gate fixed. Compiled, it takes the gate as a third argument, so each
+answer at another input gate builds the key program and scans it for the gate's owner; `constsAt (owners kp) kp` gives
+the same answers with both built once (`constsAt_owners`). -/
 def consts (c : Flock.Circuit) (n : Nat) : Nat → Option Bool :=
   let kp := keyProg c n
   fun g => if g == 0 then some true else if g == 1 || (g < kp.inputs && owner kp g == none) then some false else none
+
+/-- `consts`' answer at gate `g` for the key program `kp`, its owners read from `ow`. -/
+def constsAt (ow : Array (Option Nat)) (kp : KeyProg) (g : Nat) : Option Bool :=
+  if g == 0 then some true else if g == 1 || (g < kp.inputs && ow.getD g none == none) then some false else none
+
+/-- **`consts` from the owners**: `constsAt (owners kp) kp` is `consts c n` at `kp`, its key program. -/
+theorem constsAt_owners (c : Flock.Circuit) (n : Nat) :
+    constsAt (owners (keyProg c n)) (keyProg c n) = consts c n := by
+  funext g
+  simp only [constsAt, consts]
+  by_cases hg : g < (keyProg c n).inputs
+  · rw [getD_owners (keyProg c n) (by unfold KeyProg.size; omega)]
+  · simp [hg]
 
 /-- **Where unit `u` commits output word `x`'s bit `t`**: bit `16 (x − at) + t` of its leaf of the output row whose run
 of output ports holds the word (`HmOut.outGroup`, `at` the run's first word). -/
@@ -731,6 +879,8 @@ private def toyκ (g : Nat) : Option Bool := if g == 0 then some true else if g 
 #guard blockOf toy toyκ 0 == [4, 5, 6, 7, 8, 9, 2]
 #guard blockOf toy toyκ 1 == [10, 11, 12, 13, 14, 15, 3]
 #guard owner toy 0 == some 0 && owner toy 1 == none && owner toy 3 == some 1
+#guard owners toy == #[some 0, none, some 0, some 1, some 0, none, some 1, none]
+#guard (List.range toy.size).all fun g => (owners toy).getD g none == owner toy g
 
 /-- Two 16-bit inputs and three 1-bit inputs into one 32-bit primitive: leaves of widths 16, 16, 1, 1, 1 and 32. -/
 private def mixed : String :=
@@ -812,6 +962,7 @@ private def toyMs : Members := [(toyA, #[0, 1]), (toyB, #[0, 1])]
   (writers [(toyA, #[0, 1])]).all fun (x, _) => match gs[x]? with | some (.and _) => true | _ => false
 #guard consts toyA 2 0 == some true && consts toyA 2 1 == some false && consts toyA 2 149 == none &&
   consts toyA 2 40 == some false && consts toyA 2 258 == none
+#guard let kp := keyProg toyA 2; (List.range (kp.size + 2)).all fun g => constsAt (owners kp) kp g == consts toyA 2 g
 
 /-- Member A on a unit whose rows read only row `x`'s port. -/
 private def toyX : Flock.Circuit := { toyA with nets := #[("unit", netOf fun i => #[i])] }

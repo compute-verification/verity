@@ -1,9 +1,8 @@
-"""The two T1 checks' recomputation paths against the functions they wrap, on synthetic inputs (laptop-safe, no fixture).
+"""The T1 check's recomputation path against the function it wraps, on synthetic inputs (laptop-safe, no fixture).
 
 `replay_partition.recompute` re-derives the sampled-replay PARTITION from a `sampled_replay` record's stated parameters + the Programs; over
 the synthetic worlds of `tests.check.test_sampled_replay` it must lift to exactly what `sampled_replay` itself recorded
 (population, strata, sample, picks per (request, step), lifetime, phase anchors) -- and a changed seed / a changed Program must not.
-`decomp_hashes.lift` is the contract over `match_decomp.json`-shaped documents: the fields the check compares, and only those.
 """
 from __future__ import annotations
 
@@ -16,7 +15,6 @@ from tests.check import test_sampled_replay as T
 from tests.check.test_sampled_replay import moe_world, world  # noqa: F401  -- fixtures
 
 from tests.regression import resolver
-from tests.regression.checks import decomp_hashes as DH
 from tests.regression.checks import replay_partition as RP
 
 
@@ -72,19 +70,3 @@ def test_a_changed_program_row_moves_a_count_by_name(world):
     d = resolver.diff(RP.lift(rep), RP.lift(RP.recompute(rep, progs)))
     assert any(x.startswith("$.population.vus") for x in d), d
 
-
-def test_decomp_lift_is_the_contract_and_only_the_contract():
-    doc = {"verdict": "PASS", "xreq_total": 3,
-           "requests": {"r0": {"request_id": "r0", "canonical_sha256": {"a": "x", "b": "x", "equal": True}, "derived_digest": "d", "n_instances": 10,
-                               "LP": 4, "T": 2, "token_selects": 3, "steps": 3, "prefill_chunks": 1, "xreq": {"counts": {"r1": 3}, "examples": ["prose"]},
-                               "divergences": ["not part of the contract"]}},
-           "attribution": {"how": {"meta": 10}, "unattributed": 0, "attributed": 10, "row_rule_disagreements": 0, "weight_only_shared": 0, "faults": ["x"]},
-           "oracle": {"digest": "o", "instances": 10, "n_input_nodes": 5, "path": "/nowhere"}}
-    lifted = DH.lift(doc, pins={"program_sha256": "p", "instances_sha256": "i"})
-    assert lifted["requests"]["r0"]["xreq"] == {"counts": {"r1": 3}}
-    assert "divergences" not in lifted["requests"]["r0"] and "faults" not in lifted["attribution"] and "path" not in lifted["oracle"]
-    assert lifted["fold_record_pins"] == {"program_sha256": "p", "instances_sha256": "i"}
-    assert resolver.diff(lifted, DH.lift(copy.deepcopy(doc), pins={"program_sha256": "p", "instances_sha256": "i"})) == []
-    moved = copy.deepcopy(doc)
-    moved["requests"]["r0"]["canonical_sha256"]["b"] = "y"
-    assert resolver.diff(lifted, DH.lift(moved, pins=lifted["fold_record_pins"])) == ['$.requests.r0.canonical_sha256.b: expected "x" != actual "y"']

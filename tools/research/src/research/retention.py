@@ -4,8 +4,8 @@
                        [--why TEXT] [--by URL] [--root R] [--store S]
     research keep show PATH [--root R]
     research retention report [--root R] [--depth N] [--json]
-    research retention gc [--root R] [--policy default] [--high-pct 80] [--low-pct 75] [--force] [--jobs-dir D]... [--store S] [--json]
-                          [--apply]
+    research retention gc [--root R] [--policy default] [--high-pct 80] [--low-pct 75] [--force] [--max-paths 200] [--jobs-dir D]...
+                          [--store S] [--json] [--apply]
     research retention rm PATH... --approved-by @OWNER --ref REF [--by URL] [--root R] [--jobs-dir D]... [--store S] [--json] [--apply]
 
 A record is a sidecar: `<dir>/.retention.json` for a directory, `<file>.retention.json` beside a file, so it travels with its data
@@ -19,11 +19,26 @@ RUN_EXPIRY after the marker's `verified_utc`; priority `normal`. Nothing is writ
 
 Policy `default` (POLICY) acts when the root's filesystem is over high-pct (or with --force) and deletes, lowest priority first and
 then the oldest expiry, until it is under low-pct. A filesystem's use is the larger of its blocks' and its inodes' (`inode_usage`):
-a disk out of inodes refuses every write as one out of blocks does, even with most of its blocks free. A path qualifies only with a valid record (explicit or implicit) recorded on
-this node that is expired, `low` or `normal`, and preserved or regenerable; a preserved path also needs its artifact to hold every
-file now under it at its size, and the artifact PRESERVED on the remote, checked just before the deletion (`store_check`); and no
-file in the job-script directories may name it (`JobScripts`). An implicit record also needs its marker to still vouch for the run
-dir (`custody.marker_problem`). A path holding a nested record is left whole. A dry run (the default) reads no remote.
+a disk out of inodes refuses every write as one out of blocks does, even with most of its blocks free. One pass deletes at most
+--max-paths paths (MAX_PATHS; 0 lifts the cap), and the next takes the rest. A path qualifies only with a valid record (explicit or
+implicit) recorded on this node that is expired, `low` or `normal`, and preserved or regenerable; and no file in the job-script
+directories may name it (`JobScripts`). An implicit record also needs its marker to still vouch for the run dir
+(`custody.marker_problem`). A path holding a nested record is left whole. A dry run (the default) reads no remote.
+
+A record's expiry is its owner's word that the data may go. The remote check (`store_check`, just before each deletion of a
+preserved path) is there so that gc never deletes the only copy of data somebody still promises to keep. Its answer is one of
+STORED. gc deletes on `verified` (the remote holds the artifact; with no remote to ask, as on a node, which holds no store key, the
+replica this store's catalog verified when custody pushed it), on `expired` (the remote holds its manifest and has dropped its blobs
+past its kind's time to live, `store.gc.TTL_DAYS`) and on `withdrawn` (its `withdrawn` label): there the store gave the copy up by
+its own rule, so nothing still promised is lost. It keeps the path on `uncovered` (the artifact doesn't hold every file now under the
+path at its size, so files custody trimmed never count as stored, whatever the remote says), on `mismatch` (the remote's copy is not
+the artifact's, or a blob is absent that neither rule explains), on `unknown` (the remote has no manifest for it: it never stored
+it) and on `unreachable` (the remote, or with none this store, could not be asked), and an `unreachable` fails the pass (exit 1).
+Every --apply reports how many of each it found.
+
+Neither command deletes a path that is, lies in or holds a Lean records tree (LEAN_RECORDS) whose `.lock` a run holds: it is
+refused, naming the run its `.who` names, to retry when that run ends. Each deletion holds those trees' locks while it runs, as
+`lean_audit.py --prune` does, so no run takes one meanwhile.
 
 `rm` deletes the paths it is given, with their owner's yes, for a cleanup the policy doesn't reach. A path qualifies only when a
 record covers it (its own or an ancestor's), that record and every record beneath it (sidecars and implicit ones) are valid, name
@@ -32,7 +47,7 @@ run dir (store.sealed) is the one read-only path either command deletes: whole, 
 here passed, which redoes custody's as root; a path inside one is refused. A path no
 record covers has nobody to say yes, so it is never deleted. A path that is, holds or lies under a `passes` directory (PASSES; not a Python package of that name, nor anything inside a
 venv, `_holds_passes`) also
-needs its covering record's `preserved` artifact to hold that record's whole path, PRESERVED on the remote (`store_check`, just
+needs its covering record's `preserved` artifact to hold that record's whole path, `verified` on the remote (`store_check`, just
 before --apply deletes): a yes alone never deletes retained passes. Each record is read again just before --apply deletes, and every
 decision of an --apply goes to the node's deletion log, `<root>/LOG`, with who deleted, the approver and --ref. A dry run (the
 default) deletes and logs nothing.
@@ -40,6 +55,7 @@ default) deletes and logs nothing.
 from __future__ import annotations
 
 import argparse
+import fcntl
 import json
 import os
 import re
@@ -47,10 +63,11 @@ import shutil
 import socket
 import stat
 import sys
+from contextlib import ExitStack, contextmanager
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
-from typing import Any, Callable, Sequence
+from typing import Any, Callable, Iterator, Sequence
 
 from .disk import HOLD_PCT, RELEASE_PCT
 from .store import custody as CU
@@ -72,6 +89,12 @@ KIND = "node-data/v1"
 LOG = Path("research/retention/deletions.jsonl")
 PASSES = "passes"
 LOG_SCHEMA = "research/retention-log/v1"
+#: The paths one gc pass deletes at most (--max-paths): a pass that is wrong about what may go is wrong about this many.
+MAX_PATHS = 200
+#: What the remote check finds of a preserved path's stored copy (module docstring), in the order a pass counts them; gc deletes on
+#: COLLECTED and keeps the path on the rest.
+STORED = ("verified", "expired", "withdrawn", "uncovered", "mismatch", "unknown", "unreachable")
+COLLECTED = STORED[:3]
 RM_SCHEMA = "research/retention-rm/v0"
 OWNER_RE = re.compile(r"^@[A-Za-z0-9][A-Za-z0-9._-]*$")
 TS = "%Y-%m-%dT%H:%M:%SZ"
@@ -562,30 +585,65 @@ def covers(man: Any, path: Path) -> str | None:
     return None
 
 
-def store_check(store_root: str | None = None) -> Callable[[str, Path], str | None]:
-    """The default remote check, run just before a deletion: the artifact holds the path's files (`covers`), and
-    `preserved.check` in head mode finds it PRESERVED (remote sizes, and the single-part ETag against the local blob's MD5 where
-    the blob is here, else a read-back; `LocalStore.verify` would read back every blob). None when both hold, else why not.
-    Without a usable remote (a node holds no store key) it is `recorded` mode: the remote replica the store's catalog verified
-    when custody pushed it, which is what the store eviction trusts too (without it, a node skips every expired run)."""
+@dataclass(frozen=True)
+class Stored:
+    """A remote check's answer for one preserved path: `state`, one of STORED, and `why` in words."""
+    state: str
+    why: str
+
+
+def store_check(store_root: str | None = None, now: Callable[[], datetime] = utc_now) -> Callable[[str, Path], Stored]:
+    """The default remote check, run just before a deletion: what became of the path's stored copy (STORED, module docstring).
+    The artifact must hold the path's files (`covers`); then `preserved.check` in head mode says whether the remote holds it (remote
+    sizes, and the single-part ETag against the local blob's MD5 where the blob is here, else a read-back; `LocalStore.verify`
+    would read back every blob). Where it holds the manifest and lacks blobs, a `withdrawn` label (pulled from the remote first) or
+    a manifest older at `now` than its kind's time to live says the store gave the copy up. Without a usable remote (a node holds no
+    store key) it is `recorded` mode: the remote replica the store's catalog verified when custody pushed it, which is what the
+    store eviction trusts too; an artifact that catalog doesn't vouch for is `unreachable`, since nothing here can be asked."""
     st = None
 
-    def chk(art: str, path: Path) -> str | None:
+    def chk(art: str, path: Path) -> Stored:
         nonlocal st
+        from .store import gc as G
+        from .store import labels_sync as LS
         from .store import preserved as P
-        from .store.local import LocalStore
+        from .store.local import LocalStore, NotFound, manifest_key, object_key
 
         try:
             st = st or LocalStore(store_root)
-            if why := covers(st.get_manifest(art), path):
-                return why
-            rep = P.check(st, [art], mode="head" if st.remote is not None else "recorded")
-        except Exception as e:  # noqa: BLE001  any failure is a failed check: the path stays
-            return f"{type(e).__name__}: {e}"
-        if rep["preserved"]:
-            return None
-        errs = [e for x in rep["not_preserved"] for e in x.get("errors") or []]
-        return (errs or [rep.get("reason") or "not preserved"])[0]
+            r = st.remote
+            nobody = (f"no remote can be asked from here, and the store at {st.root} doesn't vouch for it (on a node, --store or "
+                      f"RESEARCH_STORE names the node's store, /workspace/research/store)")
+            try:
+                man = st.get_manifest(art)
+            except NotFound as e:
+                return Stored("unknown", str(e)) if r is not None else Stored("unreachable", f"{e}: {nobody}")
+            if why := covers(man, path):
+                return Stored("uncovered", why)
+            rep = P.check(st, [art], mode="head" if r is not None else "recorded")
+            if rep["preserved"]:
+                return Stored("verified", "verified on the remote" if r is not None else
+                              "verified on the remote when custody pushed it, by this store's catalog")
+            if err := rep["targets"][0].get("error"):
+                return Stored("unreachable", err)
+            errs = [e for x in rep["not_preserved"] for e in x.get("errors") or []] or [rep.get("reason") or "not preserved"]
+            if r is None:
+                return Stored("unreachable", f"{errs[0]}: {nobody}")
+            mkey = manifest_key(ids.hex_of(art))
+            if f"{mkey}: absent" in errs:
+                return Stored("unknown", f"{r.describe()} has no manifest for it, so it never stored it")
+            dropped = {f"{object_key(h)}: absent" for h, _ in man.blobs()}
+            if other := [e for e in errs if e not in dropped]:
+                return Stored("mismatch", other[0])
+            LS.pull_targets(st, [art])
+            if why := st.withdrawn(art):
+                return Stored("withdrawn", f"withdrawn from the remote: {why}")
+            ttl, age = G.TTL_DAYS.get(man.kind), (now() - parse_utc(dict(r.list_times(mkey))[mkey])).total_seconds() / 86400
+            if ttl is not None and age >= ttl:
+                return Stored("expired", f"expired on the remote: a {man.kind} lives {ttl:g} d there, and its manifest is {age:.1f} d old")
+            return Stored("mismatch", f"{errs[0]}, which neither a withdrawal nor its kind's time to live explains")
+        except Exception as e:  # noqa: BLE001  a check that could not be made keeps the path and fails the pass
+            return Stored("unreachable", f"{type(e).__name__}: {e}")
 
     return chk
 
@@ -597,9 +655,11 @@ class Action:
     reason: str
     pct_after: float | None = None
     error: str | None = None
+    stored: str | None = None    # the remote check's answer (STORED), where an --apply asked
 
     def doc(self, now: datetime) -> dict[str, Any]:
-        return {**self.row.doc(now), "action": self.action, "reason": self.reason, "pct_after": self.pct_after, "error": self.error}
+        return {**self.row.doc(now), "action": self.action, "reason": self.reason, "pct_after": self.pct_after, "error": self.error,
+                "stored": self.stored}
 
 
 def ineligible(row: Row, now: datetime, node: str) -> str | None:
@@ -624,8 +684,8 @@ def ineligible(row: Row, now: datetime, node: str) -> str | None:
     return None
 
 
-def _why_deletable(rec: dict, verified: bool) -> str:
-    how = f"preserved {rec['preserved']}" + (" (verified on the remote)" if verified else ", re-verified on the remote just before an --apply deletes it") \
+def _why_deletable(rec: dict, found: Stored | None) -> str:
+    how = f"preserved {rec['preserved']}" + (f" ({found.why})" if found else ", checked on the remote just before an --apply deletes it") \
         if rec.get("preserved") else "regenerable"
     return f"{rec['priority']}, expired {rec['expires']}, {how}"
 
@@ -643,9 +703,76 @@ def _in_sealed(path: Path) -> str | None:
     return None
 
 
+#: A Lean records tree (`lean_changed.py --records`, `--try`, `--build`): a slot's checkout and its builds, `lean-records/build-I`
+#: under the check cache (`lean_changed.RECORDS`), or that link's target on a larger volume. The run working in it holds its
+#: `.lock` (a flock) and names itself in its `.who` (`lean_changed.hold_tree`). `lean_audit.prune_records` removes a tree only
+#: while it holds that lock, and so do gc and rm (`_lean_locks`): a build whose tree goes from under it fails on a missing `.olean`.
+LEAN_RECORDS, LEAN_LOCK, LEAN_WHO = "lean-records", ".lock", ".who"
+
+
+def _lean_tree(d: Path) -> bool:
+    """Whether `d` (or the directory a link `d` names) is a Lean records tree: it holds a `.lock`, and lies in `lean-records/`
+    or holds a `.who`."""
+    try:
+        return (d / LEAN_LOCK).is_file() and (d.parent.name == LEAN_RECORDS or (d / LEAN_WHO).is_file())
+    except OSError:
+        return False
+
+
+def lean_trees(path: Path, root: Path) -> list[Path]:
+    """The Lean records trees `path` is or lies in (below `root`), else those it holds: a link to one counts, and the walk never
+    follows a link or descends into a tree or CODE_DIRS. OSError when a directory can't be read."""
+    p = Path(os.path.abspath(path))
+    out = [d for d in (p, *p.parents) if Path(root) in d.parents and _lean_tree(d)]
+    if out or not p.is_dir() or p.is_symlink():
+        return out
+    for base, dirs, _files in os.walk(p, onerror=_raise):
+        dirs.sort()
+        found = [d for d in dirs if _lean_tree(Path(base) / d)]
+        out += [Path(base) / d for d in found]
+        dirs[:] = [d for d in dirs if d not in found and d not in CODE_DIRS]
+    return out
+
+
+def _lean_holder(tree: Path) -> str:
+    try:
+        who = (tree / LEAN_WHO).read_text().strip()
+    except OSError:
+        who = ""
+    return (f"{tree} is a Lean records tree, and {who or 'a run its .who does not name'} holds its lock ({tree / LEAN_LOCK}): "
+            f"deleting it would crash that build; retry when the run ends")
+
+
+@contextmanager
+def _lean_locks(path: Path, root: Path) -> Iterator[str | None]:
+    """Hold the lock of every Lean records tree `path` is, lies in or holds (`lean_trees`) while the block runs, so no run takes
+    one meanwhile; yields None, or why not when a run holds one. OSError when a directory or a lock can't be read."""
+    with ExitStack() as stack:
+        held = None
+        for tree in lean_trees(path, root):
+            fd = os.open(tree / LEAN_LOCK, os.O_RDONLY)
+            stack.callback(os.close, fd)
+            try:
+                fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+            except BlockingIOError:
+                held = _lean_holder(tree)
+                break
+        yield held
+
+
+def lean_in_use(path: Path, root: Path) -> str | None:
+    """Why a Lean build is (or may be) working in `path` (`_lean_locks`), or None."""
+    try:
+        with _lean_locks(path, root) as held:
+            return held
+    except OSError as e:
+        return f"can't read all of it ({e}), so whether a Lean build works in it is unknown"
+
+
 def _delete(root: Path, path: Path) -> str | None:
     """Remove a recorded path with its sidecar; the error, or None. A tree holding a directory this process can't write into is
-    left whole, since rmtree would stop partway; a sealed run dir (store.sealed) is deleted whole by vy-seal-runs, as root."""
+    left whole, since rmtree would stop partway; a sealed run dir (store.sealed) is deleted whole by vy-seal-runs, as root. The
+    locks of the Lean records trees it is, lies in or holds are held throughout (`_lean_locks`), and one a run holds refuses it."""
     try:
         if root not in Path(os.path.abspath(path)).parents:
             return f"{path} is not under {root}"
@@ -653,15 +780,18 @@ def _delete(root: Path, path: Path) -> str | None:
             return f"{path} is a mount point"
         if why := _in_sealed(path):
             return why
-        if SL.sealed(path):
-            if err := SL.delete(path):
-                return f"sealed, and vy-seal-runs refused to delete it: {err}"
-        elif os.path.isdir(path) and not os.path.islink(path):
-            if ro := _read_only_dir(path):
-                return f"{ro} is read-only: its owner makes it writable, or keeps it"
-            shutil.rmtree(path)
-        else:
-            os.unlink(path)
+        with _lean_locks(path, root) as held:
+            if held:
+                return held
+            if SL.sealed(path):
+                if err := SL.delete(path):
+                    return f"sealed, and vy-seal-runs refused to delete it: {err}"
+            elif os.path.isdir(path) and not os.path.islink(path):
+                if ro := _read_only_dir(path):
+                    return f"{ro} is read-only: its owner makes it writable, or keeps it"
+                shutil.rmtree(path)
+            else:
+                os.unlink(path)
         beside(path).unlink(missing_ok=True)
     except OSError as e:
         return f"{type(e).__name__}: {e}"
@@ -671,12 +801,14 @@ def _delete(root: Path, path: Path) -> str | None:
 def gc(root: Path | str = DEFAULT_ROOT, *, policy: str = "default", high_pct: float = HOLD_PCT, low_pct: float = RELEASE_PCT,
        force: bool = False, apply: bool = False, jobs_dirs: Sequence[Path | str] | None = None, depth: int = 2,
        now: Callable[[], datetime] = utc_now, usage: Callable[[Path], Any] = shutil.disk_usage,
-       remote_check: Callable[[str, Path], str | None] | None = None, in_use: Callable[[Path], str | None] | None = None,
+       remote_check: Callable[[str, Path], Stored] | None = None, in_use: Callable[[Path], str | None] | None = None,
        node: str | None = None, store_root: str | None = None,
-       inodes: Callable[[Path], tuple[int, int]] | None = None) -> dict[str, Any]:
+       inodes: Callable[[Path], tuple[int, int]] | None = None, max_paths: int | None = None) -> dict[str, Any]:
     """The policy (module docstring) over `root`: the plan, and with `apply` its deletions. `jobs_dirs` None means the
-    DEFAULT_JOBS_DIRS that exist; `remote_check` None is `store_check(store_root)`; `in_use` None is `JobScripts(jobs_dirs)`;
-    `inodes` (`inode_usage`) makes the filesystem's use the larger of its blocks' and its inodes', None its blocks' alone."""
+    DEFAULT_JOBS_DIRS that exist; `remote_check` None is `store_check(store_root, now)`; `in_use` None is `JobScripts(jobs_dirs)`;
+    `inodes` (`inode_usage`) makes the filesystem's use the larger of its blocks' and its inodes', None its blocks' alone;
+    `max_paths` caps the paths this pass deletes, None not at all. The plan's `stored` counts the remote check's answers (STORED)
+    over the paths an --apply asked about, and `capped` the paths the cap left for the next pass."""
     if policy not in POLICIES:
         raise ValueError(f"unknown policy {policy!r} (have: {', '.join(POLICIES)})")
     if low_pct > high_pct:
@@ -693,14 +825,15 @@ def gc(root: Path | str = DEFAULT_ROOT, *, policy: str = "default", high_pct: fl
     plan: dict[str, Any] = {"schema": "research/retention-gc/v0", "policy": POLICY, "root": str(root), "node": node, "now": fmt_utc(t),
                             "apply": apply, "force": force, "high_pct": high_pct, "low_pct": low_pct, "pct_before": round(pct, 2),
                             "inodes_pct_before": round(100 * iused / itotal, 2) if itotal else None,
-                            "acting": force or pct > high_pct, "actions": [], "freed_bytes": 0, "errors": []}
+                            "max_paths": max_paths, "acting": force or pct > high_pct, "actions": [], "freed_bytes": 0, "errors": [],
+                            "stored": dict.fromkeys(STORED, 0), "capped": 0}
     if not plan["acting"]:
         plan["pct_after"] = plan["pct_before"]
         return plan
     if jobs_dirs is None:
         jobs_dirs = [d for d in DEFAULT_JOBS_DIRS if d.is_dir()]
     in_use = in_use or JobScripts(jobs_dirs, root)
-    remote_check = remote_check or store_check(store_root)
+    remote_check = remote_check or store_check(store_root, now)
     sc = scan(root, depth)
     plan["errors"] = sc.errors
     candidates, skips = [], []
@@ -715,35 +848,45 @@ def gc(root: Path | str = DEFAULT_ROOT, *, policy: str = "default", high_pct: fl
         else:
             candidates.append(row)
     candidates.sort(key=lambda r: (PRIORITIES.index(r.record["priority"]), parse_utc(r.record["expires"]), r.path))
-    acts = []
+    acts, deletions = [], 0
     for row in candidates:
         p = root / row.path
         if pct < low_pct:
             acts.append(Action(row, "skip", f"not needed: the filesystem is at {pct:.1f}%, under {low_pct:g}%"))
             continue
+        if max_paths is not None and deletions >= max_paths:
+            plan["capped"] += 1
+            acts.append(Action(row, "skip", f"left for the next pass: this one has its {max_paths} path(s) (--max-paths)"))
+            continue
         fresh = record_at(p, row.path)
-        why = None
+        why = found = None
         if fresh is None or fresh.record != row.record:
             why = "its record changed during gc: run gc again"
         elif u := in_use(p):
             why = f"in use: {u}"
-        elif apply and row.record.get("preserved") and (r := remote_check(row.record["preserved"], p)):
-            why = f"preserved {row.record['preserved']} is not verified on the remote: {r}"
+        elif u := lean_in_use(p, root):
+            why = f"in use: {u}"
+        elif apply and row.record.get("preserved"):
+            found = remote_check(row.record["preserved"], p)
+            plan["stored"][found.state] += 1
+            if found.state not in COLLECTED:
+                why = f"preserved {row.record['preserved']} is not verified on the remote: {found.why}"
         if why:
-            acts.append(Action(row, "skip", why))
+            acts.append(Action(row, "skip", why, stored=found and found.state))
             continue
+        deletions += 1
         if not apply:
             used -= row.bytes
             iused -= row.files
             pct = fullness()
-            acts.append(Action(row, "delete", "would delete: " + _why_deletable(row.record, False), round(pct, 2)))
+            acts.append(Action(row, "delete", "would delete: " + _why_deletable(row.record, None), round(pct, 2)))
             plan["freed_bytes"] += row.bytes
             continue
         err = _delete(root, p)
         total, used, _ = usage(root)
         itotal, iused = inodes(root) if inodes else (0, 0)
         pct = fullness()
-        acts.append(Action(row, "delete", "deleted: " + _why_deletable(row.record, bool(row.record.get("preserved"))), round(pct, 2), err))
+        acts.append(Action(row, "delete", "deleted: " + _why_deletable(row.record, found), round(pct, 2), err, found and found.state))
         if not err:
             plan["freed_bytes"] += row.bytes
     plan["actions"] = [a.doc(t) for a in acts + skips]
@@ -814,6 +957,8 @@ def _refusal(path: Path, root: Path, approved_by: str, top: Found | None, below:
         return f"in use: {u}"
     if why := _in_sealed(path):
         return why
+    if why := lean_in_use(path, root):
+        return why
     try:
         ro = _read_only_dir(path) if os.path.isdir(path) and not os.path.islink(path) and not SL.sealed(path) else None
         passes = _holds_passes(path, root)
@@ -854,11 +999,11 @@ def _holds_passes(path: Path, root: Path) -> bool:
 
 def rm(paths: Sequence[Path | str], *, approved_by: str, ref: str, root: Path | str = DEFAULT_ROOT, apply: bool = False,
        by: str | None = None, in_use: Callable[[Path], str | None] | None = None, now: Callable[[], datetime] = utc_now,
-       node: str | None = None, log: Path | str | None = None, remote_check: Callable[[str, Path], str | None] | None = None,
+       node: str | None = None, log: Path | str | None = None, remote_check: Callable[[str, Path], Stored] | None = None,
        store_root: str | None = None) -> dict[str, Any]:
     """`research retention rm` (module docstring): the plan for `paths`, and with `apply` their deletions, every decision a line in the
     deletion log (`log`, default `root/LOG`). `in_use` None is `JobScripts` over the DEFAULT_JOBS_DIRS that exist; `remote_check` None
-    is `store_check(store_root)`, read only by an --apply that deletes passes. RecordError when --approved-by is not a handle or --ref
+    is `store_check(store_root, now)`, read only by an --apply that deletes passes, which needs its answer `verified`. RecordError when --approved-by is not a handle or --ref
     is empty, and with `apply` when `by` is missing or the log can't be written."""
     root = Path(os.path.abspath(root))
     if not OWNER_RE.match(approved_by or ""):
@@ -928,9 +1073,9 @@ def rm(paths: Sequence[Path | str], *, approved_by: str, ref: str, root: Path | 
                 act["error"] = f"in use: {u}"
             if not act["error"] and _holds_passes(p, root):
                 art = top.record["preserved"]
-                remote_check = remote_check or store_check(store_root)
-                if r := remote_check(art, top.path):
-                    act["error"] = f"it holds retained passes, and preserved {art} is not verified on the remote: {r}"
+                remote_check = remote_check or store_check(store_root, now)
+                if (found := remote_check(art, top.path)).state != "verified":
+                    act["error"] = f"it holds retained passes, and preserved {art} is not verified on the remote: {found.why}"
             act["error"] = act["error"] or _delete(root, p)
             if act["error"]:
                 act["action"] = "failed"
@@ -1094,27 +1239,35 @@ def main(argv: list[str]) -> int:
         ap.add_argument("--low-pct", type=float, default=RELEASE_PCT, help="delete until under this %% (default %(default)s; 0 takes "
                                                                             "every qualifying path)")
         ap.add_argument("--force", action="store_true", help="act under --high-pct too")
+        ap.add_argument("--max-paths", type=int, default=MAX_PATHS, metavar="N", help="delete at most N paths in this pass and leave "
+                        "the rest for the next (default %(default)s; 0: no cap)")
         ap.add_argument("--jobs-dir", action="append", default=[], metavar="D", help="more job-script directories (beside "
                         + " and ".join(map(str, DEFAULT_JOBS_DIRS)) + " when they exist): a path a file there names is in use")
-        ap.add_argument("--store", default=None, metavar="ROOT", help="the evidence store whose remote re-verifies preserved paths")
+        ap.add_argument("--store", default=None, metavar="ROOT", help="the evidence store that says what became of a preserved path's "
+                        "stored copy (default $RESEARCH_STORE or ~/.research/store; on a node, the node's: /workspace/research/store)")
         ap.add_argument("--json", action="store_true")
-        ap.add_argument("--apply", action="store_true", help="delete; without it nothing is deleted and no remote is read")
+        ap.add_argument("--apply", action="store_true", help="delete; without it nothing is deleted and no remote is read. Exit 1 "
+                        "when a deletion failed or a stored copy could not be asked about")
         ns = ap.parse_args(rest)
+        if ns.max_paths < 0:
+            print(f"research retention gc: --max-paths {ns.max_paths}: give a count, or 0 for no cap", file=sys.stderr)
+            return 2
         if missing := [d for d in [ns.root, *ns.jobs_dir] if not Path(d).is_dir()]:
             print(f"research retention gc: {missing[0]} is not a directory", file=sys.stderr)
             return 2
         jobs = [d for d in DEFAULT_JOBS_DIRS if d.is_dir()] + [Path(d) for d in ns.jobs_dir]
         try:
             plan = gc(ns.root, policy=ns.policy, high_pct=ns.high_pct, low_pct=ns.low_pct, force=ns.force, apply=ns.apply,
-                      now=utc_now, usage=disk_usage, remote_check=store_check(ns.store), in_use=JobScripts(jobs, ns.root),
-                      inodes=inode_usage)
+                      now=utc_now, usage=disk_usage, remote_check=store_check(ns.store, utc_now), in_use=JobScripts(jobs, ns.root),
+                      inodes=inode_usage, max_paths=ns.max_paths or None)
         except ValueError as e:
             print(f"research retention gc: {e}", file=sys.stderr)
             return 2
         failed = [a for a in plan["actions"] if a["error"]]
+        rc = 1 if failed or plan["stored"]["unreachable"] else 0
         if ns.json:
             print(json.dumps(plan, indent=2))
-            return 1 if failed else 0
+            return rc
         mode = "applying" if ns.apply else "dry run (--apply deletes)"
         head = f"research retention gc: policy {plan['policy']}, {mode}: {plan['root']} at {plan['pct_before']}%"
         if not plan["acting"]:
@@ -1128,10 +1281,15 @@ def main(argv: list[str]) -> int:
             print(f"{verb:<7} {_size(a['bytes']):>10}  {path}  {a['reason']}{tail}" + (f"  ERROR {a['error']}" if a["error"] else ""))
         n = sum(1 for a in plan["actions"] if a["action"] == "delete" and not a["error"])
         print(f"{'deleted' if ns.apply else 'would delete'} {n} path(s), {_size(plan['freed_bytes'])}: {plan['pct_before']}% -> "
-              f"{plan['pct_after']}%" + ("" if ns.apply else "; nothing was deleted") + (f"; {len(failed)} deletion(s) failed" if failed else ""))
+              f"{plan['pct_after']}%" + ("" if ns.apply else "; nothing was deleted") + (f"; {len(failed)} deletion(s) failed" if failed else "")
+              + (f"; {plan['capped']} more path(s) left for the next pass (--max-paths {ns.max_paths})" if plan["capped"] else ""))
+        if ns.apply:
+            count = lambda states: ", ".join(f"{plan['stored'][k]} {k}" for k in states)  # noqa: E731
+            print(f"stored copies of the preserved paths it asked about: {count(COLLECTED)} (deleted); {count(STORED[len(COLLECTED):])} (kept)"
+                  + ("; a copy that could not be asked about fails the pass" if plan["stored"]["unreachable"] else ""))
         for e in plan["errors"]:
             print(f"error: {e}", file=sys.stderr)
-        return 1 if failed else 0
+        return rc
     if sub == "rm":
         ap = argparse.ArgumentParser(prog="research retention rm", description="delete PATHs with their owner's yes, checked against "
                                      "every record that covers them or lies beneath them; a dry run unless --apply")
@@ -1176,6 +1334,6 @@ def main(argv: list[str]) -> int:
     return 2
 
 
-__all__ = ["DEFAULT_JOBS_DIRS", "FIELDS", "JobScripts", "KIND", "POLICY", "PRIORITIES", "RUN_EXPIRY", "SCHEMA", "SIDECAR", "RecordError",
-           "beside", "check", "covers", "find", "gc", "implicit", "keep", "keep_main", "load", "main", "problems", "record_at", "report", "scan",
+__all__ = ["COLLECTED", "DEFAULT_JOBS_DIRS", "FIELDS", "JobScripts", "KIND", "MAX_PATHS", "POLICY", "PRIORITIES", "RUN_EXPIRY", "SCHEMA",
+           "SIDECAR", "STORED", "RecordError", "Stored", "beside", "check", "covers", "find", "gc", "implicit", "keep", "keep_main", "load", "main", "problems", "record_at", "report", "scan",
            "sidecar", "store_check", "target", "write"]

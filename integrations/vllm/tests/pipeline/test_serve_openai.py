@@ -907,12 +907,13 @@ def test_each_window_commits_the_rows_it_ran_at_its_close_under_its_run_root(tmp
     for w in full:
         rec, priv = w["served_rows"], private(tmp_path, w["window"])
         assert rec["binding"] == SRW.binding(bytes.fromhex(w["run_root"])).hex() and rec["statics"] == statics
+        assert rec["slice"] == sc.SERVED_SLICE == "CompileSlice_v7"
         assert rec["count"] == -(-w["steps"] // S.P)
         by_step = {t["step"]: [tuple(r) for r in t["rows"]] for t in trace if t["window"] == w["window"]}
         ids = {rid: arrival[rid] for rows in by_step.values() for rid, *_ in rows}
         assert priv["ids"] == ids
         served, session = recommit(statics, by_step, ids, w["steps"], w["run_root"], priv)
-        assert {k: v for k, v in rec.items() if k != "statics"} == served.record()
+        assert {k: v for k, v in rec.items() if k not in ("statics", "slice")} == served.record()
         for k, win in enumerate(session):
             assert served.registration.rows[k] == SRW._row(CS.srv_row(S, win))[0]
             assert SRW.leaf_ok(rec, bytes.fromhex(w["run_root"]), k, served.bc(k), served.registration.open(k).path)
@@ -925,6 +926,15 @@ def test_rows_it_cant_commit_fail_their_window_by_name(tmp_path):
     wins, _, _ = served_run(tmp_path, served_statics(IW=1))
     bad = [w for w in wins if "error" in w.get("served_rows", {})]
     assert bad and all(not w["passed"] and "doesn't fit its 1 bits" in w["served_rows"]["error"] for w in bad)
+
+
+def test_the_served_statics_refuse_an_output_length_past_a_length_slot():
+    """`SERVED_SLICE` charges each output length in a 32-bit slot (`charge_chain.check_length_slots`): an engine whose
+    max_model_len needs more is refused at start, as its windows' proofs would refuse it."""
+    with pytest.raises(ValueError, match="wider than a length slot"):
+        sc.served_statics({**ENGINE, "max_model_len": 2**33}, {**dict.fromkeys(sc.SERVED_CLASS, 1), "R": 8, "P": 3, "IW": 6})
+    assert sc.served_statics({**ENGINE, "max_model_len": 2**32 - 1}, {**dict.fromkeys(sc.SERVED_CLASS, 1), "R": 8, "P": 3,
+                                                                       "IW": 6})["L"] == 2**32 - 1
 
 
 def test_the_served_class_defaults_to_the_engines_and_refuses_too_few_rows():

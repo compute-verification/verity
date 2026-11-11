@@ -47,6 +47,7 @@ run, once one of them failed or is blocked.  Drive judges the results (`drive.Dr
 from __future__ import annotations
 
 import hashlib
+import heapq
 import json
 import re
 import subprocess
@@ -229,40 +230,78 @@ class Executor:
                                  f"{t.get('id') if isinstance(t, dict) else repr(t)}")
         return gid, g
 
-    def settle(self, graph: dict) -> dict[str, tuple[str, dict | None]]:
-        """{task id: (its state, its result)} of graph/v2 ``graph``.  A task with a key in the graph is pass, fail or pending by
+    def settle(self, graph: dict, keyed: dict[str, str] | None = None) -> dict[str, tuple[str, dict | None]]:
+        """{task id: (its state, its result)} of graph/v2 ``graph``, and into ``keyed`` when given, each task's key, the graph's
+        or the one made from what it reads.  A task with a key in the graph is pass, fail or pending by
         its `result` labels (`fold_results`).  A task that reads others is blocked once one of them failed, is blocked, or
         passed without the output it reads; pending while one is; and once each passed, keyed by `task_key` from their
-        results' `outputs` and read as the others are.  Read in rounds, each of the keys the last one made known; a task whose
-        reads never settle (a task the graph lacks) stays pending."""
+        results' `outputs` and read as the others are.  Read in rounds, each of the keys the last one made known, a round
+        taking the graph's tasks in its order, so one settled there is seen by those after it; a task whose reads never settle
+        (a task the graph lacks) stays pending.  A task is looked at only once what it reads can settle it, so the cost is the
+        graph's reads, not its reads times its rounds: a Lean graph reads each module's transitive imports, millions of reads
+        over hundreds of rounds."""
         tasks = {t["id"]: t for t in graph["tasks"]}
+        ids = list(tasks)
+        order = {i: n for n, i in enumerate(ids)}
         files, envs = graph.get("files") or {}, graph.get("envs") or {}
         out: dict[str, tuple[str, dict | None]] = {}
         keys = {i: t["key"] for i, t in tasks.items() if t.get("key")}
+        #: of each task that settles by what it reads: how many of its reads haven't settled, and whether a settled one
+        #: blocks it or leaves it pending
+        unread = {i: len(t["reads"]) for i, t in tasks.items() if i not in keys}
+        blocked: set[str] = set()
+        pending: set[str] = set()
+        readers: dict[str, list[tuple[str, dict]]] = {}
+        for i in unread:
+            for r in tasks[i]["reads"]:
+                readers.setdefault(r["task"], []).append((i, r))
         fetch = dict(keys)
-        while True:
+        later = {i for i, n in unread.items() if not n}
+        now: list[int] = []
+        at = -1
+
+        def settled(j: str) -> None:
+            """``j`` settled: each task that reads it and can now settle is looked at this round if it comes after ``j``,
+            else in the next."""
+            s = out[j]
+            for i, r in readers.get(j, ()):
+                if i in out or i in keys:
+                    continue
+                unread[i] -= 1
+                if s[0] in (FAIL, BLOCKED) or s[0] == PASS and r["output"] not in (s[1].get("outputs") or {}):
+                    blocked.add(i)
+                elif s[0] == PENDING:
+                    pending.add(i)
+                if i in blocked or i in pending or not unread[i]:
+                    if order[i] > at:
+                        heapq.heappush(now, order[i])
+                    else:
+                        later.add(i)
+
+        while fetch or later:
             if fetch:
                 got = self.transport.results(list(dict.fromkeys(fetch.values())))
                 out.update({i: fold_results(got.get(k) or (), k) for i, k in fetch.items()})
+                for i in fetch:
+                    settled(i)
                 fetch = {}
-            moved = False
-            for i, t in tasks.items():
+            for i in later:
+                heapq.heappush(now, order[i])
+            later = set()
+            while now:
+                i = ids[at := heapq.heappop(now)]
                 if i in out or i in keys:
                     continue
-                reads = [(r, out.get(r["task"])) for r in t["reads"]]
-                if any(s and (s[0] in (FAIL, BLOCKED) or s[0] == PASS and r["output"] not in (s[1].get("outputs") or {}))
-                       for r, s in reads):
-                    out[i] = (BLOCKED, None)
-                elif any(s and s[0] == PENDING for _, s in reads):
-                    out[i] = (PENDING, None)
-                elif all(s for _, s in reads):
-                    keys[i] = fetch[i] = task_key(t, files, envs[t["env"]]["digest"],
-                                                  {r["task"]: s[1]["outputs"] for r, s in reads})
+                if i in blocked or i in pending:
+                    out[i] = (BLOCKED if i in blocked else PENDING, None)
+                    settled(i)
                 else:
-                    continue
-                moved = True
-            if not moved and not fetch:
-                break
+                    t = tasks[i]
+                    keys[i] = fetch[i] = task_key(t, files, envs[t["env"]]["digest"],
+                                                  {r["task"]: out[r["task"]][1]["outputs"] for r in t["reads"]})
+            at = -1
+        if keyed is not None:
+            keyed.update(keys)
         return {i: out.get(i, (PENDING, None)) for i in tasks}
 
 
@@ -331,10 +370,16 @@ class QueueTransport:
     artifact a label on `commit:<sha>` names (`LISTED`: `tasks_graph` a `tasks-graph/v1`, `verity_graph` a `verity-graph/v2`),
     verdicts as `verdict` labels on `task:<key>` and results as `result` labels there.  A key's verdicts are pulled from the
     store's remote while it isn't passed here (a fail here may since have been relabelled error there, and an error rerun), its
-    results while it has none here yet."""
+    results while it has none here yet.  With ``by``, only labels written by it count (`research data label --by`)."""
+
+    #: the writer whose labels count, anyone's when None
+    by: str | None = None
 
     def __init__(self, store, command: tuple[str, ...] = (), cwd: Path | None = None):
         self.store, self.command, self.cwd = store, tuple(command), cwd
+
+    def _labels(self, target: str, key: str) -> list:
+        return [lab for lab in self.store.labels(target, key=key) if self.by is None or lab.by == self.by]
 
     def enqueue(self, graph_file: Path | None, priority: int, check: str, schema: str | None = None) -> None:
         if not self.command:
@@ -352,9 +397,9 @@ class QueueTransport:
 
         label, want = LISTED[schema]
         target = f"commit:{check.partition(':')[2]}"
-        if not (labs := self.store.labels(target, key=label)) and getattr(self.store, "remote", None) is not None:
+        if not (labs := self._labels(target, label)) and getattr(self.store, "remote", None) is not None:
             labels_sync.pull_targets(self.store, [target])
-            labs = self.store.labels(target, key=label)
+            labs = self._labels(target, label)
         if not labs:
             return None
         art = labs[-1].value
@@ -366,11 +411,11 @@ class QueueTransport:
         from .queue import PREFETCH_JOBS
         from .store import labels_sync
 
-        have = {k: [lab.value for lab in self.store.labels(task_target(k), key=label)] for k in keys}
+        have = {k: [lab.value for lab in self._labels(task_target(k), label)] for k in keys}
         stale = (lambda v: fold(v) != PASS) if label == vocab.TASK_VERDICT else (lambda v: not v)
         if (todo := [k for k, v in have.items() if stale(v)]) and getattr(self.store, "remote", None) is not None:
             labels_sync.pull_targets(self.store, [task_target(k) for k in todo], jobs=PREFETCH_JOBS)
-            have.update({k: [lab.value for lab in self.store.labels(task_target(k), key=label)] for k in todo})
+            have.update({k: [lab.value for lab in self._labels(task_target(k), label)] for k in todo})
         return have
 
     def labels(self, keys: list[str]) -> dict[str, list[str]]:

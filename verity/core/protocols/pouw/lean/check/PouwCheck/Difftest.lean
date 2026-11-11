@@ -62,7 +62,7 @@ def hexOrNull (j : Json) (k : String) : Except String (Option ByteArray) :=
 
 def openingOf (j : Json) : Except String Json := do
   let p ← paramsOf (← get j "params")
-  let c ← registrationOf (← hex j "commitment")
+  let c ← recordOf (← hex j "commitment")
   let units ← match ← get j "units" with
     | .null => pure Option.none
     | .arr a => some <$> a.toList.mapM fun u => need "units" (PouwWindow.strictInt? u)
@@ -111,7 +111,7 @@ def roundsOf (j : Json) : Except String Json := do
 
 def registeredOf (j : Json) : Except String Json := do
   let p ← paramsOf (← get j "params")
-  let c ← registrationOf (← hex j "commitment")
+  let c ← recordOf (← hex j "commitment")
   pure (Json.mkObj [("reason", match registered p c with
     | .ok _ => Json.null
     | .error r => .str r)])

@@ -148,8 +148,8 @@ from datetime import datetime, UTC
 from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
-TREE = HERE.parents[1]
-sys.path.insert(0, str(HERE.parent / "live_challenger"))
+TREE = Path(__file__).resolve().parents[2]
+sys.path.insert(0, str(TREE / "benchmarks/live_challenger"))
 import auditor as A  # noqa: E402
 
 #: the scan's class (`scan_zk.W63`): at most KI prompt ids in, at most KO ids out a request

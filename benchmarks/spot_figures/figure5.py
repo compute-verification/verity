@@ -1,17 +1,20 @@
 """Figure 5 of the SPOT post, where 10% comes from: the total cost, serve tax plus β, at which the bound reaches the
-FP4 weights over the headline scope, from today's measured system through each lever in turn, beside the bound at a
+FP4 weights over the headline scope, from the path's first step through each lever in turn, beside the bound at a
 total cost of `GOAL`.
 
 It reads break-even surfaces (`breakeven_surface.json`: each case's serve tax, its bound at the reported βs and its β
 at each weight size, per scope) and a path, the steps in order, each adding one lever to the steps before it, with
-its status (measured, modeled or assumed) and the surface case that prices it in each series. A step whose case no
+its status (measured, modeled or assumed), its basis (`cards.BASES`: the served cut measured, the served cut at card
+prices, or a design not served) and the surface case that prices it in each series. A step whose case no
 surface has is pending: it has no number yet, and the steps after it leave it out. A lever off the path (`off`, with
 its owner, or none) is drawn in grey beside the step it would follow. A term no step's total includes (`unpriced`) is
 drawn as a named line at its share of serving compute (`total`), or as an arrow while it has none; one whose status is
 `charged` is stated in the caption as a condition every total holds under. The bound at `GOAL` is interpolated on
-log-log axes between the surface's two nearest βs, which it fits within a part in 10^3 where the count binds.
+log-log axes between the surface's two nearest βs, which it fits within a part in 10^3 where the count binds. The
+caption calls the first step today's measured system only when its basis is `served-measured`, names where the path
+turns to a design not served, and states the model's `headline` card's rows, each with its basis.
 
-    uv run python benchmarks/spot_figures/figure5.py SURFACE.json... [--path PATH.json] [--out DIR]
+    uv run python benchmarks/spot_figures/figure5.py SURFACE.json... [--path PATH.json] [--headline CARD.json] [--out DIR]
 """
 from __future__ import annotations
 
@@ -21,6 +24,7 @@ import textwrap
 from math import ceil, exp, floor, log, log10
 from pathlib import Path
 
+import cards as spot_cards
 import figure1 as f1
 
 SCHEMA = "spot-figure5/v1"
@@ -29,38 +33,45 @@ GOAL = 0.10
 #: the weight size the bound must reach, by the surface's `weights_bits` key, and its label
 TARGET, TARGET_LABEL = "FP4", "GLM-5.3's weights at FP4"
 STATUSES = ("measured", "modeled", "assumed")
-#: the default path: each step's label, status, what the status rests on, and its case in each series
-PATH = {"steps": [
-    {"label": "(A′) per-expert cut at 128k, as Figure 1 prices its proving", "status": "measured",
+#: the default path: each step's label, status, basis, what the status rests on, and its case in each series; what
+#: makes a step a design (`design`)
+PATH = {"design": "every step prices the per-expert MoE cut (Figure 1's (A′)), which no serving path commits yet; the "
+                  "served cut is the headline card's",
+        "steps": [
+    {"label": "(A′) per-expert cut at 128k, as Figure 1 prices its proving", "status": "measured", "basis": "design",
      "cases": {"two-stage": "R0"},
      "note": "the cards' measured proving, 600 s replay blocks, at 128k over vLLM's 128k serve plan (the indexer "
              "modeled); the verifier's CPU joins at its own step"},
-    {"label": "the fused per-expert cut", "status": "measured", "cases": {"two-stage": "R1", "one-stage": "R1-1s"},
+    {"label": "the fused per-expert cut", "status": "measured", "basis": "design",
+     "cases": {"two-stage": "R1", "one-stage": "R1-1s"},
      "note": "each expert's table read fused into its GEMM at k_log 25, priced on one H200 with the cache (512 and "
-             "1024 blocks); its fixed cost before the cache is modeled"},
-    {"label": "the statement cache", "status": "measured", "cases": {"two-stage": "R2"},
+             "1024 blocks) on synthetic statements; its fixed cost before the cache is modeled"},
+    {"label": "the statement cache", "status": "measured", "basis": "design", "cases": {"two-stage": "R2"},
      "note": "fixed seconds a statement 8-10x lower on the H200 (experts measured; 5 types priced from H200 splits)"},
-    {"label": "4 provers on one H200, verify-ahead", "status": "measured", "cases": {"two-stage": "R3"},
+    {"label": "4 provers on one H200, verify-ahead", "status": "measured", "basis": "design",
+     "cases": {"two-stage": "R3"},
      "note": "on the expert types: the fused blocks measured at 128 and 256 blocks a statement, a quarter-statement "
              "each"},
-    {"label": "a 3.5x GPU prover", "status": "modeled", "cases": {"two-stage": "R4"},
+    {"label": "a 3.5x GPU prover", "status": "modeled", "basis": "design", "cases": {"two-stage": "R4"},
      "note": "device parts only; the host witness stays"},
-    {"label": "lifetime replay", "status": "modeled", "cases": {"two-stage": "R5"},
+    {"label": "lifetime replay", "status": "modeled", "basis": "design", "cases": {"two-stage": "R5"},
      "note": "458 GPU-s a sampled request at 128k, no edge pause, pages committed when written"},
-    {"label": "a 4x GPU prover", "status": "modeled", "cases": {"two-stage": "R5x4"}, "note": "device parts only"},
-    {"label": "the Lean verifier's CPU", "status": "measured", "cases": {"two-stage": "R6x4", "one-stage": "R6x4-1s"},
+    {"label": "a 4x GPU prover", "status": "modeled", "basis": "design", "cases": {"two-stage": "R5x4"},
+     "note": "device parts only"},
+    {"label": "the Lean verifier's CPU", "status": "measured", "basis": "design",
+     "cases": {"two-stage": "R6x4", "one-stage": "R6x4-1s"},
      "note": "each statement's Lean verify (measured on 9 types; families scaled; the median 681 s elsewhere) at 81.8 "
              "core-seconds a GPU-second, Nebius's on-demand list prices; total compute = serve tax + proving + "
              "verifying"},
-    {"label": "4 provers on every type, four provers per H200", "status": "assumed",
+    {"label": "4 provers on every type, four provers per H200", "status": "assumed", "basis": "design",
      "cases": {"two-stage": "R6x4+all+4perH200"},
      "note": "the experts' overlap factor taken for every type, and full statements under four provers once each "
              "prover's peak is about 33 GiB (its H200 run is pending)"},
-    {"label": "the dense types' host witness 3.5x lower", "status": "assumed",
+    {"label": "the dense types' host witness 3.5x lower", "status": "assumed", "basis": "design",
      "cases": {"two-stage": "R6x4+all+4perH200+host"}, "note": "CPU's cache cut the witness 2-4x; the H200 run is pending"},
 ], "off": [
-    {"label": "hashing cut 4x", "status": "assumed", "owner": None, "after": "the dense types' host witness 3.5x lower",
-     "cases": {"two-stage": "R6x4+all+4perH200+host+hash4"},
+    {"label": "hashing cut 4x", "status": "assumed", "basis": "design", "owner": None,
+     "after": "the dense types' host witness 3.5x lower", "cases": {"two-stage": "R6x4+all+4perH200+host+hash4"},
      "note": "in-proof hashing at a half share of the marginal, cut 4x"},
 ], "unpriced": [
     {"label": "compile-slice proving: under 1% with prefix caching off or hits charged (modeled)", "status": "modeled",
@@ -95,7 +106,8 @@ def point(row: dict, target_bits: float) -> dict:
             "bound_at_goal": bound, "times_target": None if bound is None else bound / target_bits}
 
 
-def run(surfaces: list[dict], path: dict = PATH) -> dict:
+def run(surfaces: list[dict], path: dict = PATH, headline: dict | None = None) -> dict:
+    """The figure's JSON; `headline`, the model's `headline` card, adds its rows by what each rests on."""
     by = rows(surfaces)
     weights = {k: v for s in surfaces for k, v in s["meta"]["weights_bits"].items()}
     target_bits = float(weights[TARGET])
@@ -106,6 +118,9 @@ def run(surfaces: list[dict], path: dict = PATH) -> dict:
     def priced(st: dict) -> dict:
         if st["status"] not in STATUSES:
             raise ValueError(f"step {st['label']!r}: status {st['status']!r} is not one of {STATUSES}")
+        if st.get("basis") not in spot_cards.BASES:
+            raise ValueError(f"step {st['label']!r}: basis {st.get('basis')!r} is not one of {spot_cards.BASES}; "
+                             "say whether it prices the served cut, measured or at card prices, or a design")
         at = {n: {sc: point(by[(c, sc)], target_bits) if (c, sc) in by else None for sc in scopes}
               for n, c in st["cases"].items()}
         return st | {"at": at, "pending": all(v[f1.PRIMARY] is None for v in at.values())}
@@ -115,9 +130,15 @@ def run(surfaces: list[dict], path: dict = PATH) -> dict:
         if st["after"] not in labels:
             raise ValueError(f"off-path step {st['label']!r}: no step {st['after']!r} on the path to branch from")
         off.append(priced(st) | {"after_index": labels.index(st["after"])})
+    steps = [priced(st) for st in path["steps"]]
+    if any(st["basis"] == "design" for st in steps) and not path.get("design"):
+        raise ValueError("a step's basis is design, but the path's `design` doesn't say what makes it one")
+    rows_ = [{k: r[k] for k in ("label", "pricing", "basis", "cells")}
+             for r in spot_cards.check(headline)["value"]["rows"]] if headline else []
     return {"schema": SCHEMA, "goal": GOAL, "target": {"label": TARGET_LABEL, "key": TARGET, "bits": target_bits},
-            "primary": f1.PRIMARY, "secondary": f1.SECONDARY, "series": series,
-            "steps": [priced(st) for st in path["steps"]], "off": off, "unpriced": list(path.get("unpriced", []))}
+            "primary": f1.PRIMARY, "secondary": f1.SECONDARY, "series": series, "steps": steps, "off": off,
+            "unpriced": list(path.get("unpriced", [])), "design": path.get("design", ""), "headline": rows_,
+            "headline_card": (headline or {}).get("art")}
 
 
 def _pct(x: float) -> str:
@@ -131,19 +152,42 @@ def _bytes(bits: float) -> str:
     return f"{bits / 8e3:.3g} kB"
 
 
+#: how the caption names each basis
+BASIS_TEXT = {"served-measured": "served and measured", "served-card-priced": "the served cut at card prices",
+              "design": "a design not served"}
+
+
+def headline_text(rows: list[dict], scope: str) -> str:
+    """The headline card's rows over `scope`, each by what it rests on, at each S and verifier step it has."""
+    if not rows:
+        return ""
+    cells = "; ".join(f"{r['label']}, {r['pricing']} ({BASIS_TEXT[r['basis']]}): " + ", ".join(
+        f"{s} " + " and ".join(f"{_pct(by_scope[scope])} {m}" for m, by_scope in by_m.items() if scope in by_scope)
+        for s, by_m in r["cells"].items()) for r in rows)
+    served = [r for r in rows if r["basis"] == "served-measured"]
+    return (f" The headline rows over a {scope}, each by what it rests on: {cells}. "
+            + ("No row is served and measured." if not served else
+               f"Served and measured: {', '.join(r['label'] for r in served)}."))
+
+
 def caption(out: dict) -> str:
     p, s0 = out["primary"], out["series"][0]
     done = [st for st in out["steps"] if st["at"][s0][p]]
     first, last = done[0]["at"][s0][p], done[-1]["at"][s0][p]
     goal = out["goal"]
+    start = ("Today's measured system" if done[0]["basis"] == "served-measured" else
+             f"{done[0]['label'][0].upper()}{done[0]['label'][1:]}, {BASIS_TEXT[done[0]['basis']]},")
     lead = (f"Each step adds one lever to the steps before it, and every number is the planner's design over a {p}: the "
             f"serve tax plus the β at which the bound reaches {out['target']['label']} "
             f"({out['target']['bits'] / 8e9:.1f} GB), against the goal of {goal:.0%} (top), and the bound at a total "
-            f"cost of {goal:.0%} (bottom, interpolated between the surface's β). Today's measured system breaks even at "
+            f"cost of {goal:.0%} (bottom, interpolated between the surface's β). {start} breaks even at "
             f"{_pct(first['total'])}, {first['total'] / goal:,.0f}x the goal, and at {goal:.0%} bounds a {p} at "
             f"{_bytes(first['bound_at_goal'])}, {first['times_target']:,.0f}x the weights. With the steps priced so far "
             f"it breaks even at {_pct(last['total'])}"
             + (f" and bounds {_bytes(last['bound_at_goal'])} at {goal:.0%}" if last["bound_at_goal"] else "") + ". ")
+    design = next((st for st in out["steps"] if st["basis"] == "design"), None)
+    if design:
+        lead += (f"From {design['label']} on, every total is {BASIS_TEXT['design']}: {out['design']}. ")
     marks = "A filled marker is measured, a half-filled one modeled and a hollow one assumed. "
     later = [any(not s["pending"] for s in out["steps"][i + 1:]) for i in range(len(out["steps"]))]
     notes = " ".join(f"{st['label'][0].upper()}{st['label'][1:]} ({st['status']}"
@@ -165,7 +209,7 @@ def caption(out: dict) -> str:
                        f" Not in any step, {a['label']}: {a['note']}"
                        + ("" if a.get("total") is None else f", {_pct(a['total'])} of serving compute") + "."
                        for a in out["unpriced"])
-    return lead + marks + notes + second + off + unpriced
+    return lead + marks + notes + second + off + unpriced + headline_text(out.get("headline", []), p)
 
 
 def render(out: dict, outdir: Path) -> list[Path]:
@@ -275,10 +319,13 @@ def main(argv=None) -> None:
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     ap.add_argument("surfaces", type=Path, nargs="+", help="break-even surfaces, a later one's rows replacing an earlier's")
     ap.add_argument("--path", type=Path, help="the path's steps as JSON (default: the module's PATH)")
+    ap.add_argument("--headline", type=Path, help="a headline card (default: the model's in cards/, if any)")
     ap.add_argument("--out", type=Path, help="default: the first surface's directory")
     args = ap.parse_args(argv)
+    headline = (json.loads(args.headline.read_text()) if args.headline
+                else spot_cards.load("headline", "GLM-5.3", required=False))
     out = run([json.loads(s.read_text()) for s in args.surfaces],
-              json.loads(args.path.read_text()) if args.path else PATH)
+              json.loads(args.path.read_text()) if args.path else PATH, headline)
     outdir = args.out or args.surfaces[0].parent
     outdir.mkdir(parents=True, exist_ok=True)
     (outdir / "figure5.json").write_text(json.dumps(out, indent=1, allow_nan=False) + "\n")
