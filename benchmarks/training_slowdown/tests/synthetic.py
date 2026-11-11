@@ -25,6 +25,11 @@ SHAPE = {"family": "lf", "d_model": 16, "n_layer": 1, "n_head": 2, "d_ff": 32, "
 TOKEN_BYTES = np.array([0] + [1] * 256 + [len(m) for m in MERGES], dtype=np.int64)
 PARTS = (2100, 1100, 3100)
 SETS = {"search": 6 * 1024 + 300, "final": 2 * 1024 + 50}
+#: How far apart two scores of one model on the same windows may be, relative. Under bf16 autocast on a CPU a forward
+#: pass is not bit-reproducible: now and then a few logits come out one bf16 step away. In a sweep of 2,000 passes at
+#: four threads (40 processes of 50) two scores were at most 4.7e-5 apart; the nearest scores the evaluator's tests tell
+#: apart, θ's and a perturbed state's on a slice of the search pool, are 2.2e-3 apart.
+SCORE_REL = 3e-4
 
 
 def sha256(b: bytes) -> str:
