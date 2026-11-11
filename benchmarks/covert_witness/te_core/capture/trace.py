@@ -241,6 +241,27 @@ def _marked_backward():
         torch.autograd.backward, torch.autograd.grad = ab, ag
 
 
+#: whether attention's math backend runs half-width operands in their own dtype (True) or casts them to float32, as
+#: torch does unless told (False)
+MATH_SDP_IN_OPERANDS_DTYPE = False
+
+
+@contextlib.contextmanager
+def math_attention():
+    """Scaled-dot-product attention on its math backend, with torch's switch for half-width operands (bfloat16,
+    float16) set to `MATH_SDP_IN_OPERANDS_DTYPE` and put back as it was. The switch is named under
+    `torch.backends.cuda` and is read by the math backend's own code on every device."""
+    from torch.nn.attention import SDPBackend, sdpa_kernel
+
+    was = torch.backends.cuda.fp16_bf16_reduction_math_sdp_allowed()
+    torch.backends.cuda.allow_fp16_bf16_reduction_math_sdp(MATH_SDP_IN_OPERANDS_DTYPE)
+    try:
+        with sdpa_kernel([SDPBackend.MATH]):
+            yield
+    finally:
+        torch.backends.cuda.allow_fp16_bf16_reduction_math_sdp(was)
+
+
 def _trace(step: Callable[[torch.nn.Module, Any, list], Any], model: torch.nn.Module,
            optimizers: Sequence[torch.optim.Optimizer], leaves: list, spec, device) -> Trace:
     """One `make_fx` capture of ``step(fake_model, batch, fake_optimizers)``, ``batch`` the unflattened `leaves` as fakes."""
@@ -257,9 +278,8 @@ def _trace(step: Callable[[torch.nn.Module, Any, list], Any], model: torch.nn.Mo
             flat[i] = t
         step(fake_model, pytree.tree_unflatten(flat, spec), fake_opts)
 
-    from torch.nn.attention import SDPBackend, sdpa_kernel
     try:
-        with _marked_backward(), sdpa_kernel([SDPBackend.MATH]):
+        with _marked_backward(), math_attention():
             gm = make_fx(run, tracing_mode="fake", _allow_non_fake_inputs=True)(*[fakes[i] for i in tensor_at])
     except Exception as e:
         raise _refusal(e) from e

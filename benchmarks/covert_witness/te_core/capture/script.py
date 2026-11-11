@@ -91,7 +91,8 @@ from torch.utils.weak import WeakTensorKeyDictionary
 from te_core import VERSION
 from te_core.capture import products
 from te_core.capture.structure import StepGraph, _shape
-from te_core.capture.trace import CaptureRefused, Trace
+from te_core.capture import ops_dump
+from te_core.capture.trace import MATH_SDP_IN_OPERANDS_DTYPE, CaptureRefused, Trace, math_attention
 from te_core.flops import GATHERS, TOKEN_INDEX, _is_view
 from te_core.formalism import READ_BACKS
 from te_core.opnames import gemm_like
@@ -915,10 +916,9 @@ def _record_once(script: Path, args: list[str], starts: Path, stop: int, wall: l
     main, main0 = types.ModuleType("__main__"), sys.modules.get("__main__")
     main.__dict__.update(__file__=str(script), __builtins__=builtins)
     fake = FakeTensorMode(allow_non_fake_inputs=True)
-    from torch.nn.attention import SDPBackend, sdpa_kernel
     try:
         with _patched(rec, prepare, hooks, starts, scale, windows_only), contextlib.redirect_stdout(log), \
-                sdpa_kernel([SDPBackend.MATH]), fake, _Function(rec), _Dispatch(rec):
+                math_attention(), fake, _Function(rec), _Dispatch(rec):
             sys.modules["__main__"] = main
             try:
                 try:
@@ -1028,6 +1028,8 @@ def record(script: Path, args: list[str], *, step: int, starts: Path, wall: list
             g.circuit.products = rows
         if g.formalism is not None:
             g.formalism = g.formalism | listed | {"products": rows}
+        ops_dump.dump(g, {"script": str(script), "args": list(args), "step": step, "step_tokens": step_tokens,
+                          "name": name, "te_core": VERSION, "math_sdp_in_operands_dtype": MATH_SDP_IN_OPERANDS_DTYPE})
         return g
 
     base = trace(1)
