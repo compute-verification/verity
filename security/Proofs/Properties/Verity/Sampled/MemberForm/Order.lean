@@ -649,7 +649,7 @@ theorem members_read (hT : coinTreesOf lines = .ok trees) (hR : readLog label af
       ∀ pre r post, log = pre ++ r :: post → ∀ j, j < records.size → ∀ s n, r.frame = .opening (tree j) s n →
         ∀ j' x', j' < j → records[j']? = some x' → ∃ q ∈ pre, Flock.unhex x'.2.2.2 = .ok q.answers := by
   obtain ⟨hall, hnod, hO⟩ := membersTreeReason_none hM
-  have hsess : ∀ j (x : String × Array (String × Option ℕ) × Json × String), records[j]? = some x → ∃ t ∈ trees,
+  have hsess : ∀ (j : ℕ) (x : String × Array (String × Option ℕ) × Json × String), records[j]? = some x → ∃ t ∈ trees,
       getD (getD x.2.2.1 "coin_tree") "root" = Json.str t.root ∧ (usedOf records)[j]? = some t.root ∧
       sessionTreeReason #[t.unclosed] x.2.1 x.2.2.1 = none ∧
       ∃ o ∈ t.opened, o.stream = TREE_SESSION ∧ o.round = 1 ∧ o.after = x.2.2.2 := by
@@ -658,7 +658,8 @@ theorem members_read (hT : coinTreesOf lines = .ok trees) (hR : readLog label af
     obtain ⟨hs, hk, -, ha⟩ := closes_fields hc
     exact ⟨t, ht, hroot, by rw [usedOf_getElem? hx, hroot, strOf_str], hS, o,
       Array.mem_of_getElem? (show t.opened[t.opened.size - 1]? = some o from ho), hs, hk, ha⟩
-  have hidx : ∀ j ρ, (usedOf records)[j]? = some ρ → ∃ i, (heldTrees trees).findIdx? (·.1 == ρ) = some i := by
+  have hidx : ∀ (j : ℕ) (ρ : String), (usedOf records)[j]? = some ρ →
+      ∃ i, (heldTrees trees).findIdx? (·.1 == ρ) = some i := by
     intro j ρ hρ
     have hjlt : j < records.size := by
       have := (Array.getElem?_eq_some_iff.1 hρ).1
@@ -667,7 +668,7 @@ theorem members_read (hT : coinTreesOf lines = .ok trees) (hR : readLog label af
     obtain rfl : t.root = ρ := Option.some.inj (hu.symm.trans hρ)
     obtain ⟨_, _, _, i, _, _, -, -, hkey, -, -, -, -⟩ := closing_read hT hR hO hnod ht ho hs hk
     exact ⟨i, keyAt_idx hkey⟩
-  obtain ⟨tree, htree⟩ : ∃ tree : ℕ → ℕ, ∀ j ρ, (usedOf records)[j]? = some ρ →
+  obtain ⟨tree, htree⟩ : ∃ tree : ℕ → ℕ, ∀ (j : ℕ) (ρ : String), (usedOf records)[j]? = some ρ →
       (heldTrees trees).findIdx? (·.1 == ρ) = some (tree j) := by
     refine ⟨fun j => (((usedOf records)[j]?).bind fun ρ => (heldTrees trees).findIdx? (·.1 == ρ)).getD 0,
       fun j ρ hρ => ?_⟩
