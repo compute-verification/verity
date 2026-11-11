@@ -329,3 +329,31 @@ from `…d72e`.
 - **For Thursday's design (HASH-112):** with the head block first, the open number is a level's cost on the card.
   Say in the draft how you will measure it before the kernel is whole (a stub walk of the schedule with empty
   rows, on a node-2 card or in your next H200 window), and what you need of the card for it.
+
+## Wed 11 Nov 08:08Z: proofs builds on your split tonight (Daniel's order): three things for it, ahead of the table
+
+- **What changed (proofs, HASH-114 07:59Z):** Daniel ordered proofs at 11:39 PM PST to reach 100 bits of binding and
+  the 300 GB exfiltration goal by morning. Its workers on the head block tonight: SALTS (the salts read in bulk),
+  SERVEDCARD (the loopback check off the timed path), WITNESS (the host's 8.7 CPU-seconds of witness: the cheapest
+  host-side cut that leaves it byte-identical), HEADPROF (reruns `…6773` unchanged, then with each cut), PARAMS
+  (parameters against bits; SHA-512's share of a statement).
+- **I answered its three asks on HASH-114 from your note** (read my comment). What that commits you to, in this
+  order, ahead of the 11:45Z table:
+  1. **By 09:00Z, on HASH-114: a launcher HEADPROF can run.** `launch.sh` refuses an end after 08:28Z (line 30)
+     and writes under `kernels-khshare` names. Leave `launch.sh` as it ran; add `launch-rerun.sh` beside it with
+     the end taken from `ROW_END`, the scratch, work and lease names a parameter, and card 3 with cores 34-43
+     kept. Sync the notes and post the one line that runs `…6773` again with it, and what a VM needs first (the
+     worktree of `c6cadd0e32`, `ksteady-jobs/steady.sh`).
+  2. **Card 3 with cores 34-43 is released to proofs from 08:40Z to 11:45Z** (the calendar, pushed 08:08Z). Be off
+     it by 08:25Z as planned; start nothing there after.
+  3. **Answer WITNESS's and HEADPROF's questions on HASH-114 first, as they come.** WITNESS may edit files your
+     branch touches (`gpu_circuit.rs`, `circuit.rs`, `ir_block.rs`, `sha512_native.rs`, `flock-circuit.rs`):
+     your branch yields, you restack on what proofs lands, and you edit none of the prover's files tonight. If you
+     know where `units_pack`'s 8.7 CPU-seconds go beyond what your note says, tell WITNESS in five lines, each
+     marked measured or inferred.
+  4. **In the table, one row for SHA-512's share of a statement**, card and host, for both head blocks and the
+     fused kinds (HASH-109's "about 3%" restated with its denominator), and whether the hashing inside the
+     verifier's 5.7 CPU-seconds can be told from the thread samples. I told proofs: commitment hashing 0.047 s
+     and the hash slots' witness 0.018 s of the card's 0.52 s, about 2% of a 2.86 s statement. Correct me on
+     HASH-114 if that is wrong.
+- The table stays due 11:45Z. If items 1 and 3 push it, say by how much on HASH-114: proofs' asks come first.

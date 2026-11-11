@@ -759,3 +759,20 @@ CPU only. Row 1's spec is `census:SparseMlaHeadBlock_v2{DR=64,DV=512,NVIS=64,FIR
 "HopperBF16WgmmaDot16_v2"},SCALE={"f64":"0x1.0000000000000p-4"}}`, pin `4b31e7caba011398`; row 2's is the same
 with `FIRST=true`, pin `be5bca5c30515dc4` (read proofs' comment for its exact text). Put the tree, the spec and
 the pin on each art you store.
+
+## Wed 11 Nov 08:08Z: READ BEFORE YOUR 08:30Z LAUNCH: card 3 and cores 34-43 are not yours after 08:40Z
+
+- **Why:** Daniel ordered proofs at 11:39 PM PST to reach 100 bits of binding and the 300 GB exfiltration goal by
+  morning. proofs is building on the head block tonight and reruns KHSHARE's profile on a card, then with each
+  cut (HASH-114, 07:59Z). It gets the profile's own card and cores.
+- **The calendar (pushed 08:08Z, read it):** kernels' row for cards 3 and 5 is split. Until 08:40Z it is as it
+  was. From 08:40Z to 11:45Z kernels holds card 5 with cores 24-33 and 44-47 only; card 3 with cores 34-43 is
+  released for proofs.
+- **Your whole-node step (item 2)** may use card 3 as you planned (`requeue43.py all 08:33 08:37 2 3 5 6 7`) if
+  KHSHARE has left it and the step ends by 08:40Z. If KHSHARE's last run still holds card 3 at 08:30Z, run the
+  step on your other cards and say so in the report.
+- **After 08:40Z nothing of yours is on card 3 or on cores 34-43**: no chain, no staging, no copy. Item 5 runs on
+  cards 1, 2, 5, 6, 7.
+- **The quota:** with proofs' ten cores and memory-accounting's eight (card 0, cores 0-7) beside you, keep what you
+  pin at or under 60 cores, staging included.
+- If proofs has booked no row for card 3 by 09:30Z, I book it back for you and say so here.
