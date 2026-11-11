@@ -42398,3 +42398,54 @@ For the table:
 - By gate (the options table), computed by the tree's code at `64f7cb635e3d` (#8867, not on `main`), T = 2^80: no cap at the smallest session 2^-132.03; priced 2^-116.49 to 2^-113.49 (k = 1,507) and 2^-113.49 to 2^-110.49 (the least ZK session); one table, d = 167: 2^-96.11 to 2^-93.11; 200 tables: 2^-88.47 to 2^-85.47. All modeled; K at the priced designs is typed in from REPBREAK's rows.
 - By position (#8827's form at the code, two steps of it unproved), D*1 at 1, 32 and 200 tables a session, same commit: 2^-105.03, 2^-100.03, 2^-97.39 in compressions; 2^-96.03, 2^-91.03, 2^-88.39 in 64 KiB calls; 2^-89.35, 2^-84.35, 2^-81.71 over a year of per-audit budgets. Modeled.
 - 32 tables keeps 2^-100 only while K mean ≤ 2^37.728, 0.04 bits above the row's value and before REGX's term.
+
+## FLOCKPKG, Wed 11 Nov 08:30Z: #8789 is not ready (two quick tiers could not end inside their limits; all their suites relaunched at the head in six runs, ETA about 09:15Z to 10:00Z); Lean-verifier seconds: three measurement runs are out, the head block's numbers about 10:00Z to 10:20Z
+
+**#8789 at `d68de9e61acd0edaeb42d79cf5740f6bc29f71b9`. Nothing pushed to its head; your 08:10Z message is read.** The 08:15Z mark could not be met.
+- `r20261111-080040-bfb1`: done, rc 0, "16 suites: 16 passed (0 cached), 0 failed", at the head [run: its stdout.log].
+- `r20261111-050928-97a1` and `r20261111-060033-7af9` could not end inside their stage limits (about 08:55Z and 09:21Z). A tier runs its suites one at a time: in `7af9` the passed suites' seconds add up to 6,440 s of the 113 min it had run [read: its suites.log]. They stood at 23 of 94 and 19 of 70 passed, 0 failed. I cancelled both at 08:24Z [run] and relaunched every suite at the head in six disjoint runs, `--max-min 240` [run]:
+  - A `r20261111-082449-bd5d`: `verity-vllm` alone (45 to 60 min tonight, after the verifier's `lake build`).
+  - B `r20261111-082504-a017`, C `r20261111-082532-6589`, D `r20261111-082556-d84b`: 9 suites each, the 27 others that wait on the verifier's `lake build`.
+  - E `r20261111-082609-9a53`, F `r20261111-082622-5b6a`: 26 suites each, the rest.
+  - The six hold `7af9`'s 70 suites and the 10 that only `97a1` covered; with `bfb1`'s 16 that is every suite the cut touches (96), each at the head, each in a run that ends with a verdict.
+- Records: `r20261111-075756-c476` (the composition, then `security` and `security/Properties`; limit 240 min) is running [run: status, 08:21Z].
+- I write the ready line, or the red and its cause, the minute these are in, before anything else.
+
+**Lean verifier's seconds: the plan and the first runs.**
+- **What exists.** The card on `main` (`verifier_cost.glm-5.3.json`) holds Lean's seconds for 11 block types at one block, and the head block is not among them: the planner prices it at their median, 130.2 s, assumed [read: the card; `total_cost.verifier_seconds`]. Kernels' `r20261111-061047-6773` kept three real proof-server sessions of the 256-block `FIRST=false` statement (K = 1, 2, 4) and no circuit or public file [read: its run record]. The head block's `_v2` statement stages only from #8520's tree (open, not on `main`), at `c6cadd0e325f`, the commit kernels and SERVEDCARD used.
+- **Runs** [run: launched 08:19Z to 08:20Z, source `c6cadd0e325f`, each a CPU job]:
+  - `r20261111-081919-d4ef`: `FIRST=false` staged again at `full` (the pin must be `4b31e7caba011398`), then the compiled Lean verifier on kernels' three saved sessions in one `verify` (the circuit read once, then each session), and on CPU-proved sessions of the statement's first 1, 2 and 4 blocks.
+  - `r20261111-081959-e3ed`: `FIRST=true`, the same at 1, 2 and 4 blocks (no saved session of it exists).
+  - `r20261111-082024-2fd1`: `ScaledMmFp8BlockSharedScale_v1{K=2048,N=4,G=128}` at 1, 2, 4 and 16 blocks, which also proves the script before the two long stagings end.
+  - Each verify is pinned to one core, under `/usr/bin/time -v`, twice, with the verifier's own phase lines (`inputs`, `setup`, the session), `flock-read`'s phases of the read, and one `perf` profile. Staging the head block takes 70 to 80 min, so its numbers come about 10:00Z to 10:20Z [guess].
+- **Which verifier.** `flock-verify` built at `c6cadd0e325f`. It differs from `main`'s (`8201dacff26e`) in three files: `Flock/Bytes.lean` (theorems added), `Flock/TmplSplit.lean` (the templated fold) and one comment in `FlockVerify.lean` [run: `git diff` of the two trees]. The job also builds `main`'s verifier from an archive and runs it on the same sessions.
+
+**Measured already, from the card's own two runs** [read: `job.log` of `r20261109-191738-c631` and `r20261109-211436-1bcd`, the verifier's phase lines, never split before]. One block, flat statement, `verify --zk`, wall seconds:
+
+| Type | Circuit text | Read (once a `verify`) | Setup | Check (a session) | Read's share |
+|---|---|---|---|---|---|
+| `Fp8GroupQuantUe8m0{K=6144}` | 27.3 GB | 249.6 | 3.9 | 250.3 | 50% |
+| `FlashInferFp8Linear{K=2048}` | 24.2 GB | 176.7 | 2.8 | 109.1 | 61% |
+| `SparseMlaCombine{NSPLIT=12}` | 20.9 GB | 148.8 | 2.9 | 120.8 | 55% |
+| `RMSNormFusedCudaVector8{N=6144}` | 8.6 GB | 72.0 | 2.5 | 59.7 | 54% |
+| `Fp8GroupQuantUe8m0{K=2048}` | 8.7 GB | 65.4 | 1.1 | 53.8 | 54% |
+| `SparseMlaCombine{NSPLIT=5}` | 9.0 GB | 60.0 | 1.2 | 48.4 | 55% |
+| `Fp8GroupQuantUe8m0{K=1536}` | 6.5 GB | 41.6 | 0.9 | 43.9 | 48% |
+| `AllReduceMultimem` | 3.6 GB | 31.6 | 1.1 | 35.1 | 47% |
+| `SparseMlaCombine{NSPLIT=2}` | 4.1 GB | 28.0 | 0.6 | 24.2 | 53% |
+| `MoeExpertFp8GemmW` | 0.12 GB | 2.2 | 0.5 | 5.0 | 29% |
+| `ScaledMmFp8BlockSharedScale{K=2048}` | 0.20 GB | 2.5 | 0.1 | 2.7 | 48% |
+
+- **About half of Lean's seconds on a flat statement is reading the circuit file**: 6.3 to 9.1 s a GB of text on the nine larger types. The check is 35 to 87 s per 10^9 matrix entries. Peak memory is about 3.5 GiB a GB of text.
+- **The read is paid once a `verify`, not once a session**: `verifyCmd` reads the circuit, then loops over its `--session` directories [read: `FlockVerify.lean` 993 to 1207 at `c6cadd0e325f`]. So for flat statements "the setup once for all statements of one template" needs a caller that hands one `verify` every session of a circuit, and no new verifier code. `d4ef` measures exactly that (three sessions, one read).
+- **The head block, predicted from those rates** [guess, to be replaced by `d4ef`]: 12.19 GB of text and 1.368 × 10^9 entries give a read of 85 to 105 s and a check of 60 to 85 s, so 150 to 190 s at one block against the planner's 130.2 s.
+
+**Left:** the ready line for #8789; then (B) #8814 and M6's crossing; the head block's measured seconds and their growth with blocks (10:30Z entry); the profile and each cut's size; a PR if a cut is small and sound.
+
+For the table:
+- #8789: not ready. `bfb1` passed 16 suites at the head; the other 80 run at the head in six runs (`bd5d`, `a017`, `6589`, `d84b`, `9a53`, `5b6a`); records run `c476` running.
+- Lean verifier: about half of its seconds on a flat statement is reading the circuit, paid once a `verify` (measured, `c631` and `1bcd`, 11 types at one block); the head block's own seconds are being measured (`d4ef`, `e3ed`).
+
+For BREAKEVEN:
+- Nothing changes yet. The head block's Lean seconds stay the planner's median, assumed, until `d4ef` and `e3ed` end.
+- For the 11 card types the table above splits each type's seconds into a part paid once a circuit (read) and a part paid a statement (setup and check), measured (`r20261109-191738-c631`, `r20261109-211436-1bcd`), at one block. The growth with blocks is not measured yet.
