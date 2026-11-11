@@ -814,6 +814,7 @@ def test_a_launch_sends_the_mark_audits_of_the_prs_its_tree_holds_however_old(tm
     monkeypatch.setattr(CHECK.COMMON, "merged_heads", lambda at: [behind] if at == CHECK.ROOT else [])
     monkeypatch.setattr(pytest.importorskip("research.store.local"), "LocalStore", lambda: store)
     store.remote, store.refresh = types.SimpleNamespace(presign=lambda key, ttl: f"https://r2/{key}"), lambda **kw: None
+
     def sent(*given) -> list[str]:
         return [p["run"] for p in json.loads(CHECK.verdict_url_file(tmp_path, *given).read_text())]
 

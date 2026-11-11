@@ -50,12 +50,12 @@ def merged_heads(root: Path = ROOT, limit: int = MERGED) -> list[str]:
 
 
 def lookups(runs: str, limit: int, heads: list[str] | tuple[str, ...] = ()) -> list[tuple[str, tuple, int | None]]:
-    """What a launch looks through among the store's attempts of the kind ``runs`` (an SQL condition), in order, each as (a
-    condition, its arguments and then the most rows read, the most runs taken or None for each): the mark audits of
-    ``heads`` first, where ``runs`` is `MARK_AUDITS` and there are heads, then the newest of the kind, of which ``limit``
-    are taken. A mark's audit is found by its head: the quick tier of a ready mark names the head it ran for (`--head`, or
-    `--merged` where it ran on that head's merge onto `main`), and that condition comes after the kind's, which few runs
-    meet, so the search of each command stays short."""
+    """The queries a launch makes among the store's attempts of the kind ``runs`` (an SQL condition), in order, each as (its
+    condition, its arguments, the last of them the most rows it reads, and the most runs taken from it, None for every one):
+    the mark audits of ``heads`` first, where ``runs`` is `MARK_AUDITS` and there are heads, then the newest of the kind, of
+    which ``limit`` are taken. A mark's audit is found by its head: the quick tier of a ready mark names the head it ran for
+    (`--head`, or `--merged` where it ran on that head's merge onto `main`). That condition comes after the kind's, which
+    few runs meet, so few commands are searched for the heads."""
     newest = [(runs, (4 * limit,), limit)]
     if runs != MARK_AUDITS or not heads:
         return newest
