@@ -56,6 +56,7 @@ import shutil
 import struct
 import sys
 from collections.abc import Callable
+from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass, replace
 from pathlib import Path
 from typing import Any
@@ -338,7 +339,6 @@ def map_shards(fn: Callable[..., Any], args: list[tuple[Any, ...]], jobs: int = 
     sha256 release the GIL)."""
     if jobs <= 1 or len(args) <= 1:
         return [fn(*a) for a in args]
-    from concurrent.futures import ThreadPoolExecutor
     with ThreadPoolExecutor(min(jobs, len(args))) as pool:
         return list(pool.map(lambda a: fn(*a), args))
 

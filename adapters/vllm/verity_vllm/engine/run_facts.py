@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import contextlib
 import hashlib
+import importlib.metadata as md
 import json
 import os
 import time
@@ -207,8 +208,6 @@ def host_doc() -> dict:
 
 
 def versions_doc(engine: Engine | None = None) -> dict:
-    import importlib.metadata as md
-
     def ver(name: str) -> str | None:
         try:
             return md.version(name)

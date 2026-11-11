@@ -39,6 +39,7 @@ from typing import Any
 from verity_vllm import settings
 from verity_vllm.config import CHECKPOINTS as MANIFEST
 from verity_vllm.config import checkpoint_entries
+from verity_vllm.engine.profiles.cases import CASES
 
 MODULE_PREFIX = "dense_"                    # verity_vllm.observe.fold.profiles.dense_<ROLE>
 HF_CONFIG_DIR = Path(__file__).with_name("hf_configs")
@@ -65,7 +66,6 @@ def checkpoint_entry(role: str) -> dict[str, Any] | None:
     for e in entries:
         if e.get("role") == role:
             return e
-    from verity_vllm.engine.profiles.cases import CASES
     if role in CASES:
         repo = CASES[role]["repo"]
         for e in entries:

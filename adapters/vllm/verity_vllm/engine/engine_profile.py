@@ -19,7 +19,9 @@ from pathlib import Path
 from typing import Any
 
 from verity_vllm import settings
+from verity_vllm.config import checkpoint_entries, checkpoints_hf_home
 from verity_vllm.engine import env, handle
+from verity_vllm.engine.profiles.cases import CASES
 
 DECLARED_ENV = env.ENGINE
 
@@ -43,21 +45,14 @@ def max_model_len_for(cp: dict[str, Any]) -> int:
 
 
 def apply_env() -> dict[str, str]:
-    from verity_vllm.config import checkpoints_hf_home
-
     return env.apply_engine(checkpoints_hf_home())
 
 
 def load_checkpoints(path: str | Path) -> dict[str, dict[str, Any]]:
-    from verity_vllm.config import checkpoint_entries
-
     return {c["repo"]: c for c in checkpoint_entries(path)}
 
 
 def checkpoint_for(case: str, checkpoints_path: str | Path) -> dict[str, Any]:
-    from verity_vllm.config import checkpoint_entries
-    from verity_vllm.engine.profiles.cases import CASES
-
     if case in CASES:
         cp = load_checkpoints(checkpoints_path)[CASES[case]["repo"]]
     else:
