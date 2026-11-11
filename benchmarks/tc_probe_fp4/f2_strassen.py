@@ -57,6 +57,9 @@ import f1_rates as F1  # noqa: E402
 import f3_lut as F3  # noqa: E402
 import probe as P  # noqa: E402
 import vec as V  # noqa: E402
+
+# isort: split
+# verity_config is importable once probe has put tools/config on sys.path
 from verity_config.settings import SHARED  # noqa: E402
 
 ARCH = "sm_120a"
@@ -122,7 +125,7 @@ def coeffs(level: int) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
     u, v, w = U1.reshape(7, 2, 2), V1.reshape(7, 2, 2), W1.reshape(2, 2, 7)
     if level == 1:
         return u, v, w
-    def kron(x):
+    def kron(x: np.ndarray) -> np.ndarray:
         return np.einsum("pij,qkl->pqikjl", x, x).reshape(49, 4, 4)
     return kron(u), kron(v), np.einsum("ijp,klq->ikjlpq", w, w).reshape(4, 4, 49)
 
@@ -312,7 +315,7 @@ _p = F3._p
 
 
 class F2Device:
-    def __init__(self, so: Path):
+    def __init__(self, so: Path) -> None:
         self.lib = lib = ctypes.CDLL(str(so))
         I, L, V = ctypes.c_int, ctypes.c_longlong, ctypes.c_void_p
         pI, pF = ctypes.POINTER(I), ctypes.POINTER(ctypes.c_float)
@@ -358,7 +361,8 @@ class F2Device:
             raise RuntimeError(f"f2_occupancy({kind}) rc={rc}")
         return n.value
 
-    def run_strassen(self, level, afr, bfr, ntiles, nblocks, iters):
+    def run_strassen(self, level: int, afr: np.ndarray, bfr: np.ndarray, ntiles: int, nblocks: int,
+                     iters: int) -> tuple[float, np.ndarray, np.ndarray, np.ndarray]:
         sh, ms = Shape(level), ctypes.c_float()
         out = np.zeros(ntiles * sh.tm * sh.tn, np.uint32)
         sums = np.zeros(nblocks * self.tpb() // 32 * 32 * 4, np.uint32)
@@ -368,7 +372,8 @@ class F2Device:
             raise RuntimeError(f"f2_run_strassen({level}) rc={rc}")
         return ms.value, out, sums, cyc
 
-    def run_native(self, arows, brows, c0, sh: Shape, ntiles, nblocks, iters, want=True):
+    def run_native(self, arows: np.ndarray, brows: np.ndarray, c0: np.ndarray, sh: Shape, ntiles: int, nblocks: int,
+                   iters: int, want: bool = True) -> tuple[float, np.ndarray | None, np.ndarray]:
         ms = ctypes.c_float()
         out = np.zeros(c0.size, np.uint32) if want else None
         cyc = np.zeros(nblocks, np.int64)
@@ -378,7 +383,8 @@ class F2Device:
             raise RuntimeError(f"f2_run_native rc={rc}")
         return ms.value, out, cyc
 
-    def run_step(self, gdf, mm, xg, part, c0, length):
+    def run_step(self, gdf: np.ndarray, mm: np.ndarray, xg: np.ndarray, part: np.ndarray, c0: np.ndarray,
+                 length: int) -> np.ndarray:
         out = np.zeros(c0.size, np.uint32)
         rc = self.lib.f2_run_step(_p(gdf), _p(mm), _p(xg), _p(part), _p(c0), c0.size, length, _p(out))
         if rc:
@@ -395,36 +401,37 @@ class FakeF2:
     SMS, MHZ = 64, 2000.0   # 64 SMs x one 4-warp block: a warp per tile
     TPB = 128
 
-    def __init__(self, nt: int):
+    def __init__(self, nt: int) -> None:
         self._nt = nt
 
     def identity(self) -> dict:
         return {"device": "FAKE SILICON", "compute_capability": "12.0", "driver": None, "gpu_uuid": "GPU-fake", "backend": "fake",
                 "cuda_visible_devices": SHARED.CUDA_VISIBLE_DEVICES}
 
-    def clocks(self, uuid):
+    def clocks(self, uuid: str | None) -> None:
         return None
 
-    def shape(self, level):
+    def shape(self, level: int) -> tuple[int, int, int, int]:
         sh = Shape(level)
         return sh.np_, sh.kb, sh.tm, sh.tn
 
-    def nt(self):
+    def nt(self) -> int:
         return self._nt
 
-    def tpb(self):
+    def tpb(self) -> int:
         return self.TPB
 
     def device(self) -> dict:
         return {"sms": self.SMS, "max_threads_per_sm": 1536, "cc": "12.0"}
 
-    def occupancy(self, kind, tpb) -> int:
+    def occupancy(self, kind: int, tpb: int) -> int:
         return 1
 
     def _ms(self, cycles: float) -> float:
         return cycles / (self.MHZ * 1e3)
 
-    def run_strassen(self, level, afr, bfr, ntiles, nblocks, iters):
+    def run_strassen(self, level: int, afr: np.ndarray, bfr: np.ndarray, ntiles: int, nblocks: int,
+                     iters: int) -> tuple[float, np.ndarray, np.ndarray, np.ndarray]:
         _p(afr), _p(bfr)
         sh, (_, _, w) = Shape(level), coeffs(level)
         a = np.zeros((ntiles, sh.np_, 16, sh.kb))
@@ -445,7 +452,8 @@ class FakeF2:
         cycles = iters * warps * sh.np_ * 16 * 8 * sh.kb / (self.SMS * rate)
         return self._ms(cycles), out, sums, np.full(nblocks, int(cycles), np.int64)
 
-    def run_native(self, arows, brows, c0, sh: Shape, ntiles, nblocks, iters, want=True):
+    def run_native(self, arows: np.ndarray, brows: np.ndarray, c0: np.ndarray, sh: Shape, ntiles: int, nblocks: int,
+                   iters: int, want: bool = True) -> tuple[float, np.ndarray | None, np.ndarray]:
         for x in (arows, brows, c0):
             _p(x)
         warps = nblocks * NATIVE_TPB // 32
@@ -459,7 +467,8 @@ class FakeF2:
         gd, mm, x, part = tile_terms(ops, sh)
         return self._ms(cycles), F3.chain(c0.reshape(gd.shape[:3]), gd * mm, x, part, iters).reshape(-1), cyc
 
-    def run_step(self, gdf, mm, xg, part, c0, length):
+    def run_step(self, gdf: np.ndarray, mm: np.ndarray, xg: np.ndarray, part: np.ndarray, c0: np.ndarray,
+                 length: int) -> np.ndarray:
         for x in (gdf, mm, xg, part, c0):
             _p(x)
         gd = gdf.view(np.float32).astype(np.int64)
@@ -510,7 +519,7 @@ def dots_check(sh: Shape, out: np.ndarray, sums: np.ndarray, want: np.ndarray, i
             "checksum_mismatches": int(np.count_nonzero(sums.reshape(warps, 32, 4) != want_sums))}
 
 
-def native_words(dev, fam: Family, sh: Shape, nt: int, iters: int) -> np.ndarray:
+def native_words(dev: F2Device | FakeF2, fam: Family, sh: Shape, nt: int, iters: int) -> np.ndarray:
     ntiles = NTILES * sh.native_per_tile
     warps = -(-ntiles // nt)
     nblocks = -(-warps // (NATIVE_TPB // 32))
@@ -518,7 +527,8 @@ def native_words(dev, fam: Family, sh: Shape, nt: int, iters: int) -> np.ndarray
     return out
 
 
-def gate_family(dev, fam: Family, sh: Shape, geo: dict, nt: int, rng, sample: int, corrupt: bool) -> dict:
+def gate_family(dev: F2Device | FakeF2, fam: Family, sh: Shape, geo: dict, nt: int, rng: np.random.Generator,
+                sample: int, corrupt: bool) -> dict:
     """Every group's Strassen dots at chains of 1 and 3, Strassen on the scaled values (recorded), and the route's words against
     the native atom and the pinned model."""
     blocks, warps = geo["dots"]["blocks"], geo["dots"]["warps"]
@@ -562,7 +572,7 @@ def gate_family(dev, fam: Family, sh: Shape, geo: dict, nt: int, rng, sample: in
     return rec
 
 
-def run_level(args) -> int:
+def run_level(args: argparse.Namespace) -> int:
     t_all = time.time()
     bdir, out = Path(os.path.expandvars(args.build)), Path(os.path.expandvars(args.out))
     out.mkdir(parents=True, exist_ok=True)
@@ -606,7 +616,8 @@ def run_level(args) -> int:
 
     ntn = NTILES * sh.native_per_tile
 
-    def launch(f, arm, iters):
+    def launch(f: str, arm: str,
+               iters: int) -> tuple[float, np.ndarray | None, np.ndarray] | tuple[float, np.ndarray, np.ndarray, np.ndarray]:
         fam = fams[f]
         if arm == "native":
             return dev.run_native(fam.arows, fam.brows, fam.c0, sh, ntn, geo["native"]["blocks"], iters, want=False)
@@ -663,7 +674,7 @@ def run_level(args) -> int:
     return finish(out, rec, failures, args, per, t_all)
 
 
-def finish(out: Path, rec: dict, failures: list[str], args, per: dict | None, t_all: float) -> int:
+def finish(out: Path, rec: dict, failures: list[str], args: argparse.Namespace, per: dict | None, t_all: float) -> int:
     rec["failures"] = failures
     rec["elapsed_s"] = time.time() - t_all
     name = f"{args.level}.json" if not args.fake_silicon else f"{args.level}.fake.json"
@@ -682,7 +693,7 @@ def finish(out: Path, rec: dict, failures: list[str], args, per: dict | None, t_
 
 # ---------------------------------------------------------------------------------------------------------------------- collect
 
-def collect(args) -> int:
+def collect(args: argparse.Namespace) -> int:
     """The price table over both levels (each against the NVFP4 of its own run) and the claim's check."""
     out = Path(os.path.expandvars(args.out))
     out.mkdir(parents=True, exist_ok=True)
@@ -752,7 +763,7 @@ def collect(args) -> int:
     return 0 if ok else 1
 
 
-def build_cmd(args) -> int:
+def build_cmd(args: argparse.Namespace) -> int:
     rec = build(Path(os.path.expandvars(args.out)))
     print(f"F2 BUILD {'ok' if rec['ok'] else 'FAILED'}: FTZ {rec.get('ftz_fp32') or 'none'}", flush=True)
     for n, g in (rec.get("gate") or {}).items():

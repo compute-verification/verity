@@ -51,9 +51,9 @@ Down from the root, each step gives the next equality or a collision among what 
    one salt, one `b = x ⊕ M·y` gives one inner digest `x`.
 4. **The row digest** (`inner_bind`). Under `sha512/row/v2` (`rowV2_bind`), one message gives one bit length (`P(ℓ)`) and
    one row's bytes, so one row. Under `sha512/row/v1` (`rowV1_bind`), one message gives one row's bytes, whose
-   count gives the bit length of a row of whole 16-bit words, so one row. Under `sha512/row-seg/v1` (`rowSeg_bind`),
-   one outer message gives one bit length
-   (`Q(ℓ)`) and one list of segment digests. Each segment digest comes from one segment message, so from one segment,
+   count gives the bit length of a row of whole 16-bit words, so one row. Under `sha512/row-seg/v1` (`rowSeg_bind`, at
+   any length), one outer message gives one bit length (`Q(ℓ)` holds it mod `2^64` and the segment count, which together
+   fix it) and one list of segment digests. Each segment digest comes from one segment message, so from one segment,
    and the segments cover the row.
 -/
 
@@ -97,21 +97,26 @@ theorem rowV1_bind (G : Msg → Digest) {r₁ r₂ : Row} (h₁ : r₁.length % 
     exact Or.inl (packBits_inj (by omega) hb)
   · exact Or.inr hc
 
-/-- **`sha512/row-seg/v1` binds the row.** -/
-theorem rowSeg_bind (G : Msg → Digest) {r₁ r₂ : Row} (h₁ : r₁.length < 2 ^ 64) (h₂ : r₂.length < 2 ^ 64)
-    (h : RowSeg.digest G r₁ = RowSeg.digest G r₂) :
+/-- **`sha512/row-seg/v1` binds the row**, at any length: the outer message holds the length mod `2^64` and the
+segment count `⌈ℓ / 8192⌉`, which together fix it. -/
+theorem rowSeg_bind (G : Msg → Digest) {r₁ r₂ : Row} (h : RowSeg.digest G r₁ = RowSeg.digest G r₂) :
     r₁ = r₂ ∨ CollisionIn G (RowSeg.hashed G r₁ ++ RowSeg.hashed G r₂) := by
   rcases eq_or_collisionIn (xs := RowSeg.hashed G r₁ ++ RowSeg.hashed G r₂) (x := RowSeg.outerMsg G r₁) (y := RowSeg.outerMsg G r₂) (by simp [RowSeg.hashed])
     (by simp [RowSeg.hashed]) h with hm | hc
   swap
   · exact Or.inr hc
   obtain ⟨hp, hd⟩ := List.append_inj hm (by simp [RowSeg.outerPrefix, padTo_length])
+  have hmap : (RowSeg.segmentMsgs r₁).map G = (RowSeg.segmentMsgs r₂).map G :=
+    flatMap_bytes_inj (by simpa [List.flatMap_map, Function.comp_def] using hd)
   have hℓ : r₁.length = r₂.length := by
     have hq := padTo_inj (by simp) hp
     simp only [List.append_assoc, List.append_cancel_left_eq] at hq
-    exact be_inj_lt (lt_256_pow_8 h₁) (lt_256_pow_8 h₂) (List.append_inj hq (by simp)).1
-  have hmap : (RowSeg.segmentMsgs r₁).map G = (RowSeg.segmentMsgs r₂).map G :=
-    flatMap_bytes_inj (by simpa [List.flatMap_map, Function.comp_def] using hd)
+    have hbe := be_inj (List.append_inj hq (by simp)).1
+    have hcount : RowSeg.segCount r₁.length = RowSeg.segCount r₂.length := by
+      simpa [RowSeg.segmentMsgs] using congrArg List.length hmap
+    rw [show (256 : ℕ) ^ 8 = 18446744073709551616 by norm_num] at hbe
+    simp only [RowSeg.segCount, RowSeg.SEG_BITS] at hcount
+    omega
   have hsl : ∀ j, (RowSeg.segment r₁ j).length = (RowSeg.segment r₂ j).length := fun j => by
     simp [RowSeg.segment, hℓ]
   have mem : ∀ (r : Row), ∀ j < RowSeg.segCount r.length, RowSeg.segmentMsg r j ∈ RowSeg.segmentMsgs r :=
@@ -137,7 +142,7 @@ theorem inner_bind (G : Msg → Digest) (f : Format) {r₁ r₂ : Row} (h₁ : f
     (h₂ : f.Fits r₂.length) (h : f.digest G r₁ = f.digest G r₂) :
     r₁ = r₂ ∨ CollisionIn G (f.hashed G r₁ ++ f.hashed G r₂) := by
   cases f
-  · exact rowSeg_bind G h₁ h₂ h
+  · exact rowSeg_bind G h
   · exact rowV2_bind G h₁ h₂ h
   · exact rowV1_bind G h₁.2 h₂.2 h
 
