@@ -7,11 +7,13 @@ The node of stubs: a vLLM venv whose interpreter is this one, except that the ve
 are `VERIFIER` and `PROVER` below (a verifier that listens, takes one connection and writes verifier.json as the word
 it is sent says; a prover that connects, sends that word and writes its record), with `verity-vllm`, `gpu-lease` and
 `nvcc` beside it, each writing what it was asked to `calls`, and an `ss` and an `nvidia-smi` that answer from files.
-`taskset` is the node's own."""
+`taskset` and the rest are the machine's own (`MACHINE_PATH`)."""
 from __future__ import annotations
 
+import importlib.util
 import json
 import os
+import shutil
 import socket
 import subprocess
 import sys
@@ -21,12 +23,24 @@ import pytest
 
 HERE = Path(__file__).resolve().parent
 ROOT = HERE.parents[2]
-sys.path.insert(0, str(HERE.parent))
-sys.path.insert(0, str(ROOT))
 
-import serve  # noqa: E402
 
+def load_serve():
+    """`serve.py` as a module of its own name: the auditor host's challenger, which this suite's other tests run,
+    imports its own `serve` by that name."""
+    spec = importlib.util.spec_from_file_location("remote_session_serve", HERE.parent / "serve.py")
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+serve = load_serve()
 RUN = HERE.parent / "run.sh"
+BASH = shutil.which("bash")
+TREE_LEASE = "tools/research/src/research/pods/sh/gpu_lease.sh"
+MACHINE_PATH = ":".join(d for d in os.environ["PATH"].split(":") if d and not (Path(d) / "gpu-lease").exists())
+"""The machine's PATH less every directory that holds a `gpu-lease`: a line whose stub lease a test took away finds
+none, never the lease program of the machine the suite runs on.  The node's other stubs come before it."""
 ROW = "llama__bf16__h200__tp1__b1__i256__o32"
 
 INTERPRETER = r"""#!/bin/bash
@@ -142,6 +156,17 @@ grep -qx "${2##*:}" "$STUB_DIR/busy" 2> /dev/null && echo "LISTEN 0 128 127.0.0.
 exit 0
 """
 
+LEASE_BASH = r"""#!/bin/bash
+case "$1" in
+  */gpu_lease.sh)
+    echo "lease bash $*" >> "$STUB_DIR/calls"
+    while [ "$1" != -- ]; do shift; done
+    shift
+    exec "$@" ;;
+esac
+exec "$REAL_BASH" "$@"
+"""
+
 NVIDIA_SMI = r"""#!/bin/bash
 n=$(cat "$STUB_DIR/smi.asked" 2> /dev/null || echo 0)
 echo "$((n + 1))" > "$STUB_DIR/smi.asked"
@@ -172,11 +197,8 @@ def free_port() -> int:
 
 
 def gone(pid: int) -> bool:
-    try:
-        os.kill(pid, 0)
-    except ProcessLookupError:
-        return True
-    return False
+    """Whether no process ``pid`` is left: `run.sh` waits for the verifier it started, or stopped, before it ends."""
+    return not Path(f"/proc/{pid}").exists()
 
 
 class Node:
@@ -204,12 +226,12 @@ class Node:
         return py
 
     def run(self, **env: str | None) -> subprocess.CompletedProcess:
-        base = {"PATH": f"{self.bin}:{os.environ['PATH']}", "HOME": str(self.tmp / "home"), "TMPDIR": str(self.tmp / "scratch"),
+        base = {"PATH": f"{self.bin}:{MACHINE_PATH}", "HOME": str(self.tmp / "home"), "TMPDIR": str(self.tmp / "scratch"),
                 "RESEARCH_RUN_DIR": str(self.tmp / "run"), "NODE_WORKSPACE": str(self.ws), "CUDA_ROOT": str(self.tmp / "cuda"),
-                "STUB_DIR": str(self.stub), "REAL_PY": sys.executable, "STUB_TORCH_CUDA": "12.9",
+                "STUB_DIR": str(self.stub), "REAL_PY": sys.executable, "REAL_BASH": BASH, "STUB_TORCH_CUDA": "12.9",
                 "GPU_LEASE": str(self.lease), "LEAN_EXE": str(self.lean), "TUNNEL_WAIT_S": "0"}
         env = {k: v for k, v in (base | env).items() if v is not None}
-        return subprocess.run(["bash", str(RUN)], cwd=ROOT, env=env, capture_output=True, text=True)
+        return subprocess.run([BASH, str(RUN)], cwd=ROOT, env=env, capture_output=True, text=True)
 
     def both(self, serve_as: str, **env: str | None) -> subprocess.CompletedProcess:
         """ROLE=both SERVE=``serve_as`` on a free port; a row is `ROW`, its file this node's."""
@@ -397,8 +419,8 @@ def test_one_line_of_a_row_builds_before_the_lease_and_commits_under_it(node):
     head = ["row", "run", ROW, "CHECKPOINT", "org/model", "0123abcd", "--sweep-dir", sweep, "--cuda-bin",
             str(node.tmp / "cuda/cuda-12.9/bin"), "--norm-tap-so", "/taps/norm.so", "--stages"]
     assert build["argv"] == [*head, "build"] and commit["argv"] == [*head, "commit"]
-    assert lease.endswith(" ".join(["env", f"REMOTE_VERIFIER=127.0.0.1:{port}", str(node.ws / "venv312/bin/verity-vllm"), *head,
-                                    "commit"]))
+    assert lease.endswith(" ".join([str(node.ws / "venv312/bin/verity-vllm"), *head, "commit"]))
+    assert build["env"]["REMOTE_VERIFIER"] is None           # the session is the Commit's: its Build sees no verifier
     # the registration is encoded on the card: kv.cu built for it at the session's codec, handed to the Commit
     assert nvcc.startswith("nvcc -O3 -arch=sm_90 ") and "-DKV_FIELD=1024 -DKV_MASK=1" in nvcc
     assert nvcc.endswith("benchmarks/word_codec/kv.cu") and (ROOT / "benchmarks/word_codec/kv.cu").is_file()
@@ -544,8 +566,8 @@ def test_tiny_takes_serve_or_servedrop(node):
     assert p.returncode == 6 and node.provers()[0]["argv"][-3] == "servedrop:1"
 
 
-def test_role_prover_takes_its_port_and_draws_none(node):
-    """A prover with no PORT used to draw one and wait for a verifier on it; it is refused at once, served or not."""
+def test_role_prover_takes_its_port_and_picks_none(node):
+    """A prover with no PORT used to pick one and wait for a verifier on it; it is refused at once, served or not."""
     refused(node, node.run(ROLE="prover", SERVE="tiny"), "refused: ROLE=prover takes PORT")
     refused(node, node.run(ROLE="prover", PY=str(node.ws / "venv312/bin/python")), "refused: ROLE=prover takes PORT")
     p = node.run(ROLE="prover", SERVE="tiny", PORT="7711")
@@ -554,7 +576,7 @@ def test_role_prover_takes_its_port_and_draws_none(node):
 
 # ------------------------------------------------------------------------------------------------ run.sh: the defaults
 
-def test_role_both_draws_a_port_nothing_listens_on(node):
+def test_role_both_picks_a_port_nothing_listens_on(node):
     (node.stub / "busy").write_text("".join(f"{port}\n" for port in range(7700, 7900) if port != 7777))
     p = node.both("tiny", PORT=None, STUB_VERIFIER="deaf", STUB_PROVER="quiet", VERIFIER_WAIT_S="0")
     assert p.returncode == 5, said(p)
@@ -602,7 +624,12 @@ def test_the_lease_program_is_the_one_named_then_the_paths_then_the_nodes(node):
     assert node.both("tiny", GPU_LEASE=None).returncode == 0       # else the one on the PATH
     on_path.unlink()
     assert node.both("tiny", GPU_LEASE=None).returncode == 0       # else the one installed on the node
-    assert [c.split()[1] for c in node.calls() if c.startswith("lease")] == [str(node.lease), str(on_path), str(installed)]
+    installed.unlink()
+    program(node.bin / "bash", LEASE_BASH)                         # a `bash` that runs what a lease script is handed
+    assert node.both("tiny", GPU_LEASE=None).returncode == 0       # else the tree's script
+    leases = [c.split()[1:3] for c in node.calls() if c.startswith("lease")]
+    assert [x[0] for x in leases[:3]] == [str(node.lease), str(on_path), str(installed)]
+    assert leases[3] == ["bash", str(ROOT / TREE_LEASE)] and (ROOT / TREE_LEASE).is_file()
 
 
 # ------------------------------------------------------------------------------------ run.sh: a row around its lease
@@ -628,8 +655,8 @@ def test_a_failed_lean_build_ends_4_before_the_lease(node):
 
 def test_a_verifier_that_never_listens_ends_the_line_before_the_lease(node):
     p = node.both("tiny", STUB_VERIFIER="dead")
-    assert p.returncode == 3 and "refused: the verifier ended before it listened" in p.stdout, said(p)
-    assert node.calls() == ["verifier"]
+    assert p.returncode == 3 and "refused: the verifier ended 2 before it listened" in p.stdout, said(p)
+    assert node.calls() == ["verifier"] and gone(node.verifier()["pid"])
 
 
 def test_the_rows_knobs_reach_its_build_and_its_commit(node, tmp_path):

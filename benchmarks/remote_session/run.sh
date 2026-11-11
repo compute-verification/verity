@@ -246,7 +246,7 @@ c = sorted(os.sched_getaffinity(0))
 v = max(1, len(c) // 4) if sys.argv[1] == "both" else 0
 print(",".join(map(str, c[-v:] if v else c)), ",".join(map(str, c[:len(c) - v] or c)))' "$ROLE")
   VERIFIER_CPUS=${VERIFIER_CPUS:-$VC} PROVER_CPUS=${PROVER_CPUS:-$PC}
-  THREADS=$(env -u OMP_NUM_THREADS -u OMP_THREAD_LIMIT taskset -c "$PROVER_CPUS" nproc) ||
+  THREADS=$(unset OMP_NUM_THREADS OMP_THREAD_LIMIT; taskset -c "$PROVER_CPUS" nproc) ||
     refuse "PROVER_CPUS=$PROVER_CPUS are not cores this process may run on"
   export OMP_NUM_THREADS=${OMP_NUM_THREADS:-$THREADS} MKL_NUM_THREADS=${MKL_NUM_THREADS:-$THREADS}
 fi
@@ -395,7 +395,7 @@ print(f"sm_{major}{minor}")' "$ROW_FILE" 2> /dev/null)}
         exit $BR
       fi
     fi
-    RUN=(env "REMOTE_VERIFIER=127.0.0.1:$PORT" "${ROWRUN[@]}" --stages "$LEASED")
+    RUN=("${ROWRUN[@]}" --stages "$LEASED")
     REC=$SWEEP/$ROW/commit/remote_session.json
     rm -f "$REC"
   else
@@ -416,13 +416,15 @@ print(f"sm_{major}{minor}")' "$ROW_FILE" 2> /dev/null)}
     set +m
     until grep -q '^verifier: listening' "$O/verifier.log"; do
       if ! kill -0 "$SV" 2> /dev/null; then
+        wait "$SV"; W=$?
         SV=
         tail -20 "$O/verifier.log"
-        refuse "the verifier ended before it listened on $PORT"
+        refuse "the verifier ended $W before it listened on $PORT"
       fi
       sleep 0.2
     done
   fi
+  [ "$SERVED" = row ] && export REMOTE_VERIFIER=127.0.0.1:$PORT # the Commit's session; the Build before it has none
   P=0
   card_free || P=$?
   if [ $P = 0 ]; then

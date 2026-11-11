@@ -59,8 +59,9 @@ inputs = ["verity/__init__.py", "verity/settings.py", "verity/errors.py",
           "adapters/vllm/verity_vllm/engine", "adapters/vllm/verity_vllm/protocols/remote_bandwidth",
           "verity/hardware/__init__.py", "verity/protocols/__init__.py", "verity/protocols/poub/__init__.py",
           "verity/composite/__init__.py", "verity/composite/device/__init__.py", "adapters/vllm/verity_vllm/protocols/__init__.py", "verity/composite/device/live_challenger/__init__.py",
-          # test_run_serve.py: the kv.cu that run.sh's SERVE=row hands nvcc is a file of the tree
-          "benchmarks/word_codec/kv.cu"]
+          # test_run_serve.py: the kv.cu that run.sh's SERVE=row hands nvcc, and the lease script run.sh falls back to,
+          # are files of the tree
+          "benchmarks/word_codec/kv.cu", "tools/research/src/research/pods/sh/gpu_lease.sh"]
 
 # What these test files read that their source doesn't name (a tree a test walks, a module it loads by a name it computes,
 # what a program it starts reads): the graph's test-file tasks are keyed on it.
