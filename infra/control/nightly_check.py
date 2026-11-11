@@ -24,7 +24,8 @@ stopped and nothing is launched or posted twice:
     compare   a run that ended with a verdict, once: each of its parts against the recorded checks of the same commit, which
               are the store's attempts of the clean commit whose result is a check's, but this run and any other uncached
               one. A part is a suite (its row in a suite report), a Lean package (its report in lean-audit/audit.json and
-              its inputs key in the result's `passes`) or a step of STEPS (its record in the result). It agrees when every
+              its inputs key in the result's `passes`) or a step (its record in the result; every step but those of
+              BY_PART, whose parts are the suites and the Lean packages). It agrees when every
               recorded verdict on it is the uncached one, under the same key where both sides hold one, and for a Lean
               package with the same report outside RUN_FIELDS. A comparison that can't be read is tried again each pass,
               and after COMPARE_S the night reports without one and says so.
@@ -49,7 +50,7 @@ test's own outcome (a suite is one part, read by its row's status); the uncached
 whole, which `--no-cache` never computes, so such a step's verdicts are compared and its key is the recorded side's alone;
 the key of a suite a recorded check ran in parts or passed by a traced pass, whose row holds the part's key or the suite's
 traced key and not the key of its inputs, so only its verdict is compared; circuit-check's targets, which are one part
-together; the steps outside STEPS; and a part the uncached run skipped, which is listed when a recorded check has it.
+together; and a part the uncached run skipped, which is listed when a recorded check has it.
 
 The rings, each an inbox thread: nobody's for a pass with no part that disagrees (one post, naming nobody); infra's for any
 other outcome and for a comparison that could not be read; infra's and ci's when a part disagrees, whatever the outcome.
@@ -91,8 +92,9 @@ CHECK = "tools/verity/check/check.py"
 KIND = "audit-main"                             # the dispatcher's name for this check, whose records `dispatch.classify` reads
 SUITE_FILES = ("suites.json", "suites-lean.json")     # check's suite reports, beside its result.json in the run dir
 LEAN_AUDIT = "lean-audit/audit.json"            # the Lean check's report there: each package's
-#: the steps compared as one part each: those check caches whole (its STEP_KEYS), Flock's circuit build, and circuit-check
-STEPS = ("preflight-lints", "flock-circuit-build", "flock-rust-tests", "circuit-check", "lean-agreement")
+#: the steps whose parts are compared one by one, as suites and Lean packages; every other step of a result is one part, so
+#: a step check gains is compared from the night it first runs
+BY_PART = ("pytest", "lean-suites", "lean-audit")
 #: the fields of a Lean package's report that say how its check ran; the others say what it found
 RUN_FIELDS = frozenset({"seconds", "sampled", "staged", "replay", "pipeline", "sandbox"})
 VERDICTS = ("passed", "failed")
@@ -219,10 +221,11 @@ def found(field: str, value) -> str:
 def verdicts(run: str, result: dict, suites: list[dict], audit: dict) -> dict[tuple[str, str], list[dict]]:
     """A check's records (its result, its suite reports' rows and its Lean report) as {(kind, name): its verdicts on that part}:
     each suite's row that ran or was reused, each Lean package's report (a package the report lists as failed is failed,
-    report or none), each step of STEPS that ran. A verdict holds its `run` and `status`; the `key` it was given under, where an uncached and a recorded check hold the same kind of key (a Lean
-    package's inputs key; a suite's inputs key, which the row of a part of a split suite and the row of a reused traced pass
-    don't hold: theirs are the part's key and the suite's traced key); a Lean package's `report`, each field outside RUN_FIELDS
-    by digest; and `how` a pass it reused came to it."""
+    report or none), each step that ran but those of BY_PART. A verdict holds its `run` and `status`; the `key` it was given
+    under, where an uncached and a recorded check hold the same kind of key (a Lean package's inputs key; a suite's inputs
+    key, which the row of a part of a split suite and the row of a reused traced pass don't hold: theirs are the part's key
+    and the suite's traced key); a Lean package's `report`, each field outside RUN_FIELDS by digest; and `how` a pass it
+    reused came to it."""
     out: dict[tuple[str, str], list[dict]] = {}
 
     def add(kind: str, name, status: str, key=None, how: str = "", report: dict | None = None) -> None:
@@ -247,7 +250,7 @@ def verdicts(run: str, result: dict, suites: list[dict], audit: dict) -> dict[tu
         if ("Lean package", str(pkg)) not in out:        # one whose check left no report
             add("Lean package", pkg, "failed", keys.get(pkg))
     for s in result.get("steps") or []:
-        if isinstance(s, dict) and s.get("step") in STEPS and s.get("status") in VERDICTS:
+        if isinstance(s, dict) and isinstance(s.get("step"), str) and s["step"] not in BY_PART and s.get("status") in VERDICTS:
             hit = s["cache"].get("hit") if isinstance(s.get("cache"), dict) else None
             add("step", s["step"], s["status"], how=f"a pass reused under key `{str(hit)[:12]}`" if hit else "")
     return out

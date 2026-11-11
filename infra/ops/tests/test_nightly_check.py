@@ -365,11 +365,12 @@ def step(name, status, **more):
 
 
 def uncached():
-    """The night's run: every suite but one it skips, both Lean packages and every step of N.STEPS ran, under no cache."""
+    """The night's run: every suite but one it skips, both Lean packages and every step but one it skips ran, under no cache."""
     return dict(
         result={"steps": [step("preflight-lock", "passed"), step("preflight-lints", "passed"), step("pytest", "passed"),
                           step("flock-circuit-build", "passed"), step("flock-rust-tests", "passed"), step("circuit-check", "passed"),
-                          step("lean-agreement", "passed"), step("lean-audit", "passed"), step("lean-changed", "skipped")],
+                          step("lean-agreement", "passed"), step("lean-audit", "passed"), step("lean-suites", "passed"),
+                          step("lean-changed", "skipped")],
                 "passes": {key("1"): "lean/x", key("2"): "lean/y"}},
         suites=[suite("pkg/a", "passed", key=key("a")), suite("pkg/b", "passed", key=key("b")), suite("pkg/split", "passed", key=key("c")),
                 suite("pkg/traced", "passed", key=key("d")), suite("pkg/gpu", "skipped"), suite("lean/x", "passed", key=key("e"))],
@@ -380,11 +381,13 @@ def recorded():
     """The recorded check of the same commit, in two shards, as a check that reuses passes leaves it. It says what the night's
     run says, in other records: `pkg/a` and `lean/x` are passes reused under the night's keys, `pkg/split` ran as two parts
     with a key each, `pkg/traced` is a traced pass under its traced key, the steps cached whole name their keys, and what it
-    reused of `lean/x` carries no build time, no replay and a `staged`. No shard ran `lean-agreement`."""
+    reused of `lean/x` carries no build time, no replay and a `staged`. Each shard ran the preflight's steps, and none ran
+    `lean-agreement`."""
     reused = {"commit": "0" * 40, "run": OLD, "key": key("a")}
     first = dict(
-        result={"steps": [step("preflight-lints", "passed", cache={"stored": key("7")}), step("pytest", "passed"),
-                          step("flock-rust-tests", "passed", cache={"hit": key("8")}), step("lean-agreement", "skipped")],
+        result={"steps": [step("preflight-lock", "passed"), step("preflight-lints", "passed", cache={"stored": key("7")}),
+                          step("pytest", "passed"), step("flock-rust-tests", "passed", cache={"hit": key("8")}),
+                          step("lean-agreement", "skipped")],
                 "passes": {key("1"): "lean/x"}},
         suites=[suite("pkg/a", "cached", key=key("a"), since=reused), suite("pkg/b", "passed", key=key("b")),
                 suite("pkg/split", "passed", key=key("f"), part={"ks": [1], "m": 2}),
@@ -393,8 +396,9 @@ def recorded():
         audit=audit(report("lean/x", seconds=0.2, staged=True, replay=None,
                            heartbeats=[{"declaration": "G", "heartbeats": 900, "module_seconds": None}]), cached={"lean/x": key("9")}))
     second = dict(
-        result={"steps": [step("preflight-lints", "passed", cache={"hit": key("7")}), step("flock-circuit-build", "passed"),
-                          step("circuit-check", "passed"), step("lean-audit", "passed")],
+        result={"steps": [step("preflight-lock", "passed"), step("preflight-lints", "passed", cache={"hit": key("7")}),
+                          step("flock-circuit-build", "passed"), step("circuit-check", "passed"), step("lean-audit", "passed"),
+                          step("lean-suites", "passed")],
                 "passes": {key("2"): "lean/y"}},
         suites=[suite("pkg/split", "passed", key=key("6"), part={"ks": [2], "m": 2}), suite("lean/x", "passed", key=key("e"))],
         audit=audit(report("lean/y", seconds=40)))
@@ -418,16 +422,34 @@ def ran(rec, name):
 
 
 def test_a_check_the_recorded_one_agrees_with_agrees_part_by_part_and_a_part_no_shard_ran_has_no_stored_verdict():
-    """Five suites, two Lean packages and the five steps of N.STEPS: the same verdict on each wherever a shard has one, the
-    same key wherever both hold the same kind, and the same Lean reports but for how each check ran."""
+    """Five suites, two Lean packages and six steps: the same verdict on each wherever a shard has one, the same key wherever
+    both hold the same kind, and the same Lean reports but for how each check ran."""
     got = tally(uncached(), recorded())
-    assert got == {"runs": SHARDS, "agree": 11, "disagree": [], "unstored": ["step `lean-agreement`"], "unchecked": []}
-    assert N.said(got) == SAID % "11 agree, 0 disagree, 1 with no stored verdict (step `lean-agreement`)"
+    assert got == {"runs": SHARDS, "agree": 12, "disagree": [], "unstored": ["step `lean-agreement`"], "unchecked": []}
+    assert N.said(got) == SAID % "12 agree, 0 disagree, 1 with no stored verdict (step `lean-agreement`)"
     parts = N.verdicts(RUN, **uncached())
-    assert len(parts) == 12 and ("suite", "lean/x") in parts and ("Lean package", "lean/x") in parts, \
+    assert len(parts) == 13 and ("suite", "lean/x") in parts and ("Lean package", "lean/x") in parts, \
         "a Lean suite and the Lean package at its path are two parts"
-    assert {name for kind, name in parts if kind == "step"} == set(N.STEPS), "the steps outside STEPS are no part"
+    assert {name for kind, name in parts if kind == "step"} == {
+        "preflight-lock", "preflight-lints", "flock-circuit-build", "flock-rust-tests", "circuit-check", "lean-agreement"}, \
+        "every step that ran is a part, but the three whose parts are the suites and the Lean packages"
     assert ("suite", "pkg/gpu") not in parts, "a suite it skipped has no verdict"
+
+
+def test_a_step_is_a_part_by_rule_so_one_the_check_gains_is_compared_and_one_compared_by_its_parts_is_not():
+    """No list here names the steps to compare: a step no test or constant has heard of is a part from the night both checks
+    first hold it, and the three steps of N.BY_PART never are, whose verdicts are their suites' and their packages'."""
+    mine, theirs = uncached(), recorded()
+    mine["result"]["steps"].append(step("a-step-check-gains", "passed"))
+    theirs[SHARDS[1]]["result"]["steps"].append(step("a-step-check-gains", "passed"))
+    for shard, name in ((0, "pytest"), (1, "lean-suites"), (1, "lean-audit")):
+        ran(theirs[SHARDS[shard]], name).update(status="failed")
+    got = tally(mine, theirs)
+    assert (got["agree"], got["disagree"], got["unstored"]) == (13, [], ["step `lean-agreement`"])
+    ran(theirs[SHARDS[1]], "a-step-check-gains").update(status="failed")
+    got = tally(mine, theirs)
+    assert (got["agree"], got["disagree"]) == (12, [f"step `a-step-check-gains`: passed here; failed in `{SHARDS[1]}`"])
+    assert N.BY_PART == ("pytest", "lean-suites", "lean-audit"), "a name added here is a step the comparison stops reading"
 
 
 A, B, C, D = "a" * 12, "b" * 12, "c" * 12, "d" * 12
@@ -495,8 +517,8 @@ def test_a_planted_difference_is_the_one_part_that_disagrees_named_with_both_ver
     mine, theirs = uncached(), recorded()
     plant(mine, theirs)
     got = tally(mine, theirs)
-    assert got == {"runs": SHARDS, "agree": 10, "disagree": [line], "unstored": ["step `lean-agreement`"], "unchecked": []}
-    assert N.said(got) == SAID % "10 agree, 1 disagree, 1 with no stored verdict (step `lean-agreement`)" + f"\n\u2022 {line}"
+    assert got == {"runs": SHARDS, "agree": 11, "disagree": [line], "unstored": ["step `lean-agreement`"], "unchecked": []}
+    assert N.said(got) == SAID % "11 agree, 1 disagree, 1 with no stored verdict (step `lean-agreement`)" + f"\n\u2022 {line}"
 
 
 def test_how_a_check_ran_is_no_difference_and_several_differences_are_each_named():
@@ -515,7 +537,7 @@ def test_how_a_check_ran_is_no_difference_and_several_differences_are_each_named
         PLANTED["a stored pass against an uncached failure"][1],
         f"suite `pkg/b`: passed here, key `{B}`; failed in `{SHARDS[0]}`, key `{'0' * 12}`",
         PLANTED["one part of a suite a shard ran in parts"][1]], "each part that differs is one line, however many ways it differs"
-    assert got["agree"] == 6 and got["unstored"] == ["step `lean-agreement`"]
+    assert got["agree"] == 7 and got["unstored"] == ["step `lean-agreement`"]
 
 
 def test_a_part_on_one_side_only_is_listed_and_neither_agrees_nor_disagrees():
@@ -523,18 +545,19 @@ def test_a_part_on_one_side_only_is_listed_and_neither_agrees_nor_disagrees():
     mine["suites"].append(suite("pkg/new", "passed", key=key("0")))             # no shard has a row for it
     mine["audit"]["packages"].append(report("lean/new"))
     row(theirs[SHARDS[0]], "pkg/gpu").update(status="passed", key=key("3"))     # the night's run skipped it
-    theirs[SHARDS[1]]["result"]["steps"].append(step("lean-agreement", "skipped"))
+    theirs[SHARDS[1]]["result"]["steps"].extend([step("lean-agreement", "skipped"), step("lean-changed", "passed")])
     got = tally(mine, theirs)
-    assert got == {"runs": SHARDS, "agree": 11, "disagree": [], "unchecked": ["suite `pkg/gpu`"],
+    assert got == {"runs": SHARDS, "agree": 12, "disagree": [], "unchecked": ["step `lean-changed`", "suite `pkg/gpu`"],
                    "unstored": ["Lean package `lean/new`", "step `lean-agreement`", "suite `pkg/new`"]}
-    assert N.said(got) == SAID % ("11 agree, 0 disagree, 3 with no stored verdict (Lean package `lean/new`, step `lean-agreement`, "
-                                  "suite `pkg/new`)") + " Only the recorded check has a verdict on suite `pkg/gpu`."
+    assert N.said(got) == SAID % ("12 agree, 0 disagree, 3 with no stored verdict (Lean package `lean/new`, step `lean-agreement`, "
+                                  "suite `pkg/new`)") + (" Only the recorded check has a verdict on step `lean-changed`, suite "
+                                                         "`pkg/gpu`.")
     assert N.rung({"outcome": "passed", "compared": got}) == []
 
 
 def test_a_commit_with_no_recorded_check_is_said_to_have_none_and_never_to_agree():
     got = tally(uncached(), {})
-    assert got["runs"] == [] and got["agree"] == 0 and got["disagree"] == [] and len(got["unstored"]) == 12
+    assert got["runs"] == [] and got["agree"] == 0 and got["disagree"] == [] and len(got["unstored"]) == 13
     assert N.said(got) == " The store holds no recorded check of this commit, so its verdicts were compared with none."
     assert N.rung({"outcome": "passed", "compared": got}) == []
 
@@ -1030,7 +1053,7 @@ def test_the_recorded_checks_of_a_commit_are_its_clean_attempts_whose_result_is_
     assert got == {run: N.verdicts(run, **rec) for run, rec in theirs.items()}
     assert sorted(p.stem for p in (store.root / "attempts").iterdir()) == sorted([*SHARDS, RUN, *others]), \
         "the store listed them all: what it left out, it left out by what each is"
-    assert N.tally(N.verdicts(RUN, **mine), got) == {"runs": SHARDS, "agree": 11, "disagree": [], "unchecked": [],
+    assert N.tally(N.verdicts(RUN, **mine), got) == {"runs": SHARDS, "agree": 12, "disagree": [], "unchecked": [],
                                                     "unstored": ["step `lean-agreement`"]}
 
     published(tmp_path, "r20261019-041900-0a03", bare, argv=("--shard", "2/2"), files=False)
@@ -1072,12 +1095,12 @@ def test_the_comparison_fetches_the_runs_lean_report_once_and_reads_the_recorded
 
     got = N.compared(RUN, COMMIT, "r20261019-031405", fetch=fetch, root=tmp_path / "runs", store=the_pods_store(tmp_path))
     assert asked == [(d, ("lean-audit/audit.json",))], "the Lean report, beside the records the read already fetched"
-    assert got == {"runs": SHARDS, "agree": 11, "disagree": [], "unstored": ["step `lean-agreement`"], "unchecked": []}
+    assert got == {"runs": SHARDS, "agree": 12, "disagree": [], "unstored": ["step `lean-agreement`"], "unchecked": []}
 
     row(mine, "pkg/b").update(status="failed")
     (d / "suites.json").write_text(json.dumps(mine["suites"][:-1]))
     got = N.compared(RUN, COMMIT, "r20261019-031405", fetch=fetch, root=tmp_path / "runs", store=the_pods_store(tmp_path))
-    assert got["disagree"] == [f"suite `pkg/b`: failed here, key `{B}`; passed in `{SHARDS[0]}`"] and got["agree"] == 10
+    assert got["disagree"] == [f"suite `pkg/b`: failed here, key `{B}`; passed in `{SHARDS[0]}`"] and got["agree"] == 11
 
     with pytest.raises(ConnectionError, match="unreachable \\(rc 255\\)"):
         N.compared(RUN, COMMIT, "r20261019-031405", fetch=lambda run_dir, also=(): {"last_fetch_error": {"rc": 255}},
