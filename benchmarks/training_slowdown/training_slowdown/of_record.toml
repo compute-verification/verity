@@ -105,3 +105,9 @@ run = "r20261103-095000-6998"
 art = "art:d9d953b50ca3922b5f0859f06bab1417713b841796d7fa23834d06c42d3dc80d"
 path = "out/run/run.json"
 sha256 = "7c7db29b8a3341a4a3709d0d9b6f07731835384791348c97e38ccaeabeb6b528"
+
+[held."xl-t20-1.1x-ref-optim-fullmuon-fe-wsd"]
+run = "r20261103-191327-4ac1"
+art = "art:166607d6abdeb588be0f67dad78f067e6faec4b293b7621037ac5950ce24f6ee"
+path = "out/run/run.json"
+sha256 = "45477ecac362c30bf53f07b8304a7e6f50317bcb88452d3c2a348d3dc399b487"

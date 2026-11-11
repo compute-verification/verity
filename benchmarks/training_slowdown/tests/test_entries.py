@@ -247,6 +247,7 @@ REFERENCES = {
     "s-t20-1.1x-shampoo": (under(shampoo), CLOSE),
     "s-t20-1.1x-shampoo-whole": (under(shampoo), CLOSE),
     "s-t20-1.1x-wildcard-topcode": (under(muon), CLOSE_BF16),
+    "xl-t20-1.1x-ref-optim-fullmuon-fe-wsd": (under(muon), CLOSE_BF16),
 }
 
 
