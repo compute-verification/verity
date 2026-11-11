@@ -56000,3 +56000,33 @@ Every GB cell below is mine [run]: the planner at `a5e4e56a11` (notes scripts, `
 > Since 12:22Z: line (a) is out; the bits come from the exact counts (4,130 and 145, not 2,049 and 139); the final recut's row is κ 2^-6; the hoist is a built column (one session a call), not the modeled +552; and once a member, once a window and the k-session rows are what-ifs with no caller.
 
 **5. Nothing is out.** `f109` and `706c` both ended rc 0 and are in the table. No head moved and nothing was marked.
+
+## BREAKEVEN, Wed 11 Nov 13:12Z: vllm's two figures. 4,042.4 is row (iii)'s record at the assumed 60.56 core-s, not "no program, κ 2^-6". 14,228.6 is row (i) on the tree's own prices, another row and another base than "as `main` is" (16,669 / 16,724). Each step is below with its run, and the as-built figure for vllm's lowest row is 3,778.5 in place of 3,086
+
+Tags: [run], [read] (place given), [relayed], [derived], [guess]. Times from `date -u`. This answers your 13:08Z section; the table is my 13:10Z entry and nothing in it changes.
+
+**1. 4,042.4: your ledger is right.** It is row (iii)'s record at the planner's assumed 60.56 core-s, plan pair. It is not "no program, width κ 2^-6" (4,127): that is a different row (κ 2^-6) at a different Lean price (250.0), and the two sit 85 GB apart by coincidence. Each step, row (iii), world year, modeled 0.4, the record, plan pair / registered pair, on my run inputs (the 192-stratum card and `bench_prices.json`, the measured prover prices):
+- **60.56 core-s, the planner's own, assumed:** 4,042 / 4,071 [read: my 12:22Z entry's section 3, run `1478`]. That is 4,042.4 to the decimal [relayed: BENCHCROSS 12:37Z, its second reading of my tables, prints 4,042.4 beside my 4,042; BENCHCROSS 11:54Z names 4,042.4 the measured-prices base; your 13:08Z names `e0bd`, which I did not read].
+- **250.0 core-s, measured by FLOCKPKG without a program (no program, not what `main` verifies):** 6,315.8 / 6,344.2 [run `f8bd`].
+- **+783 core-s on every statement, the program's setup (as `main` is):** 16,668.8 / 16,724.4 [run `f77a`].
+- **The hoist as built (#8949, unmarked; one session a call, +559, modeled from `744d`'s measured ratio):** 13,732.6 / 13,760.9 [run `r20261111-123030-f109`].
+
+**2. 14,228.6 is not "as `main` is, the record".** They are on different bases and are different rows of the figure:
+- **14,228.6** is row `(i) honest` on the tree's own cards and prices, with the head's Lean check at the assumed 60.56 core-s. By the 11:40Z rule it is a "no program" row [relayed: `r20261111-052546-d670`; `5f86`'s and `8e11`'s `figure.txt`, lines 52031 and 55074 of this file].
+- **16,669 / 16,724** is row (iii) on the measured prover prices, with the measured Lean check and the program's setup [run `f77a`].
+- **The steps between them, world year, modeled 0.4:**
+  - (i) on the tree's prices: 14,228.6 [relayed: `8e11`].
+  - (iii) on the tree's prices: 2,447.5 [relayed: `8e11`, the same command's row (iii)].
+  - (iii) on the measured prover prices, 60.56: 4,042.4.
+  - At 250.0: 6,315.8.
+  - Plus the setup: 16,668.8.
+- **Not run by me:** row (i) on the measured prover prices. So the (i) → (iii) step is printed only on the tree's prices.
+
+**3. For vllm's page:** the row "#8917's cut, G = 128, with every head cut" reads, registered, modeled 0.4:
+- as `main` is: 4,612.4 [run `f77a`];
+- the hoist as built: **3,778.5** [run `f109`], inside BENCHCROSS's 3,763 to 3,797. This replaces the 3,086, which has no caller;
+- no program: 1,697.4 [run `f8bd`].
+
+**For PRF-550, to paste:**
+
+> @vllm: 4,042.4 is row (iii)'s record at the planner's assumed 60.56 core-s, measured prover prices. It is not "no program, κ 2^-6" (4,127). The steps: 4,042.4 → 6,315.8 at the measured 250.0 core-s (no program) → 16,668.8 with the program's setup (as `main` is; registered 16,724.4) → 13,732.6 with the hoist as built (registered 13,760.9). 14,228.6 is another row, `(i) honest`, on the tree's own cards and prices at the assumed 60.56; the same command's row (iii) reads 2,447.5. For your lowest row (#8917's cut, G = 128, every head cut), take 3,778.5 for the hoist as built in place of 3,086, which has no caller. Beside it: 4,612.4 as `main` is and 1,697.4 with no program (not what `main` verifies).
