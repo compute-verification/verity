@@ -119,10 +119,6 @@ def test_r19_retain_windowed_pool_terms():
     assert adm.predict(_cfg(bounded_staging=True, retain_exclude=["gemm_qkv"]))["commit"]["pinned_pool"]["bytes"] == full["pinned_pool"]["bytes"]
     lv = adm.predict(_cfg(bounded_staging=True, retain="none"))["commit"]["pinned_pool"]
     assert lv["bytes"] == int(raw * 0.25) and "levels only" in lv["basis"]
-    # the alias
-    assert adm.retain_exclude_families("hidden_m1") == ["fa2_hidden_m1", "fa3_hidden_m1"]
-    assert adm.retain_exclude_families("fa3_hidden_m1_stream,gemm_qkv") == ["fa3_hidden_m1", "gemm_qkv"]
-    assert adm.retain_exclude_families(None) == []
 
 
 def test_largest_tensor_law_matches_the_ledger():
@@ -158,6 +154,29 @@ def test_under_fitted_capture_models_are_flagged_not_silently_admitted():
     assert llama["lower_bound_terms"] == []
     assert mistral["lower_bound_terms"] == ["match.capture.hidden_values", "match.capture.instance_records", "match.capture.token_values"]
     assert any("#60" in t["basis"] for t in mistral["terms"] if t["name"].startswith("match.capture."))
+
+
+# ---- the plan document ---------------------------------------------------------------------------------------------
+def _workload(row: str) -> dict:
+    return {"sweep": {"row_id": row, "batch": 8, "max_input": 1024, "max_output": 128}, "requests": [{"prompt_len": 400, "max_tokens": 64}] * 8}
+
+
+def test_plan_row_writes_the_document_and_names_what_a_limit_would_refuse(tmp_path):
+    wl = _workload("mistral-7b__bf16__l40s__tp1__b8__i1024__o128__mixed__greedy__bi-eager")
+    out = tmp_path / "admission.json"
+    doc = adm.plan_row(adm.row_config_from_workload(wl, host_limit_bytes=188_000_000_000), str(out))
+    assert json.loads(out.read_text())["line"] == doc["line"]
+    assert doc["schema"] == adm.ADMISSION_SCHEMA and doc["advisory"] is True and doc["model"] == "mistral-7b"
+    assert doc["config"] == {**doc["config"], "requests": 8, "prompt_tokens": 3200, "decode_rows": 512, "prefill_rows": 3200, "snapshot_steps": "0,1"}
+    assert {s: d["verdict"] for s, d in doc["stages"].items()} == {"build": "ADMIT", "match": "LOWER_BOUND", "commit": "REFUSE"}
+    assert doc["would_refuse"] == ["commit"] and doc["lower_bound"] == ["match"] and doc["stages"]["commit"]["decision"]["short_by_bytes"] > 0
+    assert doc["line"].startswith("ADMISSION advisory WARN would-refuse commit mistral-7b limit 179290 MiB: ") and "commit=REFUSE" in doc["line"]
+    # only the stages the row runs
+    cfg = adm.row_config_from_workload(wl, host_limit_bytes=188_000_000_000, stages="commit")
+    assert list(adm.plan_row(cfg, None)["stages"]) == ["commit"]
+    # a model with no calibration: the dense default, named in the line; no limit, no refusal
+    line = adm.plan_row(adm.row_config_from_workload(_workload("granite-3b__bf16__h100__tp1__b2__i64__o8__mixed__t1__eager")), None)["line"]
+    assert "no calibration for model 'granite-3b'" in line and "no cgroup limit read" in line and "WARN" not in line
 
 
 # ---- increment A path ------------------------------------------------------------------------------------------------

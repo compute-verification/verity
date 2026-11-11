@@ -26,7 +26,6 @@ Two data paths feed the planner:
 
 API: `predict(row_config) -> {stage: {"reserved_bytes", "terms": {...}, "margin", "peak_point", "admit"}}`,
 `compare(attempt_dir) -> per-stage predicted vs observed peak + residual`, `peak_overlap(intervals)`.
-CLI: `verity-vllm telemetry-admission compare <attempt_dir>... [--md]` / `predict --model ... --requests ...`.
 """
 from __future__ import annotations
 
@@ -46,24 +45,12 @@ from verity_vllm.engine.profiles.admission_calibration import (CALIBRATION, DENS
                                                                unknown_model_note)
 
 MiB = 1 << 20
-GiB = 1 << 30
 SCHEMA = "verity/admission-plan/v1"
 
 
 #: the value families `--retain-exclude hidden_m1` names (native_collect.retain_exclude_families): the attention launch's
 #: M1 export stream, FA2 (Ada/Ampere) or FA3 (Hopper) -- the families no C2 consumer reads back from host.
 HIDDEN_M1_FAMILIES = ("fa2_hidden_m1", "fa3_hidden_m1")
-RETAIN_EXCLUDE_ALIASES = {"hidden_m1": HIDDEN_M1_FAMILIES, "hidden": HIDDEN_M1_FAMILIES}
-
-
-def retain_exclude_families(spec: str | None) -> list[str]:
-    """`--retain-exclude` / VERITY_RETAIN_EXCLUDE -> sorted family names (the `_stream` suffix tolerated, aliases expanded)."""
-    out: set[str] = set()
-    for f in (spec or "").split(","):
-        f = f.strip().removesuffix("_stream")
-        if f:
-            out |= set(RETAIN_EXCLUDE_ALIASES.get(f, (f,)))
-    return sorted(out)
 
 
 # Named allocation objects (the inventory), with lifetime as (first substage, last substage) on the stage timeline.
@@ -965,19 +952,6 @@ def row_config_from_workload(workload_path: str | dict[str, Any], row_id: str | 
     cfg.stages = stages
     cfg.hf_model = w.get("model")
     return cfg
-
-
-def cgroup_memory_max() -> int | None:
-    for f in ("/sys/fs/cgroup/memory.max", "/sys/fs/cgroup/memory/memory.limit_in_bytes"):
-        try:
-            v = Path(f).read_text().strip()
-        except OSError:
-            continue
-        if v and v != "max":
-            n = int(v)
-            if n < (1 << 60):
-                return n
-    return None
 
 
 def plan_row(cfg: RowScale, out_path: str | None, advisory: bool = True) -> dict[str, Any]:
