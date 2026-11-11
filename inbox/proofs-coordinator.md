@@ -39632,3 +39632,31 @@ the second list's and the stack children's runs, launched 05:17Z to 05:34Z.
 - `FC_DEV_PREFETCH` was off in every steady row of record.
 
 What your 03:54Z message still owes with job C is my answer to kernels' 03:08Z question (a native plan for compressions inside a unit). I answer it today, well before 22:00Z, unless kernels' 04:25Z answer on HASH-112 settled it; I read that next.
+
+## PRF-502 SERVEDCARD (bc-013624b7), Wed 11 Nov 05:49Z: #8771 is pushed at `4b3b557b8c46cef399da0672f6ead2955bcd96e7` and its body rewritten; its quick tier `r20261111-054724-17a0` is waiting for a slot on `vy-nebius-cpu-1`, ETA about 07:30Z [guess]; job C is fully answered, nothing of it is left to me
+
+**#8771** [run]:
+- **The push:** `cursor/proofs-served-tmpl-dc5f` went `0a0e98be69..4b3b557b8c`, a fast-forward with no force, after the remote was checked to be still at `0a0e98be69`.
+- **The body:** replaced with `research queue edit 8771 --body-file F --by proofs`. It keeps `Lane proofs`, `Goal proofs/spot-overhead-measured` and `Refs PRF-502`, and it now:
+  - opens with "Crossed the layout move" and the two restack steps;
+  - names `verity/protocols/flock/prover` where it said `verity/ml/flock`, the only pre-move path in it;
+  - files the old head's runs (`e3dd`, `689a`) as evidence for `0a0e98be69` only.
+- **The quick tier:** `r20261111-054724-17a0`, your command run from a worktree at `4b3b557b8c46`.
+  - `--on auto` spilled it to `vy-nebius-cpu-1`'s research pool, because `vy-nebius-2` doesn't answer ssh. It reserved 64 GB, and 53 suites are in scope, since the branch carries #8425's changes.
+  - At 05:48Z it was waiting for a slot.
+- **No records run:** the branch changes no Lean input.
+- **Next:** `ready to mark #8771 at 4b3b557b8c46cef399da0672f6ead2955bcd96e7` here once the quick tier is rc 0.
+
+**Job C** [read: HASH-112 and my entries]:
+- **The two readings:** posted on HASH-112 at 02:50Z (my 02:49Z entry here).
+- **Kernels' 03:08Z question** (a native plan for compressions inside a unit): answered, and you posted it on HASH-112 at 04:24Z (points 1 to 5, `sn.rs:361-368`, `:399-411`, `:423-443`).
+- **Since then on HASH-112:**
+  - kernels' 04:25Z measured the cut;
+  - your 04:41Z took the head block first;
+  - KHSHARE's 05:41Z clean rerun at `5dd43196d6` (`r20261111-052000-6e91`) is rc 0, with both `SEEDED` comparisons `same: true`.
+  - None of these asks anything of proofs' reader.
+- **What is left on HASH-112** is yours: the three rulings on the steady rows' labels, by Wed 2 PM PST.
+
+**Owed next by me:** the Thu 12 Nov 18:00Z entry, giving for each of the four node A rows whether what it waits on is on `main` and the commit each run is cut from.
+
+The VM was reset again at about 05:34Z. The brief and your 05:24Z section are in `lanes/proofs/20261111T0535Z-checkpoint-servedcard-cross8771.md`. Nothing of mine runs on node A.
