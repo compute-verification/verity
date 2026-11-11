@@ -1012,6 +1012,27 @@ def test_a_module_whose_key_reads_code_lake_did_not_hand_its_compile_is_indexed_
     assert (compiled, said["modules"], said["keyed"], new) == (set(), 4, 4, 0)
     assert not (store / LA.MK.UNSTORED).exists()
 
+
+@pytest.mark.skipif(LAKE is None, reason="no lake")
+def test_a_build_lake_handed_a_module_its_key_does_not_read_is_refused_and_leaves_its_record(tmp_path, monkeypatch):
+    """`Fold`'s header changed after Lake compiled it, so Lake handed its compile `Fold.Protocol`, which the key of the
+    source now there doesn't read. `put` refuses it and records it under that key with `indexable`'s words, though no
+    module loads it, and says so in its log; the next build's stage step gives those words and leaves `Fold` to Lake,
+    which compiles it, and `put` indexes it and removes the record."""
+    LC, LA, store, build = _fold_builds(tmp_path, monkeypatch, "refused")
+    pkg = toy(tmp_path / "build-0" / "fold", FOLD)
+    compiled, _, new, logged = build(pkg, lambda: (pkg / "Fold.lean").write_text("module\n\npublic import Fold.Deployed\n"))
+    why = "Lake imports ['Fold.Protocol'] and not [] of the workspace"
+    assert (len(compiled), new) == (4, 2) and logged == [
+        f"lean-audit: {pkg}: 1 modules this run compiled can't be indexed (`indexable`), 1 recorded under their keys: "
+        f"Fold: {why}"]
+    assert [json.loads(f.read_text())["why"] for f in (store / LA.MK.UNSTORED).glob("*.json")] == [why]
+    compiled, said, new, logged = build(pkg)
+    assert said["missed"] == {f"{LA.MK.UNINDEXED}: {why}": 1} and said["left"] == 1
+    assert f"1 {LA.MK.UNINDEXED}: {why} (first Fold)" in LC.staged_line(said)
+    assert (compiled, new, logged) == ({"Fold"}, 1, []) and not list((store / LA.MK.UNSTORED).glob("*.json"))
+
+
 #: `Toy.Word` with a function the other versions lack, and the `Main` that calls it
 EXTRA = ('@[noinline] def Toy.extra (n : Nat) : Nat := n + 41\n'
          '@[noinline] def Toy.word (n : Nat) : String := s!"version B {Toy.extra n}"\n')

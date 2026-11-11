@@ -806,6 +806,8 @@ def entry(store: Path, key: str, mod: str, scope: str) -> dict | None:
 #: a store's record of each key `LakeArtifacts.put` computed for a module a build compiled and could not index
 #: (`<key>.json`: the module, its package, why): `settle` leaves such a module to Lake, as a module without a key is
 UNSTORED = "unstored"
+#: how `stage` explains a module whose key has a record (`UNSTORED`), before the words the record gives
+UNINDEXED = "put could not index it"
 #: why `settle` took a module's trace: the cache holds another version under its key, which Lake then restores; or
 #: the cache holds none, so Lake compiles it and the build's `put` indexes it
 REPLACED, ABSENT = "the cache holds another version", "not in the cache"
@@ -943,7 +945,8 @@ def stage(store: Path, root: Path, extra: list[str] | tuple[str, ...], dest: Pat
     and so is every module reading one, so Lake can't restore one module from another's. Returns ({(package, input hash):
     module} for each module staged, the number of modules with a key). ``report`` takes why each other keyed module isn't
     staged: `missed`, {reason: how many}, and `first`, {reason: the first such module}. A module whose own key has no
-    entry is explained against the entry it was last indexed under (`differs`); the others read a module that isn't
+    entry is explained by the words of `put`'s record that it could not index it under that key (`UNINDEXED`), else
+    against the entry it was last indexed under (`differs`); the others read a module that isn't
     staged (`BEHIND`), or have an entry Lake can't be handed (two under one input hash, or an artifact that differs).
     With ``settled`` the traces of ``root``'s own package, and of each package of ``also`` it requires by path, are
     settled against what was staged (`settle`, with ``seen``), and ``report`` takes how many it took by reason (`took`)
@@ -1009,6 +1012,8 @@ def stage(store: Path, root: Path, extra: list[str] | tuple[str, ...], dest: Pat
                     why = BEHIND
                 elif (now := record(m, keyed, named, loaded)) is None:
                     why = UNKEYED_READ
+                elif (h := key(m, keyed, named, loaded)) is not None and (f := unstored(store, h)) is not None:
+                    why = f"{UNINDEXED}: {json.loads(f.read_text()).get('why')}"
                 else:
                     why = differs(now, last(store, k.package.name, m))
                 missed[why] = missed.get(why, 0) + 1

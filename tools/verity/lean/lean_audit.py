@@ -1116,8 +1116,10 @@ class LakeArtifacts:
         the entry naming them, one the cache holds already kept only with the same bytes. A newer build replaces the entry
         under the same key, so the entries of a module and its imports stay one build's. A module the run compiled whole
         and that still can't go in (not `indexable`, a module it loads not indexed, an artifact's name taken) is recorded
-        under its key (`module_keys.UNSTORED`), so the next build leaves it to Lake rather than compile it again for
-        nothing (`module_keys.settle`), and so is each module of a build refused for the code its sources run. Only what
+        under its key (`module_keys.UNSTORED`) with why, whatever loads it, so the next build leaves it to Lake rather than
+        compile it again for nothing (`module_keys.settle`) and its stage step gives that reason, and so is each module of
+        a build refused for the code its sources run. The log says how many compiled modules `indexable` refused and
+        names the first few with its words. Only what
         the compiled modules load is read, so a build that compiled nothing costs its traces' `stat`s."""
         with self._lock():
             n = 0
@@ -1137,9 +1139,10 @@ class LakeArtifacts:
                 with ThreadPoolExecutor(max_workers=8) as ex:
                     built = dict(zip(keyed, ex.map(lambda m: self._built(m, keyed, ws[0], since, owners), keyed)))
                 if isinstance(only := rep.get("compiled"), list):
-                    built = {m: b if isinstance(b, str) or m in only else "not compiled by this run: Lake didn't say it built it"
-                             for m, b in built.items()}
-                need, todo = set(), [m for m, b in built.items() if not isinstance(b, str)]
+                    built = {m: b if isinstance(b, str) and not isinstance(b, Unindexable) or m in only
+                             else "not compiled by this run: Lake didn't say it built it" for m, b in built.items()}
+                refusals = {m: b for m, b in built.items() if isinstance(b, Unindexable)}
+                need, todo = set(), [m for m, b in built.items() if not isinstance(b, str) or m in refusals]
                 while todo:
                     if (m := todo.pop()) not in need:
                         need.add(m)
@@ -1150,7 +1153,7 @@ class LakeArtifacts:
                 outs = MK.read_digests({m: k for m, k in keyed.items() if m in need},
                                        {(m, a.split(".", 1)[1]): d for m, b in built.items() if not isinstance(b, str)
                                         for a, (_, d) in b[2].items()})
-                indexed: set[str] = set()
+                indexed, recorded = set(), 0
                 for mod, k in keyed.items():
                     if mod not in need:
                         continue
@@ -1166,6 +1169,11 @@ class LakeArtifacts:
                         self._unstored(mod, key, k.package.name, refused or (b if isinstance(b, str) else next(
                             (f"it loads {i}, which is not indexed" for i in loaded if i not in indexed),
                             "the cache holds an artifact of its name with other bytes")))
+                        recorded += mod in refusals
+                if refusals:
+                    log(f"lean-audit: {pkg}: {len(refusals)} modules this run compiled can't be indexed (`indexable`), "
+                        f"{recorded} recorded under their keys: "
+                        + "; ".join(f"{m}: {why}" for m, why in sorted(refusals.items())[:3]))
             self.prune()
         return n
 
