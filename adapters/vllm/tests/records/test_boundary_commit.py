@@ -28,6 +28,8 @@ def test_a_writers_record_loads_and_dumps_back_to_itself():
     held = BoundaryCommit.of(stop, "commit.json")
     assert held.dump() == stop and held.stop == stop["stop"] and held.stopped is False
     assert rec.stop is None and rec.stopped is None and not {"stop", "stopped"} & set(rec.dump())
+    tables = _doc() | {"tables": {"layers": [0, 3], "capacity": 16}}
+    assert BoundaryCommit.of(tables, "w").dump() == tables and rec.tables is None
 
 
 @pytest.mark.parametrize("field", sorted(KINDS))
