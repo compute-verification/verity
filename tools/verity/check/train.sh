@@ -165,8 +165,11 @@ if [ -n "$bookkeep" ]; then
   else echo "train: ${sha:0:12}'s check.py predates --bookkeeping-warn: its lock run fails on bookkeeping"; fi
 fi
 echo "train: ${sha:0:12} on $machine${shard:+ shard $shard}; log $log"
-# `research run` stays attached to the run until it ends; the run doesn't need it (custody publishes from the machine)
-setsid nohup uv run -q python tools/verity/check/check.py --record --on "$machine" --priority --keep-going ${pass[@]+"${pass[@]}"} \
+# `research run` stays attached to the run until it ends; the run doesn't need it (custody publishes from the machine).
+# --timeout: only a run with one extends its node's lease (`remote.lease_extend_s`), so a node that runs nothing but checks
+# would otherwise stop two hours after its boot; 10 h is past any check's wall time, as the nightly's
+setsid nohup uv run -q python tools/verity/check/check.py --record --on "$machine" --priority --keep-going --timeout 36000 \
+  ${pass[@]+"${pass[@]}"} \
   > "$log" 2>&1 < /dev/null &
 pid=$!
 # with twins (`check: --on: twins PAIR on M1, M2: ...`) one run launches per machine, and only one of them runs the check
