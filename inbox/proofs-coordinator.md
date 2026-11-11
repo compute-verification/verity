@@ -47616,3 +47616,36 @@ For CONCRETE: the right-hand side by classes, in KILIAN's cost form, not instant
 For the table:
 - Slack by proof alone in the first-hit term: only K. By classes of gates with the same readers it reads, modeled, 2^-110.6 a run in calls and 2^-101.6 in compressions at the plan of record (K0 = 6), against 2^-98.3 and 2^-89.3 by gates; in Lean as a theorem with a hypothesis on the code (`hwit`, REGX's to prove), a new statement; no PR yet, the tries wait for a check slot.
 - (a), (b), (e): nothing to gain. (c) `waits` 105 and (d) a restated event: 1 bit each, Daniel's, not built. (c′): 6.7 bits on paper, a sketch, not planned on.
+
+## KILIAN, Wed 11 Nov 10:11Z: ready to mark #8879 at 9eb9f26cea4a84d128f4d742bb96e125750e8435; the by-class twin of the cost step and the by-class bound with one closed right-hand side both compile (tries `2009`, `85f2`), no new premise
+
+**ready to mark #8879 at 9eb9f26cea4a84d128f4d742bb96e125750e8435**
+- Elaborates, axioms: try `r20261111-084512-03ba`, lean exit 0, "none of its 13 theorems uses an axiom beyond propext, Classical.choice and Quot.sound". [run]
+- Records: `r20261111-085441-70f9` of `security/Proofs` at the head: `AUDIT: PASS` for `security/Proofs` and its two requirers (`security`, `security/Properties`), 0 records regenerated in each (`audit.json`: `regenerated: 0`). It is a lean-fast/v1 result, without the kernel replay. [run] [read: the run's `lean-audit/audit.json`, `requirer-security/audit.json`, `requirer-security_Properties/audit.json`]
+- Kernel replay: the candidate's check.
+- Quick tier: `r20261111-085515-a6b0`, 8 suites, 8 passed, 0 failed. [run]
+- Merges and builds: `git merge-tree` of the head with `main` at `0a722c6ec984` is clean [run 10:10Z]; the merge with the Lean heads that change files it reads (#8781 `b7c268c7c1fe`, #8828 `53dd644bdad8`) and #8857 `96985b18aafb` builds its file: try `r20261111-085625-ed8e`, lean exit 0, axioms clean. [run] Those three heads and #8827's `946b7b72f26d` have not moved. [run 10:10Z, `gh pr view`]
+- Second reader: none yet. The body is updated with these verdicts (a body edit, the head did not move). [run]
+- It changes no lock and adds one module.
+
+For CAPS: Proofs/Flock: +1 module, +18 declarations (13 theorems, 5 definitions) (#8879: `security/Proofs/Flock/SamplingGeneric/TwoFirstHitAt.lean`)
+
+**Your 10:06Z item (1), the by-class twin: done, two pieces.**
+- **The cost by class: #8905**, open, unmarked, head `40b8e7d04736dc84ab8ad215e9afd75cb684d3c2`, stacked on #8882 (not on #8879 alone: the closed right-hand side also reads #8882's `bconfX_le_at`). Same file, +178 lines, no module added, no lock changed. Try `r20261111-095808-2009`: lean exit 0, axioms clean (22 theorems). [run] Records `r20261111-100336-94db` and quick `r20261111-100358-d4ae` are running. [run]
+  - `Compiled.ex_calls_le_at_in`: for any set of gates `G(sample)`, `E[c + Σ_{g ∈ G(sample)} c_g] ≤ firstHitCost x T N_s K_s K_m`, with `K_s ≥ E[#G(sample)]` and `K_m ≥ E[sessCountIn]`, the (session, gate of G) pairs where a proof block of the session needs the gate. [read: the file]
+  - `Compiled.ex_calls_le_at_cls`: that at `G(sample) = (sampleNeeds).image cls`, stated at the sum EXTFORM's theorem has. [read]
+- **The by-class bound with one closed right-hand side:** branch `cursor/proofs-firsthit-clsat-b3d7` at `c6412ff634978b1ec99e514b47e8ff29b32c59f1` = #8905's head merged with EXTFORM's `2a8eb198e4ff`, plus one new file, `security/Proofs/Flock/SamplingGeneric/TwoFirstHitClassAt.lean` (88 lines). Try `r20261111-100552-85f2`: lean exit 0, axioms clean (1 theorem). [run] No PR: the branch carries EXTFORM's five commits, so it waits for EXTFORM's PR to stack on. Say if you want it opened as it is.
+  - `CompiledTwo.eventTwoX_le_cls_at_budget`: under `eventTwoX_le_firstHit_cls`'s premises (`hpos`, `hrep`, `hallX`, `hallI`, `ExpectedCR` at the two by-class finders of every cap), the budget `hT`, `OpenCallsLe`, the three counts and `ExpectedCR` at `B_conf,X`: Pr[accepted and samples a proof block of FregTwoX] ≤ `εclsAt`. [read]
+  - It adds no premise the lock does not name: its hypotheses are EXTFORM's and #8882's. [read] It is a lemma: no guarantee reads it, and `hallX`/`hallI` are not shown at SPOT[Flock]'s code (REGX's wiring). [relayed: your 09:39Z]
+
+For CONCRETE: the Lean definition to instantiate and mirror is `CompiledTwo.εclsAt H L x P T N_s K_s K_m = κ_s + √(k·γ_s·Pr[B]) + (2·runCost + 4·firstHitCost)/2^256`, `runCost = T·(1 + e_s·N_s) + n_PU·openCalls`, `firstHitCost = T·(1 + e_s·N_s + K_s + e_s·K_m) + (1 + K_s)·n_PU·openCalls` (`Compiled.runCost`, `Compiled.firstHitCost`, both in #8879/#8882's file). By class the counts are: `N_s ≥ E[sessions in a run's sample]`; `K_s ≥ E[number of classes of the gates the sample needs]`; `K_m ≥ E[Σ over the sample's sessions of the class representatives a proof block of the session needs]`. `T` counts both parties' calls in one run; `e_s = 1 + waits·k` at its largest over the slots' shapes. All three are expectations over the run's coins alone. [read: the file]
+
+**g.** Witness retry `r20261111-094937-49eb`: lean exit 0, axioms clean (6 theorems), the unused simp argument is gone. [run] Records `r20261111-095155-3b89` (with `--update`) is running since 09:52Z; the PR opens unmarked when it ends, as you ruled. [run]
+
+**#8882.** Records `r20261111-090625-2d10`: pass, 0 regenerated. [run] Quick `r20261111-090707-c675`: 8 suites, 8 passed, 0 failed. [run] The merged-tree try `r20261111-095436-b9d5` has waited for a slot since 09:54Z; the ready line follows it. [run]
+
+**Next:** your item (2), the by-gate corollary of g on #8882 and #8836's `reveal_needs_spot`.
+
+For the table:
+- By class, modeled: the event of `KSRegTwoX` is at most κ_s + √(k·γ_s·Pr[B]) + (2·runCost + 4·firstHitCost)/2^256 with K_s the classes of the sample's gates and K_m the (session, class) pairs (`eventTwoX_le_cls_at_budget`, elaborates, axioms clean, try `85f2`; no replay, no second reader); a lemma under "a run's extractions open a class whole" and `ExpectedCR` at three finders, read by no guarantee.
+- #8879 (the by-gate cost, closed form): ready to mark at `9eb9f26cea4a`.
