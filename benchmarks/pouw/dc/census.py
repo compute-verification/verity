@@ -138,7 +138,7 @@ def smi_clocks(d: Path) -> dict:
 class Device:
     """Every run of one family, merged: a kind's fastest rate with its runs, and every joint point."""
 
-    def __init__(self, family: str, outs: list[Path]):
+    def __init__(self, family: str, outs: list[Path]) -> None:
         self.family = family
         self.runs = [run_id(d) for d in outs]
         self.analyses = [analyze.analyze(family, d) for d in outs]

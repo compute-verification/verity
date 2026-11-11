@@ -52,7 +52,7 @@ def load(d: Path) -> tuple[dict[str, dict], dict[str, dict]]:
     return rows, verdicts
 
 
-def loop_rate(row: dict, loop: int, prefixes=TENSOR) -> tuple[str, float] | None:
+def loop_rate(row: dict, loop: int, prefixes: tuple[str, ...] = TENSOR) -> tuple[str, float] | None:
     """The first pattern of `loop` whose opcode starts with one of `prefixes`, with its rate."""
     for key, rate in row["rates"].items():
         i, pat = key.split(":", 1)
