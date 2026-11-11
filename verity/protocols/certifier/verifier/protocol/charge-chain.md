@@ -214,8 +214,8 @@ length terms. `CompileSlice_v7` (`compile_slice_v7`, the served windows' slice) 
 max_tokens ``a_mt`` and olen its certified output length, so no slot is free witness. What holds ``cert`` to the
 certified record is a stand-in, the honest cert row under the certifier's salt, until max_tokens is read from the
 certified body; the circuit bounds max_tokens only from above, so a lower one the output still fits passes at a lower
-charge until then. A class whose windows send order entries or length terms (or a code's that sends hits) does the
-following:
+charge until then. `compile_slice_zk` checks ``cert``'s b‖c against that stand-in, as it does the arrivals the replay
+loads. A class whose windows send order entries or length terms (or a code's that sends hits) does the following:
 - It calls `window_charge.build_link(C, N, H, O, L, book, row_in, row_out, en, bits, hen, short, oen, p, r, qen, mt,
   olen)` over `window-charge`'s rows (`window_charge.reads()`), in place of `charge_chain.build_link` over
   `replay-charge`'s.

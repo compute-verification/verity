@@ -1654,8 +1654,9 @@ memory operations as records, sorted once, as `advice_check` sorts its events.
   - The length terms' max_tokens in the slice. `CompileSlice_v7` reads every length slot from ``cert``, so none is free
     witness, but what holds ``cert`` to the certified record is a stand-in, the honest cert row under the certifier's
     salt, until max_tokens is read from the certified body. The circuit bounds max_tokens only from above, so a lower
-    one the output still fits passes at a lower charge. `compile_slice_zk` proves `CompileSlice_v1`, whose charge is
-    short of each window's tail while the registration sends lengths (`send_lengths`), until it proves v4.
+    one the output still fits passes at a lower charge. `compile_slice_zk` proves `CompileSlice_v7` against that
+    stand-in (its ``max-tokens`` unit is refused by the b‖c check alone); a proof of the length rule is open
+    (`send_lengths` stays on until one holds it).
 - In `CompileSlice_v1`, `ReplayStep_v1` takes the prefix layer (each hit, its evictable blocks, each slot's returns)
   as witness it bounds, and `CacheStep_v1` derives the hits only while the no-eviction bound holds. `CompileSlice_v2`
   derives all three from `CacheStep_v2`'s pool, past the bound too.

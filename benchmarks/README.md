@@ -32,6 +32,7 @@ What the protocols cost: measured on served inference, and bounded on training.
 | `replay_ladder/` | whether replaying a saturated window under its recorded schedule gives the served tokens across a ladder of dense and MoE models, run after run, against each request served alone; and the per-model status table | maintained |
 | `serve_tax/` | what each change to serving (step trace, release order, the certified tick, committing tokens and the KV cache) costs vLLM's own server against stock compiled vLLM at three loads, the serving cost (one number with a target: the served engine's best goodput against stock's, by vLLM's own benchmark client), and replaying a recorded window under its committed schedule | maintained |
 | `vllm_encoded/` | Llama-3.1-8B in vLLM with its weights and KV cache held as codec words and receipted by PoUB, as `verity-bench` arms beside the plain stack | maintained |
+| `inference_only/` | the inference-only policy of Llama 3.2 1B as served, stated, and of the class this tree builds, with the Lean count's verdict on it, and each one's number: the least slowdown of training run inside the policy's inference blocks, under the min-cut bound | maintained |
 | `training_slowdown/` | the grader (`grader/`): a training step's matrix products, their multiply-adds and output wires, and the circuit's size, read off the Boolean circuit a lane hands over, beside training's slowdown code's trace of the same step | maintained |
 
 ## Kernels
