@@ -309,7 +309,9 @@ def test_a_planner_s_plan_is_drawn_from_its_programs_and_only_the_reads_are_made
     planner = SimpleNamespace(ready=lambda: {"program_steps": {"r0": 4, "r1": 4}, "embed_op_path": "model/embed", "prepare_s": 1.5}, plan=plan)
     sr, lk = C2.evaluate(s, {}, plan=True, planner=planner)
     assert [c[0] for c in steps.calls] == ["readers", "linkage", "touch"], "no Program is loaded here and no sample drawn"
-    assert steps.calls[0][3:6] == (None, {}, {"entries": 5}) and steps.calls[0][7] == {}
+    assert steps.calls[0][3:6] == (C2.no_weights, {}, {"entries": 5}) and steps.calls[0][7] == {}
+    with pytest.raises(RuntimeError, match="the Programs are a planner's, whose plan evaluates no row"):
+        steps.calls[0][3]("model.layers.0.weight")
     assert steps.calls[1][4]["embed_op_path"] == "model/embed" and [r["steps"] for r in steps.calls[1][3]] == [[0, 1, 2, 3], [1, 2]]
     assert steps.calls[2] == ("touch", "stub", ["read0", "read1", "read2"])
     (request,) = asked

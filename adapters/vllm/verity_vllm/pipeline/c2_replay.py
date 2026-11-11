@@ -390,8 +390,8 @@ def evaluate(s: ReplaySources, held: dict[str, Any], *, plan: bool = False, plan
         _k0 = next(iter(_progs))
         held["pi0"] = _pi0 = SR.ProgramIndex(_progs[_k0], program_dir=_loaded[_k0].get("dir"))
         facts = linkage_facts(_loaded, _progs, _pi0)
-    _wp, held["rd"] = SRW.readers(args.serving_rows, s.com, rc, s.weights_of(held["pi0"].prefix) if "pi0" in held else None, _progs, _bm, _arr,
-                                  _loaded, s.manifest, args.label, _digs)
+    _wp, held["rd"] = SRW.readers(args.serving_rows, s.com, rc, s.weights_of(held["pi0"].prefix) if "pi0" in held else no_weights, _progs, _bm,
+                                  _arr, _loaded, s.manifest, args.label, _digs)
     _rd = held["rd"]
     _wc = None if plan else s.weights_check()
     _seed, _seed_src, _seed_form, _seed_chal = seed_of(args, rc)
@@ -448,6 +448,11 @@ def evaluate(s: ReplaySources, held: dict[str, Any], *, plan: bool = False, plan
     if s.after_replay is not None:
         s.after_replay(sr, _progs, _bm, _rd, _wp, _arr, _sr_kw, _loaded, _digs)
     return sr, lk
+
+
+def no_weights(*a: Any, **kw: Any) -> Any:
+    """The weights provider where the Programs are a planner's and none is loaded here: its plan evaluates no row, so no weight is read."""
+    raise RuntimeError("no weights provider: the Programs are a planner's, whose plan evaluates no row")
 
 
 def replayed(protocols: Any, run: Callable[[], dict[str, Any]]) -> dict[str, Any]:

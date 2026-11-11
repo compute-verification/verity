@@ -2298,7 +2298,6 @@
     {"file": "verity_vllm/pipeline/build.py", "kind": "assignment", "symbol": "_construct", "detail": ""},
     {"file": "verity_vllm/pipeline/build.py", "kind": "func-returns-value", "symbol": "_write_program", "detail": ""},
     {"file": "verity_vllm/pipeline/build.py", "kind": "union-attr", "symbol": "_construct", "detail": ""},
-    {"file": "verity_vllm/pipeline/c2_replay.py", "kind": "arg-type", "symbol": "evaluate", "detail": ""},
     {"file": "verity_vllm/pipeline/circuit_db.py", "kind": "arg-type", "symbol": "due", "detail": ""},
     {"file": "verity_vllm/pipeline/circuit_db.py", "kind": "arg-type", "symbol": "evidence_of", "detail": "", "count": 2},
     {"file": "verity_vllm/pipeline/circuit_db.py", "kind": "arg-type", "symbol": "main", "detail": "", "count": 5},
