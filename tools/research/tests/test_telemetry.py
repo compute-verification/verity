@@ -1428,10 +1428,10 @@ def test_a_sweep_takes_the_runs_check_slot_scope_as_its_own(tmp_path, fake_time)
     assert rec["scopes"] == {CHECK: f"the check slot scope of run {RID}"} and rec["fallback"] is None and rec["empty"] is True
 
 
-def test_a_capped_slots_scope_is_emptied_once_its_workload_has_exited_and_a_scope_only_slots_is_left(tmp_path, fake_time, capsys):
+def test_a_limited_slots_scope_is_emptied_once_its_workload_has_exited_and_a_scope_only_slots_is_left(tmp_path, fake_time, capsys):
     """The workload is gone (an open run told to quit ends its own group) and its tasks run on in the slot's scope, holding the
-    memory the slot limits: with the slot's cap in the run's slot record they are ended, by SIGTERM then SIGKILL with no grace.
-    Without a cap in the record (a scope=1 slot), with another run's scope in it, or with nothing left, nothing is signalled, and
+    memory the slot limits: with the slot's limit in the run's slot record they are ended, by SIGTERM then SIGKILL with no grace.
+    Without a limit in the record (a scope=1 slot), with another run's scope in it, or with nothing left, nothing is signalled, and
     a record that doesn't parse is said so."""
     from research.telemetry import scope
     w, rd = _slot_world(tmp_path, ignores_term=[B + 301])
@@ -1447,11 +1447,11 @@ def test_a_capped_slots_scope_is_emptied_once_its_workload_has_exited_and_a_scop
     (Path(rd) / scope.RUN_SLOT).write_text("{")
     assert scope.end_slot_scope(Path(rd), B + 100, 7, **how) is None and w.sent == []
     assert "slot.json not read" in (err := capsys.readouterr().err) and "is not ended" in err
-    for doc in ({"state": "held", "slot": "g0", "scope": unit}, {"state": "held", "slot": "g0", "cap_gb": 32},
-                {"state": "held", "slot": "g1", "scope": "check-g1-r20261019-010101-aaaa.scope", "cap_gb": 32}, ["held"]):
+    for doc in ({"state": "held", "slot": "g0", "scope": unit}, {"state": "held", "slot": "g0", "limit_gb": 32},
+                {"state": "held", "slot": "g1", "scope": "check-g1-r20261019-010101-aaaa.scope", "limit_gb": 32}, ["held"]):
         (Path(rd) / scope.RUN_SLOT).write_text(json.dumps(doc))
         assert scope.end_slot_scope(Path(rd), B + 100, 7, **how) is None and w.sent == [], doc
-    (Path(rd) / scope.RUN_SLOT).write_text(json.dumps({"state": "held", "slot": "g0", "scope": unit, "cap_gb": 32}))
+    (Path(rd) / scope.RUN_SLOT).write_text(json.dumps({"state": "held", "slot": "g0", "scope": unit, "limit_gb": 32}))
     rec = scope.end_slot_scope(Path(rd), B + 100, 7, **how)
     assert w.sent == [(B + 300, "SIGTERM"), (B + 301, "SIGTERM"), (B + 302, "SIGTERM"), (B + 301, "SIGKILL")]
     assert set(w.procs) == {B + 2, B + 50, B + 400, B + 600}
@@ -1476,7 +1476,7 @@ open(pidf, "w").write(str(w.pid))
 """
 
 
-def test_the_runner_ends_the_tasks_a_capped_slots_run_left_behind_and_leaves_a_scope_only_slots(tmp_path, monkeypatch):
+def test_the_runner_ends_the_tasks_a_limited_slots_run_left_behind_and_leaves_a_scope_only_slots(tmp_path, monkeypatch):
     """A run whose workload exits by itself while a task it started in another session runs on. In a slot that limits the run's
     memory, the runner ends the task with the run, marks it and records it in status.json; in a slot that only gives the check a
     scope the task is left, as any process outside the workload's group is."""
@@ -1494,16 +1494,16 @@ def test_the_runner_ends_the_tasks_a_capped_slots_run_left_behind_and_leaves_a_s
         marks = [x for x in recs if x.get("kind") == "mark" and x.get("name") == "scope_outlived_leader"]
         return rc, int(pidf.read_text()), gate, marks, json.loads((d / "status.json").read_text())
 
-    capped, plain = "r20261101-000000-aaaa", "r20261101-000000-bbbb"
-    rc, pid, gate, marks, st = go(capped, {"state": "held", "slot": "g0", "scope": f"check-g0-{capped}.scope", "cap_gb": 32})
+    limited, plain = "r20261101-000000-aaaa", "r20261101-000000-bbbb"
+    rc, pid, gate, marks, st = go(limited, {"state": "held", "slot": "g0", "scope": f"check-g0-{limited}.scope", "limit_gb": 32})
     try:
         (m,) = marks                            # no mark: the runner left the task, and waiting for it to go would never end
         _gone(pid)                              # nothing released its gate: it is gone because the runner ended it
     finally:
         gate.close()
-    assert rc == 0 and st["state"] == "done" and not (tmp_path / f"{capped}.gate.released").exists()
+    assert rc == 0 and st["state"] == "done" and not (tmp_path / f"{limited}.gate.released").exists()
     assert m["empty"] is True and any(x.startswith(f"{pid} ") for x in m["SIGTERM"]["pids"])
-    assert st["scope_end"]["scopes"] == {f"{APP}/check-g0-{capped}.scope": f"the check slot scope of run {capped}, named by its slot record"}
+    assert st["scope_end"]["scopes"] == {f"{APP}/check-g0-{limited}.scope": f"the check slot scope of run {limited}, named by its slot record"}
 
     rc, pid, gate, marks, st = go(plain, {"state": "held", "slot": "t", "scope": f"check-t-{plain}.scope"})
     assert rc == 0 and marks == [] and "scope_end" not in st

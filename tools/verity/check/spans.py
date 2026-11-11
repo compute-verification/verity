@@ -44,7 +44,7 @@ def _scalar(v) -> bool:
     return isinstance(v, (str, int, float, bool))
 
 
-#: the check's own scope unit, set by slot.py on a slot with `scope=1` or `cap=` (slot.SCOPE_ENV)
+#: the check's own scope unit, set by slot.py on a slot with `scope=1` or `limit=` (slot.SCOPE_ENV)
 SCOPE_ENV = "CHECK_SCOPE_UNIT"
 
 

@@ -6,7 +6,7 @@ instead of spreading over every core the checks share (two unslotted checks on t
 
 A machine's slots are SLOTS (`/workspace/research/locks/slots`; CHECK_SLOTS overrides), one per line:
 
-    NAME CPUS [windows=FILE] [lead=MINUTES] [only=trains] [mem=GB] [scope=1] [cap=GB]   # e.g. `a 32-63 mem=560`, `d 0-47 windows=/workspace/pouw/fill/windows lead=30`
+    NAME CPUS [windows=FILE] [lead=MINUTES] [only=trains] [mem=GB] [scope=1] [limit=GB]   # e.g. `a 32-63 mem=560`, `d 0-47 windows=/workspace/pouw/fill/windows lead=30`
 
 The first slot whose lock (`check-NAME.lock` beside SLOTS, the lock the lander's `flock` takes) is free and no window blocks is
 taken. Its lock stays held by CMD (an inherited descriptor), and CMD runs pinned to CPUS with that slot's test cache
@@ -26,16 +26,16 @@ gets GB as SLOT_MEM_ENV, which check.py makes circuit-check's budget, so two che
 memory free when they began (two cold ones, each with targets of well over 100 GiB, can fill a whole slice); while the check
 runs, the slot holds a research.mem reservation of GB (`reserve`), so `research run --mem-gb` admits nothing that needs what
 the check may still take.
-A slot with cap=GB runs CMD in a systemd user scope of its own (as scope=1 does) whose memory the kernel limits to GB, in GiB
+A slot with limit=GB runs CMD in a systemd user scope of its own (as scope=1 does) whose memory the kernel limits to GB, in GiB
 as mem= is: CMD and everything it starts, in whatever process group or session, together never hold more, whatever they
 reserved. A reservation limits nothing (`reserved_gb` counts what a run hasn't used yet, and a train's gate doesn't count a
-lane run's at all), so a pool whose lines each carry a cap can take at most the sum of them from the machine's other slots.
+lane run's at all), so a pool whose lines each carry a limit can take at most the sum of them from the machine's other slots.
 At its limit the kernel first drops the scope's page cache and then ends one process of it; the rest of CMD goes on
-(`scope_props`). So that a run is refused rather than cut down inside its work, one that asks more than a slot's cap
+(`scope_props`). So that a run is refused rather than cut down inside its work, one that asks more than a slot's limit
 (RUN_MEM_ENV) never takes that slot, and one that no slot it may take can hold leaves the line and exits NOT_STARTED, naming
-the largest cap; and a capped slot never runs CMD outside its scope: where `systemd-run --user` doesn't run, the waiter exits
-NOT_STARTED too. The run's RUN_SLOT names the scope and its cap, and when CMD ends its `research run` ends whatever CMD left
-in the scope (research.telemetry.run), so nothing a capped slot's run started outlives the run.
+the largest limit; and a slot with a limit never runs CMD outside its scope: where `systemd-run --user` doesn't run, the waiter exits
+NOT_STARTED too. The run's RUN_SLOT names the scope and its limit, and when CMD ends its `research run` ends whatever CMD left
+in the scope (research.telemetry.run), so nothing such a slot's run started outlives the run.
 With every slot busy it retries every POLL_S, reading
 SLOTS again each time, so a slot added while checks wait is taken by them; with no slots file, CMD runs as it is, unless
 CHECK_SLOTS named that file: then it exits NOT_STARTED, naming the pools the machine has (a run sent to a pool the node lacks
@@ -155,14 +155,14 @@ def parse(text: str) -> list[dict]:
         opts = dict(x.split("=", 1) for x in f[2:])
         slots.append({"name": f[0], "cpus": f[1], "windows": opts.get("windows"), "lead": int(opts.get("lead", 30)),
                       "trains": opts.get("only") == "trains", "mem": int(opts["mem"]) if "mem" in opts else None,
-                      "scope": opts.get("scope") == "1" or "cap" in opts, "cap": _cap(f[0], opts["cap"]) if "cap" in opts else None})
+                      "scope": opts.get("scope") == "1" or "limit" in opts, "limit": _limit(f[0], opts["limit"]) if "limit" in opts else None})
     return slots
 
 
-def _cap(name: str, text: str) -> int:
-    """A slot's cap= in GiB; ValueError on anything but a whole number above 0, so a mistyped cap is never read as no cap."""
+def _limit(name: str, text: str) -> int:
+    """A slot's limit= in GiB; ValueError on anything but a whole number above 0, so a mistyped limit is never read as no limit."""
     if not re.fullmatch(r"[1-9]\d{0,5}", text):
-        raise ValueError(f"slot {name}: cap={text!r} is not a whole number of GB above 0")
+        raise ValueError(f"slot {name}: limit={text!r} is not a whole number of GB above 0")
     return int(text)
 
 
@@ -206,33 +206,33 @@ def session_cap(dropins: Path | None = None) -> str | None:
     return None if cap in (None, "infinity") else cap
 
 
-def scope_props(cap: int | None = None) -> list[str]:
-    """systemd-run's properties for a slot's scope. With ``cap`` (the slot's cap=, GiB), MemoryMax, the kernel's limit on what
+def scope_props(limit: int | None = None) -> list[str]:
+    """systemd-run's properties for a slot's scope. With ``limit`` (the slot's limit=, GiB), MemoryMax, the kernel's limit on what
     the scope's processes and page cache hold together, and OOMPolicy=continue: at the limit the kernel ends one process, and
     systemd, whose default stops a scope whole on that, leaves the rest of CMD running. Without one, the MemoryMax every login
     session gets here (`session_cap`), if any."""
-    if cap is not None:
-        return [f"--property=MemoryMax={cap}G", "--property=OOMPolicy=continue"]
+    if limit is not None:
+        return [f"--property=MemoryMax={limit}G", "--property=OOMPolicy=continue"]
     session = session_cap()
     return [f"--property=MemoryMax={session}"] if session else []
 
 
-def scoped(cmd: list[str], slot: str, run_id: str, cap: int | None = None) -> tuple[list[str], str]:
-    """CMD in a transient systemd user scope of its own (`scope=1` or `cap=GB` on its slot), and the scope's unit name. `--scope` registers
+def scoped(cmd: list[str], slot: str, run_id: str, limit: int | None = None) -> tuple[list[str], str]:
+    """CMD in a transient systemd user scope of its own (`scope=1` or `limit=GB` on its slot), and the scope's unit name. `--scope` registers
     this process in it and execs CMD, so the pid and the inherited slot lock stay; the check's whole tree is then one cgroup,
     whose memory.peak spans.py records at each step's end and the check's (a session scope it shares with other runs has no
     per-check peak, and summed RSS counts shared pages over and over). On a node that
     caps each login session's memory the scope gets the same MemoryMax, as the session it leaves had: `research run` refuses
     to start a workload from an uncapped cgroup, which failed every test of the research suite that runs one locally inside
-    a scoped check (exit 75). A slot's ``cap`` is the scope's limit instead (`scope_props`)."""
+    a scoped check (exit 75). A slot's ``limit`` is the scope's limit instead (`scope_props`)."""
     unit = f"check-{slot}-{run_id}"
-    return ["systemd-run", "--user", "--scope", "--quiet", "--collect", f"--unit={unit}", *scope_props(cap), "--", *cmd], unit
+    return ["systemd-run", "--user", "--scope", "--quiet", "--collect", f"--unit={unit}", *scope_props(limit), "--", *cmd], unit
 
 
 def scope_refusal(run=subprocess.run, props: tuple[str, ...] | list[str] = ()) -> str | None:
     """Why `systemd-run --user --scope` can't run here with ``props`` (no user manager or bus: a run started over ssh without
     XDG_RUNTIME_DIR, no lingering; a systemd that doesn't know a property), or None when it can. A `scope=1` slot fails open
-    on it: its check runs unscoped rather than failing every train check that slot takes. A slot with cap= fails closed
+    on it: its check runs unscoped rather than failing every train check that slot takes. A slot with limit= fails closed
     (`main`): unscoped, its run would have no limit."""
     try:
         r = run(["systemd-run", "--user", "--scope", "--quiet", "--collect", *props, "--", "true"], capture_output=True, text=True,
@@ -456,7 +456,7 @@ def window_text(w: dict) -> str:
 
 
 def asked_gib() -> int:
-    """What the run asks (RUN_MEM_ENV, GB) in GiB, as mem= and cap= are, rounded up; 0 when it asks nothing."""
+    """What the run asks (RUN_MEM_ENV, GB) in GiB, as mem= and limit= are, rounded up; 0 when it asks nothing."""
     gb = asked_gb()
     return -(-int(gb * 1e9) // 2 ** 30) if gb > 0 else 0
 
@@ -468,9 +468,9 @@ def asking(slots: list[dict]) -> list[dict]:
 
 
 def fits(slot: dict, want: int) -> bool:
-    """Whether a run that asks ``want`` GiB may take ``slot``: one without cap=, or whose cap is at least that. Under a smaller
-    cap the kernel would end the run's processes at the cap, well short of what it asked."""
-    return slot.get("cap") is None or want <= slot["cap"]
+    """Whether a run that asks ``want`` GiB may take ``slot``: one without limit=, or whose limit is at least that. Under a smaller
+    limit the kernel would end the run's processes at the limit, well short of what it asked."""
+    return slot.get("limit") is None or want <= slot["limit"]
 
 
 def take(slots: list[dict], lock_dir: Path, now: datetime, priority: bool = False) -> tuple[dict, int] | None:
@@ -614,13 +614,13 @@ def holds(slot: dict, min_mem: int | None) -> bool:
 
 
 def held_why(slot: dict, priority: bool, min_mem: int | None, want: int = 0) -> str:
-    """Why an unblocked ``slot`` isn't this waiter's now: for train checks only, under its ``min_mem``, its cap under the
+    """Why an unblocked ``slot`` isn't this waiter's now: for train checks only, under its ``min_mem``, its limit under the
     ``want`` GiB the run asks (`fits`), or busy."""
     if slot["trains"] and not priority:
         return "for train checks"
     if not holds(slot, min_mem):
         return f"under {min_mem} GB"
-    return "busy" if fits(slot, want) else f"caps a run at {slot['cap']} GB, under the {want} GB this one asks"
+    return "busy" if fits(slot, want) else f"limits a run to {slot['limit']} GB, under the {want} GB this one asks"
 
 
 def limit_run(run_max: float, slot: str, run_dir: str | None, mono=time.monotonic) -> str:
@@ -687,7 +687,7 @@ def slot_docs(slots: list[dict], lock_dir: Path, now: datetime, proc: Path = Pat
     """Each slot as `--status --json` gives it: its name, cores, `holding`, what blocks it now (`blocked`) and its `upcoming`
     windows."""
     return [{"name": s["name"], "cpus": s["cpus"], "windows": s["windows"], "lead": s["lead"], "trains": s.get("trains", False),
-             "mem": s.get("mem"), "cap": s.get("cap"), "holder": holding(lock_dir / f"check-{s['name']}.lock", lock_dir / f"check-{s['name']}.who", now, proc),
+             "mem": s.get("mem"), "limit": s.get("limit"), "holder": holding(lock_dir / f"check-{s['name']}.lock", lock_dir / f"check-{s['name']}.who", now, proc),
              "blocked": blocked(s, now), "upcoming": upcoming(s, now)} for s in slots]
 
 
@@ -697,7 +697,7 @@ def status(slots: list[dict], lock_dir: Path, now: datetime, proc: Path = Path("
     out = []
     for s in slot_docs(slots, lock_dir, now, proc):
         out.append(f"{s['name']}  cores {s['cpus']}" + ("  trains only" if s["trains"] else "")
-                   + (f"  mem {s['mem']} GB" if s["mem"] else "") + (f"  cap {s['cap']} GB" if s["cap"] else "")
+                   + (f"  mem {s['mem']} GB" if s["mem"] else "") + (f"  limit {s['limit']} GB" if s["limit"] else "")
                    + f"  {held_text(s['holder'])}" + (f"; blocked: {s['blocked']}" if s["blocked"] else ""))
         out += [f"{s['name']}  {window_text(w)}" for w in s["upcoming"]]
     return out + waiters(lock_dir / LINE, now, before)
@@ -1012,9 +1012,9 @@ def main(argv: list[str], now=lambda: datetime.now(timezone.utc), sleep=time.sle
                 return gone(f"its twin took a slot first ({describe(info) or 'claimed'})")
         want, mine = asked_gib(), [s for s in slots if (priority or not s["trains"]) and holds(s, min_mem)]
         if mine and not any(fits(s, want) for s in mine):
-            most = max(s["cap"] for s in mine)
-            return gone(f"this run asks {want} GB of memory, and every slot of {SLOTS} it may take caps its run's memory at "
-                        f"less (cap=, {most} GB at the most): the kernel would end its processes at the cap. Ask {most} GB or "
+            most = max(s["limit"] for s in mine)
+            return gone(f"this run asks {want} GB of memory, and every slot of {SLOTS} it may take limits its run's memory to "
+                        f"less (limit=, {most} GB at the most): the kernel would end its processes at the limit. Ask {most} GB or "
                         "less (`research run --mem-gb`), or send it to a pool whose slots hold it")
         n = ahead(ticket)
         if n and not priority and asked_gb() <= BACKFILL_MAX_GB:
@@ -1043,14 +1043,14 @@ def main(argv: list[str], now=lambda: datetime.now(timezone.utc), sleep=time.sle
             return gone(f"no check slot within --wait-max {wait_max:g} s ({why})")
         sleep(POLL_S)
     slot, fd = got
-    cap = slot.get("cap")
-    refusal = (scope_refusal(props=scope_props(cap)) if cap is not None else scope_refusal()) if slot.get("scope") else None
-    if refusal and cap is not None:
+    limit = slot.get("limit")
+    refusal = (scope_refusal(props=scope_props(limit)) if limit is not None else scope_refusal()) if slot.get("scope") else None
+    if refusal and limit is not None:
         os.close(fd)
-        return gone(f"slot {slot['name']} limits its run's memory to {cap} GB (cap=) in a systemd user scope, and `systemd-run "
+        return gone(f"slot {slot['name']} limits its run's memory to {limit} GB (limit=) in a systemd user scope, and `systemd-run "
                     f"--user` doesn't run here ({refusal}); unscoped, the run would have no limit. Give the run's user a "
                     "systemd user manager (`loginctl enable-linger USER`, and XDG_RUNTIME_DIR=/run/user/UID in the run's "
-                    f"environment), or take cap= off the slot's line in {SLOTS}")
+                    f"environment), or take limit= off the slot's line in {SLOTS}")
     ticket.unlink()
     os.close(tfd)
     who = SLOTS.parent / f"check-{slot['name']}.who"
@@ -1063,21 +1063,21 @@ def main(argv: list[str], now=lambda: datetime.now(timezone.utc), sleep=time.sle
     env = {k: v for k, v in os.environ.items() if k not in ("LEASE_DIR", SLOT_MEM_ENV, SCOPE_ENV, MIN_MEM_ENV)}
     env.update(LEASE_DEADLINE_FILE="/nonexistent/research-deadline", CHECK_SLOT=slot["name"],
                VERITY_TEST_CACHE=str(Path.home() / ".cache" / "verity" / f"tests-slot-{slot['name']}"),
-               **({SLOT_MEM_ENV: str(slot.get("mem") or cap)} if slot.get("mem") or cap else {}))
+               **({SLOT_MEM_ENV: str(slot.get("mem") or limit)} if slot.get("mem") or limit else {}))
     unit = None
     if slot.get("scope") and not refusal:
-        cmd, unit = scoped(cmd, slot["name"], run_id() or str(os.getpid()), cap)
+        cmd, unit = scoped(cmd, slot["name"], run_id() or str(os.getpid()), limit)
         env[SCOPE_ENV] = unit
     record_slot(run_dir, {"state": "held", **since, "slot": slot["name"], "cores": slot["cpus"], "took": f"{now():%Y-%m-%dT%H:%M:%SZ}",
                           **({"why": told} if told else {}),
-                          **({"scope": f"{unit}.scope", "cap_gb": cap} if unit and cap is not None else {})})
+                          **({"scope": f"{unit}.scope", "limit_gb": limit} if unit and limit is not None else {})})
     print(f"slot: check slot {slot['name']} (cores {slot['cpus']})", file=sys.stderr, flush=True)
     if said := reserve(slot, now(), priority):
         print(said, file=sys.stderr, flush=True)
     if run_max is not None:
         print(limit_run(run_max, slot["name"], run_dir), file=sys.stderr, flush=True)
     if unit:
-        print(f"slot: check in its own scope {unit}.scope" + (f", its memory limited to {cap} GB" if cap is not None else ""),
+        print(f"slot: check in its own scope {unit}.scope" + (f", its memory limited to {limit} GB" if limit is not None else ""),
               file=sys.stderr, flush=True)
     elif slot.get("scope"):
         print(f"slot: scope=1 but systemd-run --user doesn't run here ({refusal}); running unscoped", file=sys.stderr, flush=True)

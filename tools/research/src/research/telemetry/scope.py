@@ -7,7 +7,7 @@ systemd scopes:
 
   cluster-<run id>.scope   a queued run (`research run --queue`): its runner and workload (infra/cluster submit.wrappers)
   gpu-lease-<pid>.scope    the workload under `gpu-lease` (`--gpus N`, a queued GPU phase), or a lease the workload takes itself
-  check-<slot>-<run id>.scope   the workload in a check slot that gives it a scope (slot.py's `scope=1` and `cap=GB`)
+  check-<slot>-<run id>.scope   the workload in a check slot that gives it a scope (slot.py's `scope=1` and `limit=GB`)
   session-<n>.scope        a direct run's ssh login (one per launch); a login of a person's holds a tmux and anything else
 
 The run's *own* scopes are its queue scope and its check slot's scope (each named for its run id) and every gpu-lease scope whose
@@ -32,7 +32,7 @@ request is written leaves the runner ending only its group (`timeout` stages are
 vllm.build children ignore SIGTERM and run on).
 
 A workload that exits by itself leaves its other processes alone, but for its group (run.py) and for a check slot's scope whose
-memory the slot limits (slot.py's `cap=GB`; `end_slot_scope`): that memory is the slot's, so what the workload left there is ended
+memory the slot limits (slot.py's `limit=GB`; `end_slot_scope`): that memory is the slot's, so what the workload left there is ended
 with the run.
 """
 from __future__ import annotations
@@ -59,7 +59,7 @@ CGROUP_ROOT = Path("/sys/fs/cgroup")
 CONTROL_CANCEL = Path("control") / "cancel"      # attempt-dir relative: the cancel's grace and the run's scopes, read by the runner
 OWN_SCOPE_RE = re.compile(r"^(?:cluster-(?P<run>r\d{8}-\d{6}-[0-9a-f]{4})|gpu-lease-(?P<pid>\d+)"
                           r"|check-.+-(?P<check>r\d{8}-\d{6}-[0-9a-f]{4}))\.scope$")
-#: the run's check-slot record, attempt-dir relative (slot.py's RUN_SLOT): with "scope" and "cap_gb" once its check holds a slot
+#: the run's check-slot record, attempt-dir relative (slot.py's RUN_SLOT): with "scope" and "limit_gb" once its check holds a slot
 #: that limits its memory
 RUN_SLOT = "slot.json"
 #: The time a Sweep waits on; a test replaces both.
@@ -320,7 +320,7 @@ def scope_path(root: Path, unit: str) -> str | None:
 
 def end_slot_scope(attempt_dir: Path, leader: int, leader_start: int | None = None, **how: Any) -> dict[str, Any] | None:
     """Once the workload has exited by itself: end what it left in its check slot's scope when the slot limits the run's memory
-    (RUN_SLOT names the scope and its `cap_gb`), and the record; None when the run held no such slot or left nothing there.  A
+    (RUN_SLOT names the scope and its `limit_gb`), and the record; None when the run held no such slot or left nothing there.  A
     process leaves a cgroup neither by a session of its own nor by losing its parent, so this ends the tasks an open run started
     each in its own session, which its group's end (run.py) never reached.  SIGTERM, then SIGKILL at once: their run is over.  A
     slot that only gives its check a scope (`scope=1`) is left alone.  `how`: a Sweep's stat, pids, cgroup, env_of, cmdline, root
@@ -335,7 +335,7 @@ def end_slot_scope(attempt_dir: Path, leader: int, leader_start: int | None = No
         return None
     unit = slot.get("scope") if isinstance(slot, dict) else None
     run_dir = attempt_dir.resolve()
-    if not (isinstance(unit, str) and slot.get("cap_gb") and (m := OWN_SCOPE_RE.match(unit)) and m["check"] == run_dir.name):
+    if not (isinstance(unit, str) and slot.get("limit_gb") and (m := OWN_SCOPE_RE.match(unit)) and m["check"] == run_dir.name):
         return None
     sweep = Sweep(leader, str(run_dir), leader_start=leader_start, **how)
     if (path := scope_path(sweep.root, unit)) is None or not cgroup_procs(sweep.root, path):
