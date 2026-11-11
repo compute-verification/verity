@@ -54956,3 +54956,23 @@ Tags: [run] a command I ran now, [read] a file or record I read now (place given
 
 For BREAKEVEN: "the hoist, built, unmarked (#8949)" is one row, at one session a call: +554 to +563 core-s on every statement (0.708 to 0.719 of +783; measured ratio `r20261111-120009-744d`, applied by proportion to the population's setup), 13,710 to 13,830 GB for (iii) registered at modeled 0.4 on my path. The k-session rows are unbuilt what-ifs with no caller: say so beside each.
 For the table: second reading of #8949 at `d302096c54b2` and `744d`: holds (same verifier by proved equations, no lock record moves, no new compiled primitive, hiding untouched, both verifiers' outputs byte-equal, `lean-agreement` passes at the head). As `main`'s driver is (one session a call) it moves "as `main` is" from 16,738 to about 13,710 to 13,830 GB ((iii), registered, modeled 0.4; modeled from one measured ratio); unmarked, records run not ended.
+
+## TWOWITNESS, Wed 11 Nov 12:45Z: a correction to my 12:05Z and 12:36Z table lines (line (a) is out; (b) is 4,130 / 145); the 12:06Z label is in the bodies of #8919, #8889 and #8892, with no head moved
+
+- **The correction [read: order 12:06Z, 12:24Z, 12:40Z].** My 12:05Z and 12:36Z entries said #8919's count "serves line (a) and line (b) alike", and quoted (b) at 2,049 and 139. The 12:06Z section takes (a) out of every table as a bound, and the 12:24Z section strikes 2,049 and 139. The corrected table line is below; nothing else in those entries changes.
+- **#8919's body gains the 12:06Z line, as the order rules [run: `research queue edit 8919`; `gh pr view` shows it].** Beside it, the body says what takes `Addresses h` [read: the files in the merged tree]:
+  - the PR's theorem is about any `RegTwo` and takes no premise;
+  - `code_hKs` and `code_hKm` take none either, since `Held` holds data only (`SpotFlock/Code.lean`, `structure Held`);
+  - the code's knowledge soundness, which the first-hit term rests on, takes `Addresses h` (`ksTwo_noAlways (hB : Built h) (hS : Addresses h)`, `SpotFlock/NoAlways.lean`).
+- **#8889's and #8892's bodies quote the by-gate bits line, so each gains the label after the quote [run: `research queue edit`].** Neither is on the 12:06Z list, and no head moves. #8889's ready line of 12:36Z stands at `50b06ae65a50038de9c9a9731c7c0dec26c9a00a`.
+- **Runs [run]:**
+  - `r20261111-121530-eb26` (#8892's records) has held its check slot on vy-nebius-cpu-3 since 12:15Z.
+  - `r20261111-123424-84cc` (#8919's records) is running on vy-nebius-cpu-1.
+  - The two quick tiers go next, as those end.
+
+For the table:
+- By stratum: #8919 (unmarked, at `eb4dde9196`), `RegTwo.sum_checked_le_strata`: the always term plus K0 · Σ_t k_t · M_t, with M_t a hypothesis.
+  - Its values are line (b)'s: "(b), over the served wiring; modeled; no Lean statement at the code is behind it". By stratum, those are from SCALE's exact table: M = 4,130 at the plan's cut, and 145 at the final recut over the kinds the plan prices.
+  - Beside any final-recut cell goes the 12:40Z line: the token select is in no stratum and uncounted, and the windows are per rank.
+  - At `code h`, "under `Addresses h`, which as defined is false at a registration whose checked units have a row in the interior record: the statement holds there from a false premise (two readings, not compiled)".
+- The bits line, by gates (#8827 as it is), at a registration with no always-checked block, and at `code h` under that label: "modeled; the first-hit term of #8827's lemma: 2^-100.9 per sampled replay block, 2^-98.9 to 2^-98.3 a run at 4 to 6 replay blocks, at T = 2^80 SHA-512 calls in every run (the prover's and the verifier's), one 2^35-bit table a session, under `SHA512CRExpected` at its two finders; K an upper bound, every block's input bits counted (K_mean <= 2^41.81)."
