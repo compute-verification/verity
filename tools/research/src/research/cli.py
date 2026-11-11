@@ -366,6 +366,8 @@ def _cmd_run(argv: list[str], clones: list[Path]) -> int:
             timeout = remote.timeout_seconds(remote.flag_value(harness_opts, "--timeout"))
             wait_s = ns.pool_wait if ns.pool_wait is not None else slot_only.POOL_WAIT_S
             command = slot_only.in_pool(ns.pool, ns.lane, command, timeout, wait_s)
+            if budget := getattr(ns, "budget_gb", None):       # slot.py's own option, before the `--` that ends them
+                command[(at := command.index("--")):at] = ["--budget-gb", f"{budget:g}"]
         except ValueError as e:
             print(f"research run: --pool: {e}", file=sys.stderr)
             return 2
@@ -383,7 +385,8 @@ def _cmd_run(argv: list[str], clones: list[Path]) -> int:
             # mem= and this (a 450 GB run in a 193 GB slot reserves 450)
             ns.env = [*ns.env, f"CHECK_RUN_MEM_GB={ns.mem_gb:g}"]
             print(f"research run: --pool {ns.pool}: --mem-gb {ns.mem_gb:g} goes to the slot, which waits for and reserves the larger of "
-                  "its own mem= and that", file=sys.stderr)
+                  "its own mem= and that" + (f", and gives the run {budget:g} GB to plan its processes on" if budget else ""),
+                  file=sys.stderr)
             ns.mem_gb = None
         if cwd is None:
             harness_opts = [*harness_opts, "--cwd", "source"]
@@ -1116,7 +1119,8 @@ def _auto_spill(ns: argparse.Namespace, harness_opts: list[str], command: list[s
     from . import auto
 
     cpus = ns.cpus or AUTO_CPUS
-    mem = ns.mem_gb if ns.mem_gb is not None else AUTO_MEM_GB
+    budget = ns.mem_gb if ns.mem_gb is not None else AUTO_MEM_GB
+    mem = getattr(ns, "reserve_gb", None) or budget            # what a pool's slot reserves: a sized run of many suites, less
     gpu = ns.gpus or ns.gpu_model or ns.gpu_ids or ns.gpu_host or ns.quiet or ns.queue_phase == "gpu"
     target, why = None, "a GPU or quiet job, which only the queue books" if gpu else None
     if gpu and (closed := auto.closed(auto.read(Path(ns.source), cpus, node_only=True).get(auto.AUTO_NODE))):
@@ -1153,6 +1157,7 @@ def _auto_spill(ns: argparse.Namespace, harness_opts: list[str], command: list[s
     ns.queue, ns.on, ns.pool, ns.lane = False, machine, pool, ns.lane or "auto"
     ns.cpus = ns.max_min = ns.question = ns.disk_gb = None     # the slot's cores are the run's
     ns.mem_gb = mem     # --pool hands it to the slot, which reserves the larger of its mem= and this (a 40-GB slot alone holds a suite to 2 workers)
+    ns.budget_gb = budget if budget > mem else None            # and the slot gives the run this much to plan its processes on
     ns.queue_kind, ns.queue_class, ns.queue_phase, ns.preemptible = "adhoc", "work", None, False
     print(f"research run --on auto: spilled to {machine}'s {pool} pool, from {ns.source} ({why})", file=sys.stderr)
     print(f"research run --on auto: {told}", file=sys.stderr)
@@ -1162,7 +1167,8 @@ def _auto_spill(ns: argparse.Namespace, harness_opts: list[str], command: list[s
 def _auto_size(ns: argparse.Namespace, harness_opts: list[str], command: list[str]) -> None:
     """`--on auto` as AUTO_KIND, of a suites.py run (named suites, `--changed REV`'s or all): the memory and time their
     `[tool.verity.tests]` worker_gb and timeout_s call for (research.suite_size), where it gives no --mem-gb, or no --timeout or
-    --max-min."""
+    --max-min. A run of many suites reserves less than that memory in a pool's slot (`reserve_gb`, which `_auto_spill` hands
+    the slot); on the queue the memory is the job's cap, whole."""
     timed = ns.max_min is not None or remote.flag_value(harness_opts, "--timeout") is not None
     if ns.queue_kind != AUTO_KIND or (ns.mem_gb is not None and timed):
         return
@@ -1172,8 +1178,8 @@ def _auto_size(ns: argparse.Namespace, harness_opts: list[str], command: list[st
         return
     said = []
     if ns.mem_gb is None and "mem_gb" in shape:
-        ns.mem_gb = shape["mem_gb"]
-        said.append(f"{ns.mem_gb} GB")
+        ns.mem_gb, ns.reserve_gb = shape["mem_gb"], shape.get("reserve_gb")
+        said.append(f"{ns.mem_gb} GB" + (f" ({ns.reserve_gb} of it reserved in a pool's slot)" if ns.reserve_gb else ""))
     if not timed and "max_s" in shape:
         ns.max_min = math.ceil(shape["max_s"] / 60)
         said.append(f"{ns.max_min} min")

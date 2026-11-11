@@ -525,6 +525,44 @@ def test_on_auto_spilled_to_a_pool_keeps_its_mem_gb_for_the_slot(tmp_path, monke
     assert "--mem-gb 150 goes to the slot" in capsys.readouterr().err
 
 
+def test_on_auto_spilled_to_a_pool_reserves_a_share_of_what_a_run_of_many_suites_plans_on(tmp_path, monkeypatch, capsys):
+    """A pool's slot holds a run's reservation against the node for as long as the run holds the slot. A sized run of many
+    suites (research.suite_size) asks the slot for its `reserve_gb` and hands slot.py the whole figure as `--budget-gb`, which
+    its suites.py counts its test processes on; it is placed by what it reserves. Its own --mem-gb is reserved as given, and on
+    the queue the whole figure is the job's cap."""
+    launched, placed = [], []
+    monkeypatch.setattr(auto, "read", lambda source, cpus: {N2: share(waiters=56), CPU1: pool(slot("r8", mem=40))})
+    monkeypatch.setattr(remote, "launch", _refusing(launched))
+    monkeypatch.setattr(remote, "queue_placement", _refusing(placed))
+    repo = _auto_repo(tmp_path)
+    for path, body in {".": '[project]\nname = "verity"\n[tool.pytest.ini_options]\n',
+                       "a": '[project]\nname = "a"\n[tool.pytest.ini_options]\n[tool.verity.tests]\nworker_gb = 16\n'}.items():
+        (repo / path).mkdir(exist_ok=True)
+        (repo / path / "pyproject.toml").write_text(body)
+    subprocess.run(["git", "add", "-A"], cwd=repo, check=True)
+    monkeypatch.chdir(repo)
+    runs = ["run", "--runs-dir", str(tmp_path / "runs"), "--on", "auto"]
+    suites = ["uv", "run", "tools/verity/check/suites.py"]
+    assert main([*runs, "--", *suites]) == 3
+    (kw,) = launched
+    cmd = kw["command"]
+    assert kw["mem_gb"] is None and kw["env"]["CHECK_RUN_MEM_GB"] == "32", "half of 4 processes at a's 16 GB"
+    assert cmd[cmd.index("--budget-gb"):cmd.index("--") + 1] == ["--budget-gb", "64", "--"], "slot.py's option, before CMD"
+    assert cmd[-6:] == ["nice", "-n", "19", *suites]
+    err = capsys.readouterr().err
+    assert "64 GB (32 of it reserved in a pool's slot)" in err
+    assert "--mem-gb 32 goes to the slot" in err and "gives the run 64 GB to plan its processes on" in err
+
+    launched.clear()
+    assert main([*runs, "--mem-gb", "64", "--", *suites]) == 3
+    (kw,) = launched
+    assert kw["env"]["CHECK_RUN_MEM_GB"] == "64" and "--budget-gb" not in kw["command"], "a --mem-gb given is reserved as given"
+
+    launched.clear()
+    assert main([*runs, "--cpus", "16", "--", *suites]) == 3, "no slot here gives 16 CPUs: the queue's"
+    assert launched == [] and [spec["mem-gb"] for spec in placed] == [256], "the queue's job is capped at the whole figure"
+
+
 def test_on_auto_keeps_a_gpu_job_or_one_too_big_for_any_slot_on_node_2(tmp_path, monkeypatch, capsys):
     placed = []
     monkeypatch.setattr(auto, "read", lambda source, cpus, **kw: {N2: share(waiters=56), CPU1: pool(slot("r0"))})
