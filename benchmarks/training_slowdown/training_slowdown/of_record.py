@@ -355,12 +355,14 @@ def counted(cfg: config.Config, rows: int, out: Path, harness=run.Harness, trace
     return te.finish({"trace": trace or run.trace_step(cfg, route, model, optimizers, "cpu")})
 
 
-def _weights_as_one(log: dict) -> dict:
-    """A step's log with the forward's products of an updated weight and of θ's as one kind."""
+def _log(rec: dict, weights_as_one: bool = False) -> dict:
+    """The log of a counted record's compared step as it was counted, no rows divided out: `{(phase, kind, op,
+    shapes): [count, MACs]}`, with the forward's products of an updated weight and of θ's as one kind if asked."""
     out: dict[tuple, list] = {}
-    for (phase, kind, op, shapes), (count, macs) in log.items():
-        e = out.setdefault((phase, "weight" if (phase, kind) in (("fwd", "updated"), ("fwd", "theta")) else kind, op,
-                            shapes), [0, 0])
+    for phase, kind, op, shapes, count, macs in rec["structures"][rec["steps"][STEPS - 1]["struct"]]["log"]:
+        if weights_as_one and (phase, kind) in (("fwd", "updated"), ("fwd", "theta")):
+            kind = "weight"
+        e = out.setdefault((phase, kind, op, shapes), [0, 0])
         e[0] += count
         e[1] += macs
     return out
@@ -373,25 +375,28 @@ def tables(cfg: config.Config, rows: int, out: Path, own: dict) -> tuple[dict, d
     harness did (`AsRecorded`, into `out/tables`): the count the comparison then reads, the expected difference if it
     fired, and the differences. Fires when the two counts differ. Its exact case: they differ in the forward's
     products alone, some an updated weight's in the harness's own count (`own`) that are θ's in the other, the same
-    op, shapes, count and MACs over the two kinds together, so the step's MACs are equal."""
+    op, shapes, count and MACs over the two kinds together, so the step's MACs are equal. The two counts are set side
+    by side as counted, both at the same rows a forward: a table is no token's, so the harness's own count of its
+    uses has no one number of rows to divide out."""
     again = counted(cfg, rows, out / "tables", AsRecorded, own["trace"])
-    a, b = (per_row(c["structures"][c["steps"][STEPS - 1]["struct"]], cfg.start.shape["ctx"]) for c in (own, again))
-    if a == b:
+    a, b = _log(own), _log(again)
+    uses = [c["structures"][c["steps"][STEPS - 1]["struct"]]["updated"] for c in (own, again)]
+    if a == b and uses[0] == uses[1]:
         return again, None, []
     macs = [c["steps"][STEPS - 1]["macs"] for c in (own, again)]
-    if _weights_as_one(a["log"]) != _weights_as_one(b["log"]) or macs[0] != macs[1]:
+    if _log(own, True) != _log(again, True) or macs[0] != macs[1]:
         return again, None, [
             "the position tables: the harness's own count and the count with them checked like θ's weights differ "
             f"in more than which of the forward's products are an updated weight's (the step's MACs: {macs[0]:,} "
             f"and {macs[1]:,})"]
-    moved = [(v[0] - b["log"].get(k, [0, 0])[0], v[1] - b["log"].get(k, [0, 0])[1])
-             for k, v in a["log"].items() if k[:2] == ("fwd", "updated") and b["log"].get(k) != v]
+    moved = [(v[0] - b.get(k, [0, 0])[0], v[1] - b.get(k, [0, 0])[1])
+             for k, v in a.items() if k[:2] == ("fwd", "updated") and b.get(k) != v]
     return again, {"rule": "tables", "what": (
         "the model's position tables checked like θ's weights, as the records' harness checked them, where the "
         f"harness takes them for weights the route made: {sum(n for n, _ in moved):,} of the forward's products "
         f"({sum(m for _, m in moved):,} MACs a step at one row a forward) are an updated weight's in the harness's own "
-        f"count and θ's here, and its own count has {len(a['updated'])} uses of an updated weight for these "
-        f"{len(b['updated'])}; the step's MACs are {macs[0]:,} on both counts")}, []
+        f"count and θ's here, and its own count has {len(uses[0])} uses of an updated weight for these "
+        f"{len(uses[1])}; the step's MACs are {macs[0]:,} on both counts")}, []
 
 
 #: what `run.Harness` counts otherwise than the records' harness did. Each entry counts the config's step again as

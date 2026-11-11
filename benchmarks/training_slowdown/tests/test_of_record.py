@@ -182,6 +182,7 @@ def test_the_position_tables_are_expected_where_the_two_counts_differ_in_the_wei
     cfg = config.load(write_config(tmp_path / "a.toml"), starts.registry(tiny_registry(tmp_path / "reg")))
     rope = [[1, 2, CTX, 4], [CTX, 4]]
     own = count(("fwd", "updated", "mul", rope, 8, 8 * CTX * 8), updated=((D * D, D), (8, 0), (8, D)))
+    own["structures"]["s"]["updated"][2][3] = 2 * CTX  # a table's use in a step's second forward: no row's tokens
     as_recorded = count(("fwd", "theta", "mul", rope, 8, 8 * CTX * 8))
     asked = []
 
