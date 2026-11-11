@@ -21,6 +21,7 @@ probability at most `k_s·2⁻⁶⁴` (`Law.subset_prefix_none_le`), whatever th
 * `onWith_take_first`, `stratifiedWith_take_first`, `units_ok_of_firstOk`: where every first read samples,
   `onWith`, the stratified sample and `drawUnits` return.
 * `Flock.Bridge.firstRead`: the bytes the stages read first, in all.
+* `Flock.Bridge.strata_fail_le`: some stratum's first read fails with probability at most `(Σ_s k_s)·2⁻⁶⁴`.
 * `Flock.Bridge.units_error_le`: under a sampling design on strata that samples `kd` units (`LawOn`), on a uniform
   stream of at least `firstRead law n` bytes, `drawUnits` returns no sample with probability at most `kd·2⁻⁶⁴`.
 * `Flock.Bridge.execSel_error_le`, `execSel_card_le`: the same of the deployed sample on a uniform byte source
@@ -49,9 +50,7 @@ theorem firstOk_shift {src : ByteArray} {p : ℕ} (hp : p ≤ src.size) :
   | [], _ => ⟨fun _ => trivial, fun _ => trivial⟩
   | s :: ss, q => by
     have hsz : (src.extract p src.size).size = src.size - p := by
-      first
-        | rw [ByteArray.size_extract, Nat.min_self]
-        | simp
+      rw [ByteArray.size_extract, Nat.min_self]
     have hex : p + q + s.need ≤ src.size →
         (src.extract p src.size).extract q (q + s.need) = src.extract (p + q) (p + q + s.need) := by
       intro hi
@@ -104,16 +103,11 @@ theorem firstOk_fail_le {ι : Type} (stg : ι → Stage) (wt : ι → ℕ) :
   | [], _, _, _ => by
     refine le_trans (prCoin_mono (q := fun _ => False) fun f hf => hf trivial) ?_
     rw [prCoin_false]
-    first
-      | exact zero_le
-      | exact zero_le _
+    exact zero_le
   | i :: l, hb, L, hL => by
     have hs : (stg i).FirstBounded ((wt i : ℝ≥0∞) * (2 ^ 64 : ℝ≥0∞)⁻¹) := hb i List.mem_cons_self
     have ih := firstOk_fail_le stg wt l fun j hj => hb j (List.mem_cons_of_mem _ hj)
-    have hL' : (stg i).need + ((l.map stg).map (·.need)).sum ≤ L := by
-      first
-        | exact hL
-        | simpa using hL
+    have hL' : (stg i).need + ((l.map stg).map (·.need)).sum ≤ L := hL
     obtain ⟨ℓ, rfl⟩ : ∃ ℓ, L = (stg i).need + ℓ := ⟨L - (stg i).need, by omega⟩
     have hℓ : ((l.map stg).map (·.need)).sum ≤ ℓ := by omega
     have hor : ∀ f : Fin ((stg i).need + ℓ) → Fin 256, ¬ FirstOk ((i :: l).map stg) (Law.streamOf f) 0 →
@@ -169,9 +163,7 @@ theorem firstOk_fail_le {ι : Type} (stg : ι → Stage) (wt : ι → ℕ) :
       _ ≤ (wt i : ℝ≥0∞) * (2 ^ 64 : ℝ≥0∞)⁻¹ + (((l.map wt).sum : ℕ) : ℝ≥0∞) * (2 ^ 64 : ℝ≥0∞)⁻¹ :=
           add_le_add hP1 hP2
       _ = ((((i :: l).map wt).sum : ℕ) : ℝ≥0∞) * (2 ^ 64 : ℝ≥0∞)⁻¹ := by
-          first
-            | rw [List.map_cons, List.sum_cons, Nat.cast_add, add_mul]
-            | simp [add_mul]
+          rw [List.map_cons, List.sum_cons, Nat.cast_add, add_mul]
 
 /-- **A stratum's first read fails with probability at most `k_s·2⁻⁶⁴`**: its `subset` on its first `need` bytes
 (`Law.subset_prefix_none_le`). -/
@@ -195,7 +187,7 @@ theorem onWith_take_first (src : ByteArray) (N : ℕ) (run : ByteArray → Optio
     (congrArg (fun x : StateT ℕ (Except String) (Option (Array ℕ)) => x.run (p + N))
       (Law.onWithFuel_succ_some (fun need => _root_.Spot.Draw.take src need) N run 0 _ D hrun)).trans rfl
   rw [onWith_fuel (fun need => _root_.Spot.Draw.take src need) N run (0 + 1), StateT.run_bind, take_run,
-    if_neg hnot, bind_ok]
+    ite_eq_right hnot, bind_ok]
   exact hfuel
 
 /-- **`stratifiedWith` on `take` returns a sample** where every stratum's first read samples: each stratum reads its
@@ -218,10 +210,7 @@ theorem stratifiedWith_take_first (src : ByteArray) (strata : Array Flock.Draw.S
     induction l with
     | nil =>
       intro out pos _
-      refine ⟨out, pos, ?_⟩
-      first
-        | rfl
-        | (simp only [List.forIn_nil, StateT.run_pure] <;> rfl)
+      exact ⟨out, pos, rfl⟩
     | cons i is ih =>
       intro out pos hok
       have hok' : pos + strata[i]!.need ≤ src.size ∧
@@ -261,9 +250,7 @@ theorem stratifiedWith_take_first (src : ByteArray) (strata : Array Flock.Draw.S
       subst hy
       dsimp only at hr
       rw [StateT.run_pure] at hr
-      first
-        | exact ⟨_, _, hr.symm⟩
-        | (subst hr; exact ⟨_, _, rfl⟩)
+      exact ⟨_, _, hr.symm⟩
   exact key _ rfl
 
 /-- **`drawUnits` returns a sample** where every stage's first read samples. -/
@@ -283,9 +270,7 @@ theorem units_ok_of_firstOk (law : Flock.Draw.Law) (n : ℕ) (src : ByteArray) (
       unfold Flock.Draw.drawWith at hr
       dsimp only at hr
       rw [StateT.run_bind, ho, bind_ok, StateT.run_pure] at hr
-      first
-        | exact ⟨_, _, hr.symm⟩
-        | (subst hr; exact ⟨_, _, rfl⟩)
+      exact ⟨_, _, hr.symm⟩
     | bernoulli a b =>
       have h' : 0 + (2 * n * Flock.Draw.width b + 64) ≤ src.size ∧
           (∃ D, Flock.Draw.bernoulli a b n (src.extract 0 (0 + (2 * n * Flock.Draw.width b + 64))) = some D) ∧
@@ -295,29 +280,25 @@ theorem units_ok_of_firstOk (law : Flock.Draw.Law) (n : ℕ) (src : ByteArray) (
       unfold Flock.Draw.drawWith at hr
       dsimp only at hr
       rw [StateT.run_bind, ho, bind_ok, StateT.run_pure] at hr
-      first
-        | exact ⟨_, _, hr.symm⟩
-        | (subst hr; exact ⟨_, _, rfl⟩)
+      exact ⟨_, _, hr.symm⟩
     | stratified K St =>
       obtain ⟨_, _, ho⟩ := stratifiedWith_take_first src St 0 miss h
       unfold Flock.Draw.drawWith at hr
       dsimp only at hr
       rw [StateT.run_bind, ho, bind_ok, StateT.run_pure] at hr
-      first
-        | exact ⟨_, _, hr.symm⟩
-        | (subst hr; exact ⟨_, _, rfl⟩)
+      exact ⟨_, _, hr.symm⟩
     | work K ws =>
-      obtain ⟨_, _, ho⟩ := stratifiedWith_take_first src (ws.map (·.toStratum)) 0 miss h
+      obtain ⟨_, _, ho⟩ := stratifiedWith_take_first src (ws.map fun w : Flock.Draw.WorkStratum => w.toStratum) 0
+        miss h
       unfold Flock.Draw.drawWith at hr
       dsimp only at hr
       rw [StateT.run_bind, ho, bind_ok, StateT.run_pure] at hr
-      first
-        | exact ⟨_, _, hr.symm⟩
-        | (subst hr; exact ⟨_, _, rfl⟩)
+      exact ⟨_, _, hr.symm⟩
   obtain ⟨d, read, hd⟩ := key _ rfl
   refine ⟨d.units, read, ?_⟩
   unfold _root_.Spot.Draw.drawUnits
-  rw [hd, bind_ok] <;> rfl
+  rw [hd]
+  rfl
 
 end Properties.Spot.SecurityProofs
 
@@ -348,6 +329,22 @@ theorem stratum_mem_toList (St : Array Flock.Draw.Stratum) {i : ℕ} (hi : i ∈
     omega
   rw [getElem!_pos St i hlt]
   exact Array.mem_toList_iff.2 (Array.getElem_mem hlt)
+
+/-- **Some stratum's first read fails with probability at most `(Σ_s k_s)·2⁻⁶⁴`**, on a uniform stream that holds the
+strata's first reads, each stratum sampling at most its size. -/
+theorem strata_fail_le (St : Array Flock.Draw.Stratum) (hks : ∀ s ∈ St.toList, s.k ≤ s.size) (L : ℕ)
+    (hL : (((List.range' 0 St.size).map fun i => Properties.Spot.SecurityProofs.stage St[i]! fun _ => True).map
+      (·.need)).sum ≤ L) :
+    prCoin (fun f : Fin L → Fin 256 => ¬ Properties.Spot.SecurityProofs.FirstOk
+      ((List.range' 0 St.size).map fun i => Properties.Spot.SecurityProofs.stage St[i]! fun _ => True)
+      (Audit.Law.streamOf f) 0) ≤ (((St.toList.map (·.k)).sum : ℕ) : ℝ≥0∞) * (2 ^ 64 : ℝ≥0∞)⁻¹ := by
+  have hb := Properties.Spot.SecurityProofs.firstOk_fail_le
+    (fun i : ℕ => Properties.Spot.SecurityProofs.stage St[i]! fun _ => True) (fun i : ℕ => St[i]!.k)
+    (List.range' 0 St.size)
+    (fun i hi => Properties.Spot.SecurityProofs.stage_firstBounded St[i]! (hks _ (stratum_mem_toList St hi)) _)
+    L hL
+  rw [range_map_k St] at hb
+  exact hb
 
 /-- **The deployed sample returns no sample with probability at most `kd·2⁻⁶⁴`**, under a sampling design on strata
 that samples `kd` units, on a uniform stream that holds its stages' first reads: it ends where every stage's first read
@@ -384,31 +381,22 @@ theorem units_error_le {law : Flock.Draw.Law} {ns : List ℕ} {kd n : ℕ} (hlaw
       have hm : s.size ∈ ns := hsz ▸ List.mem_map_of_mem hs
       rw [hk s hs]
       exact stratumK_le hK (hn1 _ hm) (List.le_sum_of_mem hm)
-    have hb := Properties.Spot.SecurityProofs.firstOk_fail_le
-      (fun i : ℕ => Properties.Spot.SecurityProofs.stage St[i]! fun _ => True) (fun i : ℕ => St[i]!.k)
-      (List.range' 0 St.size)
-      (fun i hi => Properties.Spot.SecurityProofs.stage_firstBounded St[i]! (hks _ (stratum_mem_toList St hi)) _)
-      L hL
-    rw [range_map_k St, hsum] at hb
+    have hb := strata_fail_le St hks L hL
+    rw [hsum] at hb
     exact hb
   | work K ws =>
     obtain ⟨-, hk, hsum⟩ := hlaw
-    have hks : ∀ s ∈ (ws.map (·.toStratum)).toList, s.k ≤ s.size := fun s hs => by
+    have hks : ∀ s ∈ (ws.map fun w : Flock.Draw.WorkStratum => w.toStratum).toList, s.k ≤ s.size := fun s hs => by
       rw [Array.toList_map] at hs
       obtain ⟨w, hw, rfl⟩ := List.mem_map.1 hs
       show w.k ≤ w.size
       rw [hk w hw]
       exact min_le_left _ _
-    have hsum' : ((ws.map (·.toStratum)).toList.map (·.k)).sum = kd := by
+    have hsum' : ((ws.map fun w : Flock.Draw.WorkStratum => w.toStratum).toList.map (·.k)).sum = kd := by
       rw [Array.toList_map, List.map_map]
       exact hsum
-    have hb := Properties.Spot.SecurityProofs.firstOk_fail_le
-      (fun i : ℕ => Properties.Spot.SecurityProofs.stage (ws.map (·.toStratum))[i]! fun _ => True)
-      (fun i : ℕ => (ws.map (·.toStratum))[i]!.k) (List.range' 0 (ws.map (·.toStratum)).size)
-      (fun i hi => Properties.Spot.SecurityProofs.stage_firstBounded (ws.map (·.toStratum))[i]!
-        (hks _ (stratum_mem_toList (ws.map (·.toStratum)) hi)) _)
-      L hL
-    rw [range_map_k (ws.map (·.toStratum)), hsum'] at hb
+    have hb := strata_fail_le (ws.map fun w : Flock.Draw.WorkStratum => w.toStratum) hks L hL
+    rw [hsum'] at hb
     exact hb
 
 /-- **The deployed sample runs out with probability at most `kd·2⁻⁶⁴`** on a uniform byte source (A3) that holds its
@@ -442,7 +430,7 @@ theorem execSel_card_le {n : ℕ} {Ω : Type} [Fintype Ω] [Nonempty Ω] {L : Fi
     change (match Spot.Draw.drawUnits law n (Properties.Spot.bytesOf (t ω 0)) with
       | .ok r => univ.filter fun u : Fin n => u.val ∈ r.1
       | .error _ => univ) = univ.filter fun u : Fin n => u.val ∈ units
-    rw [hu] <;> rfl
+    rw [hu]
   rw [hd]
   exact (Audit.Law.card_filter_mem_le n units).trans (le_of_eq (drawUnits_size hlaw hu))
 
