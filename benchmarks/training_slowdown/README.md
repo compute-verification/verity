@@ -58,8 +58,13 @@ it (`budget.minutes`, the job's own limit over every run it continues in; withou
 
 A stopped job continues. After each checkpoint but the last a job keeps what continuing needs in its state directory
 (`--state`): the model, the optimizers' state, the stream's position, the generators, and the record so far with its
-scores and its clock. Told to stop (SIGTERM: an eviction, or the end of its run's time) it exits with 75 and leaves
-the state; the command's next run starts it again, and the job continues from the state when it is its own (the same
+scores and its clock. Told to stop (SIGTERM: an eviction, or the end of its run's time) it first writes a `run.json`
+that says so (`stopped`: "told to stop", with no step or checkpoint), then ends the route's process and leaves the
+state. The command reads a stop from that record and never from the run's exit status, which is whatever stopped the
+job reports (a lease out of time: `timeout`'s 124, whatever the job's own): a run that didn't end with 0 is stopped
+when its record says so, and failed when it holds no record or one that doesn't. A job told to stop before its own
+process is up has written none, and is failed. The command's next run starts a stopped job again, and the job
+continues from the state when it is its own (the same
 config digest, seed, split and `training_slowdown` VERSION, a model that hashes to the record's last checkpoint) and
 refuses any other, naming what differs. The job's own process states in the record so far, for the segment that
 kept the state, the SHA-512 of each of its parts (the model, the optimizers' state, the stream's position, the

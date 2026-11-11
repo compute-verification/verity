@@ -8,7 +8,7 @@ from types import SimpleNamespace
 import pytest
 from synthetic import tiny_registry, write_config
 
-from training_slowdown import config, starts
+from training_slowdown import STOPPED, TOLD, config, starts, stop_record
 
 COMMAND = Path(__file__).resolve().parents[1] / "run.py"
 _spec = importlib.util.spec_from_file_location("training_slowdown_command", COMMAND)
@@ -31,6 +31,8 @@ class Research:
         #: the records that hold a job's state, and the sha256 the store lists for each one's state.json
         self.states: set[str] = set()
         self.sha256 = STATED
+        #: the text of the run.json each record holds
+        self.said: dict[str, str] = {}
 
     def __call__(self, argv):
         assert argv[0] == "research", argv
@@ -38,6 +40,13 @@ class Research:
             self.runs.append(argv)
             return SimpleNamespace(returncode=0, stdout=f"queued r20990101-000000-{len(self.runs):04x}\n", stderr="")
         verb = argv[2]
+        if verb == "fetch" and "--to" in argv:
+            assert argv[4:7] == ["--path", "out/run.json", "--to"] and len(argv) == 8, argv
+            if argv[3] not in self.said:
+                return SimpleNamespace(returncode=1, stdout="", stderr="no file matches")
+            (Path(argv[7]) / "out").mkdir()
+            (Path(argv[7]) / "out" / "run.json").write_text(self.said[argv[3]])
+            return SimpleNamespace(returncode=0, stdout=argv[7], stderr="")
         if verb == "fetch":
             assert argv[4:] == ["--list", "--json", "--path", "out/state/state.json"], argv
             held = argv[3] in self.states
@@ -118,17 +127,58 @@ def test_a_done_job_labels_its_record_and_a_failed_one_is_never_run_again(tree, 
     assert "every job has its record (2)" in capsys.readouterr().out
 
 
-def stop(r: Research, job, record=None, machine="node-7") -> str:
-    """The job's last run ended as a job told to stop does; its id."""
-    run = sorted(t for t, _, v in r.labels if v == job.label and cmd.RUN_RE.fullmatch(t))[-1]
-    r.attempts[run] = {"status": {"rc": cmd.RC_STOPPED}, "outputs": {"run_record": record},
-                       "execution": {"machine": machine}}
+def last_run(r: Research, job) -> str:
+    return sorted(t for t, _, v in r.labels if v == job.label and cmd.RUN_RE.fullmatch(t))[-1]
+
+
+def stop(r: Research, job, record=ART, machine="node-7", rc=124) -> str:
+    """The job's last run ended as one a lease out of time stopped: `timeout`'s status, and a record whose run.json
+    is the job's `stop_record`; its id."""
+    run = last_run(r, job)
+    r.attempts[run] = {"status": {"rc": rc}, "outputs": {"run_record": record}, "execution": {"machine": machine}}
+    r.said[record] = json.dumps(stop_record(job.seed, job.split))
     return run
 
 
+def test_a_stop_is_read_from_the_runs_record_and_never_from_its_exit_status(tree, reg_path, capsys):
+    """A run that ended with any status but 0 is stopped when the run.json in its record says the job was told to
+    stop, and the command's next run continues it: under `timeout`'s 124, which a lease out of time reports whatever
+    the job exits with, a signal's 143 or 137, or the job's own. With no record, a record with no run.json or one
+    that doesn't read, or a run.json that doesn't say so, the job's last record with the budget's `stopped` among
+    them, it is failed and never run again, the job's own `STOPPED` status included."""
+    path = write_config(tree / "a.toml")
+    (job,) = config.load(path, starts.registry(reg_path)).jobs()
+    args = ("a", "--starts", str(reg_path))
+    for rc in (124, 143, 137, STOPPED):
+        r = Research()
+        command(r, *args)
+        first = stop(r, job, rc=rc)
+        assert command(r, *args, "--dry-run") == 3 and f"stopped  {first}" in capsys.readouterr().out
+        assert command(r, *args) == 3 and len(r.runs) == 2 and f"continues {first}" in capsys.readouterr().out
+        assert last_run(r, job) != first
+
+    last = stop_record(job.seed, job.split) | {"stopped": "12.0 s past the tier's 10.0 s budget", "invalid": []}
+    assert TOLD == "told to stop" and not cmd.told(last) and cmd.told(stop_record(0, "final"))
+    unsaid = "a record that doesn't say the job was told to stop"
+    for rc in (124, STOPPED):
+        for record, said, why in ((None, None, "no record"), (ART, None, "no record"),
+                                  (ART, json.dumps(stop_record(job.seed, job.split))[:-1], "no record"),
+                                  (ART, json.dumps([TOLD]), unsaid), (ART, json.dumps(last), unsaid),
+                                  (ART, json.dumps(last | {"stopped": ""}), unsaid)):
+            r = Research()
+            command(r, *args)
+            r.attempts[last_run(r, job)] = {"status": {"rc": rc}, "outputs": {"run_record": record}}
+            if said is not None:
+                r.said[record] = said
+            capsys.readouterr()
+            assert command(r, *args) == 1 and len(r.runs) == 1
+            out = capsys.readouterr().out
+            assert f"failed   {last_run(r, job)} (rc {rc}, {why})" in out and "never run again" in out
+
+
 def test_a_stopped_job_is_run_again_from_the_state_its_run_kept(tree, reg_path, capsys):
-    """A job whose run ended with `STOPPED` is started again by the command's next run, on whichever machine the
-    queue gives it: where the stopped run's record holds a state, the new run fetches it into its own $OUT before
+    """A job whose run's record says it was told to stop is started again by the command's next run, on whichever
+    machine the queue gives it: where the stopped run's record holds a state, the new run fetches it into its own $OUT before
     the job starts, with the store's read key, and the job is told the sha256 the store lists for that record's
     state.json, to continue from no other; where it holds none, or the store lists no sha256 for it, the job starts
     again from θ and is told to continue from nothing."""
@@ -320,18 +370,36 @@ def test_local_records_each_jobs_exit_and_never_reruns_a_failed_job(tmp_path, re
 
 
 def test_local_runs_a_stopped_job_again_on_its_own_state(tmp_path, reg_path, monkeypatch, capsys):
+    """Here too a stop is read from the job's run.json and not from its exit status: a job whose record says it was
+    told to stop is run again, under any status, and one that then fails, or that exits with `STOPPED` and no such
+    record, is failed. The stopped run's record is gone before the job runs again, so a run that writes none
+    isn't read as that stop."""
     path = write_config(tmp_path / "a.toml")
-    codes = [cmd.RC_STOPPED, cmd.RC_STOPPED, 0]
+    (job,) = config.load(path, starts.registry(reg_path)).jobs()
     calls = []
 
     def fake(argv, cwd):
         calls.append(argv)
-        return SimpleNamespace(returncode=codes[len(calls) - 1])
+        rc, record = ends[len(calls) - 1]
+        out = Path(argv[argv.index("--out") + 1])
+        assert not (out / "run.json").exists()
+        if record is not None:
+            (out / "run.json").write_text(json.dumps(record))
+        return SimpleNamespace(returncode=rc)
     monkeypatch.setattr(cmd.subprocess, "run", fake)
+    told, last = stop_record(job.seed, job.split), {"stopped": "12.0 s past the tier's 10.0 s budget"}
+    ends = [(124, told), (STOPPED, told), (0, last)]
     argv = [str(path), "--local", "--root", str(tmp_path / "jobs"), "--starts", str(reg_path)]
     assert cmd.main(argv) == 3 and "1 of 1 jobs pending, 1 of them stopped" in capsys.readouterr().out
     assert cmd.main(argv) == 3 and cmd.main(argv) == 0 and cmd.main(argv) == 0
     assert len(calls) == 3 and calls[0] == calls[1] == calls[2]
+
+    for n, then in enumerate(((1, None), (STOPPED, None), (124, last))):
+        calls.clear()
+        ends = [(143, told), then]
+        argv = [str(path), "--local", "--root", str(tmp_path / f"jobs-{n}"), "--starts", str(reg_path)]
+        assert cmd.main(argv) == 3 and cmd.main(argv) == 1 and cmd.main(argv) == 1 and len(calls) == 2
+        assert f"(rc {then[0]})" in capsys.readouterr().out
 
 
 @pytest.mark.slow

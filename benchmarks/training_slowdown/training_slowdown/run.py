@@ -39,8 +39,11 @@ the steps that remain; it is told the next step, the clock and the digest key, a
 process ran is a segment: the record lists them (`segments`, a stopped one with the digests of the state the next
 one continued from), its steps and checkpoints are every segment's in order, and its count is their sum (`joined`),
 which a stopped segment's work after its last kept checkpoint is not in. `budget.minutes` runs over all of them.
-Told to stop (SIGTERM), the job ends with `STOPPED` and leaves the state; a job that ends itself, with its record or
-with a failure, removes it.
+Told to stop (SIGTERM), the job writes `OUT/run.json` saying so (`stopped`: `TOLD`, by `stop_record`) before it does
+anything else, since what tells it may kill it seconds later; then it ends the route's process and leaves the
+state. That record is how whoever runs the job again knows it was stopped: the status a stopped run reports can be
+its stopper's, `timeout`'s 124 under a lease out of time. A job that ends itself, with its record or with a failure,
+removes the state.
 
 After the last step, outside the count, the job traces its route's step once for the grade (`trace_step`): the
 record's `trace` is what the capture measures of it, the product rows unpriced, and a step the capture refuses is
@@ -85,7 +88,7 @@ import numpy as np
 import torch
 import torch.nn.modules.module as nn_module
 
-from . import BUDGET_SLACK, NOTHING, STOPPED, VERSION, config, sandbox, starts
+from . import BUDGET_SLACK, NOTHING, SCHEMA, STOPPED, VERSION, config, sandbox, starts, stop_record
 from .codecs import Identity, Plan, Unencodable
 from .counterexample import SAMPLE_FINAL, SAMPLE_SEARCH, Family, check
 from .data import SPLITS, Data, Stream
@@ -441,7 +444,7 @@ class Harness:
                             f"{leaks[:5]}: what is computed on it there isn't counted")
         c = block_c(self.forward_macs_per_token)
         rec |= meta | {
-            "schema": "training-slowdown/run/v1", "training_slowdown": VERSION, "seed": self.seed, "tier": self.tier,
+            "schema": SCHEMA, "training_slowdown": VERSION, "seed": self.seed, "tier": self.tier,
             "split": self.split, "start": self.start, "theta_sha256": theta_sha256(self.theta), "device": self.device,
             "forward_macs_per_token": self.forward_macs_per_token, "c": c, "planned_steps": self.n_steps,
             "checkpoints": self.checkpoints,
@@ -910,16 +913,28 @@ def outside(a: argparse.Namespace, argv: list[str]) -> int:
     process (`inside`) in the sandbox with every registered final set and the job's state directory hidden, scores
     each state that process hands out, under the digest it hashes the state to itself, keeps what continuing needs
     where the job has a state directory (`Kept`), and writes the record with the scores in (`with_scores`) over
-    every segment the job ran in (`joined`). Told to stop (SIGTERM, to itself or to the route's process), it ends
-    the route's process and returns `STOPPED` with the state left; ending any other way it removes the state."""
+    every segment the job ran in (`joined`). Told to stop (SIGTERM, to itself or to the route's process), it writes
+    the record of the stop (`stop_record`), ends the route's process and returns `STOPPED` with the state left;
+    ending any other way it removes the state."""
     reg = starts.registry(a.starts)
     scratch = Path(tempfile.mkdtemp(prefix="training-slowdown-"))
+    child, stopping = None, []
 
-    def stop(signum, frame):
+    def stop(signum=None, frame=None) -> None:
+        """SIGTERM's handler. The record of the stop comes first, here and not where `Stopped` is caught: what
+        tells the job to stop kills what is left of it seconds later, and on its way there the exception waits
+        for the route's process, which this ends. Told again it does nothing: `timeout` signals the job and then
+        its process group."""
+        if stopping:
+            return
+        stopping.append(signum)
+        a.out.mkdir(parents=True, exist_ok=True)
+        (a.out / "run.json").write_text(json.dumps(stop_record(a.seed, a.split)) + "\n")
+        if child is not None and child.poll() is None:
+            child.terminate()
         raise Stopped
 
     told = signal.signal(signal.SIGTERM, stop) if a.retrace is None else None
-    child = None
     try:
         state = Kept(a.state) if a.state is not None and a.retrace is None else None
         hide = [x for d in [*sandbox.final_sets(reg), *([state.dir] if state else [])] for x in ("--hide", str(d))]
@@ -974,7 +989,7 @@ def outside(a: argparse.Namespace, argv: list[str]) -> int:
                               f"{len(scores) - 1} was scored; no further state is read", file=sys.stderr)
                         break
         if child.returncode == -signal.SIGTERM:
-            raise Stopped
+            stop()
         # the job ends by itself from here: with its record, or failed
         signal.signal(signal.SIGTERM, signal.SIG_IGN)
         record = scratch / "run.json"
@@ -989,11 +1004,10 @@ def outside(a: argparse.Namespace, argv: list[str]) -> int:
             state.clear()
         return report(rec)
     except Stopped:
-        if child is not None and child.poll() is None:
-            child.terminate()
+        if child is not None:
             child.wait()
         left = f"its next run continues from the state in {a.state}" if a.state else "it keeps no state (--state)"
-        print(f"training_slowdown: the job was told to stop: {left}", file=sys.stderr)
+        print(f"training_slowdown: the job was told to stop: its record says so, and {left}", file=sys.stderr)
         return STOPPED
     finally:
         if told is not None:

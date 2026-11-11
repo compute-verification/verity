@@ -18,7 +18,12 @@ the command looks every job up and runs the missing ones:
   (`run.json`, and `job.json` with the job's exit status); ROOT is `--root`, else `$OUT`.
 
 A job keeps what continuing needs after each checkpoint (`training_slowdown.run --state`), and one told to stop,
-evicted or out of its time, exits with `training_slowdown.STOPPED`. Nothing runs it again by itself: the command's
+evicted or out of its time, writes a record that says so (`training_slowdown.TOLD`). The command reads a stop there
+and never in the run's exit status, which is whatever stopped it reports: a lease out of time ends the job through
+`timeout`, whose status is 124 whatever the job's own. So a run that ended with any status but 0 is stopped when
+its record says it was told to stop, and failed when it holds no record or one that doesn't say so. A job told to
+stop before its own process is up, while its environment is made or its state fetched, has written no record and
+is failed. Nothing runs a stopped job again by itself: the command's
 next run finds it stopped and starts it again, from the state it kept. Where the state is between the two runs is
 `NODE_STATE`: by default with the stopped run's output, on the store, from where the next run fetches it on
 whichever machine it gets. The command tells that run which state it continues from (`--continues`: the sha256 the
@@ -43,6 +48,7 @@ import re
 import shlex
 import subprocess
 import sys
+import tempfile
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -50,8 +56,7 @@ HERE = Path(__file__).resolve().parent
 ROOT = HERE.parents[1]
 sys.path.insert(0, str(HERE))
 
-from training_slowdown import BUDGET_SLACK, NOTHING, config, starts  # noqa: E402
-from training_slowdown import STOPPED as RC_STOPPED  # noqa: E402
+from training_slowdown import BUDGET_SLACK, NOTHING, config, starts, told  # noqa: E402
 from verity_config.settings import SHARED  # noqa: E402
 
 KIND = "training-attack"
@@ -146,7 +151,7 @@ def research_argv(job: config.Job, a: argparse.Namespace, after: State | None = 
     else:
         # the job is told which state.json the stopped run's record holds, and continues from no other
         state = f'"$OUT/state" --continues {after.stated if fetch else NOTHING}'
-    # exec: the job's process is the run's, so it is the one told to stop and its exit status is the run's
+    # exec: the job's process is the run's, so it is the one told to stop
     cmd = (f'{SYNC} && {fetch}cd {HERE.relative_to(ROOT)} && exec ../../.venv/bin/python {py} --state {state} '
            f'--out "$OUT"')
     minutes = run_minutes(job.config)
@@ -193,6 +198,16 @@ class Store:
         p = self.research("data", "show", run, "--json", check=False)
         return json.loads(p.stdout) if p.returncode == 0 else None
 
+    def says(self, record: str) -> object:
+        """The run.json a run's record holds, as its job wrote it; None where it holds none that reads."""
+        with tempfile.TemporaryDirectory(prefix="training-slowdown-") as d:
+            if self.research("data", "fetch", record, "--path", "out/run.json", "--to", d, check=False).returncode:
+                return None
+            try:
+                return json.loads((Path(d) / "out" / "run.json").read_text())
+            except (OSError, ValueError):
+                return None
+
     def keeps(self, record: str) -> str:
         """The sha256 of the state.json a run's record holds, as the store lists it: '' where it holds no state."""
         p = self.research("data", "fetch", record, "--list", "--json", "--path", "out/state/state.json", check=False)
@@ -216,6 +231,9 @@ class Store:
 
 
 def store_state(job: config.Job, labels: dict[str, list[str]], store: Store, write: bool) -> State:
+    """Where `job` stands by its latest run. One that ended with status 0 and a record is done. Any other is stopped
+    when the run.json in its record says the job was told to stop (`told`), whatever its status, and failed when
+    its record holds none or one that doesn't say so."""
     targets = labels.get(job.label, [])
     runs = sorted(t for t in targets if RUN_RE.fullmatch(t))
     if not runs:
@@ -229,24 +247,32 @@ def store_state(job: config.Job, labels: dict[str, list[str]], store: Store, wri
         if write and record not in targets:
             store.label(record, job.label)
         return State(DONE, record, run)
-    if rc == RC_STOPPED:
+    said = store.says(record) if record else None
+    if told(said):
         machine = (a.get("execution") or {}).get("machine") or ""
         if NODE_STATE:
             return State(STOPPED, run, f"its state is on {machine}, under {NODE_STATE}", machine=machine)
-        stated = store.keeps(record) if record else ""
+        stated = store.keeps(record)
         return State(STOPPED, run, "its record holds its state" if stated else "it kept no state: it starts again "
                      "from θ", kept=record if stated else "", stated=stated, machine=machine)
-    return State(FAILED, run, f"rc {rc}" + ("" if record else ", no record"))
+    return State(FAILED, run, f"rc {rc}, " + ("no record" if said is None else "a record that doesn't say the job was "
+                                              "told to stop"))
 
 
 def local_state(job: config.Job, root: Path) -> State:
+    """Where `job` stands by its directory under `root`, read as `store_state` reads a run: its exit status says only
+    that it is done, and its run.json whether it was told to stop."""
     d = root / job.label
     if not (d / "job.json").is_file():
         return State(MISSING, str(d))
     rc = json.loads((d / "job.json").read_text())["rc"]
-    if rc == RC_STOPPED:
-        return State(STOPPED, str(d), "its state is in state/")
-    return State(DONE, str(d)) if rc == 0 else State(FAILED, str(d), f"rc {rc}")
+    if rc == 0:
+        return State(DONE, str(d))
+    try:
+        said = json.loads((d / "run.json").read_text())
+    except (OSError, ValueError):
+        said = None
+    return State(STOPPED, str(d), "its state is in state/") if told(said) else State(FAILED, str(d), f"rc {rc}")
 
 
 def local_argv(job: config.Job, a: argparse.Namespace, root: Path) -> list[str]:
@@ -257,6 +283,8 @@ def local_argv(job: config.Job, a: argparse.Namespace, root: Path) -> list[str]:
 def run_local(job: config.Job, a: argparse.Namespace, root: Path) -> None:
     d = root / job.label
     d.mkdir(parents=True, exist_ok=True)
+    # a stopped run's record: this run writes its own, and a run that fails is not read as that stop
+    (d / "run.json").unlink(missing_ok=True)
     argv = local_argv(job, a, root)
     rc = subprocess.run(argv, cwd=HERE).returncode
     (d / "job.json").write_text(json.dumps({"rc": rc, "argv": argv}) + "\n")

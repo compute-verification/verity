@@ -13,7 +13,7 @@ import pytest
 import torch
 from synthetic import tiny_registry, write_config
 
-from training_slowdown import NOTHING, VERSION, config, run, starts
+from training_slowdown import NOTHING, TOLD, VERSION, config, grade, run, starts, stop_record, told
 from training_slowdown.data import Data, Stream
 
 #: what depends on when a job ran, not on what it computed: its times, and the flags read from them
@@ -305,11 +305,38 @@ def test_a_route_that_names_a_signal_is_refused():
     assert run.screen("import os\nos.kill(os.getppid(), 15)\n") and run.screen("import signal\n")
 
 
+def test_a_job_told_to_stop_writes_the_record_of_its_stop_whatever_it_is_told_meanwhile(tmp_path, tiny, monkeypatch):
+    """A job told to stop (SIGTERM) writes `run.json` before it ends: whose it is and that it was told to stop, with
+    no step or checkpoint for a grade to score. That record is all that says the run was stopped, so a second
+    SIGTERM doesn't interrupt it: `timeout` signals the job and then its process group. Here the job is told as it
+    reads its state directory, before it starts the route's process, and again as it makes the record."""
+    root, reg, path = tiny
+    make, before = run.stop_record, signal.getsignal(signal.SIGTERM)
+
+    def told_again(seed, split):
+        os.kill(os.getpid(), signal.SIGTERM)
+        return make(seed, split)
+
+    monkeypatch.setattr(run, "stop_record", told_again)
+    monkeypatch.setattr(run.Kept, "load", lambda *a: os.kill(os.getpid(), signal.SIGTERM))
+    assert run.main(["--config", path, "--seed", 0, "--split", "final", "--out", tmp_path / "out", "--starts", reg,
+                     "--state", tmp_path / "state"]) == run.STOPPED
+    assert signal.getsignal(signal.SIGTERM) is before
+    rec = json.loads((tmp_path / "out" / "run.json").read_text())
+    assert rec == stop_record(0, "final") == {
+        "schema": "training-slowdown/run/v1", "training_slowdown": VERSION, "seed": 0, "split": "final",
+        "stopped": TOLD, "steps": [], "checkpoints": [], "invalid": ["the job was told to stop before its last step"]}
+    assert told(rec) and grade.rows_of(rec) == []
+    assert not told(rec | {"stopped": "12.0 s past the tier's 10.0 s budget"}) and not told(None) and not told([TOLD])
+    assert sorted(p.name for p in tmp_path.iterdir()) == ["out", "state"] and not any((tmp_path / "state").iterdir())
+
+
 @pytest.mark.slow
 def test_a_job_stopped_after_a_checkpoint_and_run_again_writes_the_unbroken_jobs_record(tmp_path, tiny, monkeypatch):
     """The job as a node runs it, four times, each two processes, so slow: what the quick tests above don't reach is
     the job's own process keeping the state, the stop, and the sandbox. An unbroken job; the same job told to stop
-    (SIGTERM) once it has kept its state after step 1, which ends with `STOPPED`, no record and the state left; a
+    (SIGTERM) once it has kept its state after step 1, and told again as it ends the route's process, which ends
+    with `STOPPED`, the record of its stop and the state left; a
     job of another config on that state, refused by both digests before it trains, the state left; the stopped job
     on its state with one bit of the optimizers' part flipped, in the state directory and then only in the copy
     handed to the route's process, refused each time by that part's two SHA-512; the stopped job told to continue
@@ -334,9 +361,19 @@ def test_a_job_stopped_after_a_checkpoint_and_run_again_writes_the_unbroken_jobs
         if record["checkpoints"][-1]["step"] == 1:
             os.kill(os.getpid(), signal.SIGTERM)
 
-    monkeypatch.setattr(run.Kept, "write", stop_after)
-    assert job("cut", "state") == run.STOPPED and not (tmp_path / "cut" / "run.json").exists()
-    monkeypatch.setattr(run.Kept, "write", write)
+    terminate, ended = run.subprocess.Popen.terminate, []
+
+    def told_again(self):
+        # the route's process is still there, and the record of the stop already is
+        ended.append((self.poll(), json.loads((tmp_path / "cut" / "run.json").read_text())))
+        os.kill(os.getpid(), signal.SIGTERM)
+        terminate(self)
+
+    with monkeypatch.context() as stopping:
+        stopping.setattr(run.Kept, "write", stop_after)
+        stopping.setattr(run.subprocess.Popen, "terminate", told_again)
+        assert job("cut", "state") == run.STOPPED and ended == [(None, stop_record(0, "final"))]
+    assert told(json.loads((tmp_path / "cut" / "run.json").read_text()))
     kept = sorted(p.name for p in (tmp_path / "state").iterdir())
     assert kept == ["state.json", "tensors-0000001.pt"]
     so_far = json.loads((tmp_path / "state" / "state.json").read_text())["record"]
