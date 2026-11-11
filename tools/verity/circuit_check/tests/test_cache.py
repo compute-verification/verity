@@ -1,9 +1,10 @@
-"""The cache's per-target keys (`circuit_check.cache`, `circuit-check-cache/v2`), on a synthetic tree: a registry of small
+"""The cache's per-target keys (`circuit_check.cache`, `circuit-check-cache/v4`), on a synthetic tree: a registry of small
 Definitions, a catalog (`targets.py`) and shared pins of its own (``pins/``, a file per pin), checked through `cli.run`'s `--all` path with the catalog's
 functions standing in for the real ones (the real catalog takes a minute to build).  A target's entry holds what its own check
 read or resolved, and nothing another target or the task list read."""
 from __future__ import annotations
 
+import hashlib
 import json
 import os
 import shutil
@@ -13,6 +14,7 @@ from pathlib import Path
 
 import pytest
 
+from circuit_check import cache as CC
 from circuit_check import entries as E
 from verity.definitions.numerics import _jit
 
@@ -350,7 +352,8 @@ def _values(root: Path, target: str, field: str = "value") -> list:
 
 
 def _entry(root: Path, target: str) -> dict:
-    (e,) = [json.loads(p.read_text()) for p in (root / "cache").glob("*/*/*.json")
+    """The one stored entry of ``target``, its reads as `cache.store` was handed them (`cache.read`)."""
+    (e,) = [CC.read(p) for p in (root / "cache").glob("*/*/*.json")
             if json.loads(p.read_text())["key"]["request"]["target"][1] == target]
     return e
 
@@ -450,20 +453,6 @@ def test_a_sidecar_whose_source_inspect_looked_for_is_declared_by_where_it_is(tm
         assert side not in d["files"] and (side in d["probes"]) == ("syn.extra.circuit-check" in r["present"]), d
     _edit(root, side, "return []", "return []  # no roots")
     assert _run(root)["hits"] == ["SynOther_v1", "SynTop_v1"]
-
-
-def test_what_a_read_set_holds_beyond_its_declaration_is_undeclared():
-    from circuit_check import cache as CC
-
-    now = {"files": ["a.py", "b.py"], "listed": ["d"], "probes": ["p/__init__.py"], "registry": True}
-    assert CC.undeclared(now, now) == {} and CC.undeclared(now, {**now, "files": ["a.py", "b.py", "c.py"]}) == {}
-    assert CC.undeclared(now, {"files": ["a.py"], "listed": ["d"], "probes": [], "registry": False}) == {
-        "files": ["b.py"], "probes": ["p/__init__.py"], "registry": True}
-    assert CC.undeclared({**now, "registry": False}, None) == {"files": ["a.py", "b.py"], "listed": ["d"],
-                                                               "probes": ["p/__init__.py"]}
-    assert CC.undeclared({**now, "untracked": ["build/x.so"]}, now) == {"untracked": ["build/x.so"]}   # no task declares one
-    # a path declared by its bytes or its listing is declared by its kind too
-    assert CC.undeclared({**now, "probes": ["a.py", "d", "e"]}, now) == {"probes": ["e"]}
 
 
 #: the harness with `syn` served as hatch's `dev-mode-exact` serves core's `verity`: by `editables`' finder, after the path-based
@@ -930,6 +919,7 @@ def test_a_sidecar_whose_module_is_gone_is_an_error(tmp_path, monkeypatch):
     (tmp_path / "synorphan/kept.circuit-check.json").write_text("{}")
     monkeypatch.syspath_prepend(str(tmp_path))
     monkeypatch.setattr(SC, "PACKAGES", ("synorphan",))
+    monkeypatch.setattr(SC, "TREES", ())
     SC.discover.cache_clear()
     try:
         assert list(SC.discover()) == ["synorphan.kept"]
@@ -952,6 +942,7 @@ def test_a_sidecar_under_two_packages_roots_is_named_once_from_the_deeper(tmp_pa
     monkeypatch.syspath_prepend(str(tmp_path))
     monkeypatch.syspath_prepend(str(tmp_path / "synouter/src"))
     monkeypatch.setattr(SC, "PACKAGES", ("synouter", "syninner"))
+    monkeypatch.setattr(SC, "TREES", ())
     SC.discover.cache_clear()
     try:
         assert list(SC.discover()) == ["syninner.rec"]
@@ -974,6 +965,7 @@ def test_a_sidecar_behind_a_namespace_directory_is_named_only_from_its_own_packa
     (tmp_path / "synout2/__init__.py").write_text("")
     monkeypatch.syspath_prepend(str(tmp_path))
     monkeypatch.setattr(SC, "PACKAGES", ("synout2", "synin2"))
+    monkeypatch.setattr(SC, "TREES", ())
     SC.discover.cache_clear()
     try:
         assert list(SC.discover()) == ["synin2.rec"]
@@ -981,8 +973,36 @@ def test_a_sidecar_behind_a_namespace_directory_is_named_only_from_its_own_packa
         SC.discover.cache_clear()
 
 
+def test_a_package_of_another_distribution_registers_itself_by_a_sidecar_of_its_own_module(tmp_path, monkeypatch):
+    """A package in one of `sidecars.TREES` (``<tree>/<stack>/<package>``) is searched once it has a sidecar of its own module,
+    and its sidecars are named from its own top; one without is not searched, and `sidecars.PACKAGES` names neither."""
+    from circuit_check import sidecars as SC
+
+    for pkg in ("synreg", "synunreg"):
+        sub = tmp_path / "stacks/s" / pkg / "sub"
+        sub.mkdir(parents=True)
+        for d in (sub.parent, sub):
+            (d / "__init__.py").write_text("")
+        (sub / "rec.py").write_text("")
+        (sub / "rec.circuit-check.py").write_text("")
+    own = tmp_path / "stacks/s/synreg/__init__.circuit-check.py"
+    own.write_text("")
+    monkeypatch.syspath_prepend(str(tmp_path / "stacks/s"))
+    monkeypatch.setattr(SC, "REPO", tmp_path)
+    monkeypatch.setattr(SC, "PACKAGES", ())
+    monkeypatch.setattr(SC, "TREES", ("stacks",))
+    SC.discover.cache_clear()
+    try:
+        assert list(SC.discover()) == ["synreg", "synreg.sub.rec"] and SC.packages() == {"synreg"}
+        assert SC.path_of("synreg", "py") == own.resolve()
+        assert SC.path_of("synreg.sub.rec", "json") == (own.parent / "sub/rec.circuit-check.json").resolve()
+        assert SC.path_of("synunreg.sub.rec", "py") is None
+    finally:
+        SC.discover.cache_clear()
+
+
 def test_every_package_that_defines_a_definition_is_one_sidecars_are_found_in():
-    """`sidecars.PACKAGES` holds the top-level package of every module that defines a registered Definition: a sidecar in any
+    """`sidecars.packages` holds the top-level package of every module that defines a registered Definition: a sidecar in any
     other package is never read, so its bindings would leave the task list without an error."""
     from circuit_check import sidecars as SC
     from circuit_check import targets as TG
@@ -990,7 +1010,9 @@ def test_every_package_that_defines_a_definition_is_one_sidecars_are_found_in():
 
     TG.load_registries()
     tops = {m.partition(".")[0] for d in REGISTRY.defs.values() if TG._authored(d) and (m := SC.owner(d))}
-    assert tops <= set(SC.PACKAGES), sorted(tops - set(SC.PACKAGES))
+    assert tops <= SC.packages(), (f"{sorted(tops - SC.packages())} define Definitions where circuit-check finds no sidecar: "
+                                   f"register each by a sidecar of its own module (`<package>/__init__{SC.SUFFIX}.py`, "
+                                   f"`sidecars.TREES`)")
 
 
 def test_a_target_that_would_reuse_a_memoized_result_reruns_when_its_dependency_changes(tmp_path):
@@ -1130,6 +1152,82 @@ def test_a_pure_move_of_a_registry_module_reuses_every_target(tmp_path):
     assert _run(root)["hits"] == ["SynOther_v1", "SynTop_v1"]
     _edit(root, "syn/fam/top.py", "*operands(a, b)", "*operands(b, a)")
     assert _run(root)["hits"] == ["SynOther_v1"]
+
+
+#: the harness's lookups as they were before entries shared their read records: each entry's reads whole (`cache.read`),
+#: digested now, against what it holds
+WHOLE = """
+CC._current = lambda root, p, e: (lambda r: CC._digests(root, {k: list(v) for k, v in r.items()}) == r)(CC._expand(p, e))
+"""
+
+
+def test_each_distinct_read_record_is_stored_once_and_reuse_is_decided_as_by_whole_reads(tmp_path):
+    """Each distinct module or unit record (its content and import sites) is a read record of its own, stored once under the
+    SHA-512 of its bytes, which every entry that read it refers to, and no entry holds one.  `lookup`, which holds each read set
+    and run to the tree by reference, reuses and stores what comparing each entry's reads whole does in a tree beside it: a
+    first run, a run that reuses every target, a pure move (`_moved` follows the import sites the records hold), and an edit of
+    the moved module that reruns its target."""
+    trees = {"refs": _tree(tmp_path / "refs"), "whole": _tree(tmp_path / "whole")}
+    harness = {"refs": HARNESS, "whole": HARNESS.replace("rep = cli.run(", WHOLE + "rep = cli.run(")}
+    steps = [(lambda root: None, []), (lambda root: None, ["SynOther_v1", "SynTop_v1"]),
+             (lambda root: _move(root, "syn/top.py", "syn/fam/top.py", ("syn/catalog.py", "from syn import extra, top",
+                                                                         "from syn.fam import top\n    from syn import extra")),
+              ["SynOther_v1", "SynTop_v1"]),
+             (lambda root: _edit(root, "syn/fam/top.py", "*operands(a, b)", "*operands(b, a)"), ["SynOther_v1"])]
+    for step, hits in steps:
+        got = {}
+        for name, root in trees.items():
+            step(root)
+            got[name] = _run(root, harness[name])
+        assert got["refs"]["hits"] == got["whole"]["hits"] == hits
+        assert got["refs"]["stats"]["stored"] == got["whole"]["stats"]["stored"]
+    cache = trees["refs"] / "cache"
+    (reads,) = cache.glob(f"*/{CC.READS}")
+    assert all(hashlib.sha512(p.read_bytes()).hexdigest() == p.stem for p in reads.rglob("*.json"))
+    entries = list(cache.glob("*/*/*.json"))
+    sited = {json.dumps(v, sort_keys=True, separators=(",", ":")).encode() for p in entries
+             for kind, held in CC.read(p)["reads"].items() if kind in ("modules", "units") for v in held.values() if isinstance(v, dict)}
+    values = [p.read_bytes() for p in (reads / "values").glob("*.json")]
+    assert len(values) == len(sited) and set(values) == sited
+    assert not any(b'"sites"' in p.read_bytes() for p in entries)
+
+
+def _needed(p: Path) -> set[Path]:
+    """Each record the entry or record at ``p`` names in its ``needs``, and each one those name."""
+    out: set[Path] = set()
+    todo = [p]
+    while todo:
+        q = todo.pop()
+        for n in json.loads(q.read_bytes()).get("needs", []):
+            if (r := Path(os.path.normpath(q.parent / n))) not in out:
+                out.add(r)
+                todo.append(r)
+    return out
+
+
+@pytest.mark.parametrize("bad", ["altered", "missing"])
+def test_a_record_not_its_names_bytes_or_missing_is_a_miss_the_report_names_and_the_next_store_rewrites(tmp_path, bad):
+    """A record only SynTop's entry is read with, its bytes not those its name digests (its own JSON indented, which only
+    `_record`'s digest check tells from the record) or gone: SynTop's entry counts as none, so its check runs again, and the
+    run's report names the entry, what was raised and the record (``cache.unread``).  That run's store writes the record whole
+    again (`_put`), and the next run reuses SynTop."""
+    root = _tree(tmp_path)
+    _run(root)
+    entries = {json.loads(p.read_text())["key"]["request"]["target"][1]: p for p in (root / "cache").glob("*/*/*.json")}
+    top = entries.pop("SynTop_v1")
+    rec = sorted(_needed(top) - set().union(*map(_needed, entries.values())))[0]
+    good = rec.read_bytes()
+    if bad == "altered":
+        rec.write_text(json.dumps(json.loads(good), indent=1))
+    else:
+        rec.unlink()
+    out = _run(root)
+    assert out["hits"] == ["SynOther_v1"]
+    (line,) = out["stats"]["unread"]
+    assert line.startswith(f"{top}: {'ValueError' if bad == 'altered' else 'FileNotFoundError'}: ") and str(rec) in line
+    assert rec.read_bytes() == good
+    out = _run(root)
+    assert out["hits"] == ["SynOther_v1", "SynTop_v1"] and out["stats"]["unread"] == []
 
 
 def test_a_pure_move_of_a_definition_module_with_a_sidecar_reuses_its_targets(tmp_path):
@@ -1336,7 +1434,7 @@ def test_the_catalogs_units_are_its_root_functions_and_entries():
     assert {f"_model_roots:{label}" for label in labels} <= every and len(labels) > 50
     assert {f"TEMPLATE_PARAMS:{tid}" for tid in TG.template_params()} <= every
     assert {"_core_roots", "_boolean_roots", "_pouw_roots", "_kernel_roots", "_vocabulary_bindings", "common"} <= every
-    assert {"_kernel_roots", "_vocabulary_bindings", "common"} <= set(units[CC.TARGETS])
+    assert {"_kernel_roots", "common"} <= set(units[CC.TARGETS])
     src = srcs[CC.TARGETS]
     assert CC._units_of(src.replace("\ndef catalog(", "\n# a comment\ndef catalog(", 1))[0] == units[CC.TARGETS]
     b1 = SC.path_of("verity.definitions.registry.b1", "py")
@@ -1345,9 +1443,9 @@ def test_the_catalogs_units_are_its_root_functions_and_entries():
     assert {u for u in units[b1] if edited.get(u) != units[b1][u]} == {"_model_roots:ResidualAdd_v1"}
 
 
-#: `targets.py`'s own binding units: what no one module owns (every kernel's and vocabulary kind's self-check bindings), its
-#: module body, and `_root_bindings`, a helper whose name reads as a binding's
-TARGETS_UNITS = {"_kernel_roots", "_vocabulary_bindings", "_vocabulary_roots", "_root_bindings", "common"}
+#: `targets.py`'s own binding units: what no one module owns (every kernel's self-check bindings), its module body, and
+#: `_root_bindings`, a helper whose name reads as a binding's
+TARGETS_UNITS = {"_kernel_roots", "_root_bindings", "common"}
 
 
 def test_every_binding_and_pin_is_in_the_module_it_binds():
