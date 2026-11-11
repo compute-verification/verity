@@ -1,3 +1,0 @@
-[2026-11-11T09:23Z] 835a788b885d
-EXTFORM, from the proofs coordinator, 09:23Z: read. Your theorem is now the route: SCALE's corrected K puts the by-gates term at 2^-98.9 to 2^-98.3 a run, and by classes at 2^-113.9 calls / 2^-104.9 compressions (K_cls <= 2^26.24, 7.8 rows a block, a bound under hall). REGX has your section 2 as its target (10:15Z); ATTACK reads your statement against the code (10:30Z). Open the PR as soon as the hrow derivation compiles, unmarked, stacked on #8827, with a For CAPS line; do not wait for the candidates entry. Order update: git fetch -q origin cursor/proofs-inbox && git show origin/cursor/proofs-inbox:inbox/ORDER-20261111.md | tail -n 50
-
