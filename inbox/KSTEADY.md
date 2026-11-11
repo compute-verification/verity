@@ -896,3 +896,34 @@ the row back at 12:00Z unless it says by 11:45Z that the record needs them.** Ke
 nothing more for the row; I write here at 12:00Z which it is. The three older job directories then stay until
 the node ends. benchmarks' one ask, `server_rate.py` writing the cores count on a row, goes with HASH-115, not
 this week. HASH-116 is your work now.
+
+## Wed 11 Nov 11:43Z: your return is read: node A clear, #8909 open. Next, in this order: HASH-98's closing account, #8909 to its mark, HASH-115's design
+
+Read by me: #8909's body and the whole diff of `gpu_lease.sh`; `r20261111-104037-5660` and `…42e5` rc 0 at the head
+`13678330b87f`; the seven suites are exactly what the change touches (`suites.py --changed BASE --list`). I rang
+infra on HASH-116 with the number; I mark after its word. Good work, and a clear body.
+
+1. **HASH-98's closing account, first, while it is fresh** (one comment on HASH-98, under 200 words, then go on):
+   how many block types have a steady row and at how many cores; where the list of labelled rows is
+   (`labels-since-0053Z.md`, and the earlier ones); what is left and why (row 34's reader fix; the five head-block
+   rows and two `Dsa` rows above the 10-core share, 0.036% of SPOT by benchmarks' reader, not timed again); what
+   is held and unlabelled (the four cross-node rows, `4a11`, `17b1`, `bead`) and whether each should be dropped;
+   that node A is clear of kernels. I close HASH-98's timing on Thursday from that comment.
+2. **#8909 to its mark.** Read its comments at each CHECKPOINT until infra's word. If infra asks for a change:
+   make it, run the touched suites at the new head, and **end your turn with the head and the run** (I read and
+   mark). If infra says yes with no change, say so in your CHECKPOINT and go on; I mark.
+   - **One thing for the pull request's discussion, from me:** nothing passes `--cores` yet, so the check
+     protects no run until a launcher does. Say there in two lines what it takes for kernels' own launcher
+     (`ksteady-jobs/link.sh`) to pass it, and that infra installs the new `gpu-lease` on a node
+     (`research deploy install`, or whatever a pod takes): ask infra which.
+3. **HASH-115, the design, on the issue for benchmarks, by Thu 12 Nov 02:00Z** (benchmarks owns the kit; read
+   `benchmarks/harness/README.md` first): in at most 40 lines, the proof-server point (its spec's fields: block
+   type, staged statement and its pin, provers, cores, card; its verdict, the nine checks; its label and the
+   row's `cores`, which answers benchmarks' ask that `server_rate.py` write the count); how `plan`, `run` and a
+   resume map onto what the harness already has; the slot as `gpu-lease --on CARD --cores LIST` with cores of
+   the card's own NUMA node; which of `ksteady-jobs`' scripts each piece replaces, and what the harness cannot
+   do. **End your turn with that comment** (the new rule in RULES.md: a result another lane waits for ends your
+   turn): I ring benchmarks and resume you. Dates on the issue: the quota rule and the point on `main` by Tue
+   17 Nov, all of it by Fri 20 Nov.
+4. **The 18:15Z row:** the lead writes a section here just after 11:45Z saying whether it is given back. Do
+   nothing for it until then.
