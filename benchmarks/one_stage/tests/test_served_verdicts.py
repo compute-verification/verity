@@ -5020,7 +5020,8 @@ def _gate_composed(tmp_path: Path, edit: Mapping[str, str | None] | None = None,
     """`_handed`'s serve dir with `_lean_handed`'s sampled proofs cases (v2's naming a5's ``BLOBS``), sent by
     `served_verdicts.sh gate-compose` to `GATE_DRIVER`, pinned at GATE_PIN on remote, where the compose runs this tree's
     `served_verdicts.sh compose` and record on vy-auditor-2 with a `FAKE_SAMPLED_LEAN`, no composite and no git (as the
-    pinned archive has none). ``edit`` replaces the served node's sampled-proofs files before the hand-off (None deletes);
+    pinned archive has none), its checks under no memory scope (the gate's environment says ``CHECK_SCOPE=none``: it is
+    built afresh, so `no_scope` doesn't reach it). ``edit`` replaces the served node's sampled-proofs files before the hand-off (None deletes);
     ``extra`` adds to the sender's environment. The sender's run and $OUT."""
     from verity.ml.circuits import codec
 
@@ -5042,7 +5043,7 @@ def _gate_composed(tmp_path: Path, edit: Mapping[str, str | None] | None = None,
     answer = {**_accepted()["answer"], "protocol": "verity/sampled-proofs/v1", "commitment": REG.digest(LEAN_RECORD)}
     gate_env = {"PATH": f"{_hosts(tmp_path)}:{Path(sys.executable).parent}:/usr/bin:/bin", "HOST": "vy-auditor-2",
                 "SAMPLED_EXE": str(exe), "SEEN": str(tmp_path / "seen.json"), "ANSWER": json.dumps(answer),
-                "GIT_DIR": str(tmp_path / "no-git")}
+                "GIT_DIR": str(tmp_path / "no-git"), "CHECK_SCOPE": "none"}
     cases.update({f"{sp}/{name}": None if body is None else json.loads(body) for name, body in (edit or {}).items()})
     run = _handed(tmp_path, files=cases, cmd=("gate-compose", str(out / "pieces"), str(out / "record" / "inference-only.json")),
                   pouw={"verdict": "accept", "reason": None, "commitment": "ef" * 64, **ACCEPTS["pouw"]},
