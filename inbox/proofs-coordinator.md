@@ -40920,3 +40920,87 @@ GB at the 10% point x1.05 over a world year (a datacenter year in brackets), and
   `axiom probe: none of its 51 theorems uses an axiom beyond propext, Classical.choice and Quot.sound`. Scratch commit
   `ee38f6f47a52`, unpushed; its records run `r20261111-073449-ae4e` waits for a slot. So the merge after #8539 lands
   is 11 files, and the eleventh is written.
+
+## SERVEDCARD, Wed 11 Nov 07:48Z: job 1: the loopback verifier is Flock's Rust session verifier, running on the prover's own ten cores. It is a cross-check that no guarantee reads, and its 5.68 CPU-s a statement are inside the steady row's GPU-seconds. The cheapest sound cut is to run it on the auditor's host, where the guarantee already wants its coins
+
+**Sources.** I read KHSHARE's profile run `r20261111-061047-6773` from the store: the one-prover row's thread samples, sessions, verifier log, last kept session, `rate.json`, `summary.json` and `host.json`. I read the code at the run's source `c6cadd0e32`, and at `main` `8201dacff2` for the moved paths. Every number below is from that row.
+
+**Rows 1 and 2's tree: your answer to kernels is right.**
+- Row 1's staging run `r20261110-161706-314f` and row 2's `r20261110-161719-42db` both record source `c6cadd0e325fbaf1789d5fb199b4ac8d2f216ede`, clean [read: their attempt records].
+- Both ran `stage.py "$SPEC" full "$D"` under `taskset -c 0-11 nice -n 19`, with SPEC `census:SparseMlaHeadBlock_v2{…NVIS=64,FIRST=false|true…}` [read: the same records].
+- `cursor/proofs-servedcard-final-c5f8` is at that commit [run: `git rev-parse`, 07:43Z].
+- The profile run proved row 1's statement: pin `4b31e7caba011398`, circuit 12,191,652,715 bytes [read: its `rate.json`].
+
+**What it is.**
+- **The process.** It is `flock-circuit serve --zk --queue -`, one for each type and prover, started by `ProofServer._ensure_verifier` at `proof_server.py:396-399` [read].
+- **The coins.** It is the session's counterparty and sends the coins from its own coin tree: the session's hello says `coin-tree/hm96-sha512/v2`, and this run had no challenger [read: `session.json`].
+- **The check.** At Finish it replays the transcript and verifies both reps (`lib.rs` `finish()`, `:1999-2085`) [read]. Each rep is checked by `verify_zk` → `zk_constraints` → `verify_zk_with` (`flock-circuit.rs:597-726`) [read]:
+  - the zerocheck and lincheck, replayed on masked values (`zkv::replay`);
+  - the nine regions' claims at the two link points, from the public file (`circuit.rs:3504-3533`);
+  - the ZK Ligerito opening and its constraints;
+  - the inner proof.
+- **Cores.** It shares the prover's ten cores [read: `host.json`; `proof_server.py:249,408-411`]:
+  - the run was pinned to cores 34-43 (NUMA node 1, an H200);
+  - the verifier gets the server's environment with no thread share, since only provers get `RAYON_NUM_THREADS`;
+  - its 346 CPU-s ran on rayon's global pool (threads named `flock-circuit`) [run: my sums over `k1-threads.tsv.gz`].
+- **What it reads: the flat unit, once a rep** [read]:
+  - `stage.py` stages a "Boolean `_v2` template's flat, its MUFU reads in gates" (`stage.py:34-40`);
+  - the statement is one `unit` net of 30,893,497 ANDs and 31,981,569 rows, with 606,495,933 + 761,922,141 nonzeros (`unit_nnz` 1,368,418,074), and 4 slot types (`rate.json`'s stage);
+  - the lincheck's comb (`session_verify.rs:431-470`, at the default `FC_LINCHECK=partial`) folds each distinct net's matrices once a rep, so it walks the unit's 1.37 G nonzeros once a rep, not 256 copies;
+  - the statement was built once, in 21.1 s, and held for all 43 sessions (the verifier log).
+- **Memory.** The verifier holds 26.56 GiB resident, against 41.79 GiB for the prover [read: `summary.json`].
+
+**What it costs** [run: my sums over the row's records]:
+- **CPU.** Over the steady window of 40 sessions, the verifier process used 227.0 CPU-s, 5.68 a session. The prover used 17.6 a session, and wall time was 2.75 s a session. The 35-session window also gives 5.68, so KHSHARE's 5.7 and 23.2 hold.
+- **Its own clock.** `verify_s` averages 2.07 s of wall time a session, about 0.8 s a rep in the last session; `handle_s`, the coin rounds, averages 0.19 s. All 43 sessions were accepted.
+- **Row price.** The row prices a statement at 2.5654 GPU-s (`summary.json`); your brief's 2.8555 is KHSHARE's figure. The difference changes nothing below.
+- **What dominates** [guess]: the comb. 5.68 CPU-s over 2 × 1.37 G nonzeros is 2.1 ns a nonzero, the rate of a memory-bound gather. Every other step scales with the proof (1.2 MB a rep), the regions' public bytes or the pads. No record splits the time by phase: `verify_zk` never fills `phases` (`flock-circuit.rs:597-614`), and the kept session's are null [read].
+
+**Why it is there.**
+- **No rule requires its check** [read]:
+  - "upstream's Rust verifier is a cross-check (the agreement job), not a second verifier. Proofs are about Lean" (`security/Proofs/Flock/Soundness/assumption-notes/trusted-components.md:13`);
+  - "Upstream's Rust verifier is a cross-check, never a verifier" (`verity/protocols/flock/agreement/README.md:7`);
+  - the verdict of record is Lean's `flock-verify verify --zk` (ARCHITECTURE.md:150 and `proof_server.py`'s docstring);
+  - PROTOCOL.md §5 is the prover's self-check, and §10 is the ZK server's send check, which these rows turn off (`server_rate.py:214` sets `FC_FIREWALL=0`).
+- **Its coins are required, but not on this machine** [read: `security/Proofs/Accounting/TS/Session/Assumptions.lean:94-104`]. Premise 5 says the session's audit coins come "from the auditor's verifier, on a machine the prover doesn't control… under the named assumption `trusted-host`". It also says: "today they flip their coin tree from a `serve --zk --operator loopback` that the job starts beside `prove --zk` on the prover's node…, which doesn't meet 5."
+- **So it is both a counterparty and a harness check.** It is the session's counterparty, which the guarantee needs but in another place. It is also a harness check: a refused session voids a row, and `--lean` verifies only the last sessions at K = 1 (`server_rate.py`'s docstring) [read].
+
+**Is it counted twice?**
+- **Inside the steady row: yes, once, as contention** [read: `prove_records.py:227`]. The row's GPU-seconds a statement are wall clock (`gpus / statements_per_s`). The verifier's 5.68 CPU-s run on the same ten cores, overlapped with the next sessions' proving (`verify_ahead` 2). Those ten cores were 91% busy: 23.3 CPU-s a statement over 2.5654 s × 10 [run: my arithmetic].
+- **`verifier_seconds`** is #8679's `verify_s`, 2.07 s here. It is reported beside the row and not added (`prove.py:354,509,543`) [read]. Adding it to the row would count the check twice.
+- **The planner holds no Rust check today** [read]:
+  - its proving term is the `proof_overhead` card, priced at `e2e_s`, and `e2e_s` stops before Finish (`zk_cost.py:644-649`; `flock-circuit.rs:4616` on `main`);
+  - its verification term is Lean's (`total_cost.py:296-310`).
+- **But the head block's price will double-count it.** That card has no head-block row, so the head block's proving price will come from these steady rows. Then the Rust check is inside proving and Lean's term is added on top, for 87% of SPOT's proving [relayed: the 87.1%; the rest read].
+
+**What would cut it.** Each cut below gives the CPU-s it saves a statement on the prover's cores.
+- **Move it off the ten cores, to the auditor's host with the coins.**
+  - Saves: all 5.68.
+  - Effect on the row: the 2.5654 GPU-s falls by at most 0.62 [guess]. That assumes the ten cores bind, since the verifier is 24% of their CPU.
+  - Where it is charged then: 5.68 CPU-s is about 0.07 GPU-s at the planner's 81.8 core-s a GPU-s, plus 26.6 GiB of RAM a verifier [run: the 5.68].
+  - To measure: no knob places verifiers today (`proof_server.py:371-378`). A launcher-side wrapper given as `--bin`, running `serve` under `taskset` on four other cores, needs no tree change and about 6 minutes of one card (231 s ready, then 40 sessions).
+- **The templated check (#8771): no change for the head block** [read].
+  - #8771 lets `serve --queue` take a templated statement (`flock-circuit.rs:7326` at `4b3b557b8c`; `main` still refuses it at `:7329`).
+  - But `stage.py` stages the `_v2` head block flat, so its unit stays one net, and the comb walks the same 1.37 G nonzeros.
+  - It would help a unit cut into repeated nets, which the `_v2` head block isn't.
+- **One check a batch, by bigger statements.**
+  - The comb runs once a statement and rep, whatever the instance count, so 512 instances a statement would halve it a block [read: the comb is over one block's nets].
+  - The sample fixes the instance count, not the harness [guess].
+  - To measure: a row at 512 instances.
+- **One fold for k sessions.**
+  - The same matrices are read once for k sessions' (α, point) pairs, with the same verdicts and each session's own coins. Maybe 1.5 to 2× less at k = 4 [guess].
+  - It needs a code change in `session_verify` and `zk_veil::replay`.
+  - To measure: a microbenchmark on the staged unit.
+- **Keep the coin service and drop or sample the cross-check on the served path.**
+  - Dropping it saves about 5.5, since only `handle_s`'s 0.19 s wall stays; checking 1 session in N saves 5.68 × (1 − 1/N).
+  - `finish()` has no switch for it (`lib.rs:1998`), so it needs a code change [read].
+  - It loses the row's per-session evidence, unless Lean verifies every session.
+
+**One line for Daniel's 8 AM table:**
+> The loopback verifier's 5.7 CPU-s a statement buy two things. The first is a Rust re-check of every session, two passes over the head block's 1.37 G-nonzero unit, which no guarantee reads, because Lean's offline verdict is the one of record. The second is the session's coins. The cheapest sound way to pay less is to run it on the auditor's host, where the guarantee already wants the coins. There it costs about 0.07 GPU-s a statement, instead of up to 0.6 of the 2.57 GPU-s the steady row charges now. The 0.6 is my estimate until one row runs with the verifier on other cores.
+
+**Jobs 2 and C.**
+- **Job C is done.** Both readings were posted on HASH-112 at 02:50Z, and you posted kernels' 03:08Z question at 04:24Z (my 05:49Z entry). It needs nothing more, so jobs 2 and C both fit.
+- **Job 2** (PRF-548's questions 1 to 3, question 2 first) starts now. Its first entry is due by 22:00Z.
+
+**State.** I launched nothing, and I wait on nothing.
