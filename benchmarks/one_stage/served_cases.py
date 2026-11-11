@@ -1,7 +1,8 @@
 """A served window's cases, each on the window's registration record R and beside its own Lean answer, in the directory
-form a composition of the window's subprotocols reads as a case: sampled proofs' one-stage v1 case (onsite's), remote's
-sampled proofs case (one-stage v2's in the form ``one-stage``) and the inference-only case from its records audit,
-PoUW's period case held to the same record, Pearl+'s run case naming it, and with ``--v2`` one-stage v2's bare case too:
+form a composition of the window's subprotocols reads as a case: sampled proofs' one-stage v1 case (no composite's),
+both composites' sampled proofs case (one-stage v2's in the form ``one-stage``) and the inference-only case from its
+records audit, PoUW's period case held to the same record, Pearl+'s run case naming it, and with ``--v2`` one-stage v2's
+bare case too:
 
     served_cases.py (--audit DIR | --serve-dir D) --private DIR
                     [--policy-piece DIR --key-sha512 HEX] [--alpha N/D --gamma G]
@@ -21,14 +22,20 @@ written: that digest is what remote's record tie compares (`Core.Remote.windows`
 * **`verity/sampled-proofs/one-stage/v1`** (`window_case`, `V1`): a5's ``window/case.json`` as a5 wrote it
   (`a5.write_case`: the registration record, the evidence the audit's record was handed, the sessions' verdicts among
   it, and the verifier's params), exactly those three, and none when a5 wrote its ``case-error.txt`` instead (which says
-  why). It is onsite's sampled proofs subprotocol (`Core.Onsite.components`); remote's refuses it by name
-  (`VStar.Recursive.Sampled.V1_REFUSED`). Its answer is `sampled-proofs-one-stage check` on the case.
-* **`verity/sampled-proofs/v1`** (`sampled_case`, `SAMPLED`): remote's sampled proofs subprotocol
-  (`Core.Remote.components`, `VStar.Recursive.Sampled`), v2's case (`v2_case`, below) with ``form`` ``one-stage`` in its
-  params and its evidence (`with_form`), which the dispatcher splits off before one-stage v2's decoders read the rest:
+  why). No composite takes it: both name sampled proofs (`VStar.Recursive.Sampled`) among their subprotocols
+  (`Core.Onsite.components`, `Core.Remote.components`), which refuses it by name (`VStar.Recursive.Sampled.V1_REFUSED`).
+  It is written because the other cases are read off it (v2's, the inference-only case's), and its answer,
+  `sampled-proofs-one-stage check` on the case, goes to the verdicts alone.
+* **`verity/sampled-proofs/v1`** (`sampled_case`, `SAMPLED`): both composites' sampled proofs subprotocol
+  (`Core.Remote.components`, `Core.Onsite.components`, `VStar.Recursive.Sampled`), v2's case (`v2_case`, below) with
+  ``form`` ``one-stage`` in its params and its evidence (`with_form`), which the dispatcher splits off before one-stage
+  v2's decoders read the rest:
   its params name ``proofs`` and its evidence the proofs' files in place of v1's verdicts, as the dispatcher requires.
-  None when v2's case is refused, which the refusal says, and remote's composite then names sampled proofs missing. Its
-  answer is `vstar-recursive sampled check` on the case and its blobs.
+  None when v2's case is refused, which the refusal says, and each composite then names sampled proofs missing. a5
+  writes v2's case only for a `--zk` audit that drew exactly one member (`a5.v2_proof`), and v2 refuses a windowed
+  registration (`a5.case_v2`), so a served window of several members has none: under H1's tie its audit's law is
+  `stratified:1`, a sampled reader of each table W registers. Its answer is `vstar-recursive sampled check` on the case
+  and its blobs.
 * **The inference-only case** (`inference_only_case`, `INFERENCE_ONLY`: `verity/inference-only/v0`, the inference-only
   policy's check as a core protocol, `inference-only`):
   - params: ``alpha`` and ``gamma`` (the policy's α and Γ, as the auditor's gate signed them before the serve,
@@ -99,8 +106,9 @@ Each case goes to its own directory under ``--private`` (``sampled-proofs-v1/``,
 Pearl+'s ``blobs``) and ``answer.json``, its Lean answer line (and the inference-only case's ``policy.json``, where its
 α and Γ come from). A composition is handed only the directories whose answer's protocol is one of its product's
 subprotocols: remote's are sampled proofs', the inference-only case's and the period's (v1's, Pearl+'s in the period's
-place), onsite's v1's among its own, and neither's v2's bare case. The Lean runs on files in a 0700 scratch directory
-under ``--private``; the period's answer is the one `pouw_piece.py` wrote, and Pearl+'s the Lean verdict of record's.
+place), onsite's the same three among its own, and neither's one-stage v1's case or v2's bare case. The Lean runs on
+files in a 0700 scratch directory under ``--private``; the period's answer is the one `pouw_piece.py` wrote, and
+Pearl+'s the Lean verdict of record's.
 
 **No check runs outside a memory limit of its own, and none is started that cannot fit** (`lean_answer`, `Limits`).
 Each check is its own process in a systemd user scope of its own (``MemoryMax`` ``CHECK_MEM_GB``, default
