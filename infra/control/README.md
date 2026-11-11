@@ -148,7 +148,7 @@ starts it again 10 s later, and it stops every loop first). The new `watchers.to
 check --replaces` has passed on it: the check prints each loop resolved, then each loop that is new or whose argv, env,
 env_files or needs differ from the pod's, and refuses a config that lacks a loop the pod's has, which the restart would stop.
 Such a loop was added on the pod alone: add it to `watchers.toml` in a PR and deploy that commit, or, to stop it on purpose,
-add `--allow-drop NAME` to the check. A refused config stays beside the pod's as `watchers.toml.new`:
+add `--allow-drop NAME` to the check. The last line restarts nothing while a config that didn't pass the check is left:
 
 ~~~sh
 git archive HEAD tools/research infra/control infra/ops/verity_ops .agents/skills/using-slack | $CP "set -e; cd /data/watchers; \
@@ -159,7 +159,19 @@ $CP "cat > /data/watchers/watchers.toml.new && PYTHONPATH=/data/watchers/src/too
   && mv /data/watchers/watchers.toml.new /data/watchers/watchers.toml" < infra/control/watchers.toml
 $CP "cat > /data/watchers/vm_stop.toml" < infra/control/vm_stop.toml
 $CP "cat > /data/watchers/run.sh && chmod +x /data/watchers/run.sh" < infra/control/watchers.sh
-$CP 'kill "$(cat /data/watchers/supervisor.pid)"'
+$CP 'if [ -e /data/watchers/watchers.toml.new ]; then echo "not restarted: watchers.toml.new did not pass the check, so the supervisor still runs watchers.toml as it was"; exit 1; fi; kill "$(cat /data/watchers/supervisor.pid)"'
+~~~
+
+A config that doesn't pass the check stays beside the pod's as `watchers.toml.new`: the pod's `watchers.toml` is as it was, and
+the last line says so and restarts nothing, as it does on every later run while that file is there. The rest of the block has
+run all the same: `src` is the new tree, which a loop runs from whenever the supervisor starts it again, `src.prev` is the tree
+that run of the block replaced, and `vm_stop.toml`, read every pass, and `run.sh` are the new ones. To finish the deploy, run
+the block again from the commit that keeps the loop, or the check's line with `--allow-drop NAME` added and then the last line:
+a check that passes moves `watchers.toml.new` into place. To give the deploy up, remove the file and put the tree back:
+
+~~~sh
+$CP "rm /data/watchers/watchers.toml.new"
+$CP "cd /data/watchers && [ -d src.prev ] && rm -rf src && mv src.prev src"
 ~~~
 
 A loop that takes over from a copy elsewhere starts where that copy is, never posting everything again: the relay with `research
