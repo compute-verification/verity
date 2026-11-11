@@ -178,6 +178,25 @@ theorem depth_revealCodeWired (addr : ℕ → Option Address) (c₀ : Code) :
     depth (revealCodeWired h ω keep addr c₀).own = 64 :=
   depth_revealOwn
 
+/-! Its place, bits, salt and path are the base frame's, stated as functions: a proof rewrites with these before it
+names an opening, so the unifier never unfolds an opening's data to compare a field with its value. -/
+
+theorem place_revealCodeWired (addr : ℕ → Option Address) (c₀ : Code) :
+    (revealCodeWired h ω keep addr c₀).place = addressPlace addr :=
+  rfl
+
+theorem bits_revealCodeWired (addr : ℕ → Option Address) (c₀ : Code) :
+    (revealCodeWired h ω keep addr c₀).bits = bitsOf :=
+  rfl
+
+theorem salt_revealCodeWired (addr : ℕ → Option Address) (c₀ : Code) :
+    (revealCodeWired h ω keep addr c₀).salt = saltOf :=
+  rfl
+
+theorem path_revealCodeWired (addr : ℕ → Option Address) (c₀ : Code) :
+    (revealCodeWired h ω keep addr c₀).π = pathOf :=
+  rfl
+
 open Classical in
 /-- **The address map at the wired program**: the addresses `AddressesWired` names, where it holds. -/
 noncomputable def addressMapWired (g : ℕ) : Option Address :=
@@ -381,6 +400,41 @@ theorem path_wired {addr : ℕ → Address} (i p : ℕ) :
     path_opening (h := h) (r := r) (fun g => some (addr g)) h.frame (addr i) i
   exact (congrArg bytes (pathOf_pos (r.opening h (addr i) i).2 p)).trans hπ
 
+/-- **A port that reads a gate's value is one of its session's first table's.** -/
+theorem port_lt_of_reads {S : Address} {g : ℕ}
+    (hrd : r.ReadsRegisteredWired h ω keep S g ∨ r.ReadsInteriorWired h ω keep S g) :
+    S.port r.u < r.sts[0]!.c.ports.size := by
+  rcases hrd with ⟨_, -, hfind, -⟩ | ⟨-, -, hq, -⟩
+  · exact List.mem_range.1 (List.mem_of_find?_eq_some hfind)
+  · exact hq
+
+/-- **`row_wired` at SPOT's own frame at the wired program**: the frame's place and bits are the base frame's. -/
+theorem row_frame (hr : r.Ok h) {addr : ℕ → Address} {c₀ : Code} {i : ℕ}
+    (hpl : (addr i).place = (addr (ω i)).place) (hq : (addr i).port r.u < r.sts[0]!.c.ports.size)
+    (hR : r.RowAt h (addr i) i) :
+    SamplingDeploy.row (revealCodeWired h ω keep (fun g => some (addr g)) c₀).place
+        (revealCodeWired h ω keep (fun g => some (addr g)) c₀).bits
+        ({ (r.opening h (addr i) i).2 with pos := ω i } : Opening Bool) =
+      _root_.Flock.InnerRows.rowBytes r.p r.wF 0 (r.n h) ((addr i).port r.u) := by
+  rw [place_revealCodeWired, bits_revealCodeWired]
+  exact row_wired (ω := ω) (addr := addr) (i := i) hr hpl hq hR
+
+/-- **`salt_wired` at SPOT's own frame at the wired program.** -/
+theorem salt_frame {addr : ℕ → Address} (c₀ : Code) (i : ℕ) :
+    (revealCodeWired h ω keep (fun g => some (addr g)) c₀).salt
+        ({ (r.opening h (addr i) i).2 with pos := ω i } : Opening Bool) =
+      (_root_.Flock.InnerRows.salt r.p r.wF 0 (r.n h) ((addr i).port r.u)).data.toList := by
+  rw [salt_revealCodeWired]
+  exact salt_wired (h := h) (r := r) (addr := addr) i (ω i)
+
+/-- **`path_wired` at SPOT's own frame at the wired program.** -/
+theorem path_frame {addr : ℕ → Address} (c₀ : Code) (i : ℕ) :
+    bytes ((revealCodeWired h ω keep (fun g => some (addr g)) c₀).π
+        ({ (r.opening h (addr i) i).2 with pos := ω i } : Opening Bool)) =
+      pathAt r.ins r.sts (r.n h) ((addr i).port r.u) := by
+  rw [path_revealCodeWired]
+  exact path_wired (h := h) (r := r) (addr := addr) i (ω i)
+
 /-- **The address's opening of gate `i`, at position `ω i`, passes** under the roots the wired program opens `ω i`
 under, at an accepted run's checked unit and SPOT's own frame at the wired program: the opening holds the row the
 unit's session holds `i` in (`row_opening`), read at `ω i`'s place and checked at `ω i`'s slot, which are those of
@@ -393,17 +447,16 @@ theorem opens_at (hr : r.Ok h) {addr : ℕ → Address} {c₀ : Code}
     (SamplingDeploy.commit (code h)).Opens FlockDeploy.sha512 (r.rootsWired ω keep (ω i))
       ({ (r.opening h (addr i) i).2 with pos := ω i } : Opening Bool) = true := by
   obtain ⟨hn, hR, hrd⟩ := hH
-  have hq : (addr i).port r.u < r.sts[0]!.c.ports.size := by
-    rcases hrd with ⟨reg, -, hfind, -⟩ | ⟨-, -, hq, -⟩
-    · exact List.mem_range.1 (List.mem_of_find?_eq_some hfind)
-    · exact hq
+  have hq : (addr i).port r.u < r.sts[0]!.c.ports.size := port_lt_of_reads hrd
   have hslot : slotsOf (fun g => some (addr g)) (ω i) = some (addr i).slot := congrArg some hsl.symm
   have h64 : 64 ≤ depth (revealCodeWired h ω keep (fun g => some (addr g)) c₀).own :=
     Nat.le_of_eq (depth_revealCodeWired h ω keep (fun g => some (addr g)) c₀).symm
+  have hpos : ({ (r.opening h (addr i) i).2 with pos := ω i } : Opening Bool).pos = ω i := rfl
   exact opens_slot hr hf h64 (S := addr i) (g := ω i)
-    (o := ({ (r.opening h (addr i) i).2 with pos := ω i } : Opening Bool)) rfl hslot hn
-    (row_wired (ω := ω) (addr := addr) (i := i) hr hpl hq hR) (salt_wired (h := h) (r := r) (addr := addr) i (ω i))
-    (path_wired (h := h) (r := r) (addr := addr) i (ω i)) hrd
+    (o := ({ (r.opening h (addr i) i).2 with pos := ω i } : Opening Bool)) hpos hslot hn
+    (row_frame (ω := ω) (keep := keep) (addr := addr) (c₀ := c₀) (i := i) hr hpl hq hR)
+    (salt_frame (h := h) (ω := ω) (keep := keep) (r := r) (addr := addr) c₀ i)
+    (path_frame (h := h) (ω := ω) (keep := keep) (r := r) (addr := addr) c₀ i) hrd
 
 /-- **The reveal at the wired program opens each decoded value a checked unit needs**, at addresses that hold
 (`Reveals`'s shape, at one run): for each gate `i` an accepted run's checked unit needs side by side, the reveal at
