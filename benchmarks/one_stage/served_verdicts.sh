@@ -1111,7 +1111,8 @@ inference_policy() {  # in TREE, before the lease: the policy's (c, k, n) at the
 # The limits of the policy's rate rule (verity/inference-only/v0's α and Γ, which the composite's inference-only case is
 # checked at), fixed with the policy, so before serve-openai starts: the run's ALPHA and GAMMA where both are set, else
 # α = k/c and Γ = c of the policy's own c and k, the class's public numbers, so in the unit the policy counts c in:
-# Boolean gates by its gate table (the count rule's unit; the run's own are in LIMITS_UNIT, which it states). They go to
+# Boolean gates by its gate table (the count rule's unit; the run's own are in LIMITS_UNIT, which it states, with what
+# they prove where LIMITS_PROVE says it: the file's `proves` and the line, in the run's own words). They go to
 # IO_LIMITS beside the policy, with the count rule's (c, k, n) and the policy file's SHA-512, and the deferral and the
 # compose hand-off carry them as ALPHA and GAMMA (`fixed_limits`), so no later step reads them off the served window's
 # division. The developer writes them. No auditor's device signs them unless SIGNED_LIMITS=1 (off by default; under
@@ -1130,10 +1131,10 @@ IO_LIMITS=${IO_LIMITS:-$OUT/inference-only-limits.json}
 limits() {
   local out
   [ -s "$IO_POLICY" ] || return 0
-  out=$("$SAY_PY" - "$IO_POLICY" "$IO_LIMITS" "${ALPHA:-}" "${GAMMA:-}" "${LIMITS_UNIT:-}" <<'EOF' 2>&1
+  out=$("$SAY_PY" - "$IO_POLICY" "$IO_LIMITS" "${ALPHA:-}" "${GAMMA:-}" "${LIMITS_UNIT:-}" "${LIMITS_PROVE:-}" <<'EOF' 2>&1
 import hashlib, json, sys
 from fractions import Fraction
-policy, out, alpha, gamma, unit = sys.argv[1:6]
+policy, out, alpha, gamma, unit, proves = sys.argv[1:7]
 body = open(policy, "rb").read()
 p = json.loads(body)
 given = bool(alpha and gamma)
@@ -1145,9 +1146,11 @@ doc = {"format": "verity-bench/inference-only-limits/v1", "alpha": [a.numerator,
        "count": {x: p.get(x) for x in ("c", "k", "n")},
        "from": "the run's ALPHA and GAMMA" if given else "the policy's c and k (alpha = k/c, gamma = c)",
        "policy_sha512": hashlib.sha512(body).hexdigest(), "written_by": "the developer"}
+if given and proves:
+    doc["proves"] = proves
 with open(out, "w") as f:
     f.write(json.dumps(doc, indent=1, sort_keys=True) + "\n")
-print(f"alpha = {a.numerator}/{a.denominator} and gamma = {g}, {doc['from']}")
+print(f"alpha = {a.numerator}/{a.denominator} and gamma = {g}, {doc['from']}" + (f" ({proves})" if "proves" in doc else ""))
 EOF
 ) || { say "INFERENCE-ONLY LIMITS: none written, so the composite writes an inference-only case only at the run's" \
            "ALPHA and GAMMA or a policy the gate signed:" \
