@@ -19,7 +19,7 @@
 #          FIT_CPUS=... FIT_MODEL=<id, or a snapshot directory when the HF cache has no refs>]   # p2_v1/scale.py into $OUT:
 #          the device encode rate, the store of 2^e blocks audited, vLLM beside it
 #   ... -- bash benchmarks/pous/pod.sh IMPL=p2-store P2FAST='-DP2_FAST -DP2_KEYS4 -DP2SQ_KARA' -- encode --store DIR --seed ...
-#          p2_v1/store.py's command after the literal --, run on the library with every GPU the run sees (`encode`, `verify
+#          p2_store/store.py's command after the literal --, run on the library with every GPU the run sees (`encode`, `verify
 #          --decode`, `spot`); --out is $OUT, and DIR, the store, is scratch outside the run directory
 #
 # On a shared node (band-gpu, p2-v1-gpu, side-by-side): WORK=<dir> holds the venvs and builds, VCPU and RCPU the verifier's and
@@ -247,7 +247,7 @@ elif [ "$IMPL" = p2-v1-gpu ] || [ "$IMPL" = p2-v3-gpu ] || [ "$IMPL" = p2-v3-mc-
   cp "$P2LIB"/*.ptxas "$O/" 2>/dev/null
   if [ "$IMPL" = p2-store ]; then
     while [ $# -gt 0 ] && [ "$1" != -- ]; do shift; done
-    [ $# -ge 2 ] || { echo "p2-store runs p2_v1/store.py's command after a literal --"; exit 2; }
+    [ $# -ge 2 ] || { echo "p2-store runs p2_store/store.py's command after a literal --"; exit 2; }
     shift
     "$PY" verity/protocols/pous/prover/p2/p2_store/store.py "$1" --out "${OUT:-$O/bench}" --p2-lib "$P2LIB" "${@:2}"; RC=$?
     clocks after

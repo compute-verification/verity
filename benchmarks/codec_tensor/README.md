@@ -1,10 +1,11 @@
 # benchmarks/codec_tensor
 
 The bandwidth audit's (PoUB, `verity/protocols/poub/verifier`) work on the GPU, and the tensor-core wide-word
-codec. `wt.cu` is the codec, a fused decode with its receipts, held to `wide.py`, its byte-exact reference. `reader.cu`
-(with `reader.py`) is the device reader: the audit's receipts, leaves and receipt tree, gated byte for byte
-against the audit's `receipts.py`. `sketch_receipt.py` is the reference for the audit's `sketch-sha512` receipt.
-`step.cu` (`step.py`, `step.sh`) is one decode step at HBM exhaustion, and `sha512.cuh` is SHA-512 for the kernels.
+codec. `wt.cu` is the codec, a fused decode with its receipts, held to `wide.py`, its byte-exact reference. The device
+reader is PoUB's prover's, in `verity/protocols/poub/prover/codec_tensor/`: `reader.cu` with `reader.py` gives the
+audit's receipts, leaves and receipt tree, gated byte for byte against the audit's `receipts.py`; `sketch_receipt.py`
+and `sketching.py` are the reference for the audit's `sketch-sha512` receipt, and `sha512.cuh` is SHA-512 for the
+kernels. `step.cu` (`step.py`, `step.sh`) is one decode step at HBM exhaustion.
 
 ## Interface
 

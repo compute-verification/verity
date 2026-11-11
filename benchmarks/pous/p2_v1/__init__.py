@@ -1,11 +1,8 @@
 """P2 v4 (`verity/protocols/pous/verifier/README.md`, "P2") in the POUS-only harness.
 
-- `reference.py`: the scheme on the CPU, pinned by `vectors.json`.
-- `wire.py`: `p2-audit-wire/v4`'s frames and its reference verifier, pinned by `audit-vectors.json` and
-  `audit-negative-vectors.json`; `vectors.py` writes all three files (and the package's keys fixture) in one command.
-- `p2v1.cu`, `Makefile`: the GPU library (decode on `../../../verity/protocols/pous/prover/p2/p2_gpu/p2dec.cu`'s tuned squaring, encode by two roots).
-- `gpu.py`: the library through ctypes, with the keys expanded on the device.
 - `harness.py`: P2's arm of the harness (`bench.py --impl p2-v1-gpu`); `memory_challenger.py`: its memory challenger process, k = 105.
-- `store.py`: the encoded weights store's layout (the MQA16K INT8 weights block-aligned in W; `store.py layout` writes
-  its JSON) and the reference `decode_layer` a decode-to-staging kernel matches; `store-toy/` is its toy fixture.
+
+The scheme's reference, wire and vectors are the verifier's (`verity/protocols/pous/verifier/p2_v1/`: `reference.py`,
+`wire.py`, `vectors.py`). The GPU library, its wrapper and the encoded weights store are P2's prover
+(`verity/protocols/pous/prover/p2/`: the package `p2_store` with `p2v1.cu`, `gpu.py` and `store.py`, on `p2_gpu/p2dec.cu`).
 """

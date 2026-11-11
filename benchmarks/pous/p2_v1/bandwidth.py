@@ -829,7 +829,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     r.add_argument("--out", type=Path, required=True)
     s = sub.add_parser("session")
     s.add_argument("--store", type=Path, required=True, help="the encoded store's directory, read only")
-    s.add_argument("--layout", type=Path, required=True, help="its layout JSON (p2_v1/store.py layout)")
+    s.add_argument("--layout", type=Path, required=True, help="its layout JSON (p2_store/store.py layout)")
     s.add_argument("--lib", default="unused", help="libp2v1.so's directory")
     s.add_argument("--node", required=True)
     s.add_argument("--registration", type=Path, help="the registration the store must have (registration_json)")
