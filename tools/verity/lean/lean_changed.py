@@ -1632,14 +1632,22 @@ def regenerates(p: str, pkg: str, got: int, update: bool, out: Path, at: Path, l
     return True
 
 
-def says(lock: bytes | None) -> str | None:
+def says(lock: bytes) -> str:
     """What a lock's bytes say, to compare two locks by: its JSON with every object's keys sorted, so neither the order of
-    an object's keys nor the layout counts, while a list's order and every value do (`true` is not `1`); None for no lock
-    and for bytes that are not JSON, which say nothing to compare."""
+    an object's keys nor the layout counts, while a list's order and every value do (`true` is not `1`); ValueError for
+    bytes that are not JSON."""
+    return json.dumps(json.loads(lock), sort_keys=True)
+
+
+def same(wrote: bytes, committed: bytes | None) -> bool:
+    """Whether the record a run ``wrote`` says what the ``committed`` lock says (`says`); never for no committed lock or
+    one that is not JSON, whose record is then kept as a change."""
+    if committed is None:
+        return False
     try:
-        return None if lock is None else json.dumps(json.loads(lock), sort_keys=True)
+        return says(wrote) == says(committed)
     except ValueError:
-        return None
+        return False
 
 
 def checked(p: str, pkg: str, got: int, record: Path, committed: bytes | None, up: bool, _update: bool, out: Path,
@@ -1658,7 +1666,7 @@ def checked(p: str, pkg: str, got: int, record: Path, committed: bytes | None, u
     wrote = record.read_bytes()
     if wrote == committed:
         return None
-    if (said := says(wrote)) is not None and said == says(committed):
+    if same(wrote, committed):
         record.write_bytes(committed)
         log(f"lean-records: {p}: the record check.py --update wrote says what {p}/{LOCK} says, in another order of keys or "
             "layout: no change, so no record is kept and the lock stays as committed")
