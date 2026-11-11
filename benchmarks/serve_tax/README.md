@@ -132,7 +132,7 @@ research run --on NODE --source . --cwd source -- bash benchmarks/serve_tax/run.
   limit of 131,072 tokens, each sent again with another ending, so half of the prompt tokens repeat, all of them on
   the second and fourth request. The client's `timed_trace` dataset sends them from a file of lengths and block ids
   that the arm writes (`<arm>/prefix.trace.jsonl`; a block is 64 tokens, and two prompts share the tokens of the
-  blocks whose ids they share), each prompt as the synthetic token ids the client draws for its blocks, in the
+  blocks whose ids they share), each prompt as the synthetic token ids the client generates for its blocks, in the
   file's order with one request in flight, so each repeat follows the request it repeats (`--loads` takes no rungs
   for it). The row is labelled `scaled down` while the load is those four requests alone: half of their prompt
   tokens repeat, which is this load's share and no serve's, where such pairs arrive among requests that repeat
