@@ -69,7 +69,7 @@ GAMMAS = np.linspace(0.01, 2.0, 399)
 OUTPUT = ("e_bytes", "format", "rebuild_macs", "decoder_gates")
 #: the theorem's inputs on a traced step, as `formalism.he_products` names them
 WORK = ("N", "O", "beta_w", "beta_x", "b_y", "F")
-#: what ρ reads of a record's `trace` (`traced`) and has no figure without; the job writes more (`run.trace_step`)
+#: what ρ reads of a record's `trace` (`traced`) and has no figure without; the job writes more (`traced.trace_step`)
 TRACE = ("capture", "tokens", "k", "rows", "p_match", "at", "data_dependent", "carried_scalars")
 #: what the grade reads of a trace beside `TRACE`, where the trace has it, each with what it is: a record without one
 #: still grades, the figures that read it blank (`blank`)
@@ -317,7 +317,7 @@ def with_circuit(record: dict, circuit: dict) -> dict:
 
 def traced(record: dict, row: dict) -> dict:
     """`row` (one of `rows_of(record)`) as ρ reads it: with the products of the record's `trace`, the step its job
-    traced (`run.trace_step`), in its `formalism` block, as `formalism.measure` takes a traced record's. Each raw
+    traced (`traced.trace_step`), in its `formalism` block, as `formalism.measure` takes a traced record's. Each raw
     product row is priced here by `capture.products.priced`, at the k the job classified the rows at and at each
     other k of the console's dial (`at`), and the traced step stands for every step through the row's checkpoint
     after the run's first update (`changed_steps`), by their tokens over its own, a `stand_in` where they differ from

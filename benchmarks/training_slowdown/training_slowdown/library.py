@@ -7,7 +7,7 @@ is read under. There is one kind of entry, whatever its route computes: a new on
 has, or a new route and a config of it. ENTRY is a config's file or its name there; none is every entry.
 
 For each entry the command builds its route's model at the start's shape, traces its step on a CPU as a job does
-after its last step (`run.trace_step`: on fake tensors, so it trains nothing and reads no weights and no data), and
+after its last step (`traced.trace_step`: on fake tensors, so it trains nothing and reads no weights and no data), and
 reads the bound of record on that step from the slowdown calculator (`calculator.bound`): the least slowdown of any
 partition of the traced step into the policy's blocks, on the work the theorem charges (`formalism.he_of_rows`,
 `formalism.he_figure`: the products whose two operands both depend on the update). It prints one row an entry: the
@@ -30,7 +30,7 @@ from pathlib import Path
 
 import numpy as np
 
-from . import calculator, config, policy, run, starts
+from . import calculator, config, policy, starts, traced
 from . import formalism as F
 from .codecs import Identity
 from .grade import WORK, per_period
@@ -86,7 +86,7 @@ def classified(trace: dict, k: float) -> dict | None:
 
 
 def bound(trace: dict, c: float, k: float) -> dict:
-    """The bound of record at (c, k) on a traced step (`run.trace_step`'s): its `slowdown` and what `binds`, with
+    """The bound of record at (c, k) on a traced step (`traced.trace_step`'s): its `slowdown` and what `binds`, with
     the calculator's bound (`bound`) and the work it read (`figure`, `formalism.he_figure`'s on the step's M at the
     step's own gates). No slowdown, and why in `binds`, on a step the capture refused, on one whose elementwise ops
     fan out into a product's operand (its `p_match`), at a k the trace has no rows at, and past the last k (H) states
@@ -123,7 +123,7 @@ def bound(trace: dict, c: float, k: float) -> dict:
 
 
 def trains(graph, of: int) -> dict:
-    """What a traced step trains, from the capture's graph (`run.traced_step`'s): the parameters the step writes (a
+    """What a traced step trains, from the capture's graph (`traced.traced_step`'s): the parameters the step writes (a
     buffer it writes, such as an average of the weights, is none), and their share of the start's `of` parameters.
     Adapters a route adds beside the start's weights count over the start's."""
     n = sum(math.prod(p["shape"]) for p in graph.params if p["trained"])
@@ -154,7 +154,7 @@ def row(cfg: config.Config) -> dict:
     if not all(isinstance(c, Identity) for _, c in route.plan(cfg.dials).rules):
         return out | {"slowdown": None, "binds": CODED}
     model, optimizers = route.build(cfg.start.shape, cfg.dials)
-    trace, graph = run.traced_step(cfg, route, model, optimizers, "cpu")
+    trace, graph = traced.traced_step(cfg, route, model, optimizers, "cpu")
     if graph is not None:
         out |= {"step": {"gates": trace["circuit"]["gates"], "tokens": trace["tokens"], "capture": trace["capture"],
                          "capture_code": trace["capture_code"], "approximated": approximated(graph)},
