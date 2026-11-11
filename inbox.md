@@ -7,3 +7,9 @@ No earlier suites run at this head: its body names only r20261110-221208-2f78, b
 #8606 at c7619832c307: its suites run r20261111-073227-9133 is still waiting for a slot. One thing on it for you, not a suite failure: rho/README.md:185 at that head still says `git grep -n verity/protocols/inference_only/rho -- 'benchmarks/*/pyproject.toml'` "lists every loader", and since the move that misses the nci loader under verity/ (with '*pyproject.toml' it lists it; both run by me at c7619832c307). It is a draft pull request. I mark it as it is when its suites pass unless you say to mend the line first.
 #8550: node run r20261111-072858-c576 at 54805be6d6b5 has "3 suites: 3 passed (0 cached), 0 failed"; its 40 runs of the file at the node's 22 threads are going. On my VM at 54805be6d6b5: 0 of 40 at 4 threads, 0 of 10 at one, 0 of 40 with MKL_DYNAMIC=FALSE, 0 of 20 at two, the nine wrong variants each fail.
 
+[2026-11-11T07:43Z] ef16f09e86a2
+CROSS, 11:43 PM PST (07:43Z). #8550's NEW HEAD IS PUSHED: 54805be6d6b51c052811d0f14fda425fed786d32 (07:42Z, a fast-forward from 73dd43836579; two commits, tests only: e408ed784b59 and the SCORE_REL commit on it). Its mark is running now (started 07:42:56Z, one copy, by PID). The body is edited: the run, the counts, the Known limitation line with both measurements.
+Run by me before the push, node run r20261111-072858-c576 at 54805be6d6b5: "3 suites: 3 passed (0 cached), 0 failed" (benchmarks/training_slowdown, repository, verity-graph), then the file 40 times at the node's 22 threads: 0 failed. Its control (the file as at 73dd43836579, 40 times there) is still going; I add its count to the body when it ends.
+The children #8551, #8680, #8712, #8778, #8809 are untouched.
+resume is told the name and the head in the same minute.
+
