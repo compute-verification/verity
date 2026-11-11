@@ -19,9 +19,16 @@ A scratch file of instances, never merged: what the statements of `Properties.Nc
   every bit of its writer's row (`lands_nowhere_past`).
 * **A held row that has a writer** puts no gate in θ (`held_wired_names_nothing`): the wired circuit has none of its
   gates. `Good` asks that an opening's root and domain rows be held, and never that they have no writer.
-* **The pins and the record's text.** `Carries`, the four premises of the rate rule and `Complies` are the same
-  statements whatever pins the check reports (`carries_repin`, `owns_repin`, `complies_repin`), and `Served` is the
-  same whatever record text it reports (`served_retext`).
+* **The pins and the record's text.** `Carries` holds the pins to the instance: a check and its copy reporting other
+  pins carry one instance only where the pins are the instance's own (`carries_repin_pins`), so one record read with
+  other pins and the copy neither owns its records nor complies (`not_owns_repin`, `not_complies_repin`); `LaidOut`,
+  `Counts` and `Rates` read no pin. `Served` holds the record's text to the wiring's cuts and wires
+  (`served_retext_states`) and to nothing else of it: two texts that give `Spot.Wires.Wiring.ofJson` the same thing
+  lay out the same circuits (`served_retext_iff`). A text that does not parse lays out none, so `Counts` asks nothing
+  of it (`counts_retext_unparsed`) and `LaidOut` fails (`not_laidOut_retext_unparsed`).
+* **θ is the rows the check holds, whatever the text registers.** A record that lays out a circuit lays out the same
+  wired circuit, with the same blocks, under any other choice of held rows that have no writer (`served_rehold`):
+  every row where it has no wire (`served_hold_all`), or none (`served_hold_none`).
 * **The premises on the check hold of a check that reads nothing** (`refuseAll_premises`): they are consistent, and
   that an accepting check meets them is not shown here.
 * **A leaf handed on by reference is passed on.** `PassedOn` is by the gate a return's leaf resolves to. Where the
@@ -126,11 +133,68 @@ def repin (F : Form) (ps : F.Case → List String) : Form :=
 def retext (F : Form) (s : F.Case → String) : Form :=
   { F with inst := fun c => { F.inst c with record := s c } }
 
-/-- `Carries` holds no pin to the instance. -/
-theorem carries_repin (F : Form) (ps : F.Case → List String) (j : Json) (c : F.Case) :
-    Carries (repin F ps) j c ↔ Carries F j c := Iff.rfl
+theorem map_str_inj : ∀ {l l' : List String}, l.map Json.str = l'.map Json.str → l = l'
+  | [], [], _ => rfl
+  | [], _ :: _, h => by simp at h
+  | _ :: _, [], h => by simp at h
+  | a :: l, b :: l', h => by
+    simp only [List.map_cons, List.cons.injEq] at h
+    rw [Json.str.inj h.1, map_str_inj h.2]
 
-theorem owns_repin (F : Form) (ps : F.Case → List String) : Owns (repin F ps) ↔ Owns F := Iff.rfl
+/-- **`Carries` holds the pins to the instance.** Where the check and its repinned copy both carry `j`, the pins
+reported are the instance's own. -/
+theorem carries_repin_pins (F : Form) (ps : F.Case → List String) (j : Json) (c : F.Case)
+    (h : Carries (repin F ps) j c) (h' : Carries F j c) : ps c = (F.inst c).pins := by
+  obtain ⟨-, -, -, -, -, hp⟩ := h
+  obtain ⟨-, -, -, -, -, hp'⟩ := h'
+  have hp1 : j.getObjVal? "pins" = .ok (.arr ((ps c).map Json.str).toArray) := hp
+  rw [hp'] at hp1
+  have h1 : ((F.inst c).pins.map Json.str).toArray = ((ps c).map Json.str).toArray :=
+    Json.arr.inj (Except.ok.inj hp1)
+  have h2 : (F.inst c).pins.map Json.str = (ps c).map Json.str := by
+    first
+      | exact congrArg Array.toList h1
+      | simpa using h1
+  exact (map_str_inj h2).symm
+
+/-- With the instance's own pins reported, `Carries` is the same statement. -/
+theorem carries_repin_of_eq (F : Form) (ps : F.Case → List String) (j : Json) (c : F.Case)
+    (h : ps c = (F.inst c).pins) : Carries (repin F ps) j c ↔ Carries F j c := by
+  constructor
+  · rintro ⟨h1, h2, h3, h4, h5, h6⟩
+    have h6' : j.getObjVal? "pins" = .ok (.arr ((ps c).map Json.str).toArray) := h6
+    rw [h] at h6'
+    exact ⟨h1, h2, h3, h4, h5, h6'⟩
+  · rintro ⟨h1, h2, h3, h4, h5, h6⟩
+    have h6' : j.getObjVal? "pins" = .ok (.arr ((ps c).map Json.str).toArray) := by
+      rw [h]
+      exact h6
+    exact ⟨h1, h2, h3, h4, h5, h6'⟩
+
+/-- With other pins reported, the repinned copy carries no instance the check carries. -/
+theorem not_carries_repin (F : Form) (ps : F.Case → List String) (j : Json) (c : F.Case) (h' : Carries F j c)
+    (hne : ps c ≠ (F.inst c).pins) : ¬ Carries (repin F ps) j c :=
+  fun h => hne (carries_repin_pins F ps j c h h')
+
+/-- Where the check and its repinned copy both own their records, the pins reported are the instance's own on every
+record read. -/
+theorem owns_repin_pins (F : Form) (ps : F.Case → List String) (h : Owns (repin F ps)) (h' : Owns F) {j tr : Json}
+    {c : F.Case} (hread : F.read j tr = .ok c) : ps c = (F.inst c).pins :=
+  carries_repin_pins F ps j c (h j tr c hread) (h' j tr c hread)
+
+/-- One record read with other pins reported, and the repinned copy does not own its records. -/
+theorem not_owns_repin (F : Form) (ps : F.Case → List String) (h' : Owns F) {j tr : Json} {c : F.Case}
+    (hread : F.read j tr = .ok c) (hne : ps c ≠ (F.inst c).pins) : ¬ Owns (repin F ps) :=
+  fun h => hne (owns_repin_pins F ps h h' hread)
+
+theorem owns_repin_of_eq (F : Form) (ps : F.Case → List String) (h : ∀ c, ps c = (F.inst c).pins) :
+    Owns (repin F ps) ↔ Owns F :=
+  ⟨fun ho j tr c hr => (carries_repin_of_eq F ps j c (h c)).1 (ho j tr c hr),
+    fun ho j tr c hr => (carries_repin_of_eq F ps j c (h c)).2 (ho j tr c hr)⟩
+
+/-- Accepting reads no pin. -/
+theorem accepts_repin (F : Form) (ps : F.Case → List String) (j tr : Json) (c : F.Case) :
+    Accepts (repin F ps) j tr c ↔ Accepts F j tr c := Iff.rfl
 
 theorem laidOut_repin (F : Form) (ps : F.Case → List String) : LaidOut (repin F ps) ↔ LaidOut F := Iff.rfl
 
@@ -138,13 +202,185 @@ theorem counts_repin (F : Form) (ps : F.Case → List String) : Counts (repin F 
 
 theorem rates_repin (F : Form) (ps : F.Case → List String) : Rates (repin F ps) ↔ Rates F := Iff.rfl
 
-theorem complies_repin (F : Form) (ps : F.Case → List String) : Complies (repin F ps) ↔ Complies F := Iff.rfl
+/-- Where the check and its repinned copy both comply, the pins reported are the instance's own on every record
+accepted. -/
+theorem complies_repin_pins (F : Form) (ps : F.Case → List String) (h : Complies (repin F ps)) (h' : Complies F)
+    {j tr : Json} {c : F.Case} (hacc : Accepts F j tr c) : ps c = (F.inst c).pins :=
+  carries_repin_pins F ps j c (h j tr c hacc).1 (h' j tr c hacc).1
 
-/-- `Served` reads no record text. -/
-theorem served_retext (F : Form) (s : F.Case → String) (c : F.Case) (d : Verity.RegisteredCircuit) :
-    Served (retext F s) c d ↔ Served F c d := Iff.rfl
+/-- One record accepted with other pins reported, and the repinned copy does not comply. -/
+theorem not_complies_repin (F : Form) (ps : F.Case → List String) (h' : Complies F) {j tr : Json} {c : F.Case}
+    (hacc : Accepts F j tr c) (hne : ps c ≠ (F.inst c).pins) : ¬ Complies (repin F ps) :=
+  fun h => hne (complies_repin_pins F ps h h' hacc)
 
-theorem counts_retext (F : Form) (s : F.Case → String) : Counts (retext F s) ↔ Counts F := Iff.rfl
+/-- **What a retexted record that lays out a circuit says**: the text reported parses, and states the wiring's cuts
+and wires. -/
+theorem served_retext_states (F : Form) (s : F.Case → String) (c : F.Case) (d : Verity.RegisteredCircuit)
+    (h : Served (retext F s) c d) :
+    ∃ doc W, Flock.JsonParse.parse (s c) = .ok doc ∧ Spot.Wires.Wiring.ofJson (wiresOf doc) = .ok W ∧
+      (F.wiring c).cuts = W.cuts ∧ (F.wiring c).wires = W.wires := by
+  obtain ⟨P, doc, W, S, rs, at_, -, hparse, hof, hcuts, hwires, -⟩ := h
+  exact ⟨doc, W, hparse, hof, hcuts, hwires⟩
+
+/-- A text that does not parse lays out no circuit. -/
+theorem not_served_retext_unparsed (F : Form) (s : F.Case → String) (c : F.Case) (d : Verity.RegisteredCircuit)
+    (h : ∀ doc, Flock.JsonParse.parse (s c) ≠ .ok doc) : ¬ Served (retext F s) c d := fun hs => by
+  obtain ⟨doc, W, hp, -⟩ := served_retext_states F s c d hs
+  exact h doc hp
+
+/-- A text that parses and states the wiring's cuts and wires lays out what the record's own text lays out. -/
+theorem served_retext_of (F : Form) (s : F.Case → String) (c : F.Case) (d : Verity.RegisteredCircuit) {doc' : Json}
+    {W' : Spot.Wires.Wiring} (hp : Flock.JsonParse.parse (s c) = .ok doc')
+    (ho : Spot.Wires.Wiring.ofJson (wiresOf doc') = .ok W') (hc : (F.wiring c).cuts = W'.cuts)
+    (hw : (F.wiring c).wires = W'.wires) (h : Served F c d) : Served (retext F s) c d := by
+  obtain ⟨P, doc, W, S, rs, at_, hdec, -, -, -, -, hrest⟩ := h
+  exact ⟨P, doc', W', S, rs, at_, hdec, hp, ho, hc, hw, hrest⟩
+
+/-- The other way: the record's own text states the wiring, and it lays out what the retexted copy lays out. -/
+theorem served_of_retext (F : Form) (s : F.Case → String) (c : F.Case) (d : Verity.RegisteredCircuit) {doc : Json}
+    {W : Spot.Wires.Wiring} (hp : Flock.JsonParse.parse (F.inst c).record = .ok doc)
+    (ho : Spot.Wires.Wiring.ofJson (wiresOf doc) = .ok W) (hc : (F.wiring c).cuts = W.cuts)
+    (hw : (F.wiring c).wires = W.wires) (h : Served (retext F s) c d) : Served F c d := by
+  obtain ⟨P, doc', W', S, rs, at_, hdec, -, -, -, -, hrest⟩ := h
+  exact ⟨P, doc, W, S, rs, at_, hdec, hp, ho, hc, hw, hrest⟩
+
+/-- **What is left of `Served` reading no text.** Two texts whose parsed documents give `Spot.Wires.Wiring.ofJson`
+the same thing (`wiresOf`) lay out the same circuits: `Served` tells no text from one that differs outside `cuts`
+and `wires`. -/
+theorem served_retext_iff (F : Form) (s : F.Case → String) (c : F.Case) (d : Verity.RegisteredCircuit)
+    {doc doc' : Json} (hp : Flock.JsonParse.parse (F.inst c).record = .ok doc)
+    (hp' : Flock.JsonParse.parse (s c) = .ok doc') (hsame : wiresOf doc' = wiresOf doc) :
+    Served (retext F s) c d ↔ Served F c d := by
+  constructor
+  · intro h
+    obtain ⟨P, doc1, W1, S, rs, at_, hdec, hparse, hof, hcuts, hwires, hrest⟩ := h
+    have hd : doc1 = doc' := Except.ok.inj (hparse.symm.trans hp')
+    rw [hd, hsame] at hof
+    exact ⟨P, doc, W1, S, rs, at_, hdec, hp, hof, hcuts, hwires, hrest⟩
+  · intro h
+    obtain ⟨P, doc1, W1, S, rs, at_, hdec, hparse, hof, hcuts, hwires, hrest⟩ := h
+    have hd : doc1 = doc := Except.ok.inj (hparse.symm.trans hp)
+    rw [hd, ← hsame] at hof
+    exact ⟨P, doc', W1, S, rs, at_, hdec, hp', hof, hcuts, hwires, hrest⟩
+
+/-- A check whose reported text never parses: `Counts` asks nothing of it. -/
+theorem counts_retext_unparsed (F : Form) (s : F.Case → String)
+    (h : ∀ c doc, Flock.JsonParse.parse (s c) ≠ .ok doc) : Counts (retext F s) :=
+  fun _ _ c _ d hd => (not_served_retext_unparsed F s c d (h c) hd).elim
+
+/-- And it lays out no circuit: one record read, and `LaidOut` fails. -/
+theorem not_laidOut_retext_unparsed (F : Form) (s : F.Case → String)
+    (h : ∀ c doc, Flock.JsonParse.parse (s c) ≠ .ok doc) {j tr : Json} {c : F.Case} (hread : F.read j tr = .ok c) :
+    ¬ LaidOut (retext F s) := fun hl => by
+  obtain ⟨d, hd⟩ := hl j tr c hread
+  exact not_served_retext_unparsed F s c d (h c) hd
+
+/-- Where every record read reports a text that gives `Spot.Wires.Wiring.ofJson` what the record's own gives it,
+`Counts` is the same statement. -/
+theorem counts_retext_of (F : Form) (s : F.Case → String)
+    (h : ∀ j tr c, F.read j tr = .ok c → ∃ doc doc', Flock.JsonParse.parse (F.inst c).record = .ok doc ∧
+      Flock.JsonParse.parse (s c) = .ok doc' ∧ wiresOf doc' = wiresOf doc) :
+    Counts (retext F s) ↔ Counts F := by
+  constructor
+  · intro hc j tr c hread d hd
+    obtain ⟨doc, doc', hp, hp', hsame⟩ := h j tr c hread
+    exact hc j tr c hread d ((served_retext_iff F s c d hp hp' hsame).2 hd)
+  · intro hc j tr c hread d hd
+    obtain ⟨doc, doc', hp, hp', hsame⟩ := h j tr c hread
+    exact hc j tr c hread d ((served_retext_iff F s c d hp hp' hsame).1 hd)
+
+/-! ### θ is the rows the check holds, whatever the text registers -/
+
+/-- The check `F`, holding the rows `h`. -/
+def rehold (F : Form) (h : F.Case → Row → Option Held) : Form :=
+  { F with held := h }
+
+open Classical in
+/-- The gates of the rows `held` holds. -/
+noncomputable def heldGates (P : Prog) (rs : Array TRange) (W : Spot.Wires.Wiring) (held : Row → Bool)
+    {D : Verity.Circuit} (at_ : Fin D.N → ℕ) : Finset (Fin D.N) :=
+  Finset.univ.filter fun x => ∃ r l lo hi, held r = true ∧ RowLeaf P rs W r l (at_ x) lo hi
+
+theorem names_heldGates (P : Prog) (rs : Array TRange) (W : Spot.Wires.Wiring) (held : Row → Bool)
+    {D : Verity.Circuit} (at_ : Fin D.N → ℕ) : Names P rs W held at_ (heldGates P rs W held at_) := by
+  intro x
+  simp [heldGates]
+
+/-- The gates of held rows are input gates of the wired circuit: a row's leaves are input gates. -/
+theorem heldGates_input {P : Prog} {rs : Array TRange} {W : Spot.Wires.Wiring} {S : Spot.Wires.Summary}
+    {held : Row → Bool} {D : Verity.Circuit} {at_ : Fin D.N → ℕ} (hown : OwnRows P rs W)
+    (hlay : LaysOut P rs W S D at_) : ∀ g ∈ heldGates P rs W held at_, D.isInput g = true := by
+  intro g hg
+  obtain ⟨r, l, lo, hi, -, hleaf⟩ := (names_heldGates P rs W held at_ g).1 hg
+  obtain ⟨p, ops, sc, hgate, hin⟩ := hown.1 r l (at_ g) lo hi hleaf
+  obtain ⟨p', ops', sc', hgate', -, hinp, -⟩ := hlay.2.2 g
+  rw [hgate] at hgate'
+  have hp : p = p' := (Prod.mk.inj (Except.ok.inj hgate')).1
+  rw [hinp, ← hp]
+  exact hin
+
+/-- **θ is the rows the check holds, whatever the text registers.** A record that lays out a circuit lays out the
+same wired circuit, with the same blocks, under any other choice `h` of held rows that have no writer: θ is then the
+gates of the rows `h` holds. The record's text is the same on both sides, so nothing `Served` reads of it says which
+rows are registered. -/
+theorem served_rehold (F : Form) (h : F.Case → Row → Option Held) (c : F.Case) (d : Verity.RegisteredCircuit)
+    (hd : Served F c d)
+    (hfree : ∀ S, Spot.Wires.check (F.wiring c) = .ok S →
+      ∀ r, (h c r).isSome → S.writerOf r.tid r.unit r.port r.row = none) :
+    ∃ d' : Verity.RegisteredCircuit, Served (rehold F h) c d' ∧ d'.D = d.D := by
+  obtain ⟨P, doc, W, S, rs, at_, hdec, hparse, hof, hcuts, hwires, hcheck, heval, htmpl, hown, hal, hfill, -, hlay,
+    -, hdiv⟩ := hd
+  have hn : Names P rs (F.wiring c) (fun r => (h c r).isSome) at_
+      (heldGates P rs (F.wiring c) (fun r => (h c r).isSome) at_) := names_heldGates _ _ _ _ _
+  exact ⟨Verity.RegisteredCircuit.ofPartition d.D (heldGates P rs (F.wiring c) (fun r => (h c r).isSome) at_)
+      (heldGates_input hown hlay) d.n d.𝓘,
+    ⟨P, doc, W, S, rs, at_, hdec, hparse, hof, hcuts, hwires, hcheck, heval, htmpl, hown, hal, hfill,
+      hfree S hcheck, hlay, hn, hdiv⟩, rfl⟩
+
+/-- The summary's wires are the wiring's. -/
+theorem check_wires {W : Spot.Wires.Wiring} {S : Spot.Wires.Summary} (h : Spot.Wires.check W = .ok S) :
+    S.wires = W.wires := by
+  unfold Spot.Wires.check at h
+  split at h
+  · cases h
+  · split at h
+    · cases h
+    · split at h
+      · cases h
+      · split at h
+        · cases h
+        · cases h
+          rfl
+
+/-- A wiring with no wire gives no row a writer. -/
+theorem writerOf_none {W : Spot.Wires.Wiring} {S : Spot.Wires.Summary} (h : Spot.Wires.check W = .ok S)
+    (hnone : W.wires = []) (tid : String) (u : ℕ) (port : String) (row : ℕ) : S.writerOf tid u port row = none := by
+  unfold Spot.Wires.Summary.writerOf
+  rw [check_wires h, hnone]
+  rfl
+
+/-- Every row held: with no wire at all, a record that lays out a circuit lays out the same wired circuit with every
+row of every unit in θ, whatever its text registers. -/
+theorem served_hold_all (F : Form) (c : F.Case) (d : Verity.RegisteredCircuit) (hd : Served F c d)
+    (hnone : (F.wiring c).wires = []) :
+    ∃ d' : Verity.RegisteredCircuit, Served (rehold F fun _ _ => some (Held.read "")) c d' ∧ d'.D = d.D :=
+  served_rehold F _ c d hd fun _ hS r _ => writerOf_none hS hnone r.tid r.unit r.port r.row
+
+/-- And none held: a record that lays out a circuit lays out the same wired circuit with no gate in θ, so that every
+input gate is fresh, whatever its text registers. -/
+theorem served_hold_none (F : Form) (c : F.Case) (d : Verity.RegisteredCircuit) (hd : Served F c d) :
+    ∃ d' : Verity.RegisteredCircuit, Served (rehold F fun _ _ => none) c d' ∧ d'.D = d.D ∧ d'.θ = ∅ := by
+  obtain ⟨P, doc, W, S, rs, at_, hdec, hparse, hof, hcuts, hwires, hcheck, heval, htmpl, hown, hal, hfill, -, hlay,
+    -, hdiv⟩ := hd
+  refine ⟨Verity.RegisteredCircuit.ofPartition d.D ∅ (fun g hg => absurd hg (Finset.notMem_empty g)) d.n d.𝓘,
+    ⟨P, doc, W, S, rs, at_, hdec, hparse, hof, hcuts, hwires, hcheck, heval, htmpl, hown, hal, hfill,
+      fun r hr => ?_, hlay, fun x => ?_, hdiv⟩, rfl, rfl⟩
+  · exact absurd hr (by simp [rehold])
+  · constructor
+    · intro hx
+      exact absurd hx (Finset.notMem_empty x)
+    · rintro ⟨r, l, lo, hi, hheld, -⟩
+      exact absurd hheld (by simp [rehold])
 
 /-! ### A check that reads nothing -/
 
