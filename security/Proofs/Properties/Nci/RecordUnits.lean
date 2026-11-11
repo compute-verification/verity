@@ -43,7 +43,8 @@ def tidAt (d : Desc) (root : DDef) (k : Nat) : String := d.callees.getD root.nod
 
 /-- **The root's ranges are its nodes that are no input, in order**: each a call or a batch of its callee's id, a
 call with one unit and a batch with its `n`. -/
-theorem evaluate_spec {d : Desc} {ts : Array String} {rs : Array TRange} (h : Flock.TemplateQuery.evaluate d ts = .ok rs) :
+theorem evaluate_spec {d : Desc} {ts : Array String} {rs : Array TRange}
+    (h : Flock.TemplateQuery.evaluate d ts = .ok rs) :
     ∃ root, d.def? d.root = some root ∧
       rs.toList.map (·.node) = (List.range root.nodes.size).filter (fun k => !isInput (tidAt d root k)) ∧
       ∀ r ∈ rs.toList, r.template = tidAt d root r.node ∧
