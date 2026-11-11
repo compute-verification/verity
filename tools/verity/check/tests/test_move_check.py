@@ -1571,7 +1571,8 @@ def test_a_rule_lists_only_the_paths_whose_lines_it_rewrote(tmp_path):
 
 
 #: the package `verity/ml/circuits/` moves to `verity/circuits/prover/`, but for `ops/` (to `verity/definitions/ops/`) and
-#: `pod/` (to `verity/circuits/pod/`); `benchmarks/pouw/` stays, and `tools/config/` goes to `verity/configuration/config/`
+#: `pod/` (to `verity/circuits/pod/`); `benchmarks/pouw/` stays, and `tools/config/` goes to `verity/configuration/config/`.
+#: The script's variable is one `tests/test_pythonpath_entries.py` does not hold to this tree, which has no such paths
 REST = "".join(f"line {i} of the file, which the move leaves as it is\n" for i in range(8))
 REBASE = {
     LAYOUT_MAP: '[tokens]\n"verity/ml/circuits/" = "verity/circuits/"\n',
@@ -1585,7 +1586,7 @@ REBASE = {
     "verity/ml/circuits/tests/fixtures/unit.json": "{}\n",
     "verity/ml/circuits/tests/lean/Unit.lean": "/-- Built by `pod/90-unit.sh` on `tests/fixtures/unit.json`.\n" + REST + "-/\ntheorem t : 1 = 1 := rfl\n",
     "benchmarks/pouw/pyproject.toml": '[project]\nname = "pouw"\n',
-    "benchmarks/pouw/served/legs.sh": 'env PYTHONPATH="$PWD/../..:$PWD/../../tools/config:$PWD" python -m served\n' + REST.replace("line", "# line"),
+    "benchmarks/pouw/served/legs.sh": 'env PYTHONPATH="$POUW/../..:$POUW/../../tools/config:$POUW" python -m served\n' + REST.replace("line", "# line"),
     "tools/config/settings.py": "Y = 1\n",
     "tools/other.py": "Z = 1\n",
 }
