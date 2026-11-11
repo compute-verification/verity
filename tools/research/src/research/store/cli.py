@@ -10,7 +10,11 @@
                                                    --skip-record-less pushes no attempt that names no run record
   research data labels-sync [--push-only|--pull-only|--from-backup ART|--from-dir DIR] [--jobs N] [--json]
                                                    union labels/ with the remote's labels/<target>/<content sha256>.json (nothing overwritten, ever);
-                                                   --from-backup unions a labels-backup/v1 tarball, --from-dir another store's labels/
+                                                   --from-backup unions a labels-backup/v1 tarball, --from-dir another store's labels/;
+                                                   a pull of more than 5,000 takes the labels pack first, one request for all it holds
+  research data labels-pack [--every S] [--jobs N] [--json]
+                                                   pull every remote assertion, then rebuild the labels pack (all of them as one tarball,
+                                                   packs/labels/latest.tar.gz beside latest.json) and replace the remote's; --every repeats
   research data fetch ART [--to DIR] [--path GLOB]... [--list [--json]]
                                                    materialise the payload (file or tree, or just the files matching --path); prints the path;
                                                    --list prints the tree's files (path, bytes, local/remote) and fetches nothing
@@ -25,7 +29,9 @@
   research data preserved (RUN|ART)... [--mode head|readback|recorded] [--jobs N] [--json]
                                                    the durability gate: exit 0 iff the attempt manifest, every output artifact AND every local
                                                    assertion about them are verifiably on the remote; otherwise names the failing legs (preserved.py);
-                                                   N targets (default 8) checked at once, each printed as it finishes
+                                                   exit 4 (WITHDRAWN) when the only blobs missing were withdrawn on purpose (`withdraw`): delete
+                                                   their local copies, never put them again; N targets (default 8) checked at once, each printed
+                                                   as it finishes
   research data select [--kind K] [--where meta.key=value]... [--tool T] [--derivation D] [--attempt R] [--label k=v]... [--json|--ids]
                                                    stderr names the source (the index and its as-of time, or the catalog alone);
                                                    exit 1 when there is neither an index nor an artifact in the catalog
@@ -92,6 +98,7 @@ import json
 import os
 import sqlite3
 import sys
+import time
 from pathlib import Path
 from typing import Any, Callable
 
@@ -200,12 +207,28 @@ def cmd_put(argv: list[str]) -> int:
     ap.add_argument("--ref", action="append", default=[], metavar="name=art:...")
     g = ap.add_mutually_exclusive_group()
     g.add_argument("--file", default=None)
-    g.add_argument("--tree", default=None)
+    g.add_argument("--tree", default=None, help="a directory; with a `run_id` in --meta, refused (exit 1, nothing stored) when it holds "
+                                                "a file a `withdrawn` label of that run's artifacts covers (`research data withdraw --path`)")
     ap.add_argument("--preserve", action="store_true", help="push to the remote and verify (exit 1 unless PRESERVED)")
     ap.add_argument("--json", action="store_true")
     ns = ap.parse_args(argv)
     st = LocalStore(ns.store)
-    art = st.put_artifact(ns.kind, _meta(ns.meta), _refs(ns.ref), file=Path(ns.file) if ns.file else None, tree=Path(ns.tree) if ns.tree else None)
+    meta = _meta(ns.meta)
+    if ns.tree and ids.is_run_id(run_id := meta.get("run_id")):
+        from . import withdraw  # noqa: PLC0415
+        from .local import _rel_files  # noqa: PLC0415
+
+        tree = Path(ns.tree)
+        rels = [p.relative_to(tree).as_posix() for p in _rel_files(tree)] if tree.is_dir() else []
+        if hits := withdraw.refused(st, run_id, rels, lambda s: print(f"research data put: {s}", file=sys.stderr)):
+            for path, a, w in hits:
+                print(f"research data put: {path}: withdrawn from {a} ({w['reason']!r}, by {w['by']}"
+                      + (f", ref {w['ref']}" if w["ref"] else "") + ")", file=sys.stderr)
+            print(f"research data put: REFUSED, nothing stored: {len(hits)} file(s) under {tree} were withdrawn from run {run_id}'s "
+                  "artifacts on purpose (`research data withdraw`); delete them from the tree and from every other local copy, "
+                  "then put the rest", file=sys.stderr)
+            return 1
+    art = st.put_artifact(ns.kind, meta, _refs(ns.ref), file=Path(ns.file) if ns.file else None, tree=Path(ns.tree) if ns.tree else None)
     rep, why, gone = None, None, ""
     if ns.preserve:
         rep = st.push(art, preserve=True)
@@ -405,14 +428,24 @@ def cmd_verify(argv: list[str]) -> int:
     return 0 if rep["preserved"] else 1
 
 
+EXIT_WITHDRAWN = 4
+PRESERVED_EXITS = ("exit 0: PRESERVED. 1: NOT PRESERVED (something is missing or wrong on the remote, or unchecked). 2: usage. "
+                   f"{EXIT_WITHDRAWN}: WITHDRAWN: everything else is preserved, and every blob missing from the remote was withdrawn on "
+                   "purpose (`research data withdraw`, its `withdrawn` label's reason, by and ref shown): delete those files' local "
+                   "copies, never keep, push or put them again. Neither a pass nor a loss: a caller that deletes local copies on 0 "
+                   "or restores on 1 does neither.")
+
+
 def cmd_preserved(argv: list[str]) -> int:
     """The durability gate (F7, `preserved.py`), three legs: the attempt manifest, every artifact it names (outputs + telemetry),
     and every local assertion about the attempt / its derivation / those artifacts must be verifiably on the remote.  Exit 0 iff so
-    for every target; else 1, the list of what is not, and which legs fail.  Exit 2 on a usage error (no targets).  Targets are checked
+    for every target; else 1, the list of what is not, and which legs fail.  Exit 4 (WITHDRAWN) when the only blobs missing were
+    withdrawn on purpose (`research data withdraw`): neither preserved nor lost, their local copies are to be deleted, never kept
+    or put again.  Exit 2 on a usage error (no targets).  Targets are checked
     `--jobs` at a time and each one's lines are printed as it finishes (completion order); `--json` waits and keeps the given order."""
     from . import preserved as P
 
-    ap = _ap("preserved")
+    ap = _ap("preserved", epilog=PRESERVED_EXITS)
     ap.add_argument("targets", nargs="*", help="run ids and/or art:<hex>")
     ap.add_argument("--mode", choices=list(P.MODES), default="head",
                     help="head: size + MD5 ETag per blob (read-back when unavailable), manifest read back (default); "
@@ -433,7 +466,7 @@ def cmd_preserved(argv: list[str]) -> int:
     else:
         for line in P.format_summary(rep):
             print(line)
-    return 0 if rep["preserved"] else 1
+    return 0 if rep["preserved"] else EXIT_WITHDRAWN if rep["verdict"] == P.WITHDRAWN else 1
 
 
 def cmd_select(argv: list[str]) -> int:
@@ -675,9 +708,35 @@ def cmd_labels_sync(argv: list[str]) -> int:
     if ns.json:
         _dump(rep)
     else:
-        print(f"labels: {rep['local']} local, {rep['remote_before']} on {rep['remote']}: {len(rep['pushed'])} pushed, {len(rep['pulled'])} pulled, "
-              f"{rep['already']} already on both" + (f", {len(rep['bad'])} bad remote key(s) skipped" if rep["bad"] else ""))
+        print(f"labels: {rep['local']} local, {rep['remote_before']} on {rep['remote']}: {len(rep['pushed'])} pushed, {len(rep['pulled'])} pulled"
+              + (f" ({rep['pack']} from the labels pack)" if rep["pack"] else "")
+              + f", {rep['already']} already on both" + (f", {len(rep['bad'])} bad remote key(s) skipped" if rep["bad"] else ""))
     return 1 if rep["bad"] else 0
+
+
+def cmd_labels_pack(argv: list[str]) -> int:
+    """Rebuild the labels pack and replace the remote's (`labels_sync.publish_pack`): pull every assertion the remote lists into this
+    store, then upload them as one tarball at a fixed key, which a `labels-sync` that lacks most of them takes in one request before
+    it pulls the rest.  `--every S` repeats, S seconds after each pass; a pass that fails ends the command."""
+    from . import labels_sync as LS
+
+    ap = _ap("labels-pack")
+    ap.add_argument("--every", type=float, metavar="S", help="repeat, S seconds after each pass")
+    ap.add_argument("--jobs", type=int, default=LS.SYNC_JOBS, metavar="N")
+    ap.add_argument("--json", action="store_true")
+    ns = ap.parse_args(argv)
+    st = LocalStore(ns.store)
+    warn = None if ns.json else (lambda s: print(s, file=sys.stderr, flush=True))
+    while True:
+        rep = LS.publish_pack(st, jobs=max(1, ns.jobs), log=warn)
+        if ns.json:
+            print(json.dumps(rep, sort_keys=True), flush=True)
+        else:
+            print(f"labels-pack: {rep['labels']} labels in {rep['bytes']} bytes at {LS.PACK_KEY} (sha256 {rep['sha256']}), {rep['pulled']} pulled first"
+                  + (f", {rep['bad']} bad remote key(s) left out" if rep["bad"] else ""), flush=True)
+        if ns.every is None:
+            return 0
+        time.sleep(ns.every)
 
 
 def cmd_vocab(argv: list[str]) -> int:
@@ -1438,8 +1497,7 @@ def cmd_withdraw(argv: list[str]) -> int:
             out["applied"] = withdraw.apply(st.remote, p, log=say)
             lost = False
             for art in p.arts:
-                value = f"{ns.reason} (only {', '.join(ns.paths)})" if ns.paths else ns.reason
-                st.add_label(art, vocab.WITHDRAWN, value, ns.by, ref=ns.ref)
+                st.add_label(art, vocab.WITHDRAWN, withdraw.label_value(ns.reason, ns.paths), ns.by, ref=ns.ref)
                 said, bad = _label_write_through(st, art)
                 say(f"{art}: withdrawn label {said}")
                 lost |= bad
@@ -1509,7 +1567,7 @@ COMMANDS: dict[str, Callable[[list[str]], int]] = {
     "snapshot": cmd_snapshot,
     "labels": cmd_labels, "label": cmd_label, "reindex": cmd_reindex, "index": cmd_index, "sql": cmd_sql, "push": cmd_push, "mint-credential": cmd_mint_credential,
     "vocab": cmd_vocab, "refresh-fixtures": cmd_refresh_fixtures, "fetch-fixtures": cmd_fetch_fixtures, "export": cmd_export,
-    "doctor": cmd_doctor, "evict": cmd_evict, "labels-sync": cmd_labels_sync,
+    "doctor": cmd_doctor, "evict": cmd_evict, "labels-sync": cmd_labels_sync, "labels-pack": cmd_labels_pack,
     "catalog": cmd_catalog, "vocab-check": cmd_vocab_check, "pending": cmd_pending, "refresh": cmd_refresh,
     "parity": cmd_parity, "reconcile-attempts": cmd_reconcile_attempts, "gc": cmd_gc, "withdraw": cmd_withdraw,
 }
