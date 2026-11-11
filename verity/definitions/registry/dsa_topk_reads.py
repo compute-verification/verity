@@ -34,10 +34,10 @@ the index units' twin.
 
 `DsaPositionsMerge_v1` is one traced circuit, so its description is every gate of it.  ``DsaPositionsMerge_v2{M,K}`` is the
 same function written as Calls, with `_v1`'s signature and its ANDs: a block's kept list is a batch of `DsaPositionsKeep_v1`
-over its slots, on the bits of `DsaRowValid_v1{K}`; each stage of its shift is a batch of `DsaPositionsShift_v1` over the
+over its slots, on the bits of `DsaRowValid_v2{K}`; each stage of its shift is a batch of `DsaPositionsShift_v1` over the
 slots that have one the stage's distance below and one of `DsaPositionsShiftIn_v1` over the rest; the offsets are
 `DsaPositionsFirstOffset_v1{K}` and `DsaPositionsOffset_v1{K}`; and the lists are XORed a gate a bit.  Its description is those
-rows and the pieces, of which only `DsaRowValid_v1{K}` grows with K, an AND a slot.
+rows and the pieces: with K it grows by a row for each bit of K (a stage of the shift, a level of `DsaRowValid_v2{K}`'s trie).
 
 `DsaMaskPositions_v1` is Calls, but its tags (`DsaButterflyTagBits_v1`) and its count (`DsaTopKPopCount_v1`) are traced and
 its positions are a constant a bit.  ``DsaMaskPositions_v2{N,AT,K}`` is the same function with `_v1`'s signature: the tags
@@ -239,7 +239,7 @@ def _next_offset(C, off, count, K: int) -> list:
 
 DsaPositionsKeep = _piece(
     "DsaPositionsKeep", (), lambda S: lambda C, k, w: [[C.AND(k[0], b) for b in w]], lambda S: ((("k", BIT), ("w", I32)), I32),
-    "a slot of a block's list where its keep bit k is 1, else 0: one bit of DsaRowValid_v1{K} over the block's count")
+    "a slot of a block's list where its keep bit k is 1, else 0: one bit of DsaRowValid_v2{K} over the block's count")
 DsaPositionsShift = _piece(
     "DsaPositionsShift", (), lambda S: lambda C, s, a, w: [mux(C, s[0], a, w)],
     lambda S: ((("s", BIT), ("a", I32), ("w", I32)), I32),
@@ -274,7 +274,7 @@ DsaMaskPositionsV2 = CompositeDefinition(
 
 def _merge_calls(B, S, *ports):
     """`DsaPositionsMerge_v1{M,K}`'s function as Calls, a row of them a step of `_merge`: a block's keep bits are
-    `DsaRowValid_v1{K}` of its count and its kept list a batch of `DsaPositionsKeep_v1` over the K slots; stage i of its
+    `DsaRowValid_v2{K}` of its count and its kept list a batch of `DsaPositionsKeep_v1` over the K slots; stage i of its
     shift is a batch of `DsaPositionsShift_v1` over the slots 2^i and up, each on the slot 2^i below it, and one of
     `DsaPositionsShiftIn_v1` over the slots below 2^i, both on bit i of the offset; the lists are XORed a bit a gate; and the
     offset past each block is `DsaPositionsFirstOffset_v1{K}` and then `DsaPositionsOffset_v1{K}`."""
@@ -285,7 +285,7 @@ def _merge_calls(B, S, *ports):
         return Coll(Array(n, I32), refs)
     out = off = None
     for b in range(S.M):
-        x = B.batch(DsaPositionsKeep, B.call(bind(BM.DsaRowValid, N=K), counts[b]), pos[b], axes=(0, 0))
+        x = B.batch(DsaPositionsKeep, B.call(bind(BM.DsaRowValidV2, N=K), counts[b]), pos[b], axes=(0, 0))
         if out is None:
             out = x
         else:

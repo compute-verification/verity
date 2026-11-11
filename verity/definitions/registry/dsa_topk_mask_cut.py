@@ -29,10 +29,11 @@ Every port of a unit is whole u16 words, as a row of `verity.commitments.windows
 writer sets the bits past its value's to 0 and a reader ignores them.  ``DsaTopKMaskWhole_v1{N,TOPK}`` is the counted mask up to
 `WHOLE_MAX` keys, a unit, in u16 words.
 
-``DsaTopKMaskBlock_v2`` and ``DsaTopKMaskWhole_v2`` are the two mask units with their ties by `DsaRadixTies_v2`, whose prefix
-count is Calls to its steps and not a gate for each key, and ``DsaTopKDigitPick_v2`` is the pick as Calls to its steps, a
-batch over the 255 digits it weighs: the same masks and the same picks, described in a fraction of the bytes.  `plan` and
-`cut` name the `_v1` units.
+``DsaTopKMaskBlock_v2`` and ``DsaTopKMaskWhole_v2`` are the two mask units with every part that grows with the row as Calls
+to its steps and not a gate for each key: their ties by `DsaRadixTies_v2`, their keys below n by `DsaRowValid_v2` (past a
+block's start, of `DsaRowValidOffset_v1{AT}`) and the whole mask's passes by `DsaRadixPass_v2`.  ``DsaTopKDigitPick_v2`` is
+the pick as Calls to its steps, a batch over the 255 digits it weighs.  The same masks and the same picks, described in a
+fraction of the bytes.  `plan` and `cut` name the `_v1` units.
 """
 from __future__ import annotations
 
@@ -118,6 +119,22 @@ DsaRowValidFrom = EW.specialized("DsaRowValidFrom", 1, ["N", "AT"], _row_valid_f
 
 def _valid(B, N: int, AT: int, n):
     return B.call(bind(BM.DsaRowValid, N=N), n) if AT == 0 else B.call(bind(DsaRowValidFrom, N=N, AT=AT), n)
+
+
+def _row_offset(S):
+    """`DsaRowValidOffset_v1{AT}`: n - AT where n >= AT, else 0 (n u32): what `DsaRowValidFrom_v1{N,AT}` runs its trie over."""
+    def build(C, n):
+        d, borrow = sub(C, list(n), const_bits(S.AT, 32), 32)
+        return [[C.AND(NOT(borrow), x) for x in d]]
+    return build
+
+
+DsaRowValidOffset = BM._piece("DsaRowValidOffset", ["AT"], _row_offset, lambda S: ((("n", I32),), I32))
+
+
+def _valid_calls(B, N: int, AT: int, n):
+    """`_valid` as Calls: `DsaRowValid_v2{N}` of n, past the row's start of `DsaRowValidOffset_v1{AT}` of n."""
+    return B.call(bind(BM.DsaRowValidV2, N=N), n if AT == 0 else B.call(bind(DsaRowValidOffset, AT=AT), n))
 
 
 def _digit_one_hot(S):
@@ -371,10 +388,10 @@ def _mask_sig(S):
     return ((("scores", Array(S.N, F32)), ("n", I32), ("key", I32), ("r", Array(wide(_rb(S.TOPK)), BIT))), words(S.N))
 
 
-def _mask(B, S, scores, n, theta, r, ties=BM.DsaRadixTies):
+def _mask(B, S, scores, n, theta, r, ties=BM.DsaRadixTies, valid=_valid):
     """`DsaTopKMaskBlock_v1{N,AT,TOPK}`, keys AT..AT+N-1 of a row: those below n above the threshold's key, and the first r (its
     low RB bits) of those equal to it (`DsaTopKKeyCompare_v1` per key, `DsaRadixTies_v1{N,TOPK}`), in u16 words."""
-    valid = _valid(B, S.N, S.AT, n)
+    valid = valid(B, S.N, S.AT, n)
     cmp = B.batch(DsaTopKKeyCompare, scores, valid, theta, axes=(0, 0, None))
     eq, gt = (Coll(Array(S.N, BIT), strided_view(cmp, i, 1, 2, 1, S.N)) for i in (0, 1))
     return to_words(B, B.call(bind(ties, N=S.N, TOPK=S.TOPK), eq, gt, low(r, _rb(S.TOPK))), S.N)
@@ -386,8 +403,8 @@ DsaTopKMaskBlock = CompositeDefinition("DsaTopKMaskBlock", 1, ("N", "AT", "TOPK"
 
 def _mask_calls(B, S, scores, n, theta, r):
     """`DsaTopKMaskBlock_v2{N,AT,TOPK}`: `DsaTopKMaskBlock_v1` with its ties by `DsaRadixTies_v2{N,TOPK}`, the prefix count
-    written as Calls."""
-    return _mask(B, S, scores, n, theta, r, ties=BM.DsaRadixTiesV2)
+    written as Calls, and its keys below n by `DsaRowValid_v2{N}` (`_valid_calls`), a batch a level of the trie."""
+    return _mask(B, S, scores, n, theta, r, ties=BM.DsaRadixTiesV2, valid=_valid_calls)
 
 
 DsaTopKMaskBlockV2 = CompositeDefinition("DsaTopKMaskBlock", 2, ("N", "AT", "TOPK"), _mask_sig, _mask_calls, doc=_mask_calls.__doc__,
@@ -407,8 +424,9 @@ DsaTopKMaskWhole = CompositeDefinition("DsaTopKMaskWhole", 1, ("N", "TOPK"),
 
 def _whole_calls(B, S, scores, n):
     """`DsaTopKMaskWhole_v2{N,TOPK}`: `DsaTopKMaskWhole_v1`'s mask, `DsaTopKMaskCounted_v2`'s radix select written out in the
-    unit with its ties by `DsaRadixTies_v2{N,TOPK}`."""
-    return to_words(B, BM._select(B, S, scores, n, ties=BM.DsaRadixTiesV2), S.N)
+    unit with each part as Calls: its keys below n by `DsaRowValid_v2{N}`, its 32 passes `DsaRadixPass_v2{N,TOPK}` and its
+    ties `DsaRadixTies_v2{N,TOPK}`."""
+    return to_words(B, BM._select(B, S, scores, n, ties=BM.DsaRadixTiesV2, step=BM.DsaRadixPassV2, valid=BM.DsaRowValidV2), S.N)
 
 
 DsaTopKMaskWholeV2 = CompositeDefinition("DsaTopKMaskWhole", 2, ("N", "TOPK"),
@@ -507,10 +525,10 @@ def values(scores, n: int, TOPK: int, block: int = BLOCK) -> dict[tuple, tuple]:
     return out
 
 
-CUT_DEFINITIONS = [DsaRowValidFrom, DsaTopKDigitOneHot, DsaTopKPopCount, DsaTopKDigitCount, DsaTopKDigitPick, DsaTopKCountAdd,
+CUT_DEFINITIONS = [DsaRowValidFrom, DsaRowValidOffset, DsaTopKDigitOneHot, DsaTopKPopCount, DsaTopKDigitCount, DsaTopKDigitPick, DsaTopKCountAdd,
                    DsaTopKDigitGe, DsaTopKDigitEdge, DsaTopKDigitTake, DsaTopKDigitBits, DsaTopKDigitLeft, DsaTopKDigitShare,
                    DsaTopKDigitPickV2, DsaTopKKeyCompare, DsaTopKMaskBlock, DsaTopKMaskBlockV2, DsaTopKMaskWhole, DsaTopKMaskWholeV2]
 
 __all__ = ["BLOCK", "WHOLE_MAX", "Unit", "blocks", "plan", "cut", "values", "keys_of", "wide", "words", "low", "to_words",
-           "CUT_DEFINITIONS", "DsaRowValidFrom", "DsaTopKDigitOneHot", "DsaTopKPopCount", "DsaTopKDigitCount", "DsaTopKDigitPick",
+           "CUT_DEFINITIONS", "DsaRowValidFrom", "DsaRowValidOffset", "DsaTopKDigitOneHot", "DsaTopKPopCount", "DsaTopKDigitCount", "DsaTopKDigitPick",
            "DsaTopKDigitPickV2", "DsaTopKKeyCompare", "DsaTopKMaskBlock", "DsaTopKMaskBlockV2", "DsaTopKMaskWhole", "DsaTopKMaskWholeV2"]
