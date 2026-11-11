@@ -41589,3 +41589,92 @@ Three commits above #8862's head, one file, `Spot/OneStageZk.lean` (+213/−41).
 For the table:
 - #8862 (PRF-371, the per-member form wired behind its refusal; nothing the verifier accepts changes): open, unmarked, `23e96bd37477`; quick tier 65 of 65 at the head less its two lock files (`79f0`); the head's own quick tier `3938` and records `a139` out, ready line about 09:20Z.
 - Gap 1's per-member half and the swapped-bases check: on `cursor/proofs-v2-members-held-9810` `56b5dd3c6dd2`, unopened; the file elaborates with its guards (`b3ea`); no records run.
+
+## CROSS, Wed 11 Nov 08:11Z: SHEPHERD TABLE 1: nothing of ours is red and all 29 marked heads can be built, but the BITS PRs stand at places 110 to 124 of a line of 141 and miss 16:00Z unless ci moves them up the priority file; #8857 merges clean
+
+- **Verdict.** No head of ours is red [run]. All 29 of our marked heads have what the queue needs to build them (21 a land verdict at the head, 7 the low-risk rule, #8583 an older head's labels) and only #8568 is in a candidate [run]. **The nine PRs that carry tonight's results stand at places 78 to 124 of a line of 141, and at the queue's rate they reach `main` after 16:00Z unless ci moves them up drive's priority file** [guess, arithmetic below]. KILIAN's #8857 merges clean with everything [run].
+
+**Ask 1, the one that decides the morning: ask ci to put these at the top of drive's priority file** (`/data/drive/priority` on the control pod; the verified queue takes its order from it, then mark time), in this order: **#8785, #8820, #8827, #8788, #8828, #8836, #8781, #8819** (BITS; all eight marked with a land verdict) **and #8841** (GB; marked, land), and #8857 once you mark it.
+
+- Why [run, 07:55Z to 08:05Z: `research queue status --json`, `research queue review --json`, `research queue stats --json`, the priority file read on the control pod with `research pods ssh vy-control-verity -- cat /data/drive/priority`, and the `queue/*` branches]: the file has 170 lines and ours are low in it: #8841 at line 105, #8819 138, #8781 139, #8836 140, #8785 141, #8788 144, #8828 150, #8820 151, #8827 152. Counting only heads the queue can build now (marked, with a land verdict or low-risk, any lane), 141 wait outside a candidate and 12 are in the three candidates being checked.
+- The rate [run, the stats' decision log]: `main` moved 9 times from 21:25Z to 07:04Z with 83 PRs, 8.6 an hour; the stats' own line says 13 PRs in the last hour and 7.0 an hour over 24 hours. #8819, the first of the eight, has 109 heads and the 12 in flight before it: 121 PRs is 9.3 hours at 13 an hour (17:30Z) and 14 hours at 8.6 [guess: my division].
+- What slowed it [read, same log]: candidate `811164ba9cf1` (9 PRs, none ours) failed `step pytest` at 07:12Z; the two candidates above it were dropped with it ("its base failed"), which threw #8568 and #8517 out of one and #8523 and #8553 out of the other; the loop rebuilt three candidates at 07:13Z to 07:17Z with 4 PRs each (its flags are `--batch 16 --depth 3 --lean 6`; the 4 is its bisection of the red's nine suspects [guess]). #8568 is back in the top one, `cf6545401576`.
+- Two limits that bite the Lean PRs even at the top [read, `research queue vqueue --help` and the loop's `wide` file]: a candidate takes at most 6 members whose Lean compiles, and none while a "wide" PR (#8411, #8510, #8212, #8466) is in it or below it in flight. #8466 is in `cf6545401576` now, and #8212 stands at place 23.
+
+**Ask 2, smaller:** #8539 (place 114) and #8339 (place 38) are what #8139, #8552 and #8406 wait on. If those three are to be on `main` by morning, #8539 and #8339 go up too; a ready line for them after 12:00Z is late by your rule. If they can land tomorrow, no ask.
+
+**Ask 3: `mark #8857 at 96985b18aafbb29a4ba1be075c9cd814afdd299a`** on KILIAN's 08:00Z line plus this: [run] `git merge-tree --write-tree` of that head with `main` `8201dacff26e` and with each of our 29 marked heads and the six unmarked ones of mine (#8139, #8406, #8552, #8512, #8527, #8414) exits 0, 36 of 36. It adds `security/Proofs/Core/SamplingGeneric/FirstHit.lean` (1,599 lines) and one import line in `security/Proofs/Core.lean` [run: `git diff --stat`]. Its runs and the unread cap are KILIAN's words [relayed]; the landing gate `unread_gate.py` passes a change to Lean sources with a note and leaves the cap to the Lean check [read: the gate's docstring at `main`].
+
+**The table** (labels and line as read 07:55Z to 08:05Z; "place in the line" counts the heads of every lane the queue can build now, in the priority file's order):
+
+| PR | head | marked | verdict | in a candidate | place in the line | refused or held | ask |
+|---|---|---|---|---|---|---|---|
+| #7850 | `ed27bb143d82` | no | none | no |  | stale; conflicts with `main` | none |
+| #7952 | `4d3d22fda080` | no | land (review-1) | no |  | stale | none |
+| #8120 | `b6e0c1dc5de8` | no | none | no |  | conflicts with `main` | none |
+| #8139 | `c274cac9c132` | no | none | no |  |  | none yet: after #8539 lands (the 11-file merge is drafted) |
+| #8177 | `6dd74f50be00` | no | none | no |  |  | none |
+| #8226 | `f8a3b83aa0f0` | 06:23Z | land (review-17, 06:33Z) | no | 105 of 141 |  | none |
+| #8339 | `9fd291257ffc` | 06:33Z | none; low-risk, needs none | no | 38 of 141 |  | ask 2 (#8406 waits on it) |
+| #8354 | `5591b15e3b35` | 06:40Z | land (review-17, 07:00Z) | no | 97 of 141 |  | none |
+| #8363 | `a81a1b11ea1d` | no | none | no |  | conflicts with `main` | none |
+| #8368 | `c833b3ff0a9b` | 06:53Z | land (review-13, 07:01Z) | no | 98 of 141 | lands after #8354 | none |
+| #8406 | `3d8e9aa8c0af` | no | none | no |  |  | none yet: after #8339 lands I merge `main` in and write its line |
+| #8414 | `359724056748` | no | none | no |  |  | none, ever (inside #8539) |
+| #8425 | `d4967690acd5` | 06:49Z | none; low-risk, needs none | no | 45 of 141 |  | none |
+| #8438 | `e04dd44e6ccd` | no | none | no |  | conflicts with `main` | none |
+| #8454 | `4d87c7899a6d` | 06:22Z | land (review-17, 06:49Z) | no | 29 of 141 |  | none |
+| #8458 | `81c162ded6fa` | 06:55Z | land (review-17, 07:18Z) | no | 101 of 141 |  | none |
+| #8462 | `6f4ffa9e7a6a` | no | none | no |  | conflicts with `main` | none |
+| #8512 | `815b893acd23` | no | none | no |  |  | none, ever (inside #8820) |
+| #8517 | `620badf31958` | 05:58Z | land (review-16, 06:19Z) | no | 18 of 141 | its candidate was dropped 07:13Z (its base failed) | none |
+| #8523 | `b61bbcfd88aa` | 06:37Z | none; low-risk, needs none | no | 39 of 141 | its candidate was dropped 07:13Z (its base failed) | none |
+| #8527 | `33452276ad20` | no | none | no |  |  | yours: mark at `33452276ad20` once #8820 is on `main` |
+| #8536 | `7c9387e95a73` | 06:57Z | land (review-13, 07:02Z) | no | 100 of 141 |  | none |
+| #8539 | `984a73968ccd` | 05:58Z | land (review-15, 06:50Z) | no | 114 of 141 |  | ask 2 (#8139 and #8552 wait on it) |
+| #8540 | `1b0f4f7b64fe` | 06:59Z | none; low-risk, needs none | no | 57 of 141 |  | none |
+| #8543 | `2007687fd9b8` | no | none | no |  | conflicts with `main` | none |
+| #8552 | `cb416aece716` | no | none | no |  |  | none yet: after #8539 lands |
+| #8553 | `650593be39af` | 06:23Z | none; low-risk, needs none | no | 32 of 141 | lands after #8523; its candidate was dropped 07:13Z (its base failed) | none |
+| #8563 | `80bc72a80541` | no | none | no |  |  | none |
+| #8568 | `8fb2b94ee4b4` | 05:50Z | none; low-risk, needs none | `cf6545401576` |  |  | none: it is in a candidate |
+| #8576 | `d35fd4990def` | 07:01Z | land (review-13, 07:17Z) | no | 61 of 141 |  | none |
+| #8578 | `0a713e7caaf6` | no | none | no |  |  | none |
+| #8583 | `4624bfc6cd0f` | yes, carried | none at this head; an older head's counts | no | 85 of 141 |  | none |
+| #8730 | `f612d5d5897d` | 07:03Z | land (review-14, 07:34Z) | no | 106 of 141 |  | none |
+| #8741 | `2e61e09454d2` | 07:04Z | land (review-14, 07:59Z) | no | 62 of 141 |  | none |
+| #8764 | `8dfde58665a3` | 05:27Z | land (review-13, 05:39Z) | no | 120 of 141 |  | none |
+| #8767 | `d6cf59bccf21` | no | none | no |  |  | none |
+| #8771 | `4b3b557b8c46` | 06:51Z | none; low-risk, needs none | no | 46 of 141 | lands after #8425 | none |
+| #8781 | `b7c268c7c1fe` | 07:04Z | land (review-16, 07:16Z) | no | 111 of 141 |  | ask 1 |
+| #8785 | `e7b741b17e53` | 05:32Z | land (review-15, 05:36Z) | no | 113 of 141 |  | ask 1, first (#8820 and #8827 land after it) |
+| #8788 | `65a2d97d9387` | 03:38Z | land (review-10, 04:20Z) | no | 116 of 141 |  | ask 1 (#8828 lands after it) |
+| #8789 | `d68de9e61acd` | no | none | no |  |  | none |
+| #8814 | `46df1f88f31e` | no | none | no |  | conflicts with `main` | none |
+| #8819 | `9a8a32c7c85b` | 06:00Z | land (review-17, 06:14Z) | no | 110 of 141 |  | ask 1 |
+| #8820 | `f1a8ef0141ff` | 07:06Z | land (review-13, 07:24Z) | no | 123 of 141 | lands after #8785 | ask 1, after #8785 |
+| #8827 | `946b7b72f26d` | 07:41Z | land (review-15, 07:58Z) | no | 124 of 141 | lands after #8785, #8820 | ask 1, after #8820 |
+| #8828 | `53dd644bdad8` | 07:40Z | land (review-13, 07:48Z) | no | 122 of 141 | lands after #8788 | ask 1, after #8788 |
+| #8836 | `1fab3dfa6a35` | 07:11Z | land (review-17, 07:26Z) | no | 112 of 141 |  | ask 1 |
+| #8841 | `5f197bc45539` | 07:39Z | land (review-17, 07:54Z) | no | 78 of 141 |  | ask 1 (GB) |
+
+- No reviewer has asked for changes and none has written on GitHub: `gh pr view N --json comments,reviews` gives 0 comments and 0 reviews on each of the 29 marked PRs, #8857 and my six [run, 08:08Z]. No `reviewed` label at any of our heads is other than `land` [run].
+- Not in a candidate and not refused: nothing in the decision log names a head of ours as a conflict or an ejection since its mark; the only drops are the two at 07:13Z above [read].
+- The 13 unmarked PRs with no ask are not in my brief or the ORDER; seven of them conflict with `main` (#7850, #8120, #8363, #8438, #8462, #8543, #8814) [run: `git merge-tree` with `main`]. Say if any is wanted tonight and I cross it.
+
+**Verdicts of my runs at ci's heads** (nothing pushed to them):
+
+- **#8781 at `b7c268c7c1fe`: both passed.** Quick tier `r20261111-072018-0f55`: `8 suites: 8 passed (0 cached), 0 failed`; records `r20261111-071943-dd8f`: pass (reported 07:47Z) [run].
+- **#8730 at `f612d5d5897d`: records `r20261111-072235-51ef` regenerated `security`'s lock in entry order only; nothing to commit.** `security: check.py exit 0 in 733 s`, `security/Properties` 703 s, `security/Proofs` pass; the regenerated record (sha256 `b2f5c6c6443f…`, the run's `record_sha256`, 4,175,579 bytes) parses to the same JSON as the head's lock (sha256 `48f33477fba1…`, 4,175,579 bytes) [run]. Quick tier `r20261111-072205-89cd` is still running.
+- **#8458 at `81c162ded6fa`: the same.** Records `r20261111-072126-2a70`: `security: check.py exit 0 in 1417 s`, `security/Properties` 738 s; regenerated record sha256 `b2f5c6c6443f…`, the same JSON as the head's lock [run]. Quick tier `r20261111-072101-e7c3` is still running.
+- That sha256 is the one every head whose `security` lock is `main`'s gets (#8226's and #8368's record commits hold it): `main`'s lock is not in the order `--update` writes. The lock run after the first Lean landing will rewrite it once [guess].
+
+**Mine, held:**
+
+- **#8406 at `3d8e9aa8c0af`: its guard passed**, so all three of its runs have: guard `r20261111-061321-6e01`: `1 suites: 1 passed`, `6 passed in 4351.96s (1:12:31)`, `CROSS guard_node --pytest exit 0`, fixture sha256 `3ebde199fda4…`; records `7aba` pass; quick tier `e003` 13 passed [run]. It still waits for #8339 on `main` (the one line of `fixtures/artifacts.json`).
+- **#8139's draft merge with #8539** (scratch, unpushed): the quick tier at the 10-file merge `cfa606dc5595`, `r20261111-064611-5fe4`: `71 suites: 71 passed (7 cached), 0 failed` [run]. Its records run with the eleventh file, `r20261111-073449-ae4e` at `ee38f6f47a52`, is still running. Correction to my 07:47Z entry: the eleventh file's change is +23 −8 lines by `git diff --numstat`, not "15 lines": 14 of Lean (the two lemmas and `registered`'s line), one `import all`, the rest docstrings.
+- #8552: unchanged; after #8539.
+
+**Runs out and their ETAs:** `89cd` (#8730 quick) and `e7c3` (#8458 quick): about 08:30Z [guess: #8781's, 8 suites, ended between 07:52Z and 08:07Z, 32 to 47 min after its launch, and these two have more suites]; `ae4e` (the #8139 draft's records): about 08:50Z [guess]. The next table is due 09:10Z; a red comes at once.
+
+For the table: LANDING: 29 of ours marked, all 29 buildable, 1 in a candidate, 0 red, 0 held by a reviewer; `main` `8201dacff26e` since 07:04Z. The eight BITS PRs and #8841 stand at places 78 to 124 of 141 and miss 16:00Z at the queue's rate unless ci moves them up the priority file (ask 1). #8857 merges clean, ready for your mark.
