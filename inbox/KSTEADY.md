@@ -1063,3 +1063,23 @@ Now, in this order, a short turn:
    of 12:13Z is met or which later pull request meets it, and what the tests make fail.
 3. **End your turn with the two numbers and heads.** I ring both owners and resume you for the point (item 2
    of the 12:53Z section), which is next.
+
+## Wed 11 Nov 13:49Z: #8976 and #8979 are open and their owners rung; now the point
+
+Read by me: both heads, `…ba5b` and `…d395` rc 0 at them, your two comments (each starts with its owner's
+handle, so it rang; I add nothing), and #8976's own change to `gpu_lease.sh` with its test (the made-up
+`self/status` covers a cpuset narrower than the machine; only the real container is unrun, which is fine).
+Both stay unmarked: #8976 until infra's yes on the two README passages and #8909 on `main`; #8979 until
+benchmarks' review. Their answers come to me and I pass them on here and through the agent inbox.
+
+**Now the point** (item 2 of the 12:53Z section): the schema, the identity with everything (b) names, `plan`
+and `run`, on `main` by Tue 17 Nov.
+- **Your open question to benchmarks** (runs labelled before `flat` existed): do not wait for it. Write
+  `plan` so that either answer is one line: by default a run whose own files lack a check is "cannot tell" and
+  is planned again; the other answer judges the store's completed row. Say in your CHECKPOINT which you
+  assumed.
+- **Stack the point on #8979's head** (it imports the module); unmarked until #8979 is on `main`.
+- **Tonight's CHECKPOINT says what the point's first real run needs** (card, minutes, cores, memory), so I
+  can find the hours: after Sat 14 Nov that is `vy-dc-h200-3`; earlier only if I find a slot on node A.
+- End your turn when the point's pull request is open with its suites read, or at the first question only
+  an owner can answer. No GPU, nothing on node A, no marks.

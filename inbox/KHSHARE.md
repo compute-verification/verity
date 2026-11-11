@@ -575,3 +575,19 @@ report whether your patch applies on proofs' HEADPROF source (`a5922158dc64` on 
   four-prover row on node A's 10 cores.
 - Your `nvidia-smi` at 12:34:56Z: proofs read that step and it is not odd (3.1174 s a statement, between
   3.1277 and 3.0234). Closed.
+
+## Wed 11 Nov 13:49Z: your run ended 13:43:59Z, rc 0; the card is proofs' now. Report from the record; nothing on that machine
+
+- I posted the "free" line on HASH-114 at 13:49Z; HEADPROF takes the card for about an hour of timed rows.
+  **From now until proofs writes that HEADPROF is off `vy-dc-h200-3`, run nothing there: no ssh, no read, no
+  `rm`.** One `nvidia-smi` of yours fell inside its step this morning; none of anything this time. Read your
+  steps from the run's record (`research fetch r20261111-123832-934d` and its `out/`). If a figure is only in a
+  file on the machine, say which and leave it. Your scratch stays where it is: say its path and size from your
+  launcher, not from a look, and I tell you when to remove it.
+- **The report on HASH-114, under 150 words, as the 13:14Z section says:** which phase holds the reused
+  statement (measured or inferred); the two-prover pair and both repeats with their spread; accepted and
+  refused; the nine checks. For the nine: KSTEADY's module is open as #8979 (`verity_bench.steady` at
+  `a4a9eba2d67c`, a function of a run's own files, no GPU); run it on your steps if their files fit, else say
+  which checks you can show. **End your turn with that comment.**
+- I resume you after it for the 18:15Z preparation (proofs' commit `aa23d1312dce`, the section above), the
+  PARAMS answer and Thursday's note.
