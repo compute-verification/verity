@@ -58591,3 +58591,33 @@ Each with where it is and whose it is.
 - The logging chip spec's "κ \(\le 2^{-80}\) a proof", from an older note and not rederived. compute-research (CR row 22, L399).
 - `block_record.py` writes "proved": True on a sum of published δs that no Lean declaration instantiates. compute-accounting (L721).
 - PRF-456's "\(2^{-61.0}\) a class audit": HD's guess at where it comes from is withdrawn by HD; PRF-517 gives it as network-accounting's \(2^{-53.4}\) an audit over 200 class audits a link window. network-accounting (HD).
+
+## DRAFT-CORE (PRF-540), Wed 11 Nov 16:33Z: #8940's record changes no entry (equal to the head's lock as JSON; one key order that main carries), so nothing is committed and the head stays 131a557ffc03; unmarked for Daniel; the confirming run 9d7a is out
+
+#8940 is unmarked, for Daniel. **I committed nothing and its head is unchanged**, `131a557ffc03a0267eb78bef7da114ce3b2cfd0a`: the record's diff is not what you expected, so I stopped before committing. It is smaller, not larger: no entry changes.
+
+**1. The record.** Fetched from the run's directory on cpu-8: 4,212,832 bytes, SHA-256 `7ac06b16df11308325f3e8345612917241e3ed48057c88d0f205930a9cde39e0`, the one in `result.json`.
+
+**2. Against `security/lean-audit.json` at `131a557ffc03`** (SHA-256 `662b41007c8d…`, also 4,212,832 bytes): **the two are equal as parsed JSON** [run on the VM: every one of the 24 top-level sections compared, then a walk of every dict and list]. So, by entry:
+
+- Guarantees' records (signature, type hash, statement text, `reads`, premises): none changed. Assumptions' records: none. `trust`, `deployed`, `open`, `unwitnessed`, `trees.except`, `trust_gap`, `domain`, `witnesses`: nothing.
+- **The one difference is key order in one dict**: `shape.inline` for `NetTiming.SecurityProofs.PooledLeakAccepted` (the network certifier's, not this PR's) has 11 entries, and its last two swap places (lines 28904 and 28905; same keys, same reasons). The head has `Real.instLE.le (Real.log …) …` then `∀ (z : Z), …`; the record has them the other way.
+- **That order is `main`'s, not #8940's.** `main`'s lock has held it since `b6674a49ec` (#8537 landed) and holds it at `493f49485e50`; #8940's head took it in the merge. `--update` writes the other order, the one #8934's lock and #8940's earlier head hold [read: `main`'s lock at its last 12 commits]. `lean_changed.py` reports `regenerated` whenever the bytes `--update` wrote differ from the committed ones (`lean_changed.py:1831`), which is all that happened.
+- **What you expected is already in the head's lock**, committed at `fcf8b80f3fd3` and carried through both merges. Against `main`'s lock at `493f49485e50` the regenerated record differs in 78 entries, exactly the two bodies' lists and nothing else:
+  - #8940's 60: the open premise `SpotFlock.Addresses` (digest); in `reads`, `SpotFlock.Code` (9 definitions changed, 7 added, its digest), `RevealAt` (26 changed, 1 added, digest), `SlotsAt` (6 changed, digest), `FrameIsAt` (2, digest), `Opens` (1, digest), and `Claims.Sampling.Reg`'s `bytesSecond` and `codeTwoAt` no longer read.
+  - #8934's 18: `SampledKSTwo_honest`'s signature and type hash; the definition `Flock.Guarantees.SampledKSTwo` and its module's digest; 7 definitions added in `Claims.Sampling.Reg` and its digest; 3 added in `SamplingGeneric.TwoAt` and its digest; `shape.frozen` for `SampledKSTwo`; `trees.except` for `Proofs.Flock.SamplingGeneric`.
+
+**3. Not done, and why.** Your rule was to stop on anything beyond what the body says. The swap is in another lane's guarantee's entry, the body says nothing of it, and committing it would put a network-certifier line into the lock diff Daniel reads on a SPOT PR. It is also not needed for a pass: the check without `--update` does not fail on that order [run `r20261111-152014-b708`: `security` is checked there as a requirer, without `--update`, on a tree whose lock holds `main`'s order, and passes].
+
+- **Instead, the confirming run is at the unchanged head:** `lean_changed.py --records security`, no `--update`, at `131a557ffc03` [`r20261111-162905-9d7a`, cpu-8, slot build-0, launched 16:29Z]. `security/Properties` is reused from `69de`; it audits `security` with `security/Proofs`. **ETA about 17:15Z** (the slot last held another tree; `69de` took 28 minutes for that step, `b708` 38). I expect `pass`; I have not seen it.
+- **If you want the canonical order committed anyway**, it is one commit of the record over `security/lean-audit.json` (2 lines swapped). `69de` kept `security`'s pass at the inputs key the lock has with that record (`403f3fdd02dd…`), so a records run at that head on cpu-8 should reuse it and build nothing [read: `result.json`'s `passes`; not tried]. Say so and I do it.
+- #8940's body is refiled (16:32Z; the head does not move): the verdicts of `6c51`, `69de` and `73d5` in place of "no verdict yet", the paragraph above on the record, and `9d7a` as out. #8914 and #8934 are not touched.
+
+**4. The other two runs.**
+
+- `r20261111-153523-73d5` (#8940 at `131a557ffc03`, quick tier), last line: `9 suites: 9 passed (0 cached), 0 failed; 34.7 min of test time`.
+- `r20261111-152014-b708` (#8914 merged with `main` at `d2a045c04e8e`, scratch `22a3133d02a7`): outcome `pass` in all four packages, no record regenerated: the Spot verifier's package (5,621 declarations in 50 modules), `security` (26,987 in 717 modules, 1,103 guarantees) with the whole `security/Proofs` (194,533 in 3,856 modules), `security/Properties` (3,089 in 94 modules, 463 guarantees); without the kernel replay.
+
+One more thing: my VM restarted at about 16:22Z and `/tmp/work` went with it (the scratch worktrees and the local copies of the PR bodies). Nothing is lost that is not on a branch, a PR or in the notes; the record itself is in `69de`'s run directory on cpu-8.
+
+For the table: #8940 (unmarked) at `131a557ffc03` builds and audits with `main` at `493f49485e50` in `security`, the whole `security/Proofs` and `security/Properties`, quick tier 9 of 9 [runs `r20261111-153509-69de`, `r20261111-153523-73d5`; no kernel replay, no second reader]. Its lock holds exactly the records its body lists; the run's "regenerated" is a key order `main` carries.
