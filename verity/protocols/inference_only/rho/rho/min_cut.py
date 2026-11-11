@@ -319,14 +319,17 @@ def bound_charged(c: float, k: float, n: float | None = None, *, blocks: float, 
     it reads, at most `untied` of them in all, a word at most `word` bits and read by one block. `w` is the threshold,
     a public parameter fixed before the period: a block that reads more than `w` untied words is charged whole, and
     stays in the count at its whole work. By default there is none: no block is charged, and the bound takes no
-    parameter beyond the policy's. `most` is the most untied words one block reads, where the caller can state one
-    (a block reads no more untied words than the tied words it reads); by default every untied word may be in one
-    block. `N`, `O` and `size` are `bound`'s, the work's MACs, their output wires and its gates as a plain circuit;
-    only `O / N` and `size / N` are read, so they may be one block's or the period's.
+    parameter beyond the policy's. Where the untied words are as many as the blocks, `w = 0` charges every block and
+    the bound is 1, so a figure there states its threshold. `most` is the most untied words one block reads, where
+    the caller can state one (a block reads no more untied words than the tied words it reads); by default every
+    untied word may be in one block. `N`, `O` and `size` are `bound`'s, the work's MACs, their output wires and its
+    gates as a plain circuit; only `O / N` and `size / N` are read, so they may be one block's or the period's.
 
     The untied words are the period's, over every node in it. The sampled proofs' bound is a node's: the accepted
     execution phases of one node hold at most so many untied words, however long the period, so `untied` and
-    `untied_macs` over several nodes are the nodes' sums, and `most` is one node's.
+    `untied_macs` over several nodes are the nodes' sums, and `most` is one node's. A node's bound is a share of one
+    execution phase's ticket weight, so it grows with the blocks the node serves in a phase: a figure for nodes
+    faster than the measured one scales the measured node's bound by their rate, never only its block count.
 
     `untied_macs` is the MACs that feed the untied words, at most, in all. The count is taken at the circuit with
     those words as inputs, where no MAC of the work has its output among them, so it covers none of the MACs that
