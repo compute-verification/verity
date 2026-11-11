@@ -8,7 +8,7 @@ Group=auditor
 UMask=0022
 WorkingDirectory=/opt/vy-verifier/current
 Environment=PYTHONDONTWRITEBYTECODE=1 HOME=/var/lib/vy-verifier PATH=/opt/vy-verifier/current/.lean-bin:/usr/bin:/bin
-ExecStart=/usr/bin/python3 -I /opt/vy-verifier/current/benchmarks/live_verifier/host.py replay %i
+ExecStart=/usr/bin/python3 -I /opt/vy-verifier/current/verity/protocols/poub/device/live_verifier/host.py replay %i
 ExecStopPost=+/usr/bin/systemctl --no-block start vy-verifier-publish@%i.service
 RuntimeMaxSec=12h
 NoNewPrivileges=yes
