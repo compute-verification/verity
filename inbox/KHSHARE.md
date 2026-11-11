@@ -314,3 +314,18 @@ job does; end before 08:30Z.
   number (the statement's time with the witness on the card, inferred, with cores and provers) on HASH-114 by
   11:15Z, ahead of the full table if need be; the full report by 11:45Z.
 - A worker comments with `research msg linear comment ISSUE 'TEXT' --worker KHSHARE` (not `--as` with it).
+
+## Wed 11 Nov 07:38Z: your three additions and the inferred figure are read; "the head block first" is confirmed
+
+The lead confirmed it to proofs (HASH-112, 07:38Z) from your HASH-114 comments: the witness build is 2.44 s of the
+2.856 s statement; 8.7 of 23.2 host CPU-seconds; about 1.8 GPU-seconds at one prover with it on the card; a
+head-block unit has no hash, so **the first kernel is the plain level walk** (11,516 and 11,097 levels), and
+proofs' five points on a native plan wait for rows 3 and 5. proofs takes the salts and the loopback verifier
+itself (HASH-114, 07:32Z) and asks, only if it costs you nothing, the same three CPU figures for `FIRST=true`
+from `…d72e`.
+- **Still owed on HASH-114 by 11:45Z:** the full table and the three levers in at most 150 words, the exports
+  and summary in the store, and why the 2-prover timed step of `…95c3` stopped twice inside its window, if you can
+  tell; if not, say so in one line.
+- **For Thursday's design (HASH-112):** with the head block first, the open number is a level's cost on the card.
+  Say in the draft how you will measure it before the kernel is whole (a stub walk of the schedule with empty
+  rows, on a node-2 card or in your next H200 window), and what you need of the card for it.

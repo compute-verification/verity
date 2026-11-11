@@ -750,3 +750,12 @@ HASH-115's (the larger piece it is the first part of; not yours yet).
 - **One row after those, only if a card is free:** `MoeExpertFp8GemmW_v1{E=256,K=256,N=1}` at steady state, 10
   cores, one prover. It matters to one row of proofs' table (the census's own card, with no cut), not to the
   figure of record; proofs has not checked that it stages on one card. If it does not stage, say why and stop.
+
+## Wed 11 Nov 07:38Z: for the copy to the store: the tree rows 1 and 2 were staged from (proofs, HASH-112 07:32Z)
+
+Rows 1 and 2 were staged from `c6cadd0e325fbaf1789d5fb199b4ac8d2f216ede` (branch
+`cursor/proofs-servedcard-final-c5f8`: #8520's three commits over #8281's head), with `stage.py SPEC full OUT`,
+CPU only. Row 1's spec is `census:SparseMlaHeadBlock_v2{DR=64,DV=512,NVIS=64,FIRST=false,BN=64,DOT={"fn":
+"HopperBF16WgmmaDot16_v2"},SCALE={"f64":"0x1.0000000000000p-4"}}`, pin `4b31e7caba011398`; row 2's is the same
+with `FIRST=true`, pin `be5bca5c30515dc4` (read proofs' comment for its exact text). Put the tree, the spec and
+the pin on each art you store.
