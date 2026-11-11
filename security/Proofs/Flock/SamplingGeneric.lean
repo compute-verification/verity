@@ -12,6 +12,7 @@ public import Proofs.Flock.SamplingGeneric.KSAt
 public import Proofs.Flock.SamplingGeneric.Reg
 public import Proofs.Flock.SamplingGeneric.RegAt
 public import Proofs.Flock.SamplingGeneric.RegX
+public import Proofs.Flock.SamplingGeneric.RegXAt
 public import Proofs.Flock.SamplingGeneric.Efficient
 public import Proofs.Flock.SamplingGeneric.Counter
 public import Proofs.Flock.SamplingGeneric.Deployed
