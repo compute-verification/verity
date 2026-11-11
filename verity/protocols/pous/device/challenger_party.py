@@ -41,8 +41,8 @@ side (`main`): it reads one JSON line on stdin, a salt request or the session's 
 `challenger_session.setup_of` checks against them), and answers the salt request with its source, or prints
 `{"listening": PORT}`, serves one prover (`serve`) and prints its report. Its key, session log (`sessions`) and salt log
 (`salts`) are in `DIR`. Each session it completes is kept on its own host, `DIR/setups/<session id>.json` (0700, the
-file 0600: `keep`), the request and the id it designated: the auditor's record of that window's setup, from which the
-remote bandwidth audit's verifier on the same host builds its registration (`remote_bandwidth.p2_party --pous-record`),
+file 0600: `keep`), the request and the id it designated: the auditor's record of that window's setup, from which
+PoUB's verifier on the same host builds its registration (`verity.protocols.poub.verifier.p2_party --pous-record`),
 never from a file the prover sends.
 """
 
@@ -73,10 +73,10 @@ from verity.protocols.pous.device.challenger_session import (CHALLENGER, MANIFES
 from verity.configuration.wire import Message, Phase, Refused
 
 COIN_BYTES = 64
-"""The session's coins, which the challenger draws first (`main`'s `secrets.token_bytes(64)`), before its coin tree's
+"""The session's coins, which the challenger flips first (`main`'s `secrets.token_bytes(64)`), before its coin tree's
 hiding key and salts."""
 SOURCE_BYTES = 64
-"""The setup salt's source, which the challenger draws from its OS for an audit (`give_salt`)."""
+"""The setup salt's source, which the challenger samples from its OS for an audit (`give_salt`)."""
 
 
 class Refusal(RuntimeError):
@@ -133,20 +133,20 @@ class Challenger:
         self.domain, self.warmups, self.resolution_ns = domain, warmups, resolution_ns
         self.c: mc.MemoryChallenger | None = None
         self.sid: bytes | None = None
-        self._drawn: list[bytes] = []
+        self._sampled: list[bytes] = []
         self.session: R.ChallengePhaseRecord | None = None
         self._reading: int | None = None
         self._block: bytes | None = None
         self._warm = 0
 
     def start(self, params: Mapping[str, Any], identity: Identity) -> list[Any]:
-        self.request, caps = dict(params), identity.capabilities
-        self.signer, self.log = caps["signer"], caps["log"]
+        self.request, held = dict(params), identity.capabilities
+        self.signer, self.log = held["signer"], held["log"]
         if "audit" in self.request:
             try:
-                if caps.get("salts") is None:
+                if held.get("salts") is None:
                     raise Refusal("the memory challenger keeps no salt log, so it runs no audit's session")
-                self.sid = designate(self.request, caps["salts"], self.log)
+                self.sid = designate(self.request, held["salts"], self.log)
             except (Refusal, mc.SessionLogError) as e:
                 return [Finish(None, str(e), kind="private")]
         self.phase = Phase("Coins")
@@ -181,12 +181,12 @@ class Challenger:
     def _coins(self, body: bytes) -> list[Any]:
         """The session's coins, then the coin tree's hiding key, then each round's salt, each sampled in turn; once all
         are in, the session's challenger."""
-        q, self._drawn = self.request, [*self._drawn, body]
-        if len(self._drawn) < q["k"] + 2:
+        q, self._sampled = self.request, [*self._sampled, body]
+        if len(self._sampled) < q["k"] + 2:
             self.phase.expect("Coins")
-            n = mc.HM96.key_bytes if len(self._drawn) == 1 else mc.HM96.salt_bytes
+            n = mc.HM96.key_bytes if len(self._sampled) == 1 else mc.HM96.salt_bytes
             return [Send("coins", Message("CoinsDraw", {"n": n}))]
-        coins, key, *salts = self._drawn
+        coins, key, *salts = self._sampled
         binding = bytes.fromhex(q["binding"])
         if self.sid is None:
             self.sid = coin_session_id(coins, self.domain, q["node"], binding)

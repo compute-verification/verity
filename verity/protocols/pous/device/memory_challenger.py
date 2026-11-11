@@ -67,6 +67,7 @@ import fcntl
 import gc
 import hashlib
 import json
+import logging
 import os
 import re
 import time
@@ -88,6 +89,8 @@ from verity.commitments.randomness import derive
 from verity.protocols.pous.verifier.params import SALT_BITS
 from verity.protocols.pous.verifier.protocol import CapacityBound, Scheme
 from verity.protocols.pous.verifier.verifier import DIGEST_BYTES
+
+log = logging.getLogger(__name__)
 
 PROTOCOL = "verity-pous/memory-challenger/v1"
 COIN_DOMAIN = "verity/pous/memory-challenger-coins/v1"
@@ -665,7 +668,8 @@ def verdict(signed: SignedSession, commitment: SessionCommitment, openings: Sequ
     else:
         try:
             ok = bool(verify(signed.public_key, signed.commitment.session, signed.message(), signed.signature))
-        except Exception:  # noqa: BLE001 - a malformed signature verifies nothing
+        except Exception:
+            log.debug("the signature check raised: a malformed signature verifies nothing", exc_info=True)
             ok = False
         if not ok:
             reasons.append("the signature does not verify")
