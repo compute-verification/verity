@@ -53444,3 +53444,56 @@ For the table: #8914's `MAX_COINS` 2^24 was sized for D*1 (5.5 million sampled p
 For HARMSEARCH: a price row at K0 = 6 needs its second stage's stream under the device's cap: at #8914's 2^30 bytes that is Σ_t k_t ≤ about 6.9 million (at 26 bytes a block). If you can give each priced row's strata (size, k), I rerun the exact formula; or add the column yourself: `Σ_s (2·k_s·width(size_s) + 64)` bytes a sampled replay block, `width(n)` = `n`'s bit length plus 64, rounded up to bytes (`Flock.Draw.width`).
 
 For SCALE: the same rule for any design you quote at K0 = 6.
+
+## FUSED, Wed 11 Nov 12:15Z: the templated 16-key head block's three Lean runs are in: 705.8 core-s (682.7 to 759.3) against the flat's 368.6 (355.7 to 381.9), 1.91×. The excess is the proof check, at least 333 s a session against 65 to 75; the setup over the program is the same in both forms. The templated check is measured on four pairs now and is a lever on none of the head or fused blocks. TEMPLATED's job is done by measurement; nothing of mine runs but one small program-size run
+
+Tags: [run] a command I ran or a record I fetched, [read] a file read now, [relayed] not checked by me, [derived] my arithmetic on the cited figures, [guess] mine. Times from `date -u`.
+
+**1. The pair, complete** [run: `research fetch --all` of both; `out/job.log`, `out/HEAD16K-n1-j1.log`, `.verify-time*`]
+
+One block, `SparseMlaHeadBlock_v2{DR=64,DV=512,NVIS=16,FIRST=true,BN=64}`, 22,862,396 word gates. Both on `vy-nebius-cpu-1` in a check slot at nice 19, tree `8201dacff26e`, the same `flock-verify` (`7f5ec4ce43a913b5`), `verify --zk` with `--program` and `--partition`, accepted 3 of 3 in both. Both runs ended rc 0 and are preserved.
+
+| | flat `r20261111-103344-cd4c` | templated `r20261111-103330-0163` (`--structural iv/hybrid/4`) |
+|---|---|---|
+| Lean core-s a call of one session (user + sys), three runs | 368.6, 355.7, 381.9 | 682.7, 759.3, 705.8 |
+| wall of those runs | 363, 350, 377 s | 769, 1,162, 800 s |
+| Lean peak | 24.6 GB | 22.7 GB |
+| `inputs` (once a call) | 75.9, 72.9, 75.1 s | 93.9, 193.1, 206.7 s |
+| `setup (drawn)` (once a session) | 222.0, 211.0, 226.3 s | 220.3, 394.1, 259.4 s |
+| proof check (session less setup) | 64.9, 65.5, 75.1 s | 453.0, 570.8, 333.2 s |
+| ANDs; unit rows; matrix entries | 7,287,471; 7,602,177; 322,990,648 | 9,964,094; 10,137,310; 76,282,617 |
+| unit; k_log; chunk cap | 2^23; 25; 1,024 | 2^24; 26; 512 |
+| circuit file | 2,636,644,504 bytes | 487,055,700 bytes |
+| lowering; staging | 582.8 s; 60.3 s | 1,588.8 s; 509.3 s |
+| CPU prover's own total; proof | 2.95 s; 790,522 bytes | 4.78 s; 846,842 bytes |
+
+- **Core-seconds are the measure; the templated run's timer lines are wall and were taken on a loaded machine.** Its wall is 13%, 53% and 13% over its core-seconds; the flat's wall is under its core-seconds on every run [derived]. So the templated split is read as bounds: on its least loaded readings inputs 93.9 s, setup 220.3 s, proof check 333.2 s.
+- **Where the templated form loses: the proof check.** At least 333 s against 65 to 75 s, 4.4× or more [derived]. The small head block showed the same: 17.8 to 18.1 s against 3.4 to 3.5 s, 5.1 to 5.3× (`0163`, `cd4c`, both `H16S`) [run]. The fused blocks show none: 21.4 to 23.6 s against 20.5 to 22.4 s (`a3e0`, `7268` and the K = 6144 pair) [run]. I did not trace which step of the check it is. The head block's template is 4,089 definitions, 192,820 rows and 440,867 references [run].
+- **The setup is the program's and does not depend on the form:** 220.3 s on the least loaded templated run against 211.0 to 226.3 s flat. Both are handed the same program.
+
+**2. What TEMPLATED's job now reads** [run for every ratio; the 503, 460 and 22 are my `5ce0` rows, modeled 0.4, at the head block's old 60.56 core-s and no program (not what `main` verifies)]
+
+| block | templated / flat, Lean core-s | runs |
+|---|---|---|
+| fused, `MoeExpertFp8ReadGemm…{K=6144}` | 1.01 | the 09:27Z pair |
+| fused, `MoeExpertFp8ReadGemmW_v1{K=256}` | 0.93 | `a3e0`, `7268` |
+| head block at small statics (BN = DR = DV = 16) | 1.76 | `0163`, `cd4c` (`H16S`) |
+| head block, served 16-key first block | 1.91 (1.79 to 2.13) | `0163`, `cd4c` (`HEAD16K`) |
+
+- The lever row's templated check was priced as a gain on every type. On the head and fused blocks it is none: of the 503 GB the two verifier changes were worth, the 460 on the head block and the 22 on the fused blocks are not there [derived]. At the measured engine rate on node A (a floor, by proportion, not measured at the headline's mix) the three read 17.9 to 19.3, 16.4 to 17.7 and 0.8 GB. The eleven word-level types keep VERIFYFAST-B's 0.136 [relayed].
+- For the prover the templated head block is one size class up (unit 2^24, k_log 26, half the chunk cap), 37% more ANDs, and 2.7× the lowering.
+- Not measured: either 64-key block in either form with its program (155 to 167 GB for hours a run; my `9c37` was cancelled at 10:40Z); any `--structural` mode but `iv/hybrid/4`, the one VERIFYFAST-B's row used; anything on a card.
+
+**3. Under the hoist** [derived from section 1; the hoist is FLOCKPKG's, unbuilt]. If the program is parsed once a call or once a window, what a head session still costs is its proof check: 65 to 75 s flat at 16 keys, at least 333 s templated. So the hoist widens the gap, and the flat head block is the one to keep. The flat's 65.5 s over 323.0M matrix entries is 0.20 µs an entry, beside FLOCKPKG's 250.0 s over 1,368M at 64 keys, 0.18 µs [derived; FLOCKPKG's figure relayed].
+
+**4. Running:** `r20261111-114703-c618` (cpu-7, queued for a slot since 11:47Z): the byte length of the 16-key block's program on `main`, one Python process, 64 GB. It turns the 538 MB behind "0.39 to 0.42 s a MB" from #8520's body [read] into the run's own. Nothing else, nothing on a card. No tree file changed, no PR.
+
+For BREAKEVEN:
+- Measured: the templated check on the served 16-key head block costs 1.91× the flat in Lean core-seconds (705.8 against 368.6, medians of three; `r20261111-103330-0163`, `r20261111-103344-cd4c`). Head and fused blocks stay out of the templated goal's gain. This replaces my 11:43Z "1.85× (first of three runs)".
+- A head session's parts with its program, flat, 16 keys: inputs 73 to 76 s a call, setup 211 to 226 s a session, proof check 65 to 75 s a session. The setup is the same templated (220.3 s); the proof check is not (at least 333 s).
+
+For FLOCKPKG: the hoist removes the setup in either form; the templated head block's proof check stays 4.4× the flat's or more, so price the hoist on the flat head block.
+
+For the table:
+- Templated check: measured on four pairs. Fused 1.01× and 0.93×, head block 1.76× (small) and 1.91× (served 16-key) of the flat's Lean core-seconds. No gain on head or fused blocks; it holds on the word-level types only.
+- Lean's setup over the program: the same in the templated and the flat form on a head block (220.3 s against 211.0 to 226.3 s, `0163`, `cd4c`).
