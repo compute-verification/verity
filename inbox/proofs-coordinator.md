@@ -42841,3 +42841,52 @@ For the table:
 - Its fourth term is `4·(T·(1 + e_s·N_s + K_s + e_s·K_m) + (1 + K_s)·n_PU·openCalls)/2^256`: `2^-105.04` at SCALE's
   inputs without the own calls (modeled); the counts `N_s`, `K_s`, `K_m` are hypotheses until TWOWITNESS's lemma, and
   `Pr[B_conf,X]`, `κ_s`, `√(k·γ_s·Pr[B])` stay as #8827 has them.
+
+## MEMBERS, Wed 11 Nov 08:43Z: #8862's records pass at its head and its quick tier still runs, so no ready line yet; the writer (c) is built and pushed unopened, not yet run; the held branch's stratum check refused real windows and is fixed
+
+Nothing here changes a claim. The writer adds no premise and changes no statement or definition a lock reads [read: `Spot.OneStageZk` is not in its diff]; the form stays refused. The held branch does change what the form would accept and stays unopened.
+
+**1. #8862, head `23e96bd37477a08445bfe1551e2898d75aaa4a16`.**
+
+- Records `r20261111-080302-a139`: **pass** for `verity/protocols/spot/verifier/lean`, `security`, `security/Properties` and `security/Proofs`; nothing regenerated, so the lock commit is what the head's Lean writes [run]. It is a `lean-fast/v1` result: no kernel replay.
+- Quick tier `r20261111-080306-3938`: running since 08:03Z, no output yet at 08:40Z [run].
+- Pairs at 08:41Z: `git merge-tree --write-tree` of the head exits 0 with `main` `8201dacff26e` and with #8568, #8539, #8517, #8819, #8764, #8785, #8820, #8226, #8454 and #8553, each still at the head you listed [run].
+- **The ready line comes when `3938` passes.** If you would rather take `79f0`'s quick tier (at `b1ab2981bb`, which the head differs from by the two lock files only), say so and I write it now.
+
+**2. The writer (c): built, pushed, no PR.** Branch `cursor/proofs-v2-members-writer-9810`, head `c8fa429920045f12ca44419995a95a3de8247258`, four commits above #8862's head, 9 files, +472/−40 [run: `git diff --stat`].
+
+- **Lean, 4 files, +91/−3** (`2bfdfdb73a`, `b822ff12c5`). The parse-only command is `members PARAMS EVIDENCE`, in a module of its own, `Spot/MembersParse.lean`. It runs `membersParamsOfJson`, `membersEvidenceOf` and `membersHeld`, prints the members, the statements and the words `parsed, not checked`, and prints no verdict object and no `accept`. It reads no registration, no blob and no coin, and never reaches `checkMembersAt`. I put it outside `Spot.OneStageZk` so the module the two security locks read does not change; `ZkMain` now calls the new module's `membersMain`, and the package lock's `exempt` text for `Spot.ZkMain` says so.
+- **Python, 5 files, +381/−37** (`fa440c112b`, `c8fa429920`).
+  - `proofs.members_v2` writes the keys: the parameters' `proofs` exactly `{"members": {name: {"circuit", "public", "registered", "units", "vus_per_block"}}}`, every member of the window; the evidence's `proofs` exactly `{"statements": [{"member", "sessions"}]}`, one for each member with a session, in the members' order by first unit.
+  - `proofs.members_parsed` runs the command on a case.
+  - `a5.members_proof` and `a5.case_members` build the case from what the driver staged before the sample; `write_case` writes it to **`case-v2-members.json`**, a new file. `case-v2.json` and `case-sampled.json` are unchanged, because `composite.py` reads `case-sampled.json` and a window of several members must not start handing onsite a case the verifier refuses [read].
+  - The test that holds the writer to the Lean parsers: `test_the_per_member_form_as_written_is_what_v2_parses_and_never_checks` in `verity/protocols/spot/verifier/lean/tests/test_difftest.py`. On an audit v1 accepts it writes three members, two with a session, reads them back through the command, checks the line names no verdict, checks the audit itself refuses the same case for its keys, and checks eight refusals.
+- **Run so far** [run, local]: `test_a5_case_v2.py` 12 passed; `tests/test_lean_packages.py` and `tests/test_doc_paths.py` 34 passed; retired-term counts per file equal the base's.
+- **Not run yet:** the new Lean module has not been elaborated and the difftest row has not run. Three runs at the head wait for a slot: try `r20261111-083540-24d7`, quick tier `r20261111-083613-8494`, records `r20261111-083639-88b1`. That the security locks do not move is my guess until `88b1` says [guess].
+- **Left out, as I asked at 08:16Z:** the closing round in the driver. A case the writer writes parses, and would not pass `membersRun` were the form accepted. The PR body will say so.
+- **Two PRs, by your 08:19Z update:** the Lean part at `b822ff12c5` and the Python part above it, both unmarked, when the three runs end. Say if you want one PR.
+
+**3. The held branch: my bases check refused real windows. Fixed.** Head now `01d759cdbb4dbcf779f9592e781b26504b135fb0`, still unopened.
+
+- At 08:10Z I wrote that the member name format becomes part of the form. I had read only `_members`, which names every member `<template>/c<j>`.
+- `serving_rows.members` (`adapters/vllm/verity_vllm/pipeline/serving_rows.py:296-340`) names only a chunked template's members that way. Every other template is one member with no name, so its key is the template's id alone [read]. The check at `56b5dd3c6d` refused such a member (`memberNamed`).
+- `01d759cdbb` (+25/−9): a name that is a stratum's id is that template's chunk 0; any other name is read as before. Four new guards, among them the swapped bases with bare names. Try `r20261111-083908-dd73` waits for a slot.
+- Still refused by that check: `benchmarks/one_stage/a5_tp_gates.py:218` names its members `<template>/q<q>c<k>` [read]. That is a benchmark's own window; I left it.
+- The `_members` finding from 08:10Z stands (its `j` restarts at each root-node range of a template).
+
+**4. Runs.**
+
+| Run | What, at which head | Verdict |
+|---|---|---|
+| `r20261111-080302-a139` | records, #8862 `23e96bd374` | pass, nothing regenerated |
+| `r20261111-080306-3938` | quick tier, #8862 `23e96bd374` | running |
+| `r20261111-083540-24d7` | try `Spot/MembersParse.lean`, writer `c8fa429920` | waiting for a slot |
+| `r20261111-083613-8494` | quick tier, writer `c8fa429920` | waiting for a slot |
+| `r20261111-083639-88b1` | records, writer `c8fa429920` | waiting for a slot |
+| `r20261111-083908-dd73` | try `Spot/OneStageZk.lean`, held `01d759cdbb` | waiting for a slot |
+| `r20261111-082900-0caf` | try at `2bfdfdb73a` | cancelled by me before it started: the file's header changed |
+
+For the table:
+- #8862 at `23e96bd37477`: records pass (`r20261111-080302-a139`, measured), quick tier running (`r20261111-080306-3938`); merges with `main` and the ten heads at 08:41Z; no ready line yet.
+- Writer (c): built on `cursor/proofs-v2-members-writer-9810` at `c8fa42992004`, no PR; its Lean and its difftest row are not run yet (three runs wait for a slot). The form stays refused.
+- Held branch at `01d759cdbb4d`: the bases check now reads a one-member template's bare name; unopened.
