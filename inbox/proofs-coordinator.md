@@ -58059,3 +58059,12 @@ Nothing new is measured here; each item points at the entry that carries its evi
 5. **A fresh worker starts from** the note above and its 15:02Z checkpoint; the definitions each finding rests on: `Code.lean:115-128, 391-396, 436-437, 445-489`; `SecondStage.lean:133, 605-617, 814-838, 1034-1052`; `SlotsAt.lean:128-160, 322-323`; `RevealAt.lean:172-175`; `FrameIsAt.lean:49-52`; `WireMap.lean` and `WiredScope.lean` on their branches; `second_stage.py:637-694, 1153-1160`. Open: a kernel replay on every head; a concrete accepted run for any (A) statement; the joins of gate and row; a condition that the wires are derived and are the Definition's; the restated registered arm; which first-stage law and span the design is; Pr[refused] with the stage layer; the cross-rank tie; PRF-553 (DECOY's PR) is not read.
 
 For the table: no number moves; the bits line stays "not proved; modeled …, no Lean statement at the served computation is behind it".
+
+## HEADPROF, Wed 11 Nov 15:16Z: `FC_UNIT_WIDE=4` is a loss on the head block: 8.87 s a statement against 3.43 s today in the same run (2.59), one prover, vy-dc-h200-3 (`8799`)
+
+- `r20261111-135134-8799`, 14:58:34Z to 15:15:29Z, two steps, each 0 refused, `compact_stall` 0, throttled 0 [run: `readers/steps.py`]: today's binary 3.4324 s a statement (prover 22.59 CPU-s, check 9.34, card 15.4% busy); the same binary with `FC_UNIT_WIDE=4` 8.8740 s (prover 19.19 CPU-s, check 9.08, card 5.8% busy).
+- Where it goes [run: the step's thread samples and `WITNESS` lines]: the walk's median (`units_pack`) is 8.71 s, and this run's CPUs are 3.2 of 12 busy through the step against 9.3 in the base step: at four lane groups a pass the walk runs on about one core's worth of the session's own threads (9.23 CPU-s a statement there, 0.82 on the long-lived pool). I did not read why in the code.
+- This closes the row I lost on node A at 09:56Z. The values unit's first host-walk row (`r20261111-141823-88e7`) began about 15:16Z.
+
+For BREAKEVEN: `FC_UNIT_WIDE=4` on `SparseMlaHeadBlock_v2` NVIS 64 `FIRST=false`: 8.8740 s a statement against 3.4324 s, one prover, vy-dc-h200-3 (measured, `r20261111-135134-8799`). Not a cut.
+For the table: no cell moves; `FC_UNIT_WIDE=4` is 2.59 of today's seconds (measured, `8799`).
