@@ -31,6 +31,7 @@ names the baseline too. A dump taken up to SLACK_S after a time stands for it. -
 from __future__ import annotations
 
 import argparse
+import functools
 import gzip
 import inspect
 import json
@@ -172,16 +173,27 @@ def open_store():
     return LocalStore()
 
 
+@functools.cache
+def control_ssh() -> tuple[str, ...]:
+    """The ssh command line to the control pod, as `research pods ssh` builds it: asked for once a reading."""
+    from . import remote
+    from .pods import connect
+
+    try:
+        return tuple(connect.ssh_base(CONTROL))
+    except remote.Refused as e:
+        raise Unread(f"{CONTROL} isn't reached from here ({' '.join(str(e).split())})") from None
+
+
 def pod(cmd: str, timeout: float = 120) -> str:
     """What the shell command `cmd` prints on the control pod; run here when this machine is the pod."""
-    here = Path(SWEEP_GOALS).parent.is_dir()
-    argv = ["sh", "-c", cmd] if here else [sys.executable, "-m", "research", "pods", "ssh", CONTROL, "--", cmd]
+    argv = ["sh", "-c", cmd] if Path(SWEEP_GOALS).parent.is_dir() else [*control_ssh(), cmd]
     try:
         p = subprocess.run(argv, capture_output=True, text=True, timeout=timeout)
     except (OSError, subprocess.TimeoutExpired) as e:
         raise Unread(f"{CONTROL} gave no answer ({type(e).__name__})") from None
     if p.returncode != 0:
-        raise Unread(f"{CONTROL} isn't reached from here ({p.stderr.strip()[-160:] or f'exit {p.returncode}'})")
+        raise Unread(f"{CONTROL} isn't reached from here ({' '.join(p.stderr.split())[-160:] or f'exit {p.returncode}'})")
     return p.stdout
 
 

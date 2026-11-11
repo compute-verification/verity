@@ -107,6 +107,40 @@ def test_machines_are_the_fleets_report_over_the_pods_samples_of_the_window(monk
         V.machines(since, NOW)
 
 
+def test_the_pod_is_asked_over_one_ssh_line_a_reading_and_run_here_when_this_machine_is_the_pod(monkeypatch, tmp_path):
+    from research import remote
+    from research.pods import connect
+
+    asked, ran = [], []
+
+    def ssh_base(target):
+        asked.append(target)
+        return ["ssh", "root@pod"]
+
+    def run(argv, **kw):
+        ran.append(argv)
+        return V.subprocess.CompletedProcess(argv, 0 if argv[-1] != "false" else 1, stdout="out\n", stderr="no such file")
+    monkeypatch.setattr(V, "SWEEP_GOALS", str(tmp_path / "watchers" / "goals"))
+    monkeypatch.setattr(connect, "ssh_base", ssh_base)
+    monkeypatch.setattr(V.subprocess, "run", run)
+    V.control_ssh.cache_clear()
+    assert V.pod("ls goals") == V.pod("cat samples") == "out\n"
+    assert ran == [["ssh", "root@pod", "ls goals"], ["ssh", "root@pod", "cat samples"]] and asked == [V.CONTROL]
+    with pytest.raises(V.Unread, match="isn't reached from here \\(no such file\\)"):
+        V.pod("false")
+    (tmp_path / "watchers").mkdir()                              # this machine is the pod: its own shell
+    assert V.pod("ls goals") == "out\n" and ran[-1] == ["sh", "-c", "ls goals"]
+    (tmp_path / "watchers").rmdir()
+    V.control_ssh.cache_clear()
+
+    def refused(target):
+        raise remote.Refused("runpod API unavailable: HTTP 429\n")
+    monkeypatch.setattr(connect, "ssh_base", refused)
+    with pytest.raises(V.Unread, match="vy-control-verity isn't reached from here \\(runpod API unavailable: HTTP 429\\)"):
+        V.pod("ls goals")
+    V.control_ssh.cache_clear()
+
+
 def test_asks_off_track_are_the_audits_findings_on_the_asks_not_delivered():
     def ask(issue: str, kind: str, **more) -> dict:
         return {"issue": issue, "url": "", "title": issue, "team": "TOP", "lane": "top", "asker": "daniel", "state": kind, "type": kind,
