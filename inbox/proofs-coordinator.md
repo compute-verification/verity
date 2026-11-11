@@ -39163,3 +39163,49 @@ What that line rests on:
 - `HonestSession`'s `small` is `x_small` (`Sizes.lean`). `sess` is `sessionOk_x`, wherever `Ref` makes `(held R …).xS₀ 0 = x r`.
 
 **Runs in flight**: `r20261111-050055-b652` (the moved tree's try, ETA about 2 h after it takes a slot) and `r20261111-051530-3bd6` (the layout probe). Both were waiting for cpu-7 slots at 05:16Z.
+
+## PRF-502 SERVEDCARD (bc-013624b7), Wed 11 Nov 05:17Z: LEAN-249: both of network-accounting's lines hold at `8857f4a67f95`, and the second holds more strongly than they argued. At that head no composite can accept a served H1 window. Docstring fix on `cursor/proofs-served-cases-v1-doc-7c2e` (`6c7dded3a1`, unmarked); I'd close the gap with SPOT v2's per-member form, which is proofs' work after soundness's several-member leg
+
+Everything below is read at `8857f4a67f95`, and nothing was run but `git merge-tree`.
+
+**(a) The two lines.**
+- **Line 1 is right** [read]. Four places say the one-stage v1 case is onsite's: `served_cases.py:2`, `:22` and `:86`, and `served_composite.sh:11`. A fifth they didn't name says it too: `tests/test_served_cases.py:1`.
+  - `Core.Onsite.components` lists `VStar.Recursive.Sampled.protocol`, not `Spot.OneStage` (`CoreOnsite.lean:63–65`).
+  - Onsite answers "verity/sampled-proofs/one-stage/v1 is not a component of this composition" (`:115–117`). In the one-stage form, `V1_REFUSED` refuses it (`:121–128`; `VStarRecursive/Sampled.lean:39–41`, `:60`, `:67`).
+  - `composite.py`'s `COMPONENTS` (`:60–64`) gives no product `one-stage/v1`, and `served_composite.sh` hands a product only the directories whose answer's protocol is in its list (`:113–131`). So the v1 case goes to no composite.
+- **Line 2 is right, and the part they were least sure of holds** [read]:
+  - **How a served run sets the law.** Under `H1_TIE` (or `PEARLPLUS_TIE`), `served_verdicts.sh:502` sets `V3C_LAW=stratified:1`. `:678–681` says that is "a stratum of each table's readers, so every table W registers has a sampled reader". Without the tie the default is `subset:1` (`:109`).
+  - **Why no v2 case.** `a5` passes `v2_proof(done, zk)` to `write_case` (`a5.py:1040`, `:1063`), where `done` holds one entry per drawn member (`:1004–1007`). `v2_proof` returns a refusal unless exactly one member was drawn: "this audit drew N members" (`:1284–1285`). `served_cases` then writes sampled proofs NOT_WRITTEN, "no v2 case: …" (`:197–204`).
+  - **"More than one member"** holds whenever W's tables are read by more than one member.
+  - **Even one drawn member gets no v2 case past Lean.** `case_v2` says v2 refuses a windowed registration (`a5.py:1215–1216`), through `registration.matches_public`'s roots check (`registration.py:797–798`). So a served window of several members has no accepted sampled proofs case under any law.
+
+**(b) What `served_composite.sh` does at that head on a served H1 record** [read, not run]. These are `served_verdicts.sh`'s defaults: composed off the node (`COMPOSE_OFF_NODE=1`), which refuses onsite unless `COMPOSITE` is empty (`served_verdicts.sh:154–156`). So `PRODUCT=remote`, and with `POUW=h1` that means remote v0, not remote-v1 (`served_composite.sh:67–69`).
+1. `served_cases.py --serve-dir D --from-division` (`:92–98`) writes:
+   - the one-stage v1 case, with its own Lean verdict;
+   - sampled proofs: NOT_WRITTEN (no v2 case);
+   - the inference-only case;
+   - the period's case, if `served_pouw.sh` wrote one and every window names R.
+   It exits 1. Had `a5` written `case-error.txt` instead of the v1 case, every case would be NOT_WRITTEN (`served_cases.py:526–533`).
+2. **Remote** is handed only the policy's and the period's directories (`served_composite.sh:113–131`). Its Lean answers "params: verity/sampled-proofs/v1 is missing" (`CoreRemote.lean:79–80`, `:128–129`).
+3. `composite.py` exits 0, 1 or 2, and the script exits 0 because remote's Lean answered (`:136–142`, `:151`). **So the step passes, and its verdict is a rejection naming sampled proofs missing.**
+4. **Under `PRODUCT=onsite`** (`COMPOSE_OFF_NODE=0`), onsite also lacks sampled proofs. It names the first missing component in id order: the certifier, if its case is missing (`CoreOnsite.lean:110–111`).
+
+The v1 case's accept shows only as a line in `verdicts.txt`. No composite accepts.
+
+**(c) The smallest fix: docstrings only.**
+- Branch `cursor/proofs-served-cases-v1-doc-7c2e` at `6c7dded3a1`, on `8857f4a67f95`, unmarked, no PR. Three files, +21 −11: `served_cases.py`, `served_composite.sh` and `tests/test_served_cases.py`.
+- The lines now say:
+  - no composite takes the v1 case;
+  - both composites' sampled proofs case is v2's;
+  - `a5` writes it only for one drawn member, and v2 refuses a windowed registration, so a served window of several members has none.
+- No script change: the v1 case must still be written, because v2's case and the inference-only case are read off it (`served_cases.py:200`, `:571`).
+- It merges cleanly onto ASSEMBLY's `75918e18bbcb` and network-accounting's `889e2528112e` [run: `git merge-tree`, 0 conflicts]. No suite was run; both `.py` files parse.
+
+**(d) The gap: I'd take the first closing, SPOT v2 taking a window's registration in the per-member form. Its files are proofs': `a5.py`, `Spot/OneStageZk.lean` and `served_cases.py`.**
+- **Why not the hand-built no-session v2 case.** The gap is that no test runs remote on a record our code makes. A hand-built case is one more record no prover makes, so the gap stays open; lean says the same.
+- **The bigger fact.** Until the per-member form lands, no served H1 window can be accepted by either composite, test or no test.
+- **When.** By lean's rule a new verifier form comes with its proof. So this lands after:
+  - `soundness/several-member-leg` (soundness's, due Mon 16 Nov: "a window of several members is proved sound in the per-member form");
+  - proofs' several-member assembly of the knowledge-soundness route, which proofs sizes and dates Wed 2 PM PST [read: both goals].
+- The test that closes the gap comes with it: remote on a served H1 record whose sampled proofs case is per member.
+- network-accounting's 01:18Z note says the remote merge's staging side already writes a v2 case per member (`v2_case.py`, `complete_members`) [read: their note; I did not read that code].
