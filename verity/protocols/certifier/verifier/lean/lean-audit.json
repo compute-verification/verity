@@ -30,6 +30,11 @@
    "except": [],
    "why": "the check is code: the record's encodings, the certifier program's Program grid and Σ_sync, the LMS verifier and the core protocol interface, no Mathlib and nothing of Security"
   },
+  "NetworkCheck.Clocks": {
+   "imports": ["NetworkCheck.Check"],
+   "except": [],
+   "why": "the clock openings are code: v4's certificate and sync, its encodings and its one LMS check, no Mathlib, nothing of Security and nothing of the inference-only policy's check, so `network-records` builds without it"
+  },
   "NetworkCheck.Period": {
    "imports": [
     "NetworkCheck.Check",
@@ -52,11 +57,6 @@
    "imports": ["NetworkCheck.Check", "Lms.Verify", "Flock.Hm96", "Flock.Canon", "Flock.FV3", "Identity.Tagged"],
    "except": [],
    "why": "N2's link-window verdict of record is code: v4's certificate, its one LMS check and its encodings, the LMS verifier, C-Flock's hm96 row commitment, canonical JSON and frame-v3-sha512 domain, and core's identity hash, no Mathlib and nothing of Security"
-  },
-  "NetworkCheck.Clocks": {
-   "imports": ["NetworkCheck.Check"],
-   "except": [],
-   "why": "the clock openings are code: v4's certificate and sync, its encodings and its one LMS check, no Mathlib, nothing of Security and nothing of the inference-only policy's check, so `network-records` builds without it"
   }
  },
  "reads_exempt": {
