@@ -461,6 +461,16 @@ def decoder(phi: Phi, M: int = 1, history: int = 0):
     return Net(phi, M, history)
 
 
+def request_shape(wrapper: str, LP: int | None, T: int | None) -> tuple[int, int]:
+    """A wrapper's (LP, T): (0, 0) for a `step`, which reads neither; for any other the prompt rows and the decode steps its
+    Program is built for, a TypeError without them."""
+    if wrapper == "step":
+        return 0, 0
+    if LP is None or T is None:
+        raise TypeError(f"a {wrapper} wrapper's Program is built for a prompt of LP rows and T decode steps (LP={LP!r}, T={T!r})")
+    return int(LP), int(T)
+
+
 class _Decoder:
     """The dense or fused-MoE Llama-family decoder (`ModelShape`) under the bi-eager profile, on one rank or two."""
 
@@ -493,16 +503,6 @@ class _Decoder:
 
     def model(self, B: Builder, W: Coll, peers: _Peers) -> _Model:
         return _Model(B, self.specs, W, self.specs.C, peers)
-
-
-def request_shape(wrapper: str, LP: int | None, T: int | None) -> tuple[int, int]:
-    """A wrapper's (LP, T): (0, 0) for a `step`, which reads neither; for any other the prompt rows and the decode steps its
-    Program is built for, a TypeError without them."""
-    if wrapper == "step":
-        return 0, 0
-    if LP is None or T is None:
-        raise TypeError(f"a {wrapper} wrapper's Program is built for a prompt of LP rows and T decode steps (LP={LP!r}, T={T!r})")
-    return int(LP), int(T)
 
 
 def build_program(phi: Phi, wrapper: str, *, LP: int | None = None, T: int | None = None, M: int = 1, pos0: int = 8,
@@ -575,8 +575,8 @@ def build_program(phi: Phi, wrapper: str, *, LP: int | None = None, T: int | Non
     model = net.model(B, W, peers)
     if batched and hasattr(model, "batched"):
         model.batched = True
-    batch = (launch_batch(phi, prompt_rows, decode_steps) if batch is None else batch) if wrapper == "request" else None
-    in_launch(model, batch, net.model_class, chunks, T or 0, entries=tuple(entries))
+    batch = (launch_batch(phi, LP, T) if batch is None else batch) if wrapper == "request" else None
+    in_launch(model, batch, net.model_class, chunks, T, entries=tuple(entries))
     if wrapper == "request" and isinstance(model, _Model):
         model.ctx = launch_rows(phi, prompt_rows, decode_steps, C)
     if C:
