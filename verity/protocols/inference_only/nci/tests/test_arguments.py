@@ -6,7 +6,7 @@ sys.path.insert(0, str(HERE.parent))
 
 import arguments  # noqa: E402
 
-LOCK = Path(__file__).resolve().parents[5] / "Security" / "lean-audit.json"
+LOCK = Path(__file__).resolve().parents[5] / "security" / "lean-audit.json"
 
 
 def test_argument_map_has_no_problems():
