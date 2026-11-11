@@ -77,10 +77,13 @@ after-landing check gates in graph2's place: the run beside each candidate, and 
 as `--shards` shards on `--on`'s machines (`vqueue_slim.start` with ``shards``: N, ci.toml's plan, or `auto:N`, an auto
 plan of the candidate's tree, which splits pytest by suite), judged on every step `main` waits for,
 and its verdict alone is the candidate's; a run started while graph2 gated is started again as the check.  A candidate built
-on another in flight whose check is judged on lean-audit, no member of it changing a Lean input against its merge base with
-`main` (`vqueue_slim.LEAN_INPUTS`), runs every step but lean-audit and takes that check's verdict on it (its record's
-``lean_audit_from``, `vqueue_slim.audited`): it passes lean-audit exactly when its base's check passed it, so it drops with
-its base, lands after it and never while that check hasn't said; one started once its base is `main` audits.  A failed step
+on another in flight, no member of it changing a Lean input against its merge base with `main` (`vqueue_slim.LEAN_INPUTS`),
+runs every step but lean-audit where its base's check is judged on lean-audit, or took its verdict on it from the check of a
+candidate below that is, and takes that check's verdict on it (its record's ``lean_audit_from``, the candidate whose check
+ran it, `vqueue_slim.audited`), read from the run beside `main` once that candidate has landed: it passes lean-audit exactly
+when that check passed it, so it drops with its base, lands after it and never while that check hasn't said.  One started
+once its base is `main`, or once that candidate has landed while the run beside `main` keeps no verdict on lean-audit,
+audits.  A failed step
 is inherited by its failing tests, those the run beside its base's check failed too.  A shard that failed a step it is
 judged on, or a suite of one, fails it while the other shards still run (an early red, `vqueue_slim.judge`), decided as a
 finished fail is: on the lowest candidate at once, on one above it once its base's check has ended (`vqueue_slim.based`),
@@ -1431,6 +1434,18 @@ def _running(j: Judged | None) -> dict:
     return j.record or {}
 
 
+#: where a check that takes lean-audit's verdict from candidate ``sha``'s reads it (`_lent`): the record, and whether
+#: ``sha`` has landed
+Lent = Callable[[str], tuple[dict | None, bool]]
+
+
+def _lent(judged: dict[str, Judged], beside: dict | None, *landed: str | None) -> Lent:
+    """Where a candidate's check's verdict on lean-audit is read: its record as judged now while it is a candidate, though
+    landed if ``landed`` names it (`main`, or the candidate this tick advanced it to), else, landed, the run beside `main`'s
+    (``beside``), which keeps it from that candidate's or from one that took it from it (`vqueue_slim.audited`)."""
+    return lambda sha: (judged[sha].record, sha in landed) if sha in judged else (beside, True)
+
+
 def _failing_tests(f: Failed, most: int = 5) -> str:
     """The failing tests ``f`` names, the first ``most`` of them, for an owner to read: not what it fails beyond them
     (`vqueue_slim.unnamed`)."""
@@ -1786,6 +1801,7 @@ class Loop:
             return 1 + height(bases[sha], (*seen, sha)) if bases.get(sha) in bases and sha not in seen else 0
 
         below = self._below(past, whole, n, main, origin, wrote)
+        lent = _lent(judged, below[0], main)
         w._theirs, w._listed = {}, {}
         try:
             for sha in sorted(mine, key=lambda s: (height(s), s)):      # each after its base, whose record it reads as judged now
@@ -1799,7 +1815,7 @@ class Loop:
                 if self.slim is not None and (self.gate == CHECK_GATE or not w._ancestor(sha, main)):
                     j = self._beside(p, n, main, origin, sha, base, prs, heads, j, wrote, chained(sha),
                                      below if base == main else ((judged[base].record if base in judged else None)
-                                                                 or p.slim(base)[1], p.slim_started(base)[1]))
+                                                                 or p.slim(base)[1], p.slim_started(base)[1]), lent)
                 judged[sha] = j
                 cands.append(Candidate(sha, base, prs, heads, j.verdict, p.tries(sha), reruns=p.reruns(sha),
                                        enqueued=p.enqueued(sha)))
@@ -1862,7 +1878,7 @@ class Loop:
 
     def _beside(self, past: Past, n: int, main: str, origin: str, sha: str, base: str, prs: tuple[int, ...],
                 heads: tuple[str, ...], j: Judged, wrote: list[dict], chained: bool,
-                below: tuple[dict | None, float | None] = (None, None)) -> Judged:
+                below: tuple[dict | None, float | None] = (None, None), lent: Lent | None = None) -> Judged:
         """``j`` combined with the verdict of the run beside candidate ``sha``'s check (`vqueue_slim`), which its build starts
         beside each candidate's check, and here, once, one on ``main``'s chain (``chained``) the log holds no start of (its
         build's tick stopped first); again by a retry of its infra or a rerun of its failure.  Judged each tick, its record
@@ -1875,7 +1891,7 @@ class Loop:
         ago, hasn't said, and one on a candidate stays a fail, which `vqueue.decide` holds until its base's says.  Where the
         check gates (`CHECK_GATE`), the run's verdict alone is the candidate's, graph2's kept beside it (`Judged.shadow`, its
         note marked so), a run started while graph2 gated counts as none started, and a check that took lean-audit's verdict
-        from its base's has that check's (``below``'s record, `vqueue_slim.audited`)."""
+        from the check of a candidate below has that check's (`vqueue_slim.audited`), read where ``lent`` says (`_lent`)."""
         started, rec = past.slim(sha)
         started, gates = started and not self._other(rec), self.gate == GRAPH2_GATE
         line = dict(sha=sha, base=base, members=prs, heads=heads)
@@ -1883,13 +1899,14 @@ class Loop:
             v = Verdict(PENDING)
         else:
             if not started:
-                self.write(got := self._started(n, main, origin, line, below=below[0] if base != main else None))
+                self.write(got := self._started(n, main, origin, line, below=below[0] if base != main else None, lent=lent))
                 wrote.append(got)
                 rec = got["record"]
             was = json.dumps(rec, sort_keys=True)
             v = self.slim.judge(self.world.slim_driver(), rec)
             if not gates:
-                v = self.slim.audited(self.world.slim_driver(), v, rec, below[0])
+                ran = (rec or {}).get("lean_audit_from")
+                v = self.slim.audited(self.world.slim_driver(), v, rec, lent(ran)[0] if ran and lent else None)
             if json.dumps(rec, sort_keys=True) != was:
                 self.write(got := self._line(n, main, origin, "slim", **line, why=f"judged {v.state}", record=rec, done=True))
                 wrote.append(got)
@@ -2119,16 +2136,18 @@ class Loop:
     def _start(self, t: Tick, sha: str, base: str, line: dict, why: str = "started") -> list[dict]:
         """The run beside candidate ``sha``'s check started (`vqueue_slim.start`), its record logged; a start that fails is
         logged with no record, which `vqueue_slim.judge` reads as infra.  A base still in flight lends the record of its
-        check, as judged this tick (`_audit_from`)."""
+        check, as judged this tick, and the candidates below it theirs, or, landed, the run beside `main` (`_audit_from`)."""
         if self.slim is None:
             return []
         below = t.judged[base].record if base not in (t.main, t.advanced) and base in t.judged else None
-        return [self._started(t.n, t.main, t.origin, {**line, "sha": sha, "base": base}, why, below)]
+        return [self._started(t.n, t.main, t.origin, {**line, "sha": sha, "base": base}, why, below,
+                              _lent(t.judged, t.below, t.main, t.advanced))]
 
-    def _started(self, n: int, main: str, origin: str, line: dict, why: str = "started", below: dict | None = None) -> dict:
+    def _started(self, n: int, main: str, origin: str, line: dict, why: str = "started", below: dict | None = None,
+                 lent: Lent | None = None) -> dict:
         d = self.world.slim_driver()                       # drive.toml naming no machines stops the tick: no run is infra
         try:
-            audit = self._audit_from(d, main, line, below)
+            audit = self._audit_from(d, main, line, below, lent)
             rec, error = self.slim.start(d, line["sha"], line["base"],
                                          **({"shards": self.shards} if self.gate == CHECK_GATE else {}),
                                          **({"audit_from": audit} if audit else {}),
@@ -2138,20 +2157,29 @@ class Loop:
         return self._line(n, main, origin, "slim", **line, why=why, record=rec, done=True,
                           **({"start_error": error} if error else {}))
 
-    def _audit_from(self, d: Driver, main: str, line: dict, below: dict | None) -> str | None:
+    def _audit_from(self, d: Driver, main: str, line: dict, below: dict | None, lent: Lent | None) -> str | None:
         """The candidate whose check's verdict on lean-audit the check of ``line`` takes in place of running it
-        (`vqueue_slim.start`'s ``audit_from``): where the check gates, its base, a candidate in flight, not `main`, whose
-        check (``below``, its record) is judged on lean-audit (`vqueue_slim.audits`), when no member's own change, against
-        its merge base with ``main`` (`World._changed`, as `World._judge` reads it), meets a Lean input
-        (`vqueue_slim.LEAN_INPUTS`).  None else, and when git can't say what a member changes: the check audits."""
-        if self.gate != CHECK_GATE or below is None or not line.get("heads") or not self.slim.audits(d, below):
+        (`vqueue_slim.start`'s ``audit_from``), where the check gates and its base is a candidate in flight, not `main`
+        (``below``, its record), when no member's own change, against its merge base with ``main`` (`World._changed`, as
+        `World._judge` reads it), meets a Lean input (`vqueue_slim.LEAN_INPUTS`): that base, whose check is judged on
+        lean-audit (`vqueue_slim.audits`), else the candidate its base's check took it from (``lean_audit_from``), the one
+        whose check ran it, while that check is judged on it, or, once that candidate has landed, while the run beside
+        `main` keeps a verdict on it (`vqueue_slim.answers`; where each is read: ``lent``, `_lent`).  None else, and when
+        git can't say what a member changes: the check audits."""
+        if self.gate != CHECK_GATE or below is None or lent is None or not line.get("heads"):
             return None
+        if self.slim.audits(d, below):
+            ran = line["base"]
+        else:
+            rec, landed = lent(ran) if (ran := below.get("lean_audit_from")) else (None, False)
+            if not ran or not (self.slim.answers(rec) if landed else self.slim.audits(d, rec)):
+                return None
         try:
             if any(vqueue.meets(self.world._changed(main, h), self.slim.LEAN_INPUTS) for h in line["heads"]):
                 return None
         except QueueError:
             return None
-        return line["base"]
+        return ran
 
     def _advance(self, c: Candidate, t: Tick) -> dict:
         """Push `main` to ``c`` (with --shadow, the shadow's own `main`).  Logged as soon as it is pushed, before what drive does
@@ -2696,9 +2724,9 @@ def main(argv: list[str]) -> int:
     ap.add_argument("--gate", choices=GATES, default=GRAPH2_GATE,
                     help=f"what gates a candidate: `{GRAPH2_GATE}` (the default), its graph2 check with the run beside it; "
                          f"`{CHECK_GATE}`, drive's after-landing check of it, every step as --shards shards (but lean-audit "
-                         "where no member changes a Lean input and it is built on a candidate in flight whose check runs it, "
-                         "whose verdict on it it takes), with graph2's check in shadow: read, compared with the check's "
-                         "verdict in one logged line, and deciding nothing")
+                         "where no member changes a Lean input and it is built on a candidate in flight whose check runs it "
+                         "or took it from the one below that ran it, whose verdict on it it takes), with graph2's check in "
+                         "shadow: read, compared with the check's verdict in one logged line, and deciding nothing")
     ap.add_argument("--shards", type=_shards, default=SHARDS,
                     help=f"with --gate {CHECK_GATE}, the shards each check runs as, one launch each: an N ci.toml has a shard "
                          f"plan for, or auto:N, N shards of an auto plan of the candidate's tree made before they launch, "

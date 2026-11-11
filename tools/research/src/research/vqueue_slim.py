@@ -45,10 +45,11 @@ too; what a failure doesn't name is one test no other key has (`unnamed`), so it
 shard has failed a step it judges, or a suite of one, while the others run (`_early`: a shard's failures so far, which its
 check writes as each one fails), a failure read then as it would be at the end; a candidate on another candidate whose check
 runs is compared with what that check has failed so far, the rest unknown until it ends (`based` with ``so_far``).  A
-candidate built on another in flight whose check is judged on lean-audit (`audits`), no member of it changing a Lean input
-(`LEAN_INPUTS`), audits nothing itself: `start` with ``audit_from`` leaves lean-audit out of its run (``lean_audit_from``),
-and `audited` gives it that check's verdict on the step, so it passes lean-audit exactly when its base's check passed it and
-never while that check hasn't said.  A step it leaves out
+candidate built on another in flight, no member of it changing a Lean input (`LEAN_INPUTS`), audits nothing itself where its
+base's check is judged on lean-audit (`audits`) or took its verdict on it from the check of a candidate below that is: `start`
+with ``audit_from``, the candidate whose check ran it, leaves lean-audit out of its run (``lean_audit_from``), and `audited`
+gives it that check's verdict on the step, or, once that candidate has landed, the one the run beside `main` keeps
+(`answers`), so it passes lean-audit exactly when that check passed it and never while it hasn't said.  A step it leaves out
 still runs: `failures` reads what it failed, which the loop rings to who acts on it, but what the run beside the base's
 check failed too (`Loop._off_gate`)."""
 from __future__ import annotations
@@ -157,8 +158,8 @@ def start(driver: Driver, sha: str, base: str, shards: int | str = 0, deselect: 
     `Driver.start_postland` launches the after-landing run: `--deferred` every step of `AFTER_LANDING` (each check runs the
     preflights first), `--shard K/N` on shard K's machines (`shard_machines`) for each of that many, one whole run for 1;
     `auto:N` has the auto plan its shards launch by made first (`Driver.plan_shards`, ``plan``, which `judge` follows).
-    With ``audit_from`` too, the candidate it is built on, whose check is judged on lean-audit (`audits`) and whose verdict
-    on it this one takes (`audited`): every step but lean-audit.
+    With ``audit_from`` too, the candidate below whose check ran lean-audit (`audits`), its base or the one its base's check
+    took it from, whose verdict on it this one takes (`audited`): every step but lean-audit.
     The record to keep (`Driver._started`): ``ids``, none yet while a detached launch runs (its ``launch`` then, or each
     shard's in ``shards``, which `judge` makes ``groups``, each shard's ids); the candidate (``tip``), ``base``, when it
     launched (``at``), the ``steps`` it runs and those it skips (``skip``), ``gate`` (`CHECK`) with ``shards``, and
@@ -172,7 +173,7 @@ def start(driver: Driver, sha: str, base: str, shards: int | str = 0, deselect: 
     n, auto = shard_count(shards)
     if audit_from and not n:
         raise ValueError(f"audit_from {audit_from[:12]}: only the check that gates (``shards``) runs lean-audit, so only it "
-                         "can take its base's verdict on it")
+                         "can take another check's verdict on it")
     kw, skip, _, flags = driver._postland_args({"verified": base}, sha, False)
     if left := deselection(driver, deselect):
         kw = {**kw, "deselect": str(left)}
@@ -718,34 +719,43 @@ def based(v: Verdict, base: dict | None, so_far: bool = False) -> Verdict:
 
 def audits(driver: Driver, rec: dict | None) -> bool:
     """Whether ``rec`` records the check that gates judged on lean-audit (`_gate`), whose verdict on it a check built on its
-    candidate may take in place of running it (`start`'s ``audit_from``)."""
+    candidate, or on one that took it from this one's, may take in place of running it (`start`'s ``audit_from``)."""
     return rec is not None and rec.get("gate") == CHECK and LEAN_STEP in _gate(driver, rec)
 
 
-def audited(driver: Driver, v: Verdict, rec: dict | None, base: dict | None) -> Verdict:
-    """``v``, `judge`'s verdict of the check ``rec`` records, with lean-audit's where that check took it from its base's
-    (``lean_audit_from``) and lean-audit gates it (`_gated`): the verdict on the step of the check ``base`` records, the
-    record of the base candidate's check as judged now, or of the run beside `main` once that candidate is `main` (its own).
-    The candidate passes lean-audit exactly when that check passed it.  Passed there (its kept verdict's ``passed``), ``v``.
-    Failed there, ``v`` failed with that check's failure of it, ended once ``v``'s own check has, so `based` reads it as the
-    base's and `vqueue.decide` drops the candidate with its base, or lands it after.  Unknown there (no verdict kept, or one
-    that holds neither), ``v`` never passes: a pass is pending, a fail not ended, which `vqueue.decide` holds while every
-    failure is inherited.  Once known, and ``v`` a pass or fail kept, it is kept in ``rec`` as if the check had run the step
-    (``verdict``: ``passed``, or the failure), so the record answers for it where it is the run beside `main` (`based`) and
-    is read from there."""
-    if not rec or not rec.get("lean_audit_from") or LEAN_STEP not in _gated(driver, rec):
+def _audit(rec: dict | None) -> tuple[Failed, ...] | None:
+    """The verdict on lean-audit that ``rec`` keeps: its failures of the step, none where it passed it, None where it keeps
+    none (no verdict kept, or one that holds neither)."""
+    got = (rec or {}).get("verdict")
+    if not isinstance(got, dict):
+        return None
+    failed = tuple(f for f in _kept(got).failed if f.task == f"step {LEAN_STEP}")
+    return failed if failed or LEAN_STEP in (got.get("passed") or ()) else None
+
+
+def answers(rec: dict | None) -> bool:
+    """Whether ``rec`` keeps a verdict on lean-audit: its check ran the step, or took that verdict from the check that ran it
+    (`audited`)."""
+    return _audit(rec) is not None
+
+
+def audited(driver: Driver, v: Verdict, rec: dict | None, source: dict | None) -> Verdict:
+    """``v``, `judge`'s verdict of the check ``rec`` records, with lean-audit's where that check took it from the check of a
+    candidate below that ran it (``lean_audit_from``) and lean-audit gates it (`_gated`): the verdict on the step that
+    ``source`` keeps, the record of that candidate's check as judged now, or of the run beside `main` once that candidate has
+    landed (its own, or one that took it from it too).  The candidate passes lean-audit exactly when that check passed it.
+    Passed there (its kept verdict's ``passed``), ``v``.  Failed there, ``v`` failed with that check's failure of it, ended
+    once ``v``'s own check has, so `based` reads it as the base's, whose record keeps it too, and `vqueue.decide` drops the
+    candidate with its base, or lands it after.  Unknown there (`answers`), ``v`` never passes: a pass is pending, a fail not
+    ended, which `vqueue.decide` holds while every failure is inherited.  Once known, and ``v`` a pass or fail kept, it is
+    kept in ``rec`` as if the check had run the step (``verdict``: ``passed``, or the failure), so the record answers for it
+    where it is the run beside `main` (`based`), or the base of a check that took it too, and is read from there."""
+    if not rec or not rec.get("lean_audit_from") or LEAN_STEP not in _gated(driver, rec) or answers(rec):
         return v
-    kept = rec.get("verdict")
-    if isinstance(kept, dict) and (LEAN_STEP in (kept.get("passed") or ()) or any(
-            isinstance(f, dict) and f.get("task") == f"step {LEAN_STEP}" for f in kept.get("failed") or ())):
-        return v
-    got = (base or {}).get("verdict")
-    got = got if isinstance(got, dict) else {}
-    passed = LEAN_STEP in (got.get("passed") or ())
-    if not (failed := tuple(f for f in (_kept(got).failed if got else ()) if f.task == f"step {LEAN_STEP}")) and not passed:
+    if (failed := _audit(source)) is None:
         return Verdict(PENDING) if v.state == PASS else replace(v, ended=False) if v.state == FAIL else v
-    out = v if passed else Verdict(FAIL, (*v.failed, *failed), v.infra,
-                                   ended=v.state in (PASS, INFRA) or v.state == FAIL and v.ended)
-    if isinstance(kept, dict) and v.state in (PASS, FAIL):
-        _keep(rec, out, [*(kept.get("passed") or ()), *([LEAN_STEP] if passed else [])])
+    out = v if not failed else Verdict(FAIL, (*v.failed, *failed), v.infra,
+                                       ended=v.state in (PASS, INFRA) or v.state == FAIL and v.ended)
+    if isinstance(kept := rec.get("verdict"), dict) and v.state in (PASS, FAIL):
+        _keep(rec, out, [*(kept.get("passed") or ()), *(() if failed else (LEAN_STEP,))])
     return out
