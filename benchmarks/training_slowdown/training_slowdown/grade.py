@@ -576,7 +576,7 @@ def text(s: dict) -> str:
         add("sensitivities", ", ".join(f"{name} " + ("blank" if name in gaps else f"{v:,.6g}")
                                        for name, v in rho["sensitivities"].items())
             + ", beside rho and never in it: each holds only for partitions split by tokens",
-            *(f"{name}: {'blank: ' if name in gaps else ''}{why}"
+            *(f"{name}: " + (f"blank: {why}" if name in gaps else f"partial: {why.removeprefix('unmeasured: ')}")
               for name, why in (rho["unmeasured"] | {n: w for n, w in gaps.items() if n in rho["sensitivities"]}).items()))
     seeds = [_seed(split, seed, v) for split in ("final", "search") for seed, v in mine[split]["seeds"].items()]
     theirs = [_seed(split, seed, v) for split in ("final", "search")

@@ -329,7 +329,8 @@ def test_the_traces_circuit_gives_the_parts_their_structure_and_both_sensitiviti
     red, upd = s["rho"]["sensitivities"].values()
     text = G.text(s)
     assert f"reduction {red:,.6g}, update {upd:,.6g}, beside rho and never in it" in text
-    assert f"reduction: {s['rho']['unmeasured']['reduction']}" in text and ", its code 9.9" in text
+    assert f"reduction: partial: {s['rho']['unmeasured']['reduction'].removeprefix('unmeasured: ')}" in text
+    assert "unmeasured" not in text and ", its code 9.9" in text
     assert "blank" not in text
 
 
