@@ -15,7 +15,7 @@ measures bumps `VERSION` (`training_slowdown/__init__.py`), which every record c
 | `run.py` | one job of an attack config: `Harness`, what a route's code is counted inside, the route loop (`train`) and the record's trace (`trace_step`, `retrace`); `block_c`, a start's c |
 | `config.py` | an attack config: its schema, its digest and its jobs (`Job.label`), each refusal by name |
 | `sandbox.py` | the training job's sandbox: namespaces with no network and an empty directory over each final set (`enter`), and what a process can still reach of either (`refusals`) |
-| `routes/` | the routes a config names, and the route contract (`routes/__init__.py`); `subset`, the parameters a pattern names trained with the optimizer its `opt` dial names (AdamW, SGD, Lion, Adafactor, Muon, Shampoo; the ones torch lacks in `_optimizers`; under Muon and Shampoo the gains, and the embedding unless the config puts it among the matrices, train under AdamW beside it), a rate each for the matrices, the gains and the embedding, on a linear, cosine or constant schedule, E the tensors in full or their deltas in codes; `ema`, `subset`'s step with the output an exponential average of the weights, at one decay or reaching back a share of the steps so far; `lora`, the start frozen and a low-rank adapter trained beside each matrix a pattern names, the output the start with the adapters merged in |
+| `routes/` | the routes a config names, and the route contract (`routes/__init__.py`); `subset`, the parameters a pattern names trained with the optimizer its `opt` dial names (AdamW, SGD, Lion, Adafactor, Muon, Shampoo; the ones torch lacks in `_optimizers`; under Muon and Shampoo the gains, and the embedding unless the config puts it among the matrices, train under AdamW beside it), a rate each for the matrices, the gains and the embedding, on a linear, cosine or constant schedule, AdamW in torch's default step or its fused kernel, E the tensors in full or their deltas in codes; `ema`, `subset`'s step with the output an exponential average of the weights, at one decay or reaching back a share of the steps so far; `lora`, the start frozen and a low-rank adapter trained beside each matrix a pattern names, the output the start with the adapters merged in |
 | `flops.py` | `Counter`, the dispatch-mode count of every op's multiply-adds and their provenance; `guard_exits`, token data read out of torch; `flags`, work the count can't vouch for; `forward_macs_per_token` |
 | `opnames.py` | the op-name sets the counter, the capture and the gate prices share |
 | `gates.py` | each counted op's price in Boolean gates, from the circuits' Definitions |
@@ -25,6 +25,7 @@ measures bumps `VERSION` (`training_slowdown/__init__.py`), which every record c
 | `policy.py` | a start's reference shapes and the (c, k) grid; the console's policy (`CONSOLE`), one session of the 45M reference model; `named`, the one place a config's policy name becomes (c, k) |
 | `grade.py` | the grade: a config's slowdown S = p·ρ from its jobs' records and its honest config's, printed and written as `slowdown.json` (below) |
 | `library.py` | the library's table: each entry of `attacks/` with its step traced on a CPU, its slowdown at its policy (the calculator's bound of record on that step) and what binds, and its planned run over each fleet and period |
+| `of_record.py`, `of_record.toml` | an entry beside its run of record: the entry's counted step set beside the run's record's (`compare`), equal, or what differs, each expected difference named by its rule; the data file names each held entry's run, the record's artifact, its path and its sha256, and the lines of the record's own program a route doesn't compute |
 | `calculator.py` | the slowdown calculator (`verity/protocols/inference_only/rho`) as this package reads it: a fixed policy's numbers, the fleets and periods a figure is presented over, and the bound of record |
 | `counterexample.py` | a run's counterexample families: their writer and the sampled bit-for-bit rebuild check |
 | `codecs/` | update codes: identity, low rank, sparse mask, quantized delta, scaled quantized delta, seed replay and their composition |
@@ -87,6 +88,50 @@ over a window, a week, a month and a year, and which parts are traced, approxima
 `--out` writes all of it to `DIR/library.json`. A row has no slowdown, and says why, where the capture
 refuses the step, where the bound can't read it, and where the entry's E keeps less than the trained weights: a
 weight then costs at most E's bits a trained weight, which only a run's record has, so the grade reads that entry.
+
+## An entry beside its run of record
+
+~~~text
+python -m training_slowdown.of_record [ENTRY ...] --records DIR [--held of_record.toml] [--starts starts.toml] \
+    [--out DIR]
+~~~
+
+An entry that ports a run is held to that run by its step, not by its weights, E's bytes or its loss, which only a
+run has. `of_record.toml` names each such entry's run of record: the run, the store artifact holding its record, the
+record's path there and its sha256; a run is named there and nowhere else. `--records DIR` holds the records, each at
+`DIR/RUN/PATH`, as `research data fetch ART --to DIR/RUN --path PATH` leaves one; a record that is missing, or is
+another file, is refused with that line.
+
+For each entry (every held one, or the ones named) the command counts two steps of the entry's route under the
+harness's counter, on a CPU, at the model's own initialisation and on random tokens, one row a forward, and sets the
+second beside the step structure most of the record's steps have, the record's rows a forward divided out. The count
+reads operand shapes and which weights have left θ, never a value, so it is the step a job of the entry takes
+wherever that step is one fixed graph: the step is traced too, and an entry whose trace the capture refuses, or
+whose step reads a value back, is refused. It prints, an entry:
+
+- `updated`: the uses of an updated weight, each by its MACs a token and the updated MACs upstream of it, which must
+  be the record's; this list is the entry's update structure;
+- `log`: the step's products, each by phase, kind, op, operand shapes, count and MACs, which must be the record's;
+- the start and the steps, which must be the record's, and E: its plan's kinds, each of which must be one of the
+  record's format's (`E_KINDS`), with its size after the two steps beside the record's last checkpoint's;
+- `expected`: a difference named by the rule that covers it, with the MACs on each side. A rule fires on its exact
+  case alone. The device's: weights read at 32 bits where the record's are read at 16 (`width`), the CPU's attention
+  kernels of the same count and MACs (`attention`), and the norm as elementwise ops where CUDA's fused kernel is
+  counted at an updated gain alone, and not at all in a step that trains no gain (`norm`). AdamW's kernel (`adamw`):
+  the record's program asks torch for its fused kernel, where a route takes torch's default, on a CPU the unfused
+  step, over the same parameters; this one is the program's choice, not the device's. The harness's (`HARNESS`):
+  the records' harness checked the model's position tables like θ's weights, where `run.Harness` takes them for
+  weights the route made (`tables`); the step is counted again as the records' harness counted it, that count is the
+  one compared, and the line says how many products and uses move and that the step's MACs are the same on both
+  counts;
+- `named`: a line of the record's own program that the route rightly doesn't compute, which no rule knows: the
+  entry's `record_only` in `of_record.toml` names the line, the count and MACs the record's step has of it over the
+  config's, and why. A named line that the record's step does not have over the config's as named is a difference;
+- `DIFFERS`: anything else.
+
+The command exits 1 if any entry differs or is refused. `--out` keeps the comparisons (`DIR/of_record.json`) and each
+entry's counted records: the harness's own count (`DIR/ENTRY/run.json`) and the count compared
+(`DIR/ENTRY/tables/run.json`).
 
 ## Running an attack
 

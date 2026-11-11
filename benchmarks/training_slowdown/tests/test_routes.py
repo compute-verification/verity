@@ -5,6 +5,7 @@ import pytest
 import torch
 import torch.nn.functional as F
 from synthetic import SHAPE, run_job, tiny_registry, write_config
+from torch.utils._python_dispatch import TorchDispatchMode
 
 from training_slowdown import config, run, starts
 from training_slowdown.codecs import ScaledQuant
@@ -110,6 +111,50 @@ def test_the_embedding_trains_under_adamw_beside_the_matrices_optimizer_or_under
     assert grouped(model, matrices) == [(0.003, ["embed"]), (0.01, BLOCK)] and grouped(model, adamw) == [(0.002, GAINS)]
     model, (matrices, adamw) = subset.build(SHAPE, dials | {"gain_lr": 0.0, "embed_lr": 0.0})
     assert grouped(model, matrices) == [(0.01, BLOCK)] and grouped(model, adamw) == [(0.01, ["embed", *GAINS])]
+
+
+class Kernel(TorchDispatchMode):
+    """The fused AdamW kernel's calls, each as its tensors' shapes."""
+
+    def __init__(self):
+        super().__init__()
+        self.calls = []
+
+    def __torch_dispatch__(self, func, types, args=(), kwargs=None):
+        if "_fused_adamw_" in str(func):
+            self.calls.append([tuple(p.shape) for p in args[0]])
+        return func(*args, **(kwargs or {}))
+
+
+def test_fused_steps_adamw_in_torchs_kernel_once_a_group_to_the_same_weights():
+    """`fused`: AdamW steps in torch's fused kernel, called once a group over the group's tensors, where the default
+    never calls it. The weights agree to rounding. An optimizer that is no AdamW has no such kernel."""
+    rows = torch.randint(0, SHAPE["vocab"], (2, 9), generator=torch.Generator().manual_seed(1))
+
+    def stepped(**over):
+        dials = subset.DIALS | {"trainable": "*", "opt": "muon", "lr": 0.01} | over
+        torch.manual_seed(0)
+        model, optimizers = subset.build(SHAPE, dials)
+        with Kernel() as kernel:
+            for t in range(2):
+                subset.step(model, rows, optimizers, dials, t, 2)
+        return kernel.calls, model.state_dict(), optimizers[-1]
+
+    embed, gain = (SHAPE["vocab"], SHAPE["d_model"]), (SHAPE["d_model"],)
+    calls, plain, adamw = stepped()
+    assert calls == [] and adamw.defaults["fused"] is None, "a false dial states nothing, so torch's default stands"
+    calls, fused, adamw = stepped(fused=True)
+    assert adamw.defaults["fused"] is True and calls == [[embed, gain, gain, gain]] * 2
+    torch.manual_seed(0)
+    start = LM.of(SHAPE).state_dict()
+    for k, v in fused.items():
+        assert not torch.equal(v, start[k]) and torch.allclose(v, plain[k], rtol=0, atol=1e-6), k
+    assert stepped(fused=True, embed_lr=0.003)[0] == [[embed], [gain, gain, gain]] * 2, "the kernel once a group"
+    assert stepped(fused=True, trainable="blocks.*,norm")[0] == [[gain, gain, gain]] * 2
+    whole, _, adamw = stepped(fused=True, opt="adamw")
+    assert adamw.defaults["fused"] is True and [len(call) for call in whole] == [len(start)] * 2
+    with pytest.raises(ValueError, match="fused is AdamW's kernel, and opt 'sgd' steps no AdamW"):
+        subset.plan(subset.DIALS | {"opt": "sgd", "fused": True})
 
 
 def test_a_loaded_state_steps_at_its_groups_own_rates_and_one_from_before_them_at_lr():
