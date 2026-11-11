@@ -1,6 +1,6 @@
 # One-stage audit runs
 
-The one-stage audit (`verity.core.protocols.spot.one_stage`) end to end: serving's committed values through registration, the verifier's
+The one-stage audit (`verity.protocols.spot.verifier.one_stage`) end to end: serving's committed values through registration, the verifier's
 sample, Flock's circuit prover and the Lean verifier, to the audit record with its integrity profile, then the
 negatives.
 
@@ -10,7 +10,7 @@ Figure 1 prices); and the challenger's live coins, its signed log and the Lean v
 server and no recursion on that path. The core protocols' path, every prover behind the Lean ZK server's send check, is
 `--firewall` on `a5.py`, its variants and `prove_bundle.py`, and `ZK_SERVER=1` on their shell entry points. The network
 certifier, where a run has one (`a5_warden.py`), is a layer of its own, whose signed stamp SPOT[Flock] reads as a certified
-input. What the guarantee rests on: `verity/core/protocols/spot/README.md`.
+input. What the guarantee rests on: `verity/protocols/spot/verifier/README.md`.
 
 - `a<N>.py`: the driver of run A<N>; its docstring says what the run adds and how to call it.
 - `compose_circuit.py`, `stage_subset.py`, `stage_tampered.py`: helpers that run inside the circuit prover's tree (its `verity_flock`).
@@ -34,18 +34,18 @@ input. What the guarantee rests on: `verity/core/protocols/spot/README.md`.
   the sample): GLM-5.3's TP8 Commit with
   `SERVING_ROWS=benchmarks/one_stage/glm53_silu_mul_v2_tp8.json` (its SiluMul_v2 partition: every unit of `SiluMul_v2{I=1536}`,
   the dense layers' 861 per rank, by `subset:512`), or by default the CPU TP stand-in
-  (`integrations/vllm/tests/pipeline/served_tp.py`). A member's whole population is one `verity/flock-circuit` statement, whose shape takes at most
+  (`adapters/vllm/tests/pipeline/served_tp.py`). A member's whole population is one `verity/flock-circuit` statement, whose shape takes at most
   `2^(35 - k_log)` instances: 2,048 at I=1536 (`k_log` 24) and 8,192 at I=256 (`k_log` 22), so a rank's `SiluMul_v2{I=256}`
   (172,200 routed-expert and 21,525 shared-expert units) is not a member. Each session's `circuit.txt` files and lookup tables
   go to the store by SHA-512 (`sha512/<hex>`, the Lean verifier's `--archive` layout) through
-  `integrations/vllm/verity_vllm/ops/store_trees.sh`, epoch_store.sh's put, and the run is labelled `circuits` with each tree's
+  `adapters/vllm/verity_vllm/ops/store_trees.sh`, epoch_store.sh's put, and the run is labelled `circuits` with each tree's
   art id, so the run can be verified again from the store.
 - `expert_tables_tp.sh`: the committer's per-expert tables registration of a TP model, one file a rank (`verity-vllm
   tp-register-tables --served`): each rank's expert stacks composed from the checkpoint of record, held to a capture's served
   SHA-512s and committed under the committer's key, which never leaves the node. A window's per-expert table reads count
   registered against these files (`records_audit.py audit --registered`).
 - `a5_row_tables.py` (`a5_tp.sh` with `STANDIN=row-tables`): A5 on a window with row tables, which no TP window of record has
-  yet: `integrations/vllm/tests/pipeline/test_row_tables.py`'s ScaledMmS8Coordinate chunks, whose `x` rows link four row
+  yet: `adapters/vllm/tests/pipeline/test_row_tables.py`'s ScaledMmS8Coordinate chunks, whose `x` rows link four row
   tables over two engine steps, each chunk one table's, as rank 0 of a one-rank step on a local challenger's coins. Lean
   verifies each sampled chunk with its table's registered reads (`--registered`, `tables.registered_reads`).
 - `a5_warden.py` (`a5_tp.sh` with `STANDIN=warden`, `warden:altered`, `warden:pad`, `warden:pad-named` or `warden:swapped`):
@@ -74,7 +74,7 @@ input. What the guarantee rests on: `verity/core/protocols/spot/README.md`.
   (`bash benchmarks/one_stage/a5_glm53_commit.sh`): the TP8 Commit with served windows, their
   private bodies kept on the GPU machine off custody. The second, `a5_glm53_cpu.sh GPU_RUN` from a VM, copies them to the CPU
   machine (`A5_ON`) and runs `a5_tp.sh` there in one research run.
-- `examples/vllm/commit.sh` (the vLLM demo's): the single-GPU counterpart of `a5_glm53_commit.sh`'s deferred Commit, on Llama-3.2-1B bf16
+- `demos/vllm/commit.sh` (the vLLM demo's): the single-GPU counterpart of `a5_glm53_commit.sh`'s deferred Commit, on Llama-3.2-1B bf16
   bi-eager TP1 (one RTX PRO 6000 of vy-nebius-1): the workload's Build and Match of record, a config-run Commit that seals
   `commit/replay_bundle_p0/` (a single-GPU workload defers only as a config run), its replay on CPU, and the row dir in the evidence
   store. A deferred single-GPU Commit's window comes from its bundle through `verity-vllm serving-rows`, not `tp-serving-rows`.
@@ -115,7 +115,7 @@ input. What the guarantee rests on: `verity/core/protocols/spot/README.md`.
   is a private directory (0700, files 0600) holding one subprotocol's `case.json` (its `serve` line, with `blobs` the
   paths of the files it reads) and its own Lean answer on it, `answer.json`, whose `commitment` is its digest (or a
   directory of such directories); for onsite, the inference-only policy's case is the registration. The composed params, commitment and
-  evidence (the composition's formats, `verity/core/protocols/composition/README.md`) and every answer go to
+  evidence (the composition's formats, `verity/protocols/remote/verifier/composition/README.md`) and every answer go to
   `--private-out` (0700, files 0600), since a case's evidence and params are witness, and so are an answer's query,
   digests and profile. `--public-out` gets only the verdict lines (each piece's and Lean's id, verdict and refusal's
   name), the composite's commitment, and each case's params digest and commitment, and is refused when it shares a
@@ -143,9 +143,9 @@ input. What the guarantee rests on: `verity/core/protocols/spot/README.md`.
   prover's cost per opening. `a8_gpu.sh` takes its cost points on sm_120 (`flock-circuit prove --zk --gpu`), as a GPU host
   job, and `a8_cost.py` reads a run's sessions into the one cost model's observations (`benchmarks/sampling_plan`).
 - `a7.sh`: run A7's entry point, on the same builds; the remote session's checks 1-3 and 5 on each sampled receipt are
-  proved, not opened, by the opening unit (`remote_bandwidth.opening`, `verity.ml.commitments.gates.block_check`) in a
+  proved, not opened, by the opening unit (`remote_bandwidth.opening`, `verity.protocols.poub.verifier.commitments.gates.block_check`) in a
   second statement. A7 is the requirement's plan and memory-map units
-  (`verity.ml.circuits.requirement_units`), one of each per step of a stand-in decoder's requirement, under the stratified
+  (`verity.definitions.circuits.requirement_units`), one of each per step of a stand-in decoder's requirement, under the stratified
   sampling design, their witness rows bound to canonical commitments, then wired to PoUB's ledger as its
   requirement link (`audit.RequirementLink`), its ε the most share of the linked credit the units its sample leaves
   unproved can carry and its δ the sample's.
@@ -161,7 +161,7 @@ input. What the guarantee rests on: `verity/core/protocols/spot/README.md`.
   per-statement and per-unit costs with their standard errors, writing `costfit` observations. `ZK_DRAWS=c` proves every
   staged unit: the cost of c sampled proof blocks in one statement, up to a table's 2^(35 − k_log) (2048 at K = 4096). Each point
   takes its own GPU lease, and a node without CUDA 13.3 gets its packages unpacked under `FLOCK_WORK`.
-- `prove_bundle.sh`: a sampled-proof-block replay bundle (`examples/h200/interfaces`, `verity/drawn-unit-bundle/v2`) proved by
+- `prove_bundle.sh`: a sampled-proof-block replay bundle (`benchmarks/one_stage/interfaces`, `verity/drawn-unit-bundle/v2`) proved by
   `prove_bundle.py`: `PB_BUNDLE` of the window `PB_WINDOW`, else `BUNDLE_WINDOW`, the registered fixture `tests/fixtures/bundle-window` (a W8A8 MLP's window under a
   test key, its tampered twin and the interfaces' bundle of four sampled proof blocks under the window's registered `subset:4`).
   `tests/test_prove_bundle.py` holds that bundle to the window's public part (`tests/fixtures/bundle-window-public`). `PB_LIVE=1` requires the bundle's sample to be live. The bundle is held to the prover's window: its own check (the sample's
@@ -194,12 +194,12 @@ input. What the guarantee rests on: `verity/core/protocols/spot/README.md`.
   CUDA and OS calls traced, and an A/B of base and new.
   `phase_profile.py` cuts each rep's phase at the prover's synchronizes and splits it into GPU time by kernel family and the
   host's time with the GPU idle: its OS calls (a live coin's round trip), its CUDA calls and its own compute.
-- `forged_proofs.sh`: the fixture of Flock's forged-proof negatives (`verity/ml/flock/tests/test_lean_forged_proofs.py`),
+- `forged_proofs.sh`: the fixture of Flock's forged-proof negatives (`verity/protocols/flock/prover/tests/test_lean_forged_proofs.py`),
   on hidden_zk's cached builds (`forged_proofs.py`). A small A8 unit (`LlBf16DotprodDot_v1` at K = 128) staged bound to its partition,
   with one honest sampled `--zk` session and two whose committed output word is wrong, proved with the prover's self-check
   skipped (`FC_ZK_SELF_CHECK=skip`), so the Lean verifier gets a well-formed proof of a false statement.
 - `form_refusals.sh`: the fixture of `verify --zk`'s form refusals
-  (`verity/core/protocols/spot/tests/test_form_refusals.py`), on the same builds (`form_refusals.py`): honest
+  (`verity/protocols/spot/verifier/tests/test_form_refusals.py`), on the same builds (`form_refusals.py`): honest
   `--zk` sessions of that unit flat, of it as its template, and of a toy whose last stage returns the outputs, with the
   flat session's verdicts under four statements `verify --zk` must refuse.
 - `a11.sh`: run A11's entry point, on A6's builds. A11 is GLM-5.3 TP8 B1's served step, rank 0: `a11_kinds.py` censuses

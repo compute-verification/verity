@@ -35,7 +35,7 @@ done
 I=${RESEARCH_RUN_DIR:?}/inputs
 values=$(ls "$I"/*.tar.gz | head -1)
 session=$(ls "$I"/*.tar 2> /dev/null | head -1 || true)
-L=$PWD/verity/core/service/flock
+L=$PWD/verity/protocols/flock/verifier
 S=$(mktemp -d)
 trap 'rm -rf "$S"' EXIT
 command -v lake > /dev/null || export PATH="$HOME/.elan/bin:$PATH"
@@ -83,7 +83,7 @@ fi
 if [ -n "$stmtp" ]; then
   if [ -n "$base" ]; then
     mkdir -p "$S/base"
-    git archive "$base" verity/core/service/flock | tar -x -C "$S/base"
+    git archive "$base" verity/protocols/flock/verifier | tar -x -C "$S/base"
     scratch flock-tmpl "$S/base/verity/core/service/flock" flock-tmpl-base
     stmt "$S/flock-tmpl-base/.lake/build/bin/flock-tmpl" -base
   fi
