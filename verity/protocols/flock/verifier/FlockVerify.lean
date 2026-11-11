@@ -345,6 +345,11 @@ theorem checkCoverBy_read (read : ByteArray) (c : Circuit) (program : Option Byt
       = Registered.checkCover c program partition own params := by
   rw [ProgramRead.progAt_of, Registered.checkCover_eq_by]
 
+/-- `ProvedScope.programDigestOf` at the JSON a `ProgramRead` keeps is `ProvedScope.programDigest`. -/
+theorem programDigestOf_read (read bytes : ByteArray) :
+    ProvedScope.programDigestOf ((ProgramRead.of read).jsonAt bytes) = ProvedScope.programDigest bytes := by
+  rw [ProgramRead.jsonAt_of, ProvedScope.programDigest_eq_of]
+
 /-- The SHA-512 of a JSON value's canonical JSON (`canon`), as `Spot.canonSha512` digests one. -/
 def sha512Of (j : Lean.Json) : V String := do return hexOf (Sha512.hash (← canon j).toUTF8)
 
@@ -1140,8 +1145,8 @@ def verifyCmd (args : List String) (upstream : Option Lean.Json := none) : IO UI
   -- `FailClosed.ScopeP` is the check without --registered F: no plain multi-table claim reads a shared-row public file
   let scope := if plainTables then ProvedScope.checkPOf parsed tags pubB count program publicInputs.isSome false
     else ProvedScope.checkOf parsed tags zk pubB count publicInputs.isSome registered.isSome
-  -- the program read once, for every setup and every reader in one: each setup is what it is with the program read
-  -- anew (`checkProgramBy_read`, `buildSessionBy_read`, `checkCoverBy_read`)
+  -- the program parsed once, for its digest, every setup and every reader in one: each is what it is with the program
+  -- read anew (`programDigestOf_read`, `checkProgramBy_read`, `buildSessionBy_read`, `checkCoverBy_read`)
   let read := ProgramRead.of (program.getD ByteArray.empty)
   let setupOf := fun (draw : Option Lean.Json) =>
     match (do
@@ -1172,7 +1177,7 @@ def verifyCmd (args : List String) (upstream : Option Lean.Json := none) : IO UI
     | .ok (spec, sts) => (if draw.isSome then ProvedScope.drawLaw zk tags plainTables draw else .ok ()).map fun () =>
         (spec, sts.map Setup.ofCircuit, (sts[0]?.map (·.partition)).getD Lean.Json.null, registeredOpenings sts registered)
     | .error e => Except.error s!"setup: {e}"
-  let programSha := program.bind ProvedScope.programDigest
+  let programSha := program.bind fun b => ProvedScope.programDigestOf (read.jsonAt b)
   let header := (publicHeader pubB).bind headerDigest
   let ksParsed := if tags.hiddenOutputs then parsed else HmOut.parse tags circuitB tables
   let ksFiles := if zk then PortRoots.checkOf ksParsed tags pubB else .ok ()

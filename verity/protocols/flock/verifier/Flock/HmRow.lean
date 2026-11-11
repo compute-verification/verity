@@ -2700,21 +2700,31 @@ theorem Stmt.setupTables_eq (tags : Tags) (circuitFile publicFile : ByteArray) (
 /-! ## The verifier's program, read once
 
 A setup reads the verifier's own program (`--program`) through `TemplateQuery.Desc.parse` and `Program.decode`, each of
-which parses the descriptor's JSON and hashes its canonical form. Each function below named `…By` is the function it is
+which reads the descriptor's bytes as JSON (`Program.readJson`) and hashes its canonical form. Each function below named `…By` is the function it is
 named after with those two readings as its parameters `readDesc` and `readProg`, and at the readings themselves it is that
-function (`Stmt.setupHiddenOf_eq_by`, `Stmt.setupTablesOf_eq_by`). `ProgramRead` holds a program with both readings of it,
-each made when first asked for and kept; its `descAt` and `progAt` are the two readings on every input
-(`ProgramRead.descAt_of`, `ProgramRead.progAt_of`), so a run that hands them to its setups reads its program once. -/
+function (`Stmt.setupHiddenOf_eq_by`, `Stmt.setupTablesOf_eq_by`). `ProgramRead` holds a program with its JSON and
+both readings of it, each made when first asked for and kept, the two readings from the one JSON; its `jsonAt`, `descAt` and
+`progAt` are `Program.readJson` and the two readings on every input (`ProgramRead.jsonAt_of`, `descAt_of`, `progAt_of`), so
+a run that hands them to its setups parses its program once. -/
 
-/-- A program and its two readings, `TemplateQuery.Desc.parse` and `Program.decode` of `bytes`. -/
+/-- A program, its bytes read as JSON (`Program.readJson`) and its two readings, `TemplateQuery.Desc.parse` and
+`Program.decode` of `bytes`. -/
 structure ProgramRead where
   bytes : ByteArray
+  json : Thunk (Option (Except String Json))
   desc : Thunk (V TemplateQuery.Desc)
   prog : Thunk (V Program.Prog)
 
-/-- `program` with its readings, neither made before it is asked for. -/
+/-- `program` with its JSON and its readings, none made before it is asked for, both readings from the one JSON. -/
 def ProgramRead.of (program : ByteArray) : ProgramRead :=
-  ⟨program, Thunk.mk fun _ => TemplateQuery.Desc.parse program, Thunk.mk fun _ => Program.decode program⟩
+  let json := Thunk.mk fun _ => Program.readJson program
+  ⟨program, json, Thunk.mk fun _ => TemplateQuery.Desc.parseOf json.get, Thunk.mk fun _ => Program.decodeOf json.get⟩
+
+/-- `Program.readJson`: on `r`'s own bytes the JSON `r` keeps, elsewhere read anew. -/
+def ProgramRead.jsonAt (r : ProgramRead) (b : ByteArray) : Option (Except String Json) :=
+  match withPtrEqDecEq b r.bytes (fun _ => inferInstance) with
+  | isTrue _ => r.json.get
+  | isFalse _ => Program.readJson b
 
 /-- `TemplateQuery.Desc.parse`: on `r`'s own bytes the reading `r` keeps, elsewhere made anew. -/
 def ProgramRead.descAt (r : ProgramRead) (b : ByteArray) : V TemplateQuery.Desc :=
@@ -2728,12 +2738,20 @@ def ProgramRead.progAt (r : ProgramRead) (b : ByteArray) : V Program.Prog :=
   | isTrue _ => r.prog.get
   | isFalse _ => Program.decode b
 
+theorem ProgramRead.jsonAt_of (program : ByteArray) : (ProgramRead.of program).jsonAt = Program.readJson := by
+  funext b
+  unfold ProgramRead.jsonAt
+  split
+  · rename_i h _
+    exact congrArg Program.readJson (Eq.symm h)
+  · rfl
+
 theorem ProgramRead.descAt_of (program : ByteArray) : (ProgramRead.of program).descAt = TemplateQuery.Desc.parse := by
   funext b
   unfold ProgramRead.descAt
   split
   · rename_i h _
-    exact congrArg TemplateQuery.Desc.parse (Eq.symm h)
+    exact (TemplateQuery.Desc.parse_eq_of program).symm.trans (congrArg TemplateQuery.Desc.parse (Eq.symm h))
   · rfl
 
 theorem ProgramRead.progAt_of (program : ByteArray) : (ProgramRead.of program).progAt = Program.decode := by
@@ -2741,7 +2759,7 @@ theorem ProgramRead.progAt_of (program : ByteArray) : (ProgramRead.of program).p
   unfold ProgramRead.progAt
   split
   · rename_i h _
-    exact congrArg Program.decode (Eq.symm h)
+    exact (Program.decode_eq_of program).symm.trans (congrArg Program.decode (Eq.symm h))
   · rfl
 
 namespace HmRow

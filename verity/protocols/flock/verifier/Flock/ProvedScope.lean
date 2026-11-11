@@ -447,6 +447,19 @@ def programDigest (b : ByteArray) : Option String := do
     | x => x
   return hexOf (Sha512.hash (← (canon bare).toOption).toUTF8)
 
+/-- `programDigest` from the program's bytes as `Program.readJson` read them (`programDigest_eq_of`). -/
+def programDigestOf (read : Option (Except String Lean.Json)) : Option String := do
+  let j ← (← read).toOption
+  let bare := match j with
+    | .obj kvs => Lean.Json.mkObj (kvs.toArray.filter (·.1 != "annotations")).toList
+    | x => x
+  return hexOf (Sha512.hash (← (canon bare).toOption).toUTF8)
+
+theorem programDigest_eq_of (bytes : ByteArray) : programDigest bytes = programDigestOf (Program.readJson bytes) := by
+  unfold programDigest programDigestOf Program.readJson
+  generalize String.fromUTF8? bytes = o
+  cases o <;> rfl
+
 /-- META's `program_sha512`, the Program the circuit binds; none when META names none. -/
 def metaProgram (c : Circuit) : Option String := (c.metaJ.getObjValAs? String "program_sha512").toOption
 
