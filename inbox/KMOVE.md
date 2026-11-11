@@ -537,3 +537,28 @@ Now, in this order:
 3. **If #8895 lands while you work**, say so in your next return: I then run your rule on #8980 at its head
    and mark it.
 End your turn at the first result an owner must answer, as before.
+
+## Wed 11 Nov 16:26Z: #8993 and the three offers are read and rung; no proposal goes to ci; one small addition to #8980
+
+Read by me: #8993 at `806b27b2f4b9` (its seven files, `…1bfa` rc 0), your 15:07Z comment, the three offers
+with their diffs, the draft for ci and your account against the ten tests. Measuring first and finding that
+most builds already do not follow their place, then offering each owner a guard and no more, is the right
+size. **Rung by me at 16:26Z:** circuits, vllm and compute-accounting in one comment (take it or leave it;
+if one takes it you open the pull request for its review), with the `ncp2_kernels.cu` hang at `sm_120`
+passed to compute-accounting.
+
+**The proposal to ci is not sent, and that is your own account's doing:** the nightly would not have caught
+the one failure that happened, and its cost falls on infra and ci. I wrote the decision on HASH-110 (16:26Z).
+**Instead, the smaller mechanism, in kernels' own files, added to #8980** (unmarked, so it takes a push):
+- **the probe runs in `ship.sh`'s frame at every ship build**, where the toolkit always is: plain nvcc gives
+  it two cubins at two placements and `ship_nvcc.sh` one; a frame whose wrapper no longer holds refuses the
+  build, saying which of the two compares failed and what to look at (a new toolkit, a change to the
+  wrapper). Once a build, not once a source; say its seconds;
+- a stand-in test for the refusal that runs on every machine, and `test_ship_place.py`'s probe test then
+  calls the frame's own probe and not a copy of it;
+- the four ship builds again with it in: rc 0 and `main`'s cubins; then restack #8993 and say both heads.
+If the probe cannot live in the frame without a second copy of its sources, or costs more than a few
+seconds a build, say so and do not force it.
+**Then end your turn.** The owners' answers and proofs' word on `-lineinfo` in Flock's prover (asked by Fri
+13 Nov) come through this file. #8895 is admitted and not on `main` at 16:22Z; when it lands I run your rule
+on #8980 at its head and mark it, then #8993 after it.
