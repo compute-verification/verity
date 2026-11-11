@@ -124,7 +124,7 @@ class Calls:
         return [unwords(self.st.mid.leaf(0, w)) for w in range(self.L)]
 
     def a_levels_poisoned(self) -> list[int]:
-        from verity.ml.commitments.merkle import merkle_depth
+        from verity.commitments.merkle import merkle_depth
         st = self.st
         bad = []
         for w in range(self.L):
