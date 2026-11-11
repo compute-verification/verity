@@ -168,4 +168,12 @@ def refusals(scheme: str, settings: Any, stage: str, filled: tuple[str, ...] = (
     return out
 
 
-__all__ = ["CHALLENGED", "OPENS", "UNITS", "fills", "from_engine", "of", "refusals"]
+def coins_given(scheme: str, entry: str, settings: Any) -> None:
+    """ValueError unless `settings` say where `scheme`'s epoch takes its salt coin: ``coins`` held in this process, or,
+    for a challenged scheme, the session of the challenger at ``challenger``."""
+    if settings.coins is None and not (scheme in CHALLENGED and settings.challenger is not None):
+        raise ValueError(f"{entry}: no 'coins' setting: the epoch's salt is its challenger's salt coin, opened after the "
+                         "weights' root, and there is no beacon")
+
+
+__all__ = ["CHALLENGED", "OPENS", "UNITS", "coins_given", "fills", "from_engine", "of", "refusals"]
