@@ -5,9 +5,8 @@ during development. One installable package, one CLI (`research`), stdlib
 only. It runs commands and records what happened; it imports nothing from
 Verity's packages (enforced by `tests/test_cli.py::test_no_packages_import`).
 
-The user-facing procedure (when to record a run, how to find one, how to hand
-off) will be a repo-level skill, once it exists. This file is for people changing
-the tool.
+This file is for people changing the tool; its users read the `team` and
+`writing-runs` skills.
 
 ## Layout and provenance
 
@@ -21,7 +20,8 @@ src/research/
 ├── disk.py         --disk-gb admission (--queue): held on the machine while the disk would pass 80%, released at 75%
 ├── mem.py          --mem-gb admission: cgroup limit - in use - live /workspace/ramlock reservations; MemoryNotAvailable
 ├── auto.py         --on auto: a CPU node's research pool or node 2's queue, and when the run should start there
-├── jobuser.py      --job-user: the workload as an unprivileged user in a sandboxed system unit
+├── jobuser.py      --job-user: the workload as an unprivileged user in a sandboxed system unit; it makes no namespace but those
+│                   --job-namespaces lists (of user, mnt, net), where the workload holds capabilities
 ├── env.py          conditions(): the one baseline of an attempt's conditions (source, runtime, hardware, execution); ONE SKU->family map
 ├── store/          the evidence store (`research data`; README.md there is the contract): tool, tools_registry, derivation, attempt,
 │                   cli_prov (provenance) + canon, ids, model, local, index, remote, remote_s3, kinds, cli (storage)
@@ -93,7 +93,6 @@ research pods register|unregister|registry ...                    # the pod regi
 research pods ssh TARGET [--print] [-- CMD...]                    # TARGET = machines.toml name | pod id | pod name (pods/connect.py)
 research pods sync TARGET [SRC] [--dest DIR] [--exclude G]...     # the worktree's git-visible files -> DIR (default /workspace/src)
 research tele SUBCOMMAND ...             # the harness's own surface
-research data SUBCOMMAND ...             # the evidence store (below)
 research merge REF [--into main] [--tool check] [-m MSG] [--push] [--dry-run]   # the merge gate (merge.py)
 research merge --train A B C [--on MACHINE --project P] [--command CMD] [--push]  # several refs, one checked candidate
 research merge --train --prepare BRANCH [--onto BASE] [--allow-removal PATH] N@SHA ...  # build, lint, push a train

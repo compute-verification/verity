@@ -4,7 +4,7 @@ On a shared node the runner and its workload run as the operators' account, whic
 keys and a kubeconfig, so anything the workload runs (a build dependency included) can act as the operators.  With --job-user
 the runner keeps its records as itself, and the harness spawns, in the workload's place (inside a queued GPU phase's lease),
 
-    research job-exec --user USER --unit UNIT [--pass NAME]... -- CMD...
+    research job-exec --user USER --unit UNIT [--pass NAME]... [--namespaces LIST] -- CMD...
 
 which runs CMD as USER in a transient system service (`sudo -n systemd-run --uid=USER --wait --pipe`, unit_argv): no new
 privileges and no capabilities; the host read-only but for its run dir, and no other run's dir, no launch request, no /home or
@@ -12,6 +12,15 @@ privileges and no capabilities; the host read-only but for its run dir, and no o
 link-local addresses (the cloud metadata service) unreachable; the CPUs, memory cap and nice it was started with; and only the
 variables job_env passes, from a file only root reads (no value travels on a command line).  SIGTERM, SIGINT or SIGHUP stops
 the unit (SIGTERM, then SIGKILL after TIMEOUT_STOP_S) and exits 128+signal.
+
+The unit makes no namespace (RestrictNamespaces=yes) unless the run lists types with `--job-namespaces LIST`, and then exactly
+those: of NAMESPACES (user, mnt, net) only, for a workload that builds a sandbox of its own around code it trusts less than
+itself.  job.json records the list (`run.job_namespaces`).  What that widens: inside a user namespace it makes, the workload
+holds every capability over that namespace and over the mount and network namespaces made in it, whatever the unit's empty
+bounding set, so it reaches kernel code that otherwise only root reaches (mounting, network devices, packet filters).  By the
+kernel's rules it gains nothing over the host by them: the mounts the unit made are locked in a mount namespace such a user
+namespace owns (mount_namespaces(7)), so nothing hidden comes back and nothing read-only turns writable, a new network
+namespace has no way out, and every other property of the unit holds as before.
 
 The runner opens its run dir and its out/ to the job (prepare: sticky and world-writable, so the kernel's protected_symlinks and
 protected_regular keep it from following or opening what the job leaves at the top) and, once the harness returns and before
@@ -40,6 +49,8 @@ from .telemetry.run import OUT_DIR
 SUDO = ("sudo", "-n")
 UNIT_PREFIX = "research-job-"
 ENV_FILE = Path("control") / "job.env"          # run-dir relative, in the runner's control/ (the job can't write there)
+#: the namespace types a run may ask its unit to allow (--job-namespaces), as RestrictNamespaces= spells them; none by default
+NAMESPACES = ("mnt", "net", "user")
 SYSTEM_PATH = "/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
 LEASE_DIRS = ("/run/gpu-lease", "/run/gpu-lease-circuits")      # gpu-lease's locks, when the workload takes its own lease
 HIDDEN = ("/etc/verity", "/etc/rancher", "/var/lib/rancher", "/var/lib/kubelet")
@@ -104,10 +115,24 @@ def check_run_dir(run_dir: str | Path, run_id: str) -> str:
     return real
 
 
-def spawn_argv(command: list[str], user: str, unit: str, passed: list[str] | tuple[str, ...] = ()) -> list[str]:
+def check_namespaces(names: object) -> tuple[str, ...]:
+    """`--job-namespaces LIST` (comma-separated, or a request's list of names) as a sorted tuple; Refused when it names anything
+    outside NAMESPACES, or nothing.  So a boolean or a `~` list, which RestrictNamespaces= itself would read as every type or as
+    all but those, never reaches the unit."""
+    asked = names.split(",") if isinstance(names, str) else list(names) if isinstance(names, (list, tuple)) else [names]
+    bad = [n for n in asked if n not in NAMESPACES]
+    if bad or not asked:
+        raise Refused(f"--job-namespaces: {', '.join(repr(n) for n in bad) or 'an empty list'} is not a namespace type a job's "
+                      f"unit may be allowed (a comma-separated list of {', '.join(NAMESPACES)})")
+    return tuple(sorted(set(asked)))
+
+
+def spawn_argv(command: list[str], user: str, unit: str, passed: list[str] | tuple[str, ...] = (),
+               namespaces: tuple[str, ...] = ()) -> list[str]:
     """What the harness spawns in the workload's place (`research job-exec`, run by this interpreter, so its package is this one)."""
     return [sys.executable, "-m", "research", "job-exec", "--user", user, "--unit", unit,
-            *(x for k in sorted(passed) for x in ("--pass", k)), "--", *command]
+            *(x for k in sorted(passed) for x in ("--pass", k)), *(["--namespaces", ",".join(namespaces)] if namespaces else []),
+            "--", *command]
 
 
 def job_env(environ: Mapping[str, str], passed: list[str] | tuple[str, ...] = ()) -> dict[str, str]:
@@ -169,16 +194,18 @@ class Unit:
     cpus: str | None = None
     memory: int | None = None
     nice: int = 0
+    namespaces: tuple[str, ...] = ()        # the types the unit may make (check_namespaces); none unless the run listed them
 
 
 def unit_argv(u: Unit) -> list[str]:
     """`sudo -n systemd-run` for the unit, up to the `--` its command follows."""
     runs_root = os.path.dirname(u.run_dir)
+    namespaces = " ".join(check_namespaces(u.namespaces)) if u.namespaces else "yes"    # a list allows exactly its types; yes, none
     props = [
         "NoNewPrivileges=yes", "RestrictSUIDSGID=yes", "CapabilityBoundingSet=", "AmbientCapabilities=",
         "ProtectSystem=strict", "ProtectHome=yes", "PrivateTmp=yes", "PrivateIPC=yes", "ProtectProc=invisible",
         "ProtectKernelTunables=yes", "ProtectKernelModules=yes", "ProtectKernelLogs=yes", "ProtectControlGroups=yes",
-        "ProtectClock=yes", "ProtectHostname=yes", "RestrictNamespaces=yes", "LockPersonality=yes", "RestrictRealtime=yes",
+        "ProtectClock=yes", "ProtectHostname=yes", f"RestrictNamespaces={namespaces}", "LockPersonality=yes", "RestrictRealtime=yes",
         "SystemCallArchitectures=native", "KeyringMode=private", "RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6 AF_NETLINK",
         "IPAddressDeny=link-local", "UMask=0022",
         # /run holds sockets that act for any caller; DNS (resolv.conf points into it) and gpu-lease's dirs come back
@@ -256,6 +283,7 @@ def main(argv: list[str], *, popen=subprocess.Popen, run=subprocess.run, environ
     ap.add_argument("--user", required=True)
     ap.add_argument("--unit", required=True)
     ap.add_argument("--pass", dest="passed", action="append", default=[], metavar="NAME", help="a variable of the run's own --env")
+    ap.add_argument("--namespaces", default=None, metavar="LIST", help="the run's --job-namespaces: the types the unit may make")
     ap.add_argument("cmd", nargs=argparse.REMAINDER)
     ns = ap.parse_args(argv)
     cmd = ns.cmd[1:] if ns.cmd[:1] == ["--"] else ns.cmd
@@ -267,6 +295,7 @@ def main(argv: list[str], *, popen=subprocess.Popen, run=subprocess.run, environ
     cwd = os.getcwd()
     try:
         check(ns.user)
+        namespaces = check_namespaces(ns.namespaces) if ns.namespaces is not None else ()
         st = os.lstat(run_dir)
         if not all(SAFE_PATH.fullmatch(p) for p in (run_dir, cwd)) or not SAFE_NAME.fullmatch(ns.unit):
             raise Refused(f"run dir {run_dir!r}, cwd {cwd!r} or unit {ns.unit!r} has a character a unit's property can't carry")
@@ -281,7 +310,7 @@ def main(argv: list[str], *, popen=subprocess.Popen, run=subprocess.run, environ
     with os.fdopen(fd, "w") as f:
         f.write(env_file_text(job_env(environ, ns.passed)))
     unit = Unit(name=ns.unit, user=ns.user, run_dir=run_dir, cwd=cwd, env_file=env_file, cpus=allowed_cpus(), memory=memory_max(),
-                nice=os.nice(0))
+                nice=os.nice(0), namespaces=namespaces)
     try:
         rc, sig = supervise([*unit_argv(unit), *cmd], unit.name, popen=popen, run=run)
     finally:
@@ -292,5 +321,5 @@ def main(argv: list[str], *, popen=subprocess.Popen, run=subprocess.run, environ
     return rc
 
 
-__all__ = ["Refused", "Unit", "check_run_dir", "check_user", "finish", "job_env", "main", "prepare", "spawn_argv", "supervise",
-           "unit_argv", "unit_name"]
+__all__ = ["Refused", "Unit", "check_namespaces", "check_run_dir", "check_user", "finish", "job_env", "main", "prepare", "spawn_argv",
+           "supervise", "unit_argv", "unit_name"]

@@ -17,7 +17,9 @@
                                                  # with --on; a --tool's declared preflight (or --preflight TOOL's) runs on the machine first
                                                  # it returns once the machine starts the run; --wait blocks until it ends and exits with its rc,
                                                  # for at most 20 min (--wait-max S lowers it): then exit 79, the run going on (research/waitcap.py)
-  research run --job-user USER [...] -- CMD...   # the workload as USER in a sandboxed system unit; records stay the runner's (research/jobuser.py)
+  research run --job-user USER [--job-namespaces LIST] [...] -- CMD...   # the workload as USER in a sandboxed system unit; records stay
+                                                 # the runner's. LIST (of user, mnt, net): the namespace types the unit may make, where
+                                                 # the workload then holds capabilities; none otherwise (research/jobuser.py)
   research fetch <run-id> [--all] [--on NAME]    # copy the machine's records (or every file, verified) into the local run dir
   research cancel <run-id> --reason TEXT [--by WHO] [--on NAME]   # SIGTERM to the run's workload process group and its whole cgroup
                                                  # scope, recorded as a manual cancel; 20 s later the runner SIGKILLs what is left (never
@@ -233,6 +235,11 @@ def _cmd_run(argv: list[str], clones: list[Path]) -> int:
     ap.add_argument("--job-user", default=None, metavar="USER",
                     help="run the workload as USER (an unprivileged system user) in a transient system unit, with no sudo, no home and "
                          "a clean environment; the runner keeps its records as itself (research.jobuser)")
+    ap.add_argument("--job-namespaces", default=None, metavar="LIST",
+                    help="with --job-user: the namespace types its unit may make, a comma-separated list of user, mnt and net (default: "
+                         "none), for a workload that sandboxes code of its own. Inside a user namespace it makes, the workload holds "
+                         "capabilities over the mount and network namespaces made there, and so reaches kernel code only root "
+                         "otherwise does; the unit's own limits stay (research.jobuser)")
     ap.add_argument("--pool", default=None, metavar="NAME",
                     help="with --on --source: run in the machine's NAME pool (`research`: any lane's research runs on vy-nebius-cpu-1, "
                          "on cores no check slot holds; `proofs`): the run takes a slot there and its cwd is its source, or "
@@ -318,6 +325,19 @@ def _cmd_run(argv: list[str], clones: list[Path]) -> int:
             print(f"research run: --id {ns.id!r} is not a run id (rYYYYMMDD-HHMMSS-xxxx, x hex): the store refuses its "
                   "attempt, so nothing the run writes, its coins included, would be preserved; omit --id to get one",
                   file=sys.stderr)
+            return 2
+    if ns.job_namespaces is None:
+        ns.job_namespaces = ()
+    else:
+        from . import jobuser
+
+        try:
+            if not ns.job_user:
+                raise jobuser.Refused("--job-namespaces lists what a job user's unit may make (--job-user USER); without one the "
+                                      "workload runs as the runner, in no unit")
+            ns.job_namespaces = jobuser.check_namespaces(ns.job_namespaces)
+        except jobuser.Refused as e:
+            print(f"research run: {e}", file=sys.stderr)
             return 2
     if ns.wait_max is not None:
         try:
@@ -512,6 +532,8 @@ def _cmd_run(argv: list[str], clones: list[Path]) -> int:
                             cost=cost, remote=remote_info, store=prep["section"], cwd={"path": a.cwd, "basis": cwd_basis})
     if ns.job_user:
         job["run"]["job_user"] = ns.job_user
+        if ns.job_namespaces:
+            job["run"]["job_namespaces"] = list(ns.job_namespaces)
     if clone_rec:
         job["run"]["cwd_clone"] = clone_rec
     try:                                                          # which build each installed binary is (binprov.py); never stops a run
@@ -542,7 +564,8 @@ def _cmd_run(argv: list[str], clones: list[Path]) -> int:
         # inside a queued GPU phase's lease (the request's workload wrap), so gpu-lease and its bookkeeping stay the runner's
         wrap = list(_request(ns.remote_json).get(remote.QUEUE_WORKLOAD_WRAP) or []) if ns.claimed else []
         n = len(wrap) if wrap and command[: len(wrap)] == wrap else 0
-        spawn = [*command[:n], *jobuser.spawn_argv(command[n:], ns.job_user, jobuser.unit_name(run_id), list({**clone_env, **env_map}))]
+        spawn = [*command[:n], *jobuser.spawn_argv(command[n:], ns.job_user, jobuser.unit_name(run_id), list({**clone_env, **env_map}),
+                                                   ns.job_namespaces)]
     print(f"research: run {run_id} -> {run_dir}" + (f"  cwd={a.cwd}" if a.cwd else ""), file=sys.stderr)
     try:
         if ns.job_user:
@@ -1287,7 +1310,8 @@ def _run_remote(ns: argparse.Namespace, run_id: str, run_dir: Path, harness_opts
                             source=Path(ns.source).expanduser() if ns.source else None, sends=[Path(s).expanduser() for s in ns.send],
                             cwd=None, env=env, exclusive=ns.exclusive, mem_gb=ns.mem_gb, mem_wait_s=ns.mem_wait,
                             custody_ttl=(ns.custody_ttl or "6h") if custody else None, preflight_tool=ns.preflight, queue=queue,
-                            job_user=ns.job_user, gpus=None if queue else ns.gpus, store_read=ns.store_read)
+                            job_user=ns.job_user, job_namespaces=ns.job_namespaces, gpus=None if queue else ns.gpus,
+                            store_read=ns.store_read)
     except remote.Refused as e:
         print(f"research run --on {ns.on}: refused: {e}", file=sys.stderr)
         return 3
