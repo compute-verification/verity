@@ -35,4 +35,4 @@ inputs = [
   "verity/core/protocols/__init__.py",
   "verity/protocols/reporting.py",
   "verity/protocols/spot/verifier/profile.py",
-]
+          "verity/definitions/__init__.py", "verity/protocols/__init__.py", "verity/definitions/ops/__init__.py", "verity/protocols/inference_only/__init__.py", "verity/protocols/pouw/__init__.py", "verity/protocols/spot/__init__.py", "verity/definitions/ops/boolean/__init__.py", "verity/protocols/inference_only/rho/__init__.py", "verity/protocols/pouw/prover/__init__.py", "verity/protocols/spot/verifier/__init__.py", "verity/protocols/pouw/prover/circuit/__init__.py"]
