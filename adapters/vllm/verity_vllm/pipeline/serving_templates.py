@@ -360,6 +360,19 @@ def values_widths(DV: int) -> list[int]:
     return [DV >> j for j in range(1, DV.bit_length()) if DV % (1 << j) == 0 and DV >> j >= 16]
 
 
+def chain_ways(spec: str) -> list[tuple[int | None, tuple[tuple[str, int], ...]]]:
+    """The ways a ``CHAINS`` row ``spec``'s key blocks are served, each its unit templates with their instances a row: whole
+    key blocks first (None, the cut its module names), then each key block its scores unit and values units of G columns, at
+    each G of `values_widths`, coarse to fine."""
+    from verity.circuits.codec import descriptor_id
+    from verity.definitions.registry import sparse_mla, sparse_mla_split
+    from verity_vllm.query.program_view import spec_base, spec_statics
+
+    sp, chain = _bind(spec), {**sparse_mla.CUTS, **sparse_mla_split.CUTS}[spec_base(spec)]
+    return [(g, tuple((descriptor_id(c), n) for c, n in (chain(sp) if g is None else chain(sp, cols=g))))
+            for g in (None, *values_widths(int(spec_statics(spec)["DV"])))]
+
+
 def chunk_widths(K: int, G: int, KB: int) -> list[int]:
     """The K-chunk widths of a ``KCHUNKS`` coordinate of K weights: each k < K that cuts it into whole scale blocks and tiles."""
     return [K // c for c in range(2, K // G + 1) if K % c == 0 and (K // c) % G == 0 and (K // c) % KB == 0]
@@ -439,11 +452,7 @@ def unit_templates(spec: str) -> tuple[tuple[str, int], ...]:
                     if n and (c := _bind(spec, fam, K=kc, FIRST=first, LAST=last)) is not None:
                         hit += ((descriptor_id(c), n * int(S["N"])),)
         if spec_base(spec) in CHAINS:
-            from verity.definitions.registry import sparse_mla, sparse_mla_split
-
-            chain = {**sparse_mla.CUTS, **sparse_mla_split.CUTS}[spec_base(spec)]
-            ways = [chain(sp), *(chain(sp, cols=g) for g in values_widths(int(spec_statics(spec)["DV"])))]
-            hit += tuple({descriptor_id(c): n for units in ways for c, n in units}.items())
+            hit += tuple({u: n for _g, units in chain_ways(spec) for u, n in units}.items())
         if spec_base(spec) in STAGES:
             cut = importlib.import_module(STAGE_PLANS[spec_base(spec)]).cut
             hit += tuple((descriptor_id(c), n) for c, n in cut(sp))
