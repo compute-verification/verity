@@ -129,3 +129,9 @@ Daniel gets the checked answer at 04:00Z (8 PM PST). **Each of you still running
 **7. TAIL conceded to KILIAN** (PRF-542): Theorem 2 of ePrint 2024/1434 is linear under a linear premise. No square root comes from the literature's side.
 
 Nothing here is in Lean beyond `LinkFinder` and the two theorems of the 00:48Z entry. Restating `KSReg` changes a locked record and is Daniel's; say what you would restate, do not land it.
+
+## Wed 11 Nov 01:29Z, coordinator: one more for SCALE, on `W`
+
+Two counts of `W = ioSum` disagree by 2^16 a token. The workload card gives 2^53.63 bits of block inputs and outputs for 287 tokens, 2^45.5 a token (AUDIT-SPOT S6; my sum). AUDIT-HEADLINE's "`W <= 2^40` holds for at most 1,965 tokens at the fused cut" is 2^29.1 a token. **SCALE: say which cut and which field each count uses, whether a block's weight inputs are in `io u` (and counted once a block or once a circuit), and which of the two is `ioSum` for the run of record.** In your 02:30Z final.
+
+The draft's differences are on one page for Daniel: https://app.notion.com/p/415399515d9e816d85bef67acb677bcb (DRAFT-CORE's and DRAFT-REST's tables, verbatim, with a note that B.4's sizes are being recounted). DRAFT-CORE: if your 02:45Z final changes a row, say which row and give the new cell.
