@@ -1,3 +1,5 @@
+import itertools
+
 import pytest
 import torch
 import torch.nn.functional as F
@@ -524,6 +526,70 @@ def test_every_fused_attention_kernel_names_the_operands_the_counter_reads():
                       "_scaled_dot_product_attention_math_for_mps", "_scaled_dot_product_fused_attention_overrideable",
                       "_scaled_dot_product_fused_attention_overrideable_backward"}
     assert all(opnames.gemm_like(n) for n in others)
+
+
+RATES, ON = (1e-3, torch.tensor(1e-3)), (False, True)
+
+
+def settings(**options):
+    return [dict(zip(options, values)) for values in itertools.product(*options.values())]
+
+
+#: each optimizer that has a fused kernel: the kernels it steps in, its unfused step's largest count a parameter, and
+#: every setting of its options a CPU runs (state made `capturable` needs a GPU)
+FUSED_STEPS = {
+    "SGD": ({"_fused_sgd_"}, 4, [
+        s for s in settings(lr=RATES, momentum=(0.0, 0.9), dampening=(0.0, 0.1), nesterov=ON, weight_decay=(0.0, 0.1),
+                            maximize=ON)
+        if not s["nesterov"] or (s["momentum"] and not s["dampening"])]),  # Nesterov momentum takes no other setting
+    "Adam": ({"_fused_adam_", "_fused_adamw_"}, 6, settings(
+        lr=RATES, weight_decay=(0.0, 0.1), amsgrad=ON, maximize=ON, decoupled_weight_decay=ON)),
+    "AdamW": ({"_fused_adamw_"}, 6, settings(lr=RATES, weight_decay=(0.0, 0.1), amsgrad=ON, maximize=ON)),
+    "Adagrad": ({"_fused_adagrad_"}, 4, settings(
+        lr=RATES, lr_decay=(0.0, 0.1), weight_decay=(0.0, 0.1), maximize=ON, initial_accumulator_value=(0.0, 0.5))),
+}
+
+
+@pytest.mark.parametrize("name", FUSED_STEPS)
+def test_choosing_a_fused_optimizer_kernel_never_lowers_a_steps_count(name):
+    """The rule `opnames.FUSED_OPTIMIZER_MACS` holds. At every setting of an optimizer's options its fused kernel
+    counts its constant a parameter, and its unfused step, a tensor at a time or foreach, counts at most that: SGD's
+    and Adagrad's constants are their unfused steps' largest, Adam's and AdamW's are above theirs. Between them the
+    four optimizers step in every kernel of the table.
+
+    One multiplication a step is outside it, whatever the parameters' size: with a learning rate given as a tensor,
+    Adagrad's unfused step divides the rate itself, which its kernel does inside."""
+    n = 32
+    kernels, largest, steps = *FUSED_STEPS[name][:2], FUSED_STEPS[name][2]
+    assert set().union(*(k for k, _, _ in FUSED_STEPS.values())) == set(opnames.FUSED_OPTIMIZER_MACS)
+
+    def count(options):
+        """The largest of three steps' counts of a parameter of n values (the first step makes the optimizer's
+        state), and the fused kernels they ran."""
+        torch.manual_seed(0)
+        w = torch.nn.Parameter(torch.randn(n))
+        opt, c, macs = getattr(torch.optim, name)([w], **options), Counter(digests=False), []
+        for _ in range(3):
+            w.grad = torch.randn(n)
+            before = c.setup.elementwise_macs
+            with c:
+                opt.step()
+            macs.append(c.setup.elementwise_macs - before)
+        return max(macs), {row[2] for row in c.setup.log} & set(opnames.FUSED_OPTIMIZER_MACS)
+
+    ran, most = set(), 0
+    for s in steps:
+        tensor = isinstance(s["lr"], torch.Tensor)
+        fused, (kernel,) = count(s | {"fused": True})
+        assert fused == opnames.FUSED_OPTIMIZER_MACS[kernel] * n, s
+        ran.add(kernel)
+        for foreach in ON:
+            if tensor and foreach and name.startswith("Adam"):
+                continue  # torch has no foreach step of Adam with a tensor rate
+            unfused, none = count(s | {"foreach": foreach})
+            assert not none and unfused <= fused + (tensor and name == "Adagrad"), (s, foreach)
+            most = max(most, 0 if tensor else unfused)
+    assert ran == kernels and most == largest * n
 
 
 def test_forward_macs_per_token_and_flags(tiny):

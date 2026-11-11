@@ -114,11 +114,11 @@ trace of the step holds: each product by its shape and each elementwise multipli
 trace runs: the forward's two scalings and two products, and in the backward the products and scalings of the
 gradients the step asks for. A job's record is the same under either kernel, and its counted step is its trace's
 (`tests/test_run.py`). A fused optimizer kernel is one op, priced at a constant per parameter
-(`opnames.FUSED_OPTIMIZER_MACS`, which the counter and the trace both read), above what its unfused step counts:
-AdamW at 8 multiplications a parameter where the unfused step makes 6 (5 with no weight decay), Adam at 7 where it
-makes 6 (5), Adagrad at 4 where it makes 2 or 3. SGD's 2 is its unfused step's with momentum alone: one above a
-plain step, and below a step with weight decay or Nesterov momentum, which make one more each; no route steps SGD
-in its fused kernel. A route that names anything of `training_slowdown` but the codecs and the model,
+(`opnames.FUSED_OPTIMIZER_MACS`, which the counter and the trace both read). Choosing a fused kernel never lowers a
+step's count, at any setting of the optimizer's options (`tests/test_flops.py`): AdamW counts 8 multiplications a
+parameter and Adam 7, where their unfused steps make 6 at most, and SGD and Adagrad count 4, their unfused steps'
+largest (SGD's with momentum, weight decay and either Nesterov momentum or dampening; Adagrad's foreach step with
+weight decay). A route that names anything of `training_slowdown` but the codecs and the model,
 or a route around the dispatcher (`run.FORBIDDEN`), is refused, and one that uses an op the counter can't price, reads
 token data out of torch, starts a thread or a process, or imports a module the screen refuses makes its run invalid
 (`run.py`'s docstring has the screen).
