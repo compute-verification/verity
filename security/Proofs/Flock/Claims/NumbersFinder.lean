@@ -65,7 +65,6 @@ theorem firstHitBound_le {T T' n n' k k' : ℕ} {K K' : ℚ} (hT : T ≤ T') (hn
     (hK : K ≤ K') : firstHitBound T n k K ≤ firstHitBound T' n' k' K' := by
   have hT' : (T : ℚ) ≤ T' := by exact_mod_cast hT
   have hn' : (n : ℚ) ≤ n' := by exact_mod_cast hn
-  have hT0 : (0 : ℚ) ≤ T := by positivity
   have hn0 : (0 : ℚ) ≤ n' := by positivity
   have he0 := sessionReruns_nonneg k
   have he := sessionReruns_le hk
@@ -104,12 +103,13 @@ theorem firstHitBound_cast (T n k : ℕ) (K : ℚ) :
       4 * (T : ℝ) * (1 + (n : ℝ) * (1 + 210 * (k : ℝ)) + (1 + (1 + 210 * (k : ℝ))) * (K : ℝ)) / 2 ^ (256 : ℝ) := by
   rw [show (256 : ℝ) = ((256 : ℕ) : ℝ) by norm_num, Real.rpow_natCast]
   simp only [firstHitBound, sessionReruns, waits]
-  push_cast <;> ring
+  push_cast
+  ring
 
 /-- **The expression at reals within a design's numbers is at most the bound at them**: a run of `T ≤ T'`
 compressions, `n ≤ n'` sessions, each extracted in `e ≤ 1 + 210·k'` expected reruns, and a mean of `K ≤ K'` gates. -/
-theorem real_le_firstHitBound {T n e K : ℝ} {T' n' k' : ℕ} {K' : ℚ} (hT0 : 0 ≤ T) (hn0 : 0 ≤ n) (he0 : 0 ≤ e)
-    (hK0 : 0 ≤ K) (hT : T ≤ T') (hn : n ≤ n') (he : e ≤ 1 + 210 * (k' : ℝ)) (hK : K ≤ K') :
+theorem real_le_firstHitBound {T n e K : ℝ} {T' n' k' : ℕ} {K' : ℚ} (hn0 : 0 ≤ n) (he0 : 0 ≤ e) (hK0 : 0 ≤ K)
+    (hT : T ≤ T') (hn : n ≤ n') (he : e ≤ 1 + 210 * (k' : ℝ)) (hK : K ≤ K') :
     4 * T * (1 + n * e + (1 + e) * K) / 2 ^ (256 : ℝ) ≤ ((firstHitBound T' n' k' K' : ℚ) : ℝ) := by
   have hn'0 : (0 : ℝ) ≤ n' := by positivity
   have h1 : n * e ≤ (n' : ℝ) * (1 + 210 * (k' : ℝ)) := mul_le_mul hn he he0 hn'0
@@ -125,25 +125,26 @@ theorem real_le_firstHitBound {T n e K : ℝ} {T' n' k' : ℕ} {K' : ℚ} (hT0 :
 /-- `1/2^100` over the rationals is `2^-100`, a real power. -/
 theorem cast_two_pow_neg_100 : ((1 / 2 ^ 100 : ℚ) : ℝ) = 2 ^ (-(100 : ℝ)) := by
   rw [Real.rpow_neg (by norm_num), show (100 : ℝ) = ((100 : ℕ) : ℝ) by norm_num, Real.rpow_natCast]
-  push_cast <;> ring
+  push_cast
+  ring
 
 /-- **The expression over the reals is at most `2^-100`** wherever the rational bound at numbers above it is. -/
-theorem real_le_two_rpow_neg_100 {T n e K : ℝ} {T' n' k' : ℕ} {K' : ℚ} (hT0 : 0 ≤ T) (hn0 : 0 ≤ n) (he0 : 0 ≤ e)
-    (hK0 : 0 ≤ K) (hT : T ≤ T') (hn : n ≤ n') (he : e ≤ 1 + 210 * (k' : ℝ)) (hK : K ≤ K')
+theorem real_le_two_rpow_neg_100 {T n e K : ℝ} {T' n' k' : ℕ} {K' : ℚ} (hn0 : 0 ≤ n) (he0 : 0 ≤ e) (hK0 : 0 ≤ K)
+    (hT : T ≤ T') (hn : n ≤ n') (he : e ≤ 1 + 210 * (k' : ℝ)) (hK : K ≤ K')
     (h : firstHitBound T' n' k' K' ≤ 1 / 2 ^ 100) :
     4 * T * (1 + n * e + (1 + e) * K) / 2 ^ (256 : ℝ) ≤ 2 ^ (-(100 : ℝ)) := by
   rw [← cast_two_pow_neg_100]
-  exact (real_le_firstHitBound hT0 hn0 he0 hK0 hT hn he hK).trans (Rat.cast_le.2 h)
+  exact (real_le_firstHitBound hn0 he0 hK0 hT hn he hK).trans (Rat.cast_le.2 h)
 
 /-- **The binding term is at most `2^-100` at sessions of at most `32` tables**: at a run of `T ≤ 2^80`
 compressions, `n ≤ 5523986` sessions, each extracted in `e ≤ 1 + 210·395007543` expected reruns, and a sample
 needing `K ≤ 227711235758` gates in the mean. -/
-theorem real_tables32_le {T n e K : ℝ} (hT0 : 0 ≤ T) (hn0 : 0 ≤ n) (he0 : 0 ≤ e) (hK0 : 0 ≤ K) (hT : T ≤ 2 ^ 80)
+theorem real_tables32_le {T n e K : ℝ} (hn0 : 0 ≤ n) (he0 : 0 ≤ e) (hK0 : 0 ≤ K) (hT : T ≤ 2 ^ 80)
     (hn : n ≤ 5523986) (he : e ≤ 1 + 210 * 395007543) (hK : K ≤ 227711235758) :
     4 * T * (1 + n * e + (1 + e) * K) / 2 ^ (256 : ℝ) ≤ 2 ^ (-(100 : ℝ)) := by
-  refine real_le_two_rpow_neg_100 (T' := 2 ^ 80) (n' := 5523986) (k' := 395007543) (K' := 227711235758) hT0 hn0 he0
-    hK0 ?_ ?_ ?_ ?_ firstHitBound_tables32
-  · push_cast
+  refine real_le_two_rpow_neg_100 (T' := 2 ^ 80) (n' := 5523986) (k' := 395007543) (K' := 227711235758) hn0 he0 hK0
+    ?_ ?_ ?_ ?_ firstHitBound_tables32
+  · rw [Nat.cast_pow, Nat.cast_ofNat]
     exact hT
   · push_cast
     exact hn
