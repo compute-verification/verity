@@ -177,7 +177,7 @@ async def _serve(tmp: Path, switches: tuple[str, ...], profile: str) -> dict:
             certifier.close()
 
     try:
-        honest_ep = StandIn(4, merges=lambda r: r % 2 == 1)
+        honest_ep = StandIn(1, merges=lambda r: r % 2 == 1)
         server = await asyncio.start_server(honest_ep, "127.0.0.1", 0)
         upstream = server.sockets[0].getsockname()[:2]
         url = "http://%s:%d" % upstream
