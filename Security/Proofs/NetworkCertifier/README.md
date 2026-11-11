@@ -74,8 +74,10 @@ content and order. Conventions follow POUS's package (`verity/core/protocols/pou
                                the leak relation at the rows its trace holds (OpensAtInputs, RLeakCarried)
 ../../Definitions/NetworkCertifier/Guarantees/Carried.lean  trusted: the leak bounds over a carried pool
                                (SampledLeakCarried, PooledLeakCarried)
-../../Definitions/NetworkCertifier/Witness.lean  trusted: the layouts and openings the nontrivial lemmas fail at
-                               (trivLay, notLay, certOps)
+../../Definitions/NetworkCertifier/Witness.lean  trusted: the instances the honest and nontrivial lemmas are
+                               stated at, each built by hand (trivLay, notLay, certOps; the honest certifier at a
+                               Program, the reference schedule, the verifier and the sender that accept and leak
+                               everything, a sampled audit, the rows format of the fixture `fxQueue`)
 Lemmas.lean     the statements that are only steps of the guarantees' proofs, Theorem 1(b) among them,
                                each a `def G : Prop` under the same namespace (`Guarantees.G`)
 ../NetworkCertifier.lean  proved: `SecurityProofs.G : Guarantees.G` for each guarantee and lemma, from the modules below
@@ -157,10 +159,7 @@ WitnessesChecked.lean  the nontrivial lemma of SampledLeakChecked; its honest le
 WitnessesCarried.lean  SampledLeakCarried's honest lemma, at the toy code with a run that opens its row
                                          at its input gates, and the nontrivial lemmas of SampledLeakCarried and
                                          PooledLeakCarried; PooledLeakCarried's honest lemma waits on a deployed check
-WitnessToys.lean  the instances the count and period witnesses are stated at, each built by hand (the honest
-                                         certifier at a Program, the reference schedule over two execution blocks,
-                                         the verifier and the sender that accept and leak everything, a sampled audit
-                                         with a possible incorrect set, the rows format of the fixture `fxQueue`)
+WitnessToys.lean  what holds at those instances, which the count and period witnesses conclude from
 CountWitnesses.lean  the thirteen counts' pairs, seven egress and six ingress: the honest run is accepted at
                                          `fxRate` or at `sampProg`, or has every status complete, and each bound is
                                          false at the verifier that accepts everything (`acceptAll`)

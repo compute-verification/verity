@@ -236,7 +236,7 @@ def test_v1_sends_no_timing_under_the_tick(asy):
     assert not any(w.arrived or w.order for w in wins) and any(w.hits for w in wins)
     data = V.encode(adv, rec, reg)
     assert V.decode(data, rec, reg) == adv
-    assert sum(V.bits_by_window(data, rec, reg).values()) == sum(V.string_of([CV.Window(hits=w.hits) for w in wins],
+    assert sum(V.bits_by_window(data, rec, reg).values()) == sum(V.string_of([CV.Advice(hits=w.hits) for w in wins],
                                                                              reg, V.length_tails(rec, reg))[1])
 
 
@@ -265,10 +265,10 @@ def test_a_count_capped_at_0_costs_nothing():
     count is capped at 0 costs nothing, and under v1's own caps an empty window costs bits."""
     zero = dataclasses.replace(V.TICK_CAPS, hits=0, resumes=0, lag=0)
     assert (V.TICK_CAPS.arrived, V.TICK_CAPS.order) == (0, 0)
-    assert list(CV.encode([CV.Window()] * 3, CV.Book.uniform(zero)).lens) == [0, 0, 0]
-    assert all(n > 0 for n in CV.encode([CV.Window()] * 3, CV.Book.uniform(V.CAPS)).lens)
-    assert sum(CV.encode([CV.Window()] * 3, CV.Book.uniform(V.TICK_CAPS)).lens) < \
-        sum(CV.encode([CV.Window()] * 3, CV.Book.uniform(V.CAPS)).lens)
+    assert list(CV.encode([CV.Advice()] * 3, CV.Book.uniform(zero)).lens) == [0, 0, 0]
+    assert all(n > 0 for n in CV.encode([CV.Advice()] * 3, CV.Book.uniform(V.CAPS)).lens)
+    assert sum(CV.encode([CV.Advice()] * 3, CV.Book.uniform(V.TICK_CAPS)).lens) < \
+        sum(CV.encode([CV.Advice()] * 3, CV.Book.uniform(V.CAPS)).lens)
 
 
 def write_corpus(d: Path, e, ios, times, run: Served, *, tick: bool) -> Path:

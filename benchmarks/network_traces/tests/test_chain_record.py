@@ -745,7 +745,7 @@ def test_an_audit_leaves_out_the_registered_rows_its_registration_records_at_the
         assert (got["free"], got["inputs"]["registered"], got["held"]) == (4 * (256 + 4096), 0, [])
         assert got["drawn"] == held["drawn"]
     network = {"advice": 8, "syncs": 0, "cells": 0}
-    before, after = (cr.pooled_k([a], Fraction(1, 100), network) for a in (cr.audit_of(tmp_path), held))
+    before, after = (cr.pooled_k([a | {"jitter": 0}], Fraction(1, 100), network) for a in (cr.audit_of(tmp_path), held))
     assert before["K"] - after["K"] == 4 * 4096 and after["terms"]["free"] == 4 * 256
     (tmp_path / "registration.json").write_text(json.dumps({"population": 4, "law": {"law": "subset", "k": 2},
                                                             "window": {**window, "circuit": "00" * 64}}))

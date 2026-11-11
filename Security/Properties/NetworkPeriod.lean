@@ -31,14 +31,20 @@ supplies each of the statement's quantities as at most the check's number:
 The rows form's terms charge a tied audit (one a scan's `prog` is an output of) its free inputs, and its incorrect
 proof blocks only as the slot entries they can set, since the scan reads the audit only through its `prog` and its
 state is the scan's own. The check accepts a tied audit at any sample; the consistency check of one is `RowsProgWired`
-and `RowsStateTied`. `RowsProgWired` says it accepts no link-window whose scan's `prog` is not a compute audit's slot
-entries, a lane's tree the entries port of its chunk of a `SlotEntry_v1` or `SelectEntry_v1` template of that audit's
-own Program. `RowsStateTied` says it accepts no link-window whose scan's state is not the `SCAN_STATE` of an audit its
-`prog` is wired to, so a state that skips or alters one of the scan's transitions is no Program's input. Each
-says its conclusion (`RowsProgWiredAt`, `RowsStateTiedAt`) of every period `check` accepts, and so is, by definition,
-its property of any period check at `check` (`RowsProgWiredOf`, `RowsStateTiedOf`), which the nontrivial lemmas state
-false at `acceptAllRows`, a check that accepts every period. Each guarantee writes its acceptance of `check` out rather
-than being its `…Of check`: the shape rule reads the acceptance off the statement's own binders.
+and `RowsStateTied`, and what it publishes of one sampled in part is `RowsTiedCharged`. `RowsProgWired` says it accepts
+no link-window whose scan's `prog` is not a compute audit's slot entries, a lane's tree the entries port of its chunk
+of a `SlotEntry_v1` or `SelectEntry_v1` template of that audit's own Program. `RowsStateTied` says it accepts no
+link-window whose scan's state is not the `SCAN_STATE` of an audit its `prog` is wired to, so a state that skips or
+alters one of the scan's transitions is no Program's input. `RowsTiedCharged` says the public it accepts with supplies
+the charge itself: `charged` is the facts of each tied audit sampled in part (`drawn < units`), each once, so each
+one's δ is in `eps` (`Public.eps` sums the terms' facts' and `charged`'s, and nothing else), and where such an audit's
+bound is at least one incorrect proof block, the term of every link-window whose scan's `prog` is its output has every
+slot entry bit (`faultyEntries` at `scan.entries`), the number `RowsKBoundsCount` takes as `faulty`. Each says its
+conclusion (`RowsProgWiredAt`, `RowsStateTiedAt`,
+`RowsTiedChargedAt`) of every period `check` accepts, and so is, by definition, its property of any period check at
+`check` (`RowsProgWiredOf`, `RowsStateTiedOf`, `RowsTiedChargedOf`), which the nontrivial lemmas state false at
+`acceptAllRows`, a check that accepts every period. Each guarantee writes its acceptance of `check` out rather than
+being its `…Of check`: the shape rule reads the acceptance off the statement's own binders.
 -/
 
 @[expose] public section
@@ -118,9 +124,59 @@ def RowsStateTied : Prop :=
   ∀ (p : Params) (c : Commitment) (e : Evidence) (pub : Public) (prof : Profile),
     check p c e = .accept pub prof → RowsStateTiedAt p c
 
-/-- A period check that accepts every period, publishing the rows form's terms of no link-window: what
-`RowsProgWiredOf` and `RowsStateTiedOf` must fail at for `RowsProgWired` and `RowsStateTied` (each its `…Of` at
-`check`) to say something. -/
+/-- Audit `i`'s answer gives the facts `f`: one-stage accepted its window record `reg` with a profile of one level,
+sampled `subset:k` or stratified, and `f` is what the check reads of that profile and its public (`answered`,
+`factsOf`). -/
+def AuditFacts (i : ℕ) (reg : Lean.Json) (x : Core.Answer) (f : Facts) : Prop :=
+  ∃ (prof : Core.Integrity) (pub : Lean.Json),
+    answered s!"audit {i}" reg x = .ok (prof, pub) ∧ factsOf s!"audit {i}" prof pub = .ok f
+
+/-- Among the audits' facts `facts`, in their order and each once, those of each audit `tied` ties that is sampled in
+part (`drawn < units`). -/
+def tiedInPart (tied : ℕ → Bool) (facts : Array Facts) : Array Facts :=
+  (Array.range facts.size).filterMap fun i => facts[i]?.filter fun f => tied i && decide (f.drawn < f.units)
+
+/-- What `RowsTiedCharged` says of a period its check accepted with the public `pub`: in the rows form, `pub.charged`
+is `tiedInPart` of the public's audits' facts under the commitment's ties (`tiedIn`), and each tied audit `i` has an
+answer `x` whose facts `f` (`AuditFacts`) are the public's `audits[i]`; if it is sampled in part (`f.drawn < f.units`),
+`f` is among `pub.charged` and, when its bound is at least one incorrect proof block (`1 ≤ f.wrong`), every
+link-window `w` whose scan's `prog` is its output (`tiedAudits`) has `faultyEntries = scan.entries` in the public's
+term `pub.units[w]`. -/
+def RowsTiedChargedAt (p : Params) (c : Commitment) (e : Evidence) (pub : Public) : Prop :=
+  ∀ (s : Schedule) (sd : ByteArray) (scan : Scan), p.form = .rows s sd scan →
+    pub.charged = tiedInPart (tiedIn c.audits c.windows) pub.audits ∧
+    ∀ (i : ℕ) (reg : Lean.Json), c.audits[i]? = some reg → tiedIn c.audits c.windows i = true →
+      ∃ (x : Core.Answer) (f : Facts), e.audits[i]? = some x ∧ AuditFacts i reg x f ∧ pub.audits[i]? = some f ∧
+        (f.drawn < f.units → f ∈ pub.charged ∧ (1 ≤ f.wrong →
+          ∀ (w : ℕ) (wreg : Lean.Json), c.windows[w]? = some wreg →
+            (tiedAudits c.audits wreg).contains i = true →
+              ∃ t : AuditTerms, pub.units[w]? = some t ∧ t.faultyEntries = scan.entries))
+
+/-- `RowsTiedCharged` of the period check `chk`: `RowsTiedChargedAt` of every period `chk` accepts, at the public it
+accepts with. -/
+def RowsTiedChargedOf (chk : Params → Commitment → Evidence → Core.Outcome Public Profile) : Prop :=
+  ∀ (p : Params) (c : Commitment) (e : Evidence) (pub : Public) (prof : Profile),
+    chk p c e = .accept pub prof → RowsTiedChargedAt p c e pub
+
+/-- **The rows form charges every tied audit it accepts sampled in part.** If the check accepts a period in the rows
+form with the public `pub`, then `pub.charged` is the facts of each audit that some link-window's scan's `prog` is an
+output of (`tiedIn`) and that is sampled in part (`drawn < units`), in the audits' order and each once (`tiedInPart` of
+`pub.audits`). `Public.eps` sums the δ of the terms' facts and of `charged`, and of nothing else, so each such audit's
+δ is in `eps`. And for each such audit whose bound is at least one incorrect proof block, the public's term of every
+link-window whose scan's `prog` is its output has `faultyEntries` at the scan's every slot entry bit (`Scan.entries`),
+which `K` sums. So the `faulty` `RowsKBoundsCount` takes and the δ of the audits it is read from are the check's own,
+of every period it accepts.
+
+It says nothing of a tied audit with `units ≤ drawn`. The check charges by `drawn < units` (`chargedOf`) and reads both
+off the answer's profile, so a profile naming more members drawn than its level has is neither charged nor refused
+here. -/
+def RowsTiedCharged : Prop :=
+  ∀ (p : Params) (c : Commitment) (e : Evidence) (pub : Public) (prof : Profile),
+    check p c e = .accept pub prof → RowsTiedChargedAt p c e pub
+
+/-- A period check that accepts every period, publishing the rows form's terms of no link-window, no audit's facts and
+no charge: what `RowsProgWiredOf`, `RowsStateTiedOf` and `RowsTiedChargedOf` must fail at for `RowsProgWired`,
+`RowsStateTied` and `RowsTiedCharged` (each its `…Of` at `check`) to say something. -/
 def acceptAllRows (p : Params) (_ : Commitment) (_ : Evidence) : Core.Outcome Public Profile :=
   .accept (rowsTerms #[] ⟨0, 0, 0, 0, 0⟩ #[] p.cells p.jitter p.windows) { link := p.link, windows := p.windows }
 
