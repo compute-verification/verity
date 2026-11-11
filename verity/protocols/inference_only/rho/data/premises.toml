@@ -96,7 +96,7 @@ beyond = "assumed"
 credible_bits = { value = inf, unit = "bit", source = "a property of the circuit's operations, not of a block's bits", status = "derived" }
 
 # The min-cut bound's two conjectures, keyed by their ids in the claims registry (verity/claims,
-# Security/Definitions/Assumptions.lean), which the class min-cut takes (rho/min_cut.py, which reads `beta` from this
+# security/Definitions/Assumptions.lean), which the class min-cut takes (rho/min_cut.py, which reads `beta` from this
 # file itself: it is standard library only, loaded by path).
 # `beta`: (H)'s β for an activation by block size, rows (k bits, β bits a value), k rising. Past the last row there is
 # no β, and the class bounds no block.
