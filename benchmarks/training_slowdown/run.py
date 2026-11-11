@@ -367,7 +367,8 @@ def main(argv=None, store: Store | None = None) -> int:
             states[i] = State(PENDING, run, f"continues {s.where}" if after else "")
     for c in configs:
         print(f"{'honest ' if c is not cfg else ''}{c.name}: digest {c.digest[:16]}, start {c.start.name}, route "
-              f"{c.route}, {c.budget['steps']} steps of {c.budget['batch']} windows, gain {c.target['gain']}, "
+              f"{c.route}, {c.budget['steps']} steps of {c.budget['batch']} {c.windows and c.windows + ' '}windows, "
+              f"gain {c.target['gain']}, "
               f"policy {c.policy}")
         for j, s in zip(jobs, states):
             if j.config is c:

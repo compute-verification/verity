@@ -56,8 +56,9 @@ def tiny_data(root: Path) -> Data:
     man = {"tokenizer": "tiny", "vocab": VOCAB, "selection": {"file": "selection.json", "sha256": sha256(selection)},
            "parts": []}
     for i, n in enumerate(PARTS):
-        (train / "parts" / f"{i:03d}.bin").write_bytes(tokens(rng, n).tobytes())
-        man["parts"].append({"index": i, "tokens": n})
+        part = tokens(rng, n).tobytes()
+        (train / "parts" / f"{i:03d}.bin").write_bytes(part)
+        man["parts"].append({"index": i, "tokens": n, "sha256": sha256(part)})
     raw = json.dumps(man).encode()
     (train / "manifest.json").write_bytes(raw)
     sets, pins = {}, {}
@@ -87,15 +88,17 @@ def write_safetensors(path: Path, state: dict[str, torch.Tensor]) -> None:
     path.write_bytes(len(h).to_bytes(8, "little") + h + b"".join(blobs))
 
 
-def tiny_start(root: Path, name: str = "tiny") -> tuple[Start, dict[str, torch.Tensor]]:
-    """An installed start under `root` and its registry entry."""
+def tiny_start(root: Path, name: str = "tiny", read: list[dict] | None = None) -> tuple[Start, dict[str, torch.Tensor]]:
+    """An installed start under `root` and its registry entry. Its start.json names `read` as the parts of the stream
+    its own training read (None: it says nothing of what it read)."""
     torch.manual_seed(0)
     theta = {k: v.detach().clone() for k, v in LM.of(SHAPE).state_dict().items()}
     d = root / name
     d.mkdir(parents=True)
     write_safetensors(d / "theta.safetensors", theta)
     digest = "d" * 64
-    rec = {"name": name, "digest": digest, "provenance": {"c0": {"macs": 12_345}, "search_pool": {"bpb": 7.5}}}
+    rec = {"name": name, "digest": digest, "provenance": {"c0": {"macs": 12_345}, "search_pool": {"bpb": 7.5}} | (
+        {} if read is None else {"data": {"parts": read}})}
     (d / "start.json").write_text(json.dumps(rec))
     s = Start(name, "tiny", "art:" + "0" * 64, f"starts/{name}", sha256((d / "theta.safetensors").read_bytes()),
               sha256((d / "start.json").read_bytes()), digest, SHAPE, 12_345.0, 7.5)
@@ -110,10 +113,13 @@ def _toml(v) -> str:
     return json.dumps(str(v) if isinstance(v, Path) else v)
 
 
-def tiny_registry(root: Path) -> Path:
-    """`root/starts.toml`, naming the tiny data and start built under `root`."""
+def tiny_registry(root: Path, read: tuple[int, ...] | list[dict] | None = None) -> Path:
+    """`root/starts.toml`, naming the tiny data and start built under `root`. `read` is what the start names as read
+    by its own training: parts of the tiny stream by index, each as the stream's manifest lists it, or the entries
+    as given."""
     data = tiny_data(root / "data")
-    s, _ = tiny_start(root / "starts")
+    parts = data.manifest()["parts"]
+    s, _ = tiny_start(root / "starts", read=read and [parts[q] if isinstance(q, int) else q for q in read])
     d = {"tokenizer": data.tokenizer, "vocab": data.vocab, "eot": data.eot, "train": data.train,
          "manifest_sha256": data.manifest_sha256, "tokenizer_sha256": data.tokenizer_sha256,
          "selection_sha256": data.selection_sha256}
@@ -137,10 +143,10 @@ def write_config(path: Path, **over) -> Path:
     return path
 
 
-def run_job(root: Path, *more: str, split: str = "search", **over):
+def run_job(root: Path, *more: str, split: str = "search", read: tuple[int, ...] | None = None, **over):
     """One job of the tiny start's config (`over` its keys) under `root`, through the job's own entry: its record, its
-    config, the registry and its output directory."""
-    reg = tiny_registry(root / "reg")
+    config, the registry and its output directory. `read` is `tiny_registry`'s."""
+    reg = tiny_registry(root / "reg", read)
     path = write_config(root / "a.toml", **over)
     cfg = config.load(path, starts.registry(reg))
     out = root / "out"

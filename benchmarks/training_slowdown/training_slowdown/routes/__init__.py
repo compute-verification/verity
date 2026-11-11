@@ -11,7 +11,10 @@ A route module states:
   `ValueError` on a dial value the route has no meaning for, which a config's load turns into its refusal.
 
 The harness owns the loop around `step` (`training_slowdown.run`): the counter, the data, the checkpoints, their
-evaluation and E, which it encodes itself from the weights that differ from θ, so no route code runs uncounted. A
+evaluation and E, which it encodes itself from the weights that differ from θ, so no route code runs uncounted.
+Which windows `rows` holds is the harness's too: every window of the start's data in the job's seed's order, or,
+where the config asks (`windows`, `training_slowdown.config`), only those the start's own training did not read. No
+dial chooses them, and a route sees a batch and never the stream. A
 route is screened like any code the counter runs (`training_slowdown.screen`): it reaches the harness only through these
 functions' arguments, and imports from `training_slowdown` only `codecs` and `model`.
 

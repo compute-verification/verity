@@ -29,6 +29,23 @@ def test_a_start_whose_files_or_record_differ_is_refused(tmp_path):
         starts.load(s, tmp_path)
 
 
+def test_a_start_names_the_parts_its_own_training_read_in_its_start_json(tmp_path):
+    """`provenance.data.parts`, as the file states them; none of a start.json that says nothing of what it read; and
+    a start.json that isn't the registry's is refused before anything is read from it."""
+    parts = [{"index": 3, "sha256": "a" * 64, "tokens": 7}, {"index": 0, "sha256": "b" * 64}]
+    named, _ = tiny_start(tmp_path / "named", read=parts)
+    assert starts.parts_read(named, tmp_path / "named") == parts
+    assert starts.record(named, tmp_path / "named")["provenance"]["data"] == {"parts": parts}
+    silent, _ = tiny_start(tmp_path / "silent")
+    assert starts.parts_read(silent, tmp_path / "silent") == [] and "data" not in starts.record(
+        silent, tmp_path / "silent")["provenance"]
+    assert starts.installed(silent, tmp_path / "silent") == tmp_path / "silent" / "tiny"
+    with pytest.raises(SystemExit, match=f"start.json has sha256 {silent.start_json_sha256}, the registry's tiny"):
+        starts.parts_read(dataclasses.replace(silent, start_json_sha256="0" * 64), tmp_path / "silent")
+    with pytest.raises(SystemExit, match="digest, C0 and loss"):
+        starts.parts_read(dataclasses.replace(silent, l0_bpb=1.0), tmp_path / "silent")
+
+
 def test_a_safetensors_file_reads_back_its_tensors_misaligned_too(tmp_path):
     state = {"a": torch.arange(3, dtype=torch.bfloat16), "b": torch.randn(2, 3), "c": torch.zeros(0)}
     write_safetensors(tmp_path / "t.safetensors", state)  # b starts 6 bytes in: not a float32's alignment

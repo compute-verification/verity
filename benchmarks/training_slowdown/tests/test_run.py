@@ -212,6 +212,8 @@ def test_the_route_loop_trains_scores_and_encodes_from_the_config(ran):
     assert rec["invalid"] == [] and rec["sandbox"] == {"interfaces": {"lo": False}, "final_sets": {final: "empty"}}
     assert rec["label"] == f"training-slowdown={cfg.digest}/0/search"
     assert rec["config"] == json.loads(json.dumps(cfg.record())) and rec["route"]["name"] == "subset"
+    # a config that doesn't ask for fresh windows is served every window, and its record says nothing of them
+    assert "windows" not in rec and "windows" not in rec["config"]["run"]
     assert len(rec["steps"]) == 3 and [cp["step"] for cp in rec["checkpoints"]] == [0, 1, 2]
     for cp in rec["checkpoints"]:
         assert cp["score"]["split"] == "search" and cp["bpb"] == cp["score"]["bpb"]

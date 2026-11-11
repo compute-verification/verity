@@ -28,8 +28,8 @@ measures bumps `VERSION` (`training_slowdown/__init__.py`), which every record c
 | `calculator.py` | the slowdown calculator (`verity/protocols/inference_only/rho`) as this package reads it: a fixed policy's numbers, the fleets and periods a figure is presented over, and the bound of record |
 | `counterexample.py` | a run's counterexample families: their writer and the sampled bit-for-bit rebuild check |
 | `codecs/` | update codes: identity, low rank, sparse mask, quantized delta, scaled quantized delta, seed replay and their composition |
-| `starts.py`, `starts.toml` | the starts registry: each start by its store artifact, its files' sha256, its shape, C0 and loss, and its data's pins; `load` reads an installed start and checks it |
-| `data.py` | a start's data: the training stream (`Stream`, by the job's data seed) and the held-out sets (`held_out`: the search pool and the final set), checked against the registry; the search slice from a live coin (`sample_slice`) |
+| `starts.py`, `starts.toml` | the starts registry: each start by its store artifact, its files' sha256, its shape, C0 and loss, and its data's pins; `load` reads an installed start and checks it; `parts_read`, the parts of the stream its start.json names as read by its own training |
+| `data.py` | a start's data: the training stream (`Stream`, by the job's data seed; the fresh stream, without the windows of the parts a start read, `read_windows`) and the held-out sets (`held_out`: the search pool and the final set), checked against the registry; the search slice from a live coin (`sample_slice`) |
 | `evaluate.py` | the harness's evaluator: a checkpoint's bits per byte on the job's split, the search pool's paired with θ on the same slice |
 | `model.py` | the starts' architecture, the lf dense decoder |
 
@@ -48,7 +48,7 @@ python -m training_slowdown.gates [--check]             # gates per multiply-add
 ~~~
 
 An attack is a config of `attacks/` (`config.py`'s docstring has the schema): a start, a route and its dials, the
-budget, the seeds, and what the grade reads, the target gain, the policy (`console`, policy.py's rule, or a
+budget, the seeds, the windows it asks for where it asks, and what the grade reads, the target gain, the policy (`console`, policy.py's rule, or a
 `[policy.*]` table of `verity/protocols/inference_only/rho/data`) and the honest config. The command (`run.py` here) expands a config and its honest config into
 jobs, one per seed and split, each labelled in the store `training-slowdown=<digest>/<seed>/<split>`, and runs the ones
 its labels lack: on the queue (kind `training-attack`, `infra/cluster/kinds/training.toml`), on one machine with `--on`,
@@ -85,6 +85,19 @@ hidden from the route's process as a final set is, and only the job's own proces
 times its model (the weights and two buffers of the optimizer for each), and a run holds three states at once while
 it keeps one, and a fourth, the store's own copy, when it fetched the one it continues from: the command asks the
 queue for that much disk from the start's parameters, and 20 GB for the rest (`run_disk_gb` in `run.py` here).
+
+Which windows of the start's data a job is served is the harness's, and a config's to ask for, never a route's. By
+default a job is served every window, in its seed's order. A config with `windows = "fresh"` is served that order
+without the windows the start's own training read: every window of every part of the stream the start's `start.json`
+names (`provenance.data.parts`, each part by the sha256 the stream's manifest lists it under), which is more than
+the start read where its training stopped inside a part, and never less. The job refuses the config, saying what to
+write where, on a start whose `start.json` names no part or names one the stream doesn't hold, and where fewer
+windows are fresh than a step takes. Its record states what it was served (`windows`): the parts left out, by
+sha256 with the ids of their windows, the ids of the windows of each step (a window's id is its place in the stream,
+part by part in the manifest's order), and how many times the fresh windows ran out and their order started again,
+so whether a job read a window its start read is a comparison of ids. A stopped job that continues is served the
+windows the unbroken job is, and its record states them over every segment. `windows` is in a config's digest only
+where the config asks, so a config that doesn't is the job it was, under the same label.
 
 A job trains the config's start along its route and scores each checkpoint on its split. A route is a module of
 `routes/` with `VERSION`, `DIALS`, `build`, `step` and `plan` (the route contract, `routes/__init__.py`); the harness

@@ -16,7 +16,10 @@ without its names in the environment and with the directory it lies in hidden (`
 
 The route loop (`train`): the route builds its model and optimizers (`training_slowdown.routes`), the harness loads θ
 into the model and registers it, and runs the budget's steps, each the route's `step` on the next batch of the start's
-data stream in the job's seed (`training_slowdown.data.Stream`), inside `with te.step():`. A checkpoint is taken after
+data stream in the job's seed (`training_slowdown.data.Stream`), inside `with te.step():`. The stream is every window
+of the start's data or, where the config asks (`windows = "fresh"`), only the windows the start's own training did
+not read (`stream_of`, which refuses the config on a start that doesn't say what it read); the record of a job
+served those lists them (`windows`). A checkpoint is taken after
 every 5% of the steps, uncounted: the output model's bits per byte on the job's split (`training_slowdown.evaluate`)
 and its E, the weights that differ from θ encoded by the route's plan (rebuilt from its spec, so only the codec
 library's code runs). The output model a checkpoint scores is the one E rebuilds from θ: the trained weights under a
@@ -194,10 +197,13 @@ class Harness:
     def __init__(self, theta: dict[str, torch.Tensor], out: Path, *, seed: int = 0, tier: int = 0, device: str = "cpu",
                  start: dict | None = None, evaluator=None, split: str = "", budget_s: float = 0.0,
                  keep_weights: bool = False, digests: bool = True, clock=time.perf_counter,
-                 families: Path | None = None, record: Path | None = None, kept: dict | None = None, keep=None):
+                 families: Path | None = None, record: Path | None = None, kept: dict | None = None, keep=None,
+                 stream: Stream | None = None):
         """`kept` is where a job that continues stands (`step`, the next one; `elapsed_s`; `digest_key`), and
-        `keep(state)` is called with the trained state after each planned checkpoint but the last."""
+        `keep(state)` is called with the trained state after each planned checkpoint but the last. `stream` is the
+        one the steps are served from: the record states what a fresh one served (`Stream.record`)."""
         kept = kept or {}
+        self.stream = stream
         self.theta, self.out = theta, Path(out)
         self.record = Path(record) if record else self.out / "run.json"
         self.families_root = Path(families) if families else self.out / "families"
@@ -453,6 +459,8 @@ class Harness:
             "flags": flags(rec["totals"], float(meta.get("peak_macs_per_s", 0))) + list(notes or []),
             "invalid": problems, "families": [],
         }
+        if self.stream is not None and (served := self.stream.record()) is not None:
+            rec["windows"] = served
         return self._self_cpu(rec)
 
     @staticmethod
@@ -563,6 +571,32 @@ def resume_state(trained: dict[str, torch.Tensor], optimizers, stream: Stream) -
     else from one step to the next (`training_slowdown.routes`) doesn't continue as an unbroken job runs."""
     return plain({"model": trained, "optimizers": [o.state_dict() for o in optimizers], "stream": stream.at,
                   "generators": generators()})
+
+
+def stream_of(cfg: config.Config, data: Data, seed: int, root: Path | None = None) -> Stream:
+    """The stream a job of `cfg` and `seed` is served: every window of the start's data in the seed's order or,
+    where the config asks (`windows`), that order without the windows of the parts the start's own training read,
+    as the start.json installed under `root` names them. A config that asks is refused, with what to do, on a start
+    that doesn't say which parts it read, or says it by parts the stream doesn't hold, and where fewer windows are
+    fresh than one step takes."""
+    s, ctx = cfg.start, int(cfg.start.shape["ctx"])
+    if not cfg.windows:
+        return Stream(data, seed, ctx=ctx)
+    where = f"config {cfg.path}: windows = {cfg.windows!r} at start {s.name}"
+    drop = "drop `windows` from the config, which then serves every window of the start's data"
+    try:
+        stream = Stream(data, seed, ctx=ctx, read=starts.parts_read(s, root))
+    except ValueError as e:
+        raise SystemExit(
+            f"{where}: {e}. A job is served fresh windows only when its start says what it read: write the parts "
+            f"its training read into {starts.installed(s, root) / 'start.json'}'s provenance.data.parts, each with "
+            f"the `sha256` that {data.train / 'manifest.json'} lists the part under, and register the new file "
+            f"(start_json_sha256 of [starts.{s.name}] in starts.toml); or {drop}.") from None
+    if (fresh := len(stream.order)) < (batch := cfg.budget["batch"]):
+        fewer = f"lower budget.batch to {fresh} or less, or " if fresh else ""
+        raise SystemExit(f"{where}: the start read all but {fresh} of the stream's {int(stream.starts[-1])} windows, "
+                         f"and a step takes {batch}: {fewer}{drop}.")
+    return stream
 
 
 def train(te: Harness, cfg: config.Config, route, stream: Stream, model, optimizers, state: dict | None = None) -> None:
@@ -880,17 +914,22 @@ def joined(prior: dict | None, rec: dict) -> dict:
     is the segments' sum: `totals` adds up, and `setup` holds what every segment counted outside its steps
     (`outside_steps`), so a segment's own setup is counted, and the steps a stopped segment ran after its last kept
     checkpoint, which the next one ran again, are not. `segments` lists each one's first step, its steps, its count
-    and its commit, and of one that was continued the digests of the state it kept last (`Kept.write`). A segment
-    whose record names another job than the kept one's is refused."""
+    and its commit, and of one that was continued the digests of the state it kept last (`Kept.write`). Of a job
+    served fresh windows (`windows`), the windows served are every segment's in order and the times their order
+    started again add up. A segment whose record names another job than the kept one's, or leaves other parts out
+    of the fresh windows, is refused."""
     first = len(prior["steps"]) if prior else 0
     segment = {"first": first, "steps": len(rec["steps"]), "macs": rec["totals"]["macs"], "commit": rec.get("commit")}
     if prior is None:
         return rec | {"segments": [segment]}
+    was, now = prior.get("windows"), rec.get("windows")
+    fresh = [w and [w["fresh"], [e["part"] for e in w["excluded"]]] for w in (was, now)]
     for name, its, mine in (("config digest", prior["config"]["digest"], rec["config"]["digest"]),
                             ("seed", prior["seed"], rec["seed"]), ("split", prior["split"], rec["split"]),
                             ("training_slowdown VERSION", prior["training_slowdown"], rec["training_slowdown"]),
                             ("digest key", prior["digest_key"], rec["digest_key"]),
-                            ("first step", first, rec["steps"][0]["step"] if rec["steps"] else first)):
+                            ("first step", first, rec["steps"][0]["step"] if rec["steps"] else first),
+                            ("fresh windows (how many, and the parts left out)", *fresh)):
         if its != mine:
             raise SystemExit(f"training_slowdown: the kept record's {name} is {its!r} and the segment that "
                              f"continued it states {mine!r}: no record is written")
@@ -898,7 +937,9 @@ def joined(prior: dict | None, rec: dict) -> dict:
     before = prior["totals"]["macs"]
     totals = {k: _added(v, rec["totals"].get(k, {})) if isinstance(v, dict) else v + rec["totals"].get(k, 0)
               for k, v in prior["totals"].items()}
-    return rec | {
+    windows = {"windows": now | {"served": was["served"] + now["served"],
+                                 "rounds": was["rounds"] + now["rounds"]}} if now else {}
+    return rec | windows | {
         "setup": outside_steps(structures, [prior["setup"], prior["tail"], rec["setup"]]), "structures": structures,
         "steps": prior["steps"] + rec["steps"], "totals": totals,
         "checkpoints": prior["checkpoints"] + [cp | {"macs": cp["macs"] + before} for cp in rec["checkpoints"]],
@@ -1089,8 +1130,10 @@ def inside(a: argparse.Namespace) -> int:
     if own:
         own.names(cfg.digest)
     s = cfg.start
-    theta = starts.load(s, a.starts_root or Path(reg["installed"]))
+    root = a.starts_root or Path(reg["installed"])
+    theta = starts.load(s, root)
     data = Data.of(s.data, reg)
+    stream = stream_of(cfg, data, a.seed, root)
     torch.manual_seed(a.seed)
 
     def keep(trained: dict[str, torch.Tensor]) -> None:
@@ -1101,8 +1144,7 @@ def inside(a: argparse.Namespace) -> int:
     te = Harness(theta, a.out, seed=a.seed, tier=a.tier, device=a.device, start=s.entry(), evaluator=own,
                  split=a.split, budget_s=60 * cfg.budget.get("minutes", 0), keep_weights=a.keep_weights,
                  digests=a.digests != "off", families=a.families, record=a.inside / "run.json", kept=kept,
-                 keep=keep if own and a.state is not None else None)
-    stream = Stream(data, a.seed, ctx=int(s.shape["ctx"]))
+                 keep=keep if own and a.state is not None else None, stream=stream)
     guard_exits()
     meta = json.loads(a.meta) | {
         "config": cfg.record(), "route": {"name": cfg.route, "version": cfg.route_version,
