@@ -79,6 +79,11 @@ The screen (`training_slowdown.screen`) refuses, in the route and in every modul
 the names that run code it never reads: `exec`, `eval` and `compile` (called or not), `runpy`, `importlib`,
 `__import__`, `marshal`, pickle, `FunctionType`, `CodeType`, `__code__` and `sys.meta_path`; while the job runs no
 bytecode cache is read, so what runs is the source that was screened.
+
+On a CPU each of the job's two processes limits oneDNN's instruction set to below AMX before torch computes anything
+(`limit_cpu`, `CPU_ISA`): oneDNN's AMX kernels can return a wrong bf16 product on a virtual CPU, so that one step run
+twice gives two results, and a job's products are to be the same every time. The record names the variable and the
+value the route's process holds (`cpu_isa`; null on any other device, where nothing is set).
 """
 from __future__ import annotations
 
@@ -124,6 +129,10 @@ E_KEEP_BYTES = 50 * 2**20
 #: the `trace.failed` of the record the route's process writes before it takes the trace: what a process that ends
 #: there leaves
 UNTRACED = "the route's process ended before it wrote the trace"
+#: the variable that limits oneDNN's instruction set and the limit of a job on a CPU (`limit_cpu`), the widest below
+#: AMX: oneDNN's AMX kernels return a wrong bf16 product now and then when the process is preempted on a virtual CPU,
+#: on one thread or several, so two calls of one product on one input differ; below AMX it is the same every time
+CPU_ISA = ("ONEDNN_MAX_CPU_ISA", "AVX512_CORE_BF16")
 
 
 class BudgetExceeded(RuntimeError):
@@ -1179,6 +1188,7 @@ def inside(a: argparse.Namespace) -> int:
                                           "sha256": file_sha256(route.__file__)},
         "label": f"{config.LABEL_KEY}={config.Job(cfg, a.seed, a.split).label}", "commit": git_commit(),
         "hardware": torch.cuda.get_device_name() if torch.cuda.is_available() else "cpu",
+        "cpu_isa": {CPU_ISA[0]: os.environ.get(CPU_ISA[0])} if on_cpu(a.device) else None,
         "peak_macs_per_s": a.peak_macs_per_s,
         "sandbox": {"interfaces": sandbox.interfaces(),
                     "final_sets": {str(d): "empty" if d.exists() else "absent" for d in hidden}}}
@@ -1206,9 +1216,22 @@ def inside(a: argparse.Namespace) -> int:
     return 0
 
 
+def on_cpu(device: str) -> bool:
+    return torch.device(device).type == "cpu"
+
+
+def limit_cpu(device: str) -> None:
+    """Limits oneDNN's instruction set in this process (`CPU_ISA`) where the job's device is a CPU, whatever the
+    process was started with; on any other device it sets nothing. oneDNN reads the variable once, at its first
+    product, so each of a job's processes calls this before torch computes anything (`main`)."""
+    if on_cpu(device):
+        os.environ[CPU_ISA[0]] = CPU_ISA[1]
+
+
 def main(argv=None) -> int:
     argv = sys.argv[1:] if argv is None else [str(x) for x in argv]
     a = parse(argv)
+    limit_cpu(a.device)
     return inside(a) if a.inside is not None else outside(a, argv)
 
 

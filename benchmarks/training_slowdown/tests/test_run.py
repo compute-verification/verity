@@ -1,6 +1,7 @@
 import copy
 import hashlib
 import json
+import os
 import signal
 import sys
 from pathlib import Path
@@ -560,6 +561,60 @@ def test_a_job_whose_routes_process_ends_as_it_takes_the_trace_writes_its_record
 
     assert count(rec) == count(whole) and outputs(rec) == outputs(whole) and all(cp["bpb"] for cp in rec["checkpoints"])
     assert sorted(p.name for p in out.iterdir()) == ["e", "run.json"]
+
+
+def test_a_job_on_a_cpu_limits_onednn_in_each_of_its_processes_before_either_does_anything(ran, tmp_path, monkeypatch):
+    """The record of a job on a CPU names the limit as the route's process held it. Each of the job's processes sets
+    it itself, over whatever it was started with, before it does anything else; on a GPU neither sets anything."""
+    name, limit = run.CPU_ISA
+    assert (name, limit) == ("ONEDNN_MAX_CPU_ISA", "AVX512_CORE_BF16") and ran[0]["cpu_isa"] == {name: limit}
+    held = []
+    monkeypatch.setattr(run, "inside", lambda a: held.append(os.environ.get(name)) or 0)
+    monkeypatch.setattr(run, "outside", lambda a, argv: held.append(os.environ.get(name)) or 0)
+    job = ["--config", tmp_path / "a.toml", "--seed", 0, "--split", "search", "--out", tmp_path / "out"]
+    for device, started_with, holds in [("cpu", None, limit), ("cpu", "ALL", limit), ("cuda", None, None),
+                                        ("cuda:1", "ALL", "ALL")]:
+        for process in ([], ["--inside", tmp_path]):
+            if started_with is None:
+                monkeypatch.delenv(name, raising=False)
+            else:
+                monkeypatch.setenv(name, started_with)
+            assert run.main([*job, "--device", device, *process]) == 0 and held.pop() == holds, (device, process)
+
+
+#: the route's process's interpreter: the job's own, started without the limit and with oneDNN's log on
+LOGGED = """#!{python}
+import os, sys
+if sys.argv[1:3] != ["-m", "training_slowdown.run"]:
+    os.execv({python!r}, [{python!r}, *sys.argv[1:]])
+os.environ.pop("ONEDNN_MAX_CPU_ISA", None)
+os.environ["ONEDNN_VERBOSE"] = "1"
+from training_slowdown import run
+
+sys.exit(run.main(sys.argv[3:]))
+"""
+
+
+@pytest.mark.slow
+def test_no_product_of_a_jobs_route_on_a_cpu_is_computed_by_an_amx_kernel(tmp_path, monkeypatch, capfd):
+    """A job with Muon, whose Newton-Schulz multiplies in bf16, on a CPU: oneDNN's own log of the route's process,
+    which is started without the limit, names no AMX, in the instruction set it says it uses or in a product's
+    kernel, and the record names the limit that process set. On a CPU with AMX the products are oneDNN's at the
+    limit, so it was set before the first of them. Slow: a job as a node runs it, and only oneDNN's log of that
+    process shows the limit was read in time."""
+    standin = tmp_path / "bin" / "python"
+    standin.parent.mkdir()
+    standin.write_text(LOGGED.format(python=sys.executable))
+    standin.chmod(0o755)
+    monkeypatch.setattr(run.sys, "executable", str(standin))
+    dials = {"trainable": "blocks.0.*,norm", "opt": "muon", "lr": 1e-2, "weight_decay": 0.05}
+    rec, _, _, _ = run_job(tmp_path / "job", dials=dials)
+    log = [line for line in capfd.readouterr().out.splitlines() if line.startswith("onednn_verbose")]
+    assert rec["invalid"] == [] and rec["cpu_isa"] == {"ONEDNN_MAX_CPU_ISA": "AVX512_CORE_BF16"}
+    assert not [line for line in log if "amx" in line.lower()]
+    if "amx_bf16" in Path("/proc/cpuinfo").read_text():
+        bf16 = [line.split(",")[6] for line in log if ",exec,cpu,matmul," in line and "src:bf16" in line]
+        assert bf16 and set(bf16) == {"brg_matmul:avx512_core_bf16"}
 
 
 def test_each_checkpoint_of_a_registered_start_is_scored_on_the_jobs_split(tmp_path):
