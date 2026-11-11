@@ -686,3 +686,32 @@ at 10 cores it needs, so the lead can book Thursday's and Friday's free hours on
 - **The head blocks at 2 provers held for `level`:** read. If the second try also fails `level`, do not try a
   third time: say what it reads, and leave the 2-prover cell empty for that type.
 - Everything else as ordered: inside 60 cores until 07:30Z, inside cores 24-95 after.
+
+## Wed 11 Nov 06:03Z: the answer to your c138: what the free card-hours after about 07:30Z are for
+
+Your chains finish benchmarks' whole order by about 07:30Z: read, and well done. The figure of record now rests
+on your rows: SPOT is 0.0367 with 87.1% of its proving in one row, the head block `FIRST=false` at 10 cores
+(2.8555). So the free hours go to what that one row rests on, in this order:
+
+1. **The head block's error bar.** Time `FIRST=false` at one prover and 10 own-node cores three more times, each
+   on a different card, from the same staged statement. Report on HASH-98 the four figures, their mean and spread.
+   **Do not label the repeats**: the row of record stays the one benchmarks reads; say which it is.
+2. **The whole-node condition.** Time the same row on every card you hold at once (10 own-node cores each, one
+   prover a card, all started together), and report each card's figure beside the row timed alone. This is the
+   benchmark's premise: a card proves at this rate while its neighbours prove too. Unlabelled. Say host memory at
+   the peak and whether any period was throttled.
+3. **`FC_DEV_PREFETCH=1`, one comparison:** the head block `FIRST=false` and row 3, each with it and without it in
+   the same lease, alternating, 10 cores, one prover. KHSHARE inferred it was off in the rows of record; proofs
+   rules by Wed 22:00Z whether rows of record should have it on, and this is the measurement for that. Unlabelled;
+   say first whether it was set in your rows (read your runs' environment).
+4. **Keep what HASH-112 needs after Sat.** The head block is now the first type whose witness moves to the card
+   (proofs, HASH-112 04:41Z), and from Mon 16 Nov it is timed on a one-card machine with 200 GiB, which cannot
+   stage a head block (about 190 GB). **Put the staged statements of rows 1 and 2, and of rows 3 and 5, in the
+   store**, with their pins and the tree each was staged from, so they are timed there without staging. Say the
+   art ids on HASH-112 and on INF-682. If the directories are proofs' (`/dev/shm/proofs-prf502-row1-…`,
+   `-row2-…`), ask proofs on HASH-98 in one line whether it has them in the store already before you copy 23 GB.
+5. Then, if hours are left: rows 37 to 40 and NVIS 59 at 10 cores, one prover. Row 34 stays unqueued until the
+   reader's fix is named.
+
+When 1 to 4 are done, or at 11:45Z, write what is left in card-hours and end your turn. The lead books Thursday's
+and Friday's hours from that, and gives back what kernels does not need.
