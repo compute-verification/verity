@@ -30,6 +30,7 @@ import subprocess
 import sys
 import tempfile
 import time
+from collections.abc import Sequence
 from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
@@ -65,7 +66,7 @@ def near_inverse(a0: int, a1: int, n: int) -> bool:
     return v2((p - 1) & m) >= n - 5 or v2((p + 1) & m) >= n - 5
 
 
-def not_symmetric(a0: int, a1: int, w, n: int) -> bool:
+def not_symmetric(a0: int, a1: int, w: Sequence[int], n: int) -> bool:
     """2·d1 ≡ a0 − 1 and 2·d3 ≡ a1 − 1 mod 2^n: both half-rounds then commute with bitwise NOT, so F_w does, and
     complementing d0 alone gives F_{w'} = NOT ∘ F_w, which agrees with F_w at every even R."""
     m = (1 << n) - 1
@@ -85,7 +86,8 @@ def build(tmp: Path) -> Path:
     return exe
 
 
-def jobs_for(kind: str, n: int, rng: random.Random, nkeys: int, nrand: int, word=None, src=None) -> list[tuple[int, ...]]:
+def jobs_for(kind: str, n: int, rng: random.Random, nkeys: int, nrand: int, word: tuple[int, ...] | None = None,
+             src: Path | str | None = None) -> list[tuple[int, ...]]:
     r1, r2 = ROT[n]
     if kind == "recut":
         return [tuple(map(int, p[1:7])) for p in (line.split() for line in Path(src).read_text().splitlines())

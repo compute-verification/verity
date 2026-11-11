@@ -23,6 +23,7 @@ import collections
 import subprocess
 import sys
 import tempfile
+from collections.abc import Sequence
 from pathlib import Path
 
 import numpy as np
@@ -38,7 +39,8 @@ def build(tmp: Path) -> Path:
     return exe
 
 
-def enumerate_kernels(exe: Path, n, r1, r2, rmax, word, keys):
+def enumerate_kernels(exe: Path, n: int, r1: int, r2: int, rmax: int, word: Sequence[int],
+                      keys: Sequence[tuple[int, int]]) -> dict[tuple[int, int], dict[int, set[tuple[int, ...]]]]:
     """{(a0, a1): {R: set of words w' != word in K_R}} from the C enumerator."""
     inp = "".join(f"{a0} {a1}\n" for a0, a1 in keys)
     out = subprocess.run([str(exe), str(n), str(r1), str(r2), str(rmax), *(str(x) for x in word)],
@@ -56,7 +58,7 @@ def enumerate_kernels(exe: Path, n, r1, r2, rmax, word, keys):
     return res
 
 
-def fold(y, word, a0, a1, n, r1, r2, rounds):
+def fold(y: np.ndarray | int, word: Sequence[int], a0: int, a1: int, n: int, r1: int, r2: int, rounds: int) -> np.ndarray:
     m = np.uint64((1 << n) - 1)
     d0, d1, d2, d3 = (np.asarray(x, dtype=np.uint64) for x in word)
     y = np.asarray(y, dtype=np.uint64)
@@ -67,17 +69,17 @@ def fold(y, word, a0, a1, n, r1, r2, rounds):
     return y
 
 
-def g3_ok(word, other, n):
+def g3_ok(word: Sequence[int], other: Sequence[int], n: int) -> bool:
     """(G₃) at width n: XOR limbs d0, d2 keep or complement their low three bits; add limbs d1, d3 keep bit 0."""
     return all(((word[i] ^ other[i]) & 7) in (0, 7) for i in (0, 2)) and all(((word[i] ^ other[i]) & 1) == 0 for i in (1, 3))
 
 
-def kj19_bad(a, n):
+def kj19_bad(a: int, n: int) -> bool:
     t = 1 << (n - 2)
     return (a % t) in (1, t - 1)
 
 
-def near_inverse(a0, a1, n):
+def near_inverse(a0: int, a1: int, n: int) -> bool:
     m = (1 << n) - 1
     prod = (a0 * a1) & m
 
@@ -86,12 +88,12 @@ def near_inverse(a0, a1, n):
     return v2((prod - 1) & m) >= n - 5 or v2((prod + 1) & m) >= n - 5
 
 
-def key_ok_r11(a0, a1, n):
+def key_ok_r11(a0: int, a1: int, n: int) -> bool:
     """The reduced key_ok_r11 (egemm_depthr_check.key_ok_r11)."""
     return bool(a0 & 1 and a1 & 1 and not kj19_bad(a0, n) and not kj19_bad(a1, n) and not near_inverse(a0, a1, n))
 
 
-def key_sets(n, rng, per):
+def key_sets(n: int, rng: np.random.Generator, per: int) -> dict[str, list[tuple[int, int]]]:
     """Structured key pairs at width n: KJ19-bad, g3-chains' open-shape condition (a1 = +-1 mod 2^(r+2), r the smaller
     rotation, which the reduced KJ19 at mod 2^(n-2) still admits when r + 2 < n - 2), key_ok_r11, near-inverse."""
     m = (1 << n) - 1
@@ -119,7 +121,7 @@ def key_sets(n, rng, per):
     return sets
 
 
-def mitm_k1(word, a0, a1, n, r1, r2):
+def mitm_k1(word: Sequence[int], a0: int, a1: int, n: int, r1: int, r2: int) -> set[tuple[int, ...]]:
     """K_1 by exact_kit.search.meet_kernel: G_{d0',d1'}(y) == H_{d2',d3'}^{-1}(F_w(y)) on every state."""
     m = (1 << n) - 1
     xs = np.arange(1 << n, dtype=np.uint64)
