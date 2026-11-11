@@ -637,4 +637,207 @@ theorem pr_off_le_of_forall_expectedCR [Fintype Ω] [Nonempty Ω] [Fintype P] [D
     nlinarith
   linarith
 
+/-! ## The pair the finder outputs, from the runs it is charged for -/
+
+/-- **The first tape that opens `p`**, of the tapes `ρ 0, ρ 1, …`. -/
+def firstIdx (op : Ω → P → Option V) (p : P) : (K : ℕ) → (Fin K → Ω) → Option (Fin K)
+  | 0, _ => none
+  | K + 1, ρ => if (op (ρ 0) p).isSome then some 0 else (firstIdx op p K fun i => ρ i.succ).map Fin.succ
+
+/-- The first hit is the opening of the first tape that opens the node. -/
+theorem firstIdx_of_firstHit (op : Ω → P → Option V) (p : P) {w : V} :
+    ∀ (K : ℕ) (ρ : Fin K → Ω), firstHit op p K ρ = some w →
+      ∃ j, firstIdx op p K ρ = some j ∧ op (ρ j) p = some w := by
+  intro K
+  induction K with
+  | zero =>
+    intro ρ h
+    simp [firstHit] at h
+  | succ K ih =>
+    intro ρ h
+    cases h0 : op (ρ 0) p with
+    | none =>
+      have h' : firstHit op p K (fun i => ρ i.succ) = some w := by
+        simpa [firstHit, orHit, h0] using h
+      obtain ⟨j, hj, hw⟩ := ih (fun i => ρ i.succ) h'
+      exact ⟨j.succ, by simp [firstIdx, h0, hj], hw⟩
+    | some v =>
+      have hvw : v = w := by simpa [firstHit, orHit, h0] using h
+      exact ⟨0, by simp [firstIdx, h0], by rw [h0, hvw]⟩
+
+/-- **The loop charges the first tape that opens a node it waits for**: that tape's calls are among the further runs'
+calls. -/
+theorem le_loopCost (op : Ω → P → Option V) (c : Ω → ℕ) (p : P) :
+    ∀ (K : ℕ) (need : Finset P) (ρ : Fin K → Ω) (j : Fin K), p ∈ need → firstIdx op p K ρ = some j →
+      c (ρ j) ≤ loopCost op c K need ρ := by
+  intro K
+  induction K with
+  | zero => intro need ρ j; exact j.elim0
+  | succ K ih =>
+    intro need ρ j hp hj
+    have hn : need.Nonempty := ⟨p, hp⟩
+    have e : loopCost op c (K + 1) need ρ =
+        c (ρ 0) + loopCost op c K (need.filter fun p => (op (ρ 0) p).isNone) (fun i => ρ i.succ) := by
+      simp only [loopCost, hn, ↓reduceIte]
+    rw [e]
+    cases h0 : op (ρ 0) p with
+    | none =>
+      have hj' : (firstIdx op p K fun i => ρ i.succ).map Fin.succ = some j := by
+        simpa [firstIdx, h0] using hj
+      obtain ⟨j', hj1, hj2⟩ := Option.map_eq_some_iff.1 hj'
+      have hmem : p ∈ need.filter fun p => (op (ρ 0) p).isNone :=
+        Finset.mem_filter.2 ⟨hp, by simp [h0]⟩
+      have h := ih (need.filter fun p => (op (ρ 0) p).isNone) (fun i => ρ i.succ) j' hmem hj1
+      rw [← hj2]
+      exact h.trans (Nat.le_add_left _ _)
+    | some v =>
+      have hj0 : (0 : Fin (K + 1)) = j := by simpa [firstIdx, h0] using hj
+      rw [← hj0]
+      exact Nat.le_add_right _ _
+
+open Classical in
+/-- **The pair the finder outputs**, from `coll`, which reads two runs' tapes: `coll` at the first run and a further
+run that is the first to open some node the first run opened, where that is a pair. Every run it reads is one the loop
+charges (`le_loopCost`). -/
+noncomputable def outOf (op : Ω → P → Option V) (coll : Ω → Ω → Option (Msg × Msg)) (K : ℕ) (ω : Ω)
+    (ρ : Fin K → Ω) : Option (Msg × Msg) :=
+  if h : ∃ j : Fin K, (∃ p, (op ω p).isSome ∧ firstIdx op p K ρ = some j) ∧ (coll ω (ρ j)).isSome then
+    coll ω (ρ h.choose)
+  else none
+
+/-- When `coll` outputs a pair at two runs that open a node to two values, and only collisions of `H`, the finder
+outputs a collision of `H` whenever it finds a pair. -/
+theorem outOf_collision (H : Msg → Msg) (op : Ω → P → Option V) (coll : Ω → Ω → Option (Msg × Msg))
+    (hc : ∀ (ω ω' : Ω) (p : P), ConflictAt op (ω, ω') p → (coll ω ω').isSome)
+    (hs : ∀ (ω ω' : Ω) (u v : Msg), coll ω ω' = some (u, v) → Collision H u v) {K : ℕ} {ω : Ω} {ρ : Fin K → Ω}
+    (h : Found op K ω ρ) : ∃ u v, outOf op coll K ω ρ = some (u, v) ∧ Collision H u v := by
+  obtain ⟨p, v, w, hv, hw, hne⟩ := h
+  obtain ⟨j, hj, hjw⟩ := firstIdx_of_firstHit op p K ρ hw
+  have hex : ∃ j : Fin K, (∃ p, (op ω p).isSome ∧ firstIdx op p K ρ = some j) ∧ (coll ω (ρ j)).isSome :=
+    ⟨j, ⟨p, by simp [hv], hj⟩, hc ω (ρ j) p ⟨by simp [hv], by simp [hjw], by simp [hv, hjw, hne]⟩⟩
+  obtain ⟨⟨u, v'⟩, huv⟩ := Option.isSome_iff_exists.1 hex.choose_spec.2
+  refine ⟨u, v', ?_, hs _ _ u v' huv⟩
+  rw [outOf, dite_eq_left hex]
+  exact huv
+
+/-! ## The prover's tape, outside the redraws
+
+The table of openings and its plurality depend on a tape `t` the finder draws once and keeps: `op t` is the table at
+`t` and `vstar t` a plurality table of it. The finder's seed is the tape, a first run's coins and `K` further runs'
+coins, and the bounds above hold on average over the tape, with one finder for all tapes. -/
+
+/-- An average over a tape and coins is the tapes' average of the average over the coins. -/
+theorem ex_tape {T S : Type} [Fintype T] [Fintype S] (f : T → S → ℝ) :
+    Ex (fun q : T × S => f q.1 q.2) = Ex fun t => Ex fun s => f t s := by
+  unfold Ex
+  rw [Fintype.sum_prod_type' f, Fintype.card_prod, ← Finset.sum_div, Nat.cast_mul, div_div, mul_comm]
+
+/-- A probability over a tape and coins is the tapes' average of the probability over the coins. -/
+theorem pr_tape {T S : Type} [Fintype T] [Fintype S] (p : T → S → Prop) :
+    Pr (fun q : T × S => p q.1 q.2) = Ex fun t => Pr fun s => p t s := by
+  classical
+  have e1 : Pr (fun q : T × S => p q.1 q.2) = Ex fun q : T × S => if p q.1 q.2 then (1 : ℝ) else 0 :=
+    Pr_eq_sum _
+  have e2 : ∀ t, Pr (fun s => p t s) = Ex fun s => if p t s then (1 : ℝ) else 0 := fun t => Pr_eq_sum _
+  rw [e1, ex_tape fun t s => if p t s then (1 : ℝ) else 0]
+  exact congrArg Ex (funext fun t => (e2 t).symm)
+
+theorem ex_const_mul {T : Type} [Fintype T] (a : ℝ) (f : T → ℝ) : Ex (fun t => a * f t) = a * Ex f := by
+  unfold Ex
+  rw [← Finset.mul_sum, mul_div_assoc]
+
+/-- **Success, over the tape.** -/
+theorem pr_off_tape_le {T : Type} [Fintype T] [Fintype Ω] [Nonempty Ω] [DecidableEq V] (op : T → Ω → P → Option V)
+    {vstar : T → P → V} (hv : ∀ t, IsPlurality (op t) (vstar t)) (K : ℕ) :
+    Pr (fun q : T × Ω => ∃ p, Off (op q.1) (vstar q.1) q.2 p) ≤
+      2 * Pr (fun q : T × (Ω × (Fin K → Ω)) => Found (op q.1) K q.2.1 q.2.2) +
+        Pr (fun q : T × (Ω × (Fin K → Ω)) => Miss (op q.1) K q.2.1 q.2.2) := by
+  have h : Ex (fun t => Pr fun ω => ∃ p, Off (op t) (vstar t) ω p) ≤
+      Ex fun t => 2 * Pr (fun s : Ω × (Fin K → Ω) => Found (op t) K s.1 s.2) +
+        Pr (fun s : Ω × (Fin K → Ω) => Miss (op t) K s.1 s.2) :=
+    Ex_mono fun t => pr_off_le (op t) (hv t) K
+  rw [Ex_add, ex_const_mul] at h
+  rw [pr_tape fun t ω => ∃ p, Off (op t) (vstar t) ω p,
+    pr_tape fun t (s : Ω × (Fin K → Ω)) => Found (op t) K s.1 s.2,
+    pr_tape fun t (s : Ω × (Fin K → Ω)) => Miss (op t) K s.1 s.2]
+  exact h
+
+/-- **Cost, over the tape**: at most `1 + N` times a run's expected calls, `N` the number of nodes. -/
+theorem ex_cost_tape_le {T : Type} [Fintype T] [Fintype Ω] [Nonempty Ω] [Fintype P] (op : T → Ω → P → Option V)
+    (c : T → Ω → ℕ) (K : ℕ) :
+    Ex (fun q : T × (Ω × (Fin K → Ω)) =>
+        ((c q.1 q.2.1 + loopCost (op q.1) (c q.1) K (univ.filter fun p => (op q.1 q.2.1 p).isSome) q.2.2 : ℕ) : ℝ)) ≤
+      (1 + (Fintype.card P : ℝ)) * Ex (fun q : T × Ω => (c q.1 q.2 : ℝ)) := by
+  have h : ∀ t, Ex (fun s : Ω × (Fin K → Ω) =>
+      ((c t s.1 + loopCost (op t) (c t) K (univ.filter fun p => (op t s.1 p).isSome) s.2 : ℕ) : ℝ)) ≤
+      (1 + (Fintype.card P : ℝ)) * Ex (fun ω : Ω => (c t ω : ℝ)) := by
+    intro t
+    have h1 := ex_cost_le (op t) (c t) K
+    have h2 : (#(univ.filter fun p : P => (opened (op t) p).Nonempty) : ℝ) ≤ Fintype.card P := by
+      exact_mod_cast card_opened_nonempty_le (op t)
+    have h3 : (0 : ℝ) ≤ Ex (fun ω : Ω => (c t ω : ℝ)) := Ex_nonneg fun ω => Nat.cast_nonneg _
+    nlinarith [mul_le_mul_of_nonneg_right h2 h3]
+  calc Ex (fun q : T × (Ω × (Fin K → Ω)) =>
+        ((c q.1 q.2.1 + loopCost (op q.1) (c q.1) K (univ.filter fun p => (op q.1 q.2.1 p).isSome) q.2.2 : ℕ) : ℝ))
+      = Ex fun t => Ex fun s : Ω × (Fin K → Ω) =>
+          ((c t s.1 + loopCost (op t) (c t) K (univ.filter fun p => (op t s.1 p).isSome) s.2 : ℕ) : ℝ) :=
+        ex_tape fun t (s : Ω × (Fin K → Ω)) =>
+          ((c t s.1 + loopCost (op t) (c t) K (univ.filter fun p => (op t s.1 p).isSome) s.2 : ℕ) : ℝ)
+    _ ≤ Ex fun t => (1 + (Fintype.card P : ℝ)) * Ex fun ω : Ω => (c t ω : ℝ) := Ex_mono h
+    _ = (1 + (Fintype.card P : ℝ)) * Ex fun t => Ex fun ω : Ω => (c t ω : ℝ) := ex_const_mul _ _
+    _ = (1 + (Fintype.card P : ℝ)) * Ex (fun q : T × Ω => (c q.1 q.2 : ℝ)) :=
+        congrArg (fun z : ℝ => (1 + (Fintype.card P : ℝ)) * z) (ex_tape fun t ω => (c t ω : ℝ)).symm
+
+/-- **The cap's term, over the tape**: at most `N/(K + 1)`. -/
+theorem pr_miss_tape_le {T : Type} [Fintype T] [Nonempty T] [Fintype Ω] [Nonempty Ω] [Fintype P]
+    (op : T → Ω → P → Option V) (K : ℕ) :
+    Pr (fun q : T × (Ω × (Fin K → Ω)) => Miss (op q.1) K q.2.1 q.2.2) ≤
+      (Fintype.card P : ℝ) / ((K : ℝ) + 1) := by
+  have hK : (0 : ℝ) < (K : ℝ) + 1 := by positivity
+  have h : ∀ t, Pr (fun s : Ω × (Fin K → Ω) => Miss (op t) K s.1 s.2) ≤ (Fintype.card P : ℝ) / ((K : ℝ) + 1) := by
+    intro t
+    have h2 : (#(univ.filter fun p : P => (opened (op t) p).Nonempty) : ℝ) ≤ Fintype.card P := by
+      exact_mod_cast card_opened_nonempty_le (op t)
+    exact (pr_miss_le (op t) K).trans (div_le_div_of_nonneg_right h2 hK.le)
+  calc Pr (fun q : T × (Ω × (Fin K → Ω)) => Miss (op q.1) K q.2.1 q.2.2)
+      = Ex fun t => Pr fun s : Ω × (Fin K → Ω) => Miss (op t) K s.1 s.2 :=
+        pr_tape fun t (s : Ω × (Fin K → Ω)) => Miss (op t) K s.1 s.2
+    _ ≤ Ex fun _ : T => (Fintype.card P : ℝ) / ((K : ℝ) + 1) := Ex_mono h
+    _ = (Fintype.card P : ℝ) / ((K : ℝ) + 1) := Ex_const _
+
+/-- **The first-hit finder with the tape in its seed**: its coins are the tape, a first run's coins and `K` further
+runs' coins, its output `out`, and its cost the calls of the runs it makes at the tape. -/
+noncomputable def tapeFinder {T : Type} [Fintype T] [Nonempty T] [Fintype Ω] [Nonempty Ω] [Fintype P]
+    (op : T → Ω → P → Option V) (c : T → Ω → ℕ) (K : ℕ) (out : T × (Ω × (Fin K → Ω)) → Option (Msg × Msg)) :
+    Finder where
+  S := T × (Ω × (Fin K → Ω))
+  out := out
+  cost q := c q.1 q.2.1 + loopCost (op q.1) (c q.1) K (univ.filter fun p => (op q.1 q.2.1 p).isSome) q.2.2
+
+/-- **The off-plurality mass over the tape, under `ExpectedCR` at one finder.** When the finder with the tape in its
+seed outputs each pair it finds as a collision of `H` and meets the linear expected-time bound, a run at a uniform
+tape opens some node off the tape's plurality table with probability at most `2·(1 + N)·E[c]/2^256 + N/(K + 1)`: `N`
+the number of nodes, `c` a run's calls, the average over the tape and the run's coins. -/
+theorem pr_off_tape_le_of_expectedCR {T : Type} [Fintype T] [Nonempty T] [Fintype Ω] [Nonempty Ω] [Fintype P]
+    [DecidableEq V] (H : Msg → Msg) (op : T → Ω → P → Option V) {vstar : T → P → V}
+    (hv : ∀ t, IsPlurality (op t) (vstar t)) (c : T → Ω → ℕ) (K : ℕ)
+    (out : T × (Ω × (Fin K → Ω)) → Option (Msg × Msg))
+    (hout : ∀ q : T × (Ω × (Fin K → Ω)),
+      Found (op q.1) K q.2.1 q.2.2 → ∃ u v, out q = some (u, v) ∧ Collision H u v)
+    (hCR : ExpectedCR H (tapeFinder op c K out)) :
+    Pr (fun q : T × Ω => ∃ p, Off (op q.1) (vstar q.1) q.2 p) ≤
+      2 * ((1 + (Fintype.card P : ℝ)) * Ex (fun q : T × Ω => (c q.1 q.2 : ℝ))) / 2 ^ (256 : ℝ) +
+        (Fintype.card P : ℝ) / ((K : ℝ) + 1) := by
+  have h1 := pr_off_tape_le op hv K
+  have h2 : Pr (fun q : T × (Ω × (Fin K → Ω)) => Found (op q.1) K q.2.1 q.2.2) ≤
+      Pr (fun q : T × (Ω × (Fin K → Ω)) => ∃ u v, out q = some (u, v) ∧ Collision H u v) := Pr_mono hout
+  have h3 : Pr (fun q : T × (Ω × (Fin K → Ω)) => ∃ u v, out q = some (u, v) ∧ Collision H u v) ≤
+      Ex (fun q : T × (Ω × (Fin K → Ω)) =>
+        ((c q.1 q.2.1 + loopCost (op q.1) (c q.1) K (univ.filter fun p => (op q.1 q.2.1 p).isSome) q.2.2 : ℕ) : ℝ)) /
+          2 ^ (256 : ℝ) := hCR
+  have h4 := div_le_div_of_nonneg_right (ex_cost_tape_le op c K) (show (0 : ℝ) ≤ 2 ^ (256 : ℝ) by positivity)
+  have h5 := pr_miss_tape_le op K
+  rw [mul_div_assoc]
+  linarith
+
 end Verity.FirstHit
