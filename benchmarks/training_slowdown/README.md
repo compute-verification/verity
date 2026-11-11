@@ -48,11 +48,13 @@ comment says what it trains. Each entry is held to a reference in plain torch (`
 dials, a few steps at a small shape, and the same output model as torch's own optimizer and its own average of the
 weights give, or the published rule where torch has none. An entry without a reference fails the suite.
 
-The standard algorithms differ in two ways the table shows apart. The optimizers (AdamW, SGD, Lion, Adafactor,
-Muon, Shampoo), gradient accumulation and the average of the weights train the same tensors by the same forward and
-backward passes, so they carry the same products with two operands the update reaches, and differ in the gates the
-optimizer itself adds to the step. Frozen layers (`last-blocks`) and adapters (`lora`) change those products: fewer
-of them have an operand the update reaches, or it reaches them only through a rank-wide product.
+The standard algorithms differ in two ways the table shows apart. AdamW, SGD, Lion, Adafactor and the average of the
+weights train every tensor by the same forward and backward passes, so they carry the same products with two operands
+the update reaches, and differ only in the gates the optimizer itself adds to the step; gradient accumulation carries
+those products in several passes, which write more outputs. The rest change those products. Muon and Shampoo have no
+rule for the embedding, so their entries leave it untrained, and the output head, whose weight is the embedding, no
+longer has two operands the update reaches. Frozen layers (`last-blocks`) leave more products out, and adapters
+(`lora`) reach a matrix only through a rank-wide product.
 
 The command prints one row an entry (every entry, or the ones named): its slowdown under its policy and what binds.
 It trains nothing. It builds the entry's model at the start's shape, traces its step on a CPU as a job does after its
