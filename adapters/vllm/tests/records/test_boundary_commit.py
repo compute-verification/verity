@@ -1,12 +1,13 @@
 """`records.boundary_commit`: the ``commit.json`` `pipeline.boundary_rows` writes loads as the typed record and dumps back to
-the same JSON; another format, a missing, unknown or mistyped field is refused by name."""
+the same JSON, with a stop class's rule or without one; another format, a missing, unknown or mistyped field is refused
+by name."""
 from __future__ import annotations
 
 import dataclasses
 
 import pytest
 
-from verity_vllm.records.boundary_commit import KINDS, SCHEMA, BoundaryCommit
+from verity_vllm.records.boundary_commit import KINDS, OPTIONAL, SCHEMA, BoundaryCommit
 from verity_vllm.records.fields import MissingField, RecordError, UnknownField
 
 
@@ -22,7 +23,10 @@ def _doc() -> dict:
 def test_a_writers_record_loads_and_dumps_back_to_itself():
     rec = BoundaryCommit.of(_doc(), "commit.json")
     assert rec.dump() == _doc() and BoundaryCommit.of(rec.dump(), "w") == rec
-    assert set(KINDS) == {f.name for f in dataclasses.fields(BoundaryCommit)}
+    assert set(KINDS) | set(OPTIONAL) == {f.name for f in dataclasses.fields(BoundaryCommit)}
+    stop = _doc() | {"stop": {"ids": [3, 7], "max_model_len": 64, "outputs": 4}}
+    held = BoundaryCommit.of(stop, "commit.json")
+    assert held.dump() == stop and held.stop == stop["stop"] and rec.stop is None and "stop" not in rec.dump()
 
 
 @pytest.mark.parametrize("field", sorted(KINDS))
@@ -44,3 +48,5 @@ def test_another_format_an_unknown_field_and_a_wrong_kind_are_refused_by_name():
     assert e.value.field == "salts"
     with pytest.raises(RecordError, match="'spans' is a str, not a int"):
         BoundaryCommit.of(_doc() | {"spans": "3"}, "w")
+    with pytest.raises(RecordError, match="'stop' is a list"):
+        BoundaryCommit.of(_doc() | {"stop": [3, 7]}, "w")
