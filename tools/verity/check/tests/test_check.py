@@ -976,7 +976,7 @@ def test_the_groups_split_the_cores_and_run_at_once(tmp_path, monkeypatch):
     assert pt[1][1].endswith("tools/verity/check/suites.py") and pt[1][pt[1].index("--jobs") + 1] == "8" and "--fresh" not in pt[1]
     assert cc[1][cc[1].index("--jobs") + 1] == "8" and "--cache" in cc[1]
     cold = CHECK.groups(tmp_path, 16, cache=False)
-    assert lean[0] == "lean" and "--cache" not in cold[1][0][1] and "--fresh" in cold[0][0][1]
+    assert lean[0] == "lean" and "--cache" not in cold[1][0][1] and "--fresh" in " ".join(cold[0][0][1])
     assert gate[0] == "ratchet-gate" and cold[-1][0][0] == "ratchet-gate"
     assert not any(s in pt[1] for s in CHECK.AFTER_LEAN), "without the Lean steps the suites that use Lean run with the rest"
 
@@ -1579,6 +1579,62 @@ def test_circuit_cache_keeps_circuit_checks_reuse_alone_under_no_cache(tmp_path,
     for s in ("pytest", "lean-suites", "lean-audit"):
         assert "--fresh" in " ".join(after[s]) and "--fresh" not in " ".join(cached[s]), s
     assert after["lean-changed"].startswith("skipped: --no-cache")
+
+
+def test_a_cold_check_runs_the_opt_in_tests_after_their_steps_suites_and_no_other_check_does(tmp_path, monkeypatch):
+    """The nightly (`--no-cache`, unsharded): pytest and lean-suites each run their suites, then the opt-in tests of those suites
+    (`OPT_IN`) in runs of their own.  A shard's or a deferred run's parts and a cached check leave them out, so no candidate pays
+    for them and no suite's key holds their variables."""
+    out, _ = _pinned(tmp_path, monkeypatch)
+
+    def steps(**kw) -> dict:
+        return {name: argv for g in CHECK.groups(out, 8, **kw) for name, argv, _ in g}
+
+    cold = steps(cache=False)
+    for step, then in (("pytest", "pytest --timeouts"), ("lean-suites", "lean-suites --lean-built --timeouts")):
+        bash, flag, cmd = cold[step]
+        suites, opt_in, end = cmd.split(" || rc=$?; ")
+        assert (bash, flag, end) == ("bash", "-c", "exit $rc") and "suites.py" in suites and "--opt-in" not in suites, step
+        assert f"check.py --opt-in {out} {then} --jobs 4 --fresh" in opt_in, step
+    for kw in ({}, {"cache": False, "only": ["pytest", "lean-suites"]}, {"cache": False, "circuit_cache": True, "only": ["pytest"]}):
+        assert not any("--opt-in" in " ".join(a) for a in steps(**kw).values() if isinstance(a, list)), kw
+
+
+def test_the_opt_in_tests_run_with_their_variable_set_and_fail_their_step_unless_each_passed(tmp_path, monkeypatch, capsys):
+    """Each suite's named tests in a `suites.py` run of its own with its variable set and no other's.  A named test that skipped
+    (its mark reads another variable) or that its suite lacks (pytest's "not found") ran nowhere, so it fails the step."""
+    from collections import namedtuple
+
+    suite = namedtuple("suite", "name path")
+    monkeypatch.setattr(CHECK, "OPT_IN", {"a/one": ("VERITY_A_SLOW", ("tests/test_a.py::test_x", "tests/test_a.py::test_y")),
+                                          "b/two": ("VERITY_B_SLOW", ("tests/test_b.py::test_z",))})
+    monkeypatch.setattr(CHECK.SUITES, "discover", lambda: [suite("one", "a/one"), suite("two", "b/two")])
+    monkeypatch.setattr(CHECK, "AFTER_LEAN", ("two",))
+    ran: list = []
+    outcome = {"a/one": (0, {"passed": 2, "failed": 0, "error": 0, "skipped": 0}),
+               "b/two": (0, {"passed": 1, "failed": 0, "error": 0, "skipped": 0})}
+
+    def run(cmd, cwd, env):
+        suite = cmd[2]
+        ran.append((suite, [v for v in ("VERITY_A_SLOW", "VERITY_B_SLOW") if env.get(v) == "1"], cmd[cmd.index("--") + 1:]))
+        rc, counts = outcome[suite]
+        if counts is not None:
+            Path(cmd[cmd.index("--json") + 1]).write_text(json.dumps([{"suite": suite, "status": "passed", "counts": counts}]))
+        return subprocess.CompletedProcess(cmd, rc)
+
+    monkeypatch.setattr(CHECK.subprocess, "run", run)
+    assert CHECK.opt_in(tmp_path, "pytest", ["--fresh"]) == 0
+    assert ran == [("a/one", ["VERITY_A_SLOW"], ["tests/test_a.py::test_x", "tests/test_a.py::test_y"])], "pytest's suites alone"
+    ran.clear()
+    assert CHECK.opt_in(tmp_path, "lean-suites", []) == 0 and ran == [("b/two", ["VERITY_B_SLOW"], ["tests/test_b.py::test_z"])]
+    capsys.readouterr()
+    outcome["a/one"] = (0, {"passed": 1, "failed": 0, "error": 0, "skipped": 1})
+    outcome["b/two"] = (4, None)
+    assert CHECK.opt_in(tmp_path, "all", []) == 1
+    said = capsys.readouterr().out
+    assert "a/one: 1 of the 2 tests named with VERITY_A_SLOW=1 passed (1 skipped)" in said
+    assert "b/two: 0 of the 1 tests named with VERITY_B_SLOW=1 passed (suites.py exited 4)" in said
+    assert CHECK.opt_in(tmp_path, "circuit-check", []) == 2
 
 
 def test_the_preflight_runs_first_and_a_failure_there_starts_nothing_else(tmp_path, monkeypatch):
