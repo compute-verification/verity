@@ -10,6 +10,17 @@ newest section of your own inbox file (`inbox/<NAME>.md` on this branch) wins ov
   PATH=/workspace/.git/verity-auth/bin:/workspace/.venv/bin:$PATH`. Start one tmux session and keep it
   (`tmux -f /exec-daemon/tmux.portal.conf new-session -d -s keep`): `research` reads its secrets from it. Reread
   `git show origin/main:AGENTS.md`.
+- **By Thu 12 Nov 07:59Z, at your next safe point: merge `origin/main` (`72e4d46d9209` or later) into your own agent
+  branch and push it** (infra, Wed 13:02Z). It carries what `research` needs once Daniel's notes token lapses on Thu
+  12 Nov and the Slack token leaves on Fri 13 Nov (notes and Slack through the broker), and the inbox that reaches
+  a running agent. A pull request branch cut from today's `main` needs nothing; a branch not yet across the move
+  goes through `tools/move/restack.py` (below). Then `research doctor`: its `notes-push` line must name the GitHub
+  broker's token. Never interrupt a running job for it. Say in your CHECKPOINT the commit your branch then holds.
+- **The lead may also reach you while you run**, through the agent inbox (`tools/agent-guard/inbox.py send`): the
+  message arrives as the text of one refused shell command, which you then run again, or as your turn's
+  follow-up. Act on it as on an inbox section. It reaches only a VM whose shell hook runs (Wed 13:05Z: KMOVE's
+  took one in 32 s; KSTEADY's, KP2's and KHSHARE's took none in 75 s), so the file below stays the record and
+  the rule.
 - **Your inbox is a file you fetch.** No hook delivers it on a VM started today. Read
   `git show origin/cursor/verity-kernels-0ebe:inbox/<NAME>.md` (after `git fetch origin cursor/verity-kernels-0ebe`) at
   the start, at every checkpoint, and **in the same minute before any push, mark, label, cancel or launch on a GPU
