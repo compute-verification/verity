@@ -75,6 +75,9 @@
                                                  # idle: `cluster usage` (infra/cluster usage.py) over the console's record on vy-nebius-1
   research lean-times [--hours 24] [--until T] [--over 15] [--json]   # each Lean task's wall time, from the store's attempts: records
                                                  # runs and checks' Lean steps, p50/p95/max per kind and package (research/lean_times.py)
+  research run-times [--hours 12] [--until T] [--over 10] [--on MACHINE,...] [--json]   # each run's wait to start, setup and run
+                                                 # time from its records on the machines, p50/p90/p95 by kind, machine and pool, and
+                                                 # each run that waited over 10 min with what it waited behind (research/run_times.py)
   research pods ssh TARGET [--print] [-- CMD...]  # TARGET = machines.toml name | pod id | pod name; the port is looked up, never hard-coded
   research pods sync TARGET [SRC] [--dest DIR]    # rsync the worktree's git-visible files (default /workspace/src), prune what it shipped before
   research notes checkpoint LANE STATE TEXT...   # CHECKPOINT <sha> (<HH:MM>Z) [open|blocked|final|superseded] line atop the report
@@ -2021,6 +2024,10 @@ def main(argv: list[str] | None = None) -> int:
         from .lean_times import main as lean_times_main
 
         return lean_times_main(rest)
+    if cmd == "run-times":
+        from .run_times import main as run_times_main
+
+        return run_times_main(rest)
     if cmd == "agents":
         from .agents import main as agents_main
 

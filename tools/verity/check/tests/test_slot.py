@@ -468,7 +468,8 @@ def test_a_wait_with_no_limit_moves_the_run_s_timeout_from_where_it_stands(tmp_p
 
 def test_a_run_s_slot_record_says_it_waits_until_it_takes_a_slot_or_leaves_the_line(tmp_path, monkeypatch):
     """A check waiting in the line is not reported running since its launch: its run's slot.json says waiting,
-    and why, until the slot is taken, then which slot and when; a waiter that gives up says it left, and why."""
+    and why, until the slot is taken, then which slot, when and what it last waited behind; a waiter that gives up says it left,
+    and why."""
     run = tmp_path / "run"
     run.mkdir()
     (tmp_path / "slots").write_text("a 0\n")
@@ -488,7 +489,15 @@ def test_a_run_s_slot_record_says_it_waits_until_it_takes_a_slot_or_leaves_the_l
     assert seen == [{"state": "waiting", "since": "2026-10-01T09:00:00Z", "priority": True,
                      "why": "every check slot is taken (a: busy)"}]
     assert json.loads((run / SLOT.RUN_SLOT).read_text()) == {"state": "held", "since": "2026-10-01T09:00:00Z", "priority": True,
-                                                              "slot": "a", "cores": "0", "took": "2026-10-01T09:00:20Z"}
+                                                              "slot": "a", "cores": "0", "took": "2026-10-01T09:00:20Z",
+                                                              "why": "every check slot is taken (a: busy)"}
+    (tmp_path / "free").mkdir()
+    (tmp_path / "free" / "slots").write_text("a 0\n")
+    monkeypatch.setattr(SLOT, "SLOTS", tmp_path / "free" / "slots")
+    with pytest.raises(Exec):
+        SLOT.main(["--", "true"], now=lambda: t[0], sleep=lambda s: pytest.fail("a free slot is taken without a wait"))
+    assert json.loads((run / SLOT.RUN_SLOT).read_text()) == {"state": "held", "since": "2026-10-01T09:00:20Z", "slot": "a", "cores": "0",
+                                                              "took": "2026-10-01T09:00:20Z"}, "it waited behind nothing"
     (tmp_path / "again").mkdir()
     (tmp_path / "again" / "slots").write_text("a 0\n")
     monkeypatch.setattr(SLOT, "SLOTS", tmp_path / "again" / "slots")
