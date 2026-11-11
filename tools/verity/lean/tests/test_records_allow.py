@@ -3,8 +3,9 @@
 An allowed failure stays in check.py's report and the run exits `ALLOWED_RC` as `allowed`, which is no pass: no pass of that
 package is kept, and the record `--update` regenerated for it goes under `allowed-record/`, never `record/`, which the
 records gate reads. An allowance names a failure by its code and entry, only a code of the closed list `ALLOWABLE` may be
-named, one that matches no failure fails the run, and nothing but `--records` takes one: check.py has no such option, and
-no caller of either file in the check, the merge queue or the ready mark's preflight names it.
+named, one that matches no failure fails the run, and nothing but `--records` takes one: check.py has no such option
+(that no caller of either file in the check, the merge queue or the ready mark's preflight names it is the root suite's
+`tests/test_lean_allowances.py`).
 
 The stand-in packages are `s`, whose `proved_in` names `s/proofs`, and `s/props`, which requires `s`, with the real `sync`,
 requirers and pass cache, and a fake check.py whose reports are check.py's own (`Failure`, `reported`)."""
@@ -19,7 +20,6 @@ from pathlib import Path
 import pytest
 
 HERE = Path(__file__).resolve().parent
-ROOT = HERE.parents[3]
 spec = importlib.util.spec_from_file_location("lean_changed_allow", HERE.parent / "lean_changed.py")
 LC = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(LC)
@@ -495,24 +495,3 @@ def test_check_py_takes_no_allowance_and_the_fast_path_gives_it_none(tmp_path, c
             for dev in (False, True):
                 argv = LC.check_argv(tmp_path / "p", tmp_path / "out", update, None, own, dev=dev)
                 assert not any(a.startswith("--allow") for a in argv), argv
-
-
-#: who runs check.py or `lean_changed.py` besides a lane: the Lean check's steps (`check`'s `check.py`, `lean_audit.py`), the
-#: merge queue's loop and its Lean tasks (the graph's runners), the ready mark's preflight and the records gate (`research
-#: queue`), and the `verity` command
-CALLERS = ["tools/verity/check/check.py", "tools/verity/check/train.sh", "tools/verity/lean/lean_audit.py",
-           "tools/research/src/research/vqueue_loop.py", "tools/research/src/research/vqueue_records.py",
-           "tools/research/src/research/landing.py", "tools/research/src/research/queue.py",
-           "tools/verity/cli/verity_cli/__init__.py",
-           *sorted(str(f.relative_to(ROOT)) for f in (ROOT / "tools/verity/graph/verity_graph/runners").glob("lean_*.py"))]
-ALLOW = re.compile(r"(?<![\w-])--allow(?![\w-])")
-
-
-def test_no_caller_in_the_check_the_merge_queue_or_the_preflight_names_allow():
-    """Allowances come from a lane's command line alone. The Lean check, the merge queue's loop and its Lean tasks, and the
-    ready mark's preflight never pass `--allow`: none of their sources so much as names the option, in a command they
-    build or one they tell a lane to run (the records gate's)."""
-    assert len(CALLERS) > 8 and all((ROOT / f).is_file() for f in CALLERS), CALLERS
-    named = {f: [n for n, line in enumerate((ROOT / f).read_text().splitlines(), 1) if ALLOW.search(line)] for f in CALLERS}
-    assert not {f: ns for f, ns in named.items() if ns}, "these name --allow, which only a lane gives --records by hand"
-    assert ALLOW.search("lean_changed.py --records P --allow x:y") and not ALLOW.search("git commit --allow-empty")
