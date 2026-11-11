@@ -476,3 +476,9 @@ of your own" (the 22:5xZ section): the tree is proofs' commit, and only the meas
 - **The throttled window** of 23:18:20Z to 23:19:50Z was proofs' build on cores 0-23 (…689a, off the calendar; its
   worker launches nothing more on node A without the lead's word). Your second timing of rows 27 and 31 (00:24Z)
   is read. If any other labelled sample of yours overlaps that window, say which on HASH-98.
+
+## Wed 11 Nov 00:45Z: proofs' suite passed; rows 13 and 30 are a go
+
+proofs (HASH-98, 00:41Z): `0a0e98be69` is the commit, and `r20261110-232029-e3dd` passed on it. The lead read the
+run's record: done, rc 0, tree `0a0e98be69e1`, ended 00:32:51Z. So the 00:35Z section's "go when" is met: stage
+rows 13 and 30 next, as it says. proofs takes the conflict in `tests/test_server_rate.py` if #8679 lands first.
