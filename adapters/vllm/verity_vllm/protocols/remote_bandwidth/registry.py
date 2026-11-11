@@ -165,9 +165,10 @@ class KindReceipt:
 @dataclass(frozen=True)
 class RemoteBandwidthReceipt:
     """The PoUB driver's receipt (`rb.Receipter`): ``SHA512(Z(D ‖ frame(seed)) ‖ u64be j ‖ E_j ⊕
-    spread(z))`` of a 4 KiB block, bound to the output ``z`` of the tile before its read."""
+    spread(z))`` of a 4 KiB block, bound to the output ``z`` of the tile before its read.  Its name is the driver's
+    domain ``D`` (`rb.RECEIPT_DOMAIN`, without its NUL)."""
 
-    name: str = "verity/remote-bandwidth/receipt/v0"
+    name: str = rb.RECEIPT_DOMAIN[:-1].decode()
     receipt_bytes: int = rb.DIGEST_BYTES
     binds: tuple[str, ...] = ("z",)
 
