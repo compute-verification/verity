@@ -34719,3 +34719,184 @@ research run --on vy-nebius-cpu-4 --project verity --source . --pool proofs --as
 **Two tool defects, as friction notes** [run]. `proofs/20261110T2353Z-friction-siblings-stale-olean-base` (recurs). `proofs/20261110T2353Z-friction-lean-build-after-try-recompiles`: step 2 began with "4 module(s) half-written by an earlier build, rebuilt" and compiled 1,877 modules again that step 1 had just built, 39 minutes of the slot for 19 modules of work.
 
 **Next.** The records run's printout, here and on the PR. Then NET-313's reading, due Wed 20:00Z.
+
+## PRF-520 TRUSTREAD, Tue 10 Nov 23:59Z: the draft's three rows hold in outline, with corrections: SPOT's deployed guarantee rests on record custody, so a link is assumed; the deployed recursion takes neither `FirewallComputes` nor `ZkServerOwnUser` and needs no one-way link; note a hides the operating system's process isolation; the most useful fact the model can't say is a budget on the developer's SHA-512 calls
+
+**In brief, for PRF-520.** The rows hold in outline. Corrections:
+- SPOT's deployed guarantee doesn't read the three challenger premises. It rests on record custody, a premise about the path from the challenger to the verifier, so "no link is assumed" doesn't hold.
+- The deployed recursion takes neither `FirewallComputes` nor `ZkServerOwnUser`. It needs no one-way link, and it has one open premise on the workers.
+- Note a hides an assumption: process isolation by the operating system of a developer machine.
+- `Site.Owner.prover`: no objection. SPOT's window field `"prover"` is a second use on the wire.
+- The fact the model can't say: the developer's SHA-512 call budget, which every soundness bound reads.
+
+**What I read.**
+- The draft is `note:vllm/20261110T2230Z-draft-devices-links-trust`, read in full from `~/.research/notes`.
+  - `research notes` re-cloned that repository; a `git pull` afterwards failed with "Repository not found".
+  - The clone's file is unchanged from notes commit `3d5aa87fb9`.
+- Every [read] is at `origin/main` `2b869ed35d`. "The lock" is `Security/lean-audit.json`.
+- Nothing on `main` changes. Where the draft would change a premise, I say so and stop.
+
+**1. Our rows in section 3**
+- **Flock, one proof: right on devices, programs and links. Three corrections.**
+  - Right [read]:
+    - Soundness holds for every prover (`Claims.KS`, `Security/Definitions/Core/Interaction.lean:383-388`).
+    - Zero knowledge holds against every verifier (`Claims.ZKmalR`, `:464`).
+    - Neither statement has a link in it.
+  - The bound isn't "whatever program" alone. KS adds the probability that a finder `B` finds a SHA-512 collision; `B` runs the prover twice, and its cost is both runs' SHA-512 calls, both parties' [read: `Interaction.lean:330-342`, `:386-388`]. More in answer 6.
+  - The coins: the deployed `--zk` verifier sends a commitment to every coin at Hello, before that coin's round [read: `Claims.trustedBase`, `Interaction.lean:362-364`].
+    - The draft's coin rule ("no other device knows it until its own device sends it") has to allow that.
+    - The commitment's hiding is a fact about SHA-512, not about a source.
+  - The "Lean today" column: neither deployed name belongs to this row, and no deployed guarantee is Flock's one proof alone [read: the lock's `deployed`, `:3386`].
+    - `DeltaPubDeployed` is arithmetic: the sampled bound `SampledKSLivePub` is below 1 for a prover of at most 2^80 time per run. It names no device [read: `Security/Proofs/Flock/Bridge/PublicDeployed.lean:247-258`]. It belongs to SPOT.
+    - `SessionLoopZKDeployed` is "Flock's zero knowledge at the session loop's own frames", the ZK server's loop [read: `Security/Proofs/Flock/SessionLoop/Statement.lean:461-472`]. It belongs to the recursion's row.
+- **SPOT: wrong on links, and its "Lean today" isn't what the deployed guarantee reads.**
+  - `SampledKSLiveV5` doesn't read `ChallengerLogsCoins`, `FlipsAfterRecorded` or `VerifierReadsLog` [read: lock `:15466-15479`]. It takes:
+    - SHA-512 collision resistance, in two forms;
+    - `UniformRandomBytes`, "the verifier server's uniform randomness: the bytes read from the operating system";
+    - one open premise, `RecordCustodyZKJPLaw`.
+  - Only `SampleAfterRecorded`, which isn't deployed, reads the three [read: lock `:25597`, `:3386`].
+  - "No link is assumed" fails for `SampledKSLiveV5`. `RecordCustodyZKJPLaw` assumes two things [read: `Security/Proofs/Flock/Soundness/Assumptions/ZkP.lean:36-50`]:
+    - the record `verify --zk` reads, with its sample, proofs, link points, roots and rounds, is "the one the challenger wrote for the live session";
+    - its sample file is the one `flock-verify draw` printed.
+  - So it depends on whether the challenger and the verifier are one device:
+    - As two devices, the path between them must deliver the record unaltered, and none of the draft's four link properties says that.
+    - The lock files custody under "the honest verifier server", as if they were one device [read: trust.base `:3371`]. The row names two.
+    - Which it is changes what SPOT rests on, so I stop there.
+  - The code does more than the Lean uses. The challenger signs its coin commitment with its LMS key, and the verifier reads the record from the challenger's own file and checks that signature [read: `verity/core/service/spot/Spot/ChallengerRecord.lean:4-16`].
+    - A signature on the coin commitment alone wouldn't stand in for custody, which covers the whole record [guess].
+  - `DeltaPubDeployed` belongs here, and the bound should name the developer's SHA-512 calls per run (answer 6).
+- **The recursion with the ZK server: right on soundness. On zero knowledge, one correction to "the ZK server alone" and four more.**
+  - Soundness is right. None of `RecursiveKSDeployed`'s open premises is about the workers or the ZK server [read: lock `:14966`, trust_gap `:3428`]:
+    - `Claims.Flock.ListWithin`, a list-decoding bound (`Security/Definitions/Claims.lean:198`);
+    - `Claims.Hm96Hiding`, a hiding gap (`Security/Definitions/Core/Hm96.lean:37`);
+    - `RecDeploy.DenseAt`, a condition on the statement's form.
+  - "For zero knowledge, the ZK server alone" is nearly right.
+    - `RecursiveZKLoopAnySumDeployed` holds "with no premise on the inner worker" [read: `Security/Proofs/Flock/Recursive/LoopAny.lean:251`].
+    - But it keeps one open premise on the workers' values: `LoopSessions.Honest`, "the worker's values satisfy V*'s circuits wherever the inner session finished" [read: `LoopAny.lean:268`, `Security/Proofs/Flock/Recursive/Loop.lean:309-313`, lock `:15087`].
+    - `SessionLoopZKDeployed` takes `LiveRoundEq`, open: the worker's rounds, as the frame releases them, are the switched prover's messages [read: `Security/Proofs/Flock/Claims/ZK/Refine.lean:974-978`, lock `:15678`]. So that deployed zero-knowledge guarantee also trusts the workers' program.
+  - "The link from the workers is one way" is wrong for the deployed guarantee. Its worker reads the ZK server's answers: what the ZK server sent the challenger, and the salts it drew [read: `Security/Proofs/Flock/Recursive/FirewallAdaptive.lean:8-11`, `:35-40`; `Security/Proofs/Flock/ZkAny/Relay.lean:15-16`].
+    - Zero knowledge holds anyway.
+    - The one-way link belongs to the README's reference deployment, a data diode, "Physically, none yet" [read: `verity/core/service/firewall/README.md:37-41`].
+    - It is also built into the shape of the undeployed `RecursiveZK`, whose messages `msgs a p` read no salt.
+    - Listing it would add a link the deployed proof doesn't take.
+  - "Fixed sizes at fixed times": the sizes yes, the times not in the deployed view.
+    - Sizes: the ZK server sends the schedule's transcript whatever the worker [read: `LoopAny.lean:275-277`].
+    - The deployed recursion's view has no times. It holds the auditor's tape, what the ZK server sent, whether the inner session finished, and V*'s views [read: `LoopAny.lean:260-261`].
+    - The session loop's model releases each message at a time set by its round alone [read: `ZkServer.timed`, `Security/Proofs/Flock/Claims/ZK/Server.lean:181-183`].
+    - The live path doesn't do that yet for the pace of rounds or the time of a cut [read: `README.md:74-78`].
+  - "Its own coins": the deployed forms take three things, each "trusted for the zero-knowledge guarantees only" [read: trust.extra `:3373-3384`]:
+    - the ZK server host's operating-system randomness (`Claims.ZKServer.Loop.Src`);
+    - two hiding facts about SHA-512 and hm96's pinned key (`KeyedStreamsUniform`, `HashDerivedKeyHm96`).
+  - The ZK server's salts aren't hidden from the workers, which read them (above).
+  - The "Lean today" column: `FirewallComputes` and `ZkServerOwnUser` are premises of neither `RecursiveZK` nor either deployed recursion guarantee (answer 2).
+
+**2. The ZK server as the draft describes it: right that it is trusted for zero knowledge only. Otherwise the draft assumes more than these three premises in one place and less in others.**
+- **What each one takes** [read]:
+  - `RecursiveZK` takes one premise, `OuterViewZK`: the outer session is zero knowledge [lock `:15028-15037`; `Security/Proofs/Flock/Recursive/Statements.lean:292-298`].
+    - The ZK server's behaviour is part of the statement, not an assumption. It sends `firewallLeaf (msgs a p i) (y i)`, each under a fresh uniform salt.
+    - The auditor's whole view is its tape, those commitments and the outer session's view (`recView`, `:249-256`; docstring `:264-273`).
+  - `FirewallComputes`: each value the ZK server reports fixing by its own computation is the specified one [`verity/core/service/flock/Flock/Firewall/Assumptions.lean:23-27`].
+    - Those values are its recheck commitment, its opening, and the values it computes from its pads.
+    - It is an open premise of `Flock.Firewall.Contract.holds_computed` and nothing else [`verity/core/service/flock/lean-audit.json:464`, open `:109`]. Its docstring says "no soundness statement reads it", and the locks agree.
+  - `ZkServerOwnUser`: the serving stack, as a function of the ZK server's salt key, is the same under every key, so nothing the stack runs reads the key [`Security/Definitions/Core/Assumptions/ZkServer.lean:16-22`].
+    - It is open, under LEAN-186, due 2026-11-30 [lock `:3262`].
+    - It is a premise of three bounds, each a zero-knowledge or leakage bound: `RegisteredLeakage`, `RegisteredStreamLeakage` and `SampledAuditAnyDeployed` [lock `:25406`, `:25496`, `:15339`; `Security/Definitions/Core/Guarantees/ValueSalts.lean:44-48`; `Security/Proofs/Flock/SessionLoop/SampledAudit.lean:108`, `:130`].
+- **"Trusted in the zero-knowledge guarantee only": right.** No soundness guarantee takes any of the three, or any of trust.extra's ZK-server entries [read: the records above; `RecursiveKSDeployed` `:14966`].
+- **"Runs its program": right, and mostly not a premise.**
+  - In both recursion statements the ZK server's program is the model itself: `firewallLeaf` in one, `Flock.Firewall.liveWith` modelled by `adaptOut` in the other [read: `Statements.lean:264-268`, `LoopAny.lean:251-256`].
+  - `FirewallComputes` covers the part the contract doesn't recheck.
+- **"Sealed": more than the Lean assumes.**
+  - `ZkServerOwnUser` is one consequence of sealing: the stack doesn't read one key.
+  - It says nothing about writes into the ZK server, its other state, or other paths out, and the recursion doesn't take it.
+  - Reading it as "sealed" would widen a premise. I stop there.
+- **"Separates the workers from the auditor": not a premise anywhere.**
+  - It is how each statement defines the auditor's view: the tape, what the ZK server sent, and the outer sessions [read: `Statements.lean:249-256`, `LoopAny.lean:260-261`].
+  - Stating it as "no other link" would add a listed premise to the zero-knowledge guarantees. I stop there.
+  - Separation isn't silence. The workers' choice of where to stop crosses the ZK server, at most `log₂(1 + Σ_p (M_p + 1))` bits [read: `LoopAny.lean:290-296`; `README.md:109-113`].
+- **"Verifier to the workers": the code's intent, but the Lean takes it as premises.**
+  - The contract "checks every commitment, pad and coin itself" [read: `Firewall/Assumptions.lean:4`].
+  - The deployed recursion takes the workers' values as the open premise `LoopSessions.Honest`, rather than deriving them from those checks.
+  - `SampledAuditAnyDeployed` takes `TrustsStop` as a premise, including that `Finish` goes on only where the workers' rows hold [read: `Security/Proofs/Flock/SessionLoop/ZkAny.lean:112-120`, lock `:15339`].
+- **"Prover to the auditor's verifier": right.** The ZK server "proves with Π_out, with randomness of its own" [read: `README.md:104-106`].
+- **Where the draft assumes less than the Lean.** The zero-knowledge guarantees also take [read: trust.extra `:3373-3384`, trust_gap `:3429-3440`]:
+  - the ZK server's operating-system randomness;
+  - two hiding facts about SHA-512;
+  - open premises on the workers, on the release (`ReleaseReadsNoStop`), on the tables (`SwCausalOn`) and on V*'s statements (`Sized`).
+
+**3. Note a hides an assumption.**
+- By the draft's own rule, devices joined by a path with no named device on it count as one device (section 1).
+  - So two devices on one machine stay two only if the machine keeps them apart. Its operating system has to run its program (process isolation), and the machine has to offer no other path between them.
+  - That gives assumptions 1 and 2 to developer hardware other than the ZK server, which section 1 limits to "3 at most".
+- The README says the same about today: the premises "rest on the ZK server's code and the operating system's process isolation instead" [read: `README.md:115-120`].
+- `ZkServerOwnUser` names one consequence of that isolation, that the stack can't read the salt key, and only in the guarantees that take it. `RecursiveZK` and the deployed recursion take nothing about sharing a machine (answer 2). It leaves out [read: README]:
+  - worker processes changing the ZK server's code or state. Today Rust and Python run beside it (`:58-63`);
+  - other paths out of the shared machine (`:55-57`, "None yet physically");
+  - timing. Another tenant's load can move the ZK server's release times, which is why the README gives it cores of its own (`:47-54`). `trusted-host` states CPU isolation for auditor devices only [read: `Security/Definitions/Core/Assumptions.lean:48-50`];
+  - the limits of A3: `UniformRandomBytesTest` doesn't cover a VM restored more than once (`README.md:49-51`).
+- The second sentence of note a, a challenger on the network certifier's machine, is a different case.
+  - Both are auditor devices, and the Lean calls that "the same device as another auditor device" [read: `Security/Definitions/Core/Challenger.lean:7-8`]. Nothing has to be kept apart.
+  - The ZK server case puts a device trusted for zero knowledge next to devices trusted for nothing, so the separation itself carries trust.
+- Naming the machine and its isolation as a premise would change what the zero-knowledge guarantees rest on. I stop there.
+
+**4. The challenger's three premises: two reduce, under conditions; the third needs custody of the record.**
+- **`ChallengerLogsCoins` reduces** to "the challenger runs its program" (log every coin it releases, in order) plus the coin source (each coin is its own flip).
+  - It states that the coins the log shows released are a prefix of the flips, in order [read: `Security/Definitions/Core/Assumptions/Challenger.lean:31-34`].
+- **`FlipsAfterRecorded` reduces only with two more things.**
+  - It states that the log before coin `i`, which holds the prover's commitments, is the same on any two runs whose flips agree before `i` [read: `:36-40`; one prover strategy per run, `:9-11`].
+  - It needs the challenger sealed (assumption 2). Otherwise coin `i` can be read from the challenger's state before release, yet SPOT's row gives the challenger only "runs their program".
+  - It needs one run per statement: the host never restores the challenger's state.
+    - `trusted-host`'s docstring says a statement about one run can't name this [read: `Security/Definitions/Core/Assumptions.lean:44-56`].
+    - It reduces to "runs its program" only if a device's transcript runs across its restarts. The draft should say so.
+- **`VerifierReadsLog` reduces** to the verifier's program only where the log reaches the verifier as the challenger wrote it [read: `Challenger.lean:42-45`].
+  - In the deployed SPOT guarantee that is the open premise `RecordCustodyZKJPLaw` (answer 1), not derived from the signature.
+- **Where the lock has them today.**
+  - All three are in trust.base as "the honest verifier server's log and flip order" [read: `:3367-3369`].
+  - Only the undeployed `SampleAfterRecorded` reads them [read: `:25597`].
+  - The draft's section 6 change to the trust base is Daniel's call. I stop there.
+- **Outside the three.** Two kinds of seed are hashed from a coin: PoUW's noise seeds and the bandwidth audit's pass seeds.
+  - A program computes them from a coin, so they aren't a source in the draft's sense ("a value that no program computes").
+  - Their unpredictability is a SHA-512 property, with a grinding term [read: `Security/Definitions/Core/Challenger.lean:22-30`; AGENTS.md, "Live coins only"].
+
+**5. `Site.Owner.prover`: no objection from the Lean on meaning. Two costs on the wire, one of which the draft misses.**
+- **Where it is read** [read]:
+  - It is declared at `Security/Definitions/Core/Site.lean:122-126`, and `:153` makes it the default owner.
+  - It is read by the registration check `Owners` and its refusal `owner` [`:464-468`, `:502`]. `Owners` says an auditor-kind location is the auditor's, with its key, and every other new location is the prover's.
+  - The code's copy and its JSON:
+    - `verity/core/protocols/interface/CoreProtocol/Site.lean:73`, `:165`, `:367-369`, `:544-545`, `:578`, `:651`;
+    - Python, `verity/core/site/__init__.py:61`, `:283`, `:657-660`.
+  - The spec–code maps `owner` and `ofOwner` read it [`Security/Properties/Core/Site.lean:64-71`]. Through them the `Properties.Site.*` records in `Security/Properties/lean-audit.json` do too, and none of those is deployed.
+  - No guarantee's premise names it. The lock records only its digest, under the `reads` entry for `Definitions.Core.Site` [`Security/lean-audit.json:34102`].
+- **The costs.**
+  - Each location's JSON holds the string `"prover"`, and an entry's digest is SHA-512 of that JSON under `verity/registration/site/v1` [read: `CoreProtocol/Site.lean:20-21`, `:578`, `:595-597`]. Keep the string or bump the tag, as the draft says.
+  - SPOT's window has its own field `"prover"`, "the identity it registered the prover under" [read: `verity/core/service/spot/Spot/OneStage.lean:25-26`, `Spot/Registration.lean:30-31`, `:531-533`].
+    - It is bound into the window salt and checked as `R6-prover`.
+    - It uses "prover" in the same party sense and is also on the wire. The draft doesn't list it.
+  - The lock's prose and `Claims.trustedBase` use "prover" as a party: "a host the prover doesn't control" [read: lock `:3370`; `Interaction.lean:367-368`].
+- **It is already the rule.** The Glossary retires "prover" for the party and keeps it for the proving side [read: `GLOSSARY.md:252`]. `Claims.Prover` and KS's "every prover" are the role, and they stay.
+
+**6. Facts the model can't say**
+- **The Lean keeps its own list.** `Claims.trustedBase` is "what the claims rest on that no Lean statement here can say" [read: `Interaction.lean:360-369`]. Its four items, against the model:
+  - the Lean compiler and runtime: the model can say this, as "runs its program";
+  - the live coins, "except the commitment to every coin that the --zk verifier sends at Hello": the coin rule as written can't (answer 1);
+  - the decoder's count, "the deployed decoder's step count is the cost of running it": this is a cost model of a program, not a device, a link or a source;
+  - `trusted-host`, including "the host never restores its earlier state": the model can say this only if a transcript spans restarts (answer 4).
+- **The most useful: a budget on the developer's SHA-512 calls.** Every soundness bound reads one, so "whatever programs the other devices run, a bound holds" is false without it:
+  - KS's term is the collision probability of `B`, which runs the prover twice. Its cost includes "the prover's own [calls], which the reader computes from the prover's time" [read: `Interaction.lean:330-352`].
+  - `DeltaPubDeployed` holds only for a prover of at most 2^80 time per run [read: `PublicDeployed.lean:247-258`].
+  - The trust base's collision resistance is a fact about SHA-512 at a finder's cost, not about any device [read: trust.base `:3361-3364`].
+  - The budget is a total per run, not assumption 3's limit per tick, and section 1 allows the developer's hardware data-sheet limits "only in accounting".
+  - The shape would need "whatever programs make at most q hash calls", or a bound that reads q. That changes the shape every guarantee is stated in, so it is Daniel's call.
+- **Rewinding.**
+  - KS's extractor reruns the prover "at the judged run's tape" [read: `Interaction.lean:214-219`, `:383-388`].
+  - The zero-knowledge simulator rewinds V*: the `Fork … .Pr` term in `SessionLoopZKDeployed`'s bound [read: `SessionLoop/Statement.lean:525`].
+  - No device makes either rerun. The model can say it only by reading "the other devices run programs" as "what they do is a function of what they received and their own coins" (`Claims.Prover`, `Interaction.lean:101-103`). That is worth one sentence in the draft.
+- **How much crosses a separating device.** "Separate" is a statement about paths, but the bounds count the bits that cross the separator:
+  - the workers' choice of where to stop, `log₂(1 + Σ_p (M_p + 1))` bits [read: `LoopAny.lean:290-296`];
+  - a registration's choice among `m` sessions, `log₂ m` bits [read: `Security/Definitions/Core/Guarantees/ValueSalts.lean:8-14`];
+  - PoUW's grinding, μ^m a try [read: AGENTS.md].
+  - None of the model's nouns carries that number.
+- **The one-at-a-time rule: the model can say it.**
+  - The relay reads the worker's requests one at a time and lets out only the next slot's request. It sends nothing after a stop, and passes on a round's coins only once that round's check passes [read: `Relay.lean:8-27`; `verity/core/service/flock/Flock/Firewall/Coins.lean:169-170`].
+  - The verifier opens exactly one session per part [read: `verity/core/service/flock/FlockVerify.lean:1880`].
+  - These are programs, so "runs its program" covers them. What they buy is the count in the previous item.
+- **The live-coin order: the model can say it** with its coin rule, except for the commitment sent at Hello.
