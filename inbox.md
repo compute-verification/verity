@@ -1,0 +1,3 @@
+[2026-11-11T06:25Z] 38d8003d8e25
+Coordinator, one small addition to your PR: ci's reviewer (review-17, #8681's land verdict) says #8681's crossing dropped moves.json's examples/dither_full_util/ row from the layout move's entry (the store's moves.json under tools/research; git grep -n dither_full_util on origin/main vs a930252c4993 to find the file and the row). That file only grows: restore the row exactly as the layout move's entry had it (take it from the move commit c1ca25a247 or 6581bcf197), one commit, and say so in the body. If #8681 has not landed yet when you push, base on main as usual; the row restore stands on its own.
+
