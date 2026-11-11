@@ -59,9 +59,15 @@ SKETCH_OUTSIDE = 2 ** 20
 """F, the outside-compute factor: the SHA-512 compressions a prover makes over a session are at most F times the node's
 own over its span, Q = F·C (`sketch_failure`'s `outside`).  Grinding a sketch-sha512 key reads no block, so it can run
 on any hardware the prover reaches, not only the node's GPUs: 2^20 nodes' SHA-512, about 8.4M RTX PRO 6000s, past any
-one operator's fleet.  At 16 rows it costs a session's line 0.4 bits of error (2^-29.95 to 2^-29.55 at 2118 passes),
-since AuditRO's 2^-41 a pass dominates it; 64 rows would bring δs under 2^-50 at τ 1.226 a pass on the reader, the
-option if that slack is ever cut.  Provisional, under the sketch's random-oracle assumption."""
+one operator's fleet.  What it costs the memory line, at 16 rows and a session of 2,118 one-pass windows over
+97,517,568 blocks in 226.9 s, 48 openings a window: `ledger.delta_parts` returns δs = 2^-31.59 at F = 2^20 and 2^-51.59
+at F = 1, beside the windows' profile δ 2^-40.00, the sample's rejection 2^-47.37, AuditRO's slack 2^-55.95 (2^-67 a
+pass, `audit.SLACK_LOG2`), the coin commitment's hiding 2^-179.95 (for all but a 2^-64 fraction of keys) and the
+receipts' binding 2^-164.86 (2^-184.86 at F = 1).  Their sum, `ledger.memory`'s `Line.delta`, is 2^-31.59 at F = 2^20,
+where δs is its largest part, and 2^-39.99 at F = 1, where the profile δ is, so F = 2^20 costs that line 8.40 bits.
+64 rows bring δs there to 2^-129.94 at F = 2^20 (`sketch_failure` at `rows=64`), at the pass cost `PROTOCOL.md` §4
+states under "The rows".  `tests/test_sketch_reading.py` holds each of these numbers to the function named beside it.
+F = 2^20 is provisional, under the sketch's random-oracle assumption."""
 GPU_READ_BYTES_PER_S = 1.539e12
 """One RTX PRO 6000's measured HBM read rate: the fastest bare read of an encoded store measured on it, 1,539.26 GB/s
 in an honest session's prover, rounded down.  The word codec's 1.488e12 is a slower kernel's."""
