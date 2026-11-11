@@ -8,8 +8,13 @@ directory's: a rerun checks only the targets whose reads changed.  circuit-check
 
 A pass is circuit-check's exit 0; a fail its exit 1 (a target's failure), its refusal of a name no catalog binding has
 (`NO_BINDING`) or the catalog task's marker that it made no slice of that name (`absent`); anything else is an error: another
-refusal (a slice not of this tree), a kill, no report.  `detail`: the binding's targets, how many passed, failed and were
-reused, and the failures' names, as the report's summary names them (``failure_names``, `circuit_check.checks.summarize`'s).
+refusal (a slice not of this tree), a kill, no report, a report with no read set.  What the run read is what its own report
+says (``reads``, `circuit_check.cli._read_sets`), and what of it the task's key doesn't hold are its undeclared reads
+(`undeclared`), so the task is an error: a file of its binding's read set or the registries' outside the task's inputs, a
+path they probed or listed or a loaded module's outside the places its ``lookups`` covers (`covering`, of its var
+``places``), and a library git doesn't have (``untracked``).  `detail`: the binding's targets, how many passed, failed and
+were reused, the failures' names, as the report's summary names them (``failure_names``, `circuit_check.checks.summarize`'s),
+and its targets with no entry to take their reads from (``unrecorded``).
 Its one output is every failure of its Definition targets, each by its check, code and Definition (`FIELDS`).  `checker`,
 `pack` and `unpack` are the circuit-catalog and circuit-coverage runners' too."""
 from __future__ import annotations
@@ -21,6 +26,7 @@ import shutil
 import sys
 import tarfile
 import tempfile
+from collections.abc import Callable
 from pathlib import Path
 
 from .. import ROOT
@@ -36,6 +42,10 @@ TOP = "cache"
 NAMED = 100
 #: what the ``failures`` output keeps of a failure
 FIELDS = ("check", "code", "definition")
+#: how a module file's name ends, on any platform (each of `importlib.machinery.all_suffixes()` ends so)
+MODULE_SUFFIXES = (".py", ".pyw", ".pyc", ".pyd", ".so")
+#: how the pins file beside a sidecar's module is named, which a check looks for there
+PINS = ".circuit-check.json"
 
 
 def cache() -> Path:
@@ -107,6 +117,63 @@ def absent(name: str) -> dict:
 REFUSED = "circuit-check: refused: "
 
 
+def named(name: str) -> bool:
+    """Whether a lookup at a place of ``at`` (`covering`) can ask for the entry ``name`` there: a package's directory, a module
+    file or a sidecar's pins."""
+    return name.isidentifier() or (name.partition(".")[0].isidentifier() and name.endswith((*MODULE_SUFFIXES, PINS)))
+
+
+def package_init(name: str) -> bool:
+    """Whether ``name`` is the file that makes its directory a regular package."""
+    return name.partition(".")[0] == "__init__" and name.endswith(MODULE_SUFFIXES)
+
+
+def above(path: str) -> list[str]:
+    """The directories ``path`` is under, the root's aside."""
+    parts = path.split("/")
+    return ["/".join(parts[:i]) for i in range(1, len(parts))]
+
+
+def covering(places: dict) -> Callable[..., bool]:
+    """``covered(path, listing=False)``: whether a task whose var ``places`` is ``places`` (`families.circuit_binding.places`)
+    holds in its ``lookups`` what the tree answers a probe of ``path``, or with ``listing`` a listing of it: every path under a
+    place of ``under``; at a place of ``at``, each entry a lookup there can ask for by name (`named`) and each package
+    directory's ``__init__`` (`package_init`); the kind of each place of ``at`` and of each directory above a place.  A listing
+    is covered under ``under`` alone."""
+    under = set(places["under"])
+    prefixes = tuple(f"{u}/" for u in under)
+    at = set(places["at"])
+    kinds = at | {d for p in (*under, *at) for d in above(p)}
+
+    def covered(path: str, listing: bool = False) -> bool:
+        if path in under or path.startswith(prefixes):
+            return True
+        if listing:
+            return False
+        parent, _, name = path.rpartition("/")
+        grand, _, pkg = parent.rpartition("/")
+        return (path in kinds or (parent in at and named(name))
+                or (grand in at and pkg.isidentifier() and package_init(name)))
+    return covered
+
+
+def undeclared(rep: dict, name: str, task: dict) -> list[str] | None:
+    """What binding ``name``'s run read that ``task``'s key doesn't hold, as its report ``rep`` says (``reads``): each file of its
+    read set or the registries' outside the task's inputs, each path they probed or listed and each loaded module's outside
+    what its ``lookups`` covers (`covering`), and each library git doesn't have (``untracked``); None when the report holds no
+    read set of the binding."""
+    reads = rep.get("reads") or {}
+    if (own := (reads.get("bindings") or {}).get(name)) is None:
+        return None
+    inputs, covered = set(task["inputs"]), covering(json.loads(task["vars"]["places"]))
+    sets = (own, reads.get("registries") or {})
+    return sorted({p for s in sets for p in s.get("files", ()) if p not in inputs}
+                  | {p for s in sets for p in s.get("listed", ()) if not covered(p, listing=True)}
+                  | {p for s in sets for p in s.get("probes", ()) if not covered(p)}
+                  | {p for p in reads.get("loaded", ()) if not covered(p)}
+                  | set(own.get("untracked", ())))
+
+
 def run(task: dict, work: Path) -> dict:
     name, c = task["vars"]["binding"], cache()
     piece, shared = work / task["vars"]["slice"], work / task["vars"]["shared"]
@@ -122,6 +189,9 @@ def run(task: dict, work: Path) -> dict:
         return {"status": "error", "detail": {"error": f"circuit-check --binding exited {rc}"
                                               + ("" if rep is not None else " and wrote no report")
                                               + (f": {why[:500]}" if why else "")}}
+    if (beyond := undeclared(rep, name, task)) is None:
+        return {"status": "error", "detail": {"error": f"circuit-check --binding wrote a report with no read set of {name} "
+                                                       "(reads), so what it read is unknown"}}
     facts = sorted({tuple(f[k] for k in FIELDS) for t in rep["targets"] if t["kind"] == "definition"
                     for f in t.get("failures", [])})
     out = work / task["outputs"][0]["path"]
@@ -133,4 +203,9 @@ def run(task: dict, work: Path) -> dict:
               "reused": (rep.get("cache") or {}).get("hits", 0)}
     if named:
         detail["failures"] = sorted(named)[:NAMED]
-    return {"status": "fail" if rc else "pass", "detail": detail}
+    if unrecorded := (rep["reads"].get("incomplete") or {}).get(name):
+        detail["unrecorded"] = sorted(unrecorded)[:NAMED]
+    if beyond:
+        detail["error"] = (f"read {len(beyond)} path(s) its key doesn't hold: a file outside its inputs, a lookup where its "
+                           "lookups digest doesn't look, or a library git doesn't have")
+    return {"status": "fail" if rc else "pass", "detail": detail, "undeclared_reads": beyond}

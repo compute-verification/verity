@@ -251,6 +251,8 @@ def test_pass_record_passes_in_both_and_names_its_scope():
     assert ok is True and out == V.PASS
     by = {c.name: c for c in checks}
     assert by["local_replay/sampled_replay"].scope["sample_size"] == 407 and by["local_replay/sampled_replay"].inputs["sample_seed"] == SEED_ROOT
+    seed_rule = by["local_replay/seed_of_record"]                 # the run root alone, no coin: recomputed, a measurement, not graded
+    assert seed_rule.outcome == V.NOT_RUN and "not graded" in seed_rule.notes[0] and seed_rule.inputs["sample_seed"] == SEED_ROOT
     assert by["runtime_match/openings"].scope["sample_size"] == 64 and by["runtime_match/openings"].scope["verified"] == 64
     assert by["checkpoint_binding/weights_of_record"].scope["compared"] == 163
     assert by["program_source_identity/identity_layout"].scope["steps_checked"] == 4
