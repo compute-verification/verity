@@ -18,6 +18,10 @@ TREES = ("verity/core/service/flock/", "verity/core/service/spot/", "Security/Pr
 ALLOWED = {
     "verity/core/service/flock/Flock/JsonParse.lean": "the total parser, whose docstring names the source it mirrors",
     "verity/core/service/flock/Flock/Test/JsonParse.lean": "the test holding the total parser to Lean.Json.parse",
+    "verity/core/service/flock/Flock/RecCompose.lean": "`runOf`, the reader of the challenger's run record (`--rec-run`), "
+                                                       "calls Lean.Json.parse; no proof reads it",
+    "verity/core/service/flock/Flock/RecLinksCmd.lean": "the `flock-rec-links` command, whose verdicts no proof reads",
+    "verity/core/service/flock/Flock/Test/RecCompose.lean": "a test of rec-compose's verdicts, which no proof reads",
 }
 #: (file, declaration) still calling `Lean.Json.parse`, each with the switch that deletes its entry. An entry whose file
 #: is in the tree names a declaration that still calls it; one whose file isn't yet arrives with that file.
