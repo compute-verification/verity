@@ -57937,3 +57937,20 @@ For the table: node A, four of five dependencies on `main`; #8454 marked and wai
 
 For BREAKEVEN: `SparseMlaHeadBlock_v2` NVIS 64 `FIRST=false`, no walk at all (a floor, not a served figure; `FC_SALTS_KEYED=all FC_UNIT_REUSE=1` on `aa23d1312dce`), vy-dc-h200-3, six cores: 1.8010 s a statement at one prover, 1.3456 s at two; today's binary in the same run 3.4485 s and 3.0375 s (measured, `r20261111-135122-c736`).
 For the table: head block today 3.04 s, with every cut built tonight 2.14 s (`5832`), with no walk at all 1.35 s as a floor (two provers, six cores, vy-dc-h200-3, measured, `c736`); not node A's ten cores and not four provers.
+
+## TWOWITNESS, Wed 11 Nov 14:59Z: ready to mark #8990 at d45dcd2edcb8a9e5c9e0c23496a75eff7f893b32, review-23's follow-up (one `RegTwo.blockAt_cell`, TwoCode's)
+
+ready to mark #8990 at d45dcd2edcb8a9e5c9e0c23496a75eff7f893b32: quick tier `r20261111-144305-af35` (`--changed 8201dacff26e --quick`), 4 of 4 suites passed, none cached, 0 failed, with the 2 skips in `verity/definitions/ops` of every quick tier tonight [run]; records `r20261111-141005-f2fb`, `security/Proofs`, `security` and `security/Properties` each check.py exit 0 with `regenerated: {}` in all three audits [run]; the root build on the merged tree, `r20261111-140824-01b6`, `lake build +Proofs.Flock`, 12,396 jobs, exit 0 in 2255 s, nothing failed or skipped, no warning in `SecondStrata.lean` or `TwoCode.lean` [run].
+
+- **Which of the two:** its own PR on #8919's head `eb4dde919628`, not a new head of #8919, because #8919's records run `84cc` had passed and nothing at #8919 had to run again [read: mailbox 13:48Z; run: `84cc`]. #8919 is marked now [run: queue at 15:00Z].
+- **The change:** `SecondStrata.lean` drops its copy of `SamplingDeploy.RegTwo.blockAt_cell`, and the two helpers only that copy read (`RegTwo.templateAt_cell`, `find?_range_eq`). It imports `Proofs.Flock.SamplingGeneric.TwoCode` privately instead [run: git diff]. That is 15 theorems to 12 and +1/−36 lines, and no statement left in the file changes [run: git diff]. The issue is PRF-533, whose attachments list #8889, #8892 and #8919 [read: PRF-533].
+- **The try** `r20261111-140453-033e` at the head: lean exit 0 in 78 s, no warning in the file, all 12 theorems on `propext`, `Classical.choice` and `Quot.sound`, with `TwoCode` built as the file's import [run]. Its sibling check covered 901 built modules and left 2,917 unbuilt in that cache unchecked [run]. A name scan covers the rest: in the merged tree no other file under `security/` or `verity/` declares any of the 12 names in any namespace, and `RegTwo.blockAt_cell` is declared once, at `TwoCode.lean:154` [run].
+- **The root's tree** `8efcb6bb6a`: `main` `203f23e0d6` with #8931 `2cc7decd36a6`, #8941 `b29929d015e4` (which holds #8912, #8922 and #8924), #8871 `2d4670d64165`, #8873 `676a777193e2`, #8939 `6b2922ce5b5e` and #8990's head, every merge clean [run]. Those are the marked heads not on `main` that change, under `security/`, an aggregator, `SecondStrata`, `TwoCode` or a file either imports directly [run].
+- **Who reads the dropped helpers:** of the 200 marked heads, only #8919, #8931 and #8941 hold #8919's head, and none of them names either helper [run].
+- **Newer `main`:** `1a59728741` merges cleanly with that tree, and since `203f23e0d6` it changes no `.lean`, Lake or toolchain file [run]. It does change `tools/verity/lean/` (`check.py`, `lean_audit.py`, `lean_changed.py`, `axiom_probe.py`), which the candidate's check runs and my runs at the head did not [run].
+- **For CAPS:** nothing. #8990 adds no file, and `SecondStrata`, a seeded module (+0), goes from 15 declarations to 12 [run: the axiom probe's count; read: CAPS, row 26].
+- **Not now:** review-20's 30 `draw` sites in `Refused.lean` wait for PRF-554 [read: mailbox 13:48Z].
+- **Left of mine:** #8990's mark. #8870, #8889, #8892 and #8919 are marked, and `Counts.lean` lands inside #8931 [run: queue at 15:00Z].
+
+For the table:
+- No figure moves: #8990 changes no statement, and the by-stratum count (`RegTwo.sum_checked_le_strata`) now reads `TwoCode`'s `blockAt_cell` instead of its own copy [run].
