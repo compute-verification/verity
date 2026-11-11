@@ -48,14 +48,14 @@ theorem lt_size_of_isSome_row? {kp : Spot.Bits.KeyProg} {g : ℕ} (h : (kp.row? 
   unfold Spot.Bits.KeyProg.size
   by_cases hg : g < kp.inputs
   · omega
-  · rw [if_neg hg] at h
+  · rw [ite_eq_right hg] at h
     obtain ⟨ab, hab⟩ := Option.isSome_iff_exists.1 h
     have hlt : g - kp.inputs < kp.rows.size := (Array.getElem?_eq_some_iff.1 hab).1
     omega
 
 theorem row?_of_lt_inputs {kp : Spot.Bits.KeyProg} {g : ℕ} (hg : g < kp.inputs) : kp.row? g = none := by
   unfold Spot.Bits.KeyProg.row?
-  exact if_pos hg
+  exact ite_eq_left hg
 
 /-- **An input gate's position is its index**: a key program's inputs come first, one lowered gate each. -/
 theorem posOf_of_lt_inputs (kp : Spot.Bits.KeyProg) {g : ℕ} (hg : g < kp.inputs) : Spot.Bits.posOf kp g = g := by
@@ -89,7 +89,7 @@ theorem bitsProg_row (kp : Spot.Bits.KeyProg) (κ : ℕ → Option Bool) {g : �
     simp only [Spot.Bits.lower, hr]
   have hs : Spot.Bits.gateSize kp g = 3 := by
     unfold Spot.Bits.gateSize
-    exact if_pos hg
+    exact ite_eq_left hg
   have h := Properties.Spot.SecurityProofs.bitsProg_gate kp κ (lt_size_of_isSome_row? hg)
   rw [hl, hs] at h
   exact h.trans rfl
@@ -106,7 +106,7 @@ theorem unitOf_first (kp : Spot.Bits.KeyProg) {u : ℕ} (hp : 0 < kp.perUnit)
     rw [h1, h2, h3]
     exact Bool.false_ne_true
   unfold Spot.Bits.unitOf
-  rw [if_neg hne, Nat.add_sub_cancel_left, Nat.mul_div_cancel _ hp]
+  rw [ite_eq_right hne, Nat.add_sub_cancel_left, Nat.mul_div_cancel _ hp]
 
 /-- A gate's position is among its unit's lowered gates. -/
 theorem bitsPosOf_mem_unitGates (kp : Spot.Bits.KeyProg) {g u : ℕ} (hg : g < kp.size)
@@ -125,7 +125,7 @@ theorem bitsPosOf_mem_unitGates (kp : Spot.Bits.KeyProg) {g u : ℕ} (hg : g < k
   refine List.mem_flatMap.2 ⟨g, List.mem_range.2 hg, ?_⟩
   show Spot.Bits.posOf kp g ∈ (if Spot.Bits.unitOf kp g == some u then
     (List.range (Spot.Bits.gateSize kp g)).map (Spot.Bits.off kp g + ·) else [])
-  rw [if_pos hb]
+  rw [ite_eq_left hb]
   exact hmem
 
 /-- **A unit's proof block holds a row's position**, where the unit has a row. -/
@@ -159,12 +159,12 @@ private theorem countP_lt_range {n t : ℕ} (ht : t ≤ n) : (List.range n).coun
     rw [List.range_succ, List.countP_append, List.countP_singleton]
     rcases Nat.lt_or_ge t (n + 1) with h | h
     · have hn : ¬ decide (n < t) = true := fun hd => absurd (of_decide_eq_true hd) (by omega)
-      rw [ih (by omega), if_neg hn, Nat.add_zero]
+      rw [ih (by omega), ite_eq_right hn, Nat.add_zero]
     · obtain rfl : t = n + 1 := by omega
       have hall : (List.range n).countP (fun m => decide (m < n + 1)) = (List.range n).length :=
         List.countP_eq_length.2 fun a ha => decide_eq_true (Nat.lt_succ_of_lt (List.mem_range.1 ha))
       have hn : decide (n < n + 1) = true := decide_eq_true (Nat.lt_succ_self n)
-      rw [hall, List.length_range, if_pos hn]
+      rw [hall, List.length_range, ite_eq_left hn]
 
 variable (ms : Spot.Bits.Members)
 
@@ -335,10 +335,7 @@ theorem mem_sourceBits {ms : Spot.Bits.Members} {x t : ℕ} {r : Spot.Bits.RowPo
   | none =>
     rw [hκ] at hgx
     have hgx' : (Spot.Bits.rowBit ms[m].1 ms[m].2.size g).map (fun r => (Spot.Bits.base ms m + g, m, r)) =
-        some (x, t, r) := by
-      first
-        | exact hgx
-        | simpa using hgx
+        some (x, t, r) := hgx
     obtain ⟨r', -, he⟩ := Option.map_eq_some_iff.1 hgx'
     have h1 : Spot.Bits.base ms m + g = x := congrArg Prod.fst he
     have h2 : m = t := congrArg (fun p => p.2.1) he
@@ -380,10 +377,7 @@ theorem mem_writtenBits {ms : Spot.Bits.Members} {y tw : ℕ} {r : Spot.Bits.Row
     | some r' =>
       rw [hr] at hx
       have he : (Spot.Bits.base ms m + Spot.Bits.posOf (Spot.Bits.keyProg ms[m].1 ms[m].2.size) a, m, r') =
-          (y, tw, r) := by
-        first
-          | exact Option.some.inj hx
-          | simpa using hx
+          (y, tw, r) := Option.some.inj hx
       have h1 : Spot.Bits.base ms m + Spot.Bits.posOf (Spot.Bits.keyProg ms[m].1 ms[m].2.size) a = y :=
         congrArg Prod.fst he
       have h2 : m = tw := congrArg (fun p => p.2.1) he
@@ -468,7 +462,9 @@ theorem rewires_wireMap (hfit : ∀ ci ∈ h.ms, Flock.Bridge.Members.MemberFits
     obtain ⟨ht, a, ha, he⟩ := mem_writtenBits hw
     obtain ⟨⟨ws, hand⟩, -, -⟩ := Flock.Bridge.Members.bitsProgs_written h.ms htop ht ha
     rw [he, hand]
-    exact ⟨fun hne => by cases hne, fun c hne => by cases hne⟩
+    refine ⟨fun hne => ?_, fun c hne => ?_⟩
+    · cases hne
+    · cases hne
   · intro i hi
     obtain ⟨t, r, tw, wport, u, -, -, hw⟩ := hmoved i hi
     obtain ⟨ht, a, ha, he⟩ := mem_writtenBits hw
