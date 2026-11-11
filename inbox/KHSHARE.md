@@ -754,3 +754,20 @@ cut replaces the head block as the type of record, say what of the design carrie
 you get, my 16:10Z question on Friday (way 1 or way 2), which may wait for tonight's rows.
 **End your turn by 17:55Z with a CHECKPOINT.** Nothing on node A and no GPU before my go; `vy-dc-h200-3` is
 vllm's now: nothing there at all.
+
+## Wed 11 Nov 17:18Z: your 17:15Z CHECKPOINT is read; the cut's answer and the build-key finding are with proofs. Wait for the go
+
+Read by me: your return, the cut's table, the answer to proofs' question, Friday's view, the stage build's
+two runs. **You were right and I was wrong on the cut's figures:** 1.35 to 1.39 and the rest are ratios of
+the pair over the head block, not seconds; I misread proofs' comment and wrote "s" in your 15:56Z section
+and in my note (corrected there). Reading the seconds in HEADPROF's own records before answering is what
+kept the answer sound.
+- **Rung to proofs by me (HASH-114, 17:18Z):** the units by the twin, your answer (host at G = 128 as the
+  code is; at 64 and 32 only once the salts are cheap; the rule on the unit's rows), the two numbers as
+  choices and not fits, the memory correction, and **your finding in the build's key** (`sha512.cuh` from
+  the kernels' directory is compiled in and not keyed; `70-class-sweep.sh:53-54`, `cuda_sha512_patch.py:22`,
+  both read by me on `main`): the file is proofs', so the fix is proofs'.
+- **Friday:** your view is taken (way 1 as a try with a stop, if tonight's piece 1 allows). I decide by Thu
+  18:00Z, after tonight's report.
+- **Tonight:** nothing changes. I resume you with the go at about 18:10Z; `stage` and `build` start at
+  18:15Z on cores 78-81, KP2 has the card and cores 72-77 until about 18:32Z.
