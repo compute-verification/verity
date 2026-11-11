@@ -173,7 +173,10 @@ inputs = ["verity/__init__.py", "verity/settings.py", "verity/errors.py", "verit
           "verity/protocols/certifier/prover/compile_slice_v7.circuit-check.py",
           "verity/protocols/certifier/prover/compile_slice_v7.circuit-check.json",
           "verity/protocols/certifier/verifier/served_rows.py", "verity/protocols/certifier/verifier/warden.py",
-          "verity/protocols/certifier/verifier/release.py"]
+          "verity/protocols/certifier/verifier/release.py",
+          "verity/hardware/__init__.py", "verity/protocols/__init__.py", "verity/protocols/certifier/__init__.py", "verity/protocols/pouw/__init__.py", "verity/protocols/spot/__init__.py", "verity/protocols/spot/device/__init__.py",
+          "verity/protocols/poub/__init__.py", "verity/protocols/poub/verifier/__init__.py", "verity/protocols/poub/verifier/commitments",
+          "adapters/vllm/tests/__init__.py", "verity/protocols/pous/__init__.py", "adapters/vllm/tests/check/__init__.py"]
 
 # What these test files read that their source doesn't name (a tree a test walks, a module it loads by a name it computes,
 # what a program it starts reads): the graph's test-file tasks are keyed on it.
@@ -184,7 +187,7 @@ paths = [
     "benchmarks/numerical/python/verity_numerical/bench",
     "verity/protocols/certifier",
     "verity/protocols/pous",
-    "verity/ml",
+    "verity/circuits", "verity/commitments", "verity/definitions", "verity/protocols/flock/prover", "verity/protocols/flock/pod", "verity/protocols/flock/agreement", "verity/protocols/flock/tool.py", "verity/protocols/pouw/prover", "verity/protocols/poub/__init__.py", "verity/protocols/poub/verifier/__init__.py", "verity/protocols/poub/verifier/commitments", "verity/commitments/windows",
 ]
 
 [[tool.verity.tests.reads]]
@@ -202,7 +205,7 @@ paths = [
     "verity/protocols/flock/prover/python/verity_flock/subcircuit_templates.circuit-check.py",
     "verity/protocols/certifier",
     "verity/protocols/pous",
-    "verity/ml",
+    "verity/circuits", "verity/commitments", "verity/definitions", "verity/protocols/flock/prover", "verity/protocols/flock/pod", "verity/protocols/flock/agreement", "verity/protocols/flock/tool.py", "verity/protocols/pouw/prover", "verity/protocols/poub/__init__.py", "verity/protocols/poub/verifier/__init__.py", "verity/protocols/poub/verifier/commitments", "verity/commitments/windows",
 ]
 
 [[tool.verity.tests.reads]]
@@ -216,7 +219,7 @@ paths = [
     "tools/verity/circuit_check/src/circuit_check",
     "verity/protocols/certifier",
     "verity/protocols/pous",
-    "verity/ml",
+    "verity/circuits", "verity/commitments", "verity/definitions", "verity/protocols/flock/prover", "verity/protocols/flock/pod", "verity/protocols/flock/agreement", "verity/protocols/flock/tool.py", "verity/protocols/pouw/prover", "verity/protocols/poub/__init__.py", "verity/protocols/poub/verifier/__init__.py", "verity/protocols/poub/verifier/commitments", "verity/commitments/windows",
 ]
 
 [[tool.verity.tests.reads]]
@@ -239,7 +242,7 @@ paths = [
     "tools/verity/circuit_check/src/circuit_check",
     "verity/protocols/certifier",
     "verity/protocols/pous",
-    "verity/ml",
+    "verity/circuits", "verity/commitments", "verity/definitions", "verity/protocols/flock/prover", "verity/protocols/flock/pod", "verity/protocols/flock/agreement", "verity/protocols/flock/tool.py", "verity/protocols/pouw/prover", "verity/protocols/poub/__init__.py", "verity/protocols/poub/verifier/__init__.py", "verity/protocols/poub/verifier/commitments", "verity/commitments/windows",
 ]
 
 [[tool.verity.tests.reads]]
@@ -248,7 +251,7 @@ paths = [
     "tools/verity/circuit_check/src/circuit_check",
     "verity/protocols/certifier",
     "verity/protocols/pous",
-    "verity/circuits",
+    "verity/circuits", "verity/definitions/circuits", "verity/definitions/ops", "verity/definitions/silicon",
     "verity/commitments/gates",
     "verity/protocols/flock/prover/python/verity_flock",
     "verity/definitions/private_circuits",
