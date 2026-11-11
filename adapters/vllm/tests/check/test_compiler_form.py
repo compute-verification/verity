@@ -12,7 +12,7 @@ import pytest
 from verity.circuits.codec import encode_program
 from verity_vllm.check.match import compiler_form as CF
 from verity_vllm.check.match.instance_sequence import RootView
-from verity_vllm.check.match.program_compare import compare_steps
+from verity_vllm.check.match.program_compare import _canon_step_relative as canon_step_relative, compare_steps
 from verity_vllm.program.predict import build as PB
 from verity_vllm.program.predict.phi import Phi
 
@@ -62,6 +62,27 @@ def test_the_unpruned_request_in_the_compilers_form_is_the_builds_request_progra
     res = compare_steps(A, B)
     assert res["canonical_sha256"]["equal"] and res["totals"]["operands_different"] == 0
     assert res["totals"]["steps_spec_equal"] == len(A.steps) == len(B.steps) == 4
+
+
+@pytest.mark.parametrize("compact", [False, True])
+def test_a_changed_views_positions_are_its_new_sequences(descriptors, compact):
+    """A view compared, put in the compiler's form and compared again reads its new steps' positions, also where the second
+    comparison's list of sequences is allocated at the address the first one's had: the first is freed just before the
+    second is made, and the operands are those of a view that was never compared before."""
+    def seqs(P):
+        return [list(idxs) for idxs in P.steps if idxs]
+
+    B, fresh = (RootView("ran", descriptors[1], {}, tok_node=0, compact=compact) for _ in range(2))
+    first = seqs(B)
+    canon_step_relative(B, first[0][0], first, False)
+    B.to_compiler_form()
+    fresh.to_compiler_form()
+    del first
+    again = seqs(B)
+    want = seqs(fresh)
+    assert again == want
+    assert [canon_step_relative(B, i, again, False) for idxs in again for i in idxs] == [
+        canon_step_relative(fresh, i, want, False) for idxs in want for i in idxs]
 
 
 @pytest.mark.parametrize("compact", [False, True])
