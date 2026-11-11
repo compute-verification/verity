@@ -16,11 +16,11 @@ untraced = ["tests/test_pf_rounds.py", "tests/test_pfill_fold.py", "tests/test_p
 inputs = ["benchmarks/pouw/harness", "benchmarks/pouw/settings.py", "verity/configuration/config/verity_config",
           "verity/protocols/pouw/receipts", "benchmarks/pouw/machine_model/verity_machine_model",
           "benchmarks/pouw/machine_model/data", "tools/research/src/research/__init__.py",
-          "tools/research/src/research/store", "verity/__init__.py", "verity/settings.py", "verity/core/__init__.py",
-          "verity/core/protocols/__init__.py", "verity/protocols/pouw/verifier/__init__.py",
+          "tools/research/src/research/store", "verity/__init__.py", "verity/settings.py", 
+          "verity/protocols/pouw/verifier/__init__.py",
           "verity/protocols/pouw/verifier/serving.py",
           # serving.py takes its tags from the table of domain separators, verity.commitments.domains
-          "verity/errors.py", "verity/ml/__init__.py", "verity/commitments", "verity/commitments/crypto",
+          "verity/errors.py", "verity/commitments", "verity/commitments/crypto",
           # the tests' g++ builds of pfill.cuh include its SHA-512, pearl_c/sha512.cuh, which includes sha512_rows' sha512x.cuh
           "benchmarks/pouw/pearl_c/sha512.cuh", "verity/definitions/kernels/sha512.cuh",
           "verity/definitions/__init__.py", "verity/protocols/__init__.py", "verity/definitions/kernels/__init__.py", "verity/protocols/pouw/__init__.py"]
