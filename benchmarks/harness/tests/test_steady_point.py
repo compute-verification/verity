@@ -748,7 +748,27 @@ def test_the_node_side_times_the_point_under_one_lease_and_computes_its_verdict_
     assert result["measurements"] == [{"name": "statements_per_s", "value": row["statements_per_s"], "unit": "1/s"}]
 
     spec = SP.load_spec(node.root / node.spec, root=node.root)
-    assert SP.point_why(row, S.files_in(node.run_dir), spec, SP.point(spec, POINT), own=True) is None, "as plan judges it"
+    assert SP.point_why(row, S.files_in(node.run_dir), spec, SP.point(spec, POINT), own=True) is None
+
+
+def test_the_result_lists_every_file_plan_judges_the_run_by(tmp_path, monkeypatch):
+    """The store keeps the files a run's result lists (`artifacts` and `measurement_files`) and no other, so a verdict
+    recomputed from the store reads only those: a result that listed only its records left a passed run "cannot tell"."""
+
+    import shutil
+
+    node = Node(tmp_path, monkeypatch)
+    assert node.point() == 0
+    result = node.read("result.json")
+    listed = sorted({*result["artifacts"], *result["measurement_files"]})
+    assert {S.RATES, S.LEASES, START, END, SESSIONS, N.VERDICT_FILE, N.POINT_FILE, N.TIMED_FILE} <= set(listed)
+    assert all((node.run_dir / path).is_file() for path in listed)
+    for path in listed:
+        (tmp_path / "stored" / path).parent.mkdir(parents=True, exist_ok=True)
+        shutil.copyfile(node.run_dir / path, tmp_path / "stored" / path)
+    spec = SP.load_spec(node.root / node.spec, root=node.root)
+    item, files = SP.point(spec, POINT), S.files_in(tmp_path / "stored")
+    assert SP.point_why(SP.own_row(files, item), files, spec, item, own=True) is None
 
 
 def test_a_statement_already_on_the_node_is_proved_from_a_copy_checked_against_the_pin(tmp_path, monkeypatch):

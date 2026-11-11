@@ -20,8 +20,9 @@ the `research run` that `steady_plan` launches through one of the node's GPU slo
 
 It exits 0 for a passed point, `steady_spec.NOT_PASSED` for a point that was timed and didn't pass, and `REFUSED` where
 nothing was timed. Its records are `out/point.json` (the point, the prover, the cores, the card and the versions),
-`out/verdict.json` (each check's answer) and `out/rate/`; the statement and the provers' session files stay in a scratch
-directory that it removes.
+`out/verdict.json` (each check's answer) and `out/rate/`; `result.json` lists every file a verdict reads (`kept`), so
+the store holds what `plan` judges the run by. The statement and the provers' session files stay in a scratch directory
+that it removes.
 """
 
 from __future__ import annotations
@@ -270,6 +271,15 @@ def timed(spec: steady_spec.SteadySpec, item: steady_spec.SteadyPoint, scratch: 
 # ---- the point ----------------------------------------------------------------------------------------------------------------
 
 
+def kept(run_dir: Path) -> list[str]:
+    """The run's files a verdict of it is computed from, with its records: everything under `out/`, and the lease's
+    usage line. The run's result lists them: the store keeps the files a result lists, and `plan` judges the run by
+    those."""
+
+    files = sorted(path.relative_to(run_dir).as_posix() for path in (run_dir / "out").rglob("*") if path.is_file())
+    return files + ([steady.LEASES] if (run_dir / steady.LEASES).is_file() else [])
+
+
 def write_result(run_dir: Path, identity: str, item: steady_spec.SteadyPoint, why: str | None,
                  row: Mapping[str, Any] | None) -> None:
     rate = row.get("statements_per_s") if row is not None and why is None else None
@@ -280,7 +290,7 @@ def write_result(run_dir: Path, identity: str, item: steady_spec.SteadyPoint, wh
         "validation": {"status": "passed" if why is None else "failed", "checker": "verity_bench.steady_spec.point_why",
                        "detail": why or f"{item.id}: the nine checks pass", "evidence": evidence},
         "measurements": [] if rate is None else [{"name": "statements_per_s", "value": rate, "unit": "1/s"}],
-        "measurement_files": [steady.RATES] if (run_dir / steady.RATES).is_file() else [], "artifacts": evidence})
+        "measurement_files": [steady.RATES] if (run_dir / steady.RATES).is_file() else [], "artifacts": kept(run_dir)})
 
 
 def point(a: argparse.Namespace, *, run: Runner = _run, ask: Asker = _ask, now: Callable[[], float] = time.time,
