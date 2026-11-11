@@ -22,5 +22,6 @@ addopts = "-q -p no:cacheprovider"
 [tool.verity.tests]
 # In place of `verity` whole (`inputs_only`): the settings machinery its registries are built on.
 inputs_only = true
-inputs = ["verity/__init__.py", "verity/settings.py"]
+inputs = ["verity/__init__.py", "verity/settings.py",
+          "verity/configuration/__init__.py"]
 exports = ["verity/configuration/config/verity_config"]
