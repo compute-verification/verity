@@ -487,3 +487,14 @@ def periods(gamma: float, gpus: int, window_s: float, world_flop_per_year: float
                 "world_flop": world, "world_gates": world * gates_per_flop}
 
     return {"share": share, "window": at(window_s / 3600)} | {name: at(hours) for name, hours in PERIODS_H.items()}
+
+
+def __getattr__(name: str):
+    """`paired` by this module's name: serving cost's `benchmarks/serve_tax` calls `overhead.paired`, and it goes once
+    that calls `kit.paired`. Loaded on use, so this file still loads alone by its path."""
+
+    if name == "paired":
+        from verity_bench.kit import paired
+
+        return paired
+    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
