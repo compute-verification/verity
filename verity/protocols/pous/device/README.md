@@ -11,6 +11,20 @@ against the commitment published before it and publishes the verdict, and for a 
 This directory holds the device's verdicts as executable Lean, the package `lean/` (its README lists the API). The
 device's Python is in `verity/protocols/pous` (below), the reference the Lean is difftested against.
 
+## Interface
+
+What code outside this directory may use. Everything else here is internal.
+
+| Entry point | What it is |
+|---|---|
+| `python -m verity.protocols.pous.device.challenger_party --device DIR [--listen HOST:PORT]` | The timed rounds' memory challenger as a process of its own, for the challenger host. It reads one JSON line on stdin. A salt request `{"salt": {"audit", "commitment"}}` it answers with `{"source": HEX}`, logged in its salt log. A run's request `{"binding", "block_bytes", "blocks", "k", "limit_ns", "node"}` it answers by printing `{"listening": PORT}`, serving one prover and printing its report `{"host", "public_key", "session", "session_id", "warmups"}`. A refusal prints `{"refused": REASON}` and exits 1. Its key, session log and salt log are in `DIR`, and it keeps each run it completes in `DIR/setups/`. `challenger_party.PROTOCOL` is the same two parties as a `ProtocolDef` of the deployment layer (`verity.configuration.deploy`). |
+| `python verity/protocols/pous/device/timed_audit.py --ready READY.json --leaves LEAVES.bin --out AUDIT.json [OPTIONS]` | The verifier process of the harness's timed audit: a client of a responder that runs `protocol.TimedAudit`'s audits against it (PoUS's `protocol.py`) and writes each audit's record and verdicts to `AUDIT.json`. With `--strict` it refuses a `k` or a limit the certificate doesn't cover. It exits 0 when every audit accepted and 1 otherwise. `--calibrate-only` measures the round trip and writes the limit instead. |
+| The Lean package `lean/` (`core_memory_challenger`) | The verdicts on what the device signed, as executables, Lean modules and two Python callers. `lean/README.md` states its interface. |
+
+The device's Python, which this directory imports, is PoUS's: `memory_challenger.py`, `streamed_wipe.py`, the messages of
+a run of timed rounds (`challenger_session.py`) and the wipe's process (`wipe_party.py`) are entry points of
+`verity/protocols/pous/verifier/README.md`.
+
 ## Top statements
 
 - `TrustedHost` (`security/Definitions/Core/Assumptions.lean`): the device runs its stated code on its host, which

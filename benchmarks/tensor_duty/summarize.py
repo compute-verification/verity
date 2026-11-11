@@ -1,6 +1,6 @@
 """The tensor-duty sweep's verdict on the H200 card's tensor clock (`clock.tensor`), and its reading as Markdown, over
 one or more runs' out/ directories. The sweep is that clock's falsification test: a point whose MACs over the host's
-wall clock exceed the card's tensor rate (`verity.hardware.rate`, 132 SMs x 4096 x clock.tensor) refutes the card.
+wall clock exceed the card's tensor rate (`verity.hardware.cards.rate`, 132 SMs x 4096 x clock.tensor) refutes the card.
 
 duty.cu prints its host stamps to the millisecond (`STAMP_S`), so a point's rate is known only between its MACs over
 its interval lengthened and shortened by a stamp: the verdict is REFUTED when some point exceeds the card's rate even
@@ -21,7 +21,7 @@ from collections import defaultdict
 from datetime import datetime
 from pathlib import Path
 
-from verity.hardware import load, rate
+from verity.hardware.cards import load, rate
 
 SKU = "h200-sxm-141gb"
 #: the resolution of duty.cu's host stamps, which it prints to the millisecond
