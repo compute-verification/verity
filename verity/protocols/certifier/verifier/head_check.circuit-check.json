@@ -1,0 +1,44 @@
+{
+ "definitions": {
+  "NetworkHeadCounts_v1{T=4}": {
+   "and": 127,
+   "type": "45bf4203121efd7d4e2232915d22e92000209a9a9abbdf9ba996caf9f5d4f39c6d2cafb17b9a602a9f26e3b118192ebbef1d5344b745c650f31fe1a690850dc5"
+  },
+  "NetworkHeadCounts_v1{T=600}": {
+   "and": 19199,
+   "type": "44118ba97c476559c2936af1f5b8909821b5b9cb8d349ad752bef9000e0197922837303076a73ebea4a1a71606d63344535b1f96caad73a99a75ccfff0b8492c"
+  },
+  "NetworkHeadCounts_v1{T=60}": {
+   "and": 1919,
+   "type": "0822f9d98039c17f7cd0e2acf04a744709fc78a5ee07ae258f4274847fb2823ae0ceacb6cd44f515c46e5cb235e008024a642f56e1a2ad73144c2a72ca5a7295"
+  },
+  "NetworkHeadFields_v1{L=6}": {
+   "and": 783,
+   "type": "5a2d235e458eddd423472c96185f8fc7007253a19568890c51cd9d3ced652570550a8332bfb2af7b3d15299a5365f800484a15e6392b1eef8fe083f8a1cdbb24"
+  },
+  "NetworkHeadFields_v1{L=9}": {
+   "and": 807,
+   "type": "14fcbb7bb5e70567e242e22835f35bfc1043fd53707b246966bdd8d879b0bd396f7e21aac78e62796618b34aeacf132c3a86596d8c43d18fbb8ca9ce9e66b033"
+  }
+ },
+ "digests": {
+  "NetworkHeadCheck_v2{L=6,T=32,COUNTS=0}": {
+   "sha512": "d0b142f59832ede8f0f3fa77f85ab2162dabb75dd9ab9653f23e1da64f56da4ced5541ea8330a780f08d49453728ffef9162997bebc9c278f3a85899316237aa"
+  },
+  "NetworkHeadCheck_v2{L=6,T=60,COUNTS=0}": {
+   "sha512": "04d6aa2cfbc1835b506e331122ecaa2e971d53fe2b132928f2b468781e4a21264b97a44fafaf84372e049667f98731f524a10f179147b34e36dc4b6f85a4a7c1"
+  },
+  "NetworkHeadCheck_v2{L=6,T=60,COUNTS=1}": {
+   "sha512": "d505b8fa98a67eb6d57deaac6693e909e84a04c963b2671c6524d47c36956eb214781190f84a58e14c1f3ddea9ddbc579e37211e9acf864783862c9ae28cbaa9"
+  },
+  "NetworkHeadCheck_v2{L=9,T=4,COUNTS=0}": {
+   "sha512": "86bc2b171dca5315a03d6aaad11336ef241ce37bbfb38208573ec1776a099e93a32348c6e7d677cfb639567df512895ed76294994d5f176b83270be2ebc2e96d"
+  },
+  "NetworkHeadCheck_v2{L=9,T=4,COUNTS=1}": {
+   "sha512": "31406ebb3926d72ded8fd355cb089c2c089f7a775a848e51106ac3d9c4425680a9d3a0cdb2d9fbb6bbb6b74c90fc2fa38224c21a55d8de8f14544500e877e7ac"
+  },
+  "NetworkHeadCheck_v2{L=9,T=8,COUNTS=0}": {
+   "sha512": "6cbb7bab9730a5e6b058cacefca331f4fc98eb0d9b07940936988736f472e0ff99b3ddfbd015b9be1f8089719325d7251e22a59d3bc672159d438fb9d3991a6f"
+  }
+ }
+}

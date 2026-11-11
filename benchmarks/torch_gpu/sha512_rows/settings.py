@@ -5,7 +5,8 @@ own variables (LEASE_MIN, PY, BENCH_ARGS) are the shell's.
 """
 from __future__ import annotations
 
-from verity_config.settings import VALUE, WHERE, Registry, Setting as S
+from verity_config.settings import VALUE, WHERE, Registry
+from verity_config.settings import Setting as S
 
 REGISTRY = Registry(
     __file__, ("SHA512_ROWS_",),

@@ -30,7 +30,7 @@ def _launches(monkeypatch, *argvs):
     monkeypatch.setattr(CHECK.subprocess, "run", run)
     monkeypatch.setattr(CHECK, "landable", lambda base: True)
     monkeypatch.setattr(CHECK, "lean_deps_url_file", lambda d: None)
-    monkeypatch.setattr(CHECK, "gather_verdicts", lambda d, given=None: None)
+    monkeypatch.setattr(CHECK, "verdict_url_file", lambda d: None)
     for argv in argvs:
         assert CHECK.record(["--base", "HEAD", *argv]) == 0
     return launched

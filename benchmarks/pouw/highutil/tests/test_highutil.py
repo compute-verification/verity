@@ -217,9 +217,9 @@ def test_a_kernel_s_tensor_pipe_share_is_its_own_else_its_family_s():
 
 
 def test_the_and_credit_per_mac_is_main_s_s8_accumulator_lowering_on_both_cards_imma_steps():
-    from verity.ml.circuits.defs import bind
-    from verity.ml.circuits.evaluation.bits import compile as compile_bits
-    from verity.ml.circuits.ops.boolean import gemm as BG
+    from verity.circuits.defs import bind
+    from verity.circuits.evaluation.bits import compile as compile_bits
+    from verity.definitions.ops.boolean import gemm as BG
     for dot in (BG.GEMM_SM120_S8, BG.GEMM_SM90_S8):
         for k in (64, 128):
             assert compile_bits(bind(BG.GemmAccumulatorS8, K=k, **dot)).counts["and"] * P.ANDS_PER_MAC[1] == k * P.ANDS_PER_MAC[0]

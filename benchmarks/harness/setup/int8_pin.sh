@@ -3,7 +3,7 @@
 # missing, and lake on the PATH, since PoUW's in-process coins are the Lean verifier's (`pouw.verifier.coins`
 # builds pouw-check-difftest once a process). pin.sh's output goes to $RESEARCH_RUN_DIR/out/setup.
 INT8_SNAPSHOT=$("$VENV/bin/python" -c 'import json; print(next(c["local_path"] for c in json.load(open(
-  "integrations/vllm/manifests/checkpoints-int8.json"))["checkpoints"] if c["role"] == "LLAMA31_8B_INT8"))')
+  "adapters/vllm/manifests/checkpoints-int8.json"))["checkpoints"] if c["role"] == "LLAMA31_8B_INT8"))')
 if [ ! -d "$INT8_SNAPSHOT" ]; then
   mkdir -p "${RESEARCH_RUN_DIR:-$PWD}/out/setup"
   OUT=${RESEARCH_RUN_DIR:-$PWD}/out/setup bash benchmarks/hash/dither/pin.sh \

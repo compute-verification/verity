@@ -4,7 +4,7 @@ A GPU card file names its Lean table (``lean``). Its ``clock``, ``tensorClock`` 
 ``card`` definitions are evaluated as exact rationals (``^`` a power, ``/`` exact, and a natural-number field refused
 where Lean's division would truncate) and each arm is
 compared with what the card file gives, for every store, resource and format the ACCEL ops are priced in
-(``Security/Definitions/Core/Accel/Isa.lean``): a constructor added there fails here until the card files carry it.
+(``security/Definitions/Core/Accel/Isa.lean``): a constructor added there fails here until the card files carry it.
 The B200 has no card table yet, and its data sheet (``Accounting.TS.Sheets.B200``) is held to its card file instead.
 """
 
@@ -19,11 +19,11 @@ from pathlib import Path
 
 import pytest
 
-from verity.hardware import WORD, load, number, rate, skus
+from verity.hardware.cards import WORD, load, number, rate, skus
 
 ROOT = Path(__file__).resolve().parents[3]
-ISA = ROOT / "Security/Definitions/Core/Accel/Isa.lean"
-SHEET = ROOT / "Security/Definitions/Accounting/Sheets/B200.lean"
+ISA = ROOT / "security/Definitions/Core/Accel/Isa.lean"
+SHEET = ROOT / "security/Definitions/Accounting/Sheets/B200.lean"
 LEAN = [sku for sku in skus("gpu") if "lean" in load(sku)]
 OPS = {ast.Add: operator.add, ast.Sub: operator.sub, ast.Mult: operator.mul, ast.Div: operator.truediv}
 
@@ -82,8 +82,8 @@ def card_table(text: str) -> tuple[dict[str, Fraction], dict[str, dict[str, str]
 
 def expected(card: dict) -> tuple[dict[str, Fraction], dict[str, dict[str, Fraction] | Fraction]]:
     """The Lean table the card file gives: its clocks in Hz (``tensorClock`` the card's ``clock.tensor``, its
-    ``clock.sm`` where it has none), each store's words, each resource's units a second (``verity.hardware.rate``, so
-    the arms hold the one calculator), each format's weight, and the model's ranges."""
+    ``clock.sm`` where it has none), each store's words, each resource's units a second
+    (``verity.hardware.cards.rate``, so the arms hold the one calculator), each format's weight, and the model's ranges."""
     sms, clock = number(card["sm"]["count"]), card["clock"]
     clocks = {"clock": number(clock["sm"]) * 10 ** 6, "tensorClock": number(clock.get("tensor", clock["sm"])) * 10 ** 6}
     store = card["store"]

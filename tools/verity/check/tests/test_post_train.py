@@ -131,7 +131,7 @@ def test_a_landing_ending_in_drives_lock_commit_is_labelled_on_the_trains_check(
     _git(repo, "commit", "-q", "--allow-empty", "-m",
          "Lock records regenerated for #1\n\nChecked: r20261020-152946-96c9 (the lock run of `checked` x, passed by regenerating "
          "them)\n"
-         "Regenerated: Security/lean-audit.json")
+         "Regenerated: security/lean-audit.json")
     lock = _git(repo, "rev-parse", "HEAD")
     _git(repo, "commit", "-q", "--allow-empty", "-m", "Queue: #2 later\n\nChecked: r20261020-152946-96c9 (copied)")
     later = _git(repo, "rev-parse", "HEAD")
@@ -271,8 +271,8 @@ def test_the_neutrality_tier_names_each_fast_row_that_moved_after_the_rebuilds_r
 
 
 def test_a_moved_fast_row_fails_its_landing_and_rings_vllm_at_once_and_a_neutral_tier_passes(tmp_path, monkeypatch):
-    """A landing that moves a fast row of record's Program without re-pinning it is labelled with the row, and @vllm, which owns
-    the rows of record, is rung in the merge thread as ci with the run, not left to the daily sweep; a tier whose every row
+    """A landing that moves a fast row of record's Program without re-pinning it is labelled with the row, and the owner of
+    the rows of record is rung in the merge thread as ci with the run, not left to the daily sweep; a tier whose every row
     reproduced its pins passes and rings no one."""
     calls, _ = _fake_landing(tmp_path, monkeypatch, "r20261003-145201-e806", r39="pass", rows={LLAMA: False, QWEN: True})
     assert PT.main([]) == 1
@@ -290,9 +290,9 @@ def test_a_moved_fast_row_fails_its_landing_and_rings_vllm_at_once_and_a_neutral
 
 
 def test_vllm_is_rung_for_its_own_tier_once_and_a_dry_run_rings_no_one(tmp_path, monkeypatch, capsys):
-    """A tier that ran and wrote no report compared nothing: its label says so and @vllm is rung.  A rebuild's failure alone is
-    the regression's, read by the daily sweep; a carried verdict rings no one (the run it carries from rang); a dry run prints
-    the ring instead."""
+    """A tier that ran and wrote no report compared nothing: its label says so and the rows' owner is rung.  A rebuild's
+    failure alone is the regression's, read by the daily sweep; a carried verdict rings no one (the run it carries from
+    rang); a dry run prints the ring instead."""
     calls, _ = _fake_landing(tmp_path, monkeypatch, "r20261003-145201-e806", r39="pass", rows=None)
     assert PT.main([]) == 1
     assert calls[-2][4] == "regression fail:no neutrality report (run rc=1)"
@@ -449,7 +449,7 @@ def test_untouched_is_suites_saying_the_change_touches_none(monkeypatch):
         monkeypatch.setattr(PT.subprocess, "run", lambda argv, **_k: subprocess.CompletedProcess(argv, rc, out, ""))
     fake("suites: the change from 1a2b3c4d5e6f touches 0: none\n")
     assert PT.untouched(ROOT, "HEAD^1")
-    fake("suites: the change from 1a2b3c4d5e6f touches 1: verity-vllm\nverity-vllm  integrations/vllm  not cached\n")
+    fake("suites: the change from 1a2b3c4d5e6f touches 1: verity-vllm\nverity-vllm  adapters/vllm  not cached\n")
     assert not PT.untouched(ROOT, "HEAD^1")
     fake("suites: the change from 1a2b3c4d5e6f touches 0: none\n", rc=2)
     assert not PT.untouched(ROOT, "HEAD^1")
@@ -464,5 +464,5 @@ def test_the_job_pins_the_rebuilds_to_the_cores_it_is_given_at_nice_19():
     tier = 'bash ../../tools/verity/check/neutrality_tier.sh fast "$out/neutrality"'
     assert f"nice -n 19 taskset -c 96-127 {tier}" in pinned and f"nice -n 19 {tier}" in free
     assert pinned.index("pytest.log") < pinned.index(tier), "after the rebuilds, whatever they found"
-    assert (ROOT / "integrations" / "vllm" / "../../tools/verity/check/neutrality_tier.sh").is_file(), "run from integrations/vllm"
+    assert (ROOT / "adapters" / "vllm" / "../../tools/verity/check/neutrality_tier.sh").is_file(), "run from adapters/vllm"
     assert str(PT.NEUTRALITY) == "neutrality/neutrality.json"

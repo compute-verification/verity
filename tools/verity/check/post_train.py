@@ -10,8 +10,8 @@ this, detached, after each push it lands (`after_land` in `tool.py`); run it by 
 After the rebuilds the same run rebuilds the fast rows of record's Programs and compares them with their pins (`verity-vllm
 neutrality --tier fast`, by `neutrality_tier.sh` beside this, minutes a row), so a landing that moves a
 fast row's Program without re-pinning it is a red: each row that moved or didn't build is named in the label beside the
-rebuilds' rows (`regression fail:<row>`), and @vllm, which owns the rows of record, is rung at once in the merge thread, as ci,
-with the run to read.  A carried verdict rings no one: the run it carries from rang.
+rebuilds' rows (`regression fail:<row>`), and the owner of the rows of record (`OWNER`) is rung at once in the merge thread,
+as ci, with the run to read.  A carried verdict rings no one: the run it carries from rang.
 
 COMMIT (default origin/main) must be a landing: its `Check: <attempt>` trailer names the check that let it in, or, for a train
 `research queue drive` fast-forwarded main to, the store's passing check of that commit does.  Drive passes the check it landed
@@ -91,8 +91,8 @@ out=$RESEARCH_RUN_DIR/out; mkdir -p "$out"
 s=$(mktemp -d /workspace/research/scratch/post-train.XXXXXX 2>/dev/null || mktemp -d); trap 'rm -rf "$s"' EXIT
 export TMPDIR=$s VERITY_REGRESSION_SCRATCH=$s BUILD_RAM_BUDGET_GB=32 VERITY_MANIFEST_JOBS=4
 uv run -q --locked --all-packages --extra torch-cpu python -m research data fetch-fixtures --repo "$PWD" --json \\
-  integrations/vllm/tests/regression > "$out/fetch-fixtures.json" || exit 1
-cd integrations/vllm
+  adapters/vllm/tests/regression > "$out/fetch-fixtures.json" || exit 1
+cd adapters/vllm
 VERITY_REGRESSION=1 VERITY_REGRESSION_REBUILD=1 VERITY_STORE_REQUIRED=1 VERITY_REGRESSION_RECORD_ACTUAL=$out/actual \\
   {pin}../../.venv/bin/python -m pytest tests/regression -m {marks} -n {workers} -rA --durations=0 \\
   --junitxml "$out/junit.xml" > "$out/pytest.log" 2>&1

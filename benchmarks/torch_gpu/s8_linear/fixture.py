@@ -196,7 +196,7 @@ def fp_env_ok() -> bool:
 
 def epilogue(z: np.ndarray, sa: np.ndarray, sw: np.ndarray) -> np.ndarray:
     """The Definition's words y [m, n] uint16 from the s32 sums z [m, n], s_a [m] and s_w [n] (float32)."""
-    from verity.ml.kernels.tc import f2fp_bf16_batch
+    from verity.definitions.kernels.tc import f2fp_bf16_batch
 
     if not fp_env_ok():
         raise RuntimeError("this process flushes float32 subnormals (an FTZ/DAZ library?); the twin would be wrong")

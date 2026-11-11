@@ -5,6 +5,6 @@ set -uo pipefail
 . benchmarks/harness/env.sh
 OUT=${OUT:-${RESEARCH_RUN_DIR:-.}/out}
 mkdir -p "$OUT"
-TESTS=${TESTS:-integrations/vllm/tests/commit/test_windowed_rows_sha512.py integrations/vllm/tests/commit/test_p0_footprint.py integrations/vllm/tests/commit/test_windowed_fail_closed.py}
+TESTS=${TESTS:-adapters/vllm/tests/commit/test_windowed_rows_sha512.py adapters/vllm/tests/commit/test_p0_footprint.py adapters/vllm/tests/commit/test_windowed_fail_closed.py}
 "$VENV/bin/python" -m pytest -p no:cacheprovider -rA -v $TESTS --junitxml "$OUT/junit.xml" 2>&1 | tee "$OUT/pytest.log"
 echo "pytest rc ${PIPESTATUS[0]}"

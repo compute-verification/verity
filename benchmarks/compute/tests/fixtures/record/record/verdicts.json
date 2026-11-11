@@ -1,0 +1,9 @@
+{
+ "format": "verity/all-protocols-window/v1",
+ "protocols": {
+  "work": {
+   "verdict": "missing",
+   "why": "development run, credits nothing: the registration can't be read"
+  }
+ }
+}

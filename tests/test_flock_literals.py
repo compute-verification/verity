@@ -4,7 +4,7 @@ Lean's C backend writes a `Nat` literal below 2^32 as `lean_unsigned_to_nat(n)` 
 `lean_cstr_to_nat("…")`, which parses its decimal digits through GMP. The compiler inlines a constant whose value folds
 to a literal into each function that reads it, so an unmarked `def FUEL : Nat := 2 ^ 62` is parsed again at every call
 of every such function. Marked `@[noinline]`, each read loads the constant, set once when its module is initialized. A
-scan of the Lean under `verity/core/service/flock/` refuses a `def` or `abbrev` of type `Nat` whose value, a literal or
+scan of the Lean under `verity/protocols/flock/verifier/` refuses a `def` or `abbrev` of type `Nat` whose value, a literal or
 `b ^ e` give or take a literal, is 2^32 or more, unless it is a `@[noinline] def`.
 """
 
@@ -14,7 +14,7 @@ import re
 
 from test_repository import ROOT, _tracked
 
-TREES = ("verity/core/service/flock/",)
+TREES = ("verity/protocols/flock/verifier/",)
 LIMIT = 2**32
 
 #: `/- … -/` and `-- …`, blanked so that line numbers stay

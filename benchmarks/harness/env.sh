@@ -1,7 +1,7 @@
 # Sourced by the harness's launchers (run_point.sh, benchmarks/<name>/run.sh) from the source tree: the node's pinned-vLLM
 # Python as $VENV, the checkpoint store, CUDA, and this tree's packages on PYTHONPATH. $VENV is VERITY_BENCH_VENV, which
 # the dispatcher forwards when it is set, else the first of the nodes' pinned-vLLM environments that exists: the one
-# integrations/vllm/verity_vllm/ops/pod_bootstrap.sh makes ($WORK/venv312), a jobs node's environment, the PoUW
+# adapters/vllm/verity_vllm/ops/pod_bootstrap.sh makes ($WORK/venv312), a jobs node's environment, the PoUW
 # pod's and the single-GPU VMs'. `benchmarks` is on the path so a spec names an experimental arm module
 # from there (`served_commit.prof_arm:SERVED_COMMIT_ROWS`).
 WORK=${WORK:-/workspace}
@@ -14,7 +14,7 @@ else
 fi
 if [ ! -x "$VENV/bin/python" ]; then
   echo "verity-bench: no Python at ${VERITY_BENCH_VENV:-any of $VENVS}: run" \
-       "integrations/vllm/verity_vllm/ops/pod_bootstrap.sh on this node, or dispatch with VERITY_BENCH_VENV set to the" \
+       "adapters/vllm/verity_vllm/ops/pod_bootstrap.sh on this node, or dispatch with VERITY_BENCH_VENV set to the" \
        "node's pinned-vLLM environment" >&2
   exit 2
 fi
@@ -24,4 +24,4 @@ if [ -z "${CUDA_HOME:-}" ]; then
 fi
 export PATH=${CUDA_HOME:+$CUDA_HOME/bin:}$VENV/bin:$PATH
 ROOT=$PWD
-export PYTHONPATH=$ROOT/benchmarks/harness:$ROOT/integrations/vllm:$ROOT/tools/config:$ROOT/tools/research/src:$ROOT:$ROOT/benchmarks${PYTHONPATH:+:$PYTHONPATH}
+export PYTHONPATH=$ROOT/benchmarks/harness:$ROOT/adapters/vllm:$ROOT/verity/configuration/config:$ROOT/tools/research/src:$ROOT:$ROOT/benchmarks${PYTHONPATH:+:$PYTHONPATH}

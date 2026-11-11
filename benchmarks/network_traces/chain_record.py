@@ -16,7 +16,7 @@
 * **certs**: the client's kept files (``--client``, by default the certifier rehearsal's own directory ``--run``):
   ``certificates.jsonl`` and ``clocks.jsonl``, each certificate's public part (`certifier_serve.keep_certificates`),
   held again to the certifier's key and session in ``--run``'s ``deployment.json`` by the client's own
-  `check_certificates`, each refusal the Lean's (`client_certificates`: `NetworkCheck.TransferBlocks.refusals`,
+  `check_certificates`, each refusal the Lean's (`client_certificates`: `NetworkCheck.LinkWindow.refusals`,
   `audit.certificate_refusals` beside it as the reference, ``client_check``'s ``by``). Each window's two certified
   records (``--run``'s ``certified.jsonl``, their heads and salts) are held by the Lean's audit (`certifier_serve._certified`: `NetworkCheck.Records`' ``verdicts-no-grid``, N2's
   audit without its head checks, `audit.Audit` beside it as the reference, each row's ``by`` and ``reference``) under
@@ -26,17 +26,21 @@
   exactly the client's. ``--deployed`` refuses a key that isn't LMS at
   `lms.DEPLOYED`.
 * **report**: one JSON and one Markdown report, per step its verdict, its run ids, its ε at δ and what it computed in
-  the clear, and the period's terms for `NetTiming.Guarantees.MonitoringPeriodLeakAccepted` summed by
+  the clear, and the period's terms for `NetTiming.Guarantees.PeriodLeakAccepted` summed by
   `periodLeak_le_sum`. ``--endpoint`` is network-e2e's ``--no-prove`` report on the run and the endpoint's
   records: the endpoint's advice bound to the run and the I/O tie, in the clear, required on the advice profile. N2's
   summary is `n2_zk.py prove`'s (Selection All: every link-window's one unit proved) or a sampled sample's
   (``CR_N2_CMD``), read by the same fields; on the advice profile, whose egress counts no N2 unit holds, N2 isn't
   run. Scan's is `scan_zk.py prove`'s, a stand-in on its own synthetic warden run until its ``--warden-run`` takes
   the gate's warden rows, accepted only when every round's verdict is the one scan_zk expects and no witness piece
-  reached the verifier (`scan_step`). A step on a stand-in (N2 on ``--job``'s ``stand_in``, scan without a warden
+  reached the verifier (`scan_step`). A scan whose honest round's registration names a tied value (its
+  ``rests_on_period_check``, the slot entries ``prog``) is ``accepted on the period check`` (`RESTS`), never a bare
+  accept: its acceptance rests on the network period check, which refuses scan_zk's stand-in block, and so does the
+  report's. A step on a stand-in (N2 on ``--job``'s ``stand_in``, scan without a warden
   run) never makes the report accepted. Without ``--n2`` the report is the scan's part of the record alone (`SCAN_ONLY`,
-  its ``scope``), and its verdict is ``scan accepted`` or ``scan refused``: N2 isn't required, and the rest is held as
-  before. On the certifier-only path (``--job``'s ``path``, `CERTIFIER_ONLY`) there are no warden rows: the scan isn't
+  its ``scope``), and its verdict is ``scan accepted``, ``scan accepted on the period check`` or ``scan refused``: N2
+  isn't required, and the rest is held as before. On the certifier-only path (``--job``'s ``path``,
+  `CERTIFIER_ONLY`) there are no warden rows: the scan isn't
   run or required, and the report's ``stubbed`` says what the path stands on (`STUBBED`, `stubbed`). Its negatives are
   N2's members, the rehearsal's own check on each run it must refuse, and the I/O tie's verdict on each tampered run
   that check lets through. d1's K (`pooled_k`) counts the served units' compute audits (``--audit``: each window's sample
@@ -88,7 +92,7 @@ CLEAR = {
                 "reference, network-e2e's stand-ins for the warden's rows and the Commit's port) on the honest run",
     "certificates": "at the client, on its kept certificates (their public parts): each certificate's and clock "
                     "certificate's LMS signature under the certifier's key and session, by the Lean "
-                    "(NetworkCheck.TransferBlocks.refusals, audit.certificate_refusals its reference); and the Lean's "
+                    "(NetworkCheck.LinkWindow.refusals, audit.certificate_refusals its reference); and the Lean's "
                     "audit (NetworkCheck.Records, audit.Audit its reference) of the rehearsal's certified heads "
                     "under its salted clock openings (witness a rehearsal publishes), each read by the Lean "
                     "(NetworkCheck.Period.signedSyncs, certificate.SignedClocks its reference), whose certificates "
@@ -116,9 +120,16 @@ CLEAR = {
 #: the certifier-only path (``--job``'s ``path``): the records are the certifier rehearsal's alone
 CERTIFIER_ONLY = "certifier-only"
 #: a report given no N2 summary (``report`` without ``--n2``, `chain_record.sh`'s ``CR_SCAN_ONLY=1``): the scan's
-#: part of the record, whose N2 runs in jobs of its own; its verdict is ``scan accepted`` or ``scan refused``, never the
-#: whole chain's ``accepted``
+#: part of the record, whose N2 runs in jobs of its own; its verdict is ``scan accepted`` (or on the period check,
+#: `RESTS`) or ``scan refused``, never the whole chain's ``accepted``
 SCAN_ONLY = "scan only, N2 not given"
+#: the scan step's verdict, and the report's, when the scan's honest round accepted with tied values R8 let through
+#: (its registration verdict's ``rests_on_period_check``): no bare accept, since its acceptance rests on a period check;
+#: nor a K, since `block_entry` refuses the rows-form period answer, the one that would hold those rows
+RESTS = "accepted on the period check"
+RESTS_WHY = ("the honest round's registration names {tied} tied: its acceptance rests on the network period check "
+             "(NetworkCheck.Period's wired), which ties their rows to the audit that registered them and refuses "
+             "scan_zk's stand-in block (period_case.UNWIRED)")
 #: what a report on the certifier-only path stands on that isn't the chain's own
 STUBBED = (
     "the records come from the certifier-only path (certifier_serve.py's proxy in front of the endpoint), not the "
@@ -171,7 +182,7 @@ def subset_bound(n: int, k: int, delta: float) -> int | None:
     Selection All (k = n) is 0."""
     if n <= 0 or not 0 < k <= n:
         return None
-    from verity.core.protocols.profile import Stratified
+    from verity.protocols.spot.verifier.profile import Stratified
 
     return Stratified.uniform(n, k).count_bound(delta)
 
@@ -212,8 +223,8 @@ def custody(gates: Path) -> dict:
 
 def certs(run: Path, client: Path, deployed: bool = False) -> dict:
     import certifier_serve as cs
-    from verity.ml.crypto import lms
-    from verity.core.protocols.certifier import lean_audit
+    from verity.commitments.crypto import lms
+    from verity.protocols.certifier.verifier import lean_audit
 
     plan, report, dep = (json.loads((run / f).read_text()) for f in ("plan.json", "calibration.json",
                                                                     "deployment.json"))
@@ -281,10 +292,10 @@ def client_certificates(dep: dict, windows: int, kept: Path, kept_clocks: Path) 
     """The client's kept files (`certifier_serve.keep_certificates`: each certificate's public part with its session,
     no head, sync or salt) held again to the deployment's key and session, window by window, by the client's own
     `check_certificates` on the answer they make up, each refusal the Lean's (`lean_audit.certificate_refusals`:
-    `NetworkCheck.TransferBlocks.refusals`, ``by`` ``lean``, with `audit.certificate_refusals` beside it as the reference, a
+    `NetworkCheck.LinkWindow.refusals`, ``by`` ``lean``, with `audit.certificate_refusals` beside it as the reference, a
     window where the two differ refused whole)."""
     import certifier_serve as cs
-    from verity.core.protocols.certifier import lean_audit
+    from verity.protocols.certifier.verifier import lean_audit
 
     lines = lambda p: [json.loads(x) for x in p.read_text().splitlines() if x.strip()]
     certs, clocks = lines(kept), lines(kept_clocks)
@@ -520,7 +531,8 @@ def n2_step(s: dict | None, certs_doc: dict, job: dict | None = None) -> dict:
 def scan_step(s: dict | None, warden_run: str | None, job: dict | None = None) -> dict:
     """`scan_zk.py prove`'s summary: accepted when the honest and block rounds' windows are accepted (`SCAN_ACCEPTS`),
     every other round's (chain, forged) refused, no witness piece was found at the verifier, and scan_zk's own ``ok``
-    holds."""
+    holds; `RESTS` in place of accepted when the honest round's registration verdict let tied values through
+    (``rests_on_period_check``, which the step carries)."""
     job = job or {}
     if s is None or (job.get("rc") or {}).get("scan") not in (None, "0"):
         return {"verdict": "not run" if s is None and not (job.get("rc") or {}).get("scan") else "failed",
@@ -531,7 +543,8 @@ def scan_step(s: dict | None, warden_run: str | None, job: dict | None = None) -
         rounds[name] = {"accepted": a.get("accepted"), "window_accepted": a.get("window_accepted"),
                         "verdicts": a.get("verdicts"), "why": a.get("why"),
                         "wrong_units": (a.get("audit") or {}).get("wrong_units"), "ok": r.get("ok"),
-                        "leaked": (a.get("received") or {}).get("verifier_found") or []}
+                        "leaked": (a.get("received") or {}).get("verifier_found") or [],
+                        "rests_on_period_check": a.get("rests_on_period_check") or []}
     honest = rounds.get("honest") or {}
     wrong = ([f"{n}: window {'accepted' if v.get('window_accepted') else 'refused'}" for n, v in rounds.items()
               if bool(v.get("window_accepted")) != (n in SCAN_ACCEPTS)]
@@ -539,9 +552,12 @@ def scan_step(s: dict | None, warden_run: str | None, job: dict | None = None) -
              + ["scan_zk's ok is not true"] * (s.get("ok") is not True))
     units = 2 * int(s.get("T") or 0)
     k = (s.get("draw") or {}).get("honest") if isinstance(s.get("draw"), dict) else None
-    return {"verdict": ("dry" if not rounds else "refused" if not honest.get("window_accepted")
-                        else "failed" if wrong else "accepted"),
-            "why": "; ".join(wrong) or (job.get("why") or {}).get("scan"), "ok": s.get("ok"), "rounds": rounds,
+    tied = honest.get("rests_on_period_check") or []
+    verdict = ("dry" if not rounds else "refused" if not honest.get("window_accepted")
+               else "failed" if wrong else RESTS if tied else "accepted")
+    return {"verdict": verdict, "rests_on_period_check": tied,
+            "why": "; ".join(wrong) or (RESTS_WHY.format(tied=tied) if verdict == RESTS else
+                                        (job.get("why") or {}).get("scan")), "ok": s.get("ok"), "rounds": rounds,
             "negatives": {k: not v.get("window_accepted") for k, v in rounds.items() if k not in SCAN_ACCEPTS},
             "stand_in": None if warden_run else "scan_zk's own synthetic warden run (scan_traffic), not the gate's "
                                                 "rows: its --warden-run takes those",
@@ -586,7 +602,7 @@ def input_terms(circuit: dict, pins: dict | None = None, roots: dict | None = No
 
     Refused (ValueError): a record that lists its members, a statement row of no one port, a wire or declaration outside
     its port's units or rows, two filling one row (Lean's ``apart``), and a pin of `SCAN_STATE`."""
-    from verity.ml.windows import interface as IF
+    from verity.commitments.windows import interface as IF
 
     if "members" in circuit or "wires" not in circuit:
         raise ValueError("a window circuit is counted from its stated record (its templates, statements and wires), as "
@@ -666,7 +682,7 @@ def audit_of(d: Path, pins: dict | None = None) -> dict:
     exactly, and J the offsets within a bucket. A window holding a pin must bind ``circuit.json`` by its SHA-512
     (``window.circuit``), as `NetworkCheck.Period.auditCheck` refuses a count on a circuit its registration doesn't
     bind."""
-    from verity.ml.windows import interface as IF
+    from verity.commitments.windows import interface as IF
 
     reg = json.loads((d / "registration.json").read_text())
     body = (d / "circuit.json").read_bytes()
@@ -756,7 +772,7 @@ def d1_terms(cert: dict, n2: dict, scan: dict, custody_doc: dict, endpoint: dict
                      "inputs and draw the K counts", "network": network}
     else:
         k = {f"{d:.3g}": pooled_k(audits, Fraction(d), network) for d in DELTAS} | {"audits": audits}
-    return {"theorem": "NetTiming.Guarantees.MonitoringPeriodLeakAccepted, KS as hypothesis",
+    return {"theorem": "NetTiming.Guarantees.PeriodLeakAccepted, KS as hypothesis",
             "K": k,
             "sum": "NetTiming.periodLeak_le_sum: Pr[every window accepted ∧ total > a + Σ_w b_w] ≤ Σ_w ε_w",
             "windows": len(rows), "acc": acc, "all_accepted": bool(acc) and all(acc),
@@ -789,13 +805,13 @@ def leak(run: Path, scan: dict | None = None, weights=None) -> dict:
     (`scan_zk.CLASS`) and its sample of every proof block, by `leak_bounds` (`SCOPES`): one link certifying the run's own
     request rate (`leak_bounds.per_link`), and as many identical links summed as the census's reference datacenter has
     machines (`leak_bounds.datacenter_links`) and as the adversary resource model's compute fills
-    (`leak_bounds.world`). Each count is in both forms, the per-period form (`MonitoringPeriodLeakAccepted`'s count) and the
+    (`leak_bounds.world`). Each count is in both forms, the per-period form (`PeriodLeakAccepted`'s count) and the
     pooled one (`PooledLeakAccepted`'s at q = 1), in both readings of the sampling block's free inputs
     (`leak_bounds.READINGS`), and beside ε, its scans' δ summed, and its share of ``weights`` (`leak_bounds.WEIGHTS`)."""
     import leak_bounds as LB
     import scan_zk as SZ
-    from verity.ml.protocols.certifier import ingress_scan as IS
-    from verity.core.protocols.certifier import warden as W
+    from verity.protocols.certifier.prover import ingress_scan as IS
+    from verity.protocols.certifier.verifier import warden as W
     weights = LB.WEIGHTS if weights is None else weights
     dep = _json(next((p for p in (run / "out" / "deployment.json", run / "deployment.json") if p.is_file()), None))
     v = (_json(run / "end.json") or {}).get("verdict") or {}
@@ -951,8 +967,8 @@ def period_binding(answer: dict, case: dict, *, cert: dict, n2: dict[int, str], 
     audits must be this report's ``--audit`` registrations (``audits``). The case's parameters and evidence are outside
     that digest: its link, certifier session and key must be ``cert``'s, and `block_entry` re-decides the case. The
     rows form's link-windows are the scan's registrations, which no step here holds, so that form is refused."""
-    from verity.core.protocols.spot.one_stage import registration as R
-    from verity.ml.commitments.identity import tagged_sha512
+    from verity.protocols.spot.verifier.one_stage import registration as R
+    from verity.commitments.identity import tagged_sha512
 
     try:
         raw, params = bytes.fromhex(case["commitment"]), case["params"]
@@ -1054,12 +1070,13 @@ def report(a) -> dict:
                                                "--warden-run)"}}
         tie = on_warden(tie_step(tie_doc, job), tie_doc, run_id, "the tie's summary")
         scan = on_warden(scan, _json(a.scan), run_id, "the scan's summary")
+    rests = scan.get("verdict") == RESTS
     proved = ((scan_only or n2.get("verdict") == "accepted")
-              and (certifier_only or scan.get("verdict") == "accepted")
+              and (certifier_only or scan.get("verdict") in ("accepted", RESTS))
               and (tie is None or tie.get("verdict") == "accepted"))
     steps = {"custody": cust, "certificates": certificates, "endpoint": endpoint, **({"tie": tie} if warden else {}),
-             "n2": n2, "scan": scan, "lean": {"verdict": "accepted" if proved else (scan if scan_only else n2).get(
-                                        "verdict"),
+             "n2": n2, "scan": scan, "lean": {"verdict": (RESTS if rests else "accepted") if proved else (
+                                        scan if scan_only else n2).get("verdict"),
                                     "binary": job.get("lean"), "in_the_clear": CLEAR["lean"],
                                     "n2_windows_proved": ((n2.get("members") or {}).get("honest") or {}).get(
                                         "lean_proved"),
@@ -1067,7 +1084,7 @@ def report(a) -> dict:
     required = (("custody", "certificates", "endpoint", "tie", "n2", "scan") if warden else
                 ("custody", "certificates", *(("endpoint",) if job.get("profile") == ADVICE else ()),
                  *(() if scan_only else ("n2",)), *(() if certifier_only else ("scan",))))
-    accepted = (all(steps[k].get("verdict") == "accepted" for k in required)
+    accepted = (all(steps[k].get("verdict") in ("accepted", RESTS) for k in required)
                 and not any(steps[k].get("stand_in") for k in ("n2", "scan")))
     rehearsal = {f"rehearsal/{g['gate_run']}/{s}": v == "refused" for g in cust.get("gate_runs") or []
                  for s, v in (g.get("strategies") or {}).items() if s not in REHEARSAL_ACCEPTS}
@@ -1080,7 +1097,7 @@ def report(a) -> dict:
     if pins is not None and not Path(pins).is_file():
         raise SystemExit(f"--pins {pins}: no such file")
     audits = [audit_of(d, _json(pins)) for d in audit_dirs]
-    verdict = ("scan " if scan_only else "") + ("accepted" if accepted else "refused")
+    verdict = ("scan " if scan_only else "") + ((RESTS if rests else "accepted") if accepted else "refused")
     runs = list(dict.fromkeys(r for r in (job.get("run"), *(g.get("gate_run") for g in cust.get("gate_runs") or []))
                               if r))
     why = ({k: ": ".join(str(x) for x in (steps[k].get("verdict") or "no verdict", steps[k].get("why")) if x)
@@ -1209,7 +1226,7 @@ def main(argv=None) -> int:
         a.out = a.out / "report.json"
     a.out.write_text(json.dumps(doc, indent=1, sort_keys=True, default=str))
     print(json.dumps({k: doc.get(k) for k in ("verdict", "scope", "why", "negatives_refused") if k in doc}))
-    return 0 if doc.get("verdict") in ("accepted", "scan accepted") else 1
+    return 0 if doc.get("verdict") in ("accepted", "scan accepted", RESTS, f"scan {RESTS}") else 1
 
 
 if __name__ == "__main__":

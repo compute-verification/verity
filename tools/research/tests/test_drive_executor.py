@@ -19,8 +19,8 @@ import research.drive as D
 from research import merge
 from research.drive import AFTER_LANDING, AFTER_LANDING_OPTIONAL, SLIM_JUDGED, SLIM_STEPS, task_files
 from research.executor import (AFTER_LANDING_PRIORITY, BLOCKED, GRAPH_V2, SHADOW_WAIT_S, TASKS_GRAPH_KIND, Executor, FileTransport,
-                               QueueTransport, Shadowed, agrees, compare, keyed, old_verdicts, shadow_records, shadow_report,
-                               task_key, task_target)
+                               QueueTransport, Shadowed, agrees, compare, fold_results, keyed, old_verdicts, shadow_records,
+                               shadow_report, task_key, task_target)
 from research.store.local import LocalStore
 from research.store import vocab
 from test_drive_policy import EXPIRED, LIVE, _policy
@@ -69,7 +69,7 @@ def _land(h: Review, n: int) -> str:
 
 
 def _passed_run(h: Review, tmp_path) -> None:
-    """The newest after-landing run passes every step, suite `pkg` and the Lake package `Security`."""
+    """The newest after-landing run passes every step, suite `pkg` and the Lake package `security`."""
     rid = f"r-post-{len(h.posted) - 1}"
     h.run_state[rid] = ("done", 0, None)
     d = tmp_path / rid
@@ -245,7 +245,7 @@ def test_shadow_enqueues_each_tips_check_without_a_graph_and_compares_by_the_exe
     h.tick()
     assert _main(world) == one                                  # the run alone moves `main`
     (rec,) = world.store.labels(f"commit:{one}", key=vocab.EXECUTOR_SHADOW)
-    n = len(AFTER_LANDING) + 2                                  # every step, suite `pkg` and the Lake package `Security`
+    n = len(AFTER_LANDING) + 2                                  # every step, suite `pkg` and the Lake package `security`
     assert rec.value == {"check": f"after-landing:{one}", "graph": _graph_id(fake, one), "run": "r-post-0", "units": n,
                          "agree": n, "pending": [], "disagree": [], "missing": [], "executor_only": []}
     assert one not in h.q.load_state()["drive"].get("executor", {})
@@ -520,6 +520,100 @@ def test_settle_keys_a_reader_once_what_it_reads_passed_and_blocks_it_behind_a_f
     fake.list_graph(f"after-landing:{tip}", {**g, "files": {p: d for p, d in g["files"].items() if p != "B.lean"}})
     with pytest.raises(ValueError, match=f"has a task with no key to compute: {B}"):
         ex.graph_v2(f"after-landing:{tip}")
+
+
+def _settle_by_rounds(transport, graph: dict, keyed: dict[str, str]) -> dict:
+    """`Executor.settle` as each round looked at every task the graph has yet to settle, each task's key into ``keyed``: the
+    reference its incremental form is held to, which costs a Lean graph's millions of reads times its hundreds of rounds."""
+    tasks = {t["id"]: t for t in graph["tasks"]}
+    files, envs = graph.get("files") or {}, graph.get("envs") or {}
+    out, keys = {}, {i: t["key"] for i, t in tasks.items() if t.get("key")}
+    fetch = dict(keys)
+    while True:
+        if fetch:
+            got = transport.results(list(dict.fromkeys(fetch.values())))
+            out.update({i: fold_results(got.get(k) or (), k) for i, k in fetch.items()})
+            fetch = {}
+        moved = False
+        for i, t in tasks.items():
+            if i in out or i in keys:
+                continue
+            reads = [(r, out.get(r["task"])) for r in t["reads"]]
+            if any(s and (s[0] in ("fail", BLOCKED) or s[0] == "pass" and r["output"] not in (s[1].get("outputs") or {}))
+                   for r, s in reads):
+                out[i] = (BLOCKED, None)
+            elif any(s and s[0] == "pending" for _, s in reads):
+                out[i] = ("pending", None)
+            elif all(s for _, s in reads):
+                keys[i] = fetch[i] = task_key(t, files, envs[t["env"]]["digest"], {r["task"]: s[1]["outputs"] for r, s in reads})
+            else:
+                continue
+            moved = True
+        if not moved and not fetch:
+            break
+    keyed.update(keys)
+    return {i: out.get(i, ("pending", None)) for i in tasks}
+
+
+class _Dealt:
+    """Results dealt by key: each key's documents drawn from ``seed`` and the key alone (none, an error, a pass with or without
+    the olean its readers read, a fail, a pass beside a fail), and each batch `results` was asked, in order."""
+
+    def __init__(self, seed: int):
+        self.seed, self.asked = seed, []
+
+    def results(self, keys: list[str]) -> dict[str, list[object]]:
+        import random
+
+        self.asked.append(list(keys))
+        out = {}
+        for k in keys:
+            rng = random.Random(f"{self.seed}:{k}")
+            doc = {"key": k, "outputs": {"olean": _digest(k)}}
+            out[k] = [[], [{**doc, "status": "error"}], [{**doc, "status": "pass"}], [{**doc, "status": "pass"}],
+                      [{**doc, "status": "pass", "outputs": {}}], [{**doc, "status": "fail"}],
+                      [{**doc, "status": "pass"}, {**doc, "status": "fail"}]][rng.randrange(7)]
+        return out
+
+
+@pytest.mark.parametrize("seed", range(300))
+def test_settle_settles_each_task_as_rounds_over_the_whole_graph_do(seed):
+    """Incremental settling is the same function as the rounds over the whole graph, the same results read in the same batches
+    and the same keys made, each the one a task whose reads all passed takes from their outputs: on random graphs whose tasks
+    read those before and after them, a task the graph lacks, one twice, an output no task makes, and a task keyed in the graph
+    that reads others."""
+    import random
+
+    rng = random.Random(seed)
+    n = rng.randrange(1, 30)
+    names = [f"lean-module:M{k}.lean" if rng.random() < 0.7 else f"test-file:t/test_{k}.py" for k in range(n)]
+    tasks = []
+    for k, tid in enumerate(names):
+        reads = [names[j] for j in rng.sample(range(n), rng.randrange(min(n, 6))) if j != k]
+        if rng.random() < 0.1:
+            reads.append("lean-module:Missing.lean")
+        if reads and rng.random() < 0.1:
+            reads.append(reads[0])
+        t = _task(tid, (f"src/{k}",), reads=tuple(reads), out=True)
+        if t["reads"] and rng.random() < 0.15:
+            t["reads"][-1] = {**t["reads"][-1], "output": "ilean"}
+        tasks.append(t)
+    g = _v2("1" * 40, *tasks)
+    for t in g["tasks"]:
+        if t["reads"] and rng.random() < 0.1:
+            t["key"] = _digest(f"{seed}/{t['id']}")
+    new, old = _Dealt(seed), _Dealt(seed)
+    made, ref = {}, {}
+    states = Executor(new).settle(g, made)
+    assert states == _settle_by_rounds(old, g, ref)
+    assert new.asked == old.asked and made == ref
+    for t in g["tasks"]:
+        reads = [states[r["task"]] for r in t["reads"] if r["task"] in states]
+        rule = t["key"] or (task_key(t, g["files"], ENVS[t["env"]]["digest"], {r["task"]: s[1]["outputs"] for r, s in
+                                                                               zip(t["reads"], reads)})
+                            if len(reads) == len(t["reads"]) and states[t["id"]][0] != BLOCKED
+                            and all(s[0] == "pass" for s in reads) else "")
+        assert made.get(t["id"], "") == rule, t["id"]
 
 
 def test_on_enqueues_graph_v2_and_verifies_the_tip_once_every_task_passed_by_key(world, monkeypatch, tmp_path):
@@ -813,7 +907,7 @@ def test_on_main_waits_for_the_run_of_lean_agreement_and_ratchet_gate_beside_the
     ratchet-gate (`train.sh --deferred lean-agreement,ratchet-gate --agreement`).  The graph's own tasks of those two fail,
     which counts for nothing, and every other task passes: nothing is gated, verified or red while that run runs, and once it
     passed both, the tip is verified on every step and `main` follows."""
-    monkeypatch.setattr(merge, "required_steps", lambda repo, base, commit, tool: {"lean-agreement": ["verity/ml/flock/"]})
+    monkeypatch.setattr(merge, "required_steps", lambda repo, base, commit, tool: {"lean-agreement": ["verity/protocols/flock/prover/"]})
     h = Review(world, monkeypatch, land_into="checked")
     fake = _executor(h, tmp_path, "on")
     main = _main(world)
@@ -899,7 +993,7 @@ def test_on_a_red_in_the_run_beside_the_check_holds_main_only_on_the_gate(world,
     it unless that is on the gate by the `off_gate` a run of every step reads (`_gating`), or is a preflight, which no graph/v2
     task runs, so it holds `main` though the run's one step after it, ratchet-gate (lean-agreement skipped), is off the gate."""
     if fails == "lean-agreement":
-        monkeypatch.setattr(merge, "required_steps", lambda repo, base, commit, tool: {"lean-agreement": ["verity/ml/flock/"]})
+        monkeypatch.setattr(merge, "required_steps", lambda repo, base, commit, tool: {"lean-agreement": ["verity/protocols/flock/prover/"]})
     _move_main(world, {**GATED_TREE, "tools/verity/check/policy.toml": _policy(off_gate=off_gate)})
     h = Review(world, monkeypatch, land_into="checked")
     fake = _executor(h, tmp_path, "on")
