@@ -55062,3 +55062,16 @@ For the table: every by-class or by-gate line at `code h` keeps your 12:06Z labe
 
 For the table:
 - #8922 (`code_hwit`): ready at `5b37c49d6a5c`; quick tier, records and the merged-tree build at `main` `86c03d1840cb` pass; the build at `main` `967b722429f3` is out (`f321`). A lemma, true as stated, under `Addresses h` (false as defined at a registration with a checked interior row).
+
+## HARMSEARCH, Wed 11 Nov 12:47Z: ready to mark #8950 at f8b6e599b19b7802eed13126355b6f96a3a65cc6 (the figure's driver passes the planner `widths`, `margin` and `kappas`; a benchmark driver's change, no claim). It lands only after #8853 and #8904, whose heads it holds
+
+Tags: [run], [read] (place given), [relayed], [guess]. Times from `date -u`.
+
+- **ready to mark #8950 at f8b6e599b19b7802eed13126355b6f96a3a65cc6.** Quick tier `r20261111-121123-87c2`: rc 0 at tree `f8b6e599b19b`, 57 suites, 57 passed (0 cached), 0 failed [run: its `stdout.log` and `job.json` read after it ended, 12:46Z]. No Lean file changes, so no records run.
+- **It merges:** `git merge-tree` of the head is clean with `main` `967b722429f3` and with the open PRs that touch its files, #8708 `635b2f97027d` and #8926 `1204dc214aa2`; it holds #8853 `9c9da7466aea`, #8904 `f1e9d625dd77`, #8893 `6f65951e0eb8` and #8878 `816e2396bdf7`, and is clean with each [run 12:46Z].
+- **`main` moved under it since the tier started:** `967b722429f3` holds #8539, which adds `fanout` to `two_stage_design` and to `figure1.lean_two`. The merge is clean in text, and I checked it in meaning: in the merged `optimize.py` the by-width and margin designs go through the one loop, whose `widest`, bound and final `two_stage_rankin` all take `fanout` [read: the merged file, lines 1441 to 1486]; on the merge the planner's nine width, margin and κ tests and `test_headline.py`'s ten pass [run, local, 12:38Z]. By your 11:58Z I did not merge `main` in.
+- **Order of landing:** it is stacked. If it lands before #8853 or #8904 it carries their commits with it; if either head moves, tell me and I merge it and rerun. The three rows of record keep their names and print what they printed (`(i) honest` 14,228.6) [run `r20261111-121250-8e11`].
+- The command at the head [run `8e11`, rc 0], world year, the tree's own cards and prices, modeled 0.4, GB at the 10% point × 1.05: `(i) honest` 14,228.6 → `, by width` 11,338.8; `(ii)` 8,686.3 → 5,568.6; `(iii)` 2,447.5 → 1,585.8. The body has the thirteen rows with each one's κ and Σk.
+
+For the table:
+- PLAN | #8950 `f8b6e599b19b` | ready line written 12:47Z; quick tier `87c2` 57 of 57 passed; stacked on #8853 and #8904 | the tree's command prints a row's plan by width or at a held κ; the price of record (i), world year: 14,228.6 → 11,338.8 GB × 1.05 by width (the tree's own prices, modeled 0.4) [run `8e11`].
