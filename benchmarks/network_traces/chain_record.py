@@ -62,9 +62,10 @@
   --warden-run`'s. Each is held to the network certifier run the certificates step read (`on_warden`), every one is
   required, and the report names what the path stands on (`WARDEN_STUBBED`, or `WARDEN_SERVED_STUBBED` on the served node's
   endpoint report).
-* **leak**: K per monitoring period (week, month, year; one machine and 1,000) on the warden gate run, pooled at
-  δ = 1% and 10⁻⁶ and in the per-period form, each beside its share of Llama-3.2-1B's BF16 weights (`leak`), computed
-  by `leak_bounds`: one machine is one link, and 1,000 machines are the sum over as many links.
+* **leak**: K per monitoring period (week, month, year) on the certifier's gate run, pooled at δ = 1% and 10⁻⁶ and in the
+  per-period form, each beside its share of one copy of the weights (`leak`), computed by `leak_bounds`' scaling by
+  links: one link at the run's rate, and as many of it summed as the census's reference datacenter and the world
+  have machines. The network certifier's term at a scope's own load is `verity bench certifier_term`.
 """
 from __future__ import annotations
 
@@ -794,20 +795,22 @@ def d1_terms(cert: dict, n2: dict, scan: dict, custody_doc: dict, endpoint: dict
 
 # --- leak: K per monitoring period, on the network certifier run ------------------------------------------------------
 
-#: what a monitoring period's count runs over, each machine one link: one link (`leak_bounds.per_link`), the census's
-#: reference datacenter (`leak_bounds.datacenter`) and the world (`leak_bounds.world`)
+#: what a monitoring period's count runs over, each machine one link at the run's rate: one link
+#: (`leak_bounds.per_link`), and as many of it as the census's reference datacenter and the world have machines
+#: (`leak_bounds.at_link_rate`)
 SCOPES = ("link", "datacenter", "world")
 
 
 def leak(run: Path, scan: dict | None = None, weights=None) -> dict:
     """K, the bits the network certifier's accepted transcripts can carry about the secret, per monitoring period on
-    the warden run ``run`` (a fetched gate run: its ``end.json`` and ``deployment.json``), for the scan's class
-    (`scan_zk.CLASS`) and its sample of every proof block, by `leak_bounds` (`SCOPES`): one link certifying the run's own
-    request rate (`leak_bounds.per_link`), and as many identical links summed as the census's reference datacenter has
-    machines (`leak_bounds.datacenter_links`) and as the adversary resource model's compute fills
-    (`leak_bounds.world`). Each count is in both forms, the per-period form (`PeriodLeakAccepted`'s count) and the
-    pooled one (`PooledLeakAccepted`'s at q = 1), in both readings of the sampling block's free inputs
-    (`leak_bounds.READINGS`), and beside ε, its scans' δ summed, and its share of ``weights`` (`leak_bounds.WEIGHTS`)."""
+    its gate run ``run`` (a fetched copy: its ``end.json`` and ``deployment.json``), for the scan's class
+    (`scan_zk.CLASS`) and its sample of every proof block, by `leak_bounds`' scaling by links (`SCOPES`): one link
+    certifying the run's own request rate (`leak_bounds.per_link`), and as many identical links summed
+    (`leak_bounds.at_link_rate`) as the census's reference datacenter has machines (`leak_bounds.datacenter_links`)
+    and as the world fleet has (`leak_bounds.world_links`), whatever those scopes serve. Each count is in both forms,
+    the per-period form (`PeriodLeakAccepted`'s count) and the pooled one (`PooledLeakAccepted`'s at q = 1), in both
+    readings of the sampling block's free inputs (`leak_bounds.READINGS`), and beside ε, its scans' δ summed, and its
+    share of ``weights`` (`leak_bounds.WEIGHTS`)."""
     import leak_bounds as LB
     import scan_zk as SZ
     from verity.protocols.certifier.prover import ingress_scan as IS
@@ -834,9 +837,7 @@ def leak(run: Path, scan: dict | None = None, weights=None) -> dict:
     def bound(scope: str, period: str, reading: str, delta: Fraction | None = None) -> LB.Bound:
         if scope == "link":
             return LB.per_link(cls, per_s, period, reading, delta, **at, weights=weights)
-        if scope == "world":
-            return LB.world(link, period, reading, delta, weights=weights)
-        return LB.datacenter({link: links[scope]}, period, reading, delta, weights=weights)
+        return LB.at_link_rate(link, links[scope], period, reading, delta, weights=weights)
 
     rows = []
     for period, s in LB.PERIODS.items():
@@ -876,11 +877,11 @@ def leak(run: Path, scan: dict | None = None, weights=None) -> dict:
                 "the scan proves sampling block 0 of the warden run; a monitoring period's terms are its "
                 "per-sampling-block and per-request terms at the run's request rate",
                 "the datacenter's rows sum as many identical links as the census's reference datacenter has machines, "
-                "and the world's as many as the adversary resource model's compute fills in machines of its GPUs "
-                f"(leak_bounds.datacenter, world), each link pooled at δ / links ({split}) and paying its own "
-                "incorrect proof blocks: our composition, which no Lean statement covers. Each link certifies the "
-                "run's rate; the adversary model's requests past the links' rate are uncertified, and no row counts "
-                "them",
+                "and the world's as many as the world fleet has (leak_bounds.at_link_rate, its scaling by links), "
+                f"each link pooled at δ / links ({split}) and paying its own incorrect proof blocks: our "
+                "composition, which no Lean statement covers. Each link certifies the run's rate; a scope's requests "
+                "past its links' rate are uncertified, and no row counts them, so these rows are not the scope's K "
+                "(leak_bounds.table counts the network certifier's terms over every request a scope serves)",
                 "ε is the scans' δ summed over the period's sampling blocks and the links (NetworkCheck.Period's "
                 "eps, m·δ), each scan at the scan's δ",
                 "the loop's (an untied compute audit's) free inputs don't enter K: its δ goes into JointPeriodLive's "

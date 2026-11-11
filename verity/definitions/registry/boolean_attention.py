@@ -18,6 +18,11 @@ is for `max * scale` too.
 v14 to v17 are v6 to v9 with the scale word `scale_log2` an input (a `registered_values` program registers it), whose words are
 `value_inputs`' `Attention_v10`, `_v12` and `_v13` and `fa2_check_inf`'s `Attention_v11`: v14 is v10's (v6 with the scale an
 input), v15 v12's (v7), v16 v13's (v9) and v17 v11's (v8), each over its own block and head.
+
+`AttnBlockFirst_v3` and `AttnHeadEnd_v2` are the units `dead_free` cuts a head into, on bits: the first visited key block over
+its NVIS keys alone (`AttnBlockFirst_v1`) and the head's end (`AttnHeadEnd_v1`), beside `AttnBlock_v8` and `_v9` for the
+blocks below the first. Each is a head's own Calls (`_block`, the epilogue) and reads no table, so a unit of one is gates
+alone. They are ``opt_in``: `boolean_version` never picks one, and they serve only a caller that names them.
 """
 from __future__ import annotations
 
@@ -36,6 +41,7 @@ from verity.circuits.boolean.trace import definition, word_of
 from verity.definitions.registry import hopper
 from verity.definitions.registry.b1 import (AttentionHeadV2, AttentionHeadV3, AttentionV2, AttentionV3, AttnBlockV2, AttnBlockV3,
                                              _lane, scale_log2_bits)
+from verity.definitions.registry.dead_free import AttnBlockFirstV1, AttnHeadEndV1
 from verity.definitions.registry.fa2_check_inf import (AttentionHeadV5, AttentionHeadV11, AttentionV5, AttentionV11, AttnBlockV5,
                                                         AttnBlockV11)
 from verity.definitions.registry.fa3_check_inf import AttentionHeadV4, AttentionV4, AttnBlockV4
@@ -513,6 +519,40 @@ def _checked_scaled_attention(B, S, q, kc, vc, scale_log2):
 
 AttentionV17 = _on_bits("Attention", 17, ["T", "NH", "KVH", "D", "BN", "DOT", "INV", "MASKED_FROM"], _scaled(_attention_type),
                         _checked_scaled_attention, AttentionV11)
+
+
+def _first_type(S):
+    return ((("q", Array(S.D, BF16)), ("k", Array(S.NVIS, Array(S.D, BF16))), ("v", Array(S.NVIS, Array(S.D, BF16)))),
+            Tuple(F32, Array(4, F32), Array(S.D, F32)))
+
+
+def _first_block(B, S, q, k, v):
+    """`AttnBlockFirst_v1`'s body on bits: a head's first visited key block over its NVIS = 1 ... BN keys alone, the Calls of
+    `AttnBlock_v8` at FIRST (`_block`, which then reads no running state), its V rows padded with the zero bit to the last
+    k-step it runs and no K row past NVIS. Returns the running state (max, lane sums, O) the next block reads."""
+    pad = -S.NVIS % 16
+    if pad:
+        v = Coll(Array(S.NVIS + pad, Array(S.D, BF16)), concat([v.refs, _Bits(B).zeros(Array(pad, Array(S.D, BF16))).refs]))
+    return _block(B, "AttnBlockFirst_v3", S.D, S.NVIS, True, S.BN, S.DOT, q, k, v, None, None, None)
+
+
+AttnBlockFirstV3 = _on_bits("AttnBlockFirst", 3, ["D", "NVIS", "BN", "DOT"], _first_type, _first_block, AttnBlockFirstV1)
+AttnBlockFirstV3.opt_in = True  # type: ignore[attr-defined]
+
+
+def _end_type(S):
+    return ((("l", Array(4, F32)), ("o", Array(S.D, F32))), Array(S.D, BF16))
+
+
+def _head_end(B, S, l, o):
+    """`AttnHeadEnd_v1`'s body on bits: a head's epilogue (`_head`'s) on its last block's lane sums and O, `bf16(o * INV((l0 +
+    l2) + (l1 + l3)))` with `INV` `Fa2InvSum_v2` or `Fa3InvSum_v2`, the inverse's own gates once for the row."""
+    total = B.call(BA.F32AddFtz, B.call(BA.F32AddFtz, l[0], l[2]), B.call(BA.F32AddFtz, l[1], l[3]))
+    return _scale_row(B, o, B.call(S.INV, total), bf16=True)
+
+
+AttnHeadEndV2 = _on_bits("AttnHeadEnd", 2, ["D", "INV"], _end_type, _head_end, AttnHeadEndV1)
+AttnHeadEndV2.opt_in = True  # type: ignore[attr-defined]
 
 
 #: the FA2 (Ampere mma.sync) and FA3 (Hopper wgmma) bindings of v7's DOT and INV
