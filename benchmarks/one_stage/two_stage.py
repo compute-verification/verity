@@ -31,7 +31,10 @@ gives its outcome (`prove`, `outcome_of`).
   parameters its templates' ports read (links, each registered by the interior as a value under the link's name), its
   wires and its return links. Without ``--interior`` a class's rule is its design's (`rule_of`). A block round 2
   derives no links or wires from has no second stage, and `design` says so by name: an inlined token select today,
-  whose block gathers each token's chunks.
+  whose block gathers each token's chunks. ``second --unlinked`` runs such a class as far as it goes: its sampled
+  proof blocks committed, registered, sampled and proved with no link and no wire, each port at the interior's own
+  rows. That measures the sessions and ties nothing: round 2 refuses the statements (``second-wires``), and the run
+  exits 1.
 * **The second stage's coins.** The first stage's session closed with its sample and a challenger opens a root once, so
   ``second`` opens a session of its own on the interior window's run (`interior_rows.interior_run` of the boundary
   registration and the sample), whose root the interior registration is held to and its replay-given values bind.
@@ -59,7 +62,8 @@ Usage::
     two_stage.py first --boundary DIR [DIR ...] --check TEMPLATE --replay rate:NUM/DEN --k K --challenger local \\
         --main FILE --out OUT [--interior FILE.json [--span-values VALUES.json]] [--advice REGISTRATION.json] [--proof-deadline S]
     two_stage.py second --stage1 OUT/<class>/stage1.json --boundary DIR --capture CAPTURE --challenger local --main FILE \\
-        --m0-pythonpath PATH --bin flock-circuit --lean flock-verify --out OUT2 [--proofs PARAMS.json] [--rids IDS.json] [--firewall F]
+        --m0-pythonpath PATH --bin flock-circuit --lean flock-verify --out OUT2 [--proofs PARAMS.json] [--rids IDS.json] [--firewall F] \\
+        [--unlinked]
 
 Each DIR a class's (``w<window>/p<P>-o<O>/``), every one of one window (``second``: one class's, with its private
 files); FILE.json the interior values, ``[[name, schema], ...]``; VALUES.json the replay block's parameters the interior
@@ -328,15 +332,19 @@ class Design:
                                   IR.link_values(self.links, len(sample)))
 
 
-def design(layout: BR.Layout, record: Mapping[str, Any] | None = None) -> Design:
+def design(layout: BR.Layout, record: Mapping[str, Any] | None = None, *, unlinked: bool = False) -> Design:
     """The class's `Design`, its links named as round 1's record ``record`` names its ports (the layout's own ports
     where none is given). ValueError where round 2 derives no links or no wires from the replay block (its
-    ``second-links`` and ``second-wires``): such a class has no second stage to run."""
+    ``second-links`` and ``second-wires``): such a class has no second stage to run. ``unlinked``: such a class's
+    members and cells alone, with no link and no wire: its sampled proof blocks can be committed and proved, each port
+    at its own rows, but nothing ties one to another or to round 1, and round 2 refuses its statements by that code."""
     key = descriptor_id(layout.replay)
     record = {"roots": [{"port": p} for p in layout.ports()]} if record is None else record
     members = tuple(IR.member(P.template_id(t)) for t in layout.templates)
     cells = S.replay_cells(Program(layout.replay), P.template_instances_query(layout.templates))
     wires = SS.replay_wires(layout.program, key)
+    if wires is None and unlinked:
+        return Design(key, members, cells, (), (), ())
     if wires is None:
         raise ValueError(f"replay block {key} makes no wires round 2 derives (`second_stage.replay_wires`): "
                          f"{SS.WIRES_WHY}")
@@ -349,8 +357,9 @@ def design(layout: BR.Layout, record: Mapping[str, Any] | None = None) -> Design
 def rule_of(layout: BR.Layout, replay: str, k: int, proof_deadline: float = PROOF_DEADLINE_S) -> Rule:
     """The class's rule from its `design`: the interior values the replay side commits (its templates' ports as an
     interior window lays them out) and the replay block's parameters its interior registers as values
-    (`interior_rows.span_values`, sized by the class: its rows a sampled span)."""
-    d = design(layout)
+    (`interior_rows.span_values`, sized by the class: its rows a sampled span). A class round 2 derives no wires from
+    has its templates' ports alone (`design`'s ``unlinked``): its first stage samples as any class's does."""
+    d = design(layout, unlinked=True)
     w = d.window("00", [0])
     return Rule(replay, k, tuple(v for m in w.members for v in interior_values(m)), proof_deadline,
                 IR.span_values(d.links))
@@ -416,7 +425,7 @@ class Replayed:
 
 
 def replayed(again: First, c: BR.Committed, capture: Path, directory: Path, *, window_root: str | None = None,
-             rids: Mapping[str, str] | None = None, salt_key: bytes | None = None) -> Replayed:
+             rids: Mapping[str, str] | None = None, salt_key: bytes | None = None, unlinked: bool = False) -> Replayed:
     """The replay side's half of the second stage, on the class's stream at the end of its first stage (``again``,
     `resume`): the sampled spans' proof blocks from ``capture`` (`spans_of`), committed as the interior
     (`interior_rows.interior`: each replay-block parameter a port reads registered as a value, under ``window_root``),
@@ -425,12 +434,13 @@ def replayed(again: First, c: BR.Committed, capture: Path, directory: Path, *, w
     stream's coins committed to the registration's digest. ``c``: the class's commitment, reopened from its files
     (`boundary_rows.reopen`), whose spans say which requests were sampled and what the serve emitted for them.
     ``window_root``: the open root of the challenger session the second stage's coins come from. ``salt_key``: tests
-    only. ValueError where the class has no second stage (`design`), the capture isn't the sampled spans', or round 1's
+    only. ``unlinked``: a class round 2 derives no wires from is committed with no link and no wire (`design`).
+    ValueError where the class has no second stage (`design`), the capture isn't the sampled spans', or round 1's
     record commits the block's return, which is read at round 1's rows under the serve's salts: not built here.
     `service.Refused` as the stream refuses the registration."""
     if {k: v for k, v in c.public().items() if k != "seconds"} != {k: v for k, v in again.pub.items() if k != "seconds"}:
         raise ValueError("the class's files are not the commitment its first stage registered")
-    d = design(again.layout, again.record)
+    d = design(again.layout, again.record, unlinked=unlinked)
     held = {r["port"] for r in again.record["roots"]}
     if any(x.value in held for x in d.returns):
         raise ValueError(f"round 1's record commits the block's return ({[x.value for x in d.returns if x.value in held]}): "
@@ -440,7 +450,7 @@ def replayed(again: First, c: BR.Committed, capture: Path, directory: Path, *, w
     it = IR.interior(per, d.cells, again.registration.digest, sample, row=again.pub["window"], links=d.links,
                      wires=d.wires, served=again.record, window_root=window_root, salt_key=salt_key)
     record = IR.write(it, directory)
-    tie = {"registered": IR.link_words(d.links), "schemas": IR.link_schemas(d.members, d.links),
+    tie = {**({"registered": IR.link_words(d.links), "schemas": IR.link_schemas(d.members, d.links)} if d.links else {}),
            **({} if window_root is None else {"window_root": window_root})}
     ireg, draw = again.second(record, it.ports, leaf_layer=it.leaf_layer, **tie)
     return Replayed(again, d, it, Path(directory), record, ireg, draw, tie, launches)
@@ -753,7 +763,7 @@ def _second(a: argparse.Namespace) -> int:
     out = Path(a.out)
     out.mkdir(parents=True, exist_ok=True)
     stage1 = json.loads(Path(a.stage1).read_text())
-    summary: dict[str, Any] = {"stage1": str(a.stage1), "held": False}
+    summary: dict[str, Any] = {"stage1": str(a.stage1), "held": False, "unlinked": bool(a.unlinked)}
 
     def done(code: int, **more: Any) -> int:
         summary.update(more)
@@ -787,7 +797,7 @@ def _second(a: argparse.Namespace) -> int:
             coins.plan(second_need(again.stream, len(sample)))
             again.coins.then = coins
             r = replayed(again, c, Path(a.capture), out / "interior", window_root=root,
-                         rids=json.loads(Path(a.rids).read_text()) if a.rids else None)
+                         rids=json.loads(Path(a.rids).read_text()) if a.rids else None, unlinked=a.unlinked)
         except (S.Refused, Ch.CoinError, ValueError, OSError) as e:
             return done(1, refused=e.verdict.to_json() if isinstance(e, S.Refused) else f"{type(e).__name__}: {e}")
         finally:
@@ -845,6 +855,10 @@ def main(argv: Sequence[str] | None = None) -> int:
     g.add_argument("--capture", required=True, help="the replay's capture of the sampled spans' sampler inputs "
                                                     "(engine.sampler_capture.write)")
     g.add_argument("--rids", help="a JSON object: the capture's request id for a span's engine id, where they differ")
+    g.add_argument("--unlinked", action="store_true",
+                   help="a class whose replay block gives round 2 no wires (refused without this): commit and prove its "
+                        "sampled proof blocks with no link and no wire, each port at its own rows. Nothing then ties a "
+                        "block to another or to round 1: round 2 refuses the statements (second-wires) and this exits 1")
     g.add_argument("--proofs", help="the auditor's params (service.template_circuits); without them a development run's "
                                     "are built after the sample (references)")
     g.add_argument("--m0-pythonpath", required=True)

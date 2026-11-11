@@ -62,12 +62,43 @@ def run(served) -> dict:
     return {**served, "stage1": stage1, "again": again, "r": r}
 
 
+def _handed(interior: Path, served: Path, mine: CS.Binding, reads: dict, drawn: list[int]) -> tuple[list[dict], dict]:
+    """The sessions' statements and their verdicts of record without the sessions: each member's public file as the
+    served path writes it for the written window (`flock_input_files`, as a5 stages a session), the verifier's reads,
+    and a stand-in for what `flock-verify verify`'s verdict of record names of the session it checked."""
+    from verity_flock.class_statement import member_stager
+
+    def sha512(j) -> str:
+        return hashlib.sha512(canonical_json(j)).hexdigest()
+
+    parts = SS.parts(Q, P.strata(mine.program, mine.query))
+    bind = {"partition": mine.partition_digest, "program": mine.partition["program"]}
+    stmts, verdicts = [], {}
+    for k, m in enumerate(mine.members):
+        text = member_stager(TS.template_fn(m.template), m, bind).text
+        with open(FI.flock_input_files(interior, k, text, served, write=("pub",))["pub"], "rb") as f:
+            header = json.loads(f.readline())
+        s = {"template": m.template, "header": header, "draw": SS.own_draw(Q, parts[k], drawn), "registered": reads[m.key]}
+        stmts.append(s)
+        verdicts[f"lean-verify/m{k}"] = {
+            "of_record": True, "accepted": True, "public_header_sha512": sha512(header), "unit_draw": s["draw"],
+            "session_tables": 1, "registered_sha512": sha512(s["registered"]),
+            "registered": {p: {"value": e["value"], "root": e["root"]} for p, e in s["registered"]["ports"].items()}}
+    return stmts, verdicts
+
+
 def test_a_class_whose_block_makes_no_wires_has_no_second_stage_and_one_of_instances_has_its_design():
     """An inlined token select's replay block gathers each token's chunks, which round 2 derives no wire from
-    (``second-wires``): `design` refuses the class by that name before anything is replayed. The class of whole
-    instances reads the block's ``logits`` at one template's port, one row a served token, and returns its ``o0``."""
+    (``second-wires``): `design` refuses the class by that name before anything is replayed, and gives it unlinked
+    only when asked, its templates' proof blocks with no link, wire or return; its rule registers no value of the
+    block's. The class of whole instances reads the block's ``logits`` at one template's port, one row a served token,
+    and returns its ``o0``."""
     with pytest.raises(ValueError, match="makes no wires round 2 derives"):
         TS.design(_layout(inline=True))
+    u = TS.design(_layout(inline=True), unlinked=True)
+    assert (u.cells, u.links, u.wires, u.returns) == ((O * V // 64, O), (), (), ())
+    assert TS.rule_of(_layout(inline=True), f"rate:{Q}/{N}", K).span_values == ()
+    assert TS.design(_layout(), unlinked=True) == TS.design(_layout())
     d = TS.design(_layout())
     assert (d.cells, d.wires) == ((O,), ())
     assert [(x.template, x.port, x.value, x.per, x.at) for x in d.links] == [(TID, "logits", "logits", O, tuple(range(O)))]
@@ -132,10 +163,8 @@ def test_round_2_takes_the_hand_over_but_for_the_return_read_round_1_commits_no_
     files name; and the public files the served path writes for the written window (`flock_input_files`, as a5 stages
     the sessions), each named by a stand-in verdict of record, pass every check of round 2 but ``second-read``. The
     one read it refuses is the return's: round 1's record commits no port for the block's return, and the interior may
-    not register it, so with the return link left out of the design round 2 accepts. Slow (about 25 s): it lowers the
+    not register it, so with the return link left out of the design round 2 accepts. Slow (about 15 s): it lowers the
     template for the references and the sessions' files."""
-    from verity_flock.class_statement import member_stager
-
     again, r, tmp = run["again"], run["r"], run["tmp"]
     d, brec, sample, drawn = r.design, again.record, [int(u) for u in again.draw.units], list(r.draw.units)
     mine, w = d.window(again.registration.digest, sample), r.interior.committed.window
@@ -161,23 +190,8 @@ def test_round_2_takes_the_hand_over_but_for_the_return_read_round_1_commits_no_
     assert {p: e["value"] for p, e in proofs["templates"][0]["registered"]["ports"].items()} == {
         "logits": "logits", "o0": f"{TID}/o0"}
 
-    def sha512(j) -> str:
-        return hashlib.sha512(canonical_json(j)).hexdigest()
-
+    stmts, verdicts = _handed(tmp / "interior", tmp / "served", mine, reads, drawn)
     parts = SS.parts(Q, P.strata(mine.program, mine.query))
-    bind = {"partition": mine.partition_digest, "program": mine.partition["program"]}
-    stmts, verdicts = [], {}
-    for k, m in enumerate(mine.members):
-        text = member_stager(TS.template_fn(m.template), m, bind).text
-        with open(FI.flock_input_files(tmp / "interior", k, text, tmp / "served", write=("pub",))["pub"], "rb") as f:
-            header = json.loads(f.readline())
-        s = {"template": m.template, "header": header, "draw": SS.own_draw(Q, parts[k], drawn), "registered": reads[m.key]}
-        stmts.append(s)
-        # what `flock-verify verify`'s verdict of record names of the session it checked
-        verdicts[f"lean-verify/m{k}"] = {
-            "of_record": True, "accepted": True, "public_header_sha512": sha512(header), "unit_draw": s["draw"],
-            "session_tables": 1, "registered_sha512": sha512(s["registered"]),
-            "registered": {p: {"value": e["value"], "root": e["root"]} for p, e in s["registered"]["ports"].items()}}
     assert TS.pins(proofs, stmts) == {TID: True}
     layout = again.layout
     got = TS.round_two(layout.program, d.key, sample, mine, r.record, brec, drawn, stmts, {"verdicts": verdicts}, proofs)
@@ -191,3 +205,36 @@ def test_round_2_takes_the_hand_over_but_for_the_return_read_round_1_commits_no_
                  ref_reads=tuple((e["template"], e["registered"]) for e in proofs["templates"]),
                  wires=SS.replay_wires(layout.program, d.key), rows=SS.replay_rows(layout.program, d.key))
     assert SS.check(True, own, stmts).to_json() == {"ok": True, "codes": [], "detail": {}}
+
+
+@pytest.mark.slow
+def test_an_unlinked_class_is_committed_and_proved_blockwise_and_round_2_refuses_its_wires(tmp_path):
+    """A class as a served vocabulary's is, its replay block the check's body inlined (chunks and a combine a token; a
+    vocabulary of 4,096, the smallest whose combine has a row past one hash block, which Flock's composer needs):
+    `replayed` refuses it by name, and with ``unlinked`` commits the sampled spans' chunks and combines as the
+    interior, registering no value, and samples K of each in every sampled span. The verifier's reads then put every
+    port at the interior's own, and round 2 refuses the statements by ``second-wires`` alone: the sessions prove each
+    block and tie none to another or to round 1. Slow (about 40 s): it lowers both templates twice."""
+    v = 4096
+    got, check = SM.serve(tmp_path, v, O, N, inline=True), BR.check_template(SM.template(v))
+    c, pub = BR.reopen(got["class"], check), json.loads((got["class"] / BR.COMMIT).read_text())
+    first = TS.first(pub, check, TS.rule_of(c.layout, f"rate:{Q}/{N}", K, 60.0), FC.Challenger("first"))
+    again = TS.resume(json.loads(json.dumps(first.stage1())), check, FC.Challenger("second"))
+    with pytest.raises(ValueError, match="makes no wires round 2 derives"):
+        TS.replayed(again, c, got["capture"], tmp_path / "never")
+    r = TS.replayed(again, c, got["capture"], tmp_path / "interior", unlinked=True)
+    d, sample, drawn = r.design, [int(u) for u in again.draw.units], list(r.draw.units)
+    chunks = O * v // 64
+    assert d.cells == (chunks, O) and "registered" not in r.record and r.tie == {}
+    assert sorted(u // chunks for u in drawn if u < Q * chunks) == list(range(Q))
+    assert sorted((u - Q * chunks) // O for u in drawn if u >= Q * chunks) == list(range(Q))
+    mine = d.window(again.registration.digest, sample)
+    assert CS.expected_ports(mine) == r.interior.ports
+    reads = TS.verifier_reads(d, mine, r.record)
+    assert all(e["value"] == f"{m.template}/{p}" for m in mine.members for p, e in reads[m.key]["ports"].items())
+    proofs = TS.references(d, Q, tmp_path / "references")
+    S.template_circuits(proofs, again.stream.spec.check.query)
+    stmts, verdicts = _handed(tmp_path / "interior", tmp_path / "served", mine, reads, drawn)
+    assert all(TS.pins(proofs, stmts).values())
+    r2 = TS.round_two(c.layout.program, d.key, sample, mine, r.record, again.record, drawn, stmts, {"verdicts": verdicts}, proofs)
+    assert (r2["ok"], r2["codes"]) == (False, ["second-wires"])
