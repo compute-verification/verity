@@ -150,7 +150,7 @@ def test_with_wait_a_request_over_the_quota_waits_unqueued_and_starts_when_a_lea
 
 def test_a_check_that_fails_leases_nothing_and_cores_must_be_a_cpu_list(tmp_path):
     node = Node(tmp_path)
-    for bad in ("", "a", "1-", "1,,2", "0-3 4"):
+    for bad in ("", "a", "1-", "1,,2", "0-3 4", "5-3"):
         assert node.ask("--cores", bad).returncode == 2
     node.program("python3", "exit 3")
     r = node.ask("--cores", "0-3")

@@ -683,7 +683,10 @@ while [ $# -gt 0 ] && [ "$1" != -- ]; do
     --preemptible) preempt=1 ;;
     --timed) timed=1 ;;
     --on) [ $# -ge 2 ] || usage; on=$2; shift ;;
-    --cores) [ $# -ge 2 ] || usage; cores=$2; shift; [[ $cores =~ ^[0-9]+(-[0-9]+)?(,[0-9]+(-[0-9]+)?)*$ ]] || usage ;;
+    --cores)
+      [ $# -ge 2 ] || usage; cores=$2; shift
+      [[ $cores =~ ^[0-9]+(-[0-9]+)?(,[0-9]+(-[0-9]+)?)*$ ]] || usage
+      for part in ${cores//,/ }; do [ "${part%-*}" -le "${part#*-}" ] 2> /dev/null || usage; done ;;
     --max-min) [ $# -ge 2 ] || usage; maxmin=$2; shift; case $maxmin in ''|*[!0-9]*|0) usage ;; esac ;;
     --mem-gb) [ $# -ge 2 ] || usage; memgb=$2; shift; case $memgb in ''|*[!0-9]*) usage ;; esac ;;
     *) usage ;;
