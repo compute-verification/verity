@@ -187,6 +187,50 @@ def test_a_jobs_run_gets_the_time_its_configs_budget_gives_it(tree, reg_path):
     assert "--max-min" not in plain.runs[0] and "--timeout" not in plain.runs[0]
 
 
+#: of each start of starts.toml: the GB a job's first run asks the queue for, and a run that fetched its state
+DISK_GB = {"s-t20": (22, 22), "s-t200": (22, 22), "m-t20": (23, 24), "m-t200": (23, 24), "l16-t20": (29, 32),
+           "xl-t20": (44, 52)}
+
+
+def test_a_queued_run_asks_for_the_disk_its_starts_size_needs(tree, reg_path, monkeypatch):
+    """A run's disk is its start's size and nothing measured: 4 bytes a parameter of starts.toml, `STATE_OVER_MODEL`
+    models a state, `STATE_COPIES` states at once and a fourth in a run that fetched its state, and `OUTSIDE_GB`.
+    The figures are pinned for every start of the registry; the queue is asked for a job's, and a named machine,
+    which declares nothing to it, for none."""
+    reg = starts.registry()
+    assert set(reg["starts"]) == set(DISK_GB)
+    assert (cmd.STATE_OVER_MODEL, cmd.STATE_COPIES, cmd.OUTSIDE_GB) == (3, 3, 20)
+    for name, (first, fetched) in DISK_GB.items():
+        s = starts.start(name, reg)
+        state = cmd.STATE_OVER_MODEL * 4 * s.shape["parameters"]
+        assert 3 * state <= (first - cmd.OUTSIDE_GB) * 10**9 < 3 * state + 10**9, name
+        assert 4 * state <= (fetched - cmd.OUTSIDE_GB) * 10**9 < 4 * state + 10**9, name
+        assert (cmd.run_disk_gb(s), cmd.run_disk_gb(s, fetched=True)) == (first, fetched), name
+    xl = starts.start("xl-t20", reg)
+    assert (cmd.run_disk_gb(xl, weights=True), cmd.run_disk_gb(xl, weights=True, fetched=True)) == (47, 55)
+
+    write_config(tree / "a.toml")
+    (job,) = config.load(tree / "a.toml", starts.registry(reg_path)).jobs()
+    tiny = cmd.run_disk_gb(job.config.start)
+    assert tiny == cmd.OUTSIDE_GB + 1
+    r, on = Research(), Research()
+    command(r, "a", "--starts", str(reg_path))
+    assert r.runs[0][14:16] == ["--disk-gb", str(tiny)]
+    r.states.add(ART)
+    stop(r, job, ART)
+    command(r, "a", "--starts", str(reg_path))
+    assert r.runs[1][14:16] == ["--disk-gb", str(tiny)] and r.runs[1][-5] == "--store-read"
+    monkeypatch.setattr(cmd, "run_disk_gb", lambda start, weights, fetched: f"{start.name}/{weights}/{fetched}")
+    r = Research()
+    command(r, "a", "--starts", str(reg_path), "--weights")
+    stop(r, job, ART)
+    r.states.add(ART)
+    command(r, "a", "--starts", str(reg_path))
+    assert [argv[14:16] for argv in r.runs] == [["--disk-gb", "tiny/True/False"], ["--disk-gb", "tiny/False/True"]]
+    command(on, "a", "--starts", str(reg_path), "--on", "node-1")
+    assert "--disk-gb" not in on.runs[0]
+
+
 def test_the_honest_configs_jobs_come_with_it_and_on_names_the_machine(tree, reg_path):
     write_config(tree / "ref.toml", dials={"trainable": "*"})
     write_config(tree / "a.toml", honest="ref")

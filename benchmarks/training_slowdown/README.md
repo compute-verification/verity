@@ -69,7 +69,10 @@ the job ran in, and its count is their sum: every step once, and each segment's 
 computed after its last kept checkpoint is run again and is in no record. A state is a cache: the command keeps it
 with the stopped run's output on the store, the next run fetches it on whichever machine it gets (`NODE_STATE` in
 `run.py` here places it on the node's disk instead), and losing it costs a start from θ. The state directory is
-hidden from the route's process as a final set is, and only the job's own process writes it.
+hidden from the route's process as a final set is, and only the job's own process writes it. A state is at most three
+times its model (the weights and two buffers of the optimizer for each), and a run holds three states at once while
+it keeps one, and a fourth, the store's own copy, when it fetched the one it continues from: the command asks the
+queue for that much disk from the start's parameters, and 20 GB for the rest (`run_disk_gb` in `run.py` here).
 
 A job trains the config's start along its route and scores each checkpoint on its split. A route is a module of
 `routes/` with `VERSION`, `DIALS`, `build`, `step` and `plan` (the route contract, `routes/__init__.py`); the harness

@@ -12,6 +12,9 @@
 # and leaves what continuing needs in $RESEARCH_RUN_DIR/out/state, which goes to the store with the run's output. The
 # queue starts nothing again: the command's next run does, and the job continues from that state on whichever
 # machine it gets.
+#
+# A job's disk: the command asks for each job's own (--disk-gb, from its start's size: the copies of a kept state a
+# run holds at once), so the kind states no disk_gb.
 
 [kinds.training-attack]
 phase = "gpu1"

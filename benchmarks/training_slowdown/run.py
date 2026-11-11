@@ -10,9 +10,10 @@ the command looks every job up and runs the missing ones:
 
 - by default each goes on the queue (`research run --queue`, kind `training-attack` in infra/cluster/kinds/training.toml:
   one GPU, preemptible), or with `--on MACHINE` to that machine, for the time its config's budget gives it
-  (`run_minutes`). The command labels a job's run as it queues it, and the run's record once the run ends with one
-  (`research data label`), so the store's labels are its only state and the next run of the command picks up where
-  this one stopped;
+  (`run_minutes`). On the queue it asks for the disk its start's size needs (`run_disk_gb`: the copies of a kept
+  state a run holds at once, at the state's largest); a machine named with `--on` is asked for none. The command
+  labels a job's run as it queues it, and the run's record once the run ends with one (`research data label`), so
+  the store's labels are its only state and the next run of the command picks up where this one stopped;
 - with `--local` each runs here, one after another, with no `research` call, into `ROOT/<digest>/<seed>/<split>/`
   (`run.json`, and `job.json` with the job's exit status); ROOT is `--root`, else `$OUT`.
 
@@ -65,6 +66,14 @@ NODE_STATE: str | None = None
 #: the minutes of a run that its config's `budget.minutes` doesn't count: the environment, the start's and the data's
 #: load, a kept state's fetch, the last checkpoint and the trace
 OUTSIDE_MIN = 30
+#: a kept state is at most this many times its model: the weights and, for each, two buffers of its optimizer
+STATE_OVER_MODEL = 3
+#: the copies of a kept state a run's disk holds at once: the one the route's process hands out, and the new state
+#: beside the old one until it takes its place (`training_slowdown.run.Kept.write`)
+STATE_COPIES = 3
+#: the GB a run writes besides: its environment, its tree, a checkpoint on its way to be scored and its output. The
+#: queue's own figure for a job that declares none.
+OUTSIDE_GB = 20
 DONE, PENDING, STOPPED, FAILED, MISSING = "done", "pending", "stopped", "failed", "missing"
 
 
@@ -106,6 +115,16 @@ def run_minutes(cfg: config.Config) -> int | None:
     return math.ceil(BUDGET_SLACK * minutes) + OUTSIDE_MIN if minutes else None
 
 
+def run_disk_gb(start: starts.Start, weights: bool = False, fetched: bool = False) -> int:
+    """The disk a run of a job at `start` asks the queue for, in its GB (10^9 bytes), from the start's size: its
+    parameters at 4 bytes each are its model, a kept state is at most `STATE_OVER_MODEL` models, and the run holds
+    `STATE_COPIES` of them at once, and one more when it `fetched` the state it continues from, of which the store
+    keeps its own copy on the machine. With `weights` the run keeps the last checkpoint's whole output, one more
+    model. `OUTSIDE_GB` is the rest."""
+    model = 4 * int(start.shape["parameters"])
+    return math.ceil(((STATE_COPIES + fetched) * STATE_OVER_MODEL + weights) * model / 1e9) + OUTSIDE_GB
+
+
 def research_argv(job: config.Job, a: argparse.Namespace, after: State | None = None) -> list[str]:
     """The `research run` of `job`; `after` its stopped run, it continues from the state that run kept."""
     try:
@@ -123,14 +142,16 @@ def research_argv(job: config.Job, a: argparse.Namespace, after: State | None = 
            f'--out "$OUT"')
     minutes = run_minutes(job.config)
     if a.on:
+        # a machine named by hand declares nothing to the queue, its disk included
         where = ["--on", a.on] + (["--pool", a.pool] if a.pool else [])
-        timed = ["--timeout", f"{minutes}m"] if minutes else []
+        asks = ["--timeout", f"{minutes}m"] if minutes else []
     else:
         where = ["--queue", "--kind", KIND, "--preemptible"]
-        timed = (["--max-min", str(minutes)] if minutes else []) + (["--on", after.machine] if after and NODE_STATE
-                                                                    else [])
+        asks = (["--disk-gb", str(run_disk_gb(job.config.start, a.weights, bool(fetch)))]
+                + (["--max-min", str(minutes)] if minutes else [])
+                + (["--on", after.machine] if after and NODE_STATE else []))
     return ["research", "run", *where, "--project", "verity", "--source", str(ROOT), "--cwd", "source", "--gpus", "1",
-            *timed, *(["--store-read"] if fetch else []), "--", "bash", "-lc", cmd]
+            *asks, *(["--store-read"] if fetch else []), "--", "bash", "-lc", cmd]
 
 
 class Store:
