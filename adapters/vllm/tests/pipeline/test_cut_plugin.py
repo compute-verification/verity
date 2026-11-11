@@ -258,7 +258,10 @@ def test_the_edge_holds_each_open_request_at_its_released_count(engine) -> None:
         t[0] += dt
         if t[0] >= 3:
             behind.pop("req-1", None)
-    released = lambda r: r.num_output_tokens - behind.get(r.request_id, 0)  # noqa: E731
+
+    def released(r: Any) -> int:
+        return r.num_output_tokens - behind.get(r.request_id, 0)
+
     sched, cut = Sched(), CP.Cut(every_steps=4, hold_s=5, released=released, clock=lambda: t[0], poll_s=1.0)
     steps = serve(engine(lambda core: cut), sched, [Req(0), Req(1)], wait=wait)
     e0 = cut.edges[0]

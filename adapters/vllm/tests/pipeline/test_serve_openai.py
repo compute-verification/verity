@@ -1022,7 +1022,9 @@ def test_the_pool_row_setting_is_a_token_width_and_needs_the_prefix_cache(tmp_pa
     def opts(*more: str) -> so.Options:
         return cli.parse("serve-openai", ["--model", "m", "--revision", "r", "--required-manifest", str(man), *more], environ={})
 
-    ninja = lambda _: "/v/bin/ninja"  # noqa: E731
+    def ninja(_: str) -> str:
+        return "/v/bin/ninja"
+
     so.preflight(opts(), which=ninja)
     monkeypatch.setenv("VERITY_POOL_ROW", "18")
     with pytest.raises(cli.UsageError, match="needs --prefix-caching and the Commit"):
