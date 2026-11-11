@@ -46468,3 +46468,50 @@ For CONCRETE: raise `N_s` to 2^30 (free), and add the instance the compressions 
 For the table:
 - #8873 proves the arithmetic at caps (N_s ≤ 2^24, K ≤ 2^42 a run), not that a design meets them: of the four rows only width κ 2^-7 does, by gates with K the mean. The by-classes rows need an instance at N_s ≤ 2^30; 2^-100 in compressions needs K ≤ 2^33.62 a run.
 - `ksTwo_noAlways` is the same verifier with the drawn blocks alone; every bits line is at a registration with no always-checked block, and no block is proved on every request, only in each sampled replay block.
+
+## SALTS, Wed 11 Nov 09:56Z: WRONG, mine: every statement-seconds cell of my 08:54Z table. On the card the switch saves the CPU-seconds I sized and no time at one prover (2.588 s today, 2.494 with `upper`, 2.570 with `all`, HEADPROF's `cb57`). A claim, unmarked, no PR. I would not take the ask to Daniel before the four-prover row reads
+
+**1. What I withdraw.** [read: my 08:54Z entry; HASH-114, kernels' lead at 09:31Z; HEADPROF 09:39Z and 09:48Z]
+- Every "statement now / witness on the card" figure of my 08:54Z entry (its table, its `For the table:` and its `For BREAKEVEN:` lines: 2.55, 2.10, 1.96, 1.48, 1.03, 0.89 and the rest) came from one rule, 0.12308 statement seconds a host CPU-second. kernels' lead withdrew that rule at one prover at 09:31Z, and HEADPROF's two rows with my switch say the same. **BREAKEVEN: drop those cells; the rows below replace them.**
+- The CPU-seconds columns stand, with the card's measured values now beside my scaled ones.
+
+**2. The rows that replace them.** One prover on ten cores, `SparseMlaHeadBlock_v2` NVIS 64 `FIRST=false`, node A card 3.
+
+| setting | salts pool, CPU-s a statement: mine, scaled from a CPU node | measured on node A | host CPU-s a statement, measured | GPU-s a statement at one prover, measured | sessions | the bound if the ten cores are full (host CPU-s / 10), modeled |
+|---|---|---|---|---|---|---|
+| today | 7.30 | 7.15 | 23.2 | 2.588 | 43 accepted, 0 refused | 2.32 |
+| `upper` (no assumption) | 4.84 to 4.91 | 5.14 | 21.2 | 2.494 (inside the scatter) | 43, 0; `"keyed":[12]` | 2.12 |
+| `all` (one named premise) | 1.15 to 1.33 | 2.18 | 18.3 | 2.570 | 43, 0 | 1.83 |
+
+- The measured columns are [relayed: HEADPROF, `r20261111-091148-cb57`, read in its two entries, not in its record]. The last column is [guess: mine, by kernels' second bound "CPU-seconds over ten cores"], and no run supports it yet.
+- **Why no time:** at one prover the statement is the witness walk's wall time (2.47 s, unchanged), and the salts are drawn beside it on cores that are not full (8.3 of ten busy) [relayed: kernels, HEADPROF]. [run: my bench `ea63`] the whole fill takes 0.63 s of wall time today, 0.43 with `upper` and 0.12 with `all` on ten threads, all of it under the walk.
+- **`all` leaves 0.85 to 1.0 CPU-s more on node A than I scaled** (2.18 against 1.15 to 1.33). I do not know where it goes [guess: the first touch of the 2.7 GB buffer, which my bench's later rounds did not pay, or the pool's own waits].
+- **The 12 keyed trees with `upper` is the right count** for the head block: levels 1 to 6 of two repetitions [run: my count of 08:00Z].
+- **This fills a gap of my 09:11Z entry:** the switch now has accepted sessions on a statement whose form the verifier takes, 43 of 43 with each setting [relayed: HEADPROF; I have not read which verifier its harness's check is].
+- **With the witness on the card** (unbuilt): kernels' bound is 14.5 CPU-s over ten cores, 1.45 s; by the same arithmetic `upper` 1.25 s and `all` 0.95 s. These are what-if rows and stay labelled unsupported, as your 09:42Z point 6 says.
+
+**3. What decides whether the salts are worth Daniel's attention tonight.**
+- At four provers the cores are full (9.7 to 9.9 busy) [relayed: kernels], so there a CPU-second should buy time: `all` up to 5.0 of 23.2 (21%), `upper` up to 2.0 (9%) [guess, the bound above].
+- HEADPROF's list has "every cut together at four provers", not the salts alone. **For HEADPROF, if a slot is left and you agree: one four-prover step with only `FC_SALTS_KEYED=all`**, so the salts' share can be read apart from WITNESS's cuts and the check's cores. Without it the table can say only what all the cuts give together.
+- If four provers show nothing either, my recommendation is that the ask is not posted: `upper` is a new statement version and `all` a new named premise, for CPU-seconds that buy no measured time.
+
+**4. The control my 09:11Z entry lacked.** [run: `r20261111-091321-2d3a`, vy-nebius-cpu-1, `FC_SALTS_KEYED=all`, the tile statement of `ef35`]
+- The Lean `flock-verify verify --zk` on the honest record: the form's refusal, as before.
+- On eight copies, each with one byte of `circuit.rep1.bin` (865,130 bytes) flipped: every one is refused with `S17: circuit/rep1: the proof is not the one the server received`, a check's own reason.
+- So a doctored proof does not reach the form's refusal, which is what "refused only after every check passed" needs. It is not a broken-salt control: the record's digest of the proof catches the flip before any opening is checked.
+
+**5. The ask page is drafted, for you to post, change or drop.** [run: written by me, posted nowhere]
+- `lanes/proofs/20261111T0931Z-draft-ask-salts.md` in the notes, in asking-daniel's template: options A (`upper`, no assumption), B (`all` with ChaCha20, the new Prop `ChaCha20StreamsUniform`), C (SHA-512 streams, A4, pays only on the card), D (keep the ruling); default: nothing happens.
+- Its "What it buys" still carries the withdrawn seconds. I rewrite that section on the rows above now, and again when the four-prover row reads.
+
+**Not established:** any time saved by the salts at any prover count; the last column above; why `all` leaves 2.18 CPU-s; which verifier accepted HEADPROF's 43 sessions; everything my 08:54Z entry listed as unread in Lean (whether the deployed proofs use the upper trees' salts' uniformity; the firewall path's cost).
+
+For HEADPROF: cursor/proofs-salts-8dd2 at ff48f38adc3abe6ec40ab28e5519e5a7aff2e223 (unchanged).
+
+For the table:
+- Salts (a claim, unmarked, on a branch): expanded from a 32-byte OS key a tree, the salts pool falls from 7.15 to 2.18 CPU-s a head-block statement on node A (`all`, one named premise) or to 5.14 (`upper`, no assumption), measured, `r20261111-091148-cb57`. **The statement does not move at one prover: 2.59 s today, 2.49 and 2.57 s with the cuts, inside the scatter.**
+- Whether those CPU-seconds buy time where the cores are full is not measured; the four-prover rows from 10:13Z are all the cuts together.
+
+For BREAKEVEN:
+- Replace my 08:54Z rows. `SparseMlaHeadBlock_v2` NVIS 64 `FIRST=false`, one prover on ten cores, measured (`r20261111-091148-cb57`, relayed from HEADPROF): today 2.588 GPU-s a statement at 23.2 host CPU-s; `upper` 2.494 at 21.2; `all` 2.570 at 18.3. No gain beyond the scatter.
+- Modeled, unsupported, only where the ten cores are full: host CPU-s / 10, so 2.32, 2.12, 1.83 s. Do not use them for a row of record.
