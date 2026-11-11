@@ -1,12 +1,13 @@
 """`verity graph`: the check's task graph of this checkout, one task run, and the serial reference executor.
 
-    verity graph [--json] [--family F ...] [--root DIR]
-                                  the graph (graph/v2: --json prints its canonical bytes); with --family, those families'
-                                  tasks and every task they read
+    verity graph [--json [--packed]] [--family F ...] [--root DIR]
+                                  the graph (graph/v2: --json prints its canonical bytes, --packed those of it packed,
+                                  `graph.pack`); with --family, those families' tasks and every task they read
+    verity graph unpack [FILE]    the canonical bytes of the graph/v2 a packed listing in FILE (default stdin) packs
     verity graph run ID --work DIR [--graph FILE]
                                   run task ID here in work directory DIR (its reads already there) and print its result/v1;
-                                  exit 0 pass, 1 fail, 3 error; with FILE, a listing of this checkout (`verity graph --json`)
-                                  or ID's part of it (`graph.part`), no lister runs
+                                  exit 0 pass, 1 fail, 3 error; with FILE, a listing of this checkout (`verity graph --json`,
+                                  packed or not) or ID's part of it (`graph.part`), no lister runs
     verity graph check --local [--family F ...] [--work DIR] [--retries N] [--events FILE]
                                   every task (or those families' and what they read) serially, in order, uncached, by the
                                   reference executor (`local.py`), its events/v1 lines (purpose adhoc) appended to FILE
@@ -33,17 +34,33 @@ def _families(fs: list[str] | None) -> set[str] | None:
 def _list(args: list[str]) -> int:
     ap = argparse.ArgumentParser(prog="verity graph", description="The check's task graph of this checkout (graph/v2).")
     ap.add_argument("--json", action="store_true", help="print the graph/v2 document's canonical bytes")
+    ap.add_argument("--packed", action="store_true", help="with --json, the document packed (graph.pack), which `verity graph "
+                    "unpack` makes graph/v2 again")
     ap.add_argument("--family", action="append", metavar="F", help="only family F's tasks and every task they read")
     ap.add_argument("--root", type=Path, default=ROOT, help="list the checkout at DIR (default: this one)")
     a = ap.parse_args(args)
+    if a.packed and not a.json:
+        ap.error("--packed packs the --json document")
     doc = graph.listing(a.root.resolve(), _families(a.family))
     if a.json:
-        sys.stdout.buffer.write(contract.canonical(doc) + b"\n")
+        sys.stdout.buffer.write(contract.canonical(graph.pack(doc) if a.packed else doc) + b"\n")
         return 0
     for t in doc["tasks"]:
         print(f"{t['id']:72} {t['env']:5} {t['key'][7:23] if t['key'] else 'reads'}  {t['about']}")
     print(f"{len(doc['tasks'])} tasks, {len(doc['files'])} files, commit {doc['commit'] or 'none (the tree is dirty)'}",
           file=sys.stderr)
+    return 0
+
+
+def _unpack(args: list[str]) -> int:
+    ap = argparse.ArgumentParser(prog="verity graph unpack", description="Print the graph/v2 a packed listing packs.")
+    ap.add_argument("file", nargs="?", type=Path, metavar="FILE", help="the packed listing (default: stdin)")
+    a = ap.parse_args(args)
+    try:
+        doc = json.loads(a.file.read_bytes() if a.file else sys.stdin.buffer.read())
+    except (OSError, ValueError) as e:
+        raise graph.GraphError(f"{a.file or 'stdin'}: {e}") from e
+    sys.stdout.buffer.write(contract.canonical(graph.unpack(doc)) + b"\n")
     return 0
 
 
@@ -97,6 +114,8 @@ def main(argv: list[str] | None = None) -> int:
             return _run(args[1:])
         if args[:1] == ["check"]:
             return _check(args[1:])
+        if args[:1] == ["unpack"]:
+            return _unpack(args[1:])
         return _list(args)
     except graph.GraphError as e:
         print(f"verity graph: {e}", file=sys.stderr)
