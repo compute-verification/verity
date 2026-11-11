@@ -25,7 +25,10 @@ gates as inputs that multiplies by a word `d` computes from `θ` alone (`asInput
 gate registered and then untied, the premises of `Untied.bound_untie_he` hold together, with (H) at the untied
 circuit, and (H) at `d` fails at every `k` and all positive costs (`toyR_premises`). On `CZ`, with a gate computed
 from `θ` as an input and a work that multiplies by it, the premises of `Untied.bound_asInputs_he` hold together, with
-(H) at the circuit with that gate as an input, and (H) at `d` fails (`toyZ_premises`).
+(H) at the circuit with that gate as an input, and (H) at `d` fails (`toyZ_premises`). Each bound is applied at its
+toy (`toyR_bound`, `toyZ_bound`), so a premise added to a bound breaks its witness. Both bounds are slack there, and
+(E) holds because no output is ever in the clear: the toys show that the premises can hold together, not that a bound
+is tight.
 -/
 
 @[expose] public section
@@ -194,7 +197,7 @@ theorem HEShared_nontrivial : Guarantees.HEShared_nontrivial := by
 
 `Untied.bound_untie_he` and `Untied.bound_asInputs_he` take (H) at the untied circuit. Two toys multiply by an untied
 word: there every premise of the bound holds, with (H) at the untied circuit, and (H) at `d` fails at every `k` and all
-positive costs. -/
+positive costs. Each bound is then applied at its toy. -/
 
 /-- (H) holds at costs 1 and every `k` where each word of the two arrays is one input gate outside `θ` and no word is
 in both: every separator from those gates holds each of them. -/
@@ -349,6 +352,24 @@ theorem toyR_premises :
   ⟨toyR_reads, fun _ _ u v _ _ => Subsingleton.elim u v,
     fun k => by rw [singleton_biUnion]; exact toyR_hardness_untied k, toy_exports 1, toy_values, toy_noSharedPair,
     fun _ _ hw hx k => untie_hH_false dR Toy.W Toy.val hw hx (Or.inl toyR_word) (by decide) k⟩
+
+/-- **`Untied.bound_untie_he` at the toy with its `w` gate untied.** The bound's conclusion at the toy's arguments, with
+every block in `G`, costs 1 and `e = 1`, from the conjuncts of `toyR_premises`: a premise added to the bound breaks this
+proof. It shows that the premises hold together on a work that multiplies by the untied word, and no more. The bound is
+slack there, 2 MACs (`toy_N`) against `m k + b |𝒲| = 3` before the square roots, and (E) holds only because no output
+is ever in the clear (`toy_clear`): the toy does not show the bound tight. -/
+theorem toyR_bound :
+    (Toy.W.N : ℝ) ≤ (∑ u ∈ (univ : Finset (Fin 1))ᶜ, ∑ a, (inBlock Toy.P1 Toy.W u a).card : ℕ) +
+        (1 * 2 + 1 * ({wordR} : Finset (Finset (Fin Toy.C.N))).card : ℕ) +
+      1 / 2 * √((∑ u : Fin 1,
+            (2 + 1 * (Untied.wordsRead dR.D ({wordR} : Finset (Finset (Fin Toy.C.N))) (Toy.P1.gates u)).card) ^ 2 : ℕ) *
+          outOn Toy.P1 Toy.W univ / (1 * 1)) +
+      1 / 2 * √((∑ u : Fin 1,
+            (2 + 1 * (Untied.wordsRead dR.D ({wordR} : Finset (Finset (Fin Toy.C.N))) (Toy.P1.gates u)).card) ^ 2 : ℕ) *
+          (1 * 2 + 1 * ({wordR} : Finset (Finset (Fin Toy.C.N))).card : ℕ) / (1 * 1 * 1)) := by
+  obtain ⟨hk, hone, hH, hE, hval, hshare, -⟩ := toyR_premises
+  exact Untied.bound_untie_he dR Toy.P1 Toy.W Toy.val (b := 1) ({wordR} : Finset (Finset (Fin Toy.C.N))) (by decide) hk
+    hone univ one_pos one_pos one_pos hval hshare (fun _ _ => hH _) hE
 
 /-- The gates each gate of `CZ` reads. -/
 def readsZ : Fin 4 → Finset (Fin 4) := ![∅, ∅, {0}, {1, 2}]
