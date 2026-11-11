@@ -47263,3 +47263,39 @@ For the table:
 - GB, the plan built and Lean-checked (#8878 + #8893, unmarked): 2,430 GB at modeled 0.4, 87 to 94 GB at the measured engine rate on node A (a floor) [Lean-checked design, run `r20261111-092227-d1e7`; GB modeled by ratio and by proportion]. With #8878 alone: 2,675 GB, 96 to 103.
 - GB, the by-gates fallback by width: κ 2^-6 2,791 GB at 0.4 (100 to 107 at the floor) at the planner's K0 = 4; κ 2^-7 3,228 GB (115 to 124) at K0 = 5 [modeled: the planner's bound; #8904 unmarked returns both rows].
 - GB, the family's floor at measured prices and today's blocks: 2,199 GB at 0.4 (79 to 85) [modeled: my formula].
+
+## ATTACK, Wed 11 Nov 10:07Z: CORRECTION to SCALE's 10:03Z section 3 and to my own "at most 72": the class has the WRITER in it. A key's two pieces have two writers, so they are two classes; a later head block has 132, and the "rows 72" columns are 0.8 bit too good. With 132 the 2,647 GB plan misses 2^-100 in compressions under every count (−99.85 at best)
+
+**Why the writer is in the class** [read: `Proofs/Flock/Claims/Sampling/ProgReads.lean:237-239`].
+- `Prog.Needs C u g` is `(g ∈ u ∧ Boundary u g) ∨ (a gate of u reads g ∧ g ∉ u ∧ g is no constant)`. The first half is the writer: a block needs its own outputs that leave it.
+- REGX's class is `∀ u, g ∈ needs u ↔ g' ∈ needs u`. So two gates written by different proof blocks are never in one class, whoever reads them. "Same readers" in my 09:39Z entry and in the order's 09:42Z item 2 should read **"needed by the same proof blocks, the writer among them"**. The loose word was mine.
+- It cannot be dropped: if `kv_c` of a key (written by its `DsaRMSNorm_v1` block) and `k_pe` of that key (written by its `RoPEHeadGptJ_v2` block) were one class, a run that samples the first writer and neither the second nor a head block reading the key opens `kv_c` and not `k_pe`, and `hallX` is false [derived].
+
+**What it changes.**
+- SCALE's probe (`r20261111-095316-8938`, [relayed]) says every key read has two writer rows. So a key is two classes, and a later head block has 2·64 + 2 + 1 + 1 = **132**, SCALE's 09:52Z count, not the 72 of its 10:03Z section 3. My "at most 72" (09:39Z, 09:47Z, and the order's 09:52Z row "at most 72") took one writer a key: withdrawn.
+- A block of prefill keys is not one class either, if each key's piece has its own writer block [guess: I did not read which block writes which key].
+- The columns to use are SCALE's "reader sets" [relayed: SCALE 10:03Z section 1; I recomputed the mean and the one-M cells at 09:59Z to 0.02], compressions, a run at K0 = 6:
+
+| design | GB ratio | mean (no Lean) | by stratum (TWOWITNESS, unwritten) | one M = 132 (the Lean's form today) |
+|---|---|---|---|---|
+| the record | 1.000 | −101.63 | −101.57 | **−100.83** |
+| the 2,647 GB plan (width, κ 2^-2.5) | 0.655 | −99.85 | −99.78 | −98.73 |
+| width κ 2^-3 | 0.656 | −100.35 | −100.28 | −99.23 |
+| width κ 2^-4 | 0.665 | −101.35 | −101.28 | **−100.23** |
+| width κ 2^-6 | 0.690 | −103.35 | −103.28 | −102.23 |
+
+- So: the 2,647 GB plan does not reach 2^-100 in compressions by classes under any count; SCALE's "the count by stratum carries it over (−100.58)" was at 72. The cheapest width design that clears with the count the Lean has today is κ 2^-4 (0.665 of the GB); with the count by stratum, κ 2^-3 (0.656).
+- Still open under it: that every reader of a piece reads it whole (else more classes), and `PageCopy`'s count, which decides any one-M figure (SCALE 10:03Z).
+
+**Three smaller readings since 10:02Z.**
+- TWOWITNESS's `SpotFlock/Counts.lean` [read: whole, on `cursor/proofs-codecounts-9e41` at `5a3d01fe1fc9`; not compiled]: `code_hNs`, `code_hKs`, `code_hKm` say what its entry says, with one M for every block, the always-checked term and `Pr[refused]·Σ_{u<N}`. They need `firstK h.reg.first = some K`, a first stage that is a uniform K-subset. Its `For the table` still quotes the 09:23Z line (2^-98.9 to 2^-98.3, K a mean); its own lemma gives the one-M line, 2^-98.2 to 2^-97.6.
+- DRAFT-CORE's `units_error_le` [read: `FirstReads.lean:352-356` at #8888's `746c43e0c848`]: `drawUnits` returns an error with probability at most k_d·2^-64 on a uniform stream that holds the first read. At the record a run draws k_d = 6·10,046,500, so 2^-38.2 [derived]. Two things it is not: it is not stated at `selectSecond` (which also refuses an empty or unordered sample), and the model's stage is still 2^20 bytes, where the hypothesis is false at every served size.
+- #8836 at `ae8886e9a2fc` against the `1fab3dfa6a35` I was given [run: `git diff`]: the merge of #8820's head, and one generic lemma added to `RegCanon.lean` (`pr_off_le_canon_on`). The six statements I read are unchanged; `RevealsOpen.lean` and `RewindingCanon.lean` are the same blobs. This closes my 09:45Z "24 files differ, unread".
+
+For SCALE: keep the "reader sets" columns and drop "rows 72"; the M_t by classes are 132 and 131 for the two head blocks. The Program pass you described at 09:52Z (distinct (writer, reader set) per row) is the right count.
+
+For REGX, EXTFORM: nothing changes in `hcls` or the class's Lean (it is `needs`-equivalence already); only the word.
+
+For the table:
+- By classes, a class is the gates needed by the same proof blocks, the writer among them. A later head block has 132. In compressions, a run at K0 = 6: the record 2^-100.8 with the Lean's count today (2^-101.6 as a mean), the 2,647 GB plan 2^-98.7 to 2^-99.9, a miss; width κ 2^-4 2^-100.2 at 0.665 of the GB.
+- Strike "at most 72" and the figures at it (−101.7, −99.6, −100.58) wherever they stand.
