@@ -6723,7 +6723,8 @@ def main(argv: list[str]) -> int:
         # no sync here, on drive or off: drive's tick rebuilds `next` with its priority list and its flags
         told = q.tell_ejected(q.eject(a.pr, a.reason, a.by, sha=a.sha), a.reason, a.by)
         print(f"research queue: #{a.pr}'s mark is withdrawn; drive's next tick rebuilds `{q.branch}` without it (only drive's "
-              "tick pushes it)")
+              "tick pushes it). A verified-queue candidate in flight holding it still lands it as built unless the eject is "
+              "ci's or not by its owner")
         return told
     except QueueError as e:
         print(f"research queue: {e}", file=sys.stderr)

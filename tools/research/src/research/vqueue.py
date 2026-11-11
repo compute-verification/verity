@@ -132,9 +132,10 @@ class Snapshot:
                                    # as any other infra: a tree that keeps its own launch from registering is found then
     left: tuple[tuple[int, str, str], ...] = ()  # each other open PR into `main`, as (number, head, why the queue doesn't
                                    # take it now): what a candidate's drop for a member that left `ready` says
-    pulled: frozenset[int] = frozenset()  # the PRs of `left` taken from the queue by others than their owners (a mark
-                                   # withdrawn by another, as a red's eject is, a reviewer's hold, the freeze, or a PR
-                                   # holding the head of one): a candidate holding one is dropped
+    pulled: frozenset[int] = frozenset()  # the PRs of `left` taken from the queue by others than their owners, at their
+                                   # heads or at the heads candidates in flight hold them at (a mark withdrawn by another,
+                                   # as a red's eject is, a reviewer's hold, the freeze, or a PR holding the head of one):
+                                   # a candidate holding one is dropped
     flying: tuple[Ready, ...] = ()  # each member of a candidate on the chain not ready at its head as built, at that head:
                                    # the files a fail's blame reads of it
 
