@@ -1,4 +1,4 @@
-"""Lean is the served window's verifier (`verity.core.protocols.pouw.verifier`). Each of PoUW's checks on the
+"""Lean is the served window's verifier (`verity.protocols.pouw.verifier.verifier`). Each of PoUW's checks on the
 challenger's path runs its Lean and its Python reference on one input:
 
 * ``registered``: PoUW's rule over the registration (`pouw-check-difftest registered`, `core_check.registered`);
@@ -30,13 +30,13 @@ from typing import Any, Callable, Mapping
 
 import verity_difftest as D
 
-from verity.core.protocols.pouw import core_check as CC
-from verity.core.protocols.pouw import verifier as V
-from verity.ml.circuits import codec
+from verity.protocols.pouw.verifier import core_check as CC
+from verity.protocols.pouw.verifier import verifier as V
+from verity.circuits import codec
 
 REPO = Path(__file__).resolve().parents[3]
-POUW = REPO / "verity/core/protocols/pouw/lean/check"
-PIECES = REPO / "verity/core/service/spot"
+POUW = REPO / "verity/protocols/pouw/verifier/lean/check"
+PIECES = REPO / "verity/protocols/spot/verifier/lean"
 DISAGREE = "lean-python-disagree"
 CHECKS = ("registered", "registration", "public", "pass", "draw", "opening", "prelude", "answer")
 
