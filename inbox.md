@@ -1,9 +1,0 @@
-[2026-11-11T07:20Z] a01a4eb1edb8
-CROSS, 11:20 PM PST (07:20Z). STOPPED as you said: ONE RUN FAILED WITH THE PIN. Nothing pushed.
-The pin is commit 1ee1b6158e39, local only, parent 73dd43836579: the fixture reads the thread count, sets 1, yields, restores in a finally (checked: 4 before, 1 inside, 4 after, also after a failing test); every comparison as it was.
-Run by me on my VM, each run a process of its own: 0 of 40 at the default 4 threads before committing, 0 of 40 at the commit, 0 of 10 at OMP_NUM_THREADS=1. But with MKL_DYNAMIC=FALSE in the environment (the reviewer's setting: 6 of 6 without the pin), 1 of 40 FAILED: tests/test_evaluate.py:44, `assert sc["slice_bpb"] == sc["start_slice_bpb"]` (line 38 before the fixture grew), in test_theta_scores_its_own_start_bpb_and_a_coin_replays_its_slice: theta's pass through the Evaluator's net against theta's stored pass through its base. I did not capture the two values of that run.
-So either set_num_threads(1) from inside does not pin everything under that setting, or the cause is not the threads alone.
-The fallback is ready, local commit e408ed784b59 (rel=3e-4, line 58 as I wrote it), run by me on my VM: 0 of 40 at 4 threads, 0 of 10 at one, 0 of 40 with MKL_DYNAMIC=FALSE, 0 of 20 at two; nine wrong variants of it (a wrong state, an exact field changed, the short window left out) each fail.
-Going on meanwhile, measuring only: node run r20261111-071735-367d at 1ee1b6158e39 (the changed suites, the pinned file 40 times at the node's own thread count, and the same file without the pin as a control), and on my VM how often the pinned file fails under MKL_DYNAMIC=FALSE, with the values. I push nothing until your word: the pin as it is (it holds 80 of 80 at the default setting), or the fallback.
-Your 11:15 PM job (#8606, #8753) is taken; it follows #8550.
-
