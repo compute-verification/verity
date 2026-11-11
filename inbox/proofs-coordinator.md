@@ -41432,3 +41432,40 @@ For BREAKEVEN:
 - After (#8859, four verifier cores): 17.6 CPU-s on the provers' ten and 5.68 on the verifier's four [guess: the same work, moved]. The GPU-s a statement fall by at most 0.62 [guess], which HEADPROF measures. If the auditor pays the 5.68, they are about 0.07 GPU-s at 81.8 core-s a GPU-s [derived]. They are not a prover's cost, since Lean's verifier term is the one of record.
 
 Next: the ready line for #8859 when `r20261111-080116-0667` passes; then PRF-548's questions 1 to 3 (question 2 partly sized, from 561 members' Lean records on cpu-3).
+
+## SALTS, Wed 11 Nov 08:09Z: found a cut that adds no assumption: 40% of the salt bytes (the six trees a repetition above level 0) are not read by the hiding argument at all, so they can come from a 32-byte OS seed a tree: salts 7.3 to 4.4 host CPU-s, statement 2.86 to 2.50 s now and 1.78 to 1.43 s with the witness on the card (modeled). It changes the identity's `salt_source` text, so it is a new statement version, not a PR for this morning
+
+This adds to my 08:00Z entry; that entry's null (nothing to gain from reading the same bytes in bulk) stands.
+
+**1. What the Lean says about the trees above level 0.**
+- The zero-knowledge model hides two kinds of leaves and no others: `abbrev Hid := Fin T.nU ⊕ (Fin 2 × Fin T.nPU)`, "level 0's other positions, and each rep's other pads positions" (`security/Definitions/Flock/ZK/RealView.lean` l.34) [read].
+- Levels 1 and up are any function of the restarted table and of salts of any type: `lig : Fin 2 → (Fin L → K) → Hi → VL` (`security/Definitions/Flock/ZK/Table.lean` l.114), with the header's reason: "The real verifier sees less than `y₁'^r` (`T'` and levels ≥ 1 are functions of it), so a statement about this view implies the one about the real view by post-processing" (l.43 to 44) [read]. The view holds `y₁'^r` whole, and it is uniform because each repetition folds its own pair of uniform lanes into it [read: the same header, l.24 to 25, "the restarted table `y₁'^r = y₁^r + W^r(R^r)`"].
+- The wire statements are for every `Hi`: `HonestMsg` and `ZkWireFixed` open with `∀ {K W Hi VL : Type}` and the loss is `∑ⱼ 2·|Hidⱼ|·hidingGap(My, saltHash)` (`security/Proofs/Flock/Soundness/Discharge/ZkView/Statements.lean` l.125 to 135) [read]. The salts of levels 1 and up sit in `Base z Hi` as `Fin 2 → Hi`, not among the hm96 leaves `Leaves zs → Salt` (`…/ZkView/Defs.lean` l.244 to 256) [read].
+- So with `Hi` a 32-byte seed and `lig` expanding it, the statements apply as written: the seed is uniform by A3, and nothing asks the expanded bytes to look uniform. **No premise is added and none changes** [my reading of those four places; nobody else has checked it]. The live-path properties that tie the firewall's code to this model would be instantiated again at the new `Hi` [guess: I did not read them].
+
+**2. What it is worth.**
+- Hidden leaves a statement: 2^23 at level 0, 2 × 2^13 in the pads trees, 2 for τ: 8,404,994. Salted today: 13,996,032. The 5,591,040 leaves of levels 1 to 6 take 1,073,479,680 of the 2,687,238,144 salt bytes, 39.9% [my arithmetic, from the 08:00Z count].
+- Salts' host CPU: 7.3 to 4.4 CPU-s a statement if the card expands them (7.3 × 0.601), 4.5 if the host does with AVX-512 ChaCha20, 5.9 with the scalar ChaCha20 the tree has [modeled: bytes in proportion, at my VM's 6.7 GB/s and 715 MB/s].
+- Statement, kernels' rule: 2.50 s now, 1.43 s with the witness on the card [modeled].
+
+**3. Why it is not a PR for this morning.**
+- The verifier takes any salt, so the proof format, the scheme id and the Lean verifier's checks do not change [read: an opened leaf's salt is only hashed, `cuda/sha512.cuh` l.143 to 146].
+- The identity does: `leaf_scheme`'s `salt_source` says "os bytes (getrandom), 192 per leaf, each tree's read once" (`live/src/circuit.rs` l.209 to 224), and that string is pinned in every circuit file's META (`circuit.rs` l.1231), in the Lean verifier (`Flock/Tags.lean`, `leafSchemeHm96Os`, and `ProvedScope.served`), in `verity_flock/circuit.py`, `verity_vllm/protocols/pous.py` and their tests [run: `rg salt_source`, 11 files]. A prover that derives those salts under that string would state something false, so the change is a new statement version, as `b3727bd9` and `cec3e347` were, and every staged statement is restaged or its META rewritten [guess on the last].
+- Code, sized: `zk_hooks.rs` about 60 lines and 60 of tests (a key a tree from `os_fill`; the ChaCha20 path already exists for an injected seed, l.245 to 263); for the card, `cuda/sha512.cuh` about 80 lines (a kernel that fills the device's salt buffer in place of the copy at l.543 to 552, and the opened leaves' salts recomputed in `hm96_opened_salts`, l.358) and `gpu_circuit.rs` about 20; `Tags.lean` about 40 with its lock records; the strings above [guess].
+
+**4. A second idea for level 0, unchecked: one salt a block of columns.**
+- Level 0's 2^23 salts are the other 60%. Its lanes are padded so that the at most `t_pad = 436` opened columns are jointly uniform [read: the log's `ZKL0 … "t_pad":436`, and `Flock/Zk.lean` l.401, "t_pad = 2 q_0", two repetitions of `q_0 = 218` queries on the one tree]. Put a plain SHA-512 subtree over each block of 16 columns and an hm96 node with one salt on its root. An opening then shows four plain sibling digests inside its block, which are digests of columns that are jointly uniform if `t_pad` is 16 times larger (6,976 of 2^22 coefficients a lane) [my reasoning].
+- That would leave 2^19 salts at level 0, 101 MB in place of 1,611 MB, and with section 1 the salts cost about 0.3 host CPU-s a statement: 1.99 s now, 0.92 s with the witness on the card, hiding still statistical and no premise added [modeled, on an unchecked design].
+- It changes the tree's shape, so the verifier, the soundness instance and the zero-knowledge model's `Hid` change with it: a parameter of the proof system, Daniel's, and PARAMS's to weigh. I have not checked it against the padding lemma in Lean [guess throughout].
+
+**5. What I do next.**
+- I write a measurement branch `cursor/proofs-salts-<hex>` off `origin/main`: a switch, off by default, under which the trees above level 0 take their salts from a 32-byte OS key a tree, expanded on the host. It is for HEADPROF to time on a card, not to land: with the switch on, the identity's `salt_source` is untrue. I name the branch and head in my next entry. Tell me to stop if you would rather not have it.
+- Still size only, as your mailbox says: level 0's salts from a seed (A4), shorter salts.
+
+For the table:
+- Salts: 40% of the salt bytes (levels 1 to 6) are outside the hiding argument, which hides only level 0's and the pads trees' leaves (`RealView.lean` l.34, `Table.lean` l.114). Taking them from an OS seed adds no assumption: salts 7.3 to 4.4 host CPU-s, the head-block statement 1.78 to 1.43 s with the witness on the card (modeled, unbuilt; a new statement version because the identity's text changes).
+
+For BREAKEVEN:
+- Lever "salts above level 0 from a seed" (modeled, unbuilt, no new assumption, a new statement version): `SparseMlaHeadBlock` NVIS 64, both types, one prover on ten cores: salts 4.4 host CPU-s a statement (7.3 measured in `r20261111-061047-6773`); statement 2.50 s now, 1.43 s with the witness on the card.
+- With level 0's salts also from a seed (A4, a claim, unbuilt): the 08:00Z entry's 1.96 and 0.89 s.
+- With one salt a block of 16 columns at level 0 instead (unchecked design, no new assumption): 1.99 and 0.92 s.
