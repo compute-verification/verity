@@ -373,7 +373,7 @@ def reconcile(census: dict, log_path: str, profile_name: str, proposed_allowlist
     census_steps = [s for s in census["steps"] if s.get("step") is not None]
     steps_out = []
     residue_total: Counter = Counter()
-    kernel_rows: "OrderedDict[str, dict]" = OrderedDict()   # kernel name -> {counts per step, claims}
+    kernel_rows: OrderedDict[str, dict] = OrderedDict()   # kernel name -> {counts per step, claims}
     ambiguous: list[dict] = []
     count_mismatches: list[dict] = []
     count_exempt: Counter = Counter()                        # allowlisted declared name -> steps whose count differed
@@ -398,7 +398,7 @@ def reconcile(census: dict, log_path: str, profile_name: str, proposed_allowlist
             row["us"][i] = d["us"]
             row["claims"].update(cl)
             for c in cl:
-                row["patterns"].update(pats[c] if c in pats else {"allowlist"})
+                row["patterns"].update(pats.get(c, {"allowlist"}))
             if not cl:
                 residue.append({"kernel": name, "count": d["count"], "us": d["us"]})
                 residue_total[name] += d["count"]

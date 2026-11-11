@@ -53,7 +53,7 @@ def test_the_probe_launches_are_deepgemms_shapes(launches) -> None:
     assert [L["family"] for L in launches] == list(X.PROBE_FAMILIES)
     for L in launches:
         (M, K), (N, Kb) = L["a"].shape, L["b"].shape
-        assert (M, N, K) == (X.PROBE_M, X.PROBE_N, Kb) and N <= 32 and N % 8 == 0 and K % 64 == 0 and 1 <= L["NS"] <= K // 64
+        assert (X.PROBE_M, X.PROBE_N, Kb) == (M, N, K) and N <= 32 and N % 8 == 0 and K % 64 == 0 and 1 <= L["NS"] <= K // 64
         assert L["a"].dtype == np.uint16 and L["b"].dtype == np.uint32
 
 

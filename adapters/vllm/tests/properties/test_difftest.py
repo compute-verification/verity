@@ -58,8 +58,9 @@ def test_check_requires_edge_kinds(tmp_path, monkeypatch):
     d = tmp_path / "dt"
     (d / "case_0").mkdir(parents=True)
     rng = np.random.default_rng(3)
-    y = difftest.words_for("random", [4], "bfloat16", rng); b = difftest.words_for("random", [4], "bfloat16", rng)
-    np.save(d / "case_0" / "in_0.npy", y); np.save(d / "case_0" / "in_1.npy", b)
+    y, b = difftest.words_for("random", [4], "bfloat16", rng), difftest.words_for("random", [4], "bfloat16", rng)
+    np.save(d / "case_0" / "in_0.npy", y)
+    np.save(d / "case_0" / "in_1.npy", b)
     np.save(d / "case_0" / "out_0.npy", _bf16_add_ref(y, b))
     rec = {"i": 0, "statics": {"N": 4}, "inputs": [{"shape": [4], "dtype": "bfloat16", "kind": "random"}] * 2,
            "outputs": [{"shape": [4], "dtype": "bfloat16"}], "edge": False}
@@ -82,5 +83,5 @@ def test_produce_writes_bf16_outputs_as_words(tmp_path, monkeypatch):
     man = difftest.produce("fake_bf16_adapter", 1, 3, tmp_path / "dt", device="cpu")
     out = np.load(tmp_path / "dt" / "case_0" / "out_0.npy")
     assert man["cases"][0]["outputs"] == [{"shape": [4], "dtype": "bfloat16"}] and out.dtype == np.uint16 and out.shape == (4,)
-    y = np.load(tmp_path / "dt" / "case_0" / "in_0.npy"); b = np.load(tmp_path / "dt" / "case_0" / "in_1.npy")
+    y, b = (np.load(tmp_path / "dt" / "case_0" / f"in_{i}.npy") for i in (0, 1))
     assert np.array_equal(out, _bf16_add_ref(y, b))

@@ -1052,7 +1052,7 @@ def test_the_node_records_are_the_two_h200_nodes() -> None:
     assert [(r["setting"], r["N"], r["route"], r["lo"], r["hi"], tuple(r["run_records"])) for r in old["routes"]] == [
         ("custom-off", 6144, "symm_mem_comm", 43, 2048, T.CAPTURE_RUNS[:2]), ("defaults", 6144, "symm_mem_comm", 43, 2048, T.CAPTURE_RUNS[2:]),
         ("defaults", 7168, "symm_mem_comm", 37, 2048, T.CAPTURE_RUNS[2:])]
-    assert T.UNSTATED_NODE == (TN.node_key(old)[0], *TN.node_key(old)[2:])
+    assert (TN.node_key(old)[0], *TN.node_key(old)[2:]) == T.UNSTATED_NODE
     nvls = T.covered("defaults", 6144, "pynccl_comm", 5462, device=H200, trees=new["multimem"]["trees"], ftz=False)
     assert nvls.statics == {"TREES": TN.node_key(new)[2], "FTZ": False} and T.offset_free(nvls, X.WORLD)
 

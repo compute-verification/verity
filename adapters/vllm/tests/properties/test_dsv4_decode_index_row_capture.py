@@ -59,7 +59,7 @@ def test_the_statics_are_dsv4s() -> None:
         assert X.statics(case) == X.R.DSV4_DECODE_INDICES[case]
         assert len(X.POSITIONS[case]) == 16 and X.POSITIONS[case][0] == 0 and X.POSITIONS[case][-1] == max_len - 1
     assert X.statics("c4")["NB"] == 4096 and X.statics("c4-4096")["NB"] == 16
-    assert set(X.PTX_COUNTS) == set(X.KERNELS) and len(X.SOURCES) == 4 and X.TRITON_BLOCK == X.statics("c4")["TOPK"]
+    assert set(X.PTX_COUNTS) == set(X.KERNELS) and len(X.SOURCES) == 4 and X.statics("c4")["TOPK"] == X.TRITON_BLOCK
 
 
 @pytest.mark.parametrize("case", X.CASES_L)

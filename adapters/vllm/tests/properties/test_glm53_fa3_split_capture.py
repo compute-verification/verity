@@ -69,7 +69,7 @@ def test_the_plan_is_consistent() -> None:
 
 def test_the_statics_are_glm53s() -> None:
     G = M.SPARSE_MLA_GLM53
-    assert (X.NH, X.DR, X.DV, X.SCALE) == (G["NH"], G["DR"], G["DV"], G["SCALE"]) and X.SCALE == 0.0625
+    assert (G["NH"], G["DR"], G["DV"], G["SCALE"]) == (X.NH, X.DR, X.DV, X.SCALE) and X.SCALE == 0.0625
 
 
 def test_the_operands() -> None:

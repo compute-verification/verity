@@ -68,7 +68,7 @@ def test_the_statics_are_dsv4s() -> None:
     assert (X.NH, X.H_Q, X.DN, X.DR, X.D, X.QT, X.BN) == (16, 64, 448, 64, 512, 64, 64)
     assert X.SCALE == 512 ** -0.5 == F.FLASHMLA_DSV4["SCALE"] and X.WINDOW == 128 and X.C4_TOPK == 1024
     assert X.page_bytes(64) == 37440 and X.page_bytes(2) == 1728 and T.num_sm_parts(X.H_Q) == 132
-    assert DECODE == list(X.CASE_LAYERS) and PREFILL == list(X.PREFILL_CASE_LAYERS) and len(X.EDGE_SINKS) == X.NH
+    assert list(X.CASE_LAYERS) == DECODE and list(X.PREFILL_CASE_LAYERS) == PREFILL and len(X.EDGE_SINKS) == X.NH
 
 
 def test_the_prefill_statics_are_dsv4s() -> None:
@@ -257,7 +257,7 @@ def test_the_batch_cases_are_vllms_batches() -> None:
             lens, pos = X.case_lens(case, quick), X.case_positions(case, quick)
             graph = min(g for g in X.GRAPH_SIZES if g >= real) if real <= 512 else None
             assert len(pos) == real and len(lens) == (graph if pads else real) and (pads == 0 or graph != real)
-            assert lens[:real] == tuple(X.token_lens(layer, p) for p in pos) and 0 <= min(pos) and max(pos) <= X.MAX_POS
+            assert lens[:real] == tuple(X.token_lens(layer, p) for p in pos) and min(pos) >= 0 and max(pos) <= X.MAX_POS
             assert lens[real:] == ((0, None if layer == "swa" else 0),) * pads
             if layer == "c128l":
                 top = (max(pos) + 1) // 128

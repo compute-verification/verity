@@ -80,7 +80,7 @@ def test_the_statics_are_dsv4s() -> None:
     the `fp8_ds_mla` pages the decode reads (64 and 2 rows, 37440 and 1728 bytes), and the state's pages padded past their rows."""
     assert (X.D, X.NOPE, X.ROPE, X.QB, X.W128, X.R128, X.WORDS) == (512, 448, 64, 64, 8, 16, 520)
     assert tuple(X.LAYERS["c4"]) == (4, 1024, 4, 8, 64) and tuple(X.LAYERS["c128"]) == (128, 512, 8, 128, 2)
-    assert X.W128 * X.R128 == X.LAYERS["c128"].window and (X.TOKEN_BYTES, X.DATA_BYTES, X.SCALE_BYTES) == (584, 576, 8)
+    assert X.LAYERS["c128"].window == X.W128 * X.R128 and (X.TOKEN_BYTES, X.DATA_BYTES, X.SCALE_BYTES) == (584, 576, 8)
     assert X.page_bytes(64) == 37440 and X.page_bytes(2) == 1728 and X.STATE_PAGE == 9360
     assert all(L.block * 2 * L.width < X.STATE_PAGE for L in X.LAYERS.values())
     assert set(X.PTX_COUNTS) == {"c4", "c128", "store"} and len(X.SOURCES) == 4
