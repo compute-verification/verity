@@ -15,9 +15,9 @@ and hands `a5.audit` the members, each proved by C-Flock's prover (`flock-circui
 * **The binaries.** `flock-verify` and `flock-firewall` are what check's lean-build step builds before this suite
   (`AFTER_LEAN`, the suite's ``artifacts``), and the tests skip without them. `flock-circuit` is built by
   `check_build.sh bin` on the Flock checkout check's flock-circuit-build step leaves on a machine. That build fetches
-  nothing: on a machine with no checkout or not its Rust toolchain the tests skip, saying so. The stream's and the
-  challenger's Lean (`sampled-proofs-verifier`) is its own package's, which the audit builds with `lake` on first use
-  (`one_stage.verifier.executable`): a checkout's first audit pays that build.
+  nothing: on a machine with no checkout, not its Rust toolchain or not its crates the tests skip, saying so. The
+  stream's and the challenger's Lean (`sampled-proofs-verifier`) is its own package's, which the audit builds with
+  `lake` on first use (`one_stage.verifier.executable`): a checkout's first audit pays that build.
 
 Slow, and past a minute in `check`: about 150 s on a node, about 210 s where the audit builds the coins' Lean first,
 and about 5 GB at its peak. Of it the changed member's audit is about 50 s: it alone shows a false member stopped (the
@@ -54,7 +54,7 @@ import records_audit as RA  # noqa: E402
 
 LEAN = ROOT / "verity" / "protocols" / "flock" / "verifier" / ".lake" / "build" / "bin"
 BUILD = ROOT / "verity" / "protocols" / "flock" / "prover" / "check_build.sh"
-#: `check_build.sh bin`'s exit where the machine has no Flock checkout or not its toolchain
+#: `check_build.sh bin`'s exit where the machine has no Flock checkout, not its toolchain or not its crates
 NOTHING_TO_BUILD_ON = 3
 KS = (128, 256)
 TEMPLATES = tuple(bind(G.ScaledMmS8Coordinate, K=k, **G.GEMM_SM120_S8) for k in KS)
