@@ -820,20 +820,25 @@ class World:
 
     def taken(self, flying: Iterable[tuple[int, str]], main: str) -> dict[int, tuple[str, str]]:
         """The PRs another than their owner took at the heads candidates in flight hold them at, ``flying`` (`Snapshot.flying`:
-        heads the queue doesn't take now, and the ones that land), each with that head and why: a hold by another among its
-        reviews there, its newest ready mark there withdrawn by `EJECTOR` (a red's eject) or by another, or the freeze, unless
-        cleared there (a head the clone lacks has no files to read for it).  `ready` reads these at each PR's current head
-        alone.  A closed PR's owner is its mark's author there."""
+        heads the queue doesn't take now, and the ones that land), each with that head and why, read there as `_pulled` reads a
+        PR at its head: a hold by another among its reviews there, an eject there by `EJECTOR` or by another, a mark there
+        withdrawn by another, or the freeze, unless cleared there (a head the clone lacks has no files to read for it).
+        `ready` reads these at each PR's current head alone.  A closed PR's owner is its mark's author there."""
         flying, (specs, clears), out = sorted(flying), self._frozen(), {}
         below, gone = (self._frozen_base(main), self._missing(h for _, h in flying)) if specs else (main, set())
+        ejects = self.q.load_state().get("ejected", {})
         for n, head in flying:
             mine = {_who(o) for o in self._owners(n) or {self.labels.ready_by(n, head)} if o}
             held = unreviewed([r for r in self.labels.reviews(n, head) if r.by and _who(r.by) not in mine], ()) or ""
-            withdrawn = not self.q.ready(n, head) and not (self.q.before_cutoff and self.q.before_cutoff(n, head))
+            e = ejects.get(str(n)) or {}
+            ejected, eby = e.get("head") == head and not self.q._marked_again(PR(n, head), e), e.get("by") or EJECTOR
+            withdrawn = not ejected and not self.q.ready(n, head) and not (self.q.before_cutoff and self.q.before_cutoff(n, head))
             by = self.q.marked_by(n, head) if withdrawn and self.q.marked_by is not None else None
             if held.startswith("held"):
                 out[n] = (head, f"{held}, at {head[:12]}, the head it was built at")
-            elif by and (_who(by) == _who(EJECTOR) or _who(by) not in mine):
+            elif ejected and (_who(eby) == _who(EJECTOR) or _who(eby) not in mine):
+                out[n] = (head, f"ejected by {eby} at {head[:12]}, the head it was built at: {e.get('why') or 'no reason given'}")
+            elif by and _who(by) not in mine:
                 out[n] = (head, f"its ready mark at {head[:12]}, the head it was built at, was withdrawn by {by}")
             elif specs and head not in gone and not self._cleared(n, head, clears) and self._frozen_out(below, n, head, specs):
                 out[n] = (head, f"it waits for the freeze to end ({self.frozen_file}) at {head[:12]}, the head it was built at")

@@ -665,6 +665,42 @@ def test_a_member_s_head_as_built_is_read_for_what_others_did_there_after_its_ow
     assert "advance" in _acts(loop.tick()) and env.main() == built["sha"]
 
 
+@pytest.mark.parametrize("owner", [L.EJECTOR, "lane-1"])
+@pytest.mark.parametrize("how", ["unmarked head", "closed"])
+def test_at_the_head_as_built_an_eject_drops_the_candidate_when_ci_s_and_its_owner_s_withdrawal_doesnt(env, how, owner):
+    """At the head a candidate holds, once its PR got a new head or closed, its owner's withdrawn mark lands it as built, ci's
+    on a PR ci owns too, as `_pulled` reads a PR at its head; an eject recorded there drops it when it's ci's, a red's, even
+    of ci's own PR, and lands it when it's its owner's."""
+    env.o.gh.put(1, one := env.o.change({"a.txt": "1\n"}), body=f"Lane `{owner}`.")
+    env.put(2, {"b.txt": "2\n"})
+    by = {(1, one): owner}
+    env.labels.marked_by = lambda n, h: by.get((n, h))
+    env.labels.ready_by = lambda n, h: owner if n == 1 else f"lane-{n}"
+    loop = env.loop(vqueue.decide)
+    (built,) = loop.tick()
+    assert built["members"] == [1, 2], built
+    env.o.gh.ready.discard((1, one))
+    if how == "unmarked head":
+        env.o.gh.put(1, env.o.change({"a.txt": "1b\n"}), ready=False, body=f"Lane `{owner}`.")
+    else:
+        del env.o.gh.prs[1]
+    assert not [r for r in loop.tick() if r["action"] in ("drop", "build")]
+    state = loop.world.q.load_state()
+    state["ejected"]["1"] = {"head": one, "why": "pytest:a failed", "by": owner, "at": "2026-01-01T00:00:09Z"}
+    loop.world.q.save_state(state)
+    recs = loop.tick()
+    if owner == L.EJECTOR:
+        drops = [(r["sha"], r["why"]) for r in recs if r["action"] == "drop"]
+        assert drops == [(built["sha"], f"#1 isn't taken now: ejected by {owner} at {one[:12]}, the head it was built at: "
+                                        "pytest:a failed")], recs
+        assert [r["members"] for r in recs if r["action"] == "build"] == [[2]], recs
+        return
+    assert not [r for r in recs if r["action"] in ("drop", "build")], recs
+    keys = env.listed(built["sha"], {"pytest:a": ["a.txt"]})
+    env.result(keys["pytest:a"], "pytest:a", "pass")
+    assert "advance" in _acts(loop.tick()) and env.main() == built["sha"]
+
+
 def test_a_candidate_holding_a_pr_the_shadow_ejected_is_dropped_saying_so(env):
     """A shadow's eject leaves the mark, so the PR stays out until marked again: a candidate still holding it (its drop cut
     off) is dropped for that eject, not for a withdrawn mark."""
