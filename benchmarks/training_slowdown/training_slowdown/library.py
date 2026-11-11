@@ -91,12 +91,7 @@ def bound(trace: dict, c: float, k: float) -> dict:
     elementwise ops fan out into a product's operand (its `p_match`), at a k the trace has no rows at, and past the
     last k (H) states an activation's β at. The floor, 1, where M is empty or the theorem's count is under the
     blocks the gates fill."""
-    if "refused" in trace:
-        r = trace["refused"]
-        return {"slowdown": None, "binds": f"refused: the capture refused the step ({r['reason']}, {r['op']}: "
-                                           f"{r['message']})"}
-    block = classified(trace, k)
-    if block is None:
+    if "refused" not in trace and classified(trace, k) is None:
         at = ", ".join(f"{b['k']:g}" for b in (trace, *trace["at"].values()))
         return {"slowdown": None, "binds": f"unmeasured: the trace classifies the step's products at k = {at}, and "
                                            f"the policy's k is {k:g}"}
