@@ -14,6 +14,7 @@ it refuses (exit 3) any cubin whose SASS isn't that shape.
 import re
 import subprocess
 import sys
+from pathlib import Path
 
 LINE = re.compile(r"/\*[0-9a-f]+\*/\s+(.*?)\s*;\s*/\* 0x([0-9a-f]{16}) \*/")
 
@@ -51,14 +52,14 @@ def main() -> None:
     others = used | {r + 1 for r in used}  # a named register may be the low half of a 64-bit pair
     if {a, b} & others:
         raise SystemExit(f"REFUSED: UR{a} or UR{b} is one the kernel uses for something else ({sorted(others)})")
-    blob = bytearray(open(src, "rb").read())
+    blob = bytearray(Path(src).read_bytes())
     for (word, at, _), new in zip(steps, (a, a, b, b)):
         raw = word.to_bytes(8, "little")
         if blob.count(raw) != 1:
             raise SystemExit(f"REFUSED: {word:#018x} is not unique in the cubin")
         i = blob.index(raw)
         blob[i + at] = new
-    open(dst, "wb").write(bytes(blob))
+    Path(dst).write_bytes(bytes(blob))
     want = plan(sass(cuobjdump, dst))
     if [r for _, _, r in want] != [a, a, b, b]:
         raise SystemExit(f"REFUSED: the rewritten SASS names {[r for _, _, r in want]}, not UR{a}, UR{b}")
