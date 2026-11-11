@@ -338,11 +338,11 @@ def tile_receipts(a: torch.Tensor, b: torch.Tensor, noise: torch.Tensor, keys: t
             yv = (mul32(uu, cs["ka"][i]) + zv) & M32
             zv = (rotl(uu, cs["rot"][i]) + yv) & M32
         st = torch.cat([yv, zv], -1)
-        if lanes:
+        if per is not None:
             per[:, :, s] = _xor_reduce(st.view(nu, LANES, 2, 8))
         else:
             out[:, s] = _xor_reduce(st.view(nu, LANES, 2, 8).transpose(1, 2).reshape(nu, 2, LANES * 8))
-    return per.reshape(nu, LANES, 2 * lay.sets) if lanes else out.reshape(nu, 2 * lay.sets)
+    return per.reshape(nu, LANES, 2 * lay.sets) if per is not None else out.reshape(nu, 2 * lay.sets)
 
 
 @dataclass
