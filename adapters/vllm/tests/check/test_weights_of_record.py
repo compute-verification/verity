@@ -7,6 +7,7 @@ import json
 import re
 import struct
 from pathlib import Path
+from typing import Any
 
 import numpy as np
 import pytest
@@ -23,7 +24,9 @@ def _bf16(rng, *shape) -> np.ndarray:
 
 def write_safetensors(path: str, tensors: dict[str, tuple[str, np.ndarray]]) -> None:
     """A real safetensors shard: 8-byte header length, JSON header, raw little-endian data."""
-    hdr, blobs, off = {"__metadata__": {"format": "pt"}}, [], 0
+    hdr: dict[str, dict] = {"__metadata__": {"format": "pt"}}
+    blobs: list[bytes] = []
+    off = 0
     for name, (dt, arr) in tensors.items():
         b = np.ascontiguousarray(arr).tobytes()
         hdr[name] = {"dtype": dt, "shape": list(arr.shape), "data_offsets": [off, off + len(b)]}
@@ -308,7 +311,7 @@ def test_fp8_kv_scale_loader_placeholders_are_pinned_as_the_sentinel_unless_the_
     d, man, t = checkpoint
     prog, fields = _program()
     L = "model.model.layers.0.self_attn.attn."
-    extra = [(L + s, [], 32) for s in ("q_scale", "k_scale", "v_scale", "prob_scale")]
+    extra: list[tuple[str, list[int], int]] = [(L + s, [], 32) for s in ("q_scale", "k_scale", "v_scale", "prob_scale")]
 
     def ty(shape, bits):
         tt = f"Value<{bits}>"
@@ -398,7 +401,7 @@ def test_f_r19_int_11_a_loader_placeholder_the_engine_deleted_after_loading_is_n
     d, man, t = checkpoint
     prog, fields = _program()
     L = "model.model.layers.0.self_attn.attn."
-    extra = [(L + s, [], 32) for s in ("q_scale", "k_scale", "v_scale", "prob_scale")]
+    extra: list[tuple[str, list[int], int]] = [(L + s, [], 32) for s in ("q_scale", "k_scale", "v_scale", "prob_scale")]
 
     def ty(shape, bits):
         tt = f"Value<{bits}>"
@@ -441,7 +444,7 @@ def _quantized_prog_and_ck(t, tmp_path, extra_tensors: dict, sub: str, *, placeh
     d0 = tmp_path / "snap"                                                          # the fixture's checkpoint dir (config.json: tied lm_head)
     prog, fields = _program()
     L = "model.model.layers.0.self_attn.attn."
-    extra = [(L + s, [], placeholder_bits) for s in ("q_scale", "k_scale", "v_scale", "prob_scale")]
+    extra: list[tuple[str, list[int], int]] = [(L + s, [], placeholder_bits) for s in ("q_scale", "k_scale", "v_scale", "prob_scale")]
 
     def ty(shape, bits):
         tt = f"Value<{bits}>"
@@ -566,18 +569,18 @@ def test_a_served_build_is_pinned_by_its_weight_reads(checkpoint):
     d, man, t = checkpoint
     L = "model.layers.0."
     qkv = {"weight": L + "self_attn.qkv_proj.weight", "shape": [(HQ + 2 * HKV) * D, H]}
-    program = {"calls": [{"op": "Embedding_v1", "reads": [{"value": "c00.input/ids", "width": 1},
-                                                           {"weight": "model.embed_tokens.weight", "shape": [V, H],
-                                                            "row_of": {"value": "c00.input/ids", "width": 1}}]},
-                         {"op": "mm", "reads": [{"value": "c00.rms_norm/buf1", "width": H}, qkv]},
-                         {"op": "mm", "reads": [{"value": "c02.silu_mul/buf3", "width": INTER},
-                                                {"weight": L + "mlp.down_proj.weight", "shape": [H, INTER]}]},
-                         {"op": "mm", "reads": [{"value": "c02.rms_norm/buf1", "width": H},
-                                                {"weight": L + "mlp.gate_up_proj.weight", "shape": [2 * INTER, H]}]},
-                         {"op": "InductorRMSNorm_v1", "reads": [{"value": "c00.embedding/buf0", "width": H},
-                                                                {"weight": L + "input_layernorm.weight", "shape": [H]}]},
-                         {"op": "mm", "reads": [{"value": "c00.rms_norm/buf1", "width": H}, qkv]}],
-               "logits": {"name": "logits_processor", "w": {"weight": "lm_head.weight", "shape": [V, H]}}}
+    program: dict[str, Any] = {"calls": [{"op": "Embedding_v1", "reads": [{"value": "c00.input/ids", "width": 1},
+                                                                           {"weight": "model.embed_tokens.weight", "shape": [V, H],
+                                                                            "row_of": {"value": "c00.input/ids", "width": 1}}]},
+                                         {"op": "mm", "reads": [{"value": "c00.rms_norm/buf1", "width": H}, qkv]},
+                                         {"op": "mm", "reads": [{"value": "c02.silu_mul/buf3", "width": INTER},
+                                                                {"weight": L + "mlp.down_proj.weight", "shape": [H, INTER]}]},
+                                         {"op": "mm", "reads": [{"value": "c02.rms_norm/buf1", "width": H},
+                                                                {"weight": L + "mlp.gate_up_proj.weight", "shape": [2 * INTER, H]}]},
+                                         {"op": "InductorRMSNorm_v1", "reads": [{"value": "c00.embedding/buf0", "width": H},
+                                                                                {"weight": L + "input_layernorm.weight", "shape": [H]}]},
+                                         {"op": "mm", "reads": [{"value": "c00.rms_norm/buf1", "width": H}, qkv]}],
+                               "logits": {"name": "logits_processor", "w": {"weight": "lm_head.weight", "shape": [V, H]}}}
     build = {"program": program, "program_digest": "b" * 128}
     assert [f for f, _s, _b in WR.served_weight_fields(program)] == ["model.embed_tokens.weight", L + "self_attn.qkv_proj.weight",
                                                                       L + "mlp.down_proj.weight", L + "mlp.gate_up_proj.weight",

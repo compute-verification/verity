@@ -6,6 +6,7 @@ fails by name."""
 from __future__ import annotations
 
 import copy
+from typing import Any
 
 import numpy as np
 import pytest
@@ -23,8 +24,8 @@ from verity_vllm.query.manifest.format import manifest_digest
 
 V, H, E, TOPK, VPT, INTER = 64, 32, 8, 2, 4, 16
 LAYER = "model.layers.0.mlp.experts"
-SCHEDULE = [{"request_id": "r0", "arrive": 0, "prompt_tokens": 3, "max_tokens": 3},
-            {"request_id": "r1", "arrive": 1, "prompt_tokens": 40, "max_tokens": 2}]
+SCHEDULE: list[dict[str, Any]] = [{"request_id": "r0", "arrive": 0, "prompt_tokens": 3, "max_tokens": 3},
+                                  {"request_id": "r1", "arrive": 1, "prompt_tokens": 40, "max_tokens": 2}]
 STEPS = 3
 EMB, OUT = "c00.embedding/buf0", "c00.moe_forward/buf1"
 LG, RW, RI, UP, ACT, DOWN = (f"c00.moe/{n}" for n in SM.PLANES)
@@ -80,9 +81,11 @@ def _block(plan: dict, x: np.ndarray, W: dict) -> dict[str, np.ndarray]:
     n = len(x)
     gate = plan["gemms"][f"{H},{E}"]
     lg = SC.GEMMS[gate["base"]](gate["statics"], x, W["gate"])
-    rw, ri = np.zeros((n, TOPK), np.uint32), np.zeros((n, TOPK), np.int32)
-    up, ac, down = (np.zeros((n, TOPK, w), np.uint16) for w in (2 * INTER, INTER, H))
-    out = np.zeros((n, H), np.uint16)
+    rw: np.ndarray = np.zeros((n, TOPK), np.uint32)
+    ri: np.ndarray = np.zeros((n, TOPK), np.int32)
+    planes: list[np.ndarray] = [np.zeros((n, TOPK, w), np.uint16) for w in (2 * INTER, INTER, H)]
+    up, ac, down = planes
+    out: np.ndarray = np.zeros((n, H), np.uint16)
     for t in range(n):
         r = R.moe_router({"E": E, "TOPK": TOPK, "VPT": VPT}, [lg[t]], renormalize=True)
         rw[t], ri[t] = r["router_w"], r["router_ids"].astype(np.int32)
@@ -187,7 +190,8 @@ def _steps_apart(served) -> tuple[dict, list[SC.Step], dict]:
     hidden-state row 1 + 2^-8 in the first group of eight, four 2^-25 in the second, against each expert's first w13 row of ones
     there (the two-group 25-bit adder drops the 2^-25s, the one-group 26-bit adder carries them past the bf16 tie)."""
     build, W, _steps, _prompts = served
-    x, w = np.zeros(H, np.float32), np.zeros(H, np.float32)
+    x: np.ndarray = np.zeros(H, np.float32)
+    w: np.ndarray = np.zeros(H, np.float32)
     at = [0, 1, 8, 9, 10, 11]
     x[at], w[at] = [1, 2 ** -8, *[2 ** -25] * 4], 1
     W = {**W, "embed": np.tile(_words(x), (V, 1)), "w13": W["w13"].copy()}

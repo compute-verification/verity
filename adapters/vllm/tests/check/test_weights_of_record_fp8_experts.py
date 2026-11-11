@@ -99,8 +99,8 @@ def _by_index_map(m, world: int, rank: int) -> dict[str, np.ndarray]:
     """The served tensors at (world, rank) word by word: weights sliced, scales through the index map."""
     I_r, g = INTER // world, _block(world)
     f, off = G // g, rank * I_r // g
-    w13_ws = np.empty((E, 2 * I_r // g, H // g), dtype=np.float32)
-    w2_ws = np.empty((E, H // g, I_r // g), dtype=np.float32)
+    w13_ws: np.ndarray = np.empty((E, 2 * I_r // g, H // g), dtype=np.float32)
+    w2_ws: np.ndarray = np.empty((E, H // g, I_r // g), dtype=np.float32)
     for e in range(E):
         for h, sid in enumerate(("w1", "w3")):
             src = _src(m, e, sid, "weight_scale_inv")

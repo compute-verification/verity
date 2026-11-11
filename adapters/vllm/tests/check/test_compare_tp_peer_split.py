@@ -75,7 +75,7 @@ def _ar(P: C.RootView) -> int:
 @pytest.mark.parametrize("compact", [False, True])
 def test_a_peers_run_over_adjacent_fields_compares_as_one_peer_read_per_field(rank, compact):
     A, F = rank_program(rank, compact=compact), rank_fold(rank, compact=compact)
-    want = [("PEER", K0 + i, 0, H) for i in range(W - 1)]
+    want: list[tuple] = [("PEER", K0 + i, 0, H) for i in range(W - 1)]
     want.insert(rank, ("N", 0, 0, 0, H))
     for P in (A, F):
         got = P.canon(_ar(P))[0]

@@ -8,9 +8,11 @@ FAIL of any earlier rule is unchanged.
 """
 from __future__ import annotations
 
+from typing import Any
+
 from verity_vllm.check.commit_pass import commit_verdict
 
-WP_OK = {"result": True, "why": None, "root_of_record": "ab" * 32, "compared": 163, "mismatched": [], "missing": [], "unpinned": []}
+WP_OK: dict[str, Any] = {"result": True, "why": None, "root_of_record": "ab" * 32, "compared": 163, "mismatched": [], "missing": [], "unpinned": []}
 VC_OK = {"method": "sampled-exact-replay(complete) + boundary-linkage", "result": True}
 
 

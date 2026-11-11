@@ -24,7 +24,8 @@ class _Producer:
     qkv rows (`out`, the value at [2 RL, 3 RL)), and an attention per history length T whose operands read rows 0..T-1."""
 
     def __init__(self, n=6, own_prefix=False):
-        self.rows, self.by_i, self._d = [], {}, {}
+        self.rows, self.by_i = [], {}
+        self._d: dict[int, dict] = {}
         for layer in (0, 1):
             for t in range(n):
                 k, v = 1000 * layer + t, 1000 * layer + 100 + t

@@ -6,6 +6,7 @@ from __future__ import annotations
 
 import json
 import re
+from typing import Any
 
 import numpy as np
 import pytest
@@ -83,7 +84,7 @@ def _served(t):
             f"{L0}.ffn.shared_experts.down_proj.weight_scale_inv": up("layers.0.ffn.shared_experts.w2.scale")[:, RANK:RANK + 1],
             f"{L0}.hc_attn_fn": raw("layers.0.hc_attn_fn").view(np.uint32),
             f"{L0}.hc_attn_fn_broadcast": torch.from_numpy(raw("layers.0.hc_attn_fn")).view(-1, 4, H).sum(dim=1).numpy().view(np.uint32)}
-    roles = {f"model.{n}": REQUANT[n.rsplit(".", 1)[1]] for n in want if re.search(r"(wq_b|wo_b|fused_wqa_wkv|shared_experts\.\w+)\.weight", n)}
+    roles: dict[str, dict[str, Any]] = {f"model.{n}": REQUANT[n.rsplit(".", 1)[1]] for n in want if re.search(r"(wq_b|wo_b|fused_wqa_wkv|shared_experts\.\w+)\.weight", n)}
     roles |= {f"model.{L0}.attn.wo_a.weight": {"role": "fp8_einsum_w"}, f"model.{L0}.attn.wo_a.weight_scale_inv": {"role": "fp8_einsum_ws"},
               f"model.{L0}.attn.attn_sink": {"role": "dsv4.attn_sink", "NH": NH},
               f"model.{L0}.hc_attn_fn_broadcast": {"role": "mhc.fn_broadcast", "HC": 4, "H": H}}

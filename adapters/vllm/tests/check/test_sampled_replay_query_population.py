@@ -553,7 +553,8 @@ class _NotYetPi:
 def test_a_not_yet_row_whose_address_rule_fails_is_a_mapping_fault_by_name_not_a_dropped_identity():
     from verity_vllm.check.replay import replay_codes as RC
 
-    addresses, codes = {}, {}
+    addresses: dict[tuple, object] = {}
+    codes: dict[str, dict] = {}
     vus, ne, nef = POP.population(_NotYetPi(), "r0", addresses=addresses, codes=codes)
     domain = RC.NOT_YET["AttentionHead_v1"]
     assert vus == [] and list(addresses) == [("r0", 0, "model.layers.0.attn", "out")] and ne[domain] == 1

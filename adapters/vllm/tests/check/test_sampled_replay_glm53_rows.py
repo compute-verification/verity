@@ -112,7 +112,7 @@ def test_the_split_k_gate_at_glm53s_served_statics_is_the_definition(spec):
 
 def test_the_split_k_gate_declines_what_splitk_rows_does_not_model():
     statics = RM.spec_statics('LlBf16SplitKGemm_v1{N=2,K=128,SPLIT_K=2,TILE_K=32,WARPS=2,DOT=HopperBF16WgmmaDot16_v1}')
-    args = [np.zeros(128, np.uint16), np.zeros(256, np.uint16)]
+    args: list[np.ndarray] = [np.zeros(128, np.uint16), np.zeros(256, np.uint16)]
     assert rows.ROWS["LlBf16SplitKGemm_v1"].fn(statics, args)["0"].tolist() == [0, 0]
     with pytest.raises(Declined, match="no twin for DOT=AmpereBF16TcDot16_v1"):
         rows.ROWS["LlBf16SplitKGemm_v1"].fn(statics | {"DOT": "AmpereBF16TcDot16_v1"}, args)

@@ -16,6 +16,7 @@ from __future__ import annotations
 
 import copy
 import json
+from typing import Any
 
 import pytest
 from verity.definitions.registry import bf16_gemm_check as BC
@@ -366,7 +367,7 @@ def test_a_deferred_tp1_replay_is_decided_on_the_commit_engines_facts(tmp_path, 
     stamps the route pin on the Commit engine's, which `engine_of_record` puts on the replay first."""
     from verity_vllm.pipeline import cpu_replay
 
-    row = {"tokens_equal_ref": True, "commit": _routed({"cublas": {"device": "unavailable: no CUDA device"}}, stamped=False)}
+    row: dict[str, Any] = {"tokens_equal_ref": True, "commit": _routed({"cublas": {"device": "unavailable: no CUDA device"}}, stamped=False)}
     row["commit"]["value_correspondence"]["components"] = {}
     art = tmp_path / "sampled_replay_p0.json"
     art.write_text(json.dumps({"sampled_replay": copy.deepcopy(row["commit"]["sampled_replay"])}))

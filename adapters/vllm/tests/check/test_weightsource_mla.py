@@ -57,7 +57,7 @@ def _write(path, tensors) -> dict[str, np.ndarray]:
     header, blobs, words, off = {}, [], {}, 0
     for i, (name, (dt, shape)) in enumerate(sorted(tensors.items())):
         n = int(np.prod(shape))
-        w = (np.arange(n, dtype=np.uint32) + 1000 * (i + 1)).astype(np.uint16 if dt == "BF16" else np.uint32)
+        w: np.ndarray = (np.arange(n, dtype=np.uint32) + 1000 * (i + 1)).astype(np.uint16 if dt == "BF16" else np.uint32)
         if dt == "F32":
             w = w | np.uint32(0x3F800000)
         words[name] = w

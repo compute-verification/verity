@@ -312,6 +312,7 @@ def test_a_tp_capture_writes_the_live_document_the_check_reads_from_its_own_engi
     assert code == 0 and out.count(": 0 problems") == TP
     src = Path(TPL.__file__).with_name("capture.py").read_text()
     main = ast.get_source_segment(src, next(n for n in ast.parse(src).body if isinstance(n, ast.FunctionDef) and n.name == "main"))
+    assert main is not None
     at = [main.index(m) for m in ("LLM(**kw)", "write_live(llm", "throwaway_requests(", '"tp2_install"')]
     assert at == sorted(at), at
 

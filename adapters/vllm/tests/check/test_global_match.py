@@ -11,6 +11,7 @@ import itertools
 import json
 import os
 from pathlib import Path
+from typing import Any
 
 import pytest
 
@@ -121,7 +122,8 @@ def _tok(r, p):
 
 def step_events(step, reqs, ids, base_alloc):
     """One engine step; request ri is active at local step `step - arrive` in 0 .. len(sampled)-1 (prefill at local 0)."""
-    rows, toks, links, roots, logits_rows, logits_idx, slots, seq_lens, num_computed, block_tables, sampled = [], [], [], [], [], [], [], {}, {}, {}, []
+    rows: list[tuple] = []
+    toks, links, roots, logits_rows, logits_idx, slots, seq_lens, num_computed, block_tables, sampled = [], [], [], [], [], [], {}, {}, {}, []
     for ri, r in enumerate(reqs):
         local = step - _arr(r)
         if local < 0 or local >= len(r["sampled"]):
@@ -474,7 +476,7 @@ def test_fast_path_releases_its_caches_when_the_outermost_check_returns(memory, 
     gp, oracle = assemble([R0, R1_LATE], tmp_path)
     ref = gm.check(gp, oracle)
     monkeypatch.setenv(GMF.FLAG, "fast")
-    seen = {}
+    seen: dict[str, list] = {}
     orig_leave = GMF.leave
 
     def spy_leave():
@@ -1196,8 +1198,9 @@ def test_compiled_execution_is_modelled_only_from_components_that_declare_its_co
     from verity_vllm.pipeline import global_program as G
     eng = {"enforce_eager": False, "compilation_mode": "VLLM_COMPILE", "backend": "inductor", "cudagraph_mode": "PIECEWISE",
            "attention": "splitting op executed outside the CUDA graphs", "program_derivation": "eager module-forward trace"}
-    comps = {(256, 31): {"execution": "bi-compiled", "numerics_profile": "b1-eager-v3", "gemm_target": "ada", "engine": dict(eng), "compilation": "piecewise"},
-             (11, 1): {"execution": "bi-compiled", "numerics_profile": "b1-eager-v3", "gemm_target": "ada", "engine": dict(eng), "compilation": "piecewise"}}
+    comps: dict[tuple[int, int], dict[str, Any]] = {
+        (256, 31): {"execution": "bi-compiled", "numerics_profile": "b1-eager-v3", "gemm_target": "ada", "engine": dict(eng), "compilation": "piecewise"},
+        (11, 1): {"execution": "bi-compiled", "numerics_profile": "b1-eager-v3", "gemm_target": "ada", "engine": dict(eng), "compilation": "piecewise"}}
     row = row_workload("x__b2__i256__o32__mixed__greedy__bi-compiled")
     ok = G.workload_applicability(row, comps)
     assert ok["refusal"] is None and ok["execution"] == "bi-compiled"
@@ -1877,7 +1880,8 @@ class _OperandFold:
     (no splits_values), the way a RootView-shaped reader without compare's binding sees it."""
 
     def __init__(self, selects):   # selects: list of (S value | None for a non-Const operand, 6th-operand override or None)
-        self.inst, self.k2i, self.splits_values = [], {}, {}
+        self.inst: list[dict] = []
+        self.k2i, self.splits_values = {}, {}
         for S, override in selects:
             kc, ks = len(self.inst) * 2 + 1, len(self.inst) * 2 + 2
             if S is not None:
@@ -2184,8 +2188,9 @@ def test_fast_producer_chronology_equals_the_records_loop(memory, tmp_path):
     from verity_vllm.check.match import batch_decomp as BD
     from verity_vllm.check.match import global_match_fast as GMF
     from verity_vllm.check.match import program_compare as C
-    for n, (reqs, kw) in enumerate((([R0, R1_LATE, R2_LATE], {}), ([R0, R1_LATE, R2_LATE], {"tgrouped": True}), ([R0, R1], {"leak": True}),
-                                    ([R0, R1], {"tgrouped": True, "_swap": True}))):
+    cases: list[tuple[list, dict]] = [([R0, R1_LATE, R2_LATE], {}), ([R0, R1_LATE, R2_LATE], {"tgrouped": True}), ([R0, R1], {"leak": True}),
+                                      ([R0, R1], {"tgrouped": True, "_swap": True})]
+    for n, (reqs, kw) in enumerate(cases):
         swap = kw.pop("_swap", False)
         gp, oracle = assemble(reqs, tmp_path / f"c{n}", **kw)
         if swap:
@@ -2204,7 +2209,7 @@ def test_fast_producer_chronology_equals_the_records_loop(memory, tmp_path):
             P = BD.Projection(B, f"oracle[{rid}]", idxs, tok_node=None, weights_node=weights_nodes, seed_node=None)
             # the record's loops
             late = 0
-            xstep = collections.Counter()
+            xstep: collections.Counter[str] = collections.Counter()
             wr = False
             for i_local, r in enumerate(P.inst):
                 cs = engine_step_of.get(idxs[i_local])

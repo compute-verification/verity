@@ -34,7 +34,7 @@ class _Store:
         return np.asarray(b).reshape(-1)[elo:ehi].copy(), {4: "u32", 8: "i64"}[np.asarray(b).dtype.itemsize]
 
 
-def _world(reqs: dict[str, tuple[int, int, int]], *, seed_word=None):
+def _world(reqs: dict[str, tuple[int, int, int | None]], *, seed_word=None):
     """reqs: rid -> (arrive, n_steps, declared seed).  An honest committed world: prompt ids at arrival, chained ids, one seed word per
     live (step, request) == the declared seed.  `seed_word`: overrides {(rid, step): word} to forge a committed word (the served run
     consumed something else than declared)."""

@@ -219,7 +219,8 @@ def test_the_first_progressions_weight_is_read_too(world):
 
 
 def test_a_weight_operand_across_two_fields_is_not_evaluated_by_name(world):
-    rec, reads = _replay(*world, items=_w_items(base=PRE - 4))
+    table, planes = world
+    rec, reads = _replay(table, planes, items=_w_items(base=PRE - 4))
     assert rec["result"] is None and "spans fields" in rec["why"] and reads == []
 
 

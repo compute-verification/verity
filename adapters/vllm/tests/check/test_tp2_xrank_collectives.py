@@ -2,9 +2,11 @@
 a received output that is not the definition over the committed partials fails BY NAME; a missing member is a named FAIL, never a pass."""
 from __future__ import annotations
 
+from typing import Any
+
 import pytest
 
-torch = pytest.importorskip("torch")
+torch: Any = pytest.importorskip("torch")
 
 from verity_vllm.check.match import xrank_collectives as XC  # noqa: E402
 

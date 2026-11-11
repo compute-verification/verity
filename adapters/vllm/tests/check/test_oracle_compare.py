@@ -10,6 +10,7 @@ import hashlib
 import json
 import os
 from pathlib import Path
+from typing import Any
 
 import numpy as np
 import pytest
@@ -55,7 +56,7 @@ def make_match(tmp: str, *, snapshot_steps=(0,), sampled=None) -> tuple[str, dic
                             "requests": [{"index": 0, "request_id": U0, "prompt_len": 5, "served_samples": 1, "max_tokens": 1},
                                          {"index": 1, "request_id": U1, "prompt_len": 3, "served_samples": 1, "max_tokens": 1}]}) + "\n")
         row = 0
-        pending = []                           # the qkv_proj instances, written SHUFFLED with the fold's attention-style `row` (see below)
+        pending: list[dict] = []               # the qkv_proj instances, written SHUFFLED with the fold's attention-style `row` (see below)
         for u in order:
             for pos in range(ROWS[u]):
                 for op in events:
@@ -315,7 +316,7 @@ def test_verdict_b2_requires_a_live_oracle_compare():
     assert not ok and why.startswith("C2 of record not established") and "no --program-dir" in why
     ok, why = commit_verdict({**base, "binding": _bnd(1)}, True, min_openings=64)
     assert not ok and why.startswith("C2 of record not established")
-    oc = {"result": None, "compared": 0, "why": "oracle compare not run: FileNotFoundError(...)"}
+    oc: dict[str, Any] = {"result": None, "compared": 0, "why": "oracle compare not run: FileNotFoundError(...)"}
     ok, why = commit_verdict({**base, "binding": _bnd(4), "oracle_compare": oc}, True, min_openings=64)
     assert not ok and why.startswith("C2 of record not established")
     oc = {"result": None, "compared": 100, "grade": "attribution-complete", "attribution": {"complete": True, "unverified_n": 0, "ambiguous_steps": []}}
@@ -652,7 +653,7 @@ def _shared_rotary_bmap(vals: dict, *, tensor_bytes: dict | None = None):
     from tests.check.opened import commit_host_steps
     n = ROWS[U0]
     entries = []
-    tensors = [(f"model.other.{i}", b"\0" * 4) for i in range(10)]
+    tensors: list[tuple] = [(f"model.other.{i}", b"\0" * 4) for i in range(10)]
     for k in vals:
         entries.append({"identity": {"program_digest": "p" * 64, "request_id": "r0", "step": 0, "invocation": k, "op_path": ROT, "output_member": "query",
                                      "element_range": [0, n * H], "rank": 0, "family": "instance_outputs"}, "kind": "leaf", "name": f"{ROT}/query", "tensor_ordinal": 10 + k,

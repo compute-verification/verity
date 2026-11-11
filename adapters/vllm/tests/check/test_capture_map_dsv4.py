@@ -377,7 +377,7 @@ def test_the_decode_index_rows_are_programs(registry):
         p = CMAP["programs"][pid]
         assert p["status"] == "port" and p["definitions"] and all(d in registry for d in p["definitions"]), pid
     csa, hca = (set(CM.layer_set(CMAP, k, ENV)) for k in ("csa", "hca"))
-    by = {}
+    by: dict[tuple, list] = {}
     for t, layer in CM._step_taps(CMAP, ENV, "decode", DECODE):
         if t["op"] == "layers.{i}.attn.decode_indices":
             by.setdefault((t["port"], layer), []).append(t)

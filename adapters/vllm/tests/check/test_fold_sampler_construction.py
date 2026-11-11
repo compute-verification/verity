@@ -111,7 +111,7 @@ def _fold_select(V: int, pattern: TokenSelectGumbelTopP, target: TargetProfile |
 
 
 def _as_compared(spec: str) -> str:
-    rows = [{"spec": spec, "k": 0}]
+    rows: list[dict] = [{"spec": spec, "k": 0}]
     split_selects.as_fold_selects(rows)
     return rows[0]["spec"]
 

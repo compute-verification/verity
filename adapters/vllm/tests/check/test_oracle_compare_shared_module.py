@@ -138,7 +138,8 @@ def test_an_invocation_bound_at_its_runtime_row_is_compared_with_the_folds_row(t
     last = N_LAYERS - 1
 
     def bound_at(row: int):
-        tensors, entries = [], []
+        tensors: list[tuple[str, bytes]] = []
+        entries: list[dict] = []
         for k in range(N_LAYERS):
             for member in ("query", "key"):
                 one = (k, member) == (last, "query")

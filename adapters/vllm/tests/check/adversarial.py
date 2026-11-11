@@ -97,7 +97,7 @@ def mutate_profile(profile: Profile, target: str | Callable[[Any], bool], rewrit
     `MutatingPattern(rewrite)`, every other pattern in `RecordingPattern` (so rewrites can consult `state`)."""
     state: dict = {"hits": []}
     sel = (lambda p: p.name == target) if isinstance(target, str) else target
-    pats = []
+    pats: list = []
     for p in profile.patterns:
         if sel(p):
             mp = MutatingPattern(p, rewrite, state)

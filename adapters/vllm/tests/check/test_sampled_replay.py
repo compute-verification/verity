@@ -4,6 +4,7 @@ from __future__ import annotations
 import json
 import os
 from pathlib import Path
+from typing import Any
 
 import numpy as np
 import pytest
@@ -163,7 +164,7 @@ def _program(bias: bool = False, rope: bool = False, attn: bool = False, scale: 
         lg = add(f"Gemm_v1{{K={H},N={V}}}", f"model.logits_processor/triton_launch_{s}c[0]", [[["n", norm_rows[-1], 0, H]], W("model.model.embed_tokens.weight")])
         sel_prev = add(f"TokenSelect_v1{{V={V}}}", f"argmax_{s}[0]", [[["n", lg, 0, V]]])
     params = [["prompt", f"Array<{LP},Value<32>>"], ["weights", wtype]]
-    inst = {"schema": "cb-a/instance-sequence/v1", "digest": "t" * 64, "params": params, "rows": rows}
+    inst: dict[str, Any] = {"schema": "cb-a/instance-sequence/v1", "digest": "t" * 64, "params": params, "rows": rows}
     if registered:
         params.insert(1, ["values", "{" + ", ".join(f"{n}: Value<32>" for n, _b in vfields) + "}"])
         inst["supplied"] = {"registration": {"param": 1, "name": "values", "fields": [{"name": n, "width": 32, "bits": f"0x{b:x}", "offset": k}
@@ -349,7 +350,7 @@ def test_honest_program_replays_bit_exactly_across_all_strata(world):
 
 def test_the_plan_reads_every_committed_range_the_replay_reads_and_evaluates_nothing(world):
     bmap, committed = world.bmap_and_reader()
-    seen = {"plan": set(), "replay": set()}
+    seen: dict[str, set] = {"plan": set(), "replay": set()}
 
     def reader(key):
         def read(step, name, lo, hi):
@@ -372,7 +373,8 @@ def test_the_plan_reads_every_committed_range_the_replay_reads_and_evaluates_not
 
 def test_a_population_prepared_before_the_seed_draws_and_reads_the_same(world):
     bmap, committed = world.bmap_and_reader()
-    progs, seen = _programs(world), {"cold": [], "warm": []}
+    progs = _programs(world)
+    seen: dict[str, list] = {"cold": [], "warm": []}
 
     def reader(key):
         def read(step, name, lo, hi):
@@ -533,10 +535,10 @@ def test_partial_replay_with_named_gaps_is_covered_by_a_complete_form_b_coord_m0
     partial replay without form (B), with a form (B) mismatch / incomplete attribution, with an UNNAMED gap, or with any replay mismatch =
     FAIL (O1 stands: absence of both forms never passes)."""
     from verity_vllm.check.verdict import commit_verdict
-    base = {"extra": {"expected_tensors": 3, "committed_tensors": 3, "errors_n": 0}, "openings": {"n": 64, "verified": 64},
-            "value_correspondence": {"method": "sampled-exact-replay(partial) + boundary-linkage + oracle", "result": True},
-            "boundary_linkage": {"result": True, "pairs": 6, "linked": 6, "unlinked_n": 0},
-            "weights_pin": {"result": True, "compared": 98, "mismatched": [], "missing": []}}
+    base: dict[str, Any] = {"extra": {"expected_tensors": 3, "committed_tensors": 3, "errors_n": 0}, "openings": {"n": 64, "verified": 64},
+                            "value_correspondence": {"method": "sampled-exact-replay(partial) + boundary-linkage + oracle", "result": True},
+                            "boundary_linkage": {"result": True, "pairs": 6, "linked": 6, "unlinked_n": 0},
+                            "weights_pin": {"result": True, "compared": 98, "mismatched": [], "missing": []}}
     K1, K2 = "RMSNormFusedCuda_v2{N=2048}|r0|rank0|first-decode|model.layers.1.input_layernorm|fresh-window", "SiluMul_v1{N=1024}|r0|rank0|first-decode|model.layers.1.mlp.experts|fresh-window"
     ne = [{"spec": 'RMSNormFusedCuda_v2{N=2048}', "request_id": "r0", "step": 1, "op_path": "model.layers.1.input_layernorm", "row": 0,
            "why": "no evaluator for RMSNormFusedCuda_v2{N=2048} variant (statics outside the registered relation)", "why_class": "no-evaluator"},
@@ -552,9 +554,9 @@ def test_partial_replay_with_named_gaps_is_covered_by_a_complete_form_b_coord_m0
           {"stratum": K2, **{k: ne[1][k] for k in ("spec", "request_id", "op_path", "why", "why_class")}, "phase": "first-decode", "n": 2, "classes": ["interior-composed-v2"]}]
     K3 = "SiluMul_v1{N=1024}|r0|rank0|first-decode|model.layers.1.mlp.experts|fresh-window"
     us_plane = {"stratum": K3, **{k: ne_plane[k] for k in ("spec", "request_id", "op_path", "why", "why_class")}, "phase": "first-decode", "n": 2, "classes": ["plane-fed"]}
-    part = {"result": None, "grade": "partial", "why": "2 strata not evaluated: [...]",
-            "sample": {"evaluated": 598, "equal": 598, "mismatch_n": 0, "not_evaluated_n": 224},
-            "strata_unevaluated": [K1, K2], "unevaluated_strata": us, "not_evaluated": ne}
+    part: dict[str, Any] = {"result": None, "grade": "partial", "why": "2 strata not evaluated: [...]",
+                            "sample": {"evaluated": 598, "equal": 598, "mismatch_n": 0, "not_evaluated_n": 224},
+                            "strata_unevaluated": [K1, K2], "unevaluated_strata": us, "not_evaluated": ne}
     oc_ok = {"result": True, "grade": "complete", "compared": 3, "equal": 3, "mismatch_n": 0, "complete": True,
              "compared_by_family": {"instance_outputs": 2, "input_token_ids": 1}, "not_compared_by_family": {},
              "attribution": {"complete": True, "pairs": 3, "unverified_n": 0, "ambiguous_steps": []}}
@@ -617,7 +619,7 @@ def test_partial_replay_with_named_gaps_is_covered_by_a_complete_form_b_coord_m0
 
 
 def test_token_select_first_max_tie_rule():
-    logits = np.asarray([0x3F80, 0x4000, 0x4000, 0x3F00], dtype=np.uint16)   # 1.0, 2.0, 2.0, 0.5 -> index 1
+    logits: np.ndarray = np.asarray([0x3F80, 0x4000, 0x4000, 0x3F00], dtype=np.uint16)   # 1.0, 2.0, 2.0, 0.5 -> index 1
     assert RK.token_select_first_max(logits) == 1
     from verity.circuits.defs import bind
     from verity.circuits.evaluation.reference import evaluate
@@ -841,7 +843,7 @@ def test_hopper_gemm_v2_evaluator_is_the_registered_wgmma_chain_not_the_ampere_o
     for _ in range(200):
         a = _bf16(rng, (4096, 16), 1.0)
         b = _bf16(rng, (4096, 16), 1.0)
-        z = np.zeros(4096, dtype=np.uint32)
+        z: np.ndarray = np.zeros(4096, dtype=np.uint32)
         h, _ = D.tc_dot16_hopper(z, a, b)
         m, _ = D.tc_dot16(z, a, b)
         diff = np.flatnonzero(D.f2fp_bf16(h) != D.f2fp_bf16(m))
@@ -950,7 +952,7 @@ def test_model_weights_provider_reads_buffers_as_well_as_parameters_the_set_the_
     named once at layer 0).  A parameters-only reader returned None for it -> every RoPE_v1 row 'registered weight field ... not available
     to the replay' (300/300 strata on the smollm2 canary).  The reader's set must equal the set `register_weights` pins:
     `named_parameters()` + `named_buffers()`; the wrapper prefix rule is unchanged; an unknown field is still None (unresolved by name)."""
-    torch = pytest.importorskip("torch")
+    torch: Any = pytest.importorskip("torch")
 
     class Rot(torch.nn.Module):
         def __init__(self):
@@ -999,7 +1001,7 @@ def test_model_weights_provider_reads_buffers_as_well_as_parameters_the_set_the_
 def test_model_weights_provider_serves_an_int32_table_as_its_u32_words():
     """DeepSeek-V4's hash-routed layers register `ffn.gate.tid2eid` as an int32 Parameter [V, 6]; the in-place reader serves its words
     as the deferred replay does (`cpu_replay.WORDS`), so a `GatherI32x{V}` row reads the table either way, and an int64 one stays None."""
-    torch = pytest.importorskip("torch")
+    torch: Any = pytest.importorskip("torch")
 
     class Gate(torch.nn.Module):
         def __init__(self):
@@ -1743,7 +1745,7 @@ def test_moe_evaluators_equal_the_registered_definitions():
     assert [int(v) for v in EV.evaluate("MoeSum_v1", {"TOPK": K_, "H": 16}, [[y]], [None])["sum"]] == ref(bind(R.MoeSum, TOPK=K_, H=16), [[int(v) for v in y]])
     Es, K, N = 4, 32, 4
     x, slab, e = _bf16(rng, K), _bf16(rng, Es * N * K, 0.5), 2
-    g = np.float32(0.37).view(np.uint32).item()
+    g: int = np.float32(0.37).view(np.uint32).item()
     up = EV.evaluate("MoeExpertGemm_v1", {"E": Es, "K": K, "N": N}, [[x], [np.asarray([e], dtype=np.uint32)], [slab]], [None, None, slab])["up"]
     assert [int(v) for v in up] == ref(bind(R.MoeExpertGemm, E=Es, K=K, N=N), [[int(v) for v in x], [e], [int(v) for v in slab]])
     dn = EV.evaluate("MoeExpertGemmW_v1", {"E": Es, "K": K, "N": N}, [[x], [np.asarray([e], dtype=np.uint32)], [np.asarray([g], dtype=np.uint32)], [slab]], [None, None, None, slab])["down"]
@@ -1949,13 +1951,13 @@ def test_lifted_slot_compare_bot_under_active_and_value_under_disabled_both_fail
     Under a_e = 1 every word must be Active(twin value) = the payload exactly; under a_e = 0 every word must be enc(bot) exactly.  A bot word
     under Active, a value word under disabled, and a bot with a nonzero payload / INV each FAIL with the class named; the exact
     bot plane and the exact Active plane PASS.  The enable is derived from the row's COMMITTED router_ids, never the twin's."""
-    payload = np.asarray([0x3F80, 0xBF00, 0x0000, 0x4049], dtype=np.uint16)
+    payload: np.ndarray = np.asarray([0x3F80, 0xBF00, 0x0000, 0x4049], dtype=np.uint16)
     bot17 = 1 << 16
     eq, nd, first, v = CMP.lifted_compare(payload.astype(np.uint32), payload, True, "l17")
     assert eq and nd == 0 and first is None and v.startswith("active")
     eq, nd, first, v = CMP.lifted_compare(np.full(4, bot17, dtype=np.uint32), payload, False, "l17")
     assert eq and v.startswith("disabled")
-    have = payload.astype(np.uint32)
+    have: np.ndarray = payload.astype(np.uint32)
     have[2] = bot17                                # a bot word where the slot is Active
     eq, nd, first, v = CMP.lifted_compare(have, payload, True, "l17")
     assert not eq and nd == 1 and first == 2 and "bot word under an Active enable" in v
@@ -1975,7 +1977,7 @@ def test_lifted_slot_compare_bot_under_active_and_value_under_disabled_both_fail
     eq, nd, first, v = CMP.lifted_compare(payload.astype(np.uint32)[:3], payload, True, "l17")
     assert not eq and nd == -1 and "width" in v
     # l33: the g word and the router members (u64)
-    g = np.asarray([0x3F2C4635], dtype=np.uint32)
+    g: np.ndarray = np.asarray([0x3F2C4635], dtype=np.uint32)
     assert CMP.lifted_compare(np.asarray([0x3F2C4635], dtype=np.uint64), g, True, "l33")[0]
     assert CMP.lifted_compare(np.asarray([1 << 32], dtype=np.uint64), g, False, "l33")[0]
     assert not CMP.lifted_compare(np.asarray([1 << 32], dtype=np.uint64), g, True, "l33")[0]
@@ -2016,7 +2018,8 @@ def test_population_stamps_on_every_reason_the_code_its_text_decodes_to(moe_worl
     rows = [dict(r) for r in moe_world.inst["rows"]]
     ups = [k for k, r in enumerate(rows) if r["spec"].startswith("MoeExpertGemm_v1")][:2]
     rows[ups[0]]["name"], rows[ups[1]]["name"] = rows[ups[1]]["name"], rows[ups[0]]["name"]            # a plane mapping failure
-    ne, codes = Counter(), {}
+    ne: Counter[str] = Counter()
+    codes: dict[str, dict] = {}
     for inst in (dict(moe_world.inst, rows=rows), biased_world.inst):
         ne.update(POP.population(IX.ProgramIndex(inst), "r0", codes=codes)[1])
     assert set(codes) == set(ne)

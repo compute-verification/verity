@@ -6,6 +6,7 @@ check passes them; each single perturbation fails by name."""
 from __future__ import annotations
 
 import copy
+from typing import Any
 
 import numpy as np
 import pytest
@@ -24,9 +25,9 @@ from verity_vllm.query.manifest.format import manifest_digest
 V, H, NH, KVH, D, INTER, P = 64, 64, 2, 1, 64, 32, 512
 QKV = (NH + 2 * KVH) * D
 NORM = dict(N=H, EPS=1e-5, XBLOCK=1, R0_BLOCK=256, NUM_WARPS=1)
-SCHEDULE = [{"request_id": "r0", "arrive": 0, "prompt_tokens": 3, "max_tokens": 4},
-            {"request_id": "r1", "arrive": 1, "prompt_tokens": 2, "max_tokens": 3},
-            {"request_id": "r2", "arrive": 2, "prompt_tokens": 200, "max_tokens": 2}]
+SCHEDULE: list[dict[str, Any]] = [{"request_id": "r0", "arrive": 0, "prompt_tokens": 3, "max_tokens": 4},
+                                  {"request_id": "r1", "arrive": 1, "prompt_tokens": 2, "max_tokens": 3},
+                                  {"request_id": "r2", "arrive": 2, "prompt_tokens": 200, "max_tokens": 2}]
 STEPS = 4
 H200 = SD.device_of((9, 0), 132)
 
@@ -58,8 +59,8 @@ PRE = [_call(b1.Embedding, dict(V=V, H=H), [_v(SV.IDS, 1), _w("embed", V, H)], [
        _mm(_v(N0, H), _w("qkv", QKV, H), QKVV),
        _call(IR.InductorRoPE, dict(NHEADS=NH, D=D), [_v(QKVV, NH * D, (0, NH * D)), CS], [Q]),
        _call(IR.InductorRoPE, dict(NHEADS=KVH, D=D), [_v(QKVV, KVH * D, (NH * D, (NH + KVH) * D)), CS], [K])]
-ATTENTION = {"piece": 1, "layer": "layers.0.attn", "name": ATT, "q": _v(Q, NH * D), "k": _v(K, KVH * D),
-             "v": _v(QKVV, KVH * D, ((NH + KVH) * D, QKV)), "NH": NH, "KVH": KVH, "D": D}
+ATTENTION: dict[str, Any] = {"piece": 1, "layer": "layers.0.attn", "name": ATT, "q": _v(Q, NH * D), "k": _v(K, KVH * D),
+                             "v": _v(QKVV, KVH * D, ((NH + KVH) * D, QKV)), "NH": NH, "KVH": KVH, "D": D}
 POST = [_mm(_v(ATT, NH * D), _w("o", H, NH * D), O_PROJ),
         _call(IR.InductorAddRMSNorm, NORM, [_v(O_PROJ, H), _v(EMB, H), _w("norm1", H)], [N1]),
         _mm(_v(N1, H), _w("gate_up", 2 * INTER, H), GU),
@@ -145,7 +146,7 @@ def _serve(build: dict, W: dict) -> tuple[list[SC.Step], dict[str, list[int]]]:
 
         run(PRE)
         q, k, v = (_operand(ATTENTION[x], vals, W) for x in "qkv")
-        out = np.zeros((lo, NH * D), np.uint16)
+        out: np.ndarray = np.zeros((lo, NH * D), np.uint16)
         for (r, a, b), req in zip(rows, plan["requests"]):
             kh, vh = cache.setdefault(r, ([], []))
             kh.append(k[a:b].reshape(-1, KVH, D))
@@ -236,7 +237,8 @@ def _route_apart(served, step: int) -> tuple[dict, list[SC.Step]]:
     """The run with a row of the qkv GEMM at `step` that the unsplit and the split-K sums round apart (random rows rarely do):
     1 + 2^-8 in the first 16-chunk, 2^-24 in each of the third and fourth, against a weight row of ones there."""
     build, W, steps, _prompts = served
-    x, w = np.zeros(H, np.float32), np.zeros(H, np.float32)
+    x: np.ndarray = np.zeros(H, np.float32)
+    w: np.ndarray = np.zeros(H, np.float32)
     x[[0, 1, 32, 48]], w[[0, 1, 32, 48]] = [1, 2 ** -8, 2 ** -24, 2 ** -24], 1
     W = {**W, "qkv": W["qkv"].copy()}
     W["qkv"][0] = _words(w)

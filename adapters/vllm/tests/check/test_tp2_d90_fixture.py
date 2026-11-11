@@ -558,7 +558,7 @@ def _recorder(result, rank):
 
 def _links_req(rank, result, q, drop_last=False):
     """The B>1 form: request q's Program links = the collectives carrying a peers field of q, in (step, k) order, with q's rows."""
-    out = []
+    out: list[dict] = []
     for c in sorted(result.collectives, key=lambda c: (c["step"], c["k"])):
         f = next((f for f in c["fields"] if f["request"] == q), None)
         if f is None:
