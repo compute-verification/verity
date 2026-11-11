@@ -69,7 +69,7 @@ def _land(h: Review, n: int) -> str:
 
 
 def _passed_run(h: Review, tmp_path) -> None:
-    """The newest after-landing run passes every step, suite `pkg` and the Lake package `Security`."""
+    """The newest after-landing run passes every step, suite `pkg` and the Lake package `security`."""
     rid = f"r-post-{len(h.posted) - 1}"
     h.run_state[rid] = ("done", 0, None)
     d = tmp_path / rid
@@ -245,7 +245,7 @@ def test_shadow_enqueues_each_tips_check_without_a_graph_and_compares_by_the_exe
     h.tick()
     assert _main(world) == one                                  # the run alone moves `main`
     (rec,) = world.store.labels(f"commit:{one}", key=vocab.EXECUTOR_SHADOW)
-    n = len(AFTER_LANDING) + 2                                  # every step, suite `pkg` and the Lake package `Security`
+    n = len(AFTER_LANDING) + 2                                  # every step, suite `pkg` and the Lake package `security`
     assert rec.value == {"check": f"after-landing:{one}", "graph": _graph_id(fake, one), "run": "r-post-0", "units": n,
                          "agree": n, "pending": [], "disagree": [], "missing": [], "executor_only": []}
     assert one not in h.q.load_state()["drive"].get("executor", {})
