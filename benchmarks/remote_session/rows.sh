@@ -16,17 +16,18 @@
 # inside its booked hours.
 #
 #   rows      rows.py: at each of ROWS in turn on one store of GIB GiB across CARDS, the device's gates, the store's
-#             openings and the calibration (CAL chained passes each, over the plain read); out/rows.json
+#             openings and the calibration (CAL chained passes each, over the plain read); out/rows.json. CTAS_AT
+#             (rows.py's --ctas-at words, `64=96,128,264`) gives a row count its receipt CTA counts, each in turn on
+#             that store: which count the pass over the read is least at, and the count a timed run takes
 #   session   PLAN's sessions at SESSION_ROWS rows over SESSION_GIB GiB on the first card, the verifier's process
 #             (on VERIFIER_CORES) beside the prover (on PROVER_CORES) on this machine, which audits nothing: a check
 #             of the kernels against the verifier; out/session/
-#   look      rows.py at LOOK_ROWS for each of LOOK_CTAS receipt CTAs in turn, a lease each: which count the pass over
-#             the read is least at; out/look-CTAS/rows.json
 #   inplace   inplace_gate.py --no-timing at 64 and at 16 rows: the in-place pass against the reference
 #
 #   research run --on NODE --project verity --source TREE --cwd clone --send main-session.cu -- \
 #     env CARDS=0 CORES=0-7 ARCH=90a NOT_AFTER=2026-11-11T11:30Z bash benchmarks/remote_session/rows.sh
 #   ... env CARDS=0,1,2,3,4,5,6,7 CORES=0-15 ARCH=90a STEPS=rows ROWS='16 64 16 64' GIB=496 CAL=4000 LEASE_MIN=60 ...
+#   ... env CARDS=0 CORES=0-7 ARCH=90a STEPS=rows ROWS='64 16' GIB=62 CTAS_AT='64=96,128,132' ...
 set -uo pipefail
 TREE=$PWD
 CARDS=${CARDS:-0} CORES=${CORES:-}
@@ -57,7 +58,6 @@ session() {  # under the lease: PLAN's sessions, the verifier's process beside t
 if [ "${1:-}" = session ]; then session; exit $?; fi
 
 STEPS=${STEPS-rows session} ROWS=${ROWS:-64 16} GIB=${GIB:-16}
-LOOK_ROWS=${LOOK_ROWS:-64} LOOK_CTAS=${LOOK_CTAS:-64 96 128}
 LEASE_MIN=${LEASE_MIN:-30} LEASE_MEM_GB=${LEASE_MEM_GB:-64}
 export CAL=${CAL:-400} SKETCH_CTAS=${SKETCH_CTAS:-128} PLAN=${PLAN:-honest,skip:0.0625}
 export SESSION_ROWS=${SESSION_ROWS:-64} SESSION_GIB=${SESSION_GIB:-16}
@@ -148,16 +148,8 @@ for step in $STEPS; do
     rows)
       # shellcheck disable=SC2086
       leased rows "$PY" $RS/rows.py --lib "$B/session.so" --kv "$B/kv.so" --out "$O" --rows $ROWS --gib "$GIB" \
-        --gpus "$N" --calibration-passes "$CAL" --sketch-ctas "$SKETCH_CTAS" ${ROWS_ARGS:-} ;;
-    look)
-      rc=0
-      for c in $LOOK_CTAS; do
-        mkdir -p "$O/look-$c"
-        # shellcheck disable=SC2086
-        leased "look-$c" "$PY" $RS/rows.py --lib "$B/session.so" --kv "$B/kv.so" --out "$O/look-$c" --rows $LOOK_ROWS \
-          --gib "$GIB" --gpus "$N" --calibration-passes "$CAL" --sketch-ctas "$c" ${ROWS_ARGS:-} || { rc=$?; break; }
-      done
-      (exit $rc) ;;
+        --gpus "$N" --calibration-passes "$CAL" --sketch-ctas "$SKETCH_CTAS" ${CTAS_AT:+--ctas-at $CTAS_AT} \
+        ${ROWS_ARGS:-} ;;
     inplace)
       # shellcheck disable=SC2016
       leased inplace bash -c 'rc=0; for k in 64 16; do mkdir -p "$O/inplace-$k"
@@ -171,7 +163,7 @@ for step in $STEPS; do
       else
         say "session: not started, the Lean verifier did not build (out/lean-build.log)"; false
       fi ;;
-    *) say "a step is rows, look, inplace or session, not $step"; exit 3 ;;
+    *) say "a step is rows, inplace or session, not $step"; exit 3 ;;
   esac
   rc=$?
   [ $rc = 0 ] || bad=$rc

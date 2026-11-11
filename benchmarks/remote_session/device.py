@@ -1204,6 +1204,11 @@ class GpuBackend:
         self.encode_bytes_per_s = rate
         return {"encode_bytes_per_s": rate, "blocks": self.blocks, "bytes": self.blocks * BLOCK}
 
+    def set_sketch_ctas(self, ctas: int) -> None:
+        """The receipts grid's CTAs from the next pass on, the gate store's too: `rs_pass` takes the count at each
+        call, and no ring is sized by it."""
+        self.shape["sketch_ctas"] = self.store.sketch_ctas = ctas
+
     def read_ms(self, segments: list[int], tries: int = 6) -> float:
         """The read alone (`rb_read`) of `segments` at once, each on its GPU, a host segment on the GPU's host stream
         over its PCIe link: 16 CTAs an SM, except that beside HBM a host segment is launched first on a quarter of a
