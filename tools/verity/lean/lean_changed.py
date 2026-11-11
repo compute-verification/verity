@@ -105,7 +105,10 @@ names under `proved_in`, at their paths in this repository, with each package's 
 what imports them. A package's fetched dependencies are hard links to the ones the audit keeps (`--deps`, `lean_audit.WarmDeps`),
 taken under their lock while the step tree has none for its manifest and toolchain; the build runs in the audit's sandbox
 (`tools/verity/lean/sandbox.sh`), where they are mounted read-only, so it cannot write what the audit reads, and a concurrent audit can
-move them away without touching the links. The first build of a package here is cold; later ones are not.
+move them away without touching the links. Before that mount a dependency with a `lakefile.lean` and no `.lake` gets an empty
+one, in the tree's own directory and never in the ones the audit keeps, since Lake makes it before it compiles that
+configuration at a dependency order the tree was not loaded at (`READ_ONLY`). The first build of a package here is cold;
+later ones are not.
 
 A package with guarantees then has its roots built (`lake build +ROOT`, as the audit does) and its guarantees' records
 compared with that build (`records`): `check.py`'s own reading of the `.olean` files (`Facts.lean`, in the sandbox) and its
@@ -163,9 +166,17 @@ FACTS = Path(".lake") / "lean-changed-facts"
 #: the audit's build sandbox, as `tools/verity/lean/check.py` runs it: writable only in the `.lake` directories it is given
 UNSHARE = ["unshare", "--user", "--map-root-user", "--mount", "--net", "--pid", "--fork", "--kill-child"]
 SANDBOX = ROOT / "tools" / "verity" / "lean" / "sandbox.sh"
-#: run inside the sandbox before the build: `ro DIR... -- CMD`, each DIR bind-mounted read-only over itself
+#: run inside the sandbox before the build: `ro DIR... -- CMD`, each DIR bind-mounted read-only over itself. Before its
+#: mount, each package directly under DIR (a directory of its own, never a link) that has a `lakefile.lean` and no `.lake`
+#: gets an empty one: Lake keeps such a package's compiled configuration in the workspace's
+#: `.lake/config/<the package's place among those it loads>`, and where that place holds no trace of it (a dependency order
+#: this tree was never loaded at) it first makes the package's own `.lake`, which under the mount fails the load. A package
+#: nothing builds has no `.lake` unless Lake made it so. Nothing else under DIR is written; a `mkdir` that fails is left to
+#: Lake's own error (`refused_write`)
 READ_ONLY = ('ro=(); while [ "$1" != -- ]; do ro+=("$1"); shift; done; shift; '
-             'for d in "${ro[@]}"; do mount --bind "$d" "$d" && mount -o remount,bind,ro "$d" || exit 97; done; exec "$@"')
+             'for d in "${ro[@]}"; do '
+             'for p in "$d"/*; do [ -f "$p/lakefile.lean" ] && [ ! -L "$p" ] && [ ! -e "$p/.lake" ] && mkdir "$p/.lake"; done; '
+             'mount --bind "$d" "$d" && mount -o remount,bind,ro "$d" || exit 97; done; exec "$@"')
 #: Lake's two lines for a write the sandbox's read-only mount refused, the second naming the path
 REFUSED_WRITE = re.compile(r"^error: read-only file system \(error code: \d+\)\n[ \t]+file: (\S.*?)[ \t]*$", re.M)
 #: Lake's line for a Lean error, the file relative to its package: `error: Aa/Two.lean:2:39: Unknown identifier ...`
