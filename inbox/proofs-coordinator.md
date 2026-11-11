@@ -51044,3 +51044,25 @@ By the count the Lean check is expected to make, these come to 262 modules and 2
 For the table: third raise #8932 `6b619d26d08f` unmarked, `Proofs/Flock` 269 / 2,238, Core 6 / 144 untouched; quick tier `r20261111-111152-772e` running at 11:24Z, no verdict yet.
 For the table: markable today under #8890's 267 / 2,217, in order: #8139, #8889, #8892, #8906, #8905, #8916, #8912, #8922, #8924, #8919 (ends 265 / 2,162, Core 5 / 70) [derived on run]; first over: TWOPROVE's `cursor/proofs-clscounts-c7b6` (268 modules).
 For the table: everything marked is 257 / 2,096 on the check's base (262 / 2,132 by `fd8c`'s own count) [derived on run]; `FirstHit` (80) is read by the ratchet's `defeq` seed rule [run].
+
+## MEMBERS, Wed 11 Nov 11:25Z: #8921's records run PASSES with no lock rewritten, so it is a lemma PR (no lock record, no guarantee, no premise); the Python part is open as #8927 and its suite passes at the fixed head; four runs still out, ready lines follow them
+
+No claim moves in #8921 or #8927 [run for #8921: its records run; read for #8927: no Lean and no lock in its diff]. Order read through its 11:15Z section; mailbox unchanged (285 lines) [run, 11:25Z].
+
+- **#8921 at `58a3e8b90f40d75dad15a377f43cf7f16260c8a3`: records `r20261111-103828-4970` pass** [run]: `check.py` exit 0 on the Spot package (5,589 declarations in 50 modules), `security` (27,021 in 715; 1,077 guarantees), `security/Properties` (3,088 in 94; 463 guarantees), `security/Proofs` (193,503 in 3,821); axioms `propext`, `Classical.choice`, `Quot.sound` in each; outcome `pass`, `"regenerated": {}` in each of its three `audit.json`. So my 10:46Z guess holds: the docstring rewording and the four theorems move no record in any lock. By your 10:49Z rule it is a lemma PR. It adds no `.lean` file, so no cap is involved.
+  - Still out for its ready line: quick tier `r20261111-103902-b6b5` (running on cpu-11 since about 10:54Z) and the merged tree's build `r20261111-103935-018e` (scratch `349213356392`, running on cpu-3). ETA 11:45Z to 12:15Z [guess: the records run took 45 minutes on a slot with no build of this stack; the last tier took 80].
+- **#8927 is open, unmarked**: the Python part, `cursor/proofs-v2-members-write-9810` at `403c8aed979c8753794d3d7a296c1f8e9742fcdf`, stacked on #8898; 5 files, no Lean, no lock.
+  - **The suite that failed passes at this head:** `r20261111-103615-5605`, `suites.py verity-core-sampled-proofs --quick`: 247 passed, 2 skipped (245 passed and 2 failed at the old head, run `c6ae`) [run]. The new difftest row has now run to its end once, refusal strings included.
+  - Still out for its ready line: the quick tier `r20261111-103646-64c5` (running on cpu-12 since 10:37Z), ETA 11:50Z to 12:05Z [guess].
+  - Also out, beyond what the order asks: the same tier on this head merged onto `main` 8f5d3c3823f0 with `main`'s `suites.py` (scratch `797c8c3e53ad`, pushed nowhere), `r20261111-110651-a480`. It is the tier #8716 has your mark run, slow rows of the modified test files included. ETA after 12:20Z [guess]. I report it when it ends; the ready line does not wait for it unless you say so.
+- **#8898**: ready line stands (10:46Z entry, line 49243); head `9d9adf6fe723` not moved, no label yet [run: `gh pr view`].
+- For the held branch, later: its rewording commit `56b5dd3c6d` overlaps #8921's `b8201dc046` in the docstrings. When it is restacked, only its change to `MULTI_REFUSED`'s string and the gap-1 and bases text remain of that commit.
+
+### What I wait on
+
+Runs `b6b5` and `018e` (#8921), `64c5` and `a480` (#8927). Nothing else is left on my list, so I end my turn here: resume me when they end, or on your answer about `MULTI_REFUSED`'s string. On resume I fill the two bodies and post `ready to mark #8921` and `ready to mark #8927`.
+
+For the table:
+- #8921 `58a3e8b90f40`: records `4970` pass, no lock rewritten; a lemma PR; try `20db` passes; quick tier `b6b5` and merged build `018e` out.
+- #8927 `403c8aed979c`: open, unmarked; its failed suite passes at the fixed head (`5605`, 247 passed); quick tier `64c5` out.
+- #8898 `9d9adf6fe723`: ready to mark since 10:46Z.
