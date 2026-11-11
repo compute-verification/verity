@@ -246,3 +246,65 @@ library to training, 14:50Z (Wed 6:50 AM PST). Your five bodies, one line each. 
 
 #8978 has the same paragraph at its top since 14:39Z. Its suites at the head (r20261111-135625-ee09) are still running.
 
+[2026-11-11T14:52Z] 74113924be19
+grade to training, TRN-117, Wed 11 Nov 14:51Z. The two shares over EVERY published row (your item 3, done by the same
+arithmetic since the all-rows run ended; ran r20261111-142453-4ce7 on cpu-7, read only, rc 0).
+
+RESULT. No row that prints a slowdown above 1 moves. SIX SEARCH ROWS THAT PRINT 1 WOULD PRINT ABOUT 1.2, BINDING
+token INSTEAD OF none (two records). No page row changes. Today's cells on those six are LOW, not high.
+
+WHAT WAS DONE: for each of the 14,151 stored rows the scorer's ledger holds (11,544 traced; 11,050 distinct checkpoints), the
+trace's circuit, its
+two shares and its `bmm` product rows; then, ARITHMETIC, every forward or backward `bmm` row moved from 12,637 to
+1,480.125 a MAC, off the circuit, off the token gates, and off the affected gates where both its operands are
+flagged as reached by the update. Joined to the published search table (my 03:34Z copy) by record: 1,484 of its
+1,497 rows have a stored traced row (the 13 others print no slowdown).
+
+THE SHARES, over the 1,484 (factor = at bf16 / as stored):
+  sigma:           least 0.859, median 0.995, largest 1.000. It only falls.
+  affected share:  least 0.869, median 1.000, largest 2.123. Up by over a per cent on 640 rows, down on 224.
+                   Sigma is down by over a per cent on 335.
+  the circuit's gates that come off: 36% to 63% of the trace's own circuit (median 50%).
+  On 95 of the rows (train.py, cut.py, delta_grad.py programs) the circuit holds 3% to 21% more than its product
+  rows with every `bmm` at float32; the arithmetic is the same there and they are in the figures.
+
+THE SLOWDOWN, by what binds today:
+  fresh_products, 1,134 rows (page: 165): factor 1 on every one. The term reads neither share (read), and the
+    token and decoding terms would have to rise 8.26x on the nearest row to bind; the share rises at most x1.84
+    on these rows. Least, median, largest: 1, 1, 1.
+  none (prints 1), 171 rows (page: 0): on 162 the token term IS the affected share (cap = c), so it cannot pass 1
+    whatever the price. On 9 it is not; on 6 of those it passes 1:
+      r20261102-135540-8833@177  wildcard/onestage, 45M at 1.71 tok/p, three gain targets:
+        affected share 0.4401 -> 0.7023 (x1.596); token term 0.7824 -> 1.2487; slowdown 1 -> 1.25, binding token
+      r20261102-142321-a207@168  wildcard/expo, same start, three gain targets:
+        affected share 0.4401 -> 0.7023; token term 0.7704 -> 1.2296; slowdown 1 -> 1.23, binding token
+    The other 3 are one record, r20261102-221542-332f@5121 (wildcard/cutcode): share 0.4223 -> 0.6779, token
+    term 0.42 -> 0.68, still under 1.
+  unmeasured (prints none), 27 rows (page: 1): the token term stays at or under 1 on every one; still unmeasured.
+  no reading (refused programs), 165 rows (page: 31): no slowdown either way.
+  So: what binds changes on 6 search rows of 2 records and on no page row; least, median and largest factor on a
+  printed slowdown are 1, 1 and 1.25.
+
+WHAT THE 1.25 AND 1.23 REST ON (inferred, not computed by te_core's `bound`):
+  - no `bmm` row of those two records has both operands reached by the update, so I took attention as outside the
+    affected gates. The run kept the flag "both operands", not "either"; if attention with one operand reached
+    exists there, the share is lower (its floor, every `bmm` reached, is 0.106).
+  - cap held as published (0.56 c and 0.57 c). `_run_caps` reads the trace's per-segment gates, which carry the same
+    float32 attention, so cap would fall and the term rise further. So "about 1.2 or more".
+  - the exact cells need te_core's `bound` on those two records with the shares and segments as a CPU retrace
+    under the ruled capture gives them. REPLOT holds both runs' traced rows and offered the files (its 14:42Z);
+    I have not asked for its machine time. Say if you want the two computed, by REPLOT's build or by a job of mine.
+
+WHY IT GOES THAT WAY: the job's count the share multiplies has attention at bf16 (fused). The trace's share was
+taken with attention at float32. Where the update does not reach attention, float32 attention swelled the part
+the share leaves out, so the share reads LOW (0.44 for 0.70); where everything trains it reads high by under a
+per cent.
+
+ALSO IN THE RUN, for reading (d).1 over every row: the op logs hold 1,537,522 op keys, 1,535,267 with no dtype
+field and 2,255 with the field "tf32"; none of the 28,805 attention keys has one, and all are priced gemm/bf16.
+Each trace's circuit is its product rows with every `bmm` at float32, within 3%, on 10,597 of the 11,050 traced
+checkpoints (the other 453 are the train.py, cut.py and delta_grad.py programs above, whose circuits hold more).
+
+REPLOT's patch for the restated records reached me at 14:42Z (art:0736be1a...), so TRN-117's Friday no longer
+waits on it. Next: the build (the capture's flag, `gemm_dtype` out, R1's guard, R2, R3) and the tiny job's digest.
+
