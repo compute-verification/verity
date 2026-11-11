@@ -384,14 +384,14 @@ def make(base_dir: Path, out_dir: Path, shards: list[str], *, base_repo: str, ba
                           indent=2, sort_keys=True) + "\n").encode()
         (out_dir / INDEX).write_bytes(idx)
         files[INDEX] = {"sha256": hashlib.sha256(idx).hexdigest(), "size": len(idx), "digest_source": "recipe"}
-    made = {n: d["sha256"] for n, d in files.items()}
+    sha256s = {n: d["sha256"] for n, d in files.items()}
     for p in sorted(base_dir.rglob("*")):
         rel = p.relative_to(base_dir).as_posix()
         if p.is_file() and rel not in files and rel != INDEX and any(fnmatch.fnmatch(rel, pat) for pat in COPY_PATTERNS):
             (out_dir / rel).parent.mkdir(parents=True, exist_ok=True)
             shutil.copyfile(p, out_dir / rel)
             files[rel] = {"sha256": _sha256(out_dir / rel), "size": (out_dir / rel).stat().st_size, "digest_source": "base"}
-    return {"revision": pin_revision(base_repo, base_revision, made, recipe), "files": dict(sorted(files.items())),
+    return {"revision": pin_revision(base_repo, base_revision, sha256s, recipe), "files": dict(sorted(files.items())),
             "config_sha256": files[CONFIG]["sha256"], "safetensors_sha256": {fn: files[fn]["sha256"] for fn in shards}}
 
 
@@ -413,7 +413,7 @@ def base_entry(entry: dict[str, Any], entries: list[dict[str, Any]], recipe: Rec
     """The BF16 pin a recipe entry was made from (its `recipe.base_repo` at `recipe.base_revision`, with shard sha256s)."""
     r = entry.get("recipe")
     rid = None if r is None else r.get("id")
-    if rid != recipe.id:
+    if r is None or rid != recipe.id:
         raise UsageError(f"{entry.get('role')}: recipe {rid!r} is not {recipe.id!r}")
     hits = [c for c in entries if c.get("repo") == r.get("base_repo") and c.get("revision") == r.get("base_revision")
             and c.get("safetensors_sha256")]

@@ -1975,8 +1975,6 @@
     {"file": "verity_vllm/engine/code_identity.py", "kind": "var-annotated", "symbol": "loaded_code_objects", "detail": ""},
     {"file": "verity_vllm/engine/collectives/all_reduce.py", "kind": "no-redef", "symbol": "AllReduceSeam._install", "detail": ""},
     {"file": "verity_vllm/engine/core_gate.py", "kind": "arg-type", "symbol": "EngineCoreGate._step.step", "detail": "", "count": 2},
-    {"file": "verity_vllm/engine/fp8_checkpoint.py", "kind": "arg-type", "symbol": "make", "detail": ""},
-    {"file": "verity_vllm/engine/fp8_checkpoint.py", "kind": "assignment", "symbol": "make", "detail": ""},
     {"file": "verity_vllm/engine/hooks.py", "kind": "arg-type", "symbol": "Hooks.uninstall", "detail": ""},
     {"file": "verity_vllm/engine/int8_attention.py", "kind": "call-arg", "symbol": "reference_requests", "detail": ""},
     {"file": "verity_vllm/engine/int8_attention.py", "kind": "return-value", "symbol": "packed_windows", "detail": ""},
