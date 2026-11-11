@@ -15,7 +15,7 @@ the same blob in every build; and ``program-digests/<census id>.json``, an entry
 
 - ``id``, ``display``, ``template``, ``params``: the census's;
 - ``descriptor_id``: the key ``verity_flock.circuit.program_digests`` gives its Definition at ``default_statics``
-  (``verity.ml.circuits.codec``'s id; a silicon reference no core Definition wraps keeps its own key);
+  (``verity.circuits.codec``'s id; a silicon reference no core Definition wraps keeps its own key);
 - ``default_statics``: ``{}``, or for statics that vary per instance (the census's ``variable_ranges``) the largest value of
   each; ``variants``: ``{count, varying: {name: [lo, hi]}}``, every value in each range a variant;
 - ``program_digests``: ``{statics: program_digest}`` for every variant (statics as ``boolean_export.statics_key``), as META's
@@ -117,7 +117,7 @@ def build(out: Path, report: dict, report_art: str, ids: Iterable[str] | None = 
           export: Callable[[Any, list[dict]], bytes] = export, log: Callable[[str], None] | None = None) -> dict:
     """Write the payload tree under ``out`` and return the meta, citing ``report`` (a circuit-check report, stored as
     ``report_art``) for the counts."""
-    from verity.ml.circuits.codec import descriptor_id
+    from verity.circuits.codec import descriptor_id
     from verity_flock import circuit as FC
 
     from verity_flock import subcircuit_templates as TM
