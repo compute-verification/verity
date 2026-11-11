@@ -27,7 +27,7 @@ inputs = ["verity/__init__.py", "verity/errors.py", "verity/core/__init__.py", "
           # the circuit model's codec rows and the primitives' range rows, which test_encode_chain.py and
           # test_gate_ranges.py recompute from codec.encode_word, the f32 evaluators and property/v1's rules, and
           # Exp2Lut127's table, which test_gate_ranges.py holds to vLLM's (fixtures/exp2_lut127.json)
-          "Security/Proofs/Accounting/Gates.lean", "Security/Definitions/Accounting/Gates/Ranges.lean",
+          "security/Proofs/Accounting/Gates.lean", "security/Definitions/Accounting/Gates/Ranges.lean",
           # main's first-parent history, spot' fixture, which test_remote_coins.py holds a session's pin to
           "verity/protocols/spot/verifier/tests/fixtures/main-first-parent.txt",
           # core's model pin, whose every role's checkpoint_sha512 test_store.py recomputes with the store's own

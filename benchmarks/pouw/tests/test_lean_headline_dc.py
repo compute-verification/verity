@@ -32,7 +32,7 @@ def test_the_exporter_reads_its_own_trees_machine_model(tmp_path):
 
 
 def test_the_committed_instances_are_the_exporters():
-    """Security/Definitions/Accounting/HeadlineDc/Sm90.lean, Sm90Measured.lean, Sm90MeasuredI3.lean, Sm100.lean and
+    """security/Definitions/Accounting/HeadlineDc/Sm90.lean, Sm90Measured.lean, Sm90MeasuredI3.lean, Sm100.lean and
     Sm100Measured.lean are what lean_headline_dc.py writes from the data, π* included, and every reading's bound is at
     most its target."""
     assert H.main(["--check"]) == 0
@@ -87,7 +87,7 @@ def _price(x, lam: dict, n: dict) -> Fraction:
 
 
 def test_folds_meet_fold_opt_at_pi_star():
-    """FOLD-OPT at each statement's π* (`FoldOptFoldedAt`, a conjecture under Security/lean-audit.json's
+    """FOLD-OPT at each statement's π* (`FoldOptFoldedAt`, a conjecture under security/lean-audit.json's
     `shape.conjectures`), which a fold priced below N_w·φ* at π* falsifies. It is open at all five π*, and on the H200 a
     premise only about folds off the cheater's menu, which holds every counted fold known: at the (I3) twin's π*
     li-bulk's trimmed W = ∞ member is that menu's cheapest. Every class a fold issues prices above 0 at each π* (the
@@ -220,7 +220,7 @@ def test_each_statement_has_its_eps_and_b_flat_as_one_pair(tmp_path):
     statement's name, its ε (the exact bound rounded up at 10^-5, the literal `1 - N / 100000` the Models file states
     for it), the B_♭ of the same export, exact, its facet, and the credit (1 − ε)·B_♭. `--json` writes each pair whole
     beside its reading, and a reading for the record names no statement."""
-    models = (H.LH.ROOT / "Security" / "Definitions" / "Accounting" / "Guarantees" / "HeadlineDc.lean").read_text()
+    models = (H.LH.ROOT / "security" / "Definitions" / "Accounting" / "Guarantees" / "HeadlineDc.lean").read_text()
     seen = []
     for fam in H.FAMILIES:
         for v, q in ((fam.sheet, H.Q), (fam.measured, H.Q), *(((fam.measured, fam.twin),) if fam.twin else ())):
