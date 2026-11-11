@@ -10,6 +10,9 @@ A SPEC is one of
                            result: for each move of STAGED in order, the move is the script step of PARENT's own crossing
                            (the commit whose message says `Restack-move: MOVE`), and the last merge is onto PARENT's result
     NAME=COMMIT@PARENT:onto  the child with `restack.py COMMIT --main STAGED --onto PARENT'S RESULT`, as it is
+    NAME=COMMIT:named      the head as it is: `--move-commit` for each move of `--below`..STAGED it does not hold, and
+                           `--onto STAGED` (with `@PARENT`, started when PARENT has ended)
+    NAME=COMMIT:pins       restack.py's pins step alone, on a merge made by hand
 
 Specs with no parent run side by side, at most `--jobs` at a time; a child starts when its parent has ended.
 
@@ -39,7 +42,13 @@ if not subprocess.run(["git", "config", "--get", "user.name"], capture_output=Tr
     # a node's clone has no identity of its own, and restack.py's commits need one
     ENV.update(GIT_AUTHOR_NAME="circuits", GIT_AUTHOR_EMAIL="circuits@verity.invalid",
                GIT_COMMITTER_NAME="circuits", GIT_COMMITTER_EMAIL="circuits@verity.invalid")
+# The vLLM lists' merge driver in either layout, set in the same command as restack.py (a clone's own config names the
+# moved path only; in a checkout of the moved tree this runs the same script).
+ENV.update(GIT_CONFIG_COUNT="1", GIT_CONFIG_KEY_0="merge.vllm-allowlist.driver",
+           GIT_CONFIG_VALUE_0='f=adapters/vllm/tests/lint/merge_allowlist.py; [ -f "$f" ] || '
+                              'f=integrations/vllm/tests/lint/merge_allowlist.py; python3 "$f" %O %A %B %P')
 OUT = os.environ.get("OUT") or "out"
+PARENT_LOCKS: dict[str, threading.Lock] = {}
 LOCK = threading.Lock()
 T0 = time.time()
 
@@ -166,9 +175,20 @@ def named(name: str, commit: str, main: str, moves: list[str]) -> dict:
     """A head as it is (not merged with the commit below the move), each move named: `--move-commit M... --onto MAIN`."""
     args = [commit, "--main", main, "--onto", main]
     for m in moves:
-        args += ["--move-commit", m]
+        if not holds(m, commit):
+            args += ["--move-commit", m]
     r, secs, rc = restack(name, args)
     rec = {"name": name, "kind": "named", "commit": commit, "seconds": round(secs), "exit": rc, "restack": r}
+    if r and r.get("status") == "conflicted" and r.get("step") == "base" and r.get("crossed"):
+        # A stop at a later move's `base` names no commit: cross the moves it passed again, alone, for the head a mend starts from.
+        pargs = [commit, "--main", main, "--no-pins"]
+        for m in r["crossed"]:
+            pargs += ["--move-commit", m]
+        p, psecs, _ = restack(f"{name}.partial", pargs)
+        if p and p.get("result"):
+            rec["partial"], rec["partial_seconds"] = p["result"], round(psecs)
+            say(f"{name}: crossed over {[m[:12] for m in r['crossed']]} alone it is {p['result']} ({p.get('status')}); the stop is "
+                f"its merge with {r.get('base')}")
     if r and r.get("result") and r.get("status") in ("clean", "locks-stale", "pins-stale"):
         rec["result"] = r["result"]
         rec["facts"] = facts(name, commit, r["result"], None, main, main)
@@ -214,13 +234,13 @@ def child_onto(name: str, commit: str, parent: dict, main: str) -> dict:
     return rec
 
 
-def child_steps(name: str, commit: str, parent: dict, main: str) -> dict:
+def child_steps(name: str, commit: str, parent: dict, main: str, all_moves: list[tuple[str, str, list[str]]]) -> dict:
     lp, lc = parent.get("result"), parent["commit"]
     rec = {"name": name, "kind": "child-steps", "commit": commit, "parent": parent["name"], "parent_result": lp, "moves": []}
     if not lp:
         say(f"{name}: its parent {parent['name']} has no crossed result; not tried")
         return {**rec, "skipped": "parent has no result"}
-    tip, moves, t = commit, moves_of(main, lc), time.time()
+    tip, moves, t = commit, [m for m in all_moves if not holds(m[0], lc)], time.time()
     # The parent's own script steps, one a move, oldest first: those on the first-parent line from its result back to its head
     # (a parent that is itself a child names its own parent's steps in their trailers, so they are not found by the move's id).
     own = git("log", "--first-parent", "--reverse", "--format=%H", "--grep=^Restack-move: ", lp, "--not", lc).split()
@@ -280,7 +300,9 @@ def main() -> int:
         try:
             if s["parent"]:
                 events[s["parent"]].wait()
-            with gate:
+            # one child of a parent at a time (the first pays the check of the parent's script steps, the next read it); a
+            # spec with a parent and a `how` only waits for the parent to end
+            with PARENT_LOCKS.setdefault(s["parent"] if s["parent"] and not s["how"] else s["name"], threading.Lock()), gate:
                 if s["how"] == "named":
                     rec = named(s["name"], s["commit"], main_sha, [m[0] for m in all_moves])
                 elif s["how"] == "pins":
@@ -290,7 +312,7 @@ def main() -> int:
                 elif s["how"] == "onto":
                     rec = child_onto(s["name"], s["commit"], done[s["parent"]], main_sha)
                 else:
-                    rec = child_steps(s["name"], s["commit"], done[s["parent"]], main_sha)
+                    rec = child_steps(s["name"], s["commit"], done[s["parent"]], main_sha, all_moves)
         except Exception as e:  # one spec's failure is its record, not the run's
             say(f"{s['name']}: the driver failed: {e!r}")
             rec = {"name": s["name"], "commit": s["commit"], "driver_error": repr(e)}
@@ -303,6 +325,20 @@ def main() -> int:
 
     with concurrent.futures.ThreadPoolExecutor(max_workers=len(specs)) as pool:
         list(pool.map(run, specs))
+    by_commit: dict[str, list[dict]] = {}
+    for rec in done.values():
+        if rec.get("result"):
+            by_commit.setdefault(rec["commit"], []).append(rec)
+    for commit, recs in by_commit.items():
+        for other in recs[1:]:
+            same = git("rev-parse", f"{recs[0]['result']}^{{tree}}") == git("rev-parse", f"{other['result']}^{{tree}}")
+            say(f"TREES {recs[0]['name']} {recs[0]['result'][:12]} and {other['name']} {other['result'][:12]} (both from "
+                f"{commit[:12]}): {'the same tree' if same else 'DIFFERENT TREES: ' + shortstat(recs[0]['result'], other['result'])}")
+    for rec in done.values():
+        if rec.get("kind") == "child-steps" and rec.get("result"):
+            say(f"STACK {rec['name']} {rec['result'][:12]} holds its parent {rec['parent']}'s result {rec['parent_result'][:12]}: "
+                f"{holds(rec['parent_result'], rec['result'])}; holds its own head {rec['commit'][:12]}: "
+                f"{holds(rec['commit'], rec['result'])}; holds main {main_sha[:12]}: {holds(main_sha, rec['result'])}")
     refs, excl = [], {main_sha, *(s["commit"] for s in specs)}
     for name, rec in done.items():
         tips = {"": rec.get("result")}
