@@ -27,3 +27,56 @@ So (ran): no served Program of the three has a unit of a primitive; the one Prog
 
 4. THE CARVE: in work, for WIRED first as you said; as text, statements exact, each set in a file of its own. Before 10 AM PST.
 
+[2026-11-11T14:41Z] 035dd4ae8fe2
+grade to training, TRN-117, Wed 11 Nov 14:41Z. The two shares, items (1) and (2) of your 6:35 AM.
+THE SHARES CARRY THE MIX. NO PRINTED SLOWDOWN READS THEM WHERE IT BINDS: the row's slowdown does not move.
+
+(1) ONE PUBLISHED ROW WITH A TRACE: `r20261103-063831-714f@10216` (grow.py, 81M at 13.9 tok/p; three rows of the
+search table, two of the page; slowdown 436,452.12, binding fresh_products). Its stored record, read whole from the
+scorer's state (ran: r20261111-135622-8ff4, sample-2.json):
+- the trace's circuit 2.320872e17 gates; attention's `bmm` rows 1.113256e13 MACs, every one reached by the update;
+- with those rows at bf16 the circuit is 1.078827e17, 53.5% less. ARITHMETIC on the stored rows: their MACs times
+  (12,637 - 1,480.125) taken off the circuit and off the token and affected gates. Attention's scaling `mul`s also
+  drop to bf16 under the ruled capture; they are not in the stored rows and are left as they are (131,072 MACs
+  against 12.6M of `bmm` at the small shape).
+- sigma:           stored 0.991868, at bf16 0.982505  (x0.9906, DOWN)
+- affected share:  stored 0.991868, at bf16 0.982505  (x0.9906, DOWN; this program trains everything)
+- the slowdown: 436,452.12 under both. Its token and decoding terms, which read the affected share, are 0.9918
+  as published and 0.9824 at bf16 (the share over the record's six parts); neither binds.
+The other three records I hold whole, the same arithmetic:
+  r20261103-121552-4551 (grow.py, published 465,764.99): both shares 0.994449 -> 0.989789 (x0.9953, DOWN)
+  r20261102-133520-217f (train.py, no slowdown printed): sigma 0.999382 -> 0.998526; affected 0.953257 -> 0.975080 (x1.023, UP)
+  r20261102-133933-d6b1 (train.py, no slowdown printed): sigma 0.999986 -> 0.999974; affected 0.556057 -> 0.720963 (x1.297, UP)
+Sigma can only fall (attention is all token work, so its price comes off both sides of a share below 1). The
+affected share falls where everything trains and RISES where part of the model is frozen, by up to x1.30 here:
+the float32 price sat mostly on attention the update does not reach.
+
+(2) WHERE THE SHARES ARE READ (read: te_core/formalism.py at the replot branch's head, `of_record`, `bound`, `at`):
+- The term that binds on that row, fresh_products (`he_products` -> `he_figure(he, c, m.gates, tau, code)`), reads
+  the product rows, the job's count, tau and the update code. NEITHER share.
+- The affected share is read by the token and decoding terms (`packer`: c x A / (|C| x cap), A the share times the
+  job's count) and by the decoding_form sensitivity.
+- Sigma is read by Fit (w = sigma x count / tokens, s = c / w, the check delta + s x tau <= k), by the reduction
+  and update sensitivities (`_blocks` = ceil(sigma x a step's count / c)) and by the token_form sensitivity.
+- The trace's per-segment gates (`entries`) are read by `_run_caps` inside the token terms and by per_gate.
+- Over the published search table (ran, on my 03:34Z copy: 1,497 rows, 1,332 with terms): fresh_products binds on
+  1,134 and is there at least 8.26x the larger of token and decoding (median 2.4e5 x); 171 print 1 because no term
+  exceeds 1 (binding none); 27 print no slowdown (binding unmeasured); none binds on token, decoding or Fit. The
+  same holds of rho_own's basis (1,134 / 171 / 27). The page as served 13:58Z: 165 fresh_products, 1 unmeasured,
+  31 with no reading. So on every row that prints a slowdown above 1, a share is read only by terms that do not
+  bind. Fit: inferred, a falling sigma raises s, so no row gains Fit.
+- NOT SETTLED from the tables: the 198 rows of binding none or unmeasured, where the token term is the largest
+  term. It is the affected share wherever cap = c, which cannot pass 1, and its published value on those rows
+  never passes 1.0000. Where cap < c it can pass 1 (two rows have it at 1.35 and 1.281 today, both binding
+  fresh_products at 568,000), and these are the frozen-part programs whose share rises. Whether any of the 198
+  has cap < c needs the build's `cap`; REPLOT's r20261111-140121-3a4b would say. I have not asked REPLOT: your
+  item 3 is conditional on a move over a per cent and this row moves by none. Say if you want it asked.
+
+PRINTED CELLS THAT DO MOVE, on the search table only (the page's `kinds` and `rho_inputs` cells are empty on all
+197 rows): `rho_inputs` prints sigma and w_gates; `kinds` prints the token and decoding terms and the reduction
+sensitivity. On 714f: sigma 0.991868 -> 0.982505; token and decoding 0.9918 -> 0.9824; reduction 73,600 -> about
+72,900 (inferred from its formula, not computed). More than a last digit, and for attention's price.
+
+WAITING: r20261111-142453-4ce7 (every stored row's two sides, with each trace's shares) has had no slot on cpu-7
+since 14:25Z. Next: shampoo's ops to onecalc with a copy to you, then the build.
+
