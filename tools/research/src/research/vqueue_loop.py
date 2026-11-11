@@ -289,11 +289,15 @@ def branch(sha: str) -> str:
 
 
 def kept_runs(path: Path | None) -> frozenset[str]:
-    """The run ids ``path`` names (`KEEP_RUNS`): none while it is absent."""
+    """The run ids ``path`` names (`KEEP_RUNS`): none while it is absent.  QueueError, with the fix, when it can't be read, so
+    a cancel never stops a run it may name."""
     try:
-        text = path.read_text() if path is not None else ""
-    except OSError:
-        return frozenset()
+        if path is None or not path.exists():
+            return frozenset()
+        text = path.read_text()
+    except (OSError, UnicodeDecodeError) as e:
+        raise QueueError(f"--keep-runs {path} can't be read ({getattr(e, 'strerror', None) or e}): make it a text file of "
+                         "run ids, one a line, or remove it") from None
     return frozenset(w for line in text.splitlines() if (w := line.partition("#")[0].strip()))
 
 

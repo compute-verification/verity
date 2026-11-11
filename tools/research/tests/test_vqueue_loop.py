@@ -4688,7 +4688,8 @@ def test_the_closure_of_what_tasks_read_is_the_walks_per_task(seed):
 
 def test_a_cancel_leaves_running_the_runs_the_keep_file_names(tmp_path, monkeypatch):
     """A first shard's Lean audit writes its node's module index only when it ends, so a drop's cancel leaves the runs
-    `KEEP_RUNS` names running, and cancels the rest; without the file it cancels them all."""
+    `KEEP_RUNS` names running, and cancels the rest; without the file it cancels them all, and with one it can't read it
+    cancels none, refusing with the fix."""
     cancelled = []
     monkeypatch.setattr(L, "cancel_runs", lambda repo, ids, why: cancelled.append(list(ids)) or {})
     keep = tmp_path / "keep-runs"
@@ -4700,3 +4701,7 @@ def test_a_cancel_leaves_running_the_runs_the_keep_file_names(tmp_path, monkeypa
     keep.unlink()
     assert w.cancel_runs(["r-2"], "dropped") == {} and cancelled[-1] == ["r-2"]
     assert L.kept_runs(None) == frozenset()
+    keep.mkdir()
+    with pytest.raises(L.QueueError, match="can't be read.*or remove it"):
+        w.cancel_runs(["r-4"], "dropped")
+    assert cancelled[-1] == ["r-2"]
