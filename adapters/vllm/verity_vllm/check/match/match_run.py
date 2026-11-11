@@ -6,7 +6,6 @@ import dataclasses
 from verity_vllm.check.match import batch_decomp as BD
 from verity_vllm.check.match import instance_sequence as SEQ
 
-
 #: the document's named checks, in its order
 CHECKS = ("requests_declared", "requests_observed", "subcircuits_x09", "identity_map", "shared_state", "chronology", "vu_population",
           "within_step_order")
