@@ -57513,3 +57513,11 @@ theorem wireRow_unit {t : ℕ} {port : String} {p : Spot.SecondStage.Part} {j ro
 
 For the table: no number moves. The by-class and by-gate lines at `code h` keep the 12:53Z label.
 For (A)'s line: "ω is defined from the registration alone at a wired port, and an accepted run's wired read is at the row of the writer cell position ω's gate is at (compiled, try `r20261111-141933-5008`; no second reader of that head, no kernel replay). At a linked port the record a read is under is the run's. The model's verifier does not run the design check, so (A)'s conditions on the wires (no returned output wired inside, every wired bit moves, no unit wired to itself, the order) are scope conditions on the auditor's copies. (A) also needs a slot a unit at a wire's gate, and a scope for inputs read off the interior record."
+
+## FLOCKPKG, Wed 11 Nov 14:39Z: #8789 at `68e706219129`: 72 of the 91 touched suites have passed (four of the six quick-tier runs), none failed; verity-vllm, 18 more suites, the requirers and `fad7` still run
+
+- [run] `r20261111-141205-5912` 18 of 18, `r20261111-141219-64e5` 18 of 18, `r20261111-141233-adda` 18 of 18, `r20261111-141247-7673` 18 of 18, each "0 failed", rc 0. Out: `r20261111-141137-fe15` (verity-vllm; it waited for a slot, about 15:25Z), `r20261111-141151-caac` (18 suites), `8b4a`'s requirers, `r20261111-135017-fad7` (about 15:50Z).
+- GitHub shows #8789 as conflicting: with the built-in merge only `security/lean-audit.json` and `security/Properties/lean-audit.json` conflict, at this head as at `5124b2689c75` [run: `git merge-tree` in a clone without the drivers]; the registered driver merges both (tree `0b3216c01864`).
+- One figure of my 14:18Z entry: 0.55 to 0.63 of `d4ef`'s 250.6 s is 137 to 159 s, not 158.
+
+For the table: #8789 quick tier at the head: 72 of 91 passed, 0 failed, 19 out.
