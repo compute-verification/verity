@@ -6,11 +6,11 @@
 # REGISTERED_ABOVE bits (default 32768: the prompt is 8,192, the smallest weight, a norm's, 65,536) is taken as registered. Where /workspace/jobs/venv312 isn't (the CPU nodes), it syncs the workspace
 # with CPU torch into scratch. A node with no store remote takes the descriptor from the run's inputs/ (ART's
 # out/descriptor.json.gz, fetched from the store). A descriptor whose primitives' signatures have since changed under the same id
-# decodes only against its own registry: send that commit's packages, `git archive C verity integrations/vllm/verity_vllm |
+# decodes only against its own registry: send that commit's packages, `git archive C verity adapters/vllm/verity_vllm |
 # gzip > tree.tar.gz`, and they go ahead on PYTHONPATH (this Build decodes at a4f5a429c5: LutIndex_v1 has returned 8 bits
 # since, not 32).
 #
-#   (cd integrations/vllm && RESEARCH_RUN_DIR=RUN OUT=RUN/out bash ../../benchmarks/stacked_share/beta_job.sh)
+#   (cd adapters/vllm && RESEARCH_RUN_DIR=RUN OUT=RUN/out bash ../../benchmarks/stacked_share/beta_job.sh)
 #   # on a CPU node, from a clone's root, RUN/inputs/ holding descriptor.json.gz and tree.tar.gz
 set -euo pipefail
 export HF_HUB_OFFLINE=1
@@ -21,7 +21,7 @@ d=$(mktemp -d)
 trap 'rm -rf "$d"' EXIT
 if [ -x /workspace/jobs/venv312/bin/python3 ]; then
   PY=/workspace/jobs/venv312/bin/python3
-  export PYTHONPATH=$ROOT/integrations/vllm:$ROOT:$ROOT/tools/research/src
+  export PYTHONPATH=$ROOT/adapters/vllm:$ROOT:$ROOT/tools/research/src
 else
   UV_PROJECT_ENVIRONMENT="$d/venv" uv sync -q --all-packages --extra torch-cpu > "$OUT/sync.log" 2>&1 || { tail -30 "$OUT/sync.log"; exit 4; }
   PY=$d/venv/bin/python
@@ -38,7 +38,7 @@ if [ ! -f "$desc" ]; then
   desc=$(find "$d/build" -name descriptor.json.gz | head -1)
   [ -n "$desc" ] || { cat "$OUT/fetch.log"; exit 3; }
 fi
-cd "$d"  # the clone's integrations/vllm is no longer the cwd, so a sent tree's verity_vllm is the one imported
+cd "$d"  # the clone's adapters/vllm is no longer the cwd, so a sent tree's verity_vllm is the one imported
 if [ -n "${PROBE:-}" ]; then
   nproc; free -g | head -2
   "$PY" -c "import sys; sys.path.insert(0, '$HERE'); from units import load; p = load(__import__('pathlib').Path('$desc')); \

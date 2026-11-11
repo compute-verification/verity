@@ -14,7 +14,7 @@ TREE=${TREE:-$PWD}
 VENV=${VENV:-/workspace/cache/kernels-kfuse/venv312}
 export CUDA_HOME=${CUDA_HOME:-/usr/local/cuda-13.0}
 export PATH=$VENV/bin:$CUDA_HOME/bin:$PATH
-export PYTHONPATH=$TREE:$TREE/integrations/vllm${PYTHONPATH:+:$PYTHONPATH}
+export PYTHONPATH=$TREE:$TREE/adapters/vllm${PYTHONPATH:+:$PYTHONPATH}
 export NATIVE_COLLECT_BUILD=${BUILD:-/workspace/research/served-commit-hash/nc} TORCH_CUDA_ARCH_LIST=${TORCH_CUDA_ARCH_LIST:-9.0}
 export OUT TREE VENV
 PROG=$TREE/benchmarks/served_commit/hash_prof.py
