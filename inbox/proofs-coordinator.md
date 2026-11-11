@@ -48953,3 +48953,38 @@ Tags: [run] a command I ran now, [read] a file I read now (place given), [relaye
 For HEADPROF: step 2's layout (provers on their ten cores, the check elsewhere) is the deployable one: the check is the auditor's (SPOT[Flock]) or the ZK server's own machines' (the core protocols), never the GPU host's. Label the four further cores "the harness's loopback verifier, off the GPU host when deployed". #8859's placement on one host is the nearest the harness comes to a remote verifier; a remote verifier's round trips are unmeasured.
 For BREAKEVEN: head block at four provers, price 1.731 GPU-s a statement on ten cores a card (HEADPROF's step 2), with no developer cores added for the check. Price the check once on the verifier's side: the auditor's Lean verify under SPOT[Flock], the ZK server's CPU servers under the core protocols. Which of the two the headline reads isn't mine to say.
 For the table: head block at four provers a card: 1.73 s is the row to use, with the check off the GPU host in both deployments the tree describes [read: ARCHITECTURE.md, the ZK server's README]; no extra cores a card; a remote verifier's round trips unmeasured.
+
+## NET, Wed 11 Nov 10:40Z: nothing I build calls the two-word form; the Lean side opens vllm's u16 rows as the block's 32-bit leaves and refuses nothing [read; no session run]; #8869's quick tier was cut with 8 of 10 suites unjudged
+
+Three short answers to your 10:31Z and 10:33Z sections. The tie-verdict trace is my 10:30Z entry (`67d84a18b0`).
+
+**1. A caller of the two-word form at T = 1,024, NSTOP = 3: none.**
+- The audit driver proves `EgressStop_v1`, which calls `StopRule16` [read: `adapters/vllm/verity_vllm/pipeline/boundary_rows.py:259-263` at vllm's `6fef77c702`]. I have no test of it, and nothing else of mine names it.
+- Tonight's job 2 was the one use, `r20261111-094004-c2b1`, and it **staged nothing**: the job's shell split the unit's name at its braces, so `stage.py` refused its arguments. The run ended rc 0 with `all_pass: false` after 52 minutes waiting for a slot [run]. I do not relaunch it.
+- So #8869 stays open and unmarked at `df881f327aa1a2e532168e1964d2bdc3b4232a6c`; I rebase and relaunch nothing for it.
+
+**2. Does the Lean verifier open a port committed as u16 `row/v2` words as the block's 32-bit leaves? Yes. Nothing is refused, and vllm commits nothing else.**
+
+| port | committed by the serve | the stop block reads or writes it as | the stop record's entry |
+|---|---|---|---|
+| `b.request` | 28 u16 words, one `hm96-sha512/row/v2` row a span: 448 bits | `request`: 14 leaves of 32 bits, 448 bits | `words` 14, `word_bits` 32 |
+| `b.egress` | 2T u16 words, `row/v2`: 32,768 bits at T = 1,024 | `ids`: T leaves of 32 bits | `words` T, `word_bits` 32 |
+| `b.stop` | 1 u16 word, `row/v2`: 16 bits | its one output, a u16 | none: a port of the record's own `roots` |
+
+[read, vllm's `boundary_rows.py` at `6fef77c702`: `Layout.words` `:439-442`, the block's signature `:255-256`, `stop_registration` `:570-572`]
+
+- **Why the width cannot differ in the commitment.** A `row/v2` row is committed as its bit row, and a 32-bit leaf's bits are its two u16 words, low first: `row_digest` at 32 bits is by definition the digest of those u16 words [read: `one_stage/registered.py:180-198`; run, 10:40Z on `main`: 14 leaves and 1,024 leaves each give one digest both ways]. A port's entry in a record's `roots` holds no word width at all, only `port`, `root`, `leaves` and `domain`.
+- **Registration (Lean, `Spot.Registration`).** The stop record's entry for each input is held to the verifier's own `words` and `word_bits`, which it derives from its own program's parameter: `R7-words`, `R7-word_bits` [read: `Spot/Registration.lean:354, 356-362`; Python `registered.width`, `registered.py:201-212`]. Taking the boundary record's port compares the leaf count alone, `R7-output` [`Registration.lean:276-280`], and puts the port's domain and root in place of the entry's own [`:312-321`]. So the entry must say 14 or T words of 32 bits, which is what vllm's `stop_registration` writes; an entry of 28 or 2T words of 16 bits is refused.
+- **Opening a sampled row (Lean, `flock-verify --registered`).** `checkPort` refuses a port of another schema, or one whose bit count is not the entry's `words` × `word_bits` [read: `flock/verifier/Flock/Registered.lean:207-209, 274-277`]. Then it opens the row's commitment against the registered root under the entry's domain [`:219-225`]. No step reads a word width from the committed side.
+- **What is tested and what is not.** vllm's own test holds the stop record to R1 to R7 in Python and in the Lean verifier (`V.check`), with `word_bits` 32 [read: `adapters/vllm/tests/pipeline/test_boundary_rows.py:364-401` at `6fef77c702`; not run by me]. No session has opened these rows through `flock-verify`: that is the audit driver's first run.
+
+**3. #8869's quick tier, `r20261111-093130-61a9`: cancelled by its slot's limit at 10:38Z** (`STAGE_TIMEOUT`) [run].
+- 2 of its 10 suites passed: `verity-vllm` (13,912 passed, 2,809 s) and `research` (4,247 passed).
+- The other 8 have no verdict: `verity-flock` was cut at 179 passed, and 7 never started. The output marks them `failed`; that is the kill, and no test failure is printed.
+- With the first run (`r20261111-081553-1365`), 47 of 55 suites passed and none failed. Not relaunched (yours, 10:17Z).
+- **A correction to my 10:09Z entry:** the run's first 47 minutes went to `verity-vllm`, not to Flock's `lake build`.
+
+**What can run tonight of the stop check's audit: nothing served.** The first audit that draws a stop block needs `StopRule16` on `main`, part B's head and a new GPU serve [relayed: yours, 10:31Z]. I found nothing otherwise.
+
+For the table:
+- stop check, the audit side (NET): the Lean verifier takes vllm's stop record as built (u16 `row/v2` rows read as 32-bit leaves) [read; no session run]. Nothing of ours calls the two-word form at T = 1,024, so #8869 stays open, unmarked and not rebased.
