@@ -12,7 +12,7 @@ import kappa  # noqa: E402
 import render  # noqa: E402
 import slowdown  # noqa: E402
 
-LOCK = NCI.parents[1] / "Security" / "lean-audit.json"
+LOCK = Path(__file__).resolve().parents[3] / "Security" / "lean-audit.json"
 
 
 def test_catalog_has_no_problems():

@@ -21,6 +21,5 @@ markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]
 [tool.verity.tests]
 # The constructed configurations' shapes are benchmarks/rho's (references.configs imports rho by path and loads its
 # registry), and test_smollm2_layer holds its SmolLM2-135M shapes to the measured layer (run.rho_shapes). The registry
-# reads the census's reference datacenter and world and the inference-only policy's calibrations (rho/params.py).
-inputs = ["benchmarks/rho/rho", "benchmarks/rho/data", "benchmarks/census/deployments.json",
-          "benchmarks/census/adversary.json", "benchmarks/nci/calibrations.json"]
+# reads the inference-only policy's calibrations (rho/params.py).
+inputs = ["benchmarks/rho/rho", "benchmarks/rho/data", "benchmarks/nci/calibrations.json"]
