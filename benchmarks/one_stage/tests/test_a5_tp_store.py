@@ -93,6 +93,6 @@ def test_store_trees_refuses_a_label_key_without_its_asserter_before_any_put(tmp
     (tmp_path / "ev").mkdir()
     env.update({"EV": str(tmp_path / "ev"), "LABEL_KEY": "circuits"})
     env.pop("LABEL_BY", None)
-    r = subprocess.run(["bash", str(REPO / "integrations/vllm/verity_vllm/ops/store_trees.sh"), str(tmp_path / "scratch"), "glm"],
+    r = subprocess.run(["bash", str(REPO / "adapters/vllm/verity_vllm/ops/store_trees.sh"), str(tmp_path / "scratch"), "glm"],
                        env=env, capture_output=True, text=True)
     assert r.returncode != 0 and "LABEL_BY" in r.stderr and not (tmp_path / "calls.txt").exists(), (r.stdout, r.stderr)

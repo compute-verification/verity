@@ -12,7 +12,7 @@
 # row moved or didn't build), 3 when the setup failed (OUT/setup.fail says which step).
 set -uo pipefail
 TIER=${1:?TIER}; OUT=${2:?OUT}; DRIVER_PKG=libnvidia-compute-595-server
-TREE=$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd -P); ROOT=$TREE/integrations/vllm
+TREE=$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd -P); ROOT=$TREE/adapters/vllm
 cd "$ROOT" || exit 3
 mkdir -p "$OUT" && OUT=$(cd "$OUT" && pwd -P) || exit 3
 export WORK=/workspace/tmp/neutrality-vllm
@@ -30,7 +30,7 @@ EOF
 ) || fail rows "manifests/records.json has no rows to read"
 echo "neutrality_tier: $TIER: $ROWS"
 for row in $ROWS; do
-  (cd "$TREE" && uv run -q --project tools/research research data fetch-fixtures --repo "$TREE" "integrations/vllm/workloads/$row.json") \
+  (cd "$TREE" && uv run -q --project tools/research research data fetch-fixtures --repo "$TREE" "adapters/vllm/workloads/$row.json") \
     >>"$OUT/fixtures.log" 2>&1 || fail fixtures "$row's workload ($OUT/fixtures.log)"
 done
 
