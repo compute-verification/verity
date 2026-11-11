@@ -1,4 +1,4 @@
-"""The RAM pool (`pool_ram`) against vLLM's (the replay's `_KV`) over the encodings' traces and synthetic ones, its memory
+"""The RAM pool (`pool_ram`) against vLLM's (the replay's `BlockPool`) over the encodings' traces and synthetic ones, its memory
 check on each run's log, and the fingerprint on an honest log and on tampered ones. Prints each run's operation counts.
 
     python3 difftest.py [--traces DIR] [--seeds N] [--json OUT]

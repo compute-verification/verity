@@ -84,7 +84,7 @@ def phi_of(rec: dict, *, hf_home: str | None = None, checkpoints: dict | None = 
 
 
 #: the policy fields a component Program reads (`vllm_meta.make_wrapper`); the rest of the Build's policy record is provenance
-_POLICY_FIELDS = ("kind", "temperature", "top_p", "top_k", "seeded", "splits")
+_POLICY_FIELDS = ("kind", "temperature", "top_p", "top_k", "seeded", "splits", "rid")
 
 
 def sampling_of(w: dict, phi: Phi) -> dict:
