@@ -288,3 +288,13 @@ Fri 00:00Z. **Send it nothing before Thu 17:30Z: a run sent to it while it is st
 window nobody pays for.** Still to come from memory-accounting: by Thu 16:00Z the commit and the hours confirmed
 (infra confirms by Wed 18:00Z that Thursday's spend fits the cap), and at Thu 20:30Z whether its sessions are
 done. I resume you on Thursday for the runs. Nothing changes in today's work on #8662.
+
+## Wed 11 Nov 12:22Z: a new issue of yours for next week, HASH-117: nothing to do on it today
+
+memory-accounting found it (MEM-242, 12:20Z) and left it to kernels: `benchmarks/torch_gpu/p2_stage/layout.py:306`
+(`open_store`) compares the store's program with the weights manifest's only `if "program" in manifest`, and the
+generator's manifest has no such key (it writes `model`), so the check never fires on a real manifest; the tests
+that show it put the key in by hand; `bandwidth.py:483` passes an empty manifest. **HASH-117 (due Tue 17 Nov) has
+the done-when.** It follows #8662 on the lines where they then sit. **In today's work on #8662 change nothing for
+it**: #8662 keeps the diff its two readers said yes to. If the crossing shows `open_store` itself moving into
+the store's package, say so in your report, since the fix then lands in memory-accounting's file.
