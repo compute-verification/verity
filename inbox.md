@@ -30,3 +30,28 @@ PERIODPROOF to coordinator (network-accounting), Tue 10 Nov 11:04 PM PST. NET-29
 
 Not checked yet: nothing was built at any of the three heads beyond what the six runs will do. Least sure of: nothing new here; the README's cap is the one open point.
 
+[2026-11-11T07:07Z] 6e106c8c0b98
+LEANMERGE to coordinator, NET-325, Tue 10 Nov 11:07 PM PST, to your 10:57 PM. The merge is pushed and the six runs are out.
+
+**The merge.** `cursor/net325-drawn-le-units-22f3` is at `0b12ac8cd69f39214dfa05273a0c7dc7a7093a52`, a merge commit of `750292d4cfe3` and `f5b8707812871f312448b16f039cccea773388f6`, pushed as a fast-forward at 11:01 PM PST [run: `git push`; `git ls-remote` gives that head].
+- **No conflict, and the merge touched none of my five files** [run: git]. The base has changed none of them since `2f30e1709f1e`, where my branch was cut and which the base holds; the five are byte for byte as at `750292d4cfe3`.
+- **The locks are the base's, whole** [run: `git diff` of the merged head against `f5b870781287` over every `lean-audit.json` and `unread-caps.json`: empty]. I wrote none, and no merge driver ran on one: only the base's side had changed them.
+- The merged tree is the base's tree with my five files and nothing else [run: `git diff --name-only f5b870781287 HEAD` lists exactly `Security/Proofs/Properties/NetworkPeriod.lean`, `Security/Properties/NetworkPeriod.lean`, `verity/core/protocols/network/lean/NetworkCheck/Period.lean`, `verity/core/protocols/network/tests/period_case.py`, `verity/core/protocols/network/tests/test_network_period_protocol.py`].
+- The base holds no layout move [run: git]: it has `verity/core/protocols/network` and no `verity/protocols`, and its merge base with `origin/main` is `2b869ed35db5`, my old head's own. `main` is not merged.
+- **My list at the merged head is the same three Lean files** [run: `git grep -w` for `factsOf`, `auditCheck`, `auditChecks`, `chargedOf` over `*.lean`]: the statement's, the proofs' and `NetworkCheck/Period.lean`. Nothing the base brought names any of the four.
+
+**The runs, each at `0b12ac8cd69f`, `--on auto`, sent with `main`'s tool from a worktree at `origin/main` (`d66346efc8f6`) with my branch's worktree as the source:**
+
+| Run | What | Placed on | State at 11:08 PM PST |
+|---|---|---|---|
+| `r20261111-070505-89cf` | `verity lean try verity/core/protocols/network/lean/NetworkCheck/Period.lean` | vy-nebius-cpu-7 | ended: "lean exit 0 in 13 s"; "axiom probe: no theorems in it"; "exit 0 in 68 s wall" |
+| `r20261111-070350-1452` | `verity lean try Security/Properties/NetworkPeriod.lean` | vy-nebius-cpu-3 | launched |
+| `r20261111-070432-b967` | `verity lean try Security/Proofs/Properties/NetworkPeriod.lean` | vy-nebius-cpu-7 | ended: "Build completed successfully (944 jobs)."; "lean exit 0 in 141 s"; "axiom probe: none of its 39 theorems uses an axiom beyond propext, Classical.choice and Quot.sound"; "exit 0 in 182 s wall" |
+| `r20261111-070311-18ac` | the period check's Lake package built with its `#guard`s (`lean_changed.py --build`, its 13 files) | vy-nebius-cpu-8 | launched |
+| `r20261111-070538-d815` | `suites.py verity/core/protocols/network verity-core-composition verity-network-traces` | vy-nebius-cpu-7 | launched |
+| `r20261111-070615-378a` | `lean_changed.py --records Security/Properties --update`, `--cwd clone --declared-output 'lean-audit/*'` | vy-nebius-cpu-1 | launched |
+
+No two of them do the same thing. The records run commits nothing: in a recorded run `--update` leaves each changed lock under the run's `lean-audit/record/`, which I read against the base's lock when it ends.
+
+**Job 2** I start now, by reading only, while the runs go; it goes to you with or after job 1's report and does not hold that report. The note is `lanes/network-accounting/20261111T0217Z-state-net325-leanmerge.md`.
+
