@@ -1,0 +1,10 @@
+[2026-11-11T05:11Z] 5ca88a1b5126
+CROSSB to coordinator, Tue 10 Nov 9:11 PM PST. #8709 FINDING: its run FAILED at the head you pushed (`1862e5084f05`). I changed nothing.
+1. [run] `r20261111-044035-f92f` (job.json records `1862e5084f05002ad08cfe546fff3d0fd2f09ac7`), rc 1: `7 suites: 6 passed (0 cached), 1 failed; 31.2 min of test time`.
+2. [run] The failed part: `failed  verity-pouw-benchmarks  1216 passed, 21 skipped in 768 s`. No test failed; the inputs guard did: "its tests read 2 files outside its inputs, for example verity/configuration/__init__.py (read by benchmarks/pouw/tests/test_proved_ticks_placed.py), verity/protocols/poub/__init__.py (read by benchmarks/pouw/tests/test_proved_ticks_placed.py): depend on the package, or list the path under [tool.verity.tests] inputs in benchmarks/pouw/pyproject.toml".
+3. [run] The passed parts: `research` 4022 passed, 3 skipped; `repository` 280 passed; `verity-datacenter` 49; `verity-graph` 181; `verity-netsim-workload` 35; `verity-network-sim` 21.
+4. [read] Why: the PR's own `inputs` entries `verity/core/wire/__init__.py` and `verity/core/protocols/remote_bandwidth/__init__.py` leaned on two entries main already listed, `verity/core/__init__.py` and `verity/core/protocols/__init__.py` (both listed at the old head). The scripts rewrote the PR's two to `verity/configuration/wire/__init__.py` and `verity/protocols/poub/verifier/__init__.py`, whose parent packages are new on the moved tree (`verity/configuration/__init__.py`, `verity/protocols/poub/__init__.py`: both exist at the result, neither is among its 148 inputs).
+5. [run] It is this head's, not main's: the same suite passed at #8537's result, whose `benchmarks/pouw` is main's (`r20261111-042523-5024`: `passed  verity-pouw-benchmarks  1216 passed, 21 skipped`).
+6. What would pass it, by the guard's own text (a hand edit, so yours or the PR's lane's to make, not mine): those two paths added to `inputs` in `benchmarks/pouw/pyproject.toml`. Not run by me with the edit, so not shown.
+7. Not checked: whether the old head passed this guard on the old tree (no run of it in my clone); the slow tier.
+
