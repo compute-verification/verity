@@ -45,33 +45,17 @@ from dataclasses import dataclass, field
 from typing import Any
 
 import numpy as np
-from verity.commitments import merkle_depth
-from verity.commitments.merkle import Opening
-from verity.definitions.circuits import requirement
+
 from verity.protocols.poub.verifier import receipts as rb
 from verity.protocols.poub.verifier.receipts import PER_LEAF, Plan
 from verity.protocols.poub.verifier.store import store_salt
-
+from verity.definitions.circuits import requirement
+from verity.commitments import merkle_depth
+from verity.commitments.merkle import Opening
+from verity_vllm.protocols.remote_bandwidth.interface import (KINDS, TIERS, Append, Backing, BlockOpening, Codec, Counters, Layout,
+                                         PageLayout, PassCommitment, Receipt, Registration, RegionInfo, Segment, Source,
+                                         Stale, WindowRecord)
 from verity_vllm.protocols.remote_bandwidth import memory_map as mm
-from verity_vllm.protocols.remote_bandwidth.interface import (
-    KINDS,
-    TIERS,
-    Append,
-    Backing,
-    BlockOpening,
-    Codec,
-    Counters,
-    Layout,
-    PageLayout,
-    PassCommitment,
-    Receipt,
-    RegionInfo,
-    Registration,
-    Segment,
-    Source,
-    Stale,
-    WindowRecord,
-)
 
 CHALLENGE_BYTES = 32
 SEED_BYTES = 64
@@ -181,8 +165,7 @@ class KindReceipt:
 @dataclass(frozen=True)
 class RemoteBandwidthReceipt:
     """The PoUB driver's receipt (`rb.Receipter`): ``SHA512(Z(D ‖ frame(seed)) ‖ u64be j ‖ E_j ⊕
-    spread(z))`` of a 4 KiB block, bound to the output ``z`` of the tile before its read.  Its name is the driver's
-    domain ``D`` (`rb.RECEIPT_DOMAIN`, without its NUL)."""
+    spread(z))`` of a 4 KiB block, bound to the output ``z`` of the tile before its read.  Its name is ``D`` less its NUL."""
 
     name: str = rb.RECEIPT_DOMAIN[:-1].decode()
     receipt_bytes: int = rb.DIGEST_BYTES
@@ -692,11 +675,9 @@ class NodeMemory:
         return out
 
     def _leaf(self, ps: _Pass, dom: Any, z: Callable[[str, int], bytes | None] | None = None) -> Callable[[int], bytes]:
-        seed = ps.window_seed()
-
         def leaf(c: int) -> bytes:
             ys = self.receipts_at(ps, c * PER_LEAF, min((c + 1) * PER_LEAF, ps.positions), z)
-            return leaf_digest(dom, c, b"".join(ys), self.salt(seed, c))
+            return leaf_digest(dom, c, b"".join(ys), self.salt(ps.window_seed(), c))
         return leaf
 
     def receipts(self, ps: _Pass, index: int, z: Callable[[str, int], bytes | None] | None = None) -> list[bytes]:
