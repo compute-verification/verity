@@ -60916,3 +60916,62 @@ theorem CompiledTwo.eventTwoX_oneWait_le_cls_at_budget  -- hypotheses as eventTw
 For the table:
 - #8999 at `dc1baf648bf3`: the reading holds; LAND WITH NOTES stands. Locks: the same 5, 5 and 10 leaves as at `fef48ce41a13`; nothing of `main`'s lost or doubled [run locally].
 - New on `main` since the reading's base: two input readers in `Spot/Partition.lean`, both asking the definition's form. No addition to the second pull request's list.
+
+## 18:40Z ASKS: page 3, the unit and the period of the developer's SHA-512 budget, is drafted and published (900 words; the page and card checks pass); it recommends your fallback, compressions for one verification phase, and is not to be posted before your word; the one thing to check: the design rules point at another option, the world's compute over the monitoring period, where this configuration's year reads 2^-99.8; page 1 lost one stale sentence
+
+Agent `bc-7938e090-f926-50ff-bf3b-05e921c5ed0b`. Mailbox read at 18:40Z: unchanged since its 17:49Z section [run]. Tags: [read], [run], [derived] my arithmetic, [relayed] a statement of yours or a worker's that I did not check. Ask 4 stays dropped, so this is my last draft; all three pages are published.
+
+**The draft** [run]: `lanes/proofs/20261111T1822Z-draft-ask-sha512-budget.md`, notes commit `0be51e6987`. The page is everything under the front matter; `post:`, `decision:`, `card_question:`, `card_why:` and `card_options:` hold what you need to post it. It is written as decided by the lane on pick A (your 17:49Z fallback) and opens with a **Context.** line as pages 1 and 2 do. If Daniel's reading comes first and is not A, three places change: the gray callout's Recommendation, the heading that carries "(recommended)", and "Why the lane recommends A"; `post:` says so.
+
+**What the page says.**
+- Context: his "I'm looking for 100 bits of security" of Tue 10 Nov, and that the $2^{80}$, its unit and its period are the lane's reading [read: PRF-523, which quotes him].
+- One table, one configuration ("the partition served today under the two-stage design (on `main`; not run on the served engine), six requests sampled in the first stage and about 10 million proof blocks of each proved in the second", modeled): the binding error's largest term for one verification phase, a week, a month and a year in your three readings, and a last column for a year at the world's compute.
+- A (recommended): compressions, $2^{80}$ in one verification phase, a week, a month and a year beside every figure. The premise is shown as it would enter the lock: $\Pr[\text{the fixed finder outputs a collision}] \le \mathbb{E}[\text{its SHA-512 compressions}]/2^{256}$, a call on $m$ bytes counting $\lceil (m+17)/128\rceil$.
+- B: whole calls, the Lean as it is; 9.0 bits better, by a premise that says more than SHA-512's collision resistance.
+- C: compressions, with the world's compute over the monitoring period as the budget.
+
+**Word counts** [run: my counter, as at 18:04Z]:
+
+| | everything | without Sources | without Sources and formulas | and without the fixed reply callout |
+|---|---:|---:|---:|---:|
+| page 3 | 1,091 | 994 | 932 | **900** |
+| page 1, after today's two edits | 1,007 | 929 | 907 | **875** |
+| page 2, unchanged | 1,025 | 959 | 932 | **900** |
+
+**Checks on page 3** [run]:
+- `research msg ask-daniel --dry-run --as proofs --agent-url ... --page FILE` stops at the handle, exit 2; the card and page checks run before the handle check, so both had passed.
+- The same functions called without a handle (`research.slack.card`, which calls `check_page`, and `page_request`): "card ok" (options of 67, 60 and 60 characters), "page ok: six sections present and in order; reply callout present", and the page request builds (Kind Default, Area Claim or assumption, "If no answer" = option A at 12:00 PM PST, Mon 16 Nov).
+- The tree's retired-terms lint on the body: 0 sites. Your 17:32Z list of working labels: none on the page.
+- Words that are not plain English, each the Glossary's or defined on the page in a clause: verification phase and compression (defined where first used), chunk, the fixed finder (defined in a clause), binding error, partition, two-stage design, first and second stage, proof block, monitoring period, trust base, the lock, the recursion layer, H100-equivalents (the census's unit). The Lean names `ecr/sha-512`, `SHA512CRExpected` and `cr/sha-512` are there because the template asks a claim ask for them. "Budget" is used as the ordinary word, as your mailbox uses it.
+
+**The one thing to check: the page recommends A and says, under "The design the rules want", that the rules' design is C.** The template makes that section name the design that meets every design rule. The last design rule states every result for a week, a month and a year against the world's compute, so I could not write the section as A.
+- C's figures are mine, made at draft time, one reading, nothing run [derived]. The census's `world-inference-2027` (9.36e30 FLOP a year at its Sept 2027 rate, which is 148.4 million H100-equivalents at 2e15 FLOP/s) at $2^{33}$ compressions a second a GPU (`HASH_RATE_LOG2` in `benchmarks/recursion_figures/figures.py`, "an assumed bound") is $2^{69.37}$ compressions in 600 s and $2^{85.06}$ in a year. So $2^{80}$ in one verification phase is about 1,580 times the world's compute in it. A term linear in the budget reads, for a year at the world's budget, 5.06 bits above its figure for one verification phase at $2^{80}$: $-104.87 \to -99.81$ where the Lean counts compressions, $-95.86 \to -90.80$ as the lane's tables count today.
+- So under C this term misses $2^{-100}$ for a year in this configuration: by 0.2 bits where the Lean counts compressions, by 9.2 as the tables count today. Under A it meets it for one verification phase and reads $2^{-89.2}$ over a year of one machine ($2^{-80.2}$ as the tables count). The page gives both. Which "year" Daniel means by 100 bits is the question the page puts to him.
+- `figures.py` counts the world as the census's base, 30 million H100-equivalents (`h100_equivalents`), not its Sept 2027 rate [read]. At that count: $2^{67.07}$ in 600 s, $2^{82.75}$ in a year (the "$2^{82.75}$ calls a world-year" that the goal `proofs/recursion-knowledge-sound` quotes [relayed: this file's line 58579]), 7,819 times, $-102.12$ and $-93.11$ [derived]. I used the Sept 2027 rate because the Glossary's adversary resource model names it. If you want the page on `figures.py`'s count, these change: "148 million H100-equivalents at its Sept 2027 rate" becomes "30 million H100-equivalents"; $2^{69.4} \to 2^{67.1}$; $2^{85.1} \to 2^{82.7}$ (two places); "1,600 times" becomes "7,800 times"; $-99.8 \to -102.1$ and $-90.8 \to -93.1$ (two places each). The answer then flips: the year meets $2^{-100}$ once the Lean counts compressions.
+- The table is today's expression. The 18:34Z entry's modeled $2^{-102.58}$ (nothing compiled) would move every cell by 6.71 bits: a year at the world's compute, at the Sept 2027 count, would read $2^{-106.5}$ where the Lean counts compressions and $2^{-97.5}$ as the tables count [derived]. Not on the page.
+
+**Sentences I could not trace to a source I read** (hostile reread; each is marked on the page as what it is, or is listed here because it is not).
+1. "On Tue 10 Nov you asked for 100 bits of security": PRF-523's quotation of him (3:20 PM PST); I have not seen his message.
+2. "the lane's audits of Tue 10 Nov mostly count calls": the audit note's sentence [relayed: `20261111T1620Z-report-security-numbers-audit`]; I did not count them.
+3. "Readings 1 and 2 agree: the verifier's hashing is small beside it (derived)": mine, from the form of `εclsAt` (`TwoFirstHitClassAt.lean`). It supposes that a premise counted in compressions gives the same expression with compressions in place of calls. No Lean says so.
+4. "9.0 bits on the safe side" (option A): true only while no call is longer than $2^{16}$ bytes. A developer limited in compressions may make longer calls, and the verifier's digest of the circuit's description is one streamed call over the whole description (`absorbMat`, `verity/protocols/flock/verifier/Flock/Comp.lean:218`; its hasher's type is named `Blake3.Hasher` and I did not trace which hash it runs) [read]. So the lane's tables are not a proved bound for the developer of reading 1, and the page does not say they are.
+5. "for a hash that chains compressions is counted by the compression (the lane's argument)" and B's "$2^{255.83}$ calls on average ... (the lane's argument, read twice; not in Lean)": the audit ledger's line 387 [relayed]. I redid the arithmetic only: $\sqrt{\pi/4}\cdot 2^{256} = 2^{255.83}$ for two-chunk messages, and $\sqrt{\pi/2}\cdot 2^{256} = 2^{256.33}$ for one-chunk ones, which is the docstring's "0.33 bits to spare" [derived]. "Read twice" is the worker's finding and your reading of it, as the ledger says.
+6. "No attack follows: it is asked only of the fixed finder": my inference from "a predicate on one finder" in `Assumptions/Flock.lean`. A premise that is false of a finder makes the theorem under it say nothing for that finder; it does not hand the developer an attack. The page says only the second half.
+7. "Not written or sized; lock records change (predicted)": I searched branch names only. The one hit, `cursor/proofs-binding-instance-compressions-1fe2`, is an instance at 513 a call, the lane's tables' reading [run]. The premises take the count as the finder's own field (`Finder.cost`), so which lock records change is a prediction.
+8. The table's week, month and year: the 12:31Z entry's run (`r20261111-122750-dbda`). I found no second reader's line on them and checked them by arithmetic only (1,008, 4,320 and 52,560 verification phases: 9.98, 12.08 and 15.68 bits) [derived]. "About 10 million proof blocks" is 10,046,500 [relayed], and "on `main`; not run on the served engine" is that entry's label for the configuration [relayed]. The cell for one verification phase as the lane's tables count prints $-95.86$ there and $-95.87$ on the Merkle-leaf page and in the 18:34Z entry; the page gives one decimal.
+9. "The rate is an assumption no data sheet gives": I searched no data sheet for a hash rate. `figures.py` calls its $2^{33}$ "an assumed bound, above any GPU's measured commit rate" [read]; PoUB's measured figure is 7.0e9 a second, $2^{32.7}$ (`GPU_SHA512_PER_S`, `verity/protocols/poub/verifier/timing.py`) [read].
+10. "A is how the Merkle-leaf page you approved reads": that page labels its figure "against $2^{80}$ SHA-512 compressions" and the figure is the one the lane's tables give [read]. So the sentence is true of its label.
+11. "so the lane does not pick it": my wording. You gave the pick, not a reason against C.
+
+Cut for length, and not on the page: that 13 of the audit's 67 error terms reach $2^{-100}$ at the budget each was computed at, and that two of the 13 have less room than 9.0 bits (3.2 and 5.8) [relayed: the audit note].
+
+**Page 1, two edits** (same note, republished in the same sync) [run]:
+- Removed "Before the verifier accepts the connected form we close one small case ..." and its source PRF-559: `main` has refused that case since #8730 [relayed: the 18:14Z entry; I checked that commit `219763135681` is an ancestor of `origin/main`].
+- "neither is in review" became "their pull request is not open yet". At 18:38Z the branch `cursor/proofs-wires-0239` is pushed (head `1c6f2cd929`, 18:31Z) and no pull request is open on it [run: `gh pr list --head`]. `post:` says to check that before posting and what the sentence becomes.
+- Its checks pass as at 18:04Z.
+
+**Seen on `main` while reading, and not mine to change** [read: `benchmarks/recursion_figures/figures.py` at `cc6ee7446278`]:
+- The file calls the same $2^{33}$ "SHA-512 calls a second a GPU" in its docstring and its printed text and "compressions a second a GPU" in the constant's comment. That is this page's question inside the one file on `main` that prices the world's hashing.
+- It counts the world's GPUs at the census's base, 4.95 times (2.31 bits) under the census's figure of record.
+
+**State.** Three drafts published; nothing posted to Slack, Linear or Notion; no code changed; no branch created. I read the mailbox again before any further entry, and revise page 3 if your word or Daniel's reading comes.
