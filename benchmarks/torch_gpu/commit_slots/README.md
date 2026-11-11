@@ -5,7 +5,7 @@ under hiding leaves in `frame-v3-sha512` trees, with one subtree per sequence sl
 replaying its own request. `slots.py` is the CPU reference, and its docstring states the format: a row's leaf, the three
 trees (proof block, slot and step) and their domains. `slots_gpu.py` runs the same call on the GPU (or on its host twin)
 on the SHA-512 engine (`benchmarks/torch_gpu/sha512_rows/`).
-`verity/ml/commitments/tests/fixtures/commit-slots-v1.json` is the interface's fixture.
+`verity/commitments/tests/fixtures/commit-slots-v1.json` is the interface's fixture.
 
 ## The call
 
@@ -36,7 +36,7 @@ plan = G.Plan(context, G.regroup(layout, 4))
 - `layout`: the step's public structure (`S.CommitShape`): groups (what one `add` commits) of proof blocks of rows, each
   row the concatenation of byte ranges (`S.Part(source, offset, nbytes)`) of a slot's row of the group's tensors. Every
   slot has the same layout, and a proof block holds at most 262,144 bits (its size class). Parts, rows and groups, with
-  their checks, are `verity.ml.commitments.layout`'s; `S.load(path)` reads a layout file in the form `S._layout_json`
+  their checks, are `verity.commitments.layout`'s; `S.load(path)` reads a layout file in the form `S._layout_json`
   writes.
 - `step`: the step's index; `slots`: how many sequence slots it has.
 - `salt_key`: 32 bytes, `S.fresh_salt_key()` (the operating system's generator), fresh each step and the prover's alone,
@@ -55,7 +55,7 @@ block's public strings, its root's path in the slot tree and the slot root's pat
 ## Layouts
 
 `S.edge_layout()` is a small layout over SHA-512's chunk edges, the fixture's. `S.h200_layout()` is the H200 example's
-model's (`examples/h200/`): every op's per-token output committed, one group a layer, each output cut into one-row proof
+model's (`archive/examples/h200/`): every op's per-token output committed, one group a layer, each output cut into one-row proof
 blocks.
 
 ## Files
@@ -67,7 +67,7 @@ blocks.
   layout's compressions a row-slot on the host twin (`count`). `launches.py`: an nsys report's enqueue calls a step.
   `gpu.sh`: these, with the tests, under one GPU lease (`OUT=DIR bash gpu.sh` from the tree's root; its header has the
   options).
-- `overlap.py`: the commit beside `examples/h200/`'s served step on one GPU, alone, in the serving loop and overlapped,
+- `overlap.py`: the commit beside `archive/examples/h200/`'s served step on one GPU, alone, in the serving loop and overlapped,
   each overlapped step's roots held to the serving loop's; `overlap.sh` runs it under one GPU lease on an H200 (its header
   has the command). `green_probe.py`: the commit on a green context of N SMs beside int8 GEMMs on the other SMs (no
   model).
