@@ -32,7 +32,8 @@ def sha(s: str) -> str:
 #: the functions whose failures make up a report, and where in what each returns its failures are (None: all of it)
 EMITTERS = {"judge": 0, "unreported": None, "dropped": None, "verifier_failures": None, "claim_failures": None,
             "witness_failures": None, "four_name_failures": None, "inline_failures": 0, "assumption_records": 2, "shape": None, "spec_reads": None, "tree_failures": None, "scans": None, "listings": 0, "dependency_scans": 0,
-            "assign": 1, "proved": 0, "replay_step": 0, "tests": 0, "run_paths": None, "sampled_recompile": 0}
+            "assign": 1, "proved": 0, "replay_step": 0, "tests": 0, "run_paths": None, "sampled_recompile": 0,
+            "orphan_failures": None, "layer_failures": None, "sources_judge": None, "source_graph_failures": None}
 
 
 def coded(failures) -> list:
@@ -576,6 +577,220 @@ def test_a_sealed_layer_answers_only_to_its_own_rule_and_is_reached_only_by_name
     assert A.judge(pol, facts(), FILES)[0] == []
     pol["layers"]["P.Thms"] = {"imports": ["P.Defs"], "sealed": True}
     assert A.judge(pol, facts(), FILES)[0] == ["layers: P.Thms imports P.Assumptions, outside P.Thms's layer (P.Defs)"]
+
+
+def sourced(pkg: Path, sources: dict[str, str], lock: dict) -> Path:
+    """A package at ``pkg`` with ``sources`` ({path: text}) and ``lock``, which nothing has built."""
+    for rel, text in sources.items():
+        (pkg / rel).parent.mkdir(parents=True, exist_ok=True)
+        (pkg / rel).write_text(text)
+    (pkg / "lean-toolchain").write_text("leanprover/lean4:v0\n")
+    A.dump(pkg, lock)
+    return pkg
+
+
+def built_facts(pkg: Path, imports: dict[str, list[str]], **over) -> dict:
+    """The facts of a build of ``pkg`` whose modules under the root import ``imports``, written as Lean reports them: a
+    header's own imports after the two of `Init` Lean puts first, none for a `prelude` module.  `Std.Data` stands for a
+    module of a fetched dependency or the toolchain, which the build's graph holds and no source here does."""
+    olean = {m: f"{pkg}/.lake/build/lib/lean/{m.replace('.', '/')}.olean" for m in imports}
+    graph = {m: {"imports": i, "olean": olean[m]} for m, i in imports.items()} | {
+        "Init": {"imports": [], "olean": "/toolchain/lib/lean/Init.olean"},
+        "Std.Data": {"imports": ["Init"], "olean": "/toolchain/lib/lean/Std/Data.olean"}}
+    return facts(modules=sorted(imports), imports=imports, graph=graph) | over
+
+
+def audit_of(pkg: Path, out: Path, monkeypatch, now: dict, **kw) -> dict:
+    """The audit of ``pkg`` once its build has ``now`` for facts: its Lean stubbed out and the shape rule off (the
+    stand-in facts hold no shapes), every check of the sources and every other check of the lock the real one."""
+    monkeypatch.setattr(A, "facts_of", lambda *a, **k: json.loads(json.dumps(now)) | {"oleans": []})
+    monkeypatch.setattr(A, "dependency_scans", lambda *a: ([], 0))
+    monkeypatch.setattr(A, "dependency_digests", lambda *a: {})
+    for name, value in (("anonymous_instances", []), ("read_by_dependents", set()), ("reads_home", {}), ("shape", [])):
+        monkeypatch.setattr(A, name, lambda *a, value=value, **k: value)
+    return A.audit(pkg, out, replay=False, runs=False, log=lambda *_: None, repo=pkg.parent, **kw)
+
+
+#: sources and a lock that fail every check the judge of the sources runs, and two the build alone can fail
+RED = {"P.lean": "import P.Thms\n",
+       "P/Assumptions.lean": "prelude\n",
+       "P/Defs.lean": "import Std.Data\nset_option debug.skipKernelTC true\n",
+       "P/Gen.lean": "#eval 1\n",
+       "P/Thms.lean": "import P.Assumptions\nimport P.Defs\nimport P.Gen\n#eval 2\n",
+       "P/Unused.lean": "",
+       "lakefile.lean": ""}
+RED_LOCK = POLICY | {
+    "exempt": {"Old": "why"}, "dependencies": {},
+    "layers": {"P.Defs": {"imports": [], "except": ["P.Nope"]}, "P.Model": {"imports": []},
+               "P.Thms": {"imports": ["P.Defs", "P.Gen"]}},
+    "compile_time": {"P.Gen": "it generates a table", "P.Nope": "it is gone"},
+    "runs": {"P": {"args": ["../elsewhere/data.txt"]}}}
+RED_IMPORTS = {"P": ["Init", "Init", "P.Thms"], "P.Assumptions": [], "P.Defs": ["Init", "Init", "Std.Data"],
+               "P.Gen": ["Init", "Init"], "P.Thms": ["Init", "Init", "P.Assumptions", "P.Defs", "P.Gen"]}
+#: what the sources alone fail, in the order the audit reports them
+EARLY = ["compile-time.lakefile", "unchecked.source", "compile-time.source", "orphan.file", "orphan.stale-exempt",
+         "layers.stale-except", "layers.empty", "layers.import", "runs.outside-path", "compile-time.digest",
+         "compile-time.not-a-module"]
+
+
+def test_a_failure_the_sources_show_before_the_build_is_the_one_the_audit_of_the_build_gives(tmp_path, monkeypatch):
+    """`sources_judge` reads the sources and the lock, no build: each failure it gives, the audit of the build gives
+    again with the same code, entry and text and in the same order (`EARLY` is every code it can give).  What only the
+    build can say it leaves to that audit: an import of a module no package here builds, which a layer admits only when
+    its admitted imports reach it, and a `compile_time` module a guarantee reads."""
+    pkg = sourced(tmp_path / "pkg", RED, RED_LOCK)
+    early = A.sources_judge(pkg, A.load(pkg), tmp_path)
+    assert [f.code for f in early] == EARLY
+    cites = fact(reads=[{"name": "P.g", "module": "P.Gen", "kind": "def", "hash": "4" * 32}])
+    late = audit_of(pkg, tmp_path / "out", monkeypatch, built_facts(pkg, RED_IMPORTS, pins={"P.t": cites}))["failures"]
+    again = [t for t in A.failures_json(late) if t in A.failures_json(early)]
+    assert again == A.failures_json(early), "each one again, as it was, in its order"
+    only_late = [(f.code, f.entry) for f in late if f.code in EARLY + ["compile-time.cited"] and f not in early]
+    assert only_late == [("layers.import", "P.Defs"), ("compile-time.cited", "P.Gen")]
+    assert "sources.graph" not in [f.code for f in late], "the two graphs agree here"
+    # with --update the listing of a changed file is a note in both, and a failure in neither
+    updating = A.sources_judge(pkg, A.load(pkg), tmp_path, update=True)
+    assert [f.code for f in updating] == [c for c in EARLY if c != "compile-time.digest"]
+
+
+#: sources that pass the judge of the sources: a `module` header that names a module twice, as the build's imports do
+CLEAN = {"P.lean": "import P.Thms\n",
+         "P/Assumptions.lean": "prelude\n",
+         "P/Defs.lean": "import Std.Data\n",
+         "P/Thms.lean": "module\n\npublic import P.Assumptions\nmeta import P.Assumptions\nimport P.Defs -- the definitions\n"}
+CLEAN_IMPORTS = {"P": ["Init", "Init", "P.Thms"], "P.Assumptions": [], "P.Defs": ["Init", "Init", "Std.Data"],
+                 "P.Thms": ["Init", "Init", "P.Assumptions", "P.Assumptions", "P.Defs"]}
+
+
+def test_a_pass_of_the_sources_decides_nothing(tmp_path, monkeypatch):
+    """Sources and a lock that pass `sources_judge` stop no build (`unbuilt_by_sources`), and their audit still fails on
+    what the build shows: here a layer's import that its admitted imports don't reach, and a guarantee read in a
+    `compile_time` module, neither of which the sources can say."""
+    reviewed = {"why": "why", "digest": hashlib.sha256(CLEAN["P/Defs.lean"].encode()).hexdigest()}
+    lock = recorded() | {"dependencies": {}, "layers": {"P.Defs": {"imports": []}}, "compile_time": {"P.Defs": reviewed}}
+    pkg = sourced(tmp_path / "pkg", CLEAN, lock)
+    assert A.sources_judge(pkg, A.load(pkg), tmp_path) == [] and A.unbuilt_by_sources([pkg], set(), tmp_path) == {}
+    rep = audit_of(pkg, tmp_path / "out", monkeypatch, built_facts(pkg, CLEAN_IMPORTS))
+    assert rep["failure_codes"] == ["layers.import", "compile-time.cited"]
+
+
+def test_the_sources_graph_and_the_build_s_disagreeing_is_a_failure_of_its_own(tmp_path, monkeypatch):
+    """`sources.graph`: the audit compares the import graph `sources_judge` read from the headers with the build's, the
+    modules under the roots and each one's imports as sets, and fails where they differ, whichever side is wrong.  The
+    failure is the report's and not the facts document's: the document of a build is the same bytes with it or without,
+    and a judgment from the document (`--facts-from`) reads the sources again and gives the failure again."""
+    pkg = sourced(tmp_path / "pkg", CLEAN, recorded() | {"dependencies": {}})
+    lock = A.load(pkg)
+    agree = built_facts(pkg, CLEAN_IMPORTS)
+    assert A.source_graph_failures(pkg, lock, agree) == []
+    doc = tmp_path / "agree" / A.FACTS_DOC
+    assert audit_of(pkg, tmp_path / "agree", monkeypatch, agree, facts_out=doc)["failures"] == []
+    assert A.audit_from_facts(pkg, tmp_path / "agree-b", doc, log=lambda *_: None)["failures"] == []
+
+    def differing(name: str, imports: dict[str, list[str]], *said: str) -> None:
+        now, doc = built_facts(pkg, imports), tmp_path / name / A.FACTS_DOC
+        (fail,) = A.source_graph_failures(pkg, lock, now)
+        assert fail.code == "sources.graph" and all(s in fail for s in said), fail
+        full = audit_of(pkg, tmp_path / name, monkeypatch, now, facts_out=doc)
+        assert fail in full["failures"] and "sources.graph" in full["failure_codes"]
+        body = json.loads(gzip.decompress(doc.read_bytes()))
+        assert "sources.graph" not in json.dumps(body) and set(body["findings"]) == {
+            "cross", "scans", "dropped", "dependency_scans", "anonymous", "dependencies", "heartbeats", "listings"}
+        from_doc = A.audit_from_facts(pkg, tmp_path / f"{name}-b", doc, log=lambda *_: None)
+        assert A.failures_json(from_doc["failures"]) == A.failures_json(full["failures"])
+
+    differing("fewer", CLEAN_IMPORTS | {"P.Thms": ["Init", "Init", "P.Assumptions"]},
+              "P.Thms (it imports P.Defs only in the sources)")
+    differing("more", CLEAN_IMPORTS | {"P.Defs": ["Init", "Init", "Std.Data", "P.Assumptions"]},
+              "P.Defs (it imports P.Assumptions only in the build)")
+    differing("init", CLEAN_IMPORTS | {"P.Assumptions": ["Init", "Init"]}, "P.Assumptions (it imports Init only in the build)")
+    differing("module", CLEAN_IMPORTS | {"P.More": ["Init", "Init"]}, "P.More (the roots import it only in the build)")
+    (pkg / "P" / "Defs.lean").write_text("/- a comment left open\nimport Std.Data\n")
+    differing("cut", CLEAN_IMPORTS, "P.Defs (its header can't be read)")
+    assert A.sources_judge(pkg, lock, tmp_path) == [], "no rule runs on a graph that can't be read"
+
+
+def test_a_package_the_sources_fail_is_not_built_nor_one_whose_audit_rests_on_its_build(tmp_path, monkeypatch, capsys):
+    """`check.py --build`: every package of the run is judged on its sources and its lock before the first build and before
+    the build slot is asked for.  One that fails is reported with those failures and never audited, so nothing of it is
+    built; one that requires an unbuilt package by path, or names one under `proved_in`, fails with `sources.unbuilt`
+    naming it, so no audit compiles another audited package's modules; any other package is audited as before.  When
+    none fails, every package is audited with its build, as before: the pass decided nothing.  Without `--build`, and
+    for stage A (`--facts-only`), there is no judge of the sources."""
+    lock = {"roots": ["P"], "guarantees": {}}
+    spec = sourced(tmp_path / "spec", {"P.lean": ""}, lock | {"proved_in": ["../proofs"]})
+    proofs = sourced(tmp_path / "proofs", {"P.lean": "", "Unused.lean": ""}, lock)
+    props = sourced(tmp_path / "props", {"P.lean": ""}, lock)
+    other = sourced(tmp_path / "other", {"P.lean": ""}, lock)
+    for q in (proofs, props):
+        (q / "lake-manifest.json").write_text(json.dumps({"packages": [{"type": "path", "dir": "../spec"}]}))
+    audited, slots = [], []
+
+    def fake(pkg, out, build=False, *args, built=lambda: None, **_):
+        built()
+        audited.append((pkg.name, build))
+        return {"package": str(pkg), "seconds": {}, "failures": []}
+
+    monkeypatch.setattr(A, "audit", fake)
+    monkeypatch.setattr(A, "lean_slot", lambda repo: slots.append(repo))
+    monkeypatch.setattr(A, "sandboxed", lambda: False)
+
+    def run(*flags, pkgs=(spec, props, other)):
+        audited.clear(), slots.clear()
+        out = tmp_path / f"out-{len(list(tmp_path.glob('out-*')))}"
+        code = A.main([*map(str, pkgs), *flags, "--out", str(out), "--repo", str(tmp_path)])
+        reports = {Path(r["package"]).name: r for r in json.loads((out / "audit.json").read_text())["packages"]}
+        codes = {q: r["failure_codes"] for q, r in reports.items()}
+        return code, codes, reports, sorted(audited), len(slots), capsys.readouterr().out
+
+    # the proofs fail: neither their spec nor what requires the spec is built, and the fourth package is audited
+    code, codes, reports, ran, slot, said = run("--build")
+    assert code == 1
+    assert codes == {"spec": ["sources.unbuilt"], "proofs": ["orphan.file"], "props": ["sources.unbuilt"], "other": []}
+    assert "../proofs (its `proved_in` names)" in reports["spec"]["failures"][0]
+    assert "../spec (it requires by path)" in reports["props"]["failures"][0]
+    assert ran == [("other", True)] and slot == 1
+    assert said.index("sources: 4 packages judged") < said.index("AUDIT") and f"AUDIT {proofs}: FAIL" in said
+    code, codes, _, ran, slot, _ = run("--build", pkgs=(proofs,))
+    assert (code, codes, ran, slot) == (1, {"proofs": ["orphan.file"]}, [], 0), "nothing to build: no slot is asked for"
+    # the spec fails and the proofs don't: the proofs would compile the spec's sources, and are not built
+    A.dump(proofs, A.load(proofs) | {"exempt": {"Unused": "a scratch file"}})
+    (spec / "Unused.lean").write_text("")
+    code, codes, _, ran, _, _ = run("--build")
+    assert code == 1 and ran == [("other", True)]
+    assert codes == {"spec": ["orphan.file"], "proofs": ["sources.unbuilt"], "props": ["sources.unbuilt"], "other": []}
+    for flags in ([], ["--build", "--facts-only", str(tmp_path / "facts")]):
+        _, codes, _, ran, _, said = run(*flags)
+        assert set(map(tuple, codes.values())) == {()} and len(ran) == 4 and "sources:" not in said, flags
+    A.dump(spec, A.load(spec) | {"exempt": {"Unused": "a scratch file"}})
+    code, codes, _, ran, slot, said = run("--build")
+    assert code == 0 and ran == [(q, True) for q in ("other", "proofs", "props", "spec")] and slot == 1
+    assert "none fails, which decides nothing" in said
+
+
+@pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain")
+def test_a_red_of_the_sources_ends_a_build_run_before_setup_and_a_real_build_gives_it_again(tmp_path, monkeypatch):
+    """The control fixture with a file its root doesn't import and an import a layer doesn't admit: `check.py --build`
+    fails on both before `setup` and before any `lake`, and the audit of a real build of the same sources gives the same
+    two failures, the build's graph agreeing with the one read from the headers."""
+    pkg = tmp_path / "control"
+    shutil.copytree(HERE / "fixtures" / "control", pkg, ignore=shutil.ignore_patterns(".lake"))
+    (pkg / "Control" / "Unused.lean").write_text("def Control.unused := 1\n")
+    defs = pkg / "Control" / "Defs.lean"
+    defs.write_text("import Control.Assumptions\n" + defs.read_text())
+    early = A.sources_judge(pkg, A.load(pkg), tmp_path)
+    assert [(f.code, f.entry) for f in early] == [("orphan.file", "Control/Unused.lean"), ("layers.import", "Control.Defs")]
+    ran, out = [], tmp_path / "out"
+    with monkeypatch.context() as stubbed:
+        stubbed.setattr(A, "setup", lambda *a, **k: ran.append("setup") or (1, ""))
+        stubbed.setattr(A, "run", lambda argv, *a, **k: ran.append(argv) or (1, ""))
+        assert A.main([str(pkg), "--build", "--no-replay", "--no-runs", "--out", str(out), "--repo", str(tmp_path)]) == 1
+    (rep,) = json.loads((out / "audit.json").read_text())["packages"]
+    assert rep["failures"] == early and rep["failure_codes"] == ["orphan.file", "layers.import"] and ran == []
+    subprocess.run(["lake", "build"], cwd=pkg, check=True, capture_output=True, env=A.lake_env())
+    late = A.audit(pkg, tmp_path / "late", build=False, replay=False, runs=False, log=lambda *_: None)["failures"]
+    assert [t for t in A.failures_json(late) if t in A.failures_json(early)] == A.failures_json(early)
+    assert "sources.graph" not in [f.code for f in late]
 
 
 TREES = {"P.Defs": "definitions", "P.Assumptions": "definitions", "P.Props": "properties", "P.Thms": "proofs",
@@ -1286,8 +1501,8 @@ def bookkeeping_audit(tmp_path, monkeypatch, lock: dict, now: dict, replayed=())
     monkeypatch.setattr(A, "replay_step", lambda *a: (list(replayed), {"checked": 1, "reused": 0}))
     monkeypatch.setattr(A, "dependency_scans", lambda *a: ([], 0))
     monkeypatch.setattr(A, "dependency_digests", lambda *a: {"mathlib": "d1"})
-    for name, value in (("scans", []), ("heartbeats", []), ("anonymous_instances", []), ("run_paths", []),
-                        ("listings", ([], {}, [])), ("read_by_dependents", set()), ("reads_home", {})):
+    for name, value in (("scans", []), ("source_graph_failures", []), ("heartbeats", []), ("anonymous_instances", []),
+                        ("run_paths", []), ("listings", ([], {}, [])), ("read_by_dependents", set()), ("reads_home", {})):
         monkeypatch.setattr(A, name, lambda *a, value=value, **k: value)
 
     def audit(bookkeeping=None):
@@ -1818,7 +2033,9 @@ def test_no_step_before_the_judge_reads_a_section_build_inputs_leaves_out():
         by_path[name] = None if got is None or by_path.get(name, set()) is None else by_path.get(name, set()) | got
     whole = None
     before = {"memory_refusal": {"proved_in"}, "main": {"proved_in"},       # which packages a run audits, and on what machine
-              "proved": {"roots", "exempt", "guarantees", "compile_time"}}   # the prover's lock, `qpol` above
+              "proved": {"roots", "exempt", "guarantees", "compile_time"},   # the prover's lock, `qpol` above
+              # the judge of the sources, before the build: the sections its checks read after it, and the provers
+              "unbuilt_by_sources": {"roots", "exempt", "layers", "compile_time", "runs", "proved_in"}}
     apart = {"_open": whole,                                                 # the lock the walk starts from: `policy` in `audit`
              "homes": {"layers"}, "tree_roles": {"trees"}, "read_by_dependents": {"reads"}, "_finish": whole,   # the judge's
              "load": whole, "dump": whole,                                   # the reader and the writer themselves
@@ -6485,7 +6702,8 @@ def test_the_steps_reading_only_the_packages_own_facts_start_before_its_proved_i
     monkeypatch.setattr(A, "dependency_digests", stub("dependency_digests", {"mathlib": "d1"}))
     monkeypatch.setattr(A, "sibling", lambda name: type("U", (), {"pinned": staticmethod(stub("pinned", ({"x": 1}, [])))}))
     for name, value in (("judge", ([], {})), ("dropped", []), ("spec_reads", []), ("shape", []), ("unread_spec", {}),
-                        ("read_by_dependents", set()), ("reads_home", {}), ("scans", []), ("heartbeats", []),
+                        ("read_by_dependents", set()), ("reads_home", {}), ("scans", []), ("source_graph_failures", []),
+                        ("heartbeats", []),
                         ("anonymous_instances", []), ("run_paths", []), ("listings", ([], {}, [])), ("regenerated", None)):
         monkeypatch.setattr(A, name, lambda *a, value=value, **k: value)
     rep = A.audit(pkg, tmp_path / "out", runs=False, log=lambda *_: None)
@@ -6522,7 +6740,8 @@ def test_a_node_that_builds_without_the_sandbox_neither_reuses_nor_writes_the_re
     monkeypatch.setattr(A, "dependency_scans", lambda *a: ([], 0))
     monkeypatch.setattr(A, "dependency_digests", lambda *a: {})
     for name, value in (("judge", ([], {})), ("dropped", []), ("spec_reads", []), ("shape", []), ("unread_spec", {}),
-                        ("read_by_dependents", set()), ("reads_home", {}), ("scans", []), ("heartbeats", []),
+                        ("read_by_dependents", set()), ("reads_home", {}), ("scans", []), ("source_graph_failures", []),
+                        ("heartbeats", []),
                         ("anonymous_instances", []), ("run_paths", []), ("listings", ([], {}, [])), ("regenerated", None)):
         monkeypatch.setattr(A, name, lambda *a, value=value, **k: value)
     rep = A.audit(pkg, tmp_path / "out", runs=False, log=lambda *_: None, replay_cache=cache)
@@ -6980,7 +7199,8 @@ def test_an_unsealed_audit_leaves_the_shared_replay_cache_unchanged(tmp_path, mo
     monkeypatch.setattr(A, "dependency_scans", lambda *a: ([], 0))
     monkeypatch.setattr(A, "dependency_digests", lambda *a: {})
     for name, value in (("judge", ([], {})), ("dropped", []), ("spec_reads", []), ("shape", []), ("unread_spec", {}),
-                        ("read_by_dependents", set()), ("reads_home", {}), ("scans", []), ("heartbeats", []),
+                        ("read_by_dependents", set()), ("reads_home", {}), ("scans", []), ("source_graph_failures", []),
+                        ("heartbeats", []),
                         ("anonymous_instances", []), ("run_paths", []), ("tree_roles", {}), ("tree_failures", []),
                         ("inline_failures", ([], {}, []))):
         monkeypatch.setattr(A, name, lambda *a, value=value, **k: value)
