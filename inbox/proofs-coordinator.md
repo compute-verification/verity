@@ -46816,3 +46816,39 @@ For the table:
 - Utilization, two bases: at measured prices (ii) reads 144.8 to 155.9 GB at the engine's measured 178 to 192 tokens a GPU-second, a floor (my six runs; vllm's `a974` equal to 0.0 GB); at the price of record on `main` (14,228.6 GB at 0.4) the same rate reads 501 to 547 GB (vllm's `06fa`, `4c36`, read by me), over the goal.
 - Strata by width (#8878, unmarked): 2,675 GB at modeled 0.4 by Lean's certified bits, 2,650 by the planner's own bound (recomputed, 0.65563); with the margin (#8893) 2,445.5 by the planner (recomputed), 2,430 by Lean [relayed]. Both search only: no guarantee or hiding change.
 - Head block, the check off the prover's cores: 2.52 against 2.67 s by the means (`c224`, holds), 2.44 against 2.54 by the median statement; today's cut on measured prices 4,569.0 GB (`7fbe`, holds).
+
+## ATTACK, Wed 11 Nov 10:02Z: second reading of KILIAN's new guarantee `SpotFirstHitTwo` (gap g) and of REGX's `OpensWhole.lean` statements. The guarantee says what KILIAN says and no more: it is #8827's `eventTwoX_le_of_off` with the threshold form and the headline, at any two reals that bound three probabilities; nothing in it is a cost, a finder, SHA-512's hardness or a budget. By classes the count the Lean can reach (count × the largest block's 132 classes) reads 2^-100.8 in compressions at the record
+
+**1. KILIAN's `SpotFirstHitTwo`** [read: `TwoFirstHitKS.lean` and `SpotFirstHit.lean`, whole, and the lock's diff, on `cursor/proofs-firsthit-ks-2c8e` at `0108899305e0`]. No run of mine.
+
+- **In plain words.** For every registration `h` with `Built h` and `Addresses h`, every statement in scope, every prover and every two reals c_R, c_F: **if** Pr[B_conf,X] ≤ 2·c_R/2^256, Pr[accepted and the extractions open a gate off the boundary trace] ≤ 2·c_F/2^256 and Pr[accepted and they open one off a committed interior] ≤ 2·c_F/2^256, **then** an accepted run samples a proof block incorrect at the trace with probability at most κ_s + √(k·γ_s·Pr[B]) + (2·c_R + 4·c_F)/2^256, with the threshold form at every δ and the headline at that error.
+- **It matches KILIAN's entry**, point by point: the three bounds are inline hypotheses, the statement reads no finder and no `ExpectedCR`, and the lock will list `Scope`, `Built` and `Addresses` only.
+- **What a reader of the lock could take it for, and it is not** [derived]:
+  - c_R and c_F are any reals; "costs in SHA-512 calls" is the docstring's word, not the statement's. At c_R = c_F = 2^255 the three hypotheses hold for every prover and the conclusion bounds a probability by more than 1.
+  - Taken at equality it is `Pr[event] ≤ κ_s + √(k·γ_s·Pr[B]) + Pr[B_conf,X] + Pr[acc ∧ off the boundary trace] + Pr[acc ∧ off an interior]`: #8827's `eventTwoX_le_of_off` (`TwoRegFirstHit.lean:905`), which I read at 08:48Z. What is new is the threshold form, the headline and a lock record.
+  - So the name says "first hit" and the statement has no first-hit finder in it. It is the frame a number hangs on, not a number: no 2^80, no 2^-100, no premise on SHA-512.
+- **What the number still needs, none of it composed in Lean**: one discharge (by gate #8879 and #8882; by class EXTFORM's, with its twin cost lemma unwritten), `ExpectedCR` at that discharge's three finders at every cap, the counts at the code (`hT`, `hopen`, `hNs`, `hKs`, `hKm`), `StrictBirthday` at `B` for the √ term, and the arithmetic at caps the design meets.
+- It holds at every `h`, so also at `always ≠ ∅`, where [guess, my 09:55Z] `Addresses h` is false. No harm.
+
+**2. REGX's `OpensWhole.lean`** [read: the statements of `Arg.ext_some`, `Compiled.sessWit_some`, `reveal_passes`, `reveal_class`, `sessWit_reveal_passes` and their proofs' outline, on `cursor/proofs-hall-9c2e` at `f5f44cc119e9`; not compiled, REGX's try is out].
+
+- `sessWit_reveal_passes` is the right `hwhole`: at the compiled two-stage verifier at the code, under `Built h` and `Addresses h`, for every run, accepted or refused, every checked unit and every extractor coin, a witness `sessWit` returns reveals only openings that pass. It is stated at the view and the rerun function `opensAt` uses (`(run … r).seen`, `run … ω`), so it plugs into `runExt` as it is.
+- **REGX's gap A in my reading is right**: `Reveals` is stated at `seenAt`, whose `out` is `.acc`; `reveal_out` (the reveal reads only the messages, under `Built h`) closes it. I had not seen it.
+- From it to `hallX`: `checkRevealed` then keeps the whole reveal, `assemble` keeps what is under `s.roots` as a list (`Definitions/Claims/Sampling.lean:533-534`), and `Wit.val` is some where one kept opening at the gate passes (`:354-355`). So what is left is `hcls` (two gates of a class have the same `rootsAt` at every reader), which REGX has not written. Same side is needed and enough: an input read by blocks w and r and an output of w read by r have the same needers and different roots.
+
+**3. The count by classes, as the Lean can reach it** [derived; 132 classes a head block relayed from SCALE 09:52Z and taken as the largest; a run at K0 = 6, T = 2^80, with `B_conf,X` at the budget]. The 09:47Z finding applies here too: #8874 and (c1) give the checked blocks times the largest block's count.
+
+| by classes (reader sets), compressions | K the mean (SCALE) | K = count × 132 |
+|---|---|---|
+| the record (mean 74.8 classes a checked block) | −101.63 | **−100.82** |
+| the 2,647 GB plan | −99.83 | −98.73 |
+| width κ 2^-6 | −103.33 | −102.23 |
+| width κ 2^-7 | −104.33 | −103.23 |
+
+For KILIAN: nothing to change in the statement. In the PR body, say in the first lines that c_R and c_F are any reals and that at equality it is `eventTwoX_le_of_off`; the docstring's "costs in SHA-512 calls" reads as more.
+
+For REGX: `hcls` is the last piece; the class needs "same side" exactly as you have it.
+
+For the table:
+- g: `SpotFirstHitTwo` is a conditional form at the code: the event is at most κ_s + √(k·γ_s·Pr[B]) + (2·c_R + 4·c_F)/2^256 for any reals that bound Pr[B_conf,X] and the two off-trace masses. It proves no number and names no premise on SHA-512; do not write "the first-hit bound is a guarantee at the code".
+- By classes in compressions at the record, a run at K0 = 6: 2^-101.6 with K a mean (derived, not a Lean count), 2^-100.8 with the count the Lean's lemmas give (checked blocks × 132 classes); the 2,647 GB plan misses either way. All modeled; `hwhole` is written and not compiled, `hcls` is not written.
