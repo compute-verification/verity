@@ -15,7 +15,7 @@ measures bumps `VERSION` (`training_slowdown/__init__.py`), which every record c
 | `run.py` | one job of an attack config: `Harness`, what a route's code is counted inside, the route loop (`train`) and the record's trace (`trace_step`, `retrace`); `block_c`, a start's c |
 | `config.py` | an attack config: its schema, its digest and its jobs (`Job.label`), each refusal by name |
 | `sandbox.py` | the training job's sandbox: namespaces with no network and an empty directory over each final set (`enter`), and what a process can still reach of either (`refusals`) |
-| `routes/` | the routes a config names, and the route contract (`routes/__init__.py`); `subset`, the parameters a pattern names trained with the optimizer its `opt` dial names (AdamW, SGD, Lion, Adafactor, Muon, Shampoo; the ones torch lacks in `_optimizers`), E the tensors in full or their deltas in codes; `ema`, `subset`'s step with the output an exponential average of the weights; `lora`, the start frozen and a low-rank adapter trained beside each matrix a pattern names, the output the start with the adapters merged in |
+| `routes/` | the routes a config names, and the route contract (`routes/__init__.py`); `subset`, the parameters a pattern names trained with the optimizer its `opt` dial names (AdamW, SGD, Lion, Adafactor, Muon, Shampoo; the ones torch lacks in `_optimizers`), E the tensors in full or their deltas in codes; `ema`, `subset`'s step with the output an exponential average of the weights; `lora`, the start frozen and a low-rank adapter trained beside each matrix a pattern names, the output the start with the adapters merged in; `qat`, quantization-aware training, each matrix a pattern names read as the start's plus the sparse ternary rounding of a latent that Muon trains straight through, the output the start with the last codes, handed over as codes |
 | `flops.py` | `Counter`, the dispatch-mode count of every op's multiply-adds and their provenance; `guard_exits`, token data read out of torch; `flags`, work the count can't vouch for; `forward_macs_per_token` |
 | `opnames.py` | the op-name sets the counter, the capture and the gate prices share |
 | `gates.py` | each counted op's price in Boolean gates, from the circuits' Definitions |
@@ -27,7 +27,7 @@ measures bumps `VERSION` (`training_slowdown/__init__.py`), which every record c
 | `library.py` | the library's table: each entry of `attacks/` with its step traced on a CPU, its slowdown at its policy (the calculator's bound of record on that step) and what binds, and its planned run over each fleet and period |
 | `calculator.py` | the slowdown calculator (`verity/protocols/inference_only/rho`) as this package reads it: a fixed policy's numbers, the fleets and periods a figure is presented over, and the bound of record |
 | `counterexample.py` | a run's counterexample families: their writer and the sampled bit-for-bit rebuild check |
-| `codecs/` | update codes: identity, low rank, sparse mask, quantized delta, scaled quantized delta, seed replay and their composition |
+| `codecs/` | update codes: identity, low rank, sparse mask, quantized delta, scaled quantized delta, sparse ternary, seed replay and their composition; a codec packs a weight from its value (`encode`) or from the parts a program trained it in (`encode_trained`) |
 | `starts.py`, `starts.toml` | the starts registry: each start by its store artifact, its files' sha256, its shape, C0 and loss, and its data's pins; `load` reads an installed start and checks it |
 | `data.py` | a start's data: the training stream (`Stream`, by the job's data seed) and the held-out sets (`held_out`: the search pool and the final set), checked against the registry; the search slice from a live coin (`sample_slice`) |
 | `evaluate.py` | the harness's evaluator: a checkpoint's bits per byte on the job's split, the search pool's paired with θ on the same slice |
@@ -54,7 +54,9 @@ the update reaches, and differ only in the gates the optimizer itself adds to th
 those products in several passes, which write more outputs. The rest change those products. Muon and Shampoo have no
 rule for the embedding, so their entries leave it untrained, and the output head, whose weight is the embedding, no
 longer has two operands the update reaches. Frozen layers (`last-blocks`) leave more products out, and adapters
-(`lora`) reach a matrix only through a rank-wide product.
+(`lora`) reach a matrix only through a rank-wide product. Quantization-aware training (`qat-top*`) trains the
+matrices of the last blocks and nothing else, and what one of its steps hands the next forward is each matrix's
+codes, two bits an entry and a scale, where the others hand on the weight at its width.
 
 The command prints one row an entry (every entry, or the ones named): the share of the start's parameters its step
 trains, its slowdown under its policy and what binds. It trains nothing. It builds the entry's model at the start's
@@ -95,7 +97,9 @@ A job trains the config's start along its route and scores each checkpoint on it
 `routes/` with `VERSION`, `DIALS`, `build`, `step` and `plan` (the route contract, `routes/__init__.py`); the harness
 owns the loop, the batches, the checkpoints and each checkpoint's E, the weights that differ from θ encoded by the
 route's plan. A checkpoint's output model, the one scored, is what E rebuilds from θ: the trained weights under a
-plan that keeps them whole, and the model the kept bits give under one that keeps less. Everything a route computes
+plan that keeps them whole, and the model the kept bits give under one that keeps less. A route that trained a
+weight in a codec's own form hands over those parts (`qat`, its codes), the plan's codec packs them as they are, and
+the weight scored is that codec's decode of them on θ; no route brings a codec. Everything a route computes
 through torch is counted; the harness's own work (loading, evaluating, encoding) isn't. A route that names anything of `training_slowdown` but the codecs and the model,
 or a route around the dispatcher (`run.FORBIDDEN`), is refused, and one that uses an op the counter can't price, reads
 token data out of torch, starts a thread or a process, or imports a module the screen refuses makes its run invalid
@@ -116,8 +120,10 @@ so the measured step reads what the step before it wrote and the step after it r
 aren't the run's first steps, the first of them reads the run's own weights, not θ's (`mid_run`). That gives the
 step a circuit, which the trace keeps as the capture measures it (`circuit`: the gradient's cut and a token group's
 partial, the carried state, τ, a, the update's profile, and the shares of its gates in token ops and in ops an update
-reaches, at the gate prices of the code that took it), with that code's version (`capture_code`). A step the capture
-refuses is recorded as refused, and the job stays valid.
+reaches, at the gate prices of the code that took it), with that code's version (`capture_code`). A tensor an
+optimizer holds and the model doesn't own (a latent, a second copy of a weight) is traced as the optimizer's, under
+`optimizers.I.params.J`. A step the capture refuses is recorded as refused, with the reason, and the job stays valid:
+among them a step that reads a tensor of the run it reached around its arguments, whose refusal says where to hold it.
 
 A job's output holds no weights by default: its record, and its last checkpoint's E when E is under 50 MiB. The
 command's `--weights` makes each job it runs keep its last checkpoint's whole state too.
