@@ -16,15 +16,15 @@ The package `security_proofs` (`Security/Proofs/lakefile.toml`): every proof, `<
   `except` lists by module, with the few modules of other areas that read them.
 - A code package's test may build modules here and run a Lean file that imports them in this package's Lake
   environment (`lake env lean`). These name a module here today, so renaming it changes them:
-  - `verity/core/protocols/pous/lean/grade.sh` builds `Proofs.Pous.Statements`, `Proofs.Pous.Sanity` and
+  - `verity/protocols/pous/lean/grade.sh` builds `Proofs.Pous.Statements`, `Proofs.Pous.Sanity` and
     `Proofs.Pous.Accounting.Numbers` for a submission to import, as `submissions/reference.lean` beside it does the
     first; `check.sh` beside it runs the Lean check on `Security` with the grader.
-  - `verity/core/protocols/spot/tests/lean/generate.sh` runs `ExfiltrationVectors.lean`
+  - `verity/protocols/spot/verifier/tests/lean/generate.sh` runs `ExfiltrationVectors.lean`
     (`Proofs.Flock.Soundness.Audit.Influence`, `Proofs.Flock.Soundness.Audit.StratifiedMiss`) and
     `ExfiltrationTwoVectors.lean` (`Proofs.Flock.SamplingGeneric.TwoTable`), both beside it.
-  - `verity/ml/flock/tests/lean/generate.sh` runs `RandomnessVectors.lean` beside it
+  - `verity/protocols/flock/prover/tests/lean/generate.sh` runs `RandomnessVectors.lean` beside it
     (`Proofs.Flock.Soundness.PlanDraw`).
-  - `verity/ml/flock/tests/test_lean_verifier.py` builds `Proofs.Flock.Verifier`, which its scratch files import.
+  - `verity/protocols/flock/prover/tests/test_lean_verifier.py` builds `Proofs.Flock.Verifier`, which its scratch files import.
 
 ## Areas
 

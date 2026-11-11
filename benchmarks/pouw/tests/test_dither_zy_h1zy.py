@@ -1,7 +1,7 @@
 """dither-a's -zy records pinned to h1zy's: `benchmarks/hash/dither/dither_a.py`'s `_dithera_epilogue` at ZL = 2,
 one record a `dither_a.UNIT` unit, through `dithera_mm` and `dithera_mm_tma` as `Side.gemm` launches them. A -zy row commits
 these records, and a unit opens only a record that parses as `h1zy.RECORD` into its exact z and `h1zy.dequant`'s y, as
-integrations/vllm's `test_int8_zy_h1zy` pins `verity_int8::scaled_mm_zy`'s.
+adapters/vllm's `test_int8_zy_h1zy` pins `verity_int8::scaled_mm_zy`'s.
 
 On CUDA (skipped without it) each call runs `Side.gemm` and then `Side.ycommit`, as `Side.call` does, on a stand-in window
 of T slots, the first m live (its step's m), into 0xA5-poisoned y and records, at the config dither-a picks or a forced
@@ -32,7 +32,7 @@ from types import SimpleNamespace
 import numpy as np
 import pytest
 import torch
-from verity.ml.protocols.pouw.circuit import h1zy as Z
+from verity.protocols.pouw.prover.circuit import h1zy as Z
 from verity_vllm.engine import int8_exact as E
 from verity_vllm.engine import int8_ops as OPS
 
