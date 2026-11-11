@@ -1541,7 +1541,7 @@ def test_only_an_arm_that_loads_a_plugin_has_this_tree_on_its_servers_path(tmp_p
     paths = {a: S.server_env(S.ARMS[a], tmp_path, tmp_path / "site", {"bucket_us": 1, "sat_us": 1, "free_us": 1}, 600.0, 600.0,
                              boundary_rows=rows, private=tmp_path)["PYTHONPATH"].split(S.os.pathsep) for a in S.ARMS}
     for a, arm_ in S.ARMS.items():
-        tree = [p for p in paths[a] if p in (str(S.HERE), str(S.ROOT), str(S.ROOT / "integrations/vllm"))]
+        tree = [p for p in paths[a] if p in (str(S.HERE), str(S.ROOT), str(S.ROOT / "adapters/vllm"))]
         assert bool(tree) == bool(arm_.plugin or arm_.tick), a
         assert (str(tmp_path / "site") in paths[a]) == bool(S.entry_points(arm_)), a
         # nothing else of this tree is on it but the directory of each other plugin the arm names
