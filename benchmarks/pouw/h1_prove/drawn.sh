@@ -50,7 +50,7 @@ PROVE_GB=$(( MEM_GB - SERVE_GB ))
 [ "$PROVE_GB" -ge 62 ] || { log "drawn: the prover's share, $MEM_GB - $SERVE_GB (H1_ZK_SERVER_GB) = $PROVE_GB GB, is below a K 2048" \
   "lane session's 62 GB peak: raise H1_DRAWN_MEM_GB (a larger host, or a CPU node) or, for a smaller K, lower H1_ZK_SERVER_GB"; exit 1; }
 setup
-export PYTHONPATH=$SRC:$SRC/integrations/vllm:$SRC/verity/ml/flock/python${PYTHONPATH:+:$PYTHONPATH}
+export PYTHONPATH=$SRC:$SRC/adapters/vllm:$SRC/verity/protocols/flock/prover/python${PYTHONPATH:+:$PYTHONPATH}
 WK=$SCR/stage ST=$P/drawn/statements.json
 args=(--circuits "${H1_CIRCUITS:?H1_CIRCUITS: pouw_h1_circuits --out, with the drawn K file}")
 [ -n "${H1_DRAW_K:-}" ] && args+=(--k "$H1_DRAW_K")
