@@ -155,11 +155,14 @@ under (H) at `q = β_w β_x` and (E) at `b` (`training-cut-hardness`, `training-
   own, the blocks charged at most, the MACs they hold and their share of the blocks and of the MACs, and what it
   rests on: `HECharged`, (H) at the most a block that isn't charged reads, (E), and two premises no Lean statement
   gives, the period's bound on the untied words, a node's, and an untied word's bits. With no untied word it is
-  `bound`'s slowdown. `best_w` is the threshold at which it is largest for a block count. The count holds of any
-  partition and any set of its blocks, and the caller picks neither: that the partition a period's audit reads has so
-  few blocks over `w` is a join the guarantee that reads the bound owes. `O` is wires, values times their width, and a
-  work that reads a registered table by a few fresh gates leaves the matmuls that read it out. Its three readings are
-  quoted side by side, each under its premise's name (`Charged.reading`), never one as another:
+  `bound`'s slowdown. `best_w` is the threshold at which it is largest for a block count. A node's bound on its
+  untied words is a share of one execution phase's ticket weight, so nodes faster than the measured one take its
+  bound scaled by their rate; where the untied words are then as many as the blocks, `w = 0` charges every block and
+  gives 1, and the figure states its threshold. The count holds of any partition and any set of its blocks, and the
+  caller picks neither: that the partition a period's audit reads has so few blocks over `w` is a join the guarantee
+  that reads the bound owes. `O` is wires, values times their width, and a work that reads a registered table by a
+  few fresh gates leaves the matmuls that read it out. Its three readings are quoted side by side, each under its
+  premise's name (`Charged.reading`), never one as another:
 
   | reading | (H) is asked | fixed before the period | a block over it | the count |
   |---|---|---|---|---|

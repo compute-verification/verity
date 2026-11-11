@@ -227,6 +227,21 @@ SERVED = {"N": MACS, "O": MACS * WORDS * 16 / POSITION, "size": C}
 UNTIED = 671_369
 #: the MACs that feed them, at most: the most a unit of ticket weight buys, 2,048 for each word of the least weight
 FEED = 2_048 * UNTIED
+#: the blocks of the execution phase `UNTIED` is the bound of: the served record's run, a block a slot
+RUN_BLOCKS = 4
+#: a block's y words, 35 positions of the linears' output words: the most of them one block has untied
+BLOCK_WORDS = 35 * (WORDS - 128_256)
+#: the execution phases of a week, a month of 30 days and a year of 365, at 600 s a phase
+WEEK, MONTH, YEAR = 1_008, 4_320, 52_560
+
+
+def untied_over(blocks, phases):
+    """The bound on the untied words of `blocks` blocks served over `phases` execution phases, every node at its
+    bound and all accepted. A node's bound is a share of one phase's ticket weight whatever the period's length, and
+    `UNTIED` is it for a phase of `RUN_BLOCKS` blocks. So a node has `UNTIED / RUN_BLOCKS` for each block of one of
+    its phases, and so have any number of nodes together: the untied words a block grow with nothing but the
+    period's shortness, and a row that sets a node's `UNTIED` beside the blocks of a faster node understates them."""
+    return UNTIED / RUN_BLOCKS * blocks / phases
 
 
 def squares(r):
@@ -317,19 +332,22 @@ def test_the_charged_bound_falls_with_the_untied_words_and_says_nothing_past_the
 def test_the_charged_count_alone_at_the_served_policy():
     """The count alone at the served policy's block: every untied word possibly in one block, and none of the MACs
     that feed them. Every tied value right: 38 thousand, `bound`'s. One cap for every block at the bits half the words
-    are: 6. Charging a block for one untied word leaves nothing below a million blocks and everything from a
-    datacenter's year. With no threshold a period of ten thousand blocks keeps six thousand; a threshold adds to it
-    from about fifty thousand blocks, where two blocks are charged."""
+    are: 6. Charging a block for one untied word leaves nothing below a million blocks and everything from 1e17.
+    With no threshold a period of ten thousand blocks keeps six thousand; a threshold adds to it from about fifty
+    thousand blocks, where two blocks are charged. Every row is one node's at the run's rate, `RUN_BLOCKS` blocks a
+    phase, where its bound is `UNTIED`: more blocks are a longer period, never a larger or a faster fleet. At a
+    fleet's rate the untied words outnumber the blocks, and charging a block for one untied word leaves nothing."""
     assert min_cut.bound(C, TIED, **SERVED).slowdown == pytest.approx(37_653.4, abs=0.05)
     assert min_cut.bound(C, TIED + 10_688_197, **SERVED).slowdown == pytest.approx(6.3, abs=0.05)
-    for blocks, at_zero in ((1e4, 1.0), (54_300, 1.0), (1e6, 1.5), (8.61e16, 37_653.4), (6.191e18, 37_653.4)):
+    for blocks, at_zero in ((1e4, 1.0), (54_300, 1.0), (1e6, 1.5), (1e17, 37_653.4), (1e19, 37_653.4)):
         assert charged(blocks, 0).slowdown == pytest.approx(at_zero, abs=0.05)
     for blocks, w, slowdown in ((1e4, math.inf, 6_051.8), (54_300, math.inf, 10_795.6), (54_300, 20_435, 1_521.9),
                                 (54_300, 223_789, 12_675.9), (1e6, 223_789, 28_826.5),
                                 (25_165_824, 1_582, 21_392.6), (25_165_824, 20_344, 35_552.1),
-                                (25_165_824, math.inf, 13_521.7), (1.651e15, 0, 37_652.7),
-                                (1.651e15, math.inf, 13_529.4)):
+                                (25_165_824, math.inf, 13_521.7), (1e15, 0, 37_652.2),
+                                (1e15, math.inf, 13_529.4)):
         assert charged(blocks, w).slowdown == pytest.approx(slowdown, abs=0.05), (blocks, w)
+    assert charged(1.651e15, 0, untied=untied_over(1.651e15, WEEK), most=BLOCK_WORDS).slowdown == 1
     assert min_cut.best_w(C, TIED, blocks=1e4, untied=UNTIED, untied_macs=0, **SERVED) == UNTIED
     for blocks in (54_300, 1e6):
         w = min_cut.best_w(C, TIED, blocks=blocks, untied=UNTIED, untied_macs=0, **SERVED)
@@ -338,60 +356,84 @@ def test_the_charged_count_alone_at_the_served_policy():
     assert min_cut.best_w(C, TIED, blocks=1e4, untied=0, untied_macs=0, **SERVED) == 0
 
 
-#: the period's rows at the served class: (blocks, nodes, the most untied words one block of a node reads, the best
-#: threshold with one β_x, the blocks charged at it, the slowdown at it, the slowdown with one β_x at the top cap
-#: and no block charged, and the slowdown with a β_x a block and no threshold). A node's rows are the function at
-#: one node's untied words; a datacenter's and the world's are scaled: so many nodes, each at one node's bound and
-#: all accepted, their block counts a week's, a month's and a year's. That one block of a node reads at most half
-#: the node's untied words is these rows' statement of their record, which the function takes as `most`: a sampled
-#: tile's rows are two blocks' or more.
-PERIOD = ((2_379, 1, UNTIED // 2, 335_684, 0, 3_677.1, 3_677.1, 4_107.8),
-          (1e4, 1, UNTIED // 2, 335_684, 0, 7_883.9, 7_883.9, 10_923.1),
-          (54_300, 1, UNTIED // 2, 223_789, 2, 12_564.7, 11_860.1, 24_122.5),
-          (1e6, 1, UNTIED // 2, 223_789, 2, 28_795.0, 13_424.7, 36_407.0),
-          (25_165_824, 1, UNTIED // 2, 20_344, 32, 35_550.2, 13_525.2, 37_601.8),
-          (1e10, 1, UNTIED // 2, 20_344, 32, 37_647.8, 13_529.4, 37_653.3),
-          (1.651e15, 12_500, 1_023_318, 20_435, 410_653, 37_653.0, 13_529.4, 37_653.4),
-          (7.077e15, 12_500, 1_023_318, 20_435, 410_653, 37_653.3, 13_529.4, 37_653.4),
-          (8.61e16, 12_500, 1_023_318, 20_435, 410_653, 37_653.4, 13_529.4, 37_653.4),
-          (6.191e18, 46_870_000, 1_623_184, 20_435, 1_539_785_918, 37_653.0, 13_529.4, 37_653.4),
-          (2.653e19, 46_870_000, 1_623_184, 20_435, 1_539_785_918, 37_653.3, 13_529.4, 37_653.4),
-          (3.228e20, 46_870_000, 1_623_184, 20_435, 1_539_785_918, 37_653.4, 13_529.4, 37_653.4))
+#: the period's rows at the served class: (blocks, the execution phases they are served over, the most untied words
+#: one block reads, the best threshold with one β_x, the blocks charged at it, the slowdown at it, the slowdown with
+#: one β_x at the top budget and no block charged, and the slowdown with a β_x a block and no threshold). Every
+#: row's untied words are `untied_over` its blocks and phases, and nothing else. A node's rows are a node at the
+#: run's rate, `RUN_BLOCKS` blocks a phase, whose bound is `UNTIED` however long it serves; that one block of it
+#: reads at most half the node's untied words is these rows' statement of their record, which the function takes as
+#: `most`: a sampled tile's rows are two blocks' or more. A datacenter's and the world's are scaled: every machine
+#: at its data-sheet peak for a week, a month and a year, every node at its bound and all accepted, where a node's
+#: bound is more than a block's words, so one block may be untied whole.
+PERIOD = ((2_379, 2_379 / RUN_BLOCKS, UNTIED // 2, 335_684, 0, 3_677.1, 3_677.1, 4_107.8),
+          (1e4, 1e4 / RUN_BLOCKS, UNTIED // 2, 335_684, 0, 7_883.9, 7_883.9, 10_923.1),
+          (54_300, 54_300 / RUN_BLOCKS, UNTIED // 2, 223_789, 2, 12_564.7, 11_860.1, 24_122.5),
+          (1e6, 1e6 / RUN_BLOCKS, UNTIED // 2, 223_789, 2, 28_795.0, 13_424.7, 36_407.0),
+          (25_165_824, 25_165_824 / RUN_BLOCKS, UNTIED // 2, 20_344, 32, 35_550.2, 13_525.2, 37_601.8),
+          (1e10, 1e10 / RUN_BLOCKS, UNTIED // 2, 20_344, 32, 37_647.8, 13_529.4, 37_653.3),
+          (1.651e15, WEEK, BLOCK_WORDS, 911_841, 3.01487e11, 1_614.1, 52.8, 53.2),
+          (7.077e15, MONTH, BLOCK_WORDS, 825_882, 3.32926e11, 4_787.8, 202.2, 209.6),
+          (8.61e16, YEAR, BLOCK_WORDS, 245_435, 1.12024e12, 20_422.0, 1_336.6, 1_844.3),
+          (6.191e18, WEEK, BLOCK_WORDS, 911_841, 1.13053e15, 1_614.1, 52.8, 53.2),
+          (2.653e19, MONTH, BLOCK_WORDS, 825_882, 1.24806e15, 4_787.8, 202.2, 209.6),
+          (3.228e20, YEAR, BLOCK_WORDS, 245_435, 4.19992e15, 20_422.0, 1_336.6, 1_844.3))
+#: a β_x a block with its own best threshold at a fleet's week, month and year: the threshold and the slowdown
+PERIOD_ROWS_W = ((893_962, 1_694.1), (762_988, 5_779.8), (601_611, 24_820.5))
 
 
 def test_the_period_at_the_served_class_under_each_reading():
     """The three readings side by side at the served class, each under its premise's name, each row with its block
-    count and its threshold, the MACs that feed the untied words charged whole. One β_x at the top cap, no block
-    charged: (H) is asked of every block where the block that reads the most untied words reads, and the figure stops
-    at 13.5 thousand however long the period. One β_x with the best threshold: the same up to ten thousand blocks,
-    where no block is charged, and `bound`'s 38 thousand from a datacenter's week, where the charged blocks are under
-    a billionth of the blocks; the threshold that is best there is the last before (H)'s second row. A β_x a block:
-    no threshold is needed, it is the largest of the three at every row, and it is no statement of `HECharged`'s."""
-    for blocks, nodes, most, w, over, at_w, at_none, at_rows in PERIOD:
-        terms = {"blocks": blocks, "untied": nodes * UNTIED, "untied_macs": nodes * FEED, "most": most, **SERVED}
+    count and its threshold, the MACs that feed the untied words charged whole. A node at the run's rate. One β_x at
+    the top budget, no block charged: (H) is asked of every block where the block that reads the most untied words
+    reads, and the figure stops at 13.5 thousand however long the period. One β_x with the best threshold: the same
+    up to ten thousand blocks, where no block is charged, and near `bound`'s 38 thousand once the period is long. A
+    β_x a block: no threshold is needed, and it is the largest of the three. A fleet at the census's rate: it holds
+    166.5 untied words a block over a week, 38.85 over a month and 3.19 over a year, whatever its nodes, and a block
+    may be untied whole. With no threshold both readings fall to 53, about 205 and under two thousand. With the
+    best threshold one β_x gives 1.6, 4.8 and 20 thousand, the charged blocks under a five-thousandth of the blocks,
+    and the year's threshold is the last whose budget (H)'s third row covers; a β_x a block needs its own threshold
+    there too, and then gives 1.7, 5.8 and 25 thousand. At `w = 0` every block of a fleet may read an untied word,
+    every block is charged and the bound is 1: there the threshold is a parameter the figure needs, never a default.
+    One bound for every block at what the worst block reads is 1 as well: a block untied whole is the served policy's
+    with nothing tied. A β_x a block is no statement of `HECharged`'s at any row."""
+    for blocks, phases, most, w, over, at_w, at_none, at_rows in PERIOD:
+        untied, fleet = untied_over(blocks, phases), most == BLOCK_WORDS
+        assert untied == (pytest.approx(UNTIED / RUN_BLOCKS / phases * blocks, rel=1e-12) if fleet else UNTIED)
+        terms = {"blocks": blocks, "untied": untied, "untied_macs": 2_048 * untied, "most": most, **SERVED}
         rows = min_cut.bound_charged(C, TIED, rows=True, **terms)
         assert rows.slowdown == pytest.approx(at_rows, abs=0.05) and rows.charged == 0 and rows.cap == TIED + 32 * most
-        assert rows.slowdown >= max(at_w, at_none) - 0.05 and "at what each block reads" in rows.rests_on
         assert rows.statement == min_cut.HE_ROWS and "which no guarantee states" in rows.rests_on
-        if nodes < 1e7:
+        assert "at what each block reads" in rows.rests_on
+        if fleet:
+            at, with_w = PERIOD_ROWS_W[(WEEK, MONTH, YEAR).index(phases)]
+            assert min_cut.best_w(C, TIED, rows=True, **terms) == at and at_w > at_rows > at_none
+            assert min_cut.bound_charged(C, TIED, w=at, rows=True, **terms).slowdown == pytest.approx(with_w, abs=0.05)
+            assert with_w > at_w and untied / blocks == pytest.approx(UNTIED / RUN_BLOCKS / phases, rel=1e-12)
+            zero = min_cut.bound_charged(C, TIED, w=0, **terms)
+            assert untied >= blocks and (zero.slowdown, zero.charged) == (1, blocks)
+        else:
+            assert rows.slowdown >= max(at_w, at_none) - 0.05
             assert min_cut.best_w(C, TIED, rows=True, **terms) == most
         assert min_cut.best_w(C, TIED, **terms) == w, blocks
         two, none = min_cut.bound_charged(C, TIED, w=w, **terms), min_cut.bound_charged(C, TIED, **terms)
-        assert (two.charged, none.charged) == (over, 0), blocks
+        assert two.charged == pytest.approx(over, rel=1e-5) and none.charged == 0, blocks
         assert two.slowdown == pytest.approx(at_w, abs=0.05) and none.slowdown == pytest.approx(at_none, abs=0.05)
         assert f"w = {w}" in two.rests_on and "no threshold" in none.rests_on
         assert two.statement == none.statement == min_cut.HE_CHARGED and "once, at k = " in two.rests_on
         assert (two.reading, none.reading, rows.reading) == (
             f"one β_x, with the threshold w = {w}", "one β_x at the top cap, no block charged",
             "a β_x a block, no threshold")
-        assert all(f"fed by at most {nodes * FEED:.6g} MACs" in r.rests_on for r in (two, none, rows))
+        assert all(f"fed by at most {2_048 * untied:.6g} MACs" in r.rests_on for r in (two, none, rows))
         assert two.slowdown >= none.slowdown and (over > 0 or two.slowdown == none.slowdown)
-        assert two.slowdown <= charged(blocks, w, untied=nodes * UNTIED, most=most).slowdown
+        assert two.slowdown <= charged(blocks, w, untied=untied, most=most).slowdown
         for r in (two, none, rows):
             assert r.gates == pytest.approx(r.macs * C / MACS, rel=1e-12) == pytest.approx(blocks * C / r.slowdown)
             assert r.share == 1 / r.slowdown and r.gates <= blocks * C
-    assert TIED + 32 * 20_435 <= min_cut.BETA[1][0] < TIED + 32 * 20_436
-    assert PERIOD[6][4] / PERIOD[6][0] < 1e-9 and min_cut.bound(C, TIED, **SERVED).slowdown < 37_653.45
+    assert TIED + 32 * 245_435 == min_cut.BETA[2][0] and BLOCK_WORDS == 13_189_120
+    assert [round(UNTIED / RUN_BLOCKS / p, 2) for p in (WEEK, MONTH, YEAR)] == [166.51, 38.85, 3.19]
+    assert all(1e-5 < row[4] / row[0] < 2e-4 for row in PERIOD[6:]) and PERIOD[6][5:] == PERIOD[9][5:]
+    assert TIED + 32 * BLOCK_WORDS == K + 512 and min_cut.bound(C, K + 512, **SERVED).slowdown == 1
+    assert min_cut.bound(C, TIED, **SERVED).slowdown < 37_653.45
     assert min_cut.bound_charged(C, TIED, w=5, rows=True, **terms).reading == "a β_x a block, with the threshold w = 5"
     assert lean.status(min_cut.HE_ROWS) == "draft"
 
