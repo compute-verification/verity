@@ -72,7 +72,7 @@ def query_population_gate(sr: dict | None, *, rank: int, required: bool) -> tupl
         pop = {}
     chk = pop.get("query_checks") if isinstance(pop.get("query_checks"), dict) else None
     note, fail = _query_population_scope(sr if isinstance(sr, dict) else None)
-    block = {"rule": "population.query_checks (reconciliation against Q(P)) per rank -> verdict, fail closed; commit_verdict._query_population_scope text",
+    block: dict[str, Any] = {"rule": "population.query_checks (reconciliation against Q(P)) per rank -> verdict, fail closed; commit_verdict._query_population_scope text",
              "rank": int(rank), "present": chk is not None, "ok": (chk or {}).get("ok") if chk is not None else None,
              "counts": ({k: int((v or {}).get("n") or 0) for k, v in chk.items() if isinstance(v, dict) and "n" in v} if chk else None),
              "note": note, "fail": fail}

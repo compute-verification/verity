@@ -48,7 +48,7 @@ def rank_mismatches(worker: Any, target: Any) -> dict[str, Any]:
     from verity_vllm.engine import vllm_adapter as va
 
     llm = SimpleNamespace(llm_engine=SimpleNamespace(vllm_config=worker.vllm_config), collective_rpc=lambda fn, *a, **k: [fn(worker)])
-    eng = SimpleNamespace(target=target, llm=llm, model=worker.get_model())
+    eng: Any = SimpleNamespace(target=target, llm=llm, model=worker.get_model())
     return {"rank": int(get_tensor_model_parallel_rank()), "mismatches": va.target_mismatches(eng)}
 
 
