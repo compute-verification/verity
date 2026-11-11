@@ -301,6 +301,7 @@ def _child() -> None:
     import research.cli
     import research.remote
     import research.store.local
+    import research.store.remote
     import verity_cli
 
     def acting(owner, name: str, why: str) -> None:
@@ -313,11 +314,12 @@ def _child() -> None:
 
         setattr(owner, name, wrapped)
 
-    # Resolving a machine, opening the evidence store or finding a program on PATH reads the operator's state, past the
-    # parse: `check.py --record --on auto` resolves a machine before it parses, `check.py --agreement-files` fetches from
-    # the store, and `check.py --preflight` runs uv when there is one.
+    # Resolving a machine, opening the evidence store or its remote, or finding a program on PATH reads the operator's state,
+    # past the parse: `check.py --record --on auto` resolves a machine before it parses, `check.py --agreement-files` signs
+    # URLs with the store's remote, and `check.py --preflight` runs uv when there is one.
     acting(research.remote, "load_machines", "reads the machine registry")
     acting(research.store.local.LocalStore, "__init__", "opens the evidence store")
+    acting(research.store.remote, "load_remote", "reads the store's remote config")
     acting(shutil, "which", "looks for a program to run")
 
     def enter(argv: list[str]):
