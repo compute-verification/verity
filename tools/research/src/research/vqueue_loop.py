@@ -26,12 +26,13 @@ withdrawn mark's author, a hold and by whom, no land verdict, the freeze), which
 ready names (`vqueue._stale`); `pulled` those of them others than their owners took (a red's eject, any other eject or a
 mark withdrawn by another, a hold by a reviewer or a `hold` label, the freeze, the shadow's eject, or a PR holding one of
 them), at its head or at the head a candidate in flight holds it at (`World.taken`), the only ones that drop a candidate in
-flight; and `flying` each member of the chain not ready at its head as built, with its files.
+flight; and `flying` each member of the chain not ready at its head as built, with its files and Lean test.
 `candidates` are the loop's own builds: each of origin's `queue/<sha12>` branches at the sha a build line of the log names
 (the window's, else the whole log's, which its other lines are then read from too), with that line's base and members, lowest
 first; any other `queue/*` branch is no candidate, and is logged once (`ignore`).  `now` is the clock, `lean` and `pending_s`
-the command's (`--lean`, `--pending-hours`), and `wide` the PRs `--wide-file` names, read each tick as the priority file is
-(`World.wide`).  A candidate's verdict is graph2's results for `ready:<sha>` (`Executor.settle`),
+the command's (`--lean`, `--pending-hours`), and `wide` and `pinned` the PRs `--wide-file` and `--pins-file` name, read each
+tick as the priority file is (`World.wide`, `World.pinned`); a tick that builds nothing while a pinned Lean PR waits logs
+why, once a why (`wait`).  A candidate's verdict is graph2's results for `ready:<sha>` (`Executor.settle`),
 the labels graph2 wrote alone (`GRAPH2_BY`), each key's from the first its retry or any candidate's rerun didn't set aside (a
 task graph2's `verdict` says failed or infra reads so whatever its labels say, one failed by its own fault, which it labels
 no result for, included), on the merge gate's tasks: none `"gate": false`, of ratchet-gate (`reds.RATCHET_STEP`: it judges
@@ -159,7 +160,7 @@ from .queue import (LEAN_SOURCES, PR, WORKDIR, Entry, Member, Queue, QueueError,
                     moves_between, priority_list, queue_commit, review_owners, rules_at, touched_by, unreviewed)
 from .reds import CIRCUIT_KILLED, CIRCUIT_STEP, RATCHET_STEP, red_owners
 from .vqueue import (FAIL, INFRA, LIST_FAILED, PASS, PENDING, Action, Advance, Build, Candidate, Drop, Eject, Failed, Outcome,
-                     Ready, Red, Rerun, Retry, Ring, Snapshot, Verdict, _inherited)
+                     Ready, Red, Rerun, Retry, Ring, Snapshot, Verdict, Wait, _inherited)
 
 #: graph2, infra's executor on the control pod: its argv before the subcommand
 GRAPH2 = ("python3.12", "/root/executor/infra/graph2.py", "--db", "/root/executor/graph2.db", "--events", "/root/executor/events")
@@ -176,6 +177,9 @@ DESELECT = Path("/data/vqueue/live/deselect")
 #: the PRs whose Lean change is wide, its build expensive, one number a line as the priority file holds them: a candidate
 #: taking one takes no other Lean member, and one on a candidate holding one takes none until it is on `main` (`vqueue._wide`)
 WIDE = Path("/data/vqueue/live/wide")
+#: the pinned PRs, one number a line (`#` comments and blank lines allowed): a pinned Lean PR opens a batch of pinned Lean PRs
+#: only, on `main` or on a top candidate holding no Lean change; no other Lean PR goes ahead of a PR with none (`vqueue._next`)
+PINS = Path("/data/drive/pins")
 #: how far back the decision log is read
 WINDOW_S = 48 * 3600
 #: what gates a candidate (`--gate`): graph2's check with the run beside it, or drive's after-landing check alone, as `SHARDS`
@@ -592,10 +596,11 @@ class World:
     def __init__(self, q: Queue, labels, tasks: Executor, *, graph2: tuple[str, ...] = (), priority_file: Path | None = None,
                  post: Callable[[str, tuple[str, ...]], bool] | None = None, now: Callable[[], float] = time.time,
                  labels_at: Callable[[], StoreLabels] | None = None, cache: Path | None = None, on: str = "",
-                 frozen_file: Path | None = None, deselect_file: Path | None = None, wide_file: Path | None = None):
+                 frozen_file: Path | None = None, deselect_file: Path | None = None, wide_file: Path | None = None,
+                 pins_file: Path | None = None):
         self.q, self.labels, self.tasks, self.graph2, self.on = q, labels, tasks, tuple(graph2), on
         self.priority_file, self.now, self.repo, self.labels_at = priority_file, now, q.workdir, labels_at
-        self.frozen_file, self._frozen_told, self.wide_file = frozen_file, set(), wide_file
+        self.frozen_file, self._frozen_told, self.wide_file, self.pins_file = frozen_file, set(), wide_file, pins_file
         #: the tests each candidate's check leaves out (`DESELECT`, `vqueue_slim.deselection`)
         self.deselect_file = deselect_file
         self.keys = cache / "issuer-keys.json" if cache is not None else None
@@ -770,6 +775,11 @@ class World:
         """The PRs the wide file names (`WIDE`), parsed and refused as the priority file is (`priority_list`): none while it is
         missing or empty."""
         return frozenset(priority_list(self.wide_file, "--wide-file")) if self.wide_file else frozenset()
+
+    def pinned(self) -> frozenset[int]:
+        """The PRs the pins file names (`PINS`), parsed and refused as the wide file is, `#` starting a comment: none while it is
+        missing or empty."""
+        return frozenset(priority_list(self.pins_file, "--pins-file", comments=True)) if self.pins_file else frozenset()
 
     def _another(self, n: int, by: str | None) -> bool:
         """Whether ``by`` is someone other than PR ``n``'s owner and its handle (`_owners`), compared as `unreviewed` does."""
@@ -1728,7 +1738,7 @@ class Loop:
         w = self.world
         origin = w.fetch()
         main = self._shadow_main(past, origin) if self.shadow else origin
-        wide = w.wide()
+        wide, pinned = w.wide(), w.pinned()
         ejected = {(r.get("number"), (r.get("heads") or [None])[0]): r.get("at") for r in past.of("eject") if r.get("shadow")}
         ready, out = [], {}
         for x in w.ready(main):
@@ -1786,9 +1796,9 @@ class Loop:
         snap = Snapshot(main, tuple(sorted((x for x in ready if x.number not in riding), key=lambda x: x.rank)), tuple(cands),
                         history, self.batch, self.depth, lean=self.lean, now=self.now(), pending_s=self.pending_s,
                         tree_ejects=self.tree_ejects, left=tuple((n, *left[n]) for n in sorted(left)), wide=wide,
-                        pulled=frozenset(w.pulled | set(out) | set(taken)),
+                        pinned=pinned, pulled=frozenset(w.pulled | set(out) | set(taken)),
                         flying=tuple(Ready(m, h, frozenset() if h in gone else w._changed(main, h),
-                                           lean=m in wide and h not in gone and w._judge(main, h)[0]) for m, h in sorted(flying)))
+                                           lean=h not in gone and w._judge(main, h)[0]) for m, h in sorted(flying)))
         return Tick(n, main, origin, snap, judged, whole, past.told(), foreign, wrote, below[0], riding=riding)
 
     def _shadow_main(self, past: Past, origin: str) -> str:
@@ -1972,9 +1982,10 @@ class Loop:
     def summary(self, t: Tick) -> str:
         s = t.snap
         lines = [f"tick {t.n}: main {s.main[:12]}" + (f" (origin's {t.origin[:12]})" if t.origin != s.main else ""),
-                 f"ready {len(s.ready)} (rank order; ! doesn't merge onto main, L a Lean change, W a wide one): "
+                 f"ready {len(s.ready)} (rank order; ! doesn't merge onto main, L a Lean change, W a wide one, P pinned): "
                  + " ".join(f"#{x.number}" + ("!" if x.conflict else "") + ("L" if x.lean else "")
-                            + ("W" if vqueue._wide(x, s.wide) else "") for x in s.ready)]
+                            + ("W" if vqueue._wide(x, s.wide) else "") + ("P" if x.number in s.pinned else "")
+                            for x in s.ready)]
         for c in s.candidates:
             j = t.judged[c.sha]
             lines.append(f"candidate {c.sha[:12]} on {c.base[:12]}: {' '.join(f'#{n}' for n in c.members)} {c.verdict.state}"
@@ -2014,6 +2025,8 @@ class Loop:
     def apply(self, a: Action, t: Tick) -> list[dict]:
         if isinstance(a, Build):
             return self._build(a, t)
+        if isinstance(a, Wait):
+            return [] if any(r.get("why") == a.why for r in t.past.of("wait")) else [self.record(t, "wait", why=a.why)]
         c = next((c for c in t.snap.candidates if c.sha == getattr(a, "sha", None)), None)
         if isinstance(a, Eject):
             return [self._eject(a, t)]
@@ -2611,11 +2624,18 @@ def main(argv: list[str]) -> int:
                                                              f"its check (default {DEPTH})")
     ap.add_argument("--lean", type=int, default=LEAN, help=f"the most members of a candidate whose Lean change compiles: a "
                                                            f"spec's or a Lean source's, not a lock's alone; none while a PR "
-                                                           f"with no Lean change waits (default {LEAN})")
+                                                           f"with no Lean change or a pinned one waits, and pinned ones take "
+                                                           f"no cap (--pins-file) (default {LEAN})")
     ap.add_argument("--wide-file", type=Path, default=WIDE,
                     help=f"the PRs whose Lean change is wide, one number a line, read each tick as --priority-file is: a "
                          f"candidate taking one takes no other member --lean counts, and one stacked on a candidate holding "
                          f"one takes none until it is on `main`; none while the file is missing or empty (default {WIDE})")
+    ap.add_argument("--pins-file", type=Path, default=PINS,
+                    help=f"the pinned PRs, one number a line, `#` comments and blank lines allowed, read each tick as "
+                         f"--priority-file is: a pinned Lean change opens a candidate of pinned Lean changes only, under no "
+                         f"--lean cap, on `main` or on a candidate holding no Lean change; no other Lean change goes ahead of "
+                         f"a PR with none, whatever --priority-file says; none while the file is missing or empty (default "
+                         f"{PINS})")
     ap.add_argument("--pending-hours", type=float, default=4.0,
                     help="hours the lowest candidate's check may stay pending after its first enqueue before it is enqueued "
                          "again; rung at twice that (default 4)")
@@ -2689,7 +2709,7 @@ def main(argv: list[str]) -> int:
         graph2 = tuple(shlex.split(a.graph2))
         world = World(q, labels, Executor(Transport(store, (*graph2, "enqueue"), a.repo)), graph2=graph2,
                       priority_file=a.priority_file, labels_at=labels_at, cache=a.log.parent, on=a.on,
-                      frozen_file=a.frozen, deselect_file=a.deselect, wide_file=a.wide_file)
+                      frozen_file=a.frozen, deselect_file=a.deselect, wide_file=a.wide_file, pins_file=a.pins_file)
         loop = Loop(world, a.log, shadow=a.shadow, dry_run=a.dry_run, batch=a.batch, depth=a.depth, lean=a.lean,
                     pending_s=a.pending_hours * 3600, slim=slim, state=a.state, tree_ejects=a.tree_ejects, gate=a.gate,
                     shards=a.shards)

@@ -1510,14 +1510,18 @@ def test_move_carry_jobs_says_how_many_old_heads_the_loop_maps_across_moves_at_o
     assert seen == [L.MAPPED_JOBS, 0, 0, 7]
 
 
-def test_wide_file_names_the_file_the_world_reads_each_tick_by_default_the_live_loop_s(monkeypatch, tmp_path):
+@pytest.mark.parametrize(("flag", "default"), [("--wide-file", Path("/data/vqueue/live/wide")),
+                                               ("--pins-file", Path("/data/drive/pins"))])
+def test_wide_file_and_pins_file_name_the_files_the_world_reads_each_tick_by_default_the_live_loop_s(monkeypatch, tmp_path,
+                                                                                                      flag, default):
     seen: list[Path | None] = []
+    attr = flag.removeprefix("--").replace("-", "_")
 
     class Built(Exception):
         pass
 
     def loop(world, *args, **kw):
-        seen.append(world.wide_file)
+        seen.append(getattr(world, attr))
         raise Built
 
     monkeypatch.setattr(L, "Loop", loop)
@@ -1526,10 +1530,10 @@ def test_wide_file_names_the_file_the_world_reads_each_tick_by_default_the_live_
     monkeypatch.setattr(Q, "GitHub", lambda slug: None)
     common = ["--repo", str(tmp_path / "repo"), "--store", str(tmp_path / "store"), "--lock", str(tmp_path / "lock"),
               "--log", str(tmp_path / "log" / "decisions.jsonl"), "--once"]
-    for extra in ([], ["--wide-file", str(tmp_path / "wide")]):
+    for extra in ([], [flag, str(tmp_path / "file")]):
         with pytest.raises(Built):
             L.main([*common, *extra])
-    assert seen == [L.WIDE, tmp_path / "wide"] and L.WIDE == Path("/data/vqueue/live/wide")
+    assert seen == [default, tmp_path / "file"]
 
 
 def test_only_the_loop_s_own_builds_are_candidates_and_another_queue_branch_is_ignored_logged_once(env):
@@ -1628,6 +1632,71 @@ def test_the_wide_file_is_read_each_tick_as_the_priority_file_is_and_a_line_that
         loop.tick()
     assert str(e.value) == (f"--wide-file {wide} holds '#2', which is not a PR number: write PR numbers separated by spaces "
                             "or commas") and len(seen) == 3
+
+
+def test_the_pins_file_is_read_each_tick_with_its_comments_and_a_word_that_isnt_a_pr_number_fails_the_tick(env):
+    """`--pins-file` (`World.pinned`) is read into `Snapshot.pinned` each tick as the wide file is, a `#` starting a comment
+    and blank lines skipped: none while it is missing or empty, and a word that isn't a PR number is refused, naming the
+    file, so the tick fails until it is fixed."""
+    env.put(1, {"a.txt": "1\n"})
+    seen: list[Snapshot] = []
+    loop = env.loop(lambda s: seen.append(s) or [])
+    loop.world.pins_file = pins = env.tmp / "pins"
+    loop.tick()
+    pins.write_text("")
+    loop.tick()
+    pins.write_text("# tonight's Lean PRs\n\n12  # its goal's\n#7\n1\n")
+    loop.tick()
+    assert [s.pinned for s in seen] == [frozenset(), frozenset(), frozenset({1, 12})]
+    pins.write_text("1\n12a\n")
+    with pytest.raises(Q.QueueError) as e:
+        loop.tick()
+    assert str(e.value) == (f"--pins-file {pins} holds '12a', which is not a PR number: write PR numbers separated by spaces "
+                            "or commas") and len(seen) == 3
+
+
+@pytest.mark.parametrize("priority", [None, "", "99\n", "1\n"], ids=["none", "empty", "stale", "lean first"])
+def test_a_lean_pr_ranked_first_by_mark_time_or_the_priority_file_opens_no_batch_until_the_pins_file_names_it(env, priority):
+    """Rank is the priority file, then mark time: with none, an empty one, a stale one naming only PRs gone, or one listing
+    the Lean PR first, the Lean PR marked longest ago ranks first, and still goes in no batch while a PR with no Lean change
+    waits.  Once the pins file names it, it goes in a batch of its own, leaving that PR for the next."""
+    _main_to(env, {"pkg/lean-audit.json": "{}\n", "pkg/A.lean": "-- a\n"})
+    env.put(1, {"pkg/A.lean": "-- b\n"})
+    env.put(3, {"a.txt": "3\n"})
+    seen: list[Snapshot] = []
+    loop = env.loop(lambda s: seen.append(s) or [], lean=3)
+    if priority is not None:
+        (prio := env.tmp / "priority").write_text(priority)
+        loop.world.priority_file = prio
+    loop.tick()
+    assert [(r.number, r.lean) for r in seen[-1].ready] == [(1, True), (3, False)]
+    assert vqueue.decide(seen[-1]) == [Build((3,), seen[-1].main, L.DEPTH)]
+    (pins := env.tmp / "pins").write_text("1\n")
+    loop.world.pins_file = pins
+    loop.tick()
+    assert vqueue.decide(seen[-1]) == [Build((1,), seen[-1].main, L.DEPTH)]
+
+
+def test_a_pinned_lean_pr_waits_for_a_candidate_with_no_lean_change_and_a_tick_building_nothing_logs_why_once(env):
+    """End to end, at most every second build is pinned: the pinned #1 goes alone on `main` (`--batch` 1); #2, pinned too,
+    waits on #1's candidate, which holds a Lean change, and with no PR with no Lean change to take, the tick builds nothing
+    and logs why (`wait`), once while that why holds; #3, with none, goes on #1's candidate, and #2 on #3's."""
+    _main_to(env, {"pkg/lean-audit.json": "{}\n", "pkg/A.lean": "-- a\n", "pkg/B.lean": "-- a\n"})
+    env.put(1, {"pkg/A.lean": "-- b\n"})
+    env.put(2, {"pkg/B.lean": "-- b\n"})
+    (pins := env.tmp / "pins").write_text("1\n2\n")
+    loop = env.loop(vqueue.decide, batch=1)
+    loop.world.pins_file = pins
+    for _ in range(3):
+        loop.tick()
+    env.put(3, {"a.txt": "3\n"})
+    loop.tick()
+    loop.tick()
+    lines = [r for r in env.lines() if r["action"] in ("build", "wait")]
+    assert [(r["action"], r["members"]) for r in lines] == [("build", [1]), ("wait", []), ("build", [3]), ("build", [2])]
+    assert lines[1]["why"] == (f"nothing built: pinned with a Lean change, #2 waits while the newest candidate, "
+                               f"{lines[0]['sha'][:12]}, holds #1's Lean change, and no PR with no Lean change is ready to take")
+    assert [r["base"] for r in lines[2:]] == [lines[0]["sha"], lines[2]["sha"]]
 
 
 def test_a_failure_s_tests_are_read_beside_its_base_s_and_one_whose_tests_the_base_fails_too_is_inherited(env):
@@ -2774,7 +2843,7 @@ def test_the_loop_s_batch_depth_and_lean_default_to_16_3_and_3_on_the_command_an
     with pytest.raises(SystemExit):
         Q.main(["vqueue", "--help"])
     said = " ".join(capsys.readouterr().out.split())
-    assert all(f"{o} (default {n})" in said for o, n in (("holds", 16), ("its check", 3), ("no Lean change waits", 3))), said
+    assert all(f"{o} (default {n})" in said for o, n in (("holds", 16), ("its check", 3), ("take no cap (--pins-file)", 3))), said
     loop = Loop(None, tmp_path / "log")
     assert (loop.batch, loop.depth, loop.lean) == (L.BATCH, L.DEPTH, L.LEAN) == (16, 3, 3)
 

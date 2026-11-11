@@ -44,6 +44,9 @@ member others took from the queue (`Snapshot.pulled`) drops a candidate, with ev
 
 Changes with no Lean go in batches of their own: while a batch's pool holds a PR with no Lean change (`Ready.lean` false)
 that it may take, it takes no Lean PR, so no Lean failure drops them.  With none left, Lean PRs go under the `lean` cap.
+A pinned Lean PR (`Snapshot.pinned`) that a batch may take opens a batch of pinned Lean PRs only, up to `batch` and under no
+`lean` cap, built on `main` or on a top candidate holding no Lean change, so at most every second build is one.  While one
+waits for such a top, the batch takes no Lean PR, and with nothing else to take nothing is built (`Wait`).
 """
 from __future__ import annotations
 
@@ -65,7 +68,8 @@ class Ready:
     head: str
     files: frozenset[str]          # the paths its change touches, against its merge base with `main`
     lean: bool = False             # its Lean change compiles (a spec's or a Lean source's, not a lock's alone): a batch holds
-                                   # at most `Snapshot.lean` such members, and none while a PR with none waits
+                                   # at most `Snapshot.lean` such members, and none while a PR with none or a pinned one waits,
+                                   # but for a batch of pinned ones (`Snapshot.pinned`)
     rank: int = 0                  # the queue's order, lowest first (drive's priority file, then mark time)
     conflict: bool = False         # it doesn't merge onto `main`: the queue skips it until its head changes
 
@@ -137,6 +141,9 @@ class Snapshot:
                                    # take it now): what a candidate's drop for a member that left `ready` says
     wide: frozenset[int] = frozenset()  # the PRs whose Lean change is wide: one of them that `lean` counts (`Ready.lean`)
                                    # fills that cap alone, and a batch on a candidate holding one takes none `lean` counts
+    pinned: frozenset[int] = frozenset()  # the PRs the pins file names: a Lean PR of them that a batch may take opens a batch
+                                   # of pinned Lean PRs only, under no `lean` cap, on `main` or on a top candidate holding no
+                                   # Lean change (`_next`)
     pulled: frozenset[int] = frozenset()  # the PRs of `left` taken from the queue by others than their owners, at their
                                    # heads or at the heads candidates in flight hold them at (a mark withdrawn by another,
                                    # as a red's eject is, a reviewer's hold, the freeze, or a PR holding the head of one):
@@ -212,7 +219,14 @@ class Red:
     failed: tuple[Failed, ...]
 
 
-Action = Build | Advance | Drop | Eject | Retry | Rerun | Ring | Red
+@dataclass(frozen=True)
+class Wait:
+    """Build nothing, for ``why``: a pinned Lean PR waits for a top candidate holding no Lean change, and the batch, which takes
+    no Lean PR meanwhile, has nothing else to take.  The loop logs each ``why`` once."""
+    why: str
+
+
+Action = Build | Advance | Drop | Eject | Retry | Rerun | Ring | Red | Wait
 
 
 #: the prefix of a task's test for each file it read outside its declared inputs, a fault graph2 names by file
@@ -228,7 +242,10 @@ def decide(s: Snapshot) -> list[Action]:
     word on each of its own failures is known; until then nothing, and nothing is built above it), then, while the chain is
     shorter than `depth`, one batch built on its top: one a tick, since the batch above it would sit on the sha the loop gives
     this one.  While the chain holds a wide member (`Snapshot.wide`), the batch takes no Lean member: built on it, a Lean
-    change would build again what the wide one built.  Nor does it while a PR with no Lean change waits (`_batch`).
+    change would build again what the wide one built.  Nor does it while a PR with no Lean change waits (`_batch`), or a
+    pinned one (`Snapshot.pinned`): a pinned Lean PR it may take opens a batch of pinned Lean PRs only, on `main` or on a top
+    candidate holding no Lean change, and while one waits for such a top with nothing else to take, nothing is built and
+    `Wait` says why (`_next`).
 
     A candidate already on `main` (the loop advanced to it and stopped before its drop, or `main` was moved to it) is dropped
     `on main`, with a pass outcome when its verdict passed, and its members stay out of the next batch, as does a PR whose
@@ -304,10 +321,11 @@ def decide(s: Snapshot) -> list[Action]:
         base = chain[-1].sha if chain else main
         busy = landed | ejected | {m for c in chain for m in c.members}
         pool = sorted((r for r in ready.values() if r.number not in busy and not r.conflict), key=lambda r: (r.rank, r.number))
-        lean = 0 if any(m in built and _wide(built[m], s.wide) for c in chain for m in c.members) else s.lean
-        members = _batch(pool, _outcomes(s, acts), s.batch, lean, s.wide)
+        members, why = _next(s, pool, _outcomes(s, acts), chain, built)
         if members:
             acts.append(Build(members, base, s.depth - len(chain)))
+        elif why:
+            acts.append(Wait(why))
     return acts
 
 
@@ -553,7 +571,7 @@ def _waiting(s: Snapshot, ready: dict[int, Ready], chain: list[Candidate], lande
     """Whether another PR waits behind the lowest candidate: in a candidate above it, or in the next batch."""
     busy = landed | set(chain[0].members)
     pool = sorted((r for r in ready.values() if r.number not in busy and not r.conflict), key=lambda r: (r.rank, r.number))
-    return len(chain) > 1 or bool(_batch(pool, outcomes, s.batch, s.lean, s.wide))
+    return len(chain) > 1 or bool(_next(s, pool, outcomes, [], ready)[0])
 
 
 def _tree_why(c: Candidate) -> str:
@@ -566,14 +584,41 @@ def _wide(r: Ready, wide: frozenset[int]) -> bool:
     return r.lean and r.number in wide
 
 
+def _next(s: Snapshot, pool: list[Ready], outcomes: list[Outcome], chain: list[Candidate],
+          built: dict[int, Ready]) -> tuple[tuple[int, ...], str]:
+    """The batch to build on ``chain``'s top from ``pool`` (in rank order), and why it is none while a pinned Lean PR waits (''
+    otherwise; ``built``: the chain's members as built).  A pinned Lean PR (`Snapshot.pinned`) that a batch may take
+    (`_takes`) opens a batch of pinned Lean PRs only, up to `batch` and under no `lean` cap, unless the top candidate holds a
+    Lean change or the chain a wide one; while it waits, the batch takes no Lean PR."""
+    wide = [m for c in chain for m in c.members if m in built and _wide(built[m], s.wide)]
+    top = [m for m in chain[-1].members if m in built and built[m].lean] if chain else []
+    newest = _newest(outcomes, {r.number: r.head for r in pool})
+    pinned = [r for r in pool if r.lean and r.number in s.pinned]
+    if not (waiting := [r.number for r in pinned if _takes(r, newest)]):
+        return _batch(pool, outcomes, s.batch, 0 if wide else s.lean, s.wide), ""
+    if not wide and not top:
+        return _batch(pinned, outcomes, s.batch, s.batch, s.wide), ""
+    if members := _batch(pool, outcomes, s.batch, 0, s.wide):
+        return members, ""
+    held = (f"the chain holds #{wide[0]}'s wide Lean change" if wide else
+            f"the newest candidate, {chain[-1].sha[:12]}, holds #{top[0]}'s Lean change")
+    return (), (f"nothing built: pinned with a Lean change, {', '.join(f'#{n}' for n in waiting)} wait{'s' * (len(waiting) == 1)}"
+                f" while {held}, and no PR with no Lean change is ready to take")
+
+
+def _takes(r: Ready, newest: dict[int, Outcome]) -> bool:
+    """Whether a batch may take ``r`` as any other PR: no pass or infra outcome holds it at its head (``newest``, `_newest`)."""
+    return (o := newest.get(r.number)) is None or o.state not in (PASS, INFRA)
+
+
 def _batch(pool: list[Ready], outcomes: list[Outcome], size: int, lean: int, wide: frozenset[int]) -> tuple[int, ...]:
     """The next batch from ``pool`` (in rank order): each PR whose cap allows it, while the batch is under its limit, with at
     most ``lean`` Lean PRs, and a wide one (`_wide`) only as its first Lean PR, which fills that cap; none while ``pool``
-    holds a PR with no Lean change that the batch may take (no pass or infra outcome holds it at its head).  A suspect's cap
-    is half the suspects of the newest outcome holding it at its head, at least 1; a PR set aside (`infra`) comes after every
-    other, alone, the longest set aside first."""
+    holds a PR with no Lean change that the batch may take (`_takes`).  A suspect's cap is half the suspects of the newest
+    outcome holding it at its head, at least 1; a PR set aside (`infra`) comes after every other, alone, the longest set
+    aside first."""
     newest = _newest(outcomes, {r.number: r.head for r in pool})
-    if any(not r.lean and ((o := newest.get(r.number)) is None or o.state not in (PASS, INFRA)) for r in pool):
+    if any(not r.lean and _takes(r, newest) for r in pool):
         lean = 0
     at = {id(o): i for i, o in enumerate(outcomes)}
     batch: list[int] = []
