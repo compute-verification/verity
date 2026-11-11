@@ -49733,3 +49733,37 @@ For BREAKEVEN:
 - FIRST=true, measured at 1 block on another node [`r20261111-081959-e3ed`]: once a call 102.2, a session 275 to 289. Use the FIRST=false figures for both until its 256-block sessions exist.
 - An unmeasured type, modeled from four measured ones: read 10 ns a byte of its circuit file once a call; a session 75 ns a matrix entry up to 2 GB of circuit, 180 to 215 ns at 12 GB.
 - The allocator setting: a factor 0.80 to 0.86 on a session and 0.88 to 0.91 on a one-session call, measured on ScaledMm K=6144 only [`r20261111-103102-ea6b`]; do not apply it to the head before `a3a2` reads.
+
+## BENCHCROSS, Wed 11 Nov 10:54Z: CONCRETE's 10:47Z by-class year cells are at the 132 count: at ATTACK's 643 the record keeps 2^-100 over no period in calls (2^-98.44 a week) and widths kappa 2^-6 / 2^-7 over a week, not a month (2^-98.08, 2^-99.08); its arithmetic holds (six cells by hand); #8878 and #8893 hold as search only; SALTS's branch holds as a timing switch, all rests hiding on ChaCha20
+
+Tags: [run] a command I ran now, [read] a file or record I read now, [relayed] another lane's statement I did not check, [guess] mine, unchecked. Times from `date -u`.
+
+**0. The cells that should not reach the table as they stand.** CONCRETE's 10:47Z year table is right as arithmetic, but its "by reader sets" rows take K a run from the count ATTACK corrected at 10:42Z (132 classes a head block; ATTACK: 643). Its `For the table:` line says "by reader sets in calls the record keeps it over a week, width κ 2^-6 and 2^-7 over a month". At ATTACK's K a run (2^34.31, 2^32.56, 2^31.56) [relayed] the same formula gives [run: my arithmetic]:
+
+| by classes at 643, calls | a run | a week | a month | a year | compressions, a run | a year |
+|---|---|---|---|---|---|---|
+| record | 2^-108.41 | 2^-98.44 | 2^-96.34 | 2^-92.73 | 2^-99.41 | 2^-83.73 |
+| width, κ 2^-6 | 2^-110.16 | 2^-100.18 | 2^-98.08 | 2^-94.48 | 2^-101.16 | 2^-85.48 |
+| width, κ 2^-7 | 2^-111.16 | 2^-101.18 | 2^-99.08 | 2^-95.48 | 2^-102.16 | 2^-86.48 |
+
+So at 643 the record keeps 2^-100 over no period in calls; width κ 2^-6 and 2^-7 keep it over a week and not over a month. Modeled; first hit and conflict; K0 = 6; T = 2^80 calls each run.
+
+**1. Second readings, one line each.**
+- second reading of CONCRETE's year cells at `14643669694c`: holds at the K it states, six cells by hand. [run: my arithmetic, first hit + conflict, a run at 6·N_s and 6·K] record by gates in calls 2^-98.333 a run and 2^-82.652 a year (2^-98.33, 2^-82.65); width κ 2^-6 at K a run 2^30.36: 2^-112.333 a run, 2^-102.356 a week, 2^-100.256 a month, 2^-96.652 a year (2^-112.33, 2^-102.35, 2^-100.25, 2^-96.65); the sessions' share alone over a year in compressions 2^-92.199 and 2^-93.606 (2^-92.19, 2^-93.60); the most K a run for a year in calls 2^26.22 (2^26.22).
+- second reading of #8878 at `816e2396bdf7` and #8893 at `6f65951e0eb8`: holds, search only. [read: the planner's diff from `8201dacff26e`] It changes `two_stage_design` and adds `two_stage_strata`; `two_stage_exfil`, `two_stage_price` and `two_stage_statements` are not in it, and each design's bound is still `two_stage_exfil` of its own strata and k. At the defaults the thresholds, the strata and the loop are as before; a row gains a `margin` key (0). The saving matches its runs: my own calls at these diffs gave 0.6556 (2,650.5 GB) and Lean's bits 0.6617 (`dfd9`, `a112`), entry of 10:25Z.
+- second reading of SALTS's branch at `ff48f38adc3a` (no PR): holds as a timing switch; `all` is not inside the hiding argument. [read: the diff, two files of the prover]
+  - Off unless `FC_SALTS_KEYED` is set, and refused under the ZK server, with Lean frames or with an OS source set. No verifier file. The statement's `leaf_scheme` still says OS bytes, and the code says so ("for timing the prover only").
+  - `upper` names each rep's Ligerito levels 1 to R and nothing else. [read: `salt_trees` lists level 0 and those levels, not the pads trees; `keyed_trees` adds level 0 and the pads trees' ids (`level0 + 1`, `level0 + 2 + R`, as `zk_prepare` numbers them) only under `all`.] Those levels' salts are the ones the hiding statements do not read (my 08:20Z reading).
+  - `all` makes the unopened leaves of level 0 and the pads trees hide under a ChaCha20 expansion of a 32-byte key. That is a premise outside the trust base and a second primitive beside the one hash. Daniel's.
+  - Its saving against its run: at one prover neither mode saves beyond the scatter (`cb57`: today 2.588 and 2.530, `all` 2.570, `upper` 2.494, read 10:25Z). No four-prover row of a salts cut alone exists; HEADPROF's 1.357 has `all` in it with two other cuts.
+- second reading of FUSED's split of Lean's seconds at `a3e0` / `7268`: holds on the eight runs whose timer lines I have (reps 2 and 3). [read: `verify-time.rep*.out`] inputs 20.8 to 34.0 s, setup 56.6 to 66.4 s, the session's check 20.5 to 23.6 s (the session line less the setup line). Rep 1's lines are in a log I did not fetch.
+
+**Not read:** `ee70`, `af1d` (not in the store); `0163`; #8917; #8873's Lean. vllm's `serving_rate` PR is not posted. BREAKEVEN has posted nothing since 10:26Z.
+
+For BREAKEVEN:
+- A row at salts `all` is not a row of record until Daniel takes the premise; `upper` alone is unmeasured at four provers and saved nothing measurable at one.
+- By classes at 643 (ATTACK, relayed) the design to price is width at κ ≤ 2^-6 or 2^-7; my rows for both with the measured verify are in the 10:49Z entry (4,129.5 and 4,574.2; with the cut 2,767.0 and 3,271.1).
+
+For the table:
+- By classes at ATTACK's 643, in calls, summed over the runs of a period (modeled, K0 = 6, T = 2^80 each run): the record 2^-98.44 a week; width κ 2^-6 2^-100.18 a week and 2^-98.08 a month; width κ 2^-7 2^-101.18 and 2^-99.08. CONCRETE's 10:47Z line (record over a week, the widths over a month) is at the 132 count.
+- Second readings that hold: #8878 at `816e2396bdf7`, #8893 at `6f65951e0eb8` (search only); SALTS's branch at `ff48f38adc3a` as a timing switch (`all` rests hiding on a new premise); CONCRETE's year cells as arithmetic.
