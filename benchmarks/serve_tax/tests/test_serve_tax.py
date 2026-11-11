@@ -763,7 +763,7 @@ def test_only_an_arm_that_loads_a_plugin_has_this_tree_on_its_servers_path(tmp_p
     paths = {a: S.server_env(S.ARMS[a], tmp_path, tmp_path / "site", {"bucket_us": 1, "sat_us": 1, "free_us": 1}, 600.0, 600.0,
                              boundary_rows=rows)["PYTHONPATH"].split(S.os.pathsep) for a in S.ARMS}
     for a, arm_ in S.ARMS.items():
-        ours = [p for p in paths[a] if p in (str(tmp_path / "site"), str(S.HERE), str(S.ROOT), str(S.ROOT / "integrations/vllm"))]
+        ours = [p for p in paths[a] if p in (str(tmp_path / "site"), str(S.HERE), str(S.ROOT), str(S.ROOT / "adapters/vllm"))]
         assert bool(ours) == bool(arm_.plugin or arm_.tick), a
     assert S.same_engine("compiled", "compiled-again") and not S.same_engine("compiled", "no-prefix-cache")
     assert not S.same_engine("compiled", "record") and not S.same_engine("compiled", "absent")
