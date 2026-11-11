@@ -95,16 +95,18 @@ whose step reads a value back, is refused. It prints, an entry:
 - `updated`: the uses of an updated weight, each by its MACs a token and the updated MACs upstream of it, which must
   be the record's; this list is the entry's update structure;
 - `log`: the step's products, each by phase, kind, op, operand shapes, count and MACs, which must be the record's;
-- the start and the steps, which must be the record's, and E: its plan's kind, which must be the record's format's
-  (`E_KINDS`), with its size after the two steps beside the record's last checkpoint's;
+- the start and the steps, which must be the record's, and E: its plan's kinds, each of which must be one of the
+  record's format's (`E_KINDS`), with its size after the two steps beside the record's last checkpoint's, and how a
+  codec packs the same encoding another way than the record's program did (`E_PACKING`);
 - `expected`: a difference that is the device's or the harness's, named by the rule that covers it, with the MACs on
   each side. A rule fires on its exact case alone. The device's: weights read at 32 bits where the record's are read
   at 16 (`width`), the CPU's attention kernels of the same count and MACs (`attention`), the norm as elementwise ops
-  where CUDA's fused kernel is counted at an updated gain alone (`norm`), and torch's unfused AdamW over the
-  parameters the record steps with CUDA's fused kernel (`adamw`). The harness's (`HARNESS`): the records' harness
-  checked the model's position tables like θ's weights, where `run.Harness` takes them for weights the route made
-  (`tables`); the step is counted again as the records' harness counted it, that count is the one compared, and the
-  line says how many products and uses move and that the step's MACs are the same on both counts;
+  where CUDA's fused kernel is counted at an updated gain alone, and not at all in a step that trains no gain
+  (`norm`), and torch's unfused AdamW over the parameters the record steps with CUDA's fused kernel (`adamw`). The
+  harness's (`HARNESS`): the records' harness checked the model's position tables like θ's weights, where
+  `run.Harness` takes them for weights the route made (`tables`); the step is counted again as the records' harness
+  counted it, that count is the one compared, and the line says how many products and uses move and that the step's
+  MACs are the same on both counts;
 - `named`: a line of the record's own program that the route rightly doesn't compute, which no rule knows: the
   entry's `record_only` in `of_record.toml` names the line as the command prints it and says why. A named line that
   is not the record's step's alone is a difference;

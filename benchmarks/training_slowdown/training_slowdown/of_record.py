@@ -35,8 +35,9 @@ What is held is the step and the kind of the encoding, not the weights, E's byte
   logging line's arithmetic) is no rule's: the entry of `of_record.toml` names it (`record_only`: the line as the
   command prints it, and why), and it is printed as named and taken out of the differences. A named line that is
   not the record's step's alone is a difference.
-- **The encoding.** The config's plan must be of the record's kind (`E_KINDS`: the record's `format` beside the
-  codecs of that kind); E's size after the counted steps is printed beside the record's last checkpoint's.
+- **The encoding.** Each codec of the config's plan must be of the record's kind (`E_KINDS`: the record's `format`
+  beside the codecs of that kind); E's size after the counted steps is printed beside the record's last
+  checkpoint's, with how a codec packs the same encoding another way than the record's program did (`E_PACKING`).
 
 `--out DIR` keeps the comparisons (`DIR/of_record.json`) and each config's counted records: the harness's own count
 (`DIR/ENTRY/run.json`) and the count compared (`DIR/ENTRY/tables/run.json`).
@@ -62,8 +63,13 @@ from .model import LM
 HELD = Path(__file__).with_name("of_record.toml")
 SCHEMA = "of-record/v1"
 #: a record's E `format` beside the codec kinds (`codecs.Codec.kind`) that are the same kind of encoding: the trained
-#: tensors whole, and their deltas in codes with a scale a group
-E_KINDS = {"full": ("identity",), "quant": ("scaledquant",)}
+#: tensors whole, and their deltas in codes with a scale a group, the codes a rounding of the trained delta
+#: (`scaledquant`) or the ternary ones the run trained (`sparseternary`)
+E_KINDS = {"full": ("identity",), "quant": ("scaledquant", "sparseternary")}
+#: a codec that packs the same encoding another way than the records' program did, so that its size is expected to
+#: differ from a record's by the packing alone: named in the entry's E line
+E_PACKING = {"sparseternary": "one xz stream a matrix at one setting, where the record's program kept the smallest "
+                              "of several settings' streams of all its matrices"}
 #: how many of a config's steps are counted; the last is the one compared
 STEPS = 2
 FAIR = ("Each config's step was counted at the model's own initialisation on random tokens, one row a forward, on a "
@@ -195,26 +201,32 @@ def norm(cfg: dict, rec: dict, shape: dict) -> dict | None:
     the same shapes with its count and MACs. It then covers the norm's other products on a CPU, none of which the
     record may have: the gain's multiply where the gain is θ's (`fwd/theta`), the normalisation (`fwd/act`, the
     stream by a scalar a token), which must be one for each gain's multiply, and the backward's multiplies and
-    quotients over those three shapes alone."""
+    quotients over those three shapes alone. A step that trains no gain has neither of the first two, a record with
+    nothing of the kernel beside a config with no updated gain's multiply: the rule then fires on the config's
+    multiplies by θ's gains, and covers the same products."""
     x, s, g = [1, shape["ctx"], shape["d_model"]], [1, shape["ctx"], 1], [shape["d_model"]]
     gain = json.dumps([x, g])
     fused, mul = ("fwd", "updated", "_fused_rms_norm", gain), ("fwd", "updated", "mul", gain)
     frozen, scale = ("fwd", "theta", "mul", gain), ("fwd", "act", "mul", json.dumps([x, s]))
-    if fused not in rec or cfg.get(mul) != rec[fused]:
+    trained = fused in rec
+    if cfg.get(mul) != rec.get(fused) or not trained and frozen not in cfg:
         return None
+    updated = rec[fused] if trained else [0, 0]
     inside = [k for k in cfg if k in (frozen, scale) or k[:2] == ("bwd", "grad") and k[2] in ("mul", "div")
               and k[3] != "[]" and all(o in (x, s, g) for o in json.loads(k[3]))]
-    if cfg.get(scale, [0])[0] != cfg[mul][0] + cfg.get(frozen, [0])[0] or any(k in rec for k in inside):
+    if cfg.get(scale, [0])[0] != updated[0] + cfg.get(frozen, [0])[0] or any(k in rec for k in inside):
         return None
-    found = {"rule": "norm", "record_macs": rec[fused][1], "config_macs": cfg[mul][1] + sum(cfg[k][1] for k in inside),
-             "what": f"the norm as the CPU's elementwise ops for CUDA's fused kernel: {rec[fused][0]} multiplies by "
-                     f"an updated gain, the same on both sides, and on the config's alone "
-                     f"{cfg.get(frozen, [0])[0]} by θ's gains, {cfg[scale][0]} normalisations and "
+    gains = (f"{updated[0]} multiplies by an updated gain, the same on both sides" if trained else
+             "no gain is updated, so the record has nothing of the kernel")
+    found = {"rule": "norm", "record_macs": updated[1], "config_macs": updated[1] + sum(cfg[k][1] for k in inside),
+             "what": f"the norm as the CPU's elementwise ops for CUDA's fused kernel: {gains}, and on the config's "
+                     f"alone {cfg.get(frozen, [0])[0]} by θ's gains, {cfg[scale][0]} normalisations and "
                      f"{sum(cfg[k][0] for k in inside if k[0] == 'bwd')} products of the backward's, none of which "
                      "CUDA's kernel shows the counter"}
-    for k in (mul, *inside):
+    for k in (*((mul,) if trained else ()), *inside):
         del cfg[k]
-    del rec[fused]
+    if trained:
+        del rec[fused]
     return found
 
 
@@ -450,9 +462,7 @@ def row(cfg: config.Config, h: dict, rec: dict, out: Path) -> dict:
     found = compare(per_row(mine["structures"][mine["steps"][STEPS - 1]["struct"]], shape["ctx"]), theirs, shape,
                     h.get("record_only", []))
     kinds = sorted({c.kind for _, c in route.plan(cfg.dials).rules})
-    if tuple(kinds) != E_KINDS.get(last["format"]):
-        found["differences"].append(f"E's kind: the config's plan is {', '.join(kinds)}, the record's format "
-                                    f"{last['format']} ({', '.join(E_KINDS.get(last['format'], ['none known here']))})")
+    found["differences"] += e_kind(kinds, last["format"])
     r["expected"] += found["expected"]
     r["named"] = found["named"]
     r["differences"] += found["differences"]
@@ -466,9 +476,27 @@ def row(cfg: config.Config, h: dict, rec: dict, out: Path) -> dict:
                     "token and updated MACs upstream"),
         ("log", f"{found['products']} of the record's {len(theirs['log'])} products, by phase, kind, op, operand "
                 "shapes, count and MACs"),
-        ("E", f"{', '.join(kinds)}, {cp['e_bytes']:,} B after {STEPS} steps; the record's {last['format']}, "
-              f"{last['e_bytes']:,} B after {len(rec['steps'])}")]
+        ("E", e_sizes(kinds, cp["e_bytes"], last, len(rec["steps"])))]
     return r
+
+
+def e_sizes(kinds: list[str], e_bytes: int, last: dict, steps: int) -> str:
+    """An entry's E line: the plan's `kinds` and E's size after the counted steps beside the record's format and its
+    last checkpoint's size after its `steps`, which are not compared, and each packing that differs (`E_PACKING`)."""
+    return (f"{', '.join(kinds)}, {e_bytes:,} B after {STEPS} steps; the record's {last['format']}, "
+            f"{last['e_bytes']:,} B after {steps}"
+            + "".join(f"; expected to differ in size by the packing too: {k} is {E_PACKING[k]}"
+                      for k in kinds if k in E_PACKING))
+
+
+def e_kind(kinds: list[str], fmt: str) -> list[str]:
+    """The difference, if any, between a plan's codec `kinds` and a record's E `fmt`: every codec of the plan must be
+    one of the format's kind of encoding (`E_KINDS`)."""
+    same = E_KINDS.get(fmt, ())
+    if kinds and set(kinds) <= set(same):
+        return []
+    return [f"E's kind: the config's plan is {', '.join(kinds) or 'empty'}, the record's format {fmt} "
+            f"({' or '.join(same) or 'none known here'})"]
 
 
 def verdict(r: dict) -> str:

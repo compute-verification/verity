@@ -91,6 +91,52 @@ def test_the_cpus_norm_is_expected_for_cudas_fused_kernel_with_one_normalisation
     assert got["differences"] == ["log, the config's step only: fwd/act mul [[1,1024,16] x2] x1, 16,384 MACs"]
 
 
+def test_the_cpus_norm_is_expected_where_the_step_trains_no_gain_and_the_record_has_nothing_of_it():
+    """A step that trains no gain: CUDA's counter is shown nothing of the fused kernel, so the record has no entry of
+    the norm, and the CPU's side has every gain's multiply as θ's. Expected, with one normalisation a gain; not where
+    a normalisation has no gain's multiply, where the record has one of the backward's products too, or where the
+    config multiplies by an updated gain the record never counted."""
+    n = CTX * D
+    frozen = norms(0, 5, 5)[1:]
+    got = of_record.compare(step(log(*BOTH, *frozen)), step(log(*BOTH)), SHAPE)
+    assert got["differences"] == [] and got["products"] == len(BOTH)
+    assert [(e["rule"], e["record_macs"], e["config_macs"]) for e in got["expected"]] == [
+        ("norm", 0, 5 * n + 5 * n + 5 * n + 10 * n + 5 * CTX)]
+    assert "no gain is updated" in got["expected"][0]["what"] and "5 by θ's gains" in got["expected"][0]["what"]
+    for cpu, record in ((norms(0, 5, 6)[1:], log(*BOTH)), (norms(1, 4, 5), log(*BOTH)),
+                        (frozen, log(*BOTH, ("bwd", "grad", "mul", [X, X], 1, n)))):
+        got = of_record.compare(step(log(*BOTH, *cpu)), step(record), SHAPE)
+        assert got["expected"] == [] and len(got["differences"]) >= 5
+    # a step with no norm at all on either side is equal, with no rule fired
+    got = of_record.compare(step(log(*BOTH)), step(log(*BOTH)), SHAPE)
+    assert got["expected"] == [] and got["differences"] == []
+
+
+def test_a_plans_codecs_must_each_be_of_the_records_kind_of_encoding():
+    """A record's `quant` is deltas in codes with a scale a group: a rounding of the trained delta, or the ternary
+    codes the run trained. A plan of either, or of both, is that kind; one that keeps a tensor whole is not, and
+    neither is any plan beside a format this table doesn't know."""
+    for kinds in (["scaledquant"], ["sparseternary"], ["scaledquant", "sparseternary"]):
+        assert of_record.e_kind(kinds, "quant") == []
+    assert of_record.e_kind(["identity"], "full") == []
+    assert of_record.e_kind(["identity", "sparseternary"], "quant") == [
+        "E's kind: the config's plan is identity, sparseternary, the record's format quant (scaledquant or "
+        "sparseternary)"]
+    assert of_record.e_kind(["sparseternary"], "full") == [
+        "E's kind: the config's plan is sparseternary, the record's format full (identity)"]
+    assert of_record.e_kind(["identity"], "model") == [
+        "E's kind: the config's plan is identity, the record's format model (none known here)"]
+    assert of_record.e_kind([], "full") == ["E's kind: the config's plan is empty, the record's format full (identity)"]
+    # the sizes are printed and not compared; a codec that packs the same encoding another way is named as that
+    last = {"format": "quant", "e_bytes": 1000}
+    assert of_record.e_sizes(["scaledquant"], 1200, last, 30) == (
+        "scaledquant, 1,200 B after 2 steps; the record's quant, 1,000 B after 30")
+    assert of_record.e_sizes(["sparseternary"], 1200, last, 30) == (
+        "sparseternary, 1,200 B after 2 steps; the record's quant, 1,000 B after 30; expected to differ in size by "
+        "the packing too: sparseternary is one xz stream a matrix at one setting, where the record's program kept "
+        "the smallest of several settings' streams of all its matrices")
+
+
 def unfused(params: list, times: int = 1) -> tuple:
     return tuple(("other", "param", op, [p] * operands, times * params.count(p), times * params.count(p) * p[0])
                  for p in ([D], [2 * D]) if p in params for op, operands in of_record.UNFUSED_ADAMW)
