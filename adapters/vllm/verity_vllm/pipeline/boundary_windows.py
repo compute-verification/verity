@@ -192,10 +192,18 @@ class BoundaryWindows:
         """Wrap ``sched``'s ``add_request``, ``update_from_output``, ``finish_requests`` and ``schedule`` through ``hooks``
         (an `engine.hooks.Hooks`), and stop at the process's exit: at exit and at a `multiprocessing` child's, which runs
         no `atexit` hook (vLLM's engine core is one). Refused while the scheduler caches prefixes: a hit would read
-        another request's rows, across the replay blocks' boundary."""
+        another request's rows, across the replay blocks' boundary. Refused under a stop rule whose model length is not
+        the scheduler's ``max_model_len``: the engine ends a response at its own length and the stop block at the
+        rule's, so every such response would be filed without a stop block. An honest serve's guard, which no verifier
+        relies on: the verifier holds its own copy of the rule (`boundary_rows.layout_of`)."""
         if getattr(getattr(sched, "cache_config", None), "enable_prefix_caching", False):
             raise ValueError("the boundary commitment needs prefix caching off (--no-enable-prefix-caching): a cache hit "
                              "reads another request's rows")
+        served = getattr(sched, "max_model_len", None)
+        if self.stop_rule is not None and served != self.stop_rule.max_model_len:
+            raise ValueError(f"the stop rule's model length is {self.stop_rule.max_model_len} and the scheduler's "
+                             f"max_model_len is {served!r}: serve at the rule's (--max-model-len "
+                             f"{self.stop_rule.max_model_len}), or register the rule at the length served")
 
         def add_request(orig: Callable[..., Any]) -> Callable[..., Any]:
             def wrapped(request: Any, *a: Any, **kw: Any) -> Any:

@@ -476,6 +476,23 @@ def test_a_class_is_laid_out_under_the_verifiers_own_stop_rule_and_never_the_one
         BR.reopen(there, PAIR, stop=RULE)
 
 
+def test_the_hook_refuses_a_stop_rule_whose_model_length_is_not_the_schedulers(tmp_path):
+    """The engine ends a response at its own ``max_model_len`` and the stop block at the rule's, so a serve whose rule
+    states another length is refused as it starts, with both lengths and the fix; one at the scheduler's length, and
+    a serve with no rule at any length, install."""
+    def hook(name: str, stop: BS.Stop | None) -> BW.BoundaryWindows:
+        return BW.BoundaryWindows(tmp_path / name, PAIR, 0, 1, 10.0, clock=lambda: 0.0, stop=stop)
+
+    for served in (128, 32, None):
+        refused = hook(f"refused-{served}", RULE)
+        with pytest.raises(ValueError, match=f"model length is 64 and the scheduler's max_model_len is {served!r}.*"
+                                             f"--max-model-len 64"):
+            refused.install(Scheduler(max_model_len=served), Hooks())
+        refused.stop()
+        hook(f"plain-{served}", None).install(Scheduler(max_model_len=served), Hooks()).stop()
+    hook("held", RULE).install(Scheduler(max_model_len=64), Hooks()).stop()
+
+
 def test_no_class_holds_both_a_stop_rule_and_history_tables(tmp_path):
     """A history table's name holds its class's caps and slot, which a stop class and a class without a stop block
     share at the rule's cap, so a serve with both is refused as it starts, by name: the layout, the hook and its
