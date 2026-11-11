@@ -29,12 +29,12 @@ for name in "${builds[@]}"; do
     > "$OUT/build-$name.log" 2>&1 || { echo "producer_gpu: NVCC_FAIL $name"; tail -30 "$OUT/build-$name.log"; exit 11; }
   sha256sum "$S/h1u_$name.so" | tee -a "$OUT/builds.txt"
 done
-nice -n 10 "$NVCC" -O3 -std=c++17 -I verity/ml/kernels -gencode "$GENCODE" -cubin \
-  -o "$S/noise.cubin" integrations/vllm/verity_vllm/protocols/pouw/pouw_cuda/noise.cu > "$OUT/build-noise.log" 2>&1 \
+nice -n 10 "$NVCC" -O3 -std=c++17 -I verity/definitions/kernels -gencode "$GENCODE" -cubin \
+  -o "$S/noise.cubin" adapters/vllm/verity_vllm/protocols/pouw/pouw_cuda/noise.cu > "$OUT/build-noise.log" 2>&1 \
   || { echo "producer_gpu: NVCC_FAIL noise.cu"; tail -30 "$OUT/build-noise.log"; exit 11; }
 sha256sum "$S/noise.cubin" | tee -a "$OUT/builds.txt"
 export VERITY_POUW_NOISE_CUBIN="$S/noise.cubin"
-export PYTHONPATH="$ROOT:$ROOT/tools/config:$ROOT/integrations/vllm" GPU_LEASE_WHO=${GPU_LEASE_WHO:-kernels-rcpt}
+export PYTHONPATH="$ROOT:$ROOT/verity/configuration/config:$ROOT/adapters/vllm" GPU_LEASE_WHO=${GPU_LEASE_WHO:-kernels-rcpt}
 cd benchmarks/pouw
 rc=0
 for name in "${builds[@]}"; do

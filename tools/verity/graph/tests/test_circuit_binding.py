@@ -41,7 +41,7 @@ def _core_roots(): ...
 def _registered(): ...
 TEMPLATE_PARAMS = {"rope-head": {}}
 '''
-X, FLOCK = "verity/ml/x.circuit-check.py", "verity/ml/flock/python/verity_flock/rec.circuit-check.py"
+X, FLOCK = "verity/ml/x.circuit-check.py", "verity/protocols/flock/prover/python/verity_flock/rec.circuit-check.py"
 BINDINGS = {"<registered>": (F.TARGETS, "_registered"), "TEMPLATE_PARAMS": (F.TARGETS, "TEMPLATE_PARAMS"),
             "_core_roots": (F.TARGETS, "_core_roots"), "_kernel_roots": (F.TARGETS, "_kernel_roots"),
             **{f"verity.ml.x.circuit-check#{e}": (X, e) for e in (
@@ -51,9 +51,9 @@ BINDINGS = {"<registered>": (F.TARGETS, "_registered"), "TEMPLATE_PARAMS": (F.TA
             "verity_flock.rec.circuit-check#_rec_roots": (FLOCK, "_rec_roots")}
 #: where the toy's runs can look: under the checker and its declared inputs; at the root, the workspace's members but the
 #: excluded one, and the directories above the checker
-PLACES = {"under": [F.CHECKER, "uv.lock", "verity"], "at": ["", "integrations/vllm", "tools", "tools/config", "tools/verity"]}
+PLACES = {"under": [F.CHECKER, "uv.lock", "verity"], "at": ["", "adapters/vllm", "tools", "verity/configuration/config", "tools/verity"]}
 
-TOY = {"pyproject.toml": '[tool.uv.workspace]\nmembers = ["tools/config", "integrations/*"]\nexclude = ["integrations/skip"]\n',
+TOY = {"pyproject.toml": '[tool.uv.workspace]\nmembers = ["verity/configuration/config", "adapters/*"]\nexclude = ["adapters/skip"]\n',
        f"{F.CHECKER}/pyproject.toml": '[tool.verity.tests]\ninputs = ["verity", "uv.lock"]\n',
        f"{F.CHECKER}/README.md": "prose\n", f"{F.CHECKER}/tests/test_x.py": "", f"{F.SOURCE}/__init__.py": "",
        F.SIDECARS: NEVER_RUN + 'PACKAGES = ("verity", "verity_flock.sub")\n', F.TARGETS: TARGETS,
@@ -61,11 +61,11 @@ TOY = {"pyproject.toml": '[tool.uv.workspace]\nmembers = ["tools/config", "integ
        "verity/ml/x.circuit-check.json": "{}\n", "verity/ml/pkg/__init__.py": "",
        "verity/ml/pkg/__init__.circuit-check.py": NEVER_RUN + "def _p_roots(): ...\n",
        "verity/ns/y.circuit-check.py": NEVER_RUN + "def _y_roots(): ...\n",
-       "verity/ml/flock/python/verity_flock/__init__.py": "",
-       "verity/ml/flock/python/verity_flock/rec.circuit-check.py": NEVER_RUN + "def _rec_roots(): ...\n",
+       "verity/protocols/flock/prover/python/verity_flock/__init__.py": "",
+       "verity/protocols/flock/prover/python/verity_flock/rec.circuit-check.py": NEVER_RUN + "def _rec_roots(): ...\n",
        "other/__init__.py": "", "other/z.circuit-check.py": NEVER_RUN + "def _z_roots(): ...\n",
-       "tools/config/pyproject.toml": "[project]\n", "integrations/vllm/pyproject.toml": "[project]\n",
-       "integrations/skip/pyproject.toml": "[project]\n",
+       "verity/configuration/config/pyproject.toml": "[project]\n", "adapters/vllm/pyproject.toml": "[project]\n",
+       "adapters/skip/pyproject.toml": "[project]\n",
        **{f"{graph.RUNNERS}/{m}.py": "" for m in ("circuit_binding", "circuit_catalog", "circuit_coverage")}}
 LISTERS = {"circuit-binding": F.tasks}
 
@@ -148,15 +148,15 @@ def _change(root: Path, change: dict[str, str | None]) -> None:
     ({"queue.py": ""}, True),
     ({"pynvml/__init__.py": ""}, True),
     ({"pynvml/README.txt": ""}, True),
-    ({"tools/config/verity_vllm.py": ""}, True),
-    ({"tools/config/verity_vllm/__init__.py": ""}, True),
-    ({"tools/config/helper.py": ""}, True),
-    ({"integrations/vllm/numpy.py": ""}, True),
+    ({"verity/configuration/config/verity_vllm.py": ""}, True),
+    ({"verity/configuration/config/verity_vllm/__init__.py": ""}, True),
+    ({"verity/configuration/config/helper.py": ""}, True),
+    ({"adapters/vllm/numpy.py": ""}, True),
     ({"tools/verity/helper.py": ""}, True),
     ({"tools/verity/helper.circuit-check.json": "{}\n"}, True),
-    ({"integrations/skip/numpy.py": ""}, False),
+    ({"adapters/skip/numpy.py": ""}, False),
     ({"other/notes.txt": "", "other/numpy.py": ""}, False),
-    ({"tools/verity/notes.txt": "", "tools/config/notes.txt": ""}, False),
+    ({"tools/verity/notes.txt": "", "verity/configuration/config/notes.txt": ""}, False),
     ({"NOTES.md": "", "setup.cfg": "", ".hidden/m.py": ""}, False)])
 def test_a_path_added_removed_or_renamed_where_a_run_can_look_moves_every_task_s_lookups(tmp_path, change, moves):
     """A run looks outside the files that key it: every path under circuit-check's declared inputs (a README or a test too,
@@ -172,7 +172,7 @@ def test_a_path_added_removed_or_renamed_where_a_run_can_look_moves_every_task_s
     assert [i for i, k in _keys(root).items() if k == keys[i]] == ([] if moves else sorted(keys))
 
 
-@pytest.mark.parametrize(("edit", "moves"), [(f"{F.CHECKER}/README.md", False), ("tools/config/pyproject.toml", False),
+@pytest.mark.parametrize(("edit", "moves"), [(f"{F.CHECKER}/README.md", False), ("verity/configuration/config/pyproject.toml", False),
                                              ("other/__init__.py", False), ("verity/ml/x.py", True)])
 def test_an_edit_to_any_file_moves_no_task_s_lookups_and_only_an_input_s_moves_its_key(tmp_path, edit, moves):
     root = _toy(tmp_path / "tree")
@@ -448,16 +448,16 @@ def _reads(own: dict, registries: dict | None = None, loaded: tuple[str, ...] = 
     ({"files": ["verity/ml/x.py"], "probes": ["verity/ml/z.py", "verity/ml/x", "uv.lock"]}, []),
     ({"listed": ["verity/ml", f"{F.CHECKER}/src"]}, []),
     ({"probes": ["queue.py", "pynvml", "pynvml/__init__.py", "numpy.cpython-312-x86_64-linux-gnu.so"]}, []),
-    ({"probes": ["tools/config/numpy", "tools/config/numpy.py", "tools/config/numpy/__init__.py", "integrations/vllm/a.pyc"]},
+    ({"probes": ["verity/configuration/config/numpy", "verity/configuration/config/numpy.py", "verity/configuration/config/numpy/__init__.py", "adapters/vllm/a.pyc"]},
      []),
     ({"probes": ["tools", "tools/verity", "tools/verity/helper.py", "tools/verity/pkg/__init__.py",
                  "tools/verity/x.circuit-check.json"]}, []),
     ({"files": ["verity/ml/x.py", "other/z.py"]}, ["other/z.py"]),
     ({"files": ["verity/ml/README.md"]}, ["verity/ml/README.md"]),
-    ({"probes": ["other/numpy.py", "tools/config/sub/deep.py"]}, ["other/numpy.py", "tools/config/sub/deep.py"]),
-    ({"probes": ["integrations/skip/numpy.py", "tools/verity/notes.txt"]}, ["integrations/skip/numpy.py",
+    ({"probes": ["other/numpy.py", "verity/configuration/config/sub/deep.py"]}, ["other/numpy.py", "verity/configuration/config/sub/deep.py"]),
+    ({"probes": ["adapters/skip/numpy.py", "tools/verity/notes.txt"]}, ["adapters/skip/numpy.py",
                                                                              "tools/verity/notes.txt"]),
-    ({"listed": ["tools/config", "other"]}, ["other", "tools/config"]),
+    ({"listed": ["verity/configuration/config", "other"]}, ["other", "verity/configuration/config"]),
     ({"untracked": ["verity/ml/_built.so"]}, ["verity/ml/_built.so"])])
 def test_a_binding_s_run_that_reads_outside_its_inputs_or_looks_where_its_lookups_doesn_t_is_an_error_naming_each_path(
         tmp_path, monkeypatch, read, beyond):
@@ -477,7 +477,7 @@ def test_the_registries_and_the_loaded_modules_reads_count_another_binding_s_don
     _machine(tmp_path, monkeypatch)
     regs = {"files": ["verity/ml/reg.py", "other/reg.py"], "listed": [], "probes": ["infra/ops/verity_vllm"]}
     gone = {GONE: {**OWN, "files": ["elsewhere.py"]}}
-    rep = _report(("A", []), reads={**_reads({}, regs, ("integrations/vllm/numpy.py", "other/numpy.py"),
+    rep = _report(("A", []), reads={**_reads({}, regs, ("adapters/vllm/numpy.py", "other/numpy.py"),
                                              incomplete={B_ROOTS: ["A"]}), **{"bindings": {B_ROOTS: OWN, **gone}}})
     res, _ = _binding_run(tmp_path, monkeypatch, 0, rep)
     assert res["status"] == "error" and res["detail"]["unrecorded"] == ["A"]
@@ -490,10 +490,10 @@ def test_the_registries_and_the_loaded_modules_reads_count_another_binding_s_don
 def test_a_binding_s_run_that_read_and_looked_only_inside_its_key_is_circuit_check_s_verdict(tmp_path, monkeypatch, rc,
                                                                                              targets, status):
     _machine(tmp_path, monkeypatch)
-    inside = _reads({"files": ["verity/ml/x.py"], "listed": ["verity/ml"], "probes": ["queue.py", "tools/config/numpy"],
+    inside = _reads({"files": ["verity/ml/x.py"], "listed": ["verity/ml"], "probes": ["queue.py", "verity/configuration/config/numpy"],
                      "registry": True},
                     {"files": ["verity/ml/reg.py"], "listed": [], "probes": ["verity/ml/x.circuit-check.json"]},
-                    ("integrations/vllm/numpy.py",))
+                    ("adapters/vllm/numpy.py",))
     res, _ = _binding_run(tmp_path, monkeypatch, rc, _report(*targets, reads=inside))
     assert (res["status"], res["undeclared_reads"]) == (status, []) and "error" not in res["detail"], res
 

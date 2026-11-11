@@ -1,5 +1,5 @@
 [Unit]
-Description=the verifier's run %i replayed through both verifiers, as auditor from the pinned tree (benchmarks/live_verifier/host.py replay)
+Description=the verifier's run %i replayed through both verifiers, as auditor from the pinned tree (verity/protocols/poub/device/live_verifier/host.py replay)
 
 [Service]
 Type=exec
