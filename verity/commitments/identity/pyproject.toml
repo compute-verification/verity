@@ -21,4 +21,5 @@ untraced = ["tests/test_identity_difftest.py"]
 inputs = ["verity/difftest/lean", "verity/protocols/flock/verifier/lakefile.toml",
           "verity/protocols/flock/verifier/lake-manifest.json", "verity/protocols/flock/verifier/lean-toolchain",
           "verity/protocols/flock/verifier/Flock/Field.lean", "verity/protocols/flock/verifier/Flock/Bytes.lean",
-          "verity/protocols/flock/verifier/Flock/Hash.lean", "verity/protocols/flock/verifier/Flock/Canon.lean"]
+          "verity/protocols/flock/verifier/Flock/Hash.lean", "verity/protocols/flock/verifier/Flock/Canon.lean",
+          "verity/__init__.py", "verity/commitments/__init__.py"]
