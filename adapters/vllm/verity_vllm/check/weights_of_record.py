@@ -479,8 +479,10 @@ def diff_records(a: dict[str, Any], b: dict[str, Any]) -> dict[str, Any]:
     reroot(b) whatever the two schemas were."""
     fa = {f["field"]: f for f in (a.get("fields") or [])}
     fb = {f["field"]: f for f in (b.get("fields") or [])}
-    only_a = sorted(set(fa) - set(fb)); only_b = sorted(set(fb) - set(fa))
-    differ: list[dict[str, Any]] = []; host_only: list[dict[str, Any]] = []
+    only_a = sorted(set(fa) - set(fb))
+    only_b = sorted(set(fb) - set(fa))
+    differ: list[dict[str, Any]] = []
+    host_only: list[dict[str, Any]] = []
     for name in sorted(set(fa) & set(fb)):
         x, y = fa[name], fb[name]
         keys = [k for k in ("digest", "shape", "bits", "pinned") if x.get(k) != y.get(k)]

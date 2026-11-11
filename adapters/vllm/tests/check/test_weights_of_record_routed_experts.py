@@ -52,7 +52,8 @@ def moe(request, tmp_path):
         t[f"{container}.{e}.{gate}.weight"] = ("BF16", _bf16(rng, INTER, H))
         t[f"{container}.{e}.{up}.weight"] = ("BF16", _bf16(rng, INTER, H))
         t[f"{container}.{e}.{down}.weight"] = ("BF16", _bf16(rng, H, INTER))
-    d = tmp_path / "snap"; d.mkdir()
+    d = tmp_path / "snap"
+    d.mkdir()
     write_safetensors(str(d / "model.safetensors"), t)
     json.dump({"tie_word_embeddings": False, "hidden_size": H}, open(d / "config.json", "w"))
     man = tmp_path / "checkpoints.json"
@@ -133,19 +134,32 @@ def test_expert_level_substitutions_fail_the_pin_by_name(moe):
         assert "1 served weight(s) differ from the checkpoint of record: " + field in res["why"]
         return res
     # (1) one element of ONE expert's slice flipped (flipweight on ...routed_experts.w2_weight)
-    s = dict(honest); w = s[moe["w2"]].copy(); w[2, 3, 1] ^= 0x0040; s[moe["w2"]] = w
+    s = dict(honest)
+    w = s[moe["w2"]].copy()
+    w[2, 3, 1] ^= 0x0040
+    s[moe["w2"]] = w
     _fails(s, moe["w2"])
     # (2) two experts permuted (same bytes, wrong order): the stack is not the checkpoint's experts by index
-    s = dict(honest); w = s[moe["w13"]].copy(); w[[0, 1]] = w[[1, 0]]; s[moe["w13"]] = w
+    s = dict(honest)
+    w = s[moe["w13"]].copy()
+    w[[0, 1]] = w[[1, 0]]
+    s[moe["w13"]] = w
     assert np.array_equal(np.sort(w.ravel()), np.sort(honest[moe["w13"]].ravel()))          # a permutation: every word kept
     _fails(s, moe["w13"])
     # (3) an expert replaced by another expert's tensors (a duplicated expert)
-    s = dict(honest); w = s[moe["w2"]].copy(); w[3] = w[0]; s[moe["w2"]] = w
+    s = dict(honest)
+    w = s[moe["w2"]].copy()
+    w[3] = w[0]
+    s[moe["w2"]] = w
     _fails(s, moe["w2"])
     # (4) gate|up halves swapped inside one expert (up first): the layout vLLM fills is gate first (w1), up second (w3)
-    s = dict(honest); w = s[moe["w13"]].copy(); w[1] = np.concatenate([w[1, INTER:], w[1, :INTER]]); s[moe["w13"]] = w
+    s = dict(honest)
+    w = s[moe["w13"]].copy()
+    w[1] = np.concatenate([w[1, INTER:], w[1, :INTER]])
+    s[moe["w13"]] = w
     _fails(s, moe["w13"])
     # (5) a stack with one expert fewer: shape differs -> named as a mismatch of that field, never compared partially
-    s = dict(honest); s[moe["w13"]] = honest[moe["w13"]][:E - 1]
+    s = dict(honest)
+    s[moe["w13"]] = honest[moe["w13"]][:E - 1]
     res = WR.check(rec, live_digests(s), **ctx)
     assert res["result"] is False and [m["served_name"] for m in res["mismatched"]] == [moe["w13"]]

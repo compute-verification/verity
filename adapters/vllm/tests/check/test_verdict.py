@@ -208,31 +208,67 @@ def test_mapping_old_to_new_is_complete_with_no_loss():
 def _mutations():
     b = _base
     yield "tokens differ", b(), False
-    c = b(); c["extra"]["committed_tensors"] = 571; yield "reference integrity", c, True
-    c = b(); c["extra"]["errors_n"] = 2; yield "collector errors", c, True
-    c = b(); c["extra"]["collector_failure"] = "worker failed on windowed step 0: transient host budget"; yield "collector failure", c, True
-    c = b(); c["openings"] = {"n": 60, "verified": 60}; yield "openings < min", c, True
-    c = b(); c["openings"] = {"n": 64, "verified": 63}; yield "an opening failed", c, True
-    c = b(); c["binding"]["context"] = {"ok": False, "why": "root differs"}; yield "binding context", c, True
-    c = b(); c["binding"]["coverage"] = {"ok": False, "missing_n": 3, "expected_n": 572, "bound_n": 569, "missing": [{"step": 1, "op_path": "layers.0.mlp", "output_member": "y", "invocation": 0, "request_id": "r0", "rank": 0}]}
+    c = b()
+    c["extra"]["committed_tensors"] = 571
+    yield "reference integrity", c, True
+    c = b()
+    c["extra"]["errors_n"] = 2
+    yield "collector errors", c, True
+    c = b()
+    c["extra"]["collector_failure"] = "worker failed on windowed step 0: transient host budget"
+    yield "collector failure", c, True
+    c = b()
+    c["openings"] = {"n": 60, "verified": 60}
+    yield "openings < min", c, True
+    c = b()
+    c["openings"] = {"n": 64, "verified": 63}
+    yield "an opening failed", c, True
+    c = b()
+    c["binding"]["context"] = {"ok": False, "why": "root differs"}
+    yield "binding context", c, True
+    c = b()
+    c["binding"]["coverage"] = {"ok": False, "missing_n": 3, "expected_n": 572, "bound_n": 569, "missing": [{"step": 1, "op_path": "layers.0.mlp", "output_member": "y", "invocation": 0, "request_id": "r0", "rank": 0}]}
     yield "identity coverage", c, True
-    c = b(); c["extra"]["coverage"] = {"ok": False, "checked": 500, "missing_n": 72, "missing_by_family": {"fa2_hidden_m1_stream": 72}, "families_missing_entirely": ["fa2_hidden_m1_stream"],
+    c = b()
+    c["extra"]["coverage"] = {"ok": False, "checked": 500, "missing_n": 72, "missing_by_family": {"fa2_hidden_m1_stream": 72}, "families_missing_entirely": ["fa2_hidden_m1_stream"],
                                        "missing": [{"step": 0, "op_path": "layers.0.attn", "output_member": "m1", "request_id": "r0"}], "manifest_digest": "cd" * 32}
     yield "manifest coverage", c, True
-    c = b(); c["extra"]["identity_check"] = {"ok": False, "steps_checked": 4, "violations_n": 2, "manifest": {"sampler_ids": 1},
+    c = b()
+    c["extra"]["identity_check"] = {"ok": False, "steps_checked": 4, "violations_n": 2, "manifest": {"sampler_ids": 1},
                                              "violations": [{"step": 1, "fa2_layers_bad": {"0": 48}, "sampler_ids": 1}, {"step": 2, "fa2_layers_bad": {"0": 42}, "sampler_ids": 1}]}
     yield "X-03 identity layout", c, True
-    c = b(); c["weights_pin"] = {"result": False, "why": "1 mismatched", "mismatched": ["model.layers.0.q_proj"]}; yield "checkpoint binding", c, True
-    c = b(); c["boundary_linkage"] = {"result": False, "why": "1 unlinked", "unlinked_n": 1}; yield "boundary linkage", c, True
-    c = b(); c["sampled_replay"]["result"] = False; c["sampled_replay"]["why"] = "a VU differs"; yield "replay mismatch", c, True
-    c = b(); c["sampled_replay"]["sample"]["seed"] = 12345; c["oracle_compare"] = {"result": True, "complete": False}; yield "prover-chosen seed, no form (B)", c, True
-    c = b(); c["sampled_replay"]["population"]["query_checks"] = _checks(ok=False, vus_outside_query={"n": 1, "first": [{"request_id": "r0", "step": 1, "op_path": "x", "member": "y"}]})
+    c = b()
+    c["weights_pin"] = {"result": False, "why": "1 mismatched", "mismatched": ["model.layers.0.q_proj"]}
+    yield "checkpoint binding", c, True
+    c = b()
+    c["boundary_linkage"] = {"result": False, "why": "1 unlinked", "unlinked_n": 1}
+    yield "boundary linkage", c, True
+    c = b()
+    c["sampled_replay"]["result"] = False
+    c["sampled_replay"]["why"] = "a VU differs"
+    yield "replay mismatch", c, True
+    c = b()
+    c["sampled_replay"]["sample"]["seed"] = 12345
+    c["oracle_compare"] = {"result": True, "complete": False}
+    yield "prover-chosen seed, no form (B)", c, True
+    c = b()
+    c["sampled_replay"]["population"]["query_checks"] = _checks(ok=False, vus_outside_query={"n": 1, "first": [{"request_id": "r0", "step": 1, "op_path": "x", "member": "y"}]})
     yield "population scope", c, True
-    c = b(); del c["weights_pin"]; yield "weights unpinned", c, True
-    c = b(); c["classes"] = {k: v for k, v in CLASSES.items() if k != "weights"}; yield "required class undeclared", c, True
-    c = b(); c["classes"] = dict(CLASSES, weights={"how": "registered-input", "tensors": 0}); yield "declared leaf class bound 0", c, True
-    c = b(); c["openings_after_release"] = {"n": 64, "verified": 60, "source": "host"}; yield "openings after release", c, True
-    c = b(); c["oracle_compare"] = {"result": False, "mismatch_n": 3}; yield "oracle mismatch", c, True
+    c = b()
+    del c["weights_pin"]
+    yield "weights unpinned", c, True
+    c = b()
+    c["classes"] = {k: v for k, v in CLASSES.items() if k != "weights"}
+    yield "required class undeclared", c, True
+    c = b()
+    c["classes"] = dict(CLASSES, weights={"how": "registered-input", "tensors": 0})
+    yield "declared leaf class bound 0", c, True
+    c = b()
+    c["openings_after_release"] = {"n": 64, "verified": 60, "source": "host"}
+    yield "openings after release", c, True
+    c = b()
+    c["oracle_compare"] = {"result": False, "mismatch_n": 3}
+    yield "oracle mismatch", c, True
     yield "cuBLAS route pin", _routed(None), True
 
 

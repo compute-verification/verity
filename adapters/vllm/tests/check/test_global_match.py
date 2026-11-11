@@ -1064,14 +1064,16 @@ def test_from_gprog_reads_the_lag_static_where_the_codec_writes_it_and_refuses_a
         wl, desc = _real_workload_descriptor(lag)
         assert desc["program_fn"].endswith(f",lag={lag}}}") and desc["root"].endswith(f",lag={lag}}}]_v1"), (desc["program_fn"][-30:], desc["root"][-30:])
         assert GD.workload_lag_static(desc) == lag
-        d = tmp_path / f"lag{lag}" / "build_workload"; d.mkdir(parents=True)
+        d = tmp_path / f"lag{lag}" / "build_workload"
+        d.mkdir(parents=True)
         with gzip.open(d / "descriptor.json.gz", "wb") as f:
             f.write(canonical_json(desc))
         art = {"schema": "verity/workload-program/v1", "ok": True, "workload_digest": program_digest(desc),
                "descriptor": {"sha256": __import__("hashlib").sha256(canonical_json(desc)).hexdigest(), "bytes": 1}, "requests": [], "inputs": {"derived": {}},
                "address_map": {"requests": [], "convention": "toy"}, "chronology": {"requests": []},
                "lag": {"value": lag, "async_scheduling": bool(lag)}, "stop_rule": {"eos_token_ids": [3], "lag": lag, "eos_lag_rows": lag}}
-        p = d / "workload_program.json"; p.write_text(json.dumps(art))
+        p = d / "workload_program.json"
+        p.write_text(json.dumps(art))
         gp = gm.from_gprog(str(p))
         assert gp["gprog_artifact"]["digest_verification"] == {**gp["gprog_artifact"]["digest_verification"], "verified": True, "lag_static": lag}
         # the lag section edited to the other value under the intact Program -> refused by name (the section is a claim, the static is the Program)
@@ -2070,7 +2072,8 @@ def test_scheduled_state_on_the_r15_b8_record_reproduces_the_kernel_s_flips():
     for st in d["steps"]:
         s = splits_for(sc["live"][st["step"]], d["num_sms"])
         if s != prev:
-            flips.append([st["step"], sc["live"][st["step"]], s]); prev = s
+            flips.append([st["step"], sc["live"][st["step"]], s])
+            prev = s
     assert flips == d["S_flips_(step,live,S)"] == [[0, 1, 32], [32, 5, 16], [101, 4, 32]]
     assert sum(len(t["arrivals"]) for t in sc["transitions"]) == 8 and sum(len(t["departures"]) for t in sc["transitions"]) == 8
 
@@ -2113,8 +2116,10 @@ def test_a_record_without_tokens_json_fails_g6_by_name_unless_tokens_optional_is
     acc = gm.check(gp, oracle, tokens_optional=True)
     assert acc["verdict"] == "PASS" and _check(acc, "G6")["tokens_json"] is False, acc["reasons"]
     # the CLI flag reaches check(): the default main() refuses, --tokens-optional accepts
-    gpp = tmp_path / "gp.json"; gpp.write_text(json.dumps(gp))
-    out1 = tmp_path / "gm1.json"; out2 = tmp_path / "gm2.json"
+    gpp = tmp_path / "gp.json"
+    gpp.write_text(json.dumps(gp))
+    out1 = tmp_path / "gm1.json"
+    out2 = tmp_path / "gm2.json"
     cli.main(["global-match", "--oracle", oracle, "--global-program", str(gpp), "--no-x09", "--no-alternate", "--out", str(out1)])
     cli.main(["global-match", "--oracle", oracle, "--global-program", str(gpp), "--no-x09", "--no-alternate", "--tokens-optional", "--out", str(out2)])
     assert json.load(open(out1))["verdict"] == "FAIL" and json.load(open(out2))["verdict"] == "PASS"

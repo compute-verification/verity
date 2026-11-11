@@ -1063,7 +1063,8 @@ def test_rope_v1_wrong_cache_row_is_a_mismatch_the_position_is_the_programs_slic
         inst = json.loads(json.dumps(rope_world.inst))
         if rid == "r0":
             r = next(x for x in inst["rows"] if x["spec"].startswith("RoPE_v1") and x["name"].endswith("rotary_embedding_0/query[1]"))
-            r["args"][1][0][2] += DH; r["args"][1][0][3] += DH
+            r["args"][1][0][2] += DH
+            r["args"][1][0][3] += DH
         progs[rid] = inst
     bmap, committed = rope_world.bmap_and_reader()
     rep = SR.sampled_replay(progs, bmap, committed, _weights(rope_world), per_stratum=8, seed=1)
@@ -1777,8 +1778,10 @@ def test_jit_twin_library_build_is_atomic_and_serialised_across_concurrent_first
         with open(counter, "ab") as fh:
             fh.write(b"1")
         with open(out, "wb") as fh:
-            fh.write(payload[:half]); fh.flush()
-            half_written.set(); release.wait()
+            fh.write(payload[:half])
+            fh.flush()
+            half_written.set()
+            release.wait()
             fh.write(payload[half:])
 
     real_lock = _jit.build_lock
@@ -1811,10 +1814,12 @@ def test_jit_twin_library_build_is_atomic_and_serialised_across_concurrent_first
     assert counter.read_bytes() == b"1", "exactly one compile across 6 concurrent builders"
     assert not list(tmp_path.glob("libtwin.so.*.tmp*")), "no temp file left behind"
     # fresh: no rebuild; stale source: rebuilt once, atomically
-    os.utime(src, (1_600_000_000, 1_600_000_000)); os.utime(lib, (1_600_000_100, 1_600_000_100))
+    os.utime(src, (1_600_000_000, 1_600_000_000))
+    os.utime(lib, (1_600_000_100, 1_600_000_100))
     _jit.atomic_build(lib, [src], compile_to)
     assert counter.read_bytes() == b"1"
-    src.write_text("int f(){return 2;}\n"); os.utime(src, (1_600_000_200, 1_600_000_200))
+    src.write_text("int f(){return 2;}\n")
+    os.utime(src, (1_600_000_200, 1_600_000_200))
     _jit.atomic_build(lib, [src], compile_to)
     assert counter.read_bytes() == b"11" and lib.read_bytes() == payload
     # the parent prewarm names the rms library for RMSNorm families and nothing for a Gemm-only sample
@@ -1929,7 +1934,8 @@ def test_padded_moe_block_twin_equals_the_moe01_composition_and_names_every_memb
         assert got[f"slot{e}/up"].any()
     # the memo: the same (statics, x, logits) is one evaluation; a different logits word is another
     assert RK.padded_moe_block(st, [x, logits, w13, w2], router_gemm=False) is got
-    logits2 = logits.copy(); logits2[0] ^= 0x0080
+    logits2 = logits.copy()
+    logits2[0] ^= 0x0080
     assert RK.padded_moe_block(st, [x, logits2, w13, w2], router_gemm=False) is not got
     # MoeFfnFixed_v1: the router Gemm inside = Gemm_v1 on (x, wg) then the same block
     wg = bf16((E, H), 0.5)
@@ -1949,17 +1955,21 @@ def test_lifted_slot_compare_bot_under_active_and_value_under_disabled_both_fail
     assert eq and nd == 0 and first is None and v.startswith("active")
     eq, nd, first, v = CMP.lifted_compare(np.full(4, bot17, dtype=np.uint32), payload, False, "l17")
     assert eq and v.startswith("disabled")
-    have = payload.astype(np.uint32); have[2] = bot17                                # a bot word where the slot is Active
+    have = payload.astype(np.uint32)
+    have[2] = bot17                                # a bot word where the slot is Active
     eq, nd, first, v = CMP.lifted_compare(have, payload, True, "l17")
     assert not eq and nd == 1 and first == 2 and "bot word under an Active enable" in v
-    have = np.full(4, bot17, dtype=np.uint32); have[1] = 0x3F80                      # a value word where the slot is disabled
+    have = np.full(4, bot17, dtype=np.uint32)
+    have[1] = 0x3F80                      # a value word where the slot is disabled
     eq, nd, first, v = CMP.lifted_compare(have, payload, False, "l17")
     assert not eq and nd == 1 and first == 1 and "value word under a disabled enable" in v
-    have = np.full(4, bot17, dtype=np.uint32); have[3] = bot17 | 0x0001              # bot with a nonzero payload (or INV): never accepted as bot
+    have = np.full(4, bot17, dtype=np.uint32)
+    have[3] = bot17 | 0x0001              # bot with a nonzero payload (or INV): never accepted as bot
     eq, nd, first, v = CMP.lifted_compare(have, payload, False, "l17")
     assert not eq and "nonzero payload" in v
     # an INV word (bot bit + nonzero payload) under an ACTIVE enable is named INV, never 'payload differs'
-    have = payload.astype(np.uint32).copy(); have[3] |= bot17                          # payload[2] is 0x0000: bot bit there IS bot, so use [3]
+    have = payload.astype(np.uint32).copy()
+    have[3] |= bot17                          # payload[2] is 0x0000: bot bit there IS bot, so use [3]
     eq, nd, first, v = CMP.lifted_compare(have, payload, True, "l17")
     assert not eq and nd == 1 and first == 3 and "INV word" in v and "Active" in v
     eq, nd, first, v = CMP.lifted_compare(payload.astype(np.uint32)[:3], payload, True, "l17")

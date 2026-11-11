@@ -232,13 +232,15 @@ def test_rotary_table_is_pinned_by_the_frozen_analytic_bound(checkpoint, tmp_pat
     bad = WR.check(rec, dict(live, raw={"model.layers.0.self_attn.rotary_emb.cos_sin_cache": other}))
     assert bad["result"] is False and bad["analytic"][0]["status"] == "fail" and "outside the frozen analytic bound" in bad["why"] and "cos_sin_cache" in bad["why"]
     # one corrupted word (a flipped exponent bit at position 7) -> FAIL named with the offending position
-    corrupt = table.copy(); corrupt[7, 1] ^= 0x4000
+    corrupt = table.copy()
+    corrupt[7, 1] ^= 0x4000
     bad2 = WR.check(rec, dict(live, raw={"model.layers.0.self_attn.rotary_emb.cos_sin_cache": corrupt}))
     assert bad2["result"] is False and bad2["analytic"][0]["n_outside_bound"] >= 1 and bad2["analytic"][0]["first_offending"][0]["pos"] == 7
     # served words not captured -> not a pass
     assert WR.check(rec, dict(live, raw={}))["result"] is False
     # a declared table shape that is not config.json's [MAX_POS, ROT]: unresolved, complete False (fail closed)
-    prog2 = dict(prog); prog2["instances"] = dict(prog["instances"], params=[["weights", "{" + f"{field}: Array<{MAXP * 2},Array<{ROT},Value<16>>>" + "}"]])
+    prog2 = dict(prog)
+    prog2["instances"] = dict(prog["instances"], params=[["weights", "{" + f"{field}: Array<{MAXP * 2},Array<{ROT},Value<16>>>" + "}"]])
     rec2 = WR.weights_of_record(prog2, WR.CheckpointIndex(str(d), checkpoints_manifest=str(man)), prefix=PREFIX)
     assert rec2["complete"] is False and rec2["unresolved"][0]["field"] == field and "!= analytic [MAX_POS, ROT]" in rec2["unresolved"][0]["why"]
     # a rope_scaling type without an analytic table: unpinned BY NAME (not assumed, not a silent pass)
