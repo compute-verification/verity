@@ -29,7 +29,7 @@ def code_digest() -> str:
     from verity.protocols.spot.verifier.one_stage import partition as P
 
     h = hashlib.sha256()
-    for root in (Path(__file__).parent, Path(C.__file__).parent):
+    for root in (Path(__file__).parent, Path(C.__file__).parent, Path(C.__file__).parents[1] / "definitions"):
         for p in sorted(root.rglob("*.py")):
             h.update(str(p.relative_to(root)).encode() + b"\0" + p.read_bytes() + b"\0")
     h.update(Path(P.__file__).read_bytes())
