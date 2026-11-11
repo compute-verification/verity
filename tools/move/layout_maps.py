@@ -61,7 +61,9 @@ KINDS, each treated one way:
   and no moved file brings (its "files created"; `--created FILE` lists them).
 - Lake packages. Each moves whole, by a directory row at or above its root or a `[tokens]` row for it, so a lakefile's
   or a manifest's relative `path` to it follows; a Lake package inside another has rows of its own. Lean module names
-  don't change.
+  don't change, and no `.lean` file's bytes do (`EXCLUDE`): a module's source is in its build key, so a path rewritten
+  in a comment would compile the module again, and every module that imports it. A `.lean` file that writes a path
+  outside a comment is rewritten, by a row of `LEAN_PATHS`.
 - Distributions with their own `pyproject.toml`. The pyproject moves with its component and the distribution keeps its
   name and import name (`ROOTS`).
 - Tests go with their suite; plain files go with their component, by the rule.
@@ -70,7 +72,8 @@ A DIRECTORY NO ROW MOVES WHOLE is named in `[tokens]`, so a reference to the dir
 input, a boundary's glob) is rewritten and none is left naming a directory that is gone. In a map a move, the map that
 takes the directory's `pyproject.toml` (else its `__init__.py`, its `lakefile.toml`, else most of its files) speaks
 for it. Where one map empties a directory and its files part ways, a reference reads as the directory its files keep
-together in but for the archived ones and a file with a row of its own; else as the one new directory that holds all
+together in but for the archived ones, a file with a row of its own and, in a Lake package, a Lake package inside it
+with a row of its own (`EXCEPT`), which goes its own way; else as the one new directory that holds all
 of them but the archived, where that is narrower than a top-level directory; else, in the one map, as where the
 directory's package goes. A directory a move's map speaks for reads the same in the one map: a reference to it, and a
 bare `Path(__file__).parent` in a file under it, then follow the files of the move that holds most of it, as they do
@@ -97,7 +100,9 @@ moves or archives has exactly one destination, and each map moves exactly its ow
 twice or is a file that stays; no two paths of the moved tree differ only by case; no new path outside `archive/`
 keeps a `core` or `ml` segment; every tracked file under `verity/core` or `verity/ml` moves, but for the emptied
 `__init__.py`s; no file of a component the auditor doesn't trust lands under a trusted directory, but for `UNTRUSTED`'s
-and a suite's tests; every test file outside `archive/` is under a suite's test directory after the moves; every moved
+and a suite's tests; no `pyproject.toml` lies between the root and a workspace member whose sources name the workspace
+(uv finds a member's workspace at the first `pyproject.toml` above it, so `uv lock` would fail on the moved tree); every
+test file outside `archive/` is under a suite's test directory after the moves; every moved
 Lake package moves whole; `[modules]` gives every moved module its new name and renames no module that stays; the
 order has no cycle.
 """
@@ -118,37 +123,36 @@ import layout_case  # noqa: E402
 
 #: (today's path: a file, or a directory ending in "/"; its new path; why the rule is not followed)
 EXCEPT = [
-    ("verity/ml/flock/verifier/", "verity/flock/agreement/",
+    ("verity/ml/flock/verifier/", "verity/protocols/flock/agreement/",
      "the agreement with upstream's verifier, which nobody trusts: the rule puts its scripts in "
-     "`verity/flock/verifier/`, the trusted root of the Lean verifier's Lake package, and its README on that package's"),
-    ("verity/ml/flock/python/verity_flock/", "verity/flock/prover/python/verity_flock/",
+     "`verity/protocols/flock/verifier/`, the trusted root of the Lean verifier's Lake package, and its README on that "
+     "package's"),
+    ("verity/ml/flock/python/verity_flock/", "verity/protocols/flock/prover/python/verity_flock/",
      "a module goes with its import package: eleven bench drivers are modules of `verity_flock`, which the rule would "
-     "leave in a second `verity/flock/python/verity_flock/` with no `__init__.py`, outside the distribution that keeps "
-     "the name"),
-    ("verity/core/service/spot/", "verity/spot/verifier/lean/",
-     "SPOT's Lake package: the rule puts its `pyproject.toml` on the Python verifier's in `verity/spot/verifier/`; the "
-     "Lean takes `lean/`, as each protocol's Lean is its `lean/`"),
-    ("verity/core/service/vstar/recursive/", "verity/spot/verifier/recursive/",
-     "the recursive audit's Lake package requires SPOT's: under Flock's verifier, where the rule leaves it, it reads "
-     "against the order of the layout"),
-    ("benchmarks/pouw/machine_model/", "verity/hardware/machine_model/",
-     "the machine model: the rule gives `verity/hardware/pouw/machine_model/`, where `pouw/` names only the benchmark "
-     "directory it sits in today"),
+     "leave in a second `verity/protocols/flock/python/verity_flock/` with no `__init__.py`, outside the distribution "
+     "that keeps the name"),
+    ("verity/core/service/spot/", "verity/protocols/spot/verifier/lean/",
+     "SPOT's Lake package: the rule puts its `pyproject.toml` on the Python verifier's in "
+     "`verity/protocols/spot/verifier/`; the Lean takes `lean/`, as each protocol's Lean is its `lean/`"),
+    ("verity/core/service/vstar/recursive/", "verity/protocols/recursion/verifier/recursive/",
+     "the recursive audit's Lake package: the rule gives `verity/protocols/recursion/verifier/vstar/recursive/`, where "
+     "`vstar/` names only the command package's directory it sits in today"),
     ("verity/core/protocols/record.py", "verity/hardware/record.py",
      "the rule gives `verity/hardware/protocols/record.py`: a `protocols/` segment that names nothing, and a package "
      "whose `__init__.py` no moved file brings"),
     ("verity/core/protocols/registration.py", "verity/hardware/registration.py",
      "as `record.py`: the rule gives `verity/hardware/protocols/registration.py`"),
-    ("verity/core/protocols/profile.py", "verity/spot/verifier/profile.py",
-     "the integrity profile: the rule gives `verity/spot/verifier/protocols/profile.py`, a `protocols/` segment that "
-     "names nothing"),
-    ("verity/core/protocols/pyproject.toml", "verity/protocols/pyproject.toml",
-     "the suite of the protocols' own modules goes where the one module left of them, `reporting.py`, goes; the rule "
-     "gives `verity/spot/verifier/protocols/pyproject.toml`"),
-    ("verity/ml/commitments/leaves.py", "integrations/vllm/verity_vllm/commitments/leaves.py",
-     "a module goes into an import package: the rule gives `integrations/vllm/commitments/`, beside `verity_vllm` and "
-     "in no package, where it would be imported as `integrations.vllm.commitments.leaves`"),
-    ("verity/ml/commitments/vllm_v1/", "integrations/vllm/verity_vllm/commitments/vllm_v1/",
+    ("verity/core/protocols/profile.py", "verity/protocols/spot/verifier/profile.py",
+     "the integrity profile: the rule gives `verity/protocols/spot/verifier/protocols/profile.py`, a second `protocols/` "
+     "segment that names nothing"),
+    ("integrations/vllm/verity_vllm/", "adapters/vllm/verity_vllm/",
+     "a module stays in its import package: the rule names a module of a subpackage by that subpackage and gives "
+     "`adapters/vllm/commitments/`, beside `verity_vllm` and in no package, for `verity_vllm/commitments/`. The adapter's "
+     "directory moves whole and the distribution keeps the name `verity_vllm`"),
+    ("verity/ml/commitments/leaves.py", "adapters/vllm/verity_vllm/commitments/leaves.py",
+     "a module goes into an import package: the rule gives `adapters/vllm/commitments/`, beside `verity_vllm` and "
+     "in no package, where it would be imported as `adapters.vllm.commitments.leaves`"),
+    ("verity/ml/commitments/vllm_v1/", "adapters/vllm/verity_vllm/commitments/vllm_v1/",
      "as `leaves.py`: the commitment scheme named for vLLM goes into `verity_vllm`"),
     ("verity/core/devices/memory_challenger/", "verity/protocols/pous/device/",
      "the memory challenger's package, one directory row: the rule puts it in `device/memory_challenger/`, beside the "
@@ -157,24 +161,29 @@ EXCEPT = [
     ("verity/core/protocols/remote_bandwidth/", "verity/protocols/poub/verifier/",
      "PoUB's reference, session and Lean verifier, one directory row: the rule names the protocol twice "
      "(`poub/verifier/remote_bandwidth/`)"),
-    ("examples/README.md", "workloads/README.md",
-     "the demos' index: the rule gives `workloads/dither_full_util/examples/README.md`, inside one demo"),
-    ("verity/core/service/vstar/", "verity/flock/verifier/vstar_cli/",
-     "V*'s command package: the rule gives `verity/flock/verifier/vstar/`, which differs only by case from `VStar/`, the "
-     "Flock verifier's own Lean sources, and a checkout that ignores case merges the two"),
+    ("examples/README.md", "demos/README.md",
+     "the demos' index: the rule gives `demos/dither_full_util/examples/README.md`, inside one demo"),
+    ("verity/core/service/vstar/", "verity/protocols/recursion/verifier/vstar_cli/",
+     "V*'s command package: the rule gives `verity/protocols/recursion/verifier/vstar/`, the name V*'s own Lean has in "
+     "Flock's verifier (`VStar/`, which stays in that Lake package); `vstar_cli/` says this one is the command"),
     ("verity/core/protocols/certifier/lean/", "verity/protocols/certifier/device/program/lean/",
      "the certifier program's Lake package: the rule puts it on `device/lean/`, where the certifier device's Lake "
      "package goes (two lakefiles, manifests, locks and toolchains on one path)"),
-    ("verity/ml/commitments/tests/test_leaves.py", "integrations/vllm/tests/commitments/test_leaves.py",
-     "the test of `leaves.py`, which goes into the integration: it goes into the integration's suite with the module it "
-     "tests; left with its own suite, a test under `verity/` would import an integration"),
-    ("verity/ml/commitments/tests/test_vllm_v1.py", "integrations/vllm/tests/commitments/test_vllm_v1.py",
-     "the test of `vllm_v1/`, which goes into the integration: with the code it tests, as `test_leaves.py`"),
+    ("verity/ml/commitments/tests/test_leaves.py", "adapters/vllm/tests/commitments/test_leaves.py",
+     "the test of `leaves.py`, which goes into the adapter: it goes into the adapter's suite with the module it "
+     "tests; left with its own suite, a test under `verity/` would import an adapter"),
+    ("verity/ml/commitments/tests/test_vllm_v1.py", "adapters/vllm/tests/commitments/test_vllm_v1.py",
+     "the test of `vllm_v1/`, which goes into the adapter: with the code it tests, as `test_leaves.py`"),
     ("examples/h200/e2e_h200/served_weights.py", "benchmarks/torch_gpu/p2_stage/served_weights.py",
      "the served weights' reader goes beside the GPU stage that reads it; the demo's other files stay"),
     ("examples/h200/interfaces/", "benchmarks/one_stage/interfaces/",
      "the drawn-unit replay bundle and the block record, with their schemas, fixtures and suite, go beside the one-stage "
      "audit, their main reader, which is live; the demo's other files stay"),
+    ("verity/core/protocols/pyproject.toml", "verity/protocols/tests/pyproject.toml",
+     "the suite of the protocols' own two tests, whole, in a directory with no workspace member below it (its tests go "
+     "with it, to `verity/protocols/tests/tests/`): the rule gives `verity/protocols/pyproject.toml`, between the root "
+     "and Flock's prover, and uv finds a member's workspace at the first `pyproject.toml` above it. `verity/hardware/`, "
+     "where `record.py` goes, has a suite of its own on that path"),
     ("verity/core/protocols/pous/wipe_stream.c", "verity/protocols/pous/verifier/wipe_stream.c",
      "the streamed wipe's native fill goes beside `wipe_stream.py`, the one module that builds it, by the name of the file "
      "beside itself; the rule parts the two (`device/wipe_stream.c`)"),
@@ -182,8 +191,6 @@ EXCEPT = [
 #: an EXCEPT row whose files go with another move than their component's: {the row's path today: the move}
 EXCEPT_MOVE = {
     "verity/ml/flock/python/verity_flock/": "flock_prover",
-    "verity/core/service/vstar/recursive/": "spot",
-    "verity/core/protocols/pyproject.toml": "verity",
     "verity/core/devices/memory_challenger/": "pous",
     "verity/core/protocols/remote_bandwidth/": "poub",
     "examples/h200/e2e_h200/served_weights.py": "archive",
@@ -196,7 +203,7 @@ KEEP = {
     "bench:63": "PoUW's calculators stay in `benchmarks/pouw/`: nothing under `verity/` or an integration imports them, "
                 "and one of them loads `benchmarks/sampling_plan`",
     "bench:30": "the recursion end-to-end run stays in `benchmarks/`: `verity bench NAME` runs `benchmarks/NAME`'s runner, "
-                "which its `run.py` is, and a directory under `workloads/` is a demo with a `demo.toml`, which it has not",
+                "which its `run.py` is, and a directory under `demos/` is a demo with a `demo.toml`, which it has not",
     "benchmarks/network_traces/":
         "its files find each other by bare name, with the directory on `sys.path`, and a move leaves a bare name as "
         "written: the directory stays whole, its archived files too, until its owner imports by package name and splits it",
@@ -209,8 +216,6 @@ ALIASES = {
 }
 #: files a move deletes: {path: (the move, why)}
 DROP = {
-    "benchmarks/pouw/contents/paths/machine_model.toml":
-        ("hardware", "the entry of `benchmarks/pouw`'s contents for `machine_model/`, which leaves `benchmarks/pouw`"),
     "benchmarks/pouw/contents/paths/np_kernel.toml":
         ("archive", "the entry of `benchmarks/pouw`'s contents for `np_kernel/`, which goes to `archive/`"),
     "benchmarks/pouw/contents/paths/clear.toml":
@@ -220,9 +225,14 @@ DROP = {
 }
 #: files of a component the auditor doesn't trust that land under a trusted directory: {component id: why it may}
 UNTRUSTED = {
-    "core:zk-server": "the ZK server's release side, which the developer trusts and the auditor doesn't: the layout puts it "
-                      "beside Flock's verifier, whose Lake package holds the ZK server's other half (`Flock.Firewall`)",
+    "core:zk-server": "the ZK server's half of Flock's Lake package (`Flock.Firewall`), which the developer trusts and the "
+                      "auditor doesn't: a Lake package moves whole",
+    "core:zk-server.release": "the ZK server's release side, which the developer trusts and the auditor doesn't. Its Lake "
+                              "package requires the core protocol interface, which requires Flock's verifier, so it does "
+                              "not go inside Flock's directory: the layout puts it with the recursion layer",
     "edge:tools.config": "the settings package (`verity_config`), which the layout puts with the Configuration it reads",
+    "ml:windows": "Window, what an adapter hands Verity, which no verifier imports: the layout puts it under the "
+                  "commitments its windows are committed in, as a package and a suite of its own (`windows/`)",
 }
 #: tracked files the data doesn't know, in a directory several components share, and files it places otherwise:
 #: {path, or directory ending in "/": the component id it goes with, "stays" or "archived"}
@@ -236,6 +246,35 @@ NEW = {
     "verity/ml/definitions/registry/dsa_topk_mask_cut.circuit-check.py": "ml:definitions-registry",
     "verity/ml/definitions/registry/dsa_topk_mask_cut.circuit-check.json": "ml:definitions-registry",
     "verity/ml/definitions/tests/test_dsa_topk_mask_cut.py": "ml:definitions-registry",
+    "verity/ml/definitions/registry/fa2_train.py": "ml:definitions-torch",          # a training step's attention
+    "verity/ml/definitions/registry/fa2_train.circuit-check.py": "ml:definitions-torch",
+    "verity/ml/definitions/registry/boolean_fa2_train.py": "ml:definitions-torch",  # its Boolean version, as `boolean_torch_words`
+    "verity/ml/definitions/registry/boolean_fa2_train.circuit-check.py": "ml:definitions-torch",
+    "verity/ml/definitions/tests/test_fa2_train.py": "ml:definitions-torch",
+    "verity/core/service/flock/Flock/RegBound.lean": "core:flock-lean-verifier",
+    "verity/ml/flock/tests/test_fmaxf_commit.py": "ml:flock-lowering",
+    "verity/ml/commitments/gates/sha512_stream.py": "ml:commitment-gates",          # SHA-512 over a stream, as gates
+    "verity/ml/commitments/gates/sha512_stream.circuit-check.py": "ml:commitment-gates",
+    "verity/ml/commitments/gates/sha512_stream.circuit-check.json": "ml:commitment-gates",
+    "verity/ml/commitments/tests/test_boolean_sha512_stream.py": "ml:commitment-gates",
+    "verity/ml/commitments/keyed.py": "ml:commitment-schemes",          # keyed leaves, a scheme beside `history.py`
+    "verity/ml/commitments/tests/test_keyed.py": "ml:commitment-schemes",
+    "verity/ml/crypto/transport.py": "ml:aead",        # the AEAD's transport, tested in the commitments' suite
+    "verity/ml/commitments/tests/test_transport.py": "ml:aead",
+    "verity/ml/definitions/registry/linear_cut.py": "ml:definitions-registry",
+    "verity/ml/definitions/registry/linear_cut.circuit-check.py": "ml:definitions-registry",
+    "verity/ml/definitions/registry/linear_cut.circuit-check.json": "ml:definitions-registry",
+    "verity/ml/definitions/tests/test_linear_cut.py": "ml:definitions-registry",
+    "verity/ml/definitions/registry/pearl_c_tile.py": "ml:definitions-registry",
+    "verity/ml/definitions/registry/pearl_c_tile.circuit-check.py": "ml:definitions-registry",
+    "verity/ml/definitions/registry/pearl_c_tile.circuit-check.json": "ml:definitions-registry",
+    "verity/ml/circuits/ops/tests/test_boolean_rolled.py": "ml:ops-boolean",        # tests `ops/boolean/rolled.py`
+    "verity/ml/flock/tests/test_rolled_lowering.py": "ml:flock-lowering",           # the roll's lowering
+    "verity/ml/definitions/tests/test_sparse_mla_combine_columns.py": "ml:definitions-registry",   # tests `sparse_mla_split`
+    "verity/ml/definitions/numerics/token_select_rows.py": "ml:definitions-numerics",              # a row kernel, as `stop_rows.py`
+    "benchmarks/memory/": "stays",                     # a benchmark of its own
+    "benchmarks/pouw/pearlplus_lean/": "stays",        # a benchmark's Lean, in a directory part of which is archived
+    "benchmarks/network_traces/tests/test_scan_zk_v3c.py": "stays",
     "benchmarks/pouw/np_kernel/": "archived",          # its owner archives the kernel: only its test imports it,
     "benchmarks/pouw/tests/test_np_kernel.py": "archived",              # and the test goes with it
 }
@@ -243,12 +282,14 @@ NEW = {
 #: fetches, goes with it: {the directory today: why}
 WHOLE = {
     "benchmarks/nci/": "the inference-only policy's benchmark fetches `sources/` and gains files; one row carries them",
+    "integrations/vllm/": "the adapter gains files with every change to it; one row carries them",
 }
-#: references to a directory a map splits that stay right as they are: (the move, "old file: old directory", why)
+#: references to a directory a map splits that are right after the move: (the move, "old file: old directory", why)
 SPLIT = [
     ("flock_prover", f"verity/ml/flock/live/src/{name}.rs: verity",
-     "`../../../..` from the crate's directory (`CARGO_MANIFEST_DIR`) is the repository's root, before the move and "
-     "after it: the crate is as deep in `verity/flock/prover/live` as in `verity/ml/flock/live`")
+     "`../../../..` from the crate's directory (`CARGO_MANIFEST_DIR`) is the repository's root. The crate is one level "
+     "deeper in `verity/protocols/flock/prover/live` than in `verity/ml/flock/live`, and the rewrite adds the one `..` "
+     "that keeps it the root: it reads the path from the file's directory, as `verity`, which is as much deeper")
     for name in ("circuit", "firewall", "lookup", "sha512_native")
 ]
 #: import name -> its package directory today; a module outside every root is named by its path from the root
@@ -264,24 +305,28 @@ ROOTS = {
 MOVES = [
     ("circuits", "the circuit language, to `verity/circuits`"),
     ("definitions", "the Definitions and their host kernels, to `verity/definitions`"),
-    ("flock_verifier", "Flock's Lean package, to `verity/flock/verifier`"),
-    ("flock_prover", "Flock's prover, to `verity/flock/prover`"),
-    ("flock", "Flock's tests, pod scripts and agreement with upstream, to `verity/flock`"),
-    ("spot", "sampled proofs, to `verity/spot`"),
+    ("interface", "the core protocol interface, to `verity/protocols/interface`"),
+    ("flock_verifier", "Flock's Lean package, to `verity/protocols/flock/verifier`"),
+    ("flock_prover", "Flock's prover, to `verity/protocols/flock/prover`"),
+    ("flock", "Flock's tests, pod scripts and agreement with upstream, to `verity/protocols/flock`"),
+    ("spot", "sampled proofs, to `verity/protocols/spot`"),
+    ("recursion", "V*'s command package, sampled proofs' recursive audit and the ZK server's release side, to "
+                  "`verity/protocols/recursion`"),
     ("pouw", "PoUW, to `verity/protocols/pouw`"),
     ("pous", "PoUS, to `verity/protocols/pous`"),
     ("poub", "PoUB, to `verity/protocols/poub`"),
     ("certifier", "network certification, to `verity/protocols/certifier`"),
     ("inference_only", "the inference-only policy, to `verity/protocols/inference_only`"),
-    ("composite", "the composite protocols, to `verity/composite`"),
-    ("commitments", "commitments, hashes, signatures and the challenge derivation, to `verity/commitments`"),
-    ("hardware", "the machine model, Site and registration, to `verity/hardware`"),
+    ("remote", "remote Verity and the composition of core protocols, to `verity/protocols/remote`"),
+    ("onsite", "onsite Verity, to `verity/protocols/onsite`"),
+    ("composite", "the auditor host's challenger service, to `verity/composite`"),
+    ("commitments", "commitments, hashes, signatures, the challenge derivation and Window, to `verity/commitments`"),
+    ("hardware", "World, Site and registration, to `verity/hardware`"),
     ("configuration", "the Configuration, the wire and the settings package, to `verity/configuration`"),
-    ("windows", "Window, to `verity/windows`"),
     ("difftest", "the difftest harness, to `verity/difftest`"),
     ("verity", "the claims' ids and the reporting grid, to `verity`"),
-    ("vllm", "the commitment scheme named for vLLM and the window-advice compiler, to `integrations/vllm`"),
-    ("workloads", "the demos, to `workloads`"),
+    ("vllm", "the vLLM adapter, with the commitment scheme named for vLLM, to `adapters/vllm`"),
+    ("demos", "the demos, to `demos`"),
     ("benchmarks", "the GPU probes that are Definitions today, to `benchmarks`"),
     ("archive", "what the layout archives, to `archive`"),
 ]
@@ -298,9 +343,20 @@ EXCLUDE = [
     "benchmarks/hash/dither/j10b_ref.py", "benchmarks/hash/dither/j10ca_ref.py", "benchmarks/hash/dither/j10hb.py",
     "benchmarks/hash/dither/j10rtx.py", "benchmarks/hash/dither/j10served.py",
     "integrations/vllm/tools/migrate/superseded_quarantine.py", "integrations/vllm/tests/migrate/test_superseded_quarantine.py",
+    "adapters/vllm/manifests/**", "adapters/vllm/workloads/**", "adapters/vllm/data/**", "adapters/vllm/verity_vllm/pins/**",
+    "adapters/vllm/tools/migrate/superseded_quarantine.py", "adapters/vllm/tests/migrate/test_superseded_quarantine.py",
+    "**/*.lean",
+]
+#: the `.lean` files the rewrite still reads: each writes a path outside a comment, by today's path and by its new one
+LEAN_PATHS = [
+    "verity/ml/flock/tests/lean/RandomnessVectors.lean", "verity/protocols/flock/prover/tests/lean/RandomnessVectors.lean",
+    "verity/core/protocols/spot/tests/lean/ExfiltrationVectors.lean",
+    "verity/protocols/spot/verifier/tests/lean/ExfiltrationVectors.lean",
+    "verity/core/protocols/spot/tests/lean/ExfiltrationTwoVectors.lean",
+    "verity/protocols/spot/verifier/tests/lean/ExfiltrationTwoVectors.lean",
 ]
 INCLUDE = ["fixtures/artifacts.json", "**/fixtures/README.md", "**/fixtures/**/README.md", "**/lake-manifest.json",
-           "integrations/vllm/manifests/definitions.json"]
+           "integrations/vllm/manifests/definitions.json", "adapters/vllm/manifests/definitions.json", *LEAN_PATHS]
 NAMESAKE = ("pyproject.toml", "__init__.py", "lakefile.toml")
 MAP_NAME = re.compile(r"layout_(\d\d_\w+|one)_map\.toml")
 #: the two forms of the layout
@@ -387,11 +443,9 @@ def move_of(cdir):
         if len(s) == 1:
             return "verity"
         if s[1] == "protocols":
-            return s[2]
-        if s[1] == "flock":
-            return "flock" if len(s) == 2 else f"flock_{s[2]}"
+            return f"flock_{s[3]}" if s[2] == "flock" and len(s) > 3 else s[2]
         return s[1]
-    return s[1] if s[0] == "integrations" else s[0]
+    return s[1] if s[0] == "adapters" else s[0]
 
 
 def ancestors(d):
@@ -666,11 +720,16 @@ def tokens_for(move, dest, tracked_dirs, rows, emptied=(), one=False):
             # new directory that holds every file of the old one but the archived, where that is narrower than a
             # top-level directory;
             # else, in the one map, as where its package goes, each such reference acknowledged in `[split]`.
-            rest = [p for p in mine if not dest[p][0].startswith("archive/") and own_row(p) is None]
+            def inner(p, lake="lakefile.toml" in files):   # in a Lake package inside this one that has a row of its own
+                k = excepted(p)[0]
+                return (lake and k is not None and k.endswith("/") and k.startswith(d + "/") and k != d + "/"
+                        and "lakefile.toml" in tracked_dirs.get(k.rstrip("/"), ((),))[0])
+            rest = [p for p in mine if not dest[p][0].startswith("archive/") and own_row(p) is None and not inner(p)]
             whole = {dest[p][0][: -len(p[len(d):])] if dest[p][0].endswith(p[len(d):]) else None for p in rest}
             common = posixpath.commonpath([posixpath.dirname(dest[p][0]) for p in rest or mine])
             if len(whole) == 1 and (n := next(iter(whole))) is not None:
-                out[d + "/"] = n + "/"                 # all but the archived and a file with a row of its own keep together
+                # all but the archived, a file with a row of its own and a Lake package inside this one keep together
+                out[d + "/"] = n + "/"
             elif "/" in common:
                 out[d + "/"] = common + "/"
             elif one and name is not None and posixpath.basename(dest[f"{d}/{name}"][0]) == name:
@@ -758,9 +817,11 @@ def render(fname, v, before, one=False):
               *(wrap("# ", f"`{p}`: {DROP[p][1]}.") for p in v["drop"]),
               "paths = [" + ", ".join(toml_str(p) for p in v["drop"]) + "]", "", "[rewrite]",
               "# Never rewritten: records of what was (the earlier moves and their maps, changelogs, research's recorded moves, the",
-              "# archive), and files whose bytes a digest pins.",
+              "# archive), files whose bytes a digest pins, and Lean sources. A module's source is in its build key, so a path",
+              "# rewritten in a comment would compile the module again, and every module that imports it. A `.lean` file that",
+              "# writes a path outside a comment is still rewritten (`include`); lakefiles and Lake manifests are too.",
               "exclude = [" + ",\n           ".join(", ".join(toml_str(x) for x in EXCLUDE[i:i + 4]) for i in range(0, len(EXCLUDE), 4)) + "]",
-              "include = [" + ", ".join(toml_str(x) for x in INCLUDE) + "]",
+              "include = [" + ",\n           ".join(", ".join(toml_str(x) for x in INCLUDE[i:i + 3]) for i in range(0, len(INCLUDE), 3)) + "]",
               "", "[modules]",
               "# the renames [paths] and [roots] imply (`layout.py --modules`)"]
     lines += [f"{toml_str(k)} = {toml_str(x)}" for k, x in sorted(v["modules"].items())]
@@ -836,6 +897,17 @@ def main():
         die("paths of the moved tree that differ only by case, which a checkout that ignores case merges (a row in EXCEPT):\n  "
             + "\n  ".join(" and ".join(sorted(v)) for v in by_case[:40]))
     new_of = lambda p: dest[p][0] if p in dest else p   # noqa: E731
+    members = tomllib.loads(git(repo, "show", f"{a.ref}:pyproject.toml")).get("tool", {}).get("uv", {}).get("workspace", {}).get("members", [])
+    cut = []                                           # uv finds a member's workspace at the first pyproject.toml above it
+    for m in sorted(members):
+        pp = f"{m.rstrip('/')}/pyproject.toml"
+        if pp in tracked and any(isinstance(s, dict) and s.get("workspace") for s in tomllib.loads(
+                git(repo, "show", f"{a.ref}:{pp}")).get("tool", {}).get("uv", {}).get("sources", {}).values()):
+            cut += [f"{new_of(pp)}: below {d}/pyproject.toml" for d in ancestors(posixpath.dirname(new_of(pp)))
+                    if f"{d}/pyproject.toml" in after_all]
+    if cut:
+        die("a workspace member whose sources name the workspace lands below another pyproject.toml, where `uv lock` no "
+            "longer finds the workspace (a row in EXCEPT for the pyproject.toml above it):\n  " + "\n  ".join(cut))
     testpaths = [new_of(pp)[: -len("pyproject.toml")].rstrip("/") + t[len(posixpath.dirname(pp)):] for pp, ts in suites for t in ts]
     defines = set(git(repo, "grep", "-lE", r"^(async\s+)?def\s+test|^class\s+Test", a.ref, "--", "*.py").replace(a.ref + ":", "").split())
     unsuited = sorted(new_of(p) for p in tracked if TEST_FILE.fullmatch(p) and p in defines and not p.startswith(UNSUITED)
