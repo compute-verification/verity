@@ -10,18 +10,19 @@
 # assembles CUDA 12.9's nvcc first, `benchmarks/pouw/harness/jobs/toolkit.sh`). DEFS are session.cu's own nvcc
 # arguments (-DSK64_PER_SM=2: the 64-row receipt kernels at 128 registers a thread).
 #
-# Then each of STEPS under a lease of its own on CARDS, of at most LEASE_MIN minutes and taken without waiting: a card
-# whose lock is held, or with a compute process or more than a GiB in use on it, ends the run (exit 75) with nothing
-# started there. No step starts after NOT_AFTER (`date -d` syntax), so a run stays inside its booked hours.
+# Then each of STEPS (`rows session` unless given) under a lease of its own on CARDS, of at most LEASE_MIN minutes and
+# taken without waiting: a card whose lock is held, or with a compute process or more than a GiB in use on it, ends
+# the run (exit 75) with nothing started there. No step starts after NOT_AFTER (`date -d` syntax), so a run stays
+# inside its booked hours.
 #
 #   rows      rows.py: at each of ROWS in turn on one store of GIB GiB across CARDS, the device's gates, the store's
 #             openings and the calibration (CAL chained passes each, over the plain read); out/rows.json
-#   inplace   inplace_gate.py --no-timing at 64 and at 16 rows: the in-place pass against the reference
-#   look      rows.py at LOOK_ROWS for each of LOOK_CTAS receipt CTAs in turn, a lease each: which count the pass over
-#             the read is least at; out/look-CTAS/rows.json
 #   session   PLAN's sessions at SESSION_ROWS rows over SESSION_GIB GiB on the first card, the verifier's process
 #             (on VERIFIER_CORES) beside the prover (on PROVER_CORES) on this machine, which audits nothing: a check
 #             of the kernels against the verifier; out/session/
+#   look      rows.py at LOOK_ROWS for each of LOOK_CTAS receipt CTAs in turn, a lease each: which count the pass over
+#             the read is least at; out/look-CTAS/rows.json
+#   inplace   inplace_gate.py --no-timing at 64 and at 16 rows: the in-place pass against the reference
 #
 #   research run --on NODE --project verity --source TREE --cwd clone --send main-session.cu -- \
 #     env CARDS=0 CORES=0-7 ARCH=90a NOT_AFTER=2026-11-11T11:30Z bash benchmarks/remote_session/rows.sh
@@ -55,7 +56,7 @@ session() {  # under the lease: PLAN's sessions, the verifier's process beside t
 }
 if [ "${1:-}" = session ]; then session; exit $?; fi
 
-STEPS=${STEPS-rows inplace session} ROWS=${ROWS:-64 16} GIB=${GIB:-16}
+STEPS=${STEPS-rows session} ROWS=${ROWS:-64 16} GIB=${GIB:-16}
 LOOK_ROWS=${LOOK_ROWS:-64} LOOK_CTAS=${LOOK_CTAS:-64 96 128}
 LEASE_MIN=${LEASE_MIN:-30} LEASE_MEM_GB=${LEASE_MEM_GB:-64}
 export CAL=${CAL:-400} SKETCH_CTAS=${SKETCH_CTAS:-128} PLAN=${PLAN:-honest,skip:0.0625}
