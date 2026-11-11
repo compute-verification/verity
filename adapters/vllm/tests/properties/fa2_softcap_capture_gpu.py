@@ -124,7 +124,7 @@ def compare(job: dict[str, Any]) -> dict[str, Any]:
     from verity.definitions.registry import prims as P
     from verity_vllm.program.frontend import targets as TG
 
-    table = np.memmap(job["tanh_table"], dtype="<u4", mode="r")
+    table: np.ndarray = np.memmap(job["tanh_table"], dtype="<u4", mode="r")
     tanh = lambda x: mufu_tanh(x, table, job["tanh_lo"])  # noqa: E731
     c, D, q, k, v, o, bt, cap = job["case"], job["D"], job["q"], job["k"], job["v"], job["out"], job["block_table"], job["case"]["softcap"]
     tp = TargetProfile.default().with_overrides(compute_capability=tuple(job["cc"]), num_sms=int(job["sms"]))
@@ -180,9 +180,9 @@ def compare(job: dict[str, Any]) -> dict[str, Any]:
             rec["mismatch"] += int(bad.size)
             rec["mismatch_finite"] += int(np.count_nonzero(~nonfinite[bad]))
             if bad.size and rec["first_mismatch"] is None:
-                h = int(bad[0])
-                rec["first_mismatch"] = {"token": tok + r, "head": h, "T": T, "guarded_from": gfrom, "nonfinite": bool(nonfinite[h]),
-                                         "want": [int(x) for x in want[h][:4]], "kernel": [int(x) for x in got[h][:4]]}
+                hb = int(bad[0])
+                rec["first_mismatch"] = {"token": tok + r, "head": hb, "T": T, "guarded_from": gfrom, "nonfinite": bool(nonfinite[hb]),
+                                         "want": [int(x) for x in want[hb][:4]], "kernel": [int(x) for x in got[hb][:4]]}
         tok += sq
     return {"case": c["name"], "D": D, **rec}
 

@@ -633,7 +633,8 @@ def _doc() -> dict:
              {**g, "phase": "linear", "case": "lm_head.shard", "M": 1, **NONE, "words": 6, "reference_coords": 1},
              {**g, "phase": "bmm", "case": "v_absorb", "M": 1, **NONE, "words": 4, "reference_coords": 1},
              {**d, "phase": "f32out", "case": "compressor.kv_score.c4", "M": 1, **NONE, "words": 4, "reference_coords": 1}]
-    doc: dict[str, Any] = {"schema": X.SCHEMA, "models": list(X.MODELS), "expected": [X._case(x) for x in launches], "gate": {"ok": True}, "errors": {},
+    doc: dict[str, Any]
+    doc = {"schema": X.SCHEMA, "models": list(X.MODELS), "expected": [X._case(x) for x in launches], "gate": {"ok": True}, "errors": {},
            "switch": {"ok": True, "cublas_version": 120900}, "switch_after": {"ok": True},
            "selection": {m: {"ok": True} for m in X.MODELS}, "bind": {"ok": True}, "scan": {"enabled": False, "cases": {}, "ok": True},
            "launches": launches,

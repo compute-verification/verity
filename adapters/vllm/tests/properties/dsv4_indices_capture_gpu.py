@@ -176,7 +176,7 @@ def requests(case: str, kind: str, seed: int) -> dict[str, Any]:
         er = edge_requests(c)
         seq, ql, gather = (np.array([r[i] for r in er], dtype=np.int64) for i in (0, 1, 2))
         n, m = EDGE_N, EDGE_M
-    b = np.repeat(np.arange(seq.size), ql)
+    b: np.ndarray = np.repeat(np.arange(seq.size), ql)
     pos = (seq - ql)[b] + (np.arange(b.size) - np.concatenate([[0], np.cumsum(ql)[:-1]])[b])
     o = {"seq": seq, "qlen": ql, "gather": gather, "M": m, "N": n, "pos": pos, "b": b, "mb": _w(m * b), "n": _w(np.full(b.size, n)),
          "gs": _w((seq - gather)[b])}
@@ -208,7 +208,7 @@ def short_rows(pos, K: int, ratio: int) -> np.ndarray:
     with np.errstate(over="ignore"):
         t = np.asarray(pos, dtype=np.int64) + np.int64(1)
     q = np.where(t >= 0, t // ratio, -1)
-    i = np.arange(K, dtype=np.int64)[None, :]
+    i: np.ndarray = np.arange(K, dtype=np.int64)[None, :]
     return _w(np.where(i < q[:, None], i, -1))
 
 
@@ -461,7 +461,7 @@ def ptx(triton_cache: Path, outdir: Path) -> dict[str, Any]:
         tool = shutil.which("cuobjdump")
     rec: dict[str, Any] = {"kernels": {}}
     for key, kernel in KERNELS.items():
-        entries = []
+        entries: list[dict[str, Any]] = []
         for f in sorted(glob.glob(str(triton_cache / "**" / f"{kernel}.ptx"), recursive=True)):
             text = Path(f).read_text(errors="replace")
             sha = hashlib.sha256(text.encode()).hexdigest()

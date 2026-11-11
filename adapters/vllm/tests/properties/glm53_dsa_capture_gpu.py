@@ -260,7 +260,7 @@ def slot_bytes(cache: np.ndarray, slot: int) -> tuple[np.ndarray, int]:
 
 def slot_mask(n_blocks: int, slots) -> np.ndarray:
     """The bytes of a [n_blocks, BLOCK, STRIDE] cache that writing ``slots`` touches."""
-    m = np.zeros(n_blocks * BLOCK * STRIDE, dtype=bool)
+    m: np.ndarray = np.zeros(n_blocks * BLOCK * STRIDE, dtype=bool)
     for slot in slots:
         blk, off = divmod(int(slot), BLOCK)
         base = blk * BLOCK * STRIDE
@@ -306,7 +306,7 @@ def logit_rows(q: np.ndarray, w: np.ndarray, k: np.ndarray, ks: np.ndarray) -> t
 
 def topk_short(lens: np.ndarray, width: int = TOPK) -> np.ndarray:
     """`DsaTopKShortRow_v1{TOPK}` per row: slot j holds j when j < len, else -1."""
-    j = np.arange(width, dtype=np.int64)[None, :]
+    j: np.ndarray = np.arange(width, dtype=np.int64)[None, :]
     return np.where(j < np.asarray(lens, dtype=np.int64)[:, None], j, -1).astype(np.int32)
 
 
@@ -318,7 +318,7 @@ def topk_valid(vals: np.ndarray, n: int, idx: np.ndarray) -> dict[str, Any]:
     ties = None
     if ok:
         v = np.asarray(vals[:n], dtype=np.float32)
-        mask = np.zeros(n, dtype=bool)
+        mask: np.ndarray = np.zeros(n, dtype=bool)
         mask[sel] = True
         thr = v[mask].min()
         ok = not bool((v[~mask] > thr).any())
@@ -468,7 +468,7 @@ def index_k_probe(launch: int, seed: int = 0) -> tuple[list[int], list[int]]:
     s = rng.uniform(0.25, 1.0, half) * rng.choice([-1.0, 1.0], half)
     cs = [bf16_word(v) for v in np.concatenate([c, s])]
     cf = np.array([np.float64(np.uint32(w << 16).view(np.float32)) for w in cs])
-    b = np.zeros(D, dtype=np.float32)
+    b: np.ndarray = np.zeros(D, dtype=np.float32)
     for p in range(half):
         small = (1 + (2 * int(rng.integers(8)) + 1) / 16) * 2.0 ** int(rng.integers(-5, -1)) * rng.choice([-1, 1])
         large = rng.uniform(64, 400) * rng.choice([-1, 1])
@@ -718,7 +718,7 @@ def rope_probe_inputs(n_tokens: int) -> tuple[np.ndarray, np.ndarray]:
     half = ROPE // 2
     quads = (quads * (-(-n_tokens * half // len(quads))))[:n_tokens * half]
     q = np.array(quads, dtype=np.uint16).reshape(n_tokens, half, 4)
-    x = np.empty((n_tokens, ROPE), dtype=np.uint16)
+    x: np.ndarray = np.empty((n_tokens, ROPE), dtype=np.uint16)
     x[:, 0::2], x[:, 1::2] = q[..., 0], q[..., 1]
     return x, np.concatenate([q[..., 2], q[..., 3]], axis=1)
 
@@ -1262,6 +1262,7 @@ def bind_check() -> dict[str, Any]:
     from verity.definitions.registry import sparse_mla_split as W
 
     mla = {k: v for k, v in M.SPARSE_MLA_GLM53.items() if k != "NH"}
+    targets: dict[str, Any]
     targets = {f"DsaIndexerKRow_v1{{D={D},ROPE={ROPE},EPS={K_EPS}}}": lambda: bind(dsa.DsaIndexerKRow, D=D, ROPE=ROPE, EPS=K_EPS),
                f"DsaIndexerQ_v1{{H={H},D={D},ROPE={ROPE}}}": lambda: bind(dsa.DsaIndexerQ, H=H, D=D, ROPE=ROPE),
                f"DsaMqaLogit_v3{{H={H},D={D}}}": lambda: bind(dsa.DsaMqaLogitV3, H=H, D=D),

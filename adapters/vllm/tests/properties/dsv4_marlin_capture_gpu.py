@@ -532,7 +532,7 @@ def kernel_config(k: dict[str, Any] | None, sms: int, types: list[int] | None, *
     threads x 1 x 1 on a grid of sms * b x 1 x 1, with the block's `kernel_statics` and, when given, the served [a, b, c, s] type
     ids."""
     t = (k or {}).get("template")
-    if not t:
+    if k is None or not t:
         return None, False
     grid, threads = list(k.get("grid") or [0, 0, 0]), list(k.get("block") or [0, 0, 0])
     tk, tn = 16 * t["thread_k_blocks"], 16 * t["thread_n_blocks"]
@@ -605,7 +605,9 @@ def assignment(st: np.ndarray, ex: np.ndarray, ntpp: int, ids_flat: np.ndarray, 
     position in the sorted ids over ``block``) and that block's expert, and par = num_tokens_post_padded / ``block``; ok when every
     pair sits in exactly one block below par, whose expert routes it."""
     n = ids_flat.size
-    blk, e, seen = np.full(n, -1, dtype=np.int64), np.full(n, -1, dtype=np.int64), np.zeros(n, dtype=np.int64)
+    blk: np.ndarray = np.full(n, -1, dtype=np.int64)
+    e: np.ndarray = np.full(n, -1, dtype=np.int64)
+    seen: np.ndarray = np.zeros(n, dtype=np.int64)
     par = ntpp // block
     for b in range(min(int(ex.size), par)):
         p = st[b * block:(b + 1) * block]
@@ -866,7 +868,7 @@ def compare_words(job: dict[str, Any]) -> dict[str, Any]:
     p = np.asarray(job["moved"][p0:p1], dtype=np.int64) if "moved" in job else np.arange(p0, p1)
     want, got = _twin(job, p, np.arange(job["N"]))
     bad = np.argwhere(want != got)
-    rec = {"words": int(want.size), "mismatch": len(bad), "first_mismatch": None}
+    rec: dict[str, Any] = {"words": int(want.size), "mismatch": len(bad), "first_mismatch": None}
     if len(bad):
         i, n = (int(v) for v in bad[0])
         rec["first_mismatch"] = {"pair": int(p[i]), "column": n, "want": int(want[i, n]), "kernel": int(got[i, n])}
@@ -906,12 +908,13 @@ def compare_reference(job: dict[str, Any]) -> dict[str, Any]:
             cut_p = MR.schedule(KT, NT, GRID, int(blk[p]), par)
         for n in sorted({0, N - 1, (p * 7919) % N}):
             q, s, cut = w["wq"][e[p], n], w["ws"][e[p], n], cut_p[n // TN]
-            lead = [x[p].tolist(), cut.astype(int).tolist()] + ([int(gb[p])] if routed else [])
+            lead = [x[p].tolist(), cut.astype(int).tolist()] + ([int(gb[p])] if routed and gb is not None else [])
             y = evaluate(coord, *lead, q.tolist(), s.tolist())
             twin = MR.coordinates(x[p][None], cut[None], q[None], s[None], TK=TK, g=None if gb is None else gb[p:p + 1])
             rec["reference_coords"] += 1
             rec["twin_mismatch"] += y != (int(twin[0]),)
     if routed:
+        assert gb is not None, "a w2 launch saves its gates"
         n = (P * 7919) % N
         cut = cuts.get(int(blk[0]), MR.schedule(KT, NT, GRID, int(blk[0]), par))[n // TN]
         fn = bind(MM.MarlinMoeExpertCoordinateW, E=E, K=K, TK=TK, DOT=MM.DOT)
@@ -1009,6 +1012,7 @@ def cases(doc: dict[str, Any]) -> dict[str, dict[str, Any]]:
     """Each case's own verdict: its launches' checks, the configs it ran (`auto` launches at their kernel's config, `forced` ones that
     were accepted), its probes and its words, so a NO-GO names what failed."""
     out: dict[str, dict[str, Any]] = {}
+    c: dict[str, Any] | None
     for x in doc["launches"]:
         c = out.setdefault(x["case"], {"launches_ok": True, "totals": {k: 0 for k in TOTALS}, "configs": [], "refused": 0})
         c["launches_ok"] = c["launches_ok"] and _launch_ok(x)

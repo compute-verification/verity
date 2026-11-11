@@ -204,7 +204,7 @@ def layout(layer: str, seed: int) -> dict[str, np.ndarray]:
     pos = np.concatenate([np.arange(s0, s0 + n0), np.arange(s1, s1 + n1), [p for p, _, _ in extra]]).astype(np.int64)
     req = np.concatenate([np.zeros(n0), np.ones(n1), np.full(len(extra), 2)]).astype(np.int32)
     top = max(p for p, _, _ in extra) + 1
-    sbt = np.zeros((3, (s1 + n1) // L.block + 1), dtype=np.int32)
+    sbt: np.ndarray = np.zeros((3, (s1 + n1) // L.block + 1), dtype=np.int32)
     perm, k = rng.permutation(NBS[layer]).astype(np.int32), 0
     for r, (a, b) in enumerate(((s0, s0 + n0), (s1 - pre, s1 + n1), (0, top))):
         lo, hi = a // L.block, -(-b // L.block)
@@ -212,7 +212,7 @@ def layout(layer: str, seed: int) -> dict[str, np.ndarray]:
         k += hi - lo
     sslot = sbt[req, pos // L.block].astype(np.int64) * L.block + pos % L.block
     e = pos // L.ratio
-    kbt = np.zeros((3, (s1 + n1) // L.ratio // L.pbs + 1), dtype=np.int32)
+    kbt: np.ndarray = np.zeros((3, (s1 + n1) // L.ratio // L.pbs + 1), dtype=np.int32)
     kperm, k = rng.permutation(NBK[layer]).astype(np.int32), 0
     for r, (a, b) in enumerate(((s0, s0 + n0), (s1, s1 + n1), (0, top))):
         lo, hi = a // L.ratio // L.pbs, -(-(b // L.ratio + 1) // L.pbs)
@@ -284,7 +284,7 @@ def operands(layer: str, seed: int) -> dict[str, Any]:
     w = FX._bf16(1 + 0.1 * rng.standard_normal(D))
     for i, v in W_SPECIAL.items():
         w[i] = v
-    state = np.full((NBS[layer], STATE_PAGE), SENTINEL_STATE, dtype=np.uint32)
+    state: np.ndarray = np.full((NBS[layer], STATE_PAGE), SENTINEL_STATE, dtype=np.uint32)
     k = lay["prefilled"].shape[0]
     rows = np.concatenate([scaled(k), (4 * rng.standard_normal((k, L.width))).astype(np.float32)], axis=1).view(np.uint32)
     state_rows_of(state, layer)[lay["prefilled"][:, 0], lay["prefilled"][:, 1]] = rows
@@ -331,7 +331,7 @@ def slot_words(cache: np.ndarray, slots, pbs: int) -> np.ndarray:
 def written_bytes(n_pages: int, pbs: int, slots) -> np.ndarray:
     """The bytes of a (n_pages, page_bytes(pbs)) cache that writing rows at ``slots`` touches: 576 value bytes and 8 scale bytes."""
     page = page_bytes(pbs)
-    m = np.zeros(n_pages * page, dtype=bool)
+    m: np.ndarray = np.zeros(n_pages * page, dtype=bool)
     for slot in slots:
         blk, off = divmod(int(slot), pbs)
         m[blk * page + off * DATA_BYTES: blk * page + (off + 1) * DATA_BYTES] = True
@@ -498,7 +498,7 @@ def observe(work: Path, layer: str, o: dict[str, Any], runs: list[dict[str, np.n
     p, r_, ss, ks = o["pos"], o["req"], o["sslot"], o["kslot"]
     flat = lambda s: state_rows_of(s, layer).reshape(nbs * L.block, 2 * L.width)  # noqa: E731
     written = np.flatnonzero(ss >= 0)
-    touched = np.zeros(nbs * L.block, dtype=bool)
+    touched: np.ndarray = np.zeros(nbs * L.block, dtype=bool)
     touched[ss[written]] = True
     pad = slice(L.block * 2 * L.width, None)
     jobs: list[dict[str, Any]] = []
@@ -516,6 +516,7 @@ def observe(work: Path, layer: str, o: dict[str, Any], runs: list[dict[str, np.n
     act = compressed(o, layer)
     (_, n0), (_, n1, _) = REQUESTS[layer]
     want = {0: n0 // L.ratio, 1: (REQUESTS[layer][1][0] + n1) // L.ratio - REQUESTS[layer][1][0] // L.ratio}
+    rec_comp: dict[str, Any]
     rec_comp = {"phase": "compress", "case": layer, "entries": int((act & (r_ == 0)).sum()),
                 "checks": {"deterministic": bool(np.array_equal(k, runs[1]["k"])),
                            "state_unchanged": all(np.array_equal(r["saved"], r["after"]) for r in runs),

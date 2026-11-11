@@ -260,7 +260,8 @@ class Taps:
     """Wraps module globals of vLLM modules: each call's name, keyword arguments, operands and outputs (cloned when written)."""
 
     def __init__(self, module: str, names: tuple[str, ...]):
-        self.module, self.names, self.calls = module, names, []
+        self.module, self.names = module, names
+        self.calls: list[dict[str, Any]] = []
 
     def __enter__(self):
         import importlib
@@ -458,7 +459,7 @@ def compare_linear(job: dict[str, Any]) -> dict[str, Any]:
 
     a = B._load(job["paths"])
     K, N, deep, rmap = job["K"], job["N"], job["branch"] == "deepgemm", job["row_map"]
-    rec = {**{k: 0 for k in TOTALS}, "first_mismatch": None}
+    rec: dict[str, Any] = {**{k: 0 for k in TOTALS}, "first_mismatch": None}
     r0, r1 = job["rows"]
     for i in range(r0, r1):
         r = rmap[i]
@@ -489,7 +490,7 @@ def compare_weights(job: dict[str, Any]) -> dict[str, Any]:
     from verity.definitions.numerics import deepgemm_twins as T
 
     a = B._load(job["paths"])
-    N, b0, b1 = job["N"], *job["block_rows"]
+    N, (b0, b1) = job["N"], job["block_rows"]
     r0, r1 = b0 * GROUP, min(N, b1 * GROUP)
     raw_w = np.asarray(a["raw_w"][r0:r1])
     if job["fmt"] == "e8m0":
@@ -501,7 +502,7 @@ def compare_weights(job: dict[str, Any]) -> dict[str, Any]:
     diff = np.zeros((nb * GROUP, kb * GROUP), dtype=bool)
     diff[:r1 - r0] = np.asarray(a["w"][r0:r1]) != want_w
     bad = diff.reshape(nb, GROUP, kb, GROUP).any(axis=(1, 3)) | (np.asarray(a["ws"][b0:b1]) != want_ws)
-    rec = {**{k: 0 for k in TOTALS}, "first_mismatch": None}
+    rec: dict[str, Any] = {**{k: 0 for k in TOTALS}, "first_mismatch": None}
     rec["weight_blocks"] = int((~unres).sum())
     rec["weight_mismatch"] = int((bad & ~unres).sum())
     rec["band_blocks"] = int(unres.sum())
@@ -584,7 +585,7 @@ def compare_einsum(job: dict[str, Any]) -> dict[str, Any]:
     H, K, N, rmap = job["H"], job["K"], job["N"], job["row_map"]
     w = np.asarray(a["w"]).reshape(H, N, K)
     ws = np.asarray(a["ws"]).reshape(H, cdiv(N, GROUP), K // GROUP)
-    rec = {**{k: 0 for k in TOTALS}, "first_mismatch": None}
+    rec: dict[str, Any] = {**{k: 0 for k in TOTALS}, "first_mismatch": None}
     r0, r1 = job["rows"]
     for i in range(r0, r1):
         t = rmap[i]
@@ -655,7 +656,7 @@ def jit(cache: Path, predicted: list[list[str]]) -> dict[str, Any]:
     for f in sorted(glob.glob(str(cache / "**" / "kernel.cu"), recursive=True)):
         m = JIT.search(Path(f).read_text(errors="replace"))
         name, args = (m.group(1), [s.strip() for s in m.group(2).split(",")]) if m else (None, [])
-        k = {"impl": name, "args": args}
+        k: dict[str, Any] = {"impl": name, "args": args}
         k["ok"] = name == LAYOUT_IMPL or (name == GEMM_IMPL and len(args) == 20 and args[7] == str(GROUP)
                                           and args[17] in ("GemmType::Normal", "GemmType::Batched")
                                           and args[18] == "cutlass::bfloat16_t" and args[19] == "epilogue::transform::EpilogueIdentity"
@@ -730,6 +731,7 @@ def cases(doc: dict[str, Any]) -> dict[str, dict[str, Any]]:
     """Each case's own verdict (a linear or the einsum at one M, or one weight's processing): its launch's checks and its words,
     so a NO-GO names what failed."""
     out: dict[str, dict[str, Any]] = {}
+    c: dict[str, Any] | None
     for x in doc["launches"]:
         c = out.setdefault(_case(x), {"launches_ok": True, "branch": x.get("branch"), "totals": {k: 0 for k in TOTALS}})
         c["launches_ok"] = c["launches_ok"] and _launch_ok(x)

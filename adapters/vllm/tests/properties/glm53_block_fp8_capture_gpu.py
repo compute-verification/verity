@@ -79,9 +79,10 @@ import sys
 import tempfile
 import traceback
 from collections import Counter
+from collections.abc import Callable, Set
 from concurrent.futures import ProcessPoolExecutor
 from pathlib import Path
-from typing import Any, Callable
+from typing import Any
 
 import numpy as np
 
@@ -542,7 +543,7 @@ def _assignment_ok(L: dict[str, Any], ids_flat: np.ndarray) -> bool:
     if L["sorted_token_ids"] is None:
         return bool(np.array_equal(ex, ids_flat) and ntpp == n * bm)
     st = L["sorted_token_ids"].cpu().numpy()
-    seen = np.zeros(n, dtype=np.int64)
+    seen: np.ndarray = np.zeros(n, dtype=np.int64)
     for b in range(min(ex.size, cdiv(ntpp, bm))):
         p = st[b * bm:(b + 1) * bm]
         p = p[p < n]
@@ -689,7 +690,7 @@ def compare_moe(job: dict[str, Any]) -> dict[str, Any]:
     from verity.definitions.registry import deepgemm as DG
     from verity.definitions.registry import fp8_moe as MO
 
-    rec = {**{k: 0 for k in TOTALS}, "first_mismatch": None, "refuted": {}}
+    rec: dict[str, Any] = {**{k: 0 for k in TOTALS}, "first_mismatch": None, "refuted": {}}
     out = {"phase": job["phase"], "case": job["case"], "launch": job["launch"], "pair_range": job["pair_range"]}
     a = _load(job["paths"])
     K, N, KB, SWAP, top_k = job["K"], job["N"], job["KB"], job["SWAP"], job["top_k"]
@@ -761,7 +762,7 @@ def compare_sum(job: dict[str, Any]) -> dict[str, Any]:
     from verity.definitions.numerics.rows import moe_sum
     from verity.definitions.registry import moe as MOE_R
 
-    rec = {**{k: 0 for k in TOTALS}, "first_mismatch": None, "refuted": {}}
+    rec: dict[str, Any] = {**{k: 0 for k in TOTALS}, "first_mismatch": None, "refuted": {}}
     a = _load(job["paths"])
     r0, r1 = job["rows"]
     H = job["H"]
@@ -806,7 +807,7 @@ def ptx_family(text: str) -> str | None:
     return None
 
 
-def ptx(triton_cache: Path, tiles: set[tuple[int, int, int, int]] = frozenset()) -> dict[str, Any]:
+def ptx(triton_cache: Path, tiles: Set[tuple[int, int, int, int]] = frozenset()) -> dict[str, Any]:
     """Every `fused_moe_kernel` the run compiled (one Triton cache entry per specialization): its e4m3 `tt.dot` (M, N, K) from the
     TTIR, its warps from the entry's metadata, the DOT family `fp8_moe.sm90_dot` gives that tile, and the family its PTX runs
     (`ptx_family`); ok when every kernel's two agree and every launch's tile (`launch_tile`) is among the kernels."""
@@ -819,6 +820,7 @@ def ptx(triton_cache: Path, tiles: set[tuple[int, int, int, int]] = frozenset())
         ttir, meta = p.with_suffix(".ttir"), p.with_suffix(".json")
         dots = TT_DOT.findall(ttir.read_text(errors="replace")) if ttir.exists() else []
         warps = json.loads(meta.read_text()).get("num_warps") if meta.exists() else None
+        k: dict[str, Any]
         k = {"wgmma": dict(Counter(WGMMA.findall(text))), "mma_sync": dict(Counter(MMA_SYNC.findall(text))),
              "cvt_e4m3": len(CVT_E4M3.findall(text)), "tt_dot": sorted({tuple(map(int, d)) for d in dots}), "num_warps": warps}
         shapes = {(int(m), int(n), int(kk)) for m, kk, _, n, _, _ in dots}
@@ -909,6 +911,7 @@ def cases(doc: dict[str, Any]) -> dict[str, dict[str, Any]]:
     """Each case's own verdict (a MoE case or a probe with its chain and two launches, or the planted sum): its launches' checks,
     its words, the competing models it refuted and the expert tiles, so a NO-GO names what failed."""
     out: dict[str, dict[str, Any]] = {}
+    c: dict[str, Any] | None
     for x in doc["launches"]:
         c = out.setdefault(_case(x), {"launches_ok": True, "totals": {k: 0 for k in TOTALS}, "refuted": {}, "tiles": [], "dots": {}})
         c["launches_ok"] = c["launches_ok"] and _launch_ok(x)

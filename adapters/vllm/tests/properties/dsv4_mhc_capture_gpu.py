@@ -308,7 +308,7 @@ def probe_launch(rng: np.random.Generator, family: str) -> dict[str, Any]:
     """One probe launch of `tf32_hc_prenorm_gemm`: a [PROBE_M, K] bf16, b [PROBE_N, K] f32, NS splits (module docstring)."""
     M, N, K, NS = PROBE_M, PROBE_N, 64, 1
     if family == "round":
-        a = np.zeros((M, K), np.uint16)
+        a: np.ndarray = np.zeros((M, K), np.uint16)
         a[np.arange(M), np.arange(M) % K] = 0x3F80
         low = rng.choice(np.array([0x1000, 0x1FFF, 0x0FFF, 0x1001, 0x0001, 0x1800]), (N, K))
         low = np.where(rng.random((N, K)) < 0.25, rng.integers(0, 1 << 13, (N, K)), low)
@@ -344,7 +344,7 @@ def probe_launch(rng: np.random.Generator, family: str) -> dict[str, Any]:
             k = 64 * s
             a[:half, k:k + 2] = _pow2_bf16(rng.integers(0, 2, (half, 1)), -60)
             a[half:, k:k + 8] = _pow2_bf16(rng.integers(0, 2, (M - half, 8)), rng.integers(-62, -59, (M - half, 1)))
-            t = -160 + (np.arange(N) + s) % 6
+            t: np.ndarray = -160 + (np.arange(N) + s) % 6
             sign = rng.integers(0, 2, N)
             b[:, k] = _f32_parts(sign, -91, (1 << (t + 161)) << 13)
             b[:, k + 1] = _f32_parts(sign, -90, (512 - (1 << (t + 160))) << 13)
@@ -355,8 +355,8 @@ def probe_launch(rng: np.random.Generator, family: str) -> dict[str, Any]:
             small = rng.integers(0, 2, M) << 15 | rng.integers(0, 128, M) | (rng.integers(-75, -66, M) + 127) << 7
             big = rng.integers(0, 2, M) << 15 | rng.integers(0, 128, M) | (rng.integers(-62, -60, M) + 127) << 7
             swap = rng.integers(0, 2, M).astype(bool)
-            k = 64 * s + (np.arange(M) + s) % 4
-            a[np.arange(M), k], a[np.arange(M), k + 4] = np.where(swap, small, big), np.where(swap, big, small)
+            col: np.ndarray = 64 * s + (np.arange(M) + s) % 4
+            a[np.arange(M), col], a[np.arange(M), col + 4] = np.where(swap, small, big), np.where(swap, big, small)
         b = _b_tf32(rng, (N, K), -10, 10)
     elif family == "special":
         a = bf16_words(rng.standard_normal((M, K)))
@@ -504,7 +504,8 @@ class Spy:
     given (its first two arguments, [NS, T, OUT] and [NS, T]) and calls the kernel."""
 
     def __init__(self, module, name: str):
-        self.module, self.name, self.kernel, self.calls = module, name, getattr(module, name), []
+        self.module, self.name, self.kernel = module, name, getattr(module, name)
+        self.calls: list[tuple[Any, Any]] = []
 
     def __enter__(self) -> "Spy":
         setattr(self.module, self.name, self)
@@ -567,6 +568,7 @@ def _splits_for(phase: str, T: int) -> int | None:
 
 def reference_pieces(phase: str, NS: int | None) -> list[dict[str, Any]]:
     if phase == "fused":
+        assert NS is not None
         return [{"piece": "split", "s": s} for s in range(NS)] + [{"piece": "bigfuse"}]
     if phase == "tf32":
         return [{"piece": "post"}, {"piece": "prenorm"}, {"piece": "bigfuse"}]
@@ -767,6 +769,7 @@ def served_bindings() -> dict[str, Any]:
     from verity.definitions.registry import mhc as R
 
     norm = {"REPEAT": REPEAT, "EPS": EPS, "HC_EPS": HC_EPS}
+    out: dict[str, Any]
     out = {"HopperTf32WgmmaDot8_v1": lambda: R.HopperTf32WgmmaDot8, "MhcSigmoid_v1": lambda: bind(R.MhcSigmoid),
            "MhcSinkhorn_v1{4,20}": lambda: bind(R.MhcSinkhorn, HC=HC, REPEAT=REPEAT, EPS=HC_EPS),
            "MhcPreNorm_v1{4,7168,64}": lambda: bind(R.MhcPreNorm, HC=HC, H=H, TN=TN, EPS=EPS),

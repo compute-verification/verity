@@ -259,8 +259,8 @@ def splitk_probe_words(K: int, splits: int, output: str, N: int = 32, seed: int 
     rng = np.random.default_rng(seed + K + splits + N + (output == "bf16"))
     values = np.array([s * 2.0 ** e for e in (-20, -10, -1, 0, 1, 10, 20, 30, 50) for s in (-1, 1)] + [0.0], np.float32)
     pool = (values.view(np.uint32) >> np.uint32(16)).astype(np.uint16)
-    x = np.full((1, K), 0x3F80, np.uint16)
-    w = np.zeros((N, K), np.uint16)
+    x: np.ndarray = np.full((1, K), 0x3F80, np.uint16)
+    w: np.ndarray = np.zeros((N, K), np.uint16)
     w[:, 0:K:16] = rng.choice(pool, (N, K // 16))
     starts = [int(cols[0]) for cols in BC._split_cols(K, splits, "contiguous")]
     if splits >= 3:
@@ -513,7 +513,8 @@ class Weights:
     dequantized kv_b_proj weight with `W_UK_T` and `W_UV` as views of its transpose."""
 
     def __init__(self, work: Path, seed: int):
-        self.work, self.seed, self.made = work, seed, {}
+        self.work, self.seed = work, seed
+        self.made: dict[tuple[str, str], tuple[Any, Any]] = {}
 
     def get(self, model: str, name: str):
         key = (model, name)
@@ -638,7 +639,7 @@ def scan_routes(regimes: list[dict[str, Any]]) -> list[list[int | None]]:
     """The regimes as `bf16_gemm_check`'s route table rows: maximal [m0, m1, split] runs (split None: the serial chain)."""
     runs: list[list[int | None]] = []
     for r in regimes:
-        if runs and runs[-1][2] == r["split"] and runs[-1][1] + 1 == r["m0"]:
+        if runs and runs[-1][2] == r["split"] and runs[-1][1] == r["m0"] - 1:
             runs[-1][1] = r["m1"]
         else:
             runs.append([r["m0"], r["m1"], r["split"]])
@@ -861,7 +862,7 @@ def route_table(scans: list[dict[str, Any]], run_record: str) -> dict[str, Any]:
     from verity.definitions.registry import bf16_gemm_check as BC
 
     conditions: dict[str, Any] | None = None
-    runs: dict[str, list[list[int | None]]] = {}
+    runs: dict[str, list[list[Any]]] = {}
     for i, doc in enumerate(scans):
         if not doc.get("ok"):
             bad = [k for k, c in doc.get("cases", {}).items() if not c.get("ok")]
@@ -883,7 +884,7 @@ def route_table(scans: list[dict[str, Any]], run_record: str) -> dict[str, Any]:
         raise ValueError("no scan holds a router, linear or f32out case")
     table: dict[str, list[list[int | None]]] = {}
     for key, rs in sorted(runs.items()):
-        joined: list[list[int | None]] = []
+        joined: list[list[Any]] = []
         for r in sorted(rs, key=lambda r: r[0]):
             want = joined[-1][1] + 1 if joined else (BC.LL_MAX_M + 1 if key.startswith("router ") else 1)
             if r[0] != want:
@@ -1119,8 +1120,9 @@ def _compare(job: dict[str, Any]) -> dict[str, Any]:
 
     a = _load(job["paths"])
     r0, r1 = job["rows"]
-    rec = {**{k: 0 for k in TOTALS}, "first_mismatch": None}
+    rec: dict[str, Any] = {**{k: 0 for k in TOTALS}, "first_mismatch": None}
     k = job.get("kernel") or {}
+    want: dict[int | None, np.ndarray]
     if job["phase"] == "bmm":
         got = np.asarray(a["out"][:, r0:r1]).transpose(1, 0, 2).reshape(r1 - r0, -1)
         want = {None: BC.bmm_rows(np.asarray(a["a"][:, r0:r1]), np.asarray(a["b"])).transpose(1, 0, 2).reshape(r1 - r0, -1)}

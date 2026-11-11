@@ -321,7 +321,8 @@ def indexer_edge(rng: np.random.Generator, o: dict[str, Any]) -> None:
 # ----------------------------------------------------------------------------------------------------------------- the twin side
 def written(slots: np.ndarray, nb: int) -> np.ndarray:
     """(nb, page_bytes(64)) bool: the bytes an insert at ``slots`` writes, each slot's 576 data bytes and 8 scale bytes."""
-    data, scale = np.ones((len(slots), M.DATA_BYTES), np.uint8), np.ones((len(slots), M.SCALE_BYTES), np.uint8)
+    data: np.ndarray = np.ones((len(slots), M.DATA_BYTES), np.uint8)
+    scale: np.ndarray = np.ones((len(slots), M.SCALE_BYTES), np.uint8)
     return W.scatter(np.zeros((nb, M.page_bytes(PBS)), np.uint8), slots, data, scale, PBS).astype(bool)
 
 
@@ -359,7 +360,7 @@ def _refs(T_: int, case: str, quick: bool) -> list[int]:
 def insert_jobs(case: str, paths: dict[str, str], T_: int, quick: bool) -> list[dict[str, Any]]:
     """The cache job; q jobs of JOB_TOKENS tokens; reference jobs on the first and the last token (every token of `edge`; under
     --quick only the first)."""
-    job = {"phase": "insert", "case": case, "paths": paths}
+    job: dict[str, Any] = {"phase": "insert", "case": case, "paths": paths}
     jobs = [{**job, "kind": "cache"}]
     jobs += [{**job, "kind": "q", "tokens": [lo, min(T_, lo + JOB_TOKENS)]} for lo in range(0, T_, JOB_TOKENS)]
     return jobs + [{**job, "kind": "insert-ref", "token": t} for t in _refs(T_, case, quick)]
@@ -531,7 +532,8 @@ class Spy:
     through; restores the attribute on exit."""
 
     def __init__(self, owner, name: str, static: bool = False):
-        self.owner, self.name, self.static, self.calls = owner, name, static, []
+        self.owner, self.name, self.static = owner, name, static
+        self.calls: list[tuple] = []
 
     def __enter__(self) -> "Spy":
         self.raw = vars(self.owner)[self.name] if isinstance(self.owner, type) else getattr(self.owner, self.name)

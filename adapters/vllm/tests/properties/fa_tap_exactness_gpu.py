@@ -205,9 +205,9 @@ def out_vs_ir(c: dict[str, Any], D: int, t: dict[str, Any], out, geo: dict[str, 
                 rec["special_mismatch_rows"] += int(tok + r in special)
                 rec["min_T_mismatch"] = T if rec["min_T_mismatch"] is None else min(rec["min_T_mismatch"], T)
             if bad.size and "first_mismatch" not in rec:
-                h = int(bad[0])
-                rec["first_mismatch"] = {"token": tok + r, "head": h, "T": T, "masked_from": mf,
-                                         "ir": [int(x) for x in want[h][:4]], "kernel": [int(x) for x in o[tok + r, h][:4]]}
+                hb = int(bad[0])
+                rec["first_mismatch"] = {"token": tok + r, "head": hb, "T": T, "masked_from": mf,
+                                         "ir": [int(x) for x in want[hb][:4]], "kernel": [int(x) for x in o[tok + r, hb][:4]]}
         tok += sq
     return rec
 

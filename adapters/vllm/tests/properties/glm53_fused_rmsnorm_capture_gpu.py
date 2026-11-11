@@ -68,7 +68,7 @@ SAMPLE = (0, 1, 7, 19, 1000, 2047, 2048, 3071, 3072, 3135)
 CHUNK = 512
 PER_ALT, BATCH, POOL = 4, 256, 4096
 #: the probe's weights: every bf16 word in [1, 2) (a power of two moves no product across a rounding boundary)
-PROBE_W = np.arange(0x3F80, 0x4000, dtype=np.uint16)
+PROBE_W: np.ndarray = np.arange(0x3F80, 0x4000, dtype=np.uint16)
 TOTALS = ("rows", "words", "mismatch", "reference", "twin_mismatch")
 CASES = ("served", "probe")
 KERNEL = "_fused_norm_rope_kernel"
@@ -204,7 +204,7 @@ def probe(N: int, eps: float, seed: int) -> dict[str, Any]:
     w = weight_row(rng, N)
     pool: list[np.ndarray] = []
     ours: list[np.ndarray] = []
-    free = np.ones(N, dtype=bool)
+    free: np.ndarray = np.ones(N, dtype=bool)
     rows: list[int] = []
     targets: list[dict[str, Any]] = []
     for name, (fn, product) in alternatives(N).items():

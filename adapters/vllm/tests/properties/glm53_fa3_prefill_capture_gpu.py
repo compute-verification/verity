@@ -87,7 +87,7 @@ def _error(e: BaseException) -> str:
 
 
 def case_list(quick: bool = False) -> list[dict[str, Any]]:
-    out = [{"name": f"len{n}", "seqlens": [n]} for n in LENGTHS]
+    out: list[dict[str, Any]] = [{"name": f"len{n}", "seqlens": [n]} for n in LENGTHS]
     out += [{"name": k, "seqlens": v} for k, v in VARLEN.items()]
     out.append({"name": "wide", "seqlens": [161, 300], "wide": True})
     return [c for c in out if c["name"] in QUICK] if quick else out
@@ -270,7 +270,8 @@ def split_twin(q, k, v, rows, L: int, ns: int) -> tuple[np.ndarray, np.ndarray]:
     from verity.definitions.registry import fa3_split as FS
 
     twin = {"dot16": DR.TC_DOT16_BY_PRIM["HopperBF16WgmmaDot16_v1"], "inv": DR.INV_SUM_BY_PRIM["Fa3InvSum_v1"]}
-    out, nf = np.empty((len(rows), NH, DV), dtype=np.uint16), np.zeros((len(rows), NH), dtype=bool)
+    out: np.ndarray = np.empty((len(rows), NH, DV), dtype=np.uint16)
+    nf: np.ndarray = np.zeros((len(rows), NH), dtype=bool)
     for i, r in enumerate(int(x) for x in rows):
         T = r + 1
         out[i], nf[i] = TW.head_split_rows(q[r], k[:T].transpose(1, 0, 2), v[:T].transpose(1, 0, 2), T=T, BN=BN,
@@ -320,8 +321,8 @@ def _compare(job: dict[str, Any]) -> dict[str, Any]:
             return [int(x) for x in evaluate(head, q[r, h].tolist(), k[:T, h].reshape(-1).tolist(), v[:T, h].reshape(-1).tolist())]
 
         nonfinite = np.flatnonzero(flagged[i])
-        for h in nonfinite:
-            want[i, h] = reference(int(h))
+        for hn in nonfinite:
+            want[i, hn] = reference(int(hn))
         if int(r) in SAMPLE or int(r) == L - 1:
             rec["sampled_rows"] += 1
             if split:

@@ -461,7 +461,8 @@ def _doc(batch_invariant: bool = False) -> dict:
     def weights(case):
         return {"phase": "weights", "model": "dsv4", "case": case, "deterministic": True, "operands_ok": True}
 
-    doc: dict[str, Any] = {"schema": X.SCHEMA, "batch_invariant": batch_invariant, "gate": {"ok": True}, "errors": {}, "selection": {"ok": True},
+    doc: dict[str, Any]
+    doc = {"schema": X.SCHEMA, "batch_invariant": batch_invariant, "gate": {"ok": True}, "errors": {}, "selection": {"ok": True},
            "mufu": {"rcp_ok": True}, "schedule": {"ok": True},
            "jit": {"ok": True, "gemm_types": ["GemmType::Batched", "GemmType::Normal"]}, "bind": {"ok": True},
            "launches": [weights("wq_b"), {**lin, "M": 1, "branch": branches[0]}, {**lin, "M": 32, "branch": branches[1]}, weights("wo_a"),

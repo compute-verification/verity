@@ -198,7 +198,7 @@ def fill_twin(pos) -> np.ndarray:
     with np.errstate(over="ignore"):
         q = p + np.int64(1)
     num = q // RATIO + ((q % RATIO != 0) & (q < 0))
-    j = np.arange(TOPK, dtype=np.int64)[None, :]
+    j: np.ndarray = np.arange(TOPK, dtype=np.int64)[None, :]
     return np.where(j < num[:, None], j, -1).astype(np.int32)
 
 
@@ -233,7 +233,7 @@ def topk_valid(vals: np.ndarray, n: int, idx: np.ndarray) -> dict[str, Any]:
     ties = None
     if ok:
         v = np.asarray(vals[:n], dtype=np.float32)
-        mask = np.zeros(n, dtype=bool)
+        mask: np.ndarray = np.zeros(n, dtype=bool)
         mask[sel] = True
         thr = v[mask].min()
         ok = not bool((v[~mask] > thr).any())
@@ -271,7 +271,7 @@ def layout(seed: int) -> dict[str, np.ndarray]:
     pos = np.concatenate([np.arange(SEQ), EDGE_START + np.arange(EDGE_SEQ), EXTRA_POSITIONS]).astype(np.int64)
     req = np.concatenate([np.zeros(SEQ), np.ones(EDGE_SEQ), np.full(EXTRA, 2)]).astype(np.int32)
     width = (EDGE_START + EDGE_SEQ) // STATE_BLOCK
-    sbt = np.zeros((3, width), dtype=np.int32)
+    sbt: np.ndarray = np.zeros((3, width), dtype=np.int32)
     perm = rng.permutation(NBS).astype(np.int32)
     n0, lo1 = SEQ // STATE_BLOCK, EDGE_START // STATE_BLOCK - 1
     sbt[0, :n0] = perm[:n0]
@@ -280,7 +280,7 @@ def layout(seed: int) -> dict[str, np.ndarray]:
     sbt[2, 3:8] = perm[n1:n1 + 5]
     sslot = sbt[req, pos // STATE_BLOCK].astype(np.int64) * STATE_BLOCK + pos % STATE_BLOCK
     sslot[SEQ + EDGE_SEQ:SEQ + EDGE_SEQ + EXTRA // 2] = -1
-    kbt = np.zeros((3, width // BLOCK), dtype=np.int32)
+    kbt: np.ndarray = np.zeros((3, width // BLOCK), dtype=np.int32)
     kperm = rng.permutation(NBK).astype(np.int32)
     kbt[0, :SEQ // RATIO // BLOCK] = kperm[:SEQ // RATIO // BLOCK]
     kbt[1, EDGE_START // RATIO // BLOCK] = kperm[SEQ // RATIO // BLOCK]

@@ -150,7 +150,8 @@ def block_row(xq, sx, w, ws, *, G: int, KB: int, form: str = "triton", dot: str 
     for n0 in range(0, N, chunk):
         n1 = min(N, n0 + chunk)
         n = n1 - n0
-        wc, rows = w[n0:n1], np.arange(n0, n1) // G
+        wc = w[n0:n1]
+        rows: np.ndarray = np.arange(n0, n1) // G
         acc = np.zeros(n, dtype=np.uint32)
         for k in range(K // KB):
             d = np.zeros(n, dtype=np.uint32)
@@ -615,6 +616,7 @@ def _words_ok(t: dict[str, Any], phase: str) -> bool:
 def cases(doc: dict[str, Any]) -> dict[str, dict[str, Any]]:
     """Each case's verdict: its launches' checks, its words (every comparison of its key), its first mismatch."""
     out: dict[str, dict[str, Any]] = {}
+    c: dict[str, Any] | None
     for x in doc["launches"]:
         c = out.setdefault(case_key(x), {"phase": x["phase"], "launches_ok": True, "totals": {k: 0 for k in TOTALS}, "first_mismatch": None})
         c["launches_ok"] = c["launches_ok"] and _launch_ok(x)

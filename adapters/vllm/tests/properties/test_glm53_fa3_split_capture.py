@@ -165,7 +165,8 @@ def _doc(quick: bool = False) -> dict:
     names = X.QUICK_LAUNCHES if quick else tuple(X.LAUNCHES)
     launches = [{"phase": "mufu", "case": c, "checks": {"ok": True}} for c in ("lg2", "ex2", "rcp")]
     launches += [{"phase": "attn", "case": n, "checks": {"deterministic": True, "shape": True}} for n in names]
-    comps: list[dict[str, Any]] = [{"phase": x["phase"], "case": x["case"], "words": 10, "mismatch": 0, "unresolved": 0, "reference": 1, "twin_mismatch": 0,
+    comps: list[dict[str, Any]]
+    comps = [{"phase": x["phase"], "case": x["case"], "words": 10, "mismatch": 0, "unresolved": 0, "reference": 1, "twin_mismatch": 0,
               "first_mismatch": None, "differing": []} for x in launches]
     doc = {"schema": X.SCHEMA, "quick": quick, "gate": {"ok": True}, "served": {"ok": True}, "errors": {}, "bind": {"ok": True},
            "launches": launches, "comparisons": comps}
