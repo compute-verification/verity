@@ -49,8 +49,6 @@ prof.apply_env()
 from verity_vllm.engine import vllm_adapter as va  # noqa: E402
 from verity_vllm.pipeline.timeline import Timeline  # noqa: E402  (torch-free; VERITY_TIMELINE -> JSONL, else no-op)
 
-ACCEPTED_TOKENS = va.ACCEPTED_TOKENS   # the B0 request's accepted tokens (kept for the older importers); prefer workload["accepted"]
-
 
 def dump_cos_sin(engine: va.Engine, out: Path) -> Path | None:
     """`model.layers.0.self_attn.rotary_emb.cos_sin_cache` (bf16 [MAX_POS, D]) as uint16 words -> DIR/cos_sin_cache.npy.  The
