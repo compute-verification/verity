@@ -739,6 +739,25 @@ def _tied(d: Path, n: int = 8, cap: int = 4) -> SimpleNamespace:
                            rec=json.loads((d / "registration.json").read_text()))
 
 
+@pytest.mark.parametrize("text, population, rule", [
+    ("stratified:1", 561, "stratified-rate:1/561"), ("subset:3", 40, "rate:3/40"), ("subset:9", 4, "rate:4/4"),
+    ("work:2", 10, "work-rate:2/10"), ("bernoulli:1/8", 10, "bernoulli:1/8"),
+])
+def test_the_audits_rule_is_the_rate_of_the_windows_design_which_a_stream_takes(text, population, rule):
+    """A stream's rule is a rate (`service.Law` refuses a fixed count), so the audit states the window's fixed design K of
+    N as the rate K/N of its kind (`rule_of`), which over N proof blocks samples K: one a stratum at ``stratified:1``."""
+    from verity.core.protocols.spot import service as S
+
+    assert RA.rule_of(D.parse_design(text), population) == rule
+    assert S.Law(rule).text == rule
+    with pytest.raises(ValueError, match="a fixed count"):
+        S.Law(text if not text.startswith("bernoulli") else "subset:1")
+    if text.startswith("subset"):
+        assert S.selection_law(S.Law(rule), population) == {"law": "subset", "k": min(int(text.split(":")[1]), population)}
+    if text == "stratified:1":
+        assert S.selection_law(S.Law(rule), population, [1, 200, 360]) == D.parse_design(text)
+
+
 def test_the_audit_ties_a_window_whose_circuit_takes_values_to_the_earlier_registration(tmp_path, monkeypatch, capsys):
     """A window whose circuit takes values (`_tied`) is audited tied to the earlier registration W that registered them
     first (``--tie W --tie-prefix P``), and refused before any session without the tie: the tie hands a5 one-stage's
@@ -755,11 +774,14 @@ def test_the_audit_ties_a_window_whose_circuit_takes_values_to_the_earlier_regis
 
     def audit(a, sets, out, mine, served, source, port, summary, more, **kw):
         seen.update(tie=a.tie, outputs=a.outputs, registered=kw["registered"], declared=a.declared)
+        ruled.append((a.rule, A5.rated(mine, a.rule) == mine, mine.population))
         return {"audit": {"accepted": True}}, True
 
     def output_class(circuit, given=(), own=frozenset()):
         owned.append(set(own))
         return []
+
+    ruled: list = []
 
     session = SimpleNamespace(skip=lambda r: None, join=lambda: None, evidence=lambda: {}, shutdown=lambda: None)
     monkeypatch.setattr(RA, "free_ports", lambda span: 20000)
@@ -777,6 +799,8 @@ def test_the_audit_ties_a_window_whose_circuit_takes_values_to_the_earlier_regis
     assert RA.main([*base, "--out", str(tmp_path / "out"), "--tie", str(got.w_file), "--tie-prefix", "h1/"]) == 1
     tied, pins = RA.tie_of(json.loads((got.dir / "circuit.json").read_text()), got.w, "h1/")
     assert seen["tie"] == tied and tied["log"] == [got.w] and pins == {got.name: {**got.entry, "value": got.name}}
+    (rule, same, n), = ruled
+    assert rule == f"stratified-rate:2/{n}" and same, "the stream's rule is a rate, and its design the window's own"
     assert tied["outputs"] == {got.name: {"record": R.digest(got.w), "value": f"h1/a/{K}@0"}} and owned == [{got.name}]
     assert len(seen["registered"]) == 2 and all(f["ports"]["wrow"]["root"] == got.entry["root"]
                                                  and f["ports"]["wrow"]["domain"] == got.entry["domain"]
