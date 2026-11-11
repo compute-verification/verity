@@ -390,9 +390,11 @@ class Store:
         self.store.push_labels([target])
 
     def lookup(self, **options) -> P.SteadyCompletion:
-        """The lookup of a machine that has read nothing yet, pulling the remote's attempts since the made-up day."""
+        """The lookup of a machine that has read nothing yet, pulling the remote's attempts since the made-up day; what
+        it says while it pulls is in `said`."""
 
-        return P.SteadyCompletion(self.fresh(), root=self.root, since=lambda: 1_700_000_000, log=lambda message: None,
+        self.said: list[str] = []
+        return P.SteadyCompletion(self.fresh(), root=self.root, since=lambda: 1_700_000_000, log=self.said.append,
                                   **options)
 
 
@@ -473,6 +475,29 @@ def test_a_run_that_kept_no_files_cannot_be_told(planned):
     assert store.lookup()(spec, item, identity) == (None, f"{run}: cannot tell: the run kept no files")
 
 
+def test_the_lookup_pulls_the_labels_of_runs_and_arts_alone_and_says_so_before_it_starts(planned):
+    """The remote's labels are mostly of other things than runs and arts (the check's tasks, pull requests' heads),
+    and a record's targets are runs and arts: a machine reads those, and says what it is reading before it reads."""
+
+    spec, item, identity, store = planned
+    files = store.files({SP.VERSIONS: DROP, "flat": DROP})
+    run = store.ran("r20231114-100000-0001", files)
+    store.label(run, "run_of_record", RECORD)
+    art = completed(store, run, files, {"flat": True})
+    others = ["task:" + "a" * 128, "pr:12@" + "b" * 40, "commit:" + "c" * 40]
+    for other in others:
+        store.label(other, "run_of_record", RECORD)
+    lookup = store.lookup()
+    assert lookup(spec, item, identity) == (run, None)
+    assert [bool(lookup.store.labels(target)) for target in (run, art, *others)] == [True, True, False, False, False]
+    assert store.said[0] == ("pulling the labels of the store's runs and arts: two listings of the remote, then each "
+                             "label this store lacks")
+    assert store.said[1] == "pulled 2 labels; the remote holds labels of 2 runs and arts"
+    # a second lookup on the same machine reads no label again
+    again = P.SteadyCompletion(lookup.store, root=store.root, since=lambda: 1_700_000_000, log=store.said.append)
+    assert again(spec, item, identity) == (run, None) and "pulled 0 labels; " in store.said[-2], store.said
+
+
 def test_a_labelled_row_is_a_passed_point_only_when_its_pin_count_and_cores_are_the_points_and_its_run_passes(planned):
     """A row timed outside the harness, labelled into the workload's steady-state record. Its row holds no `versions`,
     which only a run of the point's own identity is held to."""
@@ -510,16 +535,24 @@ def test_a_labelled_row_whose_files_cannot_show_a_check_is_timed_again_and_plan_
 
 
 def completed(store: Store, run: str, files: Path, changes: dict, *, runs: list[str] | None = None,
-              derivation: bool = True) -> str:
-    """An art of the record that holds a run's rows as completed after it: the run's own rows with `changes`, the run
-    named in the art's `runs` (or `runs`), and, unless `derivation` is False, how the changed fields were derived."""
+              derivation: bool | str = True, names: list[str] | None = None, rows: list[dict] | None = None) -> str:
+    """An art of the record that holds a run's rows as completed after it: the run's own rows with `changes` (a value
+    of `DROP` leaves the field out; or `rows`), the run named in the art's `runs` (or `runs`), and how fields were
+    derived: for each row the fields of `changes` (or `names`), named together in one key. `derivation`: False for
+    none, or the file's text."""
 
-    rows = [row | changes for row in json.loads((files / S.RATES).read_text())]
+    own = json.loads((files / S.RATES).read_text())
+    if rows is None:
+        rows = [{k: v for k, v in (row | changes).items() if v is not DROP} for row in own]
     store._n += 1
     (directory := store.tmp / f"completed{store._n}").mkdir()
     (directory / R.ART_RATES).write_text(json.dumps(rows))
+    if derivation is True:
+        named = ", ".join(sorted(changes) if names is None else names)
+        derivation = json.dumps({"rows": [{"type": row["type"], "provers": row["provers"],
+                                           "fields": {named: {"how": "made up"}} if named else {}} for row in own]})
     if derivation:
-        (directory / P.DERIVATION).write_text(json.dumps({"rows": [{"fields": sorted(changes)}]}))
+        (directory / P.DERIVATION).write_text(derivation)
     art = store.art("evidence/v1", {"runs": [run] if runs is None else runs}, directory)
     store.label(art, "run_of_record", RECORD)
     return art
@@ -557,6 +590,23 @@ UNTAKEN = [
     ({"derivation": False}, "holds its rows without their derivation from the run's records (`derivation.json`)"),
     ({"superseded": True}, "is superseded"),
 ]
+#: the exit codes of the made-up run's row
+EXITS = made()[0]["exits"]
+#: an art whose rows are more than the run's own rows completed: its rows, what its derivation names, and what `plan`
+#: says the art differs in (None: nothing, the art's row is taken)
+NOT_THE_RUNS = [
+    ({"changes": {"flat": True, "accepted": 20, "exits": dict(EXITS)}, "names": ["flat"]}, None),
+    ({"changes": {"flat": True, "accepted": 19}, "names": ["flat"]}, "`accepted` (changed)"),
+    ({"changes": {"flat": True, "exits": EXITS | {"prover-gpu3-1": 1}}, "names": ["flat"]},
+     "`exits.prover-gpu3-1` (changed)"),
+    ({"changes": {"flat": True, "exits": EXITS | {"prover-gpu3-1": 1}}, "names": ["flat", "exits.prover-gpu3-0"]},
+     "`exits.prover-gpu3-1` (changed)"),
+    ({"changes": {"flat": True, "unfiled": DROP}, "names": ["flat", "unfiled"]}, "`unfiled` (dropped)"),
+    ({"changes": {"flat": True, "accepted": 20.0}, "names": []}, "`accepted` (changed)"),
+    ({"changes": {"flat": True, "accepted": 19, "exits": {}, "unfiled": 2, "sessions": 21, "warm": 1}, "names": []},
+     "`accepted` (changed), `exits.prover-gpu3-0` (dropped), `exits.prover-gpu3-1` (dropped), `exits.verifier-ab-0` "
+     "(dropped) and 4 more"),
+]
 
 
 @pytest.mark.parametrize("how, says", UNTAKEN, ids=[says[:28] for _, says in UNTAKEN])
@@ -576,6 +626,111 @@ def test_a_completed_row_counts_only_from_an_art_that_names_the_run_carries_its_
     found, why = store.lookup()(spec, item, identity)
     assert found is None and why == (f"{run} (labelled `{RECORD}`, its own row: {art[:16]}… {says}): cannot tell: "
                                      "`flat` (cannot tell): its row lacks `flat`"), why
+
+
+@pytest.mark.parametrize("art, differs", NOT_THE_RUNS, ids=[str(differs)[:32] for _, differs in NOT_THE_RUNS])
+def test_a_completed_row_is_the_runs_own_row_with_only_what_it_lacked_or_the_derivation_names(planned, art, differs):
+    """An art that would pass and that changes a field the run's own row holds, without its derivation naming that
+    field, isn't the run's row completed: the run is judged on its own row, and `plan` says what the art changed."""
+
+    spec, item, identity, store = planned
+    files = store.files({SP.VERSIONS: DROP, "flat": DROP})
+    run = store.ran("r20231114-100000-0001", files)
+    art = completed(store, run, files, **art)
+    found, why = store.lookup()(spec, item, identity)
+    if differs is None:
+        assert (found, why) == (run, None)
+        return
+    assert found is None and why == (
+        f"{run} (labelled `{RECORD}`, its own row: {art[:16]}… differs from the run's own row of `gemm64` at 2 provers in "
+        f"{differs}: a completed row keeps every field of the run's and changes only those its `derivation.json` names): "
+        "cannot tell: `flat` (cannot tell): its row lacks `flat`"), why
+
+
+def test_a_derivation_names_a_field_of_a_field_and_a_name_covers_the_fields_under_it(planned):
+    spec, item, identity, store = planned
+    files = store.files({SP.VERSIONS: DROP, "flat": DROP, "stage": {"definition": "Gemm_v1{K=64}", "k_log": 20}})
+    run = store.ran("r20231114-100000-0001", files)
+    stage = {"definition": "Gemm_v1{K=64}", "k_log": 21, "blocks": 8}
+
+    def lookup(names):
+        art = completed(store, run, files, {"flat": True, "stage": stage}, names=names)
+        found = store.lookup()(spec, item, identity)
+        store.label(art, "superseded_by", "art:" + "9" * 64)
+        return found
+
+    # `stage.blocks` is a field the run's row lacks; `stage.k_log` is one it holds, changed
+    assert lookup(["flat", "stage"]) == (run, None)
+    assert lookup(["flat, stage.k_log", "stage.blocks"]) == (run, None), "several names in one key"
+    for names in (["flat", "stage.blocks"], ["flat", "stage.k"], ["flat", "k_log"]):
+        found, why = lookup(names)
+        assert found is None and "in `stage.k_log` (changed): a completed row keeps every field of the run's" in why, why
+
+
+#: an art whose rows or derivation can't be held to the run's own rows, and what `plan` says of the art
+NOT_ROW_FOR_ROW = [
+    ({"rows": []}, "holds 0 rows that aren't the run's 1, one for one by `type` and `provers`"),
+    ({"rows": [{"type": "gemm64", "provers": 4, "flat": True}]},
+     "holds 1 rows that aren't the run's 1, one for one by `type` and `provers`"),
+    ({"derivation": json.dumps({"rows": [{"fields": ["flat"]}]})},
+     "isn't a record of the fields it derived for each row"),
+    ({"derivation": "{"}, "isn't a record of the fields it derived for each row"),
+    ({"derivation": json.dumps(["flat"])}, "isn't a record of the fields it derived for each row"),
+]
+
+
+@pytest.mark.parametrize("art, says", NOT_ROW_FOR_ROW, ids=[f"{says[:24]}-{n}" for n, (_, says) in enumerate(NOT_ROW_FOR_ROW)])
+def test_a_completed_art_whose_rows_or_derivation_are_not_the_runs_row_for_row_is_not_taken(planned, art, says):
+    spec, item, identity, store = planned
+    files = store.files({SP.VERSIONS: DROP, "flat": DROP})
+    run = store.ran("r20231114-100000-0001", files)
+    art = completed(store, run, files, {"flat": True}, **art)
+    found, why = store.lookup()(spec, item, identity)
+    assert found is None and why.startswith(f"{run} (labelled `{RECORD}`, its own row: ") and says in why, why
+    assert f"{art[:16]}…" in why and why.endswith("cannot tell: `flat` (cannot tell): its row lacks `flat`")
+
+
+def test_two_standing_arts_that_complete_one_run_complete_it_for_neither(planned):
+    spec, item, identity, store = planned
+    files = store.files({SP.VERSIONS: DROP, "flat": DROP})
+    run = store.ran("r20231114-100000-0001", files)
+    first = completed(store, run, files, {"flat": True})
+    second = completed(store, run, files, {"flat": True, "verify_s": 0.5})
+    found, why = store.lookup()(spec, item, identity)
+    assert found is None and why == (
+        f"{run} (labelled `{RECORD}`, its own row: 2 standing arts hold its rows completed ({first[:16]}…, "
+        f"{second[:16]}…): supersede all but one): cannot tell: `flat` (cannot tell): its row lacks `flat`"), why
+    store.label(first, "superseded_by", second)
+    assert store.lookup()(spec, item, identity) == (run, None)
+
+
+def test_a_labelled_run_whose_rows_cannot_be_read_is_named_in_each_point_it_could_have_been(planned):
+    """A run of the record that kept no files, or whose rate file is no list of rows: its rows aren't known, so it
+    could have been any point, and `plan` says so for each point without a passing run."""
+
+    spec, item, identity, store = planned
+    bare = store.ran("r20231114-100000-0001", None)
+    store.label(bare, "run_of_record", RECORD)
+    no_files = f"{bare} (labelled `{RECORD}`): cannot tell: the run kept no files"
+    for point in (item, SP.point(spec, "gemm64-k1"), SP.point(spec, "head_block-k2")):
+        assert store.lookup()(spec, point, identity) == (None, no_files)
+
+    unread = store.ran("r20231114-110000-0002", store.files(rates="{}"))
+    store.label(unread, "run_of_record", RECORD)
+    assert store.lookup()(spec, item, identity) == (None, (
+        f"{unread} (labelled `{RECORD}`): cannot tell: the run's `out/rate/rate.json` isn't a list of rows: it has no "
+        f"row to judge; {no_files}"))
+    # an art that completes a run with no files completes nothing: there is no row of the run's to hold it to
+    completed(store, bare, store.files({SP.VERSIONS: DROP}), {"flat": True})
+    assert no_files in store.lookup()(spec, item, identity)[1]
+    # a passing run of the point is still found, and a superseded run that kept no files is no run of the record
+    passing = store.ran("r20231115-100000-0003", store.files({SP.VERSIONS: DROP}))
+    store.label(passing, "run_of_record", RECORD)
+    assert store.lookup()(spec, item, identity) == (passing, None)
+    store.label(passing, "superseded_by", "r20231116-100000-0009")
+    store.label(bare, "superseded_by", "r20231116-100000-0009")
+    found, why = store.lookup()(spec, item, identity)
+    assert found is None and bare not in why and unread in why, why
 
 
 def test_a_run_is_cannot_tell_where_neither_its_own_row_nor_its_completed_one_holds_the_field(planned):

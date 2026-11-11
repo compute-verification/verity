@@ -47,7 +47,6 @@ also holds the point's load (its timed and warm sessions, its period) and the ve
 from __future__ import annotations
 
 import hashlib
-import json
 import re
 import subprocess
 from collections.abc import Mapping
@@ -295,18 +294,12 @@ def versions(spec: SteadySpec) -> dict[str, str]:
 
 
 def rows(files: steady.Files) -> list[Mapping[str, Any]] | str:
-    """The rows of a run's rate file, or why it has none to read."""
+    """The rows of a run's rate file (`steady.rows`), or why it has none to read."""
 
-    text = files(steady.RATES)
-    if text is None:
-        return f"{steady.CANNOT_TELL}: the run holds no `{steady.RATES}`"
     try:
-        found = json.loads(text)
-    except json.JSONDecodeError as error:
-        return f"{steady.CANNOT_TELL}: the run's `{steady.RATES}` isn't JSON ({error.msg})"
-    if not isinstance(found, list) or not all(isinstance(row, Mapping) for row in found):
-        return f"{steady.CANNOT_TELL}: the run's `{steady.RATES}` isn't a list of rows"
-    return found
+        return steady.rows(files)
+    except ValueError as error:
+        return f"{steady.CANNOT_TELL}: {error}"
 
 
 def own_row(files: steady.Files, item: SteadyPoint) -> Mapping[str, Any] | str:
