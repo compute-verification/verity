@@ -13,8 +13,8 @@ from verity_vllm.pipeline import serving_rows as SRW, weight_rows as WT
 
 SERVED = [Path(__file__).resolve().parents[4] / "benchmarks/one_stage" / f"glm53_{p}.json"
           for p in ("all_families_tp8_step16", "sparse_mla_tp8_step16", "prefill_tp8_step0")]
-STATEMENTS = ("f2778c297500b72654438c215afe24a39d1bf7114b9edb69bf19ebc6af874c11"
-              "f699783684eb17a2e4f70d105f9ce88717b5e9b55569c361b25d8bb19f408ade")
+STATEMENTS = ("847f6a2c21d9cd6c50a04e0889f640f02e54ca2b10e741962a4bc5c695f6e52c"
+              "499cfb84dc2ea9f26e9b5f64eb8db8862019fe7242709c4abd18526180495479")
 
 
 def test_the_served_templates_statements_are_the_bytes_vllm_s_own_rows_gave(monkeypatch):
@@ -25,4 +25,4 @@ def test_the_served_templates_statements_are_the_bytes_vllm_s_own_rows_gave(monk
     members = [SimpleNamespace(template=t, schemas=True) for t in tmpls]
     sts = SRW.circuit_record(SimpleNamespace(members=members, row_tables=()), [])
     got = hashlib.sha512(IF.circuit_bytes(sts)).hexdigest()
-    assert len(sts) == 43 and got == STATEMENTS, got
+    assert len(sts) == 60 and got == STATEMENTS, got
