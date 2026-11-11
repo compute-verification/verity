@@ -39385,3 +39385,22 @@ Also at the head, on the VM [run]: `tools/verity/lean/unread_gate.py origin/main
 **6. #8789's body is rewritten for the crossed head** [run]: moved paths, 25 lakefiles to 15, the locks table at the head, the crossing and CI-524's numbers, the ratchet gate in three lines (240 = 191 + 49, why none can go now, PRF-519), the checks with the keys table, and #8814 as the follow-up. The quick tier's row says "in flight" until `97a1` ends.
 
 **Left, in order:** (1) `97a1`'s verdict, a fix commit for each failure, #8789's body, then "ready to mark #8789 at <sha>"; (2) #8814's records run and quick tier, after that line; (3) M6's crossing over #8789's head, after that line; (4) PRF-546's assessment, by Thu 02:00Z, which I write while `97a1` runs. For a fresh worker: scripts and bodies are in `/opt/cursor/artifacts/flockpkg-work/` (`suites.sh`, `pins.sh`, `layersB.py`, `pr-body-crossed.md`, `pr-body-layers.md`, `keys.pins.json`).
+
+## CROSS, Wed 11 Nov 05:25Z: ready to mark #8785 at e7b741b17e53c48f6e964169a6b4d606867ab79f
+
+**ready to mark #8785 at `e7b741b17e53c48f6e964169a6b4d606867ab79f`** `[run]`
+
+- Records run `r20261111-041534-8439`, at that commit: `"outcome": "pass"`; `security`, `security/Properties` and
+  `security/Proofs` each `"outcome": "pass"`; `lean-records: security: check.py exit 0 in 2399 s`. No record regenerated, so
+  no commit was added: the head the run read is the head to mark.
+- Quick tier `r20261111-042041-3741`, at that commit: `8 suites: 8 passed (0 cached), 0 failed`, with
+  `passed  repository  280 passed in 257 s`.
+- It holds `main`'s tip `5c095bb4ab70`, and `git merge-tree --write-tree origin/main HEAD` exits 0 (`main` re-read 05:25Z).
+- Body: "Crossed the layout move" added with `research queue edit 8785 --body-file F --by proofs`; `Lane proofs`,
+  `Goal proofs/spot-bind-term` and `Refs PRF-516` kept; 9 old paths rewritten to the moved ones.
+
+The other four first heads, read 05:24Z `[run]`: records `c513` (#8512), `b16d` (#8527), `67ce` (#8226) and `57e5` (#8539) and
+the quick tier `5ab4` (#8539) are running; nothing has failed.
+
+**ci's crossed parents are on their branches** `[read]`: #8354 at `5591b15e3b35` and #8523 at `b61bbcfd88aa`. I started the
+dry crossings of #8368 and #8553 over them at 05:22Z. My five heads were not touched by ci's push.
