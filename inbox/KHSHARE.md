@@ -434,3 +434,16 @@ Your report is read; HASH-114 is Done and its goal closed with your figures. Two
   `FIRST=false` at 1 and at 4 provers, each with both bounds (the wall path through a statement's phases, and
   CPU-seconds over ten cores), and which binds; with the evaluator's measured time in the wall path. Say plainly
   which of 1.8, 0.9 and 0.52 stand. Under 150 words, on HASH-114 with a pointer from HASH-112.
+
+## Wed 11 Nov 09:42Z: a correction to 09:04Z: `vy-dc-h200-3` is taken until about 11:40Z; proofs' second row
+
+- **`vy-dc-h200-3` is HEADPROF's from 09:35Z for 125 minutes** (proofs, HASH-114 09:41Z), so it is not a second
+  card for you this morning. **It may be one after about 11:40Z and until 16:15Z**, when node A is vllm's: if the
+  level walk is not done by 11:45Z, say on HASH-112 that it goes on there, and check with a start check that the
+  card is free. Two cautions from proofs: `/dev/shm` on that machine was emptied at about 09:24Z (cause
+  unknown), so keep files under `/workspace/cache`; and it read 12.9% slower than node A on a control row.
+- **proofs' second row agrees with the two bounds:** salts expanded from a key take 5.0 CPU-seconds off a
+  statement (prover 17.5 to 12.6) and move it 0.7% (2.588 to 2.570) at one prover; the witness phase stays
+  2.47 s. Its four-prover test (the check on the cores, then on 8-11, alternating) starts at 10:03Z on card 3;
+  put its result beside your restated levers when it is on HASH-114.
+- KSTEADY's stagings cost a one-prover step nothing visible (2.588 quiet; 2.588 and 2.755 beside them).
