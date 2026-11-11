@@ -18,6 +18,7 @@ public import Proofs.Flock.Claims.Witnesses.SamplingTwoRankin
 public import Proofs.Flock.Claims.Witnesses.SamplingTwoReg
 public import Proofs.Flock.Claims.Witnesses.SamplingTwoRegMiss
 public import Proofs.Flock.Claims.Witnesses.SamplingTwoRegX
+public import Proofs.Flock.Claims.Witnesses.SamplingTwoOneWait
 public import Proofs.Flock.Claims.Witnesses.Encodings
 public import Proofs.Flock.Claims.Witnesses.EncodingsGeneric
 public import Proofs.Flock.Claims.Witnesses.ZKOutLeak
@@ -51,8 +52,9 @@ under `claims.generic` with the guarantee that states it, which the lock's `witn
 nontrivial lemma (`SamplingGenericCompiler`, `SamplingGenericComplete`, `SamplingTwo` for the two-stage compiler,
 `SamplingTwoKSAt` for its extractor's cost and its KS read at a time budget, `SamplingTwoRankin` for Rankin's bound on
 its count, `SamplingTwoReg` for its committed form and headline, `SamplingTwoRegMiss` for its miss bound and the
-headline's honest lemma, `SamplingTwoRegX` for the three at the boundary trace read at the statement, `ZKOutLeak`, and
-the registered encodings' `EncodingsGeneric` at the toys of `Encodings`).
+headline's honest lemma, `SamplingTwoRegX` for the three at the boundary trace read at the statement,
+`SamplingTwoOneWait` for the committed form at the one-wait extraction's boundary trace, `ZKOutLeak`, and the registered
+encodings' `EncodingsGeneric` at the toys of `Encodings`).
 -/
 
 @[expose] public section
