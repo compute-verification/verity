@@ -47,8 +47,8 @@ class ModelShape:
     norm_chain: bool = False
     extra_norms: bool = False
     embed_scale: bool = False
-    attn_cap: float | None = None
-    final_cap: float | None = None
+    attn_softcap: float | None = None
+    final_softcap: float | None = None
     int8: bool = False
 
     @property
@@ -70,7 +70,7 @@ def model_shape(hf: dict) -> ModelShape:
     static configuration, with the family's bias rule and the checkpoint's quantization).  The vocabulary is the dense and the
     fused-MoE (indexed-read) blocks with no per-family facts beyond the q/k RMSNorm (per head, or over all heads as `qk_norm` "all"),
     the router's renormalization and Gemma-2's (the embedding normalizer, the (1 + w) norm chain with the two extra MLP norms, the
-    attention and final logit soft-caps, the tanh-GELU MLP, `query_pre_attn_scalar` = head_dim): a family with any other (another norm
+    attention and final logit softcapping, the tanh-GELU MLP, `query_pre_attn_scalar` = head_dim): a family with any other (another norm
     variant, LayerNorm, shared experts), a linear bias other than the q/k/v one a family's rule gives, an activation other than SiLU
     or a family-declared one, a partial rotary width, a rotary scaling without an analytic table, a block-FP8 checkpoint or an
     exact-int8 one with an int8 LM head or a biased linear raises `Unexpressible` (an exact-int8 checkpoint's linears are `int8`).  A
@@ -134,7 +134,7 @@ def model_shape(hf: dict) -> ModelShape:
     qpas = fv.get("query_pre_attn_scalar")
     if qpas is not None and float(qpas) != float(C["D"]):
         facts.append(f"query_pre_attn_scalar {qpas} (the attention kinds fold the scale head_dim^-0.5, head_dim {C['D']})")
-    caps = [float(fv[k]) if fv.get(k) else None for k in ("attn_logit_softcapping", "final_logit_softcapping")]
+    softcaps = [float(fv[k]) if fv.get(k) else None for k in ("attn_logit_softcapping", "final_logit_softcapping")]
     if C.get("FP8_BLOCK"):
         facts.append(f"block-scaled FP8 checkpoint (G={C['FP8_BLOCK']})")
     int8 = bool(C.get("INT8_EXACT"))
@@ -154,7 +154,7 @@ def model_shape(hf: dict) -> ModelShape:
                       D=int(C["D"]), I=inter, EPS=float(C["EPS"]), tie=bool(fv.get("tie_word_embeddings", C["tie_word_embeddings"])),
                       max_pos=int(C["MAX_POS"]), rot=int(C["D"]), qkv_bias=qkv_bias, window=int(window) - 1 if window else None,
                       qk_norm=qk_norm, E=E, TOPK=TOPK, renorm=bool(fv.get("RENORMALIZE")), act=act, norm_chain=norm_chain,
-                      extra_norms=bool(extra), embed_scale="embed_normalizer" in fv, attn_cap=caps[0], final_cap=caps[1], int8=int8)
+                      extra_norms=bool(extra), embed_scale="embed_normalizer" in fv, attn_softcap=softcaps[0], final_softcap=softcaps[1], int8=int8)
 
 
 #: vLLM's `DEFAULT_VOCAB_PADDING_SIZE`: the vocabulary-parallel embedding and LM head pad the vocabulary to a multiple of it

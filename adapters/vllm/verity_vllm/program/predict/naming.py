@@ -166,7 +166,7 @@ def refuse(net: Any) -> None:
                             f"rank only)")
     C = net.C
     facts = [f for f, on in (("the fused MoE", C.E), ("q/k norms", C.qk_norm), ("a q/k/v bias", C.qkv_bias), ("the unfused norm chain", C.norm_chain),
-                             ("the extra MLP norms", C.extra_norms), ("the embedding scale", C.embed_scale), ("soft-caps", C.attn_cap or C.final_cap),
+                             ("the extra MLP norms", C.extra_norms), ("the embedding scale", C.embed_scale), ("soft-caps", C.attn_softcap or C.final_softcap),
                              (f"the activation {C.act!r}", C.act != "silu"), ("a sliding window", C.window is not None)) if on]
     if facts:
         raise Unexpressible(f"naming: {', '.join(facts)} (vLLM's dense decoder with SiLU and fused norms only)")

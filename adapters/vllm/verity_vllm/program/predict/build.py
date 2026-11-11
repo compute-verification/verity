@@ -135,9 +135,9 @@ class _Specs:
             self.weight_once = target.effective_weight_only_calls() == "once"
         if C.embed_scale:
             self.embed_scale = self.kind("scale_tensor", N=C.H)
-        if C.final_cap is not None:
-            self.cap = [self.kind("bf16_div_scalar", N=C.V, C=C.final_cap), self.kind("bf16_tanh", N=C.V),
-                        self.kind("bf16_mul_scalar", N=C.V, C=C.final_cap)]
+        if C.final_softcap is not None:
+            self.cap = [self.kind("bf16_div_scalar", N=C.V, C=C.final_softcap), self.kind("bf16_tanh", N=C.V),
+                        self.kind("bf16_mul_scalar", N=C.V, C=C.final_softcap)]
         self._attn: dict[tuple, Any] = {}
 
     def moe(self) -> None:
@@ -197,7 +197,7 @@ class _Specs:
         fn = self._attn.get(key)
         if fn is not None:
             return fn
-        cap = {} if C.attn_cap is None else {"CAP": C.attn_cap}
+        cap = {} if C.attn_softcap is None else {"CAP": C.attn_softcap}
         if self.accepted:
             fn = self.kind("attention_softcap" if cap else "attention", T=P, NH=C.NH, KVH=C.KVH, D=C.D, **cap)
         else:
@@ -437,7 +437,7 @@ class _Model:
         S = self.S
         pl = _ptypes(S.logits)
         lg = self.collective(S.all_gather, [self.call(S.logits, Coll(pl[0], hidden_row.refs), Coll(pl[1], self.lm_head.refs))])[0]
-        for fn in S.cap if self.C.final_cap is not None else ():
+        for fn in S.cap if self.C.final_softcap is not None else ():
             lg = self.call(fn, Coll(_ptypes(fn)[0], lg.refs))
         return select_token(lambda fn, *refs: self.call(fn, *(Coll(t, r) for t, r in zip(_ptypes(fn), refs))), kind, lg.refs, self.C.V,
                             pos, policy)
