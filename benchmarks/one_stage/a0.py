@@ -45,10 +45,16 @@ STAND_IN_BINDINGS = {"verity/flock-circuit/binding/v2": identity_digest_sha512,
                      "verity/flock-ir-frame/binding/v1": lambda tag, doc: bytes.fromhex(identity_digest(tag, doc))}
 STAND_IN_BINDING = "verity/flock-circuit/binding/v2"
 STATEMENT_ID = "verity/flock-circuit"
+#: the environment's setting under which `lean_verify` links a member's circuit file into its archive rather than copying it
+ARCHIVE_LINK = "ARCHIVE_LINK"
 
 
 def sha512_file(path: Path) -> str:
-    return hashlib.sha512(path.read_bytes()).hexdigest()
+    h = hashlib.sha512()
+    with open(path, "rb") as f:
+        while chunk := f.read(1 << 24):
+            h.update(chunk)
+    return h.hexdigest()
 
 
 def environ(env: dict | None) -> dict:
@@ -296,7 +302,11 @@ def lean_verify(lean: str, st: dict, n: int, out: Path, zk: bool = False, log: s
     (a templated one's ``verity/flock-circuit/tmpl``), else `STATEMENT_ID`. The verdict keeps what `verify` names of the
     public file's header, the registered reads, the sample and the tables it checked the session against
     (``public_header_sha512``, ``registered_sha512``, ``unit_draw``, ``session_tables``), which the second stage's audit
-    holds each statement to."""
+    holds each statement to. With `ARCHIVE_LINK` set to 1 in the environment, a circuit file no earlier member archived
+    is linked into the archive under its SHA-512, hashed here, and not put: the archive then holds no second copy of
+    it. Lean still holds the object to its key when it reads it, so a wrong hash here is refused there, and where the
+    link can't be made (another filesystem) the file is put as without the setting. A link shares the file's bytes: a
+    write in place through either name changes both."""
     sessions = sorted((out / "sessions").glob("*/session.json"))
     if not sessions:
         return {"accepted": False, "of_record": True, "why": "no session recorded"}
@@ -310,10 +320,20 @@ def lean_verify(lean: str, st: dict, n: int, out: Path, zk: bool = False, log: s
     s = circuit.stat()
     ident = (s.st_dev, s.st_ino, s.st_size, s.st_mtime_ns)
     pre = held.get(ident) if held is not None else None
+    own = pre is None and os.environ.get(ARCHIVE_LINK) == "1"
+    if own:
+        pre = (sha512_file(circuit), circuit)
     if pre is not None:
         (archive / "sha512").mkdir(parents=True, exist_ok=True)
         if not (archive / "sha512" / pre[0]).exists():
-            os.link(pre[1], archive / "sha512" / pre[0])
+            try:
+                os.link(pre[1], archive / "sha512" / pre[0])
+            except OSError:
+                if not own:
+                    raise
+                pre = None
+    if own and pre is not None and held is not None:
+        held[ident] = pre
     p = run([lean, "archive-put", str(archive), *([] if pre else [str(circuit)]), str(st["dir"] / f"pub-{n}.bin"), *tables, *part,
              *prog, *reads, *iface], out / ("archive-put.log" if log == "lean-verify" else f"{log}.archive-put.log"))
     keys = {Path(line.split()[1]).name: line.split()[0] for line in p.stdout.splitlines() if len(line.split()) == 2}
