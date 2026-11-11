@@ -40838,3 +40838,46 @@ Your 07:18Z is read. All six runs are `--as proofs`, from detached worktrees at 
 
 **#8406:** held as you say; no ready line now. Its guard `6e01` is still in its tests; I report its verdict when it
 ends, and merge `main` in by hand (the one line) once #8339 is on `main`. **#8552:** noted, after #8539.
+
+## BREAKEVEN, Wed 11 Nov 07:30Z: the corrected measured-price run; (iii) 4,042.4 GB and the lever row 3,228.7 GB at world year; Q1 yes, both read; Q2 a list
+
+**The run** [run]: r20261111-065519-e0bd on vy-nebius-cpu-1, run A's tree (a5e4e56a11) and inputs, 864 rows, no errors. Its record is art:6f2f340519d2b4c02762ebf3ded5ee0cb15ab6469ba93494aaf46339395eb1c9.
+- Controls: `asrun` equals run A's rows in every key but the echo of the variant list. `asrun-dump`, my copy of the override, equals `asrun` in every number; only the `priced_by` diagnostic differs.
+
+GB at the 10% point x1.05 over a world year (a datacenter year in brackets), and the total at 300 GB/1.05 over a world year [run, `breakeven_at_target.py`]:
+
+| variant | (iii) honest | lever on (iii) | (iii) at 300 GB | lever at 300 GB |
+|---|---|---|---|---|
+| as run | 4,027.3 (4,041.3) | 3,224.5 (3,217.2) | 78.91% | 65.22% |
+| corrected: the factor off the verifier's seconds and off server-priced strata | 4,042.4 (4,056.4) | 3,228.7 (3,221.4) | 79.19% | 65.30% |
+| and the verifier's per-block slope kept | 4,047.3 (4,061.1) | 3,233.3 (3,225.9) | 79.28% | 65.39% |
+| and the verifier's seconds from benchmarks' 63 steady rows | 3,275.9 (3,280.4) | 2,993.0 (2,986.5) | 65.02% | 60.85% |
+
+- Keeping the factor off the server-priced strata changes nothing on these rows: that variant equals the corrected one in every row [run]. The whole move is the factor coming off the verifier's seconds.
+- Corrected (iii) is within 0.04% of (ii)'s 4,043.8 [run]. So warm served blocks add nothing on measured rows, as the Goals page says.
+- **A second artifact, found while writing the run** [read]. `headline_mix_succ.priced` sets each overridden stratum's seconds a block to f times the verifier-free price. That drops the verifier's per-block slope on every stratum taking a benchmarks row: 0.83 ms a block, 6.8 ms for RMSNorm v8. Keeping it adds 4.9 GB to (iii) and 4.6 GB to the lever row [run]. I would count both corrections: 4,047.3 and 3,233.3 GB.
+- **The steady rows time another verifier** [read]. Their `verifier_seconds` is the proof server's own verifier (`flock-circuit serve --zk`), its seconds a statement over the statement's blocks. `benchmarks/harness/verity_bench/prove.py` 58-60: "the Lean verifier's seconds aren't in these figures". So that variant swaps the Lean verifier for the Rust one, and I took its seconds as one core's [guess]. Its label should say "the proof server's verifier", not "the verifier as measured".
+
+**Q1: yes, the path reads both** [read]. What each is worth on this run [run]:
+- **The 0.1 is `reprice.DEFAULT = (0.1, 0.9)`** (`reprice.py` 37). `cache_factor` (344-353) gives it to every type without its own `CACHE` entry, called from `apply_server` (280).
+  - Here it prices the 14 strata without a benchmarks row (10 by k_log, 4 single).
+  - It also sets the fixed and per-block parts that the override's factor scales.
+  - At 1.0: (iii) gains 15.9 GB (+0.39%), the lever row 34.7 GB (+1.07%) and (ii) 25.7 GB. At 300 GB the totals rise 0.29 and 0.66 points.
+- **The 28,000 is `headline_rows.CAP32`** (875 tokens x 32 bits, trace128's longest output). `breakeven_burst_price.py` sets it as `STATE["S"]` at line 178, and its `model` puts it in place of `served_bits`.
+  - At the card's own 144,000: (iii) reaches 5,274.2 GB (+30.5%) and the lever row 4,177.6 GB (+29.4%). At 300 GB the totals are 101.96% and 83.22%.
+
+**Q2: what would have to be in the tree** [guess; line numbers read]:
+- **The shared base, which the driver PR moves** (`benchmarks/spot_figures/breakeven/headline.py`): the eight-head rows, the pricing chain, the plan and the reader. It covers `headline_rows`, `headline_world_h8`, `headline_mix`, `breakeven_at_target`, `servedcard_split`, `provecut10`/`8d`/`8`/`7`/`6`, `breakeven_burst_price` and `cacheopt_*` as the figure of record uses them.
+- **`headline_mix_succ.py`** (171 lines): `PRICES` (64), `basis` (68), `takes` (81), `source` (85), `priced` (91-146, the benchmarks-row override) and `request` (147).
+- **`headline_world_succ.py`** (84 lines): the lever row (30-36), `scale` (38), `priced_by` (52) and `run` (69).
+- **`bench_prices.json`** (192 cells: 115 family, 63 steady, 10 k_log, 4 single) as a card citing its art, and its producer `bench_prices.py` (60 lines).
+- **`mla128_lever.heads8.json`** (the lever's volume at 128k's keys, eight heads) and what writes it.
+- **The 192-stratum workload card** that `workload_card.py` regenerates from census art:471350fa6bf26f5e2e149c4f084b195ba03fdf8018d02960b9ad6a5e4bf5a138. The tree's card at #8568's head has 154 strata, so the measured-price rows can't be computed on it [run: 90 blocks are only in the run's card and 52 only in the tree's].
+- **Not needed:** `headline_mix_cols.py` (`SUCC_COLS=off`), and `SUCC_LINEARS`, because the planner's `LINEARS` at #8568's head already names both MoE GEMMs.
+
+**The driver PR (TOP-400), for the order** [run]:
+- It is committed on `cursor/proofs-headline-driver-c41e` (4ab2b732df), on #8568's head, which is still open.
+- One row of record and four pooled rows equal r20261111-052546-d670's in every number.
+- Its 7 tests pass, and each fails on the fault it names.
+- The 54-row comparison r20261111-072105-40ee is waiting for its slot on vy-nebius-cpu-5. The PR opens once I've read it.
+- The double count: taking the 34 tokens a request out of `mix` raises the world year's 10% point by 10.2 GB (+0.07%) [run]. The PR's body states it.
