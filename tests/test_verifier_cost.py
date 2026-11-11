@@ -1,7 +1,7 @@
 """A verifier costs O(circuit description), never O(unrolled circuit) (AGENTS.md "Design rules").
 
-A scan over the Lean under `verity/` outside `verity/protocols/flock/prover/` (the verifiers and the code they run) and over `Security/`'s verifier code
-models (each `Security/Proofs/**/Code.lean`, a verifier a guarantee is stated at, with the `Security` modules it imports
+A scan over the Lean under `verity/` outside `verity/protocols/flock/prover/` (the verifiers and the code they run) and over `security/`'s verifier code
+models (each `security/Proofs/**/Code.lean`, a verifier a guarantee is stated at, with the `security` modules it imports
 and the `Properties` modules those import) refuses the forms an unrolled walk takes there: locating gates one by one
 through the canonical layout (`P.gate g`, `Flock.Program.Prog.gate`), a range or loop bounded by a Definition's gate count
 (`List.range (P.defs[P.root]!).gates`, `[0:defn.gates]`, `List.range C.gates.length`), an array or loop bounded by a name
@@ -88,23 +88,23 @@ ALLOWED: dict[str, str] = {
     "verity/protocols/flock/verifier/Flock/Gate.lean":
         "Prog.gateAt, one gate's location as Flock.Program.Gate: verity-evaluate's `gate` serves it so the difftest holds "
         "layout.Gate to it; no verifier calls it",
-    "Security/Proofs/Flock/SpotFlock/Code.lean":
+    "security/Proofs/Flock/SpotFlock/Code.lean":
         "open: the two-stage verifier's stmtOk decides the registration (parse, partition, two) over the members' "
         "side-by-side program, every unit of every member laid out, and topoOk and partitionsOk range over its gates; "
         "until two decides the members' descriptors (each member's units, B and R, and filesOk) and stmtOk is compiled "
         "(@[csimp]) as a check that never builds bitsProgs, membersPart or filesReplay",
-    "Security/Proofs/Flock/SpotFlock/ScopeFast.lean":
+    "security/Proofs/Flock/SpotFlock/ScopeFast.lean":
         "open: topoFast, coverFast and partitionsFast, what SpotFlock.code compiles topoOk, partitionsOk and scopeOk as "
         "(@[csimp]), read every gate of the unrolled program once (linear where the checks as stated are quadratic or "
         "cubic), and their equalities restate those checks; replaced as SpotFlock/Code.lean's entry says",
-    "Security/Properties/Spot/Members.lean":
+    "security/Properties/Spot/Members.lean":
         "open: bitsProgs, membersPart and filesReplay build each member's key program (Bits.keyProg, every unit laid "
         "out) and lower it, and its blocks, unit by unit: what SpotFlock.code's parse and partition evaluate; replaced as "
         "SpotFlock/Code.lean's entry says",
     "verity/protocols/spot/verifier/lean/Spot/Bits.lean":
         "open: keyProg lays a member's every unit out (2 + n·B inputs and n·R rows), and its layout (prog, off, offs, "
         "unitGates, owner, owners, insOf, blockOf) walks that program gate by gate, which Properties.Spot.Members reads "
-        "for SpotFlock.code; replaced as Security/Proofs/Flock/SpotFlock/Code.lean's entry says",
+        "for SpotFlock.code; replaced as security/Proofs/Flock/SpotFlock/Code.lean's entry says",
 }
 
 FIX = ("a verifier of record does work proportional to the description, never to the unrolled circuit (AGENTS.md "
@@ -129,7 +129,7 @@ KEYPROG = re.compile(r"[({]\s*((?:[\w']+\s+)*[\w']+)\s*:\s*(?:[\w.]*\.)?KeyProg\
 KEYPROG_RANGE = re.compile(r"\b(?:List|Array)\.range\s*\(\s*(?:[\w.]*\.)?keyProg\b[^\n]*?\)\.(?:size|units|inputs)\b")
 #: a member's key program built, every unit laid out (`Spot.Bits.keyProg c n`)
 KEYPROG_BUILT = re.compile(r"(?<![\w'.])(?:(?:Spot\.)?Bits\.)?keyProg\s+(?![:=|])\S")
-#: a module a Lean file imports from `Security/`'s proofs or properties
+#: a module a Lean file imports from `security/`'s proofs or properties
 IMPORT = re.compile(r"^(?:\w+\s+)*import\s+(?:all\s+)?((?:Proofs|Properties)(?:\.[\w']+)+)\s*$", re.M)
 #: a templated unit unrolled: its rows, every column's position, or the fold over its rows
 UNROLLED = re.compile(r"(?<![\w'])(?:unrollAt|unitFull|posMap|foldRef)\b(?!')|(?<![\w'])Tmpl\.unroll\b(?![\w'])")
@@ -177,15 +177,15 @@ def offenses(source: str, test: bool = False) -> list[tuple[int, str]]:
 
 
 def _security_code(tracked: list[str]) -> set[str]:
-    """`Security/`'s verifier code models: each `Security/Proofs/**/Code.lean`, the `Security` modules it imports, and the
+    """`security/`'s verifier code models: each `security/Proofs/**/Code.lean`, the `security` modules it imports, and the
     `Properties` modules those import in turn."""
     have = set(tracked)
-    code = {p for p in have if p.startswith("Security/Proofs/") and p.endswith("/Code.lean")}
+    code = {p for p in have if p.startswith("security/Proofs/") and p.endswith("/Code.lean")}
     seen, todo = set(code), list(code)
     while todo:
         p = todo.pop()
         for mod in IMPORT.findall((ROOT / p).read_text()):
-            q = f"Security/{mod.replace('.', '/')}.lean"
+            q = f"security/{mod.replace('.', '/')}.lean"
             if q in have and q not in seen and (p in code or mod.startswith("Properties.")):
                 seen.add(q)
                 todo.append(q)
