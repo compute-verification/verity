@@ -1039,6 +1039,24 @@ def facts_config(policy: dict, moved: dict[str, str] | None = None) -> dict:
             "honest": honest_witnesses(policy)}
 
 
+#: the lock sections a lock run rewrites (`regenerated`, `repaired`), of which everything before the judge reads only what
+#: `facts_config` takes (the names they list, `shape`'s premises and the names its inline texts print, the honest
+#: witnesses); and `format`, which `dump` writes and only the merge driver reads
+JUDGED = frozenset({"guarantees", "reads", "assumptions", "domain", "open", "open_seed", "shape", "trust_gap", "unwitnessed",
+                    "witnesses", "witnesses_assumed", "format"})
+
+
+def build_inputs(policy: dict) -> dict:
+    """What of the lock every step before the judge reads: `Facts.lean`'s slice (`facts_config`, a prover's too: `proved`
+    passes it this lock's) and every section outside `JUDGED` whole, among them the ones the build and the seal (`roots`,
+    `exempt`), the tests (`runs`), the provers' facts (`proved_in`) and the stored findings (`FINDINGS_SECTIONS`) read.  Two
+    locks of one tree that agree on it give an audit the same build, seal, facts document, kernel replay and tests, and
+    differ only in what the judge reads of the live lock (`audit_from_facts`); they differ on it when one lists a
+    guarantee, a premise or an inline name the other doesn't, since `Facts.lean` walks what is listed.  KeyError for a lock
+    without `roots`."""
+    return {"facts": facts_config(policy), "sections": {k: v for k, v in policy.items() if k not in JUDGED}}
+
+
 def facts_of(pkg: Path, policy: dict, work: Path, moved: dict[str, str] | None = None, keep: bool = True,
              sealed: "Sealed | None" = None) -> dict:
     """Run `Facts.lean` on the package (its `.olean` files as data: no initializer, attribute handler or other package code

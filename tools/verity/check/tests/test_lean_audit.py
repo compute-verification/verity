@@ -141,13 +141,14 @@ def test_the_audit_replays_the_import_closure_against_the_kept_cache_and_a_fresh
 
 
 #: a stand-in for check.py that knows `--regenerate`: a package whose policy says "stale" fails on a record difference, or with
-#: the flag passes on the record it writes under --out (`check.py`'s `settled` and `regenerated`)
+#: the flag passes on the record it writes under --out (`check.py`'s `settled` and `regenerated`). It stores no facts
+#: document (`--facts-cache`), as check.py on a node without the sandbox
 REGEN_AUDIT = r'''
 import json, sys
 from pathlib import Path
 a = sys.argv[1:]
 root, out = Path.cwd(), Path(a[a.index("--out") + 1])
-named = [Path(x) for i, x in enumerate(a) if not x.startswith("--") and not (i and a[i - 1] in ("--out", "--repo", "--replay-cache", "--artifacts"))]
+named = [Path(x) for i, x in enumerate(a) if not x.startswith("--") and not (i and a[i - 1] in ("--out", "--repo", "--replay-cache", "--artifacts", "--facts-cache"))]
 out.mkdir(parents=True, exist_ok=True)
 reps, failed = [], []
 for pkg in named:
@@ -198,7 +199,7 @@ import json, sys
 from pathlib import Path
 a = sys.argv[1:]
 root, out = Path.cwd(), Path(a[a.index("--out") + 1])
-named = [Path(x) for i, x in enumerate(a) if not x.startswith("--") and not (i and a[i - 1] in ("--out", "--repo", "--replay-cache", "--artifacts", "--bookkeeping"))]
+named = [Path(x) for i, x in enumerate(a) if not x.startswith("--") and not (i and a[i - 1] in ("--out", "--repo", "--replay-cache", "--artifacts", "--bookkeeping", "--facts-cache"))]
 out.mkdir(parents=True, exist_ok=True)
 reps, failed = [], []
 for pkg in named:
@@ -257,6 +258,262 @@ def test_the_lock_runs_audit_repairs_bookkeeping_and_the_caps_the_repaired_locks
     assert any("--package leaves out" in s for s in logged), logged
     with pytest.raises(SystemExit):
         LA.main(["--out", str(tmp_path / "out5"), "--bookkeeping", "warn"])
+
+
+#: a stand-in for check.py as a lock run and the audit of its lock commit run it. A package's build is its `.lean` files'
+#: bytes, and its lock records their hash for each guarantee it lists; a record that differs is a record difference, which
+#: `--regenerate` settles on the lock it writes under --out. `--facts-cache DIR` stores each audit's facts document (the
+#: hash) and sidecar under its facts key, as check.py does where builds are sandboxed. `--facts-from FILE` judges the named
+#: package's lock from that document, with no build, and notes the locks it read of the packages it requires by path. A
+#: lock's `regenerates_as` (a record) and `regenerates_with` (sections) say what its regenerated lock holds instead
+LOCK_AUDIT = r'''
+import gzip, hashlib, json, sys
+from pathlib import Path
+a = sys.argv[1:]
+root, out = Path.cwd(), Path(a[a.index("--out") + 1])
+named = [Path(x) for i, x in enumerate(a) if not x.startswith("--") and not (i and a[i - 1] in (
+    "--out", "--repo", "--replay-cache", "--artifacts", "--bookkeeping", "--facts-cache", "--facts-from"))]
+out.mkdir(parents=True, exist_ok=True)
+docs = Path(a[a.index("--facts-cache") + 1]) if "--facts-cache" in a else None
+judged = Path(a[a.index("--facts-from") + 1]) if "--facts-from" in a else None
+if judged is None:
+    (out / "argv.json").write_text(json.dumps(a))
+reps, failed = [], []
+for pkg in named:
+    lock, rel = json.loads((pkg / "lean-audit.json").read_text()), str(pkg.relative_to(root))
+    with open(out / ("ran.txt" if judged is None else "judged.txt"), "a") as f:
+        f.write(rel + "\n")
+    if judged is None:
+        built = hashlib.sha256(b"".join(p.read_bytes() for p in sorted(pkg.glob("*.lean")))).hexdigest()[:12]
+        rep = {"package": str(pkg), "failures": [], "replay": {"checked": 1}, "seconds": {"replay": 1.0, "total": 2.0}}
+        if docs is not None and not lock.get("unsandboxed"):
+            docs.mkdir(parents=True, exist_ok=True)
+            data = gzip.compress(json.dumps({"schema": "FACTS_SCHEMA", "built": built}).encode(), mtime=0)
+            key = hashlib.sha256(rel.encode() + data).hexdigest()
+            (docs / f"{key}.json.gz").write_bytes(data)
+            (docs / f"{key}.json").write_text(json.dumps({"schema": "FACTS_SCHEMA", "key": key,
+                                                          "sha256": hashlib.sha256(data).hexdigest()}))
+            rep |= {"facts_key": key, "facts_document": str(docs / f"{key}.json.gz")}
+    else:
+        built = json.loads(gzip.decompress(judged.read_bytes()))["built"]
+        rep = {"package": str(pkg), "failures": [], "seconds": {"total": 0.5}}
+        (out / f"saw-{pkg.name}.json").write_text(json.dumps({
+            d["dir"]: json.loads((pkg / d["dir"] / "lean-audit.json").read_text())
+            for d in json.loads((pkg / "lake-manifest.json").read_text())["packages"] if d["type"] == "path"}))
+    stale = [f"guarantees: {n}'s record differs from the build" for n, r in sorted(lock.get("guarantees", {}).items())
+             if r != built]
+    if stale and judged is None and "--regenerate" in a:
+        rec = out / f"audit-{pkg.name}" / "lean-audit.json"
+        rec.parent.mkdir(parents=True, exist_ok=True)
+        rec.write_text(json.dumps(lock | {"guarantees": {n: lock.get("regenerates_as", built) for n in lock["guarantees"]},
+                                          "format": 1} | lock.get("regenerates_with", {})))
+        rep |= {"settled": stale, "regenerated": str(rec)}
+    else:
+        rep["failures"] = stale
+    if rep["failures"]:
+        failed.append(str(pkg))
+    reps.append(rep)
+(out / "audit.json").write_text(json.dumps({"passed": not failed, "failed": failed, "packages": reps}))
+sys.exit(1 if failed else 0)
+'''.replace("FACTS_SCHEMA", AUDIT.FACTS_SCHEMA)
+LOCK_PACKAGES = ["pkg/a", "pkg/b", "pkg/c", "pkg/p", "pkg/s"]
+
+
+def _lock_tree(tmp: Path, monkeypatch, locks: dict[str, dict] | None = None) -> Path:
+    """A tree under `LOCK_AUDIT` whose every lock records its build: `pkg/a`, `pkg/b` which requires it by path, `pkg/c`
+    which requires nothing, and a spec `pkg/s` whose guarantees `pkg/p`, which requires it, proves. ``locks`` ({package
+    name: sections}) are laid over those locks: a guarantee recorded as anything else is a record difference."""
+    def package(name: str, requires: tuple[str, ...] = (), **sections) -> dict[str, str]:
+        source = f"theorem {name} : True := trivial\n"
+        lock = {"roots": [name.upper()], "guarantees": {f"{name.upper()}.t": hashlib.sha256(source.encode()).hexdigest()[:12]}}
+        return {f"pkg/{name}/lakefile.toml": "", f"pkg/{name}/lean-toolchain": "v1\n", f"pkg/{name}/{name.upper()}.lean": source,
+                f"pkg/{name}/lake-manifest.json": json.dumps({"packages": [{"name": r, "type": "path", "dir": f"../{r}"}
+                                                                           for r in requires]}),
+                f"pkg/{name}/lean-audit.json": json.dumps(lock | sections | (locks or {}).get(name, {}))}
+    return _tree(tmp, monkeypatch, {"tools/verity/lean/check.py": LOCK_AUDIT, **package("a"), **package("b", ("a",)),
+                                    **package("c"), **package("s", proved_in=["../p"]), **package("p", ("s",))})
+
+
+def _lock_run(tmp: Path, name: str, **flags) -> tuple[int, Path, dict, list[str]]:
+    """`LA.run` into ``tmp``'s ``name``, on the caches every run of a test shares: (its exit, its --out, its audit.json,
+    its log)."""
+    out, logged = tmp / name / "lean-audit", []
+    rc = LA.run(out, tmp / "cache" / "lean-audit", tmp / "cache" / "lean-deps", log=logged.append, **flags)
+    return rc, out, json.loads((out / "audit.json").read_text()), logged
+
+
+def _lines(path: Path) -> list[str]:
+    return sorted(path.read_text().split()) if path.exists() else []
+
+
+def _commit_locks(root: Path, doc: dict) -> None:
+    """The commit drive makes of a lock run's regenerated locks: each over its package's own."""
+    for p, f in doc["regenerated"].items():
+        shutil.copyfile(f, root / p / "lean-audit.json")
+
+
+def test_the_audit_of_the_lock_commit_reuses_the_lock_runs_passes_and_builds_nothing(tmp_path, monkeypatch):
+    """A lock run judges, from the facts its own audits stored, every package whose key its regenerated locks move, on the
+    tree with those locks in place: the packages regenerated, the one requiring one of them by path, and the spec whose
+    prover's lock changed. Each judgment that leaves nothing is kept as that package's pass under its key on that tree,
+    so the audit of the commit drive makes of the locks reuses every pass and runs no build. A kept pass is a full
+    audit's: the judgment of the committed lock with the lock run's replay, which `check.lean_fast` requires of a pass."""
+    root = _lock_tree(tmp_path, monkeypatch, {"a": {"guarantees": {"A.t": "stale"}}, "p": {"guarantees": {"P.t": "stale"}}})
+    before = {p: LA.key(p, LA.COMMON.tracked_files(root), LA.FLAGS) for p in LOCK_PACKAGES}
+    stale = (root / "pkg/a/lean-audit.json").read_text()
+    rc, out, doc, logged = _lock_run(tmp_path, "lock-run", regenerate=True)
+    assert rc == 0 and sorted(doc["regenerated"]) == ["pkg/a", "pkg/p"] and _lines(out / "ran.txt") == LOCK_PACKAGES
+    assert sorted(doc["rekeyed"]) == ["pkg/a", "pkg/b", "pkg/p", "pkg/s"], logged
+    assert _lines(out / LA.LOCK_COMMIT / "judged.txt") == sorted(doc["rekeyed"]), "each judged once, and only those"
+    assert _lines(out / "ran.txt") == LOCK_PACKAGES, "the judgments build nothing"
+    # judged on the tree with the regenerated locks in place, which is never this checkout
+    regenerated = json.loads(Path(doc["regenerated"]["pkg/a"]).read_text())
+    assert json.loads((out / LA.LOCK_COMMIT / "saw-b.json").read_text()) == {"../a": regenerated}
+    assert (root / "pkg/a/lean-audit.json").read_text() == stale
+    # the lock run's own verdict and reports are as before: its pass on a regenerated lock is no pass of this tree
+    a = next(r for r in doc["packages"] if r["package"] == "pkg/a")
+    assert a["settled"] and a["failures"] == [] and not (tmp_path / "cache" / "lean-audit" / f"{before['pkg/a']}.json").exists()
+    # the facts documents were the run's own, outside all a build writes, and are gone with it
+    argv = json.loads((out / "argv.json").read_text())
+    documents = Path(argv[argv.index("--facts-cache") + 1])
+    assert documents.name.startswith(LA.SCRATCH) and not documents.exists()
+    assert AUDIT.build_roots_over(documents, [Path(x) for x in argv if x.endswith(tuple(LOCK_PACKAGES))]) == []
+    assert not list((tmp_path / "cache").glob(LA.SCRATCH + "*")) and not (out / LA.LOCK_COMMIT / "tool").exists()
+
+    _commit_locks(root, doc)
+    after = {p: LA.key(p, LA.COMMON.tracked_files(root), LA.FLAGS) for p in LOCK_PACKAGES}
+    assert doc["rekeyed"] == {p: k for p, k in after.items() if k != before[p]}, "the keys of the tree drive commits"
+    rc, out2, doc2, _ = _lock_run(tmp_path, "lock-commit")
+    assert rc == 0 and doc2["cached"] == after and doc2["regenerated"] == {}
+    assert _lines(out2 / "ran.txt") == [] and not (out2 / LA.LOCK_COMMIT).exists(), "no build and no judgment: only reuse"
+    for r in doc2["packages"]:
+        assert r["failures"] == [] and "settled" not in r and "regenerated" not in r and "facts_document" not in r
+        assert r["replay"] == {"checked": 1} and r["seconds"]["replay"] == 1.0
+        assert r.get("judged_from") == (before[r["package"]] if r["package"] in doc["rekeyed"] else None)
+    assert CHECK.lean_fast(out2.parent) is None
+
+
+def test_a_regenerated_lock_that_fails_its_judgment_keeps_no_pass(tmp_path, monkeypatch):
+    """A package whose regenerated lock fails when it is judged on the tree with the locks in place keeps no pass under
+    that tree's key, so the audit of the lock commit audits it in full (and fails it, as the judgment did). The lock run
+    itself passes as before, and a package whose own judgment there leaves nothing still keeps its pass."""
+    root = _lock_tree(tmp_path, monkeypatch, {"a": {"guarantees": {"A.t": "stale"}, "regenerates_as": "not the build's"}})
+    rc, out, doc, logged = _lock_run(tmp_path, "lock-run", regenerate=True)
+    assert rc == 0 and list(doc["regenerated"]) == ["pkg/a"] and list(doc["rekeyed"]) == ["pkg/b"]
+    assert _lines(out / LA.LOCK_COMMIT / "judged.txt") == ["pkg/a", "pkg/b"]
+    assert [s for s in logged if s.startswith("lean-audit: pkg/a: no pass kept") and "it fails (exit 1, 1 failures" in s], logged
+    assert (out / LA.LOCK_COMMIT / "pkg_a.log").is_file(), "a judgment's output goes to a file, not into the lock run's log"
+    _commit_locks(root, doc)
+    rc, out2, doc2, _ = _lock_run(tmp_path, "lock-commit")
+    assert rc == 1 and doc2["failed"] == ["pkg/a"] and _lines(out2 / "ran.txt") == ["pkg/a"]
+    assert sorted(doc2["cached"]) == ["pkg/b", "pkg/c", "pkg/p", "pkg/s"]
+
+
+def test_a_package_whose_key_the_regenerated_locks_leave_is_untouched(tmp_path, monkeypatch):
+    """A package that reads no regenerated lock has the same key on the tree with them: the lock run judges it no second
+    time and writes nothing for it, and its pass, stored by its audit or reused from an earlier one, answers on the lock
+    commit as it is."""
+    root = _lock_tree(tmp_path, monkeypatch, {"a": {"guarantees": {"A.t": "stale"}}})
+    cache = tmp_path / "cache" / "lean-audit"
+    keys = {p: LA.key(p, LA.COMMON.tracked_files(root), LA.FLAGS) for p in LOCK_PACKAGES}
+    rc, out, doc, _ = _lock_run(tmp_path, "lock-run", regenerate=True)
+    assert rc == 0 and sorted(doc["rekeyed"]) == ["pkg/a", "pkg/b"]
+    assert _lines(out / LA.LOCK_COMMIT / "judged.txt") == ["pkg/a", "pkg/b"]
+    kept = {p: (cache / f"{keys[p]}.json").read_bytes() for p in ("pkg/c", "pkg/p", "pkg/s")}
+    assert all(json.loads(e)["report"]["seconds"] == {"replay": 1.0, "total": 2.0} and "judged_from" not in json.loads(e)["report"]
+               for e in kept.values()), "the passes their own audits stored"
+    assert sorted(f.name for f in cache.glob("*.json")) == sorted(
+        f"{k}.json" for k in [*(keys[p] for p in kept), keys["pkg/b"], *doc["rekeyed"].values()])
+    # a second lock run reuses them, and those it reused are as untouched
+    rc, again, doc, _ = _lock_run(tmp_path, "lock-run-again", regenerate=True)
+    assert rc == 0 and sorted(doc["cached"]) == ["pkg/b", "pkg/c", "pkg/p", "pkg/s"] and _lines(again / "ran.txt") == ["pkg/a"]
+    assert {p: (cache / f"{keys[p]}.json").read_bytes() for p in kept} == kept
+    _commit_locks(root, doc)
+    assert {p: LA.key(p, LA.COMMON.tracked_files(root), LA.FLAGS) for p in kept} == {p: keys[p] for p in kept}
+    rc, out2, doc2, _ = _lock_run(tmp_path, "lock-commit")
+    assert rc == 0 and _lines(out2 / "ran.txt") == [] and {p: doc2["cached"][p] for p in kept} == {p: keys[p] for p in kept}
+
+
+def test_a_regenerated_lock_that_changes_what_the_build_reads_keeps_no_pass(tmp_path, monkeypatch):
+    """The facts a lock run stored are the facts of the tree with the regenerated locks only while every step before the
+    judge reads the same of both locks (`check.py`'s `build_inputs`). A regenerated lock that newly lists a premise, which
+    `Facts.lean` then walks, is no such lock: its package and the one whose audit reads that lock keep no pass, though a
+    judgment from the old facts would leave nothing, and the lock commit audits both in full."""
+    root = _lock_tree(tmp_path, monkeypatch, {"a": {"guarantees": {"A.t": "stale"},
+                                                    "regenerates_with": {"assumptions": {"A.H": {"owner": "@lean"}}}}})
+    rc, out, doc, logged = _lock_run(tmp_path, "lock-run", regenerate=True)
+    assert rc == 0 and list(doc["regenerated"]) == ["pkg/a"] and doc["rekeyed"] == {}
+    assert not (out / LA.LOCK_COMMIT).exists(), "nothing is judged"
+    for p in ("pkg/a", "pkg/b"):
+        assert [s for s in logged if s.startswith(f"lean-audit: {p}: no pass kept") and "the regenerated lock of pkg/a" in s
+                and "build_inputs" in s], logged
+    _commit_locks(root, doc)
+    rc, out2, doc2, _ = _lock_run(tmp_path, "lock-commit")
+    assert rc == 0 and _lines(out2 / "ran.txt") == ["pkg/a", "pkg/b"] and sorted(doc2["cached"]) == ["pkg/c", "pkg/p", "pkg/s"]
+
+    # a lock `build_inputs` can't read (it names no roots) agrees with no lock, itself included
+    root = _lock_tree(tmp_path / "unread", monkeypatch)
+    (root / "pkg/a/lean-audit.json").write_text(json.dumps({"guarantees": {"A.t": "stale"}}))
+    rc, out, doc, logged = _lock_run(tmp_path / "unread", "lock-run", regenerate=True)
+    assert rc == 0 and list(doc["regenerated"]) == ["pkg/a"] and doc["rekeyed"] == {} and not (out / LA.LOCK_COMMIT).exists()
+    assert len([s for s in logged if "no pass kept" in s and "the regenerated lock of pkg/a" in s]) == 2, logged
+
+
+def test_only_a_whole_run_keeps_a_pass_and_only_of_a_package_it_audited_with_a_stored_document(tmp_path, monkeypatch):
+    """What keeps no pass for the lock commit, each leaving that commit's audit to run in full as before: a package the
+    lock run reused from the cache (it has no facts of this run), one whose audit stored no facts document (a node without
+    the sandbox), a shard's run (another shard's regenerated locks move its keys too) and a `--fresh` run (nothing is
+    cached). Neither of the last two asks check.py for documents."""
+    stale = {"a": {"guarantees": {"A.t": "stale"}}}
+    _lock_tree(tmp_path / "reused", monkeypatch, stale)
+    rc, _, doc, _ = _lock_run(tmp_path / "reused", "check")           # a fails on its record; the others' passes are kept
+    assert rc == 1 and doc["failed"] == ["pkg/a"]
+    rc, out, doc, logged = _lock_run(tmp_path / "reused", "lock-run", regenerate=True)
+    assert rc == 0 and sorted(doc["cached"]) == ["pkg/b", "pkg/c", "pkg/p", "pkg/s"] and list(doc["rekeyed"]) == ["pkg/a"]
+    assert [s for s in logged if s.startswith("lean-audit: pkg/b: no pass kept") and "reused its pass" in s], logged
+
+    _lock_tree(tmp_path / "unsandboxed", monkeypatch, {"a": stale["a"] | {"unsandboxed": True}})
+    rc, out, doc, logged = _lock_run(tmp_path / "unsandboxed", "lock-run", regenerate=True)
+    assert rc == 0 and list(doc["regenerated"]) == ["pkg/a"] and list(doc["rekeyed"]) == ["pkg/b"]
+    assert [s for s in logged if s.startswith("lean-audit: pkg/a: no pass kept") and "stored no facts document" in s], logged
+
+    _lock_tree(tmp_path / "partial", monkeypatch, stale)
+    for name, flags in (("shard", {"only": ["pkg/a", "pkg/b"]}), ("fresh", {"fresh": True})):
+        rc, out, doc, _ = _lock_run(tmp_path / "partial", name, regenerate=True, **flags)
+        assert rc == 0 and list(doc["regenerated"]) == ["pkg/a"] and doc["rekeyed"] == {}
+        assert "--facts-cache" not in json.loads((out / "argv.json").read_text()) and not (out / LA.LOCK_COMMIT).exists()
+    assert "rekeyed" not in _lock_run(tmp_path / "partial", "check")[2], "only a run that regenerates lists them"
+
+
+def test_a_facts_document_is_judged_from_only_as_its_sidecar_names_it(tmp_path):
+    """`stored_document` gives the document a lock run's audit stored under a facts key only when its sidecar names the
+    schema, that key and the SHA-256 the document's bytes have: never one whose bytes changed since, one filed under
+    another key, one of another schema, or one without its sidecar (`check.py`'s `read_cached_facts`). Without the
+    document it says why, which the lock run's log carries."""
+    def store(name: str, data: bytes, **meta) -> None:
+        (tmp_path / f"{name}.json.gz").write_bytes(data)
+        (tmp_path / f"{name}.json").write_text(json.dumps({"schema": "s/v1", "key": name,
+                                                           "sha256": hashlib.sha256(data).hexdigest()} | meta))
+
+    def refused(name: str, schema: str = "s/v1") -> str:
+        doc, why = LA.stored_document(tmp_path, name, schema)
+        assert doc is None and why
+        return why
+
+    store("good", b"facts")
+    assert LA.stored_document(tmp_path, "good", "s/v1") == (tmp_path / "good.json.gz", "")
+    assert "another schema" in refused("good", "s/v2") and refused("absent").startswith("FileNotFoundError")
+    (tmp_path / "good.json.gz").write_bytes(b"other facts")
+    assert "SHA-256" in refused("good"), "its bytes changed"
+    store("misfiled", b"facts", key="another")
+    assert "key" in refused("misfiled")
+    store("bare", b"facts")
+    (tmp_path / "bare.json").unlink()
+    assert refused("bare").startswith("FileNotFoundError")
+    (tmp_path / "bare.json").write_text("[1]")
+    assert refused("bare").startswith("AttributeError") and refused("None").startswith("FileNotFoundError")
+    (tmp_path / "bare.json").write_text("not json")
+    assert refused("bare").startswith("JSONDecodeError")
 
 
 def test_held_caps_sets_each_broken_cap_to_its_count_and_leaves_the_rest():
