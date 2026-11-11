@@ -239,8 +239,8 @@ class DsaNormRopeRule(InPlaceRule):
                     preconditions=("positions a static 1-D index of T rows; q_c [T, Nq], kv_c [T, L], k_pe [T, R] bf16 values",
                                    "q_w [Nq], kv_w [L] bf16; cos_sin a bf16 rotary cache [MAX_POS, R] holding every position",
                                    "kv_c_out, k_pe_out unwritten allocations of kv_c's and k_pe's shape",
-                                   "the index operands all given or all None; given: index_k [T, D] bf16, k_norm weight and bias [D] f32, "
-                                   "a bf16 rotary cache [MAX_POS, ROPE], the interleaved RoPE, D and ROPE as DsaIndexerKRow_v1 takes them",
+                                   ("the index operands all given or all None; given: index_k [T, D] bf16, k_norm weight and bias [D] f32, "
+                                   "a bf16 rotary cache [MAX_POS, ROPE], the interleaved RoPE, D and ROPE as DsaIndexerKRow_v1 takes them"),
                                    "the eps static floats; not under registered_values"),
                     evidence_domain="structural; numerics: dsa_rmsnorm, dsa_kv_rope and DsaIndexerKRow_v1 (registry.dsa)")
 
@@ -349,8 +349,8 @@ class DsaQRule(OpRule):
     modes = frozenset({"profile"})
     info = RuleInfo("DsaQ[vllm-dsa]", 1, "op-binding", applies_to="vllm_iface.dsa_q(...) (" + ", ".join(_Q) + ")",
                     preconditions=("positions a static 1-D index of T rows; q_pe [T, NH, R] bf16; cos_sin a bf16 rotary cache [MAX_POS, R]",
-                                   "the index operands all given or all None; given: index_q [T, H, D] bf16, index_weights [T, H] bf16, a bf16 "
-                                   "rotary cache [MAX_POS, ROPE], the interleaved RoPE",
+                                   ("the index operands all given or all None; given: index_q [T, H, D] bf16, index_weights [T, H] bf16, a bf16 "
+                                   "rotary cache [MAX_POS, ROPE], the interleaved RoPE"),
                                    "softmax_scale == f32(D^-0.5) and head_scale == f32(H^-0.5), the words DsaIndexerQ_v1 folds in"),
                     evidence_domain="structural; numerics: dsa_q_rope and DsaIndexerQ_v1 (registry.dsa)")
 
@@ -458,7 +458,7 @@ def _prefill_by_dense_mha(layer_name: str, T: int) -> str | None:
     if obs.get("prefill_backend") is None or obs.get("sparse_mla_force_mqa") is True:
         return None
     limit = _decode_threshold(layer_name)
-    if isinstance(limit, str) or T <= limit:
+    if isinstance(limit, str) or limit >= T:
         return limit if isinstance(limit, str) else None
     return (f"numerics_unregistered: {layer_name!r}: a call of {T} query rows is a prefill (decode threshold {limit} at "
             f"{obs.get('q_heads_per_rank')} query heads per rank) that reached the top-k MQA op; vLLM serves a prefill by its prefill "
@@ -513,19 +513,19 @@ class DsaIndexerAttnRule(StateRule):
     before's, which the descriptor writes as an alias plus a part."""
     modes = frozenset({"profile"})
     info = RuleInfo("DsaIndexerAttn[vllm-dsa]", 1, "state", applies_to="vllm_iface.dsa_indexer_attn(...) (" + ", ".join(_ATTN) + ")",
-                    preconditions=("the layer's OBSERVED implementation is FlashAttnMLASparseImpl on a bf16 cache, without context parallelism; "
-                                   "the workload either declares the one-split pin or leaves FA3's split heuristic at its default",
-                                   "the call takes the top-k MQA path as a decode: no dense-MHA prefill backend, sparse_mla_force_mqa, or T "
+                    preconditions=(("the layer's OBSERVED implementation is FlashAttnMLASparseImpl on a bf16 cache, without context parallelism; "
+                                   "the workload either declares the one-split pin or leaves FA3's split heuristic at its default"),
+                                   ("the call takes the top-k MQA path as a decode: no dense-MHA prefill backend, sparse_mla_force_mqa, or T "
                                    "at most the metadata builder's decode threshold at the observed query heads per rank (DECODE_THRESHOLD); "
-                                   "a prefill of at most TOPK keys is DsaDenseMha[vllm-dsa]'s",
+                                   "a prefill of at most TOPK keys is DsaDenseMha[vllm-dsa]'s"),
                                    "the target's compute capability is 9.0 (FA3)",
                                    "positions are T consecutive rows continuing the layer's history; ql_nope [T, NH, L], q_pe [T, NH, R], kv_c [T, L], k_pe [T, R] bf16",
-                                   "the index operands all given (index_q [T, H, D] e4m3, index_weights [T, H] f32, index_k [T, D] e4m3, "
-                                   "index_k_scale [T] f32) or all None, then the last indexer layer selected for these positions",
-                                   "a row of at most TOPK keys takes the top-k kernels' short-row shortcut; a longer one reads the rows "
+                                   ("the index operands all given (index_q [T, H, D] e4m3, index_weights [T, H] f32, index_k [T, D] e4m3, "
+                                   "index_k_scale [T] f32) or all None, then the last indexer layer selected for these positions"),
+                                   ("a row of at most TOPK keys takes the top-k kernels' short-row shortcut; a longer one reads the rows "
                                    "DsaButterflyRows_v1 (DsaButterflyRowsPad_v1 below its class) routes at the settings "
                                    "DsaButterflySettings_v1 computes for DsaTopKMask_v1's set "
-                                   "(an IndexShare layer's rows have the indexer layer's key counts)",
+                                   "(an IndexShare layer's rows have the indexer layer's key counts)"),
                                    "layer_name static and written from one module; not under registered_values"),
                     evidence_domain="structural; numerics: DsaMqaLogits_v3, DsaTopKShortRow_v1, DsaTopKMask_v1, DsaButterflySettings_v1, "
                                     "DsaButterflyRows_v1, DsaButterflyRowsPad_v1, SparseMla_v1 or SparseMlaSplit_v1")
@@ -638,7 +638,7 @@ class DsaIndexerAttnRule(StateRule):
                     selected[P] = ctx.call(sel_fn, ln, node=node, rule=self, name=f"{h}/topk[t={P}]")
                     continue
                 N = long_row_keys(n, TOPK)
-                scores = Coll(Array(N, Value(32)), concat([logits.refs, pad(32, PAD_SCORE, pad_words(TOPK), N - n)]) if N > n else logits.refs)
+                scores = Coll(Array(N, Value(32)), concat([logits.refs, pad(32, PAD_SCORE, pad_words(TOPK), N - n)]) if n < N else logits.refs)
                 mask = ctx.call(ctx.kind("dsa_topk_mask", node, N=N, TOPK=TOPK), scores, node=node, rule=self,
                                 name=f"{h}/topk_mask[t={P}]")
                 selected[P] = ctx.call(ctx.kind("dsa_butterfly_settings", node, N=N, TOPK=TOPK), mask, node=node, rule=self,
@@ -648,7 +648,7 @@ class DsaIndexerAttnRule(StateRule):
                 ik, iks = Coll(Array(Nb, Array(D, Value(8))), klog.cut(Nb)), Coll(Array(Nb, Value(32)), slog.cut(Nb))
                 logits = [ctx.call(lg, iq[i], iw[i], ik, iks, node=node, rule=self, name=f"{h}/logits[t={pos[i]}]") for i in rows]
                 counts = [Coll(Value(32), pad(32, keys[i], 1, 1)) for i in rows]
-                tail = [pad(32, PAD_SCORE, pad_words(TOPK), N - Nb)] if N > Nb else []
+                tail = [pad(32, PAD_SCORE, pad_words(TOPK), N - Nb)] if Nb < N else []
                 fm, fs = ctx.kind("dsa_topk_mask_counted", node, N=N, TOPK=TOPK), ctx.kind("dsa_butterfly_settings", node, N=N, TOPK=TOPK)
                 masks = [ctx.call(fm, Coll(Array(N, Value(32)), concat([lgt.refs, *tail])), c, node=node, rule=self,
                                   name=f"{h}/topk_mask[t={pos[i]}]") for i, lgt, c in zip(rows, logits, counts)]
@@ -671,7 +671,7 @@ class DsaIndexerAttnRule(StateRule):
         rows_of = {}
         for Nb, rows in long_row_blocks(keys, TOPK) if batched_form() else ():
             N, hb = long_row_keys(Nb, TOPK), Coll(Array(Nb, row), latent.cut(Nb))
-            rest = (Coll(Array(N - Nb, row), pad(16, 0, pad_words(TOPK, L + R), (N - Nb) * (L + R))),) if N > Nb else ()
+            rest = (Coll(Array(N - Nb, row), pad(16, 0, pad_words(TOPK, L + R), (N - Nb) * (L + R))),) if Nb < N else ()
             fr = (ctx.kind("dsa_butterfly_rows_pad", node, T=Nb, N=N, TOPK=TOPK, W=L + R) if rest
                   else ctx.kind("dsa_butterfly_rows", node, N=N, TOPK=TOPK, W=L + R))
             for i in rows:
@@ -686,7 +686,7 @@ class DsaIndexerAttnRule(StateRule):
             kv = rows_of[i] if i in rows_of else Coll(Array(n, row), latent.cut(n))
             if n > TOPK and i not in rows_of:
                 N = long_row_keys(n, TOPK)
-                rest = (Coll(Array(N - n, row), pad(16, 0, pad_words(TOPK, L + R), (N - n) * (L + R))),) if N > n else ()
+                rest = (Coll(Array(N - n, row), pad(16, 0, pad_words(TOPK, L + R), (N - n) * (L + R))),) if n < N else ()
                 rows = (ctx.kind("dsa_butterfly_rows_pad", node, T=n, N=N, TOPK=TOPK, W=L + R) if rest
                         else ctx.kind("dsa_butterfly_rows", node, N=N, TOPK=TOPK, W=L + R))
                 kv = ctx.call(rows, selected[P], kv, *rest, node=node, rule=self, name=f"{h}/rows[t={P}]")

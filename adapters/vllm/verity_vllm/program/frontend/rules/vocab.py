@@ -8,8 +8,8 @@ the vocabulary's name and version, so "which kernels does this program claim" is
 from __future__ import annotations
 
 import hashlib
+from collections.abc import Callable
 from dataclasses import dataclass, field
-from typing import Callable
 
 from verity.circuits.defs import bind as ir_bind
 from verity.definitions.registry import act as _act
