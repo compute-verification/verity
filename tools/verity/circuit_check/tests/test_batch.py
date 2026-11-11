@@ -7,9 +7,9 @@ import json
 import pytest
 from circuit_check import cli
 
-from verity.ml.circuits.defs import CompositeDefinition, PrimitiveDefinition, bind
-from verity.ml.circuits.refs import array_of
-from verity.ml.circuits.types import Array, Value
+from verity.circuits.defs import CompositeDefinition, PrimitiveDefinition, bind
+from verity.circuits.refs import array_of
+from verity.circuits.types import Array, Value
 from verity_vllm.check.batch import SHARED, Rows, Template
 
 V16 = Value(16)
