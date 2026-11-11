@@ -28,7 +28,10 @@ record so far with its scores, where the clock stands and, in the record's last 
 of the tensors as DIR holds them (`kept_sha512`). DIR is hidden from the route's process as a final set is. A job
 that finds a state in DIR continues from it when the state is its own: the same `training_slowdown` VERSION, seed,
 split and config digest, tensors whose every part hashes to what the record states, and a model that hashes to its
-record's last checkpoint. Any other it refuses, naming what differs, and trains nothing. The route's process then
+record's last checkpoint. Any other it refuses, naming what differs, and trains nothing. The record a state is
+checked against lies beside its tensors; `--continues SHA256` ties it to the copy in the stopped run's record, which
+no job writes: whoever starts the job reads the sha256 of `state.json` there, and the job refuses a `state.json` of
+another, or under `--continues nothing` any state at all. The route's process then
 takes the kept tensors and, before it imports the route, says what each part hashes to as it holds it: the job's
 own process ends the job there when that isn't what the record states. It loads θ, puts the tensors back and runs
 the steps that remain; it is told the next step, the clock and the digest key, and never the record. Each stretch a
@@ -81,7 +84,7 @@ import numpy as np
 import torch
 import torch.nn.modules.module as nn_module
 
-from . import BUDGET_SLACK, STOPPED, VERSION, config, sandbox, starts
+from . import BUDGET_SLACK, NOTHING, STOPPED, VERSION, config, sandbox, starts
 from .codecs import Identity, Plan, Unencodable
 from .counterexample import SAMPLE_FINAL, SAMPLE_SEARCH, Family, check
 from .data import SPLITS, Data, Stream
@@ -638,6 +641,10 @@ def parse(argv=None) -> argparse.Namespace:
     ap.add_argument("--state", type=Path, metavar="DIR",
                     help="this job's state directory: it keeps there what continuing needs after each checkpoint, "
                          "and continues from a state of its own it finds there (default: neither)")
+    ap.add_argument("--continues", metavar="SHA256", type=continued,
+                    help=f"with --state, from whoever starts the job: the sha256 of the state.json it continues "
+                         f"from, as the stopped run's record holds it where no job writes, or `{NOTHING}`; the job "
+                         f"refuses any other state it finds (default: it continues from its own state as found)")
     ap.add_argument("--starts", type=Path, default=starts.REGISTRY, help="the starts registry (default starts.toml)")
     ap.add_argument("--starts-root", type=Path, default=None,
                     help="where the starts are installed, NAME/{theta.safetensors,start.json} (default the registry's)")
@@ -660,6 +667,8 @@ def parse(argv=None) -> argparse.Namespace:
     a = ap.parse_args(argv)
     if a.retrace is None and (missing := [f"--{k}" for k in ("config", "seed", "split") if getattr(a, k) is None]):
         ap.error(f"a job needs {', '.join(missing)}")
+    if a.continues is not None and a.state is None:
+        ap.error("--continues says which state of --state DIR the job continues from: give --state")
     return a
 
 
@@ -711,13 +720,24 @@ class Outside:
         self._hand("keep", state, record=record, elapsed_s=elapsed_s)
 
 
+def continued(text: str) -> str:
+    """`--continues`' value: `NOTHING`, or a sha256 in hex."""
+    if text != NOTHING and not (len(text) == 64 and set(text) <= set("0123456789abcdef")):
+        raise argparse.ArgumentTypeError(f"{text!r} is neither {NOTHING!r} nor a sha256 in hex")
+    return text
+
+
 class Kept:
     """A job's state directory (`--state`), which only the job's own process reads and writes: `state.json`, holding
     the record so far (which names the job: its config's digest, seed, split and VERSION), where the clock stands,
     and the name of the one file beside it, the tensors the route's process continues from (`resume_state`). The
     record's last segment states the SHA-512 of each part of those tensors (`kept`, by `kept_sha512`), which the
     job's own process hashes from this directory's copy. A new state is written beside the old one and takes its
-    place by a rename, so a job stopped while it writes leaves the old one whole."""
+    place by a rename, so a job stopped while it writes leaves the old one whole.
+
+    `state.json` travels with the tensors, so whoever can write the directory can write both. `--continues` ties
+    it to a copy no job writes: the sha256 of the file as the stopped run's record holds it, which `load` compares
+    with the bytes it then reads the record from."""
 
     SCHEMA = "training-slowdown/state/v1"
 
@@ -737,17 +757,27 @@ class Kept:
                 self.refuse(f"the SHA-512 of its {part}, as {where}, is {got.get(part)} and the record of the "
                             f"segment that kept it states {stated.get(part)}")
 
-    def load(self, seed: int, split: str) -> dict | None:
+    def load(self, seed: int, split: str, continues: str | None = None) -> dict | None:
         """The directory's state, for the job of `seed` and `split` to continue from; None where it holds none. One
         this tree didn't write for this job is refused by what differs: its schema, its `training_slowdown` VERSION,
         its seed or its split, a part of its tensors that doesn't hash to what its record's last segment states,
         or a model that doesn't hash to its record's last checkpoint. Its config's digest is compared once the
-        route's process, which reads the route's VERSION and dials, names its own (`outside`)."""
+        route's process, which reads the route's VERSION and dials, names its own (`outside`).
+
+        `continues` (`--continues`) is what whoever started the job found for it to continue from: under `NOTHING`
+        any state here is refused, and under a sha256 one whose `state.json` hashes to another; the record is then
+        read from the bytes that were hashed."""
         path = self.dir / "state.json"
         if not path.is_file():
             return None
+        raw = path.read_bytes()
+        if continues == NOTHING:
+            self.refuse("whoever started this job found no state for it to continue from")
+        if continues is not None and (got := hashlib.sha256(raw).hexdigest()) != continues:
+            self.refuse(f"its state.json hashes to {got} (sha256) and the one this job was started to continue "
+                        f"from, in the stopped run's record, to {continues}")
         try:
-            kept = json.loads(path.read_text())
+            kept = json.loads(raw)
         except ValueError as e:
             self.refuse(f"its state.json doesn't parse ({e})")
         if not isinstance(kept, dict) or kept.get("schema") != self.SCHEMA:
@@ -897,7 +927,7 @@ def outside(a: argparse.Namespace, argv: list[str]) -> int:
         env = os.environ | {"PYTHONPATH": os.pathsep.join([str(HERE.parent), *filter(None, sys.path)])}
         if a.retrace is not None:
             return subprocess.run(route, env=env).returncode
-        kept = state.load(a.seed, a.split) if state else None
+        kept = state.load(a.seed, a.split, a.continues) if state else None
         prior, stands = (kept["record"] if kept else None), None
         if kept:
             # a copy: through a link the route's process could write the kept file

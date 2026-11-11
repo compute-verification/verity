@@ -6,3 +6,5 @@ VERSION = "4.17.0"
 STOPPED = 75
 #: a job past its budget's minutes by this factor is stopped at its next step
 BUDGET_SLACK = 1.2
+#: a job's `--continues` when whoever starts it found no state for it to continue from
+NOTHING = "nothing"

@@ -64,7 +64,11 @@ config digest, seed, split and `training_slowdown` VERSION, a model that hashes 
 refuses any other, naming what differs. The job's own process states in the record so far, for the segment that
 kept the state, the SHA-512 of each of its parts (the model, the optimizers' state, the stream's position, the
 generators); the job that continues hashes them again, in the state directory and as the route's process holds them
-before it imports the route, and refuses a state a part of which hashes to anything else. The record lists the segments
+before it imports the route, and refuses a state a part of which hashes to anything else. That record lies beside
+the tensors, so the command ties it to the stopped run's record on the store, which no job writes: it tells the
+job the sha256 the store lists for that record's `state.json` (`--continues`), or that it found none, and the job
+continues from no other state (a state on a node's disk has no such copy, and none is checked). The record lists
+the segments
 the job ran in, and its count is their sum: every step once, and each segment's `build`. What a stopped segment
 computed after its last kept checkpoint is run again and is in no record. A state is a cache: the command keeps it
 with the stopped run's output on the store, the next run fetches it on whichever machine it gets (`NODE_STATE` in

@@ -16,6 +16,8 @@ cmd = sys.modules[_spec.name] = importlib.util.module_from_spec(_spec)
 _spec.loader.exec_module(cmd)
 
 ART = "art:" + "e" * 64
+#: the store's sha256 of the state.json a record holds
+STATED = "5" * 64
 
 
 class Research:
@@ -26,8 +28,9 @@ class Research:
         self.attempts: dict[str, dict] = {}
         self.runs: list[list[str]] = []
         self.sync_rc = 0
-        #: the records that hold a job's state
+        #: the records that hold a job's state, and the sha256 the store lists for each one's state.json
         self.states: set[str] = set()
+        self.sha256 = STATED
 
     def __call__(self, argv):
         assert argv[0] == "research", argv
@@ -39,7 +42,8 @@ class Research:
             assert argv[4:] == ["--list", "--json", "--path", "out/state/state.json"], argv
             held = argv[3] in self.states
             return SimpleNamespace(returncode=0 if held else 1, stderr="" if held else "no file matches",
-                                   stdout=json.dumps([{"path": "out/state/state.json"}]) if held else "")
+                                   stdout=json.dumps([{"path": "out/state/state.json", "sha256": self.sha256}])
+                                   if held else "")
         if verb == "labels-sync":
             return SimpleNamespace(returncode=self.sync_rc, stdout="", stderr="unreachable")
         if verb == "sql":
@@ -91,7 +95,7 @@ def test_each_missing_job_is_queued_once_and_labelled(tree, reg_path, capsys):
         assert argv[-3:-1] == ["bash", "-lc"] and script.startswith(
             cmd.SYNC + " && cd benchmarks/training_slowdown && exec ../../.venv/bin/python -m training_slowdown.run ")
         assert (f"--config attacks/a.toml --seed {job.seed} --split {job.split} --starts {reg_path.resolve()}"
-                in script and script.endswith('--state "$OUT/state" --out "$OUT"'))
+                in script and script.endswith(f'--state "$OUT/state" --continues {cmd.NOTHING} --out "$OUT"'))
         assert (r.run_of(job.label), config.LABEL_KEY, job.label) in r.labels
     assert "3 of 3 jobs pending" in capsys.readouterr().out
     assert command(r, "a", "--starts", str(reg_path)) == 3 and len(r.runs) == 3  # pending: nothing queued again
@@ -125,7 +129,9 @@ def stop(r: Research, job, record=None, machine="node-7") -> str:
 def test_a_stopped_job_is_run_again_from_the_state_its_run_kept(tree, reg_path, capsys):
     """A job whose run ended with `STOPPED` is started again by the command's next run, on whichever machine the
     queue gives it: where the stopped run's record holds a state, the new run fetches it into its own $OUT before
-    the job starts, with the store's read key; where it holds none, the job starts again from θ."""
+    the job starts, with the store's read key, and the job is told the sha256 the store lists for that record's
+    state.json, to continue from no other; where it holds none, or the store lists no sha256 for it, the job starts
+    again from θ and is told to continue from nothing."""
     path = write_config(tree / "a.toml", seeds={"search": [0], "final": [101]})
     search, final = config.load(path, starts.registry(reg_path)).jobs()
     r = Research()
@@ -147,13 +153,25 @@ def test_a_stopped_job_is_run_again_from_the_state_its_run_kept(tree, reg_path, 
     assert again[-1].startswith(f'{cmd.SYNC} && .venv/bin/research data fetch {ART} --path "out/state/*" --to '
                                 f'"$(dirname "$OUT")" && cd benchmarks/training_slowdown && exec ')
     assert "research data fetch" not in fresh[-1] and fresh[-1] == r.runs[1][-1]
-    assert all(script.endswith('--state "$OUT/state" --out "$OUT"') for script in (again[-1], fresh[-1]))
+    assert again[-1].endswith(f'--state "$OUT/state" --continues {STATED} --out "$OUT"')
+    assert fresh[-1].endswith('--state "$OUT/state" --continues nothing --out "$OUT"')
     assert f"continues {first}" in capsys.readouterr().out
     assert r.run_of(search.label) == first and len([t for t, _, v in r.labels if v == search.label]) == 2
     assert command(r, "a", "--starts", str(reg_path)) == 3 and len(r.runs) == 4   # pending: nothing queued again
     r.attempts[sorted(t for t, _, v in r.labels if v == search.label)[-1]] = {"status": {"rc": 0},
                                                                               "outputs": {"run_record": ART}}
     assert "done" in (command(r, "a", "--starts", str(reg_path)), capsys.readouterr().out)[1]
+
+    r = Research()
+    r.sha256 = '$(touch x)"'
+    command(r, "a", "--starts", str(reg_path))
+    r.states.add(ART)
+    stop(r, search, ART)
+    capsys.readouterr()
+    assert command(r, "a", "--starts", str(reg_path), "--dry-run") == 3
+    assert "(it kept no state: it starts again from θ)" in capsys.readouterr().out
+    assert command(r, "a", "--starts", str(reg_path)) == 3 and len(r.runs) == 3
+    assert r.runs[2][-1] == r.runs[0][-1] and "--store-read" not in r.runs[2] and "touch" not in r.runs[2][-1]
 
 
 def test_a_state_kept_on_the_nodes_disk_sends_the_job_back_to_its_machine(tree, reg_path, monkeypatch):
@@ -170,6 +188,7 @@ def test_a_state_kept_on_the_nodes_disk_sends_the_job_back_to_its_machine(tree, 
     assert command(r, "a", "--starts", str(reg_path)) == 3
     assert r.runs[1][2:8] == ["--queue", "--kind", "training-attack", "--preemptible", "--project", "verity"]
     assert r.runs[1][-6:-4] == ["--on", "node-7"] and r.runs[1][-1] == r.runs[0][-1]
+    assert "--continues" not in r.runs[1][-1]
     assert "--store-read" not in r.runs[1]
 
 

@@ -1,7 +1,9 @@
 """A stopped job continues from its kept state: what it keeps, what it refuses, and that its record over two segments
 is the unbroken job's."""
+import argparse
 import contextlib
 import copy
+import hashlib
 import io
 import json
 import os
@@ -11,7 +13,7 @@ import pytest
 import torch
 from synthetic import tiny_registry, write_config
 
-from training_slowdown import VERSION, config, run, starts
+from training_slowdown import NOTHING, VERSION, config, run, starts
 from training_slowdown.data import Data, Stream
 
 #: what depends on when a job ran, not on what it computed: its times, and the flags read from them
@@ -253,6 +255,43 @@ def test_a_job_keeps_one_state_and_continues_only_its_own(tmp_path, stopped):
     assert not state.dir.exists() and run.Kept(state.dir).load(0, "final") is None
 
 
+def test_a_state_rewritten_whole_is_refused_against_the_stopped_runs_record(tmp_path, stopped):
+    """A writer of the state directory writes `state.json` with the tensors, so a state rewritten whole, its
+    record's digests matching its tensors, is one the directory alone can't tell from the kept one. `--continues`
+    is the sha256 of `state.json` as the stopped run's record holds it: the kept state continues under it, the
+    rewritten one is refused by both digests, and under `nothing` any state is. A directory that holds no state
+    starts from θ under either."""
+    state, _ = kept_state(tmp_path, stopped)
+    manifest, tensors = state.dir / "state.json", state.dir / "tensors-0000001.pt"
+    stored = hashlib.sha256(manifest.read_bytes()).hexdigest()
+    kept = state.load(0, "final")
+    assert state.load(0, "final", stored) == kept
+
+    flipped = changed(stopped["state"], "optimizers")
+    torch.save(flipped, tensors)
+    whole = json.loads(manifest.read_text())
+    whole["record"]["segments"][-1]["kept"] = run.kept_sha512(flipped)
+    manifest.write_text(json.dumps(whole))
+    rewritten = hashlib.sha256(manifest.read_bytes()).hexdigest()
+    assert state.load(0, "final")["record"]["segments"][-1]["kept"] == run.kept_sha512(flipped) != kept["record"][
+        "segments"][-1]["kept"]
+    with pytest.raises(SystemExit, match=f"isn't one this job continues: its state.json hashes to {rewritten} "
+                                         f".sha256. and the one this job was started to continue from, in the "
+                                         f"stopped run's record, to {stored}. Remove {state.dir} to start"):
+        state.load(0, "final", stored)
+    with pytest.raises(SystemExit, match="whoever started this job found no state for it to continue from"):
+        state.load(0, "final", NOTHING)
+    assert json.loads(manifest.read_text()) == whole
+    assert run.kept_sha512(torch.load(tensors, weights_only=True)) == run.kept_sha512(flipped)
+
+    empty = run.Kept(tmp_path / "empty")
+    assert empty.load(0, "final", stored) is None and empty.load(0, "final", NOTHING) is None
+    assert run.continued(stored) == stored and run.continued(NOTHING) == NOTHING
+    for text in ("", stored[:-1], stored.upper(), "none"):
+        with pytest.raises(argparse.ArgumentTypeError, match="is neither 'nothing' nor a sha256 in hex"):
+            run.continued(text)
+
+
 def test_a_segment_that_names_another_job_than_the_kept_record_is_refused(stopped, rest):
     first = run.joined(None, stopped["record"])
     for over, why in (({"config": {"digest": "b" * 64}}, "config digest"), ({"seed": 5}, "seed"),
@@ -273,15 +312,16 @@ def test_a_job_stopped_after_a_checkpoint_and_run_again_writes_the_unbroken_jobs
     (SIGTERM) once it has kept its state after step 1, which ends with `STOPPED`, no record and the state left; a
     job of another config on that state, refused by both digests before it trains, the state left; the stopped job
     on its state with one bit of the optimizers' part flipped, in the state directory and then only in the copy
-    handed to the route's process, refused each time by that part's two SHA-512; and the stopped job again, which
-    continues while its state directory, hidden from the route's process, still holds the state, writes the
-    unbroken job's record in two segments, the first with the digests of the state it kept, and removes the
-    state."""
+    handed to the route's process, refused each time by that part's two SHA-512; the stopped job told to continue
+    from nothing, and from a `state.json` of another sha256, refused each time; and the stopped job again, told
+    the sha256 of its `state.json`, which continues while its state directory, hidden from the route's process,
+    still holds the state, writes the unbroken job's record in two segments, the first with the digests of the
+    state it kept, and removes the state."""
     root, reg, path = tiny
 
-    def job(out, state, cfg=path):
+    def job(out, state, cfg=path, *more):
         return run.main(["--config", cfg, "--seed", 0, "--split", "final", "--out", tmp_path / out, "--starts", reg,
-                         "--device", "cpu", "--state", tmp_path / state])
+                         "--device", "cpu", "--state", tmp_path / state, *more])
 
     assert job("whole", "state-whole") == 0 and not (tmp_path / "state-whole").exists()
     whole = json.loads((tmp_path / "whole" / "run.json").read_text())
@@ -325,7 +365,15 @@ def test_a_job_stopped_after_a_checkpoint_and_run_again_writes_the_unbroken_jobs
     assert sorted(p.name for p in (tmp_path / "state").iterdir()) == kept and tensors.read_bytes() == as_kept
     assert not (tmp_path / "changed").exists()
 
-    assert job("cut", "state") == 0 and not (tmp_path / "state").exists()
+    stored = hashlib.sha256((tmp_path / "state" / "state.json").read_bytes()).hexdigest()
+    with pytest.raises(SystemExit, match="whoever started this job found no state for it to continue from"):
+        job("changed", "state", path, "--continues", NOTHING)
+    with pytest.raises(SystemExit, match=f"its state.json hashes to {stored} .sha256. and the one this job was "
+                                         f"started to continue from, in the stopped run's record, to {'0' * 64}"):
+        job("changed", "state", path, "--continues", "0" * 64)
+    assert sorted(p.name for p in (tmp_path / "state").iterdir()) == kept and not (tmp_path / "changed").exists()
+
+    assert job("cut", "state", path, "--continues", stored) == 0 and not (tmp_path / "state").exists()
     cut = json.loads((tmp_path / "cut" / "run.json").read_text())
     assert cut["invalid"] == [] and cut["digest_key"] == so_far["digest_key"] != whole["digest_key"]
     assert [s.get("kept") for s in cut["segments"]] == [stated, None] and "kept" not in whole["segments"][0]

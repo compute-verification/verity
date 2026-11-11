@@ -21,8 +21,10 @@ A job keeps what continuing needs after each checkpoint (`training_slowdown.run 
 evicted or out of its time, exits with `training_slowdown.STOPPED`. Nothing runs it again by itself: the command's
 next run finds it stopped and starts it again, from the state it kept. Where the state is between the two runs is
 `NODE_STATE`: by default with the stopped run's output, on the store, from where the next run fetches it on
-whichever machine it gets. A state is a cache: one that is lost costs the job a start from θ, and no result is read
-from it.
+whichever machine it gets. The command tells that run which state it continues from (`--continues`: the sha256 the
+store lists for the `state.json` in the stopped run's record, or `nothing`), and the job refuses any other it finds
+in its state directory; a state on a node's disk has no copy in a record, and the job is told nothing of it. A
+state is a cache: one that is lost costs the job a start from θ, and no result is read from it.
 
 A job's output holds no weights: its record, and its last checkpoint's E (the bytes that rebuild its output model
 from θ) when E is under 50 MiB. `--weights` makes each job this call runs keep its last checkpoint's whole state too,
@@ -48,7 +50,7 @@ HERE = Path(__file__).resolve().parent
 ROOT = HERE.parents[1]
 sys.path.insert(0, str(HERE))
 
-from training_slowdown import BUDGET_SLACK, config, starts  # noqa: E402
+from training_slowdown import BUDGET_SLACK, NOTHING, config, starts  # noqa: E402
 from training_slowdown import STOPPED as RC_STOPPED  # noqa: E402
 from verity_config.settings import SHARED  # noqa: E402
 
@@ -82,8 +84,10 @@ class State:
     state: str
     where: str = ""
     note: str = ""
-    #: of a stopped job: the record of its run that holds its state, and that run's machine
+    #: of a stopped job: the record of its run that holds its state, the store's sha256 of the state.json in it, and
+    #: that run's machine
     kept: str = ""
+    stated: str = ""
     machine: str = ""
 
 
@@ -133,10 +137,15 @@ def research_argv(job: config.Job, a: argparse.Namespace, after: State | None = 
         raise SystemExit(f"training-slowdown: a queued job reads its config from the tree it ships, and "
                          f"{job.config.path} is outside {HERE}") from None
     py = " ".join(shlex.quote(x) for x in job_args(job, str(rel), a))
-    state = shlex.quote(f"{NODE_STATE}/{job.label}") if NODE_STATE else '"$OUT/state"'
     # the stopped run's out/state, into this run's $OUT (the run directory's out/)
     fetch = (f'.venv/bin/research data fetch {after.kept} --path "out/state/*" --to "$(dirname "$OUT")" && '
              if after and after.kept else "")
+    if NODE_STATE:
+        # no record holds a copy of a state on a node's disk: the job continues from the one it finds there
+        state = shlex.quote(f"{NODE_STATE}/{job.label}")
+    else:
+        # the job is told which state.json the stopped run's record holds, and continues from no other
+        state = f'"$OUT/state" --continues {after.stated if fetch else NOTHING}'
     # exec: the job's process is the run's, so it is the one told to stop and its exit status is the run's
     cmd = (f'{SYNC} && {fetch}cd {HERE.relative_to(ROOT)} && exec ../../.venv/bin/python {py} --state {state} '
            f'--out "$OUT"')
@@ -184,10 +193,12 @@ class Store:
         p = self.research("data", "show", run, "--json", check=False)
         return json.loads(p.stdout) if p.returncode == 0 else None
 
-    def keeps(self, record: str) -> bool:
-        """Whether a run's record holds a job's state."""
+    def keeps(self, record: str) -> str:
+        """The sha256 of the state.json a run's record holds, as the store lists it: '' where it holds no state."""
         p = self.research("data", "fetch", record, "--list", "--json", "--path", "out/state/state.json", check=False)
-        return p.returncode == 0 and bool(json.loads(p.stdout or "[]"))
+        rows = json.loads(p.stdout or "[]") if p.returncode == 0 else []
+        sha = str(rows[0].get("sha256")) if rows else ""
+        return sha if re.fullmatch(r"[0-9a-f]{64}", sha) else ""
 
     def label(self, target: str, value: str) -> None:
         p = self.research("data", "label", target, config.LABEL_KEY, value, "--by", BY, check=False)
@@ -222,9 +233,9 @@ def store_state(job: config.Job, labels: dict[str, list[str]], store: Store, wri
         machine = (a.get("execution") or {}).get("machine") or ""
         if NODE_STATE:
             return State(STOPPED, run, f"its state is on {machine}, under {NODE_STATE}", machine=machine)
-        kept = record if record and store.keeps(record) else ""
-        return State(STOPPED, run, "its record holds its state" if kept else "it kept no state: it starts again "
-                     "from θ", kept=kept, machine=machine)
+        stated = store.keeps(record) if record else ""
+        return State(STOPPED, run, "its record holds its state" if stated else "it kept no state: it starts again "
+                     "from θ", kept=record if stated else "", stated=stated, machine=machine)
     return State(FAILED, run, f"rc {rc}" + ("" if record else ", no record"))
 
 
