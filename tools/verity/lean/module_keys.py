@@ -579,7 +579,7 @@ def keys(root: Path, extra: list[str] | tuple[str, ...] = ()) -> dict[str, Key]:
                 if not isinstance(p, Package):
                     memo[m] = p
                     continue
-                # Lean refuses a source that isn't UTF-8, so no passing build indexes a key read through a replaced byte
+                # Lean refuses a source that isn't UTF-8, so no build indexes a key read through a replaced byte
                 data = p.file(m).read_bytes()
                 if (h := H.header(data.decode(errors="replace"))) is None:
                     memo[m] = None
@@ -771,7 +771,7 @@ def entry_path(store: Path, key: str) -> Path:
 
 def entry(store: Path, key: str, mod: str, scope: str) -> dict | None:
     """``mod``'s index entry under ``key`` in ``store``, when it is one for this module of this package (``scope``). Entries
-    are replaced whole, so one that isn't JSON was damaged on disk: it is removed, and the next passing build of the module
+    are replaced whole, so one that isn't JSON was damaged on disk: it is removed, and the next build that compiles the module
     writes it."""
     f = entry_path(store, key)
     if not f.is_file():
