@@ -50594,3 +50594,19 @@ For the table:
 - GB with the writers recut so a head block has 139 classes (N = 64; not built: the adapter has no such cut): width + margin held to κ 2^-4: **3,822 GB at modeled 0.4; 137 to 147 at the measured engine rate on node A (a floor; under 300 GB from 392 tokens a GPU-second; the rate is not measured at the headline's mix)**, 2^-100.12 in compressions under one M counting the head's queries; planner's figure, the writer's price modeled by 2^k_log.
 - Counting every port ATTACK derives: 3,939 GB (κ 2^-5, 2^-100.70), every writer recut as far as a 2^27 block allows; my guess at the wiring, SCALE's to replace.
 - The plan built, Lean-checked, at the head verify of 250.0: 3,757 GB at modeled 0.4 (134 to 145 at the measured rate); the record 6,320.
+
+## PARAMS, Wed 11 Nov 11:15Z: two corrections, mine. STRUCK: every cell of my 10:52Z entry (at 132 classes); my 10:51Z table is the one on your table of record (643). And "half the Lean verifier's time" in my 10:33Z entry is half its proof check: with the program's setup the second repetition is about 124 of about 1,120 core-s a head statement
+
+Clock: `date -u` read 11:15Z. Order reread through 10:59Z; mailbox unchanged.
+
+- **Struck, as your 10:59Z update asks:** the cells of my 10:52Z entry, and the by-class cells of my 10:10Z and 10:16Z entries (at 18, 72 and 132 a head block). The lever does not depend on the count: the wide leaf is +4.00 bits on every cell [derived]. On the table of record it reads as my 10:51Z table has it: the record 2^-103.41 / -103.38 / -102.55, width 2^-4 2^-103.16 / -103.14 / -101.96 (mean / by stratum / one M, compressions, K0 = 6; modeled; unbuilt; Daniel's).
+- **The second repetition on the verifier, restated.**
+  - A session's check is its setup and two calls of `verifyRep`, each with its own lincheck coins and its own fold of the matrix [read: `Flock/Zk.lean:199`, `:339-340`]. FLOCKPKG's 250.0 core-s is that, with a setup of 2.4 s and no program [relayed: FLOCKPKG 10:24Z]. So the second repetition is about 124 core-s a statement [derived]. That figure stands.
+  - It is not half the verifier's time. A session Lean accepts also pays the program's setup once, about 870 s for the later head block [relayed: FUSED 11:04Z, a guess of its own]. Of about 1,120 core-s the second repetition is 11%.
+  - My 10:33Z arithmetic "124.5 s twice is 249.1" proves nothing: FLOCKPKG's 91 ns may be the 250 s divided by the entries. The read of the code above is what carries it.
+- **The small tables stay withdrawn, on a measurement now:** a head session costs the Lean verifier 262 to 291 s at one block and 241 to 255 s at 256 [relayed: FLOCKPKG 10:52Z, `d4ef`]. If the setup is once a session too, four statements for one cost more than the +750 core-s I wrote.
+- **Scratch, pushed nowhere:** the five files that state `k0 ≤ 6` now read `≤ 10` in my what-if tree. One small try of two of them (`Claims/NumbersGamma.lean`, which imports `NumbersPads`; about 16 modules) has waited for a slot on vy-nebius-cpu-7 since 10:54Z, `r20261111-105451-f956`. I cancel it at 11:45Z if it has not started.
+
+For BREAKEVEN: a what-if row for one repetition reads 124 core-s off the head block's Lean verify a statement, whatever the setup is; not "half".
+
+For the table: nothing new. Largest slack: the second repetition, 100 bits no bound reads; 41% of the card's proving time [run: `r20261111-061047-6773`] and about 124 core-s a statement of the Lean verifier's proof check [derived from FLOCKPKG's measured `d4ef` and the code]. Daniel's, unbuilt.
