@@ -10,7 +10,7 @@
 set -euo pipefail
 O=${OUT:?run under research run, which sets OUT}
 [ $# -gt 0 ] || { echo "usage: registration.sh N..." >&2; exit 2; }
-L=$PWD/verity/core/service/spot
+L=$PWD/verity/protocols/spot/verifier/lean
 S=$(mktemp -d)
 trap 'rm -rf "$S"' EXIT
 command -v lake > /dev/null || export PATH="$HOME/.elan/bin:$PATH"

@@ -3,7 +3,7 @@ of record, from whose coins each rank's registration samples once (`spot.coins.C
 `remote.RemoteChallenger`), and the evidence its verifier checks every sample's coins against once the session has ended.
 
 * **The session.** ``local``: a development session on this machine, run by the auditor host's own service
-  (`benchmarks/live_challenger/auditor.py`'s reserve, admit and run, then `serve.py`, with no tunnel) on a scratch root under an
+  (`verity/composite/device/live_challenger/auditor.py`'s reserve, admit and run, then `serve.py`, with no tunnel) on a scratch root under an
   LMS key made there at `LOCAL_PARAMS`, never under the run's out/: its ledger and the session's out/ are what the challenger host
   writes, and its key is this run's alone, so its samples show the path, not an auditor's coins; and since that key is
   not at `Lms.deployed`, sampled proofs' v2 refuses its audit's case (`OneStageZk.KEY_PARAMS`). Its pins log pins main's
@@ -64,10 +64,11 @@ from multiprocessing.managers import BaseManager
 from pathlib import Path
 from typing import Any
 
-from verity.core.protocols.spot import challenger as Ch, coins as CC, remote as R, service as S
-from verity.core.protocols.spot.one_stage import draw as D, verifier as V
-from verity.ml.circuits.program import Program
-from verity.ml.crypto import lms
+from verity.protocols.spot.device import challenger as Ch, coins as CC, remote as R
+from verity.protocols.spot.verifier import service as S
+from verity.protocols.spot.verifier.one_stage import draw as D, verifier as V
+from verity.circuits.program import Program
+from verity.commitments.crypto import lms
 
 TREE = Path(__file__).resolve().parents[2]
 SCHEME = "verity/one-stage/a5-draw/v1"
@@ -95,14 +96,15 @@ def served_h1():
 def need(rule: str, program: Program, query: Mapping[str, Any], population: int,
          work_table: Mapping[str, Any] | None = None) -> int:
     """The most coins one rank's sample reads, known from its window before anything opens. The window gives the stream's law:
-    the rule over its N (`service.selection_law`), expanded over its program and query (`draw.derive`) under the work table
-    the rank registers with (a ``work`` law's), as `Stream.register` expands it. The stream's own sampler (`service.select_draw`) samples that sampling design on bytes that reject no
+    the rule over its N and strata (`service.selection_law`), expanded over its program and query (`draw.derive`) under the work table
+    the rule's rate puts over the one the rank registers with (`service.selection_table`), as `Stream.register` expands it. The stream's own sampler (`service.select_draw`) samples that sampling design on bytes that reject no
     word (zeros: a zero word is below every largest multiple), and the need is what it reads plus its longest stream once
     more. `coins.draw_first` reads each stream (the sampling design's one, or one per stratum) once, 2 k width(n) + 64 bytes. It reads
     a stream again only when the stream's words run out, which takes k + 1 of them rejected, each with probability below
     2^-64 (`coins.OwnRandomness`). The margin covers one such rerun, so a sample reads past its need only after two."""
     selection = S.Law(rule)
-    law = D.derive(program, query, S.selection_law(selection, population), work_table)
+    law = D.derive(program, query, S.selection_law(selection, population, D.strata_sizes(program, query)),
+                   S.selection_table(selection, program, query, work_table))
     reads: list[int] = []
 
     def zeros(n: int) -> bytes:
@@ -485,7 +487,7 @@ class Local:
     verifier's copy of main's first-parent line `main`."""
 
     def __init__(self, root: Path, main: list[str], by: str = "circuits") -> None:
-        A = _module("a5_auditor", TREE / "benchmarks" / "live_challenger" / "auditor.py")
+        A = _module("a5_auditor", TREE / "verity" / "composite" / "device" / "live_challenger" / "auditor.py")
         self.A, self.by = A, by
         self.host = A.Host(root=root / "var", peers=root / "peers", name=LOCAL_HOST, pins=root / "pins.jsonl")
         (root / "var" / "sessions").mkdir(parents=True)
@@ -530,13 +532,14 @@ class Local:
                          admit=lambda s: A.admit(host, s, signer=self.signer, pinned=self.pin, now=now, active=alive),
                          start=start, active=alive, ready=lambda s: A.await_commitment(host, s, alive))
         got = json.loads(out)
+        secret = got.pop("secret", None)  # an open the gate answered holds the hello's secret: no error quotes it
         if rc or opened_reason(got, withhold) is not None:
-            raise Ch.CoinError(f"the local gate refused the open, or {opened_reason(got, withhold)}: {out.decode().strip()}")
+            raise Ch.CoinError(f"the local gate refused the open, or {opened_reason(got, withhold)}: {json.dumps(got)}")
         address = host.sessions / self.session / "out" / "address.json"
         # serve.py writes the file in place, its newline last: read it only once it is whole
         while not (address.exists() and address.read_text().endswith("\n")) and alive(self.session):
             time.sleep(0.1)
-        return json.loads(address.read_text())["address"], got["secret"], got["commitment"]
+        return json.loads(address.read_text())["address"], secret, got["commitment"]
 
     def finish(self, dest: Path) -> tuple[Path, Path, Path, Ch.ChallengerKey]:
         """Once the session has ended (its end entry in the ledger): its out/, the ledger and the pins log copied to `dest`, and

@@ -4,7 +4,7 @@ the weights, δ_net and K over one execution phase beside it, marked **proved** 
 It reads the record as JSON and nothing else (the lock aside), imports no module of its writer, and computes nothing the
 record doesn't state.
 
-    python benchmarks/one_stage/onsite_periods.py OUT/record/onsite.json [--lock Security/lean-audit.json] [--out T.md]
+    python benchmarks/one_stage/onsite_periods.py OUT/record/onsite.json [--lock security/lean-audit.json] [--out T.md]
 
 Before rendering, it holds each cell's label to the record's rules (`expected`) and refuses the record, exit 1 with each
 reason, where one differs. The run's own cell is proved; its K/m over one execution phase is proved only at m = 1
@@ -31,7 +31,7 @@ from typing import Any
 FORMAT = "verity/onsite-network-record/v1"
 PERIODS = ("week", "month", "year")
 COLUMNS = {"node": "the node", "datacenter": "a datacenter", "world": "the world"}
-LOCK = Path(__file__).resolve().parents[2] / "Security" / "lean-audit.json"
+LOCK = Path(__file__).resolve().parents[2] / "security" / "lean-audit.json"
 
 
 def signature(entry: Mapping[str, Any]) -> str:

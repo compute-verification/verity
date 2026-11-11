@@ -33,11 +33,15 @@ import argparse
 import json
 import sys
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 import torch
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import exactlin as X
+
+if TYPE_CHECKING:
+    from types import ModuleType
 
 MODELS = {
     "llama-3.1-8b": {"layers": 32, "linears": {"qkv": (6144, 4096), "o": (4096, 4096), "gate_up": (28672, 4096),
@@ -65,7 +69,7 @@ POISON = 0xA5
 SPECIAL = ("zero", "all_absmax", "ties", "below_floor", "one_nonzero", "huge", "subnormal")
 
 
-def E():
+def E() -> ModuleType:
     from verity_vllm.engine import int8_exact
     return int8_exact
 
@@ -130,7 +134,8 @@ def stock_quant_emulated(x: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor]:
     return torch.round(xf * inv[:, None]).clamp(-128, 127).to(torch.int8), a / t
 
 
-def stock_doc(x, w, s_w, xq_ref, s_ref, y_ref) -> dict:
+def stock_doc(x: torch.Tensor, w: torch.Tensor, s_w: torch.Tensor, xq_ref: torch.Tensor, s_ref: torch.Tensor,
+              y_ref: torch.Tensor) -> dict:
     from vllm import _custom_ops as ops
     from vllm.model_executor.layers.quantization.compressed_tensors.triton_scaled_mm import (
         triton_scaled_mm,
@@ -185,7 +190,8 @@ def stock_doc(x, w, s_w, xq_ref, s_ref, y_ref) -> dict:
 FROZEN_TILES = ((64, 64, 256), (128, 128, 128))
 
 
-def scaled_mm_at(xq, w_t, s_a, s_w, tile) -> torch.Tensor:
+def scaled_mm_at(xq: torch.Tensor, w_t: torch.Tensor, s_a: torch.Tensor, s_w: torch.Tensor,
+                 tile: tuple[int, int, int]) -> torch.Tensor:
     """vLLM's scaled_mm_kernel launched at TILE whatever M is, as a stock engine traced at another M runs it
     (triton_scaled_mm(use_heuristic=False) leaves its tile unset at d9105ea80, so the kernel is launched here)."""
     import triton
@@ -205,7 +211,7 @@ def scaled_mm_at(xq, w_t, s_a, s_w, tile) -> torch.Tensor:
     return out
 
 
-def cutlass_swapped(xq, s_a, w, s_w) -> torch.Tensor:
+def cutlass_swapped(xq: torch.Tensor, s_a: torch.Tensor, w: torch.Tensor, s_w: torch.Tensor) -> torch.Tensor:
     """y from vLLM's CUTLASS int8 GEMM on the transposed product, y^T = W X^T with scale_a = s_w and scale_b = s_a.
     CUTLASS's epilogue applies scale_b first, so s_a goes first, the statement's order.  M must be a multiple of 16
     (CUTLASS's alignment; `ops.cutlass_scaled_mm` would fall back to Triton, whose order is the reverse)."""
@@ -228,7 +234,8 @@ def work() -> X.Workspace:
 DUMP_N = 128
 
 
-def dump_replay(path: Path, x, xq, s, w, s_w, y) -> None:
+def dump_replay(path: Path, x: torch.Tensor, xq: torch.Tensor, s: torch.Tensor, w: torch.Tensor, s_w: torch.Tensor,
+                y: torch.Tensor) -> None:
     """The fused outputs as words for replay.py: x (bf16), xq, s_a, W's and s_w's first DUMP_N rows, and y's first DUMP_N
     columns."""
     import numpy as np
@@ -239,7 +246,7 @@ def dump_replay(path: Path, x, xq, s, w, s_w, y) -> None:
              y=y[:, :DUMP_N].contiguous().view(torch.int16).cpu().numpy().view(np.uint16))
 
 
-def one(n: int, k: int, m: int, seed: int, with_stock: bool, names: list[str] | None = None, cfg=None,
+def one(n: int, k: int, m: int, seed: int, with_stock: bool, names: list[str] | None = None, cfg: X.Cfg | None = None,
         dump: Path | None = None) -> dict:
     """`cfg` is the GEMM's config (default `exactlin.pick`, what `install` serves); `dump` a directory that gets the
     graph replay's outputs (`dump_replay`)."""

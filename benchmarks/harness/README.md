@@ -1,9 +1,9 @@
 # verity-bench: the shared benchmark harness
 
 `verity-bench` measures what an arm (a protocol option or an experimental install) adds to served inference, against
-stock vLLM, through the vLLM integration (`integrations/vllm`). It owns specs, runs, sweeps, results and tables. The
-integration owns the engine pin (`config.VLLM`), the hooks (`integrations/vllm/verity_vllm/engine/hooks.py`) and the add-on
-interface (`integrations/vllm/verity_vllm/protocols/interface.py`), and the harness uses those like any other caller. This
+stock vLLM, through the vLLM integration (`adapters/vllm`). It owns specs, runs, sweeps, results and tables. The
+integration owns the engine pin (`config.VLLM`), the hooks (`adapters/vllm/verity_vllm/engine/hooks.py`) and the add-on
+interface (`adapters/vllm/verity_vllm/protocols/interface.py`), and the harness uses those like any other caller. This
 file is the harness's contract: how a point is timed and what a result says. In order: the commands, specs, arms, how a
 point is timed, metrics, results, dispatch and resume, settings, and the two tables `served-table` and `breakdown` render.
 `benchmarks/harness/tests/test_bench.py::test_the_readme_states_the_contract_the_code_keeps` fails when the code drifts from it.
@@ -22,6 +22,8 @@ verity-bench breakdown [RESULT...]  # where the bandwidth audit's time goes, by 
 verity-bench vllm --preset SPEC --arms A,B --out DIR   # the same measurement in this process, unrecorded
 verity-bench overhead points|run|table  # the front door for γ at a card's operating points (`verity bench overhead`,
                                         # benchmarks/overhead/README.md): the PoUW harness's kernels, not served vLLM
+verity-bench prove --system S --workload W  # a proof system's prover on a workload, a block type a row, from the store's
+                                            # labelled records (`verity bench prove`, benchmarks/prove/README.md)
 ~~~
 
 ## Specs

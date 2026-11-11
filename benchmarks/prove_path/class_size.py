@@ -35,8 +35,8 @@ from typing import Any
 
 from verity_vllm.program.predict import scan_state as SS
 
-from verity.ml.definitions.registry.attention_vocab import fa2_masked_from
-from verity.ml.windows.interface import K_MAX
+from verity.definitions.registry.attention_vocab import fa2_masked_from
+from verity.commitments.windows.interface import K_MAX
 
 FIRST = "AttnBlockFirst_v1"
 #: a first block's families: `AttnBlockFirst_v2{..., VS}` is v1 over a key's value as slices of VS columns
