@@ -248,4 +248,84 @@ theorem arg_reached (P : Prog) {d : Nat} (h : d < P.defs.size) {k : Nat} (hk : k
       rw [hpre _ (hr hrp')]
       exact hx
 
+/-! ## Along a walk of resolution
+
+A walk that starts at a leaf of an activation `U`'s return moves down into members of nodes and back up through
+parameters. `Passing` is what it keeps: the reference it stands at is a leaf only of parameters its Definition
+passes on, and so is every node it came down through, up to `U`. -/
+
+theorem refOn_node (P : Prog) (d k j : Nat) : refOn P d ⟨false, k, j⟩ = refOn P d ⟨false, k, 0⟩ := by
+  simp only [refOn]
+
+theorem refOn_param (P : Prog) (d i j : Nat) : refOn P d ⟨true, i, j⟩ = [i] := by
+  simp only [refOn, ite_true]
+
+/-- From the activation up to `U`, every node the walk came down through reaches only parameters its Definition
+passes on. -/
+def Covered (P : Prog) (U : Scope) : Scope → Prop
+  | .top _ _ _ => True
+  | .child parent d off k m => U = .child parent d off k m ∨
+      ((∀ x ∈ refOn P parent.d ⟨false, k, 0⟩, x ∈ passOf P parent.d) ∧ Covered P U parent)
+
+/-- What a walk from a leaf of `U`'s return keeps. -/
+def Passing (P : Prog) (U : Scope) (s : Scope × Ref) : Prop :=
+  Covered P U s.1 ∧ ∀ x ∈ refOn P s.1.d s.2, x ∈ passOf P s.1.d
+
+theorem covered_refl (P : Prog) : ∀ U : Scope, Covered P U U
+  | .top _ _ _ => trivial
+  | .child _ _ _ _ _ => Or.inl rfl
+
+/-- The walk starts passing: at a reference of `U`'s return. -/
+theorem passing_start (P : Prog) (U : Scope) (h : U.d < P.defs.size) (hp : (P.defs[U.d]!).prim = false) {q : Part}
+    (hq : q ∈ (P.defs[U.d]!).body.ret.parts) {t : Nat} (ht : t < q.count) {r : Ref} (hr : r = q.get t) :
+    Passing P U (U, r) :=
+  ⟨covered_refl P U, by rw [hr]; exact ret_passed P h hp hq ht⟩
+
+/-- A step down, from a node's reference into a member of the node at a reference of its callee's return. -/
+theorem passing_down (P : Prog) (U sc : Scope) (k j off m : Nat) (h : Passing P U (sc, ⟨false, k, j⟩))
+    (hfn : ((P.defs[sc.d]!).body.nodes[k]!).fn < P.defs.size)
+    (hp : (P.defs[((P.defs[sc.d]!).body.nodes[k]!).fn]!).prim = false) {q : Part}
+    (hq : q ∈ (P.defs[((P.defs[sc.d]!).body.nodes[k]!).fn]!).body.ret.parts) {t : Nat} (ht : t < q.count) {r : Ref}
+    (hr : r = q.get t) : Passing P U (.child sc ((P.defs[sc.d]!).body.nodes[k]!).fn off k m, r) :=
+  ⟨Or.inr ⟨fun x hx => h.2 x (by rw [refOn_node]; exact hx), h.1⟩, by rw [hr]; exact ret_passed P hfn hp hq ht⟩
+
+/-- A step up, from a parameter's reference to a reference of the argument that fills it. -/
+theorem passing_up (P : Prog) (U parent : Scope) (d off k m i j : Nat)
+    (h : Passing P U (.child parent d off k m, ⟨true, i, j⟩)) (hU : U ≠ .child parent d off k m)
+    (hd : parent.d < P.defs.size) (hk : k < (P.defs[parent.d]!).body.nodes.size)
+    (hfn : ((P.defs[parent.d]!).body.nodes[k]!).fn = d)
+    (hi : i < ((P.defs[parent.d]!).body.nodes[k]!).args.size) {q : Part}
+    (hq : q ∈ (((P.defs[parent.d]!).body.nodes[k]!).args[i]!).seq.parts) {t : Nat} (ht : t < q.count) {r : Ref}
+    (hr : r = q.get t) (hlt : r.p = false → r.i < k) : Passing P U (parent, r) := by
+  obtain ⟨hc, hi'⟩ := h
+  subst hr
+  rcases hc with hc | ⟨hreach, hc⟩
+  · exact absurd hc hU
+  · refine ⟨hc, fun x hx => hreach x ?_⟩
+    refine arg_reached P hd hk hi (Or.inl ?_) hq ht hlt x hx
+    rw [hfn]
+    exact hi' i (by rw [refOn_param]; exact List.mem_singleton.2 rfl)
+
+/-- A step to another member of the node, at a reference of the callee's return. -/
+theorem passing_back (P : Prog) (U parent : Scope) (d off k m off' m' : Nat) (r0 : Ref)
+    (h : Passing P U (.child parent d off k m, r0)) (hU : U ≠ .child parent d off k m)
+    (hd : d < P.defs.size) (hp : (P.defs[d]!).prim = false) {q : Part}
+    (hq : q ∈ (P.defs[d]!).body.ret.parts) {t : Nat} (ht : t < q.count) {r : Ref} (hr : r = q.get t) :
+    Passing P U (.child parent d off' k m', r) := by
+  obtain ⟨hc, -⟩ := h
+  rcases hc with hc | hc
+  · exact absurd hc hU
+  · exact ⟨Or.inr hc, by rw [hr]; exact ret_passed P hd hp hq ht⟩
+
+/-- An argument that has a reference is one of the node's. -/
+theorem arg_lt (args : Array Arg) (i t : Nat) (h : t < (args[i]!).seq.count) : i < args.size := by
+  rcases Nat.lt_or_ge i args.size with h' | h'
+  · exact h'
+  · rw [getElem!_neg args i (by omega)] at h
+    exact absurd h (Nat.not_lt_zero _)
+
+/-- Where the walk leaves `U`, through a parameter, the parameter is one `U`'s Definition passes on. -/
+theorem passing_exit (P : Prog) (U : Scope) (i j : Nat) (h : Passing P U (U, ⟨true, i, j⟩)) : i ∈ passOf P U.d :=
+  h.2 i (by rw [refOn_param]; exact List.mem_singleton.2 rfl)
+
 end NciCheck.Record.SecurityProofs
