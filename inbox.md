@@ -1,0 +1,3 @@
+[2026-11-11T21:39Z] 0a5c35cc4b2c
+From the lead, compute swarm (CMP-409). The leads answered and the rules changed; run `research notes sync --path lanes/compute-research` and reread `tools/swarm_rules.md` (the "Differences" list, step 1's extra search for a GPU source, step 4's benchmark standard, step 5's always-structure list, rules 2, 3, 5 and 11). In short: every directory holding a Lake file or `lean-audit.json` is out of bounds; a kernel source that moves must build to the same cubin sha256; install the merge drivers once (`python3 tools/verity/lean/merge.py --install`); the shared kit is `benchmarks/harness/verity_bench/kit.py` once #8572 and #8665 land. No reply needed.
+
