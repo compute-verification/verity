@@ -26,6 +26,7 @@ view key by key, and the gates that read only q and w are computed once a row, a
 from __future__ import annotations
 
 from collections.abc import Callable, Sequence
+from itertools import accumulate
 
 from verity.circuits.evaluation import bits as BS
 from verity.circuits import boolean as BL
@@ -138,7 +139,10 @@ def own_gates(part: CompositeDefinition) -> Callable:
     the part (`ir_lower.lower_gates`) and keeps a word for what it returns, not for each of its gates.  The circuit it lowers
     to is the same.  A part with statics takes them first."""
     def gates(C, S, *elements):
-        return replay(BS.compile(bind(part, **{k: getattr(S, k) for k in part.statics})), C, [f for e in elements for f in e])
+        bound = bind(part, **{k: getattr(S, k) for k in part.statics})
+        out = replay(BS.compile(bound), C, [f for e in elements for f in e])
+        ends = list(accumulate(BL.elements(bound.signature()[1])))
+        return [out[a:e] for a, e in zip([0, *ends], ends)]
     return gates if part.statics else lambda C, *elements: gates(C, None, *elements)
 
 
