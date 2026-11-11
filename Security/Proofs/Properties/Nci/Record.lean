@@ -156,26 +156,21 @@ theorem ofJson_wiresOf {j doc : Json} {W : Spot.Wires.Wiring} (h : Spot.Wires.Wi
   obtain ⟨_, -, h⟩ := bind_ok h
   obtain ⟨_, -, h⟩ := bind_ok h
   obtain ⟨c, h4, h⟩ := bind_ok h
+  obtain rfl := Except.ok.inj ((field_ok hc).symm.trans h4)
   obtain ⟨_, h5, h⟩ := bind_ok h
   obtain ⟨cs, h6, h⟩ := bind_ok h
   obtain ⟨w, h7, h⟩ := bind_ok h
+  obtain rfl := Except.ok.inj ((field_ok hw).symm.trans h7)
   obtain ⟨_, h8, h⟩ := bind_ok h
   obtain ⟨ws, h9, h⟩ := bind_ok h
-  obtain rfl := Except.ok.inj ((field_ok hc).symm.trans h4)
-  obtain rfl := Except.ok.inj ((field_ok hw).symm.trans h7)
-  trace_state
   refine ⟨{ templates := [], cuts := cs, wires := ws, order := none }, ?_, ?_⟩
   · unfold Spot.Wires.Wiring.ofJson
     simp only [field_ok (wiresOf_templates doc), field_ok (wiresOf_cuts doc), field_ok (wiresOf_wires doc), ho,
-      fields_nil, h5, h6, h8, h9, List.mapM_nil, ok_bind, pure_bind]
-    trace_state
-    rfl
+      fields_nil, h5, h6, h8, h9, List.mapM_nil, ok_bind, pure_bind] <;> rfl
   · cases hj : j.getObjVal? "order"
     all_goals
       simp only [hj] at h
-      trace_state
-      repeat (obtain ⟨_, _, h⟩ := bind_ok h)
-      trace_state
+      repeat (obtain ⟨_, -, h⟩ := bind_ok h)
       obtain rfl := Except.ok.inj h
       exact ⟨rfl, rfl⟩
 
