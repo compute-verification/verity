@@ -169,13 +169,15 @@ decided and the host it ran on under `decided_by`. `tests/test_pous_served_piece
 served_verdicts.py) from what a served window kept: `case.json`, the subprotocol's case, and `answer.json`, its own answer
 on it, whose commitment is the digest the composite binds. Both go to the window's private directory (0700), never
 beside the public answer. `served_piece.py` and `streamed_wipe/served_wipe.sh` write that piece through it while they
-run; after a run, from the kept outputs alone, PoUS's `C*` is encoded again from the served snapshot at the kept salt, and
-each kept output is held to the others before anything is written. `served_case.sh PIECES` runs it on a served run's
-pieces, PoUS's under a lease of a card. `tests/test_pous_served_case.py` runs both on a CPU.
+run, and the composite takes each as written: `onsite_pieces.sh`'s `onsite_cases` names the two cases, each beside its
+Lean's answer, takes no card and makes neither, and says `NOT_WRITTEN` for a piece that left no case or no such answer
+(`tests/test_pous_onsite_cases.py`). Run by hand after a run, from the kept outputs alone, it encodes PoUS's `C*` again
+from the served snapshot at the kept salt and holds each kept output to the others before anything is written.
+`tests/test_pous_served_case.py` runs both on a CPU.
 
 `big_case.py SIZE OUT` writes a synthetic run case of about SIZE bytes, streamed: an honest period at width 64 under a
 test signer, so `pous-run-protocol --test serve` answers it. It times the Lean at a served case's size: a 5.0 GiB case is
-accepted in under 8 minutes on 4 cores, at a peak of 2 times the line, which `served_case.sh`'s `MEM_GB` default
+accepted in under 8 minutes on 4 cores, at a peak of 2 times the line, which `served_piece.sh`'s `MEM_GB` default
 allows for.
 
 `wipe_resume/` runs the red team's resume attack on both wipes, on CPU. `pi2_state_attack.py` rebuilds
