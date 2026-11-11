@@ -1370,7 +1370,7 @@ def _size_class(bits: float) -> int:
 
 
 def two_stage_design(cells: Iterable[Cell], replay_blocks: int, delta: float, *, budget: float, replay: float,
-                     boundary: float = 0.0, h: float = 0.0, stratify: bool = True, served: float | None = None,
+                     boundary: float = 0.0, h: float = 0.0, stratify: bool | str = True, served: float | None = None,
                      union: bool = False, registration: float = 0.0, fanout: int = 1) -> dict | None:
     """The two-stage design with the least `two_stage_exfil` bound at a cost of at most `budget`: width-stratified
     (`stratify`) or uniform (one stratum).  A width-stratified design merges the public size classes (`unit_class`) up
@@ -1379,7 +1379,10 @@ def two_stage_design(cells: Iterable[Cell], replay_blocks: int, delta: float, *,
     worse.  At each κ of `KAPPAS` it samples k_t = κ n_t (b_t + ℓ_t)/B of stratum t's n_t proof blocks, at least 1 and at
     most n_t, at b_t the stratum's widest bits, ℓ_t = log2(e R n_t) and B a replay block's bits: at κ = 1 one incorrect
     proof block of a stratum's widest, with its location, leaks as much a unit of escape as a wholly incorrect replay
-    block does.  Under a served-output cap (`served`, `union` and `fanout`, as `two_stage_exfil` takes them) b_t is at
+    block does.  With `stratify` "template" each cell is a stratum of its own, the strata the verifier's two-stage
+    rule registers (`Spot.Select.Counts`: one whole count a template of the check): the row's `k` is each cell's
+    count by its position in `cells`, its `merged` None, and `two_stage_counts` writes it by name.  Under a
+    served-output cap (`served`, `union` and `fanout`, as `two_stage_exfil` takes them) b_t is at
     most the cap read at the fan-out and B is a replay block's capped charge, every T counted.
 
     The first stage is the one the verifier runs: of a verification phase's `registration` replay blocks it samples
@@ -1402,15 +1405,19 @@ def two_stage_design(cells: Iterable[Cell], replay_blocks: int, delta: float, *,
     cells = list(cells)
     if not cells or not budget >= boundary:
         return None
+    if stratify not in (True, False, "template"):
+        raise ValueError(f"a design is width-stratified (True), uniform (False) or by template: {stratify!r}")
     classes = [_size_class(c.bits) for c in cells]
-    thresholds = sorted(set(classes)) if stratify else [max(classes)]
+    by_template = stratify == "template"
+    thresholds = [None] if by_template else sorted(set(classes)) if stratify else [max(classes)]
     charge = fsum(c.n * c.bits for c in cells)
     if served is not None:
         charge = two_stage_exfil(cells, {c.stratum: 1 for c in cells}, 1, 0.0, 0.5, served, union, fanout=fanout)
     interior = fsum(c.n * c.commit_bytes for c in cells) * h
     rows, seen = [], set()
     for merged in thresholds:
-        split = [replace(c, stratum=0 if w <= merged else w) for c, w in zip(cells, classes)]
+        split = ([replace(c, stratum=i) for i, c in enumerate(cells)] if by_template
+                 else [replace(c, stratum=0 if w <= merged else w) for c, w in zip(cells, classes)])
         strata: dict[int, float] = {}
         widest: dict[int, float] = {}
         for c in split:
@@ -1435,7 +1442,8 @@ def two_stage_design(cells: Iterable[Cell], replay_blocks: int, delta: float, *,
             blocks, marginal, prove = (fsum(r[x] for r in st) for x in ("taken", "marginal", "prove"))
             per = replay + interior + prove
             sampled = q * replay_blocks
-            rows.append({"design": "stratified" if stratify else "uniform", "merged": merged, "kappa": kappa,
+            rows.append({"design": "template" if by_template else "stratified" if stratify else "uniform",
+                         "merged": merged, "kappa": kappa,
                          "k": k, "q": q, "registration": registration,
                          "registration_sample": count if registration else 0,
                          "shared": fsum(r["prove"] for r in st if r["shared"]) / prove if prove > 0 else 0.0,
@@ -1453,6 +1461,21 @@ def two_stage_design(cells: Iterable[Cell], replay_blocks: int, delta: float, *,
     return best | {"bound": bound, "theta": theta}
 
 
+def two_stage_counts(row: Mapping, names: Sequence[str]) -> dict:
+    """A by-template design (`two_stage_design` at `stratify` "template") as the verifier's two-stage rule takes it:
+    `sampled`, the replay blocks the first stage samples of a verification phase, and `k`, each template's whole
+    count of proof blocks in a sampled replay block, by its name in `names`, the design's cells in order
+    (`Spot.Select.Counts.per`, which names a template by its descriptor id).  A design of another kind has no such
+    counts: a stratum of several templates samples its count among them."""
+    k = row["k"]
+    if row.get("design") != "template" or len(names) != len(k) or len(set(names)) != len(names):
+        raise ValueError(f"the counts are a by-template design's, one name a cell: a {row.get('design')} design of "
+                         f"{len(k)} strata and {len(names)} names, {len(set(names))} distinct")
+    if any(k[i] != int(k[i]) or k[i] < 1 for i in range(len(names))):
+        raise ValueError(f"a template's count is a whole number of at least one: {dict(k)}")
+    return {"sampled": int(row["registration_sample"]), "k": {name: int(k[i]) for i, name in enumerate(names)}}
+
+
 __all__ = ["Candidate", "Commitment", "CostModel", "Grain", "HM96_ANDS", "LN_BITS", "LN_PREC", "LN_TERMS",
            "Objective", "PROVING_ONLY", "Plan", "PlanBounds", "ReplayGrain", "SHA512_ANDS", "SHA512_ROWS",
            "TemplateCost",
@@ -1461,5 +1484,6 @@ __all__ = ["Candidate", "Commitment", "CostModel", "Grain", "HM96_ANDS", "LN_BIT
            "frontier", "grain_costs", "grain_optimum", "leak_count", "leak_draws", "ln_bound", "ln_upper", "loc_bits",
            "max_harm", "max_harm_check", "met_replay", "needs_benchmark", "overlaps", "perturb", "pinned_ands",
            "registration_count", "registration_sample", "replay_cost", "row_ands", "sensitivity", "sqrt_grain", "structure", "template_cost",
-           "touched", "two_stage_design", "two_stage_exfil", "two_stage_price", "two_stage_rankin", "two_stage_statements", "weigh",
+           "touched", "two_stage_counts", "two_stage_design", "two_stage_exfil", "two_stage_price", "two_stage_rankin",
+           "two_stage_statements", "weigh",
            "work_draws", "work_law"]

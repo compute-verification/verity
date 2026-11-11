@@ -30,8 +30,8 @@ from verity.protocols.spot.optimize import (HM96_ANDS, PROVING_ONLY, SHA512_ANDS
                                                            needs_benchmark, overlaps, perturb, pinned_ands,
                                                            registration_count, registration_sample, replay_cost, row_ands,
                                                            sensitivity, sqrt_grain, template_cost, touched,
-                                                           two_stage_design, two_stage_exfil, two_stage_price,
-                                                           two_stage_statements, weigh, work_law)
+                                                           two_stage_counts, two_stage_design, two_stage_exfil,
+                                                           two_stage_price, two_stage_statements, weigh, work_law)
 from verity.circuits.partition_v2 import UNIT_CLASS_MAX
 
 SLACK = 1 + 2.0 ** -18
@@ -802,6 +802,35 @@ def test_the_width_stratified_design_beats_the_uniform_one_when_proving_costs():
         else:
             assert rows[True]["bound"] == pytest.approx(rows[False]["bound"], rel=1e-2)
     assert two_stage_design(cells, replay_blocks, delta, budget=1.0, replay=1.0, boundary=2.0) is None
+
+
+def test_a_design_by_template_has_the_counts_the_verifiers_rule_registers():
+    """The verifier's two-stage rule takes one whole count a template, each template a stratum of its own.  A design
+    by template has those strata: each cell's count is a whole number of at least one and at most its blocks, its bound
+    is the one at those strata, and `two_stage_counts` writes the counts by name with the first stage's K.  Two types
+    of one size class, which the width-stratified design samples together at a count they share, get a count each.  A
+    width-stratified design has no such counts, and neither has a design whose names don't match its cells."""
+    delta, replay_blocks, n = 2.0 ** -20, 10 ** 8, 10 ** 4
+    cells = [Cell(10 ** 5, 16.0, prove=1e-3, fixed=5.0, cap=1024, commit_bytes=2.0),
+             Cell(300, 12.0, prove=1e-3, fixed=5.0, cap=1024, commit_bytes=2.0),
+             Cell(4, 131072.0, prove=1e-3, fixed=5.0, cap=4, commit_bytes=2.0 ** 14)]
+    kw = {"budget": 1e7, "replay": 1.0, "boundary": 1e5, "h": 1e-6, "registration": n}
+    row = two_stage_design(cells, replay_blocks, delta, stratify="template", **kw)
+    assert row["design"] == "template" and row["merged"] is None and set(row["k"]) == {0, 1, 2}
+    assert all(k == int(k) and 1 <= k <= c.n for k, c in zip((row["k"][i] for i in range(3)), cells))
+    strata = [replace(c, stratum=i) for i, c in enumerate(cells)]
+    assert row["bound"] == pytest.approx(two_stage_exfil(strata, row["k"], replay_blocks, row["q"], delta), rel=1e-6)
+    assert row["total"] <= kw["budget"] * (1 + 1e-12) and row["q"] == row["registration_sample"] / n
+    names = ["narrow", "narrower", "wide"]
+    assert two_stage_counts(row, names) == {"sampled": row["registration_sample"],
+                                            "k": {name: row["k"][i] for i, name in enumerate(names)}}
+    width = two_stage_design(cells, replay_blocks, delta, **kw)
+    assert width["design"] == "stratified" and len(width["k"]) < 3
+    for bad, given in ((width, names), (row, names[:2]), (row, ["narrow", "narrow", "wide"])):
+        with pytest.raises(ValueError, match="by-template design's, one name a cell"):
+            two_stage_counts(bad, given)
+    with pytest.raises(ValueError, match="width-stratified"):
+        two_stage_design(cells, replay_blocks, delta, stratify="type", **kw)
 
 
 def test_a_capped_design_charges_what_a_request_serves():
