@@ -367,7 +367,9 @@ def _cmd_run(argv: list[str], clones: list[Path]) -> int:
             wait_s = ns.pool_wait if ns.pool_wait is not None else slot_only.POOL_WAIT_S
             command = slot_only.in_pool(ns.pool, ns.lane, command, timeout, wait_s)
             if budget := getattr(ns, "budget_gb", None):       # slot.py's own option, before the `--` that ends them
-                command[(at := command.index("--")):at] = ["--budget-gb", f"{budget:g}"]
+                from . import suite_size  # noqa: PLC0415
+
+                command[(at := command.index("--")):at] = [suite_size.BUDGET_OPT, f"{budget:g}"]
         except ValueError as e:
             print(f"research run: --pool: {e}", file=sys.stderr)
             return 2

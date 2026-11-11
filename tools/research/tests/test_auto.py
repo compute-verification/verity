@@ -540,6 +540,8 @@ def test_on_auto_spilled_to_a_pool_reserves_a_share_of_what_a_run_of_many_suites
         (repo / path).mkdir(exist_ok=True)
         (repo / path / "pyproject.toml").write_text(body)
     subprocess.run(["git", "add", "-A"], cwd=repo, check=True)
+    (repo / auto.SLOT_PY).parent.mkdir(parents=True)
+    (repo / auto.SLOT_PY).write_text((REPO / auto.SLOT_PY).read_text())
     monkeypatch.chdir(repo)
     runs = ["run", "--runs-dir", str(tmp_path / "runs"), "--on", "auto"]
     suites = ["uv", "run", "tools/verity/check/suites.py"]
@@ -561,6 +563,11 @@ def test_on_auto_spilled_to_a_pool_reserves_a_share_of_what_a_run_of_many_suites
     launched.clear()
     assert main([*runs, "--cpus", "16", "--", *suites]) == 3, "no slot here gives 16 CPUs: the queue's"
     assert launched == [] and [spec["mem-gb"] for spec in placed] == [256], "the queue's job is capped at the whole figure"
+
+    (repo / auto.SLOT_PY).write_text("")
+    assert main([*runs, "--", *suites]) == 3
+    (kw,) = launched
+    assert kw["env"]["CHECK_RUN_MEM_GB"] == "64" and "--budget-gb" not in kw["command"], "a tree from before slot.py's option"
 
 
 def test_on_auto_keeps_a_gpu_job_or_one_too_big_for_any_slot_on_node_2(tmp_path, monkeypatch, capsys):

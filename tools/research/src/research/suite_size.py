@@ -7,7 +7,8 @@ processes (its `--mem-gb`: `serial_slots` and `wide_workers` start no more than 
 inside it unless a process passes its own figure, and a larger one buys processes beyond the CPUs asked. A run of named suites
 reserves it whole. A run of many suites has processes at their figure only while the few suites that reach it run, and in a
 pool's slot the reservation caps nothing and is held against the node, whether or not the run reaches it, for as long as the run
-holds the slot: there it reserves MANY_RESERVED of the budget (`reserve_gb`) and plans its processes on all of it. A run
+holds the slot: there it reserves MANY_RESERVED of the budget (`reserve_gb`) and plans its processes on all of it (slot.py's
+BUDGET_OPT). A run
 past its reservation meets the node's own limits, as one past its budget does, and where the node orders its OOM kills by
 reservation (pods/nebius/oom_order.py) it is picked before a run within its own. Its time, for named suites, is their timeouts one after another (an undeclared one's SUITE_TIMEOUT_S) plus SYNC_S
 for the environment's `uv sync`. A run of many suites, `--changed REV` (the suites the change touches, as suites.py's `--list`
@@ -29,6 +30,9 @@ import tomllib
 from pathlib import Path
 
 SUITES_PY = "tools/verity/check/suites.py"
+#: slot.py's option that gives a run its budget where it reserves less: the launcher sends it only to a tree whose slot.py
+#: names it (one from before the option refuses it, so that tree's run reserves its budget whole)
+SLOT_PY, BUDGET_OPT = "tools/verity/check/slot.py", "--budget-gb"
 #: suites.py's options that take a value
 VALUED = {"--changed", "--skip", "--jobs", "-j", "--mem-gb", "--logs", "--json", "--run", "--per-test-min-s", "--explain"}
 #: suites.py's SUITE_TIMEOUT_S: an undeclared suite's bound
@@ -132,10 +136,17 @@ def pick(suites: list[dict], names: list[str]) -> list[dict] | None:
     return list({s["path"]: s for s in chosen}.values())
 
 
+def _takes_budget(source: Path) -> bool:
+    try:
+        return BUDGET_OPT in (source / SLOT_PY).read_text()
+    except (OSError, UnicodeDecodeError):
+        return False
+
+
 def size(source: Path, command: list[str], cpus: int | None) -> dict | None:
     """`{suites, mem_gb?, reserve_gb?, max_s?}` for a suites.py run whose suites' declarations, or number, say more than the
     kind's size: `mem_gb` the budget its processes are counted on, `reserve_gb` what a run of many suites reserves of it in a
-    pool's slot (never under the kind's own memory)."""
+    pool's slot (never under the kind's own memory; none where the tree's slot.py takes no BUDGET_OPT)."""
     if not (got := selection(command)):
         return None
     names, jobs, rev = got
@@ -152,7 +163,8 @@ def size(source: Path, command: list[str], cpus: int | None) -> dict | None:
     many = rev is not None or not names
     if many:
         out["mem_gb"] = max(AUTO_MEM_GB, math.ceil(workers * max(TEST_PROCESS_GB, *(s["worker_gb"] for s in chosen))))
-        out["reserve_gb"] = max(AUTO_MEM_GB, math.ceil(out["mem_gb"] * MANY_RESERVED))
+        if _takes_budget(source):
+            out["reserve_gb"] = max(AUTO_MEM_GB, math.ceil(out["mem_gb"] * MANY_RESERVED))
     elif gb := max(s["worker_gb"] for s in chosen):
         out["mem_gb"] = max(AUTO_MEM_GB, math.ceil(workers * gb))
     if many:

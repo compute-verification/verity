@@ -467,6 +467,9 @@ def test_a_run_of_many_suites_budgets_one_test_process_a_cpu_and_reserves_a_shar
         "import sys\nrev = sys.argv[sys.argv.index('--changed') + 1]\n"
         "print(f'suites: the change from {rev} touches ' + ('1: b' if rev == 'small' else '2: a, b'))\n")
     run = ["uv", "run", "tools/verity/check/suites.py"]
+    old = suite_size.size(repo, [*run], None)
+    assert old["mem_gb"] == 64 and "reserve_gb" not in old, "a tree whose slot.py takes no --budget-gb reserves its budget whole"
+    (repo / suite_size.SLOT_PY).write_text(f'USAGE = "slot.py [{suite_size.BUDGET_OPT} GB] -- CMD..."\n')
     for cmd, cpus, workers, gb, reserved in (
             ([*run, "--changed", "small"], None, 4, 18, 16),         # no suite declares one: 4 processes x TEST_PROCESS_GB
             ([*run, "--changed", "small", "--quick"], 12, 12, 54, 27),
