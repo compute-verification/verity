@@ -273,7 +273,9 @@ def test_a_member_through_the_stream_is_the_process_pairs_member_less_the_second
             assert one["live"]["accepted"] is True and one["verdict"]["accepted"] is True and one["challenger"]["ok"] is True, (k, one["live"].get("why"), one["verdict"].get("why"), one["challenger"])
             assert one["record"]["unit_draw"] == draw, k
         assert differ(pair["record"], got["record"]) == [], k
-        assert differ(pair["verdict"], got["verdict"]) == [], k
+        # Lean's verdict names the record it read, each side's own
+        assert [one["verdict"]["session"] for one in (pair, got)] == [str(one["dir"]) for one in (pair, got)], k
+        assert differ(*({f: v for f, v in one["verdict"].items() if f != "session"} for one in (pair, got))) == [], k
         session = [{f: v for f, v in one["live"].items() if f not in (*OWN, TEXT)} for one in (pair, got)]
         assert differ(*session) == [], k
         assert [got["live"][f] for f in DECIDED] == [pair["live"][f] for f in DECIDED], k
