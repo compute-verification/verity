@@ -147,4 +147,105 @@ theorem partOn_get (every : List Nat) (reach : Array (List Nat)) (q : Part) (t :
     · exact List.mem_flatMap.2 ⟨it[t], by simp, by simp [hp]⟩
     · exact List.mem_flatMap.2 ⟨it[t], by simp, by simpa [hp] using hj⟩
 
+/-- What `passedOn` holds as it reads Definition `d`: the entries of the Definitions before it. -/
+def accAt (P : Prog) (d : Nat) : Array (List Nat) :=
+  (P.defs.toList.take d).foldl (fun acc a => acc.push (defOn acc a)) #[]
+
+/-- Each node's reach in Definition `d`, as `passedOn` computes it. -/
+def reachAt (P : Prog) (d : Nat) : Array (List Nat) := reachOf (accAt P d) P.defs[d]!
+
+/-- The parameters Definition `d` passes on, none where the Program has no such Definition. -/
+def passOf (P : Prog) (d : Nat) : List Nat := (passedOn P)[d]?.getD []
+
+/-- The parameters of Definition `d` a reference of its body may be a leaf of: its parameter, or every parameter
+the node it refers to reaches. -/
+def refOn (P : Prog) (d : Nat) (r : Ref) : List Nat :=
+  if r.p then [r.i] else (reachAt P d)[r.i]?.getD (List.range (P.defs[d]!).params.size)
+
+theorem accAt_size (P : Prog) {d : Nat} (h : d ≤ P.defs.size) : (accAt P d).size = d := by
+  have := (foldl_push defOn (P.defs.toList.take d) #[]).1
+  rw [List.length_take] at this
+  simpa [accAt, Nat.min_eq_left h] using this
+
+theorem accAt_lt (P : Prog) {d c : Nat} (h : d ≤ P.defs.size) (hc : c < d) : (accAt P d)[c]? = (passedOn P)[c]? := by
+  rw [passedOn_eq, ← Array.foldl_toList]
+  exact foldl_push_prefix defOn P.defs.toList d c hc (by simpa using h)
+
+theorem passedOn_get (P : Prog) {d : Nat} (h : d < P.defs.size) :
+    (passedOn P)[d]? = some (defOn (accAt P d) P.defs[d]) := by
+  rw [passedOn_eq, ← Array.foldl_toList]
+  have := (foldl_push defOn P.defs.toList #[]).2.2 d (by simpa using h)
+  simpa [accAt] using this
+
+/-- **A reference of the return is among what the Definition passes on**: its parameter where it refers to one,
+else every parameter the node it refers to reaches. -/
+theorem ret_passed (P : Prog) {d : Nat} (h : d < P.defs.size) (hp : (P.defs[d]!).prim = false) {q : Part}
+    (hq : q ∈ (P.defs[d]!).body.ret.parts) {t : Nat} (ht : t < q.count) :
+    ∀ x ∈ refOn P d (q.get t), x ∈ passOf P d := by
+  intro x hx
+  have hd : P.defs[d]! = P.defs[d] := getElem!_pos P.defs d h
+  have hget : passOf P d =
+      (seqOn (List.range (P.defs[d]!).params.size) (reachAt P d) (P.defs[d]!).body.ret).eraseDups := by
+    unfold passOf
+    rw [passedOn_get P h, Option.getD_some]
+    unfold defOn reachAt
+    rw [← hd, hp]
+    rfl
+  rw [hget, List.mem_eraseDups]
+  refine List.mem_flatMap.2 ⟨q, Array.mem_toList_iff.2 hq, ?_⟩
+  obtain ⟨h1, h2⟩ := partOn_get (List.range (P.defs[d]!).params.size) (reachAt P d) q t ht
+  unfold refOn at hx
+  split at hx
+  · rename_i hrp
+    rw [List.mem_singleton] at hx
+    rw [hx]
+    exact h1 hrp
+  · rename_i hrp
+    exact h2 (by simpa using hrp) x hx
+
+/-- **A reference of an argument the callee passes on is among what the node reaches**: where node `k` of
+Definition `d` hands its callee argument `i`, and the callee passes that parameter on or is no earlier Definition, a
+reference of the argument to a parameter, or to an earlier node, is a leaf only of parameters node `k` reaches. -/
+theorem arg_reached (P : Prog) {d : Nat} (h : d < P.defs.size) {k : Nat} (hk : k < (P.defs[d]!).body.nodes.size)
+    {i : Nat} (hi : i < ((P.defs[d]!).body.nodes[k]!).args.size)
+    (hpass : i ∈ passOf P ((P.defs[d]!).body.nodes[k]!).fn ∨ d ≤ ((P.defs[d]!).body.nodes[k]!).fn) {q : Part}
+    (hq : q ∈ (((P.defs[d]!).body.nodes[k]!).args[i]!).seq.parts) {t : Nat} (ht : t < q.count)
+    (hr : (q.get t).p = false → (q.get t).i < k) :
+    ∀ x ∈ refOn P d (q.get t), x ∈ refOn P d ⟨false, k, 0⟩ := by
+  intro x hx
+  obtain ⟨hsz, hat⟩ := reachOf_at (accAt P d) (P.defs[d]!)
+  obtain ⟨reach, hpre, hk'⟩ := hat k hk
+  have hnk : (P.defs[d]!).body.nodes[k]! = (P.defs[d]!).body.nodes[k] := getElem!_pos _ k hk
+  show x ∈ (reachAt P d)[k]?.getD (List.range (P.defs[d]!).params.size)
+  unfold reachAt
+  rw [hk', Option.getD_some, ← hnk]
+  unfold nodeOn
+  rw [List.mem_eraseDups]
+  refine List.mem_flatMap.2 ⟨i, ?_, ?_⟩
+  · rcases hpass with hpass | hpass
+    · by_cases hfd : ((P.defs[d]!).body.nodes[k]!).fn < d
+      · rw [accAt_lt P (Nat.le_of_lt h) hfd]
+        unfold passOf at hpass
+        cases hg : (passedOn P)[((P.defs[d]!).body.nodes[k]!).fn]? with
+        | none => rw [hg] at hpass; cases hpass
+        | some l => rw [hg] at hpass; exact hpass
+      · rw [Array.getElem?_eq_none (by rw [accAt_size P (Nat.le_of_lt h)]; omega)]
+        exact List.mem_range.2 hi
+    · rw [Array.getElem?_eq_none (by rw [accAt_size P (Nat.le_of_lt h)]; omega)]
+      exact List.mem_range.2 hi
+  · rw [Array.getElem?_eq_getElem hi, Option.map_some, Option.getD_some, ← getElem!_pos _ i hi]
+    refine List.mem_flatMap.2 ⟨q, Array.mem_toList_iff.2 hq, ?_⟩
+    obtain ⟨h1, h2⟩ := partOn_get (List.range (P.defs[d]!).params.size) reach q t ht
+    unfold refOn at hx
+    split at hx
+    · rename_i hrp
+      rw [List.mem_singleton] at hx
+      rw [hx]
+      exact h1 hrp
+    · rename_i hrp
+      have hrp' : (q.get t).p = false := by simpa using hrp
+      refine h2 hrp' x ?_
+      rw [hpre _ (hr hrp')]
+      exact hx
+
 end NciCheck.Record.SecurityProofs
