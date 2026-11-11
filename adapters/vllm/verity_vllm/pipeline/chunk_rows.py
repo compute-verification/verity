@@ -33,7 +33,9 @@ SLOT_ROWS = ("Attention_v5", "Attention_v18", "AttnBlockFirst_v1", "AttnBlock_v5
 
 
 def reads(tp: Any) -> str:
-    """How `UnitStager` lays out chunked template ``tp``'s MUFU table reads: in lookup slots (`read_slots`, each table folded
+    """How `UnitStager` lays out chunked template ``tp``'s MUFU table reads: flat for a ``STAGES`` stage on bits (its Boolean
+    version, `boolean_topp_stages`: its MUFU operations are gates, so it reads no table and its unit returns its own outputs,
+    the one form `verify --zk` takes, `one_stage.proofs.ks_form_why`); else in lookup slots (`read_slots`, each table folded
     once per statement) for a ``CHAINS`` key block of a whole block (NVIS = BN: inline, step 16's 64-key split part's EX2 reads
     were 4.5 times its other nonzeros, a 322 GB build against 75.6 GB in slots) and for a whole attention row (``SLOT_ROWS``:
     inline, the 1B decode row ``Attention_v5{T=1,NH=32,KVH=8,D=64,..}``'s 64 reads make 6.35e9 nonzeros for its 10.2M ANDs,
