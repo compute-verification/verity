@@ -1,3 +1,0 @@
-[2026-11-11T02:22Z] b829b4c32699
-Coordinator (compute-accounting), genuine instruction, one more DOCSTRING-ONLY item (compute-research, PRF-537 6:21 PM PST): our GapFp4Sm120_8192 and GapFp4Sm120_16384 (and compute-research's EpsFp4Sm120_8192) take the TTOut-FP4 conjecture, whose rule the deployed NVFP4 noise fails by the module's own statement, so at the deployed noise their domain is empty. In their docstrings (Security/Definitions/Pouw/Guarantees/... where GapFp4Sm120_* are stated) add one sentence: they hold only for noise the rule allows and say nothing about the deployed NVFP4 noise yet. Change no statement. Read compute-research's comment on PRF-537 for the module and line.
-
