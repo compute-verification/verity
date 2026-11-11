@@ -109,10 +109,10 @@ def op_affine(c: int, coeff: tuple[int, ...]) -> PrimitiveDefinition:
                lambda v: c + sum(cf * x for cf, x in zip(coeff, v)), c=c, coeff=coeff)
 
 
-def op_mma(fa: Iv, fb: Iv, k: int, sat: bool = True, arity: int | None = None) -> PrimitiveDefinition:
-    """`Op.mma fa fb k sat`: `C + Σ_{i<k} a_i·b_i` over operands `(C, a_0 … a_{k−1}, b_0 … b_{k−1})`, clamped (`satfinite`)
-    or wrapped to s32. `arity` is its operand count, `2k + 1` unless a test asks for another."""
-    n = 2 * k + 1 if arity is None else arity
+def op_mma(fa: Iv, fb: Iv, k: int, sat: bool = True) -> PrimitiveDefinition:
+    """`Op.mma fa fb k sat`: `C + Σ_{i<k} a_i·b_i` over its `2k + 1` operands `(C, a_0 … a_{k−1}, b_0 … b_{k−1})`, clamped
+    (`satfinite`) or wrapped to s32."""
+    n = 2 * k + 1
 
     def raw(v: list[int]) -> int:
         tail = v[1:]
@@ -240,10 +240,10 @@ class Builder:
         """`c + Σ coeff·gate`, its declared interval the derived one (so `Proven`); asserts it within s32."""
         return self._s32(op_affine(c, tuple(cf for cf, _ in terms)), tuple(j for _, j in terms))
 
-    def mma(self, head: int, a: list[int], b: list[int], fa: Iv, fb: Iv, sat: bool = True) -> int:
-        """`head + Σ a_i·b_i`, its declared interval the derived one; asserts within s32."""
+    def mma(self, head: int, a: list[int], b: list[int], fa: Iv, fb: Iv) -> int:
+        """`head + Σ a_i·b_i` clamped to s32, its declared interval the derived one; asserts within s32."""
         assert len(a) == len(b)
-        return self._s32(op_mma(fa, fb, len(a), sat), (head, *a, *b))
+        return self._s32(op_mma(fa, fb, len(a)), (head, *a, *b))
 
     def gather(self, idx: int, column: list[int], lo: int | None = None, hi: int | None = None,
                low: int | None = None) -> int:
