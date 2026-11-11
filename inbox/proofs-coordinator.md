@@ -38494,3 +38494,56 @@ If both pass: `research queue open … --by proofs`, unmarked, and a line `ready
 - The ETAs are a guess: the old-path runs took about 34 minutes on a warm slot tree, and I do not know how much of the moved tree each node has built.
 
 **Your second list** [run: started 04:18Z on my VM, pushing nothing]: the dry crossings of #8139, #8339, #8406, #8414, #8454 and #8517, and of the ten unmarked heads, run now in two lines. I read CI-524 before each push.
+
+## KILIAN, Wed 11 Nov 04:21Z: the by-position finder compiles at one stage and at two (clean axioms; not kernel-replayed, nobody has read it); EXTFORM's asks 1 to 4 are in; item 2's PR waits on its records run, about 05:00Z
+
+**The table's row: "compiles", at one stage and at two.** My dates were 08:00Z, 12:00Z and 15:00Z; all three are met now, so 15:00Z holds.
+
+**A sentence you may send Daniel:** "The finder that extracts by position now elaborates in Lean with only the three axioms, at one stage and at two: its success, its cost and the bridge to `KSReg`'s and `KSRegTwoX`'s events; not kernel-replayed, read by nobody but its author, no locked statement changed."
+
+**What it says** [run: each `lean exit 0`, axiom probe "none beyond propext, Classical.choice and Quot.sound"]
+
+| file | theorems | head | try |
+|---|---|---|---|
+| `Proofs/Core/SamplingGeneric/FirstHit.lean` (blob `54f59f545b` on all three branches) | 64 | `cbd11034d5` | `r20261111-035927-edc8` |
+| `Proofs/Flock/SamplingGeneric/RunExtAt.lean` (new, shared by both bridges) | 8 | `ffd261e0e9` | `r20261111-040616-8bb9` |
+| `RegFirstHit.lean`, one stage, `cursor/proofs-firsthit-7c3e` | 22 | `17c2d9ba62f2` | `r20261111-041625-6f49` |
+| `TwoRegFirstHit.lean`, two stages, `cursor/proofs-firsthit-two-b41d` | 32 | `d7a7809e2a37` | `r20261111-041322-2e26` |
+
+- **One stage** (`Compiled.pr_regHit_le_needs_at_cap`): \(\Pr[\text{acc} \wedge \text{sample hits } F_{reg}] \le \kappa_s + \sqrt{k\gamma_s\Pr[B]} + \Pr[B_{conf}] + 2\cdot E[c + \sum_{g \in \text{sample}} c_g]/2^{256} + N/(K+1)\), under `ExpectedCR` at `finderRegAt K`.
+- **Two stages** (`CompiledTwo.eventTwoX_le_firstHit_at_cap`): \(\kappa_s + \sqrt{k\gamma_s\Pr[B]} + \Pr[B_{conf,X}] + 4\cdot E[c + \sum_{g \in \text{sample}} c_g]/2^{256} + N/(K_X+1) + N/(K_I+1)\), under `ExpectedCR` at `finderXAt KX` and `finderIAt KI`. So each square root of `KSRegTwoX` becomes \(2\cdot E[c + \sum_{g\in\text{sample}} c_g]/2^{256}\).
+- The `_at` forms (no `_cap`): the same without the caps' terms, under `ExpectedCR` at the finders of every cap.
+- **`c`** is the first run, whole: the prover's calls, the verifier's, and every session of the sample extracted, \(T(1 + s\,e_s)\). **`c_g`** (`callsBy`) is a run with only the sessions that have a proof block needing gate `g` extracted (`runExtAt`), \(T(1 + d_g\,e_s)\). The sum is over the gates the sampled proof blocks need.
+- **Against the paper's form** [derived, no row computed: I don't hold the W, d and \(e_s\) behind your three rows]: the term is at most \(2T[(1+W)(1+d\,e_s) + s\,e_s]/2^{256}\), the paper's \(2(1+W)T(1+d\,e_s)/2^{256}\) times \(1 + s\,e_s/((1+W)(1+d\,e_s))\). That factor is at most 2 where \(s \le W d\), so at most one bit under 132.0 / 126.6 / 116.6, and less where the sample's gates outnumber its sessions.
+- It is at most the whole-run form: `ex_runCost_callsBy_le` (one stage) and `Compiled.ex_callsBy_le` (two) prove \(E[c + \sum_g c_g] \le E[(1+|\text{sample}|)\cdot c]\).
+
+**What it does not say**
+
+1. **The first run is read whole**, the \(s\,e_s\) above. A finder that extracts the first run by position too is not stated.
+2. **The finder is charged a run for each waited gate of a further run's sample** (\(c_2(J) = \sum_{g\in J} c_g\)), though one run serves them all. Core's hypothesis is only \(c_2(J) \le \sum_{g \in J} c_1(g)\), so a tighter \(c_2\) fits the same bound; the bridges take the sum.
+3. **That the finder can be run at the cost charged is argued, not a Lean statement** [derived]. `Finder` has no such property. The Lean has `le_loopCostAt` (the pair's further run at its gate is inside the charge), `collBy` reading only the first run's log and the further run's `runExtAt g` log, and `mem_runExtAt` (under `hpos`, every opening at gate `g` of the whole extraction is in the extraction at `g`, so "this run opens `g`" is decided from what was paid). This is what a red team should attack first.
+4. **Three premises, as before**: linear `ExpectedCR` at the first-hit finder (two of them at two stages), linear at `B_conf`, strict at `B`. T must bound every run.
+5. **`hpos`**: one stage takes it for openings under the statement's roots; two stages takes SCALE's root-free form, since an interior opening is under the interior roots. `Sessions.interior` is the one clause of the contract the interior finder reads. `RevealsWithinTwo` is not taken.
+6. **Of the four checks**: elaborates yes, axioms yes, kernel replay no, red team no (EXTFORM read `a08fb44276dd`, before any of this).
+
+**EXTFORM's asks 1 to 4** [run], at `fd5a309a4a` (one stage, `r20261111-034204-4c35`), `881c93b550` (two, `r20261111-035209-0a85`), Core `d0bb721ed5` (`r20261111-034435-31a0`); the heads above hold them:
+
+1. The headlines are at the sample's own `chk`; the general-`chk` forms say "lemma" in their docstrings.
+2. One cap, expectation form, with \(N/(K+1)\), at the bridges: `pr_regHit_le_needs_ex_cap`, `eventTwoX_le_firstHit_cap`.
+3. The docstrings say `c` is the whole run with every session extracted, and that this is the paper's form at d = s.
+4. The three premises are named in the docstrings, and that T bounds every run.
+
+**Your 03:44Z sentence for the table is right in every word** for the whole-run finders. For the by-position ones, read \(c + \sum_{g \in \text{sample}} c_g\) where it has \((1+|\text{sample}|)\cdot c\), and "d = s at the first run only".
+
+**Item 2.** `cursor/proofs-firsthit-core-c9a1` at `96985b18aafb`, cut from the moved `main` (`5c095bb4ab70`): `security/Proofs/Core/SamplingGeneric/FirstHit.lean` and its import line, nothing else. I put the by-position section in it (the same blob as above), so the bridges stack on one Core PR.
+
+- At the earlier head `0fd2474e8d68` (54 theorems): try `r20261111-034905-a6ed` clean, quick tier `r20261111-034952-34b0` 4 suites passed, records `r20261111-035031-8d62` still running.
+- At `96985b18aafb`: try `r20261111-041745-3d52` (waiting for a slot), records `r20261111-041418-d23c`, quick tier `r20261111-041449-0923`, all running. The PR opens unmarked when they end; `ready to mark` follows in my next entry.
+- **The import of `Proofs.Flock.Claims.Prob`** [read]: no `layers` entry and no test refuses it; `Proofs/Core/Leak.lean` and `Rec.lean` import `Proofs.Flock.Claims.*` already. Nothing moved.
+- **The unread ratchet** [read]: the module is wholly unread, so it puts area `Proofs/Core` over its cap in `tools/verity/lean/unread-caps.json` (4 modules, 54 declarations). The PR's own full check fails on that; the fast path does not run it. I did not touch the caps: drive's lock run raises them and warns @lean. Say if you want the cap raised in the PR.
+
+**Item 1.** `r20261111-025253-8dec` is still running (ends by 05:53Z).
+
+**Crossings.** None yet. `core-c9a1` is cut from the moved `main`. `7c3e` waits for `8dec`. `two-b41d` sits on REGX's `fe391c772c` and crosses over REGX's crossed head when its entry names it (your 04:20Z recipe, to a new branch).
+
+**Next:** the PR; item 5's draft restatements in my note; the no-premise forms at the bridges (\(2\Pr[\text{the finder finds}] + N/(K+1)\)); the crossings as they open. I end my turn when only runs are left, naming them.
