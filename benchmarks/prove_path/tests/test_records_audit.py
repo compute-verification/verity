@@ -36,6 +36,7 @@ import shutil
 import subprocess
 import sys
 from dataclasses import dataclass, fields, replace
+from fractions import Fraction
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -474,6 +475,54 @@ def test_class_circuit_from_phi_alone_is_window_circuits_record_and_serve_phi_na
     served = json.loads(capsys.readouterr().out)
     assert PP.main(["compiler", "--serve", str(phi)]) == 0
     assert json.loads(capsys.readouterr().out) == served
+
+
+def test_reader_floors_state_the_verifiers_work_table_in_window_circuits_and_class_circuits_record_alike(
+        tmp_path, monkeypatch, capsys):
+    """With ``--reader-floors EPS,DELTA`` ``window-circuit`` and ``class-circuit`` write the same record, the circuit's
+    (`interface.descriptor_record`) stating the verifier's work table: every template at work 1, Pearl+'s reader templates
+    (`window_cut.readers`, stubbed to name two of the stub circuit's three) at `window_law.reader_floors`' floors and the
+    other at floor 1. The verifier's window from that record alone samples each template at its floor under work:1. A
+    circuit with no reader template, one not cut at Pearl+'s linears, is refused, and so are floors that aren't two exact
+    fractions."""
+    import prove_path as PP
+    from test_prove_path import _served
+    from verity_vllm.pipeline.window_law import reader_floors
+    from verity_vllm.program.predict import window_circuit as WC
+    from verity_vllm.program.predict import window_cut as WK
+
+    s = _served(tmp_path, monkeypatch)
+    circuit = IF.Circuit("test", tuple((bind(G.ScaledMmS8Coordinate, K=k, **G.GEMM_SM120_S8), n)
+                                       for k, n in ((64, 40), (128, 24), (256, 3))))
+    ids = list(circuit.ids)
+    mine, cut = dict(zip(ids[:2], (40, 24))), [True]
+    monkeypatch.setattr(WC, "window_circuit", lambda registered, compiled, cls, tables=None: circuit)
+    monkeypatch.setattr(WC, "class_circuit", lambda registered, cls, **kw: circuit)
+    monkeypatch.setattr(WC, "takes", lambda *a: None)
+    monkeypatch.setattr(WK, "readers", lambda c: dict(mine) if cut[0] else {})
+    (tmp_path / "advice.bin").write_bytes(s.data)
+    window = ["window-circuit", "--serve-run", str(s.run), "--window", "0", "--row-dir", s.a.row_dir, "--advice",
+              str(tmp_path / "advice.bin"), "--cap", "4", "--out", str(tmp_path / "w.json")]
+    cls = ["class-circuit", "--serve", str(s.run / "serve.json"), "--cap", "4", "--out", str(tmp_path / "c.json")]
+    floors = ["--pearl-tables", "pearl-c-h100-v1-h3", "--reader-floors", "1/4,1/10"]
+    assert PP.main([*window, *floors]) == 0 and PP.main([*cls, *floors]) == 0
+    assert (tmp_path / "c.json").read_bytes() == (tmp_path / "w.json").read_bytes()
+    rec, want = json.loads((tmp_path / "w.json").read_text()), reader_floors(mine, Fraction(1, 4), Fraction(1, 10))
+    assert all(1 < f < mine[t] for t, f in want.items())
+    table = {**{t: {"work": 1, "floor": f} for t, f in want.items()}, ids[2]: {"work": 1, "floor": 1}}
+    assert rec == {**IF.descriptor_record(circuit, 4), "work_table": table}
+    w = IF.window_of_record({**rec, "run": "ab" * 64, "context": ""}, D.parse_design("work:1"), RA.catalog_resolve)
+    assert {x["template"]: x["k"] for x in D.derive(w.program, w.query, w.law, w.work_table)["strata"]} == {**want, ids[2]: 1}
+    assert PP.main(window) == 0 and json.loads((tmp_path / "w.json").read_text()) == IF.descriptor_record(circuit, 4)
+    cut[0] = False
+    capsys.readouterr()
+    for cmd in (window, cls):
+        assert PP.main([*cmd, *floors]) == RA.REFUSED
+        assert "--reader-floors: the circuit has no Pearl+ reader template" in capsys.readouterr().err
+    for bad in ("0.25,0.1", "1/4", "1/4,1/10,1/2", "1/0,1/10", "0/4,1/10", "5/4,1/10", "1/4,1/1", "\uff11/4,1/10"):
+        with pytest.raises(SystemExit):
+            PP.main([*cls, "--reader-floors", bad])
+        assert "--reader-floors" in capsys.readouterr().err
 
 
 def test_the_window_circuit_command_under_h1s_w_reads_its_tables_with_no_key(tmp_path, monkeypatch, capsys):
