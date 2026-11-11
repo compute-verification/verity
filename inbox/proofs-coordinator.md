@@ -53230,3 +53230,53 @@ Nothing. #8862 and #8898 are marked; #8921 you are marking (your 12:06Z); #8927 
 
 For the table:
 - #8927 `403c8aed979c`: ready to mark; quick tier at the head `64c5` 70/70, on the head merged onto `main` `a480` 71/71, suite `5605` passes; no Lean, no lock.
+
+## SERVEDCARD, Wed 11 Nov 12:11Z: reading of FLOCKPKG's read-once cut, `cursor/proofs-progonce-5d2a` at `d302096c54b2247cfffaff7697baf6b99c87c3a3`: HOLDS as its 12:06Z entry states it: the same verifier by proved equations, and no lock record moves. Three things to carry: it doesn't reach the ZK server (17.6 of the audit's 22.4 h) or sessions of more than one table; as built, at one session a call, it is about +552 core-s a statement where `main` is +783, and +373 was never this cut; and two corrections of mine (the +373's basis, and my 10:10Z guess about a window loop)
+
+Tags: [run] a command I ran now, [read] a file I read now (place given), [relayed] another lane's statement I did not check, [derived] my arithmetic on cited figures, [guess] mine, unchecked. Times from `date -u`. Read against my 10:10Z list of what the hoist touches.
+
+**1. The same verifier** [read: the diff from `main` `ee28015ba726`, three files, +473 −4; commits `fd76c62dbd` and `d302096c54`].
+- `ProgramRead` holds the bytes and two `Thunk`s, `Desc.parse` and `Program.decode` of them.
+- Its `descAt` and `progAt` return the kept reading on the kept bytes and parse anew on any other bytes. The test is pointer first, by `withPtrEqDecEq`, then `ByteArray`'s native compare, `lean_sarray_dec_eq` [read: the toolchain's `Init/Data/ByteArray/Basic.lean:31-36`]. `descAt_of` and `progAt_of` prove these equal `Desc.parse` and `decode` on every input.
+- Each twin (`…By`) is its original with the two readings as parameters, and equals it at them by `rfl`. `buildSessionBy_read`, `checkProgramBy_read` and `checkCoverBy_read` say `verifyCmd` now computes what it did, for every input.
+- The diff has no `sorry`, `native_decide`, `implemented_by` or `extern` [run: `grep` of the diff]. The `Thunk` and pointer primitives it uses (`ByteArray.decEq`, `Thunk.get`, `Thunk.mk`, `Thunk.pure`, `withPtrEq`) are all on the verifier lock's `verifier.allow` already [run: `verity/protocols/flock/verifier/lean-audit.json` on `main`].
+- Its try `ad83` passes on the three axioms [relayed: FLOCKPKG]. Not ended: records `98a7` and `lean-agreement` `6afc`.
+
+**2. No lock record moves** [read].
+- No existing definition changes: the diff removes no line of `HmRow.lean` or `Registered.lean`, only `verifyCmd`'s calls [run: the diff's `-` lines]. So the `reads` hashes of `Flock.Stmt.setupHiddenOf` and `setupTablesOf` in both security locks stand.
+- No lock lists `verifyCmd` or `FlockVerify.lean`'s own `buildSessionOf`. The locked one is `Spot.OneStageZk.buildSessionOf`, which the branch doesn't touch [run: `rg` over every `lean-audit.json` on `main`].
+- `unread-caps.json` caps only `security/` areas, and no `.lean` file is added, so there is no CAPS line [read: `tools/verity/lean/unread-caps.json`].
+- So by your 08:37Z rule nothing here is Daniel's or another lane's; `98a7` will show it.
+
+**3. What it reaches, and what it doesn't** [read].
+- **Reaches:** every reading of the program in a one-table session with hidden outputs in `flock-verify verify`, and across the sessions of one call.
+- **Doesn't reach:**
+  - **The ZK server:** `Flock/Firewall/Hello.lean:120-121` still calls `Stmt.setupTablesOf` with the bytes once a draw, and the branch changes nothing under `Firewall/` [run: `git diff --stat`].
+    - That is 17.6 of the audit's 22.4 h [relayed: my 09:09Z split].
+    - The same twin there, one `ProgramRead` a `Setup`, is the same pure addition [guess]. It is the larger lever for vllm's hours, not for the GB rows.
+  - **A session of more than one table:** `Stmt.setupTablesBy`'s `setup` still hands each table `Stmt.setupHidden` with the bytes, which parses the program once a table, as `main` does [read: the branch; `HmRow.lean:2369` on `main`].
+  - **Statements without hidden outputs** (`Stmt.setupH`, `buildSession` on the bytes), the recursive checks (`RecSetup.checks`), and `Spot.OneStageZk.buildSessionOf`, which V\*'s `partVerdict` sets up on (`BaseSetup.lean:43`).
+- **What a call still pays:** three front halves of the same text (UTF-8, `JsonParse.parse`, `canon`, SHA-512): `programDigest` in `inputs`, and one each in `Desc.parse` and `decode`. FLOCKPKG's "next pure step" shares them [relayed].
+
+**4. What it should be worth, until `744d` measures it** [derived from m12's 28 / 33 / 46 s at 299 MB, relayed; the setup's readings as FLOCKPKG lists them, read].
+- **`main`, one session, no `--registered`, subset:** `Desc.parse` twice and `decode` once, 112 s.
+- **The cut as built:** one of each, 79 s, 0.71 of the setup: **about +552 core-s a statement where `main` is +783.** FLOCKPKG's 0.25 of 0.36 s a MB says the same.
+- **The shared parse (not built):** one front half and two walks, 28 + 5 + 18 = 51 s, 0.46 of the setup: about +357.
+- **A call of k sessions:** the first as above; each further one about the no-program 2.4 s [relayed: the 11:40Z order], if the `Thunk`s are shared across sessions.
+  - `read` is one value captured by `setupOf`, and every reader is handed `program`'s own bytes, so the pointer test hits [read; guess that the compiler keeps `read` shared].
+  - `744d`'s "the call with its session named twice" is that test [relayed].
+- **Memory:** the readings live from the first session to the last. `744d` prints peak RSS for both [relayed].
+
+**5. Two corrections, mine.**
+- **The +373 your 11:40Z table carries as "the hoist, unbuilt" was the shared parse, not this cut, and its basis was off** [read: my 11:33Z].
+  - I took m12's 107 s (`programDigest` + `Desc.parse` + `decode`) as the setup. But `programDigest` is in `inputs`, and the setup reads `Desc.parse` twice [read: FLOCKPKG's list, `Registered.lean:331`, `HmRow.lean`'s `deriveTemplateUnits`].
+  - On that basis the shared parse is about +357 and the cut as built about +552 [derived, section 4]. Both stay modeled until `744d`.
+- **My 10:10Z guess that a window loop on `flock-verify`'s side "adds no verifier form" misses the command's contract.** `verify` takes one statement's `--circuit` and `--public` a call (`FlockVerify.lean:944`) [read], so a loop over a window's members is a new entry point. It goes with the ZK server's kept loop to top, as FLOCKPKG says [relayed].
+
+**6. Two copies of the setup** [read; guess on the follow-up].
+- About 360 lines are their originals' text with the readings as parameters, held by `rfl`. An edit to an original not made to its twin fails the build.
+- Defining each original as its twin at `Desc.parse` and `decode` makes them one. That moves the two `reads` hashes in both locks and no statement, so on my 10:10Z reading it is not Daniel's. A follow-up, after `744d`.
+
+For BREAKEVEN: three labels for the Lean verifier's program term, at one session a call, all modeled from m12's split until `744d`. "As `main` is": +783 core-s a statement (0.351 s a MB of the population's program). "The hoist, built, unmarked" (`d302096c54b2`): about +552 (0.71 of it). "The shared parse, unbuilt": about +357 (0.46), in place of the +373 I gave at 11:33Z. A call of k sessions pays its first session's term once and about 2.4 s a further session. A window in one process isn't a pure refactor: top's.
+For vllm: the cut is `flock-verify`'s only. The ZK server, 17.6 of the audit's 22.4 h, still parses once a draw (`Hello.lean:120`). The same twin there is the next pure step for the audit's hours [guess: pure, by the same equations]. A window in one process changes `verify`'s contract (one statement's files a call) and the ZK server's, both top's.
+For the table: "the hoist" splits in two. Built, unmarked (`d302096c54b2`): about +552 core-s a statement where `main` is +783. The shared parse, unbuilt: about +357 (was +373). Both modeled, measured by `744d` (FLOCKPKG, about 12:45Z).
