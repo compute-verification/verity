@@ -52393,3 +52393,48 @@ For the coordinator to ask:
 
 For the table:
 - no change. The stop population's audit driver: its staging is read [read, nothing built]; open: which session its coins come from.
+
+## HARMSEARCH, Wed 11 Nov 11:52Z: my 11:43Z rows restated as the order's 11:40Z asks. Every GB there is "no program (not what `main` verifies)" and every bits figure is line (b). As `main` is (+783 core-s on every statement), 2^-100 by (b) under one M costs 12,331 GB at the plan's cut, 10,588 with the writers recut, 3,888 with #8917's cut on top (G = 64); by (a) the planner's own pick holds everywhere and reads 10,358, or 2,792 with #8917's cut at G = 32 and no recut. The recut is not free as `main` is: +211 GB at the pick
+
+Tags: [run], [read] (place given), [relayed], [guess]. Times from `date -u`. Row (iii), world year, measured prover prices, δ 0.01, S 28,000. Nothing here is built in the tree: every row is a what-if on the planner's inputs.
+
+**How to read my 11:43Z entry** (order 11:40Z). Its GB are at the head statement's verify of 250.0 core-s with no setup: **"no program (not what `main` verifies)"**. Its bits are **line (b), over the served wiring** (SCALE's count per kind; M = 2,049 at the plan's cut, 139 at recut A); none is "the Lean's count". Below, each design carries both lines and three GB readings.
+
+**The three GB readings** [run: the same planner call; the setup added to every statement of every type, as BENCHCROSS's 11:27Z; it reproduces BENCHCROSS's rows: 16,683 against its 16,682.5, 10,358 against 10,358.4].
+- "no program": head statement 250.0 core-s, nothing added.
+- "as `main` is": +783 core-s on every statement [relayed: BENCHCROSS 11:27Z, a program holding the first block alone; "a what-if on a program nobody built"].
+- "the hoist, unbuilt": the program parsed once a member, +373 core-s a statement [relayed: SERVEDCARD's derivation, 11:33Z]. Parsed once a window in a kept process (+1.4 core-s) reads within 12 GB of "no program" (3,872 against 3,860; 1,505 against 1,500) [run].
+
+**Bits, two lines** [modeled; SCALE's term, compressions, K0 = 6, 2^80 calls]: (a) at `code h`, units side by side, one class a block [unconfirmed: ATTACK 11:35Z]; (b) over the served wiring, each stratum with SCALE's count, as mean / by stratum / one M. Recut blocks' and cut units' prices are modeled by size, unmeasured. The measured-rate figure is by proportion, a floor on the rate, so it cannot show 300 GB is met; the rate is not measured at the headline's mix. Where a cell shows "→", the planner's κ moves with the setup (first value at no program and the hoist, last as `main` is).
+
+| writers' cut | head block | the row | the plan | (a) one class a block | (b) served wiring: mean / by stratum / one M (M) | GB, no program (not what `main` verifies): modeled 0.4 / measured engine rate on node A (a floor) | GB, the hoist, unbuilt (parsed once a member, +373 core-s a statement): modeled 0.4 / measured engine rate on node A (a floor) | GB, as `main` is (+783 core-s on every statement): modeled 0.4 / measured engine rate on node A (a floor) |
+|---|---|---|---|---|---|---|---|---|
+| the plan's | whole | the record's plan | size classes, κ 2^-5 → size classes, κ 2^-6 | -106.88 → -107.88 | -99.28 / -97.64 / -96.88 (2,049) → -100.28 / -98.64 / -97.88 (2,049) | 6,320 / 226 to 243 | 11,277 / 403 to 434 | 16,683 / 596 to 642 |
+| the plan's | whole | least GB at 2^-100 by (a) | width + margin 1/8, κ 2^-3 | -105.19 | -97.97 / -97.78 / -95.19 (2,049) | 3,781 / 135 to 146 | 6,914 / 247 to 266 | 10,358 / 370 to 399 |
+| the plan's | whole | least GB at 2^-100 by (b), by stratum | width + margin 1/8, κ 2^-6 | -108.19 | -100.97 / -100.78 / -98.19 (2,049) | 4,069 / 145 to 157 | 7,166 / 256 to 276 | 10,571 / 378 to 407 |
+| the plan's | whole | least GB at 2^-100 by (b), one M | width + margin 1/8, κ 2^-8 | -110.19 → -110.29 | -102.97 / -102.78 / -100.19 (2,049) → -103.00 / -102.82 / -100.29 (2,049) | 5,431 / 194 to 209 | 8,734 / 312 to 336 | 12,331 / 441 to 475 |
+| recut A | whole | the record's plan | size classes, κ 2^-5 → size classes, κ 2^-6 | -106.98 → -107.98 | -101.46 / -101.21 / -100.85 (139) → -102.46 / -102.21 / -101.85 (139) | 6,360 / 227 to 245 | 11,393 / 407 to 439 | 16,865 / 603 to 649 |
+| recut A | whole | least GB at 2^-100 by (a) | width + margin 1/8, κ 2^-3 | -105.33 | -100.12 / -99.80 / -99.20 (139) | 3,823 / 137 to 147 | 7,037 / 252 to 271 | 10,569 / 378 to 407 |
+| recut A | whole | least GB at 2^-100 by (b), one M | width + margin 1/8, κ 2^-4 | -106.33 | -101.12 / -100.80 / -100.20 (139) | 3,860 / 138 to 149 | 7,065 / 253 to 272 | 10,588 / 379 to 408 |
+| recut A | cut, G = 128 | least GB at 2^-100 by (b), one M | width + margin 1/8, κ 2^-6 | -108.37 | -103.62 / -102.74 / -100.99 (332) | 1,915 / 68 to 74 | 3,374 / 121 to 130 | 4,976 / 178 to 192 |
+| recut A | cut, G = 64 | least GB at 2^-100 by (b), one M | width + margin 1/8, κ 2^-6 | -108.35 | -103.38 / -103.04 / -100.15 (588) | 1,500 / 54 to 58 | 2,638 / 94 to 102 | 3,888 / 139 to 150 |
+| recut A | cut, G = 32 | least GB at 2^-100 by (b), one M | width + margin 1/8, κ 2^-7 | -109.17 → -109.33 | -103.90 / -103.62 / -100.06 (1,100) → -104.00 / -103.73 / -100.23 (1,100) | 1,770 / 63 to 68 | 2,840 / 102 to 109 | 4,013 / 143 to 155 |
+| recut A | cut, G = 32 | least GB at 2^-100 by (b), by stratum | width + margin 1/8, κ 2^-4 | -106.17 | -100.90 / -100.62 / -97.06 (1,100) | 979 / 35 to 38 | 1,956 / 70 to 75 | 3,031 / 108 to 117 |
+| recut A | cut, G = 32 | least GB at 2^-100 by (a) | width + margin 1/8, κ 2^-3 | -105.17 | -99.90 / -99.62 / -96.06 (1,100) | 934 / 33 to 36 | 1,916 / 68 to 74 | 2,995 / 107 to 115 |
+| the plan's | cut, G = 32 | least GB at 2^-100 by (a) | width + margin 1/8, κ 2^-3 | -105.04 | -99.26 / -98.83 / -95.04 (2,049) | 895 / 32 to 34 | 1,799 / 64 to 69 | 2,792 / 100 to 108 |
+| the plan's | cut, G = 32 | least GB at 2^-100 by (b), by stratum | width + margin 1/8, κ 2^-5 | -107.04 | -101.26 / -100.83 / -97.04 (2,049) | 1,047 / 37 to 40 | 1,956 / 70 to 75 | 2,955 / 106 to 114 |
+| the plan's | cut, G = 32 | least GB at 2^-100 by (b), one M | width + margin 1/8, κ 2^-8 | -110.04 → -110.20 | -104.26 / -103.83 / -100.04 (2,049) → -104.36 / -103.94 / -100.20 (2,049) | 2,684 / 96 to 103 | 3,888 / 139 to 150 | 5,186 / 185 to 200 |
+
+- **By (a) nothing is needed from the plan.** Every design on the grid holds 2^-100 by (a) (the weakest reads -104.14), so the least GB is the planner's own pick: 3,781 / 6,914 / 10,358 GB with the head block whole, and 895 / 1,799 / 2,792 with #8917's cut at G = 32. No recut and no held κ.
+- **By (b) under one M, head block whole:** recut A at κ 2^-4, 3,860 / 7,065 / 10,588 GB. At the plan's cut it takes κ 2^-8: 5,431 / 8,734 / 12,331. The recut saves 1,571 / 1,669 / 1,744 GB on this line.
+- **By (b) under one M with #8917's cut:** recut A, G = 64, κ 2^-6: 1,500 / 2,638 / 3,888 GB. G = 64 stays the least under every reading (G = 128: 1,915 / 3,374 / 4,976; G = 32: 1,770 / 2,840 / 4,013).
+- **By (b) by stratum with #8917's cut:** G = 32. At no program the recut wins (979 against 1,047); at the hoist they tie (1,956); as `main` is the plan's cut wins (2,955 at κ 2^-5 against 3,031): the recut's wider blocks cost more statements than its κ step saves.
+- **The recut is not free once a statement carries a setup.** At the planner's pick it costs +42 GB at no program (3,781 → 3,823), +123 at the hoist, **+211 as `main` is** (10,358 → 10,569). A wider block takes more of a statement's room, so there are more statements and each pays the setup. My 11:15Z "under 3 GB" was the head's query writer alone at no program.
+- **The setup moves levels, not the choice:** the same κ and G are least under all three readings on every line but one (by stratum with the cut, above). The record's own plan moves to κ 2^-6 as `main` is.
+- **No row reaches 300 GB at modeled 0.4 under any reading.**
+
+Lean's check of ten of these designs with the setup in the cells: run `r20261111-115045-3bf0`, launched 11:51Z on tree `f1e9d625dd`, ETA 12:10Z [guess]; in my next entry. Until then the three-reading figures are the planner's. The grids (144 designs a reading) are in the lane's notes: `tools/harmsearch/recut4_783.jsonl`, `recut4_373.jsonl`, `recut3.jsonl`; the tool is `recut4.py SETUP`.
+
+For BREAKEVEN: the rows above, each with its reading, its design and both bits lines. (1) by (a): the planner's pick (`widths=True, margin=0.125`, no `kappas`): 3,781 / 6,914 / 10,358 GB (no program / hoist / as `main` is), (a) -105.19, (b) one M -95.19. (2) by (b) one M, writers recut: `kappas=(2**-4,)`: 3,860 / 7,065 / 10,588, (a) -106.33, (b) -101.12 / -100.80 / -100.20. (3) by (b) one M, recut + #8917 at G = 64: `kappas=(2**-6,)`: 1,500 / 2,638 / 3,888, (a) -108.35, (b) -103.38 / -103.04 / -100.15 (M 588).
+For the table: HARMSEARCH | least GB at 2^-100, world year, modeled 0.4, as `main` is (+783 core-s on every statement) [run, planner; recut and cut prices modeled] | by (a): 10,358 (the pick; 2,792 with #8917 at G = 32) | by (b) one M: 12,331 plan's cut; 10,588 writers recut; 3,888 recut + #8917 at G = 64 | by (b) by stratum: 10,571; 10,588; 2,955 (#8917 at G = 32, plan's cut).
+For the table: the same at "no program (not what `main` verifies)": (a) 3,781 (895); (b) one M 5,431; 3,860; 1,500; by stratum 4,069; 3,860; 979. At "the hoist, unbuilt" (+373): (a) 6,914 (1,799); (b) one M 8,734; 7,065; 2,638.
