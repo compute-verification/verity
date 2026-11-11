@@ -11,6 +11,7 @@ its change to the arm it names as its parent (`serve_tax.ARMS`):
 | `compiled` | stock vLLM: torch.compile and CUDA graphs, chunked prefill, prefix caching, async scheduling | — |
 | `compiled-again` | nothing: stock in a second server lifetime, for what two starts of one engine differ by | `compiled` |
 | `no-prefix-cache` | `--no-enable-prefix-caching` | `compiled` |
+| `published` | the server started as vLLM's recipe for the model starts it (`Model.published`): the recipe's flags and context limit, and vLLM's own cap on the requests it runs at once in place of the runner's 256 | `compiled` |
 | `eager` | `--enforce-eager` | `compiled` |
 | `bi-compiled` | `VLLM_BATCH_INVARIANT=1`: vLLM's batch-invariant kernels | `compiled` |
 | `bi-eager` | `VLLM_BATCH_INVARIANT=1`, eager: the committing path's execution (`TargetProfile`'s `bi-eager`), nothing committed | `eager` |
@@ -35,6 +36,18 @@ stated there alone, as the `two-stage` arm: a job that serves the two-stage audi
 (`ARMS=two-stage RATES=... PLAN_FILE=...`), so the serve and its measured cost can't differ in an engine setting.
 Before an arm's server starts, the runner loads each of its plugins once in the server's environment and refuses the
 arm where one doesn't load, because vLLM logs such a plugin and serves on without it.
+
+`published` is stock vLLM under the settings its authors publish for the model, where `compiled` is stock under the
+settings every other arm shares. Its data is the command of the model's recipe (`recipes/models/` in vLLM's
+repository, shown at recipes.vllm.ai) for the cards the runner serves the model on: the flags that command adds
+(`Model.published`) and its context limit (`Model.published_context`). The arm adds the flags to `compiled`'s line,
+serves at the recipe's context limit and no other (a job that serves it beside other arms sets `MAX_MODEL_LEN` to that
+limit, so that the arms differ by the flags alone), and drops the runner's cap of 256 requests at once, which leaves
+vLLM's own for the cards. A model with no recipe here is refused. Of GLM-5.3's recipe the integration's pin runs all
+but three things, which the arm therefore lacks: the Rust front end (`VLLM_USE_RUST_FRONTEND=1`), the tokenizer mode
+`glm5_next`, and the release the recipe names as its minimum. The recipe's speculative decoding is opt-in and stays
+off. The recipe's page asks for prefix caching off under a benchmark; the arm keeps it on, as a server has it, and
+each pass starts from an empty cache as every arm's does.
 
 What an arm keeps that holds values never goes under its run's directory, which is published: a boundary commitment's
 classes (each class's requests' tokens and its salts), the history tables' rows and salts, and the top-k's counters.

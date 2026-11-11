@@ -440,6 +440,32 @@ def test_max_model_len_replaces_the_base_context_limit():
     assert S.base_args() == S.BASE_ARGS and len(S.base_args(40960)) == len(S.BASE_ARGS)
 
 
+def test_the_published_arm_starts_the_server_as_the_models_recipe_does():
+    """The arm's line is stock's at the recipe's context limit with the recipe's flags added and the runner's cap on
+    the requests at once dropped, and nothing else; a model with no recipe here and a context limit that isn't the
+    recipe's are refused, since the server would then not be the recipe's."""
+    glm = S.MODELS["glm53"]
+    context = S.published_context("published", "glm53", None)
+    assert context == glm.published_context == S.published_context("published", "glm53", 262144) == 262144
+    stock = S.server_argv(S.ARMS["compiled"], glm, Path("/ck"), 8000, max_model_len=context)
+    argv = S.server_argv(S.ARMS["published"], glm, Path("/ck"), 8000, max_model_len=context)
+    cap = stock.index("--max-num-seqs")
+    at = stock.index("--max-model-len")
+    assert argv == [*stock[:at], *glm.published, *stock[at:cap], *stock[cap + 2:]]
+    assert argv[argv.index("--kv-cache-dtype") + 1] == "fp8" and argv[argv.index("--max-model-len") + 1] == "262144"
+    assert S.base_args(without=S.UNPUBLISHED) == ("--max-model-len", "4096", "--seed", "0", "--disable-uvicorn-access-log")
+    with pytest.raises(SystemExit, match="MAX_MODEL_LEN=262144, for every arm of the job"):
+        S.published_context("published", "glm53", 131072)
+    for model_id, why in (("moonlight", "no recipe for moonlight"), (None, "no recipe for no model")):
+        with pytest.raises(SystemExit, match=why + r" \(Model.published; it holds glm53's\)"):
+            S.published_context("published", model_id, None)
+    # a recipe is its flags and its context limit together, and one arm alone is started by it
+    for name, m in S.MODELS.items():
+        assert bool(m.published) == (m.published_context is not None), name
+    assert [n for n, a in S.ARMS.items() if a.published] == ["published"]
+    assert S.ARMS["published"].parent == "compiled" and S.changes_of("published") == []
+
+
 def test_the_boundary_arm_takes_edges_every_period_or_at_set_times_and_keeps_no_kv_file_at_tp():
     def ns(**kw) -> argparse.Namespace:
         return argparse.Namespace(**({"arm": "boundary", "model_id": "glm53", "edges_s": None, "edges_every_s": None,
@@ -952,9 +978,14 @@ def test_a_loads_dataset_file_is_the_nodes_copy_of_the_pinned_one_or_nothing(tmp
                       (["passes", "--loads", "chat", "--arms", "tick"], "corpus client"),
                       (["passes", "--loads", "chat", "--arms", "two-stage", "--model-id", "moonlight"], "check template"),
                       (["passes", "--loads", "long", "--max-model-len", "4096"], "need a context of 16384"),
+                      (["passes", "--loads", "chat", "--arms", "published", "--model-id", "moonlight"], "no recipe for"),
+                      (["passes", "--loads", "chat", "--arms", "compiled published", "--model-id", "glm53",
+                        "--max-model-len", "131072"], "MAX_MODEL_LEN=262144"),
                       (["dataset", "long"], None)):                # a load that reads no file is no choice of `dataset`
         with pytest.raises(SystemExit, match=why):
             S.main(argv)
+    assert S.main(["passes", "--loads", "long", "--arms", "compiled published", "--model-id", "glm53",
+                   "--max-model-len", "262144"]) == 0
     # a model with no check template of its own takes the job's object
     assert S.main(["passes", "--loads", "long", "--arms", "two-stage", "--model-id", "moonlight", "--boundary-rows",
                    '{"check": "t"}']) == 0
