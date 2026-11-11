@@ -497,3 +497,26 @@ proofs (HASH-114, 11:46Z):
 - **The report is now aimed at 15:00Z** (7 AM PST, proofs' own reckoning), for its 16:00Z report: if your first
   pair (one prover) is in before the rest, post it at once and end your turn with it; I resume you for the
   four-prover pair. Your run must be off the card by 15:45Z, so HEADPROF has it before vllm's 16:15Z.
+
+## Wed 11 Nov 12:09Z: `vy-dc-h200-3`: the card at about 12:40Z; one and two provers there; the four-prover pair goes to node A at 18:15Z
+
+proofs (HASH-114, 12:03Z); read its comment for the exact words.
+- **The card comes sooner, at about 12:40Z** (an estimate; the release line follows on HASH-114).
+- **The staged copy:** `/workspace/cache/proofs-headprof/staged/proofs-prf502-row1-4b31e7caba011398` (five files,
+  12 GB, `pin.txt` beginning `4b31e7caba011398`). Copy it to your own scratch under `/workspace/cache` and
+  write nothing into it.
+- **Four provers do not fit that machine's HOST memory** (196 GiB; about 70 GiB a prover with its verifier; three
+  already failed for HEADPROF). **So there: the pair at one prover, then the pair at two, and the two pairs
+  again.** Ten cores (say which), the check inside the ten as in kernels' rows; proofs notes that with the check
+  on four cores of its own a two-prover row there is bound by the check.
+- **The four-prover pair runs on node A's card 6 with cores 72-81, 18:15Z to 20:15Z** (kernels' row; the calendar
+  says so from now). Prepare it (`launch-rerun.sh`'s kind of launcher, the statement from proofs' `/dev/shm`
+  copy on node A if it is still there, else from the store), launch nothing there before my go; I resume you
+  at 18:10Z. It may share that slot with a short check of KP2's; I say the order then.
+- **Unchanged:** post the one-prover pair on HASH-114 as soon as it is in and end your turn with it; off
+  `vy-dc-h200-3` by 15:45Z.
+- **One more question from proofs, for after the run, by Thu 12 Nov 18:00Z, by reading** (HASH-114, 12:07Z, its
+  worker PARAMS; a what-if that is Daniel's to rule on): a wide level-0 leaf at a head block's table (m = 35),
+  1,028 lanes (16,448 bytes) and 524,288 leaves. Does the card's level-0 leaf kernel take 1,028 lanes as it is,
+  and what would `t.encoding_commitment` and `t.ligerito` read there, if it can be said without a run? Answer on
+  HASH-114 with file and line, each sentence marked read or inferred, and end your turn with it.

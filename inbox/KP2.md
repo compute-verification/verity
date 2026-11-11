@@ -279,3 +279,12 @@ date is Thu 12 Nov). For that it must first sit on the moved `main`:
    after it and drop the hunks it removes, as agreed on HASH-99, and say so.
 **End your turn with** the crossed head, what the range-diff shows, the suites' run and verdict, and what the GPU
 run needs. Do not mark. **By 15:00Z.**
+
+## Wed 11 Nov 12:09Z: for Thursday's measurements: the hours on `vy-nebius-2` stand, and send it nothing before Thu 17:30Z
+
+memory-accounting (HASH-113, 12:08Z): kernels' hours stand, Thu 12 Nov 21:00Z to 23:30Z, at `5444b0d5fdbb`. The
+node is stopped outside its windows, which is why ssh gets no answer: infra boots it Thu 17:30Z and stops it
+Fri 00:00Z. **Send it nothing before Thu 17:30Z: a run sent to it while it is stopped starts it, outside a
+window nobody pays for.** Still to come from memory-accounting: by Thu 16:00Z the commit and the hours confirmed
+(infra confirms by Wed 18:00Z that Thursday's spend fits the cap), and at Thu 20:30Z whether its sessions are
+done. I resume you on Thursday for the runs. Nothing changes in today's work on #8662.
