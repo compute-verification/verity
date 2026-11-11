@@ -63,7 +63,7 @@
     {"file": "verity_vllm/check/match/per_request.py", "kind": "or-empty", "symbol": "<module>", "detail": ".get(k) or [] / {}", "count": 5},
     {"file": "verity_vllm/check/match/prefix_reads.py", "kind": "or-empty", "symbol": "<module>", "detail": ".get(k) or [] / {}", "count": 2},
     {"file": "verity_vllm/check/match/program_compare.py", "kind": "schema-literal", "symbol": "main", "detail": "cb-a/compare/v1"},
-    {"file": "verity_vllm/check/match/program_loaders.py", "kind": "or-empty", "symbol": "<module>", "detail": ".get(k) or [] / {}", "count": 10},
+    {"file": "verity_vllm/check/match/program_loaders.py", "kind": "or-empty", "symbol": "<module>", "detail": ".get(k) or [] / {}", "count": 9},
     {"file": "verity_vllm/check/match/rank_match.py", "kind": "schema-literal", "symbol": "commit_binding", "detail": "verity/tp2/commit-binding/v1"},
     {"file": "verity_vllm/check/match/rank_match.py", "kind": "schema-literal", "symbol": "cross_rank_check", "detail": "tp2/rank_match/v1"},
     {"file": "verity_vllm/check/match/rank_match.py", "kind": "or-empty", "symbol": "<module>", "detail": ".get(k) or [] / {}", "count": 16},
