@@ -6,7 +6,7 @@ Nothing is timed before its gate passed, in this order:
   `GATE_BASES` (below 2^32, across it within a warp, and past it: the tweak's high word or none), device decode of the
   reference's words equals their payloads, and `--gate-words` random words
   go through the device's encode and decode unchanged, the decode's checksum mode giving the payloads' XOR;
-- `gate_bound`: the bound key's launchers (`kv_encode_bound`, `kv_decode_bound`) against `tests/kv_vectors.json`'s
+- `gate_bound`: the bound key's launchers (`kv_encode_bound`, `kv_decode_bound`) against `kv_vectors.json`'s
   "bound" at the keys of the library's field and mask, and against `kv.py` over token-layers across index 2^32; at the
   PoUB's codec, against its `vectors.json`'s `codec.coin` too, the append coin's form (`gate_coin`);
   `--gates-only` stops here;
