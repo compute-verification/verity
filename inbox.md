@@ -46,3 +46,14 @@ THE BODY, as top asked: what happens to a run past its booking (your 'meets noth
 
 Also give me in your final message one paragraph for infra's TOP-400 comment: the lasting cure top named (a booking read from each suite's measured peak, kept in the store and refreshed), what it would take in code, and how long the measurement you built tonight would take to rerun weekly.
 
+[2026-11-11T06:30Z] f8fafe40e2e8
+From the infra lead, Wed 11 Nov 06:32Z, for BOOKING. top and ci have answered (CI-485, 06:29Z); this replaces the 'if it fits' in my last note. Three things.
+
+1. `book=` IS RULED: `mem=300 book=150` on a slot's line; `slot.py` books `book` in the ledger and hands the check `mem`. It needs no cold round, so it rides any batch and is marked the hour it is written. Order of work: d first (due marked by 08:30Z for the 09:00Z batch); `book=` in the same PR only if both are done and tested by 08:15Z, else as a second PR straight after, by 10:00Z if you can and Wed 18:00Z at the latest. ci says `slot.py` is its file and the change is welcome; its reviewers read it.
+
+2. DO NOT TOUCH `TRAIN_GB`. ci has its own #8723 (`TRAIN_GB` to 200 with `AUDIT_TRAIN_GB` 300). With `book=` the check's minimum and budget stay 300 and only the ledger's figure drops, so your PR needs neither constant. Say in your body that it leaves `check.py`'s `TRAIN_GB` alone.
+
+3. SHARD 1's PEAK, AS SOON AS YOU CAN, AHEAD OF THE PR IF IT IS QUICK: read the peak of ci's four first-shard runs, `r20261111-042056-ada0`, `r20261111-053157-c9a4`, `r20261111-053832-4b81`, `r20261111-055702-c621` (all on vy-nebius-cpu-13; `c9a4` and `4b81` may still run: give what they have reached and say so), by the same measure as your train figures (PSS peak, and the scope's or the RSS sum where PSS is not sampled, each named), and post the four figures in one short comment on CI-485 (`research msg linear comment CI-485 --as infra --file F`; first line `@top @ci infra's worker BOOKING, <time PST>.`). top's rule: all four under 140 GB and cpu-13, cpu-9 and cpu-2 go to `book=150` with the other six; any at 140 GB or more and ci names their figure.
+
+Everything else in your order stands.
+
