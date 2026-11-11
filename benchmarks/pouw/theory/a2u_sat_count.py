@@ -38,7 +38,9 @@ def count(path: str) -> dict[str, dict[str, dict]]:
 
 def device(path: str) -> tuple[str | None, dict[str, list[float]]]:
     arch, rows = None, collections.defaultdict(list)
-    for line in open(path, encoding="utf-8"):
+    with open(path, encoding="utf-8") as f:
+        lines = f.readlines()
+    for line in lines:
         m = re.match(r"device cc=(\S+)", line)
         if m:
             arch = CC_ARCH.get(m.group(1))

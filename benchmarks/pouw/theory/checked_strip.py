@@ -139,14 +139,14 @@ class CellGrid:
             D = [np.einsum("nir,nrl->nil", U, a) for a in A[1:]]
             one["Op"] = Ts[-1] - np.einsum("nir,nrl->nil", U, A[0])
         for i in range(self.n):
-            for l in range(self.n2):
+            for j in range(self.n2):
                 for kind in self.kinds:
                     if kind == "T":
-                        out.extend(T[:, i, l] for T in Ts)
+                        out.extend(T[:, i, j] for T in Ts)
                     elif kind == "D":
-                        out.extend(d[:, i, l] for d in D)
+                        out.extend(d[:, i, j] for d in D)
                     else:
-                        out.append(one[kind][:, i, l])
+                        out.append(one[kind][:, i, j])
         return np.stack(out, axis=1) & MASK
 
 
@@ -176,8 +176,8 @@ class PVBlock(CellGrid):
         self.T = k // L
 
     def __str__(self):
-        return f"pv{'' if self.two else ' without c'} (n, k, n', r, L) = ({self.n}, {self.k}, {self.n2}, {self.r}, " \
-               f"{self.L}), q = {self.q.tolist()}"
+        return (f"pv{'' if self.two else ' without c'} (n, k, n', r, L) = ({self.n}, {self.k}, {self.n2}, {self.r}, "
+                f"{self.L}), q = {self.q.tolist()}")
 
     def mask(self):
         return (np.arange(self.k)[None, :] <= self.q[:, None]).astype(np.int64)
@@ -188,10 +188,10 @@ class PVBlock(CellGrid):
         T, D, Op = out
         cells = []
         for i in range(self.n):
-            for l in range(self.n2):
-                cells.extend(t[:, i, l] for t in T)
-                cells.extend(d[:, i, l] for d in D)
-                cells.append(Op[:, i, l])
+            for j in range(self.n2):
+                cells.extend(t[:, i, j] for t in T)
+                cells.extend(d[:, i, j] for d in D)
+                cells.append(Op[:, i, j])
         return np.stack(cells, axis=1) & MASK
 
 
@@ -387,10 +387,10 @@ def check_program(targets, nb, prog):
 
 def limbs(lo, hi):
     """int8 limbs an operand with values in [lo, hi] needs: 1 if it is s8 or u8, else the signed 8m-bit width."""
-    if (-128 <= lo and hi <= 127) or (0 <= lo and hi <= 255):
+    if (lo >= -128 and hi <= 127) or (lo >= 0 and hi <= 255):
         return 1
     m = 2
-    while not (-(1 << (8 * m - 1)) <= lo and hi < (1 << (8 * m - 1))):
+    while not (lo >= -(1 << (8 * m - 1)) and hi < (1 << (8 * m - 1))):
         m += 1
     return m
 
@@ -551,12 +551,12 @@ TS_SHAPES = {"Llama-3.1-8B": [("qkv", 4096, 6144), ("o", 4096, 4096), ("gate_up"
                                ("down", 28672, 8192)]}
 
 
-def ts_time(M, O):
-    return max(a * M + b * O for _, a, b in TS_FACETS)
+def ts_time(mmas, others):
+    return max(a * mmas + b * others for _, a, b in TS_FACETS)
 
 
-def ts_binding(M, O):
-    return max(TS_FACETS, key=lambda f: f[1] * M + f[2] * O)[0]
+def ts_binding(mmas, others):
+    return max(TS_FACETS, key=lambda f: f[1] * mmas + f[2] * others)[0]
 
 
 def ts_tile(design, k, n, fold):
@@ -728,7 +728,7 @@ def main():
     Pt_rng = (Ph_rng[0] + alphabet[0], Ph_rng[1] + alphabet[-1])
     X_rng = (-128, 126 + 1)
     checks.check("A2 U's 128 letters lie in [−64, 64]; P̂ = P + c, P̃ = P̂ + U and X = V + b are int8",
-                 len(alphabet) == 128 and -128 <= Pt_rng[0] and Pt_rng[1] <= 127 and X_rng[1] <= 127,
+                 len(alphabet) == 128 and Pt_rng[0] >= -128 and Pt_rng[1] <= 127 and X_rng[1] <= 127,
                  f"U in [{alphabet[0]}, {alphabet[-1]}], P̂ in {list(Ph_rng)}, P̃ in {list(Pt_rng)}, X in {list(X_rng)}")
     lt = {}
     for kk, rr, vb in [(4096, 32, 8), (14336, 32, 8), (128, 32, 8), (128, 64, 8), (128, 64, 7), (4096, 2048, 7)]:
@@ -1067,10 +1067,11 @@ def main():
     for design in ("co32", "co32c", "cohalf"):
         for mname in TS_SHAPES:
             for x in (8, 12, 16, 24):
-                zero[f"{design} {mname} scalar x={x}"] = weighted(design, lambda kk: o_routes(design, kk)["scalar"](x),
-                                                                  mname)
+                zero[f"{design} {mname} scalar x={x}"] = weighted(
+                    design, lambda kk, design=design, x=x: o_routes(design, kk)["scalar"](x), mname)
             for route in ("b1_emulated", "b1_native", "fp4"):
-                zero[f"{design} {mname} {route}"] = weighted(design, lambda kk: o_routes(design, kk)[route], mname)
+                zero[f"{design} {mname} {route}"] = weighted(
+                    design, lambda kk, design=design, route=route: o_routes(design, kk)[route], mname)
             zero[f"{design} {mname} breakeven x"] = max(breakeven(design, kk, nn) for _, kk, nn in TS_SHAPES[mname])
         for x in (8, 12, 16, 24):
             th, tb = ts_mix(design, 128, 4096, 3, *o_routes(design, 128)["scalar"](x))
