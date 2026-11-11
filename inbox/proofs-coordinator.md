@@ -48662,3 +48662,23 @@ the lease still holds it (your 10:06Z). Another lane's run holds card 0 (17 GB o
 For BREAKEVEN: `SparseMlaHeadBlock_v2` NVIS 64 `FIRST=false`, FOUR provers on one H200: 2.417 GPU-s a statement with the check on the prover's ten cores (step 1, inside a compaction episode, being rerun) and 1.731 with the check on four further cores (step 2, clean), both measured, `r20261111-093701-db9a`, quiet host; the second row costs 14 cores a card.
 For BREAKEVEN: WITNESS's two cuts at one prover: 3.160 against 3.416 GPU-s a statement (0.925), measured, `r20261111-101057-af1d`, vy-dc-h200-3 (six cores, 12.9% slower than node A); replaces my 0.880.
 For the table: head block at four provers a card: 2.42 s today, 1.73 s with the check off the prover's cores (measured, one pair, node A; the first in a compaction episode). Every cut together at four provers reads at about 10:47Z.
+
+## RELAX (HEADCIRC), Wed 11 Nov 10:32Z: all four statements of the cut are staged for HEADPROF (scores 2^27, values 2^25 / 2^24 / 2^23), with pins
+
+**For HEADPROF** [run: each `stage.py "census:ID" full DIR` at `88bc52e1b38e4411cca5fcdff25191c7b0ab685b` (scores at `b64c67d5341a`, the same Definition), rc 0; figures read from each `stage.json`]. Each statement is the directory `/workspace/research/runs/<run>/out/<pin16>/` on its machine (`circuit.txt`, `inst.bin`, `pub.bin`, `pin.txt`, `stage.json`), and in the store by `research fetch --all <run>`:
+
+| unit (a later 64-key block) | run | machine | pin (first 16 of 128) | n | k_log | unit_log | ANDs | circuit bytes | staged in | RSS |
+|---|---|---|---|---|---|---|---|---|---|---|
+| `SparseMlaHeadScores_v2` | `r20261111-095926-af06` | vy-nebius-cpu-3 | `cd7fb86dec7c4af7` | 256 | 27 | 25 | 16,724,332 | 5,254,568,106 | 698 s | 20.3 GB |
+| `SparseMlaHeadValues_v2{G=128}` | `r20261111-102121-0c1d` | vy-nebius-cpu-12 | `bb02b38e3489b9a9` | 1,024 | 25 | 23 | 3,945,721 | 1,178,193,960 | 177 s | 5.6 GB |
+| `SparseMlaHeadValues_v2{G=64}` | `r20261111-102121-e9ed` | vy-nebius-cpu-12 | `5e7ef1efe0a2ed36` | 2,048 | 24 | 22 | 1,974,457 | 598,075,121 | 136 s | 3.4 GB |
+| `SparseMlaHeadValues_v2{G=32}` | `r20261111-102121-4cd3` | vy-nebius-cpu-12 | `60e0ede74e2f6ba6` | 4,096 | 23 | 21 | 988,825 | 308,374,174 | 57 s | 2.6 GB |
+| the keys-whole quarter of `b64c67d` (not the PR's form; a 2^26 point) | `r20261111-095926-7121` | vy-nebius-cpu-3 | `3feb19a8a56da21f` | 512 | 26 | 23 | 3,945,721 | 1,209,295,881 | 175 s | 6.3 GB |
+
+- The staged ANDs, slots and blocks of the three values units equal my read-offs exactly [run]; so circuits' row 1 (2^25, 2^24, 2^23) is now a staged fact, not only a read-off.
+- `n` is `full` (2^35 statement bits over 2^k_log), the harness's own. If HEADPROF times at another n it restages from the id in minutes (the three values units stage in 1 to 3 min; scores in 12): `census:SparseMlaHeadValues_v2{NVIS=64,FIRST=false,BN=64,DOT={"fn":"HopperBF16WgmmaDot16_v2"},G=128}`.
+- Staging took 1 to 12 min a unit, not the 70 to 80 of a head block, so your 11:15Z question is answered now: staged at 10:31Z.
+
+**Still running at `88bc52e`:** circuit-check `r20261111-102121-9fe9`, quick tier and tests `r20261111-102121-de66`. The PR opens when both read.
+
+For the table: HEADCIRC | the cut's four statements staged [run]: scores 2^27 (16.72 M ANDs), values 2^25 / 2^24 / 2^23 at G = 128 / 64 / 32 (3.95 M / 1.97 M / 0.99 M) | 0.32 / 0.20 / 0.135 of the head block by width [modeled], unpriced until HEADPROF's rows | PR pending `9fe9`, `de66`.
