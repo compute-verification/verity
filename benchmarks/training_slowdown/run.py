@@ -188,6 +188,17 @@ def research_argv(job: config.Job, a: argparse.Namespace, after: State | None = 
             *asks, *(["--store-read"] if fetch else []), "--", "bash", "-lc", cmd]
 
 
+def reads(path: Path, of: str) -> object:
+    """The run.json at `path`, which `of` holds, as its job wrote it. One that doesn't read is no record (None), which
+    leaves its job failed, and the command says what it found there."""
+    try:
+        return json.loads(path.read_text())
+    except (OSError, ValueError) as e:
+        print(f"training-slowdown: {of} holds no run.json that reads ({type(e).__name__}: {e}): read as no record",
+              file=sys.stderr)
+        return None
+
+
 class Store:
     """The evidence store, through `research`: the jobs' labels, their runs' attempts, and the runs it starts."""
 
@@ -219,14 +230,12 @@ class Store:
         return json.loads(p.stdout) if p.returncode == 0 else None
 
     def says(self, record: str) -> object:
-        """The run.json a run's record holds, as its job wrote it; None where it holds none that reads."""
+        """The run.json a run's record holds, as its job wrote it; None where it holds none, or one that doesn't
+        read (`reads`)."""
         with tempfile.TemporaryDirectory(prefix="training-slowdown-") as d:
             if self.research("data", "fetch", record, "--path", "out/run.json", "--to", d, check=False).returncode:
                 return None
-            try:
-                return json.loads((Path(d) / "out" / "run.json").read_text())
-            except (OSError, ValueError):
-                return None
+            return reads(Path(d) / "out" / "run.json", record)
 
     def keeps(self, record: str) -> str:
         """The sha256 of the state.json a run's record holds, as the store lists it: '' where it holds no state."""
@@ -288,10 +297,7 @@ def local_state(job: config.Job, root: Path) -> State:
     rc = json.loads((d / "job.json").read_text())["rc"]
     if rc == 0:
         return State(DONE, str(d))
-    try:
-        said = json.loads((d / "run.json").read_text())
-    except (OSError, ValueError):
-        said = None
+    said = reads(d / "run.json", str(d)) if (d / "run.json").is_file() else None
     return State(STOPPED, str(d), "its state is in state/") if told(said) else State(FAILED, str(d), f"rc {rc}")
 
 

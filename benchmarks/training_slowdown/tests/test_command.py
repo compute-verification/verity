@@ -179,8 +179,11 @@ def test_a_stop_is_read_from_the_runs_record_and_never_from_its_exit_status(tree
                 r.said[record] = said
             capsys.readouterr()
             assert command(r, *args) == 1 and len(r.runs) == 1
-            out = capsys.readouterr().out
+            out, err = capsys.readouterr()
             assert f"failed   {last_run(r, job)} (rc {rc}, {why})" in out and "never run again" in out
+            # only a run.json that doesn't read is said: one a record doesn't hold is the usual failed job
+            unread = said is not None and why == "no record"
+            assert (f"{ART} holds no run.json that reads (JSONDecodeError: " in err) == unread
 
 
 def test_a_stopped_job_is_run_again_from_the_state_its_run_kept(tree, reg_path, capsys):
@@ -392,7 +395,7 @@ def test_local_runs_a_stopped_job_again_on_its_own_state(tmp_path, reg_path, mon
         out = Path(argv[argv.index("--out") + 1])
         assert not (out / "run.json").exists()
         if record is not None:
-            (out / "run.json").write_text(json.dumps(record))
+            (out / "run.json").write_text(record if isinstance(record, str) else json.dumps(record))
         return SimpleNamespace(returncode=rc)
     monkeypatch.setattr(cmd.subprocess, "run", fake)
     told, last = stop_record(job.seed, job.split), {"stopped": "12.0 s past the tier's 10.0 s budget"}
@@ -402,12 +405,16 @@ def test_local_runs_a_stopped_job_again_on_its_own_state(tmp_path, reg_path, mon
     assert cmd.main(argv) == 3 and cmd.main(argv) == 0 and cmd.main(argv) == 0
     assert len(calls) == 3 and calls[0] == calls[1] == calls[2]
 
-    for n, then in enumerate(((1, None), (STOPPED, None), (124, last))):
+    unread = json.dumps(told)[:-1]
+    for n, then in enumerate(((1, None), (STOPPED, None), (124, last), (124, unread))):
         calls.clear()
         ends = [(143, told), then]
         argv = [str(path), "--local", "--root", str(tmp_path / f"jobs-{n}"), "--starts", str(reg_path)]
         assert cmd.main(argv) == 3 and cmd.main(argv) == 1 and cmd.main(argv) == 1 and len(calls) == 2
-        assert f"(rc {then[0]})" in capsys.readouterr().out
+        out, err = capsys.readouterr()
+        assert f"(rc {then[0]})" in out
+        # a record that doesn't read is said each time the command reads it, here twice; a job with none is not
+        assert err.count("holds no run.json that reads (JSONDecodeError: ") == (2 if then[1] == unread else 0)
 
 
 @pytest.mark.slow
