@@ -34,8 +34,6 @@ import subprocess
 import sys
 from pathlib import Path
 
-from verity_config.settings import SHARED
-
 HERE = Path(__file__).resolve().parent
 EXIT_FAIL = 8
 NVCC_FLAGS = ("-std=c++20", "-O3", "-ldl")
@@ -61,7 +59,7 @@ rows = _load("opcode_probe_rows", HERE / "rows.py")
 
 
 def nvcc() -> str:
-    for c in (SHARED.NVCC, SHARED.CUDA_HOME and os.path.join(SHARED.CUDA_HOME, "bin", "nvcc"),
+    for c in (os.environ.get("NVCC"), os.environ.get("CUDA_HOME") and os.path.join(os.environ["CUDA_HOME"], "bin", "nvcc"),
               shutil.which("nvcc"), "/usr/local/cuda/bin/nvcc"):
         if c and os.access(c, os.X_OK):
             return c
@@ -236,7 +234,7 @@ def main(argv: list[str] | None = None) -> int:
     r.add_argument("--reps", type=int, default=10)
     r.add_argument("--scale", type=float, default=1.0, help="multiply every probe's iterations")
     r.add_argument("--since", default="", help="the census epoch the lines hold from")
-    r.add_argument("--run-id", default=SHARED.RESEARCH_RUN_ID or "")
+    r.add_argument("--run-id", default=os.environ.get("RESEARCH_RUN_ID", ""))
     r.add_argument("--only", default="", help="time only the probes whose name matches this regex")
     r.add_argument("--passed-only", action="store_true",
                    help="time the probes that pass even when others are refused (the refusals stay in gate.json)")
