@@ -162,7 +162,8 @@ def LINKS_WHY : String :=
 def WIRES_WHY : String :=
   "the replay block's Definition reads a node other than as a template's parameter that is one field of one " ++
   "instance of another template, alike at every caller, or a wire names a template of no part, or its rows don't " ++
-  "place its part's units or its writer's"
+  "place its part's units or its writer's, or it reads an output the replay block returns, or its writer's part " ++
+  "is not before its reader's"
 
 def INTERIOR_ORDER_WHY : String :=
   "the interior record's replay sample (window.replay_sample) is not the verifier's own, in its order"
@@ -627,13 +628,21 @@ def linksOk (ps : Array Part) (own : Own) : Bool :=
   | some ls => ls.all fun l => ps.any fun p => p.template == l.template && placed own p l.port
   | none => false
 
+/-- Template `t`'s position among the parts `ps`, its first part's: the index of its member in the interior window,
+whose members are the parts in order (the interior program's strata's); `ps.size`, no member's, for none. -/
+def posOf (ps : Array Part) (t : String) : Nat := (ps.findIdx? (·.template == t)).getD ps.size
+
 /-- The wires are derived, each between templates parts `ps` are of, its reader's units placed by its rows (`placed`),
-whose rows a block are its writer's units a block. -/
+whose rows a block are its writer's units a block, whose writer's port no link names, and whose writer's part is before
+its reader's (`posOf`). An output the replay block returns is committed at the boundary, and no unit inside it reads
+that output off the interior record. With each writer's part before its reader's, the members' circuits with every
+wired read sent to its writer's output read only earlier gates, and no unit reads its own output. -/
 def wiresOk (ps : Array Part) (own : Own) : Bool :=
   match own.wires with
   | some ws => ws.all fun w =>
     ps.any (fun p => p.template == w.template && placed own p w.port) &&
-      ps.any fun p => p.template == w.writer && (rowsOf own w.template w.port).any (·.per == p.n)
+      (ps.any fun p => p.template == w.writer && (rowsOf own w.template w.port).any (·.per == p.n)) &&
+      (linkOf own w.writer w.wport).isNone && decide (posOf ps w.writer < posOf ps w.template)
   | none => false
 
 /-- The wire that names template `t`'s session port `port`. -/
@@ -951,10 +960,6 @@ def detailOf (i : Nat) (t : Json) : Json := Json.mkObj [("statement", Lean.toJso
 
 /-- The templates statements `ss` are for, those that are statements. -/
 def templates (ss : List Json) : List String := ss.filterMap fun j => (Stmt.ofJson? j).map (·.template)
-
-/-- Template `t`'s position among the parts `ps`, its first part's: the index of its member in the interior window,
-whose members are the parts in order (the interior program's strata's); `ps.size`, no member's, for none. -/
-def posOf (ps : Array Part) (t : String) : Nat := (ps.findIdx? (·.template == t)).getD ps.size
 
 /-- Statement `i` of `ss`'s failures, `(code, detail)` each: `second-statement` for one that is not a statement,
 `second-template` for one for no part's template or an earlier statement's, else its failing checks, its header placed

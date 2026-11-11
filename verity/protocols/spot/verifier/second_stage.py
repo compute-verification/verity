@@ -95,7 +95,8 @@ LINKS_WHY = ("the replay block's Definition reads a parameter, or returns, other
              "one field, alike at every caller, or a link's rows don't place its part's units")
 WIRES_WHY = ("the replay block's Definition reads a node other than as a template's parameter that is one field of one "
              "instance of another template, alike at every caller, or a wire names a template of no part, or its rows "
-             "don't place its part's units or its writer's")
+             "don't place its part's units or its writer's, or it reads an output the replay block returns, or its "
+             "writer's part is not before its reader's")
 INTERIOR_ORDER_WHY = "the interior record's replay sample (window.replay_sample) is not the verifier's own, in its order"
 NAMES_WHY = ("the interior registration registers a value of a name the boundary registration's record has, a port or a "
              "registered value")
@@ -740,10 +741,12 @@ def _links_ok(ps: Sequence[Part], own: Own) -> bool:
 
 def _wires_ok(ps: Sequence[Part], own: Own) -> bool:
     """`SecondStage.wiresOk`: the wires are derived, each between templates the parts are of, its reader's units placed
-    by its rows (`_placed`), whose rows a block are its writer's units a block."""
+    by its rows (`_placed`), whose rows a block are its writer's units a block, whose writer's port no link names, and
+    whose writer's part is before its reader's (`_pos_of`)."""
     def writer_ok(w: Wire) -> bool:
         r = _rows_of(own, w.template, w.port)
-        return r is not None and any(p.template == w.writer and r.per == p.n for p in ps)
+        return (r is not None and any(p.template == w.writer and r.per == p.n for p in ps)
+                and _link_of(own, w.writer, w.wport) is None and _pos_of(ps, w.writer) < _pos_of(ps, w.template))
     return own.wires is not None and all(any(p.template == w.template and _placed(own, p, w.port) for p in ps)
                                          and writer_ok(w) for w in own.wires)
 
