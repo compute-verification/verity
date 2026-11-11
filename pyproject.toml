@@ -80,6 +80,7 @@ markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]
 untraced = [
     "tests/lint/test_repo_env_reads.py",
     "tests/lint/test_repo_lane_text.py",
+    "tests/lint/test_repo_retired_terms.py",
     "tests/lint/test_repo_ruff.py",
     "tests/lint/test_repo_silent_excepts.py",
     "tests/test_agent_guard_hook.py",
@@ -96,6 +97,7 @@ untraced = [
     "tests/test_glossary_lean_names.py",
     "tests/test_lean_packages.py",
     "tests/test_lean_vocabulary.py",
+    "tests/test_literal_addresses.py",
     "tests/test_module_strings.py",
     "tests/test_no_wall_clock.py",
     "tests/test_pins.py",

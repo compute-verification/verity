@@ -15,10 +15,14 @@ numpy arrays, so that 10^8 captured outputs can be scored, and generalises it in
 from __future__ import annotations
 
 from dataclasses import dataclass
+from typing import TYPE_CHECKING
 
 import numpy as np
 
 from verity.ml.circuits.silicon.term import FORMATS, PRODUCT_WIDTH
+
+if TYPE_CHECKING:
+    from typing import Any
 
 FP32_MIN_NORMAL_EXPONENT = -126
 FP32_MAX_EXPONENT = 127
@@ -178,7 +182,7 @@ def candidates(fa: str, fb: str, scaled: bool) -> dict[str, Candidate]:
 
     out: dict[str, Candidate] = {}
 
-    def add(name, **kw):
+    def add(name: str, **kw: Any) -> None:
         out[name] = Candidate(name, fa, fb, **kw)
 
     add("sm120_gs32_w26_f133")

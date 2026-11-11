@@ -55,7 +55,7 @@ from verity.core.protocols.spot import challenger as CH
 
 ACCEPT, REJECT, UNDECIDED = "accept", "reject", "undecided"
 
-CORE = Path(__file__).resolve().parents[3]
+ROOT = Path(__file__).resolve().parents[5]
 
 
 def module(name: str, path: Path) -> ModuleType:
@@ -73,17 +73,17 @@ def module(name: str, path: Path) -> ModuleType:
 
 #: Sampled proofs' one-stage difftest: `answer` is `one_stage` behind the decoders `OneStage` reads, `decode_params_v2`
 #: and `_challenger_draw` v2's parameters and its challenger's coins, and its strategies sample audits.
-ONE_STAGE = module("one_stage_difftest", CORE.parents[1] / "verity/core/service/spot/tests/test_difftest.py")
+ONE_STAGE = module("one_stage_difftest", ROOT / "verity/core/service/spot/tests/test_difftest.py")
 #: PoUW's period difftest's cases: periods of the auditor's ledger and their windows, honest and with one mutation each.
-POUW_PERIOD_CASES = module("pouw_period_cases", CORE / "protocols/pouw/lean/check/tests/pouw_period_cases.py")
+POUW_PERIOD_CASES = module("pouw_period_cases", ROOT / "verity/core/protocols/pouw/lean/check/tests/pouw_period_cases.py")
 #: The network certifier's period difftest: `reference` is the period check's Python mirror, and `build` makes a signed
 #: period with one change.
-PERIOD = module("network_period_difftest", CORE / "protocols/network/tests/test_network_period_protocol.py")
+PERIOD = module("network_period_difftest", ROOT / "verity/core/protocols/network/tests/test_network_period_protocol.py")
 #: The inference-only policy's difftest: `reference` is the policy's Python check (`check_baseline`) behind the
 #: protocol's decoders, and `drawn` samples a declaration's case with one change.
-INFERENCE = module("inference_only_protocol_difftest", CORE / "protocols/network/tests/test_inference_only_protocol.py")
+INFERENCE = module("inference_only_protocol_difftest", ROOT / "verity/core/protocols/network/tests/test_inference_only_protocol.py")
 #: The wipe protocol in Python: `answer`, its mirror under S1's LMS, and `case`, a signed wipe aimed at a kind (`KINDS`).
-WIPE_CASES = module("wipe_protocol_case", CORE / "devices/memory_challenger/lean/tests/wipe_protocol_case.py")
+WIPE_CASES = module("wipe_protocol_case", ROOT / "verity/core/devices/memory_challenger/lean/tests/wipe_protocol_case.py")
 
 
 def trial_verdict(verdicts: list[str]) -> str:
