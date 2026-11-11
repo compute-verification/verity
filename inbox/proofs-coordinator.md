@@ -43610,3 +43610,26 @@ For the table:
 
 For BREAKEVEN:
 - `SparseMlaHeadBlock` NVIS 64, one prover on ten cores, salts' host CPU-s a statement, then statement seconds now / with the witness on the card. Today 7.30 (measured, `r20261111-061047-6773`; `FIRST=true` 7.63, `r20261111-061056-d72e`): 2.86 / 1.78. `upper` 4.84 to 4.91 (measured on `vy-nebius-cpu-9`, `r20261111-083117-ea63`, scaled; no assumption): 2.55 to 2.56 / 1.48 to 1.49. `all` on the host 1.15 to 1.33 (measured there, scaled; a claim): 2.10 to 2.12 / 1.03 to 1.05. `all` on the card about 0 (modeled, unbuilt; a claim): 1.96 / 0.89. All "evaluator's time not counted".
+
+## HEADPROF, Wed 11 Nov 08:54Z: the baseline reproduces: 2.62 GPU-s a statement at one prover (`r20261111-082011-1416`), host 23.1 CPU-s with kernels' split to 1%; no throttle, no compaction. The verifier cut is on the card now, SALTS's switch is queued behind it
+
+**The baseline, `r20261111-082011-1416`** [run: node A card 3, cores 34-43, `FIRST=false`, 40 timed sessions, read with kernels' `split.py`]
+- Timed step: **2.6218 GPU-s a statement** over the steady window (38 sessions, 99.6 s); 43 accepted, 0 refused. Card busy 20.8% (0.54 s a statement). 1,373 statements an hour a card.
+- CPU step (every thread sampled): 2.6189 s a statement. Host **23.1 CPU-s a statement**: witness pool 9.47, salts pool 7.20 (7.19 of it system time), the session's own threads 0.74, the loopback check 5.61 (the verifier's process; `verify_s` 2.03 s a session).
+- Against kernels' `r20261111-061047-6773` [read: its record from the store, same reader]: 2.5651 s timed and 2.6897 s in its CPU step; witness 9.46, salts 7.27, session 0.74, check 5.66. So the seconds are 2.2% over its timed step and the CPU split agrees within 1% a pool.
+- Against the labelled 2.8555 s: 8.2% under. That figure was read with 32 other cores busy [relayed: your 08:15Z message]; mine had 7.2 other cores busy in the window (8.6 in the CPU step) and 8.8 of my ten.
+- Throttle count: `nr_throttled` 6,970 before the run, 6,970 after, 0 inside each step's own counters. `compact_stall` did not grow in either steady window (0 of 20 samples).
+
+**What is on the card and what follows** [run]
+- `r20261111-082337-c224` took the lease at 08:52:20Z (to 09:37Z): the same step as it is, then with `FC_VERIFIER_CPUS=8-11` on SERVEDCARD's `5c12d7d4e86a`, alternately (A, B, A, B, then B with threads sampled). Last step about 09:23Z.
+- `r20261111-085203-95d7` is chained behind it: SALTS's switch. I ported `ff48f38adc3a` to the harness tree's paths (`a5922158dc64` on my VM: the same diff, `zk_hooks.rs` byte for byte SALTS's, on top of `5c12d7d4e86a`); its CPU build passed (`r20261111-084157-50c2`), the card build runs inside the lease. Steps, each sampled: `upper`, `all`, baseline, `all` with the verifier on 8-11, baseline, `all` again.
+- Then, in your 08:52Z order of worth: `FC_UNIT_WIDE=4` and `=2`, all cuts together, and the ladder at two and four provers, to 11:40Z.
+- vy-dc-h200-3: not looked at yet; I check it for other lanes' processes next and say what I put there.
+
+**Three things you should know** [run]
+- **A slip that touched kernels.** To keep my runs' supervisors on my fourteen cores I ran `pgrep -f <my run id>` on node A. It also matched five of kernels' run supervisors, whose command lines list my runs as concurrent (`r20261111-082947-cd20`, `-082956-1471`, `-083007-dcd1`, `-083016-75c8`, `-083025-3a29`), and I set their affinity to 8-11,34-43. I saw it in the output and set them back to 0-95 at 08:38:58Z, under a minute later. Each is one idle Python thread; their pinned children (24-33, 58-67, 72-81, 82-91, 21) were not changed. `launch.sh` now pins only the process whose arguments hold `--id <run> `.
+- My 08:21Z entry's header says 08:23Z: I wrote the time ahead instead of reading it.
+- Cores a prover of 20 or all (variant d) cannot be measured in this row: no core beyond the fourteen. Provers 1, 2, 4 on the ten cores can.
+
+For BREAKEVEN: `SparseMlaHeadBlock_v2_NVIS_64_FIRST_false`, no cut, one prover on ten cores: 2.6218 GPU-s a statement, measured, `r20261111-082011-1416` (it holds the prover's own Rust check, 5.61 CPU-s a statement on the prover's cores, as kernels' rows do)
+For the table: the head block today, measured: 2.62 GPU-s a statement at one prover a card (`r20261111-082011-1416`), host 23.1 CPU-s (witness 9.5, salts 7.2, check 5.6, session 0.7), card busy 21%. With tonight's cuts: nothing measured yet; the verifier cut reads about 09:25Z, the salts about 10:10Z.
