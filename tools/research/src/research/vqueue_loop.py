@@ -25,7 +25,8 @@ head; its mark stays.  `left` is why each other open PR into `main` isn't ready 
 withdrawn mark's author, a hold and by whom, no land verdict, the freeze), which a candidate's drop for a member no longer
 ready names (`vqueue._stale`); `pulled` those of them others than their owners took (a red's eject, any other eject or a
 mark withdrawn by another, a hold by a reviewer or a `hold` label, the freeze, the shadow's eject, or a PR holding one of
-them), the only ones that drop a candidate in flight; and `flying` each member of the chain not ready at its head as built, with its files.
+them), at its head or at the head a candidate in flight holds it at (`World.taken`), the only ones that drop a candidate in
+flight; and `flying` each member of the chain not ready at its head as built, with its files.
 `candidates` are the loop's own builds: each of origin's `queue/<sha12>` branches at the sha a build line of the log names
 (the window's, else the whole log's, which its other lines are then read from too), with that line's base and members, lowest
 first; any other `queue/*` branch is no candidate, and is logged once (`ignore`).  `now` is the clock, `lean` and `pending_s`
@@ -721,10 +722,10 @@ class World:
                 else:
                     left[n] = (p.head, f"{why}, and " + ("a move lands only with one" if p.move else "it isn't low-risk"))
             specs, clears = self._frozen()
-            if specs:                                       # a PR's own change: above `checked` while `main` doesn't hold it
-                below = old if old and not self._ancestor(old, main) else main
+            if specs:
+                below = self._frozen_base(main)
                 frozen = [n for n in took if not self._cleared(n, entries[n].pr.head, clears)
-                          and self._frozen_out(below, entries[n].pr, specs)]
+                          and self._frozen_out(below, n, entries[n].pr.head, specs)]
                 left.update((n, (entries[n].pr.head, f"it waits for the freeze to end ({self.frozen_file})")) for n in frozen)
                 took, pulled = [n for n in took if n not in frozen], pulled | set(frozen)
             new = any((entries[n].pr.head, main) not in self._judged for n in took)
@@ -801,15 +802,42 @@ class World:
         return any(str(lab.value).lower() == "true" and lab.by.lstrip("@").lower() == who.lstrip("@").lower()
                    for who, key in clears for lab in self.labels._counted(n, head, key)[0])
 
-    def _frozen_out(self, below: str, p: PR, specs: list[str]) -> bool:
-        """Whether ``p``'s own change, above ``below``, renames or deletes a file under ``specs``, said once a head in the log."""
-        hits = _out(self.repo, "diff", "--name-status", "-M", "--diff-filter=RD", f"{below}...{p.head}", "--",
+    def _frozen_base(self, main: str) -> str:
+        """What the freeze reads a PR's own change above: `checked`'s tip while `main` doesn't hold it, else ``main``."""
+        old = _git(self.repo, "rev-parse", "-q", "--verify", f"{CHECKED}^{{commit}}", check=False).stdout.strip()
+        return old if old and not self._ancestor(old, main) else main
+
+    def _frozen_out(self, below: str, n: int, head: str, specs: list[str]) -> bool:
+        """Whether PR ``n``'s own change at ``head``, above ``below``, renames or deletes a file under ``specs``, said once a head
+        in the log."""
+        hits = _out(self.repo, "diff", "--name-status", "-M", "--diff-filter=RD", f"{below}...{head}", "--",
                     *specs).splitlines()
-        if hits and p.head not in self._frozen_told:
-            self._frozen_told.add(p.head)
-            self.log(f"research queue vqueue: #{p.number} at {p.head[:12]} waits for the freeze to end ({self.frozen_file}): it "
+        if hits and head not in self._frozen_told:
+            self._frozen_told.add(head)
+            self.log(f"research queue vqueue: #{n} at {head[:12]} waits for the freeze to end ({self.frozen_file}): it "
                      f"renames or deletes {len(hits)} file(s) under its paths: {'; '.join(hits[:5])}")
         return bool(hits)
+
+    def taken(self, flying: Iterable[tuple[int, str]], main: str) -> dict[int, tuple[str, str]]:
+        """The PRs another than their owner took at the heads candidates in flight hold them at, ``flying`` (`Snapshot.flying`:
+        heads the queue doesn't take now, and the ones that land), each with that head and why: a hold by another among its
+        reviews there, its newest ready mark there withdrawn by `EJECTOR` (a red's eject) or by another, or the freeze, unless
+        cleared there (a head the clone lacks has no files to read for it).  `ready` reads these at each PR's current head
+        alone.  A closed PR's owner is its mark's author there."""
+        flying, (specs, clears), out = sorted(flying), self._frozen(), {}
+        below, gone = (self._frozen_base(main), self._missing(h for _, h in flying)) if specs else (main, set())
+        for n, head in flying:
+            mine = {_who(o) for o in self._owners(n) or {self.labels.ready_by(n, head)} if o}
+            held = unreviewed([r for r in self.labels.reviews(n, head) if r.by and _who(r.by) not in mine], ()) or ""
+            withdrawn = not self.q.ready(n, head) and not (self.q.before_cutoff and self.q.before_cutoff(n, head))
+            by = self.q.marked_by(n, head) if withdrawn and self.q.marked_by is not None else None
+            if held.startswith("held"):
+                out[n] = (head, f"{held}, at {head[:12]}, the head it was built at")
+            elif by and (_who(by) == _who(EJECTOR) or _who(by) not in mine):
+                out[n] = (head, f"its ready mark at {head[:12]}, the head it was built at, was withdrawn by {by}")
+            elif specs and head not in gone and not self._cleared(n, head, clears) and self._frozen_out(below, n, head, specs):
+                out[n] = (head, f"it waits for the freeze to end ({self.frozen_file}) at {head[:12]}, the head it was built at")
+        return out
 
     def _changed(self, main: str, head: str) -> frozenset[str]:
         """The files ``head`` changes against its merge base with ``main``."""
@@ -1743,10 +1771,11 @@ class Loop:
         at = {(x.number, x.head) for x in ready}
         flying = {(m, h) for c in cands if c.sha in chain for m, h in zip(c.members, c.heads) if (m, h) not in at}
         gone = w._missing(h for _, h in flying)
+        left.update(taken := w.taken({(m, h) for m, h in flying if m not in w.pulled}, main))
         snap = Snapshot(main, tuple(sorted((x for x in ready if x.number not in riding), key=lambda x: x.rank)), tuple(cands),
                         history, self.batch, self.depth, lean=self.lean, now=self.now(), pending_s=self.pending_s,
                         tree_ejects=self.tree_ejects, left=tuple((n, *left[n]) for n in sorted(left)), wide=wide,
-                        pulled=frozenset(w.pulled | set(out)),
+                        pulled=frozenset(w.pulled | set(out) | set(taken)),
                         flying=tuple(Ready(m, h, frozenset() if h in gone else w._changed(main, h),
                                            lean=m in wide and h not in gone and w._judge(main, h)[0]) for m, h in sorted(flying)))
         return Tick(n, main, origin, snap, judged, whole, past.told(), foreign, wrote, below[0], riding=riding)
