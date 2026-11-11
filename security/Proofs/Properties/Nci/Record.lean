@@ -183,8 +183,7 @@ theorem evaluate_ranges {d : Flock.TemplateQuery.Desc} {a b : Array String} {rs 
     simp only [bind, Except.bind, pure, Except.pure, throw, throwThe, MonadExceptOf.throw] at h h'
     repeat' (first
       | (cases h; cases h'; rfl)
-      | (cases h; done)
-      | (cases h'; done)
+      | contradiction
       | split at h
       | split at h')
 
@@ -212,14 +211,16 @@ private theorem mapM_tmplOf {P : Prog} : ∀ (l : List TRange) (ts : List Tmpl),
 
 /-- What the text's reader has checked where it gives the templates: the text's template ids are distinct, the
 template query accepts them, its ranges are the text's templates with their units, in order, and the templates are
-the ranges', one each. -/
+the ranges', one each. The reader's `match` on a template's text has no equations for `simp` to rewrite by, so the
+binds are opened without them. -/
 private theorem templatesOf_ok {P : Prog} {doc : Json} {ts : List Tmpl} (h : templatesOf P doc = .ok ts) :
     ∃ (tsp : Array (String × ℕ)) (rs : Array TRange),
       (tsp.map (·.1)).toList.eraseDups.length = (tsp.map (·.1)).size ∧
       Flock.TemplateQuery.evaluate (Flock.TemplateQuery.Desc.ofProg P) (tsp.map (·.1)) = .ok rs ∧
       rs.map (fun r => (r.template, r.count)) = tsp ∧ rs.toList.mapM (tmplOf P) = .ok ts := by
   unfold templatesOf at h
-  simp only [bind, Except.bind, pure, Except.pure, throw, throwThe, MonadExceptOf.throw] at h
+  simp (config := { iota := false }) only [bind, Except.bind, pure, Except.pure, throw, throwThe,
+    MonadExceptOf.throw] at h
   repeat (split at h <;> try cases h)
   refine ⟨_, _, ?dup, ?ev, ?eq, h⟩
   case ev => assumption
@@ -292,7 +293,7 @@ theorem unitAt_iff {P : Prog} {doc : Json} {ts : List Tmpl} {tids : Array String
         simpa using hb
       exact absurd (range_unique hts hrs hjs hi (hjt.trans hti.symm)) (Nat.ne_of_lt hji)
     rw [hemp]
-    first | rfl | simp
+    rfl
   unfold UnitAt
   constructor
   · rintro ⟨i, m, hi, hti, hm, hu, hsc⟩
