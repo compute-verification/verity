@@ -9,6 +9,7 @@ from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE.parent))
+sys.path.insert(0, str((HERE.parents[2] / "benchmarks/remote_session/prover.py").parent))
 sys.path.insert(0, str(HERE.parents[2]))
 
 from verity.protocols.poub.verifier import receipts as rb  # noqa: E402

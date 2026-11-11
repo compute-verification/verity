@@ -235,11 +235,13 @@ elif [ "$IMPL" = p2-v1-gpu ] || [ "$IMPL" = p2-v3-gpu ] || [ "$IMPL" = p2-v3-mc-
   # keyed by the nvcc and the sources' bytes: a .so another toolkit or source built is never adopted, and every checkout of the
   # same sources adopts it rather than rebuilding (make goes by mtimes, and each run's source tree is a fresh checkout);
   # and by P2FAST, the Makefile's FAST when it is set: '-DP2_FAST -DP2_KEYS4 -DP2SQ_KARA' expands the v4 keys
-  P2KEY=$({ cat benchmarks/pous/p2_v1/Makefile benchmarks/pous/p2_v1/*.cu benchmarks/pous/p2_v1/*.cuh benchmarks/pous/p2_gpu/{p2dec.cu,CGBN.commit}
+  P2KEY=$({ cat benchmarks/pous/p2_v1/Makefile benchmarks/pous/p2_v1/p2v1.cu benchmarks/pous/p2_v1/p2keys.cuh \
+              benchmarks/pous/p2_v1/p2keys4.cuh benchmarks/pous/p2_v1/p2sq.cuh benchmarks/pous/p2_gpu/p2dec.cu \
+              benchmarks/pous/p2_gpu/CGBN.commit
             [ -z "${P2FAST+x}" ] || echo "FAST=$P2FAST"; } | sha256sum | cut -c1-12)
   P2LIB=$W/p2v1bin-$ARCH-cuda$NVCC_REL-$P2KEY
   if [ -f "$P2LIB/libp2v1.so" ]; then echo "adopted $P2LIB/libp2v1.so" > "$O/p2v1-make.log"
-  else make -C benchmarks/pous/p2_v1 NVCC="$CUDA_HOME/bin/nvcc" CGBN="$CG" BIN="$P2LIB" ARCH="$ARCH" ${GMPINC:+"INC=-I $GMPINC"} \
+  else make -C "$(dirname benchmarks/pous/p2_v1/Makefile)" NVCC="$CUDA_HOME/bin/nvcc" CGBN="$CG" BIN="$P2LIB" ARCH="$ARCH" ${GMPINC:+"INC=-I $GMPINC"} \
     ${P2FAST+"FAST=$P2FAST"} > "$O/p2v1-make.log" 2>&1 || { tail -20 "$O/p2v1-make.log"; exit 3; }
   fi
   cp "$P2LIB"/*.ptxas "$O/" 2>/dev/null

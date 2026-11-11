@@ -37,9 +37,9 @@ import numpy as np
 
 if __package__ in (None, ""):
     sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-    from p2_v1 import store as S
-else:
-    from . import store as S
+sys.path.insert(0, str((Path(__file__).resolve().parents[3] / "benchmarks/pous/p2_v1/store.py").parents[1]))
+
+from p2_v1 import store as S
 
 from verity.protocols.pous.verifier import setup
 from verity.protocols.pous.verifier.schemes.p2 import expand_prefix

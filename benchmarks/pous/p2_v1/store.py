@@ -96,9 +96,8 @@ from typing import Any
 
 if __package__ in (None, ""):
     sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-    from p2_v1 import reference
-else:
-    from . import reference
+
+from p2_v1 import reference
 
 from verity.protocols.pous.verifier import setup, verifier
 from verity.protocols.pous.verifier.labels import salt_value, tag

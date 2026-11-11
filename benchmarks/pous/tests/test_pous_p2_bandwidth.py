@@ -23,6 +23,7 @@ torch = pytest.importorskip("torch")
 HERE = Path(__file__).resolve().parents[1]
 ROOT = HERE.parents[1]
 sys.path.insert(0, str(HERE))
+sys.path.insert(0, str((ROOT / "benchmarks/pous/p2_v1/store.py").parents[1]))
 from p2_v1 import bandwidth as B
 
 from verity.protocols.pous.verifier import verifier as V
@@ -123,7 +124,7 @@ def test_the_tracked_registrations_plan_is_the_real_layouts_tensors_units() -> N
     doc = ST._dump(ST.build(ST.MQA16K).to_json())
     assert hashlib.sha512(doc.encode()).hexdigest() == ST.LAYOUT_SHA512
     layout = json.loads(doc)
-    tracked = json.loads((HERE / "p2_v1" / "bandwidth-mem69-v2.json").read_text())
+    tracked = json.loads((ROOT / "benchmarks/pous/p2_v1/bandwidth-mem69-v2.json").read_text())
     reg = p2_party.registration_of(tracked)
     plan = p2_party.plan_of(tracked, reg)
     assert plan == B.tensor_plan(layout, reg.blocks) == receipts.Plan(((0, 17_003_406),), reg.blocks)
