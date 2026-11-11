@@ -10,7 +10,7 @@ import io
 import json
 from collections.abc import Iterable, Iterator
 from pathlib import Path
-from typing import IO
+from typing import IO, cast
 
 from .events import Event, RunHeader, StepEnd, StepStart, from_json, to_json
 
@@ -18,7 +18,7 @@ from .events import Event, RunHeader, StepEnd, StepStart, from_json, to_json
 def _open(path: str | Path, mode: str) -> IO:
     p = Path(path)
     if p.suffix == ".gz":
-        return gzip.open(p, mode + "t", encoding="utf-8")
+        return cast(IO, gzip.open(p, mode + "t", encoding="utf-8"))
     return open(p, mode, encoding="utf-8")
 
 

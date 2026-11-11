@@ -79,7 +79,8 @@ class _ReadBy(Mapping):
     it, and under `Q_word` every Call is a unit, so a key that every later token's attention reads has a reader per token."""
 
     def __init__(self, P: ProgramView, Q: Partition, literals: frozenset[int]) -> None:
-        self._args, self._d = (P, Q, literals), None
+        self._args = (P, Q, literals)
+        self._d: Mapping | None = None
 
     def _get(self) -> Mapping:
         if self._d is None:

@@ -152,12 +152,12 @@ def shared_instances(P: ProgramView, corr: Correspondence, record_fields: Mappin
             f = record_fields.get(v)
             if f is not None:
                 reads[m].add(f)
-    groups: dict[tuple[frozenset[str], tuple], list[str]] = defaultdict(list)
-    for m, fs in reads.items():
-        if fs and m:
+    groups: dict[tuple[frozenset[str], frozenset], list[str]] = defaultdict(list)
+    for m, read in reads.items():
+        if read and m:
             # keyed by (parameters read, body signature): a body with another signature reading the same parameter is a different
             # logical producer (a tied embedding read by the logits Gemm), never an invocation of this one
-            groups[(frozenset(fs), frozenset(sig[m]))].append(m)
+            groups[(frozenset(read), frozenset(sig[m]))].append(m)
     out: dict[str, tuple[str, int]] = {}
     faults: list[str] = []
     for (fs, _sig), group in groups.items():
@@ -183,7 +183,7 @@ def shared_instances(P: ProgramView, corr: Correspondence, record_fields: Mappin
 # the request manifest
 # ---------------------------------------------------------------------------------------------------------------------------------
 
-DTYPE_OF_WIDTH = {16: "bf16", 32: "f32", 8: "w8", 64: "i64"}
+DTYPE_OF_WIDTH: Mapping[int | None, str] = {16: "bf16", 32: "f32", 8: "w8", 64: "i64"}
 
 
 def _dtype(width: int | None, *, weight: bool = False) -> str:
@@ -612,7 +612,7 @@ def request_manifest(P: ProgramView, corr: Correspondence, res: Mapping[str, Any
     """The v1-shaped manifest of ONE request Program (B=1 component) under `query` (+ `norm_scales`, + `taps`: `query.router_softmax` / `vocab_range` POLICY; + its partition given `program_digest`)."""
     pdig = (artifact or {}).get("program_digest") or res["program"]["digest"]
     profile, fa = _profile(res, profile)
-    tpinfo = res.get("tp") if isinstance(res.get("tp"), dict) else {}
+    tpinfo = tp if isinstance(tp := res.get("tp"), dict) else {}
     prog_world, prog_rank = int(tpinfo.get("world") or 1), int(tpinfo.get("rank") or 0)
     if (prog_world > 1 or ranks > 1) and (int(ranks) != prog_world or int(rank) != prog_rank):
         raise ValueError(f"rank Program mismatch: Program is rank {prog_rank} of world {prog_world}, manifest requested rank {rank} of {ranks}")

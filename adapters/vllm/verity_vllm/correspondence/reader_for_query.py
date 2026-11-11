@@ -114,8 +114,9 @@ def call_place(slots: Iterable[tuple[Any, Any]]) -> tuple[int | None, tuple[int,
     """A Call's row and columns from its located return slots, (leaves, shape of the tensor they land in) each: the row of that tensor
     every slot lies in, when one; and for a Call of one slot that covers part of the row, the columns it covers.  (None, None) when no
     slot is located or one spans rows."""
-    places = [row_place(leaves, shape) for leaves, shape in slots]
-    if not places or None in places or len({p[0] for p in places}) != 1:
+    found = [row_place(leaves, shape) for leaves, shape in slots]
+    places = [p for p in found if p is not None]
+    if not places or len(places) != len(found) or len({p[0] for p in places}) != 1:
         return None, None
     r, c0, c1, w = places[0]
     return r, ((c0, c1) if len(places) == 1 and c1 - c0 < w else None)
@@ -252,13 +253,14 @@ def held_module_paths(P: ProgramView, names: Mapping[int, CallName]) -> tuple[di
         c = P.call(cid)
         pairs = {_holder(m, f.rsplit(".", 1)[0]) for v in param_reads(c) if (f := fields.get((v.call, v.port))) is not None}
         if not pairs:
-            pairs = {holder_of[v.call] for v in c.reads if v.call >= 0 and v.call in holder_of}
-            pairs = {(h, x) for h, x in pairs if m == h or m.startswith(h + ".")}
-        if len(pairs) != 1 or None in pairs:
+            near = {holder_of[v.call] for v in c.reads if v.call >= 0 and v.call in holder_of}
+            pairs = {(h, x) for h, x in near if m == h or m.startswith(h + ".")}
+        pair = next(iter(pairs)) if len(pairs) == 1 else None
+        if pair is None:
             if any(m == h or m.startswith(h + ".") for h in holders):
                 unresolved[m] += 1
             continue                                     # else no holder of this path resolved: not a held path we know
-        h, x = next(iter(pairs))
+        h, x = pair
         holder_of[cid] = (h, x)
         holders.add(h)
         out[cid] = dataclasses.replace(n, module=x + m[len(h):])
@@ -287,9 +289,10 @@ class Correspondence:
         #: of the row (`call_place`); empty under the fallback
         self.rows: dict[int, int] = {}
         self.columns: dict[int, tuple[int, int]] = {}
-        if table is not None or document is not None:
+        doc = table.doc if table is not None else document
+        if doc is not None:
             if table is None:
-                recorded, tensorless, self.rows, self.columns = recorded_names(document)
+                recorded, tensorless, self.rows, self.columns = recorded_names(doc)
             else:
                 recorded, tensorless = {}, []
                 for rec in table:
@@ -307,7 +310,7 @@ class Correspondence:
             self.names: dict[int, CallName] = {c.id: recorded[c.id] for c in P.calls}
             self.tensorless = frozenset(tensorless)
             self.source = "correspondence"
-            self.digest: str | None = digest or correspondence_digest(table.doc if table is not None else document)
+            self.digest: str | None = digest or correspondence_digest(doc)
         else:
             self.names = {c.id: parse_call_name(c.name) for c in P.calls}
             self.source = "v1_annotations"

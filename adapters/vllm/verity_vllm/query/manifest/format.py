@@ -23,7 +23,7 @@ import hashlib
 import json
 import os
 import re
-from collections.abc import Callable, Iterable
+from collections.abc import Callable, Iterable, Mapping
 from typing import Any
 
 from verity_vllm.records import required_manifest
@@ -530,7 +530,7 @@ def alias_family(member: str) -> str:
 REQ_RE = re.compile(r"^r(\d+)$")
 
 
-def request_label(rid: Any, workload: dict[str, Any] | None = None, *, position: int | None = None) -> str:
+def request_label(rid: Any, workload: Mapping[str, Any] | None = None, *, position: int | None = None) -> str:
     """The identity key's `request_id` is `r<k>`, k = the request's position (`index`) in the workload manifest --
     the convention the binding's map and the run header use.  A UUID is a WORKLOAD id (`requests[i].request_id`), never a request id:
     a manifest keyed by it matches only the request-less weights.

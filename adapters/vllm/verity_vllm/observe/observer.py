@@ -150,6 +150,7 @@ class Recorder:
         self.step = -1
         self.phase = "other"
         self.active = False
+        self._root_forward = False                    # a root module's forward opened the "forward" phase (`capture`'s phase hooks)
         self.module_stack: list[str] = []
         self.after_call: Callable[[int, str, tuple, dict, Any], None] | None = None
         self.after_launch: Callable[[int, str, dict], None] | None = None

@@ -256,7 +256,6 @@ class RuntimeCorrespondence:
                 rets.append(ReturnSlot(k, int(r["port"]), (o or {}).get("node", ""), r.get("output"),
                                        tuple(r["leaves"]) if r.get("leaves") is not None else None, c.get("member"), c.get("row"), view,
                                        wa, (win or {}).get("node")))
-            rets = tuple(rets)
             args = []
             for i, a in enumerate(c.get("args") or ()):
                 src = ins[a["input"]] if a.get("input") is not None and a["input"] < len(ins) else None
@@ -274,7 +273,7 @@ class RuntimeCorrespondence:
                                             cj.get("own_operand"), cj.get("peer_operand"), cj.get("peer_input"),
                                             tuple(int(x) for x in cj.get("peer_operands") or ()), tuple(cj.get("peer_inputs") or ()))
             yield CallCorrespondence(k, (o or {}).get("module", ""), (o or {}).get("module_class"), (o or {}).get("node"), (o or {}).get("op"),
-                                     (o or {}).get("rule"), c.get("member"), c.get("row"), c.get("hint"), rets, tuple(args),
+                                     (o or {}).get("rule"), c.get("member"), c.get("row"), c.get("hint"), tuple(rets), tuple(args),
                                      dict((o or {}).get("lifetime") or {}), rank, coll)
 
     # -- lookups ----------------------------------------------------------------------------------------------------------
@@ -439,7 +438,7 @@ def _walk(s: _Stream, build: bool) -> Any:
             key = s.value()
             s.take(":")
             v = _walk(s, build)
-            if build:
+            if out is not None:
                 out[key] = v
     if c == "[":
         s.pos += 1
@@ -453,7 +452,7 @@ def _walk(s: _Stream, build: bool) -> Any:
                 s.pos += 1
                 continue
             v = s.value()
-            if build:
+            if lst is not None:
                 lst.append(v)
     return s.value()
 
@@ -521,7 +520,7 @@ def read_program_document(program_dir: Any) -> tuple[dict | None, str | None, st
     if doc is None:
         return None, None, None if recorded is None else f"{d}: result.json records a correspondence_digest but the descriptor carries no {NAMESPACE!r} annotation"
     digest = correspondence_digest(doc)
-    problem = None if recorded in (None, digest) else f"{d}: correspondence_digest {digest[:16]} != result.json's {str(recorded)[:16]}"
+    problem = None if recorded in (None, digest) else f"{d}: correspondence_digest {str(digest)[:16]} != result.json's {str(recorded)[:16]}"
     return doc, digest, problem
 
 

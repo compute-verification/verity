@@ -31,7 +31,7 @@ from __future__ import annotations
 
 from collections.abc import Callable, Iterable, Mapping, Sequence
 from dataclasses import dataclass, field
-from typing import NamedTuple, Protocol, runtime_checkable
+from typing import Any, NamedTuple, Protocol, runtime_checkable
 
 __all__ = ["ValueRef", "Call", "CallGraph", "VerificationUnit", "Query", "Partition", "partition_by", "unit_boundary",
            "boundary_values", "Policy", "RequiredValues", "required_values", "PartitionError"]
@@ -104,16 +104,16 @@ class PartitionError(ValueError):
     """The units are not a partition of the Program's Calls (a Call in two units, or in none)."""
 
 
-def partition_by(key: Callable[[Call], str], *, order: Callable[[str], object] | None = None) -> Partition:
+def partition_by(key: Callable[[Call], Any], *, order: Callable[[Any], Any] | None = None) -> Partition:
     """The query whose units are the classes of ``key`` over the Program's Calls: unit id = the key, unit = every Call with that
     key.  Units are returned in first-seen body order unless ``order`` sorts the ids.  The canonical way to write a
     membership-derived query (``key`` = the owning module path, the layer, the Definition family, ...)."""
 
     def Q(P: CallGraph) -> Sequence[VerificationUnit]:
-        groups: dict[str, set[int]] = {}
+        groups: dict[Any, set[int]] = {}
         for c in P.calls:
             groups.setdefault(key(c), set()).add(c.id)
-        ids: Iterable[str] = groups if order is None else sorted(groups, key=order)
+        ids: Iterable[Any] = groups if order is None else sorted(groups, key=order)
         return tuple(VerificationUnit(k, frozenset(groups[k])) for k in ids)
 
     return Q

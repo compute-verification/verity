@@ -425,7 +425,7 @@ class _Builder:
             disjoint ascending table and step > 0, the order the runs one by one give)."""
             pv, pidx, los = params[idx], param_pidx[idx], self._param_lo[idx]
             if len(pidx) == 1:
-                sel = pidx
+                sel: list[int] | tuple[int, ...] = pidx
             elif los is None:
                 sel = [pi for p, pi in zip(pv.port_table, pidx) if p.lo < hi and lo < p.hi]
             else:                       # a weights struct has thousands of ports: the overlapping ones by bisection

@@ -115,7 +115,7 @@ def _engine_steps(r: Mapping[str, Any], arrivals: Mapping[str, int] | None, decl
     st, rid = r.get("step"), r.get("request_id")
     if r.get("engine_step") is not None and not (arrivals is not None and st is not None and rid not in (None, "*")):
         return [int(r["engine_step"])]
-    if st in (None, "*"):
+    if st is None or st == "*":
         return []
     lo, hi = st if isinstance(st, list) else (st, st)
     return [int(s) + int((arrivals or {}).get(_request(r, declared), 0)) for s in range(int(lo), int(hi) + 1)]

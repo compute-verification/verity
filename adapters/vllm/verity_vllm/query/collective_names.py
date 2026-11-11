@@ -47,7 +47,8 @@ def norm_sites(P: ProgramView, corr: Correspondence, record_fields: Mapping[Valu
                 for r in c.reads:
                     if r.call in unfused:
                         norms[r.call].add(m)
-    found, flat = Counter(), Counter()
+    found: Counter[tuple[str, Any]] = Counter()
+    flat: Counter[tuple[str, Any]] = Counter()
     for cid, ms in norms.items():
         if len(ms) == 1:
             found[key := (next(iter(ms)), step_of(cid))] += 1
