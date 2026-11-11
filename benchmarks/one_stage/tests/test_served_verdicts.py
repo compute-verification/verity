@@ -1837,15 +1837,17 @@ if __name__ == "__main__":
 
 
 def test_the_composite_step_publishes_only_each_cases_verdict_and_each_products_lean_verdict(tmp_path):
-    """served_composite.sh with a stand-in lake, served_case.sh, served_cases.py and composite.py: PoUS's case is written
-    under the serve dir's private dir with both Lean answers built and passed, and served_cases.py's under it, given no α
-    or Γ while ALPHA and GAMMA are unset; each product gets the cases of its own subprotocols; OUT/verdicts.txt gets each
+    """served_composite.sh with a stand-in lake, served_cases.py and composite.py: PoUS's case, which its piece wrote
+    under the serve dir's private dir beside its Lean's answer, is composed as written, with no card asked for and no
+    Lean built but the two products'; the wipe's, which no piece wrote, is named not written and none is made; and
+    served_cases.py's are written under the private dir, given no α or Γ while ALPHA and GAMMA are unset; each product
+    gets the cases of its own subprotocols; OUT/verdicts.txt gets each
     CASE line's protocol and verdict, each case not written by its protocol, each product's NOT_ESTABLISHED and
     VERDICT lines and the host it composed on, never a PIECE line, a reason, a log or a path; each product's public
     output is OUT/composite/PRODUCT;
     and without composite.py in the tree, or onsite's cases without ONSITE_PIECES (benchmarks/pous/onsite_pieces.sh), it
-    says so and fails, since no Lean answered. PRODUCT=remote needs no
-    served_case.sh, writes neither PoUS's case nor the wipe's, and runs remote's Lean alone. A serve dir with no V3c
+    says so and fails, since no Lean answered. PRODUCT=remote reads neither PoUS's case nor the wipe's, and runs
+    remote's Lean alone. A serve dir with no V3c
     audit hands served_cases.py step 3's records audit (``--audit SERVE_DIR/sampled-proofs-served``) once it holds a
     case, but not under H1's tie (a ``SERVE_DIR/h1/log.jsonl``), whose cases are on the record H1 named; and under it no
     product is handed a case under ``SERVE_DIR/private/pouw``, whose period case reaches a product only tied to that
@@ -1853,16 +1855,17 @@ def test_the_composite_step_publishes_only_each_cases_verdict_and_each_products_
     there, from a prover-side copy of the serve dir's audit inputs."""
     tree, bin_, d, out = tmp_path / "tree", tmp_path / "bin", tmp_path / "serve", tmp_path / "out"
     out.mkdir()
-    _script(bin_ / "lake", 'mkdir -p .lake/build/bin && touch ".lake/build/bin/$2"')
+    _script(bin_ / "lake", f'mkdir -p .lake/build/bin && touch ".lake/build/bin/$2" && echo "$2" >> {tmp_path}/built')
     _script(bin_ / "systemd-run", "exit 1")
-    _script(tree / "benchmarks" / "pous" / "served_case.sh", f'''set -e
-[ -x "$POUS_EXE" ] && [ -x "$WIPE_EXE" ] && [ "$1" = {out}/pieces ] && [ "$MEM_GB" = 170 ]
-for w in pous/w0 other; do mkdir -p {d}/private/$w; echo '{{"evidence": "beef"}}' > {d}/private/$w/case.json; done
-echo '{{"protocol": "verity/pous/p2/v4/run", "verdict": "accept"}}' > {d}/private/pous/w0/answer.json
-echo '{{"protocol": "verity/certifier/v9", "verdict": "accept"}}' > {d}/private/other/answer.json
-echo "CASE: evidence beef"
-echo 'CASE {{"piece": "{d}/private/pous/w0", "protocol": "verity/pous/p2/v4/run", "verdict": "accept"}}' ''')
-    for pkg in ("protocols/pous/verifier/check", "protocols/pous/device/lean", "protocols/remote/verifier", "protocols/onsite/verifier"):
+    _script(bin_ / "gpu-lease", f'echo "$@" >> {tmp_path}/card')
+    for w, protocol in (("pous/w0", "verity/pous/p2/v4/run"), ("other", "verity/certifier/v9")):
+        (d / "private" / w).mkdir(parents=True)
+        (d / "private" / w / "case.json").write_text(json.dumps({"evidence": "beef"}))
+        (d / "private" / w / "answer.json").write_text(json.dumps({"protocol": protocol, "verdict": "accept"}))
+    (out / "pieces" / "pous").mkdir(parents=True)
+    (out / "pieces" / "pous" / "pous.json").write_text(json.dumps(
+        {"window": 0, "verdict": "accept", "decided_by": {"program": "pous-run-protocol", "host": "the-served-node"}}))
+    for pkg in ("protocols/remote/verifier", "protocols/onsite/verifier"):
         (tree / "verity" / pkg).mkdir(parents=True)
     (tree / "benchmarks" / "one_stage").mkdir(parents=True)
     (tree / "benchmarks" / "one_stage" / "composite.py").write_text(FAKE_COMPOSITE)
@@ -1894,7 +1897,8 @@ sys.exit(1)
     on = (f"COMPOSITE: composed on {host}, which holds the serve dir, from the cases the served node wrote there, not "
           "from the parties that produced them")
     assert (out / "verdicts.txt").read_text().splitlines() == [
-        "COMPOSITE CASE verity/pous/p2/v4/run accept", "COMPOSITE CASES: served_case.sh exit 0",
+        "COMPOSITE CASE verity/pous/p2/v4/run accept", "COMPOSITE NOT_WRITTEN verity/wipe/v0",
+        "COMPOSITE CASES: PoUS's and the wipe's as their pieces wrote them, none made here",
         "COMPOSITE CASE verity/sampled-proofs/one-stage/v2 accept",
         "COMPOSITE CASE verity/registration/v0 accept",
         "COMPOSITE NOT_WRITTEN verity/inference-only/v0",
@@ -1905,8 +1909,11 @@ sys.exit(1)
     p = d / "private" / "composite"
     assert json.loads((p / "remote" / "private" / "argv.json").read_text()) == [str(v2)]
     assert json.loads((p / "onsite" / "private" / "argv.json").read_text()) == [str(d / "private" / "pous" / "w0")]
+    assert (tmp_path / "built").read_text().split() == ["remote", "onsite"] and not (tmp_path / "card").exists()
+    assert sorted(f.name for f in (d / "private" / "pous" / "w0").iterdir()) == ["answer.json", "case.json"]
+    assert not (d / "private" / "wipe").exists()
     assert oct((d / "private").stat().st_mode & 0o777) == "0o700"
-    assert sorted(out.iterdir()) == [out / "composite", out / "verdicts.txt"]
+    assert sorted(out.iterdir()) == [out / "composite", out / "pieces", out / "verdicts.txt"]
     assert sorted(f.relative_to(out).as_posix() for f in (out / "composite").rglob("*") if f.is_file()) == [
         "composite/onsite/composite.json", "composite/remote/composite.json"]
     (tree / "benchmarks" / "one_stage" / "composite.py").unlink()
@@ -1915,7 +1922,6 @@ sys.exit(1)
     assert run().returncode == 1
     assert (out / "verdicts.txt").read_text() == "COMPOSITE: not run, this tree has no benchmarks/one_stage/composite.py\n"
     (tree / "benchmarks" / "one_stage" / "composite.py").write_text(FAKE_COMPOSITE)
-    (tree / "benchmarks" / "pous" / "served_case.sh").unlink()
     (out / "verdicts.txt").unlink()
     shutil.rmtree(d / "private")
     env["PRODUCT"] = "remote"

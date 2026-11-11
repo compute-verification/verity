@@ -14,12 +14,20 @@
 #                      it; with no PoUS piece, 'bash benchmarks/one_stage/served_bandwidth.sh "$1" "$2" "$3"' where the
 #                      tree has it and this node holds the bandwidth verifier's key (~/.ssh/vy-auditor2-bw) and its
 #                      registered store (BW_STORE's setup.json, default /workspace/research/pous-store/mem69-v2)
-#   onsite_cases            served_composite.sh's: PoUS's and the wipe's cases (`served_case.sh OUT/pieces`, which writes
-#                           each under SERVE_DIR/private) with their Lean answers (pous-run-protocol and wipe-protocol,
-#                           built with served_composite.sh's `exe`; without both it writes no case), PoUS's under a lease
-#                           of its own of CASE_LEASE_MIN minutes (default 60) and CASE_MEM_GB GiB of host memory (default
-#                           170: its Python and its Lean each hold the whole re-encoded store), all within CASE_TIMEOUT
-#                           (default 90m); each CASE line's protocol and verdict go to OUT/verdicts.txt.
+#   onsite_cases            served_composite.sh's, before it composes: PoUS's and the wipe's cases as their pieces wrote
+#                           them under SERVE_DIR/private (PoUS's in pous/wK, K its pous.json's window; the wipe's in
+#                           wipe), each beside its Lean's answer (pous-run-protocol's, wipe-protocol's). It takes no
+#                           card, encodes nothing, builds no Lean and writes no case and no answer. It reads each
+#                           piece's public summary (OUT/pieces/pous/pous.json, OUT/pieces/wipe/summary.json: the
+#                           window, the verdict and who decided) and the answer beside the case, never the case.
+#                           OUT/verdicts.txt gets `COMPOSITE CASE PROTOCOL VERDICT` for a case served_composite.sh then
+#                           composes, and `COMPOSITE NOT_WRITTEN PROTOCOL` where the piece wrote no case, no answer
+#                           beside it, or an answer that isn't its Lean's or isn't of the verdict it published; why
+#                           stays in SERVE_DIR/private/composite/onsite_cases.log. served_composite.sh composes every
+#                           directory under SERVE_DIR/private that holds a case beside an answer, so where one of these
+#                           two protocols' is not the case named here (another window's, one left from an earlier run,
+#                           one answered by the Python alone), this says `COMPOSITE: not run` and exits 1 before any
+#                           product is composed: of each protocol at most one case reaches composite.py, its piece's.
 
 onsite_piece_commands() {
   # shellcheck disable=SC2016
@@ -41,16 +49,82 @@ onsite_piece_commands() {
 
 onsite_cases() {
   local rc
-  POUS_EXE=$(exe pous-run-protocol verity/protocols/pous/verifier/check) \
-    && WIPE_EXE=$(exe wipe-protocol verity/protocols/pous/device/lean) || return 0
-  GPU_LEASE_WHO=${GPU_LEASE_WHO:-vllm-composed} LEASE_MIN=${CASE_LEASE_MIN:-60} MEM_GB=${CASE_MEM_GB:-170} PY=$PY \
-    POUS_EXE=$POUS_EXE WIPE_EXE=$WIPE_EXE timeout -k 1m "${CASE_TIMEOUT:-90m}" bash benchmarks/pous/served_case.sh \
-    "$OUT/pieces" > "$P/served_case.log" 2>&1
-  rc=$?
-  grep -h '^CASE {' "$P/served_case.log" | "$PY" -c '
+  "$PY" - "$D/private" "$OUT/pieces" "$P" 2> "$P/onsite_cases.log" <<'EOF' | tee -a "$OUT/verdicts.txt"
 import json, sys
-for line in sys.stdin:
-    c = json.loads(line[len("CASE "):])
-    print("COMPOSITE CASE", c["protocol"], c["verdict"])' | tee -a "$OUT/verdicts.txt"
-  say "COMPOSITE CASES: served_case.sh exit $rc$([ "$rc" = 0 ] || echo ', its log on the node')"
+from pathlib import Path
+
+private, pieces, skip = (Path(a).resolve() for a in sys.argv[1:4])
+VERDICTS = ("accept", "reject", "undecided")
+
+
+def read(path):
+    try:
+        doc = json.loads(path.read_text())
+    except (OSError, ValueError):
+        return {}
+    return doc if isinstance(doc, dict) else {}
+
+
+def log(head, **doc):
+    print(head + " " + json.dumps(doc, sort_keys=True), file=sys.stderr)
+
+
+def pous(summary):
+    k = summary.get("window")
+    return private / "pous" / f"w{k}" if isinstance(k, int) else None
+
+
+# protocol: its Lean, its piece's summary under OUT/pieces, and its piece's private directory by that summary
+OWN = {"verity/pous/p2/v4/run": ("pous-run-protocol", "pous/pous.json", pous),
+       "verity/wipe/v0": ("wipe-protocol", "wipe/summary.json", lambda _: private / "wipe")}
+
+composed = {}  # what served_composite.sh composes: each directory holding a case beside an answer, by its protocol
+for f in sorted(private.rglob("case.json")):
+    d = f.parent
+    if d != skip and skip not in d.parents and (d / "answer.json").is_file():
+        composed.setdefault(str(read(d / "answer.json").get("protocol")), []).append(d)
+
+refused = {}
+for protocol, (lean, name, where) in OWN.items():
+    summary = read(pieces / name)
+    own = where(summary) if summary else None
+    answer = read(own / "answer.json") if own else {}
+    by = summary.get("decided_by")
+    by = by.get("program") if isinstance(by, dict) else None
+    why = None
+    if not summary:
+        why = f"the run has no piece of it: no {name} under {pieces}"
+    elif own is None:
+        why = f"{name} names no window"
+    elif not (own / "case.json").is_file():
+        why = f"its piece wrote no case in {own}"
+    elif not (own / "answer.json").is_file():
+        why = f"its piece wrote no answer beside its case in {own}"
+    elif answer.get("protocol") != protocol or answer.get("verdict") not in VERDICTS:
+        why = f"the answer in {own} is not one of {protocol}"
+    elif answer["verdict"] != summary.get("verdict"):
+        why = f"the answer in {own} is {answer['verdict']}, and its piece published {summary.get('verdict')}"
+    elif by != lean:
+        why = f"its piece's answer is {by}'s, not its Lean's ({lean}'s)"
+    if why is None:
+        log("CASE", piece=str(own), protocol=protocol, verdict=answer["verdict"])
+        print("COMPOSITE CASE", protocol, answer["verdict"])
+    else:
+        log("NOT_WRITTEN", protocol=protocol, reason=why)
+        print("COMPOSITE NOT_WRITTEN", protocol)
+    others = [str(d) for d in composed.get(protocol, []) if why or d != own]
+    if others:
+        refused[protocol] = others
+for protocol, others in refused.items():
+    log("REFUSED", protocol=protocol, pieces=others)
+    print(f"COMPOSITE: not run, the serve dir's private holds a case of {protocol} that is not its piece's with its "
+          "Lean's answer, and every case there is composed (onsite_cases.log on the node)")
+sys.exit(3 if refused else 0)
+EOF
+  rc=${PIPESTATUS[0]}
+  case $rc in
+    0) say "COMPOSITE CASES: PoUS's and the wipe's as their pieces wrote them, none made here" ;;
+    3) exit 1 ;;
+    *) say "COMPOSITE: not run, onsite's own cases weren't read (exit $rc, onsite_cases.log on the node)"; exit 1 ;;
+  esac
 }
