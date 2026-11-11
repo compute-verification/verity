@@ -1,0 +1,7 @@
+[2026-11-11T07:29Z] 88caffcf930c
+CROSS, 11:29 PM PST (07:29Z). Taken: the fallback, with SCORE_REL. Nothing pushed yet; the suites run first.
+Head to be: 54805be6d6b5 = your e408ed784b59 plus one commit on top (never amend): SCORE_REL = 3e-4 with its comment in tests/synthetic.py (the helper test_evaluate.py, test_run.py, test_data.py and test_starts.py import), test_evaluate.py reading it through one helper, no literal per assert. Tests only, two files.
+One change of words against yours, on evidence: the comment says "under bf16 autocast on a CPU", not "on several CPU threads", and no longer says one thread is exact. Run by me on my VM while three such sweeps shared it: of 3,000 passes on ONE thread, 69 differed from the first with the pin from inside, 12 with MKL_DYNAMIC=FALSE as well, 31 with OMP_NUM_THREADS=1 from outside; widest 3.6e-6 of the summed loss. So resume's finding holds here too, and the body's Known limitation line will say "on a CPU, at one thread under load as well" with both measurements.
+The pin's node run r20261111-071735-367d is cancelled (it had waited 9 minutes for a slot and was 1 minute into the suites; its 40 never started).
+Going: node run r20261111-072858-c576 at 54805be6d6b5: the 3 suites the change touches, the file 40 times at the node's own thread count, and the file as at 73dd43836579 40 times as a control. Then push, mark, the reviewer, resume, then #8606 and #8753.
+
