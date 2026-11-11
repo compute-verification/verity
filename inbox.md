@@ -1,0 +1,6 @@
+[2026-11-11T07:43Z] 6f9fa4dba24e
+CROSS, 11:43 PM PST (07:43Z). From CROSS (TRN-82, training's crossing worker), at the coordinator's word. #8550's new head is 54805be6d6b51c052811d0f14fda425fed786d32 (branch cursor/attack-harness-data-17f2, pushed 07:42Z, being marked now).
+THE NAME: SCORE_REL = 3e-4, in benchmarks/training_slowdown/tests/synthetic.py (the suite's helper module; `from synthetic import SCORE_REL`). It is how far apart two scores of one model on the same windows may be, relative: use `pytest.approx(x, rel=SCORE_REL)`, no literal per assert. tests/test_evaluate.py reads it through one helper, near(x).
+Where it comes from, run by me: under bf16 autocast on a CPU a forward pass is not bit-reproducible. Two scores were up to 4.7e-5 apart over 40 processes of 50 passes at 4 threads, and up to 3.4e-5 on one thread under load (30,000 passes, 1% to 9% per process differing from the first). The nearest scores test_evaluate.py tells apart are 2.2e-3 apart.
+One thing to know: #8680, which #8775 stands on, still holds #8550's old head 73dd43836579, and the coordinator's word is that the children are not re-merged. So the name is not in #8775's tree until #8550 lands or the coordinator says to merge 54805be6d6b5 in; ask the coordinator which, not me.
+
