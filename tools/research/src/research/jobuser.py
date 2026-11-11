@@ -48,8 +48,9 @@ UNREACHABLE = ("/home", "/root", "/run", "/tmp", "/var/tmp", "/dev/shm")
 TIMEOUT_STOP_S = 10                 # the harness's own --grace: the SIGTERM-to-SIGKILL window a workload has without --job-user
 STOP_SIGNALS = (signal.SIGTERM, signal.SIGINT, signal.SIGHUP)
 FORBIDDEN_GROUPS = frozenset({"root", "sudo", "admin", "wheel", "adm", "docker", "lxd", "systemd-journal"})
-#: what the workload gets beside --pass: the run's identity and its OUT, the tree's import path, the GPUs its lease gave it
-PASS_NAMES = frozenset({"OUT", "PYTHONPATH", "CUDA_VISIBLE_DEVICES", "CUDA_DEVICE_ORDER", "LANG", "LC_ALL", "TZ"})
+#: what the workload gets beside --pass: the run's identity and its OUT, the tree's import path, the GPUs its lease gave it,
+#: and what every job starts with (result.env_defaults)
+PASS_NAMES = frozenset({"OUT", "PYTHONPATH", "CUDA_VISIBLE_DEVICES", "CUDA_DEVICE_ORDER", "LANG", "LC_ALL", "TZ", "ONEDNN_MAX_CPU_ISA"})
 PASS_PREFIXES = ("RESEARCH_", "GPU_LEASE_")
 #: a name a credential would travel in: passed only when the run's own --env names it
 CREDENTIAL = re.compile(r"TOKEN|SECRET|PASSW|KEY|CREDENTIAL|^AWS_|^R2_|^GH_|^GITHUB_|^HF_|^SSH_|SLACK|NOTION|RUNPOD|NEBIUS|CURSOR",

@@ -473,6 +473,7 @@ def _cmd_run(argv: list[str], clones: list[Path]) -> int:
         return 2
     if ns.claimed and not env_map:
         env_map = _request_env(ns.remote_json)
+    workload_env = {**result.env_defaults(os.environ), **env_map}   # every job's defaults, under --env, which still decides
     if run_dir.exists() and ((run_dir / "job.json").exists() or not ns.claimed):
         print(f"research run: {run_dir} already exists; a rerun gets a fresh id", file=sys.stderr)
         return 2
@@ -493,7 +494,7 @@ def _cmd_run(argv: list[str], clones: list[Path]) -> int:
         except clone.Refused as e:
             return _refuse(ns, run_dir, run_id, f"--cwd {a.cwd}: {e}", "CloneRefused", mem_reservation)
     try:
-        prep = _prepare_store(ns, a, command, run_id, run_dir, env_map)
+        prep = _prepare_store(ns, a, command, run_id, run_dir, workload_env)
     except (ImportError, LookupError, TypeError) as e:
         print(f"research run: --cwd {a.cwd} / --tool {ns.tool}: {e}", file=sys.stderr)
         return 2
@@ -534,7 +535,7 @@ def _cmd_run(argv: list[str], clones: list[Path]) -> int:
     os.environ.update(prep["env"])
     # --env is the workload's: set for the harness (which spawns it with this environment), then restored so the store publish below
     # runs with the caller's environment (a workload-only AWS_* must not become the push credentials)
-    apply_env = {k: v for k, v in env_map.items() if not (ns.claimed and k == "PYTHONPATH")}   # launch_request composed it: tool, tree roots, then this
+    apply_env = {k: v for k, v in workload_env.items() if not (ns.claimed and k == "PYTHONPATH")}   # launch_request composed it: tool, tree roots, then this
     if ns.claimed and (remote_info or {}).get("gpus"):
         apply_env.pop("CUDA_VISIBLE_DEVICES", None)          # launch_request hid the GPUs (or gpu-lease names them): --env can't undo it
     apply_env = {**clone_env, **apply_env}
@@ -925,9 +926,9 @@ def unredact_key_params(command: list[str], redacted: list[str], key_params: set
 def _prepare_store(ns: argparse.Namespace, a: argparse.Namespace, command: list[str], run_id: str, run_dir: Path, env_map: dict[str, str] | None = None) -> dict:
     """Before launch: load the Tool (errors propagate: the user asked for it), collect conditions, resolve params and inputs to
     content identity, compute the closure manifest, derivation id and reuse_key, create --scratch dirs.  Everything after the
-    Tool load is best effort: a failure is recorded in the `store` section, never a reason not to run.  `env_map` (--env) is
-    recorded as `params.env`, values redacted where the NAME matches SECRET_KEY; it is not part of the derivation (a Tool that
-    depends on an environment variable declares it as a key param)."""
+    Tool load is best effort: a failure is recorded in the `store` section, never a reason not to run.  `env_map` (--env, over
+    every job's defaults: `result.env_defaults`) is recorded as `params.env`, values redacted where the NAME matches SECRET_KEY;
+    it is not part of the derivation (a Tool that depends on an environment variable declares it as a key param)."""
     import tempfile
 
     from . import env as E

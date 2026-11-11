@@ -168,7 +168,10 @@ The workload receives `RESEARCH_RUN_ID`, `RESEARCH_RUN_DIR` and `OUT` (its `out/
 workload runs in its run directory unless `--cwd` says otherwise (`--cwd source` = the invoking directory, `clone` = a clone of it), so a relative
 `result.json` lands there and never in the checkout; `--env K=V` is set for the
 workload only and recorded as the attempt's `params.env` (values of
-secret-named keys redacted). Four facts
+secret-named keys redacted). Every job also starts with oneDNN held off AMX
+(`ONEDNN_MAX_CPU_ISA=AVX512_CORE_BF16`, `result.env_defaults`, listed in `params.env` too), since on a CPU with AMX a
+preempted bf16 matrix product now and then returns wrong values; the job's `--env`, its own command, or a value the
+runner's environment already names decides instead. Four facts
 stay separate in `inspect`: exited, result well-formed, validation reported
 passed, preserved. `--require-result` makes exit 0 without a valid result
 exit 65.
