@@ -27,7 +27,7 @@ import torch
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 import engine as E
-from verity.ml.commitments.identity import identity_digest_sha512
+from verity.commitments.identity import identity_digest_sha512
 
 CAP = 32768
 LAYERS = 52

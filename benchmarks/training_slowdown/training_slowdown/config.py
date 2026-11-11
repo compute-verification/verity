@@ -8,7 +8,7 @@ value its plan refuses, a policy neither the calculator's registry nor `policy.p
     target = { gain = 1.1 }               # effective compute over the start's own, for the grade
     budget = { steps = 1400, batch = 64 } # training steps of `batch` windows; `minutes` stops a run past it
     seeds = { search = [0], final = [0, 101, 102] }
-    policy = "console"                    # policy.CONSOLE's rule, or a [policy.*] table of benchmarks/rho/data
+    policy = "console"                    # policy.CONSOLE's rule, or a [policy.*] table of verity/protocols/inference_only/rho/data
     honest = "s-t20-1.1x-reference"       # another config beside this one, at the same start and gain
 
     [dials]                               # the route's DIALS; any other key is refused
@@ -160,7 +160,7 @@ def load(path: Path, reg: dict | None = None) -> Config:
         raise SystemExit(f"{where}: no seed")
     if raw["policy"] not in (names := [*RULES, *calculator.policies()]):
         raise SystemExit(f"{where}: no policy {raw['policy']!r} (have {', '.join(names)}: policy.py's rule, or a "
-                         f"[policy.*] table of benchmarks/rho/data)")
+                         f"[policy.*] table of verity/protocols/inference_only/rho/data)")
     start = starts.start(raw["start"], reg)
     mod = route(raw["route"])
     given = dials(mod, raw.get("dials", {}), where)
