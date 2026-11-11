@@ -12,7 +12,9 @@ multi-line key's lines too).
 (`ps aux`, `ps -ef`, `ps -eo args`, `ps -o cmd --ppid N`, `ps -f -u USER`, `/proc/*/cmdline`), where a daemon's or a git child's
 token can sit in argv; one process (`ps -p PID -o args`), a listing piped straight into a `grep`/`rg` that keeps only matching
 lines (an inverted one, `grep -v`, prints the rest, so `ps -ef | grep -v grep` is refused and `ps -ef | grep -v grep | grep
-NAME` passes), and `pgrep -af PATTERN` pass. Reads Cursor's hook JSON on stdin and prints its verdict as JSON on stdout.
+NAME` passes), and `pgrep -af PATTERN` pass. Reads Cursor's hook JSON on stdin, `beforeShellExecution`'s (`command`, `cwd`) or a
+`preToolUse` event's for the Shell tool (`tool_input.command`), and prints its verdict as JSON on stdout; each event's key
+names go to $AGENT_GUARD_EVENT_LOG (`settings.record_event`).
 
 A secret file is refused the same way: a command that writes what it reads to its output (READERS: `cat`, `head`, `tail`,
 `sed`, `awk`, `cut`, `sort`, `diff`, `xxd`, `base64` and the like, `zcat` and its kin, and a `grep`/`rg` that prints lines, one
@@ -61,7 +63,8 @@ allowed command is refused once, with the message as the refusal's text, which i
 `agent_message` on an allowed command reaches no one). The agent then re-runs the command. A refused secret-printing command
 keeps the message queued, and the delivered text is appended to `<conversation_id>.delivered`. Messages pushed from other
 VMs reach the inbox through `inbox.py pull`, which the hook starts in the background, detached, at most every
-$AGENT_INBOX_POLL_S seconds per agent (default 30; `off` stops it), so the hook itself never waits on the network.
+$AGENT_INBOX_POLL_S seconds per agent (default 30; `off` stops it), so the hook itself never waits on the network. A message
+still queued when the agent's turn ends is delivered by the stop hook (`stop_hook.py`) instead.
 
 Before an allowed `git merge` or `git merge-tree`, it sets the repository's merge drivers (`.gitattributes` names them; git keeps
 them only in a clone's config) from origin/main's `research.clone.RECORD_DRIVER`, each whose value differs, as boot.sh and
@@ -82,7 +85,7 @@ import sys
 import time
 from pathlib import Path
 
-from settings import INBOX, INBOX_POLL_S
+from settings import INBOX, INBOX_POLL_S, record_event
 
 PATTERN = re.compile(r"KEY|TOKEN|SECRET|PASSW|CREDENTIAL|PRIVATE", re.I)
 WRAPPERS = {"sudo", "doas", "command", "builtin", "exec", "nohup", "time", "nice", "stdbuf", "timeout", "setsid", "taskset"}
@@ -761,10 +764,15 @@ def available() -> tuple[float, float] | None:
     return avail, total
 
 
+#: a command this hook would read past its first part: on a node it runs whole only inside one `bash -lc`
+COMPOUND = re.compile(r"&&|\|\||;|\|")
+
+
 def local_work_reason(command: str) -> str | None:
     """Why this command may not run on this VM, or None."""
     w = 0 if LOCAL_OK in command else weight(command)
-    remote = (f"Run it on a node: `research run --on auto -- CMD` (placed in a CPU node's research pool from this checkout: 4 CPUs, 16 GB "
+    cmd = f"bash -lc {shlex.quote(command)}" if COMPOUND.search(command) else "CMD"
+    remote = (f"Run it on a node: `research run --on auto -- {cmd}` (placed in a CPU node's research pool from this checkout: 4 CPUs, 16 GB "
               f"and 60 min unless --cpus, --mem-gb or --timeout say otherwise; add --wait to block until it ends, for at most 20 "
               f"minutes). For a small local run "
               f"you know fits, put {LOCAL_OK} in the command.")
@@ -876,6 +884,15 @@ def delivery(conversation: str) -> str | None:
     return text if text.strip() else None
 
 
+def checkout(root: str, cwd: str) -> str:
+    """The checkout an inbox pull runs from: the workspace root, or when the root isn't one (a Task-launched cloud agent's
+    `/agent`), the first checkout under its `repos/`, else the command's directory."""
+    if root and not os.path.exists(os.path.join(root, ".git")):
+        found = sorted(Path(root).glob("repos/*/.git"))
+        root = str(found[0].parent) if found else ""
+    return root or cwd
+
+
 def poll(conversation: str, repo: str) -> bool:
     """Start `inbox.py pull` for agent `conversation` from checkout `repo`, detached, unless one started within the poll
     interval; whether it started one."""
@@ -936,11 +953,14 @@ def main() -> int:
     raw = sys.stdin.read()
     try:
         event = json.loads(raw)
-        command = event.get("command") or ""
+        shell = event.get("tool_input") if isinstance(event.get("tool_input"), dict) else {}
+        command = event.get("command") or shell.get("command") or ""
         conversation = str(event.get("conversation_id") or "")
         root = next(iter(event.get("workspace_roots") or []), "")
-        cwd = event.get("cwd") or root or os.getcwd()
+        cwd = event.get("cwd") or shell.get("cwd") or root or os.getcwd()
+        record_event("shell_hook.py", event)
     except (ValueError, AttributeError):
+        record_event("shell_hook.py", raw)
         command, conversation, cwd, root = raw, "", os.getcwd(), ""
     try:
         deny = refused_text(command)
@@ -967,7 +987,7 @@ def main() -> int:
                           "agent_message": "Refused by tools/agent-guard/shell_hook.py (.cursor/hooks.json): " + reason}))
     else:
         try:
-            poll(conversation, root or cwd)
+            poll(conversation, checkout(root, cwd))
         except (OSError, ValueError) as e:              # nor a failed poll: the next command's hook tries again
             print(f"shell_hook: inbox poll failed: {e}", file=sys.stderr)
         try:

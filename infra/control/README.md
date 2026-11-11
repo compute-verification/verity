@@ -19,7 +19,7 @@ editing on the pod.
     sqlite3's `.backup`;
   - stop the old pod (never start it again: its `/post_start.sh` would start a second guard), copy the caches into the new
     pod's `/root`, and run `sh /data/boot/post_start.sh`, then `drive.sh start`;
-  - `research pods register vy-control --pod-id NEW --replace --any-name`, and terminate the old pod, since two pods of one
+  - `research pods register vy-control --pod-id NEW --project verity --replace --any-name`, and terminate the old pod, since two pods of one
     name make `research pods ssh vy-control-verity` and the guard host's lookup refuse.
 - **After a reset, run `sh /data/boot/post_start.sh` once.** It relinks every path below, installs rsync, sqlite3, git and psql when
   they're missing, and starts each service detached (`setsid -f`). It also puts `/post_start.sh` back as a link to itself.
