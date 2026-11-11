@@ -93,7 +93,7 @@ quotes the warm's beside it.
 
     records_audit.py audit --window DIR --law L (--opening FILE --compilers FILE [--repo DIR] | --circuit SHA512) --run HEX \\
         [--template-sets DIR] [--outputs FILE] --m0-pythonpath PATH --bin flock-circuit --lean flock-verify --firewall flock-firewall \\
-        --out DIR [--delta D] [--port P] [--ports N] [--forged] [--challenger local|loopback:HOST:PORT|gate:USER@HOST --main FILE] \\
+        --out DIR [--delta D|NUM/DEN] [--port P] [--ports N] [--forged] [--challenger local|loopback:HOST:PORT|gate:USER@HOST --main FILE] \\
         [--peer NAME --challenger-key RECORD [--gate-key KEY]] [--registered FILE] [--tie W [--tie-prefix P]] [--skip-negatives] \\
         [--compose-cache DIR] [--day N --day-log LOG [--day-params FILE] | --day-ledger LEDGER]
     records_audit.py warm --window DIR --law L [--template-sets DIR] --compose-cache DIR [--jobs N]
@@ -165,6 +165,7 @@ import sys
 import tempfile
 import time
 from collections.abc import Callable, Iterable, Iterator, Mapping
+from fractions import Fraction
 from pathlib import Path
 from typing import Any
 
@@ -397,6 +398,18 @@ def declared_count(doc: Mapping[str, Any], bits: int, resolve: Callable[[str], A
         out["window"] = {"ingress": n[IF.WINDOW_INGRESS], "free": free, "other_inputs": free + bits,
                          "bound": "vacuous" if free > 0 else "within the charge", "premise": WINDOW_PREMISE}
     return out
+
+
+def delta_arg(s: str) -> float:
+    """``--delta``'s D, a decimal or NUM/DEN in (0, 1), as the double nearest it: the audit's stream and record state
+    delta as a double."""
+    try:
+        d = float(Fraction(s))
+    except (ValueError, ZeroDivisionError, OverflowError):
+        raise argparse.ArgumentTypeError(f"delta is a decimal or NUM/DEN, not {s!r}") from None
+    if not 0 < d < 1:
+        raise argparse.ArgumentTypeError(f"delta is in (0, 1), not {s!r}")
+    return d
 
 
 def pin_arg(s: str) -> tuple[str, str]:
@@ -1082,7 +1095,8 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--lean", required=True)
     p.add_argument("--firewall", required=True)
     p.add_argument("--out", required=True)
-    p.add_argument("--delta", type=float, default=0.5)
+    p.add_argument("--delta", type=delta_arg, default=0.5, metavar="D", help="the audit's delta, a decimal or NUM/DEN: its "
+                   "stream's, and the one its record's bounds on wrong units hold at (default 0.5)")
     p.add_argument("--port", type=int, default=None, help="the sessions' base port (default a base whose --ports ports are "
                    "free now)")
     p.add_argument("--ports", type=int, default=None, help="how many ports from --port are the audit's: a session each for "
