@@ -19,12 +19,15 @@ counts them as structural scaffolding.
 from __future__ import annotations
 
 import importlib
+import importlib.machinery
 import inspect
+import socket
 import sys
 from contextlib import contextmanager
 
 import torch
 
+from verity_vllm import settings
 from verity_vllm.engine import env as engine_env, hooks
 from verity_vllm.program.frontend.dsv4_leaves import dsv4_attention_leaves
 from verity_vllm.program.frontend.marlin_moe_leaf import mxfp4_marlin_moe_leaf
@@ -137,7 +140,6 @@ class _AnswerCudaFinder:
     def find_spec(self, name, path, target=None):
         if name != "vllm.platforms":
             return None
-        import importlib.machinery
         sys.meta_path.remove(self)
         spec = importlib.machinery.PathFinder.find_spec(name, path)
         if spec is not None and spec.loader is not None:
@@ -218,8 +220,6 @@ def read_back_applied() -> dict:
 
 def host_facts() -> dict:
     """The construction HOST (informational; not part of any identity): hostname, CUDA visibility, the host GPU's name."""
-    import socket
-    from verity_vllm import settings
     h = {"hostname": socket.gethostname(), "CUDA_VISIBLE_DEVICES": settings.raw("CUDA_VISIBLE_DEVICES"), "cuda_available": bool(torch.cuda.is_available()),
          "host_gpu": None}
     if h["cuda_available"]:
