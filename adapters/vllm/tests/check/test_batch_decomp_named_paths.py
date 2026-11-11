@@ -77,6 +77,14 @@ def test_a_criterion_that_is_neither_sequence_nor_dag_is_refused(tmp_path):
         bd.decompose(str(tmp_path), [], within_step="multiset")
 
 
+def test_a_view_with_no_rows_of_record_is_refused_as_the_fold(monkeypatch, tmp_path):
+    """A derived Program's view has none: passed as the fold it is refused by name, before any instance is attributed."""
+    B = _two_requests()
+    B.oracle_rows = None
+    with pytest.raises(ValueError, match="the view passed as the fold has no instances.jsonl rows"):
+        _decompose(monkeypatch, tmp_path, B, {0: STEP0})
+
+
 def test_weight_only_instances_are_shared_and_sit_in_the_leg_of_every_request_with_rows_in_their_step(monkeypatch, tmp_path):
     """Nodes 3 (reads the weights alone) and 4 (reads node 3 alone) carry no request's data, nor does node 11 at engine step 1, where
     only r0 has a row: owned by no request, counted apart, and merged into each leg by engine step."""

@@ -50,6 +50,7 @@ import json
 import os
 import time
 from dataclasses import dataclass
+from typing import Any
 
 from verity_vllm import settings
 from verity_vllm.check.match import compiler_form as CF
@@ -129,6 +130,8 @@ def decompose(oracle_dir: str, derived_dirs: list[str], log_path: str | None = N
     # parameters; the shared weights are the Input nodes no request owns -- ONE node for a homogeneous bf16 Record, one per leaf field
     # for a mixed-width one (FP8: 435) -- never `n_input_nodes - 1`; refused by name when the layout does not hold
     seed_node_of, peer_node_of, witness_owners, weights_nodes = request_inputs(B, reqs)
+    if B.oracle_rows is None:
+        raise ValueError(f"{oracle_dir}: the view passed as the fold has no instances.jsonl rows")
     meta_of = {o["node"] + n_in: o for o in B.oracle_rows}
 
     # attribution of every instance, in node order (producers precede consumers). Channels, in order:
@@ -147,13 +150,13 @@ def decompose(oracle_dir: str, derived_dirs: list[str], log_path: str | None = N
     owners_of_param: dict[int, set[str]] = collections.defaultdict(set)
     # request-owned inputs: its prompt, seed, peers (a collective instance reading request r's peers node is r's), witnesses
     # and run values
-    for rid, k in [*param_of.items(), *seed_node_of.items(), *peer_node_of.items(), *witness_owners, *SI.run_owners(B, reqs)]:
-        owners_of_param[k].add(rid)
+    for owner, k in [*param_of.items(), *seed_node_of.items(), *peer_node_of.items(), *witness_owners, *SI.run_owners(B, reqs)]:
+        owners_of_param[k].add(owner)
     shared_inputs = weights_nodes | SI.values_nodes(B)
     owner_of_node: dict[int, str] = {}
     per_req: dict[str, list[int]] = collections.OrderedDict()
     unattributed: list[dict] = []
-    how = collections.Counter()
+    how: collections.Counter[str] = collections.Counter()
     disagree = 0
     compact = getattr(B, "compact", False)
     if compact:
@@ -230,20 +233,20 @@ def decompose(oracle_dir: str, derived_dirs: list[str], log_path: str | None = N
     A_cache: dict[tuple[int, ...], C.RootView] = {}
     components = components if components is not None else {}  # decoded component Progs keyed by dir, shared with the caller
 
-    res = {"schema": "cb-a/batch-decomp/v1", "utc": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()), "oracle_dir": oracle_dir,
-           "log": log_path, "n_requests_header": len(reqs), "n_output_sequences": len(per_req), "engine_steps": len(steps),
-           "oracle": {"digest": B.digest, "instances": len(B.inst), "n_input_nodes": n_in, "fold_form": getattr(B, "fold_form", None),
-                      # the shared weights as a node RANGE (contiguous after the request-owned parameters)
-                      "weights_input_nodes": {"n": len(weights_nodes), "first": min(weights_nodes), "last": max(weights_nodes),
-                                              "request_owned_inputs": len(reqs) + len(seed_node_of)},
-                      "weight_map": {"n_ranges": len(B.oracle_wmap), "n_overlaps": len(B.oracle_wmap_overlaps)}},
-           "attribution": {"how": dict(how), "unattributed": len(unattributed), "unattributed_examples": unattributed[:12],
-                           "attributed": sum(len(v) for v in per_req.values()), "row_rule_disagreements": disagree,
-                           # weight-only instances: owned by no request, projected into every participating leg
-                           "weight_only_shared": len(shared_idx),
-                           "weight_only_specs": dict(collections.Counter(B.inst[i]["spec"].split("{")[0] for i, _ in shared_idx).most_common(6))},
-           "derived_available": {PP.shape_name(s): d for s, d in sorted(derived.items())}, "derived_unreadable": bad_derived,
-           "requests": [], "missing_derived": []}
+    res: dict[str, Any] = {"schema": "cb-a/batch-decomp/v1", "utc": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()), "oracle_dir": oracle_dir,
+                           "log": log_path, "n_requests_header": len(reqs), "n_output_sequences": len(per_req), "engine_steps": len(steps),
+                           "oracle": {"digest": B.digest, "instances": len(B.inst), "n_input_nodes": n_in, "fold_form": getattr(B, "fold_form", None),
+                                      # the shared weights as a node RANGE (contiguous after the request-owned parameters)
+                                      "weights_input_nodes": {"n": len(weights_nodes), "first": min(weights_nodes), "last": max(weights_nodes),
+                                                              "request_owned_inputs": len(reqs) + len(seed_node_of)},
+                                      "weight_map": {"n_ranges": len(B.oracle_wmap), "n_overlaps": len(B.oracle_wmap_overlaps)}},
+                           "attribution": {"how": dict(how), "unattributed": len(unattributed), "unattributed_examples": unattributed[:12],
+                                           "attributed": sum(len(v) for v in per_req.values()), "row_rule_disagreements": disagree,
+                                           # weight-only instances: owned by no request, projected into every participating leg
+                                           "weight_only_shared": len(shared_idx),
+                                           "weight_only_specs": dict(collections.Counter(B.inst[i]["spec"].split("{")[0] for i, _ in shared_idx).most_common(6))},
+                           "derived_available": {PP.shape_name(s): d for s, d in sorted(derived.items())}, "derived_unreadable": bad_derived,
+                           "requests": [], "missing_derived": []}
     missing: set[tuple[int, ...]] = set()
     all_equal = True
 
@@ -264,7 +267,7 @@ def decompose(oracle_dir: str, derived_dirs: list[str], log_path: str | None = N
         rid, idxs = item
         pidx = param_of.get(rid)
         ent = {"request_id": rid, "parent": parent_of.get(rid), "prompt_param": pidx, "n_instances": len(idxs)}
-        prof: dict = {"request_id": rid, "n_instances": len(idxs), "pid": os.getpid(), "t_start": time.time()} if profiling else None
+        prof: dict | None = {"request_id": rid, "n_instances": len(idxs), "pid": os.getpid(), "t_start": time.time()} if profiling else None
         if prof is not None:
             ent["_profile"] = prof
         if pidx is None:
@@ -377,9 +380,9 @@ def decompose(oracle_dir: str, derived_dirs: list[str], log_path: str | None = N
         to_load: list[tuple[str, str]] = []
         for rid, idxs in items:
             sh = shape_of(rid, idxs)
-            d = derived.get(sh) if sh is not None else None
-            if d is not None and d not in components and all(d != x[0] for x in to_load):
-                to_load.append((d, f"derived[{PP.shape_name(sh)}]"))
+            comp = derived.get(sh) if sh is not None else None
+            if comp is not None and comp not in components and all(comp != x[0] for x in to_load):
+                to_load.append((comp, f"derived[{PP.shape_name(sh)}]"))
         if to_load:
             # the components are built on the workers too, one per leg (2 s to build vs 0.1 s to pickle a component back: the build is
             # the descriptor walk), then held by the parent so the legs below share them copy-on-write; a build failure raises, as the
