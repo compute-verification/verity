@@ -108,6 +108,7 @@ record the same `RECORD`.
 from __future__ import annotations
 
 import argparse
+import dataclasses
 import functools
 import gc
 import gzip
@@ -121,6 +122,7 @@ import subprocess
 import sys
 import tempfile
 import time
+from collections.abc import Callable
 from pathlib import Path
 from typing import Any
 
@@ -289,7 +291,19 @@ def gate_command(argv: list[str]) -> Any:
     return gate
 
 
-def window_sessions(gate: Any, peer: str, steps: int) -> Any:
+@dataclasses.dataclass(frozen=True)
+class WindowSessions:
+    """What `window_sessions` answers. Called with a window's name it is ``answer(name)``, that window's reserve answer;
+    ``held`` maps each window served so far to that answer, and the other map each to its sample session's."""
+    answer: Callable[[str], dict[str, Any]]
+    held: dict[str, dict[str, Any]]
+    draws: dict[str, dict[str, Any]]
+
+    def __call__(self, name: str) -> dict[str, Any]:
+        return self.answer(name)
+
+
+def window_sessions(gate: Any, peer: str, steps: int) -> WindowSessions:
     """With ``--peer``: each window the run serves gets a challenge phase of its own, reserved at the gate (``gate.reserve``) just
     before the window is installed, since the auditor host's challenger serves one window a challenge phase and a challenge phase opens
     once; ``sessions(name)`` is window `name`'s reserve answer (`pouw_h1_window.reserved_of`), and a name asked for twice
@@ -314,8 +328,7 @@ def window_sessions(gate: Any, peer: str, steps: int) -> Any:
         held[name] = fresh(name, steps, "session")
         draws[name] = fresh(name, None, "draw session")
         return held[name]
-    sessions.held, sessions.draws = held, draws
-    return sessions
+    return WindowSessions(sessions, held, draws)
 
 
 def session_end(gate: Any, reserved: dict[str, Any]) -> dict[str, Any]:

@@ -159,9 +159,9 @@ def lower_live(T: int, part: dict, path: Path) -> None:
 def rebuilt(descriptor: bytes) -> Any:
     """The declared window Program rebuilt from its descriptor's layout (`credit.layout_of`, its prefix `credit.shape_of`'s),
     each K's template held to the descriptor's by its descriptor id, which names every binding. ValueError otherwise."""
-    from verity.protocols.pouw.verifier import credit as CR
-    from verity.protocols.pouw.prover.circuit import h1window as HW
     from verity.circuits.codec import descriptor_id
+    from verity.protocols.pouw.prover.circuit import h1window as HW
+    from verity.protocols.pouw.verifier import credit as CR
     layout, why = CR.layout_of(descriptor)
     if why is not None:
         raise ValueError(f"the declared Program's layout: {why[1]}")
@@ -183,6 +183,7 @@ def leaf_bound(win: Any, k: int, kind: str) -> tuple[Any, bytes, dict, dict]:
     "program"}``."""
     from verity.protocols.pouw.prover.circuit import h1window as HW
     from verity.protocols.spot.verifier.one_stage import partition as P
+
     from verity_vllm.protocols.pouw.h1 import served as SV
     program, query = HW.leaf_program(win, k, kind)
     part = P.partition(program, query)
@@ -225,13 +226,16 @@ def leaf_files(program_dir: Path, out: Path, descriptor: bytes, ks: Sequence[int
     descriptor written beside it (`drawn_rows.LEAF_PROGRAM`): ``files`` (each file's SHA-512 and ``leaf_programs``), each
     statement's bind (``leaf_binds``) and Definition id (``templates``). ValueError when credit derives another leaf
     Program or partition at K, or refuses the K (`credit.lanes_shape`)."""
-    from tests.protocols.pouw_h1_rehearsal import PROGRAM
     from verity.protocols.pouw.verifier import credit as CR
     from verity.protocols.pouw.verifier import leaf_lanes as LL
+
+    from tests.protocols.pouw_h1_rehearsal import PROGRAM
     from verity_vllm.protocols.pouw.h1 import drawn_rows as D
     layout, _why = CR.layout_of(descriptor)
     shape, win = CR.shape_of(descriptor), rebuilt(descriptor)
-    files, binds, templates = {CR.LEAF_PROGRAMS: {}}, {}, {}
+    files: dict[str, Any] = {CR.LEAF_PROGRAMS: {}}
+    binds: dict[str, dict] = {}
+    templates: dict[str, str] = {}
     for k in ks:
         if why := CR.lanes_shape(layout, shape, k):
             raise ValueError(f"K = {k}: {why}")
