@@ -1188,3 +1188,26 @@ def test_records_takes_a_packages_lake_name_as_well_as_its_path(tmp_path):
     assert LC.matching("certifier/verifier/lean", pkgs, tmp_path) == ["verity/protocols/certifier/verifier/lean"]
     assert LC.matching("verifier", pkgs, tmp_path) == pkgs[:2]
     assert LC.matching("network_check", pkgs) == []
+
+
+def test_the_step_judges_a_package_on_the_source_modules_of_those_it_requires_by_path(tmp_path, monkeypatch):
+    """`records` hands `judge` the facts as the audit does, `source_modules` included: `Security/Properties` names
+    `Definitions.Assumptions` under `assumptions_module`, a module of `Security`, which it requires by path and none of its
+    own modules imports, so neither `modules` nor `graph` holds it. Without it the step failed that package with
+    `assumptions.module` on every build the audit would pass, and stopped the Lean suites."""
+    spec, props = tmp_path / "Security", tmp_path / "Security" / "Properties"
+    for pkg, name, module in ((spec, "security", "Definitions/Assumptions.lean"), (props, "properties", "Properties/Assumptions.lean")):
+        (pkg / module).parent.mkdir(parents=True)
+        (pkg / module).write_text("")
+        (pkg / "lakefile.toml").write_text(f'name = "{name}"\n')
+    (props / "lake-manifest.json").write_text(json.dumps({"packages": [{"name": "security", "type": "path", "dir": ".."}]}))
+    homes = ["Definitions.Assumptions", "Properties.Assumptions"]
+    (props / "lean-audit.json").write_text(json.dumps({"roots": ["Properties"], "assumptions_module": homes}))
+    monkeypatch.setattr(LC.AUDIT, "facts_of", lambda *a, **k: {"modules": ["Properties.Assumptions"], "graph": {}})
+    judged = []
+    monkeypatch.setattr(LC.AUDIT, "judge", lambda policy, facts, files, *a, **k: (judged.append((policy, facts)), ([], {}))[1])
+    assert LC.records("Security/Properties", tmp_path, "lake") == []
+    [(policy, facts)] = judged
+    assert facts["source_modules"] == homes
+    built = set(facts["modules"]) | set(facts["graph"]) | set(facts["source_modules"])     # as `judge` reads them
+    assert [h for h in LC.AUDIT.assumption_homes(policy) if h not in built] == []
