@@ -47,10 +47,10 @@ def test_counts_and_updated_structure(tiny):
 
 
 def test_a_gathers_price_is_the_ands_of_the_circuits_gather():
-    """`gather_selects` against `verity.ml.circuits.boolean.gather` on one-bit words: one tree by the token's 32 bits up to a
+    """`gather_selects` against `verity.circuits.boolean.gather` on one-bit words: one tree by the token's 32 bits up to a
     chunk, and past it the registry's chunks by the low 10 bits, then their results by the high 22."""
-    from verity.ml.circuits.boolean.forms import Circuit
-    from verity.ml.circuits.boolean.gather import gather
+    from verity.circuits.boolean.forms import Circuit
+    from verity.circuits.boolean.gather import gather
 
     def ands(n):
         C = Circuit()
