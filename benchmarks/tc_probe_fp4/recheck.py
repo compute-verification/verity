@@ -33,11 +33,11 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 import probe as P
 
 # isort: split
-# k32 (which imports verity) and verity_config are importable once probe has put the tree and tools/config on sys.path
+# k32 (which imports verity) and verity_config are importable once probe has put the tree and verity/configuration/config on sys.path
 from verity_config.settings import SHARED
 
 import k32
-from verity.ml.circuits.silicon import models as M
+from verity.definitions.silicon import models as M
 
 if TYPE_CHECKING:
     from collections.abc import Iterator

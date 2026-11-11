@@ -12,7 +12,7 @@ set -euo pipefail
 cd "$(dirname "$0")"
 export O=${RESEARCH_RUN_DIR:-$PWD}/out; mkdir -p "$O"
 ROOT=$(cd ../../.. && pwd)
-export PYTHONPATH=$ROOT:$ROOT/verity/core/difftest/python${PYTHONPATH:+:$PYTHONPATH}
+export PYTHONPATH=$ROOT:$ROOT/verity/difftest/python${PYTHONPATH:+:$PYTHONPATH}
 PY=${PY:-python3}
 
 if [ "${1:-}" = leased ]; then
@@ -38,8 +38,8 @@ FLAGS=(-O3 -std=c++17 -arch=sm_120 -Xptxas -v)
 { "$NVCC" --version; echo "flags: ${FLAGS[*]}"; } > "$O/build.txt"
 "$NVCC" "${FLAGS[@]}" labels.cu -o "$S/wipelabels" >> "$O/build.txt" 2>&1 || { tail -30 "$O/build.txt"; exit 3; }
 if grep -E "[1-9][0-9]* bytes spill" "$O/build.txt"; then echo "REFUSED: a kernel spills"; exit 3; fi
-sha256sum labels.cu "$ROOT/verity/ml/kernels/sha512.cuh" bench.py "$S/wipelabels" >> "$O/build.txt"
-(cd "$ROOT/verity/core/devices/memory_challenger/lean" && lake build streamed-wipe-verdict) >> "$O/build.txt" 2>&1 \
+sha256sum labels.cu "$ROOT/verity/definitions/kernels/sha512.cuh" bench.py "$S/wipelabels" >> "$O/build.txt"
+(cd "$ROOT/verity/protocols/pous/device/lean" && lake build streamed-wipe-verdict) >> "$O/build.txt" 2>&1 \
   || { tail -30 "$O/build.txt"; echo "REFUSED: the Lean verdict doesn't build"; exit 3; }
 
 rc=0

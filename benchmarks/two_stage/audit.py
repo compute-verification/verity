@@ -48,7 +48,7 @@ those reads (the interior's at the interior record and the links' boundary ports
 and draws, and the outcome, among it) and what SPOT[Flock]'s two-stage Lean model reads of the run with the auditor's
 copies it reads them against (``guard/``, `guard.export`).
 
-    PYTHONPATH=<tree>:<tree>/benchmarks/numerical/python:<tree>/verity/ml/flock/python:<tree>/integrations/vllm \\
+    PYTHONPATH=<tree>:<tree>/benchmarks/numerical/python:<tree>/verity/protocols/flock/prover/python:<tree>/adapters/vllm \\
       python benchmarks/two_stage/audit.py --m0-pythonpath PATH --bin flock-circuit --lean flock-verify --main FILE \\
         --out DIR [--altered]
 """
@@ -69,7 +69,8 @@ sys.path.insert(0, str(HERE.parent / "prove_path"))
 import a5_coins as AC  # noqa: E402
 import guard as G  # noqa: E402
 import toy as T  # noqa: E402
-from verity.core.protocols.spot import challenger as Ch, coins as CC, service as S  # noqa: E402
+from verity.protocols.spot.device import challenger as Ch, coins as CC
+from verity.protocols.spot.verifier import service as S  # noqa: E402
 
 #: what Lean's registered reads refuse each link member of an ``--altered`` run by
 ALTERED = "does not open"
@@ -235,9 +236,9 @@ def round_two(sample: list[int], window: T.CS.Binding, irec: dict, brec: dict, d
     audit record's verdicts of record report,
     what they name of each session they accepted (`second_stage.verified_of`), and each template's reference header and
     registered reads the params ``proofs`` give."""
-    from verity.core.protocols.spot import second_stage as SS
-    from verity.core.protocols.spot.one_stage import audit as A, partition as P
-    from verity.ml.circuits.codec import descriptor_id
+    from verity.protocols.spot.verifier import second_stage as SS
+    from verity.protocols.spot.verifier.one_stage import audit as A, partition as P
+    from verity.circuits.codec import descriptor_id
 
     replay = T.boundary_window(int(brec["population"]), len(sample)).program
     verdicts = record.get("verdicts") or {}
