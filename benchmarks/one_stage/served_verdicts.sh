@@ -309,7 +309,8 @@
 # over the work table that record states (`--reader-floors V3C_FLOORS`, EPS,DELTA each NUM/DEN: every template works 1,
 # Pearl+'s reader templates at the floors under which at most EPS of their units are wrong except with probability
 # DELTA, every other at floor 1), the table the commit states too (WINDOW-CIRCUIT-HELD) and R's design is expanded
-# under; the preflight refuses another design, or floors that aren't two such fractions.
+# under, and the audit's delta is that DELTA; the preflight refuses another design, or floors that aren't two such
+# fractions.
 # The same record at V3C_CLASS is built before serve-openai starts,
 # under the lease, from what its serve.json will record of φ on this card (`prove_path.py serve-phi`, then `class-circuit`,
 # no advice: the circuit is the class's whatever the traffic), into the serve dir's pearlplus/circuit-record.json
@@ -741,10 +742,12 @@ EOF
 # Under PEARLPLUS_TIE the audit is tied to Pearl+'s W the same way, with no prefix (W's values are the circuit's own
 # names). Pearl+'s reader templates are a template a shape of linear, not a template a table, so its sampling design is
 # work:K (V3C_LAW, default work:1) over the work table R's circuit states, each of Pearl+'s reader templates at its floor
-# of V3C_FLOORS, and V3C_PORTS defaults the same way. A sample then opens some of W's values and not each one, so the
-# audit passes where the record's check of the registered values (one_stage's `registered`) takes the ones the sessions
-# opened, and is refused where it wants every registered value opened. The preflight refuses PEARLPLUS_TIE at another
-# design or without its floors.
+# of V3C_FLOORS, and V3C_PORTS defaults the same way. The audit's delta is V3C_FLOORS' DELTA (records_audit's --delta),
+# so its stream and its record's bounds on wrong units are at the delta the floors were made for. A sample then opens
+# some of W's values and not each one, so the audit passes where the record's check of the registered values
+# (one_stage's `registered`) takes the ones the sessions opened, and is refused where it wants every registered value
+# opened. The preflight refuses PEARLPLUS_TIE at another design, without its floors, or on a tree whose prove_path.py
+# takes no --reader-floors or whose records_audit.py takes no ratio for --delta.
 # With V3C_WARM_JOBS=N, `records_audit.py warm` first composes every template of the committed window into
 # $VW/compose-cache, N at a time, each in a process of its own, within V3C_WARM_TIMEOUT (default V3C_AUDIT_TIMEOUT): the
 # templates and their binding are public, so this precedes the audit's coins, and the audit, taking the cache, composes
@@ -779,7 +782,7 @@ v3c_audit() {  # the committed window audited from its records alone: its circui
   fi
   if [ -n "${H1_TIE:-}$PEARLPLUS_TIE" ]; then
     if [ -n "${H1_TIE:-}" ]; then tie=(--tie "$D/h1/w$K/registration.json" --tie-prefix h1/)
-    else tie=(--tie "$(pearl_dir)/registration.json"); fi
+    else tie=(--tie "$(pearl_dir)/registration.json" --delta "${V3C_FLOORS#*,}"); fi  # at the DELTA its floors were made for
     [ -n "${V3C_PORTS:-}" ] || ports=$("$PY" -c 'import json, sys; print(sum(int(s["k"]) for s in json.load(open(sys.argv[1]))["law"]["strata"]))' \
       "$VW/window/registration.json") || { say "V3C-AUDIT: R, the window's registration, has no strata to size the audit's ports by: set V3C_PORTS"; return 1; }
   fi
@@ -1711,6 +1714,8 @@ if [ -n "${H1_TIE:-}$PEARLPLUS_TIE" ] && [ -z "$COMPOSE" ]; then  # V3c's audit 
       || { say "PREFLIGHT: under $TIED the window's sampling design is work:K over a work table with a floor for each of Pearl+'s reader templates, a template a shape of linear, under which at most EPS of their units are wrong except with probability DELTA: pass V3C_LAW=work:K (default work:1) and V3C_FLOORS=EPS,DELTA, each NUM/DEN (default 4/125,1/100); V3C_LAW is ${V3C_LAW:-unset} and V3C_FLOORS is ${V3C_FLOORS:-unset}"; exit 3; }
     grep -q -- '"--reader-floors"' "$TREE/benchmarks/prove_path/prove_path.py" \
       || { say "PREFLIGHT: under $TIED the verifier's record and the commit state the work table with prove_path's --reader-floors, which this tree's prove_path.py doesn't take"; exit 3; }
+    grep -q -- 'type=delta_arg' "$TREE/benchmarks/prove_path/records_audit.py" \
+      || { say "PREFLIGHT: under $TIED the audit's delta is V3C_FLOORS' DELTA, a ratio NUM/DEN, which this tree's records_audit.py's --delta doesn't take"; exit 3; }
   fi
 fi
 if [ -n "${H1_TIE:-}" ] && [ "${1:-}" != v3c ] && [ -z "$COMPOSE" ]; then  # V3c's window commit at each H1 window's close, before its sample coin
