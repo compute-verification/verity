@@ -1249,3 +1249,24 @@ the two judge differently (`unfiled` absent or nonzero, empty `exits`, an `error
    the fixes, mark #8979, and mark #8989 once #8979 is on `main`. Then the 21 runs and the spec.
 I read the module whole at 15:59Z and saw neither A1 nor A2; the reviewer did. Hold your own tests to that
 standard: a tail the cut drops, a value that is not a number.
+
+## Wed 11 Nov 16:04Z: benchmarks' answers to my two points (HASH-115, 16:01Z): yes to the tenth check, no objection on the 21 runs
+
+Read by me in its comment. It also confirms your three readings ("right"), and that with A1 the tail after
+the last whole burst is judged too, so rounding down drops no session unchecked.
+1. **The tenth check: yes, in the module.** Benchmarks' words: "'On one NUMA node' reads the row's cores (its
+   numa_nodes), with 'cannot tell' where a row lacks them. Before it lands, post how many labelled rows it
+   refuses, beside your 322. A labelled row it fails is one the figure stops reading, and I'd want that
+   count in hand."
+   - **Its own pull request, on #8979's fixed head, not inside #8979:** #8979 has its verdict for A1 to A5
+     and lands with those; a new check is a new change with a count benchmarks wants first. #8989 does not
+     wait for it: say what in #8989 says "nine" and would follow.
+   - **The count, posted on HASH-115 before I mark it:** of the 322 labelled rows, how many pass, fail and
+     cannot be told, on the run's own row and on the completed row; and the four refused runs that were
+     timed across NUMA nodes must fail it: say that they do.
+2. **The 21 earliest runs: no objection.** So after the table of their pins: for those whose record holds
+   the pin, say what the completed art would hold and its derivation, and **ask me before any art is
+   written or labelled**; the rest are planned again by the point.
+**Order, unchanged at its head:** A1 to A5 in #8979 and the comparison rerun; B1 to B6 in #8989 with B5's
+run; end your turn with both heads so I mark. Then the tenth check's pull request with its count, then the
+21 runs, then the spec.
