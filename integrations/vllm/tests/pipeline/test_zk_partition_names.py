@@ -143,29 +143,30 @@ def test_the_boolean_version_computes_the_word_definition_s_words(family):
 
 
 def test_only_a_statement_in_lookup_slots_that_reads_a_slot_s_table_is_refused():
-    """`zk_refusal` on the split parts of `test_serving_rows_splits`: the whole-block word part reads EX2 and RCP in slots and
-    is refused with its Boolean version, whose reads are inline; the partial part and the combine read them inline and are
-    not."""
-    p16, p8, c3 = (SRW.template(t) for t in SPL.TMPLS)
-    assert [CR.statement(tp)["reads"] for tp in (p16, p8, c3)] == ["slots", "inline", "inline"]
-    assert CR.slot_tables(p16.fn) == CR.slot_tables(p8.fn) == CR.slot_tables(c3.fn) == ("ex2", "rcp")
-    assert CR.zk_refusal(p8) is None and CR.zk_refusal(c3) is None
-    gates16 = SRW.template(SPL.part(16))
-    assert gates16.word == SPL.P16 and CR.statement(gates16) == {"reads": "inline"} and CR.zk_refusal(gates16) is None
-    why = CR.zk_refusal(p16)
-    assert why.startswith(f"{SPL.P16}: its statement reads ex2, rcp in lookup slots") and "`verify --zk` refuses" in why
-    assert why.endswith(f"name its Boolean version {SPL.part(16)}")
+    """`zk_refusal` on the split chain's templates of `test_serving_rows_splits`: the whole first key block's word template reads
+    EX2 in slots and is refused with its Boolean version, whose reads are inline; the partial first block, the column end and
+    the combine read their tables inline and are not."""
+    f16, f8, e0, c2 = (SRW.template(t) for t in (SPL.F16, SPL.F8, SPL.E0, SPL.C2))
+    assert [CR.statement(tp)["reads"] for tp in (f16, f8, e0, c2)] == ["slots", "inline", "inline", "inline"]
+    assert [CR.slot_tables(tp.fn) for tp in (f16, f8, e0, c2)] == [("ex2",), ("ex2",), ("rcp",), ("ex2", "rcp")]
+    assert CR.zk_refusal(f8) is None and CR.zk_refusal(e0) is None and CR.zk_refusal(c2) is None
+    gates16 = SRW.template(SPL.block(16, boolean=True))
+    assert gates16.word == SPL.F16 and CR.statement(gates16) == {"reads": "inline"} and CR.zk_refusal(gates16) is None
+    why = CR.zk_refusal(f16)
+    assert why.startswith(f"{SPL.F16}: its statement reads ex2 in lookup slots") and "`verify --zk` refuses" in why
+    assert why.endswith(f"name its Boolean version {SPL.block(16, boolean=True)}")
 
 
 def test_a_partition_for_zk_sessions_refuses_a_slots_form_template_by_name():
-    partition = {"templates": [SPL.P8, SPL.P16, SPL.C3], "law": "stratified:1", "chunk_cap": SPL.CAPS, "zk": True}
+    gates16 = SPL.block(16, boolean=True)
+    partition = {"templates": [SPL.F8, SPL.F16, SPL.C2], "law": "stratified:1", "chunk_cap": SPL.CAPS, "zk": True}
     with pytest.raises(ValueError) as e:
         SRW.population({}, partition, "00" * 64)
-    assert str(e.value) == f"a partition for --zk sessions names {CR.zk_refusal(SRW.template(SPL.P16))}"
-    assert SPL.P16 in str(e.value) and SPL.part(16) in str(e.value)
+    assert str(e.value) == f"a partition for --zk sessions names {CR.zk_refusal(SRW.template(SPL.F16))}"
+    assert SPL.F16 in str(e.value) and gates16 in str(e.value)
     for other in ({**partition, "zk": False}, {k: v for k, v in partition.items() if k != "zk"},
-                  {**partition, "templates": [SPL.P8, SPL.part(16), SPL.C3], "chunk_cap": {**SPL.CAPS, SPL.part(16): 3}}):
-        with pytest.raises(LookupError, match="no rows of SparseMlaSplitPart_v1{T=8,"):
+                  {**partition, "templates": [SPL.F8, gates16, SPL.C2], "chunk_cap": {**SPL.CAPS, gates16: 3}}):
+        with pytest.raises(LookupError, match="no rows of SparseMlaHeadBlock_v1{DR=16,DV=32,NVIS=8,"):
             SRW.population({}, other, "00" * 64)
     window = SimpleNamespace(members=[], law="stratified:1", query={"name": SRW.TEMPLATE_QUERIES[0]}, row_tables=(), work_table=None,
                              partition={}, partition_digest="00" * 64, population=0)
