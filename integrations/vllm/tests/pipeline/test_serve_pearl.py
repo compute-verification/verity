@@ -10,7 +10,9 @@ with `window_class.PearlTables`' m₁₆ A rows and real rows, and each call's A
 m₁₆) and y committed as Pearl+'s reference commits them (`audit.commit_rows`, `served_y.commit_y`) from the x the forward
 handed the linear and the y it served. The device run is a stand-in on the real pass numbering and ends (`EpochCalls`,
 `PassEnds`), its y the BF16 product. A window whose pass is short of a linear's call, or whose passes aren't its steps, is
-that window's visible failure, and serve-openai refuses what the arm can't serve before the model loads.
+that window's visible failure, and serve-openai refuses what the arm can't serve before the model loads. A window's epoch
+is made ahead of it (`PearlWindows.make_ahead`: in-process coins' always, a live session's only when asked) in the order
+its open makes it, and the open then only hooks the model.
 """
 from __future__ import annotations
 
@@ -40,6 +42,7 @@ from verity_vllm.protocols.pouw.pearl_c import passes as PP
 from verity_vllm.protocols.pouw.pearl_c import served_y as SY
 from verity_vllm.protocols.pouw.pearl_c import window as PWR
 from verity_vllm.protocols.pouw.pearl_c.ends import PassEnds, _Pass
+from verity_vllm.protocols.pouw.pearl_c.manifest import SESSION_KEYS
 
 from tests.pipeline import predicted
 from tests.pipeline.test_serve_openai import CERTIFIER_BODY, Runner, Serving, records
@@ -184,11 +187,11 @@ def _device_run_is_the_stand_in(monkeypatch):
     RUNS.clear()
 
 
-def _serving(tmp_path, runner, coins=None):
+def _serving(tmp_path, runner, coins=None, ahead=None):
     """The server over ``runner``, its arm a `PearlWindows` over the committer `Serving` makes, ready."""
     s = Serving(tmp_path, window_steps=CLASS.outputs, runner=runner,
                 arm=lambda r: SPL.PearlWindows(runner.model, r, None, out=tmp_path, config=CONFIG, run_id="t", coins=coins,
-                                               clock=lambda: 0.0))
+                                               ahead=ahead, clock=lambda: 0.0))
     s.windows.arm.com = s.windows.com
     s.windows.arm.ready()
     return s
@@ -206,18 +209,23 @@ def test_each_window_is_one_epoch_a_pass_a_step_numbered_as_the_toys_and_its_w_r
     its steps, each with every linear's call at the toy's index, m₁₆ and real rows, and its W's entries are the roots of the
     x each linear was handed and the y it served, then each linear's weight's B root, once; its line's ``pouw_pearl`` is
     its outcome, and every hook is off after.  The weights' rows are kept once, when the arm is made ready, in
-    ``pearl/rows/``, and each window's run is given them."""
+    ``pearl/rows/``, and each window's run is given them.  The coins are in-process, so each window's epoch is made
+    ahead: window 0's when the arm is made ready, with no hook on the model, and the next window's at each close, the
+    last of which no window takes and the drain closes."""
     original = vars(Forward)["execute_model"]
     runner = Forward(Model())
     with _serving(tmp_path, runner) as srv:
         arm = srv.windows.arm
-        assert sorted(arm.rows) == [f"{c}.rows" for c in range(CALLS)] and RUNS == []
+        assert sorted(arm.rows) == [f"{c}.rows" for c in range(CALLS)] and len(RUNS) == 1 and arm.ahead
+        assert hooks.live(SPL.ENTRY) == () and all("apply" not in vars(m.quant_method) for m in runner.model.layers)
         assert {p for p, _ in arm.rows.values()} == {tmp_path / SPL.DIR / SPL.ROWS / f"{c}.rows" for c in range(CALLS)}
         assert (tmp_path / SPL.DIR / SPL.ROWS).stat().st_mode & 0o777 == 0o700
-        assert arm.describe()["ready"] == {"seconds": {"kernel": 0.0, "lean": 0.0, "rows": 0.0}, "rows": {
+        assert arm.describe()["ready"] == {"seconds": {"kernel": 0.0, "lean": 0.0, "rows": 0.0, "epoch": 0.0}, "rows": {
             "files": CALLS, "bytes": sum(2 * n * k for n, k in SHAPES)}}
         _serve(srv, PROMPTS)
-    assert [r.rows for r in RUNS] == [arm.rows, arm.rows]
+    assert [r.rows for r in RUNS] == [arm.rows] * 3 and [r.finished for r in RUNS] == [True, True, False]
+    arm.drain()
+    assert RUNS[2].finished and arm.made is None
     wins, salts = records(tmp_path, "windows.jsonl"), []
     assert [w["window"] for w in wins] == [0, 1] and all("pouw_h1" not in w for w in wins)
     for k, line in enumerate(wins):
@@ -255,10 +263,14 @@ def test_each_window_is_one_epoch_a_pass_a_step_numbered_as_the_toys_and_its_w_r
             "entry": SPL.ENTRY, "window": k, "steps": CLASS.outputs, "passes": CLASS.outputs, "calls": CLASS.outputs * CALLS,
             "salt": RUNS[k].salt.hex(), "weights_root": weights_root(roots).hex(), "coin_source": "in-process",
             "served": f"{SPL.DIR}/w{k}/served.json", "seconds": None}
+        seconds = line["pouw_pearl"]["seconds"]
+        assert sorted(seconds) == ["ahead", "epoch", "hooks", "install", "lead", "record", "release", "unhook"]
+        assert sorted(seconds["epoch"]) == ["coins", "run", "salt", "weights"]
         assert d.stat().st_mode & 0o777 == 0o700 and RUNS[k].finished
     assert salts[0][0] != salts[1][0] and salts[0][1] != salts[1][1]
     assert srv.windows.summary()["pouw_pearl"] == {"windows": 2, "served": 2, "passes": 4, "calls": 16, "failed": [],
-                                                   "closing": []}
+                                                   "closing": [], "ahead": {"made": 3, "taken": 2, "unused": 1,
+                                                                            "failed": []}}
     assert hooks.live(SPL.ENTRY) == () and "execute_model" not in vars(runner) and vars(Forward)["execute_model"] is original
     assert all("apply" not in vars(m.quant_method) for m in runner.model.layers)
 
@@ -277,7 +289,67 @@ def test_a_window_short_of_a_linears_call_is_its_visible_failure(tmp_path):
     assert json.loads((tmp_path / SPL.DIR / "w1" / "served.json").read_text())["ok"]
     assert s.windows.summary()["pouw_pearl"] == {"windows": 2, "served": 1, "passes": 2, "calls": 8, "failed": [0],
                                                  "closing": []}
-    assert s.windows.arm.describe()["coins"] == "given"
+    assert s.windows.arm.describe()["coins"] == "given" and not s.windows.arm.ahead and len(RUNS) == 2
+    assert all(sorted(w["pouw_pearl"]["seconds"]) == ["epoch", "hooks", "install", "record", "release", "unhook"]
+               for w in lines)
+
+
+def _registered(tmp_path, ahead, monkeypatch):
+    """Two windows served with seeded coins and each epoch's hm96 key its number's, their epochs made ahead or not: each
+    window's line less its seconds, its coins.json and its W."""
+    made = iter(range(8))
+    monkeypatch.setattr(PPD, "new_salt_key", lambda scheme: bytes([next(made) + 1]) * 32)
+    coins = lambda k: {"coins": Challenger(k, random.Random(k).randbytes)}  # noqa: E731
+    RUNS.clear()
+    with _serving(tmp_path, Forward(Model()), coins, ahead) as s:
+        made_at_ready = len(RUNS)
+        _serve(s, PROMPTS)
+    s.windows.arm.drain()
+    out = []
+    for k, line in enumerate(records(tmp_path, "windows.jsonl")):
+        d = tmp_path / SPL.DIR / f"w{k}"
+        served = json.loads((d / "served.json").read_text())
+        W = PWR.write(tmp_path / f"W{k}.json", served["passes"], range(CLASS.outputs))
+        out.append(({**line["pouw_pearl"], "seconds": None}, (d / "coins.json").read_text(), W["window"], W["registered"],
+                    served["coins"], served["ok"]))
+    return out, made_at_ready, len(RUNS), s.windows.summary()["pouw_pearl"].get("ahead")
+
+
+def test_a_window_on_an_epoch_made_ahead_registers_what_it_registers_when_its_open_makes_it(tmp_path, monkeypatch):
+    """The same two windows, coins and keys, served with each epoch made at its window's open and with each made ahead:
+    every window's outcome, coins.json, coins of record and W (its salt, and each root it registers) are the same.  Ahead,
+    window 0's epoch exists before the server listens and a third is made at the last close, which no window takes."""
+    (tmp_path / "at-open").mkdir()
+    (tmp_path / "ahead").mkdir()
+    at_open = _registered(tmp_path / "at-open", False, monkeypatch)
+    ahead = _registered(tmp_path / "ahead", True, monkeypatch)
+    assert at_open[0] == ahead[0] and all(ok for *_, ok in ahead[0]) and len(ahead[0]) == 2
+    assert at_open[1:] == (0, 2, None) and ahead[1:] == (1, 3, {"made": 3, "taken": 2, "unused": 1, "failed": []})
+
+
+def test_an_epoch_that_cant_be_made_ahead_is_its_windows_failure_at_its_open_and_is_not_made_again(tmp_path):
+    """Window 1's coins refuse.  Made ahead at window 0's close, that refusal is kept and is window 1's failure when it
+    opens, as when its open asked: its coins are asked for once, never again.  Window 1 holds no epoch, so none is made
+    ahead at its close, and window 2 makes its own at its open and is served."""
+    asked: list = []
+
+    def coins(k):
+        asked.append(k)
+        if k == 1:
+            raise ValueError("no coins for window 1")
+        return {"coins": Challenger(k, random.Random(k).randbytes)}
+
+    with _serving(tmp_path, Forward(Model()), coins, True) as s:
+        _serve(s, [*PROMPTS, PROMPTS[0]])
+    lines = records(tmp_path, "windows.jsonl")
+    assert [w["pouw_pearl"].get("error") for w in lines] == [None, "open: ValueError: no coins for window 1", None]
+    assert asked == [0, 1, 2, 3] and "lead" in lines[0]["pouw_pearl"]["seconds"]
+    assert "lead" not in lines[2]["pouw_pearl"]["seconds"] and not (tmp_path / SPL.DIR / "w1").exists()
+    assert s.windows.summary()["pouw_pearl"] == {"windows": 2, "served": 2, "passes": 4, "calls": 16, "failed": [1],
+                                                 "closing": [], "ahead": {"made": 2, "taken": 1, "unused": 0,
+                                                                          "failed": [1]}}
+    s.windows.arm.drain()
+    assert s.windows.arm.aheads["unused"] == 1 and [r.finished for r in RUNS] == [True, True, True]
 
 
 def test_serve_openai_refuses_what_the_pearl_arm_cant_serve_before_the_model_loads(tmp_path):
@@ -298,7 +370,9 @@ def test_serve_openai_refuses_what_the_pearl_arm_cant_serve_before_the_model_loa
     assert "it needs --precision bfloat16, not verity_int8" in refusal(*arm[:2], *arm[4:])
     assert "--commit, --scheme rows-sha512 and the row's --required-manifest" in refusal(*arm, "--no-commit")
     live = ("--challenger-gate", "g", "--challenger-peer", "p", "--challenger-lane", "l")
-    assert refusal(*arm, *live) is None
+    assert refusal(*arm, *live) is None and refusal(*arm, *live, "--challenger-ahead") is None
+    assert "--challenger-ahead makes each window's live session ahead of the window" in refusal(*arm, "--challenger-ahead")
+    assert "--challenger-ahead is Pearl+'s" in refusal("--challenger-ahead")
     for short in (live[:4], live[2:], (*live[:2], *live[4:])):
         assert "--challenger-lane go together under Pearl+" in refusal(*arm, *short)
     assert "--h1-model: PoUW H1's, not Pearl+'s" in refusal(*arm, *live, "--h1-model", "m")
@@ -354,18 +428,21 @@ def test_live_coins_reserve_each_window_a_salt_only_session_under_the_lane_which
     made: dict = {}
 
     def windows(*a, **kw):
-        made["coins"] = kw["coins"]
+        made["coins"], made["ahead"] = kw["coins"], kw["ahead"]
         return SimpleNamespace(ready=lambda: None)
 
-    opts = cli.parse("serve-openai", ["--model", "m", "--revision", "r", "--protocols", SPL.ENTRY, "--precision", "bfloat16",
-                                      "--protocols-config", json.dumps(CONFIG), "--challenger-gate", GATE,
-                                      "--challenger-peer", PEER, "--challenger-lane", LANE], environ={})
+    served = ["--model", "m", "--revision", "r", "--protocols", SPL.ENTRY, "--precision", "bfloat16",
+              "--protocols-config", json.dumps(CONFIG)]
+    gate = ["--challenger-gate", GATE, "--challenger-peer", PEER, "--challenger-lane", LANE]
     with monkeypatch.context() as m:
         m.setattr(SPL, "live", lambda *a: ("live", *a))
         m.setattr(SPL, "PearlWindows", windows)
         m.setattr("verity_vllm.engine.handle.model_runner", lambda v: None)
-        SPL.arm_of(opts, SimpleNamespace(model=None, vllm=None), None, tmp_path)
-    assert made["coins"] == ("live", GATE, PEER, LANE)
+        for more, want in ((gate, (("live", GATE, PEER, LANE), False)),
+                           ([*gate, "--challenger-ahead"], (("live", GATE, PEER, LANE), True)), ([], (None, None))):
+            opts = cli.parse("serve-openai", [*served, *more], environ={})
+            SPL.arm_of(opts, SimpleNamespace(model=None, vllm=None), None, tmp_path)
+            assert (made["coins"], made["ahead"]) == want
 
     h1 = {"kind": "period-open", "session": None, "body": {"period": "p8", "lane": LANE, **dict.fromkeys(PHW.H1_PERIOD, 1)}}
     with _serving(tmp_path, Forward(Model()), SPL.live(GATE, PEER, LANE, _gate([h1], []))) as s:
@@ -373,3 +450,64 @@ def test_live_coins_reserve_each_window_a_salt_only_session_under_the_lane_which
     assert records(tmp_path, "windows.jsonl")[0]["pouw_pearl"]["error"].startswith(
         "open: ValueError: refused before reserving a salt-only session: the lane's open period p8 is H1's")
     assert not (tmp_path / SPL.DIR / "w0").exists() and RUNS == []
+
+
+class _Session:
+    """A live session's client, as the install closes it: its close is the gate's last word on it."""
+
+    def __init__(self, sid, asked):
+        self.sid, self.asked = sid, asked
+
+    def close(self):
+        self.asked.append(["close", self.sid])
+
+
+def _salt_session(asked):
+    """`pouw_h1_window.salt_session` over the stand-in gate: the reserved session opened on the weights' root handed it
+    (in ``asked``, after the reserve), its coins an in-process challenger's, which the stand-in run reads."""
+    def salt_session(entry, settings, root, opens):
+        sid = settings.session["session"]
+        asked.append(["open", sid, root.hex()])
+        coins = Challenger(0, random.Random(len(asked)).randbytes)
+        carried = {**dict.fromkeys(SESSION_KEYS), "session": sid}
+        return _Session(sid, asked), coins.commitment, coins.open("salt", root), b"", carried, None
+    return salt_session
+
+
+def _calls(asked):
+    return [a[:2] if a[0] in ("open", "close") else [a[0], *a[-2:]] if a[0] == "reserve" else a for a in asked]
+
+
+def test_a_live_session_is_made_ahead_only_when_asked_and_the_window_then_opens_without_the_gate(tmp_path, monkeypatch):
+    """Live coins.  Without ``ahead`` nothing reaches the gate until a window opens: the ledger, its reserve, its open on
+    the weights' root, and its close at the window's close.  With it, window 0's session is reserved and opened on its
+    weights' root when the arm is made ready, each reserve before its open; the window's open asks the gate nothing (the
+    gate's next word after the session's open is its close, at the window's close), and the next window's session
+    follows at that close, the old epoch freed.  The one made ahead that no window takes is closed at the drain, unused."""
+    period = [{"kind": "period-open", "session": None, "body": {"period": "p7", "lane": LANE}}]
+    reserve = lambda k: ["reserve", "--epoch", str(k)]  # noqa: E731
+    for name, ahead in (("at-open", None), ("ahead", True)):
+        asked: list = []
+        RUNS.clear()
+        (tmp_path / name).mkdir()
+        monkeypatch.setattr(PHW, "salt_session", _salt_session(asked))
+        with _serving(tmp_path / name, Forward(Model()), SPL.live(GATE, PEER, LANE, _gate(period, asked)), ahead) as s:
+            ready = _calls(asked)
+            _serve(s, PROMPTS[:1])
+        arm = s.windows.arm
+        served = _calls(asked)
+        arm.drain()
+        line = records(tmp_path / name, "windows.jsonl")[0]["pouw_pearl"]
+        coins = json.loads((tmp_path / name / SPL.DIR / "w0" / "served.json").read_text())["coins"]
+        assert "error" not in line and line["coin_source"] == pouw.PH.CHALLENGER
+        assert coins["reserved"] == _reserved("0", "p7") and coins["session"]["session"] == "s-0"
+        assert asked[2][2] == RUNS[0].epoch.weights_root.hex()
+        if not ahead:
+            assert ready == [] and served == [["ledger"], reserve(0), ["open", "s-0"], ["close", "s-0"]]
+            assert _calls(asked) == served and len(RUNS) == 1 and "lead" not in line["seconds"]
+        else:
+            assert ready == [["ledger"], reserve(0), ["open", "s-0"]]
+            assert served == [*ready, ["close", "s-0"], ["ledger"], reserve(1), ["open", "s-1"]]
+            assert asked[6][2] == RUNS[1].epoch.weights_root.hex() != asked[2][2]
+            assert _calls(asked) == [*served, ["close", "s-1"]] and [r.finished for r in RUNS] == [True, True]
+            assert arm.summary()["ahead"] == {"made": 2, "taken": 1, "unused": 1, "failed": []} and "lead" in line["seconds"]

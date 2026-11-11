@@ -127,8 +127,8 @@ def worker(name: str) -> ThreadPoolExecutor:
 
 @dataclasses.dataclass(frozen=True, kw_only=True)
 class GateOptions:
-    """serve-openai's ``--challenger-gate``, ``--challenger-peer`` and ``--challenger-lane`` (its ``gate`` group,
-    `sessions_of`, `serve_pearl.live`)."""
+    """serve-openai's ``--challenger-gate``, ``--challenger-peer``, ``--challenger-lane`` and ``--challenger-ahead`` (its
+    ``gate`` group, `sessions_of`, `serve_pearl.live`)."""
     challenger_gate: str | None = option("--challenger-gate", default=None, metavar="CMD",
                                          help="with --protocols: the auditor host's challenger gate, its command as one string "
                                               "(e.g. 'ssh -i KEY -o BatchMode=yes research@HOST'); each H1 window reserves a "
@@ -142,6 +142,14 @@ class GateOptions:
                                          help="with --challenger-gate under Pearl+'s arm: the lane whose gate key the gate's "
                                               "command holds, whose open period in the auditor's ledger each window's "
                                               "salt-only session joins (pouw_h1_window.reserve_salt); PoUW H1's take none")
+    challenger_ahead: bool = option("--challenger-ahead", default=False, action="store_true",
+                                    help="with --challenger-gate under Pearl+'s arm: each window's epoch is made ahead of "
+                                         "the window, its salt-only session reserved, opened and its salt coin drawn before "
+                                         "the server listens (window 0's) or at the window before's close, so the window's "
+                                         "open reaches no gate; the window must close within its session's minutes of that "
+                                         "open, and the one session ahead when the server stops is closed unused, which "
+                                         "refuses its lane's open period unless the period's cap refused its reserve; "
+                                         "without it a window's session is reserved at its open (serve_pearl)")
     h1_prover: str | None = option("--h1-prover", default=None, metavar="DIR",
                                    help="with --protocols: keep each H1 window's prover state (its salt key and each call's "
                                         "rows, pouw_h1_prover) and its live@<s> rows (pouw_h1_live.dump) in DIR/w<k>/, "
@@ -221,10 +229,11 @@ def refusal(opts: Any) -> str | None:
     if bool(gate) != bool(peer):
         return ("--challenger-gate and --challenger-peer go together: the gate's command and this machine's name in the "
                 "auditor host's peers, where its challenger reaches the server (ssh -R)")
-    if opts.gate.challenger_lane:
+    if opts.gate.challenger_lane or opts.gate.challenger_ahead:
         from verity_vllm.pipeline.serve_pearl import ENTRY as PEARL
 
-        return f"--challenger-lane is Pearl+'s (--protocols {PEARL}, serve_pearl): PoUW H1's windows take none"
+        flag = "--challenger-lane" if opts.gate.challenger_lane else "--challenger-ahead"
+        return f"{flag} is Pearl+'s (--protocols {PEARL}, serve_pearl): PoUW H1's windows take none"
     if gate and not opts.protocols:
         return f"--challenger-gate draws PoUW H1's coins: it needs --protocols {ENTRY}"
     if (opts.gate.h1_prover or opts.gate.h1_receipts or opts.gate.h1_window_commit) and not opts.protocols:

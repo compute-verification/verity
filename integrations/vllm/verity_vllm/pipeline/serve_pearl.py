@@ -29,6 +29,15 @@ product, one Pearl+ epoch a Commit window, under the server's own Commit, whose 
   ``pearl/rows/``), and every window's passes link them (the pouw setting ``kept_rows``): a pass's ``weights/`` holds the
   files its manifest names, as when each window wrote them. A weight's tree is under its window's salt key, so each
   window writes its own.
+* **An epoch made ahead.** A window's epoch is made (`pouw.prepare`) in the install's own order: its coins, the weights
+  committed under its fresh key, the salt coin after their root, then the device run under that salt. With in-process
+  coins it is made ahead of the window: window 0's before the server listens (`PearlWindows.ready`), window k+1's at
+  window k's close, on the loop, once window k's epoch is freed; the window's open then only hooks the model onto it
+  (the pouw setting ``prepared``). With a live session the same happens under ``--challenger-ahead`` alone, since a
+  session made ahead that no window takes is closed unused when the server stops, and an unused session of a lane's
+  period refuses the period: without the flag a live window's epoch is made at its open. At most one epoch is ever
+  ahead, and a window must close within its session's minutes of the session's open. An epoch that can't be made ahead
+  is its window's visible failure at its open, as when the open made it, and is not made again.
 
 Each window's outcome (`PearlWindows.close`) is its ``windows.jsonl`` line's ``pouw_pearl`` (`PearlWindows.outcome_key`),
 ``serve.json``'s ``protocols`` `PearlWindows.describe`, ``summary.json``'s ``commit.pouw_pearl`` `PearlWindows.summary`.
@@ -62,6 +71,8 @@ ROWS = "rows"
 DRAWER = "pouw"
 #: serve-openai's gate options a live salt session takes, all three or none (`refusal`, `live`)
 GATE = ("challenger_gate", "challenger_peer", "challenger_lane")
+#: ... and the one that makes each live window's epoch, its session with it, ahead of the window (`PearlWindows.ahead`)
+AHEAD = "challenger_ahead"
 #: where a live session's challenger is reached: this node's 127.0.0.1, at the port the gate's open answers
 AT = "127.0.0.1:0"
 
@@ -112,13 +123,17 @@ def refusal(opts: Any) -> str | None:
         return (f"--release-after {DRAWER} waits for PoUW H1's draw of each window, and Pearl+ puts none: its verifier's "
                 "coin is drawn after its window record W (served_passes.py verify)")
     g = opts.gate
-    if h1 := [f"--{f.name.replace('_', '-')}" for f in dataclasses.fields(g) if f.name not in GATE and getattr(g, f.name)]:
+    if h1 := [f"--{f.name.replace('_', '-')}" for f in dataclasses.fields(g)
+              if f.name not in (*GATE, AHEAD) and getattr(g, f.name)]:
         return (f"{', '.join(h1)}: PoUW H1's, not Pearl+'s, whose salt coin comes from a live salt-only session "
                 "(--challenger-gate, --challenger-peer, --challenger-lane) or in-process (serve_pearl)")
     if len({bool(getattr(g, f)) for f in GATE}) > 1:
         return ("--challenger-gate, --challenger-peer and --challenger-lane go together under Pearl+: the gate's command, "
                 "this machine's name in the auditor host's peers, and the lane whose gate key the command holds, whose open "
                 "period each window's salt-only session joins")
+    if getattr(g, AHEAD) and not g.challenger_gate:
+        return ("--challenger-ahead makes each window's live session ahead of the window: it needs --challenger-gate, "
+                "--challenger-peer and --challenger-lane (in-process coins are always made ahead)")
     if opts.precision != PRECISION:
         return (f"--protocols {ENTRY} serves the BF16 checkpoint's linears as Pearl+'s FP8 product: it needs --precision "
                 f"{PRECISION}, not {opts.precision}")
@@ -160,23 +175,41 @@ def live(gate: str, peer: str, lane: str, run: Any = None) -> Callable[[int], di
     return coins
 
 
+@dataclasses.dataclass
+class Made:
+    """Window ``window``'s epoch as `PearlWindows.make` made it, starting at ``at`` on the arm's clock: the ``epoch``
+    (`pouw.Prepared`), the coin settings it was made with (``coins``; a live session's reserve is their ``session``) and
+    each part's ``seconds``; or, made ahead, why it couldn't be (``error``), which is the window's failure at its open."""
+
+    window: int
+    at: float
+    epoch: Any = None
+    coins: Mapping[str, Any] = dataclasses.field(default_factory=dict)
+    seconds: Mapping[str, float] = dataclasses.field(default_factory=dict)
+    error: Exception | None = None
+
+
 class PearlWindows:
     """The arm over ``model`` (the served `verity_vllm.LLM`'s), its model ``runner`` and the server's committer ``com``:
     ``config`` the pouw settings of ``--protocols-config`` (`config_of`), ``out`` the serve dir each window's epoch goes
     under (``pearl/w<k>/``), ``run_id`` the run its ``served.json`` names, ``coins`` each window's coin settings
-    (`in_process` when None). ``clock`` times each part."""
+    (`in_process` when None). ``ahead``: each window's epoch is made ahead of its open (`ready`, `close`); None is
+    in-process coins' own answer, yes, and given coins', no. ``clock`` times each part."""
 
     #: the window line's and the summary's key for this arm's outcomes
     outcome_key = "pouw_pearl"
 
     def __init__(self, model: Any, runner: Any, com: Any, *, out: Path, config: Mapping[str, Any], run_id: str = "local",
-                 coins: Callable[[int], Mapping[str, Any]] | None = None,
+                 coins: Callable[[int], Mapping[str, Any]] | None = None, ahead: bool | None = None,
                  clock: Callable[[], float] = time.perf_counter) -> None:
         from verity_vllm.protocols import pouw
 
         self.model, self.runner, self.com, self.out, self.run_id = model, runner, com, Path(out).resolve(), str(run_id)
         self.config = {"pouw": dict(config.get("pouw", {}))}
         self.coins, self.given = coins or in_process, coins is not None
+        self.ahead = (not self.given) if ahead is None else bool(ahead)
+        self.made: Made | None = None                    # the one epoch made ahead, until its window opens
+        self.aheads = {"made": 0, "taken": 0, "unused": 0, "failed": []}
         self.clock = clock
         self.linears = sum(isinstance(m, pouw.linear_types()) for m in model.modules())
         if not self.linears:
@@ -192,8 +225,9 @@ class PearlWindows:
     def ready(self) -> dict[str, Any]:
         """What window 0's open would otherwise do first, done before the server listens: the kernel loaded
         (`pearl_c.Kernel.load`, once a process), for in-process coins the Lean verifier of record built
-        (`verifier.executable`, their entropy), and the weights' rows written once for every window's passes to link
-        (`pouw.keep_rows`, in `dir_of` `ROWS`); ``readied``, with each part's time."""
+        (`verifier.executable`, their entropy), the weights' rows written once for every window's passes to link
+        (`pouw.keep_rows`, in `dir_of` `ROWS`), and under ``ahead`` window 0's epoch made (`make_ahead`); ``readied``,
+        with each part's time."""
         from verity.core.protocols.pouw import verifier
         from verity_vllm import protocols as PO
         from verity_vllm.protocols import pouw
@@ -207,11 +241,14 @@ class PearlWindows:
         t2 = self.clock()
         self.rows = pouw.keep_rows(SCHEME, PO.Target(self.model, context(self.config)), self.dir_of(ROWS))
         t3 = self.clock()
-        self.readied = {"seconds": {"kernel": round(t1 - t0, 4), "lean": round(t2 - t1, 4), "rows": round(t3 - t2, 4)},
+        epoch = {"epoch": self.make_ahead(0)} if self.ahead else {}
+        self.readied = {"seconds": {"kernel": round(t1 - t0, 4), "lean": round(t2 - t1, 4), "rows": round(t3 - t2, 4),
+                                    **epoch},
                         "rows": {"files": len(self.rows), "bytes": sum(e["bytes"] for _, e in self.rows.values())}}
         print(f"[serve-pearl] ready: the kernel loaded in {t1 - t0:.1f} s"
               + ("" if self.given else f", the Lean verifier built in {t2 - t1:.1f} s")
-              + f", {len(self.rows)} weights' rows kept in {t3 - t2:.1f} s", flush=True)
+              + f", {len(self.rows)} weights' rows kept in {t3 - t2:.1f} s"
+              + (f", window 0's epoch made in {epoch['epoch']:.1f} s" if epoch else ""), flush=True)
         return self.readied
 
     def describe(self) -> dict[str, Any]:
@@ -220,7 +257,7 @@ class PearlWindows:
         ctx = context(self.config)
         return {"entry": ENTRY, "composition": list(ctx.enabled), "cut": ENTRY, "stage": ctx.stage,
                 "epoch": f"{DIR}/w<k>/", "rows": f"{DIR}/{ROWS}/", "coins": "given" if self.given else "in-process",
-                "release": "on the loop",
+                "ahead": self.ahead, "release": "on the loop",
                 "linears": self.linears, "config": self.config, "sealed": f"no: {DIR}/ is outside the window's seal",
                 "ready": self.readied}
 
@@ -232,24 +269,84 @@ class PearlWindows:
             p.chmod(0o700)
         return d
 
+    def make(self, window: int) -> Made:
+        """Window ``window``'s epoch made, the model untouched (`pouw.prepare`): its coins (``coins``: a live session
+        reserved, or the in-process challenger), then the weights committed under its key, the salt coin after their
+        root and the device run under that salt, with each part's seconds."""
+        from verity_vllm import protocols as PO
+        from verity_vllm.protocols import pouw
+
+        t0 = self.clock()
+        coins = dict(self.coins(window))
+        t1 = self.clock()
+        kept = {} if self.rows is None else {"kept_rows": self.rows}
+        epoch = pouw.prepare(SCHEME, PO.Target(self.model, context(self.config, {**kept, **coins})))
+        return Made(window, t0, epoch, coins, {"coins": round(t1 - t0, 4), **epoch.seconds})
+
+    def make_ahead(self, window: int) -> float:
+        """Window ``window``'s epoch made now, ahead of its open, which takes it (``made``); the seconds it took. One it
+        can't make is kept as that window's failure, raised at its open as when the open made it."""
+        self.drop()
+        t0 = self.clock()
+        try:
+            self.made = self.make(window)
+            self.aheads["made"] += 1
+        except (ValueError, RuntimeError, OSError) as e:
+            self.made = Made(window, t0, error=e)
+            self.aheads["failed"] = [*self.aheads["failed"], window][:20]
+            print(f"[serve-pearl] window {window}: its epoch can't be made ahead: {type(e).__name__}: {str(e)[:300]}",
+                  flush=True)
+        return round(self.clock() - t0, 4)
+
+    def drop(self) -> None:
+        """The epoch made ahead that no window took, closed: its run finished and its live session closed, unused."""
+        made, self.made = self.made, None
+        if made is not None and made.epoch is not None:
+            self.aheads["unused"] += 1
+            try:
+                made.epoch.close()
+            except (ValueError, RuntimeError, OSError) as e:
+                print(f"[serve-pearl] window {made.window}: its unused epoch's close: {type(e).__name__}: {str(e)[:300]}",
+                      flush=True)
+
     def open(self, window: int) -> None:
-        """Window ``window``'s epoch, on the open Commit window: its composition installed (`context`) with its coins
-        (``coins``) and its passes retained in `dir_of`."""
+        """Window ``window``'s epoch, on the open Commit window: the one made ahead for it, else made now (`make`), and
+        the window's composition installed over it (`context`, the pouw setting ``prepared``), which hooks the model
+        onto its run, its passes retained in `dir_of`.  ``opened``: the open's seconds on the loop (``install``), of
+        them the hooks' (``hooks``), what making the epoch took wherever it was made (``epoch``), and for one made
+        ahead how long before the open its making began (``lead``)."""
         from verity_vllm import protocols as PO
 
         if self.comp is not None:
             raise RuntimeError(f"{ENTRY}: window {window} opens while window {self.window}'s epoch is open")
         t0 = self.clock()
-        coins = dict(self.coins(window))
+        made, lead = self.made, {}
+        if made is not None and made.window == window:
+            self.made = None
+            if made.error is not None:
+                raise made.error
+            self.aheads["taken"] += 1
+            lead = {"lead": round(t0 - made.at, 4)}
+        else:
+            self.drop()
+            made = self.make(window)
+        t1 = self.clock()
         kept = {} if self.rows is None else {"kept_rows": self.rows}
-        ctx = context(self.config, {"transcript_dir": str(self.dir_of(window)), "runner": self.runner, **kept, **coins})
-        self.comp = PO.install(self.model, ctx)
-        self.window, self.reserved = window, coins.get("session")
-        self.opened = {"install": round(self.clock() - t0, 4)}
+        ctx = context(self.config, {"transcript_dir": str(self.dir_of(window)), "runner": self.runner, **kept, **made.coins,
+                                    "prepared": made.epoch})
+        try:
+            self.comp = PO.install(self.model, ctx)
+        except BaseException:
+            made.epoch.close()             # nothing once the install took it, which closes its session itself
+            raise
+        self.window, self.reserved = window, made.coins.get("session")
+        t2 = self.clock()
+        self.opened = {"install": round(t2 - t0, 4), "hooks": round(t2 - t1, 4), "epoch": dict(made.seconds), **lead}
 
     def close(self, window: int) -> dict[str, Any] | None:
         """Window ``window``'s epoch closed, on the loop: its hooks off, its option closed, its ``coins.json`` and
-        ``served.json`` written (`record`); its outcome, with ``error`` when any of it failed. None when no epoch is open."""
+        ``served.json`` written (`record`); its outcome, with ``error`` when any of it failed. None when no epoch is open.
+        Under ``ahead`` the next window's epoch is then made (`make_ahead`), its seconds the outcome's ``ahead``."""
         if self.comp is None:
             return None
         comp, reserved, seconds = self.comp, self.reserved, dict(self.opened)
@@ -271,9 +368,11 @@ class PearlWindows:
         except (KeyError, OSError, ValueError) as e:
             out = {"entry": ENTRY, "window": window, "steps": steps, "error": f"record: {type(e).__name__}: {e}"[:500]}
         del comp, opt
-        gc.collect()                       # the epoch's device buffers (B̃, the pass buffers) freed before the next install
-        out["seconds"] = {**seconds, "unhook": round(t1 - t0, 4), "release": round(t2 - t1, 4),
-                          "record": round(self.clock() - t2, 4)}
+        gc.collect()                       # the epoch's device buffers (B̃, the pass buffers) freed before the next is made
+        t3 = self.clock()
+        ahead = {"ahead": self.make_ahead(window + 1)} if self.ahead else {}
+        out["seconds"] = {**seconds, "unhook": round(t1 - t0, 4), "release": round(t2 - t1, 4), "record": round(t3 - t2, 4),
+                          **ahead}
         self.outcomes.append(out)
         return out
 
@@ -306,20 +405,24 @@ class PearlWindows:
         verifier's coin is drawn after W."""
 
     def drain(self) -> None:
-        """Nothing to wait for: each window's release ran on the loop at its close."""
+        """Each window's release ran on the loop at its close; the epoch made ahead that no window took is closed
+        (`drop`)."""
+        self.drop()
 
     def summary(self) -> dict[str, Any]:
         """summary.json's ``pouw_pearl``: the windows closed, those whose epoch is one Pearl+ round a step, and their
-        passes and calls."""
+        passes and calls; under ``ahead``, the epochs made ahead, those a window took, those closed unused, and the
+        windows whose epoch couldn't be made ahead."""
         ok = [o for o in self.outcomes if "error" not in o]
         return {"windows": len(self.outcomes), "served": len(ok), "passes": sum(o["passes"] for o in ok),
-                "calls": sum(o["calls"] for o in ok)}
+                "calls": sum(o["calls"] for o in ok), **({"ahead": dict(self.aheads)} if self.ahead else {})}
 
 
 def arm_of(opts: Any, llm: Any, com: Any, out: Path) -> PearlWindows | None:
     """The server's arm under ``--protocols`` `ENTRY` over the served ``llm``, its model runner and its committer ``com``
-    (None without), its coins a live salt-only session a window under ``--challenger-gate`` (`live`), else in-process,
-    made ready (`PearlWindows.ready`)."""
+    (None without), its coins a live salt-only session a window under ``--challenger-gate`` (`live`), made ahead of
+    the window only under ``--challenger-ahead``, else in-process and always made ahead; made ready
+    (`PearlWindows.ready`)."""
     from verity_vllm.engine.handle import model_runner
 
     if opts.protocols != ENTRY:
@@ -327,7 +430,7 @@ def arm_of(opts: Any, llm: Any, com: Any, out: Path) -> PearlWindows | None:
     g = opts.gate
     coins = live(g.challenger_gate, g.challenger_peer, g.challenger_lane) if g.challenger_gate else None
     arm = PearlWindows(llm.model, model_runner(llm.vllm), com, out=out, config=config_of(opts.protocols_config),
-                       run_id=opts.run_id, coins=coins)
+                       run_id=opts.run_id, coins=coins, ahead=bool(getattr(g, AHEAD)) if coins is not None else None)
     arm.ready()
     return arm
 

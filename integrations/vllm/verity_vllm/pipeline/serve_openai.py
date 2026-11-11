@@ -10,7 +10,7 @@
         [--tick-bucket-ms 100 --tick-sat-ms MS --tick-free-ms MS]
         [--protocols pouw:eps1-sm120-h1fx1 [--protocols-config JSON] [--challenger-gate CMD --challenger-peer NAME]]
         [--protocols pouw:pearl-c-h100-v1-h3 --precision bfloat16 --protocols-config JSON
-         [--challenger-gate CMD --challenger-peer NAME --challenger-lane LANE]]
+         [--challenger-gate CMD --challenger-peer NAME --challenger-lane LANE [--challenger-ahead]]]
         [--remote-verifier HOST:PORT [--remote-kv-lib SO [--remote-session-lib SO]] [--remote-filler-gib 0]]
         [--day N --day-log LOG --day-program HEX [--day-blocks KEYS] [--day-params FILE]]
 
@@ -100,7 +100,8 @@ product under this server's Commit, one Pearl+ epoch a Commit window, the window
 (`serve_pearl`): each window's passes, one an engine step, its ``coins.json`` and ``served.json`` go to ``pearl/w<k>/``, and
 its outcome is its ``windows.jsonl`` line's ``pouw_pearl``. With ``--challenger-gate``, ``--challenger-peer`` and
 ``--challenger-lane`` each window's salt coin comes from a salt-only session of its own on the auditor host's challenger,
-reserved under the lane when the window opens (`serve_pearl.live`); without them it is in-process and credits nothing.
+reserved under the lane when the window opens (`serve_pearl.live`), or with ``--challenger-ahead`` ahead of the window, as
+its whole epoch then is; without them it is in-process, made ahead of each window, and credits nothing.
 ``--day N`` declares day N's one circuit in ``--day-log`` before the model loads, and each window's registration names it (`serve_day`).
 ``--remote-verifier HOST:PORT`` proves the engine's store (its weights, and ``--remote-filler-gib``) to
 PoUB's verifier in lockstep with the server's engine steps from its first, a pass a step (`serve_remote`): its
