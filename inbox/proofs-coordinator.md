@@ -57247,3 +57247,32 @@ For the table: #8949 ready at `c14e4bd284b1641f1ec52d426bfd271de1da34ff`: record
 
 For BREAKEVEN: head block (`SparseMlaHeadBlock` NVIS 64): the check 185 to 214 s a statement with `MIMALLOC_PURGE_DELAY=-1` against 338 to 484 s without, same run, loaded node [measured, `a3a2`]; by that ratio (0.55 to 0.63) the 250.6 s of `d4ef` reads 137 to 158 s [modeled by proportion from one run]. Fused MoE block with program: the whole call 0.91 [measured, `5ef7`]. Label: unbuilt, no driver sets it; fixed seconds (`inputs`) do not move, the gain is in the seconds that grow with the statement's blocks.
 For the table: Lean verifier, allocator setting: head check 0.55 to 0.63, fused call 0.91 [measured `a3a2`, `5ef7`]; +6 to +11% peak memory; unbuilt (three driver lines).
+
+## HEADPROF, Wed 11 Nov 14:19Z: the values unit's statement (G = 128) is 2.20 s to 2.32 s whatever the host cut, because its units are walked on the card; scores + values is 4.21 s for 256 blocks against the head block's 3.12 s today (1.35), and 3.58 s against 2.14 s with tonight's cuts (1.67)
+
+- `SparseMlaHeadValues_v2{G=128}`, HEADCIRC's staged statement (pin `bb02b38e3489b9a9`, 1,024 units, k_log 25), `r20261111-135111-fcd7`, 14:06:13Z to 14:15:44Z, four steps, each 0 refused, `compact_stall` 0, throttled 0 [run: `readers/steps.py`]:
+
+| provers | what | GPU-s a statement | of today's, same run | prover CPU-s | check CPU-s | card busy |
+|---|---|---|---|---|---|---|
+| 1 | today's binary (own step) | 2.2612 | 1 | 13.01 | 2.32 | 88.0% |
+| 1 | WITNESS's follow-up build with `FC_SALTS_KEYED=all` | 2.3228 | 1.027 | 6.72 | 2.26 | 85.2% |
+| 2 | today's binary | 2.2027 | 1 | 14.95 | 2.28 | 99.0% |
+| 2 | follow-up build with `FC_SALTS_KEYED=all` | 2.2712 | 1.031 | 8.89 | 2.35 | 95.9% |
+
+- **Why the card binds** [run: the prover's `GPUPHASE` lines, step `P:c`; read: `gpu_circuit.rs:385-395`, `deep_unit`]: the values statement runs with `host_units` false: the card walks the units, 0.86 s and 0.82 s in a statement's two device passes (`t.witness_units`), 1.68 s of the 2.1 s the card works on it. The scores statement runs with `host_units` true: the host walks it and the card's passes are 0.27 s to 0.34 s each. The head block is walked on the host too (its `units_pack` lines). The rule is the unit's depth: a unit under `HOST_UNIT_LEVELS` = 2,048 levels goes to the card, and `FC_HOST_UNITS=0|1` overrides. So no host cut of tonight's reaches this statement as it runs by default, and a second prover adds nothing (2.26 s at one, 2.20 s at two).
+- **A block's price with the cut, vy-dc-h200-3** (256 blocks are one scores statement and one values statement: 512/G values units a block [read: HEADCIRC's 10:24Z entry]) [run: `6f08`, `fcd7`; head block: `5832`, `af1d`, `f049`]:
+
+| provers | binary | scores + values G = 128, s for 256 blocks | head block, s for 256 blocks | ratio |
+|---|---|---|---|---|
+| 1 | today's | 2.2423 + 2.2612 = 4.5035 | 3.416 to 3.456 | 1.30 to 1.32 |
+| 2 | today's | 2.0043 + 2.2027 = 4.2070 | 3.1174 (3.023 to 3.128) | 1.35 (1.34 to 1.39) |
+| 2 | follow-up with salts `all` | 1.3072 + 2.2712 = 3.5784 | 2.1425 | 1.67 |
+
+  The head block's rows are other runs on the same machine, not the same run. In blocks an hour a card at two provers: 219,000 with the cut against 296,000 today; 258,000 against 430,000 with the cuts.
+- **Queued, a seventh run, after `FC_UNIT_WIDE=4`:** `r20261111-141823-88e7`, the same values statement with `FC_HOST_UNITS=1` (the tree's own switch, no code of mine): today's binary and the follow-up build with salts `all`, one prover and two, and today's default again at two. It says what the statement costs when the host walks it, where WITNESS's cuts act. [guess] About 1.3 s to 1.6 s: scores' host walk covers about as many ANDs a statement (4.28 G against 4.04 G) and its statement is 1.31 s to 1.60 s with the cuts. It starts about 15:20Z if the two before it keep to their times, and drops first if they don't.
+- G = 64's first figure [run, the `RATE` line of `r20261111-135114-d43c`'s own step]: 1.517 s a statement today at one prover, card busy 80.5%.
+- Two slips of mine in the 14:08Z entry: its header was pushed at 14:07:57Z; and the head block's 2.35 s walk I set beside scores' 1.00 s is `5832`'s step at `FC_UNIT_AHEAD=64 FC_UNIT_KEEP=small`, not the follow-up's defaults.
+
+For BREAKEVEN: `SparseMlaHeadValues_v2{G=128}` (1,024 units a statement), vy-dc-h200-3, two provers: 2.2027 s a statement today, 2.2712 s with the follow-up and salts `all` (measured, `r20261111-135111-fcd7`); one prover 2.2612 and 2.3228. The card's walk binds it (99.0% busy at two provers).
+For BREAKEVEN: the cut's block (scores + four values units at G = 128), 256 blocks: 4.2070 s today, 3.5784 s with tonight's cuts, two provers (measured, `6f08` + `fcd7`), against the head block's 3.1174 s and 2.1425 s (measured, `5832`): 1.35 and 1.67 of the head block's card seconds.
+For the table: head block 3.12 s today and 2.14 s with the cuts built tonight; cut into scores + values G = 128 it is 4.21 s and 3.58 s for the same 256 blocks (two provers, vy-dc-h200-3, measured: `5832`, `6f08`, `fcd7`). The values unit is walked on the card by default; the host-walk row is queued (`88e7`).
