@@ -2665,6 +2665,16 @@ pub(crate) fn transpose32(m: &mut [u32; 32]) {
 /// answer as [`unit_ab_into`], word for word. None: the net has no one-pass form ([`IrUnitNet::one_pass`]), which a level
 /// walk needs as `eval_wide` does.
 pub fn unit_ab_levels(net: &IrUnitNet, sched: &UnitSched, uw: usize, ins: &[Vec<F128>], out: &mut [u64]) -> Option<bool> {
+    unit_ab_seeded(net, sched, &[], |_| Vec::new(), uw, ins, out)
+}
+
+/// [`unit_ab_levels`] on a cut schedule (`ir_block::schedule_seeded(net, seeds)`): `seed_z(g)` is lane group g's z at each
+/// of `seeds`' rows (slots `32 g ..`, bit l slot l's), given before the walk, so a row reads a seed whose own place in the
+/// schedule is after it. The walk still computes each seed's a and b at that place, and holds its z to the one given: the
+/// answer is also false where a seed is not its row's z in a slot. With the seeds' z right, the same `out` and the same
+/// answer as [`unit_ab_into`], word for word.
+pub fn unit_ab_seeded(net: &IrUnitNet, sched: &UnitSched, seeds: &[u32], seed_z: impl Fn(usize) -> Vec<u32> + Sync, uw: usize,
+                      ins: &[Vec<F128>], out: &mut [u64]) -> Option<bool> {
     assert_eq!(out.len(), 4 * uw * ins.len(), "unit_ab_levels: out is not 4 * uw words per slot");
     if !net.one_pass() {
         return None;
@@ -2672,10 +2682,15 @@ pub fn unit_ab_levels(net: &IrUnitNet, sched: &UnitSched, uw: usize, ins: &[Vec<
     let (u, cp, first) = (net.useful, net.const_pos, net.in_words * WORD);
     assert!(u <= uw * WORD, "unit_ab_levels: the unit's rows are more than a slot's");
     assert_eq!(sched.order.len(), cp - first, "unit_ab_levels: the schedule is not this net's");
+    let mut seeded = vec![false; if seeds.is_empty() { 0 } else { u }];
+    for &r in seeds {
+        assert!((first..cp).contains(&(r as usize)), "unit_ab_seeded: seed {r} is no row past the inputs");
+        seeded[r as usize] = true;
+    }
     let own = |rows: &crate::ir_block::Rows, i: usize| rows.row(i) == [i as u32].as_slice();
     // row i's XOR over z, whose entry i is still 0, and all ones where it reads column i an odd number of times
     let fold = |row: &[u32], i: u32, z: &[u32]| row.iter().fold((0u32, 0u32), |(x, o), &c| (x ^ z[c as usize], o ^ 0u32.wrapping_sub(u32::from(c == i))));
-    Some(out.par_chunks_mut(32 * 4 * uw).zip(ins.par_chunks(32)).all(|(dst, grp)| {
+    Some(out.par_chunks_mut(32 * 4 * uw).zip(ins.par_chunks(32)).enumerate().all(|(g, (dst, grp))| {
         let (mut z, mut a, mut b) = (vec![0u32; u], vec![0u32; u], vec![0u32; u]);
         for i in 0..first {
             if own(&net.a, i) {
@@ -2687,15 +2702,24 @@ pub fn unit_ab_levels(net: &IrUnitNet, sched: &UnitSched, uw: usize, ins: &[Vec<
             }
         }
         (z[cp], a[cp], b[cp]) = (!0, !0, !0);
+        if !seeds.is_empty() {
+            let given = seed_z(g);
+            assert_eq!(given.len(), seeds.len(), "unit_ab_seeded: a z per seed");
+            seeds.iter().zip(given).for_each(|(&r, w)| z[r as usize] = w);
+        }
+        let mut off = 0u32;
         for l in 0..sched.levels() {
             for &i in sched.level(l) {
+                // a seed's row is computed with its own entry 0, as every row's, then held to the z given
+                let given = seeded.get(i as usize).copied().unwrap_or(false).then(|| std::mem::take(&mut z[i as usize]));
                 let ((x, oa), (y, ob)) = (fold(net.a.row(i as usize), i, &z), fold(net.b.row(i as usize), i, &z));
                 let zi = x & y;
+                off |= given.map_or(0, |w| w ^ zi);
                 (z[i as usize], a[i as usize], b[i as usize]) = (zi, x ^ (zi & oa), y ^ (zi & ob));
             }
         }
         let used = u32::MAX >> (32 - grp.len());
-        let ok = z.iter().zip(&a).zip(&b).all(|((z, a), b)| (z ^ (a & b)) & used == 0);
+        let ok = off & used == 0 && z.iter().zip(&a).zip(&b).all(|((z, a), b)| (z ^ (a & b)) & used == 0);
         if ok {
             for (side, v) in [&a, &b].into_iter().enumerate() {
                 for (rb, rows) in v.chunks(32).enumerate() {
@@ -2715,6 +2739,14 @@ pub fn unit_ab_levels(net: &IrUnitNet, sched: &UnitSched, uw: usize, ins: &[Vec<
         }
         ok
     }))
+}
+
+/// `rows`' z in the slots `grp` (at most 32, bit l slot l's) by the host's evaluation: what [`unit_ab_seeded`]'s seeds are
+/// held to.
+pub fn unit_rows_z(net: &IrUnitNet, rows: &[u32], grp: &[Vec<F128>]) -> Vec<u32> {
+    assert!(grp.len() <= 32, "unit_rows_z: at most 32 slots");
+    let (z, _, _) = net.eval64_flat(|col| lane_bits(grp, col));
+    rows.iter().map(|&r| z[r as usize] as u32).collect()
 }
 
 /// Circuit `ni`'s slots (`net`, not a lookup's) from their input words `ins`: `(slot, z, a, b)`, `uw` words each, `n` lane
@@ -4006,6 +4038,79 @@ mod tests {
         fwd.a = fwd.a.with_row(WORD + 3, &row);
         let ins = vec![vec![F128::ZERO; 1]; 3];
         assert_eq!(unit_ab_levels(&fwd, &schedule(&nets[0]), 4, &ins, &mut vec![0u64; 4 * 4 * 3]), None);
+    }
+
+    /// A one-pass net of `blocks` blocks of `per` rows in series, as a hash's compressions are: every row reads the row
+    /// before it, a block's first `waist` rows also the last `waist` rows of the block before (the inputs, in the first),
+    /// its other rows earlier rows of the block.
+    fn chained_net(seed: u64, blocks: usize, per: usize, waist: usize) -> IrUnitNet {
+        use crate::ir_block::{RowWrite, Rows};
+        let (first, useful) = (WORD, WORD + blocks * per + 1);
+        let (cp, mut s) = (useful - 1, seed);
+        let mut next = |m: usize| { s ^= s << 13; s ^= s >> 7; s ^= s << 17; (s % m as u64) as usize };
+        let (mut a, mut b) = (Rows::with_rows(useful), Rows::with_rows(useful));
+        for i in 0..useful {
+            let (j, o) = (i.saturating_sub(first) / per, i.saturating_sub(first) % per);
+            let (ra, rb) = if i == cp {
+                (vec![cp], vec![cp])
+            } else if i < first {
+                (vec![i], vec![i])
+            } else if o < waist {
+                let mut before = || if j == 0 { next(first) } else { i - o - 1 - next(waist) };
+                (vec![i - 1, before()], vec![before(), cp])
+            } else {
+                (vec![i - 1, i - 1 - next(o)], vec![i - 1 - next(o), i - 1 - next(o), cp])
+            };
+            a.push_row(&ra);
+            b.push_row(&rb);
+        }
+        IrUnitNet { name: "t".into(), useful, const_pos: cp, in_groups: vec![], out_groups: vec![], in_words: 1, out_cols: vec![], a, b,
+                    unit_log: useful.next_power_of_two().trailing_zeros().max(7) as usize, sha256: [0; 32], leaves: None, cut: None,
+                    order: None, pass: Default::default() }
+    }
+
+    #[test]
+    fn unit_ab_seeded_is_unit_ab_into() {
+        use crate::ir_block::{schedule, schedule_seeded};
+        let mut s = 0x5eed_ed5c_4ed0_1e55u64;
+        let mut r = || { s ^= s << 13; s ^= s >> 7; s ^= s << 17; s };
+        // every third row a seed (copies and assertions among them); in the chain, whose every row is a level, every 64th;
+        // in the blocks in series, each block's last rows, which the next block reads: one block deep after the cut
+        let every = |net: IrUnitNet, n: usize| {
+            let seeds: Vec<u32> = (net.in_words * WORD..net.const_pos).filter(|i| i % n == 0).map(|i| i as u32).collect();
+            (net, seeds)
+        };
+        let (blocks, per, waist) = (40, 150, 24);
+        let series: Vec<u32> = (1..=blocks).flat_map(|j| (WORD + j * per - waist..WORD + j * per).map(|i| i as u32)).collect();
+        let nets: [(IrUnitNet, Vec<u32>); 5] = [every(walk_net(1, 1, 300, false), 3), every(walk_net(0x5eed, 2, 4099, false), 3), every(walk_net(77, 3, 40_001, false), 3),
+                                              every(walk_net(9, 1, 2600, true), 64), (chained_net(11, blocks, per, waist), series)];
+        for (k, (net, seeds)) in nets.iter().enumerate() {
+            let (full, cut) = (schedule(net), schedule_seeded(net, seeds));
+            assert!(cut.levels() <= full.levels() && (k != 3 || cut.levels() < full.levels()), "net {k}: {} levels after the cut, {} before", cut.levels(), full.levels());
+            if k == 4 {
+                assert_eq!((full.levels(), cut.levels()), (blocks * per, per), "the blocks in series: a block's levels after the cut");
+            }
+            let uw = 1usize << (net.unit_log - 7);
+            for slots in [1, 32, 33, 100] {
+                let ins: Vec<Vec<F128>> = (0..slots).map(|_| (0..net.in_words).map(|w| F128::new(r() & !u64::from(w == 0), r())).collect()).collect();
+                let seed_z = |g: usize| unit_rows_z(net, seeds, &ins[32 * g..(32 * g + 32).min(slots)]);
+                let (mut want, mut got) = (vec![0xa5a5_a5a5_a5a5_a5a5u64; 4 * uw * slots], vec![0x5a5a_5a5a_5a5a_5a5au64; 4 * uw * slots]);
+                assert!(unit_ab_into(net, 0, uw, &ins, &mut want), "net {k}, {slots} slots: z = a & b");
+                assert_eq!(unit_ab_seeded(net, &cut, seeds, seed_z, uw, &ins, &mut got), Some(true), "net {k}, {slots} slots: the cut walk's z = a & b");
+                assert!(got == want, "net {k}, {slots} slots: the cut walk's packed a, b words");
+                // the cut schedule without its seeds' z is another function: a row reads a seed before the seed's own place
+                assert_eq!(unit_ab_seeded(net, &cut, seeds, |_| vec![0; seeds.len()], uw, &ins, &mut got) == Some(true) && got == want, false,
+                           "net {k}, {slots} slots: the cut walk with every seed 0");
+                // one seed off in the last slot
+                let g_last = (slots - 1) / 32;
+                let off = |g: usize| {
+                    let mut z = seed_z(g);
+                    z[seeds.len() - 1] ^= u32::from(g == g_last) << ((slots - 1) % 32);
+                    z
+                };
+                assert_eq!(unit_ab_seeded(net, &cut, seeds, off, uw, &ins, &mut got), Some(false), "net {k}, {slots} slots: a seed that is not its row's z");
+            }
+        }
     }
 
     #[test]
