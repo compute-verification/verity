@@ -12,7 +12,12 @@ description: >
 # Friction
 
 When something gets in your way (a wrong command, a clumsy step, a check that fails late, a missing abstraction), take the
-first of these that applies.
+first of sections 1 to 4 that applies. Four habits:
+
+- **Fix the kind, not the case:** make the incident's kind impossible or loud.
+- **Twice by hand makes a tool:** a `research` command, or a line in one.
+- **What you learn goes where the next agent meets it:** a check, else a tool's default or message, else a skill.
+- **Look ahead:** rehearse what will stall next, before it does.
 
 Two gotchas. A `research` command or node ssh that fails for missing credentials: rerun it from a fresh tmux login shell,
 since a long-lived tool shell can lose the injected secrets. A `git push` refused for a lapsed GitHub token: hand over a
@@ -129,9 +134,6 @@ Keys and access:
   admin, billing, the Nebius and Cloudflare consoles).
 - The control pod holds a Nebius key that can only stop and read instances, root only, for infra's backstops,
   so stopping a machine never waits on an agent VM.
-- Workers open and edit their own lane's PRs with `research queue open|edit`, through a GitHub App on the
-  control pod with pull-requests write only (no contents) whose token no worker holds; the tool refuses a PR whose head
-  branch isn't the caller's lane's. Drive's App stays the only one that can move `main`.
 - A lane's gate key on an auditor's gate (vy-challenger-1, vy-auditor-2): the lane makes an ed25519 key, sends
   infra only the public half, and infra registers it under that lane.
 
@@ -213,6 +215,5 @@ Protocols and claims:
 
 ## Before you finish
 
-- Each fix you made is in a PR description.
 - Each question you asked has its ruling recorded as a rule, or is still open in your checkpoint or report.
 - Each friction note is a few lines, names its ids, and carries `severity: incident` only when something was lost.
