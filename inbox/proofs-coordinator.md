@@ -39600,3 +39600,35 @@ the second list's and the stack children's runs, launched 05:17Z to 05:34Z.
 - **`main` moved** to `c4290f5b74e2` since (8 landings). I did not merge it: the records gate wants nothing merged after the records run, and your suites command names `5c095bb4ab70`. [read]
 - **Not folded in:** LEAN-186's `SwOk` move. [run]
 - **Next:** the records run and the quick tier at this head, detached; then the PR, unmarked.
+
+## PRF-502 SERVEDCARD (bc-013624b7), Wed 11 Nov 05:46Z: #8771's crossed head is `4b3b557b8c46cef399da0672f6ead2955bcd96e7`, and every check you listed passes; I push it next as a fast-forward of `0a0e98be69`, then start the quick tier
+
+**The crossing** [run], from a fresh detached worktree of `origin/main` (`c4290f5b74`). The child's recipe takes #8425's own restack commits as the moves, the ones with `Restack-move:` trailers on its crossed head:
+1. `python3 tools/move/restack.py origin/cursor/proofs-served-tmpl-dc5f --move-commit 6a2d58023c --script tools/move/layout.py --script-arg=--map --script-arg tools/move/layout_one_map.toml --onto 4a00897117d63086a0c458e10697fd9e08d08c6d --kept --no-pins --dry-run`
+   prints `origin/cursor/proofs-served-tmpl-dc5f: clean bc838a9f4592  [plain merge conflicted (1)]`
+2. `python3 tools/move/restack.py bc838a9f4592bd1f514bd019bf8eff089cf28329 --move-commit 55238e662f --script tools/move/layout.py --script-arg=--map --script-arg tools/move/security_dir_map.toml --onto d4967690acd596983ddd9063bddac507c6550c4c --kept --no-pins --dry-run`
+   prints `bc838a9f4592bd1f514bd019bf8eff089cf28329: clean 4b3b557b8c46  [plain merge clean]`
+
+**Why the move commits themselves don't work for a child** [run]. My first try passed the move commit `6581bcf197` with `--onto 4a00897117`. It printed `based-after`: "has 8d4002392314, which came after the move's base b5354b9c2344". `restack.py`'s `based_after` refuses any branch that shares a commit with `--onto` that the move's base lacks, and #8425's old head is such a commit. Taking #8425's restack commits as the moves fixes it: their bases (`83f29d7ae6`, `c417634853`) already contain #8425's old head. The same recipe should work for any child of a crossed parent.
+
+**The checks at `4b3b557b8c46`** [run]:
+- **Ancestry:** it holds my old head `0a0e98be69`, #8425's crossed head `d4967690ac` and `5c095bb4ab70`. It does not hold today's `origin/main` tip `c4290f5b74`, which has moved on since the crossing.
+- `git merge-tree --write-tree origin/main 4b3b557b8c46` exits 0.
+- **My files:** the result differs from #8425's crossed head in my three files only, all under `benchmarks/one_stage/`, which didn't move.
+  - `tests/test_server_rate.py` is byte-identical to my old head.
+  - `README.md` and `server_rate.py` differ from my old head in base lines only, which the move rewrote: `verity/core/protocols/spot/README.md` became `verity/protocols/spot/verifier/README.md`, and `sys.path`'s `verity/ml/flock/python` became `verity/protocols/flock/prover/python`. Both new paths exist at the result.
+  - My patch over the parent is the same as before, line for line, except one hunk header and one context line, which are those two rewrites.
+  - No line I add names a pre-move path, and none of the three files holds one.
+- **Lean and pins:** the branch changes no `security/lean-audit.json` and no Lean file, so there is no lock count to check and no records run. `pins.py --stale` at the result exits 0, so `--no-pins` skipped nothing.
+
+**Next:**
+1. Push `4b3b557b8c46` to `cursor/proofs-served-tmpl-dc5f` as a fast-forward of `0a0e98be69`.
+2. Start the quick tier at it, `--changed 5c095bb4ab70`.
+3. Rewrite #8771's body with the moved paths.
+4. Write a `ready to mark` line when the quick tier passes.
+
+**Job C:** both of HASH-112's readings were posted on HASH-112 at 02:50Z (my 02:49Z entry here):
+- the firewall's level-0 recheck reads each table's whole z, so a witness made on the card needs 4.29 GB read back a statement, against today's 8.6 GB uploaded;
+- `FC_DEV_PREFETCH` was off in every steady row of record.
+
+What your 03:54Z message still owes with job C is my answer to kernels' 03:08Z question (a native plan for compressions inside a unit). I answer it today, well before 22:00Z, unless kernels' 04:25Z answer on HASH-112 settled it; I read that next.
