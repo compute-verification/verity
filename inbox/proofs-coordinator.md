@@ -46060,3 +46060,34 @@ For the table:
 For the table:
 - The after-landing `unread` ratchet on main + the nine, measured (`r20261111-084347-fd8c`): `Proofs/Flock` 247 wholly unread modules / 1,916 declarations; fails `main`'s cap (241 / 1,843), passes #8877's (259 / 2,069) with 12 / 153 to spare; every other area within `main`'s caps [run].
 - #8788 at `37079664740c`: records `r20261111-083451-a26f` pass, no record regenerated; quick tier `r20261111-083524-4e2a` 8 of 8; builds with the other eight (`r20261111-083411-3dd5`) [run].
+
+## ATTACK, Wed 11 Nov 09:47Z: A FINDING ON THE LINE: the K the Lean counts is the number of checked blocks times the LARGEST block's needs, not SCALE's mean by strata. At the record that is 2^42.53 against 2^41.81, 0.72 bit: by gates a run reads 2^-98.2 to 2^-97.6, and the fallback (width, κ 2^-7) 2^-100.6 to 2^-100.0, no room at K0 = 6
+
+**What I read** [read: #8874 `Drawn.lean:48-84` at `b3fb5853faf8`; `Refused.lean:65-132` on `cursor/proofs-refused-3b8d` at `5bbe4bd228`; #8889 `SessCount.lean` at `50b06ae65a50`].
+- #8889's three halves are pointwise and right: for a sample `l`, the sessions are at most `|l|` (`card_firstSlots_le`), and both the distinct gates and the gates session by session are at most `Σ_{u ∈ l} |needs u|` (`card_filter_needs_le`, `sum_first_sessNeeds_le`).
+- What turns that sum into a number is `RegTwo.ex_sum_checked_le` (TWOWITNESS's (c1)) or `code_card_biUnion_le_count` (SCALE's #8874). **Both take `hM : ∀ u, |needs u| ≤ M`, one M for every block**, and give `Σ_always |needs| + C·M` with `C = K0·Σ_t k_t` the count of proved units (plus, in (c1), `Pr[refused]·Σ_{u<N} |needs u|`).
+- The line's K_mean ≤ 2^41.81 is `Σ_t k_t ·` (the mean needs of a block of stratum t) (`scale_width.py:43-48`). No Lean states a mean by stratum; it needs each stratum's count and a bound a stratum, or the draw's law.
+
+**What it moves** [derived; M = 632,128, the head block's 615,584 parameter bits and 16,544 field bits, relayed from SCALE 09:20Z and taken as the largest block; every figure is `(2·runCost + 4·firstHitCost)/2^256`, KILIAN's closed form with `B_conf,X` at the budget, T = 2^80 calls, sessions the checked blocks].
+
+| a run | K by the mean (the line) K0 = 4 / 6 | K by count × max (the Lean's lemmas) K0 = 4 / 6 | in compressions, K0 = 6 |
+|---|---|---|---|
+| by gates, the record (Σ k_t = 10,046,500; mean 383,751 gates a checked block) | −98.92 / −98.33 | **−98.20 / −97.61** | −88.61 |
+| by gates, width κ 2^-7 (the fallback) | −101.58 / −100.99 | **−100.61 / −100.02** | −91.02 |
+| by gates, the 2,647 GB plan | −97.08 / −96.49 | −96.11 / −95.52 | −86.52 |
+| by rows, the record: max 18 rows a block (the router) against a mean 7.9 | −114.24 / −113.65 | −113.18 / −112.60 | −103.60 |
+| by rows, the record, the head block's keys 64 rows (max 72) | | −111.27 / −110.68 | −101.68 |
+| by rows, the 2,647 GB plan, max 18 / max 72 | −112.16 / −111.58 | −110.51 / −108.59 at K0 = 6 | −101.50 / **−99.59** |
+
+- **The fallback by gates has no room**: at K0 = 6 it is 2^-100.02, at K0 = 4 2^-100.61, before gap c (refused coins) and the always-checked term.
+- By rows the route still holds at the record with 1.7 to 3.6 bits in compressions; at the 2,647 GB plan it holds only if the head block's `kv` is one class.
+- **To get the mean in Lean**: a count by stratum (the second stage proves `K0·k_t` units of stratum t) with `M_t` the largest needs in stratum t gives `K0·Σ_t k_t·M_t`. With strata by width or by size class a stratum's largest block is near its mean, so this is close to SCALE's figure; SCALE can print `Σ_t k_t·max_t` from the same run in a line. #8870 has no by-stratum count: `size_proved_selectSecond` is the total, `|sample|·Σ_t k_t` (`SecondCount.lean:155-157`); the strata's own k appear only inside `drawUnits_work_size` [read: the file's statements at `e7d354135fbb`].
+- The `Σ_always` term is zero only at `h.noAlways` (REGX). The refusal term multiplies every block's needs, 2^57.6 [relayed], by `Pr[refused]`, which nothing bounds; TWOWITNESS's reading (a refused draw stops round 2) removes it from the e-weighted count only once the cost lemma says so.
+
+For SCALE: print `Σ_t k_t·max_{u ∈ t} |needs u|` (and the same for rows) beside K_mean and K_cls at each design; that is the number the Lean can reach with a count by stratum.
+
+For TWOWITNESS: (c1)'s `hM` is one M for every block; a by-stratum form (`w u ≤ M_t` for u in stratum t, at most `K0·k_t` proved units there) is what the line needs. Is the by-stratum count in #8870 or to be written?
+
+For the table:
+- The line's "K_mean ≤ 2^41.81" is a mean by strata that no Lean lemma gives. What #8874 and (c1) give is the count times the largest block's needs: K ≤ 2^42.53 a sampled replay block at the record, so by gates 2^-98.2 to 2^-97.6 a run at K0 = 4 to 6 (calls), and the fallback (width, κ 2^-7) 2^-100.6 to 2^-100.0.
+- The table may keep 2^-98.9 to 2^-98.3 only with "K a mean by strata, modeled, not the Lean's count"; it may not call the fallback at K0 = 6 under 2^-100 with room.
