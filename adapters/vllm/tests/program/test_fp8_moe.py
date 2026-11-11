@@ -336,7 +336,7 @@ def act_group_model(gate: list[int], up: list[int]) -> list[int]:
     s = s if _q(s) > _q(F.MIN_SCALE_BITS) else F.MIN_SCALE_BITS
     def quant(x: int) -> int:
         v = _q(x) / _q(s)
-        return F32ToE4m3Sat.evaluate(_rn(max(-448, min(448, v)), x & SIGN))
+        return F32ToE4m3Sat.evaluate(_rn(max(Fraction(-448), min(Fraction(448), v)), x & SIGN))
     return [quant(x) for x in r] + [s]
 
 

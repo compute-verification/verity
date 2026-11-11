@@ -219,7 +219,11 @@ def test_gemm_v2_batch_form_reads_one_w_for_every_row(dot_id, monkeypatch):
     t, M, N = _gemm(dot_id, len(w)), len(X), len(w)
     wb = np.broadcast_to(w.reshape(1, -1), (M, N * K))
     calls = []
-    monkeypatch.setattr(DR, "gemm_rows", lambda *a, _g=DR.gemm_rows: calls.append(len(a[0])) or _g(*a))
+    def counted(*a, _g=DR.gemm_rows):
+        calls.append(len(a[0]))
+        return _g(*a)
+
+    monkeypatch.setattr(DR, "gemm_rows", counted)
     want = []
     for i in range(M):
         try:
@@ -262,7 +266,11 @@ def test_kernel_rows_takes_the_batch_form_and_names_a_declined_instance(monkeypa
     spec = f"Gemm_v2{{K={K},N={len(w)},DOT=HopperBF16WgmmaDot16_v1}}"
     wb = np.broadcast_to(w.reshape(1, -1), (4, w.size))
     calls = []
-    monkeypatch.setattr(DR, "gemm_rows", lambda *a, _g=DR.gemm_rows: calls.append(len(a[0])) or _g(*a))
+    def counted(*a, _g=DR.gemm_rows):
+        calls.append(len(a[0]))
+        return _g(*a)
+
+    monkeypatch.setattr(DR, "gemm_rows", counted)
     got = CP._kernel_rows(t, spec, [X, wb])
     assert calls == [4] and np.array_equal(got, evaluate_batch(t, X, wb, kernel="reference"))
     X[2, 0] = 0x7F80

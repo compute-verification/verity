@@ -240,7 +240,7 @@ def test_hopper_wgmma_port_equals_silicon_total_on_every_encoding():
         check(int(rng.integers(0, 2 ** 32)), [0] * 16, [int(x) for x in _bf16_words_every_encoding(rng, 16)])   # a zero operand lane
 
 
-def test_hopper_wgmma_port_total_rules_and_no_veritor_import_at_evaluation():
+def test_hopper_wgmma_port_total_rules_and_no_veritor_import_at_evaluation(monkeypatch):
     """The registered HopperBF16WgmmaDot16 evaluates from Verity's core alone (`verity.definitions.silicon.total`; no `veritor`, no numpy) and
     follows the total rules of the step by construction -- any NaN operand / acc -> 0x7FFFFFFF; inf * 0 -> NaN; infinities
     of both signs -> NaN, of one sign -> that infinity (finite terms ignored); finite overflow -> the sticky infinity; an all-zero
@@ -248,20 +248,13 @@ def test_hopper_wgmma_port_total_rules_and_no_veritor_import_at_evaluation():
     from verity.definitions.registry import hopper as H
     one, two, z, nz, inf, ninf, nan, big = 0x3F80, 0x4000, 0x0000, 0x8000, 0x7F80, 0xFF80, 0x7FC0, 0x7F7F
     ones = [one] * 16
-    saved = {k: sys.modules.get(k) for k in ("veritor", "veritor.core", "veritor.core.silicon_total", "numpy")}
-    try:
-        for k in saved:
-            sys.modules[k] = None                                                  # any `import veritor...` / `import numpy` now raises
+    with monkeypatch.context() as blocked:
+        for k in ("veritor", "veritor.core", "veritor.core.silicon_total", "numpy"):
+            blocked.setitem(sys.modules, k, None)                                  # any `import veritor...` / `import numpy` now raises
         ev = H.HopperBF16WgmmaDot16.evaluate
         assert ev(0, *ones, *ones) == 0x41800000                                   # evaluates with veritor and numpy unimportable
         pipe, fn = H._hopper_total()                                               # the definition of record is core, stdlib only
         assert pipe.name == "hopper_bf16_wgmma_k16" and fn(pipe, 0, ones, ones) == 0x41800000
-    finally:
-        for k, v in saved.items():
-            if v is None:
-                sys.modules.pop(k, None)
-            else:
-                sys.modules[k] = v
     assert ev(0, *ones, *ones) == 0x41800000                                       # 16 * 1.0 = 16.0
     assert ev(0x3F800000, *ones, *ones) == 0x41880000                              # + acc 1.0 = 17.0
     assert ev(0, *[two] * 16, *ones) == 0x42000000                                 # 32.0
@@ -339,7 +332,7 @@ def test_ampere_tc_dot16_port_equals_silicon_total_and_the_mma_finite_model_on_e
         check(int(rng.integers(0, 0x800000)), [int(x) for x in rng.integers(1, 0x80, 16)], [int(x) for x in rng.integers(1, 0x80, 16)])
 
 
-def test_ampere_tc_dot16_total_rules_and_no_veritor_import_at_evaluation():
+def test_ampere_tc_dot16_total_rules_and_no_veritor_import_at_evaluation(monkeypatch):
     """Runs on every interpreter (the pods' 3.11 included): the registered AmpereBF16TcDot16 evaluates without `veritor` or
     `verity.definitions.numerics.mma` and follows silicon_total's rules: grouped (8, 8) truncating 25-bit accumulation; NaN / inf*0 /
     mixed infinities -> 0x7FFFFFFF; a one-signed infinity -> that infinity; group overflow is a sticky infinity; +0; subnormals."""
@@ -348,18 +341,11 @@ def test_ampere_tc_dot16_total_rules_and_no_veritor_import_at_evaluation():
     from verity.definitions.registry import prims as P
     one, two, z, inf, ninf, nan, big = 0x3F80, 0x4000, 0x0000, 0x7F80, 0xFF80, 0x7FC0, 0x7F7F
     ones = [one] * 16
-    saved = {k: sys.modules.get(k) for k in ("veritor", "veritor.core", "veritor.core.silicon", "verity.definitions.numerics", "verity.definitions.numerics.mma")}
-    try:
-        for k in saved:
-            sys.modules[k] = None
+    with monkeypatch.context() as blocked:
+        for k in ("veritor", "veritor.core", "veritor.core.silicon", "verity.definitions.numerics", "verity.definitions.numerics.mma"):
+            blocked.setitem(sys.modules, k, None)
         ev = P.AmpereBF16TcDot16.evaluate
         assert ev(0, *ones, *ones) == 0x41800000
-    finally:
-        for k, v in saved.items():
-            if v is None:
-                sys.modules.pop(k, None)
-            else:
-                sys.modules[k] = v
     assert ev(0x3F800000, *ones, *ones) == 0x41880000                              # 17.0
     assert ev(0, *[two] * 16, *ones) == 0x42000000                                 # 32.0
     assert ev(0, *[nan] + ones[1:], *ones) == 0x7FFFFFFF

@@ -526,7 +526,7 @@ def test_persist_program_writer_is_byte_identical_to_the_generic_conversion(tmp_
     assert res.report.unsupported == 0 and not res.errors and res.instances and res.accesses
 
     def generic_view(v):
-        return dataclasses.asdict(v) if dataclasses.is_dataclass(v) else RC._jsonable(v)
+        return dataclasses.asdict(v) if dataclasses.is_dataclass(v) and not isinstance(v, type) else RC._jsonable(v)
 
     def generic_rows(form):        # the generic writer, verbatim
         out = []

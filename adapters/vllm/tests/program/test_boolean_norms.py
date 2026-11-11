@@ -135,7 +135,7 @@ def _rand_f32(rng, n: int) -> np.ndarray:
     return rng.integers(0, 1 << 32, n, dtype=np.uint64)
 
 
-def _rand_bf16(rng, n: int) -> np.ndarray:
+def _rand_bf16(rng, n: int | tuple[int, ...]) -> np.ndarray:
     return rng.integers(0, 1 << 16, n, dtype=np.uint64)
 
 

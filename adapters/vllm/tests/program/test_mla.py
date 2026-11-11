@@ -169,7 +169,7 @@ def test_decode_agrees_with_the_model_at_every_mask_shape(T: int, kind: str) -> 
 
 #: captured `o` of one-split requests of `decode-v1` (`mla_capture.case_inputs` rebuilds their inputs
 #: from the case): (case index, request, sha256 of its 20 x 512 output words, little-endian)
-CAPTURED = [
+CAPTURED: list[tuple[dict, int, str]] = [
     ({"seqlens": [1, 2, 31, 32, 33], "splits": 1, "kind": "unit", "page": 64, "seed": 1}, 0, "1b7483a67b1bb456"),
     ({"seqlens": [1, 2, 31, 32, 33], "splits": 1, "kind": "unit", "page": 64, "seed": 1}, 1, "3dde29d03c6933d1"),
     ({"seqlens": [1, 2, 31, 32, 33], "splits": 1, "kind": "unit", "page": 64, "seed": 1}, 4, "d770285380b18149"),

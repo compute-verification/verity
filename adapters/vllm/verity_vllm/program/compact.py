@@ -53,6 +53,7 @@ class _Acc:
         self.open: tuple | None = None   # (space, idx, lo, hi)
 
     def _close(self) -> None:
+        assert self.open is not None
         space, idx, lo, hi = self.open
         v = (idx, lo, hi)
         out = self.out

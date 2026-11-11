@@ -189,7 +189,8 @@ def test_the_scan_slots_read_is_its_reference_and_reads_each_field_where_it_is_p
         words = [[x >> 16 * k & 0xFFFF for k in range(NS)]]
         out = [int(v) for v in np.asarray(evaluate_words(fn, np.array(words, dtype=np.uint32)), dtype=np.uint64).reshape(-1)]
         assert out == [v for occ, lp, m, ids in lanes
-                       for v in _lane(*X.feed_reference([lp, *ids], None, NP), occ, [lp, m])]
+                       for tok, slot in [X.feed_reference([lp, *ids], None, NP)]
+                       for v in _lane(tok, slot, occ, [lp, m])]
         assert out[1] == (lp0 - 1) & X.M32 and out[2:NP + 1] == lanes[0][3][1:] and out[NP + 1] == 0
     assert [X.position(K0, K, p) for p in range(NP)] == [0, 1, 3, 4]
     for bad in ({"IDS": (120, 16 * NS - IDB)}, {"IDB": 33}, {"OCC": (3,)}):

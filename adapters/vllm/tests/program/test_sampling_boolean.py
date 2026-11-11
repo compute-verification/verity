@@ -198,7 +198,11 @@ def test_stages_as_root_calls(V) -> None:
     x = logit_rows(V, 512, _rng("stages", V))
     sts = SB.stages(V)
     emitted = []
-    SB.token_select_calls(lambda fn, arg: emitted.append(fn) or arg, None, V)
+    def emit(fn, arg):
+        emitted.append(fn)
+        return arg
+
+    SB.token_select_calls(emit, None, V)
     assert [s.id for s in emitted] == [s.id for s in sts] == [f"TokenSelectStage_v1{{V={V},L={L}}}" for L in range(len(sts))]
     bits = ((x.astype(np.uint32)[:, :, None] >> np.arange(16, dtype=np.uint32)) & 1).astype(np.uint8)
     for st in sts:

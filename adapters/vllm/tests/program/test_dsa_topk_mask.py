@@ -102,11 +102,11 @@ def test_the_concentrator_lists_every_masks_members_in_index_order() -> None:
                 mask = [int(j in members) for j in range(N)]
                 assert M.butterfly_apply(M.butterfly_settings(mask, K), list(range(N)), K) == list(members), (N, members)
     rng = random.Random(0)
-    for N, K in [(rng.randrange(10, 300), None) for _ in range(30)] + [(2049, 2048), (2080, 2048), (4096, 2048), (5000, 2048)]:
-        K = K or rng.randrange(1, N + 1)
-        members = sorted(rng.sample(range(N), K))
-        mask = [int(j in set(members)) for j in range(N)]
-        assert M.butterfly_apply(M.butterfly_settings(mask, K), list(range(N)), K) == members, (N, K)
+    for N, k in [(rng.randrange(10, 300), None) for _ in range(30)] + [(2049, 2048), (2080, 2048), (4096, 2048), (5000, 2048)]:
+        K = k or rng.randrange(1, N + 1)
+        chosen = sorted(rng.sample(range(N), K))
+        mask = [int(j in set(chosen)) for j in range(N)]
+        assert M.butterfly_apply(M.butterfly_settings(mask, K), list(range(N)), K) == chosen, (N, K)
 
 
 def test_the_switch_count_is_the_pruned_butterflys() -> None:

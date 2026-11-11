@@ -239,8 +239,10 @@ def test_tf32_sqr_forms() -> None:
     normal = bf16(rng, (T, 64), 2.0)
     forms = {s: W.prenorm_sqrsum(normal, 1, s) for s in W.SQR_FORMS}
     assert all((v == forms["lo"]).all() for v in forms.values())
-    word = lambda e: (rng.integers(0, 2, T) << 15 | rng.integers(0, 128, T) | (rng.integers(*e, T) + 127) << 7).astype(np.uint16)
-    small, big = word((-75, -66)), word((-62, -60))
+    def word(lo: int, hi: int) -> np.ndarray:
+        return (rng.integers(0, 2, T) << 15 | rng.integers(0, 128, T) | (rng.integers(lo, hi, T) + 127) << 7).astype(np.uint16)
+
+    small, big = word(-75, -66), word(-62, -60)
     swap = rng.random(T) < 0.5
     a: np.ndarray = np.zeros((T, 64), np.uint16)
     a[:, 1], a[:, 5] = np.where(swap, small, big), np.where(swap, big, small)

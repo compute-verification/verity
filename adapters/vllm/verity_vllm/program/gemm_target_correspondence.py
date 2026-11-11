@@ -288,7 +288,7 @@ def check_case(case: dict, d, wd, model, spec_of) -> dict[str, Any]:
             i, j = np.argwhere(out != gpu)[0]
             first = {"epilogue": name, "row": int(rows[i]), "col": int(cols[j]), "gpu_bf16": f"{int(gpu[i, j]):04x}",
                      "model_bf16": f"{int(out[i, j]):04x}", "mismatching_coordinates": int(gpu.size - by_epilogue[name])}
-    best = max(by_epilogue, key=by_epilogue.get)
+    best = max(by_epilogue, key=lambda name: by_epilogue[name])
     return {"attempted": int(gpu.size), "exact": by_epilogue[best], "epilogue": best, "exact_by_epilogue": by_epilogue,
             "first_mismatch": None if by_epilogue[best] == gpu.size else first}
 

@@ -35,9 +35,10 @@ U32 = np.uint32
 def _digests() -> tuple[str, str, str]:
     """(mantissa outputs, sweep inputs, sweep outputs): the sha256s `mufu_lg2.json`'s provenance records."""
     m = W.lg2_table()["provenance"]["measured"]
-    mant = re.fullmatch(r".*sha256 of the outputs ([0-9a-f]{64})", m["mantissas"]).group(1)
+    mant = re.fullmatch(r".*sha256 of the outputs ([0-9a-f]{64})", m["mantissas"])
     sweep = re.fullmatch(r".*sha256 of the inputs ([0-9a-f]{64}), of the outputs ([0-9a-f]{64})", m["sweep"])
-    return mant, sweep.group(1), sweep.group(2)
+    assert mant is not None and sweep is not None, m
+    return mant.group(1), sweep.group(1), sweep.group(2)
 
 
 def _lg2_word(x: int) -> int:

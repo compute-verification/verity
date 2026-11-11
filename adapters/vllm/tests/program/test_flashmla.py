@@ -151,7 +151,7 @@ def _operands(rng, N: int, NW: int, swa: int, extra: int, NH: int = 16):
     return q, nope, (e + 127).astype(np.uint8), rope, idx, lens, rng.standard_normal(NH).astype(np.float32).view(U)
 
 
-def _softmax_with_sink(q, nope, scale, rope, idx, lens, sink, NW: int) -> np.ndarray:
+def _softmax_with_sink(q, nope, scale, rope, idx, lens, sink, *, NW: int) -> np.ndarray:
     valid = T.row_valid(idx, lens, NW)
     k = _bf16_f64(T.kv_rows(nope, scale, rope, valid, DSV4["QT"]))
     s = np.where(valid[None, :], _bf16_f64(q) @ k.T * DSV4["SCALE"], -np.inf)

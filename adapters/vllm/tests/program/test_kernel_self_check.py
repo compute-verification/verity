@@ -56,7 +56,11 @@ def test_attention_kernels_on_scores_below_two_to_the_minus_63(monkeypatch):
 
     seen: list[np.ndarray] = []
     ex2 = DR.mufu_ex2_ftz
-    monkeypatch.setattr(DR, "mufu_ex2_ftz", lambda x, table=None: seen.append(np.asarray(x).reshape(-1)) or ex2(x, table))
+    def seen_ex2(x, table=None):
+        seen.append(np.asarray(x).reshape(-1))
+        return ex2(x, table)
+
+    monkeypatch.setattr(DR, "mufu_ex2_ftz", seen_ex2)
     got = rows.ROWS["Attention_v3"].fn(statics, tiny)["out"]
     monkeypatch.undo()
     xe = (np.concatenate(seen) >> 23) & 0xFF

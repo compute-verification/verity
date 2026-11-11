@@ -62,7 +62,7 @@ INT8_EXACT_LMHEAD_QUANT = {**INT8_EXACT_QUANT, "modules_to_not_convert": []}
 
 
 def is_int8_exact(qc: dict[str, Any] | None) -> bool:
-    return bool(qc) and str(qc.get("quant_method", "")).lower() == INT8_EXACT_QUANT["quant_method"]
+    return qc is not None and str(qc.get("quant_method", "")).lower() == INT8_EXACT_QUANT["quant_method"]
 
 
 def _moe_routers(cfg: dict[str, Any] | None) -> set[str]:

@@ -81,6 +81,7 @@ def _old_head(B, S, q, k, v, *extra, block):
         else:
             st = B.call(blk, q, kb, vb, m, l, o, *extra)
         m, l, o = st[0], st[1], st[2]
+    assert l is not None and o is not None
     total = B.call(P.F32AddFtz, B.call(P.F32AddFtz, l[0], l[2]), B.call(P.F32AddFtz, l[1], l[3]))
     y = B.batch(P.F32MulFtz, o, B.call(S.INV, total), axes=(0, None))
     return B.batch(P.F2fpBf16, y, axes=(0,))

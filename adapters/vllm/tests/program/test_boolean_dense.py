@@ -126,7 +126,7 @@ def _operands(rng, kinds: str) -> list[np.ndarray]:
     if "h" in kinds and len(kinds) == 2:
         h = kinds.index("h")
         other = spec[kinds[1 - h]][rng.integers(0, len(spec[kinds[1 - h]]), 8)]
-        pair = [None, None]
+        pair: list = [None, None]
         pair[h], pair[1 - h] = np.repeat(EVERY, len(other)), np.tile(other, len(EVERY))
         cols = [np.concatenate([c, p]) for c, p in zip(cols, pair)]
     rand = [rng.integers(0, 1 << (16 if k == "h" else 32), 100_000, dtype=np.uint64).astype(np.uint16 if k == "h" else np.uint32)

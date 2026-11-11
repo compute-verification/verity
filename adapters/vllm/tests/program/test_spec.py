@@ -122,7 +122,7 @@ def test_serve_spec_tiny_schedule_obligation():
     K, LP = 2, 3
     W, WD = _random_weights(TINY, rng), _random_weights(TINY_NOBIAS, rng)
     prompt = [int(x) for x in rng.integers(0, TINY["V"], LP)]
-    A = (K, K)
+    A: tuple[int, ...] = (K, K)
     for _ in range(3):
         prog = Program(bind(spec.ServeSpec, C=TINY, CD=TINY_NOBIAS, LP=LP, K=K, A=A))
         out = _eval_program(prog, [prompt, W, WD])

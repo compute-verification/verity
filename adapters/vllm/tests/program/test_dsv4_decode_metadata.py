@@ -133,7 +133,8 @@ def _swa_tokens(st: dict, seed: int) -> list[np.ndarray]:
 
 
 def _swa_want(st: dict, args) -> np.ndarray:
-    return np.asarray([swa_kernel(*a, st["SW"], st["BS"]) for a in zip(*args)], dtype=np.uint64)
+    rows: list = [swa_kernel(t, qs, qe, seq, blocks, valid, st["SW"], st["BS"]) for t, qs, qe, seq, blocks, valid in zip(*args)]
+    return np.asarray(rows, dtype=np.uint64)
 
 
 def _c128a_tokens(st: dict, seed: int) -> list[np.ndarray]:
@@ -150,7 +151,8 @@ def _c128a_tokens(st: dict, seed: int) -> list[np.ndarray]:
 
 
 def _c128a_want(st: dict, args) -> np.ndarray:
-    return np.asarray([c128a_kernel(*a, st["W"], st["R"], st["BS"]) for a in zip(*args)], dtype=np.uint64)
+    rows: list = [c128a_kernel(position, slot, blocks, st["W"], st["R"], st["BS"]) for position, slot, blocks in zip(*args)]
+    return np.asarray(rows, dtype=np.uint64)
 
 
 def _reference(fn, args) -> np.ndarray:

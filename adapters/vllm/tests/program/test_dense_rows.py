@@ -303,7 +303,11 @@ def test_gemm_v2_row_kernel_takes_the_k16_chain_of_its_dot(monkeypatch, chain_pa
     slow = rows.ROWS["Gemm_v2"].fn(statics, [x, w.reshape(-1)])["out"]
     monkeypatch.setattr(DR, "FAST_GEMM_WORDS", 1)
     calls = []
-    monkeypatch.setattr(DR, "_claimed", lambda *a, _c=DR._claimed: calls.append(a[2]) or _c(*a))
+    def counted(*a, _c=DR._claimed):
+        calls.append(a[2])
+        return _c(*a)
+
+    monkeypatch.setattr(DR, "_claimed", counted)
     fast = rows.ROWS["Gemm_v2"].fn(statics, [x, w.reshape(-1)])["out"]
     assert calls and set(calls) == {DR.STEPS["HopperBF16WgmmaDot16_v1"]}
     assert np.array_equal(fast, slow)
