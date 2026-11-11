@@ -97,30 +97,30 @@ writes nothing into the tree it runs from, which every run of its commit shares:
 run's own, built by `uv sync --frozen` in a directory the job makes under /tmp (`UV_PROJECT_ENVIRONMENT`), which the
 job's shell removes when the job ends, stopped or not.
 
-A stopped job continues, unless its route has an `output` (`ema`, `lora`): a job of such a route keeps no state, since
-its checkpoints hand out the output model and not what its next step reads, says so in its record (`no_state`), in
-the record of its stop and on stderr, and told to stop starts again from θ. After each checkpoint but the last any
-other job keeps what continuing needs in its state directory
-(`--state`): the model, the optimizers' state, the stream's position, the generators, and the record so far with its
-scores and its clock. Told to stop (SIGTERM: an eviction, or the end of its run's time) it first writes a `run.json`
-that says so (`stopped`: "told to stop", with no step or checkpoint), then ends the route's process and leaves the
-state. The command reads a stop from that record and never from the run's exit status, which is whatever stopped the
+A stopped job continues. After each checkpoint but the last a job keeps what continuing needs in its state directory
+(`--state`): the model its route trains (under a route's `output`, `ema`'s or `lora`'s, not the output model a
+checkpoint scores), the model's buffers outside its state dict, the optimizers' state, the stream's position, the
+generators, and the record so far with its scores and its clock. Told to stop (SIGTERM: an eviction, or the end of
+its run's time) it first writes a `run.json` that says so (`stopped`: "told to stop", with no step or checkpoint),
+then ends the route's process and leaves the state. The command reads a stop from that record and never from the run's exit status, which is whatever stopped the
 job reports (a lease out of time: `timeout`'s 124, whatever the job's own): a run that didn't end with 0 is stopped
 when its record says so, and failed when it holds no record or one that doesn't. A job told to stop before its own
 process is up has written none, and is failed. The command's next run starts a stopped job again, and the job
 continues from the state when it is its own (the same
 config digest, seed, split and `training_slowdown` VERSION, a model that hashes to the record's last checkpoint) and
 refuses any other, naming what differs. The job's own process states in the record so far, for the segment that
-kept the state, the SHA-512 of each of its parts (the model, the optimizers' state, the stream's position, the
-generators); the job that continues hashes them again, in the state directory and as the route's process holds them
-before it imports the route, and refuses a state a part of which hashes to anything else. That record lies beside
+kept the state, the SHA-512 of each of its parts (the model, its buffers outside its state dict, the optimizers'
+state, the stream's position, the generators); the job that continues hashes them again, in the state directory and
+as the route's process holds them before it imports the route, and refuses a state a part of which hashes to
+anything else. That record lies beside
 the tensors, so the command ties it to the stopped run's record on the store, which no job writes: it tells the
 job the sha256 the store lists for that record's `state.json` (`--continues`), or that it found none, and the job
 continues from no other state (a state on a node's disk has no such copy, and none is checked). The record lists
 the segments
 the job ran in, and its count is their sum: every step once, and each segment's `build`. What a stopped segment
-computed after its last kept checkpoint is run again and is in no record. A state is a cache: the command keeps it
-with the stopped run's output on the store, the next run fetches it on whichever machine it gets (`NODE_STATE` in
+computed after its last kept checkpoint is run again and is in no record. A route's `output` at the checkpoint a job
+stopped at is counted outside the steps (`setup`), where an unbroken job counts it in the step after. A state is a
+cache: the command keeps it with the stopped run's output on the store, the next run fetches it on whichever machine it gets (`NODE_STATE` in
 `run.py` here places it on the node's disk instead), and losing it costs a start from θ. The state directory is
 hidden from the route's process as a final set is, and only the job's own process writes it. A state is at most three
 times its model (the weights and two buffers of the optimizer for each), and a run holds three states at once while
