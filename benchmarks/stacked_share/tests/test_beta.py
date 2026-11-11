@@ -15,13 +15,13 @@ from pathlib import Path
 
 import pytest
 
-from verity.definitions.circuits import stacking as P
-from verity.definitions.circuits.census import census
 from verity.circuits.defs import CompositeDefinition, PrimitiveDefinition
-from verity.definitions.ops import prims
 from verity.circuits.program import Program
 from verity.circuits.refs import array_of, coll_concat
 from verity.circuits.types import Array, Value
+from verity.definitions.circuits import stacking as P
+from verity.definitions.circuits.census import census
+from verity.definitions.ops import prims
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
