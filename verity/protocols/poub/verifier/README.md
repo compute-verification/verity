@@ -43,7 +43,7 @@ The verifier's definition is the Lean package `lean/` (`RemoteAudit`), the verif
 every event's result, the session's outcome and its record, the registry (`Registry`: one live registration a node,
 each session's index `k`, the outcomes `close` counts, and `registry/v0`), and the pieces (registration and its codec
 seed, codec, plans, receipts, openings, samples). Where the two differ, the Python is what is wrong. The properties of
-the Lean's verdicts are `Security/Properties/Accounting/Remote.lean`.
+the Lean's verdicts are `security/Properties/Accounting/Remote.lean`.
 
 `verity/protocols/poub/verifier/session/verifier.py` runs both. The Lean's process `remote-audit-verifier` (`RemoteAudit.Verifier`)
 decides each registration, event and window, an accepted session's record is the one it returns, and the ledger reads
@@ -105,7 +105,7 @@ group's reads by kind beside it; and
 `line.py` computes it beside it from the same inputs (`line_of_record`): `auditor_line.py` holds the two exactly equal
 and refuses the line where they differ, and `lean/tests/test_line.py`'s difftest holds them together, every refusal
 compared word for word. The Lean statement that the line is true of the trace that produced the record is
-`Security/Properties/Accounting/Remote/Line.lean`'s `LineHeld`.
+`security/Properties/Accounting/Remote/Line.lean`'s `LineHeld`.
 
 ## Replay
 
