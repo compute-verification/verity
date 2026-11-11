@@ -1,5 +1,5 @@
 """SPOT[Flock]'s two-stage Lean model on a real run of the toy: the conjuncts of `SpotFlock.stmtOk`
-(`Security/Proofs/Flock/SpotFlock/Code.lean`) that read the run accept an honest two-stage run at a `Held` fixed before
+(`security/Proofs/Flock/SpotFlock/Code.lean`) that read the run accept an honest two-stage run at a `Held` fixed before
 the run, and refuse two runs they must refuse.
 
 What it shows: `stmtOk` is its conjuncts on the registration alone (`regOk`: `partition` and `two`) and its conjuncts on
