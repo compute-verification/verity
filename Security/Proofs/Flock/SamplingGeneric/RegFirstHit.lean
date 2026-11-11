@@ -1,7 +1,10 @@
 module
 
-public import Proofs.Flock.SamplingGeneric.Reg
+public import Proofs.Flock.SamplingGeneric.RegCanon
 public import Proofs.Core.SamplingGeneric.FirstHit
+import Proofs.Flock.Claims.ERep
+import Proofs.Flock.Claims.Sampling.Cost
+import Proofs.Flock.Claims.Sampling.KS
 
 /-!
 # The first-hit finder at the committed trace
@@ -19,6 +22,11 @@ first-hit finder (`Proofs.Core.SamplingGeneric.FirstHit`), at each tape of the p
   output is `B_conf`'s at two runs (`collAt`), `Pr[a run opens a gate off the committed trace] ≤
   2·(1 + w)·E[c]/2^256 + N/(K + 1)`, where `w` bounds the gates one run's sample holds (`chk`, a function of the run's
   coins) and `c` is a run's calls (`runCost`).
+
+* `pr_offReg_le_pos`: `pr_offReg_le_sample` with `w` the positions any reveal opens under the statement's roots
+  (`opensAt_isSome_mem`).
+* `pr_offReg_le_needs`: `pr_offReg_le_sample` with `w` a bound on the gates the reveals open for the proof blocks of
+  one run's sample (`opensAt_isSome_mem_checked`), where a block's reveals open only gates of `needs`.
 
 `pr_offReg_le_firstHit` turns no found pair into a collision and builds no `Finder`: `Found` is two runs' extractions
 that open one gate two ways, the event `Conflict` reads at a pair of runs. `pr_offReg_le_sample` does both.
@@ -167,6 +175,90 @@ theorem pr_offReg_le_sample {H : Msg → Msg} {L : Compiled Coin A} (hbind : L.c
     (fun ω rc rc' u v huv => L.collAt_collision H P x s ω rc rc' huv) hCR
   rw [Fintype.card_fin] at h
   exact hoff.trans h
+
+/-! ## The sample, from what the reveals open -/
+
+/-- `pr_offReg_le_sample` at the positions any reveal opens under the statement's roots (`opensAt_isSome_mem`): the
+count is `#Spos`, the same at every run. -/
+theorem pr_offReg_le_pos {H : Msg → Msg} {L : Compiled Coin A} (hbind : L.commit.Binds H) {x : Msg}
+    {s : AuditStatement} (hs : L.parse x = some s) {Ω : Type} [Fintype Ω] [Nonempty Ω] (P : Prover Ω)
+    (Spos : Finset ℕ) (hpos : ∀ u v w, ∀ p ∈ L.reveal s u v w, p.1 = s.roots → p.2.pos ∈ Spos) (K : ℕ)
+    (hCR : ExpectedCR H (Verity.FirstHit.sampleFinder (L.opTable H P x)
+      (fun (_ : (Fin (L.V.k x) → Coin) × L.SlotEC x) (g : Fin (L.nG x)) => decide (g.val ∈ Spos))
+      (L.runCost H P x s) K
+      fun q : Ω × (((Fin (L.V.k x) → Coin) × L.SlotEC x) × (Fin K → (Fin (L.V.k x) → Coin) × L.SlotEC x)) =>
+        Verity.FirstHit.outOf (L.opTable H P x q.1) (L.collAt H P x s q.1) K q.2.1 q.2.2)) :
+    Pr (fun q : Ω × ((Fin (L.V.k x) → Coin) × L.SlotEC x) => L.OffReg H P x q.1 q.2.1 q.2.2) ≤
+      2 * ((1 + (#Spos : ℝ)) *
+          Ex (fun q : Ω × ((Fin (L.V.k x) → Coin) × L.SlotEC x) => (L.runCost H P x s q.1 q.2 : ℝ))) /
+          2 ^ (256 : ℝ) +
+        (L.nG x : ℝ) / ((K : ℝ) + 1) :=
+  pr_offReg_le_sample hbind hs P (fun _ g => decide (g.val ∈ Spos))
+    (fun ω rc g hg => decide_eq_true (opensAt_isSome_mem H L P x ω hs Spos hpos rc.1 rc.2 g hg))
+    (fun _ => card_le_card_of_injOn Fin.val (by intro g hg; exact of_decide_eq_true (mem_filter.1 hg).2)
+      (by intro a _ b _ hab; exact Fin.ext hab)) K hCR
+
+/-- **A run's extractions open only what its own sample's reveals open**: a gate `opensAt` opens at the coins `r` is
+the position of an opening some reveal makes, under the statement's roots, for a proof block of `r`'s sample;
+`opensAt_isSome_mem` with the proof block kept. -/
+theorem opensAt_isSome_mem_checked (H : Msg → Msg) (L : Compiled Coin A) {Ω : Type} (P : Prover Ω) (x : Msg) (ω : Ω)
+    {s : AuditStatement} (hs : L.parse x = some s) (needs : ℕ → Finset ℕ)
+    (hpos : ∀ u v w, ∀ p ∈ L.reveal s u v w, p.1 = s.roots → p.2.pos ∈ needs u)
+    (r : Fin (L.V.k x) → Coin) (c : L.SlotEC x) (g : ℕ) (hg : (L.opensAt H P x ω r c g).isSome) :
+    ∃ u ∈ L.checked x r, g ∈ needs u := by
+  simp only [opensAt, hs] at hg
+  obtain ⟨b, hb⟩ := Option.isSome_iff_exists.1 hg
+  unfold Sampling.Wit.val at hb
+  obtain ⟨o, ho, -⟩ := Option.map_eq_some_iff.1 hb
+  have hpred := List.find?_some ho
+  simp only [Bool.and_eq_true, beq_iff_eq] at hpred
+  obtain ⟨q, hq, hqo⟩ := List.mem_filterMap.1 (List.mem_of_find?_eq_some ho)
+  by_cases hr : q.1 = s.roots
+  · rw [if_pos hr] at hqo
+    obtain rfl := Option.some.inj hqo
+    rw [← hpred.1]
+    unfold runExt at hq
+    rw [Sampling.flatMapRP_eval] at hq
+    obtain ⟨iu, -, hiu⟩ := List.mem_flatMap.1 hq
+    split at hiu
+    · unfold sessExt at hiu
+      rw [(Claims.RP.eval_bind H _ _ _).1] at hiu
+      split at hiu
+      · simp [RP.eval] at hiu
+      · rw [Sampling.flatMapRP_eval] at hiu
+        obtain ⟨u', hu'm, hu'⟩ := List.mem_flatMap.1 hiu
+        have hu'b : u' ∈ (L.sessSlots x (L.checked x r) iu.1).filterMap fun j => (L.checked x r)[j]? := hu'm
+        obtain ⟨j, -, hj⟩ := List.mem_filterMap.1 hu'b
+        exact ⟨u', List.mem_of_getElem? hj,
+          hpos _ _ _ q (Sampling.checkRevealed_mem H _ L.commit _ q hu').1 hr⟩
+    · simp [RP.eval] at hiu
+  · rw [if_neg hr] at hqo
+    exact absurd hqo (by simp)
+
+/-- **The off-trace mass at what one run's sample opens.** Where the reveals for a proof block `u` open, under the
+statement's roots, only gates of `needs u`, and the proof blocks of any one run's sample need at most `w` gates of the
+program between them, `pr_offReg_le_sample` holds with that `w`: the sample of a run's coins is the gates its proof
+blocks (`checked`) need. -/
+theorem pr_offReg_le_needs {H : Msg → Msg} {L : Compiled Coin A} (hbind : L.commit.Binds H) {x : Msg}
+    {s : AuditStatement} (hs : L.parse x = some s) {Ω : Type} [Fintype Ω] [Nonempty Ω] (P : Prover Ω)
+    (needs : ℕ → Finset ℕ) (hpos : ∀ u v w, ∀ p ∈ L.reveal s u v w, p.1 = s.roots → p.2.pos ∈ needs u) {w : ℕ}
+    (hw : ∀ r : Fin (L.V.k x) → Coin,
+      #(univ.filter fun g : Fin (L.nG x) => ∃ u ∈ L.checked x r, g.val ∈ needs u) ≤ w) (K : ℕ)
+    (hCR : ExpectedCR H (Verity.FirstHit.sampleFinder (L.opTable H P x)
+      (fun (rc : (Fin (L.V.k x) → Coin) × L.SlotEC x) (g : Fin (L.nG x)) =>
+        decide (∃ u ∈ L.checked x rc.1, g.val ∈ needs u))
+      (L.runCost H P x s) K
+      fun q : Ω × (((Fin (L.V.k x) → Coin) × L.SlotEC x) × (Fin K → (Fin (L.V.k x) → Coin) × L.SlotEC x)) =>
+        Verity.FirstHit.outOf (L.opTable H P x q.1) (L.collAt H P x s q.1) K q.2.1 q.2.2)) :
+    Pr (fun q : Ω × ((Fin (L.V.k x) → Coin) × L.SlotEC x) => L.OffReg H P x q.1 q.2.1 q.2.2) ≤
+      2 * ((1 + (w : ℝ)) *
+          Ex (fun q : Ω × ((Fin (L.V.k x) → Coin) × L.SlotEC x) => (L.runCost H P x s q.1 q.2 : ℝ))) /
+          2 ^ (256 : ℝ) +
+        (L.nG x : ℝ) / ((K : ℝ) + 1) :=
+  pr_offReg_le_sample hbind hs P (fun rc g => decide (∃ u ∈ L.checked x rc.1, g.val ∈ needs u))
+    (fun ω rc g hg => decide_eq_true (opensAt_isSome_mem_checked H L P x ω hs needs hpos rc.1 rc.2 g hg))
+    (fun rc => (le_of_eq (congrArg Finset.card
+      (Finset.filter_congr fun g _ => decide_eq_true_iff))).trans (hw rc.1)) K hCR
 
 end Compiled
 
