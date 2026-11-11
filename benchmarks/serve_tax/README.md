@@ -21,7 +21,7 @@ its change to the arm it names as its parent (`serve_tax.ARMS`):
 | `kv` | the whole paged KV pool hashed in place on a side stream at each window edge | `tokens` |
 | `tokens-only` | each Commit period's tokens committed as `tokens` commits them, without the tick | `record` |
 | `boundary` | the boundary commitment at each replay block's edge, as a server would take it: drained, the KV pool hashed by the row-table kernels under a fresh key and copied to host memory, the scheduler's state and each rank's runner rows and generators taken and kept | `tokens-only` |
-| `boundary-rows` | prefix caching off, and the two-stage audit's boundary commitment at serve: each window's finished requests committed by size class off the engine loop (`verity_vllm.pipeline.boundary_rows`), under the arm's object (`serve_tax.ROWS`) and the model's check template (`Model.check`) | `record` |
+| `boundary-rows` | the two-stage audit's boundary commitment at serve, vLLM's prefix cache left on: each window's finished requests committed by size class off the engine loop (`verity_vllm.pipeline.boundary_rows`), under the arm's object (`serve_tax.ROWS`) and the model's check template (`Model.check`) | `record` |
 | `canonical-topk` | the canonical DSA top-k: `benchmarks/dsa_topk`'s plugin loaded and `VERITY_DSA_TOPK=canonical`, its counters kept on the node | `compiled` |
 | `two-stage` | the two-stage serve's launch line: `boundary-rows` with the canonical top-k and one attention layer's history tables in the boundary commitment (`serve_tax.TABLES`) | `boundary-rows` |
 | `restore-base` | seeded sampling (the corpus's `seeded`), each sampled token's logprob returned | `record` |
@@ -175,11 +175,12 @@ research run --on NODE --source . --cwd source -- bash benchmarks/serve_tax/run.
   verdict is `not comparable`, a fourth value, and the output names the changes that are off with their parts and
   the changes the target has no part for: the cost is not of what the target is of, so it neither meets nor misses
   it, and no target is made of the parts that are on. The `two-stage` arm leaves off admission on the certified
-  tick and the edge snapshot, which need the corpus's client, and turns on four changes GLM-5.3's target has no
-  part for (the step record, prefix caching off, the two-stage boundary commitment, the history tables), so its
-  cost against the model's target is not comparable. A target given with `--target` has no parts.
-- **Stock has vLLM's prefix cache on,** its default at the pin for a model that generates text, and the arms from
-  `boundary-rows` down turn it off, since the boundary commitment needs it off. Neither load repeats a prefix
+  tick and the edge snapshot, which need the corpus's client, and turns on three changes GLM-5.3's target has no
+  part for (the step record, the two-stage boundary commitment, the history tables), so its cost against the
+  model's target is not comparable. A target given with `--target` has no parts.
+- **Stock has vLLM's prefix cache on,** its default at the pin for a model that generates text, and so do the arms
+  from `boundary-rows` down: a request's boundary is its own prompt ids and the ids it was served, whichever KV pages
+  its prefill read. Neither load repeats a prefix
   (chat's requests are different conversations' first turns, long context's are random tokens, and the cache is
   emptied before every pass), so the number does not hold what the cache is worth on a load that does: the row on
   a repeated prefix does. `no-prefix-cache` is stock with the cache off alone, and each rep's `meta.json` records
@@ -189,8 +190,8 @@ research run --on NODE --source . --cwd source -- bash benchmarks/serve_tax/run.
   top-k's own (`canonical-topk`). Each arm's cost is printed over stock and over the nearest arm above it that ran,
   at the number's load and rung, with its share of the whole for the arms from the measured one up to stock, and
   with what its step turns on: beside each such change the target's part for it, with no verdict, or `not in the
-  model` for a change the target has no part for (the step record, prefix caching off, the two-stage boundary
-  commitment, the history tables). A
+  model` for a change the target has no part for (the step record, prefix caching off, which is `no-prefix-cache`'s
+  alone, the two-stage boundary commitment, the history tables). A
   job of `compiled` alone prints no cost: it finds the rungs where stock is saturated and where its goodput peaks,
   which a later job's `--loads` names.
 - **The boundary commitment's line** says what the measured arm's commitment did, from its own records: the finished

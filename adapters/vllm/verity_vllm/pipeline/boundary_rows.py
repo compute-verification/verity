@@ -512,11 +512,8 @@ class BoundaryWindows:
     def install(self, sched: Any, hooks: Any) -> BoundaryWindows:
         """Wrap ``sched``'s ``add_request``, ``update_from_output``, ``finish_requests`` and ``schedule`` through ``hooks``
         (an `engine.hooks.Hooks`), and stop at the process's exit: at exit and at a `multiprocessing` child's, which runs
-        no `atexit` hook (vLLM's engine core is one). Refused while the scheduler caches prefixes: a hit would read
-        another request's rows, across the replay blocks' boundary."""
-        if getattr(getattr(sched, "cache_config", None), "enable_prefix_caching", False):
-            raise ValueError("the boundary commitment needs prefix caching off (--no-enable-prefix-caching): a cache hit "
-                             "reads another request's rows")
+        no `atexit` hook (vLLM's engine core is one). A scheduler that caches prefixes commits the same rows: a span's
+        boundary is its own prompt ids and the ids it was served, whichever KV pages its prefill read."""
 
         def add_request(orig: Callable[..., Any]) -> Callable[..., Any]:
             def wrapped(request: Any, *a: Any, **kw: Any) -> Any:
