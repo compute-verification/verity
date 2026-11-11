@@ -11,9 +11,9 @@ import json
 import shutil
 
 import pytest
+
 import ra_cases as M
 import replay as R
-
 from verity.protocols.poub.verifier import audit, wire
 
 pytestmark = pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain")

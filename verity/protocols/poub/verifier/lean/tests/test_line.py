@@ -18,10 +18,10 @@ import shutil
 from fractions import Fraction
 
 import pytest
-import ra_cases as M
-import verity_difftest as D
 from hypothesis import strategies as st
 
+import ra_cases as M
+import verity_difftest as D
 from verity.protocols.poub.verifier import audit, line, receipts
 
 pytestmark = pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain")
@@ -29,14 +29,11 @@ pytestmark = pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean to
 N, B = 1000, 4096
 
 
-NOTHING = st.nothing()
-
-
-def port(inputs=NOTHING, reference=line.run_json) -> D.Port:
+def port(inputs=st.nothing(), reference=line.run_json) -> D.Port:
     return D.Port(M.EXE, "line", reference, inputs, package=M.PACKAGE, of_record="lean", rejects=M.REFUSALS)
 
 
-def record_port(inputs=NOTHING, reference=line.record_run_json) -> D.Port:
+def record_port(inputs=st.nothing(), reference=line.record_run_json) -> D.Port:
     return D.Port(M.EXE, "line_record", reference, inputs, package=M.PACKAGE, of_record="lean", rejects=M.REFUSALS)
 
 
@@ -147,12 +144,8 @@ def test_line(server) -> None:
     assert stats.rejects > 20 and told["line"] > 100 and told["credited"] > 15 and told["refused"] > 100, (stats, told)
 
 
-#: a node with no way back into its memory: every ceiling zero
-NO_WAYS_BACK = line.Rates(0, 1)
-
-
 def session(stretch: int = 1, *, weights: int = 600, host: int = 0, n: int = 12, windows=((1, 1),),
-            delta: object = 2.0 ** -40, rates: line.Rates = NO_WAYS_BACK, **over) -> dict:
+            delta: object = 2.0 ** -40, rates: line.Rates = line.Rates(0, 1), **over) -> dict:
     """`n` groups of two passes over N chunks, 10 ns apart but group 5, `stretch` times that, each one's last root at
     the next coin, its record's `windows` at `delta` (by default one opened whole, so no receipt is wrong)."""
     gs, t = [], 0
@@ -207,13 +200,13 @@ def test_each_refusal_of_the_node_is_the_leans_word_for_word(server, over, why) 
     (3, dict(passes=0, hbm=0, weights=0), "group 3 has no pass"),
     (3, dict(last_ns=29), "group 3's last root came before its coin"),
     (3, dict(released_ns=15, last_ns=40), "group 3's coin left before group 2's"),
-    (2, dict(least=990), ("group 2's least pass read 990 of the 1000 registered blocks: the paced line needs every "
-                          "pass to read every registered block, since a block a pass leaves out can be absent across "
-                          "it with neither a wrong read nor a rebuild")),
+    (2, dict(least=990), "group 2's least pass read 990 of the 1000 registered blocks: the paced line needs every "
+                         "pass to read every registered block, since a block a pass leaves out can be absent across "
+                         "it with neither a wrong read nor a rebuild"),
     (2, dict(hbm=1999), "group 2's 2 passes read 1999 registered blocks in all, not 2000"),
     (2, dict(weights=2001, hbm=1999, host=1), "group 2's passes read more weights than HBM, which holds them"),
-    (8, dict(released_ns=40, last_ns=80), ("stretch 1's span is empty: group 8's coin left no later than group 4's "
-                                           "coin")),
+    (8, dict(released_ns=40, last_ns=80), "stretch 1's span is empty: group 8's coin left no later than group 4's "
+                                          "coin"),
 ])
 def test_each_refusal_of_a_group_is_the_leans_word_for_word(server, g, over, why) -> None:
     v = session()

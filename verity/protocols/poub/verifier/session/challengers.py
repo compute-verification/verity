@@ -43,8 +43,8 @@ import socket
 import subprocess
 import tarfile
 import time
-from collections.abc import Callable, Sequence
 from pathlib import Path
+from typing import Callable, Sequence
 
 from verity.protocols.poub.verifier import audit, coins
 from verity.protocols.spot.device import challenger as Ch

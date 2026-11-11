@@ -11,10 +11,10 @@ import shutil
 from fractions import Fraction
 
 import pytest
-import ra_cases as M
-import verity_difftest as D
 from hypothesis import strategies as st
 
+import ra_cases as M
+import verity_difftest as D
 from verity.protocols.poub.verifier import pooled
 
 pytestmark = pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain")
@@ -25,10 +25,7 @@ GATE_RUNS = {"5/0": (2118, 130023424, 48), "5/2": (96, 130023424, 232), "6/0": (
 drawn s times each), at δ = 2^-40 (`tests/test_pooled.py`)."""
 
 
-NOTHING = st.nothing()
-
-
-def port(inputs=NOTHING, reference=pooled.run_json) -> D.Port:
+def port(inputs=st.nothing(), reference=pooled.run_json) -> D.Port:
     return D.Port(M.EXE, "pooled", reference, inputs, package=M.PACKAGE, of_record="lean", rejects=M.REFUSALS)
 
 

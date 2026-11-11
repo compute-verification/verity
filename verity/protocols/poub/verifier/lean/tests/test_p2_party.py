@@ -21,9 +21,9 @@ from pathlib import Path
 
 import pytest
 
-from verity.protocols.poub.verifier import coins, p2, p2_lean, p2_party, receipts
 from verity.protocols.pous.verifier import setup
 from verity.protocols.pous.verifier.schemes.p2 import P2Params
+from verity.protocols.poub.verifier import coins, p2, p2_lean, p2_party, receipts
 
 pytestmark = pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain")
 

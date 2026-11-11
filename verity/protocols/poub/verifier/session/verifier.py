@@ -136,10 +136,12 @@ from pathlib import Path
 
 from verity.protocols.poub.verifier import audit, coins, ledger, line, timing
 from verity.protocols.poub.verifier import store as rstore
-from verity.protocols.poub.verifier.session import challengers, wire
-from verity.protocols.poub.verifier.session import lean_verifier as lv
-from verity.protocols.poub.verifier.session.checks import Checks
 from verity.protocols.spot.device.challenger import Verify
+
+from verity.protocols.poub.verifier.session import challengers
+from verity.protocols.poub.verifier.session import lean_verifier as lv
+from verity.protocols.poub.verifier.session import wire
+from verity.protocols.poub.verifier.session.checks import Checks
 
 CHECK_BATCH = 1024
 """Openings a Lean thread checks at once (`checkWindowChunked`)."""

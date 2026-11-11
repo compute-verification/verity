@@ -51,10 +51,10 @@ import json
 import re
 import sys
 from pathlib import Path
+from typing import Any
 
 import ra_cases as M
 import verity_difftest as D
-
 from verity.protocols.poub.verifier import audit, coins, receipts
 
 SESSION = D.Port(M.EXE, "session", M.session, None, package=M.PACKAGE, of_record=M.OF_RECORD)
@@ -100,7 +100,7 @@ def summary(outcome: D.Outcome) -> dict:
 
 def difference(case: dict, lean: D.Outcome, python: D.Outcome) -> dict:
     """Where the two answers first differ: the event and each side's result, or else the outcome and record."""
-    if lean[0] != "output" or python[0] != "output":
+    if "output" != lean[0] or "output" != python[0]:
         return {"lean": f"{lean[0]} {lean[1][:300]}", "python": f"{python[0]} {python[1][:300]}"}
     a, b = json.loads(lean[1]), json.loads(python[1])
     for k, (x, y) in enumerate(zip(a["results"], b["results"])):

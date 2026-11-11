@@ -49,22 +49,11 @@ from collections.abc import Callable, Iterator, Mapping, Sequence
 from dataclasses import dataclass
 from typing import Any
 
-from verity.commitments.scheme import DIGEST_BYTES
 from verity.protocols.spot.device import remote
-from verity.protocols.spot.device.challenger import (
-    ChallengerKey,
-    CoinError,
-    LiveChallenger,
-    LiveCommitment,
-    LiveOpening,
-    LiveRecord,
-    Verify,
-    ledger_head,
-    live_reason,
-    order_reason,
-    pinned_session,
-    record_many,
-)
+from verity.protocols.spot.device.challenger import (ChallengerKey, CoinError, LiveChallenger, LiveCommitment,
+                                                             LiveOpening, LiveRecord, Verify, ledger_head, live_reason,
+                                                             order_reason, pinned_session, record_many)
+from verity.commitments.scheme import DIGEST_BYTES
 
 SCHEME = "verity/remote-bandwidth/coins/v1"
 CHALLENGE, OPENINGS, APPEND = "challenge", "openings", "append"

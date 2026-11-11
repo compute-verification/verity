@@ -10,19 +10,9 @@ import math
 from fractions import Fraction
 
 import pytest
-from remote_bandwidth_fakes import Clock, Entropy
-from test_remote_bandwidth import (  # noqa: F401
-    SCHEDULE,
-    A,
-    N,
-    challenger,
-    drive,
-    finish,
-    params,
-    partial,
-    store,
-)
 
+from remote_bandwidth_fakes import Clock, Entropy
+from test_remote_bandwidth import A, N, SCHEDULE, challenger, drive, finish, params, partial, store  # noqa: F401
 from verity import claims
 from verity.protocols.poub.verifier import audit, codec, ledger, line, receipts, timing
 from verity.protocols.poub.verifier.audit import AuditRun, Pace
@@ -295,7 +285,7 @@ def test_delta_charges_the_draws_a_window_requested_where_it_opens_all_its_recei
     held = (delta_s + delta + Fraction(sum(k), 2 ** ledger.REJECTION_LOG2) + Fraction(ledger.hiding(r))
             + Fraction(ledger.binding(r, n)))
     slack, rounding = Fraction(r.passes, 2 ** audit.SLACK_LOG2), 5 * D / 2 ** 53
-    assert held <= D and abs(D - held - slack) <= rounding < slack
+    assert D >= held and abs(D - held - slack) <= rounding < slack
     assert D - Fraction(sum(k) - sum(drawn), 2 ** ledger.REJECTION_LOG2) < held, "the draws made fall short of E"
     with pytest.raises(ValueError, match=r"window 0 drew 70 of its 80 receipts, not min\(60, 80\)"):
         dataclasses.replace(r, samples=60)

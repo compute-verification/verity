@@ -17,15 +17,15 @@ import shutil
 from pathlib import Path
 
 import pytest
-import ra_cases as M
-import verity_difftest as D
 from hypothesis import strategies as st
-from ra_cases import Entropy
 
+import ra_cases as M
+from ra_cases import Entropy
+import verity_difftest as D
+from verity.protocols.pous.verifier.verifier import MerkleTree, leaf_hash
 from verity.protocols.poub.verifier import coins, p2, p2_party, receipts
 from verity.protocols.poub.verifier.codec import P2_EXPANDER, P2_POINT, P2Codec
 from verity.protocols.poub.verifier.receipts import Plan
-from verity.protocols.pous.verifier.verifier import MerkleTree, leaf_hash
 
 pytestmark = pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain")
 

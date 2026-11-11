@@ -9,11 +9,11 @@ import dataclasses
 import hashlib
 
 import pytest
-from remote_bandwidth_fakes import Clock, Entropy
 
-from verity.commitments.rowleaf import sha512_row_v2_digest
+from remote_bandwidth_fakes import Clock, Entropy
 from verity.protocols.poub.verifier import audit, codec, coins, receipts
 from verity.protocols.poub.verifier.audit import AuditRun, Params
+from verity.commitments.rowleaf import sha512_row_v2_digest
 
 SEED = hashlib.sha512(b"verity/remote-bandwidth/test-key-binding/v0\0").digest()[:codec.SEED_BYTES]
 NODE = b"node-under-test"

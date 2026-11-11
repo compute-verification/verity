@@ -8,8 +8,8 @@ from __future__ import annotations
 import hashlib
 
 import pytest
-from test_appends import N, Run, honest_session, pages, salts, store
 
+from test_appends import N, Run, honest_session, pages, salts, store
 from verity.protocols.poub.verifier import audit, codec, coins
 from verity.protocols.spot.device.challenger import CoinError
 

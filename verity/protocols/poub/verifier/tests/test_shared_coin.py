@@ -10,10 +10,10 @@ import dataclasses
 from fractions import Fraction
 
 import pytest
-from test_ledger import node
-from test_remote_bandwidth import SCHEDULE, Entropy, N, drive, params, store  # noqa: F401
-from test_remote_coins import APPENDS, Service, sign  # noqa: F401
 
+from test_remote_bandwidth import N, SCHEDULE, Entropy, drive, params, store  # noqa: F401
+from test_ledger import node
+from test_remote_coins import APPENDS, Service, sign  # noqa: F401
 from verity.protocols.poub.verifier import audit, codec, coins, ledger, timing
 from verity.protocols.poub.verifier.audit import AuditRun, SessionError
 
@@ -158,7 +158,7 @@ def test_the_last_draw_may_hold_fewer_windows(store) -> None:
     n = node(squarings=1e9)
     L = ledger.window_receipts(r.pace, r.blocks, r.append_coins, r.codec.max_blocks)
     q = n.sketch_outside * ledger.compressions(r, n)
-    assert r.append_coins > 0 and (audit.STEP_LIMIT - 1) * r.codec.max_blocks == L
+    assert r.append_coins > 0 and L == (audit.STEP_LIMIT - 1) * r.codec.max_blocks
     per_draw, per_window = ledger.binding_over(2, 2 * L, p.samples, q), ledger.binding_over(3, L, p.samples, q)
     assert ledger.binding(r, n) == per_draw != per_window
     with pytest.raises(ValueError, match=r"the draw of windows 0…1 drew 7 of its 140 receipts, not min\(6, 140\)"):

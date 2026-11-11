@@ -11,10 +11,10 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[5]))
 
-from verity.commitments.crypto import lms
-from verity.commitments.scheme import DIGEST_BYTES
 from verity.protocols.poub.verifier.session import verifier
 from verity.protocols.spot.device import challenger as Ch
+from verity.commitments.scheme import DIGEST_BYTES
+from verity.commitments.crypto import lms
 
 ROOT = Path(__file__).resolve().parents[5]
 SERVE = ROOT / "verity" / "composite" / "device" / "live_challenger" / "serve.py"

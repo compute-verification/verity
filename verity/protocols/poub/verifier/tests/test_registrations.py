@@ -7,8 +7,8 @@ from __future__ import annotations
 import json
 
 import pytest
-from test_appends import NODE, P512, SOURCE, N, Run, payload, salts
 
+from test_appends import N, NODE, P512, SOURCE, Run, payload, salts
 from verity.protocols.poub.verifier import audit
 
 

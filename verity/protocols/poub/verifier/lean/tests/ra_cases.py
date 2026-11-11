@@ -26,12 +26,10 @@ from typing import Any
 
 import verity_difftest as D
 from verity_difftest import protocol as P
-
 from verity.protocols.poub.verifier import audit, codec, coins, receipts, wire
 from verity.protocols.poub.verifier.audit import AuditRun, Params, SessionError
 from verity.protocols.poub.verifier.receipts import Plan
-from verity.protocols.spot.device.challenger import COIN_BYTES as LIVE_COIN_BYTES
-from verity.protocols.spot.device.challenger import HM96, LiveChallenger
+from verity.protocols.spot.device.challenger import COIN_BYTES as LIVE_COIN_BYTES, HM96, LiveChallenger
 
 HERE = Path(__file__).resolve().parent
 PACKAGE = HERE.parent
@@ -167,7 +165,7 @@ def registration_of(v: Any) -> audit.Registration:
     receipts.block_layout(layout)
     receipts.sketch_rows(kind, rows)
     out = audit.Registration(node, blocks, root, seed, c, kind, False, layout, rows)
-    codec.key(seed, c)                              # refuses a seed that isn't `codec.SEED_BYTES` long
+    out.key
     return out
 
 
@@ -526,11 +524,11 @@ class Run:
     `cheat` if given, else the store) in step, every call to the session kept as an event with the clock it read. The
     clock moves one tick an event unless a call needs more. Every receipt is sampled unless `samples` says fewer."""
 
-    def __init__(self, world: World | None = None, *, windows: int = 2, samples: int = 10**6, min_passes: int = 1,
+    def __init__(self, world: World = World(), *, windows: int = 2, samples: int = 10**6, min_passes: int = 1,
                  lifetime: int | None = None, deferred: bool = False, deadline_ns: int = 100, window_ns: int = 10,
                  not_before_ns: int = 0, cheat: Callable[[audit.Store], audit.Store] | None = None,
                  pace: audit.Pace | None = None, groups_per_coin: int = 1) -> None:
-        self.store = store(World() if world is None else world)
+        self.store = store(world)
         reg = self.store.registration
         self.params = Params(reg.blocks, deadline_ns, windows, samples=samples, min_passes=min_passes,
                              window_ns=window_ns, codec=reg.codec, receipt=reg.receipt, rows=reg.rows, lifetime=lifetime,

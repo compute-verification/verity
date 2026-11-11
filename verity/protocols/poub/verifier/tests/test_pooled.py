@@ -11,8 +11,8 @@ from fractions import Fraction
 
 import pytest
 
-from verity.protocols.poub.verifier import audit, pooled
 from verity.protocols.spot.verifier.profile import IntegrityProfile, Subset
+from verity.protocols.poub.verifier import audit, pooled
 
 DELTA = Fraction(1, 2 ** 40)
 GATE_RUNS = {"5/0": (2118, 130023424, 48), "5/2": (96, 130023424, 232), "6/0": (2118, 113770496, 48),

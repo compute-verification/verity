@@ -15,21 +15,14 @@ import itertools
 import shutil
 
 import pytest
-import ra_cases as M
-import verity_difftest as D
 from hypothesis import strategies as st
 
-from verity.commitments import (
-    Commitment,
-    CommitmentDomain,
-    MerkleTree,
-    Opening,
-    RangeIndexedDomain,
-    verify_opening,
-)
-from verity.commitments.randomness import derive
+import ra_cases as M
+import verity_difftest as D
 from verity.protocols.poub.verifier import audit, codec, receipts
 from verity.protocols.poub.verifier.receipts import Plan
+from verity.commitments import Commitment, CommitmentDomain, MerkleTree, Opening, RangeIndexedDomain, verify_opening
+from verity.commitments.randomness import derive
 
 pytestmark = pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain")
 

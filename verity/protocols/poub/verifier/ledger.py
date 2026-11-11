@@ -88,7 +88,7 @@ class Node:
 
     def __post_init__(self) -> None:
         for name in ("spec_bytes_per_s", "read_bytes_per_s", "gpu_write_bytes_per_s", "host_write_bytes_per_s"):
-            if not _rate(getattr(self, name), name) > 0:
+            if not 0 < _rate(getattr(self, name), name):
                 raise ValueError(f"{name} is positive")
         if type(self.chip_bytes) is not int or self.chip_bytes < 0:
             raise ValueError("chip_bytes is a nonnegative integer")

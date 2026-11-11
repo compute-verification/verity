@@ -74,19 +74,11 @@ import sys
 from array import array
 from collections.abc import Iterator, Sequence
 
-from verity.commitments import (
-    Commitment,
-    CommitmentDomain,
-    MerkleTree,
-    Opening,
-    RangeIndexedDomain,
-    VerificationLimits,
-    hm96,
-    verify_opening,
-)
-from verity.commitments.randomness import derive, frame
+from verity.commitments import Commitment, CommitmentDomain, MerkleTree, Opening, RangeIndexedDomain, VerificationLimits
+from verity.commitments import hm96, verify_opening
 from verity.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_V2, sha512_row_v2_digest
 from verity.commitments.scheme import DIGEST_BYTES as _DIGEST_BYTES
+from verity.commitments.randomness import derive, frame
 
 from .codec import BLOCK_BYTES
 

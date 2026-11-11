@@ -10,20 +10,10 @@ from __future__ import annotations
 import itertools
 
 import pytest
-from test_appends import (
-    CAP,
-    HONEST_SCHEDULE,
-    P512,
-    N,
-    Run,
-    Verdict,
-    honest_session,
-    salts,
-    store,
-)
+
+from test_appends import CAP, HONEST_SCHEDULE, N, P512, Run, Verdict, honest_session, salts, store
 from test_deferred_map import STEPS, deferred, drive, history
 from test_memory_map import page, serving
-
 from verity.protocols.poub.verifier import audit, memory_map, schedule
 from verity.protocols.poub.verifier.memory_map import Header, Replay
 from verity.protocols.poub.verifier.receipts import Plan

@@ -12,19 +12,16 @@ from __future__ import annotations
 import shutil
 
 import pytest
-import ra_cases as M
-import verity_difftest as D
 from hypothesis import strategies as st
 
+import ra_cases as M
+import verity_difftest as D
 from verity.protocols.poub.verifier import schedule
 
 pytestmark = pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain")
 
 
-NOTHING = st.nothing()
-
-
-def port(inputs=NOTHING, reference=schedule.run_json) -> D.Port:
+def port(inputs=st.nothing(), reference=schedule.run_json) -> D.Port:
     return D.Port(M.EXE, "schedule", reference, inputs, package=M.PACKAGE, of_record=M.OF_RECORD,
                   rejects=M.REFUSALS)
 

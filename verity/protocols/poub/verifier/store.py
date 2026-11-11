@@ -165,7 +165,7 @@ def pin_of(data: bytes, path: str, role: str | None = None) -> dict:
         checkpoints = {_pinned(x.get("checkpoint")) for x in mine}
         if len(checkpoints) != 1:
             raise Refused(f"the registry {path} has {len(mine)} lines of {role}, pinning {len(checkpoints)} "
-                          "checkpoints: one is the pin") from None
+                          "checkpoints: one is the pin")
         doc = mine[-1]
     if isinstance(doc, dict) and doc and all(isinstance(v, dict) for v in doc.values()):
         if role not in doc:
