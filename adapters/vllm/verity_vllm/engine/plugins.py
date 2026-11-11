@@ -31,6 +31,7 @@ class Plugin:
 
 PLUGINS = {
     "verity_moe_align": Plugin("verity_vllm.engine.moe_align:register"),
+    "verity_cut": Plugin("verity_vllm.pipeline.cut_plugin:register", "VERITY_CUT"),
 }
 
 
