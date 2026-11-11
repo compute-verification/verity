@@ -151,7 +151,7 @@ def _differs(desc: dict[str, Any], fn: Any, seen: dict[str, str | None]) -> list
 
     # encode_program reads a program's root, fn and annotations: here the specialization alone, in the Build's schema
     mine = encode_program(SimpleNamespace(root=fn, fn=fn, annotations={}), desc["schema"])
-    out = []
+    out: list[str] = []
     for g in mine["definitions"]:
         if g not in seen:
             if g not in desc["definitions"]:
@@ -160,6 +160,7 @@ def _differs(desc: dict[str, Any], fn: Any, seen: dict[str, str | None]) -> list
                 seen[g] = f"{g} is not the Definition the Build bound (entry {ours[:16]}, the Build's {theirs[:16]})"
             else:
                 seen[g] = None
-        if seen[g]:
-            out.append(seen[g])
+        why = seen[g]
+        if why:
+            out.append(why)
     return out

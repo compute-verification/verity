@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import json
 import types
+from typing import Any
 
 import pytest
 
@@ -111,6 +112,7 @@ def test_program_facts_that_disagree_across_programs_carry_no_selector():
 
 
 def test_merge_adds_facts_only_where_the_manifest_declares_no_selector():
+    declared: dict[tuple[str, str], dict[str, Any]]
     declared = {("a", "0"): {"spec": "N_v1", "ordinal": None, "operand": None},
                 ("a", "1"): {"spec": "N_v1", "ordinal": 0, "operand": None},
                 ("b", "0"): {"spec": "N_v1", "ordinal": None, "operand": "X_v1"},
@@ -217,6 +219,7 @@ def test_only_a_value_every_reader_of_which_is_inside_the_producer_subtree_is_pr
                ("m.e", "0"): {"spec": "Other_v1", "consumers": ["m.e.x"]},                 # not the row's family
                ("mm", "0"): {"spec": "G_v1", "consumers": ["mmx.y"]},                      # a string prefix, not a module ancestor
                ("m.f", "out"): {"spec": "S_v1", "consumers": ["m.f.x"]}}                   # already promoted by the manifest
+    ids: list[dict[str, Any]]
     ids = [{"family": "instance_outputs", "op_path": op, "output_member": mem, "spec": "S_v1" if op in ("m", "m.f") else "G_v1"}
            for op, mem in derived]
     ids[-1].update(promoted=True, consumers=["m.f.y"])

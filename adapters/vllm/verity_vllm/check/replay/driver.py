@@ -153,18 +153,19 @@ def _prewarm_weights(indices: dict, picked: list[dict], weights: Callable[[str, 
     def walk(pi: ProgramIndex, r: dict, depth: int) -> None:
         wp = pi.pnames.index("weights") if "weights" in pi.pnames else None
         for group in r.get("args") or []:
-            for it in group if wp is not None else ():
-                span = p_item_weight_span(it, wp)                                  # a "P" progression's span, never its runs
-                ws = pi.weight_slice(*span) if span is not None else None
-                if ws is not None and ws[0] not in seen:
-                    seen.add(ws[0])
-                    weights(ws[0], ws[1], ws[2])
+            if wp is not None:
+                for it in group:
+                    span = p_item_weight_span(it, wp)                              # a "P" progression's span, never its runs
+                    ws = pi.weight_slice(*span) if span is not None else None
+                    if ws is not None and ws[0] not in seen:
+                        seen.add(ws[0])
+                        weights(ws[0], ws[1], ws[2])
             for sl in node_runs(group) if depth < INTERIOR_DEPTH else ():
                 a, lo, hi = int(sl[1]), int(sl[2]), int(sl[3])
                 if pi.member_at(a, lo, hi) is None:
                     pr = pi.by_i.get(a)
                     pd = pi.describe(pr) if pr is not None else None
-                    if pd is not None and pd["members"] == [] and pd["family"] in EVALUATORS:
+                    if pr is not None and pd is not None and pd["members"] == [] and pd["family"] in EVALUATORS:
                         walk(pi, pr, depth + 1)                                    # the interior producer's weights are the VU's too
 
     for vu in picked:
@@ -390,12 +391,13 @@ def _cublas_facts(env: dict[str, Any]) -> dict[str, Any]:
     except Exception as e:                                                          # noqa: BLE001
         return {"torch": _unavailable(e)} | cublas_versions() | {"env": env}
     m = torch.backends.cuda.matmul
-    reads = {"device": torch.cuda.get_device_name, "compute_capability": lambda: list(torch.cuda.get_device_capability()),
-             "multiprocessors": lambda: int(torch.cuda.get_device_properties(torch.cuda.current_device()).multi_processor_count),
-             "torch": lambda: str(torch.__version__),
-             "allow_fp16_reduced_precision_reduction": lambda: repr(m.allow_fp16_reduced_precision_reduction),
-             "allow_bf16_reduced_precision_reduction": lambda: repr(m.allow_bf16_reduced_precision_reduction),
-             "preferred_blas_library": lambda: str(torch.backends.cuda.preferred_blas_library())}
+    reads: dict[str, Callable[[], Any]] = {
+        "device": torch.cuda.get_device_name, "compute_capability": lambda: list(torch.cuda.get_device_capability()),
+        "multiprocessors": lambda: int(torch.cuda.get_device_properties(torch.cuda.current_device()).multi_processor_count),
+        "torch": lambda: str(torch.__version__),
+        "allow_fp16_reduced_precision_reduction": lambda: repr(m.allow_fp16_reduced_precision_reduction),
+        "allow_bf16_reduced_precision_reduction": lambda: repr(m.allow_bf16_reduced_precision_reduction),
+        "preferred_blas_library": lambda: str(torch.backends.cuda.preferred_blas_library())}
     for k, read in reads.items():
         try:
             out[k] = read()
@@ -522,7 +524,11 @@ def populate(programs: dict[str, dict[str, Any]], ranks: list[int], arrivals: di
     Program with a cached prefix of C reads it from what its producers committed; a Program without one recomputes it
     (`recomputed_prefix`: its prefix rows leave the population, and its replay computes them from the prompt)."""
     memo = {} if memo is None else memo
-    all_vus, not_ev, not_ev_fam, indices, codes = [], Counter(), Counter(), {}, {}   # codes: not-evaluable reason -> its structured code
+    all_vus: list[dict] = []
+    not_ev: Counter[str] = Counter()
+    not_ev_fam: Counter[str] = Counter()
+    indices: dict[int | str, ProgramIndex] = {}                                   # by request label, and by its Program's `id`
+    codes: dict[str, dict] = {}                                                   # not-evaluable reason -> its structured code
     addresses: dict[tuple, dict] = {}                                             # manifest address -> class of the rows producing it
     anchors: dict[str, dict] = {}                                                 # per request: the step `last` is anchored to, named
     addr_rec: dict[str, Any] = {"rule": V2_QUERY, "correspondence": {}}
@@ -587,10 +593,10 @@ def _evaluated(one: Callable[[dict], tuple[dict, dict, float]], picked: list[dic
             note, workers = f"parallel evaluator unavailable ({type(e).__name__}: {str(e)[:120]}); serial fallback", 1
     if workers > 1 and len(picked) > 1 and worker_peak is not None:
         fitted, memory = fit_pool(workers, picked, int(worker_peak))
-        if memory is not None:
+        if memory is not None:                                                    # None: no cgroup limit, and every worker asked for
             print(f"[replay] WORKERS: {memory['note']}", flush=True)
-        if fitted < workers:
-            note, workers = memory["note"], fitted
+            if fitted < workers:
+                note, workers = memory["note"], fitted
     if workers > 1 and len(picked) > 1:
         try:
             return _parallel_replay(one, picked, workers), workers, note, prewarmed, memory

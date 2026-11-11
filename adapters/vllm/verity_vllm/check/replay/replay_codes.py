@@ -94,7 +94,9 @@ def stratum_classes(entry: dict) -> list[str]:
 def seed_form(sr: dict) -> str | None:
     """How the replay's sample seed was chosen (one of SEED_FORMS, or "unknown"): as stamped (`sample.seed_form`), else decoded from
     `seed_source`.  None when the record carries neither.  The summary shape (seed / seed_source at the top level) reads the same."""
-    smp = sr.get("sample") if isinstance(sr.get("sample"), dict) else {}
+    smp = sr.get("sample")
+    if not isinstance(smp, dict):
+        smp = {}
     form = sr.get("seed_form") if sr.get("seed_form") is not None else smp.get("seed_form")
     if form is not None:
         return str(form)

@@ -85,7 +85,8 @@ def world(sampled: dict = SAMPLED, served: dict = SERVED, finish: dict = FINISH,
     steps, rows = {}, {}
     for e in range(max(len(v) for v in sampled.values())):
         live = [r for r in sorted(sampled) if e < len(sampled[r])]
-        ids, rr = [], []
+        ids: list[int] = []
+        rr: list[tuple[str, int, int]] = []
         for r in live:
             toks = PROMPTS[r] if e == 0 else [sampled[r][e - 1]]
             rr.append((r, len(ids), len(ids) + len(toks)))

@@ -86,7 +86,13 @@ def test_the_warm_request_replays_bit_for_bit_with_its_prefix_out_of_its_populat
     progs = {rid: world.inst for rid in world.prompts}
     warm = {"r1": {"cached": C, "producers": ["r0"], "prompt": world.prompts["r1"]}}
     answered, take = [], RP.RecomputedPrefix.take
-    monkeypatch.setattr(RP.RecomputedPrefix, "take", lambda self: answered.extend(got := take(self)) or got)
+
+    def taken(self):
+        got = take(self)
+        answered.extend(got)
+        return got
+
+    monkeypatch.setattr(RP.RecomputedPrefix, "take", taken)
     rep = SR.sampled_replay(progs, bmap, committed, _weights(world), per_stratum=8, seed=1, workers=0, cached_prefixes=warm)
     assert rep["result"] is True and rep["sample"]["mismatch_n"] == 0, rep.get("why")
     per = RP.positions(IX.ProgramIndex(world.inst))

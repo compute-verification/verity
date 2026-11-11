@@ -7,6 +7,9 @@ GM-01 G6 PASS with the lag exercised; the Commit required r0's steps 12..31 (bou
 test_binding_negatives)."""
 from __future__ import annotations
 
+from collections.abc import Set
+from typing import Any
+
 from tests.commit.test_binding_negatives import (
     B8_CAP,
     B8_LP,
@@ -27,7 +30,7 @@ EOS = 50279
 COVERED = {"ok": True, "expected_n": 64, "bound_n": 64, "missing_n": 0, "ambiguous_n": 0}
 
 
-def _served(lens: dict[str, int], eos_last: set[str] = frozenset()) -> dict[str, list[int]]:
+def _served(lens: dict[str, int], eos_last: Set[str] = frozenset()) -> dict[str, list[int]]:
     return {r: ([7] * (n - 1) + [EOS]) if r in eos_last else [7] * n for r, n in lens.items()}
 
 
@@ -479,6 +482,7 @@ def test_a_padded_records_rows_past_the_stop_are_the_required_padding_and_paddin
     assert not past["ok"] and past["requests"] == {"r0": [3, 4]} and past["entries_n"] == 2 and past["padding_entries_n"] == 0
     assert past["padded_record"] is False and "execution past the stop" in past["error"] and "inactive fallback" not in past["error"]
     # the same rows on a PADDED record: r0's steps 3..5 are bot-by-enablement (the full cap population), r1's are all active
+    padded: dict[str, Any]
     padded = {"schema": "padded-binding-map/1",
               "entries": [leaf("r0", s, activity="active") for s in range(3)] + [leaf("r0", s, activity=EP.ACTIVITY_PADDING) for s in range(3, 6)]
               + [leaf("r1", s, activity="active") for s in range(6)] + [{"kind": "leaf", "identity": {"family": "input_token_ids", "request_id": "r0", "step": None}, "activity": "registered-input"}]}

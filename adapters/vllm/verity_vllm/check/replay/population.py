@@ -59,7 +59,8 @@ def phase_anchor(pi_n_steps: int, ep: dict | None) -> dict[str, Any]:
     if ep and not ep.get("faults"):
         # an EOS stop at a_r = cap - LAG under LAG > 0 has n_exec == cap: the cap anchors, AND its last step IS a lag
         # step -- the flag follows the STOP (a_r < cap and LAG > 0), not n_exec < cap.
-        n_exec, a_r, lag = int(ep["n_exec"]), int(ep.get("a_r") if ep.get("a_r") is not None else ep["cap"]), int(ep.get("lag") or 0)
+        stop = ep.get("a_r")
+        n_exec, a_r, lag = int(ep["n_exec"]), int(stop if stop is not None else ep["cap"]), int(ep.get("lag") or 0)
         eos_stop_lag = a_r < int(ep["cap"]) and lag > 0
         return {"last_step": cap_last, "anchor": "cap - 1", "cap_last_step": cap_last, "n_exec": n_exec,
                 "lag_step": (n_exec - 1 if eos_stop_lag else None),
@@ -101,7 +102,10 @@ def moe_plane_alias_check(store: CommittedStore, *, max_named: int = 12) -> dict
                 rng = (int(r[0]), int(r[1])) if rng is None else (min(rng[0], int(r[0])), max(rng[1], int(r[1])))
         if rng is not None:
             layers.setdefault((rid, int(step), int(m.group(1))), {})[mem] = rng
-    compared, identical, errors, per_layer = 0, [], [], {}
+    compared = 0
+    identical: list[dict[str, Any]] = []
+    errors: list[dict[str, Any]] = []
+    per_layer: dict[str, dict[str, int]] = {}
     widths: dict[str, set[int]] = {"up": set(), "down": set()}
     for (rid, step, layer), mems in sorted(layers.items()):
         if "up" not in mems or "down" not in mems:
@@ -155,7 +159,7 @@ def _interior_feeders_without_evaluator(pi: ProgramIndex, r: dict, *, depth: int
             if const_word(pr) is not None:
                 continue                                                         # a Program constant (Const32/64[..]): read from the text, nothing to compose
             pd = pi.describe(pr) if pr is not None else None
-            if pd is None or pd["members"]:
+            if pr is None or pd is None or pd["members"]:
                 continue                                                         # unmodelled / a member-straddling slice: a replay-time fault, not a name
             pf = pd["family"]
             if pf not in EVALUATORS and pf not in DELEGATES:
@@ -184,7 +188,9 @@ def population(pi: ProgramIndex, rid: str, *, rank: int = 0, arrive: int = 0, ri
     `codes`: an accumulator, not-evaluable reason -> its structured code (`replay_codes.reason_code`), what the verdict reads.
     `recomputed`: the rows of a warm request's Program that compute its prefix-cache hit (`recomputed_prefix.prefix_rows`), which
     serving never ran for it: its replay's own, counted by family and in no stratum."""
-    vus, not_ev, not_ev_fam = [], Counter(), Counter()
+    vus: list[dict[str, Any]] = []
+    not_ev: Counter[str] = Counter()
+    not_ev_fam: Counter[str] = Counter()
     last = pi.n_steps - 1 if last_step is None else int(last_step)
 
     def _not_ev(why: str, cls: str, fam: str, *, domain: bool = False, tags: tuple[str, ...] = ()) -> None:

@@ -113,10 +113,11 @@ def adopt(pi: ProgramIndex, rid: str, warm: Mapping[str, Any] | None) -> frozens
     C = int((warm or {}).get("cached") or 0)
     if not C or pi.kv_prefix is not None:
         return frozenset()
-    if (warm or {}).get("prompt") is None:
+    prompt = (warm or {}).get("prompt")
+    if prompt is None:
         raise ValueError(f"{rid} is served {C} cached prompt rows and its Program recomputes them: the replay needs its certified "
                          "prompt (`cached_prefixes[rid]['prompt']`)")
-    pi.recomputed[rid] = (C, [int(t) for t in warm["prompt"]])
+    pi.recomputed[rid] = (C, [int(t) for t in prompt])
     return prefix_rows(pi, C)
 
 

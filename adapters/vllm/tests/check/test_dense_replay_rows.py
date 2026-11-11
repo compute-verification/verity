@@ -45,7 +45,8 @@ def test_each_dense_row_is_the_ir_reference():
     doc = b.doc(LP)
     fields = _fields(np.random.default_rng(5))
     weights = [int(w) for n, *_ in DENSE for w in fields[n]]
-    vals, seen = {}, set()
+    vals: dict[int, list[int]] = {}
+    seen: set[str] = set()
     for r in doc["rows"]:
         args = [[v for kind, a, lo, hi in g for v in (PROMPT[lo:hi] if kind == "p" and a == 0 else weights[lo:hi] if kind == "p" else vals[a][lo:hi])]
                 for g in r["args"]]
@@ -107,7 +108,7 @@ def test_a_one_output_row_is_compared_under_its_one_member_however_the_module_sp
 
     from verity_vllm.check.replay import evaluate as E
 
-    words = np.arange(4, dtype=np.uint32)
+    words: np.ndarray = np.arange(4, dtype=np.uint32)
     monkeypatch.setattr(E, "_evaluate_row", lambda *a, **k: ir_rows.ir_row("RsqrtF32_v1", {"N": 1}, [np.array([0x40800000], np.uint32)]))
     rsqrt4 = ir_rows.ir_row("RsqrtF32_v1", {"N": 1}, [np.array([0x40800000], np.uint32)])["out"]
 

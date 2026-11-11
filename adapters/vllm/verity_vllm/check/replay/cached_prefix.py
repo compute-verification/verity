@@ -12,6 +12,7 @@ from __future__ import annotations
 import json
 import os
 import re
+from collections.abc import Mapping
 from typing import Any
 
 from verity.definitions.numerics.kernel_registry import Declined
@@ -43,7 +44,7 @@ class CachedPrefix:
     """One warm request's `prefix` input as its producers' committed identities.  `producers`: the request label of each cached block,
     `indices` / `arrivals`: every request's ProgramIndex and arrival step, the producers' among them."""
 
-    def __init__(self, layout: dict[str, Any], producers: list[str], indices: dict[str, Any], arrivals: dict[str, int]) -> None:
+    def __init__(self, layout: dict[str, Any], producers: list[str], indices: Mapping[int | str, Any], arrivals: dict[str, int]) -> None:
         self.C, self.rl, self.layers = int(layout["C"]), int(layout["row_leaves"]), [layer_number(n) for n in layout["layers"]]
         if not producers or self.C % len(producers):
             raise ValueError(f"{len(producers)} producing requests for {self.C} cached rows: one per whole block")
