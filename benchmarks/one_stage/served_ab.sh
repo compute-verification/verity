@@ -176,6 +176,9 @@ prep() {  # on CORES, no card held: the Build of record, the taps, the cubin, th
   [ "$rc" = 0 ] && [ -f "$NORM_TAP_SO" ] || { cp "$STAGE/norm_tap/logs/build.log" "$OUT/prep/norm_tap_build.log" 2>/dev/null; return 5; }
   has pearl || has live || return 0
   ( export RESEARCH_RUN_DIR=$STAGE/pearlplus-cubin VERITY_BENCH_VENV=$VENV CUDA_HOME=$CUBIN_CUDA
+    if [ ! -x "$CUBIN_CUDA/bin/nvdisasm" ]; then  # cuobjdump -sass runs nvdisasm, which node A's 12.9 lacks: the venv's Triton's
+      for d in "$VENV"/lib/python*/site-packages/triton/backends/nvidia/bin; do [ -x "$d/nvdisasm" ] && PATH=$PATH:$d; done
+    fi
     mkdir -p "$RESEARCH_RUN_DIR" && cd "$TREE" || exit 1
     # shellcheck source=/dev/null
     . benchmarks/harness/env.sh && . benchmarks/harness/setup/pearl_c_sm90.sh ) > "$OUT/prep/pearlplus_cubin.log" 2>&1
