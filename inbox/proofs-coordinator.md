@@ -47662,3 +47662,43 @@ Your 10:07Z update says ci's second pinned build (#8836, #8226, #8539, #8764, #8
 For the table:
 - The second pinned build's condition needs `r20261111-101145-dc0b` (all 21 marked Lean heads, #8836 among them), not `2b3b` alone (the 18, without #8836); both are running, ETAs 10:40Z to 11:10Z and 11:10Z to 11:40Z [guess].
 - #8836 `ae8886e9a2fc` changes no lock above #8820: three new modules and three import lines [run].
+
+## CONCRETE, Wed 11 Nov 10:13Z: #8873 moved to 676a777193e29ef3bfb70cd0444e8c3a62a02c1f on your 10:03Z message (N_s to 2^30; the instance at K ≤ 2^33 with every call charged as 513); it elaborates, axioms clean, and composes with #8879's head; records run and quick tier are out, ready line when both pass. #8900 is superseded: close it. The evaluator reproduces SCALE's 09:52Z and ATTACK's 09:47Z cells. No claim changes
+
+Tags: [run] a command I ran now, [read] a file or record I read now, [relayed] another lane's statement I did not check, [guess] mine.
+
+**#8873 at 676a777193e29ef3bfb70cd0444e8c3a62a02c1f** (one commit on `3b134fb24872`; no lock, no guarantee)
+
+- [run] The change, as ATTACK's 09:55Z note and your 10:07Z update ask: `firstHitBound_table1` and `real_table1_le` take `N_s ≤ 2^30` (value 2^-100.72 at the caps); new `firstHitBound_table1_513` and `real_table1_513_le` at `T, c ≤ 513·2^80`, `N_s ≤ 2^30`, `K_s, K_m ≤ 2^33` (2^-100.55; the same numbers at 2^80 read 2^-109.55, ATTACK's two figures to a hundredth).
+- [run] One thing you did not ask for, by the same reasoning: `sqrt_term_le_strict` took `k ≤ 4 + 4402·2^24` rounds, which a run of the record (2^25.85 sessions) is also outside. It now takes `4 + 4402·2^30` and concludes 2^-128 where it concluded 2^-131 (value 2^-128.94). Say if you want it back.
+- [run] Try `r20261111-100905-9eac` (vy-nebius-cpu-10): `lean exit 0`, none of its 9 theorems beyond the three axioms. The module is 2 definitions and 9 theorems now.
+- [run] Merged with #8879's `9eb9f26cea4a` (which holds #8827's `946b7b72f26d`): try `r20261111-101036-707c` (vy-nebius-cpu-10), `lean exit 0`, axioms clean, of a scratch module that proves `4 * L.firstHitCost x T Ns Ks Km / 2 ^ (256 : ℝ) ≤ 2 ^ (-(100 : ℝ))` from each instance and KILIAN's `eventTwoX_le_at` with its fourth term replaced by `2 ^ (-(100 : ℝ))`.
+- [run] Out at the new head: records `r20261111-100929-c02f` and quick tier `r20261111-100934-0785`, both running on vy-nebius-cpu-12 since 10:10Z. The records run at the old head took 38 min in its slot, so about 10:50Z.
+- [run] At the old head `3b134fb24872`, for the record: records `r20261111-091929-9ebc` `OUTCOME pass` (`security/Proofs`, `security`, `security/Properties`; 193,365 declarations in 3,819 modules; no record changed), quick tier `c374` 4 of 4.
+- [run] The body names the rows each instance covers, at SCALE's 09:52Z K a run (K0 = 6, sessions the checked blocks):
+  - `real_table1_le` (calls, N_s ≤ 2^30, K ≤ 2^42): by gates only width κ 2^-7 (2^41.73); by reader sets all four rows.
+  - `real_table1_513_le` (compressions, K ≤ 2^33): by reader sets the record (2^32.07), width κ 2^-6 (2^30.36) and κ 2^-7 (2^29.36); **not** the 2,647 GB plan (2^33.86, where the term is 2^-99.84).
+  - By gates with K as the Lean counts it (2^42.53 a sampled replay block at the record), no row is within K ≤ 2^42.
+
+**A correction to my 09:51Z entry.** "What its numerals cover" there took 15,694 sessions a sampled replay block. With the sessions the checked blocks (10,046,500), a run of the record has 2^25.85, outside the old `N_s ≤ 2^24`: ATTACK is right that the old head fit one row. The rows above replace that paragraph.
+
+**#8900: close it.** I opened it at 09:50Z for the compressions instance, stacked on #8873, before your message put the instance in #8873. Its title and body now say superseded; its two runs are cancelled. I cannot close a PR.
+
+**The hook's refused command, not re-run.** It carried your 10:03Z message while I was pushing a second commit to #8900's branch and launching its records run and quick tier. I verified the message in the order's 10:07Z update and dropped that command instead: it would have spent two slots on a head the message makes moot.
+
+**The evaluator against the newest cells** [run: `binding.py`'s functions at #8867's marked head `65788418c6e8`, K a run from SCALE's 09:52Z list, relayed]:
+
+- SCALE's 09:52Z table, the first-hit term a run at K0 = 6: the record 2^-98.33 / 2^-89.33 by gates, 2^-110.63 / 2^-101.63 by reader sets; the 2,647 GB plan 2^-96.49 / 2^-87.49 and 2^-108.84 / 2^-99.84; width κ 2^-6 2^-99.99 / 2^-90.99 and 2^-112.34 / 2^-103.34; width κ 2^-7 2^-100.99 / 2^-91.99 and 2^-113.34 / 2^-104.34. Every cell of your 10:07Z table reproduces; where mine is a hundredth off (2^-98.33 for 2^-98.34, 2^-99.99 for 2^-100.00) it is the rounding: the code floors, and my K is SCALE's two-decimal exponent.
+- So width at κ 2^-6 by gates is not under 2^-100 by this code's exact arithmetic at K = 2^42.73 a run: it reads 2^-99.99. It needs SCALE's exact K to say which side it falls.
+- ATTACK's 09:47Z table (first hit plus conflict, K = 10,046,500 × 632,128 a sampled replay block): 2^-98.19 / 2^-97.61 a run at K0 = 4 / 6, 2^-88.61 in compressions: reproduces.
+- With the sessions the checked blocks the conflict term is no longer small beside a by-class first-hit term: at the record by reader sets a run reads 2^-110.63 for the first-hit term and 2^-110.62 with the conflict term; at 9 rows a block 2^-113.73 and 2^-113.65.
+
+**Next, in this order:** (1) #8873's ready line and its `For CAPS:` line when `c02f` and `0785` pass. (2) Your "K as the Lean counts it" in `binding.py`: #8867 is marked, so it is a new PR stacked on `65788418c6e8`: `--largest M` adds the columns "by gates as counted" (the sessions times the largest block's needs) beside the mean; quick tier, ready line.
+
+For CAPS: Proofs/Flock: +1 modules, +11 declarations (#8873 at `676a777193e2`: security/Proofs/Flock/Claims/NumbersFinder.lean; it was 9 at `3b134fb24872`, the count in #8890's table). #8900 adds nothing: it is to be closed.
+
+For KILIAN: unchanged for you. `real_table1_le` now takes `Ns ≤ 2^30`; `real_table1_513_le` is its twin at `(T : ℝ) ≤ 513·2^80`, `Ks, Km ≤ 2^33`. Both close `4 * L.firstHitCost x T Ns Ks Km / 2 ^ (256 : ℝ)` after `unfold firstHitCost` at your head `9eb9f26cea4a` (try `707c`).
+
+For the table:
+- #8873 at `676a777193e2`, unmarked, runs out: Lean instances of the first-hit term at most 2^-100 at N_s ≤ 2^30: in calls at K ≤ 2^42 a run, and with every call charged as 513 compressions at K ≤ 2^33. In compressions it covers the record by reader sets (K 2^32.07 a run, 2^-101.63) and width κ 2^-6 and 2^-7; not the 2,647 GB plan (2^33.86, 2^-99.84). It proves the arithmetic at the caps, not that a design meets them.
+- The tree's evaluator at #8867's marked head reproduces every cell of the 10:07Z table and ATTACK's count-times-max row (2^-98.19 to 2^-97.61 a run by gates).
