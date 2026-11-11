@@ -9,20 +9,20 @@ public import Flock.WindowRecord
 
 `tieOf w passes rounds dropped` holds the run's loaded passes to the window record W (`--tie W`, a
 `verity/registration/v2` record that `served_passes.py retain --window-record` writes): among W's ``pearl-a/``,
-``pearl-y/`` and ``pearl-b/`` values, W registers exactly each call's A rows and y and each weight's B rows, pass i as round
+``pearl-y/`` and ``pearl-b/`` values, W registers exactly each call's A rows and y and each fixed operand's B rows, pass i as round
 ``rounds[i]`` (default i), beside any of the ``dropped`` rounds' calls' (passes left out of the retention before the coin).
-For pass s's call c, and each weight w the passes read:
+For pass s's call c, and each fixed operand w the passes read:
 
 * ``pearl-a/{s}/{c}``: the manifest's ``root_a``, its m committed rows of K 32-bit words, under `activationBinding`'s
   `hm96-sha512` domain;
 * ``pearl-y/{s}/{c}``: the manifest's y root, its real rows of N 32-bit words, under `served_y.y_domain`'s;
-* ``pearl-b/{w}``: the pass's weight root (`Pass.weightRoots`, which the weights' root folds and `checkTile` opens B
+* ``pearl-b/{w}``: the pass's root of fixed operand w (`Pass.weightRoots`, which the fixed operands' root folds and `checkTile` opens B
   against), its n rows of K 32-bit words, under `weightBinding`'s, one entry however many passes read it.
 
 That is the tie of a W at version 2, its ``window`` header's ``version`` (`wVersion`, `pearl_c.window.version_of`). A
 version-2 W that registers no ``pearl-b/`` value at all is refused as untied (`UNTIED_WEIGHTS`), whatever its calls'
 entries: the run's B is then no registered value. A W that states no version is version 1, written before W registered
-the weights: it is held to the calls alone, as it was then, and the answer names its weights untied (`WEIGHTS_UNTIED`);
+the fixed operands: it is held to the calls alone, as it was then, and the answer names its fixed operands untied (`WEIGHTS_UNTIED`);
 one that registers a ``pearl-b/`` value is refused (`V1_WEIGHTS`), and a W stating any other version is refused
 (`UNKNOWN_VERSION`).
 
@@ -48,9 +48,9 @@ def UNTIED_WEIGHTS : String :=
   "W registers no weight's B rows (no pearl-b/ value: a window record written before W registered them)"
 /-- `verify_run.WEIGHTS_UNTIED`: the tie's `weights` for a version-1 W, which ties the calls alone. -/
 def WEIGHTS_UNTIED : String := "weights untied (W v1)"
-/-- `verify_run.V1_WEIGHTS`: why a version-1 W that registers a weight's B rows is refused. -/
+/-- `verify_run.V1_WEIGHTS`: why a version-1 W that registers a fixed operand's B rows is refused. -/
 def V1_WEIGHTS : String := "W states no version (version 1), whose values are the calls' alone, and registers"
-/-- `pearl_c.window.VERSION`: the version of a W that registers the weights' B rows. -/
+/-- `pearl_c.window.VERSION`: the version of a W that registers the fixed operands' B rows. -/
 def W_VERSION : Nat := 2
 /-- `pearl_c.window.UNKNOWN_VERSION`: why a W stating a version other than `W_VERSION` is refused. -/
 def UNKNOWN_VERSION : String :=
@@ -88,8 +88,8 @@ private def rawStr (j : Option Json) : String := match j with | some (.str s) =>
 private def domainHex (d : Except String RowsDomain) : Except String String := do
   pure (hex (← d).frame.id)
 
-/-- `tie_entries`' B rows: pass by pass (each with its round s), each weight its records read, by ascending id, as
-``pearl-b/{w}``: its n rows of K 32-bit words at the pass's weight root, under `weightBinding`'s domain. A weight is one
+/-- `tie_entries`' B rows: pass by pass (each with its round s), each fixed operand its records read, by ascending id, as
+``pearl-b/{w}``: its n rows of K 32-bit words at the pass's root of that fixed operand, under `weightBinding`'s domain. A fixed operand is one
 entry, the first pass's; a later pass that commits it under another root or shape is Python's `ValueError`. -/
 def tieWeights (passes : List (Nat × Pass)) : Except String (List (String × TieEntry)) := do
   let mut out : List (String × TieEntry) := []
@@ -109,7 +109,7 @@ def tieWeights (passes : List (Nat × Pass)) : Except String (List (String × Ti
   pure out
 
 /-- `tie_entries(passes, rounds, weights)`: what W must register for each call of the run, then, with `weights` (a
-version-2 W's), for each weight the passes read, in Python's order. `passes` are the manifests with their loaded passes. -/
+version-2 W's), for each fixed operand the passes read, in Python's order. `passes` are the manifests with their loaded passes. -/
 def tieEntries (passes : List (Json × Pass)) (rounds : Option (List Nat)) (weights : Bool := true) :
     Except String (List (String × TieEntry)) := do
   let ss := rounds.getD (List.range passes.length)

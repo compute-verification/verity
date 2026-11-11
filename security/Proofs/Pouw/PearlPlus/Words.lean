@@ -36,7 +36,7 @@ open Pouw.PearlC Pouw.Fp8Atom PouwCheck.PearlPlus
 def rowBytesOf (W : Codes) (k i : ℕ) : ByteArray := ⟨((NoiseSha512.rowBytes W k i).map Nat.toUInt8).toArray⟩
 
 /-- **Pearl+'s semantics**: Pearl-C at `pc8`'s row arithmetic on core's primitives and the H100 atom, with -h3's noise
-from SHA-512 at the salt's bytes and the weights' roots. -/
+from SHA-512 at the salt's bytes and the fixed operands' roots. -/
 def semH3 {Q R S : Type} (saltOf : S → List ℕ) (rootOf : ℕ → List ℕ) : PearlCSem Q R S :=
   sha512Sem (RowCircuit.pc8Sem RowCircuit.coreOps hopperE4m3K32
     fun _ _ _ _ _ => ⟨fun _ _ => 0, fun _ _ => 0, fun _ _ => 0, fun _ _ => 0⟩) saltOf rootOf
@@ -63,10 +63,10 @@ def StatsAreTheRow : Prop :=
         αw = RowCircuit.alpha8 RowCircuit.coreOps (RowCircuit.encRow k (rowVals k x)) k ∧
         βw = RowCircuit.beta8 RowCircuit.coreOps (RowCircuit.encRow k (rowVals k x)) k
 
-/-- **(b) A tile's words are the semantics'**: for a unit `u` of `U` with salt and weight root the semantics' bytes, a
+/-- **(b) A tile's words are the semantics'**: for a unit `u` of `U` with salt and fixed operand's root the semantics' bytes, a
 depth `k` within the domain's `K_MAX` (which the run checks when it loads the pass), a tile's rows and columns in the
-unit, every weight row of its columns passing the rules (as `TileGood` asks), opened rows that are the commitment's
-activation rows and the weight's rows, and the check's noise, operands and checked words values (no rejection): each
+unit, every fixed-operand row of its columns passing the rules (as `TileGood` asks), opened rows that are the commitment's
+activation rows and the fixed operand's rows, and the check's noise, operands and checked words values (no rejection): each
 word of a row that passes the rules has the reference ticket and useful values. -/
 def WordsAreTheSemantics : Prop :=
   ∀ {Q R S : Type} (saltOf : S → List ℕ) (rootOf : ℕ → List ℕ) (ρ : ℚ) (H : Q → R) (s : S) (U : Pouw.PearlC.Workload) (u : ℕ)

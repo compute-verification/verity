@@ -12,7 +12,7 @@ gives it (`TYPE: why`, the exception Python raises):
    (`passes_distinct`), its scheme (Pearl-C v1 -h3 on the H100's record) and its matmuls' shapes;
 2. its epoch (`manifest_epoch`, `Epoch.start`, `host.epoch_of`): the pass's coin commitment must be the verifier's (an
    in-process challenger's, or a live session's when the pass's coins are `window.LIVE_SCHEME`'s), its salt coin must open
-   against it after the weights' root (a live session's after the salt epoch's open root, `Coins.liveSalt`), and the salt
+   against it after the fixed operands' root (a live session's after the salt epoch's open root, `Coins.liveSalt`), and the salt
    must be the manifest's;
 3. its records (`records_of`, `UnitRecord`): real rows, |K|, excluded and voluntary rows, held to V-EX's caps
    (`checkRecords`) and to the records root the pass published;

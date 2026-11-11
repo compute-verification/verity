@@ -1,8 +1,8 @@
 """The interface `test_pearlplus_lean`'s cases drive, read from the Lean's source without building it: `pouw-pearlplus`'s
 options (`PouwPearlPlus/Main.lean`'s `parse`) are the ones the cases' argv passes, each taking a value or not as it does
 there; its `over_cap` rules and their default are `verify_run`'s; and the window record's value names it ties a run to
-(`PouwPearlPlus/Tie.lean`), why it refuses a version-2 W that registers no weight, a version-1 W that registers one and
-a W of another version, W's version, and the name it gives a version-1 W's untied weights, are `verify_run`'s and
+(`PouwPearlPlus/Tie.lean`), why it refuses a version-2 W that registers no fixed operand, a version-1 W that registers one and
+a W of another version, W's version, and the name it gives a version-1 W's untied fixed operands, are `verify_run`'s and
 `pearl_c.window`'s."""
 
 from __future__ import annotations

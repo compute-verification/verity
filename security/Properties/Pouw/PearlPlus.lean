@@ -11,7 +11,8 @@ The properties of the executable verdict (`verity/protocols/pouw/verifier/lean/p
 `benchmarks/pouw/pearl_c_vllm/verify_run.verify_passes`), stated against `check` and the functions it runs, for every input:
 the epoch's coin commitment, the retained passes' manifests, the number of draws, the verifier's coin (a source, or its
 record of the coin) and the prover's openings. Each has one shape, the input, the acceptance, then what it establishes.
-`Proofs.Properties.Pouw.PearlPlus` proves them, on Lean core: all but `WorkIsTheCredit` so far.
+`Proofs.Properties.Pouw.PearlPlus` proves every one of them, on Lean core, each as its name in lower camel case
+(`WorkIsTheCredit` as `workIsTheCredit`).
 
 What they compose into is the remote theorem's useful-work part: on an accepted run, under Pearl's Assumption 1 at the H100
 record per drawn tile (`TTOutTilePearlCH100Rev1`), the run's credit is at most its cost up to the draw's ε at δ, or a
@@ -36,7 +37,8 @@ SHA-512 break on the run's trees. These properties are the code's side of it:
 * `OpeningBinds`: two openings of one position of a tree both accepted open one value, or two different messages hashed
   in checking them (`rowsHashed`) collide under SHA-512.
 
-The window record's tie (`tie`) is not ported.
+The window record's tie is ported (`tieOf`, `PouwPearlPlus.Tie`, which `plan` runs before the draw), but no property
+here states what it establishes on an accepted run, that W registers the run's calls and fixed operands: that is open.
 
 **The device record.** The premise is read at the H100's record, `devH100` (`Pouw.PearlC.Assumptions.TTOutTilePearlCH100Rev1`,
 and at W1 `TTOutTilePearlCH100Rev1W1` on `W1Device.h100`), and the run it is applied to served on an H200. Every field of
@@ -61,7 +63,7 @@ namespace Properties.Pouw.PearlPlus
 
 open PouwCommit PouwCheck.PearlPlus PouwCheck.PearlPlus.Words
 
-/-- The fixed operand's noise the replay uses for tile `tid` of pass `p`: its weight's, once per pass and weight. -/
+/-- The fixed operand's noise the replay uses for tile `tid` of pass `p`: its fixed operand's, once per pass and fixed operand. -/
 def noiseOf (p : Pass) (tid : Nat) : Reject FixedNoise :=
   match p.tile? tid with
   | some (pos, _, _) =>
@@ -87,7 +89,7 @@ def PlanMeans : Prop :=
       pl.todo = todo pl.passes drawn ∧ pl.drawn = drawn.length ∧ pl.picks = drawn
 
 /-- **What `check` accepts**: a plan, every one of whose tiles the prover opened and `checkTile` passed, on the fixed
-operand's noise of its weight, or found over its inert-work bound with every other check passed where the run's
+operand's noise, or found over its inert-work bound with every other check passed where the run's
 `over_cap` is `uncredited`; the verdicts are those tiles', in the plan's order, each ok under that rule. -/
 def AcceptMeans : Prop :=
   ∀ (i : Input) (opener : Nat → Nat → Except String TileOpening), (check i opener).accept = true →
@@ -108,8 +110,8 @@ def RefusedBeforeTheCoin : Prop :=
 /-! ## A pass's records and give-up (V-EX) -/
 
 /-- **What a loaded pass's records are**: each keeps `UnitRecord`'s own rule, together they keep `check_records` (every
-unit at its weight's split, one set of excluded and of voluntary B rows per weight, V-EX's count caps ⌈m/64⌉ of A and
-⌈n/64⌉ of B), and they are the ones whose root the pass published, under its salt and weights' root. -/
+unit at its fixed operand's split, one set of excluded and of voluntary B rows per fixed operand, V-EX's count caps ⌈m/64⌉ of A and
+⌈n/64⌉ of B), and they are the ones whose root the pass published, under its salt and fixed operands' root. -/
 def LoadedGivesUp : Prop :=
   ∀ (coins : CoinCommitment) (man : Lean.Json) (p : Pass), load coins man = .ok p →
     (∀ r ∈ p.records, r.reason = none ∧ r.voluntaryA.length ≤ voluntaryCap r.matmul.m ∧
@@ -126,7 +128,7 @@ def formed (p : Pass) (wn : Reject FixedNoise) (rows cols : List Nat) (u : Matmu
   pure (ops, ← checked ops)
 
 /-- **What a tile that passes, or is only over its inert-work bound, establishes**: the tile is the verifier's own
-(`tile?`); its A and B rows and its leaf open, at the tile's positions, against the call's A root, the weight's root and
+(`tile?`); its A and B rows and its leaf open, at the tile's positions, against the call's A root, the fixed operand's root and
 the pass's transcript root (hm96 under SHA-512); its words formed from those rows under the pass's salt and the fixed
 operand's noise are checked and hash to the opened leaf; its rows keep the per-row rules (`Rule.rowsFailure`); its
 credited cells' replayed inert work is within the bound where it passes and over it, with that reason, where it is
