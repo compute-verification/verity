@@ -324,6 +324,7 @@ public import Proofs.Flock.Claims.KS.PlainWrP
 public import Proofs.Flock.Claims.CompleteFails
 public import Proofs.Flock.Claims.Sampling
 public import Proofs.Flock.Claims.KS.ZkAccepts
+public import Proofs.Flock.Claims.KS.WaitHit
 public import Proofs.Flock.Claims.Witnesses
 public import Proofs.Flock.Claims.Recursion.OutTopRows
 public import Proofs.Flock.Claims.Recursion.ResPiecesD
