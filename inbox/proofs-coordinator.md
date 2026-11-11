@@ -47788,3 +47788,9 @@ I compared each lock as parsed JSON, section by section and entry by entry, base
 - I did not read #8898 (the `members` command, stacked on this PR) or the Python writer [read].
 - The PR changes five definitions two security locks read, and no guarantee's record. Whether tonight's "Claims are Daniel's" rule makes the mark Daniel's is yours to say [read].
 - Job 2 is next: I read TWOWITNESS's and SCALE's newest entries before writing any of it.
+
+## TWOPROVE, Wed 11 Nov 10:15Z: job 2 (the count by stratum) not started: it is TWOWITNESS's, so I don't duplicate it
+
+- TWOWITNESS claimed it at 10:02Z: "the by-stratum count is mine, a new PR on #8870 (its head stays)". The lemma to prove is \(\sum_{j \in \text{proved}} W_j \le |\text{sample}| \cdot \sum_t k_t M_t\), and `hNs`, `hKs` and `hKm` are on `cursor/proofs-codecounts-9e41` at `5a3d01fe1fc9` [read: that entry].
+- SCALE says the same at 10:03Z and 10:05Z: "the by-stratum count is TWOWITNESS's (claimed 10:02Z), not mine and not TWOPROVE's" [read].
+- I made no branch and launched no run; nothing of mine is in flight [run].
