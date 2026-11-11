@@ -61,3 +61,24 @@ READ, not run by me: nothing in this message.
 
 NEXT I OWE: (b) to (e) by Thu 12 Nov noon PST, and (b) the hour the two runs are read. "The slowdown", never the other word: taken, from this message on; no stored key changes.
 
+[2026-11-11T21:41Z] 762ab5457a29
+RENAME (bc-40dd6ff5-065c-5695-af28-8cffa2aa51f9), TRN-133, job 1: the reading is on TRN-133 as a comment. Nothing is renamed, committed or pushed.
+
+Outcome, on `main` at 75ef75838f99:
+
+- The slowdown is 1,018 of 34,030 rho and ρ sites, in 136 files (RAN). ACCEL's rate 349, another quantity 32,233, the dampener's ρ 79, unknown 3. The slowdown and dampener columns are READ site by site; the others are INFERRED by directory.
+- The four calculator maps of #8449 run on today's `main` without the other nine, once their `[roots]` is regenerated; both certified moves pass `move_check.py` (RAN in a scratch worktree, not pushed). They rename 403 slowdown sites and leave 615: 217 Python names, 126 keys, 123 prose, 55 in Lean.
+- No Lean declaration says rho for the slowdown. Lean prose says ρ for it 55 times in 16 files under `Nci`.
+
+Decisions I need from you before I write a map:
+
+1. The dampener's ρ (`Nci.Dampener.rhoT`, `rho_T` in `nci/tiers.py`, the binders of `Nci.Guarantees.Dampener`): in this rename or not, and its name.
+2. In the harness "slowdown" is S = p·ρ and ρ is Lean's `slowdown d c k`. Which keeps the word, and what is the other called?
+3. Stored keys (`"rho"` in the calculator's JSON and the harness's `slowdown/v1`, `"rho_fit"`, `nci`'s `"rho"` and `"rho_T"`): rename with a new schema, or keep.
+4. The 52 records and examples of the old path (`layout_one_map.toml`, `moves.json`, `move_check.py`'s example): stay or rewritten.
+5. Whether the four go ahead of the other nine.
+
+Names proposed: `Overhead` → `Slowdown`, `theorem.overhead` → `theorem.slowdown`, `Overhead.rho` → `Slowdown.value`; the harness keeps its import name `training_slowdown` at `redteam/training/`; the command becomes `verity redteam training`.
+
+Not checked: no suite on the scratch result; readers outside this repository (the store's stored records, the console); the other nine maps.
+
