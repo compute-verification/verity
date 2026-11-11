@@ -994,7 +994,7 @@ def test_a_deferred_landings_lock_commit_is_vouched_for_only_by_the_records_its_
     lean-audit alone with no passing attempt of the whole check, vouches for nothing."""
     from research.merge import regenerated_parent
     from research.store.local import LocalStore
-    from test_queue_drive import _live_run
+    from test_landing import _live_run
 
     main, feat, tip = _repos(tmp_path)
     base, store, lock = _git(main, "rev-parse", "HEAD"), LocalStore(), "pkg/lean-audit.json"
@@ -1017,6 +1017,17 @@ def test_a_deferred_landings_lock_commit_is_vouched_for_only_by_the_records_its_
     assert vouched(_deferred_lock(feat, tip, {lock: '{"records": 2}\n'}, "r20261020-000003-0003"), "r20261020-000003-0003", elsewhere) is None  # it checked main
 
 
+def test_a_lean_report_naming_a_repaired_file_outside_repaired_is_unreadable():
+    import pytest
+
+    from research.merge import Unreadable, _regenerated_in
+
+    with pytest.raises(Unreadable, match="no lock run repairs"):
+        _regenerated_in("r1", {"regenerated": {}, "repaired": {"AGENTS.md": "/x/lean-audit/repaired/AGENTS.md"}})
+    assert _regenerated_in("r1", {"repaired": {"tests/test_lean_packages.py": "/r/lean-audit/repaired/t.py"}}) == {
+        "tests/test_lean_packages.py": "lean-audit/repaired/t.py"}
+
+
 def test_a_lock_commit_carries_the_caps_its_lock_run_repaired_and_no_other_file(tmp_path):
     """The lock run's `--bookkeeping warn` repairs files beside the locks (`REPAIRED`, its report's `repaired`): a lock commit
     holding the repaired copy byte for byte is vouched for; one whose copy differs, one that leaves it out, and one changing
@@ -1025,7 +1036,7 @@ def test_a_lock_commit_carries_the_caps_its_lock_run_repaired_and_no_other_file(
 
     from research.merge import REPAIRED, regenerated_parent
     from research.store.local import LocalStore
-    from test_queue_drive import _live_run
+    from test_landing import _live_run
 
     main, feat, tip = _repos(tmp_path)
     store, lock, caps, rid = LocalStore(), "pkg/lean-audit.json", "tests/test_lean_packages.py", "r20261020-000005-0005"
