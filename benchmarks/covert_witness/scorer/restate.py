@@ -4,6 +4,7 @@
                                   [--runs RUNS.txt] [--workers N]
     python scorer/restate.py overlay --state STATE --plan PLAN.json --overlay DIR [--only RUNS.txt] [--reuse DIR]
                                      [--drop-cache NAME] --out FILE
+    python scorer/restate.py totrace --plan PLAN.json [--traced OUT ...] [--leave RUN,...] --out FILE
     python scorer/restate.py layer --base TRACED --over TRACED [--over TRACED ...] [--only RUNS.txt] --dest DIR --out FILE
     python scorer/restate.py one --record run.json --plan PLAN.json --run RUN --out FILE
 
@@ -53,9 +54,14 @@ directories, a restated run's being a copy that differs in its `run/run.json`) a
 caches, `--drop-cache NAME` aside). `--only` restates just the listed runs: a rebuild keeps the record as it is, and
 the published trace of it, for a run whose restated record did not trace. Nothing under STATE is written.
 
+`totrace` says which restated records a run of correct.sh traces: all but the runs of `--leave`, which keep their
+record as it is and the published trace of it, and the runs an earlier run of correct.sh traced (OUT, its out/, which
+holds its plan.json and traced/). An OUT's trace of a record that is not this plan's, by `after_sha256`, is refused.
+FILE is `{"trace": [RUN], "held": {RUN: OUT}, "left": [RUN]}`.
+
 `layer` makes one trace layer of several (each a trace40.py node run's out/, traced by one te_core): BASE's traces
 with each OVER's over them run by run, a later OVER over an earlier, only the runs of `--only` when given. A run an
-OVER failed on keeps what the layer held of it before. FILE lists the runs taken from BASE, those from an OVER (`from_over`: the runs whose restated record
+OVER failed on keeps what the layer held of it before, an earlier OVER's trace of it included. FILE lists the runs taken from BASE, those from an OVER (`from_over`: the runs whose restated record
 traced, which `overlay --only` takes) and the failures. replot.py's `node` reads DIR as a `--layer`.
 
 `one` writes one restated record, for a reader that holds the record and the plan.
@@ -270,6 +276,28 @@ def cmd_overlay(a: argparse.Namespace) -> int:
     return 1 if missing else 0
 
 
+def cmd_totrace(a: argparse.Namespace) -> int:
+    plan = json.loads(a.plan.read_text())["restated"]
+    leave = {r for r in a.leave.split(",") if r}
+    if leave - set(plan):
+        raise SystemExit(f"totrace: the plan does not restate {sorted(leave - set(plan))}")
+    held = {}
+    for out in a.traced:
+        theirs = json.loads((out / "plan.json").read_text())["restated"]
+        for run, v in json.loads((out / "traced" / "traced.json").read_text()).items():
+            f = out / "traced" / "records" / f"{run}.jsonl.gz"
+            if run in leave or run not in plan or v.get("error") or not f.exists() or not f.stat().st_size:
+                continue
+            if theirs.get(run, {}).get("after_sha256") != plan[run]["after_sha256"]:
+                raise SystemExit(f"totrace: {out} traced a record of {run} that is not this plan's")
+            held[run] = str(out)
+    doc = {"trace": sorted(set(plan) - leave - set(held)), "held": dict(sorted(held.items())), "left": sorted(leave)}
+    a.out.write_text(json.dumps(doc, indent=1))
+    print(f"totrace: {len(doc['trace'])} of {len(plan)} restated records to trace, {len(held)} traced by an earlier "
+          f"run, {len(leave)} left: {doc['left']}")
+    return 0
+
+
 def cmd_layer(a: argparse.Namespace) -> int:
     base = json.loads((a.base / "manifest.json").read_text())
     (a.dest / "records").mkdir(parents=True)
@@ -288,7 +316,8 @@ def cmd_layer(a: argparse.Namespace) -> int:
                 continue
             f = over / "records" / f"{run}.jsonl.gz"
             if v.get("error") or not f.exists() or not f.stat().st_size:
-                failed[run] = str(v.get("error") or "no records")[-300:]
+                if source.get(run) != "over":
+                    failed[run] = str(v.get("error") or "no records")[-300:]
                 continue
             traced[run], source[run] = v, "over"
             failed.pop(run, None)
@@ -338,6 +367,12 @@ def main() -> int:
     p.add_argument("--drop-cache", default="")
     p.add_argument("--out", type=Path, required=True)
     p.set_defaults(func=cmd_overlay)
+    p = sub.add_parser("totrace")
+    p.add_argument("--plan", type=Path, required=True)
+    p.add_argument("--traced", type=Path, action="append", default=[])
+    p.add_argument("--leave", default="")
+    p.add_argument("--out", type=Path, required=True)
+    p.set_defaults(func=cmd_totrace)
     p = sub.add_parser("layer")
     p.add_argument("--base", type=Path, required=True)
     p.add_argument("--over", type=Path, action="append", required=True)

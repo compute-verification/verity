@@ -202,6 +202,11 @@ def test_layer(tmp_path, monkeypatch):
     assert doc["from_base"] == ["b", "c"] and doc["from_over"] == ["a", "d"] and sorted(doc["over_failed"]) == ["b", "e"]
     got = {p.name.split(".")[0]: gzip.open(p, "rt").read().strip() for p in (tmp_path / "layer" / "records").iterdir()}
     assert got == {"a": "o2 a", "b": "base b", "c": "base c", "d": "o1 d"}
+    traced(tmp_path / "o4", "t", {"d": "!timed out"})
+    assert run(monkeypatch, "layer", "--base", tmp_path / "base", "--over", tmp_path / "o1", "--over", tmp_path / "o4",
+               "--dest", tmp_path / "l0", "--out", tmp_path / "l0.json") == 0
+    doc = json.loads((tmp_path / "l0.json").read_text())
+    assert doc["from_over"] == ["a", "d"] and sorted(doc["over_failed"]) == ["b"]
     (tmp_path / "only.txt").write_text("d\n")
     assert run(monkeypatch, "layer", "--base", tmp_path / "base", "--over", tmp_path / "o1", "--only", tmp_path / "only.txt",
                "--dest", tmp_path / "l1", "--out", tmp_path / "l1.json") == 0
@@ -211,6 +216,27 @@ def test_layer(tmp_path, monkeypatch):
     with pytest.raises(SystemExit, match="te_core tree"):
         run(monkeypatch, "layer", "--base", tmp_path / "base", "--over", tmp_path / "o3", "--dest", tmp_path / "l2",
             "--out", tmp_path / "l2.json")
+
+
+def test_totrace(tmp_path, monkeypatch):
+    plan = {"restated": {r: {"after_sha256": r} for r in "abcd"}, "kept": {}}
+    (tmp_path / "plan.json").write_text(json.dumps(plan))
+    for name, runs in (("x", {"a": "x a", "b": "!timed out", "c": "!timed out"}), ("y", {"b": "y b", "e": "y e"})):
+        traced(tmp_path / name / "traced", "t", runs)
+        (tmp_path / name / "plan.json").write_text(json.dumps(plan))
+    argv = ["totrace", "--plan", tmp_path / "plan.json", "--traced", tmp_path / "x", "--traced", tmp_path / "y"]
+    assert run(monkeypatch, *argv, "--leave", "d", "--out", tmp_path / "t.json") == 0
+    doc = json.loads((tmp_path / "t.json").read_text())
+    assert doc == {"trace": ["c"], "held": {"a": str(tmp_path / "x"), "b": str(tmp_path / "y")}, "left": ["d"]}
+    assert run(monkeypatch, "totrace", "--plan", tmp_path / "plan.json", "--out", tmp_path / "t0.json") == 0
+    assert json.loads((tmp_path / "t0.json").read_text()) == {"trace": ["a", "b", "c", "d"], "held": {}, "left": []}
+    with pytest.raises(SystemExit, match="does not restate"):
+        run(monkeypatch, *argv, "--leave", "e", "--out", tmp_path / "t1.json")
+    plan["restated"]["a"]["after_sha256"] = "another"
+    (tmp_path / "plan.json").write_text(json.dumps(plan))
+    with pytest.raises(SystemExit, match="not this plan's"):
+        run(monkeypatch, *argv, "--out", tmp_path / "t2.json")
+    assert run(monkeypatch, *argv, "--leave", "a", "--out", tmp_path / "t3.json") == 0
 
 
 def test_every_run_of_the_data_file_has_a_reason():

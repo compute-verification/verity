@@ -2,7 +2,8 @@
 # The published tables rebuilt with each search record's tokens a step restated (restate.py), beside the published
 # layer rebuilt as it is. A research run's workload on the scorer's node; reads K, writes none of it, publishes nothing.
 #
-#   TE=COMMIT [LAYERS=TREE,...] [WORKERS=N] [TRACE_TIMEOUT=S] [NULL=DIR,...] bash correct.sh
+#   TE=COMMIT [LAYERS=TREE,...] [WORKERS=N] [TRACE_TIMEOUT=S] [TRACED=OUT,...] [LEAVE=RUN,...]
+#       [NULL=DIR,...] bash correct.sh
 #
 # The run's inputs/ holds: replot.bundle (a bundle holding COMMIT, the checkout whose te_core traced the published
 # layer), replot-code.tar (the checkout's benchmarks/covert_witness that builds), replot-inputs.tar (replot.py node's
@@ -13,9 +14,12 @@
 #    factor of the trace the published tables read of each (K's trace caches LAYERS, in the order the tables read
 #    them), and the runs kept as they are with why (OUT/plan.json);
 # 2. every restated record traced by COMMIT's te_core (trace40.py pack and node, OUT/traced), each checked to be the
-#    plan's record by its sha256;
-# 3. the corrected layer: the published layer with those traces over it (restate.py layer, OUT/layer-corr.json). A run
-#    whose restated record did not trace keeps its record as it is and the published trace of it;
+#    plan's record by its sha256, a step's trace given TRACE_TIMEOUT seconds. A record an earlier run of this command
+#    traced (TRACED, each the out/ of one, holding its plan.json and traced/) is not traced again, and a run LEAVE
+#    names is not traced at all (restate.py totrace, OUT/trace-plan.json);
+# 3. the corrected layer: the published layer with those traces over it, TRACED's first (restate.py layer,
+#    OUT/layer-corr.json). A run whose restated record did not trace, or that LEAVE names, keeps its record as it is
+#    and the published trace of it;
 # 4. two builds, each a replot.py node on a scratch state of its own (one te_core tree's layers share a cache name, so a
 #    state holds one of them): `fixed`, the published layer alone on K's records, which is the published tables again,
 #    and `corr`, the corrected layer on a state holding the restated record of each run the layer took (OUT/build-NAME).
@@ -33,6 +37,8 @@ TE=${TE:?the commit whose te_core traced the published layer}
 LAYERS=${LAYERS:-280a017fcfa5,34220f8d3c76,538dc468a120}
 WORKERS=${WORKERS:-20}
 TRACE_TIMEOUT=${TRACE_TIMEOUT:-3000}
+TRACED=${TRACED:-}
+LEAVE=${LEAVE:-}
 NULL=${NULL:-}
 S=$(mktemp -d)
 SAMPLER=
@@ -95,15 +101,20 @@ PY
 "$PY" "$IN/restate.py" overlay --state "$K/state" --plan "$OUT/plan.json" --overlay "$S/state-all" \
     --out "$OUT/overlay-all.json" || exit 1
 
-echo "== $(date -u +%H:%M:%SZ) packing and tracing the restated records with $WORKERS workers"
-only=$("$PY" -c 'import json, sys; print(",".join(sorted(json.load(open(sys.argv[1]))["restated"])))' "$OUT/plan.json")
-mkdir -p "$S/tmp"
-TE_SCORER=$S/state-all TMPDIR="$S/tmp" "$PY" "$IN/trace40.py" pack --te "$S/wt/te" --all --only "$only" \
-    --out "$S/pack.tar" > "$OUT/pack.json" 2> "$OUT/pack.err" || { echo "pack failed"; exit 1; }
-"$PY" - "$S/pack.tar" "$OUT/plan.json" "$OUT/packed.json" <<'PY' || exit 1
+over=()
+earlier=()
+for d in $(echo "$TRACED" | tr , ' '); do over+=(--over "$d/traced"); earlier+=(--traced "$d"); done
+"$PY" "$IN/restate.py" totrace --plan "$OUT/plan.json" "${earlier[@]}" --leave "$LEAVE" --out "$OUT/trace-plan.json" || exit 1
+only=$("$PY" -c 'import json, sys; print(",".join(json.load(open(sys.argv[1]))["trace"]))' "$OUT/trace-plan.json")
+if [ -n "$only" ]; then
+  echo "== $(date -u +%H:%M:%SZ) packing and tracing the restated records with $WORKERS workers, $TRACE_TIMEOUT s a step"
+  mkdir -p "$S/tmp"
+  TE_SCORER=$S/state-all TMPDIR="$S/tmp" "$PY" "$IN/trace40.py" pack --te "$S/wt/te" --all --only "$only" \
+      --out "$S/pack.tar" > "$OUT/pack.json" 2> "$OUT/pack.err" || { echo "pack failed"; exit 1; }
+  "$PY" - "$S/pack.tar" "$OUT/plan.json" "$OUT/trace-plan.json" "$OUT/packed.json" <<'PY' || exit 1
 # every packed record is the plan's restated one
 import gzip, hashlib, json, sys, tarfile
-plan = json.load(open(sys.argv[2]))["restated"]
+plan, want = json.load(open(sys.argv[2]))["restated"], json.load(open(sys.argv[3]))["trace"]
 bad = []
 with tarfile.open(sys.argv[1]) as t:
     packed = sorted(r["run_id"] for r in json.load(t.extractfile("./runs.json")))
@@ -111,18 +122,26 @@ with tarfile.open(sys.argv[1]) as t:
         got = hashlib.sha256(gzip.decompress(t.extractfile(f"./runs/{run}/run.json.gz").read())).hexdigest()
         if got != plan[run]["after_sha256"]:
             bad.append(run)
-json.dump({"restated": len(plan), "packed": len(packed), "not_packed": sorted(set(plan) - set(packed)),
-           "not_the_restated_record": bad}, open(sys.argv[3], "w"), indent=1)
-print(f"packed {len(packed)} of {len(plan)} restated; not packed: {sorted(set(plan) - set(packed))}; not the restated record: {bad}")
+json.dump({"to_trace": len(want), "packed": len(packed), "not_packed": sorted(set(want) - set(packed)),
+           "not_the_restated_record": bad}, open(sys.argv[4], "w"), indent=1)
+print(f"packed {len(packed)} of {len(want)} to trace; not packed: {sorted(set(want) - set(packed))}; not the restated record: {bad}")
 sys.exit(1 if bad or not packed else 0)
 PY
-TE_TRACE_TIMEOUT=$TRACE_TIMEOUT TMPDIR="$S/tmp" "$K/trace-venv/bin/python" "$IN/trace40.py" node --pack "$S/pack.tar" \
-    --out "$OUT/traced" --workers "$WORKERS" > "$OUT/traced.txt" 2>&1
-echo "trace40 node rc $? $(date -u +%H:%M:%SZ)" >> "$OUT/traced.txt"
-rm -rf "$S/pack.tar" "$S/tmp"
-echo "== $(date -u +%H:%M:%SZ) traced: $(tail -n 2 "$OUT/traced.txt" | tr '\n' ' ' | cut -c1-300); peak so far $(cat "$OUT/memory-peak-gb.txt" 2>/dev/null) GB"
+  TE_TRACE_TIMEOUT=$TRACE_TIMEOUT TMPDIR="$S/tmp" "$K/trace-venv/bin/python" "$IN/trace40.py" node --pack "$S/pack.tar" \
+      --out "$OUT/traced" --workers "$WORKERS" > "$OUT/traced.txt" 2>&1
+  echo "trace40 node rc $? $(date -u +%H:%M:%SZ)" >> "$OUT/traced.txt"
+  rm -rf "$S/pack.tar" "$S/tmp"
+  echo "== $(date -u +%H:%M:%SZ) traced: $(tail -n 2 "$OUT/traced.txt" | tr '\n' ' ' | cut -c1-300); peak so far $(cat "$OUT/memory-peak-gb.txt" 2>/dev/null) GB"
+  [ -f "$OUT/traced/traced.json" ] && over+=(--over "$OUT/traced")
+fi
+[ "${#over[@]}" -gt 0 ] || { echo "no trace to lay over: nothing traced here and no TRACED"; exit 1; }
 
-"$PY" "$IN/restate.py" layer --base "$S/layers/new" --over "$OUT/traced" --dest "$S/layers/corr" \
+"$PY" - "$OUT/trace-plan.json" "$S/only-layer.txt" <<'PY' || exit 1
+import json, sys
+t = json.load(open(sys.argv[1]))
+open(sys.argv[2], "w").write("".join(r + "\n" for r in sorted(set(t["trace"]) | set(t["held"]))))
+PY
+"$PY" "$IN/restate.py" layer --base "$S/layers/new" "${over[@]}" --only "$S/only-layer.txt" --dest "$S/layers/corr" \
     --out "$OUT/layer-corr.json" || exit 1
 "$PY" - "$OUT/layer-corr.json" "$OUT/plan.json" "$S/only-corr.txt" <<'PY' || exit 1
 import json, sys

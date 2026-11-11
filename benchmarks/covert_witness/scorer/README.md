@@ -171,7 +171,10 @@ The rules a rebuild follows:
 - **One layer of a te_core tree a state.** Layers traced by one te_core tree share a trace cache's name, so each build
   is a `replot.py node` on a scratch state of its own.
 - **A run whose restated record does not trace** keeps its record as it is and the published trace of it; `correct.sh`
-  lists those runs.
+  lists those runs. A record whose step takes longer to trace than `TRACE_TIMEOUT` gets a run of its own with the
+  timeout raised, where `LEAVE` names the restated runs that run does not trace and `TRACED` names the out/ of the
+  earlier runs, whose traces are laid over rather than made again. A run `LEAVE` names is kept as one that did not
+  trace.
 
 The standard-workloads panel reads two of the search's records through its own stored traces. Its builder takes the
 plan `correct.sh` wrote and reads those runs restated, each stored trace against the restated count of its step
