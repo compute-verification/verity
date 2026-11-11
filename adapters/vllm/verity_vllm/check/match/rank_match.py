@@ -25,6 +25,7 @@ recorded partials; TP-12 at Commit from the committed partials).  The checks FAI
 from __future__ import annotations
 
 import json
+from collections.abc import Mapping
 from pathlib import Path
 from typing import Any
 
@@ -155,7 +156,7 @@ def own_producers_from_record(instances_path: str | Path) -> dict[tuple[int, int
     return out
 
 
-def _recorded_as_folded(x: dict) -> tuple[str, list[int]]:
+def _recorded_as_folded(x: dict) -> tuple[str | None, list[int]]:
     """A recorder row's (kind, partial shape) as the fold states that collective.  A `fused_norm.KIND` row's partial is
     ``stack([partial, residual])``: on its fused path the fold's `fused_allreduce_rms_norm` collective, on its unfused path the
     communicator `all_reduce` the call made, each over the [M, N] partial."""
@@ -173,7 +174,8 @@ def load_recorder(path: str | Path) -> list[dict]:
 
 class _Check:
     def __init__(self, res: dict, name: str, what: str) -> None:
-        self.res, self.name, self.what, self.fails = res, name, what, []
+        self.res, self.name, self.what = res, name, what
+        self.fails: list[str] = []
 
     def fail(self, msg: str) -> None:
         if len(self.fails) < 32:
@@ -344,11 +346,11 @@ def cross_rank_check(colls: dict[int, list[dict]], *, producers: dict[int, dict[
         rows_by = {r: {(int(x["step"]), int(x["k"])): x for x in recorder.get(r, [])} for r in ranks}
         binding: dict[str, dict[str, Any]] = {}
         for key in common:
-            xs = {r: rows_by[r].get(key) for r in ranks}
-            missing = [r for r in ranks if xs[r] is None]
+            missing = [r for r in ranks if key not in rows_by[r]]
             if missing:
                 c.fail(f"{key}: recorder row missing on rank {missing[0]}")
                 continue
+            xs = {r: rows_by[r][key] for r in ranks}
             x0 = xs[0]
             for r in ranks[1:]:
                 if not x0.get("out_sha256") or x0.get("out_sha256") != xs[r].get("out_sha256"):
@@ -419,7 +421,8 @@ def cross_rank_check(colls: dict[int, list[dict]], *, producers: dict[int, dict[
                     if int(ln.get("k", k)) != k or int(ln.get("peer_collective_k", -1)) != k:
                         c.fail(f"{tag} link {k}: binds peer collective {ln.get('peer_collective_k')} (wrong peer)")
                     # v2 links carry `peers = [{rank, input, operand, collective_k}]` (one per other rank); a v1 link the one `peer_rank`
-                    lps = ln.get("peers") if isinstance(ln.get("peers"), list) else [{"rank": ln.get("peer_rank", -1), "collective_k": ln.get("peer_collective_k", k)}]
+                    stated = ln.get("peers")
+                    lps = stated if isinstance(stated, list) else [{"rank": ln.get("peer_rank", -1), "collective_k": ln.get("peer_collective_k", k)}]
                     got_ranks = sorted(int(x.get("rank", -1)) for x in lps)
                     if got_ranks != peers_of[r]:
                         c.fail(f"{tag} link {k}: peer ranks {got_ranks} (must be every other rank {peers_of[r]})")
@@ -433,13 +436,13 @@ def cross_rank_check(colls: dict[int, list[dict]], *, producers: dict[int, dict[
                     if not _same_site(ln.get("module", ln.get("module_path")), col["site"]):
                         c.fail(f"{tag} link {k}: module {ln.get('module', ln.get('module_path'))!r} vs fold site {col['site']!r}")
                     cls = _site_class(ln.get("module_path"))
-                    want = PRODUCER_BY_SITE_CLASS.get(cls or "")
-                    if want and producers is not None:
+                    admits = PRODUCER_BY_SITE_CLASS.get(cls or "")
+                    if admits and producers is not None:
                         key = (int(col["step"]), int(col["k"]))
                         specs = producers.get(r, {}).get(key) or []
-                        bad = sorted({str(sp) for sp in specs if not _admitted(sp, want, ADDENDS_BY_SITE_CLASS.get(cls or "", ()))})
+                        bad = sorted({str(sp) for sp in specs if not _admitted(sp, admits, ADDENDS_BY_SITE_CLASS.get(cls or "", ()))})
                         if bad:
-                            c.fail(f"{tag} link {k} ({cls}): own partial produced by {bad[:3]}, the site class admits {want} (wrong producer)")
+                            c.fail(f"{tag} link {k} ({cls}): own partial produced by {bad[:3]}, the site class admits {admits} (wrong producer)")
         c.close()
 
     if require_all:
@@ -455,7 +458,7 @@ def cross_rank_check(colls: dict[int, list[dict]], *, producers: dict[int, dict[
     return res
 
 
-def commit_binding(match_dir: str | Path, *, world: int = 2, match_oracle: dict[str, dict] | None = None, require: bool = False) -> dict:
+def commit_binding(match_dir: str | Path, *, world: int = 2, match_oracle: Mapping[Any, dict] | None = None, require: bool = False) -> dict:
     """The COMMIT-STAGE binder of the peer inputs: the fold Match published, per (rank r, step, k), the
     digest its `peers_r[s,k]` leaf is bound to (`peer_binding` of tp2_rank_match.json = the recorder's digest of rank 1-r's partial at (s,k));
     the Commit compared every committed rank-local partial against the SAME recorder's stored tensors bit-exact (`match_oracle`, per rank,
@@ -486,12 +489,12 @@ def commit_binding(match_dir: str | Path, *, world: int = 2, match_oracle: dict[
     res["n_bindings"] = len(binding)
     rec: dict[int, dict[tuple[int, int], dict]] = {}
     for r in range(world):
-        p = md / "capture" / f"coll.rank{r}.jsonl"
-        if not p.exists():
-            fails.append(f"rank {r}: recorder rows {p.name} missing from the Match capture (the Commit oracle's source)")
+        rows = md / "capture" / f"coll.rank{r}.jsonl"
+        if not rows.exists():
+            fails.append(f"rank {r}: recorder rows {rows.name} missing from the Match capture (the Commit oracle's source)")
             rec[r] = {}
             continue
-        rec[r] = {(int(x["step"]), int(x["k"])): x for x in load_recorder(p)}
+        rec[r] = {(int(x["step"]), int(x["k"])): x for x in load_recorder(rows)}
         res["n_recorder"][str(r)] = len(rec[r])
     n_bad = 0
     covered: dict[int, set[tuple[int, int]]] = {r: set() for r in range(world)}
