@@ -56,6 +56,9 @@ PUBLIC = {
                                  "calls it and put back (pin_op, Pin)",
     "verity_vllm.engine.step_trace": "I2: the scheduler's step trace of an in-process engine core (StepTrace) and its "
                                      "reader, which serve-openai records and benchmarks/serve_tax times and replays",
+    "verity_vllm.engine.sampler_capture": "I2: chosen requests' logits rows and ids at a replaying engine's sampler, held "
+                                          "across ranks and written as a token select's span, which benchmarks/serve_tax's "
+                                          "replay and rebuild take",
     "verity_vllm.engine.core_gate": "I2: the engine core's one seam between steps (EngineCoreGate): gates that hold its "
                                     "input loop and edges that act between two steps once nothing is in flight",
     "verity_vllm.engine.step_end": "I2: the scheduler's one seam at each step's end (StepSeam): observers that see each "

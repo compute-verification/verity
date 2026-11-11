@@ -86,7 +86,7 @@ def test_unknown_argument_exits_2(tmp_path: Path) -> None:
 def _readiness_source() -> str:
     """The step-5 Python heredoc, as the script feeds it to $PY."""
     text = SCRIPT.read_text()
-    m = re.search(r'\$PY - "\$ROOT" "\$CORE" "\$OUT/readiness\.json" "\$CC" "\$RESEARCH" "\$MODE" "\$CORE/verity/core" <<\'EOF\'.*?\n(.*?)\nEOF\n', text, re.S)
+    m = re.search(r'\$PY - "\$ROOT" "\$CORE" "\$OUT/readiness\.json" "\$CC" "\$RESEARCH" "\$MODE" <<\'EOF\'.*?\n(.*?)\nEOF\n', text, re.S)
     assert m, "step-5 readiness heredoc not found (argument list or heredoc marker changed)"
     return m.group(1)
 
@@ -103,10 +103,9 @@ def test_readiness_cpu_mode_record(tmp_path: Path) -> None:
     src.write_text(_readiness_source())
     out = tmp_path / "readiness.json"
     root, core, research = VLLM, TREE, TREE / "tools" / "research" / "src"
-    verifiers = TREE / "verity" / "core"
     env = dict(os.environ, PYTHONPATH=os.pathsep.join(str(p) for p in (root, core, research)),
                https_proxy="http://127.0.0.1:9", HTTPS_PROXY="http://127.0.0.1:9")   # the network probe fails fast, recorded as an error
-    r = subprocess.run([sys.executable, str(src), str(root), str(core), str(out), "", str(research), "cpu", str(verifiers)],
+    r = subprocess.run([sys.executable, str(src), str(root), str(core), str(out), "", str(research), "cpu"],
                        capture_output=True, text=True, env=env)
     assert out.exists(), f"readiness.json not written\nstdout: {r.stdout}\nstderr: {r.stderr}"
     rec = json.loads(out.read_text())
