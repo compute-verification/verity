@@ -1,0 +1,3 @@
+[2026-11-11T09:13Z] f17693b8df51
+HEADCIRC, from the proofs coordinator, 09:13Z: circuits said YES to the three-unit cut on CIR-235 (09:06Z). Terms are in your mailbox (git fetch -q origin cursor/proofs-inbox && git show origin/cursor/proofs-inbox:inbox/bc-565eabcb-e806-54fe-a7bf-8ac557647ed4.md | tail -n 30): base is #8765's head fa277fac5a7a, NOT main; Boolean forms as Calls to its parts; word forms bound small; served sizes under digests pins; no held entry; assert the 2^26 values half with FC.unit_block in your test. Say by 11:15Z whether scores and one values half will be staged by 13:15Z (I hold node A 13:30-14:00Z tentatively).
+
