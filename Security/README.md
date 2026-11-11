@@ -86,8 +86,8 @@ assumptions.
 - **The min-cut theorem**, `Nci.Cut.Guarantees.HE` and `HEShared` (`Definitions/Nci/Guarantees/Cut.lean`, proved in
   `Proofs/Nci/Cut.lean`): under (H) and (E), every partition of a circuit into m blocks, each reading at most k gates
   outside θ, has N ≤ m·(k + α) + (k/2)·√(m·O/(β_w·β_x)), α = ½·√(k³/(β_w·β_x·b)), for the N MACs and O output wires
-  of its charged matmuls, and so bounds ρ = m·c/|C| from below at every c; `HEShared` is the same for matmuls that
-  share arrays, each term times F = √(2(1 − 1/ω)).
+  of its charged matmuls, so ρ = m·c/|C| is bounded below at every c; `HEShared` is it for matmuls sharing arrays,
+  each term times F = √(2(1 − 1/ω)), and `CountHE` is it at the count's verdict, `Nci.CompliesAtMost c k m`.
 - **(H), hardness**, `Nci.Cut.Assumptions.Hardness` (`Definitions/Assumptions.lean`), conjectured: every set S of words
   with κ(S) ≤ k has Σ_r β_r·|val(S ∩ A_r)| ≤ κ(S), so words behind a cut of κ gates carry at most κ in values, a value
   of array r costing β_r.
@@ -494,7 +494,8 @@ guarantees and assumptions are still in `Proofs/Flock`, which `trees` lists by m
 Each package's `lean-audit.json` is its lock. For each guarantee it records the signature, its premises (the named
 assumptions, the domain hypotheses, the open premises, and the `Prop`s of an assumptions module its statement only reads) and a SHA-256 hash of
 its type, and, per module, every definition the statements read with a digest. A named assumption, under `assumptions`, is
-declared in `Definitions/Assumptions.lean` (`assumptions_module`) or under it; every other assumption is open, under `open` with
+declared in `Definitions/Assumptions.lean` (`assumptions_module`) or under it (`Properties`' lock also lists
+`Properties/Assumptions.lean`, for one stated over the code, which the spec can't import); every other assumption is open, under `open` with
 the Linear issue that discharges it and its due date, and `--update` adds none on its own, so that list only shrinks. A
 hypothesis that is part of what its guarantee says (a domain, a scope, the layer below's guarantee) is under `domain`
 with a one-line `why` instead, and a guarantee with an honest witness must have that witness conclude it. The
