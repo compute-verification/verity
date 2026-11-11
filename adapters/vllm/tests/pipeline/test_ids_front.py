@@ -15,9 +15,10 @@ from typing import Any
 
 import pytest
 
-from tests.pipeline.test_serve_openai import Serving, dechunked, events, id_request, shims_request
 from verity.protocols.certifier.verifier import io_tie as IT
 from verity.protocols.certifier.verifier import release as REL
+
+from tests.pipeline import test_serve_openai as served
 from verity_vllm.config import UsageError
 from verity_vllm.pipeline import cli
 from verity_vllm.pipeline import ids_front as F
@@ -31,7 +32,7 @@ STREAM = b"HTTP/1.1 200 OK\r\ncontent-type: text/event-stream; charset=utf-8\r\n
 def released(payload: int = P, n: int = 4, bucket: int = 9) -> bytes:
     """An id request in cells of ``payload`` + 9 bytes as the network certifier forwards it: release `n` of run ``run``,
     at `bucket`."""
-    return REL.with_release(id_request(payload), n, b"run", bucket)
+    return REL.with_release(served.id_request(payload), n, b"run", bucket)
 
 
 def exchange(address: tuple[str, int], request: bytes) -> bytes:
@@ -140,7 +141,7 @@ class Fronted:
 def test_an_id_request_is_its_fields_whatever_release_headers_it_came_with():
     """`serve_protocol.id_request_fields`: the fields of an id request in its P + 9-byte cells, bare or as the network
     certifier forwards it (the release, the run and the bucket); None in other cells, cut short, or changed by a byte."""
-    for request in (id_request(P), released(), REL.with_release(id_request(P), 0)):
+    for request in (served.id_request(P), released(), REL.with_release(served.id_request(P), 0)):
         assert proto.id_request_fields(request, P) == FIELDS
     assert proto.id_request_fields(released(), P + 1) is None and proto.id_request_fields(released()[:-1], P) is None
     assert proto.id_request_fields(released().replace(b'"stream":true', b'"stream":True'), P) is None
@@ -157,7 +158,7 @@ def test_the_servers_copy_keeps_the_release_and_asks_for_the_token_ids():
                         b"x-verity-release: 4\r\nx-verity-release-run: " + b"run".hex().encode() +
                         b"\r\nx-verity-release-bucket: 9\r\ncontent-length: %d\r\nconnection: close" % len(body))
     assert REL.release_of(got_head + b"\r\n\r\n") == (4, b"run", 9)
-    bare = F.server_request(id_request(P).partition(b"\r\n\r\n")[0] + b"\r\n\r\n", FIELDS, b"h")
+    bare = F.server_request(served.id_request(P).partition(b"\r\n\r\n")[0] + b"\r\n\r\n", FIELDS, b"h")
     assert b"x-verity" not in bare and REL.release_of(bare.partition(b"\r\n\r\n")[0] + b"\r\n\r\n") is None
 
 
@@ -167,12 +168,12 @@ def test_before_vllms_framing_an_id_request_is_answered_as_protocol_ids_answers_
     certifier's id request comes back as ``--protocol ids`` sends it from the same engine, each sampled id one event of P
     bytes, then the trailer, with no HTTP head, no usage and no text. The record has the release, the counts and each
     write's time after the arrival, and no id."""
-    with Serving(tmp_path, commit=False) as s, Fronted(s.http.address, payload) as f:
+    with served.Serving(tmp_path, commit=False) as s, Fronted(s.http.address, payload) as f:
         raw = f.send(released(payload))
-        assert f.send(id_request(payload)) == raw
+        assert f.send(served.id_request(payload)) == raw
     assert raw == b"".join(IT.id_event(t, payload) for t in (4853, 4884)) + IT.TRAILER
     ids = proto.IdsProtocol(True, payload=payload, base=proto.PlainProtocol(True))
-    with Serving(tmp_path / "ids", commit=False, protocol=ids) as direct:
+    with served.Serving(tmp_path / "ids", commit=False, protocol=ids) as direct:
         assert direct.send(released(payload)) == raw
     assert f.log == [{"n": 4, "run": b"run".hex(), "bucket": 9, "prompt": 3, "ids": 2, "ended": True, "why": None, "at": 1.0,
                       "ms": [1000.0, 2000.0, 3000.0]},
@@ -184,19 +185,19 @@ def test_every_other_connection_gets_the_servers_own_answer(tmp_path):
     """Through the front, what isn't an id request in the front's cells reaches the server unchanged and its answer
     comes back whole: ``/v1/models``, ``/tokenize``, the certifier's shim's streamed POST (vLLM's chunks, with their
     token ids), and an id request in other cells, which the server answers in HTTP. None is recorded."""
-    with Serving(tmp_path, commit=False) as s, Fronted(s.http.address, proto.ID_PAYLOAD) as f:
-        url = "http://%s:%d" % f.address
+    with served.Serving(tmp_path, commit=False) as s, Fronted(s.http.address, proto.ID_PAYLOAD) as f:
+        url = f"http://{f.address[0]}:{f.address[1]}"
         models = json.loads(urllib.request.urlopen(url + "/v1/models").read())  # noqa: S310 (the test's own 127.0.0.1 endpoint)
-        req = urllib.request.Request(url + "/tokenize", json.dumps({"model": "m", "prompt": "a bb ccc"}).encode(),
-                                     {"content-type": "application/json"})
+        tokenize = json.dumps({"model": "m", "prompt": "a bb ccc"}).encode()
+        req = urllib.request.Request(url + "/tokenize", tokenize, {"content-type": "application/json"})  # noqa: S310 (as above)
         tokens = json.loads(urllib.request.urlopen(req).read())  # noqa: S310 (the test's own 127.0.0.1 endpoint)
-        shim = shims_request(s.http.address[1])
+        shim = served.shims_request(s.http.address[1])
         through, direct = f.send(shim), s.send(shim)
         other = f.send(released(P))
     assert [m["id"] for m in models["data"]] == ["m"] and tokens["tokens"] == [1, 101, 102, 103]
-    head, body = dechunked(through)
-    assert head.startswith(b"HTTP/1.1 200 OK\r\n") and dechunked(direct)[0] == head
-    chunks = [json.loads(e) for e in events(body)[:-1]]
+    head, body = served.dechunked(through)
+    assert head.startswith(b"HTTP/1.1 200 OK\r\n") and served.dechunked(direct)[0] == head
+    chunks = [json.loads(e) for e in served.events(body)[:-1]]
     assert [t for c in chunks for ch in c["choices"] for t in ch["token_ids"]] == [4853, 4884]
     assert other.startswith(b"HTTP/1.1 200 OK\r\n") and IT.ID_EVENT_HEAD not in other
     assert f.log == []

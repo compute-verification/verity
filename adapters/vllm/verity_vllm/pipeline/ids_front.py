@@ -41,6 +41,7 @@ from typing import Any
 
 from verity.protocols.certifier.verifier import io_tie as IT
 from verity.protocols.certifier.verifier import release as REL
+
 from verity_vllm.config import UsageError, option
 from verity_vllm.pipeline.serve_protocol import ID_PAYLOAD, id_request_fields
 
@@ -177,7 +178,7 @@ class Front:
         IT.id_event(0, payload)
         self.upstream, self.payload, self.log, self.clock = upstream, payload, log, clock
         self.origin = clock()
-        self.host = ("%s:%d" % upstream).encode()
+        self.host = f"{upstream[0]}:{upstream[1]}".encode()
 
     async def handle(self, reader: asyncio.StreamReader, writer: asyncio.StreamWriter) -> None:
         try:
