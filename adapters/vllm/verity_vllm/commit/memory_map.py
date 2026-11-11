@@ -2,12 +2,12 @@
 from the Program of record and its census (`census_of`, `rows`, cached beside each request Build by `pipeline.memory_map`).
 
 ~~~text
-row       one position's K (or V) in a layer: a row of an attention Call's `kc` (`vc`), `Array(T, row)`, or MLA's latent row
-          of a sparse MLA Call's `kv` (`LATENT`: the normed latent, then the roped key, one plane), a batch's members each read
-          as a Call; a row past INDEX_TOPK reads its `kv` through a concentrator (`ROUTED`), whose history is the rows it
-          reads.  A layer's rows are the rows its Calls share, in the order its Calls first read them (its positions), K and V
-          paired by position.  DSA's indexer keys are no rows: their 132-byte rows pack across blocks, and memory accounting
-          leaves them uncredited until the map packs them
+row       one position's K (or V) in a layer: a row of an attention Call's `kc` (`vc`), `Array(T, row)`, or MLA's latent row of a
+          sparse MLA Call's `kv` (`LATENT`: the normed latent, then the roped key, one plane), a batch's members each read as a
+          Call; a row past INDEX_TOPK reads its `kv` through a concentrator, or under table reads through its reads of the
+          (request, layer) history table (`ROUTED`), whose history is the rows it reads.  A layer's rows are the rows its Calls
+          share, in the order its Calls first read them (its positions), K and V paired by position.  DSA's indexer keys are no
+          rows: their 132-byte rows pack across blocks, and memory accounting leaves them uncredited until the map packs them
 born      a row's step, and `last` its last structural reader's (the last step with a gate that has one of its values as
           an operand, a gather that may select one included, whichever it selected): the circuit's requirement
           (`requirement.from_census`) over the Program's census at its sampling events (`query.required.SAMPLING_EVENTS`)
@@ -35,9 +35,10 @@ from verity_vllm.query.required import SAMPLING_EVENTS
 KV = ("kc", "vc")
 #: the Definitions, by name, whose cached parameter is one plane of MLA latent rows (FA3's sparse MLA, each version)
 LATENT = {"SparseMla": ("kv",), "SparseMlaSplit": ("kv",)}
-#: the concentrators, by name, through which a row past INDEX_TOPK reads its layer's latent rows, and the parameter holding
-#: those (`DsaButterflyRowsPad`'s pad is no row)
-ROUTED = {"DsaButterflyRows": "rows", "DsaButterflyRowsPad": "rows"}
+#: the Definitions, by name, through which a row past INDEX_TOPK reads its layer's latent rows, and the parameter holding
+#: those: the concentrators (`DsaButterflyRowsPad`'s pad is no row), and under table reads the history table's reads
+#: (`program.dsa_table`), whose table is the block's history
+ROUTED = {"DsaButterflyRows": "rows", "DsaButterflyRowsPad": "rows", "DsaHistoryReads": "hist"}
 
 #: leaves `[lo, hi)` of the output of node `j` of the Program's function (the Commit's instance rows' `['n', j, lo, hi]`), or
 #: (`CACHED`, k, lo, hi) of root input node k: a cached row, which the warm request reads and never computes
@@ -102,8 +103,8 @@ def _member(nd, i: int, m: int) -> Coll:
 
 
 def _history(nodes, a: Coll) -> Coll:
-    """`a`, or where it is the output of one concentrator (`ROUTED`, a Call or a batch member), the history it routes the rows from:
-    a row past INDEX_TOPK reads its layer's rows through it."""
+    """`a`, or where it is the output of one concentrator or history table read (`ROUTED`, a Call or a batch member), the history
+    it routes or reads the rows from: a row past INDEX_TOPK reads its layer's rows through it."""
     rs = runs(a.refs)
     if not rs or rs[0][0] != "n" or any((s, j) != rs[0][:2] for s, j, _, _ in rs):
         return a
