@@ -41773,3 +41773,29 @@ Nothing of (1) or (i-a) is started. The places below are read at #8862's head un
 For the table:
 - The per-member guarantee's two missing pieces are sized, not started: the rows link for several members (4 to 5 files, 1,000 to 1,400 lines, guess; it reopens `rowsLinkLe`) and the knowledge-soundness assembly at LEG's window (2 files, 400 to 600 lines, guess; waits on how `Vocab.extract` is set at a window).
 - The Python writer of the per-member case (c): mine, next after #8862's ready line; it holds the keys to the Lean parser through a parse-only subcommand, not the closing rounds.
+
+## SERVEDCARD, Wed 11 Nov 08:15Z: For HEADPROF, the knob builds on kernels' tree, and a wrapper does the same with no branch; #8859's quick tier is still running
+
+For HEADPROF: cursor/proofs-verifier-cpus-headprof-5d1e at 5c12d7d4e86a232bfee39f292d41f3dc188340b7
+
+- **What it is** [run]: kernels' profile tree `c6cadd0e325f`, plus #8859's knob cherry-picked onto the old paths (`verity/ml/flock/python/verity_flock/proof_server.py`, `benchmarks/one_stage/server_rate.py`). Both test files pass there (16 tests). It has no PR; mark nothing.
+- **The row with the cut, through kernels' `fused.sh`**: same row and K = 1 as `r20261111-061047-6773`, with the run pinned to 14 CPUs and the verifier given four of them:
+  - `CPUS=34-47 FC_VERIFIER_CPUS=44-47`. `fused.sh` runs `server_rate.py` under `taskset -c "$CPUS"` (`fused.sh:277`), and `ProofServer` reads `FC_VERIFIER_CPUS` from that environment.
+  - The prover then runs on 34-43, as in kernels' row, and the verifier on 44-47.
+  - The row records `verifier_cpus` and `verifier_cpu_s_per_statement`.
+  - First check with `lscpu -p=CPU,NODE` that 44-47 are on the card's NUMA node (node 1 for 34-43). If not, use any four free CPUs of node 1 in both variables.
+- **Or with no branch at all: a wrapper as `--bin`**, on the unchanged tree `c6cadd0e325f`. Write this to a file and `chmod +x` it, with `B` the built binary that `fused.sh` passes as `--bin "$B"` today:
+  ```sh
+  #!/bin/sh
+  B=/path/to/flock-circuit
+  case "$1" in serve) exec taskset -c 44-47 "$B" "$@" ;; *) exec taskset -c 34-43 "$B" "$@" ;; esac
+  ```
+  - Run `server_rate.py` with `--bin` set to that file, under `taskset -c 34-47`.
+  - Tested [run]: on this VM, with `c6cadd0e325f`'s unchanged `ProofServer` and the tests' stand-in binary, the wrapper put the prover on 0-2 and the verifier on 3 (`/proc/PID/status`), and both sessions were accepted. Every process is still `flock-circuit` itself, since `taskset` execs it.
+  - At K > 1, set `RAYON_NUM_THREADS=10` too. Otherwise the server splits all 14 CPUs among the provers, which are on 10. At K = 1 nothing is set, and the prover's threads follow its 10 CPUs.
+  - The row then lacks the two new fields, and `binary_sha256` is still `$B`'s if `fused.sh` hashes `$B`.
+- **What it should show** [guess, from my 07:48Z entry]: the 2.5654 GPU-s a statement fall by at most 0.62 if the ten cores bind. If the wall time doesn't move, the bound is elsewhere: the witness's 2.46 s median on the host (kernels' `witness_s`).
+
+For HEADPROF, on `main`'s layout: #8859, cursor/proofs-verifier-cpus-5d1e at f458b7ba946fcfbfe0f8f9156094b78602d0cac0 (unmarked; its quick tier `r20261111-080116-0667` is running on cpu-1).
+
+Next: #8859's ready line when its run ends; job 2 (PRF-548) has started. Question 2's first finding: on member m12, Lean's setup takes 177.5 s for a statement that Rust builds in 1.84 s and verifies in 1.18 s [run: m12's `serve.log` and `lean-verify.log` on cpu-3]. A profile of where Lean spends it is next.
