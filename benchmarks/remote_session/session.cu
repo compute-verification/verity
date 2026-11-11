@@ -31,12 +31,12 @@
 // payload domain's id, salt_in = D(store salt) ‖ key ‖ label, positions = N.
 //
 // The row/v2 digests of the receipt tree's leaves are `hash_words`, over the GPU's one SHA-512 (`sha::`,
-// verity/ml/kernels/sha512.cuh); the hm96 leaf after its salt and the frame-v3 leaf, pad and node are the GPU's one row
-// commitment (`rc`, verity/ml/kernels/row_commit.cuh) as reader.cu takes it (`hm96_leaf`, `node_of`, rc's `pad_rt`),
+// verity/definitions/kernels/sha512.cuh); the hm96 leaf after its salt and the frame-v3 leaf, pad and node are the GPU's one row
+// commitment (`rc`, verity/definitions/kernels/row_commit.cuh) as reader.cu takes it (`hm96_leaf`, `node_of`, rc's `pad_rt`),
 // under its pass constants kC, kL, kNodeTpl and gNib, which its rb_set, rb_chain_set and rb_chain set. reader.cu's own
 // kernels (rb_leaves, rb_pads, rb_tree and level_kernel) hash the same tree unfused, one kernel a level: the fused one's
 // cross-check.
-#include "../../verity/ml/kernels/row_commit.cuh"
+#include "../../verity/definitions/kernels/row_commit.cuh"
 #include "../codec_tensor/reader.cu"
 
 namespace rb {
@@ -235,7 +235,7 @@ __device__ __forceinline__ void sk16_prologue(u32 *sg, const u32 *__restrict__ p
 }
 
 // A pass's signs from its key on the device, packed as pack16_kernel packs them: row c of S is the first 512 bytes of
-// the key's counter-mode stream at index ("row", c) (`verity.ml.randomness`'s Key.stream: block k is
+// the key's counter-mode stream at index ("row", c) (`verity.commitments.randomness`'s Key.stream: block k is
 // SHA512(head ‖ u64be k), head = stream tag ‖ key ‖ frames(("row", c)), whose last byte is c for c < 256), bit u of
 // the row (byte u / 8, LSB first) 1 where S[c][u] = −1. head is row 0's (at most 103 bytes, so a block is one
 // compression). A thread a (row, block) of the stream, then the 2048 words from shared memory.
@@ -902,7 +902,7 @@ int rs_signs16(const uint8_t *head, int head_len, uint32_t *pk, cudaStream_t s) 
 }
 
 // The fixed messages for `chain_prepare_kernel`, at one window's challenge.  The framing is
-// `verity.ml.randomness` v2, exactly as `benchmarks/codec_tensor/wt.cu::wt_set_pass` constructs it for
+// `verity.commitments.randomness` v2, exactly as `benchmarks/codec_tensor/wt.cu::wt_set_pass` constructs it for
 // WT_RECEIPT=1.
 int rs_chain_set(const uint8_t *challenge, cudaStream_t s) {
   if (!challenge) return 1;

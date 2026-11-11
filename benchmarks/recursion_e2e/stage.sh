@@ -25,7 +25,7 @@ UV=$(command -v uv || echo $HOME/.local/bin/uv)
 [ -x $UV ] || { curl -LsSf https://astral.sh/uv/install.sh | sh >/dev/null 2>&1; UV=$HOME/.local/bin/uv; }
 [ -x $W/py/bin/python ] || { $UV venv -q --python 3.12 $W/py && $UV pip install -q --python $W/py/bin/python numpy blake3; } || exit 1
 PY=$W/py/bin/python
-export PYTHONPATH=$REPO:$REPO/benchmarks/numerical/python:$REPO/verity/ml/flock/python:$REPO/integrations/vllm
+export PYTHONPATH=$REPO:$REPO/benchmarks/numerical/python:$REPO/verity/protocols/flock/prover/python:$REPO/adapters/vllm
 S=$DD/inputs
 rm -rf "$DD/stage" "$DD/stage-zk" "$S"
 if [ -n "${WINDOW:-}" ]; then
@@ -38,13 +38,13 @@ print(json.dumps({"served_root_held": ok, "window_run_root": w["run"], "publishe
                   "registration_digest": w["registration_digest"]}))
 sys.exit(0 if ok else 1)' "$WINDOW" "$SERVE_RUN" "${SERVE_WINDOW:-0}" | tee "$O/served-root.json" || exit 1
   fi
-  /usr/bin/time -v -o "$O/time-stage.txt" $PY verity/ml/flock/pod/rec_inner.py stage-window --window "$WINDOW" \
+  /usr/bin/time -v -o "$O/time-stage.txt" $PY verity/protocols/flock/prover/pod/rec_inner.py stage-window --window "$WINDOW" \
     --member "${MEMBER:-0}" --subcircuit "$SUBCIRCUIT" --sets "$S/sets" --out "$DD/stage" --zk-out "$DD/stage-zk" \
     > "$O/stage.json" 2> "$O/stage.err" || { tail -20 "$O/stage.err"; exit 1; }
 else
   N=${N:-3}
   for d in stage stage-zk; do
-    /usr/bin/time -v -o "$O/time-$d.txt" $PY verity/ml/flock/pod/rec_inner.py stage --n "$N" --subcircuit "$SUBCIRCUIT" \
+    /usr/bin/time -v -o "$O/time-$d.txt" $PY verity/protocols/flock/prover/pod/rec_inner.py stage --n "$N" --subcircuit "$SUBCIRCUIT" \
       ${SEED:+--seed $SEED} --sets "$S/sets" --out "$DD/$d" $([ $d = stage ] && echo --plain-leaves) \
       > "$O/$d.json" 2> "$O/$d.err" || { tail -20 "$O/$d.err"; exit 1; }
   done

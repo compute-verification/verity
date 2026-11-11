@@ -4245,7 +4245,7 @@ class Driver:
 
     def _circuit_held(self, m: Member) -> str | None:
         """Why ``m`` waits while circuit-check is red on `checked` (`CIRCUIT_RED`): its own change touches circuit-check's inputs
-        (`queue.forces_cold`, `_input_rule`'s rule for it, which takes all of `verity/ml/circuits/` and
+        (`queue.forces_cold`, `_input_rule`'s rule for it, which takes all of `verity/circuits/` and
         `tools/verity/circuit_check/` but their tests and docs), and its body doesn't say `fixes step circuit-check` (the fix
         of a red no culprit was named for has to land).  None otherwise."""
         if CIRCUIT_RED not in ((self._drive or {}).get("postland") or {}).get("red", {}) or not forces_cold(self._own(m)):
