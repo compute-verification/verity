@@ -9,10 +9,12 @@
 #     window's draw DELAY_S after its windows.jsonl line, so the next round's steps wait on the pool for that window's release.
 #  3. `retain_device_gpu.py compare`: each device-sealed window holds exactly its draw's leaves, byte-equal to the host bundle's,
 #     its drawn reads verify against its own run root, its undrawn read is refused by name; the pool's peak and waits.
-#   research run --on NODE --gpus 1 --project verity --source TREE --cwd source --timeout 90m -- \
-#     bash integrations/vllm/tools/retain_device_gpu.sh
-# The serve dirs (sealed bundles: private values) stay on the node under `research keep`; $OUT keeps the records and logs, and
-# summary.txt, whose RETAIN-DEVICE line is the verdict.
+#   research run --on NODE --gpus 1 --project verity --source TREE --cwd source --timeout 90m \
+#     --env KEEP='"$PY" -m research keep "$1" --owner @LANE --expires 7d --priority normal --why "retain_device_gpu.sh serve dirs"' \
+#     -- bash integrations/vllm/tools/retain_device_gpu.sh
+# The serve dirs (sealed bundles: private values) stay on the node. KEEP, when set, is the command that records their root as
+# kept there (`bash -c "$KEEP" _ ROOT`, with this script's PY and PYTHONPATH), as the launch above passes one. $OUT keeps the
+# records and logs, and summary.txt, whose RETAIN-DEVICE line is the verdict.
 set -uo pipefail
 OUT=${OUT:-${RESEARCH_RUN_DIR:-.}/out}; mkdir -p "$OUT"
 TREE=$PWD
@@ -43,10 +45,7 @@ for f in "$ROW/manifest.json" "$HIDDEN_SO" "$NORM_TAP_SO" "$PY"; do [ -e "$f" ] 
 mkdir -p "$BASE" "$ROOT/cache"
 { id -un; hostname; git -C "$TREE" rev-parse HEAD 2>/dev/null; nproc; free -g | head -2; nvidia-smi -L; df -h /workspace | tail -1
   echo "base $BASE CUDA_HOME $CUDA_HOME T $T SLOTS $SLOTS PROMPT $PROMPT WINDOW_STEPS $WINDOW_STEPS ROUNDS $ROUNDS"; } | tee "$OUT/machine.txt"
-{ "$PY" -m research keep "$ROOT" --owner @compute-accounting --expires 7d --priority normal \
-    --why "retain_device_gpu.sh: --retain device vs --retain host serve dirs (sealed bundles)" \
-  || research keep "$ROOT" --owner @compute-accounting --expires 7d --priority normal \
-    --why "retain_device_gpu.sh: --retain device vs --retain host serve dirs (sealed bundles)"; } 2>&1 | tail -2
+if [ -n "${KEEP:-}" ]; then bash -c "$KEEP" _ "$ROOT" 2>&1 | tail -2; else say "KEEP is not set: nothing records $ROOT as kept"; fi
 
 serve() {  # NAME RETAIN-ARGS...: one endpoint, ROUNDS rounds of the fixed load, every closed window sealed, then SIGTERM
   local name=$1; shift
