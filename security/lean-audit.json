@@ -340,6 +340,21 @@
    "digest": "9c8bcfbb0db47321c5495c86cc9a12ee4c0b45b8e2569f79ae4efad3605b5f20",
    "why": "The fan-out F the bound is stated at: each unit's reach (coneEgress) holds the egress of at most F charge units, which the public wiring alone determines; the honest witness meets it at the toy population (TheftServedTiedHonest)."
   },
+  "Pouw.Dither.CallsAtPub": {
+   "owner": "@compute-research",
+   "digest": "4fd27c18ca3eb07b2fbafa6e459b881abf4047e92bf2b8cf73523cc83ddf7201",
+   "why": "A scope: the headline on a card table is stated for an accelerator whose oracle call costs one public SHA-512 compression of the menu on the card. (met by `WorkSoundAtTables_honest`, `WorkSoundH200_honest` and `WorkSoundSm120_honest`)"
+  },
+  "Pouw.Dither.HostsCounted": {
+   "owner": "@compute-research",
+   "digest": "2e9647f866c68156bca4a51cafe3d1f65e86170e9569d9e33310a990c8dd1d1e",
+   "why": "A scope: the headline on a card table is stated for devices that count the cards' hosts at the host row's rates. (met by `WorkSoundAtTables_honest`, `WorkSoundH200_honest` and `WorkSoundSm120_honest`)"
+  },
+  "Pouw.Dither.OnCard": {
+   "owner": "@compute-research",
+   "digest": "4a40e06630394c3a6d7647d8bd2d25ad8c9e8bb32d9f5dfa21228a53969e1612",
+   "why": "A scope: the headline on a card table is stated for an accelerator that is the period's devices at the table's rates. (met by `WorkSoundAtTables_honest`, `WorkSoundH200_honest` and `WorkSoundSm120_honest`)"
+  },
   "Pouw.NCP.Params.InstanceU": {
    "owner": "@compute-research",
    "digest": "3b60969f8f81104b0596a2883beb8066d6bf0d7e7b08219325779dc298b062a1",
@@ -354,6 +369,16 @@
    "owner": "@proofs",
    "digest": "b127ee90592d546378395533b5ffa6452b8b69a90df932b25cdb015cbd28dd9b",
    "why": "The two-stage guarantees are stated at SPOT[Flock]'s own frame: `Built` says the held code's frame is the one `frameAt` builds from its slots and its reveal code, as the verifier's run sets it. (met by `built_spot`)"
+  },
+  "Verity.Accel.Card.Exact": {
+   "owner": "@compute-research",
+   "digest": "f13b0004040c17242c244b1336f78520617d481e56e477b018c872f9d707bafd",
+   "why": "A scope: the headline on a card table is stated at open parameters inside the table's exactness range (P1). (met by `WorkSoundAtTables_honest`, `WorkSoundH200_honest` and `WorkSoundSm120_honest`)"
+  },
+  "Verity.Accel.Machine.Fits": {
+   "owner": "@compute-research",
+   "digest": "3af395280aa76f238b3df3ad0243be45fbb61f48e3f20b71c8f9e51773ba2b90",
+   "why": "`OnCard`'s scope: the programs of the pooled machine that `OnCard` asks the accelerator to hold, code within the card's text and use within `ρ_r·T` (G1, G2). An antecedent inside a premise the honest witnesses conclude, which no witness is asked to conclude."
   },
   "Verity.Assumptions.GemmAmpereStep": {
    "owner": "@proofs",
@@ -2864,27 +2889,9 @@
    "issue": "LEAN-186",
    "due": "2026-11-30"
   },
-  "Pouw.Dither.CallsAtPub": {
-   "owner": "@compute-research",
-   "digest": "4fd27c18ca3eb07b2fbafa6e459b881abf4047e92bf2b8cf73523cc83ddf7201",
-   "issue": "LEAN-186",
-   "due": "2026-11-30"
-  },
-  "Pouw.Dither.HostsCounted": {
-   "owner": "@compute-research",
-   "digest": "2e9647f866c68156bca4a51cafe3d1f65e86170e9569d9e33310a990c8dd1d1e",
-   "issue": "LEAN-186",
-   "due": "2026-11-30"
-  },
   "Pouw.Dither.MomentSound": {
    "owner": "@compute-research",
    "digest": "288acecc93cd31625631ebd527deb7d691a5d92d4f660bebc4e4982f326c7765",
-   "issue": "LEAN-186",
-   "due": "2026-11-30"
-  },
-  "Pouw.Dither.OnCard": {
-   "owner": "@compute-research",
-   "digest": "4a40e06630394c3a6d7647d8bd2d25ad8c9e8bb32d9f5dfa21228a53969e1612",
    "issue": "LEAN-186",
    "due": "2026-11-30"
   },
@@ -3222,12 +3229,6 @@
    "owner": "@proofs",
    "digest": "381dddf63ad1742174c4674ae93270b7e65e0b39cc7c52a977f05e6f57ff1efb",
    "issue": "PRF-460",
-   "due": "2026-11-30"
-  },
-  "Verity.Accel.Card.Exact": {
-   "owner": "@compute-research",
-   "digest": "f13b0004040c17242c244b1336f78520617d481e56e477b018c872f9d707bafd",
-   "issue": "LEAN-186",
    "due": "2026-11-30"
   },
   "Verity.Advice.Framing.Separated": {
@@ -4563,6 +4564,18 @@
    "nontrivial": "Nci.SecurityProofs.DampenerRemotePeriod_nontrivial",
    "kind": "exclusion"
   },
+  "Pouw.SecurityProofs.DitherInstance.WorkSoundAtTables": {
+   "honest": ["Pouw.SecurityProofs.DitherInstance.WorkSoundAtTables_honest"],
+   "nontrivial": "Pouw.SecurityProofs.DitherInstance.WorkSoundAtTables_nontrivial"
+  },
+  "Pouw.SecurityProofs.DitherInstance.WorkSoundH200": {
+   "honest": ["Pouw.SecurityProofs.DitherInstance.WorkSoundH200_honest"],
+   "nontrivial": "Pouw.SecurityProofs.DitherInstance.WorkSoundH200_nontrivial"
+  },
+  "Pouw.SecurityProofs.DitherInstance.WorkSoundSm120": {
+   "honest": ["Pouw.SecurityProofs.DitherInstance.WorkSoundSm120_honest"],
+   "nontrivial": "Pouw.SecurityProofs.DitherInstance.WorkSoundSm120_nontrivial"
+  },
   "Accounting.SecurityProofs.TableReadBinding": {
    "honest": ["Accounting.SecurityProofs.TableReadBinding_honest"],
    "nontrivial": "Accounting.SecurityProofs.TableReadBinding_nontrivial"
@@ -5332,6 +5345,12 @@
    "type_hash": "6042883e0de54d343be42f372fe18390a11842febc9feda80046b6e3f70bb455",
    "unfolded_hash": "2eec6c9336acfa7539b2c9eecfa82c9810701d4024426048b0116374af511561"
   },
+  "NetTiming.SecurityProofs.PooledLeakCarried": {
+   "type_hash": "a9ff871790645fc89b956cc559d9b28f1f9de6812547963a09e367a883f7c74f",
+   "missing": "honest",
+   "why": "honest instance needs a deployed check that pins its checked inputs (CheckedUnique), its closing row (CheckedClosing) and its rows' roots at each pattern serving picks where every audit accepts (CarriedRoots, from each run's root check and the record rule's chain), with a proved bound on its miss (CheckedWitness, MemCheck_v1's offline check run every run on its own live coins), and its period's inputs (CIR-190)",
+   "unfolded_hash": "90c8790b267d736e22e531948ab05a382781671a2ba4d1d9adcb8a2d52a64c25"
+  },
   "Pous.SecurityProofs.BandPubMeets14": {
    "type_hash": "cc0a571f0b841ecb8d43acbf6b871e6cc71d9c7f83d30199fc0e717b117175f9",
    "unfolded_hash": "8f6522076956b9aaec905dfd60718ee9c736ab517c760a58d222cc468a2b172d"
@@ -5418,10 +5437,6 @@
    "type_hash": "67f3658934c74720d65f6dee7ae0d77df683c3dadfdce0ae498b9bbc899090b2",
    "unfolded_hash": "d4824e5c59af9a1967b1c2082686a2aa9211e16aefa093f3d264fe03c304d6d0"
   },
-  "Pouw.SecurityProofs.DitherInstance.WorkSoundH200": {
-   "type_hash": "24b90356174c20edf30dd824c9bd4905d24528aee5c2368d18361a3cd8d08eaa",
-   "unfolded_hash": "b046eb6ddd4a124ace85f829832bcfffe133ee98be82a53c054542be465bd9fc"
-  },
   "Pouw.SecurityProofs.DitherInstance.WorkSoundOnCardH200": {
    "type_hash": "976778649c1a045eb4165c8b72e71a82af245ea1fd099800ca29e3fed945ce2c",
    "unfolded_hash": "a2da6ac587ca319c0f58171f58c310bfd98b713ecf987662682d03c6f753f404"
@@ -5429,10 +5444,6 @@
   "Pouw.SecurityProofs.DitherInstance.WorkSoundOnCardSm120": {
    "type_hash": "52c39b1631fdf8d50794d876a25c2755914afe4e2d9887dc06b137158c46ca28",
    "unfolded_hash": "244ab8f61c7d79568f656838f65687c11925b610ffa2c470e239f8cc05161fe7"
-  },
-  "Pouw.SecurityProofs.DitherInstance.WorkSoundSm120": {
-   "type_hash": "f783d09e652e6d59f971b0d91401e64bd149ebbfa574976cdc439f52ab29a04b",
-   "unfolded_hash": "739ae52f9fd8674edece4a4c6ea3727aae357207b4a6e9fbb1aa4a86dae20083"
   },
   "Pouw.SecurityProofs.PearlC.TileCheck4WordsCore": {
    "type_hash": "76e1dd28768cc1a4ef30251a9db63bda229915b3c2d50ff921394a143c179cdf",
@@ -5526,19 +5537,13 @@
    "type_hash": "a595e2305f68fd4b90134f54bc1e597de991458da482ef92bfbc67d7d7a782f3",
    "unfolded_hash": "edcf280a29bc4ea8fadd07e37edb897784d1e87a921f26547ed9ef8583b5e40a"
   },
-  "Verity.SecurityProofs.ServingBlockSum": {
-   "type_hash": "08c59698b215f650f00508d3cac6aabef1196ad39401fb6c87d6f9e097cbcec8",
-   "unfolded_hash": "76801bacbea7a7241bc4900b35606f76be5cb7c45089092a126af20fd85dd6e5"
-  },
-  "NetTiming.SecurityProofs.PooledLeakCarried": {
-   "type_hash": "a9ff871790645fc89b956cc559d9b28f1f9de6812547963a09e367a883f7c74f",
-   "missing": "honest",
-   "why": "honest instance needs a deployed check that pins its checked inputs (CheckedUnique), its closing row (CheckedClosing) and its rows' roots at each pattern serving picks where every audit accepts (CarriedRoots, from each run's root check and the record rule's chain), with a proved bound on its miss (CheckedWitness, MemCheck_v1's offline check run every run on its own live coins), and its period's inputs (CIR-190)",
-   "unfolded_hash": "90c8790b267d736e22e531948ab05a382781671a2ba4d1d9adcb8a2d52a64c25"
-  },
   "Verity.SecurityProofs.RefineIncorrect": {
    "type_hash": "f002a79b8c5c0755db0aaa9574d5a115e090df1033aa688adadab139a6b4fead",
    "unfolded_hash": "9eb08e5560e18e47ac928a89e057971d0a2163e6394c4cecb743c4bbd61b3a91"
+  },
+  "Verity.SecurityProofs.ServingBlockSum": {
+   "type_hash": "08c59698b215f650f00508d3cac6aabef1196ad39401fb6c87d6f9e097cbcec8",
+   "unfolded_hash": "76801bacbea7a7241bc4900b35606f76be5cb7c45089092a126af20fd85dd6e5"
   }
  },
  "witnesses_assumed": {
@@ -21585,13 +21590,15 @@
    },
    "type_hash": "8b010720797c9578554992956a33bf108d49188498883ce01bdb589805f9c6a5"
   },
-  "Pouw.SecurityProofs.DitherInstance.WorkSoundH200": {
+  "Pouw.SecurityProofs.DitherInstance.WorkSoundAtTables": {
    "owner": "@compute-research",
-   "signature": ["Pouw.SecurityProofs.DitherInstance.WorkSoundH200 : Pouw.Guarantees.DitherInstance.WorkSoundH200"],
+   "signature": [
+    "Pouw.SecurityProofs.DitherInstance.WorkSoundAtTables : Pouw.Guarantees.DitherInstance.WorkSoundAtTables"
+   ],
    "assumptions": [],
    "premises": {
     "assumptions": [],
-    "domain": [],
+    "domain": ["Pouw.Dither.CallsAtPub", "Pouw.Dither.HostsCounted", "Pouw.Dither.OnCard", "Verity.Accel.Card.Exact"],
     "open": [
      "Pouw.Assumptions.AnswerAfterWork",
      "Pouw.Assumptions.CertifierSeesImports",
@@ -21605,18 +21612,147 @@
      "Pouw.Dither.Accel.G1",
      "Pouw.Dither.Accel.G2",
      "Pouw.Dither.Accel.G3",
-     "Pouw.Dither.CallsAtPub",
-     "Pouw.Dither.HostsCounted",
-     "Pouw.Dither.OnCard",
      "Pouw.Dither.Period.DualOpt",
      "Pouw.Dither.Prover.Passes",
-     "Verity.Accel.Card.Exact",
+     "Verity.Assumptions.AccelProductForm"
+    ],
+    "reads": ["Pouw.Assumptions.ExtractAdvAt"]
+   },
+   "type_hash": "75769de9dfecd0fc9145e9464619a02b9249a74a378f533a76ad43073e7d5ada",
+   "unfolded_hash": "af73999239fef94769d002ec7f63f1d914e9c74a04daa3606e21ac5c28540605"
+  },
+  "Pouw.SecurityProofs.DitherInstance.WorkSoundAtTables_honest": {
+   "owner": "@compute-research",
+   "signature": [
+    "Pouw.SecurityProofs.DitherInstance.WorkSoundAtTables_honest :",
+    "  Exists fun c =>",
+    "    Exists fun pb =>",
+    "      Exists fun hr =>",
+    "        Exists fun x =>",
+    "          Exists fun D =>",
+    "            Exists fun G =>",
+    "              Exists fun L =>",
+    "                Exists fun e =>",
+    "                  Exists fun Pd =>",
+    "                    Exists fun μ =>",
+    "                      And (c.Exact x)",
+    "                        (And (Verity.Assumptions.AccelProductForm x)",
+    "                          (And (Pouw.Dither.OnCard G c x D Pouw.Witness.twRound L e)",
+    "                            (And (Pouw.Dither.HostsCounted D hr)",
+    "                              (And (Pouw.Dither.CallsAtPub G e pb) (And G.G1 (And G.G2 (And G.G3 (Pd.DualOpt μ 1))))))))"
+   ],
+   "assumptions": [],
+   "premises": {
+    "assumptions": [],
+    "domain": ["Verity.Accel.Machine.Fits"],
+    "open": [],
+    "reads": ["Verity.Assumptions.AccelProductForm"]
+   },
+   "type_hash": "caf1d6cabcd644bf423fa924a8e09b5bae90ffbd2ed0a0a49d3601a2fed6ea8c"
+  },
+  "Pouw.SecurityProofs.DitherInstance.WorkSoundAtTables_nontrivial": {
+   "owner": "@compute-research",
+   "signature": [
+    "Pouw.SecurityProofs.DitherInstance.WorkSoundAtTables_nontrivial :",
+    "  Exists fun G =>",
+    "    Exists fun Pd =>",
+    "      Exists fun μ =>",
+    "        Not",
+    "          (Pouw.Dither.WorkBound G Pouw.Witness.twRound 2 (fun x x_1 x_2 x_3 => True) (fun x x_1 x_2 => Unit.unit) Pd",
+    "            (fun x => 1 / 2) (Finset.univ.sum fun r => instHMul.hMul (μ r) (instHMul.hMul 1 (Pd.hon r)))",
+    "            (fun x => 1 / 2) fun x => True)"
+   ],
+   "assumptions": [],
+   "premises": {
+    "assumptions": [],
+    "domain": [],
+    "open": ["Pouw.Dither.Prover.Passes"],
+    "reads": []
+   },
+   "type_hash": "d816654bcfc06b4dc49bd9cefb252347f1d151851ae3f49ab85f13299c889854"
+  },
+  "Pouw.SecurityProofs.DitherInstance.WorkSoundH200": {
+   "owner": "@compute-research",
+   "signature": ["Pouw.SecurityProofs.DitherInstance.WorkSoundH200 : Pouw.Guarantees.DitherInstance.WorkSoundH200"],
+   "assumptions": [],
+   "premises": {
+    "assumptions": [],
+    "domain": ["Pouw.Dither.CallsAtPub", "Pouw.Dither.HostsCounted", "Pouw.Dither.OnCard", "Verity.Accel.Card.Exact"],
+    "open": [
+     "Pouw.Assumptions.AnswerAfterWork",
+     "Pouw.Assumptions.CertifierSeesImports",
+     "Pouw.Assumptions.CommitAfterWork",
+     "Pouw.Assumptions.ExtractAdv",
+     "Pouw.Assumptions.OutsourceWithinEgress",
+     "Pouw.Assumptions.ProofSystemSound",
+     "Pouw.Assumptions.RootAfterCoin",
+     "Pouw.Assumptions.SAKMatmul",
+     "Pouw.Assumptions.SAKSha",
+     "Pouw.Dither.Accel.G1",
+     "Pouw.Dither.Accel.G2",
+     "Pouw.Dither.Accel.G3",
+     "Pouw.Dither.Period.DualOpt",
+     "Pouw.Dither.Prover.Passes",
      "Verity.Assumptions.AccelProductForm"
     ],
     "reads": ["Pouw.Assumptions.ExtractAdvAt"]
    },
    "type_hash": "24b90356174c20edf30dd824c9bd4905d24528aee5c2368d18361a3cd8d08eaa",
    "unfolded_hash": "b046eb6ddd4a124ace85f829832bcfffe133ee98be82a53c054542be465bd9fc"
+  },
+  "Pouw.SecurityProofs.DitherInstance.WorkSoundH200_honest": {
+   "owner": "@compute-research",
+   "signature": [
+    "Pouw.SecurityProofs.DitherInstance.WorkSoundH200_honest :",
+    "  Exists fun x =>",
+    "    Exists fun D =>",
+    "      Exists fun G =>",
+    "        Exists fun L =>",
+    "          Exists fun e =>",
+    "            Exists fun Pd =>",
+    "              Exists fun μ =>",
+    "                And (Verity.Accel.H200.card.Exact x)",
+    "                  (And (Verity.Assumptions.AccelProductForm x)",
+    "                    (And (Pouw.Dither.OnCard G Verity.Accel.H200.card x D Pouw.Witness.twRound L e)",
+    "                      (And (Pouw.Dither.HostsCounted D Pouw.Dither.hostH200)",
+    "                        (And (Pouw.Dither.CallsAtPub G e Pouw.Dither.pubBestH200)",
+    "                          (And G.G1 (And G.G2 (And G.G3 (Pd.DualOpt μ 1))))))))"
+   ],
+   "assumptions": [],
+   "premises": {
+    "assumptions": [],
+    "domain": ["Verity.Accel.Machine.Fits"],
+    "open": [],
+    "reads": ["Verity.Assumptions.AccelProductForm"]
+   },
+   "type_hash": "808fce3c483e90ad1453061bfadc4f817b6efd2abe37bce540baed1273becd7a"
+  },
+  "Pouw.SecurityProofs.DitherInstance.WorkSoundH200_nontrivial": {
+   "owner": "@compute-research",
+   "signature": [
+    "Pouw.SecurityProofs.DitherInstance.WorkSoundH200_nontrivial :",
+    "  Exists fun x =>",
+    "    Exists fun D =>",
+    "      Exists fun G =>",
+    "        Exists fun L =>",
+    "          Exists fun e =>",
+    "            Exists fun Pd =>",
+    "              Exists fun μ =>",
+    "                Exists fun x =>",
+    "                  Not",
+    "                    (Pouw.Dither.WorkBound G Pouw.Witness.twRound 2 (fun x x_1 x_2 x_3 => True)",
+    "                      (fun x x_1 x_2 => Unit.unit) Pd (fun x => 1 / 2)",
+    "                      (Finset.univ.sum fun r => instHMul.hMul (μ r) (instHMul.hMul 1 (Pd.hon r))) (fun x => 1 / 2)",
+    "                      fun x => True)"
+   ],
+   "assumptions": [],
+   "premises": {
+    "assumptions": [],
+    "domain": [],
+    "open": ["Pouw.Dither.Prover.Passes"],
+    "reads": ["Verity.Assumptions.AccelProductForm"]
+   },
+   "type_hash": "409d389ae0e89c84f998d1de559df6c9cb2a9884765fc469c51753eda8402fe6"
   },
   "Pouw.SecurityProofs.DitherInstance.WorkSoundOnCardH200": {
    "owner": "@compute-research",
@@ -21626,7 +21762,7 @@
    "assumptions": [],
    "premises": {
     "assumptions": [],
-    "domain": [],
+    "domain": ["Pouw.Dither.CallsAtPub", "Pouw.Dither.HostsCounted", "Pouw.Dither.OnCard"],
     "open": [
      "Pouw.Assumptions.AnswerAfterWork",
      "Pouw.Assumptions.CertifierSeesImports",
@@ -21640,9 +21776,6 @@
      "Pouw.Dither.Accel.G1",
      "Pouw.Dither.Accel.G2",
      "Pouw.Dither.Accel.G3",
-     "Pouw.Dither.CallsAtPub",
-     "Pouw.Dither.HostsCounted",
-     "Pouw.Dither.OnCard",
      "Pouw.Dither.Period.DualOpt",
      "Pouw.Dither.Prover.Passes",
      "Verity.Assumptions.CardWithinAccel"
@@ -21660,7 +21793,7 @@
    "assumptions": [],
    "premises": {
     "assumptions": [],
-    "domain": [],
+    "domain": ["Pouw.Dither.CallsAtPub", "Pouw.Dither.HostsCounted", "Pouw.Dither.OnCard"],
     "open": [
      "Pouw.Assumptions.AnswerAfterWork",
      "Pouw.Assumptions.CertifierSeesImports",
@@ -21674,9 +21807,6 @@
      "Pouw.Dither.Accel.G1",
      "Pouw.Dither.Accel.G2",
      "Pouw.Dither.Accel.G3",
-     "Pouw.Dither.CallsAtPub",
-     "Pouw.Dither.HostsCounted",
-     "Pouw.Dither.OnCard",
      "Pouw.Dither.Period.DualOpt",
      "Pouw.Dither.Prover.Passes",
      "Verity.Assumptions.CardWithinAccel"
@@ -21692,7 +21822,7 @@
    "assumptions": [],
    "premises": {
     "assumptions": [],
-    "domain": [],
+    "domain": ["Pouw.Dither.CallsAtPub", "Pouw.Dither.HostsCounted", "Pouw.Dither.OnCard", "Verity.Accel.Card.Exact"],
     "open": [
      "Pouw.Assumptions.AnswerAfterWork",
      "Pouw.Assumptions.CertifierSeesImports",
@@ -21706,18 +21836,68 @@
      "Pouw.Dither.Accel.G1",
      "Pouw.Dither.Accel.G2",
      "Pouw.Dither.Accel.G3",
-     "Pouw.Dither.CallsAtPub",
-     "Pouw.Dither.HostsCounted",
-     "Pouw.Dither.OnCard",
      "Pouw.Dither.Period.DualOpt",
      "Pouw.Dither.Prover.Passes",
-     "Verity.Accel.Card.Exact",
      "Verity.Assumptions.AccelProductForm"
     ],
     "reads": ["Pouw.Assumptions.ExtractAdvAt"]
    },
    "type_hash": "f783d09e652e6d59f971b0d91401e64bd149ebbfa574976cdc439f52ab29a04b",
    "unfolded_hash": "739ae52f9fd8674edece4a4c6ea3727aae357207b4a6e9fbb1aa4a86dae20083"
+  },
+  "Pouw.SecurityProofs.DitherInstance.WorkSoundSm120_honest": {
+   "owner": "@compute-research",
+   "signature": [
+    "Pouw.SecurityProofs.DitherInstance.WorkSoundSm120_honest :",
+    "  Exists fun x =>",
+    "    Exists fun D =>",
+    "      Exists fun G =>",
+    "        Exists fun L =>",
+    "          Exists fun e =>",
+    "            Exists fun Pd =>",
+    "              Exists fun μ =>",
+    "                And (Verity.Accel.Sm120.card.Exact x)",
+    "                  (And (Verity.Assumptions.AccelProductForm x)",
+    "                    (And (Pouw.Dither.OnCard G Verity.Accel.Sm120.card x D Pouw.Witness.twRound L e)",
+    "                      (And (Pouw.Dither.HostsCounted D Pouw.Dither.hostSm120)",
+    "                        (And (Pouw.Dither.CallsAtPub G e Pouw.Dither.pubBestSm120)",
+    "                          (And G.G1 (And G.G2 (And G.G3 (Pd.DualOpt μ 1))))))))"
+   ],
+   "assumptions": [],
+   "premises": {
+    "assumptions": [],
+    "domain": ["Verity.Accel.Machine.Fits"],
+    "open": [],
+    "reads": ["Verity.Assumptions.AccelProductForm"]
+   },
+   "type_hash": "ea9ffb2e0ef4e8034aad3c96da4fda70676f701824f478d66a7e3366b6826e09"
+  },
+  "Pouw.SecurityProofs.DitherInstance.WorkSoundSm120_nontrivial": {
+   "owner": "@compute-research",
+   "signature": [
+    "Pouw.SecurityProofs.DitherInstance.WorkSoundSm120_nontrivial :",
+    "  Exists fun x =>",
+    "    Exists fun D =>",
+    "      Exists fun G =>",
+    "        Exists fun L =>",
+    "          Exists fun e =>",
+    "            Exists fun Pd =>",
+    "              Exists fun μ =>",
+    "                Exists fun x =>",
+    "                  Not",
+    "                    (Pouw.Dither.WorkBound G Pouw.Witness.twRound 2 (fun x x_1 x_2 x_3 => True)",
+    "                      (fun x x_1 x_2 => Unit.unit) Pd (fun x => 1 / 2)",
+    "                      (Finset.univ.sum fun r => instHMul.hMul (μ r) (instHMul.hMul 1 (Pd.hon r))) (fun x => 1 / 2)",
+    "                      fun x => True)"
+   ],
+   "assumptions": [],
+   "premises": {
+    "assumptions": [],
+    "domain": [],
+    "open": ["Pouw.Dither.Prover.Passes"],
+    "reads": ["Verity.Assumptions.AccelProductForm"]
+   },
+   "type_hash": "ff44180d514551c52f2d9f9c15180b2fab51683783b89ebf0b5c63f54d4dbb7a"
   },
   "Pouw.SecurityProofs.EndToEnd": {
    "owner": "@compute-accounting",
@@ -27117,6 +27297,7 @@
    "Verity.SecurityProofs.RefineIncorrect": "frozen (no-function): It is stated over an arbitrary circuit, partition (or declaration) and transcript, and says what correct units, openings, refinements or containments establish, rather than a Lean function's acceptance.",
    "WeightSecurity.SecurityProofs.TheftServedTied": "frozen (no-function): It bounds the probability that an arbitrary outsider steals the weights from an audited deployment whose run records each window's trace of a checked population (security/Definitions/WeightSecurity/Tied.lean) by two to the served channel's covert capacity per charge unit in bits times the honest-use bound, under honest-use hardness (WeightSecurity.Assumptions.HonestUseHard), the served channel's simulability (WeightSecurity.Assumptions.Simulable), the bound on what the audit leaves undetected among the traces' incorrect blocks (WeightSecurity.Served.UndetectedLe), the population's check (Population.Dataflow.Checked) and its fan-out to charge units (Population.Dataflow.FanOut), with two open premises as probability terms: that a release is not its trace's outputs, the network certifier's egress tie (WeightSecurity.Assumptions.EgressTied), and that a trace does not hold its window's inputs, the advice charge's (WeightSecurity.Assumptions.AdviceCovered); it reads no function's acceptance.",
    "Nci.Cut.SecurityProofs.CountHE": "frozen (no-function): Like HE, it is about an arbitrary registered circuit, its charged work and the values its words carry, under the named (H) and (E) (security/Definitions/Assumptions.lean), with its only premise on the circuit its count verdict (Nci.CompliesAtMost); the join from a published complies of the count to that verdict is NciCheck.Properties.DescCountsCK, stated among the properties and not yet proved, which is what would give it an acceptance.",
+   "Pouw.SecurityProofs.DitherInstance.WorkSoundAtTables": "frozen (verdict): as WorkSoundH200, over every card table, menu and host row; the statements at the two cards are its consequences (CMP-136, CMP-392).",
    "WeightSecurity.SecurityProofs.TheftFaulted": "frozen (no-function): It bounds the probability that an arbitrary outsider steals the weights from an audited deployment whose run is a game of the audit's coins (security/Definitions/WeightSecurity/Faulted.lean), with the audit's incorrect blocks as fault inputs to a faulted circuit rather than as overwrites of releases, under honest-use hardness on a typical set of weights (WeightSecurity.Assumptions.HonestUseHard), the model claim that the faults no cut covers, within the budget M, make the circuit at most N^(λ-1) times easier to use, N the number of such patterns (WeightSecurity.Assumptions.FaultedUseHard, taken at WeightSecurity.Cut.Interiors; a fault the cut covers adds only its hint to the fault channel's strings, with no premise), the fault channel's simulability (WeightSecurity.Assumptions.Simulable), an empty fault pattern beside each honest query (WeightSecurity.NoFault) and the bound on what the audit leaves undetected (WeightSecurity.Served.UndetectedLe), with the atypical weights and the releases' faithfulness to the faulted run as probability terms, the second of which the network certifier's tie of each release to a trace of a checked dataflow discharges (Population.Dataflow.determinate_of_checked); it reads no function's acceptance."
   },
   "conjectures": {
@@ -28732,6 +28913,9 @@
     "∀ (s : g.Strategy), Cls s → ENNReal.instLE.le (Verity.Game.prob Q g s) ε": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
     "∀ (s : g.Strategy), g.InducedAt post pre σ s → Cls s": "g.InducedAt taken inline, inline when the rule came: name it or state it as a guarantee's conclusion"
    },
+   "Verity.SecurityProofs.RefineIncorrect": {
+    "∀ (g : Fin C.N), SetLike.instMembership.mem Pc.committed g → Eq (Y g) (X g)": "a membership, inline when the rule came: name it or state it as a guarantee's conclusion"
+   },
    "Verity.SecurityProofs.ServingBlockSum": {
     "Finset.instPartialOrder.le V C.computed": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
     "∀ (u : Fin B), SetLike.instMembership.mem S u → Real.instLE.le ((Finset.instInter.inter V (P.gates u)).sum fun v => ω v) (qS u)": "a membership, inline when the rule came: name it or state it as a guarantee's conclusion",
@@ -28741,9 +28925,6 @@
    "Verity.SecurityProofs.SoundMono": {
     "∀ (a : α), accept' a → accept a": "a bound variable's predicate, inline when the rule came: name it or state it as a guarantee's conclusion",
     "∀ (a : α), accept' a → E a → F a": "a bound variable's predicate, inline when the rule came: name it or state it as a guarantee's conclusion"
-   },
-   "Verity.SecurityProofs.RefineIncorrect": {
-    "∀ (g : Fin C.N), SetLike.instMembership.mem Pc.committed g → Eq (Y g) (X g)": "a membership, inline when the rule came: name it or state it as a guarantee's conclusion"
    }
   }
  },
@@ -37449,7 +37630,7 @@
    }
   },
   "Definitions.Pouw.DitherInstance": {
-   "digest": "fa0bfbb724b099d69c4c0f272825669822bbe46e5feff0a6992cd9467cb935e4",
+   "digest": "2dfe1076e644b756f30f9a3c3d76164f20e01a5666e68c80a8759b83912f9b87",
    "definitions": {
     "Pouw.Dither.CallsAtPub": "4fd27c18ca3eb07b2fbafa6e459b881abf4047e92bf2b8cf73523cc83ddf7201",
     "Pouw.Dither.CardRunsAt": "5e79c94717cbf271888e33bd189df60cf3592130f9c4be689ee6811157bd382b",
@@ -37479,6 +37660,7 @@
     "Pouw.Dither.ResUnits": "3d8c0d264700e210ebb1fecc04f965bede4bd611610a65d313a4976a9cb4e2d9",
     "Pouw.Dither.Timed": "58ef2b0f34b7b96379a74fa795d34aa26e298c7cfe048a7fea87bbb5270e1ace",
     "Pouw.Dither.TimedWorkFits": "82083adcdba152dc434b6451ac2a977ffe5ecc69aa57a1e10f320200332634cd",
+    "Pouw.Dither.WorkBound": "3e02a6fe367e6fb0289fe06ee59cae0fd4686f661c4529b2d9187fdc1f27b968",
     "Pouw.Dither.cardRun": "3016cac84d25a6b758d60f89bae812a774026c41638cac5e7feabe3c1c708443",
     "Pouw.Dither.cardUnits": "9dff00021482e7a1f5477b823f290e6064de3f63b0b3d4866d90e37700979b16",
     "Pouw.Dither.hostH200": "aeffd41fb84fcae4f27a6fd38300f05fbc18e863603ccfe65ad547e8109beed2",
@@ -37801,10 +37983,11 @@
    }
   },
   "Definitions.Pouw.Guarantees.DitherInstance": {
-   "digest": "3937a47fd7d8c12e13ddb9ac90a1d44631dea0c8b541f08b12ff0d06949ce12f",
+   "digest": "00dc3bdaee012ed94d796c91d4a4cd057bb83291acab977a7558d5748c8740cf",
    "definitions": {
     "Pouw.Guarantees.DitherInstance.WorkSoundAt": "368f1f2ade0dfbd379aca0aea8c44ba2f8fed6749da5f05b73a1224b7a2fbff9",
-    "Pouw.Guarantees.DitherInstance.WorkSoundAtX": "b4958812c4f60abdf6d147d8fd55f9132a057ee532a5fabfaf4639e226549270",
+    "Pouw.Guarantees.DitherInstance.WorkSoundAtTables": "f9721093634376c559e60de454d87cf204b2137c18cf883687b9ac1e55a5d128",
+    "Pouw.Guarantees.DitherInstance.WorkSoundAtX": "91ef1706b793efa9545b3a169280ea4363802bd937d41f03aab990889ce515d5",
     "Pouw.Guarantees.DitherInstance.WorkSoundH200": "fa9597a9f89c02b477637bab831c3892f4cb39c2573cbcbadbca8f32c78e5385",
     "Pouw.Guarantees.DitherInstance.WorkSoundOnCard": "60d9c1b01c7f3715ecf4a3ef33d4feeceaabca5b72bb5a144bbbd8612c98aafa",
     "Pouw.Guarantees.DitherInstance.WorkSoundOnCardH200": "8ee80046f55922ff1450d52cf565b3a0922baa23d8ac99f1f2c80d6dae918af4",
