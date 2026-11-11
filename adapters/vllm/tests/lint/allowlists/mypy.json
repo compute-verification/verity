@@ -1987,8 +1987,6 @@
     {"file": "verity_vllm/engine/vllm_adapter.py", "kind": "arg-type", "symbol": "run_requests", "detail": ""},
     {"file": "verity_vllm/engine/vllm_adapter.py", "kind": "assignment", "symbol": "load_workload", "detail": ""},
     {"file": "verity_vllm/engine/vllm_adapter.py", "kind": "union-attr", "symbol": "execution_of_workload", "detail": "", "count": 2},
-    {"file": "verity_vllm/llm.py", "kind": "arg-type", "symbol": "LLM.__init__", "detail": ""},
-    {"file": "verity_vllm/llm.py", "kind": "assignment", "symbol": "LLM._install", "detail": ""},
     {"file": "verity_vllm/observe/capture.py", "kind": "arg-type", "symbol": "Capture._flush_snapshots", "detail": "", "count": 2},
     {"file": "verity_vllm/observe/capture.py", "kind": "arg-type", "symbol": "Capture._snap_tensor", "detail": ""},
     {"file": "verity_vllm/observe/capture.py", "kind": "arg-type", "symbol": "Capture._write_snapshot_index", "detail": ""},
