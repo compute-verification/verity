@@ -42,9 +42,7 @@ from __future__ import annotations
 
 import hashlib
 import importlib
-import importlib.util
 import json
-import os
 import shlex
 import subprocess
 import sys
@@ -54,14 +52,19 @@ from dataclasses import dataclass, replace
 from pathlib import Path
 from typing import Any
 
+from verity_vllm import settings
 from verity_vllm.check import gates as G
 from verity_vllm.config import RowEngine, UsageError, option, row_execution, workload_arg
 from verity_vllm.engine.served import ENFORCE_EAGER
+from verity_vllm.log import init_logger
 from verity_vllm.observe.fold.supplied import program_registered_values
 from verity_vllm.pipeline import experiment as EXP
 from verity_vllm.pipeline import gpu_lease as GL
+from verity_vllm.pipeline.timeline import Timeline
 from verity_vllm.program.sampling_event import program_sampler_construction
 from verity_vllm.query.manifest.format import RUN_FAMILY, RUN_PARAM, canonical_identity
+
+logger = init_logger(__name__)
 
 DEFAULT_SNAPSHOT_STEPS = "all"        # evidence for every specialization (h1: attention T at non-snapshot steps was uncovered)
 TIER_B_STEPS = (0, 1, 2, 3)            # --full-replay (diagnostic): prefill + three decode steps
@@ -81,10 +84,6 @@ SKIP_GROUPS = {
     "nonint": {"nonint", "nonint_compare"},
     "fold": {"fold", "fold_2", "fold_other"},
 }
-#: Stages whose module may be missing in a worktree; a missing module is recorded
-#: as `missing_module`, not run.
-OPTIONAL_MODULES = {"golden": "verity_vllm.properties.golden"}
-
 
 # ---------------------------------------------------------------------------------------------------------
 # plan
@@ -176,7 +175,8 @@ class Plan:
 
     def cmd(self, stage: str) -> list[str] | None:
         a, run = self.a, self.run
-        common_gpu = ["--workload", a.workload, "--case", a.case, "--max-num-seqs", str(a.max_num_seqs), "--checkpoints", a.checkpoints]
+        workload, case, profile = required(a, "workload"), required(a, "case"), required(a, "profile")
+        common_gpu = ["--workload", workload, "--case", case, "--max-num-seqs", str(a.max_num_seqs), "--checkpoints", a.checkpoints]
         if a.max_tokens is not None:
             common_gpu += ["--max-tokens", str(a.max_tokens)]
         common_gpu += [f"--engine-arg={x}" for x in self.engine_args()]   # [GEN batch SHARED-CODE] scheduler/memory knobs -> build_engine
@@ -193,28 +193,28 @@ class Plan:
             return [self.py_gpu, "-m", "verity_vllm.pipeline.cli", "noninterference", *common_gpu, "--out", str(self.nonint_dir), "--python", self.py_gpu,
                     "--accepted-ctl", str(self.control_tokens_path())]
         if stage == "resolve":
-            return [self.py_cpu, "-m", "verity_vllm.pipeline.cli", "resolve-log", str(self.log), "--profile", a.profile, "--out", str(run / "resolution"), "--quiet"]
+            return [self.py_cpu, "-m", "verity_vllm.pipeline.cli", "resolve-log", str(self.log), "--profile", profile, "--out", str(run / "resolution"), "--quiet"]
         if stage == "census_reconcile":
             return [self.py_cpu, "-m", "verity_vllm.pipeline.cli", "census", "--reconcile", str(self.census_dir / "census.json"), "--log", str(self.log),
-                    "--profile", a.profile, "--report", str(run / "census_reconcile")]
+                    "--profile", profile, "--report", str(run / "census_reconcile")]
         if stage == "nonint_compare":
-            return [self.py_cpu, "-m", "verity_vllm.pipeline.cli", "noninterference", "--compare", "--out", str(self.nonint_dir), "--workload", a.workload,
-                    "--case", a.case, "--accepted-ctl", str(self.control_tokens_path())]
+            return [self.py_cpu, "-m", "verity_vllm.pipeline.cli", "noninterference", "--compare", "--out", str(self.nonint_dir), "--workload", workload,
+                    "--case", case, "--accepted-ctl", str(self.control_tokens_path())]
         if stage == "compare":
-            c = [self.py_cpu, "-m", "verity_vllm.pipeline.cli", "fold-compare", "--log", str(self.log), "--snapshots", str(self.snapshots), "--profile", a.profile,
+            c = [self.py_cpu, "-m", "verity_vllm.pipeline.cli", "fold-compare", "--log", str(self.log), "--snapshots", str(self.snapshots), "--profile", profile,
                  "--out", str(self.p("compare"))]
             g = self.safetensors_glob()
             if g:
                 c += ["--safetensors", g]
             return c
-        MC = fold_construction_args(a.workload, a.program_dir or ())
+        MC = fold_construction_args(workload, a.program_dir or ())
         if stage in ("fold", "fold_2"):   # --persist-dir writes program.json / instances.jsonl / accesses.jsonl.gz
-            return [self.py_cpu, "-m", "verity_vllm.pipeline.cli", "match", "--worker", "fold", "--log", str(self.log), "--profile", a.profile,
+            return [self.py_cpu, "-m", "verity_vllm.pipeline.cli", "match", "--worker", "fold", "--log", str(self.log), "--profile", profile,
                     "--out", str(self.p("fold_summary" if stage == "fold" else "fold_summary_2"))] + MC + (["--persist-dir", str(run)] if stage == "fold" else [])
         if stage == "fold_other":
             if not a.other_log:
                 return None
-            return [self.py_cpu, "-m", "verity_vllm.pipeline.cli", "match", "--worker", "fold", "--log", a.other_log, "--profile", a.profile, "--out", str(self.p("fold_summary_other"))] + MC
+            return [self.py_cpu, "-m", "verity_vllm.pipeline.cli", "match", "--worker", "fold", "--log", a.other_log, "--profile", profile, "--out", str(self.p("fold_summary_other"))] + MC
         if stage == "golden":
             return [self.py_cpu, "-m", "verity_vllm.pipeline.cli", "golden", "--check", "--out", str(self.p("golden"))]
         return None
@@ -232,21 +232,20 @@ class Plan:
         return gpu + cpu
 
 
+def required(a: Options, name: str) -> str:
+    """An option the driver doesn't run without, refused by name when absent."""
+    v = getattr(a, name)
+    if v is None:
+        raise UsageError(f"--{name.replace('_', '-')} is required")
+    return v
+
+
 def profile_config(name: str) -> dict | None:
     try:
         return G.load_profile_config(name)
-    except Exception:  # noqa: BLE001 - the profile may not exist in this worktree (dry runs)
+    except Exception as e:  # noqa: BLE001 - the profile may not exist in this worktree (dry runs)
+        logger.info("profile %s: no configuration (%s: %s)", name, type(e).__name__, e)
         return None
-
-
-def module_available(py: str, module: str) -> bool | None:
-    """Whether `module` imports under `py`; None when `py` is another interpreter (not checked)."""
-    if Path(py).resolve() != Path(sys.executable).resolve():
-        return None
-    try:
-        return importlib.util.find_spec(module) is not None
-    except (ImportError, ValueError):
-        return False
 
 
 # ---------------------------------------------------------------------------------------------------------
@@ -271,9 +270,8 @@ def run_stage(stage: str, cmd: list[str], log_path: Path, *, max_rss_gb: float |
     # the Match phase's sub-steps on the row timeline (VERITY_TIMELINE, else no-op): capture / control = one engine
     # process each (`work.*`), the CPU phases (fold, resolve, ...) are validation
     try:
-        from verity_vllm.pipeline.timeline import Timeline
         _tl = Timeline.from_env("run_config", hot=False)
-    except Exception:  # noqa: BLE001
+    except OSError:   # the telemetry file's directory can't be made: the stage runs without it
         _tl = None
     _tl_stage = f"match.{stage}" if stage not in ("capture", "control") else f"work.match_{stage}"
     if _tl is not None:
@@ -281,7 +279,7 @@ def run_stage(stage: str, cmd: list[str], log_path: Path, *, max_rss_gb: float |
     with open(log_path, "w") as lf:
         lf.write(f"$ {shlex.join(cmd)}\n")
         lf.flush()
-        proc = subprocess.Popen(cmd, stdout=lf, stderr=subprocess.STDOUT, cwd=str(cwd) if cwd else None, env=dict(os.environ, PYTHONUNBUFFERED="1"))
+        proc = subprocess.Popen(cmd, stdout=lf, stderr=subprocess.STDOUT, cwd=str(cwd) if cwd else None, env=dict(settings.environ(), PYTHONUNBUFFERED="1"))
         while True:
             rc = proc.poll()
             if rc is not None:
@@ -321,11 +319,7 @@ def _sha256_file(p: Path) -> str | None:
 
 
 def _hf_config_of(a: Options, C: dict | None) -> dict | None:
-    """`analytic.config_of(<hf config.json>)` when the integrator's module and an HF config are available."""
-    try:
-        an = importlib.import_module("verity_vllm.program.model")
-    except ImportError:
-        return None
+    """`program.model.config_of(<hf config.json>)` when an HF config is available."""
     cfg = None
     if a.hf_config:
         cfg = Path(a.hf_config)
@@ -334,16 +328,18 @@ def _hf_config_of(a: Options, C: dict | None) -> dict | None:
     else:
         repo = (C or {}).get("model")
         if repo:
-            home = Path(os.environ.get("HF_HOME") or (Path.home() / ".cache" / "huggingface"))
+            home = Path(settings.HF_HOME or (Path.home() / ".cache" / "huggingface"))
             base = home / "hub" / f"models--{repo.replace('/', '--')}" / "snapshots"
             cands = sorted(base.glob("*/config.json")) if base.exists() else []
             cfg = cands[-1] if cands else None
     if cfg is None or not cfg.exists():
         return None
+    an = importlib.import_module("verity_vllm.program.model")   # at its one use: it loads numpy and the Definitions' registry
     try:
         hf_C, _prov = an.config_of(str(cfg))      # (C, provenance) — `dict()` of the pair raised, so every card field read "hand"
         return dict(hf_C)
-    except Exception:  # noqa: BLE001 - provenance falls back to "hand"
+    except Exception as e:  # noqa: BLE001 - provenance falls back to "hand"
+        logger.warning("%s: no configuration read, so provenance falls back to \"hand\" (%s: %s)", cfg, type(e).__name__, e)
         return None
 
 
@@ -403,7 +399,7 @@ def write_spec_for(plan: Plan, a: Options, man: dict) -> dict | None:
                 if c.get("role") == a.case or (a.case == "B1" and str(c.get("role", "")).startswith("B1")):
                     ck = {k: c.get(k) for k in ("repo", "revision", "role", "files", "sha256", "digest", "local_path") if c.get(k) is not None}
                     break
-        except Exception:  # noqa: BLE001 - no manifest on this host: the checkpoint_dir still identifies the weights
+        except (OSError, ValueError, AttributeError, TypeError):   # no manifest on this host, or not one: the checkpoint_dir still identifies the weights
             pass
         wl_doc = _workload_doc(a.workload)
         spec = EXP.build_spec(config_id=a.config_id, case=a.case, profile=a.profile, workload_path=a.workload, workload_doc=wl_doc,
@@ -435,11 +431,11 @@ def write_realized(plan: Plan) -> dict | None:
     ctl_p = plan.control_tokens_path()
     try:
         cap = json.loads(cap_p.read_text()) if cap_p.exists() else None
-    except Exception:  # noqa: BLE001
+    except (OSError, ValueError):
         cap = None
     try:
         ctl = json.loads(ctl_p.read_text()) if ctl_p.exists() else None
-    except Exception:  # noqa: BLE001
+    except (OSError, ValueError):
         ctl = None
     if cap is None and ctl is None:
         return None
@@ -456,7 +452,7 @@ def write_realized(plan: Plan) -> dict | None:
         try:
             sj = json.loads(sp.read_text())
             snaps = sorted({int(s) for s in (sj.get("steps") or sj.get("snapshot_steps") or [])}) or None
-        except Exception:  # noqa: BLE001
+        except (OSError, ValueError, AttributeError, TypeError):
             snaps = None
     real = {"requests": reqs, "prompt_lens": [r["prompt_len"] for r in reqs], "n_generated": [r["n_generated"] for r in reqs],
             "engine_steps_capture": (cap or {}).get("engine_steps") or ((cap or {}).get("timing") or {}).get("engine_steps"),
@@ -558,6 +554,7 @@ class Options:
     dry_run: bool = option("--dry-run", default=False, action="store_true", help="print the exact command lines, run nothing")
     skip: str = option("--skip", default="", help="comma list of stages/groups to skip")
     cards_dir: str = option("--cards-dir", default="out/gen/cards")
+    tree: str = option("--tree", default=".", help="the tree that runs, whose version experiment.json records: its EXPORT.json, else its git head (default: the working directory)")
     k: int = option("--k", type=int, default=DEFAULT_K, help="run.json's sampling.k (no stage reads it)")
     seed: int | None = option("--seed", type=int, default=None, help="run.json's sampling.seed (no stage reads it)")
     no_program: bool = option("--no-program", default=False, action="store_true", help="(--worker fold) skip Program(): no digest")
@@ -565,6 +562,7 @@ class Options:
     program_dir: list[str] | None = option("--program-dir", action="append", default=None, help="the Build's Program dir(s) the Match compares against; the fold binds the top-p select under the construction they declare (sampling_event.program_sampler_construction)")
     sampler_construction: str | None = option("--sampler-construction", default=None, help="(--worker fold) the Programs' sampler construction (the driver passes it from --program-dir)")
     registered_values: bool = option("--registered-values", default=False, action="store_true", help="(--worker fold) the program's values are inputs (Profile.registered_values); the driver passes what the --program-dir Programs register")
+    match_pipeline: str = option("--match-pipeline", env="MATCH_PIPELINE", default="", help="(--worker fold) the row's Match pipeline: under `shared` the access journal is compressed at level 1 (the same lines, a larger file)")
     moe_construction: str | None = option("--moe-construction", default=None, help="(--worker fold) the workload's DECLARED MoE construction " "(manifest target.moe_construction: indexed-read | indexed-read-ordered | padded); the driver passes it from --workload")
 
 
@@ -582,8 +580,7 @@ def main(a: Options) -> int:
     if a.config_id is None and a.case and a.workload:
         a.config_id = f"{a.case}-{Path(a.workload).stem}"
     for req in ("config_id", "profile", "workload", "case", "out"):
-        if getattr(a, req) is None:
-            raise UsageError(f"--{req.replace('_', '-')} is required")
+        required(a, req)
     # no explicit --snapshot-max-bytes: derive the cap from the workload's largest forward and the checkpoint's widths
     # (snapshot_cap_bytes) instead of m1_capture's fixed 32 MiB, which leaves the prefill MLP rows of every 1024-class workload without
     # snapshot evidence.  An explicit value still wins; the run.json records the derivation either way.
@@ -652,14 +649,6 @@ def main(a: Options) -> int:
         cmd = plan.cmd(st)
         if cmd is None:
             continue
-        mod = OPTIONAL_MODULES.get(st)
-        py = cmd[0]
-        if mod and module_available(py, mod) is False:
-            recs.append({"stage": st, "status": "missing_module", "returncode": None, "seconds": 0.0, "log": None, "cmd": shlex.join(cmd),
-                         "reason": f"{mod} not importable under {py}"})
-            print(f"[{st}] missing module {mod}", file=sys.stderr)
-            save_stages(plan.run, recs)
-            continue
         print(f"[{st}] {shlex.join(cmd)}", file=sys.stderr)
         rec = run_stage(st, cmd, logs / f"{st}.log", max_rss_gb=max_rss, timeout_s=timeout)
         print(f"[{st}] {rec['status']} in {rec['seconds']} s", file=sys.stderr)
@@ -677,7 +666,7 @@ def main(a: Options) -> int:
     except Exception as e:  # noqa: BLE001 - informational
         print(f"[realized] not written: {type(e).__name__}: {e}", file=sys.stderr)
     try:
-        EXP.write_experiment(plan.run, repo=Path.cwd(), spec_note=spec_note)   # the Experiment index over the run directory
+        EXP.write_experiment(plan.run, repo=Path(a.tree), spec_note=spec_note)   # the Experiment index over the run directory
     except Exception as e:  # noqa: BLE001 - informational
         print(f"[experiment] not written: {type(e).__name__}: {e}", file=sys.stderr)
     bad = [r for r in recs if r["stage"] in stages and r["status"] not in ("ok", "skipped")]
@@ -718,7 +707,7 @@ def _workload_doc(path: str | None) -> dict | None:
         return None
     try:
         return json.loads(Path(path).read_text())
-    except Exception:  # noqa: BLE001
+    except (OSError, ValueError):
         return None
 
 
@@ -935,13 +924,14 @@ def instances_form() -> str:
     `runs()` expansion at write; ~3 % of the text), parameter-space runs unchanged.  Lossless either way.  The LIBRARY default stays `runs`
     (tests and ad-hoc folds unchanged); the rows of record set VERITY_INSTANCES_FORM=progressions in row_pod.sh's Match phase ("compact
     refs stay compact end to end": readers accept both forms)."""
-    v = (os.environ.get(INSTANCES_FORM_ENV) or "runs").strip().lower()
+    v = settings.get(INSTANCES_FORM_ENV)
+    v = "runs" if v is None else v
     if v not in ("runs", "progressions"):
         raise SystemExit(f"{INSTANCES_FORM_ENV}={v!r}: expected runs | progressions")
     return v
 
 
-def persist_program(result: Any, run_dir: Path, *, profile_name: str, log_path: str | Path) -> dict:
+def persist_program(result: Any, run_dir: Path, *, profile_name: str, log_path: str | Path, journal_level: int = 9) -> dict:
     """Freeze the candidate.  `program.json` is the Verity Program through the existing codec (`verity.circuits.codec`,
     digest == `fold_summary.digest`); `instances.jsonl` is the runtime-correspondence record the fold already holds in
     memory -- one line per Compute instance (step, root event id, pattern, spec id, rows, operand/output `ViewDesc`s, and
@@ -1041,10 +1031,9 @@ def persist_program(result: Any, run_dir: Path, *, profile_name: str, log_path: 
     if acc:
         p = run_dir / "accesses.jsonl.gz"
         # the journal is 22 % of the fold phase at B8 1024/128 (161 s: jsonable + dumps + gzip; 237 MB) and no
-        # Match-pipeline stage reads it (the regression fixtures pin it).  Under row_pod's MATCH_PIPELINE=shared
-        # it is compressed at level 1 (same lines, ~4x less compressor time, a larger file); unset = level 9 as before.
-        level = 1 if os.environ.get("MATCH_PIPELINE", "") == "shared" else 9
-        with gzip.open(p, "wt", compresslevel=level) as f:
+        # Match-pipeline stage reads it (the regression fixtures pin it).  The fold worker under row_pod's
+        # MATCH_PIPELINE=shared compresses it at `journal_level` 1 (same lines, ~4x less compressor time, a larger file).
+        with gzip.open(p, "wt", compresslevel=journal_level) as f:
             for r in acc:
                 # the journal entry (fold._journal): view -> the six fields, refs -> its runs() lists, everything else by the generic conversion;
                 # key order is the entry's own (unchanged bytes)
@@ -1071,7 +1060,8 @@ def fold_worker(a: Options) -> int:
     out = Path(a.out)
     out.parent.mkdir(parents=True, exist_ok=True)
     if getattr(a, "persist_dir", None):
-        doc["persisted"] = persist_program(result, Path(a.persist_dir), profile_name=a.profile, log_path=a.log)
+        doc["persisted"] = persist_program(result, Path(a.persist_dir), profile_name=a.profile, log_path=a.log,
+                                           journal_level=1 if a.match_pipeline == "shared" else 9)
     out.write_text(json.dumps(_jsonable(doc), indent=1) + "\n")
     print(f"{out}  digest={doc['digest'][:16]}  instances={doc['n_instances']}  steps={doc['n_steps']}  unresolved={doc['unresolved']}  "
           f"unknown_roots={len(doc['unknown_roots'])}  rss={doc['max_rss_gb']} GB"

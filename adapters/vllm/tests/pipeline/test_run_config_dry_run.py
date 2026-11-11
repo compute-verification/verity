@@ -11,6 +11,7 @@ from pathlib import Path
 
 import pytest
 
+from verity_vllm.pipeline import cli, gc_tuning
 from verity_vllm.pipeline import match as RC
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -143,6 +144,20 @@ def test_run_stage_records_failure_and_tees_log(tmp_path):
     assert rec["status"] == "failed" and rec["returncode"] == 3 and "exit 3" in rec["reason"]
     text = (tmp_path / "logs/boom.log").read_text()
     assert "hello" in text and "err" in text and text.startswith("$ ")
+
+
+@pytest.mark.parametrize("environ, level", [({"MATCH_PIPELINE": "shared"}, 1), ({"MATCH_PIPELINE": "standalone"}, 9), ({}, 9)])
+def test_fold_worker_compresses_the_journal_by_the_rows_match_pipeline(tmp_path, monkeypatch, environ, level):
+    """The row's stages run under its MATCH_PIPELINE: the fold worker's option takes it from the environment the CLI was started
+    with, and `shared` alone compresses the access journal at level 1."""
+    a = cli.parse("match", ["--worker", "fold", "--log", "l", "--profile", "p", "--out", str(tmp_path / "s.json"), "--persist-dir", str(tmp_path)],
+                  environ)
+    doc = {"digest": "0" * 16, "n_instances": 0, "n_steps": 0, "unresolved": 0, "unknown_roots": [], "max_rss_gb": 0}
+    seen: dict = {}
+    monkeypatch.setattr(gc_tuning, "tune", lambda: None)
+    monkeypatch.setattr(RC, "fold_summary_result", lambda *args, **kw: (dict(doc), None))
+    monkeypatch.setattr(RC, "persist_program", lambda result, run_dir, **kw: seen.update(kw) or {})
+    assert RC.fold_worker(a) == 0 and seen["journal_level"] == level
 
 
 def test_run_stage_timeout(tmp_path):
