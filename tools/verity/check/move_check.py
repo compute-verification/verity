@@ -18,12 +18,13 @@ Every path git sees changed must be one of:
   name (`verity.ml.flock.tool:FLOCK_PURE`, `verity_vllm.protocols.remote_bandwidth`'s) from where a renamed module was
   to where it is now; in any of them, the modules a run of import lines binds each name to
   (`from a import m as M` to `from b import m2 as M`, a line split in two, a `from a import (x,` whose names go on
-  past the change; in a heredoc, or in a string literal `"from a import m\n"` whose quotes the move keeps); in a
-  `*.py` file, also the module of an `import M` /
+  past the change, or a `from a import x, \\` (`rules`'s `continued`); in a heredoc, or in a string literal
+  `"from a import m\n"` whose quotes the move keeps); in a `*.py` file, also the module of an `import M` /
   `from M import` line (a relative one, `.m`, read from the file's own place), or a `Path(__file__).parents[N]` anchor
   (or `Path(m.__file__)`'s, and the path joined to it) recounted to name, from where it now is, what the old one named,
   moved; in a shell script, likewise a path from its own directory (`$(dirname "$0")/../..`, or after
-  `${BASH_SOURCE[0]}` or a variable it sets to its own path, `SH_SELF`);
+  `${BASH_SOURCE[0]}` or a variable it sets to its own path, `SH_SELF`, or once to its own directory,
+  `here=$(cd "$(dirname "$0")" && pwd)`: `rules`'s `anchor`);
 - an added line in `REGISTRIES` that registers exactly a package the range created: a root `pyproject.toml` workspace
   member (or its `tool.uv.sources` entry) for a directory that is new at HEAD, a `tests/test_lean_packages.py` entry for a
   new Lake package with its `lean-audit.json`; and in any `pyproject.toml`, an added line of a new Lake package's own
@@ -56,9 +57,10 @@ Every path git sees changed must be one of:
   manifest only in where its path packages sit, which no pinned output reads (`manifest_pin`);
 - an entry appended to research's `moves.json` whose paths agree with the range's (`moves_change`);
 - a new, empty `__init__.py` in a directory at or above a `.py` file the range moved there out of a package (its old
-  directory had an `__init__.py`) or from outside every package (none at or above it) to a directory not run by path
-  (`tests/`, `lean/`), and no higher than the root of that file's package after the move (`[roots] new` of a path map under
-  `tools/move/` at BASE): the package level `tools/move/layout.py` writes so the module imports by its new name. And a
+  directory had an `__init__.py`) or from outside every package (none at or above it; `rules`'s `level`) to a directory
+  not run by path (`tests/`, `lean/`), and no higher than the root of that file's package after the move (`[roots] new`
+  of a path map under `tools/move/` at BASE): the package level `tools/move/layout.py` writes so the module imports by
+  its new name. And a
   deleted `__init__.py` of a package the range's moves took away: files left its directory by a rename and HEAD has none
   at or below it (`rules`'s `emptied` in the `--json` report);
 - a list of paths rewritten as a cover (`rules`'s `cover`): a list `tools/move/layout.py` reads as one (its `lists`: a
@@ -1651,17 +1653,21 @@ def certify(base: str, head: str, extra: dict[str, str] | None = None, cwd: str 
 
     roots = sorted(package_roots(B), key=len, reverse=True)
 
-    def package_level(d: str) -> bool:
+    def package_level(d: str) -> str | None:
         """Whether an empty `__init__.py` added in `d` is a package level the move needs: a module the range moved to `d` or
         below it is its package's there (`tools/move/layout.py`'s `module_there`: it was a package's at BASE, or outside
         every package and now outside a directory run by path), so it is importable by its new name only if each
-        directory from it up to its package's root is a package (the mover writes these, and none above the root)."""
+        directory from it up to its package's root is a package (the mover writes these, and none above the root). It is
+        "package" where one of those modules was a package's, "outside" where each came from outside every package."""
+        by = None
         for o, n in renamed:
             if n.endswith(".py") and n.startswith(d + "/"):
                 root = next((r for r in roots if n.startswith(r + "/")), None)
                 if root is not None and (d == root or d.startswith(root + "/")) and _rename().L.module_there(o, n, root, B.set):
-                    return True
-        return False
+                    if posixpath.join(posixpath.dirname(o), "__init__.py") in B.set:
+                        return "package"
+                    by = "outside"
+        return by
 
     def emptied(d: str) -> bool:
         """Whether the range's moves took the package at `d` away: files left it by a rename, and HEAD has none at or below
@@ -1795,8 +1801,10 @@ def certify(base: str, head: str, extra: dict[str, str] | None = None, cwd: str 
             else:
                 report["edits"].append({"path": new, "copy_of": src_path, "kind": "copy"})
             continue
-        if st == "A" and name == "__init__.py" and text(e, 1) == "" and package_level(posixpath.dirname(new)):
+        if st == "A" and name == "__init__.py" and text(e, 1) == "" and (by := package_level(posixpath.dirname(new))):
             report["edits"].append({"path": new, "kind": "package level"})
+            if by == "outside":
+                report["rules"].setdefault("level", []).append(new)
             continue
         if st == "D" and old in rows.drop:
             report["edits"].append({"path": old, "kind": "dropped"})
@@ -1874,7 +1882,8 @@ def certify(base: str, head: str, extra: dict[str, str] | None = None, cwd: str 
                            for z in dict.fromkeys((x, substitute(x, short))))
 
             def block(xs: list[str], ys: list[str]) -> bool:
-                return import_block(xs, ys, modules, old, new)
+                return import_block(xs, ys, modules, old, new) and not (
+                    any(FROM_SLASH.match(z) for z in xs + ys) and took.add("continued"))
             binds = (places(a, old), places(b, new)) if py else ({}, {})
             under = json_pins().get(old, json_pins().get(new))
 

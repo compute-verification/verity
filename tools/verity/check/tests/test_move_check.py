@@ -174,6 +174,7 @@ def test_an_empty_init_for_a_package_level_the_move_makes_is_certified(tmp_path)
                                                                   ("loose/scripts/__init__.py", "added")]
     assert {e["path"] for e in r["edits"] if e["kind"] == "package level"} == {
         "security/__init__.py", "security/pous/__init__.py", "loose/__init__.py", "loose/pouw/__init__.py"}
+    assert r["rules"] == {"level": ["loose/__init__.py", "loose/pouw/__init__.py"]}
     _write(repo, {"security/pous/__init__.py": "X = 1\n"})
     assert ("security/pous/__init__.py", "added") in [(f["path"], f["reason"]) for f in _check(repo, base)["refusals"]]
 
@@ -1375,7 +1376,7 @@ def test_an_import_split_in_two_keeps_its_lines_comment_and_the_lines_it_went_on
     lines stay as they were under the statement that has their names. Refused: a line that lost the comment, and a
     continued line whose module is not where its names went."""
     r = _spot(tmp_path / "split", SPOT_SPLIT)
-    assert r["certified"], r["refusals"]
+    assert r["certified"] and r["rules"] == {"continued": ["use.py"]}, r["refusals"]
     for case, use in (("comment", SPOT_SPLIT.replace("coins as CC  # noqa: E402", "coins as CC")),
                       ("bracket", SPOT_SPLIT.replace("from app.verifier import (second", "from app.other import (second")),
                       ("backslash", SPOT_SPLIT.replace("from app.verifier.one import", "from app.other.one import"))):
