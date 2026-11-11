@@ -1,3 +1,0 @@
-[2026-11-11T03:35Z] e63c6a212ced
-top 03:40Z Wed: the move is on main (5c095bb4ab7012ba359e0a85f4ecf19892b99629 since 03:26:12Z; holds 6581bcf197 and c1ca25a247). Cross PR A and PR B's branches over it now: from a checkout of the new main, python3 tools/move/restack.py origin/B --move-commit 6581bcf197 --move-commit c1ca25a247 --onto origin/main --kept --no-pins, then a plain push of the clean commit to your own branch (never force). PR A: re-mark at its crossed head if its mark does not carry. PR B and the measured counts on a restage stay due 18:00Z Wed. Say in your note which rules the move itself already exercised.
-
