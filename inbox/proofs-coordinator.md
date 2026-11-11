@@ -66233,3 +66233,110 @@ def ExfilRegTwoX (H : Msg → Msg) (L : CompiledTwo Coin A) : Prop :=
 3. Until then: the verdicts of `r20261111-221112-b5d9` and `r20261111-211913-1865` in a short entry, and pull request 2's body.
 
 Next entry: Thu 12 Nov 03:00Z at the latest (#8940), sooner at a ruling or when #8940 lands. Checkpoint note `lanes/proofs/20261111T2207Z-report-wired.md`, synced [run].
+
+## COUNT, Wed 11 Nov 22:20Z: the planner and the figure now price every design of the second stage's sessions (head `bfc3da111b74`, pushed, no pull request yet). One session a block type whatever it holds is out of reach at every size I print: 3,000 to 2.5 million tables in one session against 200. Sessions of at most 200 tables bound 316 to 818 GB at a datacenter's 600 s, in 13,900 to 15,400 sessions. The design worker's session counts reproduce at the plan's own sample. "About 9 bits" from a pod to a datacenter stands. The new plan prints 0.0372 prover GPUs a serving GPU beside today's 0.0367. The canonical run and the suites wait for a slot
+
+Mailbox read whole at 21:52Z (eight sections, the last two 21:49Z and 21:50Z). My last entry's heading said 21:40Z and was posted at 21:34Z. Marks: [run] with its id, [local] my VM at head `bfc3da111b74` with the same script the queued run carries, [read] with the place, [relayed], [derived]. Every GB figure is modeled, on the cost model, at the 10% point, world year, times 1.05 as the quoted figures are; no code builds a verification phase of a datacenter's size.
+
+### 1. What is pushed and what is queued
+
+- `cursor/proofs-count-71ac` at `bfc3da111b74` = my seven commits and `main` `118003ab7aca` merged in (no conflict). New since 21:34Z: `3c0363847c` (the planner takes the form of the second stage's sessions: the cost model's statements, one session a template whatever it holds, one session of one table a template; a cell states its type's proof blocks a table) and `f2d27f4ae0` (the figure prints, beside each two-stage line at the ratio budget, both one-session designs and sessions of at most 1, 16 and 200 tables, each modeled; the first only where every session is within 200 tables, "out of reach" with its tables otherwise). [local: 54 planner tests, 53 of `test_total_cost.py` and `test_figure1.py` with the slow ones, 208 of the figures' twelve test files before the last two edits; ruff clean]
+- `r20261111-220645-0a76`: the plan of record's case planned again at this head with every design beside it, and the tables of section 3 for every quoted configuration. Waiting for a slot since 22:07Z ("waiting rc=None"); about four minutes once it has one. The new plan's artifact is put from its `mix.json`; I send you the id then and label nothing.
+- `r20261111-220725-e8ed`: `suites.py --changed origin/main --quick` at this head. Waiting for a slot since 22:07Z.
+
+### 2. 21:50Z item 1: a session holds at most 200 tables
+
+[read: `security/Proofs/Flock/SpotFlock/Code.lean:98-103` at `main` `75ef75838f99`, `zkOk`: 1 to 200 tables, `m` 25 to 35, `kLog ≤ 27`.] One session a block type whatever it holds needs, in its largest session, this many tables of its type [local]:
+
+| configuration | a 64-machine pod's 600 s | 1,536 machines' | a datacenter's (12,500) |
+|---|---:|---:|---:|
+| the partition `main` defines | 5,979.5 | 287,016.3 | 2,391,802.4 |
+| the best designed configuration | 3,004.6 | 168,257.3 | 1,562,388.8 |
+| the plan of record's case | 5,979.5 | 287,016.3 | 2,391,802.4 |
+| served today (in the cost model's statements, 1/2 to 32 tables each) | 3,746.9 | 299,749.8 | 2,517,898.5 |
+
+So that line is printed nowhere with a bound: the figure, `total_cost.py counts` and the new plan's meta say "out of reach" with the largest session in proof blocks and in tables. The bounds I gave for it (287 to 923 GB at a datacenter's, 756 to 2,811 GB at a pod's) are no design's.
+
+### 3. 21:50Z item 2: sessions of at most J tables, as many as hold a block type's sampled proof blocks
+
+A table is 2^35 witness bits [read: `verity/protocols/flock/prover/live/src/circuit.rs:102`, `M_MAX = 35`]: 2^(35 − k) proof blocks of 2^k bits, joined to each block type by the `k_log` the plan of record's own job dumped [run `r20261111-211801-8476`]. "Sessions" is a verification phase's; "one each" is 600 s over them, if they run one at a time. All [local]; a datacenter's 600 s, 28,000 bits a request.
+
+| | the partition `main` defines (193 block types) | the best designed configuration (258) | the plan of record's case (193) |
+|---|---|---|---|
+| the cost model's statements (1/2 to 32 tables; the plan) | 12,684.1 GB; 155,208 sessions, one each 3.9 ms; largest 32,768 blocks, 27.05 tables | 5,209.0 GB; 160,608, 3.7 ms; 32,768 blocks, 29.82 tables | 2,767.7 GB; 797,817, 0.75 ms; 32,768 blocks, 31.61 tables |
+| J = 1 | 12,684.1 GB; 157,132, 3.8 ms; largest 16,384 blocks | 5,313.2 GB; 162,044, 3.7 ms | 2,833.7 GB; 703,079, 0.85 ms |
+| J = 16 | 1,566.9 GB; 89,824, 6.7 ms; 262,144 blocks | 622.0 GB; 97,275, 6.2 ms | 854.7 GB; 164,610, 3.6 ms |
+| J = 200 | 817.5 GB; 13,882, 43 ms; 3,267,993 blocks | 316.3 GB; 15,437, 39 ms | 752.1 GB; 15,071, 40 ms |
+| one session of one table a block type (what the verifier's second stage reads) | 1,548,036,399 GB; 193 sessions, 3.1 s | 385,897,300 GB; 258, 2.3 s | 1,548,036,399 GB; 193, 3.1 s |
+
+Served today (its dump names no block type, so a table there is the cost model's statement): 22,872.5 GB in 180,897 sessions at J = 1; 2,421.7 GB in 120,632 at 16; 1,022.0 GB in 23,016 at 200 (one each 26 ms).
+
+**The design worker's counts, reproduced or corrected.** They hold the plan's sample fixed and only regroup it. At the plan's own sample [local]:
+
+| the plan's sample put in sessions of at most | the partition `main` defines | the best designed | served today | the worker's |
+|---|---:|---:|---:|---|
+| 1 table | 157,148 | 165,303 | 180,908 | 154,869 to 180,897: reproduces at the top; the bottom is 2,279 below mine |
+| 16 tables | 9,923 | 10,495 | 11,446 | |
+| 200 tables | 959 | 1,057 | 1,082 | 775 to 968 and 905 to 1,100: reproduces |
+
+**What they leave out.** A larger session spreads a statement's fixed seconds over more proof blocks, so at the same budget the planner samples 16 times the proof blocks a sampled replay block: at J = 200 the design of least bound has 13,882 to 15,437 sessions, not about 1,000, and bounds 817.5 GB where the plan's sample regrouped still bounds 12,684.1. Both are in the table; the regrouped one is the row to quote if the claim is "same sample, fewer sessions".
+
+A 64-machine pod's 600 s [local]: the partition `main` defines fits one proof block a block type at the cost model's statements (1.0 billion GB), 5,425.1 GB at J = 16 (298 sessions, one each 2.0 s) and 2,721.7 GB at J = 200 (207, 2.9 s); the best designed configuration 21,238.4 GB (435 sessions), 1,360.2 GB at 16 (437) and 756.2 GB at 200 (280, 2.2 s). One machine's 600 s has no design in any form.
+
+### 4. 21:50Z item 3: the binding error
+
+- **What my printed figure is.** 256 − log2(4·513·2^80·(1 + e N + M N + e M N)), e = 2,592,237,061, M = 4,130 classes (assumed), **N = sampled replay blocks × sampled proof blocks a sampled replay block** [derived; constants typed in].
+- **What the theorem's N is.** [read: `security/Proofs/Flock/SamplingGeneric/TwoFirstHitClassAt.lean:19-21`] `N_s` bounds the expected number of **sessions** in a run's sample, and [read: `TwoFirstHitClassNumbers.lean:25`] e ≤ 2,592,237,061 is "at sessions of one table". So my figure reads every sampled proof block as a session of one table. That is an upper bound on the sessions; it is not what the formula says.
+- **Both readings, a datacenter's 600 s** [local]. "Own sessions" puts the design's sessions for N and multiplies e by the tables its largest session holds (the worker's rule for e, which I have not derived), classes still M a session:
+
+| | at its own sampled proof blocks | at its own sessions |
+|---|---|---|
+| the partition `main` defines, the plan | 2^-95.47 | 2^-99.66 (e × 28) |
+| the same, J = 1 / 16 / 200 | 2^-95.47 / 2^-92.28 / 2^-91.34 | 2^-104.45 / 2^-101.26 / 2^-100.31 |
+| the best designed, the plan | 2^-94.14 | 2^-99.51 (e × 30) |
+| the same, J = 1 / 16 / 200 | 2^-94.17 / 2^-90.91 / 2^-89.93 | 2^-104.41 / 2^-101.14 / 2^-100.16 |
+| the plan of record's case, the plan | 2^-93.11 | 2^-97.11 (e × 32) |
+| one session of one table a block type (either configuration) | 2^-105.2 | 2^-114.1 and 2^-113.7 |
+
+- **"Linear in J".** The worker's 2^-95.65, 2^-91.65, 2^-88.0 put a J-table e on N = sampled proof blocks at a fixed sample: both the larger e and the larger N. With N = sessions, e × J and sessions ÷ J cancel in the leading term, and what moves the figure is how much more the design samples: about 4 bits from J = 1 to 200 at the designs of least bound, about none at a fixed sample [derived]. Which reading the verdict's field carries is the final form's; I print both columns until told.
+- **A pod to a datacenter: "about 9" is right for these designs, 7.6 is not** [local, own sampled proof blocks]. The best designed configuration at 15,750 bits, the plan's design: 2^-103.03 at a pod's (1 sampled replay block × 422,317 proof blocks) and 2^-94.07 at a datacenter's (31 × 6,755,024): 8.96 bits. Sessions of at most 200 tables: 2^-99.03 and 2^-89.82: 9.2. One session whatever it holds on the path's configuration: 2^-98.01 [run `r20261111-203911-3216`] and 2^-89.46: 8.55. The sample grows 500 to 590 times while the machines grow 195 times, because the datacenter's budget also samples each replay block 16 times deeper. 7.6 would hold only if the proof blocks a sampled replay block stayed the same.
+
+### 5. The second draw's coin bytes, as one more column
+
+[read: `verity/protocols/flock/verifier/Flock/Draw.lean:172`, `Stratum.need = 2 k width(n) + 64`; `:26`, `width(n) = (log2 n + 72) / 8` bytes; a cell is one template in one sampled replay block.] The limits you gave: one coin of 2^20 bytes (1,048,576) in the proof's model; 2^20 coins of 64 bytes (67,108,864) at the challenger. [local]
+
+| second draw's bytes | the plan, a datacenter's | J = 200, a datacenter's | one table a block type, a datacenter's | the plan, a pod's | J = 200, a pod's |
+|---|---:|---:|---:|---:|---:|
+| the partition `main` defines | 1,940,775,606 | 34,004,844,454 | 2,191,988 | 33,036 | 46,216,242 |
+| the best designed configuration | 4,876,222,506 | 90,240,928,812 | 2,253,652 | 5,993,608 | 191,205,248 |
+| the plan of record's case | 9,979,970,364 | 36,961,787,450 | 2,191,988 | 23,115,214 | 92,417,886 |
+
+Every design at a datacenter's size is past one coin, and every one but one table a block type past the challenger's cap. Your 1.26 GB is the width-stratified design's 70 million sampled proof blocks at 18 bytes; by template it is 1.94 GB (79 million, 18 to 22 bytes each and 64 a cell).
+
+### 6. 21:20Z corrections 1 and 2
+
+1. **Limits, not measurements.** The tree no longer says "measured" for a statement's size: `total_cost.table_blocks` gives a table's proof blocks by `k_log` and every stratum of the priced card carries it. The cost model's statement is one table for 126 of the 193 block types, half a table for 1 and 2 to 32 tables for 66 [run `8476`'s dump]. My six lines' "one session a template, no larger than measured" used that statement; at one table by `k_log` it is the last row of section 3's table, the same 1.5 billion and 386 million GB at a datacenter's and 7.9 and 2.0 million GB at a pod's.
+2. **The join: there is nothing on `main` to join against, so every session count is over the census's list.** [read: `adapters/vllm/verity_vllm/pipeline/boundary_rows.py:21-26`] the replay block on `main` is a stand-in, instances of one check template, until the request's Definition lands; the two-stage rule's counts name "each of the check's templates once" by descriptor id [read: `Spot/Select.lean:134-141`], and that check has one template or the few its body calls. The cost model's block types are the census's [read: `benchmarks/one_stage/block_census.py:1-20`]: each Program row of a served Commit cut by the options `main`'s code lists (`serving_templates.unit_templates`, descriptor ids), with the census's own choice among them. What I can say: the names are descriptor ids, the rule's namespace; 187 of the plan's 193 cells are census Definitions by exact name, 5 are the fused partition card's (two of them "built and circuit-checked (in review); not yet measured, proved or served"), 1 (`PageCopy[262144 bits]`) is no Definition. What differs or is not known: the choice among a row's options is the census's and no registration's; a cell's count is a mean a request where the rule's is a whole count in every replay block; nothing checks that the request's Definition, when it lands, has these templates.
+
+### 7. 21:49Z: #9066, and the three numbers
+
+- **#9066.** Nothing on my branch calls `plancheck.two` itself. `total_cost._point` passes a served cap to `figure1.lean_two`, the one caller, which #9066 edits in place (`returned=returned_bits(served)`); `counts`, the session designs and my tests read the planner's bound and never reach it. A trial merge of `23b637d143` into my head has no conflict [local: `git merge-tree`]. No line of mine is needed.
+- **The three numbers**, by template at the cost model's statements, a datacenter's 600 s [local; run `0a76` carries them]:
+
+| | 28,000 bits | 32,768 | 15,750 |
+|---|---:|---:|---:|
+| the partition `main` defines | 12,684.1 GB | 12,919.1 (+1.9%) | 11,645.6 (−8.2%) |
+| the best designed configuration | 5,209.0 GB | | 4,891.1 (−6.1%) |
+
+  "About 11,000 GB" is 11,645.6 and "about 5,000 GB" is 4,891.1; the packed id is worth 8% at the partition `main` defines and 6% at the best designed. At sessions of at most 200 tables the same three are 810.5, 747.7 and 289.0 GB beside 817.5 and 316.3.
+
+### 8. `verity bench prove --system spot`, and the test benchmarks asked for
+
+- The new plan: **0.0372 prover GPUs a serving GPU (0.0371 to 0.0372), modeled, steady-state measurements covering 99.4% of its proving time; 0.0529 at the plan's own prices**, beside today's 0.0367 [local, rc 0, twice: on run `09ec`'s `mix.json` and on this head's]. It ran on my VM: a node of `research run` has no evidence store ("the evidence store has no remote here (no remote is configured)", run `r20261111-212915-09ec`, rc 1).
+- Today's plan of record is refused at my head, with `main` `118003ab7aca` in it [local, rc 2]: "the sampling plan art:adca7a9a… and the census don't cover each other: the plan has no cell for 2 block type(s) (MoeExpertFp8ReadGemm_v1{…}, MoeExpertFp8ReadGemmW_v1{…}), and the census no block type for 2 cell(s) (Fused[…], Fused[…])". That refusal is the check that every cell's `block` is a census block type, already in the tree, and the new plan passes it ("missing 0"). I added no second test: a suite cannot read the store. The re-plan job also refuses to write a plan with such a cell.
+
+### 9. Open, and next
+
+1. Run `0a76` → `research data put` of its `mix.json` and `counts.json` → the artifact's id to you. Its meta says the verifier's second stage refuses several sessions a template, and holds all the designs of section 3 with their sessions and largest session.
+2. Suites `e8ed` at this head, then the pull request (`Goal proofs/spot-bind-term`) with a ready line by 04:00Z. Its tables are sections 2 to 5 at a datacenter's 600 s with the 1,536-machine and whole-year rows.
+3. Two things I print both ways unless you say: which N the binding column uses (section 4), and whether the J = 200 row quoted is the design of least bound or the plan's sample regrouped (section 3).
