@@ -186,18 +186,8 @@ def measure(label: str, path: str, stop_ids: Sequence[int], T: int = 600, ingres
         t1 = time.monotonic()
         got = decode_full(data, rec, reg)
         by = bits_by_window(data, rec, reg)
-<<<<<<< c08d034460b0626dc3b4427debda81c9710da114
-        tails = length_tails(rec, reg)
-        unordered = sum(string_of([CV.Advice(w.arrived, w.hits) for w in wins], reg, tails)[1])
-        untimed = sum(string_of([CV.Advice(hits=w.hits) for w in wins], reg, tails)[1])
-||||||| c1ca25a247486ec597a815f46f0adacfd9ef2063
-        tails = length_tails(rec, reg)
-        unordered = sum(string_of([CV.Window(w.arrived, w.hits) for w in wins], reg, tails)[1])
-        untimed = sum(string_of([CV.Window(hits=w.hits) for w in wins], reg, tails)[1])
-=======
-        unordered = sum(string_of([CV.Window(w.arrived) for w in wins], reg, tails)[1])
-        untimed = sum(string_of([CV.Window() for _ in wins], reg, tails)[1])
->>>>>>> 493f49485e50deda5fb8020f63c2fde16540f621
+        unordered = sum(string_of([CV.Advice(w.arrived) for w in wins], reg, tails)[1])
+        untimed = sum(string_of([CV.Advice() for _ in wins], reg, tails)[1])
         row[name] = {"bits": sum(by.values()), "by_window": by, "max_window": max(by.values()),
                      "order_bits": sum(by.values()) - unordered, "timing_bits": sum(by.values()) - untimed,
                      "bytes": len(data), "round_trip": got.advice == adv and got.streams == streams(adv, rec),
@@ -248,32 +238,16 @@ def _measure_job(job: tuple) -> dict[str, Any]:
 
 def held_out_books(residuals: Sequence[dict[str, Any]]) -> list[dict | None]:
     """For each trace, the book `code_v1.fit_book` fits on every other trace's windows (None where it has none), as a
-<<<<<<< c08d034460b0626dc3b4427debda81c9710da114
-    registration would fix it from history before the run; for a trace under the certified tick, on their hits alone,
-    under `TICK_TABLE_CAPS`."""
-    runs = [None if "error" in r else [CV.Advice(**w) for w in r["windows"]] for r in residuals]
-||||||| c1ca25a247486ec597a815f46f0adacfd9ef2063
-    registration would fix it from history before the run; for a trace under the certified tick, on their hits alone,
-    under `TICK_TABLE_CAPS`."""
-    runs = [None if "error" in r else [CV.Window(**w) for w in r["windows"]] for r in residuals]
-=======
     registration would fix it from history before the run; for a trace under the certified tick, where no window's
     segment codes anything, the uniform book under `TICK_TABLE_CAPS`."""
-    runs = [None if "error" in r else [CV.Window(**w) for w in r["windows"]] for r in residuals]
->>>>>>> 493f49485e50deda5fb8020f63c2fde16540f621
+    runs = [None if "error" in r else [CV.Advice(**w) for w in r["windows"]] for r in residuals]
     out: list[dict | None] = []
     for k, mine in enumerate(runs):
         others = [w for j, w in enumerate(runs) if j != k and w is not None]
         if mine is None:
             out.append(None)
         elif residuals[k].get("tick"):
-<<<<<<< c08d034460b0626dc3b4427debda81c9710da114
-            out.append(CV.fit_book([[CV.Advice(hits=x.hits) for x in ws] for ws in others], TICK_TABLE_CAPS).to_json())
-||||||| c1ca25a247486ec597a815f46f0adacfd9ef2063
-            out.append(CV.fit_book([[CV.Window(hits=x.hits) for x in ws] for ws in others], TICK_TABLE_CAPS).to_json())
-=======
             out.append(CV.Book.uniform(TICK_TABLE_CAPS).to_json())
->>>>>>> 493f49485e50deda5fb8020f63c2fde16540f621
         else:
             out.append(CV.fit_book(others, TABLE_CAPS).to_json())
     return out

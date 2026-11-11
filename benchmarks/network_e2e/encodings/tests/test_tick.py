@@ -251,7 +251,7 @@ def test_v1_sends_only_lengths_under_the_tick(asy):
     e, rec, adv, reg = tick_case(asy)
     assert _past_the_bound(e, adv) and any(x.preempted for st in adv.steps for x in st.rows)
     wins = V.residual(adv, rec, reg)
-    assert len(wins) == V.windows(rec, reg.T) > 1 and wins == [CV.Window()] * len(wins)
+    assert len(wins) == V.windows(rec, reg.T) > 1 and wins == [CV.Advice()] * len(wins)
     tails = [sum(n for _v, n in t) for t in V.length_tails(rec, reg)]
     assert sum(tails) == sum(q.max_tokens.bit_length() + 1 for q in rec.requests)
     fit = dataclasses.replace(reg, book=CV.fit_book([wins], V.TICK_TABLE_CAPS))
@@ -297,19 +297,9 @@ def test_a_hit_other_than_the_pools_and_an_abort_are_refused(asy):
     aborted = V.Record((*rec.requests[:k], dataclasses.replace(q, output=q.output[:-1], release=q.release[:-1]),
                         *rec.requests[k + 1:]))
     data = V.encode(adv, rec, reg)
-<<<<<<< c08d034460b0626dc3b4427debda81c9710da114
-    assert V.decode(data, rec, reg) == adv
-    assert sum(V.bits_by_window(data, rec, reg).values()) == sum(V.string_of([CV.Advice(hits=w.hits) for w in wins],
-                                                                             reg, V.length_tails(rec, reg))[1])
-||||||| c1ca25a247486ec597a815f46f0adacfd9ef2063
-    assert V.decode(data, rec, reg) == adv
-    assert sum(V.bits_by_window(data, rec, reg).values()) == sum(V.string_of([CV.Window(hits=w.hits) for w in wins],
-                                                                             reg, V.length_tails(rec, reg))[1])
-=======
     for run in (lambda: V.encode(adv, aborted, reg), lambda: V.decode(data, aborted, reg)):
         with pytest.raises(V.AdviceCodeError, match=f"request {q.id}: its output isn't one the stop rule ends"):
             run()
->>>>>>> 493f49485e50deda5fb8020f63c2fde16540f621
 
 
 def test_without_the_tick_the_same_run_needs_decisions():
@@ -332,25 +322,6 @@ def test_without_the_tick_the_same_run_needs_decisions():
 
 
 def test_a_count_capped_at_0_costs_nothing():
-<<<<<<< c08d034460b0626dc3b4427debda81c9710da114
-    """`TICK_CAPS` caps the decisions and the order entries at 0, so their counts code in 0 bits: a window whose every
-    count is capped at 0 costs nothing, and under v1's own caps an empty window costs bits."""
-    zero = dataclasses.replace(V.TICK_CAPS, hits=0, resumes=0, lag=0)
-    assert (V.TICK_CAPS.arrived, V.TICK_CAPS.order) == (0, 0)
-    assert list(CV.encode([CV.Advice()] * 3, CV.Book.uniform(zero)).lens) == [0, 0, 0]
-    assert all(n > 0 for n in CV.encode([CV.Advice()] * 3, CV.Book.uniform(V.CAPS)).lens)
-    assert sum(CV.encode([CV.Advice()] * 3, CV.Book.uniform(V.TICK_CAPS)).lens) < \
-        sum(CV.encode([CV.Advice()] * 3, CV.Book.uniform(V.CAPS)).lens)
-||||||| c1ca25a247486ec597a815f46f0adacfd9ef2063
-    """`TICK_CAPS` caps the decisions and the order entries at 0, so their counts code in 0 bits: a window whose every
-    count is capped at 0 costs nothing, and under v1's own caps an empty window costs bits."""
-    zero = dataclasses.replace(V.TICK_CAPS, hits=0, resumes=0, lag=0)
-    assert (V.TICK_CAPS.arrived, V.TICK_CAPS.order) == (0, 0)
-    assert list(CV.encode([CV.Window()] * 3, CV.Book.uniform(zero)).lens) == [0, 0, 0]
-    assert all(n > 0 for n in CV.encode([CV.Window()] * 3, CV.Book.uniform(V.CAPS)).lens)
-    assert sum(CV.encode([CV.Window()] * 3, CV.Book.uniform(V.TICK_CAPS)).lens) < \
-        sum(CV.encode([CV.Window()] * 3, CV.Book.uniform(V.CAPS)).lens)
-=======
     """A count capped at 0 codes in 0 bits. `TICK_CAPS` caps every count at 0, so a window's segment costs nothing; v1's own caps
     hold the hits, the resumes and the lag bits at 0, so an empty window costs only its decisions' and order entries'
     counts, less than under caps with room for the other three."""
@@ -358,11 +329,10 @@ def test_a_count_capped_at_0_costs_nothing():
     assert [getattr(V.TICK_CAPS, c) for c in counts] == [0] * 5
     assert (V.CAPS.hits, V.CAPS.resumes, V.CAPS.lag) == (0, 0, 0) and V.CAPS.arrived and V.CAPS.order
     assert V.TABLE_CAPS == dataclasses.replace(V.CAPS, arrived=V.TABLE_CAPS.arrived, order=V.TABLE_CAPS.order)
-    assert list(CV.encode([CV.Window()] * 3, CV.Book.uniform(V.TICK_CAPS)).lens) == [0, 0, 0]
+    assert list(CV.encode([CV.Advice()] * 3, CV.Book.uniform(V.TICK_CAPS)).lens) == [0, 0, 0]
     roomy = dataclasses.replace(V.CAPS, hits=1 << 12, resumes=1 << 12, lag=1 << 12)
-    own, more = (sum(CV.encode([CV.Window()] * 3, CV.Book.uniform(c)).lens) for c in (V.CAPS, roomy))
+    own, more = (sum(CV.encode([CV.Advice()] * 3, CV.Book.uniform(c)).lens) for c in (V.CAPS, roomy))
     assert 0 < own < more
->>>>>>> 493f49485e50deda5fb8020f63c2fde16540f621
 
 
 def write_corpus(d: Path, e, ios, times, run: Served, *, tick: bool) -> Path:

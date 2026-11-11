@@ -158,19 +158,9 @@ from functools import cached_property
 from typing import Any, NamedTuple
 
 from verity.commitments.identity import canonical_json_bytes, tagged_sha512
-<<<<<<< c08d034460b0626dc3b4427debda81c9710da114
-from verity.protocols.certifier.verifier.active import (DATA, HEADER, PAD, RUN_ID_BYTES, decode_frame, encode_frame,
-                                                   precise_sleep)
-from verity.protocols.certifier.verifier.grid import Certifier, GridParams, Reason, BlockGrid, Row, Status, row_count
-||||||| c1ca25a247486ec597a815f46f0adacfd9ef2063
-from verity.protocols.certifier.verifier.active import (DATA, HEADER, PAD, RUN_ID_BYTES, decode_frame, encode_frame,
-                                                   precise_sleep)
-from verity.protocols.certifier.verifier.grid import Certifier, GridParams, Reason, Record, Row, Status, row_count
-=======
 from verity.protocols.certifier.verifier.active import (DATA, HEADER, ID_DIGITS, MAX_TOKENS_AT, PAD, RUN_ID_BYTES,
                                                    decode_frame, encode_frame, id_request_max_tokens, precise_sleep)
-from verity.protocols.certifier.verifier.grid import Certifier, GridParams, Reason, Record, Row, Status, row_count
->>>>>>> 493f49485e50deda5fb8020f63c2fde16540f621
+from verity.protocols.certifier.verifier.grid import Certifier, GridParams, Reason, BlockGrid, Row, Status, row_count
 from verity.protocols.certifier.verifier.io_tie import parse_cell
 from verity.protocols.certifier.verifier.pacer import Pacer, Report
 from verity.protocols.certifier.verifier.release import WATERMARK_END, watermark_chunk, watermark_head, with_release
@@ -516,17 +506,11 @@ class Warden:
                  release: Callable[[str, Row], None] | None = None, slack: float = 0.025,
                  egress_link: str = "responses", ingress_link: str = "requests", fails_link: str = "fails",
                  run_nonce: Callable[[int], bytes] = secrets.token_bytes, paced: float | None = None,
-<<<<<<< c08d034460b0626dc3b4427debda81c9710da114
-                 watermark: Callable[[], Awaitable[tuple[Any, Any]]] | None = None) -> None:
+                 watermark: Callable[[], Awaitable[tuple[Any, Any]]] | None = None,
+                 lengths: Callable[[int, tuple[tuple[Released, ...], ...]], None] | None = None) -> None:
         if paced is None and clock is time.monotonic:
             raise ValueError("a warden on the host's clock is paced: a bucket written on its loop leaves when its tick "
                              "runs, which a server's writes move; give it `paced`, seconds past the slack")
-||||||| c1ca25a247486ec597a815f46f0adacfd9ef2063
-                 watermark: Callable[[], Awaitable[tuple[Any, Any]]] | None = None) -> None:
-=======
-                 watermark: Callable[[], Awaitable[tuple[Any, Any]]] | None = None,
-                 lengths: Callable[[int, tuple[tuple[Released, ...], ...]], None] | None = None) -> None:
->>>>>>> 493f49485e50deda5fb8020f63c2fde16540f621
         if paced is not None and not (isinstance(paced, (int, float)) and slack < paced < params.bucket_ms / 1000):
             raise ValueError(f"a paced bucket leaves past the slack and before the next boundary, so that a tick in "
                              f"time hands it before its time, not {paced!r} s after its boundary")

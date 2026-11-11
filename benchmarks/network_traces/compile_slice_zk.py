@@ -501,11 +501,6 @@ def audit(M, a, sg, m: dict, units: list[SimpleNamespace], binds: dict, out: Pat
     lean_draw = json.loads(next(x for x in p.stdout.splitlines() if x.startswith("DRAW ")).split(" ", 1)[1])
     local = sorted(u - m["base"] for u in lean_draw["units"] if m["base"] <= u < m["base"] + n)
     sdir = out / "session"
-<<<<<<< c08d034460b0626dc3b4427debda81c9710da114
-    record, live, proc = M.a8.session(a, m, sdir, local, port, env=N2.zk_server_env(M, m))
-||||||| c1ca25a247486ec597a815f46f0adacfd9ef2063
-    record, live, proc = M.a8.session(a, m, sdir, local, port, env=N2.firewall(M, m))
-=======
     if a.plain:
         sdir.mkdir(parents=True, exist_ok=True)
         (sdir / "draw.json").write_text(json.dumps({"law": "subset", "population": n, "k": len(local), "units": local},
@@ -519,7 +514,6 @@ def audit(M, a, sg, m: dict, units: list[SimpleNamespace], binds: dict, out: Pat
         record, live, proc = M.a8.session(a, m, sdir, local, port, env=env)
         lv = a0.lean_verify(a.lean, m, n, sdir, zk=True)
         tool = "flock-verify verify --zk --archive --partition --program"
->>>>>>> 493f49485e50deda5fb8020f63c2fde16540f621
     draw_t = (record or {}).get("unit_draw") or {}
     v = V.check_draw(draw_t, {"population": n}, {"law": "subset", "k": len(local)})
     verdicts = {f"m0-verifier/{name}": {"accepted": ((record or {}).get("verdict") or {}).get("accepted") is True

@@ -139,16 +139,8 @@ class Advice:
     values in the order its reader asks for them, as `code_v1` codes them. `arrived`, the replay's decisions; `hits`,
     each sent hit in hit units; `resumes`, the resumed rows' positions; `order`, each entry a step's position and its
     new requests' certified ingress indices; `lag`, async mode's bits. `reference_window` charges the residual v1
-<<<<<<< c08d034460b0626dc3b4427debda81c9710da114
-    sends, which has no resumes and no lag bits and one index an order entry, in slots: `arrived` in (en, bits),
-    `hits` in (hen, short) and each entry (p, (r,)) in (oen, p, r). That residual is the spec's advice (`ds`,
-||||||| c1ca25a247486ec597a815f46f0adacfd9ef2063
-    sends, which has no resumes and no lag bits and one index an order entry, in slots: `arrived` in (en, bits),
-    `hits` in (hen, short) and each entry (p, (r,)) in (oen, p, r). That residual is the spec's `Window` (`ds`,
-=======
     sends, which has no hits, resumes or lag bits and one index an order entry, in slots: `arrived` in (en, bits),
-    `hits` in (hen, short) and each entry (p, (r,)) in (oen, p, r). That residual is the spec's `Window` (`ds`,
->>>>>>> 493f49485e50deda5fb8020f63c2fde16540f621
+    `hits` in (hen, short) and each entry (p, (r,)) in (oen, p, r). That residual is the spec's advice (`ds`,
     `hits`, `order`)."""
 
     arrived: tuple[bool, ...] = ()
