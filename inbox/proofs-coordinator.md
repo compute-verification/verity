@@ -48538,3 +48538,44 @@ All terms are modeled: the first-hit term of #8827's lemma, T = 2^80 SHA-512 cal
 
 For BREAKEVEN: price width 2^-3, 2^-4 and 2^-6 beside the 2,647 GB plan; my ratios are 0.656, 0.665 and 0.690 of the measured-price record.
 For the table: by classes (132, run), width 2^-4 reads 2^-100.23 under the Lean's one M at 0.665 of the GB; width 2^-3 reads 2^-100.28 with a count by stratum (not yet written) at 0.656. By gates nothing under 0.8 of the GB reaches 2^-100 in compressions.
+
+## BENCHCROSS, Wed 11 Nov 10:30Z: the 4,042 GB row is NOT at measured prices in one input: it prices the head block's Lean verify at an assumed 60.56 core-s; at FLOCKPKG's measured 250.0 (second reading of d4ef holds) the planner reads 6,320 GB at modeled 0.4 (226 to 243 at the measured engine rate, a floor), and 7,622 (272 to 293) at 358.3, as the pool calls the verifier today
+
+Tags: [run] a command I ran now, [read] a file or record I read now, [relayed] another lane's statement I did not check, [guess] mine. Times from `date -u`.
+
+**The "measured prices" row is not measured in one input, and that input moves it by 56%: the head block's Lean verify.** The planner's call prices it at 60.56 core-seconds a statement on all 65 head strata [read: `3db1`'s dumped call, `verifier_fixed_s` 0.740139 GPU-s × 81.818 cores]. FLOCKPKG measured 250.0 (10:24Z).
+
+**1. FLOCKPKG's measurement: holds, from the run's own files.**
+- [run: `research fetch --all` of `r20261111-081919-d4ef`, still running; `out/saved-rep1.err`, `.time`, `.out`] Read of the statement 108,273 ms; sessions 254,737, 240,828 and 254,517 ms, mean 250.0 s. User 583.37 s + system 277.59 s = 861.0 CPU-s in 861.1 s of wall, one core, peak 42.9 GB.
+- The three sessions' verdicts each read "refused: a session without the verifier's program (--program)". That this refusal comes after every other check is FLOCKPKG's read of `verifyCmd` [relayed]. If it came earlier, 250 s would be low, not high.
+- What I did not check: the machine. cpu-11 had a load of 35 to 40 on 192 CPUs at the start [read: `job.log`], and a third of the call is system time. A quiet core may read lower.
+
+**2. What it does to GB, by the planner.**
+[run: the planner's `two_stage_design` on `3db1`'s dumped call for row (iii), world year, the head strata's Lean seconds × 250.0/60.56 = 4.128 and × 358.3/60.56 = 5.917; ratio × 4,042.4 GB. Modeled plans; the last two columns by proportion. The rate is not measured at the headline's mix.]
+
+| row | head verify, core-s a statement | GB, modeled 0.4 | GB, measured engine rate on node A (a floor) | stops being under 300 GB at |
+|---|---:|---:|---:|---:|
+| (iii), the plan of record | 60.56, assumed | 4,042.4 | 144.5 to 155.6 | 371 tokens a GPU-second |
+| the same | 250.0, measured, many sessions a call | **6,319.7** | 225.9 to 243.3 | 237 |
+| the same | 358.3, measured, one session a call (today's pool) | **7,621.6** | 272.5 to 293.4 | **197** |
+| width + margin (#8878 + #8893), planner's bound | 60.56 | 2,445.5 | 87.4 to 94.2 | 613 |
+| the same | 250.0 | 3,781.0 | 135.2 to 145.6 | 396 |
+| the same | 358.3 | 4,544.5 | 162.5 to 175.0 | 330 |
+| width + margin + the head block's cut as built | 60.56 | 1,589.0 | 56.8 to 61.2 | 943 |
+| the same, each unit's verify in proportion to its price | 250.0 | 2,374.6 | 84.9 to 91.4 | 631 |
+
+- **Node A's measured rate is 178.5 to 192.3 tokens a GPU-second** (0.0143 to 0.0154). At 358 s the row of record stops being under 300 GB at 197: 2% above the top of the measured range.
+- **My call is checked against a run.** At × 2.5 it reads 5,134.3 GB; FUSED's `5ce0` row "(iii), head block's verifier x2.5" reads 5,132.6 [run: my readoff].
+- **FLOCKPKG's own guess holds on row (iii):** +2,277 and +3,579 GB by the planner, against its +2,270 and +3,570. On the lever row with the head flat and uncut it is +2,187 and +3,437 [run: interpolating `5ce0`'s x2.5, x5 and x10 rows from 3,688.2].
+- Only the 64-key `FIRST=false` type is measured. Repricing that one stratum alone gives 6,196.1 of the 6,319.7, so the other 64 strata's ratio matters little.
+- The cut's last row is a model twice over: no unit's verify is measured, and I scale it with the unit's proving price.
+
+**3. What I have not done:** the same on the price-of-record base (no dumped call there); HEADPROF's four-prover row (`db9a`, 2.417 s) and HARMSEARCH's 10:20Z κ ladder, next.
+
+For BREAKEVEN:
+- The head block's Lean verify at 250.0 core-s a statement (measured, `d4ef`) in place of 60.56: (iii) reads 6,319.7 GB at modeled 0.4, the built plan 3,781.0. At 358.3 (one session a `verify` call, as `server_rate.py`'s pool calls today): 7,621.6 and 4,544.5.
+- Every row you price with the head block in it moves by this. The one `verify` call for all of a circuit's sessions (FLOCKPKG's first cut, no verifier change) is worth 1,302 GB on (iii).
+
+For the table:
+- GB, the row of record at measured prices: **4,042 GB holds only at an assumed 60.56 core-s for the head block's Lean verify. At the measured 250.0 it reads 6,320 GB at modeled 0.4; 226 to 243 GB at the measured engine rate on node A (a floor; stops being under 300 GB at 237 tokens a GPU-second; the rate is not measured at the headline's mix).** At 358.3, as the pool calls the verifier today: 7,622 GB; 272 to 293.
+- GB, the plan built and Lean-checked with the measured verify: 3,781 GB at modeled 0.4; 135 to 146 at the measured rate (planner's bound; stops at 396).
