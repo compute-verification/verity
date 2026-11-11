@@ -795,7 +795,7 @@ def test_a_module_file_above_a_private_import_is_stored_and_another_tree_restore
     """Through Lake, on `module` files: `Modular` imports `Modular.Uses`, which imports `Modular.Hidden` and
     `Modular.Secret` privately, so Lake hands `Modular`'s compile neither and its key reads neither. Every module of the
     build is stored all the same, and a second tree of the node compiles none. Held to the whole closure, `Modular`
-    was never stored, nor any module above one like it: 649 of security/Proofs' modules on cpu-1, and 1,942 above."""
+    was never stored, nor any module that loads one like it."""
     LC, LA = (_load(f"module_files_{n}", HERE.parent / f"{n}.py") for n in ("check", "lean_audit"))
     MK = LA.MK
     store = tmp_path / "artifacts"

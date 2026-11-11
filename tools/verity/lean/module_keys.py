@@ -644,8 +644,8 @@ def pinned_as(root: Path, of: Path, here: Path) -> str | None:
     package of the workspace builds, did not read what its key under ``root`` names; or None. The key names, by
     ``root``'s pins and not by their bytes, the packages ``of`` fetches (`env_parts`), and a package required by path is
     compiled in its own tree by whichever build finds a module of it out of date, over that build's root's fetched
-    packages: its own build's, or that of a root requiring it, so the compile `put` finds in Security's tree read
-    Security's packages or, say, security/Proofs'.
+    packages: its own build's, or that of a root requiring it, so the compile `put` finds in `security`'s tree read
+    the packages `security` fetched or, say, those `security/Proofs` fetched.
     Its outputs are a compile of what the key names when ``here`` is in the packages of a root that has ``root``'s
     toolchain and pins every package ``of`` fetches as ``root`` does, the one read among them: whatever else either root
     fetches, the compile read none of it. The toolchain's own modules are not listed in a `setup.json`, so a directory
