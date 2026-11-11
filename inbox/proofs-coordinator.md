@@ -34900,3 +34900,40 @@ research run --on vy-nebius-cpu-4 --project verity --source . --pool proofs --as
   - The verifier opens exactly one session per part [read: `verity/core/service/flock/FlockVerify.lean:1880`].
   - These are programs, so "runs its program" covers them. What they buy is the count in the previous item.
 - **The live-coin order: the model can say it** with its coin rule, except for the commitment sent at Hello.
+
+## TWOPROVE, Wed 11 Nov 00:07Z: ready to mark #8730 at 4a045b9c9f3a64d09f5a739ea5ed5c27c7316e83; PRF-517's try passed and its records run is on vy-nebius-cpu-7; C7 and C8′ are written, pushed, and in a try on vy-nebius-cpu-1
+
+**#8730: ready to mark #8730 at 4a045b9c9f3a64d09f5a739ea5ed5c27c7316e83.**
+
+- [run] The records run `r20261110-215702-c92e` (vy-nebius-cpu-7) is rc 0, SUCCESS. Its `lean-audit/audit.json` reads `passed: true`, `failed: []`, `regenerated: {}`, and its `computation.tree_sha` is `4a045b9c9f3a64d09f5a739ea5ed5c27c7316e83`.
+  - Its three packages, `verity/core/service/spot`, `Security` and `Security/Properties`, each logged "check.py exit 0", and its last line is `OUTCOME {"outcome": "pass", ...}`.
+  - No record was regenerated, so there is nothing to commit.
+- [run] The quick tier `r20261110-215702-514b` (vy-nebius-cpu-7, source dir `/workspace/research/src/4a045b9c9f3a64d09f5a739ea5ed5c27c7316e83`) is rc 0, logging "62 suites: 62 passed (0 cached), 0 failed".
+- [run] `gh pr view 8730` at 00:02Z: head `4a045b9c9f3a64d09f5a739ea5ed5c27c7316e83`, OPEN, no labels.
+
+**PRF-517 part 1: `cursor/proofs-bconf-cost-5987` at `be19220288208a4c2dacdfd6671f019962eb6be2`, pushed.**
+
+- [run] The try `r20261110-232734-0713` (vy-nebius-cpu-8, `--cwd source`) is rc 0. Its log reads:
+  - "lean-try: Security/Proofs/Flock/Claims/Witnesses/SamplingGenericKSRegAt.lean: lean exit 0 in 720 s";
+  - "siblings: no built module of its package that doesn't import Proofs.Flock.Claims.Witnesses.SamplingGenericKSRegAt declares a name it does";
+  - "axiom probe: none of its 5 theorems uses an axiom beyond propext, Classical.choice and Quot.sound".
+
+  Its build includes "Built Proofs.Flock.SamplingGeneric.RegAt"; the aggregator is outside the try's closure, and the records run builds it.
+- [run] The records run is `r20261111-000350-0c4d`, launched at 00:03Z on vy-nebius-cpu-7's research pool with `lean_changed.py --records Security --update`.
+  - It runs with `--cwd source`, because the git ship failed on vy-nebius-cpu-6. A recorded run writes a changed record only under `lean-audit/record/`, never into the checkout [read: `tools/verity/lean/lean_changed.py:47–50`].
+  - ETA about 01:15Z [guess: c92e's `Security` took 3624 s].
+- [run] The quick tier `r20261110-234622-3206` (vy-nebius-cpu-8, `--cwd clone`) has been running since 23:46Z. ETA about 01:00Z [guess].
+- State: C1–C6 and C8 are all stated. Their Lean elaborates: the earlier try built their modules, and this try built the witness file. None is proved in the lock's sense until the records run passes.
+- When both runs pass, I commit any record kept under `lean-audit/record/`, naming it and why first, then open the PR unmarked with `--issue PRF-517 --by proofs`, `Lane proofs` / `Goal proofs/spot-bind-term`.
+
+**PRF-517 part 2: C7 and C8′ on `cursor/proofs-bconf-two-9502` at `a1e9fcdffff308c1e34ae3d7a4c61cc86b0dc44b`, pushed.** It branches from #8512's head `a4916e0142`, and nothing is pushed to #8512. It carries part 1's three commits, cherry-picked as `35e2d5fdf4`, `2ec66ae51b` and `10c66efb4e`, so it opens after #8512 and part 1 land, merging `main` then.
+
+- [read] C7 is `CompiledTwo.BconfTwoAt` (`Security/Definitions/Claims/SamplingTwoReg.lean:205`). It is `BconfTwo`'s tape, runs and outcome, with `BconfAt`'s cost: `T + T`, the two extractions' own calls, and `T` per rerun. Its docstring says "`T` caps both parties' calls in every run the finder makes."
+  - Proved in `Security/Proofs/Flock/SamplingGeneric/TwoRegAt.lean`: `BconfTwoAt_pr` gives `BconfTwo`'s probability.
+  - `BconfTwoAt_cost_le` bounds the expected cost by `Compiled.bconfCost x T`, the same \(c_T\) as one stage. The proof goes through `Ex_two_forks`: each forked run is one run on uniform coins (`Ex_forkOn`), and each run's cost is bounded by `Compiled.runCostAt_exp` at `CompiledTwo.Sessions.toCostContract`.
+- [read] C8′ is `εregTwoAt` \(= \varepsilon_{reg}(T) + N\sqrt{c_T/2^{256}}\), `KSRegTwoAt` (`ExpectedCR` at both `BconfAt` and `BconfTwoAt`), and `CompilerKSRegTwoAt`, whose premises are `CompilerKSAtTwo`'s: `A.KS`, `Binds`, `Sessions` and `OpenCallsLe`.
+  - Proved: `ksRegTwoAt_of_ksRegTwo`, `compilerKSRegTwoAt_of`, and `compilerKSRegTwoAt := compilerKSRegTwoAt_of compilerKSRegTwo`.
+  - Witness: `compiledTwoKSRegAt_fails` at `sksLTwo` with \(T = 0\), in `Witnesses/SamplingTwoRegAt.lean`.
+  - Lock: three guarantees as `{"owner": "@proofs"}`, the entry `claims.witnesses` `CompiledTwo.KSRegTwoAt` (its meets are `CompiledTwo.KSAt`'s), `claims.generic`, and `witnesses` with `compilerKSTwo_honest` and `compilerBits_honest` as honest.
+- [read] At two stages both finders read the same \(c_T\), so the bound is \(\kappa_s + \sqrt{k\gamma\Pr[B]} + 2N\sqrt{c_T/2^{256}} + c_T/2^{256}\).
+- [run] The try and build `r20261111-000536-857d` were launched at 00:05Z on vy-nebius-cpu-1's research pool. The run is `--try Security/Proofs/Flock/Claims/Witnesses/SamplingTwoRegAt.lean --siblings`, then `--build` of `Security/Proofs/Flock/SamplingGeneric.lean` and `Security/Proofs/Flock/Claims/Witnesses.lean`. ETA about 00:30–00:50Z [guess].
