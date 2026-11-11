@@ -42,7 +42,6 @@ public import Proofs.NetworkCertifier.PeriodCheckedChecks
 public import Proofs.NetworkCertifier.PeriodCheckedExclusion
 public import Proofs.NetworkCertifier.PeriodFails
 public import Proofs.NetworkCertifier.PeriodFailsChecks
-public import Proofs.NetworkCertifier.PeriodFailsTerms
 public import Proofs.NetworkCertifier.PeriodLengths
 public import Definitions.NetworkCertifier.Guarantees.SampledCharge
 import Mathlib.Algebra.Order.Floor.Extended
@@ -110,9 +109,8 @@ the read-back is needed: at a placed window the count fails without `RecordForma
 `PeriodLeakFailsAtMost`, `PeriodLeakCharged`): `PeriodLeakChecked` at each fail pattern, at the pattern's operator and
 registered values, summed over the patterns. `PeriodFailsChecks` checks them at a placed window whose operator follows
 the fail pattern: the failures' factor is met, and the charged count fails at weights that sum past one.
-`PeriodFailsTerms` says what the period check's `K` bounds at terms that count the fail patterns in place of every
-connection's cells. `PeriodLengths` shows a record format of each lane's length, released data and fail cell reads back
-under the link's registered parameters (`LengthsRows.readsBy`).
+`PeriodLengths` shows a record format of each lane's length, released data and fail cell reads back under the link's
+registered parameters (`LengthsRows.readsBy`).
 `Carried` proves the leak bounds over a carried pool (`SampledLeakCarried`, `PooledLeakCarried`): one
 run's relation at the rows its extracted trace holds, and the period's bound, where an opened row costs no advice bits,
 since the chain fixes it unless two rows have one root, and the restarts serving picks cost `log₂` of the patterns it may

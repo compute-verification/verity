@@ -124,10 +124,6 @@ PeriodFails.lean  the period's leak with each failure charged (periodLeakFails, 
                                          periodLeakCharged): periodLeakChecked at each fail pattern
                                          (checked_at_pattern), summed over the patterns (exists_failPatterns,
                                          encard_failsExactly_le, encard_weighted_le)
-PeriodFailsTerms.lean  the period check's K at terms that count the fail patterns: the clock form at no
-                                         caps (clockKBoundsHeld), the rows form at the failures' term
-                                         (rowsTermsFails, rowsKBoundsFails, rowsKBoundsFailPatterns), whose number
-                                         covers failPatterns (failsAtMostCovers); the check computes neither
 PeriodLengths.lean  a lengths format reads back under the link's parameters (LengthsRows.readsBy): a lane is
                                          its length, released data and fail cell (lanesView_laneRecord); no
                                          device's layout is modelled
