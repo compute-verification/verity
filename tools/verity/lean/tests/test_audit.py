@@ -873,6 +873,7 @@ def bookkeeping_cases() -> dict[str, tuple[dict, dict]]:
         "witnesses.unwitnessed-changed": ({**bare, "unwitnessed": {"P.sound": sha("its statement before")}}, wfacts),
         "witnesses.stale": ({**wrec, "witnesses": wrec["witnesses"] | {"P.gone": wrec["witnesses"]["P.sound"]}}, wfacts),
         "witnesses.assumed-stale": ({**wrec, "witnesses_assumed": {"P.Gone": "assumed as it stands"}}, wfacts),
+        "witnesses.unwitnessed-unlisted": ({**bare, "unwitnessed": bare["unwitnessed"] | {"P.gone": sha("listed once")}}, wfacts),
         "shape.properties-stale": ({**pol, "shape": frozen | {"properties": {"P.gone": {"function": "P.f",
                                                                                        "outcome": "accept"}}}}, facts()),
         "shape.frozen-stale": ({**pol, "shape": {"frozen": frozen["frozen"] | {"P.gone": "frozen: open"}}}, facts()),
@@ -911,6 +912,8 @@ def test_every_bookkeeping_code_is_repaired_with_a_warning_and_fails_without_the
     for code in ("witnesses.missing", "witnesses.unwitnessed-changed"):
         fixed, now = fix(code)
         assert fixed["unwitnessed"]["P.sound"] == now["pins"]["P.sound"]["type_sha256"], "listed at its hashes now"
+    fixed, now = fix("witnesses.unwitnessed-unlisted")
+    assert fixed["unwitnessed"] == {"P.sound": now["pins"]["P.sound"]["type_sha256"]}, "only the entry of no guarantee goes"
     assert "open_seed" not in fix("open.seed")[0]
 
 
@@ -1140,6 +1143,30 @@ def test_an_audit_under_the_flag_writes_the_repaired_lock_and_what_else_fails_st
         rep, work = audit("2026-11-14")
         assert rep["failures"] and "regenerated" not in rep and "bookkeeping" not in rep, (name, rep)
         assert any(A.code_of(f) not in A.BOOKKEEPING for f in rep["failures"]), (name, rep["failures"])
+
+
+def test_an_unwitnessed_entry_of_no_guarantee_fails_its_audit_and_an_update_or_the_lock_run_drops_it(tmp_path, monkeypatch):
+    """An `unwitnessed` entry of a name the lock lists no guarantee under fails the audit, with the fix, and is no record
+    difference, so nothing is regenerated for it. The lock run passes on the lock without it, with one warning, and an
+    `--update` writes the lock without it and doesn't fail on it; the entry of the listed guarantee stays in both."""
+    lock, now = bookkeeping_cases()["witnesses.unwitnessed-unlisted"]
+    kept = {"P.sound": now["pins"]["P.sound"]["type_sha256"]}
+    frozen = {"frozen": dict.fromkeys(lock["guarantees"], "frozen: open")}
+    pkg, audit = bookkeeping_audit(tmp_path, monkeypatch, lock | {"default_owner": "@lean", "shape": frozen}, now)
+    before = (pkg / A.POLICY).read_text()
+    plain, _ = audit()
+    assert plain["failures"] == [
+        "witnesses: `unwitnessed` lists P.gone, which is not a guarantee of this package; run `check.py --update`, which "
+        "drops the entry, or remove it"]
+    assert A.reported(plain)["failure_codes"] == ["witnesses.unwitnessed-unlisted"] and "regenerated" not in plain
+    rep, work = audit("2026-11-14")
+    assert "bookkeeping_left" not in rep and (pkg / A.POLICY).read_text() == before
+    assert json.loads((work / A.POLICY).read_text())["unwitnessed"] == kept
+    assert rep["bookkeeping"] == ["bookkeeping: P.gone (@lean): its `unwitnessed` entry dropped: no guarantee has it "
+                                  "(witnesses.unwitnessed-unlisted)"]
+    updated = A.audit(pkg, tmp_path / "out-update", update=True, runs=False, log=lambda *_: None)
+    assert updated["failures"] == [] and json.loads((pkg / A.POLICY).read_text())["unwitnessed"] == kept
+    assert audit()[0]["failures"] == []
 
 
 def test_the_lock_runs_flag_settles_a_repaired_package_and_lists_its_warnings(tmp_path, monkeypatch):
@@ -3373,13 +3400,16 @@ def test_a_renamed_unwitnessed_guarantee_passes_under_moved_and_its_entry_is_re_
     Guarantees.Doubled` to `Control.twofold : Guarantees.Twofold`, as a namespace rename renames both), says the same,
     but its type hash reads names. Under `--update --moved` its entry, at the hash of its text under the old
     names, passes, and the lock lists it under the new name at the hash as built, which passes without `--moved`. The
-    unit test hands the rule a moved hash; this one checks that `Facts.lean`'s is the one the record and its entry hold."""
+    unit test hands the rule a moved hash; this one checks that `Facts.lean`'s is the one the record and its entry hold.
+    An entry of a name the lock lists no guarantee under fails until then, and that update drops it without failing on it."""
     pkg, build, audit, lock = excepted_toy(tmp_path, "Control.Verify", VERIFY, DOUBLED, "Control.doubled")
     build()
     audit(True)
     was = lock()["guarantees"]["Control.doubled"]["type_hash"]
     A.dump(pkg, lock() | {"unwitnessed": {"Control.doubled": was}})
     assert unshaped(audit(False)) == []
+    A.dump(pkg, lock() | {"unwitnessed": {"Control.doubled": was, "Control.gone": was}})
+    assert [(f.code, f.entry) for f in unshaped(audit(False))] == [("witnesses.unwitnessed-unlisted", "Control.gone")]
     for path in (pkg / "Control" / "Verify.lean", pkg / "Control" / "VerifyThm.lean"):
         path.write_text(path.read_text().replace("Doubled", "Twofold").replace("doubled", "twofold"))
     build()
@@ -4032,10 +4062,12 @@ def test_a_property_of_an_acceptance_has_an_honest_witness_that_the_deployment_i
 def test_an_unwitnessed_guarantee_is_listed_with_its_statement_and_the_list_only_shrinks():
     """The guarantees in scope when the rule came are listed under `unwitnessed` with their statements' hashes: one whose
     statement changed carries its witnesses (the hash no longer matches); an entry of one out of scope fails, and one beside
-    the witnesses it would exempt, or of a witness, does nothing, the witnesses checked as ever. An entry may exempt one
-    half (`missing`) of a guarantee listing the other. Under `--moved`, an entry at its text under the old names matches
-    when its record has that hash too. `--update` keeps an entry while it matches (re-keyed when the guarantee moved),
-    drops every other, and adds none, so a new guarantee in scope fails until it has witnesses."""
+    the witnesses it would exempt, or of a witness, does nothing, the witnesses checked as ever. An entry of a name the
+    lock lists no guarantee under fails, with the fix, and an update drops it and doesn't fail on it. An entry may exempt
+    one half (`missing`) of a guarantee listing the other. Under `--moved`, an entry at its text under the old names
+    matches when its record has that hash too, and the lock judged is re-keyed with its guarantees. `--update` keeps an
+    entry while it matches (re-keyed when the guarantee moved), drops every other, and adds none, so a new guarantee in
+    scope fails until it has witnesses."""
     pol, f = witnessed()
     h = f["pins"]["P.sound"]["type_sha256"]
     bare = {**POLICY, "guarantees": {"P.sound": {"owner": "@lean", "type_hash": h}}, "unwitnessed": {"P.sound": h}}
@@ -4068,9 +4100,19 @@ def test_an_unwitnessed_guarantee_is_listed_with_its_statement_and_the_list_only
     became = {**pol, "unwitnessed": {"P.sound_honest": f["pins"]["P.sound_honest"]["type_sha256"]}}
     assert witness_codes(became, f) == []
     assert A.unwitnessed_kept(became, f, {}) == {}
-    flight = {**bare, "unwitnessed": {"P.sound": h, "P.ahead": sha("a guarantee a PR ahead on next brings")}}
-    assert witness_codes(flight, f) == []
-    assert A.unwitnessed_kept(flight, f, {}) == flight["unwitnessed"]
+    gone = {**bare, "unwitnessed": {"P.sound": h, "P.gone": sha("a guarantee the lock listed once")}}
+    assert A.witness_failures(gone, f, WOWN) == [
+        "witnesses: `unwitnessed` lists P.gone, which is not a guarantee of this package; run `check.py --update`, which "
+        "drops the entry, or remove it"]
+    assert witness_codes(gone, f) == ["witnesses.unwitnessed-unlisted"]
+    assert A.unwitnessed_kept(gone, f, {}) == {"P.sound": h}
+    assert "witnesses.unwitnessed-unlisted" in {x.code for x in A.judge(gone, f, FILES)[0]}
+    fails, rec = A.judge(gone, f, FILES, update=True)
+    assert "witnesses.unwitnessed-unlisted" not in {x.code for x in fails} and rec["unwitnessed"] == {"P.sound": h}
+    unlisted = {**POLICY, "guarantees": {}, "unwitnessed": {"P.sound": h}}
+    assert witness_codes(unlisted, f) == ["witnesses.unwitnessed-unlisted"] and A.unwitnessed_kept(unlisted, f, {}) == {}
+    assert A.unwitnessed_kept(unlisted, f, {"P.sound": {"owner": "@lean", "type_hash": h}}) == {"P.sound": h}, \
+        "a name among the records the update writes keeps its entry"
     out = witnessed(guarantee={"reads": fact()["reads"]})[1]
     assert witness_codes(bare, out) == ["witnesses.unwitnessed-stale"]
     assert A.unwitnessed_kept(bare, out, {}) == {}
@@ -4090,6 +4132,11 @@ def test_an_unwitnessed_guarantee_is_listed_with_its_statement_and_the_list_only
     assert witness_codes(stale, moved) == ["witnesses.unwitnessed-changed"]
     assert A.unwitnessed_kept(stale, moved, {}) == {}
     assert witness_codes({**was, "unwitnessed": {"P.sound": sha("other")}}, moved) == ["witnesses.unwitnessed-changed"]
+    named = facts(pins={"Q.sound": moved["pins"]["P.sound"]}, own_modules=sorted(WOWN))
+    cur = A.renamed_current({**was, "unwitnessed": {"P.sound": old, "P.gone": old}}, {"P.sound": "Q.sound", "P.gone": "Q.gone"})
+    assert set(cur["guarantees"]) == {"Q.sound"} and cur["unwitnessed"] == {"Q.sound": old, "Q.gone": old}
+    assert [(x.code, x.entry) for x in A.witness_failures(cur, named, WOWN)] == [("witnesses.unwitnessed-unlisted", "Q.gone")]
+    assert A.unwitnessed_kept(cur, named, {}) == {"Q.sound": h}, "re-keyed with its guarantee, the entry of none dropped"
 
     assert A.renamed_witnesses({"witnesses": {"P.a": {"honest": ["P.a_h"], "nontrivial": "P.a_n"}},
                                 "unwitnessed": {"P.b": h}}, {"P": "Q"}) == {
