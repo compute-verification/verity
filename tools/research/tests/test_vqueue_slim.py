@@ -746,11 +746,12 @@ def test_a_check_taking_lean_audit_from_its_base_s_runs_every_step_but_it_and_it
 @pytest.mark.parametrize("says", ["passed", "failed", "running", "no record"])
 def test_a_check_that_took_lean_audit_from_its_base_s_passes_it_exactly_when_that_check_passed_it(world, monkeypatch,
                                                                                                    tmp_path, says):
-    """The candidate's own check passed every step it ran.  Its verdict on lean-audit is its base's check's: where that check
-    passed it, a pass; where it failed it, a fail on that very failure, ended, which `based` reads as the base's; either kept
-    in the candidate's record as if it had run the step, so it answers for it once its candidate is `main`, and read from
-    there.  While that check runs, or with no record of it, a pass is pending and a fail not ended, the record unchanged:
-    the candidate never passes on its other steps alone."""
+    """The candidate's own check passed every step it ran, and its base, whose check ran lean-audit, has landed: its verdict
+    on lean-audit is the one the run beside `main` keeps, here its base's run beside itself.  Where that run passed it, a
+    pass; where it failed it, `main` red on lean-audit, a fail on that very failure, ended, which `based` reads as the
+    base's; either kept in the candidate's record as if it had run the step, so it answers for it once its candidate is
+    `main`, and read from there.  While that run runs, or with none given, as while its base is in flight, a pass is pending
+    and a fail not ended, the record unchanged: the candidate never passes on its other steps alone."""
     h, base, sha, _ = _harness(world, monkeypatch)
     rec_base = start(h.d, base, base, shards=1)
     if says in ("passed", "failed"):

@@ -79,11 +79,11 @@ plan of the candidate's tree, which splits pytest by suite), judged on every ste
 and its verdict alone is the candidate's; a run started while graph2 gated is started again as the check.  A candidate built
 on another in flight, no member of it changing a Lean input against its merge base with `main` (`vqueue_slim.LEAN_INPUTS`),
 runs every step but lean-audit where its base's check is judged on lean-audit, or took its verdict on it from the check of a
-candidate below that is, and takes that check's verdict on it (its record's ``lean_audit_from``, the candidate whose check
-ran it, `vqueue_slim.audited`), read from the run beside `main` once that candidate has landed: it passes lean-audit exactly
-when that check passed it, so it drops with its base, lands after it and never while that check hasn't said.  One started
-once its base is `main`, or once that candidate has landed while the run beside `main` keeps no verdict on lean-audit,
-audits.  A failed step
+candidate below that is.  It reads lean-audit as pending while the candidate whose check ran it (its record's
+``lean_audit_from``) is in flight, whatever that check says then, and once that candidate has landed takes the verdict the
+run beside `main` keeps (`vqueue_slim.audited`): it lands after it, drops with it as its base failed, and stays pending while
+it is rerun, so a failure the rerun clears is never its own.  One started once its base is `main`, or once that candidate
+has landed while the run beside `main` keeps no verdict on lean-audit, audits.  A failed step
 is inherited by its failing tests, those the run beside its base's check failed too.  A shard that failed a step it is
 judged on, or a suite of one, fails it while the other shards still run (an early red, `vqueue_slim.judge`), decided as a
 finished fail is: on the lowest candidate at once, on one above it once its base's check has ended (`vqueue_slim.based`),
@@ -1442,7 +1442,8 @@ Lent = Callable[[str], tuple[dict | None, bool]]
 def _lent(judged: dict[str, Judged], beside: dict | None, *landed: str | None) -> Lent:
     """Where a candidate's check's verdict on lean-audit is read: its record as judged now while it is a candidate, though
     landed if ``landed`` names it (`main`, or the candidate this tick advanced it to), else, landed, the run beside `main`'s
-    (``beside``), which keeps it from that candidate's or from one that took it from it (`vqueue_slim.audited`)."""
+    (``beside``), which keeps it from that candidate's or from one that took it from it (`vqueue_slim.audited`).  A launch
+    reads it in flight too (`Loop._audit_from`); a judging only once landed (`Loop._beside`)."""
     return lambda sha: (judged[sha].record, sha in landed) if sha in judged else (beside, True)
 
 
@@ -1891,7 +1892,8 @@ class Loop:
         ago, hasn't said, and one on a candidate stays a fail, which `vqueue.decide` holds until its base's says.  Where the
         check gates (`CHECK_GATE`), the run's verdict alone is the candidate's, graph2's kept beside it (`Judged.shadow`, its
         note marked so), a run started while graph2 gated counts as none started, and a check that took lean-audit's verdict
-        from the check of a candidate below has that check's (`vqueue_slim.audited`), read where ``lent`` says (`_lent`)."""
+        from the check of a candidate below reads lean-audit as pending while that candidate is in flight, and, once it has
+        landed, takes the verdict that the record ``lent`` gives keeps (`vqueue_slim.audited`, `_lent`)."""
         started, rec = past.slim(sha)
         started, gates = started and not self._other(rec), self.gate == GRAPH2_GATE
         line = dict(sha=sha, base=base, members=prs, heads=heads)
@@ -1906,7 +1908,8 @@ class Loop:
             v = self.slim.judge(self.world.slim_driver(), rec)
             if not gates:
                 ran = (rec or {}).get("lean_audit_from")
-                v = self.slim.audited(self.world.slim_driver(), v, rec, lent(ran)[0] if ran and lent else None)
+                source, landed = lent(ran) if ran and lent else (None, False)
+                v = self.slim.audited(self.world.slim_driver(), v, rec, source if landed else None)
             if json.dumps(rec, sort_keys=True) != was:
                 self.write(got := self._line(n, main, origin, "slim", **line, why=f"judged {v.state}", record=rec, done=True))
                 wrote.append(got)
@@ -2725,8 +2728,9 @@ def main(argv: list[str]) -> int:
                     help=f"what gates a candidate: `{GRAPH2_GATE}` (the default), its graph2 check with the run beside it; "
                          f"`{CHECK_GATE}`, drive's after-landing check of it, every step as --shards shards (but lean-audit "
                          "where no member changes a Lean input and it is built on a candidate in flight whose check runs it "
-                         "or took it from the one below that ran it, whose verdict on it it takes), with graph2's check in "
-                         "shadow: read, compared with the check's verdict in one logged line, and deciding nothing")
+                         "or took it from the one below that ran it, whose verdict on it it takes once that one has landed), "
+                         "with graph2's check in shadow: read, compared with the check's verdict in one logged line, and "
+                         "deciding nothing")
     ap.add_argument("--shards", type=_shards, default=SHARDS,
                     help=f"with --gate {CHECK_GATE}, the shards each check runs as, one launch each: an N ci.toml has a shard "
                          f"plan for, or auto:N, N shards of an auto plan of the candidate's tree made before they launch, "
