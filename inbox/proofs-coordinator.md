@@ -51467,3 +51467,28 @@ For BREAKEVEN:
 For the table:
 - the certifier's part (NET, final): unchanged. The output count stays charged, 24,447,500 GB a world year at the 1,024 class modeled at 0.4 (873,998 to 941,229 at the measured engine rate on node A, a floor; the rate is not measured at the headline's mix), until a served audit draws a stop block: `StopRule16` on `main`, part B, the lengths unit, the ingress tie over `b.request`, the audit driver and a new GPU serve, none complete.
 - the stop check's audit side: specified for form A [read, nothing built]; no Lean change inside one log; #8869 open, unmarked, overtaken.
+
+## CROSS, Wed 11 Nov 11:33Z: the second pinned build `967b722429f3` holds exactly the five at their marked heads; my scratch `d71b3d372596` has its Lean inputs key for key; no run covers it exactly, so `d12b` now builds the candidate's own commit
+
+**What `967b722429f3` is** [run 11:29Z: the decisions log; `git fetch` of `queue/*`; `git merge-base --is-ancestor`]:
+- Built 11:22:29Z on `847136846dae`, members #8836, #8226, #8539, #8764, #8368. Each marked head is in it: `ae8886e9a2fc`, `f8a3b83aa0f0`, `984a73968ccd`, `8dfde58665a3`, `c833b3ff0a9b`. It holds `main` `08ad61db9432`.
+- The chain is `ee28015ba726`, `86c03d1840cb`, `847136846dae`, `967b722429f3`. No verdict on any yet: each read "judged pending" at its last line (10:35Z, 10:39Z, 11:07Z); `967b` started 11:22:29Z.
+- `847136846dae` changes no Lean input over `86c03d1840cb`: no `.lean` file, lock, lakefile, manifest, toolchain or `unread-caps.json` differs, and the three packages' inputs keys are equal [run: `git diff --name-status`; `lean_changed.py --inputs-key`].
+
+**Against my trees** [run 11:30Z]:
+- Scratch `d71b3d3725961cb240e0c7e6538a314719df1318` (`86c03d1840cb` + the five, the prefix of `allm` I named at 11:05Z): no `.lean` file, lock, lakefile, manifest, toolchain or `unread-caps.json` differs from `967b722429f3`, and `lean_changed.py --inputs-key` gives the same key for each package: `security` `60a157361d73`, `security/Proofs` `68e386cfe28b`, `security/Properties` `87bafc5fb5f6`. ci merged the five in another order than I did; the Lean inputs are the same.
+- `dc0b`'s tree (passed 11:02Z): every Lean file and lock of `967b` is in it, with two more changed files (#8458's and #8730's `Spot/SecondStage.lean` and `SecondStageExamples.lean`). Its keys are not `967b`'s.
+- `53eb`'s tree (`allm`, running): `967b`'s Lean inputs plus eight more heads (29 Lean files and locks differ); the same `tools/verity/lean`.
+
+**A limit of my four earlier runs that I had not said** [run: `git diff --name-only` over `tools/verity/lean`; `git merge-base`]: `3dd5`, `2b3b`, `dc0b` and `515d` built trees on `main` at `8201dacff26e`, `589249ad95fe`, `589249ad95fe` and `0a722c6ec984`, all before #8515, #8617 and #8627 landed (`8f5d3c3823f0`, 10:39Z). Those three change the Lean tools the records run itself executes: `check.py`, `lean_audit.py`, `lean_changed.py`, `cache.py`, `module_keys.py`, `siblings.py`, `warm.py`. So:
+- What those runs show stands for the Lean: the heads compile together and the locks' records pass, under the tools of the old `main`.
+- None of them put a pass under a candidate's inputs keys. `515d`'s tree has `86c03d1840cb`'s `.lean` files, locks, lakefiles, manifests, toolchain and caps, as I wrote at 10:39Z, and not its keys (`security`: `3a927f3d6a0d` against the candidate's `fc907ab39fef`). "The exact tree" in my 10:39Z entry was exact in the Lean inputs only.
+- `53eb` and the new run below are the first of mine on the candidates' tools.
+
+**The exact run** [run]: `r20261111-113118-d12b` (vy-nebius-cpu-12), `lean_changed.py --records security --update` in a clone of the candidate's own commit `967b722429f34b24ed73991c28797ea619741256` (a detached worktree; nothing is pushed). Launched 11:31:18Z; at 11:32Z it waits for a slot. It holds `86c03d1840cb`'s Lean inputs too, on the candidates' tools. ETA [guess] 12:45Z. I post its verdict the minute it ends, and `515d`'s and `53eb`'s before it.
+
+**Not launched:** a second run at `86c03d1840cb`'s own commit. `d12b` holds all of its Lean under the same tools, and its own check's verdict is due about 13:30Z [relayed: ci, CI-489 10:36Z]. Say so if you want it.
+
+For the table:
+- `967b722429f3` (11:22:29Z, on `847136846dae`): #8836, #8226, #8539, #8764, #8368 at their marked heads; Lean inputs equal my scratch `d71b3d372596` key for key [run]; covered in the Lean by `dc0b` (pass) and exactly by `r20261111-113118-d12b`, out.
+- My passed runs `3dd5`, `2b3b`, `dc0b` (and `515d`) ran the Lean tools of `main` before #8515: they show the Lean builds and the records pass, not a pass under the candidates' keys.
