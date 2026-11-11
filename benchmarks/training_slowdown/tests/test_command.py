@@ -26,6 +26,8 @@ class Research:
         self.attempts: dict[str, dict] = {}
         self.runs: list[list[str]] = []
         self.sync_rc = 0
+        #: the records that hold a job's state
+        self.states: set[str] = set()
 
     def __call__(self, argv):
         assert argv[0] == "research", argv
@@ -33,6 +35,11 @@ class Research:
             self.runs.append(argv)
             return SimpleNamespace(returncode=0, stdout=f"queued r20990101-000000-{len(self.runs):04x}\n", stderr="")
         verb = argv[2]
+        if verb == "fetch":
+            assert argv[4:] == ["--list", "--json", "--path", "out/state/state.json"], argv
+            held = argv[3] in self.states
+            return SimpleNamespace(returncode=0 if held else 1, stderr="" if held else "no file matches",
+                                   stdout=json.dumps([{"path": "out/state/state.json"}]) if held else "")
         if verb == "labels-sync":
             return SimpleNamespace(returncode=self.sync_rc, stdout="", stderr="unreachable")
         if verb == "sql":
@@ -81,9 +88,10 @@ def test_each_missing_job_is_queued_once_and_labelled(tree, reg_path, capsys):
         assert argv[:14] == ["research", "run", "--queue", "--kind", "training-attack", "--preemptible", "--project",
                              "verity", "--source", str(tree.parents[2]), "--cwd", "source", "--gpus", "1"]
         script = argv[-1]
-        assert argv[-3:-1] == ["bash", "-lc"] and script.startswith(cmd.SYNC + " && cd benchmarks/training_slowdown")
+        assert argv[-3:-1] == ["bash", "-lc"] and script.startswith(
+            cmd.SYNC + " && cd benchmarks/training_slowdown && exec ../../.venv/bin/python -m training_slowdown.run ")
         assert (f"--config attacks/a.toml --seed {job.seed} --split {job.split} --starts {reg_path.resolve()}"
-                in script and script.endswith('--out "$OUT"'))
+                in script and script.endswith('--state "$OUT/state" --out "$OUT"'))
         assert (r.run_of(job.label), config.LABEL_KEY, job.label) in r.labels
     assert "3 of 3 jobs pending" in capsys.readouterr().out
     assert command(r, "a", "--starts", str(reg_path)) == 3 and len(r.runs) == 3  # pending: nothing queued again
@@ -106,6 +114,79 @@ def test_a_done_job_labels_its_record_and_a_failed_one_is_never_run_again(tree, 
     assert "every job has its record (2)" in capsys.readouterr().out
 
 
+def stop(r: Research, job, record=None, machine="node-7") -> str:
+    """The job's last run ended as a job told to stop does; its id."""
+    run = sorted(t for t, _, v in r.labels if v == job.label and cmd.RUN_RE.fullmatch(t))[-1]
+    r.attempts[run] = {"status": {"rc": cmd.RC_STOPPED}, "outputs": {"run_record": record},
+                       "execution": {"machine": machine}}
+    return run
+
+
+def test_a_stopped_job_is_run_again_from_the_state_its_run_kept(tree, reg_path, capsys):
+    """A job whose run ended with `STOPPED` is started again by the command's next run, on whichever machine the
+    queue gives it: where the stopped run's record holds a state, the new run fetches it into its own $OUT before
+    the job starts, with the store's read key; where it holds none, the job starts again from θ."""
+    path = write_config(tree / "a.toml", seeds={"search": [0], "final": [101]})
+    search, final = config.load(path, starts.registry(reg_path)).jobs()
+    r = Research()
+    command(r, "a", "--starts", str(reg_path))
+    r.states.add(ART)
+    first = stop(r, search, ART)
+    stop(r, final, "art:" + "f" * 64)
+    assert command(r, "a", "--starts", str(reg_path), "--dry-run") == 3 and len(r.runs) == 2
+    out = capsys.readouterr().out
+    assert f"stopped  {first} (its record holds its state)" in out
+    assert "(it kept no state: it starts again from θ)" in out
+    assert "2 of 2 jobs pending, 2 of them stopped: run the command again to continue them" in out
+    assert out.count("would run: research run --queue") == 2 and out.count("--store-read") == 1
+
+    assert command(r, "a", "--starts", str(reg_path)) == 3 and len(r.runs) == 4
+    again, fresh = r.runs[2:]
+    assert again[:6] == fresh[:6] == ["research", "run", "--queue", "--kind", "training-attack", "--preemptible"]
+    assert again[-5] == "--store-read" and "--store-read" not in fresh and "--on" not in again
+    assert again[-1].startswith(f'{cmd.SYNC} && .venv/bin/research data fetch {ART} --path "out/state/*" --to '
+                                f'"$(dirname "$OUT")" && cd benchmarks/training_slowdown && exec ')
+    assert "research data fetch" not in fresh[-1] and fresh[-1] == r.runs[1][-1]
+    assert all(script.endswith('--state "$OUT/state" --out "$OUT"') for script in (again[-1], fresh[-1]))
+    assert f"continues {first}" in capsys.readouterr().out
+    assert r.run_of(search.label) == first and len([t for t, _, v in r.labels if v == search.label]) == 2
+    assert command(r, "a", "--starts", str(reg_path)) == 3 and len(r.runs) == 4   # pending: nothing queued again
+    r.attempts[sorted(t for t, _, v in r.labels if v == search.label)[-1]] = {"status": {"rc": 0},
+                                                                              "outputs": {"run_record": ART}}
+    assert "done" in (command(r, "a", "--starts", str(reg_path)), capsys.readouterr().out)[1]
+
+
+def test_a_state_kept_on_the_nodes_disk_sends_the_job_back_to_its_machine(tree, reg_path, monkeypatch):
+    """`NODE_STATE` is the one line that places a job's state: a directory of the nodes' own disks keeps each job's
+    state there under its label, and the job's next run asks the queue for the stopped run's machine and fetches
+    nothing."""
+    monkeypatch.setattr(cmd, "NODE_STATE", "/scratch/training-slowdown")
+    path = write_config(tree / "a.toml")
+    (job,) = config.load(path, starts.registry(reg_path)).jobs()
+    r = Research()
+    command(r, "a", "--starts", str(reg_path))
+    assert r.runs[0][-1].endswith(f'--state /scratch/training-slowdown/{job.label} --out "$OUT"')
+    stop(r, job, ART, machine="node-7")
+    assert command(r, "a", "--starts", str(reg_path)) == 3
+    assert r.runs[1][2:8] == ["--queue", "--kind", "training-attack", "--preemptible", "--project", "verity"]
+    assert r.runs[1][-6:-4] == ["--on", "node-7"] and r.runs[1][-1] == r.runs[0][-1]
+    assert "--store-read" not in r.runs[1]
+
+
+def test_a_jobs_run_gets_the_time_its_configs_budget_gives_it(tree, reg_path):
+    """`budget.minutes` is the job's own limit, over every run it continues in; a run gets `BUDGET_SLACK` times it
+    and `OUTSIDE_MIN`, on the queue and on a named machine. A budget with no minutes leaves the kind's time."""
+    write_config(tree / "a.toml", budget={"steps": 3, "batch": 2, "minutes": 51})
+    write_config(tree / "b.toml")
+    queued, on, plain = Research(), Research(), Research()
+    command(queued, "a", "--starts", str(reg_path))
+    command(on, "a", "--starts", str(reg_path), "--on", "node-1")
+    command(plain, "b", "--starts", str(reg_path))
+    assert cmd.OUTSIDE_MIN == 30 and queued.runs[0][-6:-4] == ["--max-min", "92"]
+    assert on.runs[0][2:4] == ["--on", "node-1"] and on.runs[0][-6:-4] == ["--timeout", "92m"]
+    assert "--max-min" not in plain.runs[0] and "--timeout" not in plain.runs[0]
+
+
 def test_the_honest_configs_jobs_come_with_it_and_on_names_the_machine(tree, reg_path):
     write_config(tree / "ref.toml", dials={"trainable": "*"})
     write_config(tree / "a.toml", honest="ref")
@@ -121,7 +202,7 @@ def test_a_job_keeps_its_weights_only_under_the_commands_one_flag(tree, reg_path
     assert command(r, "a", "--starts", str(reg_path)) == 3 and "--keep-weights" not in r.runs[0][-1]
     r = Research()
     assert command(r, "a", "--starts", str(reg_path), "--weights") == 3
-    assert f"--starts {reg_path.resolve()} --keep-weights --out" in r.runs[0][-1]
+    assert f"--starts {reg_path.resolve()} --keep-weights --state" in r.runs[0][-1]
 
 
 def test_a_dry_run_starts_and_labels_nothing(tree, reg_path, capsys):
@@ -168,9 +249,26 @@ def test_local_records_each_jobs_exit_and_never_reruns_a_failed_job(tmp_path, re
     assert cmd.main([str(path), "--local", "--root", str(root), "--starts", str(reg_path)]) == 1
     assert len(calls) == 2 and all(c[0] == sys.executable for c in calls)
     assert cmd.main([str(path), "--local", "--root", str(root), "--starts", str(reg_path)]) == 1 and len(calls) == 2
+    done = next(c for c in calls if c[c.index("--seed") + 1] == "0")
+    assert done[done.index("--state") + 1] == done[done.index("--out") + 1] + "/state"
     monkeypatch.delenv("OUT", raising=False)
     with pytest.raises(SystemExit, match="--root DIR"):
         cmd.main([str(path), "--local", "--starts", str(reg_path)])
+
+
+def test_local_runs_a_stopped_job_again_on_its_own_state(tmp_path, reg_path, monkeypatch, capsys):
+    path = write_config(tmp_path / "a.toml")
+    codes = [cmd.RC_STOPPED, cmd.RC_STOPPED, 0]
+    calls = []
+
+    def fake(argv, cwd):
+        calls.append(argv)
+        return SimpleNamespace(returncode=codes[len(calls) - 1])
+    monkeypatch.setattr(cmd.subprocess, "run", fake)
+    argv = [str(path), "--local", "--root", str(tmp_path / "jobs"), "--starts", str(reg_path)]
+    assert cmd.main(argv) == 3 and "1 of 1 jobs pending, 1 of them stopped" in capsys.readouterr().out
+    assert cmd.main(argv) == 3 and cmd.main(argv) == 0 and cmd.main(argv) == 0
+    assert len(calls) == 3 and calls[0] == calls[1] == calls[2]
 
 
 @pytest.mark.slow

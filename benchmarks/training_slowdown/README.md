@@ -40,7 +40,7 @@ The reference shapes are the lf model's (`integrations/vllm/tests/program/train_
 verity bench training-slowdown NAME|CONFIG.toml [--dry-run] [--local [--root DIR] | --on MACHINE [--pool NAME]] \
     [--weights]
 python -m training_slowdown.run --config CONFIG.toml --seed 0 --split search|final --out OUT [--starts-root DIR] \
-    [--device cuda] [--keep-weights]                    # one job
+    [--device cuda] [--keep-weights] [--state DIR]      # one job
 python -m training_slowdown.run --retrace RUN_JSON --out OUT   # a record with its trace taken again
 python -m training_slowdown.capture.circuit STEP.npz    # a saved step circuit's quantities
 python -m training_slowdown.gates [--check]             # gates per multiply-add by op; --check compiles the Definitions
@@ -51,8 +51,21 @@ budget, the seeds, and what the grade reads, the target gain, the policy (`conso
 `[policy.*]` table of `benchmarks/rho/data`) and the honest config. The command (`run.py` here) expands a config and its honest config into
 jobs, one per seed and split, each labelled in the store `training-slowdown=<digest>/<seed>/<split>`, and runs the ones
 its labels lack: on the queue (kind `training-attack`, `infra/cluster/kinds/training.toml`), on one machine with `--on`,
-or here, one after another, with `--local`. It exits 0 when every job has its record, 3 while one is pending and 1 when
-one failed; a failed job is never run again.
+or here, one after another, with `--local`. It exits 0 when every job has its record, 3 while one is pending or
+stopped and 1 when one failed; a failed job is never run again. A job's run gets the time its config's budget gives
+it (`budget.minutes`, the job's own limit over every run it continues in; without it, the kind's).
+
+A stopped job continues. After each checkpoint but the last a job keeps what continuing needs in its state directory
+(`--state`): the model, the optimizers' state, the stream's position, the generators, and the record so far with its
+scores and its clock. Told to stop (SIGTERM: an eviction, or the end of its run's time) it exits with 75 and leaves
+the state; the command's next run starts it again, and the job continues from the state when it is its own (the same
+config digest, seed, split and `training_slowdown` VERSION, tensors with the sha256 the state names, a model that
+hashes to the record's last checkpoint) and refuses any other, naming what differs. The record lists the segments
+the job ran in, and its count is their sum: every step once, and each segment's `build`. What a stopped segment
+computed after its last kept checkpoint is run again and is in no record. A state is a cache: the command keeps it
+with the stopped run's output on the store, the next run fetches it on whichever machine it gets (`NODE_STATE` in
+`run.py` here places it on the node's disk instead), and losing it costs a start from θ. The state directory is
+hidden from the route's process as a final set is, and only the job's own process writes it.
 
 A job trains the config's start along its route and scores each checkpoint on its split. A route is a module of
 `routes/` with `VERSION`, `DIALS`, `build`, `step` and `plan` (the route contract, `routes/__init__.py`); the harness
@@ -65,7 +78,7 @@ token data out of torch, starts a thread or a process, or imports a module the s
 (`run.py`'s docstring has the screen).
 
 A route's code runs in a process of its own, inside the job's sandbox (`sandbox.py`): no network interface is up and
-each registered final set's directory is empty there. That process stops before it imports the route if it finds
+each registered final set's directory, and the job's state directory, is empty there. That process stops before it imports the route if it finds
 either reachable, or holds a capability that could undo them, as root's does, so on a machine that can't make the
 sandbox a job fails with the reason and trains nothing. The
 job's own process reads the held-out split and scores each checkpoint's state as the route's process hands it out;

@@ -6,10 +6,16 @@
 # The job runs its route's code in namespaces of its own, with no network and an empty directory over each final set
 # (training_slowdown/sandbox.py), as a user other than root, who holds no capability to undo them; on a node that
 # refuses the namespaces, or as root, the job fails before it trains, with the reason.
+#
+# A job's time: a config that states `budget.minutes` asks for its own (--max-min, from the budget); max_wall_min is
+# the time of a job whose config states none. A job told to stop (SIGTERM: evicted, or out of its time) exits with 75
+# and leaves what continuing needs in $RESEARCH_RUN_DIR/out/state, which goes to the store with the run's output. The
+# queue starts nothing again: the command's next run does, and the job continues from that state on whichever
+# machine it gets.
 
 [kinds.training-attack]
 phase = "gpu1"
 max_wall_min = 60
 question = "How many counted gates does this attack config's route take from its start, and what does each checkpoint score on the job's held-out split?"
 outputs = ["$RESEARCH_RUN_DIR/out/run.json"]
-restart = "requeue"    # a requeued job starts again from θ: it resumes from no checkpoint
+restart = "requeue"    # a job run again continues from the state its stopped run kept, or from θ when it kept none
