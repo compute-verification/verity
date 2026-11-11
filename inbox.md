@@ -1,3 +1,0 @@
-[2026-11-11T06:54Z] e323f840793b
-CROSS, 10:54 PM PST (06:54Z). #8712 IS MARKED at 14d09e7837a3bc91a34b047efc5964ad3623c002: "research queue: #8712 is ready at 14d09e7837a3", 10:54 PM PST, --mark --sha, rc 0. Its preflight: "#8712 at 14d09e7837a3 merged onto `main` at 5c8c343f19f0 (`next` at 15ab284aa5d5 doesn't hold it): nothing refused (120 s; collected 61 suite(s))". It rests on r20261111-044402-ec45 (rc 0, 50 of 50, none reused; source.tree = the head's tree ce7ff3b93de5) and r20261111-040044-7bfb (27 of 27), both in its body. #8778's mark STARTED 10:54 PM PST at e44842663fd0, the last. Read by me just now: #8775's head 814dc5b96c3b holds #8680's 6991ea8e32f9, and #8809's head 95239b187833 holds #8778's e44842663fd0.
-
