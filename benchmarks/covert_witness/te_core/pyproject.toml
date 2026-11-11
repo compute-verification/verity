@@ -10,7 +10,7 @@ markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]
 # whose E formats and rebuild costs it checks, the fixed modules it imports (data_v3.py and model.py among them) and the
 # starts' digests it reads; test_evaluate runs covert_witness's evaluation job on a stub prepare; test_flops counts the
 # ANDs of verity's gather circuit, which `flops.gather_selects` prices; test_gates compiles verity's Definitions, which
-# read verity.errors and verity.ml.kernels' tc; test_pilot_start runs launch.py's pilot-start refusal, which imports
+# read verity.errors and verity.definitions.kernels' tc; test_pilot_start runs launch.py's pilot-start refusal, which imports
 # pin.py; test_rescore reads the scorer's state through the analysis rescore loads; test_rho_vectors measures the
 # capture's fixture circuits with te_core.capture.circuit and reads each circuit's op log beside it, and test_io_bound
 # and test_formalism capture steps with te_core.capture, so the capture package is read whole; test_frontier_fit holds
@@ -22,4 +22,4 @@ inputs = ["benchmarks/covert_witness/prepare.py", "benchmarks/covert_witness/sea
           "benchmarks/covert_witness/pin.py", "benchmarks/covert_witness/analysis/rescore_v1.py",
           "benchmarks/covert_witness/islands/ladder-v3/ladder_store.json",
           "benchmarks/covert_witness/te_core/capture", "verity/__init__.py", "verity/errors.py",
-          "verity/ml/__init__.py", "verity/ml/circuits", "verity/ml/kernels/__init__.py", "verity/ml/kernels/tc.py"]
+          "verity/ml/__init__.py", "verity/circuits", "verity/definitions/kernels/__init__.py", "verity/definitions/kernels/tc.py"]

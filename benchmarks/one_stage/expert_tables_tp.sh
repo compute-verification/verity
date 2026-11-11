@@ -24,7 +24,7 @@ for ((r = 0; r < TABLES_WORLD; r++)); do
   verify=(--no-verify-shards)
   [ "$r" = 0 ] && verify=()
   "$REPO/.venv/bin/verity-vllm" tp-register-tables --served "$TABLES_SERVED/params-rank$r.json" --world "$TABLES_WORLD" --rank "$r" \
-    --checkpoint-dir "$TABLES_CHECKPOINT" --checkpoints-manifest "$REPO/integrations/vllm/manifests/checkpoints.json" \
+    --checkpoint-dir "$TABLES_CHECKPOINT" --checkpoints-manifest "$REPO/adapters/vllm/manifests/checkpoints.json" \
     --model "$TABLES_MODEL" --revision "$TABLES_REVISION" --key "$TABLES_KEY" "${blocks[@]}" "${stacks[@]}" \
     --workers "${TABLES_WORKERS:-2}" --out "$OUT/tables-rank$r.json" "${verify[@]}" > "$OUT/tables-rank$r.log" 2>&1 &
   pids+=($!)

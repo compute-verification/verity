@@ -59,11 +59,11 @@ def gate_factors(cache: Path) -> dict:
     `PvRow{T=32, K=32, D=64}`) and torch's AdamW element (`AdamWForeach{N=1}`)."""
     if cache.exists():
         return json.loads(cache.read_text())
-    from verity.ml.circuits.defs import bind
-    from verity.ml.circuits.evaluation.bits import compile as compile_bits
-    from verity.ml.circuits.ops.boolean import gemm as BG
-    from verity.ml.circuits.ops.boolean import softmax_row as SR
-    from verity.ml.definitions.registry import torch_optim as TO
+    from verity.circuits.defs import bind
+    from verity.circuits.evaluation.bits import compile as compile_bits
+    from verity.definitions.ops.boolean import gemm as BG
+    from verity.definitions.ops.boolean import softmax_row as SR
+    from verity.definitions.registry import torch_optim as TO
 
     def total(d):
         c = compile_bits(d).counts

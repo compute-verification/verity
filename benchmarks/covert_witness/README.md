@@ -25,8 +25,8 @@ scores by the formalism. `pinned.json` names v3's commit, and v2.3's two as its 
 ## Policy and score
 
 - **Gates** (`te_core.gates`): |C|, c and w are Boolean gates. Each counted MAC is priced by the circuits' own
-  Definitions, their gate counts (AND, XOR, NOT) as `verity.ml.circuits.evaluation.bits.compile` gives them, the AND
-  counts checked against circuit-check's pins (`verity/ml/circuits/ops/boolean/*.circuit-check.json`;
+  Definitions, their gate counts (AND, XOR, NOT) as `verity.circuits.evaluation.bits.compile` gives them, the AND
+  counts checked against circuit-check's pins (`verity/definitions/ops/boolean/*.circuit-check.json`;
   `python -m te_core.gates --check` recompiles them):
 
   | op | gates per MAC | from |

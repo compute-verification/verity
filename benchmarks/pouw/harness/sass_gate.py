@@ -52,7 +52,7 @@ numeric evidence that each sequence is exact on subnormal inputs and outputs, as
 A flagged instruction also passes, alone and in any function, when its toolkit's entry lists it under ``exceptions``: an
 instruction of `EXCEPTABLE`, in that one form, which a Definition the verifier replays models bit for bit, named in the
 entry (``definition``) with the numeric run that held the toolkit's target card to it on every operand word (``numeric``,
-its ``runs``). MUFU.EX2 is one under 13.0.1-sm_90a: `verity.ml.circuits.ops.mufu.MufuEx2Ftz` on all 2^32 operands on two
+its ``runs``). MUFU.EX2 is one under 13.0.1-sm_90a: `verity.definitions.ops.mufu.MufuEx2Ftz` on all 2^32 operands on two
 H200s. An entry without both, or an instruction `EXCEPTABLE` doesn't list, fails the pins.
 
 The cubins come from a .cubin, a fatbin, or a host ELF's .nv_fatbin section (parsed here, since ``cuobjdump -xelf`` writes

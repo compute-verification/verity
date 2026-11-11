@@ -23,7 +23,7 @@ spec.loader.exec_module(S)
 LAKEFILES = ("lakefile.toml", "lakefile.lean")
 #: suites whose metadata names a Lake package that their tests only read, never build or run: suite name -> why
 READS_ONLY = {
-    "verity/core/protocols/pous": "test_pous_trusted hashes Security's lakefiles against the lock; it starts no program",
+    "verity/protocols/pous": "test_pous_trusted hashes Security's lakefiles against the lock; it starts no program",
 }
 
 

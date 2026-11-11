@@ -7,4 +7,4 @@ markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]
 # tests/test_lower.py lowers a captured step's forward through the vLLM frontend's derivation (`te_core.capture.lower`),
 # which reads verity_vllm's frontend and the Definitions registry it binds to. Importing te_core.capture reads the
 # te_core package around it.
-inputs = ["benchmarks/covert_witness/te_core", "integrations/vllm", "verity"]
+inputs = ["benchmarks/covert_witness/te_core", "adapters/vllm", "verity"]
