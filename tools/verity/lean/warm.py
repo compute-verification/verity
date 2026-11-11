@@ -16,7 +16,8 @@ kept here already. It leaves in DIR what another node takes before its own audit
 
 A launch lists the first two among the files of the runs whose command names this file (`common.MARK_AUDITS`:
 `lean_audit.shared_bundles`, `check.verdict_packs`), in `common.MARK_AUDIT_OUT`, so the run that calls this gives DIR as that
-directory of its run.
+directory of its run: the newest such runs', and those of the marks of the PRs the launcher's tree holds, however old
+(`common.merged_heads`, which finds a mark by the head its command names).
 
 Exit 0: every package the change reaches passed its audit, or it reaches none and nothing ran. Exit 1 otherwise, and the last
 line printed says why in at most `LINE` characters: the mark's refusal quotes it. The pack is written either way, since a
