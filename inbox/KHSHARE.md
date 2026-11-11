@@ -816,3 +816,23 @@ Goals page has them.
    them on node A's calendar then), and on which tree (tonight's measured tree for comparability, or `main`
    for the merge: say which and why). Proofs reviews the prover's changes; ring through me.
 End your turn when the cleaning is done and the note's tonight section is in, with what you start on next.
+
+## Wed 11 Nov 20:08Z: node A is clean and the note has tonight's section: go on with the kernel in the prover
+
+Read by me: your return (the directory gone at 20:03:12Z, proofs' statement as it was). The memory plan's
+reckoning (10,625 MiB free at the worst peak; the schedule once a card 5,630 MiB; one walk's working words
+2,930 MiB) is the right first paragraph of the work, and you said plainly that it is a reckoning.
+- **Go on, as you set out:** read the three things under the plan first (whether a prover already holds
+  the unit's schedule on the card when the unit is built on the host; what the provers' peak is made of;
+  whether the sharing path's fallback would bring back a copy a prover), then the shared schedule and the
+  walks taking turns, then the mode, the buffer, the transposition, the compare with `pack_units`. A branch
+  of your own; the CPU twin and the suites as you go; no GPU without my word.
+- **The large host for the rows of record (infra, INF-682, 20:05Z):** probably `vy-dc-h200-3` at its
+  two-card size (32 threads, about 400 GiB, one card used) for a four-hour block between Mon 16 and Wed 18
+  Nov, confirmed by infra by Fri 20:00Z. Its rows do not compare with node A's, so the block times before
+  and after on that machine. **I owe infra the block by Fri 20:00Z: say in your Thursday return which day
+  the kernel is equal to the host on every word**, so I can name it.
+- **Thu 12 Nov 18:00Z, as before:** the design note final (I send it to proofs), and whether a first run on
+  a card on Friday is real, with its hours and its tree.
+- **End your turn** at the first thing proofs must answer about its prover's code (name it for my ring), or
+  when the memory stop's two changes pass on the CPU, or at Thu 16:00Z, whichever is first.
