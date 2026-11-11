@@ -50,6 +50,12 @@ state. That record is how whoever runs the job again knows it was stopped: the s
 its stopper's, `timeout`'s 124 under a lease out of time. A job that ends itself, with its record or with a failure,
 removes the state.
 
+A job whose route has an `output` keeps no state. Its checkpoints hand out the output model, which is not what the
+route's next step reads, and what such a route carries from one step to the next beside its trained weights (an
+average, an adapter) is in none of the tensors a job keeps. Told to stop, it starts again from θ: its record and
+the record of its stop say why (`no_state`: `NO_STATE`), so does the job on stderr, and a state found for it is
+refused.
+
 After the last step, outside the count, the job traces its route's step once for the grade (`trace_step`), among
 the run's last steps: the record's `trace` is what the capture measures of it, the product rows unpriced and the
 step's circuit, and a step the capture refuses is recorded as refused and leaves the job valid. `--retrace` takes a
@@ -94,7 +100,7 @@ import numpy as np
 import torch
 import torch.nn.modules.module as nn_module
 
-from . import BUDGET_SLACK, NOTHING, SCHEMA, STOPPED, VERSION, config, sandbox, starts, stop_record
+from . import BUDGET_SLACK, NO_STATE, NOTHING, SCHEMA, STOPPED, VERSION, config, sandbox, starts, stop_record
 from .codecs import Identity, Plan, Unencodable
 from .counterexample import SAMPLE_FINAL, SAMPLE_SEARCH, Family, check
 from .data import SPLITS, Data, Stream
@@ -781,9 +787,10 @@ class Outside:
         process ends it here when that isn't what the record of the segment that kept them states."""
         self._say(kept=kept)
 
-    def names(self, digest: str) -> None:
-        """Say which config this process runs: the job's own process ends it here when its kept state is another's."""
-        self._say(digest=digest)
+    def names(self, digest: str, no_state: str | None = None) -> None:
+        """Say which config this process runs, and why it keeps no state where it keeps none (`NO_STATE`): the job's
+        own process ends it here when its kept state is another's, or is one for a job that keeps none."""
+        self._say(digest=digest, no_state=no_state)
 
     def __call__(self, state: dict[str, torch.Tensor], weights_digest: str) -> None:
         self._hand("state", {k: v.cpu() for k, v in state.items()})
@@ -1020,7 +1027,7 @@ def outside(a: argparse.Namespace, argv: list[str]) -> int:
     ending any other way it removes the state."""
     reg = starts.registry(a.starts)
     scratch = Path(tempfile.mkdtemp(prefix="training-slowdown-"))
-    child, stopping = None, []
+    child, stopping, no_state = None, [], {}
 
     def stop(signum=None, frame=None) -> None:
         """SIGTERM's handler. The record of the stop comes first, here and not where `Stopped` is caught: what
@@ -1031,7 +1038,7 @@ def outside(a: argparse.Namespace, argv: list[str]) -> int:
             return
         stopping.append(signum)
         a.out.mkdir(parents=True, exist_ok=True)
-        (a.out / "run.json").write_text(json.dumps(stop_record(a.seed, a.split)) + "\n")
+        (a.out / "run.json").write_text(json.dumps(stop_record(a.seed, a.split) | no_state) + "\n")
         if child is not None and child.poll() is None:
             child.terminate()
         raise Stopped
@@ -1074,6 +1081,11 @@ def outside(a: argparse.Namespace, argv: list[str]) -> int:
                     if "kept" in said:
                         state.same(said["kept"], prior["segments"][-1]["kept"], "the route's process read it")
                     elif "digest" in said:
+                        if said.get("no_state"):
+                            no_state["no_state"] = said["no_state"]
+                            print(f"training_slowdown: {said['no_state']}", file=sys.stderr)
+                            if prior:
+                                state.refuse(f"a job of this config keeps none ({said['no_state']})")
                         if prior and said["digest"] != prior["config"]["digest"]:
                             state.refuse(f"its config digest is {prior['config']['digest']} and this job's is "
                                          f"{said['digest']}")
@@ -1110,7 +1122,12 @@ def outside(a: argparse.Namespace, argv: list[str]) -> int:
     except Stopped:
         if child is not None:
             child.wait()
-        left = f"its next run continues from the state in {a.state}" if a.state else "it keeps no state (--state)"
+        if a.state is None:
+            left = "it keeps no state (--state)"
+        elif (a.state / "state.json").is_file():
+            left = f"its next run continues from the state in {a.state}"
+        else:
+            left = f"it kept no state in {a.state}, so its next run starts again from θ"
         print(f"training_slowdown: the job was told to stop: its record says so, and {left}", file=sys.stderr)
         return STOPPED
     finally:
@@ -1161,8 +1178,10 @@ def inside(a: argparse.Namespace) -> int:
     with no_bytecode():
         cfg = config.load(a.config, reg)
         route = config.route(cfg.route)
+    # under an `output` what a checkpoint hands out is not what the route's next step reads: no state is kept of it
+    no_state = NO_STATE if own and a.state is not None and hasattr(route, "output") else None
     if own:
-        own.names(cfg.digest)
+        own.names(cfg.digest, no_state)
     s = cfg.start
     root = a.starts_root or Path(reg["installed"])
     theta = starts.load(s, root)
@@ -1178,9 +1197,9 @@ def inside(a: argparse.Namespace) -> int:
     te = Harness(theta, a.out, seed=a.seed, tier=a.tier, device=a.device, start=s.entry(), evaluator=own,
                  split=a.split, budget_s=60 * cfg.budget.get("minutes", 0), keep_weights=a.keep_weights,
                  digests=a.digests != "off", families=a.families, record=a.inside / "run.json", kept=kept,
-                 keep=keep if own and a.state is not None else None, stream=stream)
+                 keep=keep if own and a.state is not None and not no_state else None, stream=stream)
     guard_exits()
-    meta = json.loads(a.meta) | {
+    meta = json.loads(a.meta) | ({"no_state": no_state} if no_state else {}) | {
         "config": cfg.record(), "route": {"name": cfg.route, "version": cfg.route_version,
                                           "sha256": file_sha256(route.__file__)},
         "label": f"{config.LABEL_KEY}={config.Job(cfg, a.seed, a.split).label}", "commit": git_commit(),

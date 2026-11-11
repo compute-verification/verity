@@ -13,7 +13,7 @@ import pytest
 import torch
 from synthetic import SCORE_REL, tiny_registry, write_config
 
-from training_slowdown import NOTHING, TOLD, VERSION, config, grade, run, starts, stop_record, told
+from training_slowdown import NO_STATE, NOTHING, TOLD, VERSION, config, grade, run, starts, stop_record, told
 from training_slowdown.data import Data
 
 #: what depends on when a job ran, not on what it computed: its times, and the flags read from them
@@ -393,6 +393,71 @@ def test_a_job_that_asked_for_fresh_windows_stopped_and_run_again_is_served_the_
     assert [(cp["output_sha256"], cp["e_sha256"]) for cp in cut["checkpoints"]] == states and len(set(states)) == 4
 
 
+#: the routes with an `output`, each with dials for the tiny start
+OUTPUTS = {"ema": {"trainable": "blocks.0.w_*", "lr": 1e-2, "ema_decay": 0.9},
+           "lora": {"targets": "blocks.0.w_*.weight", "rank": 2, "lr": 1e-2}}
+
+
+def stop_once_scored(monkeypatch, step: int):
+    """Tell the job to stop (SIGTERM) once its own process has scored the checkpoint of `step`: a job that keeps no
+    state has nothing later to be stopped at."""
+    score, scores = run.Evaluator.__call__, []
+
+    def stop_after(self, state, weights_digest):
+        scores.append(score(self, state, weights_digest))
+        if len(scores) == step + 1:
+            os.kill(os.getpid(), signal.SIGTERM)
+        return scores[-1]
+
+    monkeypatch.setattr(run.Evaluator, "__call__", stop_after)
+
+
+@pytest.mark.slow
+@pytest.mark.parametrize("route", sorted(OUTPUTS))
+def test_a_stopped_job_of_a_route_with_an_output_starts_again_and_writes_the_unbroken_jobs_record(
+        tmp_path, fresh, monkeypatch, capfd, route):
+    """The job as a node runs it, three times, each two processes, so slow: that a job keeps no state is decided in
+    the route's process, where it imports the route, and said to the job's own process, which no test of the harness
+    alone reaches. A route with an `output` hands out its output model at a checkpoint (`ema` an average, `lora`
+    its adapters merged into their weights): a job that continued from it would train on from other weights than an
+    unbroken one, and its record would be valid. So: an unbroken job that asked for fresh windows, whose record says
+    it keeps no state; the same job told to stop (SIGTERM) once the checkpoint of step 1 is scored, which leaves the
+    record of its stop, saying the same, and nothing in its state directory; and the stopped job again, which starts
+    from θ and writes the unbroken job's record in one segment: every step's count, every checkpoint's output bit
+    for bit, and the windows served step for step, none of them one the start read, and none left out for having
+    been served to the run that was stopped."""
+    _, reg, _ = fresh
+    path = write_config(tmp_path / "a.toml", route=route, budget=BUDGET, windows="fresh", dials=OUTPUTS[route])
+
+    def job(out, state):
+        return run.main(["--config", path, "--seed", 0, "--split", "final", "--out", tmp_path / out, "--starts", reg,
+                         "--device", "cpu", "--state", tmp_path / state])
+
+    assert job("whole", "state-whole") == 0 and not (tmp_path / "state-whole").exists()
+    whole = json.loads((tmp_path / "whole" / "run.json").read_text())
+    served = whole["windows"]["served"]
+    assert whole["invalid"] == [] and whole["no_state"] == NO_STATE and "kept" not in whole["segments"][0]
+    assert len(served) == 4 and whole["windows"]["rounds"] == 1 and not {2} & {i for step in served for i in step}
+    assert f"training_slowdown: {NO_STATE}\n" in capfd.readouterr().err
+
+    with monkeypatch.context() as stopping:
+        stop_once_scored(stopping, 1)
+        assert job("cut", "state") == run.STOPPED
+    assert json.loads((tmp_path / "cut" / "run.json").read_text()) == stop_record(0, "final") | {"no_state": NO_STATE}
+    assert not any((tmp_path / "state").iterdir())
+    assert f"it kept no state in {tmp_path / 'state'}, so its next run starts again from θ" in capfd.readouterr().err
+
+    assert job("cut", "state") == 0 and not (tmp_path / "state").exists()
+    cut = json.loads((tmp_path / "cut" / "run.json").read_text())
+    assert cut["invalid"] == [] and [(s["first"], s["steps"]) for s in cut["segments"]] == [(0, 4)]
+    a, b = timeless(whole, keyed=False), timeless(cut, keyed=False)
+    assert b["windows"] == a["windows"] and b["steps"] == a["steps"]
+    assert b["checkpoints"] == [scored(cp) for cp in a["checkpoints"]]
+    assert len({cp["output_sha256"] for cp in cut["checkpoints"]}) == 4
+    assert {k: v for k, v in b.items() if k not in ("checkpoints", "digest_key")} == {
+        k: v for k, v in a.items() if k not in ("checkpoints", "digest_key")}
+
+
 def test_a_route_that_names_a_signal_is_refused():
     assert run.screen("import torch\n") == []
     assert run.screen("import os\nos.kill(os.getppid(), 15)\n") and run.screen("import signal\n")
@@ -430,7 +495,8 @@ def test_a_job_stopped_after_a_checkpoint_and_run_again_writes_the_unbroken_jobs
     the job's own process keeping the state, the stop, and the sandbox. An unbroken job; the same job told to stop
     (SIGTERM) once it has kept its state after step 1, and told again as it ends the route's process, which ends
     with `STOPPED`, the record of its stop and the state left; a
-    job of another config on that state, refused by both digests before it trains, the state left; the stopped job
+    job of another config on that state, refused by both digests before it trains, the state left; a job of a route
+    with an `output` on it, refused since such a job keeps no state, the state left; the stopped job
     on its state with one bit of the optimizers' part flipped, in the state directory and then only in the copy
     handed to the route's process, refused each time by that part's two SHA-512; the stopped job told to continue
     from nothing, and from a `state.json` of another sha256, refused each time; and the stopped job again, told
@@ -478,6 +544,12 @@ def test_a_job_stopped_after_a_checkpoint_and_run_again_writes_the_unbroken_jobs
                                          f"{config.load(other, starts.registry(reg)).digest}"):
         job("other", "state", other)
     assert sorted(p.name for p in (tmp_path / "state").iterdir()) == kept and not (tmp_path / "other").exists()
+
+    averaged = write_config(tmp_path / "averaged.toml", route="ema", budget=BUDGET, dials=OUTPUTS["ema"])
+    with pytest.raises(SystemExit, match="isn't one this job continues: a job of this config keeps none .the route "
+                                         "has an `output`"):
+        job("averaged", "state", averaged)
+    assert sorted(p.name for p in (tmp_path / "state").iterdir()) == kept and not (tmp_path / "averaged").exists()
 
     stated = so_far["segments"][-1]["kept"]
     tensors = tmp_path / "state" / "tensors-0000001.pt"

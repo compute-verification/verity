@@ -29,4 +29,8 @@ what the job kept (`run.resume_state`): the model's `state_dict`, each optimizer
 and Python's global generators. So a route carries from one step to the next only those. Anything else it would
 keep between steps (a module attribute outside the state dict, a generator of its own, a value in a closure) starts
 again as `build` leaves it, and the job then continues otherwise than an unbroken one runs.
+
+A job of a route with an `output` keeps no state and, told to stop, starts again from θ (`training_slowdown.NO_STATE`):
+its checkpoints hand out the output model, not the trained one, and what such a route carries beside its trained
+weights (a buffer outside the state dict that holds an average, an adapter the output merges away) is not kept.
 """

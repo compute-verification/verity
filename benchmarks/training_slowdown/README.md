@@ -96,7 +96,10 @@ writes nothing into the tree it runs from, which every run of its commit shares:
 run's own, built by `uv sync --frozen` in a directory the job makes under /tmp (`UV_PROJECT_ENVIRONMENT`), which the
 job's shell removes when the job ends, stopped or not.
 
-A stopped job continues. After each checkpoint but the last a job keeps what continuing needs in its state directory
+A stopped job continues, unless its route has an `output` (`ema`, `lora`): a job of such a route keeps no state, since
+its checkpoints hand out the output model and not what its next step reads, says so in its record (`no_state`), in
+the record of its stop and on stderr, and told to stop starts again from θ. After each checkpoint but the last any
+other job keeps what continuing needs in its state directory
 (`--state`): the model, the optimizers' state, the stream's position, the generators, and the record so far with its
 scores and its clock. Told to stop (SIGTERM: an eviction, or the end of its run's time) it first writes a `run.json`
 that says so (`stopped`: "told to stop", with no step or checkpoint), then ends the route's process and leaves the

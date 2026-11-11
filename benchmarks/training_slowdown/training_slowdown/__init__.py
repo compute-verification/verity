@@ -15,12 +15,18 @@ SCHEMA = "training-slowdown/run/v1"
 BUDGET_SLACK = 1.2
 #: a job's `--continues` when whoever starts it found no state for it to continue from
 NOTHING = "nothing"
+#: a record's `no_state`: why a job given a state directory keeps no state in it. What a checkpoint hands out under
+#: a route's `output` is the output model, and what that route carries from step to step beside its weights (an
+#: average, an adapter) is in no state dict the harness keeps
+NO_STATE = ("the route has an `output`: its checkpoints hand out the output model, not what its next step reads, so "
+            "the job keeps no state, and told to stop it starts again from θ")
 
 
 def stop_record(seed: int, split: str) -> dict:
     """The record of a run of the job of `seed` and `split` that was told to stop: whose it is, and that it was
     (`stopped`: `TOLD`). It holds no step and no checkpoint and is invalid, so nothing scores it; what the job had
-    computed is in its state, where it keeps one."""
+    computed is in its state, where it keeps one. The job adds why it keeps none (`no_state`: `NO_STATE`) once its
+    route's process has said so."""
     return {"schema": SCHEMA, "training_slowdown": VERSION, "seed": seed, "split": split, "stopped": TOLD,
             "steps": [], "checkpoints": [], "invalid": ["the job was told to stop before its last step"]}
 

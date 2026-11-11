@@ -401,8 +401,14 @@ def test_local_runs_a_stopped_job_again_on_its_own_state(tmp_path, reg_path, mon
     told, last = stop_record(job.seed, job.split), {"stopped": "12.0 s past the tier's 10.0 s budget"}
     ends = [(124, told), (STOPPED, told), (0, last)]
     argv = [str(path), "--local", "--root", str(tmp_path / "jobs"), "--starts", str(reg_path)]
-    assert cmd.main(argv) == 3 and "1 of 1 jobs pending, 1 of them stopped" in capsys.readouterr().out
-    assert cmd.main(argv) == 3 and cmd.main(argv) == 0 and cmd.main(argv) == 0
+    assert cmd.main(argv) == 3
+    out = capsys.readouterr().out
+    assert "1 of 1 jobs pending, 1 of them stopped" in out and "(it kept no state: it starts again from θ)" in out
+    kept = tmp_path / "jobs" / job.label / "state"
+    kept.mkdir(parents=True, exist_ok=True)
+    (kept / "state.json").write_text("{}")
+    assert cmd.main(argv) == 3 and "(its state is in state/)" in capsys.readouterr().out
+    assert cmd.main(argv) == 0 and cmd.main(argv) == 0
     assert len(calls) == 3 and calls[0] == calls[1] == calls[2]
 
     unread = json.dumps(told)[:-1]
