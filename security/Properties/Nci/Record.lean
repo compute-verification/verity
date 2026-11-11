@@ -327,7 +327,9 @@ def Accepts (F : Form) (j tr : Json) (c : F.Case) : Prop :=
 def Owns (F : Form) : Prop :=
   ∀ (j tr : Json) (c : F.Case), F.read j tr = .ok c → Carries F j c
 
-/-- **A record the check reads lays out a circuit.** -/
+/-- **A record the check reads lays out a circuit.** It says that some circuit has the record's layout: the Program's
+gates no wire covers, with their widths, kinds and reads. It does not say that this circuit's operations are the
+Program's, nor that it is the deployment's registered circuit. -/
 def LaidOut (F : Form) : Prop :=
   ∀ (j tr : Json) (c : F.Case), F.read j tr = .ok c → ∃ d, Served F c d
 
