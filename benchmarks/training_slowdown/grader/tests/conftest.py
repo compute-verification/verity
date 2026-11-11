@@ -48,7 +48,7 @@ LF = _lf()
 def _derive(dtype, rows: int, tokens: int, cc: tuple[int, int] | None = None):
     model, batch = LF.meta_step("tiny", rows, ctx=tokens - 1, vocab=64, matmul_dtype=dtype)
     opt = AdamW(**LF.ADAMW)
-    ex = export_step(model, LF.square_loss, opt, batch)
+    ex = export_step(model, LF.square_loss, opt, batch, gpu=cc is not None)
     with pytest.MonkeyPatch.context() as mp:
         for key, route in ROUTES.items() if cc else ():
             mp.setitem(CB.TRAIN_ROUTES, key, route)
