@@ -1,0 +1,324 @@
+[project]
+name = "verity-vllm"
+version = "0.1.0"
+description = "Verity x vLLM integration: runtime capture, definitions and Torch-derived Programs for vLLM, Match/Commit, the qualification sweep."
+requires-python = ">=3.12"
+dependencies = [
+    "verity",
+    "verity-config",
+    "numpy>=1.26",
+]
+
+[project.scripts]
+verity-vllm = "verity_vllm.pipeline.cli:main"
+
+# vLLM calls each general plugin in every process it loads plugins in (vllm/plugins/__init__.py): this one puts the canonical
+# moe_align_block_size on the Marlin MoE path (verity_vllm/engine/moe_align.py)
+[project.entry-points."vllm.general_plugins"]
+verity_moe_align = "verity_vllm.engine.moe_align:register"
+
+[project.optional-dependencies]
+# The CPU half (compare / replay / gates / derivation tests) needs torch; the pod runtime adds vLLM through pod_bootstrap.sh.
+torch = ["torch>=2.4"]
+# The team's run and store tool, which the custody, telemetry and store paths (`pipeline/research*.py`, `source_identity.py`)
+# and their tests use; the workspace installs it with every member.
+research = ["research"]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = [
+    "verity_vllm",
+]
+
+[tool.uv.sources]
+research = { workspace = true }
+verity = { workspace = true }
+verity-config = { workspace = true }
+[tool.pytest.ini_options]
+# Run from this directory: fixtures are read relative to it.  CUDA / vLLM / pod-tree tests skip or fail by name off-pod.
+testpaths = ["tests"]
+addopts = "-q -p no:cacheprovider"
+# tests/regression (the reference regression; skipped unless VERITY_REGRESSION=1) is run explicitly: `pytest tests/regression -m regression`.
+markers = [
+    "slow: takes over about 5 s; deselect with -m 'not slow'",
+    "boolean_sweep: a random Boolean-vs-word sweep; skipped unless VERITY_VLLM_BOOLEAN_SWEEPS=1 (circuit-check's word_view checks the equality on every merge)",
+    "regression: the v1 reference regression checks (tests/regression); opt in with VERITY_REGRESSION=1",
+    "pod: reads > 100 MB or rebuilds for minutes/hours -- run on a pod, never on the laptop",
+    "weak: PASS-side only or a rule no reference row exercises (see the check module's docstring)",
+    "rebuild: recomputes from a row's Programs (a manifest rebuild, a component decode); skipped unless VERITY_REGRESSION_REBUILD=1, as after each train on main (tools/verity/check/post_train.py)",
+]
+
+[tool.verity.tests]
+# test files that start a program the read guard can't trace (git, lake, a shell): keyed on the suite's whole tree. A compiler
+# needs no entry: a file whose closure builds native code may start one (the test-file family's `compilers`)
+untraced = [
+    "tests/lint/test_merge_allowlist.py",
+    "tests/lint/test_ruff.py",
+    "tests/lint/test_ruff_vllm.py",
+    "tests/migrate/test_superseded_quarantine.py",
+    "tests/ops/test_epoch_row.py",
+    "tests/ops/test_pod_bootstrap.py",
+    "tests/pipeline/test_boundary_plan.py",
+    "tests/pipeline/test_commit_group.py",
+    "tests/pipeline/test_commit_tree_of_record.py",
+    "tests/pipeline/test_experiment_index.py",
+    "tests/pipeline/test_gpu_lease.py",
+    "tests/pipeline/test_interior_rows.py",
+    "tests/pipeline/test_research_tools.py",
+    "tests/pipeline/test_row.py",
+    "tests/pipeline/test_row_tables_stream.py",
+    "tests/pipeline/test_serve_h1.py",
+    "tests/pipeline/test_source_identity.py",
+    "tests/pipeline/test_tp_gpu_lease.py",
+    "tests/program/predict/test_predict.py",
+    "tests/program/test_derive_transfer.py",
+    "tests/protocols/remote_bandwidth/test_remote_session.py",
+    "tests/protocols/test_credit_gate.py",
+    "tests/protocols/test_pouw_h1.py",
+    "tests/protocols/test_pouw_h1_commit.py",
+    "tests/protocols/test_pouw_h1_live.py",
+    "tests/protocols/test_pouw_pearl_c_served.py",
+    "tests/protocols/test_rt4_h1_challenger.py",
+    "tests/tools/test_ratchet_gate.py",
+    "tests/tools/test_scorecard.py",
+    "tests/tools/test_suite_parts.py",
+]
+# In place of its dependencies' directories (`inputs_only`): `verity` whole, since the code identity (`source_identity.code_identity`,
+# the hot Commit worker's key, which tests/pipeline computes over this tree) hashes every file of it; of `research`, what the
+# package imports (`research.store.tool`, `research.telemetry.source_identity`) and the store CLI that `store_io` starts for a
+# fetch and `records.data` starts as `python -m research` (its `__main__`), and the run fixture
+# tests/regression/test_attempt_resolution.py resolves. Test-only: tests/pipeline checks the fixtures
+# this package registers and the demo's stored workload (demos/vllm/workloads/SHA256SUMS); tests/program/test_fp8_moe.py replays the Hopper e4m3 k32 step's pinned vectors (under `verity`);
+# tests/engine's int8 tests run benchmarks/ppl's int8 steps as their oracle;
+# tests/store/test_remote_session.py runs the remote session's prover and verifier (`store.remote`), and the verifier
+# imports lean_verifier.py, challengers.py and store_layout.py; tests/protocol_options/test_pouw_h1_circuits.py parses a
+# period-open's --circuit-files with infra's gate (verity/composite/device/live_challenger/auditor.py), and the in-process gate
+# (tests/protocol_options/challenger_host.py) runs infra's model registry (verity/composite/device/live_challenger/models.py);
+# tests/pipeline/test_served_unit_rows.py pins the statements of the served GLM-5.3 partitions' chunked templates
+# (benchmarks/one_stage/glm53_*.json);
+# tests/protocols/test_pous_option.py encodes and spot-checks C* with P2's store (benchmarks/pous/p2_v1/store.py and the
+# reference decode it imports); tests/tools/test_ratchet_gate.py commits the repository's lints (tests/lint/test_repo_env_reads.py,
+# test_repo_ruff.py, test_repo_silent_excepts.py, test_repo_lane_text.py and test_repo_retired_terms.py) into the repositories it gates.
+# The tests build and run the Lake packages whose lakefiles they list: tests/pipeline/test_row_tables_stream.py
+# `sampled-proofs-verifier`, tests/protocol_options/test_pouw_h1.py `pouw-check-difftest` and test_remote_session.py
+# `remote-audit-verifier`.
+# tests/protocols/pouw_h1_circuits.py lowers K's circuit file with h1_prove's h1unit.py under hidden_zk's fast_stage.py and the
+# compact_stage.py it imports (test_pouw_h1_drawn.py builds one), and reads the live Program from h1_prove's live.py (test_pouw_h1_circuits.py).
+# The root ruff.toml is what ruff.toml extends, and tests/lint/test_ruff_vllm.py reads its selection.
+inputs_only = true
+inputs = ["verity", "verity/README.md", "verity/configuration/config/verity_config", "fixtures/artifacts.json", "demos/vllm/workloads/SHA256SUMS", ".gitignore",
+          "verity/protocols/spot/verifier/lean/lakefile.toml", "verity/protocols/pouw/verifier/lean/check/lakefile.toml",
+          "verity/protocols/poub/verifier/lean/lakefile.toml",
+          "benchmarks/ppl/steps.py", "benchmarks/ppl/matmul.py", "benchmarks/ppl/gates.py", "benchmarks/ppl/spec.py", "benchmarks/ppl/methodology.py", "benchmarks/ppl/model.py",
+          "benchmarks/ppl/windows.py", "benchmarks/ppl/datasets.json", "benchmarks/pouw/edited_gemm/fattn_ref.py",
+          "benchmarks/remote_session/prover.py", "verity/protocols/poub/verifier/session/verifier.py", "verity/protocols/poub/verifier/session/wire.py",
+          "verity/protocols/poub/verifier/session/checks.py", "verity/protocols/poub/verifier/session/lean_verifier.py", "verity/protocols/poub/verifier/session/challengers.py",
+          "benchmarks/remote_session/store_layout.py", "verity/composite/device/live_challenger/auditor.py", "verity/composite/device/live_challenger/host.json",
+          "verity/composite/device/live_challenger/models.py", "benchmarks/pouw/harness/sass_gate.py",
+          "benchmarks/pous/p2_v1/__init__.py", "benchmarks/pous/p2_v1/store.py", "benchmarks/pous/p2_v1/reference.py",
+          "benchmarks/one_stage/glm53_all_families_tp8_step16.json", "benchmarks/one_stage/glm53_sparse_mla_tp8_step16.json",
+          "benchmarks/one_stage/glm53_prefill_tp8_step0.json",
+          "ruff.toml", "tests/lint/test_repo_env_reads.py", "tests/lint/test_repo_ruff.py", "tests/lint/test_repo_silent_excepts.py",
+          "tests/lint/test_repo_lane_text.py", "tests/lint/test_repo_retired_terms.py",
+          "tools/research/src/research/__init__.py", "tools/research/src/research/cli.py", "tools/research/src/research/clone.py",
+          "tools/research/src/research/compare.py", "tools/research/src/research/env.py", "tools/research/src/research/pythonpath.py",
+          "tools/research/src/research/record.py", "tools/research/src/research/remote.py", "tools/research/src/research/result.py",
+          "tools/research/src/research/runs.py", "tools/research/src/research/secret_hint.py", "tools/research/src/research/timefmt.py", "tools/research/src/research/waitcap.py",
+          "tools/research/src/research/store", "tools/research/src/research/telemetry", "tools/research/tests/fixtures/run_v0.2",
+          "tools/research/src/research/withdraw.py",
+          "tools/research/src/research/__main__.py",
+          "benchmarks/pouw/h1_prove/h1unit.py", "benchmarks/pouw/h1_prove/live.py",
+          "benchmarks/pouw/hidden_zk/fast_stage.py", "benchmarks/pouw/hidden_zk/compact_stage.py"]
+parallel = true
+# benchmarks/pouw/edited_gemm/fattn_ref.py is the int8 attention tests' oracle (tests/engine), beside benchmarks/ppl's linears;
+# tests/engine/int8_attention_sass.py reads the int8 attention kernels' SASS with the PoUW SASS gate's nvdisasm parser
+# (benchmarks/pouw/harness/sass_gate.py)
+# a worker's peak grows with its share of the suite, since what its tests leave held isn't returned: 6.2 GB on 14 workers, 12 GB on
+# 8 (test_codec's alias test takes 6.3 GB over the 5.6 GB held before it), 15.5 GB on 5. `--mem-gb`, or a job's memory cgroup,
+# divides by this, but suites.py's default `--jobs` counts 9 GB a process, so a 16 GB job runs the suite in one process unless
+# `--jobs` says more. tools/suite_parts.py runs it as 8 parts at once, each on its job's CPUs (a sixth on 4 workers: 8.5, 6.2, 6.0
+# and 3.5 GB)
+worker_gb = 8
+# the full suite takes about 10,000 s on 5 workers, past suites.py's SUITE_TIMEOUT_S; `--quick` leaves out the tests over 5 s
+# (their `slow` marks)
+timeout_s = 14400
+
+# What these test files read that their source doesn't name (a tree a test walks, a module it loads by a name it computes,
+# what a program it starts reads): the graph's test-file tasks are keyed on it.
+
+[[tool.verity.tests.reads]]
+tests = [
+    "tests/acquire/test_attention_source.py",
+    "tests/acquire/test_dsv4_attention_source.py",
+    "tests/acquire/test_dsv4_mhc_source.py",
+    "tests/acquire/test_dsv4_route_source.py",
+    "tests/acquire/test_route_source.py",
+]
+paths = ["adapters/vllm/verity_vllm/check", "adapters/vllm/verity_vllm/properties"]
+
+[[tool.verity.tests.reads]]
+tests = ["tests/acquire/test_norm_tap_src.py"]
+paths = ["adapters/vllm/verity_vllm/acquire/norm_tap_src"]
+
+[[tool.verity.tests.reads]]
+tests = [
+    "tests/check/test_capture_map.py",
+    "tests/pipeline/test_tp_gpu_lease.py",
+]
+paths = ["adapters/vllm/verity_vllm/pipeline/tp"]
+
+[[tool.verity.tests.reads]]
+tests = ["tests/check/test_challenge_seeds.py"]
+paths = ["adapters/vllm/verity_vllm", "verity/circuits"]
+
+[[tool.verity.tests.reads]]
+tests = [
+    "tests/check/test_commit_verdict_replay_seed_of_record.py",
+    "tests/check/test_g4_addressed_instances.py",
+    "tests/check/test_verdict.py",
+    "tests/observe/test_gen_batch_engine_arg.py",
+    "tests/pipeline/test_replay_plan.py",
+    "tests/pipeline/test_tp_build_width.py",
+    "tests/pipeline/test_workload_fetch.py",
+    "tests/pipeline/test_workload_file.py",
+]
+paths = ["adapters/vllm/verity_vllm/pipeline"]
+
+[[tool.verity.tests.reads]]
+tests = [
+    "tests/check/test_gates_fixtures.py",
+    "tests/engine/test_env.py",
+    "tests/observe/test_fold_build_versions.py",
+    "tests/program/predict/test_predict.py",
+    "tests/program/test_twins.py",
+    "tests/test_no_by_name_rules.py",
+]
+paths = ["adapters/vllm/verity_vllm"]
+
+[[tool.verity.tests.reads]]
+tests = ["tests/check/test_tp2_d90_fixture.py"]
+paths = ["adapters/vllm/verity_vllm/check/match", "adapters/vllm/verity_vllm/check/replay"]
+
+[[tool.verity.tests.reads]]
+tests = ["tests/commit/test_native_jit_load.py"]
+paths = ["adapters/vllm/verity_vllm/commit/committer/hidden_gpu_src"]
+
+[[tool.verity.tests.reads]]
+tests = ["tests/commit/test_pinned_pool_exact.py", "tests/observe/test_pouw_fold.py"]
+paths = ["adapters/vllm/verity_vllm", "verity/protocols/poub/verifier", "verity/circuits"]
+
+[[tool.verity.tests.reads]]
+tests = ["tests/engine/collectives/test_tp_collective.py", "tests/properties/test_quarantine_lint.py"]
+paths = ["adapters/vllm/verity_vllm/program/quarantine"]
+
+[[tool.verity.tests.reads]]
+tests = ["tests/engine/test_gen_llama.py", "tests/engine/test_gen_ov_easy.py"]
+paths = ["adapters/vllm/verity_vllm/observe/fold", "adapters/vllm/verity_vllm/pipeline"]
+
+[[tool.verity.tests.reads]]
+tests = ["tests/lint/test_p16_cli_callers.py"]
+paths = ["adapters/vllm/tools"]
+
+[[tool.verity.tests.reads]]
+tests = ["tests/lint/test_ratchet.py"]
+paths = ["adapters/vllm/tests/lint"]
+
+[[tool.verity.tests.reads]]
+tests = ["tests/lint/test_ruff.py", "tests/lint/test_ruff_vllm.py"]
+paths = ["adapters/vllm/tests", "adapters/vllm/tools"]
+
+[[tool.verity.tests.reads]]
+tests = [
+    "tests/pipeline/test_advice_commit.py",
+    "tests/pipeline/test_boundary_plan.py",
+    "tests/pipeline/test_commit_plan.py",
+    "tests/pipeline/test_commit_tree_of_record.py",
+    "tests/pipeline/test_serve_seal.py",
+]
+paths = ["adapters/vllm", "verity"]
+
+[[tool.verity.tests.reads]]
+tests = ["tests/pipeline/test_circuit_db.py"]
+paths = ["tools/research/src/research"]
+
+[[tool.verity.tests.reads]]
+tests = [
+    "tests/pipeline/test_config_run.py",
+    "tests/pipeline/test_tp_run_root.py",
+    "tests/pipeline/test_tp_world_n.py",
+]
+paths = ["adapters/vllm/verity_vllm/acquire", "adapters/vllm/verity_vllm/pipeline/tp"]
+
+[[tool.verity.tests.reads]]
+tests = ["tests/pipeline/test_glue.py"]
+paths = ["adapters/vllm/tests", "adapters/vllm/verity_vllm", "verity"]
+
+[[tool.verity.tests.reads]]
+tests = ["tests/pipeline/test_row.py"]
+paths = ["benchmarks/remote_session", "adapters/vllm", "verity"]
+
+[[tool.verity.tests.reads]]
+tests = [
+    "tests/pipeline/test_serve_advice.py",
+    "tests/program/predict/test_aot.py",
+    "tests/program/predict/test_aot_row.py",
+    "tests/program/predict/test_steps.py",
+    "tests/program/test_dense_family_boundary.py",
+]
+paths = ["adapters/vllm/verity_vllm", "verity"]
+
+[[tool.verity.tests.reads]]
+tests = [
+    "tests/pipeline/test_serve_remote.py",
+    "tests/protocols/remote_bandwidth/test_in_place_gpu.py",
+    "tests/protocols/remote_bandwidth/test_remote_session.py",
+]
+paths = ["benchmarks/remote_session", "verity/protocols/poub/verifier"]
+
+[[tool.verity.tests.reads]]
+tests = ["tests/pipeline/test_serve_row.py"]
+paths = [
+    "adapters/vllm/verity_vllm/engine",
+    "adapters/vllm/verity_vllm/pipeline",
+    "verity/protocols/certifier",
+    "verity/commitments/crypto",
+]
+
+[[tool.verity.tests.reads]]
+tests = [
+    "tests/program/predict/test_window_circuit.py",
+    "tests/program/predict/test_window_circuit_fa3.py",
+    "tests/program/predict/test_window_circuit_int8.py",
+]
+paths = ["verity/definitions/ops"]
+
+[[tool.verity.tests.reads]]
+tests = ["tests/program/predict/test_window_rows.py"]
+paths = ["verity/protocols/certifier"]
+
+[[tool.verity.tests.reads]]
+tests = ["tests/program/test_compiled_relations_warm_vml.py"]
+paths = ["adapters/vllm/verity_vllm/check"]
+
+[[tool.verity.tests.reads]]
+tests = ["tests/program/test_moe_fp8_definition_imports.py"]
+paths = ["verity/definitions/registry"]
+
+[[tool.verity.tests.reads]]
+tests = ["tests/program/test_prims_serve_boundaries.py"]
+paths = ["verity/definitions"]
+
+[[tool.verity.tests.reads]]
+tests = ["tests/protocols/test_pous_option.py"]
+paths = ["benchmarks/pous/p2_v1"]
+
+[[tool.verity.tests.reads]]
+tests = ["tests/query/test_word.py"]
+paths = ["adapters/vllm/verity_vllm/pipeline", "verity/circuits"]
+
+[[tool.verity.tests.reads]]
+tests = ["tests/test_dead_code_tests_for.py", "tests/test_imports_resolve.py", "tests/test_no_dead_modules.py"]
+paths = ["adapters/vllm/tests", "adapters/vllm/verity_vllm"]
