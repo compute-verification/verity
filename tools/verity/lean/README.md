@@ -366,8 +366,8 @@ premises or type hash, a `reads` group, a premise's digest) writes the `lean-aud
 would among its reports; its `report.json`'s `regenerated` names that file, and `changes` lists the review's
 statement changes (`entry`, `kind`: the lock's section, `owners`, `line`). A missing record or name, an owner or any
 other failure writes none. Code decides which
-failures those are, not text: each failure's code (`Failure`) is in `report.json`'s `failure_codes`
-(`settled_codes`: what `--regenerate` settled), and the record differences are `RECORD_DIFFERENCE`'s. The Lean check of a commit of `next` runs with
+those are, not text: `report.json` has each failure's code and entry (`Failure`: `failure_codes`,
+`failure_entries`; `settled_*`: `--regenerate`'s), and record differences are `RECORD_DIFFERENCE`'s. The Lean check of a commit of `next` runs with
 `--regenerate`, and drive commits the records it regenerated when it lands that commit (drive.toml's `regenerate_locks`);
 drive's after-landing run passes `--no-regenerate`, so a record difference that reaches `checked` fails there.
 
