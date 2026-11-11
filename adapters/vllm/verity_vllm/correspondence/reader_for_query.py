@@ -56,6 +56,7 @@ from verity_vllm.correspondence.runtime import (
     CallCorrespondence,
     RuntimeCorrespondence,
     correspondence_digest,
+    occurrence_views,
     read_program_document,
 )
 from verity_vllm.query.program_view import ProgramView, param_reads
@@ -151,7 +152,9 @@ def _return_shape(r: Mapping[str, Any], outs: Sequence[Any], ins: Sequence[Any])
     if r.get("output") is not None:
         return (outs[r["output"]] or {}).get("shape") if r["output"] < len(outs) else None
     wa = r.get("written_arg")
-    return ((ins[wa] or {}).get("view") or {}).get("shape") if wa is not None and wa < len(ins) else None
+    written = ins[wa] if wa is not None and wa < len(ins) else None
+    view = written.get("view") if written else None
+    return view.get("shape") if view else None
 
 
 def recorded_names(doc: Mapping[str, Any]) -> tuple[dict[int, CallName], list[int], dict[int, int], dict[int, tuple[int, int]]]:
@@ -185,7 +188,7 @@ def recorded_names(doc: Mapping[str, Any]) -> tuple[dict[int, CallName], list[in
         if rets and all(r.get("output") is None and r.get("written_arg") is None for r in rets):
             tensorless.append(k)
         elif rets:
-            outs, ins = o.get("outputs") or [], o.get("inputs") or []
+            outs, ins = occurrence_views(o, "outputs"), occurrence_views(o, "inputs")
             r, cols = call_place([(x["leaves"], _return_shape(x, outs, ins)) for x in rets if x.get("leaves") is not None])
             if r is not None:
                 rows[k] = r
@@ -370,5 +373,5 @@ class Correspondence:
         `attention_impls_declared` keys (predict's, `program.predict.naming`)."""
         if not result_json:
             return ()
-        obs = result_json.get("attention_impls_observed") or result_json.get("attention_impls_declared") or {}
-        return tuple(str(k) for k in obs)
+        obs = result_json.get("attention_impls_observed") or result_json.get("attention_impls_declared")
+        return tuple(str(k) for k in obs) if obs else ()

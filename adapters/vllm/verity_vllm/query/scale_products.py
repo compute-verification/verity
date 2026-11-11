@@ -21,6 +21,8 @@ from typing import Any
 from verity.definitions.registry import fp8, fp8_vocab
 from verity.definitions.registry import prims as P
 
+from verity_vllm.query.manifest.format import identity_rows
+
 FAMILY = "scale_products"
 MEMBER = "scale_products"
 #: the shared-scale GEMM Definitions whose Calls commit their scale products
@@ -125,7 +127,7 @@ def policy_of(manifest: Mapping[str, Any] | None) -> bool:
 def manifest_sites(manifest: Mapping[str, Any] | None) -> dict[str, dict[str, int]]:
     """op_path -> {"n_blocks", "k_blocks"} of every `scale_products` identity of a manifest; a site named with two geometries is refused."""
     out: dict[str, dict[str, int]] = {}
-    for r in (manifest or {}).get("identities") or []:
+    for r in identity_rows(manifest):
         if r.get("family") != FAMILY:
             continue
         g = {"n_blocks": int(r["n_blocks"]), "k_blocks": int(r["k_blocks"])}

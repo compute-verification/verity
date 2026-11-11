@@ -646,6 +646,12 @@ def tp_peer_binding(parts: list[dict[str, Any]], collective_kind: Callable[[str]
             "n_unbound": len(unbound), "unbound": sorted(unbound)[:16], "rule": TP_PEER_BINDING_RULE}
 
 
+def identity_rows(manifest: Mapping[str, Any] | None) -> Iterable[Mapping[str, Any]]:
+    """The identity rows a manifest holds under `identities`; none where there is no manifest, or it has no such field."""
+    rows = None if manifest is None else manifest.get("identities")
+    return () if rows is None else rows
+
+
 def manifest_digest(identities: list[dict[str, Any]]) -> str:
     """sha256 of the canonical JSON of the sorted identity tuples (+ family), independent of the annotations."""
     h = hashlib.sha256()

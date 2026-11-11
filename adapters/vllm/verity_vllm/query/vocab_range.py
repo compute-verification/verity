@@ -18,6 +18,8 @@ from collections.abc import Callable, Mapping
 from functools import cache
 from typing import Any
 
+from verity_vllm.query.manifest.format import identity_rows
+
 FAMILY = "vocab_range"
 MEMBER = "vocab_range"
 SHARDS = frozenset({"EmbeddingShard_v1"})
@@ -124,7 +126,7 @@ def policy_of(manifest: Mapping[str, Any] | None) -> bool:
 def manifest_sites(manifest: Mapping[str, Any] | None) -> dict[str, dict[str, int]]:
     """op_path -> {"start", "shard_rows"} of every `vocab_range` identity of a manifest; a site named with two ranges is refused."""
     out: dict[str, dict[str, int]] = {}
-    for r in (manifest or {}).get("identities") or []:
+    for r in identity_rows(manifest):
         if r.get("family") != FAMILY:
             continue
         g = {"start": int(r["start"]), "shard_rows": int(r["shard_rows"])}

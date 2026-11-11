@@ -22,6 +22,8 @@ from collections.abc import Callable, Mapping
 from functools import cache
 from typing import Any
 
+from verity_vllm.query.manifest.format import identity_rows
+
 FAMILY = "norm_scales"
 MEMBER = "norm_scale"
 
@@ -133,7 +135,7 @@ def policy_of(manifest: Mapping[str, Any] | None) -> bool:
 def manifest_modules(manifest: Mapping[str, Any] | None) -> dict[str, str]:
     """op_path -> the norm Definition family of every `norm_scales` identity of a manifest; a module named under two families is refused."""
     out: dict[str, str] = {}
-    for r in (manifest or {}).get("identities") or []:
+    for r in identity_rows(manifest):
         if r.get("family") != FAMILY:
             continue
         op, fam = str(r["op_path"]), str(r.get("spec") or "").split("{", 1)[0]
@@ -148,7 +150,7 @@ def words_per_token(manifest: Mapping[str, Any] | None) -> int:
     """The most scale words any step of the manifest commits per token row (q/k norms commit one per head): the source's arena bound."""
     tokens: Counter = Counter()
     words: Counter = Counter()
-    for r in (manifest or {}).get("identities") or []:
+    for r in identity_rows(manifest):
         key = (str(r.get("request_id")), str(r.get("engine_step", r.get("step"))))
         if r.get("family") == "input_token_ids":
             tokens[key] = max(tokens[key], int(r.get("rows") or 0))

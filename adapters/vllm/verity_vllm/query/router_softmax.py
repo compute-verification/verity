@@ -18,6 +18,8 @@ from collections.abc import Callable, Mapping
 from functools import cache
 from typing import Any
 
+from verity_vllm.query.manifest.format import identity_rows
+
 FAMILY = "router_softmax"
 MEMBER = "router_softmax"
 #: the selection-order router Definitions -> whether the Call renormalizes (the Norm epilogue)
@@ -150,7 +152,7 @@ def manifest_layers(manifest: Mapping[str, Any] | None) -> dict[int, dict[str, A
     """MoE layer -> {"module", "experts", "topk", "renormalize", "width"} of every `router_softmax` identity of a manifest; a layer named
     with two geometries is refused."""
     out: dict[int, dict[str, Any]] = {}
-    for r in (manifest or {}).get("identities") or []:
+    for r in identity_rows(manifest):
         if r.get("family") != FAMILY:
             continue
         layer = int(str(r["op_path"]).rsplit("/L", 1)[1])

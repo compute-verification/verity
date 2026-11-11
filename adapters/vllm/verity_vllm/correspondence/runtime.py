@@ -22,7 +22,7 @@ from __future__ import annotations
 
 import hashlib
 import json
-from collections.abc import Iterator
+from collections.abc import Iterator, Mapping, Sequence
 from dataclasses import dataclass, field
 from typing import Any
 
@@ -242,8 +242,7 @@ class RuntimeCorrespondence:
             if "members" in c:
                 raise ValueError(f"calls[{k}] is a batch's, its members' records (`prune.BATCHED`): no reader takes a batch's yet")
             o = occs[c["occ"]] if c.get("occ") is not None else None
-            outs = (o or {}).get("outputs") or []
-            ins = (o or {}).get("inputs") or []
+            outs, ins = occurrence_views(o, "outputs"), occurrence_views(o, "inputs")
             rets = []
             for r in c.get("returns") or ():
                 wa = r.get("written_arg")
@@ -272,9 +271,10 @@ class RuntimeCorrespondence:
                 coll = CollectiveOccurrence(cj["kind"], int(cj["occurrence"]), tuple(int(x) for x in cj["operand_ranks"]),
                                             cj.get("own_operand"), cj.get("peer_operand"), cj.get("peer_input"),
                                             tuple(int(x) for x in cj.get("peer_operands") or ()), tuple(cj.get("peer_inputs") or ()))
+            lifetime = None if o is None else o.get("lifetime")
             yield CallCorrespondence(k, (o or {}).get("module", ""), (o or {}).get("module_class"), (o or {}).get("node"), (o or {}).get("op"),
                                      (o or {}).get("rule"), c.get("member"), c.get("row"), c.get("hint"), tuple(rets), tuple(args),
-                                     dict((o or {}).get("lifetime") or {}), rank, coll)
+                                     {} if lifetime is None else dict(lifetime), rank, coll)
 
     # -- lookups ----------------------------------------------------------------------------------------------------------
     def __len__(self) -> int:
@@ -317,6 +317,14 @@ class RuntimeCorrespondence:
 
     def collective_calls(self) -> list[int]:
         return sorted(k for k, r in self._calls.items() if r.collective is not None)
+
+
+def occurrence_views(occurrence: Mapping[str, Any] | None, key: str) -> Sequence[Any]:
+    """An occurrence's `outputs` or `inputs` (`key`), neither of which `JSON_SCHEMA` requires of it: no entries for a Call with no
+    occurrence, and none where the occurrence records none (predict's naming writes `inputs` only for an op that writes an
+    argument in place)."""
+    views = None if occurrence is None else occurrence.get(key)
+    return () if views is None else views
 
 
 # ---------------------------------------------------------------------------------------------------------------------------
@@ -506,7 +514,8 @@ def read_program_document(program_dir: Any) -> tuple[dict | None, str | None, st
     if os.path.isfile(res_p):
         try:
             with open(res_p) as f:
-                recorded = (json.load(f).get("program") or {}).get("correspondence_digest")
+                program = json.load(f).get("program")
+            recorded = program.get("correspondence_digest") if isinstance(program, dict) else None
         except (OSError, ValueError) as e:
             return None, None, f"{res_p}: unreadable ({e})"
         if recorded is None:
@@ -561,4 +570,4 @@ def validate_document(doc: dict) -> list[str]:
 
 __all__ = ["SCHEMA", "NAMESPACE", "JSON_SCHEMA", "TensorView", "ReturnSlot", "ArgSlot", "ArgSpan", "RankOccurrence", "CollectiveOccurrence",
            "CallCorrespondence", "RuntimeCorrespondence", "correspondence_digest", "load_correspondence", "read_program_dir", "read_program_document",
-           "read_descriptor_annotation", "validate_document"]
+           "read_descriptor_annotation", "validate_document", "occurrence_views"]

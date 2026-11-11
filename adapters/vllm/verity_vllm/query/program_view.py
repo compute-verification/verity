@@ -38,7 +38,7 @@ import gzip
 import json
 import operator
 from array import array
-from collections.abc import Iterable, Iterator, Sequence
+from collections.abc import Iterable, Iterator, Mapping, Sequence
 from collections.abc import Sequence as _SequenceABC
 from dataclasses import dataclass
 from typing import Any
@@ -581,6 +581,12 @@ def definition_ports(spec: str) -> tuple[Port, ...]:
 # readers
 # ---------------------------------------------------------------------------------------------------------------------------------
 
+def _params_of(head: Mapping[str, Any]) -> Iterable[tuple[str, Any]]:
+    """An instance sequence's `params`, its Program's (name, type) pairs; none where its head holds no such field."""
+    params = head.get("params")
+    return () if params is None else params
+
+
 def _params_view(params: Iterable[tuple[str, Any]]) -> tuple[InputView, ...]:
     out = []
     for k, (name, t) in enumerate(params):
@@ -697,7 +703,7 @@ def from_instances(path_or_doc: str | dict[str, Any]) -> ProgramView:
     whose rows are not in body order (never written by `derive_step`) is read again as a document; a document's rows are sorted."""
     if isinstance(path_or_doc, str):
         hdr = _read_instance_header(path_or_doc)
-        params = _params_view(hdr.get("params") or [])
+        params = _params_view(_params_of(hdr))
         try:
             b = _instances_columns(params, iter_instance_rows(path_or_doc, expand=False))
         except _OutOfOrder:
@@ -706,7 +712,7 @@ def from_instances(path_or_doc: str | dict[str, Any]) -> ProgramView:
             return from_instances(doc)
         return b.view((), hdr.get("digest"), "instances", check_cids=_check_calls(hdr))
     doc = path_or_doc
-    params = _params_view(doc.get("params") or [])
+    params = _params_view(_params_of(doc))
     rows = sorted(doc["rows"], key=lambda r: int(r["i"]))
     try:
         b = _instances_columns(params, rows, memo=True)
