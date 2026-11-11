@@ -64,7 +64,7 @@ def test_adversary_takes_the_fastest_encode_of_each_width_and_the_cheapest_tag()
     mine = point(lane="wide", k=2, x=554.0, tau=0.82)                    # 238.8 a round at 1.16×
     theirs = point(lane="tensor", k=1, x=216.0, x_boosted=True, tau=0.48)
     other = point(lane="wide", b=255, k=1, x=109.0, tau=0.82)
-    a, t, o = F.adversary(F.check([mine, theirs, other]), tau_cap=0.61)
+    a, t, o = F.adversary(F.check([mine, theirs, other]), tau_max=0.61)
     assert a["x"] == pytest.approx(432.0) and a["x_boosted"] and a["x_own"] == 554.0 and a["tau"] == 0.61
     assert t["x"] == pytest.approx(216.0) and t["tau"] == 0.48
     assert o["x"] == pytest.approx(109.0 / 1.16)
