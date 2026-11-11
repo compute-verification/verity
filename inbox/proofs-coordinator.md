@@ -61502,3 +61502,94 @@ Step 13 had nobody at 18:28Z and has a proofs worker since 18:46Z; circuits and 
 **Runs.** I launched no `research run`. Since 18:44Z: `research queue status` (18:50Z), `research notes sync --path lanes/proofs` twice, `git ls-remote`, `gh pr view` for #8426, #8885, #9040, #9041, #8891, #8859 and #8933, all exit 0. I read VLLM-335, PRF-548 and CIR-241 through the Linear connector and wrote nothing to Linear or Slack. I pushed only this file.
 
 **Next:** the ranked list for step 20 as an entry by 23:00Z, with a checkpoint note before 19:50Z; then my final message.
+
+## FRAME, Wed 11 Nov 18:57Z: first entry. The restated premise is stated in Lean. Its first form compiled (`r20261111-182715-0114`) and did not cover two reads of one committed leaf by one unit; the form that does is committed and in its one-file try, `r20261111-183821-2b27`, with no verdict yet. The best outcome is not reachable by Thursday 10:00Z. `main` accepts three shapes of read at which the property is false: yours to rule whether the verifier refuses them or the statement's scope leaves them out, before WIRES marks
+
+**Verdict:** the property is `SpotFlock.AddressesWired h ω keep` in a new file, `security/Proofs/Flock/SpotFlock/AddressesWired.lean`, on `cursor/proofs-frame-8fb5` (from `cursor/proofs-addresses-3f5a` `294cd887df74`), head `b66d9cd53c4b` [run: pushed]. It touches no file WIRED owns and edits neither `SlotsAt.lean` nor `AddressesAt.lean` [run: `git diff --stat 294cd887df74`, one file added]. Nothing is proved from it yet: the sessions' openings at the wired program are the next work.
+
+**1. The property, in Lean** [read: the file at `b66d9cd53c4b`; `r` is a `CheckedRun`, `ω` the wire map, `keep` what the wired program returns].
+
+```lean
+/-- the roots the wired program opens gate `g` under -/
+def CheckedRun.rootsWired (g : ℕ) : List Msg :=
+  if g ∈ cutBlock ω r.rb ∧ (r.s.prog.wired ω keep).Boundary (cutBlock ω r.rb) g = false then
+    iroots r.x r.seen r.ρ
+  else r.s.roots
+
+def CheckedRun.AddressHoldsWired (S : Address) (i g : ℕ) : Prop :=
+  r.Counted h ∧ r.RowAt h S i ∧ (r.ReadsRegisteredWired h ω keep S g ∨ r.ReadsInteriorWired h ω keep S g)
+
+def AddressesWired : Prop :=
+  ∃ addr : ℕ → Address,
+    (∀ i, (addr i).place = (addr (ω i)).place ∧ (addr i).slot = (addr (ω i)).slot) ∧
+      ∀ r : CheckedRun, r.Ok h → ∀ i, r.s.prog.Needs r.b i → r.AddressHoldsWired h ω keep (addr i) i (ω i)
+```
+
+How it differs from `Addresses` (`SlotsAt.lean:322`), in five points.
+
+- **The runs are the same.** `r.Ok h` is the accepted run of the verifier as it is, over the members' programs side by side; the wired program enters only through `ω` and `keep` [read: `CheckedRun.Ok`]. So the premise is about what the verifier accepts today and not about a second verifier.
+- **An address is a side-by-side gate's.** It is asked at each gate `i` the unit's proof block needs side by side, the gate its session holds, and it is the address of `ω i` at the wired program. A unit needs gate `g` at the wired program only where it needs side by side a gate `i` with `ω i = g` [read: `Prog.needs_wired`, `Rewire.lean`].
+- **One record a gate.** The roots are `rootsWired (ω i)`: the replay block's interior record where `ω i` is in the replay block with its moved gates removed and is not at that block's boundary in the wired program (it is no output the wired program returns, no input, and no gate outside the block reads it), else the statement's [read: `Reveal.rootsAt`, `Prog.refIn`, which the generic statement fixes].
+- **The two arms name an entry by what it is under the roots**, `entryAt roots S.slot = keyAt roots K`, where `Addresses` had `S.slot.key = K` and `S.slot.sized = false`. A writer's own port and a reader's registered read of it name one entry of the interior record under two keys, so one slot serves both: `entryAt_interior_port` [run: compiled, `r20261111-182715-0114`].
+- **One place and one slot for gates sent to one gate**, the first conjunct. The frame's code fixes the place and where it checks by position alone (`Code.place`, `Code.at_`, `Code.ownAt`), so the conjunct is forced by the interface [read: `Code.lean`]. The port is each gate's own.
+
+**2. Your guess, corrected** [read, except where tagged].
+
+- "Each gate has one address per record that commits it, and the two records agree where both commit it": no agreement between records enters. At the wired program each gate a unit needs is opened under exactly one record, the one `rootsWired` names. A wired read is opened by its reader too, at its writer's gate and under the interior record: the reader's session holds the row, so the reader has an opening of it, in its own port. "Only its writer's block opens it" is true of the gates a block holds and false of the openings.
+- The rest of the guess stands: an output the wired program returns is opened under the statement's roots, and a registered value at the root round 2 reads it under.
+- The model's `stmtOk` never runs the design check [read: `SpotFlock.stmtOk`], so every condition on the wires is a condition on `h` and none comes from the accepted run. That is why the three shapes of section 5 matter.
+
+**3. Two reads of one committed leaf by one unit: as first compiled, no; as committed now, yes.**
+
+- At `a999e9bf82` the property gave one address a wired gate with one port a unit [run: `r20261111-182715-0114`, exit 0]. With two of a unit's own gates `i`, `j` sent to one gate, `RowAt` at `j` then said that the first port's row bit is `j`'s column: the agreement itself, asserted of every witness Flock accepts. That is false of a witness holding two rows that open one leaf, so the premise would have been false wherever the commitment can be broken [derived].
+- At `b66d9cd53c4b` each of the two gates has its own address, in its own port, and the two share the place and the slot (the first conjunct). The premise asserts no agreement.
+- **How the agreement WIRED needs comes out** [derived, not compiled]. The reveal at the wired program is one opening for each gate `i` the block needs side by side, at position `ω i`, under `rootsWired (ω i)`, holding the unit's decoded value at `i`. Two reads of one leaf are two openings at one position under one roots. `SessionOpensTwo` concludes only for a trace that agrees with every revealed opening that passes, so under its own hypothesis the unit's decoded values at `i` and `j` are equal. That is the hypothesis `∀ i j, S i → S j → ω i = ω j → v₀ i = v₀ j` of `decoded_rewired`, where the two gates are needed.
+- They are needed: a gate a block holds or reads that `ω` moves, or that a moved gate is sent to, is one the block needs side by side, from `Prog.Rewires.input`, `out` and `noConst` [derived from the three fields as read at `WiredScope.lean:215-232`; not compiled]. So `inj` is not read on my side either.
+- The count of openings a unit is the side-by-side count, unchanged.
+
+**4. What each case costs in the binding error: no new term and no new hash event** [read: `CompiledTwo.KS`, `Definitions/Claims/SamplingTwo.lean:322-325`; `Bext`, `Definitions/Claims/Sampling.lean:544-546`; `CommitmentScheme.Binds`, `Sampling.lean:92-96`; `Bconf` and `εreg`, `SamplingGeneric.lean:592-595`, `:635-641`].
+
+- **In the form `SpotKSTwo` states** (`CompiledTwo.KS`) the binding term is `ε_bind = Pr[B_ext]`: `B`'s fork, the extractor on each branch, and the first collision among the SHA-512 calls the two extractions' own opening checks make. Both cases are the one event `Binds` names: two openings that pass at one position under one roots with different values, among the openings an extraction checks.
+  - **One unit, two reads that differ:** the two openings are one session's, of one branch.
+  - **A reader's read against its writer's output in another unit:** the two openings are two sessions' of one run where the run checks both units. Where it checks only the reader, the case is that of any gate one unit writes and another reads, as it stands today; how the fork's two branches meet there I did not read [guess: the same event across the two extractions].
+- **In the committed form** (`εreg`): two ways in one run is the last term, `Pr[B_conf]`, with no square root and no factor `N`; a reader alone, off the committed trace at its writer's gate, is the rewinding lemma's term `N·√Pr[B_conf]`.
+- In the deployed scheme the colliding calls are the row hash, the leaf's hash or one node on the one path [guess: I read `row_places`, `Deployed.lean:102-104`, and not the proof of `Binds` for it].
+- The openings a run's extractions check are no more than today: the reveal count a unit is unchanged (section 3). `N` in the committed form is the program's gates, and the wired program has no more of them [guess: `Prog.rewire` rewrites reads in place; I did not read what WIRED's statement takes for `N`].
+
+**5. Three shapes of read `main` accepts at which the property is false** [read: `Spot/SecondStage.lean` at `main` `cc6ee7446278`, `readOk` `:831-855`, `nodeLinks` `:484-498`, `nodeWires` `:570-583`, and `readsInterior`, `readRoots`, `FrameIsAt.lean:37-62`; nothing run]. In each, the program has an input gate, which it opens under the statement's roots, and round 2 reads it off the interior record. The old premise was false at them too.
+
+- **Shape 1. A linked port read off the interior registration** (`:835-836`, the case `some x, some r` of the link's arm): where the interior registration registers a value of the link's name and the boundary record has no port or value of that name (`namesOk` refuses only where both have it). The link's port is an input of the replay block or an output it returns, which the program opens under the statement's roots.
+- **Shape 2. A registered value only the interior registration registers** (`:852`, the `<|> registeredEntry own.interior v`), at a port no link or wire names.
+- **Shape 3. An input port that no link and no wire names**, read or rooted at its own port of the interior record (`:848-850`, and `rootsOk`). The derivation makes neither a link nor a wire for an argument with no source (`:490`, `:574`: an argument of constants), so the design check passes such a Definition.
+- **Shapes 1 and 2 depend on the run** (what the prover's interior registration registers), so no condition on `h` removes them. Two ways, yours to pick:
+  - **(a) the verifier refuses them:** a linked port reads only the boundary port (the case at `:836` becomes `false`), and `:852` reads only `registeredEntry own.boundary v`. Two lines and their mirror, and it only refuses more. I do not know whether a served design needs either: the docstring at `:825-829` describes shape 1 as a supported form, and the token select's links are both boundary ports [relayed: GATHER 18:26Z section 3, WIRES 18:14Z line 2]. If one does, the program's model of an input is what has to change, which is WIRED's statement and not this premise.
+  - **(b) the statement's scope leaves them out:** the boundary record has a port of every link's value, and the boundary registration registers every value a template's reference reads that is no port. With `namesOk` the first removes shape 1 [derived]. The verifier then accepts a form the proof does not cover, which AGENTS.md rules against.
+- **Shape 3 is a property of the registered Definition**, so it can be a condition on `h` beside WIRED's `Prog.Rewires`: every input port of a member is named by a link or a wire. The design check could refuse it as well (one conjunct over each template's parameters).
+- The other conditions my side reads are all on `h` and all WIRED's or WIRES's already: `Prog.Rewires` without `inj`; every wired source bit moves (`wiresMove`); no wire's writer port is linked (WIRES's check 1); a wire's reader port and writer port have one row width and one schema (the first conjunct of the property; `readOk`'s wire arm holds the read to the writer's entry by `sameAt`, I did not check that it fixes the width).
+
+**6. The best outcome: not reachable by Thursday 10:00Z** [derived from the proof of `slotsAtGate` and the list above; nothing run]. A theorem that every accepted run has the property needs, beyond section 5:
+
+- that the session's message column at a port equals the unit's column at the gate, for every witness of Flock's relation (`RowAt`): no theorem gives it today;
+- that the unit's instance in its session is below the table's count (`Counted`);
+- that the positions the session's header gives are the rows `placedOk` holds the read to (the join ATTACK's 15:14Z entry calls "which leaf");
+- that the tree a session roots its own port at is the interior record's port's, at the unit's row (`rootsOk` against the slot's leaf);
+- and the conditions on `h` as theorems about what the design check accepts, which needs the model's `stmtOk` to run the design check.
+Each is a join between the spot verifier's Lean and Flock's session verifier. The first is the largest: it is a statement about Flock's relation, and no file states it.
+
+**7. The witness: the program's half is proved at the instance; the runs' half has no witness anyone can build today.**
+
+- **The instance** (`fanProg`, `fanWire`, `fanKeep`): one writer template with two units, each an input and its negation (gates `0, 1` and `2, 3`), and a reader of three inputs and their conjunction (gates `4` to `7`), in one replay block. The reader's inputs are wired `4 ↦ 1`, `5 ↦ 3`, `6 ↦ 1`; the wired program returns gate `7`. So one writer port is read from two disjoint writer units by one reader, GATHER's shape with 2 for 20, and one written gate is read twice by one unit, WIRED's case.
+- **Stated at it, each by `decide`** [run: `r20261111-183821-2b27`, out since 18:38Z, no verdict at this entry; the same four theorems at the first, four-gate instance compiled in `r20261111-182715-0114`]: what each proof block needs at the wired program (the reader: `[7, 1, 3, 1]`, gate `1` twice); that the wired program has gates `1` and `3` inside the replay block and `0`, `2`, `7` at its boundary; that side by side every gate is at the boundary, the reader's three inputs among them, which is why `Addresses` fails there; and `rootsWired` at each of the five gates at any run of that program.
+- **Not proved, and why.** `AddressesWired` quantifies over accepted runs, and an accepted run needs Flock statements that `zkOk` accepts, with tables of 2^25 to 2^35 [read: `zkOk_sound`, `Facts.lean:218-220`]. No concrete `Held` has one, here or for `Addresses`; the lock records the guarantees as `"missing": "honest"` under PRF-460 [read: `security/lean-audit.json`, earlier today]. So the instance witnesses that the property's program side is satisfiable and not vacuous, and it does not witness the premise. I will say so in the pull request in those words.
+
+**8. For WIRED** (no answer needed unless you disagree).
+
+- I read from your side: `Prog.wired`, `cutBlock`, `Prog.needs_wired`, `Prog.Rewires` (not `inj`), `replayOf_cut`, `Partition.cut_getElem?`. I define nothing of yours.
+- I hand over by Thursday 02:00Z: `AddressesWired h ω keep` as above, and the sessions' openings from it in the shape `Reveals` has (`Opens.lean:377`): for an accepted run, a checked unit and a witness Flock accepts, for each gate `i` its proof block needs side by side, an opening in the reveal at position `ω i` under `rootsWired (ω i)` holding the decoded value at `i`, which passes.
+- **One thing your statement has to take from me: the code's `reveal`.** `base h` reveals one opening a gate the block needs, the frame's first at that gate and roots (`Reveal.reveal … (Reveal.frameAt h.frame)`, `SpotFlock/Code.lean`, `base`; `Reveals.lean:76`). At the wired program that drops the second of two reads of one leaf. The wired code's `reveal` is instead the block's side-by-side needs, each opened at the gate `ω` sends it to: `SpotFlock.revealWired`, which I define, with `reveals` (the count) the side-by-side count as today. Its roots are `Reveal.rootsAt` at your wired partition and design; I will write it over `SpotFlock.partitionWired` and `SpotFlock.twoWired` (the members' partition and the design's replay partition, each through `Partition.cut ω`) unless you name yours first.
+- Your `decoded_rewired` then gets its agreement inside the proof of the sessions' openings (section 3), under `SessionOpensTwo`'s own hypothesis, and never as a fact about a witness.
+
+**9. Runs and next.**
+
+- `r20261111-182715-0114`: one-file try of the file at `a999e9bf82`, siblings on, lean exit 0 in 281 s, no axiom beyond the three [run]. `r20261111-183821-2b27`: one-file try at `b66d9cd53c4b`, out since 18:38Z on a machine with a cold build, no verdict at this entry; my next entry names it [run: `research status`].
+- Next: the sessions' openings at the wired program from the property (the row, salt and path at each own gate; then `Opens`), each file through the one-file try; then the pull request from `main` once WIRED's first lands. Your ruling on section 5 changes the property only in which runs it is true at, not its text.
