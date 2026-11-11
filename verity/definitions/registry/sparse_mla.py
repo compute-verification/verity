@@ -24,6 +24,10 @@ Registered functions (all `Name_v1`):
   SparseMlaHead{T,DR,DV,BN,DOT,INV,SCALE}         (q_nope: DV bf16, q_rope: DR bf16, kv: T x (DV+DR) bf16) -> DV bf16
   SparseMlaHeadBlock{DR,DV,NVIS,FIRST,BN,DOT,SCALE}  (q_nope, q_rope, kv: NVIS x (DV+DR), m, l[4], o[DV]) -> (m, l[4], o[DV]);
                                                   one block of a head's chain, a unit of its own (FIRST takes no state)
+  SparseMlaHeadScores{DR,DV,NVIS,FIRST,BN,DOT,SCALE}  (q_nope, q_rope, kv: NVIS x (DV+DR), m, l[4]) -> (m, l[4], pb: NVIS bf16,
+                                                  rescale); a head block up to P (FIRST takes no state and returns no rescale)
+  SparseMlaHeadValues{DR,DV,NVIS,FIRST,BN,DOT,D0,G}  (pb: NVIS bf16, kv: NVIS x (DV+DR), rescale, o[G]) -> o[G]; a head block's
+                                                  P V steps on O's columns [D0, D0 + G) (FIRST takes pb and kv only)
   SparseMlaHeadsBlock{NHB,DR,DV,NVIS,FIRST,BN,DOT,SCALE}  (q_nope: NHB x DV, q_rope: NHB x DR, kv: NVIS x (DV+DR), m[NHB],
                                                   l[NHB][4], o[NHB][DV]) -> (m[NHB], l[NHB][4], o[NHB][DV]); the same block of
                                                   NHB heads of one row in one unit, their keys read once
@@ -35,6 +39,9 @@ A head is cut exactly into its key blocks (`visits`), each a `SparseMlaHeadBlock
 and `SparseMlaHeadEnd`, its epilogue: at GLM-5.3's statics a full block fits a Flock block and a head of two blocks does not, so
 serving stages a `SparseMla` row as that chain (`head_chain`, ``CUTS``).  A row's heads visit the same key blocks in the same
 order, so block j of NHB of them is also one unit, `SparseMlaHeadsBlock`: each head's `SparseMlaHeadBlock` on the one ``kv``.
+A `SparseMlaHeadBlock` is itself cut exactly at P: `SparseMlaHeadScores` returns the running max, the lanes, bf16(P) and the
+rescale, and each column of O then depends only on those two, its own column of the keys and of the O before, so
+`SparseMlaHeadValues` on a partition of the columns returns the block's O (`scores`, `values`: the block's body is the two).
 """
 from __future__ import annotations
 
@@ -100,11 +107,12 @@ def check_block_statics(DR: int, DV: int, NVIS: int, BN: int) -> None:
         raise ValueError(f"SparseMlaBlock: DR={DR}, DV={DV}, BN={BN} must be multiples of 16 and 1 <= NVIS={NVIS} <= BN")
 
 
-def block(st: Steps, S, dot, DOT, q, kv, m_prev=None, l_prev=None, o_prev=None):
-    """`SparseMlaBlock`'s body over ``st``'s steps: ``dot`` the S chain (`DotBf16{K = DR + DV}`), ``DOT`` the P V step."""
+def scores(st: Steps, S, dot, q, kv, m_prev=None, l_prev=None):
+    """`SparseMlaBlock`'s steps up to P over ``st``'s steps, ``dot`` the S chain (`DotBf16{K = DR + DV}`): the running max, the
+    four lane sums, bf16(P) of each visible key and, past the first visited block, the rescale every column of O takes."""
     B, DR, DV, NVIS, FIRST, BN = st.B, S.DR, S.DV, S.NVIS, S.FIRST, S.BN
     check_block_statics(DR, DV, NVIS, BN)
-    KW, L = DR + DV, st.leaf
+    KW = DR + DV
     s = [B.call(dot, q, Coll(Array(KW, st.bf16), concat([kv[c][DV:KW].refs, kv[c][0:DV].refs]))) for c in range(NVIS)]
     bmax = s[0]
     for c in range(1, NVIS):
@@ -112,8 +120,7 @@ def block(st: Steps, S, dot, DOT, q, kv, m_prev=None, l_prev=None, o_prev=None):
     m_new = bmax if FIRST else st.max(m_prev, bmax)
     m_use = st.guard(m_new) if FIRST else m_new
     scale_log2 = st.word(scale_log2_bits(S.SCALE))
-    if not FIRST:
-        scores_scale = st.ex2(st.mul(st.sub(m_prev, m_use), scale_log2))
+    scores_scale = None if FIRST else st.ex2(st.mul(st.sub(m_prev, m_use), scale_log2))
     max_scaled = st.mul(m_use, scale_log2)
     p = [st.ex2(st.fmasub(s[c], scale_log2, max_scaled)) for c in range(NVIS)]
     lanes = []
@@ -124,17 +131,33 @@ def block(st: Steps, S, dot, DOT, q, kv, m_prev=None, l_prev=None, o_prev=None):
         for c in cols[1:]:
             acc = st.add(acc, p[c])
         lanes.append(acc)
-    pb = [st.cvt(x) for x in p]
-    o = [st.word(0) for _ in range(DV)] if FIRST else [st.mul(o_prev[d], scores_scale) for d in range(DV)]
+    return m_new, lanes, [st.cvt(x) for x in p], scores_scale
+
+
+def values(st: Steps, S, DOT, pb, kv, scores_scale=None, o_prev=None, d0: int = 0, g: int | None = None) -> list:
+    """`SparseMlaBlock`'s P V steps on O's columns [d0, d0 + g) (all DV by default): each column of the O before times the
+    rescale (zero in the first visited block), then += bf16(P) kv_c over BN/16 ascending k-steps (``DOT``).  ``pb`` is bf16(P)
+    of the NVIS visible keys, ``kv`` the block's BN rows whole, ``o_prev`` those g columns of the O before."""
+    B, DV, NVIS, FIRST, BN = st.B, S.DV, S.NVIS, S.FIRST, S.BN
+    KW, L = S.DR + DV, st.leaf
+    g = DV - d0 if g is None else g
+    o = [st.word(0) for _ in range(g)] if FIRST else [st.mul(o_prev[d], scores_scale) for d in range(g)]
     for ks in range(BN // 16):
         k0 = 16 * ks
         if k0 >= NVIS:
             break  # all-masked k-step: P = 0 exactly, no accumulator change
         prow = Coll(Array(16, st.bf16), concat([(pb[k0 + j] if k0 + j < NVIS else st.zero16()).refs for j in range(16)]))
-        vt = Coll(Array(DV, Array(16, st.bf16)), concat([strided_view(kv, ((k0 * KW) + d) * L, L, KW * L, 1, 16 * L)
-                                                          for d in range(DV)]))
+        vt = Coll(Array(g, Array(16, st.bf16)), concat([strided_view(kv, ((k0 * KW) + d0 + d) * L, L, KW * L, 1, 16 * L)
+                                                         for d in range(g)]))
         o = list(B.batch(DOT, array_of(o), prow, vt, axes=(0, None, 0)))
-    return tuple_of(m_new, array_of(lanes), array_of(o))
+    return o
+
+
+def block(st: Steps, S, dot, DOT, q, kv, m_prev=None, l_prev=None, o_prev=None):
+    """`SparseMlaBlock`'s body over ``st``'s steps: ``dot`` the S chain (`DotBf16{K = DR + DV}`), ``DOT`` the P V step; `scores`,
+    then `values` on every column."""
+    m_new, lanes, pb, scores_scale = scores(st, S, dot, q, kv, m_prev, l_prev)
+    return tuple_of(m_new, array_of(lanes), array_of(values(st, S, DOT, pb, kv, scores_scale, o_prev)))
 
 
 def _block_type(S, bf16=BF16, f32=F32):
@@ -208,10 +231,14 @@ def SparseMlaHead(B, S, q_nope, q_rope, kv):
     return head(word_steps(B), S, tile_of, S.INV, q_nope, q_rope, kv)
 
 
+def _whole_or_first(name: str, S) -> None:
+    if S.NVIS != S.BN and not S.FIRST:
+        raise ValueError(f"{name}: NVIS={S.NVIS} keys of BN={S.BN}, and only the first visited block is partial")
+
+
 def head_block(st: Steps, S, dot, DOT, q_nope, q_rope, kv, m_prev=None, l_prev=None, o_prev=None):
     """`SparseMlaHeadBlock`'s body: `head`'s block call on one block, its query and padding its own."""
-    if S.NVIS != S.BN and not S.FIRST:
-        raise ValueError(f"SparseMlaHeadBlock: NVIS={S.NVIS} keys of BN={S.BN}, and only the first visited block is partial")
+    _whole_or_first("SparseMlaHeadBlock", S)
     KW = S.DR + S.DV
     q = Coll(Array(KW, st.bf16), concat([q_rope.refs, q_nope.refs]))
     return block(st, S, dot, DOT, q, _padded(st, kv, S.NVIS, S.BN, KW), m_prev, l_prev, o_prev)
@@ -232,6 +259,54 @@ def SparseMlaHeadBlock(B, S, q_nope, q_rope, kv, m_prev=None, l_prev=None, o_pre
     check_block_statics(S.DR, S.DV, S.NVIS, S.BN)
     return head_block(word_steps(B), S, bind(DotBf16V2, K=S.DR + S.DV, DOT=S.DOT), S.DOT, q_nope, q_rope, kv, m_prev, l_prev,
                       o_prev)
+
+
+def head_scores(st: Steps, S, dot, q_nope, q_rope, kv, m_prev=None, l_prev=None):
+    """`SparseMlaHeadScores`'s body: `head_block`'s query, then `scores` on the block's NVIS keys."""
+    _whole_or_first("SparseMlaHeadScores", S)
+    q = Coll(Array(S.DR + S.DV, st.bf16), concat([q_rope.refs, q_nope.refs]))
+    m_new, lanes, pb, scores_scale = scores(st, S, dot, q, kv, m_prev, l_prev)
+    return tuple_of(m_new, array_of(lanes), array_of(pb), *(() if S.FIRST else (scores_scale,)))
+
+
+def _head_scores_type(S, bf16=BF16, f32=F32):
+    state = () if S.FIRST else (("m_prev", f32), ("l_prev", Array(4, f32)))
+    return ((("q_nope", Array(S.DV, bf16)), ("q_rope", Array(S.DR, bf16)), ("kv", Array(S.NVIS, Array(S.DR + S.DV, bf16))))
+            + state, Tuple(f32, Array(4, f32), Array(S.NVIS, bf16), *(() if S.FIRST else (f32,))))
+
+
+@composite("SparseMlaHeadScores", 1, ["DR", "DV", "NVIS", "FIRST", "BN", "DOT", "SCALE"], _head_scores_type, conformance=_CONF)
+def SparseMlaHeadScores(B, S, q_nope, q_rope, kv, m_prev=None, l_prev=None):
+    """A `SparseMlaHeadBlock_v1` up to P, a unit of its own: on the head's query, the block's NVIS keys and the running max and
+    lanes before it, the block's running max and lanes (its first two outputs, word for word), bf16(P) of each visible key in
+    key order and, past the first visited block, the rescale `ex2((m_prev - m) * scale_log2)` that every column of O takes.
+    The block's O is `SparseMlaHeadValues_v1` on these last two."""
+    check_block_statics(S.DR, S.DV, S.NVIS, S.BN)
+    return head_scores(word_steps(B), S, bind(DotBf16V2, K=S.DR + S.DV, DOT=S.DOT), q_nope, q_rope, kv, m_prev, l_prev)
+
+
+def head_values(st: Steps, S, DOT, pb, kv, rescale=None, o_prev=None):
+    """`SparseMlaHeadValues`'s body: `head_block`'s padding, then `values` on columns [D0, D0 + G)."""
+    _whole_or_first("SparseMlaHeadValues", S)
+    if not (0 <= S.D0 and 1 <= S.G and S.D0 + S.G <= S.DV):
+        raise ValueError(f"SparseMlaHeadValues: columns [{S.D0}, {S.D0 + S.G}) of DV={S.DV}")
+    kvb = _padded(st, kv, S.NVIS, S.BN, S.DR + S.DV)
+    return array_of(values(st, S, DOT, pb, kvb, rescale, o_prev, S.D0, S.G))
+
+
+def _head_values_type(S, bf16=BF16, f32=F32):
+    state = () if S.FIRST else (("rescale", f32), ("o_prev", Array(S.G, f32)))
+    return ((("pb", Array(S.NVIS, bf16)), ("kv", Array(S.NVIS, Array(S.DR + S.DV, bf16)))) + state, Array(S.G, f32))
+
+
+@composite("SparseMlaHeadValues", 1, ["DR", "DV", "NVIS", "FIRST", "BN", "DOT", "D0", "G"], _head_values_type, conformance=_CONF)
+def SparseMlaHeadValues(B, S, pb, kv, rescale=None, o_prev=None):
+    """Columns [D0, D0 + G) of a `SparseMlaHeadBlock_v1`'s O, a unit of its own: on `SparseMlaHeadScores_v1`'s bf16(P) and
+    rescale, the block's NVIS keys whole (zero-padded to BN; it reads their columns [D0, D0 + G) of kv_c) and those columns of
+    the O before, each column times the rescale (zero in the first visited block), then += bf16(P) kv_c over the block's
+    k-steps.  Over a partition of the DV columns the units' outputs are the block's O, word for word."""
+    check_block_statics(S.DR, S.DV, S.NVIS, S.BN)
+    return head_values(word_steps(B), S, S.DOT, pb, kv, rescale, o_prev)
 
 
 def heads_block(B, S, tile, q_nope, q_rope, kv, m_prev=None, l_prev=None, o_prev=None):
@@ -304,7 +379,8 @@ def SparseMla(B, S, q_nope, q_rope, kv):
     return B.batch(hd, q_nope, q_rope, kv, axes=(0, 0, None))
 
 
-SPARSE_MLA_COMPOSITES = [SparseMlaBlock, SparseMlaHead, SparseMlaHeadBlock, SparseMlaHeadsBlock, SparseMlaHeadEnd, SparseMla]
+SPARSE_MLA_COMPOSITES = [SparseMlaBlock, SparseMlaHead, SparseMlaHeadBlock, SparseMlaHeadScores, SparseMlaHeadValues,
+                         SparseMlaHeadsBlock, SparseMlaHeadEnd, SparseMla]
 #: each family serving stages as its cut, never whole, with the cut at a binding's statics (circuit-check's ``block`` holds
 #: each unit to the Flock block in the Call's place)
 CUTS = {"SparseMla_v1": head_chain}
