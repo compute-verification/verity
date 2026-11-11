@@ -208,6 +208,24 @@ def test_update_keeps_the_record_of_an_allowed_package_outside_record_and_says_w
         assert (root / S / LC.LOCK).read_text() == OLD[S], "and the run writes no record of it into the checkout"
 
 
+def test_an_unrecorded_run_writes_no_record_of_an_allowed_package_into_the_checkout(lane, tmp_path, monkeypatch):
+    """Outside a recorded run the slot path writes each regenerated record back into the checkout, where the next commit
+    takes it. It writes the requirer's, which is `regenerated`, and not the allowed package's, which is under
+    `allowed-record/` for the lane to commit knowingly."""
+    root, _, _, standing, _ = lane
+    monkeypatch.delenv("RESEARCH_RUN_DIR")
+    monkeypatch.delenv("RESEARCH_RUN_ID")
+    for p, text in OLD.items():
+        (root / p / LC.LOCK).write_text(text)
+    standing[S] = [CHANGED]
+    out = tmp_path / "out"
+    assert LC.audit_records(S, tmp_path / "deps", update=True, out=out, log=lambda _s: None,
+                            allow=["witnesses.unwitnessed-changed:G"]) == LC.ALLOWED_RC
+    assert {p: (root / p / LC.LOCK).read_text() for p in (S, P)} == {S: OLD[S], P: BUILT[P]}
+    assert (out / "allowed-record" / S / LC.LOCK).read_text() == BUILT[S]
+    assert not (out / "record" / S / LC.LOCK).exists() and not (out / "record" / LC.LOCK).exists()
+
+
 def test_a_requirer_failing_on_record_differences_beside_an_allowed_failure_is_audited_again_with_update(lane, tmp_path):
     """The requirer's first audit, without `--update`, fails on a record difference and on an allowed failure: it is
     audited again with `--update`, which settles the difference, and ends `allowed` with its record outside `record/`.
@@ -264,6 +282,7 @@ def test_an_allowance_names_a_failure_by_its_code_and_entry_never_its_text(lane,
         assert LC.audit_records(S, tmp_path / "deps", log=lambda _s: None, allow=allow) == 1
         doc = result(run_dir)
         assert (doc["outcome"], doc["stale_allowances"]) == (LC.FAILED, allow), allow
+        assert doc["records"][S] == {"outcome": LC.FAILED, "inputs_key": doc["records"][S]["inputs_key"]}, allow
     allow = frozenset({("trees.reads", "Proofs.Sampled")})
     rep = AUDIT.reported({"failures": [READS]})
     assert LC.failures_of(rep) == [("trees.reads", "Proofs.Sampled")]

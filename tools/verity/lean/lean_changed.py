@@ -1298,9 +1298,10 @@ def hits(out: Path | None, base: Path, allow: frozenset[tuple[str, str]], log=pr
 
 def withheld(outcomes: dict[str, str], ok: list[tuple[str, int]], out: Path, base: Path,
              allow: frozenset[tuple[str, str]], log=print) -> list[tuple[str, int]]:
-    """``ok`` (each package whose pass a run is about to keep, with check.py's exit) less every package with an allowed
-    failure in any of the run's reports (`hits`), whose outcome in ``outcomes`` becomes `ALLOWED` where it was better: one
-    that its own audit passed and another package's audit, which audits it beside, failed on a failure ``allow`` names."""
+    """``ok`` (each package whose audit did not fail, with check.py's exit) less every package that ended `ALLOWED`: the
+    packages whose pass a run keeps. A package with an allowed failure in any of the run's reports (`hits`) ends `ALLOWED`
+    in ``outcomes`` where it was better: one that its own audit passed and another package's audit, which audits it
+    beside, failed on a failure ``allow`` names."""
     for q in hits(out, base, allow, log):
         if outcomes.get(q) in (PASS, REGENERATED):
             outcomes[q] = ALLOWED
@@ -1581,7 +1582,7 @@ def audit_records(name: str, deps: Path, tree: Path | None = None, update: bool 
                     write_back(p, tree / p / LOCK, log)
                 if outcomes[p] == FAILED:
                     rc = rc or got
-                elif outcomes[p] != ALLOWED:
+                else:
                     ok.append((p, got))
             ok = withheld(outcomes, ok, out, tree, allowed, log)
             passes = {k: p for p, got in ok for k in passed(p, files, committed if got == 0 else committed | new, new, log)}
@@ -1642,7 +1643,7 @@ def dev_records(pkg: str, todo: list[str], update: bool, moved: Path | None, out
         outcomes[p] = settled(p, pkg, got, mine_out, ROOT, out, new, b, log, allow)
         if outcomes[p] == FAILED:
             rc = rc or got
-        elif outcomes[p] != ALLOWED:
+        else:
             ok.append((p, got))
     for p, got in withheld(outcomes, ok, out, ROOT, allow, log) if files is not None else []:
         passes |= dict.fromkeys(passed(p, files, committed if got == 0 else committed | new, new, log), p)
