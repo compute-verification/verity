@@ -21,6 +21,10 @@
 //                    last leaf short and the padding to the tree's width included (`rs_mapped_pass`); an opening's
 //                    subtree is its receipts (`rs_mapped_receipts`) and reader.cu's leaves and levels
 //
+//   side stream      a pass's padding nodes and its first consumers run on a second stream beside the receipt grid.
+//                    Under `rs_side_after`, a pass whose receipt grid leaves a consumer no room starts that stream
+//                    when the grid ends
+//
 //   rows             the registration's k_s, 16 or 64 (`rs_rows`, 16 until it is called): the pass, the in-place pass,
 //                    the subtrees and the chained signs run their 64-row forms at 64 (the receipt kernels and tiles
 //                    named 64, on reader.cu's 64-row sketch and its three-compression receipt) and the 16-row ones
@@ -1102,6 +1106,20 @@ int rs_rows(int rows) {
   return 0;
 }
 
+// Whether a pass holds its side stream until its receipt grid ends, where no consumer fits beside that grid
+// (`rs_side_after`).
+static bool gSideAfter = false;
+
+// From here on, for every GPU this copy of the library serves: with `on`, a pass whose receipt grid leaves no room for
+// a consumer (`pass_consumers`' fit) starts its side stream, the padding's nodes and the consumers on it, when the
+// receipt grid ends, not beside it. Beside a grid that fills the device a consumer has nothing to run on unless it
+// takes a receipt CTA's place, and one that does keeps it for the pass. Off until it is called, and a pass with room
+// for consumers is launched the same either way.
+int rs_side_after(int on) {
+  gSideAfter = on != 0;
+  return 0;
+}
+
 // A 64-row receipt kernel's dynamic shared memory (SK64R_SMEM is past the default limit), asked once a device.
 enum { K64_PASS, K64_MAPPED_PASS, K64_MAPPED_RECEIPTS, K64_SUBTREES, K64_KERNELS };
 static int shared64(const void *k, int id) {
@@ -1317,9 +1335,10 @@ static uint64_t kept_at(uint64_t nl, int h0, int h) {
 // CTAs of `producer`, each with producer_shared bytes of dynamic shared memory, or occ_c CTAs of `consumer`): `side`
 // as many as fit in what the receipt grid leaves of the device, at least one an SM, and `tail` the rest of a full
 // device, which take the slots the receipt grid frees when it ends. Neither count bounds progress
-// (`pass_consumer_kernel`); together they are what the device holds once the reads are done.
+// (`pass_consumer_kernel`); together they are what the device holds once the reads are done. `room`, if given, is
+// whether any consumer fits beside the receipt grid.
 static int pass_consumers(const void *producer, size_t producer_shared, const void *consumer, int ctas, size_t shared,
-                          uint64_t subtrees, uint64_t *side, uint64_t *tail) {
+                          uint64_t subtrees, uint64_t *side, uint64_t *tail, bool *room = nullptr) {
   int dev, sms, occ_p, occ_c;
   if (cudaGetDevice(&dev) || cudaDeviceGetAttribute(&sms, cudaDevAttrMultiProcessorCount, dev) ||
       cudaOccupancyMaxActiveBlocksPerMultiprocessor(&occ_p, producer, 32 * SK16_WARPS, producer_shared) ||
@@ -1328,6 +1347,7 @@ static int pass_consumers(const void *producer, size_t producer_shared, const vo
     return 4;
   const int64_t all = (int64_t)sms * occ_c, fit = all - ((int64_t)ctas * occ_c + occ_p - 1) / occ_p;
   const int64_t s = fit > sms ? fit : sms;
+  if (room) *room = fit > 0;
   *side = (uint64_t)s < subtrees ? (uint64_t)s : subtrees;
   const uint64_t rest = all > s ? (uint64_t)(all - s) : 0, left = subtrees - *side;
   *tail = rest < left ? rest : left;
@@ -1351,7 +1371,8 @@ static int pass_consumers(const void *producer, size_t producer_shared, const vo
 // pad_n / lc nodes at hc in pad_out, `pad` scratch of 2 · pad_n digests. The levels above hc are `rs_top`'s. sa waits
 // for the whole shard pass before anything queued on it after. consumers > 0 is the one consumer grid's CTAs on sb, for
 // a shard read beside another on the same device (pinned host memory over PCIe, whose few receipt CTAs leave it the
-// device but whose consumers would otherwise fill it).
+// device but whose consumers would otherwise fill it). Under `rs_side_after`, where no consumer fits beside the
+// receipt grid, sb starts when that grid ends.
 int rs_pass(const void *data, uint64_t n, uint64_t base, const uint32_t *pk, unsigned *ctr, uint64_t *ys, uint64_t *dig,
             uint64_t *up, uint64_t *kept, int h0, uint64_t chunk, int ctas, uint64_t pad_r0, uint64_t pad_n,
             uint64_t *pad, uint64_t *pad_out, cudaStream_t sa, cudaStream_t sb, int consumers) {
@@ -1390,20 +1411,23 @@ int rs_pass(const void *data, uint64_t n, uint64_t base, const uint32_t *pk, uns
   const size_t staging = wide ? CONSUMER_STAGING64 : CONSUMER_STAGING;
   const size_t shared = tree_shared > staging ? tree_shared : staging;
   uint64_t side = 0, tail = 0;
+  bool room = true;
   int rc;
   if (wide && shared64(producer, K64_PASS)) return 4;
   if (fused) {
     if (consumers)
       side = (uint64_t)consumers < groups ? (uint64_t)consumers : groups;
     else if ((rc = pass_consumers(producer, wide ? SK64R_SMEM : 0, (const void *)consumer, receipts ? ctas : 0, shared,
-                                  groups, &side, &tail)))
+                                  groups, &side, &tail, &room)))
       return rc;
     if (groups + side + tail >= (1ULL << 32)) return 1;
   }
+  // sb starts at `go`: once ctr is clear, or under `rs_side_after`, with no room for a consumer, once the receipt grid
+  // has ended.
+  const bool after = gSideAfter && receipts && !room;
   unsigned *started = ctr + 2 + ready_groups + chunks;
-  if (cudaMemsetAsync(ctr, 0, 4 * (3 + ready_groups + chunks), sa) || cudaEventRecord(go[dev], sa) ||
-      cudaStreamWaitEvent(sb, go[dev], 0))
-    return 4;
+  if (cudaMemsetAsync(ctr, 0, 4 * (3 + ready_groups + chunks), sa)) return 4;
+  if (!after && (cudaEventRecord(go[dev], sa) || cudaStreamWaitEvent(sb, go[dev], 0))) return 4;
   const unsigned ready_tiles = (unsigned)((fused ? ready_blocks : chunk) / 32);
   if (receipts && wide)
     sketch64_pass_kernel<<<ctas, 32 * SK64R_WARPS, SK64R_SMEM, sa>>>((const uint4 *)data, n, base, (const uint4 *)pk,
@@ -1412,6 +1436,7 @@ int rs_pass(const void *data, uint64_t n, uint64_t base, const uint32_t *pk, uns
     sketch16_pass_kernel<<<ctas, 32 * SK16_WARPS, 0, sa>>>((const uint4 *)data, n, base, pk, ys, ctr, ready_tiles,
                                                            started);
   if (cudaGetLastError()) return 4;
+  if (after && (cudaEventRecord(go[dev], sa) || cudaStreamWaitEvent(sb, go[dev], 0))) return 4;
   // These nodes depend on this pass's seed, but not on its receipts: hashed at the start, under the reads.
   if (pad_n) {
     uint64_t *pin = pad, *scratch = pad + 8 * pad_n;

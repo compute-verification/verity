@@ -24,8 +24,8 @@ def test_a_row_count_takes_its_words_counts_in_order_and_the_default_elsewhere()
 
 
 def test_a_count_takes_the_arms_it_names():
-    assert rows.ctas_at(["64=264,264+p0,264", "16=128+p0"], [64, 16], 128) == {
-        64: [(264, ()), (264, ("p0",)), (264, ())], 16: [(128, ("p0",))]}
+    assert rows.ctas_at(["64=264,264+p0,264+after,264", "16=128+p0+after"], [64, 16], 128) == {
+        64: [(264, ()), (264, ("p0",)), (264, ("after",)), (264, ())], 16: [(128, ("p0", "after"))]}
 
 
 @pytest.mark.parametrize("word", ["48=128", "64", "64=", "64=128,", "64=a", "x=128", "64=-1", "64=128+", "64=128+x",

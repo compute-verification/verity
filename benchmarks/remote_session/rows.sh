@@ -22,7 +22,7 @@
 #             openings and the calibration (CAL chained passes each, over the plain read); out/rows.json. CTAS_AT
 #             (rows.py's --ctas-at words, `64=96,128,264`) gives a row count its receipt CTA counts, each in turn on
 #             that store: which count the pass over the read is least at, and the count a timed run takes; a count
-#             may name an experiment's arms (`64=264,264+p0,264`, rows.py's ARMS). ROWS_ARGS are rows.py's own
+#             may name an experiment's arms (`64=264,264+p0,264+after`, rows.py's ARMS). ROWS_ARGS are rows.py's own
 #             (--whole-store)
 #   session   PLAN's sessions at SESSION_ROWS rows over SESSION_GIB GiB on the first card, the verifier's process
 #             (on VERIFIER_CORES) beside the prover (on PROVER_CORES) on this machine, which audits nothing: a check

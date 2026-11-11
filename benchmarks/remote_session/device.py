@@ -221,6 +221,7 @@ SESSION = {   # session.cu's own functions, beside the reader's it includes (`re
     "rs_enable_peers": [],
     "rs_subtrees": [_v, _u64, _v, _v, _u64, _i, _v, _v, _v],
     "rs_rows": [_i],
+    "rs_side_after": [_i],
     "rs_signs16": [_b, _i, _v, _v],
     "rs_signs64": [_b, _i, _v, _v],
     "rs_chain_set": [_b, _v],
@@ -1196,7 +1197,7 @@ class GpuBackend:
         self.gate_chunk, self.gate_chunks, self.gate_samples = gate_chunk, gate_chunks, gate_samples
         self.calibration_passes, self.warm_passes = calibration_passes, warm_passes
         self.shape = {"chunk": chunk, "kept_from": kept_from, "sketch_ctas": sketch_ctas,
-                      "payload_kept_from": payload_kept_from, "side_priority": -1}
+                      "payload_kept_from": payload_kept_from, "side_priority": -1, "side_after": False}
         self.lib = Lib(lib_path, torch)
         self._open_copy = tempfile.NamedTemporaryFile(suffix=".so")
         shutil.copyfile(lib_path, self._open_copy.name)
@@ -1260,6 +1261,13 @@ class GpuBackend:
             with self.torch.cuda.device(gpu.index):
                 gpu.side = self.torch.cuda.Stream(priority=priority)
         self.shape["side_priority"] = priority
+
+    def set_side_after(self, on: bool) -> None:
+        """From the next pass on, whether a pass whose receipt grid leaves a consumer no room starts its side stream
+        when that grid ends (`rs_side_after`), not beside it."""
+        self.store.sync()
+        self.lib.so.rs_side_after(int(on))
+        self.shape["side_after"] = bool(on)
 
     def read_ms(self, segments: list[int], tries: int = 6) -> float:
         """The read alone (`rb_read`) of `segments` at once, each on its GPU, a host segment on the GPU's host stream

@@ -25,7 +25,7 @@ order. Prints for each the plain read's and the pass's milliseconds and GB/s.
 
     python rows.py --lib session.so --kv kv.so --out OUT --rows 16 64 16 64 [--gib 496 --gpus 8, `device.py`'s options]
     python rows.py ... --rows 64 --ctas-at 64=96,128,264      which CTA count the 64-row pass is fastest at
-    python rows.py ... --rows 64 16 --ctas-at 64=264,264+p0,264 16=128,128+p0     an arm beside the pass as it is
+    python rows.py ... --rows 64 16 --ctas-at 64=264,264+p0,264+after,264 16=128,128+p0   arms beside the pass as it is
 """
 from __future__ import annotations
 
@@ -113,7 +113,8 @@ def whole_store(backend: device.GpuBackend, rows: int, rng: np.random.Generator,
             "reference_s": time.perf_counter() - t0, "ok": not differ and same}
 
 
-ARMS = {"p0": "the side stream at priority 0, the main stream's, in place of −1"}
+ARMS = {"p0": "the side stream at priority 0, the main stream's, in place of −1",
+        "after": "where no consumer fits beside the receipt grid, the side stream starts when the grid ends"}
 """An experiment's arms, which a --ctas-at count names after a +: the pass with one thing changed, beside the pass as
 it is at the same count on the same store."""
 
@@ -135,7 +136,8 @@ def ctas_at(words: list[str], rows: list[int], default: int) -> dict[int, list[t
 def set_arms(backend: device.GpuBackend, arms: tuple[str, ...]) -> dict:
     """The backend's passes from here on with `arms` and no other: what a row records as its arms."""
     backend.set_side_priority(0 if "p0" in arms else -1)
-    return {"side_priority": backend.shape["side_priority"]}
+    backend.set_side_after("after" in arms)
+    return {"side_priority": backend.shape["side_priority"], "side_after": backend.shape["side_after"]}
 
 
 def main() -> int:
