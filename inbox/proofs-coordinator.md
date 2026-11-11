@@ -60975,3 +60975,54 @@ Cut for length, and not on the page: that 13 of the audit's 67 error terms reach
 - It counts the world's GPUs at the census's base, 4.95 times (2.31 bits) under the census's figure of record.
 
 **State.** Three drafts published; nothing posted to Slack, Linear or Notion; no code changed; no branch created. I read the mailbox again before any further entry, and revise page 3 if your word or Daniel's reading comes.
+
+## STOPS, Wed 11 Nov 18:41Z: first entry. With the form's switch on, the chain runs from the stand-in serve to the Lean verdicts at the smallest configuration and stops at round 2: `second-read` on the replay block's return when the check's instances are whole, `second-wires` at the served block's shape. The fixes that exist (#8914, #8940, WIRES's two checks) change neither code. The toy, whose round 1 commits the return, reaches an accept on this branch: the switch is its only stop
+
+**Every run here is labelled "the form's switch on, ahead of its proof; not `main`'s verifier".** The accept below is evidence about the stops, never a result. Branch `cursor/proofs-stops-1340` (never merged, no pull request), head `d5c0d13ee32a` [run: `git log`, local]. Each run's `out/LABEL.txt` holds the label, the commit and both switches as the tree states them, and each run has the label as a note in the store [run: `research data label`, local, exit 0].
+
+**What the branch is** [read: its own log]: `main` `cc6ee7446278`; #8875's head `092004fadea9` (the second-stage command; the brief's `5dd58e0400d7` has moved, `two_stage.py` is the same); `SecondStage.FORM := true` and `second_stage.FORM = True`; a wrapper `benchmarks/one_stage/two_stage_stops.sh` that runs the vLLM lane's rehearsal under the label and exits 9 unless both switches are on; then the fixes: #8914's head `fc55213569b0`, #8940's head `f047277aa9ec` (holds #8934), and WIRES's commit `1c6f2cd929ef` (merged at 18:37Z; before that its diff from the 14:44Z entry, by hand: the code is the same, only docstrings and `SecondStageExamples.lean` differ, which the chain's build does not build) [run: `git diff` against WIRES's branch, local].
+
+**The smallest configuration** [read: `two_stage_small.sh`, `two_stage_small.py`]: the stand-in serve (no engine, no GPU), V = 128 logits, 6 replay blocks of 4 tokens, the first stage at rate 2/6, k = 1, the challenger local, CPU, every session `prove --zk` without the ZK server. The served block's shape made small: the same with the check's body inlined, V = 4,096 (the smallest the inlined class takes), which is the layout a served vocabulary has.
+
+**The stops, in the order a run meets them.**
+
+At the smallest configuration, the check's instances whole. Everything before round 2 passes: the boundary registration, the first stage (2 replay blocks sampled), the replay, the interior registration, the second draw (2 proof blocks), the sessions, 3 Lean verdicts accepted, 15 tampered cases refused [run: `r20261111-181003-ac2a`, `r20261111-183104-4239`].
+
+1. **`second-read`: the replay block's return is read at the interior's own tree, not at round 1's.** The statement of `TokenSelect_v4{V=128}` reads its port `o0`; the design links `o0` to the block's return, and round 1's record has no port `o0`, so the row round 2 holds it to does not exist [run: both runs' `second/summary.json`, `round_two.codes = ["second-read"]`, the stream's outcome reject, the interior's record failing `statements`, the replay sample's record failing nothing]. Where: `Spot/SecondStage.lean:831-842` (`readOk`, the link case), read at `:941`; the mirror `second_stage.py:1054`; the command hands the read at `benchmarks/one_stage/two_stage.py:484-508` [read]. Owner: the vLLM lane (round 1 commits the ids as a port, one row a token), with WIRES for round 2's side (PRF-477's five lines) [relayed: your 18:29Z mailbox]. Fix on a branch: none [read: #8807 commits a return only for a class of verdicts].
+2. **Behind it, not reached: the command refuses a round-1 record that does commit the return.** `two_stage.py:444-447`: "its rows are read at round 1's root under the serve's salts, which this command doesn't open yet" [read, not run]. Owner: the vLLM lane. Fix on a branch: none [read: #8875's head].
+3. **The form's switch, last.** `Spot/SecondStage.lean:139` (`FORM := false`), added at `:1059` only when no other code is found, read by the run of record at `Spot/Run.lean:232`; the mirror `second_stage.py:83`, `:1174` [read]. Owner: WIRED and FRAME (the proof). On in this branch only. With stops 1 and 2 out of the way it is the only one left at a toy's shape: the two-stage toy (`benchmarks/two_stage/audit.sh`, honest case), whose round 1 commits its replay block's return, gives round 2 no code and the stream's outcome accept, 15 Lean verdicts over 5 members accepted, 17 tampered cases refused [run: `r20261111-182129-a3a1`, `r20261111-183150-26ea`, rc 0; read: `audit.sh` exits 0 on `main` too, where the same case is refused by `two-stage-form` alone, which I did not run].
+
+At the served block's shape made small (the check's body inlined).
+
+4. **The command itself refuses before the interior is committed.** Without `--unlinked`, `second` exits 1 with "replay block `TemplateInlined_v1{template="TokenSelect_v4{V=4096}",N=4}` makes no wires round 2 derives", `two_stage.py:343-350` (`design`) [run: `r20261111-183339-5bd5`, rc 1]. Same cause as stop 5.
+5. **`second-wires`: the design check, on every record of today's select.** With `--unlinked` everything before round 2 passes (4 proof blocks drawn of 512 chunk units and 8 combines in 2 replay blocks, 6 Lean verdicts accepted, 15 tampered cases refused) and round 2 gives `second-wires` alone [run: `r20261111-181042-b572`, `r20261111-183136-2269`]. Where: `Spot/SecondStage.lean:570-583` (`nodeWires`: an argument that reads nodes must be one whole field of one node), `:629` (`wiresOk`), `:1066-1068`; the mirror `second_stage.py:650`, `:739`, `:1184` [read]. It is evaluated before any statement is read, so at this shape it hides every statement check, stop 1's among them. Owner: GATHER. Fix: in the Definition, not the verifier, on `cursor/proofs-gather-4931` (no commit at 18:37Z [run: `git ls-remote`]). The two states: today's select, refused at `second-wires` on every served record [run, at V = 4,096 made small]; the new select (20 units of 7,744 logits a token and a combine whose every parameter is one whole output field of one unit), passes the design check on the mirror at V = 154,880 and 256 tokens, not served, not run by me [relayed: GATHER 18:26Z].
+6. **After `second-wires`, at the served shape** [relayed: GATHER 18:26Z section 5, none run]:
+   - two row widths of one linked value (`logits` read in rows of 64 words by the chunks and of one word by the combine; `readOk` holds the entry to one leaf count, `:831-842`): gone with the new select. Owner: GATHER.
+   - the return's read: stop 1, unchanged. Owner: the vLLM lane and WIRES.
+   - the statement's size: Flock takes a statement with m at most 35 (`verity/protocols/flock/prover/live/src/circuit.rs:102`, `M_MAX = 35`, checked at `:150` [read]; a table of 2^35 bits). A replay block of 64 tokens fits one statement at the new select and one of 256 does not under any layout, so a member is split at registration or the block is 64 tokens. Owner: the vLLM lane. Fix on a branch: none.
+   - the form's switch: stop 3.
+   - a new serve: the new select changes the replay block's digest, so the serve names it as its check (`benchmarks/serve_tax/serve_tax.py`) and the adapter lays the interior out by it (`adapters/vllm/verity_vllm/pipeline/interior_rows.py`, `pieces`). Owner: the vLLM lane, or GATHER's separate commit for me to apply.
+
+Not reached at these sizes, so no run of mine says anything about them.
+
+7. **The coin limit** (`Spot/Challenger.lean:50`, `MAX_COINS = 2^20`; `spot/device/challenger.py:223`): the second stage here needs 4 and 7 coins of a 17-coin plan [run: the runs' `second/summary.json`]. It binds at served sizes only. Owner: #8914 (LAND3 lands it). Applied on this branch; it changes nothing at these sizes.
+8. **No gate, no GPU serve, no ZK server** in the runs above: the challenger is local and each session is `prove --zk`. The ZK server arm is running now (below).
+
+**Runs** (all `research run --cwd clone`, 16 CPUs; run rc is the rehearsal's, which is 0 when the run is what its own `expect` says today's record gives; `second` rc is the command's).
+
+| run | machine | commit | what | run rc | `second` rc | round 2 | outcome |
+|---|---|---|---|---|---|---|---|
+| `r20261111-181003-ac2a` | vy-nebius-cpu-3 | `6826104996ad` (switch on, no fixes) | V = 128, instances whole | 0 | 1 | `second-read` | reject |
+| `r20261111-181042-b572` | vy-nebius-cpu-10 | `6826104996ad` | V = 4,096 inlined, `--unlinked` | 0 | 1 | `second-wires` | reject |
+| `r20261111-182129-a3a1` | vy-nebius-cpu-1 | `eae80b4fb1b1` | the toy, honest case | 0 | n/a | no code | accept (this branch only) |
+| `r20261111-183104-4239` | vy-nebius-cpu-1 | `53853a74769b` (+ #8914, #8940, the two checks) | V = 128, instances whole | 0 | 1 | `second-read` | reject |
+| `r20261111-183136-2269` | vy-nebius-cpu-1 | `53853a74769b` | V = 4,096 inlined, `--unlinked` | 0 | 1 | `second-wires` | reject |
+| `r20261111-183150-26ea` | vy-nebius-cpu-2 | `53853a74769b` | the toy, honest case | 0 | n/a | no code | accept (this branch only) |
+| `r20261111-183339-5bd5` | vy-nebius-cpu-3 | `53853a74769b` | V = 4,096 inlined, linked | 1 | 1 | not reached | refused by the command (stop 4) |
+| `r20261111-183930-735b` | vy-nebius-cpu-8 | `d5c0d13ee32a` | V = 128, every session behind the ZK server | running, about 18:50Z | | | |
+
+**What the fixes changed** [run: the second three rows against the first three]: nothing. #8914 raises a limit these sizes do not reach; #8940 touches `security/` only, which the chain neither builds nor runs [read: its file list]; WIRES's two checks refuse wires these replay blocks do not have (today's inlined select derives no wires at all, and the toy's wires read no returned output and have each writer's part first: its accept stands with the checks on).
+
+**Where this leaves the brief's end condition** [guess, from the list]: no run reaches an accept at the command's own shapes, and each stop has an owner. The first one nobody has a branch for is stop 1 with stop 2 behind it (the vLLM lane's round 1 and its command); GATHER's fix clears stop 5 only.
+
+**Next:** read the ZK server run; merge GATHER's commits when they exist (due 20:30Z) and run the smallest configuration on the new select beside today's; an entry at each rerun; the list as my final message at 22:00Z.
