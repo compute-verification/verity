@@ -1,7 +1,7 @@
 # spot_figures
 
 The SPOT post's Figures 1-4 for one model, derived from the sampled-proofs planner
-(`verity.core.protocols.spot.optimize`) and the model's cards. A model, not a measurement: every input is a
+(`verity.protocols.spot.optimize`) and the model's cards. A model, not a measurement: every input is a
 card marked measured or modeled with its source, and each figure's JSON carries every card it read beside every
 plotted series. Lean checks the design behind every exfiltration and skipped-work point of both forms of Figure 1
 (`plancheck`, which builds `sampled-proofs-plancheck` with `lake` on first use; `--no-lean` plans without it): a point
@@ -138,7 +138,7 @@ research data put --kind spot-figure/v1 --tree DIR --preserve                # f
     verifier. The network certifier, which stamps each request's release order and bucket at ingress, is a layer of
     its own. The bounds are soundness alone, resting on SHA-512's collision resistance, uniform verifier randomness and
     an honest verifier, and, where a bound reads the certifier's stamp, on the certifier's own assumptions, stated in its
-    layer (`verity/core/protocols/spot/README.md`).
+    layer (`verity/protocols/spot/verifier/README.md`).
   - Each panel names the deployment it assumes (`DEPLOYMENT`: what serving commits, and the replay block) and shows
     its headline design solid and its comparisons thin, dash-dotted, dashed or dotted:
     - exfiltration: two-stage sampling (serving commits only token ids), width-stratified (the headline: the public

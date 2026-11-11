@@ -80,10 +80,10 @@ from fractions import Fraction
 from pathlib import Path
 from typing import Any, NamedTuple
 
-from verity.ml.protocols.certifier import ingress_scan as IS
-from verity.core.protocols.certifier import calibration
-from verity.core.protocols.certifier import warden as W
-from verity.core.protocols import reporting
+from verity.protocols.certifier.prover import ingress_scan as IS
+from verity.protocols.certifier.verifier import calibration
+from verity.protocols.certifier.verifier import warden as W
+from verity.protocols import reporting
 
 #: the monitoring periods' seconds, by name
 PERIODS: dict[str, int] = dict(reporting.PERIODS)
@@ -98,7 +98,7 @@ CENSUS = ROOT / "benchmarks" / "census"
 #: machine's GPUs, and the served model's workload card
 ADVERSARY, DEPLOYMENTS, HARDWARE = (f"benchmarks/census/{name}.json"
                                     for name in ("adversary", "deployments", "hardware"))
-RHO, RHO_HARDWARE = "benchmarks/rho/data/reference.toml", "benchmarks/rho/data/hardware.toml"
+RHO, RHO_HARDWARE = "verity/protocols/inference_only/rho/data/reference.toml", "verity/protocols/inference_only/rho/data/hardware.toml"
 WORKLOAD = "benchmarks/spot_figures/cards/workload.glm-5.3.json"
 #: the served model, rho's world fleet and the census's GPU peak, the H200's dense FP8 rate
 MODEL, WORLD, PEAK = "GLM-5.3", "world-h200", "h100-sxm5-80gb/e4m3"
@@ -566,7 +566,7 @@ def inputs(*, response_ids: int = RESPONSE_IDS, id_bits: int = ID_BITS, buckets:
                               f"no certified {MODEL} class: the most ids a response holds (--response-ids)"),
         "id_bits": Input(id_bits, "bit", "assumed",
                          f"no certified {MODEL} class: an id of the vocabulary "
-                         "(integrations/vllm/tests/check/fixtures/glm_moe_dsa/config.json's vocab_size)"),
+                         "(adapters/vllm/tests/check/fixtures/glm_moe_dsa/config.json's vocab_size)"),
         "phase_buckets": Input(buckets, "bucket", "assumed",
                                f"no certified {MODEL} class: an execution phase's buckets (--phase-buckets)"),
         "bucket_s": Input(bucket_s, "s", "assumed",
@@ -580,7 +580,7 @@ def inputs(*, response_ids: int = RESPONSE_IDS, id_bits: int = ID_BITS, buckets:
         "syncs": Input(chosen["n_delta"].default * chosen["n_rho"].default if syncs is None else syncs, "sync",
                        "assumed",
                        "N2's #Σ_sync, the most a calibration chooses by default: "
-                       "verity/core/protocols/certifier/calibration.py choose_sync_set's n_delta x n_rho"
+                       "verity/protocols/certifier/verifier/calibration.py choose_sync_set's n_delta x n_rho"
                        if syncs is None else "N2's #Σ_sync, given (--syncs)"),
         "failure_rate": Input(failure_rate, "failure/connection", "assumed",
                               "none measured: the share of connections that fail, which the rows with the lengths "
