@@ -619,3 +619,16 @@ not a commit of `main` (#8741 is open). Then the 01:50Z order: 2 and 4 provers a
   02:30Z). From 04:00Z card 3 takes its cores from 24-47, as the 01:50Z section says, if that is its node.
 - **Every steady row runs with `FC_FIREWALL=0`** (the script sets it). Say so in each row's comment from now:
   proofs and benchmarks are told it is SPOT[Flock] on its own, with no ZK server in the path.
+
+## Wed 11 Nov 02:48Z: no cut from 08:00Z to 10:00Z any more; a new timed neighbour from 04:00Z to 07:30Z
+
+- **vllm released 08:00Z to 10:00Z** (INF-659, 02:47Z: its gate ran on Tuesday). So cards 3 and 5 with cores 24-47
+  are yours straight through from 04:00Z to 11:45Z (the calendar's row, pushed 02:48Z), and nothing of yours stops
+  at 08:00Z. This replaces "from 08:00Z to 10:00Z only cards 1, 2, 6, 7".
+- **compute-accounting times a served step on card 0 with cores 0-7 from 04:00Z to 07:30Z** (CMP-149; the
+  calendar's row). It is a timed, interleaved run and must not be throttled by ours. In those hours the node's
+  pinned sum is its 8, KMOVE's 12 on cores 12-23, and yours: **keep yours at or under 60 cores from 04:00Z to
+  07:30Z, staging included**, so the three stay under the quota of 81.6. Name it among what ran beside each row
+  timed then.
+- Card 0 is never yours. Card 3 with cores 0-11 is yours only until 04:00Z; after that its slot's cores come from
+  24-47.
