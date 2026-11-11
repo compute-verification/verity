@@ -25,6 +25,7 @@ from collections.abc import Callable, Iterable, Iterator
 from datetime import datetime, timedelta
 from pathlib import Path
 
+import numpy as np
 from verity.commitments.crypto import lms
 from verity.protocols.pouw.verifier import credit as CR
 from verity.protocols.pouw.verifier import weights as Wt
@@ -60,7 +61,6 @@ def models():
 def linear_rows(codes, scales) -> Iterator[bytes]:
     """A linear's B rows (`weights.row_bytes`) from its int8 codes ``(n, K)`` and f32 s_w ``(n,)`` or ``(n, 1)``, as
     `models.rows_of` reads them from a checkpoint."""
-    import numpy as np
     s = np.asarray(scales, "<f4").reshape(-1)
     for j, row in enumerate(np.asarray(codes, np.int8)):
         yield Wt.row_bytes(row.tobytes(), s[j].tobytes())

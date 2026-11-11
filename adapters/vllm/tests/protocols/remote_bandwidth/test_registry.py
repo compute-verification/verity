@@ -8,6 +8,7 @@ import struct
 import numpy as np
 import pytest
 from verity.commitments.merkle import Opening
+from verity.protocols.poub.verifier import audit
 from verity.protocols.poub.verifier import receipts as rb
 
 from verity_vllm.protocols.remote_bandwidth.interface import (
@@ -23,6 +24,7 @@ from verity_vllm.protocols.remote_bandwidth.registry import (
     KindReceipt,
     NodeMemory,
     RemoteBandwidthReceipt,
+    aligned,
     chain,
 )
 from verity_vllm.protocols.remote_bandwidth.verify import verify_opening
@@ -215,7 +217,6 @@ def test_windows_chain_through_the_session():
 def test_the_sessions_first_window_chains_from_the_verifiers_registration_digest():
     """The driver's `Registration.digest`, not the store's own log root, is the root before the session's first pass;
     a later window takes none."""
-    from verity.protocols.poub.verifier import audit
     s = NodeMemory()
     weights(s)
     digest = audit.register(bytes(32), b"node", s.layout().blocks, bytes(64), nonce=bytes(32)).digest
@@ -352,7 +353,6 @@ def _driver_root(s: NodeMemory, backings: dict[str, ArrayBacking], pc, receipt=R
 
 
 def test_a_pass_lays_its_segments_out_as_subtrees_of_the_drivers_tree():
-    from verity_vllm.protocols.remote_bandwidth.registry import aligned
     s, backings = _aligned_store()
     (pc,), _ = _window(s, SIGMA, [([0, 1, 2, 3], None)])
     got = [(x.region, x.count, x.position, aligned(x)) for x in pc.segments]

@@ -29,6 +29,7 @@ if TYPE_CHECKING:
 else:
     torch = pytest.importorskip("torch")
 
+from verity.circuits.codec import canonical_json
 from verity.circuits.defs import CompositeDefinition, PrimitiveDefinition, bind
 from verity.circuits.ports import In, Out, Ports
 from verity.circuits.refs import Coll, coll_concat
@@ -48,9 +49,15 @@ from verity.protocols.pouw.verifier.audit import hm96_salt
 from verity.protocols.spot.verifier.one_stage import partition as P
 from verity.protocols.spot.verifier.one_stage import registered as G
 
+from verity_vllm.engine import hooks
+from verity_vllm.engine import int8_experts as X
 from verity_vllm.engine import int8_ops as OPS
 from verity_vllm.protocols.pouw import h1 as PH
+from verity_vllm.protocols.pouw.h1 import handoff as HO
+from verity_vllm.protocols.pouw.h1 import hooks as PHK
+from verity_vllm.protocols.pouw.h1 import records as ZR
 from verity_vllm.protocols.pouw.h1 import registered as NR
+from verity_vllm.protocols.pouw.h1 import registered_device as D
 from verity_vllm.protocols.pouw.h1 import requests as RQ
 from verity_vllm.protocols.pouw.h1 import served as SV
 
@@ -309,9 +316,6 @@ def test_each_expert_gemm_registers_its_tables_as_a_dense_linears_call_does():
     ``a/<K>@<s>`` (the step's experts' calls of K, call after call) and registers ``zy@<c>``, whose roots recompute from
     each expert's own served rows (an idle expert's zero-row call from zeros), and its manifest row carries its served
     rows m."""
-    from verity_vllm.engine import hooks
-    from verity_vllm.engine import int8_experts as X
-    from verity_vllm.protocols.pouw.h1 import hooks as PHK
     g, rng = torch.Generator().manual_seed(3), np.random.default_rng(3)
     w13, w2 = _codes(rng, 2 * 32, 32).reshape(2, 32, 32), _codes(rng, 2 * 32, 16).reshape(2, 32, 16)
     s13, s2 = (torch.rand(2, 32, 1, generator=g) * 0.01 + 1e-4 for _ in range(2))
@@ -495,7 +499,6 @@ def test_register_writes_each_calls_file(tmp_path):
     assert reg.window_root == W1.hex() and [e["value"] for e in reg.registered] == list(run.served.registered)
     assert sorted(p.name for p in tmp_path.iterdir()) == [SV.file_name(0), SV.file_name(2)] == [
         "pouw-h1-registered-c0.json", "pouw-h1-registered-c2.json"]
-    from verity.circuits.codec import canonical_json
     assert (tmp_path / SV.file_name(2)).read_bytes() == canonical_json(SV.reads_file(run, 2)) == canonical_json(reg.files[2])
 
 
@@ -933,8 +936,6 @@ def test_a_producer_with_stage_is_handed_each_served_calls_device_rows_before_it
 def test_zy_words_are_record_words_of_the_records_split():
     """`zy_words` is `record_words` of `pouw_h1_records.split`: the records' own words where the Program's tile is their
     proof block and they cover every slot, taken apart otherwise (fewer rows than slots, another tile)."""
-    from verity_vllm.protocols.pouw.h1 import records as ZR
-
     rng = np.random.default_rng(3)
     for rows, n, slots, tile in ((64, 96, 64, (32, 32)), (32, 64, 64, (32, 32)), (64, 64, 64, (16, 32))):
         records = rng.integers(0, 256, ((rows // 32) * (n // 32), ZR.ZY_BYTES), dtype=np.uint8)
@@ -946,11 +947,8 @@ def test_zy_words_are_record_words_of_the_records_split():
 def test_an_empty_calls_z_table_is_record_words_of_no_rows(monkeypatch, mode):
     """An empty call's z table (`Served._empty_zy`) is `record_words` of no rows: zeros on the host, and on the GPU a CUDA
     u16 tensor of the same words, made on the hash's stream; a window whose last step is empty registers it either way."""
-    if mode == "gpu":
-        from verity_vllm.protocols.pouw.h1 import registered_device as D
-
-        if not D.available():
-            pytest.skip("no CUDA device the kernels build for")
+    if mode == "gpu" and not D.available():
+        pytest.skip("no CUDA device the kernels build for")
     monkeypatch.setattr(NR, "MODE", mode)
     run, *_ = _window(W1)
     served = run.served
@@ -1270,8 +1268,6 @@ def test_a_public_table_is_built_again_on_read_and_registers_what_its_held_rows_
     J10-R Llama window): read whole, in any order or one at a time, on the host or as a torch tensor, they are its rows
     and core's salts, and committing them held, as bytes, registers its root, strings and levels; it pickles as it is,
     with no tensor, so a window's saved state holds it."""
-    from verity_vllm.protocols.pouw.h1 import handoff as HO
-
     run = _llama(defn=StandInJ10R)[0] if j10r else _window(W1)[0]
     served, pre = run.served, SV.PREFIX
     assert not served.refused and HW.is_j10r(served.program) == j10r

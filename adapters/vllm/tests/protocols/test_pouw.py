@@ -7,6 +7,7 @@ calls.
 """
 from __future__ import annotations
 
+import hashlib
 import json
 import random
 import sys
@@ -14,7 +15,9 @@ import types
 
 import numpy as np
 import pytest
-from verity.protocols.pouw.prover.schemes import SCHEMES, get
+from verity.protocols.pouw.prover import circuit
+from verity.protocols.pouw.prover.schemes import SCHEMES, get, pearl_c
+from verity.protocols.pouw.verifier import registration
 from verity.protocols.pouw.verifier.audit import (
     HM96,
     HM96_WEIGHTS,
@@ -37,6 +40,8 @@ from verity.protocols.pouw.verifier.protocol import DomainError, Matmul, Shape, 
 from verity_vllm import protocols as PO
 from verity_vllm.engine import hooks
 from verity_vllm.protocols import pouw
+from verity_vllm.protocols.pouw import h1 as pouw_h1
+from verity_vllm.protocols.pouw import lead as pouw_lead
 from verity_vllm.protocols.pouw import pearl_c as PPD
 from verity_vllm.protocols.pouw.pearl_c import kernel as PPK
 
@@ -95,10 +100,6 @@ def _int7_linear(x, w, bias=None):
 # --- what the adapter refuses ------------------------------------------------------------------------------------------------
 
 def test_schemes_are_the_protocol_packages_and_only_ncp_pearl_c_sm120_h1_and_the_lead_are_executed():
-    from verity.protocols.pouw.prover import circuit
-
-    from verity_vllm.protocols.pouw import h1 as pouw_h1
-    from verity_vllm.protocols.pouw import lead as pouw_lead
     assert pouw.schemes() == tuple(sorted({*SCHEMES, *circuit.SCHEMES, *PPD.SCHEMES, pouw_h1.SCHEME, pouw_lead.SCHEME}))
     assert "ncp-v1" in pouw.schemes()
     assert pouw.refusals("ncp-v1", _serve("pouw:ncp-v1")) == () and pouw.refusals("ncp-v2", _serve("pouw:ncp-v2")) == ()
@@ -322,8 +323,6 @@ def test_a_scheme_that_keeps_weight_state_is_refused_beside_pous(monkeypatch, sc
 def test_kernel_directories_load_as_their_own_modules_named_by_their_sources(tmp_path, monkeypatch):
     """Two kernel directories in one process (a tuned variant beside the gated one) get their own
     run.py and fixture.py; the same bytes anywhere are one kernel.  Before this, the second got the first's run.py."""
-    import hashlib
-
     def kernel_dir(name, mark):
         d = tmp_path / name
         d.mkdir()
@@ -369,8 +368,6 @@ def test_under_pous_the_gemm_reads_the_weight_it_is_handed(monkeypatch):
 def test_served_fp8_claims_registered_weights_only_under_the_shared_rule(monkeypatch):
     """Served FP8 applies no keyed rotation, so its weights register only from the curated list, through the one
     registered-weights rule Pearl-C4 reads too; refused, the claim says it is about nothing and names why."""
-    from verity.protocols.pouw.prover.schemes import pearl_c
-    from verity.protocols.pouw.verifier import registration
     s = PPD.scheme_of("pearl-c-sm120-v1-h3")
     seen: list[tuple] = []
     assert pouw.SERVED_TRANSFORMS == () and pearl_c.check_registration is registration.check_registration
