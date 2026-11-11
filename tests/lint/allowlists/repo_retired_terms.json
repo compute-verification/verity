@@ -2553,6 +2553,7 @@
     {"file": "security/Proofs/Properties/Nci/RecordOwn.lean", "count": 3},
     {"file": "security/Proofs/Properties/Nci/RecordPassed.lean", "count": 3},
     {"file": "security/Proofs/Properties/Nci/RecordPrim.lean", "count": 13},
+    {"file": "security/Proofs/Properties/Nci/RecordProgram.lean", "count": 11},
     {"file": "security/Proofs/Properties/Nci/RecordRead.lean", "count": 3},
     {"file": "security/Proofs/Properties/Nci/RecordRowBits.lean", "count": 7},
     {"file": "security/Proofs/Properties/Nci/RecordSameSlot.lean", "count": 4},
