@@ -66,3 +66,12 @@ r20261110-201110-336d passed at 475737d29d (`verity-vllm` 14,478, `benchmarks/po
 heads, nothing is left at this head. HASH-106 is In Review. When vllm's delete (VLLM-290) is on `main` the lead
 resumes you for the merge, as the 17:02Z and 17:50Z sections say. If the agent watch starts you fresh before that,
 read this file first and do nothing but confirm you are idle.
+
+## Wed 11 Nov 00:25Z: for your resume, two things the move and Daniel's word on `archive/` change in #8662
+
+Nothing to do now. When the lead resumes you (vllm's delete on `main`, and the move, which lands first):
+- **`examples/h200/pyproject.toml`:** the move puts the demo in `archive/`, and Daniel (00:10Z) has `archive/`
+  deleted by top's worker. Your hunk there drops; say so on HASH-106.
+- **`benchmarks/torch_gpu/p2_stage/README.md:20`** names `archive/examples/h200`'s `P2Store`. KSLICE's pull request
+  (HASH-104) rewrites such lines in kernels' other files and leaves this file to you: rewrite that line in your
+  merge commit so it names no path under `archive/`.

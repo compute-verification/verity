@@ -27,10 +27,14 @@ newest section of your own inbox file (`inbox/<NAME>.md` on this branch) wins ov
 
 ## Agents, today
 
-- **top, Wed 00:01Z: 118 agents run, 18 over Daniel's cap of 100. Nobody stops a worker that is doing work, and
-  no new one starts until Daniel names the number.** So: a worker whose work has ended, or that only waits (on a
-  run, on the move, on an owner's answer), ends its turn at once, note written and pushed, saying what it waits on.
-  The lead resumes you when that arrives and the count allows. Runs you queued keep running without you.
+- **Changed at 00:20Z Wed (top's announcement, 00:10Z). Daniel: the cap is 150 agents until the move is on `main`,
+  and the hold on new workers is off. After the move it is 100 again.** So a worker resumed tonight has work that
+  ends tonight, or leaves a note it can be restarted from. As before: when your work has ended, or you only wait (on
+  a run, on the move, on an owner's answer), end your turn at once, note written and pushed, saying what you wait
+  on. Runs you queued keep running without you.
+- **Daniel, 00:10Z: `archive/` is deleted.** top's worker deletes it by a pull request on the moved tree. So kernels
+  archives nothing: a file of kernels' that nothing loads is deleted (git keeps it), in kernels' own pull request
+  (HASH-104, KSLICE). Write no path under `archive/` into any file, and no load from it.
 - **Daniel's top set (TOP-394, 17:36Z):** the repository's organization and continuous integration first, and
   standard benchmarks with them (goals 3, 1, 4 and 5). Every kernels worker today serves one of those.
 

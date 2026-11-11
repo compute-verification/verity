@@ -45,3 +45,48 @@ The launch freeze is lifted and nothing waits for the layout, so this piece goes
 
 Your finding stands (the lead checked `60168d4fb9` on `main`). No pull request is wanted, and the lead asked top to
 close #7762 as landed. Nothing is asked of you now; the sections of 17:50Z still say what waits for the layout.
+
+## Wed 11 Nov 00:25Z: HASH-104's dead files are DELETED, not archived. Prepare that pull request tonight, on the staged tree
+
+Daniel, 00:10Z (top's announcement): `archive/` is deleted, by a pull request of top's worker on the moved tree
+after the move lands (about 03:45Z). The lead told top (TOP-398, 00:22Z): kernels' 34 paths are deleted in one pull
+request of kernels', which also rewrites the prose that names `archive/` in the files that stay; top's worker
+leaves kernels' directories alone. Read `inbox/RULES.md` ("Agents, today") first.
+
+**Base:** `cursor/top-layout-staged-e15c` (`50f940c4f285`; if top posts a later staged head on TOP-398, that one).
+A new branch from it, `cursor/kernels-dead-files-<hex>`. No pull request tonight: it opens on the lead's word, once
+the move is on `main` and the branch sits on that commit.
+
+**Delete:** the 34 paths of `kernels-archive.txt` that the staged tree still has outside `archive/` (the lead
+checked: 34 present; the other three, `commit_slots/{overlap.py,overlap.sh,green_probe.py}`, are in `archive/` and
+go with top's). Before each directory or file goes, on the staged tree:
+- nothing that stays loads it: imports, paths in scripts and data files, a suite's inputs, workspace members in the
+  root `pyproject.toml` and `uv.lock`, the SASS gate's pins (`benchmarks/pouw/harness/sass_pins.json:151` names
+  `units.cu`'s build, and `benchmarks/pouw/tests/test_sass_gate.py:510` a fixture built from it: those are
+  compute-accounting's files, so keep them working and change only what names a path that will be gone, or list it
+  for their owner on HASH-104);
+- the store shows no run of it since its last change, other than KMOVE's rehearsals of the move (HASH-102,
+  HASH-105, HASH-108). One that has such a run is kept, with the run, and listed.
+- Then every line that names a deleted path, in the same change: READMEs (`benchmarks/README.md`,
+  `benchmarks/torch_gpu/README.md`, `s8_linear/README.md`), lint allowlists, `tests/test_boundaries.py`'s lists,
+  the registry, the kernel-engineering skill if it names one.
+
+**Rewrite, in files that stay:** the lines that name `archive/` (the lead counted 8 in 5 files once `units/` and
+`realw.py` are gone: `torch_gpu/README.md:37`, `attn_bf16/README.md:58`, `commit_slots/README.md:58,70` and its
+line 72 on `green_probe.py`, `p2_stage/README.md:20`, `p2_stage/served_weights.py:5,6,606`). Each says what is true
+with no demo in the tree: the shape or the caller that exists, never a path that is gone.
+- **Leave `p2_stage/README.md` alone:** #8662 (KP2's) edits it. List its line on HASH-104 for KP2's resume.
+- **Keep `torch_gpu/README.md`'s edit to the lines it needs:** #8669 (marked) adds its Interface section to the same
+  file, and whichever lands second takes the conflict. Its Interface table has no row that names a deleted path?
+  Check, and say on HASH-104 if it does.
+- `e2e_h200.<name>` in a comment or docstring of a file that stays (`attn_bf16/attn.py`, `commit_slots/slots_gpu.py`
+  and its `tests/test_gpu.py`) names a module that will not exist: rewrite those too, comments only.
+
+**Check:** ruff on what you touch; `suites.py --changed` from the staged commit, or the suites by name (at least
+the root suite, `benchmarks/pouw`, and each `torch_gpu` and `hash` suite left), in one named run on
+`--on vy-nebius-cpu-12` (`inbox/RULES.md`, "Runs"). Read its verdict lines yourself.
+
+**Report on HASH-104 by 03:00Z, then end your turn:** the branch and its head; each of the 34 as deleted or kept
+with its reason; the lines rewritten; what you left for an owner; the run and its verdict lines. A note in
+`lanes/kernels/` that a fresh worker could open the pull request from (the base it sits on, and the one command to
+put it on the moved `main`: `git rebase --onto origin/main <staged commit>`). Mark nothing, open nothing.

@@ -340,3 +340,15 @@ from 08:00Z.
   the older names written so that no mover rewrites them and no import lint reads them as live imports; its suites
   in one named run. The lead marks.
 - kernels' open heads across the move, as HASH-107 says, each only if it has not merged.
+
+## Wed 11 Nov 00:25Z: `archive/` is deleted, and `units/` with it: leave `units` out of part 2
+
+Daniel, 00:10Z: `archive/` is deleted (top's worker, a pull request on the moved tree). Kernels' dead files,
+`torch_gpu/units/` among them, are deleted too, not archived (HASH-104; KSLICE prepares that pull request tonight).
+- **Part 2:** do not build or check `units` on the H200. Its row in the table says "not run: deleted by HASH-104".
+  The other kernels as written. Your run …f8c1 (the units' ship on the staged tree with the replay's imports
+  rewritten: rc 0, both cross-checks agree) stands as its last check.
+- **The 11 rows for the archive's `replay.py`** are not sent to anyone. Leave the files in the notes.
+- **Part 3** is unchanged (`h1v3_ref.py`, then the open heads across the move). Write no path under `archive/`.
+- The cap is 150 agents until the move is on `main`, then 100 again (`inbox/RULES.md`): when part 1 is reported,
+  end your turn; the lead resumes you for part 2 with the commit.
