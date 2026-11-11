@@ -9,7 +9,6 @@ import json
 import random
 import shutil
 import sys
-from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
 import pytest
@@ -54,25 +53,21 @@ def test_a_difference_is_reported(compared, capsys):
 @pytest.mark.slow
 def test_the_deployments_record_agrees_from_its_files():
     """The record the GPU run writes at the certificate's point: eight segments (2^19 leaves) and twenty audits of 105,
-    judged from files as the harness keeps them; and one wrong label in the last audit rejects it both ways. The Lean
-    judges the two documents side by side, each from files of its own."""
+    judged from files as the harness keeps them; and one wrong label in the last audit rejects it both ways."""
     from verity.protocols.pous.verifier.schemes import p2 as P2
 
     s = ta.Store(P2.P2Params(*P2.POINT, segments=P2.CERT_BLOCKS // P2.POINT[2]), b"deployment")
     doc = ta.record(s, random.Random(0), k=P2.CERT_K, deadline=P2.DELTA_NS, rtt=P2.RTT_ALLOWANCE_CAP_NS, strict=True,
                     audits=20)
-    wrong = ta._edit(doc, lambda d: d["records"][-1]["answers"][-1].update(
-        block=ta._flip(d["records"][-1]["answers"][-1]["block"])))
     mc = ta.challenger()
-    ta.build(ta.HERE, ta.EXE)
-    with ThreadPoolExecutor(2) as pool:
-        lean = [pool.submit(ta.lean_verdict, s.ready, s.leaves, d) for d in (doc, wrong)]
-        py = mc.verdict(s.ready, s.leaves, doc)
-        assert py["accepted"] and py["audits_accepted"] == 20 and py["gaps"] == [] and py["profile"]["blocks"] == 1 << 19
-        assert lean[0].result() == py
-        py = mc.verdict(s.ready, s.leaves, wrong)
-        assert not py["accepted"] and py["audits_accepted"] == 19 and py["audits"][-1]["answers"][-1] == [False, True]
-        assert lean[1].result() == py
+    py = mc.verdict(s.ready, s.leaves, doc)
+    assert py["accepted"] and py["audits_accepted"] == 20 and py["gaps"] == [] and py["profile"]["blocks"] == 1 << 19
+    assert ta.lean_verdict(s.ready, s.leaves, doc) == py
+    a = doc["records"][-1]["answers"][-1]
+    a["block"] = ta._flip(a["block"])
+    py = mc.verdict(s.ready, s.leaves, doc)
+    assert not py["accepted"] and py["audits_accepted"] == 19 and py["audits"][-1]["answers"][-1] == [False, True]
+    assert ta.lean_verdict(s.ready, s.leaves, doc) == py
 
 
 def _live(tmp_path, limit_ns: int, wrong=lambda i: False):
