@@ -136,9 +136,10 @@ builds no Definition.
 Entries are files ``<dir>/<version>/<sha512 of the key>/<sha512 of the entry>.json``; there is no expiry and no path or time
 shortcut.  An entry reused only where its modules moved is stored again, its reads renamed to where they are now (`lookup`).
 
-A run's reads, declared as the inputs of a task keyed on them (`declared`: a catalog binding's, `cli.READS`), are the paths of
-the tree whose bytes, listing or kind `lookup` takes of them, a kind under a path that is no directory as that path's
-(`probed`), and, for reads of what the registries registered, every module the registries import (`registry_inputs`).
+A run's reads, declared as the inputs of a task keyed on them (`declared`: a catalog binding's, in its report's ``reads``),
+are the paths of the tree whose bytes, listing or kind `lookup` takes of them, a kind under a path that is no directory as
+that path's (`probed`), and, for reads of what the registries registered, every module the registries import
+(`registry_inputs`).
 """
 from __future__ import annotations
 
