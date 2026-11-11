@@ -25,7 +25,9 @@ trace of ten rounds holds gigabytes of them. The stream key and the lane are the
 cut where the next piece reads every output, so no gate one trace would prune is kept: the key's rounds 0-4 with the key
 words rounds 5-9 read, and rounds 5-9 (`GumbelStreamKeyHead_v1`, `GumbelStreamKeyTail_v1`), and the lane's rounds 0-2, 3-7
 (the counter words round 9's word 0 reads), and 8-9 with the uniform, the logs and the add (`GumbelLaneHead_v1`,
-`GumbelLaneRounds_v1`, `GumbelLaneTail_v1`).
+`GumbelLaneRounds_v1`, `GumbelLaneTail_v1`). A lowering that runs the builders (Flock's flat one) has rows, where a trace has
+gates: there each round commits the words it returns (`philox_round`), a row a bit, so a round's ANDs read the round before
+as columns and not as its forms; a trace's commit is the word itself, so no Definition's gates read it.
 
 `GumbelNoiseLane_v3` is one lane on its own operands, for a body that Calls `GumbelNoiseLane_v1` a lane (the top-p stages'
 select chunks): its Philox word is the stream key's function of (key, 0) and (v, 0), so `GumbelStreamKey_v2`, and the uniform
@@ -119,12 +121,14 @@ def _times(C, x, k: int):
 
 def philox_round(C, c, k0, k1, pa=None, pb=None):
     """One round of `sampling.philox4x32_10_word0` on the counter words ``c``; ``pa`` is ``c[0] * PHILOX_ROUND_A`` and ``pb``
-    is ``c[2] * PHILOX_ROUND_B`` when the caller has them."""
+    is ``c[2] * PHILOX_ROUND_B`` when the caller has them. The four words it returns are committed (`forms.Circuit.commit`):
+    each is a sum of its product's adders, the counter and the key, which the next round's adders would otherwise read as
+    forms that grow round over round."""
     if pb is None:
         pb = _times(C, c[2], SM.PHILOX_ROUND_B)
     if pa is None:
         pa = _times(C, c[0], SM.PHILOX_ROUND_A)
-    return [_xor(_xor(pb[32:64], c[1]), k0), pb[:32], _xor(_xor(pa[32:64], c[3]), k1), pa[:32]]
+    return [C.commit(w) for w in (_xor(_xor(pb[32:64], c[1]), k0), pb[:32], _xor(_xor(pa[32:64], c[3]), k1), pa[:32])]
 
 
 def stream_keys(C, seed):
