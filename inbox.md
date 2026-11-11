@@ -255,3 +255,39 @@ One comment on LEAN-249 as `lean/CROSSTICK` at 1:32 PM PST, read back from Linea
 
 Note: `lanes/network-accounting/20261111T2133Z-report-lean249-crosstick-main-closes.md`, synced.
 
+[2026-11-11T22:05Z] 576454f84c42
+TERMGB to coordinator (network-accounting). Job 7, #8777: the run's verdict, after my 1:25 PM PST report. Written Wed 11 Nov, 2:05 PM PST (read from the clock).
+
+**The run at the head passed.** `r20261111-210610-cf01` at `f28f4e4acc2de821ea2d4d13fae0ef7aba50fa7c`: done, exit 0 [read from its fetched record; the record names that commit and the tree `4aaa830435a1`].
+
+```
+passed  verity-graph                 207 passed in 22 s; 207 outcomes recorded
+passed  verity-network-e2e           70 passed in 49 s; 70 outcomes recorded
+passed  verity-network-sim           21 passed in 2 s; 21 outcomes recorded
+passed  benchmarks/one_stage         507 passed in 140 s; 507 outcomes recorded
+passed  verity-network-traces        540 passed in 184 s; 540 outcomes recorded
+5 suites: 5 passed (0 cached), 0 failed; 6.6 min of test time
+112 passed, 9 warnings in 107.61s (0:01:47)
+```
+
+- **The new tests** [read]: all 20 tests of `test_certifier_term.py` are among `verity-network-traces`' 540 passes, the two new ones among them. That is 538 at `7b314b7dcaca` plus the two.
+- **Inputs** [read]: no suite read a file outside its declared inputs, 0 in each of the five records.
+- **Warnings** [read]: nine bookkeeping tests'. No path under `benchmarks/network_traces` or `benchmarks/certifier_term` is named in the root files' output.
+- **Timing** [read]: it waited for a slot from 1:06:23 to 1:24:54 PM PST, every check slot being taken, and ended 1:29:59 PM PST.
+
+**The pull request's body** [run]: the run's line now holds these verdict lines, posted 2:04 PM PST, 45,595 bytes. One hunk changed, the Checks block at the head; the body on GitHub equals my file. The head is still `f28f4e4acc2d`, open, no mark, no label, title unchanged.
+
+**Nothing else done**: no commit, no push, no second Linear comment, and NET-345 not started.
+
+**What woke me** [read]: copies of three "subagent finished" notices, mine and two other workers'. I took no action on them. My inbox had no message at 2:00 and 2:04 PM PST.
+
+**Two things you may want to know**:
+1. On this resume the VM's checkout was on `cursor/verity-network-accounting-b51f` at `660f5e0871f6`, not on my branch. I did not put it there. I changed nothing in the tree and pushed nothing from it.
+2. This run's name now reads "TERMGB: #8777 takes main; K at two schedules (NET-345)" [read]. I have no brief for that and started nothing.
+
+**Least sure**: the comment on NET-298 still gives the run as waiting. The job allows one comment, so I did not add a second. Say so if you want one line with the verdict there.
+
+**Where I did not look**: as in the 1:25 PM PST report. The whole check was not run.
+
+TIMER: none
+
