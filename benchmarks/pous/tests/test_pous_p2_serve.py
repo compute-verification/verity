@@ -16,6 +16,7 @@ pytest.importorskip("verity")
 
 BENCH = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(BENCH))
+sys.path.insert(0, str((BENCH.parents[1] / "benchmarks/pous/p2_v1/store.py").parents[1]))
 from p2_v1 import serve as V  # noqa: E402
 from p2_v1 import store as S  # noqa: E402
 

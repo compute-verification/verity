@@ -22,7 +22,7 @@ inputs = ["verity/__init__.py", "verity/errors.py",
           # challengers.py's gate client, which verifier.py builds for --challenger gate
           "verity/claims/__init__.py", "verity/protocols/spot",
           # verifier.py and its in-process harness, which the stub verifier runs
-          "benchmarks/remote_session",
+          "benchmarks/remote_session", "benchmarks/remote_session/prover.py", "benchmarks/remote_session/device.py",
           # auditor_line.py --boundary, which the stub verifier's run is read with: the network certifiers' records and audit
           "verity/protocols/certifier", "verity/protocols/certifier/prover",
           # the challenger's tunnel client, whose forced pty the challenger's tunnel key allows

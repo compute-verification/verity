@@ -21,7 +21,7 @@
 #include <cstring>
 #include <cuda_runtime.h>
 
-#include "sha512.cuh"
+#include "./sha512.cuh"
 
 #ifndef WT_FIELD
 #define WT_FIELD 1279

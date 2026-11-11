@@ -32,6 +32,7 @@ from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE.parent))
+sys.path.insert(0, str((HERE.parents[2] / "benchmarks/pous/p2_v1/gpu.py").parents[1]))
 
 from p2_v1 import reference as R  # noqa: E402
 from p2_v1.gpu import Kernels  # noqa: E402

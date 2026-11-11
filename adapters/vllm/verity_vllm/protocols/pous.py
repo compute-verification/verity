@@ -145,11 +145,11 @@ def _package(name: str, directory: Path) -> None:
 
 
 def _p2(module: str) -> Any:
-    """``store`` (`benchmarks/pous/p2_v1/store.py`, as ``p2_v1.store``) or ``stage``
+    """``store`` (`benchmarks/pous/p2_v1/store.py`, a module of the package `config.P2_POUS` names) or ``stage``
     (`benchmarks/torch_gpu/p2_stage/stage.py`, as ``p2_stage.stage``)."""
-    _package("p2_v1", config.P2_POUS / "p2_v1")
+    _package(config.P2_POUS.name, config.P2_POUS)
     if module == "store":
-        return importlib.import_module("p2_v1.store")
+        return importlib.import_module(f"{config.P2_POUS.name}.store")
     _package("p2_stage", config.P2_STAGE)
     return importlib.import_module("p2_stage.stage")
 

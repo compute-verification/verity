@@ -26,7 +26,7 @@ from . import reference as R
 from . import wire as Wi
 
 HERE = Path(__file__).resolve().parent
-ROOT = HERE.parents[2]
+ROOT = Path(__file__).resolve().parents[3]
 AUDIT_VECTORS, NEGATIVE_VECTORS = R.AUDIT_VECTORS, R.NEGATIVE_VECTORS
 KEYS_FIXTURE = ROOT / "verity/protocols/pous/verifier/tests/fixtures/p2-v4-keys.json"
 PINNED_TEXT = (HERE / "reference.py", KEYS_FIXTURE.parent.parent / "test_pous_protocol.py")

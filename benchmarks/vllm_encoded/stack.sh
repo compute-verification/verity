@@ -33,7 +33,7 @@ if [ "${MODE:-paged}" != paged ] && [ "${MODE:-paged}" != splits ] && [ "${MODE:
    [ "${MODE:-paged}" != rekey ]; then
   CT=benchmarks/codec_tensor
   nvcc "${CU[@]}" "${WTDEFS[@]}" -o "$B/wt.so" $CT/wt.cu > "$O/wt.ptxas" 2>&1 &
-  nvcc "${CU[@]}" -o "$B/reader.so" $CT/reader.cu > "$O/reader.ptxas" 2>&1 &
+  nvcc "${CU[@]}" -o "$B/reader.so" benchmarks/codec_tensor/reader.cu > "$O/reader.ptxas" 2>&1 &
 fi
 nvcc "${CU[@]}" "${KVDEFS[@]}" -o "$B/paged.so" $VE/paged.cu > "$O/paged.ptxas" 2>&1 || { tail -30 "$O/paged.ptxas"; exit 4; }
 wait

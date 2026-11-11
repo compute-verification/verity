@@ -58,7 +58,7 @@ import layout as L
 import stage as S
 
 # isort: split
-# p2_v1 is importable once layout has put benchmarks/pous on sys.path
+# the store's package is importable once layout has put its import root on sys.path
 from p2_v1 import gpu
 
 LAYERS = 52

@@ -18,7 +18,9 @@ markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]
 
 [[tool.verity.tests.reads]]
 tests = ["tests/test_interop.py"]
-paths = ["benchmarks/pous/p2_v1"]
+paths = ["benchmarks/pous/p2_v1", "benchmarks/pous/p2_v1/reference.py", "benchmarks/pous/p2_v1/wire.py",
+         "benchmarks/pous/p2_v1/vectors.json", "benchmarks/pous/p2_v1/audit-vectors.json",
+         "benchmarks/pous/p2_v1/audit-negative-vectors.json"]
 
 [tool.verity.tests]
 # test files that start a program the read guard can't trace (git, lake, a compiler, a shell): keyed on the suite's whole tree

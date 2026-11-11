@@ -17,8 +17,9 @@ set -euo pipefail
 HERE=$(cd "$(dirname "$0")" && pwd)
 . "$HERE/../ship.sh"
 OUT=${1:-${OUT:?usage: build.sh OUT}}; ARCH=${ARCH:-sm_90a}
-ship_stage benchmarks/pous/p2_v1 benchmarks/pous/p2_gpu verity/definitions/kernels
-P2=$SRC/benchmarks/pous/p2_v1
+P2=$(dirname benchmarks/pous/p2_v1/Makefile)
+ship_stage "$P2" "$(dirname benchmarks/pous/p2_gpu/p2dec.cu)" verity/definitions/kernels
+P2=$SRC/$P2
 S=$(mktemp -d "${TMPDIR:-/tmp}/p2-stage-build.XXXXXX"); trap 'rm -rf "$S"' EXIT
 mkdir -p "$OUT/lib"
 
@@ -43,8 +44,9 @@ if grep -E "spill (stores|loads)" "$OUT/lib/libp2v1.so.ptxas" | grep -vq " 0 byt
   echo "ptxas reports spills (lib/libp2v1.so.ptxas)" >&2
 fi
 { git -C "$ROOT" rev-parse HEAD
-  (cd "$ROOT" && sha256sum benchmarks/pous/p2_v1/{p2v1.cu,p2sq.cuh,p2keys.cuh,p2keys4.cuh,Makefile} \
-    benchmarks/pous/p2_gpu/{p2dec.cu,CGBN.commit} verity/definitions/kernels/sha512.cuh); } > "$OUT/source.txt"
+  (cd "$ROOT" && sha256sum benchmarks/pous/p2_v1/p2v1.cu benchmarks/pous/p2_v1/p2sq.cuh benchmarks/pous/p2_v1/p2keys.cuh \
+    benchmarks/pous/p2_v1/p2keys4.cuh benchmarks/pous/p2_v1/Makefile \
+    benchmarks/pous/p2_gpu/p2dec.cu benchmarks/pous/p2_gpu/CGBN.commit verity/definitions/kernels/sha512.cuh); } > "$OUT/source.txt"
 (cd "$OUT" && find . -type f ! -name MANIFEST.sha256 | LC_ALL=C sort | xargs sha256sum > MANIFEST.sha256)
 cat "$OUT/elf.txt"
 grep -E "registers|spill" "$OUT/lib/libp2v1.so.ptxas" | sort | uniq -c | head -20

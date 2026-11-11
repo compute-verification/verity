@@ -36,11 +36,13 @@ import numpy as np
 
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
+sys.path.insert(0, str((HERE.parents[1] / "benchmarks/codec_tensor/reader.py").parent))
 
 import bench as BW  # noqa: E402  (before kv_bench, as in step.py)
 import sketching as SKT  # noqa: E402
 
 sys.path.insert(0, str(HERE.parent / "word_codec"))
+sys.path.insert(0, str((HERE.parents[1] / "benchmarks/word_codec/kv_bench.py").parent))
 import kv_bench as BW_KV  # noqa: E402
 
 METRICS = ("lts__t_sectors_op_write.sum", "lts__t_sectors_srcunit_tex_op_write.sum", "lts__t_sectors_op_red.sum",

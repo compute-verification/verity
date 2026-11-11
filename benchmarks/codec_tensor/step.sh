@@ -42,7 +42,7 @@ LEASE=(gpu-lease 1 --wait ${GPU:+--on "$GPU"} --max-min "${MAXMIN:-28}" --)
     > "$O/$WT.ptxas" 2>&1 & P1=$!
   nvcc "${FLAGS[@]}" -DKV_FIELD=$FIELD -DKV_MASK=$MASK -DKV_FOLD6=$KV_FOLD6 -DKV_QHEADS=$QHEADS -o "$B/$KV.so" $CT/step.cu \
     > "$O/$KV.ptxas" 2>&1 & P2=$!
-  nvcc "${FLAGS[@]}" -o "$B/reader.so" $CT/reader.cu > "$O/reader.ptxas" 2>&1 || { tail -40 "$O/reader.ptxas"; exit 4; }
+  nvcc "${FLAGS[@]}" -o "$B/reader.so" benchmarks/codec_tensor/reader.cu > "$O/reader.ptxas" 2>&1 || { tail -40 "$O/reader.ptxas"; exit 4; }
   LIBS=(--wt-lib "$B/$WT.so" --kv-lib "$B/$KV.so" --reader-lib "$B/reader.so")
   wait $P1 || { tail -40 "$O/$WT.ptxas"; exit 4; }
   wait $P2 || { tail -40 "$O/$KV.ptxas"; exit 4; }
@@ -52,7 +52,7 @@ LEASE=(gpu-lease 1 --wait ${GPU:+--on "$GPU"} --max-min "${MAXMIN:-28}" --)
     "$PY" -m pytest -q -p no:cacheprovider $CT/tests benchmarks/word_codec/tests/test_kv.py > "$O/tests.log" 2>&1 \
       || { tail -30 "$O/tests.log"; exit 5; }
   fi
-  "$PY" $CT/reader.py --lib "$B/reader.so" --out "$O/reader-gate" --gib 0 > "$O/reader-gate.log" 2>&1 \
+  "$PY" benchmarks/codec_tensor/reader.py --lib "$B/reader.so" --out "$O/reader-gate" --gib 0 > "$O/reader-gate.log" 2>&1 \
     || { tail -30 "$O/reader-gate.log"; exit 6; }
   [ -n "$COMPILE_ONLY" ] && exit 0
   q() { nvidia-smi --query-gpu=index,uuid,name,clocks.sm,clocks.max.sm,power.draw,temperature.gpu,memory.used,memory.total \

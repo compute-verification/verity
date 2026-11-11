@@ -37,7 +37,6 @@ from verity.protocols.poub.verifier.session import wire
 
 HERE = Path(__file__).resolve().parent
 ROOT = HERE.parents[2]
-RS = ROOT / "benchmarks" / "remote_session"
 
 EVENTS = os.fdopen(os.dup(1), "w", buffering=1)
 os.dup2(2, 1)
@@ -100,7 +99,7 @@ def main() -> int:
         name, _, value = a.prover_args.pop(0).partition("=")
         own[name] = value
     store = ["--lib", a.lib, "--kv", a.kv, "--gib", str(a.gib)] if a.lib else []
-    cmd = [a.prover_py, str(RS / "prover.py"), "--connect", f"127.0.0.1:{port}", "--out", str(a.out / "prover"),
+    cmd = [a.prover_py, str(ROOT / "benchmarks/remote_session/prover.py"), "--connect", f"127.0.0.1:{port}", "--out", str(a.out / "prover"),
            "--plan", a.plan, *store, *a.prover_args]
     if a.prover_cpus:
         cmd = ["taskset", "-c", a.prover_cpus, *cmd]
