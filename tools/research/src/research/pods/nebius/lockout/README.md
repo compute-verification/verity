@@ -22,9 +22,9 @@ Apply order. Every step runs as vy-admin on the node and has its own rollback. W
 1. Deploy: `research deploy install NODE --by WHO --apply`. It stages the tools, `/usr/local/lib/vy-lockout/` and node 1's
    `/etc/vy/env/root.env`, and starts nothing. From this deploy on, `research run --job-user USER` asks `vy-sudo` for its
    unit, and `vy-sudo` starts one only as a job user: an account root has listed in the group `vy-job`. No tool here makes a
-   job user. Before the deploy, on the node, list each account made for jobs and nothing else:
-   `sudo groupadd -f --system vy-job && sudo usermod -aG vy-job USER` (a new one:
-   `sudo useradd --system --no-create-home --shell /usr/sbin/nologin --groups vy-job USER`). After the lock-out only vy-admin
+   job user. Before the deploy, on the node, run `sudo groupadd -f --system vy-job`, then `sudo usermod -aG vy-job USER` for
+   each account made for jobs and nothing else, or for a new one
+   `sudo useradd --system --no-create-home --shell /usr/sbin/nologin --groups vy-job USER`. After the lock-out only vy-admin
    can. `getent group vy-job` prints every job user. Rollback: `research deploy attic`.
 2. vy-admin: `sudo vy-admin-setup KEYS` with a file of public keys copied to the node. The keys are never taken from a secret
    store and never put in git. Then log in as vy-admin and run `sudo -n true`. Rollback: `userdel -r vy-admin` and remove
