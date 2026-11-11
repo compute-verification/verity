@@ -18,6 +18,7 @@ it prints from the store's records of record."""
 
 from __future__ import annotations
 
+import argparse
 import json
 import runpy
 import shutil
@@ -27,6 +28,7 @@ from pathlib import Path
 
 import pytest
 
+from verity_bench import lean_verify as L
 from verity_bench import prove as P
 from verity_bench import prove_records as R
 from verity_bench.cli import main
@@ -362,6 +364,82 @@ def test_a_total_that_leaves_a_block_type_out_is_partial_and_names_it(monkeypatc
     assert "(60.00% of the blocks, 18.75% of the blocks' MACs); and 1 more, which `--json` names\n" in R.render(page)
     whole = R.render(page | {"totals": t | {"status": "measured", "missing": []}})
     assert "measured: steady-state measurements cover 100.0% of its proving time" in whole and "partial" not in whole
+
+
+def lean(definition: str, run: str, seconds: tuple[float, ...], size: int, *, k_log: int = 20, blocks: int = 8,
+         full: int = 8) -> P.LeanVerify:
+    return P.LeanVerify(definition, k_log, blocks, full, seconds, size, run, "node-a (64 cores, a CPU)")
+
+
+def test_the_lean_verifiers_seconds_and_the_proofs_bytes_are_one_types_and_scaled_to_the_rest():
+    """A block type the Lean verifier ran on takes its statement's median seconds and its proof's bytes over the
+    statement's blocks; every other type with a k_log takes the same seconds and bytes a witness bit; a type with none
+    takes nothing. The totals are modeled, and say how much of each the measured type holds."""
+
+    census = P.Census.of(CENSUS).recut(CUT)
+    rows = (steady("gemm64", P.definition_id(GEMM64), "r20260102-000000-0002", 8, 8.0, verify=4.0),)
+    timed = (lean(P.definition_id(GEMM64), "r20260105-000000-0005", (40.0, 16.0, 24.0), 4000),
+             lean(P.definition_id(GEMM64), "r20260104-000000-0004", (1.0,), 1),             # an older run of the type
+             lean("Other_v1{N=2}", "r20260106-000000-0006", (1.0,), 1))                       # no block type of the census
+    table = P.Flock(rows, SESSIONS, "art:card", lean=timed).table(census)
+    assert [v.run for v in table.lean] == ["r20260105-000000-0005"]
+    by = {r.block: r.cost for r in table.rows}
+    assert [(by[n].lean_seconds, by[n].proof_bytes, by[n].lean_source) for n in (GEMM64, GEMM32, "Half_v1{N=4}", "Bare_v1{N=4}")] == [
+        (3.0, 500.0, P.LEAN_MEASURED), (1.5, 250.0, P.LEAN_SCALED), (6.0, 1000.0, P.LEAN_SCALED), (None, None, None)]
+    # the proof server's verifier's seconds stay the steady-state row's own
+    assert by[GEMM64].verifier_seconds == 0.5
+
+    doc = P.report(table, 1.0)
+    t = doc["totals"]
+    assert t["lean_verifier_seconds_per_token"] == {
+        "value": 2.0 * 3.0 + 1.5 + 6.0, "status": "modeled", "measured_block_types": 1, "scaled_block_types": 2,
+        "unpriced_block_types": 1, "measured_share": 6.0 / 13.5, "basis": P.LEAN_SECONDS_BASIS}
+    assert t["proof_bytes_per_token"] == {
+        "value": 2250.0, "status": "modeled", "measured_block_types": 1, "scaled_block_types": 2, "unpriced_block_types": 1,
+        "measured_share": 1000.0 / 2250.0, "basis": P.PROOF_BYTES_BASIS}
+    share = 2.0 * by[GEMM64].seconds / table.gpu_seconds_per_token()
+    assert t["lean_verify"] == [{"block": GEMM64, "time_share": share, "k_log": 20, "blocks": 8, "full": 8,
+                                 "seconds": [40.0, 16.0, 24.0], "statement_seconds": 24.0, "proof_bytes": 4000,
+                                 "run": "r20260105-000000-0005", "host": "node-a (64 cores, a CPU)"}]
+    row = next(r for r in doc["rows"] if r["block"] == GEMM32)
+    assert (row["lean_verifier_seconds"], row["proof_bytes"], row["lean_source"]) == (1.5, 250.0, P.LEAN_SCALED)
+    assert t["verifier_seconds_per_token"] == {"value": 1.0, "block_types": 1, "block_share": 2.0 / 4.25}
+
+    # with two types measured, the rest scale at the median of the two statements' seconds, and bytes, a witness bit
+    two = P.Flock(rows, SESSIONS, "art:card", lean=(*timed, lean("Half_v1{N=4}", "r20260105-000000-0005", (64.0,), 16000,
+                                                                 k_log=21, blocks=4, full=4))).table(census)
+    by = {r.block: r.cost for r in two.rows}
+    assert (by["Half_v1{N=4}"].lean_seconds, by["Half_v1{N=4}"].proof_bytes, by["Half_v1{N=4}"].lean_source) == (
+        16.0, 4000.0, P.LEAN_MEASURED)
+    assert by[GEMM32].lean_seconds == pytest.approx((24.0 / 2**23 + 64.0 / 2**23) / 2 * 2**19)
+    assert by[GEMM32].proof_bytes == pytest.approx((4000 / 2**23 + 16000 / 2**23) / 2 * 2**19)
+    assert [x["block"] for x in P.report(two, 1.0)["totals"]["lean_verify"]] == [GEMM64, "Half_v1{N=4}"]
+
+    # measured only when every block type has a record of its own; none of either with no record
+    whole = P.Census.of({**CENSUS, "definitions": {GEMM64: CENSUS["definitions"][GEMM64]}})
+    own = P.report(P.Flock(rows, SESSIONS, "art:card", lean=timed).table(whole), 1.0)["totals"]
+    assert own["lean_verifier_seconds_per_token"] == {
+        "value": 6.0, "status": "measured", "measured_block_types": 1, "scaled_block_types": 0, "unpriced_block_types": 0,
+        "measured_share": 1.0, "basis": P.LEAN_SECONDS_BASIS}
+    none = P.report(P.Flock(rows, SESSIONS, "art:card").table(census), 1.0)
+    assert none["totals"]["lean_verifier_seconds_per_token"] is None and none["totals"]["proof_bytes_per_token"] is None
+    assert none["totals"]["lean_verify"] == [] and {r["lean_source"] for r in none["rows"]} == {None}
+
+
+def test_spot_takes_the_lean_verifiers_seconds_at_the_blocks_its_plan_samples():
+    census = P.Census.of(CENSUS)
+    flock = P.Flock((steady("gemm64", P.definition_id(GEMM64), "r20260102-000000-0002", 8, 8.0),), SESSIONS, "art:card",
+                    lean=(lean(P.definition_id(GEMM64), "r20260105-000000-0005", (24.0,), 4000),))
+    cells = [{"block": GEMM64, "type": "gemm64", "taken": 4.0}, {"block": GEMM32, "type": "", "taken": 2.0},
+             {"block": NORM, "type": "norm", "taken": 0.8}]
+    table = P.Spot(flock, plan(cells), P.Serving(0.5, 4000.0, "stated")).table(census)
+    t = P.report(table, 1.0)["totals"]
+    # 40, 20 and 8 blocks sampled over 800 tokens, at 3 s a block and at its seconds a witness bit times 2^19 and 2^22
+    assert t["lean_verifier_seconds_per_token"]["value"] == pytest.approx((40 * 3.0 + 20 * 1.5 + 8 * 12.0) / 800)
+    assert t["proof_bytes_per_token"]["value"] == pytest.approx((40 * 500 + 20 * 250 + 8 * 2000) / 800)
+    assert t["lean_verifier_seconds_per_token"]["status"] == "modeled" and t["lean_verify"][0]["block"] == GEMM64
+    assert t["lean_verify"][0]["time_share"] == pytest.approx(40 * 1.0 / sum(
+        n * r.cost.seconds for n, r in zip((40.0, 20.0, 8.0), table.rows)))
 
 
 def plan(cells: list[dict], **over) -> P.SamplingPlan:
@@ -1042,6 +1120,296 @@ def test_a_run_from_before_rate_json_is_read_from_its_proof_server_reports(tmp_p
     assert all("out/light/server-k2" in r["note"] for r in at_two)
 
 
+RMSNORM = next(name for name in fixture("census.json")["definitions"] if name.startswith("RMSNormFusedCudaVector8_v1{N=6144,"))
+LEAN_HOST = {"node": "cpu-node-0", "cores": 64, "host_cores": 128, "cpu_model": "A CPU 9000", "mem_gib": 512.0, "commit": "c" * 40}
+
+
+def lean_record(run: str, *, word: str | None = RMSNORM, seconds: tuple[float, ...] = (600.0, 500.0, 520.0),
+                size: int = 2_000_000, why: str | None = None, **block) -> dict:
+    """A made-up record of `verity bench prove lean-verify`: a full statement of 256 blocks of 2^27 witness bits, each
+    run accepted, or its last refused with `why`."""
+
+    runs = [{"wall_s": x, "rc": 0, "accepted": True, "why": None} for x in seconds]
+    if why:
+        runs[-1] |= {"rc": 1, "accepted": False, "why": why}
+    return {"schema": L.SCHEMA, "run": run,
+            "block": {"word": word, "definition": "Staged_v2{N=1}", "k_log": 27, "blocks": 256, "full": 256} | block,
+            "proof": {"bytes": size}, "verifier": {"repeat": len(seconds), "runs": runs}, "accepted": not why, "host": dict(LEAN_HOST)}
+
+
+def lean_ran(s: Store, tmp: Path, run: str, doc: dict | None, *, name: str = L.RECORD) -> str:
+    """`run` in the store with `doc` as its `out/lean-verify.json` (None: a run that wrote none), a Lean verifier run
+    of record."""
+
+    files = tmp / "lean-files" / run / "out"
+    files.mkdir(parents=True)
+    (files / "job.log").write_text("ran")
+    if doc is not None:
+        (files / name).write_text(json.dumps(doc))
+    s.ran(run, files.parent)
+    return s.record(run, R.LEAN)
+
+
+def test_a_lean_verifier_run_of_record_gives_both_figures_as_modeled_and_says_what_was_measured(tmp_path):
+    """One block type's statement measured, on made-up figures: its row takes them, every other row with a k_log is
+    scaled a witness bit, and both lines say modeled, the measured type and its share of the proving time, the
+    statement, the run, the host and the basis. The proof server's verifier line stays."""
+
+    s, arts = recorded(tmp_path)
+    run = lean_ran(s, tmp_path, "r20261110-000000-0001", lean_record("r20261110-000000-0001"))
+    doc = R.build("flock", "glm53", store=s.fresh(), root=REPO)
+    rows = {r["block"]: r for r in doc["rows"]}
+    own, t = rows[RMSNORM], doc["totals"]
+    assert (own["lean_verifier_seconds"], own["proof_bytes"], own["lean_source"]) == (520.0 / 256, 2_000_000 / 256, "measured")
+    assert {r["lean_source"] for r in doc["rows"] if r is not own} == {"scaled"}
+    assert all(r["lean_verifier_seconds"] == pytest.approx(520.0 * 2 ** r["k_log"] / 2**35) for r in doc["rows"])
+    seconds, size = t["lean_verifier_seconds_per_token"], t["proof_bytes_per_token"]
+    assert seconds["value"] == pytest.approx(sum(r["per_token"] * 520.0 * 2 ** r["k_log"] / 2**35 for r in doc["rows"]))
+    assert size["value"] == pytest.approx(sum(r["per_token"] * 2_000_000 * 2 ** r["k_log"] / 2**35 for r in doc["rows"]))
+    assert (seconds["status"], size["status"]) == ("modeled", "modeled")
+    assert (seconds["measured_block_types"], seconds["scaled_block_types"], seconds["unpriced_block_types"]) == (1, 149, 0)
+    assert seconds["measured_share"] == pytest.approx(own["per_token"] * 520.0 / 256 / seconds["value"])
+    assert t["lean_verify"] == [{"block": RMSNORM, "time_share": own["time_share"], "k_log": 27, "blocks": 256, "full": 256,
+                                 "seconds": [600.0, 500.0, 520.0], "statement_seconds": 520.0, "proof_bytes": 2_000_000,
+                                 "run": run, "host": "cpu-node-0 (64 cores, A CPU 9000)"}]
+    assert doc["inputs"][-1] == {"slot": R.LEAN, "record": "prove-glm53-lean-verify", "targets": [run],
+                                 "what": "the Lean verifier (`flock-verify verify`) on one statement of each of 1 block "
+                                         "type(s); every other type's Lean verifier seconds and proof bytes are scaled "
+                                         "from them"}
+    assert doc["refused"] == [] and t["verifier_seconds_per_token"]["block_types"] == 8
+
+    text = R.render(doc)
+    lines = {line.split(" per token:")[0]: line for line in text.splitlines() if " per token:" in line}
+    assert lines["- verifier seconds"].startswith("- verifier seconds per token: ") and "the proof server's own verifier" in lines["- verifier seconds"]
+    share = f"{own['time_share']:.1%}"
+    assert lines["- Lean verifier seconds"] == (
+        f"- Lean verifier seconds per token: {R._n(seconds['value'])}, modeled, not measured. Measured: one block type, "
+        f"`{RMSNORM}` ({share} of the proving time), in its statement of 256 blocks of 2^27 witness bits each (a full "
+        "statement), which `flock-verify verify` accepted in 520 s (the median of 3 runs: 600, 500, 520 s; a run is one "
+        f"process, the statement read and set up in it), in run {run} on cpu-node-0 (64 cores, A CPU 9000). Scaled: the "
+        f"other 149 block types, {1 - seconds['measured_share']:.1%} of this figure, each at the measured statement's "
+        f"seconds a witness bit times its 2^k_log bits: {P.LEAN_SECONDS_BASIS}.")
+    assert lines["- proof bytes"] == (
+        f"- proof bytes per token: {R._n(size['value'])}, modeled, not measured. Measured: one block type, `{RMSNORM}` "
+        f"({share} of the proving time), in its statement of 256 blocks of 2^27 witness bits each (a full statement), "
+        f"whose proof files are 2.000e+06 bytes in all (run {run}). Scaled: the other 149 block types, "
+        f"{1 - size['measured_share']:.1%} of this figure, each at the measured statement's bytes a witness bit times "
+        f"its 2^k_log bits: {P.PROOF_BYTES_BASIS}.")
+    assert "per token: not measured" not in text
+
+    # at the sampling plan: the same record at the blocks the plan samples, the type's share the plan's
+    spot = R.build("spot", "glm53", store=s.fresh("second"), root=REPO)
+    rows = {r["block"]: r for r in spot["rows"]}
+    t = spot["totals"]
+    assert t["lean_verifier_seconds_per_token"]["value"] == pytest.approx(
+        sum(r["per_token"] * 520.0 * 2 ** r["k_log"] / 2**35 for r in spot["rows"]))
+    assert t["lean_verifier_seconds_per_token"]["status"] == "modeled" and t["proof_bytes_per_token"]["status"] == "modeled"
+    assert t["lean_verify"][0]["time_share"] == rows[RMSNORM]["time_share"] != own["time_share"]
+    assert [i["slot"] for i in spot["inputs"]][-2:] == [R.LEAN, R.SAMPLING]
+    assert f"`{RMSNORM}` ({rows[RMSNORM]['time_share']:.1%} of the proving time at the sampling plan), in its statement" in R.render(spot)
+
+    # a newer run of the same type replaces it; a statement that isn't full says so
+    newer = lean_ran(s, tmp_path, "r20261110-000000-0002", lean_record("r20261110-000000-0002", seconds=(300.0,), blocks=128))
+    doc = R.build("flock", "glm53", store=s.fresh("third"), root=REPO)
+    assert [x["run"] for x in doc["totals"]["lean_verify"]] == [newer] and doc["inputs"][-1]["targets"] == [newer, run]
+    assert doc["totals"]["lean_verifier_seconds_per_token"]["value"] == pytest.approx(2 * 300.0 / 520.0 * seconds["value"])
+    assert ("in its statement of 128 blocks of 2^27 witness bits each (128/256 of a full statement), which `flock-verify "
+            "verify` accepted in 300 s (one run; a run is one process") in R.render(doc)
+
+
+def test_a_lean_verifier_run_that_measures_nothing_is_refused_by_name_and_both_figures_stay_not_measured(tmp_path):
+    """A refusal by the Lean verifier is its run's result and prices nothing: with it, a run that wrote no record, one
+    not in the store, a superseded one, another schema's, one that stopped short and one of no block type of the
+    census, both figures are not measured and each run is listed with why."""
+
+    s, _ = recorded(tmp_path)
+    runs = [f"r20261110-000000-000{i}" for i in range(1, 9)]
+    lean_ran(s, tmp_path, runs[0], lean_record(runs[0], why="lincheck: the folded claim doesn't match"))
+    lean_ran(s, tmp_path, runs[1], None)
+    s.record(runs[2], R.LEAN)
+    lean_ran(s, tmp_path, runs[3], lean_record(runs[3]))
+    s.label(runs[3], R.SUPERSEDED_BY, runs[0])
+    lean_ran(s, tmp_path, runs[4], lean_record(runs[4]) | {"schema": "verity-bench/lean-verify/v0"})
+    lean_ran(s, tmp_path, runs[5], lean_record(runs[5]) | {"accepted": False, "verifier": {"repeat": 3, "runs": [
+        {"wall_s": 1.0, "rc": 0, "accepted": True, "why": None}]}})
+    lean_ran(s, tmp_path, runs[6], lean_record(runs[6], word=None, definition="Stray_v1{N=1}"))
+    record = lean_record(runs[7])
+    del record["host"]["cpu_model"], record["proof"]["bytes"]
+    lean_ran(s, tmp_path, runs[7], record)
+    doc = R.build("flock", "glm53", store=s.fresh(), root=REPO)
+    assert {x["target"]: x["why"] for x in doc["refused"]} == {
+        runs[0]: "the Lean verifier refused its statement: lincheck: the folded claim doesn't match",
+        runs[1]: "holds no `out/lean-verify.json`, which `verity bench prove lean-verify` writes",
+        runs[2]: "not in the store or on its remote",
+        runs[3]: f"superseded by {runs[0]}",
+        runs[4]: "its `out/lean-verify.json` isn't a `verity-bench/lean-verify/v1` record",
+        runs[5]: "the Lean verifier ran 1 of the 3 runs it set out to",
+        runs[6]: "its block type, `Stray_v1{N=1}`, is no block type of the census under its cut",
+        runs[7]: "its record lacks `proof.bytes`, `host.cpu_model`"}
+    assert {x["record"] for x in doc["refused"]} == {"prove-glm53-lean-verify"}
+    t = doc["totals"]
+    assert t["lean_verifier_seconds_per_token"] is None and t["proof_bytes_per_token"] is None and t["lean_verify"] == []
+    assert doc["inputs"][-1]["targets"] == [] and "not measured" in doc["inputs"][-1]["what"]
+    text = R.render(doc)
+    assert ("- Lean verifier seconds per token: not measured (no Lean verifier run of record measures a block type: label one "
+            "`research data label TARGET run_of_record prove-glm53-lean-verify --by LANE`)\n- proof bytes per token: not "
+            "measured\n") in text
+    assert f"{runs[0]}" in text.split("Refused (not read):")[1] and "the Lean verifier refused its statement" in text
+
+    bad = lean_record(runs[0], k_log=0)
+    assert R.lean_verify(bad, runs[0]).startswith("its `block` ({'k_log': 0, 'blocks': 256, 'full': 256}), `proof.bytes`")
+    assert R.lean_verify(lean_record(runs[0], seconds=(0.0,)), runs[0]).endswith("aren't a statement's blocks, bytes and seconds")
+    assert R.lean_verify(lean_record(runs[0], word=None, definition=None), runs[0]) == (
+        "its record names no block type (`block.word`, `block.definition`)")
+    assert R.lean_verify([], runs[0]) == "its `out/lean-verify.json` isn't a `verity-bench/lean-verify/v1` record"
+
+
+# ---- the Lean verifier's runner ------------------------------------------------------------------------------------------------
+
+
+class Verifier:
+    """`flock-verify` as the runner starts it, with no process: `archive-put` names each file by a key, and each
+    `verify` takes the next verdict (None: it prints none), a made-up clock advancing by the seconds it took."""
+
+    def __init__(self, monkeypatch, verdicts: list[tuple[dict | None, float]], *, put_rc: int = 0):
+        self.verdicts, self.put_rc, self.now, self.calls = list(verdicts), put_rc, 0.0, []
+        monkeypatch.setattr(L, "spawn", self.spawn)
+        monkeypatch.setattr(L, "clock", lambda: self.now)
+        monkeypatch.setattr(L, "host", lambda: LEAN_HOST)
+
+    def spawn(self, cmd, log: Path) -> tuple[int, str, dict]:
+        self.calls.append(list(cmd))
+        if cmd[1] == "archive-put":
+            assert Path(cmd[2]).is_dir()
+            self.now += 0.25
+            return self.put_rc, "".join(f"key-{Path(p).name} {p}\n" for p in cmd[3:]), {}
+        verdict, took = self.verdicts.pop(0)
+        self.now += took
+        session = cmd[cmd.index("--session") + 1]
+        log.write_text(f"inputs: 40 ms\nsetup (drawn): 900 ms\n{session}: 2000 ms\n")
+        accepted = bool(verdict and verdict["accepted"])
+        return (0 if accepted else 1, "" if verdict is None else "VERDICT " + json.dumps(verdict) + "\n",
+                {"cpu_s": took * 2, "user_s": took, "maxrss_gib": 1.5})
+
+
+def kept_proof(tmp: Path, *, stage: dict | None = None) -> Path:
+    """A kept proof's tree: a staged statement's files and one session's two proof files."""
+
+    tree = tmp / "proof"
+    (tree / "stage").mkdir(parents=True)
+    (tree / "session").mkdir()
+    for name, size in (("circuit.txt", 4000), ("pub-256.bin", 64), ("program.json", 30)):
+        (tree / "stage" / name).write_bytes(b"x" * size)
+    if stage is not None:
+        (tree / "stage" / "stage.json").write_text(json.dumps(stage))
+    (tree / "session" / "session.json").write_text("{}")
+    (tree / "session" / "circuit.rep0.bin").write_bytes(b"p" * 300)
+    (tree / "session" / "circuit.rep1.bin").write_bytes(b"p" * 200)
+    return tree
+
+
+STAGE = {"word": RMSNORM, "definition": "Staged_v2{N=1}", "k_log": 27, "n": 256}
+ACCEPTED = {"accepted": True, "unit_draw": {"seed": "ab", "units": [1, 2, 3]}}
+
+
+def test_the_lean_verifiers_runner_records_each_run_of_the_verifier_on_a_kept_proof(tmp_path, monkeypatch, capsys):
+    """The runner on a kept proof, the verifier a fake: the statement's files go to the verifier's archive, each run
+    is one `verify` on the session with its own seconds, and the record names the block type, the proof's bytes, the
+    runs and the host. `prove` reads the record it wrote."""
+
+    tree, out = kept_proof(tmp_path, stage=STAGE), tmp_path / "out"
+    verifier = Verifier(monkeypatch, [(ACCEPTED, 12.5), (ACCEPTED, 10.0), (ACCEPTED, 11.0)])
+    assert main(["lean-verify", "--lean", "flock-verify", "--proof", str(tree), "--out", str(out)]) == 0
+    doc = json.loads((out / L.RECORD).read_text())
+    put, *verifies = verifier.calls
+    archive = put[2]
+    assert put[:2] == ["flock-verify", "archive-put"] and [Path(x).name for x in put[3:]] == ["circuit.txt", "pub-256.bin", "program.json"]
+    assert not Path(archive).exists()                                # the verifier's archive is scratch, outside the record
+    assert verifies == 3 * [["flock-verify", "verify", "--statement", "verity/flock-circuit", "--archive", archive,
+                             "--circuit", "key-circuit.txt", "--public", "key-pub-256.bin", "--program", "key-program.json",
+                             "--zk", "--session", str(tree / "session")]]
+    assert doc["schema"] == L.SCHEMA and doc["accepted"] is True and doc["host"] == LEAN_HOST
+    assert doc["block"] == {"word": RMSNORM, "definition": "Staged_v2{N=1}", "k_log": 27, "blocks": 256, "full": 256}
+    assert doc["proof"] == {"files": [{"name": "circuit.rep0.bin", "bytes": 300}, {"name": "circuit.rep1.bin", "bytes": 200}],
+                            "bytes": 500, "record_bytes": 2}
+    assert doc["statement"]["files"] == [{"name": "circuit.txt", "bytes": 4000}, {"name": "pub-256.bin", "bytes": 64},
+                                         {"name": "program.json", "bytes": 30}]
+    assert (doc["statement"]["zk"], doc["statement"]["circuit_sha512"]) == (True, "key-circuit.txt")
+    v = doc["verifier"]
+    assert (v["archive_put_s"], v["repeat"], [r["wall_s"] for r in v["runs"]]) == (0.25, 3, [12.5, 10.0, 11.0])
+    assert v["runs"][0] | {"verdict_sha512": None} == {
+        "wall_s": 12.5, "cpu_s": 25.0, "user_s": 12.5, "maxrss_gib": 1.5, "rc": 0, "accepted": True, "why": None,
+        "verdict_sha512": None, "draw": {"seed": "ab"}, "phases_ms": {"inputs": 40, "setup (drawn)": 900, "session": 2000}}
+    assert capsys.readouterr().out.startswith('LEAN-VERIFY {"accepted": true, ')
+
+    # the record is the one `prove` reads
+    read = R.lean_verify(doc, "r20261110-000000-0001")
+    assert read == P.LeanVerify(P.definition_id(RMSNORM), 27, 256, 256, (12.5, 10.0, 11.0), 500, "r20261110-000000-0001",
+                                "cpu-node-0 (64 cores, A CPU 9000)")
+    assert read.statement_seconds == 11.0 and read.bits == 2**35
+
+
+def test_a_refusal_ends_the_lean_verifiers_runner_with_no_further_run(tmp_path, monkeypatch, capsys):
+    """The verifier refuses the second of three runs: the third is never started, the record says refused with the
+    verifier's reason, the command exits 1, and `prove` takes no figure from it. A run that prints no verdict is a
+    refusal too."""
+
+    tree, out = kept_proof(tmp_path, stage=STAGE), tmp_path / "out"
+    verifier = Verifier(monkeypatch, [(ACCEPTED, 12.0), ({"accepted": False, "why": "table circuit: lincheck"}, 3.0),
+                                      (ACCEPTED, 12.0)])
+    assert main(["lean-verify", "--lean", "flock-verify", "--proof", str(tree), "--out", str(out)]) == 1
+    doc = json.loads((out / L.RECORD).read_text())
+    assert len(verifier.calls) == 3 and len(verifier.verdicts) == 1          # archive-put and two runs: no third
+    assert doc["accepted"] is False and [(r["accepted"], r["why"], r["rc"]) for r in doc["verifier"]["runs"]] == [
+        (True, None, 0), (False, "table circuit: lincheck", 1)]
+    assert "the Lean verifier refused run 2 of 3: table circuit: lincheck" in capsys.readouterr().out
+    assert R.lean_verify(doc, "r20261110-000000-0001") == "the Lean verifier refused its statement: table circuit: lincheck"
+
+    Verifier(monkeypatch, [(None, 1.0)])
+    assert main(["lean-verify", "--lean", "flock-verify", "--proof", str(tree), "--out", str(out), "--repeat", "1"]) == 1
+    assert json.loads((out / L.RECORD).read_text())["verifier"]["runs"][0]["why"] == "no verdict (rc 1)"
+
+
+def test_the_lean_verifiers_runner_finds_each_file_by_name_and_takes_the_block_from_the_flags(tmp_path, monkeypatch):
+    def measured(*argv: str) -> dict:
+        parser = argparse.ArgumentParser()
+        L.add_arguments(parser)
+        return L.measure(parser.parse_args(["--lean", "flock-verify", "--proof", str(tree), "--repeat", "1", *argv]), tmp_path / "out")
+
+    tree = kept_proof(tmp_path)
+    verifier = Verifier(monkeypatch, [(ACCEPTED, 1.0)] * 3)
+    with pytest.raises(ValueError, match="no block type: the proof holds no stage.json"):
+        measured()
+    with pytest.raises(ValueError, match=r"the statement's `k_log` is None: give --k-log"):
+        measured("--definition", "Staged_v2{N=1}")
+    assert verifier.calls == []
+    # the flags name the block; a full statement's blocks are 2^35 witness bits' worth
+    doc = measured("--definition", "Staged_v2{N=1}", "--k-log", "30", "--blocks", "16", "--plain", "--verify-arg=--coins",
+                   "--verify-arg=tree")
+    assert doc["block"] == {"word": None, "definition": "Staged_v2{N=1}", "k_log": 30, "blocks": 16, "full": 32}
+    assert verifier.calls[-1][-6:] == ["--program", "key-program.json", "--coins", "tree", "--session", str(tree / "session")]
+    assert R.lean_verify(doc, "r1").definition == "Staged_v2{N=1}"
+
+    # a name two files carry is refused, and its flag says which; partition.json and registered.json go where present
+    (tree / "other").mkdir()
+    (tree / "other" / "circuit.txt").write_text("another")
+    (tree / "stage" / "partition.json").write_text("{}")
+    with pytest.raises(ValueError, match=r"2 paths under .* are named `circuit.txt` .*: say which with --circuit"):
+        measured("--definition", "D", "--k-log", "30", "--blocks", "16")
+    doc = measured("--definition", "D", "--k-log", "30", "--blocks", "16", "--circuit", str(tree / "stage" / "circuit.txt"))
+    assert "--partition" in verifier.calls[-1] and [f["name"] for f in doc["statement"]["files"]] == [
+        "circuit.txt", "pub-256.bin", "partition.json", "program.json"]
+
+    (tree / "session" / "circuit.rep0.bin").unlink()
+    (tree / "session" / "circuit.rep1.bin").unlink()
+    with pytest.raises(ValueError, match="holds no proof file"):
+        measured("--definition", "D", "--k-log", "30", "--blocks", "16", "--circuit", str(tree / "stage" / "circuit.txt"))
+    with pytest.raises(ValueError, match="archive-put` exited 1"):
+        Verifier(monkeypatch, [], put_rc=1)
+        (tree / "session" / "circuit.rep0.bin").write_bytes(b"p")
+        measured("--definition", "D", "--k-log", "30", "--blocks", "16", "--circuit", str(tree / "stage" / "circuit.txt"))
+
+
 # ---- the command ---------------------------------------------------------------------------------------------------------------
 
 
@@ -1074,3 +1442,33 @@ def test_verity_bench_prove_is_the_commands_runner(tmp_path, monkeypatch, capsys
     with pytest.raises(SystemExit):
         main(["prove", "--system", "sp1", "--workload", "glm53"])
     assert "invalid choice: 'sp1'" in capsys.readouterr().err
+
+
+
+def test_verity_bench_prove_lean_verify_is_the_lean_verifiers_runner_and_the_table_reads_its_record(tmp_path, monkeypatch, capsys):
+    """`verity bench prove lean-verify` reaches the runner through the same file, and the record it writes, kept as a
+    run of record's `out/lean-verify.json`, is what the table's two lines are from."""
+
+    s, _ = recorded(tmp_path)
+    monkeypatch.setenv("RESEARCH_STORE", str(tmp_path / "reader"))
+    monkeypatch.setenv("RESEARCH_STORE_CONFIG", str(s.config))
+    Verifier(monkeypatch, [(ACCEPTED, 9.0)])
+
+    def run(*argv: str) -> tuple[int, str]:
+        monkeypatch.setattr(sys, "argv", ["run.py", *argv])
+        with pytest.raises(SystemExit) as done:
+            runpy.run_path(str(REPO / "benchmarks" / "prove" / "run.py"), run_name="__main__")
+        return done.value.code, capsys.readouterr().out
+
+    out_dir = tmp_path / "lean-out"
+    code, out = run("lean-verify", "--lean", "flock-verify", "--proof", str(kept_proof(tmp_path, stage=STAGE)), "--out",
+                    str(out_dir), "--repeat", "1")
+    assert code == 0 and out.startswith("LEAN-VERIFY ")
+    lean_ran(s, tmp_path, "r20261110-000000-0001", json.loads((out_dir / L.RECORD).read_text()))
+    code, out = run("--system", "flock", "--workload", "glm53")
+    assert code == 0 and ", modeled, not measured. Measured: one block type, `RMSNormFusedCudaVector8_v1{" in out
+    assert "which `flock-verify verify` accepted in 9 s (one run;" in out and "per token: not measured" not in out
+    code, out = run("--system", "flock", "--workload", "glm53", "--json")
+    t = json.loads(out)["totals"]
+    assert (t["lean_verifier_seconds_per_token"]["status"], t["proof_bytes_per_token"]["status"]) == ("modeled", "modeled")
+    assert t["lean_verify"][0]["seconds"] == [9.0] and t["lean_verify"][0]["proof_bytes"] == 500
