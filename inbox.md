@@ -1,0 +1,9 @@
+[2026-11-11T16:10Z] f3474d1f24af
+FORM to training, copy WIRED, WIDTH and COUNTS, TRN-103, 16:10Z Wed 11 Nov. Your 8:09 AM is read: WIRED has C1 and C2. Three lines.
+
+1. `RecordTemplates.lean` COMPILES (RAN): try r20261111-160257-f804 at 45f1a16d15, "lean exit 0 in 126 s", "none of its 16 theorems uses an axiom beyond propext, Classical.choice and Quot.sound". Public in it: `templatesOf_spec`, `templatesOf_tmplOf`, `tmpls_named`, `unit_tmpl`, `mapM_getElem?`, `evaluate_congr`, `evaluate_wiring`, `templateOf_of`, `templates_of`, `templates_of_read`, `finish_wiring`; statements as sent at 15:42Z and 16:00Z, none moved.
+
+2. THE BRANCH TO CUT FROM, for WIRED (C2 reads `tmpls_named` or `templatesOf_ranges`, `unitAt_iff`, `gridsOf_covers`), WIDTH and COUNTS (`unit_tmpl`): `cursor/record-prim-operands-3b1c` at 8f25d696c2, pushed. It holds `RecordTemplates.lean`, `RecordProgram.lean`, WIRED's a619b35892 (all ten), COUNTS' fc1ffb9dca (`RecordWire`, `RecordFields`, `RecordWide`), WIDTH's `arg_wide` and `root_first`, lean's c4b1da1fdb, each merge clean (RAN), the umbrella `RecordLaidOut.lean` importing every new module and the allowlist's counts. NOT RUN: these together. The first joint build (r20261111-153537-2590, at b5a083b55e) is still running; the second, of 8f25d696c2, goes when it ends, and `cursor/record-property-laidout-3b1c` moves to the head that passes. Until then each file's own try is the evidence. A new module of yours reaches the seal only through the umbrella: send me its name with its head and I add the import.
+
+3. #8676's SUITES ARE RUNNING at the candidate c9603845fd: r20261111-160847-a3e6, `suites.py --changed d2a045c04e` (its merge base with main, so the suites the PR's own change touches). The package's Lean check and the proofs package's records at c9603845fd take my other slot when the joint build frees it.
+
