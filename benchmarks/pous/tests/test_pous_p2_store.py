@@ -4,12 +4,14 @@ layer by layer, to its `W`'s tensors by `reference.decode`, by the registered co
 passes the public-encoder setup with the pinned root, and refuses each negative block with its flag; the spot vectors
 decode at the real store's indices. The driver (`commit`, `encode`, `finish`, `verify`, `spot`, `tie`) runs on the CPU at a
 128-bit width with 16-block segments and the scheme's own codec in the GPU's place, over a small generator with the real
-one's tensors: the store it writes is the registered scheme's encoding of `W` in the layout (the public-encoder check
-accepts it, and `decode_layer` gives each layer's tensors), its roots are `setup.server_root`'s tree, `verify` catches a
-changed byte, a rerun resumes to the same store, and two parts join to it."""
+one's tensors and names: the store it writes is the registered scheme's encoding of `W` in the layout (the public-encoder
+check accepts it, and `decode_layer` gives each layer's tensors), its roots are `setup.server_root`'s tree, `verify`
+catches a changed byte, a rerun resumes to the same store, and two parts join to it. The store's default generator
+itself gives `W` at the real shape, and `commit` takes its manifest."""
 from __future__ import annotations
 
 import hashlib
+import importlib
 import json
 import os
 import sys
@@ -231,12 +233,12 @@ def tensor_bytes(g, seed, name, start=0, stop=None):
     return hashlib.shake_256(seed + b"/" + name.encode()).digest(n)[start:n if stop is None else stop]
 
 
-def program(g, seed):
+def model_id(g, seed):
     return "test/" + g.name + "/" + hashlib.sha512(seed).hexdigest()[:8]
 
 
 def manifest(g, seed):
-    return {"program": program(g, seed), "stream_bytes": stream_bytes(g),
+    return {"model": model_id(g, seed), "stream_bytes": stream_bytes(g),
             "tensors": [{"name": t.name, "kind": t.kind, "nbytes": t.nbytes,
                          "sha256": hashlib.sha256(tensor_bytes(g, seed, t.name)).hexdigest()} for t in tensors(g)]}
 '''
@@ -353,6 +355,51 @@ def test_parts_join_to_the_whole_store(gen: tuple[str, str], tmp_path: Path) -> 
     assert S.main(["finish", "--store", str(tmp_path / "a"), "--out", str(tmp_path / "out-a")]) == 0
     joined = json.loads((tmp_path / "out-a" / "store.json").read_text())
     assert (joined["root"], joined["w_root"], joined["tie"]) == (whole["root"], whole["w_root"], whole["tie"])
+
+
+ROOT = BENCH.parents[1]
+
+
+def test_generated_with_the_default_generator(gen: tuple[str, str], tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """The store's default generator (`S.GENERATOR`, imported by that name with the repository root on the path), not
+    the stand-in. At `h200` `Generated` is the frozen store under the generator's `model_id`, its tensors are the
+    generator's parts' bytes, and `pieces` knows the generator's manifest by its `"model"`: it refuses another seed's,
+    and this seed's only for the digests it lacks. A manifest with digests generates the whole stream, so `pieces` and
+    `commit` run whole at `tiny`, where `setup.json` holds that name as `"program"`. The stand-in has no name, and its
+    manifest no key, that the default generator's lacks."""
+    monkeypatch.syspath_prepend(str(ROOT))
+    mod = importlib.import_module("benchmarks.torch_gpu.p2_stage.served_weights")
+    seed, h200 = mod.TEST_SEED, mod.H200
+    real = S.Generated(S.GENERATOR, "h200", seed)
+    assert real.mod is mod and S.layout_sha512(real.store) == S.LAYOUT_SHA512
+    assert (real.program, real.size) == (mod.model_id(h200, seed), mod.stream_bytes(h200))
+    qkv = real.store.layer(0)[0]
+    wq, wv = (mod.tensor(h200, name).nbytes for name in ("l0.wq", "l0.wv"))
+    assert real.tensor(qkv.name, wq - 3, wq + 5) == (mod.tensor_bytes(h200, seed, "l0.wq", wq - 3)
+                                                      + mod.tensor_bytes(h200, seed, "l0.wk", 0, 5))
+    assert real.read(qkv.size - 2, qkv.size + 2) == mod.tensor_bytes(h200, seed, "l0.wv", wv - 2) + bytes(2)
+    with pytest.raises(ValueError, match=f"l0.wq is not {wq} s8 bytes with a sha256"):
+        real.pieces(mod.manifest(h200, seed))
+    with pytest.raises(ValueError, match="its model or stream_bytes differs"):
+        real.pieces(mod.manifest(h200, b"another seed"))
+
+    tiny = S.Generated(S.GENERATOR, "tiny", seed, tuple(int(x) for x in POINT.split(",")))
+    manifest = mod.manifest(mod.TINY, seed, digests=True)
+    pieces = tiny.pieces(manifest)
+    assert [p[0] for p in pieces] == ["l0.wq", "l0.wk", "l0.wv", "l0.wo", "l0.wup", "l0.wdown", "head"]
+    assert all(hashlib.sha256(tiny.read(at, at + n)).hexdigest() == sha for _, at, n, sha in pieces)
+    path = tmp_path / "default.json"
+    path.write_text(json.dumps(manifest))
+    assert S.main(["commit", "--store", str(tmp_path / "s"), "--out", str(tmp_path / "o"), "--manifest", str(path), "--seed",
+                   f"hex:{seed.hex()}", "--shape", "tiny", "--point", POINT, "--workers", "1"]) == 0
+    doc, q = json.loads((tmp_path / "o" / "setup.json").read_text()), tiny.store.params
+    assert (doc["generator"], doc["program"], doc["checked_tensors"]) == (S.GENERATOR, manifest["model"], len(pieces))
+    assert doc["commitment"] == setup.commit(q, tiny.read(0, q.w_bytes)).hex()
+
+    standin, own = S.load_generator(gen[0]), json.loads(Path(gen[1]).read_text())
+    names = {n for n, v in vars(standin).items() if getattr(v, "__module__", None) == standin.__name__}
+    assert {"model_id", "manifest"} <= names <= set(vars(mod)), "the stand-in has a name the default generator lacks"
+    assert set(own) <= set(manifest) and set(own["tensors"][0]) <= set(manifest["tensors"][0])
 
 
 def test_rows_below_p() -> None:

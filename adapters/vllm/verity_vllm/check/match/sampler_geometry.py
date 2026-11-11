@@ -7,14 +7,13 @@ import re
 
 _S_STATIC_RE = re.compile(r"[{,]S=(\d+)(?=[,}])")
 _TOPP_FAMILY = "GumbelTopPTokenSelect_v1"
-_SPLITS_OPERAND = 5   # GumbelTopPTokenSelect_v1{V}(logits, top_p, seed, pos, temperature, splits): the derived S operand
+_SPLITS_OPERAND = 5   # GumbelTopPTokenSelect_v1{V}(logits, top_p, seed, pos, temperature, splits): the Const32[S] operand
 
 
 def top_p_split_count(spec: str, B=None, inst: dict | None = None) -> int | None:
     """The launch's top-p split count S carried by a fold TokenSelect instance.  The value of
-    the select's `Const32[S]` splits operand (compare.RootView._bind_splits keeps it in `B.splits_values[select node]`; the constant itself
-    is bound to the Program's request-owned `splits` input entry, or held equal to a single-request Program's own `Const32[S]` by
-    `constant_splits_agree`), else the `S=<n>` static of the older form `GumbelTopPTokenSelect_v1{V,S}` (the fold's spec strings may carry
+    the select's `Const32[S]` splits operand (compare.RootView._bind_splits keeps it in `B.splits_values[select node]`, held equal to
+    the Program's own `Const32[S]` by `constant_splits_agree`), else the `S=<n>` static of the older form `GumbelTopPTokenSelect_v1{V,S}` (the fold's spec strings may carry
     a `prefix:`).  None when the instance carries no readable S."""
     if B is not None and inst is not None:
         v = getattr(B, "splits_values", {}).get(inst.get("k"))
@@ -37,11 +36,11 @@ def top_p_split_count(spec: str, B=None, inst: dict | None = None) -> int | None
 
 
 def constant_splits_agree(A, B) -> dict | None:
-    """A Program carries the registered S = SplitsFor_v1(1, num_SMs) as its own `Const32[S]` per select,
+    """A Program carries the registered S = registered_splits(num_SMs) as its own `Const32[S]` per select,
     bound like the fold's and removed from both sequences by `compare.RootView._bind_splits`, so neither the canonical hash nor a DAG hash
     carries its value: the two sides agree only if the constants are equal at every event both have (an event on one side only is a
     step the structural comparison already reports, e.g. a component's steps past an EOS).  None when either side binds no constant
-    (a derived-S Program reads its `splits` input instead).  Mismatches are [event, S of A, S of B]."""
+    (a greedy side).  Mismatches are [event, S of A, S of B]."""
     ea, eb = _splits_by_event(A), _splits_by_event(B)
     if not (ea and eb):
         return None
@@ -153,8 +152,7 @@ def sampler_geometry_check(gp: dict, B, engine_step_of: dict[int, int], steps: d
         n_topp += 1
         per_step[engine_step_of.get(i)].add(top_p_split_count(sp, B, r))
     sched_live = (scheduled or {}).get("live") if isinstance(scheduled, dict) else None
-    info: dict = {"relation": "S = registered_splits(num_SMs) = SplitsFor_v1(1, num_SMs) at every launch, whatever the live batch "
-                              "(engine.topp_pin); num_SMs declared",
+    info: dict = {"relation": "S = registered_splits(num_SMs) at every launch, whatever the live batch (engine.topp_pin); num_SMs declared",
                   "top_p_token_selects": n_topp, "checked_steps": 0,
                   "live_source": ("scheduled workload state (G6: declared arrivals, served lengths = cap or verified EOS, declared lag rows, "
                                   "prefill chunks) -- the record's logits rows and SampleEnd batch must equal it" if sched_live is not None
