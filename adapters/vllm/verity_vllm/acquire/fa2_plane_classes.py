@@ -35,8 +35,6 @@ from typing import Any, Iterable, Mapping
 
 PLANES = ("S", "P", "RP", "ROW", "O", "FIN")          # native_collect.cpp `name_id_seq` planes[6]; hidden_stream.StreamLayout order
 PLANES_MS = PLANES + ("MS",)                           # a build that writes the MS class (`LayoutPolicy.ms`): the seventh plane
-PLANES_PER_SEQ = len(PLANES)
-TAP_PREFIXES = ("fa2.m1/L", "fa3.m1/L")
 WHOLE, PER_SEQ, NONE = "whole", "per_seq", "none"
 
 _NAME_RE = re.compile(r"^(?P<tap>fa[23])\.m1/L(?P<layer>\d+)/(?P<rest>.+)$")
