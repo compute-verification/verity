@@ -1041,10 +1041,16 @@ def tiles : List (Nat × Nat) → List (Nat × Nat) → Bool
   | (lo, hi) :: cs, (a, b) :: rs =>
     decide (lo = a) && decide (lo < hi) && decide (hi ≤ b) && tiles cs (if hi == b then rs else (hi, b) :: rs)
 
-/-- The refusal of a member whose name is not its template's id and its chunk (`strataHeld`). -/
+/-- A member's template and its chunk among the template's, by its name and the registration's `strata`: a name that
+is a stratum's id is that template's first member, chunk 0, as a template of one member is named; another name is its
+template's id and its chunk (`chunkOf`). -/
+def placeOf (strata : Array (String × Array (Nat × Nat))) (name : String) : Option (String × Nat) :=
+  if strata.any (·.1 == name) then some (name, 0) else chunkOf name
+
+/-- The refusal of a member whose name is neither a stratum's id nor a template's id and a chunk (`strataHeld`). -/
 def memberNamed (name : String) : String :=
-  s!"members: member {name} is not named <template>/c<j>, its template's id and its chunk among the template's: a " ++
-    "member's units lie in the stratum its name's template names"
+  s!"members: member {name} is not named <template>, a stratum of the registration, or <template>/c<j>, its " ++
+    "template's id and its chunk among the template's: a member's units lie in the stratum its name's template names"
 
 /-- The refusal of a member whose name's template is no stratum of the registration (`strataHeld`). -/
 def memberStratum (name : String) : String :=
@@ -1057,17 +1063,17 @@ def stratumLaid (template : String) : String :=
     s!"stratum {template}, chunk after chunk from its first unit: a member's units lie in the stratum its name's " ++
     "template names, at the rate the registration's sampling design gives that stratum"
 
-/-- **Each member lies in the stratum its name names**: every member is named `<template>/c<j>` (`chunkOf`), its
-template a stratum of the registration's `strata` (`Partition.strata`), and each stratum's members, in the order of
-their chunks `0, 1, …` with none missing, are one range each and lie one after another through the stratum's units,
-none left out (`tiles`). So a member's first unit is a function of its name, the strata and the counts of the chunks
+/-- **Each member lies in the stratum its name names**: every member is named by a stratum of the registration's
+`strata` (`Partition.strata`), the template's id alone or `<template>/c<j>` (`placeOf`), and each stratum's members,
+in the order of their chunks `0, 1, …` with none missing, are one range each and lie one after another through the
+stratum's units, none left out (`tiles`). So a member's first unit is a function of its name, the strata and the counts of the chunks
 before it: a member of one template is never laid in another's units, where the sampling design would sample it at that
 other stratum's rate. One pass over the parameters' members and the strata, and a sort of each stratum's chunks; it
 reads no blob. -/
 def strataHeld (ms : Array Member) (strata : Array (String × Array (Nat × Nat))) : V Unit := do
   let mut groups : Std.HashMap String (Array (Nat × Nat × Nat)) := {}
   for m in ms do
-    let some (t, j) := chunkOf m.name | throw (memberNamed m.name)
+    let some (t, j) := placeOf strata m.name | throw (memberNamed m.name)
     let #[(lo, hi)] := m.units | throw MEMBERS_LAID
     groups := groups.insert t ((groups.getD t #[]).push (j, lo, hi))
   let mut held := 0
@@ -1078,7 +1084,7 @@ def strataHeld (ms : Array Member) (strata : Array (String × Array (Nat × Nat)
       throw (stratumLaid t)
     held := held + cs.size
   if held != ms.size then
-    match ms.find? fun m => (chunkOf m.name).all fun (t, _) => !strata.any (·.1 == t) with
+    match ms.find? fun m => (placeOf strata m.name).all fun (t, _) => !strata.any (·.1 == t) with
     | some m => throw (memberStratum m.name)
     | none => throw MEMBERS_LAID
 
@@ -1754,6 +1760,16 @@ private def rootsT (roots : List (String × String)) (name : String) : Option (A
 #guard refusal (strataHeld #[memberT "t/c0" #[(0, 2)], memberT "m" #[(2, 5)]] #[("t", #[(0, 5)])]) ==
   memberNamed "m"
 #guard refusal (strataHeld #[memberT "t/c0" #[(0, 2), (3, 5)]] #[("t", #[(0, 5)])]) == MEMBERS_LAID
+#guard placeOf #[("t", #[(0, 5)]), ("u/c1", #[(5, 7)])] "t" == some ("t", 0)
+#guard placeOf #[("t", #[(0, 5)]), ("u/c1", #[(5, 7)])] "u/c1" == some ("u/c1", 0)
+#guard placeOf #[("t", #[(0, 5)])] "t/c2" == some ("t", 2)
+#guard placeOf #[("t", #[(0, 5)])] "m" == none
+#guard refusal (strataHeld #[memberT "u" #[(5, 7)], memberT "t/c1" #[(2, 5)], memberT "t/c0" #[(0, 2)]]
+    #[("t", #[(0, 5)]), ("u", #[(5, 7)])]) == ""
+#guard refusal (strataHeld #[memberT "u" #[(0, 2)], memberT "t" #[(2, 5)]] #[("t", #[(0, 2)]), ("u", #[(2, 5)])]) ==
+  stratumLaid "t"
+#guard refusal (strataHeld #[memberT "t" #[(0, 2)], memberT "t/c1" #[(2, 5)]] #[("t", #[(0, 5)])]) == ""
+#guard refusal (strataHeld #[memberT "t" #[(0, 2)]] #[("t", #[(0, 5)])]) == stratumLaid "t"
 
 /-- A registered file of the ports given, each its name, its value, the hex digit its root repeats and its leaves. -/
 private def regT (ports : List (String × String × Char × Nat)) : Json :=
