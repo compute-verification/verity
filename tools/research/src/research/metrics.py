@@ -4,28 +4,30 @@
                                                             value, changes over 7 and 30 days, age and standing
 
 The page and this command read one door. It answers a site key with events:read (`$JOBS_TOKEN`, else
-~/.research/jobs/token, as `research jobs` reads it) or else this agent's Cursor identity minted for the route.
+~/.research/jobs/token, as `research jobs` reads it, when it starts with vsk_) or else this agent's Cursor identity
+minted for the route. A site key goes only to the console's own route: --url anywhere else carries the identity.
 """
 from __future__ import annotations
 
 import argparse
 import json
-import os
 import urllib.error
 
 from .jobs.client import TOKEN_ENV, TOKEN_FILE, load_token
-from .slack import RouteError, SlackError, _Identity, http_json, route_error
+from .slack import RouteError, SlackError, _code, _Identity, http_json, route_error
 
 METRICS = "https://website-docs-sage.vercel.app/api/metrics"   # the route, and its OIDC token's audience
+KEY_PREFIX = "vsk_"   # the site reads a bearer with it as a site key, and any other as a Cursor identity
 
 
 class Route:
     def __init__(self, url: str = METRICS, key: str | None = None) -> None:
-        self.base, self.key = url, key
-        self._oidc = None if key else _Identity(METRICS)
+        self.base = url
+        self.key = key if url == METRICS else None
+        self._oidc = None if self.key else _Identity(METRICS)
 
     def call(self) -> dict:
-        what = f"GET {METRICS}"
+        what = f"GET {self.base}"
 
         def get(token: str) -> object:
             return http_json("GET", self.base, None, {"Authorization": f"Bearer {token}"})
@@ -33,6 +35,9 @@ class Route:
         try:
             out = get(self.key) if self.key else self._oidc.send(get)
         except urllib.error.HTTPError as e:
+            if self.key and e.code == 401:
+                raise RouteError(f"{what}: the route rejected the site key in ${TOKEN_ENV} or {TOKEN_FILE} "
+                                 f"(HTTP 401{_code(e)}): it takes a live key with events:read", 401) from None
             raise RouteError(route_error(what, e), e.code) from None
         except (urllib.error.URLError, OSError, ValueError) as e:
             raise SlackError(f"{what}: the route is unreachable: {getattr(e, 'reason', e)}") from None
@@ -42,7 +47,12 @@ class Route:
 
 
 def _key() -> str | None:
-    return load_token() if os.environ.get(TOKEN_ENV) or TOKEN_FILE.exists() else None
+    """`research jobs`' token when it is a site key; an older token, without KEY_PREFIX, isn't sent."""
+    try:
+        key = load_token()
+    except SystemExit:
+        return None
+    return key if key.startswith(KEY_PREFIX) else None
 
 
 def _num(v: float | None) -> str:
@@ -96,7 +106,7 @@ def show(report: dict) -> str:
 
 def main(argv: list[str], route: Route | None = None) -> int:
     p = argparse.ArgumentParser(prog="research metrics", description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    p.add_argument("--url", default=METRICS, help="the route (default: the console's)")
+    p.add_argument("--url", default=METRICS, help="the route (default: the console's); only the console's gets a site key")
     sub = p.add_subparsers(dest="cmd", required=True)
     s = sub.add_parser("show")
     s.add_argument("ids", nargs="*", metavar="ID")

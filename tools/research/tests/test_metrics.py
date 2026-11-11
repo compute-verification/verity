@@ -1,10 +1,16 @@
 """`research metrics show` against a fake route: each declared metric's line, one no run has recorded, a refused row and
-why the site couldn't read something; filtering by id and owner; an undeclared id or a refusal as one line."""
+why the site couldn't read something; filtering by id and owner; an undeclared id or a refusal as one line; which
+credential goes where: a site key only to the console's route, an older token never, the identity otherwise."""
 from __future__ import annotations
 
+import io
 import json
+import urllib.error
+
+import pytest
 
 from research import metrics
+from research.jobs import client
 from research.slack import RouteError
 
 COST = {"id": "vllm/serving-cost-glm53", "title": "GLM-5.3's serving cost over stock vLLM", "owner": "vllm",
@@ -66,3 +72,40 @@ def test_a_site_key_is_sent_as_is_and_no_identity_is_minted(monkeypatch):
     monkeypatch.setattr(metrics, "_Identity", lambda aud: (_ for _ in ()).throw(AssertionError("minted an identity")))
     assert metrics.Route(key="vsk_test").call()["sha"] == "s1"
     assert sent == [("GET", metrics.METRICS, {"Authorization": "Bearer vsk_test"})]
+
+
+def test_only_a_site_key_is_taken_and_an_older_token_leaves_the_identity(monkeypatch, tmp_path):
+    monkeypatch.setattr(client, "TOKEN_FILE", tmp_path / "token")
+    monkeypatch.delenv(client.TOKEN_ENV, raising=False)
+    assert metrics._key() is None
+    monkeypatch.setenv(client.TOKEN_ENV, "a1b2c3d4older")
+    assert metrics._key() is None
+    monkeypatch.setenv(client.TOKEN_ENV, "vsk_live")
+    assert metrics._key() == "vsk_live"
+
+
+class _Identity:
+    def __init__(self, audience: str) -> None:
+        self.audience = audience
+
+    def send(self, get):
+        return get("h.p.s")
+
+
+def test_another_url_gets_the_identity_and_never_the_key(monkeypatch):
+    sent = []
+    monkeypatch.setattr(metrics, "http_json", lambda method, url, data, headers: sent.append((url, headers)) or REPORT)
+    monkeypatch.setattr(metrics, "_Identity", _Identity)
+    assert metrics.Route("http://example.invalid/collect", key="vsk_test").call()["sha"] == "s1"
+    assert sent == [("http://example.invalid/collect", {"Authorization": "Bearer h.p.s"})]
+
+
+def test_a_refused_key_is_named_as_the_key_and_the_url_as_the_one_called(monkeypatch):
+    def refuse(method, url, data, headers):
+        raise urllib.error.HTTPError(url, 401, "Unauthorized", None, io.BytesIO(b'{"error": "invalid_key"}'))
+    monkeypatch.setattr(metrics, "http_json", refuse)
+    with pytest.raises(RouteError, match=r"rejected the site key in \$JOBS_TOKEN .*\(HTTP 401 invalid_key\)"):
+        metrics.Route(key="vsk_dead").call()
+    monkeypatch.setattr(metrics, "_Identity", _Identity)
+    with pytest.raises(RouteError, match=r"^GET http://example.invalid/collect: the route rejected this agent's Cursor identity"):
+        metrics.Route("http://example.invalid/collect").call()
