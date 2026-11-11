@@ -6,12 +6,12 @@ import pytest
 
 from training_slowdown import gates
 
-ML = Path(__file__).resolve().parents[3] / "verity" / "ml"
+VERITY = Path(__file__).resolve().parents[3] / "verity"
 
 
 def test_each_and_count_is_circuit_checks_pin():
     for name, (module, ands, _, _) in gates.DEFINITIONS.items():
-        pins = json.loads(ML.joinpath(*module.split(".")).with_suffix(".circuit-check.json").read_text())["definitions"]
+        pins = json.loads(VERITY.joinpath(*module.split(".")).with_suffix(".circuit-check.json").read_text())["definitions"]
         assert pins[name]["and"] == ands, name
 
 
