@@ -11,6 +11,8 @@ circuit-check and adapters/vllm/tests/program/test_dsa_topk_mask.py hold equal t
     DsaRowValid_v1{N}              (n: 32 bits) -> N bits, bit j n > j; traced, no word Definition
     DsaTopKMaskCounted_v2{N,TOPK}  (scores: N x 32 bits, n: 32 bits) -> N bits; word view DsaTopKMaskCounted_v1
     DsaButterflyTagBits_v1{N,K}    (mask: N bits) -> N x (1 + kb) bits; traced, no word Definition
+    DsaButterflyTagsCount_v1{N,K}  (mask: N bits) -> (those tags, the mask's count: 32 bits), as Calls to DsaCountSum_v1{W},
+                                   DsaCountSplit_v1{W,U} and DsaButterflyTag_v1{W,KB}; no word Definition
     DsaButterflyCtl_v1{T,KB,TWO}   (lo, hi: 1 + KB bits) -> (bit, 1 + KB bits[, 1 + KB bits]); traced, no word Definition
     DsaButterflySettings_v2{N,K}   (mask: N bits) -> butterfly_switches(N, K) bits; word view DsaButterflySettings_v1
     DsaButterflyRows_v2{N,K,W,E}   (sw: bits, rows: N x W x E bits) -> K x W x E bits; word view DsaButterflyRows_v1
@@ -46,7 +48,7 @@ from verity.circuits.boolean.forms import NOT, ZERO, add, compress_columns, mux,
 from verity.circuits.boolean.trace import definition
 from verity.circuits.defs import CompositeDefinition, bind
 from verity.definitions.ops.boolean import elementwise as EW
-from verity.circuits.refs import Coll, broadcast, concat, strided_view
+from verity.circuits.refs import Coll, broadcast, concat, strided_view, tuple_of
 from verity.circuits.types import Array, Tuple
 from verity.definitions.registry import dsa_topk_mask as M
 from verity.definitions.registry.boolean_dsa import own_gates
@@ -166,18 +168,16 @@ DsaRadixTie = _piece("DsaRadixTie", ["W", "RB"], _tie,
                      lambda S: ((("gt", BIT), ("eq", BIT), *((("c", Array(S.W, BIT)),) if S.W else ()), ("r", Array(S.RB, BIT))), BIT))
 
 
-def _ties_calls(B, S, eq, gt, r):
-    """`DsaRadixTies_v2{N,TOPK}`: `DsaRadixTies_v1`'s mask, its prefix count written as Calls: a few batches for each level of
-    `prefix_counts`' tree and not a gate for each key.  Going up, level k's nodes of 2^k keys that lie whole inside the row
-    are summed in pairs (`DsaCountSum_v1{W=k}`).  Going down, a node hands the count before it to its left half and that
-    plus its left half's own to its right (`DsaCountSplit_v1`); a level's first node has nothing before it and its second
-    the first's count, by reference.  Then a `DsaRadixTie_v1` per key.  The count before node t of level k is below t 2^k,
-    so nodes 2^(h-1) .. 2^h - 1 carry it in k + h bits, a batch for each h.  `_v1` carries each count in the bits no
-    constant folds away and also sums the nodes past the row's end, which nothing reads: the two are one function and
-    differ in ANDs."""
-    check_statics(S.N, S.TOPK)
-    N, depth = S.N, (S.N - 1).bit_length()
-    up = [Coll(_counts(N, 1), eq.refs)]
+def _count_tree(B, N: int, bits: Coll, cap: int | None = None) -> tuple[list[Coll], dict[int, Coll]]:
+    """`prefix_counts`' tree over N bits as Calls: (the sums going up, level k's the counts of its nodes of 2^k keys that lie
+    whole inside the row, k + 1 bits each; the count before each key but the first, key 2^(h-1) .. 2^h - 1's under h, in h
+    bits, or in ``cap`` bits mod 2^cap where h is past it).  Going up, a level's nodes are summed in pairs
+    (`DsaCountSum_v1{W=k}`).  Going down, a node hands the count before it to its left half and that plus its left half's own
+    to its right (`DsaCountSplit_v1`); a level's first node has nothing before it and its second the first's count, by
+    reference.  The count before node t of level k is below t 2^k, so nodes 2^(h-1) .. 2^h - 1 carry it in k + h bits, a
+    batch for each h."""
+    depth = (N - 1).bit_length()
+    up = [Coll(_counts(N, 1), bits.refs)]
     for k in range(1, depth):
         t, low = N >> k, up[-1]
         up.append(B.batch(bind(DsaCountSum, W=k), *(Coll(_counts(t, k), strided_view(low, k * i, k, 2 * k, 1, t * k)) for i in (0, 1)),
@@ -185,17 +185,30 @@ def _ties_calls(B, S, eq, gt, r):
     before: dict[int, Coll] = {}
     for k in reversed(range(depth)):
         n, u, above = -(-N >> k), k + 1, before
-        before = {1: Coll(_counts(1, u), up[k].refs.slice(0, u))}
+        first = min(u, cap or u)
+        before = {1: Coll(_counts(1, first), up[k].refs.slice(0, first))}
         for h in range(2, (n - 1).bit_length() + 1):
-            lo, w = 1 << h - 1, k + h
-            here = min(2 * lo, n) - lo
+            lo, w = 1 << h - 1, min(k + h, cap or k + h)
+            here, own = min(2 * lo, n) - lo, min(u, w)
             parts, pairs = [], here // 2
             if pairs:
-                parts.append(B.batch(bind(DsaCountSplit, W=w, U=u), Coll(_counts(pairs, w), above[h - 1].refs.slice(0, w * pairs)),
-                                     Coll(_counts(pairs, u), strided_view(up[k], lo * u, u, 2 * u, 1, pairs * u)), axes=(0, 0)).refs)
+                parts.append(B.batch(bind(DsaCountSplit, W=w, U=own), Coll(_counts(pairs, w), above[h - 1].refs.slice(0, w * pairs)),
+                                     Coll(_counts(pairs, own), strided_view(up[k], lo * u, own, 2 * u, 1, pairs * own)),
+                                     axes=(0, 0)).refs)
             if here % 2:
                 parts.append(above[h - 1].refs.slice(w * pairs, w * (pairs + 1)))
             before[h] = Coll(_counts(here, w), concat(parts))
+    return up, before
+
+
+def _ties_calls(B, S, eq, gt, r):
+    """`DsaRadixTies_v2{N,TOPK}`: `DsaRadixTies_v1`'s mask, its prefix count written as Calls (`_count_tree`): a few batches
+    for each level of `prefix_counts`' tree and not a gate for each key, then a `DsaRadixTie_v1` per key.  `_v1` carries each
+    count in the bits no constant folds away and also sums the nodes past the row's end, which nothing reads: the two are
+    one function and differ in ANDs."""
+    check_statics(S.N, S.TOPK)
+    N, (_, before) = S.N, _count_tree(B, S.N, eq)
+
     def keys(lo: int, n: int) -> list[Coll]:
         return [Coll(Array(n, BIT), x.refs.slice(lo, lo + n)) for x in (gt, eq)]
 
@@ -294,6 +307,52 @@ DsaButterflyTagBits = EW.specialized("DsaButterflyTagBits", 1, ["N", "K"], _tag_
                                      lambda S: ((("mask", Array(S.N, BIT)),), Array(S.N, _tag(S.K))), doc=_tag_bits.__doc__)
 
 
+def _tag_of(S):
+    """`DsaButterflyTag_v1{W,KB}`: a key's tag of its mask bit and the count before it mod 2^KB, which is its W bits (no
+    gate)."""
+    return lambda C, m, *c: [[m[0], *(c[0] if c else ()), *[ZERO] * (S.KB - S.W)]]
+
+
+DsaButterflyTag = _piece("DsaButterflyTag", ["W", "KB"], _tag_of,
+                         lambda S: ((("m", BIT), *((("c", Array(S.W, BIT)),) if S.W else ())), Array(1 + S.KB, BIT)))
+
+
+def _tags_count(B, S, mask):
+    """`DsaButterflyTagsCount_v1{N,K}`: (`DsaButterflyTagBits_v1{N,K}`'s tags, how many of the N bits are set, u32), by one
+    tree of counts written as Calls (`_count_tree`, its counts going down mod 2^kb): a `DsaButterflyTag_v1` per key, and the
+    count the sum of the tree's nodes that tile the row, one for each bit set in N."""
+    M.check_net(S.N, S.K)
+    N, kb, depth = S.N, M.rank_bits(S.K), (S.N - 1).bit_length()
+    up, before = _count_tree(B, N, mask, cap=kb)
+    zero = B.call(BL.constant(0))
+
+    def keys(lo: int, n: int) -> Coll:
+        return Coll(Array(n, BIT), mask.refs.slice(lo, lo + n))
+
+    tags = concat([B.batch(bind(DsaButterflyTag, W=0, KB=kb), keys(0, 1), axes=(0,)).refs,
+                   *(B.batch(bind(DsaButterflyTag, W=min(h, kb), KB=kb), keys(1 << h - 1, len(c)), c, axes=(0, 0)).refs
+                     for h, c in sorted(before.items()))])
+    tiles = ([(depth - 1, 0), (depth - 1, 1)] if N == 1 << depth
+             else [(k, N >> k + 1 << 1) for k in reversed(range(depth)) if N >> k & 1])
+    total, wide = None, 0
+    for k, t in tiles:
+        node, w = up[k].refs.slice(t * (k + 1), (t + 1) * (k + 1)), max(wide, k + 1)
+        if total is None:
+            total, wide = node, k + 1
+            continue
+        a, b = (Coll(Array(w, BIT), concat([x, _rep(zero, w - n)]) if w > n else x) for x, n in ((total, wide), (node, k + 1)))
+        wide = min(w + 1, depth + 1)
+        total = B.call(bind(DsaCountSum, W=w), a, b).refs.slice(0, wide)
+    return tuple_of(Coll(Array(N, _tag(S.K)), tags), Coll(I32, concat([total, _rep(zero, 32 - wide)])))
+
+
+DsaButterflyTagsCount = CompositeDefinition(
+    "DsaButterflyTagsCount", 1, ("N", "K"),
+    lambda S: ((("mask", Array(S.N, BIT)),), Tuple(Array(S.N, _tag(S.K)), I32)), _tags_count, doc=_tags_count.__doc__,
+    conformance="exact-model-tested: held to DsaButterflyTagBits_v1 and to the bits' count by "
+                "adapters/vllm/tests/program/test_dsa_long_row_calls.py")
+
+
 def _ctl(S):
     """`DsaButterflyCtl_v1{T,KB,TWO}`: a stage-T switch over two tags (valid, KB rank bits): its setting (d_lo[T] if the lower is
     valid, else the upper valid and d_hi[T] = 0; past the rank bits the upper valid), and the tags `Select`ed and XORed through it,
@@ -377,7 +436,7 @@ DsaTopKRowV2 = EW.on_bits("DsaTopKRow", 2, ["N", "TOPK"], lambda S: ((("scores",
 
 BOOLEAN_DSA_TOPK_MASK = [DsaTopKKeyV2, DsaRadixPass, DsaRadixTies, DsaCountSum, DsaCountSplit, DsaRadixTie, DsaRadixTiesV2,
                          DsaTopKMaskV2, DsaRowValid, DsaTopKMaskCountedV2,
-                         DsaButterflyTagBits, DsaButterflyCtl, DsaButterflySettingsV2, DsaButterflyRowsV2, DsaButterflyRowsPadV2,
+                         DsaButterflyTagBits, DsaButterflyTag, DsaButterflyTagsCount, DsaButterflyCtl, DsaButterflySettingsV2, DsaButterflyRowsV2, DsaButterflyRowsPadV2,
                          DsaTopKRowV2]
 
 #: `dsa_topk_mask.CUTS` on bits: the counted mask past `dsa_topk_mask_cut.WHOLE_MAX` keys as `dsa_topk_mask_cut`'s units, which
