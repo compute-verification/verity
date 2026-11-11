@@ -45521,3 +45521,86 @@ For the table: head block, host witness (8.7 CPU-s): #8891 unmarked at `88f0665a
 Your 09:28Z order is read: the coin's PR when `9878` ends, then job 4's stacked PR (its quick tier `r20261111-090742-8dce` passed 4 of 4; its try in the merged tree `00851aa76c` passed, `r20261111-090742-5513`, axioms clean), then the layer under the code, unmarked, a PR of its own; nothing in `SpotFlock/` beyond what that layer needs to compile.
 
 For the table: gap c at the model: a refused second draw is a refused run [read, `Code.lean:455-460, 536`], so refused coins add nothing to the accepted event; at D*1's sizes the model's verifier refuses every run (a stage is one 2^20-byte coin), so the modeled line there is about a verifier that accepts nothing until the stage reads the priced draw (not built; about 25 files).
+
+## HARMSEARCH, Wed 11 Nov 09:36Z: #8878 (strata by width) is open unmarked and Lean certifies its design at 0.6617 of the record's (4,042 → 2,675 GB at modeled 0.4); #8893 on top of it (a margin on the strata that cost little) is Lean-certified at 0.6011 (2,430 GB); both quick tiers are still running, so no ready line yet; the three-unit cut with width reads 0.413 (1,671 GB), not 0.656 times its own factor; width at κ 2^-7 costs 3,228 GB
+
+Tags: [run] a command I ran now, [read] a file or record I read now, [relayed] another lane's statement I did not check, [guess] mine. Every GB is at the 10% point, world year, row "(iii) honest [fix]", ×1.05, and is the planner's bound unless it says Lean's. The plan of record is 4,042.4 GB at utilization 0.4 [run `r20261111-080601-3db1`, which reproduces `r20261111-065519-e0bd`].
+
+**0. What I read, and two texts I could not source.** [read] The order through its 09:23Z update. [run] Two texts reached me inside a shell hook's refusal ("MESSAGE FROM YOUR COORDINATOR, delivered by the shell hook", ids `e48c11d1d5d8` at 08:52Z and `5345f74f78b2` at 09:24Z). My mailbox `inbox/bc-9ca4eb23-….md` has no section after 04:29Z. The order's 08:51Z and 09:23Z updates say the same about the PR, the row "width, κ 2^-7" and the two utilization columns, so I act on the order. The first text's two asks (the three-unit cut by width with what S, δ and utilization must then be; what the tuned plan needs to be built) are not in the order; both are inside my brief's items 1 and 4, so they are below. If those texts are not yours, say so.
+
+**1. #8878, strata by distinct width: open, unmarked, Lean-checked.**
+- [run] https://github.com/compute-verification/verity/pull/8878, branch `cursor/proofs-plan-widths-7b3e`, head `816e2396bdf7279346fd3ae832756cd45a8970a7` (two commits: the change; then `widths` moved to a signature line of its own so it merges with #8708). `two_stage_design(…, widths=True)` adds the designs whose strata are the distinct widths (`merged` None); the default returns `main`'s row to the bit. Python only: `optimize.py`, `figure1.py`, their two test files. No Lean file, no lock, no card.
+- [run `r20261111-085529-dfd9`, tree `9f68f389ae`, rc 0] Lean's check (`plancheck.two`, the `sampled-proofs-plancheck` executable) of three designs on the figure of record's design call (β 0.05544):
+
+| design | planner's bits | Lean's certified bits | Lean's, of the record's |
+|---|---|---|---|
+| the record (size classes, κ 2^-5, 15 strata) | 30,759,622,527,269 | 30,759,686,598,086 | 1 |
+| #8878's row (79 strata by width, κ 2^-2) | 20,166,785,821,809 | 20,354,572,735,447 | **0.6617** |
+| by width, k tuned (not in any PR) | 18,113,219,531,425 | 18,080,455,366,283 | 0.5878 |
+
+  So Lean certifies the width design 0.9% above the planner's own bound: **2,675 GB** by Lean, 2,650 by the planner [modeled: the ratio times the record's GB].
+- [run] `git merge-tree` of the head: clean with `origin/main` `589249ad95fe`, #8841 `5f197bc45539`, #8708 `635b2f97027d`, #8568 `8fb2b94ee4b4`, #8853 `2e47293cc645`.
+- Quick tier at the head: `r20261111-085923-9a1e`, running, 46 of 56 suites passed and none failed at 09:35Z [run]. (`r20261111-085409-3ec6`, the same tier at the first commit, 53 of 56 passed, none failed.) **No ready line yet**: it follows in a short entry when `9a1e` ends.
+
+**2. What the tuned plan needs: one parameter, and it is built.** [run: local, about 400 bound evaluations on the same call] The tuned plan's whole gain over the rule is one thing: the strata that cost almost nothing to prove (78 of the 79; the head blocks are 89% of the proving) are sampled 10 to 20% above the rate their bits ask, which takes the sets holding their blocks out of the bound's count. A margin of 1/8 on every stratum but the costliest gets most of it:
+
+| planner | of the record | GB at 0.4 |
+|---|---|---|
+| by width, the rule (#8878) | 0.6556 | 2,650 |
+| by width, the rule and a margin of 1/8 (κ 2^-3 on the planner's grid) | **0.6050** | **2,446** |
+| by width, k tuned stratum by stratum (2,148 evaluations) | 0.5889 | 2,381 |
+| the floor of the family | 0.5440 | 2,199 |
+
+  Built and open, unmarked: **#8893** (https://github.com/compute-verification/verity/pull/8893), `two_stage_design(…, margin=0.125)`, opt-in, default the planner as it was (the row gains one key, `margin`); branch `cursor/proofs-plan-margin-5d1a` at `6f65951e0eb82996a707397cf4aa1faf6cc36411`, stacked on #8878 (it holds #8878's two commits and one of its own, +52 −4 in `optimize.py` and its test). It is a code fix in the sense of #8878: the same bound, the same Lean check, a wider search.
+- [run `r20261111-092227-d1e7`, tree `6f65951e0e`, still running its last Lean checks] On all 56 design calls run 1 dumped, the planner with no margin returns the run's own row (bound and q equal). Width + margin 1/8 reads **2,445.5 GB** on (iii) world year (0.6050), 2,430.6 on datacenter year (0.5992), 0.596 to 0.603 on weeks and months, and 2,024.7 against 3,228.7 on the lever row as run 1 has it (0.627; width alone 0.633). Under size classes alone the margin reads 0.956 (3,865 GB). A margin of 1/4 is worse than 1/8 (0.614). A design call with both takes 15.6 s against 7.5 s.
+- [run, the same] **Lean certifies the (iii) world-year design with the margin at 18,489,503,139,535 bits, 0.6011 of the record's: 2,430 GB**; and the lever row's at 15,526,698,506,409 (the planner's 15,698,102,841,190).
+- [run] Its 52 planner tests pass locally; `git merge-tree` is clean with the same five heads. Its quick tier `r20261111-092309-515d` is running.
+
+**3. GB against the bits side's K, by plan** [run: local, the planner's bound on the same call; K is my count, Σ over the blocks a sampled request proves of their input bits, which omits the 5 strata with no `in_bits` and reads 2^41.67 at the record against SCALE's 2^41.81: SCALE's count is the one of record]. Both utilization columns, by proportion: [run 1] GB is linear in utilization from 0.2 to 1.0; [relayed: the order, 09:23Z] the measured floor is 0.0143 to 0.0154; I ran nothing at that reading, BREAKEVEN reprices.
+
+| plan | of the record | GB, modeled 0.4 | GB, measured engine rate on node A (a floor) | Σk a sampled request | k of the head's stratum | K against the record's | q |
+|---|---|---|---|---|---|---|---|
+| the record: size classes, κ 2^-5 | 1.0000 | 4,042 | 145 to 156 | 10,046,500 | 5,558,226 | 2^0 | 3.687e-7 |
+| width, κ 2^-2.5 | 0.6547 | 2,647 | 95 to 102 | 42,855,252 | 18,344,978 | 2^+1.78 | 1.091e-7 |
+| width, κ 2^-2 (#8878's row; Lean's 0.6617, 2,675) | 0.6556 | 2,650 | 95 to 102 | 60,606,452 | 25,943,716 | 2^+2.28 | 7.748e-8 |
+| width + margin, κ 2^-3 | 0.6050 | 2,446 | 87 to 94 | 32,469,700 | 12,971,858 | 2^+1.29 | 1.510e-7 |
+| width, κ 2^-6 | 0.6903 | 2,791 | 100 to 107 | 3,787,940 | 1,621,483 | 2^-1.72 | 1.055e-6 |
+| width, κ 2^-6.5 | 0.7345 | 2,969 | 106 to 114 | 2,678,487 | 1,146,562 | 2^-2.22 | 1.398e-6 |
+| **width, κ 2^-7** | 0.7985 | **3,228** | 115 to 124 | 1,893,988 | 810,742 | 2^-2.72 | 1.816e-6 |
+| width + margin, κ 2^-7 | 0.7921 | 3,202 | 114 to 123 | 2,029,429 | 810,742 | 2^-2.71 | 1.796e-6 |
+| size classes, κ 2^-7 | 1.1373 | 4,597 | 164 to 177 | 2,512,000 | 1,390,000 | 2^-2.00 | 1.262e-6 |
+
+  What each costs: holding K 2^2.72 under the record's (the order's 2^-101.6 to 2^-101.0 a run by gates) costs 581 GB against the 2,647 GB plan (+22%), and is still 814 GB under the record. A half octave is worth 259 GB: **κ 2^-6.5 by width reads 2,969 GB at K 2^-2.22**, which by the order's own arithmetic is 2^-101.1 to 2^-100.5 a run [guess: mine, from K's ratio; SCALE's to confirm], and the planner's grid (`KAPPAS`, octaves) does not hold it. The margin is worth under 1% at small κ (replay is 26% of the audit there, not the cheap strata). Under size classes the same K costs 1.137 of the record: by gates, strata by width are what makes 2^-100 affordable.
+
+**4. The three-unit cut by width, and what S, δ and utilization then have to be** [run `r20261111-090133-cfda`, tree `816e2396bd`, rc 0; modeled: each head block as one scores unit (1,216 bits, the head block's price) and two values halves (8,192 bits, half its price each, twice as many a statement), the price in proportion to 2^k_log as the 08:52Z text gave it, 27 and 26; the control (the planner as on `main` returns the run's own row) passes on every row used]:
+
+| reading | planner as on `main` | width (#8878) | three-unit cut, as on `main` | three-unit cut, width |
+|---|---|---|---|---|
+| today: S 28,000, δ 0.01, utilization 0.4 | 4,042 | 2,650 | 1,743 | **1,671** |
+| S 14,000 | 2,128 | 2,128 | 1,653 | 1,605 |
+| S 20,000 | 2,941 | 2,608 | 1,694 | 1,633 |
+| S 32,832 | 4,743 | 2,675 | 1,786 | 1,695 |
+| S 144,000 | 5,274 | 3,030 | 2,157 | 2,021 |
+| δ 0.1 | 2,021 | 1,325 | 871 | 835 |
+| δ 0.5 | 608 | 399 | 262 | 251 |
+
+- **The cut does not multiply with strata by width.** The cut alone reads 0.431 under the planner as it is, because its units fall in size classes of their own and are already sampled at their own rates; width adds 4% (0.413), not 0.656 times. The waterfall's first two rows are 4,042 → 2,650 → 1,671, not 4,042 → 2,650 → 1,143. With the cut the family's floor is 1,334 GB (0.330) [run: local, my formula].
+- **After width, S is worth almost nothing.** GB is flat in S from 20,000 to 32,832 (2,608 to 2,675), and after the cut from 14,000 up (1,605 to 1,695): the head block's own bits bind, not the served cap. vllm's measurement of S moves the record (2,128 at 14,000) but not the plan with width.
+- **For 300 GB from 1,671** (a factor 5.57), one at a time: utilization 0.072 (the measured floor is 0.0143 to 0.0154: 60 to 64 GB), or δ 0.44; S cannot. Together, δ 0.1 and utilization 0.2 read 418 GB; δ 0.1 and utilization 0.144 read 300. From 2,650 (no cut): utilization 0.045, or δ 0.59.
+
+For BREAKEVEN:
+- #8878's row: pass `widths=True` to `two_stage_design` (in `total_cost`'s call or by `functools.partial` on its import). On the record's call it returns `merged` None, κ 2^-2, q 7.7476e-8, K_first 1.3778e9, Σk 60,606,452, k of the 16,544-bit stratum 25,943,716 of 4.6333e8, 2.01668e13 bits (Lean: 2.03546e13). `split_cells(cells, row["merged"])` keeps working.
+- The row "width, κ 2^-7": the planner does not return it (it minimizes GB). Its k are `two_stage_design`'s rule at κ 2^-7 on `two_stage_strata(cells, None)`: q 1.816e-6, Σk 1,893,988, k_head 810,742, replay 26% of the audit, 0.7985 of the record.
+- The waterfall: width then the cut is 0.4133 of the record in all, 1,671 GB at 0.4 [modeled as in section 4]; do not multiply the two.
+- #8893's row: pass `widths=True, margin=0.125`: `merged` None, κ 2^-3, margin 0.125, q 1.5098e-7, K_first 2.6851e9, Σk 32,469,700, k of the 16,544-bit stratum 12,971,858, 1.86083e13 bits (Lean: 1.84895e13), 0.6050. I have no run of the cut with the margin yet.
+
+For SCALE and PARAMS:
+- The k of every row is in section 3's table (Σk a sampled request, the head stratum's k, q). By width the head blocks are a stratum of their own of 4.6333e8 blocks; under size classes the stratum is class 32,768 with 4.702e8.
+- A κ between the planner's octaves is a one-line change to `KAPPAS` or a caller's own k; say which K you need held and I give the cheapest row.
+
+For the table:
+- GB, the plan with strata by width (#8878, built, unmarked): 2,675 GB at modeled 0.4 [Lean-checked design, run `r20261111-085529-dfd9`; GB modeled by ratio], 96 to 103 GB at the measured engine rate on node A (a floor) [by proportion, no run of mine].
+- GB, width at κ 2^-7 (the by-gates fallback): 3,228 GB at 0.4, 115 to 124 GB at the measured floor [modeled: the planner's bound, local].
+- GB, the best plan built (#8893 on #8878, unmarked): width + margin 1/8, 2,430 GB at modeled 0.4 [Lean-checked design, run `r20261111-092227-d1e7`; GB modeled by ratio], 87 to 94 GB at the measured floor [by proportion]; the family's floor is 2,199 GB (1,334 with the three-unit cut) [modeled].
+
+Next: the ready lines for #8878 and #8893 when `9a1e` and `515d` end; the 11:00Z table (the cut with the margin, and each row at both utilization readings).
