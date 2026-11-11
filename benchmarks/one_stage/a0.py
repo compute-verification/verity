@@ -200,6 +200,11 @@ def own_challenger(env: dict | None = None, zk: bool = False) -> bool:
     return senv.get("FLOCK_CHALLENGER") == "1" and (zk or senv.get("FC_COINS") == "tree")
 
 
+#: `session` reads its verifier's log for ``SERVING`` this often, for this long at most (seconds): the prover starts
+#: within a read of the verifier's listening, and the wait is outside the prover's clock
+SERVING_POLL, SERVING_WAIT = 0.02, 900.0
+
+
 def session(bin_: str, st: dict, n: int, law: str, port: int, out: Path, draw_file: Path | None = None,
             zk: bool = False, env: dict | None = None, prove_timeout: float = 3600) -> tuple[dict | None, dict | None]:
     """One live session: `serve --draw` (the verifier's side: registration, the sample, coins, the verdict) and `prove`.
@@ -229,10 +234,9 @@ def session(bin_: str, st: dict, n: int, law: str, port: int, out: Path, draw_fi
                              stdout=serve_log, stderr=subprocess.STDOUT, text=True, env=environ(env))
     got = None
     try:
-        for _ in range(1800):
-            if "SERVING" in (out / "serve.log").read_text() or serve.poll() is not None:
-                break
-            time.sleep(0.5)
+        late = time.monotonic() + SERVING_WAIT
+        while "SERVING" not in (out / "serve.log").read_text() and serve.poll() is None and time.monotonic() < late:
+            time.sleep(SERVING_POLL)
         p = run([bin_, "prove", *zf, "--verifier", f"127.0.0.1:{port}", "--instances", str(d / f"inst-{n}.bin"),
                  "--circuit", str(d / "circuit.txt"), *tu, "--tables", str(tables), "--runs", "1", "--warm", "0"], out / "prove.log", env=env,
                 timeout=prove_timeout)
