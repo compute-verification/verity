@@ -51,6 +51,8 @@ inputs = ["verity/__init__.py", "verity/settings.py", "verity/errors.py",
           "benchmarks/codec_tensor/reader.py", "benchmarks/codec_tensor/sketch_receipt.py",
           # rows.py's whole-store reference: the sketch as one float32 product
           "benchmarks/codec_tensor/sketching.py",
+          # sass_gate.py judges the 64-row kernels through the harness's build gate
+          "benchmarks/pouw/harness/sass_gate.py",
           # test_sampling_inputs.py: sampling_inputs.py prices an opening with sampled proofs' one cost fit
           "verity/protocols/spot",
           # auditor_line.py --boundary: the network certifiers' records of the gate node's boundary and their audit

@@ -7,7 +7,9 @@
 # session.cu (default: the commit this one's branch left `origin/main` at; else the file sent as
 # inputs/main-session.cu) the new build holds instruction for instruction (`same_sass.py`, out/same_sass.json): at 16
 # rows the pass runs those, so the run ends there (exit 5) unless the build holds every one, and also when there is
-# no base, the base does not compile or cuobjdump fails. BUILD_ONLY=1 ends after the build, so a machine with no GPU
+# no base, the base does not compile or cuobjdump fails. The kernels the base has none of, the 64-row pass's, get a
+# record and their listings (`sass_gate.py`, out/sass_gate.json, out/sass64), and the run ends there too (exit 5) if
+# one holds what that gate refuses. BUILD_ONLY=1 ends after the build, so a machine with no GPU
 # checks that it compiles (TOOLKIT=1 assembles CUDA 12.9's nvcc first, `benchmarks/pouw/harness/jobs/toolkit.sh`).
 # DEFS are session.cu's own nvcc arguments (-DSK64_PER_SM=2: the 64-row receipt kernels at 128 registers a thread).
 #
@@ -123,6 +125,20 @@ say "build: sm_$ARCH; against ${BASE_REV:-the sent file}: $same"
 [ $rc = 0 ] || {
   say "BUILD: same_sass.py exits $rc: this build is not shown to hold every kernel of the base's as it was, so" \
     "nothing runs (out/same_sass.json, out/sass)"
+  exit 5
+}
+# The kernels the base has none of: their record and listings, and what the 64-row kernels may not hold.
+cuobjdump -sass "$B/session.so" > "$B/session.sass" 2> "$O/cuobjdump.err" || {
+  say "BUILD: cuobjdump -sass exits $? on the build ($(tr '\n' ' ' < "$O/cuobjdump.err" | cut -c1-300)), so nothing runs"
+  exit 5
+}
+gate=$(python3 $RS/sass_gate.py "$O/session.ptxas" "$B/session.sass" "$O/sass_gate.json" --arch "sm_$ARCH" \
+  --listings "$O/sass64" 2>&1)
+rc=$?
+say "build: the 64-row kernels: $gate"
+[ $rc = 0 ] || {
+  say "BUILD: sass_gate.py exits $rc: a 64-row kernel is not what its gate allows, so nothing runs" \
+    "(out/sass_gate.json, out/sass64)"
   exit 5
 }
 [ -z "${BUILD_ONLY:-}" ] || exit 0
