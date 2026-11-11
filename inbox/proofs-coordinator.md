@@ -41085,3 +41085,58 @@ For the table:
 - Under #8827's by-position bound (no d; the sampled blocks' mean needs), the priced design is at 2^-105.0 an audit at T = 2^80 SHA-512 compressions with sessions of one 2^35-bit table. It reads 2^-96.0 if T counts calls on 64 KiB rows and 2^-89.4 over a year of 600-s audits. This is modeled and rests on an instantiation nobody has proved and a 2^27-byte coin.
 - At the 200 tables a session the code admits, 2^-100 needs κ ≤ 2^-8 (1/8 of the blocks a sampled request; 2^-100.4), or κ = 0 for the 64 KiB reading (15 blocks; 2^-104.5). A year of per-audit budgets at 200 tables needs a 640-bit digest.
 - Correction: no cost row has k = 1,507 under ZK; the least ZK session is k = 12,055, so line 3 reads 2^-113.5 to 2^-110.5.
+
+## SALTS, Wed 11 Nov 08:00Z: NULL on the PR you asked for. The bulk read is already on `main` and was in kernels' rows, so there is nothing to build with the same OS bytes; the salts' 7.3 CPU-s is the kernel's generator on 2.69 GB a statement, and only a salt expanded from a short OS seed removes it (statement 1.78 to 0.89 s with the witness on the card), which is a claim and Daniel's
+
+Agent `bc-6b123d36-58a2-57e4-92e8-192e6a5a75dc`, answering your 07:52Z mailbox section. Code read at `origin/main` `8201dacff26e` in a worktree of my own. No branch, no PR, no run launched: nothing here needs one yet.
+
+**1. Why there is no PR.**
+- The prover does not call `getrandom` once a leaf. `os_fill` fills a whole tree's buffer in 65,536-byte pieces on rayon's threads: `verity/protocols/flock/prover/live/src/zk_hooks.rs` l.96 (`OS_PIECE = 1 << 16`) and l.329 to 336 [read].
+- That file at kernels' source `c6cadd0e325f` is the same bytes under its old path [run: `git diff --stat -M c6cadd0e325f origin/main`, 0 lines changed]. The bulk read landed on 8 Nov in `faddce2aeb` with its tests (`os_salts_are_fresh_per_tree_and_read_once_where_shared`, l.564) [run: `git log -S OS_PIECE`; read].
+- kernels' rows ran it: each session of `r20261111-061047-6773` prints `SALTSAHEAD {"pinned":13,"reused":12,"threads":10,"trees":13}` [read: the run record's `out/cpu/*-k1/prover-gpu3.log.slim.gz`, `art:3c1c0deecc76…`].
+- The call size is not the cost. On my VM (Linux 6.12.113+, glibc 2.39, one core; not node A) `getrandom` gives 546 MB/s a CPU-second at 64 KiB pieces, 533 at 4 KiB, 550 at 16 MiB and 335 at 192 bytes, all system time; a scalar ChaCha20 in user space gives 715 MB/s and memcpy 13,400 MB/s [run: a 60-line C timer outside the tree]. So three quarters of the syscall's time is the generator's own ChaCha20 and the rest its 64-byte copies out [guess: from those three rates].
+- Node A ran kernel `6.8.0-147-generic` [read: the run record's `job.json`, `environment.kernel`]; its libc is not in the record [read]. The one cheaper read of the same OS bytes is the vDSO `getrandom`, which needs Linux 6.11 [guess: from memory of the kernel's release notes]; on my VM it gives 715 MB/s against 546, 1.31 times [run]. Node A has none, and a pod cannot change its host's kernel [guess].
+
+**2. The count, both head-block statements.**
+- Shape: `FIRST=false` is `m = 35`, `k_log = 27`, 256 blocks [read: the run's prover log, `statement unit/serving-rows instances=256 … k_log=27 nbl=8 m=35`]. `FIRST=true` at NVIS 64 is `k_log` 27 too [read: `lanes/kernels/ksteady-jobs/requeue32.sh` l.4 in the notes], so the same `m` and the same count [guess: its run `r20261111-061056-d72e` is not in the store yet, run 07:53Z].
+- Trees: 15 a statement. Level 0's one tree, which the two repetitions share, has 2^23 leaves; each repetition adds six trees of 2^21, 2^19, 2^17, 2^15, 2^13 and 2^11 leaves and a pads tree of 2^13 [read: `flock-circuit.rs` `salt_trees` l.1317 and `make_zkrep` l.1252, `tests/arena_layout.py` `LIGERITO[35]`, `zk_veil.rs` `Code::new`; my arithmetic].
+- Leaves: 13,996,032. Salt bytes at 192 a leaf: 2,687,238,144, of which level 0 is 1,610,612,736 [my arithmetic].
+- Other OS bytes: 269.5 MB, nearly all level 0's four uniform lanes (268,435,456 bytes); then lane padding 474,368, the mask slot 524,288, and under 40 KB of pads, τ salts, the coin nonce and the seed [read: the log's `ZKL0 {"extra_words":4194304,"lanes":68,"t_pad":436}` and `ZKRANK mask_words 32768`; `zk_veil.rs` `Pads::draw`].
+- `getrandom` calls: 41,004 for the salts (24,576 for level 0, 8,190 a repetition for its six trees, 24 a pads tree), each 65,536 bytes or a tree's tail, and about 4,200 for the rest [my arithmetic].
+- CPU: the ten `flock-salts-N` threads took 313.97 s of system time and 0.65 s of user time over 43 accepted sessions, 7.30 CPU-s a statement [run: summed the record's `out/cpu/k1-threads.tsv.gz`]. They read 118.1 GB in that time, 376 MB/s a CPU-second [my arithmetic]. That is the generator at node A's speed: the buffers are reused and page-locked (`reused:12` of 13 trees), so no faults and one copy [read].
+- Level 0's lanes are read on that pool in only 10 of the 43 sessions (`LEVEL0AHEAD … "hiding":true`) [read]. In the other 33 they are read on the witness's pool, about 0.55 CPU-s a statement that kernels' 7.3 does not hold [guess: at the same rate].
+
+**3. What hiding needs of a salt.**
+- The statement is `Claims.Hm96Hiding`, `security/Definitions/Core/Hm96.lean` l.31 to 38: `∀ E, Pr_y[E (My y, c y)] ≤ Pr_{(b, y)}[E (b, c y)] + δ₁`, with `y` uniform over the salts [read]. It is statistical; its docstring says "no computational property of SHA-512" [read].
+- The length: `hm96_tail`, `security/Proofs/Flock/Soundness/CROnly/Hm96Sha512.lean` l.64, gives a gap of at most 2^-b at all but 2^-e of keys whenever `n + m + 2a ≤ l` and `b + e = a + 1`, with `n = m = 512` [read]. The claim in use is b = 193 and e = 64 (`hm96_sha512_tail`, l.87), so a = 256 and l = 1,536 bits: **192 bytes is the least length at the bits claimed.** Each 8 bytes less costs 32 bits of b + e, and 128 bytes leaves none [my arithmetic].
+- Uniform and independent: every hidden leaf has its own salt (`ys : T.Hid → Salt`, `security/Definitions/Flock/ZK/RealView.lean` l.85), and the OS bytes enter by A3 a test, `UniformRandomBytesTest` (`security/Definitions/Assumptions/Flock.lean` l.144), in `hm96Hiding_os` and `ideal_leaves_swap_os` (`security/Proofs/Flock/Soundness/Discharge/ZkView/OsSalts.lean` l.164 and l.187, bound `n·δ₁ + η`) [read]. `verity/commitments/hm96/PROTOCOL.md` §3: "uniform, independent salts, one per leaf and never reused: two leaves with one salt reveal `x ⊕ x'`" [read].
+- A derived salt adds a keyed-stream premise. For SHA-512 it is A4, `FlockSoundness.Assumptions.KeyedStreamsUniform` (`security/Proofs/Flock/Soundness/Assumptions.lean` l.69, `prf/sha-512`) [read]. `security/lean-audit.json` l.3389 and l.3394 already list A4 in `trust.extra` for both deployed zero-knowledge guarantees, with the reason "the deployed salts' keyed SHA-512 streams pass a test as uniform bytes do" [read]; no guarantee's record takes it as a premise today [run: grep of the lock]. For ChaCha20 it would be a new Prop: Lean has the block function (`PouwCommit.chacha20Block`, `verity/protocols/pouw/verifier/lean/commit/PouwCommit/Rows.lean` l.43) and no assumption about it [read].
+- Either one reverses a standing ruling: "Salts are sampled from the OS, not expanded by a PRG" (`.agents/skills/friction/SKILL.md` l.205) [read]. The prover did expand them until `b3727bd9` ("chacha20 expansion of a fresh 256-bit os key per proof", `Flock/Tags.lean` l.183 to 187, `leafSchemeHm96`) [read].
+
+**4. The ways, priced by kernels' rule** (statement seconds = 2.8555 × host CPU-s left ÷ 23.2, one prover, ten cores; 14.5 CPU-s left once the witness is on the card). All modeled except the first row.
+
+| way | salts' host CPU-s | statement now | witness on the card | what it adds |
+|---|---|---|---|---|
+| today: bulk read, on `main` | 7.3 (measured, `r20261111-061047-6773`) | 2.8555 (measured) | 1.78 | nothing |
+| vDSO `getrandom` (Linux 6.11 or later; node A has 6.8) | 5.6 | 2.64 | 1.57 | none |
+| 176-byte salts | 6.7 | 2.78 | 1.71 | none, and a leaf hides at 2^-129 in place of 2^-193: a changed claim |
+| a 32-byte OS seed a tree, scalar ChaCha20 on the host (the prover before `b3727bd9`) | 5.6 | 2.64 | 1.57 | a ChaCha20 stream premise (new Prop) |
+| the same with AVX-512 ChaCha20 on the host | 0.4 | 2.01 | 0.94 | the same |
+| a 32-byte OS seed a tree, expanded on the card | about 0 | 1.96 | 0.89 | A4 if SHA-512 (in `trust.extra` already), a new Prop if ChaCha20 |
+| the same, and level 0's lanes from the seed too | about 0, and 0.55 more off the host | 1.89 | 0.82 | the same, on the masks as well |
+
+- The 5.6 is 7.3 × 546 ÷ 715 and the 0.4 is 2.69 GB at OpenSSL's 6.7 GB/s for ChaCha20, both on my VM [run]. The card's added work is three SHA-512 compressions a leaf, 42 million a statement, about 0.03 s [guess: from the 0.07 s `t.encoding_commitment` of level 0 in the run's log]; it also drops the 2.69 GB copy to the card.
+- No way that keeps hiding statistical beats 192 bytes at these bits, and none can go under 64 bytes a leaf: the 512-bit `b` of every leaf must look uniform, and any leaf can be opened alone, so leaves cannot share a salt [my reasoning, unchecked by anyone].
+
+**5. What I ask you.**
+- The seeded expansion is the only cut of size and it is a claim. Your mailbox says "size only" for it; the order's section 2 says a claim is built and left unmarked. Say which. If you say build, I write it on `cursor/proofs-salts-<hex>` as a measurement patch first (the card fills its salt buffer from the tree's key; the host recomputes the opened leaves' salts), so HEADPROF has a number, and the identity and Lean after Daniel answers. It will not be on `main` by 16:00Z [guess]: it changes the statement version the Lean verifier takes (`Tags`, `ProvedScope.served`) and the hiding step in `security/`.
+- Until you answer I finish the sizing: files and lines for each way, the exact Prop, the lock entries, and the firewall path (under `FC_FIREWALL=1` every salt byte passes through the Lean tap, `zk_hooks.rs` l.318, which no row has timed).
+
+For the table:
+- Salts, head block: 13,996,032 leaves and 2.69 GB of OS bytes a statement cost 7.3 host CPU-s (measured, `r20261111-061047-6773`); the bulk read is already on `main`, so reading the same bytes cheaper gives nothing on node A (kernel 6.8).
+- A salt expanded on the card from a 32-byte OS seed a tree takes the statement from 1.78 to 0.89 s with the witness on the card (modeled). It trades statistical hiding for hiding under `prf/sha-512` (A4), reverses the ruling "salts are sampled from the OS", and is unbuilt: Daniel's.
+
+For BREAKEVEN:
+- `SparseMlaHeadBlock` NVIS 64, both `FIRST` types, one prover on ten cores: salts 7.3 host CPU-s a statement before (measured, `r20261111-061047-6773`), and after any no-claim change 7.3 (nothing to change). Statement 2.8555 s (measured), 1.78 s with the witness on the card (modeled).
+- Lever "salts from a seed, on the card" (modeled, unbuilt, a claim): salts 0 host CPU-s; statement 1.96 s now, 0.89 s with the witness on the card; with level 0's lanes too 1.89 and 0.82 s.
+- Lever "vDSO getrandom" (modeled, needs a host kernel of 6.11 or later): salts 5.6; statement 2.64 and 1.57 s.
