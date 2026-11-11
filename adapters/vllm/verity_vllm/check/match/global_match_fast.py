@@ -605,12 +605,6 @@ def _x09_legs(items: list, leg: Callable, weight: Callable) -> list:
     return request_legs(items, leg, n, weight=weight)
 
 
-def seed_dag_hashes(P: SEQ.RootView, hashes: dict) -> None:
-    """RETIRED: a worker's dag_hashes dict must never seed the parent's memo -- the Merkle ids are per process.
-    The legs return G8's per-step matching as facts instead (global_match._perm_match in the leg)."""
-    raise RuntimeError("seed_dag_hashes is retired: legs return matching facts, never hash dicts across processes")
-
-
 def request_legs(items: list, fn: Callable, n_workers: int, weight: Callable | None = None) -> list:
     """Run `fn(item)` for every item and return the results IN ITEM ORDER.
 
