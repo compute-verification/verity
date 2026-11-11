@@ -1,7 +1,7 @@
 """A verifier costs O(circuit description), never O(unrolled circuit) (AGENTS.md "Design rules").
 
-A scan over the Lean under `verity/core/` (the verifiers and the code they run) and over `Security/`'s verifier code
-models (each `Security/Proofs/**/Code.lean`, a verifier a guarantee is stated at, with the `Security` modules it imports
+A scan over the Lean under `verity/` outside `verity/protocols/flock/prover/` (the verifiers and the code they run) and over `security/`'s verifier code
+models (each `security/Proofs/**/Code.lean`, a verifier a guarantee is stated at, with the `security` modules it imports
 and the `Properties` modules those import) refuses the forms an unrolled walk takes there: locating gates one by one
 through the canonical layout (`P.gate g`, `Flock.Program.Prog.gate`), a range or loop bounded by a Definition's gate count
 (`List.range (P.defs[P.root]!).gates`, `[0:defn.gates]`, `List.range C.gates.length`), an array or loop bounded by a name
@@ -32,79 +32,79 @@ import re
 from test_repository import ROOT, _tracked
 
 ALLOWED: dict[str, str] = {
-    "verity/core/primitives/evaluate/Evaluate/Walk.lean":
+    "verity/definitions/evaluate/Evaluate/Walk.lean":
         "Evaluate.walk, the evaluator: a Program's values gate by gate, every member of every node, by definition; no "
         "verifier imports it",
-    "verity/core/protocols/network/nci/lean/NciCheck/Desc.lean":
+    "verity/protocols/inference_only/verifier/nci/lean/NciCheck/Desc.lean":
         "NciCheck.Desc's members of a node reading part of a mapped argument, one by one: bounded by walkAtMost, "
         "which refuses past its limit",
-    "verity/core/protocols/network/nci/lean/NciCheck/DescFuzz.lean":
+    "verity/protocols/inference_only/verifier/nci/lean/NciCheck/DescFuzz.lean":
         "NciCheck.DescFuzz, the desc fuzzer the Lean audit runs (NciCheck.DescFuzzMain): it visits every member of every "
         "node of a generated Program, under caps.work, to decide DescAgrees' open statements there; the verifier never runs it",
-    "verity/core/protocols/network/nci/lean/NciCheck/Check.lean":
+    "verity/protocols/inference_only/verifier/nci/lean/NciCheck/Check.lean":
         "NciCheck.check, the gate-by-gate reference NciCheck.Desc is difftested against (runs NciCheck.DescDifftestMain); "
         "`nci-check` runs it only with --unrolled",
-    "verity/core/primitives/circuits/Circuits/AnnotExpand.lean":
+    "verity/circuits/lean/Circuits/AnnotExpand.lean":
         "Annot.sets, expand and reference, an annotation laid out gate by gate: the reference Annot.check is held to "
         "(Flock.Test.Annot, annot-difftest's annot.reference, Properties.Annot.CheckAgrees); no verifier runs it",
-    "verity/core/primitives/circuits/Circuits/Extract.lean":
+    "verity/circuits/lean/Circuits/Extract.lean":
         "open (PRF-72): Q_word v1 owns every computing gate, so its CallGraph lays out one activation of each distinct "
         "Call's Definition, batch members and scan iterations unrolled; no served window names Q_word (they name "
         "template queries, which read the root body only)",
-    "verity/core/service/flock/Flock/Qcall.lean":
+    "verity/protocols/flock/verifier/Flock/Qcall.lean":
         "open (PRF-72): Q_call v1 owns every computing gate, so its Gates lays out one activation of each distinct "
         "Call's Definition, batch members and scan iterations unrolled (its reads deduplicated in linear time, "
         "dedupReads, proved equal to the quadratic loop it replaced: gates_ref); no served window names Q_call",
-    "verity/core/service/spot/Spot/PartitionRef.lean":
+    "verity/protocols/spot/verifier/lean/Spot/PartitionRef.lean":
         "committedBitsRef, the walk of one activation Partition.committedBits replaced by reading Flock.Qcall.gates' "
         "layout (Gates.readTo): the reference the committed_bits difftest piece holds it to; the verifier never runs it",
-    "verity/core/service/flock/Flock/TemplateQuery.lean":
+    "verity/protocols/flock/verifier/Flock/TemplateQuery.lean":
         "TemplateQuery.unitGatesRef, every unit's gates unit by unit, the walk unitGates replaced: the reference the "
         "unit_gates difftest piece holds it to, and unitGates' answer on ranges evaluate never gives (not contiguous "
         "from unit 0, or a root that isn't a definition)",
-    "verity/core/service/flock/Flock/RecCoins.lean":
+    "verity/protocols/flock/verifier/Flock/RecCoins.lean":
         "open (PRF-283 Decision 1): Inner.load's comb, CircuitFold.folded on the inner statement set up from its flat "
         "file, folds every row of the unrolled inner unit, until PR 8 folds a templated inner once per Definition "
         "(InnerSuccinct)",
-    "verity/core/service/flock/Flock/RecVStar.lean":
+    "verity/protocols/flock/verifier/Flock/RecVStar.lean":
         "open (PRF-283 Decision 1): circuitFile regenerates V*'s unrolled circuit text (VStar.emitCircuitOf) for "
         "checkFile's byte comparison, until PR 8 folds a templated inner once per Definition (InnerSuccinct)",
-    "verity/core/service/flock/Flock/NetAt.lean":
+    "verity/protocols/flock/verifier/Flock/NetAt.lean":
         "Tmpl.unrollAt, a templated unit's rows at their committed positions: the reference Tmpl.unitNet is proved "
         "equal to (FlockSoundness.TmplFold.unitNet_eq) and Flock.Test.NetAt compares it with; Tmpl.unitFull, its rows "
         "behind Tmpl.unitNet's thunks, built only where a check reads them: open on the templated statement's path, "
         "where verify --zk's KsScope.checkOf reads them (ProvedScope.scopeOkH's portReadsB) before refusing the "
         "statement as a version it doesn't serve (ProvedScope.servedForm; benchmarks/verifier_cost/flock_served)",
-    "verity/core/service/flock/Flock/HmRow.lean":
+    "verity/protocols/flock/verifier/Flock/HmRow.lean":
         "HmOut.unrolled (and HmOut.parseStmt), a templated file's statement circuit, the flat circuit its template "
         "unrolls to (ASK-112 option A), which the soundness statements read; no check runs it: verify sets up on and "
         "checks the committed circuit (HmOut.parseCommit), its template by its description (ProvedScope.scopeOkT), "
         "but KsScope.checkOf's scope check reads its unit's rows (NetAt.lean's entry)",
-    "verity/core/service/flock/Flock/TmplLayout.lean":
+    "verity/protocols/flock/verifier/Flock/TmplLayout.lean":
         "Tmpl.posMap, every column's committed position: the reference Tmpl.posOf is proved to read (posMap_tree)",
-    "verity/core/service/flock/Flock/TmplFold.lean":
+    "verity/protocols/flock/verifier/Flock/TmplFold.lean":
         "Tmpl.foldRef, the fold over the unrolled rows: the reference Tmpl.foldUnit is difftested against "
         "(Flock.Test.TmplFold) and proved equal to (foldUnit_eq_project)",
-    "verity/core/primitives/circuits/Circuits/Gate.lean":
+    "verity/circuits/lean/Circuits/Gate.lean":
         "Prog.gateAt, one gate's location as Flock.Program.Gate: verity-evaluate's `gate` serves it so the difftest holds "
         "layout.Gate to it; no verifier calls it",
-    "Security/Proofs/Flock/SpotFlock/Code.lean":
+    "security/Proofs/Flock/SpotFlock/Code.lean":
         "open: the two-stage verifier's stmtOk decides the registration (parse, partition, two) over the members' "
         "side-by-side program, every unit of every member laid out, and topoOk and partitionsOk range over its gates; "
         "until two decides the members' descriptors (each member's units, B and R, and filesOk) and stmtOk is compiled "
         "(@[csimp]) as a check that never builds bitsProgs, membersPart or filesReplay",
-    "Security/Proofs/Flock/SpotFlock/ScopeFast.lean":
+    "security/Proofs/Flock/SpotFlock/ScopeFast.lean":
         "open: topoFast, coverFast and partitionsFast, what SpotFlock.code compiles topoOk, partitionsOk and scopeOk as "
         "(@[csimp]), read every gate of the unrolled program once (linear where the checks as stated are quadratic or "
         "cubic), and their equalities restate those checks; replaced as SpotFlock/Code.lean's entry says",
-    "Security/Properties/Spot/Members.lean":
+    "security/Properties/Spot/Members.lean":
         "open: bitsProgs, membersPart and filesReplay build each member's key program (Bits.keyProg, every unit laid "
         "out) and lower it, and its blocks, unit by unit: what SpotFlock.code's parse and partition evaluate; replaced as "
         "SpotFlock/Code.lean's entry says",
-    "verity/core/service/spot/Spot/Bits.lean":
+    "verity/protocols/spot/verifier/lean/Spot/Bits.lean":
         "open: keyProg lays a member's every unit out (2 + n·B inputs and n·R rows), and its layout (prog, off, offs, "
         "unitGates, owner, owners, insOf, blockOf) walks that program gate by gate, which Properties.Spot.Members reads "
-        "for SpotFlock.code; replaced as Security/Proofs/Flock/SpotFlock/Code.lean's entry says",
+        "for SpotFlock.code; replaced as security/Proofs/Flock/SpotFlock/Code.lean's entry says",
 }
 
 FIX = ("a verifier of record does work proportional to the description, never to the unrolled circuit (AGENTS.md "
@@ -129,7 +129,7 @@ KEYPROG = re.compile(r"[({]\s*((?:[\w']+\s+)*[\w']+)\s*:\s*(?:[\w.]*\.)?KeyProg\
 KEYPROG_RANGE = re.compile(r"\b(?:List|Array)\.range\s*\(\s*(?:[\w.]*\.)?keyProg\b[^\n]*?\)\.(?:size|units|inputs)\b")
 #: a member's key program built, every unit laid out (`Spot.Bits.keyProg c n`)
 KEYPROG_BUILT = re.compile(r"(?<![\w'.])(?:(?:Spot\.)?Bits\.)?keyProg\s+(?![:=|])\S")
-#: a module a Lean file imports from `Security/`'s proofs or properties
+#: a module a Lean file imports from `security/`'s proofs or properties
 IMPORT = re.compile(r"^(?:\w+\s+)*import\s+(?:all\s+)?((?:Proofs|Properties)(?:\.[\w']+)+)\s*$", re.M)
 #: a templated unit unrolled: its rows, every column's position, or the fold over its rows
 UNROLLED = re.compile(r"(?<![\w'])(?:unrollAt|unitFull|posMap|foldRef)\b(?!')|(?<![\w'])Tmpl\.unroll\b(?![\w'])")
@@ -177,15 +177,15 @@ def offenses(source: str, test: bool = False) -> list[tuple[int, str]]:
 
 
 def _security_code(tracked: list[str]) -> set[str]:
-    """`Security/`'s verifier code models: each `Security/Proofs/**/Code.lean`, the `Security` modules it imports, and the
+    """`security/`'s verifier code models: each `security/Proofs/**/Code.lean`, the `security` modules it imports, and the
     `Properties` modules those import in turn."""
     have = set(tracked)
-    code = {p for p in have if p.startswith("Security/Proofs/") and p.endswith("/Code.lean")}
+    code = {p for p in have if p.startswith("security/Proofs/") and p.endswith("/Code.lean")}
     seen, todo = set(code), list(code)
     while todo:
         p = todo.pop()
         for mod in IMPORT.findall((ROOT / p).read_text()):
-            q = f"Security/{mod.replace('.', '/')}.lean"
+            q = f"security/{mod.replace('.', '/')}.lean"
             if q in have and q not in seen and (p in code or mod.startswith("Properties.")):
                 seen.add(q)
                 todo.append(q)
@@ -194,7 +194,7 @@ def _security_code(tracked: list[str]) -> set[str]:
 
 def _scanned() -> list[str]:
     tracked = _tracked()
-    return sorted({p for p in tracked if p.startswith("verity/core/") and p.endswith(".lean")} | _security_code(tracked))
+    return sorted({p for p in tracked if p.startswith("verity/") and not p.startswith("verity/protocols/flock/prover/") and p.endswith(".lean")} | _security_code(tracked))
 
 
 def test_no_verifier_of_record_walks_the_unrolled_circuit():

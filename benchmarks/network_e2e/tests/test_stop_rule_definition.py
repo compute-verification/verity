@@ -13,11 +13,11 @@ from pathlib import Path
 import numpy as np
 import pytest
 
-from verity.ml.circuits.defs import bind
-from verity.ml.circuits.evaluation import evaluate_batch
-from verity.ml.circuits.evaluation.bits import evaluate_words
-from verity.ml.definitions.registry import stop_rule as X
-from verity.ml.definitions.registry.boolean_stop_rule import StopRuleV2
+from verity.circuits.defs import bind
+from verity.circuits.evaluation import evaluate_batch
+from verity.circuits.evaluation.bits import evaluate_words
+from verity.definitions.registry import stop_rule as X
+from verity.definitions.registry.boolean_stop_rule import StopRuleV2
 
 
 def _derived():

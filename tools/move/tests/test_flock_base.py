@@ -12,17 +12,17 @@ spec.loader.exec_module(B)
 
 FLOCK = B.FLOCK
 TREE = {
-    f"{FLOCK}/lakefile.toml": 'name = "flock_verifier"\n\n[[require]]\nname = "core_base"\npath = "../../primitives/base"\n\n'
+    f"{FLOCK}/lakefile.toml": 'name = "flock_verifier"\n\n[[require]]\nname = "core_base"\npath = "../../../circuits/base"\n\n'
                               '[[require]]\nname = "fetched"\ngit = "https://example.invalid/x"\n\n[[lean_lib]]\nname = "Flock"\n',
     f"{FLOCK}/Flock/Hash.lean": "module\n\npublic import Base.Hash\n\n/-! A re-export. -/\n",
     f"{FLOCK}/Flock/Verify.lean": "module\n\npublic import Flock.Hash\nimport all Flock.Hash\npublic import Flock.Record\n"
                                   "-- import Flock.Hash is how it was\n\ndef verify := 1\n",
     f"{FLOCK}/Flock/Record.lean": "module\n\ndef record := 1\n",
-    "verity/core/primitives/base/lakefile.toml": 'name = "core_base"\n\n[[lean_lib]]\nname = "Base"\n',
-    "verity/core/primitives/base/Base/Hash.lean": "module\n\nnamespace Flock\nprivate def round := 1\nend Flock\n",
-    "verity/core/primitives/base/Base/Pow2.lean": "module\n\ndef pow := 1\n",
-    "Security/Proofs/P.lean": "import Flock.Hash\n\nopen private round from Flock.Hash\nopen private record from Flock.Record\n",
-    "Security/Proofs/Q.lean": "open private round Round.busy natJ?\n  from Flock.Hash\n\ndef from_ := 1\n",
+    "verity/circuits/base/lakefile.toml": 'name = "core_base"\n\n[[lean_lib]]\nname = "Base"\n',
+    "verity/circuits/base/Base/Hash.lean": "module\n\nnamespace Flock\nprivate def round := 1\nend Flock\n",
+    "verity/circuits/base/Base/Pow2.lean": "module\n\ndef pow := 1\n",
+    "security/Proofs/P.lean": "import Flock.Hash\n\nopen private round from Flock.Hash\nopen private record from Flock.Record\n",
+    "security/Proofs/Q.lean": "open private round Round.busy natJ?\n  from Flock.Hash\n\ndef from_ := 1\n",
 }
 
 
@@ -45,11 +45,11 @@ def test_the_moved_modules_are_read_from_the_lakefiles(tmp_path):
 
 def test_private_names_the_module_a_declaration_moved_to_and_no_other(tmp_path):
     root = tree(tmp_path)
-    assert B.private(root) == [("Security/Proofs/P.lean", "Flock.Hash", "Base.Hash"),
-                               ("Security/Proofs/Q.lean", "Flock.Hash", "Base.Hash")]
-    assert (root / "Security/Proofs/P.lean").read_text() == (
+    assert B.private(root) == [("security/Proofs/P.lean", "Flock.Hash", "Base.Hash"),
+                               ("security/Proofs/Q.lean", "Flock.Hash", "Base.Hash")]
+    assert (root / "security/Proofs/P.lean").read_text() == (
         "import Flock.Hash\n\nopen private round from Base.Hash\nopen private record from Flock.Record\n")
-    assert (root / "Security/Proofs/Q.lean").read_text() == (
+    assert (root / "security/Proofs/Q.lean").read_text() == (
         "open private round Round.busy natJ?\n  from Base.Hash\n\ndef from_ := 1\n")
     assert B.private(root) == []
 
@@ -57,14 +57,14 @@ def test_private_names_the_module_a_declaration_moved_to_and_no_other(tmp_path):
 def test_rewrite_renames_each_import_and_deletes_the_re_export(tmp_path):
     root = tree(tmp_path)
     lines, gone = B.rewrite(root, dry=True)
-    assert (dict(lines), gone) == ({"Security/Proofs": 1, f"{FLOCK}/Flock": 2}, [f"{FLOCK}/Flock/Hash.lean"])
-    assert (root / gone[0]).exists() and "import Flock.Hash" in (root / "Security/Proofs/P.lean").read_text()
+    assert (dict(lines), gone) == ({"security/Proofs": 1, f"{FLOCK}/Flock": 2}, [f"{FLOCK}/Flock/Hash.lean"])
+    assert (root / gone[0]).exists() and "import Flock.Hash" in (root / "security/Proofs/P.lean").read_text()
     assert B.rewrite(root) == (lines, gone)
     assert not (root / gone[0]).exists()
     assert (root / FLOCK / "Flock/Verify.lean").read_text() == (
         "module\n\npublic import Base.Hash\nimport all Base.Hash\npublic import Flock.Record\n"
         "-- import Flock.Hash is how it was\n\ndef verify := 1\n")
-    assert (root / "Security/Proofs/P.lean").read_text().startswith("import Base.Hash\n")
+    assert (root / "security/Proofs/P.lean").read_text().startswith("import Base.Hash\n")
     assert B.rewrite(root) == ({}, [])
 
 

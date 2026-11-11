@@ -25,7 +25,7 @@ import tomllib
 from collections import Counter
 from pathlib import Path
 
-FLOCK = "verity/core/service/flock"
+FLOCK = "verity/protocols/flock/verifier"
 OLD = "Flock"
 #: the base packages' modules that never were modules of Flock's package
 NEW = {"Pow2"}

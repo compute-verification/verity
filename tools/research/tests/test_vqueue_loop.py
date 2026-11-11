@@ -942,7 +942,7 @@ def test_what_a_run_failed_beside_its_undeclared_reads_is_inherited_only_where_m
     message = ("its tests started programs the read guard can't trace (g++, git): name the file under its suite's "
                "`[tool.verity.tests] untraced`, which keys it on the suite's whole tree, or give the test an untraced mark")
     detail = json.dumps({"error": message})
-    files = [f"integrations/vllm/verity_vllm/pipeline/{n * 'x'}.py" for n in (30, 40, 50, 60)]
+    files = [f"adapters/vllm/verity_vllm/pipeline/{n * 'x'}.py" for n in (30, 40, 50, 60)]
     paths = ", ".join(files[:3])
     for at, key in ((main, "sha512:t0"), (sha, "sha512:t1")):   # a `why` cut before its detail
         faulted(at, key, detail[:200], paths)
@@ -1071,7 +1071,7 @@ def test_a_land_at_an_older_head_carries_to_its_merge_of_main_as_drive_toml_s_ve
 
 @pytest.mark.parametrize("change, because", [
     ("a.txt", "authored: {new} changes a.txt"),
-    ("Security/Proofs/P.lean", "authored: {new} changes Security/Proofs/P.lean"),
+    ("security/Proofs/P.lean", "authored: {new} changes security/Proofs/P.lean"),
     ("held", "held by other (the merge breaks a) at {new}")])
 def test_a_head_that_changes_more_than_its_merge_of_main_or_is_held_carries_no_land(env, change, because):
     """drive's safety checks carry over: a commit of the PR's own since the land (a Lean one too) or a hold at the head keeps
@@ -1677,7 +1677,7 @@ def test_the_after_lean_suites_test_files_reading_lean_build_s_outputs_stand_for
     runs after lean-build stand for lean-suites (`_job`): the graph lacks no job `main` waits for, and the lean-suites tasks
     its base lists may go.  A candidate whose base's check isn't listed waits for it."""
     env.gates = ["pytest", "lean-build", "lean-suites"]
-    lean, exe = "verity/core/service/flock", {"name": "flock-verify", "path": "verity/core/service/flock/.lake/build/bin/v"}
+    lean, exe = "verity/protocols/flock/verifier", {"name": "flock-verify", "path": "verity/protocols/flock/verifier/.lake/build/bin/v"}
     build, outs = f"lean-build:{lean}", [exe, {"name": "build", "path": f"{lean}/.lake/build.tar.gz"}]
     env.put(1, {"a.txt": "1\n"})
     loop = env.loop(policy)

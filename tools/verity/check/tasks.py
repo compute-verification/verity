@@ -91,12 +91,12 @@ OUTPUTS = {"lean-build": [f"lean-build:{VERIFIER}/.lake/build"],
 #: cache keys where the task runs, as `PLACED` is set there
 STEP_INPUTS = {
     "lean-build": VERIFIER_PACKAGES,
-    "flock-circuit-build": ["verity/ml/flock/check_build.sh", "verity/ml/flock/live", "verity/ml/flock/flock-*-b684b12.patch"],
-    "flock-rust-tests": ["verity/ml/flock/check_build.sh", "verity/ml/flock/live", "verity/ml/flock/flock-*-b684b12.patch"],
-    "lean-agreement": ["verity/ml/flock/verifier", *VERIFIER_PACKAGES],
+    "flock-circuit-build": ["verity/protocols/flock/prover/check_build.sh", "verity/protocols/flock/prover/live", "verity/protocols/flock/prover/flock-*-b684b12.patch"],
+    "flock-rust-tests": ["verity/protocols/flock/prover/check_build.sh", "verity/protocols/flock/prover/live", "verity/protocols/flock/prover/flock-*-b684b12.patch"],
+    "lean-agreement": ["verity/protocols/flock/agreement", *VERIFIER_PACKAGES],
 }
 #: a worker slot's size, by what a task asks: most tasks a 16-core, 64 GB slot; a Lake package's audit the same with a
-#: Lean build's disk, or a 32-core, 128 GB one when it reads `Security` (Mathlib, ArkLib: `lean_slot`); a suite that runs in
+#: Lean build's disk, or a 32-core, 128 GB one when it reads `security` (Mathlib, ArkLib: `lean_slot`); a suite that runs in
 #: one process (not `parallel`) one core and what `suites.py` holds for one test process
 SLOT = {"cores": 16, "mem_gb": 64, "disk_gb": 20}
 LEAN_PKG_SLOT = {"cores": 16, "mem_gb": 64, "disk_gb": 60}
@@ -255,8 +255,8 @@ def lean_cover(pkg: str) -> list[str]:
 
 
 def lean_slot(pkg: str) -> dict:
-    """The slot ``pkg``'s audit asks: `LEAN_SLOT` when it or a package it requires is under `Security`, else `LEAN_PKG_SLOT`."""
-    return LEAN_SLOT if any(p.split("/")[0] == "Security" for p in (pkg, *LA.path_deps(pkg))) else LEAN_PKG_SLOT
+    """The slot ``pkg``'s audit asks: `LEAN_SLOT` when it or a package it requires is under `security`, else `LEAN_PKG_SLOT`."""
+    return LEAN_SLOT if any(p.split("/")[0] == "security" for p in (pkg, *LA.path_deps(pkg))) else LEAN_PKG_SLOT
 
 
 def record(part: str, facts: Facts, all_parts: list[str], costs: dict[str, float]) -> dict:
