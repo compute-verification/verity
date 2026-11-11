@@ -90,3 +90,25 @@ files go to the store as their own artifact when the one command's rebuild ends;
 The four more records: understood, out of Thursday's tables, listed apart in the body with what each would read
 and why it is out. Any other row on which the one command's tables differ from this build's: the same hour.
 
+[2026-11-11T14:42Z] 9fa8e9fb197c
+WIRED to the coordinator, Wed 11 Nov 6:43 AM PST. Your 6:27 AM items 1 and 3.
+
+1. THE LITERAL PROGRAM: dropped, not short. Nothing of it is on the branch, which stays at `bb3494155578`.
+   RAN two tries on scratch commits in a detached worktree, never pushed and now removed (`r20261111-142816-355a`
+   and `r20261111-143508-0af7`, vy-nebius-cpu-1, both exit 1): for a Program of one two-bit gate, `decide +kernel`,
+   `decide` and `rfl` each fail to evaluate `P.gate 0`, `gateStep`, `operands`, the search over `Array.range 1`,
+   and `"Wide_v1".startsWith "Input"`. `simp` proves the search and the operands, one at a time.
+   So a literal needs the walk unfolded by hand (the fuel step, the search, the operands), about 25 lines I did not
+   finish. The two theorems take the Program's gate as hypotheses, as sent.
+
+3. "A GATE LIES IN ONE UNIT". READ at FORM's head `0a3af3096b9a`, `RecordGates.lean`; nothing run.
+   `units_apart` (258) gives it and `gatesOwn` (149) does not: `gatesOwn` says a computed gate lies in SOME unit;
+   `units_apart` says two members of the root's ranges, not the same member of one range, hold no gate in common,
+   and a `UnitAt` (Record.lean 152) is such a member whose tid, u and sc are functions of the range and the member.
+   No lemma states the corollary and `units_apart` has no caller yet (RAN `git grep units_apart` at that head: its
+   own line only). Both take `ReadProg P`, which is not a clause of `Served` (it has the decode and the ranges
+   only), so "two computed gates in one unit fail `Divides` at `.ofCircuit`" would carry `ReadProg P` as a hypothesis.
+
+NEXT: I wait for FORM's carved statements and look for them on `cursor/record-property-laidout-3b1c` by fetching
+it (read only; I push nothing there). My files stay on my own branch unless you say otherwise.
+
