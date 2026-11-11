@@ -317,6 +317,21 @@ def test_the_traced_step_has_a_step_before_it_where_the_run_has_one(tmp_path, st
     assert (tr["circuit"]["affected_share"] > 0) == (tr["circuit"]["u1_bits"] > 0) == (steps > 1)
 
 
+@pytest.mark.parametrize("steps, width", [(3, 16), (5, 32)])
+def test_a_weight_is_passed_at_the_updates_width_only_among_the_runs_first_steps(tmp_path, steps, width):
+    """Muon casts its update to 16 bits on its way into a 32-bit weight. A run of three steps is traced at its
+    second, whose weight is θ plus that update: a block makes it from the update alone, so the operand is passed at
+    16 bits. A longer run is traced mid-run, where the weight the update is added to is the run's own: the operand is
+    passed at its 32 bits."""
+    cfg = config.load(write_config(tmp_path / "a.toml", budget={"steps": steps, "batch": 2},
+                                   dials={"trainable": "blocks.0.w_*", "lr": 1e-2, "opt": "muon"}),
+                      starts.registry(tiny_registry(tmp_path / "reg")))
+    route = config.route(cfg.route)
+    tr = run.trace_step(cfg, route, *route.build(cfg.start.shape, cfg.dials), "cpu")
+    read = [r["widths"] for r in tr["rows"] if r["phase"] == "forward" and r["affected"][1]]   # each reads a weight
+    assert read and all(w == [32, width] for w in read)
+
+
 def test_a_retrace_writes_the_same_record_and_refuses_another_digest(ran, tmp_path):
     """`--retrace` takes a record's trace again and changes nothing else, and refuses a record whose config this tree
     reads as another digest. Here `retrace` runs in the test's process; the job's own path to it is the slow test."""
