@@ -62845,3 +62845,36 @@ Every GB here is modeled, as in my 18:47Z entry: world year, utilization 0.4, th
 - [run] Branch `cursor/proofs-count-71ac` is still at `9ac6befc87`; nothing new is pushed. The pull request's figures and the plan of record will be stated at a datacenter's 600 s, with the 1,536-machine line and the whole-year line in the same table and the sentence on 487 and 257 machines, as you set at 19:20Z.
 - [run] Your mailbox is read whole at 19:20Z and its headings again at 19:38Z (sections 18:07Z, 18:36Z, 18:59Z, 19:10Z; nothing since).
 - Next, for 21:30Z: the classes of gates a proof block counted on both partitions or printed as assumed; `main`'s strata (one a template, one session a template a verification phase) priced beside the width classes, and the counts a template written to a file; the one-machine long form (81 and 43 hours) in the figure's output. Then the cost model's pull request.
+
+## ATTACK, Wed 11 Nov 19:43Z: the guard is #9047, open 19:33Z and marked 19:40Z at `40157cc66775`. On `main` five of the seven mains elaborate and two do not (`whole_run`, and `nci_phases` since 28 Oct); the second is fixed in it. The number for ci and lean: 10 s a run where the packages are built, 7.6 s more once
+
+**The number.** Where the three Lake packages are built, the suite's eight tests take 10 s, 13.5 s through the runner [run `r20261111-192111-f613`: `suites.py benchmarks/verifier_cost --lean-built --fresh`, 8 passed]. After `lean-build`, Flock's three mains build nothing (0.17 s) [same run]. After the modules the other two packages' executables read, the mains' imports build three more, once per tree: `Spot.SecondStageExamples` (6.1 s) and the root `Spot`, 6.9 s together, and the root `NciCheck`, 0.7 s [run `r20261111-192616-861a`]. Alone on a shard after `lean-build` it builds what it reads of the two packages itself: 52 s and 7.5 s on that node [same run], 273 s for sampled proofs' library on a cold one [run `r20261111-181159-3283`]. In the quick tier, cold and waiting on the shared build lock, it took 352 s [run `r20261111-185247-23b3`].
+
+**For lean:** it builds in the three packages' own `.lake` under the suites' one lock (`verity_difftest.BUILD_LOCK`), and `Spot.SecondStageExamples` is built only because two mains import the root `Spot` [read: `registration/Main.lean`, `whole_run/Main.lean`].
+
+**What you marked NOT CHECKED, answered.** On `main` `cc6ee7446278`, each main elaborated as the test does: `flock_read`, `flock_served`, `flock_tmpl`, `registration` and `table_root` pass; `whole_run` fails (#9027's error) and `nci_phases` fails with `Main.lean:139:12: error(lean.unknownIdentifier): Unknown identifier NciCheck.Widths.reinterpretation` [run `r20261111-183939-ac9b`]. `8f350f54f3` of 28 Oct removed that function when the width check moved into `Flock.Program.decode` [read: `git log`].
+
+**What I decided.**
+- **`nci_phases` is fixed in the pull request, not listed as an exception** (4 lines in, 7 out). The benchmark times what `NciCheck.Desc.evaluate` runs, which has no separate width step now, so the step is gone and a decoder refusal ends like the benchmark's other refusals. `nci_cost.sh suite` at the head: exit 0, 14 rows, each `agrees: true` [run `r20261111-185313-c30f`].
+- **Stacked on #9027**, so every test passes at the guard's own head; the queue lands #9027 first. Until then its diff against `main` shows #9027's three files too.
+- **No line in the root `pyproject.toml`.** A suite is any directory whose `pyproject.toml` has pytest's table (`suites.discover`), and this one is no workspace member, like `benchmarks/two_stage` [read]. So top has nothing to read; ci has one line (`AFTER_LEAN`).
+- No exception list (all seven elaborate at the head), no `slow` mark, and a skip only where there is no `lake`, as the tree's Lean suites do.
+- Marked with `--mark` on the lane's word, as #9027 was; the quick tier is my own run, cited in the body.
+- KEPT's `flock_members.sh` and `.py`: not touched.
+
+**Runs at the head `40157cc66775`.**
+- Quick tier, `suites.py --changed cc6ee7446278 --quick`: exit 0, 124 suites, 124 passed, 0 failed; the new suite 8 passed, none skipped [run `r20261111-185247-23b3`, 44 min].
+- The new test itself: the first paragraph's run.
+- All seven mains at `866412fb0184`, the branch before the suite: all elaborate [run `r20261111-184722-2489`].
+- The mark's preflight merged it onto `main` at `61f13c2275fb` with no conflict; its collect step ran out of its 120 s budget on some suites and says so [read: the tool's output].
+
+**NOT CHECKED, and two runs of mine that went wrong.**
+- The negative control (the suite on `main`'s three broken files must fail on exactly three tests) is `r20261111-192957-208e`, waiting for a Lean slot since 19:30Z. Until it ends, the evidence that the test catches the breaks is the run on `main` above, which is the test's own command. I put its result in the pull request's body and one line here when it ends.
+- `r20261111-185200-5daa` waited 38 min for a check slot and I cancelled it by its id, superseded.
+- `r20261111-192111-f613`'s steps 3, 4, 6 and 7 were spoiled by my script: a relative path after `cd`, and `uv run pytest` run inside the suite's directory, which makes a venv and a `uv.lock` of its own there because that `pyproject.toml` has no `[project]`. Its steps 1, 2 and 5 are what I cite. `-861a` and `-208e` replace the rest. The suite is run through `suites.py` from the root, as the others are.
+
+**Job 3, second reading: GATHER's difftest fixture (`93f870229e`).** It holds the Lean to the mirror on the design each derives (links, wires, rows) and on the design check, for the gathered and the by-units shape, four cases, all with no statements [read: the commit]. What it does not hold: a read. Every difftest case that carries statements places a wired port with the run `[0, n, 0, 0]`, each reader at its writer's first row [read: `rg '"runs"'` over `test_difftest.py` at `93f870229e17`]; the new select reads writer unit 20u + j, runs `[0, 256, j, 20]`. So no fixed case compares the Lean's read check with the Python's at a stepped run; the property test may draw one [read, not counted]. The redone fixture should carry one honest statement case at such a run and one a row off. Verdict on the fixture as it is: LAND WITH NOTES, that one note; under GATHER's pick it is redone anyway.
+
+**The three lines you asked for.** #8999: the reading of 16:42Z to 17:54Z holds at `dc1baf648bf3` (my 18:38Z entry). The guard: #9047 at `40157cc66775ef87186bef84b4080937c94b25a1`, marked, admitted, waits for a land verdict. GATHER's branch: LAND WITH NOTES as the fallback, nothing broken; the pick has no Definition to read yet (my 19:19Z entry and its correction).
+
+For the table: #9047 open and marked at `40157cc66775` (suite 10 s built, quick tier 124 of 124); one run outstanding, the negative control `r20261111-192957-208e`.
