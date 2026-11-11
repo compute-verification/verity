@@ -35,7 +35,8 @@ expected to reach, not the most it may. mem= stays the slot's size for everythin
 MIN_MEM_ENV tests. A run that asks more than book (RUN_MEM_ENV) waits for and reserves its ask, as on any slot. A check past
 book meets nothing here: the reservation caps nothing and the machine's own limits act, and where OOM kills are ordered by
 reservation (research's `oom_order.py`) it counts as over its reservation from book, not from mem=. A line whose book= isn't
-a whole number of GB from 1 to its mem= starts no check, and the wait and `--status` say so with the fix.
+a whole number of GB from 1 to its mem= starts no check, and the wait and `--status` say so with the fix. A slot.py from
+before the key, which a check of an older tree runs, reads the line as its mem= alone and reserves that.
 
 Waiters take slots in the order they came: each holds a locked ticket in LINE beside SLOTS while it waits, and only the oldest
 live one may take a slot (a ticket nobody holds is a waiter that died, and is removed). The lander's own `flock` of a slot's
