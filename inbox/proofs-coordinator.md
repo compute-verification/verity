@@ -63691,3 +63691,132 @@ Every figure here is the cost model's (the plan of record's inputs: the design c
 **6. Open, and what I do next.**
 - Which second stage the plan of record states. The planner's design cannot be written as the per-template counts `main` registers, because a stratum's count is shared by its templates. The design with one stratum a template can (12,684 and 5,209 GB with the planner's statements). Unless you say otherwise I make the planner design by template, write that design's counts to a file keyed by the census's block type, and re-put the plan of record from it at a datacenter's 600 s, with one line in the body that `main` runs one session a template and what that costs (the table above).
 - Not done: the plan of record's re-put and `verity bench prove --system spot` on it; the verdict's field with `e` and the leading constant as arguments.
+
+## STOPS, Wed 11 Nov 20:12Z: the text for VLLM-339 is below. The K = 1 run ended: Flock's Lean verifier takes the combine's session when no two of its ports are wired to one writer port, and the run then stops where today's select stops, at the read of the return (`second-read`)
+
+The form's switch on, ahead of its proof; not `main`'s verifier. Every run here is from `cursor/proofs-stops-1340` (head `f87131e0b9c4`), which is never merged.
+
+**The K = 1 run, for you.** `r20261111-193238-0543` (vy-nebius-cpu-12, CPU, run exit 0, `second` exit 1) ran the select by units at one unit a token, `TokenSelectUnits_v1{V=4096,K=1}` inlined, 4 tokens a replay block, with the header probe of `f87131e0b9c4` [run]. All six Lean verdicts hold, the combine's `lean-verify/m1` among them: its ports `best0`, `idx0` and `x0` are wired to three different output ports of the units' template (`o0`, `o1`, `o2`) and `o0` is its own, four published domains with none twice, so `flock-verify`'s refusal of two ports of one domain does not fire [run]. Before the sample every check passed, both sessions' circuit files are the parameters' and the 17 tampered cases are refused [run]. It stops next at the second stage's check of the statements: `second-read` alone, on the combine's statement, and the stream's outcome is `reject` on `statements` alone [run]. The Python mirror run here on the run's kept statements gives the run's own `round_two` byte for byte, and port by port only the return's `o0` fails; `best0`, `idx0`, `x0` and all four reads of the units' statement pass [run, local, the mirror and not the Lean]. So nothing accepts, and behind the two refusals of `flock-verify` the select by units is where today's select is. Its copy `r20261111-194520-f1dc` waited 20 minutes for a slot and never started; I cancelled it at 20:06Z [run].
+
+**What the scope check requires (your question).** `Flock.PortRoots.checkOf` holds one session's two files, one template's circuit file and its public file, to the form the knowledge soundness proof covers; the part that refused is `dupId` (`PortRoots.lean:107` on `main` `61f13c2275fb`), which compares every pair of that one circuit's ports by `idOf` (`:55`), the port's entry in the public file's `frame_v3.domain_ids`, and refuses when two are equal (`loadedWhy`, `:144`, after `idsSized` at `:103` has held each to 64 bytes) [read]. A wired port of the interior commits no tree of its own and is published under its writer port's domain (`rows.Binding.held`, `rows.py:426` at #8875's head), so two parameters wired to one writer port carry one domain whatever rows they read [read]; the file's head says why the proof wants them distinct: with no two published domains one and no two roots colliding, no two ports' published roots are one (`pubRoot_ne`) [read]. A combine that reads each writer port through one port passes it, as far as the file shows, because the check compares only the ports of one statement and the writer's own statement is another [read]; the K = 1 run is that case and passes [run].
+
+**The select circuits will serve meets it, by my reading; not run.** At `cursor/proofs-gather-4931`'s head `4bcabdbfa054` (20:03Z), `greedy_stages.plan` at K = 20 makes chunks 1 to 18 instances of one template, `GreedyChunk_v1{N=7744,FIRST=0}`, and wires `GreedyCombine_v2`'s `b1` to `b18` each to that template's output 0 and `i1` to `i18` each to its output 1 (`verity/definitions/registry/greedy_stages.py:176-187` there) [read]. That is 18 ports of the combine's statement under one domain, twice, the shape K = 2 had with `best0` and `best1` [guess, from the two reads]. Three ways past it, each a guess: the check and its proof take two ports whose published trees are one tree (whoever owns `Flock.PortRoots` and `pubRoot_ne`); the combine takes all of one writer port's rows through one parameter, which `Spot.SecondStage.nodeWires` does not derive today (a parameter is one field of one instance); or each wired port has a tree of its own (`rows.Member.wired_trees`), which `Spot.SecondStage.readOk` refuses today (a wired port reads only its writer's output port of the interior record).
+
+**Three things that changed under my list since 19:49Z** [read, 20:08Z]. That branch took its own select by units back (`d9eaa908ba`), so `TokenSelectUnits_v1` and the `rows` parameter of `interior_rows.interior_window` are now at the older commit `9f1d7f59da75` and on my branch only. Its `interior_rows.py` is `main`'s again, so `git merge-tree` of #8875's head with `4bcabdbfa054` reports no conflict: the conflict I listed is gone. And nothing on that head cuts a replayed span into the greedy select's units for the interior (`interior_rows.pieces` there is `main`'s, which knows `TokenSelect_v4`'s units only).
+
+Your 20:01Z mailbox section (the interior's session, and the auditor's parameters) is read; its two answers follow in an entry of their own by 21:15Z.
+
+**Text for VLLM-339 starts here.** Each stop says in words whether a run showed it, I read it in the code, or it is relayed.
+
+---
+
+**A two-stage run of #8875's command today gets through both registrations, both samples and every second-stage session's Lean verdict, and then stops at the second stage's check of the statements, which refuses the read of the value the replay block returns (`second-read`), because the boundary registration's record commits no port for it.**
+
+That is the small class. An inlined class stops earlier, at the command itself, because its replay block gives no wires; with a select rewritten so that it does, two refusals of `flock-verify` come first and the same `second-read` is behind them.
+
+Every run below is on a branch of the proofs lane that is never merged (`cursor/proofs-stops-1340`), with the two-stage form's switch turned on ahead of its proof (`Spot.SecondStage.FORM` in Lean and `second_stage.FORM` in its Python mirror, both `false` on `main`), so nothing here is a result of `main`'s verifier, and an accept on that branch says only where a run stops.
+
+**What ran.** #8875's rehearsal `benchmarks/one_stage/two_stage_small.sh`: its stand-in serve on CPU over synthetic logits, then `two_stage.py first` and `two_stage.py second` with a local challenger. The branch is #8875's head `092004fadea9` merged into `main` at `cc6ee7446278`, with #8914, #8940 and #9041 merged in. The rehearsal exits 0 when the second stage is what today's record gives, so each row gives the run's exit code and `second`'s own. Line numbers are on `main` at `61f13c2275fb` for `verity/`, and at #8875's head for `two_stage.py` and `interior_rows.py`. Three classes ran:
+
+- today's select whole, `TokenSelect_v4{V=128}`;
+- today's select inlined, `TemplateInlined_v1` of `TokenSelect_v4{V=4096}`, 4 tokens a replay block;
+- a select written as units, `TokenSelectUnits_v1{V=4096,K}` with K chunk units a token, inlined the same way. Each parameter of its combine is one whole output of one unit, so the second stage derives wires from it. It is the proofs lane's commit `9f1d7f59da75`, and is not the select circuits will serve (`GreedySelect_v1`), which I have not run.
+
+### Stops the vLLM lane fixes, in the order the runs met them
+
+**1. The read of the replay block's return is refused.** This is the first stop of the small class and the last stop of every class that gets that far.
+
+- What the run printed, in `second/summary.json`: `"round_two": {"codes": ["second-read"], "detail": {"second-read": {"statement": 0, "template": "TokenSelect_v4{V=128}"}}}`, and the stream's outcome `"symbol": "reject", "interior": ["statements"], "statements": ["second-read"]`.
+- Where: `Spot.SecondStage.readOk`, the rule for what one port of a session may read (`verity/protocols/spot/verifier/lean/Spot/SecondStage.lean:831`, used at `:941`; its mirror `verity/protocols/spot/verifier/second_stage.py:923`, `:1054`). The command reads the return at the interior's own port in `verifier_reads` (`benchmarks/one_stage/two_stage.py:484`), whose docstring says this read is refused.
+- Runs: `r20261111-181003-ac2a`, `r20261111-183104-4239`, `r20261111-191247-a31c` (each run exit 0, `second` exit 1); `r20261111-183930-735b`, the same with the sessions behind the ZK server (`--firewall`); and `r20261111-193238-0543` at the select by units with K = 1. #8875's own `r20261111-094027-ef08` reports the same.
+- A fix on a branch: none. #8807 commits a return for one class of verdicts only.
+- What would get past it, as I read `readOk`: the boundary registration's record commits the return as a port, which no token select record does today, so that the port the return's link names is found in that record and the read is at round 1's root. That run then meets stop 2.
+
+**2. On a record that does commit the return, the command refuses before it commits the interior.**
+
+- The refusal, read in the code and not run (no class I ran commits the return): `ValueError("round 1's record commits the block's return ([...]): its rows are read at round 1's root under the serve's salts, which this command doesn't open yet")`, in `replayed`, `benchmarks/one_stage/two_stage.py:445-447`.
+- A fix on a branch: none that I found.
+- What would get past it, as I read it: `replayed` and `verifier_reads` open the return's rows at round 1's root with the serve's salts, which `return_salts` already reads and hands to nothing. #8875's body says the check that takes those salts (`second-return`) is the proofs lane's and does not exist yet; I found no `second-return` on `main`, at #9041's head or at `cursor/proofs-gather-4931`'s head. So half of this stop is the proofs lane's.
+
+**3. At the served vocabulary, `flock-circuit` refuses the chunk member's statement.** Relayed from #8875's body; I ran nothing at that size.
+
+- #8875's runs: `r20261111-063038-2cec`, exit 1 (2 sampled spans of 4 tokens, 19,360 units, m = 36), and `r20261111-074412-08a4`, exit 1 (1 span of 256 tokens, 619,520 units, m = 41). m = 34 and m = 35 were taken in `r20261111-070704-45f5` and `r20261111-070634-1374`.
+- Where: `shape_in_range`, whose text is `m = {m}: outside the spec's shape (m <= 35)` (`verity/protocols/flock/prover/live/src/circuit.rs:150`, `M_MAX` at `:102`).
+- A fix on a branch: none.
+- What would get past it, as I read #8875's formula (m = k_log + ⌈log₂ blocks⌉ over one member a template over every sampled span): a member proved in more than one statement, or fewer or smaller units a statement. Chunks of 7,744 logits change both terms; I have not computed their m.
+
+**4. With a select that has wires, the interior registration refuses the replayed rows, because every wired read is placed at its writer's first unit of the replay block.**
+
+- The refusal: `"{template}: its replayed {port!r} rows are not the {output!r} rows of the {writer template} units that write them, which the interior commits"`, in `interior` (`adapters/vllm/verity_vllm/pipeline/interior_rows.py:512-513`).
+- Where it comes from: `_held` (`interior_rows.py:310`), whose docstring says a unit "reads unit off_w + s·n_w, its writer's first in that span", and `Design.window` and `replayed` (`two_stage.py:331`, `:450`), which pass the design's wires and no rows.
+- Shown by: a test of `9f1d7f59da75`, run locally, and reading. I did not run the command without the change below.
+- A fix on a branch: on my branch only, and not offered as the fix. `interior_window`, `interior_ports` and `interior` take a `rows` parameter (from `9f1d7f59da75`), and `two_stage.py` hands them `second_stage.replay_rows(layout.program, key)`, the rows that place each wired unit's writer (`second_stage.py:710` on `main`), through `Design` (`0fb9019293e3`). With it the interior registers in the three runs of the select by units.
+- What would get past it, as I read it: the interior places each wired unit at the writer row `second_stage.replay_rows` gives, which is the row the second stage's check holds the read to.
+
+**5. `flock-verify` refuses the wired member's session: its header gives a wired port one position a reading unit, and the verifier takes one a row of the port's table.**
+
+- What the run printed, for the combine's session: `"lean-verify/m1": "setup: registered reads: port best0: one position and one path per table row"`. The units' session was accepted. The check of the statements then lists `second-verified`, `second-read` and `second-reported`.
+- Where: `Flock.Registered.checkPort`, one port of the verifier's registered reads (`verity/protocols/flock/verifier/Flock/Registered.lean:279-281`). `interior_window` declares a wired port's table as its writer's rows whole (`interior_rows.py:349`), and `write` gives its header entry one position a reading unit (`entry[p] = held[port].header(w.held_leaves(m, p))`, `:565`): 8 positions for a table of 16 rows in this run.
+- Run: `r20261111-191213-7228`, K = 2 (run exit 1, `second` exit 1).
+- A fix on a branch: none. My branch holds three lines in `write` that list every row of a wired port's table (`f87131e0b9c4`). **They are a probe and not a fix**: I put them there only to see what is behind this refusal, nothing tests them, and I have not checked that the header they write is the one a wired port should have.
+- What would get past it, as I read `checkPort`: `write` gives a wired port one position and one path for each row of the table `interior_window` declares for it, each instance's ref naming its writer unit's row. Whether that is the header the rest of the adapter wants is yours to say.
+
+### Stops the proofs lane fixes
+
+**6. The two-stage form's switch is off on `main`.** `Spot.SecondStage.FORM` is `false` (`SecondStage.lean:139`; mirror `second_stage.py:83`), and where nothing else fails the check adds `two-stage-form` (`:1059`; mirror `:1174`): "refused: a two-stage run, its second-stage sessions over an interior registration: a statement form the soundness proof does not cover". The run of record reads it at `Spot/Run.lean:232`. It is the last refusal, so on `main` a run that fails nothing else ends here. I ran nothing with it off. With it on, the two-stage toy's honest case, whose round 1 commits the return, accepts: `r20261111-182129-a3a1` and `r20261111-183150-26ea` (exit 0), on my branch only. It turns on with its proof; no branch holds that.
+
+**7. Today's inlined select gives no wires, so the command refuses it, and with `--unlinked` the second stage does.**
+
+- The command, in `r20261111-183339-5bd5` (exit 1), from `design` (`two_stage.py:349-350`):
+
+  ```
+  TWO {"refused": "ValueError: replay block TemplateInlined_v1{template=\"TokenSelect_v4{V=4096}\",N=4} makes no wires round 2 derives (`second_stage.replay_wires`): the replay block's Definition reads a node other than as a template's parameter that is one field of one instance of another template, alike at every caller, or a wire names a template of no part, or its rows don't place its part's units or its writer's, ..."}
+  ```
+
+- With `--unlinked`, every Lean verdict accepts and the check of the statements refuses `second-wires` alone, with that same sentence, before it reads any statement: `r20261111-181042-b572`, `r20261111-183136-2269`, `r20261111-191318-f8a7` (run exit 0, `second` exit 1).
+- Where: `Spot.SecondStage.nodeWires`, `wiresOk` and `designFailures` (`SecondStage.lean:570`, `:629`, `:1066-1068`; mirror `second_stage.py:650`, `:739`, `:1184`). `TokenSelectCombine_v2`'s `best` and `idx` each gather many chunk units' outputs, which is not one field of one instance.
+- The fix is in the Definition and not in the verifier: a select each of whose parameters is one whole output of one unit. `TokenSelectUnits_v1` at `9f1d7f59da75` is one and derives wires in my runs. `cursor/proofs-gather-4931` has since replaced it (head `4bcabdbfa054`) with the select circuits will serve, `GreedySelect_v1` of `GreedyChunk_v1` and `GreedyCombine_v2` at 20 chunks of 7,744 logits. I have not run that one.
+
+**8. The select by units did not merge with #8875; that conflict is gone, and what cuts a span into the new units is on no branch.** `9f1d7f59da75` changed `interior_rows.py` in nine places that conflict with #8875, which I resolved on my branch. At `4bcabdbfa054` that file is `main`'s again and `git merge-tree` of #8875's head with it reports no conflict (ran 20:08Z). What is left: `interior_rows.pieces`, which cuts a replayed span into its units' rows (`:260`), knows `TokenSelect_v4`'s units only; on my branch it also knows `TokenSelectUnits_v1`'s, and no branch I read gives it the greedy select's.
+
+**9. `flock-verify` refuses a statement two of whose ports are wired to one writer port.**
+
+- What the run printed, for the combine's session: `"lean-verify/m1": "refused: two ports of one published frame-v3 domain (frame_v3.domain_ids): a statement form the soundness proof does not cover"`.
+- Where: `Flock.PortRoots.dupId`, its text `DUP_IDS_WHY` and `loadedWhy` (`verity/protocols/flock/verifier/Flock/PortRoots.lean:107`, `:132-133`, `:144`), which `flock-verify --zk` runs as `PortRoots.checkOf` (`FlockVerify.lean:1116`). It compares the ports of one statement by the domain each is published under. A wired port is published under its writer port's domain, so `best0` and `best1`, both wired to the units' `o0`, carry one domain, and so do `idx0` and `idx1`.
+- Runs: `r20261111-192333-4ab8`, K = 2 with the probe of stop 5 (run exit 1, `second` exit 1). `r20261111-193238-0543`, K = 1, where each port of the combine is wired to a different writer port: `flock-verify` accepts both sessions (run exit 0, `second` exit 1, stopping at stop 1).
+- A fix on a branch: none. By my reading `GreedyCombine_v2` at 20 chunks has the K = 2 shape (18 parameters wired to one output of one chunk template, twice), so it meets this refusal; I have not run it.
+
+### Behind these, not reached
+
+- **Behind stop 9 at K = 2**, on the run's kept statements, the Python mirror of the check passes the links, the wires and every read but the return's: stop 1 again. That is the mirror run locally, and not the Lean.
+- **The coin limit** (`Spot.Challenger.MAX_COINS`, 2^20, `verity/protocols/spot/verifier/lean/Spot/Challenger.lean:50`). The runs used 4 and 7 coins of a 17-coin plan. #8914 is merged on my branch and changes nothing at these sizes.
+- **A challenger host.** Every run used `--challenger local`; none opened a session on the gate.
+- **A GPU serve and a served record.** Every run is the stand-in serve on CPU.
+- **The served vocabulary.** Stop 3 is relayed. The smallest sizes I ran are 128 logits whole and 4,096 inlined; at 256 logits and K = 2 the select by units was refused through `check_proof_block`, the check of a unit's rows before Flock composes it (`verity/commitments/windows/interface.py:322`), which I saw locally and not in a run, and whose text I did not keep.
+- **`main`'s verifier, with the switch off.** Not run. By the code the stops above are the same, with `two-stage-form` after the last.
+
+### Runs
+
+All CPU, `research run`, at the commit of `cursor/proofs-stops-1340` named.
+
+| run | commit | class | run exit | `second` exit | where it stopped |
+|---|---|---|---|---|---|
+| `r20261111-181003-ac2a` | `6826104996ad` | `TokenSelect_v4{V=128}` whole | 0 | 1 | `second-read` alone (stop 1) |
+| `r20261111-181042-b572` | `6826104996ad` | `TokenSelect_v4{V=4096}` inlined, `--unlinked` | 0 | 1 | `second-wires` alone (stop 7) |
+| `r20261111-182129-a3a1` | `eae80b4fb1b1` | the two-stage toy, honest case | 0 | none | accepts, on this branch only |
+| `r20261111-183104-4239` | `53853a74769b` | `TokenSelect_v4{V=128}` whole, #8914, #8940 and #9041's checks in | 0 | 1 | `second-read` alone |
+| `r20261111-183136-2269` | `53853a74769b` | inlined, `--unlinked`, the same | 0 | 1 | `second-wires` alone |
+| `r20261111-183150-26ea` | `53853a74769b` | the toy, honest case, the same | 0 | none | accepts, on this branch only |
+| `r20261111-183339-5bd5` | `53853a74769b` | inlined, linked | 1 | 1 | the command refuses: no wires (stop 7) |
+| `r20261111-183930-735b` | `d5c0d13ee32a` | `TokenSelect_v4{V=128}` whole, sessions behind the ZK server | 0 | 1 | `second-read` alone |
+| `r20261111-191247-a31c` | `0fb9019293e3` | `TokenSelect_v4{V=128}` whole, `9f1d7f59da75` merged | 0 | 1 | `second-read` alone |
+| `r20261111-191318-f8a7` | `0fb9019293e3` | inlined, `--unlinked`, the same | 0 | 1 | `second-wires` alone |
+| `r20261111-191213-7228` | `0fb9019293e3` | `TokenSelectUnits_v1{V=4096,K=2}` inlined | 1 | 1 | `flock-verify`: one position a table row (stop 5) |
+| `r20261111-192333-4ab8` | `f87131e0b9c4` | the same, with the probe | 1 | 1 | `flock-verify`: two ports of one domain (stop 9) |
+| `r20261111-193238-0543` | `f87131e0b9c4` | `TokenSelectUnits_v1{V=4096,K=1}` inlined, with the probe | 0 | 1 | all six Lean verdicts hold; `second-read` alone, on the return (stop 1) |
+
+---
+
+**Text for VLLM-339 ends here.**
+
+**Next:** the two answers of your 20:01Z section by 21:15Z; then nothing is running. A run of `GreedySelect_v1` at a small K needs `interior_rows.pieces` and the stand-in serve to know its units, which is not on any branch; say if you want me to write that on my branch.
