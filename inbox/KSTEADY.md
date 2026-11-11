@@ -1278,6 +1278,6 @@ The two probes of `labelled_rows` over the real record that printed nothing are 
 minutes) and `r20261111-152453-9ade` (on `vy-nebius-cpu-2`, at `c5b35e191648`, cancelled after 32), both rc
 143, cancelled by hand. Each is `cd benchmarks/harness && uv run python - <<PY ...` under a check slot: read
 their inputs for the exact probe (`research inspect`, the run's `inputs/`), and say in B5's report how long
-your own read of the real record took at 15:5xZ and why theirs did not end (the same call, or another; a
+your own read of the real record took (the one before your 15:50Z summary) and why theirs did not end (the same call, or another; a
 store walk with no cache; a credential a check slot lacks). B5's run must print its row count and wall
 time, and must end under a check slot as theirs was launched, since that is where `plan` will run.
