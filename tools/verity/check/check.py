@@ -39,7 +39,7 @@ after-landing run on `checked`'s tip.  It reports each step's real verdict; what
                                                             and in the run's own clone of the shipped tree (`--cwd clone`);
                                                             --priority takes the next free slot ahead of waiting lane checks,
                                                             and one of TRAIN_GB or more when it runs pytest, lean-suites or
-                                                            circuit-check (AUDIT_TRAIN_GB beside the Lean audit)
+                                                            circuit-check
                                                             (`train_gb`: a machine without one is skipped or refused, exit 75);
                                                             --agreement sends the upstream build whatever the commit changes
                                                             (a train that changes a guarantee elsewhere: `train.sh`);
@@ -384,23 +384,16 @@ SLOT_WRAP = ["python3", "tools/verity/check/slot.py", "--"]
 #: slots' mem=. In a lane slot every parallel suite gets one test worker, the one-process suites share one process and circuit-check
 #: runs one target at a time: two to four times a train slot's wall time
 TRAIN_GB = 200
-#: the least slot memory when the Lean audit runs in the same scope as one of those steps (all of a check, or a shard holding
-#: both): a cold audit's page cache fills what the others leave
-AUDIT_TRAIN_GB = 300
 #: the steps that need a train slot's memory
 TRAIN_STEPS = ("pytest", "lean-suites", "circuit-check")
 
 
 def train_gb(priority: bool, pool: str | None, parts: list[str] | None, combining: bool) -> int | None:
-    """The slot memory a recorded check must have: a train's (`--priority`, outside a pool) that runs pytest, lean-suites or
-    circuit-check, all of a check (``parts`` None) or a shard or after-landing run holding one, `AUDIT_TRAIN_GB` when the Lean
-    audit runs beside them and `TRAIN_GB` when it doesn't; else None."""
+    """The slot memory a recorded check must have (`TRAIN_GB`): a train's (`--priority`, outside a pool) that runs pytest,
+    lean-suites or circuit-check, all of a check (``parts`` None) or a shard or after-landing run holding one; else None."""
     if not priority or pool is not None or combining:
         return None
-    steps = None if parts is None else {p.partition(":")[0] for p in parts}
-    if steps is None or "lean-audit" in steps and not steps.isdisjoint(TRAIN_STEPS):
-        return AUDIT_TRAIN_GB
-    return TRAIN_GB if not steps.isdisjoint(TRAIN_STEPS) else None
+    return TRAIN_GB if parts is None or any(p.partition(":")[0] in TRAIN_STEPS for p in parts) else None
 
 
 def slot_wrap(priority: bool = False, twin: str | None = None) -> list[str]:
