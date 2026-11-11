@@ -1,4 +1,4 @@
-"""warden-serve: the active warden (`verity.core.protocols.certifier.warden`) on one host, a relay in front of any TCP
+"""warden-serve: the active warden (`verity.protocols.certifier.verifier.warden`) on one host, a relay in front of any TCP
 server, and the offline check of what it published.
 
 **Topology.** Each client connection reaches the network certifier's listener. The network certifier opens one
@@ -23,14 +23,14 @@ its own, which it never reads; `warden.json` keeps its last line, the lost relea
 
 **What it can't enforce here.**
 - Run directly, the network certifier runs on the server's host (`trusted-host` stands for the auditor's host). The
-  gate's `warden-rehearse` (`benchmarks/live_challenger/auditor.py`) runs it on the auditor's host instead, the server
+  gate's `warden-rehearse` (`verity/composite/device/live_challenger/auditor.py`) runs it on the auditor's host instead, the server
   reached through an ssh tunnel to the peer's loopback. Either way the server's host can reach anyone by any other
   route, which nothing here sees.
 - TLS is not terminated: both legs are plain TCP.
 - The rehearsal's client is on the same host, so its link is loopback, and its arrival times are read on the network
   certifier's host clock (`origin_unix`).
 - The keys are LMS at H = `cs.HEIGHT` (2^10 one-time keys) unless `--height` says otherwise, where the deployed key's
-  is H = 20 (the auditor gate's default, `benchmarks/live_challenger/auditor.py`).
+  is H = 20 (the auditor gate's default, `verity/composite/device/live_challenger/auditor.py`).
 
 **Traffic** (`traffic`, `varied_traffic`): varied, as `certifier_serve`'s: Poisson arrivals at `--rate` a second,
 prompts of 16–1024 tokens (log-uniform; words at 0.75 a token, so approximately), `max_tokens` of 16 … `--max-tokens`
@@ -54,12 +54,13 @@ loop's period of requests a group, as the gate's `warden-rehearse --scan --promp
     python warden_serve.py fake --listen HOST:PORT [--token-ms 20] [--id-payload P]
     python warden_serve.py serve --upstream HOST:PORT --listen HOST:PORT --out DIR --key KEYDIR --session HEX
         --windows N [--start-in 5] [--load-heads FILE] [--paced-ms 50] [--watermark] [schedule] [--egress id|bytes]
+        [--max-tokens-cap N]
     python warden_serve.py client --deployment DIR/deployment.json --traffic TRAFFIC.json --out DIR
     python warden_serve.py check --run DIR
     python warden_serve.py rehearse (--upstream HOST:PORT | --fake) --out DIR [--requests 100] [--temperature T]
         [--top-p P] [--ids [--prompts FILE [--window-per-group]]] [--paced-ms 50] [--watermark] [--load-store DIR --load-sinks HOST:PORT,...
         --load-program HEX [--load-shape h200|tiny] [--load-workers N] [--load-ready-s 900]] [schedule]
-        [--egress id|bytes]
+        [--egress id|bytes] [--max-tokens-cap N]
 
 - `serve` writes `deployment.json` (the network certifier's public key, the session, the schedule's parameters and their
   digest, the origin, the listener), runs the network certifier for `--windows` windows, each bucket released by its
@@ -137,12 +138,12 @@ import active_replay as ar
 import certifier_serve as cs
 import load_relay as lr
 import stall_probe
-from verity.core.protocols.certifier import io_tie as IT, warden_rows as WR
-from verity.core.protocols.certifier.active import DATA, PAD, id_request
-from verity.core.protocols.certifier.certificate import CertifiedRecord, Direction, Issuer, LmsKey, record_head
-from verity.core.protocols.certifier.grid import GridParams, Record, Status, row_count
-from verity.core.protocols.certifier.release import WATERMARK_PATH
-from verity.core.protocols.certifier.warden import (EGRESS_FORMS, END, FAIL, INTEGER_FIELDS, REFUSED, Shim, Warden,
+from verity.protocols.certifier.verifier import io_tie as IT, warden_rows as WR
+from verity.protocols.certifier.verifier.active import DATA, PAD, id_request
+from verity.protocols.certifier.verifier.certificate import CertifiedRecord, Direction, Issuer, LmsKey, record_head
+from verity.protocols.certifier.verifier.grid import GridParams, Record, Status, row_count
+from verity.protocols.certifier.verifier.release import WATERMARK_PATH
+from verity.protocols.certifier.verifier.warden import (EGRESS_FORMS, END, FAIL, INTEGER_FIELDS, REFUSED, Shim, Warden,
                                                     WardenParams, audit, cells)
 
 HERE = Path(__file__).resolve().parent
@@ -1085,15 +1086,20 @@ def schedule_flags(q: argparse.ArgumentParser, egress: str | None) -> None:
                    help="the egress form (warden's \"The egress form\"): id, the egress record's, which the period "
                         "check takes, or bytes, any server's bytes, a rehearsal's relay of another form (default: "
                         + (egress or "id with --ids, else bytes") + ")")
+    q.add_argument("--max-tokens-cap", type=int, default=None,
+                   help="the response cap (warden's \"The response cap\"), in the id form: a request whose max_tokens "
+                        "exceeds it, or doesn't parse, is refused (cap) and every response is held to its request's "
+                        "(default: none)")
 
 
 def _params(args) -> WardenParams:
     egress = args.egress or ("id" if getattr(args, "ids", False) else "bytes")
-    return WardenParams(**{name: getattr(args, name) for name in INTEGER_FIELDS}, egress=egress)
+    return WardenParams(**{name: getattr(args, name) for name in INTEGER_FIELDS}, egress=egress,
+                        max_tokens_cap=getattr(args, "max_tokens_cap", None))
 
 
 def _flags(args) -> list[str]:
-    return [x for k, v in asdict(_params(args)).items() for x in (f"--{k.replace('_', '-')}", str(v))]
+    return [x for k, v in asdict(_params(args)).items() if v is not None for x in (f"--{k.replace('_', '-')}", str(v))]
 
 
 def await_model(url: str, seconds: float, poll: float = 5.0) -> str:

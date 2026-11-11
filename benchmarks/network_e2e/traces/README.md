@@ -1,11 +1,12 @@
 # vLLM scheduler traces under varied traffic
 
 Real vLLM V1 scheduler traces for network certification's advice: what serving made unpredictable, step by step, under
-Poisson traffic. Plain vLLM's OpenAI server on one RTX PRO 6000, with the integration's batch-invariant eager engine
-(bi-eager), or on a whole 8-GPU H200 node at TP8. `corpus.MODELS` lists the models: `llama32_1b` (unsloth/Llama-3.2-1B,
-bf16), `llama31_8b_int8` (`verity-int8/Llama-3.1-8B-INT8` with the int8_exact linears, `--quantization verity_int8`)
-and `glm53` (GLM-5.3, block-FP8, at TP8 with vLLM's own kernels, at a rate given with `--rate`). A request stops on the
-checkpoint's end-of-text ids (`corpus.stop_ids`), which the corpus's meta.json records as `eos_token_ids`.
+Poisson traffic. Plain vLLM's OpenAI server on one GPU (an RTX PRO 6000 or an H200), with the integration's
+batch-invariant eager engine (bi-eager) and FlashAttention 2 (`corpus.FA2`), or on a whole 8-GPU H200 node at TP8.
+`corpus.MODELS` lists the models: `llama32_1b` (unsloth/Llama-3.2-1B, bf16), `llama31_8b_int8`
+(`verity-int8/Llama-3.1-8B-INT8` with the int8_exact linears, `--quantization verity_int8`) and `glm53` (GLM-5.3,
+block-FP8, at TP8 with vLLM's own kernels, at a rate given with `--rate`). A request stops on the checkpoint's
+end-of-text ids (`corpus.stop_ids`), which the corpus's meta.json records as `eos_token_ids`.
 
 - `vllm_trace_plugin.py`: a vLLM general plugin. In the engine core it wraps the scheduler's `add_request`, `schedule`,
   `update_from_output` and `_free_request`, and appends each request handed to the scheduler, each step's scheduled
@@ -30,6 +31,10 @@ checkpoint's end-of-text ids (`corpus.stop_ids`), which the corpus's meta.json r
   of waiting requests, random prefill splits, and prefix-cache hits refused at random or cut to one KV page
   (`VERITY_ADV_CACHE`). It records its choices beside the tracer's files. `corpus.HOSTILE`'s traces serve heavy's load
   under the honest scheduler and under hostile ones, which tests whether a request's outputs depend on its batch-mates.
+- `corpus.CUT`'s traces serve honest's server and load with the carried pool's cut at every window edge
+  (`verity_vllm.pipeline.cut_plugin`, `VERITY_CUT`), every so many steps or seconds. `corpus.py compare` against
+  `honest` says whether a cut moved any request's output ids, and each edge's record (`raw/cut.PID.jsonl`) its hold,
+  its cut set and its time.
 - `corpus.WARDEN`'s traces serve heavy's and small KV's loads through the network certifier as a relay
   (`benchmarks/network_traces/warden_serve.py serve`, a process beside the server, not on the auditor host). The client
   speaks cells through the relay's shim. `summarize` checks what the relay published, and writes each relay trace

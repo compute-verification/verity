@@ -61,7 +61,7 @@ from typing import Any
 
 HERE = Path(__file__).resolve().parent
 ROOT = HERE.parents[1]
-sys.path.insert(0, str(ROOT / "tools" / "config"))
+sys.path.insert(0, str(ROOT / "verity" / "configuration" / "config"))
 sys.path.append(str(ROOT))
 import serve_tax as S  # noqa: E402 (beside this file)
 import tp_edge as E  # noqa: E402
@@ -132,9 +132,9 @@ def sampling_params(sampling: Mapping[str, Any], logprobs: int | None = None) ->
                           detokenize=False, output_kind=RequestOutputKind.DELTA)
 
 
-def edge_site(site: Path) -> Path:
-    """`serve_tax.plugin_site`'s directory with `tp_edge.register` declared beside `servetax_plugin.register`."""
-    S.plugin_site(site, tick=False)
+def edge_site(site: Path, arm: S.Arm) -> Path:
+    """`serve_tax.plugin_site`'s directory for ``arm`` with `tp_edge.register` declared beside the arm's plugins."""
+    S.plugin_site(site, arm)
     d = site / "verity_tp_edge-0.0.dist-info"
     d.mkdir(parents=True, exist_ok=True)
     (d / "METADATA").write_text("Metadata-Version: 2.1\nName: verity-tp-edge\nVersion: 0.0\n")
@@ -202,7 +202,7 @@ def served_argv(a: argparse.Namespace, checkpoint: Path, port: int) -> list[str]
 def preflight(a: argparse.Namespace) -> int:
     """Before any engine starts: the served argv parses as `restore` parses it, and every name `restore` reads
     imports."""
-    sys.path.insert(0, str(ROOT / "integrations/vllm"))
+    sys.path.insert(0, str(ROOT / "adapters/vllm"))
     from verity_vllm.engine.hooks import Hooks  # noqa: F401
     from verity_vllm.engine.step_trace import StepTrace  # noqa: F401
     from vllm.config import VllmConfig
@@ -242,7 +242,7 @@ def serve(a: argparse.Namespace) -> int:
     plan_file = out / "plan.jsonl"
     plan_file.write_text("".join(json.dumps(r, separators=(",", ":")) + "\n" for r in plan))
     arm = S.ARMS["record"]
-    site = edge_site(scratch / ".site")
+    site = edge_site(scratch / ".site", arm)
     port = S.corpus().free_port()
     argv = served_argv(a, checkpoint, port)
     srv = out / "server"
@@ -597,7 +597,7 @@ def restore(a: argparse.Namespace) -> int:
     e1, e2 = meta["edges"][0], meta["edges"][1]
     edge1, edge2 = Path(e1["dir"]), Path(e2["dir"])
     rec1, rec2 = (json.loads((d / "edge.json").read_text()) for d in (edge1, edge2))
-    sys.path.insert(0, str(ROOT / "integrations/vllm"))
+    sys.path.insert(0, str(ROOT / "adapters/vllm"))
     os.environ.update(PINS | {"VLLM_ENABLE_V1_MULTIPROCESSING": "0", AUTOTUNE_ENV: str(scratch / "autotune"),
                               "PYTHONPATH": os.pathsep.join(dict.fromkeys([str(HERE), *filter(None, sys.path)]))})
     recs = served_trace(served)

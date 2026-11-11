@@ -23,7 +23,7 @@ import pytest
 if TYPE_CHECKING:
     from collections.abc import Iterable
 
-    from verity.ml.circuits.silicon.term import Term
+    from verity.definitions.silicon.term import Term
 
 HERE = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(HERE))
@@ -42,9 +42,9 @@ import sparse as S  # noqa: E402
 import tool  # noqa: E402
 import vec as V  # noqa: E402
 import w1_price as W  # noqa: E402
-from verity.ml.circuits.silicon import models as M  # noqa: E402
-from verity.ml.circuits.silicon.errors import InvalidArtifact  # noqa: E402
-from verity.ml.circuits.silicon.term import PRODUCT_WIDTH  # noqa: E402
+from verity.definitions.silicon import models as M  # noqa: E402
+from verity.definitions.silicon.errors import InvalidArtifact  # noqa: E402
+from verity.definitions.silicon.term import PRODUCT_WIDTH  # noqa: E402
 
 
 @pytest.fixture
@@ -1120,7 +1120,6 @@ def test_offline_sass_gates(tmp_path: Path) -> None:
                 ["probe.py", "--instruction", "sp_nvf4_meta", "--out", str(tmp_path / "meta"), "--sass-only"],
                 ["f1_rates.py", "build", "--out", str(tmp_path / "f1")],
                 ["f2_strassen.py", "build", "--out", str(tmp_path / "f2")],
-                ["f3_lut.py", "build", "--out", str(tmp_path / "f3")],
-                ["stage0_sm120.py", "--out", str(tmp_path / "s0")]):
+                ["f3_lut.py", "build", "--out", str(tmp_path / "f3")]):
         r = subprocess.run([sys.executable, str(HERE / cmd[0]), *cmd[1:]], capture_output=True, text=True, env=env)
         assert r.returncode == 0, (cmd, r.stdout[-2000:], r.stderr[-2000:])

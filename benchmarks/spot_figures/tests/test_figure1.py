@@ -10,7 +10,7 @@ import cards
 import figure1 as f
 import pytest
 from render import _fit, _lines, _zeros, appendix_stem, render, render_appendix, stem
-from verity.core.protocols.spot.optimize import Cell
+from verity.protocols.spot.optimize import Cell
 
 SCOPES = ("world year", "datacenter week")
 #: the designs every bit charged, which plan in about a second; the capped ones take seconds a point
@@ -283,7 +283,8 @@ def test_lean_two_sends_the_planners_design_in_each_form(monkeypatch):
     for served, union, form in ((None, False, "sets"), (80.0, False, "capped"), (80.0, True, "patterns")):
         seen.clear()
         assert f.lean_two(cells, 4, row, .01, served, union) == want
-        assert seen == [f.plancheck.two([Cell(3, 16), Cell(1, 64)], {0: 1}, 4, .5, .01, served, union, 2.0)]
+        assert seen == [f.plancheck.two([Cell(3, 16), Cell(1, 64)], {0: 1}, 4, .5, .01, served, union, 2.0,
+                                        fanout=f.FANOUT)]
         assert seen[0]["form"] == form
     monkeypatch.setattr(f.plancheck, "check", lambda ds: [(None, Fraction(0))])
     with pytest.raises(f.plancheck.LeanError, match="refuses the planner's two-stage point"):
@@ -327,7 +328,7 @@ def test_a_two_stage_point_is_what_lean_certifies_and_a_tampered_design_is_refus
         assert (got["lean"], got["planner"], got["theta"]) == (True, row["bound"], float(LEAN_THETA)), design
         assert seen == [f.plancheck.two(f.split_cells(m.cells, row["merged"]), row["k"], m.replay.replay_blocks,
                                         row["q"], m.delta, None if form is None else m.served, form == "patterns",
-                                        row["theta"])]
+                                        row["theta"], fanout=f.FANOUT)]
         assert (seen[0]["form"], seen[0]["S"]) == forms[form], design
     seen.clear()
     assert f.lean_point(m, "two-stage", p | {"capped": True}) == p | {"capped": True, "lean": None,
@@ -365,6 +366,35 @@ def test_a_two_stage_series_carries_lean_and_no_lean_plans_without_it(monkeypatc
     assert out["lean"] is None
     for s in out["panels"]["exfiltration"]["series"] + out["panels"]["skipped_work"]["series"]:
         assert not {"lean", "planner", "theta"} & set(s), s["design"]
+
+
+def lean_any(designs: list[dict]) -> list:
+    """A stub of Lean's checker whose answer is a function of the design alone: a leak design's count and a third, a
+    work design passing, a two-stage point seven times its θ, at its θ."""
+    return [Fraction(3 * int(d["count"]) + 1, 3) if d["kind"] == "leak" else True if d["kind"] == "work"
+            else (7 * Fraction(d["theta"]), Fraction(d["theta"])) for d in designs]
+
+
+def test_points_checked_on_processes_are_byte_for_byte_one_processs(monkeypatch):
+    """With Lean on, Figure 1's JSON on processes is byte for byte its JSON on one: each point is one job
+    (`checked_point`) that reads only its own inputs.  The checker and the two-stage planner are stubbed, each answer
+    a function of its point's proof overhead, so a point out of place would show, and the forked processes inherit
+    the stubs (`processes`)."""
+    monkeypatch.setattr(f.plancheck, "executable", lambda exe: None)
+    monkeypatch.setattr(f.plancheck, "check", lean_any)
+    monkeypatch.setattr(f, "two_stage", lambda m, design, budget: {
+        "merged": 1 << 18, "k": {0: 1}, "q": .5, "theta": m.dot.prove, "bound": 1 / m.dot.prove})
+
+    def run(workers: int) -> str:
+        out = f.run("GLM-5.3", 2, ("world year",), designs=("two-stage", "one-stage"), workers=workers)
+        return json.dumps(out, indent=1, allow_nan=False)
+
+    one = run(1)
+    assert run(3) == one
+    series = [s for p in ("exfiltration", "skipped_work") for s in json.loads(one)["panels"][p]["series"]]
+    assert {s["design"] for s in series} == {"two-stage", "one-stage"}
+    assert all(True in s["lean"] and len(set(s["y"])) > 1 for s in series if s["design"] == "two-stage")
+    assert any(True in s["lean"] for s in series if s["design"] == "one-stage")
 
 
 def test_an_incorrect_block_leaks_the_widest_blocks_output(world):

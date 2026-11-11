@@ -18,7 +18,7 @@ PHASES=${PHASES:-serve replay1 replay2 replay_plain alone}
 LEASE_MIN=${LEASE_MIN:-60}
 DISK_FLOOR_GB=${DISK_FLOOR_GB:-50}
 INODE_FLOOR=${INODE_FLOOR:-100000}
-export PYTHONHASHSEED=0 HF_HUB_OFFLINE=1 PYTHONPATH="$root/integrations/vllm${PYTHONPATH:+:$PYTHONPATH}"
+export PYTHONHASHSEED=0 HF_HUB_OFFLINE=1 PYTHONPATH="$root/adapters/vllm${PYTHONPATH:+:$PYTHONPATH}"
 
 floor() {   # refuse unless the filesystem holding WORK keeps its floors after NEED_GB more
   local need=$1 gb inodes

@@ -255,6 +255,30 @@ def test_every_setting_of_a_lakefile_is_in_the_key_but_the_lists_of_what_a_build
         "a path dependency's setting moves its modules' keys, and through what they read their importers'"
 
 
+def test_where_a_required_package_is_is_in_no_key(tmp_path):
+    """A lakefile's `require` says which package and, by its `path`, where it is. Where decides nothing a compile reads
+    but that package's modules, which a key reads by their outputs' digests, each under a path from its own package's
+    directory: a required package moved, with the `path` and the manifest's `dir` rewritten, rekeys no module. Which
+    packages a lakefile requires, and each other field of a `require`, still rekeys the package's modules."""
+    req = '\n[[require]]\nname = "d"\npath = "../d"\n'
+    root = _workspace(tmp_path, {"r/lakefile.toml": LIBS + req})
+    keys = _built(MK.keys(root))
+    mine = {"R", "R.A"}
+    assert set(keys) == mine | {"D.X"}
+    assert _changed(root, keys, "r/lakefile.toml", LIBS + req.replace("../d", "../r/../d")) == set()
+    fetched = '\n[[require]]\nname = "mathlib"\ngit = "https://example.org/mathlib"\nrev = "abc"\n'
+    for other in (LIBS, LIBS + req.replace('name = "d"', 'name = "e"'), LIBS + req + fetched,
+                  LIBS + req + 'scope = "s"\n', LIBS + req + 'somethingNobodyThoughtOf = 1\n'):
+        assert _changed(root, keys, "r/lakefile.toml", other) == mine, other
+    with_fetched = _built(MK.keys(_workspace(tmp_path, {"r/lakefile.toml": LIBS + req + fetched})))
+    assert _changed(root, with_fetched, "r/lakefile.toml", LIBS + req + fetched.replace("abc", "abd")) == mine
+    (root / "lakefile.toml").write_text(LIBS + req.replace("../d", "../moved/to/d"))
+    (root / "lake-manifest.json").write_text(_manifest(root, lambda doc: doc["packages"][0].update(dir="../moved/to/d")))
+    (tmp_path / "moved" / "to").mkdir(parents=True)
+    shutil.move(tmp_path / "d", tmp_path / "moved" / "to" / "d")
+    assert _built(MK.keys(root)) == keys
+
+
 def test_a_module_that_moves_to_a_library_with_other_options_has_another_key(tmp_path):
     """A library sets its modules' options, and `roots` say which library owns a module: with `roots` out of the key, the
     key names the owner. Lake compiles a module that several targets of its package own with the settings of whichever
@@ -293,8 +317,8 @@ def _manifest(root: Path, change) -> str:
 def test_the_env_is_the_toolchain_and_every_fetched_entry_of_the_root_s_manifest(tmp_path):
     """Of the manifest a key reads every fetched package's entry, whole but `inherited`, and every other field but the
     root's `name`, its `packagesDir` and the entries of the packages required by path, whose directories `workspace`
-    reads: a field this reading has never met moves every key, and so does a fetched package added to the root, which
-    could provide a module a dependency imports."""
+    reads: a field this reading has never met moves every key, and so does a fetched package added to the root, also
+    the key of a module of `d`, which has no manifest to say what it fetches."""
     root = _workspace(tmp_path, {"r/lake-manifest.json": json.dumps({
         "version": "1.2.0", "name": "r", "packagesDir": ".lake/packages", "packages": [
             {"type": "path", "name": "d", "dir": "../d", "inherited": False, "configFile": "lakefile.toml"},
@@ -321,23 +345,69 @@ def test_the_env_is_the_toolchain_and_every_fetched_entry_of_the_root_s_manifest
     assert changed(lambda d: d["packages"][2].update(type="another kind")) == set(keys)
 
 
-def test_a_module_has_one_key_under_every_root_with_the_same_fetched_packages(tmp_path):
-    """A key's paths start at the module's own package, and its env is the root's toolchain and fetched entries: a path
-    dependency's module has one key under each root that fetches the same packages, the dependency itself included, and
-    another under a root that fetches one more."""
-    root = _workspace(tmp_path)
-    fetched = {"type": "git", "name": "mathlib", "rev": "abc"}
-    _write(tmp_path, {"d/lake-manifest.json": json.dumps({"name": "d", "packages": [fetched | {"inherited": False}]}),
-                      "d/lean-toolchain": TOOLCHAIN,
-                      "q/lakefile.toml": 'name = "q"\ndefaultTargets = ["Q"]\n\n[[lean_lib]]\nname = "Q"\n',
+def _fetching(tmp: Path) -> tuple[Path, dict]:
+    """`_workspace`, where `d` says what it fetches (`mathlib`) and `r` fetches `arklib` too; and `mathlib`'s entry."""
+    mathlib = {"type": "git", "name": "mathlib", "rev": "abc"}
+    root = _workspace(tmp, {
+        "r/lake-manifest.json": json.dumps({"name": "r", "packages": [
+            {"type": "path", "name": "d", "dir": "../d"}, mathlib, {"type": "git", "name": "arklib", "rev": "1"}]}),
+        "d/lake-manifest.json": json.dumps({"name": "d", "packages": [mathlib | {"inherited": False}]}),
+        "d/lean-toolchain": TOOLCHAIN})
+    return root, mathlib
+
+
+def test_a_module_has_one_key_under_every_root_that_pins_what_its_package_fetches_alike(tmp_path):
+    """A key's paths start at the module's own package, and its env is the root's toolchain and the root's pins of the
+    packages the module's own package fetches: a path dependency's module has one key under the dependency itself and
+    under each root that pins those alike, whatever else the root fetches, another under a root that pins one of them
+    otherwise, and none under a root that doesn't pin one. The root's own modules read every pin of the root."""
+    root, mathlib = _fetching(tmp_path)
+    _write(tmp_path, {"q/lakefile.toml": 'name = "q"\ndefaultTargets = ["Q"]\n\n[[lean_lib]]\nname = "Q"\n',
                       "q/lake-manifest.json": json.dumps({"name": "q", "packagesDir": "p", "packages": [
-                          fetched | {"inherited": True}, {"type": "path", "name": "d", "dir": "../r/../d"}]}),
+                          mathlib | {"inherited": True}, {"type": "path", "name": "d", "dir": "../r/../d"}]}),
                       "q/lean-toolchain": TOOLCHAIN, "q/Q.lean": "import D.X\n"})
-    under = {r: _built(MK.keys(tmp_path / r, ["D.X"]))["D.X"] for r in ("r", "d", "q")}
-    assert under["r"] == under["d"] == under["q"]
-    (tmp_path / "q" / "lake-manifest.json").write_text(_manifest(tmp_path / "q", lambda d: d["packages"].append(
-        {"type": "git", "name": "arklib", "rev": "1"})))
-    assert _built(MK.keys(tmp_path / "q"))["D.X"] != under["r"]
+
+    def under(r: str, change=None) -> dict[str, str]:
+        if change is not None:
+            (tmp_path / r / "lake-manifest.json").write_text(_manifest(tmp_path / r, change))
+        return _built(MK.keys(tmp_path / r, ["D.X"]))
+
+    q, d = under("q"), under("d")["D.X"]
+    assert under("r")["D.X"] == d == q["D.X"], "r fetches arklib, which d doesn't"
+    more = under("q", lambda doc: doc["packages"].append({"type": "git", "name": "doc-gen4", "rev": "2"}))
+    assert more["D.X"] == d and more["Q"] != q["Q"]
+    assert under("q", lambda doc: doc["packages"][0].update(rev="abd"))["D.X"] != d
+    assert under("q", lambda doc: doc["packages"].pop(0)) == {}, "q pins no mathlib: its Q imports D.X, which has no key"
+    assert "pins no mathlib, which" in MK.env_parts(tmp_path / "q", tmp_path / "d")
+    assert under("d", lambda doc: doc["packages"][0].update(rev="abd"))["D.X"] != d, "d as its own root"
+    assert under("r")["D.X"] == d, "what d's manifest pins is not in a key under r, only which packages it names"
+
+
+def test_the_keys_of_a_root_s_own_modules_name_every_pin_of_the_root(tmp_path):
+    """The env of a root's own modules is the one every module of its workspace had before a path dependency's read
+    less: the root's toolchain and all its manifest pins, whatever the packages it requires by path fetch. So no entry
+    under a root's own module's key is left behind."""
+    root, mathlib = _fetching(tmp_path)
+    keyed = MK.keys(root)
+    whole = {"lean-toolchain": C.digest(TOOLCHAIN.encode()),
+             "fetched packages": _canon({"manifest": {}, "fetched": [{"type": "git", "name": "arklib", "rev": "1"}, mathlib]})}
+    own = {m: k for m, k in keyed.items() if k.package.name == "r"}
+    assert set(own) == {"R", "R.A"} and MK.env_parts(root) == MK.env_parts(root, root) == whole
+    assert {(k.env, tuple(k.parts.items())) for k in own.values()} == {(MK.workspace(root)[1], tuple(whole.items()))}
+    assert MK.workspace(root)[1] == C.env_digest(sorted(whole), whole)
+    less = whole | {"fetched packages": _canon({"manifest": {}, "fetched": [mathlib]})}
+    assert keyed["D.X"].parts == less and keyed["D.X"].env == C.env_digest(sorted(less), less)
+    assert MK.fetches(tmp_path / "d") == {"mathlib"} and MK.fetches(root) == {"mathlib", "arklib"}
+    for unread in ("{", "[]", '{"packages": 1}', '{"packages": ["mathlib"]}', '{"packages": [{"type": "git"}]}',
+                   '{"packages": [{"type": "git", "name": ["mathlib"]}]}', None):
+        if unread is None:
+            (tmp_path / "d" / "lake-manifest.json").unlink()
+        else:
+            (tmp_path / "d" / "lake-manifest.json").write_text(unread)
+        again = MK.keys(root)
+        assert {m: (k.task, k.env) for m, k in again.items() if m != "D.X"} == {m: (k.task, k.env) for m, k in own.items()}
+        assert isinstance(MK.fetches(tmp_path / "d"), str) and again["D.X"].parts == whole, \
+            f"a package whose manifest doesn't say what it fetches ({unread}): every pin of the root"
 
 
 def test_a_module_lake_could_read_otherwise_has_no_key(tmp_path):
@@ -474,7 +544,7 @@ def test_a_build_is_indexed_only_where_lake_read_its_header_as_the_parser_did(tm
     assert "and not ['D.X']" in MK.indexable("R", keyed, pkgs, owners)
     _setup(root, "R", "r", right | {"D.X": lib("r", "D.X")})
     assert MK.indexable("R", keyed, pkgs, owners) == "D.X is built in r, not d"
-    assert owners[str(lib("r", "D.X").parent)] == "r" and owners[str(mathlib.parent)] is None, "one lookup a directory"
+    assert owners["r", str(lib("r", "D.X").parent)] == "r" and owners["r", str(mathlib.parent)] is None, "one lookup a directory"
     _setup(root, "R", "d", right)
     assert "setup.json names 'R' of 'd'" == MK.indexable("R", keyed, pkgs, owners)
 
@@ -509,6 +579,49 @@ def test_a_build_is_indexed_only_where_it_read_the_fetched_packages_as_its_root_
     assert MK.indexable("R", keyed, pkgs) == "/elan/lib/lean is in no root's fetched packages"
 
 
+def test_a_build_of_a_dependency_is_indexed_where_it_read_the_packages_the_dependency_fetches(tmp_path):
+    """A module of `d`, which fetches `mathlib`, has one key under `d` and under `r`, which fetches `arklib` too
+    (`_fetching`). `d`'s own build compiles it over `d`'s packages, and a build of `r` or of another root requiring `d`
+    over that root's: each is a compile of what the key under `r` names where the root it ran under has `r`'s
+    toolchain and pins `mathlib` as `r` does, whatever else `r` or that root fetches."""
+    root, mathlib = _fetching(tmp_path)
+    pkgs, keyed = MK.workspace(root)[0], MK.keys(root)
+    _write(tmp_path, {"d/D/X.lean": "import Mathlib.Logic.Basic\n"})
+
+    def read(under: str, entries: list[dict] | None = None, toolchain: str = TOOLCHAIN) -> str | None:
+        if entries is not None:
+            _write(tmp_path, {f"{under}/lake-manifest.json": json.dumps({"name": under, "packages": entries}),
+                              f"{under}/lean-toolchain": toolchain})
+        _setup(tmp_path / "d", "D.X", "d", {
+            "Mathlib.Logic.Basic": tmp_path / under / ".lake/packages/mathlib/.lake/build/lib/lean/Mathlib/Logic/Basic.olean"})
+        return MK.indexable("D.X", keyed, pkgs)
+
+    assert read("d") is None, "d's own build: it fetches no arklib, and D.X's key names none"
+    assert read("r") is None
+    assert read("p", [mathlib, {"type": "path", "name": "d", "dir": "../d"}, {"type": "git", "name": "other", "rev": "3"}]) is None
+    assert "pins mathlib otherwise than" in read("p", [mathlib | {"rev": "abd"}])
+    assert "has another toolchain than" in read("p", [mathlib], "leanprover/lean4:v4.35.0\n")
+    assert "pins mathlib otherwise than" in read("d", [mathlib | {"rev": "abd"}]), "d's tree at another pin than r's"
+    assert MK.keys(root)["D.X"].env == keyed["D.X"].env, "which r's key doesn't name: it reads r's pin"
+
+
+def test_a_compile_that_read_a_package_its_own_package_does_not_fetch_is_never_indexed(tmp_path):
+    """Under `r`, which fetches `arklib`, Lake would resolve an import of `d`'s module in `arklib`, which `d` doesn't
+    fetch. The module's key names `mathlib`'s pin alone, so no entry stands under it for a compile that read `arklib`,
+    wherever: it is refused, and one of `r`'s own modules that read the same directory is indexed."""
+    root, _ = _fetching(tmp_path)
+    _write(tmp_path, {"d/D/X.lean": "import ArkLib.Basic\n", "r/R/B.lean": "import ArkLib.Basic\n"})
+    pkgs, keyed, owners = MK.workspace(root)[0], MK.keys(root, ["R.B"]), {}
+    arklib = {"ArkLib.Basic": root / ".lake/packages/arklib/.lake/build/lib/lean/ArkLib/Basic.olean"}
+    assert "D.X" in keyed and keyed["D.X"].parts != keyed["R.B"].parts
+    _setup(root, "R.B", "r", arklib)
+    assert MK.indexable("R.B", keyed, pkgs, owners) is None
+    _setup(tmp_path / "d", "D.X", "d", arklib)
+    why = MK.indexable("D.X", keyed, pkgs, owners)
+    assert why == f"{tmp_path / 'd'} does not fetch arklib, which a compile read under {root}", "after R.B, over one owners"
+    assert MK.indexable("R.B", keyed, pkgs, owners) is None
+
+
 def test_a_directory_s_refusal_is_never_read_half_written_by_another_thread(tmp_path, monkeypatch):
     """`put` asks `indexable` of a build's modules on several threads over one ``owners``. While one thread reads the two
     manifests that refuse a directory, another asking of the same directory must not find it there as one the root
@@ -527,15 +640,15 @@ def test_a_directory_s_refusal_is_never_read_half_written_by_another_thread(tmp_
 
     class Owners(dict):
         def __contains__(self, d):
-            if threading.current_thread() is not first and "packages" in d:
+            if threading.current_thread() is not first and "packages" in d[1]:
                 looked.set()
             return super().__contains__(d)
 
-    def slow(root, here):
+    def slow(root, of, here):
         if threading.current_thread() is first:
             inside.set()
             looked.wait()
-        return pinned_as(root, here)
+        return pinned_as(root, of, here)
 
     monkeypatch.setattr(MK, "pinned_as", slow)
     owners, got = Owners(), []
@@ -544,7 +657,7 @@ def test_a_directory_s_refusal_is_never_read_half_written_by_another_thread(tmp_
         inside.wait()
         got.append(MK.indexable("R", keyed, pkgs, owners))
 
-    other = threading.Thread(target=second)
+    other = threading.Thread(target=second, daemon=True)
     other.start()
     got.append(MK.indexable("R", keyed, pkgs, owners))
     other.join()
@@ -756,6 +869,72 @@ def test_a_build_takes_the_trace_of_each_module_it_holds_in_a_version_the_cache_
     assert stage()["took"] == {} and traces["D.X"].exists() and traces["R"].exists() and other.exists()
     traces["R"].write_text('{"depHash": "3333')
     assert stage()["took"] == {} and not traces["R"].exists(), "a trace that isn't JSON goes: Lake takes it for none"
+
+
+def test_a_build_takes_no_trace_in_the_build_of_a_package_it_requires_by_path(tmp_path):
+    """`d`'s build is `d`'s: an audit of `d` seals its files, and other packages' builds and tests read them while `r` is
+    staged and built. A trace taken there would have `r`'s Lake compile or restore `D.X` over them. So staging `r`
+    leaves that build whole: on a cache that holds nothing for these keys, where `D.X`'s trace names a version the cache
+    lacks; on one that holds another version of it, where the trace names other artifacts than its entry; and with a
+    trace that isn't JSON. `r`'s own modules are settled as before: on the cold cache each is keyed on what the tree
+    holds of `D.X` and compiled."""
+    root = _workspace(tmp_path / "ws")
+    store = tmp_path / "store"
+    keyed = MK.keys(root, ["R.B"])
+    traces = {m: _held(keyed, m, files) for m, files in (("D.X", X), ("R.A", A), ("R", R), ("R.B", B))}
+    build = keyed["D.X"].package.build()
+    caches = iter(range(99))
+
+    def held() -> dict:
+        return {f: (f.stat().st_ino, f.stat().st_mtime_ns, f.read_bytes()) for f in build.rglob("*") if f.is_file()}
+
+    def took() -> dict:
+        why: dict = {}
+        MK.stage(store, root, ["R.B"], tmp_path / "cache" / str(next(caches)), report=why, settled=True)
+        return why["took"]
+
+    was = held()
+    assert took() == {MK.ABSENT: 3} and held() == was, "R.A, R and R.B lose their traces; D.X, which the cache lacks too, keeps its"
+    assert not any(traces[m].exists() for m in ("R.A", "R", "R.B"))
+    _stock(store, keyed, {"D.X": ("5" * 16, {"9" * 16 + ".olean": b"X'", "b" * 16 + ".ilean": b"x"})})
+    assert took() == {} and held() == was, "the cache holds another version of D.X than the tree"
+    traces["D.X"].write_text('{"depHash": "1111')
+    was = held()
+    assert took() == {} and held() == was, "a trace of d's that isn't JSON is d's build's to remove"
+
+
+def test_a_build_settles_the_build_of_a_path_dependency_its_run_does_not_audit(tmp_path):
+    """`d` is in the tree only as `r`'s path dependency, and its build there is a copy of a kept build that no build of
+    `d`'s own will settle. Left as it is, `D.X`, which the cache lacks, is never indexed, and every module of `r` that
+    loads it is recorded as one the cache could not index, in each build that takes such a copy. Named to the stage
+    step, `d`'s build is settled with `r`'s: `D.X` loses its trace where the cache lacks it or holds another version,
+    and keeps it where the cache holds what the tree does. The first build of a run that reaches a module there settles
+    it; a later one of the same run leaves it, since an earlier build has compiled it and the cache holds it only when
+    the run ends."""
+    root = _workspace(tmp_path / "ws")
+    d, store = (tmp_path / "ws" / "d").resolve(), tmp_path / "store"
+    keyed = MK.keys(root, ["R.B"])
+    held = {m: files for m, files in (("D.X", X), ("R.A", A), ("R", R), ("R.B", B))}
+    traces = {m: _held(keyed, m, files) for m, files in held.items()}
+    caches = iter(range(99))
+
+    def took(seen: set, also=(d,)) -> dict:
+        why: dict = {}
+        MK.stage(store, root, ["R.B"], tmp_path / "cache" / str(next(caches)), report=why, settled=True, also=also, seen=seen)
+        return why["took"]
+
+    run: set = set()
+    assert took(run) == {MK.ABSENT: 4} and not any(t.exists() for t in traces.values()), "D.X goes with r's three"
+    assert run == {(d, "D.X")}
+    traces = {m: _held(keyed, m, files) for m, files in held.items()}     # the run's first build compiled all four
+    assert took(run) == {MK.ABSENT: 3} and traces["D.X"].exists(), "a second build of the run leaves what the first settled"
+    _stock(store, keyed, {"D.X": ("1" * 16, X), "R.A": ("2" * 16, A), "R": ("3" * 16, R)})
+    traces = {m: _held(keyed, m, files) for m, files in held.items()}
+    assert took(set()) == {MK.ABSENT: 1} and traces["D.X"].exists(), "the cache holds D.X as the tree does; R.B it lacks"
+    traces["D.X"] = _held(keyed, "D.X", {"9" * 16 + ".olean": b"another X", "b" * 16 + ".ilean": b"x"})
+    assert took(set(), also=()) == {} and traces["D.X"].exists(), "not named: d's build stays whole"
+    assert took(set(), also=(root,)) == {} and traces["D.X"].exists(), "the root named is no path dependency"
+    assert took(set()) == {MK.REPLACED: 1} and not traces["D.X"].exists(), "another version than the cache's: Lake restores it"
 
 
 def test_a_module_above_one_that_is_compiled_keeps_its_trace_when_the_cache_holds_it_as_the_tree_does(tmp_path):

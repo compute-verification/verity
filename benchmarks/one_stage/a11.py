@@ -3,7 +3,7 @@ the one-stage audit A6 ran on stand-in coordinates: each Definition kind (family
 is a template, its units staged from the step's own values, sampled by the stratified sampling design in one audit, proved by M0 under
 ``--zk`` and held by the Lean verifier.
 
-    PYTHONPATH=<tree>:<tree>/verity/ml/flock/python:<tree>/integrations/vllm \\
+    PYTHONPATH=<tree>:<tree>/verity/protocols/flock/prover/python:<tree>/adapters/vllm \\
       python benchmarks/one_stage/a11.py --values DIR --kinds kinds.json --roles derive-report.json --bin flock-circuit \\
       --lean flock-verify --out DIR [--per-kind 8] [--steps 1,0] [--layers 0,3] [--k K]
 
@@ -70,14 +70,14 @@ import a0  # noqa: E402
 import a6  # noqa: E402
 import a11_kinds as K  # noqa: E402
 import r2_population as R2  # noqa: E402
-from verity.ml.circuits.codec import canonical_json, encode_program  # noqa: E402
-from verity.ml.circuits.defs import PrimitiveDefinition  # noqa: E402
-from verity.ml.circuits.evaluation.reference import evaluate_region  # noqa: E402
-from verity.ml.circuits.program import Program  # noqa: E402
-from verity.ml.circuits.refs import runs  # noqa: E402
+from verity.circuits.codec import canonical_json, encode_program  # noqa: E402
+from verity.circuits.defs import PrimitiveDefinition  # noqa: E402
+from verity.circuits.evaluation.reference import evaluate_region  # noqa: E402
+from verity.circuits.program import Program  # noqa: E402
+from verity.circuits.refs import runs  # noqa: E402
 from verity_flock import circuit as FC  # noqa: E402
 from verity_flock import class_statement as CS  # noqa: E402
-from verity.core.protocols.spot.one_stage import draw as D, partition as P, registration as R, verifier as V  # noqa: E402
+from verity.protocols.spot.verifier.one_stage import draw as D, partition as P, registration as R, verifier as V  # noqa: E402
 
 ROW = "glm53__fp8__h200__tp8__b1__i256__o32__mixed__greedy__eager"
 WINDOW_OF = ("GLM-5.3 TP8 B1 rank 0's step values: the Match capture's activation snapshots of row " + ROW
@@ -424,7 +424,7 @@ def _reaches(c, unit_id: str) -> bool:
 def _run_units(c, args: np.ndarray, unit_id: str, sink: list, n: int) -> np.ndarray:
     """`evaluation.bits._run`, keeping in ``sink`` the argument and return bits of instance 0's first ``n`` calls of
     ``unit_id``."""
-    from verity.ml.circuits.evaluation import bits as BS
+    from verity.circuits.evaluation import bits as BS
     words = args.shape[1]
     W = np.empty((c.size, words), dtype=np.uint64)
     W[0] = 0
@@ -472,8 +472,8 @@ def boolean_units(spec, unit, args: list[np.ndarray], n: int, full_gates: int) -
     of a parameter's word view is its word leaf j), its first ``n`` calls of ``unit`` with their argument and return bits, and
     the Call's returns as words (``call_out``, element j of the return's word view at word leaf j, as `call_twin` reads a
     word Call's)."""
-    from verity.ml.circuits import boolean as BL
-    from verity.ml.circuits.evaluation import bits as BS
+    from verity.circuits import boolean as BL
+    from verity.circuits.evaluation import bits as BS
     t0 = time.time()
     c = BS.compile(spec)
     cols = []
@@ -550,7 +550,7 @@ def pick(res, kind: str, unit_fam: str, steps: list[int], layers: set[int], unit
     or with ``boolean`` its Boolean version) and its unit: the deepest Definition of that one's chain in the probed unit's
     family. Calls of the probed specialization come first (the unit the table sized; prefill's attention, say, has one per
     prefix length), then by step preference."""
-    from verity.ml.definitions.boolean import boolean_version
+    from verity.definitions.boolean import boolean_version
     cands = []
     for m in res.instances:
         if K.family(m["spec"]) != kind or m["step"] not in steps:
@@ -630,25 +630,6 @@ def kind_values(res, store, vals, rec: dict, a) -> dict:
     return {"staged": True, "unit": acc["unit"], "spec": acc["spec"], "name": c0["name"], "step": c0["step"], "event": c0["event"],
             "calls": acc["calls"], "rows_spec": acc["rows_spec"], "rows": rows, "outs": outs, "n": len(acc["in"]), "twin": twin,
             "eval": acc["evals"][0], "skipped_calls": why[-3:], **({"boolean": rec["boolean"]} if boolean else {})}
-
-
-def templated(st, d: Path, tmpl_unit_bin: str | None) -> dict:
-    """A templated statement's reads beyond a flat one's (none for a flat one): `verify`'s statement, and the prover's unit
-    rows at their positions (``d/unit.placed``, `--tmpl-unit`), which `flock-tmpl-unit` places from the circuit's template
-    section and META's layout mode (``d/unit.tmpl``, ``d/unit.layout``)."""
-    if st.meta.get("statement") != FC.TMPL_STATEMENT:
-        return {}
-    if not tmpl_unit_bin:
-        raise SystemExit("--layout stages a templated statement, whose prover reads --tmpl-unit-bin's placed unit")
-    placed = d / "unit.placed"
-    if not placed.exists():
-        d.mkdir(parents=True, exist_ok=True)
-        (d / "unit.tmpl").write_text(FC.template_of(st.text))
-        (d / "unit.layout").write_text(st.meta["layout"])
-        p = a0.run([tmpl_unit_bin, str(d / "unit.tmpl"), "--layout", st.meta["layout"], "--out", str(placed)], d / "tmpl-unit.log")
-        if p.returncode:
-            raise SystemExit(f"flock-tmpl-unit: exit {p.returncode} ({d / 'tmpl-unit.log'})")
-    return {"statement": FC.TMPL_STATEMENT, "tmpl_unit": placed}
 
 
 def stage_tampered(st, rows: dict, out_dir: Path, salt_key: bytes, indices, set_name: str) -> dict:
@@ -732,15 +713,15 @@ def save_values(d: Path, staged: dict, rows_of_kind: dict, weights_notes, a) -> 
 #: also registers its Boolean form for M0's lowering (`ir_lower._boolean_build`), which finds no other in a fresh process.
 # TODO: once its `tail_pieces.FAMILIES` lowers `GatherE4m3x{V}_v1` and `MoeSelectBf16x{E}_v1` in a fresh process, lower
 # through those pieces and keep this only for the decoded units' builders.
-LAZY = {r"GatherE4m3x(\d+)_v2": ("verity.ml.definitions.registry.boolean_fp8_moe", "gather_e4m3"),
-        r"GatherF32x(\d+)_v2": ("verity.ml.definitions.registry.boolean_gather", "gather_f32")}
+LAZY = {r"GatherE4m3x(\d+)_v2": ("verity.definitions.registry.boolean_fp8_moe", "gather_e4m3"),
+        r"GatherF32x(\d+)_v2": ("verity.definitions.registry.boolean_gather", "gather_f32")}
 
 
 def live(fn, registry):
     """A decoded Definition as the registry's own: a specialization bound again on its composite (the decoded one has no
     builder, which `Program` and the stager's binding need), function-valued statics likewise; one of `LAZY` built again."""
     import importlib
-    from verity.ml.circuits.defs import FunctionDefinition, SpecializedDefinition
+    from verity.circuits.defs import FunctionDefinition, SpecializedDefinition
     if not isinstance(fn, SpecializedDefinition):
         return fn
     name = f"{fn.defn.name}_v{fn.defn.version}"
@@ -763,8 +744,8 @@ def load_values(d: Path, lowers: list[str], per_kind: int | None = None) -> tupl
     """`save_values`' directory read back: the staged kinds among ``lowers``, each unit decoded from ``units.json`` and bound
     again from the registry, refused unless it encodes as the decoded one; ``per_kind``: each kind's first that many units
     (a kind saved with more loads only those, and says so)."""
-    from verity.ml.circuits.codec import decode_program
-    from verity.ml.definitions.registry.catalog import load as load_registry
+    from verity.circuits.codec import decode_program
+    from verity.definitions.registry.catalog import load as load_registry
     registry = load_registry()[0]
     doc = json.loads((d / "values.json").read_text())
     defs = {x.id: x for x in decode_program(json.loads((d / "units.json").read_text()), registry).defs.values()}
@@ -826,7 +807,7 @@ def main() -> int:
     summary: dict = {"row": ROW, "rank": 0, "steps": a.steps, "layers": a.layers, "per_kind": a.per_kind}
     # M0 lowers a word primitive by the Boolean Definition registered for it (`ir_lower._boolean_build`), some of which only
     # the integration's registry modules register (U32And_v1's); a11_kinds' decode loads them all the same way
-    from verity.ml.definitions.registry.catalog import load as load_registry
+    from verity.definitions.registry.catalog import load as load_registry
     summary["registry_errors"] = load_registry()[1]
 
     table = json.loads(Path(a.kinds).read_text())
@@ -902,7 +883,7 @@ def main() -> int:
                                circuit=sdir / "circuit.txt", bind=bound)
         t_build = round(time.time() - t0, 1)
         cap = a6.chunk_cap(st.meta)
-        form = templated(st, sdir, a.tmpl_unit_bin)
+        form = a0.templated(st, sdir, a.tmpl_unit_bin)
         salt_key = hashlib.sha256(f"verity/one-stage/a11/salts\0{uid}".encode()).digest()
         lo = 0
         for f in tpl["kinds"]:
@@ -1071,7 +1052,7 @@ def main() -> int:
         (d / "tables").mkdir(exist_ok=True)
         (d / "circuit.txt").symlink_to("../circuit.txt")
         tst_d = {"dir": d, "meta": tst.meta, "pin": tst.pin, "partition_file": tdir / "partition.json", "program_file": tdir / "program.json",
-                 **templated(tst, tdir, a.tmpl_unit_bin)}
+                 **a0.templated(tst, tdir, a.tmpl_unit_bin)}
         theader = a0.public_header(d, tn)
         tlaw = D.parse_design("subset:2")
         twant = a6.frame_ports(set_name, tst.meta, tn)

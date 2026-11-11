@@ -4,10 +4,9 @@ The kernels take a setup's key prefix, so one arm runs either framing, both on v
 
 - `V1` (`p2-v1-gpu`): the v4 spec as `reference.py` states it, audited by `memory_challenger.py`'s own loop.
 - `V3` (`p2-16448/v4`, `p2-v3-gpu`): `verity`'s registered scheme, whose commitment, 24-byte salt, key prefix and leaves are
-  the protocol's (`schemes.p2`, `setup`, `verifier`), audited by `protocol.TimedAudit` through `verity/core/devices/memory_challenger/timed_audit.py --strict`, which
+  the protocol's (`schemes.p2`, `setup`, `verifier`), audited by `protocol.TimedAudit` through `verity/protocols/pous/device/timed_audit.py --strict`, which
   refuses any `k` or `Δ + RTT` the certificate does not cover.  Its extra gate (`codec`) decodes segment 0 of the device's `C`
-  with the scheme's own codec back to `W`'s, when that segment is wholly encoded.  A joint run's `--bandwidth-salt GPU` sets
-  `C` up under the bandwidth audit's salt for that GPU instead (`V3.bind_device`), so the bandwidth verifier audits the same `C`.
+  with the scheme's own codec back to `W`'s, when that segment is wholly encoded.
 - `MC` (`p2-v3-mc-gpu`): `V3`'s blocks audited by the memory challenger (`memory_challenger/live.py`) at `Δ` plus the RTT
   cap, with two more controls: a tampered block (the top bit of its last byte flipped, one block in ten), which only a hash
   of the whole answer catches, and the honest sessions with a signature bit flipped or a receipt time edited after signing.
@@ -75,10 +74,6 @@ class V1:
     memory_challenger_args: tuple[str, ...] = ()
     accepted = "audits_accepted"
     """The audit document's count of accepted audits that the gates read."""
-    device: bytes | None = None
-    """The GPU whose bandwidth salt the store is set up under (`V3.bind_device`), else None: PoUS's own salt."""
-    setup_source = SETUP_SOURCE
-    """What the setup salt is drawn from, which a bandwidth verifier checks the store's salt against."""
 
     @property
     def c_of(self) -> str:
@@ -110,17 +105,17 @@ class V1:
 
 
 class V3(V1):
-    """`p2-16448/v4` (`verity.core.protocols.pous.schemes.p2`): `protocol.commit`'s commitment to `W` under the
+    """`p2-16448/v4` (`verity.protocols.pous.verifier.schemes.p2`): `protocol.commit`'s commitment to `W` under the
     scheme's manifest, `protocol.draw_salt`'s 24-byte salt, its key prefix (which frames that salt and no commitment) and `vk`'s
-    leaves, audited by `protocol.TimedAudit` (`verity/core/devices/memory_challenger/timed_audit.py --strict`), which refuses any `k` or `Δ + RTT` the
+    leaves, audited by `protocol.TimedAudit` (`verity/protocols/pous/device/timed_audit.py --strict`), which refuses any `k` or `Δ + RTT` the
     certificate does not cover.  `research` (the CPU tests' widths, where P2 has no certificate) audits anyway and lists
     the gaps."""
 
     impl, live = "p2-v3-gpu", H.MEMORY_CHALLENGER
 
     def __init__(self, P: R.Params, w_host: bytes, research: bool = False) -> None:
-        from verity.core.protocols.pous import protocol, schemes
-        from verity.core.protocols.pous.schemes import p2
+        from verity.protocols.pous.verifier import protocol, schemes
+        from verity.protocols.pous.verifier.schemes import p2
 
         self.P, self.p2 = P, p2
         self.params = schemes.P2Params(P.w, P.c0, P.blocks_per_segment, P.segments)
@@ -133,17 +128,6 @@ class V3(V1):
         self.prefix = p2.expand_prefix(self.params, self.salt)
         self.memory_challenger_args = () if research else ("--strict",)
 
-    def bind_device(self, device: bytes) -> None:
-        """Set `C` up under the bandwidth audit's salt for `device` (`bandwidth.audit.draw_salt` over the commitment to `W`
-        from the same setup source, the GPU's 16-byte id bound in) in place of `protocol.draw_salt`'s, for a joint run
-        (`--bandwidth-salt`): the bandwidth verifier then accepts `C` as this device's store, and P2's audit runs over the
-        same `C`, its key prefix and leaves under that salt."""
-        from verity.core.protocols.bandwidth import audit
-
-        self.salt = audit.draw_salt(SETUP_SOURCE, self.model, device)
-        self.prefix = self.p2.expand_prefix(self.params, self.salt)
-        self.device = device
-
     def manifest(self) -> dict[str, Any]:
         return self.params.manifest()
 
@@ -151,7 +135,7 @@ class V3(V1):
         return self.p2.block_keys(self.params, self.salt, *divmod(i, self.P.blocks_per_segment))
 
     def leaf(self, i: int, block: bytes) -> bytes:
-        from verity.core.protocols.pous.verifier import leaf_hash
+        from verity.protocols.pous.verifier.verifier import leaf_hash
         return leaf_hash(self.params, self.salt, i, block)
 
     def ready(self) -> dict[str, Any]:
@@ -195,7 +179,7 @@ class MC(V3):
                                          else ("--signer", "test")))
 
     def leaf(self, i: int, block: bytes) -> bytes:
-        from verity.core.protocols.pous.memory_challenger import block_digest
+        from verity.protocols.pous.device.memory_challenger import block_digest
         return block_digest(block)
 
 
@@ -272,7 +256,7 @@ def rows(values: list[int], width: int, device: Any) -> Any:
     return torch.tensor([list(v.to_bytes(width, "big")) for v in values], dtype=torch.uint8, device=device)
 
 
-KEYS = Path(__file__).resolve().parents[3] / "verity/core/protocols/pous/tests/fixtures/p2-v4-keys.json"
+KEYS = Path(__file__).resolve().parents[3] / "verity/protocols/pous/verifier/tests/fixtures/p2-v4-keys.json"
 """The pinned v4 keys (`p2_v1.vectors` writes them from `vectors.json`), which the vector gate holds the device's keys to."""
 
 
@@ -419,12 +403,6 @@ def run(a: Any, ws: dict[str, Any], out: Path, *, w_segment: Callable[[str, int,
 
     w_host = b"".join(w_segment(ws["id"], s, bps * payload, used) for s in range(segments))
     fr = framing(P, w_host, research)
-    if getattr(a, "bandwidth_salt", ""):
-        if not isinstance(fr, V3):
-            raise SystemExit(f"--bandwidth-salt sets up a registered P2 store (p2-v3-gpu, p2-v3-mc-gpu), not {fr.impl}'s")
-        from verity.core.protocols.bandwidth import audit as bandwidth
-
-        fr.bind_device(bandwidth.read_device(a.bandwidth_salt))
     if isinstance(fr, MC):
         fr.sign_with(getattr(a, "mc_lms_key", "") or "", getattr(a, "mc_session_log", "") or "")
     bound = backend.bind(P, fr.prefix)
@@ -498,8 +476,7 @@ def run(a: Any, ws: dict[str, Any], out: Path, *, w_segment: Callable[[str, int,
                                    "memory_challenger": str(fr.live.relative_to(H.ROOT)), "memory_challenger_args": list(fr.memory_challenger_args)},
                 "device": facts, "segments": segments, "segments_of_weight_set": total, "blocks": blocks, "weight_bytes": used,
                 "setup": {"scheme": fr.scheme, "manifest": fr.manifest(), "w_commitment": fr.model.hex(), "salt": fr.salt.hex(),
-                          "salt_from": "pous" if fr.device is None else "bandwidth",
-                          "device": None if fr.device is None else fr.device.hex(), "keys_version": keys_version(bound)},
+                          "keys_version": keys_version(bound)},
                 **({} if a.audits else H.UNTIMED), "gates": gates, "metrics": metrics, "profile": prof,
                 "measurements": [{"name": n, "value": v, "unit": u} for n, v, u in rows_ if v is not None]}
 

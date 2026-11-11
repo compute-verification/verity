@@ -69,7 +69,7 @@
 // the host generators that dfill_ref (and so dgate's receipts) holds the GPU to.
 #pragma once
 #include "../pearl_c/sha512.cuh"
-#include "../receipts/receipt_folds.cuh"
+#include "../../../verity/protocols/pouw/receipts/receipt_folds.cuh"
 
 #define PF_W 8
 #ifndef PF_CTAS
