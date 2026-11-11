@@ -77,8 +77,8 @@ def test_a_check_that_runs_a_cpp_model_is_stored_after_the_prebuild(tmp_path, mo
     assert sorted(p.name for p in (tmp_path / "libs").glob("*.so")) == sorted(f"lib{p.stem}.so" for p in CPP.glob("*.cpp"))
     c = json.loads((tmp_path / "report.json").read_text())["cache"]
     assert (c["stored"], c["untraced"]) == (1, []), c
-    (entry,) = [e for p in (tmp_path / "cache").glob("*/*/*.json")
-                if (e := json.loads(p.read_text()))["key"]["request"]["target"][1] == ATTENTION]
+    (entry,) = [CC.read(p) for p in (tmp_path / "cache").glob("*/*/*.json")
+                if json.loads(p.read_text())["key"]["request"]["target"][1] == ATTENTION]
     held = {f"{CPP.relative_to(TG.REPO).as_posix()}/{s}" for s in ("fa2_model.cpp", "tc_model.cpp")}
     assert held <= set(entry["reads"]["files"]), sorted(entry["reads"]["files"])
 
