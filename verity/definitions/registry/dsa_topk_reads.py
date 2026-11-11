@@ -235,8 +235,8 @@ def _merge_calls(B, S, *ports):
 
 DsaPositionsMergeV2 = CompositeDefinition(
     "DsaPositionsMerge", 2, ("M", "K"), _merge_sig, _merge_calls, refuse=_refuse_merge, doc=_merge.__doc__,
-    conformance="exact-model-tested: held to merge and to DsaPositionsMerge_v1, whose ANDs it has count for count, by the "
-                "definitions' test_dsa_topk_reads.py")
+    conformance="exact-model-tested: held to merge and to DsaPositionsMerge_v1, whose ANDs it has count for count, by "
+                "adapters/vllm/tests/program/test_dsa_long_row_calls.py")
 
 
 def _select(C, rows: list[list], idx: list) -> list:
