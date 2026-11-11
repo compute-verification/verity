@@ -619,7 +619,8 @@ def second_stage(a: argparse.Namespace, sets: dict, window: CS.Binding, window_d
     (`round_two`, over the replay block ``replay``, its Program and descriptor id) at the params ``proofs``. ``tie``:
     the verifier's other copies the interior registration's check takes beside the boundary record (`a5.tie`: the
     values it registers, their schemas, its window root). -> (a5's summary, its acceptance, the audit record, what the
-    run reports, the sessions' statements: None without a draw)."""
+    run reports, the sessions' statements: None without a draw). The report names what the proof server refused, in
+    flock-circuit's words, where a session never ran."""
     for d in (HERE.parent / "prove_path", HERE):
         if str(d) not in sys.path:
             sys.path.insert(0, str(d))
@@ -635,6 +636,10 @@ def second_stage(a: argparse.Namespace, sets: dict, window: CS.Binding, window_d
     got = {"audit": {x: s.get(x) for x in ("checks_before_draw", "refused", "audit", "draw", "draw_counts", "negatives",
                                            "circuits", "timing")},
            "accepted": ok, "record": {"failed": sorted(k for k, v in (record.get("checks") or {}).items() if not v.get("ok"))}}
+    refusals = sorted({line.split("\t", 1)[1] for f in sorted((out / "audit" / "proof-server").glob("*.log"))
+                       for line in f.read_text(errors="replace").splitlines() if line.startswith("REFUSED\t")})
+    if refusals:  # why a session never ran: flock-circuit's own words (a statement outside its shape, say)
+        got["proof_server_refused"] = refusals
     stmts = None
     if s.get("draw") is not None:
         stmts = statements(out / "audit", window)
@@ -769,7 +774,8 @@ def _second(a: argparse.Namespace) -> int:
         summary.update(more)
         (out / "summary.json").write_text(json.dumps(summary, indent=1, sort_keys=True, default=str))
         r2, o = summary.get("round_two"), summary.get("outcome") or {}
-        print("TWO " + json.dumps({**{x: summary.get(x) for x in ("refused", "sample", "second_stage", "pins", "held")},
+        print("TWO " + json.dumps({**{x: summary.get(x) for x in ("refused", "sample", "second_stage", "pins", "held",
+                                                                  "proof_server_refused")},
                                    "round_two": r2 and {"ok": r2.get("ok"), "codes": r2.get("codes")},
                                    "outcome": {x: o.get(x) for x in ("accepted", "interior", "replay_sample", "statements",
                                                                      "refused")}}, default=str))
