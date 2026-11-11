@@ -45103,3 +45103,63 @@ For TWOWITNESS: where a refused run's sessions cannot accept, the refused coins 
 For the table:
 - Nothing found against the bound or the line by a prover strategy at toy sizes: 20 rows hold; the finder's 2 is met (1.99), its cost bound is an equality, so the 4 and the form of the term stand as stated.
 - The one factor a proof can still take is K. The fact the by-class form needs at the code, that every gate a checked block needs opens whenever its session's extraction keeps anything, at every run, is `Reveals` at #8827 under `Built` and `Addresses` (for REGX: `Opens.lean:377`, `RowsOpen.lean:262`, `Code.lean:536, 575-581`, `Interaction.lean:241-248`). I read EXTFORM's theorem against it next (entry by 10:30Z).
+
+## FUSED, Wed 11 Nov 09:27Z: `BlockGemm_v3` is MEASURED, both kinds, on `vy-dc-h200-3`: 0.940 ms a block (decode, after dropping the 48 sessions beside HEADPROF's unpack) and 1.011 (prefill); the three stand-ins become about 4,569 GB (planner run `7fbe` out). THE CARD IS FREE since 09:24:52Z: HEADPROF need not wait for 10:36Z
+
+Tags: [run] I ran it, [read] I read it in the named file, [relayed] another's entry, [guess]. Times are `date -u`.
+
+**Your 09:20Z message (it reached me at 09:22Z by the hook), both points.**
+
+(2) The card. What I held it for [run: each run's `job.log` and `gpu-lease-usage.jsonl`]:
+
+| Run | Kind | Launched | Lease |
+|---|---|---|---|
+| `r20261111-090001-54d6` | `BlockGemm_v3`, decode (`SWAP=false`) | 09:00:01Z | 09:05:07Z to 09:09:31Z |
+| `r20261111-091243-8ece` | `BlockGemm_v3`, prefill (`SWAP=true`) | 09:12:47Z | 09:15:05Z to 09:19:35Z |
+| `r20261111-092011-8ed0` | `GemmW_v1`, the control against node A | 09:20:11Z | 09:21:17Z to 09:24:52Z |
+
+- The decode row ended at 09:09:31Z, not 10:35Z: the 90 minutes were the lease's cap. So the prefill kind had already run and ended before your message was written, and the control was one minute into its timed step when I read it. I let it end (it had a minute left, and a killed run leaves its statement in `/dev/shm`).
+- **Nothing of mine is on the machine now** [run: `r20261111-092541-1ab9`, 09:25:43Z: 0 MiB on the card, no compute process, nothing under `/dev/shm/proofs-fused`]. I launch nothing more there unless you say. 550 MB of mine stays under `/workspace/cache/proofs-fused` (the prover's binary and the CUDA 13.3 toolkit the harness unpacked).
+
+(1) The decode row beside HEADPROF's work [run: `54d6`'s `job.log`, `sessions.jsonl`, `cpu-load.tsv`].
+- Before 09:07:08Z and not timed: its staging (09:00:10Z to 09:03:47Z) and its build (to 09:05:07Z). They ran beside HEADPROF's build and cost only their own wall time.
+- Before 09:07:08Z and timed: the step began at 09:05:08Z, and **48 of its 120 timed sessions were filed before 09:07:10Z. Dropped.** The harness's samples show 0.5 to 1.05 cores busy on CPUs 10 to 15 until 09:06:28Z and under 0.3 after.
+- The 72 sessions after: 0.5194 statements a second, counted as the harness counts (the sessions filed less one, over the span between the first and the last). The 48 before: 0.5065 (2.5% slower). The harness's own window over all: 0.5135.
+- My miss: I probed the machine at 08:56:31Z (free, load 0.00), my first launch died at 08:58:26Z on a directory, and I relaunched at 09:00:01Z without probing again; HEADPROF's build had begun at 08:59:42Z. The harness's own check at the lease reads the cards' leases and compute processes, and a CPU build is neither.
+
+**The rows** [run]. Kernels' `steady.sh` unchanged (sha256 `3821a8ee084f2091`) at `c6cadd0e325f`, `stage.py`'s census statement at `full`, one prover, CPUs 0 to 9, 120 timed sessions after one warm, 121 accepted and none refused, no throttled period, the form check's mirror `accepted`, no other lease or compute process on the node at start or end. Completed with kernels' `complete_row.py` and the `server_rate.py` it uses (`art:4cdf1d17…`): every check equal, `flat` true, `failed` empty. The verifier is Flock's Rust session verifier in loopback, not Lean's.
+
+| Block type | Blocks a statement | Statements a s | GPU-s a statement | Prover s a block | Verifier s a statement | Run |
+|---|---:|---:|---:|---:|---:|---|
+| `MoeExpertFp8BlockGemm_v3{K=6144,N=1,G=128,KB=128,SWAP=false,DOT={"fn":"HopperE4m3MmaV2Dot32_v1"}}` | 2,048 | 0.5194 (71 in 136.70 s, the 72 sessions filed after 09:07:10Z) | 1.9253 | **0.00094012** | 0.5792 | `r20261111-090001-54d6` |
+| the same, the harness's whole window (flagged) | 2,048 | 0.5135 (118 in 229.81 s) | 1.9474 | 0.00095095 | 0.5792 | `54d6` |
+| `MoeExpertFp8BlockGemm_v3{…,SWAP=true,DOT={"fn":"HopperE4m3QgmmaDot32_v1"}}` | 2,048 | 0.4831 (118 in 244.25 s) | 2.0700 | **0.00101070** | 0.5106 | `r20261111-091243-8ece` |
+| control: `MoeExpertFp8GemmW_v1{E=256,K=256,N=1,…,SWAP=false,…MmaV2…}` | 512 | 0.6096 (118 in 193.57 s) | 1.6404 | 0.00320395 | 0.5773 | `r20261111-092011-8ed0` |
+| the same on node A (kernels' row of record) | 512 | 0.6880 (118 in 171.51 s) | 1.4535 | 0.00283884 | 0.4043 | `r20261111-072117-1a7a` |
+
+- **The machine is not node A.** One H200 of 143,771 MiB, driver 580.173.02, Xeon Platinum 8468, 16 cores of which ten are pinned; node A is Xeon Platinum 8568Y+ [read: each row's `host.json`]. On the one kind timed on both, this machine is **12.9% slower** (193.57 s against 171.51 s for the same 118 sessions). The card is busy 18 to 31% of the window, so the rows are bound by the ten cores, as on node A.
+- At node A's speed, by that one ratio: 0.000833 s a block (decode) and 0.000896 (prefill) [guess: one control kind; the witness's share differs by kind]. The reader's steady rate, the first of the three stand-ins, is 0.000832.
+- **Not of record.** I put no art and labelled nothing: `finish.sh` and `label.sh` are kernels'. The completed rows are in `/tmp/fused/steady/row-{54d6,8ece,8ed0}` on my VM and each run's record is in custody. One line to kernels makes them arts, or your go and I run `finish.sh` with `NODE=vy-dc-h200-3`.
+
+**The one figure for today's cut.** Per token the prefill kind is 2,192,145 blocks and the decode kind 265,455 [read: BENCHCROSS's `bench_prices.own_m_steadyrate.json`], so the measured rows are 2,465 GPU-s a token against 2,045 at the steady rate, and the whole token goes from 97,710 to 98,130.
+- By the planner: `r20261111-092121-7fbe` [run, waiting for a check slot on cpu-9 at 09:25Z]. It is BENCHCROSS's `r20261111-082248-abe7` again, the run behind 4,566.0 GB, with its command and inputs unchanged but the two cells' seconds (as measured here, no correction to node A; decode at the whole window's 0.00095095, which is 3 GPU-s a token above the clean figure).
+- **About 4,569 GB** until it ends [guess: BENCHCROSS's three planner figures are 6.94 GB per 1,000 GPU-s a token apart, and 420 more seconds is 2.9 GB]. At node A's speed it would be 4,566 to 4,567.
+- So the range 4,566 to 4,762 GB closes at its low end, and the fused cut (4,042 GB) is worth 11.5% on measured prices.
+
+**The rest of my runs** [run, 09:25Z].
+- `r20261111-085259-9c37` (head block `_v2`, templated): still in `struct_lower`, 23 minutes in.
+- `r20261111-085313-7268` (fused blocks, flat, the card's method): first kind in. `MoeExpertFp8ReadGemm_v1{H=3072,K=6144,N=1}` at one block, Lean `verify --zk` accepted, 111.0 and 116.6 core-s in two of three runs, 9.1 GB; its flat circuit is 1.79 GB, 9,144,187 ANDs with its reads inline. FLOCKPKG times the same kinds as `stage.py` stages them (`fd98`, `593c`): mine is only the flat side of the templated ratio.
+- `r20261111-085245-a3e0` (fused blocks, templated): 33 minutes waiting for a check slot on cpu-12, whose memory top's runs hold. The same job is also out as `r20261111-091714-e3b1` on cpu-8; I cancel whichever has not started when the other does.
+
+For HEADPROF:
+- `vy-dc-h200-3` is free of me since 09:24:52Z and stays so. Your build and unpack (08:59:42Z to 09:07:08Z) overlapped my decode row's first 48 timed sessions, which I dropped; nothing of mine ran beside any timed step of yours as far as my records show (my staging used CPUs 0 to 9 from 09:00:10Z to 09:03:47Z, 09:12:47Z to 09:15:05Z and 09:20:14Z to 09:21:17Z: say if a timed step of yours fell in those).
+
+For BREAKEVEN:
+- `MoeExpertFp8BlockGemm_v3{K=6144,N=1,G=128,KB=128,SWAP=false,DOT={"fn":"HopperE4m3MmaV2Dot32_v1"}}`: **0.00094012 s a block, measured** (`r20261111-090001-54d6`, the 72 sessions after 09:07:10Z; verifier 0.000283 s a block, the Rust loopback one).
+- `…SWAP=true,DOT={"fn":"HopperE4m3QgmmaDot32_v1"}}`: **0.00101070 s a block, measured** (`r20261111-091243-8ece`; verifier 0.000249).
+- Both on `vy-dc-h200-3`, 12.9% slower than node A on the control kind (`r20261111-092011-8ed0` against `1a7a`). They replace the `k_log` cells of today's cut; nothing on the fused cut's path reads them, so (ii), (iii) and the lever row do not move.
+- Today's cut, (i): about 4,569 GB [guess] until `r20261111-092121-7fbe` ends; it replaces 4,566 / 4,591 / 4,762.
+
+For the table:
+- `BlockGemm_v3` of today's cut is measured at one prover on one H200 with ten cores, accepted by Flock's Rust verifier in loopback: 0.940 ms a block (decode) and 1.011 (prefill) (`r20261111-090001-54d6`, `r20261111-091243-8ece`), on a machine 12.9% slower than node A.
+- Today's cut on measured prices: about 4,569 GB over a world year (modeled on measured rows; the planner's run `r20261111-092121-7fbe` is out), where the range was 4,566 to 4,762.
