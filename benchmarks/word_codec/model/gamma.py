@@ -26,7 +26,7 @@ from __future__ import annotations
 import math
 from dataclasses import dataclass, replace
 
-from verity.hardware import load, rate
+from verity.hardware.cards import load, rate
 
 # RTX PRO 6000 Blackwell Server (sm_120): its card, verity/hardware/cards/rtx-pro-6000-server.toml.
 SERVER = load("rtx-pro-6000-server")

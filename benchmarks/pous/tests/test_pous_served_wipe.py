@@ -8,9 +8,11 @@ gate key that isn't on the node are refused before demo.sh runs, and nothing is 
 
 from __future__ import annotations
 
+import hashlib
 import json
 import os
 import shlex
+import socket
 import stat
 import subprocess
 import sys
@@ -27,6 +29,8 @@ DEMO = WRAPPER.parent / "demo.sh"
 FAKE_DEMO = Path(__file__).resolve().parent / "served_wipe_demo.py"
 ANSWER_KEYS = ["commitment", "profile", "protocol", "public", "reason", "verdict"]
 CARD = "GPU-5e7ed000-0000-0000-0000-000000000000"
+#: who decided, as the summary and the headline name it: the stand-in demo.sh's Python, on this host
+DECIDED = {"program": "python", "host": socket.gethostname()}
 
 SMI = """#!/usr/bin/env bash
 echo "$*" >> "$FAKE_SMI_LOG"
@@ -135,7 +139,9 @@ def test_the_wipe_on_the_serves_card_writes_its_core_answer(node, tmp_path) -> N
         "serve_dir": str(tmp_path / "pieces" / "serve-run"), "window": "3", "server": "vy-dc-h200", "card": CARD,
         "run": node.get("RESEARCH_RUN_ID"), "lease": "the serve's: its engine loads on this card after the wipe"}
     summary = json.loads((d / "summary.json").read_text())
-    assert summary["verdict"] == "accept" and summary["judge"] == "python" and summary["k"] == W.READS
+    assert summary["verdict"] == "accept" and summary["decided_by"] == DECIDED and summary["k"] == W.READS
+    key, = case["params"]["trusted"]
+    assert summary["key_sha512"] == hashlib.sha512(bytes.fromhex(key)).hexdigest()
     demo = json.loads((d / "demo-argv.json").read_text())
     assert demo["lease"] == f"{CARD},GPU-other" and "--wipe-protocol" not in demo["argv"]
     assert demo["argv"] == ["--node", "vy-dc-h200", "--challenger", "vy-auditor-2", "--challenger-address",
@@ -146,7 +152,7 @@ def test_the_wipe_on_the_serves_card_writes_its_core_answer(node, tmp_path) -> N
     assert last.startswith("WIPE {")
     headline = json.loads(last.removeprefix("WIPE "))
     assert headline | {"fill_GBps": None, "t0": None, "t1": None} == {
-        "verdict": "accept", "reason": None, "protocol": W.PROTOCOL, "judge": "python", "k": W.READS, "segments": 1,
+        "verdict": "accept", "reason": None, "protocol": W.PROTOCOL, "decided_by": DECIDED, "k": W.READS, "segments": 1,
         "fill_GBps": None, "t0": None, "t1": None, "server": "vy-dc-h200", "card": CARD, "exit": 0}
     assert all(f"-i {CARD}" in line for line in (tmp_path / "smi.log").read_text().splitlines())
     assert not (tmp_path / "lease.log").exists() and not (d / "refused.txt").exists()

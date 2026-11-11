@@ -92,6 +92,8 @@ files = [("/etc/vy/vy.env", "0644", base64.b64encode(gzip.compress(env.encode(),
          ("/usr/local/sbin/vy-setup", "0755", blob(f"{nebius}/vm_setup.sh")),
          ("/usr/local/sbin/vy-nebius-stop", "0755", blob(f"{nebius}/vm_stop.sh")),
          ("/etc/systemd/system/user@.service.d/vy-cpuset.conf", "0644", blob(f"{nebius}/user-cpuset.conf")),
+         ("/etc/apt/apt.conf.d/52vy-trust", "0644", blob(f"{nebius}/apt-security-updates.conf")),
+         ("/etc/needrestart/conf.d/50-vy.conf", "0644", blob(f"{nebius}/needrestart-list-only.conf")),
          ("/usr/local/share/vy/lease.sh", "0755", blob(f"{sh}/lease.sh")),
          ("/usr/local/share/vy/gpu_adopt.py", "0755", blob(f"{nebius}/gpu_adopt.py")),
          ("/usr/local/bin/gpu-lease", "0755", blob(f"{sh}/gpu_lease.sh"))]
