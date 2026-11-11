@@ -132,7 +132,10 @@ untraced`, which keys it on the suite's whole tree. A test that builds or runs a
   open: `tools/research/tests/waits.py`), and inject the clock the code measures with (`monkeypatch.setattr(mod,
   "clock", ...)`). No result may depend on load, a shared machine or what holds it (GPU leases, check slots, pods), ports
   and sockets, a race between processes, or an outside service. `suites.py` reports a test that passed and failed under
-  one key as `nondeterministic`: it is deleted, not fixed or rerun.
+  one key as `nondeterministic`: it is deleted, not fixed or rerun. On a CPU with AMX (a cloud VM), oneDNN's AMX kernel
+  now and then returns a preempted bf16 matrix product wrong, so the runner starts every suite's process, and `research
+  run` every job, with `ONEDNN_MAX_CPU_ISA=AVX512_CORE_BF16` unless the environment already names it (`ONEDNN_ISA`). A
+  script run outside both sets it itself, before torch's first primitive, which is when oneDNN reads it.
 - **Isolated:** write only under `tmp_path`, and change the environment, `sys.path` or a module only through
   `monkeypatch`; the runner fails a run whose tests changed a repository file, naming it.
 - **Exact:** compare bit-exact code's words, digests and pinned vectors, not approximations; a negative checks that the
