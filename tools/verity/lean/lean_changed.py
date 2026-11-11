@@ -1365,7 +1365,7 @@ def audit_records(name: str, deps: Path, tree: Path | None = None, update: bool 
                     nonlocal store, redone
                     got = subprocess.run(check_argv(tree / p, mine_out, with_update, moved, p == pkg, artifacts=store,
                                                     facts_cache=facts_dir()), cwd=tree, env=env, pass_fds=fds).returncode
-                    if redone or not got or AUDIT.killed(got) or not (bad := mismatched(mine_out, tree)):
+                    if redone or not got or AUDIT.killed(got) or not (bad := mismatched(mine_out, tree, log)):
                         return got
                     store, redone = None, True
                     for mod, d in bad.items():
@@ -1781,12 +1781,12 @@ def settles(out: Path, at: Path) -> bool:
     return len(bad) == 1 and bool(bad[0].get("regenerated")) and Path(str(bad[0].get("package"))).resolve() == at.resolve()
 
 
-def mismatched(out: Path, tree: Path) -> dict[str, Path]:
+def mismatched(out: Path, tree: Path, log=print) -> dict[str, Path]:
     """{module: its package's directory} of each module whose outputs in ``tree`` check.py's sampled recompile found other
     than what its source compiles to (the reports' `sampled` `mismatched`, under ``out``), when every other failure there
     is a record difference (`RECORD_DIFFERENCE`), which `--update` settles, or a spec's `proved_in.unpassed`, which a
-    prover's failures there cause; {} when there is none, when another failure is there, or when a package it names is
-    outside ``tree``. Lean's output is not reproducible for every module (`olean_graph`): a kept build compiled once can
+    prover's failures there cause; {} when there is none, when another failure is there, when a package it names is
+    outside ``tree``, or when the reports can't be read, which it says (``log``). Lean's output is not reproducible for every module (`olean_graph`): a kept build compiled once can
     differ from a recompile of the same source, as a stale one does."""
     found: dict[str, Path] = {}
     try:
@@ -1797,7 +1797,9 @@ def mismatched(out: Path, tree: Path) -> dict[str, Path]:
                     not all(c in ("sampled", "proved_in.unpassed") or c in AUDIT.RECORD_DIFFERENCE for c in codes):
                 return {}
             found |= {m: Path(d).resolve() for m, d in mods.items()}
-    except (OSError, ValueError, KeyError, TypeError, AttributeError):
+    except (OSError, ValueError, KeyError, TypeError, AttributeError) as e:
+        log(f"lean-records: check.py's reports in {out / 'audit.json'} can't be read for the modules its sampled recompile "
+            f"failed ({type(e).__name__}: {e}), so none is compiled again")
         return {}
     return found if all(d.is_relative_to(tree.resolve()) for d in found.values()) else {}
 

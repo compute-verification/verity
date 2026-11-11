@@ -1138,6 +1138,10 @@ def test_a_spec_failing_only_because_its_provers_sampled_recompile_did_is_audite
 
     assert found(["proved_in.unpassed"]) == found([]) == {"P.M": (real / "Proofs").resolve()}
     assert found(["proved_in.unpassed", "lean"]) == {}
+    (tmp_path / "audit.json").write_text("{")
+    said: list[str] = []
+    assert LC.mismatched(tmp_path, tree, said.append) == {} and len(said) == 1 and "can't be read" in said[0], \
+        "reports that can't be read name no module, and the run says so"
 
 
 @pytest.fixture()
