@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import fcntl
 import os
+import shutil
 import subprocess
 import sys
 from pathlib import Path
@@ -68,6 +69,15 @@ def checkout(tmp_path: Path) -> Path:
     return repo
 
 
+def moved_on(repo: Path) -> str:
+    """origin/main one research commit later: that commit."""
+    git(repo, "checkout", "-q", "main")
+    later = commit(repo, "tools/research/src/research/cli.py", "newer\n")
+    git(repo, "update-ref", "refs/remotes/origin/main", later)
+    git(repo, "checkout", "-q", "lane")
+    return later
+
+
 def test_a_checkout_only_behind_runs_origin_mains_research_from_a_cached_worktree_moved_with_main(tmp_path):
     repo = checkout(tmp_path)
     commit(repo, "verity/x.py", "the lane's own work elsewhere\n")
@@ -76,12 +86,56 @@ def test_a_checkout_only_behind_runs_origin_mains_research_from_a_cached_worktre
     wt = at_main.tree(repo, main, tmp_path / "cache")
     assert (wt / "tools/research/src/research/cli.py").read_text() == "new\n"
     assert at_main.tree(repo, main, tmp_path / "cache") == wt
-    git(repo, "checkout", "-q", "main")
-    later = commit(repo, "tools/research/src/research/cli.py", "newer\n")
-    git(repo, "update-ref", "refs/remotes/origin/main", later)
-    git(repo, "checkout", "-q", "lane")
+    later = moved_on(repo)
     assert at_main.tree(repo, later, tmp_path / "cache") == wt
     assert (wt / "tools/research/src/research/cli.py").read_text() == "newer\n"
+
+
+def noting(seen: list[str]):
+    """The set-up's runner without its bound, noting in ``seen`` what it is given: git's subcommand, else the program."""
+    def runner(argv, timeout, **kw):
+        seen.append(" ".join(a for a in argv[3:5] if not a.startswith("-")) if argv[0] == "git" else argv[0])
+        return subprocess.run(argv, **kw)
+    return runner
+
+
+def made(tmp_path: Path) -> tuple[Path, Path, Path]:
+    """A checkout, its cache, and the cache's tree made at origin/main, holding one file more that a tree made again
+    wouldn't have."""
+    repo, cache = checkout(tmp_path), tmp_path / "cache"
+    wt = at_main.tree(repo, git(repo, "rev-parse", "origin/main"), cache)
+    (wt / "kept").write_text("no commit has this file\n")
+    return repo, cache, wt
+
+
+def test_a_whole_tree_at_origin_mains_commit_is_reused_as_it_is(tmp_path, monkeypatch):
+    """Were the stamp never written, or not read as this commit's, every command would remove the tree and make it again."""
+    (repo, cache, wt), seen = made(tmp_path), []
+    main = git(repo, "rev-parse", "origin/main")
+    monkeypatch.setattr(at_main, "run", noting(seen))
+    assert at_main.tree(repo, main, cache) == wt
+    assert seen == ["rev-parse"], "the one git call finds the cache: nothing is removed, made or moved"
+    assert (wt / "kept").exists() and (wt.parent / "at").read_text().split() == [main]
+
+
+def test_a_whole_tree_is_moved_to_origin_mains_new_commit_and_not_made_again(tmp_path, monkeypatch):
+    (repo, cache, wt), seen = made(tmp_path), []
+    (wt / "README.md").write_text("an edit made in the cache, to a file the move doesn't change\n")
+    later = moved_on(repo)
+    monkeypatch.setattr(at_main, "run", noting(seen))
+    assert at_main.tree(repo, later, cache) == wt
+    assert seen == ["rev-parse", "checkout"], "one checkout moves it: nothing is removed or made"
+    assert (wt / "kept").exists() and (wt / "tools/research/src/research/cli.py").read_text() == "newer\n"
+    assert git(wt, "rev-parse", "HEAD") == later and git(wt, "status", "--porcelain") == "?? kept", "every file is the commit's"
+    assert (wt.parent / "at").read_text().split() == [later], "the stamp follows the tree"
+    assert at_main.tree(repo, later, cache) == wt and seen == ["rev-parse", "checkout", "rev-parse"], "and it is reused there"
+
+
+def test_a_stamp_whose_tree_is_gone_counts_for_nothing(tmp_path, capsys):
+    repo, cache, wt = made(tmp_path)
+    shutil.rmtree(wt)
+    assert run_shim(repo, cache, capsys)[0] == [str(wt / "tools/research/src"), own(repo)]
+    assert (wt / "tools/research/src/research/cli.py").read_text() == "new\n" and not (wt / "kept").exists()
 
 
 def test_a_checkout_that_changes_research_code_or_is_level_with_main_runs_its_own(tmp_path):
@@ -211,10 +265,7 @@ def test_a_worktree_a_killed_git_left_half_made_is_never_run_from_and_the_next_c
     main, text = git(repo, "rev-parse", "origin/main"), "new\n"
     if case != "made":
         wt = at_main.tree(repo, main, cache)
-        git(repo, "checkout", "-q", "main")
-        main, text = commit(repo, "tools/research/src/research/cli.py", "newer\n"), "newer\n"
-        git(repo, "update-ref", "refs/remotes/origin/main", main)
-        git(repo, "checkout", "-q", "lane")
+        main, text = moved_on(repo), "newer\n"
     if case == "a move git refuses":
         (Path(git(wt, "rev-parse", "--absolute-git-dir")) / "index.lock").touch()
     else:
@@ -222,6 +273,7 @@ def test_a_worktree_a_killed_git_left_half_made_is_never_run_from_and_the_next_c
         ran, err = run_shim(repo, cache, capsys)
         assert ran == [own(repo)] and "(its 60 s ran out at `git checkout`)" in err and err.count("\n") == 1
         wt = next(cache.glob("*/tree"))
+        assert not (wt.parent / "at").exists(), "no stamp calls whole a tree git was killed changing"
         if case == "made":
             assert git(wt, "rev-parse", "HEAD") == main and not (wt / "tools").exists(), "it looks made, and isn't"
         monkeypatch.setattr(at_main, "run", to_its_end)
