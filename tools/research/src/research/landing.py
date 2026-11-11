@@ -208,6 +208,15 @@ def detach(repo: Path, argv: list[str], env: dict[str, str], script: str | None 
     return {"dir": d, "pid": p.pid}
 
 
+def _epoch(ts: object) -> float | None:
+    """A UTC timestamp (`YYYY-MM-DDTHH:MM:SSZ`) as seconds since the epoch, None when it isn't one."""
+    try:
+        t = datetime.fromisoformat(str(ts).replace("Z", "+00:00"))
+    except ValueError:
+        return None
+    return (t if t.tzinfo else t.replace(tzinfo=UTC)).timestamp()
+
+
 def _job_end(rec: dict, name: str) -> tuple[str, str, str | None] | str | None:
     """A detached job's end (`detach`): (its exit, its output's tail, its ``out`` file ``name``'s text when it exited 0), its
     directory removed; why, once its process is gone with no exit written; None while it runs."""

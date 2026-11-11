@@ -1,7 +1,7 @@
 # tc_probe_fp4: Blackwell's FP4 and FP8 tensor-core instructions against their models
 
 The Blackwell counterpart of `benchmarks/tc_probe`. Each probe runs an instruction on its GPU, raw bits in and out, and
-compares every output word with the instruction's pinned model in `verity/ml/circuits/silicon` (`BLACKWELL_SM120_NVF4`,
+compares every output word with the instruction's pinned model in `verity/definitions/silicon` (`BLACKWELL_SM120_NVF4`,
 `BLACKWELL_SM120_MXF4`, `GroupSum`). Where no model is pinned yet, a capture decides between named candidates. Every
 mismatch is recorded, and nothing is tuned to fit. Beside the probes, price microbenchmarks and cheaper-computation
 searches time each multiplier against dense NVFP4. Everything runs on sm_120a (RTX 5090, RTX PRO 6000) unless its file
@@ -23,7 +23,6 @@ says sm_100a (B200).
 - `f8_sm100.py` and `f8_sm100.sh` (`tcgen05_f8.cu`): the B200's `tcgen05.mma` FP8 step, generated on the CPU, captured
   under one GPU lease and scored on the CPU. `f8_model.py` is `GroupSum` on whole arrays of words, for the scoring.
 - `model5.py`: autoproof's model5, the control `probe.py` keeps. The probe refuted it on sm_120.
-- `stage0_sm120.py`: which FP4-path mnemonics ptxas accepts for sm_120a, and what each lowers to. It is record-only.
 
 `recheck.py` and `sp_e4m3.py` split into `capture` (on the GPU) and `verify` (on the CPU), so no CPU verification runs
 inside a GPU lease.

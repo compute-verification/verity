@@ -396,7 +396,7 @@ PINS_FILES = ("ci/pins.py", "tools/verity/check/pins.py")
 MODULES, HEADERS = "tools/verity/lean/modules.py", "tools/verity/lean/headers.py"
 #: the root modules of Security's `Definitions` library and Flock's `Flock`, which the port makes modules: a tree holding
 #: the codemod is on the module system when each is a module (`on_modules`)
-PORTED_ROOTS = ("Security/Definitions.lean", "verity/core/service/flock/Flock.lean")
+PORTED_ROOTS = ("security/Definitions.lean", "verity/protocols/flock/verifier/Flock.lean")
 #: what the codemod's run over a tree reads besides the codemod and its header reader: a merge that changes none of these onto
 #: a tree on the module system leaves its porting as it was (`ported`'s ``base``); pathspecs, each `*` crossing directories
 PORT_INPUTS = ("*.lean", "*lakefile.toml", "*lakefile.lean", "*lake-manifest.json", "*lean-toolchain")
@@ -970,7 +970,7 @@ class DriveFlags:
                 if not (isinstance(v, list) and all(isinstance(x, str) and GATE_PATH_RE.fullmatch(x) and ".." not in x.split("/")
                                                     for x in v)):
                     raise bad(k, "a list of Python scripts by their path from the repository's root, as "
-                                 "[\"integrations/x/tools/gate.py\"]")
+                                 "[\"adapters/x/tools/gate.py\"]")
                 got[k] = tuple(v)
         if "warn_steps" in doc:
             if not (isinstance(doc["warn_steps"], list) and all(x in CHECK_STEPS for x in doc["warn_steps"])):
@@ -1058,20 +1058,21 @@ def drive_flags(clone: Path, config: str | None = None, from_tree: bool = False)
     return flags, where
 
 
-def priority_list(path: Path) -> tuple[int, ...]:
+def priority_list(path: Path, flag: str = "--priority-file") -> tuple[int, ...]:
     """Drive's priority list (`--priority-file`, `Queue.priority`), the landing order: the PR numbers ``path`` holds, separated
     by spaces or commas, in its order, first to land first, each once (a number repeated keeps its first place); empty when
-    there is no such file.  QueueError, with the fix, when it can't be read or holds anything else."""
+    there is no such file.  QueueError, with the fix, when it can't be read or holds anything else, naming it as ``flag``:
+    the verified queue reads its `--wide-file` so too."""
     try:
         if not path.exists():
             return ()
         text = path.read_text()
     except (OSError, UnicodeDecodeError) as e:
-        raise QueueError(f"--priority-file {path} can't be read ({getattr(e, 'strerror', None) or e}): make it a text file of "
+        raise QueueError(f"{flag} {path} can't be read ({getattr(e, 'strerror', None) or e}): make it a text file of "
                          "PR numbers separated by spaces or commas, or remove it") from None
     words = [w for w in re.split(r"[\s,]+", text) if w]
     if bad := [w for w in words if not re.fullmatch(r"[1-9][0-9]*", w)]:
-        raise QueueError(f"--priority-file {path} holds {', '.join(map(repr, bad[:5]))}, which "
+        raise QueueError(f"{flag} {path} holds {', '.join(map(repr, bad[:5]))}, which "
                          f"{'is not a PR number' if len(bad) == 1 else 'are not PR numbers'}: write PR numbers separated by "
                          "spaces or commas")
     return tuple(dict.fromkeys(map(int, words)))
@@ -1312,11 +1313,11 @@ LEAN_SOURCES = (".lean", "lakefile.lean", "lakefile.toml", "lean-toolchain", "la
 #: the analysis tree: a Lean change only here that touches no lock and no spec (`LEAN_SPEC`) is proofs, checked by the
 #: after-landing run, a failure blaming it; Lean anywhere else runs as code (Flock's verifier and the ZK server, the PoUS
 #: grader, the certifier program, the inference-only check, the remote audit's verifier), and a lock run follows its landing
-LEAN_PROOFS_TREE = "Security/"
-#: the spec: the Lean the guarantees' statements read, `Security/`'s Definitions library, and the Lake files of its package.
+LEAN_PROOFS_TREE = "security/"
+#: the spec: the Lean the guarantees' statements read, `security/`'s Definitions library, and the Lake files of its package.
 #: A change to it, like a lock's, is a Lean change with or without a lock change
-LEAN_SPEC = ("Security/Definitions/", "Security/Definitions.lean", "Security/lakefile.toml", "Security/lake-manifest.json",
-             "Security/lean-toolchain")
+LEAN_SPEC = ("security/Definitions/", "security/Definitions.lean", "security/lakefile.toml", "security/lake-manifest.json",
+             "security/lean-toolchain")
 
 
 def lean_change(repo: Path, commit: str, base: str | None = None) -> bool:
@@ -1326,7 +1327,7 @@ def lean_change(repo: Path, commit: str, base: str | None = None) -> bool:
     guarantee's statement nor a definition it reads reaches `main` without its record (the after-landing lean-audit,
     `--no-regenerate`, fails on a record difference), or a Lean source outside `LEAN_PROOFS_TREE` of a Lake package that has a
     lock, Lean that runs as code, whose lock (its `verifier.allow` among them) would go stale the same way.  A change to
-    `Security/`'s other Lean alone is proofs: no lock run follows it, and a failure of the after-landing lean-audit blames
+    `security/`'s other Lean alone is proofs: no lock run follows it, and a failure of the after-landing lean-audit blames
     it."""
     files = changed(repo, base or f"{commit}^1", commit)
     if any(Path(f).name == LEAN_LOCK or f.endswith(LEAN_SOURCES) and f.startswith(LEAN_SPEC) for f in files):
@@ -3058,9 +3059,19 @@ class Queue:
 #: library), the checker, the lock and the workspace's member list (installed distributions), a sidecar (the registries), and
 #: what every target's entry reads or the registries import (an entry can read tens of files of vLLM's `program/` and these
 #: packages, so a change only to `verity_vllm/pipeline/` and `config.py` reruns hundreds of targets)
-_COLD_PREFIXES = ("verity/ml/circuits/", "tools/verity/circuit_check/", "integrations/vllm/verity_vllm/",
-                  "verity/core/protocols/pouw/", "verity/core/protocols/pous/", "verity/ml/flock/python/",
-                  "verity/ml/commitments/", "verity/ml/private_circuits/", "benchmarks/numerical/python/")
+_COLD_PREFIXES = ("verity/circuits/", "verity/definitions/circuits/", "verity/definitions/ops/", "verity/definitions/silicon/",
+                  "tools/verity/circuit_check/", "adapters/vllm/verity_vllm/", "verity/protocols/flock/prover/python/",
+                  "verity/protocols/pouw/verifier/", "verity/protocols/pous/verifier/", "verity/protocols/pous/lean/",
+                  "verity/protocols/pous/device/challenger_session.py", "verity/protocols/pous/device/memory_challenger.py",
+                  "verity/definitions/commitments/", "verity/protocols/poub/verifier/commitments/",
+                  "verity/commitments/frame_v3/", "verity/commitments/gates/", "verity/commitments/hm96/",
+                  "verity/commitments/__init__.py", "verity/commitments/advice.py", "verity/commitments/coin_tree.py",
+                  "verity/commitments/domains.py", "verity/commitments/history.py", "verity/commitments/identity.py",
+                  "verity/commitments/indexed.py", "verity/commitments/layout.py", "verity/commitments/limits.py",
+                  "verity/commitments/merkle.py", "verity/commitments/multiproof.py", "verity/commitments/pyproject.toml",
+                  "verity/commitments/row_table.py", "verity/commitments/rowleaf.py", "verity/commitments/scheme.py",
+                  "verity/commitments/window.py",
+                  "verity/definitions/private_circuits/", "benchmarks/numerical/python/")
 
 
 def contained_first(entries: dict[int, Entry]) -> list[int]:
@@ -3642,7 +3653,7 @@ SUITES = quick_tier.SUITES
 QUICK_TIER = ["uv", "run", "--locked", "--all-packages", "--extra", "torch-cpu", "python", SUITES, "--quick"]
 #: the Lake packages whose builds the suites' tests run, built before `suites.py` as `check` builds them before those suites: each
 #: test worker runs `lake build` there, and workers building one from cold at once fail (`lake build` exit 1, a binary missing)
-LEAN_BUILDS = ("verity/core/service/flock",)
+LEAN_BUILDS = ("verity/protocols/flock/verifier",)
 
 
 def allowed(repo: Path, base: str | None) -> Callable[[dict], bool] | None:
@@ -4130,7 +4141,7 @@ def _by_suite(paths: tuple[str, ...]) -> tuple[tuple[str, tuple[str, ...]], ...]
 PREFLIGHT_TESTS = _by_suite(PREFLIGHT_TEST_PATHS)
 #: lints the preflight runs on the merged tree only when the change reaches what they judge (a path starting with, or holding
 #: a directory, of the prefix): they take about 20 s and 40 s, and a train that fails one of them loses its hour-long check
-PREFLIGHT_LINTS = (("tests/test_no_wall_clock.py", ("tests/",)), ("integrations/vllm/tests/lint", ("integrations/vllm/",)))
+PREFLIGHT_LINTS = (("tests/test_no_wall_clock.py", ("tests/",)), ("adapters/vllm/tests/lint", ("adapters/vllm/",)))
 #: suites whose collection is no cheap check, each with why; the preflight names them and leaves them to the train's check
 PREFLIGHT_UNCOLLECTED: dict[str, str] = {}
 #: the merged tree's environment, as the quick tier's `uv run --locked` has it (a fresh tree syncs from uv's cache in seconds)
@@ -4598,7 +4609,7 @@ class LakeBuild:
         secs = f"{max(left - 10, 1):.0f}"
         argv = [sys.executable, "-m", "research", "run", "--on", node, *(["--pool", self.pool, "--pool-wait", secs] if self.pool else []),
                 *(["--as", self.by] if self.by else []), "--project", "verity", "--source", str(wt), "--cwd", "clone",
-                "--timeout", secs, "--wait", "--wait-every", "5", "--wait-max", secs, "--",
+                "--timeout", f"{secs}s", "--wait", "--wait-every", "5", "--wait-max", secs, "--",
                 "python3", LEAN_BUILDER, *([] if wait else ["--no-wait"]), "--build", *files]
         rc, said = self.run(argv, wt, left)
         where = f"on {node}"
@@ -4902,7 +4913,7 @@ class Preflight:
         """The commit to merge the head onto, how to name it, and `next`'s members up to it.  The members are the merges of `next`
         that the landing branch's tip (`main`'s when that can't be fetched) doesn't contain, by their trailers, past the commits
         without them (`queue_merges`); the commit is the one below the PR's newest merge among them, else `next`'s tip, or with no
-        `next` that landing tip."""
+        `next`, or one that doesn't hold `main` when `main` is the landing branch (no queue above it), that landing tip."""
         _git(self.repo, *STALL, "fetch", "-q", self.remote, "+refs/heads/main:refs/queue/preflight/main",
              f"+refs/pull/{pr.number}/head:refs/queue/preflight/pr")
         missing = lambda: _git(self.repo, "cat-file", "-e", f"{pr.head}^{{commit}}", check=False).returncode   # noqa: E731
@@ -4922,6 +4933,8 @@ class Preflight:
             raise QueueError(f"git ls-remote {self.remote}: {(r.stderr or r.stdout).strip()[-200:]}")
         _git(self.repo, *STALL, "fetch", "-q", self.remote, f"+refs/heads/{BRANCH}:refs/queue/preflight/{BRANCH}")
         tip = _out(self.repo, "rev-parse", f"refs/queue/preflight/{BRANCH}")
+        if into == "main" and _git(self.repo, "merge-base", "--is-ancestor", main, tip, check=False).returncode:
+            return main, f"`{into}` at {main[:12]} (`{BRANCH}` at {tip[:12]} doesn't hold it)", []
         members = queue_merges(self.repo, main, tip)
         if own := next((m for m in reversed(members) if m.pr == pr.number), None):
             below = _out(self.repo, "rev-parse", f"{own.commit}^1")
@@ -6724,7 +6737,8 @@ def main(argv: list[str]) -> int:
         # no sync here, on drive or off: drive's tick rebuilds `next` with its priority list and its flags
         told = q.tell_ejected(q.eject(a.pr, a.reason, a.by, sha=a.sha), a.reason, a.by)
         print(f"research queue: #{a.pr}'s mark is withdrawn; drive's next tick rebuilds `{q.branch}` without it (only drive's "
-              "tick pushes it)")
+              "tick pushes it). A verified-queue candidate in flight holding it still lands it as built unless the eject is "
+              "ci's or not by its owner")
         return told
     except QueueError as e:
         print(f"research queue: {e}", file=sys.stderr)
