@@ -233,7 +233,7 @@ def test_the_scheduler_constants():
 def test_bad_statics_are_refused_by_name(fn, kw, needle):
     extra = {k: v for k, v in (("DOT", F.HopperBF16WgmmaDot16), ("SCALE", 0.25)) if k in fn.statics}
     with pytest.raises(ValueError, match=needle.replace("(", r"\(").replace(")", r"\)")):
-        bind(fn, **kw, **extra).body
+        _ = bind(fn, **kw, **extra).body
 
 
 # --- the Boolean Definitions --------------------------------------------------------------------------------------------------------

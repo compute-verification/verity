@@ -141,9 +141,7 @@ def test_r5_a_nan_router_row_still_matches_the_unlifted_route_bit_for_bit(data):
 
 
 def _call_range(prog, name):
-    c = next(c for c in prog.circuit.root_calls() if (c.node.name or "") == name)
-    lo = min(g for g in c.returns)
-    return c
+    return next(c for c in prog.circuit.root_calls() if (c.node.name or "") == name)
 
 
 def test_a19_the_active_tokens_whole_call_is_bit_equal_to_its_single_token_run_whatever_its_batch_mate_is(data):
@@ -230,7 +228,6 @@ def test_p3_closure_the_moe_block_uses_only_lselect_and_lgatherrow_from_the_spec
                 prim_ids.add(L.member_id(nd.fn))  # the member the v2 wrapper computes when enabled (B7)
     spec_used = {i for i in prim_ids if i in L.specified_ids()}
     assert spec_used, "the MoE block must reach the specified class (its selects and gathers)"
-    families = {i.split("_v1")[0].rstrip("0123456789x") for i in spec_used}
     assert all(i.startswith(("LSelect", "LGatherRow")) for i in spec_used), spec_used   # (i): nothing MoE-specific joined the list
     assert not any(i.startswith("LStepLive") or i.startswith("LBot") or i.startswith("LIsActive") for i in spec_used)
     # (ii) the gather population per pair: TOPK·(2N+K) expert-row calls × K gathers each, over ALL E experts — whatever the route

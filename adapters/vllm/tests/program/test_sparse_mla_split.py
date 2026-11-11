@@ -238,10 +238,10 @@ def test_statics_are_checked() -> None:
         with pytest.raises(ValueError, match="selected keys in NS"):
             W.check_split_statics(T, NS)
         with pytest.raises(ValueError, match="selected keys in NS"):
-            bind(W.SparseMlaHeadSplit, T=T, NS=NS, DR=16, DV=16, BN=16, SCALE=0.0625, **FA3).body
+            _ = bind(W.SparseMlaHeadSplit, T=T, NS=NS, DR=16, DV=16, BN=16, SCALE=0.0625, **FA3).body
     for n in (0, W.LANES + 1):
         with pytest.raises(ValueError, match="the warp holds 1 to 32"):
-            bind(W.SparseMlaCombine, NSPLIT=n, DV=16, INV=FA3["INV"]).body
+            _ = bind(W.SparseMlaCombine, NSPLIT=n, DV=16, INV=FA3["INV"]).body
         with pytest.raises(ValueError, match="the warp holds 1 to 32"):
             TW.combine_rows(np.zeros((1, n), U32), np.zeros((1, n, 4), U32))
 
@@ -410,7 +410,7 @@ def test_a_head_is_its_parts_at_the_served_statics() -> None:
 
 def test_a_part_has_keys() -> None:
     with pytest.raises(ValueError, match="T=0 keys"):
-        bind(W.SparseMlaSplitPart, T=0, DR=16, DV=16, BN=16, SCALE=0.0625, **FA3).body
+        _ = bind(W.SparseMlaSplitPart, T=0, DR=16, DV=16, BN=16, SCALE=0.0625, **FA3).body
 
 
 def test_one_split_combines_to_its_bf16() -> None:

@@ -50,7 +50,9 @@ def test_rope_spec_is_the_neox_rotation_of_query_and_key():
         q, k, cs = _words(c, i)
         D = c["statics"]["D"]
         got = np.asarray(A.evaluate_spec(RD.spec(c["statics"]), [q, k, cs]), dtype=np.uint16)
-        f = lambda w: (w.astype(np.uint32) << 16).view(np.float32).astype(np.float64)
+        def f(w):
+            return (w.astype(np.uint32) << 16).view(np.float32).astype(np.float64)
+
         cos, sin = f(cs[: D // 2]), f(cs[D // 2:])
         want = []
         for x in (q, k):
@@ -67,7 +69,9 @@ def test_rope_gptj_spec_is_the_interleaved_rotation_of_query_and_key():
         q, k, cs = _words(c, i)
         D = c["statics"]["D"]
         got = np.asarray(A.evaluate_spec(RG.spec(c["statics"]), [q, k, cs]), dtype=np.uint16)
-        f = lambda w: (w.astype(np.uint32) << 16).view(np.float32).astype(np.float64)
+        def f(w):
+            return (w.astype(np.uint32) << 16).view(np.float32).astype(np.float64)
+
         cos, sin = f(cs[: D // 2]), f(cs[D // 2:])
         want = []
         for x in (q, k):
@@ -116,7 +120,9 @@ def test_moe_cases_route_distinct_experts_and_take_both_block_schedules():
 
 
 def test_two_rank_collectives_are_a_bf16_add_and_a_concatenation_in_rank_order():
-    f = lambda w: (w.astype(np.uint32) << 16).view(np.float32)
+    def f(w):
+        return (w.astype(np.uint32) << 16).view(np.float32)
+
     for i in range(10):
         c = TD.cases(random.Random(i), i)
         c["inputs"] = [dict(s, kind="random") for s in c["inputs"]]

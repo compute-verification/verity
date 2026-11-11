@@ -122,7 +122,9 @@ def test_q_word_cuts_it_into_word_units():
 
 
 def test_the_new_word_gates():
-    f = lambda x: int(np.float32(x).view(np.uint32))
+    def f(x):
+        return int(np.float32(x).view(np.uint32))
+
     assert TWGates.TopPNumkeep.evaluate(10, f(3.7)) == 7 and TWGates.TopPNumkeep.evaluate(10, f(12.0)) == 1
     assert TWGates.TopPNumkeep.evaluate(0, f(3.0)) == 0 and TWGates.TopPNumkeep.evaluate(5, f(float("nan"))) == 5
     assert TWGates.TopPNumkeep.evaluate(5, f(-2.0)) == 5 and TWGates.TopPNumkeep.evaluate(5, f(float("inf"))) == 5

@@ -45,8 +45,8 @@ def test_r1_the_lifted_workload_root_is_one_partitioned_namespace_and_every_guar
     am = wl.address_map()
     intervals = sorted([tuple(i["gates"]) for i in am["inputs"]] + [tuple(r["gates"]) for r in am["requests"]])
     assert intervals[0][0] == 0 and intervals[-1][1] == am["gates"] == wl.program.gates
-    for (a0, a1), (b0, b1) in zip(intervals, intervals[1:]):
-        assert a1 == b0, f"gap or overlap between {(a0, a1)} and {(b0, b1)}"
+    for (a0, a1), (b0, b_hi) in zip(intervals, intervals[1:]):
+        assert a1 == b0, f"gap or overlap between {(a0, a1)} and {(b0, b_hi)}"
     assert all(a < b for a, b in intervals)
     sh = am["shared"]
     assert sh["group"] == "weights"

@@ -108,9 +108,9 @@ def test_only_a_later_block_takes_the_running_state(first: bool) -> None:
 
 def test_statics_are_checked() -> None:
     with pytest.raises(ValueError, match="multiples of 16"):
-        bind(M.SparseMlaBlock, DR=8, DV=16, NVIS=4, FIRST=True, BN=16, DOT=FA3["DOT"], SCALE=0.0625).body
+        _ = bind(M.SparseMlaBlock, DR=8, DV=16, NVIS=4, FIRST=True, BN=16, DOT=FA3["DOT"], SCALE=0.0625).body
     with pytest.raises(ValueError, match="selected keys"):
-        bind(M.SparseMlaHead, T=0, DR=16, DV=16, BN=16, SCALE=0.0625, **FA3).body
+        _ = bind(M.SparseMlaHead, T=0, DR=16, DV=16, BN=16, SCALE=0.0625, **FA3).body
 
 
 BOOL = {"DOT": BM.SPARSE_MLA_GLM53["DOT"], "INV": BM.SPARSE_MLA_GLM53["INV"]}

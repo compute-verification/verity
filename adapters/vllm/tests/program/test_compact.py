@@ -1,9 +1,10 @@
-import pytest
 """cb_a.compact: run progressions are the record's maximal runs, run-length-encoded over (idx, lo, hi) -- built from the
 descriptor's refs JSON without expanding a Strided or a gather over consecutive producers, equal iff the run lists are equal, expandable
 back to the record's bytes."""
 import json
 import random
+
+import pytest
 
 from verity_vllm.program import compact as K
 from verity_vllm.observe.fold.memory import access_runs
@@ -274,7 +275,6 @@ def test_tp_rank_compare_in_compact_form_is_the_records(tmp_path, monkeypatch):
     # the two-rank fold persisted as runs and as progressions: the TP collective-row reader
     # (rank_match.own_producers_from_record, the one consumer of NODE-space refs from the file) reads the same producers from either store,
     # and the cross-rank verdict over them is the same PASS; every negative above is a compare negative, this check is the record reader's.
-    import os
     from verity_vllm.pipeline import match as RC
     from verity_vllm.check.match import rank_match as RM
     folds = {r: T.fold_rank(r) for r in (0, 1)}
@@ -435,7 +435,6 @@ def test_persist_program_progressions_form_gives_the_same_prog_and_document_and_
     compact form) and the GM-01 document are identical over both files; (3) no sidecar, same fold digest; (4) the header AND the loader
     name the form."""
     import os
-    import shutil
     from verity_vllm.pipeline import match as RC
     from verity_vllm.check.match import program_compare as C
     from verity_vllm.check.match import global_match as gm

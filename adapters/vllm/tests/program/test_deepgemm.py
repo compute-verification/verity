@@ -49,7 +49,9 @@ def _bf16_rows(rng, n: int, K: int, scale: float = 1.0) -> np.ndarray:
 
 def _guard_rows(rng, K: int) -> list[np.ndarray]:
     """Rows of K bf16 words, each 128-word group reaching one guard of the quantisers."""
-    sub = lambda: (rng.integers(1, 0x80, 128) | (rng.integers(0, 2, 128) << 15)).astype(np.uint16)   # nonzero subnormals
+    def sub():   # nonzero subnormals
+        return (rng.integers(1, 0x80, 128) | (rng.integers(0, 2, 128) << 15)).astype(np.uint16)
+
     groups = []
     g = sub(); groups.append(g)                                        # all subnormal, lane 0 nonzero: scale +inf, words 0x7F
     g = sub(); g[[0, 1, 64, 65]] = 0; groups.append(g)                 # lane 0 zero, the rest subnormal: amax 0, scale 1
@@ -228,7 +230,9 @@ def test_linears_match_their_twins(N: int) -> None:
     K = 256
     ws = T.upcast_e8m0(rng.integers(112, 124, (-(-N // 128), K // 128)))
     w = _weights(rng, N, K)
-    finite = lambda ws, nf: [v for v, f in zip(ws, nf) if not f]
+    def finite(ws, nf):
+        return [v for v, f in zip(ws, nf) if not f]
+
     guards = _guard_rows(rng, K)
     # (row, every DeepGEMM lane nonfinite, every FlashInfer lane nonfinite): an +inf or a NaN in a group makes every lane NaN (the
     # twin flags it), and so does FlashInfer's all-subnormal group (scale +inf, words 0x7F) where DeepGEMM's eps keeps it finite

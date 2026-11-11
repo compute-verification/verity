@@ -376,7 +376,7 @@ def test_boolean_tf32_compositions() -> None:
 ])
 def test_statics_refused(definition, statics) -> None:
     with pytest.raises(ValueError):
-        bind(definition, **statics).body
+        _ = bind(definition, **statics).body
 
 
 def test_served_splits() -> None:
