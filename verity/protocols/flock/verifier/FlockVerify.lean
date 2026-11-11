@@ -1111,8 +1111,8 @@ def verifyCmd (args : List String) (upstream : Option Lean.Json := none) : IO UI
   -- `FailClosed.ScopeP` is the check without --registered F: no plain multi-table claim reads a shared-row public file
   let scope := if plainTables then ProvedScope.checkPOf parsed tags pubB count program publicInputs.isSome false
     else ProvedScope.checkOf parsed tags zk pubB count publicInputs.isSome registered.isSome
-  -- the program parsed once, for its digest, every setup and every reader in one: each is what it is with the program read
-  -- anew (`ProvedScope.programDigestOf_read`, `Registered.checkProgramBy_read`, `buildSessionBy_read`, `…checkCoverBy_read`)
+  -- the program parsed once, for its digest and the three readers below: each is what it is with the program read anew
+  -- (`ProvedScope.programDigestOf_read`, `Registered.checkProgramBy_read`, `buildSessionBy_read`, `…checkCoverBy_read`)
   let read := ProgramRead.of (program.getD ByteArray.empty)
   let setupOf := fun (draw : Option Lean.Json) =>
     match (do
