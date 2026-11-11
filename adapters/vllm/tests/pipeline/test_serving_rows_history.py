@@ -199,7 +199,8 @@ def test_every_member_commits_each_port_under_the_schema_its_statement_states(se
 def test_a_record_whose_members_and_declared_tables_disagree_on_the_row_seg_rows_is_refused(served, monkeypatch):
     """`serving_rows.circuit_record` refuses a template whose members commit a row under two schemas (it has one statement),
     and a declared history table whose writer's row (`interface.seg_rows`) the members commit v2; `chunk_rows.unit_rows`
-    refuses a row-seg row that is none of the template's."""
+    refuses a row-seg row that is none of the template's, and a row named with no template, which would otherwise read as
+    another template's and leave the row v2."""
     rows = served.windows[0]
     _plan, ms = cut(rows)
     with pytest.raises(ValueError, match="a template has one statement"):
@@ -211,6 +212,9 @@ def test_a_record_whose_members_and_declared_tables_disagree_on_the_row_seg_rows
     with pytest.raises(ValueError, match=r"\['o1'\] is no row of its"):
         CR.unit_rows(SRW.template(LAT), [(LAT, "o1")])
     assert CR.unit_rows(SRW.template(LAT), [(READ, "o1")]) == CR.unit_rows(SRW.template(LAT))
+    for bare in (lambda: CR.unit_rows(SRW.template(LAT), [HR.OUT]), lambda: SRW.unit_member(LAT, 1, seg=[HR.OUT])):
+        with pytest.raises(TypeError, match=r"names each row as \(template, row\)"):
+            bare()
 
 
 def recomputed(h: IF.History, ms, strings_of, held) -> list[bytes]:
