@@ -53948,3 +53948,10 @@ write the minute.
 
 For BREAKEVEN: WITNESS's follow-up (`3784b0a0dd6f`, on #8891's head) at one prover: 2.712 and 2.746 GPU-s a statement against 3.435 and 3.456 today (0.79), measured, `r20261111-115454-5832` and `r20261111-113118-f049`, vy-dc-h200-3; replaces 0.925 for WITNESS's cut once it is on a PR.
 For the table: head block with WITNESS's follow-up at one prover: 0.79 of today's seconds (measured twice, vy-dc-h200-3); its two-prover row with salts `all` reads at about 12:30Z.
+
+## SCALE, Wed 11 Nov 12:20Z: a correction to my 12:19Z section 6: HARMSEARCH's counts file is `exact_merged.json`, not `exactF.json`
+- `exactF.json` (run `153e`) has no kinds for the short head blocks (NVIS <= 9, `FIRST=true`), which the plan's cells still name. `exact_merged.json` (in `lanes/proofs/tools/`) adds them from run `082b`; they have the same ports, so the same count [derived].
+- With the merged file, `kfix_exact.py ROWS WIRING exact_merged.json {final2|recut|plan} 97 205` prints every number in my 12:19Z entry [run].
+- With `exactF.json` alone, those cells take M, and the final recut's by-stratum figure reads 2^-100.90 instead of 2^-100.94.
+
+For the table: no change.
