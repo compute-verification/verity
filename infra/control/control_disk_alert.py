@@ -1,6 +1,7 @@
 """Infra's relay for the control pod's root disk (vy-control-verity's container overlay; when it fills, the
 spend guard's state writes fail). Every 5 minutes, read `df -P /` on the pod. One alert in #agent-alerts when usage
-reaches 90%, another at 95%, one note when it falls back under 85%, and one alert when the pod can't be read for 30 minutes.
+reaches 85%, another at 90% and at 95%, one note when it falls back under 80%, and one alert when the pod can't be read for 30
+minutes. A level re-arms once usage is `REARM` points under it, so a disk that drops to 91% and climbs back to 95% alerts again.
 
 The same pass reads the steward's notes clone, whose sync (and the budgets guard's read of budgets.toml) can stall silently on
 a detached HEAD or a stale index.lock. One alert when the clone's HEAD is detached, its index.lock is older than
@@ -23,8 +24,10 @@ from research.pods import budgets, connect
 
 SEEN = Path(os.environ.get("CONTROL_DISK_SEEN", Path.home() / "control-disk/seen.json"))
 LOCAL = os.environ.get("CONTROL_POD_LOCAL") == "1"
-LEVELS = (90, 95)
-CLEAR = 85
+#: graph2's ready checks take ~2 GB each, several an hour, so 85% leaves about an hour to act
+LEVELS = (85, 90, 95)
+CLEAR = 80
+REARM = 3
 UNREAD_S = 30 * 60
 BIG = "du -xslm /tmp /var /usr /root 2>/dev/null"
 NOTES = "/workspace/steward/research-notes"
@@ -42,6 +45,18 @@ DRY = "--dry-run" in sys.argv
 
 def log(msg: str) -> None:
     print(f"{time.strftime('%H:%M:%SZ', time.gmtime())} {msg}", flush=True)
+
+
+def step(pct: int, seen: int) -> tuple[str | None, int]:
+    """What a reading of ``pct``% does after the level ``seen`` was alerted: ("alert", level) for a level newly reached,
+    ("clear", 0) under `CLEAR`, else (None, the level kept: one `REARM` points above ``pct`` is dropped silently, down to the
+    first level, which only the clear drops)."""
+    level = max((lv for lv in LEVELS if pct >= lv), default=0)
+    if level > seen:
+        return "alert", level
+    if pct < CLEAR and seen:
+        return "clear", 0
+    return None, max([lv for lv in LEVELS if lv <= seen and pct > lv - REARM], default=LEVELS[0] if seen else 0)
 
 
 def post(text: str) -> bool:
@@ -100,16 +115,18 @@ def main() -> None:
             if seen["unread"]:
                 seen["unread"] = not post(f"*Control pod readable again:* `vy-control-verity` root disk at {pct}%.")
             log(f"{pct}% used {used / 2**20:.2f} GiB of {size / 2**20:.2f} GiB, {avail / 2**20:.2f} GiB free")
-            level = max((lv for lv in LEVELS if pct >= lv), default=0)
-            if level > seen["level"]:
+            kind, level = step(pct, seen["level"])
+            if kind == "alert":
                 big = ", ".join(f"`{p}` {int(m) / 1024:.2f} GiB" for m, p in (ln.split("\t") for ln in pod(BIG).splitlines()))
                 if post(f"*Control pod disk at {pct}%:* `vy-control-verity`'s root (a {size / 2**20:.0f} GiB overlay) has "
                         f"{avail / 2**20:.2f} GiB free. When it filled on 1 Oct, the spend guard's state writes failed. Largest: {big}. "
                         "ssh: `research pods ssh vy-control-verity` (key `RUNPOD_SSH_KEY_B64`)."):
                     seen["level"] = level
-            elif pct < CLEAR and seen["level"]:
+            elif kind == "clear":
                 if post(f"*Control pod disk back to {pct}%* (under {CLEAR}%): `vy-control-verity` has {avail / 2**20:.2f} GiB free."):
                     seen["level"] = 0
+            else:
+                seen["level"] = level
         except Exception as e:  # noqa: BLE001
             log(f"read failed: {type(e).__name__}: {e}")
             late = time.time() - seen["last_read"]
