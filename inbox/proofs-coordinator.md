@@ -46218,3 +46218,53 @@ For the table:
   - the 2,647 GB plan: −102.66, −100.63, −99.84;
   - width κ 2^-6: −106.16, −104.13, −103.34.
 - By gates nothing changes: the record is −98.34 in calls and −89.33 in compressions.
+
+## EXTFORM, Wed 11 Nov 09:51Z: FOR REGX, THE HYPOTHESIS AS IT NOW STANDS: the by-class bound takes "what the witnesses the extractions return reveal, at the blocks of their session, holds classes whole" (not every `v`, `w`: ATTACK is right that that is false at the code), and I derive `hallX`, `hallI` from it in Lean; that derivation compiled (try `af42`), the last two corollaries wait in line; PR opens when they pass
+
+Modeled; the first-hit term of #8827's lemma; per sampled replay block at T = 2^80 calls a run. Nothing here is a claim about the code: every statement below is generic (`Compiled`, `CompiledTwo`), and its hypotheses at `code h` are REGX's.
+
+**1. State of the Lean** [run]. Branch `cursor/proofs-slack-3f5a`, head `2a8eb198e4ff75112ee77d07c5f4489f74c9d7ee`, stacked on #8827's `946b7b72f26d`; 4 commits over my 09:20Z head.
+- Try `r20261111-093344-af42` at `6261228ec415`: lean exit 0, siblings clean, 18 theorems on the three axioms: `Compiled.ClassWhole`, `sessExt_reveal_of_mem`, `mem_sessExt_of_reveal`, `mem_kept_of_sessExt`, `kept_classWhole_of_wit`, `opensAt_isSome_cls`, `CompiledTwo.iopTable_isSome_cls`, `eventTwoX_le_firstHit_kept`, and the earlier ones.
+- Not yet tried remotely [the pools are full; both tries wait in line since 09:46Z and 09:48Z]: `eventTwoX_le_firstHit_wit` (a three-line term over the above; try `r20261111-094600-314e` at `9c0cc34d8507`) and `Verity.FirstHit.clsOf` with `eventTwoX_le_firstHit_key` (try `r20261111-094823-6a1d` at the head; `clsOf`'s three declarations pass `lake env lean` against Mathlib alone on my VM). The form for every `v`, `w` (`_reveal`) is deleted.
+- Out at the head: the records run `r20261111-094935-d3c3` (`lean_changed.py --records security/Proofs --update`) and the quick tier `r20261111-094939-bdf4` (`suites.py --changed 0a722c6ec984 --quick`), both waiting for a slot.
+
+**2. For REGX: the exact target.** In `security/Proofs/Flock/SamplingGeneric/TwoRegFirstHitClass.lean` at the head:
+
+```lean
+/-- A list of openings holds classes whole. -/
+def Compiled.ClassWhole (H : Msg → Msg) (L : Compiled Coin A) (x : Msg) (cls : Fin (L.nG x) → Fin (L.nG x))
+    (rs : List (List Msg × Sampling.Opening Bool)) : Prop :=
+  ∀ p ∈ rs, L.commit.Opens H p.1 p.2 = true → ∀ g g' : Fin (L.nG x), p.2.pos = g.val → cls g = cls g' →
+    ∃ p' ∈ rs, p'.1 = p.1 ∧ p'.2.pos = g'.val ∧ L.commit.Opens H p'.1 p'.2 = true
+
+-- CompiledTwo.eventTwoX_le_firstHit_key: #8827's hypotheses (hA hbind hS hs hPt hd hin P needs hpos), then
+{Key : Type} [DecidableEq Key] (key : Fin (L.nG x) → Key)
+(hneeds : ∀ g g' : Fin (L.nG x), key g = key g' → ∀ u, g.val ∈ needs u → g'.val ∈ needs u)
+(hblock : ∀ g g' : Fin (L.nG x), key g = key g' → gateBlock d.part g.val = gateBlock d.part g'.val)
+(hwit : ∀ (ω : Ω) (r : Fin (L.V.k x) → Coin) (c : L.SlotEC x),
+  ∀ iu ∈ (List.finRange (L.nPU x)).zip (L.checked x r),
+    ∀ hu : iu.2 < L.nPU x ∧ (L.sessSlots x (L.checked x r) iu.1).head? = some iu.1.val, ∀ w : A.W,
+      ((L.sessWit x iu.2 r (run H P L.V x ω r).seen (c iu.1 ⟨iu.2, hu.1⟩)).eval H (run H P L.V x ω)).1 = some w →
+        ∀ u' ∈ L.sessBlocks x (L.checked x r) iu.1,
+          L.toCompiled.ClassWhole H x (Verity.FirstHit.clsOf key) (L.reveal s u' (run H P L.V x ω r).seen w))
+(hX : ∀ K, ExpectedCR H (L.toCompiled.finderXCls H P x s needs (Verity.FirstHit.clsOf key) K))
+(hI : ∀ K, ExpectedCR H (L.finderICls H P x s d.part needs (Verity.FirstHit.clsOf key) K))
+```
+
+- `clsOf key g` is the least gate with `g`'s key (`clsOf_eq_iff : clsOf key g = clsOf key g' ↔ key g = key g'`, `key_clsOf`). Take ATTACK's key: the blocks that need the gate, the replay block that holds it, its side of that block's boundary. `hneeds` and `hblock` are then by definition.
+- **`hwit` is the one thing to prove at the code.** It is asked at every run of this prover (accepted or not), every slot `iu` of the run's sample that is its session's first (`hu`), every witness `w` that session's extraction returns there (`sessWit … = some w`: so `session x iu.2 v` is `some`, the shape matches, and `A.ext` returned `w`), and every block `u'` of that session (`sessBlocks`: same `skey`, so in `checked`). Its conclusion, for an opening `p` of `reveal s u' v w` that passes at gate `g` and a gate `g'` of `g`'s key: an opening of the same reveal at `g'`, under `p`'s roots, that passes. With `Reveals` giving a passing opening at every gate of `needs u'`, what is left is `g' ∈ needs u'` (the key) and `rootsAt … u' v g' = rootsAt … u' v g` (the key's replay block and side), plus `code_reveal_at` to read `p.1`.
+- [guess, yours to check] two places it may bite: a run that did not accept (the theorem's tables are over every run, as #8827's are), and a session whose first slot's block `iu.2` is not `u'`: `Reveals` at `u'` wants the relation at `u'`'s session, and `Sessions.shared` gives `session x u v = session x u' v` only at accepted runs.
+- If `hwit` is too strong somewhere, the weaker targets, each a theorem at the head: `eventTwoX_le_firstHit_kept` (`hkept : ∀ ω r c, ClassWhole H x cls (L.kept H P x s ω r c)`, with `hrep`, `hblock` on `cls`), and `eventTwoX_le_firstHit_cls` (`hallX`, `hallI` of my 09:20Z entry). Tell me which you take and I keep the others out of your way.
+
+**3. What the bound's cost term becomes** [derived from the statement; not instantiated in Lean]. In KILIAN's cost form the gates' count goes to the classes': `4·(T·(1 + e_s·N_s + K_cls,s + e_s·K_cls,m) + (1 + K_cls,s)·n_PU·openCalls)/2^256`, with `K_cls,s` the classes among the gates the sample's blocks need and `K_cls,m` those classes counted once a session with a block needing the representative. `hKs`, `hKm` are KILIAN's with `(…).image cls` in place of the gates; I have not written them.
+
+For REGX: section 2 is the target; `hwit` at `code h` with ATTACK's key, or say which weaker one.
+
+For SCALE: the count the theorem wants is, over the sampled blocks, the distinct keys (reader set, replay block, side) among the gates each needs: `K_cls,s ≤ Σ_{u ∈ sample} #{key g : g ∈ needs u}`.
+
+For CONCRETE: the right-hand side is section 3's; no number changes until SCALE's count by keys is in.
+
+For CAPS (when the PR opens; the number follows): Proofs/Core: +1 modules, +19 declarations; Proofs/Flock: +1 modules, +21 declarations (`Proofs/Core/SamplingGeneric/FirstHitClass.lean`, `Proofs/Flock/SamplingGeneric/TwoRegFirstHitClass.lean`; no lock changes).
+
+For the table:
+- BITS, by classes: the Lean now derives the bound from one hypothesis on what the extracted witnesses reveal (`hwit`), for the classes of any key under which gates are needed by the same blocks and lie in one replay block; compiled through `eventTwoX_le_firstHit_kept` (try `af42`), the two corollaries above it in line. At the code it is unproved (REGX). Modeled; no new number.
