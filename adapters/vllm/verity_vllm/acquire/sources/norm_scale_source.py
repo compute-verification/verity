@@ -87,10 +87,11 @@ class NormScaleSource:
         import torch
 
         self.torch, self.c, self.model = torch, committer, model
-        self.modules = {op: NS.site_of(fam) for op, fam in modules.items()}
-        bad = sorted(op for op, kind in self.modules.items() if kind is None)
-        if not self.modules or bad:
-            raise ValueError(f"norm scales: no norm module to tap ({len(self.modules)}) or modules of no norm family: {bad[:4]}")
+        sites = {op: NS.site_of(fam) for op, fam in modules.items()}
+        bad = sorted(op for op, kind in sites.items() if kind is None)
+        if not sites or bad:
+            raise ValueError(f"norm scales: no norm module to tap ({len(sites)}) or modules of no norm family: {bad[:4]}")
+        self.modules: dict[str, str] = {op: kind for op, kind in sites.items() if kind is not None}
         self.kinds = sorted(set(self.modules.values()))
         self.so_path, self.ns = so_path, None
         if "cuda" in self.kinds:

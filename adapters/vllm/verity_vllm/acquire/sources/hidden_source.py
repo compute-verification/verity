@@ -483,7 +483,9 @@ def attention_hidden(manifest: Any, model: Any) -> dict[str, Any]:
 def with_hidden_class(classes: tuple[str, ...], family: str | None) -> tuple[str, ...]:
     """`classes` with its attention hidden class replaced by `family` in place, or dropped when `family` is None."""
     hidden = set(HIDDEN_STREAM_BY_FA.values())
-    return tuple(family if c in hidden else c for c in classes if family or c not in hidden)
+    if not family:
+        return tuple(c for c in classes if c not in hidden)
+    return tuple(family if c in hidden else c for c in classes)
 
 
 def require_hidden_on_every_rank(made: list[dict[str, Any]], required_classes: tuple[str, ...], versions: dict[str, Any], *,
