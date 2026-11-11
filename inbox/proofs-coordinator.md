@@ -43529,3 +43529,84 @@ Tags: **[run]** a command I ran now, **[read]** a file or record I read now, **[
 
 For the table:
 - #8779 at `dfe58c687820`: the second reading carries. The merge changes no code, and the command prints the same 14,228.6 GB over a world year (modeled), with the same labels, as at `f0f27082ee4c`.
+
+## SALTS, Wed 11 Nov 08:54Z: THE SIZING, whole. Unmarked, no PR, a claim for Daniel: the salts' 7.3 host CPU-s a statement go to 1.2 with every tree's salts expanded by ChaCha20 from a 32-byte OS key (measured on a CPU node, host side, built on my branch), statement 2.86 to 2.11 s now and 1.78 to 1.04 s with the witness on the card (modeled). The trees above level 0 alone (40% of the bytes) need no assumption; level 0 and the pads trees need one new named Prop, or A4 with SHA-512, which only pays on the card
+
+Agent `bc-6b123d36-58a2-57e4-92e8-192e6a5a75dc`. This closes what you asked at 08:12Z ("then finish the sizing: files, the exact Prop, lock entries, the firewall path"). It adds to my 08:00Z, 08:09Z, 08:35Z and 08:40Z entries and repeats only their numbers. Code read at `origin/main` `8201dacff26e`. No answer from you yet on the card-side fill; I have not written it.
+
+**1. The count, now for both statements.**
+- `FIRST=true` is the same shape and the same count as `FIRST=false`: `dense_m` 35, `k_log` 27, 15 trees, 13,996,032 leaves, 2,687,238,144 salt bytes, 41,004 reads of 65,536 bytes [read: `r20261111-061056-d72e`'s record, `art:a18db05e4712…`, its prover log and `SALTSAHEAD … "trees":12`; my 08:00Z arithmetic].
+- Its salts cost 7.63 CPU-s a statement: the ten `flock-salts-N` threads took 327.28 s of system and 0.95 s of user time over 43 sessions [run: summed its `out/cpu/k1-threads.tsv.gz`]. `FIRST=false` is 7.30 + 0.02 [run, 08:00Z].
+- Neither row ran the firewall: `FC_FIREWALL` appears nowhere in either record, and the prover log has no firewall line [run: grep of `build.txt`, `job.log`, the logs]. Section 4 says why that matters.
+- Node A: kernel `6.8.0-147-generic` [read: `job.json`]. Its libc is in no record, and I may not launch there. It does not matter today: the one cheaper read of the same bytes needs kernel 6.11 [guess: memory].
+
+**2. The ways.** Host CPU-s are the salts' own, a statement, on node A. Statement seconds are kernels' rule, 0.12308 s a host CPU-s (relayed), with 23.2 CPU-s now and 14.5 once the witness is on the card; "evaluator's time not counted" applies to every row.
+
+| way | salts' host CPU-s | statement now / witness on card | label | the Prop it adds |
+|---|---|---|---|---|
+| today: bulk OS read, on `main` | 7.30 | 2.86 / 1.78 | measured, `r20261111-061047-6773` | none |
+| (a) vDSO `getrandom` | 5.6 | 2.64 / 1.57 | modeled; node A's kernel has none | none |
+| (b) 176-byte salts | 6.7 | 2.78 / 1.71 | modeled | none new; a leaf hides at 2^-129, not 2^-193 |
+| (d) `upper`: a 32-byte OS key a tree above level 0, ChaCha20 on the host | 4.84 to 4.91 | 2.55 to 2.56 / 1.48 to 1.49 | measured on a CPU node, scaled to node A | **none** |
+| (d) the same trees with a constant salt | 4.39 | 2.50 / 1.43 | modeled, unbuilt | none; a design-rule question (below) |
+| (c) `all`: every tree, ChaCha20 on the host | 1.15 to 1.33 | 2.10 to 2.12 / 1.03 to 1.05 | measured on a CPU node, scaled | `ChaCha20StreamsUniform` (new) |
+| (c) `all`, ChaCha20, filled on the card | about 0 | 1.96 / 0.89 | modeled, unbuilt | the same |
+| (c) `all`, SHA-512 streams on the host | about 16 | worse than today | modeled from a local rate | A4 (in `trust.extra` already) |
+| (c) `all`, SHA-512 streams on the card | about 0 | 1.96 / 0.89, plus about 0.03 s of card | modeled, unbuilt | A4 |
+| (d) one salt a block of 16 level-0 columns | about 0.3 | 1.99 / 0.92 | unchecked design, PARAMS's | none |
+
+- The measured rows: `r20261111-083117-ea63` on `vy-nebius-cpu-9` (EPYC-Genoa, kernel `6.11.0-1016-nvidia`, glibc 2.39), ten threads, the statement's 15 trees, four rounds: 6.305 CPU-s today, 4.311 `upper`, 1.158 `all`; OS bytes 2,687,238,144, then 1,613,758,848, then 480 [run]. Scaled to node A by its own generator's rate, 368 MB a CPU-s against 426 there [my arithmetic].
+- SHA-512 streams: 64 bytes of stream cost one compression, 245 MB a CPU-s on my VM against the kernel's 546 there [run: `openssl speed -evp sha512 -bytes 64`, and my 08:00Z timer]. So a SHA-512 stream on the host costs 2.2 times today's read. It pays only where the card does it: 42 million compressions a statement, about 0.03 s [guess, 08:00Z].
+- `FIRST=true`: 7.63 today; in proportion 5.1 `upper` and 1.2 to 1.4 `all` [modeled].
+
+**3. The exact Prop for each way, and the lock.**
+- **`upper`: none.** The model hides level 0's leaves and the pads trees' and no others (`Hid`, `security/Definitions/Flock/ZK/RealView.lean` l.34). Levels 1 and up are any function of the restarted table and of salts of any type `Hi` (`lig`, `…/ZK/Table.lean` l.114; "every theorem holds for any of it", l.34 to 37), and the view already holds that table whole (l.43 to 44) [read]. With `Hi` the keys and `lig` expanding them the statements apply as written. Nobody but me has checked this reading.
+- The same reading lets those salts be a constant (`Hi := Unit`): no bytes, no expansion, no cipher. But those trees then stop being hiding commitments, and AGENTS.md lists "hiding commitments" among the four public kinds. That is a design rule, so Daniel's; the keyed form keeps them hiding in practice and is what I built.
+- **`all` with ChaCha20: one new named assumption**, which does not exist today [run: `rg -i chacha security/`, no Prop]:
+
+```lean
+/-- (`prg/chacha20`) ChaCha20 under uniform 256-bit keys, one a tree, passes a test as uniform bytes do, up to `η`. -/
+def ChaCha20StreamsUniform {m : ℕ} (nonce : Fin m → UInt64) (L : Fin m → ℕ)
+    (E : ((i : Fin m) → Fin (L i) → Fin 256) → Prop) (η : ℝ≥0∞) : Prop :=
+  UniformRandomBytesTest L
+    (fun (key : Fin m → Fin 32 → Fin 256) i b => chacha20Byte (key i) (nonce i) b) E η
+```
+
+  with `chacha20Byte k n b` byte `b % 64` of `PouwCommit.chacha20Block k (b / 64) n` (`verity/protocols/pouw/verifier/lean/commit/PouwCommit/Rows.lean` l.43), `L i = 192 · leaves i`, `nonce i` the tree's id, and `E` the hiding step's test. The keys' own uniformity stays A3 per test at 15 reads of 32 bytes. I wrote this Prop; it is not compiled.
+- In form the theorems need nothing new: the one guarantee in the lock that takes A3 per test, `Flock.SecurityProofs.recursiveZK_os_gap`, takes it at a free source `t` (`security/lean-audit.json` l.15836 to 15848), as `hm96Hiding_os` and `ideal_leaves_swap_os` do (`…/Discharge/ZkView/OsSalts.lean` l.164, l.187) [read]. I advise against using that: `trust.base` reads A3 per test as "the bytes read from the operating system" (l.3379), and A3's own docstring says a build that expands with ChaCha20 gives "no record … evidence for a theorem that takes A3" (`security/Definitions/Assumptions/Flock.lean` l.141 to 143) [read]. Instantiating `t` at an expansion would make the lock say less than it reads.
+- **`all` with SHA-512: A4**, `FlockSoundness.Assumptions.KeyedStreamsUniform 32 domain context (idx := the tree's id) (L := fun t => 192 · leaves t) E η` (`security/Proofs/Flock/Soundness/Assumptions.lean` l.69), taken at `E` and at its complement because A4 is one-sided [read]. No new name, and it keeps "one hash".
+- **Lock entries** (`security/lean-audit.json`). ChaCha20: `assumptions` gains the new name with owner `@proofs`; `trust.extra` gains it under `Flock.SecurityProofs.SessionLoopZKDeployed` and `…RecursiveZKLoopAnySumDeployed` with its reason, which needs Daniel's ruling, else it lands in `trust_gap` and raises his number. SHA-512: `trust.extra` holds A4 for both already (l.3389, l.3394; "the deployed salts' keyed SHA-512 streams"). Either way the records of the guarantees whose statements gain the hypothesis change, and `recursiveZK_os_gap` is frozen (l.26729). `upper`: no `assumptions`, `trust` or `trust_gap` entry.
+- What it means in substance, for Daniel: today's OS salts are already ChaCha20 under a kernel key (A3's docstring, l.101 to 103), and `η` is that generator's advantage. `all` moves the same cipher into our code under a key we read from the OS: no new kind of reliance, a new place for a bug (a repeated nonce, a key that outlives its tree). It reverses his 9 Oct ruling, "Salts are drawn from the OS, not expanded by a PRG" (`dca34c1141`; friction skill l.204), and `fd36cbaf2b` removed exactly this code that day.
+
+**4. The firewall path: where the deployed guarantee actually reads the salts.**
+- Both deployed zero-knowledge guarantees take `Claims.ZKServer.Loop.Src`: every byte the Lean session loop reads is the uniform tape's. Its level-0 half is `Loop.Level0Src`, and `Loop.RepSrc` says each pads-tree leaf's 192 bytes and each leaf's salt at levels 1 and up are the tape's (`security/Proofs/Flock/SessionLoop/Statement.lean` l.301, l.316 to 336, l.345) [read]. Under `FC_FIREWALL=1` that loop draws the salts and hashes the leaves in Lean (`Flock/Firewall/Level0.lean` l.195, `Finish.lean` l.102, l.683; `Frame.lean` l.776) [read].
+- So a landable change is in that Lean first, not in the Rust I patched. `upper`: `hiSaltsOf` reads 32 bytes a level and expands; the tape's layout and `RepSrc`'s last clause follow; no premise. `all`: the tape holds keys, and the hiding step takes the stream premise; 57 files of `security/` name `Loop.Src` or a half of it [run: `rg -l`], most only passing it on [guess].
+- A ChaCha20 for that Lean does not exist where Flock can import it: `PouwCommit` imports `Flock.Hm96`, so the block function moves below both or becomes a second definition [read]. `Randomness.stream` (SHA-512) is already there.
+- Unmeasured: the firewall path's cost at all, and a Lean expansion's speed. kernels' rows, and so every price above, are the path the deployed guarantee is not about.
+
+**5. Files and rough lines** [guess unless tagged].
+- Built: `live/src/zk_hooks.rs` and `live/src/bin/flock-circuit.rs`, +159/−23 with two tests [run: `git show --stat ff48f38adc3a`]. To land, the env switch becomes the statement's version.
+- Identity: the `salt_source` text and a statement version in 11 files (`live/src/circuit.rs` l.214, `python/verity_flock/circuit.py` l.99, `Flock/Tags.lean` l.185 to 194 and l.338 to 381, `VStar/Compose.lean` l.44, `security/Proofs/Flock/SessionLoop/Concrete/Inputs.lean` l.458, the tests, the vLLM adapter's PoUS) [run: `rg salt_source`]; about 150 lines, and every staged statement restaged.
+- Card-side fill: about 300 lines in `cuda/sha512.cuh`, `cuda/prove_circuit.cuh`, `live/src/gpu_circuit.rs`; `fd36cbaf2b^` has the device's ChaCha20 to restore [read]. Not compilable from here.
+- Lean code: `Finish.lean`, `Level0.lean`, `Frame.lean`, a shared ChaCha20, a difftest: about 200 lines. Security Lean: `upper` about 100 lines in `Statement.lean` and `RepSrcSat.lean`; `all` unknown, I did not open the hiding step in the loop's proof.
+- (a): 0 lines with glibc 2.41 on a 6.11 kernel. (b): the scheme's key matrix, `SALT_BYTES`, `Frame.SALT`, the card's six 256-bit tiles a salt and `hm96_sha512_tail`'s instance: a new scheme version for under 0.08 s a statement. Not worth it.
+
+**6. My recommendation, three lines. I decide none of it.**
+- Ask Daniel two things: may the trees above level 0 take their salts from an OS key a tree (no assumption, 40% of the bytes), and may level 0 and the pads trees too (one named premise; ChaCha20 or SHA-512 is his choice).
+- If yes to both, ChaCha20 on the host first: it is built, it is 82 to 84% of the most a card-side fill can give, and SHA-512 gives nothing until the card fills the buffer.
+- Nothing of this is on `main` by 16:00Z: it is a new statement version, and the Lean firewall and the loop's proof change before the Rust may.
+
+**7. What I could not establish.**
+- Any card figure: the card-side rows are modeled, and no whole proof or gpu build has run under the switch until HEADPROF does.
+- Whether the two deployed theorems' proofs use the uniformity of the tape's salts above level 0 anywhere `Table`'s generality does not show; I read the definitions and the statements, not `RepSrcSat` or the relay loop's proofs.
+- The firewall path's cost; node A's libc; kernels' 2.8555 s itself (relayed; this run's own files read 2.5654 and 2.6896 s for `FIRST=false`, 3.1506 for `FIRST=true`).
+- The block-salt design against the padding lemma (PARAMS's), and the kernel's key-per-read behaviour beyond A3's docstring.
+
+For HEADPROF: cursor/proofs-salts-8dd2 at ff48f38adc3abe6ec40ab28e5519e5a7aff2e223 (unchanged; `FC_SALTS_KEYED=upper` or `all`, look for the `SALTSKEYED` line; with the switch on a record is timing only, its `salt_source` is untrue).
+
+For the table:
+- Salts (a claim, unmarked, built on a branch, not on `main`): expanded from a 32-byte OS key a tree, the salts cost 1.2 host CPU-s a statement in place of 7.3 (measured on a CPU node, host side); the head-block statement 2.86 to 2.11 s now, 1.78 to 1.04 s with the witness on the card (modeled, evaluator's time not counted). Needs Daniel: it reverses "salts are drawn from the OS" and adds one named premise (`prg/chacha20`, or A4 with SHA-512 once the card fills the buffer).
+- The no-assumption part alone (the trees above level 0, 40% of the bytes): 7.3 to 4.9 CPU-s, statement 2.55 s now, 1.48 s with the witness on the card. It still changes the identity's `salt_source`, so it is a new statement version.
+
+For BREAKEVEN:
+- `SparseMlaHeadBlock` NVIS 64, one prover on ten cores, salts' host CPU-s a statement, then statement seconds now / with the witness on the card. Today 7.30 (measured, `r20261111-061047-6773`; `FIRST=true` 7.63, `r20261111-061056-d72e`): 2.86 / 1.78. `upper` 4.84 to 4.91 (measured on `vy-nebius-cpu-9`, `r20261111-083117-ea63`, scaled; no assumption): 2.55 to 2.56 / 1.48 to 1.49. `all` on the host 1.15 to 1.33 (measured there, scaled; a claim): 2.10 to 2.12 / 1.03 to 1.05. `all` on the card about 0 (modeled, unbuilt; a claim): 1.96 / 0.89. All "evaluator's time not counted".
