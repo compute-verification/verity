@@ -226,8 +226,9 @@ def test_a_torch_lock_left_by_a_killed_build_is_removed_under_the_build_lock(tmp
     logging.getLogger("verity_vllm").addHandler(logged)
     nj.jit_load("ext", src, parent=parent, loader=loader, **VERSIONS)
     assert seen == {"lock_present": False, "held": True}
-    assert logged.lines == [f"WARNING verity_vllm.commit.committer.native_jit: [jit] removing {bd}/lock: no live build holds "
-                            f"{bd}.build-lock, so a killed build left it"]
+    removed = (f"WARNING verity_vllm.commit.committer.native_jit: [jit] removing {bd}/lock: no live build holds "
+               f"{bd}.build-lock, so a killed build left it")
+    assert logged.lines == [removed]
     nj.jit_load("ext", src, parent=parent, loader=loader, **VERSIONS)
     assert len(logged.lines) == 1, "a load that finds no torch lock logs nothing"
 
