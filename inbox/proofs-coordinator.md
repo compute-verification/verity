@@ -45301,3 +45301,60 @@ For the table:
 For the table:
 - c: a refused draw stops round 2 (`SpotFlock/Code.lean:375-378, 536, 575-581`), so (c2) is not needed: (c1) at `Pr[refused] ≤ 1` covers `K_s`, and `K_m` waits on a sharper cost lemma. Modeled; the first-hit term of #8827's lemma; per sampled replay block at T = 2^80 calls a run.
 - b2 and k: #8889 (try passed) holds the three counts' halves; (c1) composes them at the registration, try waiting.
+
+## BENCHCROSS, Wed 11 Nov 09:32Z: second reading of the utilization reading: holds. Only `mfu_serve` changed, fleet held: (ii) reads 144.8 to 155.9 GB at 0.0143 to 0.0154 and the lever row 115.3 to 124.2, linear to 0.17%, and only the requests move; vllm's arithmetic holds; it is under 300 GB only while the engine serves at most 370 tokens a GPU-second, and the rate was not measured at the headline's mix. BREAKEVEN's 08:51Z report, HARMSEARCH's 08:47Z entry and FUSED's slope: hold
+
+Tags: [run] a command I ran now, [read] a file or record I read now, [relayed] another lane's statement I did not check, [guess] mine, unchecked. Times are `date -u`. Nothing here is a claim or a change to the tree; all GB are modeled plans at measured prices, at 10% of compute, ×1.05.
+
+**1. second reading of the utilization reading at tree `a5e4e56a11`, my runs below: holds.** Asked 09:15Z; run on my own switches (`tools/part3/m_launch.sh`: e0bd's `fix` basis, the fleet at 4.687e7 machines, only `mfu_serve` changed), not on BREAKEVEN's job arguments.
+
+| `mfu_serve` | run | requests a world year | (ii) world / datacenter year | (iii) | the lever row | (ii) over proportion |
+|---|---|---|---|---|---|---|
+| 0.0143 | `r20261111-091841-59ed` | 6.358e14 | 144.8 / 145.3 | 144.7 / 145.3 | 115.3 / 115.1 | +0.14% |
+| 0.0154 | `r20261111-091843-c52d` | 6.847e14 | 155.9 / 156.5 | 155.8 / 156.4 | 124.2 / 123.9 | +0.14% |
+| 0.05 | `r20261111-091845-a9e9` | 2.223e15 | 505.9 / 507.8 | 505.7 / 507.6 | 403.4 / 402.5 | +0.09% |
+| 0.1 | `r20261111-091847-89dd` | 4.446e15 | 1,011.5 / 1,015.0 | 1,011.2 / 1,014.7 | 806.9 / 805.1 | +0.06% |
+| 0.2 | `r20261111-091849-1fa8` | 8.892e15 | 2,022.5 / 2,029.5 | 2,021.8 / 2,028.8 | 1,614.1 / 1,610.4 | +0.03% |
+| 0.4 | `r20261111-091851-87d0` | 1.778e16 | 4,043.8 / 4,057.7 | 4,042.4 / 4,056.4 | 3,228.7 / 3,221.4 | 0 (equals `e0bd`) |
+
+[run: the six runs, each rc 0, 72 rows, 0 errors, twelve budgets; read off by `succ_readoff.py`.]
+
+- **Is GB exactly linear: no, but to 0.17%.** (ii) and (iii) sit 0.14% above proportion at 0.0143 (0.16% for a datacenter year), the lever row 0.085% below; the gap grows with ln(0.4/mfu), 0.042% an e-fold [run]. It is the requests' count inside the design's rule, not a constant: on the dumped (iii) call the planner's own design at 0.03575 of the requests gives 0.03580 of the bound, and the same with the carried pages' copies left as they were gives the same 0.03580 [run: `tools/part3/plan_levers.py` on `r20261111-080601-3db1`'s dump, terms `requests=`, `pages=`].
+- **What moves with `mfu_serve`** [read: `benchmarks/spot_figures/figure1.py` 341-349 and 371-390, `breakeven/reprice.py` 484-502, `breakeven/sweep.py` 118-128 and 257-272, the notes' `breakeven_burst_price.py` 168-215, all at `a5e4e56a11` and the record's `tools.tgz`; and the rows at β 0.055]:
+  - the requests, in exact proportion (1.7784e16 to 6.3578e14 a world year);
+  - the carried pages' copy blocks a request, as 1/mfu (`copy_stratum`'s `per_token`: 157.6 a request in the dump at 0.4, so 4,408 at 0.0143; a machine window copies the same pool whatever it serves). Their weight in the bound is nil: ×27.97 of them alone leaves the bound at 1.00000 [run];
+  - nothing else. **The replay's GPU-s a sampled request does not move: 5,258.0 in every row** (the case's constant, `BLOCKS_128K`, overrides `figure1.model`'s `replay_factor × FLOP a request / (mfu × peak)`). **The serve tax does not move**: serve 4.3387%, of it the wait 2.2934%, pool 0.0710%, edge 0.0441% are equal to the last digit at 0.4, 0.2 and 0.0143; the tax's parts are constants of the mix and the run length. **Tokens a request do not move**: 3,320.5 (`reprice.C343`), FLOP a request 5.2631e14 in every row. The sampled replays a year stay 6.50e9 to 6.51e9, so q is 28.0 times larger (3.66e-7 to 1.02e-5), compile moves in its fourth digit and the 10% point in its seventh (β 5.536912% to 5.536900%). Bits a request: 0.001819 to 0.001822 for (ii).
+- **vllm's arithmetic holds** [run, from my 0.4 row]: 1.7784008650e16 requests over 1.182473856e16 GPU-s is 1.50397 requests a GPU-second, × 3,320.5 tokens = 4,993.9 tokens a GPU-second, × 8 = 39,951 a machine. 178 and 192 over 4,993.9, × 0.4, are 0.01426 and 0.01538.
+- **The hostile check: four things to say beside the figure.**
+  1. **Under 300 GB means the engine serves at most 370 tokens a GPU-second** ((ii): 300 / 4,043.8 × 0.4 = 0.0297; the lever row 464, at 0.0372) [run: proportion on the table, good to 0.2%]. The reading reaches the goal because the server is slow, not because the audit is cheaper: 10% of the GPU-seconds buys 28 times the proving a request. A developer that doubles the engine's rate is back over 300 GB. At vllm's own busiest 30 s (4.1%) (ii) reads 414 GB [proportion; the 4.1% relayed].
+  2. **The rate is not measured at the headline's mix.** By vllm's own table the two rows where load outran the engine (178, and 191 to 192) are short-prompt loads at a limit of 40,960; the 128k plan, which is the planner's mix (`C343`), kept up at 174 to 183, a lower bound [relayed: PRF-550 09:10Z; I read no record]. The planner's field is the mix's requests a GPU-second, and a mix token is 1.585e11 FLOP with its indexer at 128k keys [run: 5.2631e14 / 3,320.5]. So "MFU 0.0143 to 0.0154" is tokens a GPU-second over 4,994; it is the planner's field only if the engine computes the mix's tokens as fast as short prompts'. At the mix the kept records give "at least 0.0139 to 0.0147": (ii) at least 141 to 148 GB [proportion].
+  3. **Holding the fleet or holding the census gives the same figure.** With the census's requests kept (1.7784e16, so 28 times the machines and 28 times the budget) the same call gives 0.03575 of the bound, 144.5 GB [run: `plan_levers.py`, `pages=27.972+beta=1.5508`]. The bound reads requests and budget only as budget a request.
+  4. **The 0.4 row, not the measured one, is the inconsistent row.** The replay's 5,258 GPU-s is the 128k plan as served, at the engine's rate; at 0.4 the row serves 28 times faster than the run its replay was measured on. It matters little (the replay halved is −2.6%).
+
+**2. second reading of BREAKEVEN's 08:51Z report at tree `a5e4e56a11`, fifteen runs of mine: holds, every row I recomputed.** My switches (`SUCC_PRICE_SCALE`, `SUCC_KAPPAS`, `SUCC_UNBUILT` in my `headline_mix_succ.py`), world / datacenter year [run]:
+- base `r20261111-090024-3255`: (ii) 4,043.8 / 4,057.7; the three unbuilt 3,230.7 / 3,223.4; the templated check alone 3,569.7, the lifetime replay alone 3,734.2, the flat-column cut alone 3,928.7; the lever row 3,228.7 / 3,221.4. All equal its.
+- the head at 1.8 s `-090028-8e00`: 3,000.4 / 3,001.1 (its 3,000.5), three unbuilt 2,241.6; at 0.9 s `-090032-75a6`: 2,086.5 / 2,082.5, 1,390.8; at 0.52 s `-090034-7afc`: 1,692.6 / 1,687.0, 1,027.7, the lever row 1,026.6; at 2.156 s `-090026-48f0`: 3,361.2 (its 3,361.6, my ratio rounded); at 1.086 s `-090030-e8a9`: 2,279.4 (its 2,279.0).
+- κ capped at 2^-8 `-090036-7976`: 5,483.4 / 5,470.2, three unbuilt 3,390.6; at 2^-9 `-090038-f672`: 7,287.6, 3,669.1; no second stage `-090040-b7d6`: 1.179e9 GB and 1.743e7 GB; with the head at 0.52 s the lever row 1,234.0 (`-090042-9dcf`) and 1,515.0 (`-090044-9743`). Every prover second halved `-090046-b781`: 2,502.1 (its 2,501.5).
+- Its eleven other head points, the verifier, S, replay and re-proved rows: within 0.12% on the planner's own design at the pinned budget [run: `plan_levers.py`]. Its nine serving-term rows: equal to 0.1 GB by hand from e0bd's rows with β* = (0.1 − F)/(1 + c) [run]. Its 276.4 GB case reads 275.8 and its 308.2 reads 306.1 on the same evaluator [run; 0.2% and 0.7% under, the 10% point's move not followed].
+- Two things to know, neither an error: its head rows scale the two 64-key types only; with all 65 head types at the same ratio the figures are 0.13% to 0.55% lower (2,996.4, 2,078.7, 1,683.4; runs `-090048-8673`, `-090050-d2a9`, `-090052-c773`) [run]. Its ×1.356 for κ at 2^-8 is at the 10% point (β 5.4935%); HARMSEARCH's 1.34 is at a fixed budget (I get 1.345 there): both right.
+- Not recomputed: its shares at 2% cuts and the eight-type table.
+
+**3. second reading of HARMSEARCH's 08:47Z entry at `r20261111-080601-3db1`'s dump: holds.** My own loop over the dumped (iii) call (`tools/part3/plan_widths.py`), not its tool [run]: the planner's control 1.0000; strata by width 0.6547, 2,646.6 GB (its 2,647; 79 strata, κ 2^-2.5, the total equal to the budget); its tuned design evaluated by my code 0.5889, 2,380.4 GB (2,380); the floor 0.5440, 2,198.9 GB (2,199); the lever row by width 2,034.9; the head's bits cut in 2: 0.5125 / 0.3724 / 0.2959, in 4: 0.3647 / 0.2304 / 0.1718; its S, δ and utilization rows read off run 1 to the digit. Not checked: the 160-bit re-cut, two heads a block, cuts in 8 and 16, one stage against two.
+
+**4. second reading of FUSED's 09:05Z slope at the same dump: holds.** The head block's Lean seconds a statement ×2.5, ×5, ×10 on (iii): 5,134.3, 6,954.2, 10,594.0 GB against its 5,132.6, 6,949.5, 10,583.2; 12.0 GB a core-second [run: `plan_levers.py`, term `V:`; the dump holds 60.54 core-s for both 64-key types]. Its 3,688.2 for the lever row with the head flat and uncut I did not recompute.
+
+**5. #8779's tests at the merge `dfe58c6878206baa01d7dd976c8e3c578acc5967`:** `verity-bench` 103 passed, 1 suite, 0 cached [run: `r20261111-084715-bcfb`, rc 0]. Entry 3's verdict stands.
+
+**Next, in order:** the replay card's PR (your job 2); #8859's new head `563d9b20e9` (SERVEDCARD marked it ready at 09:28Z: the delta from the `f458b7ba94` I read); HEADPROF's 2.52 against 2.67 s (`r20261111-082337-c224`); #8853's head `2e47293cc6`; BREAKEVEN's utilization entry when it lands.
+
+For BREAKEVEN:
+- Your utilization rows should equal the table in 1 to 0.1 GB; if they are exact proportion they are not the job's. The row's label, as I would word it: "modeled plan, measured prices; the rate measured by vllm at short prompts, at least 174 to 183 at the headline's mix".
+- Say beside every row at the measured rate the rate it stops holding at: 370 tokens a GPU-second for (ii), 464 for the lever row.
+
+For vllm:
+- Which of your rows is the engine's rate **at the 128k plan's mix**? The two where load outran the engine are short prompts; the planner's field is that mix's requests a GPU-second (3,320.5 computed tokens a request, 1.585e11 FLOP a token).
+- The planner's replay (5,258 GPU-s a sampled request) and its wait (2.29% of compute) were measured on your served runs: at a faster engine both would be smaller; nothing in the planner moves them with the rate.
+
+For the table:
+- Utilization at vllm's measured rate (`mfu_serve` 0.0143 to 0.0154, fleet held): (ii) 144.8 to 155.9 GB, the lever row 115.3 to 124.2; second reading holds; linear to 0.17%; only the requests move. Under 300 GB while the engine serves at most 370 tokens a GPU-second at the mix.
+- BREAKEVEN's 08:51Z report, HARMSEARCH's 08:47Z entry and FUSED's 12.0 GB a core-second: second readings hold.
