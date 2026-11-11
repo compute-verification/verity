@@ -90,7 +90,7 @@
         "9e59",
         "98f5"
       ],
-      "examples": [
+      "demos": [
         "Which machines do we have right now, and what is each one busy with?",
         "I want to run a long job on a GPU tonight. Where can it go, and how do I start it?",
         "My run failed or was killed. Why, and where are its logs?",
@@ -118,11 +118,11 @@
         "Security/Proofs/Core/",
         "Security/Definitions/Core/",
         "verity/",
-        "verity/core/protocols/spot/",
+        "verity/protocols/spot/",
         "benchmarks/one_stage/",
         "benchmarks/serve_tax/",
         "benchmarks/replay_ladder/",
-        "benchmarks/live_challenger/",
+        "verity/composite/device/live_challenger/",
         "benchmarks/commitments/",
         "benchmarks/multi_unit/",
         "benchmarks/latency_compare.py",
@@ -136,17 +136,17 @@
         "benchmarks/route_capture/",
         "benchmarks/spot_proved/",
         "benchmarks/unit_walk/",
-        "integrations/vllm/verity_vllm/protocols/spot.py",
+        "adapters/vllm/verity_vllm/protocols/spot.py",
         "Security/Definitions/Hash/",
         "Security/Proofs/Hash/",
-        "verity/core/primitives/world/",
-        "verity/core/protocols/record.py",
-        "verity/core/protocols/registration.py",
-        "verity/core/site/",
+        "verity/hardware/world/",
+        "verity/hardware/record.py",
+        "verity/hardware/registration.py",
+        "verity/hardware/site/",
         "benchmarks/flock_kernels/",
         "benchmarks/two_stage/",
-        "verity/ml/definitions/numerics/cuda/",
-        "verity/core/protocols/interface/"
+        "benchmarks/definitions/numerics/cuda/",
+        "verity/protocols/interface/"
       ],
       "branch_suffixes": [
         "95d4",
@@ -154,7 +154,7 @@
         "f39a",
         "11bd"
       ],
-      "examples": [
+      "demos": [
         "What exactly have you proved about the proof system, and what do you still assume?",
         "If a server cheats on only a small part of its work, how likely is a sampled check to catch it?",
         "Does checking a proof reveal anything about the model's weights or the user's data?",
@@ -173,7 +173,7 @@
       ],
       "linear": "CIR",
       "owns": [
-        "integrations/",
+        "adapters/",
         "benchmarks/served_units/",
         "benchmarks/unit_block/",
         "benchmarks/served_commit/",
@@ -186,36 +186,36 @@
         "benchmarks/bool_build_cost/",
         "benchmarks/f32_exhaustive/",
         "benchmarks/mempool/",
-        "verity/ml/circuits/ops/",
-        "integrations/vllm/verity_vllm/program/",
-        "integrations/vllm/verity_vllm/query/",
-        "integrations/vllm/verity_vllm/correspondence/",
-        "integrations/vllm/verity_vllm/acquire/",
-        "integrations/vllm/verity_vllm/commit/",
-        "integrations/vllm/verity_vllm/properties/",
-        "integrations/vllm/verity_vllm/pipeline/build.py",
-        "integrations/vllm/verity_vllm/pipeline/match.py",
-        "integrations/vllm/verity_vllm/pipeline/commit.py",
-        "integrations/vllm/verity_vllm/pipeline/commit_group.py",
-        "integrations/vllm/verity_vllm/pipeline/commit_plan.py",
-        "integrations/vllm/workloads/",
-        "integrations/vllm/manifests/",
-        "integrations/vllm/tests/properties/",
-        "integrations/vllm/tests/check/test_capture_map.py",
-        "integrations/vllm/tests/check/test_capture_map_versions.py",
-        "integrations/vllm/verity_vllm/program/predict/",
-        "integrations/vllm/tests/program/predict/",
-        "integrations/vllm/tests/program/",
-        "integrations/vllm/tests/commit/",
-        "integrations/vllm/tests/acquire/",
-        "integrations/vllm/tests/query/"
+        "verity/definitions/ops/",
+        "adapters/vllm/verity_vllm/program/",
+        "adapters/vllm/verity_vllm/query/",
+        "adapters/vllm/verity_vllm/correspondence/",
+        "adapters/vllm/verity_vllm/acquire/",
+        "adapters/vllm/verity_vllm/commit/",
+        "adapters/vllm/verity_vllm/properties/",
+        "adapters/vllm/verity_vllm/pipeline/build.py",
+        "adapters/vllm/verity_vllm/pipeline/match.py",
+        "adapters/vllm/verity_vllm/pipeline/commit.py",
+        "adapters/vllm/verity_vllm/pipeline/commit_group.py",
+        "adapters/vllm/verity_vllm/pipeline/commit_plan.py",
+        "adapters/vllm/workloads/",
+        "adapters/vllm/manifests/",
+        "adapters/vllm/tests/properties/",
+        "adapters/vllm/tests/check/test_capture_map.py",
+        "adapters/vllm/tests/check/test_capture_map_versions.py",
+        "adapters/vllm/verity_vllm/program/predict/",
+        "adapters/vllm/tests/program/predict/",
+        "adapters/vllm/tests/program/",
+        "adapters/vllm/tests/commit/",
+        "adapters/vllm/tests/acquire/",
+        "adapters/vllm/tests/query/"
       ],
       "branch_suffixes": [
         "8c79",
         "c491",
         "6f04"
       ],
-      "examples": [
+      "demos": [
         "How do you turn a model like GLM or DeepSeek into a circuit, and how big is that circuit?",
         "How many gates does one decoding step of a large model take, and which parts of the model dominate?",
         "How do you know the circuit computes exactly what the GPU kernel actually computed, bit for bit?",
@@ -234,38 +234,38 @@
       ],
       "linear": "CMP",
       "owns": [
-        "verity/core/protocols/pouw/",
-        "verity/ml/protocols/pouw/",
+        "verity/protocols/pouw/verifier/",
+        "verity/protocols/pouw/prover/",
         "Security/Definitions/Pouw/",
         "Security/Proofs/Pouw/",
         "Security/Definitions/Nci.lean",
         "Security/Definitions/Nci/",
         "Security/Proofs/Nci/",
         "benchmarks/pouw/",
-        "benchmarks/pouw/clear/",
+        "verity/protocols/pouw/clear/",
         "benchmarks/pouw/machine_model/",
-        "benchmarks/pouw/receipts/",
+        "verity/protocols/pouw/receipts/",
         "benchmarks/numerical/",
         "benchmarks/ppl/",
-        "benchmarks/nci/",
+        "verity/protocols/inference_only/nci/",
         "benchmarks/int8_class_rate/",
         "benchmarks/tensor_duty/",
         "benchmarks/unit_lowering/",
         ".agents/skills/kernel-engineering/",
-        "integrations/vllm/verity_vllm/protocols/pouw/__init__.py",
-        "integrations/vllm/verity_vllm/protocols/pouw/circuit.py",
-        "integrations/vllm/verity_vllm/protocols/pouw/pouw_cuda/",
-        "integrations/vllm/verity_vllm/protocols/pouw/device.py",
-        "integrations/vllm/verity_vllm/protocols/pouw/native.py",
-        "integrations/vllm/verity_vllm/protocols/pouw/pearl_c/passes.py",
-        "integrations/vllm/verity_vllm/protocols/pouw/pearl_c/__init__.py",
-        "integrations/vllm/verity_vllm/protocols/pouw/pearl_c/graphs.py",
-        "integrations/vllm/verity_vllm/protocols/pouw/pearl_c/host.py",
-        "integrations/vllm/verity_vllm/protocols/pouw/pearl_c/kernel.py",
-        "integrations/vllm/verity_vllm/protocols/pouw/pearl_c/manifest.py",
-        "integrations/vllm/verity_vllm/protocols/pouw/pearl_c/screen.py",
-        "integrations/vllm/verity_vllm/protocols/pouw/pearl_c/screen_kernels.py",
-        "integrations/vllm/verity_vllm/protocols/pouw/pearl_c/whole.py",
+        "adapters/vllm/verity_vllm/protocols/pouw/__init__.py",
+        "adapters/vllm/verity_vllm/protocols/pouw/circuit.py",
+        "adapters/vllm/verity_vllm/protocols/pouw/pouw_cuda/",
+        "adapters/vllm/verity_vllm/protocols/pouw/device.py",
+        "adapters/vllm/verity_vllm/protocols/pouw/native.py",
+        "adapters/vllm/verity_vllm/protocols/pouw/pearl_c/passes.py",
+        "adapters/vllm/verity_vllm/protocols/pouw/pearl_c/__init__.py",
+        "adapters/vllm/verity_vllm/protocols/pouw/pearl_c/graphs.py",
+        "adapters/vllm/verity_vllm/protocols/pouw/pearl_c/host.py",
+        "adapters/vllm/verity_vllm/protocols/pouw/pearl_c/kernel.py",
+        "adapters/vllm/verity_vllm/protocols/pouw/pearl_c/manifest.py",
+        "adapters/vllm/verity_vllm/protocols/pouw/pearl_c/screen.py",
+        "adapters/vllm/verity_vllm/protocols/pouw/pearl_c/screen_kernels.py",
+        "adapters/vllm/verity_vllm/protocols/pouw/pearl_c/whole.py",
         "fixtures/bench-instances/",
         "benchmarks/census/",
         "Security/Definitions/Accounting/CoinFlow.lean",
@@ -295,8 +295,8 @@
         "Security/Proofs/Accounting/PouwWork.lean",
         "Security/Proofs/Accounting/TS.lean",
         "Security/Proofs/Accounting/TS/",
-        "examples/h200/",
-        "examples/dither_full_util/"
+        "archive/examples/h200/",
+        "demos/dither_full_util/"
       ],
       "branch_suffixes": [
         "e3fa",
@@ -304,7 +304,7 @@
         "ea24",
         "1de3"
       ],
-      "examples": [
+      "demos": [
         "How do you prove a GPU actually did the matrix multiplies it claims, rather than something cheaper?",
         "What stops a datacenter from counting work done by its host CPU or a spare GPU as the audited GPU's work?",
         "Where do the peak-throughput numbers for H200, B200 and RTX PRO 6000 come from, and how are they checked?",
@@ -335,13 +335,13 @@
       ],
       "linear": "MEM",
       "owns": [
-        "verity/core/deploy/",
+        "verity/configuration/deploy/",
         "Security/Definitions/Pous/",
         "Security/Proofs/Pous/",
         "benchmarks/bandwidth/",
         "benchmarks/codec_tensor/",
         "benchmarks/kv_filler/",
-        "benchmarks/live_verifier/",
+        "verity/protocols/poub/device/live_verifier/",
         "benchmarks/memory/",
         "benchmarks/pous/",
         "benchmarks/property_redteam/",
@@ -350,13 +350,13 @@
         "benchmarks/stacked_share/",
         "benchmarks/vllm_encoded/",
         "benchmarks/word_codec/",
-        "examples/onsite_served/",
-        "integrations/vllm/verity_vllm/protocols/pous.py",
-        "verity/core/devices/memory_challenger/",
-        "verity/core/protocols/pous/",
-        "verity/ml/protocols/pous/",
-        "verity/core/protocols/remote_bandwidth/",
-        "verity/core/primitives/requirement/",
+        "demos/onsite_served/",
+        "adapters/vllm/verity_vllm/protocols/pous.py",
+        "verity/protocols/pous/device/",
+        "verity/protocols/pous/",
+        "verity/protocols/pous/prover/",
+        "verity/protocols/poub/verifier/",
+        "verity/definitions/requirement/",
         "Security/Definitions/Accounting/Bandwidth.lean",
         "Security/Definitions/Accounting/Bandwidth/",
         "Security/Definitions/Accounting/BandwidthAudit.lean",
@@ -424,7 +424,7 @@
         "b0c1",
         "93c1"
       ],
-      "examples": [
+      "demos": [
         "How do you know the weights were actually held in GPU memory the whole time, and not reloaded from disk when you checked?",
         "What stops a node from rebuilding the blocks you ask for on the fly instead of storing them?",
         "How fast can the node pull data in from its disks or the network, and how does that change the memory number?",
@@ -435,7 +435,7 @@
     {
       "handle": "network-accounting",
       "holder": "bc-5c916421-64a5-5c38-94ba-2e28fe629237",
-      "remit": "Network accounting: the network certifier (verity/core/protocols/certifier) and its timing-channel proofs.",
+      "remit": "Network accounting: the network certifier (verity/protocols/certifier) and its timing-channel proofs.",
       "charter": "note:20260930T1740Z-handoff-from-pous-charter-pouw",
       "usergroup": "S0CAGBGSPCJ",
       "retired_usergroups": [
@@ -443,10 +443,10 @@
       ],
       "linear": "NET",
       "owns": [
-        "verity/core/protocols/network/",
-        "verity/core/protocols/certifier/",
-        "verity/ml/protocols/certifier/",
-        "verity/core/devices/certifier/",
+        "verity/protocols/",
+        "verity/protocols/certifier/",
+        "verity/protocols/certifier/prover/",
+        "verity/protocols/certifier/device/",
         "Security/Definitions/NetworkCertifier/",
         "Security/Proofs/NetworkCertifier/",
         "benchmarks/network_traces/",
@@ -460,7 +460,7 @@
         "a190",
         "061a"
       ],
-      "examples": [
+      "demos": [
         "How do you stop a GPU node from secretly sending data out over the network?",
         "What does the network certifier record about each link, and who has to trust it?",
         "How many bits could a cheating machine leak just through when it sends packets?",
@@ -484,7 +484,7 @@
       "remit": "Daniel's dashboards on the console: the Goals page and live plots of running experiments. Asks wait until Daniel opens it; nothing wakes it.",
       "charter": "Daniel, 2026-11-02 11:24 AM PST",
       "linear": "CON",
-      "examples": [
+      "demos": [
         "How do I put my goals on Daniel's Goals page?",
         "How do I publish a live plot of my runs to the console?"
       ],
@@ -498,7 +498,7 @@
       "usergroup": "S0C93AFCRT8",
       "linear": "CI",
       "owns": [
-        "tools/config/",
+        "verity/configuration/config/",
         "tools/verity/check/",
         "tools/verity/cli/",
         "tools/verity/graph/",
@@ -515,7 +515,7 @@
         "2a98",
         "1518"
       ],
-      "examples": [
+      "demos": [
         "When will my pull request land on main, and what is it waiting for?",
         "Why did my PR get taken out of the merge queue?",
         "A check failed on my change but I don't think I broke it. Can you look?",
@@ -541,7 +541,7 @@
         "6f1e",
         "fc8d"
       ],
-      "examples": [
+      "demos": [
         "How do I know the Lean proofs actually check, with no sorry or extra axioms?",
         "What does a security guarantee in Lean assume, and where is that written down?",
         "My Lean build or proof check runs out of memory or takes hours. What should I do?",
@@ -570,7 +570,7 @@
         "38e0",
         "e34f"
       ],
-      "examples": [
+      "demos": [
         "Who should I ask about something, and how do I reach them here?",
         "My question got no answer. Who saw it, and what happens next?",
         "How do I get my own chat channel, or add someone to it?"
@@ -596,8 +596,8 @@
         ".agents/skills/",
         "tests/",
         "fixtures/",
-        "examples/README.md",
-        "examples/lifecycle/",
+        "demos/README.md",
+        "demos/lifecycle/",
         "pyproject.toml",
         "uv.lock",
         ".gitattributes",
@@ -612,9 +612,9 @@
       "charter": "Daniel, 2026-10-13 (a new slice, in architecture's rollout)",
       "usergroup": "S0C954BELSW",
       "owns": [
-        "verity/ml/windows/",
-        "integrations/vllm/",
-        "examples/vllm/",
+        "verity/commitments/windows/",
+        "adapters/vllm/",
+        "demos/vllm/",
         "benchmarks/replay_determinism/",
         "ruff.toml"
       ],
@@ -625,7 +625,7 @@
         "718d",
         "49ab"
       ],
-      "examples": [
+      "demos": [
         "How do you check that a model served with vLLM computed exactly what it claims to?",
         "Does verification slow down serving, and by how much?",
         "Which models and quantizations (like int8 Llama) can you serve under verification today?",
@@ -654,7 +654,7 @@
         "47e4",
         "6193"
       ],
-      "examples": [
+      "demos": [
         "How much slower does serving a model get when you add verification, and how did you measure that?",
         "What's the overhead of the bandwidth audit (or PoUW, or the commitment) compared with plain vLLM?",
         "Can I rerun one of your benchmark numbers myself, and how?",
@@ -677,7 +677,7 @@
       "branch_suffixes": [
         "15ad"
       ],
-      "examples": [
+      "demos": [
         "How much slower is serving with the commitments on, compared with plain vLLM at full load?",
         "Why is the proof-of-work matmul so much slower than a normal int8 matmul, and what would make it faster?",
         "Is the exact int8 path supposed to be slower than ordinary int8 serving?",
@@ -693,14 +693,14 @@
       "usergroup": "S0CA9EAFKED",
       "linear": "TRN",
       "owns": [
-        "benchmarks/rho/",
+        "verity/protocols/inference_only/rho/",
         "benchmarks/circuit_properties/",
         "benchmarks/training_slowdown/"
       ],
       "branch_suffixes": [
         "4207"
       ],
-      "examples": [
+      "demos": [
         "How much more hardware would someone need to secretly train a frontier model under your verification scheme?",
         "Could a lab hide training inside work it declares and proves as inference?",
         "Which parts of the training-slowdown claim are proved, and which are still assumptions?",
@@ -716,13 +716,13 @@
       "linear": "PRF",
       "linear_label": "lane:soundness",
       "owns": [
-        "verity/core/protocols/onsite/",
-        "verity/core/protocols/remote/"
+        "verity/protocols/onsite/verifier/",
+        "verity/protocols/remote/verifier/"
       ],
       "branch_suffixes": [
         "9c4d"
       ],
-      "examples": [
+      "demos": [
         "Is there one theorem that says the whole verifier is sound, and what does it still assume?",
         "Which subprotocols of the soundness theorem are proved, and which are still premises?",
         "If the verifier accepts a period, what exactly does that guarantee about the work, memory and network claims?",
