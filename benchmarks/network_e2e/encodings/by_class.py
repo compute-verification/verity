@@ -13,8 +13,9 @@ reports per window:
   ones that started from a hit, and those hits' blocks, each at A5's window of its step (`codec.charged`).
 
 Per trace it reports the same sums, the engine's own record of the hits it admitted from (the trace's `cache_hit`), and
-the round trip (`decode(encode(a)) == a`, the streams too); where the string decodes to another schedule than the
-engine's, the first step that differs and its window.
+the round trip (`decode(encode(a)) == a`, the streams too). Where the decoder refuses the string or decodes it to
+another advice, the report says which, and gives the first step at which the replay the decoder runs differs from the
+engine's schedule, with its window.
 
     python by_class.py LABEL=DIR ... --stops IDS [--T 600 --ingress client] --out REPORT.json
 """
@@ -32,7 +33,8 @@ from typing import Any
 
 from verity_vllm.pipeline.advice_code import by_class as BC
 from verity_vllm.pipeline.advice_code.codec import (
-    arrival_order, bits_by_window, charged, decode_full, encode, lengths, Record, Registered, replay_record, streams, windows,
+    AdviceCodeError, arrival_order, bits_by_window, charged, decode_full, encode, lengths, Record, Registered, replay_record,
+    streams, windows,
 )
 
 HERE = Path(__file__).resolve().parent
@@ -107,7 +109,12 @@ def report(label: str, path: str, stop_ids: Sequence[int], T: int = 600, ingress
 def split(label: str, trace: Any, record: Record, advice: Any, reg: Registered) -> dict[str, Any]:
     """`report` of a trace already read, under the registration `reg`."""
     data = encode(advice, record, reg, check=False)
-    got = decode_full(data, record, reg)
+    refused = None
+    try:
+        got = decode_full(data, record, reg)
+        back = got.advice == advice and got.streams == streams(advice, record)
+    except AdviceCodeError as e:
+        back, refused = False, str(e)
     charge, parts = bits_by_window(data, record, reg), BC.bits_by_class(data, record, reg)
     rp, order, looks, at = replayed(advice, record, reg)
     B = reg.engine.block_size
@@ -140,7 +147,7 @@ def split(label: str, trace: Any, record: Record, advice: Any, reg: Registered) 
     return {"trace": label, "T": reg.T, "tick": None if reg.tick is None else asdict(reg.tick),
             "prefix_caching": reg.engine.enable_prefix_caching, "requests": len(record.requests), "steps": len(rp.steps),
             "windows": len(rows), "bits": sum(charge.values()), "bytes": len(data), "book": V.book_of(reg).digest(),
-            "round_trip": got.advice == advice and got.streams == streams(advice, record), "first_step_that_differs": differs,
+            "round_trip": back, "refused": refused, "first_step_that_differs": differs,
             "classes": classes(reg), "by_window": rows,
             "total": {"charge": sum(charge.values()),
                       "classes": {c: sum(r["classes"][c] for r in rows) for c in BC.CLASSES},
@@ -182,9 +189,15 @@ def render(row: dict[str, Any]) -> str:
                f"{_share(t['admissions_hit'], t['admissions'])}, {t['hit_blocks']:,} blocks; the engine's own record: "
                f"{e['admissions_hit']:,} admissions, {e['hit_blocks']:,} blocks.")
     d = row["first_step_that_differs"]
-    out.append("decode(encode(a)) == a: " + ("yes." if row["round_trip"] else "NO." if d is None else
-               f"NO: the string's schedule differs from the engine's from step {d['step']}, in window {d['window']} "
-               f"({d['matched']:,} of {d['steps']:,} steps match)."))
+    back = "yes." if row["round_trip"] else "NO."
+    if row["refused"] is not None:
+        back += f" The decoder refuses the string: {row['refused']}."
+    elif not row["round_trip"]:
+        back += " The string decodes to another advice."
+    if d is not None:
+        back += (f" The replay's schedule differs from the engine's from step {d['step']}, in window {d['window']} "
+                 f"({d['matched']:,} of {d['steps']:,} steps match).")
+    out.append("decode(encode(a)) == a: " + back)
     out.append("")
     for name, c in row["classes"].items():
         why = "; ".join(f"{r['why']} (`{r['file']}:{r['line']}`)" for r in c["rules"])

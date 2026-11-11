@@ -3,8 +3,8 @@ Each window's parts sum to its charge, and its segment's parts are the arithmeti
 tick and without it, under the uniform book and a fit one. Under the certified tick, with the prefix cache on and
 prompts that share prefixes, every field but the lengths is 0 by construction, each by rules whose lines are in the
 code; without the tick the admission is charged and the hits still aren't. The report counts the replay's lookups and
-its hits, which are the engine's own, and where the string decodes to another schedule than the engine's it names the
-first step that differs."""
+its hits, which are the engine's own, and where the decoder refuses the string it gives the decoder's reason and the
+first step at which the replay differs from the engine's schedule."""
 
 from __future__ import annotations
 
@@ -182,8 +182,9 @@ def test_the_report_splits_a_trace_by_class_and_counts_its_hits(tmp_path, capsys
 
 def test_the_report_names_the_first_step_that_differs(tmp_path, capsys):
     """A trace whose registration isn't the engine's: read as served with the prefix cache off, the plan's run has rows
-    that start from hits the replay's pool never gives. Its string decodes to another schedule, and the report says
-    so, exits 1 and names the first step that differs, the first one the engine admitted from a hit."""
+    that start from hits the replay's pool never gives. The decoder refuses its string, and the report says so with
+    the decoder's reason, exits 1 and names the first step at which the replay differs from the engine's schedule, the
+    first one the engine admitted from a hit. The split by class is still each window's charge."""
     e, (ios, times) = engine(False), plan()
     run = serve(e, ios, times, seed=1)
     d = write_corpus(tmp_path / "tick", e, ios, times, run, tick=True)
@@ -195,5 +196,9 @@ def test_the_report_names_the_first_step_that_differs(tmp_path, capsys):
     row = json.loads(out.read_text())["rows"][0]
     first = min(s for s, st in enumerate(R.read_corpus_trace(d).steps) if any(st.cache_hit.values()))
     assert not row["round_trip"] and not row["prefix_caching"] and row["total"]["admissions_hit"] == 0
+    assert "the walk's rows" in row["refused"]
     assert row["first_step_that_differs"]["step"] == first and row["engine_hits"]["admissions_hit"] > 1
-    assert f"NO: the string's schedule differs from the engine's from step {first}, in window " in capsys.readouterr().out
+    assert all(sum(w["fields"].values()) == w["charge"] for w in row["by_window"]) and row["bits"] > 0
+    text = capsys.readouterr().out
+    assert f"decode(encode(a)) == a: NO. The decoder refuses the string: {row['refused']}." in text
+    assert f"The replay's schedule differs from the engine's from step {first}, in window " in text
