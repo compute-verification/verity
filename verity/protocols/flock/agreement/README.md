@@ -64,26 +64,26 @@ commitments, is refused earlier, for its form (`ProvedScope.check`).
 ## Guarantees and premises
 
 - The one soundness theorem over everything `verify` accepts: `FailClosed.flock_verify_sound`
-  (`Security/Proofs/Flock/Soundness/Discharge/FailClosed/One.lean`); per table at `fast100`, 2^-205 without `--zk`:
+  (`security/Proofs/Flock/Soundness/Discharge/FailClosed/One.lean`); per table at `fast100`, 2^-205 without `--zk`:
   `flock_verify_sound_205` (`FailClosed/Numeric.lean`); the public ties: `flock_verify_public_ties`
   (`FailClosed/PublicTies.lean`).
-- The guarantee statements: `Security/Definitions/Flock/Guarantees/` (`ClaimsStated`, `SamplingClaimsStated`,
+- The guarantee statements: `security/Definitions/Flock/Guarantees/` (`ClaimsStated`, `SamplingClaimsStated`,
   `RecursionClaimsStated`, and the record sizing in `Audit.lean`); the proved ones are the `Flock.SecurityProofs.*`
-  entries of `Security/lean-audit.json`, among them `EndToEnd`, `EndToEndHidden`, `ZeroKnowledgeHidden`, `MaskedZK`,
+  entries of `security/lean-audit.json`, among them `EndToEnd`, `EndToEndHidden`, `ZeroKnowledgeHidden`, `MaskedZK`,
   `RecursiveKS`, `RecursiveZK`, `PublicAudit` and `IntegrityHorizon`, each stated in a `Statement.lean` (or
-  `KSStatement.lean`, `PublicAudit.lean`) of its area under `Security/Proofs/Flock/`.
-- The named assumptions, the lock's `assumptions`: `Security/Definitions/Assumptions/Flock.lean` (`SHA512CRStrict`,
+  `KSStatement.lean`, `PublicAudit.lean`) of its area under `security/Proofs/Flock/`.
+- The named assumptions, the lock's `assumptions`: `security/Definitions/Assumptions/Flock.lean` (`SHA512CRStrict`,
   `SHA512CRExpected`, `UniformRandomBytes`, `UniformRandomBytesTest`). The other assumptions, the lock's `open` and
-  `domain` entries: `Security/Proofs/Flock/Soundness/Assumptions.lean` (`HmRowComputes`), `Assumptions/Custody.lean`
+  `domain` entries: `security/Proofs/Flock/Soundness/Assumptions.lean` (`HmRowComputes`), `Assumptions/Custody.lean`
   (`RecordCustodyExec`, `RecordCustodyExecH`) and `Assumptions/Zk.lean` (the `Zk.RecordCustodyZK*` family). What each
-  means: `Security/Proofs/Flock/Soundness/ASSUMPTIONS.md`.
+  means: `security/Proofs/Flock/Soundness/ASSUMPTIONS.md`.
 - The trusted code: the running binary also trusts the toolchain's compiler and runtime and the C compiler and library
   under them, and no declaration swaps a definition for code no proof reads (`verity/protocols/flock/verifier/README.md`,
   enforced by `verity/protocols/flock/prover/tests/test_lean_verifier.py`). The agreement corpus's coverage rule is
   `verity/protocols/flock/prover/tests/test_vectors_coverage.py`.
-- The lemmas the verifier's parts rest on: `merkle_binding` (`Security/Proofs/Flock/Verifier/Merkle.lean`),
+- The lemmas the verifier's parts rest on: `merkle_binding` (`security/Proofs/Flock/Verifier/Merkle.lean`),
   `squeeze_answers` and `squeeze_retained` (`Verifier/Transcript.lean`), `G_irreducible` and `Q_irreducible`
-  (`Security/Proofs/Flock/Level3/`). The model they're about: `Security/Definitions/Flock/`.
+  (`security/Proofs/Flock/Level3/`). The model they're about: `security/Definitions/Flock/`.
 
 ## Running it
 
