@@ -89,7 +89,6 @@ from verity_vllm.protocols.pouw.operands import Operands, ncp_tiles, quantize, s
 from verity_vllm.protocols.pouw.pearl_c import passes as PP
 
 NAME = "pouw"
-DEFAULT_SCHEME = "ncp-v1"
 #: PoUW replaces the computation here; POUS wraps it from outside (`protocol_options.SITES`).
 EXECUTES = ("LinearBase.quant_method.apply",)
 #: The schemes this adapter's executor computes. ``ncp-v2`` is NCP-INT as a circuit (`verity.protocols.pouw.prover.circuit`): each call is its
