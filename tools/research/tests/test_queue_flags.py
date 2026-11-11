@@ -179,20 +179,20 @@ def test_the_low_risk_lane_excludes_what_runs_with_the_control_pods_or_every_age
 
 #: drive.toml's `lowrisk_excludes`
 EXCLUDES = ("*.lean", "lean-audit.json", "lakefile.*", "lean-toolchain", "lake-manifest.json", "TRUSTED.sha256",
-            "verity/core/", "verity/ml/circuits/", "verity/ml/kernels/", "verity/ml/commitments/", "verity/ml/crypto/",
-            "verity/ml/randomness/")
+            "verity/core/", "verity/circuits/", "verity/definitions/ops/", "verity/definitions/kernels/", "verity/commitments/", "verity/commitments/crypto/",
+            "verity/commitments/randomness/")
 
 
 @pytest.mark.parametrize("files, low", [
     (["tools/research/src/research/landing.py", "README.md"], True),
-    (["integrations/vllm/verity_vllm/serve.py", "verity/ml/flock/x.py", "verity/ml/definitions/y.py"], True),
-    (["Security/Proofs/Core/X.lean"], False),
-    (["docs/a.md", "verity/core/protocols/pous/lean/lean-audit.json"], False),
-    (["verity/core/service/flock/lakefile.toml"], False),
+    (["adapters/vllm/verity_vllm/serve.py", "verity/ml/flock/x.py", "verity/ml/definitions/y.py"], True),
+    (["security/Proofs/Core/X.lean"], False),
+    (["docs/a.md", "verity/protocols/pous/lean/lean-audit.json"], False),
+    (["verity/protocols/flock/verifier/lakefile.toml"], False),
     (["x/lean-toolchain"], False), (["x/lake-manifest.json"], False), (["x/TRUSTED.sha256"], False),
     (["verity/core/claims.py"], False),
-    (["verity/ml/circuits/ops/add.py"], False), (["verity/ml/kernels/k.cu"], False),
-    (["verity/ml/commitments/c.py"], False), (["verity/ml/crypto/c.py"], False), (["verity/ml/randomness/r.py"], False),
+    (["verity/definitions/ops/add.py"], False), (["verity/definitions/kernels/k.cu"], False),
+    (["verity/commitments/c.py"], False), (["verity/commitments/crypto/c.py"], False), (["verity/commitments/randomness/r.py"], False),
     (["verity/ml/circuitsx/a.py"], True),                   # a directory entry is a whole path component
     ([], False),                                            # nothing to land
 ])

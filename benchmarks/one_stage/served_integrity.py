@@ -16,7 +16,7 @@ from fractions import Fraction
 from pathlib import Path
 from typing import Any, Mapping
 
-from verity.core.protocols.spot.one_stage import audit as A, registration as R
+from verity.protocols.spot.verifier.one_stage import audit as A, registration as R
 
 PROTOCOL = R.PROTOCOL
 
