@@ -216,15 +216,6 @@ def Tab.refStepK (D : Def) (pt : FoldPt) (A B : Nat) (as : Array Nat) (gL : Half
     else (Tab.flushK as nk st.1 cx st.2.1 ws st.2.2, P / A, (Array.replicate 64 0).modify (u % 64) (· + fac v))
   else ((List.range nk).foldl (fun o k => Tab.ref D pt false A B as gL pos o k cx (ws.getD k 0) v) st.1, st.2.1, st.2.2)
 
-/-- An explicit row's references `vs` at every copy `k < nk` at once, weight `ws[k]`, while each copy's low part is
-below `B` and `B` divides 64: an own column's slot is then its copy's low part plus a slot common to the copies, and its
-factor is common, so a run's sums are formed once (`Tab.refStepK`) and added at each copy (`Tab.flushK`). -/
-@[specialize]
-def Tab.refsK (D : Def) (pt : FoldPt) (A B : Nat) (as : Array Nat) (gL : Half) (pos : Nat → Nat) (fac : Nat → F128)
-    (o : Tab) (nk cx : Nat) (ws : Array F128) (vs : Array Nat) : Tab :=
-  let st := vs.foldl (Tab.refStepK D pt A B as gL pos fac nk cx ws) (o, 0, Array.replicate 64 0)
-  Tab.flushK as nk st.1 cx st.2.1 ws st.2.2
-
 /-- Add pending sums `pd` of a row chunk `cx` and column chunk `cy`: `pd[s]` at slot `s < 64`, each nonzero sum once. -/
 def Tab.flushP (o : Tab) (cx cy : Nat) (pd : Array F128) : Tab :=
   { o with P := (List.range 64).foldl (fun m s =>
@@ -235,6 +226,38 @@ def Tab.flushP (o : Tab) (cx cy : Nat) (pd : Array F128) : Tab :=
 def addK (as : Array Nat) (ws : Array F128) (t : Nat) (f : F128) : Nat → Nat → Array F128 → Array F128
   | 0, _, pd => pd
   | n + 1, k, pd => addK as ws t f n (k + 1) (pd.modify (as.getD k 0 + t) (· + ws.getD k 0 * f))
+
+/-- Slot `t` of `addRun`. -/
+@[inline]
+def addRunStep (as : Array Nat) (nk : Nat) (ws acc : Array F128) (pd : Array F128) (t : Nat) : Array F128 :=
+  let x := acc.getD t 0
+  if x.isZero then pd else addK as ws t x nk 0 pd
+
+/-- A run's sums `acc` at every copy `k < nk`, weight `ws[k]`, added to pending sums `pd`: `ws[k] · acc[t]` at slot
+`as[k] + t` (`addK`), each nonzero sum. -/
+def addRun (as : Array Nat) (nk : Nat) (ws acc : Array F128) (pd : Array F128) : Array F128 :=
+  (List.range 64).foldl (addRunStep as nk ws acc) pd
+
+/-- Add a run's sums `acc` of a row chunk `cx` and column chunk `cy` to pending sums `(o, cx', cy', pd)` (`addRun`)
+once they are at the run's chunks, those of other chunks first added (`Tab.flushP`). -/
+def Tab.flushKP (as : Array Nat) (nk : Nat) (st : Tab × Nat × Nat × Array F128) (cx cy : Nat) (ws acc : Array F128) :
+    Tab × Nat × Nat × Array F128 :=
+  let (o, px, py, pd) := st
+  if px == cx && py == cy then (o, px, py, addRun as nk ws acc pd)
+  else (Tab.flushP o px py pd, cx, cy, addRun as nk ws acc (Array.replicate 64 0))
+
+/-- An explicit row's references `vs` at every copy `k < nk` at once, weight `ws[k]`, while each copy's low part is
+below `B` and `B` divides 64, on pending sums: an own column's slot is then its copy's low part plus a slot common to the
+copies, and its factor is common, so a run's sums are formed once (`Tab.refStepK`) and added at each copy, a run before
+the row's last to the table (`Tab.flushK`) and the last to the pending sums (`Tab.flushKP`), which the rows after it at
+the same chunks add to. -/
+@[specialize]
+def Tab.refsK (D : Def) (pt : FoldPt) (A B : Nat) (as : Array Nat) (gL : Half) (pos : Nat → Nat) (fac : Nat → F128)
+    (nk cx : Nat) (ws : Array F128) (st : Tab × Nat × Nat × Array F128) (vs : Array Nat) :
+    Tab × Nat × Nat × Array F128 :=
+  let (o, px, py, pd) := st
+  let r := vs.foldl (Tab.refStepK D pt A B as gL pos fac nk cx ws) (o, py, Array.replicate 64 0)
+  Tab.flushKP as nk (r.1, px, py, pd) cx r.2.1 ws r.2.2
 
 /-- One reference of a row of chunk `cx` at every copy, on pending sums `(o, cx', cy', pd)` carried across rows: an own
 column's factor `fac v` times each copy's weight `ws[k]`, added at its slot (`addK`) once the pending sums are at its
@@ -258,7 +281,7 @@ def Tab.halfK (D : Def) (pt : FoldPt) (A B : Nat) (as : Array Nat) (gL : Half) (
     (nk cx : Nat) (ws : Array F128) (st : Tab × Nat × Nat × Array F128) (vs : Array Nat) :
     Tab × Nat × Nat × Array F128 :=
   if vs.size < 64 && B == 1 then vs.foldl (Tab.refDK D pt A B as gL pos fac nk cx ws) st
-  else (Tab.refsK D pt A B as gL pos fac st.1 nk cx ws vs, st.2)
+  else Tab.refsK D pt A B as gL pos fac nk cx ws st vs
 
 /-- One explicit row `(x, ra, rb)` at every copy on pending sums: its weights formed once, an `A` reference's times `α`,
 its references through `Tab.halfK`. -/
