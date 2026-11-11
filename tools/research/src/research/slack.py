@@ -1306,10 +1306,10 @@ def vercel_oidc_token() -> str | None:
 def notes_token(now: float | None = None) -> str | None:
     """A token for the private notes repository.  Where there is a Vercel OIDC identity (`vercel_oidc_token`, as the Slack events
     service has it), the one the broker mints for it (`NOTES_TOKEN_URL`, scope `notes`), kept until shortly before it
-    expires; else, or when the broker refuses (said on stderr), `notes_sync.notes_token`'s: $RESEARCH_NOTES_TOKEN when set by
-    hand, else on a Cursor agent the one the agents' GitHub broker mints for its Cursor identity.  None when there is none of
-    them, so a read goes unauthenticated and a private file answers 404.  `notes_token_source` says which one it was, and
-    why."""
+    expires; else, or when the broker refuses (said on stderr), `notes_sync.notes_token`'s: on a Cursor agent the one the
+    agents' GitHub broker mints for its Cursor identity, and $RESEARCH_NOTES_TOKEN where that broker gives none.  None when
+    there is none of them, so a read goes unauthenticated and a private file answers 404.  `notes_token_source` says which one
+    it was, and why."""
     _notes_token.pop("why", None)
     oidc = vercel_oidc_token()
     if oidc and (token := _broker_notes_token(oidc, time.time() if now is None else now)):
@@ -2544,9 +2544,23 @@ def publish_route(root: Path, r: dict, message: str, where: str = ROUTES_DIR, na
     return line
 
 
-def notes_api(method: str, rel: str, body: dict | None = None) -> Any:
+def _given_token_refused() -> bool:
+    """GitHub refused the notes token and it was $RESEARCH_NOTES_TOKEN as given: where `notes_sync` is (never where this file
+    is deployed alone), it says so and asks the agents' GitHub broker (`notes_sync.refused_given`); whether that gave a token to
+    ask GitHub again with."""
+    if _notes_token.get("source") != "env":
+        return False
+    try:
+        from . import notes_sync
+    except ImportError:
+        return False
+    return notes_sync.refused_given()
+
+
+def notes_api(method: str, rel: str, body: dict | None = None, again: bool = True) -> Any:
     """GitHub's contents API on the notes repository, with the notes token (`notes_token`), for a caller with no clone (the
-    Slack events service): the JSON answer, or None for a GET of a path that isn't there."""
+    Slack events service): the JSON answer, or None for a GET of a path that isn't there.  A $RESEARCH_NOTES_TOKEN GitHub
+    refuses (401 or 403) is replaced once by the agents' GitHub broker's token, where there is one (`_given_token_refused`)."""
     if not (token := notes_token()):
         raise SlackError("no notes token: set RESEARCH_NOTES_TOKEN, or run where the broker mints one (VERCEL_OIDC_TOKEN); "
                          "without a notes clone, the notes are read and written with it")
@@ -2560,6 +2574,8 @@ def notes_api(method: str, rel: str, body: dict | None = None) -> Any:
     except urllib.error.HTTPError as e:
         if e.code == 404 and method == "GET":
             return None
+        if e.code in (401, 403) and again and _given_token_refused():
+            return notes_api(method, rel, body, again=False)
         raise SlackError(f"notes: GitHub {method} {rel}: HTTP {e.code}") from None
     except (urllib.error.URLError, OSError, ValueError) as e:
         raise SlackError(f"notes: GitHub {method} {rel}: {getattr(e, 'reason', e)}") from None
