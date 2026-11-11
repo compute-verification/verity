@@ -95,7 +95,7 @@ end LeanRelease
 namespace Loop
 
 /-- Completeness (the frame's, for `L`'s device, which Lean does not model for the deployed device; the honest session
-of `verity/ml/flock/verifier/firewall_controls.sh` checks it under `FC_FIREWALL=1`). **Each round of `L`'s device passes
+of `verity/protocols/flock/agreement/firewall_controls.sh` checks it under `FC_FIREWALL=1`). **Each round of `L`'s device passes
 the frame's checks where the frame takes its coins**: at `x` and `w`, after every history of `2` to `refK x` rounds
 whose last coins the frame takes, the frame round passes the frame's checks at `L`'s device round
 (`LeanRelease.roundOk`). -/

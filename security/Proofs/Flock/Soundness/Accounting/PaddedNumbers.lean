@@ -15,7 +15,7 @@ import Proofs.Flock.Soundness.Accounting.Fast100
 `√ρ'` by a rational upper bound `s̄` with `ρ' ≤ s̄²` (`padQueryError_le`), and the padded code's
 MCA numerator by a crude closed form (`padMcaA_le`; its terms sit below 2^-200).
 
-At Flock ZK's values (`verity/ml/flock/live/PROTOCOL.md` §7 item 6, the verifier's `Zk.queries0`: level-0
+At Flock ZK's values (`verity/protocols/flock/prover/live/PROTOCOL.md` §7 item 6, the verifier's `Zk.queries0`: level-0
 query counts `q₀ = 277, 242, 229` at `m = 25, 26, 27`, 219 at `m = 28..31` and 218 at `m = 32..35`, padding
 `t = 2q₀`, a pair of extra lanes per rep), every table is sound to `2^-205` at `η = 1/200` for every statement
 shape in range, at every `m` the verifier serves (`padTableError_le_m1`). The rational checks run in Lean's

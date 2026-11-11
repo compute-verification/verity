@@ -37,7 +37,7 @@ import Mathlib.Topology.Sheaves.Init
 /-!
 # The compute dampener: the vocabulary
 
-The training-efficiency bound of `benchmarks/nci/tiers.py`. A developer spends `C` FLOP on monitored hardware and `U` on
+The training-efficiency bound of `verity/protocols/inference_only/nci/tiers.py`. A developer spends `C` FLOP on monitored hardware and `U` on
 unmonitored hardware, and must still compute the counted multiplications `M` of training (an updated weight times an
 activation or an activation gradient). Each stands for `2/κ` FLOP of an unconstrained run, `κ` being the share of
 training FLOP that are counted multiplications at 2 FLOP each, so the compute efficiency is `η = (2/κ) M / (C + U)`

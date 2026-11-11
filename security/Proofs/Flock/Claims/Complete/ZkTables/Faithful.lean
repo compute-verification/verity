@@ -39,13 +39,13 @@ import Mathlib.Topology.Sheaves.Init
 `honestP` runs the masked session on each table's share of the witness as given. `flock-circuit --zk` differs from it in
 two places, and agrees with it in its other refusals; `honestPR` is `honestP` with the two differences made.
 
-* **The mask slot's words are the tape's** (`verity/ml/flock/live/src/bin/flock-circuit.rs:2738`–`2747`): table `i`'s
+* **The mask slot's words are the tape's** (`verity/protocols/flock/prover/live/src/bin/flock-circuit.rs:2738`–`2747`): table `i`'s
   block `b`'s mask words are `h.rng.f128s(STREAM_MASK, b·mask_words, mask_words)` (`STREAM_MASK`,
-  `verity/ml/flock/live/src/zk_hooks.rs:35`), so word `k` of the slot in `maskWordsOf` order (`mask_words`,
+  `verity/protocols/flock/prover/live/src/zk_hooks.rs:35`), so word `k` of the slot in `maskWordsOf` order (`mask_words`,
   `flock-circuit.rs:993`) is `STREAM_MASK`'s index `k`, the tape's `mask i k`. `maskW` puts them in the witness: table
   `c`'s bit `a` is hidden value `a·J + c` (`Readable.tableWit`), and where `a` is in the slot's word `k` (`maskIdx`) the
   bit is `mask c k`'s bit `a mod 128`. `maskWOf x` does it at `x`'s session.
-* **An outer coin `1` stops the prover** (`Masking::refuse_outer`, `verity/ml/flock/live/src/zk_veil.rs:329`, called on
+* **An outer coin `1` stops the prover** (`Masking::refuse_outer`, `verity/protocols/flock/prover/live/src/zk_veil.rs:329`, called on
   every coin as it is sampled, `zk_veil.rs:393`, `403`): the zerocheck's outer coins (`outerSlotsZk`) read from the
   verifier's replies so far (`outerHit`); at one equal to `1` the prover sends nothing more of the session (`[]`).
 * **A degenerate mask rank stops the prover** (`mask_rank_ok`, `zk_veil.rs:1087`, at the opening's label,

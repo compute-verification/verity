@@ -11,7 +11,7 @@ same session: the memory challenger streams one label sequence over every tier a
 session of its own would leave every other tier in its `R`, and two sessions don't compose.
 
 On a disk the fill writes its free space: raw devices whole, and a mounted filesystem's free space in a fill file
-(`verity/core/protocols/pous/wipe_store.py`, `Disk`). Everything on the disks the fill doesn't overwrite counts in `R`
+(`verity/protocols/pous/verifier/wipe_store.py`, `Disk`). Everything on the disks the fill doesn't overwrite counts in `R`
 in full, whatever it holds:
 
 * the used bytes of each mounted filesystem, the root filesystem among them. Its content is public, so a read of it

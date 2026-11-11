@@ -5,7 +5,7 @@ public import NciCheck.Protocol
 /-!
 # What NCI's core protocol's acceptance means
 
-`NciCheck.Protocol.check` (`verity/core/protocols/network/nci/lean/NciCheck/Protocol.lean`, package `nci_check`) is the
+`NciCheck.Protocol.check` (`verity/protocols/inference_only/verifier/nci/lean/NciCheck/Protocol.lean`, package `nci_check`) is the
 inference-only policy as a core protocol, `verity/inference-only/v0`, a subprotocol of both composites
 (`Core.Onsite.protocol`, `Core.Remote.protocol`): once the run's record names the declared circuit (`names`), it runs the
 check of record, `NciCheck.Baseline.evaluate`, on the instance its params and evidence give (`instanceOf`) and the

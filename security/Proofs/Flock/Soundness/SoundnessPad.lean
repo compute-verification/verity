@@ -323,7 +323,7 @@ theorem m1_shape : ∀ m, 25 ≤ m → m ≤ 35 →
   intro m h1 h2
   interval_cases m <;> decide +kernel
 
-/-- **The table theorem at Flock ZK's values** (`verity/ml/flock/live/PROTOCOL.md` §7 item 6): every `m`
+/-- **The table theorem at Flock ZK's values** (`verity/protocols/flock/prover/live/PROTOCOL.md` §7 item 6): every `m`
 the verifier serves, `25 ≤ m ≤ 35`, level-0 query counts `277, 242, 229` at `m = 25, 26, 27`, 219 at
 `m = 28..31` and 218 at `m = 32..35`, padding `t = 2q₀`, a pair of extra lanes per rep. For every prover
 strategy, the verifier accepts a table while the committed values do not satisfy the statement with

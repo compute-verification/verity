@@ -14,7 +14,7 @@ certifier saw is what the warden sent is a fact of the code, not a premise.
 
 **The record is the wire.** The deployed tap (`benchmarks/network_traces/warden_serve.py`, one relay on the auditor's
 machine) records every cell it sends, padding and fail cells included, a row a bucket, each cell a frame that names its
-connection (`verity/core/protocols/certifier/warden_rows.py`; `Definitions.NetworkCertifier.RecordRows` is that
+connection (`verity/protocols/certifier/verifier/warden_rows.py`; `Definitions.NetworkCertifier.RecordRows` is that
 format). So on every schedule the format holds (`RecordFormat.fits`: a record of the monitoring period's buckets, each of
 `S` slots, holds a schedule whose cells fall in them, at most `S` a bucket), the cells read back from the record under
 the schedule (`RecordFormat.read_record`). What else the record holds, each step's jitter class and statuses, may depend on

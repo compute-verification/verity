@@ -15,7 +15,7 @@ import Proofs.Flock.Soundness.ZK.RealLeaves
 
 A recursive session releases the auditor's whole view cut at a stop: where its first statement to stop stopped, or
 nowhere. Which stop comes may depend on anything, the witness included, so the stop is a leak. These two pieces bound it
-(`verity/ml/flock/live/PROTOCOL.md` §10.5, its first row).
+(`verity/protocols/flock/prover/live/PROTOCOL.md` §10.5, its first row).
 
 * `prCoin_cut_le`: where the whole view is within `ε` of an ideal one at every event, the whole view cut at a stop of
   `St`, which may depend on everything, is within `|St|` times the ideal view cut at a uniform stop, plus `ε`. The

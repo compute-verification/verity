@@ -20,7 +20,7 @@ total degree `D` hits a zero with probability at most `D / |field|` (Schwartz–
 list-decoding regime the level-0 commitment is close to up to `L₀` codewords, and a claim must
 fail for every one of them, so every term before Ligerito's binding carries a factor `L₀` (paper
 Appendix A, "Security"). Ligerito's per-level terms follow paper Appendix C.3 with the spec's
-changes (`verity/ml/flock/verifier/README.md`, A11): folding challenges in GF(2^256), two out-of-domain samples per committed
+changes (`verity/protocols/flock/agreement/README.md`, A11): folding challenges in GF(2^256), two out-of-domain samples per committed
 level, stratified queries.
 
 **List sizes.** `Level.listBound` is ArkLib's proved Johnson bound for interleaved Reed–Solomon
@@ -132,10 +132,10 @@ noncomputable def ligeritoError : List Level → ℝ
   pinned coordinates lose nothing, paper §4.3); plus the exceptional event that a sampled
   coordinate equals 1, which the `(G(1), G(∞))` encoding with `inv(0) = 0` cannot survive
   (`Flock.Piop`), degree `m − 13`, charged once;
-* Z5, `z`: the univariate skip, degree 127 (`verity/ml/flock/verifier/README.md` A3);
+* Z5, `z`: the univariate skip, degree 127 (`verity/protocols/flock/agreement/README.md` A3);
 * Z6, `ρ_i`: `m − 6` quadratic residual rounds;
 * the pin: the constant column's multilinear extension equals 1 at `ρ_out` although the pin is 0
-  in some block, degree `m − k_log` (`Flock.Piop`, the `β` term, `verity/ml/flock/verifier/README.md` A8);
+  in some block, degree `m − k_log` (`Flock.Piop`, the `β` term, `verity/protocols/flock/agreement/README.md` A8);
 * L1 `α`, L2 `β`: degree 1 each; L3 `t_j`: `k_log − 6` quadratic rounds; L5 `r'`: degree 63;
 * O5 `r''_k`: degree 7 per claim; O6 `γ`: total degree 1 (`Flock.Opening`);
 * Ligerito's level-0 out-of-domain claim's batching coin (`Flock.Ligerito` step 2). -/

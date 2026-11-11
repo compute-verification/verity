@@ -1371,8 +1371,8 @@ reads `CoinLayer.helloD` (`coinHello`), and the nonce it reads is the nonce's by
 alone, all total (`Hello.parse` reads the JSON through `Flock.JsonParse.parse`, and `CoinLayer.helloD` is itself built
 through it, `CoinLayer.helloJson`). The parser reads `canon`'s output back alike (`FlockComplete.JsonRT.parse_canon`);
 it stays a named hypothesis because `Hello.parse` accepting what it reads depends on the statement's own `Hello`.
-`verity/ml/flock/tests/test_lean_coin_open.py` runs it on the `Hello`s of the sessions Rust's `Checked` is held to
-(`verity/ml/flock/live/src/coin_open_vectors.json`). -/
+`verity/protocols/flock/prover/tests/test_lean_coin_open.py` runs it on the `Hello`s of the sessions Rust's `Checked` is held to
+(`verity/protocols/flock/prover/live/src/coin_open_vectors.json`). -/
 def HelloDParses (x : Msg) : Prop :=
   ∀ ν : CoinLayer.Nonce,
     ∃ hl : _root_.Flock.Firewall.Coins.Hello, coinHello (CoinLayer.helloD x ν) = .ok hl ∧ hl.nonce = CoinLayer.nb ν

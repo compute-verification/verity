@@ -27,7 +27,7 @@ runs, extractors, finders, simulators and the shared claim forms `KS`, `Complete
 * Nontriviality (`Nontrivial`) is for a test against recorded sessions to establish, and no Lean proof of it is
   expected: Lean's kernel can't evaluate SHA-512 over real proofs. The test is `check`'s `lean-agreement` job
   (`tools/verity/check/ci.toml`), which holds the compiled Lean verifier's checks on every recorded session to upstream's
-  verdicts (`flock-verify agree`, `verity/ml/flock/verifier/agree.py`) and fails unless each honest one passes them.
+  verdicts (`flock-verify agree`, `verity/protocols/flock/agreement/agree.py`) and fails unless each honest one passes them.
   Its sessions are of forms the verifier then refuses, so it reaches the acceptance `Flock.Nontrivial` states only up
   to those refusals.
 * List decoding is in its radius form (`Flock.ListWithin`): the opened columns are written into the
@@ -368,7 +368,7 @@ def Efficient {F : Type} [Fintype F] [DecidableEq F] [Zero (List F)] (H : Msg �
 /-- **Flock: nontriviality**: recorded honest runs, each of a statement the scope check takes, that the verifier
 accepts. It is for a test against recorded sessions to establish, not a Lean proof, and none is expected: `check`'s
 `lean-agreement` job (`tools/verity/check/ci.toml`) runs the compiled Lean verifier's checks on recorded honest sessions
-(`flock-verify agree`, `verity/ml/flock/verifier/agree.py`) and fails unless each passes them. Its sessions are of
+(`flock-verify agree`, `verity/protocols/flock/agreement/agree.py`) and fails unless each passes them. Its sessions are of
 forms the verifier then refuses, so it reaches this acceptance only up to those refusals. -/
 def Nontrivial (H : Msg → Msg) (D : Deploy Coin Col T) (recs : List (Recorded D.V)) : Prop :=
   Claims.Nontrivial H D.V recs ∧ ∀ e ∈ recs, D.scopeCheck e.x = true

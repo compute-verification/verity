@@ -32,7 +32,7 @@ rounds so far (`Loop.schedSoFar`: the algebraic phase's, then the opening's) are
 proof's round 0.
 
 Assumption record. No claim: evaluations of deterministic deployed code on one run's bytes, which say nothing about the
-prover or the world. It is witnessed outside Lean by a run of `verity/ml/flock/verifier/firewall_finish_agree.sh` at
+prover or the world. It is witnessed outside Lean by a run of `verity/protocols/flock/agreement/firewall_finish_agree.sh` at
 5a7e015281, at its default statement (`hidden:256`, one instance, sampled): one firewalled CPU `prove --zk` session
 (`FC_FIREWALL=1`, `FC_HOST_WITNESS=1`) through that tree's Lean session loop, in which every round in a device round's
 place is the loop's own (`Skeleton.rounds`, then `Drive.openStep`, which `Loop.schedSoFar` reads) and the finish holds

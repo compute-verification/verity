@@ -40,7 +40,7 @@ import Std.Tactic.BVDecide.Normalize.Prop
 
 `RefSession.zkD` is the masked record at a reference session whose coin layer (`Hello`, the opening check, the coin it
 hands on) is the session's data. `zkDeployed` is the record at the deployed coin layer, `coin-tree/hm96-sha512/v2` as the
-masked prover's transport runs it (`verity/ml/flock/live/src/coin_tree.rs`, `Checked`) and the masked verifier states it
+masked prover's transport runs it (`verity/protocols/flock/prover/live/src/coin_tree.rs`, `Checked`) and the masked verifier states it
 (`Flock.CoinTree`, `Flock.Zk.coinSpec`):
 
 * **Nonce.** 32 bytes (`Nonce`), the prefix of every hash of the tree (`nb`).

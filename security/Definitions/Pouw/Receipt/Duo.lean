@@ -10,7 +10,7 @@ import Mathlib.Tactic.SetLike
 # duo, a receipt fold (trusted)
 
 duo absorbs one word `d` into a chain's state `(y, z)`, two `n`-bit words, with keys `(k, a, r)`
-(`benchmarks/pouw/receipts/receipt_folds.py`, `duo_word`, at `n = 32`):
+(`verity/protocols/pouw/receipts/receipt_folds.py`, `duo_word`, at `n = 32`):
 
     u = y ⊕ d ⊕ k;   y ← u·a + z;   z ← rotl(u, r) + y
 

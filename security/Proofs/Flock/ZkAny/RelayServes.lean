@@ -123,7 +123,7 @@ def RelayServes {W Rr : Type} (M : LoopModel W Rr) (rv : List (Claims.Msg × Cla
 
 /-- `flock-worker-deterministic` (a trust in the worker's code). **The model's worker gives the worker's round
 values**: at each history `h` where the worker sends a frame round's content `v` (`rv h = some v`: the content
-`LiveChallenger::round` in `verity/ml/flock/live/src/lib.rs` sends in its `Req::Round`, everything the prover absorbed
+`LiveChallenger::round` in `verity/protocols/flock/prover/live/src/lib.rs` sends in its `Req::Round`, everything the prover absorbed
 since its previous squeeze), the model's worker gives `v` there and goes on. Why it is reasonable: the worker is the
 honest prover behind the ZK server, whose round contents its code computes from the statement, the witness, its tapes
 and the coins it received, the history. -/

@@ -361,7 +361,7 @@ def treeCoins (spec : Flock.CoinTree.Spec) : ℕ := spec.streams.size * 2 ^ spec
 
 /-- **The specs the device samples a coin tree of**: a coin or more a round, and at most `maxTreeCoins` coins. The
 deployed device refuses every other spec: `LiveChallenger.sample_tree`
-(`verity/core/protocols/spot/challenger.py`) refuses a spec `tree_spec_reason` refuses, a round of no coin
+(`verity/protocols/spot/device/challenger.py`) refuses a spec `tree_spec_reason` refuses, a round of no coin
 among them, and then a tree of more than `MAX_TREE_COINS` coins. So a tree the device samples holds at most
 `maxTreeCoins` leaves: a leaf is a round, of a coin or more. -/
 def TreeSpecOk (spec : Flock.CoinTree.Spec) : Prop := 1 ≤ spec.block ∧ treeCoins spec ≤ maxTreeCoins
@@ -396,7 +396,7 @@ the device refuses (a family with no coin left, a `Hello` whose spec it doesn't 
 its log holds `maxTreeLines` coin-tree lines (`treeLines`), no `i`-th tree, or `OpenTree.next`'s refusal) ends its
 releases, as a refused frame ends the challenger's session, and so does the prover's close. The output is the device's
 log. The two caps are the deployed device's own refusals (`LiveChallenger.sample_tree` and `LiveChallenger._tree_line`
-in `verity/core/protocols/spot/challenger.py`), so a play here samples at most `maxLeaves` leaves.
+in `verity/protocols/spot/device/challenger.py`), so a play here samples at most `maxLeaves` leaves.
 
 The challenger refuses further frames this device serves (a spec past its other limits, a nonce or a root of another
 length, a tree's root or key sampled twice), so each of its sessions, a refused frame read as the prover's close, is a

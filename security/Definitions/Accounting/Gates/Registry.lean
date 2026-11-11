@@ -6,7 +6,7 @@ public import Definitions.Accounting.Gates.Model
 # The registry's primitives, each in one class (trusted)
 
 Every primitive of the registry in exactly one class of the model (`Model.lean`), as the ruling closes the free
-set, 262 ids: the 194 of `verity/ml/circuits/ops/prims.py` at
+set, 262 ids: the 194 of `verity/definitions/ops/prims.py` at
 `615eabc13a`; S8-PORT's (`ops/s8.py` and `ops/boolean/s8.py` at `45351115eb`): the s8 family's two steps
 `BlackwellS8ImmaDot32` and `BlackwellU8S8ImmaDot32` and LimbSplit's four limb steps (`S32LowByte`, `S32ByteCarry`,
 `S32ClampS8`, `S32ClampRest`), each as its word Definition (`_v1`) and on bits (`_v2`); PIN's spot check
@@ -50,7 +50,7 @@ mask (`PouwOrBit`, `PouwMask32`, `PouwH1Tile_v4`) and J10-R's call-scope noise (
   one runtime word, not a column, so never a gather, whose constant index would cost nothing), LimbSplit's limb steps
   (the carries `IntGate.role` gives), and PoUW's integer helpers (H1's noise, digits and `PouwXinFinal` among them).
 * **inputs**, by family: `Input{n}_v1` ids are run inputs and `RegisteredInput{n}_v1` ids registered. A coin input is
-  an `Input` id whose port is kind coin (`verity/ml/circuits/ports.py`), so its binding is its port's, not its id's
+  an `Input` id whose port is kind coin (`verity/circuits/ports.py`), so its binding is its port's, not its id's
   (`Class.listed`).
 * **families** are full patterns, as property/v1's: a family's id is its prefix, a positive numeral with no leading `0`
   and `_v1` (`numbered`), and a table read's `TableRead`, its `n`, `x`, its `w` and `_v1`.

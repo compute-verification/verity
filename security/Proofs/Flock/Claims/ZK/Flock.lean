@@ -60,7 +60,7 @@ at `(1 + 5t)` runs in expectation (`Flock.simCostExp_of_proto`) and `1 + 5t·3^t
 (`Flock.simCost_gkE_of_proto`); at a cap `M`, `Proto.gkE_zk` gives `4·δ_A + 4t·δ_B + 3^{-t} + t/M` and `γ = 4M`.
 
 **The rounds.** A simulator against a malicious `V*` needs the coins fixed before the prover's first message, which only
-the coin commitment at `Hello` does (`verity/ml/flock/live/PROTOCOL.md` §9). `FlockDeploy.V` is the public-coin form,
+the coin commitment at `Hello` does (`verity/protocols/flock/prover/live/PROTOCOL.md` §9). `FlockDeploy.V` is the public-coin form,
 whose `k = 2 + rounds` messages (`next_acc_length`) are the link, the recorded rounds and the last, each but the last
 answered by a live coin in the clear, so `Claims.Flock.ZK` reads `D.V.k + 1` rounds, `Hello` first. The protocol's
 coins are `D.V`'s, `K = D.V.k − 1`, and it has `G.k = D.V.k + 1` messages (`deployZk_proto_k`), so at

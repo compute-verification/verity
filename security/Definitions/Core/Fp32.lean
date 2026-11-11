@@ -3,7 +3,7 @@ module
 /-!
 # FP32 arithmetic: `verity.ml.circuits.ops.fp32`
 
-The FP32 and BF16 primitives of `verity/ml/circuits/ops/fp32.py` as total functions on words, in
+The FP32 and BF16 primitives of `verity/definitions/ops/fp32.py` as total functions on words, in
 `Verity.TC.Spec`'s encoding: an FP32 word is a natural number below `2^32`, a BF16 word one below `2^16`, and the bit
 operations are Python's. Each definition is named after its primitive and version (`F32Add` v2 is `f32AddV2`, `F32Fma`
 v1 is `f32Fma`) and equals the primitive's evaluator on every word of its domain.

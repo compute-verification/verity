@@ -40,7 +40,7 @@ Level 0's committed rows under `--zk` are `width₀ = 2^k0 + 2e` lanes wide, the
 in one tree (`OpensOKZ`), and the masked session's level-0 term compares an opened row with the oracle on all of them
 (`Off₀Z`). `Flock.KS`'s columns at the masked record are the witness lanes alone (`zkRepColsOf`, `wideJ`, the claim's
 `cols`, `zkEncD`), and `oracleOf` reads `0` past a column, so a table `C` of them, as an oracle, has zero extra lanes.
-The honest prover's extra lanes are uniform (`verity/ml/flock/live/PROTOCOL.md`, "Four uniform lanes"), and rep `r`'s
+The honest prover's extra lanes are uniform (`verity/protocols/flock/prover/live/PROTOCOL.md`, "Four uniform lanes"), and rep `r`'s
 level-0 row check reads its pair of them.
 
 * `off₀Z_oracleOf_of_extra`, `offNoClashZ_oracleOf_of_extra`: a verifying level-0 opening with a nonzero extra lane is

@@ -65,7 +65,7 @@ values `p` and above (`2^n − p` of `2^n`, at `p = 2^n − c`). Not covered: a 
 choice among the registrations, which the one live registration rules out; and a layout chosen from the encodings
 after the coins, which the stacked guarantees fix before. Under the seed's key alone a writer picks an appended
 block's encoding by writing its decoding: measured in
-`verity/core/protocols/remote_bandwidth/tests/test_key_binding.py`, which also fails 64 tries under the bound key and
+`verity/protocols/poub/verifier/tests/test_key_binding.py`, which also fails 64 tries under the bound key and
 keys a block under each coin apart. -/
 def KeyBinding {Ω Ca Ch B : Type} [Fintype Ω] [Fintype Ca] [Fintype B] (T M : ℕ) (δ : ℝ≥0∞)
     (enc : Ω → Fin T → Ch → (Fin T → Ca) → Fin M → B) : Prop :=

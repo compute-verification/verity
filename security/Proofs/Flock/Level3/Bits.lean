@@ -1,5 +1,5 @@
 /-
-Level 3, L3-F (`Flock.Field`, `verity/ml/flock/verifier/README.md` stage 2): the bits of a natural number as a polynomial over GF(2). XOR is addition,
+Level 3, L3-F (`Flock.Field`, `verity/protocols/flock/agreement/README.md` stage 2): the bits of a natural number as a polynomial over GF(2). XOR is addition,
 a left shift is multiplication by a power of `X`, and a number split at bit `w` is `X^w · high + low`.
 -/
 module

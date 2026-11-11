@@ -5,7 +5,7 @@ public import NciCheck.Baseline
 /-!
 # What θ's provenance check's acceptance means
 
-`NciCheck.Baseline.evaluate` (`verity/core/protocols/network/nci/lean/NciCheck/Baseline.lean`) is the NCI check of
+`NciCheck.Baseline.evaluate` (`verity/protocols/inference_only/verifier/nci/lean/NciCheck/Baseline.lean`) is the NCI check of
 record: the policy check, then each θ entry's provenance against the trusted input, the service's registration log, the
 run's own record and the program function's parameters. `Nci.Assumptions.ThetaRegistered`
 (`Definitions/Nci/Assumptions/Baseline.lean`, [THETA-REGISTERED]) states what θ must hold: registered information,

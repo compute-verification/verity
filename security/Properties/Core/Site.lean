@@ -6,7 +6,7 @@ public import CoreProtocol.Site
 /-!
 # The Site's code: its fold and its check are the spec's
 
-`Core.Site` (`verity/core/protocols/interface/CoreProtocol/Site.lean`, package `core_protocol`) is code, so it
+`Core.Site` (`verity/protocols/interface/CoreProtocol/Site.lean`, package `core_protocol`) is code, so it
 requires nothing of `Security/`: it copies `Verity.Site` and `Verity.Registration` (`Definitions.Core.Site`) over types
 of its own. These are its properties, each a `Prop` stated against the code's functions and the spec's definitions, on
 the Site, log, digests and auditor a code value denotes (`site`, `log`, `digests`, `auditor`), and

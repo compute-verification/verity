@@ -88,7 +88,7 @@ the `U_t` (`RemoteAudit.receiptSample`, `Session.close`): `Key.subset(s'_t, U_t,
   which are fixed before coin `t` and its salt are released: a distinguisher of hm96 commitments at leaf `t` between
   coin `t` and zeros (claim `statistical-hiding`). At the pinned key (`common-reference-string`, `hash-derived-key`)
   hm96 puts each within the pair distance of leaf `t`'s commit strings, and over a session's `n` openings leaves those
-  sum to at most `n·2^-192` for all but a `2^-64` fraction of keys (`verity/ml/commitments/hm96/PROTOCOL.md` §3), so
+  sum to at most `n·2^-192` for all but a `2^-64` fraction of keys (`verity/commitments/hm96/PROTOCOL.md` §3), so
   the session's hiding terms total at most `n·2^-191` (`ledger.hiding`). That bound reads a prover whose view before
   coin `t` holds no salt of a coin not yet released, as the deployed prover's doesn't: a `view` that reads leaf `t`'s
   salt off the other coins gets no bound from hm96, rightly.

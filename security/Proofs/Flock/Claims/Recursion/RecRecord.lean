@@ -54,7 +54,7 @@ recorded round, its message's first commit strings as its tops (as many a level 
 there is any, as its one `c_k`, with its coin's values; and no last round, whose openings the challenger's live-coin part never sees.
 Everything else (stream, index, level-0 count, kind, Hello, the record past the link points) is whatever `aux`, `hd`
 and `rest` say. `recRead` reads the transcript back to each round's message and sampled values before the last round,
-at every accepted run (`readsBack_recTr`, `ReadsBackB`). The difftest (`verity/ml/flock/tests/test_lean_rec_record.py`)
+at every accepted run (`readsBack_recTr`, `ReadsBackB`). The difftest (`verity/protocols/flock/prover/tests/test_lean_rec_record.py`)
 holds the model to the honest records: `recordFullW` writes `rec_live.record_bytes`' bytes up to the link points, and
 the rounds `Record.msgs` shows are the link's and the recorded rounds', one fewer than the inner verifier's, each the
 schedule's count of commit strings. The model before it, which listed every inner round, set up no staged statement

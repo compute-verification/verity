@@ -10,7 +10,7 @@ import Mathlib.Tactic.Finiteness.Attr
 /-!
 # Advice v1's charge: the counted coded length of a decision stream under the registered book
 
-Definitions only. They mirror `verity/core/protocols/certifier/arith_encode.py`'s references one for one, with each
+Definitions only. They mirror `verity/protocols/certifier/verifier/arith_encode.py`'s references one for one, with each
 Python name in its docstring: `ChargeCount_v1{N}`'s charge (`reference_charge`), the bits ENC-CODE's 32-bit
 Witten–Neal–Cleary arithmetic coder (`benchmarks/network_e2e/encodings/code.py`'s `ArithEncoder`) would write for a
 window that sends only decisions, counted rather than written (the counting variant, which the composition charges).

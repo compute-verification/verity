@@ -8,7 +8,7 @@ public import Proofs.Flock.Soundness.ZK.GK.Extract
 
 The deployed masked prover reads the verifier's opening of one (stream, round) position, its coins, `T_n`, salt and
 Merkle path, and walks the keyed coin tree from it, every hash `SHA-512(ν ‖ ·)` under the prover's session nonce `ν`,
-to the root the verifier committed at `Hello` (`verity/ml/flock/live/PROTOCOL.md` §9). `treeChk` is that walk as an
+to the root the verifier committed at `Hello` (`verity/protocols/flock/prover/live/PROTOCOL.md` §9). `treeChk` is that walk as an
 `OC` program, so its `H` calls are logged: the chain from `T_n` up, the round digest, the salt hash, the hm96 leaf,
 then the path (`reachK`). An answer that is not 64 bytes fails the check, as no SHA-512 output is.
 

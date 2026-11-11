@@ -39,7 +39,7 @@ import Mathlib.Topology.Sheaves.Init
 /-!
 # frame-v3 trees over a hash (trusted)
 
-The served tree, `verity.ml.commitments.merkle` under `frame-v3-sha512` (`verity/ml/commitments/frame_v3/PROTOCOL.md`
+The served tree, `verity.ml.commitments.merkle` under `frame-v3-sha512` (`verity/commitments/frame_v3/PROTOCOL.md`
 §1 and §6), with the hash a parameter `H` (SHA-512 is the instance of record). A frame hashes
 `FRAME ‖ u32be |tag| ‖ tag ‖ Σ (u64be |part| ‖ part)` (`frame`). A domain is the verifier's: its id (a digest the verifier
 derives from the binding, owner, positions and count, never from an opening), its count, and its positions. The frame

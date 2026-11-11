@@ -7,7 +7,7 @@ public import Definitions.Core.Compose
 # A committed-coin protocol, its honest prover and its Goldreich–Kahan simulator
 
 The deployed masked protocol commits every coin at `Hello` (`coin-tree/hm96-sha512/v2`) and opens them round by round;
-the prover checks each opening before it uses the coin (`verity/ml/flock/live/PROTOCOL.md` §9). `Proto` is that
+the prover checks each opening before it uses the coin (`verity/protocols/flock/prover/live/PROTOCOL.md` §9). `Proto` is that
 protocol's shape, as far as zero knowledge against a malicious verifier reads it:
 
 * the prover's tape is a nonce (its `Hello`) and the rest; the verifier answers `Hello` with its commitment `ρ`;

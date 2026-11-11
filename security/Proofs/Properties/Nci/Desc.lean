@@ -6,7 +6,7 @@ public import Mathlib.Tactic
 /-!
 # The description-sized NCI check against the unrolled one
 
-`NciCheck.Desc.evaluate` (`verity/core/protocols/network/nci/lean/NciCheck/Desc.lean`) computes per IU its size and
+`NciCheck.Desc.evaluate` (`verity/protocols/inference_only/verifier/nci/lean/NciCheck/Desc.lean`) computes per IU its size and
 its novel reads from one summary per Definition, where `NciCheck.evaluate` walks the circuit gate by gate. What is
 proved here is the summaries' arithmetic, each step stated against the function that computes it:
 

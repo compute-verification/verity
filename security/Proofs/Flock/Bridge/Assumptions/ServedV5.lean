@@ -20,7 +20,7 @@ namespace Flock.Bridge.Assumptions
 open Flock
 
 /-- **The served registered session's files parse at public inputs.** There are a circuit file and a public file with the
-SHA-512 digests of the served registered `--zk` session (`SERVED` in `verity/ml/flock/tests/test_lean_ks_form.py`:
+SHA-512 digests of the served registered `--zk` session (`SERVED` in `verity/protocols/flock/prover/tests/test_lean_ks_form.py`:
 `stage/circuit.txt`, 56,327,749 bytes, and `stage/pub-32.bin`, 44,158 bytes, a shared-row public file of 32 instances),
 such that, under the tags
 `verify --zk --statement verity/flock-circuit` sets one session up with (`Witness.zkTags` at the inputs
@@ -32,7 +32,7 @@ don't read), the circuit file parses to a descriptor `D` (`Desc.parse`), `D` is 
 Assumption record. It assumes a computation's result: each conjunct evaluated with these functions, built from the
 source this module is checked at, on that session's two files (the circuit has no public input ports, and the public
 file loads with 32 instances and its shared-row tables); `flock-verify ks-form` reruns the form check on them
-(`verity/ml/flock/tests/test_lean_ks_form.py`). It asks nothing of a hash or of the prover; a change to any of these
+(`verity/protocols/flock/prover/tests/test_lean_ks_form.py`). It asks nothing of a hash or of the prover; a change to any of these
 functions or to the files makes it a new premise, to be checked by a new run. -/
 def ServedFilesParseV5 : Prop :=
   ∃ cf pf : ByteArray,

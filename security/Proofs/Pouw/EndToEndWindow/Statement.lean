@@ -63,7 +63,7 @@ lands.
 (`subset:K′`, `Law.subset`), the `N_real` real tiles padded with fillers to `pad(N_real + 1)`, sampled after the receipt,
 each sampled proof block proved alone (no closures). `WindowWork.WindowBoundOfService` discharges `WindowBound` there, its first
 term the subset sampling design's own escape, which is 0 where `K′ = N`. The clear audit's
-`Sampled(t)` (`benchmarks/pouw/clear/clear_audit.py`) is `t` independent work-weighted samples with replacement, not the
+`Sampled(t)` (`verity/protocols/pouw/clear/clear_audit.py`) is `t` independent work-weighted samples with replacement, not the
 code's sample.
 
 Gap (6)'s `Pouw.Guarantees.Window.WindowDelta` (branch `cursor/pouw-window-eps-stmt2-c7a9`) bounds the same event in

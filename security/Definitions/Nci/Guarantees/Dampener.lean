@@ -8,7 +8,7 @@ public import Definitions.Nci.Assumptions.Baseline
 /-!
 # The compute dampener: the guarantees
 
-The training-efficiency bound `η ≤ s + min(r, μ) + ν + χ` (`benchmarks/nci/tiers.py`), composed from one bound per
+The training-efficiency bound `η ≤ s + min(r, μ) + ν + χ` (`verity/protocols/inference_only/nci/tiers.py`), composed from one bound per
 source of counted multiplications. Each source's bound is a hypothesis over real numbers, the reading of a mechanism's
 guarantee or of the model's accounting:
 
