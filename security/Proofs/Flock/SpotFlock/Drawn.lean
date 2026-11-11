@@ -1,22 +1,15 @@
 module
 
 public import Proofs.Flock.SpotFlock.RevealsOpen
-public import Proofs.Flock.Claims.Sampling.Select.Second
-public import Proofs.Flock.Claims.Sampling.Select.Size
-import all Spot.Draw
-import all Lean.Data.Json.Basic
-import all Init.Data.Ord.String
+public import Proofs.Flock.Claims.Sampling.Select.SecondCount
 
 /-!
 # How many proof blocks SPOT[Flock]'s two stages prove
 
-`K`, the proof blocks a two-stage audit checks, is the always-checked blocks and the second stage's draw. The draw has
-`Kfirst · Σ_t k_t` of them at most: `k_t` of each of template `t`'s cells, one cell for each replay block the first
-stage proves, `Kfirst` of those.
+`K`, the proof blocks a two-stage audit checks, is the always-checked blocks and the second stage's draw. An accepted
+second stage proves `|sample| · Σ_t k_t` proof blocks (`Properties.Spot.SecurityProofs.size_proved_selectSecond`), and
+a first stage of count `K` hands it at most `K` replay blocks, so the draw has `K · Σ_t k_t` at most.
 
-* `drawUnits_work_size`: a work law's draw holds its strata's counts.
-* `selectSecond_proved_size`: an accepted second stage proves `|sample| · Σ_t k_t` proof blocks, its draw's units and
-  no closure.
 * `RegTwo.sample_size_le`: a first stage of count `K` (`SpotFlock.firstK`) hands the second stage at most `K` replay
   blocks; `RegTwo.proved_size_le`: so the second stage proves at most `K · Σ_t k_t`.
 * `RegTwo.card_biUnion_checked_le_count`, `SpotFlock.code_card_biUnion_le_count`: the gates the checked proof blocks
@@ -25,114 +18,6 @@ stage proves, `Kfirst` of those.
 -/
 
 @[expose] public section
-
-open Spot
-
-namespace Properties.Spot.SecurityProofs
-
-open Lean (Json)
-
-/-- **A work law's draw holds its strata's counts.** -/
-theorem drawUnits_work_size {K : ℕ} {ws : Array Flock.Draw.WorkStratum} {n : ℕ} {src : ByteArray}
-    {units : Array ℕ} {read : ℕ} (h : Draw.drawUnits (.work K ws) n src = .ok (units, read)) :
-    units.size = ((ws.map (·.toStratum)).toList.map (·.k)).sum := by
-  unfold Draw.drawUnits at h
-  cases hw : (Flock.Draw.drawWith (fun _ need => Draw.take src need) (.work K ws) n).run 0 with
-  | error e => rw [hw] at h; exact absurd h (by rw [bind_error]; simp)
-  | ok x =>
-    obtain ⟨r, read'⟩ := x
-    rw [hw, bind_ok] at h
-    obtain ⟨d, rfl⟩ : ∃ d, r = some d := by
-      cases r with
-      | none => exact absurd h (by simp [throw, throwThe, MonadExceptOf.throw])
-      | some d => exact ⟨d, rfl⟩
-    dsimp only at h
-    obtain ⟨hu, -⟩ := Prod.mk.inj (Except.ok.inj h)
-    subst hu
-    unfold Flock.Draw.drawWith at hw
-    dsimp only at hw
-    rw [StateT.run_bind] at hw
-    cases ho : (Flock.Draw.stratifiedWith (fun _ need => Draw.take src need) (ws.map (·.toStratum))).run 0 with
-    | error e => rw [ho] at hw; exact absurd hw (by rw [bind_error]; simp)
-    | ok y =>
-      obtain ⟨v, p⟩ := y
-      rw [ho, bind_ok, StateT.run_pure] at hw
-      obtain ⟨h1, -⟩ := Prod.mk.inj (Except.ok.inj hw)
-      cases v with
-      | none => exact absurd h1 (by simp)
-      | some D =>
-        obtain rfl := (Option.some.inj h1).symm
-        exact stratifiedWith_size src _ 0 p D ho
-
-/-- The cells' counts sum to `q` times the first `T` templates' counts. -/
-theorem snd_sum_cells (q : ℕ) (ns ks : Array ℕ) : ∀ T : ℕ,
-    (((List.range T).flatMap fun t => List.replicate q (ns.getD t 0, ks.getD t 0)).map Prod.snd).sum =
-      q * (ks.toList.take T).sum
-  | 0 => by simp
-  | T + 1 => by
-    rw [List.range_succ, List.flatMap_append, List.map_append, List.sum_append, snd_sum_cells q ns ks T,
-      List.flatMap_singleton, List.map_replicate, List.sum_replicate_nat, sum_take_succ, getD_toList ks T,
-      Nat.mul_add]
-
-/-- A second stage `secondProblem` passes has a count for each template's cell. -/
-theorem secondProblem_ks_size {sample ns ks : Array ℕ} (h : Select.secondProblem sample ns ks = none) :
-    ks.size = ns.size := by
-  unfold Select.secondProblem at h
-  split at h
-  · simp at h
-  split at h
-  · simp at h
-  rename_i hns
-  by_contra hne
-  exact hns (by simp [hne])
-
-theorem getD_draw_closure (sample ns ks : Array ℕ) (m : ℕ) (units : Array ℕ) :
-    getD (Json.mkObj ((entries (Select.secondLaw sample ns ks)).toList ++
-      [("population", Lean.toJson m), ("units", natsJson units)])) "closure" = Json.null := (rfl)
-
-theorem size_natsJson_int (units : Array ℕ) :
-    ((units.map fun x => Lean.toJson x).filterMap int?).size = units.size := by
-  rw [Array.filterMap_map, show (int? ∘ fun x : ℕ => Lean.toJson x) = some ∘ fun x : ℕ => (x : Int) from
-    funext int_toJson, Array.filterMap_eq_map rfl, Array.size_map]
-
-/-- The second stage's sample object proves its units and nothing else: `secondLaw` has no closure. -/
-theorem proved_second_draw (sample ns ks : Array ℕ) (m : ℕ) (units : Array ℕ) :
-    (Draw.proved (Json.mkObj ((entries (Select.secondLaw sample ns ks)).toList ++
-      [("population", Lean.toJson m), ("units", natsJson units)]))).size = units.size := by
-  unfold Draw.proved
-  dsimp only
-  rw [Verity.QSort.size_qsort, Array.size_append, getD_draw_units, getD_draw_closure]
-  exact (Nat.add_zero _).trans (size_natsJson_int units)
-
-/-- **An accepted second stage proves `|sample| · Σ_t k_t` proof blocks**: `k_t` of each of template `t`'s cells, one
-cell for each sampled replay block, and no closure. -/
-theorem selectSecond_proved_size {sample ns ks : Array ℕ} {src : ByteArray} {draw : Json} {read : ℕ}
-    (h : Select.selectSecond sample ns ks src = .ok (draw, read)) :
-    (Draw.proved draw).size = sample.size * ks.toList.sum := by
-  unfold Select.selectSecond at h
-  cases hq : Select.secondProblem sample ns ks with
-  | some e => rw [hq] at h; dsimp only at h; exact absurd h (throw_bind_ne _ _ _)
-  | none =>
-    rw [hq] at h
-    dsimp only at h
-    obtain ⟨⟨draw', read'⟩, hd, h⟩ := bind_eq_ok.1 h
-    split at h
-    · exact absurd h (throw_bind_ne _ _ _)
-    simp only [pure, Except.pure, Except.ok.injEq, Prod.mk.injEq] at h
-    obtain ⟨rfl, rfl⟩ := h
-    unfold Draw.drawFirstRead at hd
-    obtain ⟨parsed, hp, hd⟩ := bind_eq_ok.1 hd
-    obtain ⟨⟨units, read''⟩, hu, hd⟩ := bind_eq_ok.1 hd
-    simp only [pure, Except.pure, Except.ok.injEq, Prod.mk.injEq] at hd
-    obtain ⟨rfl, rfl⟩ := hd
-    obtain ⟨ws, rfl, hmap⟩ := flockLaw_second sample ns ks _ parsed hp
-    have hk := congrArg (List.map Prod.snd) (sizes_second hmap)
-    rw [List.map_map] at hk
-    refine (proved_second_draw sample ns ks (sample.size * ns.toList.sum) units).trans ?_
-    rw [drawUnits_work_size hu, show (ws.map (·.toStratum)).toList.map (·.k) = _ from hk, snd_sum_cells,
-      List.take_of_length_le (by simp [secondProblem_ks_size hq])]
-
-end Properties.Spot.SecurityProofs
 
 namespace SamplingDeploy
 
@@ -154,7 +39,7 @@ theorem RegTwo.sample_size_le (g : RegTwo) {K : ℕ} (hK : firstK g.first = some
 theorem RegTwo.proved_size_le (g : RegTwo) (src₁ src₂ : ByteArray) {draw : Lean.Json} {n : ℕ}
     (hsel : Spot.Select.selectSecond (g.sample src₁) g.ns g.ks src₂ = .ok (draw, n)) {K : ℕ}
     (hK : firstK g.first = some K) : (Spot.Draw.proved draw).size ≤ K * g.ks.toList.sum := by
-  rw [Properties.Spot.SecurityProofs.selectSecond_proved_size hsel]
+  rw [Properties.Spot.SecurityProofs.size_proved_selectSecond hsel]
   exact Nat.mul_le_mul_right _ (g.sample_size_le hK src₁)
 
 /-- **K by the count**: where the second stage draws on the replay sample of a first stage of count `K`, the gates the
