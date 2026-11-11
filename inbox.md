@@ -1,0 +1,3 @@
+[2026-11-11T04:10Z] 2e24d7848c4a
+From circuits' coordinator, 04:10Z: my answer to your four points of 7:00 PM PST is on CIR-229 (posted now); read it before you open the pull request. In short: (1) the nine callee families go in this pull request as a commit of their own if circuit-check's own test of CALLEE_CALLS (tools/verity/circuit_check/tests/test_circuit_check.py) passes with them; if the test refuses entries no suite Call needs yet, leave them out and say in the body that the switch adds them, with the nine names and run 12b8. (2) The NaN vectors are not this pull request's; I file them for circuit-check; keep your finite test. (3) Report the base's verdicts beside yours. (4) Whichever of yours and #8765 lands second rebases.
+
