@@ -4,6 +4,10 @@
    "and": 2579999,
    "type": "18600f0845eb8e524e1d23adb47ded0968f6dd92ea2d38c84f7892305b2713809e04189b7e1c60162dd08741b78b006b0c69b0e985a1c68f035ec8bc1449d071"
   },
+  "BlockOpeningCheck_v2{N=32,C=5,K=2,MASKED=1,BYTES=64,ROWS=2,LEAF=3,DR=1,DP=2,DV=1}": {
+   "and": 2581289,
+   "type": "659a2b6e69bb56f02bc87199b2b3ad55ff09e7495bc2281378a4b853cfc0b678b663f7f44dfba5481df28b7b9296ee1395fc0ed987abeb666aba265a4b6b2e3a"
+  },
   "BlockVerdict_v1{W=16}": {
    "and": 21,
    "type": "350b956a19ff31f720fadaa26b49acc24ba19267754c77254d6015dab1702ce8e85760c71679a1107579f9f9ce922b78aeaa8130bf7a54441a3478f0edc14cec"
@@ -71,6 +75,14 @@
   "LeafMatch_v1{LEAF=3,P=4}": {
    "and": 2231,
    "type": "1c8a86a5001a063a5e979f8d7f0e7f0a9ffb378e0f40bc7349b4ca6ddaaa1a76a22739229cfba578c117268ac56ec2ddde3bd6006c7fac97a57b583fa396cb7e"
+  },
+  "LeafMatch_v2{LEAF=16}": {
+   "and": 8848,
+   "type": "a4b04fe5174c9e36357563e3ebca94b23e9a9c54b28e2d0f5a09f298420ce91c597365f5baded41c64539cadd9f4d749cf9d57154d0f4d81881d1c919fc37296"
+  },
+  "LeafMatch_v2{LEAF=3}": {
+   "and": 2136,
+   "type": "7ea0304033e4c53e601b6777aa7ca4e108e3011b8f12b2805cda9cc435f8dc6bc7cc16ac8cb6c2c1abfe80be877ea73e27a6a8ba4f83cd92025ee685bc1e2faf"
   },
   "RowCompress_v1": {
    "and": 81402,
