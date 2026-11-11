@@ -20,6 +20,7 @@ uv run python benchmarks/spot_figures/figure4.py DIR/figure1.json            # F
 uv run python benchmarks/spot_figures/figure5.py SURFACE.json... [--path P] [--headline CARD]  # Figure 5
 uv run python benchmarks/spot_figures/figure6.py --advice A.json [--points P...] [--old-rule POINT...] --out DIR
 research data put --kind spot-figure/v1 --tree DIR --preserve                # for the console
+uv run python benchmarks/spot_figures/record.py stamp META.json [--out DIR]  # a serve's stamp: the switches it has off
 ~~~
 
 - **Cards** (`cards.py`, schema `spot-card/v1`): every number the figures read arrives as one JSON card in a slot
@@ -62,6 +63,12 @@ research data put --kind spot-figure/v1 --tree DIR --preserve                # f
 
   A `verifier_cost` card gives the verifier's core-seconds a statement by proof-block type (and its peak memory where
   measured), how a family's other types scale, and the core-seconds that cost one GPU-second.
+- **The post's configuration** (`record.json`, `record.py`): the 22 switches the post's claim fixes, each with the
+  value the post claims and the run that sets it (a serve, the proving run or the planner). `record.py stamp` reads a
+  serve's `meta.json` and writes its stamp, `{digest, observed, off}`: the SHA-512 of `record.json`, the serve's value
+  of each switch its `meta.json` shows, and the switches a serve sets that it does not show at the post's value (one at
+  another value, one shown only in part, one nothing in `meta.json` gives). It holds configuration only, so it is
+  published where the serve's own record is private.
 - **Figure 1** (`total_cost.py`): what an adversary serving the model on all of a scope's compute over a monitoring
   period can exfiltrate or infiltrate while evading detection with probability above δ, against total cost as a share
   of serving compute, the serve tax plus β (the share spent on replays, interior commitments, proofs of the sampled
@@ -202,6 +209,11 @@ research data put --kind spot-figure/v1 --tree DIR --preserve                # f
   ~~~sh
   uv run python benchmarks/spot_figures/breakeven/sweep.py --out DIR [--workers N] [--scopes all] [--only NAME...]
   ~~~
+
+  `--steady ROWS.json` (a case's `steady`) prices each block type the file holds a steady-state row of at what the
+  row measured (`reprice.steady`: a statement's GPU-seconds, its blocks, its provers and the run or art that holds
+  it), in place of the tables' price for it. Each priced stratum then names its basis, that record or the table that
+  priced it, and each proof-server case's row gives every basis's share of its proving (`basis`).
 - **Figure 6** (`figure6.py`), the certified tick's trade-off:
   - (a) a timeline of continuous admission against tick admission, with the network certifier stamping release
     buckets as its own layer;

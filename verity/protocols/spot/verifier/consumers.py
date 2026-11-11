@@ -8,14 +8,21 @@ protocol produced it, except that compute refuses a two-stage design's.
 from __future__ import annotations
 
 from collections.abc import Mapping, Sequence
-from math import floor, inf, log2, nextafter
+from math import floor, inf, log, nextafter
 
-from verity.protocols.spot.verifier.profile import MARGIN, IntegrityProfile
+from verity.protocols.spot.verifier.profile import MARGIN, IntegrityProfile, neg_log_ratio
 from verity.protocols.spot.verifier.service import REPLAY
 
 UNCERTIFIED_COMPUTE = ("a two-stage design's profile is credited for integrity and exfiltration only: its interiors are "
                        "committed after the draw, so work skipped at serve time and done late passes as work done")
 """`compute_bound`'s refusal of a profile with a level of replay blocks (`service.REPLAY`) above its checked level."""
+
+
+def entropy_bits(n: int, k: int) -> float:
+    """n H2(k / n) in bits for 0 < 2k < n, to a few units in the last place at any size: (k ln(n / k) +
+    (n - k) ln(n / (n - k))) / ln 2, each log `neg_log_ratio`'s.  (Taken as -x log2 x - (1 - x) log2(1 - x) at x = k / n,
+    the float 1 - x drops x's digits: under 2^-53 it is 1 and its term, 1.44 k bits, is gone.)"""
+    return (k * neg_log_ratio(k, n) + (n - k) * neg_log_ratio(n - k, n)) / log(2)
 
 
 def location_bits(profile: IntegrityProfile) -> float:
@@ -29,9 +36,7 @@ def location_bits(profile: IntegrityProfile) -> float:
         return 0.0
     if 2 * k >= n:
         return float(n)
-    x = k / n
-    bits = n * (-x * log2(x) - (1 - x) * log2(1 - x))
-    return min(float(n), nextafter(bits * (1 + MARGIN), inf))
+    return min(float(n), nextafter(entropy_bits(n, k) * (1 + MARGIN), inf))
 
 
 def infiltration_bound(profile: IntegrityProfile,
@@ -69,4 +74,5 @@ def compute_bound(profile: IntegrityProfile, work: float | Mapping[str, float | 
     return profile.harm_bound(work)
 
 
-__all__ = ["UNCERTIFIED_COMPUTE", "compute_bound", "exfiltration_bound", "infiltration_bound", "location_bits"]
+__all__ = ["UNCERTIFIED_COMPUTE", "compute_bound", "entropy_bits", "exfiltration_bound", "infiltration_bound",
+           "location_bits"]

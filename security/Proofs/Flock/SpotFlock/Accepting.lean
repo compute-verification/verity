@@ -13,6 +13,8 @@ at every set of the auditor's copies `h`:
 * `ref_numbers`: template `t`'s reference session statement `xS₀ t` has `1` to `200` tables, their level-0 lengths
   summed `2^10` to `n·2^23` (`zkOk_sound`, `FlockDeploy.N₀_le`); so the code's tables, the most any template's
   reference statement has, are at most `200` (`tables_le`);
+* `ref_one_table`: where the two-stage design evaluates, template `t`'s reference statement has one table
+  (`templateOk`), so its level-0 length is at most `2^23` and its sessions' `k′ = ⌈4N₀/e⌉` at most `12343986`;
 * `κF_le`: so each template's sessions' knowledge error `κ_F = 4·ε_table + 2^{−m′} + 2k′/K′ + e^{−k′/8}`, at its
   `N₀` (`κFAt`), is at most `2^{−190}`;
 * `slack_le_one_add`, `slack_sq_le_one_add`: the waits' slack factor `c = 2^{2^{−j}}` at `j = slackExp` is at most
@@ -72,6 +74,33 @@ theorem tables_le (x : Msg) : (code h).tables x ≤ 200 := by
   refine hfold ((List.range (h.ms.length + 1)).map fun t => (shapeOf (h.xS₀ t)).length) fun a ha => ?_
   obtain ⟨t, -, rfl⟩ := List.mem_map.1 ha
   exact (ref_numbers h t).2.1
+
+/-- **Where the design evaluates, a template's session is one table**: `templateOk` holds each template's reference
+statement to one table (`templateOk_of_two`), so its masked level-0 length is at most `2^23` and its sessions'
+`k′ = ⌈4N₀/e⌉` at most `12343986`, the one table's at `m = 35`. `ref_numbers`'s `200` tables are Flock's masked
+scope's (`zkOk`): the two-stage verifier refuses every run of a template with more than one. -/
+theorem ref_one_table {s : AuditStatement} {d : Design.Two} (hd : two h s = some d) {t : ℕ}
+    (ht : t < h.ms.length) :
+    (shapeOf (h.xS₀ t)).length = 1 ∧ n₀ h t ≤ 2 ^ 23 ∧ ⌈4 * n₀ h t / Real.exp 1⌉₊ ≤ 12343986 := by
+  have h1 : (shapeOf (h.xS₀ t)).length = 1 := by
+    have hok := templateOk_of_two h hd ht
+    unfold templateOk at hok
+    cases hr : FlockDeploy.readOf true (h.xS₀ t) with
+    | none => rw [hr] at hok; cases hok
+    | some r =>
+      rw [hr] at hok
+      simp only [Bool.and_eq_true, beq_iff_eq] at hok
+      exact hok.1.2
+  have hN : n₀ h t ≤ 2 ^ 23 := by
+    have hle := (ref_numbers h t).2.2.2
+    rw [h1] at hle
+    simpa using hle
+  refine ⟨h1, hN, ?_⟩
+  have he0 : 0 < Real.exp 1 := Real.exp_pos 1
+  have hlo := Real.exp_one_gt_d9
+  rw [Nat.ceil_le, div_le_iff₀ he0]
+  push_cast
+  linarith
 
 theorem inv_two_pow_eq (k : ℕ) : (2 : ℝ) ^ (-(k : ℝ)) = 2⁻¹ ^ k := by
   rw [Real.rpow_neg (by norm_num), Real.rpow_natCast, inv_pow]
