@@ -48,11 +48,11 @@ rule, and never by requests what a check counts by capacity:
 
 * the scan, `rowsTerms`'s terms (`terms`). The network certifier's own are the schedules and the fail cells,
   ⌈log2(egress_cells + 1)⌉ each a connection of the period's parameters, counted by request, and the jitter,
-  ⌈log2 D_j^T⌉ an execution phase of each link, which is 0 at D_j = 1 and a bit a bucket at D_j = 2. The term of
-  record is the one at D_j = 2 (`OF_RECORD`), two release schedules. The term at D_j = 1 is what a network certifier
-  with a set-time card, a network card that releases at a set time, would be charged; no timing test has shown one,
-  so a figure at D_j = 1 is printed only under its label (`SET_TIME`). The entries, the tied compute audits' free
-  inputs, are the compute side's. The check charges every slot's entry at its whole width
+  ⌈log2 D_j^T⌉ an execution phase of each link, which is a bit a bucket at D_j = 2 and 0 at D_j = 1. The term of
+  record is the one at D_j = 2 (`OF_RECORD`), two release schedules, and it is printed first. The term at D_j = 1 is
+  what a network certifier with a set-time card, a network card that releases at a set time, would be charged; no
+  timing test has shown one, so a figure at D_j = 1 is printed only under its label (`SET_TIME`). The entries, the
+  tied compute audits' free inputs, are the compute side's. The check charges every slot's entry at its whole width
   (`ingress_scan.entry_bits`), lanes × T / EVERY of them a link's execution phase, a count by capacity that needs the
   class's lanes; with none given the entries are one a request, the least the check can charge;
 * N2, the clock form's terms (`clock_terms`): the schedules are ⌈log2 #Σ_sync^m⌉ over a link's m execution phases,
@@ -834,8 +834,9 @@ def _pipes(head: Sequence[str], body: Sequence[Sequence[str]], text: int) -> lis
 
 def render(doc: dict) -> str:
     """``doc`` (`document`) as text: what each row counts, the inputs, the scopes, and the terms in GB and in
-    bits."""
-    ph, tg, at, theirs = doc["phase"], doc["target"], [str(dj) for dj in JITTERS], "the compute side's"
+    bits, the columns of the term of record (D_j = `OF_RECORD`) before those at D_j = 1."""
+    ph, tg, theirs = doc["phase"], doc["target"], "the compute side's"
+    at = [str(dj) for dj in sorted(JITTERS, key=lambda dj: dj != OF_RECORD)]
     counted, seen = doc["request_count"], {(r["scope"], r["period"]): r for r in doc["rows"]}
     card = doc["with_set_time_card"]
     # the scan's schedules and fail cells are the same at each jitter bound and its jitter is 0 at D_j = 1, so what
@@ -875,8 +876,8 @@ def render(doc: dict) -> str:
         f"The entries as the scan's check charges them today: {doc['entries_rule']}.",
         f"A link's execution phase is {_n(ph['seconds'])} s of {_n(ph['buckets'])} buckets: {_n(ph['requests'])} "
         f"requests, each charged {ph['connection_bits']} bits for its schedule and again for its fail cell; N2's "
-        f"schedules are {_n(ph['sync_bits'])} bits; the jitter is 0 at D_j = 1 and {_n(ph['buckets'])} bits at "
-        f"D_j = 2; a slot entry is {_n(ph['entry_bits'])} bits.",
+        f"schedules are {_n(ph['sync_bits'])} bits; the jitter is {_n(ph['buckets'])} bits at D_j = {OF_RECORD}, and "
+        f"0 at D_j = 1 {card['label']}; a slot entry is {_n(ph['entry_bits'])} bits.",
         f"The target is {_n(tg['value'])} GB: over the world's year, {_n(tg['bits_a_phase'])} bit a link's execution "
         f"phase and {_n(tg['bits_a_request'])} bit a request. The weights are one copy of {doc['weights']['label']}, "
         f"{_n(doc['weights']['value'])} GB.",

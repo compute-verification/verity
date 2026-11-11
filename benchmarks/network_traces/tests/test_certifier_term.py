@@ -13,6 +13,8 @@ load of a node, the reference datacenter and the world, each check's by its own 
   asked; a given count in place of either; and every row names which;
 - the term of record is the one at D_j = 2: the document's value is the scan's over the world's year at D_j = 2, and
   a figure at D_j = 1 is beside it only under its label, in the document and in every header of the tables;
+- the term of record comes first: in each table a column at D_j = 2 stands before its column at D_j = 1, and every
+  cell is under its own header;
 - a row that rests on the set-time card at either D_j carries the label, in the document and in its printed name,
   and no other row prints a jitter of 0 at D_j = 2;
 - the command prints the table and its JSON (value, unit, commit, run), through `verity bench`'s runner too."""
@@ -464,7 +466,7 @@ def test_the_headline_is_the_scans_world_year_term_at_two_release_schedules_and_
     heads = [[c.strip() for c in line.strip("|").split("|")] for line in text if line.startswith("| scope")]
     assert [sum("D_j = 1" in c for c in head) for head in heads] == [0, 4, 4]
     assert [c for c in heads[1] if c.startswith("x ")] == [
-        f"{c}, D_j = {dj}" for dj in (f"1, {CARD}", "2") for c in ("x target", "x weights")]
+        f"{c}, D_j = {dj}" for dj in ("2", f"1, {CARD}") for c in ("x target", "x weights")]
     for head in heads:
         assert all(c.endswith(f", D_j = 1, {CARD}") for c in head if "D_j = 1" in c)
         assert sum("D_j = 2" in c for c in head) == sum("D_j = 1" in c for c in head)
@@ -474,6 +476,46 @@ def test_the_headline_is_the_scans_world_year_term_at_two_release_schedules_and_
     zeroed = {name for name, kind in LB.ROWS.items() if "timing" in (kind.changes or ())}
     assert zeroed == {"timing", "all three"} == {name for name, k in LB.ROWS.items() if "set-time card" in k.counts}
     assert "no timing test has shown one" in LB.CHANGES["timing"]
+
+
+def test_the_term_of_record_comes_first_in_both_tables():
+    """In each table a column at D_j = 2 stands before its column at D_j = 1, and every cell is under its own
+    header. On the hand-worked world the scan's year is 23,652,000 bits of jitter in a term of 171,477,000 bits at
+    D_j = 2, 232 bits a link's phase and 23.2 a request; without the jitter it is 147,825,000 bits, 200 and 20. The
+    line on a link's execution phase names the jitter at D_j = 2 first, and the one at D_j = 1 under its label."""
+    one, n = f"D_j = 1, {CARD}", LB._n
+    text = LB.render(LB.document(small(), only=["world"], periods=["year"]))
+    scopes, gb, bits = tables(text)
+    assert [len(t) for t in (scopes, gb, bits)] == [1, 8, 8]
+    assert list(gb[0]) == [
+        "scope", "period", "row", "request count", "schedules", "cells", "jitter, D_j = 2", f"jitter, {one}",
+        "term, D_j = 2", "x target, D_j = 2", "x weights, D_j = 2", f"term, {one}", f"x target, {one}",
+        f"x weights, {one}", "entries, the compute side's"]
+    assert list(bits[0]) == [
+        "scope", "period", "row", "request count", "schedules", "cells", "jitter, D_j = 2", f"jitter, {one}",
+        "term, D_j = 2", f"term, {one}", "entries, the compute side's", "a link's phase, D_j = 2",
+        f"a link's phase, {one}", "a request, D_j = 2", f"a request, {one}"]
+    scan = gb[0]
+    assert (scan["row"], scan["jitter, D_j = 2"], scan[f"jitter, {one}"]) == ("scan", n(23_652_000 / LB.GB), "0")
+    assert (scan["term, D_j = 2"], scan[f"term, {one}"]) == (n(171_477_000 / LB.GB), n(147_825_000 / LB.GB))
+    assert scan["x target, D_j = 2"] == n(171_477_000 / (300 * LB.GB)) != scan[f"x target, {one}"]
+    assert scan[f"x target, {one}"] == n(147_825_000 / (300 * LB.GB))
+    scan = bits[0]
+    assert (scan["jitter, D_j = 2"], scan[f"jitter, {one}"]) == ("23,652,000", "0")
+    assert (scan["term, D_j = 2"], scan[f"term, {one}"]) == ("171,477,000", "147,825,000")
+    assert (scan["a link's phase, D_j = 2"], scan[f"a link's phase, {one}"]) == ("232", "200")
+    assert (scan["a request, D_j = 2"], scan[f"a request, {one}"]) == ("23.2", "20")
+    assert f"the jitter is 32 bits at D_j = 2, and 0 at D_j = 1 {LB.SET_TIME}; a slot entry is " in text
+    for doc in (LB.document(small()), LB.document(LB.inputs())):
+        _, gb, bits = tables(LB.render(doc))
+        for r, g, b in zip(doc["rows"], gb, bits, strict=True):
+            for dj, at in (("2", "D_j = 2"), ("1", one)):
+                jitter, term = r["jitter"][dj], r["term"][dj]
+                assert (g[f"jitter, {at}"], b[f"jitter, {at}"]) == (n(jitter["GB"]), n(jitter["bits"]))
+                assert [g[f"{c}, {at}"] for c in ("term", "x target", "x weights")] == [
+                    n(term[k]) for k in ("GB", "of_target", "of_weights")]
+                assert [b[f"{c}, {at}"] for c in ("term", "a link's phase", "a request")] == [
+                    n(term[k]) for k in ("bits", "bits_a_phase", "bits_a_request")]
 
 
 def test_a_row_that_rests_on_the_set_time_card_carries_the_label():
