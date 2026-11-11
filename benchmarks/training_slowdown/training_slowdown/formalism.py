@@ -71,7 +71,7 @@ choices favourable to the block:
 - tokens are fractional, as in v2's room.
 A block that computes a token from its inputs (x0) is not charged, and the attack side is v2's.
 
-**The one bound** (`bound`, and `at` with `one_bound`): the counting lemma over kinds K of block work, each a lower
+**The one bound** (`bound`, which `at` reads): the counting lemma over kinds K of block work, each a lower
 bound on its own, ρ ≥ max_K (|B_K|/|C|)/(cap_K(k)/c): each kind's term, the max, the kind it binds on and what each
 kind rests on (`RESTS_ON`). Where Fit fails ρ is the entry point's slowdown, max(1, that max); where Fit holds it is
 c/(c − d), and every term is at most that. Its one kind:
@@ -576,9 +576,8 @@ def bound(m: Measured, c: float, k: float, kinds: tuple[str, ...] = KINDS) -> di
     if entry["why"] is not None:
         unmeasured["products"] = entry["why"]
     u, u_in = (capped(m.u, m.delta_bits), capped(m.u_in, m.delta_bits)) if code else (m.u, m.u_in)
-    x0, s_star = bottom_share(u_in, k), room(u, k) / m.a_bits
-    if m.context is not None:
-        s_star = context_s_star(m.context, u, k, m.a_bits, x0, s_star)
+    x0, a1 = bottom_share(u_in, k), room(u, k) / m.a_bits
+    s_star = a1 if m.context is None else context_s_star(m.context, u, k, m.a_bits, x0, a1)
     x0r, sr = bottom_share(m.u_in, k), room(m.u, k) / m.a_bits
     if m.context is not None:
         sr = context_s_star(m.context, m.u, k, m.a_bits, x0r, sr)
@@ -596,7 +595,8 @@ def bound(m: Measured, c: float, k: float, kinds: tuple[str, ...] = KINDS) -> di
                                 f"or not traced)" + ("; the term sums the parts that have it" if got else ""))
     steps = [p.steps for p in m.parts]
     inputs = {"products": he,
-              "token_form": {"sigma": m.sigma, "x0": x0, "s": c / m.w, "s_star": s_star, "alpha_ratio": m.alpha_ratio},
+              "token_form": {"sigma": m.sigma, "x0": x0, "s": c / m.w, "s_star": s_star, "alpha_ratio": m.alpha_ratio}
+                            | ({"s_star_a1": a1} if m.context is not None else {}),
               "decoding_form": {"share": share, "delta_bits": m.delta_bits if code else None,
                                 "decoder_gates": m.decoder_gates, "x0": x0r, "s_star": sr, "alpha_max": m.alpha_max,
                                 "cap": cap},
@@ -611,15 +611,13 @@ def bound(m: Measured, c: float, k: float, kinds: tuple[str, ...] = KINDS) -> di
             "labels": dict(SENSITIVITIES), "entry": entry}
 
 
-def at(m: Measured, c: float, k: float, one_bound: bool = False, kinds: tuple[str, ...] = KINDS) -> dict:
-    """ρ at (c, k), with each part's s, w and Fit, Slowdown's bound and its terms, and the attack side (module
-    docstring); with `m.context`, s* is the context charge's (`context_s_star`) and v2's is `s_star_a1`. An unmeasured
-    decoder (d None) fits no block. With `one_bound`, ρ where Fit fails is the slowdown `calculator.slowdown` gives
-    (`bound`'s `entry`: None where the record gives none), and `bound` gives its terms and label; without it,
-    Slowdown's token form alone."""
+def at(m: Measured, c: float, k: float, kinds: tuple[str, ...] = KINDS) -> dict:
+    """ρ at (c, k): Fit's c/(c − d) where the training fits (each part's s, w and Fit kinds under `parts`; an
+    unmeasured decoder, d None, fits no block), else the slowdown `calculator.slowdown` gives (`bound`'s `entry`:
+    None where the record gives none). Beside it the one bound (`bound`: its terms, its sensitivities, Slowdown's
+    token form among them, and its label) and the attack side (module docstring)."""
     d = m.decoder_gates if m.decoder_gates is not None else math.inf
     delta, delta_t = (m.delta_bits, m.delta_t) if d < c else (None, None)
-    u, u_in = (m.u, m.u_in) if delta is None else (capped(m.u, delta), capped(m.u_in, delta))
     rho_fit = c / (c - d) if d < c else math.inf
     parts, fits = [], []
     for p in m.parts:
@@ -632,25 +630,16 @@ def at(m: Measured, c: float, k: float, one_bound: bool = False, kinds: tuple[st
             checks["update"] = delta_t is not None and dg is not None and delta_t + dg <= k
         fits.append(all(checks.values()))
         parts.append({"w": w, "s": s, "fit": checks, "fit_training": fits[-1]})
-    sigma, s = m.sigma, c / m.w
-    ratio = m.alpha_ratio
-    x0, s_star = bottom_share(u_in, k), room(u, k) / m.a_bits
-    charged = {}
-    if m.context is not None:
-        charged = {"s_star_a1": s_star}
-        s_star = context_s_star(m.context, u, k, m.a_bits, x0, s_star)
-    slow = _token_form(sigma, x0, s, s_star, ratio)
     fit = all(fits)
     x0_known = 1.0 if all(p["fit"]["compute"] for p in parts) else 0.0
     t = m.tail_share
     tail_tokens = min(math.floor(k / (m.a_bits + m.tau_bits)),
                       math.floor(c / (t * m.alpha_max)) if t * m.alpha_max else math.inf) if 0 < t < 1 else 0
     s_star_known = t * tail_tokens if x0_known < 1 else 0.0
-    one = {"bound": bound(m, c, k, kinds)} if one_bound else {}
-    rho = rho_fit if fit else one["bound"]["entry"]["slowdown"] if one else max(1.0, slow)
-    return {"c": c, "k": k, "sigma": sigma, "w": m.w, "s": s, "x0": x0, "s_star": s_star, "alpha_ratio": ratio,
-            "slowdown": slow, "delta_counted": delta is not None, "parts": parts, "fit": fit, "rho_fit": rho_fit,
-            "rho": rho, "x0_known": x0_known, "s_star_known": s_star_known} | charged | one
+    b = bound(m, c, k, kinds)
+    return {"c": c, "k": k, "delta_counted": delta is not None, "parts": parts, "fit": fit, "rho_fit": rho_fit,
+            "rho": rho_fit if fit else b["entry"]["slowdown"], "x0_known": x0_known, "s_star_known": s_star_known,
+            "bound": b}
 
 
 #: what a published ρ rests on, by its binding kind, short (a console cell on every row; `RESTS_ON` has each kind's in
@@ -670,7 +659,7 @@ CELL_SENSITIVITIES = ("reduction", "update")
 
 def published(m: Measured, c: float | None = None, k: float | None = None) -> dict:
     """The published ρ at (c, k), by default the console's policy (training_slowdown.policy's `CONSOLE`, one full
-    session of the reference model), `at`'s with the one bound: Fit's c/(c − d) where it holds; else the slowdown
+    session of the reference model), `at`'s: Fit's c/(c − d) where it holds; else the slowdown
     `calculator.slowdown` gives and what it says binds: `products` where the theorem's count exceeds 1, `partial`
     where a kind is unmeasured (ρ is then only a lower bound); None (binding `unmeasured`) where the record gives
     none, with `why` saying so, never 1, which would read as no slowdown; else 1, binding `none` (the count is
@@ -686,7 +675,7 @@ def published(m: Measured, c: float | None = None, k: float | None = None) -> di
         c, k = policy.CONSOLE
     from . import VERSION
 
-    v = at(m, c, k, one_bound=True)
+    v = at(m, c, k)
     b = v["bound"]
     rho, partial, why = v["rho"], False, None
     off = uncomputed(b)

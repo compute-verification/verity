@@ -9,7 +9,8 @@
   attribute `calculator._x` or `from ... calculator import _x`) or writes a `slowdown`, `rho` or `S` key in a function
   `STATES` doesn't list; inside it, only `_bound` calls the calculator's `bound`, `blocks_at_least` or
   `slowdown_at_least`, only `slowdown` and `_figure` call `_bound`, only `slowdown` calls `_figure`, and its public
-  functions are `PUBLIC`. With the entry point replaced, what `STATES`' functions state follows it."""
+  functions are `PUBLIC`. With the entry point replaced, what `STATES`' functions state follows it. The one ratio
+  that is not the entry point's is Fit's c/(c − d), where a training fits one block (`formalism.at`)."""
 import ast
 import math
 from pathlib import Path
@@ -190,9 +191,9 @@ KEYS = {"slowdown", "rho", "S"}
 #: the functions outside the one module that write one of `KEYS`, each with whose slowdown it writes. It only shrinks.
 STATES = {
     ("training_slowdown/formalism.py", "at"):
-        "`rho`: Fit's c/(c − d) where the training fits one block, which is no bound of the calculator's, else the "
-        "entry point's slowdown; without `one_bound`, as no source calls it, Slowdown's token form",
-    ("training_slowdown/formalism.py", "published"): "`at`'s `rho` with `one_bound`",
+        "`rho`: Fit's c/(c − d) where the training fits one block, the one ratio that is no bound of the "
+        "calculator's, else the entry point's slowdown",
+    ("training_slowdown/formalism.py", "published"): "`at`'s `rho`",
     ("training_slowdown/grade.py", "rho_of"): "`published`'s `rho`, or none with the reason",
     ("training_slowdown/grade.py", "grade"): "`rho_of`'s `rho`, and `S`, p times it",
     ("training_slowdown/library.py", "bound"): "the entry point's slowdown, or none with its reason",
@@ -246,12 +247,6 @@ def test_no_second_slowdown_is_computed():
              if isinstance(f, ast.FunctionDef) for n in ast.walk(f) if isinstance(n, ast.Dict)
              for k in n.keys if isinstance(k, ast.Constant) and k.value in KEYS}
     assert not set(STATES) - wrote, f"STATES entries that write no slowdown; remove them: {sorted(set(STATES) - wrote)}"
-    calls = [n for text in files.values() for n in ast.walk(ast.parse(text)) if isinstance(n, ast.Call)
-             and (n.func.id if isinstance(n.func, ast.Name) else getattr(n.func, "attr", None)) == "at"]
-    assert calls and all(any(k.arg == "one_bound" and isinstance(k.value, ast.Constant) and k.value.value is True
-                             for k in c.keywords) for c in calls), (
-        "formalism.at is called with one_bound=True: without it its `rho` is Slowdown's token form, not the entry "
-        "point's slowdown")
 
 
 def test_a_second_slowdown_is_found():
@@ -277,10 +272,10 @@ def test_a_second_slowdown_is_found():
 
 def test_every_slowdown_the_benchmark_states_is_the_entry_points(monkeypatch):
     """With the entry point replaced by one that gives 7.25 on every record (beside a term of 3.5, which a caller
-    flooring the term itself would give), `at`'s `rho` with `one_bound`, the published slowdown and the library's
-    row give 7.25, binding the products, and the one bound's products term is the entry point's term; where it gives
-    none, they give none with its reason; and where it gives the floor, 1, binding none. The one ratio that isn't
-    the entry point's is Fit's c/(c − d), where a training fits one block."""
+    flooring the term itself would give), `at`'s `rho`, the published slowdown and the library's row give 7.25,
+    binding the products, and the one bound's products term is the entry point's term; where it gives none, they
+    give none with its reason, whatever the sensitivities beside it are; and where it gives the floor, 1, binding
+    none. The one ratio that isn't the entry point's is Fit's c/(c − d), where a training fits one block."""
     real, given = calculator.slowdown, {}
 
     def entry(pol, step, run=None):
@@ -304,7 +299,7 @@ def test_every_slowdown_the_benchmark_states_is_the_entry_points(monkeypatch):
         given.update(give)
         b, one = F.bound(m, c, k), F.published(m, c, k)
         assert b["entry"]["slowdown"] == rho and b["terms"]["products"] == give["term"]
-        assert F.at(m, c, k, one_bound=True)["rho"] == rho and (one["rho"], one["binding_kind"]) == (rho, binding)
+        assert F.at(m, c, k)["rho"] == rho and (one["rho"], one["binding_kind"]) == (rho, binding)
         row = library.bound(traced(k), c, k)
         assert row["slowdown"] == rho
         if rho is None:

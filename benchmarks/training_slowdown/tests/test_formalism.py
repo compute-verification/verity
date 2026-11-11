@@ -34,25 +34,36 @@ def term_of(m: F.Measured, c: float, k: float) -> tuple[float | None, str | None
     return b["terms"]["products"], b["unmeasured"].get("products"), b["inputs"]["products"]
 
 
-def test_even_update_slowdown_is_the_corollary():
-    """Evenly spread with u(1) >> k: x0 <= k/u(1), s* <= k^2/(4 a u(1)), so rho ≳ 4 σ s a u(1) / k^2."""
+def token_form(m: F.Measured, c: float, k: float) -> dict:
+    """Slowdown's token form on `m` at (c, k), a sensitivity of the one bound and never its slowdown: its terms (σ,
+    x0, s, s*, ᾱ/α_max, and v2's s* as `s_star_a1` where the context is charged) and its value (`token_form`)."""
+    b = F.bound(m, c, k)
+    return b["inputs"]["token_form"] | {"token_form": b["sensitivities"]["token_form"]}
+
+
+def test_even_update_token_form_is_the_corollary():
+    """Evenly spread with u(1) >> k: x0 <= k/u(1), s* <= k^2/(4 a u(1)), so the token form is about 4 σ s a u(1) / k^2;
+    it is a sensitivity, and no slowdown of the record's, which has no product rows."""
     m, c, k = measured(u1=1e9), 1e13, 1e5
-    r = F.at(m, c, k)
+    r = token_form(m, c, k)
     s = c / 0.8e9
     assert (r["sigma"], r["s"]) == pytest.approx((0.8, s))
     assert r["x0"] == pytest.approx(k / 1e9)
     assert r["s_star"] == pytest.approx(k * k / (4 * 1e9) / 8192)
-    assert r["rho"] == pytest.approx(4 * 0.8 * s * 8192 * 1e9 / k ** 2, rel=1e-3) and not r["fit"]
+    assert r["token_form"] == pytest.approx(4 * 0.8 * s * 8192 * 1e9 / k ** 2, rel=1e-3)
+    got = F.at(m, c, k)
+    assert not got["fit"] and got["rho"] is None and "slowdown" not in got
 
 
 def test_a_frozen_tail_is_always_charged():
     """Frozen layers above changed ones with u(1) > k: u_in jumps at once, so x0 = 0 and the tail's work stays charged;
-    s* <= t k / a, so rho ≈ σ s a / (t k), below the evenly spread update's (the tail leaves a block more room)."""
+    s* <= t k / a, so the token form is about σ s a / (t k), below the evenly spread update's (the tail leaves a
+    block more room)."""
     t, k, u1, c = 0.05, 1e5, 1e9, 1e13
-    r = F.at(measured(u1=u1, tail=t), c, k)
+    r = token_form(measured(u1=u1, tail=t), c, k)
     assert r["x0"] == 0 and r["s_star"] == pytest.approx(t * k / 8192)
-    assert r["rho"] == pytest.approx(0.8 * (c / 0.8e9) * 8192 / (t * k), rel=1e-6)
-    assert F.at(measured(u1=u1), c, k)["rho"] > r["rho"]
+    assert r["token_form"] == pytest.approx(0.8 * (c / 0.8e9) * 8192 / (t * k), rel=1e-6)
+    assert token_form(measured(u1=u1), c, k)["token_form"] > r["token_form"]
 
 
 def test_the_tail_profiles():
@@ -74,20 +85,20 @@ def test_varying_token_blocks_take_the_largest_per_token_affected_count():
     u = F.even(1e9)
     m = F.Measured((a, b), 32, 8192, u, u, 1e9)
     c, k = 1e13, 1e5
-    r = F.at(m, c, k)
+    r = token_form(m, c, k)
     s_star = F.room(u, k) / 8192
     alpha_max = 0.8e12 / 1e3
     assert r["alpha_ratio"] == pytest.approx((1e12 / 2e3) / alpha_max)
-    assert r["slowdown"] == pytest.approx((1 - k / 1e9) * c * 1e12 / (alpha_max * 2e12 * s_star))
-    assert r["slowdown"] == pytest.approx(m.sigma * (1 - k / 1e9) * (c / m.w) / s_star * r["alpha_ratio"])
+    assert r["token_form"] == pytest.approx((1 - k / 1e9) * c * 1e12 / (alpha_max * 2e12 * s_star))
+    assert r["token_form"] == pytest.approx(m.sigma * (1 - k / 1e9) * (c / m.w) / s_star * r["alpha_ratio"])
     same = F.Measured((a, a), 32, 8192, u, u, 1e9)
-    assert F.at(same, c, k)["alpha_ratio"] == 1
+    assert token_form(same, c, k)["alpha_ratio"] == 1
 
 
 def test_fit_is_three_kinds_of_block_and_gives_c_over_c_minus_d():
     """Training fits when compute (Δ + sτ), reduction (2Δ_grad) and update application (Δ + Δ_grad) each fit in k;
     ρ is then c/(c − d), 1 with no decoder (d = 0); an unmeasured decoder fits no block. There Δ ≤ k bounds u and u_in
-    (`capped`), so x0's bound is 1 and Slowdown's bound 0."""
+    (`capped`), so x0's bound is 1 and the token form 0."""
     c, k = 1e13, 1e6
     s_tau = c / 0.8e9 * 32
     fits = F.at(measured(u1=1e5, dgrad=1e5, decoder=1e12), c, k)
@@ -103,8 +114,9 @@ def test_fit_is_three_kinds_of_block_and_gives_c_over_c_minus_d():
         assert not got[name] and all(v for n, v in got.items() if n != name), name
     assert not F.at(measured(u1=1e5), c, k)["fit"]  # Δ_grad unmeasured: training Fit unchecked
     for tail in (0.0, 0.5):
-        wide = F.at(measured(u1=1e8, delta=1e3, dgrad=1e3, tail=tail), c, k)
-        assert wide["fit"] and wide["rho"] == 1.0 and wide["x0"] == 1.0 and wide["slowdown"] == 0.0
+        m = measured(u1=1e8, delta=1e3, dgrad=1e3, tail=tail)
+        wide, form = F.at(m, c, k), token_form(m, c, k)
+        assert wide["fit"] and wide["rho"] == 1.0 and form["x0"] == 1.0 and form["token_form"] == 0.0
 
 
 def test_u_and_u_in_are_at_most_delta_where_delta_counts():
@@ -117,9 +129,9 @@ def test_u_and_u_in_are_at_most_delta_where_delta_counts():
     assert F.capped(u, 50.0) == u and F.capped(u, 10.0)[1:] == ((0.5, 10.0), (0.75, 10.0), (1.0, 10.0))
     part = F.Part(gates=1e12, tokens=1e3, token_gates=0.8e12, affected_gates=0.4e12)
     c, k = 1e13, 30.0
-    r = F.at(F.Measured((part,), 32, 8192, u, u, 20.0, decoder_gates=0.0), c, k)
+    r = token_form(F.Measured((part,), 32, 8192, u, u, 20.0, decoder_gates=0.0), c, k)
     assert r["x0"] == 1.0 and r["s_star"] == pytest.approx((k - 20.0) / 8192)
-    wide = F.at(F.Measured((part,), 32, 8192, u, u, 20.0, decoder_gates=c), c, k)
+    wide = token_form(F.Measured((part,), 32, 8192, u, u, 20.0, decoder_gates=c), c, k)
     assert wide["x0"] == pytest.approx(0.5 + 0.25 * 2 / 3)
 
 
@@ -141,7 +153,7 @@ def test_the_attack_side_is_reported_beside_the_bounds():
     c, k = 1e13, 1e5
     tail = F.at(measured(u1=1e9, tail=0.05), c, k)
     assert tail["x0_known"] == 0 and tail["s_star_known"] == pytest.approx(0.05 * math.floor(k / (8192 + 32)))
-    assert tail["s_star_known"] <= tail["s_star"]
+    assert tail["s_star_known"] <= token_form(measured(u1=1e9, tail=0.05), c, k)["s_star"]
     narrow = F.at(measured(u1=1e9, tail=0.05), 1e8, k)
     assert narrow["s_star_known"] == pytest.approx(0.05 * math.floor(1e8 / (0.05 * 0.4e9)))
     assert F.at(measured(u1=1e9), c, k)["s_star_known"] == 0
@@ -156,7 +168,7 @@ def charged(m: F.Measured, h: float, positions: int = 1024, kv: float = 2 * 512 
 def test_the_context_charge_is_its_formula_on_a_toy_profile():
     """u(x) = 8000x, k = 5000, a = 1000, L = 4: x(k − u(x)) peaks at x* = 5/16 with u(x*) = 2500, so S1(p) is v2's
     s* = 0.78125 while a(p + 1) ≤ 2500 and then the limit's x(k − u(x)), 750 and 500 over a; S0 at h = 0.2 is
-    0.2 (5000 − 1600)/1000. u_in jumps, so x0 = 0, and ρ is σ s times the positions' mean of
+    0.2 (5000 − 1600)/1000. u_in jumps, so x0 = 0, and the token form is σ s times the positions' mean of
     h/max(S0, S1(p)) + (1 − h)/S1(p)."""
     part = F.Part(gates=1e12, tokens=1e3, token_gates=0.8e12, affected_gates=0.4e12)
     m = F.Measured((part,), tau_bits=32, a_bits=1000, u=F.even(8000), u_in=((0, 0), (0, 8000), (1, 8000)),
@@ -165,33 +177,36 @@ def test_the_context_charge_is_its_formula_on_a_toy_profile():
     assert F.context_rooms(m.u, 5000, 1000, 4) == pytest.approx(s1)
     assert F.room(m.u, 5000, 0.2) / 1000 == pytest.approx(s0)
     mean = sum(0.2 / max(s0, s) + 0.8 / s for s in s1) / 4
-    r = F.at(charged(m, 0.2, positions=4, kv=2000), 1e12, 5000)
+    r = token_form(charged(m, 0.2, positions=4, kv=2000), 1e12, 5000)
     assert r["x0"] == 0 and r["s_star_a1"] == pytest.approx(0.78125) and r["s_star"] == pytest.approx(1 / mean)
-    assert r["slowdown"] == pytest.approx(0.8 * 1250 * mean) and r["rho"] == r["slowdown"]
-    v2 = F.at(m, 1e12, 5000)["slowdown"]
-    assert v2 == pytest.approx(0.8 * 1250 / 0.78125) and v2 < r["slowdown"]
+    assert r["token_form"] == pytest.approx(0.8 * 1250 * mean)
+    v2 = token_form(m, 1e12, 5000)
+    assert v2["token_form"] == pytest.approx(0.8 * 1250 / 0.78125) and v2["token_form"] < r["token_form"]
+    assert "s_star_a1" not in v2
     with pytest.raises(ValueError, match="best span"):
         F.at(charged(m, 0.2, positions=4, kv=999), 1e12, 5000)
 
 
-def test_a_narrow_cut_whose_best_block_holds_the_sequence_keeps_v2s_rho():
+def test_a_narrow_cut_whose_best_block_holds_the_sequence_keeps_v2s_token_form():
     """a = 32 and a frozen tail: v2's best block holds k/a = 2500 tokens, more than L = 1024, so every position's
     S1(p) is s* and the charge changes nothing."""
     m = replace(measured(u1=1e9, tail=0.3), a_bits=32)
-    v2, r = F.at(m, 1e13, 8e4), F.at(charged(m, 0.6), 1e13, 8e4)
-    assert r["s_star"] == pytest.approx(v2["s_star"]) == r["s_star_a1"] and r["rho"] == pytest.approx(v2["rho"])
+    v2, r = token_form(m, 1e13, 8e4), token_form(charged(m, 0.6), 1e13, 8e4)
+    assert r["s_star"] == pytest.approx(v2["s_star"]) == r["s_star_a1"]
+    assert r["token_form"] == pytest.approx(v2["token_form"])
 
 
 def test_a_dense_cut_is_unbounded_where_k_holds_few_tokens():
     """a = d_model·16 at k = 80,000 bits: a block doing a token's charged work must hold every earlier token, so none
-    serves a position past k/a − 1 ≈ 8.8, and the charged share 1 − h left there makes ρ infinite (s* 0). At k = 10^8
-    the block holds the sequence and ρ is v2's. With no affected K/V (h = 1) nothing is charged."""
+    serves a position past k/a − 1 ≈ 8.8, and the charged share 1 − h left there makes the token form infinite (s* 0).
+    At k = 10^8 the block holds the sequence and the token form is v2's. With no affected K/V (h = 1) nothing is
+    charged."""
     m = measured(u1=1e9, tail=0.3)
-    r = F.at(charged(m, 0.6), 1e13, 8e4)
-    assert r["s_star"] == 0 and r["rho"] == math.inf and r["s_star_a1"] == pytest.approx(0.3 * 8e4 / 8192)
-    assert F.at(charged(m, 0.6), 1e13, 1e8)["rho"] == pytest.approx(F.at(m, 1e13, 1e8)["rho"])
-    assert F.at(charged(m, 1.0), 1e13, 8e4)["rho"] == pytest.approx(F.at(m, 1e13, 8e4)["rho"])
-    assert F.at(charged(replace(m, u_in=F.even(1e3)), 0.6), 1e13, 8e4)["slowdown"] == 0
+    r = token_form(charged(m, 0.6), 1e13, 8e4)
+    assert r["s_star"] == 0 and r["token_form"] == math.inf and r["s_star_a1"] == pytest.approx(0.3 * 8e4 / 8192)
+    for h, k in ((0.6, 1e8), (1.0, 8e4)):
+        assert token_form(charged(m, h), 1e13, k)["token_form"] == pytest.approx(token_form(m, 1e13, k)["token_form"])
+    assert token_form(charged(replace(m, u_in=F.even(1e3)), 0.6), 1e13, 8e4)["token_form"] == 0
 
 
 def test_the_context_quantities_from_the_changed_tensors():
@@ -216,10 +231,10 @@ def test_the_context_quantities_from_the_changed_tensors():
     assert m.context == emb and m.labels["context"] == F.CONTEXT
 
 
-def test_fit_reads_delta_and_slowdown_reads_u1_as_separate_fields():
-    """A total update (Fit's Δ) larger than the per-token update (Slowdown's u(1)), as for an update each token's path
-    reads only part of: the compute block fails on Δ while the Slowdown bound reads u(1). With a small Δ the compute
-    block fits and Δ bounds u too. The record says which value each came from."""
+def test_fit_reads_delta_and_the_token_form_reads_u1_as_separate_fields():
+    """A total update (Fit's Δ) larger than the per-token update (the token form's u(1)), as for an update each
+    token's path reads only part of: the compute block fails on Δ while the token form reads u(1). With a small Δ the
+    compute block fits and Δ bounds u too. The record says which value each came from."""
     row = {"output": {"e_bytes": 10**9, "rebuild_macs": 0}, "macs_log": {"by": {}, "ops": {}}}
     part = {"gates": 1e12, "tokens": 1e3, "token_gates": 1e12, "affected_gates": 5e11, "steps": 1,
             "delta_grad_bits": None}
@@ -229,11 +244,13 @@ def test_fit_reads_delta_and_slowdown_reads_u1_as_separate_fields():
     assert m.labels["u1_bits"] == "upper bound (witness): a test" and m.labels["u"] == F.STUBS["u"]
     assert m.labels["u"].startswith("assumption (A1)") and m.labels["u_in"].startswith("assumption (A1)")
     k = 1e6
-    r = F.at(m, 1e13, k)
-    assert not r["parts"][0]["fit"]["compute"] and r["x0"] == pytest.approx(k / 1e9)
-    assert r["rho"] == pytest.approx(4 * 1e4 * 512 * 16 * 1e9 / k ** 2, rel=2e-3)
-    small = F.at(F.complete(f, row | {"output": {"e_bytes": 10, "format": "full"}}, SHAPE), 1e13, k)
-    assert small["parts"][0]["fit"]["compute"] and not small["fit"] and small["x0"] == 1.0 and small["rho"] == 1.0
+    r, form = F.at(m, 1e13, k), token_form(m, 1e13, k)
+    assert not r["parts"][0]["fit"]["compute"] and form["x0"] == pytest.approx(k / 1e9)
+    assert form["token_form"] == pytest.approx(4 * 1e4 * 512 * 16 * 1e9 / k ** 2, rel=2e-3)
+    less = F.complete(f, row | {"output": {"e_bytes": 10, "format": "full"}}, SHAPE)
+    small, form = F.at(less, 1e13, k), token_form(less, 1e13, k)
+    assert small["parts"][0]["fit"]["compute"] and not small["fit"]
+    assert form["x0"] == 1.0 and form["token_form"] == 0.0
     with pytest.raises(ValueError):
         F.complete({"parts": [part], "u": [[0, 0], [1, 5.0]], "u1_bits": 6.0}, row, SHAPE)
 
@@ -414,8 +431,8 @@ def test_the_one_bound_is_its_products_kind_resting_on_what_it_names():
     stated = replace(one_part(), products=STATED)
     one = F.bound(stated, c, k)
     assert one["binding"] == "products" and one["max"] == one["terms"]["products"] > 1
-    r = F.at(stated, c, k, one_bound=True)
-    assert r["bound"] == one and r["rho"] == one["max"]
+    r = F.at(stated, c, k)
+    assert r["bound"] == one and r["rho"] == one["max"] == one["entry"]["slowdown"]
     with pytest.raises(ValueError, match="some of"):
         F.bound(stated, c, k, kinds=("tokens",))
     with pytest.raises(ValueError, match="sensitivities, never in the bound's max"):
@@ -979,10 +996,10 @@ def test_reduction_update_and_the_two_forms_are_sensitivities_never_the_bound():
     """They come out labelled beside the kind: reduction and update where the step's token work fills two or more
     blocks (b = 8 at c = 1e11), unmeasured without the cuts, and Slowdown's token form and the decoding form,
     targets; asking for any of them in the max is refused. A record with no product rows has no measured kind, so
-    where Fit fails the one bound's ρ is unmeasured."""
+    where Fit fails ρ is unmeasured, whatever the token form gives."""
     m, c, k = measured(u1=1e9), 1e11, 1e5
     b = F.bound(m, c, k)
-    assert b["sensitivities"]["token_form"] == F.at(m, c, k)["slowdown"]
+    assert b["sensitivities"]["token_form"] > 1
     assert b["sensitivities"]["reduction"] is None and set(b["unmeasured"]) == {"products", "reduction", "update"}
     cut = replace(m, parts=(replace(m.parts[0], partial_bits=1e6, grad_bits=2e6),))
     b = F.bound(cut, c, k)
@@ -991,8 +1008,8 @@ def test_reduction_update_and_the_two_forms_are_sensitivities_never_the_bound():
     assert b["sensitivities"]["update"] == pytest.approx(c * 2e6 / (k * 1e12))
     assert b["max"] is None and b["binding"] is None and set(b["labels"]) == set(F.SENSITIVITIES)
     assert "split by tokens" in b["labels"]["reduction"] and "a target, not a bound" in b["labels"]["token_form"]
-    r = F.at(cut, c, k, one_bound=True)
-    assert not r["fit"] and r["rho"] is None and F.at(cut, c, k)["rho"] == max(1.0, b["sensitivities"]["token_form"])
+    r = F.at(cut, c, k)
+    assert not r["fit"] and r["rho"] is None and r["bound"]["sensitivities"] == b["sensitivities"]
     for kinds in (("products", "reduction"), ("update",), ("token_form",), ("decoding_form",)):
         with pytest.raises(ValueError, match="sensitivities, never in the bound's max"):
             F.bound(cut, c, k, kinds=kinds)
