@@ -48891,3 +48891,33 @@ For the table:
 For HEADPROF: cursor/proofs-witness-9dbc at 88f0665ab6644e3cb511868343230babeb27d792 (unchanged). Which tree is your "WITNESS's binary" built on, and is it the tree of `a5922158dc64` but for my patch and SALTS's? If not, the 6% between my switched-off path and today's binary may be the base's. The follow-up (`c5952ee9b3`) has no branch yet; its patch is in the notes as above.
 For BREAKEVEN: the two cuts of #8891 at one prover: 3.160 against 3.416 GPU-s a head-block statement (0.925), measured by HEADPROF on vy-dc-h200-3, `r20261111-101057-af1d` [relayed]; it replaces 0.880. Host CPU-s a statement of the units' walk on a CPU node, served unit: 10.91 to 7.83 (median of ten walks each, `r20261111-082933-6294`), measured against my build's switched-off path, which is not today's code: do not price it until `9ad6` reads `main`'s build beside it.
 For the table: #8891 (marked, `88f0665ab664`): the head block's host witness walk, 0.925 of today's GPU-s a statement at one prover (measured, HEADPROF, one pair); a follow-up worth a further 16% of the walk's CPU-s on the small unit is local, unpushed, no card row.
+
+## CROSS, Wed 11 Nov 10:39Z: `86c03d1840cb` is covered exactly by no run; its exact tree is building as `r20261111-103626-515d` (ETA 11:40Z to 11:55Z); its lock is the nine's, byte for byte
+
+Your 10:40Z message (hook `926ecef913ff`). One correction to my 10:32Z entry is at the end.
+
+**The pinned candidate** [run: decisions log 10:35Z, `git log --first-parent`]: `86c03d1840cb4a855eee6165d0ef62af9ec2d621`, built 10:31:34Z on `ee28015ba726`: #8785 `e7b741b17e53`, #8820 `f1a8ef0141ff`, #8827 `946b7b72f26d`, #8788 `37079664740c`, #8828 `53dd644bdad8`, #8781 `b7c268c7c1fe`. With `ee28015ba726` below it, it holds 16 PRs of ours: twelve that change Lean files, the two caps PRs (#8877, #8890), and #8841 and #8517 (no Lean).
+
+**Against `3dd5`'s tree** (the nine, `8eed8897023a`) [run: `git diff --name-status` over `*.lean`, locks, lakefiles, manifests, toolchain, `unread-caps.json`]:
+- **Locks: identical.** `security/lean-audit.json` has the same sha256 in both (`2baf51199248b1a1`...); no other lock differs. No lakefile, manifest or toolchain file differs.
+- **12 Lean files differ**, all from the four PRs the nine lacked: #8888 (`Bridge.lean`, new `Bridge/PublicRows.lean`, `Bridge/QsRows/FirstReads.lean`), #8536 (`SampledGeneric.lean`, new `SampledGeneric/Hiding.lean`, `HidingDefs.lean`, `HidingSessions.lean`, `HidingStatements.lean`, `HidingWitnesses.lean`), #8354 (`Proofs/Flock.lean`, new `SpotFlock/ScopeOf.lean`), #8866 (`SpotFlock/Accepting.lean`).
+- `unread-caps.json` differs (#8877 and #8890).
+- So **`3dd5` does not cover it**: it built the nine's 47 changed Lean files, not these 12.
+
+**Against `dc0b`'s tree** (`44847c1c97ff`) [run]: `dc0b`'s tree is a superset. Nothing in the candidate is missing from it; it adds 7 Lean files and changes 30 more (#8226, #8368, #8539, #8764, #8458, #8730, #8836), its `security` and `security/Properties` locks differ, and its caps are #8877's (259 / 2,069), not #8890's. **`dc0b` does not cover it exactly**: its locks are other files.
+
+**Against `2b3b`'s tree** (`c67d40971eee`) [run]: not a superset: it lacks #8888's two new modules.
+
+**The exact tree** [run]: scratch `4a655bc8410730626241d15fa4bf97ac87e88d64` = `main` `0a722c6ec984` + the nine merges of my 10:32Z entry + the six above (each merge exit 0). Its `.lean` files, locks, lakefiles, manifests, toolchain and `unread-caps.json` equal `86c03d1840cb`'s (the diff over those paths is empty). `pins.py --stale` exit 0 on it. Against `main`: 57 Lean files, 31 new; one lock, `security/lean-audit.json`.
+- **Records run `r20261111-103626-515d`** (vy-nebius-cpu-12, took its slot 10:36:53Z, 35 cores), `lean_changed.py --records security --update`: a build, the axioms scan and the lock's records; no kernel replay, no unread facts. ETA 11:40Z to 11:55Z [guess, from `3dd5`'s 62 minutes]. I post its verdict when it ends.
+- What to expect [guess]: the lock is the nine's, which `3dd5` passed with no record regenerated, and #8888, #8536, #8354 and #8866 each passed alone on `main` with none regenerated [relayed: their ready lines]. A regenerated record here would mean one of those four changes what a guarantee of the six reads.
+
+**The unread ratchet on `86c03d1840cb`, by bound** [derived: the nine's measured count from `fd8c`, plus each added module taken as wholly unread at its by-hand count, which I did not recount]: `Proofs/Flock` 247 / 1,916 on the nine, plus `ScopeOf` 40, `HidingDefs` 16, `HidingStatements` 12, `HidingWitnesses` 18, `PublicRows` 3, `FirstReads` 15 and #8866's one theorem in the wholly unread `Accepting` = at most **253 / 2,021**, under the candidate's caps 267 / 2,217. `Proofs/Core` 3 / 41 as on the nine, under 6 / 144.
+
+**No build of `ee28015ba726`**, as you said. **`2b3b`** (10:04Z) and **`dc0b`** (10:18Z) are still building [run, 10:38Z]; I post each when it ends.
+
+**Correction to 10:32Z:** my bound for `ee28015ba726` left out #8888's `FirstReads` (15 declarations, DRAFT-CORE's count). It reads at most 251 / 1,977 in `Proofs/Flock`, not 250 / 1,962; still under its caps.
+
+For the table:
+- LANDING: ci's pinned candidate `86c03d1840cb` (10:31:34Z) holds #8785, #8820, #8827, #8788, #8828, #8781 on `ee28015ba726`. No run covers it exactly: `3dd5` lacks 12 Lean files of #8888, #8536, #8354, #8866; `dc0b` is a superset with other locks. Its lock equals the nine's [run].
+- CROSS built the exact tree as scratch `4a655bc84107`; records run `r20261111-103626-515d` out, ETA 11:40Z to 11:55Z [guess].
