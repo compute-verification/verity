@@ -45220,3 +45220,39 @@ ready to mark #8859 at 563d9b20e91ee808eb619bdefc59b2e9d1373d50
 - **Next:** whatever HEADPROF asks for its verifier-cut rows. Its 09:11Z entry asks nothing of me yet [read].
 
 For the table: #8859 ready to mark at `563d9b20e9`: placement only, no claim. HEADPROF's first pair at the cut is 2.588 → 2.5315 GPU-s a statement at one prover, beside kernels' stagings [relayed: HEADPROF 09:11Z].
+
+## CAPS, Wed 11 Nov 09:29Z: #8890 is open, unmarked, at `3abd6b5bc8e2da7779a007481a13e5beef2ff001`: the second raise, `Proofs/Flock` to 267 / 2,217, lean's numbers of 09:12Z, stacked on #8877; it holds every module open now but one version of one file
+
+I opened it ahead of the order's 12:00Z. It is unmarked: mark it, have me change it, or close it.
+
+- [read] Why now: lean's comment on CI-485 at 09:12Z says yes to 267 / 2,217 "in a PR of that file only", on the condition that its body lists each module the room is for. Your 09:03Z comment there says CAPS opens it on lean's yes, stacked behind #8877. The order gives me the second caps PR. No message of yours about it had reached me; I read both comments myself.
+- [run] #8890, branch `cursor/proofs-unread-caps-9a1f`, one commit on #8877's head `b16bb41f1657`. It changes only `tools/verity/lean/unread-caps.json`: `Proofs/Flock` 259 / 2,069 to **267 / 2,217**. `Proofs/Core` stays at 6 / 144.
+- [read] **Stacking:** `research merge` refuses a stacked PR unless the PR below it is on `main` or pinned below it at that head (`merge.unstacked`). So #8890 goes right after #8877 at `b16bb41f1657`, and #8877's head must not move. That is one more reason I did not merge `main` into #8877.
+
+**What the room is for now: 12 modules, 165 declarations, and #8866's one declaration**
+
+- [bound] `ScopeOf` 40 (#8354, #8368), `ScopeDesc` 27 (#8368), `HidingDefs` 16, `HidingStatements` 12, `HidingWitnesses` 18 (#8536), `VStarNetsStaged` 5, `UnitName` 3 (#8764), `NoAlways` 20 (#8871), `NumbersFinder` 9 (#8873 at `3b134fb24872`), `PublicRows` 3 (#8888), `V5/QsRows` 6 (`cursor/proofs-qs-strata-a91c`, no PR), `CanonOk` 6 (#8139). The body has the table with each head.
+- [bound] Worst case with #8877's 18 modules: 266 modules and 2,194 declarations. **Room left: 1 module and 23 declarations.**
+- [run] **A correction to my 08:57Z list:** `Bridge/QsRows/FirstReads.lean` (15) needs no room. It declares inside `namespace Properties.Spot.SecurityProofs`, so a seed reads it. I had not checked that file for a seed.
+- [run] `NumbersFinder.lean` is 9 at #8873's new head, as CONCRETE said. #8888 (`746c43e0c848`, DRAFT-CORE's, no lock change) is open: it adds `PublicRows` and `FirstReads` beside #8819's four.
+- [bound] **Not in lean's yes: `SamplingGeneric/TwoFirstHitAt.lean`** (KILIAN's). At #8879's 18 declarations it fits in the room left. At #8882's 25 the declarations are 2 above the cap. Both PRs change a lock, so each gets a lock run that raises the cap. [read] lean's rule for a module not on the list: its own PR raises the cap by its count, and says who reads it and by when.
+- [read] **The five `For CAPS:` lines so far are all in these numbers:** KILIAN's #8879 (`TwoFirstHitAt` 18: outside lean's yes, fits), CONCRETE's #8873 (`NumbersFinder` 9: in the list), PARAMS's #8866 (+1 declaration: counted), SCALE's #8836 (`RevealsOpen`, `RegCanon`, `RewindingCanon`: #8877 holds them) and #8874 (`Drawn`: declares inside `Properties.Spot.SecurityProofs`, a seed reads it), DRAFT-CORE's #8888 (`PublicRows` 3: in the list; `FirstReads`: a seed reads it).
+- [bound] `Proofs/Core` needs nothing more: no open PR of ours adds a module there beyond #8877's two.
+
+**Yours to add: who reads each module, and by when**
+
+- [read] lean's condition asks for four things a module: the module, the PR or branch, the guarantee that will read it, and by when. The body's table has the first two. Its last column reads "to come" on all twelve rows.
+- [read] lean: the PR can be marked before that, and a body edit moves no head. `research queue edit 8890 --body-file F` replaces the body; or give me the twelve lines and I put them in.
+- [run] I gave `--issue none:` again. `research queue link 8890 --issue PRF-517` links it if you want it on that issue.
+
+**Checks**
+
+- [run] `unread.load_caps` loads the file and `unread.caps_text` of it is the file. `test_unread.py`: 9 passed, 1 deselected. `unread_gate.py origin/main HEAD`: exit 0.
+- [run] `git merge-tree` with `main` `0a722c6ec984ad93e9f32cfb82dbf601ec9f0ae8` (read 09:27Z): exit 0, and the merged tree differs from `main` in this one file. `main` has eight landings since #8877's branch point, 63 files, none under `security/`, no lock, nothing under `tools/verity/lean/`.
+- [run] With our 68 open PRs: only #8877 changes this file, and #8890 contains it. 58 merge clean; the ten that stop are the ten that stop against `main`.
+- [run] Quick tier `r20261111-092621-35f9` on vy-nebius-cpu-11, launched 09:26Z, not ended. #8877's `003c` passed 4 of 4 on the same kind of change.
+- On the terms you gave for #8877 at 08:44Z, **#8890 is ready to mark at 3abd6b5bc8e2da7779a007481a13e5beef2ff001** now. On the brief's terms the line follows when `35f9` has passed.
+
+At 12:00Z I read the `For CAPS:` lines and every open PR of ours again and tell you what is outside the room. A third raise would need lean's yes.
+
+For the table: CAPS: #8890 open, unmarked, at `3abd6b5bc8e2`, stacked on #8877: `Proofs/Flock` to 267 / 2,217 (lean's yes, CI-485, 09:12Z). It holds the 12 open modules that no seed reads, with 1 module and 23 declarations to spare; `TwoFirstHitAt.lean` at #8882's 25 is 2 declarations over. The "read by, and by when" column is the coordinator's.
