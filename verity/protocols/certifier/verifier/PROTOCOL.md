@@ -2098,22 +2098,39 @@ side's committed values or reads the block's verdict and failures.
 
 **The content rows' formats** (`content_rows`) are three rows of a released connection that hold what it carried:
 its request (u32 bytes, the bytes, zeros to its class's size), its response (u32 m, then O u32 ids, the ids of the
-m `DATA` cells released before its `END` or `FAIL` and zeros to O) and its end (a fails slot: (0, 0), or (1, n)
-after a `FAIL`). A row's size is its class's, a size of prompt ids and a size of ids released, each a power of two.
+m `DATA` cells released before its `END` or `FAIL` and zeros to O) and its end (a fails slot's layout: (0, n) after
+an `END` and (1, n) after a `FAIL`, n the `DATA` cells released before it, where a fails slot counts them before a
+`FAIL` alone). A row's size is its class's, a size of prompt ids and a size of ids released, each a power of two.
 Only the formats exist: the network certifier writes no such row, and no table, head or registration holds one.
 
 **The response tie's proof block** (`verity.protocols.certifier.prover.response_tie`, in no Spec) is one a
-connection, of one of two Definitions by its class: `ResponseTieStop` in a stop class and `ResponseTieFailed` in a
-failed class, each with the one static O and no optional port, so each is a circuit file and a session of its own.
-It reads the compute side's committed row of the connection's O ids, the network certifier's end row and, in a stop
-class, the compute side's committed stop word (`StopRule16_v1`'s, n + finish·2^13), and no cell. Its gates compute
-the response row: the count, then the first count ids and zeros to O. In a stop class the count is the stop word's
-n, and the block checks that the end row is (0, 0), that the finish is not 0 and that n is at most O; in a failed
-class the count is the end row's `at`, and it checks that the class is 1 and that `at` is at most O. Its outputs
-are a verdict and the row. Where a check fails the row's count word is all ones, a count no response row has, so a
-statement that registers the row as a read of the signed one opens its root on no refused input, whether or not
-anything reads the verdict. Every switch is computed and none is witness. A row is the block's output whole, so O
-is at most 4,096 (`content_rows.check_ids`).
+connection, of one of two Definitions by the kind of its class: `ResponseTieStop` in a stop class and
+`ResponseTieNoStop` in a no-stop class. Each has the one static O and no optional port, so each is a circuit file
+and a session of its own, and each takes every connection its kind of class holds, however it ended. It reads the
+compute side's committed row of the connection's O ids, the network certifier's end row and, in a stop class, the
+compute side's committed stop word (`StopRule16_v1`'s, n + finish·2^13), and no cell. Its gates compute the
+response row: the count, then the first count ids and zeros to O.
+
+- **A stop class.** The block checks that the stop word's finish is not 0, that n is at most O and that the end
+  row's class is 0 or 1. Where the connection ended in its `END` (class 0) the count is n, and `at` is in no check:
+  the signed row holds the count to the network certifier's. Where the network certifier failed the connection
+  after the engine finished it (class 1) the count is `at`, and the block checks that `at` is at most n. Soundness
+  needs that check: the ids past n in the committed egress row are held by nothing, so without it a server could
+  commit ids it chose there, send them, and have the connection failed.
+- **A no-stop class.** The block checks that the end row's class is 0 or 1 and that `at` is at most O, and the
+  count is `at`. It takes an aborted connection and one that ended in its `END` (past the stop rule's most ids, a
+  body's own stop strings, a `min_tokens`). Its soundness has a premise the block cannot check: every one of the
+  row's O ids below the count is one the compute audit holds. The premise is open: whether the compute audit's
+  replay holds all O ids of a no-stop row or only the ids served is not settled, and the form has no count word.
+
+Its outputs are a verdict and the row. Where a check fails the row's count word is all ones, a count no response
+row has, so a statement that registers the row as a read of the signed one opens its root on no refused input,
+whether or not anything reads the verdict. Every switch is computed and none is witness. A row is the block's
+output whole, so O is at most 4,096 (`content_rows.check_ids`). Flock's composer takes a statement only where one
+of its rows is 112 bytes or more (`verity_flock.circuit`'s `compose`), and the block's longest row is 4·(O + 1)
+bytes: a statement of it is taken only from O = 32, so a tied class under 32 ids has no statement today. That is
+a fact of the composer and no rule of the classes: the gates are bound from O = 2, and circuit-check doesn't see
+it. The block has its reference (`refusals`, `outputs`), and no table holds the rows it reads and returns.
 
 **The leak bound** is what a server can signal on the wire beyond the response it sends:
 - **0 size bits.** Every cell is B bytes, whatever its kind (`PAD`, `DATA`, `END`, `FAIL` or `REFUSED`).
