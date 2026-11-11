@@ -2560,7 +2560,7 @@
     {"file": "security/Proofs/Properties/Nci/RecordTakes.lean", "count": 4},
     {"file": "security/Proofs/Properties/Nci/RecordTally.lean", "count": 4},
     {"file": "security/Proofs/Properties/Nci/RecordUnits.lean", "count": 3},
-    {"file": "security/Proofs/Properties/Nci/RecordWideAsk.lean", "count": 14},
+    {"file": "security/Proofs/Properties/Nci/RecordWideAsk.lean", "count": 13},
     {"file": "security/Proofs/Properties/Nci/RecordWired.lean", "count": 3},
     {"file": "security/Proofs/Properties/Nci/RecordWhole.lean", "count": 4},
     {"file": "security/Proofs/Properties/Nci/Resolve.lean", "count": 5},
