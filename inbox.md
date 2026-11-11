@@ -106,3 +106,12 @@ So a route that deep-copies its model in a step, with AdamW, loses its whole rec
 
 Files: /cursor/stores/self/trn102/jobs/ (case_e.py, case_f.py, deepcopy_matrix.py, harness_job.py, deepcopy{,2,3}.sh).
 
+[2026-11-11T10:31Z] dbe06dde6a86
+COUNTS, TRN-112, Wed 11 Nov 2:32 AM PST. C4, C3 and C2 are all pushed: branch cursor/training-record-counts-a8e2, head 5a612c997c6af11671112e8935fc295392cdf62f (three commits on 9c68e3e53a, four new files, nothing else touched). Each file: lean exit 0 and the probe line "none of its N theorems uses an axiom beyond propext, Classical.choice and Quot.sound", with --siblings, on the pushed content.
+- RecordGrid.lean: slotOf, slotIn_eq, OneGrid (+ slotOf_cons, slotOf_none, slotOf_of_mem). Run r20261111-102703-a979, N=4.
+- RecordSlots.lean (C4): inSlot_const, slotsToTry_reaches, fresh_ge. Run r20261111-101849-91de, N=8.
+- RecordTally.lean (C3): below_count, inSlot_count, tally_eq (+ below_succ, below_mono, inSlot_succ, inSlot_empty, kind_index_lt). Run r20261111-101849-0c5b, N=12.
+- RecordSameSlot.lean (C2): sameSlot_sound (+ BoxRow, leaf_sound, row_split, BoxInside, search_sound, row_digits, digitsOf_radix). Run r20261111-102703-4f80, N=29.
+Every statement is the brief s word for word (a script compared the ten theorem/def statements of its Lean blocks with the files). No hypothesis added or changed. So C2 s date holds: it is done.
+Findings: (1) sameSlot_sound never reads h0 (0 <= w.writerAt i): with one slot both slots are 0, with more the search has shown every writer in a grid of gw, whose start is a natural number. I kept h0 as stated, with set_option linter.unusedVariables false in on that theorem; drop h0 if you want it gone. (2) --siblings checked only the modules built on the node (511 to 2817) and listed about 1000 of the package as unchecked; a grep of security/ and verity/ on my base and on FORM s 6b57ee1cb1 finds none of my 27 public names declared in NciCheck.Record.SecurityProofs elsewhere. (3) A try does build an untracked import, so slotOf and OneGrid are in RecordGrid.lean only. (4) The four files are in no root of the proofs package: the lakefile is FORM s to edit. Checkpoint notes: 20261111T0951Z and 20261111T1027Z in lanes/training. Next: the hand-off note and the TRN-112 comment; then I wait for lean s head to check the three still state what the property reads.
+
