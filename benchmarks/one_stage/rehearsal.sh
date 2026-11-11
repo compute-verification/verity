@@ -8,16 +8,18 @@
 #                         serve's settings. Each step's log is $OUT/logs/STEP.log, its exit status and seconds a line of
 #                         $OUT/steps.txt, and the exit status is 0 only where every step's is. The steps: this tree's
 #                         environment (uv sync); the filter around a stand-in harness (a made-up secret, an exit status
-#                         carried, a TERM waited out); the settings file as `serve` holds it; the class's circuit cut
-#                         at Pearl+'s linears from the serve's phi (a stand-in for `serve-phi`, which reads the card:
-#                         the H200's compute capability and SMs); the harness's own policy step, which fixes the limits
-#                         and states what they prove; the policy's Lean check on the class's own Program
-#                         (`rehearsal_limits.py`), and the settings' ALPHA, GAMMA and DAY_PROGRAM held to what it
-#                         answers ($OUT/record.env.add has the lines where they differ); the day's declaration at that
-#                         Program in a scratch log, checked as the follow-on checks it; the Lean the serve, the audit
-#                         and the compose run (Flock's verifier and ZK server, Pearl+'s check, remote's composite);
-#                         Pearl+'s period, salt session, draw, coin and piece against this tree's own gate code
-#                         (`pearlplus_local_e2e.py`), whose piece then holds the execution phase and each check's cost.
+#                         carried, a TERM waited out); the settings file as `serve` holds it; `serve` around a stand-in
+#                         harness (the deferral's copy asked once, only after a serve that exited 0); the class's
+#                         circuit cut at Pearl+'s linears from the serve's phi (a stand-in for `serve-phi`, which
+#                         reads the card: the H200's compute capability and SMs); the harness's own policy step,
+#                         which fixes the limits and states what they prove; the policy's Lean check on the class's
+#                         own Program (`rehearsal_limits.py`), and the settings' ALPHA, GAMMA and DAY_PROGRAM held to
+#                         what it answers ($OUT/record.env.add has the lines where they differ); the day's declaration
+#                         at that Program in a scratch log, checked as the follow-on checks it; the Lean the serve,
+#                         the audit and the compose run (Flock's verifier and ZK server, Pearl+'s check, remote's
+#                         composite); Pearl+'s period, salt session, draw, coin and piece against this tree's own
+#                         gate code (`pearlplus_local_e2e.py`), whose piece then holds the execution phase and each
+#                         check's cost.
 #                         The whole verb runs inside one memory scope (MEM_GB, default 64) where the node makes one.
 #   rehearsal.sh serve    the serve node, one card: the harness at SETTINGS (default the run's sent record.env), after
 #                         the settings are held to what the rehearsal serves (`settings_ok`). Where the serve deferred
@@ -33,8 +35,8 @@
 #                         one memory scope of its own (COMPOSE_MEM_GB, default 64, no swap). Each Lean check it starts
 #                         runs in a scope of its own and is not started past its blob limit (`served_cases.py`:
 #                         CHECK_MEM_GB, CHECK_BLOBS_GB); on a node that makes no user scope the verb is refused.
-#   rehearsal.sh filter CMD...   CMD through the filter alone, with its exit status (`filter-test DIR` and `settings
-#                         FILE` are `check`'s two steps of those names).
+#   rehearsal.sh filter CMD...   CMD through the filter alone, with its exit status (`filter-test DIR`, `settings FILE`
+#                         and `serve-test DIR` are `check`'s three steps of those names).
 #
 # A follow-on's settings come from the serve dir (deferred.env, compose.env), which carry no POUW: `audit` and `compose`
 # set POUW=pearlplus, the rehearsal's.
@@ -148,6 +150,38 @@ EOF
   echo "the same harness without the wrapper: made-up secrets in its log $(count "$scr/log3")"
   [ "$(count "$scr/log3")" = 2 ]
 }
+serve_test() {  # `serve` around a stand-in harness, at SETTINGS: the deferral's copy is asked once, after a serve that
+  # exited 0 and deferred, of the serve dir the harness named; the exit status is the serve's, then the copy's
+  local scr=$1 rc n=0 ok=0
+  mkdir -p "$scr/out" "$scr/d/private/deferred"
+  export SCR=$scr
+  cat > "$scr/harness.sh" <<'EOF'
+#!/usr/bin/env bash
+if [ "${1:-}" = copy ]; then echo "D=$D $*" >> "$SCR/copies"; exit "${COPY_RC:-0}"; fi
+echo "serve dir $SCR/d" > "$OUT/machine.txt"
+rm -f "$SCR/d/private/deferred/deferred.env"
+[ -z "${DEFERS:-}" ] || : > "$SCR/d/private/deferred/deferred.env"
+exit "${SERVE_RC:-0}"
+EOF
+  : > "$scr/copies"
+  try() {  # WHAT WANT_RC WANT_COPIES ENV...: one serve under ENV
+    local what=$1 want=$2 copies=$3
+    shift 3
+    env OUT="$scr/out" HARNESS="$scr/harness.sh" "$@" bash "$SELF" serve > "$scr/log" 2>&1; rc=$?
+    n=$(grep -c . "$scr/copies")
+    echo "$what: the wrapper exits $rc (want $want); copies asked so far $n (want $copies)"
+    [ "$rc" = "$want" ] && [ "$n" = "$copies" ] || ok=1
+  }
+  try "a serve that deferred, with COPY_TO" 0 1 DEFERS=1 COPY_TO=host:dir
+  [ "$(tail -1 "$scr/copies")" = "D=$scr/d copy deferred host:dir" ] \
+    || { echo "the copy was asked as: $(tail -1 "$scr/copies")"; ok=1; }
+  try "a serve that deferred, with no COPY_TO" 0 1 DEFERS=1
+  try "a serve that exits 7, with COPY_TO" 7 1 DEFERS=1 SERVE_RC=7 COPY_TO=host:dir
+  try "a serve that deferred nothing, with COPY_TO" 0 1 COPY_TO=host:dir
+  grep -q 'holds no deferral: nothing copied' "$scr/log" || { echo "no line says nothing was copied"; ok=1; }
+  try "a copy that exits 5" 5 2 DEFERS=1 COPY_RC=5 COPY_TO=host:dir
+  return "$ok"
+}
 
 check() {
   local OUT=${OUT:-${RESEARCH_RUN_DIR:-.}/out} MEM_GB=${MEM_GB:-64}
@@ -186,6 +220,7 @@ check() {
   step filter 2m bash "$SELF" filter-test "$scratch/filter"
   cp "$OUT/logs/filter.log" "$OUT/filter.txt"
   step settings 1m bash "$SELF" settings "$SETTINGS"
+  step serve-copy 1m env SETTINGS="$SETTINGS" bash "$SELF" serve-test "$scratch/serve-copy"
 
   # the class's circuit from phi, as PEARLPLUS-CIRCUIT's command makes it on the serve node
   D=$scratch/serve
@@ -305,5 +340,6 @@ case ${1:-} in
   filter) shift; filtered "$@" ;;
   filter-test) filter_test "${2:?a scratch directory}" ;;
   settings) settings_ok "${2:?a settings file}" ;;
+  serve-test) serve_test "${2:?a scratch directory}" ;;
   *) refuse "rehearsal.sh check|serve|audit|compose|filter CMD..., not ${1:-nothing}" ;;
 esac
