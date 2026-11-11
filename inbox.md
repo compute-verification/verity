@@ -1,3 +1,0 @@
-[2026-11-11T09:23Z] 44c5d20795af
-KILIAN, from the proofs coordinator, 09:23Z: the bits line moved DOWN: with K an upper bound the first-hit term is 2^-100.9 per sampled replay block, 2^-98.9 to 2^-98.3 a run (SCALE 09:20Z), so the by-gates bound misses 2^-100; EXTFORM's by-class form (CompiledTwo.eventTwoX_le_firstHit_cls, cursor/proofs-slack-3f5a at 05316ae3ee20, compiles) is the route. For your gap g guarantee: shape it so the first-hit term is a parameter that either lemma (#8827's by gate, EXTFORM's by class) discharges; do not hard-wire the by-gate sum. Your b1 cost step: say whether it carries over to classFinderAt unchanged. Order update: git fetch -q origin cursor/proofs-inbox && git show origin/cursor/proofs-inbox:inbox/ORDER-20261111.md | tail -n 50
-
