@@ -84,7 +84,9 @@ v1 audit (`OneStage`) with the verdicts computed here, from the statement's file
   the member whose name, then `/`, the root's port begins with (`rootsOf`; a root that is no member's or two members'
   refuses, and so does a window's row tables' root, `ROW_TABLES`). A member's public file is held to its slice of the
   registration (`Member.slice`, `headerHeld`): the window's scheme, the member's roots and their domains under their
-  bare ports, and the member's count of units as its instances.
+  bare ports, and the member's count of units as its instances. A member may read registered values, with its own
+  registered file as the one statement's, and a value is one tree for every member (`classHeld`): two members' ports of
+  one value that differ in its root, leaves, row width, domain or leaf schema refuse, whether or not either is drawn.
 
 Without blobs (`toProtocol`) every check rejects: no blob holds the circuit file.
 -/
@@ -1017,6 +1019,40 @@ def laidHeld (ms : Array Member) (rec : Json) : V Unit :=
       pure ()
     else throw MEMBERS_LAID
 
+/-- The refusal of two members' ports of one registered value that are not one tree's (`classHeld`): `diff` is the
+first field they differ in (`Flock.RecVStar.portDiff?`). -/
+def classTwo (first second value diff : String) : String :=
+  s!"registered: members {first} and {second} read the registered value {value} as two ({diff}): a value the " ++
+    "window registers is one tree, read by every member at one root"
+
+/-- The member `name`'s registered port `q` after the ports before it: `acc` holds, for each value read so far, the
+first port of it and its member's name. A port of a value `acc` holds must be that port in the value's root, leaves,
+row width, domain and leaf schema (`Flock.RecVStar.portDiff?`, without the units' reads). -/
+def classPort (name : String) (acc : Std.HashMap String (String × Flock.Registered.Port))
+    (q : Flock.Registered.Port) : V (Std.HashMap String (String × Flock.Registered.Port)) :=
+  match acc.get? q.value with
+  | none => pure (acc.insert q.value (name, q))
+  | some (first, q0) =>
+    match Flock.RecVStar.portDiff? q0 q false with
+    | none => pure acc
+    | some diff => throw (classTwo first name q.value diff)
+
+/-- One member's registered ports after the members before it (`classPort` on each); a member whose registered file
+is no registered reads refuses, and one with none reads nothing. -/
+def classStep (acc : Std.HashMap String (String × Flock.Registered.Port)) (m : Member) :
+    V (Std.HashMap String (String × Flock.Registered.Port)) :=
+  match m.own.registered with
+  | none => pure acc
+  | some j =>
+    (Flock.Registered.ofJson j).mapError (s!"member {m.name}: {·}") >>= fun own => own.foldlM (classPort m.name) acc
+
+/-- **A registered value is one tree for every member**: over the parameters' members, drawn or not, every port of
+one value names one root, one count of leaves, one row width, one domain and one leaf schema (`classStep`), so the
+values the members read are a function of the parameters, each with one root. It reads the parameters only: each
+member's registered file once, and no blob. -/
+def classHeld (ms : Array Member) : V Unit :=
+  ms.foldlM classStep {} >>= fun _ => pure ()
+
 /-- **A member's population check**, in the place of the one statement's `FilePart.check` and `publicHeld`
 (`Member.heldAt` at the strata of the member's query over its program, as `FilePart.check` reads them, then
 `headerHeld` at the member's `slice` of the registration): its strata are the registration's restricted to its units,
@@ -1188,9 +1224,9 @@ def membersTreesHeld (ts : Array Challenger.LoggedTree) (log : List String) (sts
 evidence `e` and its statements `sts`: the statements' structure (`membersHeld`), their sessions v1's in order, the
 sessions' coins held to the trees the challenger logged in the order it must release them, each tree closed after its
 session's evidence before the next is opened (`treesOf`, `orderHeld`, `membersTreesHeld`), the registration's
-population held to the program (`popHeld`) and the members laid over it (`laidHeld`), the registration's roots each
-one member's (`rootsOf`), then each statement's session on the blobs, at its member's slice of the registration
-(`Member.slice`, `runMembers`). -/
+population held to the program (`popHeld`) and the members laid over it (`laidHeld`), each registered value the
+members read one tree (`classHeld`), the registration's roots each one member's (`rootsOf`), then each statement's
+session on the blobs, at its member's slice of the registration (`Member.slice`, `runMembers`). -/
 def membersRun (p : Params) (ms : Array Member) (c : OneStage.Commitment) (e : Evidence) (sts : Array StatementFiles)
     (bs : Core.Blobs) : V Run := do
   let held ← membersHeld ms sts
@@ -1201,6 +1237,7 @@ def membersRun (p : Params) (ms : Array Member) (c : OneStage.Commitment) (e : E
   membersTreesHeld ts (← linesOf e) (sts.zip held) bs
   popHeld p.base.verifier c.record
   laidHeld ms c.record
+  classHeld ms
   let roots ← rootsOf ms c.record
   runMembers (fun m => m.slice c.record roots) ms sts e.base.provedUnits bs
 
@@ -1573,6 +1610,29 @@ private def rootsT (roots : List (String × String)) (name : String) : Option (A
 #guard refusal (laidHeld #[memberT "a" #[(0, 2), (3, 5)], memberT "b" #[(2, 3)]] (recordT 5 [])) == MEMBERS_LAID
 #guard refusal (laidHeld #[memberT "a" #[(0, 2)], memberT "b" #[(3, 6)]] (recordT 5 [])) == MEMBERS_LAID
 #guard refusal (laidHeld keyedT Json.null) == "the record names no population"
+
+/-- A registered file of the ports given, each its name, its value, the hex digit its root repeats and its leaves. -/
+private def regT (ports : List (String × String × Char × Nat)) : Json :=
+  Json.mkObj [("format", Json.str Flock.Registered.FORMAT),
+    ("ports", Json.mkObj (ports.map fun (name, value, c, leaves) => (name, Json.mkObj [
+      ("domain", Json.str ("".pushn 'd' 128)), ("leaves", Lean.toJson leaves), ("reads", Json.arr #[]),
+      ("root", Json.str ("".pushn c 128)), ("value", Json.str value)])))]
+
+/-- The member `name` with the registered file `reg`. -/
+private def readerT (name : String) (reg : Json) : Member :=
+  { memberT name #[(0, 1)] with own := { sharedT with registered := some reg } }
+
+#guard refusal (classHeld keyedT) == ""
+#guard refusal (classHeld #[readerT "a" (regT [("p", "w", 'a', 2)]), memberT "b" #[(1, 2)],
+  readerT "c" (regT [("q", "w", 'a', 2), ("r", "v", 'b', 2)])]) == ""
+#guard whyT (classHeld #[readerT "a" (regT [("p", "w", 'a', 2)]), memberT "b" #[(1, 2)],
+  readerT "c" (regT [("q", "w", 'b', 2)])]) ==
+  classTwo "a" "c" "w" ("root " ++ "".pushn 'a' 128 ++ ", against " ++ "".pushn 'b' 128)
+#guard whyT (classHeld #[readerT "a" (regT [("p", "w", 'a', 2)]), readerT "c" (regT [("q", "w", 'a', 3)])]) ==
+  classTwo "a" "c" "w" "leaves 2, against 3"
+#guard whyT (classHeld #[readerT "a" (regT [("p", "w", 'a', 2), ("q", "w", 'b', 2)])]) ==
+  classTwo "a" "a" "w" ("root " ++ "".pushn 'a' 128 ++ ", against " ++ "".pushn 'b' 128)
+#guard (whyT (classHeld #[memberT "a" #[(0, 1)], readerT "c" Json.null])).startsWith "member c: "
 
 /-- The slice `rootsOf` and `Member.slice` give the member `name` of `keyedT` on the roots given. -/
 private def sliceT (roots : List (String × String)) (name : String) : Json :=
