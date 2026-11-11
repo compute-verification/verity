@@ -125,6 +125,11 @@ record = "/workspace/research/deploy/record.jsonl"
 managed = ["/etc/systemd/system/user-1001.slice.d/50-vy-headroom.conf", "/etc/systemd/system/session-.scope.d/50-vy-job-memory.conf",
            "/etc/systemd/system/user@1001.service.d/50-vy-oom.conf", "/etc/systemd/system/ssh.service.d/50-vy-memory.conf"]
 
+# cpu-13 (a train slot and a proofs pool): only the verified queue's loop and the retention collector are deploy's there so far
+[nodes.vy-nebius-cpu-13]
+record = "/workspace/research/deploy/record.jsonl"
+managed = ["/usr/local/sbin/vy-vqueue-*", "/usr/local/lib/vy-vqueue/*", "/usr/local/lib/vy-vqueue/bin/*", "/etc/systemd/system/vy-vqueue*"]
+
 # cpu-14 to cpu-17 (uk-south2, train slots): cpu-12's entries. pods/nebius/launch.sh creates each with NEBIUS_VM_NAME, cpu-13's
 # shape (cpu-d3, 192vcpu-768gb, ubuntu24.04-driverless) and a data disk whose size is a multiple of 93 GiB
 [nodes.vy-nebius-cpu-14]
@@ -783,7 +788,7 @@ owner = "infra"
 path = "/etc/systemd/system/vy-retention-gc.service"
 src = "tools/research/src/research/pods/nebius/sky/retention_gc.service"
 nodes = ["vy-nebius-1", "vy-nebius-2", "vy-nebius-cpu-1", "vy-nebius-cpu-2", "vy-nebius-cpu-3", "vy-nebius-cpu-4", "vy-nebius-cpu-5",
-         "vy-nebius-cpu-6", "vy-nebius-cpu-7", "vy-nebius-cpu-9", "vy-nebius-cpu-11", "vy-nebius-cpu-12",
+         "vy-nebius-cpu-6", "vy-nebius-cpu-7", "vy-nebius-cpu-9", "vy-nebius-cpu-11", "vy-nebius-cpu-12", "vy-nebius-cpu-13",
          "vy-nebius-cpu-14", "vy-nebius-cpu-15", "vy-nebius-cpu-16", "vy-nebius-cpu-17"]
 run = ["systemd:vy-retention-gc.timer"]
 owner = "infra"
@@ -792,7 +797,7 @@ owner = "infra"
 path = "/etc/systemd/system/vy-retention-gc.timer"
 src = "tools/research/src/research/pods/nebius/sky/retention_gc.timer"
 nodes = ["vy-nebius-1", "vy-nebius-2", "vy-nebius-cpu-1", "vy-nebius-cpu-2", "vy-nebius-cpu-3", "vy-nebius-cpu-4", "vy-nebius-cpu-5",
-         "vy-nebius-cpu-6", "vy-nebius-cpu-7", "vy-nebius-cpu-9", "vy-nebius-cpu-11", "vy-nebius-cpu-12",
+         "vy-nebius-cpu-6", "vy-nebius-cpu-7", "vy-nebius-cpu-9", "vy-nebius-cpu-11", "vy-nebius-cpu-12", "vy-nebius-cpu-13",
          "vy-nebius-cpu-14", "vy-nebius-cpu-15", "vy-nebius-cpu-16", "vy-nebius-cpu-17"]
 run = ["systemd:vy-retention-gc.timer"]
 owner = "infra"
@@ -1546,4 +1551,63 @@ owner = "infra"
 path = "/etc/vy/gpu-lease-host"
 src = "tools/research/src/research/pods/nebius/gpu-lease-host"
 nodes = ["vy-glm53-eu", "vy-glm53-eu2"]
+owner = "infra"
+
+# ---- the verified queue's loop (`research queue vqueue`) on a CPU node's own disk, as the user vy-vqueue under
+# vy-vqueue.service (vqueue/loop.sh says what it keeps and its three modes: dry-run, which writes nothing and is what it runs
+# until its mode file says otherwise, shadow and live). Installing starts nothing. Then, as root: `vy-vqueue-setup` (the
+# user, /var/lib/vy-vqueue, its own ssh key, /etc/vy/vqueue for the credentials root copies there by hand), gh at /usr/bin/gh,
+# the loop's clone, ci's pinned tree and the loop's state under /var/lib/vy-vqueue, and `systemctl enable --now vy-vqueue`,
+# which starts vy-vqueue-token.timer with it. The App's key is read by root's vy-vqueue-token.service alone (token.sh, with
+# the control pod's gh_app_token.sh): the loop holds a one-hour token.
+
+[[file]]
+path = "/etc/systemd/system/vy-vqueue.service"
+src = "tools/research/src/research/pods/nebius/vqueue/vy-vqueue.service"
+nodes = ["vy-nebius-cpu-13"]
+run = ["systemd:vy-vqueue"]
+owner = "infra"
+
+[[file]]
+path = "/usr/local/lib/vy-vqueue/loop.sh"
+src = "tools/research/src/research/pods/nebius/vqueue/loop.sh"
+nodes = ["vy-nebius-cpu-13"]
+run = ["systemd:vy-vqueue"]
+owner = "infra"
+
+[[file]]
+path = "/usr/local/lib/vy-vqueue/bin/gh"
+src = "tools/research/src/research/pods/nebius/vqueue/bin/gh"
+nodes = ["vy-nebius-cpu-13"]
+owner = "infra"
+
+[[file]]
+path = "/usr/local/sbin/vy-vqueue-setup"
+src = "tools/research/src/research/pods/nebius/vqueue/setup.sh"
+nodes = ["vy-nebius-cpu-13"]
+owner = "infra"
+
+# a oneshot every 20 minutes reads them fresh: nothing to restart
+[[file]]
+path = "/etc/systemd/system/vy-vqueue-token.service"
+src = "tools/research/src/research/pods/nebius/vqueue/vy-vqueue-token.service"
+nodes = ["vy-nebius-cpu-13"]
+owner = "infra"
+
+[[file]]
+path = "/etc/systemd/system/vy-vqueue-token.timer"
+src = "tools/research/src/research/pods/nebius/vqueue/vy-vqueue-token.timer"
+nodes = ["vy-nebius-cpu-13"]
+owner = "infra"
+
+[[file]]
+path = "/usr/local/lib/vy-vqueue/token.sh"
+src = "tools/research/src/research/pods/nebius/vqueue/token.sh"
+nodes = ["vy-nebius-cpu-13"]
+owner = "infra"
+
+[[file]]
+path = "/usr/local/lib/vy-vqueue/gh_app_token.sh"
+src = "infra/control/gh_app_token.sh"
+nodes = ["vy-nebius-cpu-13"]
 owner = "infra"
