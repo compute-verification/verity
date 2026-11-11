@@ -376,7 +376,9 @@ algorithm: `remote-replicas/README.md`.
 - `fetch-fixtures` makes fetched entries present and exact (a tree's directory holds its files and nothing else), never writes a
   tracked file, and is offline once fetched. `suites.py` runs it first and keys each suite on the ids under its inputs.
 - `export` copies every entry and `previous` id to the export bucket (`remote.load_export`; never the store's own), blobs first.
-  A superseded id the store lacks comes from git history; one neither holds is a warning. `--verify-url` is the end-to-end test.
+  Its key may write but not read, so each object is one `PUT If-None-Match: *` (`create`; 412 = already there), and keys a
+  pass saw land, kept under the store's `export/`, aren't sent again (`--fresh` sends all). A superseded id the store lacks
+  comes from git history; one neither holds is a warning. `--verify-url` is the end-to-end test.
 
 ### 7.4 Retention on the remote — `research data gc` (`gc.py`)
 
@@ -491,12 +493,12 @@ research data refresh-fixtures [--preserve] [--dry-run] [--repo DIR] [--json]
                                               re-register every fixtures/artifacts.json entry whose bytes changed (§7)
 research data fetch-fixtures [PATH ...] [--repo DIR] [--check] [--stubs] [--public-url URL] [--no-private] [--jobs N] [--json]
                                               make the fetched registry entries under PATH present and exact (§7.3); exit 1 if any is missing
-research data export [--repo DIR] [--dry-run] [--no-previous] [--blobs FILE] [--id ART]... [--jobs N] [--json]
+research data export [--repo DIR] [--dry-run [--write-check]] [--fresh] [--no-previous] [--blobs FILE] [--id ART]... [--jobs N] [--json]
                                               copy every registry entry and its `previous` ids, and each --id, to the export bucket (§7.3)
 research data export --verify-url URL [...]   fetch all of it back through URL into a scratch store, every byte checked
 research data doctor [--clean] [--runs-dir D] [--json]
                                               run dirs holding a store_publish_error.json (§10): stale vs REAL; --clean deletes the stale ones
-research data attempt publish RUN_DIR|RUN_ID [--tool ...] [--force] | --all [--runs-dir D]   (what `research run` calls; after the fact for old runs)
+research data attempt publish RUN_DIR|RUN_ID [--tool ...] [--force] | --all [--runs-dir D]   (what `research run` calls; after the fact for old runs; a run with run custody: `research data custody RUN --publish`)
 research data pull --from MACHINE RUN --project P    (the machine is bound to a project, as for `run --on`)
 research data reindex [--remote]
 research data sql "SELECT ..." [--index] [--json]   read-only: the catalog, or the index (§5.1)
@@ -530,7 +532,7 @@ Active run state stays in the run registry; the store only ever sees completed/f
 
 With `--custody-r2` (the default with `--on`; `--no-custody-r2` opts out) the run's custody does not depend on the launcher's disk:
 the launcher mints an action-scoped temporary key
-(§7.1, local signing; `--custody-ttl`, default 6h, at most 24h, must outlast the run and its upload: `research run` refuses a `--timeout` longer than 6h without an explicit `--custody-ttl`; a run over 4 GiB gets a `size_warning`, since uploads don't resume; no `DeleteObject`/`CopyObject`) and stages it with a
+(§7.1, local signing; `--custody-ttl`, default 6h, at most 24h, must outlast the run and its upload: `research run` refuses a `--timeout` longer than 6h without an explicit `--custody-ttl`, and takes one past 24h with `--custody-ttl 24h`, warning that a run outliving its key is repaired after with `research data custody RUN --publish`; a run over 4 GiB gets a `size_warning`, since uploads don't resume; no `DeleteObject`/`CopyObject`) and stages it with a
 secret-free store.toml under `<root>/requests/<run id>/custody/` (mode 600; never in request.json, remote.json or the workload's
 environment). Without the parent key on the launcher the launch is refused. After the workload exits, the runner publishes the
 attempt with one more output, `outputs.run_record`: a `run-record/v1` tree of the run dir's files, less those `custody.select` trims
