@@ -235,9 +235,9 @@ negatives.
   wipe: the window report's `space`, `bandwidth` and `wipe` rows) as their rows state them, missing where the run has
   no such row; whether the run is of record reads none of them. A verdict read from a row is `accept` only where a
   server is named for the row's answer (the report's `servers`, or its piece's records for the period check's answer
-  a remote run takes) and it is the report's node: an answer about another server, an accept naming none, or an accept
-  whose source the report's `sources` or that piece says isn't `real` (an answer brought from a recorded run), is
-  missing, says which, and gives the record no figure.
+  a remote run takes) and it is the report's node: an answer about another server, an accept naming none, or an answer
+  about the node whose source the report's `sources` or that piece says isn't `real` (an answer brought from a recorded
+  run, whatever it says), is missing, says which, and gives the record no figure.
   Sampled proofs' verdict is its leg in the composite of record, the outcome
   of remote's sampled proofs case there (one-stage v2), never the window report's integrity row, the records audit's
   one-stage v1 answer, which is no verdict: where the composite of record has no such case, it is not established, the

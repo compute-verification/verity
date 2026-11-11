@@ -45,10 +45,10 @@ A verdict read from a row is ``accept`` only where a server is named for the row
 node (`off_node`), the server named being the report's ``servers`` entry and, for the row the network certifier's
 period check's answer gives where the report drops it, the one its piece names (`served_verdicts.piece_server`): an
 answer about another server is missing, naming that server (`ELSEWHERE`), and so is an accept no server is named for
-(`UNSERVED`), and an accept about the node whose source, as the report's ``sources`` or that piece states it, isn't
-``real``, an answer brought from a recorded run (`BROUGHT`). Such a row gives the record no figure: the rows its
-verdicts and figures read are made once, after that check (`on_node`), and each figure reads the row as it reads a
-missing one.
+(`UNSERVED`), and an answer about the node whose source, as the report's ``sources`` or that piece states it, isn't
+``real``, an answer brought from a recorded run (`BROUGHT`), whatever it says. Such a row gives the record no figure:
+the rows its verdicts and figures read are made once, after that check (`on_node`), and each figure reads the row as it
+reads a missing one.
 
 While `certifier-key` is open (`PREMISES`, `KEY_OPEN`), an accepted network certifier's verdict is ``not
 established``, its Lean answer's accept beside it (``answer``), and its bound conditional on it by name; so is it
@@ -257,10 +257,10 @@ ELSEWHERE = ("the run has no answer about this node: the {key} row's answer ({sr
              "another server than the window report's node")
 UNSERVED = ("the run has no answer about this node: the {key} row ({src}) accepts, and no server is named for its "
             "answer")
-#: why an accept about the node whose source isn't ``real`` is missing (`off_node`): the source stated for a row is the
+#: why an answer about the node whose source isn't ``real`` is missing (`off_node`): the source stated for a row is the
 #: report's ``sources`` entry, and `served_verdicts.piece_server`'s for the row `network_row` composes
-BROUGHT = ("the run has no answer of its own: the {key} row's accept ({src}) was brought from a recorded run (its "
-           "source is {source}, not real)")
+BROUGHT = ("the run has no answer of its own: the {key} row's answer ({src}), {verdict}, was brought from a recorded "
+           "run (its source is {source}, not real)")
 #: where the certifier piece leaves its period's case (`certifier_piece.CASE`), whose params carry the schedule and caps
 CASE = Path("pieces") / "certifier" / "case.json"
 #: the run's advice registration as it publishes it (`served_verdicts.py public-registration`), its compiler's cap ℓ_a
@@ -997,17 +997,16 @@ def network_row(out: Path, rows: Mapping[str, Any], at: tuple[Any, Any],
 def off_node(at: tuple[Any, Any], node: Any, key: str, src: str, verdict: Any) -> str | None:
     """Why the row ``key`` (from ``src``), answering ``verdict``, is no answer of the run's own about the window
     report's ``node``, None where it is one, by the server and the source named for it (``at``): the server is another
-    (`ELSEWHERE`), or none is named and the row accepts (`UNSERVED`), or the row accepts and its source is stated and
-    isn't ``real`` (`BROUGHT`). A row that doesn't accept and names no server reads as it states, as the report
-    composes it, and a source no one states is the writer's default, ``real``."""
+    (`ELSEWHERE`), or none is named and the row accepts (`UNSERVED`), or it is the node and the answer's source is
+    stated and isn't ``real`` (`BROUGHT`), whatever the answer says. A row that doesn't accept and names no server reads
+    as it states whatever its source, as the report composes it, and a source no one states is the writer's default,
+    ``real``."""
     server, source = at
     if server is None:
         return UNSERVED.format(key=key, src=src) if verdict == "accept" else None
     if server != node:
         return ELSEWHERE.format(key=key, src=src, verdict=verdict, server=server)
-    if verdict == "accept" and source not in (None, "real"):
-        return BROUGHT.format(key=key, src=src, source=source)
-    return None
+    return BROUGHT.format(key=key, src=src, verdict=verdict, source=source) if source not in (None, "real") else None
 
 
 def on_node(rows: Mapping[str, Any], at: Mapping[str, tuple[Any, Any]], node: Any,

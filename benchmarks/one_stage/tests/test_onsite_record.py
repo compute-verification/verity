@@ -2688,9 +2688,11 @@ def test_the_record_of_a_row_that_is_no_answer_about_the_node_is_the_record_of_t
     assert rec == record(as_missing(out, key, why)) != base
 
 
-def brought(key: str, src: str | None = None) -> str:
-    """Why the accepting row ``key`` (the window report's unless ``src``) whose source is a fixture's is missing."""
-    return OR.BROUGHT.format(key=key, src=src or f"record/verdicts.json protocols.{key}", source="fixture")
+def brought(key: str, src: str | None = None, verdict: str = "accept") -> str:
+    """Why the row ``key`` (the window report's unless ``src``), answering ``verdict`` about `NODE`, whose source is a
+    fixture's, is missing."""
+    src = src or f"record/verdicts.json protocols.{key}"
+    return OR.BROUGHT.format(key=key, src=src, verdict=verdict, source="fixture")
 
 
 def sourced(out: Path, sources: dict[str, str | None] | None) -> Path:
@@ -2725,10 +2727,31 @@ def test_an_accept_about_the_node_is_the_runs_own_only_where_its_source_is_real(
 
 
 @pytest.mark.parametrize("name, key", list(ROW_READ.items()))
-def test_a_row_that_doesnt_accept_reads_as_it_states_whatever_its_source(tmp_path, name, key):
-    out = answering(every_row_accepting(tmp_path), key, "reject")
+@pytest.mark.parametrize("verdict", ["reject", "error"])
+def test_an_answer_about_the_node_brought_from_a_recorded_run_is_missing_whatever_it_says(tmp_path, name, key, verdict):
+    """A reject or an error about the node whose source the report says is a fixture's is no answer of this run's
+    either: the verdict is missing, naming the answer, where a real one reads as it states, and the whole record is that
+    of the row missing, so the record states no reject or error the run didn't produce."""
+    out = answering(every_row_accepting(tmp_path), key, verdict)
     here = record(out)
-    assert here["verdicts"][name]["verdict"] == "reject" and record(sourced(out, {key: "fixture"})) == here
+    rec = record(sourced(out, {key: "fixture"}))
+    why = brought(key, verdict=verdict)
+    assert here["verdicts"][name]["verdict"] == verdict and verdict in why and "accept" not in why
+    assert rec["verdicts"] == here["verdicts"] | {name: off_node(here["verdicts"], name, why)}
+    assert rec == record(as_missing(out, key, why)) != here
+
+
+@pytest.mark.parametrize("name, key", list(ROW_READ.items()))
+@pytest.mark.parametrize("verdict", ["accept", "reject", "error"])
+def test_a_row_naming_no_server_reads_as_it_does_whatever_its_source(tmp_path, name, key, verdict):
+    """A row the report names no server for is read as the report composes it, whatever source it states: an accept is
+    missing because no server is named (`OR.UNSERVED`), not because it was brought, and a reject or an error reads as it
+    states."""
+    out = about(answering(every_row_accepting(tmp_path), key, verdict), {key: None})
+    here = record(out)
+    v = here["verdicts"][name]
+    assert (v["verdict"], v.get("why")) == (("missing", unserved(key)) if verdict == "accept" else (verdict, None))
+    assert record(sourced(out, {key: "fixture"})) == here
 
 
 @pytest.mark.parametrize("leg", ["accept", None])
@@ -2744,16 +2767,17 @@ def test_sampled_proofs_verdict_is_its_composite_leg_whatever_source_the_report_
     assert (v == base) if leg else (v["verdict"] == "missing" and "answer" not in v)
 
 
-@pytest.mark.parametrize("verdict, source, reads", [("accept", "real", "accept"), ("accept", "fixture", "missing"),
-                                                    ("reject", "fixture", "reject")])
-def test_the_period_checks_answer_a_remote_run_takes_is_held_to_the_source_its_piece_states(
-        tmp_path, verdict, source, reads):
+@pytest.mark.parametrize("verdict", ["accept", "reject", "error"])
+@pytest.mark.parametrize("source", ["real", "fixture"])
+def test_the_period_checks_answer_a_remote_run_takes_is_held_to_the_source_its_piece_states(tmp_path, verdict, source):
     """The row the record takes from the period check's answer where remote's report drops the network certifier, its
-    piece naming the report's node: an accept its piece's `SERVED` record says is a fixture's is missing, saying so,
-    with no bound and the run not of record; one it says is real is the run's own; a reject reads as it states."""
+    piece naming the report's node: an answer its piece's `SERVED` record says is a fixture's is missing whatever it
+    says, naming the answer, with no bound and the run not of record; one it says is real is the run's own and reads as
+    it answers (an answer that isn't a core answer is the row's error)."""
     rec = record(remote_dropped(tmp_path, verdict, PIECE_NAMES["the node"], source))
     v, src = rec["verdicts"]["the network certifier"], "pieces/certifier/answer.json"
-    assert v["verdict"] == reads and (reads != "missing" or v["why"] == brought("communication", src))
+    reads = verdict if source == "real" else "missing"
+    assert v["verdict"] == reads and (reads != "missing" or v["why"] == brought("communication", src, verdict))
     assert rec["of_record"]["holds"] is (reads == "accept") and ("K" in rec["bound"]) is (reads == "accept")
 
 
@@ -2966,8 +2990,9 @@ REFUSAL = "toy: the period check refused"
 
 def remote_dropped(tmp_path: Path, verdict: str, names: dict[str, str], source: str | None = None) -> Path:
     """A run of record under remote's product: its window report drops the network certifier, naming no server for it,
-    and its period check's answer under OUT/pieces/certifier is ``verdict``, its piece's records naming ``names`` and,
-    where given, its `SERVED` record the answer's ``source``."""
+    and its period check's answer under OUT/pieces/certifier is ``verdict`` (``error``: one that isn't a core answer,
+    which `served_verdicts.piece_row` reads as the row's error), its piece's records naming ``names`` and, where given,
+    its `SERVED` record the answer's ``source``."""
     out = accepted(tmp_path)
     f = out / "record" / "verdicts.json"
     report = json.loads(f.read_text())
@@ -2976,7 +3001,8 @@ def remote_dropped(tmp_path: Path, verdict: str, names: dict[str, str], source: 
     f.write_text(json.dumps(report))
     refusal = {"protocol": OR.NETWORK, "verdict": "reject", "reason": REFUSAL, "commitment": "ab" * 64, "public": None,
                "profile": None}
-    (out / OR.CASE.parent / "answer.json").write_text(json.dumps(answer(PUBLIC) if verdict == "accept" else refusal))
+    said = {"accept": answer(PUBLIC), "reject": refusal, "error": {"protocol": OR.NETWORK, "verdict": "accept"}}[verdict]
+    (out / OR.CASE.parent / "answer.json").write_text(json.dumps(said))
     for name, server in names.items():
         stated = {"source": source} if source and name == SV.SERVED else {}
         (out / OR.CASE.parent / name).write_text(json.dumps({"server": server} | stated))
