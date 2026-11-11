@@ -108,7 +108,7 @@ OK = 'CHECK = Tool(name="check", produces=["check/v1"]'
 #: main's own layout: `preflight` after `merge_requires`
 MAINS = ('CHECK = Tool(name="check", version="1", command=["uv", "run", "--locked", "--extra", "torch-cpu", "python", '
          '"tools/verity/check/check.py"],\n             produces=["check/v1"],\n'
-         '             merge_requires={"lean-agreement": ["verity/protocols/flock/prover/", "!README.md", "!PROTOCOL.md"]},\n'
+         '             merge_requires={"lean-agreement": ["verity/ml/flock/", "!README.md", "!PROTOCOL.md"]},\n'
          '             preflight=["tools/verity/check/preflight.py"])\n')
 
 

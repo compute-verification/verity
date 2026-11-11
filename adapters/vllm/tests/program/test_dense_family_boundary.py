@@ -21,7 +21,7 @@ FAMILY = ("dense", "act", "boolean_dense", "boolean_dense_norm", "boolean_norms"
 READS = ("prims", "b1", "sampling", "value_inputs", "tables")
 THIRD_PARTY = ("numpy",)
 #: the catalog, where the layout move put core's Definitions and silicon models
-CATALOG = "verity.circuits"
+CATALOG = ("verity.circuits", "verity.definitions.circuits", "verity.definitions.ops", "verity.definitions.silicon")
 #: `evidence.json`'s ids, read with the standard library only
 EVIDENCE = "verity.definitions.evidence"
 MOVED = ("verity_vllm.properties.difftests.rope_difftest", "verity_vllm.properties.difftests.rope_gptj_difftest",
@@ -61,7 +61,7 @@ def _foreign(mod: str, names: tuple[str, ...]) -> list[str]:
         return [f"{REGISTRY}.{x}" for x in names if x not in allowed]
     if mod.startswith(REGISTRY + "."):
         return [] if mod[len(REGISTRY) + 1:].split(".")[0] in allowed else [mod]
-    if top in sys.stdlib_module_names or top in THIRD_PARTY or _core(mod) or mod in (CATALOG, EVIDENCE) or mod.startswith(CATALOG + "."):
+    if top in sys.stdlib_module_names or top in THIRD_PARTY or _core(mod) or mod in (*CATALOG, EVIDENCE) or mod.startswith(tuple(c + "." for c in CATALOG)):
         return []
     return [mod]
 
