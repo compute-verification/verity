@@ -1,7 +1,7 @@
 """The response tie's proof block: one response row of the network certifier's content rows (`content_rows`)
 computed, as the proof block's gates, from the compute side's committed row of the same connection's ids and the
-network certifier's end row of it. Nothing here is in a Spec, and no table holds the rows it reads and returns:
-`content_rows` has their formats alone.
+network certifier's end row of it. Nothing here is in a Spec or proved, and no table holds the rows it reads and
+returns: `content_rows` has their formats alone.
 
 **One proof block a connection** (`ResponseTie`), in one of two forms by its class (the static STOP). It reads
 ``egress``, the compute side's committed row of the O ids it served the connection, O its class's size; in a stop
@@ -38,13 +38,14 @@ So in either form an end row whose class is neither 0 nor 1 is refused.
 
 **Where a check fails** o0 is 0 and the count word of o1 is all ones (`content_rows.NO_COUNT`), a count no response
 row has, since a row's count is at most its O ids. So no row a refused block returns is one the network certifier
-signed, and the block is sound where nothing holds o0 to `ACCEPT`: a statement that registers o1 as a read of the
-signed row opens its root on no refused input. The ids of such a row are still what the gates compute (`outputs`
-gives the same).
+signs, and the block is sound where nothing holds o0 to `ACCEPT`: a statement that registers o1 as a read of the
+signed row opens its root on no refused input. That rests on the network certifier signing only rows of the form
+(`trusted-host`) and on the commitment binding its row. The ids of such a row are still what the gates compute
+(`outputs` gives the same).
 
 **The gates**, with k = log2 O. The count's low k bits and whether it is O or more give the comparison of every
-position p below O with the count (`_prefix`): the half of p's bits above against the count's and the half below
-against the count's, each half one AND a position less its bits (`_below`), and one AND a position to join them.
+position p below O with the count (`_prefix`): the upper half of p's bits against the count's and the lower half
+against the count's (`_below`, 2^w − w − 1 ANDs for a half of w bits), and one AND a position to join the two.
 One AND an id bit then keeps the ids below the count, and the count word takes one OR a bit. The checks are an OR
 over the end row's bits, the count's comparison with O, and in a stop class the finish's three bits.
 
