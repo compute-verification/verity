@@ -2,3 +2,35 @@
 VERSION, which every record carries."""
 
 VERSION = "4.19.0"
+#: a job's exit status when it was told to stop (SIGTERM) and left its state: sysexits' "temporary failure, try again".
+#: Nothing reads it, since what stops a job may report a status of its own (a lease out of time, `timeout`'s 124): a
+#: stop is read from the job's record
+STOPPED = 75
+#: a record's `stopped` when the job was told to stop: the record is the stop's (`stop_record`), not the job's last.
+#: A job that stops itself past its budget says by how many seconds instead, in the record it ends with
+TOLD = "told to stop"
+#: a job's record, `run.json`
+SCHEMA = "training-slowdown/run/v1"
+#: a job past its budget's minutes by this factor is stopped at its next step
+BUDGET_SLACK = 1.2
+#: a job's `--continues` when whoever starts it found no state for it to continue from
+NOTHING = "nothing"
+#: a record's `no_state`: why a job given a state directory keeps no state in it. What a checkpoint hands out under
+#: a route's `output` is the output model, and what that route carries from step to step beside its weights (an
+#: average, an adapter) is in no state dict the harness keeps
+NO_STATE = ("the route has an `output`: its checkpoints hand out the output model, not what its next step reads, so "
+            "the job keeps no state, and told to stop it starts again from θ")
+
+
+def stop_record(seed: int, split: str) -> dict:
+    """The record of a run of the job of `seed` and `split` that was told to stop: whose it is, and that it was
+    (`stopped`: `TOLD`). It holds no step and no checkpoint and is invalid, so nothing scores it; what the job had
+    computed is in its state, where it keeps one. The job adds why it keeps none (`no_state`: `NO_STATE`) once its
+    route's process has said so."""
+    return {"schema": SCHEMA, "training_slowdown": VERSION, "seed": seed, "split": split, "stopped": TOLD,
+            "steps": [], "checkpoints": [], "invalid": ["the job was told to stop before its last step"]}
+
+
+def told(record: object) -> bool:
+    """Whether `record`, a `run.json` as read, says its job was told to stop."""
+    return isinstance(record, dict) and record.get("stopped") == TOLD

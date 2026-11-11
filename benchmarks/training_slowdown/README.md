@@ -12,9 +12,11 @@ measures bumps `VERSION` (`training_slowdown/__init__.py`), which every record c
 
 | module | what it does |
 |---|---|
-| `run.py` | one job of an attack config: `Harness`, what a route's code is counted inside, the route loop (`train`) and the record's trace (`trace_step`, `retrace`); `block_c`, a start's c |
+| `run.py` | one job of an attack config: `Harness`, what a route's code is counted inside, the route loop (`train`) and the record's trace taken again (`retrace`); `block_c`, a start's c |
+| `traced.py` | a config's step as the capture measures it: the trace a job records (`trace_step`) and, with the capture's graph, what the library reads (`traced_step`) |
 | `config.py` | an attack config: its schema, its digest and its jobs (`Job.label`), each refusal by name |
-| `sandbox.py` | the training job's sandbox: namespaces with no network and an empty directory over each final set (`enter`), and what a process can still reach of either (`refusals`) |
+| `screen.py` | the screen of a route's source: the names a route may not contain (`FORBIDDEN`), read before the route is imported |
+| `sandbox.py` | the training job's sandbox: namespaces with no network and an empty directory over each final set, over /run and over the user's tmux directory (`enter`), and what a process can still reach of them (`refusals`) |
 | `routes/` | the routes a config names, and the route contract (`routes/__init__.py`); `subset`, the parameters a pattern names trained with the optimizer its `opt` dial names (AdamW, SGD, Lion, Adafactor, Muon, Shampoo; the ones torch lacks in `_optimizers`), E the tensors in full or their deltas in codes; `ema`, `subset`'s step with the output an exponential average of the weights; `lora`, the start frozen and a low-rank adapter trained beside each matrix a pattern names, the output the start with the adapters merged in |
 | `flops.py` | `Counter`, the dispatch-mode count of every op's multiply-adds and their provenance; `guard_exits`, token data read out of torch; `flags`, work the count can't vouch for; `forward_macs_per_token` |
 | `opnames.py` | the op-name sets the counter, the capture and the gate prices share |
@@ -28,8 +30,8 @@ measures bumps `VERSION` (`training_slowdown/__init__.py`), which every record c
 | `calculator.py` | the slowdown calculator (`verity/protocols/inference_only/rho`) as this package reads it: a fixed policy's numbers, the fleets and periods a figure is presented over, and the bound of record |
 | `counterexample.py` | a run's counterexample families: their writer and the sampled bit-for-bit rebuild check |
 | `codecs/` | update codes: identity, low rank, sparse mask, quantized delta, scaled quantized delta, seed replay and their composition |
-| `starts.py`, `starts.toml` | the starts registry: each start by its store artifact, its files' sha256, its shape, C0 and loss, and its data's pins; `load` reads an installed start and checks it |
-| `data.py` | a start's data: the training stream (`Stream`, by the job's data seed) and the held-out sets (`held_out`: the search pool and the final set), checked against the registry; the search slice from a live coin (`sample_slice`) |
+| `starts.py`, `starts.toml` | the starts registry: each start by its store artifact, its files' sha256, its shape, C0 and loss, and its data's pins; `load` reads an installed start and checks it; `parts_read`, the parts of the stream its start.json names as read by its own training |
+| `data.py` | a start's data: the training stream (`Stream`, by the job's data seed; the fresh stream, without the windows of the parts a start read, `read_windows`) and the held-out sets (`held_out`: the search pool and the final set), checked against the registry; the search slice from a live coin (`sample_slice`) |
 | `evaluate.py` | the harness's evaluator: a checkpoint's bits per byte on the job's split, the search pool's paired with θ on the same slice |
 | `model.py` | the starts' architecture, the lf dense decoder |
 
@@ -58,7 +60,7 @@ longer has two operands the update reaches. Frozen layers (`last-blocks`) leave 
 
 The command prints one row an entry (every entry, or the ones named): the share of the start's parameters its step
 trains, its slowdown under its policy and what binds. It trains nothing. It builds the entry's model at the start's
-shape, traces its step on a CPU as a job does after its last step (`run.traced_step`, on fake tensors), and reads the
+shape, traces its step on a CPU as a job does after its last step (`traced.traced_step`, on fake tensors), and reads the
 calculator's bound of record on the traced step (`calculator.bound`): the least slowdown of any partition of that
 step into the policy's blocks, on the products whose two operands both depend on the update. `trains` is read from
 the trace, the parameters the step writes over the start's: an entry that trains less charges fewer products, so its
@@ -77,19 +79,66 @@ weight then costs at most E's bits a trained weight, which only a run's record h
 verity bench training-slowdown NAME|CONFIG.toml [--dry-run] [--local [--root DIR] | --on MACHINE [--pool NAME]] \
     [--weights]
 python -m training_slowdown.run --config CONFIG.toml --seed 0 --split search|final --out OUT [--starts-root DIR] \
-    [--device cuda] [--keep-weights]                    # one job
+    [--device cuda] [--keep-weights] [--state DIR]      # one job
 python -m training_slowdown.run --retrace RUN_JSON --out OUT   # a record with its trace taken again
 python -m training_slowdown.capture.circuit STEP.npz    # a saved step circuit's quantities
 python -m training_slowdown.gates [--check]             # gates per multiply-add by op; --check compiles the Definitions
 ~~~
 
 An attack is a config of `attacks/` (`config.py`'s docstring has the schema): a start, a route and its dials, the
-budget, the seeds, and what the grade reads, the target gain, the policy (`console`, policy.py's rule, or a
+budget, the seeds, the windows it asks for where it asks, and what the grade reads, the target gain, the policy (`console`, policy.py's rule, or a
 `[policy.*]` table of `verity/protocols/inference_only/rho/data`) and the honest config. The command (`run.py` here) expands a config and its honest config into
 jobs, one per seed and split, each labelled in the store `training-slowdown=<digest>/<seed>/<split>`, and runs the ones
 its labels lack: on the queue (kind `training-attack`, `infra/cluster/kinds/training.toml`), on one machine with `--on`,
-or here, one after another, with `--local`. It exits 0 when every job has its record, 3 while one is pending and 1 when
-one failed; a failed job is never run again.
+or here, one after another, with `--local`. It exits 0 when every job has its record, 3 while one is pending or
+stopped and 1 when one failed; a failed job is never run again. A job's run gets the time its config's budget gives
+it (`budget.minutes`, the job's own limit over every run it continues in; without it, the kind's). A queued job
+writes nothing into the tree it runs from, which every run of its commit shares: its Python environment is the
+run's own, built by `uv sync --frozen` in a directory the job makes under /tmp (`UV_PROJECT_ENVIRONMENT`), which the
+job's shell removes when the job ends, stopped or not.
+
+A stopped job continues, unless its route has an `output` (`ema`, `lora`): a job of such a route keeps no state, since
+its checkpoints hand out the output model and not what its next step reads, says so in its record (`no_state`), in
+the record of its stop and on stderr, and told to stop starts again from θ. After each checkpoint but the last any
+other job keeps what continuing needs in its state directory
+(`--state`): the model, the optimizers' state, the stream's position, the generators, and the record so far with its
+scores and its clock. Told to stop (SIGTERM: an eviction, or the end of its run's time) it first writes a `run.json`
+that says so (`stopped`: "told to stop", with no step or checkpoint), then ends the route's process and leaves the
+state. The command reads a stop from that record and never from the run's exit status, which is whatever stopped the
+job reports (a lease out of time: `timeout`'s 124, whatever the job's own): a run that didn't end with 0 is stopped
+when its record says so, and failed when it holds no record or one that doesn't. A job told to stop before its own
+process is up has written none, and is failed. The command's next run starts a stopped job again, and the job
+continues from the state when it is its own (the same
+config digest, seed, split and `training_slowdown` VERSION, a model that hashes to the record's last checkpoint) and
+refuses any other, naming what differs. The job's own process states in the record so far, for the segment that
+kept the state, the SHA-512 of each of its parts (the model, the optimizers' state, the stream's position, the
+generators); the job that continues hashes them again, in the state directory and as the route's process holds them
+before it imports the route, and refuses a state a part of which hashes to anything else. That record lies beside
+the tensors, so the command ties it to the stopped run's record on the store, which no job writes: it tells the
+job the sha256 the store lists for that record's `state.json` (`--continues`), or that it found none, and the job
+continues from no other state (a state on a node's disk has no such copy, and none is checked). The record lists
+the segments
+the job ran in, and its count is their sum: every step once, and each segment's `build`. What a stopped segment
+computed after its last kept checkpoint is run again and is in no record. A state is a cache: the command keeps it
+with the stopped run's output on the store, the next run fetches it on whichever machine it gets (`NODE_STATE` in
+`run.py` here places it on the node's disk instead), and losing it costs a start from θ. The state directory is
+hidden from the route's process as a final set is, and only the job's own process writes it. A state is at most three
+times its model (the weights and two buffers of the optimizer for each), and a run holds three states at once while
+it keeps one, and a fourth, the store's own copy, when it fetched the one it continues from: the command asks the
+queue for that much disk from the start's parameters, and 20 GB for the rest (`run_disk_gb` in `run.py` here).
+
+Which windows of the start's data a job is served is the harness's, and a config's to ask for, never a route's. By
+default a job is served every window, in its seed's order. A config with `windows = "fresh"` is served that order
+without the windows the start's own training read: every window of every part of the stream the start's `start.json`
+names (`provenance.data.parts`, each part by the sha256 the stream's manifest lists it under), which is more than
+the start read where its training stopped inside a part, and never less. The job refuses the config, saying what to
+write where, on a start whose `start.json` names no part or names one the stream doesn't hold, and where fewer
+windows are fresh than a step takes. Its record states what it was served (`windows`): the parts left out, by
+sha256 with the ids of their windows, the ids of the windows of each step (a window's id is its place in the stream,
+part by part in the manifest's order), and how many times the fresh windows ran out and their order started again,
+so whether a job read a window its start read is a comparison of ids. A stopped job that continues is served the
+windows the unbroken job is, and its record states them over every segment. `windows` is in a config's digest only
+where the config asks, so a config that doesn't is the job it was, under the same label.
 
 A job trains the config's start along its route and scores each checkpoint on its split. A route is a module of
 `routes/` with `VERSION`, `DIALS`, `build`, `step` and `plan` (the route contract, `routes/__init__.py`); the harness
@@ -97,16 +146,23 @@ owns the loop, the batches, the checkpoints and each checkpoint's E, the weights
 route's plan. A checkpoint's output model, the one scored, is what E rebuilds from θ: the trained weights under a
 plan that keeps them whole, and the model the kept bits give under one that keeps less. Everything a route computes
 through torch is counted; the harness's own work (loading, evaluating, encoding) isn't. A route that names anything of `training_slowdown` but the codecs and the model,
-or a route around the dispatcher (`run.FORBIDDEN`), is refused, and one that uses an op the counter can't price, reads
+or a route around the dispatcher (`screen.FORBIDDEN`), is refused, and one that uses an op the counter can't price, reads
 token data out of torch, starts a thread or a process, or imports a module the screen refuses makes its run invalid
-(`run.py`'s docstring has the screen).
+(`screen.py` has the screen).
 
 A route's code runs in a process of its own, inside the job's sandbox (`sandbox.py`): no network interface is up and
-each registered final set's directory is empty there. That process stops before it imports the route if it finds
-either reachable, or holds a capability that could undo them, as root's does, so on a machine that can't make the
+each registered final set's directory, and the job's state directory, is empty there. So are /run and the directory
+of the user's tmux server, where the sockets are through which a process has another started outside the sandbox (the
+user's systemd manager, its session bus, tmux). That process stops before it imports the route if it finds
+any of them reachable, or holds a capability that could undo them, as root's does, so on a machine that can't make the
 sandbox a job fails with the reason and trains nothing. The
 job's own process reads the held-out split and scores each checkpoint's state as the route's process hands it out;
-no score goes back in. The sandbox hides the paths the registry names and nothing else of the file system.
+no score goes back in. Where the job's run holds a key to the store (`research run --store-read`, which a job that
+continues fetches its state with), the route's process gets none of it: it is started without the names the key and
+the store's configuration arrive under (those that start `AWS_`, and `RESEARCH_STORE_CONFIG`), and the directory the
+configuration is in, where the key lies in a file beside it, is hidden as well. The job's own process and its shell
+keep the key. The sandbox hides those paths and nothing else of the file system: a socket at another path stays
+reachable.
 
 After its last step a job traces its route's step once, outside the count, and its record's `trace` holds what the
 capture measures of it for the grade: the token axes, the forward's updated MAC nodes, and the product rows unpriced

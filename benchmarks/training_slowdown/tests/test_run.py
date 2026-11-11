@@ -16,6 +16,7 @@ from training_slowdown.counterexample import check
 from training_slowdown.data import Stream
 from training_slowdown.evaluate import Evaluator
 from training_slowdown.model import LM
+from training_slowdown.traced import TRACED_STEPS, trace_step
 
 V, D = 32, 16
 
@@ -213,6 +214,8 @@ def test_the_route_loop_trains_scores_and_encodes_from_the_config(ran):
     assert rec["invalid"] == [] and rec["sandbox"] == {"interfaces": {"lo": False}, "final_sets": {final: "empty"}}
     assert rec["label"] == f"training-slowdown={cfg.digest}/0/search"
     assert rec["config"] == json.loads(json.dumps(cfg.record())) and rec["route"]["name"] == "subset"
+    # a config that doesn't ask for fresh windows is served every window, and its record says nothing of them
+    assert "windows" not in rec and "windows" not in rec["config"]["run"]
     assert len(rec["steps"]) == 3 and [cp["step"] for cp in rec["checkpoints"]] == [0, 1, 2]
     for cp in rec["checkpoints"]:
         assert cp["score"]["split"] == "search" and cp["bpb"] == cp["score"]["bpb"]
@@ -280,7 +283,7 @@ def test_the_job_traces_its_routes_step(ran):
     assert set(tr) == {"capture", "capture_code", "torch", "step", "axes", "tokens", "order", "updated", "rows", "k",
                        "p_match", "at", "elementwise_products", "data_dependent", "carried_scalars", "circuit"}
     assert (tr["capture"], tr["capture_code"], tr["torch"]) == (products.CAPTURE, VERSION, torch.__version__)
-    assert tr["step"] == 1 and len(rec["steps"]) == run.TRACED_STEPS
+    assert tr["step"] == 1 and len(rec["steps"]) == TRACED_STEPS
     assert tr["axes"] == {"batch": 2, "seq": 1024} and {s["tokens"] for s in rec["steps"]} == {tr["tokens"]} == {2048}
     assert tr["data_dependent"] == tr["carried_scalars"] == [] and tr["k"] == policy.CONSOLE[1]
     assert sorted(map(int, tr["at"])) == sorted(set(products.DIAL_K) - {int(tr["k"])})
@@ -313,7 +316,7 @@ def test_the_traced_step_has_a_step_before_it_where_the_run_has_one(tmp_path, st
     cfg = config.load(write_config(tmp_path / "a.toml", budget={"steps": steps, "batch": 2}),
                       starts.registry(tiny_registry(tmp_path / "reg")))
     route = config.route(cfg.route)
-    tr = run.trace_step(cfg, route, *route.build(cfg.start.shape, cfg.dials), "cpu")
+    tr = trace_step(cfg, route, *route.build(cfg.start.shape, cfg.dials), "cpu")
     assert tr["step"] == traced
     assert (tr["circuit"]["affected_share"] > 0) == (tr["circuit"]["u1_bits"] > 0) == (steps > 1)
 
@@ -331,7 +334,7 @@ def test_what_a_routes_output_computes_is_traced_and_charged_with_its_step(tmp_p
         return model.state_dict() | {"blocks.0.wo.weight": b.w_gate.weight.T @ b.w_up.weight}
 
     def trace(r):
-        tr = run.trace_step(cfg, r, *route.build(cfg.start.shape, cfg.dials), "cpu")
+        tr = trace_step(cfg, r, *route.build(cfg.start.shape, cfg.dials), "cpu")
         return tr, [x for x in tr["rows"] if x["phase"] == "forward" and not x["token_dims"]]
 
     (bare, no_rows), (traced, rows) = trace(route), trace(SimpleNamespace(step=route.step, output=output))
@@ -352,7 +355,7 @@ def test_a_weight_is_passed_at_the_updates_width_only_among_the_runs_first_steps
                                    dials={"trainable": "blocks.0.w_*", "lr": 1e-2, "opt": "muon"}),
                       starts.registry(tiny_registry(tmp_path / "reg")))
     route = config.route(cfg.route)
-    tr = run.trace_step(cfg, route, *route.build(cfg.start.shape, cfg.dials), "cpu")
+    tr = trace_step(cfg, route, *route.build(cfg.start.shape, cfg.dials), "cpu")
     read = [r["widths"] for r in tr["rows"] if r["phase"] == "forward" and r["affected"][1]]   # each reads a weight
     assert read and all(w == [32, width] for w in read)
 
@@ -401,7 +404,7 @@ def test_a_step_the_capture_refuses_is_recorded_as_refused(tmp_path):
             if float(model(rows[:, :-1]).sum()) > 0:
                 route.step(model, rows, optimizers, dials, t, n)
 
-    tr = run.trace_step(cfg, Branching, model, optimizers, "cpu")
+    tr = trace_step(cfg, Branching, model, optimizers, "cpu")
     assert set(tr) == {"refused"} and set(tr["refused"]) == {"reason", "op", "message"}
     assert tr["refused"]["reason"] == "dynamic_control_flow" and "reads a tensor's value" in tr["refused"]["message"]
 

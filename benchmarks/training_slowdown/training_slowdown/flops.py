@@ -411,6 +411,11 @@ def guard_exits() -> None:
         setattr(torch.Tensor, name, exit_)
 
 
+def structure_id(struct: dict) -> str:
+    """The name a record's `structures` holds a step's structure (its updated nodes and its log) under."""
+    return hashlib.sha256(json.dumps(struct, sort_keys=True).encode()).hexdigest()[:16]
+
+
 def leaked(step: dict) -> bool:
     """Whether a step's record shows token data read out of torch at one value or more per token."""
     return step.get("exited", 0) >= max(step["tokens"], 2)
@@ -418,14 +423,16 @@ def leaked(step: dict) -> bool:
 
 class Counter(TorchDispatchMode):
     """See the module docstring. `register(model)` names θ's weights; `begin_step`/`end_step` bound a step; work outside
-    any step is counted in step -1 (setup)."""
+    any step is counted in step -1 (setup). A counter that continues a job counts its own steps from `first` on, and
+    digests under the job's `key`."""
 
     def __init__(self, theta: dict[str, torch.Tensor] | None = None, *, digests: bool = True,
-                 clock=time.perf_counter, cpu_clock=time.process_time):
+                 clock=time.perf_counter, cpu_clock=time.process_time, first: int = 0, key: bytes | None = None):
         super().__init__()
         self.theta_cpu = theta or {}
         self.digests = digests
-        self.wdigest = KeyedDigest(os.urandom(16)) if digests else None
+        self.wdigest = KeyedDigest(key or os.urandom(16)) if digests else None
+        self.first = first
         self.clock, self.cpu_clock = clock, cpu_clock
         self.theta_ptr: dict[int, str] = {}
         self.held: dict[int, torch.Tensor] = {}
@@ -450,6 +457,12 @@ class Counter(TorchDispatchMode):
         self._events = None
 
     # -- registration and steps
+
+    @property
+    def done(self) -> int:
+        """The index of the next step to end: the steps a job ran before this counter began (`first`, a job that
+        continues from a kept state) and this counter's own."""
+        return self.first + len(self.steps)
 
     def register(self, named: dict[str, torch.Tensor]) -> None:
         """Name θ's weights by the live tensors that hold them (a model's `state_dict(keep_vars=True)`), each of which must
@@ -519,7 +532,7 @@ class Counter(TorchDispatchMode):
         """Start the next step; work since the last step ended is the new step's."""
         self._close(self.cur)
         if self.cur is self.setup:
-            self.cur = Step(len(self.steps))
+            self.cur = Step(self.done)
         self._reset_tags()
         self._open(self.cur)
 
@@ -535,7 +548,7 @@ class Counter(TorchDispatchMode):
                         self.epoch[ptr] = self.epoch.get(ptr, 0) + 1
         self._resolve(self.cur)
         self.steps.append(self.cur)
-        self.cur = Step(len(self.steps))
+        self.cur = Step(self.done)
         self._reset_tags()
         self._open(self.cur)
 
@@ -846,12 +859,12 @@ class Counter(TorchDispatchMode):
     def record(self) -> dict:
         """The run's count: totals, per-step records with their structures deduplicated, timings and flags."""
         structures, steps = {}, []
-        tail = self.cur if self.cur is not self.setup else Step(len(self.steps))
+        tail = self.cur if self.cur is not self.setup else Step(self.done)
         for s in [self.setup, *self.steps, tail]:
             self._resolve(s)
             struct = {"updated": sorted(s.updated, key=lambda u: (u[1], u[0])),
                       "log": sorted([list(k) + v for k, v in s.log.items()])}
-            sid = hashlib.sha256(json.dumps(struct, sort_keys=True).encode()).hexdigest()[:16]
+            sid = structure_id(struct)
             structures[sid] = struct
             steps.append({"step": s.index, "tokens": s.tokens, "macs": s.macs, "matmul_macs": s.matmul_macs,
                           "elementwise_macs": s.elementwise_macs, "approx_macs": s.approx_macs, "by": s.by,
