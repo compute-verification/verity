@@ -1,7 +1,8 @@
 """conftest.py's catalog rules, in a pytest of their own over a copy of it: a process builds circuit-check's catalog only for a
 selected test that asks for it, such a test is marked slow (so `--quick` builds none), and without it `targets.suite` and
 `targets.catalog` fail by name rather than build one; handed records (`CIRCUIT_CHECK_RECORDS`) that don't count fail the session
-by name rather than build one."""
+by name rather than build one, and records nobody handed that don't count end the plan at the first one, so that the session's
+one build apart makes the catalog and this process builds no binding."""
 from __future__ import annotations
 
 import os
@@ -58,6 +59,30 @@ PLANS = {
                '"_x_roots", UN.key(("syn#_x_roots",), 0), []))', "syn#_x_roots's record doesn't count"),
 }
 
+#: a catalog test over records nobody handed, of which a binding's record misses: a plan that goes on past the miss is where
+#: `units.plan` builds that binding in this process, and the session's build apart is a stub that says it made the catalog
+UNHANDED = '''
+import conftest
+import pytest
+
+from circuit_check import units as UN
+
+
+def _plan(cache, repo, *a, **k):
+    UN._lookup(cache, repo, UN.Entry(("syn#_x_roots",), "_x_roots", "_x_roots", UN.key(("syn#_x_roots",), 0), []))
+    raise AssertionError("the plan went on past a record that doesn't count, to build its binding in this process")
+
+
+UN.plan = _plan
+conftest._apart = lambda shared, jobs: conftest.Catalog(conftest.Suite([], lambda fid: None), {}, lambda fid: None,
+                                                        "built apart (a stub)", set())
+
+
+@pytest.mark.slow
+def test_marked(suite):
+    assert conftest._BUILT[0].how == "built apart (a stub)"
+'''
+
 
 def _session(tmp_path: Path, tests_py: str, env: dict | None = None) -> subprocess.CompletedProcess:
     (tmp_path / "pyproject.toml").write_text(PYPROJECT)
@@ -84,3 +109,9 @@ def test_handed_records_that_dont_count_fail_the_session_by_name_before_any_test
     assert r.returncode == pytest.ExitCode.USAGE_ERROR, (r.stdout[-3000:], r.stderr[-3000:])
     assert f"CIRCUIT_CHECK_RECORDS={records} was handed, and {why}" in r.stderr, r.stderr[-3000:]
     assert "passed" not in r.stdout, r.stdout[-3000:]
+
+
+def test_records_nobody_handed_that_dont_count_end_the_plan_before_this_process_builds_a_binding(tmp_path):
+    env = {k: v for k, v in os.environ.items() if k != "CIRCUIT_CHECK_RECORDS"}
+    r = _session(tmp_path, UNHANDED, {**env, "HOME": str(tmp_path)})
+    assert r.returncode == 0 and "1 passed" in r.stdout, (r.stdout[-3000:], r.stderr[-3000:])
