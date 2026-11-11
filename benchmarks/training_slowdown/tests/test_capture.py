@@ -1,4 +1,4 @@
-"""`capture_step` / `capture_fn` / `capture_steps` on toy models against hand counts: every GEMM's MACs, phase and role
+"""`capture_step` / `capture_steps` on toy models against hand counts: every GEMM's MACs, phase and role
 as a multiset derived from the architecture alone, the upstream counts, φ and the cut, the token dims, a measured
 step's circuit among its neighbours, and the refusals."""
 from __future__ import annotations
@@ -11,7 +11,7 @@ import torch
 import torch.nn.functional as F
 
 from models import TinyLM, conv_net, lm_loss, lora, mlp
-from training_slowdown.capture import CaptureRefused, capture_fn, capture_step, capture_steps, phase, products
+from training_slowdown.capture import CaptureRefused, capture_step, capture_steps, products
 
 B, S, V, H, NH, I, L, R = 2, 4, 32, 16, 2, 32, 2, 2
 T = B * S
@@ -206,21 +206,21 @@ def test_transformer_mezo_forward_only():
             for p, z in zip(params, zs):
                 p.add_(z, alpha=eps)
             g = (l1 - l2) / (2 * eps)
-            with phase("update"):
-                for p, z in zip(params, zs):
-                    p.sub_(lr * g * z)
+            for p, z in zip(params, zs):
+                p.sub_(lr * g * z)
 
-    g = capture_fn(mezo, model, lm_batch())
+    g = capture_steps([mezo] * 3, model, lm_batch(), measured=1)
     one = Counter({("forward", "updated", T * H * V): 1})
     for _ in range(L):
         one += fwd_layer("updated")
     assert roles(g) == one + one
     assert macs_of(g, "producing") == 0
-    assert g.trained == g.updated == {n for n, _ in model.named_parameters()}
+    assert g.trained == {n for n, _ in model.named_parameters()}
     fwd = [m.upstream for m in g.matmuls if m.role == "updated"]
     assert fwd == [0, 0, 0, 2, 4, 5, 6, 7, 8, 8, 8, 10, 12, 13, 14, 15, 16] * 2   # the second pass reads no product of the first
     # the update is one 32-bit loss difference times a seeded direction
     assert g.cut_bits == 32 and g.beta == 32 / (g.updated_macs() / T)
+    assert g.formalism["grad_cut_bits"] == g.formalism["partial_cut_bits"] == 32 and g.formalism["state_bits"] == 0
 
 
 def test_a_step_that_reads_theta_alone_multiplies_nothing_updated():
@@ -320,7 +320,7 @@ def test_a_step_among_its_neighbours_is_the_step_alone_with_its_circuit():
     32 bits an element, the carried values no token op reads are AdamW's two moments, the update's profile ends at the
     block's weights at their 32 bits, and a token reads its id and its label."""
     model, opt = top_block()
-    alone = capture_fn(standard, model, lm_batch(), optimizers=opt)
+    alone = capture_step(model, opt, lm_loss, lm_batch())
     assert alone.circuit is None and alone.formalism is None
     g = capture_steps([standard] * 3, model, lm_batch(), measured=1, optimizers=opt)
     assert roles(g) == roles(alone) and g.structure()["updated"] == alone.structure()["updated"]
@@ -364,14 +364,11 @@ def widths(g) -> dict:
 def test_steps_taken_mid_run_read_the_runs_own_weights():
     """A step whose update is cast to 16 bits before it is added to a 32-bit weight. Among a run's first steps the
     measured step's weight is θ plus that update, which a block makes from the update alone, so the weight is passed
-    at the update's 16 bits. Mid-run the first captured step's weight is the run's own, a block needs it at its 32
-    bits, and the measured step's rows are the step's captured alone. The step's circuit is the same either way: the
-    gradient's cut is at the cast, 16 bits an element."""
+    at the update's 16 bits. Mid-run the first captured step's weight is the run's own, and a block needs it at its 32
+    bits. The step's circuit is the same either way: the gradient's cut is at the cast, 16 bits an element."""
     model, _ = top_block()
-    alone = products.raw_on_dial(capture_fn(narrowed, model, lm_batch()))
     first = capture_steps([narrowed] * 3, model, lm_batch(), measured=1)
     late = capture_steps([narrowed] * 3, model, lm_batch(), measured=1, mid_run=True)
-    assert products.raw_on_dial(late) == alone and products.raw_on_dial(first) != alone
     by_weight = {k: (a, b) for (k, a), b in zip(widths(first).items(), widths(late).values()) if a != b}
     assert by_weight and set(by_weight.values()) == {((32, 16), (32, 32))}
     assert late.formalism == first.formalism and late.formalism["grad_cut_bits"] == 16 * (4 * H + 4 * H2 + 2 * HI)
@@ -457,7 +454,7 @@ def test_refuses_item():
                 p.mul_(1 - lr)
 
     with pytest.raises(CaptureRefused) as e:
-        capture_fn(step, model, (torch.empty(4, 8),))
+        capture_steps([step], model, (torch.empty(4, 8),), measured=0)
     assert e.value.reason == "dynamic_control_flow" and "loss.item()" in e.value.where
 
 
@@ -495,7 +492,8 @@ def test_refuses_custom_kernel_without_fake():
 def test_refuses_custom_kernel_with_fake():
     model = mlp()
     with pytest.raises(CaptureRefused) as e:   # traced, but with no backward
-        capture_fn(lambda m, b, _o: torch.ops.te_test.opaque_faked(m(b[0])).sum().backward(), model, (torch.empty(4, 8),))
+        capture_step(model, torch.optim.SGD(model.parameters(), lr=0.1),
+                     lambda m, b: torch.ops.te_test.opaque_faked(m(b[0])).sum(), (torch.empty(4, 8),))
     assert e.value.reason == "custom_kernel" and e.value.op == "te_test.opaque_faked.default"
 
     def forward_only(m, b, _o):
@@ -503,19 +501,19 @@ def test_refuses_custom_kernel_with_fake():
             torch.ops.te_test.opaque_faked(m(b[0]))
 
     with pytest.raises(CaptureRefused) as e:   # in the graph: its products are not ATen ops
-        capture_fn(forward_only, model, (torch.empty(4, 8),))
+        capture_steps([forward_only], model, (torch.empty(4, 8),), measured=0)
     assert e.value.reason == "custom_kernel" and e.value.op == "te_test.opaque_faked.default"
 
 
 def test_refuses_cond():
     model = mlp()
 
-    def step(m, batch, _opts):
+    def loss(m, batch):
         h = m(batch[0])
-        torch.cond(h.sum() > 0, lambda x: x * 2, lambda x: x * 3, (h,)).sum().backward()
+        return torch.cond(h.sum() > 0, lambda x: x * 2, lambda x: x * 3, (h,)).sum()
 
     with pytest.raises(CaptureRefused) as e:
-        capture_fn(step, model, (torch.empty(4, 8),))
+        capture_step(model, torch.optim.SGD(model.parameters(), lr=0.1), loss, (torch.empty(4, 8),))
     assert e.value.reason == "dynamic_control_flow", e.value
 
 

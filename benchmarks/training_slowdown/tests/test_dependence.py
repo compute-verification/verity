@@ -10,7 +10,7 @@ import torch.nn.functional as F
 from torch import nn
 
 from models import LoRA, TinyLM, lm_loss, lora
-from training_slowdown.capture import capture_fn, capture_step
+from training_slowdown.capture import capture_step, capture_steps
 
 B, S, V, NH, L = 2, 4, 32, 2, 2
 T = B * S
@@ -161,9 +161,14 @@ def ef_batch():
     return torch.empty(N, D_IN), torch.empty(N, D_OUT)
 
 
+def second_of_three(step):
+    """The second of three such steps of one run: what its forward reads is the first's, and the third's reads its."""
+    return capture_steps([step] * 3, EF(), ef_batch(), measured=1, token_dims=[(0,), (0,)])
+
+
 def test_sign_update_with_error_feedback_is_one_bit_per_value():
-    g = capture_fn(sign_ef, EF(), ef_batch(), token_dims=[(0,), (0,)])
-    assert g.dependent == ["err", "fc.weight"] and g.sinks == ["fc.weight"]
+    g = second_of_three(sign_ef)
+    assert g.trained == {"fc.weight"} and len(g.sinks) == 1   # the next forward reads the new weight, never the error
     assert g.updated_macs() == N * D_IN * D_OUT
     # the sign bits and the scale: every path from the gradient to the new weight crosses them
     assert g.cut_bits == D_IN * D_OUT + 32 and sorted(b for _, b in g.cut) == [32, D_IN * D_OUT]
@@ -181,8 +186,8 @@ def momentum_through_a_copy(m, batch, _opts, lr=1e-3):
 
 
 def test_an_update_through_a_buffer_copied_onto_itself_reads_the_gradient():
-    g = capture_fn(momentum_through_a_copy, EF(), ef_batch(), token_dims=[(0,), (0,)])
-    assert g.dependent == ["err", "fc.weight"] and g.sinks == ["fc.weight"]
+    g = second_of_three(momentum_through_a_copy)
+    assert g.trained == {"fc.weight"} and len(g.sinks) == 1
     # the copy's source is the buffer, so the gradient reaches the new weight through it, at its 32 bits an element
     assert g.cut_bits == 32 * D_IN * D_OUT
 

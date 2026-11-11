@@ -73,14 +73,13 @@ import numpy as np
 import torch
 
 from training_slowdown.capture.circuit import ATTR, CARRIED, COMPUTED, OTHER_INPUT, RANDOM, TOKEN_INPUT, Net, StepCircuit, measure
-from training_slowdown.capture.trace import BACKWARD, PHASE, Capture, CaptureRefused
+from training_slowdown.capture.trace import BACKWARD, Capture, CaptureRefused
 from training_slowdown.flops import (ELEMENTWISE_NAMES, FUSED_OPTIMIZER_MACS, GATHERS, GEMM_LIKE, LINALG_NAMES, NOT_GEMM, SCALED_NAMES,
                            TOKEN_INDEX, _is_view, gather_macs)
 from training_slowdown.gates import kind_of, per_mac
 
 __all__ = ["CLASSES", "Matmul", "StepGraph"]
 
-aten = torch.ops.aten
 #: operand classes, highest first: a GEMM's weight is its highest
 CLASSES = ("updated", "registered", "gradient", "activation", "constant")
 _RANK = {c: i for i, c in enumerate(CLASSES)}
@@ -258,10 +257,6 @@ def _arg_nodes_of(args) -> list:
     return out
 
 
-def _width(dtype: str) -> int:
-    return _dtype_bits(getattr(torch, dtype))
-
-
 def _dtype_bits(dtype: torch.dtype) -> int:
     return 1 if dtype == torch.bool else dtype.itemsize * 8
 
@@ -304,13 +299,9 @@ class Matmul:
 
 
 def _phases(gm) -> dict:
-    """Each node's phase: a recorded program's (``meta["te_phase"]``, `trace.record_program`), else from the
-    `record_function` markers around it (module docstring of `trace`)."""
+    """Each node's phase, from the `record_function` markers around it (module docstring of `trace`)."""
     out, stack = {}, []
     for n in gm.graph.nodes:
-        if "te_phase" in n.meta:
-            out[n] = n.meta["te_phase"]
-            continue
         name = _pk(n.target) if n.op == "call_function" else ""
         if name == "_record_function_enter_new":
             stack.append((n, str(n.args[0])))
@@ -326,9 +317,6 @@ def _phases(gm) -> dict:
                 break
             if m.startswith("Optimizer."):
                 ph = "optimizer"
-                break
-            if m.startswith(PHASE):
-                ph = m[len(PHASE):]
                 break
         out[n] = ph
     return out
