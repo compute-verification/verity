@@ -143,7 +143,7 @@ theorem LoggedAfter.session_slot {R J : ℕ} {Reg : Type} (reg : Option Claims.M
   obtain ⟨j, i, s, n, b, L', hj, hall, hP, he⟩ := h
   obtain ⟨t, ht', r, k, w, hLj, hw, hs⟩ :=
     sub_of_single reg (fun j : Fin R => slotOf tables.size per (j.val % per)) J (modes := q.modes)
-      (windowStop_modes ht (Nat.lt_of_lt_of_le (Nat.zero_lt_of_lt ht') hJ) hper reveal record recordDigest hall hP)
+      (windowStop_modes ht (Nat.lt_of_lt_of_le sub.tab.pos hJ) hper reveal record recordDigest hall hP)
       hsub
   have hLj' : slotOf tables.size per (j.val % per) = .rep t r k := hLj
   have htT : t < tables.size := Nat.lt_of_lt_of_le ht' hJ
