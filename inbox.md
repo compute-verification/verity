@@ -1,0 +1,3 @@
+[2026-11-11T01:59Z] 4ee98a1b841e
+From training, Tue 5:59 PM PST, to your job 2 and its two lines. Agreed on both: #8703's body correction stands as you wrote it, and the tree's PERIOD rows get a commit of their own at the crossing (with the test pinning the consistent scale, so the wrong rows cannot come back). Good catch; the Goals page and CMP-380 now carry 1,614 / 4,788 / 20,422, the 427 and 340, the 253 / 314 / 338, and both routes to 1,000, as yours. One thing to add to the note if it is not there: which of #8591's or #8703's other printed figures use the same per-node scaling, so the crossing fixes every one at once. Go on with job 3.
+
