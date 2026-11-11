@@ -40372,3 +40372,117 @@ of its 8 suites done at 06:19Z), and #8406's two above.
 Still out, read 06:24Z `[run]`: #8406's records `7aba` (`security: check.py exit 0 in 3528 s`, no regeneration; on
 `security/Properties`, ETA 06:35Z) and guard `6e01` (suite passed; building the guard's two modules, ETA 06:55Z
 `[guess]`); #8368's quick tier `57d5` (1 of 8 suites passed, ETA 06:50Z `[guess]`).
+
+## BREAKEVEN → proofs coordinator, Wed 11 Nov 06:32Z: the second read of run A's nine figures, Q1–Q3, and #8568 not landed
+
+**All nine figures hold to the printed digit** on my own reader [run]. That is `breakeven_at_target.py` (notes `lanes/proofs/tools/`) over the fetched rows, not BENCHCROSS's read-offs. I launched nothing.
+
+The rows read:
+- A, `r20261111-052726-07b0`, rows sha256 `d66a7211…`, 360 rows, tree a5e4e56a11, 0 errors;
+- F, `art:0b61c581…`;
+- C, `art:4d1cb7d4…`;
+- ce3c's rows, `art:b86a2ce1…`, its `h8` rows;
+- S8's `mix.json`, `art:adca7a9a…`.
+
+Three of the explanations beside the figures don't hold. I set out each one in the question it bears on:
+- **The warm step.** Its 0.41% is the warm factor cutting the Lean verifier's seconds a statement. It is not prover seconds (Q1).
+- **"No effect".** For the three prover levers it means *not priced*. Benchmarks' rows are one prover a GPU, and they replace prover seconds after every lever (Q2).
+- **The "lever row".** It is (iii) with all six modelled levers at their P5 goals. It is not (iii) honest plus the sparse-MLA lever, because the lever file's volume is in every honest row (Q2).
+
+Run A has rows for the world's year and a datacenter's year only. Nothing gives the week or the month on the census of record.
+
+| # | figure (10% of total compute, λ 1.05, world year) | BENCHCROSS | mine | verdict |
+|---|---|---:|---:|---|
+| 1 | (i) honest; F, the reader's steady-state rate; C, the reader's rows | 5,735.4; 4,653.8; 20,679.1 GB | 5,735.4; 4,653.8; 20,679.1 | holds [run] |
+| 2 | (ii) honest | 4,043.8 | 4,043.8 | holds [run] |
+| 3 | (ii) honest at S8's β 0.05544106123672309, λ 1 | 3,846.200912527993 | 3,846.200912527993 | holds [run] |
+| 4 | (iii) honest | 4,027.3 | 4,027.3 | holds [run] |
+| 5 | the lever row | 3,224.5 | 3,224.5 | holds [run]; what it is: Q2 |
+| 6 | shares for 300 GB: (i), (ii), (iii), lever row | 110.49, 79.21, 78.91, 65.22% | 110.49, 79.21, 78.91, 65.22% | holds [run] |
+| 7 | the warm step (ii)→(iii); its "because"; on the planner's prices (old census, ce3c) | −0.41%; 99.97% of proving replaced; 11 strata reached; 8,697.5 → 2,459.2 | −0.408%; 99.97%; 11 of 33; 8,697.5 → 2,459.2 | the figures hold [run]; the mechanism doesn't (Q1) |
+| 8 | one lever left at its goal: templated check; replay over the lifetime; flat-column cut | 3,563.2 (−11.5%); 3,716.7 (−7.7%); 3,914.7 (−2.8%) | the same (−11.52, −7.71, −2.80%) | holds [run/derived] |
+| 9 | the prover at the 4x goal; four dense provers; the front run | no effect | 4,027.4; 4,027.3; 4,027.3 | holds [run]; it means unpriced (Q2) |
+
+More on the figures:
+- **Datacenter year** [run]: (i) 5,564.5, (ii) 4,057.7, (iii) 4,041.3, the lever row 3,217.2, F 4,595.0 and C 18,873.3 GB. All match BENCHCROSS's table.
+- **At S8's β, the other rows** [run]:
+  - (i) honest is 5,457.7 at λ 1 and 5,730.6 at λ 1.05;
+  - (iii) honest is 3,830.5 and 4,022.0;
+  - the lever row is 3,125.0 and 3,281.3, at a total of 9.902%.
+- **The control against S8 itself.** A's (ii) row has q 3.6857779827440166e-07, replay_sample 6554790752.561274 and bound_bits 30769607300223.94. S8's `mix.json` (sha256 `157cc3ef…`) has the same three values, digit for digit [run].
+- **ce3c, the old census, on the planner's prices** [run]: the world week, month and year are 8,717.9, 8,709.3 and 8,697.5 GB for (ii). For (iii) they are 2,462.7, 2,457.9 and 2,459.2, and for the lever row 1,963.7, 1,962.0 and 1,965.2.
+
+**Q1: is the warm factor acting on prover seconds only where no benchmarks row replaces them?**
+
+On prover seconds, yes, but it does not act only there.
+- **How it reaches the verifier** [read]:
+  - `scaled()` multiplies the planner's whole `fixed_seconds` by 0.25 (`servedcard_split.py` 48–49, A's `tools.tgz`).
+  - That figure already holds the Lean verifier's seconds a statement (`reprice.py` 310 at a5e4e56a11: `fixed += verify * v / CORE_PER_GPU`).
+  - The override wraps `scaled()` (`headline_mix_succ.py` 64). It replaces only the prover part and keeps `x.fixed − b.fixed`, the verifier's seconds ×0.25 (lines 91–106).
+  - So the factor cuts the verifier's seconds of all 33 warm-family strata, the 22 that have steady rows included.
+- **What the numbers say** [run/derived]:
+  - At the same β, prover seconds a token are 11,553.8919 in (ii) and 11,553.8005 in (iii): −0.0008%.
+  - Yet proving cost per unit q (`prove / q`) falls 0.4315%.
+  - So at least 99.8% of the 0.41% is the verifier's seconds being scaled.
+  - With the factor kept off the verifier, (iii) on measured prices equals (ii) to 0.1 GB.
+  - So (iii) honest on measured prices is the wrong row to read a warm gain from.
+
+**What a warm measured row is worth: nothing on top, because the measured rows are already warm.**
+- **How they were measured** [read]: fbdc is one of the runs labelled `run_of_record prove-glm53-flock-steady` by kernels. It is one long-running prover proving the same staged statement in "120 timed sessions", timed over a 118-session window, at K=1 with the GPU busy 0.374 (its `stdout.log`).
+- **Against cold single sessions** [derived]: the cold rows are the `proof_overhead` card (`art:aa8fed9b…`, benchmarks' `flock-single`). On the 8 warm-family types in both, the steady rows cost a median of 0.058 of the card's seconds a block, ranging from 0.026 to 0.28. This is confounded, because the statement sizes and prover versions differ.
+
+**Is there a measured warm row in benchmarks' labels, and what does the planner do with it?**
+- **Yes.** Benchmarks' labels hold 63 measured warm rows (`steady`), and 115 `family` rows derived from them.
+- **The planner reads none of them.** Nothing in a5e4e56a11's tree names them [run]; only BENCHCROSS's notes override applies them.
+- **The override ignores their verifier seconds** [run]. All 63 steady rows carry a measured `verifier_seconds`, but the override's docstring says "benchmarks' rows hold none" (lines 12–13).
+- **The planner's own measured warm rows are its server prices** (`reprice.py` 29, 139 and 248, applied at 262–266). (iii)'s 0.25 multiplies those a second time:
+  - 7 of the 13 warm families on the census of record have a server-priced stratum;
+  - on ce3c's (ii) at β 0.4, those families hold 13.08 of the warm families' 16.41 points of the pricing split [run].
+- **On the 63 steady strata, measurement goes against the warm estimate** [run]. The planner prices 9,396.3 prover-seconds a token in (ii) and 7,508.6 in (iii). Measured is 11,545.1, which is 1.23× (ii)'s price and 1.54× (iii)'s.
+
+**Q2: is 3,224.5 GB the right end of the priced path on measured prices?**
+
+No. A's lever row is (iii) with all six modelled levers at their P5 goals [run/read]:
+- its `sc_case` is `{"split": []}`, where (iii) honest has the six measured values;
+- `headline_world_succ.py` lines 10–11 and 43 define it so.
+
+Its whole −19.9% from 4,027.3 comes from the levers that act outside prover seconds:
+- the templated check and the flat-column cut, acting on the planner's modeled verifier seconds (`reprice.py` 304–305 and 308–309);
+- replay over the lifetime, which is outside pricing.
+
+It also carries the 0.41% verifier artifact. The prover levers are unpriced rather than worthless: all 178 benchmarks rows are `provers: 1` (`bench_prices.json`), and the override replaces prover seconds after every lever [run].
+
+The rows the path needs that the planner cannot build yet:
+- **More provers a GPU.** Steady-state proof-server rows at more than one prover a GPU: two and four dense provers, four elsewhere, under MPS. fbdc's GPU was busy 0.374 at one prover.
+- **The front run.** Rows with the front run beside device work.
+- **The 4x prover.** Rows on the prover at its 4x goal.
+- **The verifier at its goals.** The Lean verifier measured at the templated check's goal and with the flat-column cut. Benchmarks' 63 `verifier_seconds` are today's verifier, and the override does not read them.
+- **The 11 warm strata.** Rows for the 11 warm strata still on the planner's price, which hold 0.03% of proving.
+- **The lever's MACs.** The 128k lever's MACs, your (c), after #8568 lands.
+
+**Q3: which path should Daniel's table call the path, and how should each be labelled?**
+
+Call the measured-price path the path. It runs from (ii) honest at 4,043.8 GB, through (iii), which is the same because the warm step is zero on warm rows, to 3,224.5 GB with the verifier and replay goals.
+
+Its labels:
+- **Its start is modeled**, by benchmarks' rule that a total is measured only when every block type is measured at steady state (`benchmarks/prove/README.md` 25–28 at 6735b7d3d4) [read].
+  - Prover seconds are measured at steady state for 99.925% of proving time, at one prover a GPU.
+  - Family rows hold 0.047% and planner prices 0.028% [run].
+  - The Lean verifier's seconds are the planner's model.
+- **Its end, 3,224.5, is assumed.** It takes three goals that are not built (the templated check, the flat-column cut and replay over the lifetime), on rows at one prover a GPU.
+
+The 1,965 GB path (ce3c, on the planner's prices) should be labelled **assumed** and kept off "the path":
+- it is on the superseded census;
+- its 72% step from (ii) to (iii) is the 0.25 estimate, which the steady rows go against;
+- the estimate scales measured warm server prices a second time, and the verifier's seconds too.
+
+A run would put numbers on the corrected (iii) and lever row: the factor kept off the verifier's seconds and off server-priced strata. Say so and I'll launch it. I'd expect the lever row about 0.4% higher [guess].
+
+**Part 2.** At 06:28:11Z, `gh pr view 8568 --json state,mergedAt` gave `OPEN` with `mergedAt` null, at head `8fb2b94ee4`. So nothing ran for Part 2, I labelled nothing, and the plan of record's re-put waits for #8568.
+
+**Next.** Your 06:29Z section (TOP-400) is read. I start it now, after this read, on a new branch `cursor/proofs-headline-driver-<hex>` based at #8568's head `8fb2b94ee4b4`, and checkpoint in my note before I start and each hour. If #8568 lands meanwhile, I do the plan of record's re-put first.
+
+**To reproduce.**
+1. `research data fetch ART --to DIR`.
+2. `python3 ~/.research/notes/lanes/proofs/tools/breakeven_at_target.py DIR/out/rows.jsonl`; for ce3c, only its rows with `h8 == "h8"`.
+3. The field reads above take each row's `priced_by`, `split`, `sc_case`, `prove` and `q` at b10 0.05544106123672309, world year.
