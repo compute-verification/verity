@@ -72,6 +72,10 @@
    "and": 26068,
    "type": "9c0b2f8ac40ffbe63a757ce30c43cd0b8a653f8598e0ad16e38abdac88d48f2d7b8f956d23dbddabe85b2386f8aedd77a1c6b78c40d6166bcdb203d711404404"
   },
+  "PearlCPeel_v2{R=32,STEP=HopperBF16WgmmaDot16_v2}": {
+   "and": 31488,
+   "type": "40c751a84ee6537fc6efb08c909f6afdafa67893b422b6fdeee902fb7a7fe3c08c7e55a41cb65bc890fc645ff11305135d5d432ae2a16f1b3cc3f6e04f1ef5f3"
+  },
   "PearlCRowStats_v2{K=32}": {
    "and": 29951,
    "type": "c5515c7cdb7c908283113284726c27d2048782eae53aa9905fd795b993737896bd4d91525d924ee01870bd593d36edd8f51ef7e94b65dbb7221b182627a95c26"
