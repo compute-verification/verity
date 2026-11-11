@@ -25,8 +25,7 @@ from contextlib import contextmanager
 
 import torch
 
-from verity_vllm.engine import env as engine_env
-from verity_vllm.engine import hooks
+from verity_vllm.engine import env as engine_env, hooks
 from verity_vllm.program.frontend.dsv4_leaves import dsv4_attention_leaves
 from verity_vllm.program.frontend.marlin_moe_leaf import mxfp4_marlin_moe_leaf
 
@@ -87,7 +86,6 @@ def apply_target_profile(profile):
     `read_back_applied()` inside this context returns what vLLM now sees, and the driver refuses if that differs from the profile.
     Nesting is safe (LIFO restore)."""
     import importlib
-
     from vllm.platforms import current_platform
     from vllm.platforms.interface import DeviceCapability
     major, minor = profile.compute_capability
@@ -221,7 +219,6 @@ def read_back_applied() -> dict:
 def host_facts() -> dict:
     """The construction HOST (informational; not part of any identity): hostname, CUDA visibility, the host GPU's name."""
     import socket
-
     from verity_vllm import settings
     h = {"hostname": socket.gethostname(), "CUDA_VISIBLE_DEVICES": settings.raw("CUDA_VISIBLE_DEVICES"), "cuda_available": bool(torch.cuda.is_available()),
          "host_gpu": None}
@@ -332,10 +329,7 @@ def moe_ops_traced(model=None):
 def _moe_config_at_launch(fused_moe_module, h) -> None:
     """Under a declared launch batch, the Triton experts' tile config (`try_get_optimal_moe_config`, read at trace time from the
     token count) is the one for the launch's tokens, every module that imported it by name included."""
-    from verity_vllm.program.frontend.rules.vllm_bindings.observations import (
-        launch_batch_declared,
-        traced_launch_tokens,
-    )
+    from verity_vllm.program.frontend.rules.vllm_bindings.observations import launch_batch_declared, traced_launch_tokens
     if not launch_batch_declared():
         return
     original = fused_moe_module.try_get_optimal_moe_config
@@ -537,9 +531,7 @@ def fused_allreduce_rms_norm_leaf(model=None):
     The construction's ``TPStub`` carries those workload settings and authors the rank-ordered peer operands through its
     ``CollectiveBus``.  Calls outside that path keep vLLM's original fallback (ordinary all-reduce followed by the norm).
     """
-    from verity_vllm.program.frontend.rules.vllm_bindings.observations import (
-        traced_launch_tokens,
-    )
+    from verity_vllm.program.frontend.rules.vllm_bindings.observations import traced_launch_tokens
     home = sys.modules.get(_FUSED_AR_NORM_MODULE)
     original = getattr(home, _FUSED_AR_NORM_NAME, None) if home is not None else None
     if original is None or model is None:
@@ -592,12 +584,9 @@ def moe_gate_leaf(model=None, site=None):
         return
     if site is None:
         site = importlib.import_module(_LL_BF16_SITE)
-    from verity.definitions.registry.bf16_gemm_check import LL_MAX_M
-
     from verity_vllm.program.frontend.rules import vllm_iface  # noqa: F401  (registers the op)
-    from verity_vllm.program.frontend.rules.vllm_bindings.observations import (
-        traced_launch_tokens,
-    )
+    from verity_vllm.program.frontend.rules.vllm_bindings.observations import traced_launch_tokens
+    from verity.definitions.registry.bf16_gemm_check import LL_MAX_M
     cublas_tier = all(getattr(g, "allow_cublas_router_gemm", False) and not getattr(g, "allow_fp32_router_gemm", False)
                       and not getattr(g, "allow_bf16x3_router_gemm", False) for g in gates)
 
