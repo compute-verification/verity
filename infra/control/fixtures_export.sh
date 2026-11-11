@@ -1,15 +1,18 @@
 #!/bin/sh
 # Every 5 min: copy every fixture origin/main's fixtures/artifacts.json registers to the public export that nodes and pods fetch
 # fixtures from (`research data export`, the store README's export), so a newly registered fixture reaches it with nobody running
-# the export by hand. The export skips what the bucket already holds, so a pass with nothing new only HEADs. Code and registry
-# both come from a checkout of origin/main kept at /data/infra/fixtures-export-repo, fetched with the read-only deploy key.
+# the export by hand. The export never reads the bucket: each object is a conditional PUT (412 = already there), and the
+# export store's record of what landed keeps a pass with nothing new from sending anything. Code and registry
+# both come from a checkout of origin/main kept at /data/infra/fixtures-export-repo, fetched over https with verity-drive's App token (gh_app_token.sh).
 # r2.env's key reads the private store and writes the public bucket; it goes only into the environment.
 # Log: /data/infra/fixtures-export.log. The relay's `fixtures-public` monitor alerts when a registered fixture stays missing.
 LOG=/data/infra/fixtures-export.log
 REPO=/data/infra/fixtures-export-repo
 exec 9> /root/fixtures-export.lock
 flock -n 9 || { echo "$(date -u +%FT%TZ) another copy holds /root/fixtures-export.lock" >> "$LOG"; exit 0; }
-export GIT_SSH_COMMAND="ssh -i /data/state/secrets/verity-deploy -o IdentitiesOnly=yes -o StrictHostKeyChecking=accept-new -o UserKnownHostsFile=/data/state/secrets/known_hosts"
+export GIT_CONFIG_COUNT=2 GIT_CONFIG_KEY_0=url.https://github.com/compute-verification/verity.git.insteadOf \
+  GIT_CONFIG_VALUE_0=git@github.com:compute-verification/verity.git GIT_CONFIG_KEY_1=credential.helper \
+  GIT_CONFIG_VALUE_1='!/data/infra/gh_app_token.sh git'
 export GIT_TERMINAL_PROMPT=0 LC_ALL=C.UTF-8
 while :; do
   (

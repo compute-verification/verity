@@ -1,5 +1,7 @@
-import Definitions.Nci.Guarantees.PartitionCovers
-import Proofs.Core.Circuit
+module
+
+public import Definitions.Nci.Guarantees.PartitionCovers
+public import Proofs.Core.Circuit
 
 /-!
 # Proof of Lemma A.1: a `(c, k)`-partition's completed proof blocks cover the circuit
@@ -9,12 +11,14 @@ and a source in it is in `in(I)`, since every gate of `I` is an operation gate a
 It computes exactly `I`, so the completions compute every operation gate.
 -/
 
+@[expose] public section
+
 namespace Nci.SecurityProofs
 
 open Verity Nci.Covering Finset
 
 /-- Proof block `u`'s completion `I ∪ in(I)`, with inputs `in(I)`, on a circuit of positive fan-in. -/
-def completion {d : Declaration} {B : ℕ} (P : Partition d.D B)
+def completion {d : RegisteredCircuit} {B : ℕ} (P : Partition d.D B)
     (hfan : ∀ g, d.D.isInput g = false → (d.D.reads g).Nonempty) (u : Fin B) : Subcircuit d.D where
   gates := P.gates u ∪ d.D.into (P.gates u)
   ins := d.D.into (P.gates u)

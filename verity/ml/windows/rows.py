@@ -1,6 +1,6 @@
 """A window's rows: the ``frame-v3-sha512`` + ``hm96-sha512/v1`` commitment of a window's units in Flock's statement row leaf
 format (``verity_flock.circuit``'s statement rows), with the registration, Flock's public and prover files and the
-labels the one-stage audit binds (``verity.core.protocols.sampled_proofs.one_stage``).
+labels the one-stage audit binds (``verity.core.protocols.spot.one_stage``).
 
 The population is the verifier's: its program is ``TemplateInstances`` / ``TemplatePopulations`` over the members' templates and
 counts (``verity.ml.windows.population``, over the builders core's ``one_stage.partition`` names too), its
@@ -50,7 +50,10 @@ twice.  Its linked members (``Member.links``) are shared-row chunks whose ``x`` 
 under its row table row's salt (so the same ``b || c``), read by offset; the integration's verifier side ties them to the
 recorded segment roots (``tables.check_row_tables``).  ``write`` adds ``t<k>-public.bin``
 (every row's ``b || c``) and ``t<k>-private.bin`` (rows, then salts; prover only).  A wired member (``Member.wired``) commits
-each wired input port as other units' output rows under their salts, which `wiring.check` holds across statements.
+each wired input port as other units' output rows under their salts, which `wiring.check` holds across statements.  One with no
+wired trees (``Member.wired_trees`` false) commits no tree for a wired port: the port is its writer's output value, its rows
+leaves of its writer's tree (`Binding.held`), so each value is committed once.  Its rows are then its writer's output rows,
+whole: a shared-row member's table of them, each unit's ref its writer's row, or one a unit in its writer's order.
 """
 from __future__ import annotations
 
@@ -72,12 +75,12 @@ import numpy as np
 
 from verity.ml.circuits import partition_object as PO
 from verity.ml.commitments import hm96, row_table as RT
-from verity.ml.commitments.identity import identity_digest_sha512
 from verity.ml.commitments.indexed import RangeIndexedDomain
-from verity.ml.commitments.merkle import CommitmentDomain
-from verity.ml.commitments.window import WINDOW_DOMAIN, window_domain
+from verity.ml.commitments.hm96 import batch as HB
+from verity.ml.commitments.merkle import CommitmentDomain, levels, merkle_depth, tree_levels
+from verity.ml.commitments.window import WINDOW_DOMAIN, window_binding, window_domain
 from verity.ml.commitments.rowleaf import (ROLE_X, SCHEMA_HM96_SHA512_ROW, SCHEMA_HM96_SHA512_ROW_SEG, SCHEMA_HM96_SHA512_ROW_V2,
-                                           sha512_row_prefix, sha512_row_seg_digest, sha512_row_v2_prefix)
+                                           row_leaf, sha512_row_prefix, sha512_row_seg_digest, sha512_row_v2_prefix)
 from verity.ml.circuits.codec import canonical_json
 from verity.ml.windows.population import population_program, template_partition
 
@@ -119,14 +122,14 @@ class ValueRows:
     """`commit`'s rows of an input port given by reference: rows ``positions`` of ``value``, a registered value of 16-bit leaves
     (core's ``one_stage.registered.Registered``: ``words``, ``word_bits``, ``rows``, ``salts`` and ``bcs`` by row), committed
     under the value's salts, so each row's ``b || c`` is the value's. ``salts``: those rows' salts concatenated, when the
-    caller has drawn them (`value_salts`), else drawn here."""
+    caller has sampled them (`value_salts`), else sampled here."""
     value: Any
     positions: tuple[int, ...]
     salts: bytes | None = field(default=None, repr=False, compare=False)
 
 
 def value_salts(value: Any, positions: Sequence[int] | np.ndarray) -> bytes:
-    """Rows ``positions`` of registered value ``value``: their salts concatenated, all at once where its salts draw many
+    """Rows ``positions`` of registered value ``value``: their salts concatenated, all at once where its salts sample many
     (``salts.at``, `pouw.h1.registered.Salts`), else one by one."""
     at = getattr(value.salts, "at", None)
     return at(positions) if at is not None else b"".join(bytes(value.salts[int(i)]) for i in positions)
@@ -140,101 +143,32 @@ def value_rows(value: Any, positions: Sequence[int] | np.ndarray) -> np.ndarray:
     return np.asarray(a, dtype=np.uint16).reshape(len(at), value.words)
 
 
-_FRAME = b"veritor/protocol/merkle/frame/v3\0"
+# --- salts: hm96's salt stream under RFC 8439's nonce -------------------------------------------------------------------
 
-
-# --- salts: ChaCha20 (RFC 8439) over numpy -------------------------------------------------------------------------------
-
-_SIGMA = np.frombuffer(b"expand 32-byte k", dtype="<u4")
-_QR = ((0, 4, 8, 12), (1, 5, 9, 13), (2, 6, 10, 14), (3, 7, 11, 15), (0, 5, 10, 15), (1, 6, 11, 12), (2, 7, 8, 13), (3, 4, 9, 14))
-
-
-def _rotl(v: np.ndarray, n: int) -> np.ndarray:
-    return (v << np.uint32(n)) | (v >> np.uint32(32 - n))
-
-
-def chacha20(key: bytes, nonce: bytes, nbytes: int, counter: int = 0) -> bytes:
-    """``nbytes`` of the RFC 8439 ChaCha20 keystream (32-byte key, 12-byte nonce, 32-bit block counter from ``counter``)."""
-    if len(key) != 32 or len(nonce) != 12:
-        raise ValueError("ChaCha20 takes a 32-byte key and a 12-byte nonce")
-    nblk = -(-nbytes // 64)
-    if counter + nblk > 1 << 32:
+def _stream(key: bytes, nonce: int, n: int) -> bytes:
+    """The salts of rows 0 .. n - 1 under ``key`` at the 96-bit ``nonce`` (12 bytes LE), row i at offset 192 i of RFC 8439's
+    ChaCha20 stream from block 0: `hm96.batch.salts`, whose 64-bit counter and nonce are RFC 8439's 32-bit counter and
+    96-bit nonce read another way."""
+    if not 0 <= nonce < 1 << 96:
+        raise ValueError("an RFC 8439 nonce is 12 bytes")
+    if HB.SALT_BLOCKS * n > 1 << 32:
         raise ValueError("the 32-bit block counter would wrap")
-    out = []
-    for lo in range(0, nblk, 1 << 16):
-        m = min(1 << 16, nblk - lo)
-        s = np.empty((16, m), dtype=np.uint32)
-        s[0:4] = _SIGMA[:, None]
-        s[4:12] = np.frombuffer(key, dtype="<u4")[:, None]
-        s[12] = np.arange(counter + lo, counter + lo + m, dtype=np.uint64).astype(np.uint32)
-        s[13:16] = np.frombuffer(nonce, dtype="<u4")[:, None]
-        x = s.copy()
-        for _ in range(10):
-            for a, b, c, d in _QR:
-                x[a] += x[b]; x[d] = _rotl(x[d] ^ x[a], 16)  # noqa: E702
-                x[c] += x[d]; x[b] = _rotl(x[b] ^ x[c], 12)  # noqa: E702
-                x[a] += x[b]; x[d] = _rotl(x[d] ^ x[a], 8)  # noqa: E702
-                x[c] += x[d]; x[b] = _rotl(x[b] ^ x[c], 7)  # noqa: E702
-        x += s
-        out.append(np.ascontiguousarray(x.T).astype("<u4").tobytes())
-    return b"".join(out)[:nbytes]
+    return HB.salts(key, nonce >> 32, np.arange(n), (nonce & 0xFFFFFFFF) << 32)
 
 
 def salts(key: bytes, port_index: int, n: int) -> bytes:
-    """The ``n`` rows' salts of port ``port_index`` (192 bytes each, concatenated)."""
-    return chacha20(key, port_index.to_bytes(12, "little"), n * SALT_BYTES)
+    """The ``n`` rows' salts of port ``port_index`` (192 bytes each, concatenated): nonce = the port's index."""
+    return _stream(key, port_index, n)
 
 
 def segment_salts(key: bytes, segment: int, n: int) -> bytes:
     """The salts of ``segment``'s ``n`` table rows under the run's row key (192 bytes each, concatenated): its tables in order,
-    each table's rows in rank order, one stream per segment (nonce = the segment, 12 bytes LE)."""
-    return chacha20(key, segment.to_bytes(12, "little"), n * SALT_BYTES)
-
-
-# --- the frame on SHA-512, batched ---------------------------------------------------------------------------------------
-
-def _uint(v: int) -> bytes:
-    return v.to_bytes(max(1, (v.bit_length() + 7) // 8), "big")
-
-
-def _part(p: bytes) -> bytes:
-    return len(p).to_bytes(8, "big") + p
-
-
-class _Frame:
-    """``merkle._hash`` for one SHA-512 domain, with the constant prefix of each tag hashed once."""
-
-    def __init__(self, domain_id: bytes) -> None:
-        head = lambda tag: hashlib.sha512(_FRAME + len(tag).to_bytes(4, "big") + tag + _part(domain_id))  # noqa: E731
-        self._leaf, self._node, self._pad = head(b"leaf"), head(b"node"), head(b"pad")
-
-    def leaf(self, rank: int, schema: bytes, value: bytes) -> bytes:
-        u = _part(_uint(rank))
-        h = self._leaf.copy()
-        h.update(u + u + schema + _part(value))
-        return h.digest()
-
-    def node(self, level: int, index: int, left: bytes, right: bytes) -> bytes:
-        h = self._node.copy()
-        h.update(_part(_uint(level)) + _part(_uint(index)) + _part(left) + _part(right))
-        return h.digest()
-
-    def pad(self, rank: int) -> bytes:
-        h = self._pad.copy()
-        h.update(_part(_uint(rank)))
-        return h.digest()
-
-    def reduce(self, level: list[bytes], first: int, depth: int = 0) -> bytes:
-        """Fold a level whose first node has global index ``first`` at ``depth`` up to one node."""
-        while len(level) > 1:
-            level = [self.node(depth, (first >> 1) + j, level[2 * j], level[2 * j + 1]) for j in range(len(level) // 2)]
-            first >>= 1
-            depth += 1
-        return level[0]
+    each table's rows in rank order, one stream per segment (nonce = the segment)."""
+    return _stream(key, segment, n)
 
 
 def _width(n: int) -> int:
-    return 1 << max(0, (n - 1).bit_length())
+    return 1 << merkle_depth(n)
 
 
 def _copy_update(h: Any, data: bytes | memoryview) -> bytes:
@@ -251,7 +185,7 @@ def _chunk(task: tuple[str, int, int]) -> tuple[str, int, bytes, bytes]:
     (a ``string`` port's are given)."""
     port, start, size = task
     j = _JOB["ports"][port]
-    fr, n = _Frame(j["domain_id"]), j["count"]
+    dom, n = j["domain"], j["count"]
     hi = min(start + size, n)
     leaves: list[bytes] = []
     bc = b""
@@ -266,16 +200,16 @@ def _chunk(task: tuple[str, int, int]) -> tuple[str, int, bytes, bytes]:
         for i in range(m):
             s = bytes(b[i * 64:(i + 1) * 64]) + _copy_update(salt_h, yv[i * SALT_BYTES:(i + 1) * SALT_BYTES])
             out += s
-            leaves.append(fr.leaf(start + i, schema, _copy_update(leaf_h, s)))
+            leaves.append(dom.leaf(start + i, start + i, schema, _copy_update(leaf_h, s)))
         bc = bytes(out)
     elif j["kind"] == "string" and hi > start:
         s, leaf_h = memoryview(j["strings"]), _JOB["leaf_h"]
-        leaves = [fr.leaf(i, j["schema"], _copy_update(leaf_h, s[i * BC_BYTES:(i + 1) * BC_BYTES])) for i in range(start, hi)]
+        leaves = [dom.leaf(i, i, j["schema"], _copy_update(leaf_h, s[i * BC_BYTES:(i + 1) * BC_BYTES])) for i in range(start, hi)]
     elif j["kind"] == "word" and hi > start:
         w = j["words"][start:hi].astype(">u2").tobytes()
-        leaves = [fr.leaf(start + i, j["schema"], w[2 * i:2 * i + 2]) for i in range(hi - start)]
-    leaves += [fr.pad(r) for r in range(max(start, n), start + size)]
-    return port, start, fr.reduce(leaves, start), bc
+        leaves = [dom.leaf(start + i, start + i, j["schema"], w[2 * i:2 * i + 2]) for i in range(hi - start)]
+    leaves += [dom.pad(r) for r in range(max(start, n), start + size)]
+    return port, start, levels(dom.domain_id, leaves, start, hash=dom.hash)[-1][0], bc
 
 
 # --- the window ----------------------------------------------------------------------------------------------------------
@@ -298,6 +232,7 @@ class Member:
     link_units: tuple[int, ...] = ()             # a row-table member: per link, how many of its units (consecutive, in order) read it
     links: tuple[tuple[int, int], ...] = ()      # a row-table member: per row of its x table, the window's row table and rank it is
     wired: tuple[tuple[str, str, tuple[int, ...]], ...] = ()  # per wire (port, out, writers): unit i's port row is unit writers[i]'s out row (`wiring`)
+    wired_trees: bool = True                     # False: a wired port commits no tree, its rows its writer's output rows, whole (`Binding.held`)
 
     def __post_init__(self) -> None:
         if self.schemas and (sorted(p for p, _ in self.schemas) != sorted(p for p, _ in self.rows + self.outs)
@@ -382,12 +317,12 @@ class RowTable:
 
 @dataclass(frozen=True)
 class Binding:
-    """What the roots are bound to: the verifier's population program and query (the partition over them), the law it draws by, the
+    """What the roots are bound to: the verifier's population program and query (the partition over them), the sampling design it samples by, the
     run (the record's run root, hex), and the members the population is made of, in the partition's order (refused otherwise); and
     its row tables, grouped by segment in rising order and in the integration's order within one, every rank of each the row of
     at least one linked member's ``x`` table, under ``context`` (hex, 64 bytes known before the first segment: the live coin
     commitment's root).  A ``work`` law
-    draws by the verifier's ``work_table`` (`draw.work_table`), which the registration's law is expanded under."""
+    samples by the verifier's ``work_table`` (`draw.work_table`), which the registration's law is expanded under."""
     program: Any
     query: dict[str, Any]
     law: dict[str, Any]
@@ -414,6 +349,18 @@ class Binding:
         if len({m.key for m in self.members}) != len(self.members):
             raise ValueError(f"members {[m.key for m in self.members]}: each its own name")
         WI.validate(self.members)
+        at = WI.bases(self.members)
+        for m in self.members:
+            for p, _o, ws in () if m.wired_trees else m.wired:
+                got = WI._writers(self.members, ws, at)
+                if len(got) != 1:
+                    raise ValueError(f"{m.key}: its wired {p!r} rows are several members' outputs, which no one tree holds: "
+                                     "give its wired ports trees of their own (Member.wired_trees)")
+                (wm, _mine, theirs), = got
+                if dict(m.tables).get(p, m.n) != wm.n if m.tables else not np.array_equal(theirs, np.arange(wm.n)):
+                    raise ValueError(f"{m.key}: its wired {p!r} port has no tree of its own, so its rows are {wm.key}'s {wm.n} "
+                                     f"output rows, whole: a table of {wm.n} rows (Member.tables), each unit's ref its writer's "
+                                     "row, or one row a unit in its writer's order")
         covered = [np.zeros(t.n, dtype=bool) for t in self.row_tables]
         for m in self.members:
             for t, r in m.links:
@@ -471,11 +418,27 @@ class Binding:
         return template_partition(self.program, self.query).population
 
     def binding(self, port: str, schema: str, leaves: int) -> bytes:
-        return identity_digest_sha512(DOMAIN_TAG, {"program": self.partition["program"], "partition": self.partition_digest,
-                                                   "port": port, "schema": schema, "leaves": int(leaves), "run": self.run})
+        return window_binding(self.partition["program"], self.partition_digest, port, schema, leaves, self.run)
 
     def domain(self, port: str, schema: str, leaves: int) -> CommitmentDomain:
         return CommitmentDomain(self.binding(port, schema, leaves), OWNER, RangeIndexedDomain(0, leaves), hash="sha512")
+
+    def held(self, m: Member, port: str) -> str:
+        """The port whose tree holds member ``m``'s port ``port``: its writer's output port, for a wired port of a member
+        with no wired trees (``Member.wired_trees``), else its own."""
+        return self._held(m, port)[0]
+
+    def held_leaves(self, m: Member, port: str) -> tuple[int, ...]:
+        """The leaf of the tree holding member ``m``'s port ``port`` (`held`) each of its units reads, in order: its writer
+        unit's, else its own."""
+        return self._held(m, port)[1]
+
+    def _held(self, m: Member, port: str) -> tuple[str, tuple[int, ...]]:
+        wire = None if m.wired_trees else next((w for w in m.wired if w[0] == port), None)
+        if wire is None:
+            return m.port(port), tuple(range(m.n))
+        (wm, _mine, theirs), = WI._writers(self.members, wire[2], WI.bases(self.members))
+        return wm.port(wire[1]), tuple(int(x) for x in theirs)
 
 
 @dataclass
@@ -539,12 +502,14 @@ class Committed:
         return np.ascontiguousarray(self.rows[p]).astype("<u2").tobytes() + self.salts[p]
 
     def frame_entry(self, k: int) -> dict[str, Any]:
-        """The circuit prover's header ``frame_v3`` entry for member ``k``: its bare port names, as its statement reads them."""
+        """The circuit prover's header ``frame_v3`` entry for member ``k``: its bare port names, as its statement reads them,
+        each at the tree holding it (`Binding.held`), so a wired port with no tree of its own at its writer's."""
         m = self.window.members[k]
         names = [p for p, _ in m.all_rows]
-        return {"frame": "frame-v3-sha512", "roots": {p: self.roots[m.port(p)].hex() for p in names},
-                "domain_ids": {p: self.domains[m.port(p)].domain_id.hex() for p in names},
-                "bindings": {p: self.domains[m.port(p)].binding.hex() for p in names}, "owner": OWNER,
+        held = {p: self.window.held(m, p) for p in names}
+        return {"frame": "frame-v3-sha512", "roots": {p: self.roots[held[p]].hex() for p in names},
+                "domain_ids": {p: self.domains[held[p]].domain_id.hex() for p in names},
+                "bindings": {p: self.domains[held[p]].binding.hex() for p in names}, "owner": OWNER,
                 "schemas": {p: m.schema(p) for p in names}, "row_key_sha512": hashlib.sha512(INST.default_key).hexdigest()}
 
 
@@ -573,16 +538,16 @@ def commit_ports(domains: dict[str, CommitmentDomain], rows: dict[str, np.ndarra
     for p, s in (strings or {}).items():
         if len(s) != domains[p].count * BC_BYTES:
             raise ValueError(f"{p}: {len(s)} bytes of strings, not {domains[p].count} rows' b || c")
-        ports[p] = {"kind": "string", "count": domains[p].count, "domain_id": domains[p].domain_id, "strings": bytes(s),
-                    "schema": _part((schemas or {}).get(p, ROW_SCHEMA).encode())}
+        ports[p] = {"kind": "string", "count": domains[p].count, "domain": domains[p], "strings": bytes(s),
+                    "schema": (schemas or {}).get(p, ROW_SCHEMA)}
     for p, r in rows.items():
         r = np.ascontiguousarray(r).astype("<u2")
         s = (schemas or {}).get(p, ROW_SCHEMA)
-        ports[p] = {"kind": "row", "count": domains[p].count, "domain_id": domains[p].domain_id, "rows": r.tobytes(),
-                    "row_bytes": 2 * int(r.shape[1]), "salts": ys[p], "inner": _inner(s, int(r.shape[1])), "schema": _part(s.encode())}
+        ports[p] = {"kind": "row", "count": domains[p].count, "domain": domains[p], "rows": r.tobytes(),
+                    "row_bytes": 2 * int(r.shape[1]), "salts": ys[p], "inner": _inner(s, int(r.shape[1])), "schema": s}
     for p, w in words.items():
-        ports[p] = {"kind": "word", "count": domains[p].count, "domain_id": domains[p].domain_id,
-                    "words": np.ascontiguousarray(w).reshape(-1).astype(np.uint16), "schema": _part(WORD_SCHEMA.encode())}
+        ports[p] = {"kind": "word", "count": domains[p].count, "domain": domains[p],
+                    "words": np.ascontiguousarray(w).reshape(-1).astype(np.uint16), "schema": WORD_SCHEMA}
     _JOB.update(ports=ports, hiding=HidingLeaves(instance=INST), salt_h=hashlib.sha512(INST.salt_prefix),
                 leaf_h=hashlib.sha512(INST.leaf_prefix(INST.default_key)))
     tasks = []
@@ -605,7 +570,7 @@ def commit_ports(domains: dict[str, CommitmentDomain], rows: dict[str, np.ndarra
     for p, j in ports.items():
         mine = sorted(by.get(p, ()))
         size = min(chunk, _width(j["count"]))
-        roots[p] = _Frame(j["domain_id"]).reduce([node for _, node, _ in mine], 0, (size - 1).bit_length())
+        roots[p] = levels(j["domain"].domain_id, [node for _, node, _ in mine], 0, (size - 1).bit_length(), j["domain"].hash)[-1][0]
         if j["kind"] == "row":
             bc[p] = b"".join(b for _, _, b in mine)
         elif j["kind"] == "string":
@@ -620,12 +585,16 @@ def _wire(m: Member, port: str) -> tuple[str, str, tuple[int, ...]]:
 def _by_reference(members: Sequence[Member], bases: np.ndarray, src: Any, ys: Mapping[str, bytes],
                   bc: Mapping[str, bytes]) -> tuple[bytes, bytes]:
     """A port given by reference (`commit`): its rows' salts and ``b || c``, its source's (a `ValueRows`' value's, or a wired
-    port's writers' output rows', from their committed ``ys`` and ``bc``); ``bases``, the members' (`wiring.bases`)."""
+    port's writers' output rows', from their committed ``ys`` and ``bc``: a wired port with no tree of its own, its writer's
+    whole, `Binding.held`); ``bases``, the members' (`wiring.bases`)."""
     if isinstance(src, ValueRows):
         v = src.value
         return (value_salts(v, src.positions) if src.salts is None else src.salts), b"".join(bytes(v.bcs[i]) for i in src.positions)
     m, port = src
     _p, o, ws = _wire(m, port)
+    if not m.wired_trees:
+        (wm, _mine, _theirs), = WI._writers(members, ws, bases)
+        return ys[wm.port(o)], bc[wm.port(o)]
     y, s = np.empty((m.n, SALT_BYTES), dtype=np.uint8), np.empty((m.n, BC_BYTES), dtype=np.uint8)
     for wm, mine, theirs in WI._writers(members, ws, bases):
         y[mine] = np.frombuffer(ys[wm.port(o)], dtype=np.uint8).reshape(wm.n, SALT_BYTES)[theirs]
@@ -635,7 +604,7 @@ def _by_reference(members: Sequence[Member], bases: np.ndarray, src: Any, ys: Ma
 
 class _Rows(Mapping):
     """A commit's rows by port (`commit`): the arrays given, and each port given by reference read off its source when it is
-    read (a value's rows, or a wired port's writers' output rows), never held."""
+    read (a value's rows, or a wired port's writers' output rows: its writer's whole with no tree of its own), never held."""
 
     def __init__(self, members: Sequence[Member], rows: Mapping[str, np.ndarray], refd: Mapping[str, Any], order: tuple[str, ...]):
         self._members, self._rows, self._refd, self._order = members, rows, refd, order
@@ -649,6 +618,9 @@ class _Rows(Mapping):
             return value_rows(src.value, src.positions)
         m, p = src
         _p, o, ws = _wire(m, p)
+        if not m.wired_trees:
+            (wm, _mine, _theirs), = WI._writers(self._members, ws, self._bases)
+            return self[wm.port(o)]
         out = np.empty((m.n, dict(m.rows)[p]), dtype=np.uint16)
         for wm, mine, theirs in WI._writers(self._members, ws, self._bases):
             out[mine] = self[wm.port(o)][theirs]
@@ -684,19 +656,22 @@ def commit(window: Binding, data: Sequence[dict[str, dict[str, np.ndarray]]], *,
     ``segment_roots`` (what the integration recorded before each segment's coin, by segment), each must be the window's, or the
     commit is refused.
 
-    ``salt_key``: tests only; an integration draws 32 fresh OS bytes.  ``row_salt_key``: the run's row key the recorded segment
+    ``salt_key``: tests only; an integration samples 32 fresh OS bytes.  ``row_salt_key``: the run's row key the recorded segment
     roots were salted under (32 bytes); fresh OS bytes when ``None``, which no recorded segment root can match.
     ``salts_of``: by port, an outside registered value's salts, one a row, so its rows' ``b || c`` are the value's (`write`).
 
     An input port's rows may be given by reference, in a window with no row tables: `WIRED` for a wired port (its writers'
     output rows) or a `ValueRows` (rows of a registered value). Their rows are never held or hashed: each row's salt and
     ``b || c`` are its source's, so the commitment is the one their rows given in full make, and the committed rows (`_Rows`)
-    are read off the sources when a body is written."""
+    are read off the sources when a body is written. A wired port of a member with no wired trees (``Member.wired_trees``)
+    is given `WIRED` and gets no tree, domain or root: its writer's tree holds its rows (`Binding.held`), and its rows,
+    salts and ``b || c`` are its writer's output rows', whole, a shared-row member's each unit's ref its writer's row."""
     t0 = time.perf_counter()
     ms = window.members
     if len(data) != len(ms) or sum(m.n for m in ms) != window.population:
         raise ValueError(f"{sum(m.n for m in ms)} units in {len(ms)} members; the registered population is {window.population}")
     rows, refs, schemas, counts, refd = {}, {}, {}, {}, {}
+    held = {m.port(p) for m in ms if not m.wired_trees for p, _o, _ws in m.wired}
     for k, (m, dk) in enumerate(zip(ms, data, strict=True)):
         count, wired = dict(m.tables), {p for p, _o, _ws in m.wired}
         for kind, ports in (("rows", m.rows), ("outs", m.outs)):
@@ -706,6 +681,8 @@ def commit(window: Binding, data: Sequence[dict[str, dict[str, np.ndarray]]], *,
                 src = dk[kind][p]
                 want = (count.get(p, m.n) if kind == "rows" else m.n, words)
                 schemas[m.port(p)], counts[m.port(p)] = m.schema(p), want[0]
+                if m.port(p) in held and not (isinstance(src, str) and src == WIRED):
+                    raise ValueError(f"{m.port(p)}: a wired port with no tree of its own is given as {WIRED} rows")
                 if kind == "rows" and (isinstance(src, ValueRows) or (isinstance(src, str) and src == WIRED)):
                     if isinstance(src, str) and p not in wired:
                         raise ValueError(f"{m.port(p)}: given as {WIRED} rows, but no wire writes it")
@@ -738,6 +715,10 @@ def commit(window: Binding, data: Sequence[dict[str, dict[str, np.ndarray]]], *,
             bound = np.array([count[p] for p, _ in m.rows])
             if r.shape != (m.n, len(m.rows)) or (r < 0).any() or (r >= bound).any():
                 raise ValueError(f"{m.key}: refs {r.shape} are not {m.n} x {len(m.rows)} rows inside tables {dict(m.tables)}")
+            for i, (p, _w) in enumerate(m.rows):
+                if m.port(p) in held and not np.array_equal(r[:, i], window.held_leaves(m, p)):
+                    raise ValueError(f"{m.port(p)}: a wired port with no tree of its own is its writer's rows, so each unit's ref "
+                                     "is its writer's row (Binding.held_leaves)")
             own = np.repeat(np.arange(m.n, dtype=np.int64)[:, None], len(m.outs), axis=1)
             refs[k] = np.concatenate([r, own], axis=1).astype(np.uint32)
     if segment_roots is not None and row_salt_key is None:
@@ -751,7 +732,7 @@ def commit(window: Binding, data: Sequence[dict[str, dict[str, np.ndarray]]], *,
     key = os.urandom(32) if salt_key is None else bytes(salt_key)
     ys = {p: (salts_of or {}).get(p) or salts(key, k, n) for k, (p, n) in enumerate(counts.items()) if p not in refd}
     del key
-    domains = {p: window.domain(p, schemas[p], n) for p, n in counts.items()}
+    domains = {p: window.domain(p, schemas[p], n) for p, n in counts.items() if p not in held}
     rk = os.urandom(32) if row_salt_key is None else bytes(row_salt_key)
     for k, (t, a) in enumerate(zip(window.row_tables, _table_rows(window, rows), strict=True)):
         rows[t.port], schemas[t.port], domains[t.port] = a, TABLE_SCHEMA, window.table_domain(k)
@@ -770,9 +751,10 @@ def commit(window: Binding, data: Sequence[dict[str, dict[str, np.ndarray]]], *,
         strings, at = {}, WI.bases(ms)
         for p, src in refd.items():
             ys[p], strings[p] = _by_reference(ms, at, src, ys, bc)
-        more, _ = commit_ports(domains, {}, {}, {}, workers=workers, chunk=chunk, schemas=schemas, strings=strings)
+        more, _ = commit_ports(domains, {}, {}, {}, workers=workers, chunk=chunk, schemas=schemas,
+                               strings={p: s for p, s in strings.items() if p not in held})
         roots |= more
-        roots = {p: roots[p] for p in counts}
+        roots = {p: roots[p] for p in counts if p not in held}
         bc |= strings
         rows = _Rows(ms, rows, refd, tuple(counts))
     table_roots = {t.port: roots.pop(t.port) for t in window.row_tables}
@@ -792,9 +774,10 @@ def commit(window: Binding, data: Sequence[dict[str, dict[str, np.ndarray]]], *,
 # --- the files ----------------------------------------------------------------------------------------------------------
 
 def port_leaves(m: Member) -> dict[str, int]:
-    """Each of member ``m``'s row ports (outputs included) and its leaf count: its table's size for a shared-row input, else ``n``."""
-    tables = dict(m.tables)
-    return {p: tables.get(p, m.n) for p, _ in m.all_rows}
+    """Each of member ``m``'s row ports (outputs included) that has a tree of its own, and its leaf count: its table's size for a
+    shared-row input, else ``n``. A wired port of a member with no wired trees has none (`Binding.held`)."""
+    tables, held = dict(m.tables), set() if m.wired_trees else {p for p, _o, _ws in m.wired}
+    return {p: tables.get(p, m.n) for p, _ in m.all_rows if p not in held}
 
 
 def expected_ports(window: Binding) -> dict[str, dict[str, Any]]:
@@ -824,7 +807,7 @@ def window_bytes(members: Sequence[Member], row_tables: Sequence[RowTable] = ())
     for m in members:
         leaves = port_leaves(m)
         for p, w in m.all_rows:
-            add(p, leaves[p], w)
+            add(p, leaves.get(p, m.n), w)
         if m.tables:
             out["public"] += 4 * m.n * len(m.all_rows)
     for t in row_tables:
@@ -840,11 +823,13 @@ def leaf_layer(publics: Mapping[str, bytes]) -> str:
 
 
 def registration(c: Committed, provenance: Mapping[str, Any], previous: str | None = None, *, kind: str = "served",
-                 registrar: Any) -> dict[str, Any]:
+                 registrar: Any, entries: Sequence[Mapping[str, Any]] = ()) -> dict[str, Any]:
     """Core's ``verity/registration/v1`` record of the window, made by ``registrar`` (core's ``one_stage.registration``: its
     ``record``, ``KINDS``): its program, query and law, the scheme, every port's root, leaves and window domain, the leaf layer,
-    and ``window = {"kind": kind, "run": <the record's run root>, **provenance}``.  ``served``: these roots are the integration's
-    own commitment as it ran, made before any draw; ``stand-in``: a fresh commitment to values opened from its record afterwards,
+    and ``window = {"kind": kind, "run": <the record's run root>, **provenance}``, chained after ``previous`` (the digest of
+    the prover's last record; None for its first).  ``entries``: those of the values its program takes as parameters
+    (``Registered.entry()`` each), which make it ``verity/registration/v2``.  ``served``: these roots are the integration's
+    own commitment as it ran, made before any sample; ``stand-in``: a fresh commitment to values opened from its record afterwards,
     whose link to the record's roots is provenance."""
     if kind not in registrar.KINDS:
         raise ValueError(f"window kind {kind!r} is not one of {registrar.KINDS}")
@@ -852,7 +837,8 @@ def registration(c: Committed, provenance: Mapping[str, Any], previous: str | No
     roots = [{"port": p, "root": c.roots[p].hex(), "leaves": c.domains[p].count, "domain": c.domains[p].domain_id.hex()} for p in c.roots]
     publics = {m.key: c.public_body(k) for k, m in enumerate(w.members)}
     return registrar.record(w.program, w.query, w.law, SCHEME, roots, {**provenance, "kind": kind, "run": w.run},
-                            leaf_layer=leaf_layer(publics), previous=previous, work_table=w.work_table)
+                            leaf_layer=leaf_layer(publics), previous=previous, work_table=w.work_table,
+                            registered=list(entries))
 
 
 def units_doc(m: Member) -> dict[str, Any]:
@@ -932,11 +918,84 @@ def registered_header(win: Mapping[str, Any], k: int) -> dict[str, Any] | None:
     return out
 
 
+def own_value(port: str) -> str:
+    """The value a member's port ``<member>/<port>`` is read as at its own registered root (`own_entries`, `own_reads`).
+    It is never the port's own name: the audit takes a value named as a registration root's port for a registered value
+    of the record (`audit.session_registered`), which a registration listing none refuses."""
+    return f"committed/{port}"
+
+
+def own_entries(mem: Mapping[str, Any], body: bytes, without: Collection[str] = ()) -> dict[str, dict[str, Any]]:
+    """Header ``registered`` entries (`registered_header`'s form) for shared-row member ``mem``'s ports but ``without``, from
+    its public ``body`` (`Committed.public_body`): each port whose table is one row per instance, instance i's row i, as rows
+    of the value `own_value` names, its own tree, whose root and domain the registration holds (``frame_v3``'s), row i at
+    position i with its path. A statement checked against registered reads must have every port registered
+    (`Flock.Registered.checkComplete`); these are the reads of the ports its registered values' reads leave, which the
+    verifier makes at the registration's roots (`own_reads`). A port of another table layout gets none: its readers'
+    positions are the prover's refs. Refused where a port's rows don't make its ``frame_v3`` root."""
+    shared = mem.get("shared_rows")
+    if not shared:
+        return {}
+    n, ports, fv = int(mem["n"]), [p for p, _w in mem["ports"]], mem["frame_v3"]
+    starts, at = {}, 0
+    for p in ports:
+        starts[p], at = at, at + int(shared[p]) * BC_BYTES
+    if len(body) != at + 4 * n * len(ports):
+        raise ValueError(f"{mem['name']}: a public body of {len(body)} bytes, not its tables' and refs' {at + 4 * n * len(ports)}")
+    refs = np.frombuffer(body, dtype="<u4", offset=at).reshape(n, len(ports))
+    out = {}
+    for j, p in enumerate(ports):
+        if p in without or int(shared[p]) != n or not np.array_equal(refs[:, j], np.arange(n)):
+            continue
+        dom = CommitmentDomain(bytes.fromhex(fv["bindings"][p]), OWNER, RangeIndexedDomain(0, n), hash="sha512")
+        bcs = [body[starts[p] + BC_BYTES * i:starts[p] + BC_BYTES * (i + 1)] for i in range(n)]
+        lv = tree_levels(dom, [row_leaf(dom, i, INST.tree_leaf(INST.default_key, bc), fv["schemas"][p]) for i, bc in enumerate(bcs)])
+        if dom.domain_id.hex() != fv["domain_ids"][p] or lv[-1][0].hex() != fv["roots"][p]:
+            raise ValueError(f"{mem['name']} {p}: its rows' tree is not its frame_v3 root")
+        out[p] = {"value": own_value(f"{mem['name']}/{p}"), "positions": list(range(n)),
+                  "paths": [b"".join(level[(i >> d) ^ 1] for d, level in enumerate(lv[:-1])).hex() for i in range(n)]}
+    return out
+
+
+def own_reads(reads: Mapping[str, Mapping[str, Any]], w: Binding, roots: Mapping[str, Mapping[str, Any]], *,
+              registered: Any) -> dict[str, dict[str, Any]]:
+    """The verifier's ``--registered`` files ``reads`` (by member key: a read of a registered value or of a row table) with
+    every other port of the member as rows of its own tree at the root the registration holds for it (``roots``, the
+    registration's entries by ``<member>/<port>``), unit ``m.base + i`` reading row i (a wired port with no tree of its own,
+    its writer's tree at its writer unit's row, `Binding.held`): Lean refuses a statement checked
+    against registered reads unless they name every port of its circuit (`Flock.Registered.checkComplete`), so each row
+    a member's outputs read opens a root registered before any coin. The prover's header gives the paths (`own_entries`).
+    A port whose registered tree isn't one leaf a unit gets none, and Lean refuses the member at that port. ``registered``
+    is core's ``one_stage.registered``, as `interface.registered_reads` takes it. Refused (ValueError) where the
+    registration holds no root for a port."""
+    out = dict(reads)
+    for m in w.members:
+        f = reads.get(m.key)
+        if f is None:
+            continue
+        ports, words = dict(f["ports"]), dict(m.rows + m.outs)
+        for p, _w in m.all_rows:
+            if p in ports:
+                continue
+            port = w.held(m, p)
+            e = roots.get(port)
+            if e is None:
+                raise ValueError(f"{m.key} {p}: the registration holds no root for it")
+            if port == m.port(p) and int(e["leaves"]) != m.n:
+                continue
+            ports[p] = {"value": own_value(port), "root": e["root"], "leaves": int(e["leaves"]), "words": words[p],
+                        "word_bits": registered.WORD_BITS, "domain": e["domain"], registered.SCHEMA_KEY: m.schema(p),
+                        "reads": list(w.held_leaves(m, p)), registered.READS_FROM: m.base}
+        out[m.key] = {**f, "ports": dict(sorted(ports.items()))}
+    return out
+
+
 class Bodies:
     """A written window's prover bodies (`write`), each made from the files that hold its rows and salts: a member's own
     ``m<k>-private.bin`` (its body less its ports ``value_rows`` and ``wired_rows`` name, in the body's own order), a
     registered value's ``v<j>-private.bin`` (the rows the window reads, in position order, then their salts) and, for a wired
-    port, its writers' own files (each row and salt its writer's output row's). Each file is read where a body reads it,
+    port, its writers' own files (each row and salt its writer's output row's; with no tree of its own, ``wired_trees``
+    false, its writer's output rows, whole: `Binding.held`). Each file is read where a body reads it,
     memory-mapped; a file not the size its ports make, a row no file holds and a writer whose output isn't the port's rows
     are refused."""
 
@@ -1030,6 +1089,9 @@ class Bodies:
         if self._bases is None:
             self._bases = np.array([m["base"] for m in self.members], dtype=np.int64)
         o, ws = self._wires[k, p]
+        if self.members[k].get("wired_trees", True) is False:
+            jj = int(np.searchsorted(self._bases, ws[0], side="right") - 1)
+            ws = self._bases[jj] + np.arange(int(self.members[jj]["n"]), dtype=np.int64)
         w = ws[at]
         j = np.searchsorted(self._bases, w, side="right") - 1
         out = np.empty((len(w), SALT_BYTES if salts else words), dtype=np.uint8 if salts else np.uint16)
@@ -1085,11 +1147,13 @@ def read_private(window_dir: str | Path, win: Mapping[str, Any], k: int) -> byte
 
 def write(c: Committed, out_dir: str | Path, provenance: dict[str, Any], index: dict[str, Any], extra: dict[str, Any] | None = None, *,
           kind: str = "served", registered: Mapping[str, dict[str, Any]] | None = None, registrar: Any,
-          index_salt: bytes | None = None) -> dict[str, Any]:
+          index_salt: bytes | None = None, previous: str | None = None,
+          entries: Sequence[Mapping[str, Any]] = ()) -> dict[str, Any]:
     """The window's files, its registration's window of ``kind`` (`registration`, by ``registrar``, which also names and digests
-    the record: ``FORMAT``, ``digest``); the window's provenance gets the index's hiding leaf (`index_leaf`), so the
+    the record: ``FORMAT``, or ``FORMAT_V2`` with ``entries``, and ``digest``), chained after ``previous`` and registering
+    the values' ``entries``; the window's provenance gets the index's hiding leaf (`index_leaf`), so the
     registration binds the unit -> label map and says nothing of it. ``index.json`` and its salt are prover only: the salt is
-    ``index_salt`` (192 bytes, a committer's drawn under its key) or else fresh bytes from the OS.  ``registered``: by member
+    ``index_salt`` (192 bytes, a committer's sampled under its key) or else fresh bytes from the OS.  ``registered``: by member
     key, an outside value's reads (``salts_of``), each a header entry
     (``{port: {"value", "positions", "paths"}}``), whose paths ``window.json`` gives once for the window
     (``registered_paths``, by value and position; `registered_header`).  A member's ``m<k>-private.bin`` is its prover body
@@ -1108,7 +1172,8 @@ def write(c: Committed, out_dir: str | Path, provenance: dict[str, Any], index: 
         f.write(ib)
     with _private(d / INDEX_SALT) as f:
         f.write(salt)
-    rec = registration(c, {**provenance, "index_leaf": leaf, "order": ORDER}, kind=kind, registrar=registrar)
+    rec = registration(c, {**provenance, "index_leaf": leaf, "order": ORDER}, previous, kind=kind, registrar=registrar,
+                       entries=entries)
     (d / "registration.json").write_text(json.dumps(rec, indent=1, sort_keys=True) + "\n")
     trees: dict[int, RT.RowTable] = {}
     members, paths, read = [], {}, {}
@@ -1139,7 +1204,8 @@ def write(c: Committed, out_dir: str | Path, provenance: dict[str, Any], index: 
                         **({"wired_rows": [p for p, _ in m.rows if p in wired]} if wired else {}),
                         **({"shared_rows": {**dict(m.tables), **{p: m.n for p, _ in m.out_rows}}} if m.tables else {}),
                         **({"row_links": [list(x) for x in m.links]} if m.links else {}),
-                        **({"wired": [{"port": p, "out": o, "writers": list(ws)} for p, o, ws in m.wired]} if m.wired else {})})
+                        **({"wired": [{"port": p, "out": o, "writers": list(ws)} for p, o, ws in m.wired]} if m.wired else {}),
+                        **({"wired_trees": False} if m.wired and not m.wired_trees else {})})
     values = {}
     for j, (name, (v, ats, yss)) in enumerate(sorted(read.items())):
         at, step = np.unique(np.concatenate(ats)), max(1, VALUE_CHUNK // (2 * v.words))
@@ -1172,7 +1238,8 @@ def write(c: Committed, out_dir: str | Path, provenance: dict[str, Any], index: 
            **({"row_tables": tables, "row_table_steps": segs} if tables else {}),
            **({"registered_paths": paths} if paths else {}), **({"value_rows": values} if values else {}),
            "partition": c.window.partition, "partition_digest": c.window.partition_digest, "run": c.window.run,
-           "domain_tag": DOMAIN_TAG, "registration": registrar.FORMAT, "registration_digest": registrar.digest(rec),
+           "domain_tag": DOMAIN_TAG, "registration": registrar.FORMAT_V2 if entries else registrar.FORMAT,
+           "registration_digest": registrar.digest(rec),
            "leaf_layer": rec["leaf_layer"],
            "leaf_layer_rule": LEAF_LAYER, "index_leaf": leaf, "index_rule": INDEX_RULE,
            "salt_rule": "chacha20 (rfc 8439), a fresh 32-byte os key per window, nonce = the row port's index over all members "

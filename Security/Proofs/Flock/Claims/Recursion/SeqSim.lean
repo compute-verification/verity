@@ -1,4 +1,6 @@
-import Proofs.Flock.Claims.Recursion.Seq
+module
+
+public import Proofs.Flock.Claims.Recursion.Seq
 
 /-!
 # The composed simulator is the claim's `Sim`
@@ -18,6 +20,8 @@ inner protocol's rounds are the inner verifier's (`I.V.k = IV.k` at the inner st
 * `Claims.ZKMal.ZKmalAt.of_sim`: `ZKmalAt` carries over to a simulator with the same transcripts on coins in
   bijection.
 -/
+
+@[expose] public section
 
 namespace Claims.ZKMal
 
@@ -203,8 +207,8 @@ theorem simPre_goesOn {W : Type} (ivScope : Claims.Msg → Bool) (I : Claims.Rec
 
 /-- A transcript of messages read back from the prover's history is itself. -/
 theorem asRounds_histOf {τ : List (Claims.Msg × Claims.Out)} (h : ∀ p ∈ τ, Claims.ZKMal.isMsg p.2 = true) :
-    asRounds (Claims.ZKMal.histOf τ) = τ := by
-  simp only [asRounds, Claims.ZKMal.histOf, List.map_map]
+    asRounds (Claims.histOf τ) = τ := by
+  simp only [asRounds, Claims.histOf, List.map_map]
   refine (List.map_congr_left fun p hp => ?_).trans (List.map_id τ)
   obtain ⟨a, o⟩ := p
   cases o with
@@ -215,7 +219,7 @@ theorem asRounds_histOf {τ : List (Claims.Msg × Claims.Out)} (h : ∀ p ∈ τ
 /-- **Past a first part of `kPre x` rounds of messages, the V\* statements `simM` reads are `Sim`'s.** -/
 theorem xsOf_of_goesOn (x : Claims.Msg) (s : ℕ) (τ₀ r : List (Claims.Msg × Claims.Out))
     (hl : τ₀.length = kPre IV x) (hm : ∀ p ∈ τ₀, Claims.ZKMal.isMsg p.2 = true) :
-    xsOf IV b x s (Claims.ZKMal.histOf (τ₀ ++ r)) = (vstar b.st x τ₀).getD s [] := by
+    xsOf IV b x s (Claims.histOf (τ₀ ++ r)) = (vstar b.st x τ₀).getD s [] := by
   unfold xsOf
   rw [Claims.ZKMal.histOf_append, List.take_append_of_le_length (by rw [Claims.ZKMal.histOf_length, hl]),
     List.take_of_length_le (by rw [Claims.ZKMal.histOf_length, hl]), asRounds_histOf hm]
@@ -226,7 +230,7 @@ noncomputable def stepM (H : Claims.Msg → Claims.Msg) (ask : List Claims.Msg �
     (SO : Claims.Msg → ℕ → Claims.Recursion.OSim) (x : Claims.Msg) (τ : List (Claims.Msg × Claims.Out)) (s : ℕ)
     (c : (SO x s).C) : List (Claims.Msg × Claims.Out) :=
   if Claims.Recursion.goesOn τ then τ ++ (Claims.SP.eval H ask (Claims.ZKMal.spUnder (τ.map Prod.fst)
-    ((SO x s).prog (xsOf IV b x s (Claims.ZKMal.histOf τ)) c))).1 else τ
+    ((SO x s).prog (xsOf IV b x s (Claims.histOf τ)) c))).1 else τ
 
 /-- **`simM`'s nested simulator's transcript**: the first part's, then one `stepM` per session, on the coins
 `iterCoins` reads off the nested ones. -/

@@ -25,12 +25,12 @@ from verity_vllm.program.predict import window_circuit as WC
 from verity_vllm.program.predict import window_rows as WR
 from verity_vllm.program.predict import window_weights as WW
 
-from verity.core.protocols.certifier import ingress_scan as IS
+from verity.ml.protocols.certifier import ingress_scan as IS
 from verity.core.protocols.certifier import warden as W
 from verity.core.protocols.certifier.active import id_request
 from verity.core.protocols.pouw.audit import hm96_salt
-from verity.core.protocols.sampled_proofs.one_stage import registered as CR
-from verity.core.protocols.sampled_proofs.one_stage import registration as REG
+from verity.core.protocols.spot.one_stage import registered as CR
+from verity.core.protocols.spot.one_stage import registration as REG
 from verity.ml.circuits.codec import descriptor_id
 from verity.ml.circuits.defs import bind
 from verity.ml.circuits.evaluation import evaluate_batch
@@ -246,7 +246,7 @@ def _traffic(cls: WC.WindowClass, prompts, arrivals) -> tuple[list[bytes], dict[
     import sys
     from pathlib import Path
 
-    spec = importlib.util.spec_from_file_location("scan_traffic", Path(IS.__file__).parent / "tests" / "scan_traffic.py")
+    spec = importlib.util.spec_from_file_location("scan_traffic", Path(IS.__file__).parent.parent.parent.parent / "core" / "protocols" / "certifier" / "tests" / "scan_traffic.py")
     ST = sys.modules["scan_traffic"] = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(ST)
     scan = cls.scan
@@ -312,7 +312,7 @@ def test_a_chunks_best_is_its_first_maximum_above_minus_infinity():
     nan, inf, ninf = 0x7FC0, 0x7F80, 0xFF80
     assert WR.chunk_best(_bf16([1.0, 3.0, 3.0, 2.0])) == (int(_bf16(3.0)), 1)
     assert WR.chunk_best(np.array([nan, *_bf16([-2.0, -1.0])], dtype=np.uint16)) == (int(_bf16(-1.0)), 2)
-    assert WR.chunk_best(np.array([ninf, nan, ninf], dtype=np.uint16)) == (WR.NEG_INF_BF16, 0)
+    assert WR.chunk_best(np.array([ninf, nan, ninf], dtype=np.uint16)) == (ninf, 0)
     assert WR.chunk_best(np.array([ninf, inf], dtype=np.uint16)) == (inf, 1)
 
 

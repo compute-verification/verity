@@ -1,9 +1,50 @@
-import Proofs.Flock.Claims.Recursion.FlockKSAbort
-import Proofs.Flock.Soundness.ExtractAccLin
-import Definitions.Claims.RecursionLin
+module
+
+public import Proofs.Flock.Claims.Recursion.FlockKSAbort
+public import Proofs.Flock.Soundness.ExtractAccLin
+public import Definitions.Claims.RecursionLin
+import Mathlib.Algebra.Order.Floor.Extended
+import Mathlib.Algebra.Order.Interval.Basic
+import Mathlib.Algebra.Order.Star.Real
+import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
+import Mathlib.Analysis.SpecialFunctions.Bernstein
+import Mathlib.Analysis.SpecialFunctions.Gamma.Basic
+import Mathlib.Analysis.SpecialFunctions.Trigonometric.DerivHyp
+import Mathlib.Combinatorics.Enumerative.DyckWord
+import Mathlib.Combinatorics.SimpleGraph.Triangle.Removal
+import Mathlib.Data.NNRat.Floor
+import Mathlib.Data.Nat.Choose.Multinomial
+import Mathlib.Geometry.Euclidean.Altitude
+import Mathlib.NumberTheory.Chebyshev
+import Mathlib.NumberTheory.Height.NumberField
+import Mathlib.NumberTheory.Height.Projectivization
+import Mathlib.NumberTheory.LucasLehmer
+import Mathlib.NumberTheory.SelbergSieve
+import Mathlib.RingTheory.Radical.NatInt
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Tactic.ReduceModChar
+import Mathlib.Topology.Sheaves.Init
+import Proofs.Flock.Claims.Bits
+import Proofs.Flock.Claims.Bridge.Transport
+import Proofs.Flock.Claims.ERepCost
+import Proofs.Flock.Claims.Finder
+import Proofs.Flock.Soundness.Game
+import Std.Tactic.BVDecide.Normalize.BitVec
 
 /-!
-# Flock meets `KSFlockLin` from the table bound at the abort law, linearly
+# Flock meets `KSFlockLin` from the table bound at the abort distribution, linearly
 
 `KSAbort_of_oneWaitAbort` reads the table bound with escapes under one root: each cap's fork and level 0's conflict
 fork, `√(γ·Pr[BAbort])` after `EscapesD.le`. `KSFlockLin` charges each to a finder of its own, so here the table
@@ -14,7 +55,7 @@ conflict is `F0`'s:
   `t ≥ 0` on the tapes with `𝔼 t ≤ k(x)·Pr[BAbort] + W(x)·(Pr[FC] + 1/(M+1))`, such that every table of `Ok` columns
   that does not extract leaves a run accepting as it aborts at most `ε_table + t(ω)` more often than accepting so and
   opening a position off the table.
-* **One wait over draws, linearly** (`oneWaitD_lin`): `joint_acc_le_lin` at `drawGame`, as `oneWaitD` is
+* **One wait over samples, linearly** (`oneWaitD_lin`): `joint_acc_le_lin` at `drawGame`, as `oneWaitD` is
   `joint_acc_le`, and level 0's conflict among the `k + 1` accepted runs as the conflict finder's success
   (`conflict_succ_ge`, `(k+1)/(R+1)` at every `R`).
 * **The conflict finder is `F0`** (`expect_conflictG_drawGame`, `Ex_conflictSucc_le_PrF0`): at `drawGame` its runs are
@@ -27,17 +68,19 @@ conflict is `F0`'s:
   (`Ex_capHits`).
 -/
 
+@[expose] public section
+
 namespace Claims.Recursion
 
 open Claims Claims.Flock FlockSoundness FlockSoundness.Game FlockSoundness.Extract FlockSoundness.Rewinding
 
-/-! ## Draws as runs of games -/
+/-! ## Samples as runs of games -/
 
 section DrawRuns
 
 variable {Dr : Type} [Fintype Dr] [Nonempty Dr]
 
-/-- **`k` runs of a game whose runs are uniform draws** are `k` independent draws. -/
+/-- **`k` runs of a game whose runs are uniform samples** are `k` independent samples. -/
 theorem expectN_of_expect {α U : Type} [Fintype U] [Nonempty U] (g : Game α) (s : Strategy g) (e : U → α)
     (h : ∀ f : α → ℝ, expect f g s = Ex fun u => f (e u)) :
     ∀ (k : ℕ) (Φ : List α → ℝ),
@@ -52,13 +95,13 @@ theorem expectN_of_expect {α U : Type} [Fintype U] [Nonempty U] (g : Game α) (
     refine congrArg Ex (funext fun r => ?_)
     simp [List.finRange_succ, List.map_cons, List.map_map, Function.comp_def]
 
-/-- **`R` runs of `drawGame`** are `R` independent draws. -/
+/-- **`R` runs of `drawGame`** are `R` independent samples. -/
 theorem expect_runsG_drawGame (R : ℕ) (f : List Dr → ℝ) :
     expect f (runsG (drawGame Dr) R) (runsStrat (drawGame Dr) (drawS Dr) R) =
       Ex fun u : Fin R → Dr => f ((List.finRange R).map u) := by
   rw [expect_runsG, expectN_drawGame]
 
-/-- **The conflict finder at `drawGame`**: a draw, and `k` waits of `R` draws each, all independent. -/
+/-- **The conflict finder at `drawGame`**: a sample, and `k` waits of `R` samples each, all independent. -/
 theorem expect_conflictG_drawGame (R k : ℕ) (F : Dr × List (List Dr) → ℝ) :
     expect F (conflictG (drawGame Dr) R k) (conflictStrat (drawGame Dr) (drawS Dr) R k) =
       Ex fun s : Dr × (Fin k → Fin R → Dr) =>
@@ -70,7 +113,7 @@ theorem expect_conflictG_drawGame (R k : ℕ) (F : Dr × List (List Dr) → ℝ)
 
 omit [Fintype Dr] [Nonempty Dr] in
 open Classical in
-/-- **A wait's first accepted draw is the loop's pick.** -/
+/-- **A wait's first accepted sample is the loop's pick.** -/
 theorem find?_finRange_map (p : Dr → Prop) : ∀ (R : ℕ) (us : Fin R → Dr),
     ((List.finRange R).map us).find? (fun x => decide (p x)) = firstPick p R us
   | 0, _ => rfl
@@ -109,7 +152,7 @@ theorem mem_of_firsts (acc : Dr → Prop) : ∀ (bl : List (List Dr)) (bs : List
 
 end DrawRuns
 
-/-! ## One wait over draws, linearly -/
+/-! ## One wait over samples, linearly -/
 
 section OneWaitLin
 
@@ -151,10 +194,10 @@ theorem conflict_succ_ge' {β P V : Type} (g : Game β) (s : Strategy g) (acc : 
       div_le_div_of_nonneg_left hk0 (by positivity) he
     linarith
 
-/-- **One wait's bound over draws, linearly, from the table's bound**: `oneWaitD` with level 0's conflict among the
+/-- **One wait's bound over samples, linearly, from the table's bound**: `oneWaitD` with level 0's conflict among the
 `k + 1` accepted runs left linear (`joint_acc_le_lin`) and then charged to the conflict finder at every `R`:
 `ε · Q/ε^k ≤ ε_c + N·ε/(e·k) + Pr[conflict finder] + (k+1)/(R+1)`. -/
-theorem oneWaitD_lin (D : Flock.Deploy Coin Col T) (N : Msg → ℕ) (x : Msg) (tr : Dr → Trace) {s : Flock.Stmt}
+theorem oneWaitD_lin (D : Flock.Deploy Coin Col T) (N : Msg → ℕ) (x : Msg) (tr : Dr → Transcript) {s : Flock.Stmt}
     (hs : D.parse x = some s) (h1 : s.tables = 1) (Ok : Msg → Col → Prop) (hz : Ok x 0)
     (hok : ∀ d q u, (tr d).out = .acc → q < N x → lookCol (D.cols (tr d).seen 0) q = some u → Ok x u)
     (εc : ℝ) (hεc : 0 ≤ εc)
@@ -253,7 +296,7 @@ theorem ind_le_of_imp {α β : Type} {p : α → Prop} {q : β → Prop} {a : α
 
 omit [DecidableEq Col] [Zero Col] in
 open Classical in
-/-- **The conflict finder over draws succeeds at most as often as `F0` finds a collision**, averaged over the tape:
+/-- **The conflict finder over samples succeeds at most as often as `F0` finds a collision**, averaged over the tape:
 its `k + 1` accepted runs are `F0`'s run and its waits' picks, two of them that open a position of the word to two
 columns collide in their calls (`ConflictTied`), and every call of theirs is in `F0`'s list. -/
 theorem Ex_conflictSucc_le_PrF0 (H : Msg → Msg) (D : Flock.Deploy Coin Col T) (N : Msg → ℕ)
@@ -320,13 +363,13 @@ theorem Ex_conflictSucc_le_PrF0 (H : Msg → Msg) (D : Flock.Deploy Coin Col T) 
 
 end ConflictF0
 
-/-! ## The table bound at the abort law, linearly, and KS -/
+/-! ## The table bound at the abort distribution, linearly, and KS -/
 
 section KSLin
 
 variable {Coin Col T : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin] [DecidableEq Col] [Zero Col]
 
-/-- **The fixed-table bound at the abort law, linearly**: at every statement, prover, way it may abort and `M`, a
+/-- **The fixed-table bound at the abort distribution, linearly**: at every statement, prover, way it may abort and `M`, a
 nonnegative term on the tapes whose average is at most `k(x)·Pr[BAbort] + W(x)·(Pr[FC] + 1/(M+1))`, such that at
 every tape and every table at the word's positions whose columns `Ok` admits and which does not extract, a run accepts
 as it aborts with probability at most `ε_table` and that term beyond that of accepting so and opening a position of
@@ -352,7 +395,7 @@ theorem PrFC_nonneg (H : Msg → Msg) (V : Verifier Coin) (Cp : Caps Coin) {Ω A
   · exact Pr_nonneg _
   · exact le_rfl
 
-/-- **Flock as the inner protocol meets `KSFlockLin`, from the table bound at the abort law, linearly**: at every
+/-- **Flock as the inner protocol meets `KSFlockLin`, from the table bound at the abort distribution, linearly**: at every
 decoder that meets `ListWithin`, when the word is no longer than `N₀`, `ε_table ≥ 0`, the verifier takes a round,
 `K > 0`, `Ok` admits `0` and every column an accepted run opens, with `ConflictTied`, and `k ≥ 8`, the relation splits
 by table and the statement has one table wherever the verifier accepts some run. -/
@@ -457,7 +500,7 @@ section Averages
 
 variable {Coin : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin]
 
-/-- **One-run events, linearly**: events on one draw, each tied to a collision among the verifier's calls in the run as
+/-- **One-run events, linearly**: events on one sample, each tied to a collision among the verifier's calls in the run as
 it aborts, weighted by `β ≥ 0`, average over the tape to at most `Σβ · Pr[BAbort]`. -/
 theorem Ex_oneRun_le (H : Msg → Msg) (V : Verifier Coin) {Ω A : Type} [Fintype Ω] [Nonempty Ω] [Fintype A]
     [Nonempty A] (P : Prover Ω) (x : Msg) (keep : Ω → (Fin (V.k x) → Coin) → A → Bool) {L : Type} [Fintype L]

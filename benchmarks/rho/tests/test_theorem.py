@@ -6,7 +6,7 @@ from rho.theorem import (
     Budget,
     Cut,
     Partition,
-    ServingBlock,
+    ServerBlock,
     aggregate,
     least,
     local,
@@ -20,7 +20,7 @@ W = 0.5
 
 
 def block(*cuts, layout=None, gates=1000.0, name="s", mfu=1.0):
-    return ServingBlock(name, gates, 1.0, cuts, layout, mfu)
+    return ServerBlock(name, gates, 1.0, cuts, layout, mfu)
 
 
 def test_a_serving_block_contributes_its_least_cut_and_never_more_than_its_capacity():
@@ -126,8 +126,8 @@ def test_a_bound_holds_uncertified_and_dark_gates_and_every_block_at_u_and_an_at
 
 
 def test_overhead_weights_serving_blocks_by_their_gates():
-    free = ServingBlock("free", 3000.0, 1.0, ())
-    locked = ServingBlock("locked", 1000.0, 1.0, (Cut("c", (Blocks("x", Budget(1000, 0), 1),)),))
+    free = ServerBlock("free", 3000.0, 1.0, ())
+    locked = ServerBlock("locked", 1000.0, 1.0, (Cut("c", (Blocks("x", Budget(1000, 0), 1),)),))
     s = overhead(Partition((free, locked), 0.0), lambda bud: bud.inputs, W)
     assert math.isclose(s.g, 0.75) and math.isclose(s.padded, 4 / 3)
     assert math.isclose(sum(s.terms.values()), s.g)

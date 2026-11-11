@@ -1,4 +1,4 @@
-"""verity/flock-circuit's Python side (lane flock-circuit): the composite circuit, its instance files, and the tail pieces in
+"""verity/flock-circuit's Python side: the composite circuit, its instance files, and the tail pieces in
 the circuit. The Rust statement's own tests are ``flock-circuit selftest`` on a pod (every negative) and the crate's unit tests."""
 from __future__ import annotations
 
@@ -12,14 +12,13 @@ from verity_flock import circuit as FC
 from verity_flock import tail as TL
 from verity_flock.gf2 import Circuit, const_bits
 
-pytest.importorskip("verity_numerical")
-from verity_numerical.bench import templates as TM  # noqa: E402
-from verity_numerical.bench.generate import generate  # noqa: E402
-from verity_numerical.bench.input_sets import InputSet  # noqa: E402
+from verity_flock import subcircuit_templates as TM  # noqa: E402
+from synthetic_sets import synthetic_set  # noqa: E402
+from verity_flock.input_sets import InputSet  # noqa: E402
 
 
 def _set(sid: str, n: int, tmp_path):
-    summary = generate(TM.parse_subcircuit_id(sid), n, 20260926, tmp_path)
+    summary = synthetic_set(TM.parse_subcircuit_id(sid), n, 20260926, tmp_path)
     return InputSet.open(summary["path"])
 
 
@@ -222,7 +221,7 @@ def test_registered_reads_refuse_a_circuit_naming_a_port_twice():
 
 @pytest.mark.slow
 def test_the_header_carries_an_rfc8785_identifier(tmp_path):
-    """The header's identifier (PROTOCOL.md §16.10) is both files' as given; anything but a JSON object on which canonical
+    """The header's identifier (`Flock.HmRow`) is both files' as given; anything but a JSON object on which canonical
     JSON is RFC 8785 is refused."""
     s = _set("rope-head/d64/neox-bf16", 4, tmp_path)
     text = FC.compose(FC.lowering_for_set(s), s.subcircuit)
@@ -264,7 +263,7 @@ def test_public_leaves_split_from_the_rows_and_lie_in_whole_words():
 
 @pytest.mark.slow
 def test_public_input_ports_carry_the_verifiers_recomputation(tmp_path):
-    """A public input port (PROTOCOL.md §16.10) is no row: META names it with its seed and derivation, its leaves are zero
+    """A public input port (`Flock.HmRow`) is no row: META names it with its seed and derivation, its leaves are zero
     leaves of ``leaves_in`` and public words of ``leaves_public`` in whole words of the leaf group, and the unit range is not
     packed (the in region reads it). Both instance files end with its words; the verifier's own ``--public-inputs`` file holds
     the same words under the same ports. A port naming no recomputation, no input port, or one sharing a word with a row's
@@ -361,13 +360,14 @@ def test_the_leaf_scheme_is_the_lean_verifiers_and_the_provers():
     import re
     from pathlib import Path
 
-    flock, service = Path(__file__).resolve().parents[1], Path(__file__).resolve().parents[3] / "core" / "service"
+    flock = Path(__file__).resolve().parents[1]
+    lean_flock = Path(__file__).resolve().parents[4] / "verity/core/service/flock"
     words = {k: v for k, v in FC.LEAF_SCHEME.items() if k in ("id", "inner", "salt_source", "key")}
     lean = r'\("(\w+)", (?:s )?"([^"]*)"\)'
     rust = _body(flock / "live" / "src" / "circuit.rs", "pub fn leaf_scheme()")
-    copies = {"Flock.Tags.leafSchemeHm96Os": re.findall(lean, _body(service / "flock" / "Flock" / "Tags.lean",
+    copies = {"Flock.Tags.leafSchemeHm96Os": re.findall(lean, _body(lean_flock / "Flock" / "Tags.lean",
                                                                     "def leafSchemeHm96Os")),
-              "VStar.leafScheme": re.findall(lean, _body(service / "flock" / "VStar" / "Compose.lean", "def leafScheme")),
+              "VStar.leafScheme": re.findall(lean, _body(lean_flock / "VStar" / "Compose.lean", "def leafScheme")),
               "circuit.rs leaf_scheme": [("id", re.search(r'\{ \("([^"]+)", 192\) \}', rust)[1]),
                                          *re.findall(r'"(\w+)": "([^"]*)"', rust)]}
     for name, pairs in copies.items():
@@ -381,8 +381,8 @@ def test_the_zk_hooks_name_the_provers_randomness():
     import re
     from pathlib import Path
 
-    flock, service = Path(__file__).resolve().parents[1], Path(__file__).resolve().parents[3] / "core" / "service"
-    lean = _body(service / "flock" / "Flock" / "Zk.lean", "def hooks")
+    flock = Path(__file__).resolve().parents[1]
+    lean = _body(Path(__file__).resolve().parents[4] / "verity/core/service/flock/Flock/Zk.lean", "def hooks")
     os_words = dict(re.findall(r'let (\w+) := if os then "([^"]*)" else', lean))
     assert set(os_words) == {"pads", "draws"}, os_words
     want = {k: re.search(rf'\("{k}", s s!"([^"]*)"\)', lean)[1].replace("{pads}", os_words["pads"])

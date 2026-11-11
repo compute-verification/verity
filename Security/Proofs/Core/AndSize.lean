@@ -1,9 +1,11 @@
-import Definitions.Core.Guarantees.Formalism
-import Definitions.Core.Guarantees.Expand
-import Proofs.Core.Expand
-import Mathlib.Data.ZMod.Basic
-import Mathlib.Tactic.LinearCombination
-import Mathlib.Tactic.Ring
+module
+
+public import Definitions.Core.Guarantees.Expand
+public import Definitions.Core.Guarantees.Formalism
+public import Mathlib.Data.ZMod.Basic
+public import Mathlib.Tactic.LinearCombination
+public import Proofs.Core.Expand
+import Mathlib.Tactic.Ring.RingNF
 
 /-!
 # Proofs about the AND count
@@ -12,9 +14,11 @@ import Mathlib.Tactic.Ring
   circuit's size (`CreditSizeLe`);
 * `Circuit.not_affine_of_and`: a gate that computes `p ∧ q` on the inputs that are `p` at `x`, `q` at `y` and `0`
   elsewhere is not affine: an affine function's values on those four inputs sum to `0`, AND's to `1`;
-* `ToCircuitAnd`: C-Flock's XOR, NOT and input gates are affine, and its `and a b` (`a ≠ b`) and its rows whose XORs
+* `ToCircuitAnd`: Flock's XOR, NOT and input gates are affine, and its `and a b` (`a ≠ b`) and its rows whose XORs
   differ are not.
 -/
+
+@[expose] public section
 
 namespace Verity
 
@@ -91,7 +95,7 @@ end SecurityProofs
 
 end Verity
 
-namespace FlockSoundness.Audit.Circuit
+namespace Verity.Boolean.Circuit
 
 open Verity Verity.Circuit Finset
 
@@ -177,11 +181,11 @@ theorem apply_row_andProbe {N : ℕ} {a b : List (Fin N)} {x y : Fin N} (hxy : x
     xorSum_andProbe b hxy p q false true (count_even b x hxb) (count_odd b y hyb)]
   cases p <;> cases q <;> rfl
 
-end FlockSoundness.Audit.Circuit
+end Verity.Boolean.Circuit
 
 namespace Verity.SecurityProofs
 
-open FlockSoundness.Audit FlockSoundness.Audit.Circuit Finset
+open Verity.Boolean.Circuit Finset
 
 theorem ToCircuitAnd : Guarantees.ToCircuitAnd := by
   intro B g
@@ -194,7 +198,7 @@ theorem ToCircuitAnd : Guarantees.ToCircuitAnd := by
     | input =>
       have : (B.op g).isInput = false := hi
       rw [ho] at this
-      exact absurd this (by simp [Op.isInput])
+      exact absurd this (by simp [Verity.Boolean.Op.isInput])
     | and a b => exact Or.inl ⟨a, b, rfl⟩
     | row a b => exact Or.inr ⟨a, b, rfl⟩
     | xor a b =>
@@ -203,13 +207,13 @@ theorem ToCircuitAnd : Guarantees.ToCircuitAnd := by
       · subst hab
         refine ⟨∅, 0, empty_subset _, fun v => ?_⟩
         rw [bitZ_toCircuit_op, ho]
-        simp [Op.apply]
+        simp [Verity.Boolean.Op.apply]
       · refine ⟨{a, b}, 0, ?_, fun v => ?_⟩
         · show ({a, b} : Finset (Fin B.N)) ⊆ (B.op g).args.toFinset
           rw [ho]
           intro z hz
           simp only [mem_insert, mem_singleton] at hz
-          rcases hz with rfl | rfl <;> simp [Op.args]
+          rcases hz with rfl | rfl <;> simp [Verity.Boolean.Op.args]
         · rw [bitZ_toCircuit_op, ho, zero_add]
           exact (bit_xor _ _).trans (sum_pair (f := fun z => Verity.Circuit.bitZ (v z)) hab).symm
     | not a =>
@@ -217,7 +221,7 @@ theorem ToCircuitAnd : Guarantees.ToCircuitAnd := by
       refine ⟨{a}, 1, ?_, fun v => ?_⟩
       · show ({a} : Finset (Fin B.N)) ⊆ (B.op g).args.toFinset
         rw [ho]
-        simp [Op.args]
+        simp [Verity.Boolean.Op.args]
       · rw [bitZ_toCircuit_op, ho]
         exact (bit_not _).trans (congrArg (1 + ·) (sum_singleton (fun z => Verity.Circuit.bitZ (v z)) a).symm)
   · exact not_affine B g hab fun p q => by rw [h]; exact apply_and_andProbe B hab p q

@@ -1,6 +1,22 @@
-import Proofs.Flock.Soundness.Discharge.Hidden.Wide.Copies
-import Proofs.Flock.Soundness.Discharge.Hidden.Wide.RowCommit
+module
+
+public import Proofs.Flock.Soundness.Discharge.Hidden.Wide.Copies
+public import Proofs.Flock.Soundness.Discharge.Hidden.Wide.RowCommit
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
 import Proofs.Flock.Soundness.Discharge.Hm.Bc
+import Proofs.Flock.Soundness.Discharge.Hm.Nets
 
 /-!
 # A row's `b ‖ c` under its own prefix, for `sha512/row/v1` and `sha512/row/v2` rows
@@ -12,6 +28,8 @@ its compressions' blocks and end, with their padding, in its `hm96` slot's block
 `pad_const_tgt`), with the row's own prefix `HmRow.prefixOf`. A row of no compression is hashed by its `hm96` slot
 alone, its `cv` the prefix's midstate (`row_copies_tgt0`, `port_commit_rows0`).
 -/
+
+@[expose] public section
 
 set_option Elab.async false
 

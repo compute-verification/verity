@@ -14,15 +14,25 @@
                                     the check's task graph of this checkout (`tasks/v1`, check/tasks.py; its README's "Tasks")
     verity tasks run ID [--out FILE]
                                     run one task here as check runs it, and print its verdict, outputs, seconds and key
-    verity example NAME [ARGS]      examples/NAME's command (`verity run` its config.toml, else its run.py or run.sh): its
+    verity graph [--json] [--family F]
+                                    the fine-grained check's task graph of this checkout (`verity-graph/v2`, graph/README.md)
+    verity graph run ID --work DIR  run one task of it here and print its result (`verity-result/v1`)
+    verity graph check --local [--family F]
+                                    run the graph serially here, uncached: the reference executor
+    verity demo NAME [ARGS]         examples/NAME's command (`verity run` its config.toml, else its run.py or run.sh): its
                                     workload on its placement
-    verity example --status         every example's protocol, workload, run and proof, and each one's next missing evidence
+    verity demo --status            every demo's protocol, workload, run and proof, and each one's next missing evidence
     verity lean try FILE            elaborate one Lean file, the edit loop: `lake env lean FILE` in the Lake package that
-                                    holds it, exiting with lean's status (on a project machine with --on NODE [--pool P])
+                                    holds it, with its Lean options as `lake build` gives them, exiting with lean's
+                                    status, and last the axiom probe: each theorem whose
+                                    axioms go beyond the standard three (`sorryAx` too), or none (on a project machine with
+                                    --on auto); --siblings: then fail on a name another module of its package declares too
 """
 from __future__ import annotations
 
 import argparse
+import contextlib
+import importlib.util
 import os
 import re
 import shutil
@@ -35,11 +45,9 @@ from pathlib import Path
 HERE = Path(__file__).resolve().parents[2]
 ROOT = HERE.parents[1]
 LAKEFILES = ("lakefile.lean", "lakefile.toml")
-USAGE = "verity lean try FILE [--on NODE [--pool P] [--as LANE]]"
-#: the node whose pool `verity lean try --on` takes when --pool names none, and that pool
-TRY_NODE, TRY_POOL = "vy-nebius-cpu-1", "research"
-#: `research run --on`'s line naming the run it started (or refused)
-LAUNCHED = re.compile(r"^research: run (\S+) (?:launched|refused) on ", re.M)
+USAGE = "verity lean try FILE [--siblings] [--on auto | --on MACHINE [--pool P] [--as LANE]]"
+#: `research run --on`'s line naming the run it started (or refused) and the machine it is on, which `--on auto` chose
+LAUNCHED = re.compile(r"^research: run (\S+) (?:launched|refused) on (\S+)", re.M)
 
 
 def _run(argv: list[str]) -> int:
@@ -101,8 +109,27 @@ def _snapshot(tree: Path, tmp: Path) -> Path:
     return tmp / "tree"
 
 
-def _lean_here(file: str) -> int:
-    """`lake env lean FILE` in the directory of the nearest lakefile above FILE, against that package's built imports."""
+def _probe():
+    """`tools/verity/lean/axiom_probe.py`, which `lean_changed.py --try` runs too."""
+    spec = importlib.util.spec_from_file_location("axiom_probe_for_verity_cli", HERE / "lean" / "axiom_probe.py")
+    m = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(m)
+    return m
+
+
+def _siblings():
+    """`tools/verity/lean/siblings.py`, which `lean_changed.py --try` runs too."""
+    spec = importlib.util.spec_from_file_location("lean_siblings_for_verity_cli", HERE / "lean" / "siblings.py")
+    m = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(m)
+    return m
+
+
+def _lean_here(file: str, siblings: bool = False) -> int:
+    """`lake env lean` in the directory of the nearest lakefile above FILE, against that package's built imports and with
+    its Lean options (`siblings.options`), on a copy of FILE with the axiom probe appended (`axiom_probe.py`), whose line is
+    the last; lean's status on FILE's own lines.
+    With ``siblings``, the copy's build then goes through the sibling check (`siblings.py`), whose status it takes."""
     path = (Path(file) if Path(file).is_file() else _tree(file) / file).resolve()
     pkg = next((d for d in path.parents if any((d / name).is_file() for name in LAKEFILES)), None)
     if not path.is_file() or path.suffix != ".lean" or pkg is None:
@@ -113,18 +140,48 @@ def _lean_here(file: str) -> int:
     if not Path(lake).is_file():
         raise SystemExit(f"verity lean try: no `lake` here: `bash tools/verity/lean/setup.sh {where}` installs elan, the "
                          "toolchain and the package's dependencies, then `lake build` there builds its imports")
-    rel = os.path.relpath(path, pkg)
-    print(f"verity lean try: lake env lean {rel} (in {where})", flush=True)
-    return subprocess.run([lake, "env", "lean", rel], cwd=pkg).returncode
+    rel, probe, sib = os.path.relpath(path, pkg), _probe(), _siblings()
+    opts = sib.options(pkg)
+    plan = sib.plan(pkg, rel) if siblings else None
+    if isinstance(plan, str):
+        print(f"verity lean try: {rel}: no sibling check: {plan}", flush=True)
+        plan = None
+
+    def lean(copy: str, args: list[str]) -> tuple[int, str]:
+        p = subprocess.run([lake, "env", "lean", *args, copy], cwd=pkg, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
+                           text=True)
+        print(p.stdout, end="", flush=True)
+        return p.returncode, p.stdout
+
+    with sib.scratch(pkg) if plan else contextlib.nullcontext() as work:
+        at = os.path.relpath(sib.source(plan, work), pkg / probe.COPIES) if plan else rel
+        args = opts + (sib.lean_args(pkg, plan, work) if plan else [])
+        print(f"verity lean try: lake env lean {''.join(o + ' ' for o in opts)}{probe.COPIES / at}, {rel} with the axiom "
+              f"probe after its last line{', then the sibling check' if plan else ''} (in {where})", flush=True)
+        rc, said, _ = probe.probe(pkg, at, path.read_text(), lambda copy: lean(copy, args))
+        if rc == 0 and plan:
+            rc, output, line = sib.check(plan, work, lambda a: sib.run([lake, "env", "lean", *a], pkg))
+            print(output, end="")
+            print(f"verity lean try: {rel}: {line}", flush=True)
+    if said:
+        print(f"verity lean try: {rel}: {said}", flush=True)
+    return rc
 
 
 def _lean(args: list[str]) -> int:
     ap = argparse.ArgumentParser(prog="verity lean try", description="Elaborate one Lean file: `lake env lean FILE` in the Lake "
                                  "package that holds it (the nearest lakefile above FILE), against that package's built "
-                                 "imports (`lake build` there first), exiting with lean's status.")
+                                 "imports (`lake build` there first) and with its `[leanOptions]`, as `lake build` gives "
+                                 "them, exiting with lean's status; its last line, the "
+                                 "axiom probe's, names each theorem whose axioms go beyond propext, Classical.choice and "
+                                 "Quot.sound (sorryAx too), or says none do.")
     ap.add_argument("file", metavar="FILE", help="the .lean file: a path from here, or from the root of "
                     "the checkout you're in, which is the tree it elaborates")
-    ap.add_argument("--on", metavar="NODE", help="elaborate it on a project machine instead")
+    ap.add_argument("--siblings", action="store_true", help="once it elaborates, import its build beside every built module "
+                    "of its package that doesn't import it, which fails on a name two of them declare, as the package's "
+                    "root would")
+    ap.add_argument("--on", metavar="MACHINE", help="elaborate it on a project machine instead: `auto`, where `research run "
+                    "--on auto` places it")
     ap.add_argument("--pool", help="with --on: the machine's pool for it")
     ap.add_argument("--as", dest="lane", metavar="LANE", help="with --on: the lane the pool's slot names (default $RESEARCH_LANE)")
     if not args or args[0] != "try":
@@ -133,21 +190,21 @@ def _lean(args: list[str]) -> int:
     if a.on is None:
         if a.pool or a.lane:
             ap.error("--pool and --as go with --on")
-        return _lean_here(a.file)
+        return _lean_here(a.file, a.siblings)
     tree = _tree(a.file)
     file = a.file if not Path(a.file).is_file() else os.path.relpath(Path(a.file).resolve(), tree)
-    if not (tree / file).is_file():
-        raise SystemExit(f"verity lean try: no {file} in {tree}, the checkout it ships")
-    pool = a.pool or (TRY_POOL if a.on == TRY_NODE else None)
+    if file.startswith(os.pardir + os.sep) or not (tree / file).is_file():
+        raise SystemExit(f"verity lean try: no {a.file} in {tree}, the checkout it ships: put FILE in a checkout")
     research = [sys.executable, "-m", "research"]
     t0 = time.monotonic()
     with tempfile.TemporaryDirectory(prefix="verity-lean-try-") as tmp:
         source = _snapshot(tree, Path(tmp))
         try:
-            p = subprocess.Popen([*research, "run", "--on", a.on, *(["--pool", pool] if pool else []),
+            p = subprocess.Popen([*research, "run", "--on", a.on, *(["--pool", a.pool] if a.pool else []),
                                   *(["--as", a.lane] if a.lane else []), "--project", "verity",
                                   "--source", str(source), "--cwd", "clone", "--wait", "--wait-every", "5", "--",
-                                  "python3", "tools/verity/lean/lean_changed.py", "--try", file],
+                                  "python3", "tools/verity/lean/lean_changed.py", "--try", file,
+                                  *(["--siblings"] if a.siblings else [])],
                                  cwd=ROOT, stderr=subprocess.PIPE, text=True)
             said = []
             for line in p.stderr:
@@ -160,13 +217,13 @@ def _lean(args: list[str]) -> int:
     if not (m := LAUNCHED.search("".join(said))):
         print(f"verity lean try: `research run` exited {rc} without starting a run", file=sys.stderr)
         return rc or 1
-    run_id = m.group(1)
-    subprocess.run([*research, "fetch", run_id, "--on", a.on, "--all"], cwd=ROOT, stdout=subprocess.DEVNULL)
+    run_id, machine = m.groups()
+    subprocess.run([*research, "fetch", run_id, "--on", machine, "--all"], cwd=ROOT, stdout=subprocess.DEVNULL)
     d = Path(os.environ.get("RESEARCH_RUNS", Path.home() / ".research" / "runs")).expanduser() / run_id
     for name, to in (("stdout.log", sys.stdout), ("stderr.log", sys.stderr)):
         if (d / name).is_file():
             to.write((d / name).read_text(errors="replace"))
-    print(f"verity lean try: run {run_id} on {a.on}: exit {rc} in {time.monotonic() - t0:.0f} s wall", flush=True)
+    print(f"verity lean try: run {run_id} on {machine}: exit {rc} in {time.monotonic() - t0:.0f} s wall", flush=True)
     return rc
 
 
@@ -183,19 +240,23 @@ def main(argv: list[str] | None = None) -> int:
         return _runner("benchmarks", "bench", args[1:])
     if args[0] == "tasks":
         return _run([sys.executable, str(HERE / "check" / "tasks.py"), *args[1:]])
+    if args[0] == "graph":
+        from verity_graph.cli import main as graph
+
+        return graph(args[1:])
     if args[0] in ("run", "config"):
         from . import run
 
         return (run.run_main if args[0] == "run" else run.config_main)(args[1:])
-    if args[0] == "example" and args[1:] == ["--status"]:
+    if args[0] == "demo" and args[1:] == ["--status"]:
         from verity_cli.examples import status
         return status(ROOT)
-    if args[0] == "example":
+    if args[0] == "demo":
         if args[1:] and (config := ROOT / "examples" / args[1].replace("-", "_") / "config.toml").is_file():
             from . import run
 
             return run.run_main([str(config), *args[2:]])
-        return _runner("examples", "example", args[1:])
+        return _runner("examples", "demo", args[1:])
     if args[0] == "lean":
         return _lean(args[1:])
     raise SystemExit(f"verity: no command {args[0]!r}\n{__doc__}")

@@ -14,7 +14,8 @@ Each check is `ok`, `skip` (it does not apply here) or a `finding`, which says w
   slack       `auth.test` is ok, with the bot token or through the broker (coordinator and infra: a lane asks its coordinator)
   ssh:NAME    `ssh -o BatchMode=yes ... true`, as `research run --on` reaches NAME, for each machine whose entry names an ssh host
               (machines.toml, and the registry where the notes clone already is: the doctor never clones it); a changed host
-              key reads as ok, since `research`'s ssh does not check host keys (runpod.ssh_command)
+              key reads as ok, since `research`'s ssh does not check host keys (runpod.ssh_command). The auditor hosts
+              (`remote.restricted`) refuse lanes' keys by design: they are not probed, and `ssh:auditor-hosts` names them
   venv        `uv sync --locked --check --offline` of the checkout's lock against the venv this runs in (else the checkout's
               .venv), workspace members aside: a worktree's come from PYTHONPATH
   disk        free space on the filesystems of the runs root, the store, the checkout and $TMPDIR, against the floor `research
@@ -57,12 +58,12 @@ from .store import remote as store_remote
 SCHEMA = "research/doctor/v1"
 ROLES = ("lane", "coordinator", "infra")
 #: The Cursor secrets each role needs, by name; a tuple is alternatives, any one of which will do, and a role needs the names of
-#: the roles before it too. GitHub and Slack need none: they go through Verity's brokers with the agent's Cursor identity
-#: (.git/verity-auth, `research msg`). HF_TOKEN is optional (the Hub repos we fetch are public); Notion is an MCP server's.
+#: the roles before it too. GitHub, the notes and Slack need none: they go through Verity's brokers with the agent's Cursor
+#: identity (.git/verity-auth, `notes_sync.notes_token`, `research msg`). HF_TOKEN is optional (the Hub repos we fetch are
+#: public); Notion is an MCP server's.
 SECRETS: dict[str, tuple[str | tuple[str, ...], ...]] = {
     "lane": ("R2_ENDPOINT", "R2_BUCKET", "AWS_ACCESS_KEY_ID", "AWS_SECRET_ACCESS_KEY",      # the store's remote (store/remote.py)
-             "RUNPOD_API_KEY", "RUNPOD_SSH_KEY_B64",                                       # pods, and ssh to every machine (pods/runpod.py)
-             "RESEARCH_NOTES_TOKEN"),                                                      # notes pushes (notes_sync.py)
+             "RUNPOD_API_KEY", "RUNPOD_SSH_KEY_B64"),                                      # pods, and ssh to every machine (pods/runpod.py)
     "coordinator": (),
     "infra": ("NEBIUS_SA_ID", "NEBIUS_SA_PUBLIC_KEY_ID", ("NEBIUS_SA_PRIVATE_KEY_B64", "NEBIUS_SA_PRIVATE_KEY")),   # pods/nebius/common.sh
 }
@@ -225,15 +226,19 @@ def check_notes_push() -> Check:
     root = registry.notes_root()
     if _git_root(root) != root.resolve():
         return Check("notes-push", FINDING, f"{root} is not a git clone: notes written here reach nobody",
-                     "with RESEARCH_NOTES_TOKEN set, any `research notes` command clones it (kb/cloud-lane-setup.md, section 1)")
+                     "any `research notes` command clones it, with the GitHub broker's notes token on a Cursor agent "
+                     "(kb/cloud-lane-setup.md, section 1)")
     if not _has_origin(root):
         return Check("notes-push", FINDING, f"the notes clone {root} has no origin: notes committed here reach nobody (a checkout "
                                             "may be local on purpose, a notes clone may not)",
                      f"`git -C {root} remote add origin {notes_sync.NOTES_URL}`")
     opts, where = notes_sync.remote_target(root)
-    fix = (f"{notes_sync.TOKEN_ENV} was refused (expired or rotated): a new one goes in {DASHBOARD}" if os.environ.get(notes_sync.TOKEN_ENV)
-           else f"set {notes_sync.TOKEN_ENV} (a Cursor secret): without it git pushes as the VM's GitHub App, which the notes repo "
-                "refuses (kb/cloud-lane-setup.md, section 1)")
+    fix = ("the GitHub broker's notes token was refused: the agents' App needs research-notes in its repository access"
+           if os.environ.get(notes_sync.SOURCE_ENV) == "broker"
+           else f"{notes_sync.TOKEN_ENV} was refused (expired or rotated): unset it to use the GitHub broker's token, or put a new "
+                f"one in {DASHBOARD}" if os.environ.get(notes_sync.TOKEN_ENV)
+           else "no notes token: a Cursor agent gets one from the GitHub broker (`notes_sync.notes_token`); elsewhere set "
+                f"{notes_sync.TOKEN_ENV}")
     return push_probe("notes-push", root, opts, where, fix)
 
 
@@ -292,9 +297,16 @@ def registry_unread() -> bool:
 
 def ssh_machines() -> dict[str, dict]:
     """The machines `research run --on` knows (machines.toml, and the registry unless `registry_unread`) whose entries name an
-    ssh host."""
+    ssh host, the auditor hosts (`remote.restricted`) aside."""
+    return _ssh_machines()[0]
+
+
+def _ssh_machines() -> tuple[dict[str, dict], list[str]]:
+    """(the machines to probe, the auditor hosts left out)."""
     ms = remote.load_machines(remote.machines_path()) if registry_unread() else remote.load_machines()
-    return {n: m for n, m in sorted(ms.items()) if isinstance(m, dict) and m.get("provider") == "ssh"}
+    ssh = {n: m for n, m in sorted(ms.items()) if isinstance(m, dict) and m.get("provider") == "ssh"}
+    skipped = remote.restricted(ssh)
+    return {n: m for n, m in ssh.items() if n not in skipped}, sorted(skipped)
 
 
 def check_ssh(name: str, machine: dict) -> Check:
@@ -411,7 +423,7 @@ def checks(role: str, root: Path | None) -> list[Probe]:
     if role in SLACK_ROLES:
         out.append(("slack", check_slack))
     try:
-        machines = ssh_machines()
+        machines, skipped = _ssh_machines()
     except Exception as e:  # noqa: BLE001  (a TOML error, or a table of the wrong shape: only the class is shown)
         out.append(("ssh", lambda e=e: Check("ssh", FINDING, f"the machines config is unreadable: {type(e).__name__}",
                                              f"{remote.machines_path()} holds one `[machines.NAME]` table per machine; "
@@ -424,6 +436,9 @@ def checks(role: str, root: Path | None) -> list[Probe]:
             "machines.toml or the registry"
         out += [(f"ssh:{n}", lambda n=n, m=m: check_ssh(n, m)) for n, m in machines.items()] or \
                [("ssh", lambda: Check("ssh", SKIP, f"no machine in {where} names an ssh host"))]
+        if skipped:
+            out.append(("ssh:auditor-hosts", lambda: Check("ssh:auditor-hosts", SKIP, f"not probed: {', '.join(skipped)}, which refuse "
+                                                                                        "lanes' keys by design")))
     out += [("venv", lambda: check_venv(root)), ("disk", lambda: check_disk(root)), ("clock", check_clock)]
     return out
 

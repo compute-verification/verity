@@ -18,14 +18,17 @@ settings registries it marks, ``{"file", "registry": true}``, a declaration rath
 counted) and ``test_repo_silent_excepts.py`` its except handlers that swallow what they catch
 (``allowlists/repo_silent_excepts.json``); ``test_repo_lane_text.py`` holds the prose of every file its ``holds`` takes
 (comments, docstrings, Lean comments and Markdown, the integration's too, outside ``archive/``) to a count per file of its
-lane text (``allowlists/repo_lane_text.json``); its slugs stay apart from the integration's.  A change is judged when it touches a
+lane text (``allowlists/repo_lane_text.json``), and ``test_repo_retired_terms.py`` the whole text of the same files to a count
+per file of the terms ``GLOSSARY.md``'s older names retire (``allowlists/repo_retired_terms.json``); its slugs stay apart from
+the integration's.  A change is judged when it touches a
 ratchet, a ``*.py`` file under ``integrations/vllm/tests/lint/`` or ``tests/lint/`` (the lints' code) or a ruff lint's config:
-``integrations/vllm/ruff.toml``, the root ``ruff.toml`` (both ruff lints') and the ruff the root ``dev`` group pins.  It passes
+``integrations/vllm/ruff.toml``, the root ``ruff.toml`` (both ruff lints'), ``integrations/vllm/tests/lint/ruff_vllm.toml``
+(the integration's lint with vLLM's rules, ``test_ruff_vllm.py``) and the ruff the root ``dev`` group pins.  It passes
 when:
 
-* in each ratchet, no kind whose entries record counts (an entry's ``count``: typed_records' or-empty per package, P07's)
+* in each ratchet, no kind whose entries record counts (an entry's ``count``: typed_records' or-empty per file, P07's)
   holds more in total after it than before.  A key may rise, or a new one appear, when the same kind's other keys fall by
-  at least as much, so a move from one package to another passes.  A repository list
+  at least as much, so a move from one file to another passes.  A repository list
   (``repo_ruff``'s and each counted lint's, ``CATCH_UP``) may also raise a key, in any file, up to what its lint, as the
   change's base has it, finds there in the base's tree: a list that records what its base already holds adds no finding,
   so a list behind its tree catches up, while growth past the base's own findings is held as before.  A change that edits
@@ -37,16 +40,22 @@ when:
 * among the other entries, the per-site ones and P10's, whose count is a size in lines, no ratchet its base has holds
   more after it than before, and no entry's recorded ``count`` grows (an entry is its fields less ``count``);
 * a command the ``public`` table of P16's list (``allowlists/p16_cli_callers.json``) gains, one run from outside the
-  integration, where P16's suite doesn't look, or one given another caller, names a file that, in the change's tree, runs it
+  integration, where P16's suite doesn't look, or only from a file the public export doesn't copy, or one given another
+  caller, names a file that, in the change's tree, runs it
   as the base's P16 lint finds a call (its ``runs``).  Like the environment-read list's registry marks, the table is a
   declaration and no ratchet counts it, but this one is checked, so a change may add one (were the table P16's code, which
   the gate runs as the base has it, no change could add a command run from ``benchmarks/``); and
-* if it changes a lint's code or allowlist, its base's lint code finds nothing on its tree that its allowlists don't cover.
-  In a temporary worktree of the change's top, each lint directory to run and both ``ruff.toml`` files are replaced by the
-  base's, each allowlist there holding the top's entries for its slug (none for a deleted one), P16's the top's public
-  commands too, and the ``test_no_new*`` tests
+* if it changes a lint's code or allowlist, its base's lint code finds nothing on its tree that its allowlists don't cover,
+  beyond what it finds on the base's own tree, with the base's lists: a violation the tree below already holds isn't the
+  change's, so it passes, naming the change that added each one's line (``git blame --first-parent`` on the base: ``#N``
+  for a queue merge), whose own merge the source checks below fail.  In a temporary worktree of the change's top, each
+  lint directory to run and both ``ruff.toml`` files are replaced by the base's, each allowlist there holding the top's
+  entries for its slug (none for a deleted one), P16's the top's public commands too, and the ``test_no_new*`` tests
   of each lint whose code or allowlist changed (every lint's in a directory whose shared code did) run without pytest, the ruff
-  lints with the base's pin.
+  lints with the base's pin.  A counted lint, and each ruff lint, reads those replaced files too, as the base has them, so
+  its violations in one are counted again on the change's own copy (ruff's per rule, with the base's configs and pin),
+  against the change's list: a lint module whose prose or ruff finding the change cleans, with its entry dropped, passes,
+  and one that keeps its sites without its entry fails, naming the change's own sites.
   So loosening a lint to drop its entries (raising P10's cap, skipping a kind, ignoring a ruff rule, deleting the lint)
   fails, naming each violation the base's lint still finds, while tightening one passes once the change fixes what it
   finds.
@@ -56,9 +65,8 @@ allowlist, and every change is judged by it: in the ``*.py`` files it touches un
 no more ``noqa`` comments (``# noqa``, ``# noqa: CODE``, a file's ``# ruff: noqa``) than it removes.  A line is matched by its stripped text, codes included, so one
 that moves with its code counts as kept, and deleting a stale ``noqa`` pays for a new one.
 
-The top change's Python is linted too (drive lands before the suites run, so a new finding would land and be reverted),
-when its base has the repository's ruff lint: each ``*.py`` and ``*.pyi`` file the change
-adds or modifies outside that lint's ``LEFT_OUT`` (the integration's ruff lint's files, and ``archive/``) is checked by ruff
+The top change's Python is linted too, when its base has the repository's ruff lint: each ``*.py`` and ``*.pyi`` file the
+change adds or modifies outside that lint's ``LEFT_OUT`` (the integration's ruff lint's files, and ``archive/``) is checked by ruff
 under the base's root ``ruff.toml``, as it is before the change and after it, and the change fails when any (file, rule) count
 grows, naming each new finding ``file:line RULE message``.  (file, rule) is the repository's ruff lint's key too, so a
 finding moved within its file passes both.  A renamed file's before is its old path's (``git diff -M``), so a move keeps its
@@ -74,33 +82,44 @@ reads it would exempt doesn't count): the fix is the area's settings registry.  
 catch (every outcome is recorded): the fix is to re-raise, record the outcome, or narrow the handler.
 A rename must move the file's entry (``python3 tests/lint/test_<slug>.py --move OLD NEW``), as for ruff.
 
-Only the top change is linted: a PR's own commits at the preflight, its merge onto `next` at the sync, where the members below
-were linted at their own merges.
+Only the top change is linted: a branch's own commits before marking, the tip's merge in the after-landing run, so a merge
+that lands below a run's tip, with others in one landing, is never linted here (the repository's lints still check its files
+against their lists).  Its findings and sites are counted with the lints, configs and pin its own base has when that base holds
+BASE (the merge below it, whose merges below may change a lint: the lints it landed with), else with BASE's (a branch's
+merge base, an older `main`), so a PR that adds a site a lint landed below it counts fails at its own merge, not later in
+the whole-tree run of a change that touches a lint.
 
 A counted lint with ``holds`` reads each file its ``holds`` takes, of any kind, rather than each ``*.py`` file, and counts it
 by its path too: the repository's lane text, in the prose of code, Lean and Markdown, whose fix says where the text goes (history
-to git, work to Linear, rulings to Notion, results to the store).
+to git, work to Linear, rulings to Notion, results to the store), and its retired terms, whose fix is the term the glossary gives.
 
 Exempt: a revert (each commit's subject ``Revert "``, or a queue merge whose PR title starts ``Revert``) and a pure move that
 BASE's ``tools/verity/check/move_check.py`` certifies.
 
 It runs on git, in the repository of the current directory, and runs no code but the base's (its lints and the ruff it pins,
-and BASE's move_check), so the merge queue runs `main`'s copy of it, which a PR can't weaken, on `main` and a PR's head (or,
-at the sync, its merge onto `next`, each member below judged again) as it admits the PR (a landing gate in drive.toml's ``landing_gates``: `research queue ready`'s preflight refuses the mark, and the
-sync onto `next` leaves the PR out).  The lints run on the Python that runs it, and ruff (the ruff lints, and the source lint)
+and BASE's move_check).  Nothing runs it before a PR lands: it is the check's ``ratchet-gate`` step
+(``tools/verity/check/check.py``'s ``ratchet_gate``, ci.toml's job), off the merge gate (policy.toml's ``off_gate``), which
+drive's after-landing run of `checked`'s tip runs as ``ratchet_gate.py BASE TIP`` with BASE's copy of this file, which no
+change it judges can weaken, BASE a commit below the tip that drive sends (``check.py`` says which).  Each `Queue: #N` merge
+above BASE is judged against the one below it, so a failure names its PR, which drive takes as the red's culprit.  The red
+never holds `main`, and drive never reverts its culprit (drive.toml's ``warn_steps``): it rings the culprit's owner, who
+fixes it forward in their next PR.  The lints run on the Python that runs it, and ruff (the ruff lints, and the source lint)
 on the first Python whose ``-m ruff`` is the base's pin: this one, else one ``uv run --offline --with`` makes from uv's cache,
-else one ``uv run --with`` fetches the pin for (the network, once per uv cache).  A sync gates each PR on its merge onto
-`next`, which holds every PR below it, so each change's verdict is kept under ``$RATCHET_GATE_CACHE`` (default
-``~/.cache/verity/ratchet-gate``; empty: none), keyed by this file's bytes and the change's commits, which are all it reads, and
-BASE too for a verdict that reads it (a failed change's exemptions run BASE's move_check): a sync of N PRs judges each change
-once, not N times, and once `main` moves an untouched or passed change is still not judged again.  The source checks' findings
+else one ``uv run --with`` fetches the pin for (the network, once per uv cache).  A run judges every change above its BASE,
+and runs overlap (a rerun of one tip, a later tip's run whose BASE lies below changes an earlier run judged), so each
+change's verdict is kept under ``$RATCHET_GATE_CACHE`` (default ``~/.cache/verity/ratchet-gate``; empty: none; the check's
+step keeps it in the check's cache), keyed by this file's bytes and the change's commits, which are all it reads, and BASE
+too for a verdict that reads it (a failed change's exemptions run BASE's move_check): N runs over a change judge it once,
+not N times, and once BASE moves an untouched or passed change is still not judged again.  The source checks' findings
 are kept beside the verdict under BASE's key (they run BASE's lints and config), and apply to the top change only, so a member
-below the top is never failed by them.  An entry that can't be read is judged again, and an error is never kept.  Before marking
-a branch, run
-``python3 integrations/vllm/tools/ratchet_gate.py origin/main HEAD``.  Exit 0 when every change passes, 1 when one fails
-(with the fix), 2 on a usage or git error, or when the base's lints or ruff can't run (with the fix for the host), which the
-sync takes as a refusal: the gate never passes what it couldn't judge.  ``--json`` prints `KIND`, whose ``failures`` name
-each failing change's top ``commit``.
+below the top is never failed by them.  An entry that can't be read is judged again, and an error is never kept.  A change's
+judgement reads only its own commits (and BASE), so the changes the cache doesn't hold are judged at once, each in a forked
+process of its own, its worktree and ruff cache with it, up to ``$RATCHET_GATE_JOBS`` at a time (default the lesser of 16 and
+this process's CPUs; 1 judges them in turn), and reported in chain order, as judging them in turn reports them.  Before
+marking a branch, run ``python3 integrations/vllm/tools/ratchet_gate.py origin/main HEAD``.  Exit 0 when every change passes,
+1 when one fails (with the fix), 2 on a usage or git error, or when the base's lints or ruff can't run (with the fix for the
+host), which fails the check's step: the gate never passes what it couldn't judge.  ``--json`` prints `KIND`, whose
+``failures`` name each failing change's top ``commit``.
 """
 from __future__ import annotations
 
@@ -112,6 +131,7 @@ import importlib.util
 import io
 import json
 import math
+import multiprocessing
 import os
 import re
 import shutil
@@ -122,7 +142,9 @@ import tokenize
 import tomllib
 import types
 from collections import Counter
-from collections.abc import Callable
+from collections.abc import Callable, Iterable
+from concurrent.futures import ProcessPoolExecutor
+from concurrent.futures.process import BrokenProcessPool
 from dataclasses import dataclass, field
 from pathlib import Path, PurePosixPath
 
@@ -149,7 +171,8 @@ REPO_RUFF_LIST = f"{REPO_LINT}/allowlists/{REPO_RUFF_LINT}.json"
 #: with ``holds`` chooses the files it reads, any kind, and its sites function takes the file's path after its text.
 COUNTED = (("repo_env_reads", "reads", "direct environment read"),          # S1: configuration in one place
            ("repo_silent_excepts", "handlers", "silent except handler"),    # S4: recorded outcomes
-           ("repo_lane_text", "sites", "lane-text site"))                   # S5: what is true now
+           ("repo_lane_text", "sites", "lane-text site"),                   # S5: what is true now
+           ("repo_retired_terms", "sites", "retired-term site"))            # one vocabulary (GLOSSARY.md)
 #: the repository's lists whose keys may rise to what the change's base holds (``held``)
 CATCH_UP = (REPO_RUFF_LINT, *(s for s, *_ in COUNTED))
 #: a git tree entry's modes that are a file ruff reads (a symlink or a submodule isn't)
@@ -157,12 +180,18 @@ FILE_MODES = {"100644", "100755"}
 #: the lint directories, each run as its base has it
 LINTS = (LINT, REPO_LINT)
 #: P16's lint (every CLI command has a caller) and its list, whose ``public`` table names each command run from outside the
-#: integration with the file that runs it
+#: integration, or only from a file the public export doesn't copy, with the file that runs it
 CALLERS_MODULE = f"{LINT}/test_p16_cli_callers.py"
 CALLERS_LIST = f"{LINT}/allowlists/p16_cli_callers.json"
 PUBLIC = "public"
+#: the integration's lint with vLLM's rules (``test_ruff_vllm.py``) and its config, which extends nothing and sits in its lint
+#: directory, so the base's copy comes with the directory
+RUFF_VLLM_LINT = "ruff_vllm"
+RUFF_VLLM_CONFIG = f"{LINT}/ruff_vllm.toml"
 #: each ruff lint's directory and the configs it reads: the integration's extends the root's
-RUFF_LINTS = {RUFF_LINT: (LINT, (RUFF_CONFIG, REPO_RUFF_CONFIG)), REPO_RUFF_LINT: (REPO_LINT, (REPO_RUFF_CONFIG,))}
+RUFF_LINTS = {RUFF_LINT: (LINT, (RUFF_CONFIG, REPO_RUFF_CONFIG)), RUFF_VLLM_LINT: (LINT, (RUFF_VLLM_CONFIG,)),
+              REPO_RUFF_LINT: (REPO_LINT, (REPO_RUFF_CONFIG,))}
+RUFF_CONFIGS = (RUFF_CONFIG, REPO_RUFF_CONFIG, RUFF_VLLM_CONFIG)
 MOVE_CHECK = "tools/verity/check/move_check.py"
 QUEUE_SUBJECT = re.compile(r"^Queue: #(\d+) ?(.*)$")
 RULE_NUMBER = re.compile(r"^p\d+_")
@@ -172,6 +201,10 @@ NOQA = re.compile(r"#\s*(?:(?:ruff|flake8)\s*:\s*)?noqa\b", re.IGNORECASE)
 HUNK = re.compile(r"^@@ -\d+(?:,\d+)? \+(\d+)(?:,(\d+))? @@", re.MULTILINE)
 #: entries or violations named in a failure's fix, at most
 CHEAPEST = 12
+#: a violation that names a file, and maybe its line, as `violations` writes it: ``lint: file:line what``, ``lint: file: ...``
+SITE = re.compile(r"^[^:]+: ([^\s:]+):(?:(\d+)\b)?")
+#: a violation of the repository's ruff lint that names its (file, rule) pair: ``repo_ruff: file [RULE]: N found, M allowed``
+RUFF_PAIR = re.compile(r"^[^:]+: ([^\s:]+) \[([^\]]+)\]: ")
 #: the ratchets whose ``count`` measures one site (P10's is a size in lines) rather than counting findings, so never pooled
 MEASURES = {"size"}
 
@@ -613,19 +646,21 @@ def blobs(shas: set[str]) -> dict[str, bytes]:
     return out
 
 
-def ruff_findings(ruff: list[str], config: str, files: dict[str, bytes]) -> list[tuple[str, str, int, str]]:
+def ruff_findings(ruff: list[str], configs: dict[str, str], files: dict[str, bytes]) -> list[tuple[str, str, int, str]]:
     """(file, rule, line, message) of each finding ``ruff`` makes on ``files`` (path: content), laid out as in the tree with
-    ``config`` as the root ``ruff.toml``, as the repository's ruff lint runs it."""
+    ``configs`` (path: text), run from the first config's directory and given that config, as the ruff lint that reads it
+    runs it (``RUFF_LINTS``: the repository's, ``{REPO_RUFF_CONFIG: text}``)."""
     if not files:
         return []
     with tempfile.TemporaryDirectory(prefix="ratchet-gate-ruff-") as d:
         root = Path(d).resolve()
-        for path, data in files.items():
+        for path, data in {**files, **{p: t.encode() for p, t in configs.items()}}.items():
             (root / path).parent.mkdir(parents=True, exist_ok=True)
             (root / path).write_bytes(data)
-        (root / REPO_RUFF_CONFIG).write_text(config, encoding="utf-8")
-        r = subprocess.run([*ruff, "check", "--config", REPO_RUFF_CONFIG, "--no-cache", "--exit-zero", "--output-format",
-                            "json", "--", *sorted(files)], cwd=root, capture_output=True, text=True, stdin=subprocess.DEVNULL)
+        at = (root / next(iter(configs))).parent
+        r = subprocess.run([*ruff, "check", "--config", next(iter(configs)).rpartition("/")[2], "--no-cache", "--exit-zero",
+                            "--output-format", "json", "--", *(os.path.relpath(root / f, at) for f in sorted(files))],
+                           cwd=at, capture_output=True, text=True, stdin=subprocess.DEVNULL)
         try:
             found = json.loads(r.stdout) if r.returncode == 0 else None
         except ValueError:
@@ -650,7 +685,7 @@ def source_lint(c: Change, base: str) -> tuple[list[str], list[str], list[str]]:
     c.linted = [path for path, *_ in sources]
     if not sources:
         return [], [], []
-    config = git("show", f"{base}:{REPO_RUFF_CONFIG}")
+    config = {REPO_RUFF_CONFIG: git("show", f"{base}:{REPO_RUFF_CONFIG}")}
     data = blobs({b for *_, lo, hi in sources for b in (lo, hi) if b})
     ruff = [*python_for(ruff_pin(base), [REPO_RUFF_LINT]), "-m", "ruff"]
     was = Counter((f, rule) for f, rule, *_ in ruff_findings(ruff, config, {p: data[lo] for p, _, lo, _ in sources if lo}))
@@ -796,7 +831,7 @@ def findings_at(rev: str, s: str, files: set[str]) -> Counter:
         if (left := left_out(rev)) is None:
             return Counter()
         ruff = [*python_for(ruff_pin(rev), [REPO_RUFF_LINT]), "-m", "ruff"]
-        found = ruff_findings(ruff, git("show", f"{rev}:{REPO_RUFF_CONFIG}"),
+        found = ruff_findings(ruff, {REPO_RUFF_CONFIG: git("show", f"{rev}:{REPO_RUFF_CONFIG}")},
                               tree_files(rev, {f for f in files if not f.startswith(left)}))
         return Counter(key({"file": f, "rule": rule}) for f, rule, *_ in found)
     _, sites, noun = next(c for c in COUNTED if c[0] == s)
@@ -947,6 +982,87 @@ def base_lints(c: Change, selection: dict[str, list[str] | None], after: dict[st
     return ran, failures
 
 
+def replaced(c: Change, lints: Iterable[str]) -> set[str]:
+    """The files `base_lints`'s worktree for ``c`` holds as its base has them, not as the change does: each file of a lint
+    directory in ``lints``, and each ruff config, that the change edits or deletes (its allowlists hold the change's
+    entries)."""
+    out = git("diff", "--no-renames", "--name-only", "--diff-filter=DMT", "-z", c.lo, c.hi, "--", *lints, RUFF_CONFIG,
+              REPO_RUFF_CONFIG)
+    return {f for f in out.split("\0") if f and not is_ratchet(f)}
+
+
+def own_ruff(c: Change, s: str, f: str) -> list[str] | None:
+    """Ruff lint ``s``'s violations (``RUFF_LINTS``) on the change's own copy of ``f``, ruff run with the configs and pin of
+    the change's base, at each rule it finds there more often than the change's list allows (the integration's entries of
+    that file and rule, the repository's (file, rule) count): none when the copy is within the list, or the change deletes
+    it; None when the base has no config for that lint, so the base's own copy's violations stand."""
+    _, configs = RUFF_LINTS[s]
+    texts = {p: git("show", f"{c.lo}:{p}") for p in configs if git("ls-tree", "--name-only", c.lo, "--", p).strip()}
+    if configs[0] not in texts:
+        return None
+    own = tree_files(c.hi, {f})
+    found = ruff_findings([*python_for(ruff_pin(c.lo), [s]), "-m", "ruff"], texts, own) if own else []
+    name = f.removeprefix(f"{INTEGRATION}/") if s == RUFF_LINT else f
+    if s == RUFF_LINT:
+        try:
+            doc = json.loads(git("show", f"{c.hi}:{LINT}/allowlists/{RUFF_LINT}.json"))
+        except (GitError, ValueError):
+            doc = {}
+        listed: Counter = Counter()
+        for e in doc.get("entries", []) if isinstance(doc, dict) else []:
+            if isinstance(e, dict) and e.get("file") == name:
+                listed[e.get("kind")] += count(e)
+    else:
+        listed = Counter({rule: n for (g, rule), n in repo_list(c.hi).items() if g == f})
+    now = Counter(rule for _, rule, *_ in found)
+    out = []
+    for rule in sorted(r for r in now if now[r] > listed[r]):
+        out += [f"{s}: {name}: {now[rule]} {rule} found, {listed[rule]} allowed"] + [
+            f"{s}: {name}:{line} [{rule}] {message}" for _, r, line, message in sorted(found) if r == rule]
+    return out
+
+
+def own_copies(c: Change, lints: Iterable[str], found: list[str]) -> tuple[list[str], list[str]]:
+    """(``found``, each counted or ruff lint's violations at a file `replaced` names judged on the change's own copy; the
+    violations that leave, as found).  A counted lint, and ruff, reads every file the worktree holds, so in a lint directory
+    or a ruff config it reads the base's text, which the change's tree doesn't hold: the change's copy is counted as the
+    base's lint counts it (ruff per rule, `own_ruff`), against the change's list, and within it, its violations go; past it,
+    the change's own sites replace them.  Another lint's violations there stay as found."""
+    at, names = replaced(c, lints), {s for s, *_ in COUNTED}
+    out, by = [], {}
+    for v in found:
+        s, m = v.partition(": ")[0], SITE.match(v) or RUFF_PAIR.match(v)
+        f = m and (f"{INTEGRATION}/{m[1]}" if s == RUFF_LINT else m[1])
+        if m and f in at and (s in names or s in RUFF_LINTS):
+            by.setdefault((s, f), []).append(v)
+        else:
+            out.append(v)
+    gone = []
+    for (s, f), vs in by.items():
+        if s in RUFF_LINTS:
+            own = own_ruff(c, s, f)
+            if own is None:
+                out += vs
+            elif own:
+                out += own
+            else:
+                gone += vs
+            continue
+        _, sites, noun = next(x for x in COUNTED if x[0] == s)
+        if (lint := counted_lint_at(c.lo, s, sites, noun)) is None:
+            out += vs
+            continue
+        holds, count = counter(lint, sites)
+        own = tree_files(c.hi, {f}).get(f) if holds(f) and not f.startswith(tuple(lint.LEFT_OUT)) else None
+        now = count(own.decode("utf-8", errors="replace"), f) if own is not None else []
+        listed, marked = counted_list(lint, s, c.hi)
+        if len(now) <= listed[f] or getattr(lint, "is_registry", lambda path, marks: False)(f, marked):
+            gone += vs
+        else:
+            out += [f"{s}: {f}: {len(now)} found, {listed[f]} allowed"] + [f"{s}: {f}:{line} {what}" for line, what in now]
+    return out, gone
+
+
 def violations(failures: list[dict]) -> list[str]:
     """Each violation a failing test names (its message's indented lines, else its first), or the error a test raised, by
     lint."""
@@ -961,15 +1077,39 @@ def violations(failures: list[dict]) -> list[str]:
     return out
 
 
+def added_by(rev: str, items: list[str]) -> str:
+    """Each violation in ``items`` with the change on ``rev``'s first-parent chain that added the line it names
+    (``lint: file:line ...``), by `git blame --first-parent`: ``#N`` for a queue merge, else the commit.  One that names only
+    a file (``lint: file: 2 found, 1 allowed``) goes with a line of that file, else is listed as it is."""
+    sites = [(item, SITE.match(item)) for item in items[:CHEAPEST]]
+    by_item: dict[str, str] = {}
+    by_file: dict[str, set[str]] = {}
+    for item, m in sites:
+        if m and m[2]:
+            r = subprocess.run(["git", "blame", "--first-parent", "--porcelain", "-L", f"{m[2]},{m[2]}", rev, "--", m[1]],
+                               capture_output=True, text=True)
+            if r.returncode == 0 and r.stdout:
+                sha = r.stdout.split()[0]
+                q = QUEUE_SUBJECT.match(git("log", "-1", "--format=%s", sha).strip())
+                by_item[item] = f"#{q[1]}" if q else sha[:12]
+                by_file.setdefault(m[1], set()).add(by_item[item])
+    out: dict[str, list[str]] = {}
+    for item, m in sorted(sites, key=lambda s: not (s[1] and s[1][2])):
+        who = by_item.get(item) or (", ".join(sorted(by_file[m[1]])) if m and m[1] in by_file else "no line named")
+        out.setdefault(who, []).append(item)
+    more = f"; ... and {len(items) - CHEAPEST} more" if len(items) > CHEAPEST else ""
+    return "; ".join(f"added by {w}: {', '.join(v)}" for w, v in out.items()) + more
+
+
 def judge(c: Change, base: str) -> None:
     diff = git("diff", "--no-renames", "--name-only", "-z", c.lo, c.hi).split("\0")
-    c.touched = sorted(f for f in diff if f and (is_ratchet(f) or is_lint_code(f) or f in (RUFF_CONFIG, REPO_RUFF_CONFIG)
+    c.touched = sorted(f for f in diff if f and (is_ratchet(f) or is_lint_code(f) or f in RUFF_CONFIGS
                                                  or f == PYPROJECT and ruff_pin(c.lo) != ruff_pin(c.hi)))
     new_noqa, c.noqa_added, c.noqa_removed = noqa_change(c.lo, c.hi, diff)
     noqa = [f"{c.noqa_added} `# noqa` line(s) added, {c.noqa_removed} removed"] if c.noqa_added or c.noqa_removed else []
     if not c.touched and not noqa:
         c.verdict, c.why = "untouched", (f"changes no ratchet, no lint code under {' or '.join(f'{x}/' for x in LINTS)}, no "
-                                         f"{RUFF_CONFIG} or {REPO_RUFF_CONFIG}, no ruff pin and no `# noqa` under {INTEGRATION}/")
+                                         f"{', '.join(RUFF_CONFIGS)}, no ruff pin and no `# noqa` under {INTEGRATION}/")
         return
     grown, added, bad, found, uncalled, public = [], [], [], [], [], []
     if c.touched:
@@ -980,16 +1120,28 @@ def judge(c: Change, base: str) -> None:
         grown, added, c.pooled = growth(before, after, {**was_at, **now_at}, *held(c, before, after))
         uncalled, public = public_callers(c)
     noqa_grows = c.noqa_added > c.noqa_removed
+    inherited: list[str] = []
+    based: list[str] = []
     if c.touched and not (grown or bad or uncalled or noqa_grows):
         selection = {lint: s for lint in LINTS if (s := lint_selection(c.touched, lint)) is None or s}
         if selection:
             c.lints, failures = base_lints(c, selection, after)
             found = violations(failures)
+            if found:
+                had = set(violations(base_lints(Change(c.lo, c.lo, []), selection, before)[1]))
+                inherited, found = [v for v in found if v in had], [v for v in found if v not in had]
+                found, based = own_copies(c, selection, found)
     if not (grown or bad or uncalled or noqa_grows or found):
         c.verdict, c.why = "passed", "; ".join(
             ([f"{c.before} -> {c.after} ratchet exceptions"] if c.touched else []) + [f"pooled: {p}" for p in c.pooled] + noqa
             + ([f"public, each run by its caller: {', '.join(public)}"] if public else [])
-            + ([f"the base's lint code finds nothing uncovered ({', '.join(c.lints)})"] if c.lints else []))
+            + ([f"the base's lint code finds nothing uncovered ({', '.join(c.lints)})"]
+               if c.lints and not (inherited or based) else [])
+            + ([f"the base's lint code ({', '.join(c.lints)}) finds {len(inherited)} violation(s) its own tree already holds, "
+                f"which aren't this change's: {added_by(c.lo, inherited)}"] if inherited else [])
+            + ([f"the base's lint code ({', '.join(c.lints)}) finds {len(based)} violation(s) in the base's copy of "
+                f"{', '.join(sorted({(SITE.match(v) or RUFF_PAIR.match(v))[1] for v in based}))}, which it runs in place of the change's, and the "
+                f"change's own copy is within its list"] if based else []))
         return
     if is_revert(c):
         c.verdict, c.why = "exempt", "a revert"
@@ -1026,23 +1178,34 @@ def judge(c: Change, base: str) -> None:
         c.fix = found[:CHEAPEST] + ([f"... and {len(found) - CHEAPEST} more"] if len(found) > CHEAPEST else [])
 
 
+def lints_at(c: Change, base: str) -> str:
+    """Where the source checks read their lints for ``c``: its own base when that holds BASE (a merge on the train, whose
+    merges below may change a lint, so these are the lints it landed with), else BASE (a branch's own commits, whose merge
+    base is an older `main`).  A merge below that makes a lint count more is counted against the PR that adds a site to it,
+    rather than found later by the whole-tree run of a change that touches a lint."""
+    if c.lo != base and subprocess.run(["git", "merge-base", "--is-ancestor", base, c.lo], capture_output=True).returncode == 0:
+        return c.lo
+    return base
+
+
 def find(c: Change, base: str) -> None:
-    """The source checks on ``c``: ruff's findings, and each counted lint's count."""
+    """The source checks on ``c``: ruff's findings, and each counted lint's count, with the lints at ``base``."""
     c.ruff_new, c.ruff_grown, c.ruff_unmoved = source_lint(c, base)
     c.counted = {slug: got for slug, sites, noun in COUNTED if (got := counted_lint(c, base, slug, sites, noun)) is not None}
 
 
 def lint_top(c: Change, base: str) -> None:
-    """The source checks on the top change ``c``, after ``judge``: a ruff finding or a counted lint's site it adds, or a list
-    entry a rename leaves behind, fails a change that passed or touched nothing else, unless it is exempt (a revert; a
-    pure move, from what it adds but not from the entries it leaves behind, which would fail the repository's lints as
-    surely); a change already failed or exempt keeps its verdict.  What the checks find is kept beside the verdict, in an entry
-    of its own, so a change below the top never fails by it."""
+    """The source checks on the top change ``c``, after ``judge``, with the lints `lints_at` reads: a ruff finding or a
+    counted lint's site it adds, or a list entry a rename leaves behind, fails a change that passed or touched nothing else,
+    unless it is exempt (a revert; a pure move, from what it adds but not from the entries it leaves behind, which would
+    fail the repository's lints as surely); a change already failed or exempt keeps its verdict.  What the checks find is
+    kept beside the verdict, in an entry of its own, so a change below the top never fails by it."""
     if c.verdict in ("failed", "exempt"):
         return
+    at = lints_at(c, base)
     p = cache_path(c, base, "found")
     if not recall(c, p, FOUND):
-        find(c, base)
+        find(c, at)
         keep(c, p, FOUND)
     counted = [(slug, sites, noun, c.counted[slug]) for slug, sites, noun in COUNTED if slug in c.counted]
     if not (c.linted or any(v["read"] for *_, v in counted)):
@@ -1060,7 +1223,7 @@ def lint_top(c: Change, base: str) -> None:
         for *_, v in counted:
             v["new"] = []
     def reads(slug: str, sites: str, noun: str) -> str:
-        return "files" if hasattr(counted_lint_at(base, slug, sites, noun), "holds") else "Python"
+        return "files" if hasattr(counted_lint_at(at, slug, sites, noun), "holds") else "Python"
 
     if not (new or unmoved):
         notes = ([f"ruff finds nothing new in the {len(c.linted)} Python file(s) it changes"] if c.linted else []) + [
@@ -1076,7 +1239,7 @@ def lint_top(c: Change, base: str) -> None:
                    f"and F541 among them), or, where a rule is wrong for that line, say why in a `# noqa: CODE` on it")
     for slug, sites, noun, v in counted:
         if v["new"]:
-            lint = counted_lint_at(base, slug, sites, noun)
+            lint = counted_lint_at(at, slug, sites, noun)
             why.append(f"adds {len(v['new'])} {noun}(s) to the {reads(slug, sites, noun)} it changes, as the base's "
                        f"{counted_paths(slug)[0]} "
                        f"counts them ({'; '.join(v['grown'])}): {lint.FIX}"
@@ -1138,14 +1301,47 @@ def keep(c: Change, p: Path | None, fields: tuple[str, ...] = JUDGED) -> None:
         pass
 
 
+def jobs() -> int:
+    """How many changes are judged at once: ``$RATCHET_GATE_JOBS``, default the lesser of 16 and this process's CPUs."""
+    raw = os.environ.get("RATCHET_GATE_JOBS", "")
+    if not raw:
+        return min(16, len(os.sched_getaffinity(0)) if hasattr(os, "sched_getaffinity") else os.cpu_count() or 1)
+    if not raw.isdigit() or int(raw) < 1:
+        raise GitError(f"RATCHET_GATE_JOBS is {raw!r}: set it to a number of processes, 1 to judge the changes in turn")
+    return int(raw)
+
+
+def judged(c: Change, base: str) -> Change:
+    """``c`` judged, its verdict kept."""
+    judge(c, base)
+    keep(c, cache_path(c, None if c.verdict in BASE_FREE else base))
+    return c
+
+
+def judge_all(cs: list[Change], base: str) -> list[Change]:
+    """Each of ``cs`` judged, in order: by up to ``jobs()`` forked processes, or in turn.  The first error in chain order is
+    the one raised, as in turn."""
+    n = min(jobs(), len(cs))
+    if n <= 1 or "fork" not in multiprocessing.get_all_start_methods():
+        return [judged(c, base) for c in cs]
+    pool = ProcessPoolExecutor(n, mp_context=multiprocessing.get_context("fork"))
+    try:
+        return [f.result() for f in [pool.submit(judged, c, base) for c in cs]]
+    except BrokenProcessPool as e:
+        raise GitError(f"a process judging the changes died ({e}), so the gate couldn't judge them all: rerun it, with "
+                       f"RATCHET_GATE_JOBS=1 to judge them in turn") from e
+    finally:
+        pool.shutdown(cancel_futures=True)
+
+
 def gate(base: str, top: str) -> dict:
     base, top = (git("rev-parse", "--verify", f"{r}^{{commit}}").strip() for r in (base, top))
     cs = changes(base, top)
+    todo = [i for i, c in enumerate(cs) if not (recall(c, cache_path(c, None), verdicts=BASE_FREE)
+                                                or recall(c, cache_path(c, base)))]
+    for i, c in zip(todo, judge_all([cs[i] for i in todo], base)):
+        cs[i] = c
     for c in cs:
-        free, based = cache_path(c, None), cache_path(c, base)
-        if not (recall(c, free, verdicts=BASE_FREE) or recall(c, based)):
-            judge(c, base)
-            keep(c, free if c.verdict in BASE_FREE else based)
         if c.hi == top:
             lint_top(c, base)
     failed = [c for c in cs if c.verdict == "failed"]

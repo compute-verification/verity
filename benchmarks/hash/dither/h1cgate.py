@@ -1,7 +1,7 @@
 """`h1c.cu` gated on a full served step against `served_h1/commit.py` (and `serve.step_roots`), then timed.
 
 A step of Llama-3.1-8B's 128 served linears at T slots, step s, m real rows (random s8 rows, random positive scales; every
-other slot the canonical empty row), the window's random key:
+other slot the canonical empty row), the execution phase's random key:
 
     gate     outputs poisoned with 0xA5 first; every call's A table root (`commit.s8_table`, labels a/<s>/<w>), its admit
              tree (labels s/<s>/<w>, the T / 16 words of the slots < m), the step's a-step, admit-step and round roots
@@ -25,9 +25,13 @@ import statistics
 import sys
 import time
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 import numpy as np
 import torch
+
+if TYPE_CHECKING:
+    from collections.abc import Sequence
 
 HERE = Path(__file__).resolve().parent
 ROOT = HERE.parents[2]
@@ -37,9 +41,9 @@ sys.path.insert(0, str(HERE))
 import commit as CM  # noqa: E402
 import credit as CR  # noqa: E402
 import serve as SV  # noqa: E402
+from verity_config.settings import of  # noqa: E402
 
 from h1c import H1C, Dom, Tab, Tail, unwords  # noqa: E402
-from verity_config.settings import of  # noqa: E402
 
 settings = of(__file__)
 PIN = "/workspace/hf/hub/models--verity-int8--Llama-3.1-8B-INT8/snapshots/723d342ac443b040931242c768df342b0f6f15a7"
@@ -63,7 +67,8 @@ class Step:
     """One step's tables at T slots: the pre-coin sets (calls' A and admit tables; a-step and admit-step; round) and the
     receipt set, on device buffers this owns."""
 
-    def __init__(self, lib: H1C, window: str, t: int, lin, dev, receipts=True):
+    def __init__(self, lib: H1C, window: str, t: int, lin: list[tuple[str, int, int]], dev: torch.device,
+                 receipts: bool = True) -> None:
         self.t, self.lin = t, lin
         g = torch.Generator(device=dev).manual_seed(t)
         self.slots = [torch.zeros(t, k, dtype=torch.int8, device=dev) for _, _, k in lin]
@@ -118,16 +123,16 @@ class Step:
             for b in (st.level, st.segs, st.dom, st.roots):
                 b.fill_(POISON)
 
-    def pre(self, lib: H1C, step) -> None:
+    def pre(self, lib: H1C, step: torch.Tensor) -> None:
         lib.build(self.calls, step)
         lib.build(self.mid, step)
         lib.build(self.round, step)
 
-    def post(self, lib: H1C, step) -> None:
+    def post(self, lib: H1C, step: torch.Tensor) -> None:
         lib.build(self.rset, step)
 
 
-def cpu_calls(window: str, key: bytes, st: Step, s: int, ws=None) -> dict:
+def cpu_calls(window: str, key: bytes, st: Step, s: int, ws: Sequence[int] | None = None) -> dict:
     """commit.py's roots of step s over st's buffers: per call A and admit roots, the step roots."""
     out = {"a": {}, "admit": {}}
     bits = np.arange(st.t) < st.m
@@ -167,7 +172,7 @@ def compare(st: Step, ref: dict) -> dict:
             "round": unwords(st.round.root(0)) == ref["round"]}
 
 
-def b_tables(lib: H1C, key: bytes, dev) -> dict:
+def b_tables(lib: H1C, key: bytes, dev: torch.device) -> dict:
     """Two linears' B tables (layer 0's o_proj and down_proj) against commit.s8_table under serve.b_tables' domain."""
     from safetensors import safe_open
     idx = json.loads((Path(PIN) / "model.safetensors.index.json").read_text())["weight_map"]
@@ -208,7 +213,7 @@ def no_poison(st: Step) -> bool:
     return True
 
 
-def tail_check(lib: H1C, st: Step, step, ref: dict, reps: int) -> dict:
+def tail_check(lib: H1C, st: Step, step: torch.Tensor, ref: dict, reps: int) -> dict:
     """The step's mid and round trees through `Tail` (h1c_tail), from poison, against `ref`; and the time from the
     leaves on of h1c_build's two builds and of `Tail.levels`."""
     tl = Tail(lib, st.mid, st.round, host_root=True)

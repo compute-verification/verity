@@ -1,4 +1,4 @@
-// H1 + fx1's unit (pouw.circuit.h1tile) fused on sm_90a / sm_100a, bit for bit served_h1/receipts.py's
+// H1 + fx1's unit (pouw.circuit.h1tile) fused on sm_90a / sm_100a, bit for bit pouw_h1_receipts'
 // `call_receipts`: a served call's A [M, K] and B [N, K] s8, its units the full 32 x 32 tiles in
 // row-block-major order, unit u at position base + u.
 //
@@ -59,7 +59,7 @@
 //              two-launch form on J10-R's call-scale noise (measured only; at the end of this file)
 //   kh_seeds_at(data, idx, pos, U, seeds, stream)   kh_seeds of U units anywhere: unit u's at position pos[u] from
 //              data's record idx[u] (kh_seeds' data, 30 words a record)
-//   kh_lanes(A, B, L, K, seeds, out, lr, stream)   L drawn leaves on gathered operands: their receipts and lane records
+//   kh_lanes(A, B, L, K, seeds, out, lr, stream)   L sampled leaves on gathered operands: their receipts and lane records
 //              (option A's partials, partials.py; at the end of this file)
 //   kh_seeds_j10r(data, call, base, U, seeds, stream), kh_units_multi_j10r(calls, ncalls, units, M, live, mode, stream)
 //              kh_units_multi's receipts under J10-R's call-scale noise (the verifier's form; at the end of this file), with
@@ -609,7 +609,7 @@ static_assert(H1U_JPD >= 1 && (H1U_JRING == 0 || H1U_JRING == 1) && 16 % (H1U_JP
 #define H1U_JRCPF 0
 #endif
 // H1U_JPROBE = 1 (RW without RC): a timing probe, never a receipt: the column tiles are the row tile's words, not
-// hashed, so a unit's time less its column hash bounds what sharing the column tiles can save (unitsbench --probe).
+// hashed, so a unit's time less its column hash bounds what sharing the column tiles can save.
 // With JX, which reads no row tile, they are a multiply of their stream position into the midstate's words. Bits 2
 // and 4 (any RW unit) hold B's and A's (X's) segment loads at their first segments, which stay in L1, so the probe's
 // time against the unit's bounds what those loads' L2 latency costs
@@ -2751,7 +2751,7 @@ extern "C" int kh_one_peel(const void* A, const void* B, unsigned rows, unsigned
   return one_call<true>(A, B, rows, N, K, seeds, live, out, ws, J, z, zo, y, ydump, sa, sw, step, M, stream);
 }
 
-// J10 banded (measured only; noise=j10-banded, j10b_ref.py's reading of SharedNoise.lean): kh_one and
+// J10 banded (measured only; noise=j10-banded, a reading of SharedNoise.lean): kh_one and
 // kh_one_peel on band-leader rows, band column tiles a band; mode 0 noise then units, 1 the units alone, 2 the noise alone
 extern "C" int kh_one_band(const void* A, const void* B, unsigned rows, unsigned N, unsigned K, const void* seeds,
                            const void* live, void* out, void* ws, unsigned J, int* z, int* zo, void* y, void* ydump,
@@ -2768,7 +2768,7 @@ extern "C" int kh_one_peel_band(const void* A, const void* B, unsigned rows, uns
 }
 
 // J10-R (J10R's Definition, `h1tile.j10r_reference`, in the verifier's form, whose credit derives a unit's call and
-// blocks at the window's slot M): the call's noise is one stream, h1tile.noise(cseed, Layout(rows, N, K)) at call
+// blocks at the execution phase's slot M): the call's noise is one stream, h1tile.noise(cseed, Layout(rows, N, K)) at call
 // scale, row i's blocks at i RB and column j's at rows RB + j CB, so unit (ri, cj) reads call rows 32 ri .. and
 // columns 32 cj .. of it.
 // cseed: the call's seed as 8 big-endian words (16 read as h1s_noise reads a unit's). Each unit keeps its own fold keys
@@ -2803,7 +2803,7 @@ extern "C" int kh_one_j10(const void* A, const void* B, unsigned rows, unsigned 
 
 extern "C" int kh_fault_shift() { return FAULT_SHIFT; }
 
-// Option A's prover side (partials.py): drawn leaves' lane partials after the sample. L units on gathered operands, unit u
+// Option A's prover side (partials.py): sampled leaves' lane partials after the sample. L units on gathered operands, unit u
 // A rows 32 u .. 32 u + 31 and B rows 32 u .. 32 u + 31 (A and B each [32 L, K] s8: leaf u's 32 A rows and 32 B rows),
 // seeds 16 a unit as kh_seeds writes them (seed_j's 8 big-endian words, then sigma_R's). out: L x kh_words(K) u32, the
 // leaves' receipts; lr: L x 32 x kh_words(K) u32, each leaf's record: lane l's 2 (KS + m) words at l kh_words(K), lanes
@@ -3459,7 +3459,7 @@ extern "C" unsigned long long kh_j10r_rows_bytes(unsigned M, unsigned K) {
   return H1U_JX ? jx_ad_off(M, K) + 4ull * (M / 32) * JX_AD_WORDS
                 : 64ull * M * (K / 512 + 1) + (H1U_JAP ? (unsigned long long)M * K : 0) + (H1U_JAY ? 128ull * M : 0);
 }
-// the row workspace's int32 word whose bit 0 unitsbench's row fault flips (after the rows, before the units): row 0's
+// the row workspace's int32 word whose bit 0 j10r_sm90's row fault flips (after the rows, before the units): row 0's
 // first block, or with H1U_JAP its A' bytes A'[0][0 .. 3], which the units read instead
 extern "C" unsigned long long kh_j10r_row_fault_word(unsigned M, unsigned N, unsigned K, int rc) {
   return H1U_JAP ? jap_words(M, N, K, rc != 0) : 0;
@@ -3571,8 +3571,8 @@ __global__ void __launch_bounds__(256) h1jr_cols(const UCallR* __restrict__ call
 }
 
 // H1U_JSWZ = G (h1umjc; 0 is the launch's order): H1U_SWZ's order for its units, G row tiles at a time column tile by
-// column tile, so B's lines and the column tiles are read from DRAM once for G row tiles (unitsbench --j10r at
-// T = M = 2048, step_multi_j10rc: G 0 256.8, 8 240.6, 16 236.0, 32 233.1, 64 237.3 ms)
+// column tile, so B's lines and the column tiles are read from DRAM once for G row tiles; 32 unless set, under
+// step_multi_j10rc's units
 #ifndef H1U_JSWZ
 #define H1U_JSWZ 32
 #endif

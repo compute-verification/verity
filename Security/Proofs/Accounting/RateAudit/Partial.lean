@@ -1,8 +1,10 @@
-import Mathlib
-import Definitions.Accounting.Guarantees.RateAuditPartial
-import Proofs.Accounting.RateAudit.Audit
-import Proofs.Accounting.RateAudit.Honest
-import Proofs.Accounting.RateAudit.PartialChip
+module
+
+public import Mathlib
+public import Proofs.Accounting.Lemmas.RateAudit
+public import Proofs.Accounting.RateAudit.Audit
+public import Proofs.Accounting.RateAudit.Honest
+public import Proofs.Accounting.RateAudit.PartialChip
 
 /-!
 # The rate audit with partial completion: the proof
@@ -20,9 +22,11 @@ the oracle, under the certified stream, at the contents of at least `k` words (`
   (`card_compress_le`): the trace records `x` bits per completion of `x` (`PChip.trace_length`), and replaying the chip
   recomputes its queries (`PChip.replay_trace`).
 
-The honest device is `RateHonest`'s, as a partial device (`Device.toPartial`), and the rebuild route
+The honest device is `RateHonest`'s, as a partial device (`Prover.toPartial`), and the rebuild route
 (`RatePartialRebuild`) is `PChip.completed_mul_le` at the device.
 -/
+
+@[expose] public section
 
 namespace Accounting.Rate
 
@@ -244,7 +248,7 @@ theorem card_compress_le (A : PartialDevice N b h ρ S L q) (O : Oracle N b h ρ
 end PartialDevice
 
 /-- A device of `RateAudit.lean`'s game as a partial device: its rebuilds are completions of all `b` bits. -/
-def Device.toPartial (A : Device N b h ρ S L q) : PartialDevice N b h ρ S L q where
+def Prover.toPartial (A : Prover N b h ρ S L q) : PartialDevice N b h ρ S L q where
   state := A.state
   mem := A.mem
   side := A.side
@@ -256,7 +260,7 @@ def Device.toPartial (A : Device N b h ρ S L q) : PartialDevice N b h ρ S L q 
 
 /-- As a partial device, a device commits to the same tags with the same footprint and ingress, completes `b` bits per
 rebuilt word and pays `cost b` for each. -/
-theorem Device.toPartial_eq (A : Device N b h ρ S L q) (E : Store N b) (R : Bits ρ) (O : Oracle N b h ρ) :
+theorem Prover.toPartial_eq (A : Prover N b h ρ S L q) (E : Store N b) (R : Bits ρ) (O : Oracle N b h ρ) :
     A.toPartial.tags E R O = A.tags E R O ∧ A.toPartial.footprint E R O = A.footprint E R O ∧
       A.toPartial.ingress E R O = A.ingress E R O ∧
       A.toPartial.completed E R O = (A.chip (A.state E)).rebuilds (A.world E R O) * b ∧

@@ -1,4 +1,6 @@
-import Definitions.Accounting.Assumptions.RemoteHeld
+module
+
+public import Definitions.Accounting.Assumptions.RemoteHeld
 
 /-!
 # The memory a remote audit shows held (trusted)
@@ -28,10 +30,12 @@ Known limits, each a premise a real node may fail rather than a gap in the bound
   moves the rest (half of every block read back from its disks, a block's halves streamed in at different ticks) is
   no instance of the trace, though the bound holds of it in bytes with the same numbers.
 * A fixed `W`. `LiveCoins` takes `W` fixed before the coins, while the openings' pooled bound (`audit.pooled`) is a
-  function of the record: the prover sizes each window after the earlier windows' coins. `HeldDrawn` and its
+  function of the record: the prover sizes each window after the earlier windows' coins. `HeldSampled` and its
   time-held forms (`Definitions.Accounting.Guarantees.RemoteDraw`) state these lines at the record's own pooled bound, with
   `LiveCoins` derived from the deployed opening draw.
 -/
+
+@[expose] public section
 
 namespace Accounting.Guarantees.Remote
 

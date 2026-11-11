@@ -1,7 +1,9 @@
-import Mathlib.Data.Finite.Prod
-import Mathlib.Data.Fintype.Perm
-import Definitions.Pous.Model.Labelling
-import Definitions.Pous.Model.Pebbling
+module
+
+public import Mathlib.Data.Finite.Prod
+public import Mathlib.Data.Fintype.Perm
+public import Definitions.Pous.Model.Labelling
+public import Definitions.Pous.Model.Pebbling
 
 /-!
 # P3's invertible two-layer labels, their ideal model, and white/green hardness (N10)
@@ -11,6 +13,8 @@ statement `Security/Proofs/Pous/P3/Refutation.lean` refutes. The model `p3Model`
 permutation `P` of labels, with `P`
 and `P⁻¹` both queryable; the labels are `c¹ = P(W ⊕ H(0, ·))` and `c² = P(transpose(c¹) ⊕ H(1, ·))`.
 -/
+
+@[expose] public section
 
 namespace Pous.Invertible
 
@@ -68,7 +72,7 @@ def c2 (G : Labelling.TopoDAG n) (Hf : KQ n wc → Lab n wc) (P : Equiv.Perm (La
   termination_by v => v.val
   decreasing_by exact G.par_lt v u _h
 
-/-- The top label of node `v`, as a function of the drawn primitive `ω = (H, P)`. -/
+/-- The top label of node `v`, as a function of the sampled primitive `ω = (H, P)`. -/
 def topLabel (G : Labelling.TopoDAG n) (W : Fin n → Lab n wc) (ω : P3Omega n wc) (v : Fin n) : Lab n wc :=
   c2 G ω.1 ω.2 W v
 

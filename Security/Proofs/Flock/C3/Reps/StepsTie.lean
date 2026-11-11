@@ -1,4 +1,23 @@
-import Proofs.Flock.C3.Reps.Steps
+module
+
+public import Proofs.Flock.C3.Reps.Steps
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Proofs.Flock.C3.HoloValues.Shape
+import Proofs.Flock.C3.HoloValues.ZcLc
+import Proofs.Flock.Soundness.Refine.HoloRefines
+import Proofs.Flock.Soundness.Refine.Seam
 
 /-!
 # `RepStepsWoven` and the openings from the reps' parts
@@ -12,6 +31,8 @@ have the same messages. They are the source's definition at the reps, so they ho
 with its reps' steps and openings read off the values (`repWeaveAt_repsOfVals`, `hos_repsOfVals`); there `StepsOfVals`
 needs only the other parts and the cap (`stepsOfVals_repsOfVals`).
 -/
+
+@[expose] public section
 
 namespace FlockC3.Reps
 
@@ -30,7 +51,7 @@ open FlockSoundness.Discharge.PlaysCoin (coinArr)
 
 /-- **A rep unit's messages and coin steps at `v`, woven along `holoRepShape`** at `S`, `nX` extra claims and `sch₀`
 (`UnitWoven`'s steps). -/
-def unitWeave (S : Model.Statement) (sch₀ : Accounting.Schedule) (nX : ℕ) (sh : Flock.Shape) (d : RepData)
+def unitWeave (S : Model.Statement) (sch₀ : FlockSoundness.Accounting.Schedule) (nX : ℕ) (sh : Flock.Shape) (d : RepData)
     (v : UnitVals) : List Game.Step :=
   weave (holoRepShape 𝔽 𝕂 Dig S.m S.kLog nX sch₀) (holoRepMsgs v.st v.sch (2 + nX) v.p (hOfW sh d.w) capDig)
     ((consumed v.t.rounds v.t.k (v.t.k + 3 + (v.st.m - 6) + 2 + (S.kLog - 6)) ++
@@ -39,7 +60,7 @@ def unitWeave (S : Model.Statement) (sch₀ : Accounting.Schedule) (nX : ℕ) (s
 /-- **A rep's messages and coins are a tape along its shape** from its unit's other parts: the program runs
 (`holoProg_of_zclc`), refines to `holoRepC` (`holoRep_refines`) at the proof's rows as openings, and that run is a
 tape along `holoRepC`'s spine (`tapeAlong_of_plays`). -/
-theorem tapeAlong_of_parts {S : Model.Statement} {sch₀ : Accounting.Schedule} {extra : List (Model.Claim 𝔽 S.m)}
+theorem tapeAlong_of_parts {S : Model.Statement} {sch₀ : FlockSoundness.Accounting.Schedule} {extra : List (Model.Claim 𝔽 S.m)}
     {sh : Flock.Shape} {d : RepData} {v : UnitVals} (hm : 13 ≤ S.m) (alg : AlgebraHolds sh d) (acc : AccHolds sh d)
     (hp : UnitProof sh d v) (hs : UnitSetup S sch₀ extra sh v) (hf : UnitFrames sh d v) :
     TapeAlong (holoRepShape 𝔽 𝕂 Dig S.m S.kLog extra.length sch₀)

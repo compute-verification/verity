@@ -1,8 +1,15 @@
-import Properties.Pous.Wipe
-import Proofs.Pous.StreamedWipe.Family
+module
+
+public import Proofs.Properties.Pous.Lemmas.Wipe
+public import Mathlib.Algebra.Group.End
+import Mathlib.Algebra.Order.Algebra
+import Mathlib.Analysis.SpecialFunctions.Pow.Real
+import Mathlib.Combinatorics.SimpleGraph.Init
+import Mathlib.Data.Sym.Sym2.Init
+import Mathlib.Tactic.Positivity.Finset
 import Proofs.Pous.Sanity
-import Mathlib.Tactic.SplitIfs
-import Mathlib.Tactic.DefEqTransformations
+import Proofs.Pous.StreamedWipe.Family
+import Proofs.Pous.Prob
 
 /-!
 # Proof that an accepted wipe meets the survivor bound it publishes (`Properties.Pous.Wipe`)
@@ -37,12 +44,14 @@ import Mathlib.Tactic.DefEqTransformations
   segment's `ratio 2152 = 24` and its declared `2^28` bits are the kernel's to evaluate (`segment_foreign_le`).
 -/
 
+@[expose] public section
+
 namespace MemoryChallenger.Properties.SecurityProofs
 
 open Verity
 open scoped ENNReal
 
-/-- The value of a draw with no prover move is the fraction of the coins on which the event holds. -/
+/-- The value of a sample with no prover move is the fraction of the coins on which the event holds. -/
 theorem value_draw {X : Type} [Fintype X] [Nonempty X] (p : X → Prop) [DecidablePred p] :
     Game.value p (Game.draw X) = ((Finset.univ.filter p).card : ℝ≥0∞) / Fintype.card X := by
   classical
@@ -51,7 +60,7 @@ theorem value_draw {X : Type} [Fintype X] [Nonempty X] (p : X → Prop) [Decidab
   refine Finset.sum_congr rfl fun x _ => ?_
   by_cases hx : p x <;> simp [hx]
 
-/-- The value of a draw with no prover move is the probability of its event. -/
+/-- The value of a sample with no prover move is the probability of its event. -/
 theorem value_draw_pr {X : Type} [Fintype X] [Nonempty X] (p : X → Prop) :
     Game.value p (Game.draw X) = Pous.pr p := by
   classical
@@ -102,7 +111,7 @@ theorem winIdeal_le_of_reads {n k r R q E : ℕ} (hn : 0 < n) (hr : 0 < r) (hk :
     simp only [Fintype.card_fun, Fintype.card_bool, Fintype.card_fin, ← pow_mul, mul_comm]
   let e : Pous.Bits (n * 512) ≃ (Fin n → Pous.Bits 512) := Fintype.equivOfCardEq hc
   have hreal : Pous.StreamedWipe.winReal e P = Pous.StreamedWipe.winIdeal P := by
-    unfold Pous.StreamedWipe.winReal Pous.StreamedWipe.winIdeal Pous.pr
+    unfold Pous.StreamedWipe.winReal Pous.StreamedWipe.winIdeal; simp only [Pous.pr_eq_card]
     congr 2
     · exact Finset.card_equiv ((Equiv.refl _).prodCongr e) fun x => by simp; exact Iff.rfl
     · simp only [Fintype.card_prod, hc]

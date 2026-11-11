@@ -177,7 +177,7 @@ class SingleRow(Row):
             except (OSError, ValueError, AttributeError) as e:
                 self.log(f"job.json not updated with the source identity: {e}")
         self.tl("precheck", "end", ("rc", 0))
-        self.verdict("precheck", "PASS", f"source identity == {self.tree}{' @ ' + sha if sha else ''} (verity verity_vllm hidden_gpu research)",
+        self.verdict("precheck", "PASS", f"source identity == {self.tree}{' @ ' + sha if sha else ''} (verity verity_vllm research)",
                      quiet=True)
 
     def shape(self) -> None:
@@ -534,7 +534,7 @@ class SingleRow(Row):
         """The Commit's command line; `taps`: the workload's taps that apply to it (`row_records.applicable_taps`), whose sources it attaches."""
         ck = self.ck_
         pairs, warmup = ("1", "1") if self.config_run else (str(ck.pairs), "2")
-        cmd = self.cli("commit", "--case", self.role, "--workload", self.wl, "--committer", "native_collect_v2b", "--fast-copy", "--gpu-tree",
+        cmd = self.cli("commit", "--case", self.role, "--workload", self.wl, "--committer", "native_collect_v2b",
                        "--hidden-so", self.hidden_so, "--openings", "64", "--pairs", pairs, "--warmup", warmup, "--max-num-seqs", str(self.B),
                        "--engine-arg", f"gpu_memory_utilization={self.gpu_util}", "--label", self.row, "--out", f"{self.d}/commit")
         if self.config_run:                           # one instrumented run (and its control with a baseline), bounded staging, k units

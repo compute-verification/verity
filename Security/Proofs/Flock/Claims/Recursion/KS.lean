@@ -1,5 +1,43 @@
-import Proofs.Flock.Claims.Recursion.Finders
-import Proofs.Flock.Claims.Recursion.Hybrid
+module
+
+public import Definitions.Claims.Recursion
+public import Proofs.Flock.Claims.Recursion.Finders
+public import Proofs.Flock.Claims.Recursion.Hybrid
+import Mathlib.Algebra.Order.Floor.Extended
+import Mathlib.Algebra.Order.Interval.Basic
+import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
+import Mathlib.Analysis.SpecialFunctions.Bernstein
+import Mathlib.Analysis.SpecialFunctions.Gamma.Basic
+import Mathlib.Analysis.SpecialFunctions.Trigonometric.DerivHyp
+import Mathlib.Combinatorics.Enumerative.DyckWord
+import Mathlib.Combinatorics.SimpleGraph.Triangle.Removal
+import Mathlib.Data.NNRat.Floor
+import Mathlib.Data.Nat.Choose.Multinomial
+import Mathlib.Geometry.Euclidean.Altitude
+import Mathlib.NumberTheory.Chebyshev
+import Mathlib.NumberTheory.Height.NumberField
+import Mathlib.NumberTheory.Height.Projectivization
+import Mathlib.NumberTheory.LucasLehmer
+import Mathlib.NumberTheory.SelbergSieve
+import Mathlib.RingTheory.Radical.NatInt
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Topology.Sheaves.Init
+import Proofs.Flock.Claims.ERep
+import Proofs.Flock.Claims.KS.Fork
+import Proofs.Flock.Claims.Prob
+import Proofs.Flock.Claims.Recursion.Cost
 
 /-!
 # The recursion: KS
@@ -9,7 +47,7 @@ each session and the inner protocol's KS at the served runs, at the errors that 
 `KS` (`Claims.Recursion.KS`) with its `κ` and the weights `γ_A`, `γ_eA`. `E*` is the composed extractor of `Compose`
 (`served_eq`), so `servedERep_bad_le_good` splits its failure on an accepted run in two:
 
-* **`E_O` fails at one of the inner stage's draws**, at most `N_I = 1 + m′_I·k_I` times as often as `E_O` fails
+* **`E_O` fails at one of the inner stage's samples**, at most `N_I = 1 + m′_I·k_I` times as often as `E_O` fails
   (Wald). `E_O` gives up only when one session's `E^rep` does (`EO_none_session`), so `E_O`'s failure is at most the sum
   of the sessions' (`PrBad_EO_le`), each bounded by the outer Flock's KS at its session (`OuterKS`):
   `κ_O,s + √(γ_O,s·k(x)·Pr[B])`. That is `N_I·Σ_s κ_O,s` and, summed under one root, `√(γ_A·Pr[B])` with
@@ -40,6 +78,8 @@ the instance with Flock as the inner protocol. The draft's `γ` is `γ_A` with a
   statement that parses with no circuit commitment) and `InnerRounds` (its first rounds are the inner session's).
 -/
 
+@[expose] public section
+
 namespace Claims.Recursion
 
 open Claims
@@ -50,7 +90,7 @@ variable {Coin W Col T : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin] [
 
 /-! ## The outer extraction, session by session -/
 
-/-- `E_O`'s output, as the composition reads it: `E_O` gave one. Its failure at a draw is its giving up there. -/
+/-- `E_O`'s output, as the composition reads it: `E_O` gave one. Its failure at a sample is its giving up there. -/
 def outR : Rel (List Flock.Wit) := fun _ _ => True
 
 /-- **Outer session `s`'s extraction, as `E_O` makes it**: replay the judged run; if it accepted, Flock's `E^rep` at
@@ -86,7 +126,7 @@ def OuterKS [Zero Col] (H : Msg → Msg) (D : Deploy Coin) (I : Inner Coin W) (D
       (D.nums x s).κ + Real.sqrt ((D.nums x s).γ * D.V.k x * PrB H D.V P x)
 
 /-- `collect` gives up only where one of its programs does. -/
-theorem collect_none {R α : Type} (H : Msg → Msg) (run : R → Trace) :
+theorem collect_none {R α : Type} (H : Msg → Msg) (run : R → Transcript) :
     ∀ ps : List (RP R (Option α)), ((collect ps).eval H run).1 = none → ∃ p ∈ ps, (p.eval H run).1 = none
   | [], h => by simp [collect, RP.eval] at h
   | p :: ps, h => by
@@ -108,11 +148,11 @@ theorem EO_none_session (H : Msg → Msg) (D : Deploy Coin) (I : Inner Coin W) (
     (c : (EO D I DO decO).C x) (hacc : (run H P D.V x ω r₀).out = .acc)
     (h : ((EO D I DO decO).eval H P x ω r₀ c).1 = none) :
     ∃ s : Fin (D.nS x), ((EOs D I DO decO s).eval H P x ω r₀ (c s)).1 = none := by
-  simp only [Extractor.eval, EO, RP.eval, Trace.seen, hacc, ↓reduceIte] at h
+  simp only [Extractor.eval, EO, RP.eval, Transcript.seen, hacc, ↓reduceIte] at h
   obtain ⟨p, hp, hpn⟩ := collect_none H _ _ h
   obtain ⟨s, _, rfl⟩ := List.mem_map.1 hp
   refine ⟨s, ?_⟩
-  simp only [Extractor.eval, EOs, RP.eval, Trace.seen, hacc, ↓reduceIte]
+  simp only [Extractor.eval, EOs, RP.eval, Transcript.seen, hacc, ↓reduceIte]
   rw [(RP.eval_bind H _ _ _).1, hpn]
   rfl
 
@@ -261,7 +301,7 @@ def Refuses (H : Msg → Msg) (D : Deploy Coin) : Prop :=
 
 /-- **The inner protocol's KS, carried to the served runs**: at every outer decoder that meets the list-decoding spec,
 the inner stage of `E*` (the inner `E^rep` at the inner statement, each rerun served by `E_O`) fails on an accepted run,
-when `E_O` succeeds at every draw it reruns at, with probability at most
+when `E_O` succeeds at every sample it reruns at, with probability at most
 `κ_I + √(γ_I·Pr[B_I]) + N_I·√(k_I·k(x)·Pr[Be])`: the inner protocol's bound with `B_I` for the inner `B` (the inner
 verifier's calls are recorded in the outer witnesses only), and, at each of the inner `E^rep`'s `N_I` expected reruns,
 the inner rounds' differing openings, each at most `√(Pr[a differing opening at a fork at that round])`. -/
@@ -331,7 +371,7 @@ theorem KS_of [Zero Col] (H : Msg → Msg) (D : Deploy Coin) (I : Inner Coin W) 
   have hp0 : 0 ≤ p := PrB_nonneg H D.V P x
   have hq0 : 0 ≤ q := PrBe_nonneg H D I DO decO P x
   have hG0 : 0 ≤ G := Finset.sum_nonneg fun s _ => Real.sqrt_nonneg _
-  -- the split: `E_O` fails at one of the inner stage's draws, or the inner stage fails
+  -- the split: `E_O` fails at one of the inner stage's samples, or the inner stage fails
   have hsplit := servedERep_bad_le_good H D.V (R D I) outR (EO D I DO decO) (dec H D) (fun x => I.waits (xI D x))
     (fun x => I.k (xI D x)) (fun x => I.cap (xI D x)) I.opens (fun x => I.assemble (xI D x))
     (fun x => I.check (xI D x)) x P

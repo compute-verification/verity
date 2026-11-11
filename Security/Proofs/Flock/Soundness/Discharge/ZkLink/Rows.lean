@@ -1,4 +1,7 @@
-import Proofs.Flock.Soundness.Discharge.ZkLink.CompiledLink
+module
+
+public import Proofs.Flock.Soundness.Discharge.ZkLink.CompiledLink
+import Mathlib.Combinatorics.Matroid.Init
 
 /-!
 # The rows link at the compiled `--zk` value layer
@@ -17,13 +20,15 @@ some of the commit strings (`isRead`, `wo`):
   cost (`cTZC`), as `LinkCRZC` asks it of the link finders.
 -/
 
+@[expose] public section
+
 namespace FlockSoundness.Discharge.ZkLink
 
 open Game Model Accounting Extract LinkFinder Audit Audit.Partition ZkSession
 
 variable {F K : Type} [Field F] [Fintype F] [DecidableEq F] [Field K] [Fintype K] [DecidableEq K] {mPts : ℕ}
 variable {D Sl : Type} [Inhabited D] [Inhabited Sl]
-variable (A : Arith F K) (Hs : Hashes F D Sl) {C : Circuit} {n : ℕ} (P : Partition C n) {Reg : Type}
+variable (A : Arith F K) (Hs : Hashes F D Sl) {C : Verity.Boolean.Circuit} {n : ℕ} (P : Partition C n) {Reg : Type}
   (planZ : Finset (Fin n) → Reg → List (TabZK F mPts))
   (tab : (S : Finset (Fin n)) → (R : Reg) → Fin n → Fin (planZ S R).length)
 
@@ -49,7 +54,7 @@ noncomputable def rowsOutZC (wo : vb.Pos → vb.Opening) (c : vb.Pos) (e : Trial
     some (vb.collide (opOfVZC A Hs P planZ tab vb R τ c e (Classical.choose h)) (wo c))
   else none
 
-/-- **`ecr/sha-512` (A2) for the rows finders**: at each registered read `c` that some draw reads, the finder that plays
+/-- **`ecr/sha-512` (A2) for the rows finders**: at each registered read `c` that some sample reads, the finder that plays
 the trial at `c` (`trialGZC`) once and outputs `rowsOutZC`, at the trial's cost `cTZC` (`t'` per run it plays), satisfies
 `Assumptions.SHA512CRExpected`.
 

@@ -1,22 +1,32 @@
-"""A survey of a derivation's refusals (`with_holes`): every node the rules refuse becomes a hole, its outputs fields of the
-Program's `run` input, so one derivation lists every refusal (`holes`) and its Program counts everything else.
+"""A survey of a derivation's refusals (`survey`): every node the rules refuse becomes a hole (`with_holes`), its outputs fields of
+the Program's `run` input, so one derivation lists every refusal and its Program counts everything else.
+
+A hole is a value no gate checks, which a prover would choose: a Program with holes is no statement. Its holes are in its
+annotations (`annotations["survey_holes"]`), `check_identity` refuses it, and `derive_report`'s tail, which runs `check_identity`,
+returns no Program for a derivation that left holes. `survey` builds it from the flat body for a count, without that tail.
 
     with_holes(ruleset) -> RuleSet                     the same rules, each refused node a hole
-    holes(report) -> list[dict]                        a survey's refusals
+    survey(graph, example_inputs, *, mode, rules, ...) -> (holes, Program | Unsupported)
 """
 
 from __future__ import annotations
 
+from typing import Any, Sequence
+
+import torch
+
+from verity.ml.circuits.program import Program
 from verity_vllm.program.frontend.derive import _no_rule
 from verity_vllm.program.frontend.errors import FrontendError
-from verity_vllm.program.frontend.outcomes import Refuse
+from verity_vllm.program.frontend.outcomes import _CODE_TO_REASON, Refuse, Unsupported
 from verity_vllm.program.frontend.rules.base import ANY, Rule, RuleInfo, RuleSet
 from verity_vllm.program.frontend.value_types import type_of_tensor
 
 
 
 class Hole(Rule):
-    """Survey only: a node every rule refuses takes its outputs from fields of the `run` input, and the refusal is recorded."""
+    """Survey only: a node every rule refuses takes its outputs from fields of the `run` input, and the refusal is recorded
+    (`ctx.state["survey_holes"]`: node, op, reason, hint and the fields)."""
     info = RuleInfo("Hole[train]", 1, "op-binding", applies_to="any node the other rules refuse (survey only)",
                     preconditions=("every other candidate refused",), evidence_domain="none: a hole is no derivation")
 
@@ -46,13 +56,15 @@ class Hole(Rule):
         else:
             reason, hint = "unsupported_view", f"{getattr(error, 'code', '')}: {error}"
         meta = node.meta.get("val")
-        k = len(ctx.state.setdefault("train_holes", []))
-        ctx.state["train_holes"].append(node.name)
+        holes = ctx.state.setdefault("survey_holes", [])
+        k, fields = len(holes), []
 
         def hole(i, m):
-            return ctx.run_value(f"hole{k}.{i}:{node.name}", type_of_tensor(m), node)
+            fields.append(f"hole{k}.{i}:{node.name}")
+            return ctx.run_value(fields[-1], type_of_tensor(m), "survey_hole", node)
 
         ctx.define(node, [hole(i, m) for i, m in enumerate(meta)] if isinstance(meta, (tuple, list)) else hole(0, meta))
+        holes.append({"node": node.name, "op": str(node.target), "reason": reason, "hint": str(hint), "fields": fields})
         ctx.record(self, node, {}, emitted="run input", reason=reason, hint=str(hint))
 
 
@@ -92,13 +104,31 @@ def with_holes(ruleset: RuleSet) -> RuleSet:
     return RuleSet(f"{ruleset.name}+holes", [_guarded(r, hole) for r in ruleset.rules] + [hole], list(ruleset.families))
 
 
-def holes(report) -> list[dict]:
-    """The holes of a survey's report: node, op, reason and hint of each refusal."""
-    prov = report.provenance
-    apps = prov["applications"] if "applications" in prov else prov.get("applications_before_refusal", [])
-    return [{"node": a["node"], "op": a["op"], "reason": a.get("reason"), "hint": a.get("hint")} for a in apps
-            if a["rule"] == Hole.info.rule_id]
+def survey(graph: torch.fx.GraphModule, example_inputs: Sequence[Any], *, mode: str, rules: RuleSet, profile: str | None = None,
+           name: str | None = None, input_names: Sequence[str] | None = None,
+           theta: Sequence[str] = ()) -> tuple[list[dict], Program | Unsupported]:
+    """`derive_graph`'s derivation of `graph` with every refused node a hole (`with_holes(rules)`), to its flat body: the holes, and
+    the Program of the rest marked with them (`annotations["survey_holes"]`, which `check_identity` refuses); or, with the holes
+    before it, the `Unsupported` of a refusal no hole stands in for (one outside the rules; a graph with no refusal at all is
+    `side_input`, its `run` input unread: `derive_graph` derives it). No correspondence, digest or identity check: a count needs
+    none of them."""
+    from verity_vllm.program.frontend.derive import _derive_flat
+    from verity_vllm.program.frontend.derive_graph import graph_export
+    from verity_vllm.program.frontend.rules import vocabulary_for
+
+    ep, source = graph_export(graph, input_names, theta, name)
+    holder: list = []
+    try:
+        flat, ctx = _derive_flat(source, example_inputs, mode=mode, profile=profile, config={}, allowed_dims={}, name=source.__name__,
+                                 ruleset=with_holes(rules), vocab=vocabulary_for(mode, profile), _ctx_holder=holder, exported=ep)
+    except Refuse as e:
+        return (holder[0].state.get("survey_holes", []) if holder else []), e.u
+    except FrontendError as e:
+        u = Unsupported(_CODE_TO_REASON.get(e.code, "shape"), None, e.where, f"{e.code}: {e.message}")
+        return (holder[0].state.get("survey_holes", []) if holder else []), u
+    holes = ctx.state.get("survey_holes", [])
+    return holes, Program(flat, annotations={"survey_holes": holes}, theta=tuple(theta))
 
 
 
-__all__ = ["Hole", "holes", "with_holes"]
+__all__ = ["Hole", "survey", "with_holes"]

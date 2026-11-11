@@ -1,4 +1,6 @@
-import Definitions.Accounting.Gates.Model
+module
+
+public import Definitions.Accounting.Gates.Model
 
 /-!
 # The registry's primitives, each in one class (trusted)
@@ -9,7 +11,7 @@ set, 262 ids: the 194 of `verity/ml/circuits/ops/prims.py` at
 `BlackwellS8ImmaDot32` and `BlackwellU8S8ImmaDot32` and LimbSplit's four limb steps (`S32LowByte`, `S32ByteCarry`,
 `S32ClampS8`, `S32ClampRest`), each as its word Definition (`_v1`) and on bits (`_v2`); PIN's spot check
 (`benchmarks/pouw/hashed_gemm/segment_e2e.py`): `PouwSegDot_v1`, `PouwDuoAbsorb_v1`, `PouwSel32_v1`, `PouwWinOk_v1`;
-and the H1 + fx1 tile's (`verity/core/protocols/pouw/circuit/`'s `segment.py`, `h1tile.py`, `seeds.py`, `words.py` and
+and the H1 + fx1 tile's (`verity/ml/protocols/pouw/circuit/`'s `segment.py`, `h1tile.py`, `seeds.py`, `words.py` and
 `boolean.py` at `b5516bef2f`), each as its word Definition (`_v1`) and on bits (`_v2`): its segment dots (`PouwSegDot`'s
 `_v2` and `PouwSegDot0`), its noise (`PouwU129`, `PouwI8AddBit`, `PouwI8Add`, `PouwI8Neg`, and the seeds' composites
 `PouwUnitSeeds` and `PouwNoiseBlock`), its digits (`PouwDigitLo`, `PouwDigitHi`, `PouwDigitZ`, `PouwLow8`, `PouwSx8`,
@@ -61,6 +63,8 @@ the u8·s8 IMMA step is, `Bf16ToF32_v1`, free-affine here as property/v1 counts 
 as ruled), and the table's nine other `other` ids, roundings here: the ruling caps three classes and no fourth, and both
 are budgeted the same.
 -/
+
+@[expose] public section
 
 namespace Accounting.Gates
 

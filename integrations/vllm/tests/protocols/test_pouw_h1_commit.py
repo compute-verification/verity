@@ -25,8 +25,9 @@ from torch import nn
 from verity.core.protocols.pouw import credit as CR
 from verity.core.protocols.pouw import weights as Wt
 from verity.core.protocols.pouw import window as Wd
-from verity.core.protocols.pouw.circuit import h1window as HW
-from verity.core.protocols.sampled_proofs import remote as R
+from verity.ml.protocols.pouw.circuit import h1window as HW
+from verity.core.protocols.spot import remote as R
+from verity.core.protocols.spot.one_stage import registered as G, registration as REG
 from verity.ml.circuits.codec import canonical_json
 from verity_vllm import protocols as PO
 from verity_vllm.engine import int8_exact as E
@@ -217,16 +218,16 @@ def _ids(run, s):
     return out
 
 
-class _Laid(dict):
-    """`Served`'s open step tables (``_a``, each call's block by call) laid out by ``lay`` when a step's table of K is
+def _laid(served, lay):
+    """``served``'s step tables of K (`Served._a_rows`, each call's block in call order) laid out by ``lay`` when one is
     taken whole: the rows the window registers and hands the tap as its table, the Commit's own rows untouched."""
+    whole = served._a_rows
 
-    def __init__(self, lay):
-        super().__init__()
-        self.lay = lay
+    def laid(call, value, mine, codes, scales):
+        table = whole(call, value, mine, codes, scales)
+        return None if table is None else np.concatenate(lay(np.split(table, len(mine))))
 
-    def pop(self, key, *default):
-        return dict(enumerate(self.lay([b for _c, b in sorted(super().pop(key, *default).items())])))
+    served._a_rows = laid
 
 
 #: the server's step-input port's T (`served_record.StepInputPort`: whole 4096-byte chunks of i64 ids)
@@ -252,7 +253,7 @@ def _served_commit(com, model, quant=None):
 
 
 def _window(tmp_path, monkeypatch, edit=None, ids=lambda s, x: x, lay=None, model=None, lie=None, com=None,
-            order=None, coins=None, key=hashlib.sha512(b"w").digest(), served_commit=False):
+            order=None, coins=None, key=hashlib.sha512(b"w").digest(), served_commit=False, commit_record=None):
     """A served two-step window with the Commit in its engine: the record (`pouw_h1.CALLS_FILE`), the run and the tap.
     ``edit`` makes the codes H1 is handed of what the arm quantized; ``ids`` the input ids the Commit acquires at step s
     of the honest ones; ``lay`` the blocks of a step's A table of K (one a call, in call order) as the window lays them
@@ -263,7 +264,7 @@ def _window(tmp_path, monkeypatch, edit=None, ids=lambda s, x: x, lay=None, mode
     (`Served.window`), None for one keyed by its window-open root, as the harness's under a challenger. The Commit is
     H1's own (`h1_commit.attach` on the stand-in `Committer`), or with ``served_commit`` the server's (`_served_commit`,
     H1's tap on it `h1_commit.tap`); either way the ids are its step-input port's, each step's model input padded by
-    `GRAPH_PAD` positions past its scheduled tokens."""
+    `GRAPH_PAD` positions past its scheduled tokens. ``commit_record`` is the pouw setting, unset when None."""
     if coins is None:
         _host(tmp_path, monkeypatch, rounds=STEPS)
     model, com = model or Model(edit), com or Committer()
@@ -278,8 +279,9 @@ def _window(tmp_path, monkeypatch, edit=None, ids=lambda s, x: x, lay=None, mode
         port = next(s for s in com.sources if isinstance(s, StepInputPort))
     served = SV.Served(PH.TILE, _unit(), window=key, tap=tap)
     if lay is not None:
-        served._a = _Laid(lay)
-    kw = {"transcript_dir": str(tmp_path / "w"), "served": served}
+        _laid(served, lay)
+    kw = {"transcript_dir": str(tmp_path / "w"), "served": served,
+          **({} if commit_record is None else {"commit_record": commit_record})}
     settings = (_remote(rows=ROWS, steps=STEPS, **kw) if coins is None
                 else coins(SimpleNamespace(runner=Runner()), {**kw, "admission": "round-0"}))
     runner = settings["pouw"]["runner"]
@@ -303,12 +305,14 @@ def _window(tmp_path, monkeypatch, edit=None, ids=lambda s, x: x, lay=None, mode
             com._cur = None
     finally:
         lied.uninstall()
-        comp.close()
-        if served_commit:
-            src.uninstall()
-        else:
-            com.close()
-        tap.untap()
+        try:
+            comp.close()
+        finally:
+            if served_commit:
+                src.uninstall()
+            else:
+                com.close()
+            tap.untap()
     return json.loads((tmp_path / "w" / PH.CALLS_FILE).read_text()), run, tap
 
 
@@ -465,6 +469,194 @@ def test_the_commits_record_is_under_calls_root(tmp_path, monkeypatch):
     assert CR.calls_root(PHC.program_salt_of(c), record["calls"],
                          SV.digest_of(c["served"]["entries"], c["served"]["refused"]),
                          CT.digest(c["commit"])).hex() == c["calls_root"]
+
+
+#: the audited circuit's Program, whose registration a window names as its Commit record (a stand-in digest)
+AUDITED = hashlib.sha512(b"the audited circuit's Program").hexdigest()
+
+
+def _reusing(window, edit):
+    """A registration of the `AUDITED` Program that reuses the window's tables from its registration ``window``: a value
+    of its own, then each round's A table of K and its input-ids table under the Commit's name with ``window``'s entry
+    of it, chained right after ``window``; ``edit`` makes the record of that."""
+    theirs = {e["value"]: e for e in window["registered"]}
+    tables = [(CR.commit_rows(s, K), f"{SV.PREFIX}a/{K}@{s}") for s in range(STEPS)]
+    tables += [(CR.commit_ids(s), f"{SV.PREFIX}ids@{s}") for s in range(STEPS)]
+    own = {"value": "scan/state", "leaves": 16, "words": 1, "root": "ab" * 64, "domain": "cd" * 64}
+    return edit({"format": REG.FORMAT_V2, "protocol": REG.PROTOCOL, "program": AUDITED, "query": "01" * 64,
+                 "partition": "02" * 64, "population": 4, "law": {"law": "subset", "k": 1}, "scheme": "hm96-sha512",
+                 "roots": [], "leaf_layer": None, "anchors": [], "window": {"kind": "served", "run": "ef" * 64},
+                 "registered": [own, *({**theirs[v], "value": name} for name, v in tables)],
+                 "previous": REG.digest(window)})
+
+
+def _named(previous=None, edit=lambda rec: rec, window=lambda w: w):
+    """The pouw setting ``commit_record``: the window's registration chained after ``previous`` (as ``window`` makes it
+    of the window's own) and `_reusing`'s record of it, kept in its ``got``."""
+    def commit_record(run):
+        w = CT.registration(run, previous)
+        commit_record.got = (w, _reusing(w, edit))
+        return window(w), commit_record.got[1]
+    return commit_record
+
+
+def test_a_named_record_reusing_the_windows_tables_is_its_commit_record_before_the_draw_coin(tmp_path, monkeypatch):
+    """With ``commit_record`` the window names, in its tap's place, a registration of another Program that reuses its
+    tables. The window's registration W is a v2 record of its served entries under its Program and open root, chained
+    after the prover's last record, and one-stage's reuse form reads each of its tables from W in the log
+    (`registration._earlier`). The named record R is chained right after W and registers each round's A table and
+    input-ids table under the Commit's name with W's entry of it: R is the window's Commit record, one digest for every
+    reader (`registration.digest`, credit's `commit_of`), bound into calls_root before the draw coin opens, and core's
+    ROOTS1 steps pass on it."""
+    previous, named = "12" * 64, _named("12" * 64)
+    record, run, _tap = _window(tmp_path, monkeypatch, commit_record=named)
+    window, rec = named.got
+    c = record["commitment"]
+    assert window["format"] == REG.FORMAT_V2 and window["previous"] == previous
+    assert window["program"] == run.served.program_digest and window["window"]["open_root"] == run.served.root
+    assert window["registered"] == c["served"]["entries"]
+    for e in window["registered"]:
+        want = {"leaves": e["leaves"], "words": e["words"], "word_bits": e.get(G.WIDTH_KEY, G.WORD_BITS)}
+        assert REG._earlier([window], REG.digest(window), "value", e["value"], want) == e
+    assert c["commit"] == canonical_json(rec).hex() == CT.record_of(run) != run.served.tap.hex(run.served)
+    assert CT.digest(c["commit"]).hex() == REG.digest(rec)
+    assert run.details["commit_record"] == {"named": True, "registration": REG.digest(window), "record": REG.digest(rec)}
+    assert PHC.manifest_reason(record) is None and _core(record, run) == (None, None)
+    assert c["draw"]["coin"] is not None and "refused" not in c["draw"]
+    assert all(v["credit"] for v in run.gated().values())
+
+
+def _registered(edit):
+    return lambda rec: {**rec, "registered": edit(rec["registered"])}
+
+
+def _fails(run):
+    raise ValueError("window-commit refused the window")
+
+
+@pytest.mark.parametrize("named,why", [
+    (_named(edit=_registered(lambda r: [r[0], {**r[1], "root": "00" * 64}, *r[2:]])),
+     f"registers {CR.commit_rows(0, K)} at another root, domain or leaf count"),
+    (_named(edit=_registered(lambda r: [e for e in r if e["value"] != CR.commit_ids(1)])),
+     f"registers {CR.commit_ids(1)} not"),
+    (_named(edit=_registered(lambda r: [*r, r[1]])), f"registers {CR.commit_rows(0, K)} twice"),
+    (_named(edit=lambda rec: {**rec, "previous": None}), "previous is not the window registration's digest"),
+    (_named(edit=lambda rec: {**rec, "format": REG.FORMAT}), "is not a Commit record credit reads"),
+    (_named(window=lambda w: {**w, "registered": w["registered"][1:]}), "the window's registration is not its own"),
+    (_fails, "ValueError: window-commit refused the window"),
+], ids=["a-table-root-off", "ids-table-missing", "a-table-twice", "not-chained-after-w", "v1", "not-its-registration",
+        "hook-fails"])
+def test_a_window_whose_named_record_does_not_reuse_its_tables_binds_none_and_opens_no_draw_coin(tmp_path, monkeypatch,
+                                                                                                named, why):
+    """A named record that doesn't reuse the window's tables from its own registration, or a ``commit_record`` that
+    fails: the window binds no Commit record under calls_root (credit refuses it at ``commit``), its draw coin stays
+    unopened, its transcript says why, and its release raises ValueError, the window's visible refusal."""
+    with pytest.raises(ValueError, match="the window names no Commit record"):
+        _window(tmp_path, monkeypatch, commit_record=named)
+    record = json.loads((tmp_path / "w" / PH.CALLS_FILE).read_text())
+    c, named = record["commitment"], record["details"]["commit_record"]
+    assert named["named"] is False and why in named["reason"]
+    assert c["commit"] is None and c["draw"]["coin"] is None and why in c["draw"]["refused"]
+    assert PHC.manifest_reason(record) is None and CR.commit_of(c["commit"]) == (None, ("commit", CR.COMMIT_FORM))
+
+
+class _Unforeseen(Exception):
+    pass
+
+
+@pytest.mark.parametrize("raised,returned", [(ValueError, True), (_Unforeseen, False), (KeyboardInterrupt, False)],
+                         ids=["named-type", "other-type", "base-exception"])
+def test_a_failing_hook_is_the_windows_refusal_and_any_other_failure_is_recorded_then_raised(raised, returned):
+    """A ``commit_record`` that fails with a type `named` names is the window's refusal, which `bind` records and returns
+    for the release to raise (above). One that fails with any other type, a BaseException included, is recorded as the
+    same refusal and raised as it is."""
+    def hook(run):
+        raise raised("window-commit failed")
+    run = SimpleNamespace(entry=ENTRY, commit_record=hook, commits={}, details={})
+    if returned:
+        assert CT.bind(run) == f"{ENTRY}: the window names no Commit record: ValueError: window-commit failed"
+    else:
+        with pytest.raises(raised, match="window-commit failed"):
+            CT.bind(run)
+    assert run.commits["commit"] is None
+    assert run.details["commit_record"] == {"named": False, "reason": f"{raised.__name__}: window-commit failed"}
+
+
+def _kept_tables(monkeypatch) -> dict[str, np.ndarray]:
+    """Each step's A table H1 commits, whole, by its name, as the window's served trees register it (`Served._register`)."""
+    kept, register = {}, SV.Served._register
+
+    def spy(self, run, value, words, *args, **kwargs):
+        if value.startswith(f"{SV.PREFIX}a/"):
+            kept[value] = words.copy()
+        return register(self, run, value, words, *args, **kwargs)
+    monkeypatch.setattr(SV.Served, "_register", spy)
+    return kept
+
+
+def test_the_audited_circuits_tables_are_the_windows_registration_of_them(tmp_path, monkeypatch):
+    """`reuse`: the audited circuit's tables, given as the rows its proof blocks make of each (here H1's own: each step's A
+    table as the window committed it, each round's input-ids table its served ids), are the window's registration W's
+    tables: each salted under H1's key at its nonce and W's entry's domain (round 0's input-ids binding the session), its
+    entry W's but in name, the Commit's (`credit.commit_rows`, `credit.commit_ids`), so a record registering them reuses
+    W's. Each is asked for at its rows, with its empty row (zero codes of scale 0, `EMPTY_ID`). Refused by name where a
+    table's rows aren't W's, H1's key is another, or W registers no such table."""
+    kept = _kept_tables(monkeypatch)
+    _record, run, _tap = _window(tmp_path, monkeypatch)
+    w, served = CT.registration(run), run.served
+    layout = {"calls": served.calls, "linears": served.linears, "m": served.m}
+    names = [(CR.commit_rows(s, K), f"{SV.PREFIX}a/{K}@{s}") for s in range(STEPS)]
+    names += [(CR.commit_ids(s), f"{SV.PREFIX}ids@{s}") for s in range(STEPS)]
+    words = {**{CR.commit_rows(s, K): kept[f"{SV.PREFIX}a/{K}@{s}"] for s in range(STEPS)},
+             **{CR.commit_ids(s): served.ids_of(s) for s in range(STEPS)}}
+    asked = []
+
+    def rows_of(name, n, empty):
+        asked.append((name, n, list(empty)))
+        return words[name]
+    got = CT.reuse(w, layout, STEPS, run._key, rows_of)
+    theirs = {e["value"]: e for e in w["registered"]}
+    assert CT.shape(layout, STEPS) == (K, served.m, 2)
+    assert {n: r.entry() for n, r in got.items()} == {n: {**theirs[h], "value": n} for n, h in names}
+    with pytest.raises(ValueError, match="no binding to recompute it from"):
+        _ = got[CR.commit_ids(0)].domain
+    assert asked == [(n, 2 * served.m, [0] * (K // 2 + 2)) for n, _ in names[:STEPS]] + [
+        (n, served.m, [0xFFFF, 0xFFFF]) for n, _ in names[STEPS:]]
+    r = got[CR.commit_ids(0)]
+    assert r.salts[3] == served.ids[0].salts[3] and r.path(3) == served.ids[0].path(3)
+    with pytest.raises(ValueError, match=f"{CR.commit_rows(0, K)}: .* or H1's key is another"):
+        CT.reuse(w, layout, STEPS, bytes(32), rows_of)
+    with pytest.raises(ValueError, match=f"registers no {SV.PREFIX}ids@1, which the audited circuit reads as "
+                                         f"{CR.commit_ids(1)}"):
+        CT.reuse({**w, "registered": [e for e in w["registered"] if e["value"] != f"{SV.PREFIX}ids@1"]}, layout, STEPS,
+                 run._key, rows_of)
+    words[CR.commit_rows(1, K)] = words[CR.commit_rows(1, K)].copy()
+    words[CR.commit_rows(1, K)][3, 0] ^= 1
+    with pytest.raises(ValueError, match=f"{CR.commit_rows(1, K)}: the rows the audited circuit's proof blocks make of it "
+                                         f"are not the window's registration's {SV.PREFIX}a/{K}@1"):
+        CT.reuse(w, layout, STEPS, run._key, rows_of)
+
+
+@pytest.mark.parametrize("layout, steps, why", [
+    ({"calls": [["a", 0], ["b", 0]], "linears": [["a", 64, 8], ["b", 128, 8]], "m": 8}, 1, "not one K's"),
+    ({"calls": [["a", 0], ["b", 0]], "linears": [["a", 64, 8], ["b", 128, 8]], "m": 8}, 2,
+     r"\[\(0, 64, 1\), \(1, 128, 1\)\] \(round, K, calls\) over its 2 rounds are not one K's"),
+    ({"calls": [["a", 0]] * 3, "linears": [["a", 64, 8]], "m": 8}, 2, "over its 2 rounds are not one K's"),
+    ({"calls": [["d", 0]], "linears": [["d", 8192, 8]], "m": 8}, 1, r"K = 8192: an A row of \d+ leaves"),
+], ids=["two-ks-a-round", "k-differs-by-round", "rounds-dont-divide", "chunked"])
+def test_tables_the_audited_circuit_doesnt_read_are_refused(layout, steps, why):
+    """`shape` refuses H1's window Program unless each round's A tables are one K's, the same calls each round, a row one
+    leaf: the one form the audited circuit reads (`window_class.Tables`)."""
+    with pytest.raises(ValueError, match=why):
+        CT.shape(layout, steps)
+
+
+def test_commit_record_is_h1s_setting_a_callable_beside_served():
+    """The setting ``commit_record`` is a callable, and only H1's with its served tables."""
+    with pytest.raises(ValueError, match="'commit_record' is commit_record"):
+        pouw.Settings.of({"commit_record": "w.json"})
+    refused = PO.refusals(PO.Context(stage="serve", enabled=(ENTRY,), settings=_remote(commit_record=_fails)))
+    assert any("'commit_record' names H1's" in r for r in refused)
 
 
 def _experts(name):
@@ -649,24 +841,23 @@ def test_attach_builds_a_rows_sha512_commit_whose_port_is_the_steps_one_copy_of_
 
 
 def test_h1s_commit_refuses_a_sha256_run_root(monkeypatch):
-    """vllm-v1's committer (SHA-256 rows, 32-byte roots) is no Commit of H1's. `h1_commit.attach` refuses one built under
-    it, closed before anything is put on the engine; and `pouw_h1_commit.committed`, what a run records of the Commit
-    (the GPU harness's ``committer`` and each rank's release), refuses vllm-v1's real 32-byte run root, and a
+    """A committer of another scheme (an old record's vllm-v1: SHA-256 rows, 32-byte roots) is no Commit of H1's.
+    `h1_commit.attach` refuses one, closed before anything is put on the engine; and `pouw_h1_commit.committed`, what a run
+    records of the Commit (the GPU harness's ``committer`` and each rank's release), refuses its 32-byte run root, and a
     rows-sha512 committer's root of any length but 64. The offline core's rows-sha512 run root passes."""
     from tests.check import opened as O
-    steps = {0: [("step.input/ids", bytes(range(64)))]}
-    sha512 = O.commit_steps(steps, commit_scheme=CT.SCHEME, run_id="h1-rows")
-    sha256 = O.commit_steps(steps, run_id="h1-v1")
+    sha512 = O.commit_steps({0: [("step.input/ids", bytes(range(64)))]}, run_id="h1-rows")
+    old = O.committer(run_id="h1-v1")
+    old.commit_scheme = "vllm-v1"
     assert (sha512[0].commit_scheme, len(sha512[1].run_root)) == (CT.SCHEME, CT.ROOT_BYTES)
-    assert (sha256[0].commit_scheme, len(sha256[1].run_root)) == ("vllm-v1", 32)
     assert CT.committed(*sha512) == {"run_root": sha512[1].run_root.hex(), "commit_scheme": CT.SCHEME,
                                      "name": sha512[0].name}
-    with pytest.raises(ValueError, match=f"committed under vllm-v1 to a 32-byte run root, not under {CT.SCHEME} to a 64-byte"):
-        CT.committed(*sha256)
     short = SimpleNamespace(run_root=bytes(32), extra={})
+    with pytest.raises(ValueError, match=f"committed under vllm-v1 to a 32-byte run root, not under {CT.SCHEME} to a 64-byte"):
+        CT.committed(old, short)
     with pytest.raises(ValueError, match=f"committed under {CT.SCHEME} to a 32-byte run root"):
         CT.committed(Committer(), short)
-    old, model = sha256[0], Model()
+    model = Model()
     closed = []
     monkeypatch.setattr(old, "close", lambda: closed.append(True))
     monkeypatch.setattr(HC, "committer", lambda engine, run_id: old)
@@ -722,8 +913,11 @@ def test_a_forward_out_of_module_order_ties_and_its_a_zero_is_refused_at_arow(tm
 class _Gate:
     """The challenger gate for a run of several windows (`pouw_h1_gpu.window_sessions`): each ``reserve`` is a challenge phase of its own
     on a challenger host of its own (`challenger_host.Host`, gated), all under one auditor key and one ledger, which
-    reserves, opens and ends them in turn. Calling it is the gate's open (`pouw_h1_window.Gate`), the serving side
-    reaches the challenge phase opened last, and ``ended`` is the challenge phase's ``status`` once its end is in the ledger."""
+    reserves, opens and ends them in turn; a reserve of no `steps` is a window's sample's challenge phase, whose host, over
+    the sample's coins (`window.draw_challenger`) and withheld, starts (and the ledger reserves it) at its open, since the
+    window's open is signed at a leaf held from its reserve. Calling it is the gate's open (`pouw_h1_window.Gate`), the
+    serving side reaches the challenge phase opened last, and ``ended`` is the challenge phase's ``status`` once its end
+    is in the ledger."""
 
     def __init__(self, tmp_path, monkeypatch):
         self.dir, self.leaves, self.hosts, self.opened = tmp_path / "gate", itertools.count(), {}, None
@@ -735,17 +929,26 @@ class _Gate:
     def reserve(self, peer, steps):
         n = len(self.hosts) + 1
         sid = CH.session_id(n)
-        self.hosts[sid] = CH.Host(self.dir / sid, Wd.live_challenger(0, steps, CH.entropy(n)), 1, sid, self.leaves,
-                                  self.ledger, gated=True)
+        if steps is None:
+            self.hosts[sid] = n
+        else:
+            self.hosts[sid] = CH.Host(self.dir / sid, Wd.live_challenger(0, steps, CH.entropy(n)), 1, sid, self.leaves,
+                                      self.ledger, gated=True)
         return {"session": sid, "seq": len(self.ledger.lines) - 1, "peer": peer, "by": "vllm",
                 "expires_utc": "2026-10-20T11:18:00Z"}
 
-    def __call__(self, session, root):
-        self.opened = self.hosts[session]
-        return self.opened.open(session, root)
+    def __call__(self, session, root, withhold=False):
+        host = self.hosts[session]
+        assert isinstance(host, int) == withhold, "a draw session is opened withheld, a window's session never"
+        if withhold:
+            host = self.hosts[session] = CH.Host(self.dir / session, Wd.draw_challenger(0, CH.entropy(host)), 1, session,
+                                                 self.leaves, self.ledger, gated=True, withhold=True)
+        self.opened = host
+        return host.open(session, root)
 
     def ended(self, session):
-        self.hosts[session].ended()
+        if not isinstance(self.hosts[session], int):
+            self.hosts[session].ended()
         lines = [json.loads(line) for line in self.ledger.lines]
         entry = {e["kind"]: e for e in lines if e["session"] == session}
         return {"session": session, "open": entry.get("open"), "end": entry.get("end")}
@@ -753,9 +956,13 @@ class _Gate:
 
 def _live(gate, sessions, name):
     """``coins`` for `_window`: window `name`'s settings as the GPU harness makes them with ``--challenger --gate --peer``,
-    its challenge phase the one `sessions` (`pouw_h1_gpu.window_sessions`) reserves for it."""
+    its challenge phase and its sample's the ones `sessions` (`pouw_h1_gpu.window_sessions`) reserves for it."""
     from tests.protocols import pouw_h1_gpu as G
-    return lambda eng, kw: G.h1_settings(eng, ROWS, STEPS, AUDITOR, sessions(name), gate, **kw)
+
+    def settings(eng, kw):
+        reserved = sessions(name)
+        return G.h1_settings(eng, ROWS, STEPS, AUDITOR, reserved, gate, sessions.draws[name], **kw)
+    return settings
 
 
 def _in_process(eng, kw):
@@ -765,17 +972,22 @@ def _in_process(eng, kw):
 
 
 def _summary_row(gate, sessions, name, record, run):
-    """Window `name` as the GPU harness's record keeps it for `pouw_h1_gpu.coins_summary`, its challenge phase ended."""
+    """Window `name` as the GPU harness's record keeps it for `pouw_h1_gpu.coins_summary`, its challenge phase and its
+    sample's ended."""
     from tests.protocols import pouw_h1_gpu as G
-    end = G.session_end(gate, sessions.held[name]) if name in getattr(sessions, "held", {}) else None
-    return {"coin_source": record["commitment"]["coin_source"], "gate": run.credit(), **({"session": end} if end else {})}
+    ends = {}
+    if name in getattr(sessions, "held", {}):
+        ends = {"session": G.session_end(gate, sessions.held[name]),
+                "draw_session": G.session_end(gate, sessions.draws[name])}
+    return {"coin_source": record["commitment"]["coin_source"], "gate": run.credit(), **ends}
 
 
 def test_each_commit_window_draws_every_coin_from_a_session_of_its_own(tmp_path, monkeypatch):
     """`pouw_h1_gpu.py --commit --challenger --gate --peer`: the honest Commit window and a negative each reserve their own
-    challenge phase at the gate (`window_sessions`), opened on that window's open root; every coin the credit gate checks, the
-    salt, each round's and the sample, is that challenge phase's, which the verifier trusts (`trusted_rounds_reason`) and which
-    ends closed and complete before the next is reserved (`session_end`). The honest window's credit gate passes every
+    challenge phase at the gate (`window_sessions`), opened on that window's open root, and a sampling challenge phase
+    beside it, opened withheld on its sample root; the salt and each round's coin are the window's challenge phase's and
+    the sample the sampling one's, which the verifier trusts (`trusted_rounds_reason`) and which end closed and complete
+    before the next window's are reserved (`session_end`). The honest window's credit gate passes every
     served call, the negative's refuses every one as untied (never as in-process), core still refuses the negative at
     ``arow``, the harness's summary is ok, and a window asks for its challenge phase once."""
     from tests.protocols import pouw_h1_gpu as G
@@ -792,19 +1004,25 @@ def test_each_commit_window_draws_every_coin_from_a_session_of_its_own(tmp_path,
             doc["h1_commit"] = row
         else:
             doc["negatives"]["a-zero"] = {"window": row}
-    assert [s["session"] for s in sessions.held.values()] == [CH.session_id(1), CH.session_id(2)]
+    assert [s["session"] for s in sessions.held.values()] == [CH.session_id(1), CH.session_id(3)]
+    assert [s["session"] for s in sessions.draws.values()] == [CH.session_id(2), CH.session_id(4)]
     for name, (record, run, row) in runs.items():
-        c, sid = record["commitment"], sessions.held[name]["session"]
-        host = gate.hosts[sid]
+        c, sid, dsid = record["commitment"], sessions.held[name]["session"], sessions.draws[name]["session"]
+        host, drawn = gate.hosts[sid], gate.hosts[dsid]
         assert c["coin_source"] == PH.CHALLENGER and run.details["challenger"] == {"closed": True}
         assert c["session"]["session"] == sid and c["coins"] == c["round_coins"] == host.challenger.commitment.to_json()
+        assert c["draw_session"]["session"] == dsid
         assert row["session"]["ok"] and row["session"]["end"]["complete"]
+        assert row["draw_session"]["ok"] and row["draw_session"]["end"]["complete"]
         assert PHC.trusted_rounds_reason(c, host.directory, [gate.ledger.path], host.window, host.key,
-                                         pins=[gate.ledger.pins_path], main=CH.MAIN) is None
+                                         pins=[gate.ledger.pins_path], main=CH.MAIN,
+                                         draw_directory=drawn.directory) is None
         received = R.released_roots(host.directory / R.RELEASES, host.challenger.commitment)
         assert received[Wd.SALT] == (bytes.fromhex(c["session"]["root"]),)
         assert received[Wd.ROUND] == tuple(bytes.fromhex(r["root"]) for r in c["rounds"]) and len(c["rounds"]) == STEPS
-        assert received[Wd.DRAW] == (bytes.fromhex(c["draw"]["root"]),) and c["draw"]["coin"]
+        assert Wd.DRAW not in received
+        draws = R.released_roots(drawn.directory / R.RELEASES, drawn.challenger.commitment)
+        assert draws[Wd.DRAW] == (bytes.fromhex(c["draw"]["root"]),) and c["draw"]["coin"]
     honest, zero = runs["commit"][2]["gate"], runs["commit-a-zero"][2]["gate"]
     served = sum(len(runs["commit"][1].owners[s]) for s in range(STEPS)) * 2
     assert honest["refused"]["calls"] == 0 and honest["gate_passed"]["rows"] == served and honest["coins"] == PH.CHALLENGER
@@ -872,13 +1090,18 @@ def test_a_refused_reserve_or_a_reused_session_serves_no_window():
         G.window_sessions(Refusing(), "vy-nebius-1", STEPS)("commit")
 
     class Same:
-        def reserve(self, peer, steps):
-            return {"session": CH.session_id(1), "seq": 0, "peer": peer, "by": "vllm"}
+        def __init__(self, draw):
+            self.draw = draw
 
-    sessions = G.window_sessions(Same(), "vy-nebius-1", STEPS)
-    assert sessions("commit")["session"] == CH.session_id(1)
+        def reserve(self, peer, steps):
+            return {"session": CH.session_id(1 if steps is not None else self.draw), "seq": 0, "peer": peer, "by": "vllm"}
+
+    sessions = G.window_sessions(Same(0xd), "vy-nebius-1", STEPS)
+    assert sessions("commit")["session"] == CH.session_id(1) and sessions.draws["commit"]["session"] == CH.session_id(0xd)
     with pytest.raises(ValueError, match="no fresh session"):
         sessions("fill")
+    with pytest.raises(ValueError, match="no fresh draw session"):
+        G.window_sessions(Same(1), "vy-nebius-1", STEPS)("commit")
 
 
 @pytest.mark.parametrize("argv,why", [

@@ -1,9 +1,45 @@
-import Proofs.Flock.Claims.ZK.FinExe
-import Proofs.Flock.Claims.ZK.CausalExe
-import Proofs.Flock.Claims.ZK.FrameRounds
+module
+
+public import Proofs.Flock.Claims.ZK.CausalExe
+public import Proofs.Flock.Claims.ZK.FinExe
+public import Proofs.Flock.Claims.ZK.FrameRounds
+public import Proofs.Flock.Claims.ZK.Split
+import Flock.With.SimWalk
+import Mathlib.Algebra.Order.Floor.Extended
+import Mathlib.Algebra.Order.Interval.Basic
+import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
+import Mathlib.Analysis.SpecialFunctions.Bernstein
+import Mathlib.Analysis.SpecialFunctions.Gamma.Basic
+import Mathlib.Analysis.SpecialFunctions.Trigonometric.DerivHyp
+import Mathlib.Combinatorics.Enumerative.DyckWord
+import Mathlib.Combinatorics.SimpleGraph.Triangle.Removal
+import Mathlib.Data.NNRat.Floor
+import Mathlib.Data.Nat.Choose.Multinomial
+import Mathlib.Geometry.Euclidean.Altitude
+import Mathlib.NumberTheory.Chebyshev
+import Mathlib.NumberTheory.Height.NumberField
+import Mathlib.NumberTheory.Height.Projectivization
+import Mathlib.NumberTheory.LucasLehmer
+import Mathlib.NumberTheory.SelbergSieve
+import Mathlib.RingTheory.Radical.NatInt
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Topology.Sheaves.Init
+import Proofs.Flock.Claims.Complete.ZkTables.Scope
 
 /-!
-# A rep's rank check from the source, at coins every table admits
+# A rep's rank check from the source, at coins that show no refusal
 
 `Flock.Firewall.Finish.repCut_fw` asks (`hpiop`) that the rank check pass at the rounds the source's zerocheck and lincheck
 leave, answered by `asksCut`. Those rounds carry the coins of the sends they made, whatever the masked values, so the
@@ -17,10 +53,13 @@ refusal shows (`not_refused_of_admits`), so the check passes there.
   it only grow.
 * **The claim points** (`roundPoints_cut`): the zerocheck's and lincheck's `m + k_log − 6` rounds (`CutEq`'s counts) read as
   `claimPoints` at the coins from the rep's first send.
-* **At admitted coins** (`Claims.ZKMal.Masked.rankOk_of_admits`, **`rank_at_admits`**): table `j`'s rep `r`'s check, after
-  rep `0`'s points at rep `1` (`priorE`), passes at the opened coins, so at any coins that are the opened ones through
-  the rep's rank check.
+* **Where no refusal shows** (`Claims.ZKMal.Masked.rankOk_of_unrefused`, **`rank_at_unrefused`**): table `j`'s rep `r`'s
+  check, after rep `0`'s points at rep `1` (`priorE`), passes at the opened coins when `¬ Refused x c i` with its rounds
+  at most `i`, so at any coins that are the opened ones through the rep's rank check. **At admitted coins**
+  (`rankOk_of_admits`, `rank_at_admits`) no refusal shows at any `i`.
 -/
+
+@[expose] public section
 
 namespace FlockComplete.RankAt
 
@@ -252,24 +291,32 @@ theorem tab_bounds {x : Msg} (hx : Live x) {j : ℕ} (hj : j < (stsOf x).size) :
   · rw [hst]
     exact (zkTab x ⟨j, hjJ⟩).wf.1.hk6
 
+/-- **Where the coins below round `i` show no refusal, every rank check reached by then passes**: table `j`'s rep `r`'s,
+after rep `0`'s points at rep `1`. -/
+theorem rankOk_of_unrefused {x : Msg} (hx : Live x) {c : Fin (refK x) → FlockDeploy.Coin} {i : ℕ}
+    (hn : ¬ Refused x c i) {j r : ℕ} (hj : j < (stsOf x).size) (hr : r < 2) (h0 : rankSlot x j 0 ≤ i)
+    (hi : rankSlot x j r ≤ i) :
+    FlockComplete.MaskRank.maskRankOk (priorE c j r ++ ptsOpen c (stsOf x)[j]! (2 * j + r))
+      (Composed.maskWordsOf (stsOf x)[j]!) = true := by
+  obtain ⟨hm, hk6⟩ := tab_bounds hx hj
+  by_contra hb
+  exact hn (.inr ⟨j, hj, r, hr, .inl ⟨hm, hk6, h0, hi, Bool.eq_false_iff.2 hb⟩⟩)
+
 /-- **Where every table admits the opened coins, every rank check passes there**: table `j`'s rep `r`'s, after rep `0`'s
 points at rep `1`. -/
 theorem rankOk_of_admits {x : Msg} (hx : Live x) {c : Fin (refK x) → FlockDeploy.Coin}
     (hA : ∀ j, (tabC PE x j).Admits (czExe PE x c j)) {j r : ℕ} (hj : j < (stsOf x).size) (hr : r < 2) :
     FlockComplete.MaskRank.maskRankOk (priorE c j r ++ ptsOpen c (stsOf x)[j]! (2 * j + r))
-      (Composed.maskWordsOf (stsOf x)[j]!) = true := by
-  obtain ⟨hm, hk6⟩ := tab_bounds hx hj
-  by_contra hb
-  exact not_refused_of_admits hx hA (rankSlot x j 0 + rankSlot x j r)
-    (.inr ⟨j, hj, r, hr, .inl ⟨hm, hk6, by omega, by omega, Bool.eq_false_iff.2 hb⟩⟩)
+      (Composed.maskWordsOf (stsOf x)[j]!) = true :=
+  rankOk_of_unrefused hx (not_refused_of_admits hx hA (rankSlot x j 0 + rankSlot x j r)) hj hr (by omega) (by omega)
 
-/-- **A rep's rank check from the source, at coins every table admits** (`repCut_fw`'s `hpiop`, its first half): table
-`j`'s rep `r`, its zerocheck and lincheck run from no rounds at its first send `repBase x (2j + r)` and answered by
-coins that are the opened ones through its rank check, leaves rounds at which the check, after rep `0`'s points at rep
-`1` (`priorE`), passes over the table's mask words. -/
-theorem rank_at_admits {x : Msg} (hx : Live x) {c : Fin (refK x) → FlockDeploy.Coin}
-    (hA : ∀ j, (tabC PE x j).Admits (czExe PE x c j)) {j r : ℕ} (hj : j < (stsOf x).size) (hr : r < 2)
-    (coin : ℕ → ℕ → _root_.Flock.F128) (n : ℕ)
+/-- **A rep's rank check from the source, where the coins show no refusal by its round** (`¬ Refused x c i` with the
+rank check's rounds at most `i`): table `j`'s rep `r`, its zerocheck and lincheck run from no rounds at its first send
+`repBase x (2j + r)` and answered by coins that are the opened ones through its rank check, leaves rounds at which the
+check, after rep `0`'s points at rep `1` (`priorE`), passes over the table's mask words. -/
+theorem rank_at_unrefused {x : Msg} (hx : Live x) {c : Fin (refK x) → FlockDeploy.Coin} {i : ℕ}
+    (hn : ¬ Refused x c i) {j r : ℕ} (hj : j < (stsOf x).size) (hr : r < 2) (h0 : rankSlot x j 0 ≤ i)
+    (hi : rankSlot x j r ≤ i) (coin : ℕ → ℕ → _root_.Flock.F128) (n : ℕ)
     (hcoin : ∀ k < rankSlot x j r, ∀ e, coin k e = slotAt c k e) (st : _root_.Flock.Setup)
     (hsm : st.m = (stsOf x)[j]!.m) (hsk : st.kLog = (stsOf x)[j]!.c.kLog) (hfk : st.fold.kLog = st.kLog)
     (cap root : ByteArray) (lay : _root_.Flock.Zk.PadLayout) (mk : ℕ → _root_.Flock.F128)
@@ -295,7 +342,29 @@ theorem rank_at_admits {x : Msg} (hx : Live x) {c : Fin (refK x) → FlockDeploy
     · rw [hl]
       exact hcoin _ (by unfold rankSlot; omega) e
   rw [hpts]
-  exact rankOk_of_admits hx hA hj hr
+  exact rankOk_of_unrefused hx hn hj hr h0 hi
+
+/-- **A rep's rank check from the source, at coins every table admits** (`repCut_fw`'s `hpiop`, its first half): table
+`j`'s rep `r`, its zerocheck and lincheck run from no rounds at its first send `repBase x (2j + r)` and answered by
+coins that are the opened ones through its rank check, leaves rounds at which the check, after rep `0`'s points at rep
+`1` (`priorE`), passes over the table's mask words. -/
+theorem rank_at_admits {x : Msg} (hx : Live x) {c : Fin (refK x) → FlockDeploy.Coin}
+    (hA : ∀ j, (tabC PE x j).Admits (czExe PE x c j)) {j r : ℕ} (hj : j < (stsOf x).size) (hr : r < 2)
+    (coin : ℕ → ℕ → _root_.Flock.F128) (n : ℕ)
+    (hcoin : ∀ k < rankSlot x j r, ∀ e, coin k e = slotAt c k e) (st : _root_.Flock.Setup)
+    (hsm : st.m = (stsOf x)[j]!.m) (hsk : st.kLog = (stsOf x)[j]!.c.kLog) (hfk : st.fold.kLog = st.kLog)
+    (cap root : ByteArray) (lay : _root_.Flock.Zk.PadLayout) (mk : ℕ → _root_.Flock.F128)
+    {t₀ : _root_.Flock.Transcript} (ht₀ : t₀.rounds = #[]) {l : Array Msg} (hl : l.size = repBase x (2 * j + r))
+    {zp : _root_.Flock.ZerocheckProof} {zc : _root_.Flock.ZcOut} {t₁ : _root_.Flock.Transcript} {l₁ : Array Msg}
+    {lp : _root_.Flock.LincheckProof} {lc : _root_.Flock.LcOut} {t₂ : _root_.Flock.Transcript} {l₂ : Array Msg}
+    (h₁ : ((FlockComplete.zerocheckCut (FlockComplete.asksCut coin n) st.m st.digest cap root lay mk).run t₀).go l =
+      (.ok ((zp, zc), t₁), l₁))
+    (h₂ : ((FlockComplete.lincheckCut (FlockComplete.asksCut coin n) st.fold st.m lay mk zc).run t₁).go l₁ =
+      (.ok ((lp, lc), t₂), l₂)) :
+    FlockComplete.MaskRank.maskRankOk (priorE c j r ++ FlockComplete.MaskRank.roundPoints st.m st.kLog t₂.rounds)
+      (Composed.maskWordsOf (stsOf x)[j]!) = true :=
+  rank_at_unrefused hx (not_refused_of_admits hx hA (rankSlot x j 0 + rankSlot x j r)) hj hr (by omega) (by omega)
+    coin n hcoin st hsm hsk hfk cap root lay mk ht₀ hl h₁ h₂
 
 end Masked
 

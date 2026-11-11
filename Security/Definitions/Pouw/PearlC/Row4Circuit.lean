@@ -1,4 +1,6 @@
-import Definitions.Pouw.PearlC.RowCircuit
+module
+
+public import Definitions.Pouw.PearlC.RowCircuit
 
 /-!
 # Pearl-C4's row units as core circuits (definitions only)
@@ -17,8 +19,10 @@ E2M1 nibbles; the statistics read `x` widened (`Wire.bf16`). Then:
 * **the sides**: RowA's `P_A` chains (`af4Run`) and the noise' `Ẽ` (`et4Run`); RowB's `Ẽ`, its `P_B` blocks (`mid4Run`)
   and `−Ẽ`.
 
-`tests/test_circuit_row_lean.py` checks every gate against the templates, as for `pc8`.
+`verity/core/protocols/pouw/tests/test_circuit_row_lean.py` checks every gate against the templates, as for `pc8`.
 -/
+
+@[expose] public section
 
 namespace Pouw.PearlC.RowCircuit
 

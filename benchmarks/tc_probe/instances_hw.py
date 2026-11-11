@@ -62,6 +62,7 @@ import sys
 import time
 from dataclasses import dataclass
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 import numpy as np
 from verity_config.settings import SHARED
@@ -69,9 +70,12 @@ from verity_config.settings import SHARED
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 import tc_probe as P  # sibling module: kernels, formats, instruction table, SASS check, result envelope
-from verity.ml.circuits.silicon import silicon as S
+from verity.ml.circuits.silicon import models as S
 from verity.ml.circuits.silicon.cast import f32_to_bf16_word
 from verity.ml.circuits.targets import target as T
+
+if TYPE_CHECKING:
+    from collections.abc import Callable
 
 REPO = Path(__file__).resolve().parents[2]
 N = P.N
@@ -204,7 +208,7 @@ def load_bench_instances(tier: str, root: Path | None, manifest_path: Path, lo: 
     return InstanceSet(tier=tier, a=x, b=w, c0=c0, acc=None, y=y.copy(), epilogue=EPILOGUE_BF16, negative=neg, **common)
 
 
-def fp8_random_finite_operands(rng: np.random.Generator, shape) -> np.ndarray:
+def fp8_random_finite_operands(rng: np.random.Generator, shape: tuple[int, ...]) -> np.ndarray:
     """Uniform E4M3 bytes without the NaN codes (``archive.direct.ligero.fp8.witness.random_finite_operands``, verbatim)."""
 
     w = rng.integers(0, 256, size=shape, dtype=np.int64)
@@ -213,7 +217,7 @@ def fp8_random_finite_operands(rng: np.random.Generator, shape) -> np.ndarray:
     return w
 
 
-def bf16_random_finite_operands(rng: np.random.Generator, shape) -> np.ndarray:
+def bf16_random_finite_operands(rng: np.random.Generator, shape: tuple[int, ...]) -> np.ndarray:
     """Finite BF16 words with exponent fields in [96, 160), one in ten a signed zero, one in ten a subnormal
     (``archive.direct.ligero.relations.random_finite_bf16``, verbatim)."""
 
@@ -230,7 +234,7 @@ def bf16_random_finite_operands(rng: np.random.Generator, shape) -> np.ndarray:
 @dataclass(frozen=True)
 class Synthetic:
     """A seeded synthetic set of a ligero chain relation (``archive.direct.ligero.relchain.instances`` / ``instances_digest``,
-    and before it ``fp8.chain.instances_fp8``): input ``i`` draws ``rng = default_rng([seed, i])``, ``a`` then ``b`` (``K_VU`` words
+    and before it ``fp8.chain.instances_fp8``): input ``i`` samples ``rng = default_rng([seed, i])``, ``a`` then ``b`` (``K_VU`` words
     each) with ``operands``, and records ``tc_dot(model)`` chained from ``+0`` after every step.  The set has no files: its
     ``manifest_sha256`` is ``sha256("<relation> synthetic|seed=<seed>|n=<n>|K=1536")``."""
 
@@ -311,7 +315,7 @@ def fp8_instances_digest(n: int, seed: int = FP8_ADA_SEED) -> str:
     return FP8_ADA_SYNTHETIC.digest(n, seed)
 
 
-def _synthetic_worker(job: tuple[str, int]):
+def _synthetic_worker(job: tuple[str, int]) -> tuple[int, np.ndarray, np.ndarray, np.ndarray]:
     spec, i = job
     syn = SYNTHETIC[spec]
     a, b, accs = syn.instance(i)
@@ -369,7 +373,7 @@ DATASETS = {
 }
 
 
-def load_instances(spec: str, args) -> InstanceSet:
+def load_instances(spec: str, args: argparse.Namespace) -> InstanceSet:
     if spec not in DATASETS:
         raise SystemExit(f"unknown input set {spec!r}; known: {', '.join(DATASETS)}")
     dataset, _, tier = spec.rpartition("/")
@@ -401,7 +405,7 @@ def epilogue_words(name: str | None, acc: np.ndarray) -> np.ndarray:
     raise ValueError(f"unknown epilogue {name!r}")
 
 
-def replay(probe, ins: P.Instruction, inst: InstanceSet, log=print) -> dict:
+def replay(probe: P.Probe, ins: P.Instruction, inst: InstanceSet, log: Callable[[str], None] = print) -> dict:
     """Run every instance of ``inst`` through ``probe`` (one instruction per step per tile) and compare every word."""
 
     M, K, fmt = ins.m, ins.k, ins.fmt

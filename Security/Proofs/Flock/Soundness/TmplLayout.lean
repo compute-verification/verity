@@ -1,6 +1,27 @@
-import Proofs.Flock.Soundness.ExecSetup
+module
+
+public import Flock.HmRow
+public import Proofs.Flock.Soundness.ExecPlacement
+public import Proofs.Flock.Soundness.TmplNetOK
+import Mathlib.Algebra.Order.Floor.Semifield
+import Mathlib.MeasureTheory.Integral.Bochner.Basic
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
 import Proofs.Flock.Soundness.TmplUnitAt
-import Proofs.Flock.Soundness.TmplNetOK
+import Proofs.Flock.Soundness.TmplUnitNet
+import Proofs.Flock.Soundness.TmplUnrollAt
+import VCVio.Prelude.Core
 
 /-!
 # A templated statement has the layout the placement reads
@@ -10,6 +31,8 @@ templated unit's logical net placed at `posMap` (`UnitAt.tmpl`). Every other fac
 `HmRow.parse` accepted with the unit's committed net first (`TmplValue.parseTmpl_facts`), which only `Circuit.tmpl`
 tells apart from the statement's.
 -/
+
+@[expose] public section
 
 namespace FlockSoundness
 

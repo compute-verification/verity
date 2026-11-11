@@ -1,5 +1,9 @@
-import Mathlib.Algebra.BigOperators.Field
-import Proofs.Flock.Soundness.LinkFinder
+module
+
+public import Mathlib.Algebra.BigOperators.Field
+public import Proofs.Flock.Soundness.LinkFinder
+import Mathlib.Tactic.Positivity.Finset
+import Proofs.Flock.Soundness.Game
 
 /-!
 # Carried state: one hiding leaf read in several sampling blocks
@@ -25,6 +29,8 @@ pays more than `m` times the mixture's binding error for it, `m` the number of s
 * `errAt_le_coll`: at the plurality, a trial's binding error is at most the probability that its finder outputs a
   collision, plus `1/(eM)`: `link_mass_le` without its collision-resistance hypothesis, the break form.
 -/
+
+@[expose] public section
 
 namespace FlockSoundness
 

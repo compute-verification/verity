@@ -1,6 +1,42 @@
+module
+
+public import Proofs.Flock.Bridge.Canon
+public import Proofs.Flock.Claims.Bridge.WrongSet
+import Mathlib.Algebra.Order.Floor.Extended
+import Mathlib.Algebra.Order.Interval.Basic
+import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
+import Mathlib.Analysis.SpecialFunctions.Bernstein
+import Mathlib.Analysis.SpecialFunctions.Gamma.Basic
+import Mathlib.Analysis.SpecialFunctions.Trigonometric.DerivHyp
+import Mathlib.Combinatorics.Enumerative.DyckWord
+import Mathlib.Combinatorics.SimpleGraph.Triangle.Removal
+import Mathlib.Data.NNRat.Floor
+import Mathlib.Data.Nat.Choose.Multinomial
+import Mathlib.Geometry.Euclidean.Altitude
+import Mathlib.NumberTheory.Chebyshev
+import Mathlib.NumberTheory.Height.NumberField
+import Mathlib.NumberTheory.Height.Projectivization
+import Mathlib.NumberTheory.LucasLehmer
+import Mathlib.NumberTheory.SelbergSieve
+import Mathlib.RingTheory.Radical.NatInt
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Tactic.ReduceModChar
+import Mathlib.Topology.Sheaves.Init
 import Proofs.Flock.Bridge.Lowers
-import Proofs.Flock.Bridge.Deployed
-import Proofs.Flock.Bridge.Canon
+import Proofs.Flock.SamplingBoundary
+import Std.Tactic.BVDecide.Normalize.BitVec
 
 /-!
 # A unit right on its canonical openings is not faulty
@@ -18,16 +54,20 @@ wire's position under `Cm` and `roots`. It reads the transport only at the right
   (`boundary_inner` excludes a row's two XORs).
 * `witDep_val`: `witDep` opens a wire's position at its value wherever some datum passes there (`posOf_injective`).
 * Slot `u` is unit `u`'s proof block with the inputs it owns, which leave its values alone (`ref_blockOf`), so it is
-  correct when the unit's gates are and each owned input opens (`correct_blockOf`). The interior is the evaluation at
-  `wireAt`, so `lowers` gives the unit's gates correct, and each input the unit owns is one of its committed wires
-  (`mem_io_of_owner`), so its row opens.
+  correct when the unit's gates are and each owned input opens (`correct_blockOf`). `correct_blockOf_of`: at any wire
+  values `V` that apply the unit's gates, carried by the committed values at its committed wires, `lowers_of` gives the
+  unit's gates correct whatever the interior, and each input the unit owns is one of its committed wires
+  (`mem_io_of_owner`), so it opens. `faultyRightC` takes `V` the evaluation on `Xr`; `correct_of_local` takes `u`'s
+  local evaluation on values `X` that make `u` correct (`Partition.Correct`), which is `X` on `u`'s committed wires.
 -/
+
+@[expose] public section
 
 namespace Flock.Bridge
 
 open FlockSoundness.Audit Claims.Sampling
 
-variable {C : FlockSoundness.Audit.Circuit} {κ : Fin C.N → Option Bool}
+variable {C : Verity.Boolean.Circuit} {κ : Fin C.N → Option Bool}
 
 theorem mem_io_of_read {n : ℕ} {P : FlockSoundness.Audit.Partition C n} {u : Fin n} {a h : Fin C.N}
     (hh : P.unit h = some u) (ha : a ∈ (C.op h).args) (hne : P.unit h ≠ P.unit a) : a ∈ P.io u := by
@@ -41,7 +81,7 @@ theorem mem_io_of_owner {n : ℕ} {P : FlockSoundness.Audit.Partition C n} {u : 
   obtain ⟨hin, -, ho⟩ := mem_insOf.1 ha
   obtain ⟨h, hh, hr⟩ := reads_of_owner ho
   refine mem_io_of_read hh hr ?_
-  rw [hh, (P.input_iff a).2 (by simp [hin, Op.isInput])]
+  rw [hh, (P.input_iff a).2 (by simp [hin, Verity.Boolean.Op.isInput])]
   simp
 
 /-- **A position the unit commits is a wire of `P.io u`**: a gate of `unitGates P u` that `Boundary` commits is the
@@ -69,7 +109,7 @@ theorem posOf_of_boundary {n : ℕ} {P : FlockSoundness.Audit.Partition C n} {u 
       rw [posOf_eq, gates_off g (by omega)] at hin
       exfalso
       cases hop : C.op g with
-      | input => exact absurd ((P.input_iff g).2 (by simp [hop, Op.isInput])) (by simp [hu])
+      | input => exact absurd ((P.input_iff g).2 (by simp [hop, Verity.Boolean.Op.isInput])) (by simp [hu])
       | and a b => simp [lower, hop, gateSize] at hin
       | xor a b => simp [lower, hop, gateSize] at hin
       | not a => simp [lower, hop, gateSize] at hin
@@ -145,9 +185,66 @@ theorem witDep_val {Cm : CommitmentScheme Bool} {H : Claims.Msg → Claims.Msg} 
   rw [posOf_injective (hg'p.symm.trans hpo.1)] at hg'v
   rw [hg'v]
 
+/-- **Slot `u` is correct on committed values that carry wire values `V` applying the unit's gates**: its proof block
+`blockOf P κ u` is correct on committed values `val` carrying `V` at each committed wire of `u` that `κ` doesn't fix,
+whatever its interior values `ι`, at constants that fix only inputs and that are `V`'s at `u`'s committed wires
+(`lowers_of` at `wireAt`, and each input `u` owns is one of its committed wires). -/
+theorem correct_blockOf_of {n : ℕ} (P : FlockSoundness.Audit.Partition C n) (u : Fin n)
+    (hκin : ∀ g b, κ g = some b → (C.op g).isInput = true)
+    (V : Fin C.N → Bool) (hV : ∀ g, P.unit g = some u → V g = (C.op g).apply V)
+    (hκ : ∀ g ∈ P.io u, ∀ b, κ g = some b → V g = b)
+    (val : ℕ → Option Bool) (hval : ∀ g ∈ P.io u, κ g = none → val (posOf C g) = some (V g)) (ι : ℕ → Bool) :
+    (progOf C κ).Correct ((progOf C κ).refIn (blockOf P κ u) val ι) (blockOf P κ u) := by
+  have hκ' : ∀ a b, C.op a = .input → κ a = some b → (∃ h, P.unit h = some u ∧ a ∈ (C.op h).args) → V a = b := by
+    rintro a b hin hk ⟨h, hh, ha⟩
+    refine hκ a (mem_io_of_read hh ha ?_) b hk
+    rw [hh, (P.input_iff a).2 (by simp [hin, Verity.Boolean.Op.isInput])]
+    simp
+  rw [ref_blockOf, correct_blockOf]
+  by_cases hN : Nonempty (Fin C.N)
+  · obtain ⟨d⟩ := hN
+    refine ⟨lowers_of P u (wireAt C d) (wireAt_posOf d) V hV hκ' _ fun i hi hc hB => ?_, fun a ha => ?_⟩
+    · obtain ⟨a, ha, rfl⟩ := need_posOf hi hB
+      have hnone : κ a = none := by
+        cases hk : κ a with
+        | none => rfl
+        | some b => exact absurd (gates_posOf_const (input_of_isInput (hκin a b hk)) hk) (hc b)
+      have hv : (progOf C κ).refIn (unitGates P u) val ι (posOf C a) = val (posOf C a) := by
+        rcases hB with hB | hB
+        · exact Boundary.ref_out _ hB
+        · exact Boundary.ref_boundary _ hB
+      rw [hv, wireAt_posOf, hval a ha hnone]
+    · obtain ⟨hin, hk, -⟩ := mem_insOf.1 ha
+      rw [Boundary.ref_input _ (gates_posOf_input hin hk), hval a (mem_io_of_owner ha) hk]
+      simp
+  · refine ⟨?_, fun a _ => absurd ⟨a⟩ hN⟩
+    intro g hg
+    obtain ⟨w, -⟩ := mem_unitGates.1 hg
+    exact absurd ⟨w⟩ hN
+
+/-- **A unit correct on its own values is correct at its slot**: where `Xu` makes `u` correct (`Partition.Correct`: its
+committed outputs are its gates applied to its committed inputs, all read from `Xu`) and is `κ`'s constant at each of
+`u`'s committed wires `κ` fixes, slot `u`'s proof block is correct on committed values that carry `Xu` at each committed
+wire of `u` that `κ` doesn't fix, whatever its interior values (`correct_blockOf_of` at `u`'s local evaluation on `Xu`,
+which is `Xu` on `u`'s committed wires). -/
+theorem correct_of_local {n : ℕ} (P : FlockSoundness.Audit.Partition C n) (u : Fin n)
+    (hκin : ∀ g b, κ g = some b → (C.op g).isInput = true)
+    (Xu : Fin C.N → Bool) (hX : P.Correct Xu u) (hκ : ∀ g ∈ P.io u, ∀ b, κ g = some b → Xu g = b)
+    (val : ℕ → Option Bool) (hval : ∀ g ∈ P.io u, κ g = none → val (posOf C g) = some (Xu g)) (ι : ℕ → Bool) :
+    (progOf C κ).Correct ((progOf C κ).refIn (blockOf P κ u) val ι) (blockOf P κ u) := by
+  have hloc : ∀ g ∈ P.io u, P.localEval Xu u g = Xu g := by
+    intro g hg
+    by_cases hu : P.unit g = some u
+    · simp only [FlockSoundness.Audit.Partition.io, Finset.mem_filter] at hg
+      exact (hX g hg.1 hu).symm
+    · exact P.localEval_of_not_mem Xu hu
+  exact correct_blockOf_of P u hκin (P.localEval Xu u) (fun _ hu => P.localEval_of_mem Xu hu)
+    (fun g hg b hk => (hloc g hg).trans (hκ g hg b hk)) val
+    (fun g hg hk => (hval g hg hk).trans (congrArg some (hloc g hg).symm)) ι
+
 /-- **A unit right on its canonical openings is not faulty** (`FaultyRightTarget` at canonical openings), at constants
 `κ` that fix only inputs: a constant the unit reads is `.const`, which carries its value when `hκ` holds there, and any
-other wire it reads is transported. -/
+other wire it reads is transported (`correct_blockOf_of` at `C`'s evaluation on `Xr`). -/
 theorem faultyRightC {n : ℕ} (P : FlockSoundness.Audit.Partition C n) {Pos Val Opn Com : Type}
     (pos : Fin C.N → Pos) (bit : Val → Fin C.N → Bool) (val : Opn → Val) (com : Opn → Com) (cs : Pos → Com)
     (canon : Fin C.N → Val → Prop) (H : Claims.Msg → Claims.Msg) (Cm : CommitmentScheme Bool) (roots : List Claims.Msg)
@@ -158,63 +255,26 @@ theorem faultyRightC {n : ℕ} (P : FlockSoundness.Audit.Partition C n) {Pos Val
     (htr : ∀ g ∈ P.io u, κ g = none → ∀ o : Opn, com o = cs (pos g) → canon g (val o) →
       ∃ d : Claims.Msg, Cm.Opens H roots ⟨posOf C g, bit (val o) g, d⟩ = true)
     (hκ : ∀ g ∈ P.io u, ∀ b, κ g = some b → C.eval Xr g = b)
-    (kd : ℕ) (desc : Claims.Msg) (q : Query) :
-    u.val ∉ faulty H Cm (stmtOf P κ kd desc q roots) (partOf P κ) (witDep C Cm H roots Xr) := by
+    {ns : List ℕ} (hns : ns.sum = n) (r : OneStage) (desc : Claims.Msg) (q : Query) :
+    u.val ∉ faulty H Cm (stmtOf P κ r desc q roots) (partOf P κ ns) (witDep C Cm H roots Xr) := by
   obtain ⟨op, hop⟩ := hright
   have hval : ∀ a ∈ P.io u, κ a = none →
-      (witDep C Cm H roots Xr).val H Cm (stmtOf P κ kd desc q roots) (posOf C a) = some (C.eval Xr a) := by
+      (witDep C Cm H roots Xr).val H Cm (stmtOf P κ r desc q roots) (posOf C a) = some (C.eval Xr a) := by
     intro a ha hk
     obtain ⟨h1, h3, h2⟩ := hop a ha
     obtain ⟨d, hd⟩ := htr a ha hk _ h1 h2
     exact witDep_val _ rfl a ⟨d, h3 ▸ hd⟩
-  have hκ' : ∀ a b, C.op a = .input → κ a = some b → (∃ h, P.unit h = some u ∧ a ∈ (C.op h).args) →
-      C.eval Xr a = b := by
-    rintro a b hin hk ⟨h, hh, ha⟩
-    refine hκ a (mem_io_of_read hh ha ?_) b hk
-    rw [hh, (P.input_iff a).2 (by simp [hin, Op.isInput])]
-    simp
   intro hmem
   simp only [faulty, Finset.mem_filter] at hmem
   apply hmem.2
-  by_cases hN : Nonempty (Fin C.N)
-  · obtain ⟨d⟩ := hN
-    refine ⟨blockOf P κ u, blocks_partOf_getElem? P u, fun i => C.eval Xr (wireAt C d i), ?_⟩
-    change (progOf C κ).Correct ((progOf C κ).refIn (blockOf P κ u)
-      ((witDep C Cm H roots Xr).val H Cm (stmtOf P κ kd desc q roots)) (fun i => C.eval Xr (wireAt C d i)))
-      (blockOf P κ u)
-    rw [ref_blockOf, correct_blockOf]
-    refine ⟨lowers P u (wireAt C d) (wireAt_posOf d) Xr hκ' _ fun i hi hc => ?_, fun a ha => ?_⟩
-    swap
-    · obtain ⟨hin, hk, -⟩ := mem_insOf.1 ha
-      rw [Boundary.ref_input _ (gates_posOf_input hin hk), hval a (mem_io_of_owner ha) hk]
-      simp
-    change (progOf C κ).refIn (unitGates P u) ((witDep C Cm H roots Xr).val H Cm (stmtOf P κ kd desc q roots))
-      (fun i => C.eval Xr (wireAt C d i)) i = some (C.eval Xr (wireAt C d i))
-    unfold Claims.Sampling.Prog.refIn
-    split_ifs with hin
-    · rfl
-    · have hB : i ∉ unitGates P u ∨ (progOf C κ).Boundary (unitGates P u) i = true := by
-        by_cases h1 : i ∈ unitGates P u
-        · exact Or.inr (by simpa [h1] using hin)
-        · exact Or.inl h1
-      obtain ⟨a, ha, rfl⟩ := need_posOf hi hB
-      have hnone : κ a = none := by
-        cases hk : κ a with
-        | none => rfl
-        | some b =>
-          exact absurd (gates_posOf_const (input_of_isInput (hκin a b hk)) hk) (hc b)
-      rw [wireAt_posOf]
-      exact hval a ha hnone
-  · refine ⟨blockOf P κ u, blocks_partOf_getElem? P u, fun _ => false, ?_⟩
-    intro g hg
-    rcases mem_blockOf.1 hg with hg | ⟨a, -, -⟩
-    · obtain ⟨w, -⟩ := mem_unitGates.1 hg
-      exact absurd ⟨w⟩ hN
-    · exact absurd ⟨a⟩ hN
+  refine ⟨blockOf P κ u, blocks_partOf_getElem? P hns u, fun _ => false, ?_⟩
+  change (progOf C κ).Correct ((progOf C κ).refIn (blockOf P κ u)
+    ((witDep C Cm H roots Xr).val H Cm (stmtOf P κ r desc q roots)) (fun _ => false)) (blockOf P κ u)
+  exact correct_blockOf_of P u hκin (C.eval Xr) (fun _ hu => C.eval_op Xr (isInput_of_unit hu)) hκ _ hval _
 
 /-- **`FaultyRightTargetC`**, at any `canon` (`Bridge.Canon`): `faultyRightC`. -/
 theorem faultyRightTargetC : FaultyRightTargetC := by
-  intro C n P Pos Val Opn Com pos bit val com cs canon H Cm roots Xr κ u hκin hright htr hκ kd desc q
-  exact faultyRightC P pos bit val com cs canon H Cm roots Xr κ u hκin hright htr hκ kd desc q
+  intro C n P Pos Val Opn Com pos bit val com cs canon H Cm roots Xr κ u hκin hright htr hκ ns r desc q hns
+  exact faultyRightC P pos bit val com cs canon H Cm roots Xr κ u hκin hright htr hκ hns r desc q
 
 end Flock.Bridge

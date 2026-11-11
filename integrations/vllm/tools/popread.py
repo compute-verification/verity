@@ -16,8 +16,8 @@ two ways, and this tool names both, per Call family:
 no earlier token was an EOS, so their units are programmed (their reads stay public) but their activity is value-keyed.  Under
 a stop rule with ignore_eos no request stops early, and the counts say what an EOS stop would key.
 
-Each report also carries `egress`: E(u) = |O ∩ W(down{u})|, the declared output slots O in unit u's downstream cone, which
-bounds what wrong units can put on the egress (Reach_inf(B) <= sum of E(u) over B <= |B| E_max).  It is a wiring property,
+Each report also carries `egress`: E(u) = |O ∩ W(down{u})|, the size of u's reach, the declared output slots (O) written downstream of u, which
+bounds what incorrect proof blocks can put on the egress (Reach_inf(B) <= sum of E(u) over B <= |B| E_max).  It is a wiring property,
 bounded per unit by its Call's cone, and given in slots and bits (a sampled id's bits are ceil(log2 V), its word's 32).
 
     python tools/popread.py descriptor DESCRIPTOR.json.gz [--units] [--workload-program workload_program.json] --out OUT.json
@@ -444,8 +444,8 @@ class Units:
 
     def of(self, fns: dict[str, Any]) -> dict[str, int]:
         """name -> units per activation of `fns[name]`."""
-        from verity.ml.definitions.word import definition_digest
-        digest = {fn.id: definition_digest(fn) for fn in fns.values()}
+        from verity.ml.definitions.word import closure_digest
+        digest = {fn.id: closure_digest(fn) for fn in fns.values()}
         by_id: dict[str, int] = {}
         todo: dict[str, Any] = {}
         for fn in fns.values():

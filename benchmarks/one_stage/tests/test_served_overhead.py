@@ -2,7 +2,8 @@
 time per output token, time to first token and tokens per second come from its arrivals and step outputs, a Commit window's
 on-loop close counts only in busy tokens per second, the client's timings file gives the same three from send to done, and
 `table` takes each dir's first load, refuses engines that differ unless allowed, and puts composed over stock with a
-delta-method interval."""
+delta-method interval. The composed run's published aggregate holds no load's tokens or span, and `table` reads the full
+one the serve dir keeps."""
 from __future__ import annotations
 
 import json
@@ -59,7 +60,8 @@ def test_a_windows_close_on_the_loop_counts_only_in_busy_throughput(tmp_path):
     w = {"window": 0, "seconds": {"open": 0.4, "on_loop": 2.0}, "on_loop_phases_s": {"arm": 1.5}, "pouw_h1": {"tied": True}}
     ld = O.serve_dir(_dir(tmp_path / "c", _load(10.0, 0.5, window=0), windows=[w]))["loads"][0]
     assert ld["tokens_per_s"] == pytest.approx(2.0) and ld["busy_tokens_per_s"] == pytest.approx(1.0)
-    assert ld["windows"] == {"n": 1, "open_s": 0.4, "close_on_loop_s": 2.0, "arm_close_s": 1.5, "h1": [True]}
+    assert ld["windows"] == {"n": 1, "closed_mid_load": 0, "open_s": 0.4, "close_on_loop_s": 2.0, "close_on_loop_after_s": 2.0,
+                             "arm_close_s": 1.5, "h1": ["tied"]}
 
 
 def test_the_table_takes_first_loads_and_puts_composed_over_stock(tmp_path):
@@ -96,16 +98,17 @@ def test_the_single_protocol_rows_are_the_serving_paths_h200_first():
     assert [(r["device"], r["time_per_output_token_ratio"]["mean"]) for r in got] == [("NVIDIA H200", 1.2), ("NVIDIA B200", 1.1)]
 
 
-def _timings(send: float, first: float, done: float, *, ok: bool = True) -> dict:
-    """Two requests sent at ``send`` and ``send + 0.5``, two tokens each."""
+def _timings(at: float, send: float, first: float, done: float, *, ok: bool = True) -> dict:
+    """A load whose client started at unix time ``at`` (the trace's clock): two requests sent ``send`` and ``send + 0.5``
+    after it, two tokens each."""
     req = lambda u, s: {"user": u, "release": 0, "at_s": s, "send_s": s, "first_token_s": s + first, "done_s": s + done,  # noqa: E731
                         "tokens": 2, "ok": ok}
-    return {"clock": "monotonic", "release_run": "r", "start_unix": 1.0e9, "requests": [req("u0", send), req("u1", send + 0.5)]}
+    return {"clock": "monotonic", "release_run": "r", "start_unix": at, "requests": [req("u0", send), req("u1", send + 0.5)]}
 
 
 def test_the_client_ruler_reads_the_timings_beside_the_records_or_in_timings(tmp_path):
     s = _dir(tmp_path / "s", _load(100.0, 0.5) + _load(200.0, 0.25))
-    for j, doc in ((1, _timings(0.0, 0.25, 1.5)), (2, _timings(0.0, 0.5, 3.5))):
+    for j, doc in ((1, _timings(100.0, 0.0, 0.25, 1.5)), (2, _timings(200.0, 0.0, 0.5, 3.5))):
         (s / f"load-{j}.timings.json").write_text(json.dumps(doc))
     first, warm = O.serve_dir(s)["loads"]
     assert first["client"]["file"] == "load-1.timings.json" and first["client"]["tokens"] == 4
@@ -113,7 +116,7 @@ def test_the_client_ruler_reads_the_timings_beside_the_records_or_in_timings(tmp
     assert first["client_time_to_first_token_s"] == pytest.approx(0.25) and warm["client_time_to_first_token_s"] == pytest.approx(0.5)
     c = _dir(tmp_path / "out" / "serve", _load(10.0, 1.5))
     (tmp_path / "out" / "timings").mkdir()
-    (tmp_path / "out" / "timings" / "load.timings.json").write_text(json.dumps(_timings(0.0, 4.0, 7.5)))
+    (tmp_path / "out" / "timings" / "load.timings.json").write_text(json.dumps(_timings(10.0, 0.0, 4.0, 7.5)))
     t = O.table([c], [s])
     assert list(t["metrics"])[:3] == list(O.CLIENT)
     r = t["metrics"]["client_time_per_output_token_s"]
@@ -121,13 +124,124 @@ def test_the_client_ruler_reads_the_timings_beside_the_records_or_in_timings(tmp
     assert "client: time per output token" in O.markdown(t)
 
 
-def test_the_client_ruler_refuses_failed_requests_and_a_count_that_misses_the_loads(tmp_path):
+def test_the_client_ruler_refuses_failed_requests_and_busy_periods_no_load_holds(tmp_path):
     with pytest.raises(ValueError, match="failed"):
-        O.client_metrics(_timings(0.0, 0.25, 1.5, ok=False))
+        O.client_metrics(_timings(0.0, 0.0, 0.25, 1.5, ok=False))
     s = _dir(tmp_path / "s", _load(100.0, 0.5) + _load(200.0, 0.25))
-    (s / "load-1.timings.json").write_text(json.dumps(_timings(0.0, 0.25, 1.5)))
-    with pytest.raises(ValueError, match="1 timings files for 2 loads"):
+    (s / "load-1.timings.json").write_text(json.dumps(_timings(100.0, 0.0, 0.25, 1.5)))
+    with pytest.raises(ValueError, match="arriving at 200.000 .* falls in no timings file's span"):
         O.serve_dir(s)
+    (s / "load-2.timings.json").write_text(json.dumps(_timings(300.0, 0.0, 0.25, 1.5)))
+    with pytest.raises(ValueError, match="arriving at 200.000"):
+        O.serve_dir(s)
+    (s / "load-2.timings.json").write_text(json.dumps(_timings(199.0, 0.0, 0.25, 4.0)))
+    (s / "load-3.timings.json").write_text(json.dumps(_timings(300.0, 0.0, 0.25, 1.5)))
+    with pytest.raises(ValueError, match=r"timings files \[2\] .* hold no busy period"):
+        O.serve_dir(s)
+
+
+def test_a_load_the_commit_serves_as_two_windows_is_one_load_with_the_gap_and_mid_close_in_its_span(tmp_path):
+    """The Commit admits a load's later requests only once an earlier window closed, so the trace's two busy periods are one
+    client load: its span runs from the first arrival to the last step, and only the last window's close adds to busy time."""
+    def half(t0: float, w: int) -> list[dict]:
+        a, b = f"a{t0}", f"b{t0}"
+        return [{"kind": "arrive", "request": a, "t": t0}, {"kind": "arrive", "request": b, "t": t0},
+                {"kind": "window", "window": w, "event": "open"}, _step(t0 + 1, {a: 1, b: 1}, (a, b)),
+                {"kind": "window", "window": w, "event": "close"}]
+    ws = [{"window": 0, "seconds": {"open": 0.5, "on_loop": 2.0}, "on_loop_phases_s": {"arm": 1.0}, "pouw_h1": {"tied": True}},
+          {"window": 1, "seconds": {"open": 0.5, "on_loop": 1.0}, "pouw_h1": {"error": "refused"}}]
+    c = _dir(tmp_path / "c", half(10.0, 0) + half(13.0, 1), windows=ws)
+    (c / "load.timings.json").write_text(json.dumps(_timings(9.9, 0.0, 1.2, 4.2)))
+    assert len(O.loads(O._jsonl(c / O.TRACE))) == 2
+    (ld,) = O.serve_dir(c)["loads"]
+    assert (ld["requests"], ld["tokens"], ld["steps"], ld["span_s"]) == (4, 4, 2, pytest.approx(4.0))
+    assert ld["time_to_first_token_s"] == pytest.approx(1.0) and ld["busy_tokens_per_s"] == pytest.approx(4 / 5.0)
+    assert ld["windows"] == {"n": 2, "closed_mid_load": 1, "open_s": 1.0, "close_on_loop_s": 3.0, "close_on_loop_after_s": 1.0,
+                             "arm_close_s": 1.0, "h1": ["tied", "error"]}
+
+
+def test_public_ratios_carry_no_count_time_or_rate_of_either_arm(tmp_path, capsys):
+    c = _dir(tmp_path / "c", _load(10.0, 1.5, window=0), windows=[{"window": 0, "seconds": {"open": 0.5, "on_loop": 1.0}}])
+    (c / "load.timings.json").write_text(json.dumps(_timings(10.0, 0.0, 4.0, 7.5)))
+    stock = []
+    for i, s in enumerate((0.4, 0.5, 0.6)):
+        stock.append(d := _dir(tmp_path / f"s{i}", _load(100.0, s) + _load(200.0, 0.1)))
+        for j, at in ((1, 100.0), (2, 200.0)):
+            (d / f"load-{j}.timings.json").write_text(json.dumps(_timings(at, 0.0, 0.25, 1.5)))
+    assert O.main(["table", "--composed", str(c), "--stock", *map(str, stock), "--public", "--out", str(tmp_path / "o")]) == 0
+    assert sorted(p.name for p in (tmp_path / "o").iterdir()) == ["ratios.json", "ratios.md"]
+    pub = json.loads((tmp_path / "o" / "ratios.json").read_text())
+    r = pub["ratios"]["time_per_output_token_s"]
+    assert r["ratio"]["mean"] == pytest.approx(2.0) and r["per_stock_rep"] == pytest.approx([1.0 / 0.55, 1.0 / 0.45])
+    assert set(pub["ratios"]) == set(O.CLIENT + O.METRICS) and "warm" in r
+    assert pub["composed_shares"]["window_open"] == pytest.approx(0.5 / 5.0)
+    text = json.dumps(pub)
+    assert not any(k in text for k in ('"requests"', '"tokens"', '"steps"', "span_s", '"loads"', '"sd"', "open_s", "on_loop_s"))
+    assert "client: time per output token" in capsys.readouterr().out
+
+
+def test_metrics_prints_aggregates_and_the_table_reads_them_as_it_reads_the_dirs(tmp_path, capsys):
+    c = _dir(tmp_path / "c", _load(10.0, 1.5, window=0), windows=[{"window": 0, "seconds": {"open": 0.5, "on_loop": 1.0}}])
+    (c / "load.timings.json").write_text(json.dumps(_timings(10.0, 0.0, 4.0, 7.5)))
+    s = _dir(tmp_path / "s", _load(100.0, 0.5) + _load(200.0, 0.25))
+    for j, at in ((1, 100.0), (2, 200.0)):
+        (s / f"load-{j}.timings.json").write_text(json.dumps(_timings(at, 0.0, 0.25, 1.5)))
+    assert O.main(["metrics", str(c), str(s)]) == 0
+    lines = capsys.readouterr().out.splitlines()
+    files = []
+    for name, line in zip("cs", lines):
+        doc = json.loads(line)
+        assert doc["schema"] == O.AGGREGATE and doc["identity"]["precision"] == "verity_int8"
+        assert all(set(ld) <= set(O.PUBLIC_LOAD) and "client_tokens_per_s" in ld for ld in doc["loads"])
+        assert not any(k in line for k in ("step_s", "start_unix", "timings.json", "emitted"))
+        (f := tmp_path / f"{name}.json").write_text(line)
+        files.append(f)
+    by_file, by_dir = O.table(files[:1], files[1:]), O.table([c], [s])
+    assert by_file["metrics"] == by_dir["metrics"] and by_file["composed"][0]["dir"] == str(files[0])
+    assert "step_s" not in json.dumps(by_dir)
+
+
+def test_the_composed_runs_published_aggregate_holds_its_loads_tokens_and_span_and_the_table_reads_the_private_one(
+        tmp_path, capsys):
+    """`served_verdicts.py publish` leaves the composed run's aggregate with no load's tokens or span (its tokens count its
+    blocks), nor its counts and windows; `table` refuses that file, naming the serve dir's private/out copy, and from that
+    copy `table --public` gives the ratios and shares the serve dir gives."""
+    import served_verdicts as SV
+
+    c = _dir(tmp_path / "c", _load(10.0, 1.5, window=0), windows=[{"window": 0, "seconds": {"open": 0.5, "on_loop": 1.0}}])
+    (c / "load.timings.json").write_text(json.dumps(_timings(10.0, 0.0, 4.0, 7.5)))
+    s = _dir(tmp_path / "s", _load(100.0, 0.5) + _load(200.0, 0.25))
+    for j, at in ((1, 100.0), (2, 200.0)):
+        (s / f"load-{j}.timings.json").write_text(json.dumps(_timings(at, 0.0, 0.25, 1.5)))
+    out, private = tmp_path / "out", c / "private" / "out"
+    (out / "serve").mkdir(parents=True)
+    assert O.main(["metrics", str(c)]) == 0
+    (out / "serve" / "overhead.json").write_text(capsys.readouterr().out)
+    assert O.main(["metrics", str(s)]) == 0
+    (stock := tmp_path / "stock.json").write_text(capsys.readouterr().out)
+    assert SV.publish(out, private) == ["serve/overhead.json"]
+    published = json.loads((out / "serve" / "overhead.json").read_text())
+    assert published["loads"] and all(set(ld) == set(O.METRICS + O.CLIENT) for ld in published["loads"])
+    with pytest.raises(ValueError, match="published aggregate, its loads without requests, span_s, windows .* "
+                                         "private/out/serve/overhead.json"):
+        O.run_of(out / "serve" / "overhead.json")
+    assert O.main(["table", "--composed", str(out / "serve" / "overhead.json"), "--stock", str(stock), "--public"]) == 2
+    assert "private/out/serve/overhead.json" in capsys.readouterr().err
+    full = private / "serve" / "overhead.json"
+    assert O.main(["table", "--composed", str(full), "--stock", str(stock), "--public", "--out", str(tmp_path / "f")]) == 0
+    assert O.main(["table", "--composed", str(c), "--stock", str(s), "--public", "--out", str(tmp_path / "d")]) == 0
+    by_file, by_dir = (json.loads((tmp_path / x / "ratios.json").read_text()) for x in "fd")
+    assert by_file["ratios"] == by_dir["ratios"] and by_file["composed_shares"] == by_dir["composed_shares"]
+    assert by_file["ratios"]["time_per_output_token_s"]["ratio"]["mean"] == pytest.approx(2.0)
+
+
+def test_the_table_refuses_a_file_that_is_no_aggregate_and_metrics_a_dir_with_no_trace(tmp_path, capsys):
+    (f := tmp_path / "x.json").write_text(json.dumps({"schema": "other"}))
+    with pytest.raises(ValueError, match="not a verity-bench/served-overhead-metrics/v0"):
+        O.run_of(f)
+    (tmp_path / "empty").mkdir()
+    assert O.main(["metrics", str(tmp_path / "empty")]) == 2
+    assert "no advice_trace.jsonl" in capsys.readouterr().err
 
 
 def test_without_timings_the_table_has_only_the_engine_ruler(tmp_path):
@@ -135,5 +249,104 @@ def test_without_timings_the_table_has_only_the_engine_ruler(tmp_path):
     assert list(t["metrics"]) == list(O.METRICS)
 
 
+def _fixed(t0: float, n: int, steps: int, step_s: float) -> list[dict]:
+    """`serve_load.py --fixed n --window-steps steps`'s load on the trace: n requests arriving at t0, each emitting a token at
+    every one of the window's steps (ignore_eos), all finishing at its last."""
+    users = [f"fixed.{j:05d}.{t0}" for j in range(n)]
+    return [{"kind": "arrive", "request": u, "t": t0} for u in users] + [
+        _step(t0 + (k + 1) * step_s, dict.fromkeys(users, 1), tuple(users) if k == steps - 1 else ()) for k in range(steps)]
+
+
+def _fixed_timings(at: float, n: int, steps: int, step_s: float) -> dict:
+    """The fixed load's timings document as `serve_load.timings` writes it: every request at 0, released in order."""
+    req = lambda j: {"user": f"fixed.{j:05d}", "release": j, "at_s": 0.0, "send_s": 0.0, "first_token_s": step_s,  # noqa: E731
+                     "done_s": steps * step_s, "tokens": steps, "ok": True}
+    return {"clock": "monotonic", "release_run": "r", "start_unix": at, "requests": [req(j) for j in range(n)]}
+
+
+def test_a_fixed_load_lifetime_is_read_as_a_varied_one(tmp_path, capsys):
+    """A stock lifetime of `served_stock.sh` with FIXED (4 requests of max_tokens WINDOW_STEPS 4, ignore_eos): `metrics` gives
+    its aggregate and `table --stock --public` its ratios, as for a varied lifetime."""
+    c = _dir(tmp_path / "c", _fixed(10.0, 4, 4, 0.5), windows=[])
+    (c / "load.timings.json").write_text(json.dumps(_fixed_timings(10.0, 4, 4, 0.5)))
+    stock = []
+    for i, s in enumerate((0.2, 0.25, 0.3)):
+        stock.append(d := _dir(tmp_path / f"rep-{i}", _fixed(100.0, 4, 4, s)))
+        (d / "load-1.timings.json").write_text(json.dumps(_fixed_timings(100.0, 4, 4, s)))
+    assert O.main(["metrics", str(stock[0])]) == 0
+    (ld,) = json.loads(capsys.readouterr().out)["loads"]
+    assert (ld["requests"], ld["tokens"], ld["steps"]) == (4, 16, 4) and ld["span_s"] == pytest.approx(0.8)
+    assert ld["time_to_first_token_s"] == pytest.approx(0.2) and ld["client_time_per_output_token_s"] == pytest.approx(0.8 / 16)
+    assert O.main(["table", "--composed", str(c), "--stock", *map(str, stock), "--public", "--out", str(tmp_path / "o")]) == 0
+    pub = json.loads((tmp_path / "o" / "ratios.json").read_text())
+    assert pub["ratios"]["time_per_output_token_s"]["ratio"]["mean"] == pytest.approx(0.5 / 0.25)
+    assert set(pub["ratios"]) == set(O.CLIENT + O.METRICS) and '"requests"' not in json.dumps(pub)
+
+
 def test_served_stock_sh_parses():
     assert subprocess.run(["bash", "-n", str(HERE.parent / "served_stock.sh")]).returncode == 0
+
+
+STUB_PY = """#!/usr/bin/env bash
+printf '%s\\n' "$*" >> "$ARGV_LOG"
+case "$*" in
+  "-c "*) echo 0123456789abcdef ;;
+  *" serve-openai "*) echo "SERVE-OPENAI listening on 127.0.0.1"; exec tail -f /dev/null ;;
+  *serve_load.py*) echo "[serve-load] fixed: 4/4 ok, prompts 32…32 tokens" ;;
+  *"served_overhead.py metrics"*) echo '{}' ;;
+esac
+"""
+
+
+def _stock(tmp_path: Path, *args: str, **env: str) -> tuple[subprocess.CompletedProcess, list[str]]:
+    """`served_stock.sh` on the CPU with a stub interpreter that logs each argv, answers serve-openai's listening line and
+    holds it until the script's TERM, and stands in for the load and `served_overhead.py metrics`."""
+    venv = tmp_path / "venv" / "bin"
+    venv.mkdir(parents=True)
+    (venv / "python").write_text(STUB_PY)
+    (venv / "python").chmod(0o755)
+    log = tmp_path / "argv.log"
+    base = {"PATH": "/usr/bin:/bin", "HOME": str(tmp_path), "VENV": str(tmp_path / "venv"), "ARGV_LOG": str(log),
+            "OUT": str(tmp_path / "out"), "SERVE_ROOT": str(tmp_path / "root"), "RESEARCH_RUN_ID": "t", "WARM": "0", "REPS": "1",
+            "LOADS": "1", "SLOTS": "4", "PROMPTS": "32:32"}
+    p = subprocess.run(["bash", str(HERE.parent / "served_stock.sh"), *args], cwd=HERE.parents[2], env=base | env,
+                       capture_output=True, text=True)
+    return p, log.read_text().splitlines() if log.exists() else []
+
+
+def _argv(lines: list[str], what: str) -> list[str]:
+    (line,) = [x for x in lines if what in x]
+    return line.split()
+
+
+def test_served_stock_sh_with_fixed_serves_the_records_fixed_load_and_window_steps(tmp_path):
+    """FIXED and WINDOW_STEPS give serve_load.py the fixed load as served_verdicts.sh's LOAD=fixed passes it and serve-openai
+    its --window-steps; $OUT gets status lines alone and the load's counts stay in the private dir."""
+    p, lines = _stock(tmp_path, "reps", FIXED="4", WINDOW_STEPS="4")
+    assert p.returncode == 0, p.stdout + p.stderr
+    serve, load = _argv(lines, " serve-openai "), _argv(lines, "serve_load.py")
+    assert serve[serve.index("--window-steps") + 1] == "4" and serve.count("--window-steps") == 1
+    i = load.index("--fixed")
+    assert load[i:i + 6] == ["--fixed", "4", "--window-steps", "4", "--prompt-range", "32:32"]
+    assert not {"--varied", "--rate", "--max-tokens"} & set(load)
+    out = tmp_path / "out"
+    assert sorted(f.name for f in out.iterdir()) == ["stock.txt"]
+    assert (out / "stock.txt").read_text().splitlines() == ["rep-1 LOAD 1: exit 0", "rep-1: stopped (exit 143)"]
+    priv = tmp_path / "root" / "runs" / "t"
+    assert "4/4 ok" in (priv / "stock.txt").read_text() and (priv / "rep-1" / "overhead.json").exists()
+
+
+def test_served_stock_sh_without_fixed_serves_the_varied_load_and_no_window_steps(tmp_path):
+    p, lines = _stock(tmp_path, "reps")
+    assert p.returncode == 0, p.stdout + p.stderr
+    assert "--window-steps" not in _argv(lines, " serve-openai ")
+    load = _argv(lines, "serve_load.py")
+    assert load[load.index("--varied"):load.index("--varied") + 6] == ["--varied", "4", "--rate", "1000", "--max-tokens", "4"]
+    assert "--fixed" not in load and "--window-steps" not in load
+
+
+@pytest.mark.parametrize(("env", "why"), [({"FIXED": "4"}, "FIXED needs WINDOW_STEPS"),
+                                         ({"FIXED": "4", "WINDOW_STEPS": "four"}, "WINDOW_STEPS is a positive integer")])
+def test_served_stock_sh_refuses_a_fixed_load_without_its_window_steps(tmp_path, env, why):
+    p, lines = _stock(tmp_path, **env)
+    assert p.returncode == 3 and f"PREFLIGHT: {why}" in (tmp_path / "out" / "stock.txt").read_text() and lines == []

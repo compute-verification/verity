@@ -88,7 +88,7 @@ def registry_level(status: str | None) -> Level:
 
 
 #: Elements with 0 mismatches on the anchor SKU for PINNED.  One default ``tc_probe --sweep`` is ~2.5e7 elements, so 1e7 demands a
-#: full sweep (the 1.4e5-element FP8-family run alone cannot pin) while one run suffices; at 1e7 independent draws a per-element
+#: full sweep (the 1.4e5-element FP8-family run alone cannot pin) while one run suffices; at 1e7 independent samples a per-element
 #: defect of rate 5e-7 is accepted with probability e^-5 < 1%.
 N_MIN = 10_000_000
 #: Honest proof blocks the prover's relation must accept (bit-exact against ``Model.step``) and mutations it must reject.
@@ -224,8 +224,8 @@ INDEPENDENT_REFERENCES: dict[str, tuple[IndependentReference, ...]] = {
         IndependentReference("hawkeye-hopper-fp8", "simulator", _HAWKEYE, note="Hawkeye's Hopper FP8 simulator does not describe Ada (D10)"),
     ),
     "sm90.wgmma.m64n8k32.e4m3": (
-        IndependentReference("veritor-h100-wgmma-fp8", "second-compiled-path", ("verity/ml/circuits/silicon/captures/veritor-tc-fp8-2026-09-08.json",),
-                             replica="verity/ml/circuits/silicon/captures/veritor-tc-fp8-2026-09-08.json",
+        IndependentReference("veritor-h100-wgmma-fp8", "second-compiled-path", ("verity/ml/circuits/silicon/captures/veritor-tc-fp8.json",),
+                             replica="verity/ml/circuits/silicon/captures/veritor-tc-fp8.json",
                              note="veritor: Triton tl.dot -> wgmma m64n64k32, 144,543,744 words"),
         IndependentReference("hawkeye-hopper-fp8", "simulator", _HAWKEYE, note="Hawkeye (H100 FP8, zero accumulator only): groups (32,), width 14, floor -139"),
     ),
@@ -381,7 +381,7 @@ def _target_aliases() -> dict[str, Target]:
 
 
 def subjects(name: str) -> Subject:
-    """Resolve a target name (``first-campaign-target/2026-09-21``), a target constant (``FIRST``) or an instruction id."""
+    """Resolve a target name (a key of ``TARGETS``), a target constant (``FIRST``) or an instruction id."""
     aliases = _target_aliases()
     if name in aliases:
         t = aliases[name]
@@ -556,7 +556,7 @@ class DatasetIdentity:
 class _StoreView:
     """The few LocalStore calls this module makes, with the labels folded into ``key -> [values in ts order]``."""
 
-    def __init__(self, store: Any):
+    def __init__(self, store: Any) -> None:
         self.store = store
         self._attempts: dict[str, dict | None] = {}
 
@@ -564,7 +564,7 @@ class _StoreView:
         rows = self.store.index.select_artifacts(kind=kind)
         return [r["id"] if isinstance(r, dict) else str(r) for r in rows]
 
-    def manifest(self, art_id: str):
+    def manifest(self, art_id: str) -> Any:
         return self.store.get_manifest(art_id)
 
     def labels(self, art_id: str) -> dict[str, list[str]]:
@@ -891,7 +891,8 @@ def _contract_instance_sets(subject: Subject, contract: Any | None = None) -> li
         return []
     if contract is None:
         try:
-            from verity_numerical.bench import contract as _contract  # a sibling workspace package; absent -> no contract sets
+            # a sibling workspace package; absent -> no contract sets
+            from verity_numerical.bench import contract as _contract
         except ImportError:
             return []
         contract = _contract
@@ -1672,7 +1673,7 @@ def publish(rep: TrustReport, store: Any, *, by: str = "trust", push: bool = Tru
 DEFAULT_STORE_CLASS = "research.store.local:LocalStore"
 
 
-def _open_store(root: str | None, store_class: str = DEFAULT_STORE_CLASS):
+def _open_store(root: str | None, store_class: str = DEFAULT_STORE_CLASS) -> Any:
     """The evidence store for the CLI: the store class is named as data (``module:Class``) and resolved at run time; any
     object with the :class:`LocalStore` surface documented at the top of this module works."""
     import importlib

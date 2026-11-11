@@ -19,10 +19,10 @@ from verity.ml.circuits.evaluation import evaluate  # noqa: E402
 from verity.ml.circuits.defs import bind  # noqa: E402
 from verity.ml.circuits.ops import fp32 as F  # noqa: E402
 from verity.ml.circuits.ops.scalar import SelectF32  # noqa: E402
-from verity_numerical.bench import lowerings  # noqa: E402
-from verity_numerical.bench import templates as TM  # noqa: E402
-from verity_numerical.bench.generate import generate  # noqa: E402
-from verity_numerical.bench.input_sets import InputSet  # noqa: E402
+from verity_flock import lowerings  # noqa: E402
+from verity_flock import subcircuit_templates as TM  # noqa: E402
+from synthetic_sets import synthetic_set  # noqa: E402
+from verity_flock.input_sets import InputSet  # noqa: E402
 from verity.ml.definitions.registry import ref_prims as RP  # noqa: E402
 from verity.ml.definitions.registry import sampling as SM  # noqa: E402
 
@@ -134,7 +134,7 @@ def test_the_lane_is_the_pinned_one():
 
 def _set(tmp_path, V, n=3):
     sub = TM.subcircuit(S.TEMPLATE, V=V)
-    return InputSet.open(generate(sub, n, 20260926, tmp_path)["path"])
+    return InputSet.open(synthetic_set(sub, n, 20260926, tmp_path)["path"])
 
 
 def _replay_scan(masked, g, noisy, V):

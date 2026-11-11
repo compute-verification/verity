@@ -54,7 +54,8 @@ import sys
 import threading
 from pathlib import Path
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "verity/ml/flock/verifier"))
+#: the directory of Flock's reader, `redigest.py`, and the modules it imports beside it
+sys.path.insert(0, str((Path(__file__).resolve().parents[2] / "verity/ml/flock/verifier/redigest.py").parent))
 import redigest as RD  # noqa: E402
 
 #: The verifier's files the statement fixes before any witness: its program and partition, and the staged circuit.
@@ -67,7 +68,7 @@ _SWAP = threading.Lock()
 #: ``lig.fold`` (``fold_grinding_nonces``) is one too: the verifier requires it empty, but the scan reads what it got.
 GRIND = ("lig.qn", "lig.fold", "lig.cbn", "lig.consn")
 
-#: A ring switch's grinding nonce, which the verifier requires to be 0 (Flock's PROTOCOL.md §8.3): a zero one is a
+#: A ring switch's grinding nonce, which the verifier requires to be 0 (the Lean verifier's `Flock.Proof`): a zero one is a
 #: field the reader fixes, and a nonzero one, which the verifier refuses, stays the prover's.
 RS_NONCE = re.compile(r"rs\.\d+\.nonce")
 

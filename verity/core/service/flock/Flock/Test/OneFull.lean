@@ -1,9 +1,14 @@
 /-
-`RecSetup.oneFull` under F1's inner shape: one table holding its whole population passes, undrawn or drawn in full (a
-population of four, four instances); a table drawn short of its population (three of four, as a sampled RecCap table
+`RecSetup.oneFull` under F1's inner shape: one table holding its whole population passes, unsampled or sampled in full (a
+population of four, four instances); a table sampled short of its population (three of four, as a sampled RecCap table
 would be) is refused, and so are two tables and none. Without an inner shape it passes whatever the tables are.
 -/
-import Flock.RecSetup
+module
+
+public import Flock.RecSetup
+meta import Flock.RecSetup
+
+@[expose] public section
 
 namespace Flock.Test.OneFull
 
@@ -11,7 +16,7 @@ open Flock
 
 def inner : RecVStar.Inner := { m := 27, kLog := 24, claims := 8, regions := 3 }
 
-/-- A table of `n` instances, drawn from a registered population of `pop` when `pop` is some. -/
+/-- A table of `n` instances, sampled from a registered population of `pop` when `pop` is some. -/
 def tbl (n : Nat) (pop : Option Nat := none) : Stmt :=
   { (default : Stmt) with n := n, pub := { (default : Public) with n := n, population := pop.map (·, #[], #[]) } }
 

@@ -1,14 +1,14 @@
 """PoUW's read of the network certifier's salt (`verity.core.protocols.pouw.salt`) against the certifier itself
 (`certifier.active.Proxy`, driven tick by tick on an injected clock): the salt's form, the record's and the prover id's
-are pinned; a context names its PoUW window; `revealed` gives PoUW window p's salt on p's registration once p is
+are pinned; a context names its PoUW execution phase; `revealed` gives PoUW execution phase p's salt on p's registration once p is
 published, once, and fails closed when it is unregistered, early, late, revealed already or missing; `pouw_window` takes
-one whole PoUW window aligned at 0 and nothing else; `Epoch.certified` applies `pouw_salt` of the reveal, the window,
+one whole PoUW execution phase aligned at 0 and nothing else; `Epoch.certified` applies `pouw_salt` of the reveal, the execution phase,
 the stream and the prover, 64 bytes, which the seeds and the identifier take, with the challenger's sampling coin; two
-registrations of one window are salted apart; `core_check.pass_epoch` passes a certified window's pass only when its
+registrations of one execution phase are salted apart; `core_check.pass_epoch` passes a certified execution phase's pass only when its
 salt is that of the certifier's reveal and its weights, stream and prover those the prover recorded with the certifier,
-signed, before it drew that salt (`Proxy.commit_weights`, read back by `committed`); `Registrations` admits a window
-once per stream and prover; a certified window credits only units that read its salt (`unit_reason`); and a live
-window's open root (`window_open_root`) is pinned. The prover salts its pass from the salt it receives in-band (`certifier`'s `drawn`), so the
+signed, before it drew that salt (`Proxy.commit_weights`, read back by `committed`); `WindowOpens` admits an execution phase
+once per stream and prover; a certified execution phase credits only units that read its salt (`unit_reason`); and a live
+execution phase's open root (`window_open_root`) is pinned. The prover salts its pass from the salt it receives in-band (`certifier`'s `drawn`), so the
 verifier's one reveal comes after the registration that names the pass."""
 
 from __future__ import annotations
@@ -22,6 +22,7 @@ import random
 import pytest
 
 import epoch_coins as E
+from verity.ml.commitments import hm96
 from verity.ml.crypto import lms
 from verity.core.protocols.certifier import active
 from verity.core.protocols.certifier.active import Proxy
@@ -31,13 +32,13 @@ from verity.core.protocols.certifier.schedule import ClockSync, SyncSet
 from verity.core.protocols.pouw import core_check as CC
 from verity.core.protocols.pouw import identifier as I
 from verity.core.protocols.pouw import salt as PS
-from verity.core.protocols.pouw.audit import Epoch, Workload, commit_rows, weight_binding, weights_root
+from verity.core.protocols.pouw.audit import HM96_WEIGHTS, Epoch, Workload, commit_rows, weight_binding, weights_root
 from verity.core.protocols.pouw.coins import coin_reason
-from verity.core.protocols.pouw.circuit import seeds as SD
+from verity.ml.protocols.pouw.circuit import seeds as SD
 from verity.core.protocols.pouw.protocol import DomainError, Matmul, Shape
-from verity.core.protocols.pouw.schemes import ncp
-from verity.core.protocols.sampled_proofs.one_stage import registration as R
-from verity.core.protocols.sampled_proofs.service import Registration
+from verity.ml.protocols.pouw.schemes import ncp
+from verity.core.protocols.spot.one_stage import registration as R
+from verity.core.protocols.spot.service import WindowCommitmentRecord
 
 EGRESS = GridParams(buckets=6, allocation=3, frame_bytes=512)
 INGRESS = GridParams(buckets=6, allocation=2, frame_bytes=512)
@@ -45,7 +46,7 @@ SYNC_SET = SyncSet((0, 1), (1, 2))
 SYNCS = [ClockSync(0, 1)] * 4
 MANIFEST = hashlib.sha512(b"the pass's manifest").hexdigest()
 STREAM = hashlib.sha512(b"a stream").digest()
-#: a certifier window's seconds: PoUW window p of k ends at (p + 1)·k·W, and its reveal deadline is k·W after
+#: a certifier window's seconds: PoUW execution phase p of k ends at (p + 1)·k·W, and its reveal deadline is k·W after
 W = INGRESS.buckets * INGRESS.bucket_ms / 1000
 #: the deployed LMS scheme (N = 64, W = 1) on 2^6 leaves, so a key takes a fraction of a second
 SIGNING = lms.Params(64, 1, 6)
@@ -63,24 +64,24 @@ PROVER = PS.prover_id(KEY.public)
 
 
 def signed(c: Proxy, p: int, record: bytes, sign=SIGN, context: bytes | None = None) -> bytes:
-    """`sign`'s signature of `record` for PoUW window p behind `c`, under `context` (by default `c`'s, the stream)."""
+    """`sign`'s signature of `record` for PoUW execution phase p behind `c`, under `context` (by default `c`'s, the stream)."""
     ctx = c.prover_context if context is None else context
     return sign(active.weights_message(c.bucketer.certifier.link, p, record, ctx))
 
 
-def registration(p: int, ctx: str | None = None, window: dict | None = None) -> Registration:
-    """PoUW's registration of window p as the proof system returns it: a record whose served window's context names p,
+def registration(p: int, ctx: str | None = None, window: dict | None = None) -> WindowCommitmentRecord:
+    """PoUW's registration of execution phase p as the proof system returns it: a record whose served execution phase's context names p,
     with its receipt and digest."""
     w = {"kind": "served", "context": PS.context("served-zk/test", p, MANIFEST) if ctx is None else ctx, "public": {}}
     record = {"window": w if window is None else window}
-    return Registration(record, R.receipt(record, "test", received=str(p)), R.digest(record), p)
+    return WindowCommitmentRecord(record, R.receipt(record, "test", received=str(p)), R.digest(record), p)
 
 
 def certifier(windows: int, records: dict[int, bytes] | None = None, clock=lambda: 0.0,
               **kwargs) -> tuple[Proxy, dict[int, bytes]]:
     """The certifier with PoUW's reader and the prover's key, the stream its context, on clock `clock`, handed `records`
-    by PoUW window before its first tick (`commit_weights`, signed by the prover), after `windows` certifier windows of
-    ingress ticks, and the salts it sampled by PoUW window: what the prover's server receives in-band."""
+    by PoUW execution phase before its first tick (`commit_weights`, signed by the prover), after `windows` certifier windows of
+    ingress ticks, and the salts it sampled by PoUW execution phase: what the developer's server receives in-band."""
     drawn: dict[int, bytes] = {}
 
     def source(p: int, n: int) -> bytes:
@@ -97,11 +98,11 @@ def certifier(windows: int, records: dict[int, bytes] | None = None, clock=lambd
 
 
 def test_pouw_salt_form():
-    """The salt PoUW applies in window p for a registration of a stream and a prover is SHA-512(b"verity/pouw-salt/v1" ‖
+    """The salt PoUW applies in execution phase p for a registration of a stream and a prover is SHA-512(b"verity/pouw-salt/v1" ‖
     reveal ‖ u64be(p) ‖ stream ‖ prover), what PoUW records for p before it SHA-512(b"verity/pouw-record/v1" ‖ weights'
     root ‖ stream ‖ prover), and the prover's id SHA-512(b"verity/pouw-prover/v1" ‖ its public key), each pinned on one
     vector, every part of the first two fixed-width: a reveal, a stream, a prover or a weights' root that isn't 64 bytes,
-    and a window that isn't a u64, are refused, as is a public key that isn't non-empty bytes."""
+    and an execution phase that isn't a u64, are refused, as is a public key that isn't non-empty bytes."""
     reveal, stream, prover, root = (bytes(range(i, i + 64)) for i in (0, 64, 128, 192))
     assert PS.pouw_salt(reveal, 3, stream, prover).hex() == (
         "7c43e79ad05bb29ccb777671767a31fac039bf1cd89279318d8232b97c3094cd"
@@ -134,8 +135,49 @@ def test_pouw_salt_form():
             PS.prover_id(bad)
 
 
+def test_lead_record_form():
+    """What the lead records for an execution phase before its salt is SHA-512(b"verity/pouw-lead-record/v1" ‖ weights' root ‖
+    stream ‖ prover ‖ key leaf ‖ u64be(calls)), 290 bytes, pinned on the lead's keyed vector, whose key leaf is the
+    `hm96.SHA512` tree leaf over ks_w under a 192-byte salt y₀, and on one of consecutive bytes. A part that isn't 64
+    bytes, and a call count that isn't a positive u64, are refused; another key leaf or call count is another record."""
+    def label(name: str, n: int) -> bytes:
+        tag = f"lead/keyed/vector/{name}".encode()
+        return b"".join(hashlib.sha512(tag + i.to_bytes(8, "big")).digest() for i in range(-(-n // 64)))[:n]
+    H = hm96.SHA512
+    weights, ks_w, stream, prover = (hashlib.sha512(f"lead/keyed/vector/{n}".encode()).digest()
+                                     for n in ("weights", "ks_w", "stream", "prover"))
+    key_leaf = H.tree_leaf(H.default_key, H.commit_string(H.default_key, ks_w, label("y0", H.salt_bytes)))
+    assert key_leaf.hex() == (
+        "e121d1ae87e74b21ddb3585cff79d9c21aac50281d5e3a77fa18453007ae3f8d"
+        "1315a9b3c0dda315ed6e199f57f62a9dee19a9fa4fcd25ac67be7c612672c095")
+    assert PS.lead_record(weights, stream, prover, key_leaf, 64).hex() == (
+        "546ffb4bbb7d5ead4ecbdbe7ada190d9e4201369fb8659b6327e459d21c5b7f3"
+        "a2860f62d77c0ed21185f131b71eabf5fb9f45b9e074891f0e300fa0cfe6edbe")
+    message = b"verity/pouw-lead-record/v1" + weights + stream + prover + key_leaf + (64).to_bytes(8, "big")
+    assert len(message) == 290 and PS.lead_record(weights, stream, prover, key_leaf, 64) == hashlib.sha512(message).digest()
+    stream, prover, root, leaf = (bytes(range(i, i + 64)) for i in (0, 64, 128, 192))
+    assert PS.lead_record(root, stream, prover, leaf, 3).hex() == (
+        "7d1472590172ae63855670e09f66e734792de175ac711a0a6be3992c94a3f6e7"
+        "671957517ba0a0db3c3541aea569ceb0fbcd912675444e1e5a0dd91aba53075f")
+    assert PS.lead_record(root, stream, prover, leaf, 3) != PS.pouw_record(root, stream, prover)
+    assert len({PS.lead_record(root, stream, prover, leaf, 3), PS.lead_record(root, stream, prover, leaf, 4),
+                PS.lead_record(root, stream, prover, root, 3)}) == 3
+    for bad in (leaf[:32], leaf + b"\0", bytearray(leaf), leaf.hex()):
+        with pytest.raises(DomainError, match="weights' root is 64 bytes"):
+            PS.lead_record(bad, stream, prover, leaf, 3)
+        with pytest.raises(DomainError, match="stream is a 64-byte digest"):
+            PS.lead_record(root, bad, prover, leaf, 3)
+        with pytest.raises(DomainError, match="prover is a 64-byte id"):
+            PS.lead_record(root, stream, bad, leaf, 3)
+        with pytest.raises(DomainError, match="key leaf is 64 bytes"):
+            PS.lead_record(root, stream, prover, bad, 3)
+    for bad in (0, -1, 1 << 64, True, 3.0):
+        with pytest.raises(DomainError, match="positive u64"):
+            PS.lead_record(root, stream, prover, leaf, bad)
+
+
 def test_window_open_root_form():
-    """A live window's open root is SHA-512(b"verity/pouw-window-open/v1" ‖ weights' root ‖ round-0 request table's root
+    """A live execution phase's open root is SHA-512(b"verity/pouw-window-open/v1" ‖ weights' root ‖ round-0 request table's root
     ‖ SHA-512(the session's ASCII id)), every part 64 bytes, pinned on one vector: another weights' root, request table
     or session is another root, a root that isn't 64 bytes is refused, and so is a session id that isn't 1 to 64 of
     [A-Za-z0-9._:-] starting alphanumeric."""
@@ -160,9 +202,9 @@ def test_window_open_root_form():
 
 
 def test_epoch_open_root_form():
-    """A Pearl-C salt epoch's open root is SHA-512(b"verity/pouw-epoch-open/v1" ‖ weights' root ‖ u64be(k)), 97 bytes
-    hashed, pinned on one vector: another weights' root or epoch is another root, no epoch root is a window-open root's
-    tag, a root that isn't 64 bytes is refused, and so is an epoch number that isn't an integer in [0, 2^64)."""
+    """A Pearl-C salt execution phase's open root is SHA-512(b"verity/pouw-epoch-open/v1" ‖ weights' root ‖ u64be(k)), 97 bytes
+    hashed, pinned on one vector: another weights' root or execution phase is another root, no execution phase root is an execution phase-open root's
+    tag, a root that isn't 64 bytes is refused, and so is an execution phase number that isn't an integer in [0, 2^64)."""
     weights = bytes(range(64))
     root = PS.epoch_open_root(weights, 0)
     assert root.hex() == (
@@ -181,9 +223,9 @@ def test_epoch_open_root_form():
 
 
 def test_anchored_epoch_root_form():
-    """An H1 window's salt epoch's open root is SHA-512(b"verity/pouw-epoch-open/v2" ‖ W ‖ X ‖ u64be(k)), 161 bytes
-    hashed, pinned on one vector: another W, X or epoch is another root, none is a Pearl-C epoch's root, and a root
-    that isn't 64 bytes or an epoch number that isn't an integer in [0, 2^64) is refused."""
+    """An H1 execution phase's salt execution phase's open root is SHA-512(b"verity/pouw-epoch-open/v2" ‖ W ‖ X ‖ u64be(k)), 161 bytes
+    hashed, pinned on one vector: another W, X or execution phase is another root, none is a Pearl-C execution phase's root, and a root
+    that isn't 64 bytes or an execution phase number that isn't an integer in [0, 2^64) is refused."""
     weights, anchors = bytes(range(64)), bytes(range(64, 128))
     root = PS.anchored_epoch_root(weights, anchors, 0)
     assert root.hex() == (
@@ -207,8 +249,8 @@ def test_anchored_epoch_root_form():
 
 
 def test_a_context_names_its_pouw_window():
-    """`context` names the window before the manifest's digest, which stays the last segment (`pass_epoch`'s), and
-    `window_of` reads it back; anything else names no window."""
+    """`context` names the execution phase before the manifest's digest, which stays the last segment (`pass_epoch`'s), and
+    `window_of` reads it back; anything else names no execution phase."""
     ctx = PS.context("served-zk/run", 7, MANIFEST)
     assert ctx == f"served-zk/run/pouw-window/7/{MANIFEST}" and PS.window_of(ctx) == 7
     assert PS.window_of(PS.context("", 0, MANIFEST)) == 0 and PS.window_of(f"pouw-window/{(1 << 64) - 1}/m") == (1 << 64) - 1
@@ -221,9 +263,9 @@ def test_a_context_names_its_pouw_window():
 
 
 def test_the_certifier_reveals_a_pouw_window_on_its_registration():
-    """With PoUW windows of two certifier windows and PoUW's reader, the certifier reveals PoUW window 0's salt once
-    windows 0 and 1 are published, on PoUW's registration of window 0, and `revealed` gives it whole; PoUW window 1's
-    after windows 2 and 3."""
+    """With PoUW execution phases of two certifier windows and PoUW's reader, the certifier reveals PoUW execution phase 0's salt once
+    execution phases 0 and 1 are published, on PoUW's registration of execution phase 0, and `revealed` gives it whole; PoUW execution phase 1's
+    after execution phases 2 and 3."""
     c, drawn = certifier(4, pouw_window=2)
     assert sorted(drawn) == [0, 1] and {len(s) for s in drawn.values()} == {PS.SALT_BYTES}
     for p in (0, 1):
@@ -232,14 +274,14 @@ def test_the_certifier_reveals_a_pouw_window_on_its_registration():
 
 
 def test_revealed_fails_closed():
-    """`revealed` refuses (`Unrevealed`) a window that is unregistered: no registration, another window's, the network
-    certifier's own provenance, a context that names no window, a window with another key; and, through the
+    """`revealed` refuses (`Unrevealed`) an execution phase that is unregistered: no registration, another execution phase's, the network
+    certifier's own provenance, a context that names no execution phase, an execution phase with another key; and, through the
     certifier, a receipt or digest that isn't the record's, and PoUW's registration to a certifier without PoUW's
     reader. It refuses one that is early: before its last certifier window is published. One that is late: its reveal
-    deadline, one PoUW window after its end on the certifier's clock, has passed (the same reveal at the deadline is
-    given). One revealed already: a second reveal on the same registration or another naming the window, so behind one
-    certifier one registration of a window gets its salt. And one whose salt is missing: never sampled (a certifier back
-    from maintenance after its first window), the salt off, or a salt of another width. The certifier's refusals of
+    deadline, one PoUW execution phase after its end on the certifier's clock, has passed (the same reveal at the deadline is
+    given). One revealed already: a second reveal on the same registration or another naming the execution phase, so behind one
+    certifier one registration of an execution phase gets its salt. And one whose salt is missing: never sampled (a certifier back
+    from maintenance after its first execution phase), the salt off, or a salt of another width. The certifier's refusals of
     time and the once are matched by PoUW's words only, so its own wording isn't pinned here."""
     c, _ = certifier(2, pouw_window=2)
     reg = registration(0)
@@ -307,7 +349,7 @@ def test_revealed_fails_closed():
 
 
 def test_pouw_window_is_one_whole_pouw_window_aligned_at_0():
-    """Certifier windows p·k … p·k + k − 1, in order, make PoUW window p; any other run of windows is refused, as is a k
+    """Certifier windows p·k … p·k + k − 1, in order, make PoUW execution phase p; any other run of execution phases is refused, as is a k
     that isn't a positive integer."""
     assert PS.pouw_window(range(0, 1), 1) == 0 and PS.pouw_window([4, 5], 2) == 2 and PS.pouw_window(range(9, 12), 3) == 3
     assert PS.pouw_window([7], 1) == 7
@@ -324,13 +366,13 @@ def setup():
     rng = random.Random(3)
     work = Workload((Matmul(0, Shape(32, 64, 64), 7),))
     rows = [ncp.int7_bytes([rng.randint(-64, 63) for _ in range(64)]) for _ in range(64)]
-    return work, {7: commit_rows(weight_binding(7), -2, rows).commitment.root}
+    return work, {7: commit_rows(weight_binding(7), -2, rows, salt_key=bytes(32), nonce=HM96_WEIGHTS + 7).commitment.root}
 
 
 def test_a_certified_epoch_applies_its_pouw_windows_salt():
-    """`Epoch.certified` of PoUW window 1's certifier windows (2 and 3, k = 2) under a stream and a prover has salt
+    """`Epoch.certified` of PoUW execution phase 1's certifier windows (2 and 3, k = 2) under a stream and a prover has salt
     `pouw_salt(reveal, 1, stream, prover)`, 64 bytes: the seeds take it and Epoch.start's 32 bytes they refuse, the
-    identifier names it whole, and the challenger's sampling coin opens against its coins. Misaligned windows, a reveal,
+    identifier names it whole, and the challenger's sampling coin opens against its coins. Misaligned execution phases, a reveal,
     stream or prover of another width and weights that aren't the workload's are refused."""
     work, roots = setup()
     c, drawn = certifier(4, pouw_window=2)
@@ -365,8 +407,8 @@ def test_a_certified_epoch_applies_its_pouw_windows_salt():
 
 
 def manifest(work: Workload, roots: dict[int, bytes], p: int, salt: bytes, run: str = "r") -> tuple[bytes, str]:
-    """A certified pass's manifest over `work` and its weights' `roots`, salted `salt`, and its window's context, which
-    names PoUW window p and the manifest."""
+    """A certified pass's manifest over `work` and its weights' `roots`, salted `salt`, and its execution phase's context, which
+    names PoUW execution phase p and the manifest."""
     man = {"schema": CC.MANIFEST_CERTIFIED, "salt": salt.hex(), "run": run,
            "matmuls": [{"index": u.index, "m": u.shape.m, "k": u.shape.k, "n": u.shape.n, "weight": u.weight}
                        for u in work.matmuls],
@@ -376,10 +418,10 @@ def manifest(work: Workload, roots: dict[int, bytes], p: int, salt: bytes, run: 
 
 
 def test_a_certified_window_passes_only_a_pass_salted_by_its_certifiers_reveal():
-    """`core_check.pass_epoch` in a certified window, its context naming PoUW window 1 and the pass, with the reveal
-    `revealed` and the record `committed` read from the certifier on that registration, and the window's stream and
-    prover: the pass the prover salted by `Epoch.certified` of windows 2 and 3 from the salt it received passes
-    (``certifier``). Salted by window 0's epoch, by the raw reveal, or checked against window 0's reveal, it doesn't, nor
+    """`core_check.pass_epoch` in a certified execution phase, its context naming PoUW execution phase 1 and the pass, with the reveal
+    `revealed` and the record `committed` read from the certifier on that registration, and the execution phase's stream and
+    prover: the pass the prover salted by `Epoch.certified` of execution phases 2 and 3 from the salt it received passes
+    (``certifier``). Salted by execution phase 0's execution phase, by the raw reveal, or checked against execution phase 0's reveal, it doesn't, nor
     does it pass at a verifier without the reveal."""
     work, roots = setup()
     c, drawn = certifier(4, {1: PS.pouw_record(weights_root(roots), STREAM, PROVER)}, pouw_window=2)
@@ -400,12 +442,12 @@ def test_a_certified_window_passes_only_a_pass_salted_by_its_certifiers_reveal()
 
 
 def test_two_registrations_of_one_window_are_salted_apart():
-    """Two registrations of PoUW window 1 behind one certifier, of the same weights and the same operands, differing only
+    """Two registrations of PoUW execution phase 1 behind one certifier, of the same weights and the same operands, differing only
     in their stream or only in their prover, get different salts, and so a different seed and receipt seed at every
     matmul index: to a unit that reads its seed, a tile computed once is no other registration's. Each one's pass is
-    refused at the other's verifier, whichever the certifier recorded. The certifier reveals the window once, so its
-    second registration gets no salt at all. Each certifier draws its own salts, so two certifiers' salts for window 1
-    (two proxies' lifetimes, each counting from its origin) differ too, with no epoch bound."""
+    refused at the other's verifier, whichever the certifier recorded. The certifier reveals the execution phase once, so its
+    second registration gets no salt at all. Each certifier samples its own salts, so two certifiers' salts for execution phase 1
+    (two proxies' lifetimes, each counting from its origin) differ too, with no execution phase bound."""
     work, roots = setup()
     root = weights_root(roots)
     other_stream, other_prover = hashlib.sha512(b"another stream").digest(), PS.prover_id(prover_key(b"another")[0].public)
@@ -436,15 +478,15 @@ def test_two_registrations_of_one_window_are_salted_apart():
 
 
 def test_a_certified_window_passes_only_weights_and_a_binding_recorded_before_its_salt():
-    """The certifier's salt binds no weights, so a certified window passes only weights, a stream and a prover the
-    prover recorded with the certifier before it sampled the window's salt (`pouw_record`, through `Proxy.commit_weights`,
+    """The certifier's salt binds no weights, so a certified execution phase passes only weights, a stream and a prover the
+    prover recorded with the certifier before it sampled the execution phase's salt (`pouw_record`, through `Proxy.commit_weights`,
     signed by the prover's registered key over `weights_message` under the stream), which `committed` reads on
-    `reveal`'s conditions. End to end against the certifier, PoUW windows of two certifier windows: window 0's record
-    is refused unsigned, signed by another key, signed for another window or under another stream's context; signed,
-    made before its sample, it is read back and its pass passes, and a second record for it is refused. Window 1's, made
-    after its sample, is refused, so `committed` refuses window 1 and its pass, salted by its own salt, is refused. A pass
+    `reveal`'s conditions. End to end against the certifier, PoUW execution phases of two certifier windows: execution phase 0's record
+    is refused unsigned, signed by another key, signed for another execution phase or under another stream's context; signed,
+    made before its sample, it is read back and its pass passes, and a second record for it is refused. Execution phase 1's, made
+    after its sample, is refused, so `committed` refuses execution phase 1 and its pass, salted by its own salt, is refused. A pass
     over other weights, salted the same since the salt doesn't read them, is refused, as are a stream or prover other
-    than those recorded, a registration that isn't the window's and a certifier that gives anything but 64 bytes.
+    than those recorded, a registration that isn't the execution phase's and a certifier that gives anything but 64 bytes.
     `recorded_reason`, the record's rule short of the reveal, which a challenger runs before it asks for one, refuses
     what `pass_epoch` refuses of the record, in its words. The certifier's refusals are matched by type and PoUW's by
     its own words, so neither's wording is pinned to the other's."""
@@ -460,7 +502,7 @@ def test_a_certified_window_passes_only_weights_and_a_binding_recorded_before_it
     other = PS.pouw_record(root, STREAM, PS.prover_id(prover_key(b"another")[0].public))
     with pytest.raises(RuntimeError):
         c.commit_weights(0, other, signed(c, 0, other))
-    for _ in range(2 * INGRESS.buckets + 1):   # windows 0 and 1, then window 2's first tick: PoUW window 1's salt
+    for _ in range(2 * INGRESS.buckets + 1):   # execution phases 0 and 1, then execution phase 2's first tick: PoUW execution phase 1's salt
         c.bucketer.tick()
     with pytest.raises(RuntimeError):
         c.commit_weights(1, record, signed(c, 1, record))
@@ -518,18 +560,18 @@ def test_a_certified_window_passes_only_weights_and_a_binding_recorded_before_it
 
 
 def test_a_certified_window_registers_once_per_stream_and_prover():
-    """`Registrations` admits PoUW window p once per stream and prover: a second registration of p under them, which has
-    their salt and so their seeds, is refused (`Reregistered`), naming the first; p under another stream or prover, and
-    another window under them, are admitted. A window that isn't a u64, or a stream or prover that isn't 64 bytes, is
+    """`WindowOpens` admits PoUW execution phase p once per stream and prover: a second registration of p under them, which has
+    their salt and so their seeds, is refused (`Reopened`), naming the first; p under another stream or prover, and
+    another execution phase under them, are admitted. An execution phase that isn't a u64, or a stream or prover that isn't 64 bytes, is
     refused."""
     other = hashlib.sha512(b"another").digest()
-    ledger = PS.Registrations()
+    ledger = PS.WindowOpens()
     ledger.admit(1, STREAM, PROVER, "aa" * 64)
-    with pytest.raises(PS.Reregistered, match=r"PoUW window 1 is already registered \(aaaaaaaaaaaaaaaa\)"):
+    with pytest.raises(PS.Reopened, match=r"PoUW window 1 is already registered \(aaaaaaaaaaaaaaaa\)"):
         ledger.admit(1, STREAM, PROVER, "bb" * 64)
     for window, stream, prover in ((1, other, PROVER), (1, STREAM, other), (2, STREAM, PROVER)):
         ledger.admit(window, stream, prover, "cc" * 64)
-    with pytest.raises(PS.Reregistered):
+    with pytest.raises(PS.Reopened):
         ledger.admit(2, STREAM, PROVER, "dd" * 64)
     for window, stream, prover in ((-1, STREAM, PROVER), (1, STREAM[:32], PROVER), (1, STREAM, None)):
         with pytest.raises(DomainError):
@@ -538,12 +580,12 @@ def test_a_certified_window_registers_once_per_stream_and_prover():
 
 
 def test_a_certified_window_credits_only_units_that_read_its_salt():
-    """`unit_reason` refuses the served-zk window's sampled proof block, `Pc8TileSide`, which reads two committed side rows and
+    """`unit_reason` refuses the served-zk execution phase's sampled proof block, `Pc8TileSide`, which reads two committed side rows and
     no salt (it declares no port), and passes the compiled Program's H1 tile (`PouwH1Tile`), whose ``salt`` is a coin
     port over the 64-byte salt; anything without a signature is refused."""
-    from verity.core.protocols.pouw.circuit import compile as C
-    from verity.core.protocols.pouw.circuit import h1tile as H
-    from verity.core.protocols.pouw.circuit import pc8
+    from verity.ml.protocols.pouw.circuit import compile as C
+    from verity.ml.protocols.pouw.circuit import h1tile as H
+    from verity.ml.protocols.pouw.circuit import pc8
     from verity.ml.circuits.defs import bind
     from verity.ml.circuits.ops.boolean import gemm as BG
 

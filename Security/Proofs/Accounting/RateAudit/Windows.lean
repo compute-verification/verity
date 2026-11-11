@@ -1,5 +1,42 @@
-import Mathlib
+module
+
+public import Definitions.Accounting.Guarantees.RateAudit
+public import Mathlib.Algebra.Group.End
+import Mathlib.Algebra.Order.Floor.Extended
+import Mathlib.Algebra.Order.Interval.Basic
+import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
+import Mathlib.Analysis.SpecialFunctions.Bernstein
+import Mathlib.Analysis.SpecialFunctions.Gamma.Basic
+import Mathlib.Analysis.SpecialFunctions.Trigonometric.DerivHyp
+import Mathlib.Combinatorics.Enumerative.DyckWord
+import Mathlib.Combinatorics.SimpleGraph.Triangle.Removal
+import Mathlib.Data.NNRat.Floor
+import Mathlib.Data.Nat.Choose.Multinomial
+import Mathlib.Geometry.Euclidean.Altitude
+import Mathlib.NumberTheory.Chebyshev
+import Mathlib.NumberTheory.Height.NumberField
+import Mathlib.NumberTheory.Height.Projectivization
+import Mathlib.NumberTheory.LucasLehmer
+import Mathlib.NumberTheory.SelbergSieve
+import Mathlib.RingTheory.Radical.NatInt
+import Mathlib.Tactic.ENatToNat
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Topology.Sheaves.Init
 import Proofs.Accounting.RateAudit.Audit
+import Std.Tactic.BVDecide.Normalize.Prop
+import Proofs.Pous.Prob
 
 /-!
 # The rate audit over `n` windows: the proof
@@ -11,6 +48,8 @@ class, played on the store and window `i`'s own coins (`pr_short_le`). Markov's 
 windows (`mul_pr_le_sum`) gives the guarantee.
 -/
 
+@[expose] public section
+
 namespace Accounting.Rate
 
 open Pous (Bits pr)
@@ -20,7 +59,7 @@ open scoped ENNReal
 theorem pr_le_of_fiber {X Y : Type} [Fintype X] [Fintype Y] (P : X × Y → Prop) (ε : ℝ≥0∞)
     (h : ∀ y, pr (fun x => P (x, y)) ≤ ε) : pr P ≤ ε := by
   classical
-  unfold pr at h ⊢
+  simp only [Pous.pr_eq_card] at h ⊢
   refine ENNReal.div_le_of_le_mul ?_
   have hy : ∀ y, ((Finset.univ.filter (fun x => P (x, y))).card : ℝ≥0∞) ≤ ε * Fintype.card X := by
     intro y
@@ -44,7 +83,7 @@ theorem pr_le_of_fiber {X Y : Type} [Fintype X] [Fintype Y] (P : X × Y → Prop
 theorem pr_equiv {X Y : Type} [Fintype X] [Fintype Y] (e : X ≃ Y) (P : X → Prop) :
     pr P = pr (fun y => P (e.symm y)) := by
   classical
-  unfold pr
+  simp only [Pous.pr_eq_card]
   rw [card_filter_equiv e P, Fintype.card_congr e]
 
 open Classical in
@@ -52,7 +91,7 @@ open Classical in
 the sum of their probabilities. -/
 theorem mul_pr_le_sum {Ω ι : Type} [Fintype Ω] [Fintype ι] (P : ι → Ω → Prop) (m : ℕ) :
     (m : ℝ≥0∞) * pr (fun x => m ≤ (Finset.univ.filter (fun i => P i x)).card) ≤ ∑ i, pr (P i) := by
-  unfold pr
+  simp only [Pous.pr_eq_card]
   rw [← ENNReal.sum_div, ← mul_div_assoc]
   refine ENNReal.div_le_div_right ?_ _
   have key : ∀ T : Finset Ω, (∀ x ∈ T, m ≤ (Finset.univ.filter (fun i => P i x)).card) →

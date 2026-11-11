@@ -1,14 +1,13 @@
-"""V*'s outer statements (hiding model architectures, lane rec-v0): the inner session's Ligerito openings, one C-Flock
+"""V*'s outer statements (hiding model architectures): the inner session's Ligerito openings, one Flock
 statement per level, each instance a `RecOpen` of one opening, the top node it climbs to and its running sum read from the
 prover's registrations of them.
 
 A level's openings share one shape (its rows' lanes, ``H = depth - c`` siblings below its top of ``2^c`` nodes), so each level
 is one template, ``RecOpen{LANES, H}``, and one statement over that level's openings of both reps, in rep and query order
 (M0 proves one template per statement). Its program is `population_program` of the template over the level's openings, its
-partition that program's ``Q_template_instance`` v0. Every instance reads two fresh private rows, the opened row and its
-``aux`` (its siblings: `rec_open.pack`), and five registered rows: its coefficients ``coef`` and the position's low bits
-``dirs``, which the verifier registers itself, ``out``, ``acc`` in and ``acc_out`` out (§16.13). The statement has no public
-input.
+partition that program's ``Q_template_instance`` v0. Every instance reads seven registered rows: the opened row ``row`` and
+its ``aux`` (its siblings: `rec_open.pack`), its coefficients ``coef`` and the position's low bits ``dirs``, which the
+verifier registers itself, ``out``, ``acc`` in and ``acc_out`` out (`HmOut`). The statement has no public input.
 
 **The verifier's values** (`COEF_VALUE`, `DIRS_VALUE`). The verifier computes each opening's ``coef`` (`coefficients`) and
 ``dirs`` (`rec_open.dirs_words` of the position its own query coins give) and registers each as a value of the level's
@@ -16,12 +15,12 @@ statement program, row i instance i's, under public salts (`rec_residuals.verifi
 inner session's public record, and the prover's rows and salts are the same registration's.
 
 **The tops** (`TopValue`). Neither side sees a tree's top in the clear: the ZK server committed each node as a registered row
-(`verity_flock.rec_live.top_rows`) under a fresh salt of its own, and the coin server recorded only the nodes' ``b || c``
+(`verity_flock.rec_live.top_rows`) under a fresh salt of its own, and the challenger recorded only the nodes' ``b || c``
 (`verity_flock.rec_vstar.tops`). The prover registers the tops a level's openings climb to (level 0's ``root_B``, both reps'
 one tree, else rep 0's top then rep 1's) as the value ``rec-top-L<level>`` under the V* session's program and those very salts;
 the verifier builds its own entry of that value from the recorded ``b || c`` alone (`rec_residuals.commits_entry`), and its
 reads file puts instance ``i``'s output at the row of the top node its position names (rep ``r``'s first row plus
-``pos >> H``; PROTOCOL.md §16.13 "Registered reads", `verity.core.protocols.sampled_proofs.one_stage.registered`). An
+``pos >> H``; `HmOut` "Registered reads", `verity.core.protocols.spot.one_stage.registered`). An
 instance is satisfiable only if its private rows climb, by the verifier's ``dirs``, to that registered row, whose ``b || c``
 the ZK server committed: the statement holds only if every opening climbs to the committed top node its coin names.
 
@@ -39,10 +38,11 @@ own salts, the prover registers each rep's `rec_sparse.RecSparse` claim as the v
 r's (one element, 64 words): RecSparse's instance r reads row r, and the registered opening (`rec_residuals.stage_opening`)
 reads row 0 as ``claim0`` and row 1 as ``claim1``, so the two statements open one root's cells.
 
-With ``link_rows``, the opened rows are not fresh: the prover registers them first, as the value ``rec-rows-L<level>`` under
-its own salts (what it would send before the outer coins), and the statement's ``row`` port reads row ``i`` of that value in
-instance ``i``. The verifier then checks every opened row against that root, which is how another statement can read the
-same rows.
+**The opened rows.** The prover registers the opened rows and their siblings first, as the values ``rec-rows-L<level>`` and
+``rec-aux-L<level>`` (R's levels ``rec-rows-stacked-L<level>`` and ``rec-aux-stacked-L<level>``, after their tops) under its
+own salts, what it sends before the outer coins, and the statement's ``row`` and ``aux`` ports read row ``i`` of each in
+instance ``i``. The verifier checks every opened row against those roots, which is how another statement can read the same
+rows, and its reads file names every port of the statement, as `flock-verify` requires of each (``Registered.checkComplete``).
 
 `stage` writes one level's ``circuit.txt``, the prover's ``inst.bin``, the verifier's ``pub.bin``, ``program.json``,
 ``partition.json`` and the reads file ``registered.json``; `verity_flock.rec_vstage` stages every level
@@ -57,7 +57,6 @@ from pathlib import Path
 from types import SimpleNamespace
 
 import numpy as np
-from verity.ml.commitments import hm96
 from verity.ml.circuits.codec import canonical_json, encode_program, program_digest
 from verity.ml.circuits.program import Program
 from verity.ml.circuits.ops.boolean.gf2k import mul
@@ -142,7 +141,7 @@ def top_value_name(level: int) -> str:
 @dataclass
 class TopValue:
     """A level's tops as one registered value (`top_value_name`): the prover's registration (``reg``, the top rows under the
-    ZK server's salts), the verifier's own entry from the coin server's ``b || c`` alone (``own``), and each rep's first row."""
+    ZK server's salts), the verifier's own entry from the challenger's ``b || c`` alone (``own``), and each rep's first row."""
 
     reg: object
     own: dict
@@ -153,7 +152,7 @@ class TopValue:
         """``tops``: each rep's top at the level (`rec_vstar.tops`); a top two reps share (level 0's ``root_B``) is one run of
         rows. Refused when the prover's registration is not the value the recorded ``b || c`` commit. ``value``: another
         table's name for it (default `top_value_name`)."""
-        from verity.core.protocols.sampled_proofs.one_stage import registered as G
+        from verity.core.protocols.spot.one_stage import registered as G
 
         runs: list[V.Top] = []
         first = {}
@@ -193,7 +192,7 @@ class Chain:
     @classmethod
     def build(cls, program: str, queries: list[V.Query], coefs: dict[tuple[int, int, int], list[int]],
               salts: list[bytes] | None = None) -> "Chain":
-        from verity.core.protocols.sampled_proofs.one_stage import registered as G
+        from verity.core.protocols.spot.one_stage import registered as G
 
         by = {(q.rep, q.level, q.j): q for q in queries}
         order = chain_order(queries)
@@ -213,14 +212,14 @@ class Chain:
 
 
 def stage(level: dict, out_dir: Path, chain: Chain, coefs: dict[tuple[int, int, int], list[int]], tops: TopValue,
-          link_rows: bool = False, name: str | None = None, version: int = 1) -> dict:
+          name: str | None = None, version: int = 1) -> dict:
     """One level's statement, the verifier's own files beside the prover's (``out_dir``), and what it costs. ``chain``: the
     prover's running sums; ``coefs``: each opening's ``coef`` words (the verifier's); ``tops``: the level's committed tops;
     ``name``: its unit's name (default `unit_name`; R's levels `stacked_name`); ``version``: its population program's
     (`partition.population_program`; 0 restages a level recorded before v1). The openings' positions are the ones the
     verifier's query coins give (`rec_vstage.coefficients` checks them), so ``dirs`` is the verifier's too."""
-    from verity.core.protocols.sampled_proofs.one_stage import partition as P
-    from verity.core.protocols.sampled_proofs.one_stage import registered as G
+    from verity.core.protocols.spot.one_stage import partition as P
+    from verity.core.protocols.spot.one_stage import registered as G
 
     LANES, H, qs = level["LANES"], level["H"], level["queries"]
     n = len(qs)
@@ -266,15 +265,14 @@ def stage(level: dict, out_dir: Path, chain: Chain, coefs: dict[tuple[int, int, 
     own = {"format": G.READS, "ports": {"out": read(tops.own, tops_at), "acc": read(chain.reg.entry(), at),
                                        "coef": read(coef_reg.entry(), range(n)), "dirs": read(dirs_reg.entry(), range(n)),
                                        "acc_out": read(chain.reg.entry(), [p + 1 for p in at])}}
-    fresh = lambda: [hm96.SHA512.fresh_salt() for _ in range(n)]
-    salts = {"row": fresh(), "aux": fresh(), "acc": acc_salts, "coef": coef_salts, "dirs": dirs_salts, "out": out_salts,
-             "acc_out": out_acc_salts}
+    salts = {"acc": acc_salts, "coef": coef_salts, "dirs": dirs_salts, "out": out_salts, "acc_out": out_acc_salts}
     registered = {"out": entry, "acc": acc_entry, "coef": coef_entry, "dirs": dirs_entry, "acc_out": out_acc_entry}
-    linked = None
-    if link_rows:
-        linked = G.Registered.commit(prog, f"rec-rows-L{level['level']}", rows.tolist())
-        _rows, salts["row"], registered["row"] = linked.statement(range(n))
-        own["ports"]["row"] = read(linked.entry(), range(n))
+    after = tops.own["value"].removeprefix("rec-top-")
+    private = {"row": G.Registered.commit(prog, f"rec-rows-{after}", rows.tolist()),
+              "aux": G.Registered.commit(prog, f"rec-aux-{after}", aux.tolist())}
+    for port, reg in private.items():
+        _rows, salts[port], registered[port] = reg.statement(range(n))
+        own["ports"][port] = read(reg.entry(), range(n))
     d = Path(out_dir)
     d.mkdir(parents=True, exist_ok=True)
     (d / "circuit.txt").write_text(text)
@@ -296,5 +294,6 @@ def stage(level: dict, out_dir: Path, chain: Chain, coefs: dict[tuple[int, int, 
             "vus_per_block": meta["vus_per_block"], "per_vu": meta["per_vu"], "compressions": R.compressions(LANES, H),
             "circuit_sha512": info["digests"][0],
             "program_sha512": prog, "partition_digest": P.digest(part), "registered_root": tops.own["root"],
-            "top_rows": tops.own["leaves"], "acc_root": chain.reg.root.hex(), "rows_root": linked.root.hex() if linked else None,
+            "top_rows": tops.own["leaves"], "acc_root": chain.reg.root.hex(), "rows_root": private["row"].root.hex(),
+            "aux_root": private["aux"].root.hex(),
             "coef_root": coef_reg.root.hex(), "dirs_root": dirs_reg.root.hex()}

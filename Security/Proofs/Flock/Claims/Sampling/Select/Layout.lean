@@ -1,9 +1,23 @@
+module
+
+public import Spot.Slots
+public import Aesop.BuiltinRules
+public import Batteries.Data.List.Basic
+public import Mathlib.Data.Nat.Notation
+public import Mathlib.Tactic.Attr.Core
+public import Mathlib.Tactic.Basic
+public import Mathlib.Tactic.Simps
+public import Mathlib.Tactic.ToAdditive
+public import Mathlib.Tactic.ToDual
+import Mathlib.Algebra.Order.Module.Field
+import Mathlib.Basic.ENNReal.Real
 import Proofs.Flock.Claims.Sampling.Select.Take
-import SampledProofs.Slots
 
-open SampledProofs
+@[expose] public section
 
-namespace Properties.SampledProofs.SecurityProofs
+open Spot
+
+namespace Properties.Spot.SecurityProofs
 
 /-- A range list's units, in order. -/
 def expand (l : List (ℕ × ℕ)) : List ℕ := l.flatMap fun r => List.range' r.1 (r.2 - r.1)
@@ -367,4 +381,4 @@ theorem mem_checked (l : Slots.Layout) (proved : Array ℕ) (v : ℕ) :
   · rintro ⟨hv, hu⟩
     exact ⟨(l.blocks[v], v), ⟨Array.mem_zipIdx_iff_getElem?.2 (Array.getElem?_eq_getElem hv), hu⟩, rfl⟩
 
-end Properties.SampledProofs.SecurityProofs
+end Properties.Spot.SecurityProofs

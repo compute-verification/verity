@@ -1,6 +1,13 @@
-import Proofs.Flock.Soundness.OpeningPhase
-import Proofs.Flock.Soundness.LincheckPhase
-import Proofs.Flock.Soundness.LigeritoQueries
+module
+
+public import Definitions.Flock.Game
+public import Mathlib.Data.Fin.VecNotation
+public import Mathlib.Data.Fintype.Pi
+import Mathlib.Algebra.Order.Floor.Semifield
+import Mathlib.MeasureTheory.Integral.Bochner.Basic
+import Mathlib.RingTheory.Henselian
+import Mathlib.RingTheory.RegularLocalRing.Defs
+import Mathlib.RingTheory.SimpleRing.Principal
 
 /-!
 # The `--zk` inner proof is sound (live/PROTOCOL.md §5)
@@ -35,6 +42,8 @@ The query positions are any map `pos` with `Pr[pos w ∈ D] ≤ |D|/N` (`hpos`);
 This module holds the definitions and the row lemmas, on Mathlib; the code lemmas and `inner_sound`, on ArkLib's
 Reed–Solomon code and BCIKS20, are in `InnerSound`.
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Discharge.ZkSession
 

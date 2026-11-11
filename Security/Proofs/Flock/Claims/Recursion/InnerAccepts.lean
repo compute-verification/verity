@@ -1,4 +1,44 @@
+module
+
+public import Proofs.Flock.Claims.Recursion.Inner
+public import Proofs.Flock.Claims.Recursion.OuterKS
+import Mathlib.Algebra.Order.Floor.Extended
+import Mathlib.Algebra.Order.Interval.Basic
+import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
+import Mathlib.Analysis.SpecialFunctions.Bernstein
+import Mathlib.Analysis.SpecialFunctions.Gamma.Basic
+import Mathlib.Analysis.SpecialFunctions.Trigonometric.DerivHyp
+import Mathlib.Combinatorics.Enumerative.DyckWord
+import Mathlib.Combinatorics.SimpleGraph.Triangle.Removal
+import Mathlib.Data.NNRat.Floor
+import Mathlib.Data.Nat.Choose.Multinomial
+import Mathlib.Geometry.Euclidean.Altitude
+import Mathlib.NumberTheory.Chebyshev
+import Mathlib.NumberTheory.Height.NumberField
+import Mathlib.NumberTheory.Height.Projectivization
+import Mathlib.NumberTheory.LucasLehmer
+import Mathlib.NumberTheory.SelbergSieve
+import Mathlib.RingTheory.Radical.NatInt
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Topology.Sheaves.Init
+import Proofs.Flock.Claims.ERep
+import Proofs.Flock.Claims.Finder
+import Proofs.Flock.Claims.Prob
+import Proofs.Flock.Claims.Recursion.Cost
 import Proofs.Flock.Claims.Recursion.InnerAbort
+import Std.Tactic.BVDecide.Normalize.Prop
 
 /-!
 # `InnerAccepts` at the inner shapes
@@ -6,7 +46,7 @@ import Proofs.Flock.Claims.Recursion.InnerAbort
 `InnerAccepts` (`Recursion/Inner.lean`) is the code fact that wherever `E_O` gives witnesses on an accepted run, the
 inner view read off them is accepted. This file reduces it to what V*'s circuits compute, at each inner shape the
 recursion's claims cover, read off the compiled verifier's own inner shape (`Form`): dense (`Form.Dense`: public inner
-units, no sparse phase; `PublicAudit`'s), holo (`Form.Holo`: private inner circuits; `RecursiveAuditC3`'s) and sparse
+units, no sparse phase; `PublicAudit`'s), holo (`Form.Holo`: private inner circuits; `RecursiveAuditHolo`'s) and sparse
 (`Form.Sparse`: public inner units with candidate 3's RecSparse phase). The three cover every form
 (`Form.shape_cases`), so no statement falls outside them.
 
@@ -24,6 +64,8 @@ units, no sparse phase; `PublicAudit`'s), holo (`Form.Holo`: private inner circu
   `InnerKS` over it at the same `γ_eA`.
 -/
 
+@[expose] public section
+
 namespace Claims.Recursion
 
 open Claims
@@ -33,7 +75,7 @@ open Claims
 /-- **Dense**: public inner units and no sparse phase (`PublicAudit`'s inner protocol). -/
 def Form.Dense (f : Form) : Prop := f.holo = false ∧ f.sparse = none
 
-/-- **Holo**: private inner circuits (`RecursiveAuditC3`'s inner protocol). -/
+/-- **Holo**: private inner circuits (`RecursiveAuditHolo`'s inner protocol). -/
 def Form.Holo (f : Form) : Prop := f.holo = true
 
 /-- **Sparse**: public inner units with candidate 3's RecSparse phase. -/
@@ -47,7 +89,7 @@ theorem Form.shape_cases (f : Form) : f.Dense ∨ f.Holo ∨ f.Sparse := by
 /-! ## `E_O`'s witnesses are in the outer relation -/
 
 /-- `collect` returns, in order, what each of its programs returned. -/
-theorem collect_some {R α : Type} (H : Msg → Msg) (run : R → Trace) :
+theorem collect_some {R α : Type} (H : Msg → Msg) (run : R → Transcript) :
     ∀ (ps : List (RP R (Option α))) (as : List α), ((collect ps).eval H run).1 = some as →
       List.Forall₂ (fun p a => (p.eval H run).1 = some a) ps as
   | [], as, h => by
@@ -68,7 +110,7 @@ theorem collect_some {R α : Type} (H : Msg → Msg) (run : R → Trace) :
       exact .cons hp (collect_some H run ps l hl)
 
 theorem stepWith_acc_pos {Ω : Type} (H : Msg → Msg) (P : Prover Ω) (x : Msg) (ω : Ω) (vn : List Msg → OC Out) :
-    ∀ (n : ℕ) (hist : List (Msg × Msg)) (as : List Msg) (t : Trace),
+    ∀ (n : ℕ) (hist : List (Msg × Msg)) (as : List Msg) (t : Transcript),
       (stepWith H P x ω vn n hist as t).out = .acc → 0 < n
   | 0, _, _, _, h => by simp [stepWith] at h
   | _ + 1, _, _, _, _ => Nat.succ_pos _
@@ -100,7 +142,7 @@ theorem eoGives_outerHolds {H : Msg → Msg} {D : Deploy Coin} {I : Inner Coin W
     {c : (EO D I DO decO).C x} {ws : List Flock.Wit} (h : EOGives H D I DO decO P x ω r c ws) :
     OuterHolds DO (runVstar H D I P x ω r) (D.nS x) ws := by
   obtain ⟨hacc, h⟩ := h
-  simp only [Extractor.eval, EO, RP.eval, Trace.seen, hacc, ↓reduceIte] at h
+  simp only [Extractor.eval, EO, RP.eval, Transcript.seen, hacc, ↓reduceIte] at h
   have hf := collect_some H _ _ ws h
   have hlen := hf.length_eq
   rw [List.length_map, List.length_finRange] at hlen

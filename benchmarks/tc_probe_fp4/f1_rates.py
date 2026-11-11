@@ -26,7 +26,7 @@ emulates (s4, u4, b1 and FP16 m8n8k4 on sm_120a: one ``CALL`` per PTX instructio
 passes the SASS gate as ``emulated``, with its callee's MMAs recorded, and is timed as that route: its price is the emulation's.
 
 Operands are uniform random codes of each form's types (small magnitudes where the accumulator is FP16, so no chain reaches inf);
-the sparse forms carry real 2:4 metadata (every nibble one of the six index pairs ordered_metadata accepts, drawn per lane and per
+the sparse forms carry real 2:4 metadata (every nibble one of the six index pairs ordered_metadata accepts, sampled per lane and per
 operand set; 1:2 for TF32), and ``sp_nvf4_meta_const`` repeats OMMA.SF.SP with one constant nibble.
 A product narrower than an E2M1 product (``s4``, ``u4``, ``b1``) is priced per its own product and flagged: it can't
 hold one E2M1 x E2M1 product (12 x 12 as integers after the x2), so it is not a like-for-like multiplier.  Labels: every rate
@@ -47,12 +47,19 @@ import subprocess
 import sys
 import time
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 import numpy as np
+
+if TYPE_CHECKING:
+    from numpy.typing import ArrayLike
 
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
 import probe as P  # noqa: E402
+
+# isort: split
+# verity_config is importable once probe has put tools/config on sys.path
 from verity_config.settings import SHARED  # noqa: E402
 
 ARCH = "sm_120a"
@@ -116,7 +123,7 @@ class Form:
 
 
 @dataclasses.dataclass(frozen=True)
-class Op:
+class SimtMultiplier:
     """One CUDA-core multiplier: ``body`` is one dependent step on chain register %0 with operands %1 (y) and %2 (z)."""
     name: str
     ptx: str
@@ -136,7 +143,8 @@ class Op:
         return False
 
 
-def _f(name, family, ptx, mnk, a, b, acc, fa, fb, **kw) -> Form:
+def _f(name: str, family: str, ptx: str, mnk: tuple[int, int, int], a: tuple[str, int], b: tuple[str, int],
+       acc: tuple[str, int], fa: str, fb: str, **kw: str | None) -> Form:
     return Form(name, family, ptx, mnk, a, b, acc, fa, fb, **kw)
 
 
@@ -269,26 +277,28 @@ def _forms() -> list:
 FORMS_TENSOR = _forms()
 
 OPS = [
-    Op("ffma_f32", "fma.rn.f32", "fma.rn.f32 %0, %0, %1, %2;", "f", "f", "f", "ffma", "FFMA", 1, 1),
+    SimtMultiplier("ffma_f32", "fma.rn.f32", "fma.rn.f32 %0, %0, %1, %2;", "f", "f", "f", "ffma", "FFMA", 1, 1),
     # an immediate addend: two register sources, so no three-operand register-bank conflict (the op's best form)
-    Op("ffma_f32_imm", "fma.rn.f32 (immediate addend 2^-4)", "fma.rn.f32 %0, %0, %1, 0f3D800000;", "f", "f", None, "ffma_imm", "FFMA",
-       1, 1),
-    Op("fmul_f32", "mul.rn.f32", "mul.rn.f32 %0, %0, %1;", "f", "f", None, "fmul", "FMUL", 1, 1),
-    Op("ffma_f32x2", "fma.rn.f32x2", "fma.rn.f32x2 %0, %0, %1, %2;", "l", "l", "l", "ffma2", "FFMA", 2, 2),
-    Op("hfma2_f16", "fma.rn.f16x2", "fma.rn.f16x2 %0, %0, %1, %2;", "r", "r", "r", "hfma2", "HFMA2", 1, 2),
-    Op("hfma2_bf16", "fma.rn.bf16x2", "fma.rn.bf16x2 %0, %0, %1, %2;", "r", "r", "r", "bfma2", "HFMA2", 1, 2),
+    SimtMultiplier("ffma_f32_imm", "fma.rn.f32 (immediate addend 2^-4)", "fma.rn.f32 %0, %0, %1, 0f3D800000;", "f", "f", None,
+                   "ffma_imm", "FFMA", 1, 1),
+    SimtMultiplier("fmul_f32", "mul.rn.f32", "mul.rn.f32 %0, %0, %1;", "f", "f", None, "fmul", "FMUL", 1, 1),
+    SimtMultiplier("ffma_f32x2", "fma.rn.f32x2", "fma.rn.f32x2 %0, %0, %1, %2;", "l", "l", "l", "ffma2", "FFMA", 2, 2),
+    SimtMultiplier("hfma2_f16", "fma.rn.f16x2", "fma.rn.f16x2 %0, %0, %1, %2;", "r", "r", "r", "hfma2", "HFMA2", 1, 2),
+    SimtMultiplier("hfma2_bf16", "fma.rn.bf16x2", "fma.rn.bf16x2 %0, %0, %1, %2;", "r", "r", "r", "bfma2", "HFMA2", 1, 2),
     # ptxas lowers half of these to HFMA2 with a -0 addend (an exact multiply): both count
-    Op("hmul2_f16", "mul.rn.f16x2", "mul.rn.f16x2 %0, %0, %1;", "r", "r", None, "hmul2", ("HMUL2", "HFMA2"), 1, 2),
-    Op("dfma_f64", "fma.rn.f64", "fma.rn.f64 %0, %0, %1, %2;", "d", "d", "d", "dfma", "DFMA", 1, 1),
-    Op("imad_s32", "mad.lo.s32", "mad.lo.s32 %0, %0, %1, %2;", "r", "r", "r", "int", "IMAD", 1, 1),
-    Op("imad_s32_imm", "mad.lo.s32 (immediate addend)", "mad.lo.s32 %0, %0, %1, 12345;", "r", "r", None, "int", "IMAD", 1, 1),
-    Op("imad_hi_u32", "mad.hi.u32", "mad.hi.u32 %0, %0, %1, %2;", "r", "r", "r", "int", "IMAD.HI", 1, 1),
-    Op("imad_wide_u32", "mad.wide.u32", "{\n.reg .b32 lo, hi;\nmov.b64 {lo, hi}, %0;\nmad.wide.u32 %0, lo, %1, %0;\n}", "l", "r", None,
-       "int", "IMAD.WIDE", 1, 1),
-    Op("dp4a_s8", "dp4a.s32.s32", "dp4a.s32.s32 %0, %0, %1, %2;", "r", "r", "r", "int", "IDP.4A", 1, 4),
-    Op("dp2a_s16s8", "dp2a.lo.s32.s32", "dp2a.lo.s32.s32 %0, %0, %1, %2;", "r", "r", "r", "int", "IDP.2A", 1, 2),
-    Op("popc_and_b1", "and.b32 + popc.b32 + add.u32", "{\n.reg .b32 t;\nand.b32 t, %0, %1;\npopc.b32 t, t;\nadd.u32 %0, %0, t;\n}",
-       "r", "r", None, "int", "POPC", 1, 32, product="b1"),
+    SimtMultiplier("hmul2_f16", "mul.rn.f16x2", "mul.rn.f16x2 %0, %0, %1;", "r", "r", None, "hmul2", ("HMUL2", "HFMA2"), 1, 2),
+    SimtMultiplier("dfma_f64", "fma.rn.f64", "fma.rn.f64 %0, %0, %1, %2;", "d", "d", "d", "dfma", "DFMA", 1, 1),
+    SimtMultiplier("imad_s32", "mad.lo.s32", "mad.lo.s32 %0, %0, %1, %2;", "r", "r", "r", "int", "IMAD", 1, 1),
+    SimtMultiplier("imad_s32_imm", "mad.lo.s32 (immediate addend)", "mad.lo.s32 %0, %0, %1, 12345;", "r", "r", None, "int", "IMAD",
+                   1, 1),
+    SimtMultiplier("imad_hi_u32", "mad.hi.u32", "mad.hi.u32 %0, %0, %1, %2;", "r", "r", "r", "int", "IMAD.HI", 1, 1),
+    SimtMultiplier("imad_wide_u32", "mad.wide.u32", "{\n.reg .b32 lo, hi;\nmov.b64 {lo, hi}, %0;\nmad.wide.u32 %0, lo, %1, %0;\n}",
+                   "l", "r", None, "int", "IMAD.WIDE", 1, 1),
+    SimtMultiplier("dp4a_s8", "dp4a.s32.s32", "dp4a.s32.s32 %0, %0, %1, %2;", "r", "r", "r", "int", "IDP.4A", 1, 4),
+    SimtMultiplier("dp2a_s16s8", "dp2a.lo.s32.s32", "dp2a.lo.s32.s32 %0, %0, %1, %2;", "r", "r", "r", "int", "IDP.2A", 1, 2),
+    SimtMultiplier("popc_and_b1", "and.b32 + popc.b32 + add.u32",
+                   "{\n.reg .b32 t;\nand.b32 t, %0, %1;\npopc.b32 t, t;\nadd.u32 %0, %0, t;\n}", "r", "r", None, "int", "POPC", 1, 32,
+                   product="b1"),
 ]
 
 FORMS = FORMS_TENSOR + OPS
@@ -406,14 +416,14 @@ def _op_words(c: str | None) -> int:
     return 0 if c is None else (2 if c in ("d", "l") else 1)
 
 
-def op_words_per_chain(op: Op) -> int:
+def op_words_per_chain(op: SimtMultiplier) -> int:
     return _op_words(op.x) + _op_words(op.y) + _op_words(op.z)
 
 
-def simt_kernel(op: Op) -> str:
+def simt_kernel(op: SimtMultiplier) -> str:
     w = op_words_per_chain(op)
 
-    def load(c, idx):
+    def load(c: str, idx: str) -> str:
         if c in ("d",):
             return f"__hiloint2double((int)f[{idx} + 1], (int)f[{idx}])"
         if c == "l":
@@ -584,7 +594,7 @@ void f1_teardown(void) {
 """
 
 
-def kernel_source(form) -> str:
+def kernel_source(form: Form | SimtMultiplier) -> str:
     return tensor_kernel(form) if form.tensor else simt_kernel(form)
 
 
@@ -636,16 +646,16 @@ def calls_of(text: str) -> dict:
     out: dict = {}
     fn, ins = None, []
 
-    def flush():
+    def flush() -> None:
         if fn is None:
             return
         at = {a: i for i, (a, _) in enumerate(ins)}
 
-        def target(toks):
+        def target(toks: list[str]) -> int | None:
             m = re.search(r"0x([0-9a-f]+)", " ".join(toks))
             return int(m.group(1), 16) if m and int(m.group(1), 16) in at else None
 
-        def expand(t, depth) -> tuple[dict, set]:
+        def expand(t: int | None, depth: int) -> tuple[dict, set]:
             hist: dict = {}
             body: set = set()
             if t is None or depth > 4:
@@ -685,7 +695,7 @@ def _op(toks: list[str]) -> str:
     return toks[1] if toks[0].startswith("@") and len(toks) > 1 else toks[0]
 
 
-def form_gate(form, hist: dict, calls: list | None = None) -> dict:
+def form_gate(form: Form | SimtMultiplier, hist: dict, calls: list | None = None) -> dict:
     """What the timed loop holds.  Tensor forms: the MMA-family instructions, a nonzero multiple of BODY (one PTX MMA may lower
     to several: ``sass_per_ptx`` > 1, recorded), or, where ptxas emulates the form, exactly BODY calls in the loop (and none
     elsewhere) to callees holding MMA instructions, whose MMAs are counted per PTX instruction (``emulated``); SIMT forms: exactly
@@ -759,7 +769,7 @@ _E4M3_FINITE = np.array([c for c in range(256) if c & 0x7F != 0x7F], np.uint32)
 
 
 #: FP6 / FP4 codes (exponent bits, mantissa bits) and, for the FP16-accumulate forms, how many of the smallest magnitude codes
-#: they draw (|x| <= 0.4375, 0.625, 0.5). A K=32 sum then stays within 16, at most half an FP16 ulp once |D| >= 2^15, so a
+#: they sample (|x| <= 0.4375, 0.625, 0.5). A K=32 sum then stays within 16, at most half an FP16 ulp once |D| >= 2^15, so a
 #: chain of millions of MMAs on fixed operands stalls short of inf
 _NARROW = {"e3m2": (3, 2, 8), "e2m3": (2, 3, 6), "e2m1": (2, 1, 2)}
 #: where kind::f8f6f4 / kind::mxf8f6f4 read a code in its 8-bit container (PTX ISA: E2M1 in the central 4 bits, E3M2 and E2M3
@@ -767,7 +777,7 @@ _NARROW = {"e3m2": (3, 2, 8), "e2m3": (2, 3, 6), "e2m1": (2, 1, 2)}
 _CONTAINER_SHIFT = {"e3m2": 0, "e2m3": 0, "e2m1": 2}
 
 
-def _small_fp8(rng, fmt: str, shape, small: bool = False) -> np.ndarray:
+def _small_fp8(rng: np.random.Generator, fmt: str, shape: int | tuple[int, ...], small: bool = False) -> np.ndarray:
     """Bytes of an FP8 value (small magnitudes) or an FP6/FP4 code (uniform, or small exponents with ``small``) in its 8-bit
     container (``_CONTAINER_SHIFT``)."""
     s = rng.integers(0, 2, size=shape, dtype=np.uint32) << 7
@@ -786,14 +796,14 @@ def _pack4(b: np.ndarray) -> np.ndarray:
     return (b[..., 0] | (b[..., 1] << 8) | (b[..., 2] << 16) | (b[..., 3] << 24)).astype(np.uint32)
 
 
-def _half_bits(rng, shape, bf16: bool, lo: int, hi: int) -> np.ndarray:
+def _half_bits(rng: np.random.Generator, shape: int | tuple[int, ...], bf16: bool, lo: int, hi: int) -> np.ndarray:
     s = rng.integers(0, 2, size=shape, dtype=np.uint32)
     if bf16:
         return (s << 15) | (rng.integers(lo, hi, size=shape, dtype=np.uint32) << 7) | rng.integers(0, 128, size=shape, dtype=np.uint32)
     return (s << 15) | (rng.integers(lo, hi, size=shape, dtype=np.uint32) << 10) | rng.integers(0, 1024, size=shape, dtype=np.uint32)
 
 
-def operand_words(fmt: str, rng, shape, small: bool = False) -> np.ndarray:
+def operand_words(fmt: str, rng: np.random.Generator, shape: tuple[int, ...], small: bool = False) -> np.ndarray:
     """u32 words of one operand register (or a double's two words interleaved lo, hi) in a form's input format."""
     if fmt == "e2m1x8" or fmt == "b32":
         return rng.integers(0, 2**32, size=shape, dtype=np.uint64).astype(np.uint32)
@@ -815,7 +825,7 @@ def _seed(name: str) -> int:
     return int(hashlib.sha256(name.encode()).hexdigest()[:8], 16)
 
 
-def _meta(rng, form: Form, shape) -> np.ndarray:
+def _meta(rng: np.random.Generator, form: Form, shape: tuple[int, ...]) -> np.ndarray:
     nibs = np.array(META_12 if form.sparse == "1:2" else META_24, np.uint32)
     if form.meta == "const":
         return np.full(shape, int(nibs[0]) * 0x11111111, np.uint32)
@@ -823,14 +833,14 @@ def _meta(rng, form: Form, shape) -> np.ndarray:
     return (n << (4 * np.arange(8, dtype=np.uint32))).sum(axis=-1, dtype=np.uint64).astype(np.uint32)
 
 
-def _scale(rng, kind: str | None, shape) -> np.ndarray:
+def _scale(rng: np.random.Generator, kind: str | None, shape: tuple[int, ...]) -> np.ndarray:
     if kind is None:
         return np.zeros(shape, np.uint32)
     lo, hi = (0x30, 0x48) if kind == "ue4m3" else (124, 132)
     return _pack4(rng.integers(lo, hi, size=shape + (4,), dtype=np.uint32))
 
 
-def _reg_words(t: tuple[str, int], fmt: str, rng, lanes: int, small: bool = False) -> np.ndarray:
+def _reg_words(t: tuple[str, int], fmt: str, rng: np.random.Generator, lanes: int, small: bool = False) -> np.ndarray:
     if t[0] == "d":
         v = operand_words("f64", rng, (lanes, NSETS, t[1]))
         return v.view(np.uint32).reshape(lanes, NSETS, 2 * t[1])
@@ -850,15 +860,15 @@ def tensor_inputs(form: Form, threads: int, seed: int) -> np.ndarray:
     return out
 
 
-def _f32w(v) -> np.ndarray:
+def _f32w(v: ArrayLike) -> np.ndarray:
     return np.asarray(v, np.float32).view(np.uint32)
 
 
-def _f64w(v) -> np.ndarray:
+def _f64w(v: ArrayLike) -> np.ndarray:
     return np.ascontiguousarray(v, np.float64).view(np.uint32)
 
 
-def simt_inputs(op: Op, threads: int, seed: int) -> np.ndarray:
+def simt_inputs(op: SimtMultiplier, threads: int, seed: int) -> np.ndarray:
     """u32[threads][SIMT_CH][words]: (x, y[, z]) per chain, in the op's domain: FMA chains x <- x*y + z with y in [0.5, 0.99) and z
     small (x converges, finite), multiply chains with y = +-1, integer chains uniform random words."""
     rng = np.random.default_rng([seed, 7, _seed(op.name)])
@@ -875,7 +885,7 @@ def simt_inputs(op: Op, threads: int, seed: int) -> np.ndarray:
         two = lambda lo, hi: np.stack([_f32w(rng.uniform(lo, hi, sh)), _f32w(rng.uniform(lo, hi, sh))], -1)  # noqa: E731
         return np.concatenate([two(1, 2), two(0.5, 0.99), two(2**-4, 2**-3)], -1).astype(np.uint32)
     elif op.fmt in ("hfma2", "bfma2", "hmul2"):
-        def pack(lo, hi, sign=False):
+        def pack(lo: float, hi: float, sign: bool = False) -> np.ndarray:
             v = rng.uniform(lo, hi, sh + (2,)) * (rng.choice([-1.0, 1.0], sh + (2,)) if sign else 1.0)
             if op.fmt == "bfma2":
                 bits = (v.astype(np.float32).view(np.uint32) >> 16).astype(np.uint32)
@@ -898,14 +908,14 @@ def simt_inputs(op: Op, threads: int, seed: int) -> np.ndarray:
     return out
 
 
-def inputs(form, threads: int, seed: int) -> np.ndarray:
+def inputs(form: Form | SimtMultiplier, threads: int, seed: int) -> np.ndarray:
     return tensor_inputs(form, threads, seed) if form.tensor else simt_inputs(form, threads, seed)
 
 
 # ------------------------------------------------------------------------------------------------------------------------ device
 
 class F1Device:
-    def __init__(self, so: Path, kernels: list[str]):
+    def __init__(self, so: Path, kernels: list[str]) -> None:
         self.lib = lib = ctypes.CDLL(str(so))
         V, I, L = ctypes.c_void_p, ctypes.c_int, ctypes.c_longlong
         lib.f1_device.argtypes = [ctypes.POINTER(I)] * 4
@@ -953,7 +963,8 @@ class F1Device:
             raise RuntimeError(f"f1_occupancy({name}) rc={rc}")
         return n.value
 
-    def run(self, name: str, slot: int, nblocks: int, tpb: int, iters: int, want: bool = False):
+    def run(self, name: str, slot: int, nblocks: int, tpb: int, iters: int,
+            want: bool = False) -> tuple[float, np.ndarray | None, np.ndarray]:
         ms = ctypes.c_float()
         sink = np.zeros(nblocks * tpb * 2, np.uint32) if want else None
         cyc = np.zeros(nblocks, np.int64)
@@ -973,26 +984,26 @@ class FakeF1:
 
     SMS, MHZ = 188, 2000.0
 
-    def __init__(self, kernels: list[str]):
+    def __init__(self, kernels: list[str]) -> None:
         self.index = {n: i for i, n in enumerate(kernels)}
 
     def identity(self) -> dict:
         return {"device": "FAKE SILICON", "compute_capability": "12.0", "driver": None, "gpu_uuid": "GPU-fake", "backend": "fake",
                 "cuda_visible_devices": SHARED.CUDA_VISIBLE_DEVICES}
 
-    def clocks(self, uuid):
+    def clocks(self, uuid: str | None) -> None:
         return None
 
     def device(self) -> dict:
         return {"sms": self.SMS, "max_threads_per_sm": 1536, "cc": "12.0"}
 
-    def alloc(self, nslots, max_threads, max_blocks) -> None:
+    def alloc(self, nslots: int, max_threads: int, max_blocks: int) -> None:
         pass
 
-    def upload(self, slot, words) -> None:
+    def upload(self, slot: int, words: np.ndarray) -> None:
         pass
 
-    def occupancy(self, name, tpb) -> int:
+    def occupancy(self, name: str, tpb: int) -> int:
         return 4 if BY_NAME[name].tensor else 6
 
     def _products_per_sm_clk(self, name: str) -> float:
@@ -1002,7 +1013,8 @@ class FakeF1:
         base = 8192 / 4  # dense NVFP4: 2,048 products per SM per clock
         return base * (1.0 if f.family == "fp4" else 0.5 if f.family in ("f8f6f4", "mxf8f6f4", "fp8", "int") else 0.25)
 
-    def run(self, name, slot, nblocks, tpb, iters, want=False):
+    def run(self, name: str, slot: int, nblocks: int, tpb: int, iters: int,
+            want: bool = False) -> tuple[float, np.ndarray | None, np.ndarray]:
         f = BY_NAME[name]
         per_launch = iters * (BODY * nblocks * tpb // 32 * f.products if f.tensor else SIMT_CH * SIMT_U * nblocks * tpb * f.products)
         cycles = per_launch / self.SMS / self._products_per_sm_clk(name)
@@ -1018,7 +1030,7 @@ class FakeF1:
 
 # ------------------------------------------------------------------------------------------------------------------------- run
 
-def grid(form, d: dict, occ: int) -> dict:
+def grid(form: Form | SimtMultiplier, d: dict, occ: int) -> dict:
     if form.tensor:
         bps = min(4, occ)
         tpb = TENSOR_TPB
@@ -1028,7 +1040,7 @@ def grid(form, d: dict, occ: int) -> dict:
     return {"threads_per_block": tpb, "blocks_per_sm": bps, "blocks": d["sms"] * bps, "warps_per_sm": bps * tpb // 32}
 
 
-def work_per_launch(form, g: dict, iters: int) -> tuple[float, float, float]:
+def work_per_launch(form: Form | SimtMultiplier, g: dict, iters: int) -> tuple[float, float, float]:
     """(instructions, nonzero products, logical MACs) of one launch: warp instructions for tensor forms, thread ops for SIMT."""
     if form.tensor:
         inst = float(iters) * BODY * g["blocks"] * g["threads_per_block"] / 32
@@ -1042,7 +1054,7 @@ def clock_label(samples: list, launch_mhz: list[float], locked_mhz: float | None
     return W.clock_label(samples, launch_mhz, locked_mhz)
 
 
-def run_family(args) -> int:
+def run_family(args: argparse.Namespace) -> int:
     t_all = time.time()
     bdir = Path(os.path.expandvars(args.build))
     out = Path(os.path.expandvars(args.out))
@@ -1146,7 +1158,7 @@ def run_family(args) -> int:
     return finish(out, rec, failures, args, per, t_all)
 
 
-def finish(out: Path, rec: dict, failures: list[str], args, per: dict | None, t_all: float) -> int:
+def finish(out: Path, rec: dict, failures: list[str], args: argparse.Namespace, per: dict | None, t_all: float) -> int:
     rec["failures"] = failures
     rec["elapsed_s"] = time.time() - t_all
     name = f"{args.family}.json" if not args.fake_silicon else f"{args.family}.fake.json"
@@ -1205,7 +1217,7 @@ def scan_lib(path: str, arch: str = "sm_120", timeout_s: float = 1200.0) -> dict
     return rec
 
 
-def scan_libs(args) -> int:
+def scan_libs(args: argparse.Namespace) -> int:
     out = Path(os.path.expandvars(args.out))
     out.mkdir(parents=True, exist_ok=True)
     libs = [x for x in (args.libs.split(",") if args.libs else DEFAULT_LIBS) if x]
@@ -1247,7 +1259,7 @@ def mma_class(op: str) -> str:
     return ".".join(keep)
 
 
-def collect(args) -> int:
+def collect(args: argparse.Namespace) -> int:
     """The price table over every recorded family (each priced against the NVFP4 of its own chunk), the claim's check, the
     ptxas-refused forms, and (with --libscan) every multiply-family opcode NVIDIA's sm_120 libraries use that no F1 form reached."""
     out = Path(os.path.expandvars(args.out))
@@ -1339,7 +1351,7 @@ def collect(args) -> int:
     return 0 if ok else 1
 
 
-def build_cmd(args) -> int:
+def build_cmd(args: argparse.Namespace) -> int:
     out = Path(os.path.expandvars(args.out))
     names = [x for x in args.forms.split(",") if x] if args.forms else None
     rec = build(out, names, args.jobs)

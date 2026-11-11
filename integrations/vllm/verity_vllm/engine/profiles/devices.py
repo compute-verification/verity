@@ -2,16 +2,26 @@
 keys by it.
 
 vLLM keys its tuned kernel configs by that name (`get_device_name_as_file_name`: GLM-5.3's fused-MoE tiles, `program.registry.fp8_moe`),
-so a GPU-free Build answers its row's (`export_compat.select_cuda_platform`) and reads the config file the class's GPU does.  On a
-class not listed the platform answers nothing, and a construction that reads the name fails there by name.  `FUSED_MOE_CONFIGS` holds
-the files a prediction reads without vLLM (`predict`)."""
+so a GPU-free Build answers its target's (`export_compat.select_cuda_platform`: a traced request Build's `--device-name`, else its
+row's) and reads the config file that GPU does.  On a class not listed the platform answers nothing, and a construction that reads
+the name fails there by name.  `FUSED_MOE_CONFIGS` holds
+the files a prediction reads without vLLM (`predict`).  `CARD` is the card each served target is registered on, by that name, and
+`NO_CARD` the served targets with no card file yet."""
 from __future__ import annotations
 
 import json
 
+from verity_vllm.config import workload_file
 from verity_vllm.target_family import device_token_of_row
 
 DEVICE_NAME: dict[str, str] = {"h200": "NVIDIA H200"}
+
+#: the card file (`verity.hardware.load`) each served target is registered on, by the name its device reports, which
+#: `acquire.served_device` holds the device to (`served_device.card_of`: a name in neither this nor `NO_CARD` is refused)
+CARD: dict[str, str] = {"NVIDIA H200": "h200-sxm-141gb", "NVIDIA RTX PRO 6000 Blackwell Server Edition": "rtx-pro-6000-server"}
+
+#: the served targets that have no card file yet, by the same name, each with its reason: these alone are held to no card
+NO_CARD: dict[str, str] = {"NVIDIA B200": "no card file yet: verity/hardware/cards has none for the B200"}
 
 #: vLLM d9105ea80's tuned fused-MoE configs (model_executor/layers/fused_moe/configs/<file>, `get_config_file_name`), batch size ->
 #: (BLOCK_SIZE_M, BLOCK_SIZE_N, BLOCK_SIZE_K, GROUP_SIZE_M, num_warps, num_stages); the file below is sha256 ade035ab90cbce92...
@@ -32,8 +42,9 @@ def device_name_of_row(row_id: str) -> str | None:
 
 
 def device_name(workload: str | None) -> str | None:
-    """The name a GPU of the workload's row class reports; None for a class `DEVICE_NAME` does not list or without a workload."""
-    sweep = (json.load(open(workload)).get("sweep") or {}) if workload else {}
+    """The name a GPU of the workload's row class reports; None for a class `DEVICE_NAME` does not list or without a workload.  A
+    stored workload is made present and checked first (`config.workload_file`)."""
+    sweep = (json.loads(workload_file(workload).read_text()).get("sweep") or {}) if workload else {}
     return device_name_of_row(sweep.get("row_id") or "")
 
 

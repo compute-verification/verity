@@ -1,4 +1,22 @@
-import Proofs.Flock.Soundness.LigeritoPadDecode
+module
+
+public import Proofs.Flock.Soundness.LigeritoMid
+public import Proofs.Flock.Soundness.LigeritoPadDecode
+public import Proofs.Flock.Soundness.LigeritoPadLevel0
+import ArkLib.Data.CodingTheory.JohnsonBound.Family
+import ArkLib.Data.CodingTheory.ReedSolomon.MutualCorrelatedAgreement.Johnson.Probability
+import Proofs.Flock.Soundness.Accounting.Fast100
+import Proofs.Flock.Soundness.Accounting.Numbers
+import Proofs.Flock.Soundness.Defs
+import Proofs.Flock.Soundness.Game
+import Proofs.Core.Game.Poly
+import Proofs.Flock.Soundness.LigeritoCoins
+import Proofs.Flock.Soundness.LigeritoQueries
+import Proofs.Flock.Soundness.LigeritoWeights
+import Proofs.Flock.Soundness.LincheckPhase
+import Proofs.Flock.Soundness.NovelBasis
+import Proofs.Flock.Soundness.OpeningPhase
+import Proofs.Flock.Soundness.Rounds
 
 /-!
 # The padded level 0's queries, and on to level 1
@@ -11,6 +29,8 @@ The queries are `phaseA`'s on a column function `v` (`value_queryAndBatchV_le`,
 column, since otherwise it decodes to a family of the list (`decode_pad`), whose claim is false
 (`query_bound_pad`). Its mismatch survives the queries with probability at most `(√ρ' + η)^Q`.
 -/
+
+@[expose] public section
 
 namespace FlockSoundness
 

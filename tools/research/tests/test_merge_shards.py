@@ -200,11 +200,14 @@ def test_a_job_the_commits_ci_toml_declares_that_no_shard_runs_passes_nothing(wo
 
 
 def _off_gate(world):
-    """``world`` with feat's ci.toml also declaring `off`, a job off the gate (`gate = false`, as circuit-check is)."""
+    """``world`` with feat's ci.toml also declaring `off`, a job drive's policy takes off the gate (policy.toml's `off_gate`, as
+    circuit-check is)."""
     main, _tip, _config, store = world
     _git(main, "checkout", "-q", "feat")
-    (main / "tools" / "verity" / "check" / "ci.toml").write_text(CI + '[[job]]\nname = "off"\nowner = "ci"\ngroup = 2\ngate = false\n')
-    _git(main, "commit", "-q", "-am", "off the gate")
+    (main / "tools" / "verity" / "check" / "ci.toml").write_text(CI + '[[job]]\nname = "off"\nowner = "ci"\ngroup = 2\n')
+    (main / "tools" / "verity" / "check" / "policy.toml").write_text('schema = "policy/v0"\noff_gate = ["off"]\n')
+    _git(main, "add", "-A")
+    _git(main, "commit", "-q", "-m", "off the gate")
     tip = _git(main, "rev-parse", "HEAD")
     _git(main, "checkout", "-q", "main")
     return main, tip, _git(main, "rev-parse", f"{tip}:tools/verity/check"), store

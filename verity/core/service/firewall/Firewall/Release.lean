@@ -1,23 +1,28 @@
 /-
 # One outer session's stages, held to the record's rules
 
-Take the slot, then admit the session (`seat`, `Firewall.Record`); `prove` runs it up to the barrier where its proofs
+Take the slot, then admit the session and the registrations its statement reads (`seat`, `Firewall.Record`); `prove`
+runs it up to the barrier where its proofs
 would leave, `ready` is the send check's verdict on what it proved, then at its release time if it has one (a missed time
 is a stop) the proofs are sent (`Decision.after`), and the challenger's verdict decides release or stop (`settle`).
-`decide` is everything before the send: the firewall's own decision, which `Firewall.Protocol` checks with the send check
+`decide` is everything before the send: the ZK server's own decision, which `Firewall.Protocol` checks with the send check
 as `Flock.Firewall.Contract.run`. The prover and the send check are given as what they returned, a fault included: a fault
-anywhere is a stop, never the firewall's end. Each of the session's ops on the record is one `Record.op`, which reads the
-record again: an error is a record the firewall can't read, and the session ends there with nothing sent.
+anywhere is a stop, never the ZK server's end. Each of the session's ops on the record is one `Record.op`, which reads the
+record again: an error is a record the ZK server can't read, and the session ends there with nothing sent.
 `Firewall.Loop` runs these stages on the record's file around the session loop (`core-firewall session`), and the
 difftest's `outer` (`Firewall.Json`) runs them in turn on a record and a clock it is given.
 -/
-import Firewall.Record
+module
+
+public import Firewall.Record
+
+@[expose] public section
 
 namespace Core.Firewall
 
 open Flock (V)
 
-/-- What a step outside the firewall (the prover, the send check) returned. -/
+/-- What a step outside the ZK server (the prover, the send check) returned. -/
 inductive Run where
   | ok
   | err (why : String)
@@ -27,7 +32,7 @@ inductive Run where
 
 def faultWhy (msg : String) : String := s!"the firewall's fault (a panic: {String.ofList (msg.toList.take 200)})"
 
-/-- The firewall's decision on an admitted or refused outer session, before anything is sent. -/
+/-- The ZK server's decision on an admitted or refused outer session, before anything is sent. -/
 inductive Decision where
   /-- refused before the prover ran: nothing reaches the challenger -/
   | refused (why : String)
@@ -51,10 +56,18 @@ def Decision.after (a : Admitted) (now : Nat) (prove ready : Run) : Decision :=
       | some t => if now > t then .stop s!"missed its release time ({now} ms, after {t} ms)" else .go a
       | none => .go a
 
-/-- The session's ops once it holds the slot: the slot's events, then its admission, and the record after them. -/
-def seat (r : Record) (s part : String) : V (Except String Admitted × Record) := do
+/-- The session's ops once it holds the slot: the slot's events, then its admission and, given `reads` (the registrations
+its statement reads, on the events), its registrations' (`admitReads`) on the same read of the record, and the record
+after them. -/
+def seat (r : Record) (s part : String) (reads : Option (Events → Except String (Array Nat)) := none) :
+    V (Except String Admitted × Record) := do
   let ((), r) ← r.op fun evs => ((), slot evs s part)
-  r.op (admit · s part)
+  r.op fun evs => match admit evs s part, reads with
+    | (.ok a, evs), some f =>
+      match admitReads evs s part (f evs) with
+      | (.ok (), evs) => (.ok a, evs)
+      | (.error why, evs) => (.error why, evs)
+    | x, _ => x
 
 /-- Everything before the send, at time `now` (ms): the decision and the record after it. A stop's event is not yet
 recorded (`stopAt` records it). -/

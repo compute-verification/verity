@@ -1,6 +1,7 @@
-import Mathlib.Data.Fintype.Card
-import Mathlib.Data.Finset.Card
-import Definitions.Core.Boolean
+module
+
+public import Definitions.Core.Boolean
+public import Mathlib.Data.Fintype.Card
 
 /-!
 # Partitions of a circuit, and the correctness of a unit
@@ -18,9 +19,9 @@ inputs (`Partition.Correct`): evaluate `u`'s gates in order, reading every other
 The lemmas about them (composition, congruence, refinement) are in `Proofs.Flock.Soundness.Audit.Circuit`.
 -/
 
-namespace FlockSoundness.Audit
+@[expose] public section
 
-namespace Circuit
+namespace Verity.Boolean.Circuit
 
 variable (C : Circuit)
 
@@ -33,17 +34,19 @@ inductive Feeds : Fin C.N → Fin C.N → Prop
   | refl (t : Fin C.N) : Feeds t t
   | step {g h t : Fin C.N} : g ∈ (C.op h).args → Feeds h t → Feeds g t
 
-end Circuit
+end Verity.Boolean.Circuit
+
+namespace FlockSoundness.Audit
 
 /-- A partition of a circuit's computed gates into `n` units; the input gates are the input unit
 (`none`). -/
-structure Partition (C : Circuit) (n : ℕ) where
+structure Partition (C : Verity.Boolean.Circuit) (n : ℕ) where
   unit : Fin C.N → Option (Fin n)
   input_iff : ∀ g, unit g = none ↔ (C.op g).isInput = true
 
 namespace Partition
 
-variable {C : Circuit} {n : ℕ} (P : Partition C n)
+variable {C : Verity.Boolean.Circuit} {n : ℕ} (P : Partition C n)
 
 open Classical in
 /-- The committed wires: inputs, outputs, and every gate that a gate of another unit reads. -/
@@ -60,7 +63,7 @@ def Correct (X : Fin C.N → Bool) (u : Fin n) : Prop :=
   ∀ g ∈ P.committed, P.unit g = some u → X g = P.localEval X u g
 
 open Classical in
-/-- The wrong units of a transcript. -/
+/-- The incorrect proof blocks of a transcript. -/
 noncomputable def wrong (X : Fin C.N → Bool) : Finset (Fin n) :=
   Finset.univ.filter fun u => ¬ P.Correct X u
 

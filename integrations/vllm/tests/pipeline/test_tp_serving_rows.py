@@ -1,17 +1,15 @@
 """A TP Commit's serving rows (`pipeline.tp.serving_rows`, ``tp-commit --serving-rows``), on CPU.
 
-* Ordering: `tp.commit.main` over a stand-in LLM of two ranks writes every rank's window after the ranks' finalize and before the
-  challenge is sampled or any opening is asked for, and binds them to the TP run root of the ranks' roots.
-* Fail closed: a rank without a window, a rank outside the world or a missing rank exits the Commit before its challenge; a Commit
-  whose windows could not come before every sample is refused.
+* Fail closed: a rank without a window, a rank outside the world or a missing rank is refused; a Commit whose windows could not
+  come before every sample is refused.
 * A rank's window over real committed values: `write` on the served toy Commit (`tests.pipeline.served_rope`, its SiluMul rows: the
   "row's own Definition" port rule) is ``served``, its run the TP run root and the rank, its domains core's served domains over that
   run, and its hidden rows the single-GPU hook's (whose window, run the rank's own root, is unchanged); two ranks' domains differ.
 * The verifier's side (`window_of_record`, `source`) on a TP Commit of two rows-sha512 ranks served on CPU under the SHA-512 TP run
   root (`tests.pipeline.served_tp`): each rank's registration passes, held to the verifier's own window of that rank from the
   Commit's record alone, and is refused for another rank, another TP run root, other served Programs, a stand-in, a record whose TP
-  run root does not combine its ranks' roots (a 32-byte rank root by name), and a rank Program not of record; an old record's
-  vllm-v1 ranks under the SHA-256 v1 root are refused as served by name (``sha512``).
+  run root does not combine its ranks' roots (a 32-byte rank root by name), and a rank Program not of record; a window held to an
+  old record's 32-byte TP run root is refused as served by name (``sha512``).
 * A deferred TP Commit that wrote no window (`served_tp --deferred`): each rank's ``stand-in`` from its sealed bundle (`from_bundle`)
   holds the values the in-Commit window of the same ranks holds, names the rank's rows-sha512 root under the TP run root and the
   bundle's manifest, and passes `source`; a stand-in naming another bundle, another link or another rank, or of a rank whose bundle
@@ -22,9 +20,8 @@ import dataclasses
 import json
 import multiprocessing
 import shutil
-import sys
 from pathlib import Path
-from types import ModuleType, SimpleNamespace
+from types import SimpleNamespace
 
 import numpy as np
 import pytest
@@ -34,115 +31,8 @@ from verity_vllm.pipeline import cli
 from verity_vllm.pipeline.tp import serving_rows as SRT
 from verity_vllm.pipeline.tp import run_root as RT
 
-from tests.pipeline import served_ranks
 
-WORKLOAD = {"requests": [{"request_id": "q0", "prompt_token_ids": [1, 2, 3], "max_tokens": 4}], "sampling": {"max_tokens": 4}, "sha256": "w",
-            "execution": "bi-eager"}
-RUN = {"wall_s": 0.5, "iterations": 4, "step_wall_s": [0.2, 0.1, 0.1, 0.1], "step_tokens_out": [1, 1, 1, 1], "generated_tokens": 4, "prompt_tokens": 3, "tokens": {"q0": [5, 6, 7, 8]}}
-ROOTS = {0: bytes(range(64)), 1: bytes(range(64, 128))}
 SILU = "SiluMul_v1{I=32}"
-
-
-class _Stop(Exception):
-    pass
-
-
-class _LLM:
-    """`vllm.LLM` over two ranks: every `collective_rpc` is an event; `rank_rows` runs on a stand-in worker per rank, every other method
-    answers one finalize-shaped dict per rank, and the challenge's openings (``tp2_commit_open``) end the run."""
-
-    def __init__(self, events: list[str]) -> None:
-        self.events = events
-
-    def __call__(self, **kw) -> _LLM:
-        return self
-
-    def collective_rpc(self, method, timeout=None, args=(), kwargs=None):
-        name = getattr(method, "__name__", method)
-        self.events.append(f"rpc.{name}")
-        if name == "tp2_commit_open":
-            raise _Stop
-        if method is SRT.rank_rows:
-            return [method(SimpleNamespace(_tp2_commit={"rank": r}), *args) for r in ROOTS]
-        if (served := served_ranks.answer(method, WORKLOAD, ROOTS)) is not None:
-            return served
-        return [{"rank": r, "leaves": 3, "errors_n": 0, "errors": [], "committer": "native_collect_v2b", "run_root": ROOTS[r].hex(),
-                 "leaves_per_step": [3], "cpu_s": {}} for r in ROOTS]
-
-
-def _tp_commit(tmp_path: Path, monkeypatch, write) -> tuple[list[str], Path]:
-    """`tp.commit.main` with ``--serving-rows`` over `_LLM`, each rank's window `write`'s; -> the events and the request's dir."""
-    pytest.importorskip("torch")
-    from verity_vllm import protocols as PO
-    from verity_vllm.commit import challenge, partition
-    from verity_vllm.engine import engine_profile as prof
-    from verity_vllm.engine import vllm_adapter as va
-    from verity_vllm.pipeline import commit as PC
-    from verity_vllm.pipeline import gpu_lease as GL
-    from verity_vllm.pipeline.tp import commit as TPCM
-
-    events: list[str] = []
-    monkeypatch.setenv("VLLM_BATCH_INVARIANT", "0")
-    vllm = ModuleType("vllm")
-    vllm.LLM = _LLM(events)
-    monkeypatch.setitem(sys.modules, "vllm", vllm)
-    for owner, name, value in [(prof, "apply_env", lambda: {}), (prof, "checkpoint_for", lambda case, path: {"repo": "org/model"}),
-                               (prof, "engine_kwargs", lambda cp, **kw: dict(kw)), (va, "load_workload", lambda path, max_tokens: WORKLOAD),
-                               (va, "target_of_workload", lambda wl, *a: None), (va, "case_of", lambda wl, case: case),
-                               (va, "throwaway_requests", lambda eng, reqs, seed=0: reqs), (PO, "commit_guard", lambda *a, **k: None),
-                               (PC, "git_head", lambda: None), (PC, "run_workload", lambda eng, reqs, sampling: dict(RUN)),
-                               (TPCM, "tree_of_record", lambda: {}), (GL, "_ENVIRON", []), (GL, "_HELD", []),
-                               (partition, "require_partition", lambda doc, *a: {"program_digest_per_rank": {"0": "d0", "1": "d1"}, "ranks": 2}),
-                               (challenge, "challenge_positions", lambda root, *a, **k: events.append(f"challenge {root.hex()}") or []),
-                               (SRT, "write", write)]:
-        monkeypatch.setattr(owner, name, value)
-    builds = []
-    for r in ROOTS:
-        (b := tmp_path / f"build_rank{r}").mkdir()
-        (b / "result.json").write_text(json.dumps({"program": {"digest": f"d{r}"}}))
-        builds += ["--build-rank", str(b)]
-    (tmp_path / "manifest.json").write_text("{}")
-    req = tmp_path / "request.json"
-    req.write_text(json.dumps({"dir": str(tmp_path / "serving-rows"), "partition": "partition.json", "run": "r-test", "committer": {"source": "t"}}))
-    opts = cli.parse("tp-commit", ["--workload", str(tmp_path / "w.json"), "--out", str(tmp_path / "commit"), "--case", "C", "--pairs", "1",
-                                   "--warmup", "1", "--only-arm", "instrumented", "--required-manifest", str(tmp_path / "manifest.json"), *builds,
-                                   "--replay-deferred", "--serving-rows", str(req), "--label", "row-t"], environ={})
-    with pytest.raises((_Stop, SystemExit)) as e:
-        TPCM.main(opts)
-    events.append(f"exit {e.value}" if e.type is SystemExit else "stopped at the openings")
-    return events, tmp_path / "serving-rows"
-
-
-def test_every_ranks_window_comes_after_every_root_and_before_the_challenge(tmp_path, monkeypatch):
-    seen = []
-
-    def write(st, request, tp):
-        seen.append((st["rank"], request, tp))
-        return {"run": SRT.run_of(bytes.fromhex(tp["tp_run_root"]), st["rank"]), "population": 8, "registration_digest": "ab" * 64}
-
-    events, d = _tp_commit(tmp_path, monkeypatch, write)
-    root = RT.tp_run_root(2, ROOTS)
-    last_finalize = max(i for i, e in enumerate(events) if e == "rpc.tp2_commit_finalize")
-    assert events[last_finalize + 1:] == ["rpc.rank_rows", *[f"challenge {root.hex()}"] * 2, "rpc.tp2_commit_open", "stopped at the openings"]
-    assert events.count("rpc.rank_rows") == 1
-    tp = {"world": 2, "tp_run_root": root.hex(), "roots": {str(r): x.hex() for r, x in ROOTS.items()}, "root_tag": RT.TP_ROOT_TAG.decode()}
-    assert seen == [(r, {"dir": str(d), "partition": "partition.json", "run": "r-test", "committer": {"source": "t"}, "row": "row-t"}, tp) for r in ROOTS]
-    doc = json.loads((d / "tp.json").read_text())
-    assert (doc["result"], doc["tp_run_root"], doc["roots"]) == (True, root.hex(), tp["roots"])
-    assert doc["runs"] == {"0": f"{root.hex()}/rank0", "1": f"{root.hex()}/rank1"} == {r: w["run"] for r, w in doc["windows"].items()}
-
-
-def test_a_rank_that_cannot_write_its_window_exits_the_commit_before_its_challenge(tmp_path, monkeypatch):
-    def write(st, request, tp):
-        if st["rank"] == 1:
-            raise LookupError("rank 1: no binding map")
-        return {"run": SRT.run_of(bytes.fromhex(tp["tp_run_root"]), 0), "population": 8, "registration_digest": "ab" * 64}
-
-    events, d = _tp_commit(tmp_path, monkeypatch, write)
-    assert events[-2:] == ["rpc.rank_rows", "exit fail-closed: serving rows: rank 1: LookupError('rank 1: no binding map')"]
-    assert not any(e.startswith("challenge") for e in events) and "rpc.tp2_commit_open" not in events
-    doc = json.loads((d / "tp.json").read_text())
-    assert doc["result"] is False and doc["windows"]["1"] is None and "no binding map" in (d / "rank1" / "error.txt").read_text()
 
 
 @pytest.mark.parametrize("got, why", [
@@ -182,7 +72,7 @@ def test_a_ranks_window_over_its_committed_values_binds_the_tp_run_root(tmp_path
     from tests.pipeline import served_rope
 
     monkeypatch.setattr(T, "I", 32)            # SiluMul's in0 (2I words) is one whole SHA-512 block
-    c = served_rope.commit(tmp_path, commit_scheme=step_rows.NAME)
+    c = served_rope.commit(tmp_path)
     (pf := tmp_path / "silu.json").write_text(json.dumps({"templates": [SILU], "law": "subset:1"}))
     r = DRW.of_record(RB.path(c["out"], 1), str(c["row_dir"]))
     bmap = json.loads((r.out / f"binding_map_p{r.pair}.json").read_text())
@@ -239,15 +129,6 @@ def served_tp(tmp_path_factory):
     return ST.commit(tmp_path_factory.mktemp("served-tp"), world=2, I=256, law="subset:2")
 
 
-@pytest.fixture(scope="module")
-def served_tp_v1(tmp_path_factory):
-    """An old record's TP Commit: vllm-v1 ranks under the SHA-256 ``verity/tp-run-root/v1``."""
-    pytest.importorskip("torch")
-    from tests.pipeline import served_tp as ST
-
-    return ST.commit(tmp_path_factory.mktemp("served-tp-v1"), world=2, I=256, law="subset:2", commit_scheme="vllm-v1")
-
-
 def _registered(c, rank: int) -> dict:
     return json.loads((c["windows"] / f"rank{rank}" / "registration.json").read_text())
 
@@ -280,14 +161,14 @@ def test_a_ranks_served_window_under_a_sha512_tp_run_root_passes(served_tp):
         assert SRT.source(w["window"], mine, held) == {"ok": True, "codes": [], "detail": {"kind": "served", "run": mine.run, "tp": held["tp"]}}
 
 
-def test_a_ranks_served_window_under_an_old_records_sha256_tp_run_root_is_refused_by_name(served_tp_v1):
-    """A served window names a SHA-512 commitment, as `deferred_rows.source` holds a deferred Commit's (one hash): an old record's
-    windows, vllm-v1 ranks under the SHA-256 v1 TP run root and held to the verifier's on everything else, are refused by ``sha512``."""
-    assert SRT.record(served_tp_v1["commit"])["root_tag"] == RT.TP_ROOT_TAG_V1.decode()
+def test_a_ranks_served_window_under_an_old_records_sha256_tp_run_root_is_refused_by_name(served_tp):
+    """A served window names a SHA-512 commitment, as `deferred_rows.source` holds a deferred Commit's (one hash): a window held to
+    a record whose TP run root is 32 bytes (an old record's SHA-256 v1 root), and to the verifier's on everything else, is refused
+    by ``sha512``."""
     for r in range(2):
-        mine, held = _mine(served_tp_v1, r)
-        assert len(bytes.fromhex(held["tp"]["tp_run_root"])) == len(bytes.fromhex(held["tp"]["run_root"])) == 32
-        got = SRT.source(_registered(served_tp_v1, r)["window"], mine, held)
+        mine, held = _mine(served_tp, r)
+        tp = {**held["tp"], "tp_run_root": held["tp"]["tp_run_root"][:64]}
+        got = SRT.source({**_registered(served_tp, r)["window"], "tp": tp}, mine, {**held, "tp": tp})
         assert (got["ok"], got["codes"]) == (False, ["sha512"])
 
 

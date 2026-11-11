@@ -1,11 +1,27 @@
-import Proofs.Flock.Soundness.Discharge.ZkExec.Compiled
-import Proofs.Flock.Soundness.Discharge.ZkExec.Shape
-import Proofs.Flock.Soundness.Discharge.PlaysCoin.Decodes
+module
+
+public import Proofs.Flock.Soundness.Discharge.PlaysCoin.Decodes
+public import Proofs.Flock.Soundness.Discharge.PlaysCoin.Statements
+public import Proofs.Flock.Soundness.Discharge.ZkExec.Compiled
+public import Proofs.Flock.Soundness.Discharge.ZkExec.Shape
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
 
 /-!
 # The coin half of `DecodesZK` at the compiled `--zk` table
 
-`DecodesZK` (R11b at `--zk`) at `Discharge/ZkLink`'s compiled table, with each round's coin step `coinMsg true`
+`DecodesZK` (the decoder premise at `--zk`) at `Discharge/ZkLink`'s compiled table, with each round's coin step `coinMsg true`
 (`one := fun _ _ _ => true`), from its message half alone. `Discharge/PlaysCoin`'s `decodesOfRunsAt` turns each rep's
 `RepRun` along a spine that holds where the run ends (`SpineAt`) into `Decodes`. At the compiled rep that spine is
 `repShapeZ` at every result whose Ligerito part is not a reject (`repZCAt_spineAt`), and a table that accepts has no
@@ -14,10 +30,12 @@ such result (`accZ_lig`).
 * `RunsZC`: the message half, named. On every live outcome flock-verify `--zk` accepts, each rep has a `RepRun` on its
   rounds along `repShapeZ`, with `fin`'s messages as the tail, and the compiled table accepts at the two runs' ends.
 * `decodesZK_of_runsZC`: `RunsZC` gives `DecodesZK` at the compiled table.
-* `RunsOnZC`, `decodes_of_runsOnZC`: the same at the law's draws only, for a decoder that is right only where the
-  challenger's draws are (`DrawOkZK` at `L.draw ω`).
+* `RunsOnZC`, `decodes_of_runsOnZC`: the same at the sampling design's samples only, for a decoder that is right only where the
+  challenger's samples are (`DrawOkZK` at `L.draw ω`).
 * `zk_headline_exec_zc_runs`: `zk_headline_exec_zc_execOS` with `RunsZC` in place of `hdec`.
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Discharge.ZkExec
 
@@ -50,7 +68,7 @@ variable (I : Inputs) (wr : Finset (Fin n) → Reg → LiveOut mPts → Exec.Tra
   (fin : Finset (Fin n) → Reg → Fin 2 → Array ByteArray → List Msg)
   (capOf : Finset (Fin n) → Reg → ByteArray → Fin 1 → Cap D) (N : ℕ)
 
-/-- **The message half of `DecodesZK` at the compiled `--zk` table**: at every draw and registration, on every live
+/-- **The message half of `DecodesZK` at the compiled `--zk` table**: at every sample and registration, on every live
 outcome whose session directory flock-verify `--zk` accepts, each rep has a `RepRun` on its rounds along `shapeZ`, with
 `fin`'s messages as the tail, and the compiled table accepts at the two runs' ends, with the cap `root_B` decodes to and
 the openings the proof files decode to. -/
@@ -74,7 +92,7 @@ theorem decodesZK_of_runsZC (h : RunsZC A Hs T I wr opn dec fin capOf) :
   exact ⟨pend, _, _, repZCAt_spineAt A Hs (T S R) o.pts 0 hl₀, h₀, repZCAt_spineAt A Hs (T S R) o.pts 1 hl₁, h₁,
     hacc⟩
 
-/-- **`RunsZC` at the law's draws**: `RunsZC`'s conclusion at the draws `L.draw ω` only, on every live outcome whose
+/-- **`RunsZC` at the sampling design's samples**: `RunsZC`'s conclusion at the samples `L.draw ω` only, on every live outcome whose
 session directory flock-verify `--zk` accepts there. -/
 def RunsOnZC (L : Law n) : Prop :=
   ∀ ω R (o : LiveOut mPts), AcceptsZK I (wr (L.draw ω) R o) →
@@ -87,7 +105,7 @@ def RunsOnZC (L : Law n) : Prop :=
         (outZ Hs T (L.draw ω) R (capOf (L.draw ω) R o.rootB) pend (opn (L.draw ω) R o.proofs)) = true
 
 omit [Fintype K] in
-/-- **`Decodes` at the law's draws from `RunsOnZC`** (`decodesZK_of_runsZC` at `L.draw ω`), with
+/-- **`Decodes` at the sampling design's samples from `RunsOnZC`** (`decodesZK_of_runsZC` at `L.draw ω`), with
 `one := fun _ _ _ => true`. -/
 theorem decodes_of_runsOnZC {L : Law n} (h : RunsOnZC A Hs T I wr opn dec fin capOf L) (ω : L.Ω) (R : Reg) :
     Decodes (outZ Hs T (L.draw ω) R) (fun o => AcceptsZK I (wr (L.draw ω) R o))
@@ -100,11 +118,11 @@ theorem decodes_of_runsOnZC {L : Law n} (h : RunsOnZC A Hs T I wr opn dec fin ca
   exact ⟨pend, _, _, repZCAt_spineAt A Hs (T (L.draw ω) R) o.pts 0 hl₀, h₀,
     repZCAt_spineAt A Hs (T (L.draw ω) R) o.pts 1 hl₁, h₁, hacc⟩
 
-variable {C : Circuit} (P : Partition C n) (tab : (S : Finset (Fin n)) → (R : Reg) → Fin n → Fin (planOne T S R).length)
+variable {C : Verity.Boolean.Circuit} (P : Partition C n) (tab : (S : Finset (Fin n)) → (R : Reg) → Fin n → Fin (planOne T S R).length)
   {decode : DecoderZK (C := C) (planOne T) tab} {Dh : Type} {Hc : List UInt8 → Dh}
   (vb : ZkLink.ValueBindingZ A P (planOne T) tab decode Hc)
 
-/-- **The `--zk` headline at flock-verify's acceptance, at the live draw under A3, from the message half**:
+/-- **The `--zk` headline at flock-verify's acceptance, at the live sample under A3, from the message half**:
 `zk_headline_exec_zc_execOS` with `hrun : RunsZC …` in place of `hdec`, through `decodesZK_of_runsZC`. -/
 theorem zk_headline_exec_zc_runs (hlow : LoweringSoundZK A P (planOne T) tab decode)
     {m : ℕ} (σs : Fin n → Fin m) (ks : Fin m → ℕ) (hks : ∀ s, ks s ≤ (Law.stratum σs s).card)

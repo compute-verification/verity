@@ -66,7 +66,6 @@ def run_case(case: dict, s: model.JobService | None = None, vectors: dict = VECT
         elif "store" in step:
             s.store.attempts.update(json.loads(json.dumps(step["store"].get("attempts", {}))))
             s.store.manifests.update(json.loads(json.dumps(step["store"].get("manifests", {}))))
-            s.store.objects.update(step["store"].get("objects", {}))
         elif "github_push" in step:
             g = step["github_push"]
             s.github.push(g["ref"], g["sha"], g["parents"], g["files"])
@@ -169,7 +168,7 @@ def test_the_gate_reads_only_a_check_declaration_it_can_parse(tool_py, pr, state
 ], ids=["another-tool", "comment", "docstring", "suffix-keyword"])
 def test_the_gate_reads_checks_own_produces_whatever_quotes_one_above_it(above):
     """A pattern for `produces=[...]` took the first one anywhere in main's tool.py: another Tool's, a comment's, a docstring's,
-    or a keyword that merely ends in `produces` (red team, #990).  A bench-result/v1 never lands as a check."""
+    or a keyword that merely ends in `produces`.  A bench-result/v1 never lands as a check."""
     _s, tr, _head = _train_on(above + MAINS, 2, "bench-result/v1")
     assert (tr.state, tr.why) == ("stuck", f"run r9's result is a bench-result/v1, and {trains.TOOL_PY} on main produces check/v1")
     _s, tr, _head = _train_on(above + MAINS, 2)
@@ -188,6 +187,36 @@ def test_the_repositorys_own_check_declaration_parses_to_what_importing_it_decla
     tool = declaration(tmp_path, "check")
     assert trains.declared(text) == (tool.produces, tool.merge_requires)
     assert tool.produces and tool.merge_requires
+
+
+@pytest.mark.parametrize(("base", "ours", "theirs", "merged", "why"), [
+    pytest.param({"guarantees": {"t": "1"}}, {"guarantees": {"t": "1"}}, {"guarantees": {"t": "2", "u": "1"}},
+                 {"guarantees": {"t": "2", "u": "1"}}, [], id="theirs-changed"),
+    pytest.param({"guarantees": {"t": "1"}}, {"guarantees": {}}, {"guarantees": {"t": "1"}}, {"guarantees": {}}, [],
+                 id="ours-removed"),
+    pytest.param({"guarantees": {"t": "1"}}, {"guarantees": {"t": "2"}}, {"guarantees": {"t": "3"}}, {"guarantees": {"t": "3"}},
+                 ["guarantees[t]: changed on both sides, differently: took theirs"], id="both-changed"),
+    pytest.param({"guarantees": {}}, {"guarantees": {"t": "1"}}, {"guarantees": {"t": "2"}}, {"guarantees": {"t": "2"}},
+                 ["guarantees[t]: added on both sides, differently: took theirs"], id="both-added"),
+    pytest.param({"guarantees": {"t": "1"}}, {"guarantees": {}}, {"guarantees": {"t": "2"}}, {"guarantees": {"t": "2"}},
+                 ["guarantees[t]: removed on one side and changed on the other: kept theirs' change"], id="ours-removed-theirs-changed"),
+    pytest.param({"guarantees": {"t": "1"}}, {"guarantees": {"t": "2"}}, {"guarantees": {}}, {"guarantees": {"t": "2"}},
+                 ["guarantees[t]: removed on one side and changed on the other: kept ours' change"], id="ours-changed-theirs-removed"),
+    pytest.param({"upstream": {"watch": {"a": "1"}}, "x": 1}, {"upstream": {"watch": {"a": "2"}}},
+                 {"upstream": {"watch": {"a": "3"}}, "x": 2}, {"upstream": {"watch": {"a": "3"}}, "x": 2},
+                 ["upstream[watch][a]: changed on both sides, differently: took theirs",
+                  "x: removed on one side and changed on the other: kept theirs' change"], id="nested-and-a-section"),
+])
+def test_the_record_merge_never_refuses(base, ours, theirs, merged, why):
+    """Each outcome of merge.py's `one()`, which the train cases reach only as `added on both sides`: where the sides disagree
+    it still merges (lock files never conflict on merge), keeping the changed side over the removed one and theirs' where both
+    changed it, and names the entry with the side taken."""
+    assert trains.merge_record(base, ours, theirs) == (merged, why)
+
+
+def test_the_record_merge_leaves_reads_to_the_sites_port():
+    with pytest.raises(NotImplementedError, match="reads"):
+        trains.merge_record({}, {"reads": {}}, {"reads": {}})
 
 
 FORMS = {"req", "tick", "revoke", "retire", "reconcile", "store", "github_push", "github_label", "expect_github"}

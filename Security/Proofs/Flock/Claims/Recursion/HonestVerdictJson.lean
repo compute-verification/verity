@@ -1,6 +1,49 @@
-import Proofs.Flock.Claims.Recursion.NextR
-import Proofs.Flock.Claims.Complete.Json.Decode
+module
+
+public import Proofs.Flock.Claims.Complete.Json.Decode
+import all Lean.Data.Json.Basic
+import all Init.Data.Array.Basic
+import all Lean.Data.Json.FromToJson.Basic
+public import Proofs.Flock.Claims.Recursion.NextSha
+import Mathlib.Algebra.Order.Floor.Extended
+import Mathlib.Algebra.Order.Interval.Basic
+import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
+import Mathlib.Analysis.SpecialFunctions.Bernstein
+import Mathlib.Analysis.SpecialFunctions.Gamma.Basic
+import Mathlib.Analysis.SpecialFunctions.Trigonometric.DerivHyp
+import Mathlib.Combinatorics.Enumerative.DyckWord
+import Mathlib.Combinatorics.SimpleGraph.Triangle.Removal
+import Mathlib.Data.NNRat.Floor
+import Mathlib.Data.Nat.Choose.Multinomial
+import Mathlib.Data.String.Basic
+import Mathlib.Geometry.Euclidean.Altitude
+import Mathlib.NumberTheory.Chebyshev
+import Mathlib.NumberTheory.Height.NumberField
+import Mathlib.NumberTheory.Height.Projectivization
+import Mathlib.NumberTheory.LucasLehmer
+import Mathlib.NumberTheory.SelbergSieve
+import Mathlib.RingTheory.Radical.NatInt
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Tactic.ReduceModChar
+import Mathlib.Topology.Sheaves.Init
+import Proofs.Flock.Claims.Complete.Json.Canon
+import Proofs.Flock.Claims.Complete.Json.Hex
+import Proofs.Flock.Claims.Complete.Json.Spec
 import Proofs.Flock.Claims.Complete.ZkTables.Decode
+import Proofs.Flock.Claims.Recursion.NextShaDec
+import Std.Data.String.ToNat
 
 /-!
 # The honest record survives the reader's substitutions
@@ -17,13 +60,15 @@ value the record already holds. A value alike the honest record decodes as the p
   whose coin opens to its coins, the link at its own points, each rep stream at its coin offset, the whole record.
 -/
 
+@[expose] public section
+
 namespace FlockComplete.JsonRT
 
 open Flock Transcript FlockComplete
 open Lean (Json JsonNumber)
 
 /-- **A value alike the honest record decodes as `sessOf`**: `decode_recordObj`, read at the value. -/
-theorem decodeJ_recordObj (S : Claims.JsonSpec printJ Flock.canon) {h : ByteArray → ByteArray}
+theorem decodeJ_recordObj {h : ByteArray → ByteArray}
     (h64 : ∀ b, (h b).size = 64) {spec : SessionSpec} {t : String} (ht : spec.tables = #[t])
     (hct : spec.coinTree = none)
     (hdraw : DrawOk spec) (hsig : 0 < spec.sigma.size)
@@ -47,7 +92,7 @@ theorem decodeJ_recordObj (S : Claims.JsonSpec printJ Flock.canon) {h : ByteArra
   obtain ⟨l, hl, hls⟩ := fld_same hs (gR (k := "link") (v := linkObj spec h #[rb] points) (by simp [recordList]))
   unfold Record.decodeJWith
   simp only [hct, pure_bind, liftM, monadLift_self, hkind, hhello, habort, hcfg, hreq, hmode, hl, FlockComplete.ok_bind,
-    beq_self_eq_true, check_true, S.beq_same _ _ (.bool true)]
+    beq_self_eq_true, check_true]
   have gL : ∀ {k v}, (k, v) ∈ linkList spec h #[rb] points → (linkObj spec h #[rb] points).getObjVal? k = .ok v :=
     fun hm => getObjVal?_mkObj (linkList_distinct ..) hm
   have hlm : Record.str l "mode" = .ok "exchange" := str_same hls (gL (by simp [linkList]))
@@ -71,8 +116,8 @@ theorem decodeJ_recordObj (S : Claims.JsonSpec printJ Flock.canon) {h : ByteArra
       rintro ⟨hn, hg, D, hD, hDs⟩ hdvs
       simp only [Option.getD_some] at hdvs
       have hn' : dv ≠ Json.null := fun e => hn (same_null (e ▸ hdvs.symm))
-      obtain ⟨c, hc, -⟩ := S.canon_ok d hg
-      have hc' : canon dv = .ok c := by rw [← S.canon_same _ _ hdvs, hc]
+      obtain ⟨c, hc, -⟩ := FlockComplete.JsonRT.canon_ok d hg
+      have hc' : canon dv = .ok c := by rw [← FlockComplete.JsonRT.canon_same _ _ hdvs, hc]
       rw [ho₂ hn']
       simp only [Draw.check, hc, hc', FlockComplete.ok_bind, bne_self_eq_false, Bool.false_eq_true, ite_false, hD, hDs]
       rfl

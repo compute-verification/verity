@@ -1,9 +1,12 @@
-import Proofs.Flock.Soundness.Discharge.Exec.FramesRep
-import Proofs.Flock.Soundness.Discharge.Exec.Shape
-import Proofs.Flock.Soundness.Discharge.Exec.Decode
+module
+
+public import Proofs.Flock.Soundness.Discharge.Exec.Shape
+public import Proofs.Flock.Soundness.Discharge.Exec.Decode
+public import Proofs.Flock.Soundness.Discharge.Exec.Emit
+import Mathlib.Combinatorics.Matroid.Init
 
 /-!
-# The per-Kind decoder (R11b)
+# The per-Kind decoder, the `dec` that `DecodesAll` asks for
 
 `DecodesAll` asks for a decoder `dec : ℕ → ByteArray → List Msg` from a round's retained bytes to the messages the
 round carries. A round retains the encodings of its chunk's frames (`Exec.RepRounds`), and frames are recoverable from
@@ -16,6 +19,8 @@ its values), or one `.bytes` frame.
 * `coinPat`, `groupPat`, `rdChunks`, `Carries`: a phase's frames carry its messages, in the groups its spine cuts them
   into at its coins, then a tail the proof file carries. `Carries.append` glues two phases.
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Discharge.DecodeZL
 

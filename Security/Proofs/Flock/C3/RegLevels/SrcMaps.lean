@@ -1,7 +1,23 @@
-import Proofs.Flock.C3.RegLevels.Maps
-import Proofs.Flock.C3.RegLevels.ROpensPR
-import Proofs.Flock.C3.Opening.SrcLayer
+module
+
+public import Proofs.Flock.C3.RegLevels.ROpensPR
+public import Proofs.Flock.C3.Opening.SrcLayer
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Tactic.ReduceModChar
 import Proofs.Flock.C3.Opening.ClaimTie
+import Proofs.Flock.Level3.Assembly
 
 /-!
 # n14: R's levels at the tied source, from V*'s sessions
@@ -19,6 +35,8 @@ import Proofs.Flock.C3.Opening.ClaimTie
   Ligerito steps' weave (`lgSteps_of_lig` makes it a play's tape) and the openings, the cap; and the claim tie, in
   `openingReadAt_src`'s form.
 -/
+
+@[expose] public section
 
 namespace FlockC3.Opening
 
@@ -189,7 +207,7 @@ def MapsLeft (M : FlockC3.Reps.StackedMaps stmt Vs) (zs : (s : Fin S) → (Vs s)
   Flock.RecAlgebra.NoEmpty c ∧ capDig (capR sh e0) = cap₀ ∧
     (∀ (rsr : Array Flock.F128) (rs : Flock.RecAlgebra.RsPts Flock.F128) (k₂ : ℕ),
       Flock.RecAlgebra.ringSwitch (msgsO sh w ops) a 0 (Flock.RecAlgebra.CoinSource.ofRounds c) = .ok ((rsr, rs), k₂) →
-      u.op.filterMap Sum.getRight? = ((List.range' 0 k₂).map fun i => c[i]!).map (coinArr fOf)) ∧
+      u.op.filterMap Sum.getRight? = ((List.range' 0 k₂).map fun i => (c)[i]!).map (coinArr fOf)) ∧
     (∀ (rsr : Array Flock.F128) (rs : Flock.RecAlgebra.RsPts Flock.F128) (k₂ : ℕ) (lgr : Array Flock.F128)
       (lg : Flock.RecAlgebra.LgPts) (k₁ : ℕ),
       Flock.RecAlgebra.ringSwitch (msgsO sh w ops) a 0 (Flock.RecAlgebra.CoinSource.ofRounds c) = .ok ((rsr, rs), k₂) →
@@ -198,7 +216,7 @@ def MapsLeft (M : FlockC3.Reps.StackedMaps stmt Vs) (zs : (s : Fin S) → (Vs s)
       OpensAtMaps (readMaps M sh.sched) zs Lb sh (sibsR sh ops sb e) (capR sh e0) (pR sh e0 w ops sb e) lg ∧
       u.lg = FlockSoundness.Discharge.Exec.weave (ligShape GF128 GF256 Dig (holoAt st hp).rsch.sch)
         (ligMsgs (pR sh e0 w ops sb e) capDig sh.sched)
-        (((List.range' k₂ (c.size - k₂)).map (fun i => c[i]!)).map (coinArr fOf))) ∧
+        (((List.range' k₂ (c.size - k₂)).map (fun i => (c)[i]!)).map (coinArr fOf))) ∧
     ∀ ℓ j, u.os.1 2 ℓ j = openRow (pR sh e0 w ops sb e) sh.sched ℓ j
 
 /-- **R's levels at a tied run, from V*'s sessions** at one accepted outer proof: `levelTie_of_maps` at `opsAt` over

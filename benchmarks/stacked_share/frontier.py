@@ -12,7 +12,7 @@ row selection: ``model:`` atoms, one rounding, compare-select or gather unit an 
 property/v1 left free as s8 lanes (attention's QKᵀ and PV, DSA's indexer dots, linear attention's chunked prefill products:
 one unit each, from the shapes; a product an fp term already charges, as SwiGLU's or MoE's combine, isn't charged twice). DSA's served circuit
 (`verity.ml.definitions.registry.dsa_topk`: a Waksman network over the whole history and a top-k check of N f32 scores in one
-primitive) is refused by property/v1 (`Xor3x16`, `DsaTopKOrderCheck` unlisted), so its row selection is costed as gathers,
+primitive) is refused by property/v1 (`Xor3x16`, `DsaTopKLongRowCheck` unlisted), so its row selection is costed as gathers,
 each selected row's words and its index bits. Each term of a composition is one of them times its instances a token, under a
 role; `compose` builds them, `evaluate` sums them, and `check_anchor` holds the composition of Llama-3.1-8B to the units the
 int8 census measured on its whole Program.

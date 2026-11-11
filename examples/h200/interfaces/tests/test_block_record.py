@@ -1,6 +1,7 @@
 """The block record: the fixture records (built by `from-runs` from two all-protocols runs and a wipe run) fit their schema
-and check clean, every derived field is refused when it is not its legs', and a period whose six legs all accept on one
-server composes to accept."""
+and check clean, every derived field is refused when it is not its legs' or its answer's, the verdict is the Lean
+onsite or remote check's answer, undecided when none ran, whatever the legs say, and remote's product composes sampled
+proofs and PoUW alone."""
 from __future__ import annotations
 
 import copy
@@ -14,8 +15,9 @@ import pytest
 from verity_e2e_demo import block_record as R
 
 FIXTURES = Path(__file__).parent / "fixtures"
-SCHEMA = json.loads((Path(R.__file__).parent / "schemas" / "block-record.v1.schema.json").read_text())
-NAMES = ("block-record-r2-period0", "block-record-r1-window10")
+SCHEMA = json.loads((Path(R.__file__).parent / "schemas" / "block-record.v2.schema.json").read_text())
+NAMES = ("block-record-r2-period0", "block-record-r1-window10", "block-record-b71a-w30")
+ONSITE = {"protocol": "verity/onsite/v0", "verdict": "accept", "reason": None, "commitment": "ab" * 64, "public": None}
 
 
 def _load(name: str) -> dict:
@@ -35,18 +37,21 @@ def test_period0_is_five_real_legs_and_a_wipe_elsewhere() -> None:
         "integrity": 299, "pouw": 262144, "pous": 0, "bandwidth": 6963200, "certifier": 15764, "wipe": 268435456}
     assert all(v["source"] == "real" for v in rec["legs"].values())
     c = rec["composed"]
-    assert (c["verdict"], c["missing"], c["elsewhere"]) == ("pending", ["wipe"], ["wipe"])
+    assert (c["verdict"], c["answer"], c["missing"], c["elsewhere"]) == ("undecided", None, ["wipe"], ["wipe"])
     assert Fraction(c["joint_horizon"]["error_sum"]) == (Fraction(1, 2) + Fraction(1, 100) + Fraction(1, 10**6)
                                                          + Fraction(4194729, 2**62))
     assert c["joint_horizon"]["at"]["1/1000000"]["not_established"] == ["certifier"]
     assert all(p["joint_horizon"]["vacuous"] for p in rec["monitoring_period"]["periods"].values())
 
 
-def test_integrity_bounds_are_the_runs() -> None:
-    assert R.integrity_bound(1024, 2, Fraction(1, 2)) == 299
-    assert R.integrity_bound(1024, 64, Fraction(1, 100)) == 68
+def test_integrity_bounds_are_the_profiles_count_bound() -> None:
+    """The integrity line at δ is `profile.Stratified`'s count bound (Lean's `countBound`): the largest K with
+    miss(K) ≥ δ, so at miss = δ exactly (one of 100 units sampled, 99 wrong) it is 99, where the copy this replaced said 98."""
     at = _load("block-record-r1-window10")["legs"]["integrity"]["at"]
     assert (at["1/100"]["value"], at["1/1000000"]["value"]) == (68, 192)
+    q = {"symbol": "integrity bound", "value": 0, "unit": "wrong units", "of": 100, "drawn": 1}
+    assert R.at_deltas("integrity", q, Fraction(1, 2))["1/100"] == {"holds": True, "value": 99, "epsilon": "99/100",
+                                                                    "by": "draw"}
 
 
 def test_the_integrity_bound_counts_a_sampling_term_equal_to_delta() -> None:
@@ -59,7 +64,29 @@ def test_the_integrity_bound_counts_a_sampling_term_equal_to_delta() -> None:
 def test_a_flipped_leg_verdict_is_refused() -> None:
     rec = copy.deepcopy(_load("block-record-r2-period0"))
     rec["legs"]["pouw"]["answer"]["verdict"] = "reject"
-    assert set(R.check(rec)) == {"composed:verdict", "composed:legs", "composed:joint_horizon", "monitoring_period"}
+    assert set(R.check(rec)) == {"composed:legs", "composed:joint_horizon", "monitoring_period"}
+
+
+def test_the_verdict_is_the_answers_and_nothing_else() -> None:
+    """A record's verdict is its Lean answer's: an accepting onsite answer with a leg missing is accept, a rejecting one
+    over six accepting legs is reject, and a verdict of the record's own, or an answer of another protocol or with a
+    verdict that is not `Core.Verdict`'s, is refused."""
+    rec = _load("block-record-r2-period0")
+    assert rec["composed"]["missing"] == ["wipe"]
+    for verdict in R.VERDICTS:
+        a = {**ONSITE, "verdict": verdict, "reason": None if verdict == "accept" else "why"}
+        c = R.composed(rec["server"], rec["legs"], a)
+        assert (c["verdict"], c["answer"]) == (verdict, {k: a[k] for k in ("protocol", "verdict", "reason", "commitment")})
+        mine = rec | {"composed": c}
+        jsonschema.Draft202012Validator(SCHEMA).validate(mine)
+        assert R.check(mine) == {}
+    forged = copy.deepcopy(rec)
+    forged["composed"]["verdict"] = "accept"
+    assert R.check(forged) == {"composed:verdict": "not its answer's verdict"}
+    for bad in ({**ONSITE, "protocol": "verity/pouw/period/v1"}, {**ONSITE, "verdict": "pending"}):
+        with pytest.raises(ValueError, match="not an answer of"):
+            R.composed(rec["server"], rec["legs"], bad)
+        assert "composed:answer" in R.check(rec | {"composed": {**rec["composed"], "answer": bad}})
 
 
 def test_a_changed_error_is_refused() -> None:
@@ -115,16 +142,74 @@ def test_the_wipe_is_its_threshold_at_its_reads() -> None:
     assert lg["error"] == f"1/{2 ** 128}" and all(at["holds"] for at in lg["at"].values())
 
 
-def test_six_accepting_legs_on_one_server_compose_to_accept() -> None:
+def test_six_accepting_legs_on_one_server_are_undecided_until_the_lean_check_answers() -> None:
     report, wipe = _accepting_report()
     rec = R.from_period(report, steps=(4, 6), deployment=R.REFERENCE, extra={"wipe": wipe})
     jsonschema.Draft202012Validator(SCHEMA).validate(rec)
     assert R.check(rec) == {}
-    assert (rec["composed"]["verdict"], rec["composed"]["missing"], rec["composed"]["onsite"]) == ("accept", [], None)
+    assert (rec["composed"]["verdict"], rec["composed"]["missing"], rec["composed"]["answer"]) == ("undecided", [], None)
+    decided = R.from_period(report, steps=(4, 6), deployment=R.REFERENCE, answer=ONSITE, extra={"wipe": wipe})
+    assert R.check(decided) == {} and decided["composed"]["verdict"] == "accept"
     assert rec["legs"]["wipe"]["source"] == "fixture" and rec["composed"]["joint_horizon"]["outside_statement"] == ["wipe"]
     assert rec["server_time"] == [{"server": report["node"], "steps": [4, 6]}]
     week = rec["monitoring_period"]["periods"]["week"]
     assert week["blocks"] == 12500 * 1008 and week["per_block_error_for"]["1/100"] == str(Fraction(1, 100 * 12500 * 1008))
+
+
+def test_remote_composes_spot_and_pouw_alone_its_other_legs_dropped() -> None:
+    """Remote's product: sampled proofs and PoUW accepted on the block's server, no onsite leg run, compose with the onsite
+    legs named dropped, neither missing nor in the error sum, and are undecided until the remote check answers; as
+    onsite's the same legs miss four. The remote check's answer decides it, and an onsite answer is refused. A record of
+    remote's that ran a leg remote drops, that names no product, or that names an unknown one is refused."""
+    report, _ = _accepting_report()
+    keep = {R.RUNNER_KEYS[leg] for leg in R.PRODUCTS["remote"]}
+    report["protocols"] = {k: v for k, v in report["protocols"].items() if k in keep}
+    rec = R.from_period(report, steps=(4, 6), deployment=R.REFERENCE, product="remote")
+    jsonschema.Draft202012Validator(SCHEMA).validate(rec)
+    assert R.check(rec) == {}
+    c = rec["composed"]
+    assert (c["verdict"], c["answer"], c["product"], c["missing"], c["dropped"]) == (
+        "undecided", None, "remote", [], ["bandwidth", "certifier", "pous", "wipe"])
+    assert c["legs"] == {"integrity": "accept", "pouw": "accept"} and sorted(c["joint_horizon"]["terms"]) == ["integrity", "pouw"]
+    remote = {**ONSITE, "protocol": "verity/remote/v0"}
+    decided = R.from_period(report, steps=(4, 6), deployment=R.REFERENCE, answer=remote, product="remote")
+    jsonschema.Draft202012Validator(SCHEMA).validate(decided)
+    assert R.check(decided) == {} and decided["composed"]["verdict"] == "accept"
+    with pytest.raises(ValueError, match="not an answer of the remote check"):
+        R.from_period(report, steps=(4, 6), deployment=R.REFERENCE, answer=ONSITE, product="remote")
+    with pytest.raises(ValueError, match="not an answer of the onsite check"):
+        R.from_period(report, steps=(4, 6), deployment=R.REFERENCE, answer=remote)
+    onsite = R.from_period(report, steps=(4, 6), deployment=R.REFERENCE)["composed"]
+    assert (onsite["verdict"], onsite["missing"]) == ("undecided", ["bandwidth", "certifier", "pous", "wipe"])
+    full, wipe = _accepting_report()
+    with pytest.raises(ValueError, match="legs the remote product drops"):
+        R.from_period(full, steps=(4, 6), deployment=R.REFERENCE, extra={"wipe": wipe}, product="remote")
+    ran = copy.deepcopy(rec)
+    ran["legs"]["pous"] = R.from_period(full, steps=(4, 6), deployment=R.REFERENCE)["legs"]["pous"]
+    assert R.check(ran) == {"legs": "pous: legs the remote product drops, which the block ran"}
+    unnamed = copy.deepcopy(rec)
+    del unnamed["composed"]["product"], unnamed["composed"]["dropped"]
+    assert set(R.check(unnamed)) == {"composed:missing"}
+    unnamed = copy.deepcopy(decided)
+    del unnamed["composed"]["product"], unnamed["composed"]["dropped"]
+    assert set(R.check(unnamed)) == {"composed:answer"}
+    unknown = copy.deepcopy(rec)
+    unknown["composed"]["product"] = "offsite"
+    assert R.check(unknown) == {"composed:product": "not one of ['onsite', 'remote']"}
+
+
+def test_a_leg_carries_its_answers_placement_and_no_other_profile() -> None:
+    """The certifier's answer names which host ran each party (``profile.placement``): its leg carries that and the
+    record still fits its schema and checks clean; a leg whose profile names no placement carries no profile."""
+    report, wipe = _accepting_report()
+    placement = {"kind": "not-placed", "parties": {"network_certifier": "gate", "prover": "n0", "verifier": "n0"}}
+    row = report["protocols"][R.RUNNER_KEYS["certifier"]]
+    row["answer"] = {**row["answer"], "profile": {**row["answer"]["profile"], "placement": placement}}
+    rec = R.from_period(report, steps=(4, 6), deployment=R.REFERENCE, extra={"wipe": wipe})
+    jsonschema.Draft202012Validator(SCHEMA).validate(rec)
+    assert R.check(rec) == {}
+    assert rec["legs"]["certifier"]["answer"]["profile"] == {"placement": placement}
+    assert all("profile" not in lg["answer"] for k, lg in rec["legs"].items() if k != "certifier")
 
 
 def test_a_report_of_another_format_is_refused() -> None:

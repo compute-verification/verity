@@ -1,5 +1,5 @@
 """Hardware probe for one tensor-core instruction: one ``mma.sync`` (or ``wgmma``) per tile, arbitrary accumulators, captures in
-the golden-record format, compared bit for bit against the pinned ``verity.ml.circuits.silicon.silicon`` model of that instruction.
+the golden-record format, compared bit for bit against the pinned ``verity.ml.circuits.silicon.models`` model of that instruction.
 
 Provenance: ported from veritor ``gpu/tensor-core-semantics/`` (``mma_tiles.cu``, ``tcs_gpu.py``,
 ``validate_tiles.py``: the BF16 kernel, encodings, finite-sweep families, per-element records, multiprocess model comparison,
@@ -103,13 +103,18 @@ import time
 from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 import numpy as np
 
+from verity.ml.circuits.silicon import models as S
 from verity.ml.circuits.silicon import models as TCM
-from verity.ml.circuits.silicon import silicon as S
+from verity.ml.circuits.silicon import term as TM
 from verity.ml.circuits.silicon import total as T
+
+if TYPE_CHECKING:
+    from collections.abc import Iterator, Sequence
+    from multiprocessing.pool import Pool
 
 HERE = Path(__file__).resolve().parent
 N = 8  # every shape here has 8 output columns
@@ -134,7 +139,7 @@ def to_bf16_bits(x: np.ndarray) -> np.ndarray:
     return ((u + 0x7FFF + lsb) >> 16).astype(np.uint16)
 
 
-def random_finite_fp32_bits(rng, n, exp_lo=1, exp_hi=254):
+def random_finite_fp32_bits(rng: np.random.Generator, n: int, exp_lo: int = 1, exp_hi: int = 254) -> np.ndarray:
     e = rng.integers(exp_lo, exp_hi + 1, size=n).astype(np.uint32)
     m = rng.integers(0, 1 << 23, size=n).astype(np.uint32)
     s = rng.integers(0, 2, size=n).astype(np.uint32)
@@ -153,7 +158,7 @@ class Format:
     bias: int
 
     @property
-    def dtype(self):
+    def dtype(self) -> type[np.unsignedinteger]:
         return np.uint16 if self.bits == 16 else np.uint8
 
     @property
@@ -228,7 +233,8 @@ class Format:
         code = np.where(choose_hi, codes[hi], codes[lo]).astype(np.uint8)
         return (code | (np.signbit(x).astype(np.uint8) << 7)).astype(np.uint8)
 
-    def random_finite_bits(self, rng, shape, exp_lo=None, exp_hi=None) -> np.ndarray:
+    def random_finite_bits(self, rng: np.random.Generator, shape: tuple[int, ...], exp_lo: int | None = None,
+                           exp_hi: int | None = None) -> np.ndarray:
         """Uniformly random sign, exponent field in [exp_lo, exp_hi] (default 1 .. finite max) and mantissa; NaN codes repaired
         to the largest finite mantissa (E4M3) -- the BF16 probe's samples."""
 
@@ -265,7 +271,7 @@ def _fp8_positive_table(fmt: Format) -> tuple[np.ndarray, np.ndarray]:
 # --- the instruction table -----------------------------------------------------------------------------------------------------------
 
 
-def _e5m2_product(a: int, b: int) -> S.Term:
+def _e5m2_product(a: int, b: int) -> TM.Term:
     """HYPOTHESIS: exact product of two E5M2 bytes as a 25-bit-scaled :class:`Term`, formed like :func:`silicon.e4m3_product`
     (3x3-bit significands -> 6 bits, shifted by 19; subnormals keep their unnormalised significand at exponent -14).  Exponent
     field 31 (infinities and NaN) is outside the finite model and raises.  The canonical product is silicon-p0's to add."""
@@ -277,27 +283,28 @@ def _e5m2_product(a: int, b: int) -> S.Term:
     sb = (b & 0x3) | (0x4 if eb else 0)
     magnitude = (sa * sb) << 19
     if magnitude == 0:
-        return S.ZERO
-    return S.Term(((a ^ b) >> 7) & 1 == 1, (ea or 1) + (eb or 1) - 30, magnitude)
+        return TM.ZERO
+    return TM.Term(((a ^ b) >> 7) & 1 == 1, (ea or 1) + (eb or 1) - 30, magnitude)
 
 
-PRODUCTS: dict[str, Callable[[int, int], S.Term]] = {"e4m3": S.e4m3_product, "e5m2": _e5m2_product}
+PRODUCTS: dict[str, Callable[[int, int], TM.Term]] = {"e4m3": TM.e4m3_product, "e5m2": _e5m2_product}
 
 
-def tc_dot_with_product(pipeline: S.Pipeline, product: Callable[[int, int], S.Term], acc_bits: int, a, b) -> int:
+def tc_dot_with_product(pipeline: S.GroupSum, product: Callable[[int, int], TM.Term], acc_bits: int, a: Sequence[int],
+                        b: Sequence[int]) -> int:
     """:func:`silicon.tc_dot` with the products formed by ``product`` instead of the pipeline's own (hypothesis models)."""
 
     if len(a) != pipeline.k or len(b) != pipeline.k:
         raise S.InvalidArtifact(f"{pipeline.name} takes {pipeline.k} operand pairs")
-    acc = S.fp32_term(acc_bits)
+    acc = TM.fp32_term(acc_bits)
     start = 0
     for size in pipeline.groups:
         terms = [acc, *(product(a[i], b[i]) for i in range(start, start + size))]
         acc = S.group_sum(terms, width=pipeline.width, zero_exponent=pipeline.zero_exponent)
-        if acc.magnitude and acc.exponent > S.FP32_MAX_EXPONENT:
-            return S.pack_fp32(acc)
+        if acc.magnitude and acc.exponent > TM.FP32_MAX_EXPONENT:
+            return TM.pack_fp32(acc)
         start += size
-    return S.pack_fp32(acc)
+    return TM.pack_fp32(acc)
 
 
 def fp32_add_bits(x: int, y: int) -> int:
@@ -319,7 +326,8 @@ _SM90_LOW_K = [k for k in range(32) if k % 4 in (0, 1)]
 _SM90_HIGH_K = [k for k in range(32) if k % 4 in (2, 3)]
 
 
-def sm90_fp8_mma_lowered(pipeline16: S.Pipeline, product: Callable[[int, int], S.Term], acc_bits: int, a, b) -> int:
+def sm90_fp8_mma_lowered(pipeline16: S.GroupSum, product: Callable[[int, int], TM.Term], acc_bits: int,
+                         a: Sequence[int], b: Sequence[int]) -> int:
     if len(a) != 32 or len(b) != 32:
         raise S.InvalidArtifact("the sm_90a FP8 mma.sync lowering takes 32 operand pairs")
     low = tc_dot_with_product(pipeline16, product, 0, [a[k] for k in _SM90_LOW_K], [b[k] for k in _SM90_LOW_K])
@@ -335,7 +343,7 @@ class Model:
     (:func:`verity.ml.circuits.silicon.total.tc_dot_total`: NaN, infinities and saturation included), so the ``specials`` family is asserted
     too.  ``declared`` models fail validation on any mismatch; the others are HYPOTHESES whose agreement counts are reported."""
 
-    pipeline: S.Pipeline
+    pipeline: S.GroupSum
     product: str | None = None
     declared: bool = True
     lowering: str | None = None
@@ -351,7 +359,7 @@ class Model:
         return {"name": self.name, "pipeline": p.name, "groups": list(p.groups), "width": p.width, "zero_exponent": p.zero_exponent,
                 "product": self.product or p.dtype, "lowering": self.lowering, "declared": self.declared, "total": self.total}
 
-    def evaluate(self, acc_bits: int, a, b) -> int:
+    def evaluate(self, acc_bits: int, a: Sequence[int], b: Sequence[int]) -> int:
         if self.total:
             return T.tc_dot_total(self.pipeline, acc_bits, a, b)
         if self.lowering == SM90_FP8_MMA_LOWERING:
@@ -536,7 +544,8 @@ def _sha256_text(text: str) -> str:
 
 
 class Probe:
-    def __init__(self, so: Path, ins: Instruction, a_source: str | None = None, kernel: str | None = None, k: int | None = None):
+    def __init__(self, so: Path, ins: Instruction, a_source: str | None = None, kernel: str | None = None,
+                 k: int | None = None) -> None:
         """``kernel`` / ``k`` override the instruction's entry point and tile depth (the chained BF16 wgmma kernels, K = 64)."""
 
         self.ins = ins
@@ -624,13 +633,14 @@ def host_identity() -> dict:
 # --- the finite-sweep families ---------------------------------------------------------------------------------------------------------
 
 
-def families(rng, n_random, fmt: Format, M: int, K: int):
+def families(rng: np.random.Generator, n_random: int, fmt: Format, M: int,
+             K: int) -> Iterator[tuple[str, np.ndarray, np.ndarray, np.ndarray, dict | None]]:
     """Yield (name, A (n,M,K), Bt (n,8,K), C (n,M,8), meta) -- the nine families of the Ada validation (unchanged for BF16: the
-    same draws in the same order), the zero-exponent family (BF16) and the FP8-specific families."""
+    same samples in the same order), the zero-exponent family (BF16) and the FP8-specific families."""
 
-    def cast(x):
+    def cast(x: np.ndarray) -> np.ndarray:
         return fmt.from_f32(x.astype(np.float32))
-    def zeros_acc(n):
+    def zeros_acc(n: int) -> np.ndarray:
         return np.zeros((n, M, N), np.uint32)
     fp8 = fmt.bits == 8
 
@@ -726,19 +736,20 @@ def families(rng, n_random, fmt: Format, M: int, K: int):
         yield "zero_acc_tiny_cancellation", a, b, acc, None
 
     # 11-14: the accumulator / adder families of tc-probe-fp8, for every format (pin-bf16 extended them to BF16 with the
-    # format's own parameters; the FP8 draws are the same, in the same order, as before).
+    # format's own parameters; the FP8 samples are the same, in the same order, as before).
     yield from probe_families(rng, fmt, M, K)
 
     if fp8:
         yield from fp8_families(rng, fmt, M, K)
 
 
-def probe_families(rng, fmt: Format, M: int, K: int):
+def probe_families(rng: np.random.Generator, fmt: Format, M: int,
+                   K: int) -> Iterator[tuple[str, np.ndarray, np.ndarray, np.ndarray, dict | None]]:
     """Families 11-14 (tc-probe-fp8 for FP8; pin-bf16 for BF16): the accumulator pass-through, the LSB walk, the special-value
     classes and Hawkeye's adder-width probe.  The accumulator families are format-independent by construction (products are
     zero); the specials table and the adder-width exponents come from the format (``SPECIAL_OPERANDS``, ``adder_width_parameters``)."""
 
-    def zero_ops(n):
+    def zero_ops(n: int) -> tuple[np.ndarray, np.ndarray]:
         return (np.zeros((n, M, K), fmt.dtype), np.zeros((n, N, K), fmt.dtype))
 
     # 11. all products zero, random finite accumulators over the whole range: the Ada quirk is that the accumulator comes back
@@ -781,7 +792,8 @@ def probe_families(rng, fmt: Format, M: int, K: int):
     yield "adder_width_cancellation", A, Bt, C, meta
 
 
-def fp8_families(rng, fmt: Format, M: int, K: int):
+def fp8_families(rng: np.random.Generator, fmt: Format, M: int,
+                 K: int) -> Iterator[tuple[str, np.ndarray, np.ndarray, np.ndarray, dict | None]]:
     """The FP8-only families: 15. the adder-floor probe (pin-bf16, D15(b))."""
 
     A, Bt, C, meta = floor_probe_tiles(fmt, M, K)
@@ -815,7 +827,7 @@ SPECIAL_OPERANDS = {
 }
 
 
-def specials_tiles(fmt: Format, M: int, K: int):
+def specials_tiles(fmt: Format, M: int, K: int) -> tuple[np.ndarray, np.ndarray, np.ndarray, dict]:
     spec = SPECIAL_OPERANDS[fmt.name]
     a_cls = [(s.split(":")[0], int(s.split(":")[1], 16)) for s in spec["a"]]
     b_cls = [(s.split(":")[0], int(s.split(":")[1], 16)) for s in spec["b"]]
@@ -853,7 +865,7 @@ def adder_width_parameters(fmt: Format) -> tuple[tuple[int, ...], list[int]]:
     return (-55, 0, 32, 63), list(range(-30, -2))
 
 
-def adder_width_tiles(fmt: Format, M: int, K: int):
+def adder_width_tiles(fmt: Format, M: int, K: int) -> tuple[np.ndarray, np.ndarray, np.ndarray, dict]:
     lo, hi = fmt.min_pow2_exp, fmt.max_pow2_exp
     pas, ratios = adder_width_parameters(fmt)
     cases = []  # (variant, pe, ratio_base, slot_base)
@@ -956,7 +968,7 @@ FLOOR_PROBE_ACC = [
 FLOOR_PROBE_COUNTS = [1, 2, 3, 4, 7, 8, 15, 16, 31, 32]
 
 
-def floor_probe_tiles(fmt: Format, M: int, K: int):
+def floor_probe_tiles(fmt: Format, M: int, K: int) -> tuple[np.ndarray, np.ndarray, np.ndarray, dict]:
     """D15(b): tiles on which an adder floor f in ``FLOOR_PROBE_RANGE`` could show, if it can show at all.  Rows and columns
     are read by ``floor_probe_summary`` through ``meta['tiles']``:
 
@@ -1090,12 +1102,12 @@ def model_descs(ins: Instruction) -> list[tuple]:
     return [(m.pipeline.name, m.product, m.declared, m.lowering, m.total) for m in ins.models]
 
 
-def _init(model_descs):
+def _init(model_descs: list[tuple]) -> None:
     global _MODELS
     _MODELS = [Model(TCM.MODELS[pname], prod, declared, lowering, total) for pname, prod, declared, lowering, total in model_descs]
 
 
-def _eval_tiles(args):
+def _eval_tiles(args: tuple[np.ndarray, np.ndarray, np.ndarray]) -> tuple[list[np.ndarray], list[np.ndarray]]:
     A, Bt, C = args
     n, M, _ = A.shape
     outs = [np.zeros((n, M, N), np.uint32) for _ in _MODELS]
@@ -1114,7 +1126,9 @@ def _eval_tiles(args):
     return outs, errs
 
 
-def model_eval(pool, A, Bt, C, procs, worker=_eval_tiles):
+def model_eval(pool: Pool, A: np.ndarray, Bt: np.ndarray, C: np.ndarray, procs: int,
+               worker: Callable[[tuple[np.ndarray, np.ndarray, np.ndarray]], Any] = _eval_tiles,
+               ) -> tuple[np.ndarray, np.ndarray] | list[tuple[np.ndarray, np.ndarray]]:
     n = A.shape[0]
     chunks = max(1, min(n // 64 + 1, procs * 8))
     idx = np.array_split(np.arange(n), chunks)
@@ -1125,7 +1139,7 @@ def model_eval(pool, A, Bt, C, procs, worker=_eval_tiles):
     return [(np.concatenate([p[0][m] for p in parts]), np.concatenate([p[1][m] for p in parts])) for m in range(n_models)]
 
 
-def _eval_zero_alternatives(args):
+def _eval_zero_alternatives(args: tuple[np.ndarray, np.ndarray, np.ndarray]) -> tuple[np.ndarray, np.ndarray]:
     """For zero accumulators: the word the source-close evaluator gives when the zero is carried at exponent -126 / -127 instead of
     E_ZERO (the two arrays returned).  Elements with a nonzero accumulator get the ordinary result in both."""
 
@@ -1149,7 +1163,7 @@ def _eval_zero_alternatives(args):
     return out[0], out[1]
 
 
-def _eval_floor_alternatives(args):
+def _eval_floor_alternatives(args: tuple[np.ndarray, np.ndarray, np.ndarray]) -> tuple[np.ndarray, np.ndarray]:
     """The declared pipeline's words at every floor of ``_FLOORS`` (set by ``_init_floors``): one (n, M, 8) array per floor."""
 
     A, Bt, C = args
@@ -1169,7 +1183,7 @@ def _eval_floor_alternatives(args):
 _FLOOR_MODELS: list[Model] = []
 
 
-def _init_floors(desc, floors):
+def _init_floors(desc: tuple, floors: list[int]) -> None:
     global _FLOOR_MODELS
     import dataclasses
 
@@ -1178,7 +1192,8 @@ def _init_floors(desc, floors):
     _FLOOR_MODELS = [Model(dataclasses.replace(base, name=f"{base.name}@floor{f}", zero_exponent=f), prod, declared, lowering) for f in floors]
 
 
-def floor_alternatives(pool, model: Model, A, Bt, C, D, declared_words, procs: int, floors: list[int]) -> dict:
+def floor_alternatives(pool: Pool, model: Model, A: np.ndarray, Bt: np.ndarray, C: np.ndarray, D: np.ndarray,
+                       declared_words: np.ndarray, procs: int, floors: list[int]) -> dict:
     """D15(b): the declared pipeline evaluated with ``zero_exponent`` set to every floor in ``floors`` on the floor-probe tiles;
     per floor, how many words differ from the pinned floor's and from the hardware's.  All zeros = no floor in the range is
     observable on these tiles (the structural reason is in discrepancy-log entry D15: with any nonzero term the group's maximum
@@ -1203,7 +1218,7 @@ def floor_alternatives(pool, model: Model, A, Bt, C, D, declared_words, procs: i
 # --- records ----------------------------------------------------------------------------------------------------------------------
 
 
-def hexrec(acc, a, b, d, width: int = 4) -> dict:
+def hexrec(acc: int | np.integer, a: np.ndarray, b: np.ndarray, d: int | np.integer, width: int = 4) -> dict:
     return {
         "acc": f"{int(acc):08x}",
         "a": "".join(f"{int(x):0{width}x}" for x in a),
@@ -1239,8 +1254,9 @@ def layout_check(probe: Probe, ins: Instruction) -> dict:
 
 
 def special_all_finite_records(path: Path) -> list[dict]:
-    """The all-finite records (finite acc, finite a and b words) of a ``tc-total-2026-09-07/<device>/mma_special.reduced.json.gz``
-    file, in the golden-record shape: the ``cases`` list and the ``pos`` list (one measured word each)."""
+    """The all-finite records (finite acc, finite a and b words) of a device's ``mma_special.reduced.json.gz`` from the
+    A100 and RTX 4090 special-value campaign, in the golden-record shape: the ``cases`` list and the ``pos`` list (one
+    measured word each)."""
 
     import gzip
 
@@ -1263,8 +1279,8 @@ def special_all_finite_records(path: Path) -> list[dict]:
 
 
 def hopper_capture_records(path: Path) -> list[dict]:
-    """Every record of veritor's H100 BF16 wgmma capture (``tc-hopper-2026-09-07/special.reduced.json.gz``: 14 families, the
-    non-finite ones included), in the golden-record shape with ``family`` set."""
+    """Every record of veritor's H100 BF16 wgmma capture (its ``special.reduced.json.gz``: 14 families, the non-finite
+    ones included), in the golden-record shape with ``family`` set."""
 
     import gzip
 
@@ -1359,8 +1375,9 @@ def replay_instances(probe: Probe, root: Path, manifest_path: Path | None = None
     epilogue is not a tensor-core operation), with ``vu-k1536.y.u16``.  Before anything runs, every array's sha256 is checked
     against ``manifest_path`` (default ``<root>/manifest.json``): a replay of arrays other than the pinned ones is refused."""
 
-    from verity.ml.circuits.silicon.cast import f32_to_bf16_word
     from verity_numerical.bench import instances as I
+
+    from verity.ml.circuits.silicon.cast import f32_to_bf16_word
 
     if probe.ins.fmt is not BF16 or probe.ins.m != 16:
         raise RuntimeError("--replay-instances is a BF16 m16n8k16 replay")
@@ -1462,7 +1479,7 @@ def replay_instances(probe: Probe, root: Path, manifest_path: Path | None = None
 # --- the sweep ---------------------------------------------------------------------------------------------------------------------
 
 
-def sweep(probe: Probe, ins: Instruction, args, out: Path, identity: dict) -> tuple[dict, dict]:
+def sweep(probe: Probe, ins: Instruction, args: argparse.Namespace, out: Path, identity: dict) -> tuple[dict, dict]:
     M, K, fmt = ins.m, ins.k, ins.fmt
     only = set(args.families.split(",")) if args.families else None
     rng = np.random.default_rng(args.seed)
@@ -1486,7 +1503,7 @@ def sweep(probe: Probe, ins: Instruction, args, out: Path, identity: dict) -> tu
                 C = np.zeros_like(C)
             n_sample = min(args.golden_per_family, A.shape[0] * M * N)
             if only is not None and name not in only:
-                rng.choice(A.shape[0] * M * N, size=n_sample, replace=False)  # the skipped family's sampling draw: --families leaves the others' tiles unchanged
+                rng.choice(A.shape[0] * M * N, size=n_sample, replace=False)  # the skipped family's sampling sample: --families leaves the others' tiles unchanged
                 continue
             t0 = time.time()
             D = probe.tiles(A, Bt, C)
@@ -1582,7 +1599,7 @@ def chain_kernel(probe: Probe) -> str:
     return probe.kernel.replace("_tiles", f"_chain{CHAIN_STEPS}_tiles")
 
 
-def _eval_chain_tiles(args):
+def _eval_chain_tiles(args: tuple[np.ndarray, np.ndarray, np.ndarray]) -> tuple[list[np.ndarray], list[np.ndarray]]:
     """``_eval_tiles`` for K = 16 * CHAIN_STEPS tiles: each model's step folded over the k16 slices in ascending order."""
 
     A, Bt, C = args
@@ -1606,7 +1623,7 @@ def _eval_chain_tiles(args):
     return outs, errs
 
 
-def chain_sweep(so: Path, base: Probe, args, out: Path) -> dict:
+def chain_sweep(so: Path, base: Probe, args: argparse.Namespace, out: Path) -> dict:
     """Every sweep family at K = 64 through the chained kernel (one layout check first), against each model's step folded over the
     four k16 slices: whether back-to-back wgmma on one accumulator equal the chain of single steps, bit for bit.  ``base`` is the
     single-instruction probe whose layout check fixed the descriptor offsets."""
@@ -1668,7 +1685,7 @@ def write_result(out: Path, doc: dict) -> None:
     os.replace(tmp, out / "result.json")
 
 
-def compile_only(ids: list[str], out: Path, args) -> int:
+def compile_only(ids: list[str], out: Path, args: argparse.Namespace) -> int:
     """Build each instruction's kernel for its arch and run the SASS check; no device needed."""
 
     results: dict = {"schema": "wp1/tc-probe/v0", "mode": "compile-only", "identity": host_identity(), "instructions": {}}
@@ -1692,7 +1709,8 @@ def compile_only(ids: list[str], out: Path, args) -> int:
         print(id_, json.dumps({k: v for k, v in entry.items() if k not in ("instruction", "sass")}),
               json.dumps({k: v for k, v in entry.get("sass", {}).items() if k in ("ok", "kernel", "tile_kernel_mma_count", "error")}), flush=True)
     (out / "probe_results.json").write_text(json.dumps(results, indent=1))
-    from verity_config.settings import SHARED  # here, not at the top: verity/ml/circuits/ops' tests import this module's tiles
+    # here, not at the top: verity/ml/circuits/ops' tests import this module's tiles
+    from verity_config.settings import SHARED
     run_id = SHARED.RESEARCH_RUN_ID
     if run_id:
         checks = {id_: {"compiled": e["compiled"], "sass_ok": e.get("sass", {}).get("ok", False), "mma_count": e.get("sass", {}).get("tile_kernel_mma_count"),
@@ -1884,10 +1902,12 @@ def main() -> int:
     results["hypothesis_findings"] = findings
     (out / "probe_results.json").write_text(json.dumps(results, indent=1))
 
-    from verity_config.settings import SHARED  # here, not at the top: verity/ml/circuits/ops' tests import this module's tiles
+    # here, not at the top: verity/ml/circuits/ops' tests import this module's tiles
+    from verity_config.settings import SHARED
     run_id = SHARED.RESEARCH_RUN_ID
     if run_id:
-        import canary as CANARY  # the label contract of tc-evidence/v1 lives there (no-op if --canary imported it already)
+        # the label contract of tc-evidence/v1 lives there (no-op if --canary imported it already)
+        import canary as CANARY
 
         checked_something = any(k in results for k in ("golden_replay", "special_replay", "capture_replay", "instances_replay", "chain_sweep")) or (("sweep" in results or "canary" in results) and declared)
         status = "failed" if failures else ("passed" if checked_something else "not_run")

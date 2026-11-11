@@ -8,9 +8,13 @@ With the oracles of `Flock.With.Log`: forgetting the log gives back setup at `h`
 the log's length is `Stmt.setupCalls h`, the number of SHA-512 calls a run with the counting oracle makes
 (`Stmt.setupLogged_size`).
 -/
-import Flock.With.SimWalk
-import Flock.With.Setup
-import Flock.With.Log
+module
+
+public import Flock.With.Log
+public import Flock.With.Setup
+public import Flock.With.SimWalk
+
+@[expose] public section
 
 namespace Flock.With
 
@@ -327,7 +331,7 @@ theorem setupHiddenWith_sim (S : Sim M N) [LawfulMonad M] [LawfulMonad N] (tM : 
       hmOutCheckPublicWith_sim S tM tN hh, deriveTemplateUnitsWith_sim S tM tN hh, hmLinksCheckWith_sim S tM tN hh,
       qwordFindingWith_sim S tM tN hh]
 
--- the walk meets each of the three draw checks' join points at every call that does not throw
+-- the walk meets each of the three sample checks' join points at every call that does not throw
 set_option maxHeartbeats 800000 in
 theorem setupTablesWith_sim (S : Sim M N) [LawfulMonad M] [LawfulMonad N] (tM : Throws M) (tN : Throws N)
     {hs : Flock.Hashes M} {hs' : Flock.Hashes N} (hh : S.Hashes hs hs') (tags : Tags) (circuitFile publicFile : ByteArray)

@@ -1,13 +1,53 @@
-import Proofs.Flock.Claims.Recursion.Wald
+module
+
+public import Proofs.Flock.Claims.Recursion.Wald
+import Mathlib.Algebra.Order.Floor.Extended
+import Mathlib.Algebra.Order.Interval.Basic
+import Mathlib.Algebra.Order.Star.Real
+import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
+import Mathlib.Analysis.SpecialFunctions.Bernstein
+import Mathlib.Analysis.SpecialFunctions.Gamma.Basic
+import Mathlib.Analysis.SpecialFunctions.Trigonometric.DerivHyp
+import Mathlib.Combinatorics.Enumerative.DyckWord
+import Mathlib.Combinatorics.SimpleGraph.Triangle.Removal
+import Mathlib.Data.NNRat.Floor
+import Mathlib.Data.Nat.Choose.Multinomial
+import Mathlib.Geometry.Euclidean.Altitude
+import Mathlib.NumberTheory.Chebyshev
+import Mathlib.NumberTheory.Height.NumberField
+import Mathlib.NumberTheory.Height.Projectivization
+import Mathlib.NumberTheory.LucasLehmer
+import Mathlib.NumberTheory.SelbergSieve
+import Mathlib.RingTheory.Radical.NatInt
+import Mathlib.RingTheory.WittVector.IsPoly
+import Mathlib.Tactic.ENatToNat
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Tactic.Polynomial.Basic
+import Mathlib.Tactic.ReduceModChar
+import Mathlib.Topology.Sheaves.Init
+import Proofs.Flock.Claims.Prob
+import Std.Tactic.BVDecide.Normalize.Prop
 
 /-!
 # The composed extractor: the outer extractor, then the inner one
 
 A recursion's prover proves, in an outer session, that the inner verifier accepts its hidden inner transcript. Its
-extractor composes two: the inner stage is `E^rep` (`m` waits of at most `K` draws, each stopping at `k` accepted
+extractor composes two: the inner stage is `E^rep` (`m` waits of at most `K` samples, each stopping at `k` accepted
 reruns), and each rerun it makes is served by the outer extractor `E₂` at that rerun's coins, whose output (the outer
-witness: the hidden inner transcript) `dec` reads as what the inner stage sees. Its draws are the prover's run coins
-with `E₂`'s coins; its judged draw is the judged run's coins `r₀` with `E₂`'s coins of its own (`servedERep`).
+witness: the hidden inner transcript) `dec` reads as what the inner stage sees. Its samples are the prover's run coins
+with `E₂`'s coins; its judged sample is the judged run's coins `r₀` with `E₂`'s coins of its own (`servedERep`).
 
 * **Cost** (`servedERep_runs_le`, `servedERep_runs_exp`): `E₂`'s reruns times the inner stage's, `(1 + m·K)·N₂` in the
   worst case and `(1 + m·k)·N₂` in expectation, for `E₂` within `N₂` (`ExtractRunsLe`, `ExtractRunsExpLe`); with
@@ -20,6 +60,8 @@ with `E₂`'s coins; its judged draw is the judged run's coins `r₀` with `E₂
   (`KSLin_of_servedERep`, `KS_servedERep`, `KSLin_servedERep`), with an extraction-based finder's linear term folded in
   through `Finder.either`, which runs two finders and outputs a collision either finds.
 -/
+
+@[expose] public section
 
 namespace Claims
 
@@ -107,14 +149,14 @@ section Served
 
 variable {Coin W W₂ Op : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin]
 
-/-- **The outer stage at a draw**: `E₂` at the draw's run coins and its own coins, its output read by `dec` as what the
+/-- **The outer stage at a sample**: `E₂` at the sample's run coins and its own coins, its output read by `dec` as what the
 inner stage sees. -/
 def outerStage {V : Verifier Coin} (E₂ : Extractor Coin W₂ V) (dec : (x : Msg) → (Fin (V.k x) → Coin) → Option W₂ → Seen)
     (x : Msg) (d : (Fin (V.k x) → Coin) × E₂.C x) : RP (Fin (V.k x) → Coin) Seen :=
   (E₂.ext x d.1 d.2).bind fun w₂ => .ret (dec x d.1 w₂)
 
-/-- **The served `E^rep`, the composed extractor**: `E^rep` over draws of the run's coins and `E₂`'s coins, its judged
-draw the judged run's coins `r₀` with coins `c.1` of its own, each draw's rerun served by `E₂` there (`outerStage`). -/
+/-- **The served `E^rep`, the composed extractor**: `E^rep` over samples of the run's coins and `E₂`'s coins, its judged
+flip the judged run's coins `r₀` with coins `c.1` of its own, each sample's rerun served by `E₂` there (`outerStage`). -/
 def servedERep (V : Verifier Coin) (E₂ : Extractor Coin W₂ V)
     (dec : (x : Msg) → (Fin (V.k x) → Coin) → Option W₂ → Seen) (m k K : Msg → ℕ) (opens : Seen → List Op)
     (assemble : Msg → List Op → Option W) (check : Msg → W → Bool) : Extractor Coin W V where
@@ -123,7 +165,7 @@ def servedERep (V : Verifier Coin) (E₂ : Extractor Coin W₂ V)
 
 omit [Fintype Coin] [Nonempty Coin] [Inhabited Coin] in
 theorem outerStage_eval {V : Verifier Coin} (H : Msg → Msg) (E₂ : Extractor Coin W₂ V)
-    (dec : (x : Msg) → (Fin (V.k x) → Coin) → Option W₂ → Seen) (x : Msg) (run : (Fin (V.k x) → Coin) → Trace)
+    (dec : (x : Msg) → (Fin (V.k x) → Coin) → Option W₂ → Seen) (x : Msg) (run : (Fin (V.k x) → Coin) → Transcript)
     (d : (Fin (V.k x) → Coin) × E₂.C x) :
     (outerStage E₂ dec x d).eval H run =
       (dec x d.1 ((E₂.ext x d.1 d.2).eval H run).1, ((E₂.ext x d.1 d.2).eval H run).2.1,
@@ -169,7 +211,7 @@ theorem servedERep_runs_exp (H : Msg → Msg) (V : Verifier Coin) (E₂ : Extrac
     _ ≤ (1 + m x * k x) * N₂ x := mul_le_mul_of_nonneg_left hEw hk
 
 /-- A wait makes no SHA-512 call of its own: against runs that log none, it makes none. -/
-theorem waitAcc_hashes {R : Type} (H : Msg → Msg) (run : R → Trace) (hrun : ∀ r, (run r).pLog = [] ∧ (run r).vLog = [])
+theorem waitAcc_hashes {R : Type} (H : Msg → Msg) (run : R → Transcript) (hrun : ∀ r, (run r).pLog = [] ∧ (run r).vLog = [])
     (k : ℕ) : ∀ (rs : List R) (acc : List Seen), ((waitAcc k rs acc).eval H run).2.1 = 0 := by
   intro rs
   induction rs with
@@ -181,7 +223,7 @@ theorem waitAcc_hashes {R : Type} (H : Msg → Msg) (run : R → Trace) (hrun : 
     · rfl
     · simp only [RP.eval, ih, (hrun r).1, (hrun r).2, List.length_nil]
 
-theorem firstWait_hashes {R W' Op' : Type} (H : Msg → Msg) (run : R → Trace)
+theorem firstWait_hashes {R W' Op' : Type} (H : Msg → Msg) (run : R → Transcript)
     (hrun : ∀ r, (run r).pLog = [] ∧ (run r).vLog = []) (k : ℕ) (opens : Seen → List Op')
     (assemble : List Op' → Option W') (check : W' → Bool) :
     ∀ rss : List (List R), ((firstWait k opens assemble check rss).eval H run).2.1 = 0 := by
@@ -198,7 +240,7 @@ theorem firstWait_hashes {R W' Op' : Type} (H : Msg → Msg) (run : R → Trace)
     · exact ih
 
 /-- **`E^rep` makes no SHA-512 call of its own**: against runs that log none, it makes none. -/
-theorem erepProg_hashes {D W' Op' : Type} (H : Msg → Msg) (run : D → Trace)
+theorem erepProg_hashes {D W' Op' : Type} (H : Msg → Msg) (run : D → Transcript)
     (hrun : ∀ d, (run d).pLog = [] ∧ (run d).vLog = []) (m k K : ℕ) (opens : Seen → List Op')
     (assemble : List Op' → Option W') (check : W' → Bool) (d₀ : D) (ρ : Fin m → Fin K → D) :
     ((erepProg m k K opens assemble check d₀ ρ).eval H run).2.1 = 0 := by
@@ -207,7 +249,7 @@ theorem erepProg_hashes {D W' Op' : Type} (H : Msg → Msg) (run : D → Trace)
   · exact firstWait_hashes H run hrun k opens assemble check _
   · rfl
 
-theorem servedRun_logs {R₁ R₂ : Type} (H : Msg → Msg) (q : R₁ → RP R₂ Seen) (run : R₂ → Trace) (r : R₁) :
+theorem servedRun_logs {R₁ R₂ : Type} (H : Msg → Msg) (q : R₁ → RP R₂ Seen) (run : R₂ → Transcript) (r : R₁) :
     (servedRun H q run r).pLog = [] ∧ (servedRun H q run r).vLog = [] := ⟨rfl, rfl⟩
 
 /-- **The composed extractor's SHA-512 calls, worst case**: the inner stage makes none of its own, so they are at most

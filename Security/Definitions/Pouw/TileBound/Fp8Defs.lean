@@ -1,4 +1,10 @@
-import Definitions.Pouw.TileBound.Defs
+module
+
+public import Definitions.Pouw.TileBound.Defs
+import Mathlib.Data.Nat.Totient
+import Mathlib.Data.Sym.Sym2.Init
+import Mathlib.Tactic.ContinuousFunctionalCalculus
+import Mathlib.Tactic.NormNum.GCD
 
 /-!
 # The FP8-tile model at sm_120's E4M3 atom (trusted definitions)
@@ -16,7 +22,7 @@ cheapest multiplier; NVFP4 is.
   full-width 4-bit significands at one exponent.
   - E4M3 holds 1 in the model's per-slot rule. That rule fails per pair: on in-domain codes the sum and the difference
     of two codes are both E4M3 for 28–30% of pairs. What holds is its fragment form: 0 of 160 whole 16 × 32 operand
-    fragments merge (`fp8-merge-rate/sm120`, `pearlc_merge_rate.py`). A tensor-core pre-add feeds a whole fragment,
+    fragments merge (`fp8-merge-rate/sm120`). A tensor-core pre-add feeds a whole fragment,
     whose inputs are shared across 8 columns or 16 rows, so the closure of E4M3 pre-adds rests on that fragment rate,
     not on this per-slot capacity.
   - BF16 holds 16 (8 bits), FP16 128 (11 bits), TF32 128 (11 bits) and FFMA 2²⁰ (24 bits).
@@ -34,6 +40,8 @@ cheapest multiplier; NVFP4 is.
 * **The honest program** `honest8` is stated here, self-contained, so that the pins reading it read only trusted
   definitions.
 -/
+
+@[expose] public section
 
 namespace Pouw.TileBound
 

@@ -219,7 +219,7 @@ def symbols() -> list[dict]:
         ("ε_W W_cert/C", "the deficit's share of capacity under the floor credit, ε_W (1 − r̂)", p["eps_w"] * (1 - r)),
         ("ε_W", "at the best plausible PoUW design", (p | BEST)["eps_w"]),
         ("ε′", "aggregation slack (δ_win / ε′ = 2.7e-8 at δ_win = 3·2^-40)", p["eps_agg"]),
-        ("r = r̂ + ε_W W_cert/C + ε′", "the residual DampenerRemote bounds (#3646), under the floor credit",
+        ("r = r̂ + ε_W W_cert/C + ε′", "the residual DampenerRemote bounds, under the floor credit",
          T.residual_share(p)),
         ("GPU / r̂", "share of r̂", p["residual"] / r),
         ("clock / r̂", "share of r̂", p["clock_share"] / r),
@@ -299,7 +299,7 @@ def substitutes() -> list[dict]:
 
 def floor() -> list[dict]:
     """The floor's limits as the verdict lag goes to 0, with ε_W and ε′ (at r̂ = 0 all of C is certified, so the deficit
-    is ε_W C) and as they go to 0 too, and what evaluate would give at zero lag, ε_W and ε′ if the partial-sum law held,
+    is ε_W C) and as they go to 0 too, and what evaluate would give at zero lag, ε_W and ε′ if the partial-sum rule held,
     where with no residual to relay through it binds below nu."""
     p = T.DEFAULTS
     eps_w = (p | FLOOR)["eps_w"]
@@ -416,7 +416,6 @@ def exposures(th: dict) -> list[dict]:
     p = T.DEFAULTS
     loud = p | X.SCENARIOS["served today, R_wipe 4 GB"] | {"sigma": 1e7}
     falls = alpha_falls(next(r for r in th["defaults"]["T3"] if r["key"] == "K"))
-    chi = cheat(p)
     out = [
         ("r̂ added by a thousand identities' verdict lag", 1000 * p["lag_s"] / (p["years"] * T.YEAR)),
         ("ν at 100 times today's K", X.nu(p | {"K": 100 * p["K"]})),
@@ -426,8 +425,9 @@ def exposures(th: dict) -> list[dict]:
         ("η at T4, served today with a 4 GB wipe residual and σ = 1e7 bit/s", X.eta(loud, "T4")),
         ("R_wipe there, helpers refilling within the read deadline, GB", X.wipe_residual(loud) / T.GB),
         ("multiple of today's proving cost at which χ reaches 1%",
-         bisect(lambda x: cheat(p | {"overhead": x * p["overhead"]}) >= 0.01, 1.0, 1e4)),
-        ("the same if χ were linear in it, 0.01/χ", 0.01 / chi),
+         bisect(lambda x: cheat(p | {"overhead": x * p["overhead"]}) >= 0.01, 1e-6, 1e4)),
+        ("the same if χ were linear in it, 0.01 over the closed form's χ (which the fleet's capacity doesn't stop at 1)",
+         0.01 / X.chi(p)),
     ]
     for tier in T.TIERS:
         key, share = tornado(tier)
@@ -437,7 +437,7 @@ def exposures(th: dict) -> list[dict]:
 
 
 def holes() -> dict:
-    """The known holes: the cheating share at today's sparse draws and at 512 draws per statement, the T5 ladder at
+    """The known holes: the cheating share at today's sparse samples and at 512 samples per statement, the T5 ladder at
     each, and the holes' other numbers."""
     p = T.DEFAULTS
     C = capacity(p)

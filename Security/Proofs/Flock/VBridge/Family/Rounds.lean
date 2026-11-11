@@ -1,4 +1,20 @@
-import Proofs.Flock.VBridge.Family.Commits
+module
+
+public import Proofs.Flock.VBridge.Family.Commits
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Tactic.ReduceModChar
 
 /-!
 # The family's reads files, round map and round commitments
@@ -24,9 +40,11 @@ At the family, `VStarFamily.own` is `ownOf` at each statement and `VStarFamily.s
 
 The tops (`rec-top-L<l>`) are no commit strings: a RecOpen instance reads its level's tops at the row
 `first[rep] + (pos >> (d − c))` (`TopValue.position`, `rec_outer.py:150-151,224,236`) of the query position `pos`, which
-the verifier's query coins draw after the cap's round, so no digest the round's commitment fixes is registered at a top
+the verifier's query coins sample after the cap's round, so no digest the round's commitment fixes is registered at a top
 row and `VCommits` cannot hold there.
 -/
+
+@[expose] public section
 
 namespace FlockVBridge.Family
 
@@ -62,7 +80,7 @@ def recTags : List Accounting.Level → List Absorb
 
 /-- Compiled Ligerito's (`ligShape`): `T` (which the stream absorbs as Ligerito starts, `rec_algebra.py:751-752`), the
 first out-of-domain value, level 0's folding messages, then as `recTags`. -/
-def ligTags (sch : Accounting.Schedule) : List Absorb :=
+def ligTags (sch : FlockSoundness.Accounting.Schedule) : List Absorb :=
   match sch.levels with
   | [] => []
   | _ :: rest => .elts :: .elts :: (List.replicate sch.k0 .elts ++
@@ -72,7 +90,7 @@ def ligTags (sch : Accounting.Schedule) : List Absorb :=
 
 /-- **A rep's stream rounds**, in order (`repShape`'s coins): the zerocheck's, the lincheck's, the `claims` ring switches'
 and the opening's coin, then compiled Ligerito's. -/
-def streamTags (m kLog claims : ℕ) (sch : Accounting.Schedule) : List Absorb :=
+def streamTags (m kLog claims : ℕ) (sch : FlockSoundness.Accounting.Schedule) : List Absorb :=
   ([.none, .none, .elts] ++ List.replicate (m - 6) .elts) ++
     (([.elts, .none] ++ List.replicate (kLog - 6) .elts ++ [.elts]) ++
       ((List.replicate claims .elts ++ [.none]) ++ ligTags sch))
@@ -109,7 +127,7 @@ theorem coins_recShape (ext : ℕ) : ∀ levels, (Exec.recShape F K D ext levels
       coins_recShape ext (lv' :: rest)]
 
 /-- **The stream has one round per coin of the rep's spine**: `streamTags` lists `repShape`'s coins. -/
-theorem coins_repShape (m kLog nExtra : ℕ) (sch : Accounting.Schedule) :
+theorem coins_repShape (m kLog nExtra : ℕ) (sch : FlockSoundness.Accounting.Schedule) :
     (Exec.repShape F K D m kLog nExtra sch).countP isCoin = (streamTags m kLog (nExtra + 2) sch).length := by
   obtain ⟨m', k0, ls, ext⟩ := sch
   rcases ls with _ | ⟨lv₀, _ | ⟨lv₁, rest⟩⟩ <;>
@@ -140,10 +158,10 @@ def mPort (name : String) (k : ℕ) : Registered.Port :=
 def mIndex (nm : String) : Option ℕ := if nm.startsWith "m" then (nm.drop 1).toString.toNat? else none
 
 /-- **A statement's message-round ports**: an algebra part's ports `m<k>`, none of a RecOpen's, nor of candidate 3's
-statements or RecCap, which no session of the circuit table's family is. -/
+statements, RecCap or RecLink, which no session of the circuit table's family is. -/
 def ownOf : VStar.Stmt → Array Registered.Port
   | .inner _ _ p => (p.S.ports.filterMap fun (nm, _) => (mIndex nm).map (mPort nm)).toArray
-  | .recOpen .. | .recOpenStacked .. | .sparse .. | .opening .. | .cap .. => #[]
+  | .recOpen .. | .recOpenStacked .. | .sparse .. | .opening .. | .cap .. | .link .. => #[]
 
 /-- A message-round port: one named `m<k>` or registering a `rec-c<k>`. -/
 def isMsg (p : Registered.Port) : Bool := (mIndex p.name).isSome || (cIndex p.value).isSome
@@ -162,7 +180,7 @@ def SameMsg (own own' : Array Registered.Port) : Prop := ∀ q, q ∈ msgPorts o
 
 theorem isMsg_ownOf {st : VStar.Stmt} {p : Registered.Port} (hp : p ∈ ownOf st) : isMsg p = true := by
   cases st with
-  | recOpen | recOpenStacked | sparse | opening | cap => simp [ownOf] at hp
+  | recOpen | recOpenStacked | sparse | opening | cap | link => simp [ownOf] at hp
   | inner _ _ part =>
     simp only [ownOf, List.mem_toArray, List.mem_filterMap, Option.map_eq_some_iff] at hp
     obtain ⟨⟨nm, _⟩, -, k, hk, rfl⟩ := hp
@@ -197,7 +215,7 @@ theorem skOf_congr {S : ℕ} (Vs : Fin S → VStmt) {own own' : Fin S → Array 
     exact ⟨key _ _ (h j) _ _ _, key _ _ (fun q => (h j q).symm) _ _ _⟩
   · exact iff_of_false (inr_not_mem_skOf g) (inr_not_mem_skOf g)
 
-/-- **U4's pass, port by port**: `fullMiss` finds nothing where every unit reading a round's commitment is drawn in
+/-- **U4's pass, port by port**: `fullMiss` finds nothing where every unit reading a round's commitment is sampled in
 full. -/
 theorem fullMiss_eq_none {own : Array Registered.Port} {d : Flock.Draw.UnitDraw} :
     Registered.fullMiss own d = none ↔
@@ -211,7 +229,7 @@ theorem fullMiss_eq_none {own : Array Registered.Port} {d : Flock.Draw.UnitDraw}
       Bool.not_eq_true', not_and, Bool.not_eq_false, true_implies]
   · simp [hc]
 
-/-- **U4's pass on a parsed draw**: `checkFull` passes where `fullMiss` finds nothing. -/
+/-- **U4's pass on a parsed sample**: `checkFull` passes where `fullMiss` finds nothing. -/
 theorem checkFull_ok_iff {own : Array Registered.Port} {dj : Lean.Json} {d : Flock.Draw.UnitDraw}
     (hd : Flock.Draw.UnitDraw.ofJson dj = .ok d) :
     Registered.checkFull (some own) (some dj) = .ok () ↔ Registered.fullMiss own d = none := by
@@ -224,7 +242,7 @@ theorem checkFull_ok_iff {own : Array Registered.Port} {dj : Lean.Json} {d : Flo
   | none => exact iff_of_true rfl rfl
   | some _ => exact iff_of_false (fun h => by cases h) (fun h => by cases h)
 
-/-- **U4 at `ownOf` from the verifier's U4**: where a session's reads file has `ownOf`'s message-round ports, a draw
+/-- **U4 at `ownOf` from the verifier's U4**: where a session's reads file has `ownOf`'s message-round ports, a sample
 that passes U4 on it passes U4 on `ownOf`'s, whose ports are all message-round ports. -/
 theorem checkFull_of_msgPorts {own own' : Array Registered.Port} {dj : Lean.Json} {d : Flock.Draw.UnitDraw}
     (hd : Flock.Draw.UnitDraw.ofJson dj = .ok d) (hm : ∀ p ∈ own', isMsg p = true)
@@ -292,7 +310,7 @@ theorem skOf_zs (hown : F.HOwn) (R : Reg) (ω : L.Ω) (t : List (Cm × (ℐ).Coi
 
 /-- **`VBridgeRead` at `own`, `sel` and `bc`**: `vbridgeRead_of_family` where the family's commit strings are
 `skOf`'s at `own` and `sel`, its digests `cmtOf`'s at `bc cOf`, and its messages `dec`'s; `HCommits` from `PubCommits`
-(`hCommits_of`), `VDecodesRead` from `dec` (`vDecodesRead_of`), and `VFullRead` from V*'s full draw
+(`hCommits_of`), `VDecodesRead` from `dec` (`vDecodesRead_of`), and `VFullRead` from V*'s full sample
 (`vFullRead_of`). -/
 theorem vbridgeRead_of_rounds (dg : ByteArray → ByteArray) (N k Rw : ℕ) {GS : Flock.RecAlgebra.GfS}
     {gs : Array (Array ℕ × Array ℕ × Array ℕ)} (hst : F.HStruct GS gs) (hsh : F.HShape dg N k Rw GS)

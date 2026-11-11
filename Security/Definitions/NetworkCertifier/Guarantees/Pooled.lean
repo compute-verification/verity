@@ -1,20 +1,55 @@
-import Definitions.NetworkCertifier.SampledAudit
+module
+
+public import Definitions.NetworkCertifier.SampledAudit
+import Mathlib.Algebra.Order.Floor.Extended
+import Mathlib.Algebra.Order.Interval.Basic
+import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
+import Mathlib.Analysis.SpecialFunctions.Bernstein
+import Mathlib.Analysis.SpecialFunctions.Gamma.Basic
+import Mathlib.Analysis.SpecialFunctions.Trigonometric.DerivHyp
+import Mathlib.Combinatorics.Enumerative.DyckWord
+import Mathlib.Combinatorics.SimpleGraph.Triangle.Removal
+import Mathlib.Data.NNRat.Floor
+import Mathlib.Data.Nat.Choose.Multinomial
+import Mathlib.Geometry.Euclidean.Altitude
+import Mathlib.NumberTheory.Chebyshev
+import Mathlib.NumberTheory.Height.NumberField
+import Mathlib.NumberTheory.Height.Projectivization
+import Mathlib.NumberTheory.LucasLehmer
+import Mathlib.NumberTheory.SelbergSieve
+import Mathlib.RingTheory.Radical.NatInt
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Topology.Sheaves.Init
 
 /-!
-# The wrong units over a monitoring period of sampled audits
+# The incorrect proof blocks over a monitoring period of sampled audits
 
 A monitoring period is `m` windows, each audited on its own live coins: the period's coins are a product `Fin m → Ω`,
-window `i` drawing `k i` of its `n i` units at `ω i`, a uniform `k i`-subset. The units wrong at window `i`'s
-registration (`W i ω`) are fixed before its draw: they read only the earlier windows' coins. Every wrong unit risks
-detection in its window, and the windows' draws are independent, so the escapes multiply: with `q ≤ k i / n i` in every
-window, every window's audit accepts while the monitoring period holds at least `F` wrong units in total with
+window `i` sampling `k i` of its `n i` units at `ω i`, a uniform `k i`-subset. The units wrong at window `i`'s
+registration (`W i ω`) are fixed before its sample: they read only the earlier windows' coins. Every incorrect proof block risks
+detection in its window, and the windows' samples are independent, so the escapes multiply: with `q ≤ k i / n i` in every
+window, every window's audit accepts while the monitoring period holds at least `F` incorrect proof blocks in total with
 probability at most `(1 - q)^F` plus the windows' soundness errors `ε i`, whatever the number of windows. At
 `F ≥ ln (1/δ) / q` that is at most `δ + Σ_i ε_i`.
 
-The statement is a fact of probability over every draw, acceptance event and error: the draw's law and each window's
-soundness are its hypotheses. A deployment's instances of them (A3 for the draw, `Claims.Sampling.KS` for each
-window) come in where it is applied to the sampled verifier.
+The statement is a fact of probability over every sample, acceptance event and error: the sample's law and each window's
+soundness are its hypotheses. A deployment's instances of them (A3 for the sample, `Claims.SamplingGeneric.Compiled.KS`
+for each window) come in where it is applied to the sampled verifier.
 -/
+
+@[expose] public section
 
 namespace NetTiming.Guarantees
 
@@ -23,17 +58,17 @@ open Claims
 -- A guarantee keeps its theorem's hypothesis names for the reader, though no statement refers to them.
 set_option linter.unusedVariables false
 
-/-- **The wrong units over a monitoring period of accepted sampled audits.** Over `m` windows on independent live
-coins, window `i` drawing a uniform `k i`-subset of its `n i` units (every coin draws `k i` units, and each
-`k i`-subset is drawn by the share `1 / C(n i, k i)` of the coins), with the units wrong at each registration fixed
-before that window's draw, and each window's audit accepting while its draw meets a wrong unit with probability at most
+/-- **The incorrect proof blocks over a monitoring period of accepted sampled audits.** Over `m` windows on independent live
+coins, window `i` sampling a uniform `k i`-subset of its `n i` units (every coin samples `k i` units, and each
+`k i`-subset is sampled by the share `1 / C(n i, k i)` of the coins), with the units wrong at each registration fixed
+before that window's sample, and each window's audit accepting while its sample meets an incorrect proof block with probability at most
 `ε i`: for `0 ≤ q ≤ 1` with `q · n i ≤ k i` in every window,
 
-* every window's audit accepts and the monitoring period holds at least `F` wrong units with probability at most
+* every window's audit accepts and the monitoring period holds at least `F` incorrect proof blocks with probability at most
   `(1 - q)^F + Σ_i ε i`;
-* `(1 - q)^F ≤ δ` once `ln (1/δ) ≤ q · F`, so at most `ln (1/δ) / q` wrong units pass the whole monitoring period
+* `(1 - q)^F ≤ δ` once `ln (1/δ) ≤ q · F`, so at most `ln (1/δ) / q` incorrect proof blocks pass the whole monitoring period
   except with probability `δ + Σ_i ε i`. -/
-def PooledWrongUnitsLe : Prop :=
+def PooledIncorrectBlocksLe : Prop :=
   ∀ {m : ℕ} {Ω : Type} [Fintype Ω] [Nonempty Ω] (n k : Fin m → ℕ) (draw : (i : Fin m) → Ω → Finset (Fin (n i)))
     (hcard : ∀ i x, (draw i x).card = k i)
     (hunif : ∀ i (S : Finset (Fin (n i))), S.card = k i →

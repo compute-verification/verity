@@ -1,6 +1,15 @@
-import Proofs.Flock.Soundness.ExecRowsAt
+module
+
+public import Proofs.Flock.Soundness.ExecRowsAt
+public import Flock.TmplValue
+public import Flock.TmplAt
+import Mathlib.Algebra.Order.BigOperators.Ring.Finset
+import Mathlib.Combinatorics.Matroid.Init
+import Mathlib.Data.Nat.Totient
+import Proofs.Flock.Soundness.Audit.Circuit
+import Proofs.Flock.Soundness.ExecParse
+import Proofs.Flock.Soundness.SparseRows
 import Proofs.Flock.Soundness.TmplUnrollAt
-import Flock.TmplValue
 
 /-!
 # A templated unit's committed net, satisfied, composes its Definitions
@@ -12,6 +21,8 @@ Definition's value (`Tmpl.evalDef`) on its bound inputs (`unrollAt_eval`). A rea
 (`TmplUnit.eval`). The same holds of the audit's `Rows` of the logical net `Tmpl.unroll` builds (`rowHolds_of_rowsSat`,
 `unroll_eval`), the rows a partition unit is an instance of (`TmplValueUnit`). No verifier path reads this file.
 -/
+
+@[expose] public section
 
 open Flock Flock.Tmpl FlockSoundness.Audit FlockSoundness.SparseRows
 
@@ -55,13 +66,13 @@ theorem unrollAt_eval {t : Tmpl} {lays : Array Lay} {net : Net} (hwf : t.wellFor
 converse of `rowsSat_of_netSat` on the rows `Rows.ofNet` reads. -/
 theorem netRow_of_rowsSat {net : Net} (hB : Built net) (hu : net.unitLog ≤ 32) {z : ℕ → Bool}
     (hs : (Rows.ofNet hB).Sat fun c => z c.val) {r : ℕ} (h1 : min (net.inWords * WORD) net.constPos ≤ r)
-    (h2 : r < net.constPos) : z r = (xorSum (net.a.row r).toList z && xorSum (net.b.row r).toList z) := by
+    (h2 : r < net.constPos) : z r = (Verity.Boolean.xorSum (net.a.row r).toList z && Verity.Boolean.xorSum (net.b.row r).toList z) := by
   have hn : (Rows.ofNet hB).nComp = net.constPos - min (net.inWords * WORD) net.constPos := rfl
   have hr : (Rows.ofNet hB).nIn + (r - min (net.inWords * WORD) net.constPos) = r := by
     rw [Rows.ofNet_nIn]; omega
   have e := hs ⟨r - min (net.inWords * WORD) net.constPos, by omega⟩
   change z ((Rows.ofNet hB).nIn + (r - min (net.inWords * WORD) net.constPos)) =
-    (xorSum ((Rows.ofNet hB).a _) (z ∘ Fin.val) && xorSum ((Rows.ofNet hB).b _) (z ∘ Fin.val)) at e
+    (Verity.Boolean.xorSum ((Rows.ofNet hB).a _) (z ∘ Fin.val) && Verity.Boolean.xorSum ((Rows.ofNet hB).b _) (z ∘ Fin.val)) at e
   rw [← xorSum_map, ← xorSum_map, Rows.ofNet_a hB hu, Rows.ofNet_b hB hu] at e
   simp only [hr] at e
   exact e

@@ -1,6 +1,6 @@
 """A protocol keeps a ``PROTOCOL.md`` only while it is experimental (AGENTS.md "Where writing goes"). Once its verifier is
 Lean, Lean is the source of truth: the README is an outline, signposts to the Lean verifier and its guarantees and the
-core API, and whatever the spec states that the Lean doesn't cover is an issue or a named premise. Every tracked
+core API, and whatever the spec states that the Lean doesn't cover is an issue or an assumption. Every tracked
 ``PROTOCOL.md`` is listed here with its reason, so a new one needs one.
 """
 from __future__ import annotations
@@ -11,7 +11,6 @@ from test_repository import ROOT, _tracked
 
 #: Specs that stay: {PROTOCOL.md: why}.
 KEPT = {
-    "verity/core/protocols/bandwidth/PROTOCOL.md": "experimental: the bandwidth audit over PoUS's store has no Lean verifier",
     "verity/core/protocols/pouw/dither/PROTOCOL.md": "experimental: Dither has no Lean verifier",
     "verity/ml/circuits/PROTOCOL.md": "a format: the circuit file",
     "verity/ml/commitments/frame_v3/PROTOCOL.md": "a format: frame-v3 trees",
@@ -24,9 +23,7 @@ KEPT = {
 RETIRING = {
     "verity/core/protocols/certifier/PROTOCOL.md": "verity/core/protocols/certifier/lean",
     "verity/core/protocols/pous/PROTOCOL.md": "verity/core/protocols/pous/lean",
-    "verity/core/protocols/pouw/PROTOCOL.md": "verity/core/protocols/pouw/lean",
     "verity/core/protocols/remote_bandwidth/PROTOCOL.md": "verity/core/protocols/remote_bandwidth/lean",
-    "verity/ml/flock/verifier/PROTOCOL.md": "verity/core/service/flock",
 }
 
 
@@ -39,7 +36,7 @@ def test_every_spec_has_a_reason():
     assert not unlisted, (
         "a PROTOCOL.md that tests/test_protocol_specs.py doesn't list. A protocol keeps one only while it is experimental: "
         "if its verifier is Lean, write the README as an outline with signposts to the Lean and its guarantees, and file "
-        "what the Lean doesn't cover as an issue or a named premise; if it is experimental, add it to KEPT with why:\n"
+        "what the Lean doesn't cover as an issue or an assumption; if it is experimental, add it to KEPT with why:\n"
         + "\n".join(f"  {f}" for f in unlisted))
 
 

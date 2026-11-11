@@ -31,10 +31,10 @@ from verity_flock import rec_algebra as A
 from verity_flock.record_text import session_text
 
 HERE = Path(__file__).resolve().parent
-REPO = HERE.parents[3]
+REPO = Path(__file__).resolve().parents[4]
 SET = HERE / "fixtures" / "hidden-outputs" / "flat" / "gemm-coordinate"
 INNER = json.loads((HERE / "fixtures" / "inner_claims.json").read_text())
-LEAN = HERE.parents[3] / "verity/core/service/flock"
+LEAN = Path(__file__).resolve().parents[4] / "verity/core/service/flock"
 BIN = LEAN / ".lake" / "build" / "bin" / "flock-verify"
 #: the set was recorded under f5df3bbc's identity, which the unversioned name no longer is (test_lean_hidden_outputs.py)
 STATEMENT = "verity/flock-circuit@f5df3bbc+seed-injection"
@@ -179,7 +179,7 @@ def test_the_honest_reps_pass_every_check_at_the_lean_verifiers_values(session):
 
 
 def test_a_nonzero_nonce_is_refused(session, monkeypatch):
-    """R4 (verifier PROTOCOL.md D21): the decoder refuses each Ligerito nonce list's first nonce set to 1, as the Lean
+    """R4 (`Flock.Proof`, D21 in `verity/ml/flock/verifier/README.md`): the decoder refuses each Ligerito nonce list's first nonce set to 1, as the Lean
     verifier's `Reader.nonce0` does, with its reason."""
     rep = session[1][0]
     at, vec = {}, A._Reader.vec
@@ -348,7 +348,7 @@ def _write_session(d: Path, record: dict, proofs: list[bytes]) -> None:
 @pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain")
 def test_the_lean_verifier_rejects_exactly_the_mutations_with_a_nonzero_residual(session, tmp_path):
     """Each entry of MUTATIONS as a session (the proof's bytes and the round that retained them, with their digests), judged
-    by the Lean verifier of record: exactly the sessions whose residuals are all zero (the honest one, and a changed last
+    by the Lean verifier: exactly the sessions whose residuals are all zero (the honest one, and a changed last
     Ligerito message) pass every check, so their verdict is the sample-less refusal (`PASSED`), and it rejects each other one at
     the check of its first nonzero residual. It catches a
     reference that is zero where the inner verifier rejects, or that sees a check fail where the inner verifier sees none,

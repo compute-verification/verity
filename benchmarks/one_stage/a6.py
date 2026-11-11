@@ -1,5 +1,5 @@
 """One-stage audit, run A6: the W8A8 linears of an int8 decoder layer, each output coordinate a unit, sampled by the stratified
-law in one audit. A coordinate is `ScaledMmS8Coordinate_v1{K, DOT=BlackwellS8ImmaDot32_v1}` (K/32 satfinite s8 IMMA steps on
+sampling design in one audit. A coordinate is `ScaledMmS8Coordinate_v1{K, DOT=BlackwellS8ImmaDot32_v1}` (K/32 satfinite s8 IMMA steps on
 sm_120, then `benchmarks/ppl/steps.py`'s `int8_linear` scaling, the int8 step vLLM's int8 profile serves), one template per K.
 
     PYTHONPATH=<tree>:<tree>/verity/ml/flock/python:<tree>/integrations/vllm:<tree>/tools/verity/circuit_check/src \\
@@ -10,7 +10,7 @@ sm_120, then `benchmarks/ppl/steps.py`'s `int8_linear` scaling, the int8 step vL
   qkv's 3072, o's 2048 and gate_up's 16384 coordinates at K = 2048, and down's 2048 at K = 8192. The program is
   `TemplatePopulations_v1` over the templates, and the partition `Q_template_instances` v0, one unit per coordinate.
 * **Stand-in values.** Each coordinate's rows are seeded N(0, 1) and N(0, 0.02) rows, each quantized to s8 as steps.py's
-  `quant_rows` does (`benchmarks/served_units/stage.py`'s s8-coord draw), committed afresh. The circuit's output is held to
+  `quant_rows` does (`benchmarks/served_units/stage.py`'s s8-coord sample), committed afresh. The circuit's output is held to
   that numpy twin's. The window says so; vllm's int8 Program and its served rows replace these values.
 * **Statements.** One circuit per template, staged by Flock's `UnitStager` bound to the partition: META names the template,
   the partition and the program. A statement holds at most `chunk_cap` instances (flock-circuit's spec shape, m = k_log + nbl
@@ -19,7 +19,7 @@ sm_120, then `benchmarks/ppl/steps.py`'s `int8_linear` scaling, the int8 step vL
   indices. The verifier derives each port's frame domain itself from META's row schemas and the member's set (Flock's
   set-bound domains), holds the public files to the registration, and the leaf layer is the SHA-512 of the canonical map
   from member to the SHA-512 of its public file.
-* **One sample, the stratified law** (`stratified:K`: one stratum per template, k_s = max(1, round(k n_s / n))), made by the
+* **One sample, the stratified sampling design** (`stratified:K`: one stratum per template, k_s = max(1, round(k n_s / n))), made by the
   verifier's Lean `flock-verify draw --program --partition --stratified K` over its own program and partition object. Each
   member's server serves the sample's units it holds (`serve --zk --draw-file`), and Lean `verify --zk --partition --program`
   holds each session (units derived), so the stratum's share is proved across its template's members.
@@ -50,7 +50,7 @@ from verity.ml.commitments.indexed import RangeIndexedDomain  # noqa: E402
 from verity.ml.commitments.merkle import CommitmentDomain  # noqa: E402
 from verity.ml.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_SEG as SEG, SCHEMA_HM96_SHA512_ROW_V2 as V2  # noqa: E402
 from verity_flock import class_statement as CS  # noqa: E402
-from verity.core.protocols.sampled_proofs.one_stage import draw as D, partition as P, registration as R, verifier as V  # noqa: E402
+from verity.core.protocols.spot.one_stage import draw as D, partition as P, registration as R, verifier as V  # noqa: E402
 
 #: one Llama-3.2-1B decoder layer's W8A8 coordinates for one token, by K
 LLAMA_3_2_1B_LAYER = "2048:21504,8192:2048"
@@ -97,7 +97,7 @@ def stage_template(K: int, n: int, base: int, bound: dict, out: Path, chunk: int
     t0 = time.time()
     tag = f"s8-coord-k{K}"
     rng = np.random.default_rng(int.from_bytes(hashlib.sha256(f"verity/one-stage/a6/v1\0{tag}".encode()).digest()[:8], "little"))
-    rows, twin = SU._s8_coord_draw({"K": K}, n, rng)
+    rows, twin = SU._s8_coord_values({"K": K}, n, rng)
     in_rows = [("x", SEG, 16 * rows["x"].shape[1], ["x", "sx"]), ("w", V2, 16 * rows["w"].shape[1], ["wrow", "sw"])]
     st = CS.UnitStager(template(K), f"unit/a6-{tag}", in_rows, [(V2, (0,))], circuit=out / "circuit.txt", bind=bound)
     t_build = time.time() - t0
@@ -165,7 +165,7 @@ def main() -> int:
     ranges = P.ranges(program, query)
     (out / "partition.json").write_text(json.dumps(part, sort_keys=True))
     (out / "program.json").write_bytes(canonical_json(encode_program(program)))
-    law = D.parse_law(f"stratified:{a.k}")
+    law = D.parse_design(f"stratified:{a.k}")
     strata = P.strata(program, query)
     assert [t for t, _ in strata] == [P.template_id(d) for d in defs] and all(len(rs) == 1 for _, rs in strata)
 
@@ -212,9 +212,10 @@ def main() -> int:
         print("A6 " + json.dumps({"refused_before_draw": summary["checks_before_draw"], "checks": checks}, default=str))
         return 1
 
-    # the verifier's stratified sample, by its own Lean over its own program and partition object; each member serves its stratum
-    p = a0.run([a.lean, "draw", "--program", str(out / "program.json"), "--partition", str(out / "partition.json"),
-                "--stratified", str(a.k)], out / "draw.log")
+    # the verifier's stratified sample, by its own Lean over its own program and partition object on a development
+    # challenger's coins; each member serves its stratum
+    p = a0.challenger_draw(a.lean, ["--program", str(out / "program.json"), "--partition", str(out / "partition.json"),
+                                    "--stratified", str(a.k)], rec["law"], n_all, R.digest(rec), out / "draw.log")
     lean_draw = json.loads(next(x for x in p.stdout.splitlines() if x.startswith("DRAW ")).split(" ", 1)[1])
     (out / "draw.json").write_text(json.dumps(lean_draw, sort_keys=True))
     served, proved, instances, verdicts, statement, sessions, counts, session_roots = [], [], 0, {}, {}, [], {}, {}
@@ -265,8 +266,8 @@ def main() -> int:
     if len(defs) > 1:
         v = V.check(rec, program, P.template_instances_query(defs[:-1]), law, a0.SCHEME, want, leaf_layer=leaf_layer)
         neg["registration-query-drops-a-template (R2)"] = {"refused": not v.ok, "codes": list(v.codes)}
-    for name, other in (("registration-law-another-k (R1)", D.parse_law(f"stratified:{a.k + 1}")),
-                        ("registration-law-subset-not-stratified (R1)", D.parse_law(f"subset:{a.k}"))):
+    for name, other in (("registration-law-another-k (R1)", D.parse_design(f"stratified:{a.k + 1}")),
+                        ("registration-law-subset-not-stratified (R1)", D.parse_design(f"subset:{a.k}"))):
         v = V.check(rec, program, query, other, a0.SCHEME, want, leaf_layer=leaf_layer)
         neg[name] = {"refused": not v.ok, "codes": list(v.codes)}
     first = members[0]["name"]

@@ -32,10 +32,9 @@ order, and `--pins` the Build's meta (`rank_workload_digests`), which each must 
               `NciCheck.Baseline`: the policy check, then θ's provenance against the registration log).
               `--node-points` picks some of `NODE_POINTS`
 
-A finer division of a whole session (per engine step, per layer, per Call) is not checked: `NciCheck.Desc` holds every
-read of a root node as pieces of gates, and on GLM-5.3 a Call's output is mostly one piece per leaf (the 6,144 outputs of
-`Fp8GroupQuantUe8m0_v1{K=6144,G=128}` are 6,192 pieces), about 10^9 pieces per rank. Inside one Call they are resolved
-and dropped, which is why the IUs here are Calls.
+A finer division of a whole session (per engine step, per layer, per Call) is not checked here. Its root would be the
+request's body, whose reads `NciCheck.Desc` holds as segments of gates, each Definition's return coalesced into runs
+(`Desc.coalesce`); `nci_cost.py glm` counts and times them (`summarize_steps`).
 
 DIR/results.json has a row per check: the Program (SHA-512 digest, bytes, root nodes, gates), the division, the verdict
 summarised and the time and peak RSS; DIR/ius/<case>.json each verdict's IUs.
@@ -599,7 +598,7 @@ def slices(runs: Runs, scratch: Path, src: Source, body: dict, ref) -> None:
 def node_instances(args, scratch: Path) -> tuple[list[tuple], dict]:
     """The registered node's instances, one per `--node-points` point, once its descriptor is its digest and, given its
     registration, held to it (`registered-node`); run in a process of its own, as the decoded descriptor is tens of GB."""
-    from verity.core.protocols.sampled_proofs.one_stage import registration as REG
+    from verity.core.protocols.spot.one_stage import registration as REG
 
     desc, ann = load(Path(args.node))
     text, size = described(desc)

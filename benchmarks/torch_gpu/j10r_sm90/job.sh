@@ -20,8 +20,8 @@
 # summary.json written after the lease.
 # Env: NVCC (default CUDA 13.0's), H1U_ARMS (NAME=DEFINES ..., default H1U_DEFAULT's five), STEPS, CHECK_ARGS, BENCH_ARGS,
 # PROF_ARGS, LEASE_MIN (default 25),
-# PY (default /workspace/cp/venv312's or /workspace/jobs/venv312's python, else torch and numpy from PyPI in a uv venv
-# in the scratch directory), JOBS.
+# PY (default benchmarks/harness/env.sh's; with no VERITY_BENCH_VENV and no node venv, torch and numpy from PyPI in a uv
+# venv in the scratch directory), JOBS.
 set -uo pipefail
 WHAT=${1:?usage: job.sh build|cpu|gpu}
 D=benchmarks/torch_gpu/j10r_sm90
@@ -42,10 +42,9 @@ build() {
   cat "$lib/BUILD.txt"; grep -E 'registers|spill' "$lib/ptxas.txt"
 }
 
-# sm_90a arms of benchmarks/hash/dither/h1u.cu, compiled from this tree with
-# benchmarks/hash/dither/j10r90.sh's defines and dither/job.sh's flags plus --no-compress: $OUT/lib/sm_90a/h1u_ARM.so,
-# their resource usage and BUILD.txt; then benchmarks/pouw/harness/sass_gate.py on them as sass_pins.json stands
-# (sass-gate.json, a diagnostic only)
+# sm_90a arms of benchmarks/hash/dither/h1u.cu, compiled from this tree with dither/job.sh's flags plus --no-compress:
+# $OUT/lib/sm_90a/h1u_ARM.so, their resource usage and BUILD.txt; then benchmarks/pouw/harness/sass_gate.py on them as
+# sass_pins.json stands (sass-gate.json, a diagnostic only)
 H1U_BASE=-DH1U_KSPLIT=4,-DH1K_AUTO=1,-DH1K_RONLY=1
 H1U_A=$H1U_BASE,-DH1U_JCTA=1,-DH1U_WARPS=4,-DH1U_JX=1,-DH1U_JBW=1
 H1U_Q=$H1U_A,-DH1U_PF=1,-DH1U_JPI=1
@@ -84,10 +83,12 @@ h1u_build() {
 }
 
 # s8_linear's exact plain linear (benchmarks/torch_gpu/s8_linear), given as files in LIBS: its build.sh run unchanged
-# from a scratch copy, $OUT/s8ship (the cubin, its SASS gate's sass.json, MANIFEST.sha256); prints the wgmma directory
+# from a scratch copy, with this tree's harness gate (benchmarks/pouw/harness/sass_gate.py, its sass_gate.py's mma_gate)
+# beside it, $OUT/s8ship (the cubin, its SASS gate's sass.json, MANIFEST.sha256); prints the wgmma directory
 s8_build() {
-  local w=$S/s8/benchmarks/torch_gpu/s8_linear nv=${NVCC:-/usr/local/cuda-13.0/bin/nvcc}
-  mkdir -p "$w" && cp "$LIBS"/{build.sh,s8_wgmma.cu,s8_acc.h,sass_gate.py,wgmma.py,configs.py} "$w/" || return 2
+  local w=$S/s8/benchmarks/torch_gpu/s8_linear h=$S/s8/benchmarks/pouw/harness nv=${NVCC:-/usr/local/cuda-13.0/bin/nvcc}
+  mkdir -p "$w" "$h" && cp "$LIBS"/{build.sh,s8_wgmma.cu,s8_acc.h,sass_gate.py,wgmma.py,configs.py} "$w/" || return 2
+  cp "$ROOT/benchmarks/pouw/harness/sass_gate.py" "$h/" || return 2
   CUDA=$(dirname "$(dirname "$nv")") PY=/nonexistent bash "$w/build.sh" "$OUT/s8ship" >&2 || return 2
   echo "$w"
 }
@@ -105,8 +106,7 @@ case $WHAT in
     LIBS=${LIBS:-${RESEARCH_RUN_DIR:-.}/inputs}
     S=$(mktemp -d /tmp/j10r-sm90.XXXXXX); trap 'rm -rf "$S"' EXIT
     : > "$OUT/rc.txt"
-    PY=${PY:-}
-    for v in /workspace/cp/venv312 /workspace/jobs/venv312; do [ -z "$PY" ] && [ -x "$v/bin/python" ] && PY=$v/bin/python; done
+    PY=${PY:-$(. benchmarks/harness/env.sh && echo "$VENV/bin/python")} || [ -z "${VERITY_BENCH_VENV:-}" ] || exit 2
     if [ -z "$PY" ]; then
       uv venv -q -p 3.12 "$S/venv" && uv pip install -q -p "$S/venv" torch numpy > "$OUT/venv.out" 2>&1
       echo "venv rc $?" >> "$OUT/rc.txt"

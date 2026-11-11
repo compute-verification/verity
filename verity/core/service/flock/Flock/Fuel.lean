@@ -3,9 +3,13 @@ The fuel-bounded recursions of the sampled verifier's reading: past its fuel eac
 some fuel it gives, unchanged, at any more (`defOfJsonIn_mono`, `cutIn_mono`, `evalDefIn_mono`; the walks' is
 `Steps.run_mono`). So the verifier's answer at `Steps.FUEL` is the unbounded recursion's wherever it accepts.
 -/
-import Flock.Qword
-import Flock.Qcall
-import Flock.Extract
+module
+
+public import Flock.Qword
+public import Flock.Qcall
+public import Flock.Extract
+
+@[expose] public section
 
 namespace Flock.Fuel
 
@@ -78,7 +82,7 @@ theorem defOfJsonIn_mono : ∀ {n m : Nat} {j : Lean.Json} {d : Qword.Def}, n �
 
 /-- A Q_call cut the verifier finishes at some nesting bound, it finishes alike at any larger one. -/
 theorem cutIn_mono {P : Prog} {G : Qcall.Gates} {X : Nat} : ∀ {n m : Nat} {lo hi : Nat} {path : Array (Array Nat)}
-    {how : Qcall.Piece} {acc r : Array Qcall.Unit}, n ≤ m →
+    {how : Qcall.Piece} {acc r : Array Qcall.ProofBlock}, n ≤ m →
     Qcall.cutIn n P G X lo hi path how acc = .ok r → Qcall.cutIn m P G X lo hi path how acc = .ok r
   | 0, _, _, _, _, _, _, _, _, h => by simp [Qcall.cutIn] at h
   | _ + 1, 0, _, _, _, _, _, _, hnm, _ => by omega

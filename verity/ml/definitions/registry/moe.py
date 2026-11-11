@@ -50,6 +50,7 @@ SEMANTIC_ID = "moe/FusedMoE@v1"
 
 F32GtStrict = R.F32GtStrict   # a > b on f32 values (NaN false): greedy argmax, first index wins ties
 F32Sub = R.F32Sub             # RN(a - b), no ftz
+ArgmaxStepF32 = R.ArgmaxStepF32   # the router's argmax step: (x, i) taken iff x > best, so the lowest expert wins ties
 
 
 def _round_f32_toward_neg_inf(x: Fraction) -> int:
@@ -129,9 +130,14 @@ C_MAGIC = b1.f32c(12582913.0)
 C_NEG_MAGIC_BIAS = b1.f32c(-12583039.0)
 C_LOG2E_HI = b1.f32c(f32_of(0x3FB8AA3B))
 C_LOG2E_LO = b1.f32c(f32_of(0x32A57060))
+_EXPF = EVIDENCE["cc12_expf_logf_capture"]
+EXPF_CONF = ("exact-model-tested: every word of torch.exp's f32 CUDA kernel (exp_kernel_cuda) on cc 12.0 with 188 SMs (torch "
+             "2.14.0+cu130) at 4,194,320 inputs, 16 specials (±0, ±inf, a NaN, three subnormals, FLT_MIN, ±1 and five words at "
+             "the overflow and underflow edges), 2^21 random bit patterns and 2^21 words with |x| in [2^-30, 2^7), every NaN "
+             f"result 0x7FFFFFFF as here (capture {_EXPF['run_record']}, fit {_EXPF['fit']})")
 
 
-@composite("NvExpf", 1, [], lambda S: ((("x", F32),), F32), conformance="not-yet-established")
+@composite("NvExpf", 1, [], lambda S: ((("x", F32),), F32), conformance=EXPF_CONF)
 def NvExpf(B, S, x):
     """CUDA math-library `expf(x)` (nvcc, sm_89, no fast-math) as the SASS computes it: saturated range reduction to
     `j = floor(x*log2e)` through the `fma.rm` magic-number trick, `f = x*log2e - j` in two fma steps (hi/lo split of log2e),
@@ -170,20 +176,6 @@ def _butterfly(B, op, vals: list[Coll]) -> list[Coll]:
 # ---------------------------------------------------------------------------------------------------------
 
 
-@composite("RouterArgmaxStep", 1, [], lambda S: ((("carry", Tuple(F32, I32, I32)), ("x", F32)), Tuple(Tuple(F32, I32, I32), I32)),
-           conformance="model-untested")
-def RouterArgmaxStep(B, S, carry, x):
-    """Greedy argmax step over (best, best_index, i) on f32 probabilities: take (x, i) iff x > best (strict; the lowest
-    expert wins ties — the kernel's in-thread strict `>` plus its cross-thread `(other > max) || (other == max &&
-    other_expert < expert)` rule compose to exactly this global order), then i += 1."""
-    best, best_i, i = carry[0], carry[1], carry[2]
-    gt = B.call(F32GtStrict, x, best)
-    nb = B.call(P.SelectF32, gt, x, best)
-    ni = B.call(P.SelectI32, gt, i, best_i)
-    nxt = B.call(P.I32Add, i, B.call(b1.const(32, 1)))
-    return tuple_of(tuple_of(nb, ni, nxt), ni)
-
-
 @composite("MoeRouterTopK", 1, ["E", "TOPK", "VPT"],
            lambda S: ((("logits", Array(S.E, BF16)),), Tuple(Array(S.TOPK, F32), Array(S.TOPK, I32))),
            conformance="not-yet-established")
@@ -191,15 +183,16 @@ def MoeRouterTopK(B, S, logits):
     """`topk_softmax(renormalize=False)` for one token row: f32 softmax over the E bf16 logits with the kernel's reduction
     geometry (E/VPT threads x VPT values: thread-local max / sum in ascending column order, warp butterfly xor T/2..1),
     `p_i = expf(x_i - max) * (1.f / sum)` with `expf` = `NvExpf_v1` (the CUDA math-library sequence) and `1.f / sum` =
-    `rcp.rn.f32` (IEEE, `F32Div_v1`), NaN/Inf -> 0, then TOPK rounds of lowest-index argmax with the winner masked to
-    -10000.f.  Returns (topk_weights = the raw probabilities, topk_ids)."""
+    `rcp.rn.f32` (IEEE, `F32Div_v1`), NaN/Inf -> 0, then TOPK rounds of lowest-index argmax (`ArgmaxStepF32_v1`'s scan: the
+    kernel's in-thread strict `>` and its cross-thread `(other > max) || (other == max && other_expert < expert)` compose to
+    exactly that order) with the winner masked to -10000.f.  Returns (topk_weights = the raw probabilities, topk_ids)."""
     p = _router_probs(B, S.E, S.VPT, logits)
     neg_big = B.call(NEG_10000)
     consts = [B.call(b1.const(32, i)) for i in range(S.E)]
     weights, ids = [], []
     for _ in range(S.TOPK):
         init = tuple_of(p[0], consts[0], consts[1])
-        res = B.scan(RouterArgmaxStep, init, xs=(_array(p[1:]),))
+        res = B.scan(ArgmaxStepF32, init, xs=(_array(p[1:]),))
         best, best_i = res[0][0], res[0][1]
         weights.append(best)
         ids.append(best_i)
@@ -297,7 +290,7 @@ def MoeRouterProbs(B, S, logits):
 def MoeRouterFirst(B, S, p):
     """Round 0 of `MoeRouterTopK_v1`: the strict first-max argmax scan over the probabilities."""
     c0, c1 = B.call(b1.const(32, 0)), B.call(b1.const(32, 1))
-    return B.scan(RouterArgmaxStep, tuple_of(p[0], c0, c1), xs=(_array([p[i] for i in range(1, S.E)]),))[0][1]
+    return B.scan(ArgmaxStepF32, tuple_of(p[0], c0, c1), xs=(_array([p[i] for i in range(1, S.E)]),))[0][1]
 
 
 @composite("MoeRouterNext", 1, ["E"], lambda S: ((("p", Array(S.E, F32)), ("w", F32), ("e", I32)), I32), conformance="not-yet-established")
@@ -312,7 +305,7 @@ def MoeRouterNext(B, S, p, w, e):
         ci = B.call(b1.const(32, i))
         after = B.call(BitOr, B.call(F32GtStrict, w, p[i]), B.call(BitAnd, B.call(F32Eq, p[i], w), B.call(BitNot, B.call(P.I32Le, ci, e))))
         q.append(B.call(P.SelectF32, after, p[i], neg_big))
-    return B.scan(RouterArgmaxStep, tuple_of(q[0], B.call(b1.const(32, 0)), B.call(b1.const(32, 1))), xs=(_array(q[1:]),))[0][1]
+    return B.scan(ArgmaxStepF32, tuple_of(q[0], B.call(b1.const(32, 0)), B.call(b1.const(32, 1))), xs=(_array(q[1:]),))[0][1]
 
 
 @composite("MoeRouterPick", 1, ["E"], lambda S: ((("p", Array(S.E, F32)), ("e", I32)), F32), conformance="not-yet-established")
@@ -445,14 +438,14 @@ def _ok_take(B, found: Coll, best: Coll, ok: Coll, x: Coll) -> Coll:
 
 
 def _first_max(B, s: list[Coll]) -> Coll:
-    """`MoeRouterFirst_v1(s)`: `RouterArgmaxStep_v1`'s scan over s[1 .. E-2], then the last expert's step for its index alone (a
+    """`MoeRouterFirst_v1(s)`: `ArgmaxStepF32_v1`'s scan over s[1 .. E-2], then the last expert's step for its index alone (a
     scan's last step would also compute a best value and an i + 1 nothing reads)."""
     c0, c1 = B.call(b1.const(32, 0)), B.call(b1.const(32, 1))
     if len(s) == 1:
         return c0
     carry = tuple_of(s[0], c0, c1)
     if len(s) > 2:
-        carry = B.scan(RouterArgmaxStep, carry, xs=(_array(s[1:-1]),))[0]
+        carry = B.scan(ArgmaxStepF32, carry, xs=(_array(s[1:-1]),))[0]
     return B.call(P.SelectI32, B.call(F32GtStrict, s[-1], carry[0]), carry[2], carry[1])
 
 
@@ -590,6 +583,27 @@ def MoeRouterSigmoidBias(B, S, logits, bias):
     out = B.call(bind(MoeRouterSigmoidNorm, TOPK=S.TOPK, SCALE=S.SCALE, KERNEL=kernel), _array([p[0] for p in pairs]),
                  _array([p[1] for p in pairs]))
     return tuple_of(out, _array(ids))
+
+
+def slots_signature(f32, i32):
+    """`MoeRouterSigmoidBiasSlots`' signature over its element types: `MoeRouterSigmoidBias_v1`'s parameters, and its weights and
+    ids one return field a slot, (w_0, .., w_{TOPK-1}, id_0, .., id_{TOPK-1})."""
+    return lambda S: ((("logits", Array(S.E, f32)), ("bias", Array(S.E, f32))), Tuple(*[f32] * S.TOPK, *[i32] * S.TOPK))
+
+
+def slots(out: Coll, topk: int) -> Coll:
+    """A (weights, ids) pair of TOPK-arrays as its 2 TOPK slot fields, no gate."""
+    return tuple_of(*[out[0][k] for k in range(topk)], *[out[1][k] for k in range(topk)])
+
+
+@composite("MoeRouterSigmoidBiasSlots", 1, ["E", "TOPK", "SCALE", "KERNEL"], slots_signature(F32, I32),
+           conformance="exact-model-tested; MoeRouterSigmoidBias_v1's words, one field a slot, so the captures its conformance "
+                       "names hold it")
+def MoeRouterSigmoidBiasSlots(B, S, logits, bias):
+    """`MoeRouterSigmoidBias_v1` with its outputs one field a slot: a unit's output rows are its return fields, so slot k's
+    expert id is a row of its own, which the read of the expert's weight rows (`gates.embedding`'s ``tok``) wires whole, and
+    slot k's weight one, which its down projection's ``g`` wires whole."""
+    return slots(B.call(bind(MoeRouterSigmoidBias, E=S.E, TOPK=S.TOPK, SCALE=S.SCALE, KERNEL=S.KERNEL), logits, bias), S.TOPK)
 # ---------------------------------------------------------------------------------------------------------
 
 
@@ -725,7 +739,7 @@ def MoeSum(B, S, y):
     return B.batch(bind(MoeSumCoordinate, TOPK=S.TOPK), cols, axes=(0,))
 
 
-ALL = [F32Sat, F32FmaRm, F32Neg, F32BitsShl23, NvExpf, F32IsFinite, RouterArgmaxStep, MoeRouterTopK, MoeRouterTopKNorm, MoeRouterProbs,
+ALL = [F32Sat, F32FmaRm, F32Neg, F32BitsShl23, NvExpf, F32IsFinite, MoeRouterTopK, MoeRouterTopKNorm, MoeRouterProbs,
        MoeRouterFirst, MoeRouterNext, MoeRouterPick, MoeRouterTopKOrdered, MoeRouterTopKOrderedNorm, NvSigmoid, MoeRouterBiasScore,
        MoeRouterSigmoidScore, RouterArgmaxOkStep, MoeRouterBiasNext, MoeRouterPickPair, MoeRouterSigmoidNorm, MoeRouterSigmoidBias, MoeExpertRow,
        MoeExpertCoordinate, MoeExpertGemm, MoeExpertCoordinateW, MoeExpertGemmW, MoeExpertCoordinateV2, MoeExpertGemmV2,

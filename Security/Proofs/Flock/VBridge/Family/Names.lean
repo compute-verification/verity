@@ -1,5 +1,26 @@
-import Proofs.Flock.VBridge.Family.Structure
-import Proofs.Flock.Soundness.ExecCircuit
+module
+
+public import Proofs.Flock.VBridge.Family.Structure
+import all Init.Data.String.Legacy
+import all Init.Data.String.Defs
+import all Init.Data.Repr
+import all Init.Data.Int.Repr
+import Std.Data.String.ToNat
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Tactic.ReduceModChar
+import Proofs.Flock.Soundness.Refine.Setup
 
 /-!
 # The circuit file's unit name, emitted and parsed
@@ -8,10 +29,13 @@ import Proofs.Flock.Soundness.ExecCircuit
 net, whose header line is `flock-ir-unit/v2 <unit> …` (`VStar.emitNet`, `Unit.lean:94`). `HmRow.parse`
 (`HmRow.lean:550`) splits the text at `\n`, takes the first `CIRCUIT unit` section's net (`Net.parse`, `Net.lean:200`),
 and that net's name is the second token of its header line. The legacy `String.splitOn "\n"` is `List.splitOn '\n'` on
-the characters (`splitOn_nl`), `Flock.tokens` reads a line's second word (`tokens_second`), `pyDumps` writes one line
-(`pyDumps_noNl`), and the unit names are one word (`recOpen_name`, `residuals_name`), so the parse names the circuit's
-unit as the statement's (`file_unitName`): `HUnitName` and `HOpenName` at any history and registration.
+the characters (`splitOn_nl`, as at any one-byte separator: `splitOn_sep`), `Flock.tokens` reads a line's second word
+(`tokens_second`), `pyDumps` writes one line (`pyDumps_noNl`), and the unit names are one word (`recOpen_name`,
+`residuals_name`), so the parse names the circuit's unit as the statement's (`file_unitName`): `HUnitName` and
+`HOpenName` at any history and registration.
 -/
+
+@[expose] public section
 
 namespace FlockVBridge.Names
 
@@ -103,10 +127,13 @@ theorem extract_at (s : String) (pre mid post : List Char) (hs : s.toList = pre 
     simp only [Nat.zero_add] at h1
     rw [show (0 : String.Pos.Raw) = ⟨0⟩ from rfl, h1, ulen_append, go₂_at]
 
-theorem splitOnAux_nl (s : String) (pre mid post : List Char) (hs : s.toList = pre ++ mid ++ post)
-    (hmid : '\n' ∉ mid) (r : List String) :
-    String.splitOnAux s "\n" ⟨ulen pre⟩ ⟨ulen (pre ++ mid)⟩ 0 r =
-      r.reverse ++ ((mid ++ post).splitOn '\n').map String.ofList := by
+/-- The legacy `String.splitOnAux` at a one-byte separator `sep`, the character `ch`, inside a field `mid` that holds no
+`ch`: the fields before it, then `List.splitOn ch` of the rest. -/
+theorem splitOnAux_sep (sep : String) (ch : Char) (hg : String.Pos.Raw.get sep 0 = ch)
+    (hn : String.Pos.Raw.next sep 0 = ⟨1⟩) (he : String.Pos.Raw.atEnd sep ⟨1⟩ = true) (hz : ch.utf8Size = 1)
+    (s : String) (pre mid post : List Char) (hs : s.toList = pre ++ mid ++ post) (hmid : ch ∉ mid) (r : List String) :
+    String.splitOnAux s sep ⟨ulen pre⟩ ⟨ulen (pre ++ mid)⟩ 0 r =
+      r.reverse ++ ((mid ++ post).splitOn ch).map String.ofList := by
   induction post generalizing pre mid r with
   | nil =>
     rw [String.splitOnAux, if_pos]
@@ -132,37 +159,31 @@ theorem splitOnAux_nl (s : String) (pre mid post : List Char) (hs : s.toList = p
       have := c.utf8Size_pos
       omega
     rw [String.splitOnAux, if_neg hnot]
-    have hnl : String.Pos.Raw.get "\n" 0 = '\n' := rfl
-    have hsz : '\n'.utf8Size = 1 := rfl
-    have hmid' : ∀ x ∈ mid, (x == '\n') = false := by
+    have hmid' : ∀ x ∈ mid, (x == ch) = false := by
       intro x hx
       simp only [beq_eq_false_iff_ne, ne_eq]
       rintro rfl
       exact hmid hx
-    by_cases hc : c = '\n'
+    by_cases hc : c = ch
     · subst hc
-      rw [if_pos (by rw [hget, hnl]; rfl)]
+      rw [if_pos (by rw [hget, hg]; exact beq_self_eq_true c)]
       dsimp only
-      have hend : String.Pos.Raw.atEnd "\n" (String.Pos.Raw.next "\n" 0) = true := rfl
-      rw [if_pos hend]
-      have hnext : String.Pos.Raw.next s ⟨ulen (pre ++ mid)⟩ = ⟨ulen (pre ++ mid ++ ['\n'])⟩ := by
+      rw [hn, if_pos he]
+      have hnext : String.Pos.Raw.next s ⟨ulen (pre ++ mid)⟩ = ⟨ulen (pre ++ mid ++ [c])⟩ := by
         unfold String.Pos.Raw.next
-        rw [hget, String.Pos.Raw.add_char_eq, ulen_append (pre ++ mid), ulen_cons, hsz]
+        rw [hget, String.Pos.Raw.add_char_eq, ulen_append (pre ++ mid), ulen_cons, hz]
         rfl
-      have hun : (String.Pos.Raw.unoffsetBy ⟨ulen (pre ++ mid ++ ['\n'])⟩ (String.Pos.Raw.next "\n" 0)) =
-          ⟨ulen (pre ++ mid)⟩ := by
-        have : String.Pos.Raw.next "\n" 0 = ⟨1⟩ := rfl
-        rw [this]
-        show (⟨ulen (pre ++ mid ++ ['\n']) - 1⟩ : String.Pos.Raw) = _
-        rw [ulen_append (pre ++ mid), ulen_cons, hsz]
+      have hun : String.Pos.Raw.unoffsetBy ⟨ulen (pre ++ mid ++ [c])⟩ ⟨1⟩ = ⟨ulen (pre ++ mid)⟩ := by
+        show (⟨ulen (pre ++ mid ++ [c]) - 1⟩ : String.Pos.Raw) = _
+        rw [ulen_append (pre ++ mid), ulen_cons, hz]
         rfl
       rw [hnext, hun, extract_at s pre mid _ hs]
-      have := ih (pre ++ mid ++ ['\n']) [] (by rw [hs]; simp) (by simp) (String.ofList mid :: r)
+      have := ih (pre ++ mid ++ [c]) [] (by rw [hs]; simp) (by simp) (String.ofList mid :: r)
       rw [List.append_nil] at this
-      rw [this, List.nil_append, show (mid ++ '\n' :: post).splitOn '\n' = mid :: post.splitOn '\n' from
-        List.splitOnP_append_cons_of_forall_mem hmid' '\n' rfl post]
+      rw [this, List.nil_append, show (mid ++ c :: post).splitOn c = mid :: post.splitOn c by
+        simp only [List.splitOn_eq_splitOnP]; exact List.splitOnP_append_cons_of_forall_mem hmid' c (by simp) post]
       simp
-    · rw [if_neg (by rw [hget, hnl, beq_iff_eq]; exact hc)]
+    · rw [if_neg (by rw [hget, hg, beq_iff_eq]; exact hc)]
       have hnext : (String.Pos.Raw.unoffsetBy ⟨ulen (pre ++ mid)⟩ 0).next s = ⟨ulen (pre ++ (mid ++ [c]))⟩ := by
         show String.Pos.Raw.next s ⟨ulen (pre ++ mid) - 0⟩ = _
         rw [Nat.sub_zero]
@@ -173,12 +194,17 @@ theorem splitOnAux_nl (s : String) (pre mid post : List Char) (hs : s.toList = p
         simp only [List.mem_append, List.mem_singleton, not_or]; exact ⟨hmid, fun h => hc h.symm⟩) r]
       simp
 
-/-- **The legacy `String.splitOn "\n"` is `List.splitOn '\n'` on the characters.** -/
-theorem splitOn_nl (s : String) : s.splitOn "\n" = (s.toList.splitOn '\n').map String.ofList := by
+/-- **The legacy `String.splitOn` at a one-byte separator is `List.splitOn` of its character on the characters.** -/
+theorem splitOn_sep (sep : String) (ch : Char) (hg : String.Pos.Raw.get sep 0 = ch)
+    (hn : String.Pos.Raw.next sep 0 = ⟨1⟩) (he : String.Pos.Raw.atEnd sep ⟨1⟩ = true) (hz : ch.utf8Size = 1)
+    (hne : sep ≠ "") (s : String) : s.splitOn sep = (s.toList.splitOn ch).map String.ofList := by
   unfold String.splitOn
-  rw [if_neg (by decide)]
-  have := splitOnAux_nl s [] [] s.toList (by simp) (by simp) []
-  exact this
+  rw [if_neg (by simpa using hne)]
+  exact splitOnAux_sep sep ch hg hn he hz s [] [] s.toList (by simp) (by simp) []
+
+/-- **The legacy `String.splitOn "\n"` is `List.splitOn '\n'` on the characters.** -/
+theorem splitOn_nl (s : String) : s.splitOn "\n" = (s.toList.splitOn '\n').map String.ofList :=
+  splitOn_sep "\n" '\n' rfl rfl rfl rfl (by decide) s
 
 theorem fromUTF8?_toUTF8 (s : String) : String.fromUTF8? s.toUTF8 = some s := by
   unfold String.fromUTF8?
@@ -299,6 +325,29 @@ theorem loop_inv' {β : Type} (P Q : β → Prop) (μ : β → ℕ) {f : Unit �
 theorem getElem!_str (a : Array String) (i : ℕ) : a[i]! = a.getD i "" := by
   simp only [getElem!_def, Array.getD_eq_getD_getElem?]
   cases a[i]? <;> rfl
+
+theorem toNat_unit : ("unit" : String).toNat? = none := by
+  rw [← String.toNat?_toSlice, String.Slice.toNat?_eq_none_iff, String.isNat_toSlice, ← Bool.not_eq_true,
+    String.isNat_iff]
+  simp
+
+theorem toNat_empty : ("" : String).toNat? = none := by
+  rw [← String.toNat?_toSlice, String.Slice.toNat?_eq_none_iff, String.isNat_toSlice, ← Bool.not_eq_true,
+    String.isNat_iff]
+  simp
+
+/-- **`HmRow.tmplLines` passes over nothing** unless line 2 is two tokens, the second a numeral (`TEMPLATE n`): the
+sections then start right after META. -/
+theorem tmplLines_eq_zero {tags : Tags} {lines : Array String}
+    (h : (tokens (lines.getD 2 "")).size ≠ 2 ∨ ((tokens (lines.getD 2 "")).getD 1 "").toNat? = none) :
+    HmRow.tmplLines tags lines = 0 := by
+  unfold HmRow.tmplLines
+  try dsimp only
+  generalize tokens (lines.getD 2 "") = t at h ⊢
+  rcases h with h | h
+  · simp [h]
+  · rw [getElem!_str t 1, h]
+    simp
 
 /-- The first net read is the `Net.parse` of the lines after line 2, under line 2's second token. -/
 def FirstNet (lines : Array String) (nets : Array (String × Net)) : Prop :=
@@ -453,9 +502,13 @@ theorem parse_unit {tags : Tags} {bytes : ByteArray} {tables : List (String × B
       rw [Array.getD_eq_getD_getElem?, Array.getElem?_eq_none (by omega)]; rfl
     rw [e] at hu
     simp [tokens_eq] at hu
+  have hat0 : at0 = 2 := by
+    have htl : HmRow.tmplLines tags lines = 0 := tmplLines_eq_zero (Or.inr (by rw [hu]; exact toNat_unit))
+    show 2 + HmRow.tmplLines tags lines = 2
+    omega
   have hfirst : FirstNet lines s1.1 := by
     refine loop_inv' (fun b : Array (String × Net) × ℕ => FirstNet lines b.1 ∨ (b.1 = #[] ∧ b.2 = 2))
-      (fun b => FirstNet lines b.1) (fun b => lines.size - b.2) ?_ _ (nets0, at0) s1 le_rfl (Or.inr ⟨rfl, rfl⟩) hwhile
+      (fun b => FirstNet lines b.1) (fun b => lines.size - b.2) ?_ _ (nets0, at0) s1 le_rfl (Or.inr ⟨rfl, hat0⟩) hwhile
     intro b hb s h
     ((try beta_reduce at h); extract_lets (config := { underBinder := false, onlyGivenNames := true }) nets at_ at h)
     split at h
@@ -866,7 +919,7 @@ theorem parse_name {lines : Array String} {net : Net} (h : Net.parse lines = .ok
   obtain ⟨s, -, h⟩ := except_bind_ok h
   by_cases hL : (lines.getD (1 + useful) "").startsWith "LEAVES " = true
   · rw [ite_eq_left_of_eq_true _ _ (eq_true hL)] at h
-    rcases hj : Lean.Json.parse ((lines.getD (1 + useful) "").drop 7).toString with e | j
+    rcases hj : Flock.JsonParse.parse ((lines.getD (1 + useful) "").drop 7).toString with e | j
     · rw [hj] at h; exact absurd h throw_bind_ne
     · rw [hj] at h
       exact ofRows_name (ite_throw_ok (ite_throw_ok h))

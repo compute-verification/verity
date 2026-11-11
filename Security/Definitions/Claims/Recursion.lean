@@ -1,4 +1,6 @@
-import Definitions.Claims.IndexedTapes
+module
+
+public import Definitions.Claims
 
 /-!
 # Claims: the ZK-recursion compiler (a draft, before it freezes)
@@ -10,7 +12,7 @@ eight items:
 
 1. **Statement format.** `x` is the canonical bytes of what the compiled verifier reads, parsed by its own parser
    (`Deploy.parse`) into the inner statement's bytes, the inner statement's dimensions as the verifier sets it up, the
-   commitment to the circuit (the private-circuit variant only), the recursion's form, and each V* session's draw as
+   commitment to the circuit (the private-circuit variant only), the recursion's form, and each V* session's sample as
    its record holds it, where the statement carries the records (`CompiledStatement`, `Form`, `DrawRecord`).
 2. **Witness.** The inner protocol's (`W`), in both variants. In the private-circuit one the circuit is in the inner
    witness, which the universal unit's relation reads, and its commitment is hm96 rows that unit outputs.
@@ -19,11 +21,11 @@ eight items:
 4. **Scope, readable** (`Scope`, `InScope`): the inner scope, and the inner shapes the compiled verifier accepts: the
    dense form only (public inner circuits, no RecSparse phase and no R; it refuses the holo and sparse forms, which
    `RecursiveKS` doesn't cover). A fast100 inner table, `k_log ≥ 6`, two claims and two per region, no circuit
-   commitment. Every V* session draws every unit of its population (`DrawRecord.Full`). There is no recursion-level scope
+   commitment. Every V* session samples every unit of its population (`DrawRecord.Full`). There is no recursion-level scope
    refusal: `ScopeMatches` states that this is the compiled verifier's own scope check, its setup's checks of the inner
-   shape, its refusal of a holo or sparse inner shape, its refusal of a V* session whose draw is not
-   every unit, and its refusal of a session over an inner session whose record holds no draw. Where the V* records are
-   run messages, the statement carries no draws, and the compiled verifier refuses a session whose draw is not every
+   shape, its refusal of a holo or sparse inner shape, its refusal of a V* session whose sample is not
+   every unit, and its refusal of a session over an inner session whose record holds no sample. Where the V* records are
+   run messages, the statement carries no samples, and the compiled verifier refuses a session whose sample is not every
    unit when that session decides.
 5. **Named pieces.** A run is the inner session's rounds, the prover's staging rounds (`Deploy.kS`), at which it stages
    the V* statements, then the V* sessions. `E*` (`E`): the outer extractor `E_O` (`EO`: per V* session, `E^rep` over
@@ -54,7 +56,7 @@ eight items:
    `q ≤ 2^128 · t`. `ZK`'s errors are Flock's proved
    `--zk` simulation error at each V* session (`Nums.εzk`) and `2δ₁` per commit string of the inner session and the
    staging messages. `ZKStop` restates `ZK`, statement only, and reads `Hm96Hiding` as `ZK` does: of
-   the masked record's own reference prover on the finite tape each statement's nonce and rest draw (`ZkDeploy.prover`,
+   the masked record's own reference prover on the finite tape each statement's nonce and rest sample (`ZkDeploy.prover`,
    `ZKmalRx`), which stops where the statement and the public transcript before the sessions say the honest proof can
    be refused (`StopDeploy.stops`), at the simulator that stops there too and commits to the zero digest as many
    strings at each inner round as the reference prover's round carries (`SimStop`, `StopDeploy.nAt`), within `2δ₁`
@@ -71,7 +73,7 @@ eight items:
    `2^-128` target under every weight: its KS is stated and proved at that level, not at the floor. `BitsLin2`'s
    level λ₂ (`lamLin2`) evaluates to at least 100 at the deployed records (`RecDeploy.lamLin2_deployed_ge_dep`, about
    165.8) as a number, and `KSLin2` at the deployment's dense statements (`KSLin2On` at `RecDeploy.DenseAt`) is proved
-   with no hypothesis at the deployed reader's record, the coin server's (`Flock.Guarantees.RecursiveKS`);
+   with no hypothesis at the deployed reader's record, the challenger's live-coin part's (`Flock.Guarantees.RecursiveKS`);
    `RecDeploy.ksLin2_deployed_open`, at the earlier `finOpen` layout, still takes `PartChecksBV`, `PartOpensB` and
    `DecompB`. Holo statements have a model of their own (`Model.holoTable`),
    and `BitsLin2` at the dense statements follows from it (`bitsLin2On_of_ksLin2On`).
@@ -79,6 +81,8 @@ eight items:
 Mathlib only, as `Definitions/` is. So every claim is parametric in the deployed verifier, its parser and its readers:
 binding them to the compiled verifier is the code side's, as Flock's is.
 -/
+
+@[expose] public section
 
 namespace Claims.Recursion
 
@@ -97,7 +101,7 @@ def serve {R₁ R₂ α : Type} (q : R₁ → RP R₂ Seen) : RP R₁ α → RP 
 /-- A rerun at `r`, seen through `f`. -/
 def viewing {R : Type} (f : Seen → Seen) (r : R) : RP R Seen := .rerun r fun v => .ret (f v)
 
-/-- **`E^rep`'s program over draws `D`**: rerun the judged draw `d₀`; if it accepted, make the `m` waits over the draws
+/-- **`E^rep`'s program over samples `D`**: rerun the judged sample `d₀`; if it accepted, make the `m` waits over the samples
 `ρ`, each stopping at `k` accepted reruns, and return the first assembled candidate that `check` accepts. `ERep`'s
 program is this one at the run's coins. -/
 def erep {D W Op : Type} (m k K : ℕ) (opens : Seen → List Op) (assemble : List Op → Option W) (check : W → Bool)
@@ -122,15 +126,15 @@ section Served
 
 variable {Coin W W₂ Op : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin]
 
-/-- **The outer stage at a draw**: `E₂` at the draw's run coins and its own coins, its output read by `dec` as what
+/-- **The outer stage at a sample**: `E₂` at the sample's run coins and its own coins, its output read by `dec` as what
 the inner stage sees. -/
 def outerStage {V : Verifier Coin} (E₂ : Extractor Coin W₂ V)
     (dec : (x : Msg) → (Fin (V.k x) → Coin) → Option W₂ → Seen) (x : Msg) (d : (Fin (V.k x) → Coin) × E₂.C x) :
     RP (Fin (V.k x) → Coin) Seen :=
   (E₂.ext x d.1 d.2).bind fun w₂ => .ret (dec x d.1 w₂)
 
-/-- **`E^rep` served by `E₂`**: `E^rep` over draws of the run's coins and `E₂`'s coins, its judged draw the judged
-run's coins `r₀` with `E₂`'s coins `c.1`, each draw's rerun served by `E₂` there (`outerStage`). -/
+/-- **`E^rep` served by `E₂`**: `E^rep` over samples of the run's coins and `E₂`'s coins, its judged flip the judged
+run's coins `r₀` with `E₂`'s coins `c.1`, each sample's rerun served by `E₂` there (`outerStage`). -/
 def served (V : Verifier Coin) (E₂ : Extractor Coin W₂ V)
     (dec : (x : Msg) → (Fin (V.k x) → Coin) → Option W₂ → Seen) (m k K : Msg → ℕ) (opens : Seen → List Op)
     (assemble : Msg → List Op → Option W) (check : Msg → W → Bool) : Extractor Coin W V where
@@ -224,17 +228,17 @@ of the run and fresh coins of its own for that run, which the inner verifier doe
 and is rejected. -/
 
 /-- An aborted run: nothing sent, rejected. -/
-def abortTrace : Trace := ⟨[], [], [], .rej⟩
+def abortTranscript : Transcript := ⟨[], [], [], .rej⟩
 
 /-- **A run that may abort after the inner rounds**: `P`'s run at the tape `ω` and the coins `t.1`, unless `keep`, which
 reads the tape, every coin of the run and the run's fresh coins `t.2`, refuses it; then the run aborts. -/
 def abortRun {Coin : Type} [Inhabited Coin] {Ω A : Type} (H : Msg → Msg) (P : Prover Ω) (V : Verifier Coin)
-    (x : Msg) (keep : Ω → (Fin (V.k x) → Coin) → A → Bool) (ω : Ω) (t : (Fin (V.k x) → Coin) × A) : Trace :=
-  if keep ω t.1 t.2 then run H P V x ω t.1 else abortTrace
+    (x : Msg) (keep : Ω → (Fin (V.k x) → Coin) → A → Bool) (ω : Ω) (t : (Fin (V.k x) → Coin) × A) : Transcript :=
+  if keep ω t.1 t.2 then run H P V x ω t.1 else abortTranscript
 
 /-- **`Pr[run = acc ∧ ¬R(x, E^rep(x))]` at a prover that may abort**, over the tape, the judged run's coins with its
-abort coins, and `E^rep`'s draws, each a run's coins with its abort coins: `E^rep` at the inner protocol's waits reruns
-at the judged draw, then at its draws, and sees each run as it aborts. -/
+abort coins, and `E^rep`'s samples, each a run's coins with its abort coins: `E^rep` at the inner protocol's waits reruns
+at the judged sample, then at its samples, and sees each run as it aborts. -/
 noncomputable def Inner.PrBadAbort {Coin W : Type} [Fintype Coin] [Inhabited Coin] (H : Msg → Msg)
     (I : Inner Coin W) (x : Msg) {Ω A : Type} [Fintype Ω] [Fintype A] (P : Prover Ω)
     (keep : Ω → (Fin (I.V.k x) → Coin) → A → Bool) : ℝ :=
@@ -243,7 +247,7 @@ noncomputable def Inner.PrBadAbort {Coin W : Type} [Fintype Coin] [Inhabited Coi
       ¬ I.R.ext x ((erep (I.waits x) (I.k x) (I.cap x) I.opens (I.assemble x) (I.check x) s.2.1 s.2.2).eval H
         (abortRun H P I.V x keep s.1)).1
 
-/-- **`B` at runs that may abort**: `B`'s fork (guess `j`, draw `ω, r_1..r_j`, run twice from the shared start with
+/-- **`B` at runs that may abort**: `B`'s fork (guess `j`, sample `ω, r_1..r_j`, run twice from the shared start with
 fresh continuations), each run with its own abort coins, and the first collision among the verifier's SHA-512 calls in
 the two runs as they abort. Its cost is both runs' calls, both parties'. -/
 def BAbort {Coin : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin] {Ω A : Type} [Fintype Ω] [Nonempty Ω]
@@ -319,7 +323,7 @@ structure Form where
   stacked : Option (ℕ × ℕ)
   unitRangeInBlock : Bool
 
-/-- **A V* session's draw record**, the draw as its record holds it: its law's `k` when the law is `subset` (`none` for
+/-- **A V* session's sample record**, the sample as its record holds it: its sampling design's `k` when the sampling design is `subset` (`none` for
 another law), its population, its units and its closure. -/
 structure DrawRecord where
   subset : Option ℕ
@@ -327,13 +331,13 @@ structure DrawRecord where
   units : List ℕ
   closure : List ℕ
 
-/-- **The full draw**: the `subset` draw of every unit of its population, `0, …, N − 1` in order, with no closure. -/
+/-- **The full sample**: the `subset` sample of every unit of its population, `0, …, N − 1` in order, with no closure. -/
 def DrawRecord.Full (d : DrawRecord) : Prop :=
   d.subset = some d.population ∧ d.units = List.range d.population ∧ d.closure = []
 
 /-- **The recursion's statement**: the inner statement's bytes, its `(m, k_log, regions)` as the verifier sets it up
 from its files (`none` where the verifier holds none), the commitment to the circuit (the private-circuit variant),
-the form, each V* session's draw as its record holds it (`none` where it holds none the verifier reads; no draws
+the form, each V* session's sample as its record holds it (`none` where it holds none the verifier reads; no samples
 where the records are run messages rather than the statement's), and the inner population's link table
 (`verity/rec-links/v1`) as its root `T` and row count `N`, where the statement carries one. Neither the relation nor
 the scope reads `links` yet: the compiled verifier refuses every statement that carries one. -/
@@ -348,12 +352,12 @@ structure CompiledStatement where
 /-- RecSparse's `P_LOG` at `ℓ`: the bit length of `2ℓ + 1`. -/
 def pLog (ell : ℕ) : ℕ := Nat.log 2 (2 * ell + 1) + 1
 
-/-- **The recursion's scope, readable**: the inner shapes the compiled verifier accepts, every V* session drawing every
+/-- **The recursion's scope, readable**: the inner shapes the compiled verifier accepts, every V* session sampling every
 unit of its population. No circuit commitment; the inner table at a fast100 `m` (`22 ≤ m ≤ 35`), `k_log ≥ 6`, two
 claims and two per region; and the dense form only: public circuits (not `holo`), no RecSparse phase and no R. The
 compiled verifier refuses the holo and sparse forms (`RecSetup.denseOnly`), which `RecursiveKS` doesn't cover, so they
 are out of scope. Every V* session's
-record holds a draw, and it is the full draw (`DrawRecord.Full`). -/
+record holds a sample, and it is the full sample (`DrawRecord.Full`). -/
 def InScope (s : CompiledStatement) : Prop :=
   s.circ = none ∧ 22 ≤ s.form.m ∧ s.form.m ≤ 35 ∧ 6 ≤ s.form.kLog ∧ s.form.claims = 2 + 2 * s.form.regions ∧
     (s.form.holo = false ∧ s.form.sparse = none ∧ s.form.stacked = none) ∧
@@ -364,7 +368,7 @@ def InScope (s : CompiledStatement) : Prop :=
 /-- **An outer session's numbers**, those Flock's errors read at one V* statement (`Flock.Deploy`'s at it): the
 table's error, `N₀`, the weight `C`, the outer verifier's rounds, `E^rep`'s waits and its truncation; and those its
 `--zk` simulation error reads (`Flock.zk_of_models`' `n_L` and `n_B`): the hm96 leaves of the masked prover's
-messages before the coins (`leaves`), and of its answers to one draw of the coins (`coinLeaves`). -/
+messages before the coins (`leaves`), and of its answers to one sample of the coins (`coinLeaves`). -/
 structure Nums where
   εtable : ℝ
   N₀ : ℝ
@@ -454,7 +458,7 @@ def Deploy.zeroCommits {Coin : Type} (D : Deploy Coin) : List (Fin D.saltLen →
   | [] => .ret []
   | y :: ys => spBind (spOf (D.zeroCommit y)) fun c => spBind (D.zeroCommits ys) fun cs => .ret (c :: cs)
 
-/-- **The masked record**: a deployment with its reference prover's tape at each statement drawn as a finite nonce and
+/-- **The masked record**: a deployment with its reference prover's tape at each statement sampled as a finite nonce and
 rest of that statement's (`tapeOf x`), since each V* session runs on a tape of its own, and the outer `--zk` Flock's
 simulators at each attempt budget, at the recursion's statement and each V* session's index (`SO`), which `Sim`
 runs. -/
@@ -471,7 +475,7 @@ structure ZkDeploy (Coin : Type) extends Deploy Coin where
 attribute [instance] ZkDeploy.nonceFin ZkDeploy.nonceNe ZkDeploy.restFin ZkDeploy.restNe
 
 /-- **The masked record's reference prover** at the statement `x`: `Deploy.P`, the prover `Complete` reads, on the
-tape `x`'s nonce and rest draw. -/
+tape `x`'s nonce and rest sample. -/
 def ZkDeploy.prover {Coin : Type} (D : ZkDeploy Coin) (w : Flock.Wit) (x : Msg) : Prover (D.Nonce x × D.Rest x) :=
   ⟨fun x' hist ω => (D.P w).next x' hist (D.tapeOf x ω)⟩
 
@@ -479,7 +483,7 @@ def ZkDeploy.prover {Coin : Type} (D : ZkDeploy Coin) (w : Flock.Wit) (x : Msg) 
 (`ZkDeploy`) and the following.
 
 * Zero knowledge is of the masked record's reference prover (`ZkDeploy.prover`: `P` on the tape `x`'s nonce and rest
-  draw), at its outer simulators (`ZkDeploy.SO`).
+  sample), at its outer simulators (`ZkDeploy.SO`).
 * The reference prover's inner round `i` at `x` carries `nAt x i` hm96 commit strings under fresh salts of its tape,
   and its message is `innerMsg x ms cs` at the run so far `ms` and those strings `cs` (the public rest of the round, as
   `stage` is the staging round's).
@@ -547,14 +551,14 @@ noncomputable def EO (D : Deploy Coin) (I : Inner Coin W) (DO : Flock.Deploy Coi
               fork (I.V.k (xI D x) + D.kS x + ((xs.take s).map DO.V.k).sum) r₀ (c s i j))))
     else .ret none
 
-/-- The inner session's view at a draw, read off the outer extractor's output with the inner verifier at the oracle
+/-- The inner session's view at a sample, read off the outer extractor's output with the inner verifier at the oracle
 `H`; a rejected view when it gave up. -/
 def dec (H : Msg → Msg) (D : Deploy Coin) (x : Msg) (r : Fin (D.V.k x) → Coin) : Option (List Flock.Wit) → Seen
   | some ws => D.innerView H x r ws
   | none => ⟨[], .rej⟩
 
 /-- **`E*`, the recursion's extractor** at the oracle `H`: the outer extractor, then the inner one. The inner
-protocol's `E^rep` at its inner statement, each of its reruns served by `E_O` at that draw's coins and `E_O`'s own, the
+protocol's `E^rep` at its inner statement, each of its reruns served by `E_O` at that sample's coins and `E_O`'s own, the
 inner view read off `E_O`'s output (`dec`). -/
 noncomputable def E (H : Msg → Msg) (D : Deploy Coin) (I : Inner Coin W) (DO : Flock.Deploy Coin Col T)
     (decO : List (ℕ × Col) → List T) : Extractor Coin W D.V :=
@@ -563,7 +567,7 @@ noncomputable def E (H : Msg → Msg) (D : Deploy Coin) (I : Inner Coin W) (DO :
 
 /-! ### The extraction-based finder -/
 
-/-- **`Be`** (extraction-based): `B`'s fork (guess `j`, draw `ω, r_1..r_j`, run twice from the shared start with fresh
+/-- **`Be`** (extraction-based): `B`'s fork (guess `j`, sample `ω, r_1..r_j`, run twice from the shared start with fresh
 continuations), `E_O` on each run with fresh coins, and the first collision among the SHA-512 evaluations the two
 runs' outer witnesses record (`Deploy.calls`: the inner verifier's and the commitments', which no party computes in the
 clear). Its cost is both runs' calls, both parties', and both extractions'. -/
@@ -665,7 +669,7 @@ it is about 65.2 bits per SHA-512 call at the deployed shape (one inner table at
 `coverW`; 69.4 at `C_DE`'s weight), the third term binding: below the 100-bit floor and the `2^-128` target
 under every weight. `BitsLin2`'s level λ₂ (`lamLin2`) evaluates to at least 100 at the deployed records
 (`RecDeploy.lamLin2_deployed_ge_dep`, about 165.8) as a number, and `KSLin2` at the deployment's dense statements
-(`KSLin2On` at `RecDeploy.DenseAt`) is proved with no hypothesis at the deployed reader's record, the coin server's
+(`KSLin2On` at `RecDeploy.DenseAt`) is proved with no hypothesis at the deployed reader's record, the challenger's live-coin part's
 (`Flock.Guarantees.RecursiveKS`); `RecDeploy.ksLin2_deployed_open`, at the earlier `finOpen` layout, still takes
 `PartChecksBV`, `PartOpensB` and `DecompB`. Holo statements have a model of their own, and `BitsLin2` at the dense
 statements follows from it (`bitsLin2On_of_ksLin2On`). -/
@@ -768,7 +772,7 @@ compiled verifier's scope check takes it. -/
 def ScopeMatches (D : Deploy Coin) (I : Inner Coin W) : Prop := Claims.ScopeMatches (Scope D I) D.scopeCheck
 
 /-- **The recursion: zero knowledge** of the masked record's reference prover (`ZkDeploy.prover`: `Deploy.P`, which
-`Complete` reads, on the tape each statement's nonce and rest draw) against every malicious verifier of the compiled
+`Complete` reads, on the tape each statement's nonce and rest sample) against every malicious verifier of the compiled
 verifier's rounds (`ZKmalRx` at `D.V.k`), at `Sim` over the record's outer `--zk` Flock simulators at each attempt
 budget `t ≥ 1` (`D.SO t`): wherever hm96 leaves hide up to `δ₁` at the deployed key (`Hm96Hiding` at its salt mask
 `D.mask` and salt hash `D.saltHash H`), within `εzk` (each V* session's proved `--zk` simulation error, and `2δ₁` per
@@ -842,7 +846,7 @@ noncomputable def εzkStop (D : StopDeploy Coin) (I : Inner Coin W) (t : ℕ) (�
     2 * (∑ i : Fin (I.V.k (xI D.toDeploy x)), D.nAt x i + D.kS x * D.nC x) * δ₁
 
 /-- **The recursion: zero knowledge with the prover's public stop**, `ZK` restated: of the record's own reference
-prover on the tape each statement's nonce and rest draw (`ZkDeploy.prover`: `Deploy.P`, which `Complete` reads),
+prover on the tape each statement's nonce and rest sample (`ZkDeploy.prover`: `Deploy.P`, which `Complete` reads),
 which stops where `stops` says, against every malicious verifier of the compiled verifier's rounds (`ZKmalRx` at
 `D.V.k`), at `SimStop` over the record's outer `--zk` Flock simulators at each attempt budget `t ≥ 1` (`D.SO t`), which
 stops there too: wherever hm96 leaves hide up to `δ₁` at the deployed key, within `εzkStop` plus `γzk` times the
@@ -894,7 +898,7 @@ end AtFlock
 
 /-! ## At the representation V* binds
 
-The deployed V* never reads the inner session's framed transcript. It binds what the firewall's coin server records
+The deployed V* never reads the inner session's framed transcript. It binds what the ZK server's live-coin part records
 (`rec/inner-transcript/v1`, the run's inner rounds) and what its parts hold:
 
 * round 0: each table's level-0 top as salted commitments, one hm96 `b ‖ c` a cap node (`link.roots`), answered by the
@@ -903,7 +907,7 @@ The deployed V* never reads the inner session's framed transcript. It binds what
   registered row (none where `F_k` is empty), answered by its coins;
 * never in the run: the rows, the salts and the proof files, hidden values of V*'s parts.
 
-The firewall drops the rest of a round's framed bytes: the domain and labels (constants), the proof-of-work nonces
+The ZK server drops the rest of a round's framed bytes: the domain and labels (constants), the proof-of-work nonces
 (each `0`, the only one the verifier accepts, R4: with live coins grinding buys nothing) and the statement digest (a function of the statement). So
 the inner verifier `E*`'s views run at is one over that representation (`Bound.IVStar`): an element-level inner Flock
 (`Bound.DE`, at plain SHA-512 leaves), each round message before its last committed as rows under hm96 at the pinned
@@ -920,21 +924,21 @@ and `DE` the deployed plain record at plain leaves with only its verifier's step
 
 **What binds each message of an inner view to the run**, in V*'s setup:
 
-* round 0's commit strings: `checkTopRows` (`pub.bin`'s rows of `rec-top-L0` are the coin server's `b ‖ c`, read off its
+* round 0's commit strings: `checkTopRows` (`pub.bin`'s rows of `rec-top-L0` are the challenger's live-coin part's `b ‖ c`, read off its
   record by `innerLink`), with the schedule's node count (`checkLinkRounds`);
-* round 0's coins, the link points: `innerLink` (the inner session's record holds the coin server's points) and
+* round 0's coins, the link points: `innerLink` (the inner session's record holds the challenger's live-coin part's points) and
   `checkLink` (a check-5 part is refused without them);
-* a later round's salted tops: `checkOpenTops` and `checkLevelTopReads` (each opening's `out` reads the coin server's top
+* a later round's salted tops: `checkOpenTops` and `checkLevelTopReads` (each opening's `out` reads the challenger's live-coin part's top
   at its rep's coins), at the schedule's rounds and node counts (`checkLinkRounds`);
 * a later round's `c_k`: the registered value V*'s algebra opens that round's row against, which the setup builds from
   `c_k` (`RecSetup.commits`, `checkInner`);
-* each round's coins: `innerCommits` (the record's coins are the coin server's);
+* each round's coins: `innerCommits` (the record's coins are the challenger's live-coin part's);
 * the rounds themselves: `checkSchedule` (`RecSetup.commits`, at the verifier's inner shape: each stream's rounds, in
   the schedule's order, with its coin, top, level-0 and `c_k` counts, in a record that ends `finish`, `checkFinished`);
 * the last message: the rows, salts and proof files are the parts' hidden values, and `IVStar`'s own openings hold
   them to the earlier rounds' commit strings (`Bound.opens`, binding where `Bound.Binds`).
 
-**Why ZK's hiding route is compatible, and what it costs.** The run's inner messages are exactly the coin server's
+**Why ZK's hiding route is compatible, and what it costs.** The run's inner messages are exactly the challenger's live-coin part's
 commit strings, each an hm96 `b ‖ c` at the pinned key: hiding commitments, one of the four kinds of public things.
 `IVStar`'s last message is never sent in the run; V*'s parts hold it inside the outer `--zk` proofs. So every message of
 an inner view that the run shows is one `Sim` replaces by a commit string to the zero digest under a fresh salt, and the
@@ -968,7 +972,7 @@ variable {Coin Col T : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin] [De
 /-- **The inner session at the representation V\* binds**, a parameter as `Flock.Deploy` is:
 
 * the element-level inner Flock (`DE`), at plain SHA-512 leaves (`flock-leaf/sha512-unsalted`, which Flock's verifier
-  admits for hidden outputs without `--zk`). Its round messages before the last are the rows the firewall commits at
+  admits for hidden outputs without `--zk`). Its round messages before the last are the rows the ZK server commits at
   that round, joined (`join`); its last message is the proof files' rest, the openings at the query positions under
   the caps its rounds committed;
 * the answer to a round before the last: its coin (`ans`);
@@ -1094,7 +1098,7 @@ the calls only by membership, so they are compared as sets: the record's stream 
 of a table's empty publics change the list of calls the deployed verifier makes, not the set. Two last messages the
 deployed record reads alike, such as the trailing-space pair the deployed verifier decided alike before S0, are one view
 to `E*` with the same calls, so they are no counterexample. That pair refuted (P4) as first stated, a collision wherever
-`final` reads two accepted last messages apart, which is retired (card ef47c02e, 19 Oct).
+`final` reads two accepted last messages apart, which is retired.
 
 The recursion's KS reads this with `LastCoinFree` (`RecDeploy.ksBoundRoute_of_bridge_cols`), not the bridge. At the
 deployed bound record it follows from `Binds` and the deployed plain verifier's binding of its own last message

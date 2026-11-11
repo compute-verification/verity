@@ -1,5 +1,44 @@
-import Proofs.Flock.Claims.Recursion.DeployPremises
-import Proofs.Flock.Claims.Recursion.VStarKS
+module
+
+public import Proofs.Flock.Claims.Recursion.DeployPremises
+public import Proofs.Flock.Claims.Recursion.VStar
+public import Proofs.Flock.Claims.Recursion.VStarKS
+import Mathlib.Algebra.Order.Floor.Extended
+import Mathlib.Algebra.Order.Interval.Basic
+import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
+import Mathlib.Analysis.SpecialFunctions.Bernstein
+import Mathlib.Analysis.SpecialFunctions.Gamma.Basic
+import Mathlib.Analysis.SpecialFunctions.Trigonometric.DerivHyp
+import Mathlib.Combinatorics.Enumerative.DyckWord
+import Mathlib.Combinatorics.SimpleGraph.Triangle.Removal
+import Mathlib.Data.NNRat.Floor
+import Mathlib.Data.Nat.Choose.Multinomial
+import Mathlib.Geometry.Euclidean.Altitude
+import Mathlib.NumberTheory.Chebyshev
+import Mathlib.NumberTheory.Height.NumberField
+import Mathlib.NumberTheory.Height.Projectivization
+import Mathlib.NumberTheory.LucasLehmer
+import Mathlib.NumberTheory.SelbergSieve
+import Mathlib.RingTheory.Radical.NatInt
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Topology.Sheaves.Init
+import Proofs.Flock.Claims.Recursion.DeployFacts
+import Proofs.Flock.Claims.Recursion.DeployMargin
+import Proofs.Flock.Claims.Recursion.DeploySessions
+import Proofs.Flock.Claims.Recursion.FlockKSRecord
+import Proofs.Flock.Claims.Recursion.KSStated
 
 /-!
 # The recursion's premises at `deployRec`, with registered ties
@@ -24,6 +63,8 @@ registered ties:
   `ksFlock_deployed` at `VStar.KS_of_flockKS_played`, whose bound charges the forks' registered ties to `Br`.
   `ksA_deployed_parts` is the same from V*'s parts at a layout the readers are (`VStar.codeFacts_of_parts`).
 -/
+
+@[expose] public section
 
 namespace RecDeploy
 
@@ -237,12 +278,11 @@ theorem ksA_deployed_reg (rel relO : Flock.Readable.Parsed → Flock.Readable.Re
     (FlockDeploy.coinsShown_V FlockDeploy.sha512 false) (callsNil I.V ivScope b FlockDeploy.sha512)
 
 /-- **`KSFlock` at `deployRec`, with registered ties**: `ksA_deployed_reg` at every inner decoder that meets the spec, as
-`KSA` is `KS`. Its level (`Claims.Recursion.lam`) is about 65 bits per SHA-512 call at the deployed shape (one inner
-table at `m = 35`, `γ`'s weight at `IVStar` at `coverW`), below the 100-bit floor and the `2^-128` target under every
-weight. Route 2C's bound λ₂ (`lamLin2`) evaluates to at least 100 at the deployed records
-(`RecDeploy.lamLin2_deployed_ge_dep`), but `KSLin2` at the deployment's dense statements (`KSLin2On` at
-`RecDeploy.DenseAt`) only follows from premises still open (`RecDeploy.ksLin2_deployed_open`), Holo statements being
-candidate 3's own model, and `BitsLin2` at those statements follows from it (`bitsLin2On_of_ksLin2On`). -/
+`KSA` is `KS`. No theorem evaluates its level (`Claims.Recursion.lam`) at the deployment. Route 2C's bound λ₂
+(`lamLin2`) evaluates to at least 135.7 at the deployed records (`RecDeploy.lamLin2_deployed_ge_dep_tight`), and
+`KSLin2` at the deployment's dense statements (`KSLin2On` at `RecDeploy.DenseAt`) is proved
+(`Flock.SecurityProofs.RecursiveKS`), Holo statements being candidate 3's own model, and `BitsLin2` at those statements
+follows from it (`bitsLin2On_of_ksLin2On`). -/
 theorem ksFlock_deployed_reg (rel relO : Flock.Readable.Parsed → Flock.Readable.Relation) (ivScope : Msg → Bool)
     (b : Brings) (opening : Claims.Recursion.Opening)
     (hF : Claims.Flock.KS FlockDeploy.sha512 (deployZkRec relO))

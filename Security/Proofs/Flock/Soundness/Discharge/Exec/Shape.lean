@@ -1,5 +1,13 @@
-import Proofs.Flock.Soundness.Refine.LiveSim
-import Proofs.Flock.Soundness.Game.Union
+module
+
+public import Proofs.Flock.Soundness.Refine.LiveSim
+import Mathlib.Algebra.Order.Floor.Semifield
+import Mathlib.Combinatorics.Matroid.Init
+import Mathlib.MeasureTheory.Integral.Bochner.Basic
+import Proofs.Flock.Soundness.Game
+import Proofs.Flock.Soundness.LincheckPhase
+import Proofs.Flock.Soundness.ZerocheckPhase
+import VCVio.Prelude.Core
 
 /-!
 # The static shape of a rep
@@ -17,6 +25,8 @@ it. A rep may only stop early, on a reject.
   `repC_spine`: compiled Ligerito and a whole rep have spines, `repShape`, which read only the dimensions, the number
   of claims and the schedule.
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Discharge.Exec
 

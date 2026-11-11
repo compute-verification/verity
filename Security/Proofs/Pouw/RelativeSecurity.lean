@@ -1,6 +1,8 @@
-import Mathlib
-import Definitions.Pouw.RelativeSecurity
-import Proofs.Pouw.SteinerRigidity
+module
+
+public import Mathlib
+public import Definitions.Pouw.RelativeSecurity
+public import Proofs.Pouw.SteinerRigidity
 
 /-!
 # Relative security for matmul PoUW: the definition, the masking algebra, the reduction's shape
@@ -108,27 +110,27 @@ proof workers' results land here as theorems or as named hypotheses. The definit
   dropped term is right with probability ½ + 1/(2|α|) (`luck_coins`, `luck_dropped`); U's 128 letters are distinct
   and never 0 (`uRe_injective`, `uRe_ne_zero`), so 0.5039 (`luck_dropped_reEncoded`), and ½ for a term dropped
   outright (`_zero`). The window-level ½ is false at `|S| ≥ 4` (RS-E-REF r5 V.2), so ¾ is the window's bound
-  (decision 39 states the luck given the drawn pair indices at `p = ¾`).
+  (decision 39 states the luck given the sampled pair indices at `p = ¾`).
 * Stages inside a round (decision 36, the stage-coins draft §2, as RS-E-REF r5 V.3 repaired
-  it): a round of `St` stages, each committing its operands, then drawing both noise blocks of its products (keyed by
-  the draw), then committing its outputs, with one check at the round's end. Per stage, a cheat step fixed before its
-  draw and the wrong share the draw adds (`StageGame`): `(1 − U) e^{(1−p) D}` is a supermartingale over the stages
+  it): a round of `St` stages, each committing its operands, then sampling both noise blocks of its products (keyed by
+  the sample), then committing its outputs, with one check at the round's end. Per stage, a cheat step fixed before its
+  sample and the wrong share the sample adds (`StageGame`): `(1 − U) e^{(1−p) D}` is a supermartingale over the stages
   (`StageGame.expect_le`, RS-E-REF r3 III.1's extension), so staged rounds meet the exponential bound that `RoundsHyp`
   reads (`RoundGame.Staged`, `RoundGame.expBound_of_staged`). The staged spot check (`StagePlay`, `StagedPlay`) is
   valid at `p = ¾` for degree-2 errors (`StagePlay.valid_sgame`, `StagedPlay.game_staged`), and `RoundsHypKSt` gives
   `RoundsHyp` with the stage floors summed, `F₀ = St κ L n n' B` (`roundsHyp_of_staged`), so for affine products the
   floor has neither a luck nor a chain hypothesis (`certifiedFraction120θ_staged_40`). Decode's deferred edit, every
-  operand committed before one draw, is `St = 1` (`certifiedFraction120θ_decode_40`).
+  operand committed before one sample, is `St = 1` (`certifiedFraction120θ_decode_40`).
 * Overlapping stages (chunks in flight, no node barrier) and stages of different shapes (Theorem K∥,
   the stage-coins draft r2 §2.2 and §2.5): the round's run is one straight-line program
-  over every draw's bits, fixed before its first draw, whose operands are affine in each draw's bits at every bit
-  point of the others' (`AffMulAt`; `RoundsHypKOv`). K's count is local to one row of one draw, the other draws' bits
-  at theirs (`mergeAt`), and row purity adds the rows' bounds over every draw at any depth (`SlpG.cells_card_le_ov`).
-  The luck is per draw, the other draws' bits given: swapping a draw's bits for fresh ones is an involution, so each
-  cell's pass probability is the spot check's on its own draw (`prob_cell_eq`, `prob_ov_le`, `OvPlay.passBound_game`).
+  over every sample's bits, fixed before its first sample, whose operands are affine in each sample's bits at every bit
+  point of the others' (`AffMulAt`; `RoundsHypKOv`). K's count is local to one row of one sample, the other samples' bits
+  at theirs (`mergeAt`), and row purity adds the rows' bounds over every sample at any depth (`SlpG.cells_card_le_ov`).
+  The luck is per sample, the other samples' bits given: swapping a sample's bits for fresh ones is an involution, so each
+  cell's pass probability is the spot check's on its own sample (`prob_cell_eq`, `prob_ov_le`, `OvPlay.passBound_game`).
   So `F₀ = κ L Σ_t n_t n'_t B_t`, every stage's cell-blocks once (`roundsHyp_of_overlap`,
   `certifiedFraction120θ_overlap_40`), with no joint projection. `RoundsHypKSt` allows what `RoundsHypKOv` doesn't,
-  a stage's program branching on earlier draws; overlap with that (RS-E-REF r3 III.1's adaptive model) is open
+  a stage's program branching on earlier samples; overlap with that (RS-E-REF r3 III.1's adaptive model) is open
   (r2 §2.5).
 * The parity luck for one-sided operands of any form (RS-E-REF r6 VI.2):
   mod 2 at a cell-block's frame (`dFrame`), a one-sided run's error is `⟨F x, G y⟩ + a x + b y` with a term per
@@ -155,19 +157,23 @@ proof workers' results land here as theorems or as named hypotheses. The definit
   `certifiedFraction120θ_reEncodedExact_40`).
 -/
 
+@[expose] public section
+
+open Claims renaming Ex → expect
+
 namespace Pouw.RelativeSecurity
 
-open Finset
+open Finset hiding expect
 
 section Probability
 
 theorem prob_nonneg {Ω : Type*} [Fintype Ω] (p : Ω → Prop) : 0 ≤ prob p := by
-  unfold prob
+  unfold prob Claims.prUniform
   positivity
 
 theorem prob_le_one {Ω : Type*} [Fintype Ω] (p : Ω → Prop) : prob p ≤ 1 := by
   classical
-  unfold prob
+  unfold prob Claims.prUniform
   rcases Nat.eq_zero_or_pos (Fintype.card Ω) with h | h
   · simp [h]
   · rw [div_le_one (by exact_mod_cast h)]
@@ -175,7 +181,7 @@ theorem prob_le_one {Ω : Type*} [Fintype Ω] (p : Ω → Prop) : prob p ≤ 1 :
 
 theorem prob_mono {Ω : Type*} [Fintype Ω] {p q : Ω → Prop} (h : ∀ ω, p ω → q ω) : prob p ≤ prob q := by
   classical
-  unfold prob
+  unfold prob Claims.prUniform
   apply div_le_div_of_nonneg_right _ (by positivity)
   exact_mod_cast card_le_card fun ω hω => by
     simp only [mem_filter, mem_univ, true_and] at hω ⊢
@@ -186,7 +192,7 @@ theorem mem_filter_univ_iff {Ω : Type*} [Fintype Ω] {p : Ω → Prop} (inst : 
 
 theorem prob_or_le {Ω : Type*} [Fintype Ω] (p q : Ω → Prop) : prob (fun ω => p ω ∨ q ω) ≤ prob p + prob q := by
   classical
-  unfold prob
+  unfold prob Claims.prUniform
   rw [← add_div]
   apply div_le_div_of_nonneg_right _ (by positivity)
   have key : ∀ s t u : Finset Ω, (∀ ω ∈ s, ω ∈ t ∨ ω ∈ u) → (s.card : ℝ) ≤ t.card + u.card := fun s t u h => by
@@ -194,14 +200,11 @@ theorem prob_or_le {Ω : Type*} [Fintype Ω] (p q : Ω → Prop) : prob (fun ω 
   exact key _ _ _ fun ω hω => ((mem_filter_univ_iff _ ω).mp hω).imp ((mem_filter_univ_iff _ ω).mpr)
     ((mem_filter_univ_iff _ ω).mpr)
 
-/-- The expectation of a real function under the uniform distribution on a finite type. -/
-noncomputable def expect {Ω : Type*} [Fintype Ω] (f : Ω → ℝ) : ℝ := (∑ ω, f ω) / (Fintype.card Ω : ℝ)
-
 /-- Markov's inequality for a nonnegative function. -/
-theorem markov {Ω : Type*} [Fintype Ω] {f : Ω → ℝ} (hf : ∀ ω, 0 ≤ f ω) (X : ℝ) :
+theorem markov {Ω : Type} [Fintype Ω] {f : Ω → ℝ} (hf : ∀ ω, 0 ≤ f ω) (X : ℝ) :
     X * prob (fun ω => X ≤ f ω) ≤ expect f := by
   classical
-  unfold prob expect
+  unfold prob expect Claims.prUniform
   rw [mul_div_assoc']
   apply div_le_div_of_nonneg_right _ (by positivity)
   have key : ∀ s : Finset Ω, (∀ ω ∈ s, X ≤ f ω) → X * (s.card : ℝ) ≤ ∑ ω, f ω := fun s hs => by
@@ -210,20 +213,20 @@ theorem markov {Ω : Type*} [Fintype Ω] {f : Ω → ℝ} (hf : ∀ ω, 0 ≤ f 
       _ ≤ ∑ ω, f ω := sum_le_sum_of_subset_of_nonneg (subset_univ _) fun ω _ _ => hf ω
   exact key _ fun ω hω => (mem_filter_univ_iff _ ω).mp hω
 
-theorem expect_mono {Ω : Type*} [Fintype Ω] {f g : Ω → ℝ} (h : ∀ ω, f ω ≤ g ω) : expect f ≤ expect g :=
+theorem expect_mono {Ω : Type} [Fintype Ω] {f g : Ω → ℝ} (h : ∀ ω, f ω ≤ g ω) : expect f ≤ expect g :=
   div_le_div_of_nonneg_right (sum_le_sum fun ω _ => h ω) (by positivity)
 
-theorem expect_mul_left {Ω : Type*} [Fintype Ω] (k : ℝ) (f : Ω → ℝ) :
+theorem expect_mul_left {Ω : Type} [Fintype Ω] (k : ℝ) (f : Ω → ℝ) :
     expect (fun ω => k * f ω) = k * expect f := by
   unfold expect
   rw [← mul_sum, mul_div_assoc]
 
-theorem expect_sum {Ω ι : Type*} [Fintype Ω] (s : Finset ι) (f : ι → Ω → ℝ) :
+theorem expect_sum {Ω ι : Type} [Fintype Ω] (s : Finset ι) (f : ι → Ω → ℝ) :
     expect (fun ω => ∑ l ∈ s, f l ω) = ∑ l ∈ s, expect (f l) := by
   unfold expect
   rw [Finset.sum_comm, Finset.sum_div]
 
-theorem expect_le_of_le {Ω : Type*} [Fintype Ω] {f : Ω → ℝ} {k : ℝ} (hk : 0 ≤ k) (h : ∀ ω, f ω ≤ k) :
+theorem expect_le_of_le {Ω : Type} [Fintype Ω] {f : Ω → ℝ} {k : ℝ} (hk : 0 ≤ k) (h : ∀ ω, f ω ≤ k) :
     expect f ≤ k := by
   unfold expect
   rcases Nat.eq_zero_or_pos (Fintype.card Ω) with h0 | h0
@@ -233,21 +236,21 @@ theorem expect_le_of_le {Ω : Type*} [Fintype Ω] {f : Ω → ℝ} {k : ℝ} (hk
       _ = k * (Fintype.card Ω : ℝ) := by rw [sum_const, card_univ, nsmul_eq_mul, mul_comm]
 
 /-- The expectation over a product is the iterated expectation (fresh coins). -/
-theorem expect_prod {α β : Type*} [Fintype α] [Fintype β] (f : α × β → ℝ) :
+theorem expect_prod {α β : Type} [Fintype α] [Fintype β] (f : α × β → ℝ) :
     expect f = expect fun a => expect fun b => f (a, b) := by
   unfold expect
   rw [Fintype.sum_prod_type, Fintype.card_prod, Nat.cast_mul, ← sum_div, div_div, mul_comm (Fintype.card β : ℝ)]
 
-theorem expect_prod_swap {α β : Type*} [Fintype α] [Fintype β] (f : α × β → ℝ) :
+theorem expect_prod_swap {α β : Type} [Fintype α] [Fintype β] (f : α × β → ℝ) :
     expect f = expect fun b => expect fun a => f (a, b) := by
   unfold expect
   rw [Fintype.sum_prod_type, Finset.sum_comm, Fintype.card_prod, Nat.cast_mul, ← sum_div, div_div]
 
 /-- A probability is the expectation of the event's indicator. -/
-theorem prob_eq_expect {Ω : Type*} [Fintype Ω] (p : Ω → Prop) [DecidablePred p] :
+theorem prob_eq_expect {Ω : Type} [Fintype Ω] (p : Ω → Prop) [DecidablePred p] :
     prob p = expect fun ω => if p ω then 1 else 0 := by
   classical
-  unfold prob expect
+  unfold prob expect Claims.prUniform
   rw [Finset.card_filter, Nat.cast_sum]
   congr 1
   refine Finset.sum_congr rfl fun ω _ => ?_
@@ -255,14 +258,14 @@ theorem prob_eq_expect {Ω : Type*} [Fintype Ω] (p : Ω → Prop) [DecidablePre
 
 /-- An event whose every slice at the second coordinate has probability at most `κ ≥ 0` has probability at most
 `κ`. -/
-theorem prob_le_of_slices {α β : Type*} [Fintype α] [Fintype β] (E : α × β → Prop) {κ : ℝ} (hκ : 0 ≤ κ)
+theorem prob_le_of_slices {α β : Type} [Fintype α] [Fintype β] (E : α × β → Prop) {κ : ℝ} (hκ : 0 ≤ κ)
     (h : ∀ b, prob (fun a => E (a, b)) ≤ κ) : prob E ≤ κ := by
   classical
   rw [prob_eq_expect, expect_prod_swap]
   exact expect_le_of_le hκ fun b => by rw [← prob_eq_expect (fun a => E (a, b))]; exact h b
 
 /-- A probability over a product is the mean of its slices at the second coordinate. -/
-theorem prob_prod_eq_sum {α β : Type*} [Fintype α] [Fintype β] (E : α × β → Prop) :
+theorem prob_prod_eq_sum {α β : Type} [Fintype α] [Fintype β] (E : α × β → Prop) :
     prob E = ∑ b, (Fintype.card β : ℝ)⁻¹ * prob (fun a => E (a, b)) := by
   classical
   rw [prob_eq_expect, expect_prod_swap, expect, div_eq_inv_mul, Finset.mul_sum]
@@ -272,7 +275,7 @@ theorem prob_prod_eq_sum {α β : Type*} [Fintype α] [Fintype β] (E : α × β
 theorem prob_equiv {α β : Type*} [Fintype α] [Fintype β] (e : α ≃ β) (p : α → Prop) :
     prob p = prob fun b => p (e.symm b) := by
   classical
-  unfold prob
+  unfold prob Claims.prUniform
   rw [Fintype.card_congr e]
   congr 2
   exact Finset.card_equiv e fun a => by simp
@@ -284,7 +287,7 @@ theorem prob_exists_le {Ω ι : Type*} [Fintype Ω] (s : Finset ι) (B : ι → 
   induction s using Finset.induction_on with
   | empty =>
     simp only [Finset.notMem_empty, false_and, exists_false, sum_empty]
-    unfold prob
+    unfold prob Claims.prUniform
     simp
   | insert a s ha ih =>
     rw [Finset.sum_insert ha]
@@ -302,7 +305,7 @@ theorem one_sub_mul_exp_le (u : ℝ) : (1 - u) * Real.exp u ≤ 1 := by
 theorem prob_add_not {Ω : Type*} [Fintype Ω] [Nonempty Ω] (q : Ω → Prop) :
     prob q + prob (fun ω => ¬q ω) = 1 := by
   classical
-  unfold prob
+  unfold prob Claims.prUniform
   have := Finset.card_filter_add_card_filter_not (s := (univ : Finset Ω)) q
   rw [Finset.card_univ] at this
   have h' : ((univ.filter q).card : ℝ) + ((univ.filter fun ω => ¬q ω).card : ℝ) = Fintype.card Ω := by
@@ -314,13 +317,13 @@ theorem prob_add_not {Ω : Type*} [Fintype Ω] [Nonempty Ω] (q : Ω → Prop) :
 theorem prob_add_not_le {Ω : Type*} [Fintype Ω] (q : Ω → Prop) : prob q + prob (fun ω => ¬q ω) ≤ 1 := by
   rcases isEmpty_or_nonempty Ω with hΩ | hΩ
   · have h0 : ∀ q : Ω → Prop, prob q = 0 := fun q => by
-      unfold prob
+      unfold prob Claims.prUniform
       simp
     rw [h0, h0]
     norm_num
   · exact (prob_add_not q).le
 
-theorem expect_const_add_mul {Ω : Type*} [Fintype Ω] [Nonempty Ω] (A k : ℝ) (f : Ω → ℝ) :
+theorem expect_const_add_mul {Ω : Type} [Fintype Ω] [Nonempty Ω] (A k : ℝ) (f : Ω → ℝ) :
     expect (fun ω => A + k * f ω) = A + k * expect f := by
   unfold expect
   have hC : (0 : ℝ) < Fintype.card Ω := by exact_mod_cast Fintype.card_pos
@@ -340,7 +343,7 @@ section Rounds
 
 /-! ### Theorem S: one spot check per round, fresh coins (luck-loss round 4 §1; guarded, round 5's Theorem S_G)
 
-A window is `R` rounds. Round `w` draws fresh coins, uniform on `Ω`, and runs one check; the window accepts iff every
+A window is `R` rounds. Round `w` flips fresh coins, uniform on `Ω`, and runs one check; the window accepts iff every
 check passes. The prover's play is a `RoundGame`, a tree over the earlier rounds' coins, so each round's deficiency
 and check may depend on the whole past. The deficiency is fixed before the round's coins (straight-line rounds,
 `PassBound`) or read off the round's guard path (`PathBound`). The proof is the supermartingale
@@ -521,7 +524,7 @@ theorem theoremS_G [Fintype Ω] {p : ℝ} (hp : p ≤ 1) {R : ℕ} (G : RoundGam
   G.prob_accept_le (by linarith) (G.expBound_of_pathBound hG) acc Bind ZK hBind hZK hacc D
 
 /-- **The window form from the exponential bound**: the per-round `E[1[pass_w] e^{(1−p) d_w}] ≤ 1` (`ExpBound`) is
-all the window form reads, so rounds with several draws inside (`RoundGame.Staged`) have it too. -/
+all the window form reads, so rounds with several samples inside (`RoundGame.Staged`) have it too. -/
 theorem window_le_exp [Fintype Ω] {p : ℝ} (hp : p ≤ 1) {R : ℕ} (G : RoundGame Ω R) (hG : G.ExpBound (1 - p))
     (acc : Paths Ω R → Prop) (Bind ZK : Fin R → Paths Ω R → Prop) {δb δz : ℝ}
     (hBind : ∀ w, prob (Bind w) ≤ δb) (hZK : ∀ w, prob (ZK w) ≤ δz)
@@ -564,11 +567,11 @@ theorem pathBound_of_passBound [Fintype Ω] {p : ℝ} : ∀ {n : ℕ} (G : Round
     rw [e1, e2]
     rcases isEmpty_or_nonempty Ω with hΩ | hΩ
     · have h0 : ∀ q : Ω → Prop, prob q = 0 := fun q => by
-        unfold prob
+        unfold prob Claims.prUniform
         simp
       rw [h0, h0, mul_zero]
     · have h1 : prob (fun _ : Ω => True) = 1 := by
-        unfold prob
+        unfold prob Claims.prUniform
         simp
       rw [h1, mul_one]
       exact hpass
@@ -594,9 +597,9 @@ section Stages
 /-! ### Stages inside a round (RS-E-REF r3 III.1's extension; decision 36, the stage-coins draft
 §2, as RS-E-REF r5 V.3 repaired it)
 
-A round may be a sequence of stages, each committing its operands, then drawing both noise blocks of its products
-(keyed by the draw), then committing its outputs, with one check at the round's end over all of them. Each stage's
-cheat step `a` is fixed before its draw, and its draw raises the round's wrong share `U` by `u` with
+A round may be a sequence of stages, each committing its operands, then sampling both noise blocks of its products
+(keyed by the sample), then committing its outputs, with one check at the round's end over all of them. Each stage's
+cheat step `a` is fixed before its sample, and its sample raises the round's wrong share `U` by `u` with
 `E[u] ≥ (1 − p) a`. Then `Φ(U, D) = (1 − U) e^{(1−p) D}` is a supermartingale over the stages (`StageGame.expect_le`),
 so a round whose check passes with probability at most `1 − U` meets the exponential bound with `d_w = Σ_s a_s`
 (`RoundGame.Staged`, `RoundGame.expBound_of_staged`), which is all the window form reads (`window_le_exp`). -/
@@ -605,12 +608,12 @@ namespace StageGame
 
 variable {Ω : Type}
 
-/-- The round's wrong share `U = Σ_s u_s` along its draws. -/
+/-- The round's wrong share `U = Σ_s u_s` along its samples. -/
 def wrong : {m : ℕ} → StageGame Ω m → Paths Ω m → ℝ
   | _, .done, _ => 0
   | _, .stage _ u next, x => u x.1 + (next x.1).wrong x.2
 
-/-- Every stage's step is nonnegative and fixed before its draw, which raises the wrong share by at least
+/-- Every stage's step is nonnegative and fixed before its sample, which raises the wrong share by at least
 `(1 − p) a` in expectation. -/
 def Valid [Fintype Ω] (p : ℝ) : {m : ℕ} → StageGame Ω m → Prop
   | _, .done => True
@@ -649,8 +652,8 @@ theorem expect_le [Fintype Ω] [Nonempty Ω] {p : ℝ} (hp : p ≤ 1) : ∀ {m :
 end StageGame
 
 open Classical in
-/-- **A window of staged rounds**: each round's coins are its stages' draws and the check's coins `J`; given the
-past, the round's deficiency is its stage game's (fixed by the draws), and given the draws its check passes with
+/-- **A window of staged rounds**: each round's coins are its stages' samples and the check's coins `J`; given the
+past, the round's deficiency is its stage game's (fixed by the samples), and given the samples its check passes with
 probability at most `1 − U`. -/
 def RoundGame.Staged {Ωs J : Type} [Fintype Ωs] [Fintype J] (p : ℝ) (m : ℕ) :
     {n : ℕ} → RoundGame (Paths Ωs m × J) n → Prop
@@ -2483,7 +2486,7 @@ theorem serviceFloorPerProver_of_slices {Mc : Machine} {S : Service} {Ω : Type}
     rw [ENNReal.ofReal_mul hβ, ENNReal.ofReal_sum_of_nonneg fun w _ => ?_]
     · unfold finderTerm
       exact mul_le_mul' le_rfl (Finset.sum_le_sum fun w _ => ofReal_finderPr_le_ecrBound _ _ _)
-    · unfold Claims.Finder.Pr Claims.Pr
+    · unfold Claims.Finder.Pr Claims.Pr Claims.prUniform
       positivity
   rw [prob_prod_eq_sum, ENNReal.ofReal_sum_of_nonneg fun r _ => ?_]
   swap
@@ -4530,8 +4533,8 @@ end ChainRound
 /-! ### The luck lemma (RS-E-REF r4 IV.4)
 
 Theorem S_G's per-round hypothesis `PathBound p` asks that a round of deficiency `d` pass with probability at most
-`1 − (1 − p) d`. In a spot check the verifier draws a cell and the round's bits uniformly, and the check passes where
-the drawn cell's error (its committed word minus the target) vanishes. An error of degree at most 2 on the cube
+`1 − (1 − p) d`. In a spot check the verifier samples a cell and the round's bits uniformly, and the check passes where
+the sampled cell's error (its committed word minus the target) vanishes. An error of degree at most 2 on the cube
 (`CubeQuad`) that is not zero is nonzero on at least a quarter of the cube, in any ring (`luck_quad`): if a pair
 difference is nonzero, one corner of each of its squares is; else the error is affine, and if a first difference is
 nonzero, one end of each of its edges is; else it is constant. So spot windows with degree-2 errors satisfy
@@ -4552,7 +4555,7 @@ vanishes on at most one letter, so `½ + 1/(2|α|)` (`luck_dropped`). The design
 128 distinct values, none 0 (`uRe_injective`, `uRe_ne_zero`), so a dropped term is right with probability at most
 `½ + 2⁻⁸ = 0.5039` (`luck_dropped_reEncoded`), and `½` if dropped outright (`luck_dropped_reEncoded_zero`). Those
 are per-term bounds: a window-level ½ is false at `|S| ≥ 4` (RS-E-REF r5 V.2), and the luck premise is stated given
-the drawn pair indices at `p = ¾` (decision 39), which the spot check gives. For one-sided operands of any form the
+the sampled pair indices at `p = ¾` (decision 39), which the spot check gives. For one-sided operands of any form the
 luck is the parity lemma's `0.854`, in the product deficit rather than this one (`roundsHyp_of_stagedP`,
 `roundsHyp_of_overlapP`). -/
 
@@ -4716,7 +4719,7 @@ theorem prob_zero_le_of_cubeQuad {f : (V → R) → R} (hf : CubeQuad f) (hne : 
   have hsum := Finset.card_filter_add_card_filter_not (s := (univ : Finset (Finset V)))
     (fun S : Finset V => f (bitInd S) = 0)
   rw [prob_eq_expect, ← prob_eq_expect]
-  unfold prob
+  unfold prob Claims.prUniform
   have hpos : (0 : ℝ) < Fintype.card (Finset V) := by exact_mod_cast Fintype.card_pos
   rw [div_le_iff₀ hpos]
   have h' : ((univ.filter fun S : Finset V => f (bitInd S) = 0).card : ℝ) +
@@ -4730,7 +4733,7 @@ theorem prob_zero_le_of_cubeQuad {f : (V → R) → R} (hf : CubeQuad f) (hne : 
 
 end Luck
 
-theorem expect_affine_le {Ω : Type*} [Fintype Ω] {c : ℝ} (hc : 0 ≤ c) (k : ℝ) (f : Ω → ℝ) :
+theorem expect_affine_le {Ω : Type} [Fintype Ω] {c : ℝ} (hc : 0 ≤ c) (k : ℝ) (f : Ω → ℝ) :
     expect (fun ω => c + k * f ω) ≤ c + k * expect f := by
   unfold expect
   rcases Nat.eq_zero_or_pos (Fintype.card Ω) with h0 | h0
@@ -4766,7 +4769,7 @@ theorem prob_spot_le (e : C → (V → R) → R) (he : ∀ c, CubeQuad (e c)) :
 /-- **A spot-check window** (the shape of the re-encoded design's rounds): each round the prover's errors `e c`
 (its committed word minus the target, per cell, as functions of the round's bits) are fixed before the round's
 coins and of degree 2 (`CubeQuad`); the round's deficiency is the share of uncertified cells (`spotDef`); the
-verifier draws a cell and the bits uniformly, and the check passes only where the drawn cell's error vanishes. -/
+verifier samples a cell and the bits uniformly, and the check passes only where the sampled cell's error vanishes. -/
 def RoundGame.Spot (R : Type) [CommRing R] {C V : Type} [Fintype C] [Fintype V] [DecidableEq V] :
     {n : ℕ} → RoundGame (C × Finset V) n → Prop
   | _, .done => True
@@ -4840,7 +4843,7 @@ theorem luck_quad_tight :
   · have h3 : (univ.filter fun S : Finset (Unit ⊕ Unit) =>
         (bitInd S (.inl ()) : ℤ) * bitInd S (.inr ()) = 0).card = 3 := by decide
     have h4 : Fintype.card (Finset (Unit ⊕ Unit)) = 4 := by decide
-    unfold prob
+    unfold prob Claims.prUniform
     rw [h4]
     convert (show ((3 : ℕ) : ℝ) / ((4 : ℕ) : ℝ) = 3 / 4 by norm_num) using 3
     convert h3
@@ -4905,7 +4908,7 @@ theorem luck_coins {α V : Type} [Fintype α] [Fintype V] [DecidableEq V] (f₀ 
           exact hmaps S hS) (hinv.injective.injOn)
       have hsum := Finset.card_filter_add_card_filter_not (s := (univ : Finset (Finset V)))
         (fun S : Finset V => f₀ a + ∑ u ∈ S, f u a = 0)
-      unfold prob
+      unfold prob Claims.prUniform
       have hpos : (0 : ℝ) < Fintype.card (Finset V) := by exact_mod_cast Fintype.card_pos
       rw [div_le_iff₀ hpos]
       have h' : ((univ.filter fun S : Finset V => f₀ a + ∑ u ∈ S, f u a = 0).card : ℝ) +
@@ -4922,7 +4925,7 @@ at most one letter: probability at most `1 / |α|`. -/
 theorem prob_dropped_le {α : Type} [Fintype α] (U : α → R) (hU : Function.Injective U) (c c' : R)
     (hc' : IsUnit c') : prob (fun a => c + c' * U a = 0) ≤ 1 / Fintype.card α := by
   classical
-  unfold prob
+  unfold prob Claims.prUniform
   have h1 : (univ.filter fun a => c + c' * U a = 0).card ≤ 1 :=
     Finset.card_le_one.mpr fun a ha b hb => by
       simp only [Finset.mem_filter, Finset.mem_univ, true_and] at ha hb
@@ -5021,13 +5024,13 @@ theorem luck_dropped_reEncoded_zero {β V : Type} [Fintype β] [Fintype V] [Deci
   have hF : ∀ ab : Finset (Fin 7) × β, ¬∀ v, f v ab = 0 := fun ab hab =>
     (hc'.mul_right_eq_zero.not.mpr (uRe_ne_zero ab.1)) ((hv₀ ab.1 ab.2) ▸ hab v₀)
   have h2 : prob (fun ab : Finset (Fin 7) × β => ∀ v, f v ab = 0) ≤ 0 := by
-    unfold prob
+    unfold prob Claims.prUniform
     simp [hF]
   linarith
 
 end LuckDesign
 
-theorem prob_eq_card {Ω : Type*} [Fintype Ω] (p : Ω → Prop) [DecidablePred p] :
+theorem prob_eq_card {Ω : Type} [Fintype Ω] (p : Ω → Prop) [DecidablePred p] :
     prob p = ((univ.filter p).card : ℝ) / Fintype.card Ω := by
   rw [prob_eq_expect]
   unfold expect
@@ -5050,7 +5053,7 @@ namespace SpotPlay
 variable {C V A : Type} [Fintype C] [Fintype V] [DecidableEq V] [CommRing A]
 
 /-- **The window's game** of a play: round `w`'s deficiency is the share of uncertified cells (`spotDef`), and its
-check passes where the drawn cell's error vanishes at the drawn bits. -/
+check passes where the sampled cell's error vanishes at the sampled bits. -/
 noncomputable def game : {n : ℕ} → SpotPlay C V A n → RoundGame (C × Finset V) n
   | _, .done => .done
   | _, .round e next => .round (fun _ => spotDef e) (fun a => e a.1 (bitInd a.2) = 0) fun a => (next a).game
@@ -5165,7 +5168,7 @@ theorem valid_sgame (M : ℕ) : ∀ {m : ℕ} (P : StagePlay C V A m), (∀ x s 
     refine mul_le_mul_of_nonneg_left ?_ (inv_nonneg.mpr (Nat.cast_nonneg _))
     rcases isEmpty_or_nonempty C with hC | hC
     · have h0 : spotDef e = 0 := by
-        unfold spotDef prob
+        unfold spotDef prob Claims.prUniform
         simp
       rw [h0, mul_zero]
       unfold expect
@@ -5298,8 +5301,8 @@ theorem roundsHyp_of_K_one {Mc : Machine} {S : Service} {Ω : Type} [Fintype Ω]
 
 /-- **The window's rounds as spot checks** (the re-encoded design, chain form, with the luck derived), a named
 hypothesis. It is `RoundsHypK` with its game the spot-check game of the prover's play (`SpotPlay.game`: the round's
-deficiency is the share of uncertified cell-blocks, and the check passes where the drawn cell-block's error vanishes
-at the drawn bits), and the certified cell-blocks those whose error is zero at every bit point with at most two
+deficiency is the share of uncertified cell-blocks, and the check passes where the sampled cell-block's error vanishes
+at the sampled bits), and the certified cell-blocks those whose error is zero at every bit point with at most two
 ones. Along every play `x`, round `w`'s error table is its run's committed prefix words minus their targets. -/
 def RoundsHypKS (Mc : Machine) (S : Service) (R : ℕ) (Vmax δb δz κ : ℝ) (n L np B n' : ℕ) {Ar : Type}
     [CommRing Ar] (wt : Fin np → Ar) (Ok : ((DBits n L np B n' → Ar) → Ar) → Prop) : Prop :=
@@ -5369,19 +5372,19 @@ theorem roundsHypK_of_spot {Mc : Machine} {S : Service} {R : ℕ} {Vmax δb δz 
         rw [mul_sub, mul_one, mul_div_cancel₀ _ hpos.ne']
         linarith
 
-/-- **The window's staged rounds** (per-stage draws: decision 36, the stage-coins draft §2,
+/-- **The window's staged rounds** (per-stage samples: decision 36, the stage-coins draft §2,
 as RS-E-REF r5 V.3 repaired it; the re-encoded design, chain form, the luck derived), a named hypothesis. Each round
-is `St` stages: stage `s` commits its operands, then draws both noise blocks of its products together (keyed by the
-draw: the stage's bits), then commits its outputs; one check at the round's end draws a stage and a cell-block. The
+is `St` stages: stage `s` commits its operands, then samples both noise blocks of its products together (keyed by the
+sample: the stage's bits), then commits its outputs; one check at the round's end samples a stage and a cell-block. The
 window's game is the staged spot-check game of the prover's play (`StagedPlay.game`). Along every play `x`:
 - round `w`'s stage `s` is a straight-line program over a ring `Ar` on the stage's bits (`prog w s`) whose products
   are in `Ok`, on committed constants `pc w s` and `vq w s`, and its error table is its committed prefix words
   (`word w s`) minus their targets;
 - certified words of distinct rows of a stage share no product (row-pure);
 - the run is charged at least `κ` a product over every stage of every round (cost additivity: a stage's interval,
-  from its draw to its outputs' commitment, holds no other draw), less the noise reads `V`.
+  from its sample to its outputs' commitment, holds no other sample), less the noise reads `V`.
 
-Decode's deferred edit, every operand of the round's products committed before one draw, is the case `St = 1`.
+Decode's deferred edit, every operand of the round's products committed before one sample, is the case `St = 1`.
 Overlapping stages, and stages of different shapes, are `RoundsHypKOv`. -/
 def RoundsHypKSt (Mc : Machine) (S : Service) (R St : ℕ) (Vmax δb δz κ : ℝ) (n L np B n' : ℕ) {Ar : Type}
     [CommRing Ar] (wt : Fin np → Ar) (Ok : ((DBits n L np B n' → Ar) → Ar) → Prop) : Prop :=
@@ -5496,7 +5499,7 @@ section Overlap
 
 variable {St : ℕ} {ι : Fin St → Type} [∀ t, Fintype (ι t)] [∀ t, DecidableEq (ι t)] {R : Type} [CommRing R]
 
-/-- Draw `t`'s bits `z`, every other draw's bits at 0. -/
+/-- Sample `t`'s bits `z`, every other sample's bits at 0. -/
 noncomputable def extZ (t : Fin St) (z : ι t → R) : (Σ t, ι t) → R := Function.extend (Sigma.mk t) z 0
 
 omit [∀ t, Fintype (ι t)] [∀ t, DecidableEq (ι t)] in
@@ -5557,7 +5560,7 @@ theorem mergeAt_eq_add (U : ∀ s, Finset (ι s)) (t : Fin St) (z : ι t → R) 
     rw [mergeAt_mk, mergeAt_mk, extZ_mk, Pi.zero_apply, zero_add]
   · rw [mergeAt_ne U t _ h, mergeAt_ne U t _ h, extZ_ne t z h, add_zero]
 
-/-- A joint bit-affine operand with every other draw's bits at theirs in `U`: an operand on draw `t`'s bits. -/
+/-- A joint bit-affine operand with every other sample's bits at theirs in `U`: an operand on sample `t`'s bits. -/
 def BitAff.restrictAt (U : ∀ s, Finset (ι s)) (t : Fin St) (A : BitAff (Σ s, ι s) R) : BitAff (ι t) R :=
   ⟨A.eval (mergeAt U t 0), fun v => A.α ⟨t, v⟩⟩
 
@@ -5567,7 +5570,7 @@ theorem BitAff.eval_mergeAt (U : ∀ s, Finset (ι s)) (t : Fin St) (A : BitAff 
   rw [add_assoc, ← sum_extZ_mul t z A.α, ← Finset.sum_add_distrib]
   exact congrArg _ (Finset.sum_congr rfl fun b _ => by rw [mergeAt_eq_add U t z b, mul_add])
 
-/-- A program whose products are K∥'s computes, on draw `t`'s bits at any bit point of the other draws', words of
+/-- A program whose products are K∥'s computes, on sample `t`'s bits at any bit point of the other samples', words of
 degree 2. -/
 theorem SlpG.cubeQuad_val_mergeAt {N : ℕ} (P : SlpG (Σ s, ι s) R N) (hOk : ∀ j, P.isProd j = true → AffMulAt (P.prod j))
     (U : ∀ s, Finset (ι s)) (t : Fin St) (j : Fin N) : CubeQuad fun z => P.val (mergeAt U t z) j := by
@@ -5596,8 +5599,8 @@ theorem prob_fst {α β : Type} [Fintype α] [Fintype β] [Nonempty β] (p : α 
   simpa using expect_const_add_mul (Ω := β) (if p a then (1 : ℝ) else 0) 0 fun _ => 0
 
 omit [∀ t, Fintype (κ t)] in
-/-- One cell's pass probability with overlapping draws equals the spot check's on its own draw with the other
-draws' bits as the cell: swapping draw `t`'s bits for fresh ones is an involution. -/
+/-- One cell's pass probability with overlapping samples equals the spot check's on its own sample with the other
+samples' bits as the cell: swapping sample `t`'s bits for fresh ones is an involution. -/
 theorem prob_cell_eq (e : ((Σ s, ι s) → R) → R) (t : Fin St) :
     prob (fun U : ∀ s, Finset (ι s) => e (drawInd U) = 0) =
       prob fun b : (∀ s, Finset (ι s)) × Finset (ι t) => e (mergeAt b.1 t (bitInd b.2)) = 0 := by
@@ -5615,9 +5618,9 @@ theorem prob_cell_eq (e : ((Σ s, ι s) → R) → R) (t : Fin St) :
   simp only [φ]
   rw [mergeAt_update, ← mergeAt_self b.1 t]
 
-/-- **The spot check's pass bound with overlapping draws** (RS-D1E r2 §2.5): with every cell's error of degree 2 on
-its own draw's bits at every bit point of the other draws', a uniform cell and uniform draws find a zero with
-probability at most `1 − ¼ d`, `d` the share of cells and draws at which the cell is uncertified. -/
+/-- **The spot check's pass bound with overlapping samples** (RS-D1E r2 §2.5): with every cell's error of degree 2 on
+its own sample's bits at every bit point of the other samples', a uniform cell and uniform samples find a zero with
+probability at most `1 − ¼ d`, `d` the share of cells and samples at which the cell is uncertified. -/
 theorem prob_ov_le (e : (Σ t, κ t) → ((Σ s, ι s) → R) → R) (he : ∀ c U, CubeQuad fun z => e c (mergeAt U c.1 z)) :
     prob (fun a : (Σ t, κ t) × (∀ s, Finset (ι s)) => e a.1 (drawInd a.2) = 0) ≤ 1 - (1 - 3 / 4) * ovDef e := by
   classical
@@ -5651,7 +5654,7 @@ theorem dAt_game : ∀ {n : ℕ} (P : OvPlay κ ι A n) (x : Paths ((Σ t, κ t)
       simp only [game, errAt, RoundGame.dAt, Fin.cases_succ]
       exact dAt_game (next x.1) x.2 w'
 
-/-- Errors of degree 2 on each cell's own draw, at every bit point of the other draws', along every play make the
+/-- Errors of degree 2 on each cell's own sample, at every bit point of the other samples', along every play make the
 game meet Theorem S's pass bound at `p = ¾`. -/
 theorem passBound_game : ∀ {n : ℕ} (P : OvPlay κ ι A n),
     (∀ x w c U, CubeQuad fun z => P.errAt x w c (mergeAt U c.1 z)) → P.game.PassBound (3 / 4)
@@ -5680,13 +5683,13 @@ passes with probability at most `½ + ½ √½ < 0.854` (`parity_luck_short`), a
 That luck can't sit in `RoundsHypK`'s `PathBound`, whose deficiency is the share of uncertified cells: no `p < 1`
 bounds it for one-sided operands (`luck_oneSided_point`). It sits in the product deficit (RS-E-REF r6 VI.2.1): a
 cell-block is short of products (`ParShort`) when its error has a parity form with fewer than `L` terms at its frame,
-and a round's product deficit is the share of its cell-blocks short (`parDef`; per draw, `ovDefP`). The spot, staged
+and a round's product deficit is the share of its cell-blocks short (`parDef`; per sample, `ovDefP`). The spot, staged
 and overlapped games in that deficiency (`SpotPlay.gameP`, `StagedPlay.gameP`, `OvPlay.gameP`) accept as their games
 do and meet Theorem S's bounds at `0.854` whatever the errors (`passBound_gameP`, `StagedPlay.game_stagedP`). The
 floor reads the design: at cell-block `(i, l, t)`'s frame (`dFrame`: row `i` of U at plane `p₀`, the block's coins)
 the target is `⟨x, y⟩` plus junk (`split_dPrefix`), one-sided products split (`OneSided.splitProd`), so a one-sided
 run's error is a parity form whose terms are the products its word reads that are two-sided there
-(`SlpG.parityForm_err`; per draw, `SlpG.parityForm_err_ov`). A cell-block not short is charged at least `L` products,
+(`SlpG.parityForm_err`; per sample, `SlpG.parityForm_err_ov`). A cell-block not short is charged at least `L` products,
 and with no product charged to two cell-blocks (charging purity, `SlpG.ChargePure`, `SlpG.ChargePureAt`, in place of
 row purity) the charges add up (`SlpG.card_full_le`, `SlpG.card_full_le_ov`). So `RoundsHypKStP` and `RoundsHypKOvP`
 give `RoundsHyp` at `p = 0.854` with Theorem K's `F₀` (`roundsHyp_of_stagedP`, `roundsHyp_of_overlapP`), and
@@ -6448,7 +6451,7 @@ theorem valid_sgameP (M : ℕ) {fr : C → Fin K ⊕ Fin K → V} (hfr : ∀ c, 
     refine mul_le_mul_of_nonneg_left ?_ (inv_nonneg.mpr (Nat.cast_nonneg _))
     rcases isEmpty_or_nonempty C with hC | hC
     · have h0 : parDef fr φ e = 0 := by
-        unfold parDef prob
+        unfold parDef prob Claims.prUniform
         simp
       rw [h0, mul_zero]
       unfold expect
@@ -6518,13 +6521,13 @@ section ParityOverlap
 variable {St : ℕ} {κ ι : Fin St → Type} [∀ t, Fintype (κ t)] [∀ t, Fintype (ι t)] [∀ t, DecidableEq (ι t)]
   {A : Type} [CommRing A] {K : ℕ}
 
-/-- **A round's product deficit with overlapping draws**: the share of cells and draws at which the cell, on its own
-draw's bits with every other draw's at theirs, is short of products at its frame. -/
+/-- **A round's product deficit with overlapping samples**: the share of cells and samples at which the cell, on its own
+sample's bits with every other sample's at theirs, is short of products at its frame. -/
 noncomputable def ovDefP (fr : (c : Σ t, κ t) → Fin K ⊕ Fin K → ι c.1) (φ : A →+* ZMod 2)
     (e : (Σ t, κ t) → ((Σ s, ι s) → A) → A) : ℝ :=
   prob fun a : (Σ t, κ t) × (∀ s, Finset (ι s)) => ParShort (fr a.1) φ fun z => e a.1 (mergeAt a.2 a.1.1 z)
 
-/-- **The overlapped spot check's pass bound for one-sided operands of any form**: per draw, with the other draws'
+/-- **The overlapped spot check's pass bound for one-sided operands of any form**: per sample, with the other samples'
 bits given, as `prob_ov_le`. -/
 theorem prob_ovP_le (fr : (c : Σ t, κ t) → Fin K ⊕ Fin K → ι c.1) (hfr : ∀ c, Function.Injective (fr c))
     (φ : A →+* ZMod 2) (e : (Σ t, κ t) → ((Σ s, ι s) → A) → A) :
@@ -6548,7 +6551,7 @@ theorem prob_ovP_le (fr : (c : Σ t, κ t) → Fin K ⊕ Fin K → ι c.1) (hfr 
 
 namespace OvPlay
 
-/-- **The window's product-deficit game** of a play with overlapping draws: as `game`, its deficiency `ovDefP`. -/
+/-- **The window's product-deficit game** of a play with overlapping samples: as `game`, its deficiency `ovDefP`. -/
 noncomputable def gameP (fr : (c : Σ t, κ t) → Fin K ⊕ Fin K → ι c.1) (φ : A →+* ZMod 2) :
     {n : ℕ} → OvPlay κ ι A n → RoundGame ((Σ t, κ t) × (∀ s, Finset (ι s))) n
   | _, .done => .done
@@ -6588,11 +6591,11 @@ section OverlapRound
 variable {St : ℕ} {R : Type} [CommRing R] {n B n' : Fin St → ℕ} {L np : ℕ}
 
 open Classical in
-/-- **Overlapping draws add up** (Theorem K∥, RS-D1E r2 §2.2): a round's run over every draw's bits, with K∥'s
-products, row-pure across the rows of every draw, has at least `L / c` products per certified cell-block of every
-stage, at any bit point `W` of the draws. Per stage `t` and row: with every other draw's bits at theirs in `W`
-(`mergeAt`), the products are affine products on draw `t`'s bits, their coefficients unchanged, so the chain bound
-counts the products feeding the row's certified words; row purity makes the counts add over every row of every draw,
+/-- **Overlapping samples add up** (Theorem K∥, RS-D1E r2 §2.2): a round's run over every sample's bits, with K∥'s
+products, row-pure across the rows of every sample, has at least `L / c` products per certified cell-block of every
+stage, at any bit point `W` of the samples. Per stage `t` and row: with every other sample's bits at theirs in `W`
+(`mergeAt`), the products are affine products on sample `t`'s bits, their coefficients unchanged, so the chain bound
+counts the products feeding the row's certified words; row purity makes the counts add over every row of every sample,
 whatever intervals the products lie in. -/
 theorem SlpG.cells_card_le_ov {w : Fin np → R} {c : ℕ}
     (hc : ∀ t, ChainBound R (n t) L np (B t) (n' t) w (fun π => AffProd π) c) {N : ℕ}
@@ -6662,19 +6665,19 @@ end OverlapRound
 
 /-- **The window's rounds with overlapping stages** (Theorem K∥, RS-D1E r2 §2.2 and §2.5), a named hypothesis. Each
 round is `St` stages of any shapes (stage `t`: `n t` rows, `B t` blocks of `L`, `n' t` columns), each with its own
-draw of its design bits; the draws may overlap at any depth, since the round's run is one straight-line program over
-every draw's bits (`prog w`), fixed before the round's first draw. The window's game is the spot-check game of the
-prover's play over the round's draws (`OvPlay.game`): the check draws a cell-block among every stage's, and the
-round's deficiency is the share of cell-blocks and draws at which the cell-block, on its own draw's bits with the
-other draws' at theirs, is uncertified (`ovDef`). Along every play `x`:
-- round `w`'s products are K∥'s: at every bit point of the other draws, products of two operands affine in draw
-  `t`'s bits (`AffMulAt`), so a stage's operand may depend on other draws in any way;
-- stage `t`'s error table is its committed prefix words (`word w`) minus their targets on draw `t`'s bits;
-- at every bit point of the draws, certified words of distinct rows, of any stages, share no product (row-pure);
+sample of its design bits; the samples may overlap at any depth, since the round's run is one straight-line program over
+every sample's bits (`prog w`), fixed before the round's first sample. The window's game is the spot-check game of the
+prover's play over the round's samples (`OvPlay.game`): the check samples a cell-block among every stage's, and the
+round's deficiency is the share of cell-blocks and samples at which the cell-block, on its own sample's bits with the
+other samples' at theirs, is uncertified (`ovDef`). Along every play `x`:
+- round `w`'s products are K∥'s: at every bit point of the other samples, products of two operands affine in sample
+  `t`'s bits (`AffMulAt`), so a stage's operand may depend on other samples in any way;
+- stage `t`'s error table is its committed prefix words (`word w`) minus their targets on sample `t`'s bits;
+- at every bit point of the samples, certified words of distinct rows, of any stages, share no product (row-pure);
 - the run is charged at least `κ` a product, each product once, less the noise reads `V`.
 
 `RoundsHypKSt` is the sequential case with stages of one shape, where a stage's program may also branch on earlier
-draws. -/
+samples. -/
 def RoundsHypKOv (Mc : Machine) (S : Service) (R St : ℕ) (Vmax δb δz κ : ℝ) (n : Fin St → ℕ) (L np : ℕ)
     (B n' : Fin St → ℕ) {Ar : Type} [CommRing Ar] (wt : Fin np → Ar) : Prop :=
   ∃ e : S.Seed ≃ Paths (OSpot St n L np B n') R, ∀ (Ω' : Type) [Fintype Ω']
@@ -6809,8 +6812,8 @@ theorem roundsSlice_of_overlap {R St : ℕ} {Vmax κ : ℝ} {n B n' : Fin St →
 
 /-- **Overlapping stages give the window's cost line** (Theorem K∥): under `RoundsHypKOv` with chain factor 1 on
 every stage's shape, `RoundsHyp` holds at `p = ¾` with `F₀ = κ L C`, `C` the round's cell-blocks over all its
-stages, and no slack. The luck is per draw, with the other draws' bits given (`OvPlay.passBound_game`), and the
-certified count is `SlpG.cells_card_le_ov`'s at every bit point of the draws, so at least its mean
+stages, and no slack. The luck is per sample, with the other samples' bits given (`OvPlay.passBound_game`), and the
+certified count is `SlpG.cells_card_le_ov`'s at every bit point of the samples, so at least its mean
 (`roundsSlice_of_overlap`, slice by slice). -/
 theorem roundsHyp_of_overlap {Mc : Machine} {S : Service} {R St : ℕ} {Vmax δb δz κ : ℝ} {n B n' : Fin St → ℕ}
     {L np : ℕ} {Ar : Type} [CommRing Ar] {wt : Fin np → Ar} (h : RoundsHypKOv Mc S R St Vmax δb δz κ n L np B n' wt)
@@ -6829,7 +6832,7 @@ section ParityOverlapRound
 variable {St : ℕ} {Ar : Type} [CommRing Ar] {n B n' : Fin St → ℕ} {L np : ℕ}
 
 /-- **An overlapped one-sided run's error has a parity form at every cell-block's frame**, at every bit point `W` of
-the other draws: its terms the products charged to the word there. -/
+the other samples: its terms the products charged to the word there. -/
 theorem SlpG.parityForm_err_ov (φ : Ar →+* ZMod 2) {p₀ : Fin np} {w : Fin np → Ar} (hw : φ (w p₀) = 1) {N : ℕ}
     (P : SlpG (OBits St n L np B n') Ar N) (hOk : ∀ j, P.isProd j = true → OneSidedAt (P.prod j))
     (W : ODraws St n L np B n') (pc : ∀ t, Fin (n t) → Fin (B t) → Fin L → Ar)
@@ -6848,7 +6851,7 @@ theorem SlpG.parityForm_err_ov (φ : Ar →+* ZMod 2) {p₀ : Fin np} {w : Fin n
   exact h
 
 open Classical in
-/-- **Charge-pure one-sided overlapped runs add up**: at every bit point of the draws, the round's run has at least
+/-- **Charge-pure one-sided overlapped runs add up**: at every bit point of the samples, the round's run has at least
 `L` products per cell-block, of any stage, not short of products. -/
 theorem SlpG.card_full_le_ov (φ : Ar →+* ZMod 2) {p₀ : Fin np} {w : Fin np → Ar} (hw : φ (w p₀) = 1) {N : ℕ}
     (P : SlpG (OBits St n L np B n') Ar N) (hOk : ∀ j, P.isProd j = true → OneSidedAt (P.prod j))
@@ -6983,8 +6986,8 @@ theorem roundsHyp_of_stagedP {Mc : Machine} {S : Service} {R St : ℕ} {Vmax δb
   exact ⟨G, Bind, ZK, V', hG, hB, hZ, hacc', hV', hcost⟩
 
 /-- **The window's rounds with overlapping stages, one-sided operands of any form** (RS-E-REF r6 VI.2), a named
-hypothesis: `RoundsHypKOv` with its products one-sided per draw at every bit point of the other draws (`OneSidedAt`)
-in place of `AffMulAt`, and charging purity across draws (`SlpG.ChargePureAt`) in place of row purity. -/
+hypothesis: `RoundsHypKOv` with its products one-sided per sample at every bit point of the other samples (`OneSidedAt`)
+in place of `AffMulAt`, and charging purity across samples (`SlpG.ChargePureAt`) in place of row purity. -/
 def RoundsHypKOvP (Mc : Machine) (S : Service) (R St : ℕ) (Vmax δb δz κ : ℝ) (n : Fin St → ℕ) (L np : ℕ)
     (B n' : Fin St → ℕ) {Ar : Type} [CommRing Ar] (wt : Fin np → Ar) (φ : Ar →+* ZMod 2) (p₀ : Fin np) : Prop :=
   ∃ e : S.Seed ≃ Paths (OSpot St n L np B n') R, ∀ (Ω' : Type) [Fintype Ω']
@@ -7075,7 +7078,7 @@ theorem roundsSlice_of_overlapP {R St : ℕ} {Vmax κ : ℝ} {n B n' : Fin St �
 `RoundsHypKOvP` with `φ (wt p₀) = 1`, `RoundsHyp` holds at `p = 0.854` with `F₀ = κ L C`, `C` the round's
 cell-blocks over all its stages, and no slack. The game is the product-deficit game (`OvPlay.gameP`), whose rounds
 pass at most `1 − 0.146 d` whatever the errors (`OvPlay.passBound_gameP`); the count is `SlpG.card_full_le_ov`'s at
-every bit point of the draws, so at least its mean (`roundsSlice_of_overlapP`, slice by slice). -/
+every bit point of the samples, so at least its mean (`roundsSlice_of_overlapP`, slice by slice). -/
 theorem roundsHyp_of_overlapP {Mc : Machine} {S : Service} {R St : ℕ} {Vmax δb δz κ : ℝ} {n B n' : Fin St → ℕ}
     {L np : ℕ} {Ar : Type} [CommRing Ar] {wt : Fin np → Ar} {φ : Ar →+* ZMod 2} {p₀ : Fin np}
     (h : RoundsHypKOvP Mc S R St Vmax δb δz κ n L np B n' wt φ p₀) (hw : φ (wt p₀) = 1) (hκ : 0 ≤ κ) :
@@ -8177,8 +8180,8 @@ theorem certifiedFraction120θ_reEncodedSpotMixed_40 (kd : K120 → Kind) (S : S
     ((chainBound_gProd toF2 rfl toF2_wRe_zero).mono fun _ hπ => hπ.gProd) (by norm_num) hκ hC hδb hδz
   rwa [e] at this
 
-/-- **The re-encoded design's certified fraction with per-stage draws** (decision 36, RS-E-REF r5 V.3's repair):
-under `RoundsHypKSt` with products of affine operands (one-sided or mixed), rounds of `St` stages, each drawing its
+/-- **The re-encoded design's certified fraction with per-stage samples** (decision 36, RS-E-REF r5 V.3's repair):
+under `RoundsHypKSt` with products of affine operands (one-sided or mixed), rounds of `St` stages, each sampling its
 products' noise after committing their operands, have the floor with the `St` stage floors summed,
 `F₀ = St κ L n n' B`, at `D₀ = 160 ln 2` rounds of luck at `2⁻⁴⁰`, with neither a luck nor a chain hypothesis. -/
 theorem certifiedFraction120θ_staged_40 (kd : K120 → Kind) (S : Service) {R St : ℕ} {Vmax δb δz κ : ℝ}
@@ -8200,7 +8203,7 @@ theorem certifiedFraction120θ_staged_40 (kd : K120 → Kind) (S : Service) {R S
   rwa [e, mul_zero, sub_zero] at this
 
 /-- **Decode's deferred edit as an instance** (RS-D1E (b), RS-E-REF r5 V.3: every operand of the round's products
-committed before the round's one draw): rounds of one stage, with the floor `F₀ = κ L n n' B`. -/
+committed before the round's one sample): rounds of one stage, with the floor `F₀ = κ L n n' B`. -/
 theorem certifiedFraction120θ_decode_40 (kd : K120 → Kind) (S : Service) {R : ℕ} {Vmax δb δz κ : ℝ}
     {n L B n' : ℕ}
     (h : RoundsHypKSt (machine kd (.ofNat price120)) S R 1 Vmax δb δz κ n L 7 B n' wRe fun π => AffProd π)
@@ -8211,7 +8214,7 @@ theorem certifiedFraction120θ_decode_40 (kd : K120 → Kind) (S : Service) {R :
   simpa only [Nat.cast_one, one_mul] using certifiedFraction120θ_staged_40 kd S h one_pos hκ hC hδb hδz
 
 /-- **The certified fraction with overlapping stages** (Theorem K∥): under `RoundsHypKOv` with K∥'s products,
-rounds of `St` stages of any shapes, their draws overlapping at any depth, have the floor `F₀ = κ L Σ_t n_t n'_t B_t`,
+rounds of `St` stages of any shapes, their samples overlapping at any depth, have the floor `F₀ = κ L Σ_t n_t n'_t B_t`,
 every stage's cell-blocks counted once, at `D₀ = 160 ln 2` rounds of luck at `2⁻⁴⁰`, with neither a luck nor a chain
 hypothesis. -/
 theorem certifiedFraction120θ_overlap_40 (kd : K120 → Kind) (S : Service) {R St : ℕ} {Vmax δb δz κ : ℝ}
@@ -8245,7 +8248,7 @@ theorem exp_parity_274 : Real.exp (-((1 - 427 / 500) * (274 * Real.log 2))) ≤ 
   push_cast
   nlinarith
 
-/-- **The certified fraction with per-stage draws, one-sided operands of any form** (RS-E-REF r6 VI.2): under
+/-- **The certified fraction with per-stage samples, one-sided operands of any form** (RS-E-REF r6 VI.2): under
 `RoundsHypKStP` on `Z/2³²` read mod 2 (`toF2`, plane 0 at an odd weight), the staged floor `F₀ = St κ L n n' B` at
 `D₀ = 274 ln 2` rounds of luck at `2⁻⁴⁰` (the parity luck `0.854`), with neither a luck nor a chain hypothesis. -/
 theorem certifiedFraction120θ_stagedP_40 (kd : K120 → Kind) (S : Service) {R St : ℕ} {Vmax δb δz κ : ℝ}

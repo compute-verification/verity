@@ -1,10 +1,12 @@
-import Definitions.Core.Formalism
+module
+
+public import Definitions.Core.Formalism
 
 /-!
 # The training formalism v2, §1: circuits
 
-Section 1 of Daniel's training formalism v2, on core's one circuit type `Verity.Circuit` and its one declaration
-`Verity.Declaration`, which say it as written:
+Section 1 of the training formalism v2, on core's one circuit type `Verity.Circuit` and its one declaration
+`Verity.RegisteredCircuit`, which say it as written:
 
 * a **circuit** of §1 is a `Verity.Circuit` that is `Wellformed`: every value is a bit (`Circuit.Boolean`) and every gate
   reads one or two values (`Circuit.Boolean`'s positive fan-in and `Circuit.FanIn C 2`). A value is a position
@@ -23,6 +25,8 @@ Core's circuits are more general than §1's: values of any width, output gates, 
 §1 is the `Wellformed` case, and nothing in this formalism reads the rest.
 -/
 
+@[expose] public section
+
 namespace Nci.Formalism
 
 open Finset
@@ -40,7 +44,7 @@ def GateSet (C : Circuit) (S : Finset (Fin C.N)) : Prop := S ⊆ C.computed
 def inputs (C : Circuit) : Finset (Fin C.N) := univ.filter fun v => C.isInput v = true
 
 /-- `x` agrees with `y` on the values `T`. -/
-def AgreesOn (C : Circuit) (x y : C.Transcript) (T : Finset (Fin C.N)) : Prop := ∀ v ∈ T, x v = y v
+def AgreesOn (C : Circuit) (x y : C.Trace) (T : Finset (Fin C.N)) : Prop := ∀ v ∈ T, x v = y v
 
 /-- **Gate `g` depends on the value `v`**: some gate reads `v` and feeds `g`, so `g` reads `v` or reads a value computed
 by a gate that depends on `v`. -/
@@ -53,7 +57,7 @@ inductive FeedsWithin (C : Circuit) (S : Finset (Fin C.N)) : Fin C.N → Fin C.N
 
 /-- **The reconstruction of `S` from `x`**: `S`'s gates evaluated once each in increasing order, each on the values its
 predecessors left, starting from `x`; every value outside `S` keeps `x`'s. -/
-def reconstruct (C : Circuit) (S : Finset (Fin C.N)) (x : C.Transcript) : C.Transcript :=
+def reconstruct (C : Circuit) (S : Finset (Fin C.N)) (x : C.Trace) : C.Trace :=
   (S.sort (· ≤ ·)).foldl (fun y g => Function.update y g (C.op g y)) x
 
 end Nci.Formalism

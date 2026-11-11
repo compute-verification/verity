@@ -32,7 +32,7 @@ from verity_config.settings import of
 
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
-sys.path.insert(0, str(HERE.parent / "clear"))
+sys.path.insert(0, str(Path(__file__).resolve().parents[3] / "benchmarks/pouw/clear"))
 settings = of(__file__)
 
 SCHEME = "pearl-c-sm120-v1-h3"
@@ -99,7 +99,7 @@ def _calls(d: Path) -> dict:
     """An eager pass's calls held to the reference: the row seeds, E_A's committed rows and its padding rows."""
     import verify_run as VR
     from verity.core.protocols.pouw.protocol import Context, Matmul, Shape
-    from verity.core.protocols.pouw.schemes import pearl_c as C
+    from verity.ml.protocols.pouw.schemes import pearl_c as C
 
     man = json.loads((d / "manifest.json").read_text())
     s, files, out = _scheme(man), VR.Files(d), []

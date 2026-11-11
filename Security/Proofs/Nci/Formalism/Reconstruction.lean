@@ -1,5 +1,7 @@
-import Definitions.Nci.Formalism
-import Proofs.Core.Circuit
+module
+
+public import Definitions.Nci.Formalism
+public import Proofs.Core.Circuit
 
 /-!
 # The training formalism v2: reconstruction, and the three kinds of a block's inputs
@@ -14,13 +16,15 @@ Two lemmas of the formalism (`Definitions.Nci.Formalism`), which its theorems re
   `k` bounds, is the last two. `mem_inputs_of_mem_θ`, a registered value is an input, makes it set algebra.
 -/
 
+@[expose] public section
+
 namespace Nci.Formalism
 
 open Finset
-open Verity (Circuit Declaration)
+open Verity (Circuit RegisteredCircuit)
 
-theorem foldl_update_eval {C : Circuit} (S : Finset (Fin C.N)) (hS : GateSet C S) (a : C.Transcript)
-    (l : List (Fin C.N)) (hl : l.Pairwise (· < ·)) (hlS : ∀ g ∈ l, g ∈ S) (y : C.Transcript)
+theorem foldl_update_eval {C : Circuit} (S : Finset (Fin C.N)) (hS : GateSet C S) (a : C.Trace)
+    (l : List (Fin C.N)) (hl : l.Pairwise (· < ·)) (hlS : ∀ g ∈ l, g ∈ S) (y : C.Trace)
     (hy : ∀ v, v ∈ C.into S ∨ (v ∈ S ∧ v ∉ l) → y v = C.eval a v) :
     ∀ v ∈ S, l.foldl (fun y g => Function.update y g (C.op g y)) y v = C.eval a v := by
   induction l generalizing y with
@@ -61,13 +65,13 @@ theorem foldl_update_eval {C : Circuit} (S : Finset (Fin C.N)) (hS : GateSet C S
         · exact h2 h
 
 /-- A registered value is an input. -/
-theorem mem_inputs_of_mem_θ {d : Declaration} {v : Fin d.D.N} (hθ : v ∈ d.θ) : v ∈ inputs d.D := by
+theorem mem_inputs_of_mem_θ {d : RegisteredCircuit} {v : Fin d.D.N} (hθ : v ∈ d.θ) : v ∈ inputs d.D := by
   simp only [inputs, Finset.mem_filter, Finset.mem_univ, true_and]
   exact d.θ_input v hθ
 
 /-- **Reconstruction**: for a set of gates `S` and any `x` that holds the values of `in(S)`, the reconstruction of `S`
 from `x` evaluates `|S|` gates, one each, and holds every value `S` computes. -/
-theorem reconstruction (C : Circuit) (S : Finset (Fin C.N)) (a x : C.Transcript) (hS : GateSet C S)
+theorem reconstruction (C : Circuit) (S : Finset (Fin C.N)) (a x : C.Trace) (hS : GateSet C S)
     (hx : AgreesOn C x (C.eval a) (C.into S)) :
     (S.sort (· ≤ ·)).length = S.card ∧ AgreesOn C (reconstruct C S x) (C.eval a) S := by
   refine ⟨Finset.length_sort _, ?_⟩
@@ -77,7 +81,7 @@ theorem reconstruction (C : Circuit) (S : Finset (Fin C.N)) (a x : C.Transcript)
 
 /-- **A block's reads split three ways**: for a set of gates `I`, `in(I)` is its registered values, its data and its
 computed values, and `in(I) \ θ`, what `k` bounds, is the last two. -/
-theorem reads_split (d : Declaration) (I : Finset (Fin d.D.N)) :
+theorem reads_split (d : RegisteredCircuit) (I : Finset (Fin d.D.N)) :
     d.D.into I = registeredReads d I ∪ dataReads d I ∪ computedReads d I ∧
       d.unregistered I = dataReads d I ∪ computedReads d I := by
   constructor
@@ -85,7 +89,7 @@ theorem reads_split (d : Declaration) (I : Finset (Fin d.D.N)) :
     simp only [registeredReads, dataReads, computedReads, Finset.mem_union, Finset.mem_inter, Finset.mem_sdiff]
     tauto
   · ext v
-    simp only [Verity.Declaration.unregistered, dataReads, computedReads, Finset.mem_union, Finset.mem_inter,
+    simp only [Verity.RegisteredCircuit.unregistered, dataReads, computedReads, Finset.mem_union, Finset.mem_inter,
       Finset.mem_sdiff]
     constructor
     · rintro ⟨hv, hθ⟩

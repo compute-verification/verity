@@ -27,7 +27,13 @@ its own. Each row is then canonical as `flock-ir-unit/v2` writes it, a sum over 
 named an even number of times dropped. The root has no inputs; the unit's columns are its, and the constant its last,
 `[const]·[const]`. Every column is written at most once, and one never written is empty.
 -/
-import Flock.Net
+module
+
+public import Flock.Net
+
+@[expose] public section
+set_option backward.privateInPublic true
+set_option backward.privateInPublic.warn false
 
 namespace Flock.Tmpl
 
@@ -105,6 +111,17 @@ def Def.ordered (F : Array Bool) (df : Def) : Bool :=
   df.rows.toList.all (fun r => (r.2.1.toList ++ r.2.2.toList).all fun v => df.cols ≤ v || v < r.1) &&
     df.calls.toList.all fun c => F.getD c.def_ false && c.segs.toList.all (Seg.ordered df.cols c.base c.stride c.count)
 
+/-- `Def.ordered`, each row's A and B read in place. -/
+def Def.orderedFast (F : Array Bool) (df : Def) : Bool :=
+  df.rows.all (fun r => r.2.1.all (fun v => df.cols ≤ v || v < r.1) && r.2.2.all fun v => df.cols ≤ v || v < r.1) &&
+    df.calls.all fun c => F.getD c.def_ false && c.segs.all (Seg.ordered df.cols c.base c.stride c.count)
+
+/-- Compiled code runs `Def.orderedFast`; the kernel and every proof see `Def.ordered`. `@[csimp]` rewrites only code
+compiled after it, so it stays directly below `Def.ordered`. -/
+@[csimp] theorem Def.ordered_eq_fast : @Def.ordered = @Def.orderedFast := by
+  funext F df
+  simp only [Def.ordered, Def.orderedFast, List.all_append, Array.all_toList]
+
 /-- Which Definitions are ordered, each from the earlier ones. -/
 def flags (defs : Array Def) : Array Bool := defs.foldl (fun F df => F.push (df.ordered F)) #[]
 
@@ -119,6 +136,23 @@ def Tmpl.rootOrdered (t : Tmpl) (F : Array Bool) : Bool :=
         (t.inCols ≤ c.base && F.getD c.def_ false && c.segs.toList.all fun s =>
           (s.len == 1 && s.at_ + 1 == df.cols && s.hi c.count ≤ df.cols) ||
             (Seg.ordered df.cols c.base c.stride c.count s && (t.inCols ≤ s.at_ || t.portSpan s.at_ (s.hi c.count))))
+
+/-- `Tmpl.rootOrdered`, each row's A and B read in place. -/
+def Tmpl.rootOrderedFast (t : Tmpl) (F : Array Bool) : Bool :=
+  let df := t.defs.getD t.root default
+  let ok (r : Nat) (v : Nat) : Bool := df.cols ≤ v + 1 || (v < r && (t.inCols ≤ v || t.portSpan v (v + 1)))
+  df.rows.all (fun r => decide (r.1 < t.inCols) || (r.2.1.all (ok r.1) && r.2.2.all (ok r.1))) &&
+    df.calls.all fun c =>
+      decide (c.base + (c.count - 1) * c.stride + (t.defs.getD c.def_ default).cols ≤ t.inCols) ||
+        (t.inCols ≤ c.base && F.getD c.def_ false && c.segs.all fun s =>
+          (s.len == 1 && s.at_ + 1 == df.cols && s.hi c.count ≤ df.cols) ||
+            (Seg.ordered df.cols c.base c.stride c.count s && (t.inCols ≤ s.at_ || t.portSpan s.at_ (s.hi c.count))))
+
+/-- Compiled code runs `Tmpl.rootOrderedFast`; the kernel and every proof see `Tmpl.rootOrdered`. `@[csimp]` rewrites
+only code compiled after it, so it stays directly below `Tmpl.rootOrdered`. -/
+@[csimp] theorem Tmpl.rootOrdered_eq_fast : @Tmpl.rootOrdered = @Tmpl.rootOrderedFast := by
+  funext t F
+  simp only [Tmpl.rootOrdered, Tmpl.rootOrderedFast, List.all_append, Array.all_toList]
 
 /-- **The unrolled rows are in order**, checked on the description (`Flock.TmplOrder.rows_ordered`). -/
 def Tmpl.ordered (t : Tmpl) : Bool :=
@@ -228,6 +262,144 @@ def parse (lines : Array String) : V Tmpl := do
     throw s!"{FORMAT}: a row or a binding reads a later column, input padding, or both its caller's own columns and its inputs"
   if !t.wellFormed then throw s!"{FORMAT}: a definition has 2^64 columns or calls, or a call the fold's proof does not cover"
   return t
+
+/-- Row `i` of definition `d`, numbers `o`, as `parse` reads its line `s` when `o` is `Net.lineNums s` (`rowNums_eq`). -/
+def rowNums (d i : Nat) (o : Option (Array Nat)) : V (Array Nat) :=
+  match o with
+  | some v => pure v
+  | none => throw s!"{FORMAT}: definition {d}: row {i} is not numbers"
+
+theorem rowNums_eq (d i : Nat) (s : String) : rowNums d i (Net.lineNums s) = (tokens s).mapM fun t => match t.toNat? with
+    | some n => pure n
+    | none => throw s!"{FORMAT}: definition {d}: row {i} is not numbers" :=
+  (Net.mapM_toNat_arr (tokens s) s!"{FORMAT}: definition {d}: row {i} is not numbers").symm
+
+/-- `parse` over its lines' accessors (`parseFast` passes an array's): `n` lines, line `k` being `line k` and its
+numbers, when it is a row, `nums k` (`Net.lineNums` of it), each row's A and B checked in place. A line view reads a
+row's numbers off the file's bytes, so a row makes no `String`. -/
+def parseAt (n : Nat) (line : Nat → String) (nums : Nat → Option (Array Nat)) : V Tmpl := do
+  let h := tokens (line 0)
+  if h[0]? != some FORMAT then throw s!"not a {FORMAT} unit"
+  let name := h.getD 1 ""
+  let root ← num h 2 "header"
+  let (inGroups, at1) ← groups h 3
+  let (outGroups, at2) ← groups h at1
+  if at2 != h.size then throw s!"{FORMAT}: trailing header fields"
+  let mut defs : Array Def := #[]
+  let mut leaves := none
+  let mut at_ := 1
+  while at_ < n do
+    if at_ + 1 == n && (line at_).startsWith "LEAVES " then
+      leaves := some (line at_)
+      break
+    let dh := tokens (line at_)
+    if dh.size != 5 || dh[0]! != "DEF" then throw s!"{FORMAT}: line {at_} is not a DEF line"
+    let cols ← num dh 1 "DEF"
+    let ins ← num dh 2 "DEF"
+    let nrows ← num dh 3 "DEF"
+    let ncalls ← num dh 4 "DEF"
+    let refs := cols + ins + 1
+    let mut rows := #[]
+    for i in [0:nrows] do
+      let v ← rowNums defs.size i (nums (at_ + 1 + i))
+      let na := v.getD 1 0
+      let nb := v.getD (2 + na) 0
+      if v.size < 2 || v.size != 3 + na + nb then throw s!"{FORMAT}: definition {defs.size}: row {i} is malformed"
+      let (col, a, b) := (v[0]!, v.extract 2 (2 + na), v.extract (3 + na) (3 + na + nb))
+      if col ≥ cols then throw s!"{FORMAT}: definition {defs.size}: row {i} is not at one of its columns"
+      if a.any (· ≥ refs) || b.any (· ≥ refs) then
+        throw s!"{FORMAT}: definition {defs.size}: row {i} reads past its references"
+      rows := rows.push (col, a, b)
+    let mut calls := #[]
+    for i in [0:ncalls] do
+      let ct := tokens (line (at_ + 1 + nrows + i))
+      if ct[0]? != some "CALL" then throw s!"{FORMAT}: definition {defs.size}: call {i} is not a CALL line"
+      let e ← num ct 1 "CALL"
+      let count ← num ct 2 "CALL"
+      let base ← num ct 3 "CALL"
+      let stride ← num ct 4 "CALL"
+      let nseg ← num ct 5 "CALL"
+      if ct.size != 6 + 5 * nseg then throw s!"{FORMAT}: definition {defs.size}: call {i} is malformed"
+      let mut segs := #[]
+      for s in [0:nseg] do
+        segs := segs.push ⟨← num ct (6 + 5 * s) "CALL", ← num ct (7 + 5 * s) "CALL", ← num ct (8 + 5 * s) "CALL",
+          ← num ct (9 + 5 * s) "CALL", ← num ct (10 + 5 * s) "CALL"⟩
+      let some callee := defs[e]? | throw s!"{FORMAT}: definition {defs.size}: call {i} names no earlier definition"
+      if count == 0 || (count > 1 && stride < callee.cols) || base + (count - 1) * stride + callee.cols > cols then
+        throw s!"{FORMAT}: definition {defs.size}: call {i}'s copies overlap, or overrun its columns"
+      if segs.foldl (fun n s => n + s.reps * s.len) 0 != callee.ins then
+        throw s!"{FORMAT}: definition {defs.size}: call {i}'s segments do not bind its callee's inputs"
+      if segs.any (fun s => s.len > 0 && s.reps > 0 && s.hi count > refs) then
+        throw s!"{FORMAT}: definition {defs.size}: call {i} binds past its references"
+      calls := calls.push { def_ := e, count, base, stride, segs }
+    defs := defs.push { cols, ins, rows, calls }
+    at_ := at_ + 1 + nrows + ncalls
+  if root ≥ defs.size then throw s!"{FORMAT}: the root names no definition"
+  if (defs.getD root default).ins != 0 || (defs.getD root default).cols == 0 then
+    throw s!"{FORMAT}: the root has inputs, or no constant"
+  let t : Tmpl := { name, root, inGroups, outGroups, defs, leaves }
+  if !t.ordered then
+    throw s!"{FORMAT}: a row or a binding reads a later column, input padding, or both its caller's own columns and its inputs"
+  if !t.wellFormed then throw s!"{FORMAT}: a definition has 2^64 columns or calls, or a call the fold's proof does not cover"
+  return t
+
+/-- `parse`, each row's numbers read by `Net.lineNums`, which compiled code reads off the line's bytes
+(`Net.lineNums_eq_fast`), and its A and B checked in place. -/
+def parseFast (lines : Array String) : V Tmpl :=
+  parseAt lines.size (fun k => lines.getD k "") fun k => Net.lineNums (lines.getD k "")
+
+/-- Compiled code runs `parseFast`; the kernel and every proof see `parse`. `@[csimp]` rewrites only code compiled after
+it, so it stays directly below `parse`. -/
+@[csimp] theorem parse_eq_fast : @parse = @parseFast := by
+  funext lines
+  unfold parse parseFast parseAt
+  have hl : ∀ k, lines[k]! = lines.getD k "" := fun k => by
+    rw [getElem!_def, Array.getD_eq_getD_getElem?]; rfl
+  simp only [hl, Array.any_append, rowNums_eq]
+  all_goals rfl
+
+/-- A template `parseAt` returns passed its last two checks (`TmplUnit.readParsedAt` reads them). -/
+theorem parseAt_checked {n : Nat} {line : Nat → String} {nums : Nat → Option (Array Nat)} {t : Tmpl}
+    (h : parseAt n line nums = .ok t) : t.ordered = true ∧ t.wellFormed = true := by
+  have bind_eq_ok {α β : Type} {x : V α} {f : α → V β} {b : β} :
+      (x >>= f) = .ok b ↔ ∃ a, x = .ok a ∧ f a = .ok b := by
+    cases x <;> simp [bind, Except.bind]
+  -- the body from the outside in, each join point unfolded once its branch is taken (inlining them all copies the rest
+  -- of the body into every check), each check's other branch a `throw`
+  unfold parseAt at h
+  extract_lets at h
+  split at h
+  · cases h
+  simp -zeta +zetaDelta only [] at h
+  obtain ⟨_, -, h⟩ := bind_eq_ok.1 h
+  obtain ⟨⟨_, _⟩, -, h⟩ := bind_eq_ok.1 h
+  obtain ⟨⟨_, _⟩, -, h⟩ := bind_eq_ok.1 h
+  try simp -zeta only [] at h
+  extract_lets at h
+  split at h
+  · cases h
+  simp -zeta +zetaDelta only [] at h
+  obtain ⟨_, -, h⟩ := bind_eq_ok.1 h
+  extract_lets at h
+  split at h
+  · cases h
+  simp -zeta +zetaDelta only [] at h
+  try extract_lets at h
+  split at h
+  · cases h
+  try simp -zeta +zetaDelta only [] at h
+  try extract_lets at h
+  split at h
+  · cases h
+  rename_i hord
+  try simp -zeta +zetaDelta only [] at h
+  try extract_lets at h
+  split at h
+  · cases h
+  rename_i hwf
+  try simp -zeta +zetaDelta only [] at h
+  cases h
+  exact ⟨by simpa using hord, by simpa using hwf⟩
 
 /-- A sorted list with each run of equal columns cut to its length mod 2. -/
 def dropPairs : List Nat → List Nat

@@ -1,7 +1,23 @@
-import Proofs.Flock.C3.Sparse.Src
-import Proofs.Flock.VBridge.Sparse.Laid
-import Proofs.Flock.VBridge.Sparse.Unit
-import Proofs.Flock.VBridge.AccUnits
+module
+
+public import Proofs.Flock.C3.Sparse.Src
+public import Proofs.Flock.VBridge.Sparse.Laid
+public import Proofs.Flock.VBridge.Sparse.Unit
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Tactic.ReduceModChar
+import Proofs.Flock.C3.Sparse.SrcTape
 
 /-!
 # The source's sparse phases from V*'s RecSparse units
@@ -15,6 +31,8 @@ states the rows as `LaidRows` of `RecSparse.unitLaid`; `SrcLayer` reads them off
 `check_sparse` bounds `T_LOG`, and `laid_sparse` reads the zero columns as the unit's residuals being zero, so the unit
 accepts and plays its phase on its steps (`playsT_of_unit`).
 -/
+
+@[expose] public section
 
 namespace FlockC3.Sparse
 

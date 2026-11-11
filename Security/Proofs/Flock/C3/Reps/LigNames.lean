@@ -1,4 +1,21 @@
-import Proofs.Flock.C3.Reps.KeysInW
+module
+
+public import Proofs.Flock.C3.Reps.KeysInW
+public import Proofs.Flock.C3.Reps.WithReads
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Tactic.ReduceModChar
 
 /-!
 # Ligerito's names in w: `wKey` at its sumcheck messages, out-of-domain values and final `yr`
@@ -10,6 +27,8 @@ message `j` below `k₀ + 4`, and below `k₀ + 4 + 7n + 4` at `n + 1` levels af
 below `3`, and below `3 + 2n` there, and there the final `yr`'s `2^(ext+1)` entries. Those rounds are w's
 (`mem_wNames_of_lig`), so these keys pass `wKey` (`ligKeys_wKey`).
 -/
+
+@[expose] public section
 
 namespace FlockC3.Reps
 

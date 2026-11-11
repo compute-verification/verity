@@ -15,7 +15,7 @@ from remote_bandwidth_fakes import Clock, Entropy
 from test_remote_bandwidth import A, N, SCHEDULE, challenger, drive, finish, params, partial, store  # noqa: F401
 from verity.core import claims
 from verity.core.protocols.remote_bandwidth import audit, codec, ledger, line, receipts, timing
-from verity.core.protocols.remote_bandwidth.audit import Pace, Session
+from verity.core.protocols.remote_bandwidth.audit import AuditRun, Pace
 
 PASS_NS, DOWN_NS, UP_NS = 300, 20, 30
 B = codec.BLOCK_BYTES
@@ -35,10 +35,10 @@ def paced(store, p: audit.Params, plan=None):
     """A paced session driven on its own schedule: each pass takes `PASS_NS` from its coin's arrival or the pass before,
     each message `DOWN_NS` to the prover and `UP_NS` back; the prover runs at most k passes under a coin, moves to the
     next coin once it has arrived, and stops at the close; the verifier sends each boundary message at
-    `Session.next_boundary_ns`, recomputed after every root.  Returns the session, prover, passes, clock and each
+    `AuditRun.next_boundary_ns`, recomputed after every root.  Returns the session, prover, passes, clock and each
     root's arrival."""
     clock = Clock()
-    s = Session(p, store.registration, None, challenger(store, p), not_before_ns=0, clock=clock)
+    s = AuditRun(p, store.registration, None, challenger(store, p), not_before_ns=0, clock=clock)
     prover = audit.Prover(store, None, entropy=Entropy(b"receipt salts"))
     challenges, coin_at, closed_at = {0: s.start()}, {0: DOWN_NS}, None
     passes, arrivals, previous = {}, {}, store.registration.digest
@@ -72,7 +72,7 @@ def paced(store, p: audit.Params, plan=None):
 
 @pytest.fixture(scope="module")
 def k1(store):
-    """k = 1, five windows, the last the closing window, γ per fixed window of 1,000 ns, every receipt drawn: no
+    """k = 1, five windows, the last the closing window, γ per fixed window of 1,000 ns, every receipt sampled: no
     receipt is wrong."""
     s, prover, passes, clock, arrivals = paced(store, params(windows=5, samples=N, window_ns=1, pace=Pace(1, 1000)))
     assert all(v.accepted for v in finish(s, prover, passes, clock))
@@ -96,12 +96,12 @@ def test_a_paced_session_releases_a_coin_every_k_passes_and_records_arrivals(sto
 def test_next_boundary_is_the_stated_window_unpaced_and_the_pace_when_paced(store) -> None:
     clock = Clock()
     p = params()
-    s = Session(p, store.registration, None, challenger(store, p), not_before_ns=0, clock=clock)
+    s = AuditRun(p, store.registration, None, challenger(store, p), not_before_ns=0, clock=clock)
     assert s.next_boundary_ns() is None
     s.start()
     assert s.next_boundary_ns() == p.window_ns
     p = params(windows=3, window_ns=5, pace=Pace(2))
-    s = Session(p, store.registration, None, challenger(store, p), not_before_ns=0, clock=clock)
+    s = AuditRun(p, store.registration, None, challenger(store, p), not_before_ns=0, clock=clock)
     coin = s.start()
     assert s.next_boundary_ns() == A, "not due before its first root: at the latest one allowance after its coin"
     prover = audit.Prover(store, None, entropy=Entropy(b"receipt salts"))
@@ -217,7 +217,7 @@ def test_the_snapshot_is_helds_conclusion(store) -> None:
 
 def test_the_coin_commitments_hiding_is_charged(store) -> None:
     """`ledger.hiding` is `LineHeld`'s hiding terms under hm96-sha512's pinned key: two distances a window, each
-    within 2^-192, n·2^-191 over the record's n windows, which the line's δ carries (`PooledDraw` reads none)."""
+    within 2^-192, n·2^-191 over the record's n windows, which the line's δ carries (`PooledSample` reads none)."""
     s, prover, passes, clock = drive(store, params(), SCHEDULE)
     assert all(v.accepted for v in finish(s, prover, passes, clock))
     r = s.record()
@@ -232,7 +232,7 @@ def test_the_lines_prf_advantages_are_named_by_a_registered_claim_and_in_no_part
 
 
 def test_the_draws_terms_are_charged_by_name(store) -> None:
-    """`ledger.draw` is `PooledDraw`'s terms beyond δ over the record's windows: the rejection Σ_t k_t/2^64 at the
+    """`ledger.draw` is `PooledSample`'s terms beyond δ over the record's windows: the rejection Σ_t k_t/2^64 at the
     record's `samples` and the receipts' binding term under `cr/sha-512`, Σ_t √(|L_t|·s)·q_t/2^256.5
     at the session's bounds, not the record's U_t and s'_t: |L_t| the most receipts a window can have (unpaced, fewer
     than 2^64 passes of the codec's `max_blocks`, since the session reserved append coins), s the sample cap, and
@@ -362,7 +362,7 @@ def test_the_node_carries_a_write_ceiling_per_tier() -> None:
 
 
 def test_wrong_receipts_fill_the_groups_at_their_rates(store) -> None:
-    """With 7 of 20 receipts drawn a window, the pooled wrong receipts W are spread over the groups at
+    """With 7 of 20 receipts sampled a window, the pooled wrong receipts W are spread over the groups at
     v = (1, 349, 300, 300, L) a wrong read, highest first, at most N a group of one pass."""
     s, prover, passes, clock, _ = paced(store, params(windows=5, samples=7, window_ns=1, pace=Pace(1, 1000)))
     assert all(v.accepted for v in finish(s, prover, passes, clock))

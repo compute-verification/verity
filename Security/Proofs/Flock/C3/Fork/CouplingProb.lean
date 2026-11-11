@@ -1,5 +1,23 @@
-import Proofs.Flock.C3.Fork.CouplingBad
-import Proofs.Flock.C3.Fork.CouplingValue
+module
+
+public import Proofs.Flock.C3.Fork.CouplingBad
+public import Proofs.Flock.C3.Fork.CouplingValue
+public import Proofs.Flock.Recursive.HoloExec
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Tactic.ReduceModChar
+import Proofs.Flock.Soundness.Game
 
 /-!
 # a1l, step 7: the compiled holographic table on a clash-free set, against one prover
@@ -10,6 +28,8 @@ argument on `lockHoloL`: the oracle prover sends `W`'s tables (`tab₀W` at the 
 so `holo_bad_zero` leaves the coupling no bad term, and the coupling's oracle game is no better than the oracle table
 (`holoOrcL_value_le`).
 -/
+
+@[expose] public section
 
 namespace FlockC3.Fork
 

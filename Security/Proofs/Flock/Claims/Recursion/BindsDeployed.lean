@@ -1,12 +1,40 @@
-import Proofs.Flock.Claims.Recursion.BoundDeploy
-import Proofs.Flock.Soundness.Discharge.Hm.Row
-import Proofs.Flock.Claims.DeployK
-import Proofs.Flock.Claims.Complete.Encode
-import Proofs.Flock.Claims.Complete.Zk.Run
-import Proofs.Flock.Claims.KS.Width
-import Proofs.Flock.Claims.KS.ConflictRun
-import Proofs.Flock.Claims.KS.PlainStep
-import Proofs.Flock.Claims.Bridge.Custody
+module
+
+public import Proofs.Flock.Claims.Complete.Encode
+public import Proofs.Flock.Claims.KS.PlainStep
+public import Proofs.Flock.Claims.Recursion.BoundDeploy
+import Mathlib.Algebra.Order.Floor.Extended
+import Mathlib.Algebra.Order.Interval.Basic
+import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
+import Mathlib.Analysis.SpecialFunctions.Bernstein
+import Mathlib.Analysis.SpecialFunctions.Gamma.Basic
+import Mathlib.Analysis.SpecialFunctions.Trigonometric.DerivHyp
+import Mathlib.Combinatorics.Enumerative.DyckWord
+import Mathlib.Combinatorics.SimpleGraph.Triangle.Removal
+import Mathlib.Data.NNRat.Floor
+import Mathlib.Data.Nat.Choose.Multinomial
+import Mathlib.Geometry.Euclidean.Altitude
+import Mathlib.NumberTheory.Chebyshev
+import Mathlib.NumberTheory.Height.NumberField
+import Mathlib.NumberTheory.Height.Projectivization
+import Mathlib.NumberTheory.LucasLehmer
+import Mathlib.NumberTheory.SelbergSieve
+import Mathlib.RingTheory.Radical.NatInt
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Tactic.ReduceModChar
+import Mathlib.Topology.Sheaves.Init
 
 /-!
 # (P2) and (P4) at the intended choice
@@ -31,6 +59,8 @@ so the checks accept one text per record (`LastGap.checks_record_eq`) and refuse
 
 `JsonTrailingSpace` is a hypothesis, not a lemma: `Json.parse`'s `anyCore` is `partial`, so the kernel doesn't see its
 body. The rest is proved. -/
+
+@[expose] public section
 
 namespace RecDeploy
 
@@ -66,7 +96,7 @@ theorem binds_deployed (rel : _root_.Flock.Readable.Parsed → _root_.Flock.Read
 /-- **Lean's JSON parser accepts trailing whitespace**: `Json.parse` is `ws; anyCore; eof`, and every branch of
 `anyCore` ends with `ws`. A hypothesis because `anyCore` is `partial`. -/
 def JsonTrailingSpace : Prop :=
-  ∀ (r : String) (j : Json), Json.parse r = .ok j → Json.parse (r ++ " ") = .ok j
+  ∀ (r : String) (j : Json), Flock.JsonParse.parse r = .ok j → Flock.JsonParse.parse (r ++ " ") = .ok j
 
 end RecDeploy
 
@@ -187,26 +217,26 @@ open Lean (Json)
 
 /-! ## The deployed plain verifier reads the record only through `Json.parse` -/
 
-theorem recordDraw_congr {r r' : String} (h : Json.parse r' = Json.parse r) :
+theorem recordDraw_congr {r r' : String} (h : Flock.JsonParse.parse r' = Flock.JsonParse.parse r) :
     FlockSoundness.Discharge.Exec.recordDraw r' = FlockSoundness.Discharge.Exec.recordDraw r := by
   unfold FlockSoundness.Discharge.Exec.recordDraw
   rw [h]
 
-theorem liveOf_congr (spec : _root_.Flock.SessionSpec) {r r' : String} (h : Json.parse r' = Json.parse r) :
+theorem liveOf_congr (spec : _root_.Flock.SessionSpec) {r r' : String} (h : Flock.JsonParse.parse r' = Flock.JsonParse.parse r) :
     FlockDeploy.liveOf spec r' = FlockDeploy.liveOf spec r := by
   unfold FlockDeploy.liveOf
   rw [h]
 
 theorem decodeWith_congr {M : Type → Type} [Monad M] [MonadExceptOf String M] [MonadLiftT _root_.Flock.V M]
     (hs : _root_.Flock.Hashes M) (spec : _root_.Flock.SessionSpec) {r r' : String}
-    (h : Json.parse r' = Json.parse r) :
+    (h : Flock.JsonParse.parse r' = Flock.JsonParse.parse r) :
     _root_.Flock.Record.decodeWith hs spec r' = _root_.Flock.Record.decodeWith hs spec r := by
   unfold _root_.Flock.Record.decodeWith
   rw [h]
 
 theorem verifyWithM_congr {M : Type → Type} [Monad M] [MonadExceptOf String M] [MonadLiftT _root_.Flock.V M]
     (hs : _root_.Flock.Hashes M) (spec : _root_.Flock.SessionSpec) (tabs : Array _root_.Flock.Setup)
-    (ps : Array ByteArray) {r r' : String} (h : Json.parse r' = Json.parse r) :
+    (ps : Array ByteArray) {r r' : String} (h : Flock.JsonParse.parse r' = Flock.JsonParse.parse r) :
     _root_.Flock.verifyWithM hs spec tabs r' ps = _root_.Flock.verifyWithM hs spec tabs r ps := by
   unfold _root_.Flock.verifyWithM
   rw [decodeWith_congr hs spec h]
@@ -224,7 +254,7 @@ theorem append_space_ne (r : String) : r ++ " " ≠ r := by
 message the same, are one text (S0, `Flock.RecordText.check_inj`). -/
 theorem checks_record_eq {zk : Bool} {s : FlockDeploy.Ins} {spec : _root_.Flock.SessionSpec} {x : Msg}
     {link : List ByteArray × List ByteArray} {c₁ : FlockDeploy.Coin} {mids : List (Msg × FlockDeploy.Coin)}
-    {st : Msg} {ps : Array ByteArray} {r r' : String} (h : Json.parse r' = Json.parse r)
+    {st : Msg} {ps : Array ByteArray} {r r' : String} (h : Flock.JsonParse.parse r' = Flock.JsonParse.parse r)
     (hc : FlockDeploy.checks zk s spec x link c₁ mids ⟨st, r, ps⟩ = .ok ())
     (hc' : FlockDeploy.checks zk s spec x link c₁ mids ⟨st, r', ps⟩ = .ok ()) : r' = r :=
   _root_.Flock.RecordText.check_inj (Claims.Bridge.Custody.checks_canonical hc')

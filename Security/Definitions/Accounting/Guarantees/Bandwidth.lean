@@ -1,4 +1,12 @@
-import Definitions.Accounting.Bandwidth
+module
+
+public import Definitions.Accounting.Bandwidth
+public import Definitions.Accounting.Bandwidth.Interactive
+public import Definitions.Accounting.Bandwidth.Joint
+public import Definitions.Accounting.Bandwidth.Relay
+public import Mathlib.Data.Fintype.Pi
+public import Mathlib.Data.Fintype.Prod
+import Mathlib.Basic.ENNReal.Real
 
 /-!
 # The bandwidth audit v0: what an accepted device read
@@ -9,6 +17,8 @@ No named assumption: the device's bounds (on-chip state `S`, side-source bits `c
 the measurement that falsifies each (`bandwidth-s-chip`, `bandwidth-side-cap`, `bandwidth-regen-time`) and what the
 model takes on trust (`random-oracle` for the tag, `bandwidth-instantiation` for the stored blocks).
 -/
+
+@[expose] public section
 
 namespace Bandwidth.Guarantees
 
@@ -43,16 +53,6 @@ def AuditRO : Prop :=
     pr (fun x : Store N b × Oracle N b h × (Fin s → Fin N) =>
         Accepts A x.1 x.2.1 x.2.2 ∧ A.ingress x.1 x.2.1 + S + c + G * b + lam < k * b)
       ≤ (((k - 1 : ℕ) : ℝ≥0∞) / N) ^ s + (s : ℝ≥0∞) / 2 ^ h + (q.choose k : ℝ≥0∞) / 2 ^ lam
-
-/-- **Completeness of `AuditRO`: an honest device is accepted, and its ingress is exactly the store.** For every `N`,
-`b` and `h` there is a device with no on-chip state, no side sources and no regeneration that makes `N` oracle queries
-(a `Device N b h 0 0 0 N`) whose tags are accepted on every store, oracle and sample, and whose ingress is exactly `N·b`
-bits. The device reads every block once and queries the oracle at it. Against `AuditRO` at `S = c = G = 0` and `q = N`,
-the honest `N·b` sits above the floor `k·b − λ` by the sample's slack `(N − k)·b`, about `ε_s·N·b`, plus `λ`. Proof:
-`Bandwidth.SecurityProofs.HonestPasses`. -/
-def HonestPasses : Prop :=
-  ∀ N b h : ℕ, ∃ A : Device N b h 0 0 0 N,
-    ∀ (E : Store N b) (O : Oracle N b h) (s : ℕ) (I : Fin s → Fin N), Accepts A E O I ∧ A.ingress E O = N * b
 
 /-- **The bandwidth audit v0 with relayed tags, in the random-oracle model.** `AuditRO` for a `RelayDevice`, whose side
 sources may depend on the oracle: a peer holding a copy of the store can compute tags after the seed and relay them,

@@ -1,14 +1,19 @@
-import Proofs.Flock.Soundness.Audit.FlockBatched
-import Proofs.Flock.Soundness.SessionBatchAcc
+module
+
+public import Proofs.Flock.Soundness.Audit.FlockBatched
+public import Proofs.Flock.Soundness.SessionBatchAcc
+import Mathlib.Combinatorics.Matroid.Init
+import Proofs.Flock.Soundness.Audit.Circuit
+import Proofs.Flock.Soundness.Game
 
 /-!
 # The batched Flock audit with the expected-time extractor (DESIGN.md §3)
 
-`FlockBatched.lean` with the extractor of expected-time collision resistance: each drawn unit's
+`FlockBatched.lean` with the extractor of expected-time collision resistance: each sampled proof block's
 table is extracted from `k` reruns of everything after `Commit` in which the session accepts, so an
 extraction costs `1 + k` runs in expectation whatever the acceptance probability `ε`. Its knowledge
 bound is relative to `ε` (`joint_le_accB`): `ε·Pr[fails] ≤ a + r·ε`, with `a = ε_c⁻ + √(k·adv₀)`
-and `r = N₀/(ek) < 1`. So at a wrong drawn unit
+and `r = N₀/(ek) < 1`. So at a wrong sampled proof block
 $$\varepsilon\le\varepsilon\Pr[\text{fails}]+\varepsilon\Pr[\text{link}]\le a+r\varepsilon+
 \varepsilon\Pr[\text{link}],\qquad\varepsilon\le\frac{a+\varepsilon\Pr[\text{link}]}{1-r}.$$
 
@@ -19,10 +24,12 @@ $$\varepsilon\le\varepsilon\Pr[\text{fails}]+\varepsilon\Pr[\text{link}]\le a+r\
   `FlockBatched.lean` on the table extracted from accepted reruns.
 
 At `k = cN₀/e`, `1/(1 − r) = c/(c−1)`, which is `2` at the record's `c = 2`. The knowledge term is
-its own bound averaged over the draw (`flock_batched_knowledgeSoundE`), with no named assumption.
-The link term stays named (`LinkSound`), for the link theorem under expected-time collision
+its own bound averaged over the sample (`flock_batched_knowledgeSoundE`), with no named assumption.
+The binding error stays named (`BindSound`), for the link theorem under expected-time collision
 resistance (`Assumptions.SHA512CRExpected`).
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Audit
 
@@ -34,7 +41,7 @@ local notation "𝔽" => FlockLevel3.GF128
 
 namespace Partition
 
-variable {C : Circuit} {n : ℕ} (P : Partition C n) {Reg : Type} {D : Type} [Inhabited D]
+variable {C : Verity.Boolean.Circuit} {n : ℕ} (P : Partition C n) {Reg : Type} {D : Type} [Inhabited D]
   (H : List UInt8 → D) (E : Merkle.Enc (List 𝔽) D) {mPts : ℕ}
   (plan : Finset (Fin n) → Reg → List (TabSpec mPts))
   (tab : (S : Finset (Fin n)) → (R : Reg) → Fin n → Fin (plan S R).length)
@@ -55,7 +62,7 @@ theorem prob_batchedSession_eq (S : Finset (Fin n)) (R : Reg)
   rfl
 
 /-- **The batched audit's analysis, with the expected-time extractor.** `X` is the committed
-transcript (the link theorem defines it), `decode` reads each drawn unit from its table's witness,
+transcript (the link theorem defines it), `decode` reads each sampled proof block from its table's witness,
 and `k` is the number of accepted reruns, with `N₀/(ek) < 1` for every table of every plan. -/
 noncomputable def analysisBE
     (decode : DecoderB (C := C) (Reg := Reg) plan tab)
@@ -102,15 +109,15 @@ noncomputable def analysisBE
     exact ENNReal.ofReal_le_ofReal key
 
 /-- **The batched audit's knowledge term, with the expected-time extractor**, per prover: after
-each draw, the largest over the plan's tables of `(ε_c⁻ + √(k·adv₀))/(1 − N₀/(ek))`, averaged over
-the draw. -/
+each sample, the largest over the plan's tables of `(ε_c⁻ + √(k·adv₀))/(1 − N₀/(ek))`, averaged over
+the sample. -/
 noncomputable def ksAvgBE (k : ℕ) (R : Reg) (τ : Cont L Reg (batchedSession H E plan) R) : ℝ≥0∞ :=
   avg fun ω => ⨆ j : Fin (plan (L.draw ω) R).length,
     ENNReal.ofReal (ksBoundAccB execArith H E (plan (L.draw ω) R) j k (batchStrat H E plan (τ ω)) /
       (1 - rateB (plan (L.draw ω) R) j k))
 
 /-- **`ε_ks` with the expected-time extractor**: the analysis's knowledge term is its own bound,
-averaged over the draw. -/
+averaged over the sample. -/
 theorem flock_batched_knowledgeSoundE
     (decode : DecoderB (C := C) (Reg := Reg) plan tab)
     (Xc : (R : Reg) → Cont L Reg (batchedSession H E plan) R → (Fin C.N → Bool)) {k : ℕ}
@@ -129,7 +136,7 @@ theorem flock_batched_countE
     (Xc : (R : Reg) → Cont L Reg (batchedSession H E plan) R → (Fin C.N → Bool)) {k : ℕ}
     (hk : 1 ≤ k) (hr : ∀ S R j, rateB (plan S R) j k < 1) (hlow : P.LoweringSoundB plan tab decode)
     {δlink : (R : Reg) → Cont L Reg (batchedSession H E plan) R → ℝ≥0∞}
-    (hlink : (P.analysisBE H E plan tab decode Xc k hk hr hlow).LinkSound δlink) (K : ℕ)
+    (hlink : (P.analysisBE H E plan tab decode Xc k hk hr hlow).BindSound δlink) (K : ℕ)
     (σ : Strategy (audit L Reg (batchedSession H E plan))) :
     prob (fun o => o.1 = true ∧ K ≤ (P.wrong (Xc (reg σ) (cont σ))).card)
         (audit L Reg (batchedSession H E plan)) σ ≤
@@ -137,14 +144,14 @@ theorem flock_batched_countE
   extraction_audit_count (P.analysisBE H E plan tab decode Xc k hk hr hlow)
     (P.flock_batched_knowledgeSoundE H E plan tab decode Xc hk hr hlow) hlink K σ
 
-/-- **Drawn units of the batched Flock audit, with the expected-time extractor**, are correct up to
+/-- **Sampled proof blocks of the batched Flock audit, with the expected-time extractor**, are correct up to
 `ε_ks(σ) + δ_link(σ)`. -/
 theorem flock_batched_drawnE
     (decode : DecoderB (C := C) (Reg := Reg) plan tab)
     (Xc : (R : Reg) → Cont L Reg (batchedSession H E plan) R → (Fin C.N → Bool)) {k : ℕ}
     (hk : 1 ≤ k) (hr : ∀ S R j, rateB (plan S R) j k < 1) (hlow : P.LoweringSoundB plan tab decode)
     {δlink : (R : Reg) → Cont L Reg (batchedSession H E plan) R → ℝ≥0∞}
-    (hlink : (P.analysisBE H E plan tab decode Xc k hk hr hlow).LinkSound δlink)
+    (hlink : (P.analysisBE H E plan tab decode Xc k hk hr hlow).BindSound δlink)
     (σ : Strategy (audit L Reg (batchedSession H E plan))) :
     prob (fun o => o.1 = true ∧ ¬ Disjoint (P.wrong (Xc (reg σ) (cont σ))) o.2)
         (audit L Reg (batchedSession H E plan)) σ ≤

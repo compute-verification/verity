@@ -1,5 +1,7 @@
-import Proofs.Flock.Claims.Bridge.Committed
-import Proofs.Flock.Verifier.Encode
+module
+
+public import Proofs.Flock.Claims.Bridge.Committed
+public import Proofs.Flock.Verifier.Encode
 
 /-!
 # The coin tree's hiding from `Hm96Hiding`
@@ -25,6 +27,8 @@ This file derives it from the claims' hiding assumption `Hm96Hiding` (one hm96 l
   (`coin_bytes_injective`).
 -/
 
+@[expose] public section
+
 namespace Claims.Bridge
 
 open FlockSoundness.Game (ind)
@@ -34,7 +38,7 @@ open scoped ENNReal
 
 theorem Pr_eq_card {α : Type} [Fintype α] (p : α → Prop) [DecidablePred p] :
     Pr p = (Fintype.card {a // p a} : ℝ) / Fintype.card α := by
-  unfold Pr
+  unfold Pr Claims.prUniform
   rw [Fintype.card_subtype]
   congr 3
   exact Finset.filter_congr_decidable _ _ _
@@ -49,12 +53,6 @@ theorem Pr_prod {α β : Type} [Fintype α] [Fintype β] (P : α → β → Prop
   rw [Pr_eq_Ex, Ex_prod]
   simp only [Pr_eq_Ex]
   rfl
-
-theorem Pr_le_of_forall {α β : Type} [Fintype α] [Nonempty α] [Fintype β] (P : α → β → Prop) {ε : ℝ}
-    (h : ∀ a, Pr (P a) ≤ ε) : Pr (fun p : α × β => P p.1 p.2) ≤ ε := by
-  rw [Pr_prod]
-  calc _ ≤ Ex fun _ : α => ε := Ex_mono h
-    _ = ε := Ex_const (α := α) ε
 
 theorem Pr_not {α : Type} [Fintype α] [Nonempty α] (p : α → Prop) : Pr (fun a => ¬ p a) = 1 - Pr p := by
   have := Classical.decPred p
@@ -118,7 +116,7 @@ theorem PrENNReal_eq {α : Type} [Fintype α] (p : α → Prop) :
 
 theorem PrENNReal_toReal {α : Type} [Fintype α] (p : α → Prop) : (PrENNReal p).toReal = Pr p := by
   classical
-  rw [PrENNReal_eq, ENNReal.toReal_mul, ENNReal.toReal_inv, ENNReal.toReal_natCast, ENNReal.toReal_natCast, Pr,
+  rw [PrENNReal_eq, ENNReal.toReal_mul, ENNReal.toReal_inv, ENNReal.toReal_natCast, ENNReal.toReal_natCast, Pr, Claims.prUniform,
     div_eq_inv_mul]
 
 theorem PrENNReal_ne_top {α : Type} [Fintype α] (p : α → Prop) : PrENNReal p ≠ ⊤ := by
@@ -137,8 +135,6 @@ variable {α β : Type} [Fintype α] [DecidableEq β] (g h : α → β)
 /-- `α` as each value's fiber under `g`, indexed. -/
 noncomputable def fibers : α ≃ Σ b, Fin (Fintype.card {a // g a = b}) :=
   (Equiv.sigmaFiberEquiv g).symm.trans (Equiv.sigmaCongrRight fun _ => Fintype.equivFin _)
-
-theorem fibers_fst (a : α) : (fibers g a).1 = g a := rfl
 
 theorem fibers_symm (x : Σ b, Fin (Fintype.card {a // g a = b})) : g ((fibers g).symm x) = x.1 :=
   ((Fintype.equivFin {a // g a = x.1}).symm x.2).2
@@ -198,7 +194,7 @@ theorem card_unmatched [Fintype β] :
 open Classical in
 theorem Pr_comp_eq [Fintype β] (E : β → Prop) :
     Pr (fun a => E (g a)) = (∑ b ∈ Finset.univ.filter E, (Fintype.card {a // g a = b} : ℝ)) / Fintype.card α := by
-  unfold Pr
+  unfold Pr Claims.prUniform
   congr 1
   rw [Finset.card_eq_sum_card_fiberwise (f := g) (t := Finset.univ.filter E) (fun a ha => by simpa using ha)]
   push_cast
@@ -394,7 +390,7 @@ theorem sim_opnSeq [Add B] [Fintype Coin] [Inhabited Coin] [Fintype Y] [Nonempty
   rw [T.sim_opn dec σ _ j hne (by simp), hlast, hdec]
 
 /-- **The hm96 coin tree hides at distance `2 k δ₁`** against its simulator, where each leaf hides at `δ₁`
-(`Hm96Hiding`) and the answers determine their coins. The hybrid runs over the leaves: draw the simulator's tape
+(`Hm96Hiding`) and the answers determine their coins. The hybrid runs over the leaves: sample the simulator's tape
 `(r', y', t)`; the tree's salts `y_j = rematch j (r' j) (r j) (y' j)` are uniform for every `r'`, and round `j`'s leaf
 at `(r j, y_j)` is the simulator's at `(r' j, y' j)` but with probability `2 δ₁` (`rematch_le`: `Hm96Hiding` one way,
 its complement the other), so the two root-and-openings differ with probability at most `2 k δ₁`. -/
@@ -467,7 +463,7 @@ theorem Pr_runC_le_hm96 {Coin Ω B Y C T₀ : Type} [Fintype Coin] [Inhabited Co
     [AddGroup B] [Fintype B] [Fintype Y] [Nonempty Y] [Fintype T₀] [Nonempty T₀] (H : Msg → Msg) (V : Verifier Coin)
     (x : Msg) (T : Hm96Tree Coin B Y C T₀ (V.k x)) {δ₁ : ℝ≥0∞} (hH : Hm96Hiding T.My T.cs δ₁) (hδ : δ₁ ≠ ⊤)
     (ans : Coin → Msg) (hans : Function.Injective ans) (hV : AnswersCoin H V x ans) (P : CProver Ω) :
-    ∃ S : OnlineSim, ∀ Ev : Ω → (Fin (V.k x) → Coin) → Trace → Prop,
+    ∃ S : OnlineSim, ∀ Ev : Ω → (Fin (V.k x) → Coin) → Transcript → Prop,
       Pr (fun p : Ω × (Fin (V.k x) → Coin) × (Fin (V.k x) → Y) × T₀ =>
           Ev p.1 p.2.1 (runC H P V x T.tree p.1 p.2.1 p.2.2)) ≤
         Pr (fun p : (Ω × S.Tape) × (Fin (V.k x) → Coin) => Ev p.1.1 p.2 (run H (simProver S V.k P) V x p.1 p.2)) +
@@ -501,7 +497,7 @@ theorem Pr_runC_le_deploy {Ω B Y C T₀ : Type} [Fintype Ω] [Nonempty Ω] [Add
     [Nonempty Y] [Fintype T₀] [Nonempty T₀] (zk : Bool) (H : Msg → Msg) (x : Msg)
     (T : Hm96Tree FlockDeploy.Coin B Y C T₀ ((FlockDeploy.V zk).k x)) {δ₁ : ℝ≥0∞} (hH : Hm96Hiding T.My T.cs δ₁)
     (hδ : δ₁ ≠ ⊤) (P : CProver Ω) :
-    ∃ S : OnlineSim, ∀ Ev : Ω → (Fin ((FlockDeploy.V zk).k x) → FlockDeploy.Coin) → Trace → Prop,
+    ∃ S : OnlineSim, ∀ Ev : Ω → (Fin ((FlockDeploy.V zk).k x) → FlockDeploy.Coin) → Transcript → Prop,
       Pr (fun p : Ω × (Fin ((FlockDeploy.V zk).k x) → FlockDeploy.Coin) × (Fin ((FlockDeploy.V zk).k x) → Y) × T₀ =>
           Ev p.1 p.2.1 (runC H P (FlockDeploy.V zk) x T.tree p.1 p.2.1 p.2.2)) ≤
         Pr (fun p : (Ω × S.Tape) × (Fin ((FlockDeploy.V zk).k x) → FlockDeploy.Coin) =>

@@ -1,5 +1,5 @@
 # The vLLM demo's placement: the workload it serves, the node each of its runs goes to, how `research run` starts it there,
-# and what that node holds. `run.sh` (`verity example vllm`) reads it and hands the run's script its node's paths as its environment, so
+# and what that node holds. `run.sh` (`verity demo vllm`) reads it and hands the run's script its node's paths as its environment, so
 # no script names a node or a path on one. A node's paths are the [node.NAME] table; a run's own variables are its env table.
 
 # the workload the demo serves, one of the integration's (integrations/vllm/workloads/<row>.json, fetched by its art id and
@@ -12,10 +12,11 @@ row = "llama32-1b__int8__h200__tp1__b4__i256__o32__mixed__greedy__bi-eager"
 VENV = "/workspace/cp/venv312"
 CUDA_HOME = "/usr/local/cuda-13.0"
 HF_HOME = "/workspace/hf"
-# the workload dirs, LLAMA_ROOT/<run>/<row>; COMMIT_RUN is the run whose workload dir the endpoint commits under: its Build's
-# manifest (ROW/manifest.json), and the taps built beside it
+# the workload dirs, LLAMA_ROOT/<run>/<row>; COMMIT_RUN is the run whose traced workload dir the endpoint's Build of record
+# (`predict row`) is held to, traced after the required manifest stopped naming the FlashAttention M1 stream; the taps are
+# built beside it
 LLAMA_ROOT = "/workspace/research/vllm-composed-h200int8"
-COMMIT_RUN = "r20261026-185144-3ccb"
+COMMIT_RUN = "r20261030-210701-a20f"
 # no endpoint serves with less free on its serve dir's filesystem
 DISK_FLOOR_GB = "100"
 
@@ -30,10 +31,17 @@ NORM_TAP_SO = "/workspace/research/vllm-composed-h200int8/norm_tap/build/verity_
 # each sampling block's coins from a session of its own on vy-challenger-1's gate (H1_GATE, the gate key of the node's
 # research user; H1_PEER the node); `--env MAIN_SHA=SHA` also holds the gate's pins to main's first-parent line from SHA.
 # The sampled proofs' coins are the Lean verifier's own unless PP_CHALLENGER names the live challenger
-# (`--env PP_CHALLENGER=gate:USER@HOST` with PP_PEER, PP_CHALLENGER_KEY and PP_GATE_KEY).
+# (`--env PP_CHALLENGER=gate:USER@HOST` with PP_PEER, PP_CHALLENGER_KEY and PP_GATE_KEY). ONSITE_PIECES gives the onsite
+# product its private pieces (the wipe's, PoUS's and the bandwidth audit's) and cases; KEEP_CMD keeps the serve dirs on
+# the node for a week.
 node = "vy-dc-h200"
 research = ["--cwd", "clone", "--timeout", "6h"]
-env = { H1_GATE = "ssh -i ~/.ssh/vllm_gate_ed25519 -o BatchMode=yes research@204.12.178.84", H1_PEER = "vy-dc-h200" }
+
+[run.window.env]
+H1_GATE = "ssh -i ~/.ssh/vllm_gate_ed25519 -o BatchMode=yes research@204.12.178.84"
+H1_PEER = "vy-dc-h200"
+ONSITE_PIECES = "benchmarks/pous/onsite_pieces.sh"
+KEEP_CMD = '''why="served_verdicts.sh's serve dirs (sealed row dirs, advice, window circuits) and C-Flock's build"; "$PY" -m research keep "$1" --owner @vllm --expires 7d --priority high --why "$why" || research keep "$1" --owner @vllm --expires 7d --priority high --why "$why"'''
 
 [run.commit]
 # once per workload: its Build, Match and Commit with the sealed replay bundle (a GPU leased only for the Match capture and the

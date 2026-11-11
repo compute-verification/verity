@@ -29,7 +29,7 @@
   the clear, and the period's terms for `NetTiming.Guarantees.PeriodLeakAccepted` summed by
   `periodLeak_le_sum`. ``--endpoint`` is network-e2e's ``--no-prove`` report on the run and the endpoint's
   records: the endpoint's advice bound to the run and the I/O tie, in the clear, required on the advice profile. N2's
-  summary is `n2_zk.py prove`'s (Selection All: every link-window's one unit proved) or a sampled draw's
+  summary is `n2_zk.py prove`'s (Selection All: every link-window's one unit proved) or a sampled sample's
   (``CR_N2_CMD``), read by the same fields; on the advice profile, whose egress counts no N2 unit holds, N2 isn't
   run. Scan's is `scan_zk.py prove`'s, a stand-in on its own synthetic warden run until its ``--warden-run`` takes
   the gate's warden rows, accepted only when every round's verdict is the one scan_zk expects and no witness piece
@@ -39,24 +39,24 @@
   before. On the certifier-only path (``--job``'s ``path``, `CERTIFIER_ONLY`) there are no warden rows: the scan isn't
   run or required, and the report's ``stubbed`` says what the path stands on (`STUBBED`, `stubbed`). Its negatives are
   N2's members, the rehearsal's own check on each run it must refuse, and the I/O tie's verdict on each tampered run
-  that check lets through. d1's K (`pooled_k`) counts the served units' compute audits (``--audit``: each window's draw
+  that check lets through. d1's K (`pooled_k`) counts the served units' compute audits (``--audit``: each window's sample
   and free inputs, `free_inputs`) and the network's own terms (`network_terms`), at each δ. With ``--period-answer``
   (certifier/v0's ``network-period check`` answer on the period, a ``certifier.answer.json``, its case
   ``certifier.case.json`` beside it or ``--period-case``) and ``--server``, an accepted report also writes
-  ``block.json``: the block record's certifier entry (``legs.certifier`` of ``verity/block-record/v1``),
+  ``block.json``: the block record's certifier entry (``legs.certifier`` of ``verity/block-record/v2``),
   `block_certifier.block_leg` of that answer, once the answer is held to this chain (`period_binding`) and is
   ``network-period check``'s own on its case (`decide_period`; `block_entry`).
-* **The warden path** (``--job``'s ``path``, `WARDEN`): every step reads an active warden's own run (the gate's
-  ``warden-rehearse``, or `warden_serve.py`'s directory; `warden_chain`) and no certifier rehearsal's, whose input is
-  refused by name (`warden_chain.PROXY`). ``certs --warden-run`` reruns the warden's own offline check on its witness
-  and holds the public ``certificates.jsonl`` to the certified lines (`warden_chain.certificates`; no clock
-  certificate: the warden signs none). ``endpoint`` binds the endpoint's own advice to the certified I/O read off the
-  warden's cells (`warden_endpoint`); where the endpoint's records stay on the served node, that node runs it
-  (`served_endpoint`, `served_session.py endpoint`) and the chain reads its report. N2 is `n2_zk.py prove
-  --warden-run`'s, on the warden link; the I/O tie is
+* **The network certifier path** (``--job``'s ``path``, `WARDEN`): every step reads an active network certifier's own
+  run (the gate's ``warden-rehearse``, or `warden_serve.py`'s directory; `warden_chain`) and no certifier rehearsal's,
+  whose input is refused by name (`warden_chain.PROXY`). ``certs --warden-run`` reruns the network certifier's own
+  offline check on its witness and holds the public ``certificates.jsonl`` to the certified lines
+  (`warden_chain.certificates`; no clock certificate: the network certifier signs none). ``endpoint`` binds the
+  endpoint's own advice to the certified I/O read off the network certifier's cells (`warden_endpoint`); where the
+  endpoint's records stay on the served node, that node runs it (`served_endpoint`, `served_session.py endpoint`) and
+  the chain reads its report. N2 is `n2_zk.py prove --warden-run`'s, on the network certifier link; the I/O tie is
   `n2_tie_zk.py prove --class warden`'s, proved (``--tie``, `tie_step`); the scan is `scan_zk.py prove
-  --warden-run`'s. Each is held to the warden run the certificates step read (`on_warden`), every one is required,
-  and the report names what the path stands on (`WARDEN_STUBBED`, or `WARDEN_SERVED_STUBBED` on the served node's
+  --warden-run`'s. Each is held to the network certifier run the certificates step read (`on_warden`), every one is
+  required, and the report names what the path stands on (`WARDEN_STUBBED`, or `WARDEN_SERVED_STUBBED` on the served node's
   endpoint report).
 * **leak**: K per monitoring period (week, month, year; one machine and 1,000) on the warden gate run, pooled at
   δ = 1% and 10⁻⁶ and in the per-period form, each beside its share of Llama-3.2-1B's BF16 weights (`leak`), computed
@@ -65,6 +65,7 @@
 from __future__ import annotations
 
 import argparse
+import decimal
 import hashlib
 import json
 import math
@@ -124,9 +125,10 @@ STUBBED = (
     "network certifier's own cells as one device, so there are no warden rows and the scan isn't run",
     "the output tie (IoTieRequest) is computed in the clear at the auditor, outside the proofs",
     "the weights' load isn't certified: nothing here shows the endpoint served the registered weights")
-#: the warden path (``--job``'s ``path``): every step reads an active warden's own run (`warden_chain`)
+#: the network certifier path (``--job``'s ``path``): every step reads an active network certifier's own run
+#: (`warden_chain`)
 WARDEN = "warden"
-#: what a report on the warden path stands on that isn't the chain's own
+#: what a report on the network certifier path stands on that isn't the chain's own
 WARDEN_STUBBED = (
     "the endpoint's advice is bound to the warden's certified I/O and rebuilt from it in the clear at the auditor, "
     "and the output tie to the Commit's port isn't proved",
@@ -178,7 +180,8 @@ def eps_at_delta(n: int, k: int, law: str) -> dict:
     return {"law": law, "units": n, "drawn": k,
             "incorrect_at_delta": {f"{d:.3g}": subset_bound(n, k, d) for d in DELTAS},
             "per_proof": "each proof's soundness error, ε_ks + ε_bind (KSLinOn's κ + √(γ·Pr B) + Pr[Bext]), "
-                         "symbolic: Claims.Sampling.KS is a hypothesis until Flock.Guarantees.SampledKSLive"}
+                         "symbolic: Claims.SamplingGeneric.Compiled.KS is a hypothesis until "
+                         "Flock.Guarantees.SampledKSLive"}
 
 
 # --- custody ----------------------------------------------------------------------------------------------------------
@@ -346,19 +349,19 @@ ADVICE_CLI = [sys.executable, "-m", "verity_vllm.pipeline.cli", "advice"]
 
 
 def warden_endpoint(run: Path, ep: Path, eos: list[int]) -> dict:
-    """The endpoint's own advice for a warden run (`served_endpoint`), on the certified I/O read off its cells
-    (`warden_chain.io`)."""
+    """The endpoint's own advice for a network certifier run (`served_endpoint`), on the certified I/O read off its
+    cells (`warden_chain.io`)."""
     import warden_chain as WC
 
     return served_endpoint(WC.deployment(run)[0], WC.io(run), ep, eos)
 
 
 def served_endpoint(dep: dict, io: dict, ep: Path, eos: list[int]) -> dict:
-    """The endpoint's own advice for the warden run of ``dep`` (its ``deployment.json``), as network-e2e's
+    """The endpoint's own advice for the network certifier run of ``dep`` (its ``deployment.json``), as network-e2e's
     `endpoint_advice` makes it for a certifier rehearsal's: `verity-vllm advice` over the endpoint's records ``ep``
-    (network-e2e's ``chain.ENDPOINT``) into ``ep/advice`` at the warden's bucket unless an index is there, then
-    ``chain.served_advice`` on the certified I/O ``io`` (`warden_chain.io`'s) over the warden's execution phases, with
-    the model's EOS ids ``eos`` (a warden run records none)."""
+    (network-e2e's ``chain.ENDPOINT``) into ``ep/advice`` at the network certifier's bucket unless an index is there,
+    then ``chain.served_advice`` on the certified I/O ``io`` (`warden_chain.io`'s) over the network certifier's
+    execution phases, with the model's EOS ids ``eos`` (a network certifier run records none)."""
     import subprocess
 
     sys.path.insert(0, str(HERE.parent / "network_e2e"))
@@ -384,7 +387,7 @@ def served_endpoint(dep: dict, io: dict, ep: Path, eos: list[int]) -> dict:
 
 
 def warden_endpoint_step(e: dict | None) -> dict:
-    """`warden_endpoint`'s report: accepted when the warden's certified I/O reads whole off its cells and the
+    """`warden_endpoint`'s report: accepted when the network certifier's certified I/O reads whole off its cells and the
     endpoint's own advice is bound to it and rebuilt from it, in the clear."""
     if e is None:
         return {"verdict": "not run", "why": "no endpoint records (CR_ENDPOINT)",
@@ -424,9 +427,9 @@ def tie_step(t: dict | None, job: dict | None = None) -> dict:
 
 
 def on_warden(step: dict, doc: dict | None, run_id: str | None, what: str) -> dict:
-    """A warden-path step held to the warden run the certificates step read (``run_id``): refused by name
-    (`warden_chain.PROXY`) when its input is a certifier rehearsal's (it names no warden run), and when it is another
-    warden run's."""
+    """A network-certifier-path step held to the network certifier run the certificates step read (``run_id``): refused
+    by name (`warden_chain.PROXY`) when its input is a certifier rehearsal's (it names no active network certifier run),
+    and when it is another network certifier run's."""
     from warden_chain import PROXY
 
     if doc is None or step.get("verdict") in ("not run", "not given"):
@@ -438,8 +441,8 @@ def on_warden(step: dict, doc: dict | None, run_id: str | None, what: str) -> di
 
 
 def escaped(name: str, m: dict, s: dict) -> dict | None:
-    """A negative member the sampled draw accepted because none of its incorrect windows (those its reference expects
-    refused) was among the windows drawn: the draw's sampling error, which its ``wrong_units`` at δ bounds, not a
+    """A negative member the sampled sample accepted because none of its incorrect windows (those its reference expects
+    refused) was among the windows sampled: the sample's sampling error, which its ``wrong_units`` at δ bounds, not a
     failure of the run. None for honest, a member refused, or a period not sampled."""
     net = m.get("network") or {}
     units = (((s.get("sampled") or {}).get(name) or {}).get("draw") or {}).get("units") or (m.get("period") or {}).get(
@@ -452,7 +455,7 @@ def escaped(name: str, m: dict, s: dict) -> dict | None:
 
 def unexpected(name: str, m: dict, escape: dict | None = None) -> list[str]:
     """What keeps an N2 driver's member from its ``ok``: the conditions `n2_zk` holds it to, but
-    a negative's acceptance when it escaped the draw (`escaped`). A witness piece counts when the scan reads it
+    a negative's acceptance when it escaped the sample (`escaped`). A witness piece counts when the scan reads it
     ``leaked`` (`leak_scan.classify`); a ``structured`` find is listed, not counted, as the drivers decide."""
     wins, net, rec = m.get("windows") or [], m.get("network") or {}, m.get("received") or {}
     return ([f"windows {[w.get('window') for w in wins if not w.get('as_expected')]} not as expected"]
@@ -560,44 +563,123 @@ def scan_exit(s: dict | None, job: dict) -> str | None:
                       *(["scan_zk's ok is not true"] if s is not None and s.get("ok") is not True else [])])
 
 
-def free_inputs(circuit: dict) -> int:
+#: the value a window circuit registers the scan's state rows as, which no pin holds: the verifier fixes it before no run,
+#: so its reads stay free (`NetworkCheck.Period.stateValue`)
+SCAN_STATE = "verity/certifier/scan-state/v1"
+
+
+def input_terms(circuit: dict, pins: dict | None = None, roots: dict | None = None) -> dict:
+    """A compute audit window's input bits by what fills them, from its ``circuit.json`` alone (its templates, its
+    statements' ``in_rows`` and its declarations; work per template, wire and declaration, never per unit, and no
+    Definition looked up), as `NetworkCheck.Circuit.countsOf` counts them (`interface.input_count`):
+
+    * ``inputs``: every unit's input rows;
+    * ``wired``: each wire's reader rows times one row of its port, a cut port's row its words over its cuts
+      (`Spot.Wires`' ``wiredBits``);
+    * ``registered``: each registered read of a held parameter, its reader rows, and each table read and opening of a
+      table over one, its ports' rows. A parameter is held where the verifier's pin of it (``pins``, ``{param: root}``,
+      the verifier's own, never the record's) is the root the window's registration records for it (``roots``, its
+      ``registered_roots``; `interface.held_params`); a read of any other parameter stays free, and with no pins every
+      one does;
+    * ``free``: the rest, ``#(freeInputs \\ reg)``. A port ``external`` names as the system's I/O stays free, as
+      ``countsOf`` leaves it: the prover chooses its values as it does any other unwired input.
+
+    Refused (ValueError): a record that lists its members, a statement row of no one port, a wire or declaration outside
+    its port's units or rows, two filling one row (Lean's ``apart``), and a pin of `SCAN_STATE`."""
+    from verity.ml.windows import interface as IF
+
+    if "members" in circuit or "wires" not in circuit:
+        raise ValueError("a window circuit is counted from its stated record (its templates, statements and wires), as "
+                         "the period check counts it; a record that lists its members is refused")
+    if SCAN_STATE in (pins if isinstance(pins, dict) else {}):
+        raise ValueError(f"a pin of {SCAN_STATE}: the scan's state is no value the verifier fixes before the run, so its "
+                         "reads count free")
+    units = {t: int(n) for t, n in circuit["templates"]}
+    rows: dict[tuple[str, str], list[int]] = {}
+    for t in units:
+        for name, _schema, bits, ports in circuit["statements"][t]["in_rows"]:
+            port, cut, j = name.partition("#")
+            got = rows.setdefault((t, port), [])
+            if (ports != [name] if not cut else not all(p.startswith(f"{port}[") for p in ports) or j != str(len(got))):
+                raise ValueError(f"{t}: statement row {name!r} of ports {ports} is no one port's row, nor row j of a cut "
+                                 "port's rows p#0, p#1, …")
+            got.append(int(bits))
+    wires, cuts, reg, _ingress = IF.declarations(circuit)
+    for (t, port), rs in rows.items():
+        if len(rs) != int(cuts.get(t, {}).get(port, 1)) or len(set(rs)) != 1:
+            raise ValueError(f"{t} {port}: {len(rs)} rows of {sorted(set(rs))} bits, not its cuts' "
+                             f"{cuts.get(t, {}).get(port, 1)} rows of one width")
+    held = IF.held_params(pins, roots)
+    rects: dict[tuple[str, str], list[tuple[int, int, int, int, str]]] = {}
+
+    def fill(tid: str, port: str, at: int, n: int, r0: int, r1: int, what: str, bits: int) -> int:
+        if (tid, port) not in rows or not (0 <= at and at + n <= units[tid] and 0 <= r0 < r1 <= len(rows[tid, port])):
+            raise ValueError(f"{what}: units [{at}, {at + n}) and rows [{r0}, {r1}) of no input port of the circuit's")
+        for a2, b2, s2, e2, w2 in rects.setdefault((tid, port), []):
+            if a2 < at + n and at < b2 and s2 < r1 and r0 < e2:
+                raise ValueError(f"{tid} {port}: {w2} and {what} both fill rows of units from {max(at, a2)}")
+        rects[tid, port].append((at, at + n, r0, r1, what))
+        return bits
+
+    wired = sum(fill(w.reader, w.port, w.at, w.reader_units, w.cut[0], w.cut[0] + w.cut[1], f"wire {w.doc()}",
+                     w.units * rows.get((w.reader, w.port), [0])[0]) for w in wires)
+    registered = 0
+    if reg is not None:
+        pinned = {x.name for x in reg.tables if x.param in held}
+        for r in reg.reads:
+            if (r.reader, r.port) in rows:
+                registered += fill(r.reader, r.port, r.at, r.reader_units, r.cut[0], r.cut[0] + r.cut[1],
+                                   f"registered read {r.doc()}",
+                                   r.units * rows[r.reader, r.port][0] if r.param in held else 0)
+        for x in reg.roots:
+            k = len(rows.get((x.reader, x.port), ()))
+            registered += fill(x.reader, x.port, x.at, x.units, 0, max(k, 1), f"table read {x.doc()}",
+                               x.units * sum(rows.get((x.reader, x.port), ())) if x.table in pinned else 0)
+        for o in reg.openings:
+            for p in o.ports:
+                k = len(rows.get((o.reader, p), ()))
+                registered += fill(o.reader, p, o.at, o.units, 0, max(k, 1), f"opening {o.doc()} {p}",
+                                   o.units * sum(rows.get((o.reader, p), ())) if o.table in pinned else 0)
+    inputs = sum(units[t] * sum(rs) for (t, _p), rs in rows.items())
+    return {"inputs": inputs, "wired": wired, "registered": registered, "free": inputs - wired - registered}
+
+
+def free_inputs(circuit: dict, pins: dict | None = None, roots: dict | None = None) -> int:
     """``#(freeInputs \\ reg)`` of a compute audit's window from its ``circuit.json``: every proof block's input-row
-    bits (each template's proof blocks times its statement's ``in_rows`` widths), less each proof block's rows whose
-    every port a wire feeds from another proof block's output (``wires``) or ``external`` names as the system's I/O. A
-    row the registration's anchors register still counts, an overcount."""
-    from verity.ml.windows.interface import Wire
-
-    units = {t: n for t, n in circuit["templates"]}
-    covered: dict[tuple[str, str], set[int] | None] = {}
-    for e in circuit["external"]:
-        t, port = e.rsplit("/", 1)
-        if t not in units:
-            raise ValueError(f"external port {e!r} is no template's")
-        covered[t, port] = None
-    for w in map(Wire.of, circuit["wires"]):
-        if w.reader not in units:
-            raise ValueError(f"a wire's reader {w.reader!r} is no template")
-        fed = covered.setdefault((w.reader, w.port), set())
-        if fed is not None:
-            fed.update(range(w.at, w.at + w.units))
-    bits = 0
-    for t, n in units.items():
-        for _, _, width, ports in circuit["statements"][t]["in_rows"]:
-            fed = [covered.get((t, p), set()) for p in ports]
-            gone = 0 if not fed else n if all(f is None for f in fed) else len(set(range(n)).intersection(
-                *(set(range(n)) if f is None else f for f in fed)))
-            bits += (n - gone) * width
-    return bits
+    bits less those its wires and the held registered reads at the verifier's ``pins`` fill (`input_terms`)."""
+    return input_terms(circuit, pins, roots)["free"]
 
 
-def audit_of(d: Path) -> dict:
+def registered_bits(circuit: dict, pins: dict | None = None, roots: dict | None = None) -> int:
+    """The bits of a window circuit's input rows its registration registers at the verifier's ``pins``, as
+    `NetworkCheck.Circuit.countsOf` counts them (`input_terms`' ``registered``)."""
+    return input_terms(circuit, pins, roots)["registered"]
+
+
+def audit_of(d: Path, pins: dict | None = None) -> dict:
     """A compute audit's window as one-stage registers it (``registration.json`` and ``circuit.json``): its proof
     blocks, the proof blocks its sampling design samples (a subset design's ``k``, a stratified design's ``Σ k``, as
     `NetworkCheck.Period` counts them), the
-    least rate it draws a unit at (``q``: ``k/n``, or the least stratum's ``k/n``) and its free inputs
-    (`free_inputs`); its jitter term 0 at D_j = 1, `JITTER`: N2 holds the egress counts exactly, and J the offsets
-    within a bucket."""
+    least rate it samples a unit at (``q``: ``k/n``, or the least stratum's ``k/n``) and its free inputs with the terms
+    taken out of them (`input_terms`, the registered rows at the verifier's ``pins`` the registration's window records as
+    its ``registered_roots``); its jitter term 0 at D_j = 1, `JITTER`: N2 holds the egress counts
+    exactly, and J the offsets within a bucket. A window holding a pin must bind ``circuit.json`` by its SHA-512
+    (``window.circuit``), as `NetworkCheck.Period.auditCheck` refuses a count on a circuit its registration doesn't
+    bind."""
+    from verity.ml.windows import interface as IF
+
     reg = json.loads((d / "registration.json").read_text())
+    body = (d / "circuit.json").read_bytes()
+    window = reg.get("window") if isinstance(reg.get("window"), dict) else {}
+    try:
+        roots = IF.registered_roots(window)
+        circuit = json.loads(body)
+        terms = input_terms(circuit, pins, roots)
+    except ValueError as e:
+        raise SystemExit(f"--audit {d}: {e}") from e
+    if terms["registered"] and window.get("circuit") != hashlib.sha512(body).hexdigest():
+        raise SystemExit(f"--audit {d}: its registration's window binds another circuit record than circuit.json, so "
+                         "the registered rows counted there are none the registration registers")
     law, n = reg["law"], reg["population"]
     if law.get("law") == "subset":
         drawn, q = law["k"], Fraction(law["k"], n)
@@ -609,8 +691,28 @@ def audit_of(d: Path) -> dict:
     else:
         raise SystemExit(f"--audit {d}: K's q is a subset or stratified law's, not {law}")
     return {"window": str(d), "registration": hashlib.sha512(json.dumps(reg, sort_keys=True).encode()).hexdigest(),
-            "units": n, "drawn": drawn, "q": str(q),
-            "free": free_inputs(json.loads((d / "circuit.json").read_text())), "jitter": 0}
+            "units": n, "drawn": drawn, "q": str(q), "free": terms["free"], "inputs": terms,
+            "held": sorted(IF.held_params(pins, roots)), "jitter": 0}
+
+
+def power_bits(m: int, f: int, exact_below: int = 1 << 16) -> int:
+    """``(m^f - 1).bit_length()``, the bits naming one of ``m^f`` sets, computed exactly without the power where it
+    would be large: ``f·log2 m`` for ``m`` a power of two, else ``⌊f·log2 m⌋ + 1``, the floor read off a 60-digit
+    logarithm, and where that logarithm can't tell the floor (``f·log2 m`` within ``1e-30`` of an integer) the larger
+    candidate, so never fewer bits than the power has. A power of under ``exact_below`` bits is computed."""
+    if m < 1 or f < 0:
+        raise ValueError(f"the sets of {m}^{f}: m ≥ 1, f ≥ 0")
+    if m == 1 or f == 0:
+        return 0
+    if m & (m - 1) == 0:
+        return (m.bit_length() - 1) * f
+    if f * m.bit_length() < exact_below:
+        return (m ** f - 1).bit_length()
+    with decimal.localcontext() as ctx:
+        ctx.prec = 60
+        x = decimal.Decimal(f) * decimal.Decimal(m).ln() / decimal.Decimal(2).ln()
+        slack = decimal.Decimal("1e-30")
+        return int((x + slack).to_integral_value(decimal.ROUND_FLOOR)) + 1
 
 
 def pooled_k(audits: list[dict], delta: Fraction, network: dict) -> dict:
@@ -623,7 +725,7 @@ def pooled_k(audits: list[dict], delta: Fraction, network: dict) -> dict:
     q = min(Fraction(a["q"]) if "q" in a else Fraction(a["drawn"], a["units"]) for a in audits)
     fmax = math.ceil(math.log(1 / float(delta)) / float(q) * (1 + 1e-12))
     n = sum(a["units"] for a in audits)
-    terms = {**network, "faulty_bits": OUT_BITS * fmax, "faulty_sets": ((n + 1) ** fmax - 1).bit_length(),
+    terms = {**network, "faulty_bits": OUT_BITS * fmax, "faulty_sets": power_bits(n + 1, fmax),
              "free": sum(a["free"] for a in audits), "jitter": sum(a["jitter"] for a in audits)}
     k = sum(terms.values())
     return {"delta": str(delta), "q": str(q), "Fmax": fmax, "units": n, "terms": terms, "K": k,
@@ -665,7 +767,8 @@ def d1_terms(cert: dict, n2: dict, scan: dict, custody_doc: dict, endpoint: dict
             "lms_height": [g.get("lms_height") for g in custody_doc.get("gate_runs", [])],
             "uncovered": [
                 "the I/O tie (IoTieRequest) is checked in the clear, outside the proofs",
-                "Claims.Sampling.KS is a hypothesis until Flock.Guarantees.SampledKSLive restates it live",
+                "Claims.SamplingGeneric.Compiled.KS is a hypothesis until Flock.Guarantees.SampledKSLive restates it "
+                "live",
                 "hdata (the wardens' arrivals are the framed egress of the certifier's observations) and Carries "
                 "are run conditions, not yet named assumptions",
                 "B_reg: the trace's values at reg are the registration's",
@@ -673,7 +776,7 @@ def d1_terms(cert: dict, n2: dict, scan: dict, custody_doc: dict, endpoint: dict
                 "no carry across windows: each window's terms stand alone"]}
 
 
-# --- leak: K per monitoring period, on the warden run ------------------------------------------------------------------
+# --- leak: K per monitoring period, on the network certifier run ------------------------------------------------------
 
 #: what a monitoring period's count runs over, each machine one link: one link (`leak_bounds.per_link`), the census's
 #: reference datacenter (`leak_bounds.datacenter`) and the world (`leak_bounds.world`)
@@ -683,7 +786,7 @@ SCOPES = ("link", "datacenter", "world")
 def leak(run: Path, scan: dict | None = None, weights=None) -> dict:
     """K, the bits the network certifier's accepted transcripts can carry about the secret, per monitoring period on
     the warden run ``run`` (a fetched gate run: its ``end.json`` and ``deployment.json``), for the scan's class
-    (`scan_zk.CLASS`) and its draw of every proof block, by `leak_bounds` (`SCOPES`): one link certifying the run's own
+    (`scan_zk.CLASS`) and its sample of every proof block, by `leak_bounds` (`SCOPES`): one link certifying the run's own
     request rate (`leak_bounds.per_link`), and as many identical links summed as the census's reference datacenter has
     machines (`leak_bounds.datacenter_links`) and as the adversary resource model's compute fills
     (`leak_bounds.world`). Each count is in both forms, the per-period form (`PeriodLeakAccepted`'s count) and the
@@ -691,7 +794,8 @@ def leak(run: Path, scan: dict | None = None, weights=None) -> dict:
     (`leak_bounds.READINGS`), and beside ε, its scans' δ summed, and its share of ``weights`` (`leak_bounds.WEIGHTS`)."""
     import leak_bounds as LB
     import scan_zk as SZ
-    from verity.core.protocols.certifier import ingress_scan as IS, warden as W
+    from verity.ml.protocols.certifier import ingress_scan as IS
+    from verity.core.protocols.certifier import warden as W
     weights = LB.WEIGHTS if weights is None else weights
     dep = _json(next((p for p in (run / "out" / "deployment.json", run / "deployment.json") if p.is_file()), None))
     v = (_json(run / "end.json") or {}).get("verdict") or {}
@@ -792,8 +896,8 @@ def leak_markdown(doc: dict) -> str:
 
 
 def merged_n2(paths: list[str] | None) -> dict | None:
-    """N2's summaries of one period's members proved in several runs (``--n2 A B …``, each run's draw on its own
-    challenger session, every one of the same population and K): one summary, its members and sampled draws their
+    """N2's summaries of one period's members proved in several runs (``--n2 A B …``, each run's sample on its own
+    challenger session, every one of the same population and K): one summary, its members and sampled samples their
     union, ``ok`` only when every run's is, and each run's challenger session kept."""
     docs = [d for d in map(_json, [paths] if isinstance(paths, str) else paths or []) if d]
     if len(docs) < 2:
@@ -809,8 +913,8 @@ def merged_n2(paths: list[str] | None) -> dict | None:
 
 def stubbed(job: dict, custody_doc: dict, endpoint: dict | None = None) -> list[str]:
     """What a certifier-only report stands on that isn't the chain's own: `STUBBED`, and where its gate runs ran and
-    what served them when their ``request.json`` says (demo_chain.sh's); a warden-path report's, `WARDEN_STUBBED`, or
-    `WARDEN_SERVED_STUBBED` when its endpoint step (``endpoint``) ran on the served node."""
+    what served them when their ``request.json`` says (demo_chain.sh's); a network-certifier-path report's,
+    `WARDEN_STUBBED`, or `WARDEN_SERVED_STUBBED` when its endpoint step (``endpoint``) ran on the served node."""
     if job.get("path") == WARDEN:
         return list(WARDEN_SERVED_STUBBED if (endpoint or {}).get("at") == SERVED_NODE else WARDEN_STUBBED)
     if job.get("path") != CERTIFIER_ONLY:
@@ -847,7 +951,7 @@ def period_binding(answer: dict, case: dict, *, cert: dict, n2: dict[int, str], 
     audits must be this report's ``--audit`` registrations (``audits``). The case's parameters and evidence are outside
     that digest: its link, certifier session and key must be ``cert``'s, and `block_entry` re-decides the case. The
     rows form's link-windows are the scan's registrations, which no step here holds, so that form is refused."""
-    from verity.core.protocols.sampled_proofs.one_stage import registration as R
+    from verity.core.protocols.spot.one_stage import registration as R
     from verity.ml.commitments.identity import tagged_sha512
 
     try:
@@ -972,7 +1076,10 @@ def report(a) -> dict:
                  **{f"n2/{k}": v for k, v in n2.get("negatives", {}).items()},
                  **{f"scan/{k}": v for k, v in scan.get("negatives", {}).items()}}
     audit_dirs = [Path(d) for d in getattr(a, "audit", None) or []]
-    audits = [audit_of(d) for d in audit_dirs]
+    pins = getattr(a, "pins", None)
+    if pins is not None and not Path(pins).is_file():
+        raise SystemExit(f"--pins {pins}: no such file")
+    audits = [audit_of(d, _json(pins)) for d in audit_dirs]
     verdict = ("scan " if scan_only else "") + ("accepted" if accepted else "refused")
     runs = list(dict.fromkeys(r for r in (job.get("run"), *(g.get("gate_run") for g in cust.get("gate_runs") or []))
                               if r))
@@ -1042,34 +1149,37 @@ def main(argv=None) -> int:
     v = sub.add_parser("certs", help="the client's kept certificates and clock certificates, verified")
     which = v.add_mutually_exclusive_group(required=True)
     which.add_argument("--run", type=Path, help="the certifier rehearsal's honest directory")
-    which.add_argument("--warden-run", type=Path, help="the warden path: an active warden's run (warden_chain)")
+    which.add_argument("--warden-run", type=Path, help="the network certifier path: an active network certifier's run (warden_chain)")
     v.add_argument("--client", type=Path, help="the client's kept files (default --run)")
     v.add_argument("--deployed", action="store_true", help="refuse a key that isn't LMS at lms.DEPLOYED")
     v.add_argument("--out", required=True, type=Path)
     e = sub.add_parser("endpoint",
-                       help="the warden path: the endpoint's own advice bound to the warden's certified I/O")
+                       help="the network certifier path: the endpoint's own advice bound to the network certifier's certified I/O")
     e.add_argument("--warden-run", required=True, type=Path)
     e.add_argument("--endpoint", required=True, type=Path, help="the endpoint's records (network-e2e chain.ENDPOINT)")
     e.add_argument("--eos", required=True,
-                   help="the model's EOS token ids, comma-separated (a warden run records none)")
+                   help="the model's EOS token ids, comma-separated (a network certifier run records none)")
     e.add_argument("--out", required=True, type=Path)
     r = sub.add_parser("report", help="one report over the steps' outputs")
     for f in ("custody", "certs", "endpoint", "scan", "job"):
         r.add_argument(f"--{f}")
-    r.add_argument("--tie", help="the warden path: n2_tie_zk.py prove --class warden's summary")
+    r.add_argument("--tie", help="the network certifier path: n2_tie_zk.py prove --class warden's summary")
     r.add_argument("--n2", nargs="*", help="N2's summary, or one per run of a period's members (merged_n2); without "
                                            "it, the scan's part alone (SCAN_ONLY)")
     r.add_argument("--warden-run")
     r.add_argument("--audit", nargs="*", help="the served proof blocks' compute audit windows (registration.json and "
                                               "circuit.json each), whose sample and free inputs d1's K counts")
+    r.add_argument("--pins", help="the verifier's own pins, a JSON {param: root} of the roots it fixed before the run: "
+                                  "an --audit window's reads of a parameter whose registered root is its pin leave its "
+                                  "free inputs (chain_record.registered_bits); with none, every registered read counts")
     r.add_argument("--period-answer", help="certifier/v0's network-period check answer on the period "
                                            "(certifier.answer.json), the block record's certifier entry's")
     r.add_argument("--period-case", help="the answer's case (default X.case.json beside X.answer.json), held to this "
                                          "chain and re-decided by network-period check")
     r.add_argument("--server", help="the node the block ran on (the block record's server)")
     r.add_argument("--out", required=True, type=Path)
-    k = sub.add_parser("leak", help="K per monitoring period on the warden run, for the scan's class and sample")
-    k.add_argument("--warden-run", required=True, type=Path, help="the fetched warden gate run (its end.json)")
+    k = sub.add_parser("leak", help="K per monitoring period on the network certifier run, for the scan's class and sample")
+    k.add_argument("--warden-run", required=True, type=Path, help="the fetched network certifier gate run (its end.json)")
     k.add_argument("--scan", help="the scan's summary on that run (its sample); default every proof block sampled")
     k.add_argument("--out", required=True, type=Path)
     a = ap.parse_args(argv)

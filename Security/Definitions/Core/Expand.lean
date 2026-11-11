@@ -1,6 +1,8 @@
-import Mathlib.Algebra.BigOperators.Fin
-import Mathlib.Algebra.Order.BigOperators.Group.Finset
-import Definitions.Core.Formalism
+module
+
+public import Mathlib.Algebra.BigOperators.Fin
+public import Mathlib.Algebra.Order.BigOperators.Group.Finset
+public import Definitions.Core.Formalism
 
 /-!
 # The bit-level expansion: a multi-bit circuit as a Boolean one
@@ -9,11 +11,17 @@ A gate of `w g` bits is a bundle of `w g` one-bit gates (§3). The expansion `C.
 bit `i` being `C.bit g i`, numbered gate by gate in `C`'s order and, within a gate, least significant bit first, so a
 bundle read in order is `Circuit.bits`. Bit `i` of a computed gate `g` reads every bit of every gate `g` reads and is
 bit `i` of `g`'s operation on the values they assemble (`ofBits`). An input bit is an input gate, a registered one when
-its gate is (`Declaration.expand`), and a partition puts each bit in its gate's unit (`Partition.expand`).
+its gate is (`RegisteredCircuit.expand`), and a partition puts each bit in its gate's unit (`Partition.expand`).
 
 `expandT X` is a transcript of `C` read bit by bit, and `collapse a` is a transcript of the expansion assembled gate by
 gate. Gates of width 0 have no bits.
+
+A constant (`Circuit.isConst`) is a computed gate that reads no gate of positive width, so its bits would read no bit.
+The model's Boolean circuits take a constant as a registered input gate, and `RegisteredCircuit.constInputs` makes it
+one before expanding.
 -/
+
+@[expose] public section
 
 namespace Verity
 
@@ -89,11 +97,11 @@ theorem bit_lt {a g : Fin C.N} (h : a < g) (i : Fin (C.w a)) (j : Fin (C.w g)) :
   outputs := univ.filter fun b => (C.unbit b).1 ∈ C.outputs
 
 /-- `X` read bit by bit: a transcript of the expansion. -/
-def expandT (X : C.Transcript) : C.expand.Transcript :=
+def expandT (X : C.Trace) : C.expand.Trace :=
   fun b => BitVec.ofBool ((X (C.unbit b).1).getLsbD (C.unbit b).2)
 
 /-- A transcript of the expansion assembled gate by gate: a transcript of `C`. -/
-def collapse (a : C.expand.Transcript) : C.Transcript :=
+def collapse (a : C.expand.Trace) : C.Trace :=
   fun g => ofBits fun i => (a (C.bit g i)).getLsbD 0
 
 /-- **Positive fan-in in bits**: every computed gate of positive width reads a gate of positive width. The expansion
@@ -101,13 +109,55 @@ of such a circuit is Boolean. -/
 def BitFaninPos : Prop :=
   ∀ g, C.isInput g = false → 0 < C.w g → ∃ a ∈ C.reads g, 0 < C.w a
 
+/-- Whether gate `g` is a **constant**: a computed gate that reads no gate of positive width, so it takes one value
+on every run (a `Const<w>` primitive reads nothing). -/
+def isConst (g : Fin C.N) : Bool := !C.isInput g && decide (∀ a ∈ C.reads g, C.w a = 0)
+
+/-- `C` with its **constants as input gates** (`isConst`) that read nothing, as the draft's Boolean circuits take a
+constant. Every other gate, every width and every operation is `C`'s. -/
+@[reducible] def constInputs : Circuit where
+  N := C.N
+  w := C.w
+  isInput g := C.isInput g || C.isConst g
+  reads g := if C.isConst g then ∅ else C.reads g
+  reads_lt g a ha := by
+    split_ifs at ha
+    · simp at ha
+    · exact C.reads_lt g a ha
+  input_reads g h := by
+    have h' : (C.isInput g || C.isConst g) = true := h
+    show (if C.isConst g = true then ∅ else C.reads g) = ∅
+    cases hc : C.isConst g
+    · rw [hc, Bool.or_false] at h'
+      simp [C.input_reads g h']
+    · simp
+  op := C.op
+  op_congr g v v' h := C.op_congr g v v' fun a ha => by
+    have h' : ∀ a ∈ (if C.isConst g = true then ∅ else C.reads g), v a = v' a := h
+    cases hc : C.isConst g
+    · rw [hc] at h'
+      exact h' a (by simpa using ha)
+    · simp only [isConst, Bool.and_eq_true, decide_eq_true_eq] at hc
+      have h0 := hc.2 a ha
+      have h1 : (v a).toNat < 1 := (v a).isLt.trans_le (by simp [h0])
+      have h2 : (v' a).toNat < 1 := (v' a).isLt.trans_le (by simp [h0])
+      exact BitVec.eq_of_toNat_eq (by omega)
+  outputs := C.outputs
+
 end Circuit
 
 /-- A declaration's expansion: an input bit is registered when its gate is. -/
-@[reducible] def Declaration.expand (d : Declaration) : Declaration where
-  D := d.D.expand
-  θ := univ.filter fun b => (d.D.unbit b).1 ∈ d.θ
-  θ_input _ hb := d.θ_input _ (mem_filter.1 hb).2
+@[reducible] def RegisteredCircuit.expand (d : RegisteredCircuit) : RegisteredCircuit :=
+  .ofCircuit d.D.expand (univ.filter fun b => (d.D.unbit b).1 ∈ d.θ) fun _ hb => d.θ_input _ (mem_filter.1 hb).2
+
+/-- A declaration with its **constants registered**: its circuit's constants as input gates (`Circuit.constInputs`),
+registered with `θ`, since the circuit fixes a constant's value. -/
+@[reducible] def RegisteredCircuit.constInputs (d : RegisteredCircuit) : RegisteredCircuit :=
+  .ofCircuit d.D.constInputs (d.θ ∪ univ.filter fun g => d.D.isConst g = true) fun g hg => by
+    show (d.D.isInput g || d.D.isConst g) = true
+    rcases mem_union.1 hg with h | h
+    · rw [d.θ_input g h, Bool.true_or]
+    · rw [(mem_filter.1 h).2, Bool.or_true]
 
 /-- A partition's expansion: each bit is in its gate's unit. -/
 def Partition.expand {C : Circuit} {B : ℕ} (P : Partition C B) : Partition C.expand B where

@@ -1,7 +1,9 @@
 """Numpy twins of `registry.sparse_mla_split`'s Definitions, vectorised over rows: `MufuLg2Ftz_v1` (`mufu_lg2_words`, with
-`undetermined_words`), `SparseMlaSplitEnd_v1` (`split_end_rows`), `SparseMlaCombine_v1` (`combine_rows`),
-`SparseMlaSplitPart_v1` (`part_rows`, one split's partial and lse) and `SparseMlaHeadSplit_v1` (`head_split_rows`, which at NS = 1
-is `SparseMlaHead_v1`).  The blocks are `derived_rows.attn_block` over
+`undetermined_words`), `SparseMlaSplitEnd_v1` (`split_end_rows`), `SparseMlaCombine_v1` (`combine_rows`), `SparseMlaCombineLse_v1`
+(`combine_lse_rows`),
+`SparseMlaSplitPart_v1` (`part_rows`, one split's partial and lse), `SparseMlaHeadSplit_v1` (`head_split_rows`, which at NS = 1
+is `SparseMlaHead_v1`), a head's `SparseMlaHeadBlock_v1` chain (`chain_rows`, each block's state; `split_chain_rows`, a chain
+per split) and its end `SparseMlaHeadEnd_v1` (`head_end_rows`).  The blocks are `derived_rows.attn_block` over
 q = [q_rope | q_nope], k = [k_pe | kv_c] and v = [kv_c | 0] (`AttnBlock_v4`'s steps, which `SparseMlaBlock_v1` restates), the step
 `tc_dot16_hopper` and the inverse `fa3_inv_sum`; the captures' fast path, checked word for word against the Definitions in
 `tests/program/test_sparse_mla_split.py`.  A row whose dot reads a non-finite operand is flagged and never claimed exact
@@ -75,22 +77,38 @@ def _lane0(op, v: np.ndarray) -> np.ndarray:
     return v[:, 0]
 
 
-def combine_rows(lse, o, *, inv=DR.fa3_inv_sum) -> np.ndarray:
-    """`SparseMlaCombine_v1{NSPLIT, DV, INV}`: lse (R, NSPLIT), o (R, NSPLIT, DV) f32 words -> (R, DV) bf16 words."""
+def _combine(lse, o, inv) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+    """The combine's (out (R, DV) bf16 words, the warp max before its guard (R,), the warp sum (R,))."""
     lse, o = np.asarray(lse, dtype=U32), np.asarray(o, dtype=U32)
     R, NSPLIT = lse.shape
     if not 1 <= NSPLIT <= W.LANES:
         raise ValueError(f"combine_rows: NSPLIT={NSPLIT} splits, the warp holds 1 to {W.LANES}")
     lanes = np.concatenate([lse, np.full((R, W.LANES - NSPLIT), W.NEG_INF, dtype=U32)], axis=1)
-    cur = DR.guard_neg_inf_zero(_lane0(DR.max_fmnmx, lanes))
+    mx = _lane0(DR.max_fmnmx, lanes)
+    cur = DR.guard_neg_inf_zero(mx)
     log2e = np.full(lanes.shape, W.LOG2E, dtype=U32)
     scale = DR.mufu_ex2_ftz(DR.mul_ftz(DR.sub_ftz(lanes, cur[:, None]), log2e))
-    inv_sum = inv(_lane0(DR.add_ftz, DR.add_ftz(np.zeros_like(scale), scale)))
+    tot = _lane0(DR.add_ftz, DR.add_ftz(np.zeros_like(scale), scale))
+    inv_sum = inv(tot)
     acc = np.zeros((R, o.shape[2]), dtype=U32)
     for s in range(NSPLIT):
         w = DR.mul_ftz(scale[:, s], inv_sum)
         acc = np.where(gtz(w)[:, None], DR.fma_ftz(np.broadcast_to(w[:, None], acc.shape), o[:, s], acc), acc)
-    return DR.f2fp_bf16(acc)
+    return DR.f2fp_bf16(acc), mx, tot
+
+
+def combine_rows(lse, o, *, inv=DR.fa3_inv_sum) -> np.ndarray:
+    """`SparseMlaCombine_v1{NSPLIT, DV, INV}`: lse (R, NSPLIT), o (R, NSPLIT, DV) f32 words -> (R, DV) bf16 words."""
+    return _combine(lse, o, inv)[0]
+
+
+def combine_lse_rows(lse, o, *, inv=DR.fa3_inv_sum) -> tuple[np.ndarray, np.ndarray]:
+    """`SparseMlaCombineLse_v1{NSPLIT, DV, INV}`: `combine_rows`' (R, DV) bf16 words and the stored lse (R,), FFMA.FTZ of the
+    sum's MUFU.LG2, LN2 and the FMNMX max before its guard, every NaN the GPU's 0x7FFFFFFF."""
+    out, mx, tot = _combine(lse, o, inv)
+    s = DR.fma_ftz(mufu_lg2_words(tot), np.full(tot.shape, W.LN2, dtype=U32), mx)
+    nan = ((s & 0x7F800000) == 0x7F800000) & ((s & 0x7FFFFF) != 0)
+    return out, np.where(nan, U32(W.QNAN), s).astype(U32)
 
 
 def _operands(what: str, q_nope, q_rope, kv, T: int, DR_: int, DV: int) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
@@ -105,11 +123,10 @@ def _operands(what: str, q_nope, q_rope, kv, T: int, DR_: int, DV: int) -> tuple
             np.concatenate([kv[:, :, :DV], np.zeros((R, T, DR_), dtype=np.uint16)], axis=2))
 
 
-def _split(q, kb, vb, b0: int, b1: int, *, T: int, BN: int, DV: int, sbits: int, dot16) -> tuple[tuple, np.ndarray]:
-    """One split: blocks [b0, b1) last to first (its first visited one FIRST, the keys' last block zero-padded) -> its end's
-    (m, l, o[:, :DV]) and the rows whose dot read a non-finite operand."""
+def _blocks(q, kb, vb, b0: int, b1: int, *, T: int, BN: int, sbits: int, dot16):
+    """Blocks [b0, b1) last to first (the first visited one FIRST, the keys' last block zero-padded): after each, its state
+    (m, l, o of width DR + DV) and the rows whose dot read a non-finite operand."""
     R, KW = q.shape
-    nf = np.zeros(R, dtype=bool)
     m = l = o = None
     for b in range(b1 - 1, b0 - 1, -1):
         lo, hi = b * BN, min(T, (b + 1) * BN)
@@ -118,8 +135,54 @@ def _split(q, kb, vb, b0: int, b1: int, *, T: int, BN: int, DV: int, sbits: int,
         first = b == b1 - 1
         m, l, o, f = DR.attn_block(q, kblk, vblk, m, l, o, D=KW, NVIS=hi - lo, FIRST=first, dot16=dot16, check=first,
                                    scale_bits=sbits)
+        yield (m, l, o), f
+
+
+def _split(q, kb, vb, b0: int, b1: int, *, T: int, BN: int, DV: int, sbits: int, dot16) -> tuple[tuple, np.ndarray]:
+    """One split: blocks [b0, b1) (`_blocks`) -> its end's (m, l, o[:, :DV]) and the rows whose dot read a non-finite operand."""
+    nf = np.zeros(q.shape[0], dtype=bool)
+    for (m, l, o), f in _blocks(q, kb, vb, b0, b1, T=T, BN=BN, sbits=sbits, dot16=dot16):
         nf |= f
     return (m, l, o[:, :DV]), nf
+
+
+def chain_rows(q_nope, q_rope, kv, *, T: int, DR_: int = 64, DV: int = 512, BN: int = W.BLOCK_N, scale: float,
+               dot16=DR.tc_dot16_hopper) -> tuple[list[tuple[np.ndarray, np.ndarray, np.ndarray]], np.ndarray]:
+    """A head's `SparseMlaHeadBlock_v1{.., DR, DV, BN, DOT, SCALE}` chain over its T keys (`sparse_mla.visits`): q_nope (R, DV),
+    q_rope (R, DR), kv (R, T, DV + DR) or (T, DV + DR) bf16 words -> (each block's returned (m (R,), l (R, 4), o (R, DV)) f32
+    words in visit order, nonfinite (R,)).  `head_end_rows` of the last block's l and o is `SparseMlaHead_v1`."""
+    q, kb, vb = _operands("chain_rows", q_nope, q_rope, kv, T, DR_, DV)
+    nf, states = np.zeros(q.shape[0], dtype=bool), []
+    for (m, l, o), f in _blocks(q, kb, vb, 0, -(-T // BN), T=T, BN=BN, sbits=M.scale_log2_bits(scale), dot16=dot16):
+        states.append((m, l, o[:, :DV]))
+        nf |= f
+    return states, nf
+
+
+def split_chain_rows(q_nope, q_rope, kv, *, T: int, NS: int, DR_: int = 64, DV: int = 512, BN: int = W.BLOCK_N, scale: float,
+                     dot16=DR.tc_dot16_hopper) -> tuple[list[list[tuple[np.ndarray, np.ndarray, np.ndarray]]], np.ndarray]:
+    """A head's `SparseMlaHeadBlock_v1` chains over its NS splits (`sparse_mla_split.split_blocks`), each split's blocks as
+    `chain_rows` visits a head's: `chain_rows`' operands -> (per non-empty split, each block's returned (m, l, o) in visit
+    order, nonfinite (R,)).  `split_end_rows` of a split's last state is its `SparseMlaSplitEnd_v1` (whose columns
+    [C G, (C + 1) G) and lse are `SparseMlaSplitEndCols_v1{G, C}`'s), and at NS = 1 the one chain is `chain_rows`'."""
+    W.check_split_statics(T, NS)
+    q, kb, vb = _operands("split_chain_rows", q_nope, q_rope, kv, T, DR_, DV)
+    sbits = M.scale_log2_bits(scale)
+    nf, out = np.zeros(q.shape[0], dtype=bool), []
+    for b0, b1 in W.split_blocks(T, NS, BN):
+        states = []
+        for (m, l, o), f in _blocks(q, kb, vb, b0, b1, T=T, BN=BN, sbits=sbits, dot16=dot16):
+            states.append((m, l, o[:, :DV]))
+            nf |= f
+        out.append(states)
+    return out, nf
+
+
+def head_end_rows(l, o, *, inv=DR.fa3_inv_sum) -> np.ndarray:
+    """`SparseMlaHeadEnd_v1{DV, INV}`: l (R, 4), o (R, DV) f32 words -> (R, DV) bf16 words, `bf16(o * inv((l0 + l2) + (l1 + l3)))`."""
+    l, o = np.asarray(l, dtype=U32), np.asarray(o, dtype=U32)
+    tot = DR.add_ftz(DR.add_ftz(l[:, 0], l[:, 2]), DR.add_ftz(l[:, 1], l[:, 3]))
+    return DR.f2fp_bf16(DR.mul_ftz(o, inv(tot)[:, None]))
 
 
 def part_rows(q_nope, q_rope, kv, *, T: int, DR_: int = 64, DV: int = 512, BN: int = W.BLOCK_N, scale: float,
@@ -148,8 +211,7 @@ def head_split_rows(q_nope, q_rope, kv, *, T: int, NS: int, DR_: int = 64, DV: i
         ends.append(e)
         nf |= f
     if NS == 1:
-        m, l, o = ends[0]
-        tot = DR.add_ftz(DR.add_ftz(l[:, 0], l[:, 2]), DR.add_ftz(l[:, 1], l[:, 3]))
-        return DR.f2fp_bf16(DR.mul_ftz(o, inv(tot)[:, None])), nf
+        _m, l, o = ends[0]
+        return head_end_rows(l, o, inv=inv), nf
     parts = [split_end_rows(m, l, o, scale=scale, inv=inv) for m, l, o in ends]
     return combine_rows(np.stack([p[1] for p in parts], axis=1), np.stack([p[0] for p in parts], axis=1), inv=inv), nf

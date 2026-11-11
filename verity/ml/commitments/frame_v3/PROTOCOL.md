@@ -1,4 +1,4 @@
-# `frame-v3` leaves: word leaves and the SHA-256 and BLAKE3 row-leaf schemas; `frame-v3-sha512` and its bit rows; `frame-b3`
+# `frame-v3` leaves: word leaves and the SHA-256 and BLAKE3 row-leaf schemas; `frame-v3-sha512` and its bit rows
 
 frame-v3 is SHA-256 indexed trees over verifier-derived domains. The framing itself (frame
 `veritor/protocol/merkle/frame/v3\0`, the `leaf`, `pad`, `node` and `empty` tags, and domain ids) is in
@@ -97,14 +97,12 @@ Table 1 lists these hashes, all of class standard:
 - SHA-256, for the frame-v3 leaves, nodes, pads and domain ids, and for `sha256/row/v1` and `sha256/row-nvfp4/v1`;
 - BLAKE3 (keyed), for the archived `blake3-keyed/row/v2` and `blake3-keyed/row-nvfp4/v1`.
 
-The Poseidon2 row leaf `poseidon2-babybear-w24/row/v2h` (`rowleaf.SCHEMA_ROW`) stays in the code so that recorded
-results keep verifying. It is algebraic, so no core scheme configuration offers it.
-
 ## 6. `frame-v3-sha512`
 
 frame-v3 with SHA-512 in place of SHA-256 for every hash the framing computes, for SHA-512 data commitments
-(SHA-512 on every commitment path). It is opt-in:
-- a port's domain is `CommitmentDomain(binding, owner, positions, hash="sha512")`;
+(SHA-512 on every commitment path). It is the default:
+- a port's domain is `CommitmentDomain(binding, owner, positions)` (`hash="sha512"`), and a SHA-256 frame names
+  `hash="sha256"`;
 - `FrameV3` over such ports is named `frame-v3-sha512`;
 - nothing recorded moves.
 
@@ -118,7 +116,7 @@ frame-v3 with SHA-512 in place of SHA-256 for every hash the framing computes, f
 - `leaf_prefix` is the same prefix over the 64-byte domain id, so `leaf = SHA-512(prefix ‖ value)`.
 
 **The binding.** `binding` is the caller's identity digest of what the commitment may not outlive: a header, a replay phase or a
-weights tag. It is an identity from the protocol and the IR, not something the frame computes. Under every frame it is 64 bytes, an
+weights tag. It is an identity from the protocol and the Program, not something the frame computes. Under every frame it is 64 bytes, an
 `identity_digest_sha512` or another SHA-512 digest (one hash, SHA-512), or 32 bytes, a SHA-256 identity
 digest as recorded statements carry it. The domain message frames every part with its u64be length, so a 64-byte binding and a
 32-byte one never give the same message, and the frame version does not change. `binding64_trees` in
@@ -179,7 +177,7 @@ P(ℓ)      = ( "verity/sha512-row/v2\0" ‖ u64be ℓ )  zero-padded to 128 byt
 digest    = SHA-512( P(ℓ) ‖ row bytes )
 ~~~
 
-- **Elements.** A row of elements lists each element's bits least significant first, elements in order: the Boolean IR's element
+- **Elements.** A row of elements lists each element's bits least significant first, elements in order: the circuit format's element
   convention. For every format in use the row bytes are then the tensor's memory: two E2M1 codes a byte, the first in the low nibble;
   one byte per E4M3 element or scale; two little-endian bytes per BF16 element. An NVFP4 or MXFP4 row is its k codes followed by its
   scales, as one row (4k + 8·k/16 or 4k + 8·k/32 bits), so an NVFP4 row's bytes are §4a's `nvfp4_row_bytes`. Which values form a
@@ -199,7 +197,7 @@ digest    = SHA-512( P(ℓ) ‖ row bytes )
   verifier's own registration: it holds the file's roots and domain ids before the proof, and within one verification it reads
   them as given. Any consumer that carries a registered root into another statement or commitment recomputes that root's domain
   id from its own derivation of the binding, and refuses a root whose recorded domain differs (R3-domain in
-  `verity.core.protocols.sampled_proofs.one_stage.registration` does).
+  `verity.core.protocols.spot.one_stage.registration` does).
 - **Reference and conformance.** `verity.ml.commitments.rowleaf`: `bit_row`, `sha512_row_v2_prefix`, `_layout` and `_digest`, the last
   refusing a nonzero fill. The vectors in `vectors_sha512.json` are `bit_row_leaves`, `bit_row_trees` and `bit_row_hiding_leaves`:
   random rows at ℓ = 0, 1, 13, 888, 896, 1016, 1023, 1024, 1025, 3172 and 8192 (888 and 896 straddle the length whose SHA-512 padding
@@ -259,6 +257,16 @@ The schema string names the rule that produced the 64 bytes, so a statement is e
 `hm96-sha512/row/v2` (`BitRowLeaf.hiding_schema`). `rowleaf.row_leaf` accepts each at its width. The SHA-256 frame has no hiding
 row schema: every commitment is hm96 rows in `frame-v3-sha512` trees (one hash, SHA-512).
 
+**Keyed leaves.** The one exception is PoUW's lead, whose instances are keyed leaves. A keyed leaf is a `frame-v3-sha512`
+subtree hashed as above up to M_top, the message whose SHA-512 would be its root (its root node, or a one-leaf subtree's
+leaf), and published as d = SHA-512(ks ‖ salt ‖ M_top) in the root's place, with ks the window's secret key (64 OS bytes,
+never published) and salt its live salt; ks ‖ salt is one 128-byte block (`Hash.Keyed`). It hides computationally: over
+tops with distinct domain ids, a distinguisher's view (the key leaf and every digest) moves by at most the explicit
+advantages of two distinguishers built from it, one in hm96's hiding game and one against SHA-512 as a PRF keyed by its
+first block (`Pouw.Guarantees.KeyedLeaf.Hides`). The window's key is committed before its salt as its key leaf, the
+`hm96-sha512/v1` leaf over ks under 192 OS salt bytes, which the lead's registration records (`pouw.salt.lead_record`)
+and a proof opens ks against.
+
 **Openings and multiproofs.**
 - Paths carry 64-byte siblings.
 - `verify_opening` and `FrameV3.verify_path` reject a sibling, leaf or root of the other size.
@@ -290,34 +298,5 @@ and `test_rowleaf_bits.py` check them.
   domain id, the positions' identity, leaves, pads, nodes and roots. Binding a value to a position inside a verifier-held domain
   rests on `cr/sha-512` alone.
 - **What may still rest on SHA-256.** Which statement and which session a root belongs to also rests on `binding`. A 64-byte binding
-  rests on `cr/sha-512`; a 32-byte SHA-256 identity digest from the protocol or the IR does not, and a Table 1 row that cites this
+  rests on `cr/sha-512`; a 32-byte SHA-256 identity digest from the protocol or the Program does not, and a Table 1 row that cites this
   frame over one cites `cr/sha-256` beside `cr/sha-512`.
-
-## 7. `frame-b3`
-
-Archived: off the served path, which hashes with SHA-512. The code keeps the mode in `verity.ml.commitments.merkle`.
-
-A tree mode for latency, not a leaf schema of frame v3: `CommitmentDomain(binding, owner, positions, hash="blake3")` in
-`verity.ml.commitments.merkle`, where the module docstring states the layout. Its user was Pearl-C's hashing format `-h1`
-(`verity/core/protocols/pouw/PROTOCOL.md`), whose rows must be committed within a decode step. The SP1 kernel, `ligero-verify` and
-B-Ligero do not mirror it, `FrameV3` does not offer it, and `multiproof` refuses it.
-
-~~~text
-domain id  = BLAKE3( the frame-v3 domain message )                     (not keyed)
-leaf       = keyed(domain id, H zero-padded to a 64-byte block ‖ value),  H = 0x01 ‖ u64 rank ‖ u64 position ‖ u16 len ‖ schema
-node at l  = keyed(keyed(domain id, 0x02 ‖ u8 l), left ‖ right)         (one compression; no index)
-pad        = keyed(domain id, 0x03 ‖ u64 rank);   empty root = keyed(domain id, 0x04)
-~~~
-
-Integers are little-endian. The value starts block-aligned, so a row streams through BLAKE3's own chunk tree: a 32 KB row is
-33 chunks hashed in parallel under 6 parent levels. The tree's shape is fixed by the count the domain id absorbs, so a node
-hashes no index, and a leaf (its own tag) and a node (its level's key) cannot collide.
-
-- **Vectors and conformance.** `verity/ml/commitments/tests/test_frame_b3.py` rebuilds each message from this layout,
-  pins a domain id, leaf, node, pad, empty root and root, and rebuilds the root with the `blake3` package when that is
-  installed. `verity.ml.crypto.blake3` itself matches that package on `vectors.json`'s BLAKE3 cases, hash and keyed
-  (`test_frame_v3.py`). Pearl-C's BLAKE3 device kernels, checked against this reference on the host while Pearl-C hashed
-  with BLAKE3, were deleted with the archive in `2091252fe3` (`pouw-blake3/pearl_c/hash.cuh`).
-- **Hashes.** Binding a value to a position rests on `cr/blake3`. As in §6, which statement and session a root belongs to
-  also rests on `binding` (64 or 32 bytes, as in §6) and the positions' identity, a SHA-256 identity digest, so a Table 1 row
-  citing this mode cites `cr/sha-256` beside `cr/blake3`, and `cr/sha-512` for a 64-byte binding.

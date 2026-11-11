@@ -1,5 +1,5 @@
-"""V*'s algebra statement (hiding model architectures, lane rec-v0): the inner verifier's algebraic checks on each rep of the
-inner session (`verity_flock.rec_algebra`) as ``InnerRepCheck_v2{S}``, one instance a rep, one C-Flock statement.
+"""V*'s algebra statement (hiding model architectures): the inner verifier's algebraic checks on each rep of the
+inner session (`verity_flock.rec_algebra`) as ``InnerRepCheck_v2{S}``, one instance a rep, one Flock statement.
 
     U16 = Array<16, Value<1>>
     InnerRepCheck_v2{S}(m0: Array<P(n_0), U16>, .., acc0: Array<64, U16>, acc1: Array<64, U16>, v: Array<P(nv), U16>)
@@ -26,7 +26,7 @@ then zero words.
   k's ring switch). The opening is one instance, ``rec-opening/m<m>-c<claims>-p<j>``, its rounds' messages one-row
   registrations.
 * ``v``: the coefficients and constants at the rep's coins, then ``z_partial``'s comb, the inner circuit's fold at the rep's
-  point (§10), which the verifier computes from the inner session's public record and the inner statement
+  point (`Flock.Piop`), which the verifier computes from the inner session's public record and the inner statement
   (`rec_algebra.verifier_rows`; the extra claims and the comb `verity_flock.rec_vstage` computes), as a row port of
   ``P(nv)`` words, its words after the nv elements zero and unread. The verifier registers it itself (`verifier_value`): the
   value ``rec-v`` (`V_VALUE`), row r rep r's, under public salts (`verifier_salts`), so its root is a function of the public
@@ -425,7 +425,7 @@ def verifier_value(program: str, value: str, rows: list[list[int]]):
     """A value the verifier registers itself (`registered.Registered`): rows it computes from the inner session's public record,
     the inner statement and its own coins, under `verifier_salts`. Its entry is then a function of those rows alone, which the
     verifier's reads file names, and the prover's table rows and salts are the same registration's."""
-    from verity.core.protocols.sampled_proofs.one_stage import registered as RG
+    from verity.core.protocols.spot.one_stage import registered as RG
 
     return RG.Registered.commit(program, value, rows, verifier_salts(program, value, len(rows)))
 
@@ -434,7 +434,7 @@ def commits_entry(program: str, value: str, words_: int, bcs: list[bytes]) -> di
     """The verifier's own entry of a registered value it knows only by its rows' ``b || c`` (`registered.Registered.entry`'s
     fields): its domain and the root of its tree over them."""
     from verity.ml.commitments.merkle import tree_levels
-    from verity.core.protocols.sampled_proofs.one_stage import registered as RG
+    from verity.core.protocols.spot.one_stage import registered as RG
 
     dom = RG.domain(program, value, words_, len(bcs))
     root = tree_levels(dom, [RG.leaf(dom, i, bc) for i, bc in enumerate(bcs)])[-1][0]
@@ -445,7 +445,7 @@ def statement(S: dict, name: str, n: int, holo: bool = False) -> SimpleNamespace
     """``InnerRepCheck_v2{S}`` over ``n`` instances: its Program, partition, unit and circuit text, which only ``n``, ``S`` and
     ``holo`` decide. ``holo``: S is a part of a holo shape's spec, which META says (`HOLO_KEY`). With `rec_circuits`' cache
     the text is built once per (S, name, n, holo), and ``low`` is None when it was read back."""
-    from verity.core.protocols.sampled_proofs.one_stage import partition as P
+    from verity.core.protocols.spot.one_stage import partition as P
 
     from . import rec_circuits as RC
 
@@ -493,8 +493,8 @@ def write_rows(st: SimpleNamespace, reads: dict, vrows: list[list[int]], out_dir
     of its ``v`` row (``v_words``; ``vrows``, which the verifier registers as ``st.v_value``) and of its one output row
     (``out_words``, the verifier's zero rows under ``st.zero_value``), and its reference ``st.ref(rows by name, v's words)``.
     Returns what every such statement costs and holds, with each instance's reference output (``ref``)."""
-    from verity.core.protocols.sampled_proofs.one_stage import partition as P
-    from verity.core.protocols.sampled_proofs.one_stage import registered as RG
+    from verity.core.protocols.spot.one_stage import partition as P
+    from verity.core.protocols.spot.one_stage import registered as RG
 
     n, low, sub, text, names = st.n, st.low, st.sub, st.text, st.names
     if set(reads) != set(names) or len(vrows) != n or any(len(pos) != n for _, pos in reads.values()):

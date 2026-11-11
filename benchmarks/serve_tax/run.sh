@@ -1,0 +1,208 @@
+#!/usr/bin/env bash
+# The serve tax on one node (README.md), from the shipped tree's root under `research run`, the C4 shard sent with
+# --send (or C4=PATH) unless a ready plan is:
+#   ARMS="compiled eager ..." RATES=light=R,medium=R,saturated=R [MODEL_ID=moonlight] [REPS=3] [SPAN_S=60]
+#     [REQUESTS=N] [WINDOW_S=600] [KV_WINDOW_S=WINDOW_S] [TICK_MS=SAT,FREE | TICK_FROM=RECORD_ARM_DIR]
+#     [REPLAY=LOAD [REPLAY_FROM=RECORD_ARM_DIR] [REPLAY_MODES="compiled eager"] [REPLAY_LOGPROBS=1]] [MAX_MIN=240]
+#     bash benchmarks/serve_tax/run.sh
+#   CAPACITY=1 [REQUESTS=800] bash benchmarks/serve_tax/run.sh   # stock compiled under one burst: its capacity
+#   REPLAY=LOAD REPLAY_FROM=RECORD_ARM_DIR [REPLAY_MODES=...] [REPLAY_CAPTURE=ID,...] bash benchmarks/serve_tax/run.sh
+#     # only replay an earlier window, at the model's GPUs as tensor-parallel width, taking REPLAY_CAPTURE's requests'
+#     # logits rows and ids at the sampler into OUT/replay-<mode>/capture (replay.py --capture)
+#   ARMS="restore-base restore-pause restore" RATES=medium=R REPS=1 SPAN_S=720 EDGES_S=180,360,540 [SAVE_KV=1]
+#     [RESTORE=1:2 [RESTORE_ARM="restore ..."] [RESTORE_WARM=N]] [NUM_GPU_BLOCKS=N] [KV_DIR=DIR]
+#     bash benchmarks/serve_tax/run.sh   # boundary states at the edges, one restored
+#   ARMS="compiled record tokens-only boundary" RATES=... EDGES_EVERY_S=30 [KV_COPY=all|first|none] [PLAN_FILE=PLAN.jsonl]
+#     [MAX_MODEL_LEN=N] [FLASHINFER=1] [LDCONFIG=1] [BUDGET_MIN=M] bash benchmarks/serve_tax/run.sh   # the production tax
+#   ARMS=boundary-rows BOUNDARY_ROWS='{"check":T,"per_prompt":0,"per_output":1}' RATES=... [PLAN_FILE=PLAN.jsonl]
+#     bash benchmarks/serve_tax/run.sh   # the two-stage boundary committed at serve, under OUT/boundary-rows/server/boundary
+# EDGES_EVERY_S puts the boundary arm's edge each that many seconds of a load (its replay blocks' length); at TP > 1 each
+# rank keeps its KV copy and rows in host memory, and KV_COPY=first copies rank 0's pool alone (for ranks that hold the
+# same KV bytes, as GLM-5.3's replicated MLA cache does). PLAN_FILE (else a sent inputs/plan.jsonl) is a ready plan, served
+# as it is (the replay ladder's production plan: each request's own sampling, stopping at its end of text), copied to
+# OUT/plan.jsonl; MAX_MODEL_LEN the engines' context limit. FLASHINFER=1 puts CUDA_HOME's bin first on PATH (CUDA_HOME, else
+# the newest toolkit under /usr/local), so vLLM runs FlashInfer's sampler, autotune and fused all-reduce, and runs a sent
+# inputs/fi_smoke.py before the first engine so that its JIT lands outside the served traffic; OUT/engine_env.txt records
+# the toolkit, has_flashinfer and FlashInfer's caches' digests (fi_cache) before the arms and after each. LDCONFIG=1 refreshes the
+# linker cache first. BUDGET_MIN bounds the arms' minutes: each arm after the first serves the reps of REPS that still fit
+# (serve_tax.py fit, from the arm before it), and one if none does, since reps are cut and never an arm (OUT/arms.txt says
+# what was cut).
+# Each restore arm keeps the KV bytes and states of SAVE_KV's edges in KV_DIR/<arm> (KV_DIR by default a fresh directory
+# under the node's scratch, removed at the end); RESTORE=FROM:TO then restores each RESTORE_ARM's edge FROM into a fresh
+# engine (warmed first on RESTORE_WARM of the replay block's prompts) and replays to edge TO (restore.py) into
+# OUT/<arm>-replay. RESTORE_FROM=OUT_DIR with KV_DIR and no ARMS restores an earlier job's arms alone.
+# One plan (OUT/plan.jsonl, from the shard's first DOCS documents) is made before the GPUs are held; then each arm is a
+# server lifetime of its own (serve_tax.py run) into OUT/<arm>, in ARMS's order, all under one gpu-lease; the tick arms
+# take τ from TICK_MS, else from TICK_FROM, else from this job's own record arm, calibrated on its saturated load.
+# REPLAY then replays LOAD's first rep of the record arm (by default this job's) in each of REPLAY_MODES (replay.py)
+# into OUT/replay-<mode>; a mode listed again replays into OUT/replay-<mode>-<k>, its tokens compared with the first's too
+# (REPLAY_MODES="compiled compiled": does the replay agree with itself?). Then OUT/table.{json,md}. MODEL_ID moonlight serves the replay-determinism benchmark's kept
+# checkpoint on one GPU; glm53 the GLM-5.3 TP drivers' (benchmarks/served_commit/tp_decode.sh) on eight; llama8b and
+# qwen3-30b their pinned snapshots under HF_HOME on one. VENV's vLLM must be d9105ea80, the integration's pin.
+set -uo pipefail
+D=${RESEARCH_RUN_DIR:?run this under research run}; OUT=$D/out
+here=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
+[ -d /workspace/cp/venv312 ] && venv=/workspace/cp/venv312 || venv=/workspace/venv312   # a dc node's, else a pod's
+VENV=${VENV:-$venv}; PY=$VENV/bin/python
+export PATH="$VENV/bin:$PATH"   # the venv's ninja, which FlashInfer's JIT (vLLM's default sampler) runs
+[ -d /workspace/cp/hf ] && hf=/workspace/cp/hf || hf=/workspace/hf
+export HF_HOME=${HF_HOME:-$hf} HF_HUB_OFFLINE=1 TRANSFORMERS_OFFLINE=1 TOKENIZERS_PARALLELISM=false PYTHONHASHSEED=0
+MODEL_ID=${MODEL_ID:-moonlight}
+case $MODEL_ID in
+  moonlight) CK=${CHECKPOINT:-/workspace/research/scratch/replay-determinism/moonlight}; GPUS=1 ;;
+  glm53)
+    REV=aca966e4e02791568aa6a4ced368624b3d897f42
+    if [ -e "/workspace/cp/glm53-ckpt/$REV/.verified" ]; then CK=/workspace/cp/glm53-ckpt/$REV; else CK=/workspace/fs/glm53/$REV; fi
+    CK=${CHECKPOINT:-$CK}; GPUS=8 ;;
+  llama8b|qwen3-30b) CK=${CHECKPOINT:-$("$PY" "$here/serve_tax.py" checkpoint --model-id "$MODEL_ID")}; GPUS=1 ;;
+  *) echo "serve-tax: MODEL_ID is moonlight, glm53, llama8b or qwen3-30b, not $MODEL_ID"; exit 2 ;;
+esac
+# nvcc, which the kv and boundary arms build the row-table kernels with: CUDA_HOME's, else the newest toolkit under
+# /usr/local; with FLASHINFER=1 first on PATH, for FlashInfer's JIT too, which finds CUDA_HOME's headers and libraries
+# itself (an inherited CPATH or LIBRARY_PATH could mix toolkits)
+if [ "${FLASHINFER:-0}" = 1 ]; then
+  CUDA_HOME=${CUDA_HOME:-$(ls -d /usr/local/cuda-[0-9]*.[0-9]* 2>/dev/null | sort -V | tail -1)}
+  export CUDA_HOME PATH="$CUDA_HOME/bin:$PATH"
+  unset CPATH LIBRARY_PATH
+else
+  command -v nvcc >/dev/null || for d in ${CUDA_HOME:+"$CUDA_HOME/bin"} $(ls -d /usr/local/cuda*/bin 2>/dev/null | sort -rV); do
+    [ -x "$d/nvcc" ] && { export PATH="$PATH:$d"; break; }
+  done
+fi
+C4=${C4:-$(ls "$D"/inputs/*.json.gz 2>/dev/null | head -1)}
+REPS=${REPS:-3}; SPAN_S=${SPAN_S:-60}; MAX_MIN=${MAX_MIN:-240}; DOCS=${DOCS:-45000}
+WINDOW_S=${WINDOW_S:-600}; KV_WINDOW_S=${KV_WINDOW_S:-$WINDOW_S}; PLAN=${PLAN:-$OUT/plan.jsonl}
+PLAN_FILE=${PLAN_FILE:-$(ls "$D"/inputs/plan.jsonl 2>/dev/null)}
+[ -z "$PLAN_FILE" ] || [ -f "$PLAN_FILE" ] || { echo "serve-tax: no plan at PLAN_FILE=$PLAN_FILE"; exit 2; }
+unset NCCL_P2P_DISABLE VLLM_USE_DEEP_GEMM
+# Inductor's runtime R0_BLOCK choice (each process times a halved candidate) changes the reduction order: pin it
+export TORCHINDUCTOR_DYNAMIC_SCALE_RBLOCK=0
+replay_only=0; [ -z "${ARMS:-}" ] && [ "${CAPACITY:-0}" != 1 ] && [ -n "${REPLAY_FROM:-}${RESTORE_FROM:-}" ] && replay_only=1
+[ -f "$C4" ] || [ $replay_only = 1 ] || [ -n "$PLAN_FILE" ] || { echo "serve-tax: no C4 shard (--send it, or C4=PATH)"; exit 2; }
+[ -d "$CK" ] || { echo "serve-tax: no checkpoint at $CK"; exit 2; }
+v=$("$PY" -c 'import vllm; print(vllm.__version__)') || exit 2
+case $v in *+gd9105ea8*) ;; *) echo "serve-tax: vLLM $v is not d9105ea80, the integration's pin"; exit 2 ;; esac
+mkdir -p "$OUT"
+
+# FlashInfer's caches every engine reads, by their files' digests: its JIT GEMMs (~/.tensorrt_llm/cache) and vLLM's
+# autotune file per config hash (VLLM_CACHE_ROOT's flashinfer_autotune_cache), which the arms share, as they share the hash
+fi_cache() {
+  local kv c
+  for kv in "tensorrt_llm_cache:$HOME/.tensorrt_llm/cache" \
+            "autotune_cache:${VLLM_CACHE_ROOT:-${XDG_CACHE_HOME:-$HOME/.cache}/vllm}/flashinfer_autotune_cache"; do
+    c=${kv#*:}
+    if [ -d "$c" ]; then
+      printf '%s=%s files=%s ' "${kv%%:*}" "$(cd "$c" && find . -type f -print0 | sort -z | xargs -0 -r sha256sum | sha256sum | cut -c1-64)" \
+        "$(find "$c" -type f | wc -l)"
+    else
+      printf '%s=none ' "${kv%%:*}"
+    fi
+  done
+  echo
+}
+
+if [ "${1:-}" = leased ]; then
+  t_leased=$(date +%s)
+  nvidia-smi --query-gpu=index,name,memory.used,memory.total,clocks.max.sm --format=csv
+  smoke=$(ls "$D"/inputs/fi_smoke.py 2>/dev/null)
+  if [ -n "$smoke" ] && [ "${FLASHINFER:-0}" = 1 ]; then
+    echo "== fi_smoke $(date -u +%FT%TZ)"
+    GPUS=$GPUS "$PY" "$smoke" "$OUT/fi_smoke.json" > "$OUT/fi_smoke.log" 2>&1 || { tail -n 20 "$OUT/fi_smoke.log"; exit 1; }
+  fi
+  echo "before the arms: $(fi_cache)" >> "$OUT/engine_env.txt"
+  common=(--model-id "$MODEL_ID" --checkpoint "$CK" --c4 "$C4" ${MAX_MODEL_LEN:+--max-model-len "$MAX_MODEL_LEN"})
+  if [ "${CAPACITY:-0}" = 1 ]; then
+    "$PY" "$here/serve_tax.py" run --arm compiled "${common[@]}" --rates burst=1000 --requests "${REQUESTS:-800}" --reps 1 \
+      --warm-s 10 --out "$OUT/capacity"
+    exit $?
+  fi
+  rc=0
+  if [ -n "${TICK_MS:-}" ]; then tick=(--tick-ms "$TICK_MS"); else tick=(--tick-from "${TICK_FROM:-$OUT/record}"); fi
+  count=(); [ -n "${REQUESTS:-}" ] && count=(--requests "$REQUESTS")
+  [ -n "${NUM_GPU_BLOCKS:-}" ] && count+=(--num-gpu-blocks "$NUM_GPU_BLOCKS")
+  [ -n "${EDGES_S:-}" ] && count+=(--edges-s "$EDGES_S" --save-kv "${SAVE_KV:-1}" --kv-dir "$KV_DIR")
+  [ -n "${EDGES_EVERY_S:-}" ] && count+=(--edges-every-s "$EDGES_EVERY_S" ${SAVE_KV:+--save-kv "$SAVE_KV"} --kv-copy "${KV_COPY:-all}")
+  last=
+  for arm in ${ARMS:-}; do
+    reps=$REPS
+    if [ -n "${BUDGET_MIN:-}" ] && [ -n "$last" ]; then
+      left=$((BUDGET_MIN * 60 - ($(date +%s) - t_leased)))
+      reps=$("$PY" "$here/serve_tax.py" fit "$OUT/$last" --budget-s "$left" --reps "$REPS") || reps=$REPS
+      [ "$reps" -lt "$REPS" ] && echo "== $arm: $reps of $REPS reps fit the $((left / 60)) min left of BUDGET_MIN=$BUDGET_MIN" | tee -a "$OUT/arms.txt"
+      [ "$reps" -lt 1 ] && { reps=1; echo "== $arm: serving 1 rep anyway (reps are cut, never an arm)" | tee -a "$OUT/arms.txt"; }
+    fi
+    echo "== $arm $(date -u +%FT%TZ)"
+    "$PY" "$here/serve_tax.py" run --arm "$arm" "${common[@]}" --rates "$RATES" --reps "$reps" --span-s "$SPAN_S" \
+      --plan "$PLAN" --docs "$DOCS" --window-s "$WINDOW_S" --kv-window-s "$KV_WINDOW_S" "${tick[@]}" "${count[@]}" \
+      ${BOUNDARY_ROWS:+--boundary-rows "$BOUNDARY_ROWS"} --out "$OUT/$arm" || rc=1
+    echo "after $arm: $(fi_cache)" >> "$OUT/engine_env.txt"
+    echo "== $arm done $(date -u +%FT%TZ): $reps reps, $((($(date +%s) - t_leased) / 60)) min since the GPUs were held" | tee -a "$OUT/arms.txt"
+    last=$arm
+  done
+  for ra in ${RESTORE:+${RESTORE_ARM:-restore}}; do
+    echo "== restore $ra ${RESTORE} $(date -u +%FT%TZ)"
+    "$PY" "$here/restore.py" --arm-dir "${RESTORE_FROM:-$OUT}/$ra" --from-edge "${RESTORE%%:*}" --to-edge "${RESTORE##*:}" \
+      --kv-dir "$KV_DIR/$ra" --checkpoint "$CK" --warm "${RESTORE_WARM:-0}" --out "$OUT/$ra-replay" \
+      > "$OUT/$ra-replay.log" 2>&1 || { tail -n 60 "$OUT/$ra-replay.log"; rc=1; }
+    tail -n 1 "$OUT/$ra-replay.log"
+  done
+  if [ -n "${REPLAY:-}" ]; then
+    declare -A times=()
+    for mode in ${REPLAY_MODES:-compiled eager}; do
+      flag=(); [ "$mode" = eager ] && flag=(--eager)
+      [ "${REPLAY_LOGPROBS:-0}" = 1 ] && flag+=(--logprobs)
+      n=$(( ${times[$mode]:-0} + 1 )); times[$mode]=$n
+      dir="replay-$mode"; [ "$n" -gt 1 ] && { dir="replay-$mode-$n"; flag+=(--against "$OUT/replay-$mode"); }
+      echo "== replay $REPLAY $mode #$n $(date -u +%FT%TZ)"
+      "$PY" "$here/replay.py" --arm-dir "${REPLAY_FROM:-$OUT/record}" --load "$REPLAY" --checkpoint "$CK" --tp "$GPUS" \
+        "${flag[@]}" ${REPLAY_CAPTURE:+--capture "$REPLAY_CAPTURE"} --out "$OUT/$dir" > "$OUT/$dir.log" 2>&1 \
+        || { tail -n 40 "$OUT/$dir.log"; rc=1; }
+      tail -n 1 "$OUT/$dir.log"
+    done
+  fi
+  exit $rc
+fi
+
+if [ "${CAPACITY:-0}" != 1 ] && [ -z "${ARMS:-}" ]; then
+  [ $replay_only = 1 ] || { echo "serve-tax: ARMS: the arms to serve, in order (or only REPLAY with REPLAY_FROM, or RESTORE with RESTORE_FROM)"; exit 2; }
+  [ -z "${RESTORE_FROM:-}" ] || [ -n "${KV_DIR:-}" ] || { echo "serve-tax: RESTORE_FROM reads the edges' KV bytes in KV_DIR/<arm>: set KV_DIR"; exit 2; }
+elif [ "${CAPACITY:-0}" != 1 ]; then
+  [ -z "$PLAN_FILE" ] || cp "$PLAN_FILE" "$PLAN" || exit 2
+  "$PY" "$here/serve_tax.py" plan --model-id "$MODEL_ID" --checkpoint "$CK" --c4 "$C4" --rates "${RATES:?RATES: NAME=REQ_PER_S,...}" \
+    --span-s "$SPAN_S" ${REQUESTS:+--requests "$REQUESTS"} --docs "$DOCS" --out "$PLAN" || exit 1
+fi
+fresh_kv=0
+if [ -n "${EDGES_S:-}" ] && [ -z "${KV_DIR:-}" ]; then
+  KV_DIR=$(mktemp -d "${SCRATCH:-/workspace/research/scratch}/serve-tax-kv.XXXXXX") || exit 2; fresh_kv=1
+fi
+export PLAN DOCS WINDOW_S KV_WINDOW_S KV_DIR
+# LDCONFIG=1: the linker cache refreshed first, so libnvrtc and the rest resolve to the toolkit the node's dev packages
+# were installed for, the same for every engine of the job
+[ "${LDCONFIG:-0}" = 1 ] && ldconfig
+for k in FLASHINFER VLLM_USE_FLASHINFER_SAMPLER CUDA_HOME TORCHINDUCTOR_DYNAMIC_SCALE_RBLOCK MAX_MODEL_LEN PLAN_FILE; do
+  echo "$k=${!k-unset}"; done > "$OUT/engine_env.txt"
+{ command -v nvcc && nvcc --version | tail -1
+  echo "has_flashinfer=$("$PY" -c 'from vllm.utils.flashinfer import has_flashinfer; print(has_flashinfer())')"
+  echo "plan_sha256=$(sha256sum "$PLAN" | cut -c1-64)"; } >> "$OUT/engine_env.txt" 2>&1
+if command -v gpu-lease > /dev/null; then
+  GPU_LEASE_WHO=${GPU_LEASE_WHO:-serve-tax} gpu-lease "$GPUS" --wait --max-min "$MAX_MIN" -- bash "$here/run.sh" leased
+  rc=$?
+else
+  # a node without gpu-lease queues its jobs by other means: refuse to start on GPUs another job still holds
+  for _ in $(seq 31); do
+    used=$(nvidia-smi --query-gpu=memory.used --format=csv,noheader,nounits | sort -n | tail -1)
+    [ "${used:-0}" -lt "${FREE_MIB:-2048}" ] && break
+    sleep 20
+  done
+  if [ "${used:-0}" -ge "${FREE_MIB:-2048}" ]; then
+    echo "serve-tax: a GPU still holds $used MiB after 10 min; not starting"; rc=75
+  else
+    bash "$here/run.sh" leased; rc=$?
+  fi
+fi
+[ $fresh_kv = 1 ] && rm -rf "$KV_DIR"
+gzip -f "$OUT"/*/server/step_trace.*.jsonl "$OUT"/*/server/edges/outputs.*.jsonl "$OUT"/*-replay/*.jsonl 2>/dev/null
+dirs=()
+for d in "$OUT"/*/; do [ -f "$d/meta.json" ] && dirs+=("$d"); done
+[ ${#dirs[@]} -gt 0 ] && "$PY" "$here/serve_tax.py" table "${dirs[@]}" --out "$OUT"
+exit $rc

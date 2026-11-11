@@ -1,3 +1,8 @@
+module
+
+public import Proofs.Flock.Soundness.Discharge.ZkExec.Statements
+import Mathlib.Combinatorics.Matroid.Init
+import Proofs.Flock.Soundness.Discharge.Exec.Retained
 import Proofs.Flock.Soundness.Discharge.ZkExec.Verify
 
 /-!
@@ -9,10 +14,12 @@ there):
 
 * `acceptsZK_setupH : AcceptsZKSetupH`: every table is `setupH`'s statement under `tagsAt (zkTags I) J j` and the coin
   tree, and passes `Zk.shapeOk`.
-* `acceptsZK_one : AcceptsZKOne`: for one table, at the record's draw, with `Zk.verify` on `#[Setup.ofCircuit st]`.
+* `acceptsZK_one : AcceptsZKOne`: for one table, at the record's sample, with `Zk.verify` on `#[Setup.ofCircuit st]`.
 * `acceptsZK_retained : AcceptsZKRetained`: under tags that retain rounds, every stream of the record retained every
   round's bytes.
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Discharge.ZkExec
 

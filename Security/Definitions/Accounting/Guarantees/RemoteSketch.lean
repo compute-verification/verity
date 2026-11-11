@@ -1,6 +1,8 @@
-import Definitions.Accounting.Assumptions.RateAuditDeployed
-import Definitions.Accounting.Assumptions.RemoteHeld
-import Definitions.Accounting.Assumptions.RemoteSketch
+module
+
+public import Definitions.Accounting.Assumptions.RateAuditDeployed
+public import Definitions.Accounting.Assumptions.RemoteHeld
+public import Definitions.Accounting.Assumptions.RemoteSketch
 
 /-!
 # The receipts' sketch bound, derived (trusted)
@@ -32,10 +34,12 @@ device did not obtain is uniform, and at rank `r` at most `256^(32−r)` of its 
 
 What stays assumed: SHA-512's keys at the candidate seeds are within `ε_ro` of uniform (`SketchHashRandom`, claim
 `random-oracle`), the
-store is uniform (the outcome's coins), the devices obtain sectors whole and verbatim (`RateSketch.Device`, claim
+store is uniform (the outcome's coins), the devices obtain sectors whole and verbatim (`RateSketch.Prover`, claim
 `rate-sketch-verbatim`), the signs' rank tail (`SketchRank`, evaluated outside Lean), the hash budget (`KeyBudget`), and
 the model's receipts and obtained blocks are the trace's (`Receipted`, `Present`).
 -/
+
+@[expose] public section
 
 namespace Accounting.Guarantees.Remote
 

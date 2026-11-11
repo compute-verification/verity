@@ -1,4 +1,22 @@
+module
+
+public import Proofs.Flock.C3.PubRows.Shape
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
 import Proofs.Flock.C3.RegLevels.AccReads
+import Proofs.Flock.C3.RegLevels.OpensRegs
+import Proofs.Flock.Soundness.Discharge.ZkExec.Setup
 
 /-!
 # `SharedOwnRoot`: two sessions register a shared value under one root, from `checkShared`
@@ -17,6 +35,8 @@ cap `rec-top-L0`, needs such an entry. So:
   (`ChecksAccepted`; the checked family's, `checksAccepted_checked`) `SharedOwnRoot` holds at `rows`. A value `rows`
   does not register, other than R's tops, is not covered.
 -/
+
+@[expose] public section
 
 namespace FlockC3.RegLevels
 

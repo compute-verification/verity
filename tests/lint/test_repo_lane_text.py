@@ -1,37 +1,43 @@
-"""Lane text in the tree's prose, held to ``allowlists/repo_lane_text.json``: S5 of the quality rollout, a tree that says what
-is true now.  Prose is every comment and docstring in code (Python's comments and string statements, read by ``tokenize``;
-Lean's ``--``, ``/- -/`` and ``/-- -/`` comments; the ``#`` comments of shell, TOML, YAML and unit files; the ``//`` and
-``/* */`` comments of Rust, C, C++ and CUDA) and every Markdown file, whole.  Code's string literals are not prose and are
-not read.  Lane text is what records how the tree got here or who is working on it, which the tree can't keep true:
+"""Lane text in the tree's prose, held to ``allowlists/repo_lane_text.json``, so the tree says what is true now.  Prose is
+every comment and docstring in code (Python's comments and string statements, read by ``tokenize``; Lean's ``--``, ``/- -/``
+and ``/-- -/`` comments; the ``#`` comments of shell, TOML, YAML and unit files; the ``//`` and ``/* */`` comments of Rust,
+C, C++ and CUDA) and every Markdown file, whole.  Code's string literals are not prose and are not read.  Lane text is what
+records how the tree got here or who is working on it, which the tree can't keep true:
 
 * ``attribution``: a parenthetical holding a date, ``(Daniel, 18 Oct)``, ``(12 Oct 06:20Z)``, ``(2026-10-12)``, or a date
   that follows ``Daniel``;
-* ``date``: an ISO date, ``2026-10-12``;
-* ``note``, ``notion``, ``linear``, ``pr``: a ``note:`` id, a Notion URL, a Linear issue id (``VLLM-136``, the workspace's
-  team keys) or URL, and a pull request (``#1234``, or its GitHub URL);
+* ``date``: a date, ``2026-10-12``, ``27 Oct``, ``Oct 27``;
+* ``name``: a person named as a rule's source, ``Daniel's ruling``, ``per Daniel``, except the Asks for Daniel database and
+  its ``Waiting on Daniel`` status, where AGENTS.md and the skills name the person who decides, and where ``OWN_KINDS``
+  says the code acts for him;
+* ``note``, ``notion``, ``linear``, ``pr``: a ``note:`` id or a worker's note, brief or draft by its codename
+  (``CHAINMAP's note``), a Notion URL, a Linear issue id (``VLLM-136``, the workspace's team keys) or URL, and a pull
+  request (``#1234``, or its GitHub URL);
 * ``agent``, ``slack``: a Cursor agent id (``bc-`` and hex) and a Slack timestamp or archive URL;
+* ``run``, ``art``: a run id (``r20261025-031300-0fcc``) and an ``art:`` id (``art:23a3``), except where ``OWN_KINDS``
+  says the tooling mints and reads them;
 * ``codename``: a worker's codename in prose: a board id (``M-1234``, ``F-r16``), a round (``R10``..``R19``), ``[lane `` or
   ``lane NAME`` with a hyphenated lane name, and a handle (``@vllm``), except where AGENTS.md and the skills name a handle
   as an owner.
 
-``art:`` ids are allowed: they name evidence, which the store keeps.  Declared data isn't read at all (``*.json``, ``*.csv``
-and every other file not named above: ``fixtures/artifacts.json``, each ``lean-audit.json``'s records, the handle registry,
-the manifests), nor what ``SKIP`` names, each with its reason.  This lint takes over P11's docstring patterns
-(``integrations/vllm/tests/lint/test_p11_names.py``: board ids, ``[lane ``, rounds and dates), for the whole tree.
+Declared data isn't read at all (``*.json``, ``*.csv`` and every other file not named above: ``fixtures/artifacts.json``,
+each ``lean-audit.json``'s records, the handle registry, the manifests), nor what ``SKIP`` names, each with its reason.
+This lint takes over P11's docstring patterns (``integrations/vllm/tests/lint/test_p11_names.py``: board ids, ``[lane ``,
+rounds and dates), for the whole tree.
 
 Sites are counted per file, the key the ratchet gate counts by too: an entry ``{"file", "count"}`` allows ``count`` sites in
 its file.  A file with more than its entry allows, or with one and no entry, fails, and the files ``PINNED`` names
 (AGENTS.md, ARCHITECTURE.md, GLOSSARY.md and the skills) hold none and may have no entry.  An entry that allows more than
 is found doesn't fail: the list can run ahead of a tree, as each area cleans its own, and ``--prune`` deletes and lowers
 what this tree no longer finds.  A file that moves takes its entry with it, in the same change (``--move``).  The ratchet
-gate (``integrations/vllm/tools/ratchet_gate.py``) refuses a change that adds a site to a file it touches, or that grows
+gate (``integrations/vllm/tools/ratchet_gate.py``) fails a change that adds a site to a file it touches, or that grows
 this list or leaves a renamed file's entry behind, and judges a change to this module by running it as the change's base
 has it on the change's tree.  So it imports only the standard library, ``test_no_new_lane_text`` takes no fixture, and the
 gate reads ``LEFT_OUT``, ``FIX``, ``holds``, ``sites`` and ``parse`` from the base's copy of this module.
 
     python3 tests/lint/test_repo_lane_text.py --move OLD NEW   # a file (or directory) moved: its entry follows it
     python3 tests/lint/test_repo_lane_text.py --prune          # delete and lower what this tree no longer finds
-    python3 tests/lint/test_repo_lane_text.py --record         # the list is what this tree finds (the gate holds a rise)
+    python3 tests/lint/test_repo_lane_text.py --record         # the list is what this tree finds (the ratchet gate flags a rise)
 """
 from __future__ import annotations
 
@@ -57,6 +63,12 @@ SKIP = {
     "benchmarks/census/": "data only (AGENTS.md: verity never reads it)",
     f"tests/lint/test_{NAME}.py": "its examples are the lane text it refuses",
 }
+#: the kinds a path prefix's prose may hold, each with its reason
+OWN_KINDS = {
+    "tools/research/": (("run", "art"), "runs and the evidence store mint and read these ids: they are its subject"),
+    "infra/": (("run", "art", "name"), "the machines launch runs and fetch evidence by these ids, act with Daniel's "
+               "user key and relay his decisions to his Asks pages: they are its subject"),
+}
 #: test fixtures: a path with one of these directories is data
 FIXTURE_DIRS = ("fixtures", "testdata", "golden")
 #: the files that hold no lane text and may have no entry
@@ -64,7 +76,7 @@ PINNED = ("AGENTS.md", "ARCHITECTURE.md", "GLOSSARY.md", ".agents/skills/")
 #: where AGENTS.md and the skills name handles as owners
 OWNERS = ("AGENTS.md", ".agents/skills/")
 FIX = ("Say what is true now, and put the rest where it lives: history in git (the commit message), work in Linear (the "
-       "issue), rulings in Notion (the decisions log), results in the store (`research data put`, cited as `art:<id>`). "
+       "issue), rulings in Notion (the decisions log), results in the store (`research data put`, cited outside the tree). "
        f"If the file moved, move its entry in the same change: `python3 tests/lint/test_{NAME}.py --move OLD NEW`.")
 
 PY = (".py", ".pyi")
@@ -74,7 +86,9 @@ HASH = (".sh", ".bash", ".toml", ".yaml", ".yml", ".service", ".timer", ".conf",
 SLASH = (".rs", ".c", ".h", ".cc", ".cpp", ".hpp", ".cu", ".cuh", ".ts", ".js", ".go")
 
 MONTH = r"(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Sept|Oct|Nov|Dec)[a-z]*\.?"
-DATE = rf"(?:\b\d{{1,2}} {MONTH}(?![\w-])|\b{MONTH} \d{{1,2}}\b(?!:)|\b20\d\d-[01]\d-[0-3]\d\b)"
+MONTH_WORD = (r"(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Sept|Oct|Nov|Dec|January|February|March|April|June|July|August"
+              r"|September|October|November|December)")
+DATE = rf"(?:\b\d{{1,2}} {MONTH}(?![\w-])|\b{MONTH_WORD}\.? \d{{1,2}}\b(?!:)|\b20\d\d-[01]\d-[0-3]\d\b)"
 TEAMS = "TRN|CMP|TOP|CI|PRF|CIR|INF|NET|HASH|MEM|VLLM|LEAN|BENCH|COMM|CON|DAN|LAND"
 HANDLES = ("compute-accounting", "compute-research", "memory-accounting", "network-accounting", "benchmarks", "circuits",
            "soundness", "training", "console", "kernels", "proofs", "infra", "comms", "lean", "vllm", "top", "ci")
@@ -86,13 +100,19 @@ PATTERNS = tuple((kind, re.compile(p), before and re.compile(before)) for kind, 
     ("attribution", rf"\((?:[^()\n]{{0,80}}?[\s,;:(])?{DATE}[^()\n]{{0,120}}\)?", None),
     ("attribution", rf"Daniel(?:'s)?\b[^()\n.]{{0,40}}?{DATE}", r"\w"),
     ("date", r"20\d\d-[01]\d-[0-3]\d\b", r"\w"),
+    ("date", rf"\d{{1,2}} {MONTH_WORD}\b", r"[\w.:]"),
+    ("date", rf"{MONTH_WORD}\.? \d{{1,2}}\b(?![:\d])", r"\w"),
+    ("name", r"(?<!Asks for )(?<!Waiting on )Daniel(?:'s)?\b", r"\w"),
     ("note", r"note:[0-9A-Za-z][\w.:-]*", r"\w"),
+    ("note", r"[A-Z][A-Z0-9]{3,}'s (?:notes?|brief|draft)\b(?!:)", r"[\w']"),
     ("notion", r"notion\.(?:so|site|com)\b\S*", None),
     ("linear", rf"(?:{TEAMS})-\d+\b", r"\w"),
     ("linear", r"linear\.app/\S*", r"\w"),
     ("pr", r"#\d{3,5}\b", r"[\w&/#]"),
     ("pr", r"github\.com/[\w.-]+/[\w.-]+/(?:pull|issues)/\d+", None),
     ("agent", r"bc-[0-9a-f]{6,}", r"\w"),
+    ("run", r"r20\d{6}-\d{6}-[0-9a-f]{4}", r"[\w-]"),
+    ("art", r"art:[0-9a-f]{4,}", r"\w"),
     ("slack", r"1[5-9]\d{8}\.\d{6}\b", r"\w"),
     ("slack", r"slack\.com/archives/\S*", None),
     ("codename", r"M-\d{4}\b|F-r\d+|R1\d\b", r"\w"),
@@ -120,9 +140,9 @@ def holds(path: str) -> bool:
     return path.endswith(PY + LEAN + MARKDOWN + HASH + SLASH)
 
 
-def found_in(prose: list[tuple[int, str]], owners: bool = False) -> list[tuple[int, str]]:
+def found_in(prose: list[tuple[int, str]], owners: bool = False, own: tuple[str, ...] = ()) -> list[tuple[int, str]]:
     """(line, ``kind: text``) of each site in ``prose``, its chunks' (first line, text); ``owners``: handles name owners
-    here."""
+    here; ``own``: the kinds this prose may hold (``OWN_KINDS``)."""
     text = "\n".join(chunk for _, chunk in prose)
     if not text:
         return []
@@ -137,7 +157,7 @@ def found_in(prose: list[tuple[int, str]], owners: bool = False) -> list[tuple[i
         at += len(chunk) + 1
     out, end = [], 0
     for start, _, stop, kind, what in sorted(hits):
-        if start < end or owners and kind == "codename" and HANDLE.match(what):
+        if start < end or kind in own or owners and (kind == "codename" and HANDLE.match(what) or kind == "name"):
             continue
         i = bisect.bisect_right(starts, start) - 1
         out.append((prose[i][0] + text.count("\n", starts[i], start), f"{kind}: {what.strip()[:80]}"))
@@ -233,7 +253,8 @@ def sites(text: str, path: str) -> list[tuple[int, str]]:
         prose = comments(text, SLASH_COMMENT)
     else:
         return []
-    return sorted(found_in(sorted(prose, key=lambda c: c[0]), owners), key=lambda s: s[0])
+    own = tuple(k for p, (kinds, _) in OWN_KINDS.items() if path.startswith(p) for k in kinds)
+    return sorted(found_in(sorted(prose, key=lambda c: c[0]), owners, own), key=lambda s: s[0])
 
 
 def parse(doc: object) -> Counter:
@@ -296,8 +317,12 @@ def test_what_is_lane_text_and_what_is_not() -> None:
     assert [(line, w.split(":")[0]) for line, w in sites(py, "a.py")] == [
         (1, "codename"), (1, "attribution"), (1, "pr"), (1, "linear"), (2, "agent"), (2, "note"), (4, "attribution"),
         (4, "codename"), (4, "codename"), (6, "date"), (6, "notion"), (6, "slack"), (6, "codename"), (6, "codename"),
-        (7, "codename")]
+        (7, "codename"), (7, "art")]
     assert sites("m = (\n    '(12 Oct) in a call'\n    'and #1234'\n)\nf(x,\n  '''VLLM-1''')\n", "b.py") == []
+    ids = ("# r20261025-031300-0fcc, art:23a3; not x-r20261025-031300-0fcc, cart:23a3 or art:<id>\n"
+           "RUN, ART = 'r20261025-031300-0fcc', 'art:23a3'\n")
+    assert [w for _, w in sites(ids, "a.py")] == ["run: r20261025-031300-0fcc", "art: art:23a3"]
+    assert sites(ids, "tools/research/src/research/a.py") == sites(ids, "infra/a.sh") == []
     lean = ("/-- Lean's (Daniel, 8 Oct)\n  /- nested -/ still (12 Oct) -/\n"
             'def s := "-- (12 Oct) is a string"  -- PRF-12\n/-! #4040 -/\n')
     assert [(line, w.split(":")[0]) for line, w in sites(lean, "A.lean")] == [
@@ -308,6 +333,12 @@ def test_what_is_lane_text_and_what_is_not() -> None:
     assert sites("int x;  // INF-71 (Oct 12)\nchar *u = \"https://x\";\n", "k.cu") == [
         (1, "linear: INF-71"), (1, "attribution: (Oct 12)")]
     assert sites("x = 1  # (12 Oct)\n", "a.toml") == [(1, "attribution: (12 Oct)")]
+    assert [w for _, w in sites("# CHAINMAP's note, NUMERIC's brief; not the README's note:<id>, GEMM's tile\n", "a.py")] == [
+        "note: CHAINMAP's note", "note: NUMERIC's brief"]
+    named = "per Daniel. It landed 27 Oct (Oct 28 next); the Asks for Daniel database, Waiting on Daniel, Decision 3, 12:30Z, @daniel"
+    assert [w for _, w in sites(f"# {named}\n", "a.py")] == ["name: Daniel", "date: 27 Oct", "attribution: (Oct 28 next)"]
+    assert [w for _, w in sites(named, ".agents/skills/x/SKILL.md")] == ["date: 27 Oct", "attribution: (Oct 28 next)"]
+    assert [w for _, w in sites(f"# {named}\n", "infra/a.py")] == ["date: 27 Oct", "attribution: (Oct 28 next)"]
     for src in (py, Path(__file__).read_text(encoding="utf-8"), (ROOT / "integrations/vllm/tools/ratchet_gate.py").read_text()):
         assert found_in(python_prose(src)) == found_in(tokenized(src))
     assert sites("#5040 (12 Oct)", "data.json") == []

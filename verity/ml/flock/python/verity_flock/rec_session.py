@@ -4,12 +4,13 @@ circuits' share of the lincheck's fold, as a round of its own after z_partial (`
 `rec_algebra.Shape.holo`).
 
     python -m verity_flock.rec_session --listen 127.0.0.1:PORT --out DIR --statement STATEMENT --circuit CIRCUIT [--hidden unit]
+        [--coin-tree --tree-from HOST:PORT | --coin-tree --tree-test-os]      every coin the challenger's coin tree (rec_live's)
     python -m verity_flock.rec_session --check-fold FOLD --inner DIR      InnerFold --hide's comb plus the session's h is its full fold
 
 **The relay** (`Relay`) passes every request to the proxy except each rep's round that absorbs z_partial and squeezes r′. That
 round reaches the proxy as two: z_partial's frames ending in a squeeze of no coins, then a round that absorbs h's 64 elements
 and squeezes r′. h is computed between them, at the rep's fold points (`rec_algebra.fold_points`, from the coins the prover
-has had: they are sampled before z_partial). So the coin server draws r′ after the ``c_k`` of z_partial and of h, on the rep's
+has had: they are sampled before z_partial). So the challenger samples r′ after the ``c_k`` of z_partial and of h, on the rep's
 one coin stream, and the prover gets r′ as its round's answer and never sees h.
 
 **h** (`hidden_fold`) is `Stmt.partialRanges` (``Flock/Statement.lean``) on the hidden circuits' ranges alone: per range, its
@@ -48,6 +49,7 @@ from pathlib import Path
 
 from verity.ml.circuits.ops.boolean import gf2k as G
 from verity.ml.circuits.ops.boolean.gf2k import mul
+from verity.ml.commitments import coin_tree as CT
 
 from . import rec_algebra as A
 from . import rec_live as RL
@@ -243,7 +245,7 @@ def staged_stacked(stage: Path) -> tuple[dict, str, dict]:
     """The circuit registration META binds in ``stage`` (`inner_registered.bound`), its digest, and the `rec_live.Proxy`'s
     ``registered`` opening of its `rec_live.STACKED` entry (`inner_registered.private`, its ``top`` the nodes' ``b || c``
     under their salts); refused when the record carries no ``stacked`` entry or the prover holds no opening of it."""
-    from verity.core.protocols.sampled_proofs.one_stage import registration as R
+    from verity.core.protocols.spot.one_stage import registration as R
 
     from . import inner_registered as IR
 
@@ -456,10 +458,13 @@ class Relay:
 
 def serve(listen: str, out: Path, statement: dict, circuit: Path, hidden: Sequence[str] = HIDDEN,
           rand: Callable[[int], bytes] = os.urandom, ready: Callable[[str], None] | None = None, sparse=None,
-          workers: int = 1, stacked: Path | None = None, forge: str | None = None, draw: dict | None = None) -> dict:
+          workers: int = 1, stacked: Path | None = None, forge: str | None = None, draw: dict | None = None,
+          tree: CT.Spec | None = None, source: RL.TreeSource | None = None) -> dict:
     """One session on ``listen``, held to the statement's holo schedule (`rec_live.schedule_for`, written to
     ``out/schedule.json`` first), through a `Relay` whose h is the ``hidden`` circuits' fold in ``circuit``; written into
-    ``out`` (`Relay.write`), or, when it stops, the coin server's record alone. ``sparse``: the bucket's `rec_sparse.Shape`,
+    ``out`` (`Relay.write`), or, when it stops, the challenger's live-coin part's records alone (`rec_live.write_stopped`). ``tree``: every
+    coin of the session, the relay's sparse and stacked phases' too, is the challenger's coin tree of that spec, sampled by
+    ``source`` at ``Hello`` (`rec_live.CoinServer`); the prover runs under ``FC_COINS=tree``. ``sparse``: the bucket's `rec_sparse.Shape`,
     whose sparse phase (`Relay.sparse_phase`, on ``workers`` processes) the one hidden circuit's entries run. ``stacked``
     (with ``sparse``): flock-circuit, which opens R at the sparse claims (`Relay.stacked_phase`, under ``out/stacked``;
     ``forge`` its forgery), R and its registered top as staged beside ``circuit`` (`stage_stacked`, read by
@@ -492,7 +497,7 @@ def serve(listen: str, out: Path, statement: dict, circuit: Path, hidden: Sequen
     out = Path(out)
     out.mkdir(parents=True, exist_ok=True)
     (out / "schedule.json").write_text(json.dumps(schedule, indent=1))
-    proxy = RL.Proxy(RL.CoinServer(rand), schedule=schedule, registration=registration, registered=registered, bound=bound,
+    proxy = RL.Proxy(RL.CoinServer(rand, tree, source), schedule=schedule, registration=registration, registered=registered, bound=bound,
                      draw=draw)
     relay = Relay(proxy, m, k_log, lambda p: hidden_fold(nets, ranges, p["alpha"], p["lw"], p["rho_in"], p["ts"]), phase, workers, st)
     host, port = listen.rsplit(":", 1)
@@ -512,7 +517,7 @@ def serve(listen: str, out: Path, statement: dict, circuit: Path, hidden: Sequen
     if proxy.verdict is None and proxy.stopped is None:
         proxy.stop("rec session: the session ended without Finish")
     if proxy.stopped is not None:
-        (out / "public.json").write_text(RL.record_bytes(proxy.coins.record()))
+        RL.write_stopped(out, proxy.coins)
         return {"session": None, "refused": proxy.stopped, "rounds": len(proxy.coins.rounds)}
     relay.write(out)
     rec = proxy.coins.record()
@@ -543,6 +548,7 @@ def main(argv=None) -> int:
     ap.add_argument("--forge", choices=("cell", "late", "point"),
                     help="--stacked: R registered at staging with cell 0 flipped (staged so), R's cell 0 flipped after its "
                     "registration, or rep 0's point off")
+    RL.add_tree_args(ap)
     a = ap.parse_args(argv)
     if a.check_fold:
         if not a.inner:
@@ -556,10 +562,16 @@ def main(argv=None) -> int:
     if a.sparse:
         from .rec_sparse import Shape
         sparse = Shape(*(int(v) for v in a.sparse.split(",")))
-    res = serve(a.listen, Path(a.out), RL.statement_of(Path(a.statement).read_text()), Path(a.circuit), a.hidden.split(","),
-                ready=lambda addr: print(f"SERVING {addr}", flush=True), sparse=sparse,
-                workers=len(os.sched_getaffinity(0)) if a.workers is None else a.workers, stacked=a.stacked, forge=a.forge,
-                draw=json.loads(Path(a.draw).read_text()) if a.draw else None)
+    source = RL.tree_source(ap, a)
+    try:
+        res = serve(a.listen, Path(a.out), RL.statement_of(Path(a.statement).read_text()), Path(a.circuit), a.hidden.split(","),
+                    ready=lambda addr: print(f"SERVING {addr}", flush=True), sparse=sparse,
+                    workers=len(os.sched_getaffinity(0)) if a.workers is None else a.workers, stacked=a.stacked, forge=a.forge,
+                    draw=json.loads(Path(a.draw).read_text()) if a.draw else None,
+                    tree=RL.INNER_COIN_SPEC if a.coin_tree else None, source=source)
+    finally:
+        if source is not None:
+            source.close()
     print("REC_INNER\t" + json.dumps(res), flush=True)
     return 0 if res["session"] else 1
 

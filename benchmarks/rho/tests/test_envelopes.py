@@ -5,10 +5,12 @@ from pathlib import Path
 
 import pytest
 from rho import envelopes, hardware, lean
-from rho.envelopes import Certifier, Context, Detection, Onsite, Remote
+from rho.envelopes import Certifier, Context, Detection, Onsite, Remote, Wipe
 from rho.params import Param, Registry
 from rho.scenario import build, evaluate_named
 from rho.theorem import Budget, multiple_bound, overhead
+
+from verity.core.protocols.profile import WINDOW_DELTA
 
 ROOT = Path(__file__).resolve().parents[3]
 REG = Registry.load()
@@ -65,20 +67,29 @@ def test_the_remote_uncertified_share_is_tiers_residual_term():
     assert remote.uncertified(ctx) == pytest.approx(T.evaluate(p, T.TIERS["T1"])["residual"], rel=1e-9)
 
 
-def test_with_sampled_proofs_it_adds_tiers_escape_and_cheating_shares():
+def test_with_spot_it_adds_tiers_escape_and_cheating_shares():
+    """At today's sparse samples the bits the accepted incorrect blocks inject, each the widest public size class of a
+    block's outputs, are worth more than tiers' fleet, and both stop the cheating share at 1; at the proving cost's low
+    end, batched throughput, it is below 1."""
     ctx = tiers_context()
-    p = tiers_params(ctx)
-    sampled = envelopes.regime(REG, "remote-sampled")
-    t5 = T.evaluate(p, T.TIERS["T5"])
-    slack = sampled.slack(ctx)
-    assert sampled.detection.injected() == pytest.approx(t5["cheat_bits"], rel=1e-12)
-    assert sampled.detection.chord == pytest.approx(T.chord(p, t5["cheat_bits"]), rel=1e-7)
-    assert math.fsum(v for k, v in slack.items() if k != "exfil.incorrect") == pytest.approx(t5["residual"], rel=1e-9)
-    assert slack["exfil.incorrect"] == pytest.approx(t5["cheat"], rel=1e-7)
+    cost = REG.param("regime.remote-sampled.overhead")
+    shares = []
+    for proving in (cost.value, cost.low):
+        p = tiers_params(ctx) | {"overhead": proving}
+        sampled = envelopes.regime(REG.override({cost.key: proving}), "remote-sampled")
+        t5 = T.evaluate(p, T.TIERS["T5"])
+        slack = sampled.slack(ctx)
+        assert sampled.detection.injected() == pytest.approx(t5["cheat_bits"], rel=1e-12)
+        assert sampled.detection.chord == pytest.approx(T.chord(p, t5["cheat_bits"]), rel=1e-7)
+        assert math.fsum(v for k, v in slack.items() if k != "exfil.incorrect") == pytest.approx(t5["residual"], rel=1e-9)
+        assert slack["exfil.incorrect"] == pytest.approx(t5["cheat"], rel=1e-7)
+        shares.append(slack["exfil.incorrect"])
+    assert shares[0] == 1 > shares[1] > 0
 
 
 def test_with_nothing_else_bounding_the_padded_size_ratio_is_lean_dampener_remote_at_full_capacity():
-    """Lean's `DampenerRemote` with no declared products (ν_T = 0) and χ = 0 is `max(1, 1/(s + (1 − s) u / MFU₀))`,
+    """Lean's `DampenerRemote` with no declared products (the declared share `ν = 0`) and χ = 0 is
+    `max(1, 1/(s + (1 − s) u / MFU₀))`,
     against an unencumbered trainer at `MFU₀`. The bound counts every gate at capacity against the reference at
     capacity, so its padded size ratio is `DampenerRemote`'s `ρ` at `MFU₀ = 1` (where at least 1), and the slowdown is
     that `ρ` at the reference's MFU."""
@@ -86,14 +97,14 @@ def test_with_nothing_else_bounding_the_padded_size_ratio_is_lean_dampener_remot
     ctx = tiers_context(reg)
     remote = envelopes.regime(reg, "remote")
     part = remote.partition(ctx)
-    s, u = part.eps_dark, remote.uncertified(ctx)
+    s, u = part.eps_unreg, remote.uncertified(ctx)
     o = overhead(part, lambda b: 0.0, 0.6)
     assert o.padded == pytest.approx(multiple_bound(1.0, s, (1 - s) * u), rel=1e-12) and o.padded > 10
     assert o.rho == o.multiple(1.0) == pytest.approx(o.padded, rel=1e-12)
     assert overhead(part, lambda b: 0.0, 0.6, mfu=0.4).rho == o.multiple(0.4) == pytest.approx(
         multiple_bound(0.4, s, (1 - s) * u), rel=1e-12)
     ctx = tiers_context()
-    s, u = ctx.fleet.eps_dark, envelopes.regime(REG, "remote").uncertified(ctx)
+    s, u = ctx.fleet.eps_unreg, envelopes.regime(REG, "remote").uncertified(ctx)
     # the inference blocks hold a little weight too, under their caps
     pad = evaluate_named(REG, "remote-tiers-kimi").families[0].combined.padded
     assert pad <= 1 / (s + (1 - s) * u) and pad == pytest.approx(1 / (s + (1 - s) * u), rel=1e-4)
@@ -102,7 +113,7 @@ def test_with_nothing_else_bounding_the_padded_size_ratio_is_lean_dampener_remot
 #: `Nci.Dampener.remoteDampener` as Security/Definitions/Nci/Remote.lean defines it, and the conclusion of
 #: `Nci.Guarantees.DampenerRemote` (Security/Definitions/Nci/Guarantees/Remote.lean) that names it `ρ`
 REMOTE_DAMPENER = "noncomputable def remoteDampener (mfu s x : ℝ) : ℝ := max 1 (1 / (s + x / mfu))"
-REMOTE_CONCLUSION = "remoteDampener mfu (unmonitoredShare C U)"
+REMOTE_CONCLUSION = "remoteDampener mfu (unregisteredShare C U)"
 
 
 def test_the_remote_overhead_is_lean_remote_dampener_at_the_references_mfu():
@@ -136,7 +147,7 @@ def test_the_remote_overhead_is_lean_remote_dampener_at_the_references_mfu():
 
     r = evaluate_named(REG, "remote-h200-kimi")
     ctx, remote = r.scenario.context, r.scenario.regime
-    s, u = ctx.fleet.eps_dark, remote.uncertified(ctx)
+    s, u = ctx.fleet.eps_unreg, remote.uncertified(ctx)
     assert r.scenario.mfu == ctx.fleet.mfu_train == 0.4
     assert r.lo == pytest.approx(multiple_bound(0.4, s, (1 - s) * u), rel=1e-4) == pytest.approx(3.040, abs=1e-3)
     assert r.families[0].combined.padded == pytest.approx(r.lo, rel=1e-12)
@@ -183,7 +194,7 @@ def test_a_regime_table_with_a_stray_key_or_a_base_loop_is_refused():
         envelopes.regime(REG.override({"regime.onsite-links.form": "widths"}), "onsite-links")
     with pytest.raises(ValueError, match="wipe per"):
         envelopes.regime(REG.override({"regime.onsite.per": "rack"}), "onsite")
-    with pytest.raises(ValueError, match="sampled proofs need"):
+    with pytest.raises(ValueError, match="SPOT needs"):
         Detection(1, 3600, sampled=True)
 
 
@@ -294,7 +305,7 @@ def test_onsite_w63_beside_the_reference():
     lower bound's padded size ratio, which a dark share of 1% caps near 100, rises from 98.7 to 99.8, with the best
     attack's at 249 and 250; at line rate both fall to remote's (2.99, at the card table's clock). The cadence feeds the
     serving this package credits only if outputs outnumber prompts more than 20:1, so it isn't the default."""
-    reg = REG.override({"fleet.world-h200.eps_dark": 0.01})
+    reg = REG.override({"fleet.world-h200.eps_unreg": 0.01})
     ref, w63 = evaluate_named(reg, "reference-onsite-h200"), evaluate_named(reg, "onsite-w63")
     inputs = [r.scenario.regime.budget(r.scenario.context).inputs for r in (ref, w63)]
     assert inputs == [pytest.approx(3.193e11, rel=1e-3), pytest.approx(4.803e10, rel=1e-3)]
@@ -324,21 +335,23 @@ def test_without_pouw_only_the_serving_cut_bounds():
 
 
 def test_pouw_as_deployed_on_the_h200_certifies_so_little_that_rho_stays_near_one():
-    """`regime.remote-h200-pouw`: per-call J10-R credits a step's 5.72e14 served INT8 MACs against the H200's 1.0705e15
-    MACs/s (the ACCEL card table: 4,096 a SM-clock, 132 SMs, at the clock's 1,980 MHz ceiling) over its 12.60 s (served
-    3.78, its commit 0.42, PoUW's units 5.59 and their commit 2.81). J10-R credits words, and C counts the card at its
-    ceiling, so the clock term is 0. Hosts carry no compute, so `r̂` is the residual, 0.958. onsite-today's twin carries
-    the same PoUW envelope, and both differ from remote's in three keys."""
+    """`regime.remote-h200-pouw`: per-call J10-R credits a step's 5.72e14 served INT8 MACs against the H200's 9.894e14
+    MACs/s (the ACCEL card table: 4,096 a SM-clock, 132 SMs, at the tensor clock's 1,830 MHz ceiling; 1.0705e15 at the
+    1,980 MHz SM clock) over its 12.60 s (served 3.78, its commit 0.42, PoUW's units 5.59 and their commit 2.81). J10-R
+    credits words, and C counts the card at its ceiling, so the clock term is 0. Hosts carry no compute, so `r̂` is the
+    residual, 0.954 (0.958 with the tensor at 1,980 MHz). onsite-today's twin carries the same PoUW envelope, and both
+    differ from remote's in three keys."""
     remote, today = envelopes.regime(REG, "remote-h200-pouw"), envelopes.regime(REG, "onsite-today-h200-pouw")
     assert today.pouw == remote.pouw and today.wipe == envelopes.regime(REG, "onsite-today").wipe
     macs = 4096 * (52 * (2 * 16384**2 + 2 * 16384 * 64 + 2 * 16384 * 65536) + 16384 * 256)
-    assert remote.pouw.residual == pytest.approx(1 - macs / (4096 * 132 * 1.98e9 * (3.78 + 0.42 + 5.59 + 2.81)), abs=5e-4)
+    assert remote.pouw.residual == pytest.approx(1 - macs / (4096 * 132 * 1.83e9 * (3.78 + 0.42 + 5.59 + 2.81)), abs=5e-4)
+    assert 1 - macs / (4096 * 132 * 1.98e9 * (3.78 + 0.42 + 5.59 + 2.81)) == pytest.approx(0.958, abs=5e-4)
     assert remote.pouw.clock_share == 0
     p = remote.pouw
     assert dataclasses.replace(envelopes.regime(REG, "remote").pouw, residual=p.residual, clock_share=p.clock_share,
                                host=p.host) == p
     loc = context("reference-h200").location
-    assert p.host == 0 and p.audited(loc) == p.residual == pytest.approx(0.958, abs=5e-4)
+    assert p.host == 0 and p.audited(loc) == p.residual == pytest.approx(0.954, abs=5e-4)
     assert evaluate_named(REG, "reference-remote-h200-pouw").lo < 1.05
 
 
@@ -385,9 +398,11 @@ def test_pouws_delta_splits_into_coins_and_cryptography():
     ctx = context("reference-h200")
     remote, sampled = envelopes.regime(REG, "remote"), envelopes.regime(REG, "remote-sampled")
     d = remote.delta(ctx)
-    assert d.coin == pytest.approx(2**-40 / remote.pouw.eps_agg, rel=1e-2)
-    assert d.crypto == pytest.approx(2 * d.coin, rel=1e-2)
-    assert d.coin + d.crypto == pytest.approx(3 * 2**-40 / 1e-4, rel=1e-2)
+    window = float(WINDOW_DELTA)
+    assert d.coin == pytest.approx(window / remote.pouw.eps_agg)
+    assert d.crypto == pytest.approx(2 * d.coin)
+    assert d.coin + d.crypto == pytest.approx(3 * window / 1e-4)
+    assert sampled.detection.p_evade == window
     assert sampled.delta(ctx).coin == pytest.approx(d.coin + sampled.detection.p_evade)
     assert (envelopes.regime(REG, "unmonitored").delta(ctx).coin, envelopes.regime(REG, "unmonitored").delta(ctx).crypto) \
         == (0.0, 0.0)
@@ -404,9 +419,21 @@ def test_delta_sums_every_subprotocol_and_the_wipe_per_server_and_per_wipe(scena
     d = r.delta(ctx)
     assert set(d.by) == {"pouw", "detection", "wipe", "certifier"}
     games = ctx.fleet.count * getattr(ctx.location, per) * ctx.period.seconds / r.wipe.wipe_s
-    assert d.by["wipe"] == pytest.approx((games * 2**-128, games * r.wipe.prf_advantage))
+    assert r.wipe.game_delta_coin == REG["regime.onsite.game_delta_coin"] > 0
+    assert d.by["wipe"] == pytest.approx((games * r.wipe.game_delta_coin, games * r.wipe.prf_advantage))
     assert d.by["pouw"] == pytest.approx(r.pouw.delta(ctx)) and d.by["certifier"] == (0.0, 0.0)
     assert d.coin == pytest.approx(math.fsum(c for c, _ in d.by.values()))
     assert d.crypto == pytest.approx(math.fsum(x for _, x in d.by.values()))
-    assert d.coin == pytest.approx(r.pouw.window_delta_coin / r.pouw.eps_agg + games * 2**-128)
+    assert d.coin == pytest.approx(r.pouw.window_delta_coin / r.pouw.eps_agg + games * r.wipe.game_delta_coin)
     assert d.json()["by"]["wipe"]["coin"] == d.by["wipe"][0]
+
+
+def test_a_wipe_games_failure_is_stated_once_in_the_registry():
+    """The retention game fails with the coins' probability plus `Adv_PRF`. `Wipe` restates neither (a wipe not given
+    them adds nothing), and the registry sets each once, at `regime.onsite`, which every regime with a wipe inherits."""
+    assert (Wipe().game_delta_coin, Wipe().prf_advantage) == (0.0, 0.0)
+    for leaf in ("game_delta_coin", "prf_advantage"):
+        assert [p.key for p in REG.params() if p.key.rpartition(".")[2] == leaf] == [f"regime.onsite.{leaf}"]
+    stated = (REG["regime.onsite.game_delta_coin"], REG["regime.onsite.prf_advantage"])
+    wiped = [r for r in (envelopes.regime(REG, name) for name in REG.names("regime")) if isinstance(r, Onsite)]
+    assert wiped and all((r.wipe.game_delta_coin, r.wipe.prf_advantage) == stated for r in wiped) and min(stated) > 0

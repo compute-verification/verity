@@ -6,6 +6,8 @@ circuits and imports this), with its plain-integer reference.
   and Maj; 64 schedule words of 3 additions; 8 final additions), fewer where an operand is a constant (a constant message
   block's schedule is free). On a `forms.Circuit` it also commits copies (`commit`) that keep every row's linear forms short;
   traced (`trace.TracingCircuit`) a copy is the form itself, so a Boolean Definition built on it has exactly the ANDs.
+* `Sha512CompressFolded`: `compress_gadget` as a Definition of its arguments' pattern (`trace.folded`), which a Definition
+  traced with calls calls in place of each compression's gates.
 
 Words are 64-bit values as little-endian bit lists (bit i of a word is its value's bit i); a digest's bytes are its eight words
 big-endian.
@@ -14,9 +16,11 @@ from __future__ import annotations
 
 import struct
 
+from verity.ml.circuits.boolean import trace as TR
 from verity.ml.circuits.boolean.forms import ONE, ZERO, Circuit, const_bits, maj
 
-__all__ = ["CARRY_EVERY", "IV", "K", "M64", "commit", "compress_gadget", "compress_ref", "midstate", "pad_tail", "words_be"]
+__all__ = ["CARRY_EVERY", "IV", "K", "M64", "Sha512CompressFolded", "commit", "compress_gadget", "compress_ref", "midstate",
+           "pad_tail", "words_be"]
 
 K = [
     0x428a2f98d728ae22, 0x7137449123ef65cd, 0xb5c0fbcfec4d3b2f, 0xe9b5dba58189dbbc, 0x3956c25bf348b538, 0x59f111f1b605d019,
@@ -122,7 +126,16 @@ def commit(C: Circuit, word: list) -> list:
 
 
 def compress_gadget(C: Circuit, cv: list[list], msg: list[list]) -> list[list]:
-    """:func:`compress_ref` over words of circuit bits; the schedule words and each round's new ``a`` and ``e`` are committed."""
+    """:func:`compress_ref` over words of circuit bits; the schedule words and each round's new ``a`` and ``e`` are committed.
+    Traced with calls (`trace.CallTracingCircuit`), it is a call of `Sha512CompressFolded` instead."""
+    fold = getattr(C, "fold_call", None)
+    if fold is not None:
+        out = fold(Sha512CompressFolded, [f for x in (*cv, *msg) for f in x])
+        return [out[64 * i:64 * i + 64] for i in range(8)]
+    return _compress(C, cv, msg)
+
+
+def _compress(C: Circuit, cv: list[list], msg: list[list]) -> list[list]:
     w = list(msg)
     for t in range(16, 80):
         s0 = _xor3(_rot(w[t - 15], 1), _rot(w[t - 15], 8), _shr(w[t - 15], 7))
@@ -138,3 +151,15 @@ def compress_gadget(C: Circuit, cv: list[list], msg: list[list]) -> list[list]:
         t2 = _add(C, s0, mj)
         h, g, f, e, d, c, b, a = g, f, e, commit(C, _add(C, d, t1)), c, b, a, commit(C, _add(C, t1, t2))
     return [_add(C, x, y) for x, y in zip(cv, [a, b, c, d, e, f, g, h])]
+
+
+def _compress_bits(C: Circuit, bits: list) -> list:
+    words = [bits[64 * i:64 * i + 64] for i in range(24)]
+    return [f for w in _compress(C, words[:8], words[8:]) for f in w]
+
+
+Sha512CompressFolded = TR.folded(
+    "Sha512CompressFolded", 1, _compress_bits, 1536, 512,
+    doc="One SHA-512 compression (`compress_gadget`) at the argument pattern P (`trace.pattern_of`): the chaining value's 512 "
+        "bits then the block's 1024, each a constant or the XOR of parameters, to the 512 bits of the next chaining value. The "
+        "hashing Definitions traced with calls call it once per compression, so a pattern's circuit is written once.")

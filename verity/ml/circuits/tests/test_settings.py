@@ -1,7 +1,8 @@
 """`verity.settings`, the settings machinery (`Registry`) and the distribution's own registry: every variable declared once (a
 type, a role, a doc), read at the read, an undeclared ``VERITY_ML_*`` variable refused by name, a ``debug`` setting refused on
-a run of record, and the run's record of the value settings.  And the circuits area, on the soundness path, reads the
-environment through it alone: its direct reads are held at today's count, none."""
+a run of record, a program's startup check (`Registry.check`), the run's record of the value settings, and `direct_uses`,
+which a suite's ratchet counts with.  And the circuits area, on the soundness path, reads the environment through it alone:
+its direct reads are held at today's count, none."""
 from __future__ import annotations
 
 import ast
@@ -15,6 +16,7 @@ from verity import settings as S
 
 REGISTRY = Path(S.__file__)
 AREA = Path(__file__).resolve().parents[1]
+ROOT = Path(__file__).resolve().parents[4]
 TOKEN = re.compile(r"\bVERITY_ML_[A-Z0-9_]*[A-Z0-9]\b")
 #: the attributes of ``os`` that touch the environment
 OS_ENV = frozenset({"environ", "environb", "getenv", "getenvb"})
@@ -104,6 +106,27 @@ def test_a_debug_setting_is_refused_on_a_run_of_record(monkeypatch: pytest.Monke
     S.REGISTRY.of_record({**env, "VERITY_ML_TEST_DUMP": ""})
 
 
+def test_check_refuses_an_unknown_name_a_value_that_doesnt_parse_and_a_debug_setting_on_a_run_of_record() -> None:
+    r = S.Registry("x.py", ("X_",), S.Setting("X_TRACE", str, None, S.DEBUG, "a trace file"),
+                   S.Setting("X_N", int, 3, S.VALUE, "a number"), schema=S.RECORD_SCHEMA)
+    r.check({"X_TRACE": "/t"}, of_record=False)
+    r.check({"X_TRACE": ""}, of_record=True)
+    with pytest.raises(S.DebugOnRecord, match="X_TRACE: debug setting, refused on a run of record"):
+        r.check({"X_TRACE": "/t"}, of_record=True)
+    with pytest.raises(ValueError, match="X_N='x'"):
+        r.check({"X_N": "x"}, of_record=False)
+    with pytest.raises(S.UnknownSetting, match="unknown setting X_NN: nothing in the tree reads it"):
+        r.check({"X_NN": "1"}, of_record=False)
+
+
+def test_direct_uses_sees_each_form() -> None:
+    src = ("import os\nimport os as o\nfrom os import environ, getenv as g\n"
+           "a = os.environ.get('A')\nb = o.environ['B']\nc = environ.get('C')\nd = g('D')\nos.environ['E'] = '1'\n"
+           "e = {**os.environ}\nf = os.getpid()\nx.os.environ\n")
+    assert S.direct_uses(src) == [(4, "os.environ"), (5, "os.environ"), (6, "os.environ"), (7, "os.getenv"),
+                                  (8, "os.environ"), (9, "os.environ")]
+
+
 def test_the_record_carries_the_value_settings_in_force_and_names_a_credential(monkeypatch: pytest.MonkeyPatch) -> None:
     assert S.record({"VERITY_ML_BOOLEAN_EXHAUSTIVE": "1"})["values"] == {}
     _synthetic(monkeypatch)
@@ -120,7 +143,7 @@ def test_the_record_carries_the_value_settings_in_force_and_names_a_credential(m
 
 def _area() -> list[tuple[str, str]]:
     """Each Python file of the area, this one aside (it spells undeclared names to see them refused), with its text."""
-    return [(p.relative_to(AREA.parents[2]).as_posix(), p.read_text(encoding="utf-8")) for p in sorted(AREA.rglob("*.py"))
+    return [(p.relative_to(ROOT).as_posix(), p.read_text(encoding="utf-8")) for p in sorted(AREA.rglob("*.py"))
             if p != Path(__file__).resolve()]
 
 

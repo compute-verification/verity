@@ -1,6 +1,42 @@
-import Proofs.Flock.Claims.KS.ZkUntrim
-import Proofs.Flock.Claims.KS.Extend
-import Proofs.Flock.Claims.GS.ZkRadius
+module
+
+public import Proofs.Flock.Claims.KS.Extend
+public import Proofs.Flock.Claims.KS.ZkTables
+public import Proofs.Flock.Claims.KS.ZkUntrim
+import all Init.Data.Array.Basic
+import all Init.Data.Nat.Power2.Basic
+import all Init.Data.Range.Basic
+import Mathlib.Algebra.Order.Floor.Extended
+import Mathlib.Algebra.Order.Interval.Basic
+import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
+import Mathlib.Analysis.SpecialFunctions.Bernstein
+import Mathlib.Analysis.SpecialFunctions.Gamma.Basic
+import Mathlib.Analysis.SpecialFunctions.Trigonometric.DerivHyp
+import Mathlib.Combinatorics.Enumerative.DyckWord
+import Mathlib.Combinatorics.SimpleGraph.Triangle.Removal
+import Mathlib.Data.NNRat.Floor
+import Mathlib.Data.Nat.Choose.Multinomial
+import Mathlib.Geometry.Euclidean.Altitude
+import Mathlib.NumberTheory.Chebyshev
+import Mathlib.NumberTheory.Height.NumberField
+import Mathlib.NumberTheory.Height.Projectivization
+import Mathlib.NumberTheory.LucasLehmer
+import Mathlib.NumberTheory.SelbergSieve
+import Mathlib.RingTheory.Radical.NatInt
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Topology.Sheaves.Init
 
 /-!
 # `ExtendJ` at the untrimmed masked instance
@@ -23,6 +59,8 @@ rate is at least `1/2` (`zk_reg`, `Claims.GS.reg_of_rate`), and the indices' `n 
 * `FlockDeploy.KS.zk_KS_untrim`: so `Flock.KS` at the untrimmed masked instance at SHA-512 at the deployed relation
   holds with no premise (`zk_KS_untrim_of_extendJ`).
 -/
+
+@[expose] public section
 
 namespace FlockDeploy.KS
 

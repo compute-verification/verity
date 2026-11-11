@@ -1,4 +1,14 @@
-import Proofs.Flock.VBridge.Algebra.RunSkel
+module
+
+public import Flock.RecAlgebra
+public import Proofs.Flock.Soundness.Refine.Final
+public import Proofs.Flock.VBridge.Algebra.RunSkel
+import Mathlib.Algebra.Order.Floor.Semifield
+import Mathlib.Combinatorics.Matroid.Init
+import Mathlib.MeasureTheory.Integral.Bochner.Basic
+import Proofs.Flock.VBridge.Algebra.Ligerito
+import Proofs.Flock.VBridge.Algebra.Zerocheck
+import VCVio.Prelude.Core
 
 /-!
 # `verifierRows` reads a record's rounds only through their sizes
@@ -8,6 +18,8 @@ from them feed `finalWeights` (RecAlgebra.lean:456–496), whose checks read onl
 hold as many coins each, with as many extra claims, `run` succeeds at one exactly when at the other
 (`residualLins_sizes`), and so does `verifierRows` (`verifierRows_sizes`).
 -/
+
+@[expose] public section
 
 namespace Flock.RecAlgebra
 
@@ -70,7 +82,7 @@ theorem cm_bind_of {A B : Type} {x : CM A} {f : A → CM B} {k k₁ : Nat} {src 
 /-! ## Two runs at two records of one shape -/
 
 /-- `x` at a record and `y` at any record whose rounds have the same sizes: whenever `x` succeeds, `y` does, with as
-many coins drawn and related results. -/
+many coins flipped and related results. -/
 def RF {A B : Type} (R : A → B → Prop) (x : CM A) (y : CM B) : Prop :=
   ∀ r r', SameSizes r r' → ∀ k a j, x k (CoinSource.ofRounds r) = .ok (a, j) →
     ∃ b, y k (CoinSource.ofRounds r') = .ok (b, j) ∧ R a b

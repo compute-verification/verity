@@ -1,7 +1,27 @@
-import Proofs.Flock.EndToEndRegisteredRows.Statement
-import Proofs.Flock.EndToEndRegistered
-import Proofs.Flock.Soundness.Registered.ReadsAt
-import Proofs.Flock.Soundness.Discharge.ZkLink.RowsSound
+module
+
+public import Proofs.Flock.EndToEndRegistered
+public import Proofs.Flock.EndToEndRegisteredRows.Statement
+public import Proofs.Flock.Soundness.Discharge.ZkLink.RowsSound
+public import Proofs.Flock.Soundness.Registered.ReadsAt
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Proofs.Flock.Soundness.Discharge.Composed.DrawnJ
+import Proofs.Flock.Soundness.Discharge.Composed.PublicJ
+import Proofs.Flock.Soundness.Discharge.ZkReg.Checked
+import Proofs.Flock.Soundness.Discharge.ZkReg.SoundHJCustody
+import Proofs.Flock.Soundness.Game
 
 /-!
 # `EndToEndRegisteredRows` from the rows' extraction bound
@@ -10,17 +30,19 @@ import Proofs.Flock.Soundness.Discharge.ZkLink.RowsSound
 with the registered reads' term removed, at outcomes whose registration is on the registrant's leaves
 (`¬ rd.Off o.1`), and with only the input rows in the event. The rest is proved here:
 
-* **output rows**: a drawn unit not wrong on the registration (`wrongRegZ`) is correct in the value layer, so on each of
+* **output rows**: a sampled proof block not wrong on the registration (`wrongRegZ`) is correct in the value layer, so on each of
   its committed wires the value layer is the circuit's evaluation on its inputs (`Partition.correct_eval`, with
   `Layout.keyProg_readsOwn`);
 * **the registered reads' term**: at an accepted outcome whose reads the verifier owns, the registered check holds at
-  the outcome's registration (`EndToEndRegisteredDrawn`'s second conjunct), so accepting while a read's leaf is off is
+  the outcome's registration (`EndToEndRegisteredDrawnFlat`'s second conjunct), so accepting while a read's leaf is off is
   at most `q_R²/2^513` (`Registered.ReadsX.prob_off_le_at`).
 
-`RowsLinkLe` is `EndToEndRegisteredDrawn`'s first conjunct with the input rows added to "wrong" and `δ_rows` to the
+`RowsLinkLe` is `EndToEndRegisteredDrawnFlat`'s first conjunct with the input rows added to "wrong" and `δ_rows` to the
 bound, and `rowsLinkLe` proves it: `zk_session_soundHJR_custody_drawn_reg`'s proof, at an analysis whose wrong set
-and link term carry the registrant's rows too (`ZkLink.analysisZCRows`, `ZkLink.zk_flock_drawnC_rows`).
+and binding error carry the registrant's rows too (`ZkLink.analysisZCRows`, `ZkLink.zk_flock_drawnC_rows`).
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Discharge.ZkReg
 
@@ -31,7 +53,7 @@ open FlockSoundness.Discharge.Tables (LiveOutJ)
 open scoped ENNReal
 
 open Classical in
-/-- **The rows' extraction bound** (`rowsLinkLe`): in `EndToEndRegisteredRows`' setting, accepting while some drawn unit is
+/-- **The rows' extraction bound** (`rowsLinkLe`): in `EndToEndRegisteredRows`' setting, accepting while some sampled proof block is
 wrong on the registration, or, with the registration on the registrant's leaves at every owned read, carries at an
 owned registered read a bit other than the registrant's row's, has probability at most `ε_ks + δ_link + δ_rows`. -/
 def RowsLinkLe : Prop :=
@@ -85,7 +107,7 @@ def RowsLinkLe : Prop :=
 
 /-- **The rows' extraction bound.** The registered reads' leaves are the public file's at every registration
 (`layShHJ`'s `regLeaf` reads only `pub`), so `rd.Off` is one proposition at every registration. Where it holds, the
-rows' disjunct is empty and the bound is `EndToEndRegisteredDrawn`'s first conjunct. Where it fails, the registrant's
+rows' disjunct is empty and the bound is `EndToEndRegisteredDrawnFlat`'s first conjunct. Where it fails, the registrant's
 openings `wo` open the registered commitments at every read, and the bound is `ZkLink.zk_flock_drawnC_rows` at "wrong"
 `wrongRegZ ∪ rowsWrongZ`, through `execRefinesZK_tables_drawn` and `ksAvgZC_le_strict`, as
 `zk_session_soundHJR_custody_drawn_reg` is `zk_flock_drawnC_reg`'s. -/
@@ -150,8 +172,8 @@ theorem rowsLinkLe : RowsLinkLe := by
 theorem EndToEndRegisteredRows_of_rowsLink (hL : RowsLinkLe) : Flock.Guarantees.EndToEndRegisteredRows := by
   intro n Reg own I ht D hDesc hU pub hpub hscope kd hdiv dj S₀ d₀ y₀ rd wr dg N Ω _ _ Lb src hTags hCust k Rw M hk
     hRw hM ρ hρ hr t' ht' τ qF qS qR L G P vb wo σ hCR hA2 hRows hReg
-  have hD := Flock.SecurityProofs.EndToEndRegisteredDrawn n Reg I ht own D hDesc hU pub hpub hscope kd hdiv dj S₀ d₀ y₀
-    wr dg N Ω Lb src hTags hCust k Rw M hk hRw hM ρ hρ hr t' ht' τ qF qS hCR hA2
+  have hD := Flock.SecurityProofs.EndToEndRegisteredDrawnFlat n Reg I ht own D.unroll (Flock.Desc.parse_flat hDesc) hU pub
+    hpub hscope kd hdiv dj S₀ d₀ y₀ wr dg N Ω Lb src hTags hCust k Rw M hk hRw hM ρ hρ hr t' ht' τ qF qS hCR hA2
   have hLk := hL n Reg own I ht D.unroll (Flock.Desc.parse_flat hDesc) hU pub hpub hscope kd hdiv dj S₀ d₀ y₀ rd wr dg
     N Ω Lb src hTags hCust k Rw M hk hRw hM ρ hρ hr t' ht' τ qF qS hCR hA2 hRows
   set Xv := XplurZC execArith hs512 P (planZHJ dj y₀) (tabZHJ dj y₀) vb (reg σ) (cont σ) k Rw

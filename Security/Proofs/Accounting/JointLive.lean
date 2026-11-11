@@ -1,8 +1,11 @@
-import Definitions.Accounting.Guarantees.JointLive
-import Proofs.Core.Game.Prob
-import Proofs.Core.Blocks
-import Proofs.Core.Circuit
-import Proofs.Pouw.PearlC.WholeCircuit
+module
+
+public import Definitions.Accounting.Guarantees.JointLive
+public import Proofs.Core.Game.Prob
+public import Proofs.Core.Blocks
+public import Proofs.Core.Circuit
+public import Proofs.Pouw.PearlC.WholeCircuit
+public import Proofs.Accounting.Lemmas.JointLive
 
 /-!
 # Proof of the joint guarantee over a causal game
@@ -17,7 +20,7 @@ charged at its finder (`Live.sound_of_break`), not folded into its acceptance.
 A wipe's survivor bound (`Verity.Wipe.SurvivorBound`) is a bound in its own game. On a run whose coins at the
 boundary are the wipe's (`Verity.Wipe.OfRun.Preserves`), the run's event that the wipe accepts while foreign content
 past the survivor threshold survives is the preimage of the wipe's game's, so the survivor bound bounds it
-(`Verity.Wipe.OfRun.prob_kept_le`), and the horizon's union bound sums it (`JointHorizonBlocksLive`). Read with the bits
+(`Verity.Wipe.OfRun.prob_kept_le`), and the horizon's union bound sums it (`JointPooledBlocksLive`). Read with the bits
 a strategy gives back as what it keeps (`Live.kept`: all of the foreign content when it reads it back, none otherwise),
 the survivor bound at `foreignBits` is the survivor bound at a fraction `f` (at most `f · fill + 2λ` bits plus the
 unfilled state, `λ = 128`) whenever `foreignBits ≤ f · fill + 2λ` (`Live.survives_of_survivorBound`, and on the run
@@ -29,6 +32,8 @@ opens every gate to it, so no unit is unbound and the integrity claim holds at e
 (`JointPeriodLive_honest`). A one-gate circuit whose extractor reads the wrong bit fails the integrity claim on its one
 run (`JointPeriodLive_nontrivial`).
 -/
+
+@[expose] public section
 
 namespace Accounting.SecurityProofs
 
@@ -101,7 +106,7 @@ theorem Live.sound_of_break {ι : Type} {d : Device ι} {α : Type} [Fintype α]
 
 /-- **No unit is unbound** in a transcript that is an evaluation and that the openings open at every gate. -/
 theorem Live.unbound_eval {C : Verity.Circuit} {n : ℕ} (P : Verity.Partition C n)
-    (opens : (g : Fin C.N) → BitVec (C.w g) → Prop) (x : C.Transcript) (ho : ∀ g, opens g (C.eval x g)) :
+    (opens : (g : Fin C.N) → BitVec (C.w g) → Prop) (x : C.Trace) (ho : ∀ g, opens g (C.eval x g)) :
     unbound P opens (C.eval x) = ∅ := by
   refine Finset.eq_empty_of_forall_notMem fun u hu => ?_
   simp only [unbound, Finset.mem_filter, Finset.mem_univ, true_and] at hu
@@ -208,8 +213,8 @@ theorem JointPeriodLive_nontrivial : Accounting.Guarantees.JointPeriodLive_nontr
     _ ≤ _ := prob_mono (fun _ _ => ⟨.sampled, trivial, hfail⟩) _ _
 
 /-- **The joint guarantee over a horizon of periods played as one causal game**
-(`Accounting.Guarantees.JointHorizonLive`). -/
-theorem JointHorizonLive : Accounting.Guarantees.JointHorizonLive := by
+(`Accounting.Guarantees.JointPooledLive`). -/
+theorem JointPooledLive : Accounting.Guarantees.JointPooledLive := by
   intro ι α _ d m C O G r c err h s
   calc prob (fun o => ∃ j a, (r j).accepts a o ∧ ¬ (r j).Holds (c j) s a o) G s
       ≤ ∑ j, prob (fun o => ∃ a, (r j).accepts a o ∧ ¬ (r j).Holds (c j) s a o) G s :=
@@ -219,10 +224,10 @@ theorem JointHorizonLive : Accounting.Guarantees.JointHorizonLive := by
     _ ≤ _ := Finset.sum_le_sum fun j _ => Finset.sum_le_sum fun a _ => h j a s
 
 /-- **The joint guarantee over a horizon of server-time blocks and their wipes, played as one causal game**
-(`Accounting.Guarantees.JointHorizonBlocksLive`). -/
-theorem JointHorizonBlocksLive : Accounting.Guarantees.JointHorizonBlocksLive := by
+(`Accounting.Guarantees.JointPooledBlocksLive`). -/
+theorem JointPooledBlocksLive : Accounting.Guarantees.JointPooledBlocksLive := by
   intro ι α _ _ d B C O G S c σ err δPous D sched Ω Ch _ _ _ _ W foreignBits εWipe R h hW hR hM s
-  have hA := JointHorizonLive ι α d B C O G S.block c err h s
+  have hA := JointPooledLive ι α d B C O G S.block c err h s
   have hW' : prob (fun o => ∃ b, (R b s).accepts o ∧ (R b s).Kept (foreignBits b) o) G s ≤
       ∑ b, εWipe b (R b s).S_φ (R b s).hold (R b s).keep :=
     (Live.prob_exists_univ_le _ G s).trans
@@ -236,7 +241,7 @@ theorem JointHorizonBlocksLive : Accounting.Guarantees.JointHorizonBlocksLive :=
 
 /-! ## A wipe's survivor bound and the survivor bound at a fraction -/
 
-/-- **The bits of foreign content a block keeps** on the draw `x = (z, ω, c)` of the wipe's game (foreign content, seed
+/-- **The bits of foreign content a block keeps** on the sample `x = (z, ω, c)` of the wipe's game (foreign content, seed
 and spot reads), when the device's state at the boundary holds `z` by `hold` and the block reads it back by `keep`: all
 `S_φ` bits when `keep` gives back `z`, none otherwise. -/
 def Live.kept {ι : Type} {d : Device ι} {D : Verity.Circuit} {B : ℕ} {sched : Verity.Blocks D B} {b : Fin B}

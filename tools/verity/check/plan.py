@@ -7,10 +7,10 @@ COMMIT defaults to HEAD: this checkout as it is, uncommitted files included, as 
 checked out in a temporary worktree and planned there, in that tree's own environment (`DECLARED`, the declared command's `uv
 run`), by that commit's own key code: its `suites.py`, its `check.py` (`env`, `STEP_KEYS`), its `lean_audit.py` and its
 `circuit_check`.  Run it where `check` runs (a check node): the suites' and circuit-check's keys hold the interpreter, the base
-image and the installed versions, so a machine unlike the one that earned a pass never finds it.  `--on MACHINE` does that from
-anywhere the store is (`on_machine`): the packs are gathered here, and COMMIT (always a worktree of it, so committed files only)
-is planned on MACHINE by a short `research run --wait` that ships it with this plan.py, verdicts.py and those packs.  Its keys
-match passes earned on a machine of MACHINE's environment only (the vy-nebius-cpu nodes have no nvidia-smi, the GPU nodes do).
+image, the toolchains installed and the installed versions, so a machine unlike the one that earned a pass never finds it.  `--on
+MACHINE` does that from anywhere the store is (`on_machine`): the packs are gathered here, and COMMIT (always a worktree of it,
+so committed files only) is planned on MACHINE by a short `research run --wait` that ships it with this plan.py, verdicts.py and
+those packs.  Its keys match passes earned on any node of MACHINE's environment: no key names the node, its paths or its slot.
 
 Each part of the check, with its key at COMMIT and the recorded passes under that key:
 
@@ -23,8 +23,8 @@ Each part of the check, with its key at COMMIT and the recorded passes under tha
                           part, `circuit-check`, `unkeyed`: its targets' keys need the task list built (every Definition)
     lean-audit:PACKAGE    `lean_audit.key`, a pass whose report has the kernel replay (`check.lean_fast`'s rule)
     flock-rust-tests, lean-agreement, preflight-lints
-                          `STEP_KEYS`, under the step environment of each check slot here (the key reads VERITY_TEST_CACHE,
-                          which a slot sets to its own test cache), so a pass counts in the slot that earned it; preflight-lints
+                          `STEP_KEYS`, under the step environment here and, for a tree whose `check._env_key` reads
+                          VERITY_TEST_CACHE (which a slot sets to its own test cache), each check slot's; preflight-lints
                           passes too where the repository's own suite (tests/), which holds `LINTS`, passed
     lean                  `skipped`, in place of every Lean part, on a tree without the verifier's Lean package (check
                           skips its Lean group there): a skip passes nothing
@@ -32,7 +32,7 @@ Each part of the check, with its key at COMMIT and the recorded passes under tha
     ratchet-gate          no verdict, never required: it judges the merges above the check's base, not COMMIT's tree, and
                           is off the merge gate
 
-A job off the merge gate (ci.toml's `gate = false`: circuit-check, ratchet-gate) is listed, and none of its parts is required.
+A job off the merge gate (drive's policy, policy.toml's `off_gate`: circuit-check, ratchet-gate) is listed, and none of its parts is required.
 
 The steps that build or fetch what other steps read (`IMPLIED`) keep no verdict of their own.  Each is
 `implied` when every part that reads what it makes has passed (`implied_by`), and `must-run` when one hasn't.  Why those passes
@@ -49,19 +49,19 @@ answer for each:
                           (`rust_tests_key`) holds everything the build reads (the script, its pinned Flock commit and
                           toolchain, the patches, the live crate), and its tests compile those crates in release.  They don't
                           compile the `flock-circuit` binary target or the `sha512,glue` set, so an error only there is what
-                          this leaves to the post-landing run.  Implied by flock-rust-tests.
+                          this leaves to the after-landing run.  Implied by flock-rust-tests.
     lean-build            `lake build` of the verifier.  Its audit (`lean-audit:` the verifier's package) builds every file of
                           the package from the same sources and toolchain, its key holding them, and replays each declaration;
                           the suites that run its binaries are keyed by those sources (`suites.built_from`) and ran on them,
                           as lean-agreement did when the change requires it.  Implied by those.
     lean-unit-cut         `unit_cut_agree.py` on 500 random cuts against the binary lean-build built.  verity-flock's
                           `test_unit_cut_agrees_with_the_reference` runs it on the first 300 of the same seed, against the
-                          binary its key now names, so this leaves the last 200 cuts to the post-landing run.  Implied by
+                          binary its key now names, so this leaves the last 200 cuts to the after-landing run.  Implied by
                           the suite that runs it.
 
 The passes are looked up in this machine's caches (`local`: $CHECK_CACHE, $VERITY_TEST_CACHE and every check slot's test
-cache; not with --packs-only), in the verdict pack of each recorded check `gather_verdicts` would take (none with
---no-gather), in both packs of each recorded check of COMMIT and of its post-landing runs (`--deferred`, which drive runs on
+cache; not with --packs-only), in the recorded checks' verdict packs a recorded check imports (`check.verdict_packs`; none
+with --no-gather), in both packs of each recorded check of COMMIT and of its after-landing runs (`--deferred`, which drive runs on
 the `main` it landed: none with --no-gather) and of each RUN given with --from (the
 passes it stored, `verdicts.tar.gz`, and those it reused, `verdicts-reused.tar.xz`: `check.Reused`), and in each PACK given
 (which no gate cites).  A pass found in a recorded check's pack names that attempt, the pack's sha256, which `research merge
@@ -272,9 +272,12 @@ def suite_parts(C, sources: list[Source], lean: bool) -> list[Part]:
     """One part per suite, as `suites.py`'s own plan keys and finds it (its `main`), under pytest's or lean-suites' environment."""
     S = C.SUITES
     e = step_env(C)
+    on_path = getattr(S, "cargo_on_path", lambda: None)            # a tree's suites.py puts cargo on the PATH before keying
     with environ(e):
+        on_path()
         env = {"pytest": S.environment()}
     with environ(lean_env(e)):
+        on_path()
         env["lean-suites"] = S.environment()
     pkgs, suites = S.members(), S.discover()
     tree = S.worktree()
@@ -342,7 +345,8 @@ def lean_parts(C, sources: list[Source]) -> list[Part]:
 
 
 def keyed_step_parts(C, sources: list[Source], names: list[str]) -> list[Part]:
-    """`STEP_KEYS`' steps: the key under the step environment as it is here and in each check slot (its VERITY_TEST_CACHE)."""
+    """`STEP_KEYS`' steps: the key under the step environment as it is here and in each check slot (its VERITY_TEST_CACHE, which
+    a tree's older `_env_key` reads; a key that doesn't is one key under all of them)."""
     e = step_env(C)
     variants = [e, *({**e, "VERITY_TEST_CACHE": str(p)} for p in slot_caches(C) if str(p) != e.get("VERITY_TEST_CACHE"))]
     out = []
@@ -521,7 +525,7 @@ ENDED = ("done", "failed", "cancelled")
 
 
 def own_checks(store, commit: str) -> list[str]:
-    """The recorded checks of ``commit`` that ended, and its post-landing runs (`check.py --deferred`, recorded without `--tool
+    """The recorded checks of ``commit`` that ended, and its after-landing runs (`check.py --deferred`, recorded without `--tool
     check`, so found by their argv), newest first."""
     rows = store.index.sql(f"SELECT id, tool FROM attempts WHERE source_commit = ? AND state IN ({', '.join('?' * len(ENDED))}) "
                            "ORDER BY start_utc DESC", (commit, *ENDED))
@@ -537,8 +541,8 @@ def _post_landing(store, rid: str) -> bool:
 
 
 def gather(C, d: Path, a, notes: list[str], commit: str | None = None) -> list[tuple[str | None, Path]]:
-    """The packs to look passes up in: what `gather_verdicts` would take (unless --no-gather); both packs of each recorded check
-    of ``commit`` (unless --no-gather) and of each --from RUN, the passes it stored and those it reused (`REUSED`, a pack too
+    """The packs to look passes up in: those a recorded check imports (`check.verdict_packs`, unless --no-gather); both packs
+    of each recorded check of ``commit`` (unless --no-gather) and of each --from RUN, the passes it stored and those it reused (`REUSED`, a pack too
     big to take from every check); each --verdicts-in PACK."""
     from research.store.local import LocalStore
 
@@ -588,10 +592,10 @@ LAUNCHED = re.compile(r"\brun (r20\d{6}-\d{6}-[0-9a-f]{4}) launched\b")
 def on_machine(machine: str, commit: str, d: Path, packs: list[tuple[str | None, Path]], flags: list[str], out: Path,
                notes: list[str], run=subprocess.run) -> int:
     """`--on MACHINE`: plan ``commit`` on MACHINE, a check node, where the keys are that machine's (its interpreter, base image,
-    the tools on its PATH and its check slots' caches), as a `research run --wait` of a worktree of ``commit`` (`--source`,
+    the toolchains it has, and its check slots' caches), as a `research run --wait` of a worktree of ``commit`` (`--source`,
     `--cwd source`, in `REMOTE_POOL`): this checkout's plan.py and verdicts.py, sent with the run, plan that tree (`--tree .`) in its own
     environment (`DECLARED`), on the packs gathered here, sent too, since a run on a node can't fetch the store's blobs.  Its
-    shell is no login shell: a profile's PATH would key flock-rust-tests, lean-agreement and preflight-lints unlike a check's.  The
+    shell is no login shell: a profile's variables (the locale, a `VERITY_*` switch) would key every part unlike a check's.  The
     plan comes back from the run's `REMOTE_OUT` to ``out``.  Returns the run's exit, 2 when it launched none."""
     if machine == "auto" or "," in machine:
         print(f"check.py --plan --on {machine}: name one machine; its keys are that machine's", file=sys.stderr)
@@ -661,7 +665,7 @@ def inner(a) -> dict:
             rid, _, path = spec.partition("=")
             try:
                 sources.append(unpack(V, Path(path), Path(d) / str(i), rid or None))
-            except (V.BadPack, OSError, EOFError) as e:
+            except V.UNREADABLE as e:
                 notes.append(f"{rid or path}: its pack is refused ({type(e).__name__}: {e})")
         parts = plan_tree(tree, sources, a.agreement, local=not a.packs_only, own=a.own)
         commit = _git("rev-parse", "HEAD", repo=tree)

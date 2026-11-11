@@ -1,8 +1,13 @@
-import Definitions.Pouw.Dimension.Defs
-import Definitions.Pouw.Assumptions.Dimension.Pinned
-import Proofs.Pouw.NCP.RelationProofs
-import Proofs.Pouw.NCP.RelationWitness
-import Proofs.Pouw.NCP.ChainProofs
+module
+
+public import Definitions.Pouw.Assumptions.Dimension.Pinned
+public import Proofs.Pouw.NCP.ChainProofs
+public import Proofs.Pouw.NCP.RelationProofs
+public import Proofs.Pouw.NCP.RelationWitness
+import Mathlib.LinearAlgebra.FiniteDimensional.Lemmas
+import Mathlib.Tactic.Positivity.Finset
+import Proofs.Pouw.Exact
+import Proofs.Pouw.NCP.Proofs
 
 /-!
 # Theorem D: proofs
@@ -10,9 +15,11 @@ import Proofs.Pouw.NCP.ChainProofs
 * `dimLePriced`: one dimension per priced value; `count_le`, the generic count.
 * `secondDifference`: the four-point evaluation lemma, jointly over units and entries. The mixed difference kills
   `V₀` (`sd_V0`), and `A = g(F₁)` drops out because the words have no `A·E` term (`mixdiff2`).
-* `pricedCount`, `algBound` (Theorem D), `ttNCPAlg` (TT_NCP in AlgM_16 at `γ₀ = 16/(3k)`).
+* `pricedCount`, `algBound` (Theorem D), `ttNCPAlg` (TT_NCP in AlgM_16 at `g₀ = 16/(3k)`).
 * `algWitness`, `algSharp`: the hypotheses hold jointly, the bound is attained, and `16/(3k)` is sharp.
 -/
+
+@[expose] public section
 
 namespace Pouw.Dimension
 
@@ -359,9 +366,9 @@ theorem algBound : AlgBound := by
   have := h16_cost hH
   omega
 
-/-- **TT_NCP in AlgM_16** at `γ₀ = 16/(3k)`. -/
+/-- **TT_NCP in AlgM_16** at `g₀ = 16/(3k)`. -/
 theorem ttNCPAlg : TTNCPAlg := by
-  intro k m n N R A B U L P γ₀ h16 hk hind hU hL hH hout hγ hγ1 hev
+  intro k m n N R A B U L P g₀ h16 hk hind hU hL hH hout hg hg1 hev
   have hb := algBound k m n N R A B U L P hind hU hL hH hout
   obtain ⟨k', rfl⟩ := h16
   have hk' : 1 ≤ k' := by omega
@@ -372,10 +379,10 @@ theorem ttNCPAlg : TTNCPAlg := by
     push_cast [Nat.cast_sub (by omega : 1 ≤ 3 * k')] at this
     linarith
   rw [sum_const, nsmul_eq_mul] at hev
-  have hpos : 0 < 1 - γ₀ := by linarith
+  have hpos : 0 < 1 - g₀ := by linarith
   rw [div_lt_iff₀ hpos] at hev
-  push_cast at hev hγ
-  have h48 : 16 ≤ γ₀ * (3 * (16 * (k' : ℝ))) := (div_le_iff₀ (by positivity)).1 hγ
+  push_cast at hev hg
+  have h48 : 16 ≤ g₀ * (3 * (16 * (k' : ℝ))) := (div_le_iff₀ (by positivity)).1 hg
   have hX : (0 : ℝ) ≤ U.card * (m * n) := by positivity
   nlinarith [mul_le_mul_of_nonneg_left h48 hX]
 
@@ -432,9 +439,9 @@ theorem algWitness : AlgWitness := by
   exact ⟨R, honest k m n N R A B U 16, hadm, hind, coords_V0, honest_h16 le_rfl, honest_outputs,
     honest_cost _ _ _ _ _ _ _ _ _⟩
 
-/-- **`γ₀ = 16/(3k)` is sharp in AlgM_16.** -/
+/-- **`g₀ = 16/(3k)` is sharp in AlgM_16.** -/
 theorem algSharp : AlgSharp := by
-  intro k m n N R A B U γ₀ h16 hk _ hne hmn hγ
+  intro k m n N R A B U g₀ h16 hk _ hne hmn hg
   refine ⟨honest k m n N R A B U 16, honest_h16 le_rfl, honest_outputs, ?_⟩
   rw [honest_cost]
   obtain ⟨k', rfl⟩ := h16
@@ -445,16 +452,16 @@ theorem algSharp : AlgSharp := by
     have := Nat.cast_pos (α := ℝ).2 (Nat.mul_pos (card_pos.2 hne) hmn)
     push_cast at this
     exact this
-  push_cast [Nat.cast_sub (by omega : 1 ≤ 3 * k')] at hγ ⊢
+  push_cast [Nat.cast_sub (by omega : 1 ≤ 3 * k')] at hg ⊢
   have hk'R : (1 : ℝ) ≤ k' := by exact_mod_cast hk'
-  have hγ' : γ₀ * (3 * (16 * (k' : ℝ))) < 16 := (lt_div_iff₀ (by positivity)).1 hγ
-  have hpos : 0 < 1 - γ₀ := by
+  have hg' : g₀ * (3 * (16 * (k' : ℝ))) < 16 := (lt_div_iff₀ (by positivity)).1 hg
+  have hpos : 0 < 1 - g₀ := by
     have : (16 : ℝ) / (3 * (16 * k')) ≤ 1 / 3 := by
       rw [div_le_iff₀ (by positivity)]
       nlinarith
     linarith
   rw [div_lt_iff₀ hpos]
-  nlinarith [mul_lt_mul_of_pos_left hγ' hX]
+  nlinarith [mul_lt_mul_of_pos_left hg' hX]
 
 /-! ## Sanity: the degenerate cases -/
 
@@ -492,7 +499,7 @@ theorem sanity_h16_needed (k m n N : ℕ) (R : Mat) (A : (Fin k → Fin n → Fi
       cost P = U.card * (m * n) * (3 * k / 16 - 1) :=
   ⟨honest k m n N R A B U 1, honest_outputs, by rw [honest_cost, one_mul]⟩
 
-/-! ## A1 and A2 -/
+/-! ## A1 -/
 
 /-- **A1's witness.** -/
 theorem a1Witness : A1Witness := by
@@ -513,47 +520,6 @@ theorem a1Witness : A1Witness := by
   have hd : (Module.finrank ℚ V : ℝ) ≤ r := by exact_mod_cast hdim
   have h0 : (0 : ℝ) ≤ Module.finrank ℚ V := Nat.cast_nonneg _
   nlinarith
-
-/-- **A2's witness** (a trivial model). -/
-theorem a2Witness : A2Witness := by
-  intro N m n k W q
-  exact ⟨coords N m n k, q.1, coords_V0, q.2, fun φ hφ _ => hφ, by simp [algMachine]⟩
-
-/-- **TT_NCP from A2 into AlgM_16.** -/
-theorem ttNCPOfA2 : TTNCPOfA2 := by
-  intro k m n N R A B U M q γ₀ γ₂ h16 hk hind hU hA2 hout hγ₂ hγ₀ hγ hev
-  obtain ⟨L, P, hL, hH, hPout, hcost⟩ := hA2 q
-  have hb := algBound k m n N R A B U L P hind hU hL hH
-    (fun u hu p hp => hPout _ (hout u hu p hp) ⟨u, hu, p, hp, rfl⟩)
-  obtain ⟨k', rfl⟩ := h16
-  have hk' : 1 ≤ k' := by omega
-  have h3 : 3 * (16 * k') / 16 - 1 = 3 * k' - 1 := by omega
-  rw [h3] at hb
-  have hbR : (16 : ℝ) * (U.card * (m * n) * (3 * k' - 1)) ≤ cost P := by
-    have : ((16 * (U.card * (m * n) * (3 * k' - 1)) : ℕ) : ℝ) ≤ cost P := by exact_mod_cast hb
-    push_cast [Nat.cast_sub (by omega : 1 ≤ 3 * k')] at this
-    linarith
-  rw [sum_const, nsmul_eq_mul] at hev
-  have hpos : 0 < 1 - γ₀ := by linarith
-  rw [div_lt_iff₀ hpos] at hev
-  push_cast at hev hγ
-  have hk'R : (0 : ℝ) < k' := by exact_mod_cast hk'
-  have hid : (1 - 16 / (3 * (16 * (k' : ℝ)))) * (3 * (16 * k')) = 16 * (3 * k' - 1) := by
-    field_simp
-  have hX : (0 : ℝ) ≤ U.card * (m * n) := by positivity
-  have step1 : (U.card * (m * n) * (3 * (16 * (k' : ℝ)))) * (1 - γ₀) ≤
-      (U.card * (m * n) * (3 * (16 * (k' : ℝ)))) * ((1 - γ₂) * (1 - 16 / (3 * (16 * (k' : ℝ))))) :=
-    mul_le_mul_of_nonneg_left hγ (by positivity)
-  have step2 : (U.card * (m * n) * (3 * (16 * (k' : ℝ)))) * ((1 - γ₂) * (1 - 16 / (3 * (16 * (k' : ℝ))))) =
-      (1 - γ₂) * (16 * (U.card * (m * n) * (3 * k' - 1))) := by
-    rw [show (U.card * (m * n) * (3 * (16 * (k' : ℝ)))) * ((1 - γ₂) * (1 - 16 / (3 * (16 * (k' : ℝ))))) =
-      (1 - γ₂) * (U.card * (m * n) * ((1 - 16 / (3 * (16 * (k' : ℝ)))) * (3 * (16 * k')))) by ring, hid]
-    ring
-  have step3 : (1 - γ₂) * (16 * (U.card * (m * n) * (3 * k' - 1))) ≤ (1 - γ₂) * cost P :=
-    mul_le_mul_of_nonneg_left hbR (by linarith)
-  have e1 : (U.card : ℝ) * (3 * (m * (16 * k') * n)) = U.card * (m * n) * (3 * (16 * (k' : ℝ))) := by ring
-  rw [e1] at hev
-  linarith
 
 /-- **Theorem D for the protocol's checked values.** -/
 theorem algBoundWrapped : AlgBoundWrapped := by

@@ -1,13 +1,53 @@
-import Proofs.Flock.Claims.KS.ZkAbortR
+module
+
+public import Proofs.Flock.Claims.KS.ZkAbortR
+public import Proofs.Flock.Claims.KS.ZkTrimW
+import Mathlib.Algebra.Order.Floor.Extended
+import Mathlib.Algebra.Order.Interval.Basic
+import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
+import Mathlib.Analysis.SpecialFunctions.Bernstein
+import Mathlib.Analysis.SpecialFunctions.Gamma.Basic
+import Mathlib.Analysis.SpecialFunctions.Trigonometric.DerivHyp
+import Mathlib.Combinatorics.Enumerative.DyckWord
+import Mathlib.Combinatorics.SimpleGraph.Triangle.Removal
+import Mathlib.Data.NNRat.Floor
+import Mathlib.Data.Nat.Choose.Multinomial
+import Mathlib.Geometry.Euclidean.Altitude
+import Mathlib.NumberTheory.Chebyshev
+import Mathlib.NumberTheory.Height.NumberField
+import Mathlib.NumberTheory.Height.Projectivization
+import Mathlib.NumberTheory.LucasLehmer
+import Mathlib.NumberTheory.SelbergSieve
+import Mathlib.RingTheory.Radical.NatInt
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Topology.Sheaves.Init
+import Proofs.Flock.Claims.KS.Deploy
+import Proofs.Flock.Claims.KS.Range
+import Proofs.Flock.Claims.Recursion.FlockKSDeploy
+import Proofs.Flock.Claims.Recursion.FlockKSRecord
+import Proofs.Flock.Claims.Recursion.InnerAbort
+import Proofs.Flock.Claims.Recursion.KSStated
 
 /-!
 # The recursion's KS over the masked record at every number of tables, from every table's bound counted per round
 
-`ZkAbortR` at several tables, with no premise that the statement has one table. One wait over draws holds at every
+`ZkAbortR` at several tables, with no premise that the statement has one table. One wait over samples holds at every
 table's word's positions (`Claims.Recursion.opDJ`, `Claims.Recursion.firstTable_opDJ`, `Claims.Recursion.oneWaitDJ`,
-as `oneWait_of_tableBoundJ` over runs): at a draw list that does not extract, the first table that does not is not
+as `oneWait_of_tableBoundJ` over runs): at a sample list that does not extract, the first table that does not is not
 `GoodTableAt` there. Every table's bound with escapes on accepted runs counted per round
-(`Claims.Recursion.TableBoundJOnAccR`, at every statement `Flock.TableBoundJAccAtR`) gives it at the abort law
+(`Claims.Recursion.TableBoundJOnAccR`, at every statement `Flock.TableBoundJAccAtR`) gives it at the abort distribution
 (`Claims.Recursion.TableBoundJAbortR`, `Claims.Recursion.tableBoundJAbortR_of_onAccR`), so one wait there with the
 escapes and the conflict fork merged by round (`Claims.Recursion.oneWaitAbort_of_tableBoundJR`), so `Inner.KSAbort`
 wherever the statement parses where some run accepts (`Claims.Recursion.KSAbort_of_tableBoundJOnAccR`). At the masked
@@ -19,11 +59,13 @@ masked prover where some run accepts (`FlockDeploy.KS.zk_tableBoundJOnAccR_of_si
 `FlockDeploy.KS.zk_KSAbort_of_simWJ_tables`, `FlockDeploy.KS.zk_KSFlock_of_simWJ_tables`).
 -/
 
+@[expose] public section
+
 namespace Claims.Recursion
 
 open Claims Claims.Flock FlockSoundness FlockSoundness.Game FlockSoundness.Extract FlockSoundness.Rewinding
 
-/-! ## One wait over draws at every table -/
+/-! ## One wait over samples at every table -/
 
 section OneWaitDJ
 
@@ -31,15 +73,15 @@ variable {Dr Coin Col T : Type} [Fintype Dr] [Nonempty Dr] [Fintype Coin] [Nonem
   [DecidableEq Col] [Zero Col]
 
 open Classical in
-/-- **An accepted run's openings over draws** at the words' positions, its first column of table `j` at table `j`'s;
+/-- **An accepted run's openings over samples** at the words' positions, its first column of table `j` at table `j`'s;
 none on a rejected run. -/
-noncomputable def opDJ (D : Flock.Deploy Coin Col T) (N : Msg → ℕ → ℕ) (x : Msg) (tr : Dr → Trace) (d : Dr)
+noncomputable def opDJ (D : Flock.Deploy Coin Col T) (N : Msg → ℕ → ℕ) (x : Msg) (tr : Dr → Transcript) (d : Dr)
     (p : PosJ D N x) : Option Col :=
   if (tr d).out = .acc then lookCol (D.cols (tr d).seen p.1) p.2.val else none
 
 omit [Fintype Dr] [Nonempty Dr] [Fintype Coin] [Nonempty Coin] [Inhabited Coin] [DecidableEq Col] in
-/-- **On accepted draws the extractor's table is the zero-filled words.** -/
-theorem firstTable_opDJ (D : Flock.Deploy Coin Col T) (N : Msg → ℕ → ℕ) (x : Msg) (tr : Dr → Trace) (bs : List Dr)
+/-- **On accepted samples the extractor's table is the zero-filled words.** -/
+theorem firstTable_opDJ (D : Flock.Deploy Coin Col T) (N : Msg → ℕ → ℕ) (x : Msg) (tr : Dr → Transcript) (bs : List Dr)
     (hacc : ∀ b ∈ bs, AccD tr b) (p : PosJ D N x) :
     firstTable (opDJ D N x tr) (fun _ => 0) bs p =
       (lookCol ((bs.map fun d => (tr d).seen).flatMap fun v => D.cols v p.1) p.2.val).getD 0 := by
@@ -50,9 +92,9 @@ theorem firstTable_opDJ (D : Flock.Deploy Coin Col T) (N : Msg → ℕ → ℕ) 
       simp only [show (tr b).out = .acc from hacc b hb, ↓reduceIte]]
 
 omit [Fintype Coin] [Nonempty Coin] [Inhabited Coin] in
-/-- **One wait's bound over draws, from every table's bound**: `oneWaitD` at a statement of several tables, the
+/-- **One wait's bound over samples, from every table's bound**: `oneWaitD` at a statement of several tables, the
 positions every table's word's (`PosJ`). -/
-theorem oneWaitDJ (D : Flock.Deploy Coin Col T) (N : Msg → ℕ → ℕ) (x : Msg) (tr : Dr → Trace) {s : Flock.Stmt}
+theorem oneWaitDJ (D : Flock.Deploy Coin Col T) (N : Msg → ℕ → ℕ) (x : Msg) (tr : Dr → Transcript) {s : Flock.Stmt}
     (hs : D.parse x = some s) (Ok : Msg → ℕ → Col → Prop) (hz : ∀ j, Ok x j 0)
     (hok : ∀ d j q u, (tr d).out = .acc → j < nTab D x → q < N x j → lookCol (D.cols (tr d).seen j) q = some u →
       Ok x j u)
@@ -133,7 +175,7 @@ theorem oneWaitDJ (D : Flock.Deploy Coin Col T) (N : Msg → ℕ → ℕ) (x : M
 
 end OneWaitDJ
 
-/-! ## The chain at the abort law at every table, counted per round -/
+/-! ## The chain at the abort distribution at every table, counted per round -/
 
 section TableBound
 
@@ -145,7 +187,7 @@ def TableBoundJOnAccR (H : Msg → Msg) (D : Flock.Deploy Coin Col T) (N : Msg �
     Prop :=
   ∀ x, Flock.TableBoundJAccAtR H D N Ok x
 
-/-- **Every table's bound at the abort law, counted per round** (`EscapesD.FitsForkR`). -/
+/-- **Every table's bound at the abort distribution, counted per round** (`EscapesD.FitsForkR`). -/
 def TableBoundJAbortR (H : Msg → Msg) (D : Flock.Deploy Coin Col T) (N : Msg → ℕ → ℕ) (Ok : Msg → ℕ → Col → Prop) :
     Prop :=
   ∀ (x : Msg) (Ω : Type) [Fintype Ω] [Nonempty Ω] (P : Prover Ω) (A : Type) [Fintype A] [Nonempty A]
@@ -157,7 +199,7 @@ def TableBoundJAbortR (H : Msg → Msg) (D : Flock.Deploy Coin Col T) (N : Msg �
             ∃ (p : Fin (N x j)) (u : Col),
               lookCol (D.cols (abortRun H P D.V x keep ω d).seen j) p.val = some u ∧ u ≠ C p
 
-/-- **Every table's bound at the abort law counted per round, from every table's bound with escapes on accepted runs
+/-- **Every table's bound at the abort distribution counted per round, from every table's bound with escapes on accepted runs
 counted per round**: `tableBoundθAbortR_of_onAccR` at each table. -/
 theorem tableBoundJAbortR_of_onAccR (H : Msg → Msg) (D : Flock.Deploy Coin Col T) (N : Msg → ℕ → ℕ)
     (Ok : Msg → ℕ → Col → Prop) (decC : Msg → Msg → Coin) (htab : TableBoundJOnAccR H D N Ok)
@@ -173,7 +215,7 @@ theorem tableBoundJAbortR_of_onAccR (H : Msg → Msg) (D : Flock.Deploy Coin Col
     (fun s => ∃ (p : Fin (N x j)) (u : Col), lookCol (D.cols s j) p.val = some u ∧ u ≠ C p) ω
     (fun g => hb (ω, g) j hj C hC hg)
 
-/-- **Flock's one-wait bound at the abort law, from every table's bound there counted per round**: when the words
+/-- **Flock's one-wait bound at the abort distribution, from every table's bound there counted per round**: when the words
 together are no longer than `N₀` and the statement parses wherever some run accepts, `oneWaitAbort_of_tableBoundR` at
 every table's positions (`oneWaitDJ`). -/
 theorem oneWaitAbort_of_tableBoundJR (H : Msg → Msg) (D : Flock.Deploy Coin Col T) (N : Msg → ℕ → ℕ)

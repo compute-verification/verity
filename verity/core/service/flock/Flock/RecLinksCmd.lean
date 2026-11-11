@@ -1,5 +1,8 @@
-import Lean.Data.Json
-import Flock.RecLinks
+module
+
+public import Flock.JsonParse
+public import Flock.RecLinks
+public import Lean.Data.Json.FromToJson.Basic
 
 /-!
 `flock-rec-links`'s command: `Flock.RecLinks.check` on each case of a vectors file (`verity/rec-links-vectors/v1`, written
@@ -10,6 +13,8 @@ by `verity_flock.rec_links.vectors`), which `test_rec_links` holds to the Python
 A case holds the shape (`units`, `ins`, `outs`), every unit's input and output rows' words (`in_rows`, `out_rows`, by unit
 then row) and the table's rows in hex (`rows`). The code is the refusal's text before its first colon.
 -/
+
+@[expose] public section
 
 namespace Flock.RecLinksCmd
 
@@ -49,7 +54,7 @@ def cmd (args : List String) : IO UInt32 := do
   let [path] := args | IO.eprintln "usage: flock-rec-links VECTORS"; return 2
   let text ← IO.FS.readFile path
   let out : Except String (Array String) := do
-    let j ← Json.parse text
+    let j ← JsonParse.parse text
     if (j.getObjValAs? String "format").toOption != some VECTORS_FORMAT then throw s!"not a {VECTORS_FORMAT} file"
     (← j.getObjValAs? (Array Json) "cases").mapM verdict
   match out with

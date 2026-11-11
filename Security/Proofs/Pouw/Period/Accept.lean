@@ -1,6 +1,13 @@
-import Proofs.Pouw.Period.Sort
-import Proofs.Properties.Pouw.Check
-import Proofs.Properties.Pouw.Draw
+module
+
+public import Proofs.Pouw.Period.Sort
+public import Proofs.Properties.Pouw.Check
+public import Proofs.Properties.Pouw.Draw
+public import Properties.Pouw.Check
+import all Init.Data.Array.Basic
+import all Init.Data.Array.DecidableEq
+import all Init.Data.Ord.String
+import all Lean.Data.Json.Basic
 
 /-!
 # PoUW's deployed check accepts H1's honest window at the leg's parameters
@@ -8,15 +15,17 @@ import Proofs.Properties.Pouw.Draw
 The all-protocols PoUW leg (`benchmarks/all_protocols/legs/pouw.py`) checks its H1 window at `h1_params`: the
 pinned H1 tile's check item with the entries bound 1024 and no coin mode, ε = 1/2, δ = 10⁻⁶, the 3-bit grid, the range
 `[1, 2^16]` and the loop's fixed length, 4 requests of 2 decode steps (`h1Params`). A window registering the loop's
-128 real tiles is at level 39, which pads to `N = 144`, and its draw is `K′ = 24` (`kPrime_h1`:
+128 real tiles is at level 39, which pads to `N = 144`, and its sample is `K′ = 24` (`kPrime_h1`:
 `q = 1 − (1/2)·128/144 = 5/9`, `q^23 > 10⁻⁶ ≥ q^24`).
 
 `check_h1`: `protocol.check` accepts the honest registration of that window (`h1Reg`: its items the verifier's own,
-`N = 144` drawn `subset:24`) with any service answer citing it that accepted 24 ascending distinct units below 144 at
+`N = 144` sampled `subset:24`) with any service answer citing it that accepted 24 ascending distinct units below 144 at
 the profile the rule fixes (`h1Evidence`), and publishes level 39's work, `K′ = 24` and those units. `numbers_h1`: every
 window the check accepts at those parameters, registered at level 39, publishes `N = 144` and `K′ = 24`, the population
-and draw size `DrawIsCoin` reads at H1's instance.
+and sample size `SampleIsCoin` reads at H1's instance.
 -/
+
+@[expose] public section
 
 namespace Properties.Pouw.Period.SecurityProofs.Accept
 
@@ -57,8 +66,8 @@ def h1ItemList : List (String × Json) :=
 def h1Items : Json := Json.mkObj h1ItemList
 
 /-- The loop's honest registration in context `context`, for any record bytes, format, Program and partition: a served
-window registering `h1Items`, the population 144 drawn `subset:24`, the check's query and scheme, and no roots. -/
-def h1Reg (context format program partition : String) (bytes : ByteArray) : Registration where
+window registering `h1Items`, the population 144 sampled `subset:24`, the check's query and scheme, and no roots. -/
+def h1Reg (context format program partition : String) (bytes : ByteArray) : WindowCommitmentRecord where
   bytes := bytes
   format := format
   program := program
@@ -70,8 +79,8 @@ def h1Reg (context format program partition : String) (bytes : ByteArray) : Regi
   roots := #[]
   window := ⟨"served", context, h1Items, none, none⟩
 
-/-- The profile the rule fixes for it: the registered Program over one level, the partition's 144 units drawn
-`subset:24`, at δ = 10⁻⁶, 24 drawn. -/
+/-- The profile the rule fixes for it: the registered Program over one level, the partition's 144 units sampled
+`subset:24`, at δ = 10⁻⁶, 24 sampled. -/
 def h1Profile (program partition : String) : Core.Integrity where
   programs := #[program]
   prescribed := #[]
@@ -81,8 +90,8 @@ def h1Profile (program partition : String) : Core.Integrity where
   delta := ⟨1, 1000000⟩
   drawn := #[(unitLevel, 24)]
 
-/-- One-stage's answer accepting registration `c` with the rule's profile and a `subset:24` draw of `units` over 144. -/
-def h1Evidence (c : Registration) (units : Array Nat) : Evidence where
+/-- One-stage's answer accepting registration `c` with the rule's profile and a `subset:24` sample of `units` over 144. -/
+def h1Evidence (c : WindowCommitmentRecord) (units : Array Nat) : Evidence where
   protocol := oneStage
   commitment := some (Flock.hexOf c.digest)
   said := .accept (h1Profile c.program c.partition) ⟨.subset 24, 144, units⟩
@@ -135,7 +144,7 @@ theorem grid_h1 : 39 + 1 ≤ PouwWindow.level PouwWindow.gridBits (PouwWindow.fl
 
 theorem work_h1 : Work.at 3 39 = ⟨39, 128, 144⟩ := by decide
 
-/-! ## The draw: `K′ = 24` -/
+/-! ## The sample: `K′ = 24` -/
 
 /-- **`K′ = 24` at the leg's ε, δ and level**: `p = (1/2)·(128·2048)/(144·2048) = 4/9`, so `q = 5/9`, and
 `q^23 ≈ 1.34·10⁻⁶ > 10⁻⁶ ≥ q^24 ≈ 7.45·10⁻⁷`. -/
@@ -164,7 +173,7 @@ theorem sampling_h1 : PouwWindow.sampling (toRat ⟨1, 2⟩) (toRat ⟨1, 100000
 
 /-- **The loop's honest registration keeps PoUW's rule** at the leg's parameters, fixing level 39 and `K′ = 24`. -/
 theorem keeps_h1 (context format program partition : String) (bytes : ByteArray) :
-    Properties.Pouw.Check.RegistrationKeeps (h1Params context) (h1Reg context format program partition bytes)
+    Properties.Pouw.Check.RecordKeeps (h1Params context) (h1Reg context format program partition bytes)
       h1Fixed := by
   refine ⟨⟨rfl, rfl⟩, congrArg (fun o => o.getD []) keys_h1Items, length_h1, level_h1, grid_h1.1, grid_h1.2, rfl,
     sampling_h1, rfl, ?_, rfl, rfl, rfl, rfl⟩
@@ -179,7 +188,7 @@ theorem keeps_h1 (context format program partition : String) (bytes : ByteArray)
 
 /-- **The window's salt is kept**: the leg's check item names no coin mode, so the window is seeded, and the honest
 answer carries no salt. -/
-theorem saltKept_h1 (context : String) (r c : Registration) (units : Array Nat) :
+theorem saltKept_h1 (context : String) (r c : WindowCommitmentRecord) (units : Array Nat) :
     Properties.Pouw.Check.SaltKept (h1Params context) r (h1Evidence c units) := rfl
 
 /-- **The deployed check accepts H1's honest window at the leg's parameters**: on the loop's honest registration and
@@ -194,9 +203,9 @@ theorem check_h1 (context format program partition : String) (bytes : ByteArray)
     (keeps_h1 context format program partition bytes)
     ⟨rfl, rfl, rfl, rfl, rfl, rfl, rfl, rfl, rfl, hu.1, hu.2.1, hu.2.2⟩ (saltKept_h1 _ _ _ _)
 
-/-- **`DrawIsCoin`'s numbers at the leg's parameters**: every window the check accepts at them, registered at level 39
-(the loop's 128 real tiles), publishes the population `N = 144` and the draw size `K′ = 24`. -/
-theorem numbers_h1 (context : String) (c : Registration) (e : Evidence) (pub : Public) (prof : Core.Integrity)
+/-- **`SampleIsCoin`'s numbers at the leg's parameters**: every window the check accepts at them, registered at level 39
+(the loop's 128 real tiles), publishes the population `N = 144` and the sample size `K′ = 24`. -/
+theorem numbers_h1 (context : String) (c : WindowCommitmentRecord) (e : Evidence) (pub : Public) (prof : Core.Integrity)
     (hc : protocol.check (h1Params context) c e = .accept pub prof) (hl : levelOf c.window.items = some 39) :
     pub.work.n = 144 ∧ pub.sampling.k = 24 := by
   obtain ⟨f, draw, hk, -, -, rfl⟩ := Properties.Pouw.Check.acceptMeans _ _ _ _ _ hc

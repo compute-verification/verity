@@ -31,8 +31,8 @@ reuse_key = sha256 hex of canon({"derivation": drv_id, "source": <source identit
 attempt id = run id (r20260922-105905-2021)
 pr:<number>@<40-hex commit>                             a pull request at one head; only labels target it
 ckpt:<HF repo id>@<40-hex revision>                     a checkpoint at one revision; only labels target it
-task:<sha512 hex of a tasks/v1 task's key>              a check's task: the executor's verdicts on it; only labels target it
-commit:<40-hex commit>                                  a commit: drive's shadow record of the executor's check of it; only labels target it
+task:<sha512 hex of a task's key>                       a check's task: the executor's verdicts (pass, fail or error; a fail stands until an error after it, else the newest is the key's) and results on it; only labels target it
+commit:<40-hex commit>                                  a commit: the executor's task graphs of it and drive's shadow record of its check; only labels target it
 ~~~
 
 Two agents freezing the same member set produce the same snapshot id (members are sorted and de-duplicated; `name`, `note`
@@ -154,8 +154,9 @@ string, `derivation` a `drv:` id, `inputs`/`outputs` values `art:` ids, the whol
 
 `research data reindex` wipes and rebuilds it from `manifests/`, `attempts/`, `labels/` (local), then, with `--remote`,
 from the remote listing too (manifests and attempts the remote has and we lack are fetched and cached first). Deleting the
-file and reindexing gives the same query results as the incremental index (tested). Tables (denormalised; add columns freely,
-the file is disposable):
+file and reindexing gives the same query results as the incremental index (tested). Tables (denormalised; the file is
+disposable, but every worktree on the machine writes it, older code included, so no shipped table gains a column; a new column
+goes in a side table keyed like its table, as `replica_checks` is for `replicas`):
 
 ~~~text
 artifacts(id, kind, bytes, payload_type, manifest_json, local INTEGER, remote INTEGER, repo_path TEXT)
@@ -171,6 +172,11 @@ labels(target, key, value, by, ts, ref, path)
 replicas(id, location, verified_utc, detail)            verifications, which a rebuild keeps (not a local fact)
 replica_checks(id, location, verified)                  which check (§7): etag-md5 | sha256-readback
 ~~~
+
+Every write finds the rows it reads, replaces or deletes through an index (each `attempt_*` table is indexed on `attempt`;
+tested). A write holds the file's lock until it commits and every process on the machine writes this one file, so a write that
+scanned a table would hold all the others off for the pass, and a refresh's run of writes (`research queue ready`'s records
+gate) would starve them until it ended.
 
 Flattening: nested objects get dotted keys, lists numeric indices (`families.0`), scalars are stored as text (strings raw,
 everything else `json.dumps`: `true`, `null`, `1.5`); `--where` and `--label` compare that text. `local` means manifest + every
@@ -206,7 +212,7 @@ it every 5 minutes, `--public` once `store-export.env` exists (`infra/control/st
 (Neon's `store_private` with `$STORE_PRIVATE_READER_URL`, else `index.sqlite`, else the catalog), with its listing time and the
 records only here. `select` names its source and that time on stderr in every output form (`--json` stays a list), and exits 1
 when there is no index that ever listed the bucket and the catalog holds no artifact: a `research run` job's store, where an empty
-answer had read as "none" (19 Oct).
+answer would read as "none".
 
 ## 6. Tools, derivations, conditions, closures, scratch
 
@@ -370,7 +376,9 @@ algorithm: `remote-replicas/README.md`.
 - `fetch-fixtures` makes fetched entries present and exact (a tree's directory holds its files and nothing else), never writes a
   tracked file, and is offline once fetched. `suites.py` runs it first and keys each suite on the ids under its inputs.
 - `export` copies every entry and `previous` id to the export bucket (`remote.load_export`; never the store's own), blobs first.
-  A superseded id the store lacks comes from git history; one neither holds is a warning. `--verify-url` is the end-to-end test.
+  Its key may write but not read, so each object is one `PUT If-None-Match: *` (`create`; 412 = already there), and keys a
+  pass saw land, kept under the store's `export/`, aren't sent again (`--fresh` sends all). A superseded id the store lacks
+  comes from git history; one neither holds is a warning. `--verify-url` is the end-to-end test.
 
 ### 7.4 Retention on the remote — `research data gc` (`gc.py`)
 
@@ -442,8 +450,11 @@ prints the table; the groups are:
   no-dumps), `verifier`, `verifier_seconds`, `same_device` (bool), `below_bar` (bool: verified, but the whole-proof bound misses the tables' 2^-128 bar,
   so it is shown in the below-bar drill-down and never as a Table 2 cell), `outcome`; `independently_verified` (bool) is the back-fill's
   spelling of `verified` — accepted by every reader, deprecated for new writes; `verified_by` is a ledger row's free text and
-  carries no verdict — ignored; `verdict` (enum: pass | fail) on `task:<key>`, by the executor's worker, and `executor_shadow`
-  on `commit:<sha>`, by drive (`research.executor`).
+  carries no verdict — ignored; `verdict` (enum: pass | fail | error, error when no run gave a result) and `result` (a result/v1 document) on `task:<key>`, by the
+  executor's worker, `tasks_graph` and `verity_graph` on `commit:<sha>`, by the executor (the `art:` id of the
+  `tasks-graph/v1` or `verity-graph/v2` graph it listed on a worker), and `executor_shadow` on `commit:<sha>`, by drive
+  (`research.executor`); `label_auth` beside a ready mark or land verdict on `pr:<n>@<head>`, and `label_delegation` on an
+  agent's delegation target (`task:<sha512>`), each by a handle (`research.labelauth`).
 - **evidence** — probe captures and input sets: `instruction`, `model`, `model_agrees` (bool), `model_status`,
   `model_rejected`, `evidence`, `family`, `instances_dataset`, `instances_tier`, `mismatches`, `target`, `component`, `jobs`, `dtype`;
   `staged` on `ckpt:<repo>@<revision>`, when a host finished staging a checkpoint's weights (`verity-vllm records staged`).
@@ -482,12 +493,12 @@ research data refresh-fixtures [--preserve] [--dry-run] [--repo DIR] [--json]
                                               re-register every fixtures/artifacts.json entry whose bytes changed (§7)
 research data fetch-fixtures [PATH ...] [--repo DIR] [--check] [--stubs] [--public-url URL] [--no-private] [--jobs N] [--json]
                                               make the fetched registry entries under PATH present and exact (§7.3); exit 1 if any is missing
-research data export [--repo DIR] [--dry-run] [--no-previous] [--blobs FILE] [--id ART]... [--jobs N] [--json]
+research data export [--repo DIR] [--dry-run [--write-check]] [--fresh] [--no-previous] [--blobs FILE] [--id ART]... [--jobs N] [--json]
                                               copy every registry entry and its `previous` ids, and each --id, to the export bucket (§7.3)
 research data export --verify-url URL [...]   fetch all of it back through URL into a scratch store, every byte checked
 research data doctor [--clean] [--runs-dir D] [--json]
                                               run dirs holding a store_publish_error.json (§10): stale vs REAL; --clean deletes the stale ones
-research data attempt publish RUN_DIR|RUN_ID [--tool ...] [--force] | --all [--runs-dir D]   (what `research run` calls; after the fact for old runs)
+research data attempt publish RUN_DIR|RUN_ID [--tool ...] [--force] | --all [--runs-dir D]   (what `research run` calls; after the fact for old runs; a run with run custody: `research data custody RUN --publish`)
 research data pull --from MACHINE RUN --project P    (the machine is bound to a project, as for `run --on`)
 research data reindex [--remote]
 research data sql "SELECT ..." [--index] [--json]   read-only: the catalog, or the index (§5.1)
@@ -521,7 +532,7 @@ Active run state stays in the run registry; the store only ever sees completed/f
 
 With `--custody-r2` (the default with `--on`; `--no-custody-r2` opts out) the run's custody does not depend on the launcher's disk:
 the launcher mints an action-scoped temporary key
-(§7.1, local signing; `--custody-ttl`, default 6h, at most 24h, must outlast the run and its upload: `research run` refuses a `--timeout` longer than 6h without an explicit `--custody-ttl`; a run over 4 GiB gets a `size_warning`, since uploads don't resume; no `DeleteObject`/`CopyObject`) and stages it with a
+(§7.1, local signing; `--custody-ttl`, default 6h, at most 24h, must outlast the run and its upload: `research run` refuses a `--timeout` longer than 6h without an explicit `--custody-ttl`, and takes one past 24h with `--custody-ttl 24h`, warning that a run outliving its key is repaired after with `research data custody RUN --publish`; a run over 4 GiB gets a `size_warning`, since uploads don't resume; no `DeleteObject`/`CopyObject`) and stages it with a
 secret-free store.toml under `<root>/requests/<run id>/custody/` (mode 600; never in request.json, remote.json or the workload's
 environment). Without the parent key on the launcher the launch is refused. After the workload exits, the runner publishes the
 attempt with one more output, `outputs.run_record`: a `run-record/v1` tree of the run dir's files, less those `custody.select` trims

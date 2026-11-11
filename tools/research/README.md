@@ -20,7 +20,7 @@ src/research/
 ├── remote.py       --on: machines file, tool/source snapshots, request, claim-by-run-id, exclusive lock, fetch, preservation manifest
 ├── disk.py         --disk-gb admission (--queue): held on the machine while the disk would pass 80%, released at 75%
 ├── mem.py          --mem-gb admission: cgroup limit - in use - live /workspace/ramlock reservations; MemoryNotAvailable
-├── auto.py         --on auto: a CPU node's research pool (cpu-1, cpu-5, cpu-3) or node 2's queue
+├── auto.py         --on auto: a CPU node's research pool or node 2's queue, and when the run should start there
 ├── jobuser.py      --job-user: the workload as an unprivileged user in a sandboxed system unit
 ├── env.py          conditions(): the one baseline of an attempt's conditions (source, runtime, hardware, execution); ONE SKU->family map
 ├── store/          the evidence store (`research data`; README.md there is the contract): tool, tools_registry, derivation, attempt,
@@ -30,10 +30,6 @@ src/research/
 tests/              pure-Python; the machine side of --on is exercised locally (launch_request is a plain function)
 tests/fixtures/     job_v0.1.json: a record as the harness alone writes it; run_v0.2/: a finished run dir with a `store` section (state.json -> status.json at test time)
 ~~~
-
-The `telemetry` and `pods` packages were promoted from `veritor` `zk/campaign/` at
-commit `df7fbea3d` (branch `lane/r17-mprof`, 2026-09-21) and have since been
-edited here like the rest of the package.
 
 `research run` pre-writes `job.json` (the harness keeps an existing one) and
 calls the harness's `run()` directly: one execution engine, one record.
@@ -88,7 +84,7 @@ research fetch RUN [--all]               # records only, or every file sha256-ve
 research status [RUN] [--refresh] [--all] [--json]   # under each active run, a `mem` line per cgroup it executes in (scopemem.py):
                                          # current, peak, cap, growth from its own samples, NEAR CAP within 10%; remote: with RUN or --refresh
 research inspect RUN [--json|--py-spy]   # fetch, status RUN and inspect take a run another VM launched (a full id): found on
-                                         # --on NAME, else on each ssh machine, and its records fetched here
+                                         # --on NAME, else on each ssh machine but the auditor hosts, and its records fetched here
 research data SUBCOMMAND ...             # the store: put/show/fetch/select/... and lookup / pull / attempt publish
 research pods create --name N --max-hours H ... | list | terminate | check-part    # RunPod lifecycle (pods/runpod.py, pods/part.py)
 research pods extend TARGET --hours H | lease TARGET                               # the pod's lease (pods/lease.py)
@@ -107,6 +103,7 @@ research merge --canary [--tool check] [--json]                    # the gates' 
 research queue status|sync|land|eject|drive|ready|open [--dry-run]  # the merge queue on `next` (queue.py)
 research queue judge RUN [--by LANE]      # the mark `queue ready --on` writes, from its quick-tier run that ended after its caller died
 research queue stats --log FILE [--hours 24] [--until T] [--json]  # where landed PRs' time went (queue_stats.py)
+research lean-times ...  # Lean tasks' p95
 research git old2new|remap|check|build ...                              # after a history rewrite (commitmap.py, below)
 research msg send|close|read|list|names|traffic|owners|handles|subscriptions|ask-daniel|groups sync [--dry-run]   # Slack (slack.py, below)
 ~~~
@@ -158,7 +155,8 @@ one `--no-ff` merge commit each, and drive fast-forwards `checked` to the review
 stuck ready PR or a red, and the lander handles only what drive refuses. A PR is admitted when it's open (drafts too),
 names its owner (a `Lane {name}` line, else its Cursor agent id), has no hold label, and is marked ready at its head by that
 owner (`research queue ready PR --mark --by LANE`, or `--on auto` to run the quick tier first, or a `ready` label on
-`pr:{n}@{head}`). No PR waits on a person's approval or on a per-head grant. The branch holds the queue's state (each
+`pr:{n}@{head}`); `ready` and `open` only warn of a body with neither a `Goal <id>` line naming a live goal, which `open --issue KEY` writes
+from KEY's goal label, nor `Issue: none: REASON`. No PR waits on a person's approval or on a per-head grant. The branch holds the queue's state (each
 merge commit's `PR:`, `Head:` and `Owner:` trailers); a sync keeps the prefix that still matches and merges the rest again, and one post per
 root cause names each PR it leaves out. `--shadow` builds `queue-shadow`, never moves `main` and tells no one.
 
@@ -414,8 +412,11 @@ called PRESERVED without a remote; nothing in the store is ever overwritten.
   and writes the attempt manifest (write-once). One line reports it:
   `research: attempt published: N outputs drv=... reuse=...`. A publish failure
   never changes the run's exit status: it is written to
-  `store_publish_error.json` and `research data attempt publish RUN` retries
-  (also the way to publish old run dirs; `--all --runs-dir DIR` sweeps a runs
+  `store_publish_error.json` and `research data attempt publish RUN` retries;
+  a run whose attempt names its run record (run custody, `--run-record`)
+  retries with `research data custody RUN --publish`, since an attempt is
+  write-once and `attempt publish` leaves the record out (it refuses a run with
+  run custody) (also the way to publish old run dirs; `--all --runs-dir DIR` sweeps a runs
   root and prints `published / already present / refused (not terminal) /
   errors` with one line per error class). A configured-but-unusable remote
   (credential env vars unset here) does not stop a local publish: the attempt
@@ -449,7 +450,7 @@ is written for it, and a sidecar wins.
 research keep PATH --owner @LANE --expires DATE|never|7d --priority P [--regenerate CMD] [--art ART | --preserve] [--why T] [--by URL]
 research keep show PATH                      # the record covering PATH, explicit or implicit, as JSON
 research retention report [--root /workspace] [--depth 2] [--json]
-research retention gc [--root /workspace] [--force] [--high-pct 80] [--low-pct 75] [--jobs-dir D]... [--json] [--apply]
+research retention gc [--root /workspace] [--force] [--high-pct 80] [--low-pct 75] [--max-paths 200] [--jobs-dir D]... [--store S] [--json] [--apply]
 research retention rm PATH... --approved-by @OWNER --ref REF [--by URL] [--root /workspace] [--jobs-dir D]... [--json] [--apply]
 ~~~
 
@@ -457,24 +458,25 @@ research retention rm PATH... --approved-by @OWNER --ref REF [--by URL] [--root 
 a failed push records nothing. The report walks with `os.scandir` and `lstat`, never into a recorded path. It lists every recorded
 path and every area in the top `--depth` levels with no record beneath it (`unowned`): unowned and expired first, then totals.
 
-Policy `default` (`default/v0`) acts only over `--high-pct` (vy-disk-guard's 80%) or with `--force`. It deletes the lowest priority,
-then the oldest expiry, until the filesystem is under `--low-pct` (75%). A path qualifies only when its record is valid, of this node,
-expired, `low` or `normal`, and preserved or regenerable, it holds no nested record, and no file in `/workspace/pouw/fill/queue`,
-`/workspace/pouw/fill/running` or a `--jobs-dir` names it. Just before `--apply` deletes a path, its record and the job scripts are
-read again. A preserved path also needs its artifact to hold every file now under it at its size, so files custody trimmed never
-count as preserved, and `preserved.check` in head mode must find the artifact PRESERVED. An implicit record's marker must still vouch
-for the run dir (the store README's §10.1). A path without a record is never deleted. Without `--apply` gc deletes nothing and reads
-no remote; either way it prints every deletion and every skip with its reason. Its named failure: on 1 Oct node 2 held 737 GiB of
-unowned, unpreserved bitsets that nobody could decide to delete.
+Policy `default` (`default/v0`) acts only over `--high-pct` (vy-disk-guard's 80%) of blocks or inodes, or with `--force`. It deletes
+the lowest priority, then the oldest expiry, until the filesystem is under `--low-pct` (75%), at most `--max-paths` paths a pass. A
+path qualifies only when its record is valid, of this node, expired, `low` or `normal`, and preserved or regenerable, it holds no
+nested record, and no file in `/workspace/pouw/fill/queue`, `/workspace/pouw/fill/running` or a `--jobs-dir` names it. Just before
+`--apply` deletes a path, its record and the job scripts are read again. A preserved path also needs its artifact to hold every file
+now under it at its size, so files custody trimmed never count as preserved, and its stored copy `verified`, `expired` or
+`withdrawn` on the remote; one that can't be asked about fails the pass (`retention.STORED`). An implicit record's marker must still
+vouch for the run dir (the store README's §10.1). A path without a record is never deleted. Without `--apply` gc deletes nothing and
+reads no remote; either way it prints every deletion and every skip with its reason. The failure it prevents: hundreds of GiB of
+unowned, unpreserved files on a node that nobody can decide to delete.
 
 `rm` is the one way to delete data you don't own on a node, for a cleanup the policy doesn't reach. It deletes a path only when a
 record covers it (its own or an ancestor's), and that record and every record beneath it (sidecars and implicit ones) name the
 `--approved-by` handle as owner and are not `keep`. No job script may name the path, and nothing in it may be read-only or a mount. A
 path no record covers has nobody to say yes and is never deleted. The records are read again just before `--apply` deletes. Each
 decision of an `--apply` (delete, refuse, failed) is a `research/retention-log/v1` line in `/workspace/research/retention/deletions.jsonl`
-with `--by` (default `$RESEARCH_AGENT_URL`), the approver and `--ref`. Its named failure: on 3 Oct a disk cleanup ran a bare `rm -rf`
-on four FP8 passes (about 74 GB each) under `pouw/mvp-e2e`. Their record named @compute-accounting as owner until 7 Oct, but another
-lane had approved the deletion, so the passes were lost. Here that `rm` is refused with the true owner's name.
+with `--by` (default `$RESEARCH_AGENT_URL`), the approver and `--ref`. The failure it prevents: a disk cleanup's bare `rm -rf` of
+outputs whose record names another lane as owner, approved by a lane that doesn't own them, which loses them. Here that `rm` is
+refused with the true owner's name.
 
 ### Slack
 

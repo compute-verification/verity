@@ -1,20 +1,23 @@
-import Proofs.Flock.Soundness.Discharge.ZkExec.Event
-import Proofs.Flock.Soundness.Discharge.Exec.Live
+module
+
+public import Proofs.Flock.Soundness.Discharge.ZkExec.Event
+public import Proofs.Flock.Soundness.Discharge.Exec.Live
+import Mathlib.Combinatorics.Matroid.Init
 
 /-!
 # The live `--zk` audit, and the compiled `--zk` table it is simulated in
 
 The live audit is `Exec.auditLive` with the challenger's one table (`liveOf dg mPts N wr`: `liveTable`, every
-round's coins fresh and drawn after its bytes, written out by `wr`), as without `--zk`. Under `--zk` the coins come from
-the keyed coin tree committed before the prover's first message (C-Flock ZK), so this is the session with each round's
-coins fresh: the coin tree's step from that to C-Flock ZK's is `Discharge/ZkCoins`'s, an open guarantee here.
+round's coins fresh and sampled after its bytes, written out by `wr`), as without `--zk`. Under `--zk` the coins come from
+the keyed coin tree committed before the prover's first message (Flock ZK), so this is the session with each round's
+coins fresh: the coin tree's step from that to Flock ZK's is `Discharge/ZkCoins`'s, an open guarantee here.
 
 The target is a compiled `--zk` table on one table, named by its pieces in `modelTable`'s shape (the challenger's
-simulation, `Refine/LiveSim.lean`, reads exactly these), at each draw `S` and registration `R`:
+simulation, `Refine/LiveSim.lean`, reads exactly these), at each sample `S` and registration `R`:
 
 * `Cp S R`, the level-0 commitment the prover sends first (`root_B`);
 * `G S R pts r : Game (P S R)`, rep `r`'s game at link points `pts`, from its pads' commitment to its inner proof's last
-  coin, every commitment a digest message and every coin a draw;
+  coin, every commitment a digest message and every coin a sample;
 * `Op S R`, the openings sent after the last coin of both reps (level 0's rows, the pads' columns, `τ`'s opening);
 * `out S R` the table's output, and `acc S R` its verdict.
 
@@ -22,11 +25,13 @@ simulation, `Refine/LiveSim.lean`, reads exactly these), at each draw `S` and re
 session with salted commitments, its instance of these pieces and its bound against `ZkSession.sessionZK` are
 `Discharge/ZkLink`'s.
 
-`DecodesZK` is R11b at `--zk` (`Exec.DecodesAll`'s form): on every live outcome flock-verify `--zk` accepts, each rep's
+`DecodesZK` is the decoder premise at `--zk` (`Exec.DecodesAll`'s form): on every live outcome flock-verify `--zk` accepts, each rep's
 game runs on the tape decoded from its stream and its proof file, and the table's verdict on those runs, with the cap
 `root_B` decodes to and the openings the proof files decode to, holds. `simAuditZK` is the audit strategy the simulation
 builds from a live prover.
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Discharge.ZkExec
 
@@ -38,7 +43,7 @@ variable {n : ℕ} {Reg : Type} {mPts : ℕ} {P Cp Op Out : Finset (Fin n) → R
   (G : ∀ S R, (Fin 2 → Fin mPts → 𝔽) → Fin 2 → Game (P S R))
   (out : ∀ S R, Cp S R → P S R × P S R → Op S R → Out S R) (acc : ∀ S R, Out S R → Bool)
 
-/-- **The compiled `--zk` table's game at a draw**: the level-0 cap, the link points, the two reps concurrently, the
+/-- **The compiled `--zk` table's game at a sample**: the level-0 cap, the link points, the two reps concurrently, the
 openings, and the table's verdict. -/
 def sessionZC (S : Finset (Fin n)) (R : Reg) : Game Bool := (modelTable (G S R) (out S R)).map (acc S R)
 
@@ -48,7 +53,7 @@ variable [∀ S R, Nonempty (Op S R)] (I : Inputs) (wr : Finset (Fin n) → Reg 
   (fin : Finset (Fin n) → Reg → Fin 2 → Array ByteArray → List Msg)
   (capOf : ∀ S R, ByteArray → Cp S R) (N : ℕ)
 
-/-- **The decoder is right on the sessions flock-verify `--zk` accepts** (R11b at `--zk`, named): at every draw and
+/-- **The decoder is right on the sessions flock-verify `--zk` accepts** (the decoder premise at `--zk`, named): at every sample and
 registration, on every live outcome whose session directory `AcceptsZK` holds of, each rep's game runs on the tape
 decoded from its stream and its proof file, and the compiled table's verdict on those runs, with the cap `root_B`
 decodes to and the openings the proof files decode to, holds. -/
@@ -58,7 +63,7 @@ def DecodesZK : Prop :=
 
 variable {L : Law n}
 
-/-- **The simulated audit strategy**: the live prover's registration, and at each draw the simulated table strategy
+/-- **The simulated audit strategy**: the live prover's registration, and at each sample the simulated table strategy
 (`simTable`) against its live session. -/
 noncomputable def simAuditZK (hinh : ∀ S R pts r, AllInh (G S R pts r))
     (hdec : DecodesZK G out acc I wr opn dec one fin capOf)

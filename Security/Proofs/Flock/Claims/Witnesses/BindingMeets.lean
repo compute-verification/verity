@@ -1,23 +1,61 @@
-import Proofs.Flock.Claims.Sampling.Deployed
+module
+
+public import Proofs.Flock.Claims.Sampling.Deployed
+import Mathlib.Algebra.Order.Floor.Extended
+import Mathlib.Algebra.Order.Interval.Basic
+import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
+import Mathlib.Analysis.SpecialFunctions.Bernstein
+import Mathlib.Analysis.SpecialFunctions.Gamma.Basic
+import Mathlib.Analysis.SpecialFunctions.Trigonometric.DerivHyp
+import Mathlib.Combinatorics.Enumerative.DyckWord
+import Mathlib.Combinatorics.SimpleGraph.Triangle.Removal
+import Mathlib.Data.NNRat.Floor
+import Mathlib.Data.Nat.Choose.Multinomial
+import Mathlib.Geometry.Euclidean.Altitude
+import Mathlib.NumberTheory.Chebyshev
+import Mathlib.NumberTheory.Height.NumberField
+import Mathlib.NumberTheory.Height.Projectivization
+import Mathlib.NumberTheory.LucasLehmer
+import Mathlib.NumberTheory.SelbergSieve
+import Mathlib.RingTheory.Radical.NatInt
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Tactic.ReduceModChar
+import Mathlib.Topology.Sheaves.Init
+import Std.Tactic.BVDecide.Normalize.BitVec
 
 /-!
 # Binding's antecedent at the deployed sampling record
 
 The sampling `Binding` reads two openings that pass. At the deployed record (`SamplingDeploy.deploy rel c`) whether one
-passes depends on the code: the commitment's addressing of a position (`at_`), its registered ports (`own`) and the path
-an opening's data carries (`π`) are fields of `SamplingDeploy.Code`, which the tree has no concrete instance of, and a
-code that addresses nothing opens nothing (`Binding_dead`). So the antecedent is met at the code's executable check:
+passes depends on the code: the commitment's addressing of a position (`at_`), the ports a position reads under a run's
+roots (`ownAt`, the registered ports `own` unless the code sets it) and the path an opening's data carries (`π`) are
+fields of `SamplingDeploy.Code`, and a code that addresses nothing opens nothing (`Binding_dead`). So the antecedent is
+met at the code's executable check:
 
-* `Binding_meets`: **at every code, at SHA-512, an opening passes exactly when C-Flock's own registered check
-  (`Flock.Registered.opensLeaf`) accepts** its hm96 leaf at the port whose root the code addresses, at the leaf index it
-  names, through the path the opening carries. The antecedent is the executable verifier's own opening check, no
-  weaker or stronger.
-* `Binding_meets_one`: an opening passes at every code that registers one port of one leaf at the root that opening's
-  row climbs to, and addresses its leaf `0` there with an empty path (`opensLeaf_one`: the executable check accepts
-  there).
+* `Binding_meets`: **at every code, at SHA-512, an opening passes exactly when Flock's own registered check
+  (`Flock.Registered.opensLeaf`) accepts** its hm96 leaf at the port whose root the code addresses, among those its
+  position reads under its roots, at the leaf index it names, through the path the opening carries. The antecedent is
+  the executable verifier's own opening check, no weaker or stronger.
+* `Binding_meets_one`: an opening passes at every code whose position reads, under its roots, one port of one leaf at
+  the root that opening's row climbs to, and addresses its leaf `0` there with an empty path (`opensLeaf_one`: the
+  executable check accepts there).
 * `Binding_dead`: the probe that the record alone meets nothing: at a code whose `at_` addresses no position, no opening
   passes at any `H`.
 -/
+
+@[expose] public section
 
 namespace Claims.Sampling
 
@@ -30,20 +68,20 @@ theorem find?_bs_root (own : Array _root_.Flock.Registered.Port) (root : Msg) :
   funext p
   exact decide_eq_decide.2 ⟨fun h => by rw [← h, bytes_bs], fun h => by rw [h, bs_bytes]⟩
 
-/-- **Binding's antecedent at the deployed record**: at every code, at SHA-512, an opening passes exactly when C-Flock's
-registered check accepts its hm96 leaf at the port whose root the code addresses, at the leaf index it names, through
-the path the opening carries. -/
+/-- **Binding's antecedent at the deployed record**: at every code, at SHA-512, an opening passes exactly when Flock's
+registered check accepts its hm96 leaf at the port whose root the code addresses, among the ports the opening's
+position reads under its roots, at the leaf index it names, through the path the opening carries. -/
 theorem Binding_meets (rel : _root_.Flock.Readable.Parsed → _root_.Flock.Readable.Relation) (c : SamplingDeploy.Code)
     (roots : List Msg) (o : Opening Bool) :
     (SamplingDeploy.deploy rel c).commit.Opens sha512Msg roots o = true ↔
       ∃ root i reg, c.at_ roots o.pos = some (root, i) ∧
-        c.own.find? (fun p => decide (p.root = bytes root)) = some reg ∧
+        (c.ownAt roots o.pos).find? (fun p => decide (p.root = bytes root)) = some reg ∧
         _root_.Flock.Registered.opensLeaf reg
           (bytes (digBytes (H512 (hm96Input (SamplingDeploy.row c.place c.bits o) (c.salt o))))) i (bytes (c.π o)) =
           true := by
   rw [SamplingDeploy.deploy_commit]
   unfold CommitmentScheme.Opens
-  simp only [pathCommit]
+  simp only [SamplingDeploy.commit, pathCommit]
   cases hat : c.at_ roots o.pos with
   | none => simp [OC.eval]
   | some ri =>
@@ -57,7 +95,7 @@ theorem Binding_meets (rel : _root_.Flock.Readable.Parsed → _root_.Flock.Reada
       cases h0
       exact ⟨reg, h1, h2⟩
 
-/-- C-Flock's registered check accepts a row at the one leaf of a port registered at the root that row's leaf climbs to
+/-- Flock's registered check accepts a row at the one leaf of a port registered at the root that row's leaf climbs to
 with no siblings. -/
 theorem opensLeaf_one (dom payload : ByteArray) :
     _root_.Flock.Registered.opensLeaf
@@ -68,14 +106,15 @@ theorem opensLeaf_one (dom payload : ByteArray) :
   simp [_root_.Flock.Registered.opensLeaf, _root_.Flock.FV3.Sha512.leafAs, _root_.Flock.Registered.rowLeaf, h1,
     size_bytes]
 
-/-- **An opening passes at the deployed record**: at every code that registers one port of one leaf, at the root the
-opening's row climbs to with no siblings, and addresses that root's leaf `0` with an empty path. -/
+/-- **An opening passes at the deployed record**: at every code whose position reads, under the opening's roots, one
+port of one leaf, at the root the opening's row climbs to with no siblings, and addresses that root's leaf `0` with an
+empty path. -/
 theorem Binding_meets_one (rel : _root_.Flock.Readable.Parsed → _root_.Flock.Readable.Relation)
     (c : SamplingDeploy.Code) (roots : List Msg) (o : Opening Bool) (root : Msg) (dom : ByteArray)
     (hat : c.at_ roots o.pos = some (root, 0)) (hπ : c.π o = [])
     (hroot : bytes root = _root_.Flock.FV3.Sha512.climb dom (_root_.Flock.Registered.rowLeaf dom 0
       (bytes (digBytes (H512 (hm96Input (SamplingDeploy.row c.place c.bits o) (c.salt o)))))) 0 0 (bytes []))
-    (hown : c.own =
+    (hown : c.ownAt roots o.pos =
       #[{ name := "", value := "", root := bytes root, leaves := 1, words := none, wordBits := 16, domain := dom,
           readsRel := #[] }]) :
     (SamplingDeploy.deploy rel c).commit.Opens sha512Msg roots o = true := by
@@ -93,6 +132,6 @@ theorem Binding_dead (rel : _root_.Flock.Readable.Parsed → _root_.Flock.Readab
     (SamplingDeploy.deploy rel c).commit.Opens H roots o = false := by
   rw [SamplingDeploy.deploy_commit]
   unfold CommitmentScheme.Opens
-  simp [pathCommit, hat, OC.eval]
+  simp [SamplingDeploy.commit, pathCommit, hat, OC.eval]
 
 end Claims.Sampling

@@ -1,5 +1,7 @@
-import Definitions.Accounting.Guarantees.ServingBlocks
-import Definitions.Accounting.ServingBlocks.Instances
+module
+
+public import Definitions.Accounting.Guarantees.ServingBlocks
+public import Definitions.Accounting.ServingBlocks.Instances
 
 /-!
 # The serving-block bound: honest and nontrivial lemmas
@@ -12,6 +14,10 @@ conjunct the bound's negation `¬ J.total ≤ …`. `ServingBlockBound` has two 
 each premise that bounds its boundary term: `ServingBlockBound_nontrivial_bodies` (`OperationBodies`) and
 `ServingBlockBound_nontrivial_overlap` (`Overlap`, and so the boundary term itself).
 
+`UncertifiedElementary` takes no premise, so it has none to hold or drop. Its honest lemma states that its cap is
+attained at `Honest` with a right-hand side above `0`, and its nontrivial lemma that a tighter cap fails at `Straddle`:
+the cap is attained there too, and fails at the right-hand side `0`.
+
 `Honest` is a small faithful instance of a serving-block layout: a Boolean declaration with a registered input, two
 serving blocks around one wipe, an operation split across the wipe and a dark remainder. It is accepted as the honest
 instance of this structural bound, which is about one circuit: Layer 2's envelopes supply the deployed premises, each
@@ -19,6 +25,8 @@ with its probability.
 
 The proofs are in `Security/Proofs/Accounting/ServingBlocks/Witnesses.lean`.
 -/
+
+@[expose] public section
 
 namespace Accounting.Guarantees.ServingBlocks
 
@@ -70,18 +78,20 @@ def ServingBlockBoundRemote_nontrivial : Prop :=
   ¬ Counter.J.total ≤
     ∑ u ∈ Counter.S, (((univ.filter fun i => Counter.r.parent i = u).card : ℝ) * Counter.q 1 0 + 0) + 0
 
-/-- **The elementary uncertified cap's premise holds** at `Honest`: its serving blocks and dark remainder refine
-themselves. -/
+/-- **The elementary uncertified cap is attained** at `Honest`, at its serving block after the wipe with that block as
+its one inference block: the weight the inference block leaves is the split weight, which is `1`, gate 2's operation
+split across the wipe. -/
 def UncertifiedElementary_honest : Prop :=
-  Nonempty (Honest.P.Refines Honest.P)
+  Honest.J.outside (Honest.P.gates 1) (fun i : {i // Honest.r.parent i = 1} => Honest.P.gates i) =
+    Honest.J.split (Honest.P.gates 1) (fun i : {i // Honest.r.parent i = 1} => Honest.P.gates i) ∧
+  Honest.J.split (Honest.P.gates 1) (fun i : {i // Honest.r.parent i = 1} => Honest.P.gates i) = 1
 
-/-- **The elementary uncertified cap is false without refinement**: at `Counter`, the parent map `away` sends the one
-inference block, which holds the counted operation's gate, to the unit of `P₂` that holds no gate, so it is no
-refinement, and the operation's weight `1`, in `P₂`'s first unit with no inference block mapped there, is above the cap
-`split = 0`. -/
+/-- **A tighter elementary uncertified cap is false** at `Straddle`, at its serving block after the wipe with that block
+as its one inference block: the operation split across the wipe is computed wholly inside no inference block, so the
+weight left is the split weight, and the cap fails at every right-hand side below it, `0` among them. -/
 def UncertifiedElementary_nontrivial : Prop :=
-  ¬ (∀ g, Counter.P₂.unit g = (Counter.P.unit g).map Counter.away) ∧
-  ¬ UncertifiedCap Counter.J (Counter.P₂.gates 0) (fun i : {i // Counter.away i = 0} => Counter.P.gates i)
-    (Counter.J.split (Counter.P₂.gates 0) (fun i : {i // Counter.away i = 0} => Counter.P.gates i))
+  Straddle.J.outside (Straddle.P.gates 1) (fun i : {i // Straddle.r.parent i = 1} => Straddle.P.gates i) =
+    Straddle.J.split (Straddle.P.gates 1) (fun i : {i // Straddle.r.parent i = 1} => Straddle.P.gates i) ∧
+  ¬ UncertifiedCap Straddle.J (Straddle.P.gates 1) (fun i : {i // Straddle.r.parent i = 1} => Straddle.P.gates i) 0
 
 end Accounting.Guarantees.ServingBlocks

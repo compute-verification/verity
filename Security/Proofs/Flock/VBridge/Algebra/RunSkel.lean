@@ -1,12 +1,21 @@
-import Proofs.Flock.VBridge.Algebra.Rows
+module
+
+public import Proofs.Flock.VBridge.Algebra.Rows
+public import Mathlib.Algebra.Group.Nat.Defs
+import Mathlib.Algebra.Order.Floor.Semifield
+import Mathlib.Combinatorics.Matroid.Init
+import Mathlib.MeasureTheory.Integral.Bochner.Basic
+import Proofs.Flock.Soundness.Refine.Arith
 import Proofs.Flock.VBridge.Algebra.Ligerito
+import Proofs.Flock.VBridge.Algebra.Zerocheck
+import VCVio.Prelude.Core
 
 /-!
 # `run`'s residuals have one skeleton at every coin source
 
-`run` (RecAlgebra.lean:532–539) over the symbolic messages draws coins only to scale values (`sm`), to weigh them
+`run` (RecAlgebra.lean:532–539) over the symbolic messages flips coins only to scale values (`sm`), to weigh them
 (`dotV`, `kc`, `kf`, `fk`) and to fill the coin-derived points; it branches on no coin's value. The keys a residual
-holds, whether it has a constant and its products depend on the coins only through how many are drawn, which is the
+holds, whether it has a constant and its products depend on the coins only through how many are sampled, which is the
 same at any two sources that hand out rounds of the sizes asked (`Sized`). So the residuals at the zero coins and at a
 rep's coins have one skeleton whenever both runs succeed (`residualLins_skel`), and `verifierRows` returns whenever
 `structureOf` does and `run` succeeds at the rep's coins (`verifierRows_ok`).
@@ -14,6 +23,8 @@ rep's coins have one skeleton whenever both runs succeed (`residualLins_skel`), 
 The values related are linear (no products) except the zerocheck's and the lincheck's residuals, whose products are
 `mv` of message elements and so the same at both sources.
 -/
+
+@[expose] public section
 
 namespace Flock.RecAlgebra
 

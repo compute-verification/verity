@@ -1,5 +1,7 @@
-import Proofs.Flock.Claims.KS.PlainAccPrR
-import Proofs.Flock.Claims.KS.PlainLeafClashJK
+module
+
+public import Proofs.Flock.Claims.KS.PlainAccPrR
+public import Proofs.Flock.Claims.KS.PlainLeafClashJK
 
 /-!
 # The run-level half of `PlainRdInR`, at `VR rd`
@@ -21,6 +23,8 @@ and whose simulator's live outcome is that decision's view (`PlainSimRunR`).
   (`plainRawLevelColsRV`), from the J decoders' later entries (`LaterEntriesAtJK`).
 * `plainRdInR_of_sim`: `PlainRdInR rd x` from a simulator at every prover (`PlainSimAtR`).
 -/
+
+@[expose] public section
 
 namespace FlockDeploy.KS
 
@@ -133,7 +137,7 @@ theorem wrPDJK_viewR {I : Exec.Inputs} {d : Json} {mPts : ℕ} {spec : SessionSp
     (wrPDJK id I d (viewOfJ 1 mPts spec link c₁ (jAt sha512 spec sts c₁ mids f)
         (FlockDeploy.filesAt (tabsOf sts) (pointsOf spec c₁) f.ps))).proofs =
       FlockDeploy.filesAt (tabsOf sts) (pointsOf spec c₁) f.ps ∧
-    ∀ (spec' : SessionSpec) (sts' : Array Stmt) (sess : Session), setupAtD I (some d) = .ok (spec', sts') →
+    ∀ (spec' : SessionSpec) (sts' : Array Stmt) (sess : RunRecord), setupAtD I (some d) = .ok (spec', sts') →
       Record.decodeJWithK id With.std spec' (wrPDJK id I d (viewOfJ 1 mPts spec link c₁
         (jAt sha512 spec sts c₁ mids f) (FlockDeploy.filesAt (tabsOf sts) (pointsOf spec c₁) f.ps))).j = .ok sess →
       ∀ k < 2, ∀ y : StreamRec,
@@ -383,7 +387,7 @@ theorem plainR_levelOpeningD {rd : Claims.Msg → Option FinalP} {Ω : Type} {P 
 
 /-! ## The abort -/
 
-/-- **The verdict at the draw, at the parsed value, refuses an outcome without proof files**
+/-- **The verdict at the sample, at the parsed value, refuses an outcome without proof files**
 (`not_plainVerdictAtK_nil` at `plainVerdictAtJK`). -/
 theorem not_plainVerdictAtJK_nil (keep : Bool → Bool) (I : Exec.Inputs) (d : Json) {N mPts : ℕ}
     (C : Fin N → List 𝔽) (rootB₀ : Array ByteArray) {o : LiveOutJ 1 mPts} (h : o.proofs = #[]) :
@@ -396,7 +400,7 @@ theorem not_plainVerdictAtJK_nil (keep : Bool → Bool) (I : Exec.Inputs) (d : J
   subst hp
   exact not_acceptsAtDJK_nil keep I (some d) j hA
 
-/-- **The live verdict at the draw at the simulator's outcome gives an accepting run of `VR rd`**, where the
+/-- **The live verdict at the sample at the simulator's outcome gives an accepting run of `VR rd`**, where the
 simulator sends no proof files on a rejected run (`PlainSimR`'s fourth part). -/
 theorem plain_acc_of_nilR (rd : Claims.Msg → Option FinalP) {Ω : Type} {P : Claims.Prover Ω} {x : Claims.Msg}
     {ω : Ω} {mPts : ℕ} {N : Claims.Msg → ℕ} {dg : ByteArray → ByteArray} {w : Claims.Msg → Wire 65536 1 mPts}
@@ -415,7 +419,7 @@ theorem plain_acc_of_nilR (rd : Claims.Msg → Option FinalP) {Ω : Type} {P : C
 open Classical in
 /-- **A self-clash at the simulator's decoded outcome is a collision of an accepted run of `VR rd`**
 (`plainClashQ₀K` and `plainClashQLK` at `VR rd`): at a simulator of `P` that sends no proof files on a rejected run, a
-live self-clash at the verdict at the draw holds only on an accepted run of `VR rd`, whose decision's view is the
+live self-clash at the verdict at the sample holds only on an accepted run of `VR rd`, whose decision's view is the
 outcome (`PlainSimRunR`). The J decoders' entries clash (`hE`) puts two different rows of one position among the
 decision's rep rows, at level 0 or at a later level, and both are `Opening`s in the run's log against one root
 (`plainR_opening₀`, `plainR_levelOpeningD`). -/
@@ -423,7 +427,7 @@ theorem plainClashRunR_of (rd : Claims.Msg → Option FinalP) {x : Claims.Msg} {
     (hs : parse false Readable.relation x = some s) (hin : Claims.Flock.InScope false s) {ins : Ins}
     {spec : SessionSpec} {sts : Array Stmt} (hset : setupOf false x = some (ins, spec, sts)) {st : Stmt}
     {d : Json} (hd : ins.read.draw = some d) (Lf : Merkle.Leaf (List 𝔽) (List UInt8) Dig H512)
-    (T : TabSpec spec.mPts) (sch : Accounting.Schedule)
+    (T : TabSpec spec.mPts) (sch : FlockSoundness.Accounting.Schedule)
     (opn : Array ByteArray → Fin 1 → Model.Opens 𝔽 Dig × Model.Salts (List UInt8))
     (hE : ∀ o : LiveOutJ 1 spec.mPts, AcceptsAtDJK id ins.read.I (some d) (wrPDJK id ins.read.I d o) →
       ∀ pend' : Model.PendL 𝔽 Dig × Model.PendL 𝔽 Dig,
@@ -513,14 +517,14 @@ theorem plainClashRunR_of (rd : Claims.Msg → Option FinalP) {x : Claims.Msg} {
 /-! ## The rows -/
 
 /-- **An opening at the simulator's decoded outcome is a row the accepted run opens** (`plainRel_ofK` at `VR rd`): at
-a simulator of `P` that sends no proof files on a rejected run, a decoded live outcome at the verdict at the draw is
+a simulator of `P` that sends no proof files on a rejected run, a decoded live outcome at the verdict at the sample is
 an accepted run of `VR rd`, and an opening of its rep `r`'s level-`ℓ + 1` slot is a row of that level the run's level
 reader holds (`plainRawLevelColsRV`), through the J decoders' later entries (`hE`). -/
 theorem plainRel_ofR (rd : Claims.Msg → Option FinalP) {x : Claims.Msg} {s : Claims.Flock.Stmt}
     (hs : parse false Readable.relation x = some s) (hin : Claims.Flock.InScope false s) {ins : Ins}
     {spec : SessionSpec} {sts : Array Stmt} (hset : setupOf false x = some (ins, spec, sts)) {st : Stmt}
     {d : Json} (hd : ins.read.draw = some d) (Lf : Merkle.Leaf (List 𝔽) (List UInt8) Dig H512)
-    (T : TabSpec spec.mPts) (sch : Accounting.Schedule)
+    (T : TabSpec spec.mPts) (sch : FlockSoundness.Accounting.Schedule)
     (opn : Array ByteArray → Fin 1 → Model.Opens 𝔽 Dig × Model.Salts (List UInt8))
     (hE : ∀ o : LiveOutJ 1 spec.mPts, AcceptsAtDJK id ins.read.I (some d) (wrPDJK id ins.read.I d o) →
       ∀ pend' : Model.PendL 𝔽 Dig × Model.PendL 𝔽 Dig,

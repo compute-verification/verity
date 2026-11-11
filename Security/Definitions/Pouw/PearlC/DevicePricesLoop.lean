@@ -1,9 +1,11 @@
-import Definitions.Pouw.PearlC.Device
+module
+
+public import Definitions.Pouw.PearlC.Device
 
 /-!
 # The RTX PRO 6000's W1 prices in the measured loop (definitions only, staged)
 
-γ's price rule computes γ at the issue-bound FP32 add (`Prices.sm120`, 8.00) and at the measured in-loop one (8.376),
+The gap's price rule computes g at the issue-bound FP32 add (`Prices.sm120`, 8.00) and at the measured in-loop one (8.376),
 and publishes the larger. This file holds the in-loop record (node 2 at
 locked 2,100 MHz, the runs `DevicePrices` cites):
 * an FP32 add is 8.376 per word (3 loop instructions per 64);
@@ -13,14 +15,16 @@ locked 2,100 MHz, the runs `DevicePrices` cites):
 * the A-only forming is one FFMA on every 8th element at 8.376, 1.047 per element.
 
 `Costs` counts the forming in whole units, so the record rounds the A-only forming up to `qa = 2`. That raises `W_ref`
-and not the credit, so it raises γ at every shape: γ here is above γ at the measured 1.047 (0.37349% against 0.36218%
+and not the credit, so it raises g at every shape: g here is above g at the measured 1.047 (0.37349% against 0.36218%
 for v2 at the cap 1/1,000, 8192³). The add is exact.
 -/
+
+@[expose] public section
 
 namespace Pouw.PearlC
 
 /-- sm_120's W1 prices in the measured loop: an FP32 add `1047/125 = 8.376`, a BF16 MAC 2, credited forming 40 (the
-cast at its cheapest 8.0) and A-only forming 2 per element (1.047 measured, rounded up so that γ does not fall). -/
+cast at its cheapest 8.0) and A-only forming 2 per element (1.047 measured, rounded up so that g does not fall). -/
 def Prices.sm120Loop : Prices := ⟨1047 / 125, 2, ⟨40, 2⟩⟩
 
 end Pouw.PearlC

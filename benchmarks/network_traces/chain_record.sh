@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # The network chain's run of record (chain_record.py) on a CPU machine, from the gate's fetched tarballs, on hidden_zk's
-# builds (its job.sh, sourced: Flock's flock-circuit and the Lean flock-verify, the verifier of record) with the
-# firewall's Lean frame, N2's network-records and the sampled-proofs verifier built in the tree. From a clone, in one of
+# builds (its job.sh, sourced: Flock's flock-circuit and the Lean flock-verify, the verifier) with the
+# ZK server's Lean frame, N2's network-records and the sampled-proofs verifier built in the tree. From a clone, in one of
 # the network slots, as a job of at most 240 minutes on a CPU node whose input is the gate's tarball GATE.tgz:
 #   env CHECK_SLOTS=/workspace/research/locks/network/slots python3 tools/verity/check/slot.py --by LANE -- \
 #     env CR_MEM_GB=128 CR_GATES=GATE.tgz bash benchmarks/network_traces/chain_record.sh
@@ -11,8 +11,8 @@
 #            certified records held by the Lean's audit, network-records (chain_record.py certs)
 #   endpoint with CR_ENDPOINT, the endpoint's own advice bound to the run and the I/O tie on it, both in the clear
 #            (network-e2e's e2e.py --no-prove: chain.served_advice and chain.tie)
-#   n2       N2's units proved by Flock --zk and decided by its verifier of record, Lean included: CR_N2_CMD
-#            (a sampled draw on signed clocks); else n2_zk.py prove, and on the advice profile, whose egress counts no
+#   n2       N2's units proved by Flock --zk and decided by its verifier, Lean included: CR_N2_CMD
+#            (a sampled sample on signed clocks); else n2_zk.py prove, and on the advice profile, whose egress counts no
 #            N2 unit holds, not run
 #   scan     the scan's chained units, --zk, held by Lean verify --zk --registered (scan_zk.py prove, with
 #            --warden-run when CR_WARDEN_RUN names the gate's warden run and scan_zk takes it)
@@ -23,27 +23,29 @@
 #            $OUT/leak-guard.json), and the rest of the hold released to $OUT
 # CR_PATH=warden is the warden path: every step reads the active warden's own run (CR_WARDEN_RUN, or the one gate run
 # holding a certified.jsonl) and nothing of a certifier rehearsal's, which in CR_GATES is refused by name: certs
-# --warden-run, endpoint (chain_record.py endpoint, the advice bound to the certified I/O off the warden's cells),
-# n2_zk.py prove --warden-run, the tie and the scan; the report requires every one (chain_record.WARDEN).
+# --warden-run, endpoint (chain_record.py endpoint, the advice bound to the certified I/O off the network certifier's
+# cells), n2_zk.py prove --warden-run, the tie and the scan; the report requires every one (chain_record.WARDEN).
 # env: CR_MEM_GB (what job.sh's stages may take, within the slot's)
 #      CR_GATES (space-separated: a tarball's name under the run's inputs/, an art: id, or a directory)
 #      CR_CLIENT (the client's kept files, a path under the unpacked gates; by default the certifier rehearsal's
 #      own client/, else its honest directory, never a file of another gate run)  CR_DEPLOYED=1 (certs refuses a key that
 #      isn't LMS at lms.DEPLOYED, H = 20)
 #      CR_ENDPOINT (the endpoint's records, network_e2e chain.ENDPOINT's four files: a tarball's name under inputs/,
-#      an art: id, or a directory; on the warden path it may be the served node's endpoint report instead, a
+#      an art: id, or a directory; on the network certifier path it may be the served node's endpoint report instead, a
 #      report.json beside no advice_trace.jsonl, which the endpoint step then reads rather than runs)
 #      CR_N2_ROUNDS (n2_zk.py's --rounds)
 #      CR_N2_CMD (replaces the above; run with HONEST, CLIENT, BIN, LEAN, E2E and N2OUT set, writing N2OUT/summary.json)
-#      CR_WARDEN_RUN (the warden rehearsal's run, a path under the unpacked gates)  CR_SCAN_ARGS (more scan_zk.py
-#      arguments, e.g. "--draw 8")  CR_SCAN_CMD (replaces scan_zk.py prove; SCANOUT/summary.json)
-#      CR_PATH=certifier-only (the records are the certifier rehearsal's alone, with no warden rows: the scan isn't run
-#      or required, and the report names what that path stubs, chain_record.STUBBED)
-#      CR_PATH=warden (above)  CR_EOS_IDS (the warden path's endpoint step: the model's EOS token ids, comma-separated,
-#      e.g. 128001 for Llama-3.2-1B; a warden run records none)  CR_TIE_WINDOWS (the tie's execution phases, the run's all
+#      CR_WARDEN_RUN (the network certifier rehearsal's run, a path under the unpacked gates)  CR_SCAN_ARGS (more
+# scan_zk.py      arguments, e.g. "--draw 8")  CR_SCAN_CMD (replaces scan_zk.py prove; SCANOUT/summary.json)
+#      CR_PATH=certifier-only (the records are the certifier rehearsal's alone, with no active network certifier's rows:
+# the scan isn't run      or required, and the report names what that path stubs, chain_record.STUBBED)
+#      CR_PATH=warden (above)  CR_EOS_IDS (the network certifier path's endpoint step: the model's EOS token ids,
+# comma-separated,      e.g. 128001 for Llama-3.2-1B; a network certifier run records none)  CR_TIE_WINDOWS (the tie's
+# execution phases, the run's all
 #      by default)  CR_TIE_GPU=1 and CR_N2_GPU=1 (the tie's and N2's provers on the GPU)  CR_N2_DRAW (n2_zk.py's
-#      --draw K: N2's period sampled, K of the link-windows drawn on the verifier's coins; every one by default)
+#      --draw K: N2's period sampled, K of the link-windows sampled on the verifier's coins; every one by default)
 #      CR_AUDIT (the served units' compute audit windows, space-separated directories: the report's --audit, d1's K)
+#      CR_PINS (the verifier's own pins, a JSON {param: root}: the report's --pins, the registered rows K leaves out)
 #      CR_PERIOD_ANSWER (certifier/v0's network-period check answer on the period, X.answer.json with its case
 #      X.case.json beside it, a path or a name under inputs/) and CR_SERVER (the node the block ran on): network-period
 #      is built, and an accepted report whose answer is this chain's and network-period's own on its case also writes
@@ -52,12 +54,12 @@
 #      in jobs of its own)  CR_CACHE (the build cache; hidden_zk's by default)
 #      CR_QUARANTINE (where what the record mustn't hold goes, 0700 and outside the run dir: by default quarantine/RUN
 #      beside the runs root, /workspace/research/quarantine/RUN on a node, kept until its owner removes it)
-# n2 runs, then (on the warden path) the tie, then scan: outer proofs go through the ZK server one at a time
-# (n2_zk.ONE_SESSION), so no two of their provers' firewalled sessions overlap.
+# n2 runs, then (on the network certifier path) the tie, then scan: outer proofs go through the ZK server one at a time
+# (n2_zk.ONE_SESSION), so no two of their provers' ZK server sessions overlap.
 # Kept in $OUT: the steps' records and logs, the public files and everything each verifier received; never a prover's
 # file (inst-*, prover-instances.bin, instances.bin) nor a circuit (its pin is kept), a session's archive, a signer's
-# state, a gate run's witness/ (custody uploads all of $OUT; a warden run's witness is its lane key's only) nor a
-# rehearsal's request values (plan.json's and probe.json's requests, io.json's certified I/O, out-witness.jsonl's rows).
+# state, a gate run's witness/ (custody uploads all of $OUT; a network certifier run's witness is its lane key's only)
+# nor a rehearsal's request values (plan.json's and probe.json's requests, io.json's certified I/O, out-witness.jsonl's rows).
 # Custody publishes the whole run dir once this exits (out/, the runner's logs, and undeclared files, inputs/ among
 # them), so none of it may hold the gates' witness. Every step writes to the hold, $Q/held (0700, outside the run dir),
 # and so does the job's own stdout and stderr (released as out/stdout.log), so nothing it writes reaches the record
@@ -198,7 +200,7 @@ elif [ -n "${CR_ENDPOINT:-}" ]; then
   mkdir -p "$OUT/endpoint"; cp "$E2E"/report.json "$E2E"/report.md "$E2E"/endpoint/advice.log "$OUT/endpoint/" 2>/dev/null
   [ -d "$E2E/rehearsal" ] || ln -s "${HONEST%/honest}" "$E2E/rehearsal"
 fi
-(cd verity/core/service/sampled_proofs && lake build sampled-proofs-verifier) > "$OUT/build-sampled-proofs.log" 2>&1 \
+(cd verity/core/service/spot && lake build sampled-proofs-verifier) > "$OUT/build-sampled-proofs.log" 2>&1 \
   || { tail -40 "$OUT/build-sampled-proofs.log"; exit 7; }
 export FC_FIREWALL_LEAN=${LEAN%/*}/flock-firewall
 (exec 8>"${LEAN%/.lake/*}.firewall.lock"; flock 8; [ -x "$FC_FIREWALL_LEAN" ] || (cd "${LEAN%/.lake/*}" && lake build flock-firewall)) \
@@ -278,7 +280,7 @@ EOF
 PA=${CR_PERIOD_ANSWER:-}; [ -z "$PA" ] || [ -e "$PA" ] || PA=${RESEARCH_RUN_DIR:?}/inputs/$PA
 "$PY" "$CR" report --custody "$OUT/custody.json" --certs "$OUT/certs.json" --endpoint "$OUT/endpoint/report.json" \
   $( [ -n "${CR_SCAN_ONLY:-}" ] || echo --n2 "$OUT/n2/summary.json") --scan "$OUT/scan/summary.json" --job "$OUT/job.json" \
-  $( [ -f "$W/scan.warden" ] && echo --warden-run "$(cat "$W/scan.warden")") ${CR_AUDIT:+--audit $CR_AUDIT} \
+  $( [ -f "$W/scan.warden" ] && echo --warden-run "$(cat "$W/scan.warden")") ${CR_AUDIT:+--audit $CR_AUDIT} ${CR_PINS:+--pins "$CR_PINS"} \
   $( [ "${CR_PATH:-}" = warden ] && echo --tie "$OUT/tie/summary.json") \
   ${PA:+--period-answer "$PA"} ${CR_SERVER:+--server "$CR_SERVER"} --out "$OUT/report" | tee -a "$OUT/job.log"
 rc=${PIPESTATUS[0]}

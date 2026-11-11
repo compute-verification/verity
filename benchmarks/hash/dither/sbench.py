@@ -12,7 +12,7 @@ Measures, per arm and rep:
                      run at vLLM's own max_num_seqs and max_num_batched_tokens, not --t's (summary's scheduler_by_arm,
                      with each engine's KV tokens: --arm-mem gives an arm the memory share its batch needs).  With sat
                      in --ops the warm-up runs one such generate first (its batches' graphs and compiles, a -we arm's
-                     spill pool grown to that window: about 218 MB a step at m 256 under -wea, so $DITHER_SPILL_MAX_GB
+                     spill pool grown to that execution phase: about 218 MB a step at m 256 under -wea, so $DITHER_SPILL_MAX_GB
                      and the lease's memory sized for T 256's ~800 steps), and each rep's tokens are held to its
                      reference arm's (summary's gate_tokens_equal_ref_arm, under ops=sat alone)
 and the gate: each arm's greedy token ids on the 32 requests equal `stock`'s (an arm that changes no served value must).
@@ -43,7 +43,7 @@ Arms:
                  next step (`dither_fused.patch(rc="side")`); the `h1f` launches compute z and y only
     dither-1s    exact with every linear's y from Dither's one stream (`dither_one`, `h1o.cu`, H1V3): y = dequant(O' -
                  sum_d 128^d D_d) from the noised mainloop the call's receipts fold, z that O; the call's A table, seeds
-                 (the window's salt and root(A_j), root(B_j): epsilon 'seeded') and units in the forward; admit and z
+                 (the execution phase's salt and root(A_j), root(B_j): epsilon 'seeded') and units in the forward; admit and z
                  tables, the step trees, the round and the receipt trees between steps.  It serves the dithered product, so
                  its tokens are not exact's (reported, not gated)
     dither-1s-credit  dither-1s on an eager engine with every linear's `apply` inside the credit gate
@@ -76,7 +76,7 @@ Arms:
                  -hbr in one run and held to its every gate), with its own libh1c.so where DITHER_H1C_KC names one
                  (sbench.sh's HB_KC_H1C_FLAGS) and its own DITHER_ZY1 where DITHER_ZY1_KC is set (1: -zy's z and y
                  tables in one h1c_build, `dither_a.ZY1_ENV`).  Each with -zy commits the per-unit z/y leaves (one hiding leaf a
-                 32 x 32 unit holding its z and its y = dequant(z): the epilogue writes the records, the window
+                 32 x 32 unit holding its z and its y = dequant(z): the epilogue writes the records, the execution phase
                  builds every call's table between steps),
                  and with -y commits no z at all (y only: the leaves' cost floor, never credited; its gate is its
                  tokens).  With -ao after those, the A tables run on a stream of
@@ -99,20 +99,20 @@ Arms:
                  priority), round s's trees build beside step s + 1's forward from ring copies
                  of what forward s wrote and step s's units go out as soon as coin s is back; its gate adds that round s
                  covers forward s's values while built once forward s + 1 had started, and fault_ring.  With -we
-                 last, each window ends (`SoWindow.end`: the tail's units after their coins, their receipts under a
+                 last, each execution phase ends (`SoWindow.end`: the tail's units after their coins, their receipts under a
                  final round, the manifest root, the sampling coin after it): in process at the end of each generate,
-                 inside its time (the next window's challenger made after it), its gate adds the ended window's
+                 inside its time (the next execution phase's challenger made after it), its gate adds the ended execution phase's
                  checks and two end faults (fault_tail, fault_late_receipt, `dither_so.check_end`); off the node the
-                 session's one window ends at its layout's last step (DITHER_CHALLENGERS' "rounds"), served there at
+                 run's one execution phase ends at its layout's last step (DITHER_CHALLENGERS' "rounds"), served there at
                  the arm's stop, its manifest in OUT (`dither_manifest`) and its checks in stop.json.  Under -we each
                  step's live A rows, scales and z/y records go to pinned host memory as their ring slot retires and
-                 stay until the window's sample (`dither_so.Spill`, about 291 MB a step at T 64, m 32; the pool grown
-                 in the warm-up, bounded by $DITHER_SPILL_MAX_GB), and the ended window's check opens three of its
+                 stay until the execution phase's sample (`dither_so.Spill`, about 291 MB a step at T 64, m 32; the pool grown
+                 in the warm-up, bounded by $DITHER_SPILL_MAX_GB), and the ended execution phase's check opens three of its
                  steps from them; -wea (`-so<D>[-ov...]-wea`) holds A and the scales alone (about 27 MB a step), z/y
                  recomputed from them at an opening
     ARM-xl       any dither arm with `verity_int8::row_quant`'s CUDA body exactlin's quantizer (`exactlin.install`, which
                  serves `scaled_mm` from exactlin's GEMM too; the dither arms call row_quant only): the same xq and s_a, so
-                 ARM's gate and reference arm, and its tokens gated as ARM's are; sbench.sh and hb_served.sh run exactlin's
+                 ARM's gate and reference arm, and its tokens gated as ARM's are; sbench.sh runs exactlin's
                  kgate.py in the lease before an -xl or exact-fused arm is timed
     ARM-a2       any dither arm with each call's A table from `h1c_a_call2_k` (DITHER_A_FORM=2: the same table, its
                  compressions paired); ARM-a3 from `h1c_a_call3_k` (DITHER_A_FORM=3: paired, its messages in registers);
@@ -124,15 +124,15 @@ Arms:
                  own worker's environment, so one run times the units' forms and shares side by side (ARM-j10r-smq9o16)
     ARM-zy1      a dither-a-hbc arm with DITHER_ZY1_KC=1 (its z and y tables in one h1c_build), whatever the run's
                  environment sets
-    ARM-kcb      a dither-a-hbc arm on a second h1u_kc build ($HB_H1U_KC_B, e.g. hb_served.sh's HB_KC_FLAGS_B), timed beside
+    ARM-kcb      a dither-a-hbc arm on a second h1u_kc build ($HB_H1U_KC_B, sbench.sh's from HB_KC_FLAGS_B), timed beside
                  ARM on $HB_H1U_KC's
     ARM-cgp      a dither-a-so arm serving at priority (DITHER_SO_PRIO=1) with vLLM's graphs captured at it too
                  (DITHER_SO_CAPTURE_PRIO=1, `dither_so.capture_at`).  Under SMQ units it keeps every step in the fast
-                 regime while the units' span plus lm_head's 0.7 ms covers the step's cycle: without it, a step whose
+                 regime while the units' span plus lm_head's covers the step's cycle: without it, a step whose
                  units drain before the next dispatch lets them refill their SMs ahead of lm_head, which then runs on
-                 the forward's SMs alone (2.9 ms, not 0.7) and the next steps stay slow.  Under it, h1u's H1U_JXS units
-                 stall on some steps (b32 and b64: their span about 2.3 times the median, the serving stream waiting
-                 about 20 ms on them), which their length doesn't explain: H1U_JPI's units, as long, never do, nor do
+                 the forward's SMs alone, slower, and the next steps stay slow.  Under it, h1u's H1U_JXS units
+                 stall on some steps (b32 and b64: their span well past the median, the serving stream waiting
+                 on them), which their length doesn't explain: H1U_JPI's units, as long, never do, nor do
                  H1U_JCS=2's, shorter; DITHER_SO_PREQ=0 makes the stalls rarer without removing them
     ARM-mc32     a dither arm whose worker has 32 hardware queues (CUDA_DEVICE_MAX_CONNECTIONS=32, set before its engine
                  makes the CUDA context)
@@ -153,8 +153,8 @@ Arms:
                  ending -DH1U_JCTA=1 -DH1U_WARPS=4 (sbench.sh's dither-a-hbc build); at 45/64 under ARM-cgp:
                  dither-a-hbc-zy-aomn-pt-so8-wea-rd0-smq45o64-cgp-mmq, the same build
 
-`gate` (--gate, before the reps): exact and dither each generate GATE_TOKENS tokens for the 32 requests; dither's window
-checks one B32 decode step (`dither_fused.check`, its transcript buffers 0xA5 before the kernels wrote them) and refuses
+`gate` (--gate, before the reps): exact and dither each generate GATE_TOKENS tokens for the 32 requests; dither's execution phase
+checks one B32 decode step (`dither_fused.check`, its trace buffers 0xA5 before the kernels wrote them) and refuses
 its no-write control (a later B32 step whose kernels write none of them), and its tokens must equal exact's (dither-1s:
 `dither_one.check` on its gate, control, fault and fault_wb steps, and peeled fault_xa, tokens reported), under a CUDA
 profiler range and the NVTX range GATE_RANGE/<arm> (nsys --capture-range=cudaProfilerApi; kernels.py counts the dither worker's
@@ -176,20 +176,20 @@ so a run profiles one arm: under DITHER_NSYS=prof the gate runs unprofiled, so a
 --prefill: every request a T-token prompt (`prefill_prompts`, token ids cycled from the prompts) with one output token, so
 at max_num_batched_tokens = T each request is one step of m = T, a whole prompt in one chunk (max_model_len T + 64).
 `prefill` (an op): PF[0] and then PF[1] requests a generate, prefill_step_ms their difference over PF[1] - PF[0] (each
-generate's own overhead and, in process, its window's end cancel), and ttft_ms the median of PF_TTFT one-request
-generates (llm.generate alone; ttft_end_ms with an in-process -we window's end after it).  `prof` takes PF's counts of
+generate's own overhead and, in process, its execution phase's end cancel), and ttft_ms the median of PF_TTFT one-request
+generates (llm.generate alone; ttft_end_ms with an in-process -we execution phase's end after it).  `prof` takes PF's counts of
 requests in place of PROF_N's tokens.  The gate arms PF_CAPTURES at m = T (the decode gate's faults are not armed) in a
 generate of len(PF_CAPTURES) + gate_extra requests, each capture copied to host memory (dither_so.CAP_HOST_ENV) and its
 leaves hashed in a pool (dither_a.CHECK_WORKERS_ENV, default PF_CHECK_WORKERS); its verdict `prefill_verdict`, and the
 token gate a generation of GATE_TOKENS tokens for PF_GATE_REQS prefill requests (chunked prefill, then decode), equal to
-the reference arm's.  Under -we the end gate is not run.  A Dither window at T = 2048 needs most of a 96 GB GPU, so a
+the reference arm's.  Under -we the end gate is not run.  A Dither execution phase at T = 2048 needs most of a 96 GB GPU, so a
 prefill row runs --serial: each arm's engine alone, built, gated, timed and stopped before the next (its reference first).
 
-Coins: a dither arm's window takes its round coins from the challenger off the node when its worker has a session
+Coins: a dither arm's execution phase takes its round coins from the challenger off the node when its worker has a challenge phase
 (DITHER_CHALLENGERS' entry for the arm, ``{"ARM": {"session": ID, "address": "127.0.0.1:PORT", "secret_file": F,
 "commitment": HEX, "rounds": R}}``, each its own from the challenger's gate, `coins.py open` (R its --rounds, the layout a
-dither_so window takes), else $POUW_CHALLENGER, $POUW_CHALLENGER_SESSION,
-$POUW_CHALLENGER_SECRET_FILE and $POUW_CHALLENGER_COMMITMENT), one session a window, opened at the window's build (its
+dither_so execution phase takes), else $POUW_CHALLENGER, $POUW_CHALLENGER_SESSION,
+$POUW_CHALLENGER_SECRET_FILE and $POUW_CHALLENGER_COMMITMENT), one challenge phase per execution phase, opened at the execution phase's build (its
 hello's commitment held to HEX) and closed at the arm's stop; without one they are in-process, and the arm's stats say
 ``coins: in-process (not certified)``.
 
@@ -200,8 +200,8 @@ timed beside itself with a knob set.  SBENCH_TIME_AT=HH:MM (UTC) holds the reps 
 the engines built and gated before it; sbench.sh's SBENCH_TIMED=1 takes the lease such a window grants (gpu-lease --timed).
 
 --bw-passes GIB runs PoUB's passes beside the arms on their GPU once every arm is built, warm and
-gated (`dbw.py`: the prover's calibration beside the dither arms' decode ops, an idle session, each rep an off block of
-every arm's ops and an on block inside a session's passes, and a tampered session beside each dither arm; summary.json's
+gated (`dbw.py`: the prover's calibration beside the dither arms' decode ops, an idle run, each rep an off block of
+every arm's ops and an on block inside a run's passes, and a tampered run beside each dither arm; summary.json's
 "bw", per_arm's TPOT the off blocks' alone).  Not with --serial, whose arms are never up together.
 
     python sbench.py --out OUT [--arms stock,exact,dither] [--reps 3] [--t 64] [--ops decode] [--gate] [--bw-passes GIB]
@@ -218,8 +218,16 @@ import statistics
 import sys
 import time
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 from verity_config.settings import of
+
+if TYPE_CHECKING:
+    from collections.abc import Callable
+    from multiprocessing.connection import Connection
+
+    from transformers import PreTrainedTokenizerBase
+    from vllm import LLM
 
 settings = of(__file__)
 HERE = Path(__file__).resolve().parent
@@ -259,7 +267,7 @@ def prefill() -> bool:
     return settings.get(PREFILL_ENV)
 
 
-def prefill_prompts(tok, n: int, t: int) -> list[dict]:
+def prefill_prompts(tok: PreTrainedTokenizerBase, n: int, t: int) -> list[dict]:
     """n prompts of t token ids each, request i's from offset 61 i of the prompts' ids cycled (no two alike)."""
     ids = tok.encode(" ".join(prompts(64)))
     need = t + 61 * n
@@ -312,7 +320,7 @@ def stock_args(gpu_mem: float) -> dict:
     return engine_args(gpu_mem, own_batch=settings.get(OWN_BATCH_ENV))
 
 
-def scheduler_of(llm) -> dict | None:
+def scheduler_of(llm: LLM) -> dict | None:
     """The engine's resolved batch and its KV cache's tokens: what a stock arm under --stock-own-batch really ran at,
     and whether its memory share, not its scheduler, bounded its concurrency at saturation."""
     try:
@@ -334,7 +342,7 @@ DISABLED = {"stock": "CutlassInt8ScaledMMLinearKernel", "stock-percall": "Cutlas
             "stock-humming": "CutlassInt8ScaledMMLinearKernel,TritonInt8ScaledMMLinearKernel"}
 
 
-def kernels_of(llm) -> dict:
+def kernels_of(llm: LLM) -> dict:
     """The linear kernels the engine's layers really run: class name -> layers."""
     from verity_vllm.engine import handle
     seen: dict = {}
@@ -355,13 +363,13 @@ def install_exactlin() -> None:
         exactlin._sbench_installed = True
 
 
-def a_form(f: int):
+def a_form(f: int) -> Callable[[], None]:
     def set_form() -> None:
         os.environ["DITHER_A_FORM"] = str(f)
     return set_form
 
 
-def env_of(name: str, value: str | None):
+def env_of(name: str, value: str | None) -> Callable[[], None]:
     def set_env() -> None:
         if value is None:
             os.environ.pop(name, None)
@@ -384,8 +392,8 @@ def mm_cfg() -> None:
 
 # ARM-mmq's $DITHER_MM_CFG by the units' "Q/D" ($DITHER_SO_UNITS_SMQ's): dmmsweep.py --block Q/D's best.json
 # dither_mm_cfg, the m=64 entries the 11/16 sweep's.  The forward's GEMMs run on the SMs the units leave them, so a config
-# holds at the SMQ it was tuned at alone (at 47/64, 11/16's configs cost 1.7 ms a step).  45/64 takes 47/64's: dmmsweep
-# --block 45/64's own best, timed with the units beside it, slowed both the forward and the units (18.25 ms, not 16.8)
+# holds at the SMQ it was tuned at alone (11/16's configs make a 47/64 step slower).  45/64 takes 47/64's: dmmsweep
+# --block 45/64's own best, timed with the units beside it, slowed both the forward and the units
 MM_CFGS = {"47/64": "6144,4096,32=32x32x128:w4:s3:k1+4096,4096,32=32x32x256:w4:s3:k1:t1+28672,4096,32=32x64x128:w4:s2:k1"
                     "+4096,14336,32=32x32x256:w4:s3:k1+4096,4096,64=32x64x256:w8:s4:k3+4096,14336,64=32x64x512:w8:s3:k3"}
 MM_CFGS["45/64"] = MM_CFGS["47/64"]
@@ -430,7 +438,7 @@ def suffix_of(arm: str) -> str | None:
     return None
 
 
-def suffix_env(s: str):
+def suffix_env(s: str) -> Callable[[], None]:
     if s in SUFFIXES:
         return SUFFIXES[s]
     m = SMQ_SUFFIX.fullmatch(s)
@@ -443,7 +451,7 @@ def base_arm(arm: str) -> str:
     return base_arm(arm[:-len(s)]) if s else arm
 
 
-def build(arm: str, scratch: Path, gpu_mem: float):
+def build(arm: str, scratch: Path, gpu_mem: float) -> LLM:
     from vllm import LLM
     arm = arm.split("@")[0]
     s = suffix_of(arm)
@@ -468,8 +476,8 @@ def build(arm: str, scratch: Path, gpu_mem: float):
         vllm_dir = ROOT / "integrations" / "vllm"
         sys.path.insert(0, str(vllm_dir))
         from tests.engine import int8_exact_gpu as G
-        from verity_vllm.engine.build import build_engine
         from verity_vllm import TargetProfile
+        from verity_vllm.engine.build import build_engine
         target = TargetProfile.from_device().with_overrides(int8_exact="all")
         ns = argparse.Namespace(checkpoints=str(vllm_dir / "manifests" / "checkpoints.json"), role="LLAMA31_8B_INT8",
                                 base_role="LLAMA31_8B", repo="verity-int8/Llama-3.1-8B-INT8",
@@ -481,8 +489,9 @@ def build(arm: str, scratch: Path, gpu_mem: float):
         return eng.llm
     if arm in ("exact", "exact-fused", "dither", "dither-side"):
         sys.path.insert(0, str(HERE))
-        import dither_fused as DF
         from verity_vllm.engine import int8_vllm
+
+        import dither_fused as DF
         int8_vllm.register()
         if arm == "exact-fused":
             install_exactlin()
@@ -527,10 +536,11 @@ def build(arm: str, scratch: Path, gpu_mem: float):
         return llm
     if arm in DITHER_A:
         sys.path.insert(0, str(HERE))
+        from verity_vllm.engine import int8_vllm
+
         import dither_a as DA
         import dither_fused as DF
         import dither_one as DO
-        from verity_vllm.engine import int8_vllm
         int8_vllm.register()
         h1u = settings.HB_H1U
         unit, z, ao, pt, ls = DITHER_A[arm]
@@ -549,15 +559,16 @@ def build(arm: str, scratch: Path, gpu_mem: float):
         llm = LLM(model=str(DF.int8_checkpoint(PIN, scratch)), **a)
         win = DO.hook(llm)
         win.captures = DA.CAPTURES
-        # the y-only floor commits no z, so it has no window gate: its gate is its tokens (TOKENS_ONLY)
+        # the y-only floor commits no z, so it has no execution-phase gate: its gate is its tokens (TOKENS_ONLY)
         llm.dither_stats, llm.dither_win, llm.dither_mod = DA.stats(win), (win if z != "none" else None), DA
         return llm
     if arm in DITHER_SO:
         sys.path.insert(0, str(HERE))
+        from verity_vllm.engine import int8_vllm
+
         import dither_fused as DF
         import dither_one as DO
         import dither_so as SO
-        from verity_vllm.engine import int8_vllm
         int8_vllm.register()
         unit, ao, pt, depth, ov, serve_prio, we, spill = DITHER_SO[arm]
         a = engine_args(gpu_mem)
@@ -583,7 +594,7 @@ DITHER_A = {f"dither-a{u}{z}{o}{p}{q}": (unit, zm, ao, pt, ls)
             for p, pt in (("", False), ("-pt", True))
             for q, ls in (("", False), ("-ls", True))}
 # -ov: round s and step s's units beside step s + 1's forward, a round ring of 2 steps (-ov1: 1); -ovp: -ov with the
-# engine serving on a stream above the trees' and the units' priority; -we: each window ends (`dither_so.SoWindow.end`),
+# engine serving on a stream above the trees' and the units' priority; -we: each execution phase ends (`dither_so.SoWindow.end`),
 # each step's A and z/y records held in pinned host memory until its sample (`dither_so.Spill`), -wea its A alone
 DITHER_SO = {f"dither-a-{unit}-zy-{o}{p}-so{d}{v}{e}": (unit, ao, pt, d, r, sp, we, spill)
              for unit in ("hbk", "hbr", "hbc") for o, ao in (("aom", "m"), ("aomn", "mn"), ("ab", "b"), ("abn", "bn"))
@@ -597,7 +608,7 @@ REF_OF = {"dither": "exact", "dither-side": "exact", "dither-1s": "exact", "dith
           "dither-1s-percall-rtt": "exact", "dither-1s-cpeel": "exact", "dither-1s-split-cpeel": "exact",
           "dither-1s-block2-cpeel": "exact", "dither-1s-split2-cpeel": "exact", "dither-1s-mix-cpeel": "exact",
           "exact-fused": "exact", "stock-percall": "stock", **{x: "exact" for x in (*DITHER_A, *DITHER_SO)}}
-# an arm with no window check whose gate is its tokens: equal to its reference arm's or the run times nothing
+# an arm with no execution-phase check whose gate is its tokens: equal to its reference arm's or the run times nothing
 TOKENS_ONLY = {"exact-fused", "stock-percall", *(x for x, (_, z, *_) in DITHER_A.items() if z == "none")}
 def token_diff(a: list, b: list) -> dict:
     """Two arms' greedy outputs for the same requests: how many are equal, and each other one's first differing position."""
@@ -627,9 +638,9 @@ def pick_of(arm: str) -> str | None:
     only = settings.get(PICK_ARMS_ENV)
     return settings.get(PICK_ENV) if not only or arm.startswith(tuple(only)) else None
 GATE_TOKENS = 16    # enough B32 decode steps for the gate's capture, its receipts, the control's and its receipts
-# {arm: {"session": ID, "address": HOST:PORT, "secret_file": F, "commitment": HEX}}: each dither arm's window its own
-# challenger session off the node (its POUW_CHALLENGER, POUW_CHALLENGER_SESSION, POUW_CHALLENGER_SECRET_FILE and
-# POUW_CHALLENGER_COMMITMENT), since every arm's engine, and so its window, lives through the whole run
+# {arm: {"session": ID, "address": HOST:PORT, "secret_file": F, "commitment": HEX}}: each dither arm's execution phase its own
+# challenge phase off the node (its POUW_CHALLENGER, POUW_CHALLENGER_SESSION, POUW_CHALLENGER_SECRET_FILE and
+# POUW_CHALLENGER_COMMITMENT), since every arm's engine, and so its execution phase, lives through the whole run
 CHALLENGERS_ENV = "DITHER_CHALLENGERS"
 # {arm: {NAME: VALUE}}: an arm's own environment, set in its worker before its engine is built, so one lease times arms
 # that differ in a knob the worker reads (not sbench.sh's builds, which read the run's)
@@ -659,9 +670,9 @@ def wait_time_at() -> dict | None:
 
 
 def close_coins() -> None:
-    """End this worker's window's off-node coin session, if it has one: the challenger answers closed (after every
-    round a `coins.RoundPipe` sent has its coin back, and a dither_so -ov window's rounds and units drained; a dither_so
-    window closes itself, `SoWindow.close`, ending it under -we)."""
+    """End this worker's execution phase's off-node challenge phase, if it has one: the challenger answers closed (after every
+    round a `coins.RoundPipe` sent has its coin back, and a dither_so -ov execution phase's rounds and units drained; a dither_so
+    execution phase closes itself, `SoWindow.close`, ending it under -we)."""
     for name in ("dither_fused", "dither_one"):
         win = getattr(sys.modules.get(name), "WIN", None)
         if win is not None and hasattr(win, "close"):
@@ -671,8 +682,8 @@ def close_coins() -> None:
             (getattr(win, "pipe", None) or win.coins).close()
 
 
-def fill_end(llm, gen) -> dict:
-    """A -we arm's off-node window served to its layout's last step at the stop (one request a generate, its prompt one
+def fill_end(llm: LLM, gen: Callable[[list, int], tuple[float, list]]) -> dict:
+    """A -we arm's off-node execution phase served to its layout's last step at the stop (one request a generate, its prompt one
     step's prefill, so a generate of n tokens is n steps), where it ends on its own; then its `check_end`."""
     win, mod = getattr(llm, "dither_win", None), getattr(llm, "dither_mod", None)
     if win is None or not getattr(win, "window_end", False) or win.end_each or not win.open:
@@ -685,7 +696,7 @@ def fill_end(llm, gen) -> dict:
             "end": mod.end_checks(win, settings.need(mod.LIB_ENV)), "stats": llm.dither_stats()}
 
 
-def worker(arm: str, conn, scratch: str, gpu_mem: float) -> None:
+def worker(arm: str, conn: Connection, scratch: str, gpu_mem: float) -> None:
     settings.setdefault("VLLM_ENABLE_V1_MULTIPROCESSING", "0")
     at = (settings.get(CHALLENGERS_ENV) or {}).get(arm)
     if at:
@@ -725,8 +736,8 @@ def worker(arm: str, conn, scratch: str, gpu_mem: float) -> None:
         settings.setdefault(DA.CHECK_WORKERS_ENV, str(PF_CHECK_WORKERS))
     last: dict = {}
 
-    def gen(reqs: list, n: int):
-        # a -we arm's in-process window ends with each generate, inside its time; the next one's challenger is made after
+    def gen(reqs: list, n: int) -> tuple[float, list]:
+        # a -we arm's in-process execution phase ends with each generate, inside its time; the next one's challenger is made after
         sp = SamplingParams(temperature=0.0, max_tokens=n, ignore_eos=True, seed=0)
         win = getattr(llm, "dither_win", None)
         we = win is not None and getattr(win, "end_each", False)
@@ -743,7 +754,7 @@ def worker(arm: str, conn, scratch: str, gpu_mem: float) -> None:
 
     def serve(cmd: dict) -> None:
         if cmd["op"] == "warm" and pf:
-            # every step of m = T, a -we arm's spill pool grown to a timed window's (PF[1] steps)
+            # every step of m = T, a -we arm's spill pool grown to a timed execution phase's (PF[1] steps)
             gen(pp[:4], 1)
             gen(pp[:PF[1]], 1)
             conn.send({"warm": True})
@@ -754,7 +765,7 @@ def worker(arm: str, conn, scratch: str, gpu_mem: float) -> None:
             if cmd.get("sat"):
                 gen(prompts(SAT_REQS), SAT_TOKENS)
             elif getattr(win, "spill_mode", None) and getattr(win, "end_each", False):
-                # a -we arm's spill pool grown here to a timed window's size (N2 steps), not inside rep 0
+                # a -we arm's spill pool grown here to a timed execution phase's size (N2 steps), not inside rep 0
                 gen(ps, N2)
             conn.send({"warm": True})
         elif cmd["op"] == "prefill":
@@ -781,7 +792,7 @@ def worker(arm: str, conn, scratch: str, gpu_mem: float) -> None:
             mod = getattr(llm, "dither_mod", None) or (DF if win is not None else None)
             we = win is not None and getattr(win, "end_each", False)
             if pf and win is not None and mod is DF:
-                raise ValueError(f"{arm}: --prefill gates dither_one's windows (dither-a, dither-1s), not dither_fused's")
+                raise ValueError(f"{arm}: --prefill gates dither_one's execution phases (dither-a, dither-1s), not dither_fused's")
             if win is not None:
                 if mod is DF:
                     win.arm(B)
@@ -797,7 +808,7 @@ def worker(arm: str, conn, scratch: str, gpu_mem: float) -> None:
                 torch.cuda.synchronize()
                 torch.cuda.profiler.start()
                 torch.cuda.nvtx.range_push(f"{GATE_RANGE}/{arm}")
-            # a window whose captures' receipts go under later rounds (dither_so) runs that many steps more
+            # an execution phase whose captures' receipts go under later rounds (dither_so) runs that many steps more
             if pf and win is not None:
                 t, outs = gen(pp[:len(PF_CAPTURES) + getattr(win, "gate_extra", 0)], 1)
             elif pf:
@@ -829,7 +840,7 @@ def worker(arm: str, conn, scratch: str, gpu_mem: float) -> None:
                     if getattr(mod, "CG", None) is not None:
                         res["credit_2684"] = mod.credit_doc()
                     if we and not pf:
-                        # the gate's window ended with its generate; the end faults each in a window of their own
+                        # the gate's execution phase ended with its generate; the end faults each in an execution phase of their own
                         mod.end_gate(win, lambda n: gen(ps, n))
                         res["end"] = mod.end_checks(win, lib)
                         res["verdict"]["end"] = res["end"]["verdict"]
@@ -912,7 +923,7 @@ def worker(arm: str, conn, scratch: str, gpu_mem: float) -> None:
             return
 
 
-def recv(arm: str, conn, op: str, keep: bool = False) -> dict:
+def recv(arm: str, conn: Connection, op: str, keep: bool = False) -> dict:
     """ARM's next message.  A worker that reports an error or exits ends the run (exit 5, its result kept: the gates so
     far in gate.json, the reps in reps.jsonl); sys.exit terminates the daemon workers, so no engine outlives it.  With
     KEEP the error is returned instead, the worker gone and the run going on without it."""
@@ -944,7 +955,7 @@ def main() -> int:
     ap.add_argument("--reps", type=int, default=3)
     ap.add_argument("--scratch", default=None)
     ap.add_argument("--gpu-mem", type=float, default=0.40)
-    ap.add_argument("--t", type=int, default=MAX_TOKENS_STEP, help="max_num_batched_tokens: the Dither window's T")
+    ap.add_argument("--t", type=int, default=MAX_TOKENS_STEP, help="max_num_batched_tokens: the Dither execution phase's T")
     ap.add_argument("--ops", default="decode,sat")
     ap.add_argument("--gate", action="store_true")
     ap.add_argument("--stock-own-batch", action="store_true",
@@ -958,19 +969,19 @@ def main() -> int:
     ap.add_argument("--serial", action="store_true",
                     help="one engine on the GPU at a time: each arm built, warmed, gated, timed and stopped before the next "
                          "comes up, in --arms order (its reference arm first); for an arm that needs most of the GPU, as "
-                         "Dither's window does at --prefill's T = 2048")
+                         "Dither's execution phase does at --prefill's T = 2048")
     ap.add_argument("--bw-passes", type=float, default=0.0, metavar="GIB",
                     help="PoUB's passes beside the arms on their GPU, over a store of GIB GiB "
-                         "(`dbw.py`: the prover calibrated beside the dither arms' decode ops, an idle session, each rep "
-                         "an off block and an on block, a tampered session)")
+                         "(`dbw.py`: the prover calibrated beside the dither arms' decode ops, an idle run, each rep "
+                         "an off block and an on block, a tampered run)")
     ap.add_argument("--bw-prover-args", action="append", metavar="ARGS",
                     help="a side of its own a time, its prover's options (leading NAME=VALUE words its environment)")
     ap.add_argument("--bw-cover", type=float, default=4.0,
-                    help="the first on block's session lasts this many times the off block before it (each later one "
+                    help="the first on block's run lasts this many times the off block before it (each later one "
                          "1.5 times the longest on block before it, the tampered one twice its dither op), in "
-                         "stretches of the idle session's length (`dbw.window_s`), then of the last on session's "
+                         "stretches of the idle run's length (`dbw.window_s`), then of the last on run's "
                          "beside its block (`dbw.beside_s`)")
-    ap.add_argument("--bw-idle-s", type=float, default=3.0, help="the idle session's passes, in seconds")
+    ap.add_argument("--bw-idle-s", type=float, default=3.0, help="the idle run's passes, in seconds")
     a = ap.parse_args()
     if a.bw_passes and not (settings.BW_LIB and settings.BW_KV):
         ap.error("--bw-passes needs BW_LIB and BW_KV: session.so and kv.so (sbench.sh builds both)")
@@ -1195,7 +1206,7 @@ def main() -> int:
                     break
         for arm in arms:
             conns[arm].send({"op": "stop"})
-        # each worker's stop: a -we arm's off-node window served to its end and checked, its session closed
+        # each worker's stop: a -we arm's off-node execution phase served to its end and checked, its challenge phase closed
         for arm in arms:
             try:
                 stops[arm] = conns[arm].recv()

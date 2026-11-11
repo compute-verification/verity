@@ -9,8 +9,8 @@
 # without that file runs no shell hook. When the branch doesn't track `.cursor/hooks.json` it first writes one that runs DEST's hook, fail-closed, and excludes it in
 # `.git/info/exclude` (git overwrites an excluded file when a branch that tracks it is checked out): Cursor reads hooks once,
 # early in the session, so the file comes before the fetch, and until DEST's copy is there every command is refused. Then it
-# copies origin/main's `tools/agent-guard` to DEST (default /opt/agent-guard), or keeps an earlier copy when origin/main can't
-# be read, checks that the hook refuses `env`, and runs DEST's `install.sh` (the redacting `env` and the git guard ahead of
+# copies the files of origin/main's `tools/agent-guard` (not its tests) to DEST (default /opt/agent-guard), or keeps an
+# earlier copy when origin/main can't be read, checks that the hook refuses `env`, and runs DEST's `install.sh` (the redacting `env` and the git guard ahead of
 # /usr/bin); the hook stays in place if that refuses. Then it starts the VM's OOM recorder (oom_watch.py). It also puts research
 # and the GitHub helper on PATH in ~/.bashrc ($AGENT_GUARD_BASHRC), once, and sets WORKSPACE's merge drivers (`.gitattributes`
 # names them; git keeps them only in a clone's config) from origin/main's `research.clone.RECORD_DRIVER`, as every run clone
@@ -35,6 +35,9 @@ else
       {"command": "python3 $dest/task_hook.py", "matcher": "Task", "timeout": 10},
       {"command": "python3 $dest/task_hook.py", "matcher": "CallDynamicTool", "timeout": 10},
       {"command": "python3 $dest/task_hook.py", "matcher": "^MCP:", "timeout": 10}
+    ],
+    "stop": [
+      {"command": "python3 $dest/stop_hook.py", "timeout": 60}
     ]
   }
 }
@@ -45,11 +48,45 @@ EOF
   grep -qxF /.cursor/hooks.json "$exclude" 2>/dev/null || echo /.cursor/hooks.json >> "$exclude"
   echo "agent-guard: wrote $ws/.cursor/hooks.json (excluded), running $dest/shell_hook.py"
 fi
+# A Task-launched cloud agent's workspace root is /agent, with this repository checked out under /agent/repos/, and Cursor
+# reads the root's hooks (a daemon started with --hook-repo-path also reads that checkout's), so the checkout's tracked
+# hooks.json may run nothing there. Each root in AGENT_GUARD_ROOTS that isn't itself a checkout gets a hooks.json running the
+# first checkout's hook.sh under it, else DEST's copy. Cursor strips `/*...*/` and `//...` from hooks.json as comments, inside
+# strings too, so no command may hold either: the glob is `?*`, not `*`.
+for root in ${AGENT_GUARD_ROOTS:-/agent}; do
+  [ -d "$root" ] && [ ! -e "$root/.git" ] || continue
+  f=$(mktemp)
+  if ! python3 - "$root" "$dest" > "$f" <<'PY'
+import json, sys
+root, dest = sys.argv[1:]
+run = (f"sh -c 'for h in {root}/repos/?*/tools/agent-guard/hook.sh; do [ -f \"$h\" ] && exec sh \"$h\" \"$1\"; done; "
+       f"exec python3 {dest}/\"$1\"' guard ")
+hook = lambda name, timeout=10, **kw: {"command": run + name, "timeout": timeout, **kw}
+out = json.dumps({"version": 1, "hooks": {
+    "beforeShellExecution": [hook("shell_hook.py", failClosed=True)],
+    "preToolUse": [hook("task_hook.py", matcher=m) for m in ("Task", "CallDynamicTool", "^MCP:")],
+    "stop": [hook("stop_hook.py", timeout=60)]}}, indent=2)
+if "/*" in out or "//" in out:
+    sys.exit(f"agent-guard: a hooks.json for {root} would hold `/*` or `//`, which Cursor strips as a comment")
+print(out)
+PY
+  then
+    rm -f "$f"
+    continue
+  fi
+  if { mkdir -p "$root/.cursor" && cp "$f" "$root/.cursor/hooks.json"; } 2>/dev/null \
+      || { sudo -n mkdir -p "$root/.cursor" && sudo -n cp "$f" "$root/.cursor/hooks.json"; }; then
+    echo "agent-guard: wrote $root/.cursor/hooks.json, running $root/repos/*/tools/agent-guard/hook.sh"
+  else
+    echo "agent-guard: could not write $root/.cursor/hooks.json: no hook runs for an agent rooted at $root" >&2
+  fi
+  rm -f "$f"
+done
 tmp=$(mktemp -d)
 trap 'rm -rf "$tmp"' EXIT
 if git -C "$ws" fetch -q origin main && git -C "$ws" archive origin/main tools/agent-guard | tar -x -C "$tmp"; then
   $sudo mkdir -p "$dest"
-  $sudo cp "$tmp"/tools/agent-guard/* "$dest"/
+  $sudo find "$tmp/tools/agent-guard" -maxdepth 1 -type f -exec cp -t "$dest" {} +
   $sudo chmod 755 "$dest"/*
 elif [ -f "$dest/shell_hook.py" ]; then
   echo "agent-guard: origin/main unreadable; using the copy already in $dest" >&2
@@ -62,7 +99,7 @@ case $verdict in
   *'"deny"'*) ;;
   *) echo "agent-guard: $dest/shell_hook.py let \`env | cut -d= -f1\` through: $verdict" >&2; exit 1 ;;
 esac
-# research (the workspace's venv) and the GitHub helper on every later shell's PATH (INF-71: a fresh VM had neither)
+# research (the workspace's venv) and the GitHub helper on every later shell's PATH, since a fresh VM has neither
 line='export PATH=/workspace/.git/verity-auth/bin:/workspace/.venv/bin:$PATH'
 rc=${AGENT_GUARD_BASHRC:-$HOME/.bashrc}
 grep -qxF "$line" "$rc" 2>/dev/null || echo "$line" >> "$rc"

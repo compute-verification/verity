@@ -1,8 +1,10 @@
-import Mathlib
-import Definitions.Core.Boolean
-import Definitions.Core.Interaction
-import Definitions.Claims.Hm96
-import Definitions.Claims.Json
+module
+
+public import Mathlib
+public import Definitions.Core.Boolean
+public import Definitions.Core.Interaction
+public import Definitions.Core.Hm96
+public import Definitions.Claims.Json
 
 /-!
 # Claims: Flock's claim statements (frozen before any proof work)
@@ -22,11 +24,12 @@ runs, extractors, finders, simulators and the shared claim forms `KS`, `Complete
   own count (`Flock.Deploy.dec`, a named, counted program), at the encoded length of the word it decodes
   (`Flock.wordLen`). The form first frozen (`DecoderComplexity`) took the decoder, its count and its size as arguments,
   so a count of `0` met it.
-* Nontriviality (`Nontrivial`) is established by a test against recorded sessions, and no Lean proof of it is expected:
-  Lean's kernel can't evaluate SHA-512 over real proofs. The test is `check`'s `lean-agreement` job
-  (`tools/verity/check/ci.toml`), which runs the compiled Lean verifier on every recorded honest session
-  (`verity/ml/flock/verifier/agree.py`) and fails unless it accepts each. `Flock.Nontrivial` states what that test
-  checks.
+* Nontriviality (`Nontrivial`) is for a test against recorded sessions to establish, and no Lean proof of it is
+  expected: Lean's kernel can't evaluate SHA-512 over real proofs. The test is `check`'s `lean-agreement` job
+  (`tools/verity/check/ci.toml`), which holds the compiled Lean verifier's checks on every recorded session to upstream's
+  verdicts (`flock-verify agree`, `verity/ml/flock/verifier/agree.py`) and fails unless each honest one passes them.
+  Its sessions are of forms the verifier then refuses, so it reaches the acceptance `Flock.Nontrivial` states only up
+  to those refusals.
 * List decoding is in its radius form (`Flock.ListWithin`): the opened columns are written into the
   zero-filled word of the trace's codeword length (`Flock.fill`: at each position the first opened column there, the
   positions from the length on ignored), and the decoder lists every trace whose encoding agrees with that word on at
@@ -49,7 +52,7 @@ runs, extractors, finders, simulators and the shared claim forms `KS`, `Complete
   list once, at most `J·L` checks where every combination would be `L^J`, and `Flock.Efficient` bounds each list by
   the decoder's polynomial, which counts them. At one table this is the text it replaces.
 * Completeness (`Complete`) is at a hash whose outputs are 64 bytes (`Out64`), as the deployed oracle's are, SHA-512
-  with its whole output, and as the random-oracle model draws them; it fixes the length only, so `H` stays a parameter.
+  with its whole output, and as the random-oracle model samples them; it fixes the length only, so `H` stays a parameter.
   Flock's is of the deployed record's reference prover (`Flock.Deploy.P`), not of a prover the claim takes. The form
   first frozen held at an empty tape type for every verifier, and its prover was whatever its discharge chose, so an
   assembled claim's completeness premise was met for free.
@@ -62,16 +65,18 @@ runs, extractors, finders, simulators and the shared claim forms `KS`, `Complete
 Mathlib only, as `Definitions/` is. So every claim is parametric in the deployed verifier, its parser and the hash:
 binding them to the compiled verifier (`Flock.verifyWith Sha512.hash`, `Flock.ProvedScope.check`) is the code side's.
 
-The named assumptions: `StrictBirthday` and `ExpectedCR` (Core's), hm96's hiding, `Hm96Hiding`
-(`Definitions/Claims/Hm96.lean`, which the soundness proofs read), and the JSON library's specification, `JsonSpec`
-(`Definitions/Claims/Json.lean`, which only completeness reads). What the claims rest on and no Lean statement can say
-is `trustedBase`.
+The named assumptions: `StrictBirthday` and `ExpectedCR` (Core's) and hm96's hiding, `Hm96Hiding`
+(`Definitions/Core/Hm96.lean`, which the soundness proofs read). What the claims rest on and no Lean statement can say
+is `trustedBase`. The texts the canonical printer prints are ASCII without DEL, `Json.Ascii`
+(`Definitions/Claims/Json.lean`), which only completeness reads.
 
 Frozen by `Flock.Guarantees.ClaimsStated` (`Definitions/Flock/Guarantees/Claims.lean`), whose statement reads every claim
 here but `Flock.ZK`, and the shared forms of `Definitions/Core/Interaction.lean` they instantiate, and by
 `Flock.Guarantees.MaskedZK`, which states `Flock.ZK` at the deployed masked record: the lock records each one's text
 under `reads`, so a changed claim is a changed record.
 -/
+
+@[expose] public section
 
 namespace Claims
 
@@ -112,7 +117,7 @@ outputs, which the verifier checks against the registered rows; their salts are 
 structure Stmt where
   m : ℕ
   kLog : ℕ
-  C : FlockSoundness.Audit.Circuit
+  C : Verity.Boolean.Circuit
   inp : ℕ → ℕ → Src
   out : ℕ → ℕ → Src
   pub : List Bool
@@ -133,7 +138,7 @@ def val (s : Stmt) (w : Wit) : Src → Bool
   | .hid i => w.hid.getD i false
 
 /-- **Flock's relation** on a parsed statement: `C` maps inputs to outputs in every block. Evaluated one bit per gate
-(`FlockSoundness.Audit.Circuit.toCircuit`) with each input gate `g` holding the value `inp b g`, `C` holds at each
+(`Verity.Boolean.Circuit.toCircuit`) with each input gate `g` holding the value `inp b g`, `C` holds at each
 output gate `o` the value `out b o`. That is the whole relation: the commitments are hm96 rows under frame-v3-sha512
 trees that `C` computes from the hidden values, salts included, and outputs, so this clause reads them as `C`'s
 outputs. -/
@@ -167,8 +172,8 @@ any number of stages the verifier evaluates, reading wires from earlier outputs,
 computes every slot from the leaves (`wiresAcyclic`); every row a `sha512/row/v1` row, or, with hidden outputs, every
 row a `sha512/row/v2` or `sha512/row-seg/v1` row; and no output port pinned (META `pinned_outputs`), which both row forms
 (`rowsV1`, `rowsV2OrSeg`) read. A templated statement (`templated`: its unit read from a template, the unit's fields
-those of the unit it unrolls to) only under `--zk`, with hidden outputs, without registered reads and at one table, its
-unit reading one input group and returning the outputs. -/
+those of the unit it unrolls to) only under `--zk`, with hidden outputs and at one table, its unit reading one input
+group and returning the outputs. -/
 def InScope (zk : Bool) (s : Stmt) : Prop :=
   (if zk then 25 else 22) ≤ s.m ∧ s.m ≤ 35 ∧ 6 ≤ s.kLog ∧ s.kLog ≤ min s.m 27 ∧
     s.form.hm96Rows ∧ ¬ s.form.typed ∧ s.form.retainedRounds ∧
@@ -178,7 +183,7 @@ def InScope (zk : Bool) (s : Stmt) : Prop :=
     ((s.form.unitInputGroups = 1 ∧ ¬ s.form.tail) ∨ (s.form.hiddenOutputs ∧ s.form.wiresAcyclic)) ∧
     s.form.unitLog ≤ 32 ∧ s.form.readsOnlyPortBits ∧
     (s.form.rowsV1 ∨ (s.form.hiddenOutputs ∧ s.form.rowsV2OrSeg)) ∧
-    (s.form.templated → zk ∧ s.form.hiddenOutputs ∧ ¬ s.form.registeredReads ∧ s.form.tables ≤ 1 ∧
+    (s.form.templated → zk ∧ s.form.hiddenOutputs ∧ s.form.tables ≤ 1 ∧
       s.form.unitInputGroups = 1 ∧ ¬ s.form.tail)
 
 /-- **The zero-filled word** of length `n`: at each position the first opened column there, zero where none was opened.
@@ -361,9 +366,10 @@ def Efficient {F : Type} [Fintype F] [DecidableEq F] [Zero (List F)] (H : Msg �
     ∀ os, (D.decode os).length ≤ p.eval (wordLen os)
 
 /-- **Flock: nontriviality**: recorded honest runs, each of a statement the scope check takes, that the verifier
-accepts. It is established by a test against recorded sessions, not by a Lean proof, and none is expected:
-`check`'s `lean-agreement` job (`tools/verity/check/ci.toml`) runs the compiled Lean verifier on recorded honest
-sessions (`verity/ml/flock/verifier/agree.py`) and fails unless it accepts each. This states what that test checks. -/
+accepts. It is for a test against recorded sessions to establish, not a Lean proof, and none is expected: `check`'s
+`lean-agreement` job (`tools/verity/check/ci.toml`) runs the compiled Lean verifier's checks on recorded honest sessions
+(`flock-verify agree`, `verity/ml/flock/verifier/agree.py`) and fails unless each passes them. Its sessions are of
+forms the verifier then refuses, so it reaches this acceptance only up to those refusals. -/
 def Nontrivial (H : Msg → Msg) (D : Deploy Coin Col T) (recs : List (Recorded D.V)) : Prop :=
   Claims.Nontrivial H D.V recs ∧ ∀ e ∈ recs, D.scopeCheck e.x = true
 

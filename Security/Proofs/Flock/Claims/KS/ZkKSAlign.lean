@@ -1,7 +1,43 @@
-import Proofs.Flock.Claims.KS.ZkAlign
-import Proofs.Flock.Claims.KS.ZkForkClash
-import Proofs.Flock.Claims.KS.ZkPadsSlot
-import Proofs.Flock.Claims.KS.ZkTauPair
+module
+
+public import Proofs.Flock.Claims.KS.ZkFork
+public import Proofs.Flock.Claims.KS.ZkForkClash
+public import Proofs.Flock.Claims.KS.ZkPadsSlot
+public import Proofs.Flock.Claims.KS.ZkTauFork
+public import Proofs.Flock.Claims.KS.ZkTauPair
+import Mathlib.Algebra.Order.Floor.Extended
+import Mathlib.Algebra.Order.Interval.Basic
+import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
+import Mathlib.Analysis.SpecialFunctions.Bernstein
+import Mathlib.Analysis.SpecialFunctions.Gamma.Basic
+import Mathlib.Analysis.SpecialFunctions.Trigonometric.DerivHyp
+import Mathlib.Combinatorics.Enumerative.DyckWord
+import Mathlib.Combinatorics.SimpleGraph.Triangle.Removal
+import Mathlib.Data.NNRat.Floor
+import Mathlib.Data.Nat.Choose.Multinomial
+import Mathlib.Geometry.Euclidean.Altitude
+import Mathlib.NumberTheory.Chebyshev
+import Mathlib.NumberTheory.Height.NumberField
+import Mathlib.NumberTheory.Height.Projectivization
+import Mathlib.NumberTheory.LucasLehmer
+import Mathlib.NumberTheory.SelbergSieve
+import Mathlib.RingTheory.Radical.NatInt
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Topology.Sheaves.Init
+import Proofs.Flock.Claims.KS.ZkBatchSim
+import Proofs.Flock.Claims.KS.ZkClashPads
 
 /-!
 # Masked KS from the `τ` alignment
@@ -11,6 +47,8 @@ message: the caps' alignment (`zkSlotAlign`) and clash (`zkForkClash`), the pads
 the pads' view clash (`zkViewClashQP`). The fifth, the fork bound at `τ`, rests on `τ`'s alignment alone
 (`zkSimForkLeTau_of_align`), so masked KS has the one premise `ZkTauAlign` (`zk_KS_of_tauAlign`).
 -/
+
+@[expose] public section
 
 namespace FlockDeploy.KS
 

@@ -1,4 +1,6 @@
-import Definitions.Pouw.H1Zy.Dequant
+module
+
+public import Definitions.Pouw.H1Zy.Dequant
 
 /-!
 # `PouwZyDequant_v1` against the Python evaluators (vectors)
@@ -6,6 +8,8 @@ import Definitions.Pouw.H1Zy.Dequant
 Each `example` is a word the Python evaluator computes (`S32ToF32Rn.evaluate`, `F32MulV2.evaluate`, `F2fpBf16.evaluate`,
 `h1zy.dequant`), checked by the kernel: NaNs, infinities and zeros, overflow, subnormal results and ties included.
 -/
+
+@[expose] public section
 
 namespace Pouw.H1Zy.DequantVectors
 

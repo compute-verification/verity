@@ -1,6 +1,24 @@
-import Proofs.Flock.VBridge.Verifier
-import VStar.Stage
-import Std.Data.String.ToNat
+module
+
+public import Proofs.Flock.VBridge.Verifier
+public import Std.Data.String.ToNat
+public import VStar.Stage
+import Mathlib.Algebra.Order.Floor.Semifield
+import Mathlib.MeasureTheory.Integral.Bochner.Basic
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import VCVio.Prelude.Core
 
 /-!
 # A rec-open unit's `(L, H)` is its pinned statement's
@@ -17,6 +35,8 @@ circuit under that name must give back the pinned pair, not another one the file
   pair `params` gives has the same name. This needs no lemma about `String.splitOn`.
 * `unit_check_pinned`: `unit_check` at the pinned name in place of `params`' answer.
 -/
+
+@[expose] public section
 
 namespace FlockVBridge
 
@@ -100,7 +120,7 @@ theorem name_recOpen (level L H n : ℕ) : (VStar.Stmt.recOpen level L H n).name
 /-- **`unit_check` at the pinned name**: a unit the verifier accepted (`RecOpen.check`) under the name of V*'s statement
 at `L` and `H` (`unitName L H`) computes, in a copy in a unit of any partition, the climb and the consistency term at that
 `L` and `H` (`params_of_check`). -/
-theorem unit_check_pinned {C : Audit.Circuit} {n : ℕ} {P : Partition C n} {u : Fin n} {c : Flock.Circuit}
+theorem unit_check_pinned {C : Verity.Boolean.Circuit} {n : ℕ} {P : Partition C n} {u : Fin n} {c : Flock.Circuit}
     (hB : Built c.unit) {k : ℕ} (I : P.IsRowsUnit u ((Rows.ofNet hB).stack k)) (X : Fin C.N → Bool) {j : ℕ}
     (hj : j < k) (hone : X (I.wire ((Rows.ofNet hB).stack k).one) = true)
     (ms : Flock.MerkleScheme) (hms : ∀ l r, ms.node l r = Flock.Sha512.hash (l ++ r))

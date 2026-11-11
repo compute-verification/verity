@@ -1,21 +1,25 @@
-import Proofs.Flock.Soundness.Discharge.Placed.Setup
-import Proofs.Flock.Soundness.Types.ProgramPlaces
-import Proofs.Flock.Soundness.ExecFlatCopies
+module
+
+public import Proofs.Flock.Soundness.ExecFlatCopies
+import Mathlib.Combinatorics.Matroid.Init
+import Proofs.Flock.Soundness.Lowering
 
 /-!
 # `ProgPlaces` on the typed path
 
 On a typed flat-class statement (`tags.typed = true`), the verifier derives the unit's rows itself (`deriveChecked`), and
-`setupH_flatTableClass` gives the accepted statement's `TableClass`. `UProg.derivedPlaces_of_classes` places each drawn
-unit of a program of units (`UProg`) at a slot of its table's class, as `DerivedPlaces`. This file gives the headline's
+`setupH_flatTableClass` gives the accepted statement's `TableClass`. `UProg.derivedPlaces_of_classes` places each sampled
+proof block of a program of units (`UProg`) at a slot of its table's class, as `DerivedPlaces`. This file gives the headline's
 `ProgPlaces` for the program's rows circuit `p.toRows hk` (whose circuit and partition are `p.C hk` and `p.P hk`):
 
-* `ofRowsAt`: `ProgPlaces` from a place per drawn unit (`RowsAt`) aliased at a program-wide instance;
+* `ofRowsAt`: `ProgPlaces` from a place per sampled proof block (`RowsAt`) aliased at a program-wide instance;
 * `UProg.rows_toRows`: the rows circuit's unit rows are the units' composed rows;
-* `UProg.progPlaces_of_classes`: `ProgPlaces (p.toRows hk) p.outsC plan tab` from each drawn unit's table class, slot and
+* `UProg.progPlaces_of_classes`: `ProgPlaces (p.toRows hk) p.outsC plan tab` from each sampled proof block's table class, slot and
   block, given that the unit reads the class's derivation inputs (`Reads`) and the slot's copies (`Copies`);
 * `TypedAccepted`, `UProg.progPlaces_of_setupH`: the same, each class from `setupH_flatTableClass`.
 -/
+
+@[expose] public section
 
 open Flock FlockLevel3 Flock.DeriveAll
 
@@ -26,12 +30,12 @@ open Model Audit Types.Dag Compose
 /-! ## `ProgPlaces` from places -/
 
 /-- An instance of equal rows. -/
-def castInst {C : Audit.Circuit} {n : ℕ} {P : Audit.Partition C n} {u : Fin n} {R₁ R₂ : Rows} (e : R₁ = R₂)
+def castInst {C : Verity.Boolean.Circuit} {n : ℕ} {P : Audit.Partition C n} {u : Fin n} {R₁ R₂ : Rows} (e : R₁ = R₂)
     (i : P.IsRowsUnit u R₁) : P.IsRowsUnit u R₂ :=
   e ▸ i
 
 /-- Aliasing moves along equal rows. -/
-theorem aliased_cast {C : Audit.Circuit} {n : ℕ} {P : Audit.Partition C n} {u : Fin n} {St : Model.Statement}
+theorem aliased_cast {C : Verity.Boolean.Circuit} {n : ℕ} {P : Audit.Partition C n} {u : Fin n} {St : Model.Statement}
     {R₁ R₂ : Rows} (e : R₁ = R₂) (inst : P.IsRowsUnit u R₂) (a : RowsAt St R₂) (h : a.Aliased inst.wire) :
     (a.cast e.symm).Aliased (castInst e.symm inst).wire := by
   subst e; exact h
@@ -41,7 +45,7 @@ section OfRowsAt
 variable {N n : ℕ} {Reg : Type} {mPts : ℕ} {plan : Finset (Fin n) → Reg → List (TabSpec mPts)}
   {tab : (S : Finset (Fin n)) → (R : Reg) → Fin n → Fin (plan S R).length}
 
-/-- **`ProgPlaces` from a place per drawn unit**: unit `u`'s instance `inst u`, and a block and columns at which its
+/-- **`ProgPlaces` from a place per sampled proof block**: unit `u`'s instance `inst u`, and a block and columns at which its
 table's statement holds its rows (`pl`), carrying one value on its inputs that share a gate (`hal`). -/
 def ofRowsAt (q : Prog N n) (outs : Finset (Fin N)) (inst : ∀ u, (q.partition outs).IsRowsUnit u (q.rows u))
     (pl : ∀ (S : Finset (Fin n)) (R : Reg) (u : Fin n), u ∈ S → RowsAt (Partition.tabOf plan tab S R u).S (q.rows u))
@@ -81,7 +85,7 @@ noncomputable def instRows (hk : one < k) {outs : List ℕ} (p : UProg k one out
 variable {Reg : Type} {mPts : ℕ}
 
 /-- **`ProgPlaces` for a program of units, from its tables' classes** (`derivedPlaces_of_classes` in the headline's
-form): unit `u`, drawn in `S` under `R`, at slot `slot` of block `o` of its table's class `cls`, whose derivation inputs
+form): unit `u`, sampled in `S` under `R`, at slot `slot` of block `o` of its table's class `cls`, whose derivation inputs
 it reads (`hr`), where the slot's inputs that read one of `u`'s sources copy one position, or forced-zero rows (`hcp`). -/
 noncomputable def progPlaces_of_classes (hk : one < k) {outs : List ℕ} (p : UProg k one outs)
     (plan : Finset (Fin p.n) → Reg → List (TabSpec mPts))
@@ -133,7 +137,7 @@ namespace UProg
 
 variable {k one : ℕ} {Reg : Type} {mPts : ℕ}
 
-/-- **`ProgPlaces` for a program of units, from setupH's accept on the typed path**: each drawn unit at slot `slot` of
+/-- **`ProgPlaces` for a program of units, from setupH's accept on the typed path**: each sampled proof block at slot `slot` of
 block `o` of its table's accepted class, given that it reads the class's derivation inputs (`hr`) and the slot's
 copies (`hcp`). -/
 noncomputable def progPlaces_of_setupH (hk : one < k) {outs : List ℕ} (p : UProg k one outs)

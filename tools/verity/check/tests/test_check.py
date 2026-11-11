@@ -2,7 +2,10 @@
 from __future__ import annotations
 
 import importlib.util
+import json
 import re
+import subprocess
+import sys
 from pathlib import Path
 
 import pytest
@@ -19,8 +22,8 @@ def test_the_steps_are_the_suites_then_circuit_check_then_the_lean_hook(tmp_path
     names = [(n, argv if isinstance(argv, str) else argv[1:4]) for n, argv, _cwd in CHECK.steps(tmp_path)]
     assert names[0] == ("pytest", [str(ROOT / "tools/verity/check/suites.py"), "--json", str(tmp_path / "suites.json")])
     assert names[1] == ("flock-circuit-build", [str(ROOT / "verity" / "ml" / "flock" / "check_build.sh")])
-    assert names[2] == ("circuit-check", ["-m", "circuit_check", "--all"])
-    assert names[3] == ("flock-rust-tests", ["CARGO_BUILD_JOBS=1", "RUST_TEST_THREADS=1", "bash"])
+    assert names[2] == ("flock-rust-tests", ["CARGO_BUILD_JOBS=1", "RUST_TEST_THREADS=1", "bash"])
+    assert names[3] == ("circuit-check", ["-m", "circuit_check", "--all"])
     assert names[4] == ("lean", "skipped: verity/core/service/flock is not on this tree")
 
 
@@ -43,7 +46,7 @@ def test_the_rust_tests_run_the_live_crates_unit_tests_and_every_test_of_the_cra
     patched = set()
     for p in sorted((ROOT / "verity" / "ml" / "flock").glob("flock-*-b684b12.patch")):
         patched |= {m.group(1) for line in p.read_text().splitlines() if (m := re.match(r"\+\+\+ b/crates/([a-z-]+)/", line))}
-    upstream = re.search(r"cargo test --release -q((?: -p [a-z-]+)+)$", mode, re.M).group(1).split(" -p ")[1:]
+    upstream = re.search(r"cargo test --release -q((?: -p [a-z-]+)+)(?: \\)?$", mode, re.M).group(1).split(" -p ")[1:]
     assert sorted(upstream) == sorted(patched - {"flock-live"}), "every crate a patch changes, and only those"
 
 
@@ -127,11 +130,26 @@ def _pinned(tmp_path, monkeypatch, binary=_BIN, pinned=_BIN):
     return tmp_path / "out", sent
 
 
+def _signed(sent: Path, at: Path) -> Path:
+    """`AGREEMENT_URLS` at ``at``, as `agreement_url_file` writes it, for the pinned files `_pinned` built in ``sent``, each with a
+    `file:` URL of its tarball."""
+    import json
+
+    pin = json.loads(CHECK.UPSTREAM_PIN.read_text())
+    at.write_text(json.dumps({k: {"art": pin[k]["art"], "sha256": pin[k]["sha256"], "bytes": (sent / f).stat().st_size,
+                                  "url": (sent / f).as_uri()} for k, f in (("upstream", "a.tar.gz"), ("inputs", "b.tar.gz"))}))
+    return at
+
+
 def test_the_lean_steps_once_the_verifier_is_on_the_tree(tmp_path, monkeypatch):
     """`lake build`, the unit-cut conformance and the audit of every Lean package are required; the agreement runs when the run
-    has the pinned upstream build and inputs (found by hash, whatever their names), and is skipped by name otherwise."""
+    was sent URLs of the pinned upstream build and inputs, each listed with its pinned sha256, is skipped by name when it was
+    sent none, and fails when the file it was sent can't be read or doesn't list both, rather than passing for not sent."""
+    import json
+
     out, sent = _pinned(tmp_path, monkeypatch)
-    (build, lake, _), (unit, cut, _), (audit, lean_audit, _), (agree, argv, _) = CHECK.lean_steps(out)
+    urls = _signed(sent, tmp_path / "agreement-urls.json")
+    (build, lake, _), (unit, cut, _), (audit, lean_audit, _), (agree, argv, _) = CHECK.lean_steps(out, agreement_urls=urls)
     assert (build, unit, audit, agree) == ("lean-build", "lean-unit-cut", "lean-audit", "lean-agreement")
     assert lake[-1].endswith("lake build")
     assert cut[1].endswith("verifier/unit_cut_agree.py") and cut[cut.index("--lean") + 1].endswith(".lake/build/bin/flock-verify")
@@ -139,10 +157,19 @@ def test_the_lean_steps_once_the_verifier_is_on_the_tree(tmp_path, monkeypatch):
     assert lean_audit[4].endswith("tools/verity/lean/lean_audit.py") and {"--cache", "--deps"} <= set(lean_audit) and "--fresh" not in lean_audit
     assert "--fresh" in CHECK.lean_steps(out, cache=False)[2][1]
     assert "--regenerate" in lean_audit and "--regenerate" not in CHECK.lean_steps(out, regenerate=False)[2][1]
-    assert argv[2:4] == ["--lean-agreement", str(out)] and {Path(x).name for x in argv[4:]} == {"a.tar.gz", "b.tar.gz"}
-    (sent / "b.tar.gz").unlink()
-    assert CHECK.lean_steps(out)[3][1] == "only upstream of the pinned upstream build and inputs was sent"
-    (sent / "a.tar.gz").unlink()
+    warn = CHECK.lean_steps(out, bookkeeping=True)[2][1]
+    assert "--bookkeeping" not in lean_audit and warn[warn.index("--bookkeeping") + 1] == "warn"
+    assert "--bookkeeping" not in CHECK.lean_steps(out, regenerate=False, bookkeeping=True)[2][1]
+    assert argv[1].endswith("tools/verity/check/check.py") and argv[2:] == ["--lean-agreement-urls", str(out), str(urls)]
+    doc = json.loads(urls.read_text())
+    urls.write_text(json.dumps({**doc, "inputs": {**doc["inputs"], "sha256": "0" * 64}}))
+    assert CHECK.lean_steps(out, agreement_urls=urls)[3][1] == "the URLs sent list upstream of the pinned upstream build and inputs"
+    for unsigned in ({"upstream": {**doc["upstream"], "url": None}}, ["upstream"]):
+        urls.write_text(json.dumps(unsigned))
+        assert CHECK.lean_steps(out, agreement_urls=urls)[3][1] == "the URLs sent list neither of the pinned upstream build and inputs"
+    urls.write_text("{")
+    assert CHECK.lean_steps(out, agreement_urls=urls)[3][1] == ("the URLs sent for the pinned upstream build and inputs can't be "
+                                                                "read (JSONDecodeError)")
     assert CHECK.lean_steps(out)[3][1].startswith("skipped: the pinned upstream build was not sent")
 
 
@@ -153,15 +180,15 @@ def test_the_agreement_fails_while_the_verifier_requires_a_package_from_outside_
     import json
 
     out, sent = _pinned(tmp_path, monkeypatch)
+    urls = _signed(sent, tmp_path / "agreement-urls.json")
     lean = CHECK.FLOCK_LEAN
     (lean / "lakefile.toml").write_text('name = "flock_verifier"\n[[require]]\nname = "inner"\npath = "inner"\n')
-    assert not isinstance(CHECK.lean_steps(out)[3][1], str)
+    assert not isinstance(CHECK.lean_steps(out, agreement_urls=urls)[3][1], str)
     (lean / "lakefile.toml").write_text('name = "flock_verifier"\n[[require]]\nname = "identity"\npath = "../identity"\n')
-    assert CHECK.lean_steps(out)[3][1].startswith("the verifier's Lean package requires identity from outside its directory")
+    assert CHECK.lean_steps(out, agreement_urls=urls)[3][1].startswith(
+        "the verifier's Lean package requires identity from outside its directory")
     (lean / "lakefile.toml").write_text('name = "flock_verifier"\n')
     (lean / "lake-manifest.json").write_text(json.dumps({"packages": [{"type": "git", "name": "mathlib", "rev": "abc"}]}))
-    for f in sent.iterdir():
-        f.unlink()
     assert CHECK.lean_steps(out)[3][1].startswith("the verifier's Lean package requires mathlib from outside")
     assert CHECK.requires_outside(ROOT / "verity" / "core" / "service" / "flock") == []
 
@@ -184,11 +211,53 @@ def test_the_lean_dependency_urls_leave_the_run_directory_before_any_step(tmp_pa
     assert CHECK.take_lean_deps_urls(tmp_path) == Path("/somewhere/urls.json")
 
 
-def test_custody_deletes_the_lean_dependency_urls_wherever_a_run_leaves_them():
-    """A run of anything else, or a check that ends before `check.py` starts, leaves them in inputs/ for custody to delete."""
-    from research.store.custody import CREDENTIALS
+def test_the_agreement_urls_leave_the_run_directory_before_any_step(tmp_path, monkeypatch):
+    """The pinned upstream build's URLs grant a read until they expire, as the Lean bundles' do: taken out of the run directory
+    to a file only its owner reads, the step's argument, which `run` deletes when the run ends; a local recorded run reads its
+    launcher's file where it is, and leaves it."""
+    out, sent = _pinned(tmp_path, monkeypatch)
+    monkeypatch.delenv(CHECK.AGREEMENT_URLS_ENV, raising=False)
+    assert CHECK.take_agreement_urls(out) is None
+    body = _signed(sent, out / "inputs" / CHECK.AGREEMENT_URLS).read_text()
+    got = CHECK.take_agreement_urls(out)
+    try:
+        assert not (out / "inputs" / CHECK.AGREEMENT_URLS).exists() and not got.is_relative_to(out)
+        assert got.read_text() == body and got.stat().st_mode & 0o777 == 0o600 and got.name.startswith(CHECK.TAKEN)
+        assert CHECK.lean_steps(out, agreement_urls=got)[3][1][-1] == str(got)
+    finally:
+        got.unlink()
+    monkeypatch.setenv(CHECK.AGREEMENT_URLS_ENV, str(local := _signed(sent, tmp_path / CHECK.AGREEMENT_URLS)))
+    assert CHECK.take_agreement_urls(out) == local and not local.name.startswith(CHECK.TAKEN)
 
-    assert f"inputs/{CHECK.LEAN_DEPS_URLS}" in CREDENTIALS
+
+def test_the_verdict_pack_urls_leave_the_run_directory_before_any_step(tmp_path, monkeypatch, capsys):
+    """Each URL grants a read of its pack until it expires, and the run's record keeps what its run directory holds.  A file that
+    isn't a list of packs imports none and goes all the same; a local recorded run reads its launcher's file where it is."""
+    monkeypatch.delenv(CHECK.VERDICT_URLS_ENV, raising=False)
+    assert CHECK.take_verdict_urls(tmp_path) == []
+    (tmp_path / "inputs").mkdir()
+    pack = {"run": "r-new", "sha256": "a" * 64, "bytes": 3, "url": "https://r2/o?sig"}
+    unsigned = {k: v for k, v in pack.items() if k != "url"}
+    (sent := tmp_path / "inputs" / CHECK.VERDICT_URLS).write_text(json.dumps([pack, {**pack, "bytes": "3"}, unsigned, {"run": "r-x"}, "r-y"]))
+    assert CHECK.take_verdict_urls(tmp_path) == [pack] and not sent.exists()
+    for garbled in ("[", json.dumps(pack), "3"):
+        sent.write_text(garbled)
+        assert CHECK.take_verdict_urls(tmp_path) == [] and not sent.exists()
+    assert capsys.readouterr().out.count("check: verdicts: the packs' URLs sent can't be read (JSONDecodeError); the run imports none") == 1
+    (local := tmp_path / "urls.json").write_text(json.dumps([pack]))
+    monkeypatch.setenv(CHECK.VERDICT_URLS_ENV, str(local))                              # a local recorded run's launcher
+    assert CHECK.take_verdict_urls(tmp_path) == [pack] and local.exists()
+
+
+def test_custody_deletes_the_presigned_urls_wherever_a_run_leaves_them(tmp_path):
+    """A run of anything else, or a check that ends before `check.py` takes them, leaves them in inputs/ for custody to delete."""
+    from research.store.custody import drop_credentials
+
+    (tmp_path / "inputs").mkdir()
+    for name in (CHECK.LEAN_DEPS_URLS, CHECK.VERDICT_URLS, CHECK.AGREEMENT_URLS, "sent.txt"):
+        (tmp_path / "inputs" / name).write_text("x")
+    drop_credentials(tmp_path)
+    assert [p.name for p in (tmp_path / "inputs").iterdir()] == ["sent.txt"]
 
 
 def test_the_agreement_leaves_memory_for_the_steps_beside_it(monkeypatch):
@@ -210,8 +279,67 @@ def test_the_agreement_runs_ci_on_the_pinned_binaries_only(tmp_path, monkeypatch
     assert argv[argv.index("--upstream") + 1] == f"abc={out / 'flock-agreement' / 'upstream' / 'upstream-abc'}"
     assert argv[argv.index("--inputs") + 1].endswith("flock-agreement/inputs") and argv[argv.index("--fuzz") + 1] == "2"
     assert int(argv[argv.index("--session-jobs") + 1]) == CHECK.session_jobs() >= 1
+    assert argv[argv.index("--lean") + 1] == str(CHECK.FLOCK_LEAN / ".lake" / "build" / "bin" / "flock-verify")
+    out, sent = _pinned(tmp_path / "given", monkeypatch)
+    assert CHECK.main(["--lean-agreement", str(out), str(sent / "a.tar.gz"), str(sent / "b.tar.gz"), str(tmp_path / "fv")]) == 0
+    argv = json.loads((out / "flock-agreement" / "argv.json").read_text())
+    assert argv[argv.index("--lean") + 1] == str(tmp_path / "fv")
     out, sent = _pinned(tmp_path / "t", monkeypatch, binary=b"tampered")
     assert CHECK.lean_agreement(out, sent / "a.tar.gz", sent / "b.tar.gz") == 1
+
+
+def test_the_agreement_step_fetches_the_pinned_files_through_their_urls(tmp_path, monkeypatch, capsys):
+    """The launch used to fetch the pinned upstream build and inputs from the store and send them, minutes of every shard's
+    launch on the control pod; the step now fetches them through the URLs the launch signed, into scratch outside the run
+    directory, each held to its listed size and pinned sha256, and runs the agreement on them.  With no other copy to fall
+    back on, a fetch that fails is tried again after each of `AGREEMENT_FETCH_WAITS_S`, and the step fails when the last does;
+    no URL is printed, since each grants a read until it expires."""
+    import json
+    import urllib.error
+
+    out, sent = _pinned(tmp_path, monkeypatch)
+    urls = _signed(sent, tmp_path / "agreement-urls.json")
+    (scratch := tmp_path / "scratch").mkdir()
+    monkeypatch.setattr(CHECK.tempfile, "tempdir", str(scratch))
+    slept = []
+    assert CHECK.lean_agreement_urls(out, urls, sleep=slept.append) == 0 and slept == []
+    argv = json.loads((out / "flock-agreement" / "argv.json").read_text())
+    assert argv[argv.index("--upstream") + 1] == f"abc={out / 'flock-agreement' / 'upstream' / 'upstream-abc'}"
+    assert "check: lean-agreement: fetched the pinned upstream build and inputs (0 MiB) in " in capsys.readouterr().out
+    assert not list(scratch.iterdir()), "the fetched files are scratch, deleted when the step ends"
+
+    real, calls = CHECK.urllib.request.urlopen, []
+
+    def flaky(url, timeout):
+        calls.append(url)
+        if len(calls) <= 2:
+            raise urllib.error.URLError("unreachable")
+        return real(url, timeout=timeout)
+
+    monkeypatch.setattr(CHECK.urllib.request, "urlopen", flaky)
+    out, sent = _pinned(tmp_path / "flaky", monkeypatch)
+    assert CHECK.lean_agreement_urls(out, _signed(sent, tmp_path / "flaky.json"), sleep=slept.append) == 0
+    assert slept == list(CHECK.AGREEMENT_FETCH_WAITS_S) and len(calls) == 4
+    said = capsys.readouterr().out
+    assert said.count("the pinned upstream build (art:u): it can't be fetched (URLError); fetching it again in ") == 2
+
+    monkeypatch.setattr(CHECK.urllib.request, "urlopen", real)
+    out, sent = _pinned(tmp_path / "gone", monkeypatch)
+    doc = json.loads(_signed(sent, urls).read_text())
+    urls.write_text(json.dumps({**doc, "inputs": {**doc["inputs"], "bytes": doc["inputs"]["bytes"] - 1}}))
+    slept.clear()
+    assert CHECK.lean_agreement_urls(out, urls, sleep=slept.append) == 1 and slept == list(CHECK.AGREEMENT_FETCH_WAITS_S)
+    err = capsys.readouterr()
+    n = doc["inputs"]["bytes"]
+    assert (f"error: the pinned inputs (art:i): the {n} bytes fetched aren't the {n - 1} the store lists under its sha256 "
+            f"({len(CHECK.AGREEMENT_FETCH_WAITS_S) + 1} tries)") in err.err
+    assert "file:" not in err.out + err.err and not (out / "flock-agreement" / "argv.json").exists()
+    urls.write_text(json.dumps({"upstream": doc["upstream"]}))
+    assert CHECK.lean_agreement_urls(out, urls, sleep=slept.append) == 1
+    assert f"error: {urls} lists upstream of the pinned upstream build and inputs" in capsys.readouterr().err
+    urls.write_text("{")
+    assert CHECK.lean_agreement_urls(out, urls, sleep=slept.append) == 1
+    assert f"error: {urls} can't be read (JSONDecodeError)" in capsys.readouterr().err
 
 
 def test_a_build_that_cannot_run_here_fails_the_preflight_in_seconds(tmp_path, monkeypatch, capsys):
@@ -240,7 +368,8 @@ def test_the_rule_the_gate_reads(monkeypatch):
     spec2 = importlib.util.spec_from_file_location("check_tool", ROOT / "tools" / "verity" / "check" / "tool.py")
     tool = importlib.util.module_from_spec(spec2)
     spec2.loader.exec_module(tool)
-    assert tool.CHECK.merge_requires["lean-agreement"] == ["verity/ml/flock/", "verity/core/service/flock/", "!README.md",
+    assert tool.CHECK.merge_requires["lean-agreement"] == ["verity/ml/flock/", "verity/ml/flock/pod/", "verity/ml/flock/verifier/",
+                                                           "verity/ml/flock/tool.py", "verity/core/service/flock/", "!README.md",
                                                            "!PROTOCOL.md"]
     assert set(tool.CHECK.merge_requires) == {"lean-agreement", "lean-suites"}
     assert {"verity/core/service/flock/VStar/In.lean", "verity/core/service/vstar/"} <= set(tool.CHECK.merge_requires["lean-suites"])
@@ -358,7 +487,7 @@ def test_record_warns_when_the_commit_cannot_land_as_is_and_checks_it_anyway(mon
 
     monkeypatch.setattr(subprocess, "run", run)
     monkeypatch.setattr(CHECK, "lean_deps_url_file", lambda d: None)
-    monkeypatch.setattr(CHECK, "gather_verdicts", lambda d, given=None: None)
+    monkeypatch.setattr(CHECK, "verdict_url_file", lambda d: None)
     for can, said in ((False, True), (True, False)):
         monkeypatch.setattr(CHECK, "landable", lambda base, can=can: can)
         assert CHECK.record(["--base", "HEAD"]) == 0 and len(launched) == 1
@@ -483,59 +612,167 @@ def test_the_ratchet_gate_step_fails_when_its_base_is_head_or_above_it(tmp_path,
         argv = gate(at)
         assert not isinstance(argv, str) and argv[4] == at, argv
     assert gate("0" * 40) == f"skipped: no base: {'0' * 40} names no commit here"
+    (out / "inputs" / CHECK.RATCHET_BASE_FILE).write_text(f"{below}\n")    # --ratchet-base: the gate's, over --base's
+    argv = CHECK.ratchet_gate(out, True)
+    assert not isinstance(argv, str) and argv[4] == below, argv
+    (out / "inputs" / CHECK.RATCHET_BASE_FILE).unlink()
     (out / "inputs" / CHECK.BASE_FILE).unlink()
     assert CHECK.ratchet_gate(out, True) == "skipped: no base: origin/main names no commit here"
 
 
-def test_record_sends_the_verdicts_it_gathers_with_a_pack_given_added_unless_no_cache(tmp_path, monkeypatch):
-    """`--verdicts-in` adds to the gathered pack, never replaces it: a stale pack given once turned reuse off for every check
-    it rode with, because the gathered pack it replaced held the passes."""
+def test_record_sends_the_verdict_packs_urls_with_a_pack_given_beside_them_unless_no_cache(tmp_path, monkeypatch):
+    """A launch sends the newest recorded checks' packs as URLs the run fetches, never the packs: fetching and combining them on
+    the launcher held each shard's launch some ten minutes.  `--verdicts-in` travels beside them, never in their place: a stale
+    pack given once turned reuse off for every check it rode with, because the gathered pack it replaced held the passes."""
     import subprocess
     import sys
 
-    real, launched, given_to = subprocess.run, [], []
+    real, launched, listed = subprocess.run, [], []
 
     def run(cmd, *a, **k):
         if cmd[:4] == [sys.executable, "-m", "research", "run"]:
-            launched.append(cmd)
+            head = cmd[:cmd.index("--")]
+            launched.append((cmd[cmd.index("--") + 1:], [head[i + 1] for i, x in enumerate(head) if x == "--send"], k["env"], head))
             return subprocess.CompletedProcess(cmd, 0)
         return real(cmd, *a, **k)
 
-    def gathered(d: Path, given: Path | None = None) -> Path:
-        given_to.append(given)
-        (d / "verdicts-gathered.tar.gz").write_bytes(b"")
-        return d / "verdicts-gathered.tar.gz"
+    def url_file(d: Path) -> Path:
+        listed.append(d / CHECK.VERDICT_URLS)
+        listed[-1].write_text("[]")
+        return listed[-1]
 
     monkeypatch.setattr(subprocess, "run", run)
     monkeypatch.setattr(CHECK, "lean_deps_url_file", lambda d: None)
     monkeypatch.setattr(CHECK, "landable", lambda base: True)
     monkeypatch.setattr(CHECK, "slot_wrap", lambda priority: [])
-    monkeypatch.setattr(CHECK, "gather_verdicts", gathered)
+    monkeypatch.setattr(CHECK, "verdict_url_file", url_file)
+    monkeypatch.delenv(CHECK.VERDICT_URLS_ENV, raising=False)
     assert CHECK.record(["--base", "HEAD", "--on", "vy-x"]) == 0
-    [cmd] = launched
-    tail = cmd[cmd.index("--") + 1:]
-    assert tail[-2] == "--verdicts-in" and tail[-1].endswith("verdicts-gathered.tar.gz") and cmd[cmd.index("--send") + 1] == tail[-1]
-    assert given_to == [None]
+    [(tail, sends, env, _)] = launched
+    assert str(listed[-1]) in sends and "--verdicts-in" not in tail and CHECK.VERDICT_URLS_ENV not in env
     launched.clear()
-    assert CHECK.record(["--base", "HEAD", "--on", "vy-x", "--verdicts-in", "mine.tar.gz"]) == 0
-    [cmd] = launched
-    tail = cmd[cmd.index("--") + 1:]
-    assert given_to[-1] == Path("mine.tar.gz").resolve() and "mine.tar.gz" not in " ".join(cmd)
-    assert tail[-2:] == ["--verdicts-in", cmd[cmd.index("--send") + 1]] and tail[-1].endswith("verdicts-gathered.tar.gz")
+    CHECK.VERDICTS._write(mine := tmp_path / "mine.tar.gz", [("tests/k.json", b"{}")])
+    with monkeypatch.context() as here:                                 # the run starts elsewhere: it's given the path whole
+        here.chdir(tmp_path)
+        assert CHECK.record(["--base", "HEAD", "--on", "vy-x", "--verdicts-in", "mine.tar.gz"]) == 0
+    [(tail, sends, _, _)] = launched
+    mine = mine.resolve()
+    assert tail[tail.index("--verdicts-in") + 1] == str(mine) and str(mine) in sends and str(listed[-1]) in sends
     launched.clear()
-    assert CHECK.record(["--base", "HEAD", "--no-cache"]) == 0 and len(given_to) == 2
-    assert not any(x.endswith("verdicts-gathered.tar.gz") for x in launched[0])
+    assert CHECK.record(["--base", "HEAD"]) == 0                                       # a local recorded run
+    [(tail, sends, env, _)] = launched
+    assert env[CHECK.VERDICT_URLS_ENV] == str(listed[-1]) and sends == []
     launched.clear()
-    # drive's after-landing run: circuit-check's passes come from the gathered pack (main imports only theirs)
-    assert CHECK.record(["--base", "HEAD", "--on", "vy-x", "--no-cache", "--circuit-cache"]) == 0 and len(given_to) == 3
-    [cmd] = launched
-    tail = cmd[cmd.index("--") + 1:]
-    assert tail[-4:-2] == ["--no-cache", "--circuit-cache"] and tail[-2] == "--verdicts-in", tail
-    launched.clear()
-    assert CHECK.record(["--base", "HEAD", "--no-cache"]) == 0 and len(given_to) == 3
-    head = launched[0][:launched[0].index("--")]
+    assert CHECK.record(["--base", "HEAD", "--no-cache"]) == 0 and len(listed) == 3
+    [(_, sends, env, head)] = launched
+    assert sends == [] and CHECK.VERDICT_URLS_ENV not in env
     assert [head[i + 1] for i, x in enumerate(head) if x == "--declared-output"] == [*CHECK.PACK_FILES, "check-live.json"], \
         "custody uploads the packs and the live record however the run ends, never trimming them as undeclared"
+    launched.clear()
+    # drive's after-landing run: circuit-check's passes come from the packs sent (main imports only theirs)
+    assert CHECK.record(["--base", "HEAD", "--on", "vy-x", "--no-cache", "--circuit-cache"]) == 0 and len(listed) == 4
+    [(tail, sends, _, _)] = launched
+    assert tail[-2:] == ["--no-cache", "--circuit-cache"] and str(listed[-1]) in sends
+    (bad := tmp_path / "bad.tar.gz").write_bytes(b"not a pack")
+    for given, why in ((bad, "refused"), (tmp_path / "absent.tar.gz", "no such pack")):
+        with pytest.raises(SystemExit, match=why):
+            CHECK.record(["--base", "HEAD", "--on", "vy-x", "--verdicts-in", str(given)])
+
+
+class _Remote:
+    """The store's remote as `agreement_url_file` reads it: it holds every object at ``n`` bytes (none without ``held``) and signs
+    a URL of each, keeping each signature; a read of an object fails the test."""
+
+    def __init__(self, n: int = 7 << 20, held: bool = True):
+        self.n, self.held, self.signed = n, held, []
+
+    def head(self, key: str) -> dict | None:
+        return {"bytes": self.n, "etag": None} if self.held else None
+
+    def presign(self, key: str, expires_s: int) -> str:
+        self.signed.append((key, expires_s))
+        return f"https://store.invalid/{key}?X-Amz-Signature=signed"
+
+    def get(self, key: str, path: Path) -> None:
+        raise AssertionError(f"the launch read {key}")
+
+
+def _remote(monkeypatch, remote) -> None:
+    import research.store.remote
+
+    monkeypatch.setattr(research.store.remote, "load_remote", lambda path=None: remote)
+
+
+def test_a_launch_that_needs_the_agreement_sends_its_urls_and_fetches_nothing(tmp_path, monkeypatch, capsys):
+    """The launch fetched the pinned upstream build and inputs from the store to send with the run: minutes of each shard's
+    launch on the control pod.  It now reads each one's size from the store's remote and signs a GET of it for
+    `AGREEMENT_URL_TTL_S`, in a file only its owner reads, sent with the run or, for a local one, named by
+    `AGREEMENT_URLS_ENV`; it opens no local store, reads no object and prints no URL.  A remote that can't sign, can't be read
+    or doesn't hold a pinned file refuses the launch, whose agreement would otherwise fail on the machine."""
+    import tempfile
+    import urllib.error
+
+    import research.store.local
+    from research.store.local import object_key
+
+    real, launched, sent, opened = subprocess.run, [], {}, []
+
+    def run(cmd, *a, **k):
+        if cmd[:4] == [sys.executable, "-m", "research", "run"]:
+            launched.append(cmd)
+            named = [cmd[i + 1] for i, x in enumerate(cmd) if x == "--send" and cmd[i + 1].endswith(CHECK.AGREEMENT_URLS)]
+            for p in map(Path, named + ([u] if (u := (k.get("env") or {}).get(CHECK.AGREEMENT_URLS_ENV)) else [])):
+                sent[p] = (json.loads(p.read_text()), p.stat().st_mode & 0o777)
+            return subprocess.CompletedProcess(cmd, 0)
+        return real(cmd, *a, **k)
+
+    class Store:
+        def __init__(self, *a, **k):
+            opened.append(a)
+            raise AssertionError("the launch opened the local store")
+
+    (scratch := tmp_path / "scratch").mkdir()
+    monkeypatch.setattr(tempfile, "tempdir", str(scratch))
+    monkeypatch.setattr(subprocess, "run", run)
+    monkeypatch.setattr(research.store.local, "LocalStore", Store)
+    monkeypatch.setattr(CHECK, "lean_deps_url_file", lambda d: None)
+    monkeypatch.setattr(CHECK, "verdict_url_file", lambda d: None)
+    monkeypatch.delenv(CHECK.AGREEMENT_URLS_ENV, raising=False)
+    _remote(monkeypatch, remote := _Remote())
+    pin = json.loads(CHECK.UPSTREAM_PIN.read_text())
+    want = {k: {"art": pin[k]["art"], "sha256": pin[k]["sha256"], "bytes": 7 << 20,
+                "url": f"https://store.invalid/{object_key(pin[k]['sha256'])}?X-Amz-Signature=signed"} for k in ("upstream", "inputs")}
+    assert CHECK.record(["--on", "vy-x", "--base", "HEAD", "--agreement"]) == 0
+    [cmd] = launched
+    [(path, (doc, mode))] = sent.items()
+    assert path.name == CHECK.AGREEMENT_URLS and doc == want and mode == 0o600 and str(path) in cmd
+    assert [cmd[i + 1] for i, x in enumerate(cmd) if x == "--input"] == [f"flock_{k}={pin[k]['art']}" for k in ("upstream", "inputs")]
+    assert remote.signed == [(object_key(pin[k]["sha256"]), CHECK.AGREEMENT_URL_TTL_S) for k in ("upstream", "inputs")]
+    out = capsys.readouterr().out
+    assert "sending presigned URLs for the pinned upstream build and inputs (14 MiB, which the run fetches)" in out
+    assert "X-Amz-Signature" not in out and opened == [] and not list(scratch.iterdir())
+    launched.clear(), sent.clear()
+    assert CHECK.record(["--base", "HEAD", "--agreement"]) == 0                        # a local recorded run
+    [(path, (doc, _))] = sent.items()
+    assert doc == want and CHECK.AGREEMENT_URLS not in " ".join(launched[0])
+
+    class Unreadable(_Remote):
+        def head(self, key: str) -> dict | None:
+            raise urllib.error.HTTPError(f"https://store.invalid/{key}", 403, "Forbidden", {}, None)
+
+    launched.clear()
+    for given, why in ((_Remote(held=False), f"the store's remote doesn't hold the pinned upstream ({pin['upstream']['art']})"),
+                       (Unreadable(), "the store's remote can't be read (HTTPError 403)"), (None, "no store remote here signs URLs")):
+        _remote(monkeypatch, given)
+        assert CHECK.record(["--on", "vy-x", "--base", "HEAD", "--agreement"]) == 2
+        assert (f"check: --record refused: the run needs lean-agreement, which fetches the pinned upstream build and inputs "
+                f"through presigned URLs, and {why}; nothing launched") in capsys.readouterr().err
+        assert CHECK.main(["--agreement-files"]) == 1 and f"check: --agreement-files: {why}" in capsys.readouterr().err
+    assert launched == [] and opened == [] and not list(scratch.iterdir())
+    _remote(monkeypatch, _Remote())
+    assert CHECK.main(["--agreement-files"]) == 0
+    printed = capsys.readouterr().out.split()
+    assert printed[0] == "--send" and json.loads(Path(printed[1]).read_text()) == want
 
 
 def test_record_sends_the_agreement_for_a_file_renamed_out_of_its_paths(tmp_path, monkeypatch, capsys):
@@ -545,8 +782,6 @@ def test_record_sends_the_agreement_for_a_file_renamed_out_of_its_paths(tmp_path
     import subprocess
     import sys
     import tempfile
-
-    import research.store.local
 
     def git(*args):
         subprocess.run(["git", "-c", "user.email=t@t", "-c", "user.name=t", "-c", "commit.gpgsign=false", *args], cwd=tmp_path,
@@ -563,13 +798,8 @@ def test_record_sends_the_agreement_for_a_file_renamed_out_of_its_paths(tmp_path
     git("commit", "-q", "-m", "base")
     git("mv", "verity/ml/flock/verify.rs", "verify.rs")
     git("commit", "-q", "-m", "move")
-    (tmp_path / "upstream.json").write_text(json.dumps({"upstream": {"art": "art:u"}, "inputs": {"art": "art:i"}}))
-
-    class Store:
-        def fetch(self, art):
-            (tmp_path / art[4:]).write_text("")
-            return tmp_path / art[4:]
-
+    (tmp_path / "upstream.json").write_text(json.dumps({"upstream": {"art": "art:u", "sha256": "a" * 64},
+                                                        "inputs": {"art": "art:i", "sha256": "b" * 64}}))
     real, launched = subprocess.run, []
 
     def run(cmd, *a, **k):
@@ -581,12 +811,13 @@ def test_record_sends_the_agreement_for_a_file_renamed_out_of_its_paths(tmp_path
     monkeypatch.setattr(CHECK, "ROOT", tmp_path)
     monkeypatch.setattr(CHECK, "UPSTREAM_PIN", tmp_path / "upstream.json")
     monkeypatch.setattr(CHECK, "lean_deps_url_file", lambda d: None)
-    monkeypatch.setattr(research.store.local, "LocalStore", Store)
+    monkeypatch.setattr(CHECK, "verdict_url_file", lambda d: None)
+    _remote(monkeypatch, _Remote())
     monkeypatch.setattr(tempfile, "tempdir", str(tmp_path))
     monkeypatch.setattr(subprocess, "run", run)
     assert CHECK.record(["--base", "HEAD^"]) == 0
     [cmd] = launched
-    assert "flock_upstream=art:u" in cmd and "sending the pinned upstream build" in capsys.readouterr().out
+    assert "flock_upstream=art:u" in cmd and "sending presigned URLs for the pinned upstream build" in capsys.readouterr().out
 
 
 def test_check_refuses_a_python_that_imports_the_trees_packages_from_elsewhere(monkeypatch, capsys):
@@ -598,6 +829,32 @@ def test_check_refuses_a_python_that_imports_the_trees_packages_from_elsewhere(m
     assert CHECK.main([]) == 2
     assert "against another checkout's code (verity from /tmp/s1350/x.py)" in capsys.readouterr().err
     assert probed == [str(ROOT / "tools/research/src")]
+
+
+def test_check_run_as_a_script_in_a_fresh_trees_environment_installs_the_workspace_first(monkeypatch, capsys):
+    """`uv run --extra torch-cpu python tools/verity/check/check.py` installs the root, torch and the dev group, not every member."""
+    monkeypatch.delenv("RESEARCH_RUN_ID", raising=False)
+    monkeypatch.setattr(CHECK.SUITES, "foreign", lambda pkgs, env: "verity_identity from nowhere (not importable)")
+    monkeypatch.setattr(CHECK.SUITES, "fresh", lambda env: True)
+    monkeypatch.setattr(CHECK, "run", lambda *a: pytest.fail("a step ran"))
+    resynced = []
+    monkeypatch.setattr(CHECK, "resync", resynced.append)
+    assert CHECK.main(["--cores", "4"], script=True) == 2 and resynced == [["--cores", "4"]]
+    assert f"`{' '.join(CHECK.SUITES.SYNC)} && uv run --extra torch-cpu python" in capsys.readouterr().err
+    assert CHECK.main([]) == 2 and len(resynced) == 1
+
+
+def test_check_resyncs_once_and_runs_again_only_where_the_sync_filled_the_environment(monkeypatch):
+    synced, ran, fresh = [], [], [False]
+    monkeypatch.setattr(CHECK.subprocess, "run", lambda cmd, cwd: synced.append(cmd) or subprocess.CompletedProcess(cmd, 0))
+    monkeypatch.setattr(CHECK.os, "execv", lambda exe, args: ran.append(args))
+    monkeypatch.setattr(CHECK.SUITES, "fresh", lambda env: fresh[0])
+    monkeypatch.setattr(sys, "argv", ["tools/verity/check/check.py", "--cores", "4"])
+    CHECK.resync(["--cores", "4"])
+    assert synced == [CHECK.SUITES.SYNC] and ran == [[sys.executable, "tools/verity/check/check.py", "--cores", "4"]]
+    fresh[0] = True
+    CHECK.resync(["--cores", "4"])
+    assert len(synced) == 2 and len(ran) == 1
 
 
 def test_a_recorded_run_refuses_to_skip_the_store(monkeypatch):
@@ -633,7 +890,7 @@ def test_a_cached_circuit_check_keeps_the_catalog_bindings_records_and_an_uncach
 
 
 def test_beside_pytest_alone_circuit_check_takes_the_share_lean_suites_would_have(tmp_path, monkeypatch):
-    """A post-landing run (`--deferred circuit-check,pytest`) runs no Lean step, so circuit-check getting 210 GiB of a 560 GiB
+    """An after-landing run (`--deferred circuit-check,pytest`) runs no Lean step, so circuit-check getting 210 GiB of a 560 GiB
     slot while pytest kept to its half of the rest, 175, would leave lean-suites' 175 unused and run the 147-167 GiB SHA-512
     targets one at a time.  Pytest's share is unchanged."""
     monkeypatch.setattr(CHECK, "FLOCK_LEAN", tmp_path / "verifier-lean")
@@ -701,9 +958,9 @@ def test_the_groups_split_the_cores_and_run_at_once(tmp_path, monkeypatch):
     monkeypatch.setattr(CHECK, "FLOCK_LEAN", tmp_path / "verifier-lean")
     monkeypatch.setattr(CHECK, "memory_gb", lambda: 2048)
     monkeypatch.delenv(CHECK.SLOT.SLOT_MEM_ENV, raising=False)
-    assert "--mem-gb" not in CHECK.groups(tmp_path, 16)[1][1][1]
+    assert "--mem-gb" not in CHECK.groups(tmp_path, 16)[1][2][1]
     monkeypatch.setenv(CHECK.SLOT.SLOT_MEM_ENV, "560")
-    (pt,), (build, cc, rust), (lean,), (gate,) = CHECK.groups(tmp_path, 16)
+    (pt,), (build, rust, cc), (lean,), (gate,) = CHECK.groups(tmp_path, 16)
     assert cc[1][cc[1].index("--mem-gb") + 1] == "210", "a slot's mem=, less what pytest and Lean hold beside it, caps circuit-check"
     assert build[0] == "flock-circuit-build" and build[1][-1].endswith("verity/ml/flock/check_build.sh")
     assert rust[0] == "flock-rust-tests" and rust[1][-2:] == [build[1][-1], "test"] and "CARGO_BUILD_JOBS=8" in rust[1]
@@ -775,7 +1032,7 @@ def test_a_checkouts_files_are_gits_and_the_key_environment_drops_the_tree_path(
         (tmp_path / built).parent.mkdir(parents=True, exist_ok=True)
         (tmp_path / built).write_bytes(b"x")
     assert CHECK.tracked_files(tmp_path) == [".gitignore", "a.txt"]
-    assert CHECK._env_key({"VIRTUAL_ENV": f"{ROOT}/.venv", "SSH_CLIENT": "1 2 3"}) == {"VIRTUAL_ENV": "<tree>/.venv"}   # per-commit path
+    assert CHECK._env_key({"PYTHONPATH": f"{ROOT}/x", "VIRTUAL_ENV": f"{ROOT}/.venv", "SSH_CLIENT": "1 2 3"}) == {"PYTHONPATH": "<tree>/x"}
 
 
 def test_the_agreement_is_not_required_for_docs_alone():
@@ -786,10 +1043,10 @@ def test_the_agreement_is_not_required_for_docs_alone():
     tool = importlib.util.module_from_spec(spec2)
     spec2.loader.exec_module(tool)
     rule = tool.CHECK.merge_requires["lean-agreement"]
-    docs = ["verity/ml/flock/verifier/PROTOCOL.md", "verity/ml/flock/verifier/README.md", "verity/ml/flock/README.md", "AGENTS.md"]
+    docs = ["verity/ml/flock/live/PROTOCOL.md", "verity/ml/flock/verifier/README.md", "verity/ml/flock/README.md", "AGENTS.md"]
     assert rule_touches(rule, docs) == []
-    assert rule_touches(rule, [*docs, "verity/ml/flock/verifier/ci.py"]) == ["verity/ml/flock/"]
-    assert rule_touches(rule, ["verity/ml/flock/verifier/DESIGN.md"]) == ["verity/ml/flock/"]      # only the two names are left out
+    assert rule_touches(rule, [*docs, "verity/ml/flock/verifier/ci.py"]) == ["verity/ml/flock/", "verity/ml/flock/verifier/"]
+    assert rule_touches(rule, ["verity/ml/flock/verifier/DESIGN.md"]) == ["verity/ml/flock/", "verity/ml/flock/verifier/"]  # only the two names are left out
     for f in ("ci.py", "agree.py", "fuzz.py", "redigest.py", "transcript_check.py", "selftest_records.py"):   # cited, never read
         reads = [line for line in (ROOT / "verity" / "ml" / "flock" / "verifier" / f).read_text().splitlines()
                  if any(r in line for r in ("open(", "read_text", "read_bytes")) and any(d in line for d in ("README", "PROTOCOL"))]
@@ -863,6 +1120,22 @@ def test_the_agreement_refuses_a_machine_it_cannot_run_on_in_seconds(tmp_path, m
     assert "needs glibc 99.1" in CHECK.agreement_preflight({"upstream": {"glibc": "99.1"}}, [ok])
     monkeypatch.setattr(CHECK, "memory_gb", lambda: 16)
     assert "may use 16 GB; the agreement needs 24" in CHECK.agreement_preflight({"upstream": {}}, [ok])
+
+
+def test_the_agreements_smoke_replay_expects_upstreams_own_verdict_where_a_case_records_a_divergence(tmp_path, monkeypatch):
+    """A case that records a divergence (`upstream_accepted`: an honest session Lean refuses for completeness and upstream
+    accepts) is held to upstream's own verdict: held to Lean's, it would fail the preflight. A case without the key expects
+    its one verdict of both."""
+    v = tmp_path / "verifier"
+    v.mkdir()
+    (v / "agree.py").write_text("def drawn(d):\n    return False\n\ndef upstream_cmd(a, public, extra):\n    return [a.upstream]\n")
+    sets = [{"pr83": c, "lean_statement": "s", "statement": {"circuit": f"art:{c}/c", "public": f"art:{c}/p"},
+             "sessions": [{"dir": f"art:{c}/honest", "expect": expect}]}
+            for c, expect in (("aa", {"accepted": False, "why": "setup: registered reads (complete): ", "upstream_accepted": True}),
+                              ("bb", {"accepted": True, "why": ""}))]
+    (v / "vectors.json").write_text(json.dumps({"replayable": {"sets": sets}}))
+    monkeypatch.setattr(CHECK, "FLOCK_VERIFIER", v)
+    assert {c: e for c, _, e in CHECK.upstream_smoke(tmp_path)} == {"aa": {"accepted": True}, "bb": {"accepted": True}}
 
 
 def _fake_run(monkeypatch, groups, pre=()):
@@ -1215,6 +1488,59 @@ def test_the_lean_audit_step_refuses_a_fast_path_result(tmp_path):
     assert rec["status"] == "failed" and rec["detail"].startswith(f"refused: a: a {kind} result"), rec
 
 
+def test_a_check_s_passes_are_the_packages_its_audit_passed_on_the_commit_s_own_lock_by_their_inputs_keys(tmp_path, monkeypatch):
+    """result.json's `passes` ({inputs key: package}): each package the lean-audit step passed with the kernel replay on the
+    commit's own lock, under the key `lean_changed.py --inputs-key` prints for it at that commit, which a records run of the
+    commit keeps too, so `research queue`'s records gate finds a check's pass as it finds a records run's.  None of a
+    package that failed, passed only on a record it regenerated or without the replay; none at all from a refused or stopped
+    step or an audit that crashed."""
+    import subprocess
+    import sys
+
+    lc = CHECK._load("lean_changed", CHECK.LEAN_JOBS)
+    root = tmp_path / "repo"
+    files = {"a/lakefile.toml": "", "a/lean-audit.json": "{}", "a/A.lean": "def a := 1\n",
+             "a/lake-manifest.json": json.dumps({"packages": [{"name": "p", "type": "path", "dir": "../p"}]}),
+             "p/lakefile.toml": "", "p/lean-audit.json": "{}", "p/P.lean": "def p := 1\n",
+             "c/lakefile.toml": "", "c/lean-audit.json": "{}", "d/lakefile.toml": "", "d/lean-audit.json": "{}"}
+    for f, text in files.items():
+        (root / f).parent.mkdir(parents=True, exist_ok=True)
+        (root / f).write_text(text)
+    for args in (["init", "-q"], ["add", "-A"], ["commit", "-q", "-m", "packages"]):
+        subprocess.run(["git", "-c", "user.email=t@t", "-c", "user.name=t", "-c", "commit.gpgsign=false", *args], cwd=root,
+                       check=True, capture_output=True)
+    for m in (CHECK, lc, lc.LA):
+        monkeypatch.setattr(m, "ROOT", root)
+    full = {"failures": [], "seconds": {"build": 1.0, "audit": 1.0, "replay": 1.0}}
+    audit = {"passed": False, "failed": ["p"], "cached": {"a": "k"}, "regenerated": {"c": "c/lean-audit.json"},
+             "packages": [{**full, "package": "a"}, {**full, "package": "p", "failures": ["audit: no"]},
+                          {**full, "package": "c", "settled": True, "regenerated": "c/lean-audit.json"},
+                          {**full, "package": "d", "seconds": {"build": 1.0, "audit": 1.0}}]}
+    (tmp_path / "lean-audit").mkdir()
+    (tmp_path / "lean-audit" / "audit.json").write_text(json.dumps(audit))
+    step = {"step": "lean-audit", "status": "failed", "rc": 1, "log": "lean-audit.log", "seconds": 1.0}
+    printed = subprocess.run([sys.executable, str(CHECK.LEAN_JOBS / "lean_changed.py"), "--inputs-key", "a", "--repo", str(root)],
+                             check=True, capture_output=True, text=True).stdout
+    key = json.loads(printed)["a"]
+    assert CHECK.lean_passes(tmp_path, [step], lc) == {key: "a"}
+    for bad in ({**step, "detail": "refused: a: a lean-fast/v1 result"}, {**step, "status": "stopped", "rc": -15},
+                {**step, "detail": "hung: no output for 30 min"}):
+        assert CHECK.lean_passes(tmp_path, [bad], lc) == {}, bad
+    (tmp_path / "lean-audit" / "audit.json").write_text(json.dumps({**audit, "failed": ["p", "check.py exit 2"]}))
+    assert CHECK.lean_passes(tmp_path, [step], lc) == {}, "check.py crashed: what it reported isn't every verdict"
+    (tmp_path / "lean-audit" / "audit.json").write_text(json.dumps(audit))
+    (root / "a" / "A.lean").write_text("def a := 2\n")
+    got = CHECK.lean_passes(tmp_path, [step], lc)
+    assert list(got.values()) == ["a"] and key not in got, "keyed on the files the audit read: here a change not committed"
+
+    monkeypatch.setenv("RESEARCH_RUN_ID", "r-test")
+    monkeypatch.setattr(CHECK, "lean_passes", lambda out, done, lc=None: {key: "a"})
+    CHECK.write_result(tmp_path, False, [step])
+    assert json.loads((tmp_path / "result.json").read_text())["passes"] == {key: "a"}
+    CHECK.write_result(tmp_path, False, [step], stopped_by="SIGTERM")
+    assert json.loads((tmp_path / "result.json").read_text())["passes"] == {}, "a stopped run has no verdict"
+
+
 def test_the_early_lean_build_is_a_group_of_its_own_beside_the_lean_steps(tmp_path, monkeypatch):
     out, _ = _pinned(tmp_path, monkeypatch)
     gs = CHECK.groups(out, 8)
@@ -1256,6 +1582,30 @@ def test_the_preflight_runs_first_and_a_failure_there_starts_nothing_else(tmp_pa
     assert done[1]["detail"] == "not started: preflight-lock failed" and not marker.exists()
     _fake_run(monkeypatch, [[("pytest", touch, tmp_path)]], pre=[("preflight-lock", _py("pass"), tmp_path)])
     assert CHECK.run(tmp_path, 2)[0] and marker.exists()
+
+
+def test_a_prebuild_that_fails_refuses_the_run_with_its_output_and_exit_status_even_under_keep_going(tmp_path, monkeypatch):
+    """The C++ models' prebuild ran with its output captured and its exit ignored, and fell back to building nothing where the
+    twins didn't import, so a check whose models didn't build ran on, each step compiling them untraced: it refuses now."""
+    import json
+
+    assert "except" not in CHECK.PREBUILD, "a prebuild whose models don't import fails, never falls back to building none"
+    marker = tmp_path / "ran"
+    touch = _py("open(__import__('sys').argv[1], 'w')", marker)
+    for keep_going in (False, True):
+        _fake_run(monkeypatch, [[("pytest", touch, tmp_path)]], pre=[("preflight-lock", _py("pass"), tmp_path)])
+        monkeypatch.setattr(CHECK, "PREBUILD", "import sys\nprint('compiling tc_model.cpp', flush=True)\nsys.exit('g++: not found')")
+        ok, done = CHECK.run(tmp_path, 2, keep_going=keep_going)
+        assert not ok and not marker.exists(), keep_going
+        assert [(s["step"], s["status"], s.get("rc")) for s in done] == [("preflight-lock", "passed", 0), ("prebuild", "failed", 1)]
+        assert done[1]["detail"].startswith("refused: the C++ models' prebuild exited 1 (g++: not found; prebuild.log)")
+        assert (tmp_path / "prebuild.log").read_text().splitlines() == ["compiling tc_model.cpp", "g++: not found"]
+        assert json.loads((tmp_path / "steps.jsonl").read_text().splitlines()[-1])["step"] == "prebuild"
+    _fake_run(monkeypatch, [[("pytest", touch, tmp_path)]], pre=[("preflight-lock", _py("pass"), tmp_path)])
+    monkeypatch.setattr(CHECK, "PREBUILD", "print('{\"tc_model\": \"libtc_model.so\"}')")
+    ok, done = CHECK.run(tmp_path, 2)
+    assert ok and marker.exists() and [s["step"] for s in done] == ["preflight-lock", "pytest"]
+    assert (tmp_path / "prebuild.log").read_text() == '{"tc_model": "libtc_model.so"}\n'
 
 
 def test_a_failed_preflight_starts_nothing_else_even_under_keep_going(tmp_path, monkeypatch):
@@ -1387,8 +1737,6 @@ def test_record_sends_the_agreement_for_a_flock_file_whose_name_git_quotes(tmp_p
     import sys
     import tempfile
 
-    from research.store import local
-
     def git(*args: str) -> None:
         subprocess.run(["git", "-c", "user.email=t@t", "-c", "user.name=t", "-c", "commit.gpgsign=false", *args], cwd=tmp_path,
                        check=True, capture_output=True)
@@ -1403,11 +1751,6 @@ def test_record_sends_the_agreement_for_a_flock_file_whose_name_git_quotes(tmp_p
     git("checkout", "-q", "-b", "pr")
     git("add", "-A")
     git("commit", "-q", "-m", "é")
-
-    class Store:
-        def fetch(self, art: str) -> Path:
-            return tmp_path / art.replace(":", "_")
-
     real, launched = subprocess.run, []
 
     def run(cmd, *a, **k):
@@ -1418,11 +1761,14 @@ def test_record_sends_the_agreement_for_a_flock_file_whose_name_git_quotes(tmp_p
 
     monkeypatch.setattr(CHECK, "ROOT", tmp_path)
     monkeypatch.setattr(CHECK, "lean_deps_url_file", lambda d: None)
-    monkeypatch.setattr(local, "LocalStore", Store)
+    monkeypatch.setattr(CHECK, "verdict_url_file", lambda d: None)
+    _remote(monkeypatch, _Remote())
     monkeypatch.setattr(tempfile, "tempdir", str(tmp_path))
     monkeypatch.setattr(subprocess, "run", run)
     assert CHECK.record(["--base", "main"]) == 0
-    assert "check: changes under verity/ml/flock/, verity/core/service/flock/ against main: sending the pinned upstream build and inputs" in capsys.readouterr().out
+    assert ("check: changes under verity/ml/flock/, verity/ml/flock/pod/, verity/ml/flock/verifier/, verity/ml/flock/tool.py, "
+            "verity/core/service/flock/ against main: sending presigned URLs for the pinned upstream build and inputs") \
+        in capsys.readouterr().out
     [cmd] = launched
     assert any(x.startswith("flock_upstream=art:") for x in cmd)
 
@@ -1553,6 +1899,8 @@ def test_train_sh_refuses_every_flag_but_agreement(tmp_path):
     assert p.returncode == 1 and "no parent store key" in p.stderr, p.stderr
     p = train("--base", "main")
     assert p.returncode == 2 and "train: --base refused without --deferred" in p.stderr, p.stderr
+    p = train("--ratchet-base", "main")
+    assert p.returncode == 2 and "train: --ratchet-base refused without --deferred" in p.stderr, p.stderr
 
 
 def test_train_sh_copied_out_of_the_tree_finds_the_trees_settings(tmp_path):
@@ -1640,6 +1988,7 @@ def _train_repo(tmp_path):
         env.pop(k, None)
 
     def train(*a, **extra):
+        done.unlink(missing_ok=True)      # else `sleep` returns at once on an earlier call's launch, before this one's
         return subprocess.run(["bash", str(ROOT / "tools" / "verity" / "check" / "train.sh"), *a], capture_output=True, text=True,
                               cwd=tmp_path / "repo", env={**env, **extra})
 
@@ -1662,29 +2011,6 @@ def test_train_sh_refuses_an_empty_commit_and_one_origin_lacks(tmp_path):
     p = train("HEAD", "vy-x")
     assert p.returncode == 1 and "is on no branch of origin" in p.stderr, p.stderr
     assert not argv.exists()
-
-
-def test_train_sh_runs_with_priority_and_posts_a_launch_that_registers_no_run(tmp_path):
-    git, train, argv = _train_repo(tmp_path)
-    (tmp_path / "repo" / "a").write_text("b\n")
-    git("commit", "-q", "-am", "change")
-    git("push", "-q", "origin", "HEAD:main")
-    p = train("HEAD", "vy-x", "--agreement")
-    args = argv.read_text().split()
-    assert p.returncode == 0 and {"--record", "--priority", "--keep-going", "--agreement"} <= set(args), args
-    p = train("HEAD", "vy-x", "--deferred", "pytest,circuit-check", "--no-cache", "--circuit-cache", "--no-regenerate")
-    args = argv.read_text().split()
-    assert p.returncode == 0 and args[args.index("--deferred"):] == ["--deferred", "pytest,circuit-check", "--no-cache",
-                                                                     "--circuit-cache", "--no-regenerate"], args
-    p = train("HEAD", "vy-x", "--deferred", "pytest", "--shard", "2/3")
-    args = argv.read_text().split()
-    assert p.returncode == 0 and args[-4:] == ["--deferred", "pytest", "--shard", "2/3"], args
-    assert "shard 2/3" in p.stdout and f"train-{git('rev-parse', 'HEAD')[:12]}-2of3.log" in p.stdout, p.stdout
-
-    (tmp_path / "origin.git").rename(tmp_path / "gone.git")
-    (tmp_path / "bin" / "sleep").write_text("#!/bin/sh\n")                # the fetch's backoffs: nothing launches to wait for
-    p = train("HEAD", "vy-x")
-    assert p.returncode == 1 and "git fetch origin failed" in (tmp_path / "posted").read_text()
 
 
 def test_train_sh_launches_the_records_step_alone_and_hands_a_shard_its_artifact(tmp_path):
@@ -1734,6 +2060,34 @@ def test_train_sh_hands_an_auto_shard_its_plan_and_refuses_one_without_it(tmp_pa
         assert p.returncode == 2 and f"train: {why}" in p.stderr and not argv.exists(), (flags, p.stderr)
 
 
+def test_train_sh_hands_the_lock_runs_bookkeeping_flag_to_a_check_that_takes_it(tmp_path):
+    """Drive's lock run (`--deferred lean-audit --bookkeeping-warn`): the flag reaches check.py --record when the commit's
+    check.py takes it, and on a commit whose check.py predates it the run launches without it, saying so; with --no-regenerate,
+    --shard or without --deferred it is refused before anything launches."""
+    git, train, argv = _train_repo(tmp_path)
+    check = tmp_path / "repo" / "tools" / "verity" / "check" / "check.py"
+    check.parent.mkdir(parents=True)
+    check.write_text('BOOKKEEPING = "--bookkeeping-warn"\n')
+    git("add", "tools")
+    git("commit", "-q", "-m", "landing")
+    git("push", "-q", "origin", "HEAD:main")
+    p = train("HEAD", "vy-x", "--deferred", "lean-audit", "--bookkeeping-warn")
+    args = argv.read_text().split()
+    assert p.returncode == 0 and args[args.index("--deferred"):] == ["--deferred", "lean-audit", "--bookkeeping-warn"], (
+        p.stderr, args)
+    check.write_text("\n")
+    git("commit", "-q", "-am", "older")
+    git("push", "-q", "origin", "HEAD:main")
+    p = train("HEAD", "vy-x", "--deferred", "lean-audit", "--bookkeeping-warn")
+    args = argv.read_text().split()
+    assert p.returncode == 0 and "--bookkeeping-warn" not in args and "predates --bookkeeping-warn" in p.stdout, (p.stdout, args)
+    argv.unlink()
+    for flags in (["--bookkeeping-warn"], ["--deferred", "lean-audit", "--no-regenerate", "--bookkeeping-warn"],
+                  ["--deferred", "lean-audit", "--shard", "1/3", "--bookkeeping-warn"]):
+        p = train("HEAD", "vy-x", *flags)
+        assert p.returncode == 2 and "train: --bookkeeping-warn refused" in p.stderr and not argv.exists(), (flags, p.stderr)
+
+
 def test_train_sh_replaces_a_tree_git_no_longer_lists_as_a_worktree(tmp_path):
     """On the control pod's NFS TMPDIR a train's tree can be left half removed and no longer a worktree, which `worktree remove`
     skips and `worktree add` refuses: every relaunch of that commit registered no run."""
@@ -1765,6 +2119,13 @@ def test_train_sh_hands_check_the_base_below_the_tip_that_drive_sends(tmp_path):
     argv.unlink()
     p = train("HEAD", "vy-x", "--deferred", "ratchet-gate", "--base", "nope")
     assert p.returncode == 1 and "--base nope: no such commit" in p.stderr and not argv.exists(), p.stderr
+    # ratchet-gate's own base (`--ratchet-base`: the tip of drive's last run whose gate gave a verdict), beside `--base`
+    p = train("HEAD", "vy-x", "--deferred", "ratchet-gate", "--base", "HEAD~1", "--ratchet-base", "HEAD~1")
+    args = argv.read_text().split()
+    assert p.returncode == 0 and args[args.index("--base"):] == ["--base", verified, "--ratchet-base", verified], (p.stderr, args)
+    argv.unlink()
+    p = train("HEAD", "vy-x", "--deferred", "ratchet-gate", "--ratchet-base", "nope")
+    assert p.returncode == 1 and "--ratchet-base nope: no such commit" in p.stderr and not argv.exists(), p.stderr
 
 
 def test_train_sh_retries_a_failed_first_fetch_twice_with_a_backoff(tmp_path):
@@ -1898,7 +2259,8 @@ def test_the_lints_are_keyed_by_the_committed_tree_and_unkeyed_on_any_change(tmp
     monkeypatch.setattr(CHECK, "ROOT", tmp_path)
     e = {"PATH": "/usr/bin"}
     one = CHECK.lints_key(e)
-    assert one and CHECK.lints_key(e) == one and CHECK.lints_key({"PATH": "/bin"}) != one
+    assert one and CHECK.lints_key(e) == one and CHECK.lints_key({"PATH": "/bin"}) == one
+    assert CHECK.lints_key({**e, "VERITY_SLOW": "1"}) != one
     (tmp_path / "b.md").write_text("b\n")
     assert CHECK.lints_key(e) is None
     git("add", "-A")

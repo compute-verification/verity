@@ -1,5 +1,42 @@
-import Proofs.Core.Boolean
-import Proofs.Flock.Claims.Scope.Readable
+module
+
+public import Proofs.Core.Boolean
+public import Proofs.Flock.Claims.Scope.Readable
+import Mathlib.Algebra.Order.Floor.Extended
+import Mathlib.Algebra.Order.Interval.Basic
+import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
+import Mathlib.Analysis.SpecialFunctions.Bernstein
+import Mathlib.Analysis.SpecialFunctions.Gamma.Basic
+import Mathlib.Analysis.SpecialFunctions.Trigonometric.DerivHyp
+import Mathlib.Combinatorics.Enumerative.DyckWord
+import Mathlib.Combinatorics.SimpleGraph.Triangle.Removal
+import Mathlib.Data.NNRat.Floor
+import Mathlib.Data.Nat.Choose.Multinomial
+import Mathlib.Geometry.Euclidean.Altitude
+import Mathlib.NumberTheory.Chebyshev
+import Mathlib.NumberTheory.Height.NumberField
+import Mathlib.NumberTheory.Height.Projectivization
+import Mathlib.NumberTheory.LucasLehmer
+import Mathlib.NumberTheory.SelbergSieve
+import Mathlib.RingTheory.Radical.NatInt
+import Mathlib.Tactic.ENatToNat
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Topology.Sheaves.Init
+import Proofs.Core.Circuit
+import Std.Tactic.BVDecide.Normalize.Bool
+import Std.Tactic.BVDecide.Normalize.Prop
 
 /-!
 # Block R1CS systems over GF(2), as the readable relation
@@ -16,6 +53,8 @@ gates' outputs are those hidden bits again, its pins' the public `1`, and its fi
 `relS_iff`: a witness satisfies `Claims.Flock.RelS` of a statement with these fields exactly when, in every block, every
 table's rows hold (`Sys.Holds`).
 -/
+
+@[expose] public section
 
 namespace Flock.Readable
 
@@ -60,7 +99,7 @@ def copied (p : ℕ) : List ℕ :=
 
 /-- Gate `g` of the block circuit: an input bit, row `g − J·N`'s AND of XORs, or a copy, the AND of one bit with
 itself. -/
-def gate (g : Fin S.size) : FlockSoundness.Audit.Op S.size :=
+def gate (g : Fin S.size) : Verity.Boolean.Op S.size :=
   if g.val < S.J * S.N then .input
   else if g.val < 2 * (S.J * S.N) then
     .row (S.ins (S.sel S.A (g.val - S.J * S.N))) (S.ins (S.sel S.B (g.val - S.J * S.N)))
@@ -80,16 +119,16 @@ theorem gate_lt (g : Fin S.size) : ∀ a ∈ (S.gate g).args, a < g := by
   show a.val < g.val
   unfold gate at ha
   split_ifs at ha with h1 h2
-  · simp [FlockSoundness.Audit.Op.args] at ha
-  · simp only [FlockSoundness.Audit.Op.args, List.mem_append] at ha
+  · simp [Verity.Boolean.Op.args] at ha
+  · simp only [Verity.Boolean.Op.args, List.mem_append] at ha
     rcases ha with ha | ha <;> have := S.ins_lt ha <;> omega
-  · simp only [FlockSoundness.Audit.Op.args, List.mem_append] at ha
+  · simp only [Verity.Boolean.Op.args, List.mem_append] at ha
     rcases ha with ha | ha <;> have := S.ins_lt ha <;> omega
 
 /-- **The block circuit**: gates `0, …, J·N − 1` the input bits, then gate `J·N + q` for row `q = c·N + i`, the AND of the
 XOR of its table's bits that `A c i` selects and the XOR of those `B c i` selects, then a copy of each pin's bit and of
 each fixed bit. Every gate after the inputs is an output. -/
-@[reducible] def circ : FlockSoundness.Audit.Circuit where
+@[reducible] def circ : Verity.Boolean.Circuit where
   N := S.size
   op := S.gate
   topo := S.gate_lt
@@ -161,31 +200,31 @@ theorem foldl_filter (p f : ℕ → Bool) (l : List ℕ) (c : Bool) :
 
 section Eval
 
-variable {a : S.circ.toCircuit.Transcript} {x : ℕ → Bool}
+variable {a : S.circ.toCircuit.Trace} {x : ℕ → Bool}
 
 theorem bit_input {g : Fin S.size} (hg : g.val < S.J * S.N) :
     (S.circ.toCircuit.eval a g).getLsbD 0 = (a g).getLsbD 0 := by
   rw [Verity.Circuit.eval_input _ a (g := g)
-    (by show (S.gate g).isInput = true; simp [gate, hg, FlockSoundness.Audit.Op.isInput])]
+    (by show (S.gate g).isInput = true; simp [gate, hg, Verity.Boolean.Op.isInput])]
 
 theorem bit_op {g : Fin S.size} (h : (S.gate g).isInput = false) :
     (S.circ.toCircuit.eval a g).getLsbD 0 = (S.gate g).apply fun y : Fin S.size => (S.circ.toCircuit.eval a y).getLsbD 0 :=
   FlockSoundness.Audit.eval_toCircuit S.circ a h
 
 theorem xorSum_ins {v : Fin S.size → Bool} (hv : ∀ g : Fin S.size, g.val < S.J * S.N → v g = x g.val) {ts : List ℕ}
-    (hts : ∀ t ∈ ts, t < S.J * S.N) : FlockSoundness.Audit.xorSum (S.ins ts) v = (ts.map x).foldr xor false := by
+    (hts : ∀ t ∈ ts, t < S.J * S.N) : Verity.Boolean.xorSum (S.ins ts) v = (ts.map x).foldr xor false := by
   induction ts with
   | nil => rfl
   | cons t ts ih =>
     have ht := hts t (by simp)
     have e : S.ins (t :: ts) = ⟨t, by unfold size; omega⟩ :: S.ins ts := by simp [ins, ht]
     rw [e]
-    simp only [FlockSoundness.Audit.xorSum, List.map_cons, List.foldr_cons] at ih ⊢
+    simp only [Verity.Boolean.xorSum, List.map_cons, List.foldr_cons] at ih ⊢
     rw [ih fun t' h => hts t' (by simp [h]), hv _ ht]
 
 theorem xorSum_sel (hN : 0 < S.N) {v : Fin S.size → Bool} (hv : ∀ g : Fin S.size, g.val < S.J * S.N → v g = x g.val)
     (A : ℕ → ℕ → ℕ → Bool) {q : ℕ} (hq : q < S.J * S.N) :
-    FlockSoundness.Audit.xorSum (S.ins (S.sel A q)) v =
+    Verity.Boolean.xorSum (S.ins (S.sel A q)) v =
       xsum (A (q / S.N) (q % S.N)) (fun r => x (q / S.N * S.N + r)) S.N := by
   have hle := table_le hN hq
   rw [xorSum_ins hv fun t ht => ?_]
@@ -205,7 +244,7 @@ theorem bit_row (hN : 0 < S.N) {g : Fin S.size} (h1 : S.J * S.N ≤ g.val) (h2 :
   have hv : ∀ g' : Fin S.size, g'.val < S.J * S.N → (S.circ.toCircuit.eval a g').getLsbD 0 = x g'.val :=
     fun g' h => (bit_input h).trans (hxa g' h)
   rw [bit_op (by rw [hop]; rfl), hop]
-  simp only [FlockSoundness.Audit.Op.apply]
+  simp only [Verity.Boolean.Op.apply]
   rw [xorSum_sel hN hv _ (by omega), xorSum_sel hN hv _ (by omega)]
   rfl
 
@@ -217,7 +256,7 @@ theorem bit_copy {g : Fin S.size} (h2 : 2 * (S.J * S.N) ≤ g.val)
   have hv : ∀ g' : Fin S.size, g'.val < S.J * S.N → (S.circ.toCircuit.eval a g').getLsbD 0 = x g'.val :=
     fun g' h => (bit_input h).trans (hxa g' h)
   rw [bit_op (by rw [hop]; rfl), hop]
-  simp only [FlockSoundness.Audit.Op.apply]
+  simp only [Verity.Boolean.Op.apply]
   rw [xorSum_ins hv hc, Bool.and_self]
 
 end Eval
@@ -280,7 +319,7 @@ theorem forall_outputs {P : Fin S.size → Prop} :
 
 /-- **The block circuit's outputs**: on block `b`'s inputs, every output gate holds the value its output reads exactly
 when the system holds in block `b`. -/
-theorem outputs_iff (hw : S.WF) (w : Claims.Flock.Wit) {b : ℕ} (hb : b < S.nB) (a : S.circ.toCircuit.Transcript)
+theorem outputs_iff (hw : S.WF) (w : Claims.Flock.Wit) {b : ℕ} (hb : b < S.nB) (a : S.circ.toCircuit.Trace)
     (ha : ∀ g : Fin S.size, (a g).getLsbD 0 = w.hid.getD (S.idx b g.val) false) (val : Claims.Flock.Src → Bool)
     (hhid : ∀ i, val (.hid i) = w.hid.getD i false) (hpub : ∀ i, val (.pub i) = S.pubs.getD i false) :
     (∀ o ∈ S.circ.outputs, (S.circ.toCircuit.eval a o).getLsbD 0 = val (S.rel.out b o.val)) ↔ S.Holds w b := by

@@ -1,5 +1,5 @@
-"""`CacheStep_v2` (`verity.core.protocols.certifier.cache_step_v2`) against vLLM's block pool as the replay models it
-(`replay._KV`) over a whole trace, and its difftest vectors.
+"""`CacheStep_v2` (`verity.ml.protocols.certifier.cache_step_v2`) against vLLM's block pool as the replay models it
+(`replay.BlockPool`) over a whole trace, and its difftest vectors.
 
 `drive` replays a trace with its scheduler's pool tapped (not a fork's, not a dry run), and makes the unit's call for
 each pool operation, in order:
@@ -7,9 +7,9 @@ each pool operation, in order:
 - an allocation that succeeds: a compute of its new blocks and the units `cache_blocks` caches in it;
 - `cache_blocks` after a step (async scheduling caches a decode's block a step late): a compute with no new blocks;
 - `free_request` (a stop or a preemption): a free.
-Each call's witness is `_KV`'s own: the hit, its evictable blocks, the new blocks, the blocks held and returned. The
+Each call's witness is `BlockPool`'s own: the hit, its evictable blocks, the new blocks, the blocks held and returned. The
 threshold stamp is the pool's e-th oldest queued stamp, the one stamp the unit accepts. After each call `drive` holds
-the unit's pool to `_KV`'s. The same hashes are cached, each with its blocks in the same order and held by the same
+the unit's pool to `BlockPool`'s. The same hashes are cached, each with its blocks in the same order and held by the same
 requests' slots. The hashless free count is the same, and so is the order of the cached free blocks in the free
 queue. Each eviction removes the blocks of the hashes vLLM evicts. Beside each honest call it makes refused ones:
 - a lookup's hit a unit either side, and the hit a cache that never evicts would give where that one is longer (a
@@ -18,7 +18,7 @@ queue. Each eviction removes the blocks of the hashes vLLM evicts. Beside each h
 - a compute's threshold stamp at the queue's (e − 1)-th, (e + 1)-th or last queued copy, or between the e-th and the
   next. With e = 0 it is the oldest queued stamp (a made-up eviction);
 - a free's returns one either side.
-`drive` also checks, from `_KV` alone, that vLLM evicts a hash's last block only when no descendant of it is cached
+`drive` also checks, from `BlockPool` alone, that vLLM evicts a hash's last block only when no descendant of it is cached
 (`dropped_with_descendant`), the fact `cache_step_v2`'s N = NB − 1 rests on.
 
     python3 cache_pool_vectors.py tests/fixtures/async-prefix-cache.jsonl tests/fixtures/async-crush.json.gz \\
@@ -41,7 +41,7 @@ from typing import Any, Sequence
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import replay as RP  # noqa: E402
 
-from verity.core.protocols.certifier import cache_step_v2 as C2  # noqa: E402
+from verity.ml.protocols.certifier import cache_step_v2 as C2  # noqa: E402
 
 HERE = Path(__file__).parent
 FIXTURES = HERE / "tests" / "fixtures"
@@ -114,7 +114,7 @@ def threshold(pool: C2.Pool, new: int) -> int:
     return _queued(pool)[e - 1] if e else 0
 
 
-def _fits(S, op: C2.Op) -> bool:
+def _fits(S, op: C2.CallInputs) -> bool:
     """Whether each of the op's fields fits its width (a variant that doesn't has no arguments)."""
     Z = C2.widths(S)
     w = {"slot": Z.SL, "r": S.RW, "K": Z.LW, "tau": S.SW, **dict.fromkeys(("wh", "ev", "nins", "new", "held", "ret"), Z.HW)}
@@ -126,10 +126,10 @@ class Call:
     """One call as `drive` made it: its kind, its op, the request's tokens it reads (unit u0 on, `known` of them) and the
     refused variants beside it."""
     kind: str
-    op: C2.Op
+    op: C2.CallInputs
     u0: int
     known: int
-    refused: list[tuple[str, C2.Op]] = field(default_factory=list)
+    refused: list[tuple[str, C2.CallInputs]] = field(default_factory=list)
 
 
 class _Driver:
@@ -154,7 +154,7 @@ class _Driver:
             self.slots[i] = free[0]
         return self.slots[i]
 
-    def _call(self, kv, kind: str, op: C2.Op, u0: int, known: int, refused: list[tuple[str, C2.Op]]) -> C2.Out:
+    def _call(self, kv, kind: str, op: C2.CallInputs, u0: int, known: int, refused: list[tuple[str, C2.CallInputs]]) -> C2.Out:
         S = self.S
         if not _fits(S, op):
             raise AssertionError(f"call {len(self.calls)} ({kind}, {op}): a field past its width")
@@ -179,7 +179,7 @@ class _Driver:
         S = self.S
         cap = (r.num_tokens - 1) // S.U
         never = next((k for k, h in enumerate(r.block_hashes[:cap]) if h not in self.ever), min(cap, len(r.block_hashes)))
-        op = C2.Op(slot=self._slot(r.i) if take else self._free_slot(), r=r.i, admit=True, take=take, K=r.num_tokens,
+        op = C2.CallInputs(slot=self._slot(r.i) if take else self._free_slot(), r=r.i, admit=True, take=take, K=r.num_tokens,
                    wh=wh, ev=ev, units=window(r.io.tokens[:r.num_tokens], 0, S))
         refused = [("a hit one unit longer", replace(op, wh=wh + 1)), ("the evictable count plus one", replace(op, ev=ev + 1))]
         if wh:
@@ -201,7 +201,7 @@ class _Driver:
         e = max(new - self.pool.hf, 0)
         q = _queued(self.pool)
         tau = q[e - 1] if e else 0
-        op = C2.Op(slot=self._slot(r.i), r=r.i, nins=full - done, new=new, tau=tau,
+        op = C2.CallInputs(slot=self._slot(r.i), r=r.i, nins=full - done, new=new, tau=tau,
                    units=window(r.io.tokens[:r.num_tokens], done, S))
         refused = []
         if e:
@@ -229,13 +229,13 @@ class _Driver:
             if held:
                 raise AssertionError(f"request {r.i} frees {held} blocks it never allocated")
             return
-        op = C2.Op(slot=self.slots[r.i], free=True, held=held, ret=ret)
+        op = C2.CallInputs(slot=self.slots[r.i], free=True, held=held, ret=ret)
         refused = [("the returns plus one", replace(op, ret=ret + 1))] + ([("the returns less one", replace(op, ret=ret - 1))]
                                                                         if ret else [])
         self._call(kv, "free", op, 0, 0, refused)
         del self.slots[r.i]
 
-    # the pool against _KV's
+    # the pool against BlockPool's
 
     def _hashes(self, kv, pool: C2.Pool) -> list[int | None]:
         ids = self.hashes._ids
@@ -269,15 +269,16 @@ class _Driver:
         for h, bs in kv.by_hash.items():
             theirs[h] = [sum(1 << slot_of[i] for i in holder.get(b, ())) for b in bs]
         if {h: [m for m, _ in v] for h, v in mine.items()} != theirs:
-            raise AssertionError(f"call {len(self.calls)}: the pool's cached blocks and holders aren't _KV's")
+            raise AssertionError(f"call {len(self.calls)}: the pool's cached blocks and holders aren't BlockPool's")
         free_cached = [(kv.block_hash[b], list(kv.by_hash[kv.block_hash[b]]).index(b)) for b in kv.free.d
                        if kv.block_hash[b] is not None]
         queued = sorted((c.stamp, hashes[x], d) for x, ent in enumerate(pool.table) if ent
                         for d, c in enumerate(ent.copies) if not c.mask)
         if [(h, d) for _, h, d in queued] != free_cached:
-            raise AssertionError(f"call {len(self.calls)}: the queued copies by stamp aren't _KV's free queue")
+            raise AssertionError(f"call {len(self.calls)}: the queued copies by stamp aren't BlockPool's free queue")
         if pool.hf != len(kv.free) - len(free_cached):
-            raise AssertionError(f"call {len(self.calls)}: hf {pool.hf}, _KV's hashless free {len(kv.free) - len(free_cached)}")
+            raise AssertionError(f"call {len(self.calls)}: hf {pool.hf}, BlockPool's hashless free "
+                                 f"{len(kv.free) - len(free_cached)}")
         for i, s in self.slots.items():
             want = S.N if not kv.num_cached.get(i) else next(
                 x for x, h in enumerate(hashes) if h == self.reqs[i].block_hashes[kv.num_cached[i] - 1])
@@ -289,8 +290,8 @@ class _Driver:
 
 @contextmanager
 def _tapped(drv: _Driver):
-    K = RP._KV
-    names = ("allocate_slots", "cache_blocks", "free_request", "_new_blocks", "_pop_hash")
+    K = RP.BlockPool
+    names = ("allocate_slots", "cache_blocks", "free_request", "_get_new_blocks", "_pop_hash")
     orig = {n: getattr(K, n) for n in names}
 
     def allocate_slots(self, r, n, hit=(), *, full_sequence_must_fit=False, has_scheduled_reqs=True, dry=False):
@@ -298,7 +299,7 @@ def _tapped(drv: _Driver):
         if dry or self.mine is not None:
             return orig["allocate_slots"](self, r, n, hit, **kw)
         drv.reqs[r.i] = r
-        look = r.status != RP._RUN and r.num_computed == 0
+        look = r.status != RP.RUNNING and r.num_computed == 0
         ev = sum(1 for b in hit if self.ref[b] == 0)
         drv.alloc = {"new": 0, "evicted": Counter(), "cache": None, "popping": False}
         ok = orig["allocate_slots"](self, r, n, hit, **kw)
@@ -333,11 +334,11 @@ def _tapped(drv: _Driver):
         drv.free(self, r, held, ret)
         drv.check(self)
 
-    def _new_blocks(self, k):
+    def _get_new_blocks(self, k):
         if self.mine is None and drv.alloc is not None:
             drv.alloc["new"], drv.alloc["popping"] = k, True
         try:
-            return orig["_new_blocks"](self, k)
+            return orig["_get_new_blocks"](self, k)
         finally:
             if self.mine is None and drv.alloc is not None:
                 drv.alloc["popping"] = False
@@ -352,7 +353,7 @@ def _tapped(drv: _Driver):
         return orig["_pop_hash"](self, b)
 
     taps = {"allocate_slots": allocate_slots, "cache_blocks": cache_blocks, "free_request": free_request,
-            "_new_blocks": _new_blocks, "_pop_hash": _pop_hash}
+            "_get_new_blocks": _get_new_blocks, "_pop_hash": _pop_hash}
     for n in names:
         setattr(K, n, taps[n])
     try:
@@ -363,7 +364,7 @@ def _tapped(drv: _Driver):
 
 
 def drive(inp: Input, st: dict, *, record: int | None = None) -> _Driver:
-    """The unit over the whole trace, held to `_KV` (the module's docstring); the first `record` calls kept (all with
+    """The unit over the whole trace, held to `BlockPool` (the module's docstring); the first `record` calls kept (all with
     None). Raises AssertionError where the two disagree."""
     S = SimpleNamespace(**st)
     drv = _Driver(S, inp, record)
@@ -377,7 +378,7 @@ def drive(inp: Input, st: dict, *, record: int | None = None) -> _Driver:
         return False
 
     drv.descends = descends  # type: ignore[attr-defined]
-    H = RP._Hashes
+    H = RP.BlockHashes
     intern = H.__call__
 
     def call(self, p, block):
@@ -405,7 +406,7 @@ def drive(inp: Input, st: dict, *, record: int | None = None) -> _Driver:
 _FIELDS = ("slot", "r", "admit", "take", "free", "K", "wh", "ev", "nins", "new", "tau", "held", "ret")
 
 
-def _op_row(op: C2.Op) -> list[int]:
+def _op_row(op: C2.CallInputs) -> list[int]:
     return [int(getattr(op, f)) for f in _FIELDS]
 
 
@@ -422,14 +423,14 @@ def slice_of(name: str, calls: int, L: int) -> dict[str, Any]:
             "calls": [[c.kind, _op_row(c.op), c.u0, c.known, [[w, _op_row(b)] for w, b in c.refused]] for c in drv.calls]}
 
 
-def ops_of(sl: dict[str, Any]) -> list[tuple[str, C2.Op, list[tuple[str, C2.Op]]]]:
+def ops_of(sl: dict[str, Any]) -> list[tuple[str, C2.CallInputs, list[tuple[str, C2.CallInputs]]]]:
     """A slice's calls as ops (the inverse of `slice_of`)."""
     S = SimpleNamespace(**sl["statics"])
     out = []
     for kind, row, u0, known, refused in sl["calls"]:
         f = dict(zip(_FIELDS, row))
         units = window(sl["tokens"][str(f["r"])][:known], u0, S) if known else ()
-        mk = lambda r: C2.Op(**{k: (bool(v) if k in ("admit", "take", "free") else v)  # noqa: E731
+        mk = lambda r: C2.CallInputs(**{k: (bool(v) if k in ("admit", "take", "free") else v)  # noqa: E731
                                 for k, v in zip(_FIELDS, r)}, units=units)
         out.append((kind, mk(row), [(w, mk(b)) for w, b in refused]))
     return out

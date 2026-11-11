@@ -1,4 +1,28 @@
-import Proofs.Flock.Soundness.Discharge.ZkExec.VerdictForms
+module
+
+public import Proofs.Flock.Soundness.Discharge.ZkExec.VerdictForms
+public import Proofs.Flock.Soundness.Discharge.ZkExec.RunsLig
+import Mathlib.Tactic.ENatToNat
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Tactic.Polynomial.Basic
+import Mathlib.Tactic.ReduceModChar
+import Proofs.Flock.Soundness.Discharge.ZkExec.PlaysLig
+import Proofs.Flock.Soundness.Discharge.ZkExec.PlaysRep
+import Proofs.Flock.Soundness.Refine.Arith
+import Proofs.Flock.Soundness.Refine.Final
+import Proofs.Flock.Soundness.Refine.Plays
 
 /-!
 # Level 0's lane rows are the executable's
@@ -12,6 +36,8 @@ constraints `Zk.ligeritoConstraints` builds, at the record `Zk.ligerito` returns
 * `foldZK_rel`, `ligeritoPadZC_row`: the model's lane rounds fold the claim as the executable does, so every run of
   `ligeritoPadZC` returns the row `laneLhs` is.
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Discharge.ZkExec
 
@@ -239,6 +265,8 @@ theorem lforIn_inv' {σ : Type} (body : ℕ → σ → LM (ForInStep σ)) (I : L
       | done b => obtain ⟨-, rfl, rfl⟩ := lpure_ok h₂; exact hI₁
       | yield b => exact lforIn_inv' body I B hb n (a + 1) b st₁ t₁ s' st' t' (by omega) hI₁ h₂
 
+-- one proof of a few hundred lines down `Zk.ligerito`'s unfolded run, a `*_bind` step per bind and `rw` and `omega` on
+-- the round indices
 set_option maxHeartbeats 4000000 in
 /-- **`Zk.ligerito`'s record**: the target, level 0's out-of-domain coin, the lane rounds' coins and the pair's coins,
 at the rounds the run consumed, and those rounds' coin counts. -/
@@ -447,7 +475,7 @@ theorem zk_ligerito_rec (ms : MerkleScheme) (sch : Flock.Schedule) (T : F128) (c
 
 /-! ## The model's lane rounds -/
 
-theorem coinK_limbs (c : Array F128) : execArith.ofLimbs (fOf c[0]!) (fOf c[1]!) = gOf (coinK c) :=
+theorem coinK_limbs (c : Array F128) : execArith.ofLimbs (fOf (c)[0]!) (fOf (c)[1]!) = gOf (coinK c) :=
   ofLimbs_coin c
 
 /-- One lane round on forms is `laneStepE`. -/
@@ -455,7 +483,7 @@ theorem laneStep_rel {e : ℕ} (lay : Zk.PadLayout) (P : ZkSession.Pads0 lay.len
     (ch : Array F256) (j : ℕ) (hP : ∀ t : Fin 4, (P.msg j t).val = lay.lgMsg j t.val)
     {s : ZkSession.LinK 𝕂 lay.len} {x : Zk.Lin2} (hs : Rel2 s x) (c : Array F128) (hc : coinK c = ch[j]!) :
     Rel2 ((ZkSession.fromMsgL (ZkSession.unmask execArith P j (gOf lg.messages[j]!.1, gOf lg.messages[j]!.2))
-        s).eval (execArith.ofLimbs (fOf c[0]!) (fOf c[1]!))) (laneStepE lay lg ch x j) := by
+        s).eval (execArith.ofLimbs (fOf (c)[0]!) (fOf (c)[1]!))) (laneStepE lay lg ch x j) := by
   have h1 := rel2_masked lg.messages[j]!.1 (P.msg j 0) (P.msg j 1) (hP 0) (hP 1)
     (by simp [Zk.PadLayout.lgMsg])
   have h2 := rel2_masked lg.messages[j]!.2 (P.msg j 2) (P.msg j 3) (hP 2) (hP 3)
@@ -482,7 +510,7 @@ theorem foldZK_rel {e : ℕ} (lay : Zk.PadLayout) (P : ZkSession.Pads0 lay.len e
       obtain ⟨hc2, hck⟩ := hc 0 (by omega)
       simp only [List.getElem!_cons_zero, Nat.add_zero] at hc2 hck
       rw [ZkSession.foldRoundsZK, show kMsgs lg (j + 1) (1 - 1) = [] by simp [kMsgs]]
-      have hk : Plays fOf (Model.drawK execArith) [] [c] (execArith.ofLimbs (fOf c[0]!) (fOf c[1]!)) := by
+      have hk : Plays fOf (Model.drawK execArith) [] [c] (execArith.ofLimbs (fOf (c)[0]!) (fOf (c)[1]!)) := by
         unfold Model.drawK
         exact Plays.bind' (ms₂ := []) (cs₂ := []) (Plays.drawVec c hc2 (by omega)) (Plays.pure _) (by simp) (by simp)
       refine ⟨_, Plays.bind' (ms₂ := []) (cs₂ := []) hk (Plays.pure _) rfl rfl, ?_⟩
@@ -501,7 +529,7 @@ theorem foldZK_rel {e : ℕ} (lay : Zk.PadLayout) (P : ZkSession.Pads0 lay.len e
           simpa [show j + (i + 1) = j + 1 + i by omega] using this)
       rw [ZkSession.foldRoundsZK, show kMsgs lg (j + 1) (k + 2 - 1) =
           kMsg lg.messages[j + 1]! :: kMsgs lg (j + 1 + 1) (k + 1 - 1) by simp [kMsgs, List.range'_succ]]
-      have hk : Plays fOf (Model.drawK execArith) [] [c] (execArith.ofLimbs (fOf c[0]!) (fOf c[1]!)) := by
+      have hk : Plays fOf (Model.drawK execArith) [] [c] (execArith.ofLimbs (fOf (c)[0]!) (fOf (c)[1]!)) := by
         unfold Model.drawK
         exact Plays.bind' (ms₂ := []) (cs₂ := []) (Plays.drawVec c hc2 (by omega)) (Plays.pure _) (by simp) (by simp)
       refine ⟨_, Plays.bind' hk (Plays.bind' (Plays.recv _ _) (Plays.bind' hpl (Plays.pure _) (List.append_nil _).symm
@@ -510,7 +538,7 @@ theorem foldZK_rel {e : ℕ} (lay : Zk.PadLayout) (P : ZkSession.Pads0 lay.len e
       exact hrel
 
 theorem plays_drawK (c : Array F128) (hc : c.size = 2) :
-    Plays fOf (Model.drawK execArith) [] [c] (execArith.ofLimbs (fOf c[0]!) (fOf c[1]!)) := by
+    Plays fOf (Model.drawK execArith) [] [c] (execArith.ofLimbs (fOf (c)[0]!) (fOf (c)[1]!)) := by
   unfold Model.drawK
   exact Plays.bind' (ms₂ := []) (cs₂ := []) (Plays.drawVec c hc (by omega)) (Plays.pure _) (by simp) (by simp)
 
@@ -534,6 +562,8 @@ theorem claim0_rel (lay : Zk.PadLayout) (i : Fin lay.len) (hi : i.val = lay.lgOo
   · simp only [liftK, ZkSession.cK, ZkSession.padF, ZkSession.cF, ZkSession.mskF, ZkSession.pF, Prod.snd_add,
       Prod.smul_snd, smul_eq_mul, add_zero, map_add, map_mul]
 
+-- `ZkLink.ligeritoPadZC`'s run matched against `ligMsgsZ`'s messages, a `plays_bind_split` step per message and coin,
+-- then the lane relation's algebra (`convert`, `abel`)
 set_option maxHeartbeats 1000000 in
 /-- **Every run of the compiled masked level 0 returns the lane phase's row** (`laneLhs`), at the record whose
 target, out-of-domain coin, lane coins and pair coins the run's coins are. -/

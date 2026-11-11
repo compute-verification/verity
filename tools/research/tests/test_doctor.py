@@ -71,8 +71,8 @@ def test_secrets_name_what_the_role_lacks_and_where_to_add_it(monkeypatch):
     c = doctor.check_secrets("lane")
     assert (c.status, c.detail) == (FINDING, f"not set here: {LANE[-1]}") and "Cursor Dashboard" in c.fix
     monkeypatch.setenv(LANE[-1], "dummy")
-    assert doctor.check_secrets("lane") == Check("secrets", OK, "the 7 names the lane role needs are set")
-    assert doctor.check_secrets("coordinator").detail == "the 7 names the coordinator role needs are set"    # a lane's, and Slack's broker
+    assert doctor.check_secrets("lane") == Check("secrets", OK, "the 6 names the lane role needs are set")
+    assert doctor.check_secrets("coordinator").detail == "the 6 names the coordinator role needs are set"    # a lane's, and Slack's broker
     c = doctor.check_secrets("infra")
     assert c.detail == "not set here: NEBIUS_SA_ID, NEBIUS_SA_PUBLIC_KEY_ID, NEBIUS_SA_PRIVATE_KEY_B64|NEBIUS_SA_PRIVATE_KEY"
     for n in ("NEBIUS_SA_ID", "NEBIUS_SA_PUBLIC_KEY_ID", "NEBIUS_SA_PRIVATE_KEY"):                       # either form of the key will do
@@ -81,7 +81,7 @@ def test_secrets_name_what_the_role_lacks_and_where_to_add_it(monkeypatch):
 
 
 def test_a_secret_the_vm_injects_and_lost_is_a_finding_whose_fix_is_a_fresh_shell_or_a_new_vm(monkeypatch):
-    """ci's VM on 3 Oct: the injected values gone from every shell after an exec-daemon restart, unnoticed."""
+    """A VM's injected values can vanish from every shell after an exec-daemon restart, unnoticed."""
     for n in LANE:
         monkeypatch.setenv(n, "dummy")
     monkeypatch.setenv("CLOUD_AGENT_INJECTED_SECRET_NAMES", ",".join([*LANE, "JOBS_TOKEN"]))
@@ -91,7 +91,7 @@ def test_a_secret_the_vm_injects_and_lost_is_a_finding_whose_fix_is_a_fresh_shel
     monkeypatch.setenv("JOBS_TOKEN", "dummy")
     monkeypatch.setattr(secret_hint, "RECOVERED", ["R2_BUCKET", "JOBS_TOKEN"])
     c = doctor.check_secrets("lane")
-    assert c.status == OK and c.detail.startswith("the 7 names the lane role needs and the 8 this VM injects are set; 2 taken back from "
+    assert c.status == OK and c.detail.startswith("the 6 names the lane role needs and the 7 this VM injects are set; 2 taken back from "
                                                   "the tmux server because this shell had lost them (R2_BUCKET, JOBS_TOKEN)")
 
 
@@ -217,7 +217,7 @@ def test_notes_push_needs_a_clone_and_pushes_through_the_token_s_helper(monkeypa
     monkeypatch.setenv("RESEARCH_NOTES", str(clone))
     runs_ = Runs(monkeypatch, git=(128, "remote: Permission to danielreuter/research-notes.git denied to cursor[bot]."))
     c = doctor.check_notes_push()
-    assert c.status == FINDING and "set RESEARCH_NOTES_TOKEN (a Cursor secret)" in c.fix
+    assert c.status == FINDING and "no notes token: a Cursor agent gets one from the GitHub broker" in c.fix
     assert runs_.calls[-1][0][-2] == "origin"                                     # no token: the remote as configured
     monkeypatch.setenv("RESEARCH_NOTES_TOKEN", "not-to-be-printed")
     c = doctor.check_notes_push()
@@ -340,6 +340,27 @@ def test_ssh_probes_each_machine_with_an_ssh_host_as_research_run_reaches_it(mon
     assert c.detail == "research@192.0.2.10:22: refused the key" and "ask @infra to add its public key" in c.fix
     runs_.answers["ssh"] = (255, "ssh: connect to host 192.0.2.10 port 22: Connection timed out")
     assert doctor.check_ssh("node-a", m).detail == "research@192.0.2.10:22: unreachable"
+
+
+def test_the_auditor_hosts_are_not_probed_and_one_check_names_them(monkeypatch, tmp_path):
+    """They refuse lanes' keys by design (`remote.restricted`: vy-challenger-1 is deploy.toml's `admin = true`, node-g names its gate),
+    so probing them left a refused login in their auth logs and a finding no lane could fix."""
+    (tmp_path / "machines.toml").write_text(
+        '[machines.node-a]\nprovider = "ssh"\nhost = "192.0.2.10"\nuser = "research"\n'
+        '[machines.vy-challenger-1]\nprovider = "ssh"\nhost = "192.0.2.11"\nuser = "vy-admin"\n'
+        '[machines.node-g]\nprovider = "ssh"\nhost = "192.0.2.12"\nuser = "vy-admin"\nauditor = "its gate"\n')
+    monkeypatch.setenv("RESEARCH_MACHINES", str(tmp_path / "machines.toml"))
+    monkeypatch.setattr(runpod, "SSH_KEY", tmp_path / "key")
+    monkeypatch.setattr(runpod, "KNOWN_HOSTS", tmp_path / "known_hosts")
+    (tmp_path / "key").write_text("dummy\n")
+    assert list(doctor.ssh_machines()) == ["node-a"]
+    runs_ = Runs(monkeypatch, ssh=(0, ""))
+    probes = [p for p in doctor.checks("lane", None) if p[0].startswith("ssh")]
+    assert [n for n, _ in probes] == ["ssh:node-a", "ssh:auditor-hosts"]
+    assert doctor.gather(probes) == [Check("ssh:node-a", OK, "research@192.0.2.10:22 answers"),
+                                     Check("ssh:auditor-hosts", SKIP, "not probed: node-g, vy-challenger-1, which refuse lanes' keys "
+                                                                      "by design")]
+    assert [argv[-2] for argv, _, _ in runs_.calls] == ["research@192.0.2.10"]
 
 
 def test_two_ssh_machines_on_a_fresh_state_dir_both_get_the_whole_key(monkeypatch, tmp_path):

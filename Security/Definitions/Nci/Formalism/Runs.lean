@@ -1,4 +1,6 @@
-import Definitions.Nci.Formalism.Training
+module
+
+public import Definitions.Nci.Formalism.Training
 
 /-!
 # The training formalism v2: runs, losses and the honest cost
@@ -16,18 +18,20 @@ not from the answer): `H(ℓ*)` is `honestCost methods ℓ ℓ*`, and a run's in
 the bins of `Δ`, the update profiles along which A2's floor is measured.
 -/
 
+@[expose] public section
+
 namespace Nci.Formalism
 
 open Finset
-open Verity (Declaration)
+open Verity (RegisteredCircuit)
 open scoped ENNReal
 
 /-- **A run**: a declaration, an annotation of its training with `numTokens` tokens, and the inputs it runs on. -/
 structure Run where
-  d : Declaration
+  d : RegisteredCircuit
   numTokens : ℕ
   A : Annotation d (Fin numTokens)
-  inputs : d.D.Transcript
+  inputs : d.D.Trace
 
 namespace Run
 

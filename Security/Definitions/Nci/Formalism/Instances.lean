@@ -1,6 +1,8 @@
-import Definitions.Nci.Formalism.Runs
-import Mathlib.Data.Fin.VecNotation
-import Mathlib.Tactic.FinCases
+module
+
+public import Definitions.Nci.Formalism.Runs
+public import Mathlib.Data.Fin.VecNotation
+public import Mathlib.Tactic.FinCases
 
 /-!
 # The training formalism v2: the instances its witnesses are stated at (trusted)
@@ -16,19 +18,21 @@ one registered input, the weight `θ`.
   the token, each a copy of the one before, a chain. `blocks` puts each gate in a block of its own, a partition into
   inference blocks at `(c, k) = (1, 1)`; only gate 2's block computes the token from its inputs, reading the new weight,
   and gates 3 and 4's each read the token's gate before. `whole` is one block of all four gates, which is no partition
-  into inference blocks at `c = 1` and prices them at `1 / 4`. A1's values here are `entry`, where a block's work on the
-  token begins, the token's gates it holds; `state`, the token's state there, the token's values that work reads; and
-  `update`, the update bits a block reads, the new weight when it reads it. The lemmas of the counting lemma, Slowdown
-  and Security are stated here, Security's with a run on the all-zero inputs that is the only one of the methods
-  considered.
+  into inference blocks at `c = 1` and prices them at `1 / 4`. A1's values here are set by witness blocks entering the
+  token at `entry`, one entry for every block: `witnesses`, the token's three gates as one block, which reads the new
+  weight alone, one shared bit and none of the token's state; and `skipping`, gates 2 and 4, which read the new weight
+  and gate 3's value, one shared bit and one bit of the token's state, more than gate 3's block reads. The lemmas of
+  the counting lemma, Slowdown and Security are stated here, Security's with a run on the all-zero inputs that is the
+  only one of the methods considered.
 
 `silent` is the decoder that outputs nothing, so every total update is `⊤`, within `D = ⊤` bits.
 -/
 
+@[expose] public section
+
 namespace Nci.Formalism
 
 open Verity
-open scoped NNReal
 
 /-- The decoder that outputs nothing. -/
 def silent : Decoder (List Bool) where
@@ -57,7 +61,7 @@ abbrev C : Circuit where
   outputs := {3}
 
 /-- Gate 0 is registered. -/
-abbrev d : Declaration := ⟨C, {0}, by decide⟩
+abbrev d : RegisteredCircuit := .ofCircuit C {0} (by decide)
 
 /-- Two blocks, gate 2 and gate 3. -/
 abbrev P : Partition d.D 2 := ⟨![none, none, some 0, some 1], by decide⟩
@@ -86,7 +90,7 @@ abbrev C : Circuit where
   outputs := {4}
 
 /-- Gate 0 is registered. -/
-abbrev d : Declaration := ⟨C, {0}, by decide⟩
+abbrev d : RegisteredCircuit := .ofCircuit C {0} (by decide)
 
 /-- The new weight is gate 1, and the one token holds gates 2, 3 and 4. -/
 abbrev A : Annotation d (Fin 1) := ⟨{1}, ⟨fun _ => {2, 3, 4}⟩⟩
@@ -97,14 +101,14 @@ abbrev blocks : Partition d.D 4 := ⟨![none, some 0, some 1, some 2, some 3], b
 /-- One block of all four gates. -/
 abbrev whole : Partition d.D 1 := ⟨![none, some 0, some 0, some 0, some 0], by decide⟩
 
-/-- Where a block's work on the token begins: the token's gates it holds. -/
-abbrev entry (I : Finset (Fin d.D.N)) (T : Fin 1) : Finset (Fin d.D.N) := I ∩ A.tokens.holds T
+/-- Where a block's work on the token begins: one entry for every block. -/
+abbrev entry (_ : Finset (Fin d.D.N)) (_ : Fin 1) : Unit := ()
 
-/-- The token's state at an entry: the token's values that the work from it reads. -/
-noncomputable abbrev state (T : Fin 1) (S : Finset (Fin d.D.N)) : ℝ≥0 := ((d.D.into S ∩ A.tokens.holds T).card : ℝ≥0)
+/-- The witness blocks: the token's three gates, one block, which reads the new weight alone. -/
+abbrev witnesses : Finset (Finset (Fin d.D.N)) := { {2, 3, 4} }
 
-/-- The update bits a block reads: the new weight, when it reads it. -/
-noncomputable abbrev update (I : Finset (Fin d.D.N)) : ℝ≥0 := ((d.D.into I ∩ A.θ').card : ℝ≥0)
+/-- A witness block that skips gate 3: gates 2 and 4, which read the new weight and gate 3's value. -/
+abbrev skipping : Finset (Finset (Fin d.D.N)) := { {2, 4} }
 
 /-- The run on the all-zero inputs. -/
 abbrev r : Run := ⟨d, 1, A, fun _ => 0⟩

@@ -1,4 +1,8 @@
-import Proofs.Core.Game.Expect
+module
+
+public import Proofs.Core.Game.Expect
+import Mathlib.Algebra.CharP.Defs
+import Mathlib.Tactic.Positivity.Finset
 
 /-!
 # Independent runs of a strategy
@@ -8,6 +12,8 @@ reading the list of their outputs, first run first. A per-run quantity summed ov
 times its expectation (`expectN_sum_map`), and a product over independent runs is the expectation
 to the `n` (`expectN_prod_map`).
 -/
+
+@[expose] public section
 
 namespace Verity
 

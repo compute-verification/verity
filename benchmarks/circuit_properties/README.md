@@ -53,10 +53,11 @@ m.products, m.s_x, m.a_out, m.a_in        # 46792704, 681, 17920, 1536
 
 `references.layer(C, T)` is one b1 layer (σ(`LayerPre_v1`), the Boolean `Attention_v3`, σ(`LayerPost_v1`)) at T
 positions; `references.configs()` lists the served configurations and two shapes with no served workload (Qwen2.5-7B,
-Llama-3.1-405B), labeled as constructed. The circuits are forward layers: the IR declares no training (backward,
-optimizer) circuit.
+Llama-3.1-405B), labeled as constructed, whose shapes are benchmarks/rho's (its `models.toml`, read through
+`rho.instances.models`). The circuits are forward layers: the Programs declare no training (backward, optimizer)
+circuit.
 
-    uv run --extra torch-cpu benchmarks/circuit_properties/run.py [--models NAME,...] [--T T] [--out DIR]
+    uv run --extra torch-cpu verity bench circuit_properties [--models NAME,...] [--T T] [--out DIR]
 
 measures each and sets a_out, a_in and |𝒥| per position beside benchmarks/rho's `fanout`, `legs` and layer products
 (its `models.toml` row, and `derived_fanout` / `derived_legs` of the config's matrices), checks whole-in-block under

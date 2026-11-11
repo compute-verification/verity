@@ -1,6 +1,8 @@
-import Proofs.Flock.Claims.KS.PlainLeafClash
-import Proofs.Flock.Claims.KS.PlainLeafClashRunK
-import Proofs.Flock.Claims.KS.PlainLiveK
+module
+
+public import Proofs.Flock.Claims.KS.PlainLeafClash
+public import Proofs.Flock.Claims.KS.PlainLeafClashRunK
+public import Proofs.Flock.Claims.KS.PlainLiveK
 
 /-!
 # The concrete simulator's fork bound at plain SHA-512 leaves
@@ -18,6 +20,8 @@ the live opening (`plain_liveOpening`) read no leaf.
 * `plainAdv_leU`: so the fork bound holds at every plain-leaf statement.
 * `PlainHDecUK` … `plainAdv_leUK`: each of these at `VK keep` (`plainSimK keep`, `plainVerdictAtK keep`).
 -/
+
+@[expose] public section
 
 namespace FlockDeploy.KS
 
@@ -121,7 +125,7 @@ def PlainAlignQU {spec : SessionSpec} {st : Stmt} (L : Layout st) (m k0 : ℕ) (
 def PlainLiveForkU {Ω : Type} (P : Claims.Prover Ω) (x : Claims.Msg) (ω : Ω) {spec : SessionSpec} (st : Stmt)
     (T : TabSpec spec.mPts) (hw : 2 * spec.mPts ≤ 65536) (I : Exec.Inputs) (d : Json)
     (opn : Array ByteArray → Fin 1 → Model.Opens 𝔽 Refine.Dig × Model.Salts (List UInt8))
-    (sch : Accounting.Schedule) (C : Fin (wordLen false x) → List 𝔽) (u : plainTape x)
+    (sch : FlockSoundness.Accounting.Schedule) (C : Fin (wordLen false x) → List 𝔽) (u : plainTape x)
     (r₁ r₂ : Fin (plainN x + 2) → LCoin 65536) (r : Fin 2) (ℓ : ℕ) : Prop :=
   LiveEv (Claims.Bridge.RetOK (fun _ cap pend os => tableOutL Refine.H512 Refine.enc512 Refine.leafPlain cap pend os)
       (plainVerdictAt I d C (plainRoot P x ω)) opn (plainDec T) (fun _ _ => true) (fun _ _ _ => [])
@@ -136,7 +140,7 @@ def PlainLiveForkU {Ω : Type} (P : Claims.Prover Ω) (x : Claims.Msg) (ω : Ω)
 def PlainForkQU {Ω : Type} (P : Claims.Prover Ω) (x : Claims.Msg) (ω : Ω) {spec : SessionSpec} (st : Stmt)
     (T : TabSpec spec.mPts) (hw : 2 * spec.mPts ≤ 65536) (I : Exec.Inputs) (d : Json)
     (opn : Array ByteArray → Fin 1 → Model.Opens 𝔽 Refine.Dig × Model.Salts (List UInt8))
-    (sch : Accounting.Schedule) : Prop :=
+    (sch : FlockSoundness.Accounting.Schedule) : Prop :=
   ∀ (C : Fin (wordLen false x) → List 𝔽) (u : plainTape x) (r₁ r₂ : Fin (plainN x + 2) → LCoin 65536) (r : Fin 2)
     (ℓ : ℕ), PlainLiveForkU P x ω st T hw I d opn sch C u r₁ r₂ r ℓ →
     (Claims.run sha512 P (V false) x ω (plainΦ x spec st (u, r₁))).out = .acc →
@@ -183,7 +187,7 @@ theorem plainAdv_le_ofU {x : Claims.Msg} {spec : SessionSpec} {st : Stmt}
 /-- **A live fork event's pair, at `leafPlain`**: `pairEv_of_forkQ`'s. -/
 theorem pairEv_of_forkQU {Ω : Type} {P : Claims.Prover Ω} {x : Claims.Msg} {ω : Ω} {spec : SessionSpec} {st : Stmt}
     {T : TabSpec spec.mPts} {hw : 2 * spec.mPts ≤ 65536} {I : Exec.Inputs} {d : Json}
-    {opn : Array ByteArray → Fin 1 → Model.Opens 𝔽 Refine.Dig × Model.Salts (List UInt8)} {sch : Accounting.Schedule}
+    {opn : Array ByteArray → Fin 1 → Model.Opens 𝔽 Refine.Dig × Model.Salts (List UInt8)} {sch : FlockSoundness.Accounting.Schedule}
     {C : Fin (wordLen false x) → List 𝔽}
     (habort : PlainSimAbort P x ω spec.mPts plainN (plainDg spec) (plainW spec hw) (plainSim P x spec st)
       (plainΦ x spec st) (plainVerdictAt I d C (plainRoot P x ω)))
@@ -264,7 +268,7 @@ theorem plainAlignQ_of_slotU {spec : SessionSpec} {st : Stmt} {L : Layout st} {m
 theorem plainForkQ_ofU {x : Claims.Msg} {s : Claims.Flock.Stmt} (hs : parse false Readable.relation x = some s)
     (hin : Claims.Flock.InScope false s) {ins : Ins} {spec : SessionSpec} {sts : Array Stmt}
     (hset : setupOf false x = some (ins, spec, sts)) {st : Stmt} (h : tables false x = [(spec, st)]) {d : Json}
-    (hd : ins.read.draw = some d) (T : TabSpec spec.mPts) (sch : Accounting.Schedule)
+    (hd : ins.read.draw = some d) (T : TabSpec spec.mPts) (sch : FlockSoundness.Accounting.Schedule)
     (opn : Array ByteArray → Fin 1 → Model.Opens 𝔽 Dig × Model.Salts (List UInt8))
     (hE : ∀ o : LiveOutJ 1 spec.mPts, AcceptsAtD ins.read.I (some d) (wrPD ins.read.I d o) →
       ∀ pend' : Model.PendL 𝔽 Dig × Model.PendL 𝔽 Dig,
@@ -426,7 +430,7 @@ def PlainAlignQUK (keep : Bool → Bool) {spec : SessionSpec} {st : Stmt} (L : L
 def PlainLiveForkUK (keep : Bool → Bool) {Ω : Type} (P : Claims.Prover Ω) (x : Claims.Msg) (ω : Ω) {spec : SessionSpec} (st : Stmt)
     (T : TabSpec spec.mPts) (hw : 2 * spec.mPts ≤ 65536) (I : Exec.Inputs) (d : Json)
     (opn : Array ByteArray → Fin 1 → Model.Opens 𝔽 Refine.Dig × Model.Salts (List UInt8))
-    (sch : Accounting.Schedule) (C : Fin (wordLen false x) → List 𝔽) (u : plainTape x)
+    (sch : FlockSoundness.Accounting.Schedule) (C : Fin (wordLen false x) → List 𝔽) (u : plainTape x)
     (r₁ r₂ : Fin (plainN x + 2) → LCoin 65536) (r : Fin 2) (ℓ : ℕ) : Prop :=
   LiveEv (Claims.Bridge.RetOK (fun _ cap pend os => tableOutL Refine.H512 Refine.enc512 Refine.leafPlain cap pend os)
       (plainVerdictAtK keep I d C (plainRoot P x ω)) opn (plainDec T) (fun _ _ => true) (fun _ _ _ => [])
@@ -441,7 +445,7 @@ def PlainLiveForkUK (keep : Bool → Bool) {Ω : Type} (P : Claims.Prover Ω) (x
 def PlainForkQUK (keep : Bool → Bool) {Ω : Type} (P : Claims.Prover Ω) (x : Claims.Msg) (ω : Ω) {spec : SessionSpec} (st : Stmt)
     (T : TabSpec spec.mPts) (hw : 2 * spec.mPts ≤ 65536) (I : Exec.Inputs) (d : Json)
     (opn : Array ByteArray → Fin 1 → Model.Opens 𝔽 Refine.Dig × Model.Salts (List UInt8))
-    (sch : Accounting.Schedule) : Prop :=
+    (sch : FlockSoundness.Accounting.Schedule) : Prop :=
   ∀ (C : Fin (wordLen false x) → List 𝔽) (u : plainTape x) (r₁ r₂ : Fin (plainN x + 2) → LCoin 65536) (r : Fin 2)
     (ℓ : ℕ), PlainLiveForkUK keep P x ω st T hw I d opn sch C u r₁ r₂ r ℓ →
     (Claims.run sha512 P (VK keep) x ω (plainΦ x spec st (u, r₁))).out = .acc →
@@ -488,7 +492,7 @@ theorem plainAdv_le_ofUK (keep : Bool → Bool) {x : Claims.Msg} {spec : Session
 /-- `pairEv_of_forkQU` at `VK keep`. -/
 theorem pairEv_of_forkQUK (keep : Bool → Bool) {Ω : Type} {P : Claims.Prover Ω} {x : Claims.Msg} {ω : Ω} {spec : SessionSpec} {st : Stmt}
     {T : TabSpec spec.mPts} {hw : 2 * spec.mPts ≤ 65536} {I : Exec.Inputs} {d : Json}
-    {opn : Array ByteArray → Fin 1 → Model.Opens 𝔽 Refine.Dig × Model.Salts (List UInt8)} {sch : Accounting.Schedule}
+    {opn : Array ByteArray → Fin 1 → Model.Opens 𝔽 Refine.Dig × Model.Salts (List UInt8)} {sch : FlockSoundness.Accounting.Schedule}
     {C : Fin (wordLen false x) → List 𝔽}
     (habort : PlainSimAbortK keep P x ω spec.mPts plainN (plainDg spec) (plainW spec hw) (plainSimK keep P x spec st)
       (plainΦ x spec st) (plainVerdictAtK keep I d C (plainRoot P x ω)))
@@ -569,7 +573,7 @@ theorem plainAlignQ_of_slotUK (keep : Bool → Bool) {spec : SessionSpec} {st : 
 theorem plainForkQ_ofUK (keep : Bool → Bool) {x : Claims.Msg} {s : Claims.Flock.Stmt} (hs : parse false Readable.relation x = some s)
     (hin : Claims.Flock.InScope false s) {ins : Ins} {spec : SessionSpec} {sts : Array Stmt}
     (hset : setupOf false x = some (ins, spec, sts)) {st : Stmt} (h : tables false x = [(spec, st)]) {d : Json}
-    (hd : ins.read.draw = some d) (T : TabSpec spec.mPts) (sch : Accounting.Schedule)
+    (hd : ins.read.draw = some d) (T : TabSpec spec.mPts) (sch : FlockSoundness.Accounting.Schedule)
     (opn : Array ByteArray → Fin 1 → Model.Opens 𝔽 Dig × Model.Salts (List UInt8))
     (hE : ∀ o : LiveOutJ 1 spec.mPts, AcceptsAtDK keep ins.read.I (some d) (wrPDK keep ins.read.I d o) →
       ∀ pend' : Model.PendL 𝔽 Dig × Model.PendL 𝔽 Dig,

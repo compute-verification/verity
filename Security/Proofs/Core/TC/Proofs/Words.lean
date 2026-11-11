@@ -1,4 +1,6 @@
-import Proofs.Core.TC.Proofs.SemGroup
+module
+
+public import Definitions.Core.TC.Bridge
 
 /-!
 # The FP32 word at the boundary
@@ -6,6 +8,8 @@ import Proofs.Core.TC.Proofs.SemGroup
 `decode_eq`: the relation's `decode_state` of an accumulator word is the canonical state of `fp32_value`'s value, which
 is admissible. `decode_pack`: `decode_state` of `pack_value` is the canonical state, for an admissible value.
 -/
+
+@[expose] public section
 
 namespace Verity.TC.Proofs
 

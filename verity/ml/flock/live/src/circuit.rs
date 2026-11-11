@@ -1,4 +1,4 @@
-//! `verity/flock-circuit` (lane flock-circuit): any lowered IR template, its serving rows committed in the circuit, and
+//! `verity/flock-circuit`: any lowered IR template, its serving rows committed in the circuit, and
 //! nothing public but the frame-v3-sha512 roots, each row's hm96 commit string `b || c` and the pinned layout. The rows are
 //! the input rows, then one output row per output port (its words zero-padded to whole SHA-512 blocks): an output is a
 //! hidden value like an input. `verity_flock.circuit` composes the pinned circuit (`flock-circuit`) and stages the instance
@@ -36,7 +36,7 @@
 use std::{
     collections::{BTreeMap, BTreeSet},
     sync::{
-        OnceLock,
+        Arc, Mutex, OnceLock, PoisonError,
         atomic::{AtomicU64, Ordering},
     },
     time::Instant,
@@ -54,13 +54,13 @@ use rayon::prelude::*;
 use serde_json::{Value, json};
 use sha2::{Digest, Sha512};
 
-use crate::{chunk::log2ceil, ir_block::IrUnitNet, lookup::LookupNet};
+use crate::{chunk::log2ceil, ir_block::{IrUnitNet, Row2, Row4, Row8, RowRead, RowWord}, lookup::LookupNet};
 
 pub const FORMAT: &str = "flock-circuit";
 pub const INST_FORMAT: &str = "flock-circuit-inputs";
 pub const STATEMENT: &str = "verity/flock-circuit";
 
-/// The strings a circuit statement hashes byte for byte, by its id (PROTOCOL.md §16.5's table, the Lean `Flock.Tags`): the
+/// The strings a circuit statement hashes byte for byte, by its id (the Lean `Flock.Tags`): the
 /// id is also the statement digest's tag, and each id has its own Σ tag and stream domain.
 pub struct Tags {
     pub statement: &'static str,
@@ -72,8 +72,9 @@ pub struct Tags {
 pub const TAGS: Tags = Tags { statement: STATEMENT, sigma: "verity/flock-circuit/sigma", domain: "flock-circuit/fast100x2/rep" };
 pub const TYPED_TAGS: Tags =
     Tags { statement: crate::typed::STATEMENT, sigma: "verity/flock-circuit/types/sigma", domain: "flock-circuit-types/fast100x2/rep" };
-/// A templated statement (the Lean `Tags.circuitTmpl`): META `template` and `layout` in place of the unit's rows,
-/// which the prover reads from `flock-tmpl-unit`'s file, the unit committed at the layout's positions.
+/// A templated statement (the Lean `Tags.circuitTmpl`): its template section right after META (`TEMPLATE n`, then the
+/// template's `n` lines) and META `layout` in place of the unit's rows, which the prover reads from `flock-tmpl-unit`'s
+/// file, the unit committed at the layout's positions.
 pub const TMPL_FORMAT: &str = "flock-circuit/tmpl";
 pub const TMPL_STATEMENT: &str = "verity/flock-circuit/tmpl";
 pub const TMPL_TAGS: Tags =
@@ -93,7 +94,7 @@ pub const PER_SLOT: usize = 3;
 /// META's bindings (what the statement binds about the circuit): a class leaves them out.
 pub const BINDING_KEYS: [&str; 3] = ["partition", "program_sha512", "program_digests"];
 /// `Stmt.InRange` as the pinned table-soundness theorems prove it (`FlockSoundness/Accounting/Fast100.lean`): `k_log <= 27`,
-/// at most 1,024 public regions, at most 64 link-point coordinates; with PROTOCOL.md §16.5's `m <= 35`. A statement outside it
+/// at most 1,024 public regions, at most 64 link-point coordinates; with the Lean `Flock.Schedule`'s `m <= 35`. A statement outside it
 /// is refused, so an accepted statement is one the pins cover.
 pub const IN_RANGE_K_LOG: usize = 27;
 pub const IN_RANGE_REGIONS: usize = 1024;
@@ -145,7 +146,7 @@ pub fn regions_in_range(regions: &[RegionShape]) -> Result<(), String> {
     Ok(())
 }
 
-/// The instance count's part: the dense size `m = k_log + nbl` (PROTOCOL.md §16.5) and the link points' coordinates.
+/// The instance count's part: the dense size `m = k_log + nbl` (the Lean `Flock.Circuit`) and the link points' coordinates.
 pub fn shape_in_range(m: usize, m_pts: usize) -> Result<(), String> {
     if m > M_MAX {
         return Err(format!("m = {m}: outside the spec's shape (m <= {M_MAX})"));
@@ -441,7 +442,7 @@ pub struct Composite {
     pub unit_net: usize,
     pub leaves_in: Vec<Vec<i64>>,
     pub leaves_out: Vec<Vec<usize>>,
-    /// the public input ports (META `public_inputs`, PROTOCOL.md §16.10), `(port, words)`: unit inputs that are no row but
+    /// the public input ports (META `public_inputs`, the Lean `Flock.HmRow`), `(port, words)`: unit inputs that are no row but
     /// public words the verifier recomputes from public data, each naming its recomputation (seed and derivation)
     pub public_inputs: Vec<(String, usize)>,
     /// each unit's leaf ports' public words (META `leaves_public`): the word's index among the public ports' words, or -1
@@ -471,6 +472,37 @@ pub struct Composite {
     pub lookups: BTreeMap<usize, LookupNet>,
     /// a typed template's instance (`crate::typed::Instance`): the unit is its root, one slot per VU, beside its parts
     pub typed: Option<TypedBlock>,
+    /// SHA-512 of every byte [`Composite::parse_with`] read but the MUFU tables, which the build pins
+    /// (`ir_tail::TABLE_SHA256`): the circuit file's SHA-512 and a templated statement's unit rows
+    pub parsed_from: ParsedFrom,
+}
+
+/// [`Composite::parsed_from`]: set by the parse alone, and not kept by a copy, whose fields may then be edited (a selftest's
+/// forged circuit), so an edited copy is never taken for the circuit it was copied from.
+#[derive(Default)]
+pub struct ParsedFrom(Option<[u8; 64]>);
+
+impl Clone for ParsedFrom {
+    fn clone(&self) -> Self {
+        ParsedFrom(None)
+    }
+}
+
+impl ParsedFrom {
+    /// Of a circuit file by its SHA-512 and, for a templated statement, its unit's rows.
+    fn of(file_sha512: &[u8; 64], unit_rows: Option<&str>) -> Self {
+        let mut h = Sha512::new();
+        h.update(b"verity/flock-circuit/parsed-from\0");
+        h.update(file_sha512);
+        if let Some(rows) = unit_rows {
+            h.update(Sha512::digest(rows.as_bytes()));
+        }
+        ParsedFrom(Some(h.finalize().into()))
+    }
+
+    pub fn digest(&self) -> Option<&[u8; 64]> {
+        self.0.as_ref()
+    }
 }
 
 /// A typed template's block: the instance, and each part's circuit and slot among its layout's slots in the VU.
@@ -690,6 +722,17 @@ fn row_wires(ports: &[Port], sha: usize, hm: usize) -> Vec<Wire> {
     out
 }
 
+/// The next `n` lines of `lines`, a `split_inclusive('\n')` of `text`, as the one slice of `text` they span: their
+/// concatenation, without copying it.
+fn next_lines<'a>(text: &'a str, lines: &mut std::str::SplitInclusive<'a, char>, n: usize) -> &'a str {
+    let at = |l: &str| l.as_ptr() as usize - text.as_ptr() as usize;
+    let mut taken = lines.by_ref().take(n);
+    let Some(first) = taken.next() else { return "" };
+    let start = at(first);
+    let end = taken.last().map_or(start + first.len(), |l| at(l) + l.len());
+    &text[start..end]
+}
+
 impl Composite {
     /// The statement's Ligerito trees have plain SHA-512 leaves ([`leaf_scheme_plain`], the SHA-512 build only).
     pub fn plain_leaves(&self) -> bool {
@@ -701,8 +744,8 @@ impl Composite {
         Self::parse_with(text, tables, None)
     }
 
-    /// [`Composite::parse`], with a templated statement's unit: the rows `flock-tmpl-unit` wrote for its META
-    /// `template` and `layout`, at their positions (an `ORDER` line).
+    /// [`Composite::parse`], with a templated statement's unit: the rows `flock-tmpl-unit` wrote for its template
+    /// section and META `layout`, at their positions (an `ORDER` line).
     pub fn parse_with(text: &str, tables: Option<&str>, tmpl_unit: Option<&str>) -> Result<Self, String> {
         let sha512: [u8; 64] = Sha512::digest(text.as_bytes()).into();
         let mut lines = text.split_inclusive('\n');
@@ -733,7 +776,12 @@ impl Composite {
                 m.as_object_mut().ok_or("META is not an object")?.remove(k);
             }
             let rest = text.splitn(3, '\n').nth(2).unwrap_or("");
-            Sha512::digest(format!("{head}\nMETA {}\n{rest}", serde_json::to_string(&sorted(&m)).unwrap()).as_bytes()).into()
+            let json = serde_json::to_string(&sorted(&m)).unwrap();
+            let mut h = Sha512::new();
+            for part in [head, "\nMETA ", json.as_str(), "\n", rest] {
+                h.update(part.as_bytes());
+            }
+            h.finalize().into()
         };
         let is_sha512 = |v: &Value| v.as_str().is_some_and(|x| x.len() == 128 && x.bytes().all(|c| c.is_ascii_digit() || (b'a'..=b'f').contains(&c)));
         if !is_sha512(&meta["program_sha512"]) {
@@ -746,6 +794,7 @@ impl Composite {
         let mut nets = Vec::new();
         let parse_net = |t: &str| std::panic::catch_unwind(|| IrUnitNet::parse(t)).map_err(|_| "a derived circuit's rows do not parse".to_string());
         let mut instance = None;
+        let mut unit_rows = None;
         if typed && crate::typed::is_flat(&meta) {
             nets.push(("unit".to_string(), parse_net(&crate::typed::unit_rows(&meta, &name)?)?));
         } else if typed {
@@ -761,10 +810,20 @@ impl Composite {
             }
             instance = Some(inst);
         } else if tmpl {
-            if !meta["template"].is_array() || !meta["layout"].is_string() {
-                return Err("META: a templated statement's template (its lines) and layout (its mode)".into());
+            if !meta["layout"].is_string() {
+                return Err("META: a templated statement's layout (its mode)".into());
             }
-            let unit = parse_net(tmpl_unit.ok_or("a templated statement: pass its unit's rows (--tmpl-unit F, from flock-tmpl-unit)")?)?;
+            let h: Vec<&str> = lines.next().unwrap_or("").split_whitespace().collect();
+            let n: usize = match h.as_slice() {
+                ["TEMPLATE", n] if n.bytes().all(|c| c.is_ascii_digit()) => n.parse().map_err(|_| "TEMPLATE line count")?,
+                _ => return Err("a templated statement's template section (TEMPLATE n, then its n lines) is not right after META".into()),
+            };
+            for _ in 0..n {
+                lines.next().ok_or("the template section is truncated")?;
+            }
+            let rows = tmpl_unit.ok_or("a templated statement: pass its unit's rows (--tmpl-unit F, from flock-tmpl-unit)")?;
+            unit_rows = Some(rows);
+            let unit = parse_net(rows)?;
             if unit.order.is_none() {
                 return Err("the templated unit's rows have no ORDER line (its position map)".into());
             }
@@ -783,8 +842,8 @@ impl Composite {
                 return Err("CIRCUIT unit: a templated statement's unit is its template, never rows".into());
             }
             let n: usize = h[2].parse().map_err(|_| "CIRCUIT sections count")?;
-            let body: String = (0..n).map(|_| lines.next().unwrap_or("")).collect();
-            let net = std::panic::catch_unwind(|| IrUnitNet::parse(&body)).map_err(|_| format!("CIRCUIT {}: not a flock-ir-unit/v2 expanded circuits", h[1]))?;
+            let body = next_lines(text, &mut lines, n);
+            let net = std::panic::catch_unwind(|| IrUnitNet::parse(body)).map_err(|_| format!("CIRCUIT {}: not a flock-ir-unit/v2 expanded circuits", h[1]))?;
             if net.cut.is_some() {
                 return Err(format!("CIRCUIT {}: a CUT line (a tail the verifier evaluates); the verifier evaluates no part of the computation", h[1]));
             }
@@ -986,11 +1045,12 @@ impl Composite {
         {
             return Err("META: the rows' wires are not the chains and hm96 inputs the ports imply".into());
         }
+        let parsed_from = ParsedFrom::of(&sha512, unit_rows);
         let c = Composite {
             name, sha512, class_sha512, k_log: us(&meta, "k_log")?, leaf_scheme: meta["leaf_scheme"].clone(), meta, nets, ranges, ports, n_in,
             leaf_cuts_of: { let mut v = vec![Vec::new(); upv]; for &(u, j, l) in &leaf_cuts { if u < upv { v[u].push((j, l)); } } v },
             out_words, out_row_ports, pinned, g, upv, unit_net, leaves_in, leaves_out, public_inputs, leaves_public, rows, sha_net, hm_net, out_net, out_ports, out_slotted, leaf_cuts, dummy_bc, dummy_outputs, per_vu, wires,
-            lookups: lookups_fast.into_iter().collect(), typed: None,
+            lookups: lookups_fast.into_iter().collect(), typed: None, parsed_from,
         };
         let typed = instance.map(|inst| {
             let mut seen: BTreeMap<usize, usize> = BTreeMap::new();
@@ -1146,7 +1206,7 @@ impl Composite {
         // the bit and its gate's value to zero (elsewhere it would only force A·z · B·z to zero, or free the bit)
         for (n, r) in self.pinned_rows() {
             let net = &self.nets[n].1;
-            if (0..16).any(|t| r.checked_add(t).and_then(|i| net.b.get(i)).map(Vec::as_slice) != Some(&[net.const_pos][..])) {
+            if (0..16).any(|t| r.checked_add(t).is_none_or(|i| i >= net.b.n_rows() || !net.b.row_is(i, &[net.const_pos]))) {
                 return Err(PINNED_LINEAR.into());
             }
         }
@@ -1174,7 +1234,7 @@ impl Composite {
         self.check_public_inputs()
     }
 
-    /// The public input ports (§16.10): each named once, and no row's name; one public leaf map per unit, each public leaf a
+    /// The public input ports (`Flock.HmRow`): each named once, and no row's name; one public leaf map per unit, each public leaf a
     /// zero leaf of `leaves_in`; the unit range unpacked, since the `in` regions read it; their words
     /// ([`Self::public_leaf_words`]) inside the leaf group, each leaf in them a public or a zero leaf in every unit.
     fn check_public_inputs(&self) -> Result<(), String> {
@@ -1239,7 +1299,7 @@ impl Composite {
         self.leaves_public.iter().flat_map(|l| l.iter().enumerate().filter(|x| *x.1 >= 0).map(move |(j, _)| col + j / 8)).collect()
     }
 
-    /// The `in` regions (§16.10), as `(w, s)`: `2^s` words of every unit slot from word `w`. The public leaves' words
+    /// The `in` regions (`Flock.HmRow`), as `(w, s)`: `2^s` words of every unit slot from word `w`. The public leaves' words
     /// ([`Self::public_leaf_words`]) in aligned blocks of `2^e` words ([`aligned_blocks`]), each split into `2^(e - s)`
     /// regions, `s = min(e, PT_LOCAL - 7 - log2ceil(units))` (`7 + s` free bits beside the slot bits).
     pub fn in_regions(&self) -> Vec<(usize, usize)> {
@@ -1471,7 +1531,7 @@ impl Composite {
         let ands = ours.map(|n| {
             let net = &self.nets[n].1;
             let port = |r: usize| net.in_groups.iter().chain(&net.out_groups).any(|g| (g.col * WORD..(g.col + g.words) * WORD).contains(&r));
-            self.per_vu[n] * (0..net.useful).filter(|&r| r != net.const_pos && !port(r) && !(net.a[r].is_empty() && net.b[r].is_empty())).count()
+            self.per_vu[n] * (0..net.useful).filter(|&r| r != net.const_pos && !port(r) && !(net.a.row_len(r) == 0 && net.b.row_len(r) == 0)).count()
         }).sum();
         (rows, ands)
     }
@@ -1677,13 +1737,13 @@ pub struct Instances {
     /// every row's `b || c`, instance-major, ports in order (a shared-row file: its tables' rows, port-major)
     pub bcs: Vec<[u8; BC_BYTES]>,
     /// SHA-512 of the header's compact key-sorted JSON (no newline) and every public byte after the rows and salts
-    /// (`b || c`, refs): what Σ binds. A drawn statement's header is its sample's, which no file holds, so this is no file's hash.
+    /// (`b || c`, refs): what Σ binds. A sampled statement's header is its sample's, which no file holds, so this is no file's hash.
     pub public_sha512: [u8; 64],
     /// SHA-512 of the verifier's own public file of the registered population (`public_file`'s bytes, which is the staged
-    /// `pub-<n>.bin` when its writer writes the header as serde does: `verity_flock.circuit.public_file`). A drawn statement
+    /// `pub-<n>.bin` when its writer writes the header as serde does: `verity_flock.circuit.public_file`). A sampled statement
     /// keeps its population's.
     pub public_file_sha512: [u8; 64],
-    /// the registered population's `b || c` (a drawn statement: the frame-v3 roots are over them); `None`: the statement's own
+    /// the registered population's `b || c` (a sampled statement: the frame-v3 roots are over them); `None`: the statement's own
     pub population: Option<(usize, Vec<[u8; BC_BYTES]>)>,
     /// a shared-row file's row tables (header `shared_rows`); `None`: every instance carries its own rows
     pub tables: Option<RowTables>,
@@ -1858,15 +1918,22 @@ impl Instances {
         let pw = c.public_words();
         let public: Vec<u16> = units.iter().flat_map(|&u| self.public[u * pw..(u + 1) * pw].to_vec()).collect();
         if let Some(t) = &self.tables {
-            // the tables stay the population's; the drawn instances keep their refs into them
+            // the tables stay the population's; the sampled instances keep their refs into them
             let refs = units.iter().flat_map(|&u| t.refs[u * np..(u + 1) * np].to_vec()).collect();
             return Ok(Instances { header, n: units.len(), rows: None, salts: None, bcs: self.bcs.clone(), public_sha512,
                                   public_file_sha512, population, tables: Some(RowTables { refs, ..t.clone() }), public });
         }
+        let gather = |src: &[u8], w: usize| -> Vec<u8> {
+            let mut out = Vec::with_capacity(units.len() * w);
+            for &u in &units {
+                out.extend_from_slice(&src[u * w..(u + 1) * w]);
+            }
+            out
+        };
         Ok(Instances {
             header, n: units.len(),
-            rows: self.rows.as_ref().map(|r| units.iter().flat_map(|&u| r[u * rb..(u + 1) * rb].to_vec()).collect()),
-            salts: self.salts.as_ref().map(|s| units.iter().flat_map(|&u| s[u * np * SALT_BYTES..(u + 1) * np * SALT_BYTES].to_vec()).collect()),
+            rows: self.rows.as_ref().map(|r| gather(r, rb)),
+            salts: self.salts.as_ref().map(|s| gather(s, np * SALT_BYTES)),
             bcs: units.iter().flat_map(|&u| self.bcs[u * np..(u + 1) * np].to_vec()).collect(),
             public_sha512,
             public_file_sha512,
@@ -1928,6 +1995,58 @@ impl Instances {
         }
         out.extend(public);
         Some(out)
+    }
+
+    /// The rows whose salts the file holds: every instance's per port, or a shared-row file's table rows.
+    pub fn salt_count(&self, np: usize) -> usize {
+        match &self.tables {
+            Some(t) => t.counts.iter().sum(),
+            None => self.n * np,
+        }
+    }
+
+    /// Puts `salts` in place of the file's row salts, in the file's order ([`Instances::salt_count`] of them): a registered
+    /// population's prover file only.
+    pub fn set_salts(&mut self, np: usize, salts: Vec<u8>) -> Result<(), String> {
+        if !self.has_rows() || self.population.is_some() {
+            return Err("salts are set on a registered population's prover file".into());
+        }
+        if salts.len() != SALT_BYTES * self.salt_count(np) {
+            return Err(format!("{} bytes of salts, where the file's {} rows take {}", salts.len(), self.salt_count(np), SALT_BYTES * self.salt_count(np)));
+        }
+        match &mut self.tables {
+            Some(t) => t.salts = Some(std::sync::Arc::new(salts)),
+            None => self.salts = Some(salts),
+        }
+        Ok(())
+    }
+
+    /// The prover's file of this registered population, as [`Instances::load`] reads it: the header (`rows` true), the rows,
+    /// their salts and the public bytes.
+    pub fn prover_file(&self) -> Result<Vec<u8>, String> {
+        if self.population.is_some() || !self.has_rows() {
+            return Err("a prover's file is a registered population's, with its rows".into());
+        }
+        let mut header = self.header.clone();
+        header["rows"] = Value::Bool(true);
+        let mut b = serde_json::to_vec(&header).map_err(|e| format!("header: {e}"))?;
+        b.push(b'\n');
+        match &self.tables {
+            Some(t) => {
+                b.extend(t.rows.as_deref().into_iter().flatten());
+                b.extend(t.salts.as_deref().into_iter().flatten());
+            }
+            None => {
+                b.extend(self.rows.iter().flatten());
+                b.extend(self.salts.iter().flatten());
+            }
+        }
+        b.extend(self.bcs.iter().flatten());
+        if let Some(t) = &self.tables {
+            b.extend(t.refs.iter().flat_map(|r| r.to_le_bytes()));
+        }
+        b.extend(self.public.iter().flat_map(|w| w.to_le_bytes()));
+        Ok(b)
     }
 
     /// Every instance's row salts, instance-major, ports in order (a shared-row file's gathered by its refs); `None`: the
@@ -2060,7 +2179,7 @@ pub fn check_public(c: &Composite, inst: &Instances) -> Result<(), String> {
 
 pub const LINKS_FORMAT: &str = "verity/flock-links/v1";
 
-/// Linking (PROTOCOL.md §16.13) on the registered population's public file: the verifier's own links file (`--links`,
+/// Linking (the Lean `HmOut`) on the registered population's public file: the verifier's own links file (`--links`,
 /// `verity/flock-links/v1`, derived from its program and query: `verity_flock.class_statement.links_file`) is for this
 /// circuit, its partition and META `links`' ports, and every `(reader, port, writer)` it lists has the reader's link row's
 /// `b || c` equal to the writer's output row's. A circuit with META `links` needs the file; one without takes none. The links
@@ -2119,7 +2238,7 @@ pub fn check_links(c: &Composite, inst: &Instances, file: Option<&Value>) -> Res
 }
 
 /// The frame-v3-sha512 roots of the file's public part, one row tree per row (input rows, then output rows): over the
-/// registered population (a drawn statement's instances are some of its units), a shared-row file's row trees over its tables.
+/// registered population (a sampled statement's instances are some of its units), a shared-row file's row trees over its tables.
 pub fn frame_roots(c: &Composite, inst: &Instances) -> Result<Vec<(String, [u8; 64])>, String> {
     let fv = &inst.header["frame_v3"];
     let dom_of = |k: &str| -> Result<Vec<u8>, String> { hexb(fv["domain_ids"][k].as_str().ok_or(format!("frame_v3.domain_ids.{k} missing"))?) };
@@ -2224,7 +2343,7 @@ pub fn region_word_violation(c: &Composite, regions: &[RegionShape], da: &[(u32,
             match r.kind {
                 Kind::Net(i) => {
                     let net = &c.nets[i].1;
-                    cols.extend((if a { &net.a } else { &net.b }).get(q - slot0).into_iter().flatten().map(|&k| slot0 + k));
+                    cols.extend((if a { &net.a } else { &net.b }).cols_or_empty(q - slot0).map(|k| slot0 + k));
                 }
                 Kind::Mask => cols.push(q),
             }
@@ -2236,12 +2355,14 @@ pub fn region_word_violation(c: &Composite, regions: &[RegionShape], da: &[(u32,
         .map(|(ri, q)| format!("region {:?}: column {q} shares a word with the region's bits and is not forced to zero", regions[ri].region))
 }
 
+#[derive(Clone)]
 pub struct BlockCircuit {
     pub k_log: usize,
     pub pin: usize,
     /// per slot type: its log size and its circuit, column-major: the fold gathers each column's rows, where a row scatter
-    /// would give each of its ~4 chunks per thread an accumulator as wide as the slot (2^21 to 2^24 columns for a GEMM unit)
-    pub types: Vec<(usize, CscCircuit)>,
+    /// would give each of its ~4 chunks per thread an accumulator as wide as the slot (2^21 to 2^24 columns for a GEMM unit);
+    /// shared by every statement of the circuit ([`Stmt::drawn`])
+    pub types: Arc<Vec<(usize, CscCircuit)>>,
     /// per slot type: a generated read's table-direct B side
     pub tables: Vec<Option<TableSide>>,
     /// (type index, first position, count) per range
@@ -2310,7 +2431,8 @@ pub type RowIns<'a> = &'a (dyn Fn(usize) -> (Vec<Vec<F128>>, Vec<Vec<F128>>) + S
 
 /// Everything a session needs, the same on both sides.
 pub struct Stmt {
-    pub c: Composite,
+    /// the circuit, shared by every statement of it ([`Stmt::drawn`])
+    pub c: Arc<Composite>,
     pub n: usize,
     pub blocks_real: usize,
     pub nbl: usize,
@@ -2326,7 +2448,7 @@ pub struct Stmt {
     pub flock_digest: [u8; 32],
     /// how the verifier's identity is pinned: profile, reps, zk, leaf scheme, coin mode (backend identity)
     pub identity: Value,
-    /// `r1cs.c0_is_identity()`, a function of the statement alone: computed by its first verification, read by the rest
+    /// `r1cs.c0_is_identity()`, a function of the statement alone: computed by its first verification or zk replay, read by the rest
     pub c0_identity: OnceLock<bool>,
 }
 
@@ -2492,34 +2614,67 @@ fn lanes_into(v: &[u64], n: usize, dst: &mut [u64], stride: usize, off: usize, l
 
 /// Circuit `ni`'s slots (`net`, not a lookup's) from their input words `ins`, as mapped host slots hold them (`HostSlots`
 /// with a, b per slot): slot x's a words then its b words, `uw` F128 words each as (lo, hi) u64 pairs, at `out[4 * uw * x..]`,
-/// written straight from each lane group's bit-sliced rows. Whether every slot's z is a & b word for word, which that layout
-/// requires (if not, `out` holds no layout).
+/// written straight from each lane group's bit-sliced rows, [`unit_width`] groups a pass. Whether every slot's z is a & b word
+/// for word, which that layout requires (if not, `out` holds no layout).
 pub fn unit_ab_into(net: &IrUnitNet, ni: usize, uw: usize, ins: &[Vec<F128>], out: &mut [u64]) -> bool {
+    unit_ab_into_wide(net, ni, uw, ins, out, unit_width(ins.len(), rayon::current_num_threads()))
+}
+
+/// [`unit_ab_into`] at `n` lane groups a pass.
+pub fn unit_ab_into_wide(net: &IrUnitNet, ni: usize, uw: usize, ins: &[Vec<F128>], out: &mut [u64], n: usize) -> bool {
     assert_eq!(out.len(), 4 * uw * ins.len(), "unit_ab_into: out is not 4 * uw words per slot");
     let t0 = Instant::now();
     let one_pass = unit_flat() && net.one_pass();
     let flat_s = t0.elapsed().as_secs_f64();
-    let prof = GroupProf::default();
-    let ok = out.par_chunks_mut(64 * 4 * uw).zip(ins.par_chunks(64)).enumerate().all(|(gi, (dst, grp))| {
-        let (zz, aa, bq) = prof.eval(net, ni, gi, grp);
-        let tw = Instant::now();
-        let used = u64::MAX >> (64 - grp.len());
-        let ok = zz.iter().zip(&aa).zip(&bq).all(|((z, a), b)| (z ^ (a & b)) & used == 0);
-        if ok {
-            lanes_into(&aa, grp.len(), dst, 4 * uw, 0, 2 * uw);
-            lanes_into(&bq, grp.len(), dst, 4 * uw, 2 * uw, 2 * uw);
-        }
-        prof.out(tw);
-        ok
+    let prof = GroupProf::new(n);
+    let ok = out.par_chunks_mut(n * 64 * 4 * uw).zip(ins.par_chunks(n * 64)).enumerate().all(|(ti, (dst, slots))| {
+        let mut dst = dst.chunks_mut(64 * 4 * uw);
+        prof.each_group(net, ni, n * ti, slots, |_, grp, (zz, aa, bq)| {
+            let dst = dst.next().expect("out holds 64 slots a group");
+            let tw = Instant::now();
+            let used = u64::MAX >> (64 - grp.len());
+            let ok = zz.iter().zip(&aa).zip(&bq).all(|((z, a), b)| (z ^ (a & b)) & used == 0);
+            if ok {
+                lanes_into(&aa, grp.len(), dst, 4 * uw, 0, 2 * uw);
+                lanes_into(&bq, grp.len(), dst, 4 * uw, 2 * uw, 2 * uw);
+            }
+            prof.out(tw);
+            ok
+        }).into_iter().all(|ok| ok)
     });
     prof.print("slot_ab", ni, net.useful, ins.len(), one_pass, flat_s, t0);
     ok
 }
 
-/// A lane group's evaluation for [`Stmt::slot_zab`] and [`unit_ab_into`] (`eval64_flat`; with `FC_UNIT_CHECK=1` eval64 beside
-/// it, asserted equal), and the times `FC_UNIT_PROFILE` reports.
+/// Circuit `ni`'s slots (`net`, not a lookup's) from their input words `ins`: `(slot, z, a, b)`, `uw` words each, `n` lane
+/// groups a pass.
+#[allow(clippy::type_complexity)]
+fn unit_zab(net: &IrUnitNet, ni: usize, uw: usize, ins: &[Vec<F128>], n: usize) -> Vec<(usize, Vec<F128>, Vec<F128>, Vec<F128>)> {
+    let t0 = Instant::now();
+    let one_pass = unit_flat() && net.one_pass();
+    let flat_s = t0.elapsed().as_secs_f64();
+    let prof = GroupProf::new(n);
+    let items = ins.par_chunks(n * 64).enumerate().flat_map_iter(|(ti, slots)| {
+        prof.each_group(net, ni, n * ti, slots, |gi, grp, (zz, aa, bq)| {
+            let tl = Instant::now();
+            let (z, a, b) = (lanes(&zz, grp.len(), uw), lanes(&aa, grp.len(), uw), lanes(&bq, grp.len(), uw));
+            prof.out(tl);
+            z.into_iter().zip(a).zip(b).enumerate().map(|(l, ((z, a), b))| (64 * gi + l, z, a, b)).collect::<Vec<_>>()
+        }).into_iter().flatten()
+    }).collect();
+    prof.print("slot_zab", ni, net.useful, ins.len(), one_pass, flat_s, t0);
+    items
+}
+
+/// One lane group's bit-sliced (z, a, b) rows.
+type Zab = (Vec<u64>, Vec<u64>, Vec<u64>);
+
+/// Lane groups' evaluation for [`unit_zab`] and [`unit_ab_into`] (`eval64_flat`, or [`IrUnitNet::eval_wide`] for several
+/// groups in one pass; with `FC_UNIT_CHECK=1` eval64 beside it, asserted equal), and the times `FC_UNIT_PROFILE` reports.
 #[derive(Default)]
 struct GroupProf {
+    wide: usize,
+    passes: AtomicU64,
     eval_ns: AtomicU64,
     eval_max: AtomicU64,
     ref_ns: AtomicU64,
@@ -2528,41 +2683,110 @@ struct GroupProf {
     check: OnceLock<bool>,
 }
 
+/// The first `n` groups' words of `v`'s rows, each group's in its own vector, `v` read once.
+fn by_group<W: RowWord>(v: &[W], n: usize) -> Vec<Vec<u64>> {
+    let mut out: Vec<Vec<u64>> = (0..n).map(|_| Vec::with_capacity(v.len())).collect();
+    for w in v {
+        for (g, o) in out.iter_mut().enumerate() {
+            o.push(w.word(g));
+        }
+    }
+    out
+}
+
+/// Up to 64 lanes' bits at input column `col`, lane l in bit l.
+fn lane_bits(grp: &[Vec<F128>], col: usize) -> u64 {
+    grp.iter().enumerate().fold(0u64, |x, (l, r)| x | (bit(&r[col / WORD], col % WORD) << l))
+}
+
 impl GroupProf {
-    fn eval(&self, net: &IrUnitNet, ni: usize, gi: usize, grp: &[Vec<F128>]) -> (Vec<u64>, Vec<u64>, Vec<u64>) {
+    /// At most `wide` lane groups a pass.
+    fn new(wide: usize) -> Self {
+        assert!((1..=8).contains(&wide), "{wide} lane groups a pass: 1 to 8");
+        GroupProf { wide, ..Default::default() }
+    }
+
+    fn eval(&self, net: &IrUnitNet, ni: usize, gi: usize, grp: &[Vec<F128>]) -> Zab {
         let te = Instant::now();
-        let lanes_in = |col: usize| grp.iter().enumerate().fold(0u64, |x, (l, r)| x | (bit(&r[col / WORD], col % WORD) << l));
         let got = if unit_flat() {
             let cols = bit_rows(grp, net.in_words);
             net.eval64_flat(|col| cols[col])
         } else {
-            net.eval64(lanes_in)
+            net.eval64(|col| lane_bits(grp, col))
         };
-        let e = te.elapsed().as_nanos() as u64;
+        self.walked(te);
+        self.against_eval64(net, ni, gi, grp, &got);
+        got
+    }
+
+    /// The lane groups of `slots` (64 slots each, group `gi` first, at most `wide`) in order, each handed to `f(group, its
+    /// slots, (z, a, b))` as [`GroupProf::eval`] returns them: several in one pass of [`IrUnitNet::eval_wide`].
+    fn each_group<R>(&self, net: &IrUnitNet, ni: usize, gi: usize, slots: &[Vec<F128>], mut f: impl FnMut(usize, &[Vec<F128>], Zab) -> R) -> Vec<R> {
+        let grps: Vec<&[Vec<F128>]> = slots.chunks(64).collect();
+        assert!(grps.len() <= self.wide, "{} lane groups, past {} a pass", grps.len(), self.wide);
+        match grps.len() {
+            0 => Vec::new(),
+            1 => vec![f(gi, grps[0], self.eval(net, ni, gi, grps[0]))],
+            _ if !(unit_flat() && net.one_pass()) => grps.iter().enumerate().map(|(g, grp)| f(gi + g, grp, self.eval(net, ni, gi + g, grp))).collect(),
+            2 => self.wide_pass::<Row2, R>(net, ni, gi, &grps, f),
+            3 | 4 => self.wide_pass::<Row4, R>(net, ni, gi, &grps, f),
+            _ => self.wide_pass::<Row8, R>(net, ni, gi, &grps, f),
+        }
+    }
+
+    fn wide_pass<W: RowWord, R>(&self, net: &IrUnitNet, ni: usize, gi: usize, grps: &[&[Vec<F128>]], mut f: impl FnMut(usize, &[Vec<F128>], Zab) -> R) -> Vec<R> {
+        let te = Instant::now();
+        let mut cols = vec![W::splat(0); net.in_words * WORD];
+        for (g, grp) in grps.iter().enumerate() {
+            for (c, x) in cols.iter_mut().zip(bit_rows(grp, net.in_words)) {
+                c.set(g, x);
+            }
+        }
+        let (z, a, b) = net.eval_wide(|col| cols[col]).expect("a one-pass net");
+        self.walked(te);
+        let td = Instant::now();
+        let [z, a, b] = [z, a, b].map(|v| by_group(&v, grps.len()));
+        self.eval_ns.fetch_add(td.elapsed().as_nanos() as u64, Ordering::Relaxed);
+        z.into_iter().zip(a).zip(b).zip(grps).enumerate().map(|(g, (((z, a), b), grp))| {
+            let got = (z, a, b);
+            self.against_eval64(net, ni, gi + g, grp, &got);
+            f(gi + g, grp, got)
+        }).collect()
+    }
+
+    /// One walk over a net, from `since`.
+    fn walked(&self, since: Instant) {
+        let e = since.elapsed().as_nanos() as u64;
+        self.passes.fetch_add(1, Ordering::Relaxed);
         self.eval_ns.fetch_add(e, Ordering::Relaxed);
         self.eval_max.fetch_max(e, Ordering::Relaxed);
+    }
+
+    /// With `FC_UNIT_CHECK=1`, that group `gi`'s rows are `eval64`'s.
+    fn against_eval64(&self, net: &IrUnitNet, ni: usize, gi: usize, grp: &[Vec<F128>], got: &Zab) {
         if *self.check.get_or_init(|| std::env::var("FC_UNIT_CHECK").as_deref() == Ok("1")) {
             let tr = Instant::now();
-            let want = net.eval64(lanes_in);
+            let want = net.eval64(|col| lane_bits(grp, col));
             let r = tr.elapsed().as_nanos() as u64;
             self.ref_ns.fetch_add(r, Ordering::Relaxed);
             self.ref_max.fetch_max(r, Ordering::Relaxed);
-            assert!(want == got, "circuit {ni}, group {gi}: the one-pass evaluation is not eval64's");
+            assert!(want == *got, "circuit {ni}, group {gi}: the one-pass evaluation is not eval64's");
         }
-        got
     }
 
     fn out(&self, since: Instant) {
         self.out_ns.fetch_add(since.elapsed().as_nanos() as u64, Ordering::Relaxed);
     }
 
-    /// `out_sum_s`: the lanes' packed words (`lanes`, or `unit_ab_into`'s writes)
+    /// `eval_sum_s`: every walk's time with its groups' rows taken out of it, `passes` walks; `out_sum_s`: the lanes' packed
+    /// words (`lanes`, or `unit_ab_into`'s writes)
     #[allow(clippy::too_many_arguments)]
     fn print(&self, part: &str, ni: usize, rows: usize, slots: usize, one_pass: bool, flat_s: f64, t0: Instant) {
         if unit_profile() {
             let s = |x: &AtomicU64| x.load(Ordering::Relaxed) as f64 * 1e-9;
             eprintln!("UNITPROF\t{}", serde_json::json!({"part": part, "circuit": ni, "rows": rows, "slots": slots,
-                "one_pass": one_pass, "flat_s": flat_s, "groups": slots.div_ceil(64), "wall_s": t0.elapsed().as_secs_f64(),
+                "one_pass": one_pass, "flat_s": flat_s, "groups": slots.div_ceil(64), "wide": self.wide,
+                "passes": self.passes.load(Ordering::Relaxed), "wall_s": t0.elapsed().as_secs_f64(),
                 "eval_sum_s": s(&self.eval_ns), "eval_max_s": s(&self.eval_max), "out_sum_s": s(&self.out_ns),
                 "check": self.check.get().copied().unwrap_or(false), "eval64_sum_s": s(&self.ref_ns), "eval64_max_s": s(&self.ref_max)}));
         }
@@ -2590,9 +2814,8 @@ fn bit_rows(grp: &[Vec<F128>], words: usize) -> Vec<u64> {
 pub const GPU_NNZ_MAX: u64 = u32::MAX as u64;
 
 /// Refuses a circuit whose A or B side holds more than `limit` nonzeros.
-pub fn nnz_within(name: &str, a: &[Vec<usize>], b: &[Vec<usize>], limit: u64) -> Result<(), String> {
-    let count = |m: &[Vec<usize>]| m.iter().map(|r| r.len() as u64).sum::<u64>();
-    let (na, nb) = (count(a), count(b));
+pub fn nnz_within<R: RowRead + ?Sized>(name: &str, a: &R, b: &R, limit: u64) -> Result<(), String> {
+    let (na, nb) = (a.nnz() as u64, b.nnz() as u64);
     if na.max(nb) > limit {
         return Err(format!("{name}: {na} nonzeros in A and {nb} in B, past the GPU prover's {limit} (32-bit offsets): the CPU prover"));
     }
@@ -2612,6 +2835,25 @@ pub fn unit_flat() -> bool {
     *ON.get_or_init(|| std::env::var("FC_UNIT_FLAT").as_deref() != Ok("0"))
 }
 
+/// Lane groups of 64 host unit slots evaluated in one pass of [`IrUnitNet::eval_wide`] by a walk over `slots` slots on a pool of
+/// `threads`: `FC_UNIT_WIDE` (1 to 8) for every walk when set, else [`width_for`] the walk's lane groups.
+pub fn unit_width(slots: usize, threads: usize) -> usize {
+    static N: OnceLock<Option<usize>> = OnceLock::new();
+    let fixed = *N.get_or_init(|| std::env::var("FC_UNIT_WIDE").ok().map(|v| {
+        v.parse().ok().filter(|n| (1..=8).contains(n)).unwrap_or_else(|| panic!("FC_UNIT_WIDE={v}: 1 to 8 lane groups a pass"))
+    }));
+    fixed.unwrap_or_else(|| width_for(slots.div_ceil(64), threads))
+}
+
+/// The widest of 8, 4 and 2 lane groups a pass that still leaves `groups` at least `threads` passes, else 1, a pass a group. A
+/// pass reads the net's rows once, whatever its groups, so a wider pass spends less CPU and memory bandwidth a slot, but fewer
+/// passes than threads leave cores idle. A pass of 3 or of 5 to 7 groups costs what its row word's full width does, so those
+/// widths are never taken. A wide pass holds its groups' rows at once, so the width stops at 8; and since a narrower width is
+/// taken only where 8 would leave a thread idle, a walk of wide passes never holds more row words at once than it would at 8.
+fn width_for(groups: usize, threads: usize) -> usize {
+    [8, 4, 2].into_iter().find(|&w| groups.div_ceil(w) >= threads).unwrap_or(1)
+}
+
 /// `FC_UNIT_PROFILE=1`: the host witness's parts as `UNITPROF` lines on stderr.
 pub fn unit_profile() -> bool {
     static ON: OnceLock<bool> = OnceLock::new();
@@ -2622,13 +2864,54 @@ fn flip_bit(w: &mut F128, t: usize) {
     if t < 64 { w.lo ^= 1 << t } else { w.hi ^= 1 << (t - 64) }
 }
 
+/// Whether a session's side reuses the sampled statements it built before ([`StmtCache`]); `FC_STMT_CACHE=0`: every session
+/// builds its own.
+pub fn stmt_cache_on() -> bool {
+    static ON: OnceLock<bool> = OnceLock::new();
+    *ON.get_or_init(|| std::env::var("FC_STMT_CACHE").as_deref() != Ok("0"))
+}
+
+/// One side's sampled statements, each built once. [`Stmt::new`] reads only its circuit, its count and its identity, all
+/// public (no value, coin or sampled proof block), so a statement built again from the same three is the same statement. The
+/// key binds all three: the registered statement's digest (its circuit file's SHA-512 under its statement tag), the sampled
+/// count and the canonical identity. Each side keeps its own cache: the verifier's holds only statements it built itself.
+pub struct StmtCache(Mutex<BTreeMap<([u8; 64], usize, String), Arc<Stmt>>>);
+
+impl Default for StmtCache {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl StmtCache {
+    pub const fn new() -> Self {
+        Self(Mutex::new(BTreeMap::new()))
+    }
+
+    /// `base.drawn(n, identity)`, built at the first call with this key and the same statement after it.
+    pub fn drawn(&self, base: &Stmt, n: usize, identity: Value) -> Result<Arc<Stmt>, String> {
+        let key = (base.digest, n, sorted(&identity).to_string());
+        if let Some(s) = self.0.lock().unwrap_or_else(PoisonError::into_inner).get(&key) {
+            return Ok(s.clone());
+        }
+        let s = Arc::new(base.drawn(n, identity)?);
+        Ok(self.0.lock().unwrap_or_else(PoisonError::into_inner).entry(key).or_insert(s).clone())
+    }
+
+    pub fn len(&self) -> usize {
+        self.0.lock().unwrap_or_else(PoisonError::into_inner).len()
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.len() == 0
+    }
+}
+
 impl Stmt {
     pub fn new(c: Composite, n: usize, identity: Value) -> Result<Self, String> {
-        let k_log = c.k_log;
         let blocks_real = n.div_ceil(c.g);
         let nbl = log2ceil(blocks_real.max(1)).max(3);
-        let m = k_log + nbl;
-        shape_in_range(m, PT_LOCAL + nbl)?;
+        shape_in_range(c.k_log + nbl, PT_LOCAL + nbl)?;
         let pin = pin_of(&c);
         let (da, db) = delta(&c, pin);
         let mut types: Vec<(usize, CscCircuit)> = Vec::new();
@@ -2642,12 +2925,7 @@ impl Stmt {
             let key = format!("{:?}", r.kind);
             let t = *type_of.entry(key).or_insert_with(|| {
                 let circ = match r.kind {
-                    Kind::Net(i) => {
-                        let net = &c.nets[i].1;
-                        let k = 1usize << net.unit_log;
-                        let pad = |rows: &Vec<Vec<usize>>| { let mut x = rows.clone(); x.resize(k, Vec::new()); SparseBinaryMatrix { num_rows: k, num_cols: k, rows: x.into() } };
-                        CscCircuit::from_matrices(&pad(&net.a), &pad(&net.b))
-                    }
+                    Kind::Net(i) => c.nets[i].1.csc(),
                     Kind::Mask => {
                         let k = 1usize << r.slot_log;
                         let id = SparseBinaryMatrix { num_rows: k, num_cols: k, rows: (0..k).map(|i| vec![i]).collect::<Vec<_>>().into() };
@@ -2664,6 +2942,29 @@ impl Stmt {
         if let Some(e) = region_word_violation(&c, &regions, &da, &db) {
             return Err(e);
         }
+        let circuit = BlockCircuit { k_log: c.k_log, pin, types: Arc::new(types), tables, ranges, da, db };
+        Self::of(Arc::new(c), circuit, regions, None, n, identity)
+    }
+
+    /// `Stmt::new(self.c, n, identity)`, the statement of this one's circuit at `n` instances (a drawn sample's), with this
+    /// one's circuit, slot types and `A_0`, `B_0`, `C_0` shared rather than built again: [`Stmt::new`] derives them from the
+    /// circuit alone.
+    pub fn drawn(&self, n: usize, identity: Value) -> Result<Self, String> {
+        let r = &self.r1cs;
+        let mats = [r.a_0.clone(), r.b_0.clone(), r.c_0.clone()];
+        Self::of(self.c.clone(), self.circuit.clone(), Self::regions(&self.c)?, Some(mats), n, identity)
+    }
+
+    /// The statement of circuit `c` (its slot types and regions built) at `n` instances; `mats`: its `A_0`, `B_0` and `C_0`,
+    /// functions of its `k_log` alone, where another statement of it holds them.
+    fn of(c: Arc<Composite>, circuit: BlockCircuit, regions: Vec<RegionShape>, mats: Option<[SparseBinaryMatrix; 3]>,
+          n: usize, identity: Value) -> Result<Self, String> {
+        let k_log = c.k_log;
+        let blocks_real = n.div_ceil(c.g);
+        let nbl = log2ceil(blocks_real.max(1)).max(3);
+        let m = k_log + nbl;
+        shape_in_range(m, PT_LOCAL + nbl)?;
+        let pin = circuit.pin;
         let mut h = Sha512::new();
         h.update(c.tags().statement.as_bytes());
         h.update(c.sha512);
@@ -2671,7 +2972,7 @@ impl Stmt {
         for x in [n, blocks_real, nbl, m, k_log, pin, regions.len(), c.g] {
             h.update((x as u64).to_le_bytes());
         }
-        for d in [&da, &db] {
+        for d in [&circuit.da, &circuit.db] {
             h.update((d.len() as u64).to_le_bytes());
             for &(i, cc) in d.iter() {
                 h.update(i.to_le_bytes());
@@ -2681,21 +2982,23 @@ impl Stmt {
         let digest: [u8; 64] = h.finalize().into();
         let flock_digest: [u8; 32] = digest[..32].try_into().unwrap();
         let kk = 1usize << k_log;
-        let empty = || SparseBinaryMatrix { num_rows: kk, num_cols: kk, rows: vec![Vec::new(); kk].into() };
+        let [a_0, b_0, c_0] = mats.unwrap_or_else(|| {
+            let empty = || SparseBinaryMatrix { num_rows: kk, num_cols: kk, rows: vec![Vec::new(); kk].into() };
+            [empty(), empty(), SparseBinaryMatrix { num_rows: kk, num_cols: kk, rows: (0..kk).map(|i| vec![i]).collect::<Vec<_>>().into() }]
+        });
         let r1cs = BlockR1cs {
             m,
             k_log,
             k_skip: b3::K_SKIP,
             useful_bits: kk,
-            a_0: empty(),
-            b_0: empty(),
-            c_0: SparseBinaryMatrix { num_rows: kk, num_cols: kk, rows: (0..kk).map(|i| vec![i]).collect::<Vec<_>>().into() },
+            a_0,
+            b_0,
+            c_0,
             layout: WitnessLayout::RowMajor,
             const_pin: Some(pin),
             digest_cache: OnceLock::from(flock_digest),
             csc_cache: OnceLock::new(),
         };
-        let circuit = BlockCircuit { k_log, pin, types, tables, ranges, da, db };
         Ok(Stmt { c, n, blocks_real, nbl, m, m_pts: PT_LOCAL + nbl, pin, regions, circuit, r1cs, digest, flock_digest, identity,
                   c0_identity: OnceLock::new() })
     }
@@ -3109,19 +3412,7 @@ impl Stmt {
                     (x, f(zz), f(aa), f(bq))
                 }).collect()
             } else {
-                let t0 = Instant::now();
-                let one_pass = unit_flat() && net.one_pass();
-                let flat_s = t0.elapsed().as_secs_f64();
-                let prof = GroupProf::default();
-                let items = ins.par_chunks(64).enumerate().flat_map_iter(|(gi, grp)| {
-                    let (zz, aa, bq) = prof.eval(net, ni, gi, grp);
-                    let tl = Instant::now();
-                    let (z, a, b) = (lanes(&zz, grp.len(), uw), lanes(&aa, grp.len(), uw), lanes(&bq, grp.len(), uw));
-                    prof.out(tl);
-                    z.into_iter().zip(a).zip(b).enumerate().map(move |(l, ((z, a), b))| (64 * gi + l, z, a, b))
-                }).collect();
-                prof.print("slot_zab", ni, net.useful, ins.len(), one_pass, flat_s, t0);
-                items
+                unit_zab(net, ni, uw, ins, unit_width(ins.len(), rayon::current_num_threads()))
             };
             items
         }
@@ -3294,7 +3585,7 @@ mod tests {
 
     use super::*;
 
-    /// PROTOCOL.md §16.5: the statement digest's tag is the statement id. The flat statement keeps its tags; the typed id
+    /// The Lean `Flock.Tags`: the statement digest's tag is the statement id. The flat statement keeps its tags; the typed id
     /// has its own.
     #[test]
     fn tags_follow_the_statement_id() {
@@ -3360,7 +3651,7 @@ mod tests {
         assert!(regions_in_range(&[region((0..14).collect()), overlap]).unwrap_err().contains("LinkLayout"));
     }
 
-    /// §16.10: the in regions' words, run by run, in the largest aligned blocks (the vectors `test_circuit.py` gives Python's).
+    /// `Flock.HmRow`: the in regions' words, run by run, in the largest aligned blocks (the vectors `test_circuit.py` gives Python's).
     #[test]
     fn public_words_are_cut_into_aligned_blocks() {
         let blocks = |w: &[usize]| aligned_blocks(&w.iter().copied().collect());
@@ -3386,7 +3677,7 @@ mod tests {
     }
 
     /// The verifier's public file, written as `public_file` writes it, is the file whose SHA-512 the prover's record
-    /// carries (`public_file_sha512`), and a drawn statement keeps its population's; Σ's public digest is neither.
+    /// carries (`public_file_sha512`), and a sampled statement keeps its population's; Σ's public digest is neither.
     #[test]
     fn the_public_file_digest_is_the_files_own() {
         let c = Composite::parse(&typed_statement(), None).unwrap();
@@ -3408,6 +3699,40 @@ mod tests {
         let d = inst.drawn(&c, &json!({"law": "subset", "population": n, "k": 1, "units": [1]})).unwrap();
         assert_eq!(d.public_file_sha512, file);
         assert_ne!(d.public_sha512, inst.public_sha512);
+    }
+
+    /// A prover's file with its salts set elsewhere (the ZK server's: `flock-circuit --salt-refs`) is written as `load` reads
+    /// it: the same rows, the new salts and the same public part. Salts of another count, a verifier's file and a sampled
+    /// statement are refused.
+    #[test]
+    fn salts_set_on_a_prover_file_round_trip() {
+        let c = Composite::parse(&typed_statement(), None).unwrap();
+        let (n, np) = (2, c.ports.len());
+        let header = json!({"format": INST_FORMAT, "statement": c.statement(), "circuit_sha512": crate::hex(&c.sha512),
+                            "instances": n, "rows": true, "units": units_entry(&c, &[0, 1])});
+        let mut b = serde_json::to_vec(&header).unwrap();
+        b.push(b'\n');
+        let body = n * c.row_bytes() + n * np * SALT_BYTES + BC_BYTES * n * np + 2 * n * c.public_words();
+        b.extend((0..body).map(|i| i as u8));
+        let p = std::env::temp_dir().join(format!("flock-prover-file-{}.bin", std::process::id()));
+        std::fs::write(&p, &b).unwrap();
+        let inst = Instances::load(p.to_str().unwrap(), &c);
+        let mut inst = inst.unwrap();
+        assert_eq!(inst.prover_file().unwrap(), b, "unchanged, the file as it was read");
+        assert_eq!(inst.salt_count(np), n * np);
+        assert!(inst.set_salts(np, vec![7; SALT_BYTES * n * np - 1]).unwrap_err().contains("bytes of salts"));
+        let salts: Vec<u8> = (0..SALT_BYTES * n * np).map(|i| (i % 251) as u8).collect();
+        inst.set_salts(np, salts.clone()).unwrap();
+        std::fs::write(&p, inst.prover_file().unwrap()).unwrap();
+        let again = Instances::load(p.to_str().unwrap(), &c);
+        std::fs::remove_file(&p).unwrap();
+        let again = again.unwrap();
+        assert_eq!((again.rows.as_ref(), again.salts.as_ref(), &again.bcs, &again.public), (inst.rows.as_ref(), Some(&salts), &inst.bcs, &inst.public));
+        assert_eq!(again.public_file().unwrap(), inst.public_file().unwrap());
+        let mut d = inst.drawn(&c, &json!({"law": "subset", "population": n, "k": 1, "units": [1]})).unwrap();
+        let (rb, sb) = (c.row_bytes(), np * SALT_BYTES);
+        assert_eq!((d.rows.as_deref(), d.salts.as_deref()), (Some(&inst.rows.as_deref().unwrap()[rb..2 * rb]), Some(&salts[sb..2 * sb])));
+        assert!(d.prover_file().is_err() && d.set_salts(np, vec![0; SALT_BYTES * np]).is_err());
     }
 
     #[test]
@@ -3461,32 +3786,95 @@ mod tests {
         let (net, _) = crate::lookup::LookupNet::build("t", table, n, 4, 31);
         let uw = 1usize << (net.unit_log - 7);
         // an assertion row (its own column in A, B the constant) that fails: z is not a & b there
+        use crate::ir_block::RowWrite;
         let mut bad = net.clone();
-        let i = (0..bad.useful).rev().find(|&i| i != bad.const_pos && !bad.a[i].is_empty() && !bad.b[i].is_empty()).unwrap();
-        bad.b[i] = vec![bad.const_pos];
-        bad.a[i].push(i);
-        for (net, slots, wide) in [(&net, 100, false), (&net, 64, false), (&net, 130, true), (&bad, 100, true)] {
+        let i = (0..bad.useful).rev().find(|&i| i != bad.const_pos && !bad.a.row(i).is_empty() && !bad.b.row(i).is_empty()).unwrap();
+        bad.b = bad.b.with_row(i, &[bad.const_pos]);
+        let row: Vec<usize> = bad.a.row_cols(i).chain([i]).collect();
+        bad.a = bad.a.with_row(i, &row);
+        assert!(net.one_pass() && bad.one_pass(), "one-pass nets, so several groups take one wide pass");
+        for (net, slots, wide) in [(&net, 100, false), (&net, 64, false), (&net, 130, true), (&net, 520, true), (&bad, 100, true)] {
             let ins: Vec<Vec<F128>> = (0..slots).map(|_| (0..net.in_words).map(|w| match (w, wide) {
                 (0, false) => F128::new(r() & ((1 << n) - 1), 0),
                 (_, false) => F128::ZERO,
                 _ => F128::new(r(), r()),
             }).collect()).collect();
-            let (mut want, mut ok) = (Vec::new(), true);
-            for grp in ins.chunks(64) {
+            let (mut want, mut want_zab, mut ok) = (Vec::new(), Vec::new(), true);
+            for (gi, grp) in ins.chunks(64).enumerate() {
                 let (z, a, b) = net.eval64(|col| grp.iter().enumerate().fold(0u64, |x, (l, w)| x | (bit(&w[col / WORD], col % WORD) << l)));
                 let (z, a, b) = (lanes(&z, grp.len(), uw), lanes(&a, grp.len(), uw), lanes(&b, grp.len(), uw));
-                for ((z, a), b) in z.iter().zip(&a).zip(&b) {
-                    ok &= z.iter().zip(a).zip(b).all(|((z, a), b)| z.lo == a.lo & b.lo && z.hi == a.hi & b.hi);
-                    want.extend(a.iter().chain(b).flat_map(|x| [x.lo, x.hi]));
+                for (l, ((z, a), b)) in z.into_iter().zip(a).zip(b).enumerate() {
+                    ok &= z.iter().zip(&a).zip(&b).all(|((z, a), b)| z.lo == a.lo & b.lo && z.hi == a.hi & b.hi);
+                    want.extend(a.iter().chain(&b).flat_map(|x| [x.lo, x.hi]));
+                    want_zab.push((64 * gi + l, z, a, b));
                 }
             }
-            let mut out = vec![!0u64; 4 * uw * slots];
-            assert_eq!(unit_ab_into(net, 0, uw, &ins, &mut out), ok, "{slots} slots: z = a & b");
             assert_eq!(ok, !std::ptr::eq(net, &bad), "a lookup's rows hold, the failed assertion does not");
-            if ok {
-                assert!(out == want, "{slots} slots: the packed a, b words");
+            for wide in 1..=8 {
+                let mut out = vec![!0u64; 4 * uw * slots];
+                assert_eq!(unit_ab_into_wide(net, 0, uw, &ins, &mut out, wide), ok, "{slots} slots, {wide} groups a pass: z = a & b");
+                if ok {
+                    assert!(out == want, "{slots} slots, {wide} groups a pass: the packed a, b words");
+                }
+                assert!(unit_zab(net, 0, uw, &ins, wide) == want_zab, "{slots} slots, {wide} groups a pass: the slots' z, a, b words");
             }
         }
+    }
+
+    #[test]
+    fn every_width_and_pool_size_walks_the_same_bytes() {
+        let mut s = 0x5eed_0f1a_7e5d_0b0eu64;
+        let mut r = || { s ^= s << 13; s ^= s >> 7; s ^= s << 17; s };
+        let n = 10;
+        let table: &'static [u32] = Box::leak((0..1u32 << n).map(|_| r() as u32 & 0x7fff_ffff).collect::<Vec<_>>().into_boxed_slice());
+        let (net, _) = crate::lookup::LookupNet::build("t", table, n, 4, 31);
+        assert!(net.one_pass(), "a one-pass net, so several groups take one wide pass");
+        let uw = 1usize << (net.unit_log - 7);
+        // 14 lane groups, the last partial: without FC_UNIT_WIDE, pools of 1, 3, 5 and 8 threads walk at widths 8, 4, 2 and 1
+        let slots = 64 * 13 + 5;
+        let ins: Vec<Vec<F128>> = (0..slots).map(|_| (0..net.in_words).map(|_| F128::new(r(), r())).collect()).collect();
+        let walk = |wide: usize| {
+            let mut out = vec![!0u64; 4 * uw * slots];
+            assert!(unit_ab_into_wide(&net, 0, uw, &ins, &mut out, wide), "{wide} groups a pass: z = a & b");
+            (out, unit_zab(&net, 0, uw, &ins, wide))
+        };
+        let want = walk(1);
+        for wide in 2..=8 {
+            assert!(walk(wide) == want, "{wide} groups a pass: width 1's packed a, b words and slots' z, a, b words");
+        }
+        for threads in [1, 2, 3, 5, 8, 16] {
+            let pool = rayon::ThreadPoolBuilder::new().num_threads(threads).stack_size(crate::THREAD_STACK).build().expect("a pool");
+            let (wide, got) = pool.install(|| {
+                let mut out = vec![!0u64; 4 * uw * slots];
+                assert!(unit_ab_into(&net, 0, uw, &ins, &mut out), "{threads} threads: z = a & b");
+                let wide = unit_width(slots, rayon::current_num_threads());
+                (wide, (out, unit_zab(&net, 0, uw, &ins, wide)))
+            });
+            assert!(got == want, "{threads} threads, {wide} groups a pass: width 1's words");
+        }
+    }
+
+    #[test]
+    fn the_width_leaves_every_thread_a_pass_and_holds_no_more_than_8() {
+        // the row words a walk of wide passes holds at once at most: its `threads` largest passes, a pass of n groups in a
+        // row word of n.next_power_of_two() lanes
+        let held = |groups: usize, w: usize, threads: usize| {
+            let mut passes: Vec<usize> = (0..groups).step_by(w).map(|g| w.min(groups - g).next_power_of_two()).collect();
+            passes.sort_unstable_by(|a, b| b.cmp(a));
+            passes.into_iter().take(threads).sum::<usize>()
+        };
+        for threads in 1..=40 {
+            for groups in 0..=320 {
+                let w = width_for(groups, threads);
+                let passes = groups.div_ceil(w);
+                let at = format!("{groups} lane groups on {threads} threads, {w} a pass");
+                assert!([1, 2, 4, 8].contains(&w), "{at}");
+                assert!(passes >= threads.min(groups), "{at}: {passes} passes leave a thread idle");
+                assert!(w == 8 || groups.div_ceil(2 * w) < threads, "{at}: {} a pass also leaves every thread a pass", 2 * w);
+                assert!(held(groups, w, threads) <= held(groups, 8, threads), "{at}: holds more row words at once than 8 a pass");
+            }
+        }
+        assert_eq!([width_for(32, 4), width_for(32, 16), width_for(32, 96), width_for(1024, 96)], [8, 2, 1, 8]);
     }
 
     #[test]
@@ -3639,7 +4027,7 @@ mod tests {
         let eq: Vec<F128> = (0..n).map(|_| { s = s.wrapping_mul(6364136223846793005).wrapping_add(1442695040888963407); F128::new(s, s.rotate_left(29)) }).collect();
         let mut want = vec![F128::ZERO; n];
         for r in ln.prod0()..ln.prod0() + (ln.k << 5) {
-            for &c in &net.b[r] {
+            for c in net.b.row_cols(r) {
                 want[c] += eq[r];
             }
         }
@@ -3665,10 +4053,7 @@ mod tests {
             }
             let k = 1usize << r.slot_log;
             let (a, b) = match r.kind {
-                Kind::Net(i) => {
-                    let pad = |rows: &Vec<Vec<usize>>| { let mut x = rows.clone(); x.resize(k, Vec::new()); SparseBinaryMatrix { num_rows: k, num_cols: k, rows: x.into() } };
-                    (pad(&c.nets[i].1.a), pad(&c.nets[i].1.b))
-                }
+                Kind::Net(i) => c.nets[i].1.padded(k),
                 Kind::Mask => {
                     let id = SparseBinaryMatrix { num_rows: k, num_cols: k, rows: (0..k).map(|i| vec![i]).collect::<Vec<_>>().into() };
                     (id.clone(), id)
@@ -3681,6 +4066,249 @@ mod tests {
         }
         assert_eq!(seen.len(), st.circuit.types.len());
         assert!(c.ranges.iter().any(|r| r.kind == Kind::Mask) && c.nets.iter().any(|n| n.1.a.iter().filter(|x| !x.is_empty()).count() > 1));
+    }
+
+    /// Everything a session reads of a statement, as bytes: its digests and shape, its regions, its ranges and tables, each
+    /// slot type's circuit folded at fixed random points, and its R1CS.
+    fn stmt_bytes(st: &Stmt) -> Vec<u8> {
+        use flock_core::lincheck::LincheckCircuit;
+        let mut out = format!("{:?} {:?} {} {} {} {} {} {}|", st.digest, st.flock_digest, st.n, st.blocks_real, st.nbl, st.m,
+                              st.m_pts, st.pin).into_bytes();
+        for r in &st.regions {
+            out.extend(format!("{:?} {:?} {} {}|", r.region, r.free, r.mask, r.fixed).bytes());
+        }
+        let b = &st.circuit;
+        out.extend(format!("{} {} {:?} {:?} {:?}|", b.k_log, b.pin, b.ranges, b.da, b.db).bytes());
+        for t in &b.tables {
+            out.extend(format!("{:?}|", t.as_ref().map(|t| (t.table, t.lo, t.nh, t.k, t.prod0, t.lo_top))).bytes());
+        }
+        let mut s = 7u64;
+        let mut rnd = || { s = s.wrapping_mul(6364136223846793005).wrapping_add(1442695040888963407); F128::new(s, s.rotate_left(29)) };
+        for (log, circ) in b.types.iter() {
+            let alpha = rnd();
+            let eq: Vec<F128> = (0..1usize << log).map(|_| rnd()).collect();
+            out.extend(format!("{log} {} {:?}|", circ.n_cols(), circ.fold_alpha_batched(alpha, &eq)).bytes());
+        }
+        let r = &st.r1cs;
+        out.extend(format!("{} {} {} {} {:?} {:?} {:?} {:?} {:?}", r.m, r.k_log, r.k_skip, r.useful_bits, r.a_0, r.b_0, r.c_0,
+                           r.layout, r.const_pin).bytes());
+        out
+    }
+
+    fn test_circuits() -> Vec<(&'static str, Composite)> {
+        [("typed", typed_statement()), ("flat tail", flat_tail_statement()), ("pinned", pinned_statement(&|_| {}))]
+            .into_iter().map(|(name, text)| (name, Composite::parse(&text, None).unwrap_or_else(|e| panic!("{name}: {e}")))).collect()
+    }
+
+    /// A cached drawn statement is the one `Stmt::new` builds afresh from the same circuit, count and identity, byte for byte,
+    /// for each test circuit at counts on both sides of a block-count step and under two identities; a second call with the
+    /// same key returns that statement, and an identity's key is its canonical form.
+    #[test]
+    fn cached_statements_are_fresh_builds() {
+        for (name, c) in test_circuits() {
+            let base = Stmt::new(c.clone(), 2, json!({})).unwrap_or_else(|e| panic!("{name}: {e}"));
+            let cache = StmtCache::new();
+            for n in [1, 2, 3, 8, 9] {
+                for id in [json!({}), json!({"zk": true, "reps": 2, "leaf": "hm96-sha512/v1"})] {
+                    let cached = cache.drawn(&base, n, id.clone()).unwrap_or_else(|e| panic!("{name} n={n}: {e}"));
+                    let fresh = Stmt::new((*base.c).clone(), n, id.clone()).unwrap();
+                    assert!(stmt_bytes(&cached) == stmt_bytes(&fresh), "{name} n={n} {id}: the cached statement is not the fresh one");
+                    assert!(Arc::ptr_eq(&cached.c, &base.c) && Arc::ptr_eq(&cached.circuit.types, &base.circuit.types),
+                            "{name} n={n}: the circuit or its slot types built again");
+                    assert!(Arc::ptr_eq(&cached, &cache.drawn(&base, n, id).unwrap()), "{name} n={n}: rebuilt under the same key");
+                }
+            }
+            assert_eq!(cache.len(), 10, "{name}");
+            let a = cache.drawn(&base, 2, json!({"a": 1, "b": [1, 2]})).unwrap();
+            let b = cache.drawn(&base, 2, serde_json::from_str(r#"{"b": [1, 2], "a": 1}"#).unwrap()).unwrap();
+            assert!(Arc::ptr_eq(&a, &b), "{name}: one identity under two key orders");
+        }
+    }
+
+    /// A key that differs in its circuit, its count or its identity rebuilds: a statement of its own, which is the fresh build
+    /// for that key, never the cached statement of another.
+    #[test]
+    fn cache_key_mismatch_rebuilds() {
+        let cs = test_circuits();
+        let bases: Vec<Stmt> = cs.iter().map(|(_, c)| Stmt::new(c.clone(), 2, json!({})).unwrap()).collect();
+        let cache = StmtCache::new();
+        let first = cache.drawn(&bases[0], 2, json!({})).unwrap();
+        let others = [(&bases[1], 2, json!({}), "another circuit"), (&bases[2], 2, json!({}), "a third circuit"),
+                      (&bases[0], 3, json!({}), "another count"), (&bases[0], 9, json!({}), "a count past a block-count step"),
+                      (&bases[0], 2, json!({"zk": true}), "another identity")];
+        for (k, (base, n, id, what)) in others.into_iter().enumerate() {
+            let got = cache.drawn(base, n, id.clone()).unwrap();
+            assert!(!Arc::ptr_eq(&first, &got), "{what}: the cached statement of another key");
+            assert!(got.digest != first.digest, "{what}: the same statement digest");
+            assert!(stmt_bytes(&got) == stmt_bytes(&Stmt::new((*base.c).clone(), n, id).unwrap()), "{what}: not the fresh build");
+            assert_eq!(cache.len(), k + 2, "{what}: not built");
+        }
+        assert!(Arc::ptr_eq(&first, &cache.drawn(&bases[0], 2, json!({})).unwrap()), "the first key's statement was dropped");
+    }
+
+    /// A public file with what `proved_scope::check` reads of it: registered reads named in its header, shared rows.
+    fn scope_file(registered: bool, shared: bool) -> Instances {
+        let header = if registered { json!({"registered": "r"}) } else { json!({}) };
+        Instances { header, n: 2, rows: None, salts: None, bcs: vec![], public_sha512: [0; 64], public_file_sha512: [0; 64], population: None,
+                    tables: shared.then(|| RowTables { counts: vec![], rows: None, salts: None, refs: vec![] }), public: vec![] }
+    }
+
+    /// Sessions pairwise apart in each thing the check reads of a session: its registered reads, its shared rows, `--zk`
+    /// and its tables.
+    fn scope_sessions() -> Vec<(Instances, bool, usize)> {
+        vec![(scope_file(false, false), true, 1), (scope_file(true, false), true, 1), (scope_file(false, true), true, 1),
+             (scope_file(true, true), true, 1), (scope_file(false, false), false, 1), (scope_file(false, false), false, 2),
+             (scope_file(false, false), true, 2)]
+    }
+
+    /// The kept verdict of each test circuit's check in each session is the fresh check's, the acceptance or the refusal
+    /// word for word, at its first call and at the next; each (circuit, session) keeps one, so no two of them share a key.
+    #[test]
+    fn kept_verdicts_are_fresh_checks() {
+        let v = crate::proved_scope::Verdicts::new();
+        let (cs, ss) = (test_circuits(), scope_sessions());
+        let (mut accepted, mut refused) = (0, 0);
+        for (name, c) in &cs {
+            for (k, (inst, zk, tables)) in ss.iter().enumerate() {
+                let fresh = crate::proved_scope::check(c, inst, *zk, *tables);
+                assert_eq!(v.check(c, inst, *zk, *tables), fresh, "{name}, session {k}: a first check");
+                assert_eq!(v.check(c, inst, *zk, *tables), fresh, "{name}, session {k}: the kept verdict");
+                if fresh.is_ok() { accepted += 1 } else { refused += 1 }
+            }
+        }
+        assert!(accepted > 0 && refused > 0, "{accepted} accepted, {refused} refused: a verdict of each kind");
+        assert_eq!(v.len(), cs.len() * ss.len(), "a (circuit, session) shares another's key");
+        assert_eq!(v.seen()["lookups"], json!(2 * cs.len() * ss.len()));
+    }
+
+    /// A sampled statement's check takes its population's verdict: the session's sample, its count and its digests are not
+    /// what the check reads.
+    #[test]
+    fn a_sampled_statement_keeps_its_populations_verdict() {
+        let v = crate::proved_scope::Verdicts::new();
+        for (name, c) in test_circuits() {
+            let pop = scope_file(true, false);
+            let mut sampled = scope_file(true, false);
+            sampled.header["units"] = json!({"indices": [1]});
+            (sampled.n, sampled.public_sha512, sampled.public_file_sha512) = (1, [7; 64], [9; 64]);
+            let before = v.len();
+            let want = v.check(&c, &pop, true, 1);
+            assert_eq!(v.check(&c, &sampled, true, 1), want, "{name}");
+            assert_eq!(v.len(), before + 1, "{name}: the sampled statement checked again");
+        }
+    }
+
+    /// At Register a sampled session's server checks the sampled statement the server builds: the sample's public file, cut
+    /// from the population's file the server loaded, over the circuit the sampled statement shares with the population's
+    /// (through the statement cache). With or without registered reads, shared rows or `--zk`, that check takes the
+    /// population's kept verdict, which is a fresh check of the sample.
+    #[test]
+    fn the_register_check_takes_its_populations_verdict() {
+        let c = Composite::parse(&typed_statement(), None).unwrap();
+        let (n, np) = (2, c.ports.len());
+        let header = json!({"format": INST_FORMAT, "statement": c.statement(), "circuit_sha512": crate::hex(&c.sha512),
+                            "instances": n, "rows": false, "units": units_entry(&c, &[0, 1])});
+        let mut b = serde_json::to_vec(&header).unwrap();
+        b.push(b'\n');
+        b.extend((0..BC_BYTES * n * np + 2 * n * c.public_words()).map(|i| i as u8));
+        let p = std::env::temp_dir().join(format!("flock-register-scope-{}.bin", std::process::id()));
+        std::fs::write(&p, &b).unwrap();
+        let pop = Stmt::new(c, n, json!({})).unwrap();
+        let one = StmtCache::new().drawn(&pop, 1, json!({})).unwrap();
+        assert!(Arc::ptr_eq(&one.c, &pop.c), "the sampled statement parsed a circuit of its own");
+        for (registered, shared) in [(false, false), (true, false), (false, true), (true, true)] {
+            let mut inst = Instances::load(p.to_str().unwrap(), &pop.c).unwrap();
+            if registered {
+                inst.header["registered"] = json!("r");
+            }
+            inst.tables = shared.then(|| RowTables { counts: vec![1], rows: None, salts: None, refs: vec![0; n * np] });
+            let sample = inst.drawn(&pop.c, &json!({"law": "subset", "population": n, "k": 1, "units": [1]})).unwrap();
+            let v = crate::proved_scope::Verdicts::new();
+            for zk in [false, true] {
+                let what = format!("registered {registered}, shared rows {shared}, zk {zk}");
+                let want = crate::proved_scope::check(&pop.c, &inst, zk, 1);
+                assert_eq!(v.check(&pop.c, &inst, zk, 1), want, "{what}: the population's");
+                assert_eq!(v.check(&one.c, &sample, zk, 1), want, "{what}: the sample's is not the population's");
+                assert_eq!(crate::proved_scope::check(&one.c, &sample, zk, 1), want, "{what}: a fresh check of the sample differs");
+            }
+            assert_eq!((v.len(), v.seen()["lookups"].clone()), (2, json!(4)),
+                       "registered {registered}, shared rows {shared}: the sample checked again");
+        }
+        std::fs::remove_file(&p).unwrap();
+    }
+
+    /// One byte more or less in the circuit file is another statement's key: its check runs again.
+    #[test]
+    fn a_circuit_a_byte_apart_misses() {
+        let text = flat_tail_statement();
+        let zeros = "0".repeat(128);
+        let edited = text.replacen(&format!("\"program_sha512\":\"{zeros}\""), &format!("\"program_sha512\":\"1{}\"", &zeros[1..]), 1);
+        assert_eq!((edited.len(), text.bytes().zip(edited.bytes()).filter(|(a, b)| a != b).count()), (text.len(), 1));
+        let (a, b) = (Composite::parse(&text, None).unwrap(), Composite::parse(&edited, None).unwrap());
+        assert_ne!(a.parsed_from.digest(), b.parsed_from.digest());
+        let (v, inst) = (crate::proved_scope::Verdicts::new(), scope_file(false, false));
+        let want = crate::proved_scope::check(&a, &inst, true, 1);
+        assert!(want.is_ok(), "{want:?}");
+        assert_eq!(v.check(&a, &inst, true, 1), want);
+        assert_eq!(v.check(&b, &inst, true, 1), crate::proved_scope::check(&b, &inst, true, 1));
+        assert_eq!(v.len(), 2, "the edited circuit took the first one's verdict");
+        // the same bytes parsed again are the same statement
+        assert_eq!(Composite::parse(&text, None).unwrap().parsed_from.digest(), a.parsed_from.digest());
+        assert_eq!(v.check(&Composite::parse(&text, None).unwrap(), &inst, true, 1), want);
+        assert_eq!(v.len(), 2);
+    }
+
+    /// A templated statement's unit rows are part of what its circuit was parsed from; a statement with none differs from one
+    /// whose rows are empty.
+    #[test]
+    fn a_templated_units_rows_are_parsed_from() {
+        let pin = [3u8; 64];
+        let of = |rows| ParsedFrom::of(&pin, rows).digest().copied();
+        assert_ne!(of(Some("CIRCUIT unit 1\n")), of(Some("CIRCUIT unit 2\n")));
+        assert_ne!(of(None), of(Some("")));
+        assert_eq!(of(Some("CIRCUIT unit 1\n")), of(Some("CIRCUIT unit 1\n")));
+    }
+
+    /// A copy of a parsed circuit, whose fields may be edited, has no parse digest: its check runs afresh each time and keeps
+    /// nothing.
+    #[test]
+    fn a_copy_keeps_no_verdict() {
+        let v = crate::proved_scope::Verdicts::new();
+        let inst = scope_file(false, false);
+        for (name, c) in test_circuits() {
+            let copy = c.clone();
+            assert!(c.parsed_from.digest().is_some() && copy.parsed_from.digest().is_none(), "{name}");
+            assert_eq!(v.check(&copy, &inst, true, 1), crate::proved_scope::check(&c, &inst, true, 1), "{name}");
+        }
+        assert!(v.is_empty());
+    }
+
+    /// A section's lines as one slice of the text are the lines copied out, past the text's end too.
+    #[test]
+    fn next_lines_is_the_lines_concatenated() {
+        let text = "a\nbb\n\nccc\nd";
+        for takes in [[0usize, 2, 3], [1, 1, 3], [5, 0, 1], [2, 2, 2], [4, 3, 0]] {
+            let (mut x, mut y) = (text.split_inclusive('\n'), text.split_inclusive('\n'));
+            for n in takes {
+                let want: String = (0..n).map(|_| x.next().unwrap_or("")).collect();
+                assert_eq!(next_lines(text, &mut y, n), want, "{takes:?}");
+            }
+        }
+    }
+
+    /// A slot type's circuit from its rows in place is the one from its rows padded to its slot with empty rows.
+    #[test]
+    fn slot_csc_is_the_padded_rows_circuit() {
+        let mut padded = 0;
+        for (name, c) in test_circuits() {
+            for (nm, net) in &c.nets {
+                let k = 1usize << net.unit_log;
+                padded += usize::from(net.a.len() < k || net.b.len() < k);
+                let (a, b) = net.padded(k);
+                assert!(net.csc() == CscCircuit::from_matrices(&a, &b), "{name} {nm}");
+            }
+        }
+        assert!(padded > 0, "no slot type with a padding row to leave out");
     }
 
     /// A typed template's refusals at parse: a non-power-of-two count of roots, and the flat block's wiring stated.
@@ -3776,7 +4404,7 @@ mod tests {
         assert!(flat.contains("one 16-bit port per output word"), "{flat}");
     }
 
-    /// No unit in a VU is refused (PROTOCOL.md §16.10, D8), with the tail that returns the outputs, whose unit count need not
+    /// No unit in a VU is refused (the Lean `Flock.HmRow`, D8), with the tail that returns the outputs, whose unit count need not
     /// be a power of two, kept consistent: no unit or stage slot, no leaf map and no wire but the rows'.
     #[test]
     fn a_tail_with_no_unit_is_refused() {
@@ -3796,7 +4424,7 @@ mod tests {
         assert!(err.contains("units_per_vu is 0"), "{err}");
     }
 
-    /// No VU in a block is refused (PROTOCOL.md §16.10, D9), with the tail that returns the outputs, whose unit count need not
+    /// No VU in a block is refused (the Lean `Flock.HmRow`, D9), with the tail that returns the outputs, whose unit count need not
     /// be a power of two, kept consistent: every circuit's range has no slot.
     #[test]
     fn a_block_with_no_vu_is_refused() {
@@ -3812,7 +4440,7 @@ mod tests {
         assert!(err.contains("vus_per_block is 0"), "{err}");
     }
 
-    /// Three VUs in a block are refused (PROTOCOL.md §16.10, D9), with the tail that returns the outputs, whose unit count
+    /// Three VUs in a block are refused (the Lean `Flock.HmRow`, D9), with the tail that returns the outputs, whose unit count
     /// need not be a power of two, laid out for them (aligned, disjoint) in the same block: the Digest region's VU bits pin
     /// every VU only at a power of two.
     #[test]

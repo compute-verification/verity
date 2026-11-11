@@ -1,6 +1,77 @@
-import Proofs.Accounting.JointBridge.WorkOfH1CheckedCreditPeriod
-import Proofs.Pouw.Period.Honest
-import Proofs.Pouw.Prob
+module
+
+public import Definitions.Accounting.Assumptions.CreditedWords
+public import Definitions.Accounting.JointBridge.H200
+public import Mathlib.CategoryTheory.Types.Basic
+public import Mathlib.RingTheory.WittVector.IsPoly
+public import Mathlib.Tactic.Polynomial.Basic
+public import Mathlib.Tactic.ReduceModChar
+public import Proofs.Accounting.JointBridge.WorkOfH1CheckedCreditPeriod
+public import Proofs.Pouw.Period.Honest
+public import Proofs.Pouw.Prob
+import Definitions.Accounting.TS
+import Definitions.Claims
+import Definitions.Pouw.PearlC.DevicePrices
+import Definitions.Pouw.PearlC.DevicePricesLoop
+import Flock.Sizes
+import Mathlib.Algebra.Order.Floor.Extended
+import Mathlib.Algebra.Order.Interval.Basic
+import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
+import Mathlib.Analysis.SpecialFunctions.Bernstein
+import Mathlib.Analysis.SpecialFunctions.Gamma.Basic
+import Mathlib.Analysis.SpecialFunctions.Trigonometric.DerivHyp
+import Mathlib.Combinatorics.Enumerative.DyckWord
+import Mathlib.Combinatorics.SimpleGraph.Triangle.Removal
+import Mathlib.Data.NNRat.Floor
+import Mathlib.Data.Nat.Choose.Multinomial
+import Mathlib.Geometry.Euclidean.Altitude
+import Mathlib.NumberTheory.Chebyshev
+import Mathlib.NumberTheory.Height.NumberField
+import Mathlib.NumberTheory.Height.Projectivization
+import Mathlib.NumberTheory.LucasLehmer
+import Mathlib.NumberTheory.SelbergSieve
+import Mathlib.RingTheory.Radical.NatInt
+import Mathlib.Tactic.ENatToNat
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Topology.Sheaves.Init
+import PouwCheck
+import PouwWindow
+import Proofs.Accounting.Compose.CircuitWork
+import Proofs.Accounting.Compose.ServiceBudget
+import Proofs.Accounting.Compose.ServiceCovers
+import Proofs.Accounting.Compose.SplitRateClosed
+import Proofs.Accounting.Compose.SplitRateExp
+import Proofs.Accounting.ComposeMonitoringPeriod
+import Proofs.Accounting.HMu
+import Proofs.Accounting.Headline.Luck
+import Proofs.Accounting.JointBridge.WorkOfCreditedWords
+import Proofs.Accounting.TS
+import Proofs.Accounting.TS.ReceiptDuoCP
+import Proofs.Accounting.TS.ReceiptLi
+import Proofs.Accounting.TS.Stages
+import Proofs.Accounting.Tag.Basic
+import Proofs.Accounting.Tag.LittlewoodOfford
+import Proofs.Accounting.Tag.Signs
+import Proofs.Pouw.Period
+import Proofs.Pouw.Period.Sort
+import Proofs.Pouw.Receipt
+import Proofs.Properties.Pouw.Check
+import Proofs.Properties.Pouw.Draw
+import Proofs.Properties.Pouw.Grid
+import Proofs.Properties.Accounting.Remote.Sort
+import Spot.Record
 
 /-!
 # `WorkOfH1CheckedCreditPeriodH200`'s witnesses: an honest period on the H200, and the verifier that accepts everything
@@ -31,11 +102,13 @@ At no windows its device runs nothing, so a work certificate `W = 1` fails on ev
 there at any error below one (`WorkOfH1CheckedCreditPeriodH200_nontrivial`).
 -/
 
+@[expose] public section
+
 namespace Accounting.SecurityProofs.Bridge.HonestH200
 
 open Properties.Pouw.Period Properties.Pouw.Period.SecurityProofs
 open Accounting.TS Accounting.Compose Accounting.Assumptions.TS Accounting.Assumptions.Compose Pouw.RelativeSecurity
-open Accounting.SecurityProofs.ComposePeriod
+open Accounting.SecurityProofs.ComposeMonitoringPeriod
 
 /-! ## The word count and the price -/
 
@@ -98,7 +171,7 @@ theorem step_fits (n : ℕ) : (step n).Fits (device n) := by
   refine ⟨fun o => ?_, ?_, fun _ => ?_, ?_, ?_⟩ <;> simp [step, device]
 
 /-- **The deployed check accepts the period**: the compiled PoUW check (`PouwCheck.protocol.check`) accepts every
-window of H1's honest period on the coins `x`, each at its registration and the proof service's answer. -/
+window of H1's honest period on the coins `x`, each at its registration and the proof system's answer. -/
 def checkedAccepts (n : ℕ) (x : Paths HonestH1.Ω1 n) : Prop :=
   ∀ w, Accepts HonestH1.prm ((HonestH1.windows n).reg x w) ((HonestH1.windows n).ev x w)
 
@@ -118,7 +191,7 @@ noncomputable def honestRun (n : ℕ) :
   win := ⟨0, 1⟩
   schedule := fun _ _ => step n
   fits := fun _ _ => step_fits n
-  transcript := fun _ g => g.elim0
+  trace := fun _ g => g.elim0
   commWithin := fun K _ => (0 : ℝ) ≤ K
   accepts := fun a ξ => match a with
     | .pouw => (checkedPlay n).accepts (ξ ())
@@ -135,7 +208,7 @@ def acceptAll (n : ℕ) :
   win := ⟨0, 1⟩
   schedule := fun _ _ => step n
   fits := fun _ _ => step_fits n
-  transcript := fun _ g => g.elim0
+  trace := fun _ g => g.elim0
   commWithin := fun _ _ => True
   accepts := fun _ _ => True
 
@@ -223,7 +296,7 @@ theorem meets (n : ℕ) (hn : 0 < n) {δs : ℝ} (hδs : 0 < δs) (sha fetch : �
     (HonestH1.period n).EveryWindow (fun live _ => DeadConeDead Honest.scheme HonestH1.circuit 144 live) ∧
     PrefixOf (HonestH1.layer n) (checkedPlay n).game ∧
     (∀ w, prob (fun x => (HonestH1.layer n).MovedIn x w) ≤ 0) ∧
-    RegisteredBeforeDraw (HonestH1.windows n) ∧ DrawIsCoin HonestH1.hK24 HonestH1.prm (HonestH1.windows n) ∧
+    RegisteredBeforeDraw (HonestH1.windows n) ∧ SampleIsCoin HonestH1.hK24 HonestH1.prm (HonestH1.windows n) ∧
     ServiceSound HonestH1.prm (HonestH1.windows n) HonestH1.opened (stagedAt HonestH1.salt HonestH1.staged) 0 ∧
     SaltIsLiveCoin HonestH1.hr1 (HonestH1.salt (n := n)) HonestH1.enc ∧ StagedPins HonestH1.staged HonestH1.flat ∧
     (HonestH1.period n).EveryWindow
@@ -278,7 +351,7 @@ namespace Accounting.SecurityProofs.Bridge
 
 open Properties.Pouw.Period Properties.Pouw.Period.SecurityProofs
 open Accounting.TS Accounting.Compose Accounting.Assumptions.TS Accounting.Assumptions.Compose Pouw.RelativeSecurity
-open Accounting.SecurityProofs.ComposePeriod
+open Accounting.SecurityProofs.ComposeMonitoringPeriod
 open HonestH200
 
 /-- **`WorkOfH1CheckedCreditPeriodH200`'s honest witness**: its hypotheses hold at the honest period on the H200
@@ -309,7 +382,7 @@ theorem WorkOfH1CheckedCreditPeriodH200_honest :
     (HonestH1.period 1).EveryWindow (fun live _ => DeadConeDead Honest.scheme HonestH1.circuit 144 live) ∧
     PrefixOf (HonestH1.layer 1) (checkedPlay 1).game ∧
     (∀ w, prob (fun x => (HonestH1.layer 1).MovedIn x w) ≤ 0) ∧
-    RegisteredBeforeDraw (HonestH1.windows 1) ∧ DrawIsCoin HonestH1.hK24 HonestH1.prm (HonestH1.windows 1) ∧
+    RegisteredBeforeDraw (HonestH1.windows 1) ∧ SampleIsCoin HonestH1.hK24 HonestH1.prm (HonestH1.windows 1) ∧
     ServiceSound HonestH1.prm (HonestH1.windows 1) HonestH1.opened (stagedAt HonestH1.salt HonestH1.staged) 0 ∧
     SaltIsLiveCoin HonestH1.hr1 (HonestH1.salt (n := 1)) HonestH1.enc ∧ StagedPins HonestH1.staged HonestH1.flat ∧
     (HonestH1.period 1).EveryWindow

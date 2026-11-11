@@ -1,6 +1,6 @@
 # verifier_cost
 
-A verifier of record's time against the size of the description it reads and against the size of the circuit that
+A verifier's time against the size of the description it reads and against the size of the circuit that
 description unrolls to. The rule it measures (AGENTS.md "Design rules"): a verifier's cost is
 O(circuit description), never O(unrolled circuit).
 
@@ -9,12 +9,12 @@ The workload is Serve_v1 (`benchmarks/network_sim/workload/served.py`) at a ladd
 the way down (`ir="boolean"` can't derive Serve_v1; `lift.py`'s docstring says why). Two verifiers are measured:
 
 * `measure`, the inference-only check: `nci-check --policy` (`NciCheck.Desc`, one summary per Definition) on an instance whose θ is
-  the registered inputs and whose isolation blocks are the root's Calls, one each. `--policy` leaves out θ's provenance
+  the registered inputs and whose inference blocks are the root's Calls, one each. `--policy` leaves out θ's provenance
   (`NciCheck.Baseline`), which reads the registration log and adds work in θ's length and the log's. Where the unrolled
   circuit is small enough (`--unrolled-max`), the instance expanded gate by gate also goes through
   `nci-check --policy --unrolled` (`NciCheck.check`, the gate-by-gate reference), and the two verdicts must agree.
 * `partition`, the one-stage verifier's partition: `sampled-proofs-difftest`'s `partition` (`Partition.units`, `strata`,
-  the expanded law and the digest, as the verifier of record computes them) on Serve_v1 under the template query of its
+  the expanded sampling design and the digest, as the verifier computes them) on Serve_v1 under the template query of its
   Calls (`Q_template_instances`), under `Q_word` v1 and `Q_call` v1 at `X = 16` where its Calls' distinct Definitions are
   small enough (`--unrolled-max`), and on the served shape: the population program of Serve_v1's largest Definition at
   1 to 10⁶ instances under `Q_template_instance`, as a served window registers one. A template query must apply.
@@ -31,27 +31,36 @@ verity bench verifier_cost plot ART --to PNG             # from the store
 `nci_glm.sh` runs `nci-check --policy` on GLM-5.3's registered Programs: the eight per-rank workload Programs of the B1
 Build (vLLM, TP8 on 8×H200, a 256-token prompt and 32 sampled tokens), each checked against the Build's pinned
 digest. A registered Program's root is its inputs and one Call, the request, so the only division `NciCheck.Desc` can
-check on it is that one isolation block; and its weights are bound per run (`Input<w>_v1`), so θ can't hold them
+check on it is that one inference block; and its weights are bound per run (`Input<w>_v1`), so θ can't hold them
 (`theta-not-registered`). `nci_glm.py` (its docstring has the cases) derives Programs with the same computed gates and
-wires: rank 0's with its weights bound at registration (θ), one isolation block per rank; and the eight ranks' requests joined into
+wires: rank 0's with its weights bound at registration (θ), one inference block per rank; and the eight ranks' requests joined into
 one Definition the node's root calls once, each collective reading the other ranks' partials where it read its
-`peers_*` inputs, one isolation block per node session. The node's session is checked at the demo's policy, Γ = 2^44 gates and
-α = 2^-25 bits per gate (`GAMMA`, `ALPHA`; the check's older form of the policy, here c = 2^44 and k = αΓ = 2^19 bits), and at
-its four neighbours. Finer divisions of a whole session (per step,
-per layer, per Call) are out of `NciCheck.Desc`'s reach at this size: it holds each root node's reads as pieces of
-gates, about one per leaf on GLM-5.3, so only a Call's internal reads stay small. Three of rank 0's Definitions (the
-router, the fused all-reduce and norm, an FP8 linear layer) go per Call and in all through `--policy`,
-`--policy --unrolled` and the Python reference, which must agree. `$OUT/results.json` (`verity/nci-glm/v1`) has a row
-per check: the Program's SHA-512, bytes, root nodes and gates, the division, the verdict summarised, wall seconds and
-peak RSS; `$OUT/ius/` has each verdict's isolation blocks. A rank's check takes about 21 minutes and 7 GB, the node's (a 2.2 GB
-descriptor) about 2.6 hours and 50 GB, and the whole run about 3 hours (r20261023-064803-3874).
+`peers_*` inputs, one inference block per node session. The node's session is checked at the demo's policy, Γ = 2^44 gates and
+α = 2^-25 bits per gate (`GAMMA`, `ALPHA`), and at its four neighbours. Finer divisions of a whole session (per step,
+per layer, per Call) aren't checked here: their root would be the request's body, whose reads `NciCheck.Desc` holds as
+segments of gates, each Definition's return coalesced into runs (`Desc.coalesce`); `nci_cost.py glm` counts and times
+them. Three of rank 0's Definitions (the router, the fused all-reduce and norm, an FP8 linear layer) go per Call and in
+all through `--policy`, `--policy --unrolled` and the Python reference, which must agree. `$OUT/results.json`
+(`verity/nci-glm/v1`) has a row per check: the Program's SHA-512, bytes, root nodes and gates, the division, the verdict
+summarised, wall seconds and peak RSS; `$OUT/ius/` has each verdict's inference blocks.
 
 ~~~sh
-research data fetch art:32c488d8ca7bb12f80b38e45ec5a97d95312bcb62974a4d776da0b58d1adec35 --to B1 \
+B1_BUILD=$(python3 -c 'import json; print(json.load(open("benchmarks/sampling_plan/glm53_blocks.json"))["build"])')
+research data fetch "$B1_BUILD" --to B1 \
   --path 'build/rank*/build_workload/descriptor.json.gz'    # the Build; its meta's rank_workload_digests are the pins
 research run --project verity --on vy-nebius-cpu-2 --source . --cwd clone --mem-gb 420 --mem-wait 3600 --timeout 6h \
   --send glm53-b1-pins.json $(for r in 0 1 2 3 4 5 6 7; do echo --send glm53-b1-rank$r.descriptor.json.gz; done) \
   -- bash benchmarks/verifier_cost/nci_glm.sh --jobs 10 [--case registered|rank|slice|node ...]
+~~~
+
+`nci_cost.sh` times `NciCheck.Desc` step by step (`nci-phases`, `nci_phases/Main.lean`: decode, summaries, root reads,
+the verdict, the slowest Definitions' summaries and their return pieces) beside `nci-check --policy`, on the `nci` suite's
+vectors (`suite`), Serve_v1 word-level and on bits (`serve`), and GLM-5.3's rank 0 word-level and lifted to bits (`glm`);
+`nci_cost.py`'s docstring has the cases.
+
+~~~sh
+research run --project verity --on vy-nebius-cpu-2 --pool network --source . --cwd clone --mem-gb 320 --timeout 12h \
+  --send glm53-b1-rank0.descriptor.json.gz -- bash benchmarks/verifier_cost/nci_cost.sh [suite|serve|glm ...]
 ~~~
 
 `--case registered-node` checks the node Program that `verity-vllm predict node` registered, as registered.
@@ -63,7 +72,7 @@ research run --project verity --on vy-nebius-cpu-2 --source . --cwd clone --mem-
   - θ is its root's `RegisteredInput` nodes, and its `annotations.theta` where it has them;
   - given the registration, it is the program of the record that the trusted input names as the run's own, and
     there is one provenance entry per θ node, each citing the log's first record.
-- **The isolation block.** One isolation block holds every root node that isn't an input, which is the whole node's session (the demo's
+- **The inference block.** One inference block holds every root node that isn't an input, which is the whole node's session (the demo's
   division).
 - **The checks**, in the order they start (`NODE_POINTS`):
   - given the registration, the check of record (`nci-check INSTANCE TRUSTED`, `NciCheck.Baseline`), at A: the
@@ -109,6 +118,22 @@ research run --as proofs --project verity --on vy-nebius-cpu-2 --source . --pool
   bash benchmarks/verifier_cost/registration.sh 1024 4096 12288 49152
 ~~~
 
+`whole_run.sh run|desc SHAPE N...` times `Run.run`, the stream's whole run of one registration, against the population.
+`whole_run.py` writes, per N, an accepted `run` input (`run`: a stratified v1 audit on challenger coins with N/8 more
+ports) or the program and query alone (`desc`), over a template population of about N units: `toy`, the difftest's
+three templates, or `l5`, a GLM-5.3 MoE window's seven templates at the window's proportions (whose Python partition
+walks every gate, so `l5` takes `desc`). `whole_run/Main.lean` times the `run` piece and each of `Run.run`'s steps,
+`Slots.popOk`'s layout split into `Partition.evaluate`, `Partition.unitGates`, `Slots.inputGates` and `Slots.layout`; on
+a program alone, `Program.parse`, one `Desc.gates` and one `TemplateQuery.gates` per range, the input gates' count and,
+with `-- --unit-gates`, `Partition.unitGates`; `-- --unit-gates --ref` adds `Partition.unitGatesRef`, the walk unit by
+unit `unitGates` replaced, and fails unless the two give the same gates; `--pop-ok` adds `Slots.popOk` last, whose
+layout holds a proof block per input gate. `PERF_N` adds a `perf` profile at that N. `$OUT` gets whole_run.jsonl, one row per N and step (milliseconds, peak RSS).
+
+~~~sh
+research run --as proofs --project verity --on vy-nebius-cpu-1 --source . --pool proofs --cwd clone -- \
+  bash benchmarks/verifier_cost/whole_run.sh run toy 146 1000 10000 50000
+~~~
+
 `flock_tmpl.sh K...` is the same unit in `flock-ir-tmpl/v2` (`Flock/Tmpl.lean`): `flock_read.py --circuit-only`
 builds the circuit, `python -m verity_flock.tmpl` writes its unit's templated form (Definitions read off the flat unit's
 repeated blocks), and `flock_tmpl/Main.lean` times the templated read (`Tmpl.parse`) and diffs `Tmpl.unroll`'s lines
@@ -125,18 +150,55 @@ research run --as proofs --project verity --on vy-nebius-cpu-1 --source . --pool
 `Sparse.ofRows`), the logical `Tmpl.unroll`, and `Net.parse` on the circuit's flat unit. Per K, `$OUT` gets unit-K.tmpl,
 unroll-K.jsonl (every PHASE line, with its step) and each step's `/usr/bin/time -v`.
 
+`flock_served.sh KIND [N]` measures the Lean verifier on a served statement: one kind of a saved served step
+(`one_stage/a11.py --save-values`, sent as a `.tar.gz`) staged as a11 stages it, flat, or with `--layout MODE` as a
+templated statement (with `--structural`, `struct_lower`'s template, the flat unit never built). With a recorded a11
+session of that kind sent (a `.tar` of its session directory), it times `archive-put` and `verify --zk --partition
+--program` as `a0.lean_verify` runs them, under `perf record` where the node has it, so the verify's own phase lines
+(`inputs:`, `setup (drawn):`, the session) split the profile, a templated statement's as well as a flat one's. With
+`--phases`, and at every templated statement, `flock_served/Main.lean` times verify's work before the session a step
+at a time: the read, SHA-512, `Zk.maskLogOf`, `ProvedScope.circuitOf`, `ProvedScope.checkOf`, `PortRoots.checkOf`,
+`KsScope.checkOf` and `Stmt.setupTablesOf` with the sample, each with its RSS. `build.json` has the unit's ANDs and matrix
+entries, k_log, the circuit file's bytes and lines, and its Program descriptor's bytes, the size a description-cost
+verifier would read.
+
+~~~sh
+research run --as proofs --project verity --on auto --mem-gb 128 --timeout 7200 --source . --cwd clone \
+  --send values.tar.gz [--send session.tar] -- bash benchmarks/verifier_cost/flock_served.sh KIND [N] [--phases] \
+  [--layout iv/hybrid/4 [--structural] [--stmt [--base REV]]]
+~~~
+
+`flock_served/Main.lean` parses the circuit as `verify` does (`circuitOfKnowing`: the file's SHA-512 already known). On a
+templated statement, `--stmt` times that parse instead with `flock-tmpl stmt` (`flock_tmpl/Main.lean`): whole, then a
+stage at a time (`tmplOf`, `Tmpl.parse`, each of `TmplUnit.read`'s checks, `HmRow.parseWith`'s decode, split, class
+digest and sections), with the template's size against the unrolled unit's (rows and entries, the copies multiplied
+through the calls) into stmt.jsonl; `--base REV` first times the same `flock-tmpl` built against REV's verifier on the
+same staged statement (stmt-base.jsonl).
+
+`table_root/table_root.sh` measures the Lean verifier's SHA-512 rate and what a history table's root costs it at the
+pinned capacity (`Spot.HistoryTable.CAPACITY`, `2^17` ranks): `table_root/Main.lean`, built in a scratch Lake package
+against the checkout's verifier, times `Flock.Sha512.hash` at the message lengths the verifier hashes and at 1 MiB, the
+frame-v3 node, leaf and tree leaf, `FV3.root` over `2^17` leaves, and whole table roots (`Spot.HistoryTable.rootAt`)
+at the lengths given, each over `--tables` distinct tables. `$OUT` gets table_root.jsonl (one row per phase: calls, ns a
+call, calls a second, milliseconds, peak RSS), cpu.txt and the build's log.
+
+~~~sh
+research run --as proofs --project verity --on vy-nebius-cpu-1 --source . --pool proofs --cwd clone -- \
+  bash benchmarks/verifier_cost/table_root/table_root.sh [--tables T] [--lengths 4096,40960,131072]
+~~~
+
 `qcall.sh CONFIG X...` measures `Q_call` v1 (`Flock.Qcall`, an open walk in `tests/test_verifier_cost.py`) on one Serve_v1
 config's word-level descriptor: `flock-verify qcall-program` at each X, with the output's SHA-256 so two commits' outputs
 compare, a `perf` profile at the first X, and the one-stage `partition` piece under `Q_call` v1 at X = 16. Its header has
 the command.
 
-`results.json` (`verity/verifier-cost/v1`) has one row per config and IR: the description's bytes, Definitions and body
+`results.json` (`verity/verifier-cost/v1`) has one row per config and `ir` (word or Boolean): the description's bytes, Definitions and body
 nodes, the unrolled circuit's gates, and per check its wall seconds (the best of `--repeat`), peak RSS and the verdict.
-`partition.json` (`verity/verifier-cost-partition/v1`) has one row per config, IR, shape and query: the description's
+`partition.json` (`verity/verifier-cost-partition/v1`) has one row per config, `ir`, shape and query: the description's
 bytes, the unrolled gates, the gates of the Calls' distinct Definitions (what `Q_word` and `Q_call` lay out), the wall
 seconds, peak RSS and the population (null where the verifier refuses the query). `store` puts either in the store as
 an `evidence/v1` record naming the run and its commit; it runs where the store's keys are (a VM), since a node's shell
 has none.
 
-Apart from `nci_glm`'s inputs, nothing here is a served Program: `on_bits`'s output and `nci_glm`'s derived Programs are
+Apart from `nci_glm`'s inputs and `flock_served`'s saved step, nothing here is a served Program: `on_bits`'s output and `nci_glm`'s derived Programs are
 this benchmark's constructions, and nothing outside this directory reads them.

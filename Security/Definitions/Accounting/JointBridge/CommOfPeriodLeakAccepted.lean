@@ -1,7 +1,40 @@
-import Definitions.Accounting.JointPeriod
-import Definitions.NetworkCertifier.Period
-import Definitions.NetworkCertifier.Tap
-import Definitions.Core.Assumptions
+module
+
+public import Definitions.Accounting.JointPeriod
+public import Definitions.NetworkCertifier.Period
+public import Definitions.NetworkCertifier.Tap
+public import Definitions.Core.Assumptions
+import Mathlib.Algebra.Order.Floor.Extended
+import Mathlib.Algebra.Order.Interval.Basic
+import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
+import Mathlib.Analysis.SpecialFunctions.Bernstein
+import Mathlib.Analysis.SpecialFunctions.Gamma.Basic
+import Mathlib.Analysis.SpecialFunctions.Trigonometric.DerivHyp
+import Mathlib.Combinatorics.Enumerative.DyckWord
+import Mathlib.Combinatorics.SimpleGraph.Triangle.Removal
+import Mathlib.Data.NNRat.Floor
+import Mathlib.Data.Nat.Choose.Multinomial
+import Mathlib.Geometry.Euclidean.Altitude
+import Mathlib.NumberTheory.Chebyshev
+import Mathlib.NumberTheory.Height.NumberField
+import Mathlib.NumberTheory.Height.Projectivization
+import Mathlib.NumberTheory.LucasLehmer
+import Mathlib.NumberTheory.SelbergSieve
+import Mathlib.RingTheory.Radical.NatInt
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Topology.Sheaves.Init
 
 /-!
 # A period whose communication audit is the network certifier's period of sampled audits (trusted)
@@ -17,13 +50,16 @@ deployed network certifier in `PeriodLeakAccepted`'s form, and its trust, `trust
 (`Verity.Assumptions.TrustedHost`), is a field: the per-window bound (`window_le`) is what its records give.
 -/
 
+@[expose] public section
+
 namespace Accounting.JointBridge
 
 open Claims Claims.Sampling NetTiming
+open Claims.SamplingGeneric (Arg Compiled)
 
 /-- **A period whose communication audit is the network certifier's period of `n` sampled audits**, at the
-deployment `D` of the sampled verifier, the public layouts `lay`, horizons `k`, registered inputs `reg` and jitter
-bound `Dj`, at `δ` and the decoder `decode`, with the claim at `K`. Every field is a property of the deployed run:
+compiled sampled verifier `D`, the public layouts `lay`, horizons `k`, registered inputs `reg` and jitter
+bound `Dj`, at `δ`, with the claim at `K`. Every field is a property of the deployed run:
 
 * the period's windows, as `PeriodLeakAccepted` takes them: each window's registration (`sw`) and its registered
   values (`ρ`), and the network certifier's openings at each statement (`tops`);
@@ -43,17 +79,17 @@ bound `Dj`, at `δ` and the decoder `decode`, with the claim at `K`. Every field
 * at each window and every value of the other coins, the network audit's own coins are a run of the sampled verifier
   at the window's statement against a prover (`prover`, on a finite tape `Tape`, the rest of the coins), and the
   probability over the audit's own coins that the network certifier accepts while the window fails `WindowGood` is at
-  most that run's `PrBad` at the leak relation at the network certifier's rows, `RLeakTap` (`window_le`). Past
-  `RLeakTap` and the scope, `WindowGood` holds the trace's values at the registered inputs and the records' coverage
+  most that run's `PrBad` at the leak relation at the network certifier's rows, `RLeakCertifier` (`window_le`). Past
+  `RLeakCertifier` and the scope, `WindowGood` holds the trace's values at the registered inputs and the records' coverage
   (`Covered`, length and jitter): `window_le` holds them on acceptance. The registered values are the gap
   `PeriodLeakAccepted` names, which the registration's commitment binds; no proof here gives it. `window_le` is the
   per-window bound that the trusted network certifier's records give; deriving it from `PeriodLeakAccepted` at the
   deployed period and `trusted`, rather than reading it as a field, is the follow-up. -/
 structure RealizesCommOfPeriodLeakAccepted {ι : Type} {d : Device ι} {α : Type} [Fintype α] {C : Verity.Circuit}
-    {I : Type} {Ω : I → Type} [DecidableEq I] [∀ i, Fintype (Ω i)] {Coin Col T : Type} [Fintype Coin] [Nonempty Coin]
-    [Inhabited Coin] [DecidableEq Col] [Zero Col]
-    (r : PeriodRun d α C Ω) (K : ℝ) (H : Msg → Msg) (D : Deploy Coin Col T) (L Kₒ S : ℕ)
-    (lay : AuditStatement → BoundaryGates L S) (k : AuditStatement → ℕ) (δ : ℝ) (decode : List (ℕ × Col) → List T) (reg : AuditStatement → Finset ℕ)
+    {I : Type} {Ω : I → Type} [DecidableEq I] [∀ i, Fintype (Ω i)] {Coin : Type} [Fintype Coin] [Nonempty Coin]
+    [Inhabited Coin] {A : Arg Coin}
+    (r : PeriodRun d α C Ω) (K : ℝ) (H : Msg → Msg) (D : Compiled Coin A) (L Kₒ S : ℕ)
+    (lay : AuditStatement → BoundaryGates L S) (k : AuditStatement → ℕ) (δ : ℝ) (reg : AuditStatement → Finset ℕ)
     (Dj n : ℕ) where
   /-- each window's registration -/
   sw : Fin n → AuditStatement
@@ -90,16 +126,16 @@ structure RealizesCommOfPeriodLeakAccepted {ι : Type} {d : Device ι} {α : Typ
   /-- what reaches the network certifier from the server on each connection, at the server's state -/
   arr : Srv → Conn → Arrivals Cell
   /-- the network certifier's record format over the period's windows -/
-  fmt : TapRecord Conn Cell (Fin n → List (Obs L Kₒ S))
+  fmt : RecordFormat Conn Cell (Fin n → List (Obs L Kₒ S))
   /-- the deployed network certifier -/
   device : Dev
   /-- what the network certifier does on a schedule and the server's state: the cells the client receives and its
   records of the period's windows -/
-  run : Dev → WardenSchedule Conn × Srv → (Conn → List (ℕ × CellView Cell)) × (Fin n → List (Obs L Kₒ S))
-  /-- the network certifier runs its code (`tapCode`) on its host: `trusted-host`, the trust the network audit rests
+  run : Dev → CertifierSchedule Conn × Srv → (Conn → List (ℕ × CellView Cell)) × (Fin n → List (Obs L Kₒ S))
+  /-- the network certifier runs its code (`recordingCode`) on its host: `trusted-host`, the trust the network audit rests
   on. Its records are what `window_le`'s per-window bound comes from; deriving `window_le` from `PeriodLeakAccepted`
   at this deployed period and this premise, not at the period of no windows, is the follow-up. -/
-  trusted : Verity.Assumptions.TrustedHost device run fun p => tapCode fmt p.1 (arr p.2)
+  trusted : Verity.Assumptions.TrustedHost device run fun p => recordingCode fmt p.1 (arr p.2)
   /-- the network audit's acceptance with window `i` failing its good event, over the audit's own coins, is at most
   the sampled verifier's `PrBad` at the window's statement and prover: the per-window bound that the trusted network
   certifier's records (`trusted`) give. It is a field until it is derived from `PeriodLeakAccepted` at the deployed
@@ -109,8 +145,8 @@ structure RealizesCommOfPeriodLeakAccepted {ι : Type} {d : Device ι} {α : Typ
         ¬ WindowGood H D L Kₒ S lay k δ reg Dj (sw i) (ρ i) tops (stmt (Function.update ξ (r.own .network) x) i)
           (wit (Function.update ξ (r.own .network) x) i) (obs (Function.update ξ (r.own .network) x) i)) ≤
     PrBad H D.V
-      (RLeakTap H D.commit D.parse D.partition L Kₒ S lay k δ (fun s => AsReg s.prog (lay s) (k s) (reg s)) Dj tops)
-      (E D decode) (stmt ξ i) (prover ξ i)
+      (RLeakCertifier H D.commit D.parse D.partition L Kₒ S lay k δ (fun s => AsReg s.prog (lay s) (k s) (reg s)) Dj tops)
+      D.E (stmt ξ i) (prover ξ i)
 
 attribute [instance] RealizesCommOfPeriodLeakAccepted.tapeFintype RealizesCommOfPeriodLeakAccepted.tapeNonempty
   RealizesCommOfPeriodLeakAccepted.connFintype

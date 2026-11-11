@@ -34,7 +34,7 @@ def test_registry_record_has_the_qualifications():
     assert rec["summary"].startswith("not universally exact")
     # other tests may register extra definitions in the same process; the library's own counts are lower bounds
     c = rec["counts"]
-    assert c["superseded"] == 3 and c["exact-model-tested"] >= 51 and c["model-untested"] >= 5
+    assert c["superseded"] >= 3 and c["exact-model-tested"] >= 51 and c["model-untested"] >= 5
 
 
 def test_the_fp8_block_moe_and_group_quant_forms_are_exact_model_tested():

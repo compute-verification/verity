@@ -1,5 +1,30 @@
+module
+
+public import Proofs.Flock.Soundness.Discharge.Hidden.Flat
+public import Proofs.Flock.Soundness.Discharge.Hidden.Wide.SegDelta
+import Mathlib.Tactic.ENatToNat
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Proofs.Flock.Soundness.Discharge.Hidden.Binding
+import Proofs.Flock.Soundness.Discharge.Hidden.Committed
+import Proofs.Flock.Soundness.Discharge.Hidden.Delta
+import Proofs.Flock.Soundness.Discharge.Hidden.Facts
+import Proofs.Flock.Soundness.Discharge.Hidden.Rows
+import Proofs.Flock.Soundness.Discharge.Hidden.Spec
 import Proofs.Flock.Soundness.Discharge.Hidden.Wide.SegRowBc
-import Proofs.Flock.Soundness.Discharge.Hidden.Wide.V2
+import Proofs.Flock.Soundness.Discharge.Hm.Bc
+import Proofs.Flock.Soundness.Discharge.Hm.Nets
 
 /-!
 # Output rows unsegmented, input rows of any kind (`OutputsCommittedSeg`, `OutputsBindingSeg`)
@@ -11,6 +36,8 @@ holds each output row's message bit's copy (`Any.msg_copyAll`); the row's `b ‖
 (`Any.row_bc_tgt`). An output row's columns and `outPairs`' copies need only the output rows unsegmented
 (`Any.OutRows`, `Any.deltaMsgCol_inj`).
 -/
+
+@[expose] public section
 
 set_option Elab.async false
 

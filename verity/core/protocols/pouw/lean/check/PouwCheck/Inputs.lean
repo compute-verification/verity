@@ -1,25 +1,31 @@
-import CoreProtocol.Protocol
-import CoreProtocol.Profile
-import Flock.WindowRecord
-import PouwCheck.Json
-import PouwCheck.Tile
-import PouwWindow.Length
-import Identity.Domains
+module
+
+public import CoreProtocol.Profile
+public import CoreProtocol.Protocol
+public import Flock.WindowRecord
+public import Identity.Domains.Pouw
+public import PouwCheck.Json
+public import PouwCheck.Tile
+public import PouwWindow.Length
 
 /-!
 # The check's three inputs (`core_check.py`, "the three inputs")
 
-* `Params`: the verifier's own parameters of the window: the check item, ε and δ, the grid's bits, the declared range
-  of tile counts, the window's context and the check query's SHA-512; its template one the verifier pins (`tiles`), with
+* `Params`: the verifier's own parameters of the execution phase: the check item, ε and δ, the grid's bits, the declared range
+  of tile counts, the execution phase's context and the check query's SHA-512; its template one the verifier pins (`tiles`), with
   that template's tile work and query; and the rows' fixed length: stop mode `fixed` and each slot's max_tokens.
-* `Registration`: one-stage's record of the window (`registration.record`), canonical JSON, with what PoUW's rule reads;
-  its digest is the record's own, `registration.digest`.
-* `Evidence`: the proof service's answer for a registration, read by `Core.Answer.ofJson`: the protocol, the
-  registration it is for, and what it said (on acceptance, the integrity profile and the verifier's draw as one-stage's
+* `WindowCommitmentRecord`: the execution phase's window commitment record, one-stage's record of it
+  (`registration.record`), canonical JSON, with what PoUW's rule reads; its digest is the record's own,
+  `registration.digest`. It is the execution phase's commitment, not the registration log (`Core.Registration`), which
+  registers the Site, θ and the registered compiler and declares each day's circuit.
+* `Evidence`: the proof system's answer for a window commitment record, read by `Core.Answer.ofJson`: the protocol, the
+  record it is for, and what it said (on acceptance, the integrity profile and the verifier's sample as one-stage's
   `draw.py` writes it).
 
 Each decoder refuses with `core_check.py`'s message, and `Core.Protocol.answer` prefixes it with the input's name.
 -/
+
+@[expose] public section
 
 namespace PouwCheck
 
@@ -34,7 +40,7 @@ def checkKeys : List String := ["entries", "scheme", "template", "tile_work"]
 /-- `window.COINS` and `window.MODES`: the check item's optional key and the coin modes it may name. -/
 def coinsKey : String := "coins"
 def coinModes : List String := ["live", "seeded"]
-/-- `core_check.LIVE_PARAM`, `LIVE` and `LIVE_PARAMS`: a live window's parameters' salt session inputs. -/
+/-- `core_check.LIVE_PARAM`, `LIVE` and `LIVE_PARAMS`: a live execution phase's parameters' salt session inputs. -/
 def liveKey : String := "live"
 def liveKeys : List String := ["key", "ledger", "main", "pins", "session"]
 def LIVE_PARAMS : String :=
@@ -42,7 +48,7 @@ def LIVE_PARAMS : String :=
     "key, the auditor's ledger, the host's pins log, main's first-parent history and the salt session's files"
 
 /-- The `check` item: the tile template, its work per tile, the commitment scheme, the public bound on entries, and the
-window's coin mode when the item names one (`window.mode`: seeded when it names none). -/
+execution phase's coin mode when the item names one (`window.mode`: seeded when it names none). -/
 structure CheckItem where
   entries : Nat
   scheme : String
@@ -70,7 +76,7 @@ structure Params where
   hi : Nat
   /-- Each slot's max_tokens, which a row of record serves whatever it samples (stop mode `fixed`, `ignore_eos`). -/
   maxTokens : List Nat
-  /-- A live window's salt session's inputs as its verifier holds them (`liveKeys`); `none` for any other window. -/
+  /-- A live execution phase's salt session's inputs as its verifier holds them (`liveKeys`); `none` for any other execution phase. -/
   live : Option Json := none
 
 def isHexDigest (s : String) : Bool := s.length = 128 && s.all fun c => c.isDigit || ('a' ≤ c && c ≤ 'f')
@@ -138,12 +144,12 @@ def rootOf? (j : Json) : Option Root := do
   guard (keys j == some ["domain", "leaves", "port", "root"])
   pure ⟨← str? (get j "port"), ← str? (get j "root"), ← nat? (get j "leaves"), ← str? (get j "domain")⟩
 
-/-- `core_check.WINDOW_VALUES`: the window's optional groups of committed values, the activations it committed before
+/-- `core_check.WINDOW_VALUES`: the execution phase's optional groups of committed values, the activations it committed before
 its salt and the registered weights' entries (`valuesRoot?`). -/
 def WINDOW_VALUES : List String := ["activations", "registered"]
 
 /-- The record's `window`: its kind, its context, the items it registers, and its groups of committed values
-(`WINDOW_VALUES`), each `some` exactly when the window has the key, whatever its value. -/
+(`WINDOW_VALUES`), each `some` exactly when the execution phase has the key, whatever its value. -/
 structure Window where
   kind : String
   context : String
@@ -151,8 +157,9 @@ structure Window where
   activations : Option Json
   registered : Option Json
 
-/-- The registration: the canonical bytes its digest hashes, and the record's fields PoUW's rule reads. -/
-structure Registration where
+/-- The execution phase's window commitment record: the canonical bytes its digest hashes, and the record's fields
+PoUW's rule reads. -/
+structure WindowCommitmentRecord where
   bytes : ByteArray
   format : String
   program : String
@@ -164,7 +171,7 @@ structure Registration where
   roots : Array Root
   window : Window
 
-def registrationOf (b : ByteArray) : V Registration := do
+def recordOf (b : ByteArray) : V WindowCommitmentRecord := do
   let rec_ ← Core.canonicalJson b
   let some format := (str? (get rec_ "format")).filter (formats.contains ·)
     | throw s!"format is not {" or ".intercalate formats}"
@@ -193,13 +200,14 @@ def registrationOf (b : ByteArray) : V Registration := do
         "and registered")
   pure { bytes := b, format, program, query, partition, scheme, population, law, roots, window }
 
-/-- `registration.digest`: the window record's digest (`Flock.WindowRecord.digestOf`) of its format and the canonical
+/-- `registration.digest`: the execution phase record's digest (`Flock.WindowRecord.digestOf`) of its format and the canonical
 bytes it was read from. -/
-def Registration.digest (c : Registration) : ByteArray := Flock.WindowRecord.digestOf c.format c.bytes
+def WindowCommitmentRecord.digest (c : WindowCommitmentRecord) : ByteArray :=
+  Flock.WindowRecord.digestOf c.format c.bytes
 
-/-! The service's draw, as one-stage's `draw.py` writes it. -/
+/-! The service's sample, as one-stage's `draw.py` writes it. -/
 
-/-- A stratum of a stratified or work draw: its template, its units as `[lo, hi)` ranges, its `k`, and a work
+/-- A stratum of a stratified or work sample: its template, its units as `[lo, hi)` ranges, its `k`, and a work
 stratum's work and floor. -/
 structure DrawStratum where
   template : String
@@ -208,8 +216,8 @@ structure DrawStratum where
   work : Option (Nat × Nat)
   deriving DecidableEq, Repr
 
-/-- The draw's law: `subset:k`, `bernoulli:p` (`p` as written), `stratified:k` or `work:k` with their strata, and a work
-draw's closure. -/
+/-- The sample's law: `subset:k`, `bernoulli:p` (`p` as written), `stratified:k` or `work:k` with their strata, and a work
+sample's closure. -/
 inductive Law where
   | subset (k : Nat)
   | bernoulli (p : String)
@@ -217,14 +225,14 @@ inductive Law where
   | work (k : Nat) (strata : Array DrawStratum) (closure : Option (Array Nat))
   deriving DecidableEq, Repr
 
-/-- `parse_law`'s spelling. -/
+/-- `parse_design`'s spelling. -/
 def Law.name : Law → String
   | .subset k => s!"subset:{k}"
   | .bernoulli p => s!"bernoulli:{p}"
   | .stratified k _ => s!"stratified:{k}"
   | .work k _ _ => s!"work:{k}"
 
-/-- The verifier's draw: its law, over a population, and the units it drew. -/
+/-- The verifier's sample: its sampling design, over a population, and the units it drew. -/
 structure UnitDraw where
   law : Law
   population : Nat
@@ -257,7 +265,7 @@ def strataOf (work : Bool) (j : Json) (ctx : String) : V (Array DrawStratum) := 
   pure strata
 
 /-- The public outputs `{"draw": d}`, `d` one of `draw.py`'s laws with exactly its keys (`check_draw`'s), and optionally a
-live window's `salt` (`saltOf`). -/
+live execution phase's `salt` (`saltOf`). -/
 def drawOf (j : Json) : V UnitDraw := do
   unless keys j == some ["draw"] || keys j == some ["draw", "salt"] do
     throw "public: keys are not draw, and optionally salt"
@@ -283,7 +291,7 @@ def drawOf (j : Json) : V UnitDraw := do
       pure (.work k strata closure)
   pure ⟨l, population, ← natsOf d "units" ctx⟩
 
-/-- A live window's `salt` among the public outputs, an object (`windowSaltReason` reads it), or `none`. -/
+/-- A live execution phase's `salt` among the public outputs, an object (`windowSaltReason` reads it), or `none`. -/
 def saltOf (j : Json) : V (Option Json) :=
   match PouwWindow.field? j "salt" with
   | none => pure none

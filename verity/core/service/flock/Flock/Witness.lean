@@ -1,10 +1,6 @@
-import Flock.Zk
-import Flock.Norm
-import Flock.ProvedScope
-import Flock.RecVStar
-import Flock.RecCoins
-import Flock.Registered
-import Flock.Lookup
+module
+
+public import Flock.RecCoins
 
 /-!
 # `flock-witness`: the recursive audit's predicates, evaluated on recorded sessions
@@ -15,10 +11,10 @@ meets is found by a run rather than by reading. Each check here is one of them, 
 reads; `Proofs.Flock.Recursive.Witness` proves that each check's `.ok` is the model's predicate.
 
 * `inner --circuit F --public F [--partition F] [--program F] [--registered F] [--record F]`: the inner statement.
-  `acceptsStmt` (`AcceptsStmt`: `Stmt.setupTables` at `RecVStar.innerTags`, the coin server's coins and the statement's
+  `acceptsStmt` (`AcceptsStmt`: `Stmt.setupTables` at `RecVStar.innerTags`, the challenger's coin tree and the statement's
   partition object and program returns one table, and `Zk.schedule` accepts its `m`), `acceptsDescription`
   (`AcceptsDescription`, at each of the verifier's own registered reads), and with `--record` the recorded inner
-  session's Σ (its `hello`'s `link.sigma`) against the statement's, at the record's full draw when it has one
+  session's Σ (its `hello`'s `link.sigma`) against the statement's, at the record's full sample when it has one
   (`RecCoins.drawnSpec`, as check 5 decodes it). `accepts_stmt`'s line also prints the statement's
   partition finding, the verifier's own inner shape (`shapeOf`, `innerAt`), the number of V*'s outer statements over it
   (`outerPartsOf`, `outerParts`) and V*'s statements there (`RecVStar.statements`).
@@ -27,19 +23,21 @@ reads; `Proofs.Flock.Recursive.Witness` proves that each check's `.ok` is the mo
   sessions, with `flock-verify verify --zk`'s flags. Once: `tagsOk` (`DecodeZL.TagsOk`, public outputs) and `tagsOkZHJ`
   (`ZkHidden.TagsOkZHJ`, hidden outputs, `ZkOuterR.hTags`), which no session meets both of, the statement check without
   and with the registered reads (`ScopeZ`, `ScopeZR`), and the circuit's `scopeOk` (`VStmt.hscope`). Per session: `fullDraw`
-  (the record's draw is the full draw `RecordCustody` reads, `subset` of every unit of the population), `acceptsZKRAt`
+  (the record's sample is the full sample `RecordCustody` reads, `subset` of every unit of the population), `acceptsZKRAt`
   (`ZkReg.AcceptsZKR`, with the statement's `m` and its schedule's level 0), and with `--rec-inner` `accepts_zkv`
   (`AcceptsZKV`: `acceptsZKRAt`, then `checkZKV`, V*'s statement check, whose refusal it prints apart as `check_stmt`).
 
 One `WITNESS` line per check: its name, `ok`, and the refusal when it fails. Exit 0 iff every check passes.
 -/
 
+@[expose] public section
+
 namespace Flock.Witness
 
 open Lean (Json)
 
 /-- What `flock-verify verify --zk` reads besides the session directory, for one of V*'s sessions: `Exec.Inputs`'s
-fields but the work, stratified and closure inputs, which V*'s full draw reads none of, and the coins, which `--zk` sets. -/
+fields but the work, stratified and closure inputs, which V*'s full sample reads none of, and the coins, which `--zk` sets. -/
 structure Inputs where
   tags : Tags
   circuitFile : ByteArray
@@ -49,9 +47,9 @@ structure Inputs where
   partition : Option Json
   program : Option ByteArray
 
-/-- A record's `unit_draw`, when it is a draw (not absent, not null), rebuilt (`norm`): `Main.recordDraw`. -/
+/-- A record's `unit_draw`, when it is a sample (not absent, not null), rebuilt (`norm`): `Main.recordDraw`. -/
 def recordDraw (record : String) : Option Json :=
-  match Json.parse record with
+  match JsonParse.parse record with
   | .ok j => match j.getObjVal? "unit_draw" with
     | .ok Json.null => none
     | .ok d => some (Flock.norm d)
@@ -62,7 +60,7 @@ def recordDraw (record : String) : Option Json :=
 def zkCoins (I : Inputs) : Coins := .tree (Zk.coinSpec (I.tags.tableNames I.count))
 
 /-- The tags `verify --zk` sets a session up under. -/
-def zkTags (I : Inputs) : Tags := Zk.tags (I.tags.withCoins (zkCoins I)) (Zk.maskLogOf I.circuitFile) I.count
+def zkTags (I : Inputs) : Tags := Zk.tags I.tags (Zk.maskLogOf I.circuitFile) I.count
 
 /-- The session's statement `verify --zk` sets up for a record. -/
 def setupOf (I : Inputs) (record : String) : V (SessionSpec × Array Stmt) :=
@@ -70,11 +68,13 @@ def setupOf (I : Inputs) (record : String) : V (SessionSpec × Array Stmt) :=
     I.program
 
 /-- `verify --zk --registered F`'s verdict on a session set up as `s`: every table's registered reads against `own`,
-every table's shape, and `Zk.verify`. -/
+every port of every table's circuit a port of `own` (`Registered.checkComplete`), every table's shape, and
+`Zk.verify`. -/
 def acceptsZKRAt (s : V (SessionSpec × Array Stmt)) (own : Array Registered.Port) (record : String)
     (proofs : Array ByteArray) : V Unit := do
   let r ← s
   r.2.forM (checkRegistered · (some own))
+  r.2.forM fun st => Registered.checkComplete st.c own
   r.2.forM Zk.shapeOk
   Zk.verify r.1 (r.2.map Setup.ofCircuit) record proofs
 
@@ -102,7 +102,7 @@ def scopeOk (I : Inputs) : V Circuit := do
   let c ← HmRow.parse (zkTags I) I.circuitFile I.tables
   if ProvedScope.scopeOk c then pure c else throw "scopeOk refuses the circuit"
 
-/-- The record's draw is the full draw over `n` units: `subset n` of the population `[0, n)`, every unit, no closure. -/
+/-- The record's sample is the full sample over `n` units: `subset n` of the population `[0, n)`, every unit, no closure. -/
 def fullDraw (n : Nat) (record : String) : V Unit :=
   match recordDraw record with
   | none => throw "the record has no draw"
@@ -122,7 +122,7 @@ def one (sts : Array Stmt) : V Stmt :=
 
 /-- The inner statement's setup, as `RecVStar.innerOf` makes it. -/
 def innerSetup (cf pf : ByteArray) (partition : Option Json) (program : Option ByteArray) : V (SessionSpec × Array Stmt) :=
-  Stmt.setupTables RecVStar.innerTags cf pf Coins.os 1 (partition := partition) (program := program)
+  Stmt.setupTables RecVStar.innerTags cf pf RecVStar.innerTree 1 (partition := partition) (program := program)
 
 /-- `acceptsStmt` at a setup already made. -/
 def acceptsStmtAt (r : V (SessionSpec × Array Stmt)) : V Stmt := do
@@ -181,7 +181,7 @@ def readTables (args : List String) : IO (List (String × ByteArray)) := do
 def readJson (path : String) : IO (Except String Json) := do
   try
     let t ← IO.FS.readFile path
-    return (Json.parse t).mapError fun e => s!"{path}: not JSON: {e}"
+    return (JsonParse.parse t).mapError fun e => s!"{path}: not JSON: {e}"
   catch e => return .error s!"{path}: {e}"
 
 def registeredOf (args : List String) : IO (Except String (Array Registered.Port)) := do
@@ -241,7 +241,7 @@ def await {α : Type} (t : Task (Except IO.Error α)) : IO α := do
 
 /-- The Σ a session record's `hello` names (`link.sigma`). -/
 def recordSigma (record : Json) : V String := do
-  let h ← Json.parse (← record.getObjValAs? String "hello")
+  let h ← JsonParse.parse (← record.getObjValAs? String "hello")
   (← h.getObjVal? "link").getObjValAs? String "sigma"
 
 def innerCmd (args : List String) : IO UInt32 := do
@@ -276,8 +276,8 @@ def innerCmd (args : List String) : IO UInt32 := do
     let record ← readJson rf
     let want : V SessionSpec := do
       let (spec, _) ← r
-      RecCoins.drawnSpec (fun d => Stmt.setupHidden RecVStar.innerTags circuitFile publicFile Coins.os [] (some d) partition
-        program) spec st text
+      RecCoins.drawnSpec (fun d => Stmt.setupHidden RecVStar.innerTags circuitFile publicFile RecVStar.innerTree [] (some d)
+        partition program) spec st text
     let ok : V Unit := do
       let s ← record >>= recordSigma
       let w := hexOf (← want).sigma

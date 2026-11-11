@@ -1,13 +1,30 @@
-import Proofs.Flock.Soundness.Discharge.ZkHidden.Defs
-import Proofs.Flock.Soundness.Discharge.ZkLink.StrictZ
+module
+
+public import Proofs.Flock.Soundness.Discharge.ZkHidden.Defs
+public import Proofs.Flock.Soundness.Discharge.ZkLink.StrictZ
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
 
 /-!
 # The compiled `--zk` count curve at the hidden-output tables
 
 `zk_flock_countC_execOS_cr` reads its tables only through the plan, so it holds at the one-table hidden-output plan
-`planAtZKH` as stated. The hidden-output binding enters through `place` and `vb`, which read the drawn units' places
+`planAtZKH` as stated. The hidden-output binding enters through `place` and `vb`, which read the sampled proof blocks' places
 in `tableAtZKH`'s statements (`AcceptsZKAcceptedH`).
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Discharge.ZkHidden
 
@@ -17,11 +34,11 @@ open scoped ENNReal
 local notation "𝔽" => FlockLevel3.GF128
 
 variable {K : Type} [Field K] [Fintype K] [DecidableEq K] {mPts : ℕ} {D Sl : Type} [Inhabited D] [Inhabited Sl]
-  (A : Arith 𝔽 K) (Hs : Hashes 𝔽 D Sl) {C : Circuit} {n : ℕ} (P : Partition C n) {Reg : Type} {I : Inputs}
+  (A : Arith 𝔽 K) (Hs : Hashes 𝔽 D Sl) {C : Verity.Boolean.Circuit} {n : ℕ} (P : Partition C n) {Reg : Type} {I : Inputs}
   (dj : Finset (Fin n) → Lean.Json) {S₀ : Finset (Fin n)} (y₀ : DrawSetupZKH I mPts S₀ (dj S₀))
 
-/-- **#874's compiled `--zk` count curve at the hidden-output tables**: `zk_flock_countC_execOS_cr` at
-`planAtZKH dj y₀` (each draw's table `tableAtZKH dj y₀ S`, every unit in it). -/
+/-- **The compiled `--zk` count curve at the hidden-output tables**: `zk_flock_countC_execOS_cr` at
+`planAtZKH dj y₀` (each sample's table `tableAtZKH dj y₀ S`, every unit in it). -/
 theorem zk_flock_countC_execOS_crH (hA : A.Correct)
     {m : ℕ} (σs : Fin n → Fin m) (ks : Fin m → ℕ) (hks : ∀ s, ks s ≤ (Law.stratum σs s).card)
     (St : Fin m → Flock.Draw.Stratum) (hS : Law.ExecStrata σs ks St) (Kd pop : ℕ)

@@ -1,12 +1,50 @@
+module
+
+public import Proofs.Flock.Claims.KS.ZkDecodeW
+import all Init.Data.Array.Basic
+import all Init.Data.Range.Basic
+import all Init.Data.Nat.Power2.Basic
+public import Proofs.Flock.Claims.KS.ZkLiveW
+import Mathlib.Algebra.Order.Floor.Extended
+import Mathlib.Algebra.Order.Interval.Basic
+import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
+import Mathlib.Analysis.SpecialFunctions.Bernstein
+import Mathlib.Analysis.SpecialFunctions.Gamma.Basic
+import Mathlib.Analysis.SpecialFunctions.Trigonometric.DerivHyp
+import Mathlib.Combinatorics.Enumerative.DyckWord
+import Mathlib.Combinatorics.SimpleGraph.Triangle.Removal
+import Mathlib.Data.NNRat.Floor
+import Mathlib.Data.Nat.Choose.Multinomial
+import Mathlib.Geometry.Euclidean.Altitude
+import Mathlib.NumberTheory.Chebyshev
+import Mathlib.NumberTheory.Height.NumberField
+import Mathlib.NumberTheory.Height.Projectivization
+import Mathlib.NumberTheory.LucasLehmer
+import Mathlib.NumberTheory.SelbergSieve
+import Mathlib.RingTheory.Radical.NatInt
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Topology.Sheaves.Init
 import Proofs.Flock.Claims.KS.JointR
-import Proofs.Flock.Claims.KS.ZkDecodeW
+import Proofs.Flock.Claims.KS.ZkDecJ
 
 /-!
 # The masked live sessions' bound at the deployed decoders, off the table on a witness lane
 
 `ZkXferJ` at the verdict the deployed decoders are right at with no premise on the extra lanes (`ZkXferWJ`): the
 mixture bounds the deployed runs accepting with no column of table `j` off `C` by its live outcomes `verify --zk`
-accepts at the draw with no column of table `j` off `C` read and table `j`'s `root_B` the mixture's (`AccTxJ`), and
+accepts at the sample with no column of table `j` off `C` read and table `j`'s `root_B` the mixture's (`AccTxJ`), and
 level 0's fork event at each table bounds the simulated strategies' `Adv₀` after `Commit`. At a masked statement in
 scope table `j`'s word has level 0's `2^logLen` columns (`wordLenJ_zkTabs`, from `zkLevel0_d_eq`), so the deployed
 decoders right at `OkOffWJ` (`decodesTableW_deploy`) give `ZkLiveAccWJ`'s verdict (`zkLiveAccWJ_of_xferWJ`). So
@@ -14,6 +52,8 @@ decoders right at `OkOffWJ` (`decodesTableW_deploy`) give `ZkLiveAccWJ`'s verdic
 (`zk_KS_of_xferWJ`), and table 0's bound with escapes on accepted runs counted per round from it alone
 (`zk_tableBoundθAccAtR_of_xferWJ`).
 -/
+
+@[expose] public section
 
 namespace FlockDeploy.KS
 
@@ -24,7 +64,7 @@ open FlockSoundness.Discharge.Composed (outJ repJ)
 
 local notation "𝔽" => FlockLevel3.GF128
 
-/-- **C-Flock ZK's level 0 is M1's**: at `m ∈ [25, 35]`, level 0's `d` is M1's level-0 `logLen`. -/
+/-- **Flock ZK's level 0 is M1's**: at `m ∈ [25, 35]`, level 0's `d` is M1's level-0 `logLen`. -/
 theorem zkLevel0_d_eq : ∀ m : Fin 11, (Claims.Flock.zkLevel0 (m.val + 25)).d =
     ((Accounting.m1Schedule (m.val + 25)).levels.headD default).logLen := by
   decide +kernel
@@ -33,7 +73,7 @@ namespace Gen
 
 variable [S : ZkSetup]
 
-/-- **Table `j`'s word has level 0's `2^logLen` columns** at C-Flock ZK's padded tables of a masked statement in
+/-- **Table `j`'s word has level 0's `2^logLen` columns** at Flock ZK's padded tables of a masked statement in
 scope. -/
 theorem wordLenJ_zkTabs {x : Claims.Msg} {s : Claims.Flock.Stmt}
     (hs : parse true Readable.relation x = some s) (hin : Claims.Flock.InScope true s) {ins : Ins}
@@ -61,7 +101,7 @@ theorem wordLenJ_zkTabs {x : Claims.Msg} {s : Claims.Flock.Stmt}
 
 end Gen
 
-/-- **Table `j`'s word has level 0's `2^logLen` columns** at C-Flock ZK's padded tables of a masked statement in
+/-- **Table `j`'s word has level 0's `2^logLen` columns** at Flock ZK's padded tables of a masked statement in
 scope. -/
 theorem wordLenJ_zkTabs {x : Claims.Msg} {s : Claims.Flock.Stmt}
     (hs : parse true Readable.relation x = some s) (hin : Claims.Flock.InScope true s) {ins : Ins}
@@ -77,7 +117,7 @@ theorem wordLenJ_zkTabs {x : Claims.Msg} {s : Claims.Flock.Stmt}
 
 open Classical in
 /-- **The masked live sessions' bound at the deployed decoders, off the table on a witness lane**: `ZkXferJ` with the
-live verdict `AccTxJ` (accepted at the draw at `wrS`, no column of table `j` off `C` read, table `j`'s `root_B` the
+live verdict `AccTxJ` (accepted at the sample at `wrS`, no column of table `j` off `C` read, table `j`'s `root_B` the
 mixture's), the simulated strategies after `Commit` at the deployed decoders right at `OkOffWJ` there
 (`decodesTableW_deploy`), and level 0's fork event at each table (`Claims.Flock.IZW`) bounding their `Adv₀`, each
 fork bound with the slack of the fork at its round (`Claims.Flock.forkSlack`), as `ZkSessWJ` reads. -/
@@ -168,7 +208,7 @@ variable [S : ZkSetup]
 
 open Classical in
 /-- **The masked live sessions' bound at the deployed decoders, off the table on a witness lane**: `ZkXferJ` with the
-live verdict `AccTxJ` (accepted at the draw at `wrS`, no column of table `j` off `C` read, table `j`'s `root_B` the
+live verdict `AccTxJ` (accepted at the sample at `wrS`, no column of table `j` off `C` read, table `j`'s `root_B` the
 mixture's), the simulated strategies after `Commit` at the deployed decoders right at `OkOffWJ` there
 (`decodesTableW_deploy`), and level 0's fork event at each table (`Claims.Flock.IZW`) bounding their `Adv₀`, each
 fork bound with the slack of the fork at its round (`Claims.Flock.forkSlack`), as `ZkSessWJ` reads. -/
@@ -254,7 +294,7 @@ def ZkXferWJ (x : Claims.Msg) : Prop :=
             Claims.Pr fun s : Fin ((V true).k x) → Coin => ev₁ j ω s
 
 /-- **`ZkXferWJ` gives `ZkLiveAccWJ`** where some run accepts: the statement parses in scope (`acc_inScope`) and
-carries a draw (`acc_draw_of_setup`), the deployed decoders are right at `OkOffWJ` on `AccTxJ`
+carries a sample (`acc_draw_of_setup`), the deployed decoders are right at `OkOffWJ` on `AccTxJ`
 (`decodesTableW_deploy`), and table `j`'s word has level 0's columns (`wordLenJ_zkTabs`), so that verdict at table `j`
 accepts with no opening off `C` on a witness lane unless it self-clashes. -/
 theorem zkLiveAccWJ_of_xferWJ {x : Claims.Msg} (hno : ¬ Claims.Flock.NoAcc sha512 (V true) x) (hx : ZkXferWJ x) :
@@ -280,7 +320,7 @@ theorem zkLiveAccWJ_of_xferWJ {x : Claims.Msg} (hno : ¬ Claims.Flock.NoAcc sha5
 end Gen
 
 /-- **`ZkXferWJ` gives `ZkLiveAccWJ`** where some run accepts: the statement parses in scope (`acc_inScope`) and
-carries a draw (`acc_draw_of_setup`), the deployed decoders are right at `OkOffWJ` on `AccTxJ`
+carries a sample (`acc_draw_of_setup`), the deployed decoders are right at `OkOffWJ` on `AccTxJ`
 (`decodesTableW_deploy`), and table `j`'s word has level 0's columns (`wordLenJ_zkTabs`), so that verdict at table `j`
 accepts with no opening off `C` on a witness lane unless it self-clashes. -/
 theorem zkLiveAccWJ_of_xferWJ {x : Claims.Msg} (hno : ¬ Claims.Flock.NoAcc sha512 (V true) x) (hx : ZkXferWJ x) :

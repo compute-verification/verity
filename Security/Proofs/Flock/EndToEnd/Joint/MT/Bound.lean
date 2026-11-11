@@ -1,21 +1,43 @@
-import Proofs.Flock.EndToEnd.Joint.MT.Drawn
+module
+
+public import Proofs.Flock.EndToEnd.Joint.MT.Drawn
+public import Proofs.Flock.EndToEnd.Joint.MT.Statement
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Tactic.ReduceModChar
 import Proofs.Flock.EndToEnd.Joint.Prod
-import Proofs.Flock.Soundness.Game.Union
+import Proofs.Flock.EndToEnd.Period.Union
+import Proofs.Flock.Soundness.Audit.HarmBound
+import Proofs.Flock.Soundness.Audit.Law
+import Proofs.Flock.Soundness.Game
 
 /-!
 # Proof of the joint stratified bound over sampling blocks of `J` tables, per sampling block and pooled
 
 The proofs of `JointStratified` and `JointStratifiedHorizon` (`Joint/Bound.lean`), at `StratifiedBlockMT`:
 
-* `Flock.SecurityProofs.JointStratifiedMT`: if the sampling block's wrong units `B` are in the confidence set, they are
+* `Flock.SecurityProofs.JointStratifiedMT`: if the sampling block's incorrect proof blocks `B` are in the confidence set, they are
   within the one budget (`StratifiedBlockMT.within_of_le`), so the event is empty. Otherwise an accepted sampling block
-  outside the budget has a drawn unit wrong, at most `ε_ks + ε_bind` (`StratifiedBlockMT.accepted_drawnWrong_le`), or
-  its draw misses `B`, at most `B`'s escape `< δ` under A3 (`StratifiedBlockMT.drawMiss_le`).
-* `Flock.SecurityProofs.JointStratifiedHorizonMT`: a run in which every sampling block is accepted and the wrong units
-  are not within the period's budget either has a sampling block accepted with a drawn unit wrong, at most
-  `Σ_t (ε_ks,t + ε_bind,t)` by `period_union`, or every draw misses with the product of the escapes below `δ`, at most
+  outside the budget has a sampled proof block wrong, at most `ε_ks + ε_bind` (`StratifiedBlockMT.accepted_drawnWrong_le`), or
+  its sample misses `B`, at most `B`'s escape `< δ` under A3 (`StratifiedBlockMT.drawMiss_le`).
+* `Flock.SecurityProofs.JointStratifiedHorizonMT`: a run in which every sampling block is accepted and the incorrect proof blocks
+  are not within the period's budget either has a sampling block accepted with a sampled proof block wrong, at most
+  `Σ_t (ε_ks,t + ε_bind,t)` by `period_union`, or every sample misses with the product of the escapes below `δ`, at most
   `δ` by `period_prod`.
 -/
+
+@[expose] public section
 
 namespace Flock.Guarantees
 

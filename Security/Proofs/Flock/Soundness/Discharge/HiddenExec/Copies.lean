@@ -1,5 +1,22 @@
-import Proofs.Flock.Soundness.Discharge.HiddenExec.Flat
-import Proofs.Flock.Soundness.Discharge.Zero
+module
+
+public import Proofs.Flock.Soundness.Discharge.HiddenExec.Flat
+public import Proofs.Flock.Soundness.Discharge.Zero.Stack
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Proofs.Flock.Soundness.Discharge.Aliased.Rows
+import Proofs.Flock.Soundness.Discharge.Zero.Uniform
 
 /-!
 # `Layout.Aliased` at a hidden-output statement, from its flat twin's copy positions
@@ -16,6 +33,8 @@ hidden statement as in its twin (`UnitRowsFlat`), so:
   the hidden statement (`Layout.Aliased`);
 - `stack_zero_blockH`: a stacked input that reads the zero carries 0.
 -/
+
+@[expose] public section
 
 set_option Elab.async false
 
@@ -130,7 +149,7 @@ include hR in
 /-- **The unit's inputs on one gate carry one value in the hidden statement** (`Layout.Aliased`), at template instance
 `g`'s stacked unit slots in every block, for an instance that wires them as Δ copies them in the flat twin
 (`Aliased.Copies`). -/
-theorem aliased_of_copiesH {C : Audit.Circuit} {n : ℕ} {P : Audit.Partition C n} {u : Fin n}
+theorem aliased_of_copiesH {C : Verity.Boolean.Circuit} {n : ℕ} {P : Audit.Partition C n} {u : Fin n}
     (inst : P.IsRowsUnit u ((unitRows st L.unit_built).stack st.c.upv)) {g : ℕ} (hg : g < st.c.g)
     (hcp : Aliased.Copies Lf regs F inst hg) (o : Fin (2 ^ (L.model regs).nbl)) : L.Aliased regs inst o hg := by
   intro c c' hw hc hc' z hz

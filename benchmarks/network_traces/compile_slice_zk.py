@@ -40,7 +40,7 @@ proved by Flock `prove --zk` behind the Lean ZK server and held by Lean `verify 
   `--zk`'s shape (`stage`).
 * **The served rows** (`served_rows`): the Commit side registers each unit's window under the run root (a stand-in: the
   partition's digest) before the sample, a row each block of G steps (``--g``, P by default: one ``srv`` row a unit; at
-  G < P the unit is `compile_slice.CompileSliceBlocks_v1`, its rows ``srv0`` …): the served rows, but ``table``'s,
+  G < P the unit is `compile_slice.CompileSliceRowGroups_v1`, its rows ``srv0`` …): the served rows, but ``table``'s,
   which are the schedule its server served (its own rows, the hit taken), so its ``cache`` check alone refuses it.
   Every unit's ``srv`` rows are its window's but ``sixpass-own``'s, which are its own run's.
 * **The bindings**, checked natively by the verifier on the row commitments b‖c the public file holds: each unit's
@@ -341,7 +341,7 @@ def srv_leaves(S, record: dict, i: int) -> list[tuple[str, int]]:
     return [(r, SR.leaf(S, record, i, j)) for j, r in enumerate(CS.srv_names(S))]
 
 
-def advice_leaf_ok(reg: ADV.Registration, binding: bytes, n: int, i: int, bc: bytes, n_bits: int) -> bool:
+def advice_leaf_ok(reg: ADV.Committed, binding: bytes, n: int, i: int, bc: bytes, n_bits: int) -> bool:
     """The verifier's check of unit i's ``adv`` row: its leaf from the proof's b‖c, walked to the registered root."""
     d = ADV.domain(binding, n)
     kind = BitRowLeaf(n_bits)
@@ -385,7 +385,7 @@ def audit(M, a, sg, m: dict, units: list[SimpleNamespace], binds: dict, out: Pat
         want[f"{name}/{p_}"] = w
         roots.append({"port": f"{name}/{p_}", "root": fv["roots"][p_], "leaves": w["leaves"], "domain": fv["domain_ids"][p_]})
     leaf_layer = hashlib.sha512(M.canonical_json({name: a0.sha512_file(m["dir"] / f"pub-{n}.bin")})).hexdigest()
-    law = M.D.parse_law(f"stratified:{n}")
+    law = M.D.parse_design(f"stratified:{n}")
     win = {"kind": "stand-in", "of": f"the compile slice's {sg.slice} window (compile_slice_zk.py)",
            "members": {name: {"template": P.template_id(m["defn"]), "units": [m["base"], m["base"] + n]}},
            "link": "compile_slice: each unit's adv row is the advice registration's row, its cert row the certified "
@@ -614,7 +614,7 @@ def prove(a) -> int:
     port_ = {p.name: p for p in sg.st.ports}
     honest = units[0].words
     n_bits = 16 * len(honest["adv"])
-    reg = ADV.register([bit_row((u.words["adv"], 16))[0] for u in units], n_bits, binding, salts["adv"])
+    reg = ADV.commit([bit_row((u.words["adv"], 16))[0] for u in units], n_bits, binding, salts["adv"])
     served = SR.register(x.S, [u.registered for u in units], binding, G=CS.block(x.S), salts=srv_salts)
     binds = {"advice": reg, "binding": binding, "n_bits": n_bits, "served": served, "run_root": binding,
              "certified": certified(M, port_["cert"], honest["cert"], cert_salt), "chain": ch, "program": program}

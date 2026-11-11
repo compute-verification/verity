@@ -1,11 +1,18 @@
-import Proofs.Flock.Soundness.Rounds
-import Proofs.Flock.Soundness.Defs
-import Proofs.Flock.Soundness.Game.Union
-import Proofs.Flock.Soundness.Game.Interleave
+module
+
+public import Definitions.Core.Game
+public import Definitions.Flock.Defs
+public import Mathlib.Algebra.EuclideanDomain.Field
+public import Proofs.Flock.Soundness.Defs
+public import Proofs.Flock.Soundness.Rounds
+import Mathlib.Algebra.Order.Algebra
 import Mathlib.LinearAlgebra.Lagrange
+import Mathlib.Tactic.Positivity.Finset
+import Proofs.Flock.Soundness.Game
+import Proofs.Core.Game.Poly
 
 /-!
-# The lincheck phase (PROTOCOL.md §10)
+# The lincheck phase (`Flock.Piop`)
 
 For one codeword near the committed table, whose witness `z` makes the `c` claim and the region
 claims true: the doomed zerocheck says the `a` claim, the `b` claim or the pin fails. Then the
@@ -24,6 +31,8 @@ lincheck ends with a true `ab` claim for `z` with probability at most `(2 + 2(k_
 
 `lincheck_phase_of_card` takes the union over a list of at most `L` codewords.
 -/
+
+@[expose] public section
 
 namespace FlockSoundness
 
@@ -101,7 +110,7 @@ theorem prCoin_linear_le (a b : F) (ha : a ≠ 0) :
   have hdeg : (C a * Polynomial.X + C b : F[X]).natDegree ≤ 1 := natDegree_linear_le
   calc prCoin (fun x : F => a * x + b = 0)
       = prCoin (fun x : F => (C a * Polynomial.X + C b : F[X]).eval x = 0) := by simp
-    _ ≤ ((C a * Polynomial.X + C b : F[X]).natDegree : ℝ≥0∞) / Fintype.card F := prCoin_eval_eq_zero_le _ hP
+    _ ≤ ((C a * Polynomial.X + C b : F[X]).natDegree : ℝ≥0∞) / Fintype.card F := Verity.Game.prCoin_eval_eq_zero_le _ hP
     _ ≤ 1 / Fintype.card F := by gcongr; exact_mod_cast hdeg
 
 /-- A nonzero vector on the 64 skip nodes stays visible through the Lagrange weights at a live
@@ -127,7 +136,7 @@ theorem prCoin_lagS_le (A : Arith F K) (hA : A.Correct) (d : Fin 64 → F) (hd :
     rw [← hinterp p hnat ζ]
     simp only [hnode]
   simp_rw [hsum]
-  refine (prCoin_eval_eq_zero_le p hp).trans ?_
+  refine (Verity.Game.prCoin_eval_eq_zero_le p hp).trans ?_
   gcongr
   exact_mod_cast (by omega : p.natDegree ≤ 63)
 

@@ -1,6 +1,41 @@
-import Proofs.Flock.Claims.ZK.Hypotheses
-import Proofs.Flock.Claims.Sampling.Deployed
-import Proofs.Flock.Claims.ZK.Indexed
+module
+
+public import Proofs.Flock.Claims.Sampling.Deployed
+public import Proofs.Flock.Claims.ZK.Hypotheses
+public import Proofs.Flock.Claims.ZK.Indexed
+import Mathlib.Algebra.Order.Floor.Extended
+import Mathlib.Algebra.Order.Interval.Basic
+import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
+import Mathlib.Analysis.SpecialFunctions.Bernstein
+import Mathlib.Analysis.SpecialFunctions.Gamma.Basic
+import Mathlib.Analysis.SpecialFunctions.Trigonometric.DerivHyp
+import Mathlib.Combinatorics.Enumerative.DyckWord
+import Mathlib.Combinatorics.SimpleGraph.Triangle.Removal
+import Mathlib.Data.NNRat.Floor
+import Mathlib.Data.Nat.Choose.Multinomial
+import Mathlib.Geometry.Euclidean.Altitude
+import Mathlib.NumberTheory.Chebyshev
+import Mathlib.NumberTheory.Height.NumberField
+import Mathlib.NumberTheory.Height.Projectivization
+import Mathlib.NumberTheory.LucasLehmer
+import Mathlib.NumberTheory.SelbergSieve
+import Mathlib.RingTheory.Radical.NatInt
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Topology.Sheaves.Init
+import Proofs.Flock.Claims.ZK.Congr
+import Proofs.Flock.Soundness.CROnly.Hiding
 
 /-!
 # Sampling's zero knowledge from a committed-coin protocol
@@ -8,7 +43,7 @@ import Proofs.Flock.Claims.ZK.Indexed
 `Claims.Sampling.ZK` is `ZKmalRx` at the sampled verifier's rounds, `ZKmalR` at a record masked at one tape
 (`zkmalRx_const_of`), of the masked record's reference prover and at its simulator, on the honest pairs whose published
 leaf layer is `l x`, with the simulator given `l x`. Its binding term is `γ` times `Fork` of the sampled prover's own two
-runs on one nonce, so it is the Goldreich–Kahan theorem at the sampled protocol itself, with every coin it draws (the
+runs on one nonce, so it is the Goldreich–Kahan theorem at the sampled protocol itself, with every coin it samples (the
 selection's and each checked unit's session's) committed at its `Hello`.
 The route of record is the other: Flock's zero knowledge at each session composes to it in turn
 (`SamplingDeploy.zk_seq`, `Sampling/Seq.lean`), since the composed tape guesses which session's `Fork` to charge
@@ -36,6 +71,8 @@ whole sampled run, reads models of that protocol (`Proto.TMsgLink` and the rest)
   prover on the masked tape is the protocol's (`Honest`); and `SamplingDeploy.sampling_deployed_models`,
   `sampling_deployed` with its zero knowledge from them.
 -/
+
+@[expose] public section
 
 namespace Claims.Sampling
 
@@ -222,12 +259,8 @@ theorem zk_deploy_mask_of_models_gap (H : Msg → Msg) (L : Leaky Wit) (t : ℕ)
 set_option synthInstance.maxSize 1024 in
 /-- **The sampling claims at the deployed record, with zero knowledge from the models**: `sampling_deployed` at
 the record masked at `tapeOf` and `S_GK` given the leaf layer, its `hZK` from `zk_deploy_mask_of_models_gap`. -/
-theorem sampling_deployed_models (H : Msg → Msg) (hKS : Claims.Flock.KS H (FlockDeploy.deployZk rel))
-    (hfixed : DrawFixed (deploy rel c)) (hsessions : SessionRuns H (deploy rel c)) (hnum : SessionsIn c)
-    (hslots : DrawSlots (deploy rel c)) (iroots : Msg → Seen → ℕ → List Msg)
-    (hopens : SessionOpens H (deploy rel c) iroots) (hfix : InteriorFixed H (deploy rel c) iroots)
-    (hprog : ProgramScope (deploy rel c)) (hchecks : ChecksScope H (deploy rel c)) (hreveals : RevealsLe c)
-    (hComplete : Complete H (deploy rel c)) (L : Leaky Wit) (t : ℕ) (ht : 0 < t)
+theorem sampling_deployed_models (H : Msg → Msg) (hslots : DrawSlots (deploy rel c))
+    (hprog : ProgramScope (deploy rel c)) (hComplete : Complete H (deploy rel c)) (L : Leaky Wit) (t : ℕ) (ht : 0 < t)
     (hK : ∀ x s, c.parse x = some s → L.G.K x + 2 = c.V.k x) {Salt B Cc : Type} [AddCommGroup Salt]
     [AddCommGroup B] [Fintype Salt] [DecidableEq Salt] [Fintype B] [DecidableEq B] [DecidableEq Cc] (My : Salt → B)
     (cs : Salt → Cc) (tapeOf : L.G.Nonce × L.G.Rand → Reference.Tape) (hP : Honest c H L.G tapeOf)
@@ -238,14 +271,12 @@ theorem sampling_deployed_models (H : Msg → Msg) (hKS : Claims.Flock.KS H (Flo
     (hS : ∀ lx, (L.proto lx).SimLink H (Mc lx)) (hN : ∀ lx, (L.proto lx).NonDegenerate (Mc lx))
     (hI : ∀ lx, (L.proto lx).InnerHolds (RAt H (deploy rel c) lx) (Mc lx)) (hC : L.G.CoinCheck) :
     ScopeMatches (deploy rel c) ∧ Binding (deploy rel c) ∧ Universal (deploy rel c) ∧ FaultyBoundary ∧
-      KS H (deploy rel c) ∧ KSCount H (deploy rel c) ∧ Bits H (deploy rel c) ∧
-      Efficient H (deploy rel c) FlockDeploy.zkStepPoly ∧ Complete H (deploy rel c) ∧
+      Complete H (deploy rel c) ∧
       ZK H ((deploy rel c).mask L.G.Nonce L.G.Rand tapeOf (L.simLeakE t (t * 3 ^ t)))
         (fun x => 8 * nL x * (ENNReal.ofReal (FlockSoundness.CROnly.hidingGap My cs)).toReal +
           8 * t * nB x * (ENNReal.ofReal (FlockSoundness.CROnly.hidingGap My cs)).toReal + 2 * (1 / 3) ^ t)
         fun _ => 4 * t * 3 ^ t :=
-  sampling_deployed rel c H hKS hfixed hsessions hnum hslots iroots hopens hfix hprog hchecks hreveals hComplete
-    tapeOf (L.simLeakE t (t * 3 ^ t)) _ _
+  sampling_deployed rel c H hslots hprog hComplete tapeOf (L.simLeakE t (t * 3 ^ t)) _ _
     (zk_deploy_mask_of_models_gap rel c H L t ht hK My cs tapeOf hP Mp Mc nL nB hnL hnB hL hS hN hI hC)
 
 end SamplingDeploy

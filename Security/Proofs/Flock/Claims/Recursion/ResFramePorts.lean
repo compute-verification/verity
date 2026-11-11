@@ -1,12 +1,54 @@
-import Proofs.Flock.Claims.Recursion.ResFrameElems
-import Proofs.Flock.Claims.Recursion.ResCopyRows
-import Proofs.Flock.Claims.Recursion.ResLowerDD
-import Proofs.Flock.Claims.Recursion.ResHeldRows
-import Proofs.Flock.Claims.Recursion.ResOpenedRow
+module
+
+public import Proofs.Flock.Claims.Recursion.ResCopyRows
+public import Proofs.Flock.Claims.Recursion.ResFrameElems
+public import Proofs.Flock.Claims.Recursion.ResHeldRows
+public import Proofs.Flock.Claims.Recursion.ResLowerD
+public import Proofs.Flock.Claims.Recursion.ResOpenedRow
+public import Proofs.Flock.VBridge.Family.PartKeys
+import Mathlib.Algebra.Order.Floor.Extended
+import Mathlib.Algebra.Order.Interval.Basic
+import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
+import Mathlib.Analysis.SpecialFunctions.Bernstein
+import Mathlib.Analysis.SpecialFunctions.Gamma.Basic
+import Mathlib.Analysis.SpecialFunctions.Trigonometric.DerivHyp
+import Mathlib.Combinatorics.Enumerative.DyckWord
+import Mathlib.Combinatorics.SimpleGraph.Triangle.Removal
+import Mathlib.Data.NNRat.Floor
+import Mathlib.Data.Nat.Choose.Multinomial
+import Mathlib.Geometry.Euclidean.Altitude
+import Mathlib.NumberTheory.Chebyshev
+import Mathlib.NumberTheory.Height.NumberField
+import Mathlib.NumberTheory.Height.Projectivization
+import Mathlib.NumberTheory.LucasLehmer
+import Mathlib.NumberTheory.SelbergSieve
+import Mathlib.RingTheory.Radical.NatInt
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Tactic.Polynomial.Basic
+import Mathlib.Tactic.ReduceModChar
+import Mathlib.Topology.Sheaves.Init
+import Proofs.Flock.C3.Reps.RoundLinks
+import Proofs.Flock.Claims.Recursion.DecodeTies
+import Proofs.Flock.Claims.Recursion.ResFrames
+import Proofs.Flock.Claims.Recursion.ResLowerDA
+import Proofs.Flock.Claims.Recursion.RestLens
+import Proofs.Flock.Claims.Recursion.SlotsCheck
+import Proofs.Flock.Claims.Recursion.TopsOpens
 import Proofs.Flock.Claims.Recursion.VVTieOf
 import Proofs.Flock.Claims.Recursion.VerdictLoop
-import Proofs.Flock.Claims.Recursion.VerdictRowDTie
-import Proofs.Flock.VBridge.Family.PartKeys
+import Proofs.Flock.Claims.Recursion.VerdictRowG
 
 /-!
 # P2 at the deployed constants (`framePorts_D`)
@@ -23,6 +65,8 @@ The element is group `p`'s port `i` at offset `o` (`sum_decomp`), port `i` being
   `framesRead` reads at `j` (`DecAt.frame_elem`), and `elemReadC` reads `framesRead` below the accumulators
   (`Rows.elemReadC_frame`).
 -/
+
+@[expose] public section
 
 namespace RecDeploy.ResLower
 
