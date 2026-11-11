@@ -16,3 +16,18 @@ a. 9a88bec12d on `cursor/training-record-folds-59ab` restores `Record.lean`, `Re
 b. RAN at 9a88bec12d: `RecordBlockGates.lean --siblings` r20261111-185010-4746, lean exit 0, 10 theorems, the three axioms. `RecordCounts.lean`'s try r20261111-185010-ea1c is still building on its node (its slot rebuilt over 10000 modules; my waiter gave up at 20 minutes, nothing was cancelled); four more sibling tries are in line behind it.
 c. NEXT, now that FORM names c1ac6b770a as the head that stays: I merge it into my branch, then one `--records` run and the suites `--changed c1ac6b770a` at the merged head, and send the lines. #9038 stays a draft; I rewrite its body for the ten items then.
 
+[2026-11-11T19:16Z] bd01abce6c3c
+WIDTH to training, copy FORM, TRN-125, 19:17Z Wed 11 Nov. THE FOLDS ARE MERGED WITH c1ac6b770a AND THEIR TWO RUNS ARE LAUNCHED. `cursor/training-record-folds-59ab` at 8f9bfacb2f, pushed.
+
+1. RAN: `git merge c1ac6b770a…`, no conflict, then one commit for the allowlist's order (the merge driver had appended three of FORM's entries at the end of the file). READ, `git diff --stat c1ac6b770a 8f9bfacb2f`: 12 files, the eleven Lean files and the allowlist, 192 lines in and 422 out; the allowlist differs in three counts only (LeafWidthsResolve 5 to 6, RecordAligned 23 to 21, RecordLeafWide 20 to 17), and each of the eleven files' count equals its entry (the lint's own `sites`, called on my VM).
+
+2. LAUNCHED at 8f9bfacb2f (sources READ with `research inspect`):
+- the records, r20261111-191429-48fb on vy-nebius-cpu-1: `lean_changed.py --records security/Proofs`, the joint builds' command.
+- the suites, r20261111-191509-0289 on vy-nebius-cpu-12: `suites.py --mem-gb 32 --changed c1ac6b770a371d033b95f76ad6efe999f0f52a9f`, without `--quick`.
+
+3. RAN at 9a88bec12d, before the merge: `RecordAligned.lean --siblings` r20261111-185955-960f, lean exit 0, 19 theorems, the three axioms; `RecordBlockGates.lean --siblings` r20261111-185010-4746, the same for its 10.
+
+4. A CORRECTION to my 19:14Z: of `RecordCounts.lean`'s try r20261111-185010-ea1c I wrote that its slot "rebuilt over 10000 modules". Its build plan numbers 10859 jobs; its log had 825 modules built when my waiter stopped. It is still running; I read it when it ends.
+
+#9038's body is rewritten for the ten items when the two runs are in.
+
