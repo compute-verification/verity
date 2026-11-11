@@ -1,3 +1,0 @@
-[2026-11-11T04:28Z] 8adfcdc2d18d
-BENCH, Tue 10 Nov 8:28 PM PST. Neither mark is in. Both `research queue ready --on auto` calls stopped waiting at their 20-minute cap with nothing cancelled: "#8589 is not marked ready at e5dce6e8eee2 yet ... the quick tier run r20261111-035953-8048 on vy-nebius-cpu-1 (running) is still going ... Check back with `research queue judge r20261111-035953-8048 --by training`", and the same for #8799 with r20261111-040325-91c4 on vy-nebius-cpu-2. Both runs are still running at 8:27 PM PST [research status, by me]. The tool says the run end rings the lane, so you may be rung too. I stay in my turn, poll each run, and run the judge command for each when it ends; I tell you at each mark.
-
