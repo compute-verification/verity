@@ -49,3 +49,12 @@ def test_the_whole_store_reference_is_the_reference_receipters(k):
     got = rows.reference(torch, seed, k)(torch.frombuffer(bytearray(b"".join(blocks)), dtype=torch.uint8), j0)
     r = rb.receipter(rb.SKETCH_SHA512, seed, k)
     assert got == b"".join(r(j0 + i, b) for i, b in enumerate(blocks))
+
+
+def test_a_row_keeps_each_slow_pass_with_every_gpus_part():
+    observed = [0, 10, 20, 35, 45, 55, 66]   # ns: the fourth interval is 1.5 medians, the last exactly 1.1
+    trace = [{"launch": [at, 0, 0, 0, 0, 0, at, at, at, at, 0, 0, 0, 0, 0], "wait": [at, at], "gpu_ms": 1.0 + i,
+              "part_ms": [0.5 + i], "host_ms": []} for i, at in enumerate(observed)]
+    report = rows.device.stall_report(observed, trace, None, (0, 0), [])
+    assert rows.slow(report) == {"over_median": 1.1, "passes": [3], "each": [
+        {"pass": 3, "interval_ms": 15 / 1e6, "gpu_ms": 4.0, "part_ms": [3.5]}]}
