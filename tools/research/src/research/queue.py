@@ -4157,6 +4157,8 @@ CROSS_UNLANDED = ("no land verdict of its own counts, so its mark wouldn't carry
                   "`--unlanded` crosses such heads, in a run of their own")
 #: what a push says when its lease on the old head fails: the branch moved since the crossing read it
 LEASE_RE = re.compile(r"\(stale info\)")
+#: the branches `research queue cross --push` never pushes, whatever a PR names as its own
+CROSS_NEVER = ("main", "checked", "next")
 #: whether `research queue cross` passes restack.py `--kept`, which keeps each move's check on the machine (restack.py's
 #: `KEEP`), so the run's restacks check each move once; tests keep nothing
 CROSS_KEPT = True
@@ -4394,8 +4396,8 @@ def cross_push(repo: Path, report: dict, remote: str, opened: dict[int, PR] | No
             said[str(n)] = f"not pushed: owner pushed since ({p.head[:12]})"
         elif c.get("below") is not None and not said.get(str(c["below"]), "").startswith("pushed"):
             said[str(n)] = f"not pushed: #{c['below']} below it in its stack wasn't"
-        elif not branch:
-            said[str(n)] = "not pushed: its PR names no branch"
+        elif not branch or branch in CROSS_NEVER or branch.startswith("refs/"):
+            said[str(n)] = f"not pushed: its PR names {f'the branch {branch}' if branch else 'no branch'}, never pushed"
         elif not (has(old, new) and has(report["main"], new) and all(has(m, new) for m in report["moves"])) or own_change(
                 repo, _git(repo, "merge-base", report["main"], new, check=False).stdout.strip() or report["main"], new) != c["own"]:
             said[str(n)] = f"not pushed: {new[:12]} isn't the crossing the report describes"

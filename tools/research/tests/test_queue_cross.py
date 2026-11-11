@@ -140,6 +140,16 @@ def test_an_owners_push_since_the_crossing_wins_over_its_lease(world, monkeypatc
     assert json.loads((out / Q.CROSS_PUSHED).read_text()) == {"6": f"not pushed: owner pushed since ({theirs[:12]})"}
 
 
+def test_the_push_never_pushes_main_checked_or_next_whatever_a_pr_names(tmp_path):
+    """A crossing whose PR names `main`, `checked`, `next` or a full ref as its branch is never pushed, before any git runs."""
+    report = {"main": "0" * 40, "moves": [], "crossed": [
+        {"pr": n, "old": "1" * 40, "new": "2" * 40, "own": "3", "branch": branch, "below": None, "lands": True}
+        for n, branch in enumerate(("main", "checked", "next", "refs/heads/x"))]}
+    said = Q.cross_push(tmp_path, report, "origin", log=lambda s: None)
+    assert said == {str(n): f"not pushed: its PR names the branch {b}, never pushed"
+                    for n, b in enumerate(("main", "checked", "next", "refs/heads/x"))}
+
+
 def test_a_stack_crosses_lowest_first_and_what_restack_wont_cross_onto_the_crossing_below_is_reported(world, monkeypatch):
     """#8 is stacked on #7: its head holds #7's.  Both marked and passed, #7 crosses onto `main` first, and #8 is tried onto
     #7's crossing, which restack.py refuses (#7's old head is a commit after the move's base that #8 shares with it): #8 is
