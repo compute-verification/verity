@@ -5,7 +5,7 @@
 # on the serving node's loopback and is reached through one ssh local forward. A `research run` job from the shipped
 # tree's root (--cwd source); certside/launch.sh launches it:
 #   PEER=USER@HOST PORT=P [SSH_PORT=22] [KEY=FILE] [MODEL=NAME] [ID_BOUND=N] [schedule and traffic, below]
-#     [TRIES=2 [LANES2=64] [RATE2=1.67] [REQUESTS2=2000]]
+#     [TRIES=2 [LANES2=64] [RATE2=1.67] [REQUESTS2=2000] [SEED2=SEED]]
 #     [REACH_ONLY=1 | FAKE=1 [FIRST_MS=2000] [TOKEN_MS=220] [FAKE_IDS=N]] bash certside/job.sh
 # 1. Reach, in under a minute, before anything is sent: KEY readable, the forward up (ssh -N, one -L from this node's
 #    127.0.0.1:LOCAL to the serving node's 127.0.0.1:PORT, and nothing else asked of the serving node: no command, no
@@ -31,8 +31,10 @@
 #    before a name, or the serving node's host as PEER gave it.
 # TRIES=2 is two tries behind the one forward, for a server that starts once: 2 and 3 as try 1, under $OUT/try1/ in
 # place of $OUT, and then, if and only if try 1 is ACCEPTED (rehearse and check both exit 0), at once 2 and 3 again
-# as try 2, under $OUT/try2/, with LANES2, RATE2 and REQUESTS2 in place of LANES, RATE and REQUESTS and nothing else
-# changed. Each try is a rehearsal of its own: its own certifier process, run id, keys and watermark stream. Each
+# as try 2, under $OUT/try2/, with LANES2, RATE2, REQUESTS2 and SEED2 in place of LANES, RATE, REQUESTS and SEED and
+# nothing else changed. SEED2 is SEED unless given, and then try 2's requests are try 1's again from the first on,
+# arriving at RATE2: a request's draws are its seed's alone, whatever the rate and the count.
+# Each try is a rehearsal of its own: its own certifier process, run id, keys and watermark stream. Each
 # has its summary.json, and $OUT/summary.json names both verdicts, the seconds between the tries (between_s, from try
 # 1's rehearsal returning to try 2's start; between_buckets_s, from its last bucket to try 2's first), and what the
 # job kept. The exit: 0 both ACCEPTED; 1 try 1 is not, so try 2 was not started (the job says why, from try 1's record);
@@ -87,7 +89,7 @@ LANES=${LANES:-8}; QUEUE=${QUEUE:-64}; WINDOW=${WINDOW:-600}; INGRESS_CELLS=${IN
 INGRESS_BUCKETS=${INGRESS_BUCKETS:-16}; EGRESS_CELLS=${EGRESS_CELLS:-4096}; CAP=${CAP:-256}
 RATE=${RATE:-0.2}; REQUESTS=${REQUESTS:-240}; SEED=${SEED:-0}; PROMPT_MAX=${PROMPT_MAX:-1024}
 MAX_TOKENS=${MAX_TOKENS:-256}; TAIL=${TAIL:-120}
-TRIES=${TRIES:-1}; LANES2=${LANES2:-64}; RATE2=${RATE2:-1.67}; REQUESTS2=${REQUESTS2:-2000}
+TRIES=${TRIES:-1}; LANES2=${LANES2:-64}; RATE2=${RATE2:-1.67}; REQUESTS2=${REQUESTS2:-2000}; SEED2=${SEED2:-$SEED}
 plan() {   # SCHEDULE and TRAFFIC from the variables as they stand: try 2 changes LANES, RATE and REQUESTS
   SCHEDULE=(--cell-bytes "$CELL_BYTES" --slots "$SLOTS" --bucket-ms "$BUCKET_MS" --delay "$DELAY" --lanes "$LANES"
             --queue "$QUEUE" --window "$WINDOW" --ingress-cells "$INGRESS_CELLS" --ingress-buckets "$INGRESS_BUCKETS"
@@ -414,18 +416,18 @@ if [ "$TRIES" = 1 ]; then
   exit
 fi
 # Two tries. `seconds` in a try's summary.json are the job's own, from its start: `start` is the try's.
-TRY="try 1: "; mark start
+TRY="try 1: "; SEED1=$SEED; mark start
 try "$OUT/try1"; first=$?
 second=
 if [ "$first" = 0 ]; then
-  log "try 1 ACCEPTED: try 2 starts, with --lanes $LANES2, --rate $RATE2, --requests $REQUESTS2"
-  LANES=$LANES2; RATE=$RATE2; REQUESTS=$REQUESTS2; plan
+  log "try 1 ACCEPTED: try 2 starts, with --lanes $LANES2, --rate $RATE2, --requests $REQUESTS2, --seed $SEED2"
+  LANES=$LANES2; RATE=$RATE2; REQUESTS=$REQUESTS2; SEED=$SEED2; plan
   TRY="try 2: "; mark start
   try "$OUT/try2"; second=$?
 else
   log "try 1 is NOT ACCEPTED: try 2 is not started. Why, from its record (out/try1/report.txt, above, has its counts):"
 fi
-"$PY" - "$OUT" "$first" "$second" <<'EOF'
+"$PY" - "$OUT" "$first" "$second" "$SEED1" "$SEED2" <<'EOF'
 import json, pathlib, sys
 out, first, second = pathlib.Path(sys.argv[1]), int(sys.argv[2]), sys.argv[3]
 
@@ -454,6 +456,7 @@ def of(name, rc):
 tries = {"try1": of("try1", first)}
 tries["try2"] = of("try2", int(second)) if second else {"run": False, "accepted": False,
                                                        "why": "try 1 was not ACCEPTED, so try 2 was not started"}
+tries["try1"]["seed"], tries["try2"]["seed"] = int(sys.argv[4]), int(sys.argv[5])
 if first:
     for problem in (read("try1/summary.json") or {}).get("problems") or ["no problem is listed: read out/try1/rehearse.log"]:
         print("  - " + str(problem)[:300])
