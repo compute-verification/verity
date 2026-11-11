@@ -11,9 +11,9 @@ Every path git sees changed must be one of:
   the file's own directory first (in a `*.md` file, one in backticks or a link's target), in a `*.py` file a pathlib
   chain `ROOT / "a" / "b"` read as `"a/b"`. A changed line may also, the rest of it kept byte for byte, rewrite each
   place it names from the file's own to name, from where the file now is, where that place moved (`placed`): a relative path from the file's directory (`../../verity/x/`, in a
-  comment, prose or code), a path below a moved directory the file is in and stays in (`rho/circuits.py` in a file of
-  `verity/protocols/inference_only/rho/`, a path BASE has), or in a `*.py` file a pathlib join on a name the file binds only to its own place
-  (`HERE.parent / "rho"` after `HERE = Path(__file__).resolve().parent`). Each changed line left may only rewrite a
+  comment, prose or code), a path below a moved directory the file is in and stays in (`slowdown/circuits.py` in a file of
+  `verity/protocols/inference_only/slowdown/`, a path BASE has), or in a `*.py` file a pathlib join on a name the file binds only to its own place
+  (`HERE.parent / "slowdown"` after `HERE = Path(__file__).resolve().parent`). Each changed line left may only rewrite a
   moved path as written below a directory its old and new places share (`verity_vllm/program/predict/`), or a dotted
   name (`verity.protocols.flock.tool:FLOCK_PURE`, `verity_vllm.protocols.remote_bandwidth`'s) from where a renamed module was
   to where it is now; in any of them, the modules a run of import lines binds each name to
@@ -161,8 +161,8 @@ ROOT = Path(__file__).resolve().parents[3]
 IMPORT = re.compile(r"^(\s*from\s+)([\w.]+)(\s+import\b.*)$|^(\s*import\s+)([\w.]+)(.*)$")
 LEAN_IMPORT = re.compile(r"^(\s*(?:(?:public|private|meta)\s+)*import\s+(?:all\s+)?)([\w.]+)(\s*(?:--.*)?)$")
 RELATIVE = re.compile(r"""(["'])(\.\.?(?:/[^"'\s]*)?)\1""")
-#: a place a line names from its own file's (`placed`): a pathlib join on a name (`HERE.parent / "rho"`), a relative path
-#: (`../../verity/x/`), or a path with a `/` in it (`rho/circuits.py`)
+#: a place a line names from its own file's (`placed`): a pathlib join on a name (`HERE.parent / "slowdown"`), a relative
+#: path (`../../verity/x/`), or a path with a `/` in it (`slowdown/circuits.py`)
 SPOT = re.compile(r'(?<![\w.])(?P<var>[A-Za-z_]\w*)(?P<up>(?:\.parent\b)*|\.parents\[\d+\])\s*/\s*"(?P<rest>[^"]+)"'
                   r"|(?<![\w.\-/~$*:@\\])(?P<path>(?:\.\.?/)+(?:[\w.\-*]*[\w\-*](?:/[\w.\-*]*[\w\-*])*/?)?"
                   r"|[\w\-*][\w.\-*]*(?:/[\w.\-*]*[\w\-*])+/?)")
