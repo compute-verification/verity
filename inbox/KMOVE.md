@@ -373,3 +373,37 @@ Daniel, 00:10Z: `archive/` is deleted (top's worker, a pull request on the moved
   `main` (about 01:30Z), so the landing is not before about 03:45Z and may be later. The lead writes the commit
   here and resumes you. Card 4 and cores 12-23 are yours 04:00Z to 07:30Z; the battery took about 100 minutes this
   morning, so a start after 05:45Z does not fit: if it comes to that the lead says which steps go first.
+
+## Wed 11 Nov 03:36Z: THE MOVE IS ON `main`: `5c095bb4ab7012ba359e0a85f4ecf19892b99629`. Part 2 now
+
+top and infra, 03:34Z: the move landed at 03:26Z as one pull request (#8769), green on its first check. The lead
+read: `5c095bb4ab70` is `origin/main`'s head; the final staging `e81cb11cdd77` is its ancestor; kernels'
+directories, the prover's and `verity/definitions/kernels` do not differ between the two (`git diff --stat`).
+
+**Part 2, from `5c095bb4ab70`:**
+- **Ships and card-less builds on `vy-nebius-cpu-1` now.** Then node A: **card 4, cores 12-23, Wed 04:00Z to
+  07:30Z**, not a minute before 04:00Z (KSTEADY has the card until then) and off by 07:30Z. Your `part2.md` and
+  `NOT_BEFORE` stand.
+- **No `units`:** no ship build of it, and `units` out of the step group `dither,units,s8,exactlin,j10r,attn`.
+  Its row reads "not run: deleted by HASH-104". (The 00:25Z and 00:45Z sections above.)
+- **Beside you, both timed, do not disturb them:** compute-accounting on card 0 with cores 0-7 (CMP-149, 04:00Z to
+  07:30Z), and KSTEADY's slots on cards 1, 2, 3, 5, 6, 7 with cores 24-95. Stay on cores 12-23 for everything,
+  builds included; name both among what ran beside each step.
+- **The table on HASH-108 by 08:00Z:** each kernel of HASH-105's table from this commit, its own check, pass or
+  fail as before the move, and which came out as different machine code. Say first, before any launch on the node,
+  that kernels' files at this commit are byte for byte the ones you read in part 1.
+
+**Part 3, after part 2, by Thu 12 Nov (top's rules for crossing, TOP-398 03:34Z: read that comment):**
+- **The agent cap is 100 again.** You are kernels' one worker for crossing; do not ask for another.
+- **ci crosses every marked head itself** (#8521, #8542, #8573, #8666, #8669, #8679; its dry run is read about
+  05:00Z). Push nothing to them. When ci has reported, list on HASH-107 which of kernels' crossed clean and which
+  it stopped; cross by hand only a head it stopped or the lead names:
+  `python3 tools/move/restack.py origin/B --move-commit 6581bcf197 --move-commit c1ca25a247 --onto origin/main
+  --kept --no-pins` from a checkout of the moved `main`, then `git push origin ID:refs/heads/B`, no force.
+  Before any merge on the moved tree, once: `git config merge.vllm-allowlist.driver 'python3
+  adapters/vllm/tests/lint/merge_allowlist.py %O %A %B %P'`.
+- **Not yours to cross:** #8662 (KP2's, at its merge), `cursor/kernels-witness-card-43ee` (KHSHARE's),
+  `cursor/kernels-dead-files-0c41` (KSLICE's; it sits on the final staging, an ancestor of `main`).
+- **The small pull request on the moved `main`:** `h1v3_ref.py`'s fallback (the 23:16Z section) and
+  `sbench.sh:204` with its three points (the 00:45Z section). Its suites in one named run. The lead marks.
+- After merging the moved `main` on your VM: `uv sync --all-packages --extra torch-cpu` (infra, 03:34Z).
