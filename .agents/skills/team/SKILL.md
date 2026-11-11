@@ -73,7 +73,7 @@ AGENTS.md states the code's layout and rules. This skill states how the team tha
   then runs `lean-audit` alone on `checked`'s tip (the lock run), commits the records it regenerated as `Lock
   records regenerated for #N...`, and checks that commit, so `main` moves only to one whose records are the regenerated
   ones; a lock run that fails is a red like any other. A PR whose merge onto `checked` changes nothing drive.toml's
-  `lowrisk_excludes` names (Lean, locks, Lake files, `verity/core/`, the soundness-path Python) lands on its ready mark alone,
+  `lowrisk_excludes` names (Lean, locks, Lake files, the verifiers, the soundness-path Python) lands on its ready mark alone,
   with no verdict (the low-risk lane).
 - One run checks `checked`'s tip after each landing (circuit-check is off the merge gate). A red's culprit, the one landing
   touching what its failure names (never bisected), is rung to fix it forward: mark a fix (its new head, or a PR whose
