@@ -64516,3 +64516,110 @@ Mailbox: absent at 20:56Z, so nothing new [run: `git show origin/cursor/proofs-i
 - **Done**: the predictions on PRF-456 at 19:29Z, before both runs [run: comment `789d31fe-924b-46c6-8ecf-044ef39673f1`, read back at 20:30Z as the issue's newest comment, no reply yet]; the pull request #9059, open and marked at `782510c5b5`, quick tier passed on that head [run `r20261111-200755-49e6`]; what moves, in its body [run `r20261111-194436-d571`].
 - **Out**: nothing of mine is running. I wait on the vLLM lane's measured shares on PRF-456, Thu 12 Nov noon PST (20:00Z) [relayed: your brief].
 - **Need from you**: (1) ring @vllm with my comment before 03:00Z if you have not; (2) label PRF-456 with the goal `proofs/serving-cost-three-parts`, or tell me to change the Goal line in #9059; (3) say whether the one modeled case that changes sides of 1 (`P5+poolwin3600`, the world's year, 1.011 → 0.9999, entry 3) needs more than the pull request's body; (4) resume me when the shares are posted, for the comparison due Fri 13 Nov 20:00Z.
+
+## EXTFORM, Wed 11 Nov 20:56Z: pieces (2) and (3), the statement each needs and its size, ahead of 23:00Z. (2) is a count over a family of designs, about 850 lines, and moves no listed guarantee; (3) is 260 lines of counting plus a tie between the release and the trace that nothing on `main` gives for the two-stage design, and that tie is the decision for Daniel. One change to piece (1)'s statement since 20:41Z. Nothing here is built, and piece (1) has still not compiled
+
+Mailbox read at 20:54Z, nothing since 20:32Z. Run `r20261111-203754-1732` was still waiting for a slot at 20:54Z [run, `research fetch`].
+
+### 0. One change to piece (1)'s statement since my 20:41Z entry
+
+The boundary trace now reads the release too: `val : (t : ℕ) → (O → V) × Tick × Adv → Msg → Prover Unit → ℕ → Option Bool`, applied at `τ.1 τ.2.1.1 τ.2.1.2`, which is everything the verification phase's strategy sends before the phase's coins: the release, the statement, the prover. Commit `dcd61ff161` on `cursor/proofs-twoperiod-4e7a` [run, pushed]. Why: piece (3) needs a trace that agrees with the released bytes, and that is a trace that reads them (section 2). With this, piece (3) is an instance of piece (1) and piece (1)'s statement is not touched again. The instances at the committed trace and at the one-wait trace ignore the new argument; nothing else in that entry's section 1 changes. The same commit adds an import that the instance at the committed trace needs, found by rereading; the queued run was launched before it and will fail at those two theorems at least.
+
+A Mathlib-only check of the new induction's steps on my VM passed [run, `lake env lean` on a scratch file with a stand-in record: the unfolding of `leadEscape`, the budget `c / e`, `ENNReal.mul_div_le`]. That is not a compile of the file.
+
+### 1. Piece (2): the count over a period's sets
+
+```lean
+/-- The admissible families at δ: one set of proof blocks a verification phase, whose phases' P̄_a at
+their counts multiply to at least δ. -/
+noncomputable def admissiblePeriodTwo {n : ℕ} (Pt : Fin n → Partition) (d : Fin n → Design.Two) (δ : ℝ) :
+    Finset ((t : Fin n) → Finset ℕ) :=
+  (Fintype.piFinset fun t => (Finset.range (Pt t).blocks.length).powerset).filter fun T =>
+    δ ≤ ∏ t, (d t).Pa (Pt t) (counts (Pt t) (d t).part (T t))
+
+def AdmissiblePeriodTwoRankin : Prop :=
+  ∀ (n : ℕ) (s : Fin n → AuditStatement) (Pt : Fin n → Partition) (d : Fin n → Design.Two)
+    (q : Fin n → ℕ → ℝ) (δ θ : ℝ), (∀ t, InScopeTwo (Pt t) (d t) (s t)) →
+    (∀ t, ∀ T ⊆ Finset.range (d t).part.blocks.length,
+      (d t).replay.Pa (d t).part T ≤ ∏ ρ ∈ T, (1 - q t ρ)) →
+    (∀ t ρ, q t ρ ≤ 1) → 0 < δ → 0 ≤ θ →
+      ((∑ T ∈ admissiblePeriodTwo Pt d δ, 2 ^ ∑ t, bitsOf (s t) (Pt t) (T t) : ℕ) : ℝ) ≤
+        δ ^ (-θ) * ∏ t, ∏ ρ ∈ Finset.range (d t).part.blocks.length,
+          rankinFactor (s t) (Pt t) (d t) (q t ρ) θ ρ
+```
+
+In plain words: over a period of n verification phases, each with its own statement, partition and two-stage design whose first stage misses a set of its replay blocks no more often than independent catches would, take every choice of one set of proof blocks a phase whose phases' P̄_a multiply to at least δ. Weighing each choice by 2 to its committed bits, they sum to at most δ^-θ times the product, over every replay block of every phase, of that replay block's factor. One δ^-θ for the whole period.
+
+- It is `AdmissibleTwoRankin` (`Definitions/Claims/SamplingTwoRankin.lean:79`, listed in the lock's `claims.generic`) at n = 1, with `δ ≤` where that has `δ <`, because the complement of piece (1)'s event is `δ ≤ ∏` [read].
+- **It needs no change to `FirstStageAt`.** Each phase's design keeps its own first stage of one uniform subset (`Properties/Spot/TwoStageCheck.lean:42`). What the 19:40Z entry found missing, a first stage of one subset a phase, is missing only if the year is written as one design; counted as a family of designs it is not needed [read; guess that the proof goes through].
+- **The checker's code needs no change either.** `checkTwoStage` returns θ·ln(1/δ) + Σ over its classes of count·max(v, 0), and reads the replay blocks only through its classes' counts [read, `verity/protocols/spot/verifier/lean/Spot/TwoStageCheck.lean:1-88`]. A point whose classes' counts are the period's evaluates the period's bound. This is the cost model's "the year's replay blocks as one population" [relayed, the 19:40Z entry's section 1]. What is new is the checker's soundness over a family: `ClassesCover` over every phase's replay blocks.
+- Three forms, as on `main`: the sets', the patterns' (the one `TwoStageCheckPatternsSound` reads) and the served-output cap's.
+- **To join it to piece (1)** the record carries the phase's statement and the proof blocks incorrect at its boundary trace at best interiors (`wrongAllAt`), whose counts are the footprint (`inter_cell_wrongAllAt`, `TwoCap.lean`). Outside piece (1)'s event the family of the phases before the first sampled one is in `admissiblePeriodTwo` of the statements the run sent. The bound then reads those statements' factors; for a number fixed before the period, a premise that every statement in a phase's scope has factors multiplying to at most a stated g_t, as `CompilerPeriodTwoReg` takes the two rates at every statement in scope.
+
+Size [guess, from the lengths of `main`'s one-design proofs]:
+
+| part | where | lines |
+| --- | --- | ---: |
+| definitions and the three statements | a new file under `security/Definitions/Claims/` | 90 |
+| the sets' form: `Pa_le_passes` a phase (`TwoRankin.lean:132`), Rankin's step at the product, `Real.finsetProd_rpow` and `Finset.prod_univ_sum` across the phases, and one phase's sum over all its sets as a lemma (today the last two steps inside `admissibleTwo_rankin_weight`, `TwoRankin.lean:172-207`) | new file under `Proofs/Flock/SamplingGeneric/` | 200 |
+| the patterns' and the capped forms (`main`'s are 107 and 90 lines over that lemma) | same | 300 |
+| the checker's soundness over a family, three statements and proofs (`main`'s proof file is 463 lines) | `Properties/Spot/`, `Proofs/Properties/Spot/`, new files | 60 + 200 |
+| the join to piece (1) | beside `TwoProdPeriod.lean` | 80 |
+
+About 150 lines of statements and 780 of proof. **Listed guarantees that move: none.** New entries if you list them: three in `claims.generic` beside `AdmissibleTwoRankin*`, three in the properties package's lock.
+
+### 2. Piece (3): what is served, at the committed trace
+
+What `main` has [read]: `influenceTwo` (`SamplingTwo.lean:215`) is the set of outputs `served H Cm s w` over witnesses `w` with given inputs whose footprint at some interiors is in M̄_δ; `card_influenceTwo_le` (`TwoCount.lean:385`) bounds its size by the sum over the admissible sets; `Exfil`'s first conjunct puts the extractor's witness's outputs in it. The lemma under the count, `outs_eq` (`TwoCount.lean:286`), is already at values `X Y : ℕ → Option Bool` and not at witnesses: two traces with the same inputs, the same incorrect set and the same bits where that set's proof blocks write have the same returned gates.
+
+It needs two things.
+
+**(a) The count at values, over a period.** Deterministic, no game:
+
+```lean
+def servedAt (s : AuditStatement) (val : ℕ → Option Bool) : Fin s.prog.outs.length → Bool :=
+  fun i => (s.prog.read val s.prog.outs[i]).getD false
+def inputsAt (s : AuditStatement) (val : ℕ → Option Bool) (g : ℕ) : Option Bool :=
+  if s.prog.gates[g]? = some .input then val g else none
+
+/-- What a period can serve at inputs a: the outputs of every family of boundary traces with those inputs
+whose phases' P̄_a, at their footprints at some interiors, multiply to at least δ. -/
+noncomputable def influencePeriodTwo {n : ℕ} (s : Fin n → AuditStatement) (Pt : Fin n → Partition)
+    (d : Fin n → Design.Two) (δ : ℝ) (a : (t : Fin n) → ℕ → Option Bool) :
+    Finset ((t : Fin n) → Fin (s t).prog.outs.length → Bool) :=
+  Finset.univ.filter fun y => ∃ val : (t : Fin n) → ℕ → Option Bool,
+    (∀ t, inputsAt (s t) (val t) = a t) ∧
+    (∃ ι : (t : Fin n) → ℕ → ℕ → Bool,
+      δ ≤ ∏ t, (d t).Pa (Pt t) (footprintAt (s t) (Pt t) (d t).part (val t) (ι t))) ∧
+    ∀ t, servedAt (s t) (val t) = y t
+
+-- on statements in scope:
+--   (influencePeriodTwo s Pt d δ a).card ≤ ∑ T ∈ admissiblePeriodTwo Pt d δ, 2 ^ ∑ t, bitsOf (s t) (Pt t) (T t)
+```
+
+About 60 lines of statements and 200 of proof [guess]: `main`'s `served_eq_of` to `card_influenceTwo_le` (`TwoCount.lean:322-405`) restated at values and over a family, with `outs_eq` used as it is.
+
+**(b) The tie: that what an accepted phase releases is `servedAt` of its boundary trace, and what it was asked is `inputsAt` of it.** This is the gap, and it is not a proof gap only.
+- On `main` the tie is a premise of the weight-security guarantees, at the extracted trace: `Served.Traced.Tied` (`Definitions/WeightSecurity/Tied.lean:90`) and `Served.Faithful` (`Definitions/WeightSecurity/Faulted.lean:78`), each "what the layers below give". The layer that gives it is the network certifier's `PeriodLeakAccepted`, for the one-stage design, at the extracted trace (deployed; its `trust_gap`: `Compiled.KS`, `CertifierRegisters`, `ScopeAcc`) [read, lock].
+- For the two-stage design nothing gives it, at either trace [read]: `twoGame` sends the release before the statement and relates them by nothing (`Proofs/WeightSecurity/Two.lean:49`); the verifier's run reads the statement only; `CompiledTwo.Sessions` has no field that reads a release (its fields: `replayDraws`, `secondDraws`, `slots`, `shared`, `unions`, `refuses`, `interior`, `fixed`, `runs`, `opens`, `keys`, `SamplingTwo.lean:276-321`); and no network-certifier statement names the two-stage design [relayed, the 19:40Z entry's `rg`].
+- And the committed trace has a property the extracted one does not: it is the value the extractions open most often, so at a gate no extraction opens it is `true` by definition (`SamplingTwoReg.lean`, the docstring of `iregVal` and of `regVal`). A release need not agree with it there. So "the release is the committed trace's outputs" is false as written for an honest datacenter, and the statement must say which trace it means at such a gate.
+
+Two ways to state the tie:
+1. **As a premise**, an event of the run in `Tied`'s form at the boundary trace the record carries, and the period's bound gains the probability that it fails. About 100 lines. It is honest about what is missing, and by the last bullet nothing meets it at `regVal`.
+2. **By construction**, which is what the change in section 0 is for: read piece (1) at the trace `val t m x P` := the committed trace with its returned gates set to the release `m` (and its input gates to the certified inputs). The tie then holds by definition, and the work moves into piece (1)'s one hypothesis, the event's bound at that trace: the committed form's bound, plus the probability that an accepted run samples a proof block that reads or writes a returned gate where the release differs from what the extractions open. Bounding that needs the verifier to check a sampled proof block's openings at returned gates against the release. No contract on `main` says it does: the statement would have to carry the release (or the network certifier's record of it), and the check would be a new field, or a contract beside `Sessions`.
+
+Size of way 2 [guess]: the trace and its event bound as a new theorem beside `eventTwo_le` (`Proofs/Flock/SamplingGeneric/TwoReg.lean:498`, whose split gains a case), 400 to 600 lines; the contract, 40 lines; the period's statement ("except with probability δ + Σ_t ε_t, what the accepted verification phases before the first sampled one release is in `influencePeriodTwo` at their certified inputs"), 80 lines, and its proof from pieces (1), (2) and (a), 150 lines.
+
+**Listed guarantees that would move.** None, if the contract sits beside `Sessions` and the period's guarantee beside `SpotExfilTwo`. If instead `CompiledTwo.Sessions` gains a field, every listed statement that reads it moves: `CompilerKSTwo`, `CompilerKSRegTwo`, `CompilerMissTwo`, `CompilerHeadlineTwo`, `CompilerExfilTwo`, `CompilerKSRegTwoX`, `CompilerHeadlineTwoX` (`claims.generic`, `lean-audit.json:4057-4079`) and `SpotKSTwo`, `SpotExfilTwo` [read by name; guess that the list is complete: the lock's `reads` would say and I have not run it]. For weight security, `TheftFaulted`'s covert strings are fault patterns whose sizes sum to at most M (`faultChannel`, `Definitions/WeightSecurity/Faulted.lean:57`); strings that are the period's admissible families would be a new channel and a new guarantee beside it, not sized here.
+
+**What Daniel would decide** [guess at the framing, yours to cut]: (i) which trace the page's theorem speaks of at a gate no extraction opens; (ii) whether the release is tied by the verifier's own check (a new contract) or by the network certifier (an auditor-trusted device, a new premise); (iii) whether the period's guarantee replaces the one-phase ones on the page or sits beside them.
+
+### 3. What stands between the 300 GB figure and Lean, in one list
+
+1. Piece (1): on my branch, not compiled. Premises: the two-stage contract (open in the lock) and each phase's bound on the event (proved on `main` at the committed trace from `Arg.KS`, open in the lock; on the one-wait branch without it).
+2. Piece (2): not written. About 930 lines, no decision needed.
+3. Piece (3)(a): not written. About 260 lines, no decision needed.
+4. Piece (3)(b): not written, and needs a decision before it is written.
+5. The figure itself is the cost model's [relayed]: no Lean statement gives a number of gigabytes.
+
+I build none of (2) or (3) without your word.
