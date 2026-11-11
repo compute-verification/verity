@@ -99,9 +99,10 @@ allowed: beside allowed failures it takes `--update`, without which the package 
 closed list here (`ALLOWABLE`: a statement that reads the proofs tree, a guarantee changed since `unwitnessed` listed
 it); any other is refused before anything runs (exit 2), a record difference, the build, the replay, an axiom, `sorry`,
 `native_decide`, a kernel bypass and a malformed lock among them. An allowance that matches no failure of the run fails
-it (`unmatched`), so one outlives its finding by no run. Allowances come from the command line alone, and only a lane
-gives one: the lean-changed step, `--build`, check.py and every caller of either in the check, the merge queue and the
-ready mark's preflight take none.
+it (`unmatched`), so one outlives its finding by no run. It is for a finding cured before the mark: one meant to land
+goes into the lock (`trees.except`), as ever. Allowances come from the command line alone, and only a lane gives one:
+the lean-changed step, `--build`, check.py and every caller of either in the check, the merge queue and the ready mark's
+preflight take none.
 
 A package whose records need no run is skipped, and with none left nothing is built and no slot taken (`reused`; the
 `result.json`'s `path` is `reused`). Each package whose check.py passes is kept under `lean-records/passes/`, keyed on the
