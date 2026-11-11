@@ -51,11 +51,11 @@ v1 audit (`OneStage`) with the verdicts computed here, from the statement's file
   units other than the evidence's `proved_units`, or a circuit, public or record file no blob holds, rejects; a rep
   file no blob holds is that session's reject, as a file `flock-verify` can't read is. So does a length a session's
   statement can't hold, since it writes each in an 8-byte word: the circuit or public file, the lookup tables, the
-  program, the partition object, the registered reads or a session's draw at `2^64` bytes or more (`fitsWhy`,
+  program, the partition object, the registered reads or a session's sample at `2^64` bytes or more (`fitsWhy`,
   `drawFitsWhy`, the JSON ones as `Flock.RecordText.printT` prints them);
-* **per member** (`checkMembersAt`): the form for a population of several members, a statement a drawn member. It
-  accepts nothing (`MULTI_REFUSED`, `checkMembersAt_refuses`) until the guarantee for a sample over several members'
-  statements under one draw is in the lock, and `protocol` does not read it: `paramsOfJson` and `evidenceOf` refuse
+* **per member** (`checkMembersAt`): the form for a population of several members, a statement a sampled member. It
+  accepts nothing (`MULTI_REFUSED`, `checkMembersAt_refuses`) until the guarantee for one sample over several
+  members' statements is in the lock, and `protocol` does not read it: `paramsOfJson` and `evidenceOf` refuse
   `proofs` of other keys than the one statement's, so their parameters name no members, their evidence no statements,
   and the check at the coins (`checkBlobsAt`) is the one statement's (`checkOneAt`). The form's own parsers read it
   (`membersParamsOfJson`, `membersEvidenceOf`; `paramsEitherOfJson` and `evidenceEitherOf` read either form), and on
@@ -86,7 +86,7 @@ v1 audit (`OneStage`) with the verdicts computed here, from the statement's file
   registration (`Member.slice`, `headerHeld`): the window's scheme, the member's roots and their domains under their
   bare ports, and the member's count of units as its instances. A member may read registered values, with its own
   registered file as the one statement's, and a value is one tree for every member (`classHeld`): two members' ports of
-  one value that differ in its root, leaves, row width, domain or leaf schema refuse, whether or not either is drawn.
+  one value that differ in its root, leaves, row width, domain or leaf schema refuse, whether or not either is sampled.
 
 Without blobs (`toProtocol`) every check rejects: no blob holds the circuit file.
 -/
@@ -192,7 +192,7 @@ structure StatementFiles where
   sessions : Array RunFiles
 
 /-- The evidence: v1's and the sessions' files, in v1's `sessions`' order, and in the per-member form the statements
-those sessions are of, a drawn member each. -/
+those sessions are of, a sampled member each. -/
 structure Evidence where
   base : OneStage.Evidence
   sessions : Array RunFiles
@@ -452,7 +452,7 @@ def fitsWhy (limit : Nat) (circuit pub : ByteArray) (tables : List (String × By
   else if registered.any (limit ≤ printedSize ·) then some "the registered reads"
   else none
 
-/-- `some "the draw"` when a session's statement would hold its record's draw `draw` at `limit` bytes or more
+/-- `some "the draw"` when a session's statement would hold its record's sample `draw` at `limit` bytes or more
 (`printedSize`). -/
 def drawFitsWhy (limit : Nat) (draw : Option Json) : Option String :=
   if draw.any (limit ≤ printedSize ·) then some "the draw" else none
@@ -504,7 +504,7 @@ def sessionAt (I : Flock.Witness.Inputs) (rd : Reads) (draw : Option Json) : V (
   pure r
 
 /-- `sessionAt`'s session as `verify` reads it: the tables' verifier-side setups, the partition finding and the
-registered openings, once the sample's law holds. -/
+registered openings, once the sampling design holds. -/
 def setupAt (I : Flock.Witness.Inputs) (rd : Reads) (draw : Option Json) :
     V (Flock.SessionSpec × Array Flock.Setup × Json × Json) := do
   let (spec, sts) ← (sessionAt I rd draw).mapError (s!"setup: {·}")
@@ -594,7 +594,7 @@ def push (I : Flock.Witness.Inputs) (rd : Reads) (programSha : Option String) (w
 /-- One session's `flock-verify verify --zk` on the blobs, after the sessions `r` holds: set up at its record's own sample
 (`setupAt`), its rep files the blobs its `reps` name, its coin-tree key fresh, `Zk.verify` and the checks `verifyCmd`
 makes after it, the population check last (`verdictOf`), its verdict pushed (`push`). A refusal when its record is in
-no blob or not UTF-8, its draw doesn't fit the session's statement (`drawFitsWhy`), or it accepted naming another
+no blob or not UTF-8, its sample doesn't fit the session's statement (`drawFitsWhy`), or it accepted naming another
 program than the partition object's. -/
 def step (I : Flock.Witness.Inputs) (rd : Reads) (bs : Core.Blobs) (scope ksFiles population : V Unit)
     (programSha : Option String) (want : Json) (r : Run) (s : RunFiles) : V Run := do
@@ -765,8 +765,8 @@ def checkOneAt (p : Params) (c : OneStage.Commitment) (ξ : ByteArray) (e : Evid
 
 /-! ## The per-member form (module docstring, **per member**) -/
 
-/-- The refusal of the per-member form's acceptance: no guarantee in the lock yet covers a sample over several members'
-statements under one draw. -/
+/-- The refusal of the per-member form's acceptance: no guarantee in the lock yet covers one sample over several
+members' statements. -/
 def MULTI_REFUSED : String :=
   "the per-member form (proofs.members) is refused until the guarantee for a sample over several members' " ++
     "statements under one draw is in the lock: verify one statement (proofs {circuit, public, registered})"
@@ -778,7 +778,7 @@ def ascending : Nat → List (Nat × Nat) → Bool
 
 /-- The per-member form's `members`, on the program and the partition `shared` every member's statement reads: each a
 nonempty name with exactly its keys, its circuit and public files' digests and registered file as the one statement's
-(`committedOf`), its units `Draw.ranges?` of naturals, ascending (`ascending`), its circuit's units a proof block
+(`committedOf`), its units ranges `[lo, hi)` of naturals, ascending (`ascending`), its circuit's units a proof block
 positive, and no unit in two members' ranges. -/
 def membersOf (shared : Own) (j : Json) : V (Array Member) := do
   let .obj _ := j
@@ -1046,7 +1046,7 @@ def classStep (acc : Std.HashMap String (String × Flock.Registered.Port)) (m : 
   | some j =>
     (Flock.Registered.ofJson j).mapError (s!"member {m.name}: {·}") >>= fun own => own.foldlM (classPort m.name) acc
 
-/-- **A registered value is one tree for every member**: over the parameters' members, drawn or not, every port of
+/-- **A registered value is one tree for every member**: over the parameters' members, sampled or not, every port of
 one value names one root, one count of leaves, one row width, one domain and one leaf schema (`classStep`), so the
 values the members read are a function of the parameters, each with one root. It is one pass over the parameters'
 members, each member's registered file read once, and it reads no blob. -/
@@ -1155,7 +1155,7 @@ def stepMember (slice : Member → Json) (bs : Core.Blobs) (r : Run) (z : Statem
 /-- **The per-member form's run**, at each member's `slice` of the registration: the statements' structure held
 (`membersHeld`), then each statement at its member's statement after the statements before it (`stepMember`), so
 `step`'s coin-tree keys are fresh across statements; then, where every session accepted, the union of the statements'
-proved units held to the evidence's `want` (`provedHeld`). Each drawn member's files are read once; a member no
+proved units held to the evidence's `want` (`provedHeld`). Each sampled member's files are read once; a member no
 statement names is never read. -/
 def runMembers (slice : Member → Json) (ms : Array Member) (sts : Array StatementFiles) (want : Array Nat)
     (bs : Core.Blobs) : V Run :=
