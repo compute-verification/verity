@@ -82,6 +82,13 @@ def test_only_a_site_key_is_taken_and_an_older_token_leaves_the_identity(monkeyp
     assert metrics._key() is None
     monkeypatch.setenv(client.TOKEN_ENV, "vsk_live")
     assert metrics._key() == "vsk_live"
+    monkeypatch.delenv(client.TOKEN_ENV)
+    (tmp_path / "token").write_text("vsk_file\n")
+    (tmp_path / "token").chmod(0o644)
+    with pytest.raises(SystemExit, match="readable by others"):
+        metrics._key()
+    (tmp_path / "token").chmod(0o600)
+    assert metrics._key() == "vsk_file"
 
 
 class _Identity:

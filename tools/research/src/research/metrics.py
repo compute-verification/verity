@@ -13,7 +13,7 @@ import argparse
 import json
 import urllib.error
 
-from .jobs.client import TOKEN_ENV, TOKEN_FILE, load_token
+from .jobs.client import TOKEN_ENV, TOKEN_FILE, kept_token
 from .slack import RouteError, SlackError, _code, _Identity, http_json, route_error
 
 METRICS = "https://website-docs-sage.vercel.app/api/metrics"   # the route, and its OIDC token's audience
@@ -48,11 +48,8 @@ class Route:
 
 def _key() -> str | None:
     """`research jobs`' token when it is a site key; an older token, without KEY_PREFIX, isn't sent."""
-    try:
-        key = load_token()
-    except SystemExit:
-        return None
-    return key if key.startswith(KEY_PREFIX) else None
+    key = kept_token()
+    return key if key and key.startswith(KEY_PREFIX) else None
 
 
 def _num(v: float | None) -> str:
