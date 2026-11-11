@@ -196,5 +196,6 @@ def test_a_measured_reading_is_written_beside_the_default_never_over_it(tmp_path
 def test_a_floors_caption_says_its_bounds_are_floors_and_a_saturated_rates_does_not():
     said = {"tokens_per_gpu_second": 180.0, "assumed_tokens_per_gpu_second": 7200.0, "saturated": False}
     floor, most = f.reading_note(said), f.reading_note(said | {"saturated": True})
-    assert floor.endswith("one under 300 GB does not show that 300 GB is met.")
-    assert "lower bound" not in most and most.endswith("0.025 of that reading's.")
+    assert "one under 300 GB does not show that 300 GB is met. " + f.REGISTRATION_NOTE in floor
+    assert "lower bound" not in most and most.endswith("0.025 of that reading's. " + f.REGISTRATION_NOTE)
+    assert "holds at a registration of 1/q requests" in f.REGISTRATION_NOTE
