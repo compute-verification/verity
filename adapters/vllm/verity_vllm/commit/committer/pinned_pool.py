@@ -20,6 +20,9 @@ from concurrent.futures import ThreadPoolExecutor
 from typing import Any
 
 from verity_vllm import settings
+from verity_vllm.log import init_logger
+
+logger = init_logger(__name__)
 
 BLOCK_BYTES = 64 << 20
 PINNED_EXACT = settings.VERITY_PINNED_EXACT
@@ -230,12 +233,14 @@ class PinnedPool:
                     self.deferred_unmaps += 1
         return n
 
-    def __del__(self) -> None:  # pragma: no cover -- ordering: unregister BEFORE the owners are freed
+    def __del__(self) -> None:
+        """Unregister before the owners are freed.  Nothing can catch what a collection raises, so a release that fails here is logged
+        with its traceback and the blocks stay registered until the process exits."""
         try:
             if self.mode in EXACT_MODES:
                 self.release()
-        except Exception:  # noqa: BLE001
-            pass
+        except Exception:
+            logger.warning("pinned pool: the release at collection failed; its blocks stay registered", exc_info=True)
 
     def _fresh(self, nbytes: int) -> Any:
         t0 = time.perf_counter()
