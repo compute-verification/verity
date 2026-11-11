@@ -13,8 +13,11 @@ each part's share of the gates in its run cell; a workload no run measures is a 
 te_core.workloads' model priced the same way; it reads traces from te_core 4.4 on; the panel keeps to the panels
 route's limits, a cell up to 4,096
 characters, never replaces a served panel with one that drops its rows, and cites its tables in the research run's
-out/; and a PUT takes a cited body only over the panel the build read, then reads it back."""
+out/; a PUT takes a cited body only over the panel the build read, then reads it back; and a run a plan restates is
+read with its record's tokens a step restated and its stored traces against the restated count."""
+import copy
 import dataclasses
+import hashlib
 import importlib.util
 import json
 import math
@@ -824,3 +827,46 @@ def test_the_route_takes_a_cell_of_4096_characters_and_refuses_a_longer_one_a_lo
         [f"its note is {console.NOTE_MAX + 1} characters, over {console.NOTE_MAX}"]
     big = p | {"rows": p["rows"] * (console.BODY_MAX // console.CELL_MAX)}
     assert SW.refused(big) == [f"its body is {len(console.body(big))} bytes, over {console.BODY_MAX}"]
+
+
+
+def test_a_run_a_plan_restates_is_read_restated_and_its_stored_traces_against_the_restated_count(monkeypatch):
+    """A plan's entry restates the record's tokens a step as the scorer's restate.py does (a structure the entry lists
+    states its own count, every other the factor times its record's), and each stored trace of the run is read
+    against the restated count of its step: its step_tokens and its products block's tokens are that count, its
+    token_factor its own tokens over it, and the stored trace is left as it was. A record the plan didn't read, a
+    restating that isn't the plan's and a products block that doesn't count the record's tokens are refused. A build
+    hands a row its run's entry, and no other row one."""
+    before = {"steps": [{"step": i, "struct": sid, "tokens": 4} for i, sid in enumerate("abc")]}
+    after = {"steps": [{"step": i, "struct": sid, "tokens": n} for i, (sid, n) in enumerate(zip("abc", (8, 4, 8)))]}
+    raw = json.dumps(before).encode()
+    entry = {"factor": 2.0, "tokens": {"b": {"4": 4}}, "before_sha256": hashlib.sha256(raw).hexdigest(),
+             "after_sha256": hashlib.sha256(json.dumps(after).encode()).hexdigest()}
+
+    def trace(tokens: int) -> dict:
+        f = {"tokens": tokens, "step_tokens": 4, "token_factor": tokens / 4, "products": {"tokens": 4, "rows": []}}
+        return {"trace": {"formalism": copy.deepcopy(f), "structure": {"formalism": copy.deepcopy(f)}},
+                "measured": {"tokens": tokens, "step_tokens": 4, "token_factor": tokens / 4}}
+
+    stored = {0: trace(8), 1: trace(4)}
+    record, read = SW.restated(raw, entry, stored)
+    assert record == after and stored == {0: trace(8), 1: trace(4)}
+    for f in (read[0]["trace"]["formalism"], read[0]["trace"]["structure"]["formalism"]):
+        assert (f["step_tokens"], f["token_factor"], f["products"]["tokens"]) == (8, 1.0, 8)
+    assert read[0]["measured"] == {"tokens": 8, "step_tokens": 8, "token_factor": 1.0} and read[1] == stored[1]
+    with pytest.raises(SystemExit, match="isn't the one the plan read"):
+        SW.restated(raw + b" ", entry, stored)
+    with pytest.raises(SystemExit, match="isn't the plan's"):
+        SW.restated(raw, entry | {"factor": 4.0}, stored)
+    off = {0: trace(8)}
+    off[0]["trace"]["formalism"]["products"]["tokens"] = 2
+    with pytest.raises(SystemExit, match="products block counts 2 tokens, not the record's 4"):
+        SW.restated(raw, entry, off)
+
+    fx = json.loads(PINNED.read_text())
+    m, got = formalism.from_json(fx["measured"]), []
+    monkeypatch.setattr(SW, "traces", lambda arts: {})
+    monkeypatch.setattr(SW, "measured", lambda *args: got.append(args[2:]) or (m, fx["shape"], fx["read"]))
+    for plan in (None, {}, {"another run": entry}, {fx["row"]["run"]: entry}):
+        SW.build({"rows": [fx["row"]]}, REVS, stamp="2026-11-03T00:00:00Z", plan=plan)
+    assert got == [(), (), (), (entry,)]

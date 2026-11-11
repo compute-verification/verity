@@ -1,7 +1,8 @@
 """training/algorithm-policy rebuilt from the scorer's state, with runs' steps traced again, and what moved.
 
     python scorer/replot.py node --state K --inputs IN --scratch S --out OUT \\
-        [--layer NAME=CHECKOUT=TRACED ...] [--publish NAME]                       # on the scorer's node
+        [--layer NAME=CHECKOUT=TRACED ...] [--publish NAME] \\
+        [--size-scaling STEPS [--size-scaling-runs NAME=RUN,...] [--size-scaling-art ART]]   # on the scorer's node
     python scorer/replot.py check --run OUT --out FILE [--same NAME ...] [--expect LEAF ...]
     python scorer/replot.py diff --out FILE LABEL=PANEL.json LABEL=PANEL.json [...]
 
@@ -29,7 +30,11 @@ overlay's stored tables and the console's two panels as served) and the finals' 
    store and ingested afresh), and the overlay (plot2_final.py) of a finals table over each build's search table: the
    one the served overlay read over the control's, the rebuilt one over each layer's. The overlay of `--publish` (the
    last layer unless named) is OUT/overlay, the one to publish;
-6. each panel's rows, cell by cell, across the published tables and the builds (`compare`), under OUT/diff.
+6. each panel's rows, cell by cell, across the published tables and the builds (`compare`), under OUT/diff;
+7. with `--size-scaling`, training/size-scaling from the build of `--publish` (islands/ladder-v3/size_scaling.py
+   `build`, OUT/size-scaling): the build's search tables, its ledger's records, the rows as the tables read them
+   (te_core.rescore's formalism.jsonl on that ledger, with the build's own options) and standard training's traced
+   steps (STEPS, size_scaling.py `trace`'s directory).
 
 Every build's tables, console copies and logs go to OUT, so nothing is read back from the node.
 
@@ -638,6 +643,33 @@ def overlay(finals_table: Path, search: Path, out: Path, log: Path) -> dict:
     return json.loads((out / "tables" / "algorithm-policy.json").read_text())
 
 
+def size_scaling(name: str, steps: Path, runs: str | None, art: str | None, K: Path, S: Path, OUT: Path, meta: dict,
+                 cap: Path, logs: Path) -> dict:
+    """Step 7 for the build `name`: what size_scaling.py's `build` said and how it exited (1: a row it priced isn't
+    the table's, or the route would refuse the body). Its panel and its check are in OUT/size-scaling."""
+    work, ledger = S / name / "size-scaling", S / name / "priced"
+    tables = work / "algorithm-policy" / "tables"
+    tables.mkdir(parents=True)
+    for n in TABLES[:2]:
+        shutil.copyfile(S / name / "out" / "tables" / n, tables / n)
+    rescore = work / "rescore"
+    rescore.mkdir()
+    shutil.copyfile(gate_factors(K, meta["stamp"].replace(":", "")), rescore / "analysis-gates.json")
+    run([sys.executable, "-m", "te_core.rescore", "--out", rescore, "--root", ledger, "--scorer", K / "state",
+         *(x for p in meta["pins"] for x in ("--pin", p)), "--ladder-fit", cap], logs / "size-scaling-rescore.log")
+    os.link(rescore / "formalism.jsonl", work / "formalism.jsonl")
+    r = run([sys.executable, CW / "islands" / "ladder-v3" / "size_scaling.py", "build", "--tables", work, "--ledger",
+             ledger, "--steps", steps, "--out", OUT / "size-scaling", *(("--trace-runs", runs) if runs else ()),
+             *(("--art", art) if art else ())], logs / "size-scaling.log", check=False)
+    said = (r.stdout.strip().splitlines() or [r.stderr.strip()[-600:]])[-1]
+    if not (OUT / "size-scaling" / "size-scaling.json").exists():
+        raise SystemExit(f"replot: size_scaling.py build exited {r.returncode} with no panel: {said}")
+    return {"build": name, "rc": r.returncode, "said": said,
+            "formalism_jsonl": {"bytes": (rescore / "formalism.jsonl").stat().st_size,
+                                "sha256": sha256(rescore / "formalism.jsonl")},
+            "steps": {p.name: sha256(p) for p in sorted(steps.glob("*.products.json"))}}
+
+
 def node(a) -> int:
     K, IN, S, OUT = a.state, a.inputs, a.scratch, a.out
     logs = OUT / "logs"
@@ -745,6 +777,12 @@ def node(a) -> int:
           "rows_the_rebuild_adds": sorted(map(list, rebuilt - served)),
           "bytes": len((OUT / "overlay" / "console" / ap).read_bytes()), "note": now["note"],
           "rows": compare({"served": was, "rebuilt": now}, rotating)})
+    if a.size_scaling:
+        say("size-scaling")
+        panel = size_scaling(publish, a.size_scaling, a.size_scaling_runs, a.size_scaling_art, K, S, OUT, meta, cap,
+                             logs)
+        dump(OUT / "size-scaling" / "build.json", panel)
+        say(f"size-scaling: rc {panel['rc']}: {panel['said']}")
     say("done")
     return 0
 
@@ -761,6 +799,10 @@ def main(argv=None) -> int:
                    help="a build with a trace40.py node run's out/ (TRACED), traced by CHECKOUT's te_core, over the "
                         "last refresh's capture layers; repeatable")
     n.add_argument("--publish", default=None, help="the build whose overlay is OUT/overlay (default: the last layer)")
+    n.add_argument("--size-scaling", type=Path, default=None, metavar="STEPS",
+                   help="build training/size-scaling too, from the build of --publish and size_scaling.py trace's STEPS")
+    n.add_argument("--size-scaling-runs", default=None, metavar="NAME=RUN,...", help="the run that traced each size")
+    n.add_argument("--size-scaling-art", default=None, metavar="ART", help="the search tables' art id, for its source")
     c = sub.add_parser("check", help="what a rebuild moved, and whether it may be published")
     c.add_argument("--run", type=Path, required=True, help="`node`'s OUT")
     c.add_argument("--same", action="append", default=[], metavar="NAME",
