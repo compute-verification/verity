@@ -142,6 +142,37 @@ def _places(T: int, NS: int, BN: int, DV: int) -> tuple[Place, ...]:
     return tuple(out)
 
 
+@cache
+def _key_places(T: int, NS: int, BN: int, DV: int, DR: int) -> tuple[Place, ...]:
+    from verity.definitions.registry.sparse_mla_split import split_blocks
+
+    if DR not in values_widths(DV):
+        return ()
+    out: list[Place] = []
+    for s, (b0, b1) in enumerate(split_blocks(T, NS, BN)):
+        for c in range(DV // DR + 1):
+            for k, b in enumerate(range(b1 - 1, b0 - 1, -1)):
+                lo, hi = b * BN, min(T, (b + 1) * BN)
+                out.append(Place(("keys", hi - lo, DR), s, k, (lo, hi), c))
+    return tuple(out)
+
+
+def key_places(statics: dict[str, Any]) -> tuple[Place, ...]:
+    """Each key block's column blocks of DR columns in a row of ``statics``, split by split, column block by column block (kv_c's
+    DV / DR, then k_pe), then key block by key block in visit order, each one `SparseMlaHeadKeys_v1{NVIS, W = DR}` unit, shared
+    by the row's heads, so that a chunk of a keys template's units is one column block's; none unless DR is a values unit's
+    width (`serving_templates.values_widths`), the one width a key block's writers and the values units that read them
+    share."""
+    return _key_places(int(statics["T"]), int(statics.get("NS", 1)), int(statics["BN"]), int(statics["DV"]), int(statics["DR"]))
+
+
+def key_block(kv: np.ndarray, p: Place, DV: int) -> np.ndarray:
+    """Keys place ``p``'s column block of a row's keys ``kv`` (T x (DV + DR)): kv_c's columns [c W, (c + 1) W), or k_pe."""
+    W = int(p.key[2])
+    at = p.col * W if p.col < DV // W else DV
+    return kv[p.keys[0]:p.keys[1], at:at + W]
+
+
 def _cols(p: Place, DV: int) -> int:
     """The columns of place ``p``'s column block in a row of DV output columns: a values unit's, an end's or a combine's G,
     a whole head's end's DV."""
@@ -193,6 +224,8 @@ def _key(tp: Template, DV: int) -> tuple:
             hit = ("scores" if k == "scores" else "block", int(S["NVIS"]), S["FIRST"] is True)
         elif k == "values":
             hit = ("values", int(S["NVIS"]), S["FIRST"] is True, int(S["G"]))
+        elif k == "keys":
+            hit = ("keys", int(S["NVIS"]), int(S["W"]))
         elif k == "cols":
             hit = ("cols", int(S["C"]))
         elif k == "split":
@@ -207,7 +240,8 @@ def _key(tp: Template, DV: int) -> tuple:
 
 @cache
 def _positions(key: tuple, T: int, NS: int, BN: int, DV: int) -> tuple[int, ...]:
-    return tuple(j for j, p in enumerate(_places(T, NS, BN, DV)) if p.key == key)
+    pl = _key_places(T, NS, BN, DV, int(key[2])) if key[0] == "keys" else _places(T, NS, BN, DV)
+    return tuple(j for j, p in enumerate(pl) if p.key == key)
 
 
 def positions(tp: Template, statics: dict[str, Any]) -> list[int]:
@@ -222,8 +256,9 @@ def positions(tp: Template, statics: dict[str, Any]) -> list[int]:
 
 
 def units(tp: Template, statics: dict[str, Any]) -> int:
-    """A row's units of template ``tp``: NH heads times its places in each head's chain."""
-    return int(statics["NH"]) * len(positions(tp, statics))
+    """A row's units of template ``tp``: NH heads times its places in each head's chain; a keys template's, its places in the
+    row (`key_places`), which the heads share."""
+    return (1 if kind(tp) == "keys" else int(statics["NH"])) * len(positions(tp, statics))
 
 
 def cuts(tp: Template) -> dict[str, int] | None:
@@ -250,6 +285,7 @@ def read(m: CS.Member, rows: Sequence[Row], store: Any, weights: Callable, arriv
     """Member ``m``'s units (the module's order and ports), every port its elements' bytes in u16 words, the row's argument groups
     read by ``slices`` (`serving_rows._slices`); one index entry per row."""
     from verity.definitions.numerics.sparse_mla_split_twins import combine_rows, head_end_rows, split_chain_rows, split_end_rows
+    from verity_vllm.query.program_view import spec_statics
 
     tp = template(m.template)
     k = kind(tp)
@@ -290,6 +326,8 @@ def read(m: CS.Member, rows: Sequence[Row], store: Any, weights: Callable, arriv
         pl = places(S)
 
         def returned(p: Place, h: int) -> list[np.ndarray]:
+            if p.key[0] == "keys":
+                return [key_block(kv, p, DV)]
             G = _cols(p, DV)
             cols = slice(p.col * G, (p.col + 1) * G)
             if p.key[0] in ("block", "scores", "values"):
@@ -301,11 +339,21 @@ def read(m: CS.Member, rows: Sequence[Row], store: Any, weights: Callable, arriv
                 return [part[h, p.split, cols], lse[h, p.split]]
             return [y[h, cols]]
 
-        at = [(h, pl[j]) for h in range(NH) for j in positions(tp, S)]
+        if k == "keys":
+            kp = key_places(S)
+            at = [(0, kp[j]) for j in positions(tp, S)]
+        else:
+            at = [(h, pl[j]) for h in range(NH) for j in positions(tp, S)]
 
         def own(nm: str) -> np.ndarray | None:
+            if k == "keys":
+                return np.stack([key_block(kv, p, DV) for _h, p in at]) if nm == "kv" else None
             if k == "values":
                 return np.stack([kv[p.keys[0]:p.keys[1], p.col * p.key[3]:(p.col + 1) * p.key[3]] for _h, p in at]) if nm == "kv" else None
+            if k == "scores" and (nm == "k_pe" or (nm[:2] == "kv" and nm[2:].isdigit())):
+                G = int(spec_statics(tp.word)["G"])
+                cols = slice(DV, DV + DR) if nm == "k_pe" else slice(int(nm[2:]) * G, (int(nm[2:]) + 1) * G)
+                return np.stack([kv[p.keys[0]:p.keys[1], cols] for _h, p in at])
             if k not in ("first", "block", "scores") or nm not in ("q_nope", "q_rope", "kv"):
                 return None
             return np.stack([qn[h] if nm == "q_nope" else qr[h] if nm == "q_rope" else kv[p.keys[0]:p.keys[1]] for h, p in at])
@@ -346,6 +394,8 @@ def _way(tp: Template, DV: int) -> int | None:
     -1 as scores and values units of any width (a scores unit); None for a unit both ways hold (a combine of
     `sparse_mla_split.combine_cols` columns)."""
     key = _key(tp, DV)
+    if key[0] == "keys":
+        return None
     if key[0] in ("block", "cols") or key == ("end",):
         return 0
     if key[0] == "scores":
@@ -384,7 +434,7 @@ def wire(ms: Sequence[CS.Member], tmpls: Sequence[str], rows: Sequence[list[Row]
                              f"are served one way")
     unit: dict[tuple[str, int, int, int], int] = {}
     for t, rs in of.items():
-        if kind(template(t)) in ("end", "combine"):
+        if kind(template(t)) in ("end", "combine", "keys"):
             continue
         u = base[t]
         for rid, _pi, r, d in rs:
@@ -394,6 +444,8 @@ def wire(ms: Sequence[CS.Member], tmpls: Sequence[str], rows: Sequence[list[Row]
     writers: dict[str, list[tuple[str, str, np.ndarray]]] = {}
     for t, rs in of.items():
         tp = template(t)
+        if kind(tp) == "keys":
+            continue
         g = {nm: i for i, (nm, _ty) in enumerate(tp.fn.signature()[0])}
         w: dict[tuple[str, str], list[int]] = {}
         for rid, _pi, r, d in rs:
@@ -414,4 +466,82 @@ def wire(ms: Sequence[CS.Member], tmpls: Sequence[str], rows: Sequence[list[Row]
             lo = m.base - base[m.template]
             m = replace(m, wired=m.wired + tuple((p, o, tuple(int(x) for x in w[lo:lo + m.n])) for p, o, w in writers[m.template]))
         out.append(m)
+    return out
+
+
+def wire_keys(ms: Sequence[CS.Member], tmpls: Sequence[str], rows: Sequence[list[Row]]) -> list[CS.Member]:
+    """``ms`` (`wire`'s) with each key block's keys read from their one writer: every scores unit's ``kv<c>`` and ``k_pe`` and
+    every values unit's ``kv`` wired to the ``o0`` row of the keys unit (`key_places`) of the same row, key block and column
+    block, and every such reader a member with no trees of its own for its wired ports (`rows.Member.wired_trees`), each a
+    table of its writer member's rows (`rows.Member.tables`); refused when the partition names no keys template for a block's
+    column block, or a values unit's width is not the keys units' DR. A wired port whose rows several members wrote keeps
+    its member's n as its table, which `rows.Binding` refuses."""
+    from verity.commitments.windows import wiring as WI
+    from verity_vllm.query.program_view import spec_statics
+
+    of = {t: rs for t, rs in zip(tmpls, rows, strict=True) if template(t).layout == "chain"}
+    base = {t: min(m.base for m in ms if m.template == t) for t in of}
+    writer: dict[tuple[str, int, int, int, int], int] = {}
+    for t, rs in of.items():
+        if kind(template(t)) == "keys":
+            u = base[t]
+            for rid, _pi, r, d in rs:
+                kp = key_places(d["statics"])
+                for j in positions(template(t), d["statics"]):
+                    writer[(rid, int(r["i"]), kp[j].split, kp[j].block, kp[j].col)], u = u, u + 1
+    wires: dict[str, dict[str, list[int]]] = {}
+    for t, rs in of.items():
+        tp = template(t)
+        g = {nm: i for i, (nm, _ty) in enumerate(tp.fn.signature()[0])}
+        if kind(tp) == "values":
+            reads: list[tuple[str, int | None]] = [("kv", None)]
+        elif kind(tp) == "scores" and "k_pe" in g:
+            n = int(spec_statics(tp.word)["DV"]) // int(spec_statics(tp.word)["G"])
+            reads = [(f"kv{c}", c) for c in range(n)] + [("k_pe", n)]
+        else:
+            continue
+        w: dict[str, list[int]] = {}
+        for rid, _pi, r, d in rs:
+            S, pl = d["statics"], places(d["statics"])
+            if kind(tp) == "values" and int(spec_statics(tp.word)["G"]) != int(S["DR"]):
+                raise ValueError(f"{t}: a values unit of {spec_statics(tp.word)['G']} columns reads no keys unit's column block "
+                                 f"of DR = {S['DR']}")
+            for h in range(int(S["NH"])):
+                for j in positions(tp, S):
+                    p = pl[j]
+                    for nm, c in reads:
+                        at = (rid, int(r["i"]), p.split, p.block, p.col if c is None else c)
+                        if at not in writer:
+                            raise ValueError(f"{t}: row {r['i']}'s block {p.block} (visit order) column block {at[4]} is the "
+                                             f"output of a keys template the partition does not name")
+                        w.setdefault(f"in{g[nm]}", []).append(writer[at])
+        wires[t] = w
+    out = []
+    for m in ms:
+        if m.template in wires:
+            lo = m.base - base[m.template]
+            m = replace(m, wired=m.wired + tuple((p, "o0", tuple(x[lo:lo + m.n])) for p, x in wires[m.template].items()),
+                        wired_trees=False)
+        out.append(m)
+    at = WI.bases(out)
+    for k, m in enumerate(out):
+        if not m.wired_trees:
+            n = {p: got[0][0].n for p, _o, ws in m.wired if len(got := WI._writers(out, ws, at)) == 1}
+            out[k] = replace(m, tables=tuple((p, n.get(p, m.n)) for p, _w in m.rows))
+    return out
+
+
+def held_rows(window: CS.Binding, data: Sequence[dict[str, Any]]) -> list[dict[str, Any]]:
+    """``data`` (`serving_rows.read_all`'s, one entry a member) as `rows.commit` takes it from a window with readers that hold
+    their writers' rows (`wire_keys`): each held port `rows.WIRED` and the member's refs, each unit's row of its port's table,
+    its writer's (`rows.Binding.held_leaves`) for a held port and its own for the others."""
+    out = []
+    for m, g in zip(window.members, data, strict=True):
+        if not m.tables:
+            out.append(g)
+            continue
+        held = {p for p, _o, _ws in m.wired} if not m.wired_trees else set()
+        refs = np.stack([np.asarray(window.held_leaves(m, p), dtype=np.int64) if p in held else np.arange(m.n) for p, _w in m.rows],
+                        axis=1)
+        out.append({"rows": {p: (CS.WIRED if p in held else a) for p, a in g["rows"].items()}, "outs": g["outs"], "refs": refs})
     return out

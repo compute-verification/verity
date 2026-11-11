@@ -213,6 +213,28 @@ SparseMlaHeadScoresV2 = EW.on_bits("SparseMlaHeadScores", 2, ["DR", "DV", "NVIS"
                                    lifted=_LIFTED)
 
 
+def _head_scores_cols_calls(B, S, q_nope, q_rope, *rest):
+    """`SparseMlaHeadScoresCols_v1`'s body on bits: its key rows its column blocks side by side (`sparse_mla.key_rows`), then
+    `SparseMlaHeadScores_v2`'s Calls on them."""
+    M.check_cols_statics(S)
+    n = S.DV // S.G
+    return _head_scores_calls(B, S, q_nope, q_rope, M.key_rows(S, rest[:n], rest[n], BF16), *rest[n + 1:])
+
+
+SparseMlaHeadScoresColsV2 = EW.on_bits("SparseMlaHeadScoresCols", 2, ["DR", "DV", "NVIS", "FIRST", "BN", "DOT", "SCALE", "G"],
+                                       lambda S: M._head_scores_cols_type(S, BF16, F32), _head_scores_cols_calls,
+                                       M.SparseMlaHeadScoresCols, lifted=_LIFTED)
+
+
+def _head_keys(B, S, kv):
+    """`SparseMlaHeadKeys_v1`'s body on bits: a copy, no gate."""
+    return kv.reshape(Array(S.NVIS, Array(S.W, BF16)))
+
+
+SparseMlaHeadKeysV2 = EW.on_bits("SparseMlaHeadKeys", 2, ["NVIS", "W"], lambda S: M._head_keys_type(S, BF16), _head_keys,
+                                 M.SparseMlaHeadKeys)
+
+
 def _head_values_calls(B, S, pb, kv, rescale=None, o_prev=None):
     """`SparseMlaHeadValues_v1`'s body on bits as Calls, `SparseMlaHeadBlock_v3`'s P V steps on G columns of O: each column of
     the O before by the rescale (its own gates once), then rows of `SparseMlaDotStep` that share bf16(P)'s 16 words of a step,
@@ -261,4 +283,5 @@ SparseMlaV2 = flat("SparseMla", 2, ["T", "NH", "DR", "DV", "BN", "DOT", "INV", "
                    M.SparseMla, lifted=_LIFTED)
 
 BOOLEAN_SPARSE_MLA = [SparseMlaBlockV2, SparseMlaHeadV2, SparseMlaHeadBlockV2, SparseMlaDotStepB, SparseMlaDotStep,
-                      SparseMlaHeadBlockV3, SparseMlaHeadScoresV2, SparseMlaHeadValuesV2, SparseMlaHeadEndV2, SparseMlaV2]
+                      SparseMlaHeadBlockV3, SparseMlaHeadScoresV2, SparseMlaHeadScoresColsV2, SparseMlaHeadKeysV2,
+                      SparseMlaHeadValuesV2, SparseMlaHeadEndV2, SparseMlaV2]
