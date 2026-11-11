@@ -59,7 +59,7 @@ from verity.commitments.identity import canonical_json_bytes
 from verity.protocols.pous.device import memory_challenger as mc
 from . import streamed_wipe as sw
 from . import wipe_party, wipe_store
-from .period import serve
+from .period import decided_by, serve
 from .wipe_party import READS, UNCOUNTED
 
 PROTOCOL = "verity/wipe/v0"
@@ -219,9 +219,10 @@ def keeping(foreign: int) -> Callable[[sw.WipeParams], sw.Prover]:
 
 @dataclass(frozen=True)
 class Wipe:
-    """A period's wipe: the protocol's answer and case, how the session ran (`ended`, `reads`, the challenger's `host`;
-    with the challenger a party of its own the session's `window` on its clock and the prover's `connection`; with the
-    native streamer its gate and figures, `streamer` and `fill`) and the signed session, if signed."""
+    """A period's wipe: the protocol's answer and case, how the session ran (`ended`, `reads`, the challenger's `host`
+    and the SHA-512 of the key it signs under, `key_sha512`; with the challenger a party of its own the session's
+    `window` on its clock and the prover's `connection`; with the native streamer its gate and figures, `streamer` and
+    `fill`) and the signed session, if signed."""
 
     answer: dict[str, Any]
     case: dict[str, Any]
@@ -279,6 +280,7 @@ def run(node: str, params: sw.WipeParams | None = None, *, signer: mc.Signer | N
         signed = None if got["signed"] is None else wipe_party.signed_of(got["signed"])
         report = {"ended": got["ended"], "host": got["host"], "reads": got["reads"]}
         report |= {k: got[k] for k in ("connection", "fill", "streamer", "window") if k in got}
+    report["key_sha512"] = hashlib.sha512(key).hexdigest()
     trusted = (key,) if trusted is None else tuple(trusted)
     return Wipe(answer(server, commitment.session, trusted, commitment, signed, schemes, protocol),
                 case(server, commitment.session, trusted, commitment, signed), report, signed)
@@ -531,7 +533,8 @@ def leg(period_dir: Path, node: str, out: Path) -> dict[str, Any]:
     party of its own on `period.json`'s `challenger_host` (`wipe_party.side_of`; on this node by default, a process
     whose key and session log are in `wipe-challenger` beside the periods) and the prover here. A `wipe_store` prover
     gates its store before the session. With `wipe-protocol` among the period's tools, the Lean answers (the
-    verifier) and must agree with the Python; it writes `out/wipe.case.json` (onsite's wipe case) and `out/wipe.json`.
+    verifier) and must agree with the Python; it writes `out/wipe.case.json` (onsite's wipe case) and `out/wipe.json`,
+    which names the program that answered and the host it ran on (`decided_by`, `period.decided_by`).
     Which host ran each party, whether `trusted-host`'s premise holds, the memory the prover kept the fill in,
     the links leaving the node (`wipe.links`, and the challenger's on its own host as the prover connected to it) and
     the node's memory outside the declared tier (`undeclared`) go in `wipe.json` and in an accepted answer's profile
@@ -599,7 +602,8 @@ def leg(period_dir: Path, node: str, out: Path) -> dict[str, Any]:
         answer = answer | {"profile": answer["profile"] | {"placement": where}}
     out.mkdir(parents=True, exist_ok=True)
     (out / "wipe.case.json").write_text(json.dumps(wipe.case, sort_keys=True))
-    (out / "wipe.json").write_text(json.dumps({"answer": answer, "lean": lean, "placement": where, "prover": prover,
+    (out / "wipe.json").write_text(json.dumps({"answer": answer, "decided_by": decided_by(tools.get("wipe-protocol")),
+                                               "lean": lean, "placement": where, "prover": prover,
                                                "report": wipe.report, "seconds": seconds, "session": timing(wipe.signed),
                                                "uncertified": uncertified(where, wipe.signed), "window": window,
                                                "wipe": c | {"foreign_labels": foreign, "k": k,
@@ -611,13 +615,14 @@ def leg(period_dir: Path, node: str, out: Path) -> dict[str, Any]:
 
 
 def summary(record: Mapping[str, Any]) -> dict[str, Any]:
-    """`wipe.json`'s headline: the verdict and who gave it, the reads the challenger ran (`k`), where each party ran, the
-    session's window on the challenger's clock (`t0`, `t1`), what the bound doesn't cover, and the fill's and the reads'
-    figures on each side."""
+    """`wipe.json`'s headline: the verdict and who gave it (`decided_by`: the program, `wipe-protocol` or `python`, and
+    the host it ran on), the SHA-512 of the challenger key the session was signed under, which the verdict trusted
+    (`key_sha512`), the reads the challenger ran (`k`), where each party ran, the session's window on the challenger's
+    clock (`t0`, `t1`), what the bound doesn't cover, and the fill's and the reads' figures on each side."""
     a, prover, session, fill = record["answer"], record["prover"] or {}, record["session"] or {}, record["report"].get("fill")
     w, window = record["wipe"], (record.get("window") or {}).get("challenger") or {}
-    return {"verdict": a["verdict"], "reason": a["reason"], "public": a["public"], "judge": "lean" if record["lean"] else
-            "python", "k": w.get("k"), "segments": w["segments"], "tier": w["tier"],
+    return {"verdict": a["verdict"], "reason": a["reason"], "public": a["public"], "decided_by": record["decided_by"],
+            "key_sha512": record["report"]["key_sha512"], "k": w.get("k"), "segments": w["segments"], "tier": w["tier"],
             "foreign_labels": w.get("foreign_labels", 0),
             "placement": record["placement"], "seconds": record["seconds"],
             "t0": window.get("t0"), "t1": window.get("t1"), "uncertified": record.get("uncertified", []),
