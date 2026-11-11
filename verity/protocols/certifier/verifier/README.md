@@ -58,32 +58,39 @@ Open premises (`open`):
 ## Interface
 
 - **Python**: `verity.protocols.certifier.verifier`. Code outside this directory imports every module but `boundary`,
-  `capacity` and `pacer`. Its importers: the prover side, `verity/protocols/certifier/prover`; `../..`'s tests and
-  vector script; `../device`'s vector scripts; `adapters/vllm` (`active`, `advice`, `blocks`,
-  `compile_slice`, `io_tie`, `release`, `served_rows`, `warden`); the tests of `../../pouw/verifier` and `tools/verity`; and in
-  `benchmarks/`, `network_traces`, `network_e2e`, `network_sim`, `prove_path`, `one_stage`, `pouw`, `remote_session`,
-  `live_challenger`, `mempool` and `compile_cost`. `../../spot`, `verity/protocols` and `verity/protocols/flock/prover` import none.
+  `capacity` and `pacer`. Its importers: the prover side, `verity/protocols/certifier/prover`; `../device`'s vector
+  scripts; `adapters/vllm` (`active`, `advice`, `blocks`, `charge_chain`, `compile_slice`, `io_tie`, `release`,
+  `served_rows`, `warden`); `verity/composite/device/live_challenger`; the tests of `../../pouw/verifier` and
+  `tools/verity`; and in `benchmarks/`, `network_traces`, `network_e2e`, `network_sim`, `prove_path`, `one_stage`,
+  `pouw`, `remote_session`, `mempool` and `compile_cost`. In this directory, the network check's tests (`network/tests`)
+  and vector script (`lean/scripts`) import it too. `../../spot`, `../../flock` and `../../recursion` import none.
 - **Command**: `network-certifier-calibrate` (`calibration:main`), a console script of the root `pyproject.toml`.
-- **Lean here**: `lean/`, the certifier program, is the Lake package `certifier_program`, whose library
-  `NetworkCertifier` the packages at `lean`, `../device/lean` and `security/Proofs` require by
-  path. Its executables (`lake exe`): `certifier-difftest`, `certifier-charge-difftest` and `certifier-window-difftest`,
-  each `INSTANCES PYTHON N`. The Lean check runs each `../device/program/lean/scripts` script, then its difftest (`../device/program/lean/lean-audit.json`).
-- **Lean beside it**: `lean` is the Lake package `network_check`, whose library `NetworkCheck` the
+- **Lean here**: `lean/` is the Lake package `network_check`, whose library `NetworkCheck` the
   packages at `../device/lean`, `../../onsite/verifier` and `security/Properties` require by path. Its executables:
   - `network-check`, `network-records` and `network-period`, each `id | check PARAMS COMMITMENT EVIDENCE | serve`: the
     core protocols `verity/network-certificate/v4`, `verity/network-records/v3` and `verity/certifier/v0`;
   - `network-records verdicts`, the process `lean_audit` starts and `service` asks (`VERITY_NETWORK_RECORDS_EXE` names
     a built one); `benchmarks/network_e2e` and `benchmarks/network_traces` build and run it;
   - `network-check-difftest INSTANCES PYTHON N`.
+- **Lean beside it**: `../device/program/lean/`, the certifier program, is the Lake package `certifier_program`, whose
+  library `NetworkCertifier` the packages at `lean`, `../device/lean` and `security/Proofs` require by path. Its
+  executables (`lake exe`): `certifier-difftest`, `certifier-charge-difftest` and `certifier-window-difftest`, each
+  `INSTANCES PYTHON N`. The Lean check runs each `../device/program/lean/scripts` script, then its difftest
+  (`../device/program/lean/lean-audit.json`).
 - **Documents others read**: the answer of `network-period check`, `verity/certifier/v0`. `benchmarks/network_traces`
   runs the check and writes it as the certifier's piece, which `benchmarks/one_stage` reads.
 - **Files others load by path**: `tests/scan_traffic.py` (`benchmarks/network_traces`, `benchmarks/prove_path`, the
   tests of `adapters/vllm`); `tests/egress_traffic.py` (`benchmarks/network_traces`); in `tests/fixtures`,
   `compile_slice_smallkv.json` (`benchmarks/network_traces`, `benchmarks/prove_path`) and the vectors
-  `benchmarks/network_e2e/encodings` writes; and in `network/tests`, `period_case.py` (`benchmarks/network_traces`)
-  and `test_network_period_protocol.py` (the tests of `../../remote/verifier/composition`).
-- **Loads from**: `lean/`, no package. The modules, `verity.circuits`, `verity.commitments`, `verity.commitments.crypto`
-  and `verity.protocols.spot.verifier`, never the prover side, which `../device/program/lean/scripts/window_vectors.py` and the tests import.
+  `benchmarks/network_e2e/encodings` writes; `advice.py` (`benchmarks/network_e2e/encodings`); and in `network/tests`,
+  `period_case.py` (`benchmarks/network_traces`), and `test_network_period_protocol.py` and
+  `test_inference_only_protocol.py` (the tests of `../../remote/verifier/composition`).
+- **Loads from**: `lean/`, six Lake packages by path: `certifier_program`, `flock_verifier` (`../../flock/verifier`),
+  `nci_check` (`../../inference_only/verifier/nci/lean`), `core_protocol` (`../../interface`), and `lms` and
+  `core_identity` (`verity/commitments/lms/lean`, `verity/commitments/identity`); the certifier program, no package.
+  The modules, `verity.circuits`, `verity.commitments`, `verity.commitments.crypto`, `verity.protocols.spot.verifier`
+  and, `coin_link` alone, `verity.protocols.spot.device`, never the prover side, which
+  `../device/program/lean/scripts/window_vectors.py` and the tests import.
 - **Not here**: the certifier's host programs, which are in `benchmarks/network_traces`.
 
 ## What this package holds
