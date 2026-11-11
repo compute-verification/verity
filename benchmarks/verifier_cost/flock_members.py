@@ -14,7 +14,9 @@ Per member and way, from the verifier's own stage lines on standard error: `inpu
 parsed before any session), `setup_ms` (its session's statement set up), `before_check_ms`, their sum, the seconds a
 member waits before its first check, and `session_ms` (the setup and the check). `wall_s` is the process's for a member
 alone, and for a kept member the time from its line written to its `MEMBER` line read: the first member's holds the
-process's start and its one read of the program. A kept process's peak RSS is the whole process's.
+process's start and its one read of the program. A kept process's peak RSS is the whole process's, and a kept member's
+`rss_kb` is the process's resident memory when that member's `MEMBER` line arrives: what the process holds, beside
+whatever runs next to it, until the next member's line.
 
 The guard, without which no figure counts: each kept member's `VERDICT` lines are byte for byte those `verify` printed
 for it alone in the same round, its `MEMBER` line carries that exit status and its index, every member is accepted,
@@ -76,6 +78,12 @@ def reaped(p: subprocess.Popen) -> tuple[int, int]:
     return p.returncode, usage.ru_maxrss
 
 
+def resident_kb(pid: int) -> int:
+    """A live process's resident memory in kB (`VmRSS` of its `/proc` status)."""
+    [line] = [x for x in Path(f"/proc/{pid}/status").read_text().splitlines() if x.startswith("VmRSS:")]
+    return int(line.split()[1])
+
+
 def alone(cmd: list[str], args: list[str], out: str) -> dict:
     """One `verify` on a member's arguments, its output in `out`.out and its stage lines in `out`.err."""
     t0 = time.monotonic()
@@ -108,7 +116,7 @@ def kept(cmd: list[str], once: list[str], lines: list[bytes], out: str) -> tuple
                     break
             if not answer or not answer[-1].startswith(b"MEMBER "):
                 break
-            answers.append({"lines": answer, "wall_s": round(time.monotonic() - t1, 3)})
+            answers.append({"lines": answer, "wall_s": round(time.monotonic() - t1, 3), "rss_kb": resident_kb(p.pid)})
         try:
             p.stdin.close()
         except BrokenPipeError as e:
@@ -177,7 +185,8 @@ def main() -> int:
             if last != want:
                 failures.append(f"round {r}: member {i}'s line is {last!r}, not {want!r}")
             rows.append({"round": r, "way": "kept", "member": i, "load": load, **(got[i] if i < len(got) else {}),
-                         "wall_s": answer["wall_s"], "exit": json.loads(last[len(b"MEMBER "):]).get("exit")})
+                         "wall_s": answer["wall_s"], "rss_kb": answer["rss_kb"],
+                         "exit": json.loads(last[len(b"MEMBER "):]).get("exit")})
             print(f"FM {json.dumps(rows[-1])}", flush=True)
 
     def of(way: str, key: str, members) -> float | None:
@@ -187,7 +196,7 @@ def main() -> int:
     summary = {f"{name}_{key}": of(way, key, members)
                for name, way, members in (("alone", "alone", range(a.members)), ("kept_first", "kept", (0,)),
                                           ("kept_later", "kept", later))
-               for key in ("before_check_ms", "inputs_ms", "setup_ms", "session_ms", "wall_s")}
+               for key in ("before_check_ms", "inputs_ms", "setup_ms", "session_ms", "wall_s", "rss_kb")}
     doc = {"schema": SCHEMA, "lean_sha256": hashlib.sha256(Path(a.lean).read_bytes()).hexdigest(), "members": a.members,
            "rounds": a.rounds, "core": core, "once": once, "rows": rows, "kept": processes,
            "guard": {"ok": not failures, "failures": failures}, "summary": summary}
