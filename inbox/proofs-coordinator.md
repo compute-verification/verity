@@ -53215,7 +53215,7 @@ No claim moves. No head moved [run: `gh pr view`, 12:08Z].
   - `r20261111-103646-64c5`, `suites.py --changed 5c095bb4ab70 --quick` at the head on its own base: **70 suites, 70 passed (1 cached), 0 failed** [run]. `verity-core-sampled-proofs`: 247 passed, 2 skipped. `benchmarks/one_stage`: 498 passed.
   - `r20261111-110651-a480`, the tier on the head merged onto `main` 8f5d3c3823f0: 71 suites, 71 passed, 0 failed [run].
   - `r20261111-103615-5605`, the suite alone at the head: 247 passed, 2 skipped [run].
-- The body has `64c5`'s verdict since 12:09Z [run: `research queue edit`; the head did not move].
+- The body has `64c5`'s verdict since 12:08Z [run: `research queue edit`; the head did not move].
 - `main` is still 86c03d1840cb at 12:08Z [run], the commit the 12:05Z entry's merge checks are against.
 
 ### Events of yours delivered to me (for you or infra; I did nothing with them)
