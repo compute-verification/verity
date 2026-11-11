@@ -69,6 +69,10 @@ IDLE = {"llama-3.1-8b": IDLE_8B, "llama-3.1-70b": 0.10}  # a point without `mode
 BOOST = 1.16    # the RTX PRO 6000's boost clock over the locked 2,092 MHz (red team)
 
 
+class NoPoints(ValueError):
+    """No point is at the batches a plot was asked for."""
+
+
 def model_of(p: dict) -> str:
     return p.get("model", "llama-3.1-8b")
 
@@ -218,8 +222,9 @@ def frontier(points: list[dict], budget: float, d: float | None = None, idle: fl
 
 def table(points: list[dict], budget: float, batches=(1, 32), d: float | None = None, idle: float = IDLE_8B,
           boost: float = BOOST) -> str:
-    lines = ["| batch | b | k | arithmetic | x (boosted) | x* | μ_rebuild | y_total | decode | tag | commit | measured "
-             "| source |", "|---|---|---|---|---|---|---|---|---|---|---|---|---|"]
+    head = ("| batch | b | k | arithmetic | x (boosted) | x* | μ_rebuild | y_total | decode | tag | commit | measured "
+            "| source |")
+    lines = [head, "|---|---|---|---|---|---|---|---|---|---|---|---|---|"]
     best = frontier(points, budget, d, idle, boost)
     for mb in batches:
         p = best.get(mb)
@@ -247,18 +252,18 @@ def best_per_config(points: list[dict]) -> list[dict]:
 
 def plot(points: list[dict], out: Path, budget: float, tau_ref: float | None, batches=(1, 32),
          show_all: bool = False, idle: float = IDLE_8B, boost: float = BOOST, model: str = "llama-3.1-8b") -> None:
+    pts = [p for p in points if p["batch"] in batches]
+    if not show_all:
+        pts = best_per_config(pts)
+    if not pts:
+        raise NoPoints("no points at the plotted batches")
     import matplotlib
 
     matplotlib.use("Agg")
     import matplotlib.pyplot as plt
     import numpy as np
 
-    pts = [p for p in points if p["batch"] in batches]
-    if not show_all:
-        pts = best_per_config(pts)
     lanes = {p.get("lane") for p in pts if not p.get("reference")}
-    if not pts:
-        raise SystemExit("no points at the plotted batches")
     tau_ref = statistics.median(p["tau"] for p in pts) if tau_ref is None else tau_ref
     fig, ax = plt.subplots(figsize=(12, 6.5))
     colors = {"base": "#9e9e9e", "decode": "#1f77b4", "tag": "#ff7f0e", "commit": "#2ca02c"}
@@ -372,7 +377,10 @@ def main() -> int:
     print(f"{a.model}, idle {idle:g}")
     print(table(points, a.budget, batches, a.d, idle, a.boost))
     if a.out:
-        plot(points, Path(a.out), a.budget, a.tau, batches, a.all, idle, a.boost, a.model)
+        try:
+            plot(points, Path(a.out), a.budget, a.tau, batches, a.all, idle, a.boost, a.model)
+        except NoPoints as e:
+            sys.exit(str(e))
         print(f"wrote {a.out}")
     return 0
 

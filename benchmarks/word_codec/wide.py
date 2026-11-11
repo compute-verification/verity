@@ -85,7 +85,7 @@ class Field(RB.Field):
 
     def check_payload(self, payload: int | None) -> int:
         b = self.payload if payload is None else payload
-        if not 8 <= b or ((1 << b) > self.p and not self.full_width(b)):
+        if b < 8 or ((1 << b) > self.p and not self.full_width(b)):
             raise ValueError(f"{self.name}: a payload is under {self.p.bit_length() - 1} bits, or the word's full width")
         return b
 
