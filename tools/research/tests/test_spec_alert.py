@@ -360,10 +360,10 @@ def test_a_gap_premise_swapped_for_a_fresh_one_with_another_text_is_no_growth_an
         ("open", "• open premise `A.SampleIsCoin` listed (X-2, due 2026-11-30)"),
         ("discharged", "• open premise `A.DrawIsCoin` discharged: no longer listed (X-1, due 2026-11-30)")]
     repo = _repo(tmp_path)
-    a = _commit(repo, "Security/lean-audit.json", old, "a")
-    b = _commit(repo, "Security/lean-audit.json", new, "b")
+    a = _commit(repo, "security/lean-audit.json", old, "a")
+    b = _commit(repo, "security/lean-audit.json", new, "b")
     text = spec.message(repo, a, b)
-    assert "• `Security`: guarantees: 1 with new premises; premises: 1 open listed, 1 discharged" in text
+    assert "• `security`: guarantees: 1 with new premises; premises: 1 open listed, 1 discharged" in text
     assert rests in text and "trust gap" not in text
 
 
@@ -372,8 +372,8 @@ def test_a_record_that_holds_a_trust_for_the_first_time_is_tallied_and_sends_not
     new = _trust(_doc({"A.G": _g("G", "h1")}), ["A.G"], {"A.G": ["P1"]}, {"C.CR": "collision resistance"})
     assert spec._entries(old, new) == [] and [k for _, k, _ in spec._across({"x": old}, {"x": new})] == ["trust"]
     repo = _repo(tmp_path)
-    a = _commit(repo, "Security/lean-audit.json", old, "a")
-    b = _commit(repo, "Security/lean-audit.json", new, "b")
+    a = _commit(repo, "security/lean-audit.json", old, "a")
+    b = _commit(repo, "security/lean-audit.json", new, "b")
     assert spec.message(repo, a, b) is None
 
 
