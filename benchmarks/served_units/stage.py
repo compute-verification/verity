@@ -1,8 +1,12 @@
 """stage.py UNIT N OUT [--public-weights [--packed]]: N inputs of one served proof-block type's Q_word proof block, from synthetic
-values at the model's served statics, staged for Flock as a ``verity/flock-circuit`` statement with hidden outputs.
+values at the model's served statics, staged for Flock as a ``verity/flock-circuit`` statement with hidden outputs. For a
+`CENSUS` type N may be ``full``, the most instances a statement of `MAX_STATEMENT_BITS` holds at the built block's k_log
+(a power of two, as `class_statement` cuts a PARTS type's N), or ``full/D``, that over D.
 
     UNIT  TYPE[:S=V,...]   a type of `UNITS`, `PARTS` or `CENSUS` at its statics (each type's defaults are its model's: GLM-5.3's
                            at TP8, s8-coord's Llama-3.2-1B's), e.g. fp8-coord:K=2048, router:C=1, s8-coord:K=8192, gq:K=384
+          census:NAME      any block type of the serving rows by its census name verbatim, staged as a `CENSUS` type, e.g.
+                           census:MoeSum_v1{TOPK=8,H=3072}
     --public-weights       a `UNITS` type's weight row ``w`` as public input ports (`UnitStager`'s ``public_inputs``, each leaf in
                            its own u16 words) instead of a row hashed in the circuit, on the same values: the price of the block
                            with its weight row's in-circuit opening removed, the in-circuit share a registered weight encoding
@@ -23,18 +27,20 @@ largest) staged by `class_statement.stage` with every input's own ``sha512/row/v
 lowered once (Flock's pieces, and for a primitive without one the registered Boolean Definition's builder), its lanes the
 flat Definition evaluated on uniform synthetic parameters (`class_statement.class_lanes`), the laid-out proof block checked against
 them on every input (``twin`` null: no served twin cuts the same proof block).  The circuit binds the partition's
-``verity/partition/v1`` digest, so the verifier is given its own copy of the partition object (partition.json,
-``flock-verify --partition``); not the program, from which it derives a statement's proof blocks only where each is one whole
+``verity/partition/v1`` digest, so the verifier is given its own copy of the partition object (partition.json, the Lean
+verifier's ``--partition``); not the program, from which it derives a statement's proof blocks only where each is one whole
 activation of the circuit's template (``Extract.claimedUnits``), and a class here is part of one, on synthetic Calls.
 
 A type of `CENSUS` is a block type of the serving rows by its census name (`serving_templates.template`, the name a proof
 overhead card prices it under), one whole Definition a proof block, laid out as the served composer lays its template
-(`compose_circuit.py --template`): its served rows (`chunk_rows.unit_rows`, each parameter's leaves seeded at their width,
-`census_leaves`) and statement (`chunk_rows.statement`: the 64-key sparse MLA split part's MUFU reads in Flock's lookup
-slots, its unit cut into stage nets under the automatic caps, which keep it within the GPU prover's slot types; RMSNorm's
-and the FP8 linears' inline) under its unit name, so the statement is the served one but for its binding: its
-``class_sha512`` is the served composer's. The circuit is streamed to circuit.txt once, every input's outputs checked against
-the Program's reference (``twin`` null).
+(`compose_circuit.py --template`): its served rows (`chunk_rows.unit_rows`, each parameter's leaves seeded at their width
+in the template's word view, `census_leaves`) and statement (`chunk_rows.statement`: the 64-key sparse MLA split part's MUFU
+reads in Flock's lookup slots, its unit cut into stage nets under the lowering's automatic per-net AND limits, which keep it
+within the GPU prover's slot types; RMSNorm's inline, and a Boolean ``_v2`` template's flat, its MUFU reads in gates) under
+its unit name, so the statement is the served one but for its binding: its ``class_sha512`` is the served composer's. The
+circuit is streamed to circuit.txt once, every input's outputs checked against the Program's reference (``twin`` null).
+``census:NAME`` stages any other block type of the serving rows the same way, its values seeded by the same rule and its
+seeds keyed by the name.
 
 Writes circuit.txt, inst.bin, pub.bin, pin.txt and stage.json under OUT, a PARTS type's partition.json, and beside a statement
 reading in slots the MUFU tables the prover reads (``tables/``, ``flock-circuit --tables``), as the served composer does.
@@ -60,8 +66,14 @@ FP8 scale groups of 128, DSA indexer 32 heads of 128, index_topk 2048; per TP8 r
                 the block's inputs instead.
     gq          `CENSUS`: Fp8GroupQuantUe8m0_v1{K,G}, one token row's quantization to E4M3 in groups of G with power-of-two
                 scales, before an FP8 linear of K inputs (K = 6144: the hidden state's); a K below 6144 is a column block.
-    fi          `CENSUS`: FlashInferFp8Linear_v1{K,N}, the FlashInfer FP8 linear's output coordinate (N = 1) on one token row:
-                its bf16 x quantized in the block, an E4M3 weight row and its f32 block scales (K = 2048: q_b and o_proj).
+    fi          `CENSUS`: FlashInferFp8Linear_v2{K,N}, the FlashInfer FP8 linear's output coordinate (N = 1) on one token row
+                as served, the Boolean version of ``FlashInferFp8Linear_v1``: its bf16 x quantized in the block, its RCP
+                reads in gates, an E4M3 weight row and its f32 block scales (K = 2048: q_b and o_proj).
+    fi-quant    `CENSUS`: FlashInferFp8Quant1x128_v2{K}, that linear's quantisation part, one token row's x to E4M3 in groups of
+                128 and their scales, as served (the row's quantisation once, which its coordinates read).
+    router-row  `CENSUS`: MoeRouterSigmoidBias_v2{E=256,TOPK=8,..}, the MoE router's sigmoid, bias and top-8 of one token row as
+    router-slots  served, its EX2 and RCP reads in gates; ``router-slots`` is its slots form (the per-slot outputs).
+    dsa-q-row   `CENSUS`: DsaIndexerQ_v2{H=32,D=128,ROPE=64}, DSA's indexer query row as served, its EX2 reads in gates.
     mla-split-part  `CENSUS`: SparseMlaSplitPart_v1 at T = 64, one query's sparse MLA over one split's 64 keys (FA3's).
     rmsnorm-v8  `CENSUS`: RMSNormFusedCudaVector8_v1{N=6144,BLOCK=256}, the fused residual add and RMSNorm of one token row.
     the rest    `PARTS`: the capture map's Programs (``glm-moe-dsa-eager-hopper-tp8-v0``) at their GLM-5.3 statics; the MoE
@@ -70,6 +82,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import re
 import resource
 import sys
 import time
@@ -82,6 +95,7 @@ import numpy as np
 from circuit_check import targets as TG
 from verity.ml.circuits import partition_object as PO
 from verity.ml.circuits.codec import program_digest
+from verity.ml.circuits.types import Array
 from verity.ml.circuits.defs import bind
 from verity.ml.circuits.ops import gemm as OG
 from verity.ml.circuits.ops.boolean import gemm as BG
@@ -113,16 +127,16 @@ def words(*parts: np.ndarray) -> np.ndarray:
 
 @dataclass(frozen=True)
 class Unit:
-    """A proof-block type: its Boolean Definition at statics ``S``, its input rows ``(row, schema, params)``, and ``draw(S, n, rng)``:
-    each row's words per input ``(n, words)`` and the served twin's output words ``(n, out_words)``."""
+    """A proof-block type: its Boolean Definition at statics ``S``, its input rows ``(row, schema, params)``, and
+    ``values(S, n, rng)``: each row's words per input ``(n, words)`` and the served twin's output words ``(n, out_words)``."""
 
     definition: Callable[[dict], object]
     rows: tuple[tuple[str, str, tuple[str, ...]], ...]
-    draw: Callable[[dict, int, np.random.Generator], tuple[dict[str, np.ndarray], np.ndarray]]
+    values: Callable[[dict, int, np.random.Generator], tuple[dict[str, np.ndarray], np.ndarray]]
     defaults: dict
 
 
-def _fp8_coord_draw(S: dict, n: int, rng: np.random.Generator):
+def _fp8_coord_values(S: dict, n: int, rng: np.random.Generator):
     K, G = S["K"], S["G"]
     xs, ws, twin = [], [], []
     for _ in range(n):
@@ -143,7 +157,7 @@ def _s8_quant(v: np.ndarray) -> tuple[np.ndarray, np.float32]:
     return np.clip(np.rint(v / s), -127, 127).astype(np.int8), s
 
 
-def _s8_coord_draw(S: dict, n: int, rng: np.random.Generator):
+def _s8_coord_values(S: dict, n: int, rng: np.random.Generator):
     K = S["K"]
     xs, ws, twin = [], [], []
     for _ in range(n):
@@ -159,9 +173,9 @@ def _s8_coord_draw(S: dict, n: int, rng: np.random.Generator):
 
 UNITS: dict[str, Unit] = {
     "fp8-coord": Unit(lambda S: bind(BF.ScaledMmFp8BlockCoordinateV2, K=S["K"], G=S["G"]),
-                      (("x", SEG, ("xq", "sx")), ("w", V2, ("wrow", "sw"))), _fp8_coord_draw, {"K": 6144, "G": 128}),
+                      (("x", SEG, ("xq", "sx")), ("w", V2, ("wrow", "sw"))), _fp8_coord_values, {"K": 6144, "G": 128}),
     "s8-coord": Unit(lambda S: bind(BG.ScaledMmS8Coordinate, K=S["K"], **BG.GEMM_SM120_S8),
-                     (("x", SEG, ("x", "sx")), ("w", V2, ("wrow", "sw"))), _s8_coord_draw, {"K": 2048}),
+                     (("x", SEG, ("x", "sx")), ("w", V2, ("wrow", "sw"))), _s8_coord_values, {"K": 2048}),
 }
 
 
@@ -214,13 +228,19 @@ class Census:
     fixed: str = ""
 
     def name(self, S: dict) -> str:
-        return f"{self.family}{{{','.join([*(f'{k}={v}' for k, v in S.items()), *filter(None, [self.fixed])])}}}"
+        inner = ",".join([*(f"{k}={v}" for k, v in S.items()), *filter(None, [self.fixed])])
+        return f"{self.family}{{{inner}}}" if inner else self.family
 
 
 _EPS = '{"f64":"0x1.4f8b588e368f1p-17"}'
+_ROUTER = 'E=256,TOPK=8,SCALE={"f64":"0x1.4000000000000p+1"},KERNEL="block"'
 CENSUS: dict[str, Census] = {
     "gq": Census("Fp8GroupQuantUe8m0_v1", {"K": 6144, "G": 128}),
-    "fi": Census("FlashInferFp8Linear_v1", {"K": 2048, "N": 1}),
+    "fi": Census("FlashInferFp8Linear_v2", {"K": 2048, "N": 1}),
+    "fi-quant": Census("FlashInferFp8Quant1x128_v2", {"K": 6144}),
+    "router-row": Census("MoeRouterSigmoidBias_v2", {}, _ROUTER),
+    "router-slots": Census("MoeRouterSigmoidBiasSlots_v2", {}, _ROUTER),
+    "dsa-q-row": Census("DsaIndexerQ_v2", {}, "H=32,D=128,ROPE=64"),
     "mla-split-part": Census("SparseMlaSplitPart_v1", {}, 'T=64,DR=64,DV=512,BN=64,DOT={"fn":"HopperBF16WgmmaDot16_v1"},'
                              'INV={"fn":"Fa3InvSum_v1"},SCALE={"f64":"0x1.0000000000000p-4"}'),
     "rmsnorm-v8": Census("RMSNormFusedCudaVector8_v1", {}, f"N=6144,EPS={_EPS},BLOCK=256"),
@@ -239,7 +259,7 @@ def census_leaves(rng: np.random.Generator, ty, n: int) -> np.ndarray:
         return c.view("<u2")
     if w == {32}:
         return np.ldexp(np.ones((n, ty.leaves), np.float32), rng.integers(-10, -3, (n, ty.leaves))).astype("<f4").view("<u2")
-    raise SystemExit(f"stage.py: a census parameter of {ty.leaves} leaves of {sorted(w)} bits, which `census_leaves` doesn't draw")
+    raise SystemExit(f"stage.py: a census parameter of {ty.leaves} leaves of {sorted(w)} bits, which `census_leaves` doesn't generate")
 
 
 def _static(default, v: str):
@@ -250,6 +270,11 @@ def _static(default, v: str):
 
 def parse(spec: str) -> tuple[str, Unit | Part | Census, dict]:
     name, _, rest = spec.partition(":")
+    if name == "census":
+        family, brace, inner = rest.partition("{")
+        if not family or (brace and not inner.endswith("}")):
+            raise SystemExit(f"stage.py: census:NAME takes a census name, FAMILY or FAMILY{{STATICS}}, not {rest!r}")
+        return name, Census(family, {}, inner[:-1]), {}
     if name not in UNITS and name not in PARTS and name not in CENSUS:
         raise SystemExit(f"stage.py: unit type {name!r} is not one of {sorted(UNITS) + sorted(PARTS) + sorted(CENSUS)}")
     u = UNITS.get(name) or PARTS.get(name) or CENSUS[name]
@@ -279,7 +304,7 @@ def stage_part(name: str, part: Part, S: dict, tag: str, n: int, out: Path, t0: 
     rep = cl.representative
     key = PU.derive(PU.SOURCE, PU.DOMAIN, {"program": program_digest(prog), "seed": 0})
     lanes = CS.class_lanes(units, cl, key, n, CS.broadcast_params(units))
-    t_draw = time.time() - t0
+    t_values = time.time() - t0
     salt_key = hashlib.sha256(f"verity/served-units/salts\0{tag}".encode()).digest()
     st = CS.stage(units, "q-word", s, cl, lanes, out, salt_key, packed=False, share_rows=False)
     (out / f"inst-{st['n']}.bin").rename(out / "inst.bin")
@@ -294,7 +319,7 @@ def stage_part(name: str, part: Part, S: dict, tag: str, n: int, out: Path, t0: 
             "vus_per_block": st["vus_per_block"], "row_schemas": meta.get("row_schemas"), "circuit_bytes": st["circuit_bytes"],
             "circuit_sha512": st["circuit_sha512"], "class_sha512": st["class_sha512"],
             "inst_bytes": (out / "inst.bin").stat().st_size, "pub_bytes": (out / "pub.bin").stat().st_size, "twin": None,
-            "seconds": {"draw": round(t_draw, 1), "total": round(time.time() - t0, 1)}, "maxrss_gb": gb()}
+            "seconds": {"values": round(t_values, 1), "total": round(time.time() - t0, 1)}, "maxrss_gb": gb()}
 
 
 def nets(low) -> list[dict]:
@@ -305,42 +330,62 @@ def nets(low) -> list[dict]:
     return [{"net": nm, **{k: int(lay.counts[k]) for k in ("ands", "rows", "nnz_a", "nnz_b")}} for nm, lay in lays]
 
 
-def stage_census(name: str, cen: Census, S: dict, tag: str, n: int, out: Path, t0: float) -> dict:
+def stage_census(name: str, cen: Census, S: dict, tag: str, n: int | str, out: Path, t0: float) -> dict:
     """``n`` inputs of the census type's Definition, a proof block each, on its served rows and statement, as stage.json's
-    record."""
+    record; ``n`` ``full`` or ``full/D`` is the most instances a statement holds at the built block's k_log (as
+    `class_statement` cuts a PARTS type's), over D."""
     from verity_vllm.pipeline import chunk_rows as CR
     from verity_vllm.pipeline.serving_rows import template
 
-    tp = template(cen.name(S))
+    try:
+        tp = template(cen.name(S))
+    except KeyError as e:
+        raise SystemExit(f"stage.py: {cen.name(S)} lacks the static {e}: census:NAME takes the census name with every static, "
+                         "as the serving rows name it") from None
     d = tp.fn
-    params, _ret = d.signature()
+    params, _ret = template(tp.word).fn.signature()
     rng = np.random.default_rng(int.from_bytes(hashlib.sha256(f"verity/served-units/v1\0{tag}".encode()).digest()[:8], "little"))
-    vals = {p: census_leaves(rng, ty, n) for p, ty in params}
+    vals: dict[str, np.ndarray] = {}
+    types = dict(params)
+
+    def part(p: str) -> np.ndarray:
+        """Parameter ``p``'s words, or for a cut row's ``q[i]`` the words of q's element i, q generated whole."""
+        if p in vals:
+            return vals[p]
+        m = re.fullmatch(r"(\w+)\[(\d+)\]", p)
+        if not (m and m[1] in vals and isinstance(types[m[1]], Array) and vals[m[1]].shape[1] % types[m[1]].n == 0):
+            raise SystemExit(f"stage.py: {tp.id}'s served row part {p!r} is neither a parameter nor an element of one")
+        w = vals[m[1]].shape[1] // types[m[1]].n
+        return vals[m[1]][:, int(m[2]) * w:(int(m[2]) + 1) * w]
+
     in_rows, out_rows = CR.unit_rows(tp)
-    if any(p not in vals for *_r, ps in in_rows for p in ps):
-        raise SystemExit(f"stage.py: {tp.id}'s served rows {in_rows} cut a parameter, which a census type draws whole")
-    rows = {r: np.concatenate([vals[p] for p in ps], axis=1) for r, _s, _b, ps in in_rows}
-    if any(rows[r].shape != (n, b // 16) for r, _s, b, _ps in in_rows):
-        raise SystemExit(f"stage.py: {tp.id}'s drawn rows {[rows[r].shape for r, *_x in in_rows]} are not its rows' words")
     stmt = CR.statement(tp)
-    t_draw = time.time() - t0
     st = CS.UnitStager(d, "unit/serving-rows", in_rows, out_rows, circuit=out / "circuit.txt", **stmt)
     t_built = time.time() - t0
+    if isinstance(n, str):
+        g = st.meta.get("vus_per_block") or 1
+        full = 1 << ((MAX_STATEMENT_BITS // ((1 << st.meta["k_log"]) // g)).bit_length() - 1)
+        n = max(g, full // int(n.partition("/")[2] or 1))
+    vals.update({p: census_leaves(rng, ty, n) for p, ty in params})
+    rows = {r: np.concatenate([part(p) for p in ps], axis=1) for r, _s, _b, ps in in_rows}
+    if any(rows[r].shape != (n, b // 16) for r, _s, b, _ps in in_rows):
+        raise SystemExit(f"stage.py: {tp.id}'s generated rows {[rows[r].shape for r, *_x in in_rows]} are not its rows' words")
+    t_values = time.time() - t0 - t_built
     salt_key = hashlib.sha256(f"verity/served-units/salts\0{tag}".encode()).digest()
     got = st.stage(rows, out, salt_key)
     if stmt.get("reads") == "slots":
         FC.IL.write_tables(out / "tables")
     meta = got["meta"]
-    return {"unit": name, "statics": S, "tag": tag, "n": n, "definition": d.id, "census": cen.name(S),
+    return {"unit": name, "statics": S, "tag": tag, "n": n, "definition": d.id, "word": tp.word, "census": cen.name(S),
             "in_rows": [[r, s, b, ps] for r, s, b, ps in in_rows], "public_inputs": [], "packed": False, "ands": got["ands"],
-            "statement": stmt, "caps": getattr(st.low, "caps", None), "nets": nets(st.low), "lookups": meta.get("lookups"),
+            "statement": stmt, "net_and_limits": getattr(st.low, "caps", None), "nets": nets(st.low), "lookups": meta.get("lookups"),
             "slot_types": len({r["net"] for r in meta.get("ranges", ())}),
             "unit_nnz": got["unit_nnz"], "k_log": meta["k_log"], "unit_log": meta.get("unit_log"),
             "vus_per_block": meta.get("vus_per_block"), "row_schemas": meta.get("row_schemas"),
             "circuit_bytes": (out / "circuit.txt").stat().st_size, "circuit_sha512": st.pin, "class_sha512": st.class_sha512,
             "inst_bytes": (out / "inst.bin").stat().st_size, "pub_bytes": (out / "pub.bin").stat().st_size, "macs": 0,
-            "twin": None, "seconds": {"draw": round(t_draw, 1), "built": round(t_built - t_draw, 1),
-                                      "round": round(time.time() - t0 - t_built, 1), "total": round(time.time() - t0, 1)},
+            "twin": None, "seconds": {"values": round(t_values, 1), "built": round(t_built, 1),
+                                      "round": round(time.time() - t0 - t_built - t_values, 1), "total": round(time.time() - t0, 1)},
             "maxrss_gb": gb()}
 
 
@@ -378,10 +423,15 @@ def main() -> None:
         raise SystemExit(f"stage.py: usage: stage.py UNIT N OUT [--public-weights [--packed]], not {sys.argv[1:]}")
     if packed and not public:
         raise SystemExit("stage.py: --packed lays out --public-weights' ports")
-    spec, n, out = args[0], int(args[1]), Path(args[2])
+    spec, out = args[0], Path(args[2])
+    n: int | str = args[1] if re.fullmatch(r"full(/[1-9]\d*)?", args[1]) else int(args[1])
     t0 = time.time()
     name, u, S = parse(spec)
+    if isinstance(n, str) and not isinstance(u, Census):
+        raise SystemExit(f"stage.py: N {n} is for a CENSUS type, whose block's k_log sets it; {spec} takes a count")
     tag = f"{name}-" + "-".join(f"{k.lower()}{v}" for k, v in sorted(S.items()))
+    if name == "census":
+        tag += hashlib.sha256(u.name(S).encode()).hexdigest()[:16]
     if isinstance(u, (Part, Census)):
         if public:
             raise SystemExit(f"stage.py: --public-weights is for a type of UNITS, not {name}")
@@ -393,8 +443,8 @@ def main() -> None:
         return
     d = u.definition(S)
     rng = np.random.default_rng(int.from_bytes(hashlib.sha256(f"verity/served-units/v1\0{tag}".encode()).digest()[:8], "little"))
-    rows, twin = u.draw(S, n, rng)
-    t_draw = time.time() - t0
+    rows, twin = u.values(S, n, rng)
+    t_values = time.time() - t0
     unit_rows, ports = u.rows, None
     if public:
         (w,) = [r for r in u.rows if r[0] == "w"]
@@ -420,7 +470,7 @@ def main() -> None:
            "row_schemas": meta.get("row_schemas"), "circuit_bytes": len(text), "circuit_sha512": pin,
            "class_sha512": FC.class_digest(text), "inst_bytes": (out / "inst.bin").stat().st_size,
            "pub_bytes": (out / "pub.bin").stat().st_size, "twin": {"agrees": True, "instances": n, "first": int(twin[0, 0])},
-           "seconds": {"draw": round(t_draw, 1), "total": round(time.time() - t0, 1)}, "maxrss_gb": gb()}
+           "seconds": {"values": round(t_values, 1), "total": round(time.time() - t0, 1)}, "maxrss_gb": gb()}
     (out / "stage.json").write_text(json.dumps(rec, indent=1))
     print(json.dumps(rec), flush=True)
 
