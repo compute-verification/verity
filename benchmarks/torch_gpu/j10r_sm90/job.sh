@@ -29,12 +29,15 @@ ROOT=$PWD
 export OUT=${OUT:-${RESEARCH_RUN_DIR:-.}/out}
 mkdir -p "$OUT"
 git rev-parse HEAD > "$OUT/commit.txt" 2>/dev/null || echo "${RESEARCH_SOURCE_SHA:-unknown}" > "$OUT/commit.txt"
+# nvcc for the libraries below: their cubins don't follow where the tree or a source's directory sits
+JOB_NVCC=$ROOT/benchmarks/torch_gpu/job_nvcc.sh
 
 build() {
   local nv=${NVCC:-/usr/local/cuda-13.0/bin/nvcc} lib=$OUT/lib/sm_90a
   [ -x "$nv" ] || nv=$(command -v nvcc) || { echo "job.sh: no nvcc" >&2; return 2; }
   mkdir -p "$lib"
-  "$nv" -O3 -std=c++17 -shared -Xcompiler -fPIC -gencode arch=compute_90a,code=sm_90a -Xptxas -v \
+  CUDA=$(dirname "$(dirname "$nv")") "$JOB_NVCC" -O3 -std=c++17 -shared -Xcompiler -fPIC \
+    -gencode arch=compute_90a,code=sm_90a -Xptxas -v \
     "$D/j10r_ref.cu" -o "$lib/j10r_ref.so" > "$lib/ptxas.txt" 2>&1 || { cat "$lib/ptxas.txt"; return 2; }
   { echo "commit $(cat "$OUT/commit.txt")"; "$nv" --version | tail -2
     echo "flags -O3 -std=c++17 -shared -Xcompiler -fPIC -gencode arch=compute_90a,code=sm_90a"
@@ -60,7 +63,8 @@ h1u_build() {
   for v in $arms; do
     arm=${v%%=*}; def=${v#*=}
     # shellcheck disable=SC2086
-    "$nv" "${flags[@]}" -I benchmarks/hash/dither ${def//,/ } benchmarks/hash/dither/h1u.cu -o "$lib/h1u_$arm.so" \
+    CUDA=$(dirname "$(dirname "$nv")") "$JOB_NVCC" "${flags[@]}" -I benchmarks/hash/dither ${def//,/ } \
+      benchmarks/hash/dither/h1u.cu -o "$lib/h1u_$arm.so" \
       > "$lib/build-h1u_$arm.log" 2>&1 &
     pids+=($!)
   done

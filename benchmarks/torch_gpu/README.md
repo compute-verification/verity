@@ -32,7 +32,9 @@ it includes sits, the device compiler is handed the same text and the same argum
 that only moves one leaves each cubin they compile with it as it was. The program's own text is compiled as written,
 so `ship_nvcc.sh` refuses one that names a file (`__FILE__`, or an assert, which expands to it, gives the name as its
 `#include` spells it, which a move changes). That leaves out the row tables' cubins in `s8_linear`'s ship, which the
-adapter's own build compiles.
+adapter's own build compiles. A library a job builds off the card outside a ship (`j10r_sm90/job.sh`'s, and
+`benchmarks/hash/dither/job.sh`'s) compiles with `job_nvcc.sh`, that wrapper without the frame: its cubin doesn't follow
+its place either, and nothing holds a rebuild to the same bytes from run to run.
 
 - `commit_slots/`: the serve-time commit call, a step's proof-block outputs as hm96-sha512 rows under hiding leaves in
   frame-v3-sha512 trees, one subtree per sequence slot. `gpu.sh` holds the GPU's roots to the CPU reference's.

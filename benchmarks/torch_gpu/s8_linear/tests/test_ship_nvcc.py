@@ -1,7 +1,8 @@
 """ship_nvcc.sh (the nvcc this directory's build.sh and the other ship builds compile with), without nvcc: a stand-in
 toolkit whose nvcc prints a dry run of nvcc's shape and whose gcc, cicc and ptxas record what they are given. What cicc is
 handed for one source at two places in a tree is the same to the byte, and a dry run the wrapper can't follow, or a text
-that names the file it is in, is refused before cicc runs."""
+that names the file it is in, is refused before cicc runs. job_nvcc.sh (the nvcc a job's own libraries compile with) is that
+wrapper in a directory of the call's own."""
 from __future__ import annotations
 
 import os
@@ -11,6 +12,7 @@ from pathlib import Path
 import pytest
 
 SHIP_NVCC = Path(__file__).resolve().parents[2] / "ship_nvcc.sh"
+JOB_NVCC = SHIP_NVCC.with_name("job_nvcc.sh")
 TEMP = "tmpxft_0000aaaa_00000000"
 
 #: nvcc's dry run for a cubin: its variables, then the preprocessor, cicc, ptxas and an rm of a file it never wrote
@@ -148,3 +150,29 @@ def test_a_dry_run_with_no_cicc_step_is_refused(tmp: Path) -> None:
     r = run(tmp, "a/b", "../h.cuh", dry="".join(x for x in DRY.splitlines(keepends=True) if '/cicc" ' not in x))
     assert r.returncode != 0 and "has no cicc step" in r.stderr
     assert not (tmp / "rec.gcc").exists()
+
+
+def test_job_nvcc_is_the_wrapper_in_a_directory_of_the_calls_own(tmp: Path) -> None:
+    """A real nvcc names its temporaries under TMPDIR, so the stand-in's dry run here does too."""
+    kit = tmp / "kit"
+    (kit / "bin/nvcc").write_text('#!/bin/bash\nsed "s|@TMP@|$TMPDIR|g" "$(dirname "$0")/dry.txt" >&2\n')
+    seen = []
+    for place in ("a/b", "a/much/longer/place/of/it"):
+        src = tmp / place / "t.cu"
+        src.parent.mkdir(parents=True, exist_ok=True)
+        src.write_text(TEXT.format(src=src, inc="../h.cuh"))
+        (kit / "bin/dry.txt").write_text(DRY.format(kit=kit, tmp="@TMP@", temp=TEMP, ii=f"@TMP@/{TEMP}-5_t.cpp1.ii", src=src,
+                                                    out=tmp / "out.cubin", more="", s=" "))
+        r = subprocess.run(["bash", str(JOB_NVCC), "-cubin", "-o", str(tmp / "out.cubin"), str(src)],
+                           env=dict(os.environ, CUDA=str(kit), TMPDIR=str(tmp / "tmp")), capture_output=True, text=True,
+                           check=False)
+        assert r.returncode == 0, r.stderr
+        cicc = given(tmp, "cicc")
+        own = cicc["cwd"].strip()
+        assert own.startswith("/tmp/job_nvcc.") and len(own) == len("/tmp/job_nvcc.XXXXXXXX") and not Path(own).exists()
+        seen.append((own, cicc["argv"].replace(own, "TMP"), cicc["input"]))
+    assert seen[0][0] != seen[1][0] and seen[0][1:] == seen[1][1:]
+    assert not list((tmp / "tmp").iterdir())
+    r = subprocess.run(["bash", str(JOB_NVCC), "-cubin", "t.cu"], env=dict(os.environ, CUDA=""), capture_output=True, text=True,
+                       check=False)
+    assert r.returncode != 0 and "the toolkit whose nvcc builds" in r.stderr
