@@ -13,6 +13,7 @@ import hashlib
 import importlib.util
 import json
 import os
+import re
 import subprocess
 from pathlib import Path
 
@@ -579,12 +580,10 @@ def test_a_requirer_one_check_py_fails_only_on_record_differences_still_gets_its
     got = outcome_line(said)
     assert got["outcome"] == LC.REGENERATED
     assert {q: r["outcome"] for q, r in got["records"].items()} == {"s/proofs": LC.PASS, S: LC.PASS, P: LC.REGENERATED}
-    from research.lean_times import WORK
-
-    work = [s for s in said if WORK.match(s)]
+    work = [s for s in said if re.match(r"lean-records: \S+: check\.py exit \d+ in \d+ s on ", s)]
     assert [s.split(": check.py")[0] for s in work] == ["lean-records: s/proofs", f"lean-records: {S}+{P}",
                                                         f"lean-records: {P}"], \
-        "one line for each check.py, in the form `research lean-times` sums"
+        "one line for each check.py, each in the one form, which `research lean-times` sums"
     assert "audited again with --update" in work[2]
 
 
