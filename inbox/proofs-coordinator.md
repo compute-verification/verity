@@ -64147,3 +64147,31 @@ My pick is A [guess]. I build nothing for A before your word, since it changes a
 > A yes or no by 22:00Z keeps the first post (the diff, the equality test, circuit-check's report, the suites on the merge with `main`) at Thu 12 Nov 03:00Z.
 
 **Next:** I fetch the four runs as they end and write them into a checkpoint note at 21:10Z. I end my turn now so that you read this: the ruling in section 3 is what I wait on.
+
+## SERVEPARTS, Wed 11 Nov 20:28Z: the pull request is open and marked (#9059, `782510c5b5`); the cost model reads the three parts by name and every figure that moves is in its body; one modeled case changes sides of 1
+
+Mailbox: absent at 20:27Z, so nothing new [run: `git show origin/cursor/proofs-inbox:inbox/bc-b32bec38-232a-50ef-a44d-eb1d5a81cf6b.md`].
+
+**The pull request.** https://github.com/compute-verification/verity/pull/9059, branch `cursor/proofs-serveparts-04c4`, head `782510c5b5`, opened 20:21Z and linked to PRF-456 [run: `research queue open`]. I marked it at 20:26Z; the mark's preflight merged it onto `main` at `61f13c2275` and refused nothing, and it says "marked on proofs's word, with no quick tier" [run: `research queue ready 9059 --mark --by proofs`]. `research queue status` lists it as ready and admitted, to land on its mark alone if it is low-risk [run, 20:26Z]. It changes only `benchmarks/spot_figures/` (the card, `cards.py`, `total_cost.py`, `breakeven/sweep.py`, two tests, the README) [run: `git diff --stat origin/main...HEAD` on my branch].
+
+**What I checked before the mark.**
+- The pre-mark quick tier passed on `9fa7b98c26`: 3 suites, `benchmarks/spot_figures` 151 passed, `repository` 304 passed, `verity-graph` 207 passed, none failed [run `r20261111-191429-fb5e`].
+- The whole `benchmarks/spot_figures` suite with every slow test passed on `9fa7b98c26`: 153 passed in 1,160 s [run `r20261111-193230-b42b`].
+- The head `782510c5b5` differs from `9fa7b98c26` by one comment and one string's `f` prefix in `total_cost.py`, and the card regenerates to the same bytes [run: `git show 782510c5b5`, and `total_cost.py priced-card` compared to the kept card on the VM].
+- The same quick tier on the head itself is out: `r20261111-200755-49e6`, waiting for a slot since 20:08Z [run: `research fetch`, 20:26Z]. Since the mark ran no tier of its own, this run is the one that covers the head; I report it when it ends.
+
+**What moves** [run `r20261111-194436-d571`, rc 0, 40 planner rows: Figure 5's 12 cases and the 4 leverage cases at the world's year and a datacenter's year on my branch, and the 4 leverage cases again with the three parts set to zero; all in the pull request's body].
+- The card: the two-stage design's serving cost 2.039% → 2.120% of serving compute (+0.081 points: step record 0.067, boundary commitment 0.010, history tables 0.004), its low 2.039% → 2.042%, its high 6.817% → 7.486%; with batch-invariant kernels 25.739% → 25.820%; (B) and (C) unchanged [run: `total_cost.py priced-card`, and `git diff` of the card].
+- The target you state as 2.05 points reads 2.13 with the three parts [guess: 2.05 + 0.081; your brief gives the 0.006 of the carried pages' hash, and `rg -i 'carried pages'` finds nothing under `benchmarks/spot_figures/`, so it is not on this card].
+- 171 of the planner's 173 cases gain 0.081 points; the two one-stage cases do not change [run on the VM: every case's `tax()` on `origin/main` and on my branch].
+- Figure 4: the β a total of 10% leaves goes 7.961% → 7.880%, so its proof rate, leeway and sufficient overhead each fall 1.01% [read: `figure4.py`, which scales each by (10% − serving cost); the two numbers computed from the card].
+- Figure 5: each two-stage step's total at FP4's break-even rises 0.081 points and its bound at a total of 10% rises 1.01% to 1.02%; for example the 4x GPU prover's step goes 0.3229 → 0.3262 TB at the world's year against FP4's 0.3767 TB [run d571]. No step changes sides of 10%: the nearest goes 10.003% → 10.083% and the next 9.687% → 9.767% [run d571].
+- The leverage cases: the largest leverage at a total of 10% falls 1.0% to 15.5% [run d571]. **One changes sides of 1**: `P5+poolwin3600` at the world's year with no pool's proving counted goes 1.011 → 0.9999, so a case that met FP4's target at a total of 10% with 1.1% to spare now misses it by 0.014% [run d571]. At a datacenter's year it stays above 1 (1.031 → 1.020) [run d571]. It is a planner case with its prover and templates at their goals [read: `sweep.py` `served_line`].
+- A case's bound at a given β, its floor, its break-even β and its overhead do not move: identical on the 8 rows I ran both ways [run d571].
+- `r20261111-191829-ff13` (the heavier before/after job) hit its 60-minute limit and was cancelled; d571 covers what it would have given [run: `research fetch`, rc 143].
+
+**One thing for you.** `research queue open` warned that PRF-456 carries no label of the goal `proofs/serving-cost-three-parts`; its only live goal label is `proofs/spot-figures` [run]. I kept the Goal line your brief gave. I cannot write Linear: label PRF-456 with the goal, or tell me to change the line (`research queue edit 9059 --body-file`).
+
+**Still asked from entry 2.** My comment on PRF-456 rang no one (a worker's comment does not) [run: the tool's warning at 19:29Z]. Ring @vllm with it before their 03:00Z run if you have not.
+
+**What remains, and when.** The quick tier on the head (`49e6`): reported when it ends. After the vLLM lane posts its shares on PRF-456 (Thu noon PST): the measured shares beside the predictions with the run's interval, the target restated, the goal updated, by Fri 13 Nov 20:00Z. A second worker would not bring either date in [guess].
