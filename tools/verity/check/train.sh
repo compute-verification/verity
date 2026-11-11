@@ -1,14 +1,15 @@
 #!/usr/bin/env bash
 # `tools/verity/check/train.sh COMMIT MACHINE [--agreement]`: the lander's recorded check of a train, and the one way the lander
 # launches a check. It runs the merge queue's command (`research.jobs.dispatch.command`: `check.py --record --on MACHINE`, against
-# origin/main, on the passes it gathers from the newest recorded checks) in a priority slot and past a failed step, and refuses
+# origin/main, on the passes of the newest recorded checks, which the run fetches) in a priority slot and past a failed step, and refuses
 # any other flag, so no flag of the lander's turns reuse off or changes what is checked.
 #
 # COMMIT (a train-prep branch or sha) is checked out in a worktree of its own, so the checkout it is run from stays on main, and
 # `check.py --record --on MACHINE --priority --keep-going` runs there: an Attempt of exactly COMMIT, in the next check slot of
-# MACHINE to free, ahead of lane checks still waiting and never stopping a running one (`slot.py --priority`), with the pinned
-# upstream build when COMMIT changes verity/ml/flock/ or verity/core/service/flock/ against origin/main. --agreement sends that
-# build whatever the train changes: the lander's rule for a train that adds or changes a guarantee (`lean-audit.json`) anywhere.
+# MACHINE to free, ahead of lane checks still waiting and never stopping a running one (`slot.py --priority`), with presigned
+# URLs of the pinned upstream build when COMMIT changes verity/ml/flock/ or verity/core/service/flock/ against origin/main, which
+# the run fetches. --agreement sends them whatever the train changes: the lander's rule for a train that adds or changes a
+# guarantee (`lean-audit.json`) anywhere.
 # It prints the run ids (`RUN ID...`); `research merge COMMIT` lands it on a pass. `research merge --train --prepare` builds
 # COMMIT's branch. With MACHINE `auto` and no free slot, check.py launches twins, one run per machine that can take it (`slot.py
 # --twin`): the first to take a slot runs the check and the others exit 75, not started, so RUN names one id per twin. When every
@@ -16,8 +17,8 @@
 #
 # `--deferred STEP,...`: drive's after-landing run and its lock run in place of the check: only those ci.toml jobs and what
 # they need (`check.py --record --deferred`), in a priority slot as a check runs, recorded without `--tool check`, so no gate
-# reads it; drive reads its steps and suites. With it alone, `--agreement` sends the upstream build (a run of `main` has no
-# change to send it for), `--no-cache` reuses no pass (`--circuit-cache` beside it: but circuit-check's per-target ones), and
+# reads it; drive reads its steps and suites. With it alone, `--agreement` sends the upstream build's URLs (a run of `main` has
+# no change to send them for), `--no-cache` reuses no pass (`--circuit-cache` beside it: but circuit-check's per-target ones), and
 # `--no-regenerate` fails lean-audit on a lock record difference rather than passing it on a regenerated record: drive's
 # after-landing run, of a commit whose records drive's lock run regenerated and drive committed. `--base REF` (with --deferred alone)
 # is the run's base (`check.py --record --base`), above which ratchet-gate judges every landing: drive sends the last verified
@@ -169,8 +170,7 @@ setsid nohup uv run -q python tools/verity/check/check.py --record --on "$machin
   > "$log" 2>&1 < /dev/null &
 pid=$!
 # with twins (`check: --on: twins PAIR on M1, M2: ...`) one run launches per machine, and only one of them runs the check
-# 30 min: drive launches several runs at once, each gathering ~1 GiB of verdicts into TMPDIR on the control pod's network
-# volume, which can take past 10 min
+# 30 min: drive launches several runs at once, each placing itself and shipping its tree to its machine
 launch_wait_s=1800
 want=1 ids=
 for _ in $(seq $((launch_wait_s / 5))); do
