@@ -1,5 +1,6 @@
 module
 
+public import Proofs.Properties.Nci.RecordUnits
 public import Proofs.Properties.Nci.RecordWhole
 public import Proofs.Properties.Nci.ResolveRows
 
@@ -11,5 +12,6 @@ wiring states them (`RecordJson`), its blocks as grids over each template's unit
 the check takes whole says of its two rows (`RecordWhole`). Of resolution: a reference from inside an activation
 ends inside it or at a leaf of one of its parameters (`ResolveWithin`); a leaf it returns through a parameter is a
 leaf of one `Record.passedOn` lists (`RecordPassed`, `ResolvePassed`); and a leaf of a unit's parameter is a gate of
-an input node of the root, no two of them one gate (`RecordOwn`, `ResolveRows`).
+an input node of the root, no two of them one gate (`RecordOwn`, `ResolveRows`). Of the root: its ranges are its
+nodes that are no input, in order (`RecordUnits`).
 -/
