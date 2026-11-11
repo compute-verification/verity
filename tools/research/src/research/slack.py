@@ -1914,7 +1914,8 @@ def cmd_ask(ns: argparse.Namespace, reg: dict) -> int:
     if owner["handle"] == h["handle"]:
         raise SlackError("an ask goes to another handle")
     ch = channel_id(ns, reg, FRONT_DOOR)
-    warn_unrouted(body := _body(ns), reg, h["handle"], (owner["handle"],))
+    body = re.sub(rf"^@{re.escape(owner['handle'])}\b[:,]?\s*", "", _body(ns))
+    warn_unrouted(body, reg, h["handle"], (owner["handle"],))
     text = f"{tag(owner)} {linear_ask(ns, owner, h['handle'], body)}"
     check_length(reg, ch, text, POST_WORDS)
     _post(client(ns), ch, h["handle"], text, route=_route(ns, reg, ch), urgent=ns.urgent)
@@ -4218,6 +4219,9 @@ def cmd_ask_daniel(ns: argparse.Namespace, reg: dict) -> int:
             if ns.choice == OTHERWISE and not 1 <= len((ns.note or "").strip()) <= OTHERWISE_NOTE_MAX:
                 raise SlackError(f"ask-daniel resolve --choice otherwise needs --note: what Daniel decided instead, in 1 to "
                                  f"{OTHERWISE_NOTE_MAX} characters")
+            if ns.on_page and provisional:
+                raise SlackError("ask-daniel resolve: --on-page records Daniel's word and --provisional the lane's own "
+                                 "decision; a resolve is one or the other")
             if ns.choice == OTHERWISE and provisional:
                 raise SlackError("ask-daniel resolve --choice otherwise is Daniel's word, never provisional: a lane decides only "
                                  "among its card's options")
