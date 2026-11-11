@@ -37,6 +37,9 @@ the code's reveal reads only a transcript's messages under `Built` (`reveal_out`
   opening of the same reveal under the same roots that passes. Over every transcript and witness this fails: the
   commitment's check places the opening's value in the row and never compares it with the row's own bit there, so
   only a witness the relation accepts ties the two.
+* `Reveal.rootsAt_same_side`, `reveal_has_class`: at every transcript and witness, the reveal holds an opening under
+  the same roots at every gate the unit needs on the same side of its replay block's boundary. With `reveal_passes`,
+  the gates with the same readers on the same side of one replay block's boundary are opened together or not at all.
 * `sessWit_reveal_passes`: the two halves composed at the compiled two-stage verifier.
 -/
 
@@ -325,6 +328,34 @@ theorem reveal_class (hB : Built h) (hS : Addresses h) {x : Msg} {s : AuditState
         (code h).reveal s u (run FlockDeploy.sha512 P (V h) x ω r).seen wF :=
     (Reveal.mem_reveal (partition h) (two h) (iroots []) (Reveal.frameAt h.frame)).2 ⟨g', hg', rfl⟩
   exact ⟨_, hmem, hroots, rfl, reveal_passes h hB hS hx hP hd hin P ω r hu hsess hacc hck _ hmem⟩
+
+/-! ## The reveal's classes -/
+
+/-- **Gates on the same side of the unit's replay block's boundary open under the same roots**, at every
+transcript: both under the block's interior roots, or both under the statement's. -/
+theorem Reveal.rootsAt_same_side (part : AuditStatement → Option Partition)
+    (two : AuditStatement → Option Design.Two) (ir : Seen → ℕ → List Msg) {s : AuditStatement} {u ρ g g' : ℕ}
+    {v : Seen} {P : Partition} {d : Design.Two} {rb : List ℕ} (hP : part s = some P) (hd : two s = some d)
+    (hρ : replayOf P d.part u = some ρ) (hrb : d.part.blocks[ρ]? = some rb)
+    (hside : (g ∈ rb ∧ s.prog.Boundary rb g = false) ↔ (g' ∈ rb ∧ s.prog.Boundary rb g' = false)) :
+    Reveal.rootsAt part two ir s u v g = Reveal.rootsAt part two ir s u v g' := by
+  rw [Reveal.rootsAt_eq part two ir hP hd hρ hrb (g := g), Reveal.rootsAt_eq part two ir hP hd hρ hrb (g := g')]
+  exact if_congr hside rfl rfl
+
+/-- **The reveal holds a class whole**, at every transcript and witness: an opening of unit `u`'s reveal has, at
+every other gate `g'` the unit needs on the same side of the unit's replay block's boundary, an opening of the same
+reveal at `g'` under the same roots. Nothing here says either passes; `reveal_passes` does, at its premises. -/
+theorem reveal_has_class {s : AuditStatement} {Pt : Partition} {d : Design.Two} (hP : partition h s = some Pt)
+    (hd : two h s = some d) {u ρ : ℕ} {rb : List ℕ} (hρ : replayOf Pt d.part u = some ρ)
+    (hrb : d.part.blocks[ρ]? = some rb) (v : Seen) (wF : Claims.Flock.Wit) :
+    ∀ p ∈ (code h).reveal s u v wF, ∀ g' ∈ Reveal.needs (partition h) s u,
+      ((p.2.pos ∈ rb ∧ s.prog.Boundary rb p.2.pos = false) ↔ (g' ∈ rb ∧ s.prog.Boundary rb g' = false)) →
+      ∃ p' ∈ (code h).reveal s u v wF, p'.1 = p.1 ∧ p'.2.pos = g' := by
+  intro p hp g' hg' hside
+  obtain ⟨g, -, hgp⟩ := (Reveal.mem_reveal (partition h) (two h) (iroots []) (Reveal.frameAt h.frame)).1 hp
+  rw [← hgp] at hside ⊢
+  exact ⟨_, (Reveal.mem_reveal (partition h) (two h) (iroots []) (Reveal.frameAt h.frame)).2 ⟨g', hg', rfl⟩,
+    (Reveal.rootsAt_same_side (partition h) (two h) (iroots []) (g := g) (g' := g') hP hd hρ hrb hside).symm, rfl⟩
 
 /-! ## The two halves, at the compiled verifier -/
 
