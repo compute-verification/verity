@@ -52,8 +52,8 @@ Program's (`Templates`), and the wiring's order is left free: under any order `S
 without a cycle (`Spot.Wires.check_acyclic`). The slots are the ones the text's inference blocks give each unit
 (`NciCheck.RecordText.slot`), and every row the check holds is one the text declares, for the reason it declares: a
 registered read, a table read or an opening (`NciCheck.RecordText.declared`). Both readers take the Program beside
-the text. So θ and the blocks are not the check's to choose: it holds no row the text does not declare. It may hold
-fewer, and then counts more bits as fresh.
+the text. So the blocks are the text's, and θ lies within what the text declares: the check holds no row the text
+does not declare. It may hold fewer, and then counts more bits as fresh.
 
 **The rate rule** (`Complies`): where the check accepts, the instance's fields are the ones it judged by, the record
 lays out a circuit, and every circuit it lays out meets the policy block by block at the instance's `Γ` and `α`, so
