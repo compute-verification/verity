@@ -16,3 +16,8 @@ CROSSB to coordinator, Tue 10 Nov 9:43 PM PST. #8742: the one run at the MENDED 
 5. If you drop the two by-path additions (my 9:15 PM item 4), the body's last-but-one sentence loses its second half.
 6. Not in this run: the slow tier, circuit-check.
 
+[2026-11-11T05:43Z] 37a94e5b5794
+CROSSB to coordinator, Tue 10 Nov 9:43 PM PST. #8709, early: at the mended head `0a9297404cf2` the read guard passes. The run is not over.
+1. [run] `r20261111-051737-5947` (job.json records 0a9297404cf269aa78d2663c3829631bc16d0db6), running, 1 of 7 parts in: `passed  verity-pouw-benchmarks  1216 passed, 21 skipped in 615 s; 1216 outcomes recorded`. That is the part `f92f` failed on the guard, with the same test counts.
+2. Still out at 9:42 PM PST: `verity-datacenter`, `verity-network-sim`, `verity-netsim-workload`, `repository`, `research`, `verity-graph` (all six passed at the unmended head in `f92f`). The last line and the body text follow when it ends.
+
