@@ -59135,3 +59135,42 @@ The 82 failed runs among the 178 that run-times leaves out, same causes: known r
 **Next.** When `a692` ends I put its verdict in the body (`research queue edit 9023`) and write the ready line. I do not mark.
 
 For the table: #9023 open, unmarked, at `6b782d972ec4`; waits on `r20261111-170101-a692`.
+
+## V2CASE (PRF-555), Wed 11 Nov 17:05Z: #9024 open at `d51774321e6d`, not marked, stacked on #8984; its quick tier PASSED, 4 of 4 suites [run `52a5`]. The four notes are answered; the JSON number: Lean reads one of any length, Python's `json` refuses it, nothing opened
+
+Tags: [read] a file and line (lines of `d51774321e`), [run] a run I read with `research status` or a command I ran now, [local] one test file or a few calls on the agent VM, [relayed], [guess]. Times from `date -u`.
+
+**The PR.** #9024, head `d51774321e6d7d5dec227baab2b1d95295cb7451`, branch `cursor/proofs-v2case-notes-9664`, `Refs PRF-555`, open, not marked.
+- It needs #8984's lines, so it is #8984's head `a15be818102f` plus two commits: 4 files, +111 −41, all in `benchmarks/one_stage` [run: `git diff --shortstat`]. The body says it stacks. Against `main` the PR shows #8984's commit too until that lands.
+- It merges clean with `main` `493f49485e50` [run: `git merge-tree --write-tree`]. The tier ran on the branch, not on that merge.
+- #8984 (`a15be818102f`) and #9007 (`e4a196030a7c`) are untouched [run: `gh pr view`, 17:05Z].
+
+**Note 1, the label: `case.json`'s top-level key `files`** (`v2_case.py:144`), the string the `V2CASE` line prints.
+- No reader takes it: `composite.py`'s `piece` takes `params`, `commitment`, `evidence`, `blobs` by name (`composite.py:113-120`); Lean's `check` is given `params.json`, `commitment.bin`, `evidence.json` and the blobs, never `case.json` (`v2_case.py:170-171`); Lean's `serve` reader of a case reads by name too (`CoreProtocol/Cli.lean:50-54`) [read].
+- No digest covers it: the commitment and the composite's params digest are over `params`.
+- Not in what Lean reads: it holds the params' and `proofs`' keys exactly (`OneStageZk.lean:146-147`, `:192`), so a field there is a refusal.
+- Not `missing.json`'s sibling: one more name for a reader of `--out` to know, and `missing.json` already carries the label in `why`.
+
+**Note 2, `case_v2`'s docstring** (`a5.py:1143-1154`): `public` is the file's SHA-512 as the caller took it and `case_v2` checks nothing about when; `audit`'s is taken at staging, before the sample it takes itself and after one its caller handed it; `v2_case.py`'s is the kept case's or the kept file's own. `OneStageZk.lean:5-6` reads the old way and is not changed (Lean, out of scope).
+
+**Note 3, the refusal** (`v2_case.py:57-58`, `:111`, `:157-162`): `case` raises `Refused`, a `ValueError`; `main` catches that alone, clears `--out`, writes `missing.json` with the text, prints `V2CASE {"refused": …}`, exits 2. An unreadable kept file still raises as before. The text dropped "before the sample", which note 4 makes false for a handed sample. One test.
+
+**Note 4, the boundary: the window DOES record it, so the case is labelled** [read].
+- `a5.audit` writes `summary.json` into the window (`a5.py:1065`) with `handed` exactly when its caller handed it the sample (`a5.py:979-982`); `two_stage/audit.py:270` is the one such caller and reads it back at `:395`; `run.sh:120-124` keeps the file.
+- `case` reads it (`v2_case.py:113-121`). A staged digest's label ends `before the sample`, `after the sample its caller handed it`, or `cannot tell whether before the sample: the window keeps no summary.json`. The docstring says so (`:12-19`).
+- **One limit:** a5 took a handed sample (`298a3c801b`) one commit before it wrote `handed` (`428517cc49`), both 8 November [run: `git log -S`]. A two-stage window written between them would read "before the sample". I know of no such kept window [guess].
+- The one real kept window (`1b8e`) keeps no `case-v2.json` [relayed: BENCHCROSS 14:50Z], so it gets the fallback's label, unchanged.
+
+**Tests and runs.**
+- `tests/test_v2_case.py`: 6 passed in 0.25 s; with #8984's `v2_case.py` put back, the 3 changed or added tests fail and 3 pass [local].
+- `r20261111-165447-52a5`: done, rc 0, at `d51774321e`, clean [run]. `suites.py --changed 72e4d46d9209 --quick` (the merge base, so #8984's change counts): 4 suites, 4 passed, 0 failed, 0 cached. `benchmarks/one_stage` 509 (`test_v2_case.py` whole), `benchmarks/prove_path` 143, `repository` 295, `verity-graph` 207.
+- `r20261111-165317-706f`: **cancelled by me** (`research cancel`, `CANCELLED_MANUAL`) one minute after launch, while it waited for a slot. I had given `--changed` a 40-digit revision that is no commit (I completed the short hash from memory instead of `git rev-parse`). `52a5` is the same command with the right one.
+- **Not run:** the script on a real kept window, `--exe`, `kept_composite.sh`, any GPU run, the full check.
+
+**The JSON number past 4,300 digits: the Lean reads one, Python refuses it, and the refusal is not the Site's.**
+- Lean [read]: a sheet's `bw`, `chip`, `mem`, a location's `bytes` and a link's `beta`, `latency` are `Flock.J.nat` (`CoreProtocol/Site.lean:641-642`, `:654`, `:661`), which is `Json.getNat?` on the parsed number (`Flock/Canon.lean:146-149`, `:167`). The canonical parser adds the digits into a `Nat` with no bound (`CoreProtocol/Protocol/Canonical.lean:105-121`), `Flock.canon` writes the mantissa back whole (`Canon.lean:75`, `:112`), and `Site.lean` bounds none of them [run: `rg` for a power of two or a fixed-width type finds nothing]. The difftest server parses with Lean core's `Json.parse` (`Difftest.lean:42`), which I did not read [guess: no bound].
+- Python [local: six calls]: the Site's `_nat` takes any `int`, and `Sheet(…, bw=10**4300, …)` constructs. `json.loads` on a 4,301-digit number raises a plain `ValueError`, before any Site code. `json.dumps` raises the same, so `wire.canonical` (`verity/configuration/wire/__init__.py:62-64`) does, and with it `Sheet.digest`. `wire.parse` turns the reader's into `Refused('malformed')` (`:81-87`); the Site's and the registration's Python take parsed JSON and catch nothing.
+- **A fix is not a Site change.** It is the JSON reader and writer every Python verifier shares: `parse_int` on the read side is one argument, but the write side needs our own integer writer in `wire.canonical`, in the commitments' `canonical_json_bytes` and in the difftest harness's `canonical`. That is a wire change with other owners. I opened nothing and wait for your word.
+- Not traced: whether a prover can register such a number where a bound reads it (a sheet's `mem` and `bw` are the prover's own figures; I saw no check that bounds them) [guess].
+
+For the table: #9024 at `d51774321e6d`, PRF-555, open and unmarked, stacked on #8984; quick tier 4/4 [run `52a5`]; the label is `case.json`'s `files`; the refusal exits 2 with `missing.json`; a handed sample is read from `summary.json`'s `handed`. JSON numbers: Lean reads any length, Python's `json` refuses past 4,300 digits; a fix is the shared wire's, not opened.
