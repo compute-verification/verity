@@ -10,8 +10,6 @@ from __future__ import annotations
 CAPTURE_LOG_SCHEMA = "verity-capture/log/v1"
 #: a capture's snapshot index, `snapshots.json`, which `observe.capture.Capture._write_snapshot_index` writes
 CAPTURE_SNAPSHOTS_SCHEMA = "verity-capture/snapshots/v1"
-#: the runtime's module tree, which `observe.runtime_tree.RuntimeTree.to_json` writes and its `from_json` refuses any other
-RUNTIME_TREE_SCHEMA = "verity-vllm/runtime-tree/v1"
 
 # --- the query (`verity_vllm.query`)
 #: whether a Commit used the manifest of record, which `query.manifest.verify.verify` and `acquire.compiled`'s `main`

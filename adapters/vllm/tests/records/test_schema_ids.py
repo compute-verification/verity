@@ -2,7 +2,7 @@
 and never moves."""
 from __future__ import annotations
 
-from verity_vllm.observe import events, runtime_tree
+from verity_vllm.observe import events
 from verity_vllm.records import schema_ids
 
 #: the ids as the records on disk have them
@@ -32,7 +32,6 @@ ON_DISK = {
     "PROGRAM_COMPARE_SCHEMA": "cb-a/compare/v1",
     "RANK_COMMIT_BINDING_SCHEMA": "verity/tp2/commit-binding/v1",
     "RANK_MATCH_SCHEMA": "tp2/rank_match/v1",
-    "RUNTIME_TREE_SCHEMA": "verity-vllm/runtime-tree/v1",
     "SAMPLED_REPLAY_SCHEMA": "verity-sweep/sampled-replay/v1",
     "TP_FOLD_MATCH_SCHEMA": "verity/tp2/fold-match/v1",
     "TP_LINKS_SCHEMA": "cb-a/tp_links/v2",
@@ -53,5 +52,3 @@ def test_every_constant_is_the_id_on_disk_and_the_module_holds_no_other():
 
 def test_the_observation_reads_its_ids_from_the_module():
     assert events.SCHEMA is schema_ids.CAPTURE_LOG_SCHEMA
-    assert runtime_tree.RUNTIME_TREE_SCHEMA is schema_ids.RUNTIME_TREE_SCHEMA
-    assert runtime_tree.RuntimeTree().to_json()["schema"] == "verity-vllm/runtime-tree/v1"
