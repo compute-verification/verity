@@ -32,7 +32,10 @@ def parse(path):
 
 def mix(ins):
     base, full = collections.Counter(i[1] for i in ins), collections.Counter(i[2] for i in ins)
-    srt = lambda c: dict(sorted(c.items(), key=lambda kv: -kv[1]))
+
+    def srt(c):
+        return dict(sorted(c.items(), key=lambda kv: -kv[1]))
+
     return {"total": len(ins), "base": srt(base), "full": srt(full)}
 
 
