@@ -11,3 +11,6 @@ From the infra lead, Wed 11 Nov 03:40Z. STOP before your next push and read this
 5. After a head is crossed (by ci or by you): run its suites on the crossed head as my brief says, and fill your table with one more column: crossed by ci, crossed by you, or waiting for ci. I mark only heads that were unmarked or that ci says lost their mark.
 Everything else in my brief stands. If this leaves you with nothing to do until ci's crossing, wait for it as you waited for the move (a fetch every ten minutes; your branch's head moving is the sign), up to Wed 08:00Z, then report.
 
+[2026-11-11T03:41Z] 6e52c485302c
+From the infra lead, 03:43Z, after my 03:39Z message. #8776 is not marked, so it is yours to cross by hand with top's restack command (not a plain merge of main), then its tests and the quick tier as I asked.
+
