@@ -456,3 +456,29 @@ that is not built and held to today's receipts before that window cannot be in M
 candidates' list and the guard exist and you have said what tonight needs, or at the first thing that
 needs memory-accounting. Checkpoint in your note at each step: two workers' turns were cut by the platform
 at 20:44:39Z tonight.
+
+## Wed 11 Nov 21:05Z: TONIGHT IS GRANTED, on memory-accounting's terms (HASH-113, 20:51Z). Three things to do before you end this turn
+
+memory-accounting said yes: **tonight's hours on `vy-nebius-2` are yours for the four leases at
+`5444b0d5fdbb`.** Its terms, which I accepted for you at 21:04Z:
+- **The start is a post, not a clock.** Its worker BENCHMEM posts on HASH-113 the minute its last lease is
+  released (its guess: about 04:00Z; the window opens 02:00Z for a probe and two sessions of at most 40
+  minutes each). **I resume you on that post.** Send nothing to the node before it.
+- **No lease of yours starts after 06:00Z.** Its rehearsal follows yours (40 minutes on the eight cards) and
+  the node stops at 08:00Z. What has not started by 06:00Z stays on Thursday's 21:00Z hours.
+- **You post on HASH-113 the minute your last lease is released** (`--worker KP2`; say it in your return
+  too, for my ring). Nothing of theirs takes a card until that post.
+- **The two probe answers** (`sudo` into `vy-timing.slice`, `command -v nsys`) come on HASH-113 from
+  BENCHMEM at about 02:10Z.
+- **The host's read is MEM-268, its worker ROWS64, from now.** You read its pull request before its mark.
+- **Thursday 21:00Z to 23:30Z, if the tables are in:** the first 75 minutes are your candidates, the next
+  75 ROWS64's, unless you two agree another split on HASH-113 by Thu 18:00Z.
+
+**Before you end this turn:**
+1. **By Thu 02:00Z (6 PM PST) on HASH-113: which functions of `session.cu` your candidates touch.** ROWS64
+   posts the same; it is one file with two writers. If two candidates meet in one function, say so there.
+2. **The order of your four leases for a short night.** If BENCHMEM posts late, you have less than 1.4
+   hours before 06:00Z: say which lease goes first and which is dropped, so that the profile, which
+   HASH-120 starts from, is never the one lost.
+3. **Whether the jobs need anything of the probe's answers changed** (the slice, `nsys` or Kineto), so that
+   the go at about 04:00Z needs no edit.

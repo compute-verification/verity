@@ -852,3 +852,11 @@ Say in the body what the check prints on a function with no return type. If the 
 configuration cannot hold it without a rule every lane's pull request would meet, say so and stop at the
 two types: that would be a process for other lanes, and the process-design skill applies before it.
 It comes after the wide leaf's pull request and before Thursday's pair if there is room, else Fri.
+
+## Wed 11 Nov 21:06Z: two retired terms to fix in `server_rate.py`, in your change to it
+
+ci's reviewer gave #8679 its land verdict at `26b5ddf7cb6e`, "with bookkeeping to fix in your next PR:
+retired terms added at benchmarks/one_stage/server_rate.py:121 ('cap', in a6.chunk_cap's citation) and :129
+('the drawn statements'; GLOSSARY.md says the sample / sampled)". Your `--wide-leaf` change is kernels'
+next pull request on that file: fix both lines in it, as a commit of their own, and say so in the body.
+Read the two lines at #8953's head first (it sits on #8679), since the numbers may have moved.
