@@ -217,25 +217,34 @@ def session(st: Mapping[str, Any], units: Sequence[int], out: Path, *, bin_: str
 @dataclass
 class Resumed:
     """A stop class's two streams again at the end of its first stage: the boundary stream's (`two_stage.resume`), and
-    the stop stream on its record, with the stop record's registration, the copies it was held to and its sample."""
+    the stop stream on the record of its log the stop record names, with the stop record's registration, the copies it
+    was held to and its sample."""
 
     first: TS.First
     stream: S.Stream
     held: Any
     registration: S.WindowCommitmentRecord
     sample: S.Draw
+    #: the boundary record's index in the boundary stream's log
+    received: int = 0
 
     @property
     def layout(self) -> BR.Layout:
         return self.first.layout
 
+    @property
+    def boundary(self) -> str:
+        """The digest of the boundary record the stop record reads, a record of the boundary stream's log."""
+        return self.registration.record["previous"]
+
 
 def resume(stage1: Mapping[str, Any], check: SpecializedDefinition, stop: BS.Stop, design: str, *, delta: float = 0.5,
            proof_deadline: float = TS.PROOF_DEADLINE_S) -> Resumed:
     """The class's stop stream again from its ``stage1.json``, under the verifier's own check template, stop rule and
-    sampling design: the boundary stream's record registered again (`two_stage.resume`), the stop stream built on that
-    record, the stop record registered (R1 to R7) and sampled again on the bytes its sample read. `Unlogged` when the
-    stop record's ``previous`` is not that boundary record; ValueError when the first stage sampled no stop block, or
+    sampling design: the boundary stream's record registered again (`two_stage.resume`), the stop stream built on the
+    record of that stream's log (`Stream.log`) whose digest is the stop record's ``previous``, the stop record
+    registered (R1 to R7) and sampled again on the bytes its sample read. `Unlogged` when that log holds no such
+    record; ValueError when the first stage sampled no stop block, or
     the Spec, the record, its registration or the sample isn't ``stage1.json``'s; `service.Refused` as the streams
     refuse."""
     s = stage1.get("stop")
@@ -243,10 +252,11 @@ def resume(stage1: Mapping[str, Any], check: SpecializedDefinition, stop: BS.Sto
         raise ValueError(f"the class's first stage registered or sampled no stop block: {(s or {}).get('error') or stage1.get('error')}")
     root = stage1.get("window_root")
     first = TS.resume(stage1, check, delta=delta, window_root=root, stop=stop)
-    layout, boundary = first.layout, first.registration.record
-    if s["record"].get("previous") != first.registration.digest:
+    layout, logged = first.layout, {R.digest(rec): (i, rec) for i, rec in enumerate(first.stream.log)}
+    if s["record"].get("previous") not in logged:
         raise Unlogged(f"the stop record's previous, {str(s['record'].get('previous'))[:16]}, is no record of the class's "
-                       f"boundary stream's log, which holds {first.registration.digest[:16]}")
+                       f"boundary stream's log, which holds {', '.join(d[:16] for d in logged)}")
+    received, boundary = logged[s["record"]["previous"]]
     stream = S.Stream(TS.stop_spec(layout, design, proof_deadline), layout.stop.template, budget=1, delta=delta,
                       challenger=TS.CHALLENGER, coins=TS.Staged(bytes.fromhex(s["read"])), log=[boundary])
     if stream.spec.digest() != s["spec"]:
@@ -262,7 +272,7 @@ def resume(stage1: Mapping[str, Any], check: SpecializedDefinition, stop: BS.Sto
     sample = stream.select(reg)
     if list(sample.units) != list(s["units"]) or sample.draw != s["sample"]:
         raise ValueError("the stop stream samples other stop blocks read again than its first stage did")
-    return Resumed(first, stream, held, reg, sample)
+    return Resumed(first, stream, held, reg, sample, received)
 
 
 def reads(r: Resumed) -> dict[str, Any]:
@@ -286,12 +296,12 @@ def order_entry(r: Resumed, stop: Mapping[str, Any], window_root: str | None, ou
     and the stop registration this stream made."""
     import a5_coins as AC
 
-    why = TS.stop_order(stop.get("evidence"), window_root or r.layout.run, r.first.registration.digest,
+    why = TS.stop_order(stop.get("evidence"), window_root or r.layout.run, r.boundary,
                         r.registration.digest, bytes.fromhex(stop["read"]), AC.lms_verify)
     return {"accepted": why is None, "of_record": False, "tool": TOOL, "premise": ORDER_PREMISE,
             "case": 1 if why is None else 2, **({} if why is None else {"why": why}),
-            "boundary": {"registration": r.first.registration.digest, "received": r.first.registration.order,
-                         "audit": boundary_entry(r.first.registration.digest, outcome)["audit"]},
+            "boundary": {"registration": r.boundary, "received": r.received,
+                         "audit": boundary_entry(r.boundary, outcome)["audit"]},
             "stop": {"registration": r.registration.digest, "previous": r.registration.record.get("previous")}}
 
 
@@ -334,7 +344,7 @@ def verdicts_of(r: Resumed, stage1: Mapping[str, Any], file: Mapping[str, Any], 
     got[LEAN] = {**got[LEAN], "of_record": True, "sessions": list(proved["sessions"])}
     got[READS] = reads_entry(file, got[LEAN])
     got[ORDER] = order_entry(r, stage1["stop"], stage1.get("window_root"), outcome)
-    got[BOUNDARY_AUDIT] = boundary_entry(r.first.registration.digest, outcome)
+    got[BOUNDARY_AUDIT] = boundary_entry(r.boundary, outcome)
     got[REQUEST_ROW] = {"accepted": None, "of_record": False, "premise": REQUEST_PREMISE}
     got[STOP_RULE] = {"accepted": None, "of_record": False, "premise": STOP_RULE_PREMISE}
     return got
@@ -365,7 +375,7 @@ def summary_of(r: Resumed, stop: BS.Stop, design: str, got: Mapping[str, Any]) -
     accepted, complete = audit.get("accepted") is True and got.get("accepted") is True, audit.get("complete") is True
     return {"format": FORMAT, "class": [L.prompt, L.outputs], "spans": L.spans, "run": L.run, "stop_rule": stop.to_json(),
             "design": design, "sample": list(r.sample.units),
-            "registration": {"boundary": r.first.registration.digest, "stop": r.registration.digest},
+            "registration": {"boundary": r.boundary, "stop": r.registration.digest},
             "accepted": accepted, "complete": complete, "length_held": accepted and complete,
             "symbol": got.get("symbol"), "record": got.get("record"), "refused": got.get("refused"),
             "failed": sorted(k for k, c in (audit.get("checks") or {}).items() if not c.get("ok")),
