@@ -331,8 +331,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     return 0
 
 
-__all__ = ["COIN_BYTES", "PROTOCOL", "SOURCE_BYTES", "Challenger", "Refusal", "designate", "give_salt", "keep",
-           "main", "report", "serve"]
+__all__ = ["PROTOCOL", "SOURCE_BYTES", "Refusal", "designate", "give_salt", "keep", "report", "serve"]
 
 if __name__ == "__main__":
     sys.exit(main())
