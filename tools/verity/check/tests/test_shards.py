@@ -31,9 +31,18 @@ PACKAGES = LA.packages(CHECK.tracked_files(ROOT))
 SECURITY = tuple(f"lean-audit:{p}" for p in ("security", "security/Proofs", "security/Properties"))
 #: those the hand-written plans name: the spec goes with its provers (`declaration.resolve`), so no plan spells its path
 NAMED = SECURITY[1:]
-#: lean-suites' parts: its suites, the composition suite in the three parts by test id its pyproject declares
+#: lean-suites' parts: its suites, the composition and PoUW benchmark suites each in the three parts by test id its pyproject
+#: declares
 SUITES = CHECK._parts_of()["lean-suites"]
 COMPOSITION = tuple(f"lean-suites:verity-core-composition:{k}/3" for k in (1, 2, 3))
+POUW = tuple(f"lean-suites:verity-pouw-benchmarks:{k}/3" for k in (1, 2, 3))
+#: the lean-suites every plan runs beside the security analysis's audit, and beside lean-build; the rest go with the Rust build
+BESIDE_AUDIT = (*(f"lean-suites:{s}" for s in ("verity-vllm", "verity/protocols/recursion/verifier/vstar_cli",
+                                               "verity-core-evaluate", "pous-check", "verity/protocols/certifier/verifier",
+                                               "verity-pouw-check-difftest")),
+                COMPOSITION[2], POUW[2])
+BESIDE_BUILD = ("lean-suites:verity-flock", COMPOSITION[0], POUW[1])
+WITH_RUST = (COMPOSITION[1], POUW[0], "lean-suites:*")
 
 
 @pytest.fixture(autouse=True)
@@ -50,29 +59,32 @@ def _resolved(n: int, packages=PACKAGES) -> list[list[str]]:
 
 
 def test_the_plans_are_the_documented_ones():
-    c1, c2, c3 = COMPOSITION
+    build = ("lean-build", "lean-unit-cut")
     assert D.plans() == {
-        3: ((*NAMED, "pytest", c3),
-            ("lean-build", "lean-unit-cut", "lean-audit:*", c1, "lean-suites:*", "lean-agreement", "lean-changed"),
-            ("flock-circuit-build", "circuit-check", "flock-rust-tests", c2)),
-        4: ((*NAMED, "circuit-check:1/4", c3),
-            ("lean-build", "lean-unit-cut", "lean-audit:*", c1, "lean-suites:*", "lean-agreement", "lean-changed", "circuit-check:2/4"),
-            ("pytest", "circuit-check:3/4"), ("flock-circuit-build", "flock-rust-tests", "circuit-check:*", c2)),
-        5: ((*NAMED, c3), ("lean-audit:*", "lean-changed"), ("lean-build", "lean-unit-cut", c1, "lean-suites:*", "lean-agreement"),
-            ("pytest",), ("flock-circuit-build", "circuit-check", "flock-rust-tests", c2))}
+        3: ((*NAMED, "pytest", *BESIDE_AUDIT),
+            (*build, "lean-audit:*", *BESIDE_BUILD, "lean-agreement", "lean-changed"),
+            ("flock-circuit-build", "circuit-check", "flock-rust-tests", *WITH_RUST)),
+        4: ((*NAMED, "circuit-check:1/4", *BESIDE_AUDIT),
+            (*build, "lean-audit:*", *BESIDE_BUILD, "lean-agreement", "lean-changed", "circuit-check:2/4"),
+            ("pytest", "circuit-check:3/4"), ("flock-circuit-build", "flock-rust-tests", "circuit-check:*", *WITH_RUST)),
+        5: ((*NAMED, *BESIDE_AUDIT), ("lean-audit:*", "lean-changed"), (*build, *BESIDE_BUILD, "lean-agreement"),
+            ("pytest",), ("flock-circuit-build", "circuit-check", "flock-rust-tests", *WITH_RUST))}
 
 
 @pytest.mark.parametrize("n", sorted(D.plans()))
-def test_every_plan_runs_the_composition_suites_three_parts_on_three_shards(n):
-    """verity-core-composition declares three parts by test id: lean-suites' parts are its suites with it as those three, and
-    every plan's shards, gated and after landing, hold one each, so no shard runs the suite whole."""
-    assert CHECK.suite_parts() == {"verity-core-composition": 3}
-    parts = [p.removeprefix("lean-suites:") for p in COMPOSITION]
-    assert SUITES == [x for s in CHECK.AFTER_LEAN for x in (parts if s == "verity-core-composition" else [s])]
+def test_every_plan_runs_each_suite_in_parts_on_three_shards(n):
+    """verity-core-composition and verity-pouw-benchmarks declare three parts by test id: lean-suites' parts are its suites with
+    each of those as its three, and every plan's shards, gated and after landing, hold one of each, so no shard runs either
+    whole."""
+    split = {"verity-core-composition": COMPOSITION, "verity-pouw-benchmarks": POUW}
+    assert CHECK.suite_parts() == {s: len(parts) for s, parts in split.items()}
+    assert SUITES == [x for s in CHECK.AFTER_LEAN
+                      for x in ([p.removeprefix("lean-suites:") for p in split[s]] if s in split else [s])]
     for gated in (True, False):
         shards = [CHECK.shard(f"{k}/{n}", gated)["parts"] for k in range(1, n + 1)]
-        held = [[p for p in s if p in COMPOSITION] for s in shards]
-        assert sorted(p for h in held for p in h) == sorted(COMPOSITION) and all(len(h) <= 1 for h in held)
+        for parts in split.values():
+            held = [[p for p in s if p in parts] for s in shards]
+            assert sorted(p for h in held for p in h) == sorted(parts) and all(len(h) <= 1 for h in held)
 
 
 @pytest.mark.parametrize("n", sorted(D.plans()))
@@ -534,7 +546,7 @@ def test_a_recorded_shard_tells_the_preflight_its_parts(monkeypatch):
     monkeypatch.setattr(subprocess, "run", run)
     for args in (["--shard", "1/5"], ["--shard", "4/5"], ["--combine", "r1", "r2"], []):
         assert CHECK.record(["--base", "HEAD", "--on", "pod", *args]) == 0
-    assert parts == [[[*SECURITY, COMPOSITION[2]]], [["pytest"]], [[]], []], "an unsharded check sends none"
+    assert parts == [[[*SECURITY, *sorted(BESIDE_AUDIT)]], [["pytest"]], [[]], []], "an unsharded check sends none"
 
 
 def _records_run(tmp_path, monkeypatch, rc: int = 0) -> tuple[Path, list[list[str]]]:
