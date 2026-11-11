@@ -20,10 +20,10 @@ _spec.loader.exec_module(PR)
 def _toy(tmp_path: Path) -> Path:
     from verity.circuits.codec import encode_program
     from verity.circuits.defs import CompositeDefinition, bind
-    from verity.definitions.ops.fp32 import Bf16Add
-    from verity.definitions.ops.scalar import I32Add
     from verity.circuits.program import Program
     from verity.circuits.types import Array, Value
+    from verity.definitions.ops.fp32 import Bf16Add
+    from verity.definitions.ops.scalar import I32Add
     from verity.definitions.registry.prims import gather_bf16
 
     def signature(S):
@@ -83,9 +83,9 @@ def test_a_selection_inside_a_composite_names_the_call_its_index_comes_from(tmp_
     """The index reaches the gather through the composite's parameter: the walk maps it to the root Call that computed it."""
     from verity.circuits.codec import encode_program
     from verity.circuits.defs import CompositeDefinition, bind
-    from verity.definitions.ops.scalar import I32Add
     from verity.circuits.program import Program
     from verity.circuits.types import Array, Value
+    from verity.definitions.ops.scalar import I32Add
     from verity.definitions.registry.prims import gather_bf16
 
     inner = bind(CompositeDefinition("PopreadRow", 0, (), lambda S: ((("e", Value(32)), ("w", Array(2, Array(8, Value(16))))),
@@ -281,13 +281,13 @@ def _prefix_form(producers: int, warm: int) -> dict:
     selects by the mask inside the proof block.  One more request shares only the weights."""
     from verity.circuits.codec import encode_program
     from verity.circuits.defs import CompositeDefinition, bind
-    from verity.definitions.ops.fp32 import Bf16Add
-    from verity.definitions.ops.scalar import BitAnd, I32Eq, SelectBf16
     from verity.circuits.program import Program
     from verity.circuits.refs import array_of
     from verity.circuits.types import Array, Value
-    from verity.definitions.registry.prims import gather_bf16
     from verity.definitions.call_scope import specialization
+    from verity.definitions.ops.fp32 import Bf16Add
+    from verity.definitions.ops.scalar import BitAnd, I32Eq, SelectBf16
+    from verity.definitions.registry.prims import gather_bf16
 
     V, C, K = 4, 2, producers
     I32, BF16, BIT = Value(32), Value(16), Value(1)
@@ -368,9 +368,9 @@ def test_a_k_way_page_mux_is_one_unit_a_word_and_a_prefix_match_one_unit():
     K - 1 gates), and the match of C = 128 prompt ids in blocks of 16, whose 8 mask bits fit one proof block's output, is one proof block."""
     from verity.circuits.cut import evaluate_definition
     from verity.circuits.defs import CompositeDefinition, bind
-    from verity.definitions.ops.scalar import BitAnd, I32Eq, SelectBf16
     from verity.circuits.refs import array_of
     from verity.circuits.types import Array, Value
+    from verity.definitions.ops.scalar import BitAnd, I32Eq, SelectBf16
 
     def mux(K, words=8):
         def body(B, S, m, pages):

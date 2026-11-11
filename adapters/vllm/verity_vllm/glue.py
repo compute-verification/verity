@@ -42,10 +42,18 @@ from importlib import resources
 from pathlib import Path
 from typing import Any
 
-from verity_vllm.pipeline import circuit_db as RC
 from verity_vllm.commit import capture_map as CM
-from verity_vllm.config import CHECKPOINTS, MANIFESTS, ROOT, UsageError, option, workload_files
-from verity_vllm.engine.profiles import dense_generic, family_facts as FF
+from verity_vllm.config import (
+    CHECKPOINTS,
+    MANIFESTS,
+    ROOT,
+    UsageError,
+    option,
+    workload_files,
+)
+from verity_vllm.engine.profiles import dense_generic
+from verity_vllm.engine.profiles import family_facts as FF
+from verity_vllm.pipeline import circuit_db as RC
 from verity_vllm.pipeline import config_record as CR
 
 MARKER = "__models__"
@@ -276,8 +284,8 @@ def render(inv: dict[str, Any]) -> str:
         areas[f["area"]] += f["lines"]
     n_area = Counter(f["area"] for f in files)
     lines = [f"{inv['model']}  (role {inv['role']}, model_type {inv['model_type']}, rows {len(inv['rows'])})",
-             f"  files         {len(files)}, {sum(f['lines'] for f in files):,} lines; {len(only)}, "
-             f"{sum(f['lines'] for f in only):,} lines for this model alone",
+             (f"  files         {len(files)}, {sum(f['lines'] for f in files):,} lines; {len(only)}, "
+              f"{sum(f['lines'] for f in only):,} lines for this model alone"),
              "                " + "  ".join(f"{a} {n_area[a]} ({areas[a]:,})" for a in sorted(areas)),
              f"  rules         {len(inv['rules'])}" + "".join(f"  {r['rule']}" for r in inv["rules"]),
              f"  allowlists    {len(inv['allowlists'])}" + "".join(f"  {k} {n}" for k, n in sorted(Counter(e['allowlist'] for e in inv['allowlists']).items()))]
