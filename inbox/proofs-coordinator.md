@@ -51796,3 +51796,52 @@ Tags: [run] a command I ran now, [read] a file I read now (place given), [relaye
 For BREAKEVEN: every row below is `two_stage_design(cells, R, 0.01, widths=True, margin=0.125, kappas=(κ,))` (#8904's keywords) on the recut cells (`tools/harmsearch/recut3.py::build`), head verify 250.0, and carries its own bits. (a) head block whole, recut A, κ 2^-4: 3,860 GB [modeled prices for the recut blocks], -101.12 / -100.80 / -100.20 at M 139; κ 2^-5 if PageCopy is 205: 3,936 GB, -102.12 / -101.80 / -100.64. (b) #8917's cut at G = 64, recut A, κ 2^-6: 1,500 GB [modeled unit prices], -103.38 / -103.04 / -100.15 at M 588. (c) the record with the recut: 6,360 GB, -101.46 / -101.21 / -100.85.
 For the table: HARMSEARCH | by SCALE's count per stratum, head verify 250.0, modeled 0.4 [run, planner; prices of recut blocks and cut units modeled] | least GB at 2^-100 under one M: plan's cut 5,431 (κ 2^-8); writers recut 3,860 (κ 2^-4; 3,936 if PageCopy is 205); recut + #8917 at G = 64 1,500 (κ 2^-6, M 588) | by stratum: 4,069; 3,860; 979 (G = 32, κ 2^-4).
 For the table: the measured-rate floor of those rows: 194 to 209; 138 to 149; 54 to 58 GB; the rate is not measured at the headline's mix, and a floor cannot show 300 GB is met.
+
+## FUSED, Wed 11 Nov 11:43Z: the served 16-key head block, both forms, MEASURED: Lean takes 368.6 core-s flat (355.7 to 381.9) and 682.7 templated (first of three runs), 1.85×, and the templated statement is one size class up for the prover (unit 2^24 against 2^23). So the templated check is NOT a lever on the head block; it costs more on both sides. The setup law holds on a head block: 211 to 226 s of each 287 s session is setup over its program
+
+**1. The pair** [run: `r20261111-103344-cd4c` (flat, done 11:30:42Z rc 0, `preserved=yes`) and `r20261111-103330-0163` (templated, its second and third Lean runs still going); both cpu-1, EPYC-Genoa, source `8201dacff26e`, the same `flock-verify` `7f5ec4ce43a913b5`; `SparseMlaHeadBlock_v2{DR=64,DV=512,NVIS=16,FIRST=true,BN=64}`, the 16-key block of step 16's partition in its `_v2` form, 22,862,396 word gates; one block, proved on CPU, accepted by Lean in every run so far].
+
+| | flat | templated (`--structural iv/hybrid/4`) |
+|---|---|---|
+| Lean `verify --zk`, core-s | 368.6, 355.7, 381.9 | 682.7 (runs 2 and 3 about 12:05Z) |
+| wall | 6:03, 5:50, 6:17 | 12:49 |
+| peak memory | 24.6 GB | 22.7 GB |
+| Lean's `inputs` (once a call) | 75.9, 72.9, 75.1 s | 193.1 s (run 2; run 1's line comes with the job's end) |
+| `setup (drawn)` (once a session) | 222.0, 211.0, 226.3 s | to come |
+| the session's proof check | 64.9, 65.5, 75.1 s | to come |
+| ANDs | 7,287,471 | 9,964,094 (1.37×) |
+| the unit's rows; its size class | 7,602,177; 2^23 | 10,137,310; 2^24 |
+| k_log; blocks a statement at most | 25; 1,024 | 26; 512 |
+| matrix entries | 322,990,648 | 76,282,617 |
+| circuit file | 2,637 MB | 487 MB |
+| template | | 4,089 Definitions, 192,820 rows, 440,867 references |
+| lowering; staging | 583 s; 60 s | 1,589 s; 509 s |
+| the CPU prover's own total | 2.95 s | 4.78 s |
+
+- **Templated is 1.85× the flat in Lean's core-seconds** (682.7 against the flat's median 368.6), on one run so far. At small statics it was 1.76× (11:04Z). The template is small (1.9% of the unit's rows) and the circuit file is a fifth of the flat's, and the check still costs more.
+- **It also costs the prover a size class**: 37% more ANDs put the unit over 2^23 rows, so k_log is 26 against 25, a statement holds half the blocks, and the CPU prover's own time is 1.62× [run]. Nobody timed it on a card.
+- **The setup law on a head block** [run; the program's size from #8520's body, 538 MB, read]: 211 to 226 s a session, 0.39 to 0.42 s a MB, 77% of the session. With the three small sizes of 11:04Z and #8520's row the law reads 0.35 to 0.42 s a MB from 33 MB to 2,228 MB in the flat form.
+
+**2. What this closes in TEMPLATED's job** (the lever row's three unbuilt changes).
+
+| change | status now | by |
+|---|---|---|
+| the templated check (−11.5% assumed) | measured on every traced block I could stage: fused K=6144 1.01×, fused K=256 0.93×, head block at small statics 1.76×, the served 16-key head block 1.85×. It keeps the gain VERIFYFAST-B measured on the eleven word-level types (0.136 of the flat) and has none on the head and fused blocks. Of the 503 GB the two verifier changes were worth together, 460 were on the head block and 22 on the fused blocks | `a3e0`, `7268`, `0163`, `cd4c` |
+| the replay over the lifetime (−7.7%) | vllm's (my 09:05Z `For vllm:`) | |
+| the flat-column verifier cut (−2.8%) | on `main` already | |
+
+The 64-key block itself is not measured templated: `9c37` was cancelled (10:40Z), and by the two sizes above it would read the same way [guess].
+
+**3. GB** [derived; no planner run of mine since `5ce0` and `7fbe`]. My rows do not move: the lever row with the head and fused blocks flat is 3,710.4 at modeled 0.4 (132.2 to 142.7 at the measured engine rate on node A, a floor, by proportion; under 300 GB only while the engine serves at most 404 tokens a GPU-second), at the head block's assumed 60.56 core-s. At the measured 250.0 the rows are BENCHCROSS's and BREAKEVEN's. Both are sessions with no program (my 11:04Z): the setup over the program is on top, 0.35 to 0.42 s a MB a sampled session.
+
+**4. Running:** `0163`'s last two Lean runs (about 12:05Z). Nothing else of mine, nothing on a card. No tree file changed, no PR.
+
+For BREAKEVEN:
+- Measured: the templated check on the served 16-key head block costs 1.85× the flat in Lean core-seconds (682.7 against 368.6; `r20261111-103330-0163`, `r20261111-103344-cd4c`) and one size class on the prover. Keep the head block out of the templated goal, with the fused blocks.
+- Measured: a head block's session with its program, flat, 16 keys: inputs 73 to 76 s a call, setup 211 to 226 s a session, proof check 65 to 75 s a session (`cd4c`). Setup is 0.39 to 0.42 s a MB of its 538 MB program.
+
+For FLOCKPKG: `cd4c` is a head-block session Lean accepts with `--program` and `--partition`, with Lean's three timer lines in its `out/job.log`; its proof check (65 to 75 s for 323.0M matrix entries, two repetitions) is your fold's rate, and its setup is what your census sessions do not pay.
+
+For the table:
+- Templated check, head block: measured at the served 16-key block, 1.85× the flat for Lean and a size class more for the prover (`0163`, `cd4c`). Not a lever; the lever row's verifier part stays 21 GB.
+- Lean's setup over the program: measured on a head block at 0.39 to 0.42 s a MB a sampled session (`cd4c`); the 250.0 core-s row has no program in it.
