@@ -42,6 +42,8 @@ from typing import Any
 
 from verity_vllm.config import workload_file
 
+from . import store_io
+
 HERE = Path(__file__).resolve().parent
 VLLM_ROOT = HERE.parents[1]  # adapters/vllm
 FIXTURES = HERE / "fixtures.toml"
@@ -189,7 +191,6 @@ class Row:
     def _fetch(self, art: str, label: str) -> Path:
         # the store's trees/ is a cache its eviction may clear under a running suite: a tree that went is fetched again
         if art not in self._fetched or not self._fetched[art].is_dir():
-            from . import store_io
             try:
                 self._fetched[art] = store_io.fetch(art)
             except Exception as e:  # the store not being reachable is a skip, not an error
@@ -373,7 +374,6 @@ class Row:
             except (OSError, ValueError):
                 pass
             shutil.rmtree(dest, ignore_errors=True)
-        from . import store_io
         try:
             return store_io.fetch_attempt(mine, dest)
         except Exception as e:  # the store not being reachable is a skip, not an error
@@ -410,7 +410,6 @@ SCRATCH_ENV = "VERITY_REGRESSION_SCRATCH"
 def scratch(row: Row) -> Path:
     """`$VERITY_REGRESSION_SCRATCH/r19-regress/<row>/<pid>` (default: the system temp dir): rebuilt manifests, their logs, the merged
     Programs view.  One per process: xdist workers rebuilding one row (#57's manifest and its refusal) never share a file."""
-    import tempfile
     p = Path(os.environ.get(SCRATCH_ENV) or tempfile.gettempdir()) / "r19-regress" / row.key / str(os.getpid())
     p.mkdir(parents=True, exist_ok=True)
     return p
@@ -430,7 +429,6 @@ def candidate_attempt_docs() -> list[dict[str, Any]]:
     """The manifests of the candidate attempts, fetched once per process (`store_io.attempt`), plus the chain they cite: an attempt's
     `inputs` name artifacts (`build=art:…`, `match=art:…`) whose manifests carry the publishing attempt in `meta.run_id` -- naming the
     Commit attempt alone resolves the Match and Build attempts behind it.  An unreachable store is NotResolvable."""
-    from . import store_io
     out: list[dict[str, Any]] = []
     queue = list(candidate_attempt_ids())
     seen: set[str] = set()

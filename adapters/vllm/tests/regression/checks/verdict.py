@@ -12,6 +12,8 @@ so on them this check IS the retroactive gate of Phase 5b (old facts -> new reco
 """
 from __future__ import annotations
 
+from verity_vllm.check.verdict import from_record
+
 from .. import resolver
 
 NAME = "verdict"
@@ -102,6 +104,5 @@ def actual(row: resolver.Row) -> dict:
         return dict(_lift(resolver.read_json(cand), row.cls), source="candidate")
     if row.has("verdict.json"):
         return dict(_lift(row.json("verdict.json"), row.cls), source="recorded")
-    from verity_vllm.check.verdict import from_record
     row_dir = row.path("commit/verdict.json", verify=False).parent.parent
     return dict(_lift(from_record(row_dir).to_dict(), row.cls), source="reconstructed")

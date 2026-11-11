@@ -97,6 +97,8 @@ from typing import NoReturn
 import pytest
 
 from . import checks, resolver, store_io
+from . import decisions as D
+from .checks import manifest_digest
 
 pytestmark = pytest.mark.regression
 
@@ -220,7 +222,6 @@ def test_negative_57_refusal_reproduces(record_property) -> None:
     if not numbered_57:
         pytest.skip("#57 not in fixtures.toml")
     row = numbered_57[0]
-    from .checks import manifest_digest
     _skip_retired(row, manifest_digest.NAME, record_property)
     try:
         reachable = row.programs_root() is not None or row.candidate_root() is not None
@@ -250,7 +251,6 @@ def test_decisions_are_listed_and_well_formed(record_property) -> None:
     `python -m tests.regression.decisions`; no store, no VERITY_REGRESSION needed): row, check, finding, status, since, what it
     sanctions (`expected`) and pins (`pins`), the reason.  Fails on a malformed decision (missing DECISION_FIELDS, unknown status)
     -- `sanction` would ignore it silently otherwise -- so the pending ones (`status = "pending_review"`) are always reviewable."""
-    from . import decisions as D
     rows_ = D.listing()
     text = D.render(rows_)
     print("\n" + text)

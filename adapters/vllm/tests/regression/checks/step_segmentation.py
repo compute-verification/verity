@@ -19,6 +19,12 @@ from __future__ import annotations
 import hashlib
 import os
 
+from verity.circuits.codec import descriptor_id
+
+from verity_vllm.pipeline import global_program as GP
+from verity_vllm.program import sampling_event as SE
+from verity_vllm.program import workload as W
+
 from .. import resolver
 
 NAME = "step_segmentation"
@@ -47,7 +53,6 @@ def component_dirs(wp: dict) -> dict[str, str]:
 
 
 def sampling_events(hist: dict) -> int:
-    from verity_vllm.program import sampling_event as SE
     return sum(int(n) for spec, n in (hist or {}).items() if SE.is_sampling_event(spec))
 
 
@@ -90,12 +95,8 @@ def expected(row: resolver.Row) -> dict:
 
 def recompute(desc: dict) -> dict:
     """`request_component` (current code) over one component descriptor: its segmentation and the sampling events in its body."""
-    from verity.circuits.codec import descriptor_id
 
     # the registry set build_workload decodes components with
-    from verity_vllm.pipeline import global_program as GP
-    from verity_vllm.program import sampling_event as SE
-    from verity_vllm.program import workload as W
     comp = W.request_component(desc, GP.REGISTRY, None, canon={})
     specs = [descriptor_id(n.fn) for n in comp.fn.body.nodes]
     return {"program_digest": comp.program_digest, "n_nodes": comp.n_nodes, "steps": len(comp.step_nodes),

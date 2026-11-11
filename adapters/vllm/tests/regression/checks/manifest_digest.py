@@ -35,6 +35,8 @@ import subprocess
 import sys
 from pathlib import Path
 
+from verity_vllm.query.manifest.format import IDENTITY_KEY
+
 from .. import resolver
 
 NAME = "manifest_digest"
@@ -53,7 +55,6 @@ def applies(row: resolver.Row) -> str | None:
 
 
 def _identity_key(r: dict) -> str:
-    from verity_vllm.query.manifest.format import IDENTITY_KEY
     return json.dumps([r[k] if k != "element_range" else list(r[k]) for k in IDENTITY_KEY], separators=(",", ":"), sort_keys=True)
 
 

@@ -17,6 +17,8 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
+from verity_vllm.query.manifest.bind import coverage_check
+
 from .. import resolver
 
 NAME = "coverage"
@@ -76,7 +78,6 @@ def expected(row: resolver.Row) -> dict:
 
 
 def actual(row: resolver.Row) -> dict:
-    from verity_vllm.query.manifest.bind import coverage_check
     cand = row.candidate_root() is not None
     man_path, lay_path = _side(row, "manifest.json"), _side(row, LAYOUTS)
     if man_path is None or lay_path is None:
