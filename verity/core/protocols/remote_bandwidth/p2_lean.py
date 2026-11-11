@@ -15,7 +15,7 @@ from typing import Any
 
 PACKAGE = Path(__file__).resolve().parent / "lean"
 EXE = "remote-audit-verifier"
-BUILD_LOCK = Path(__file__).resolve().parents[2] / "difftest" / "lean" / ".lake" / "harness-build.lock"
+BUILD_LOCK = Path(__file__).resolve().parents[4] / "verity/core/difftest/lean/.lake/harness-build.lock"
 """`verity_difftest.BUILD_LOCK`: Lake builds the package's path requires in place, so a build here and the difftest's
 build of `remote-audit-difftest` take turns."""
 

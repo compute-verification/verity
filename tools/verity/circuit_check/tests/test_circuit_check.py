@@ -1432,7 +1432,7 @@ def test_a_proof_blocks_export_counts_its_circuit_types():
 
 
 def test_a_proof_blocks_export_is_evaluated_against_the_circuit_it_is_handed():
-    """`checks._export_counts` given the circuit ``build`` made (`template_lowering` hands it `_traced`'s) evaluates the
+    """`checks._export_counts` given the circuit ``build`` made (`template_lowering` hands it the lowering's) evaluates the
     export's types against that circuit: one that computes something else is refused."""
     from verity_flock import gf2
 
@@ -1589,6 +1589,29 @@ def test_a_genuine_and_with_one_is_a_redundant_and():
     (gv,), (qv,) = g.s, q.s
     assert not CK.is_commit(C, gv)
     assert CK.redundant_ands(C, owner=str) == (2, {str(qv): 1, str(gv): 1})
+
+
+def test_a_template_s_unit_is_checked_as_its_lowering_built_it_and_traced_only_to_name_a_redundant_and(monkeypatch):
+    """`template_lowering` reads the unit circuit its lowering built (a traced build makes the same circuit): its type, export
+    and redundant ANDs; it builds the unit again, traced, only to name where a redundant AND is, as the traced build names it."""
+    from collections import Counter
+
+    from verity_flock import lowerings
+    from verity_flock import subcircuit_templates as TM
+
+    sub = TM.TEMPLATES["rope-head"].bind(D=8)
+    low = lowerings.registry("C-Flock").module("rope-head").lowering(sub)
+    C, root = CK._traced(low.units.circuit)
+    assert CK.lowering_type(low.circuit) == CK.lowering_type(C) and low.circuit.kind == C.kind
+    traced: list[int] = []
+    real = CK._traced
+    monkeypatch.setattr(CK, "_traced", lambda build: traced.append(1) or real(build))
+    e = CK.check_subcircuit(sub, OPTS, pins=PINS)
+    assert not e["failures"] and e["lowering"][0]["redundant_ands"] == {"count": 0, "where": {}} and not traced
+    monkeypatch.setattr(CK, "redundant_ands", lambda C, owner=None: (1, Counter([owner(len(C.kind) - 1)])))
+    (got,) = CK.check_subcircuit(sub, OPTS, pins=PINS)["lowering"]
+    assert got["redundant_ands"] == {"count": 1, "where": {CK._owner_names(root, len(C.kind))(len(C.kind) - 1): 1}}
+    assert len(traced) == 1
 
 
 def _whole_boolean(name, build):
