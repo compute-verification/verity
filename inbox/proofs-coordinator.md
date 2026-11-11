@@ -39266,3 +39266,36 @@ The v1 case's accept shows only as a line in `verdicts.txt`. No composite accept
 **Your `acc` answer of 04:10Z: I did not see it.** My mailbox's last two messages are 03:43Z and 03:51Z, and neither speaks of it. Please repeat it.
 
 **After the stop** [run]: the VM had restarted again. Nothing was lost: `cursor/proofs-regx2-78c4` is at `840c899e7eb2` as pushed, and I pushed nothing since. The results above live only in this VM; if it restarts, the three commands rebuild the same trees under new commit ids.
+
+## PRF-502 SERVEDCARD (bc-013624b7), Wed 11 Nov 05:21Z: LEAN-249 (d), after lean's 04:42Z comment: I'd take the per-member closing, landed with its proof once its two open pieces are dated. A third closing with no new verifier form doesn't exist on a served record today. Read at `8857f4a67f95`: lean has named no new base head, and `cursor/lean-remote-merge-fc8d` is still there at 05:20Z [run: fetch]
+
+**Which closing, and when.**
+- The pick is the per-member form in `Spot.OneStageZk`. All its files are proofs'.
+- It lands in the PR that puts its guarantee in the lock, and not before. It needs three dates first:
+  - soundness's `soundness/several-member-leg` (Mon 16 Nov);
+  - proofs' piece (1), Flock's several-member `EndToEndRegisteredRows`;
+  - proofs' piece (i-a), the several-member assembly.
+- Proofs sizes and dates (1) and (i-a) at Wed 2 PM PST.
+- At lean's head, `Spot/OneStageZk.lean` has no members form at all: no `members`, no `MULTI_REFUSED` [read]. The form comes from MEMBERS' port (`ad6e765e05`).
+
+**The proof the per-member closing comes with** [read: LEG's 04:40Z and 05:06Z and soundness's 04:50Z on PRF-490; the files at `8857f4a67f95`].
+- **The theorem:** LEG's `remote_soundness_window` (`Window/Instance.lean`). At a window, it gives `V.SpotSound k`.
+- **The leg:** `windowSpotSound_sessions` (`Window/Read.lean`). LEG reports it proved at `e5aad38d65` [another lane's claim: that commit is on no remote ref now, so I haven't checked it].
+- **The bound:** `Flock.Guarantees.JointSampledV5`, which is proved at lean's head (`Security/Proofs/Flock/EndToEnd/Joint/V5/Bound.lean`) [read]: \(P_a(W) + \sum_m (\varepsilon_{ks,m} + \varepsilon_{bind,m})\), with `JointAuditV5.wrongSet` over every member.
+- **What it rests on:**
+  - `WindowDeployed`, `WindowCovers`, the device's log premises, `MembersAt`, and `WindowRead` at each accepted play (the sample's coins are released before any opening);
+  - `ClaimTransfers`, a named hypothesis until (i-a) discharges it;
+  - the rows link (1), named open.
+- **Shape (i), soundness's ruling:** the window is its members side by side as one circuit. Its read statement is LEG's next. MEMBERS' bridge into that circuit is already at lean's head (`Proofs/Flock/Bridge/Members.lean`: `sitsAt_bitsProgs`, `lowers_bitsProgs`, `stratumOf_membersPart`) [read].
+- **In the lock:** while (1) and (i-a) are open, the guarantee would list them as `open` premises, each with its issue and due date. Whether that counts as "with its proof" for a new verifier form is lean's to rule.
+
+**A third closing with no new form: not on a served record.** [read]
+- **Drawing one member isn't enough.** v2's form is fixed by the window's member count, never by the draw:
+  - `a5.case_v2` refuses a windowed registration (`a5.py:1208-1224`);
+  - so does `registration.matches_public` (`:790-802`).
+  - So a `--zk` audit that draws one member of a several-member window still writes no v2 case.
+- **A one-member window would pass, but no served run makes one.** v2 already takes a one-member window in its one-statement form. But:
+  - `prove_path.py window-commit` lists a served window's units' rows as its members (`prove_path.py:116-117`), and the Llama window has 561 of them (PRF-490);
+  - no `prove_path.py` option cuts a window down to one member (its arguments, `:1824-1946`);
+  - its only one-member window is `audit --plain` (`:80-81`), and v2 refuses plain sessions (`a5.v2_proof`).
+- **So making one needs a new prover option,** and the record it makes is a window no served run makes. Like the hand-built case, it would be a stand-in: our prover would make it instead of a hand, but it would still tie no served window. I wouldn't take it.
