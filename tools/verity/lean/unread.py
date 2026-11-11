@@ -34,8 +34,9 @@ constant to the declaration it belongs to. The seeds:
   keeps it. This tool, its test and the Lean tools' fixtures read none (`NOT_READERS`).
 
 The `@[defeq]` theorems, the coercion instances, the lock-listed modules, the names in the locks' texts and their
-documents, and the cited names are seeds to be safe (`CAUTIOUS`): the report counts what each alone keeps
-(`kept_only_by`).
+documents, the cited names and the constants with a `SecurityProofs` component are seeds to be safe (`CAUTIOUS`): the
+report counts what each alone keeps (`kept_only_by`). A lock's guarantee is a seed by its lock, so what the
+`SecurityProofs` seed alone keeps is the constants no lock names and what only they read.
 
 **Declarations.** A constant with a declaration range is a declaration, unless it belongs to a type (a constructor, a
 recursor, a projection) or Lean generated it from another's command (the same first line as a declaration its name
@@ -116,10 +117,11 @@ SEED_FLAGS = ("meta", "unsafe", "partial", "defeq")
 COERCION = frozenset({"Coe", "CoeTail", "CoeHead", "CoeOut", "CoeHTCT", "CoeHTC", "CoeOTC", "CoeTC", "CoeT", "CoeDep",
                       "CoeFun", "CoeSort"})
 #: the seeds taken to be safe rather than because something reads them: each is reported with what it alone keeps
-CAUTIOUS = ("defeq", "coercion", "lock module", "lock text", "lock doc", "cited")
+CAUTIOUS = ("defeq", "coercion", "lock module", "lock text", "lock doc", "cited", "SecurityProofs")
 CAUTIOUS_TEXT = {"defeq": "`@[defeq]` theorems", "coercion": "coercion instances", "lock module": "the modules locks list",
                  "lock text": "names in the locks' texts", "lock doc": "names in the docs the locks name",
-                 "cited": "names in files outside Lean"}
+                 "cited": "names in files outside Lean",
+                 "SecurityProofs": "constants with a `SecurityProofs` component"}
 #: a module of checks or vectors (its name's last component): theorems over concrete values that test the definitions
 #: they mention, which nothing reads by design. It is kept when it mentions a declaration that is read (`checks`)
 CHECKS = re.compile(r"(?:Checks|Vectors)$")
@@ -986,8 +988,9 @@ def markdown(rep: dict, rev: str | None) -> str:
             "proof, and the Lean check says so.",
             "- `@[defeq]` theorems are seeds (kept), since `dsimp` and `simp only [t]` use them with no trace, as are "
             "coercion instances, which elaboration unfolds where it inserts the coercion, every declaration of a module "
-            "a lock lists, each one (and each module) a lock's text or a document a lock names holds, and each one a "
-            "file outside Lean names; `kept_only_by` counts what each alone keeps.",
+            "a lock lists, each one (and each module) a lock's text or a document a lock names holds, each one a "
+            "file outside Lean names, and every constant with a `SecurityProofs` component, which a lock need not "
+            "name; `kept_only_by` counts what each alone keeps.",
             "- An `example`, `#guard` or `#eval` leaves nothing in the environment: a declaration only they use is "
             "reported unread, and a module only they use deletable alone; deleting it means deleting them.",
             "- A module of checks (theorems over concrete values or vectors, which the build checks) is read by nothing "
