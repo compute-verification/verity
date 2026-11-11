@@ -107,4 +107,3 @@ verity_vllm.protocols.pouw.pearl_c.whole
 verity_vllm.protocols.spot
 tests/regression/
 verity_vllm/protocols/remote_bandwidth/      # the node's store, imported by the protocol driver and the benchmarks (benchmarks/vllm_hooks)
-verity_vllm.program.predict.batch      # the compiler's batch-invariance templates and rule, imported by circuit-check --batch

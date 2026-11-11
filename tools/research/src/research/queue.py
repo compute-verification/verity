@@ -21,7 +21,8 @@ only once that commit's after-landing run, the full check, passed every step on 
                                                    the owner's word that the PR is ready at its current head (a new push needs it
                                                    again unless its own change is the marked head's;
                                                    --sha: only at SHA, refused when GitHub still has another head after a few reads),
-                                                   once the quick tier passes there: as a run on MACHINE in a check slot
+                                                   once the quick tier passes on its merge onto `main`'s tip
+                                                   (`onto_main`): as a run on MACHINE in a check slot
                                                    (`RemoteQuickTier`; `auto` or M1,M2: the one with a free slot), or here
                                                    (`QuickTier`); exit 3 when it never started (no slot within its wait), 79 when
                                                    --on's run is still going after 20 min (research.waitcap: `judge RUN` marks it
@@ -176,8 +177,11 @@ branch it builds on, or restack its own commits onto `main` (`old_next_refusal`;
 `Preflight._old_next`).  A PR based on another branch is never admitted: `ready` marks it and says so,
 and `status` lists it, once marked, as waiting to be retargeted to `main` (a PR containing another waits for it there).  Ready is a store label `ready = true` on `pr:{number}@{head sha}` that
 `research queue ready PR` writes, so a new push needs a new one unless its own change is a marked head's (below; `ready` marks a head whose tree is a
-marked head's, as a merge of `main` that changes no file leaves it, without a tier), and only after the quick tier passes at that
-head: `suites.py --quick` on the suites the PR changes, from a clean checkout, either as a `research run` on a machine (`--on`,
+marked head's, as a merge of `main` that changes no file leaves it, without a tier), and only after the quick tier passes on that
+head merged onto `main`'s tip as the loop merges it (`onto_main`; the head itself when it holds that tip): `suites.py --quick` on
+the suites the PR changes (with the slow tests of the test modules it reaches, and the vLLM
+reference regression, as check runs it), after the Lean audit on that merge of a change that touches Lean (`LEAN_AUDIT`, which
+publishes what it builds for the candidate's audit), from a clean checkout, either as a `research run` on a machine (`--on`,
 `RemoteQuickTier`: in one of its check slots, so several PRs' tiers run at once and the caller only waits) or here (`--local`,
 `QuickTier`); a failure refuses and names the tests, and a remote run whose result can't be read, or that reports another head, is a
 failure.  `--mark` (`MarkOnly`) writes the mark with no tier, and the after-landing run is the head's first full check.  Draft state is ignored: agents open PRs as drafts, and
@@ -1168,18 +1172,24 @@ def gates_at(repo: Path, ref: str, key: str = "landing_gates") -> tuple[str, ...
     return getattr(DriveFlags.parse(f"{key} = {json.dumps(gates)}\n", source), key)
 
 
-def into_at(repo: Path, ref: str) -> str:
-    """drive.toml's `land_into` at ``ref``, "main" when it has none.  Only that key is read, as `gates_at` reads its own: drive's
-    config read names a bad key, and every `Queue` reads this one."""
+def land_into_key(repo: Path, ref: str) -> str | None:
+    """drive.toml's `land_into` at ``ref`` as written, None when it has none.  `land_into = "main"` written out is the verified
+    queue's: it lands on `main` itself and nothing builds `next`, so what reads `next` for drive reads nothing then."""
     r = _git(repo, "show", f"{ref}:{DRIVE_FLAGS}", check=False)
     if r.returncode:
-        return "main"
+        return None
     source = f"{DRIVE_FLAGS} at {ref}"
     try:
         into = tomllib.loads(r.stdout).get("land_into")
     except tomllib.TOMLDecodeError as e:
         raise QueueError(f"{source}: not TOML: {e}") from None
-    return "main" if into is None else DriveFlags.parse(f"land_into = {json.dumps(into)}\n", source).land_into
+    return None if into is None else DriveFlags.parse(f"land_into = {json.dumps(into)}\n", source).land_into
+
+
+def into_at(repo: Path, ref: str) -> str:
+    """drive.toml's `land_into` at ``ref``, "main" when it has none.  Only that key is read, as `gates_at` reads its own: drive's
+    config read names a bad key, and every `Queue` reads this one."""
+    return land_into_key(repo, ref) or "main"
 
 
 def signed_at(repo: Path, ref: str) -> bool:
@@ -3653,11 +3663,25 @@ def _render(entries: dict[int, Entry]) -> str:
 
 
 #: the quick tier, run from the checkout's root: the suites the PR changes since `--changed REV`, without the tests marked `slow`
+#: but those of the test modules the change reaches (`suites.py`'s `taken_whole`)
 SUITES = quick_tier.SUITES
 QUICK_TIER = ["uv", "run", "--locked", "--all-packages", "--extra", "torch-cpu", "python", SUITES, "--quick"]
 #: the Lake packages whose builds the suites' tests run, built before `suites.py` as `check` builds them before those suites: each
 #: test worker runs `lake build` there, and workers building one from cold at once fail (`lake build` exit 1, a binary missing)
 LEAN_BUILDS = ("verity/protocols/flock/verifier",)
+#: the Lean audit on the merge, for a change that touches Lean (`lean_audit`): run from the root of the tier's checkout, after
+#: `LEAN_BUILDS` and before the suites, with `--base {main's tip} --out DIR` (`quick_tier.py --lean-audit`), it audits what the
+#: change reaches and publishes the modules it builds and its replay entries, which the audit of the candidate landing that merge
+#: stages.  Exit 0 passes; else its last line says why, and the mark is refused.  None, no audit, while it isn't on `main`
+LEAN_AUDIT: list[str] | None = None
+
+
+def lean_audit(repo: Path, base: str, at: str) -> list[str] | None:
+    """`LEAN_AUDIT` when it is set and the change from ``base`` to ``at`` touches a Lean input (a file ending in `LEAN_SOURCES`, or a
+    lock), else None."""
+    if LEAN_AUDIT and any(f.endswith(LEAN_SOURCES) or Path(f).name == LEAN_LOCK for f in changed(repo, base, at)):
+        return LEAN_AUDIT
+    return None
 
 
 def allowed(repo: Path, base: str | None) -> Callable[[dict], bool] | None:
@@ -3672,9 +3696,32 @@ def allowed(repo: Path, base: str | None) -> Callable[[dict], bool] | None:
     return lambda row: pol.suite(str(row.get("name")), row, now).covered
 
 
+class TierRefused(QueueError):
+    """Why the quick tier has no commit to run at: the head isn't on the remote, or doesn't merge onto `main`'s tip."""
+
+
+def onto_main(repo: Path, main: str, pr: PR) -> str:
+    """The commit the quick tier runs at for ``pr``: its head when that holds ``main`` (`main`'s tip), else the head merged onto
+    ``main`` as the loop merges a candidate there (`merged_tree`, with ``main``'s merge drivers and each pin rebuilt, then
+    `ported`), as a merge commit with ``main`` its first parent and the head its second, since what lands is that merge, not
+    the head.  TierRefused when it doesn't merge."""
+    if not _git(repo, "merge-base", "--is-ancestor", main, pr.head, check=False).returncode:
+        return pr.head
+    tree, files, r = merged_tree(repo, main, pr.head)
+    if tree is None:
+        raise TierRefused(f"it conflicts with `main` at {main[:12]} in {', '.join(files)}: merge `main` into the branch" if files else
+                          f"`git merge-tree` of it onto `main` exited {r.returncode} ({(r.stderr or r.stdout).strip()[-200:]})")
+    tree, _, _, why = ported(repo, tree, base=main)
+    if tree is None:
+        raise TierRefused(why)
+    return _git(repo, "commit-tree", tree, "-p", main, "-p", pr.head, "-m", f"quick tier: #{pr.number} onto main {main[:12]}",
+                env=IDENTITY).stdout.strip()
+
+
 class QuickTier:
-    """`suites.py --quick --changed {merge base with main}` at a PR's head, from a clean checkout (`quick_tier.tier`, judged by
-    `quick_tier.judge`, with what drive's policy on `main` allows: `allowed`): one worktree of the caller's repository per machine under `root`, checked out at the head and cleaned of
+    """`suites.py --quick --changed {main's tip}` on a PR's head merged onto `main`'s tip (`onto_main`), from a clean checkout
+    (`quick_tier.tier`, judged by `quick_tier.judge`, with what drive's policy on `main` allows: `allowed`): one worktree of the
+    caller's repository per machine under `root`, checked out at that commit and cleaned of
     everything but its `.venv` and the `.lake` of each of `LEAN_BUILDS` for each PR (one PR at a time: `{name}.lock`), so its
     environment syncs only what moved and Lake rebuilds only what changed.  Each of `LEAN_BUILDS` is built first (with the PATH's
     `lake`, else elan's; none, or a failed build, refuses).  Passes are cached by input (`suites.py`), so a re-run after a failure
@@ -3689,18 +3736,20 @@ class QuickTier:
         self.root = Path(root or Path.home() / ".research" / "queue" / "ready")
 
     def __call__(self, pr: PR) -> str | None:
-        """None when the tier passes at ``pr``'s head; else what failed, for the refusal."""
-        with self._checkout(pr) as (wt, base):
-            if base is None:
-                return f"{pr.head[:12]} isn't on {self.remote} (pushed again since?)"
-            out = self.root / "logs" / f"{pr.number}-{pr.head[:12]}"
-            return quick_tier.judge(quick_tier.tier(wt, out, pr.head, base, QUICK_TIER, LEAN_BUILDS), pr.head,
-                                    covers=allowed(self.repo, base))
+        """None when the tier passes on ``pr``'s head merged onto `main`'s tip; else what failed, for the refusal."""
+        try:
+            with self._checkout(pr) as (wt, at, base):
+                out = self.root / "logs" / f"{pr.number}-{pr.head[:12]}"
+                doc = quick_tier.tier(wt, out, at, base, QUICK_TIER, LEAN_BUILDS, merged=None if at == pr.head else pr.head,
+                                      audit=lean_audit(self.repo, base, at))
+                return quick_tier.judge(doc, at, covers=allowed(self.repo, base))
+        except TierRefused as e:
+            return str(e)
 
     @contextlib.contextmanager
     def _checkout(self, pr: PR):
-        """Under the worktree's lock: the worktree at ``pr``'s head, cleaned, and the head's merge base with `main` (None when the
-        head isn't on the remote)."""
+        """Under the worktree's lock: the worktree at the commit the tier runs at (`onto_main`), cleaned, that commit and `main`'s
+        tip, its base; TierRefused when the head isn't on the remote or doesn't merge onto `main`."""
         common = Path(_out(self.repo, "rev-parse", "--path-format=absolute", "--git-common-dir"))
         wt = self.root / (hashlib.sha256(str(common).encode()).hexdigest()[:12] + self.WORKTREE_SUFFIX)
         self.root.mkdir(parents=True, exist_ok=True)
@@ -3709,16 +3758,19 @@ class QuickTier:
             _git(self.repo, "fetch", "-q", self.remote, "+refs/heads/main:refs/queue/ready/main",
                  f"+refs/pull/{pr.number}/head:refs/queue/ready/pr")
             if _git(self.repo, "cat-file", "-e", f"{pr.head}^{{commit}}", check=False).returncode:
-                yield wt, None
-                return
+                raise TierRefused(f"{pr.head[:12]} isn't on {self.remote} (pushed again since?)")
+            main = _out(self.repo, "rev-parse", "refs/queue/ready/main")
+            if (at := onto_main(self.repo, main, pr)) != pr.head:
+                print(f"research queue: #{pr.number}'s head {pr.head[:12]} merged onto `main` at {main[:12]}: the tier runs on "
+                      f"{at[:12]}", flush=True)
             _git(self.repo, "worktree", "prune")
             if not (wt / ".git").exists():
                 shutil.rmtree(wt, ignore_errors=True)
-                _git(self.repo, "worktree", "add", "-q", "--detach", "--force", str(wt), pr.head)
+                _git(self.repo, "worktree", "add", "-q", "--detach", "--force", str(wt), at)
             else:
-                _git(wt, "checkout", "-q", "--detach", "--force", pr.head)
+                _git(wt, "checkout", "-q", "--detach", "--force", at)
             _git(wt, "clean", "-qffdx", "-e", "/.venv", *(x for d in LEAN_BUILDS for x in ("-e", f"/{d}/.lake")))
-            yield wt, _out(self.repo, "merge-base", "refs/queue/ready/main", pr.head)
+            yield wt, at, main
 
 
 #: what a remote quick tier may take once it holds a check slot (`slot.py --run-max`), how long it may wait in the machine's line for
@@ -3831,23 +3883,27 @@ class RemoteQuickTier(QuickTier):
         slot = (["env", f"CHECK_SLOTS={POOL_SLOTS.format(pool=pool)}"] if pool else []) + list(SLOT)
         job = Path(quick_tier.__file__)
         rid = R.new_run_id()
-        with self._checkout(pr) as (wt, base):
-            if base is None:
-                return f"{pr.head[:12]} isn't on {self.remote} (pushed again since?)"
-            args = [*(x for d in LEAN_BUILDS for x in ("--lean", d)), "--head", pr.head, "--base", base, "--", *QUICK_TIER]
-            opts = [*(["--by", self.by] if self.by else []), "--wait-max", f"{self.wait_s:g}", "--run-max", f"{self.timeout_s:g}"]
-            r = self.launch([sys.executable, "-m", "research", "run", "--id", rid, "--on", on, "--project", self.project,
-                             "--source", str(wt), "--cwd", "source", "--send", str(job), "--require-result",
-                             "--timeout", f"{self.wait_s + self.timeout_s:g}", "--custody-ttl", str(math.ceil(self.wait_s + self.timeout_s + REMOTE_GRACE_S)),
-                             "--declared-output", "out/*", "--", *slot, *opts,
-                             "--", "sh", "-c", f'exec python3 "$RESEARCH_RUN_DIR/inputs/{job.name}" {shlex.join(args)}'], wt)
+        try:
+            with self._checkout(pr) as (wt, at, base):
+                audit = lean_audit(self.repo, base, at)
+                args = [*(x for d in LEAN_BUILDS for x in ("--lean", d)), "--head", at, "--base", base,
+                        *([] if at == pr.head else ["--merged", pr.head]), *(["--lean-audit", shlex.join(audit)] if audit else []),
+                        "--", *QUICK_TIER]
+                opts = [*(["--by", self.by] if self.by else []), "--wait-max", f"{self.wait_s:g}", "--run-max", f"{self.timeout_s:g}"]
+                r = self.launch([sys.executable, "-m", "research", "run", "--id", rid, "--on", on, "--project", self.project,
+                                 "--source", str(wt), "--cwd", "source", "--send", str(job), "--require-result",
+                                 "--timeout", f"{self.wait_s + self.timeout_s:g}", "--custody-ttl", str(math.ceil(self.wait_s + self.timeout_s + REMOTE_GRACE_S)),
+                                 "--declared-output", "out/*", "--", *slot, *opts,
+                                 "--", "sh", "-c", f'exec python3 "$RESEARCH_RUN_DIR/inputs/{job.name}" {shlex.join(args)}'], wt)
+        except TierRefused as e:
+            return str(e)
         if r.returncode:
             return f"`research run --on {on}` failed (exit {r.returncode}): {(r.stderr or r.stdout or '').strip()[-400:]}"
         print(f"research queue: the quick tier runs as {rid} on {on}, in {'a slot of its ' + pool + ' pool' if pool else 'a check slot'}; waiting for it to end "
               f"(`research inspect {rid}`)", flush=True)
         d = R.runs_root() / rid
         status, why = self._wait(d, on)
-        return why or judge_run(d, rid, on, pr.head, status, allowed(self.repo, base))
+        return why or judge_run(d, rid, on, at, status, allowed(self.repo, base))
 
     def _wait(self, d: Path, on: str) -> tuple[dict, str | None]:
         """The run's status.json once it says the run ended, from its records fetched every `poll_s` until the wait's deadline; or why
@@ -4792,7 +4848,8 @@ class Preflight:
 
     `next` is fetched fresh; a PR already on it is merged onto the commit below its merge there, as drive's next sync would
     rebuild it, found by its trailers among the commits of `next` the landing branch doesn't hold, past those without them
-    (`_fetch`).
+    (`_fetch`).  Under `land_into = "main"` written in drive.toml, the verified queue's, each `next` above reads `main`: the head
+    is judged on its merge onto `main`'s tip, as the loop merges it, and drive's frozen `next` is never fetched.
 
     The checks of (b) and (e) run in a temporary worktree of the caller's repository at the merge (`merged_worktree`), (e)
     first, within `lean_s`, while the tree is clean (a `research run` ships it), then (b) with its own environment (`sync`;
@@ -4917,7 +4974,9 @@ class Preflight:
         """The commit to merge the head onto, how to name it, and `next`'s members up to it.  The members are the merges of `next`
         that the landing branch's tip (`main`'s when that can't be fetched) doesn't contain, by their trailers, past the commits
         without them (`queue_merges`); the commit is the one below the PR's newest merge among them, else `next`'s tip, or with no
-        `next`, or one that doesn't hold `main` when `main` is the landing branch (no queue above it), that landing tip."""
+        `next`, or one that doesn't hold `main` when `main` is the landing branch (no queue above it), that landing tip.  Under
+        `land_into = "main"` written in drive.toml (`land_into_key`) it is `main`'s tip with no members: the verified queue merges
+        each candidate onto `main`, and `next` is drive's, frozen."""
         _git(self.repo, *STALL, "fetch", "-q", self.remote, "+refs/heads/main:refs/queue/preflight/main",
              f"+refs/pull/{pr.number}/head:refs/queue/preflight/pr")
         missing = lambda: _git(self.repo, "cat-file", "-e", f"{pr.head}^{{commit}}", check=False).returncode   # noqa: E731
@@ -4926,7 +4985,9 @@ class Preflight:
         if missing():
             raise QueueError(f"{pr.head[:12]} isn't on {self.remote} (pushed again since?)")
         main, into = _out(self.repo, "rev-parse", "refs/queue/preflight/main"), "main"
-        if (land := into_at(self.repo, "refs/queue/preflight/main")) != "main" and not _git(
+        if (written := land_into_key(self.repo, "refs/queue/preflight/main")) == "main":
+            return main, f"`main` at {main[:12]}", []
+        if (land := written or "main") != "main" and not _git(
                 self.repo, *STALL, "fetch", "-q", self.remote, f"+refs/heads/{land}:refs/queue/preflight/{land}", check=False).returncode:
             main, into = _out(self.repo, "rev-parse", f"refs/queue/preflight/{land}"), land
         r = _git(self.repo, *STALL, "ls-remote", "--exit-code", self.remote, f"refs/heads/{BRANCH}", check=False)
@@ -5561,8 +5622,8 @@ def ready(github, store, number: int | None, by: str, tier: Callable[[PR], str |
           preflight: Callable[[PR, list[PR]], str | None] | None = None, sha: str | None = None,
           sleep: Callable[[float], None] = time.sleep, as_json: bool = False,
           records: Callable[[PR], str | None] | None = None, goals: Callable[[PR], str | None] | None = None) -> int:
-    """`research queue ready PR`: run the quick tier at the PR's current head (`tier`, a `RemoteQuickTier` or a `QuickTier`), and once
-    it passes write `ready = true` on `pr:{n}@{that head}` and push it to the store's remote.  A head whose tree is that of another
+    """`research queue ready PR`: run the quick tier on the PR's current head merged onto `main`'s tip (`tier`, a `RemoteQuickTier` or
+    a `QuickTier`: `onto_main`), and once it passes write `ready = true` on `pr:{n}@{that head}` and push it to the store's remote.  A head whose tree is that of another
     head marked ready (`same_tree_mark`) is marked without running the tier again.  A head drive or the lander ejected is refused
     unless ``again`` (a re-mark at an ejected head would fail a second train on the same line).  Before any of it, a PR
     `PR.outside` refuses (its head on another repository than ``github``'s, or an author the organization doesn't have) is
@@ -5635,7 +5696,8 @@ def _ready(github, store, number: int | None, by: str, tier: Callable[[PR], str 
     if isinstance(tier, MarkOnly):
         print(f"research queue: #{pr.number} at {pr.head[:12]}: marked on {by}'s word, with no quick tier", flush=True)
         return _mark(store, pr, by, None, "ready"), pr, prs
-    print(f"research queue: the quick tier at #{pr.number}'s head {pr.head[:12]}: `suites.py --quick` on the suites it changes", flush=True)
+    print(f"research queue: the quick tier of #{pr.number}'s head {pr.head[:12]} on its merge onto `main`'s tip: `suites.py --quick` "
+          "on the suites it changes", flush=True)
     return _mark(store, pr, by, tier(pr), "ready"), pr, prs
 
 
@@ -5644,7 +5706,8 @@ def judge(github, store, ref: str, by: str, on: str | None = None, fetch: Callab
           records: Callable[[PR], str | None] | None = None, goals: Callable[[PR], str | None] | None = None) -> int:
     """`research queue judge RUN`: what `ready --on` does once its run ends, for a quick-tier run that already ended (its waiting
     client gone): fetch its records (`research fetch`; a run another VM launched is adopted from its machine, ``on`` or each), judge
-    them as `RemoteQuickTier` does, at the head the tier ran at, and mark the open PR at that head ready, or, when none is there now
+    them as `RemoteQuickTier` does, at the commit the tier ran at, and mark the open PR at the head it ran for (the head it merged
+    onto `main`'s tip, the facts' `merged`, else that commit) ready, or, when none is there now
     and ``repo`` (a clone of ``url``) is given, the one open PR whose head has that head's tree (`same_tree_mark`'s reason).
     Refused when the run can't be fetched, hasn't ended, isn't a quick tier, failed, or no open PR is at that head or tree now;
     ``goals`` (`goal_gate`) and ``records`` (`RecordsGate`) warn, as in `ready`."""
@@ -5669,14 +5732,15 @@ def judge(github, store, ref: str, by: str, on: str | None = None, fetch: Callab
     if why:
         return refuse(why)
     head = tier.get("head") if isinstance(tier := res.doc.get("tier"), dict) else None
+    of = (tier.get("merged") if isinstance(tier, dict) else None) or head
     open_prs = github.open_prs()
-    prs = [p for p in open_prs if p.head == head]
-    if not prs and repo is not None and isinstance(head, str):
-        if len(prs := same_tree_prs(repo, url, open_prs, head)) == 1:
-            print(f"research queue: #{prs[0].number}'s head {prs[0].head[:12]} has the tree of {head[:12]}, where run {rid} ran the "
+    prs = [p for p in open_prs if p.head == of]
+    if not prs and repo is not None and isinstance(of, str):
+        if len(prs := same_tree_prs(repo, url, open_prs, of)) == 1:
+            print(f"research queue: #{prs[0].number}'s head {prs[0].head[:12]} has the tree of {of[:12]}, where run {rid} ran the "
                   f"quick tier: the same files", flush=True)
     if len(prs) != 1:
-        return refuse(f"run {rid} ran the quick tier at {str(head)[:12]}, " + (
+        return refuse(f"run {rid} ran the quick tier at {str(of)[:12]}, " + (
             f"the head of each of {', '.join('#' + str(p.number) for p in prs)}: mark one with `research queue ready`" if prs else
             "which is no open PR's head now, nor its tree (pushed again since, or closed?)"))
     if why := prs[0].outside(github.repo):
@@ -5723,7 +5787,8 @@ def review(q: Queue, store, labels: StoreLabels, pr: int | None, verdict: str | 
     """`research queue review`: without ``pr``, list the open PRs onto `main` marked ready at their head and not on `main` that no
     land verdict at their head lands (`unreviewed`), oldest mark first: those the verified queue waits on a reviewer for (a
     low-risk one lands on its mark alone, so its row says it); with it, write ``verdict`` (`land` or `hold`, ``ref`` its note or
-    reason) by ``by`` on the PR's head on `next` (or ``sha``, or its open head when it isn't on `next`), refusing its owner.  Without
+    reason) by ``by`` on the PR's head on `next` (or ``sha``, or its open head when it isn't on `next`), refusing its owner.  Under
+    `land_into = "main"` written in drive.toml no `next` is read (`land_into_key`): the head is its open one, or ``sha``.  Without
     ``sha`` it refuses when GitHub has a head other than `next`'s, as the reviewer may have read either; a short ``sha`` is the
     known head or clone commit it starts.  The list names each land verdict ``labels`` doesn't authenticate
     (`StoreLabels.refusals`); ``store``, a `labelauth.Signer` (`label_signer`), refuses a verdict it can't sign."""
@@ -5763,7 +5828,7 @@ def review(q: Queue, store, labels: StoreLabels, pr: int | None, verdict: str | 
             print(f"research queue review: {len(rows)} marked PR(s) not on `main` lack a land verdict")
         return 0
     q.fetch()
-    chain = q.chain()
+    chain = [] if land_into_key(q.workdir, "refs/remotes/origin/main") == "main" else q.chain()
     m = next((m for m in chain if m.pr == pr), None)
     live = (p := opened.get(pr)) and ((p.branch and getattr(q.github, "branch_tip", lambda _b: None)(p.branch)) or p.head)
     if sha:
