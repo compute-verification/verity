@@ -14,8 +14,8 @@ the proof supplies them.
   menu, host row, semantics, devices, accelerator, layout, resource match, period and prices.
 * `WorkSoundAt_nontrivial`: at some accelerator, period and prices, `WorkSoundAt`'s conclusion (`WorkBound`) fails
   under the verdict that accepts everything.
-* `WorkSoundAt_nontrivial_at`, `WorkSoundAt_nontrivial_and`: the same failure at an instance where the premises
-  `WorkSoundAt_honest` concludes hold too, stated as an `∃` over their proof and as a conjunction.
+* `WorkSoundAt_nontrivial_at`: the same failure at an instance where the premises `WorkSoundAt_honest` concludes hold
+  too, the table among its `∃`s.
 
 **The instance every proof here supplies**: the H200's table `Verity.Accel.H200.card` with its menu `pubBestH200` and
 its host row `hostH200`; the exact `s8` semantics `Verity.Accel.s8Open`; one card with its row's hosts and no other
@@ -243,34 +243,20 @@ theorem WorkSoundAt_nontrivial :
     fun _ => 1,
     nontrivial_at Verity.Accel.H200.card h200_rates_pos hostH200 hostH200_pos _ _⟩
 
-/-- **The nontrivial witness at the honest instance**, with the premises as an `∃` over their proof: at some
-instance where every premise `WorkSoundAt_honest` concludes holds, `WorkBound` fails under the verdict that accepts
-everything. Past its `∃`s the statement is `¬ WorkBound …`. The proof's instance is the H200's, as
-`WorkSoundAt_honest`'s. -/
+/-- **The nontrivial witness at the honest instance**: at some card table, menu, host row, semantics, devices,
+accelerator, layout, match, period and prices where every premise `WorkSoundAt_honest` concludes holds, `WorkBound`
+fails under the verdict that accepts everything. The premises are an `∃` over their proof, so that past its `∃`s the
+statement is `¬ WorkBound …`.
+
+The statement names no table. **The proof's instance is the H200's**, the one `WorkSoundAt_honest`'s proof supplies:
+`Verity.Accel.H200.card`, `pubBestH200`, `hostH200`, `Verity.Accel.s8Open`, `devs`, `accelAt` at `pubShaH200`'s first
+schedule, `idLayout`, the identity match, `halfPd` and the prices 1. -/
 theorem WorkSoundAt_nontrivial_at :
     ∃ (c : Verity.Accel.Card) (pb : PubBest c) (hr : HostRow) (x : Verity.Accel.Open) (D : Devices c) (G : Accel)
       (L : Layout (D.machine x) twRound) (e : G.Res ≃ Verity.Accel.Res ⊕ D.oth.Res) (Pd : Period G)
       (μ : G.Res → ℝ)
       (_ : c.Exact x ∧ Verity.Assumptions.AccelProductForm x ∧ OnCard G c x D twRound L e ∧ HostsCounted D hr ∧
         CallsAtPub G e pb ∧ G.G1 ∧ G.G2 ∧ G.G3 ∧ Pd.DualOpt μ 1),
-      ¬ WorkBound G twRound 2 (Obs := Unit) (fun _ _ _ _ => True) (fun _ _ _ => ()) Pd (fun _ => 1 / 2)
-        (∑ r, μ r * (1 * Pd.hon r)) (fun _ => 1 / 2) (fun _ => True) :=
-  ⟨Verity.Accel.H200.card, pubBestH200, hostH200, Verity.Accel.s8Open, devs Verity.Accel.H200.card hostH200,
-    accelAt Verity.Accel.H200.card Verity.Accel.s8Open hostH200 (shaUnits 3400 152 (3608 / 32)),
-    idLayout Verity.Accel.H200.card Verity.Accel.s8Open hostH200, Equiv.refl _,
-    halfPd (accelAt Verity.Accel.H200.card Verity.Accel.s8Open hostH200 (shaUnits 3400 152 (3608 / 32))) fun _ => 1,
-    fun _ => 1,
-    honest_at Verity.Accel.H200.card h200_rates_pos hostH200 hostH200_pos pubBestH200 _ (List.Mem.head _),
-    nontrivial_at Verity.Accel.H200.card h200_rates_pos hostH200 hostH200_pos _ _⟩
-
-/-- **The nontrivial witness at the honest instance**, with the premises as a conjunct: the same as
-`WorkSoundAt_nontrivial_at`, stated `(the premises) ∧ ¬ WorkBound …`. The proof's instance is the H200's. -/
-theorem WorkSoundAt_nontrivial_and :
-    ∃ (c : Verity.Accel.Card) (pb : PubBest c) (hr : HostRow) (x : Verity.Accel.Open) (D : Devices c) (G : Accel)
-      (L : Layout (D.machine x) twRound) (e : G.Res ≃ Verity.Accel.Res ⊕ D.oth.Res) (Pd : Period G)
-      (μ : G.Res → ℝ),
-      (c.Exact x ∧ Verity.Assumptions.AccelProductForm x ∧ OnCard G c x D twRound L e ∧ HostsCounted D hr ∧
-        CallsAtPub G e pb ∧ G.G1 ∧ G.G2 ∧ G.G3 ∧ Pd.DualOpt μ 1) ∧
       ¬ WorkBound G twRound 2 (Obs := Unit) (fun _ _ _ _ => True) (fun _ _ _ => ()) Pd (fun _ => 1 / 2)
         (∑ r, μ r * (1 * Pd.hon r)) (fun _ => 1 / 2) (fun _ => True) :=
   ⟨Verity.Accel.H200.card, pubBestH200, hostH200, Verity.Accel.s8Open, devs Verity.Accel.H200.card hostH200,
