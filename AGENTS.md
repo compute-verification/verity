@@ -212,24 +212,26 @@ module's sidecar (`<module>.circuit-check.py`, pins in `.circuit-check.json`), w
 There is no GitHub Actions CI. `check` (`verity check`, `tools/verity/check/check.py`) is the one check: every suite,
 `circuit-check --all`, Flock's Rust build and tests, the Lean verifier's build and partition check, the Lean check, and
 `lean-agreement` (against upstream's Rust verifier) when Flock or its Lean verifier changes. The runners report facts: each
-suite, test, target and step's real verdict. What gates, what may stay red and what a red triggers is drive's config,
-`tools/verity/check/policy.toml`: its `off_gate` jobs, and its allowances, each an id, an owner, a UTC expiry and a reason, under
-which drive takes a failure as not red until it expires. `circuit-check` is off the merge gate until `circuit-check --all`
-fits inside the rest of the check: a recorded check, `research merge` and the move of `main` leave it out, and it runs after
-landing on `checked`'s tip, where a red holds the PRs touching its inputs until it passes.
+suite, test, target and step's real verdict. What gates and what may stay red is `tools/verity/check/policy.toml`, read at
+the commit it judges: its `off_gate` jobs, and its allowances, each an id, an owner, a UTC expiry and a reason, under
+which a failure is not red until it expires. `circuit-check` is off the merge gate until `circuit-check --all`
+fits inside the rest of the check: a recorded check, `research merge` and the move of `main` leave it out, and it runs with
+each candidate's check, where a red its base doesn't share is rung to the owner of the target's pins and holds nothing.
 
 A pass of a test suite, a circuit-check target or a Lean package's Lean check is reused only while every input it read is
 unchanged.
 
 A part's verdict is reused while a hash of its declared inputs, the base image and its runner is unchanged, so a
-docs-only change reruns nothing; a nightly uncached check must agree, and a disagreement is fixed in the check. `main` holds
-only fully checked commits: drive lands each marked PR on `checked` once it is reviewed or low-risk, runs the full check on
-its tip, and moves `main` only to a commit of `checked` whose full check passed every step on the merge gate. A red's
-culprit is the one landing whose change touches what its failure names (its files, the files declaring a Lean declaration
-it names, else the failed suite's or step's declared inputs), never found by bisecting: its lane fixes it forward, or drive
-reverts it on `checked`. What drive.toml lets warn (its `warn_gates` and `warn_steps`) and a lock's bookkeeping never
-revert: drive tells the owner, who fixes it in their next PR. How a PR lands, from its ready mark to `main`, and drive's
-rule for each case: the team skill's Landing.
+docs-only change reruns nothing; a nightly uncached check must agree, and a disagreement is fixed in the check. `main` moves
+only to a checked candidate with no new failure: the verified queue (`research queue vqueue`) stacks the marked PRs that are
+reviewed or low-risk, one `Queue: #N` merge each, on `main`'s tip or on the candidate below, checks that tree, and
+fast-forwards `main` to it once every task on the merge gate passed or fails on its base too, so `main`'s reds only shrink.
+A candidate that fails never reaches `main`, and nothing is reverted: its suspects are the members whose changed files meet
+a failed task's inputs, every member when none does; a lone suspect loses its ready mark and its owner is told which tasks
+failed, several are bisected over the next batches, and the candidates built on it are dropped. An infra error blames
+nobody: the check is enqueued again. What drive.toml lets warn (its `warn_gates` and `warn_steps`) and a lock's
+bookkeeping never revert: drive tells the owner, who fixes it in their next PR. How a PR gets its mark and its verdict:
+the team skill's Landing; the queue's rule for each case: `tools/research/src/research/vqueue.py`'s docstring.
 
 ## Lean
 
