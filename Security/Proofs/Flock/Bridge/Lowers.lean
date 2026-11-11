@@ -65,6 +65,9 @@ alone (`ref_blockOf`), and it is correct exactly when the unit's gates are and e
   `correct_of_local`),
   reading from outside the unit only positions of wires, whose committed values `Lowers` gives, or constants
   (`const_pos`), which `Prog.read` reads with no committed value.
+* `correct_unitGates_of`: so the unit's lowered gates are correct on committed values that carry, at each position of
+  a wire the unit computes or reads, values that hold its gates and the constants it reads; nothing is asked at the
+  two XORs.
 -/
 
 @[expose] public section
@@ -744,5 +747,58 @@ theorem correct_blockOf {n : ℕ} (P : Partition C n) (u : Fin n) (ref : ℕ →
       (progOf C κ).Correct ref (unitGates P u) ∧ ∀ a ∈ insOf P κ u, ref (posOf C a) ≠ none := by
   rw [blockOf, correct_append_inputs inputs_blockOf (fun _ _ hx _ hi => reads_lt hx hi) ref]
   simp
+
+/-- **A unit's lowered gates are correct on values that hold its gates** (`lowers` at such values rather than the
+circuit's evaluation): on committed values carrying `V` at the position of each wire the unit computes or reads, where
+`V` holds each of the unit's gates and each constant `κ` fixes that the unit reads. -/
+theorem correct_unitGates_of {n : ℕ} (P : Partition C n) (u : Fin n) (V : Fin C.N → Bool)
+    (hV : ∀ g, P.unit g = some u → V g = (C.op g).apply V)
+    (hκ : ∀ a b, κ a = some b → (∃ g, P.unit g = some u ∧ a ∈ (C.op g).args) → V a = b) (ref : ℕ → Option Bool)
+    (href : ∀ a : Fin C.N, (P.unit a = some u ∨ ∃ g, P.unit g = some u ∧ a ∈ (C.op g).args) →
+      ref (posOf C a) = some (V a)) :
+    (progOf C κ).Correct ref (unitGates P u) := by
+  have hread : ∀ p ∈ unitGates P u, ∀ x, (progOf C κ).gates[p]? = some x → ∀ a : Fin C.N,
+      posOf C a ∈ x.reads → posOf C a ∉ unitGates P u → (progOf C κ).read ref (posOf C a) = some (V a) := by
+    intro p hp x hx a hr _
+    obtain ⟨g, hu, j, hj, rfl⟩ := mem_unitGates.1 hp
+    rw [gates_off g hj] at hx
+    obtain ⟨a', ha', he⟩ : ∃ a' ∈ (C.op g).args, posOf C a = posOf C a' := by
+      rcases reads_lower_args hx hr with h | ⟨rfl, h⟩
+      · exact h
+      · exfalso
+        rcases h with h0 | h1
+        · exact off_ne_posOf (g := g) (a := a) (j := 0) (by omega) (by rw [Nat.add_zero]; exact h0.symm)
+        · exact off_ne_posOf (g := g) (a := a) (j := 1) (by omega) h1.symm
+    obtain rfl := posOf_injective he
+    by_cases hc : ∃ b, (progOf C κ).gates[posOf C a]? = some (.const b)
+    · obtain ⟨b, hb⟩ := hc
+      rw [read_const hb]
+      obtain ⟨a'', he', -, hk⟩ := const_pos hb
+      obtain rfl := posOf_injective he'
+      exact congrArg some (hκ a b hk ⟨g, hu, ha'⟩).symm
+    · push Not at hc
+      rw [Boundary.read_eq _ hc]
+      exact href a (Or.inr ⟨g, hu, ha'⟩)
+  have hrun := runIn_posOf_of P u V hV ref hread
+  intro p hp
+  refine ⟨fun x hx i hi hiU => ?_, fun hb => ?_⟩
+  · obtain ⟨g, hu, j, hj, rfl⟩ := mem_unitGates.1 hp
+    have hx' := hx
+    rw [gates_off g hj] at hx'
+    rcases reads_lower_args hx' hi with ⟨a, -, rfl⟩ | ⟨rfl, h⟩
+    · rw [hread _ hp x hx a hi hiU]
+      simp
+    · exfalso
+      apply hiU
+      rcases h with rfl | rfl
+      · exact mem_unitGates.2 ⟨g, hu, 0, by omega, rfl⟩
+      · exact mem_unitGates.2 ⟨g, hu, 1, by omega, rfl⟩
+  · obtain ⟨g, hu, j, hj, rfl⟩ := mem_unitGates.1 hp
+    by_cases hjl : j + 1 < gateSize (C.op g)
+    · rw [boundary_inner hu hjl] at hb
+      exact absurd hb (by simp)
+    · have hpos : off C g.val + j = posOf C g := by rw [posOf_eq]; omega
+      rw [hpos] at hp ⊢
+      exact ⟨_, href g (Or.inl hu), hrun g.val g rfl hu⟩
 
 end Flock.Bridge
