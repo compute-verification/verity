@@ -214,8 +214,8 @@ class TopkSoftmaxRule(InPlaceRule):
     modes = frozenset({"profile"})
     info = RuleInfo("TopkSoftmax[vllm-moe]", 1, "in-place-binding",
                     applies_to="_moe_C.topk_softmax(Tensor! w, Tensor! ids, Tensor! tei, logits, bool renormalize, Tensor? bias, Tensor? is_padding)",
-                    preconditions=("logits is bf16 [M, E] with E in the difftested set (64, 128); renormalize a static bool (False -> MoeRouterTopK_v1, "
-                                   "True -> MoeRouterTopKNorm_v1); bias None; is_padding None",
+                    preconditions=(("logits is bf16 [M, E] with E in the difftested set (64, 128); renormalize a static bool (False -> MoeRouterTopK_v1, "
+                                   "True -> MoeRouterTopKNorm_v1); bias None; is_padding None"),
                                    "w is an unwritten allocation [M, TOPK] f32; ids [M, TOPK] i32; tei [M, TOPK] i32"),
                     evidence_domain="structural; numerics: MoeRouterTopK_v1 (vLLM _moe_C.topk_softmax fused kernel, cp-moe xcheck)")
 
@@ -301,8 +301,8 @@ class FusedMoeKernelRule(InPlaceRule):
                                    "a is bf16 [rows, K] row-major with rows*top_k == num_valid_tokens; b is bf16 [E, N, K] contiguous (stride_bk 1, stride_bn K, stride_be N*K)",
                                    "c is an unwritten allocation of num_valid_tokens rows of N; K % BLOCK_SIZE_K == 0, BLOCK_SIZE_K % 16 == 0",
                                    "launch geometry == the difftested one (BLOCK 64/64/32, GROUP_SIZE_M 8, 4 warps, 3 stages: vLLM's BI default for these stacks at every M)",
-                                   "schedule: sorted_token_ids_ptr is a MoeSchedule marker over an i32 [M, TOPK] ids value, or naive_block_assignment with "
-                                   "expert_ids_ptr the i32 pair ids value; topk_weights_ptr is the f32 [M, TOPK] routed weights value when MUL_ROUTED_WEIGHT"),
+                                   ("schedule: sorted_token_ids_ptr is a MoeSchedule marker over an i32 [M, TOPK] ids value, or naive_block_assignment with "
+                                   "expert_ids_ptr the i32 pair ids value; topk_weights_ptr is the f32 [M, TOPK] routed weights value when MUL_ROUTED_WEIGHT")),
                     evidence_domain="structural; numerics: MoeExpertGemm_v1 / MoeExpertGemmW_v1 (the same Triton kernel; f32 accumulator, k16 chunks; cp-moe xcheck), _v2{DOT} where registry.targets.moe_expert_dot names a step")
 
     def targets(self):
@@ -612,10 +612,10 @@ class PaddedFusedMoeKernelRule(InPlaceRule):
     info = RuleInfo("PaddedFusedMoeKernel[vllm-moe]", 1, "in-place-binding",
                     applies_to="verity_cba::triton_launch of fused_moe.fused_moe_kernel when moe_construction = padded (kernel name + source + constexprs pinned)",
                     preconditions=("FusedMoeKernel[vllm-moe]'s launch pins (bf16 unquantized path, difftested tiling)",
-                                   "up: a is the bf16 [M,H] hidden value (M*top_k == num_valid_tokens, top_k == the route's TOPK); b bf16 [E,2I,H] contiguous; "
-                                   "the schedule is the route's PaddedSchedule (sorted) or the route's topk_ids marker (naive)",
-                                   "down: a is the PaddedAct of the up launch ([M*TOPK, I]); topk_weights_ptr the route's topk_weights marker; "
-                                   "b bf16 [E,H,I] contiguous; top_k == 1",
+                                   ("up: a is the bf16 [M,H] hidden value (M*top_k == num_valid_tokens, top_k == the route's TOPK); b bf16 [E,2I,H] contiguous; "
+                                   "the schedule is the route's PaddedSchedule (sorted) or the route's topk_ids marker (naive)"),
+                                   ("down: a is the PaddedAct of the up launch ([M*TOPK, I]); topk_weights_ptr the route's topk_weights marker; "
+                                   "b bf16 [E,H,I] contiguous; top_k == 1"),
                                    "c is an unwritten allocation of num_valid_tokens rows of N"),
                     evidence_domain="structural; numerics: inside MoeFfnFixedL_v1 (MoeExpertBody_v1 = the pair body without the expert-axis gather)")
 

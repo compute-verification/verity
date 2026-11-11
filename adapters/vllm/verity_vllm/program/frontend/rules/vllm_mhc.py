@@ -116,9 +116,9 @@ class MhcPreBroadcastRule(OpRule):
     fn_broadcast, NS DeepGEMM's split count at the launch's tokens over H, and `MhcResidualBroadcast_v1` for the streams."""
     modes = frozenset({"profile"})
     info = RuleInfo("MhcPreBroadcast[vllm-dsv4]", 1, "op-binding", applies_to="vllm_iface.mhc_pre_broadcast_tilelang",
-                    preconditions=("residual [T, H] bf16; fn [OUT, HC*H], fn_broadcast [OUT, H], hc_scale [3], hc_base [OUT] f32, "
-                                   "OUT = HC (2 + HC); norm_weight [H] bf16", "rms_eps = norm_eps, hc_pre_eps = hc_sinkhorn_eps, the post "
-                                   "multiplier 2.0, the Sinkhorn repeat static", "a pinned thread geometry at H; a cc 9.0 target"),
+                    preconditions=(("residual [T, H] bf16; fn [OUT, HC*H], fn_broadcast [OUT, H], hc_scale [3], hc_base [OUT] f32, "
+                                   "OUT = HC (2 + HC); norm_weight [H] bf16"), ("rms_eps = norm_eps, hc_pre_eps = hc_sinkhorn_eps, the post "
+                                   "multiplier 2.0, the Sinkhorn repeat static"), "a pinned thread geometry at H; a cc 9.0 target"),
                     evidence_domain="structural; numerics: MhcPreBroadcast_v1 and MhcResidualBroadcast_v1 (registry.mhc)")
 
     def targets(self):

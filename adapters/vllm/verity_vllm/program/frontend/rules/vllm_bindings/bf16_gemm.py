@@ -196,8 +196,8 @@ class CublasRouterRule(OpRule):
         applies_to="aten.mm.dtype(x, W.T, out_dtype=float32): GateLinear's cc 9.0 fallback above 16 tokens, or a direct call",
         preconditions=(
             "x is row-major bf16 [M,K], W.T is the transposed view of row-major bf16 W[N,K], and output is row-major f32 [M,N]",
-            "the shape and M have a captured vLLM-default route (`_f32out_phase`); in the router family, vLLM dispatches the "
-            "cuBLAS tier",
+            ("the shape and M have a captured vLLM-default route (`_f32out_phase`); in the router family, vLLM dispatches the "
+            "cuBLAS tier"),
         ),
         evidence_domain="GLM-5.3 BF16 GEMM defaults capture; GO pending its capture-side probe fix",
     )

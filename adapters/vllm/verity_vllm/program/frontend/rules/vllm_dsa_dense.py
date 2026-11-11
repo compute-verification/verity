@@ -72,19 +72,19 @@ class DsaDenseMhaRule(StateRule):
     call's cache rows open the layer's history as `DsaIndexerAttn[vllm-dsa]`'s do, for the decode steps after it."""
     modes = frozenset({"profile"})
     info = RuleInfo("DsaDenseMha[vllm-dsa]", 1, "state", applies_to="vllm_iface.dsa_dense_mha(...) (" + ", ".join(_DENSE) + ")",
-                    preconditions=("the layer's OBSERVED implementation is FlashAttnMLASparseImpl on a bf16 cache, without context parallelism; "
-                                   "its prefill backend FlashAttnPrefillBackend on FA3 with v unpadded at the call's scale; sparse_mla_force_mqa off",
+                    preconditions=(("the layer's OBSERVED implementation is FlashAttnMLASparseImpl on a bf16 cache, without context parallelism; "
+                                   "its prefill backend FlashAttnPrefillBackend on FA3 with v unpadded at the call's scale; sparse_mla_force_mqa off"),
                                    "the target is compute capability 9.0 under FA3's check-inf-per-iteration construction (Attention_v4)",
-                                   "the call is a prefill: T above the decode threshold at the observed query heads per rank (DECODE_THRESHOLD), "
-                                   "T <= TOPK, and it opens the layer's history (no chunked context)",
-                                   "q's and k's parts q_nope, k_nope [T, NH, P], q_pe [T, NH, R], k_pe [T, R], and v [T, NH, D] bf16 "
+                                   ("the call is a prefill: T above the decode threshold at the observed query heads per rank (DECODE_THRESHOLD), "
+                                   "T <= TOPK, and it opens the layer's history (no chunked context)"),
+                                   ("q's and k's parts q_nope, k_nope [T, NH, P], q_pe [T, NH, R], k_pe [T, R], and v [T, NH, D] bf16 "
                                    "at D = P + R (one head dim, D registered by targets.fa3_kblock_n); kv_c [T, L] bf16; "
-                                   "scale == f32(D^-0.5), the word Attention_v4 folds in",
-                                   "FA3's split count of the sequence (`fa3_model.split_plan` at the target's SMs, or batch invariance's "
+                                   "scale == f32(D^-0.5), the word Attention_v4 folds in"),
+                                   ("FA3's split count of the sequence (`fa3_model.split_plan` at the target's SMs, or batch invariance's "
                                    "num_splits = 1) under a launch bound of at most 32 splits, the FlashAttnFwdCombine instantiation "
-                                   "SparseMlaCombine_v1 states (kLogMaxSplits 5)",
-                                   "no declared launch context other than the call's own rows (a varlen launch's split plan reads every "
-                                   "sequence's length)",
+                                   "SparseMlaCombine_v1 states (kLogMaxSplits 5)"),
+                                   ("no declared launch context other than the call's own rows (a varlen launch's split plan reads every "
+                                   "sequence's length)"),
                                    "the index operands both given (index_k [T, Dk] e4m3, index_k_scale [T] f32) or both None",
                                    "layer_name static and written from one module; not under registered_values"),
                     evidence_domain="structural; numerics: Attention_v4 and AttentionSplit_v1 (glm53_fa3_prefill_capture)")

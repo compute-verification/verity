@@ -210,13 +210,13 @@ class Dsv4SparseAttnRule(StateRule):
     info = RuleInfo("Dsv4SparseAttn[vllm-dsv4]", 1, "state", applies_to="vllm_iface.dsv4_sparse_attn",
                     preconditions=("the target's compute capability is 9.0 (FlashMLA's cc 9.0 sparse kernels)",
                                    "positions are T consecutive rows continuing the layer's history (opened at its first call's first position)",
-                                   "q [T, NHP, D] bf16, NoPE [T, D - DR] e4m3, scale [T, (D - DR) / QT + 1] u8, RoPE [T, DR] bf16, sink [NHP] f32, "
-                                   "(D, DR) a registered FlashMLA geometry; cos_sin an f32 rotary cache [MAX_POS, DR] holding every position",
-                                   "ratio 1 without a compressor, or 4 or 128 with state kv and score [T, D] f32 ([T, 2D] at ratio 4), the "
-                                   "norm weight [D] bf16 and a static eps",
+                                   ("q [T, NHP, D] bf16, NoPE [T, D - DR] e4m3, scale [T, (D - DR) / QT + 1] u8, RoPE [T, DR] bf16, sink [NHP] f32, "
+                                   "(D, DR) a registered FlashMLA geometry; cos_sin an f32 rotary cache [MAX_POS, DR] holding every position"),
+                                   ("ratio 1 without a compressor, or 4 or 128 with state kv and score [T, D] f32 ([T, 2D] at ratio 4), the "
+                                   "norm weight [D] bf16 and a static eps"),
                                    "at ratio 4, (p + 1) / 4 <= topk at every position (the indexer's short path)",
-                                   "layer_name, heads, window, topk and softmax_scale static; the caches written from one module; "
-                                   "not under registered_values"),
+                                   ("layer_name, heads, window, topk and softmax_scale static; the caches written from one module; "
+                                   "not under registered_values")),
                     evidence_domain="structural; numerics: Dsv4MlaCompressC4_v1 / C128_v1, FlashMlaDecode_v1, FlashMlaGatherRow_v1, "
                                     "FlashMlaPrefill_v1")
 
@@ -395,8 +395,8 @@ class Dsv4InvRopeQuantRule(OpRule):
                     preconditions=("the target's compute capability is 9.0 and tma_aligned_scales false: f32 scales (cc 10.0 packs UE8M0)",
                                    "positions a static 1-D index of num_tokens = T rows; o [T, n_groups * heads_per_group, HD] bf16",
                                    "cos_sin an f32 rotary cache [MAX_POS, 2 half_rope] holding every position",
-                                   "HD = chunks_per_head * quant_group_size, the rotary suffix quant_group_size - rope_start = 2 half_rope, "
-                                   "d = heads_per_group * HD, scale_inner = heads_per_group * chunks_per_head; fp8_max 448",
+                                   ("HD = chunks_per_head * quant_group_size, the rotary suffix quant_group_size - rope_start = 2 half_rope, "
+                                   "d = heads_per_group * HD, scale_inner = heads_per_group * chunks_per_head; fp8_max 448"),
                                    "not under registered_values"),
                     evidence_domain="structural; numerics: Dsv4InvRopeQuantHead_v1 (registry.dsv4_indexer)")
 

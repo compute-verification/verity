@@ -176,8 +176,8 @@ class Dsv4TopkRule(InPlaceRule):
     modes = frozenset({"profile"})
     info = RuleInfo("Dsv4Topk[vllm-moe]", 1, "in-place-binding",
                     applies_to="verity_cba::triton_launch of router.dsv4_topk._dsv4_topk_kernel (kernel name + source + constexprs pinned)",
-                    preconditions=("kernel qualified name, source sha256, NUM_EXPERTS, BLOCK_N, HAS_VL and num_warps are the pinned ones "
-                                   "(DSV4_TOPK_PINS)",
+                    preconditions=(("kernel qualified name, source sha256, NUM_EXPERTS, BLOCK_N, HAS_VL and num_warps are the pinned ones "
+                                   "(DSV4_TOPK_PINS)"),
                                    "gating_output a packed f32 value [M, E]; correction_bias a packed f32 value [E]",
                                    f"topk_weights and topk_ids unwritten packed allocations [M, {DSV4_TOPK}], f32 and i32",
                                    "routed_scaling_factor a static number; grid (M,)"),

@@ -123,11 +123,11 @@ class MarlinMoeGemmRule(OpRule):
     modes = frozenset({"profile"})
     info = RuleInfo("MarlinMoeGemm[vllm-marlin-moe]", 1, "op-binding", applies_to="vllm_iface.marlin_moe_mxfp4_gemm",
                     preconditions=("topk_ids an i32 value [M, TOPK]; blk an i32 value [M * TOPK] and par [1] (marlin_moe_align's)",
-                                   "w13: top_k == TOPK, mul_topk_weights False, x a bf16 value [M, K]; w2: top_k 1, mul_topk_weights True, "
-                                   "x a bf16 value [M * TOPK, K], topk_weights an f32 value [M, TOPK]",
+                                   ("w13: top_k == TOPK, mul_topk_weights False, x a bf16 value [M, K]; w2: top_k 1, mul_topk_weights True, "
+                                   "x a bf16 value [M * TOPK, K], topk_weights an f32 value [M, TOPK]"),
                                    "w a u8 value [E, N, K / 2] and w_scale a u8 value [E, N, K / 32] (the e8m0 bytes Mxfp4MoEMethod holds)",
-                                   "the capture gives the launch's config at its tokens (MARLIN_SERVED) and moe_block_size is "
-                                   "fused_marlin_moe's there"),
+                                   ("the capture gives the launch's config at its tokens (MARLIN_SERVED) and moe_block_size is "
+                                   "fused_marlin_moe's there")),
                     evidence_domain="structural; numerics: MarlinMoeExpertGemm_v1 / MarlinMoeExpertGemmW_v1 (registry.marlin_moe; the "
                                     "capture tests/properties/dsv4_marlin_capture_gpu.py)")
 

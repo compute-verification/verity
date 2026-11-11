@@ -81,8 +81,8 @@ class UnifiedAttentionWithOutputRule(StateRule):
     modes = frozenset({"profile"})
     info = RuleInfo("UnifiedAttentionWithOutput[vllm]", 2, "state",
                     applies_to="vllm.unified_attention_with_output(query, key, value, Tensor! output, layer_name: str, output_scale=None, output_block_scale=None, kv_cache_dummy_dep=None)",
-                    preconditions=("the layer's OBSERVED attention implementation (instantiated `Attention.impl` class, backend, FA version, window, soft cap, "
-                                   "alibi, sinks, kv dtype, batch_invariant_enabled) equals ATTN_PINS — derived from the model instance, never assumed",
+                    preconditions=(("the layer's OBSERVED attention implementation (instantiated `Attention.impl` class, backend, FA version, window, soft cap, "
+                                   "alibi, sinks, kv dtype, batch_invariant_enabled) equals ATTN_PINS — derived from the model instance, never assumed"),
                                    "q [T, NH, D], k, v [T, KVH, D] bf16 (or flat rows with config D); NH % KVH == 0",
                                    "output is an unwritten allocation of q's shape", "layer_name is a static string owned by exactly one module",
                                    "output_scale and output_block_scale are None (no fp8 output quantisation)",

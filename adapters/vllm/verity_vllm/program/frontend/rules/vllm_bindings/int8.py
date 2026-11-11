@@ -132,8 +132,8 @@ class Int8UnifiedAttentionRule(UnifiedAttentionWithOutputRule):
     (Int8LutAttentionRow_v2), reading the registered `exp2_lut127` the rule declares when a layer's observed impl is the int8 one."""
     info = RuleInfo("Int8UnifiedAttentionWithOutput[vllm]", 2, "state",
                     applies_to="vllm.unified_attention_with_output(query, key, value, Tensor! output, layer_name: str, None, None, kv_cache_dummy_dep?)",
-                    preconditions=(f"the layer's OBSERVED attention impl is {INT8_ATTENTION_IMPL}, with its K scales (one per KV head) and "
-                                   "float softmax scale read back",
+                    preconditions=((f"the layer's OBSERVED attention impl is {INT8_ATTENTION_IMPL}, with its K scales (one per KV head) and "
+                                   "float softmax scale read back"),
                                    "q [T, NH, D], k, v [T, KVH, D] bf16; NH % KVH == 0", "output is an unwritten allocation of q's shape",
                                    "assumed (op contract): causal attention over the history + this call's rows"),
                     evidence_domain="structural; numerics: Int8KvQuant_v1 + Int8LutAttentionRow_v1 (engine.int8_ops' kv_quant_batch and "

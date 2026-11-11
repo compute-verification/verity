@@ -192,8 +192,8 @@ class MeanDimBIRule(OpRule):
                     preconditions=("x is a genuine f32 value collection of rank >= 1 (a widened bf16 view is refused)",
                                    "dim is the last axis only; keepdim=True; no dtype argument",
                                    "export facts show batch-invariant Triton launches in this graph (derived, never assumed)",
-                                   "installed vLLM's mean_kernel src sha, mean_dim and mean_batch_invariant source shas == MEAN_PINS; "
-                                   "enable_batch_invariant_mode registers aten::mean.dim"),
+                                   ("installed vLLM's mean_kernel src sha, mean_dim and mean_batch_invariant source shas == MEAN_PINS; "
+                                   "enable_batch_invariant_mode registers aten::mean.dim")),
                     evidence_domain="structural; numerics: MeanTriton_v1 (BI mean_kernel reduction order, div.full.f32)")
 
     def targets(self):

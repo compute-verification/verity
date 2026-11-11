@@ -98,15 +98,15 @@ class FusedMoeKernelFp8Rule(FusedMoeKernelRule):
     `c` is rebound."""
     info = RuleInfo("FusedMoeKernelFp8[vllm-moe]", 1, "in-place-binding",
                     applies_to="verity_cba::triton_launch of fused_moe.fused_moe_kernel with use_fp8_w8a8 and block_shape [G, G] (kernel name + source + constexprs pinned)",
-                    preconditions=("block-FP8 path: SPLIT_K 1, HAS_BIAS False, USE_TD False, use_fp8_w8a8 True, no int8, per_channel_quant False, "
-                                   "group_n == group_k == G, compute_type bf16; the target registers an e4m3 step (cc 9.0, cc 12.0)",
-                                   "a is e4m3 [rows, K] row-major with rows*top_k == num_valid_tokens; b is e4m3 [E, N, K] contiguous; c a bf16 "
-                                   "allocation/value of num_valid_tokens rows of N",
-                                   "a_scale is an f32 value [rows, K/G] (strides K/G, 1); b_scale an f32 weight [E, cdiv(N, G), K/G] (strides cdiv(N, G)*K/G, "
-                                   "K/G, 1); K % G == 0 and G % BLOCK_SIZE_K == 0",
-                                   "batch invariant: BLOCK 64/64/32, GROUP_SIZE_M 8, 4 warps, 3 stages, SWAP_AB False (vLLM's default); otherwise "
+                    preconditions=(("block-FP8 path: SPLIT_K 1, HAS_BIAS False, USE_TD False, use_fp8_w8a8 True, no int8, per_channel_quant False, "
+                                   "group_n == group_k == G, compute_type bf16; the target registers an e4m3 step (cc 9.0, cc 12.0)"),
+                                   ("a is e4m3 [rows, K] row-major with rows*top_k == num_valid_tokens; b is e4m3 [E, N, K] contiguous; c a bf16 "
+                                   "allocation/value of num_valid_tokens rows of N"),
+                                   ("a_scale is an f32 value [rows, K/G] (strides K/G, 1); b_scale an f32 weight [E, cdiv(N, G), K/G] (strides cdiv(N, G)*K/G, "
+                                   "K/G, 1); K % G == 0 and G % BLOCK_SIZE_K == 0"),
+                                   ("batch invariant: BLOCK 64/64/32, GROUP_SIZE_M 8, 4 warps, 3 stages, SWAP_AB False (vLLM's default); otherwise "
                                    "cc 9.0 with SWAP_AB = enable_swap_ab(BLOCK_SIZE_M, BLOCK_SIZE_N), and the tile's MMAv2/QGMMA step registered "
-                                   "(vLLM's tuned config; the shared tile-lowering rule)",
+                                   "(vLLM's tuned config; the shared tile-lowering rule)"),
                                    "schedule and routed weights as FusedMoeKernel[vllm-moe]"),
                     evidence_domain="structural; numerics: MoeExpertFp8Gemm_v1 / MoeExpertFp8GemmW_v1 over MoeExpertFp8BlockGemm(W)_v3{DOT} "
                                     "(registry.fp8_moe DOT_CONF: exact-model-tested at cc 12.0's step; at cc 9.0's, the _v1 forms, model-untested)")

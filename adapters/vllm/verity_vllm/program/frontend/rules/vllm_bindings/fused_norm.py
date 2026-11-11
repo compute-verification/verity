@@ -15,8 +15,8 @@ class FusedAddRmsNormBIRule(_FusedAddRmsNormRule):
     the one launched under batch invariance) only when the export shows the batch-invariant path (`observe_export_facts`); otherwise
     refuses — the width-8 kernel (`RMSNormFusedCuda_v1`) is superseded and not in the profile's vocabulary."""
     info = RuleInfo("FusedAddRmsNorm[vllm-bi]", 1, "in-place-binding", applies_to="_C.fused_add_rms_norm(Tensor! x, Tensor! residual, weight, eps)",
-                    preconditions=("the export's fused_add_rms_norm dispatch was OBSERVED as batch-invariant (op reached via `rms_norm_batch_invariant`; "
-                                   "BI Triton overrides installed and launched in the same graph) — derived, never assumed",)
+                    preconditions=(("the export's fused_add_rms_norm dispatch was OBSERVED as batch-invariant (op reached via `rms_norm_batch_invariant`; "
+                                   "BI Triton overrides installed and launched in the same graph) — derived, never assumed"),)
                     + tuple(_FusedAddRmsNormRule.info.preconditions),
                     evidence_domain=_FusedAddRmsNormRule.info.evidence_domain)
 
