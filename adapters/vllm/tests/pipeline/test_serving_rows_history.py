@@ -10,7 +10,9 @@ five tokens and then a decode step of one, and in each window long rows of TOPK 
   the table's length);
 * the reads' roots, domain ids and verdicts are committed by reference to the tables' supplied values, the writer's rows as
   their table's strings (hashed once), and the verifier recomputes each table's root from the writer's public
-  strings, the second window's after the first window's held strings, and holds the root the window registers to it.
+  strings, the second window's after the first window's held strings, and holds the root the window registers to it;
+* each template's statement states every row under the schema its members commit it under (`stated_rows.unstated`): the
+  writer's ``o0`` row-seg where the window commits history tables, v2 where it doesn't.
 """
 from __future__ import annotations
 
@@ -36,6 +38,8 @@ from verity_vllm.commit import history_tables as H
 from verity_vllm.pipeline import chunk_rows as CR
 from verity_vllm.pipeline import history_rows as HR
 from verity_vllm.pipeline import serving_rows as SRW
+
+from tests.pipeline.stated_rows import unstated, unstated_in
 
 KVL, R, EPS, TOPK, WORDS = 512, 64, 1e-5, 4, 576
 LATENT = bind(DN.DsaLatentRow, KVL=KVL, R=R, EPS=EPS)
@@ -168,6 +172,30 @@ def light(ms) -> SimpleNamespace:
     return SimpleNamespace(members=tuple(ms), row_tables=(), partition_digest="ef" * 64)
 
 
+def statements(monkeypatch, ms) -> dict:
+    """The statements `serving_rows.circuit_record` records for members ``ms``, by template, taken off a `light` window:
+    the record's other fields need its population program."""
+    monkeypatch.setattr(IF, "templates_of", lambda _w: [])
+    monkeypatch.setattr(SRW, "registered", lambda *_a: None)
+    monkeypatch.setattr(IF, "circuit_record", lambda _w, _name, _templates, sts, **_kw: sts)
+    return SRW.circuit_record(light(ms), [])
+
+
+def test_every_member_commits_each_port_under_the_schema_its_statement_states(served, monkeypatch):
+    """The rule (`stated_rows.unstated`) over every member of each window, with history tables and without: where the
+    window commits them the writer's ``o0`` is stated row-seg as it is committed, its table's leaves, and every other row
+    v2; where it doesn't, the same template's ``o0`` is a v2 row in both."""
+    for rows in served.windows:
+        _plan, ms = cut(rows)
+        sts = statements(monkeypatch, ms)
+        assert unstated(ms, sts) == []
+        assert [s for s, _ports in sts[LAT]["out_rows"]] == [SEG] and {s for _p, s, *_x in sts[LAT]["in_rows"]} == {V2}
+        assert {s for s, _ports in sts[READ]["out_rows"]} | {s for _p, s, *_x in sts[READ]["in_rows"]} == {V2}
+    off = SRW.members([LAT], served.windows[0][:1], None, CAPS)
+    sts = statements(monkeypatch, off)
+    assert unstated(off, sts) == [] and [s for s, _ports in sts[LAT]["out_rows"]] == [V2]
+
+
 def recomputed(h: IF.History, ms, strings_of, held) -> list[bytes]:
     """History ``h``'s strings as the verifier orders them (`history.order`, as `ml.windows.history.strings` does): a unit run's
     its writer's committed strings, a held run's the strings ``held`` of the table's earlier windows."""
@@ -241,6 +269,7 @@ def test_the_window_commits_the_writers_rows_as_its_tables_strings_and_the_verif
         assert full.roots == c.roots and full.bc == c.bc
         publics = {m.key: c.public_body(i) for i, m in enumerate(ms)}
         doc = json.loads(IF.circuit_bytes(SRW.circuit_record(w, rows, None, hreg)))
+        assert unstated_in(doc) == []
         pins = HW.pins(doc, roots)
         assert pins == {h.name: {"value": h.name, "root": roots[h.name], "leaves": HT.CAPACITY, "words": WORDS,
                                  "domain": HT.domain(PROGRAM, h.name, WORDS, HT.CAPACITY).domain_id.hex()} for h in hreg.histories}
