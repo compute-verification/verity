@@ -23,7 +23,8 @@ It exits 0 for a passed point, `steady_spec.NOT_PASSED` for a point that was tim
 nothing was timed. Its records are `out/point.json` (the point, the prover, the cores, the card and the versions),
 `out/verdict.json` (each check's answer) and `out/rate/`; `result.json` lists every file a verdict reads (`kept`), so
 the store holds what `plan` judges the run by. The statement and the provers' session files stay in a scratch directory
-that it removes.
+that it removes, also when the run is cancelled or timed out: TERM and INT end it with `STOPPED`, after the command
+it was waiting for (`_run`) and with no result.
 """
 
 from __future__ import annotations
@@ -34,6 +35,7 @@ import json
 import os
 import re
 import shutil
+import signal
 import subprocess
 import sys
 import tempfile
@@ -51,6 +53,10 @@ RESULT_SCHEMA = "research/result/v0.1"
 KIND = "verity-steady-point/v1"
 POINT_FILE, VERDICT_FILE, TIMED_FILE = "out/point.json", "out/verdict.json", "out/timed.json"
 REFUSED = 4
+#: the exit code of a run that TERM or INT ended: 128 and TERM's number, for both
+STOPPED = 128 + signal.SIGTERM
+#: the seconds a command this process was waiting for has to end, once sent TERM, before it is killed
+STOP_S = 30
 #: the files of a staged statement the node side reads; the prover reads the rest
 STAGED = ("stage.json", "circuit.txt", "pin.txt")
 #: the bytes kept of each of the server's logs, from its end
@@ -67,8 +73,20 @@ class Refused(ValueError):
 
 
 def _run(argv: Sequence[str], log: Path) -> int:
-    with log.open("w") as f:
-        return subprocess.run(list(argv), stdout=f, stderr=subprocess.STDOUT, check=False).returncode
+    """A command's exit code, its output in `log`. Where this process is ended while it waits (`_stopped`), the command
+    is sent TERM and waited for first: a lease's holder then releases its card and stops its step before the scratch
+    goes, where killing it would leave the step running."""
+
+    with log.open("w") as f, subprocess.Popen(list(argv), stdout=f, stderr=subprocess.STDOUT) as process:
+        try:
+            return process.wait()
+        except BaseException:
+            process.terminate()
+            try:
+                process.wait(timeout=STOP_S)
+            except subprocess.TimeoutExpired:
+                process.kill()
+            raise
 
 
 def _ask(argv: Sequence[str]) -> tuple[int, str]:
@@ -300,11 +318,19 @@ def point(a: argparse.Namespace, *, run: Runner = _run, ask: Asker = _ask, now: 
     root = Path.cwd()
     spec = steady_spec.load_spec(a.spec, root=root)
     item = steady_spec.point(spec, a.point)
-    files_sha256 = sha256(steady_spec.closure(root, spec))
+    files = steady_spec.closure(root, spec)
+    files_sha256 = sha256(files)
     identity = steady_spec.point_identity(spec, item, files_sha256)
     if identity != a.identity:
         raise ValueError(f"point identity changed: this tree gives {item.id} {identity}, and the run was launched as "
-                         f"{a.identity}: a file its time depends on differs from the launching checkout's")
+                         f"{a.identity}: a file its time depends on differs from the launching checkout's. "
+                         + ("" if (root / ".git").exists() else
+                            "This tree is no checkout, so every file under "
+                            f"{', '.join(entry for entry in steady_spec.CLOSURE if (root / entry).is_dir())} counts: one "
+                            "the launching checkout doesn't track (what a build or a setup left there) changes the "
+                            "identity too. ")
+                         + f"Its closure here is {len(files)} files (SHA-256 {files_sha256[:16]}...); `plan` prints "
+                         "the launching checkout's as its `toolchain`")
     run_dir = Path(settings.RESEARCH_RUN_DIR).resolve()
     out = run_dir / "out"
     out.mkdir(parents=True, exist_ok=True)
@@ -333,7 +359,10 @@ def point(a: argparse.Namespace, *, run: Runner = _run, ask: Asker = _ask, now: 
         if step.get("refused"):
             raise Refused(step["refused"])
         if not step:
-            raise Refused(f"the timed step never ran: gpu-lease exited {record['lease_exit']} (out/lease.log)")
+            began = (run_dir / steady.card_file(item.to_json(), "start")).is_file()
+            raise Refused(("the timed step was stopped before its end and left no row, as a preempted lease stops it"
+                           if began else "the timed step never began")
+                          + f": gpu-lease exited {record['lease_exit']} (out/lease.log)")
     except Refused as refused:
         record["refused"] = str(refused)
         _write(run_dir / POINT_FILE, record)
@@ -366,8 +395,21 @@ def parse(argv: Sequence[str] | None) -> argparse.Namespace:
     return parser.parse_args(argv)
 
 
+def _stopped(signum: int, frame: Any) -> None:
+    raise SystemExit(STOPPED)
+
+
+def stop_on_signals() -> None:
+    """TERM (a cancel, a timeout) and INT end the run with `STOPPED` from wherever it is, so that `point` removes its
+    scratch on the way out: a statement left in the scratch stays on the node, in memory where the scratch is one."""
+
+    for number in (signal.SIGTERM, signal.SIGINT):
+        signal.signal(number, _stopped)
+
+
 def main(argv: Sequence[str] | None = None) -> int:
     a = parse(argv)
+    stop_on_signals()
     try:
         settings.validate(of_record=True)
         return point(a)

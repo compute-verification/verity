@@ -1,13 +1,15 @@
 """A steady-state spec's points on a made-up tree, a store with a directory remote and stand-ins for the node: the schema
 loaded strictly, what a point's identity binds and what it leaves out, the sessions a point times where a row's sessions
-file in bursts, which run `plan` counts as a point's passing run and why it counts no other, the command `run --direct`
-launches, and the node side from its refusals to its verdict. No GPU, no node and no clock."""
+file in bursts, which run `plan` counts as a point's passing run and why it counts no other, which labels it pulls,
+the command `run --direct` launches, and the node side from its refusals to its verdict and to a signal that ends it.
+No GPU, no node and no clock."""
 
 from __future__ import annotations
 
 import hashlib
 import json
 import re
+import signal
 import sys
 from pathlib import Path
 
@@ -1095,6 +1097,26 @@ def test_the_node_side_refuses_a_tree_whose_point_is_not_the_one_it_was_launched
     (node.root / "verity/protocols/flock/prover/src/main.rs").write_text("fn main() { /* edited on the node */ }\n")
     with pytest.raises(ValueError, match="a file its time depends on differs from the launching checkout's"):
         node.point()
+    (node.root / "verity/protocols/flock/prover/src/main.rs").write_text(FILES["verity/protocols/flock/prover/src/main.rs"])
+    # a shipped tree is no checkout: a file a build left under the closure's directories counts, and the refusal says so
+    (left := node.root / "verity/protocols/flock/prover/target/built.o").parent.mkdir()
+    left.write_text("object\n")
+    with pytest.raises(ValueError) as shipped:
+        node.point()
+    assert ("This tree is no checkout, so every file under verity/protocols/flock/prover, verity/protocols/flock/pod "
+            "counts: one the launching checkout doesn't track (what a build or a setup left there) changes the identity "
+            "too. Its closure here is ") in str(shipped.value)
+    assert re.search(r"Its closure here is \d+ files \(SHA-256 [0-9a-f]{16}\.\.\.\); `plan` prints the launching "
+                     r"checkout's as its `toolchain`$", str(shipped.value))
+    # in a checkout the same file is untracked and no part of the point, and a tracked file that differs is
+    left.unlink()
+    git(node.root)
+    left.write_text("object\n")
+    (node.root / "verity/protocols/flock/prover/src/main.rs").write_text("fn main() { /* edited in the checkout */ }\n")
+    with pytest.raises(ValueError) as checkout:
+        node.point()
+    assert "differs from the launching checkout's. Its closure here is " in str(checkout.value)
+    assert "no checkout" not in str(checkout.value)
     monkeypatch.setenv("RUST_MIN_STACK", "1")
     (node.root / "verity/protocols/flock/prover/src/main.rs").write_text(FILES["verity/protocols/flock/prover/src/main.rs"])
     with pytest.raises(ValueError, match=r"differs from spec 'steady''s env and setup in \['RUST_MIN_STACK'\]"):
@@ -1136,7 +1158,91 @@ def test_the_timed_step_refuses_a_card_or_versions_that_are_not_the_specs(tmp_pa
 def test_a_lease_that_never_ran_the_timed_step_is_a_refusal(tmp_path, monkeypatch):
     node = Node(tmp_path, monkeypatch, lease_exit=75)
     assert node.point() == N.REFUSED
-    assert "the timed step never ran: gpu-lease exited 75 (out/lease.log)" in node.read(N.POINT_FILE)["refused"]
+    assert node.read(N.POINT_FILE)["refused"] == "the timed step never began: gpu-lease exited 75 (out/lease.log)"
+
+
+def test_a_timed_step_stopped_before_its_end_is_a_refusal_that_says_it_began(tmp_path, monkeypatch):
+    """A lease preempted mid-step: the step had recorded the node at its start and wrote no record of its end."""
+
+    node = Node(tmp_path, monkeypatch)
+    timer = node.run
+
+    def preempted(argv, log):
+        if argv[0] == "gpu-lease":
+            assert timer(argv, log) == 0
+            (node.run_dir / N.TIMED_FILE).unlink()
+            return 143
+        return timer(argv, log)
+
+    node.run = preempted
+    assert node.point() == N.REFUSED
+    assert (node.run_dir / START).is_file()
+    assert node.read(N.POINT_FILE)["refused"] == (
+        "the timed step was stopped before its end and left no row, as a preempted lease stops it: gpu-lease exited "
+        "143 (out/lease.log)")
+    assert node.read("result.json")["validation"]["status"] == "failed"
+
+
+@pytest.fixture
+def signals():
+    """TERM's and INT's handlers, put back after a test that lets the node side set its own."""
+
+    kept = {number: signal.getsignal(number) for number in (signal.SIGTERM, signal.SIGINT)}
+    yield
+    for number, handler in kept.items():
+        signal.signal(number, handler)
+
+
+@pytest.mark.parametrize("number", [signal.SIGTERM, signal.SIGINT], ids=["TERM", "INT"])
+def test_a_cancelled_or_timed_out_point_removes_its_scratch_and_exits_143(tmp_path, monkeypatch, signals, number):
+    """A cancel or a timeout reaches the node side while it waits for its lease: the run ends with 143 and no result,
+    and the statement it staged is gone from the scratch."""
+
+    node = Node(tmp_path, monkeypatch)
+    seen = {}
+
+    def lease(argv, log):
+        if argv[0] != "gpu-lease":
+            return Node.run(node, argv, log)
+        seen["scratch"] = scratch = Path(argv[-1])
+        seen["staged"] = (scratch / "z" / "gemm64" / "c1" / "stage" / "circuit.txt").is_file()
+        assert signal.getsignal(number) is N._stopped, "the signal would end the tests' own process"
+        signal.raise_signal(number)
+        return 0
+
+    node.run = lease
+    N.stop_on_signals()
+    with pytest.raises(SystemExit) as stopped:
+        node.point()
+    assert stopped.value.code == N.STOPPED == 143
+    assert seen["staged"] and not seen["scratch"].exists() and list(node.scratch_root.iterdir()) == []
+    assert not (node.run_dir / "result.json").exists() and not (node.run_dir / N.POINT_FILE).exists()
+
+
+def test_main_ends_on_a_signal_and_a_command_it_waits_for_is_ended_first(tmp_path, monkeypatch, signals):
+    """`main` sets the handlers; and `_run`, ended while it waits, sends its command TERM and waits for it, so a lease's
+    holder stops its step and releases its card before the scratch goes. The command here signals its parent, the
+    tests' process, once it can be signalled itself, and writes a file when TERM reaches it."""
+
+    node = Node(tmp_path, monkeypatch)
+    for number in (signal.SIGTERM, signal.SIGINT):
+        signal.signal(number, signal.SIG_DFL)
+    assert N.main(["--spec", node.spec, "--point", POINT, "--identity", "0" * 64]) == 2
+    assert [signal.getsignal(number) for number in (signal.SIGTERM, signal.SIGINT)] == [N._stopped, N._stopped]
+
+    ended = tmp_path / "ended"
+    command = ("import os, signal, sys\n"
+               "def end(*_):\n"
+               "    open(sys.argv[1], 'w').write('ended by TERM')\n"
+               "    sys.exit(0)\n"
+               "signal.signal(signal.SIGTERM, end)\n"
+               "os.kill(os.getppid(), signal.SIGTERM)\n"
+               "while True:\n"
+               "    signal.pause()\n")
+    with pytest.raises(SystemExit) as stopped:
+        N._run([sys.executable, "-c", command, str(ended)], tmp_path / "command.log")
+    assert stopped.value.code == 143 and ended.read_text() == "ended by TERM"
+    assert (tmp_path / "command.log").read_text() == ""
 
 
 #: a point that was timed and isn't a passed point: the stand-in's change and what the verdict says
