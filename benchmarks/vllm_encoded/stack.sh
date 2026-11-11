@@ -60,7 +60,7 @@ case ${MODE:-paged} in
     MODEL=${MODEL:-$WORK/models/llama-3.1-8b-instruct}
     export PATH=$PATH FLASHINFER_CUDA_ARCH_LIST=12.0f HF_HOME=${HF_HOME:-/workspace/hf}
     . benchmarks/pouw/pearl_c_vllm/flashinfer_env.sh
-    export PYTHONPATH=$PWD:$PWD/integrations/vllm CUDA_DEVICE_ORDER=PCI_BUS_ID VLLM_ENABLE_V1_MULTIPROCESSING=0
+    export PYTHONPATH=$PWD:$PWD/adapters/vllm CUDA_DEVICE_ORDER=PCI_BUS_ID VLLM_ENABLE_V1_MULTIPROCESSING=0
     LIBS=(--wt-lib "$B/wt.so" --reader-lib "$B/reader.so" --paged-lib "$B/paged.so")
     if [ "$MODE" = capture ]; then
       # shellcheck disable=SC2086
