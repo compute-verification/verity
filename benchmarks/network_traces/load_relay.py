@@ -53,7 +53,7 @@ The commit itself (`relay`, which ``relay`` runs end to end with a key of its ow
   chunk takes the blocks its bytes fall in, so a block two chunks share is decoded twice.
 * **The salts** are the operating system's, 192 bytes a row, sampled by the worker that commits the row (`os_salts`):
   every hm96 salt is the operating system's (A3 in
-  ``Security/Definitions/Assumptions/Flock.lean``), so nothing rests on a stream generator. ``--witness`` is
+  ``security/Definitions/Assumptions/Flock.lean``), so nothing rests on a stream generator. ``--witness`` is
   where they go, every value's in manifest order, its rows in order (each value's `Transfer.witness`): the prover's
   alone, 4.85 GB at H200 (25,284,864 rows). `keyed_salts` is interface 1's prover-side derivation (Flock's
   ``hm96_salt``), here only to hold this commit to interface 1's fixture roots.
