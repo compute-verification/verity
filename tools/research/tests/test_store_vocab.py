@@ -45,7 +45,7 @@ RESULT_KEYS = ("candidate", "proof_class", "soundness", "K", "B", "hardware", "a
 VERIFICATION_KEYS = ("verified", "verifier", "verifier_seconds", "independently_verified", "verified_by", "finding", "same_device", "below_bar", "outcome",
                      "grant", "ready", "reviewed", "lean_review", "landed", "commit_map", "custody", "source-lost", "challenger-key", "challenger-ledger",
                      "challenger-pins", "challenger-models", "verdict", "executor_shadow", "tasks_graph", "verity_graph", "result",
-                     "label_auth", "label_delegation")
+                     "label_auth", "label_delegation", "nightly_check")
 EVIDENCE_KEYS = ("instruction", "model", "model_agrees", "model_status", "model_rejected", "evidence", "family", "instances_dataset", "instances_tier",
                  "mismatches", "target", "device", "instances_manifest_sha256", "component", "jobs", "level", "anchor", "dtype", "staged",
                  "circuits")
