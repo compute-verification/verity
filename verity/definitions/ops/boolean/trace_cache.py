@@ -6,7 +6,7 @@ its own settings name); a verifier never does, and nothing in `verity.core` name
 it (the Definition's name, version and bindings), looks the circuit up in the directory `use` named before it runs the builder,
 and writes the circuit it traced there. An entry is named by the SHA-512 of that key with the parameter and return types, ``cse``,
 Python's and numpy's versions, and a digest of the code that could change the gates (`code_digest`): every Python and JSON file
-of `verity` but tests, every file of `verity.circuits` but its tests, Markdown and TOML (so its tables), and the builder's
+of `verity` but tests, every file of `verity.circuits` and `verity.definitions` but tests, Markdown and TOML (so their tables), and the builder's
 source file when it is elsewhere. So an edit anywhere in `verity` makes every entry a miss. What the digest can't see (a builder
 outside `verity` that calls a helper from another module there, a monkeypatched builder) can make an entry stale; a stale or
 tampered entry gives other gates, and so a Program digest unequal to one built without the cache. An entry whose bytes don't
@@ -37,7 +37,7 @@ from verity.circuits.types import Type
 MAGIC = b"verity-trace-cache v1\n"
 _KIND = {k: i for i, k in enumerate(TR._KINDS)}
 _CIRCUITS = Path(_circuits.__file__).resolve().parent
-_VERITY = _CIRCUITS.parents[1]
+_VERITY = _CIRCUITS.parents[0]
 #: directories `code_digest` never enters, besides hidden ones (`.lake`)
 _SKIP = {"tests", "__pycache__", "target"}
 
@@ -48,7 +48,7 @@ def _covered(path: Path) -> bool:
         return False
     if any(d in _SKIP or d.startswith(".") for d in path.relative_to(_VERITY).parts[:-1]):
         return False
-    return path.suffix in (".py", ".json") or (path.is_relative_to(_CIRCUITS) and path.suffix not in (".md", ".toml"))
+    return path.suffix in (".py", ".json") or (path.suffix not in (".md", ".toml") and (path.is_relative_to(_CIRCUITS) or path.is_relative_to(_VERITY / "definitions")))
 
 
 @functools.cache
