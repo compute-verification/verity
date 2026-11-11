@@ -1038,18 +1038,21 @@ MEMBER = re.compile(r"artifacts/[0-9a-f]{16}\.[a-z.]+|" + MK.INDEX + r"/[0-9a-f]
 #: what one bundle (`LakeArtifacts.bundle`) holds at most, uncompressed: a run's files over 4 GiB upload without resume. A
 #: run that added more writes as many bundles as that takes (`LakeArtifacts.bundle_into`)
 BUNDLE_CAP = 3 << 30
-#: a key of `lean-deps-urls.json` naming a recorded check's bundle by its sha256 (`shared_bundles`)
+#: a key of `lean-deps-urls.json` naming a bundle of one of `PUBLISHERS`' runs by its sha256 (`shared_bundles`)
 SHARED = "lean-artifacts/"
 #: a bundle's name in the directory its audit writes it in (`LakeArtifacts.bundle_into`)
 BUNDLE_NAME = r"lean-artifacts(-\d+)?\.tar\.gz"
-#: a recorded check's file that is a bundle, in the run's `lean-audit/`
+#: a recorded check's or a records run's file that is a bundle, in the run's `lean-audit/`
 BUNDLE_FILE = re.compile("lean-audit/" + BUNDLE_NAME)
+#: the store's attempts of records runs (`lean_changed.py --records`), by the command `research run` recorded
+RECORDS_RUNS = "manifest_json LIKE '%tools/verity/lean/lean_changed.py%--records%'"
 #: the runs `shared_bundles` lists bundles of, each kind as (the store's attempts of it, a bundle's path among its files,
 #: which of the attempt's outputs list its files): a recorded check lists its own among its run's files; the audit of a
 #: ready mark's merge (`warm.py`) leaves its in the `--out` its caller gave it, which a caller that doesn't list its files
-#: still has in its run record
+#: still has in its run record; a records run writes its where a recorded check does (`lean_changed.audit_records`)
 PUBLISHERS = ((COMMON.RECORDED_CHECKS, BUNDLE_FILE, ("run_files",)),
-              (COMMON.MARK_AUDITS, re.compile(re.escape(COMMON.MARK_AUDIT_OUT) + BUNDLE_NAME), ("run_files", "run_record")))
+              (COMMON.MARK_AUDITS, re.compile(re.escape(COMMON.MARK_AUDIT_OUT) + BUNDLE_NAME), ("run_files", "run_record")),
+              (RECORDS_RUNS, BUNDLE_FILE, ("run_files",)))
 #: how many of the newest runs of each kind the launcher sends the bundles of, every bundle of each: a candidate's shards end
 #: by the dozen, and counted with them a mark's bundles would be gone before the candidate that holds its change is built.
 #: The marks of the PRs the launcher's tree holds are sent beside these, however old (`shared_bundles`' ``heads``). Runs
@@ -1083,9 +1086,9 @@ class LakeArtifacts:
     output that differs (`check.sampled_recompile`), which is what binds a restored `.olean` to its source.
 
     Between nodes, the module versions a recorded check's audit added travel as bundles in its run's files (`bundle_into`), as
-    do those the audit of a ready mark's merge added (`warm.py`); the launcher sends a URL for each of the newest of each
+    do those the audit of a ready mark's merge added (`warm.py`) and those a records run added (`lean_changed.py
+    --records`); the launcher of a check, and `research run` for a records run, sends a URL for each of the newest of each
     and for those of the marks of the PRs its tree holds (`shared_bundles`), and a node takes in each it hasn't yet (`take`).
-    A records run (`lean_changed.py --records`) bundles what it added the same way, which `shared_bundles` doesn't list yet.
     A bundle is trusted as far as its source, as a verdict pack is (`verdicts.py`): a recorded run."""
 
     def __init__(self, store: Path, cap: int = ARTIFACTS_CAP):
@@ -1902,7 +1905,7 @@ def _run(out: Path, cache: Path, deps: Path, fresh: bool, log, urls: dict[str, s
     failed += [p for p in pkgs if p not in reports and p not in failed]
     regenerated = {p: reports[p]["regenerated"] for p in pkgs if reports.get(p, {}).get("settled")}
     for p, f in regenerated.items():
-        log(f"lean-audit: {p}: passed on its regenerated record ({f}), which drive commits over {p}/lean-audit.json")
+        log(f"lean-audit: {p}: passed on its regenerated record ({f}), which the queue commits over {p}/lean-audit.json")
     for rep in reports.values():                        # a pass cached before check.py reported codes has none to list
         rep.setdefault("failure_codes", [None] * len(rep.get("failures", [])))
     for p in UNREAD_FACTS:
@@ -2020,7 +2023,8 @@ def bundled(dests: list[Path], n: int, added: int) -> str:
 
 
 def url_file(dest: Path, ttl_s: int = URL_TTL_S) -> Path | None:
-    """`presigned` written as ``dest/lean-deps-urls.json`` (mode 600), the name `check.py` looks for among a run's inputs."""
+    """`presigned` written as ``dest/lean-deps-urls.json`` (mode 600), the name `check.py` and a records run
+    (`lean_changed.sent_urls`) look for among a run's inputs."""
     if not (urls := presigned(ttl_s)):
         return None
     p = dest / URLS
