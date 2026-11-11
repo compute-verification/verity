@@ -36022,3 +36022,82 @@ Runs at the pushed head, each on a clean tree with `--cwd source`, recorded at c
 - `r20261111-012900-0197` (vy-nebius-cpu-3) failed in 3 s before any test ran. The git ship there fell back to the archive stream (an extra `tools/verity/check/__pycache__/common.cpython-312.pyc` in the extracted tree), and `suites.py` refuses a tree that isn't a checkout. `69ca` is its relaunch on cpu-1.
 
 Since my merge, `main` has moved 34 commits to `a930252c49`. Within the suite's inputs it changed only the `verifier_cost` card (#8453), which the planner's `reprice.py` reads, and one assertion in `test_total_cost.py`. The new card keeps every block and key the planner looks up, and adds two types. On a scratch merge of that `main` into the head (`b286f6af75`, not pushed), `r20261111-015158-efb5` (vy-nebius-cpu-2) ran `test_breakeven.py` and `test_figure5.py`: rc 0, `11 passed in 16.49s`. Drive's landing on `checked` runs them again, so nothing is owed.
+
+## TAIL, Wed 11 Nov 02:01Z: PAD's binding at the card's units: committed bits counted once, whole error 2^-131.6 / 2^-130.2 / 2^-120.4 at the 287-token request / B / A
+
+**PAD still reaches 100 at the card's units.**
+
+- **The headline.** Whole error 2^-131.6 / 2^-130.2 / 2^-120.4 at the 287-token request / B (one request of 4,557 tokens) / A (1,843 of them). That is at T = 2^80 compressions, n_sess = n_PU, at any sample size m. [derived]
+- **With T counted as SHA-512 calls** on rows of at most 2^18 bits, the figures are 2^-123.6 / 2^-122.2 / 2^-112.3.
+- **The count** is committed bits, each once: a weight row read by many blocks counts once. It is not every read.
+
+TAIL, follow-up to my PAD final (PRF-530, 00:52Z). Mailbox read to 01:52Z. Sources:
+- the card `benchmarks/spot_figures/cards/workload.glm-5.3.json` at `origin/main` a930252c49, summed by me: 2^43.72 MACs, 2^54.15 ANDs, 2^34.32 blocks, in 2^53.63, out 2^39.29, weights 2^42.46 bits, matching the coordinator's sums [read];
+- SCALE's PRF-533 final (01:20Z) for B, A and n_PU [relayed].
+
+Every figure is under the one-stage contract (`Compiled`), the committed form on `main`. A two-stage committed form would only split P (Σ_j P_j = P), and COMMIT's ×2 covers it. No figure depends on m.
+
+**1. The count: committed positions, each once** [derived, except where marked]
+
+- **What P and Q are.** P is the set of leaves under the roots; each holds at least one committed bit, so committed bits bound it. Q is the number of distinct leaves one run opens.
+- **The step that fixes it** is the rewinding lemma's position type. `prBad_le`'s Q bounds `#(univ.filter fun p => (op ω p).isSome)`, a set of positions a run opens [read `Security/Proofs/Core/Game/Rewinding.lean:175-176`].
+  - Under PAD, `op ω p` is the string run ω publishes at leaf p.
+  - The conflict the finder turns into a collision is two runs publishing different strings at one leaf under one root.
+  - Nothing in the step reads which blocks read the leaf, or how many.
+- **Why a weight row read by many blocks counts once.** It is one leaf under the registered root, so it has one plurality string and is one position. Every session of a run that reads it reads the string that run published there. A run that publishes it twice, differently, has a collision within the run, which is the one-run term 2T/2^256.5.
+- **The Lean counts the same way.** A value opens "at gate g's position" (`Wit.val`, `Security/Definitions/Claims/Sampling.lean:354`). `io u` is `P.committed.filter …`, a subset of one set of committed gates (`Security/Definitions/Flock/Circuit.lean:77-78`) [read]. So two blocks that read one weight share its position. `in_bits + out_bits` (SCALE's W = Σ_u |io u|) counts a position once for every block that touches it; that is the read count, not P.
+- **So AUDIT-CRYPTO's first reading is the right one**: 2^-131.9 at the 287-token request, not 2^-120.9.
+
+**2. The three figures at the card's units** [derived, `pad2.py`]
+
+The bound is ε ≤ κ_s + √(n_sess·2^48)·2T/2^256.5 + 2·P·2T/2^256.5 + 2T/2^256.5 + 2^-256, with P = out_bits(request) × requests + weight bits + input bits.
+
+- **Each term's source:**
+  - **out_bits**: the card's 2^39.29 at 287 tokens [read]. It is scaled linearly in tokens to 4,557 [guess, SCALE's reading of the planner rows as per token]. MoE expert GEMMs, norms, linears and all-reduce make up at least 85% of out_bits [read: the card], and attention-type strata are below that.
+  - **Weights**: 2^42.46 bits, counted once (one registration) [read].
+  - **Inputs**: 32 bits a token [guess]; negligible.
+  - **n_PU** for the fork term: 2^34.32 at 287 tokens [read]; 2^38.3 at B and 2^49.2 at A at today's cut [relayed, SCALE].
+- **So P** = 2^42.61 / 2^43.93 / 2^54.13.
+
+| | 287-token | B | A |
+|---|---|---|---|
+| committed bits P | 2^42.61 | 2^43.93 | 2^54.13 |
+| binding, 2·P·2T/2^256.5, T = 2^80 | −131.9 | −130.6 | −120.4 |
+| fork at n_sess = 1 / n_PU | −151.5 / −134.3 | −151.5 / −132.3 | −151.5 / −126.9 |
+| **whole error**, n_sess = n_PU, T = 2^80 compressions | **−131.6** | **−130.2** | **−120.4** |
+| the same, T = 2^80 calls, rows ≤ 2^18 bits (257 compressions, +8.0) | −123.6 | −122.2 | −112.3 |
+| the same, T = 2^80 calls, 64 KiB rows (513 compressions, +9.0) | −122.6 | −121.2 | −111.4 |
+| the same, T = 2^64 compressions | −147.6 | −146.2 | −136.4 |
+
+- **The session count barely moves it.** At n_sess = 1 and 30 the whole error is the binding term within 0.1 bit.
+- **Without COMMIT's factor 2** the figures are one bit better (−132.4 / −130.9 / −121.3). The two stages' positions are disjoint parts of P, so Σ_j √(P_j·Q_j) ≤ Σ_j P_j ≤ P.
+- **Against my 00:52Z figures** (positions at N in MACs: −130.8 / −126.6 / −115.7), these are 1.1 / 4.0 / 4.7 bits better.
+- **Row sizes.** The card's largest output row is 196,608 bits, under 2^18 [read]. I have not read the weight rows' length, so the 64 KiB line is the margin for it.
+
+**3. M's coin: AUDIT-CRYPTO is right** [derived]
+
+- **Why.** The count needs Pr_M[M·Δ = G(s) XOR G(s')] ≤ 2^-1024 for every triple. A family drawn from a 64-byte coin gives M·Δ at most 2^512 values, so for some target the probability is at least 2^-512, and the union over 2^768 triples bounds nothing (2^256).
+- **What then fails.** Binding would rest on the expander, so it would be computational. A second key could then exist, the false-statement step fails, and extraction comes back.
+- **What works.** Any family with M·Δ uniform for every Δ ≠ 0:
+  - the field form, R ∈ GF(2^1024), 128 bytes;
+  - Toeplitz, 1,279 bits, 160 bytes (hm96's map, relayed from AUDIT-CRYPTO);
+  - the full matrix, 32 KiB.
+
+  Two or three independent 64-byte live coins, concatenated rather than expanded, give 128 or 192 uniform bytes, which is enough.
+- **No fifth change.** It adds a clause to change 1: M is at least 1,024 uniform bits of the auditor's live coins in such a family, never expanded from a shorter coin. At 512-bit keys, c_k needs 1,280 bits: 160 bytes in field form, 224 as Toeplitz.
+
+**4. Three or more keys: the same bits** [derived]
+
+- **One lemma covers every key.** One application of the rewinding lemma covers every leaf under every root. Each leaf's committed value is its plurality string XOR the F of the key its root is bound to, and a conflict is a collision under that leaf's root whatever its key.
+  - So it is not one term a key in bits: split by key, the terms sum to the same P (Σ_j P_j = P, and Σ_j √(P_j·Q_j) ≤ P).
+  - ε_M is charged once if one M serves every c_k, because a bad M is one where some c_k opens two ways, a property of M alone. It is 2^-256 for each independent M otherwise.
+- **The session.** Its statement opens each c_k its rows are under, and the false-statement step holds key by key (each k*_j is unique). It needs each root bound to one c_k in the registration record, a public map, so the prover cannot choose a leaf's key.
+- **The order still works.** What it needs is M before each c_k, and each c_k and root before the first sample that reads its tree.
+  - The registration's c_k,reg, made long before, is fine. Statistical binding does not age, and each audit's committed weights (that audit's plurality XOR F_{k*_reg}) are fixed before that audit's sample.
+  - That needs M drawn before the first registration (one deployment-wide M), or an M_reg of its own.
+  - The certifier's c_k is made while serving, after M and before the sample.
+- **What it costs.** One opening of each c_k in each session that reads that key's rows (COMMIT's 116,240 ANDs each). That is WIDEHASH's to price.
+
+**5. Independent of the sample's size** [derived]. The term is at most 2·P·2T/2^256.5 with Q ≤ P, and needs no K. With Q = K it improves to √(P·K)·2T/2^256.5 = −141.4 / −140.7 / −135.6, at SCALE's K ≤ 2^25.6 (m = 150 to 167). There, Q ≤ K holds by the verifier's own check in the clear of which leaves it accepts, so it needs no session clause.
+
+For Daniel: PAD counts each committed bit once, so at the card's sizes it gives 2^-131.6 for the 287-token request, 2^-130.2 for one 4,557-token request and 2^-120.4 for 1,843 of them, about 8 bits less if the 2^80 counts SHA-512 calls rather than compressions. It needs M drawn from at least 128 truly random bytes, and three keys leave the bound unchanged.
