@@ -51683,3 +51683,45 @@ For the table:
 - Part 1's first try passed (`r20261111-113035-a3a2`; the tidied text `r20261111-113645-f082`, lean exit 0, 16 theorems on the three axioms); branch pushed, PR and entry next.
 
 For the table: THE YEAR's figures at the plan's cut and the recut are [run `r20261111-113702-e9d1`], with `r20261111-110947-88dc` for 643, 139 and the sessions' share; nothing in my 11:38Z entry changes.
+
+## SALTS, Wed 11 Nov 11:41Z: at four provers a card, every tree's salts from a 32-byte OS key reads 2.031 against 2.430 GPU-s a statement (0.836, measured, `r20261111-102210-ee70` steps 5 and 2, record read by me; my written guess was 0.80), and the card's level-0 wait falls from 2.67 to 0.57 s a session. It is a CLAIM (one new named premise), built, unmarked, no PR, nothing on `main`. The draft ask is rewritten on that row for you to post, change or drop
+
+**1. What I read in `ee70`'s record** [run: my script over `out/steps/*/rate/rate.json` and the four provers' logs of each step, art:ffd716866f22; node A card 3, cores 34-43, four provers, `FIRST=false`; 76 accepted and 0 refused in every step]
+
+| step | GPU-s a statement | prover / check, CPU-s a statement | the card's level-0 commitment, a session: mean, p90, over 1 s | read-ahead wall, median / p90 | witness phase, median | a session's wall, median |
+|---|---|---|---|---|---|---|
+| 2, today's block | 2.430 | 18.80 / 6.36 | 2.67 s, 10.8 s, 22 of 76 | 8.4 / 22.2 s | 7.02 s | 12.47 s |
+| 4, today's, loaded | 2.382 | 19.39 / 6.45 | 2.28 s, 9.1 s, 22 of 76 | 9.0 / 21.5 s | 7.23 s | 12.90 s |
+| 5, `FC_SALTS_KEYED=all` alone | 2.031 | 13.94 / 6.22 | 0.57 s, 2.7 s, 8 of 76 | 4.5 / 8.0 s | 7.13 s | 9.39 s |
+| 1, every cut | 1.357 | 12.68 / 5.35 | 0.22 s, 0.18 s, 4 of 76 | 1.7 / 3.8 s | 4.93 s | 6.63 s |
+| 3, every cut, loaded | 1.402 | 13.80 / 5.35 | 0.19 s, 0.20 s, 2 of 76 | 2.4 / 4.0 s | 5.35 s | 6.87 s |
+
+- Step 5 printed `SALTSKEYED {"keyed":[15],"os_bytes_a_keyed_tree":32,"trees":"all"}` in all 76 sessions; steps 2 and 4 print none [run].
+- The witness phase does not move between steps 2 and 5 (7.02 and 7.13 s), so the gain is not the witness's. The card's wait in its level-0 commitment falls by 2.1 s a session, and a session's wall by 4 x (2.430 - 2.031) = 1.6 s [my arithmetic on the rows above]. That fits what I wrote at 10:36Z from `db9a`: with the cores full the card waits for the read-ahead's level-0 salts. It is still read from the path and these timings; nothing instruments the lock [guess on the cause].
+- With `all` at four provers the salts pool costs 1.34 user + 0.72 system = 2.05 CPU-s a statement [run: step 1's `cpu/k4-threads.tsv.gz`, the steady window; HEADPROF's 2.07]. At one prover it was 2.21 (`cb57`). So the salts' CPU row is 7.19 to 2.1 to 2.2 at either prover count.
+
+**2. Two corrections, mine**
+- My 10:36Z what-if "with the check also off the cores, 1.73 to about 1.3 s" for `all` alone was too low. By HEADPROF's multiplication it is 1.731 x 0.836 = 1.45 s [modeled], and every cut together measures 1.357. Strike 1.3.
+- My guess for `all` alone was 0.80; it reads 0.836. My other guesses there are still guesses, nothing measured: `upper` alone 0.92, no fresh level-0 buffer (`FC_LEVEL0_AHEAD=0`) 0.97, `FC_SALTS_NICE=0` about 1. Node A is released, so they stay guesses. An `upper`-alone step at two provers on `vy-dc-h200-3` would be the one row that tells option A from option B; that is your call and HEADPROF's lease, I ask for nothing and launch nothing.
+
+**3. The ask**
+- By the test I wrote at 10:36Z ("if `all` alone reads near 0.80 at four provers, the ask is worth posting") it is worth posting now. Your 10:07Z line "no ask goes to Daniel before a four-prover row reads" is met by step 5.
+- The draft is `lanes/proofs/20261111T0931Z-draft-ask-salts.md` (synced), in asking-daniel's template, rewritten on the four-prover rows. Question: may the prover expand a tree's leaf salts from one 32-byte OS key, reversing the ruling of 9 Oct. Options: A, the trees above level 0 only, no assumption, not measured at four provers; **B, every tree with ChaCha20, the one new premise `FlockSoundness.Assumptions.ChaCha20StreamsUniform`, measured 0.836**; C, every tree with SHA-512 streams, A4 (listed already), needs CUDA nobody wrote; D, keep the ruling. It recommends B, and D instead if Daniel takes PARAMS's wide leaf (salts 2.684 to 0.168 GB a statement, no assumption [relayed: PARAMS 10:10Z]). If he says nothing, nothing happens.
+- I post nothing. The Prop is written out in my 08:54Z entry and is not compiled.
+
+**4. Not established**
+- `upper` at four provers; the `FC_LEVEL0_AHEAD=0` lever; that the wait is on the salts' lock (not instrumented).
+- A card-side fill (none written); the firewall path's cost; node A's libc.
+- Whether the deployed theorems' proofs use the upper trees' salts' uniformity beyond what BENCHCROSS and I read in the model (`RepSrcSat` and the relay loop's proofs unread).
+- Every option needs a new statement version (the identity's `salt_source` text); none can be on `main` this morning.
+
+For HEADPROF: `cursor/proofs-salts-8dd2` at `ff48f38adc3abe6ec40ab28e5519e5a7aff2e223` (unchanged; nothing more asked of you).
+
+For the table:
+- Salts from a 32-byte OS key a tree, every tree (a claim: adds `ChaCha20StreamsUniform`; built as a timing switch, unmarked): head block 2.430 to 2.031 GPU-s a statement at four provers a card (measured, `r20261111-102210-ee70` steps 2 and 5), and 2.59 to 2.57 at one prover (measured, `r20261111-091148-cb57`: no gain). Salts 7.19 to 2.1 host CPU-s a statement.
+- The same for the trees above level 0 only (no assumption): 2.49 at one prover (measured, inside the scatter); four provers not measured.
+- Draft ask ready in the notes; recommendation B, or D if the wide leaf is taken.
+
+For BREAKEVEN:
+- `SparseMlaHeadBlock` NVIS 64 `FIRST=false`, node A, four provers on ten cores: today 2.430; salts `all` alone 2.031 (measured, `ee70` step 5; label: a claim, unmarked, one new premise); with the check on cores 8-11 as well 1.45 (modeled: 1.731 x 0.836); every cut 1.357 (measured, `ee70` step 1). Salts' CPU-seconds a statement: 7.19 before, 2.05 to 2.21 after (measured).
+- `upper` (no assumption): 5.18 CPU-s (measured, `cb57`); no four-prover time, do not print one.
