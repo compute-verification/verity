@@ -1149,6 +1149,27 @@ mod tests {
         assert!(fwd.eval_wide(|_| Row2::splat(1)).is_none(), "a row reading a later column has no one-pass form");
     }
 
+    /// A walk's words are a function of the net and its inputs alone: the digest (SHA-512's first 16 bytes) of z, a and b on
+    /// a fixed net and fixed inputs, eight lane groups in one pass and each of the eight alone. A change to the walk that
+    /// changes a word fails here, even one that changes `eval64` with it.
+    #[test]
+    fn the_walk_words_are_pinned() {
+        fn pin(words: impl Iterator<Item = u64>) -> String {
+            let mut h = sha2::Sha512::new();
+            words.for_each(|w| h.update(w.to_le_bytes()));
+            crate::hex(&h.finalize()[..16])
+        }
+        let net = random_net(99, 3, 40_000);
+        let input = |g: usize, col: usize| (col as u64 + 1).wrapping_mul(0x9e37_79b9_7f4a_7c15).rotate_left(7 * g as u32 + 1) ^ g as u64;
+        let (z, a, b) = net.eval_wide(|col| Row8(std::array::from_fn(|g| input(g, col)))).expect("a one-pass net");
+        let wide = pin([&z, &a, &b].into_iter().flat_map(|v| (0..8).flat_map(move |g| v.iter().map(move |w| w.word(g)))));
+        let flat: Vec<[Vec<u64>; 3]> = (0..8).map(|g| net.eval64_flat(|col| input(g, col)).into()).collect();
+        let alone = pin((0..3).flat_map(|v| flat.iter().flat_map(move |t| t[v].iter().copied())));
+        assert_eq!((wide.as_str(), alone.as_str()), (WALK_PIN, WALK_PIN), "the walk's z, a and b words: eight groups a pass, each alone");
+    }
+
+    const WALK_PIN: &str = "c084c17e7a051c6e213039b613738958";
+
     #[test]
     fn csc_reads_the_rows_in_place() {
         for (seed, in_words, useful) in [(1u64, 1usize, 200usize), (0x9e37_79b9, 2, 5000)] {

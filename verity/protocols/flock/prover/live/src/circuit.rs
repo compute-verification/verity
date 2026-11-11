@@ -3854,6 +3854,31 @@ mod tests {
         }
     }
 
+    /// The device reads a statement's host units as the a, b words `unit_ab_into` packs. Their digest (SHA-512's first 16
+    /// bytes) on a fixed net and fixed inputs, four lane groups with the last partial, at every width: a walk that writes
+    /// another word fails here, even where every evaluator changed with it.
+    #[test]
+    fn the_packed_unit_words_are_pinned() {
+        let mut s = 0x9e37_79b9_0bad_cafeu64;
+        let mut r = || { s ^= s << 13; s ^= s >> 7; s ^= s << 17; s };
+        let n = 10;
+        let table: &'static [u32] = Box::leak((0..1u32 << n).map(|_| r() as u32 & 0x7fff_ffff).collect::<Vec<_>>().into_boxed_slice());
+        let (net, _) = crate::lookup::LookupNet::build("t", table, n, 4, 31);
+        assert!(net.one_pass(), "a one-pass net, so several groups take one wide pass");
+        let uw = 1usize << (net.unit_log - 7);
+        let slots = 64 * 3 + 5;
+        let ins: Vec<Vec<F128>> = (0..slots).map(|_| (0..net.in_words).map(|_| F128::new(r(), r())).collect()).collect();
+        for wide in [1, 2, 4, 8] {
+            let mut out = vec![!0u64; 4 * uw * slots];
+            assert!(unit_ab_into_wide(&net, 0, uw, &ins, &mut out, wide), "{wide} groups a pass: z = a & b");
+            let mut h = Sha512::new();
+            out.iter().for_each(|w| h.update(w.to_le_bytes()));
+            assert_eq!(crate::hex(&h.finalize()[..16]), PACKED_PIN, "{wide} groups a pass: the packed a, b words");
+        }
+    }
+
+    const PACKED_PIN: &str = "7fd2c142f9e5764c788769940b6b3ce8";
+
     #[test]
     fn the_width_leaves_every_thread_a_pass_and_holds_no_more_than_8() {
         // the row words a walk of wide passes holds at once at most: its `threads` largest passes, a pass of n groups in a
