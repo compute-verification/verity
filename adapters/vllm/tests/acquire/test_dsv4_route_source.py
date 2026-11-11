@@ -2,7 +2,7 @@
 whose `route_site` decides three routes per step at four sites: a stand-in model with the map's modules (`tests/acquire/dsv4_model.py`)
 runs the pinned vLLM's decoder layers, FlashMLA's `forward_mqa` split and the CSA indexer's short path on a decode, a scored decode, a
 prefill, a short prefill and a mixed step.  Each step's routes are the union of its decisions, its committed names are the ones
-`capture-map ids --route ... --names` prints for them, and the committer's identity check passes on them with the source attached and
+the map gives them (`commit.capture_map.committer_names`), and the committer's identity check passes on them with the source attached and
 fails without it; a layer that recorded no attention rows, or indexers that disagree, fail the step."""
 from __future__ import annotations
 
@@ -15,12 +15,11 @@ from typing import Any
 import pytest
 import torch
 
-from tests.acquire.dsv4_model import CMAP, CONFIG_PATH, CSA, ENV, HCA_R, HOOKED, L, MAP, STEPS, TP, dsv4_model, metadata, run_step
+from tests.acquire.dsv4_model import CMAP, CSA, ENV, HCA_R, HOOKED, L, STEPS, TP, dsv4_model, metadata, run_step
 from verity_vllm.acquire.sources import route_source as RS
 from verity_vllm.acquire.sources import taps as TAPS
 from verity_vllm.commit import capture_map as CM
 from verity_vllm.commit.committer.native_host import GPU_CHUNK_BYTES, TP_PARTIAL_RE, NativeHostCommitter, TensorMeta
-from verity_vllm.pipeline import cli
 
 #: nearly every test here builds and serves a DeepSeek-V4 stand-in, seconds to minutes each, so the whole module is slow
 pytestmark = pytest.mark.slow
@@ -30,14 +29,10 @@ COUNTED = {n: CM.row_count_of(CMAP, tap) for p in RS.PHASES for n, (tap, _layer)
            if CM.row_count_of(CMAP, tap)}
 
 
-def map_names(capsys, routes: tuple[str, ...], phase: str, rank: int = 3, binders: tuple[str, ...] = RS.BINDERS) -> list[str]:
-    """What `capture-map ids --names` prints for one step's names of `binders` (no rank-tagged partial)."""
-    argv = ["capture-map", "ids", "--map", str(MAP), "--config", str(CONFIG_PATH), "--phase", phase, "--rank", str(rank), "--names"]
-    argv += [a for r in routes for a in ("--route", r)] + [a for b in binders for a in ("--binder", b)]
-    capsys.readouterr()
-    assert cli.main(argv) == 0
-    lines = [ln.split(" ", 1) for ln in capsys.readouterr().out.splitlines()]
-    return [n for _cid, n in lines if not TP_PARTIAL_RE.search(n)]
+def map_names(routes: tuple[str, ...], phase: str, rank: int = 3, binders: tuple[str, ...] = RS.BINDERS) -> list[str]:
+    """The committer names of one step's taps that `binders` bind (no rank-tagged partial)."""
+    names = CM.committer_names(CMAP, ENV, phase=phase, routes=routes, rank=rank, binders=binders)
+    return [n for n in names if not TP_PARTIAL_RE.search(n)]
 
 
 class Run:
@@ -124,8 +119,8 @@ def test_each_step_records_the_routes_of_its_three_decisions(run):
                                                 "prefill decode-tokens+hc-split+indexer-scored+prefill-tokens": 1}
 
 
-def test_capture_map_ids_and_the_committer_agree_on_every_route(run, capsys):
-    steps = {k: map_names(capsys, routes, phase) for k, (_md, routes, phase) in enumerate(STEPS)}
+def test_capture_map_ids_and_the_committer_agree_on_every_route(run):
+    steps = {k: map_names(routes, phase) for k, (_md, routes, phase) in enumerate(STEPS)}
     for k, (_md, routes, phase) in enumerate(STEPS):
         assert sorted(steps[k]) == sorted(run.src.names_at(tuple(sorted(routes)), phase))
     wq_b = {f"model.layers.{i}.attn.indexer.wq_b/0" for i in sorted(CSA)}
@@ -137,8 +132,8 @@ def test_capture_map_ids_and_the_committer_agree_on_every_route(run, capsys):
     assert any(v["step"] == 1 and v["multiplicity_vs_step0"] for v in without["violations"]), "a scored step differs from step 0"
 
 
-def test_a_step_off_its_routes_fails(run, capsys):
-    steps = {k: map_names(capsys, routes, phase) for k, (_md, routes, phase) in enumerate(STEPS)}
+def test_a_step_off_its_routes_fails(run):
+    steps = {k: map_names(routes, phase) for k, (_md, routes, phase) in enumerate(STEPS)}
     extra = "model.layers.2.attn.indexer.wq_b/0"
     bad = {**steps, 0: steps[0] + [extra]}
     got = run.check(bad)
@@ -146,10 +141,10 @@ def test_a_step_off_its_routes_fails(run, capsys):
     assert got["violations"][0]["routes_bad"] == {extra: (1, 0)}
 
 
-def test_a_layer_without_attention_rows_or_split_indexers_fail(run, capsys):
+def test_a_layer_without_attention_rows_or_split_indexers_fail(run):
     run.step(9, STEPS[0][0], skip=(3,))
-    names = map_names(capsys, STEPS[0][1], "decode")
-    got = run.check({0: map_names(capsys, STEPS[0][1], "decode"), 9: names})
+    names = map_names(STEPS[0][1], "decode")
+    got = run.check({0: map_names(STEPS[0][1], "decode"), 9: names})
     assert got["ok"] is False and got["violations"][0]["routes_bad"] == {f"<1 of {L} layers recorded no route (rows)>": (len(names), 0)}
     run.src.routes.pop(9)
     run.com._cur = types.SimpleNamespace(step=9)

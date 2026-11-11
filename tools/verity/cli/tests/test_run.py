@@ -167,8 +167,8 @@ def test_the_hash_leaves_out_the_transport_and_fills_the_defaults():
     assert set(K.TRANSPORT["party"]) <= set(K.PARTY) and set(K.TRANSPORT["channel"]) <= set(K.CHANNEL)
 
 
-#: The onsite configuration's hash before the network certifier's response cap was a parameter: an uncapped
-#: configuration keeps it.
+#: The onsite configuration's hash before the network certifier's response cap and its lengths rows' form were
+#: parameters: a configuration that sets neither keeps it.
 UNCAPPED_ONSITE = ("8bb037ee67cf0b2fd8475458194d5d0ea79d7e9ed1285b398a9b20420e1f6e64"
                    "cbb336535923a6320f0cf3f717ddecfccd9ff8cef279e1eb20d992ab719fb9b8")
 
@@ -179,7 +179,7 @@ def capped(cap):
 
 def test_an_uncapped_certifier_configuration_hashes_as_before_the_cap():
     cfg = K.check(config(), REG.components, REG.workloads)
-    assert "max_tokens_cap" not in cfg["params"]["verity/certifier/v0"]
+    assert not {"max_tokens_cap", "lengths"} & set(cfg["params"]["verity/certifier/v0"])
     assert K.digest(cfg) == UNCAPPED_ONSITE
 
 
@@ -190,6 +190,25 @@ def test_a_capped_certifier_configuration_round_trips():
     assert WardenParams(**{k: v for k, v in table.items() if k != "tie"}).max_tokens_cap == 4
     assert K.check(cfg, REG.components, REG.workloads) == cfg
     assert K.digest(cfg) != UNCAPPED_ONSITE
+
+
+def with_lengths(**schedule):
+    table = {"lengths": 1} | schedule
+    return edit(lambda c: c.setdefault("params", {}).setdefault("verity/certifier/v0", {}).update(table))
+
+
+def test_a_certifier_configuration_with_lengths_rows_round_trips_and_needs_a_schedule_that_fits_them():
+    fits = {"cell_bytes": 512, "ingress_buckets": 10, "egress_cells": 2048}
+    cfg = K.check(K.parse(K.render(with_lengths(**fits))), REG.components, REG.workloads)
+    table = cfg["params"]["verity/certifier/v0"]
+    assert table["lengths"] == 1 and "max_tokens_cap" not in table
+    assert WardenParams(**{k: v for k, v in table.items() if k != "tie"}).lengths == 1
+    assert K.check(cfg, REG.components, REG.workloads) == cfg
+    assert K.digest(cfg) != UNCAPPED_ONSITE
+    for schedule in ({}, fits | {"lengths": 2}, fits | {"egress": "bytes"}):
+        with pytest.raises(Refused) as e:
+            K.check(with_lengths(**schedule), REG.components, REG.workloads)
+        assert e.value.name == "params" and "lengths" in e.value.detail
 
 
 @pytest.mark.parametrize("cap", [0, -1, True, "4", 4096, 1 << 32])

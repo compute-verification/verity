@@ -9,9 +9,9 @@ from fractions import Fraction
 
 import pytest
 
-import verity.hardware as hardware
 from verity.errors import InvalidArtifact
-from verity.hardware import KINDS, MARKS, load, skus
+from verity.hardware import cards
+from verity.hardware.cards import KINDS, MARKS, load, skus
 
 
 def entries(table: dict, at: str = "") -> dict[str, dict]:
@@ -46,9 +46,22 @@ def test_every_number_is_sourced_and_marked(sku: str) -> None:
 @pytest.mark.parametrize("sku", skus())
 def test_sources_cite_the_store_not_runs_or_hosts(sku: str) -> None:
     """Evidence is cited by its `art:` id, and a node by its kind, never by a run id or a host name."""
-    text = (hardware.CARDS / f"{sku}.toml").read_text(encoding="utf-8")
+    text = (cards.CARDS / f"{sku}.toml").read_text(encoding="utf-8")
     assert not re.findall(r"\br\d{8}-\d{6}-[0-9a-f]{4}\b|\bvy-[a-z0-9-]+", text), \
         "cite the run's record (`research data show RUN`: outputs.run_record) as art:<12 hex>, and name the node by its kind"
+
+
+def test_a_measurement_cites_the_run_that_measured_it() -> None:
+    """A measured number nobody can check: an entry marked `measurement` whose source names a probe program, a census or
+    a document and no run's record, so a reader of the card cannot reach the output that holds its figure."""
+    measured = {f"{sku}: {key}": entry["source"] for sku in skus() for key, entry in entries(load(sku)).items()
+                if entry["mark"] == "measurement"}
+    assert measured, "no card marks a number `measurement`, so this test checks nothing"
+    uncited = sorted(at for at, source in measured.items() if not re.search(r"\bart:[0-9a-f]{12}", source))
+    assert not uncited, (
+        f"marked `measurement` with no run cited: {uncited}; add the record of the run that measured each to its "
+        "source as art:<12 hex> (`research data show RUN`: outputs.run_record), or mark it `placeholder` until a run "
+        "measures it")
 
 
 @pytest.mark.parametrize("kind", KINDS)
@@ -106,29 +119,29 @@ def test_the_rates_readers_quote() -> None:
     without a `clock.tensor`, and at a clock a reader names; every other resource at the SM clock, and device memory's
     words a second."""
     server, h200 = load("rtx-pro-6000-server"), load("h200-sxm-141gb")
-    assert hardware.rate(server) == 188 * 1024 * 2430 * 10 ** 6
-    assert hardware.rate(h200) == 132 * 4096 * 1830 * 10 ** 6
-    assert hardware.rate(h200, fmt="bf16") == 132 * 4096 * 1830 * 10 ** 6 / 2
-    assert hardware.rate(h200, "issue") == 132 * 4 * 1980 * 10 ** 6
+    assert cards.rate(server) == 188 * 1024 * 2430 * 10 ** 6
+    assert cards.rate(h200) == 132 * 4096 * 1830 * 10 ** 6
+    assert cards.rate(h200, fmt="bf16") == 132 * 4096 * 1830 * 10 ** 6 / 2
+    assert cards.rate(h200, "issue") == 132 * 4 * 1980 * 10 ** 6
     untimed = copy.deepcopy(h200)
     del untimed["clock"]["tensor"]
-    assert hardware.rate(untimed) == 132 * 4096 * 1980 * 10 ** 6
-    assert hardware.rate(untimed, "issue") == 132 * 4 * 1980 * 10 ** 6
-    assert hardware.rate(server, "issue", mhz=2092) == 4 * 188 * 2092 * 10 ** 6
-    assert hardware.rate(server, fmt="nvf4", mhz=2092.5) == 188 * 1024 * Fraction("2092.5") * 10 ** 6 * 2
-    assert hardware.rate(h200, "dram") == 4916736 * 10 ** 6 / 4
-    for call, refusal in ((lambda: hardware.rate(load("xeon-6776p-2s")), "is a host card"),
-                          (lambda: hardware.rate(h200, "dram", mhz=1500), "no SM clock"),
-                          (lambda: hardware.rate(h200, "tensr"), "no rate.tensr"),
-                          (lambda: hardware.rate(h200, "issue", fmt="s8"), "weighs tensor MACs only"),
-                          (lambda: hardware.rate(h200, fmt="fp8"), "weighs tensor MACs only")):
+    assert cards.rate(untimed) == 132 * 4096 * 1980 * 10 ** 6
+    assert cards.rate(untimed, "issue") == 132 * 4 * 1980 * 10 ** 6
+    assert cards.rate(server, "issue", mhz=2092) == 4 * 188 * 2092 * 10 ** 6
+    assert cards.rate(server, fmt="nvf4", mhz=2092.5) == 188 * 1024 * Fraction("2092.5") * 10 ** 6 * 2
+    assert cards.rate(h200, "dram") == 4916736 * 10 ** 6 / 4
+    for call, refusal in ((lambda: cards.rate(load("xeon-6776p-2s")), "is a host card"),
+                          (lambda: cards.rate(h200, "dram", mhz=1500), "no SM clock"),
+                          (lambda: cards.rate(h200, "tensr"), "no rate.tensr"),
+                          (lambda: cards.rate(h200, "issue", fmt="s8"), "weighs tensor MACs only"),
+                          (lambda: cards.rate(h200, fmt="fp8"), "weighs tensor MACs only")):
         with pytest.raises((KeyError, ValueError), match=refusal):
             call()
 
 
 def test_an_unknown_sku_names_the_cards() -> None:
-    cards = ["b200-sxm-180gb", "h200-sxm-141gb", "rtx-pro-6000-server", "xeon-6776p-2s", "xeon-platinum-8468-2s"]
-    with pytest.raises(KeyError, match=re.escape(f"the cards are {cards}")):
+    every = ["b200-sxm-180gb", "h200-sxm-141gb", "rtx-pro-6000-server", "xeon-6776p-2s", "xeon-platinum-8468-2s"]
+    with pytest.raises(KeyError, match=re.escape(f"the cards are {every}")):
         load("rtx-pro-6000-workstation")
 
 
@@ -147,6 +160,6 @@ def test_an_unknown_sku_names_the_cards() -> None:
 ])
 def test_an_unsourced_or_unmarked_number_is_refused(tmp_path, monkeypatch, body: str, refusal: str) -> None:
     (tmp_path / "x.toml").write_text(body, encoding="utf-8")
-    monkeypatch.setattr(hardware, "CARDS", tmp_path)
+    monkeypatch.setattr(cards, "CARDS", tmp_path)
     with pytest.raises(InvalidArtifact, match=refusal):
         load("x")

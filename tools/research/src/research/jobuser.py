@@ -6,7 +6,8 @@ the runner keeps its records as itself, and the harness spawns, in the workload'
 
     research job-exec --user USER --unit UNIT [--pass NAME]... -- CMD...
 
-which runs CMD as USER in a transient system service (`sudo -n systemd-run --uid=USER --wait --pipe`, unit_argv): no new
+which runs CMD as USER in a transient system service (`sudo -n systemd-run --uid=USER --wait --pipe`, unit_argv; on a node
+whose vy-sudo has the job's forms, each root command goes through it, `root`): no new
 privileges and no capabilities; the host read-only but for its run dir, and no other run's dir, no launch request, no /home or
 /root; its own /tmp, /dev/shm and IPC; an empty /run but for DNS and the GPU lease dirs; /etc/verity and the k3s state hidden;
 link-local addresses (the cloud metadata service) unreachable; the CPUs, memory cap and nice it was started with; and only the
@@ -38,6 +39,8 @@ from pathlib import Path
 from .telemetry.run import OUT_DIR
 
 SUDO = ("sudo", "-n")
+#: the lock-out's helper (pods/nebius/lockout/vy_sudo.py): the only root a locked-out node leaves the runner
+VY_SUDO = "/usr/local/sbin/vy-sudo"
 UNIT_PREFIX = "research-job-"
 ENV_FILE = Path("control") / "job.env"          # run-dir relative, in the runner's control/ (the job can't write there)
 SYSTEM_PATH = "/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
@@ -171,8 +174,23 @@ class Unit:
     nice: int = 0
 
 
-def unit_argv(u: Unit) -> list[str]:
-    """`sudo -n systemd-run` for the unit, up to the `--` its command follows."""
+def helper(path: str | None = None) -> bool:
+    """Whether this node's vy-sudo has the job's forms (a job unit's stop and job-reclaim, beside systemd-run). Where it does,
+    every root command of a job goes through it, so the job runs the same before and after the node's sudo is cut down to it;
+    elsewhere (no lock-out's files, or a helper from before those forms) the commands run under sudo directly."""
+    try:
+        return b'"job-reclaim"' in Path(path or VY_SUDO).read_bytes()
+    except OSError:
+        return False
+
+
+def root(via: bool | None = None) -> tuple[str, ...]:
+    """What a root command of the job starts with."""
+    return (*SUDO, VY_SUDO) if (helper() if via is None else via) else SUDO
+
+
+def unit_argv(u: Unit, via: bool | None = None) -> list[str]:
+    """`sudo -n [vy-sudo] systemd-run` for the unit, up to the `--` its command follows."""
     runs_root = os.path.dirname(u.run_dir)
     props = [
         "NoNewPrivileges=yes", "RestrictSUIDSGID=yes", "CapabilityBoundingSet=", "AmbientCapabilities=",
@@ -193,19 +211,21 @@ def unit_argv(u: Unit) -> list[str]:
         *([f"MemoryMax={u.memory}"] if u.memory else []),
         *([f"Nice={u.nice}"] if u.nice else []),
     ]
-    return [*SUDO, "systemd-run", f"--unit={u.name}", f"--uid={u.user}", "--wait", "--pipe", "--collect", "--quiet",
+    return [*root(via), "systemd-run", f"--unit={u.name}", f"--uid={u.user}", "--wait", "--pipe", "--collect", "--quiet",
             "--service-type=exec", "--expand-environment=no", f"--working-directory={u.cwd}",
             *(x for p in props for x in ("-p", p)), "--"]
 
 
-def supervise(argv: list[str], unit: str, popen=subprocess.Popen, run=subprocess.run) -> tuple[int, int | None]:
+def supervise(argv: list[str], unit: str, popen=subprocess.Popen, run=subprocess.run,
+              via: bool | None = None) -> tuple[int, int | None]:
     """Run `systemd-run` and wait; on SIGTERM, SIGINT or SIGHUP stop the unit.  Returns its exit status and the signal, if any.
     sudo runs in its own session, so a signal to this process group reaches this process alone."""
     got: list[int] = []
+    sudo = root(via)
 
     def stop(signum, _frame):
         if not got:
-            run([*SUDO, "systemctl", "stop", "--no-block", unit], capture_output=True)
+            run([*sudo, "systemctl", "stop", "--no-block", unit], capture_output=True)
         got.append(signum)
 
     old = {s: signal.signal(s, stop) for s in STOP_SIGNALS}
@@ -215,7 +235,7 @@ def supervise(argv: list[str], unit: str, popen=subprocess.Popen, run=subprocess
         for s, h in old.items():
             signal.signal(s, h)
     if got or rc < 0:
-        run([*SUDO, "systemctl", "stop", unit], capture_output=True)       # blocks until the unit is gone
+        run([*sudo, "systemctl", "stop", unit], capture_output=True)       # blocks until the unit is gone
     return rc, (got[0] if got else None)
 
 
@@ -232,17 +252,22 @@ def prepare(run_dir: str) -> int:
     return stat.S_IMODE(st.st_mode)
 
 
-def finish(run_dir: str, unit: str, user: str, uid: int, mode: int, run=subprocess.run) -> tuple[list[str], list[str]]:
+def finish(run_dir: str, unit: str, user: str, uid: int, mode: int, run=subprocess.run,
+           via: bool | None = None) -> tuple[list[str], list[str]]:
     """Runner side, once the harness returns and before anything reads the run dir: wait for the unit to be gone (however the
     workload ended, job-exec killed included), then as root delete what the job left that is neither a file nor a directory, give
     the rest to this user, and give the run dir and its out/ that mode back.  Returns what was deleted and what the job user still
     owns."""
-    run([*SUDO, "systemctl", "stop", unit], capture_output=True)            # waits out a stop in progress; a no-op once gone
+    via = helper() if via is None else via
+    run([*root(via), "systemctl", "stop", unit], capture_output=True)      # waits out a stop in progress; a no-op once gone
     (Path(run_dir) / ENV_FILE).unlink(missing_ok=True)
-    r = run([*SUDO, "find", "-P", run_dir, "-mindepth", "1", "-user", user, "!", "-type", "d", "!", "-type", "f", "-print",
-             "-delete"], capture_output=True, text=True)
+    if via:                                                                 # vy-sudo does both, and prints what it removed
+        r = run([*SUDO, VY_SUDO, "job-reclaim", run_dir, user], capture_output=True, text=True)
+    else:
+        r = run([*SUDO, "find", "-P", run_dir, "-mindepth", "1", "-user", user, "!", "-type", "d", "!", "-type", "f", "-print",
+                 "-delete"], capture_output=True, text=True)
+        run([*SUDO, "chown", "-R", "-P", f"--from={user}", f"{os.getuid()}:{os.getgid()}", "--", run_dir], capture_output=True)
     removed = [os.path.relpath(p, run_dir) for p in (r.stdout or "").splitlines() if p]
-    run([*SUDO, "chown", "-R", "-P", f"--from={user}", f"{os.getuid()}:{os.getgid()}", "--", run_dir], capture_output=True)
     for d in (os.path.join(run_dir, OUT_DIR), run_dir):
         os.chmod(d, mode)
     still = [os.path.relpath(os.path.join(base, n), run_dir) for base, dirs, files in os.walk(run_dir) for n in dirs + files
