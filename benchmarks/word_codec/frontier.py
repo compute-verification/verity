@@ -218,8 +218,9 @@ def frontier(points: list[dict], budget: float, d: float | None = None, idle: fl
 
 def table(points: list[dict], budget: float, batches=(1, 32), d: float | None = None, idle: float = IDLE_8B,
           boost: float = BOOST) -> str:
-    lines = ["| batch | b | k | arithmetic | x (boosted) | x* | μ_rebuild | y_total | decode | tag | commit | measured "
-             "| source |", "|---|---|---|---|---|---|---|---|---|---|---|---|---|"]
+    head = ("| batch | b | k | arithmetic | x (boosted) | x* | μ_rebuild | y_total | decode | tag | commit | measured "
+            "| source |")
+    lines = [head, "|---|---|---|---|---|---|---|---|---|---|---|---|---|"]
     best = frontier(points, budget, d, idle, boost)
     for mb in batches:
         p = best.get(mb)
