@@ -51,7 +51,7 @@ import numpy as np
 
 from verity.protocols.spot.verifier.one_stage import registration as R
 from verity.definitions.numerics.rows import SAMPLED_MEMBER
-from verity.definitions.numerics.token_select_rows import token_select_chunk_bests, token_select_combine
+from verity.definitions.numerics.token_select_rows import token_select_chunk_bests
 from verity.definitions.registry.dead_free import CHUNK
 from verity.commitments.windows import rows as CS
 from verity_vllm.check.replay import evaluate as EV
@@ -59,6 +59,7 @@ from verity_vllm.check.replay.compare import _tp_member_alias
 from verity_vllm.check.replay.index import IDS_MEMBER, SAMPLER_OP, ProgramIndex, node_runs
 from verity_vllm.check.replay.opening import _ITEMSIZE, _NPDTYPE
 from verity_vllm.engine.sampler_capture import CAPTURE
+from verity_vllm.pipeline import select_rows as SE
 from verity_vllm.pipeline import serving_rows as SRW
 from verity_vllm.query.manifest import format as RM
 from verity_vllm.records.logits_capture import LogitsCapture
@@ -382,7 +383,7 @@ def pieces(s: Span, c: int | None = None) -> tuple[Span, Span]:
                          "is a third template")
     n, k, x = s.n, V // c, s.data["rows"][port]
     best, idx = token_select_chunk_bests(x.reshape(n * k, c))
-    tok, want = token_select_combine(x[:, 0], best.reshape(n, k), idx.reshape(n, k), c), s.data["outs"][out].view("<u4")[:, 0]
+    tok, want = SE.combine(x[:, 0], best.reshape(n, k), idx.reshape(n, k), c), s.data["outs"][out].view("<u4")[:, 0]
     if not np.array_equal(tok, want):
         raise ValueError(f"request {s.rid}: its chunks and combine select {tok.tolist()[:8]}..., its span {want.tolist()[:8]}...")
     i32 = idx.astype("<u4").view("<u2")

@@ -8,7 +8,7 @@ units go row by row, a row's group units in s's order.
 A group unit reads its C logits as C / w rows of w words (`cuts`: one row per writer unit of w logits), and the combine its
 ``best`` and ``idx`` one row per group unit, which the window wires to that unit's two output rows (`wire`), and ``x0``, the
 row's logits[0].  A group unit's outputs are words serving never stores: the reader computes them
-(`numerics.token_select_rows`) and holds the combine's token to the row's served one."""
+(`numerics.token_select_rows`) and holds the combine's token (`combine`) to the row's served one."""
 from __future__ import annotations
 
 import re
@@ -53,12 +53,23 @@ def units(tp: Template, statics: dict[str, Any]) -> int:
     return int(statics["V"]) // _statics(tp)["C"] if groups(tp) else 1
 
 
+def combine(x0: np.ndarray, best: np.ndarray, idx: np.ndarray, c: int) -> np.ndarray:
+    """`TokenSelectCombine_v2{V, C=c}` on each token's logits[0] and its chunks' (best, idx): from (x0, 0), chunk j's
+    (best, j·c + idx) is taken iff its best is strictly greater, so a NaN x0 is never left."""
+    f = lambda w: (np.asarray(w, dtype=np.uint16).astype(np.uint32) << 16).view(np.float32)   # noqa: E731
+    run, tok, fb = f(x0), np.zeros(len(x0), dtype=np.int64), f(best)
+    for j in range(best.shape[1]):
+        take = fb[:, j] > run
+        run, tok = np.where(take, fb[:, j], run), np.where(take, j * c + idx[:, j], tok)
+    return tok
+
+
 def _twin(logits: np.ndarray, G: int) -> tuple[int, np.ndarray, np.ndarray]:
     """A row's token as its units compute it, and every group's best and index."""
-    from verity.definitions.numerics.token_select_rows import token_select_chunk_bests, token_select_combine
+    from verity.definitions.numerics.token_select_rows import token_select_chunk_bests
 
     best, idx = token_select_chunk_bests(logits.reshape(-1, G))
-    return int(token_select_combine(logits[:1], best[None], idx[None], G)[0]), best, idx.astype("<u4").view("<u2")
+    return int(combine(logits[:1], best[None], idx[None], G)[0]), best, idx.astype("<u4").view("<u2")
 
 
 def read(m: CS.Member, rows: Sequence[Row], store: Any, weights: Callable, arrivals: dict[str, int] | None,
