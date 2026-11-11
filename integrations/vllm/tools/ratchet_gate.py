@@ -22,7 +22,8 @@ lane text (``allowlists/repo_lane_text.json``), and ``test_repo_retired_terms.py
 per file of the terms ``GLOSSARY.md``'s older names retire (``allowlists/repo_retired_terms.json``); its slugs stay apart from
 the integration's.  A change is judged when it touches a
 ratchet, a ``*.py`` file under ``integrations/vllm/tests/lint/`` or ``tests/lint/`` (the lints' code) or a ruff lint's config:
-``integrations/vllm/ruff.toml``, the root ``ruff.toml`` (both ruff lints') and the ruff the root ``dev`` group pins.  It passes
+``integrations/vllm/ruff.toml``, the root ``ruff.toml`` (both ruff lints'), ``integrations/vllm/tests/lint/ruff_vllm.toml``
+(the integration's lint with vLLM's rules, ``test_ruff_vllm.py``) and the ruff the root ``dev`` group pins.  It passes
 when:
 
 * in each ratchet, no kind whose entries record counts (an entry's ``count``: typed_records' or-empty per file, P07's)
@@ -183,8 +184,14 @@ LINTS = (LINT, REPO_LINT)
 CALLERS_MODULE = f"{LINT}/test_p16_cli_callers.py"
 CALLERS_LIST = f"{LINT}/allowlists/p16_cli_callers.json"
 PUBLIC = "public"
+#: the integration's lint with vLLM's rules (``test_ruff_vllm.py``) and its config, which extends nothing and sits in its lint
+#: directory, so the base's copy comes with the directory
+RUFF_VLLM_LINT = "ruff_vllm"
+RUFF_VLLM_CONFIG = f"{LINT}/ruff_vllm.toml"
 #: each ruff lint's directory and the configs it reads: the integration's extends the root's
-RUFF_LINTS = {RUFF_LINT: (LINT, (RUFF_CONFIG, REPO_RUFF_CONFIG)), REPO_RUFF_LINT: (REPO_LINT, (REPO_RUFF_CONFIG,))}
+RUFF_LINTS = {RUFF_LINT: (LINT, (RUFF_CONFIG, REPO_RUFF_CONFIG)), RUFF_VLLM_LINT: (LINT, (RUFF_VLLM_CONFIG,)),
+              REPO_RUFF_LINT: (REPO_LINT, (REPO_RUFF_CONFIG,))}
+RUFF_CONFIGS = (RUFF_CONFIG, REPO_RUFF_CONFIG, RUFF_VLLM_CONFIG)
 MOVE_CHECK = "tools/verity/check/move_check.py"
 QUEUE_SUBJECT = re.compile(r"^Queue: #(\d+) ?(.*)$")
 RULE_NUMBER = re.compile(r"^p\d+_")
@@ -1096,13 +1103,13 @@ def added_by(rev: str, items: list[str]) -> str:
 
 def judge(c: Change, base: str) -> None:
     diff = git("diff", "--no-renames", "--name-only", "-z", c.lo, c.hi).split("\0")
-    c.touched = sorted(f for f in diff if f and (is_ratchet(f) or is_lint_code(f) or f in (RUFF_CONFIG, REPO_RUFF_CONFIG)
+    c.touched = sorted(f for f in diff if f and (is_ratchet(f) or is_lint_code(f) or f in RUFF_CONFIGS
                                                  or f == PYPROJECT and ruff_pin(c.lo) != ruff_pin(c.hi)))
     new_noqa, c.noqa_added, c.noqa_removed = noqa_change(c.lo, c.hi, diff)
     noqa = [f"{c.noqa_added} `# noqa` line(s) added, {c.noqa_removed} removed"] if c.noqa_added or c.noqa_removed else []
     if not c.touched and not noqa:
         c.verdict, c.why = "untouched", (f"changes no ratchet, no lint code under {' or '.join(f'{x}/' for x in LINTS)}, no "
-                                         f"{RUFF_CONFIG} or {REPO_RUFF_CONFIG}, no ruff pin and no `# noqa` under {INTEGRATION}/")
+                                         f"{', '.join(RUFF_CONFIGS)}, no ruff pin and no `# noqa` under {INTEGRATION}/")
         return
     grown, added, bad, found, uncalled, public = [], [], [], [], [], []
     if c.touched:

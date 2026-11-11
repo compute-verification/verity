@@ -18,11 +18,15 @@ packages = ["src/research"]
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]
+# a passed test's tmp_path is removed when it ends: its tests' git repositories, all kept, reach about 400,000 files at once,
+# and a check node with 8 million inodes runs out under a few of these runs
+tmp_path_retention_policy = "failed"
 
 [tool.verity.tests]
 # test files that start a program the read guard can't trace (git, lake, a compiler, a shell): keyed on the suite's whole tree
 untraced = [
     "tests/test_agents.py",
+    "tests/test_at_main.py",
     "tests/test_auto.py",
     "tests/test_binprov.py",
     "tests/test_bucket_index.py",
@@ -44,6 +48,7 @@ untraced = [
     "tests/test_drive_config.py",
     "tests/test_drive_executor.py",
     "tests/test_drive_hold_lift.py",
+    "tests/test_drive_locks.py",
     "tests/test_drive_lowrisk.py",
     "tests/test_drive_moves.py",
     "tests/test_drive_policy.py",
@@ -55,11 +60,12 @@ untraced = [
     "tests/test_evict_src.py",
     "tests/test_evict_src_local.py",
     "tests/test_fixture_fetch.py",
+    "tests/test_fleet.py",
     "tests/test_gates.py",
     "tests/test_holds.py",
     "tests/test_jobs_dispatch.py",
     "tests/test_jobuser.py",
-    "tests/test_lean_prune.py",
+    "tests/test_labelauth.py", "tests/test_lean_prune.py",
     "tests/test_mem_admission.py",
     "tests/test_merge_gate.py",
     "tests/test_merge_shards.py",
@@ -89,6 +95,7 @@ untraced = [
     "tests/test_queue_ported.py",
     "tests/test_record_driver.py",
     "tests/test_record_result.py",
+    "tests/test_records_short_head.py",
     "tests/test_remote_adopt.py",
     "tests/test_remote_cwd.py",
     "tests/test_remote_local.py",

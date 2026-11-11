@@ -10,9 +10,9 @@ it contains. Your checkout and your prompt can be older than `main`: `git show o
 - `verity/`: the distribution `verity` (the root `pyproject.toml`; its module list is `verity/README.md`). Import from the
   owning module (`from verity.ml.circuits import Program`); `verity` re-exports nothing.
   - `verity/core/`: the verifiers, trusted code. `verity/core/protocols/` holds the integrity profile (`profile`) and one
-    package per protocol: sampled proofs, PoUW, proof of useful space (PoUS), the bandwidth audit over PoUS's store,
-    PoUB over a node's registered store and network certification, each a Python verifier until its Lean verifier (its
-    `lean/`) replaces it; the inference-only policy (`network/nci/`) is Lean only. `claims` holds the security claims'
+    package per protocol: sampled proofs, PoUW, proof of useful space (PoUS), PoUB over a node's registered store and
+    network certification, each a Python verifier until its Lean verifier (its `lean/`) replaces it; the inference-only
+    policy (`network/nci/`) is Lean only. `claims` holds the security claims'
     ids, `service/flock/` Flock's Lean verifier and the ZK server (`Flock.Firewall`), `service/firewall/` the ZK server's
     release side, and `difftest` the Python held to each Lean.
   - `verity/ml/`: Python and CUDA: the provers, and Python that mirrors the Lean for speed. `circuits` (format in
@@ -271,7 +271,10 @@ rule for each case: the team skill's Landing.
   skills, READMEs, docstrings and CLI help. Fix a stale statement on sight. `tests/test_doc_paths.py` warns on a doc
   naming a dead path.
 - Never print a secret's value. List environment variable names with `compgen -e`, never `env`, `printenv` or tmux's
-  `show-environment`.
+  `show-environment`, and an env file's with `python3 tools/agent-guard/envnames.py FILE...` (on another machine,
+  `ssh HOST python3 - FILE... < tools/agent-guard/envnames.py`), never `cat`, `sed`, `cut` or `grep` on it or on a glob
+  over its directory, which matches the keys beside it. Look at a key with `stat`, `sha256sum` or
+  `openssl pkey -in FILE -pubout`.
 
 ## Where writing goes
 

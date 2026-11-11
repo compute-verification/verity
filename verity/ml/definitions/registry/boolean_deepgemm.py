@@ -6,7 +6,10 @@ one's word view is its `_v1` at the same statics.
     Fp8Ue8m0Ceil_v2                                one traced circuit (`boolean_dsa.flat`): its three constant words folded
     Fp8GroupScaleUe8m0_v2{G}, Fp8GroupQuantUe8m0Group_v2{G}, FlashInferFp8Quant1x128Group_v2
                                                    one traced circuit each: a group's words share their scale's and their own
-                                                   decoding (the tracer's common ANDs once, its dead gates none)
+                                                   decoding (the tracer's common ANDs once, its dead gates none); the two
+                                                   groups written as calls of their words' circuits (`rolled.rolled`: each
+                                                   class's ...GroupIn_v2{V} and ...GroupOut_v2{V}, and ...GroupCore_v2), so
+                                                   their descriptions are a word's circuit once, lowered as the one circuit
     Fp8GroupQuantUe8m0_v2{K,G}, FlashInferFp8Quant1x128_v2{K}
     DeepGemmFp8Linear_v2{K,N}, FlashInferFp8Linear_v2{K,N}, ScaledMmFp8BlockGrouped_v2{H,K,N,G}
 
@@ -24,6 +27,7 @@ from verity.ml.circuits.ops.boolean import attention as BA
 from verity.ml.circuits.ops.boolean import elementwise as EW
 from verity.ml.circuits.ops.boolean import gemm as BG
 from verity.ml.circuits.ops.boolean import mufu as BM
+from verity.ml.circuits.ops.boolean import rolled as RO
 from verity.ml.circuits.ops.boolean import scalar as SC
 from verity.ml.definitions.registry import boolean_dsa as BD
 from verity.ml.definitions.registry import boolean_fp8 as BF8
@@ -91,7 +95,13 @@ def _group_quant_group(B, S, x):
     return DG.group_quant(bit_ops(B), S.G, x, bind(Fp8GroupScaleUe8m0V2, G=S.G), T)
 
 
-Fp8GroupQuantUe8m0GroupV2 = BD.flat("Fp8GroupQuantUe8m0Group", 2, ["G"], lambda S: DG.group_sig(S.G, T), _group_quant_group,
+def _rolled(name: str, statics: list[str], signature, body, word):
+    """`BD.flat`'s circuit of ``body`` written as calls of its words' circuits (`RO.rolled`)."""
+    inner = EW.on_bits(name, 2, statics, signature, body, word, register=False)
+    return RO.rolled(name, 2, statics, BD.replayed(inner, statics, signature), signature, doc=body.__doc__ or "", word=inner.word)
+
+
+Fp8GroupQuantUe8m0GroupV2 = _rolled("Fp8GroupQuantUe8m0Group", ["G"], lambda S: DG.group_sig(S.G, T), _group_quant_group,
                                     DG.Fp8GroupQuantUe8m0Group)
 
 
@@ -109,7 +119,7 @@ def _fi_group(B, S, x):
     return DG.fi_group(bit_ops(B), x, T)
 
 
-FlashInferFp8Quant1x128GroupV2 = BD.flat("FlashInferFp8Quant1x128Group", 2, [], lambda S: DG.fi_group_sig(S, T), _fi_group,
+FlashInferFp8Quant1x128GroupV2 = _rolled("FlashInferFp8Quant1x128Group", [], lambda S: DG.fi_group_sig(S, T), _fi_group,
                                          DG.FlashInferFp8Quant1x128Group)
 
 
