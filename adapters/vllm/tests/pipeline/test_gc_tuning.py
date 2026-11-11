@@ -16,9 +16,9 @@ import sys
 
 import pytest
 
-from verity_vllm.pipeline import gc_tuning
 from tests.observe.test_fold_synthetic import memory, toy_log, toy_profile  # noqa: F401  (memory: fixture)
 from verity_vllm.observe.fold.fold import fold
+from verity_vllm.pipeline import gc_tuning
 
 PROBE = ("import gc, json, sys\n"
          "from verity_vllm.pipeline.gc_tuning import tune\n"
@@ -170,11 +170,10 @@ def test_a_ranks_program_load_runs_under_the_tuned_thresholds(monkeypatch):
 
 def test_the_entry_points_call_tune():
     import inspect
-    from verity_vllm.pipeline import manifest
+
+    from verity_vllm.check.match import batch_decomp, global_match
+    from verity_vllm.pipeline import build, global_program, manifest
     from verity_vllm.pipeline import match as run_config
-    from verity_vllm.check.match import batch_decomp
-    from verity_vllm.check.match import global_match
-    from verity_vllm.pipeline import build, global_program
     assert "gc_tuning import tune" in inspect.getsource(build.main)
     assert "gc_tuning import tune" in inspect.getsource(global_program.main)
     assert "gc_tuning import tune" in inspect.getsource(run_config.fold_worker)

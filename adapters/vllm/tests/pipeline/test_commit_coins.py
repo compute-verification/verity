@@ -19,15 +19,14 @@ from types import SimpleNamespace
 from typing import Any
 
 import pytest
-
+from verity.commitments.crypto import lms
 from verity.protocols.spot.device import challenger as LC
 from verity.protocols.spot.device import remote as R
 from verity.protocols.spot.device.challenger import CoinError
-from verity.commitments.crypto import lms
-from verity_vllm.commit.challenge import challenge_positions
-from verity_vllm.pipeline import commit_coins as CC
 
 from tests.protocols import challenger_host as CH
+from verity_vllm.commit.challenge import challenge_positions
+from verity_vllm.pipeline import commit_coins as CC
 
 PRIVATE, KEY = CH.challenger_key(3, H=5)
 GATE = "ssh -i KEY -o IdentitiesOnly=yes research@auditor"
