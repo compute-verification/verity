@@ -54,12 +54,13 @@ loop's period of requests a group, as the gate's `warden-rehearse --scan --promp
     python warden_serve.py fake --listen HOST:PORT [--token-ms 20] [--id-payload P]
     python warden_serve.py serve --upstream HOST:PORT --listen HOST:PORT --out DIR --key KEYDIR --session HEX
         --windows N [--start-in 5] [--load-heads FILE] [--paced-ms 50] [--watermark] [schedule] [--egress id|bytes]
+        [--max-tokens-cap N]
     python warden_serve.py client --deployment DIR/deployment.json --traffic TRAFFIC.json --out DIR
     python warden_serve.py check --run DIR
     python warden_serve.py rehearse (--upstream HOST:PORT | --fake) --out DIR [--requests 100] [--temperature T]
         [--top-p P] [--ids [--prompts FILE [--window-per-group]]] [--paced-ms 50] [--watermark] [--load-store DIR --load-sinks HOST:PORT,...
         --load-program HEX [--load-shape h200|tiny] [--load-workers N] [--load-ready-s 900]] [schedule]
-        [--egress id|bytes]
+        [--egress id|bytes] [--max-tokens-cap N]
 
 - `serve` writes `deployment.json` (the network certifier's public key, the session, the schedule's parameters and their
   digest, the origin, the listener), runs the network certifier for `--windows` windows, each bucket released by its
@@ -1085,15 +1086,20 @@ def schedule_flags(q: argparse.ArgumentParser, egress: str | None) -> None:
                    help="the egress form (warden's \"The egress form\"): id, the egress record's, which the period "
                         "check takes, or bytes, any server's bytes, a rehearsal's relay of another form (default: "
                         + (egress or "id with --ids, else bytes") + ")")
+    q.add_argument("--max-tokens-cap", type=int, default=None,
+                   help="the response cap (warden's \"The response cap\"), in the id form: a request whose max_tokens "
+                        "exceeds it, or doesn't parse, is refused (cap) and every response is held to its request's "
+                        "(default: none)")
 
 
 def _params(args) -> WardenParams:
     egress = args.egress or ("id" if getattr(args, "ids", False) else "bytes")
-    return WardenParams(**{name: getattr(args, name) for name in INTEGER_FIELDS}, egress=egress)
+    return WardenParams(**{name: getattr(args, name) for name in INTEGER_FIELDS}, egress=egress,
+                        max_tokens_cap=getattr(args, "max_tokens_cap", None))
 
 
 def _flags(args) -> list[str]:
-    return [x for k, v in asdict(_params(args)).items() for x in (f"--{k.replace('_', '-')}", str(v))]
+    return [x for k, v in asdict(_params(args)).items() if v is not None for x in (f"--{k.replace('_', '-')}", str(v))]
 
 
 def await_model(url: str, seconds: float, poll: float = 5.0) -> str:
