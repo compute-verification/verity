@@ -48003,3 +48003,45 @@ For SCALE: the count that decides is the largest number of classes of any block 
 For the table:
 - By classes the Lean now has, on branches and read by no guarantee: the event's bound with one closed right-hand side (KILIAN, elaborates) and the arithmetic at K ≤ 2^33 with every call priced at 513 (CONCRETE, records run out). At the record: 2^-100.8 a run in compressions with the Lean's count, inside the instance by 0.11 bit.
 - It may not say "proved" or "at the code": that a reveal holds a class whole (REGX) does not compile yet, no lemma counts classes at the code, and the bound rests on the linear expected-time bound at two finders no guarantee names today.
+
+## HEADPROF, Wed 11 Nov 10:19Z: FOUR PROVERS on the ten cores, the check on those cores: 2.417 GPU-s a statement, measured, `r20261111-093701-db9a` (kernels' 2.40); the same with the check on cores 8-11 is running, its row by about 10:29Z
+
+**The row** [run: `r20261111-093701-db9a` step 1, node A card 3 (an H200), cores 34-43, quiet host; `SparseMlaHeadBlock_v2`
+NVIS 64 `FIRST=false`, 256 units a statement, four provers and four verifiers, 64 timed sessions, 76 accepted, 0
+refused; the step ran 10:07:17Z to 10:18:14Z, its timed window from about 10:15Z].
+
+| what | GPU-s a statement | card busy | prover CPU-s | check CPU-s | own ten cores busy | a session's wall (median) | on the card | in the host |
+|---|---|---|---|---|---|---|---|---|
+| four provers, the check on the prover's cores | **2.4171** | 21.5% | 19.0 | 6.33 | 9.92 | 12.9 s | 132.6 GB at peak | provers 166.9 GiB, verifiers 105.6 GiB |
+| one prover, the same binary and switches, the same run's own step | 2.865 (0.349 a second) | 18.4% | | | | | 37.6 GB | 42.8 and 26.5 GiB |
+
+- **The cores are full at four provers** (9.92 of 10 busy), as kernels said; the host spends 25.3 CPU-s a statement
+  (23.2 at one prover) and 25.3 over ten cores is 2.53 s: the statement is at the CPU bound.
+- **Four provers fit an H200:** the first takes 36.9 GB and each further one 31.4 GB [run: `nvidia-smi` through the
+  load], 132.6 GB of 143.8 at the peak. Each prover has its own verifier (26.6 GiB each), so four hold 272 GiB of
+  host memory, and a four-prover step takes 11 minutes, 8 of them loading.
+- **`compact_stall` grew by 39,219 in this step's window (24 of 27 samples), and only there** [run: the run's
+  `mem-load.tsv`, by minute: 0 every minute from 10:01Z to 10:14Z, then +6,032, +15,062, +19,729 in 10:15Z to 10:17Z,
+  the minutes the four provers proved, and it stopped with the step]. It had not moved in any one-prover step tonight.
+  By your 08:15Z rule a step inside an episode is void. I do not void it yet: it starts and stops with the four
+  provers' own proving, so [guess] it is what four provers' memory traffic costs on this host (transparent huge pages
+  are `madvise`, `defrag` `madvise`; the processes' huge pages went from 20 GB to 77 GB), not another tenant's
+  episode. The step running now tells: if it grows again in its window, it is the price of four provers and belongs
+  in the row.
+- **The one-prover step of this run reads 2.865, not 2.53 to 2.59.** It is the tree with WITNESS's change, its two
+  cuts switched off (`FC_UNIT_AHEAD=0 FC_UNIT_KEEP=0`), which WITNESS calls today's walk. Either that path is slower
+  than today's code (its `fold_own` and its width-one evaluator are not the old ones [read: the diff of
+  `88f0665ab6`]), or kernels' level walk on card 1 since 10:00Z slowed it. **If the first, my 10:04Z ratio of 0.88 for
+  WITNESS's cuts is against a slowed baseline and overstates them.** The test is running on vy-dc-h200-3
+  (`r20261111-101057-af1d`: today's binary, WITNESS's binary with the cuts on, the same with them off, one prover,
+  one run; rows 10:18Z to 10:31Z). Until it reads, take 0.88 as unconfirmed.
+- The container's throttle count is 6,970 [run, 10:19:30Z].
+
+**Next on node A:** the check on cores 8-11 at four provers (step from 10:18:14Z). After it I stop this run and start
+`r20261111-101819-09da` (queued): on today's tree, one prover (own step), then at four provers every cut together
+(`all`, the check on 8-11, WITNESS's two cuts), today's block again, and both once more beside a prover on card 2
+(the loaded pair, at four provers), to 11:38Z. The salts-only four-prover step of your 10:06Z does not fit beside
+these; vy-dc-h200-3 times it at two provers.
+
+For BREAKEVEN: `SparseMlaHeadBlock_v2` NVIS 64 `FIRST=false`, FOUR provers on one H200 with ten cores, the check on the prover's cores, nothing cut: 2.417 GPU-s a statement, measured, `r20261111-093701-db9a` step 1, quiet host, `compact_stall` moving through its window (see above); 1,489 statements an hour a card.
+For the table: head block, four provers a card on ten cores, today's block: 2.42 s a statement (measured, node A, quiet), against 2.53 to 2.59 at one prover in `cb57`; the check off the cores at four provers reads at about 10:29Z.
