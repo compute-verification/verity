@@ -10,8 +10,6 @@
     {"file": "verity_vllm/commit/committer/native_host.py", "kind": "broad-except", "symbol": "NativeHostCommitter._load_cudart", "detail": "except Exception", "count": 2},
     {"file": "verity_vllm/commit/committer/native_host.py", "kind": "optional-import", "symbol": "<module>", "detail": "except ImportError"},
     {"file": "verity_vllm/commit/committer/pinned_pool.py", "kind": "broad-except", "symbol": "PinnedPool.__del__", "detail": "except Exception"},
-    {"file": "verity_vllm/commit/committer/pinned_pool.py", "kind": "environ", "symbol": "<module>", "detail": "VERITY_PINNED_EXACT"},
-    {"file": "verity_vllm/commit/committer/topp_splits.py", "kind": "broad-except", "symbol": "install_split_kernel_proxies", "detail": "except Exception"},
     {"file": "verity_vllm/pipeline/manifest.py", "kind": "broad-except", "symbol": "_program_dirs_for", "detail": "except Exception"},
     {"file": "verity_vllm/properties/noninterference.py", "kind": "broad-except", "symbol": "case_of_args", "detail": "except Exception"},
     {"file": "verity_vllm/properties/noninterference.py", "kind": "broad-except", "symbol": "compare", "detail": "except Exception"},

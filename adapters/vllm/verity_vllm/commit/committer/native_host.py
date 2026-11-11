@@ -590,11 +590,8 @@ def step_bound_bytes(model: Any, modules: list[tuple[str, Any]], envelope: dict[
     rope_mult = max(1, -(-layers // n_rope)) if n_rope else 1
     for name, m in modules:
         names = _mro_names(m)
-        try:
-            p = next(m.parameters())
-            isz = p.element_size()
-        except StopIteration:
-            isz = 2
+        p = next(m.parameters(), None)
+        isz = 2 if p is None else p.element_size()
         w = 0
         if LC.LOGITS in names:
             per_seq += vocab * 4
