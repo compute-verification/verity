@@ -33,8 +33,9 @@ alone (`cutBlock`).
   make it correct, cut, at the wired program, where the two agree through `ω` at the block's gates and the wires they
   read.
 * `Prog.exists_correct_wired`: such values exist where `ω` sends no two of those gates to one gate.
-* `Prog.needs_rewire`, `Prog.needs_wired`: a gate a cut proof block's correctness reads at the wired program is the
-  image, under `ω`, of a gate the block's correctness reads in `C`.
+* `Prog.needs_rewire`, `Prog.needs_wired`, `Prog.fixed_of_needs_wired`: a gate a cut proof block's correctness reads
+  at the wired program is the image, under `ω`, of a gate the block's correctness reads in `C`, so it is no gate `ω`
+  moves.
 * `Prog.topological_rewire`, `Prog.topological_wired`: the wired program is topologically ordered where `C` is and
   `ω` sends no wire to a later gate.
 * `Partition.blocks_cut`, `Partition.cut_getElem?`, `Partition.length_blocks_cut`, `Partition.gates_cut`,
@@ -575,6 +576,14 @@ theorem Prog.needs_wired {C : Prog} {ω : ℕ → ℕ} {keep : ℕ → Bool} {u 
     (hn : (C.wired ω keep).Needs (cutBlock ω u) g) : ∃ i, C.Needs u i ∧ ω i = g := by
   unfold Prog.wired at hn
   exact Prog.needs_rewire hin hw (fun o ho => (List.mem_filter.1 ho).1) hn
+
+/-- **No cut proof block's correctness reads a gate `ω` moves** at the wired program, where `ω` moves no gate it sends
+a wire to: every gate it reads there is one `ω` leaves alone. -/
+theorem Prog.fixed_of_needs_wired {C : Prog} {ω : ℕ → ℕ} {keep : ℕ → Bool} {u : List ℕ} {g : ℕ}
+    (hin : ∀ i, ω i ≠ i → C.gates[i]? = some .input) (hw : ∀ i, ω i ≠ i → ω i ∈ C.outs)
+    (hidem : ∀ i, ω (ω i) = ω i) (hn : (C.wired ω keep).Needs (cutBlock ω u) g) : ω g = g := by
+  obtain ⟨i, -, rfl⟩ := Prog.needs_wired hin hw hn
+  exact hidem i
 
 /-- **The wired program is topologically ordered** where `C` is and `ω` sends no wire to a later gate. -/
 theorem Prog.topological_wired {C : Prog} {ω : ℕ → ℕ} {keep : ℕ → Bool} (htop : C.Topological)
