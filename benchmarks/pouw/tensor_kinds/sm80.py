@@ -23,6 +23,7 @@ from __future__ import annotations
 import importlib.util
 import json
 import math
+import operator
 import re
 import sys
 from collections import Counter, defaultdict
@@ -481,7 +482,6 @@ def census(outs: list[Path], ext: list[Path] = ()) -> tuple[str, str]:
         elif abs(v - old[0]) <= 1e-9 * abs(v):
             old[1].add(run)
 
-    lt = lambda a, b: a < b
     for out, latest in [(p, False) for p in outs] + [(p, True) for p in ext]:
         rec = json.loads((out / "sm80.json").read_text())
         s, fails = rec["summary"], rec["gate_failures"]
@@ -493,15 +493,15 @@ def census(outs: list[Path], ext: list[Path] = ()) -> tuple[str, str]:
             issue_runs.add(run)
         for st, f in s["forms"].items():
             kind = FORMS[st][1]
-            keep(alone, kind, f["alone_smsp_cycles_per_mma"], run, lt)
+            keep(alone, kind, f["alone_smsp_cycles_per_mma"], run, operator.lt)
             if lane_ok:
-                keep(joint, kind, f["a"], run, lt)
+                keep(joint, kind, f["a"], run, operator.lt)
                 if not latest:
-                    keep(before, kind, f["a"], run, lt)
+                    keep(before, kind, f["a"], run, operator.lt)
         for kind, (_, lanes) in SCALAR.items():
             for ln in lanes:
                 v = s["lanes"].get(ln, {}).get("per_op", {}).get(ln)
-                keep(rate, kind, None if v is None else 4 * v, run, lambda a, b: a > b)
+                keep(rate, kind, None if v is None else 4 * v, run, operator.gt)
         for ln, v in s["lanes"].items():
             pairs[ln] = max(pairs.get(ln, 0.0), v["instr_per_smsp_cycle"])
     lines, cites = [], defaultdict(set)
