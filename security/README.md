@@ -86,7 +86,7 @@ assumptions.
 - **The min-cut theorem**, `Nci.Cut.Guarantees.HE` and `HEShared` (`Definitions/Nci/Guarantees/Cut.lean`, proved in
   `Proofs/Nci/Cut.lean`): under (H) and (E), every partition of a circuit into m blocks, each reading at most k gates
   outside θ, has N ≤ m·(k + α) + (k/2)·√(m·O/(β_w·β_x)), α = ½·√(k³/(β_w·β_x·b)), for the N MACs and O output wires
-  of its charged matmuls, so ρ = m·c/|C| is bounded below at every c; `HEShared` is it for matmuls sharing arrays,
+  of its charged matmuls, so the slowdown m·c/|C| is bounded below at every c; `HEShared` is it for matmuls sharing arrays,
   each term times F = √(2(1 − 1/ω)), and `CountHE` is it at the count's verdict, `Nci.CompliesAtMost c k m`.
 - **(H), hardness**, `Nci.Cut.Assumptions.Hardness` (`Definitions/Assumptions.lean`), conjectured: every set S of words
   with κ(S) ≤ k has Σ_r β_r·|val(S ∩ A_r)| ≤ κ(S), so words behind a cut of κ gates carry at most κ in values, a value
@@ -95,7 +95,7 @@ assumptions.
   computed gates has κ(B → E(B)) ≥ b·|E(B)|, E(B) the outputs a MAC inside B feeds that have no wire in B.
 - **The counting bound over kinds of work**, `Nci.Formalism.Guarantees.Counting`
   (`Definitions/Nci/Guarantees/Formalism.lean`, proved in `Proofs/Nci/Formalism/Slowdown.lean`): every partition into
-  inference blocks has ρ ≥ max(max_K (|B_K|/|C|)/(cap_K/c), max_J Λ_J), for kinds of work B_K, each with a cap cap_K on
+  inference blocks has slowdown ≥ max(max_K (|B_K|/|C|)/(cap_K/c), max_J Λ_J), for kinds of work B_K, each with a cap cap_K on
   the gates of it an inference block holds, and kinds J each bounded by Λ_J over the whole partition; `Slowdown` beside
   it takes the token kind's cap from the named assumption `training-token-work`.
 
@@ -200,7 +200,7 @@ Remote, for each execution block E_j, in five steps:
    the inference blocks. The policies read the accounts.
 
 The monitoring period is accepted when every subprotocol accepts every E_j, under one commitment that binds them all.
-Acceptance alone doesn't require the developer to keep its registered hardware busy: a bound on ρ, which holds for
+Acceptance alone doesn't require the developer to keep its registered hardware busy: a bound on the slowdown, which holds for
 every admissible run, needs a **utilization policy** in the accounting step, refusing a monitoring period whose
 credited utilization u is below a public floor u_min. Without it, the bound below holds only for the accepted run's own
 Φ_D.
@@ -387,7 +387,7 @@ at peak, ζ̄ = ζ_ref/MFU₀.
 
 ### Part 4: so reaching the target takes more fleet-time
 
-The **slowdown** ρ(𝒢, η) is T_𝒢(η; 𝒜)/T_𝒢(η; 𝓕), T_𝒢(η; ·) the least fleet-time at which some computation in the set
+The **slowdown** slowdown(𝒢, 𝒜, η) is T_𝒢(η; 𝒜)/T_𝒢(η; 𝓕), T_𝒢(η; ·) the least fleet-time at which some computation in the set
 reaches the target with probability above η, and **fleet-time** elapsed time times Φ, registered and unregistered.
 
 **Remote.** A covered successful computation carries a weighted count of at least Ω_* (part 1; with every weight 1,
@@ -405,7 +405,7 @@ The denominator is measured: C_ref is the fleet-time at which the reference trai
 probability above η, which takes a seed sweep, not one run. It stands in for T_𝒢(η; 𝓕), which it bounds from above,
 so the bound is relative to that reference. If f is bounded uniformly over 𝒜 (the utilization policy bounds it),
 
-$$ \rho \;\ge\; \frac{\Omega_*}{C_{\mathrm{ref}}\,\big[\bar\zeta\,f + (q/c)\,(1 - f)\big]}, $$
+$$ \mathrm{slowdown} \;\ge\; \frac{\Omega_*}{C_{\mathrm{ref}}\,\big[\bar\zeta\,f + (q/c)\,(1 - f)\big]}, $$
 
 and the bound holds except with probability η + δ: an accepted run reaches the target in less fleet-time only if it
 lacks the covered structure, which coverage allows below T_max with probability at most η
@@ -413,7 +413,7 @@ lacks the covered structure, which coverage allows below T_max with probability 
 (part 3). Let Ω_ref be the reference's count in the same convention and ζ_ref = Ω_ref/C_ref. Under the required-count
 floor Ω_* ≥ Ω_ref/α,
 
-$$ \rho \;\ge\; \frac{1}{\alpha\,\big[(\bar\zeta/\zeta_{\mathrm{ref}})\,f + y\big]}, \qquad
+$$ \mathrm{slowdown} \;\ge\; \frac{1}{\alpha\,\big[(\bar\zeta/\zeta_{\mathrm{ref}})\,f + y\big]}, \qquad
    y = \frac{q}{c\,\zeta_{\mathrm{ref}}}\,(1 - f), $$
 
 y the yield of correct credited work, as a share of the reference's rate. The ratio ζ̄/ζ_ref keeps the reference's achieved rate apart from the ceiling on every
