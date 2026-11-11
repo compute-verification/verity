@@ -114,7 +114,10 @@ keep() {  # NAME: $W/NAME's records into $O/NAME (never the MUFU tables a circui
           # its circuits and tables into the store
   mkdir -p $O/$1
   if [ "${A5_MEMBER_SECONDS:-0}" = 1 ]; then   # before the copy: a process's end is its log's modification time
-    $PY $REPO/benchmarks/one_stage/member_seconds.py measure $W/$1 --stamped $W/stamped > $O/$1/member-seconds.log 2>&1 || MSEC_RC=1
+    cp $W/stamped/stamps.txt $O/$1/member-seconds.stamps.txt
+    (cd $W/$1 && find . -name '*.log' -printf '%T@ %P\n' | sort -k2) > $O/$1/member-seconds.ends.txt
+    timeout 1800 $PY $REPO/benchmarks/one_stage/member_seconds.py measure $W/$1 --stamped $W/stamped > $O/$1/member-seconds.log 2>&1 \
+      || MSEC_RC=1
     grep '^MEMBER-SECONDS' $O/$1/member-seconds.log | cut -c1-4000
   fi
   (cd $W/$1 && find . -type f ! -name circuit.txt ! -name 'inst-*' ! -name 'm*-inst-*' ! -name '*-private.bin' ! -path './*/archive/*' \

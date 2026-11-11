@@ -100,11 +100,16 @@ def plant(tmp_path: Path) -> tuple[Path, Path]:
 
 def test_a_members_seconds_are_its_own_processes(tmp_path):
     audit, d = plant(tmp_path)
-    got = MS.measure(audit, MS.stamps((d / MS.STAMPS).read_text()), None, 1)
+    got = MS.measure(audit, MS.stamps((d / MS.STAMPS).read_text()))
     assert {x: got[x] for x in ("audit", "firewall", "stamped", "staging")} == {
         "audit": "rank0", "firewall": True, "stamped": True, "staging": {"drawn_s": 1.5}}
     m0, m1 = got["members"]
     assert (m0["k"], m0["template"], m0["n"], m0["to_next_member_s"]) == (0, "T0", 8, 1.0) and "alone" not in m0
+    ns = T * 10**9
+    assert m0["starts_ns"] == {"serve": ns, "prove": ns + 3 * 10**9, "tap": ns + 61 * 10**8, "loop": ns + 62 * 10**8,
+                               "draw-test": ns + 205 * 10**8, "archive-put": ns + 207 * 10**8, "verify": ns + 2175 * 10**7}
+    assert m0["ends_ns"] == {"prove": ns + 20 * 10**9, "draw-test": ns + 207 * 10**8, "archive-put": ns + 217 * 10**8,
+                             "verify": ns + 2475 * 10**7}
     assert m0["bytes"] == {"circuit": 100, "partition": 11, "program": 13, "registered": 7, "public:pub-8.bin": 20,
                            "prover:inst-8.bin": 300, "table:t.u32": 16}
     assert m0["session"] == {"verifier_ahead_s": 3.0, "verifier_built_s": 2.5, "prover_s": 17.0, "prover_built_s": 3.0,
@@ -187,7 +192,9 @@ def test_each_reader_alone_is_the_members_command_on_its_files(tmp_path, monkeyp
         real[name] = str(f)
     ticks = iter(range(10**6))
     monkeypatch.setattr(MS, "clock", lambda: next(ticks) * 0.5)
-    got = MS.measure(audit, MS.stamps((d / MS.STAMPS).read_text()), real, 2)
+    all_stamps = MS.stamps((d / MS.STAMPS).read_text())
+    got = MS.measure(audit, all_stamps)
+    assert MS.readers(audit, got, all_stamps, real, 2)
     m0, m1 = (m["alone"] for m in got["members"])
     half = {"s": 0.5, "each": [0.5, 0.5]}
     assert m0["verifier_load"] == m0["prover_load"] == {**half, "built_s": 0.25}
@@ -198,7 +205,7 @@ def test_each_reader_alone_is_the_members_command_on_its_files(tmp_path, monkeyp
                                                    "registered.json")}
     # member 1 ran no Lean loop, and linked its circuit rather than put it: the circuit is still put alone
     assert sorted(m1) == ["archive_put", "prover_load", "verifier_load"] and sorted(m1["archive_put"]) == ["circuit.txt", "none", "pub-4.bin"]
-    m, s = audit / "m0", audit / "session-m0"
+    m = audit / "m0"
     ran = log.read_text().splitlines()
     state = f"--circuit {m / 'circuit.txt'} --tables {m / 'tables'}"
     loop = (f"flock-firewall session --statement verity/flock-circuit --circuit {m / 'circuit.txt'} --public {m / 'pub-8.bin'} "
@@ -212,4 +219,6 @@ def test_each_reader_alone_is_the_members_command_on_its_files(tmp_path, monkeyp
     assert [x[3:] for x in puts] == [y for f in ([], [str(m / "circuit.txt")], [str(m / "pub-8.bin")], [str(m / "tables" / "t.u32")],
                                                  [str(audit / "partition.json")], [str(audit / "program.json")],
                                                  [str(m / "registered.json")]) for y in (f, f)]
-    assert (s / "draw.json").read_text() == '{"k": 1}'
+    # a reader whose command can't be run at all is the member's error, and the audit's own seconds stay
+    assert not MS.readers(audit, got, all_stamps, {}, 1)
+    assert [list(m["alone"]) for m in got["members"]] == [["error"], ["error"]] and got["members"][0]["session"]["before_clock_s"] == 6.5

@@ -5,7 +5,8 @@ session behind the ZK server (``--firewall``) or not.
     python benchmarks/one_stage/member_seconds.py wrap DIR flock-circuit flock-verify flock-firewall
         # a stamping wrapper of each binary under DIR, their three paths printed: give the audit these
     python benchmarks/one_stage/member_seconds.py measure ROOT --stamped DIR [--reps 3] [--no-alone]
-        # every audit under ROOT (a directory holding session-m<k>/): <audit>/member-seconds.json and a MEMBER-SECONDS line
+        # every audit under ROOT (a directory holding session-m<k>/): <audit>/member-seconds.json and a MEMBER-SECONDS line;
+        # run it before the audit's logs are copied, which loses their modification times
 
 `a5_tp.sh` does both under ``A5_MEMBER_SECONDS=1``.
 
@@ -295,26 +296,39 @@ def audits(root: Path) -> list[Path]:
     return sorted({d.parent for d in root.rglob("session-m*") if d.is_dir() and d.name[9:].isdigit()})
 
 
-def measure(audit: Path, all_stamps: list[dict], real: dict | None, reps: int) -> dict:
+#: the logs whose modification times are their processes' ends
+LOGS = {"prove": "prove.log", "draw-test": "u1-u3.lean.log", "archive-put": "archive-put.log", "verify": "lean-verify.log"}
+
+
+def measure(audit: Path, all_stamps: list[dict]) -> dict:
     """``audit``'s members' seconds: a record a member with a session, in the members' order."""
     summary = json.loads(text(audit / "summary.json") or "{}")
     named = {e["k"]: e for e in summary.get("members", []) if isinstance(e, dict) and "k" in e}
     waits = {v.get("sigma"): v.get("session_s") for v in (summary.get("timing") or {}).values() if isinstance(v, dict)}
     members = []
     for k in members_of(audit):
-        at = found(audit, k, all_stamps)
-        sigma = live(text(audit / f"session-m{k}" / "prove.log")).get("sigma")
-        rec = {"k": k, "template": named.get(k, {}).get("template"), "n": named.get(k, {}).get("n"), "bytes": sizes(audit, k),
-               "starts_ns": {name: x and x["ns"] for name, x in at.items()},
-               "prover_exit_ns": ended(audit / f"session-m{k}" / "prove.log"),
-               "session": {**session(audit, k, at), "session_s": waits.get(sigma) if sigma else None}, "lean": lean(audit, k, at)}
-        if real is not None:
-            rec["alone"] = alone(audit, k, at, real, reps)
-        members.append(rec)
+        at, s = found(audit, k, all_stamps), audit / f"session-m{k}"
+        sigma = live(text(s / "prove.log")).get("sigma")
+        members.append({"k": k, "template": named.get(k, {}).get("template"), "n": named.get(k, {}).get("n"),
+                        "bytes": sizes(audit, k), "starts_ns": {name: x and x["ns"] for name, x in at.items()},
+                        "ends_ns": {name: ended(s / log) for name, log in LOGS.items()},
+                        "session": {**session(audit, k, at), "session_s": waits.get(sigma) if sigma else None},
+                        "lean": lean(audit, k, at)})
     for a, b in zip(members, members[1:]):
-        a["to_next_member_s"] = sub(b["starts_ns"]["serve"], a["prover_exit_ns"])
+        a["to_next_member_s"] = sub(b["starts_ns"]["serve"], a["ends_ns"]["prove"])
     return {"audit": audit.name, "firewall": bool(summary.get("firewall")), "stamped": bool(all_stamps),
             "staging": summary.get("staging"), "members": members}
+
+
+def readers(audit: Path, got: dict, all_stamps: list[dict], real: dict, reps: int) -> bool:
+    """Adds each member's readers run alone (`alone`) to `measure`'s ``got``; False when one could not be run at all."""
+    ok = True
+    for rec in got["members"]:
+        try:
+            rec["alone"] = alone(audit, rec["k"], found(audit, rec["k"], all_stamps), real, reps)
+        except Exception as e:  # noqa: BLE001  (the audit's own seconds are kept whatever a reader's command does)
+            rec["alone"], ok = {"error": repr(e)[-400:]}, False
+    return ok
 
 
 def main(argv=None) -> int:
@@ -341,14 +355,20 @@ def main(argv=None) -> int:
     if not found_audits:
         print(f"member_seconds: no audit under {a.root} (a directory holding session-m<k>/)", file=sys.stderr)
         return 1
+    ok = True
     for audit in found_audits:
-        got = measure(audit, all_stamps, real, a.reps)
+        got = measure(audit, all_stamps)
         (audit / "member-seconds.json").write_text(json.dumps(got, indent=1, sort_keys=True))
+        if real is not None:
+            ok = readers(audit, got, all_stamps, real, a.reps) and ok
+            (audit / "member-seconds.json").write_text(json.dumps(got, indent=1, sort_keys=True))
         print("MEMBER-SECONDS " + json.dumps({"audit": audit.name, "members": [
             {"k": r["k"], "template": r["template"], "before_clock_s": r["session"]["before_clock_s"],
              "verifier_ahead_s": r["session"]["verifier_ahead_s"], "e2e_s": r["session"]["e2e_s"],
              "before_first_check_s": r["lean"]["before_first_check_s"], "check_s": r["lean"]["check_s"]} for r in got["members"]]}))
-    return 0
+    if not ok:
+        print("member_seconds: a member's readers could not be run alone (its `alone` is the error)", file=sys.stderr)
+    return 0 if ok else 1
 
 
 if __name__ == "__main__":
