@@ -72,6 +72,7 @@ from verity.protocols.pouw.verifier.audit import (
 from verity.protocols.pouw.verifier.coins import Challenger, CoinCommitment
 from verity.protocols.pouw.verifier.protocol import Context as UnitContext
 from verity.protocols.pouw.verifier.protocol import DomainError, Matmul, Shape
+from verity.protocols.pouw.verifier.serving import SCHEDULES
 
 from verity_vllm.protocols.interface import Context, Option, Target
 from verity_vllm.protocols.pouw import circuit as PC
@@ -232,7 +233,6 @@ class Settings:
         kernel, cubin = raw.get("kernel"), raw.get("cubin")
         if any(p is not None and not isinstance(p, str) for p in (kernel, cubin)):
             raise ValueError("pouw settings 'kernel' and 'cubin' are path strings")
-        from verity.protocols.pouw.verifier.serving import SCHEDULES
         schedule = raw.get("schedule", "serial")
         if schedule not in SCHEDULES:
             raise ValueError(f"pouw setting 'schedule' is one of {', '.join(SCHEDULES)}")
