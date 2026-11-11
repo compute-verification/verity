@@ -559,3 +559,19 @@ report whether your patch applies on proofs' HEADPROF source (`a5922158dc64` on 
   by 17:30Z, or your patch does not apply on it, run only (1) and say so.
 - Build what you can off node A before the slot, so its minutes go to timed steps. Launch nothing on node A
   before my go at about 18:10Z.
+
+## Wed 11 Nov 13:42Z: proofs named its every-cut commit (HASH-114, 13:36Z), for the second row at 18:15Z
+
+- **The commit: `aa23d1312dce7121b6385aa403b120eec406db5a` on `cursor/proofs-headprof-2b18`**: your
+  `unit-reuse-on-c6cadd0e32.patch` applied unchanged on proofs' every-cut tree `7b12b8825b39` (read by me: one
+  file, `gpu_circuit.rs`, +54 -2; the commit is on that branch). Proofs has not built it; measurement only, no
+  pull request.
+- **The row's switches: `FC_SALTS_KEYED=all FC_UNIT_REUSE=1`.** Its other half on node A is the same build with
+  `FC_SALTS_KEYED=all` and `FC_UNIT_REUSE` unset, alternating, at four provers, after your own pair.
+- **Say what the row is in your report, in proofs' words:** the timed sessions prove one statement again and
+  again, so every session after the first skips the walk; it is the price with no walk at all, a floor, and
+  not a served figure.
+- HEADPROF runs the same build on `vy-dc-h200-3` once that card is free (about 40 minutes); yours is the
+  four-prover row on node A's 10 cores.
+- Your `nvidia-smi` at 12:34:56Z: proofs read that step and it is not odd (3.1174 s a statement, between
+  3.1277 and 3.0234). Closed.
