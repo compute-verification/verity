@@ -94,7 +94,7 @@ from verity_vllm.protocols.pouw.h1 import (commit as CT, prover as PV, records a
 from verity_vllm.protocols.pouw.h1.commit import calls_root
 from verity_vllm.protocols.pouw.h1.names import SALT_TAG, program_salt
 from verity_vllm.protocols.pouw.h1.records import numpy_of
-from verity_vllm.protocols.pouw.h1.requests import TABLE_NONCES, TABLE_TAGS, slots, table_leaves
+from verity_vllm.protocols.pouw.h1.requests import slots
 from verity_vllm.protocols.pouw.h1.static import FILL, Static, bind_all, graph_pad, utilization
 
 SCHEME = H.SCHEME
@@ -774,7 +774,7 @@ class H1Run:
             raise ValueError(refused)
 
 
-__all__ = ["CALLS_FILE", "CHALLENGER", "Call", "FILL", "H1Run", "IN_PROCESS", "Listener", "Opener", "PROGRAM", "PROGRAM_META", "RECORD", "SALT_TAG",
-           "SCHEME", "Static", "TABLE_TAGS", "TILE", "VllmInt8LinearH1", "bind_all", "calls_root", "check_tiles", "compiled",
-           "coordinate", "layout", "numpy_of", "padded", "program", "program_salt", "slots",
-           "table_leaves", "units", "utilization", "weight_root", "TABLE_NONCES", "WEIGHT_KEY"]
+__all__ = ["CALLS_FILE", "CHALLENGER", "Call", "FILL", "H1Run", "IN_PROCESS", "Listener", "Opener", "PROGRAM",
+           "PROGRAM_META", "RECORD", "SALT_TAG", "SCHEME", "Static", "TILE", "VllmInt8LinearH1", "bind_all", "calls_root",
+           "check_tiles", "compiled", "coordinate", "layout", "numpy_of", "padded", "program", "program_salt", "slots",
+           "units", "utilization", "weight_root", "WEIGHT_KEY"]
