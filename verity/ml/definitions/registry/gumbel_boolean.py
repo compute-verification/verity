@@ -3,6 +3,7 @@ And/Xor/Not circuits.
 
     GumbelStreamKey_v2      (seed, pos: Array<64>) -> Array<32>                          word view: GumbelStreamKey_v1
     NvLogf_v3               (a: Array<32>) -> Array<32>                                  word view: NvLogf_v2
+    NvLogf_v5               (a: Array<32>) -> Array<32>                                  word view: NvLogf_v4
     GumbelSelectF32_v2{V}   (logits: Array<V, Array<32>>, seed, pos: Array<64>, temp: Array<32>) -> Array<32>
                                                                                          word view: GumbelSelectF32_v1{V}
 
@@ -11,6 +12,9 @@ And/Xor/Not circuits.
 ``__nv_log1pf`` and ``__nv_logf`` with FTZ (`nv_log1pf`, `nv_logf`: `softmax`'s FTZ f32 operations step for step, the
 toward-zero add `fp.f32_add`'s ``rz``; ``f32(e) * 2^-23`` and ``fma(f32(e), 2^-23, i0)`` written as the integers they equal
 exactly), every NaN result 0x7FFFFFFF as `NvLogf_v2`'s: the noise never reaches one, so it is `GumbelNoiseLane_v1`'s.
+`NvLogf_v5` is libdevice's ``__nv_logf`` without flush-to-zero, which torch's CUDA `log` calls: `nv_logf` with the 2^23
+scaling of an input below FLT_MIN `fp.f32_mul`'s, so a subnormal's log is finite; its word view `NvLogf_v4` is its reference
+alone, registered nowhere.
 
 A product by a constant is linear in its operand's bits, so through Philox's rounds every bit's form (`forms.L`) grows: one
 trace of ten rounds holds gigabytes of them. The stream key and the lane are therefore Calls of pieces traced on their own,
@@ -49,14 +53,15 @@ from verity.ml.circuits.boolean.forms import NOT, OR, ZERO, add, and_reduce, con
 from verity.ml.circuits.ops.boolean.scalar import gt_u, select
 from verity.ml.circuits.ops.boolean.softmax import f32_add_ftz, f32_fma_ftz, f32_mul_ftz, ftz
 from verity.ml.circuits.boolean.trace import definition
+from verity.ml.definitions.evidence import EVIDENCE
 from verity.ml.definitions.registry import sampling as SM
 from verity.ml.definitions.registry import topp_word_gates as TG
 from verity.ml.definitions.registry.sampling_boolean import F32ArgmaxStage, G, GB, argmax_calls, traced_family
 
 __all__ = ["LANE_ROUNDS", "GumbelLane", "GumbelLaneHead", "GumbelLaneRounds", "GumbelLaneTail", "GumbelNoise", "GumbelNoiseGroup", "GumbelSelectF32",
-           "GumbelSetup", "GumbelStreamKey", "GumbelStreamKeyHead", "GumbelStreamKeyTail", "NvLogf", "gumbel_noise",
-           "gumbel_select_calls", "lane_keys", "lane_products", "lane_rounds", "nv_log1pf", "nv_logf", "philox_round",
-           "round2_lows", "stream_keys", "tl_rand"]
+           "GumbelSetup", "GumbelStreamKey", "GumbelStreamKeyHead", "GumbelStreamKeyTail", "NvLogf", "NvLogfV5",
+           "gumbel_noise", "gumbel_select_calls", "lane_keys", "lane_products", "lane_rounds", "nv_log1pf", "nv_logf",
+           "nv_logf_no_ftz", "philox_round", "round2_lows", "stream_keys", "tl_rand"]
 
 BIT = BL.BIT
 U32 = Array(32, BIT)
@@ -202,12 +207,13 @@ def _poly(C, coeffs, f):
     return f32_fma_ftz(C, r, f, f)
 
 
-def nv_logf(C, a):
-    """`sampling.nv_logf_gpu` (`NvLogf_v2`): libdevice ``__nv_logf`` with FTZ, every NaN result 0x7FFFFFFF."""
+def nv_logf(C, a, ftz: bool = True):
+    """`sampling.nv_logf_gpu` (`NvLogf_v2`): libdevice ``__nv_logf`` with FTZ, every NaN result 0x7FFFFFFF; with `ftz` False its
+    build without flush-to-zero (`NvLogf_v4`), whose 2^23 scaling of an input below FLT_MIN is `fp.f32_mul`'s."""
     s, e = a[31], a[23:31]
     nan = C.AND(and_reduce(C, e), or_reduce(C, a[:23]))
     small = mux(C, s, [NOT(nan)], [NOT(or_reduce(C, e))])[0]      # a < FLT_MIN as values (every negative, +0, subnormals)
-    a2 = select(C, small, f32_mul_ftz(C, a, _c(SM.TWO_P23_BITS)), a)
+    a2 = select(C, small, (f32_mul_ftz if ftz else fp.f32_mul)(C, a, _c(SM.TWO_P23_BITS)), a)
     e9 = sub(C, a2, _c(1059760811), 32)[0][23:]                   # (a2 - 0x3F2AAAAB) & 0xFF800000, as a 9-bit integer
     m = a2[:23] + sub(C, a2[23:], e9, 9)[0]
     k = sub(C, e9 + [e9[8]], [small, small, small, ZERO, small] + [ZERO] * 5, 10)[0]   # fma(f32(e), 2^-23, small ? -23 : 0)
@@ -247,6 +253,21 @@ def gumbel_noise(C, u):
 
 NvLogf = definition("NvLogf", 3, nv_logf, (("a", F32),), F32, word=TG.NvLogfV2,
                     doc="libdevice __nv_logf (FTZ) on bits: NvLogf_v2 (every NaN result 0x7FFFFFFF)")
+
+
+def nv_logf_no_ftz(C, a):
+    """`nv_logf` of libdevice's build without flush-to-zero."""
+    return nv_logf(C, a, ftz=False)
+
+
+_LOGF = EVIDENCE["cc12_logf_capture"]
+NvLogfV5 = definition("NvLogf", 5, nv_logf_no_ftz, (("a", F32),), F32, word=SM.NvLogfV4,
+                      doc="libdevice __nv_logf without flush-to-zero on bits: NvLogf_v4 (every NaN result 0x7FFFFFFF)",
+                      conformance="exact-model-tested: every word of torch.log's f32 CUDA kernel (log_kernel_cuda, libdevice "
+                                  "__nv_logf without flush-to-zero) on cc 12.0 with 188 SMs (torch 2.14.0+cu130) at 4,194,320 "
+                                  "inputs, 16 specials (±0, ±inf, a NaN, three subnormals, FLT_MIN, ±1 and five words at expf's "
+                                  "overflow and underflow edges), 2^21 random bit patterns and 2^21 words from +0 to +inf, every "
+                                  f"NaN result 0x7FFFFFFF as here (capture {_LOGF['run_record']}, fit {_LOGF['fit']})")
 
 GumbelStreamKeyHead = definition("GumbelStreamKeyHead", 1, stream_key_head, (("seed", I64), ("pos", I64)), Tuple(C4, K4, K4),
                                  doc="Rounds 0-4 of the stream key's Philox4x32-10 (counter (pos, 0, 0), key seed): the counter, "
