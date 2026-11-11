@@ -676,7 +676,7 @@ patterns = ['(?i:\bcertifier windows?\b)', '(?i:\b(?:promotion|partial|device|ro
             '\bthe firewall(?: serves nothing more of it|\x27s fault)',
             '\btest_firewall_(?:release_agreement|release_protocol|session_loop)\b',
             '(?:(?<=\()|(?<=type == )|(?<=messages = \[))\x22Firewall\x22|\bFirewall(?= \{sha512)',
-            '\bwrong_units\b', '\bproof_unit\b', '[\x22\x27]proof-unit[\x22\x27]', '\bservice/firewall\b',
+            '\bwrong_units\b', '\bproof_unit\b', '[\x22\x27]proof-unit[\x22\x27]', '\b(?:service|verifier)/firewall\b',
             'N, the (?:window|round)\x27s proof units', 'one proof unit per registration: the link-window',
             'T proof units per registration, unit t the link-window\x27s bucket row t',
             '\bRemote\.Draw\b', '\bRemoteDraw\b', '\bRemote(?:Held|Audit)[./]Draw(?:Meets)?\b', '\b(?:to)?DrawnLayer\b',
