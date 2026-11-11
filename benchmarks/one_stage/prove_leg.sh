@@ -30,12 +30,12 @@ keep_leg() {
 trap 'keep_leg; rm -rf "$W"' EXIT
 trap 'exit 143' TERM INT HUP
 export PATH=$HOME/.elan/bin:$PATH
-export PYTHONPATH=$SRC:$SRC/verity/ml/flock/python:$SRC/integrations/vllm:$SRC/tools/verity/circuit_check/src:$SRC/benchmarks/numerical/python
+export PYTHONPATH=$SRC:$SRC/verity/protocols/flock/prover/python:$SRC/adapters/vllm:$SRC/tools/verity/circuit_check/src:$SRC/benchmarks/numerical/python
 # the prover's worker threads overflow the default stack on wide units
 export RUST_MIN_STACK=${RUST_MIN_STACK:-67108864}
 setup
 SPD=; [ "${FLOCK_CHALLENGER:-0}" = 1 ] && SPD=sampled-proofs-difftest
-(cd verity/core/service/spot && lake build sampled-proofs-verifier $SPD) > "$OUT/build-sampled-proofs.log" 2>&1 \
+(cd verity/protocols/spot/verifier/lean && lake build sampled-proofs-verifier $SPD) > "$OUT/build-sampled-proofs.log" 2>&1 \
   || { tail -40 "$OUT/build-sampled-proofs.log"; exit 7; }
 FW=
 if [ "${LEG_FIREWALL:-1}" = 1 ]; then
