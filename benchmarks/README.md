@@ -3,7 +3,7 @@
 `benchmarks/` holds measurement only: each directory measures something, or holds the data measurements are computed
 against. A benchmark is never the verifier, writes no verdict and computes no number a guarantee reads, and
 nothing outside `benchmarks/` reads it. End-to-end demos, what a person runs to serve and audit a workload, are in
-`examples/`. This file is the directory's interface: its entry points, the shared harness, what a benchmark may import
+`demos/`. This file is the directory's interface: its entry points, the shared harness, what a benchmark may import
 and write, and the index of every directory.
 
 ## Entry points
