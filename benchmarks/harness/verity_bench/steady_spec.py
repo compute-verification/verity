@@ -24,8 +24,9 @@ Standard library and `verity_config` only: the node side reads it too.
     period = 4            # optional: the sessions a prover's filings repeat over, where they file in bursts
     staged = "/..."       # optional: a statement already on the node, proved from a copy checked against `pin`
 
-**A point's timed sessions** (`timed_sessions`) are the spec's `sessions`, and for a row with a `period` the next count
-whose rated window holds a whole number of bursts, a multiple of three: a burst is `period` sessions a prover, and a
+**A point's timed sessions** (`timed_sessions`) are the spec's `sessions`, at least the eight a prover the timing script
+times whatever it is told (`FLOOR`), and for a row with a `period` the next count whose rated window holds a whole
+number of bursts, a multiple of three: a burst is `period` sessions a prover, and a
 window or a third of one that cuts a burst reads the burst's phase and not the rate. The period is declared, never read
 off the run's first sessions: the count is then fixed before the run and is the point's. The node side writes what it
 used in the row (`BURSTS`).
@@ -74,6 +75,8 @@ STAGER = "benchmarks/served_units/stage.py"
 TIMER = "benchmarks/one_stage/server_rate.py"
 #: the node side's exit code for a point that was timed and whose row isn't a passed point; 0 is a passed point's
 NOT_PASSED = 3
+#: the sessions a prover the timing script times at least, whatever its `--sessions` says
+FLOOR = 8
 
 
 @dataclass(frozen=True)
@@ -161,9 +164,11 @@ def window_gaps(sessions: int, provers: int) -> int:
 
 
 def timed_sessions(sessions: int, provers: int, period: int | None) -> int:
-    """The sessions a point times: `sessions`, and with a `period` the next count whose rated window is a whole number
-    of bursts and a multiple of three of them, so the window and each third of it (`steady.thirds`) hold whole bursts."""
+    """The sessions a point times: `sessions`, at least the timing script's `FLOOR` a prover, and with a `period` the
+    next count whose rated window is a whole number of bursts and a multiple of three of them, so the window and each
+    third of it (`steady.thirds`) hold whole bursts."""
 
+    sessions = max(sessions, FLOOR * provers)
     if period is None:
         return sessions
     three = 3 * period * provers

@@ -280,6 +280,8 @@ BURSTY = (1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 9.0)
 
 def test_a_declared_period_sizes_the_timed_sessions_so_the_window_and_its_thirds_hold_whole_bursts():
     assert [SP.timed_sessions(120, provers, None) for provers in (1, 2, 4)] == [120, 120, 120]
+    assert [SP.timed_sessions(16, provers, None) for provers in (1, 2, 4)] == [16, 16, 32], "the timing script's floor"
+    assert SP.timed_sessions(16, 4, 4) == 56
     assert [SP.timed_sessions(120, provers, 4) for provers in (1, 2, 4)] == [122, 124, 152]
     assert SP.timed_sessions(124, 2, 4) == 124 and SP.timed_sessions(125, 2, 4) == 148 and SP.timed_sessions(16, 2, 4) == 28
     for sessions, provers, period in [(120, 1, 4), (120, 2, 4), (120, 4, 4), (16, 2, 4), (40, 3, 5), (17, 2, 1)]:
@@ -966,6 +968,7 @@ def test_the_node_side_reads_the_environment_through_declared_settings_and_names
 
     root = Path(__file__).resolve().parents[3]
     assert (root / SP.STAGER).is_file() and (root / SP.TIMER).is_file() and SP.TIMER in SP.CLOSURE
+    assert f"timed_n = max(a.sessions, {SP.FLOOR} * K)" in (root / SP.TIMER).read_text(), "the floor a point's count takes"
     assert (root / "benchmarks/harness/steady_point.sh").is_file() and STEADY_POINT.command[-1].endswith("steady_point.sh")
     assert {SP.STAGER, SP.TIMER} <= set(STEADY_POINT.closure)
     assert all(any(path.startswith(pattern.removesuffix("/**")) for pattern in STEADY_POINT.closure) for path in SP.CLOSURE)

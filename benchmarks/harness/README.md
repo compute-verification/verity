@@ -220,7 +220,8 @@ sessions a prover runs `ahead`, the GPU `driver` and `cuda` toolkit versions, a 
 counts (a point each), the `warm` sessions a prover and, optionally, `period` and `staged`, a statement already on the
 node. Loading is as strict as a vLLM spec's.
 
-**Timed sessions.** A point times the spec's `sessions`. Where a row's sessions file in bursts, its `period` says the
+**Timed sessions.** A point times the spec's `sessions`, and at least eight a prover, the fewest the timing script
+times. Where a row's sessions file in bursts, its `period` says the
 sessions a prover's filings repeat over (a burst is `period` times the provers), and the point times the next count
 whose rated window is a whole number of bursts and a multiple of three of them: a window, or a third of one, that cuts
 a burst reads the burst's phase and not the rate. The period is declared, not read off the run's first sessions, so
