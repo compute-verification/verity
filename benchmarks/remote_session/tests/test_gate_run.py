@@ -1,7 +1,8 @@
 """`gate_run.sh --dry-run`: the prover run it would launch and what its gate steps are given. HOST_GIB is the node's
 `--host-gib` and that much more of the lease's host memory, and SESSIONS, WINDOWS, WINDOW_MS and SAMPLES reach gate.sh
-in place of PACED; with none of them the prover's run and the gate steps' variables are the launcher's defaults. The
-launcher is a copy in a throwaway repository whose origin's main names one role; `uv` is a stub on PATH that records
+in place of PACED; with none of them the prover's run and the gate steps' variables are the launcher's defaults. A
+HOST_GIB that isn't whole GiB, and a form gate.sh refuses, end it before anything is written or run. The launcher is
+a copy in a throwaway repository whose origin's main names one role; `uv` is a stub on PATH that records
 each `research run` and answers with a run id, so nothing is launched."""
 from __future__ import annotations
 
@@ -97,4 +98,16 @@ def test_a_dry_run_prints_the_provers_run_with_the_host_part_and_hands_the_sessi
 def test_a_host_part_that_is_not_whole_gib_is_refused_before_anything_is_written_or_run(tmp_path, host_gib):
     p, prover, calls = dry_run(tmp_path, HOST_GIB=host_gib)
     assert p.returncode == 3 and f"HOST_GIB is {host_gib}: the store's host part in whole GiB, 0 for none" in p.stdout
+    assert prover == [] and calls == [] and not (tmp_path / "home" / ".research").exists()
+
+
+@pytest.mark.parametrize("given, why", [
+    ({**FORM, "PACED": "1:1000:2773:7"}, "the host's run takes one form, so unset SESSIONS or both of the others"),
+    ({**FORM, "PACE_PASS_MS": "46"}, "the host's run takes one form, so unset SESSIONS or both of the others"),
+    ({"WINDOWS": "7", "WINDOW_MS": "60000", "SAMPLES": "33273"},
+     "SESSIONS is unset: set it, or unset them for PACED's sessions"),
+], ids=["sessions-and-paced", "sessions-and-a-pace", "windows-without-sessions"])
+def test_both_forms_of_the_hosts_run_or_half_of_one_is_refused_before_anything_is_written_or_run(tmp_path, given, why):
+    p, prover, calls = dry_run(tmp_path, **given)
+    assert p.returncode == 3 and why in p.stdout, p.stdout + p.stderr
     assert prover == [] and calls == [] and not (tmp_path / "home" / ".research").exists()

@@ -6,7 +6,7 @@ told to rerun at its pin; one pinned off it, to repin. Under DRY=1 nothing reach
 PATH; COMMIT is the head of a throwaway repository whose bare origin's main holds it and its parent.
 
 `gate.sh host`: the run it asks the verifier host for is PACED's paced sessions, or with SESSIONS that many sessions of
-one coin a window, and never both."""
+one coin a window, and never both: every verb refuses both forms at once, and `form` does nothing else."""
 from __future__ import annotations
 
 import hashlib
@@ -207,12 +207,14 @@ PACED = ("--paced 1:60000:33273:2 1:60000:33273:2 1:1000:2773:7 1:1000:2773:7 --
 
 def host(tmp_path: Path, verb: str = "host", **form: str) -> tuple[subprocess.CompletedProcess, list[str] | None]:
     """gate.sh VERB under DRY=1 with these of FORM's variables and no other: its result, and the requests it would
-    have sent, each without its time and its host (None when it wrote no gate.requests)."""
+    have sent, each without its time and its host (None when it wrote no gate.requests). `form` gets no OUT."""
     out = tmp_path / "out"
     out.mkdir()
-    env = {k: v for k, v in os.environ.items() if k not in FORM + REQUEST}
-    env |= {"OUT": str(out), "DRY": "1", "PERIOD": "ma-remote-coins-9", "PIN": PIN, "GATE_KEY": str(tmp_path / "key"),
+    env = {k: v for k, v in os.environ.items() if k not in FORM + REQUEST + ("OUT",)}
+    env |= {"DRY": "1", "PERIOD": "ma-remote-coins-9", "PIN": PIN, "GATE_KEY": str(tmp_path / "key"),
             "COMMIT": "0" * 40, **form}
+    if verb != "form":
+        env["OUT"] = str(out)
     p = subprocess.run(["bash", str(GATE), verb], cwd=tmp_path, env=env, capture_output=True, text=True)
     sent = out / "gate.requests"
     return p, [line.split(" ", 2)[2] for line in sent.read_text().splitlines()] if sent.exists() else None
@@ -238,7 +240,7 @@ def test_the_hosts_run_is_asked_for_paced_sessions_or_with_sessions_for_one_coin
     assert sent == [f"run --peer vy-nebius-2 --port 7951 --period ma-remote-coins-9 --pin {PIN} {want}"]
 
 
-@pytest.mark.parametrize("verb", ["host", "probe", "fire"])
+@pytest.mark.parametrize("verb", ["host", "probe", "fire", "form"])
 @pytest.mark.parametrize("form, why", [
     ({"SESSIONS": "1", "PACED": "1:1000:2773:7"}, "the host's run takes one form, so unset SESSIONS or both of the others"),
     ({"SESSIONS": "1", "PACE_PASS_MS": "85"}, "the host's run takes one form, so unset SESSIONS or both of the others"),
@@ -249,3 +251,12 @@ def test_both_forms_at_once_or_a_window_without_sessions_is_refused_before_any_r
     p, sent = host(tmp_path, verb, **form)
     assert p.returncode == 2 and why in p.stdout, p.stdout + p.stderr
     assert sent is None
+
+
+@pytest.mark.parametrize("form", [{}, {"PACED": "1:1000:2773:7", "PACE_PASS_MS": "46"}, {"SESSIONS": "1"},
+                                  {"SESSIONS": "1", "WINDOWS": "7", "WINDOW_MS": "60000", "SAMPLES": "33273"}],
+                         ids=["default", "paced", "sessions-alone", "one-coin-a-window"])
+def test_form_passes_one_form_and_writes_and_asks_nothing(tmp_path, form):
+    p, sent = host(tmp_path, "form", **form)
+    assert (p.returncode, p.stdout, p.stderr, sent) == (0, "", "", None)
+    assert list((tmp_path / "out").iterdir()) == []

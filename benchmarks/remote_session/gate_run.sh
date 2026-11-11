@@ -47,7 +47,7 @@
 # T_MS/(K·PACE_PASS_MS) groups, so where the node's pass is longer than it, as a larger arena's is, the groups take
 # longer than the stretch. No session is late for it. SESSIONS asks the host for that many sessions of one coin a window
 # in place of PACED's, again one a session of PLAN: WINDOWS windows of WINDOW_MS with SAMPLES openings each (gate.sh's
-# `host`, which refuses both forms at once).
+# `host`). Both forms at once, or half of one, is refused before anything is written or run (gate.sh's `form`).
 # PROVER_RUN names a prover already launched for PERIOD,
 # which step 4 fires against (step 3 launches none); default the one `prover` recorded in PERIOD.env, which launches
 # step 3 alone, so the prover can take its slot before the hosts are pinned at COMMIT and the probe passes (its tree is
@@ -81,6 +81,7 @@ case $HOST_GIB in
   *[!0-9]*) echo "HOST_GIB is $HOST_GIB: the store's host part in whole GiB, 0 for none"; exit 3 ;;
 esac
 HOST_GIB=$((10#$HOST_GIB))
+bash "$HERE/gate.sh" form || exit 3
 LEASE_ON=${LEASE_ON:-} LEASE_MEM_GB=${LEASE_MEM_GB:-$((32 * ENGINES + HOST_GIB))} LEASE_BY=${LEASE_BY:-}
 LEASE_FROM=${LEASE_FROM:-}
 SLOTS=${SLOTS-/workspace/research/locks/gpu/slots} CHECKPOINT_WAIT_S=${CHECKPOINT_WAIT_S:-900} SLOT_WAIT_S=${SLOT_WAIT_S:-3600}
