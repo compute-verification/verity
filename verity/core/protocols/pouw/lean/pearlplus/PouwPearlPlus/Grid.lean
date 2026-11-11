@@ -1,4 +1,10 @@
-import PouwPearlPlus.Check
+module
+
+public import PouwPearlPlus.Check
+meta import PouwPearlPlus.Check
+meta import PouwPearlPlus.Credit
+meta import PouwPearlPlus.Run
+meta import PouwPearlPlus.Records
 
 /-!
 # The grid form of an accepted run's work (`verify_run.grid_work`)
@@ -21,6 +27,8 @@ window class's fixed load (`tieAt`, `Tied.load`) publishes its work in the grid 
 is held, and `check`'s work as it is where none is (the structural credit is defined by the class). A test instance's
 credits nothing in either form.
 -/
+
+@[expose] public section
 
 namespace PouwCheck.PearlPlus
 
