@@ -264,6 +264,31 @@ pub fn keep_rows() -> bool {
     keep().load(Ordering::Relaxed)
 }
 
+static KEEP_HUGE: OnceLock<AtomicBool> = OnceLock::new();
+
+fn keep_huge() -> &'static AtomicBool {
+    KEEP_HUGE.get_or_init(|| AtomicBool::new(std::env::var("FC_UNIT_KEEP").as_deref() != Ok("small")))
+}
+
+/// Whether a kept vector asks for huge pages when it is mapped ([`crate::huge_pages::advise_huge`]); `FC_UNIT_KEEP=small`:
+/// it is mapped as the prover's page policy has every other allocation.
+pub fn set_keep_huge(on: bool) {
+    keep_huge().store(on, Ordering::Relaxed);
+}
+
+/// A vector with room for `n` rows that a walk will keep: one mapping, asking for huge pages unless told not to.
+fn fresh(n: usize) -> Vec<u64> {
+    let v: Vec<u64> = Vec::with_capacity(n);
+    if keep_huge().load(Ordering::Relaxed) {
+        crate::huge_pages::advise_huge(v.as_ptr() as *mut u8, 8 * v.capacity());
+    }
+    v
+}
+
+fn kept_size(n: usize) -> bool {
+    keep_rows() && n * 8 >= crate::huge_pages::MIN_BYTES
+}
+
 /// Sets [`keep_rows`]; turned off, the kept vectors are dropped.
 pub fn set_keep_rows(on: bool) {
     keep().store(on, Ordering::Relaxed);
@@ -288,11 +313,16 @@ impl RowWord for u64 {
                 v.resize(n, 0);
                 v
             }
+            None if kept_size(n) => {
+                let mut v = fresh(n);
+                v.resize(n, 0);
+                v
+            }
             None => vec![0; n],
         }
     }
     fn take(n: usize) -> Vec<u64> {
-        kept(n).unwrap_or_else(|| Vec::with_capacity(n))
+        kept(n).unwrap_or_else(|| if kept_size(n) { fresh(n) } else { Vec::with_capacity(n) })
     }
     /// Kept where it is a mapping of its own (glibc's largest mmap threshold); past [`KEPT_MAX`] it takes the place of a
     /// smaller one.
