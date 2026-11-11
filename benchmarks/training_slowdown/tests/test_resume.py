@@ -11,7 +11,7 @@ import signal
 
 import pytest
 import torch
-from synthetic import tiny_registry, write_config
+from synthetic import SCORE_REL, tiny_registry, write_config
 
 from training_slowdown import NOTHING, TOLD, VERSION, config, grade, run, starts, stop_record, told
 from training_slowdown.data import Data, Stream
@@ -33,10 +33,19 @@ def timeless(x, keyed: bool = True):
     return [timeless(v, keyed) for v in x] if isinstance(x, list) else x
 
 
+def scored(cp: dict) -> dict:
+    """A checkpoint to compare another job's with: its scores, the numbers the evaluator's forward passes gave (its
+    bpb and each float of its `score`), to within what two passes of one model may differ by (`SCORE_REL`), and every
+    other field, the digests of its state among them, as it is."""
+    def near(x):
+        return pytest.approx(x, rel=SCORE_REL) if isinstance(x, float) else x
+    return cp | {"bpb": near(cp["bpb"]), "score": cp["score"] and {k: near(v) for k, v in cp["score"].items()}}
+
+
 def assert_continues(whole: dict, cut: dict, at: int, keyed: bool = True) -> None:
     """`cut`, a job stopped and continued from step `at`, records what `whole`, the unbroken one, does: every step's
-    count, every checkpoint's digests and score, and everything else but its times, its segments and the route's
-    build, which the second segment ran and counted again."""
+    count, every checkpoint's digests, its score to within `SCORE_REL` (`scored`), and everything else but its
+    times, its segments and the route's build, which the second segment ran and counted again."""
     again = cut["setup"]["macs"] - whole["setup"]["macs"]
     assert [(s["first"], s["steps"]) for s in cut["segments"]] == [(0, at), (at, len(whole["steps"]) - at)]
     assert [(s["first"], s["steps"]) for s in whole["segments"]] == [(0, len(whole["steps"]))]
@@ -44,7 +53,8 @@ def assert_continues(whole: dict, cut: dict, at: int, keyed: bool = True) -> Non
     assert again == whole["setup"]["macs"] > 0
     a, b = timeless(whole, keyed), timeless(cut, keyed)
     assert b["steps"] == a["steps"] and [s["step"] for s in b["steps"]] == list(range(len(b["steps"])))
-    assert [cp | {"macs": cp["macs"] - again * (cp["step"] >= at)} for cp in b["checkpoints"]] == a["checkpoints"]
+    assert [cp | {"macs": cp["macs"] - again * (cp["step"] >= at)} for cp in b["checkpoints"]] == [
+        scored(cp) for cp in a["checkpoints"]]
     assert b["structures"].items() >= a["structures"].items()
 
     def rest(rec):
@@ -343,7 +353,8 @@ def test_a_job_stopped_after_a_checkpoint_and_run_again_writes_the_unbroken_jobs
     from nothing, and from a `state.json` of another sha256, refused each time; and the stopped job again, told
     the sha256 of its `state.json`, which continues while its state directory, hidden from the route's process,
     still holds the state, writes the unbroken job's record in two segments, the first with the digests of the
-    state it kept, and removes the state."""
+    state it kept, and removes the state. Every checkpoint's state is the unbroken job's bit for bit; its score is
+    another forward pass's, so within `SCORE_REL`."""
     root, reg, path = tiny
 
     def job(out, state, cfg=path, *more):
@@ -415,5 +426,9 @@ def test_a_job_stopped_after_a_checkpoint_and_run_again_writes_the_unbroken_jobs
     assert cut["invalid"] == [] and cut["digest_key"] == so_far["digest_key"] != whole["digest_key"]
     assert [s.get("kept") for s in cut["segments"]] == [stated, None] and "kept" not in whole["segments"][0]
     assert_continues(whole, cut, at=2, keyed=False)
-    assert [cp["score"] for cp in cut["checkpoints"]] == [cp["score"] for cp in whole["checkpoints"]]
+    # the states are the unbroken job's bit for bit; their scores are two forward passes' each
+    states = [(cp["output_sha256"], cp["e_sha256"]) for cp in whole["checkpoints"]]
+    assert [(cp["output_sha256"], cp["e_sha256"]) for cp in cut["checkpoints"]] == states and len(set(states)) == 4
+    assert [cp["score"] for cp in cut["checkpoints"]] == [scored(cp)["score"] for cp in whole["checkpoints"]]
+    assert all(cp["score"]["bpb"] == cp["bpb"] > 0 for cp in cut["checkpoints"])
     assert sorted(p.name for p in (tmp_path / "cut").iterdir()) == ["e", "run.json"]
