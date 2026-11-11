@@ -3006,6 +3006,30 @@ def test_under_gate_check_a_suite_failed_while_the_shards_run_ejects_its_lone_su
     assert rebuilt["members"] == [2] and rebuilt["base"] == main
 
 
+@pytest.mark.parametrize("killed", [True, False])
+def test_under_gate_check_a_step_killed_while_the_shards_run_is_no_early_red(env, monkeypatch, killed):
+    """lean-audit fails in one shard while the others run.  Its log saying a process of its own was killed (`KILLED_SAYS`,
+    the kernel replay's exit 137) is what the reading at the check's end takes as infra, so the early reading waits for the
+    end; a failure that says no such thing is an early red, and the lone member's is run again."""
+    from research.drive import KILLED_SAYS
+
+    main = env.main()
+    env.put(1, {"1.txt": "1\n"})
+    loop, runs = _check(env, monkeypatch, batch=1, depth=1)
+    _, built, _ = loop.tick()
+    sha = built["sha"]
+    runs.end(main)
+    log = f"replay of Security: {KILLED_SAYS} (exit 137)\n" if killed else "error: Security/Foo.lean:3:0: type mismatch\n"
+    runs.fail(sha, 1, step="lean-audit", log=log, at=T0 + 60)
+    env.clock = T0 + 300
+    logged = loop.tick()
+    early = [x for x in logged if x.get("sha") == sha and "early" in (x.get("record") or {})]
+    if killed:
+        assert not {"rerun", "eject", "drop"} & {*_acts(logged)} and not early and not env.cancelled
+    else:
+        assert early and {"rerun", "eject", "drop"} & {*_acts(logged)}
+
+
 def test_under_gate_check_an_early_red_is_compared_with_nothing_and_its_drop_cancels_graph2_s_check(env, monkeypatch):
     """graph2's check, in shadow, ended before the check that gates, which then fails a suite while its other shards run: that
     check hasn't ended, so graph2's verdict is logged as the one that came first and no line compares it with the fail so

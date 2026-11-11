@@ -381,6 +381,8 @@ def _early(driver: Driver, rec: dict, states: dict) -> Verdict:
     tests: dict[str, set[str]] = {}
     at: list[float] = []
     for d in dirs:
+        if implicated(d) is None and killed(d):
+            continue                                     # a kill, as `judge` reads it at the end: infra, never an early red
         ended = {st.get("step"): st for st in step_records(d)}
         for s in _gate(driver, rec):
             if (st := ended.get(s)) is not None:
