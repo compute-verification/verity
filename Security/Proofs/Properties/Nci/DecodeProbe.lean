@@ -132,4 +132,35 @@ theorem eq_domainArr : domainError (.arr #[.str "a", .null]) = none := by simp [
 
 theorem eq_ty : (Ty.ofJson (.arr #[.str "Tuple", .arr #[]])).toOption.isSome = true := by simp [Ty.ofJson]
 
+/-! ### Controls: a recursion by well-founded order on a parsed text, written here -/
+
+/-- The depth of a parsed text's arrays, by well-founded recursion on the text. -/
+def depthProbe (j : Json) : Nat :=
+  match j with
+  | .arr a => (Array.range a.size).attach.foldl
+    (fun n i => max n (1 + depthProbe (a[i.1]'(Array.mem_range.1 i.2)))) 0
+  | _ => 0
+termination_by j
+decreasing_by exact sizeOf_lt_of_mem_arr (Array.getElem_mem _)
+
+/-- The same with one more argument, as `domainError` has its path. -/
+def depthProbe2 (j : Json) (k : Nat := 0) : Nat :=
+  match j with
+  | .arr a => (Array.range a.size).attach.foldl
+    (fun n i => max n (depthProbe2 (a[i.1]'(Array.mem_range.1 i.2)) (k + 1))) k
+  | _ => k
+termination_by j
+decreasing_by exact sizeOf_lt_of_mem_arr (Array.getElem_mem _)
+
+theorem stop_sizeOf : sizeOf Json.null = 1 := by decide +kernel
+
+theorem stop_wfJson : depthProbe .null = 0 := by decide +kernel
+
+theorem stop_wfJsonArr : depthProbe (.arr #[.null]) = 1 := by decide +kernel
+
+theorem stop_wfJson2 : depthProbe2 .null = 0 := by decide +kernel
+
+theorem eq_tyPure : (Ty.ofJson (.arr #[.str "Tuple", .arr #[]])).toOption.isSome = true := by
+  simp [Ty.ofJson, pure, Except.pure, Except.toOption]
+
 end Flock.Program.Closed

@@ -20,8 +20,9 @@ and leave out.
 * **The clauses are of the instance's two texts.** The Program and the parsed text `Served` binds are the ones the
   instance's texts decode and parse to, so a served check's slots are `NciCheck.RecordText.slot` of them and each row
   it holds is one `NciCheck.RecordText.declared` declares, for that reason (`tied_of_served`). Two checks of one
-  instance that both hold a row hold it for one declared reason (`held_declared_unique`); an opening's pin is not
-  part of that reason (`opened_pin`).
+  instance give every unit one slot (`slot_unique`), and where both hold a row they hold it for one declared reason
+  (`held_declared_unique`); a check that holds a row for another reason is served by no circuit
+  (`not_served_of_undeclared`). An opening's pin is not part of that reason (`opened_pin`).
 * **Where the readers refuse.** On a text that does not name the Program, `templatesOf` refuses, so `slot` and
   `declared` are none everywhere (`slot_noProgram`, `declared_noProgram`), and a served check has no slot and holds
   no row (`served_noProgram`). So a check with a slot, or one that holds a row, is served on no such text
@@ -207,6 +208,21 @@ theorem held_declared_unique {F G : Form} {c : F.Case} {c' : G.Case} {d d' : Ver
   have h := (tied_of_served hd' hdec hparse).2 r x' hx'
   rw [hheld r x hx] at h
   exact Option.some.inj h
+
+/-- Two checks of one instance that are both served give every unit one slot. -/
+theorem slot_unique {F G : Form} {c : F.Case} {c' : G.Case} {d d' : Verity.RegisteredCircuit}
+    (hi : F.inst c = G.inst c') (hd : Served F c d) (hd' : Served G c' d') : F.slot c = G.slot c' := by
+  obtain ⟨P, doc, W, S, rs, at_, hdec, hparse, -, -, -, hslot, -⟩ := hd
+  rw [hi] at hdec hparse
+  exact hslot.trans (tied_of_served hd' hdec hparse).1.symm
+
+/-- A check that holds a row for a reason its text does not declare is served by no circuit. -/
+theorem not_served_of_undeclared {F : Form} {c : F.Case} {P : Prog} {doc : Json}
+    (hP : Flock.Program.decode (F.inst c).program.toUTF8 = .ok P)
+    (hdoc : Flock.JsonParse.parse (F.inst c).record = .ok doc) {r : Row} {x : Held} (hx : F.held c r = some x)
+    (hn : NciCheck.RecordText.declared P doc r ≠ some x.declared) (d : Verity.RegisteredCircuit) :
+    ¬ Served F c d :=
+  fun hd => hn ((tied_of_served hd hP hdoc).2 r x hx)
 
 /-- An opening's pin is not part of the reason the text declares. -/
 theorem opened_pin (name p a b : String) : (Held.opened name p a).declared = (Held.opened name p b).declared := rfl
