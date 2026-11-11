@@ -47,7 +47,7 @@ sys.path.insert(0, str(VE.parent / "word_codec"))
 import kv as KV            # noqa: E402  the codec's byte-exact CPU reference
 import kv_bench as KB      # noqa: E402  the stack's key derivation (SEED, lib_key)
 
-from verity.ml.circuits.ops.kv_cache import kv_cache_append_e4m3_word  # noqa: E402
+from verity.definitions.ops.kv_cache import kv_cache_append_e4m3_word  # noqa: E402
 
 SCHEMA = "verity/vllm-encoded/kv-append-capture/v1"
 WANT_CC = (12, 0)

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""A cell's commitment time: the serving hook (``verity.ml.windows.rows.commit``, M0's ``frame-v3-sha512`` +
+"""A cell's commitment time: the serving hook (``verity.commitments.windows.rows.commit``, M0's ``frame-v3-sha512`` +
 ``hm96-sha512/v1`` row leaves) committing the first ``--n`` instances of an input set afresh, as a Table 1 cell's
 ``commit.seconds``.
 
@@ -30,10 +30,10 @@ from typing import Any
 
 import numpy as np
 
-from verity.ml.commitments import hm96
-from verity.ml.commitments.rowleaf import ROLE_X, sha512_row_layout
+from verity.commitments import hm96
+from verity.commitments.rowleaf import ROLE_X, sha512_row_layout
 from verity_flock.input_sets import InputSet
-from verity.ml.windows import rows as SR
+from verity.commitments.windows import rows as SR
 
 RESULT_SCHEMA = "research/result/v0.1"
 
@@ -126,7 +126,7 @@ def main(argv: list[str] | None = None) -> int:
                                      "rows": "one row per instance and row port, the output rows included (M0's per-instance statement, no shared rows); one member "
                                              "per run of instances with the same row widths (an attention class set: one per key count)",
                                      "members": len(ms),
-                                     "implementation": "verity.ml.windows.rows.commit (hashlib SHA-512, numpy ChaCha20, fork pool)",
+                                     "implementation": "verity.commitments.windows.rows.commit (hashlib SHA-512, numpy ChaCha20, fork pool)",
                                      "workers": ns.workers, "reps": ns.reps, "cpu": platform.processor() or platform.machine(),
                                      "nproc": os.cpu_count(), "python": sys.version.split()[0]},
             "validation": {"status": "passed" if not bad else "failed",
