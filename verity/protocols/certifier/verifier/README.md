@@ -8,8 +8,8 @@ accepted audit leaves the certified traffic outside what that Program accepts, a
 of bits of such a sender's secrets a decoder recovers from the client's view.
 
 The guarantee is `NetTiming.Guarantees.PeriodLeakAccepted`
-(`Security/Definitions/NetworkCertifier/Guarantees/Period.lean`), proved as
-`NetTiming.SecurityProofs.PeriodLeakAccepted` (`Security/Proofs/NetworkCertifier/Period.lean`). Over a monitoring
+(`security/Definitions/NetworkCertifier/Guarantees/Period.lean`), proved as
+`NetTiming.SecurityProofs.PeriodLeakAccepted` (`security/Proofs/NetworkCertifier/Period.lean`). Over a monitoring
 period of n execution phases (the Lean's windows), execution phase i audited by the compiled sampled verifier at its
 registered statement, with one network certifier on the server's uplink running its code on schedules in `Ss`:
 
@@ -30,7 +30,7 @@ It bounds each execution phase's failure on its own: the union over the monitori
 and `WindowGood` adds a condition no proof gives, the registration's values at the prover's registered inputs. It is a
 statement about the network certifier's code (`recordingCode`), not about runs of the network check's Lean
 (`lean`, `NetworkCheck`), which is the verifier's code and states no bound.
-`NetTiming.Guarantees.PooledLeakAccepted` (`Security/Definitions/NetworkCertifier/Guarantees/PooledLeak.lean`) is the
+`NetTiming.Guarantees.PooledLeakAccepted` (`security/Definitions/NetworkCertifier/Guarantees/PooledLeak.lean`) is the
 pooled count, with the incorrect proof blocks paid for once over the monitoring period,
 `#Ss · ∏_c (cap_c + 1) · (N + 1)^Fmax · 2^(b · Fmax) · ∏_i 2^#(freeInputs_i \ reg_i) · Dj^k_i` at `Fmax ≥ ln(1/δ)/q`
 (N the period's proof blocks, b each one's committed bits, q the per-execution-phase detection probability), failing
@@ -38,7 +38,7 @@ with probability at most `δ + Σ_i e_i + Σ_i e'_i`. It is conditional on two p
 discharged (`hesc`, the conditional escape; `hleak`, the leak relation at the witness's incorrect set), so it is not
 yet the deployed system's bound over a monitoring period.
 
-What `PeriodLeakAccepted` takes, as its record in the lock (`Security/lean-audit.json`, `guarantees`) lists it. Named
+What `PeriodLeakAccepted` takes, as its record in the lock (`security/lean-audit.json`, `guarantees`) lists it. Named
 assumptions: none. A premise that is part of what it says (`domain`):
 
 - `Claims.Sampling.CommitmentScheme.Binds`: the trace's commitment binds, a break giving an explicit collision.
@@ -376,9 +376,9 @@ and their evaluator.
 The Boolean Definitions above that core doesn't import (`advice_check`, `cache_step_v2`, `cache_step_v3`, `compile_slice_v2`,
 `compile_slice_v3`, `compile_slice_v4`, `compile_slice_v5`, `compile_slice_v6`, `compile_slice_v7`, `egress`, `ingress_scan`, `io_ids`, `served_statics`, `served_tie`, `window_charge`) are in
 `verity.protocols.certifier.prover`, stated over the ones here.
-`PROTOCOL.md` has the semantics and the correspondence to the Lean analysis (`Security/`, area `NetworkCertifier`).
+`PROTOCOL.md` has the semantics and the correspondence to the Lean analysis (`security/`, area `NetworkCertifier`).
 `lean/` is the certifier program, the Lake package `certifier_program` (Lean core only): List forms of the analysis's
-definitions, proved equal to them in `Security/Proofs/NetworkCertifier/Code.lean`, and the difftest that holds this
+definitions, proved equal to them in `security/Proofs/NetworkCertifier/Code.lean`, and the difftest that holds this
 package to them (`lake exe certifier-difftest INSTANCES PYTHON N` on what `../device/program/lean/scripts/difftest_vectors.py` writes; the audit runs it
 from `../device/program/lean/lean-audit.json`). Advice v1's charge has its own: `lake exe certifier-charge-difftest INSTANCES PYTHON N` on
 what `../device/program/lean/scripts/charge_vectors.py` writes from `arith_encode.reference_charge`, and its whole window's
@@ -386,7 +386,7 @@ what `../device/program/lean/scripts/charge_vectors.py` writes from `arith_encod
 `window_charge.reference_window`.
 
 The two terms of the charge the capacity bounds leave open are fixed in the spec, in the last section of
-`Security/Definitions/NetworkCertifier/Guarantees.lean`'s documentation:
+`security/Definitions/NetworkCertifier/Guarantees.lean`'s documentation:
 - the content advice `A_c`, which is the schedule. It gets a bound once the deployment declares a deterministic
   scheduler, admission on a step clock and a registered list of N profiles: `log2 N` once per audit, or
   `log2(N · #Σ_sync)` per window when the profile may switch at window boundaries;
@@ -460,7 +460,7 @@ they differ in the accept bit, the public outputs or the digest, or which the Le
   both reject, among them another network certifier's digest, and `unread`, a sync off Σ_sync that changes neither
   verdict.
 - the Python keeps running beside the Lean as the reference.
-- the Lean's verdict has its property in `Security/Properties/NetworkCertifier/Check/LinkWindow.lean`
+- the Lean's verdict has its property in `security/Properties/NetworkCertifier/Check/LinkWindow.lean`
   (`Properties.NetworkCertifier.LinkWindowAcceptMeans`, proved): an accepted execution phase was proved, opened to the
   word 0b11, certified on both ends and synced within Σ_sync (a network certifier link's syncs are not asked of), and
   its public outputs are verdict 1 and deadline 1.
