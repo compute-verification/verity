@@ -55,6 +55,8 @@ SHARD_LAYOUT_H = 3
 WINDOW_H = 24
 #: where the last reading of each node's CPU counters is kept, so the next run gives the average over the time between
 STATE = Path.home() / ".research" / "queue-table.json"
+#: this checkout, whose policy.toml and drive.toml say what is off the gate and what the low-risk rule admits
+CHECKOUT = Path(__file__).resolve().parents[4]
 
 CONTROL_SCRIPT = r'''
 import ast, json, re, shlex, subprocess, sys
@@ -388,6 +390,37 @@ def lean_files(base: str, sha: str) -> list[int] | None:
     return [len(got), sum(1 for f in got if LEAN_FILE.search(f))]
 
 
+def pr_files(pr: str) -> list[str] | None:
+    """The files an open PR changes from its base, as GitHub lists them (at most 3,000); None when it gave no answer."""
+    try:
+        p = subprocess.run(["gh", "api", "--paginate", f"repos/{REPO}/pulls/{pr}/files", "--jq", ".[].filename"],
+                           capture_output=True, text=True, timeout=90)
+    except (OSError, subprocess.SubprocessError) as e:
+        print(f"research queue stats: no files of #{pr} ({e!r}); it counts as needing a land verdict", file=sys.stderr)
+        return None
+    return p.stdout.splitlines() if p.returncode == 0 else None
+
+
+def lowrisk_heads(open_prs: dict[str, str], labels: dict[str, list[dict]], now: float) -> dict[str, bool | None]:
+    """{PR@head: whether the low-risk rule admits it on its ready mark alone}, for each open head marked ready that has no land
+    verdict and no reviewer's hold: the loop takes such a head when its files match nothing the checkout's drive.toml excludes
+    (`queue.lowrisk`).  None for a head GitHub listed no files for; nothing when the lane is off or drive.toml can't be read."""
+    from .queue import DRIVE_FLAGS, DriveFlags, QueueError, lowrisk
+
+    try:
+        flags = DriveFlags.parse((CHECKOUT / DRIVE_FLAGS).read_text(), DRIVE_FLAGS)
+    except (OSError, QueueError) as e:
+        print(f"research queue stats: {DRIVE_FLAGS} not read ({e}); no head counts as low-risk", file=sys.stderr)
+        return {}
+    if not (flags.lowrisk_lane and flags.lowrisk_excludes):
+        return {}
+    bare = [pr for pr, head in open_prs.items()
+            if mark_at(labels.get(f"{pr}@{head}") or [], now) and verdict_at(labels.get(f"{pr}@{head}") or []) == (None, False)]
+    with ThreadPoolExecutor(8) as ex:
+        files = list(ex.map(pr_files, bare))
+    return {f"{pr}@{open_prs[pr]}": None if got is None else lowrisk(got, flags.lowrisk_excludes) for pr, got in zip(bare, files)}
+
+
 def collect(store_root=None, sample_s: float = 5.0, nodes: list[str] | None = None, now: float | None = None,
             lean: dict[str, list[int]] | None = None) -> dict:
     """Everything the table reads, as one JSON-able document.  ``lean`` is what earlier runs learned of `lean_files`, by a
@@ -418,7 +451,7 @@ def collect(store_root=None, sample_s: float = 5.0, nodes: list[str] | None = No
     try:
         import tomllib
 
-        doc["off_gate"] = tomllib.loads((Path(__file__).resolve().parents[4] / "tools/verity/check/policy.toml").read_text())["off_gate"]
+        doc["off_gate"] = tomllib.loads((CHECKOUT / "tools/verity/check/policy.toml").read_text())["off_gate"]
     except (OSError, ValueError, KeyError, IndexError):
         doc["off_gate"] = list(OFF_GATE)
     built = {(str(pr), head) for r in doc["control"].get("decisions", []) if r["action"] in ("advance", "build") and not r.get("shadow")
@@ -433,6 +466,7 @@ def collect(store_root=None, sample_s: float = 5.0, nodes: list[str] | None = No
     pairs = sorted(built | set(doc["open"].items()))
     labels = _labels(store_root, [label_target(int(pr), head) for pr, head in pairs])
     doc["labels"] = {f"{pr}@{head}": labels[label_target(int(pr), head)] for pr, head in pairs}
+    doc["lowrisk"] = lowrisk_heads(doc["open"], doc["labels"], now)
     return doc
 
 
@@ -654,7 +688,7 @@ def table(doc: dict, prev: dict | None = None, readings: list[dict] | tuple = ()
     hour, day = now - 3600, window_start(doc)
     hours = max(1e-9, (now - day) / 3600)
     decisions = doc["control"].get("decisions") or []
-    labels, open_prs = doc["labels"], doc["open"]
+    labels, open_prs, lowrisk = doc["labels"], doc["open"], doc.get("lowrisk") or {}
     off_gate = tuple(doc.get("off_gate") or OFF_GATE)
     checks = [n for n in doc["check_nodes"] if n in doc["nodes"]]
     runs = {r["id"]: dict(r, node=n) for n, d in doc["nodes"].items() for r in d["runs"]
@@ -709,14 +743,19 @@ def table(doc: dict, prev: dict | None = None, readings: list[dict] | tuple = ()
         v, hold = verdict_at(labs)
         if mark and v:
             review.append((v, max(0.0, _m(v - mark))))
-        elif mark and open_prs.get(pr) == head:
+        elif mark and open_prs.get(pr) == head and not lowrisk.get(key):
             no_verdict.append((_m(now - mark), hold))
     unheld = [w for w, hold in no_verdict if not hold]
+    admitted = sum(1 for low in lowrisk.values() if low)
+    unknown = sum(1 for low in lowrisk.values() if low is None)
     add("2", "Mark to land verdict (the review wait)", "", _dist(win(review, hour)), _dist(win(review, day)), "",
         "first `reviewed = land` label at the head less its mark, 0 when the verdict came first; by verdict time")
     add("2", "Marked heads with no land verdict now", f"{len(no_verdict)}: {len(no_verdict) - len(unheld)} held by a reviewer, {len(unheld)} "
-        "not looked at" + (f", the oldest of those marked {max(unheld):.0f} min ago" if unheld else ""), "", "", "oldest 15 min",
-        "a low-risk PR lands on its mark alone and still counts here")
+        "not looked at" + (f", the oldest of those marked {max(unheld):.0f} min ago" if unheld else "")
+        + (f" ({unknown} of them with files GitHub did not list)" if unknown else "")
+        + (f"; {admitted} more need none: low-risk, admitted on the mark alone" if admitted else ""), "", "", "oldest 15 min",
+        "an open head marked ready with no `reviewed = land` label; left out when the low-risk rule admits it on its mark alone: "
+        "not held, and no file its PR changes (GitHub) is one the checkout's drive.toml excludes (`lowrisk_excludes`)")
 
     # 3. the quick tier before a mark
     tiers = [r for r in runs.values() if r["kind"] == "tier"]

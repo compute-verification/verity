@@ -317,3 +317,30 @@ def test_a_change_of_the_lean_checks_own_code_is_a_lean_change():
     for f in ("tools/verity/check/suites.py", "verity/ml/circuits/lean.py", "docs/tools/verity/lean/x.md", "a/leanish.py",
               "tools/verity/lean/tests/test_audit.py", "tools/verity/lean/README.md"):
         assert not rule.search(f), f
+
+
+def test_a_head_the_low_risk_rule_admits_needs_no_land_verdict():
+    d = doc()
+    d["open"]["7"], d["labels"]["7@h7"] = "h7", [lab("ready", True, "02:00")]
+    row = {r["name"]: r for r in qt.table(dict(d, lowrisk={"5@h5": True, "7@h7": None}))}["Marked heads with no land verdict now"]
+    assert row["now"] == ("2: 1 held by a reviewer, 1 not looked at, the oldest of those marked 60 min ago (1 of them with files GitHub "
+                          "did not list); 1 more need none: low-risk, admitted on the mark alone")
+    assert "low-risk" not in {r["name"]: r for r in qt.table(d)}["Marked heads with no land verdict now"]["now"]
+
+
+def test_the_low_risk_heads_are_the_marked_ones_with_no_verdict_and_no_hold(monkeypatch, tmp_path):
+    files = {"5": ["benchmarks/spot_figures/a.py"], "7": ["verity/core/x.py"], "8": None}
+    asked = []
+    monkeypatch.setattr(qt, "pr_files", lambda pr: asked.append(pr) or files[pr])
+    monkeypatch.setattr(qt, "CHECKOUT", tmp_path)
+    flags = tmp_path / "tools/verity/check/drive.toml"
+    flags.parent.mkdir(parents=True)
+    d = doc()
+    for n in ("7", "8"):
+        d["open"][n], d["labels"][f"{n}@h{n}"] = f"h{n}", [lab("ready", True, "02:00")]
+    assert qt.lowrisk_heads(d["open"], d["labels"], d["now"]) == {}             # no drive.toml: no head is low-risk
+    flags.write_text('lowrisk_lane = true\nlowrisk_excludes = ["verity/core/", "*.lean"]\n')
+    assert qt.lowrisk_heads(d["open"], d["labels"], d["now"]) == {"5@h5": True, "7@h7": False, "8@h8": None}
+    assert sorted(asked) == ["5", "7", "8"]         # not #3 (a land verdict), #4 (held) or #6 (its mark withdrawn)
+    flags.write_text('lowrisk_lane = false\nlowrisk_excludes = ["verity/core/"]\n')
+    assert qt.lowrisk_heads(d["open"], d["labels"], d["now"]) == {}
