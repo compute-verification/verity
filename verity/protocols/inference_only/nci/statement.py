@@ -218,7 +218,7 @@ def symbols() -> list[dict]:
         ("ε_W", "PoUW's deficit, a share of certified work (CircuitCredit)", p["eps_w"]),
         ("ε_W W_cert/C", "the deficit's share of capacity under the floor credit, ε_W (1 − r̂)", p["eps_w"] * (1 - r)),
         ("ε_W", "at the best plausible PoUW design", (p | BEST)["eps_w"]),
-        ("ε′", "aggregation slack (δ_win / ε′ = 2.7e-8 at δ_win = 3·2^-40)", p["eps_agg"]),
+        ("ε′", "aggregation slack (δ_win / ε′: 2.7e-8 if δ_win were 3·2^-40, which has no value yet)", p["eps_agg"]),
         ("r = r̂ + ε_W W_cert/C + ε′", "the residual DampenerRemote bounds, under the floor credit",
          T.residual_share(p)),
         ("GPU / r̂", "share of r̂", p["residual"] / r),
