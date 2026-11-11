@@ -42253,3 +42253,57 @@ For the table:
 - Largest exact cut: two heads a block, block rows a head 134.2M → 67.1M [modeled]; not local, nothing built yet.
 
 **(b′), parked on your 08:00Z order** [read: my checkpoint note `20261111T0732Z-report-relax`]: branch `cursor/proofs-registered-kept-d8c6` at `4c8634f60134c8ce2b1fd45c09895213ef9a1a2c`, one commit, pushed, no PR. It holds the relaxed check in Lean and Python, the restated conjunct, its proof and the difftests. **It changes what a guarantee says, so it is Daniel's.** Nothing Lean is built on a machine yet: no try, no records run, no quick tier, lock not regenerated; the refusing variant is not written. The conjunct, before: `(registered present ∨ opened present) → SameRoots opened registered` (equal sizes, each opened entry a registered one). After: `OpenedRegistered opened registered`, each opened entry a registered one at an equal root. Three questions for when I resume at 16:00Z: (1) `audit_record`'s docstring now states the old rule and rule 4 gives it to vllm; (2) the Goal line, `demos/remote-demo` or `proofs/exfiltration-under-300gb`; (3) rule 3: sessions do report values the record does not name [read: `scan_zk.py` `warden_roots`, `windows/rows.py` `committed/<port>`], so a refusing variant would refuse those paths.
+
+## TWOPROVE, Wed 11 Nov 08:27Z: PRF-477's six lines: vllm's table is right; yes to a port of ids; yes, the Lean run takes a second session; split a member at registration rather than raise m; a record on made-up spans helps as a fixture only. Job 1: the probe passed, the records run is running
+
+**Job 1, where it stands [run].**
+- Probe `r20261111-081142-0229` passed: Lean printed no error, and `probe_exp_neg_le` and `probe_hD` use only `propext`, `Classical.choice` and `Quot.sound`. So the new arithmetic elaborates against Mathlib.
+- Records run `r20261111-080957-140a` is running.
+- `cursor/proofs-waits-cap-ea0b` at `8939826c7f88` merges clean with `main` and with #8827, #8828, #8781, #8836, #8857, #8841, #8820 and #8819 (`git merge-tree`). None of those PRs adds a line that reads the cap or the theorems I changed.
+- The ready line is due by 11:00Z.
+
+**PRF-477's six lines.** Sources are #8730's head `f612d5d5897d` and #8707's head `7824b055decc`; vllm's comments are relayed from your mailbox.
+
+1. **vllm's table is right about what is ours** [read]:
+   - The wires are ours: `nodeWires` (`SecondStage.lean:562–575`) makes no wire of an argument that gathers several nodes, and a linked port must be read alike by every caller (75; `gather`, 455).
+   - The port of ids is vllm's to commit.
+   - The auditor's params are ours: `Own.refs` and `Own.refReads`, the reference statements fixed before the run (26 and 61; their fields at 328–342).
+   - The second session is vllm's to open.
+   - The two-stage form is still refused last (`FORM := false`, 138, because `Embeds` and `FrameIs` are open, 135–137). The goal's test expects exactly that refusal, so it isn't a missing piece.
+2. **Yes to a round-1 port of ids, one row a token, beside `b.egress`** [read]:
+   - It must carry the name `returnLinks` (514–528) gives the replay block's return field, `o<j>` through `portOf`.
+   - It must be committed in round 1, under the boundary's scheme, with `population × per` leaves (`per` = 1 at one token a block) and its rows in replay-block order.
+   - `readOk`'s link case (830–834) then reads it at `linkedRow` (804–807).
+   - That the ids are the served bytes' still needs the circuit to output that equality; the port alone doesn't give it [guess].
+3. **Yes, the Lean run takes a second session on the interior window's own root** [read]:
+   - `interiorSteps` (`Run.lean:186–202`) draws the second stage from the interior's own coins (`it.source`).
+   - `coinsHold` (161) holds those coins to the challenger's evidence for the window whose open root the interior's params name (`v.windowRoot`), after the interior registration's digest.
+   - The challenger refuses a second session for the same window (`test_remote.py:1339`), so the session must be on the interior's own window, as vllm plans.
+4. **Dates: none from me; they are yours to set:**
+   - Nobody on tonight's roster holds the gather wire or the two row widths [read: the order].
+   - The work is in `nodeWires`, `wireRuns`, `gather`, `Rows`, `readOk`'s wire case and their lemmas (`readOk_wired`, 1366, and `check_ok_*`), plus the mirror and difftest. It is a new verifier form, so it lands with its proof.
+   - The auditor's params for the 48 heavy templates are a run, by vllm's estimate about 0.45 TB and 9.5 h [relayed].
+5. **Split a member rather than raise m. Split it at registration, as PARAMS proposed at 08:25Z: the code is vllm's, and the Lean reads what it reads now:**
+   - **Raising m is not one constant** [read]. `queries0` (`Flock/Zk.lean:37–48`) has no fast100 schedule past m = 35. A new schedule would have to be held to upstream's Rust verifier through `lean-agreement`.
+   - **The split at registration needs nothing new from round 2's check** [read]. It registers one circuit as several members, each of at most 16,384 chunk units: \(\lceil 619{,}520/16{,}384\rceil = 38\) for `p256-o256`'s one span [derived from relayed sizes].
+     - Round 2's parts are the strata by template key (`parts`, 193), so each member is its own part with one statement.
+     - The auditor's params give one `{template, circuit, header, registered}` entry per key, and nothing asks two keys' circuits to differ (`Run.lean:134–146`; `Own.refs` and `refOf`, `SecondStage.lean:342, 677`).
+     - Not traced: `filesOk` and `scopeOk` [relayed: PARAMS].
+   - **Whose code.** `interior_window`'s members are vllm's, and so are the params' entries, one a member.
+   - **What the Lean reads:** the same parts, refs and `Held.ms` as now [read; `Held.ms` relayed: PARAMS].
+   - **What does change is the draw:** `secondLaw` draws `ks[t]` of `ns[t]` in each (template, replay block) cell (`Select.lean:294–306`), so the counts become per member. That changes δ and the coins, which SCALE and DRAFT-CORE should price [read, guess].
+   - **It is not one change with D\*'s cap on a session's tables.** That cap is already one table wherever a run is accepted: round 2's `second-tables` (22–25) [read], and the model's `templateOk` [relayed: PARAMS]. The split adds members and sessions, which D\*'s `n_sess·e_max` term reads: 38 sessions where vllm's served record has one [derived].
+6. **Yes, a record on made-up spans helps us on Thursday, as a fixture at the served statics, not as evidence. Make it.**
+   - **What the check reads of round 1's record:**
+     - `o0`'s entry: root, domain and leaves through `sameAt` (769–771) [read];
+     - the boundary's `population` and the rows' `per` (`readOk`, 830–834; `linkedRow`, 804–807) [read];
+     - for the planned `second-return` check, the sampled `o0` rows' salts and `o0`'s schema, from which it computes `row_digest(one)` [guess: not written];
+     - nothing of the table or of the spans' content.
+   - **What a record with no table can't run.** The check itself needs no table. But it compares against a verdict's `b ‖ c`, and the session that would give one proves the long row's 2,048 reads of the table (`long_row.py:24, 30–31`). So `second-verified`, `second-read` at the table's link and `second-return` can't run on it [read, guess].
+   - **What it can run:** the record-side steps. Those are `sameAt`, `population`, `per`, the placed rows, and a salt through `commit_string` to the record's own leaf and root.
+   - **What a pass would show that my fixtures don't:** the sizes and formats at the served statics (`o0`'s leaves, `population × per`, the salts file vllm keeps). It shows no served values: the spans are made up, and nothing holds the `ok` bits to ones [relayed: vllm, 07:52Z].
+   - **So make it, labelled a fixture.** For anything served, wait for the served record, with the `verdicts` key and a serve under the long row's check.
+
+For the table:
+- PRF-477: yes to the port of ids and to a second session; split members at registration (38 for `p256-o256`) rather than raise m; the made-up-spans record is a fixture at the served statics. The wires and the auditor's params are ours, with no date from me.
+- Job 1: probe `0229` passed; records run `140a` is running.
