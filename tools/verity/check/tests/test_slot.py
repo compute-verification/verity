@@ -289,6 +289,120 @@ def test_a_scope_slot_where_systemd_run_cant_run_runs_its_check_unscoped(tmp_pat
         raise SLOT.subprocess.TimeoutExpired(a[0], 10)
 
     assert real(hang).startswith("TimeoutExpired")
+    seen = []
+    assert real(lambda argv, **k: seen.append(argv) or R(0), props=["--property=MemoryMax=32G"]) is None
+    assert seen == [["systemd-run", "--user", "--scope", "--quiet", "--collect", "--property=MemoryMax=32G", "--", "true"]]
+
+
+def _capped(tmp_path, monkeypatch, slots: str, refusal: str | None = None):
+    """A pool of ``slots`` in a `research run`, where `systemd-run --user` runs (or fails with ``refusal``): what main() would
+    exec, the properties it tried a scope with first, and the run's directory."""
+    run = tmp_path / "r20261023-000000-abcd"
+    run.mkdir(exist_ok=True)
+    (tmp_path / "slots").write_text(slots)
+    monkeypatch.setattr(SLOT, "SLOTS", tmp_path / "slots")
+    monkeypatch.setattr(SLOT.os, "sched_setaffinity", lambda pid, cpus: None)
+    monkeypatch.setenv("RESEARCH_RUN_ID", run.name)
+    monkeypatch.setenv("RESEARCH_RUN_DIR", str(run))
+    monkeypatch.setattr(SLOT, "memory_gb", lambda: 700)
+    monkeypatch.setattr(SLOT, "reserved_gb", lambda proc=None, priority=False: 0)
+    ran, tried = {}, []
+
+    def execvpe(f, argv, env):
+        ran.update(argv=argv, unit=env.get(SLOT.SCOPE_ENV), slot=env["CHECK_SLOT"], mem=env.get(SLOT.SLOT_MEM_ENV))
+        raise Exec
+
+    monkeypatch.setattr(SLOT.os, "execvpe", execvpe)
+    monkeypatch.setattr(SLOT, "scope_refusal", lambda run=None, props=(): tried.append(list(props)) or refusal)
+    return ran, tried, run
+
+
+def test_a_capped_slot_runs_its_check_in_a_scope_whose_memory_the_kernel_limits(tmp_path, monkeypatch):
+    """A reservation limits nothing: four open runs that had reserved their slots held as much again in use, and a train slot,
+    which counts memory in use and not a lane run's reservation, stayed shut. `cap=GB` is the scope's MemoryMax, which the
+    kernel holds the run's every process to, with OOMPolicy=continue so that one process ended at the limit doesn't stop the
+    scope whole; the run's slot record names the scope and the cap for the runner that ends the run."""
+    (slot,) = SLOT.parse("g0 0-31 cap=32")
+    assert (slot["cap"], slot["scope"], slot["mem"]) == (32, True, None) and SLOT.parse("t 0 mem=300 scope=1")[0]["cap"] is None
+    for bad in ("0", "-1", "1.5", "32G", ""):
+        with pytest.raises(ValueError, match="is not a whole number of GB above 0"):
+            SLOT.parse(f"g0 0-31 cap={bad}")
+    dropins = tmp_path / "session-.scope.d"
+    dropins.mkdir()
+    (dropins / "50-vy-job-memory.conf").write_text("[Scope]\nMemoryMax=80%\n")
+    monkeypatch.setattr(SLOT, "SESSION_DROPINS", dropins)
+    props = ["--property=MemoryMax=32G", "--property=OOMPolicy=continue"]
+    assert SLOT.scope_props(32) == props and SLOT.scope_props() == ["--property=MemoryMax=80%"]
+    ran, tried, run = _capped(tmp_path, monkeypatch, "g0 0-31 cap=32\n")
+    with pytest.raises(Exec):
+        SLOT.main(["--by", "executor", "--", "sh", "-c", "work"], now=lambda: NOW, sleep=lambda _s: None)
+    unit = f"check-g0-{run.name}"
+    assert ran == {"argv": ["systemd-run", "--user", "--scope", "--quiet", "--collect", f"--unit={unit}", *props, "--", "sh", "-c", "work"],
+                   "unit": unit, "slot": "g0", "mem": "32"}
+    assert tried == [props], "the scope is tried with the cap's own properties before the slot's check starts"
+    assert json.loads((run / SLOT.RUN_SLOT).read_text()) == {"state": "held", "since": "2026-10-01T09:00:00Z", "slot": "g0",
+                                                              "cores": "0-31", "took": "2026-10-01T09:00:00Z",
+                                                              "scope": f"{unit}.scope", "cap_gb": 32}
+    assert SLOT.status(SLOT.parse("g1 32-63 cap=32"), tmp_path, NOW) == ["g1  cores 32-63  cap 32 GB  free"]
+    assert SLOT.slot_docs(SLOT.parse("g1 32-63 cap=32"), tmp_path, NOW)[0]["cap"] == 32
+
+
+def test_a_run_that_asks_more_than_a_slots_cap_never_takes_it_and_is_refused_where_no_slot_holds_it(tmp_path, monkeypatch, capsys):
+    """Under a cap smaller than its ask, a run would lose processes to the kernel in the middle of its work: it takes only a
+    slot whose cap holds what it asks, waits while that one is busy, and where no slot it may take can hold it, it leaves at
+    once with NOT_STARTED and the largest cap, having run and reserved nothing."""
+    ran, _, run = _capped(tmp_path, monkeypatch, "g0 0 cap=32\ng1 1 cap=64\nt 2 only=trains mem=300 scope=1\n")
+    monkeypatch.setenv(SLOT.RUN_MEM_ENV, "60")                              # 56 GiB
+    assert SLOT.asked_gib() == 56 and not SLOT.fits(SLOT.parse("g0 0 cap=32")[0], 56) and SLOT.fits(SLOT.parse("g1 1 cap=64")[0], 56)
+    assert SLOT.fits(SLOT.parse("u 0")[0], 10**6) and SLOT.fits(SLOT.parse("g0 0 cap=32")[0], 0), "no cap, or no ask: any run"
+    with pytest.raises(Exec):
+        SLOT.main(["--", "work"], now=lambda: NOW, sleep=lambda _s: pytest.fail("g1 is free and holds it"))
+    assert ran["slot"] == "g1" and "--property=MemoryMax=64G" in ran["argv"] and ran["mem"] == "56", "g0 is free, and too small"
+    ran.clear()
+    capsys.readouterr()
+    held, waits = [_hold(tmp_path / "check-g0.lock")], []                    # g1's lock is still held: the faked exec kept it
+
+    def sleep(_s):
+        waits.append(capsys.readouterr().err)
+        monkeypatch.setenv(SLOT.RUN_MEM_ENV, "30")                          # 28 GiB: now g0 would hold it, and g0 is busy
+        os.close(held.pop())
+
+    with pytest.raises(Exec):
+        SLOT.main(["--", "work"], now=lambda: NOW, sleep=sleep)
+    assert "g0: caps a run at 32 GB, under the 56 GB this one asks; g1: busy; t: for train checks" in waits[0]
+    assert ran["slot"] == "g0" and ran["mem"] == "28"
+
+    ran.clear()
+    monkeypatch.setenv(SLOT.RUN_MEM_ENV, "128")                             # 120 GiB: over every cap of the pool
+    for f in (tmp_path / "ramlock").glob("*.json"):
+        f.unlink()
+    assert SLOT.main(["--", "work"], now=lambda: NOW, sleep=lambda _s: pytest.fail("refused at once")) == SLOT.NOT_STARTED
+    err = capsys.readouterr().err
+    assert "not started: this run asks 120 GB of memory" in err and "(cap=, 64 GB at the most)" in err and f"exit {SLOT.NOT_STARTED}" in err
+    assert ran == {} and not list((tmp_path / "ramlock").glob("*.json")) and not list((tmp_path / SLOT.LINE).iterdir())
+    doc = json.loads((run / SLOT.RUN_SLOT).read_text())
+    assert doc["state"] == "left" and doc["why"].startswith("this run asks 120 GB of memory")
+
+    (tmp_path / "wide").mkdir()
+    ran, _, _ = _capped(tmp_path / "wide", monkeypatch, "g0 0 cap=32\nu 1\n")
+    with pytest.raises(Exec):
+        SLOT.main(["--", "work"], now=lambda: NOW, sleep=lambda _s: pytest.fail("u has no cap"))
+    assert ran["slot"] == "u" and ran["argv"] == ["work"], "a slot without a cap takes any ask, as before"
+
+
+def test_a_capped_slot_where_systemd_run_cant_run_starts_nothing(tmp_path, monkeypatch, capsys):
+    """Fail closed, where a scope=1 slot fails open: unscoped, the run would hold whatever it grew to. It leaves with
+    NOT_STARTED and the fix, its slot free for the next waiter."""
+    ran, tried, run = _capped(tmp_path, monkeypatch, "g0 0-31 cap=32\n", refusal="exit 1: Failed to connect to bus: No medium found")
+    assert SLOT.main(["--", "work"], now=lambda: NOW, sleep=lambda _s: pytest.fail("it leaves, and doesn't wait")) == SLOT.NOT_STARTED
+    err = capsys.readouterr().err
+    assert ("not started: slot g0 limits its run's memory to 32 GB (cap=) in a systemd user scope, and `systemd-run --user` "
+            "doesn't run here (exit 1: Failed to connect to bus: No medium found)") in err
+    assert "loginctl enable-linger" in err and "running unscoped" not in err
+    assert ran == {} and tried == [["--property=MemoryMax=32G", "--property=OOMPolicy=continue"]]
+    assert not (tmp_path / "ramlock").exists() and not list((tmp_path / SLOT.LINE).iterdir())
+    assert json.loads((run / SLOT.RUN_SLOT).read_text())["state"] == "left"
+    os.close(_hold(tmp_path / "check-g0.lock"))                              # the slot's lock is free again
 
 
 def test_a_slot_added_while_a_check_waits_is_one_it_takes(tmp_path, monkeypatch):
