@@ -37,7 +37,8 @@ class WindowCommit:
 
     def __init__(self, runs: dict[int, Any], *, edit: Callable[[dict], dict] = lambda r: r, rc: int = 0, write: bool = True,
                  then: Callable[[], Any] = lambda: None) -> None:
-        self.runs, self.edit, self.rc, self.write, self.then, self.calls = runs, edit, rc, write, then, []
+        self.runs, self.edit, self.rc, self.write, self.then = runs, edit, rc, write, then
+        self.calls: list[dict[str, Any]] = []
 
     def __call__(self, argv: list[str], log: Any) -> int:
         self.then()
@@ -50,7 +51,9 @@ class WindowCommit:
 
 
 def _tied(tmp_path, monkeypatch, closer: Any, **commit: Any) -> tuple[_Server, SH.H1Windows, WindowCommit, dict, list]:
-    srv, runs, flushed = _Server(monkeypatch), {}, []
+    srv = _Server(monkeypatch)
+    runs: dict[int, Any] = {}
+    flushed: list[str] = []
     wc = WindowCommit(runs, **commit)
     tie = TIE.WindowTie("v3c-window-commit", tmp_path / "serve", flush=lambda: flushed.append("flush"), runner=wc)
     arm = SH.H1Windows(srv.model, srv.com, ROWS, STEPS, engine=object(), out=tmp_path / "serve", unit=_unit(),

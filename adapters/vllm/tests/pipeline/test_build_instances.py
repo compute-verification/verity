@@ -10,6 +10,7 @@ import gzip
 import io
 import json
 import zlib
+from typing import Any
 
 import pytest
 
@@ -207,7 +208,12 @@ def test_the_writer_encodes_each_heads_items_once_not_once_a_call(monkeypatch):
     monkeypatch.setattr(codec, "descriptor_id", lambda fn: fn)
     program, encoded = _glm_attention_layer(256, 8), []
     items = compact._file_items
-    monkeypatch.setattr(compact, "_file_items", lambda progs: encoded.append(len(progs)) or items(progs))
+
+    def counted(progs):
+        encoded.append(len(progs))
+        return items(progs)
+
+    monkeypatch.setattr(compact, "_file_items", counted)
     rows = list(instance_rows(program))
     old, encoded[:] = sum(encoded), []
     texts = list(RowTexts().rows(program))
@@ -237,7 +243,12 @@ def test_the_writer_encodes_a_weight_read_by_every_tokens_call_once(monkeypatch)
     program = NS(fn=NS(body=NS(nodes=nodes)))
     calls = []
     scattered = compact._scattered_strided
-    monkeypatch.setattr(compact, "_scattered_strided", lambda *a: calls.append(a) or scattered(*a))
+
+    def counted(*a):
+        calls.append(a)
+        return scattered(*a)
+
+    monkeypatch.setattr(compact, "_scattered_strided", counted)
     want = [json.dumps(r) for r in instance_rows(program)]
     old, calls[:] = len(calls), []
     assert list(RowTexts().rows(program)) == want
@@ -262,7 +273,7 @@ def _read_as_json_load(p, **dump) -> None:
 def _attention_rows(n: int, heads: int = 2) -> list[dict]:
     """Rows shaped like a dense attention prefill's: per row and head a key operand of the rows so far (one count-2 "N" item a row)
     and a value operand of one progression, beside a weight read."""
-    rows = []
+    rows: list[dict] = []
     for t in range(n):
         for h in range(heads):
             rows.append({"i": len(rows), "spec": f"Attention_v4{{T={t + 1}}}", "form": "call", "name": f"layers.0.attn/h{h}[{t}]",
@@ -335,7 +346,7 @@ _ALIKE = [[["p", 1, 0, 64]] * 16 + [["p", 2, s, s + 1]] for s in range(6)]  # on
 def _repeating_rows(tokens: int = 5) -> list[dict]:
     """Rows whose long operands repeat as weight reads do (every token's Call of a layer reads its layer's), beside operands that may
     not be read as copies, rows laid out otherwise than the writers do, and a key whose text holds `"args": [`."""
-    rows = []
+    rows: list[dict] = []
     for t in range(tokens):
         for layer in range(3):
             rows.append({"i": len(rows), "spec": "BatchedGemm_v1{M=1}", "form": "call", "name": f"layers.{layer}.absorb[{t}]",
@@ -357,7 +368,9 @@ def _as_read(doc: dict, expand: bool) -> dict:
             return it
     for r in doc["rows"]:
         args = r.get("args") if isinstance(r, dict) else None
-        for k, a in enumerate(args if isinstance(args, list) else ()):
+        if not isinstance(args, list):
+            continue
+        for k, a in enumerate(args):
             if not isinstance(a, list):
                 continue
             if expand and any(isinstance(it, list) and len(it) == 8 and it[0] in _FILE_SPACES for it in a):
@@ -402,7 +415,7 @@ def test_read_instances_reads_a_repeated_operand_text_as_a_copy_of_its_list(tmp_
     assert len({json.dumps(a)[:IF._MEMO_KEY] for a in _ALIKE}) == 1 and len(_ALIKE) > IF._MEMO_WAYS
     p = tmp_path / "instances.json.gz"
     write_instances_file(str(p), HEAD, _repeating_rows())
-    decoded = collections.Counter()
+    decoded: collections.Counter = collections.Counter()
     operand = IF._Rows.operand
     monkeypatch.setattr(IF._Rows, "operand", lambda self, a: decoded.update([json.dumps(a)]) or operand(self, a))
     doc = IF.read_instances(str(p), expand=expand)
@@ -496,9 +509,10 @@ def test_from_instances_of_a_v2_file_is_the_v1_documents_view(tmp_path):
     from verity_vllm.program.compact import file_items_from_runs
     from verity_vllm.query.program_view import from_instances
     params = [["prompt", "Array<8,Value<32>>"], ["m.w.weight", "Array<4096,Value<32>>"]]
-    v1_rows = [{"i": k, "spec": "Gemm_v1{K=64,N=8}", "form": "call", "name": f"model.layers.0.q_proj/mm[{k}]",
-                "args": [[["n", k - 1, 0, 8]] if k else [["p", 0, 0, 8]],
-                         [["p", 1, 64 * q + k, 64 * q + k + 1] for q in range(64)]]} for k in range(6)]  # a transposed-weight column
+    v1_rows: list[dict[str, Any]] = [
+        {"i": k, "spec": "Gemm_v1{K=64,N=8}", "form": "call", "name": f"model.layers.0.q_proj/mm[{k}]",
+         "args": [[["n", k - 1, 0, 8]] if k else [["p", 0, 0, 8]],
+                  [["p", 1, 64 * q + k, 64 * q + k + 1] for q in range(64)]]} for k in range(6)]  # a transposed-weight column
     v2_rows = [{**r, "args": [file_items_from_runs(map(tuple, a)) for a in r["args"]]} for r in v1_rows]
     assert any(it[0] == "P" for r in v2_rows for a in r["args"] for it in a)
     p = tmp_path / "instances.json.gz"

@@ -162,7 +162,7 @@ def stager(t: str) -> UnitStager:
     return st
 
 
-def units(ms, tmpls, places: dict[str, list[int]] = PLACES, NH: int = TOY["NH"], rows: int = 1) -> dict[tuple, int]:
+def units(ms, tmpls, places: dict[str, list[int]] = PLACES, NH: int = int(TOY["NH"]), rows: int = 1) -> dict[tuple, int]:
     """The global unit of each (row, head, place) in its head's chain: a template's units row by row, then head, then its
     places."""
     out: dict[tuple, int] = {}

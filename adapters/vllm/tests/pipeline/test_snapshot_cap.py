@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import json
 import sys
+from typing import Any
 
 import pytest
 
@@ -21,7 +22,7 @@ OLMOE = {"H": 2048, "I": 1024, "GU": 2048, "QKV": 4096, "V": 50304, "TOPK": 8, "
 
 
 def _wl(prompt_lens, max_tokens=128, mnbt=None):
-    doc = {"requests": [{"request_id": f"r{i}", "prompt_len": n, "prompt_token_ids": [7] * n, "max_tokens": max_tokens} for i, n in enumerate(prompt_lens)]}
+    doc: dict[str, Any] = {"requests": [{"request_id": f"r{i}", "prompt_len": n, "prompt_token_ids": [7] * n, "max_tokens": max_tokens} for i, n in enumerate(prompt_lens)]}
     if mnbt is not None:
         doc["engine"] = {"args": {"max_num_batched_tokens": mnbt, "max_model_len": 1152}}
     return doc

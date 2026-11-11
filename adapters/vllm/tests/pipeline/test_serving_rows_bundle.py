@@ -64,7 +64,7 @@ def test_a_deferred_commits_serving_rows_are_the_verifiers_window_over_the_serve
     assert (got.partition_digest, got.run, got.members, CS.expected_ports(got)) == (mine.partition_digest, mine.run, mine.members, ports)
 
     # every hidden row is what was served: x the qkv row's head slice, cs the cache row at the token's position, out the rotated head
-    rows = np.frombuffer((wdir / "m0-private.bin").read_bytes()[:heads * 3 * D * 2], dtype="<u2").reshape(heads, 3, D)
+    rows: np.ndarray = np.frombuffer((wdir / "m0-private.bin").read_bytes()[:heads * 3 * D * 2], dtype="<u2").reshape(heads, 3, D)
     world, inst = c["world"], c["inst"]
     idx = json.loads((wdir / "index.json").read_text())
     ents = idx["members"][0]["rows"]

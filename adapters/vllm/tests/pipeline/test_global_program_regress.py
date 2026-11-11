@@ -32,6 +32,7 @@ import gzip
 import json
 import os
 from pathlib import Path
+from typing import Any
 
 import pytest
 from verity.circuits.codec import canonical_json, encode_program, program_digest
@@ -157,7 +158,7 @@ def test_no_second_identity_per_output_position_and_no_root_node_beyond_inputs_a
     assert all(sp == "n" for sp, _, _, _ in ret_runs)
     leaves = [(idx, j) for sp, idx, lo, hi in ret_runs for j in range(lo, hi)]
     assert len(leaves) == len(set(leaves)) == sum(r.cap for r in wl.requests)
-    per_node = {}
+    per_node: dict[int, list[int]] = {}
     for idx, j in leaves:
         per_node.setdefault(idx, []).append(j)
     assert list(per_node) == [K + i for i in range(len(wl.requests))]                # manifest order, one call node each
@@ -194,7 +195,7 @@ def test_program_is_a_function_of_the_manifest_only_two_builds_are_byte_equal():
 def test_a_program_rebuilt_from_a_served_length_is_refused_by_name():
     """The population is D_MAX steps x declared requests: a component whose T is not cap-1 (a Program rebuilt to the served
     length) is refused by name, at every cap and for every request position."""
-    canon = {}
+    canon: dict = {}
     c = W.request_component(_desc(3, 2), REGISTRY, _WP(3), canon=canon)          # a T=2 component: cap must be 3
     for cap in (1, 2, 4, 8):
         with pytest.raises(ValueError, match="never from a served length"):
@@ -424,7 +425,7 @@ def _oracle_dir(tmp_path, reqs):
     def body(Bd, S, *args):
         prompts, weights = args[:B], args[B]
         prev = [p[0] for p in prompts]
-        outs = [[] for _ in reqs]
+        outs: list[list] = [[] for _ in reqs]
         horizon = max(r["T"] + 1 for r in reqs)
         for e in range(horizon):
             live = [i for i, r in enumerate(reqs) if e <= r["T"]]
@@ -527,7 +528,7 @@ def test_single_weights_input_node_baseline_still_passes(tmp_path):
         d = _reg("PrToyReqH_v1") or CompositeDefinition("PrToyReqH", 1, ("LP", "T"), sig, body)
         return d.bind(LP=LP, T=T)
 
-    reqs = [{"id": "r0", "LP": 3, "T": 2}, {"id": "r1", "LP": 2, "T": 1}]
+    reqs: list[dict[str, Any]] = [{"id": "r0", "LP": 3, "T": 2}, {"id": "r1", "LP": 2, "T": 1}]
     B = len(reqs)
     meta = []
 
@@ -537,7 +538,7 @@ def test_single_weights_input_node_baseline_still_passes(tmp_path):
     def body(Bd, S, *args):
         prompts, weights = args[:B], args[B]
         prev = [p[0] for p in prompts]
-        outs = [[] for _ in reqs]
+        outs: list[list] = [[] for _ in reqs]
         for e in range(3):
             live = [i for i, r in enumerate(reqs) if e <= r["T"]]
             for row, i in enumerate(live):
@@ -651,7 +652,8 @@ _S_FORMS = ["static"] + (["operand"] if _reader_takes_the_bound_operand() else [
 def _topp_fold_for(live_per_step: dict[int, int], s_of: dict[int, int], form: str = "static"):
     """A stub fold with one GumbelTopPTokenSelect per live row per step carrying the launch S `s_of[step]` in the given representation,
     plus engine_step_of (keyed by the SELECT instances' indices -- the unbound form interleaves one Const32 instance per select)."""
-    s_list, es = [], {}
+    s_list: list[int] = []
+    es: dict[int, int] = {}
     for st in sorted(live_per_step):
         for _ in range(live_per_step[st]):
             es[len(s_list)] = st
@@ -660,7 +662,7 @@ def _topp_fold_for(live_per_step: dict[int, int], s_of: dict[int, int], form: st
         return _OperandStubFold(s_list), es
     if form == "unbound":
         fold = TGM._OperandFold([(S, None) for S in s_list])
-        sel = [i for i, x in enumerate(fold.inst) if x["spec"].startswith("GumbelTopP")]
+        sel = [i for i, x in enumerate(fold.inst) if str(x["spec"]).startswith("GumbelTopP")]
         assert len(sel) == len(s_list)
         return fold, {sel[n]: es[n] for n in range(len(s_list))}
     return TGM._StubFold([f"GumbelTopPTokenSelect_v1{{V=64,S={S}}}" for S in s_list]), es

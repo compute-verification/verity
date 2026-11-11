@@ -9,6 +9,7 @@ import json
 import tarfile
 from pathlib import Path
 from types import SimpleNamespace
+from typing import Any
 
 import pytest
 from research.store.local import LocalStore
@@ -30,13 +31,14 @@ ROW = "llama32-1b__bf16__l40s__tp2__b1__i256__o32__mixed__greedy__bi-eager"
 REPO = "meta-llama/Llama-3.2-1B"
 PARTS = ("build_step", "build_request_LP9_T2", "build_workload")
 PROP = "glm53_bf16_gemm_capture"
-SUMMARY = {"schema": "verity/commit-integ/delta-tp/v1", "pass": True, "pairs": 1, "commit_pass": [True], "tp_run_roots": ["ab" * 32],
-           "per_rank_roots": [{"0": "c0" * 32, "1": "c1" * 32}], "openings": 64, "weights_pin": {"result": True},
-           "value_check": {"verdict": "PASS"}, "match_oracle": {"0": {"verdict": "PASS"}, "1": {"verdict": "PASS"}},
-           "required_manifest": {"manifest_digest": "mm", "identities": 7},
-           "sampled_replay": {"result": True, "sample": {"picked": 4, "evaluated": 4, "equal": 4, "mismatch_n": 0},
-                              "per_rank": {"0": {"result": True, "grade": "complete"}, "1": {"result": True, "grade": "complete"}}},
-           "served": {"schema": "verity-vllm/served-switches/v1", "ok": True, "problems": []}}
+SUMMARY: dict[str, Any] = {
+    "schema": "verity/commit-integ/delta-tp/v1", "pass": True, "pairs": 1, "commit_pass": [True], "tp_run_roots": ["ab" * 32],
+    "per_rank_roots": [{"0": "c0" * 32, "1": "c1" * 32}], "openings": 64, "weights_pin": {"result": True},
+    "value_check": {"verdict": "PASS"}, "match_oracle": {"0": {"verdict": "PASS"}, "1": {"verdict": "PASS"}},
+    "required_manifest": {"manifest_digest": "mm", "identities": 7},
+    "sampled_replay": {"result": True, "sample": {"picked": 4, "evaluated": 4, "equal": 4, "mismatch_n": 0},
+                       "per_rank": {"0": {"result": True, "grade": "complete"}, "1": {"result": True, "grade": "complete"}}},
+    "served": {"schema": "verity-vllm/served-switches/v1", "ok": True, "problems": []}}
 
 
 def test_index_names_rows_of_record():

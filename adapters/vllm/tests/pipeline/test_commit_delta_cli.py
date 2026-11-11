@@ -15,6 +15,7 @@ import argparse
 import ast
 from collections import Counter
 from pathlib import Path
+from typing import Any
 
 SRC = Path(__file__).resolve().parents[2] / "verity_vllm" / "pipeline" / "commit.py"
 
@@ -43,7 +44,7 @@ def test_commit_delta_parser_builds_and_declares_every_option_once():
         assert opts, f"add_argument without a literal option string at line {c.lineno}"
         for o in opts:
             seen[o] += 1
-        kw = {}
+        kw: dict[str, Any] = {}
         for k in c.keywords:
             if k.arg in ("help", "metavar", "dest", "nargs", "choices", "required", "action") and isinstance(k.value, ast.Constant):
                 kw[k.arg] = k.value.value

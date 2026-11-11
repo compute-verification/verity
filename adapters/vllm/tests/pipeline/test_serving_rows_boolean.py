@@ -116,8 +116,8 @@ def test_a_boolean_templates_window_commits_the_word_rows_and_passes_the_verifie
 
     # the same u16 rows and the same unit -> served identity index as the word template's window
     n = HEADS * 3 * D * 2
-    rows = [np.frombuffer((d / "m0-private.bin").read_bytes()[:n], dtype="<u2") for d in (wdir, tmp_path / "word")]
-    assert np.array_equal(*rows) and rows[0].any()
+    rows: list[np.ndarray] = [np.frombuffer((d / "m0-private.bin").read_bytes()[:n], dtype="<u2") for d in (wdir, tmp_path / "word")]
+    assert np.array_equal(rows[0], rows[1]) and rows[0].any()
     idx = [json.loads((d / "index.json").read_text())["members"][0] for d in (wdir, tmp_path / "word")]
     assert idx[0]["rows"] == idx[1]["rows"] and (idx[0]["template"], idx[1]["template"]) == (ROPE_BITS, ROPE)
 

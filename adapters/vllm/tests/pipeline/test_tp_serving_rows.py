@@ -116,8 +116,8 @@ def test_a_ranks_window_over_its_committed_values_binds_the_tp_run_root(tmp_path
     hook = json.loads((tmp_path / "hook" / "registration.json").read_text())
     assert (hook["window"]["kind"], hook["window"]["run"], "tp" in hook["window"]) == ("served", rank_root.hex(), False)
     n, words = 8, 64 + 64
-    rows = [np.frombuffer((tmp_path / d / "m0-private.bin").read_bytes()[:n * words * 2], dtype="<u2") for d in ("tp/rank0", "hook")]
-    assert np.array_equal(*rows) and rows[0].any()
+    rows: list[np.ndarray] = [np.frombuffer((tmp_path / d / "m0-private.bin").read_bytes()[:n * words * 2], dtype="<u2") for d in ("tp/rank0", "hook")]
+    assert np.array_equal(rows[0], rows[1]) and rows[0].any()
 
 
 @pytest.fixture(scope="module")

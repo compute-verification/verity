@@ -61,8 +61,13 @@ def test_build_components_takes_the_lock_only_without_a_budget_of_its_own(host, 
         yield
 
     monkeypatch.setattr(M, "_pool_lock", lock)
-    monkeypatch.setattr(M, "_build_forked", lambda tasks, jobs, after, head, log: heads.append(head) or [])
-    tasks = [("a", {}), ("b", {})]
+
+    def forked(tasks, jobs, after, head, log):
+        heads.append(head)
+        return []
+
+    monkeypatch.setattr(M, "_build_forked", forked)
+    tasks: list[tuple[str, dict]] = [("a", {}), ("b", {})]
     host(str(96 * GiB), head=90 * GiB)
     M.build_components(tasks, jobs=2)
     assert (locks, heads) == ([], [90 * GiB])
@@ -79,7 +84,8 @@ def test_each_component_built_adds_a_progress_line_to_the_log(host, monkeypatch,
     monkeypatch.setattr(M, "build", lambda d, **kw: {"d": d})
     monkeypatch.setattr(global_program, "component_spec_histogram", lambda d: {"Gemm_v1{K=4,N=4}": 1})
     host(str(96 * GiB), head=90 * GiB)
-    tasks, lines = [(f"c{i}", {}) for i in range(3)], []
+    tasks: list[tuple[str, dict]] = [(f"c{i}", {}) for i in range(3)]
+    lines: list[str] = []
     assert M.build_components(tasks, jobs=jobs, log=lines.append) == [{"d": d} for d, _kw in tasks]
     assert [ln.split(" built in ")[0] for ln in lines if " built in " in ln] == [f"  components: {k}/3" for k in (1, 2, 3)], lines
 
@@ -97,7 +103,12 @@ def test_the_word_rules_prefetch_budgets_its_share_of_that_headroom(host, monkey
 
     monkeypatch.setattr(M, "_pool_lock", lock)
     monkeypatch.setattr(global_program, "component_spec_histogram", lambda d: {} if d == "bare" else {"Gemm_v1{K=4,N=4}": 1})
-    monkeypatch.setattr(M.word_query, "prefetch", lambda specs, X, W, extras, *, max_gates, jobs, budget: budgets.append(budget) or 0)
+
+    def prefetch(specs, X, W, extras, *, max_gates, jobs, budget):
+        budgets.append(budget)
+        return 0
+
+    monkeypatch.setattr(M.word_query, "prefetch", prefetch)
     host(str(96 * GiB), head=90 * GiB)
     M.prefetch_word_rules(["row"], "16/32", jobs=2)
     host("max", head=70 * GiB)

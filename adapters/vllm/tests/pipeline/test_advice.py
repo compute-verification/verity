@@ -8,6 +8,7 @@ import json
 import random
 import re
 from types import SimpleNamespace
+from typing import Any
 
 import pytest
 from verity.protocols.certifier.verifier import advice as I1
@@ -25,7 +26,8 @@ def _served(tmp_path, *, seed: int = 0, n: int = 12, gap: bool = True, **sched_k
     """A run of `n` requests with varied prompt and output lengths, some ending at EOS, arriving while others decode, with an idle
     gap before the last two when `gap`; writes step_trace.jsonl and requests.jsonl under tmp_path."""
     rng = random.Random(seed)
-    arrivals, at = {}, 0
+    arrivals: dict[int, list[FakeRequest]] = {}
+    at = 0
     for i in range(n):
         prompt, cap = rng.randint(1, 40), rng.randint(1, 12)
         outputs = [rng.randint(3, 99) for _ in range(cap)]
@@ -180,9 +182,11 @@ def test_a_request_aborted_before_it_is_ever_scheduled_is_dropped_from_the_advic
     assert rep["roundtrip"] and rep["counts"]["requests"] == 1 and rep["counts"]["aborted_unscheduled"] == 1
     assert [(q.id, q.output_len) for q in _advice(tmp_path).requests] == [("user-e0", 3)]
     gone = "request e1 was aborted before it was ever scheduled, which the advice drops, and the trace emitted"
-    for e1, why in [({"output_ids": [6]}, "0 tokens for it, the Commit record 1, finished by abort"),
-                    ({"finish": {"reason": "abort", "stop_reason": None, "k": 2}}, "0 tokens for it, the Commit record 0, finished by abort after 2 ids"),
-                    ({"finish": {"reason": "length", "stop_reason": None}}, "0 tokens for it, the Commit record 0, finished by length")]:
+    edits: list[tuple[dict[str, Any], str]] = [
+        ({"output_ids": [6]}, "0 tokens for it, the Commit record 1, finished by abort"),
+        ({"finish": {"reason": "abort", "stop_reason": None, "k": 2}}, "0 tokens for it, the Commit record 0, finished by abort after 2 ids"),
+        ({"finish": {"reason": "length", "stop_reason": None}}, "0 tokens for it, the Commit record 0, finished by length")]
+    for e1, why in edits:
         with pytest.raises(ValueError) as e:
             ADV.from_trace(recs, {**io, "e1": {**io["e1"], **e1}}, carry=())
         assert str(e.value) == f"{gone} {why}"

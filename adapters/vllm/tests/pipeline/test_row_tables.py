@@ -12,6 +12,7 @@ import copy
 import json
 from dataclasses import replace
 from pathlib import Path
+from typing import Any
 
 import numpy as np
 import pytest
@@ -55,13 +56,14 @@ class Served:
 
     def __init__(self, seed: int = 3) -> None:
         rng = np.random.default_rng(seed)
-        self.rows, self.ops, self.y = [], {}, {}
+        self.rows, self.ops = [], {}
+        self.y: dict[tuple[str, int, str], dict[int, np.ndarray]] = {}
         self.W = {op: rng.integers(-128, 128, (n, K)).astype(np.int8) for op, n in N.items()}
         self.sw = {op: (np.abs(rng.standard_normal(n)) * 0.02).astype(np.float32) for op, n in N.items()}
         for u, (rid, step, tok, i, op) in enumerate(ROWS):
             n, w = N[op], 1000 + list(N).index(op)
-            r = {"i": i, "spec": f"ScaledMmS8_v1{{K={K},N={n},DOT={DOT}}}",
-                 "args": [[["n", u, 0, K]], [["n", u, K, K + 1]], [["p", w, 0, n * K]], [["p", w, n * K, n * K + n]]]}
+            r: dict[str, Any] = {"i": i, "spec": f"ScaledMmS8_v1{{K={K},N={n},DOT={DOT}}}",
+                                 "args": [[["n", u, 0, K]], [["n", u, K, K + 1]], [["p", w, 0, n * K]], [["p", w, n * K, n * K + n]]]}
             d = {"statics": {"K": K, "N": n}, "op_path": op, "members": [("y", n, "bf16")], "row": tok, "step": step}
             self.rows.append((rid, None, r, d))
             x, sx = rng.integers(-128, 128, K).astype(np.int8), np.array([abs(rng.standard_normal()) / 127], np.float32)
@@ -293,8 +295,11 @@ def test_the_audit_record_carries_each_drawn_chunks_reads_beside_the_roots_lean_
     reads = TB.registered_reads(mine, {m.key: (tmp_path / f"m{k}-public.bin").read_bytes() for k, m in enumerate(mine.members)},
                                  registered=REG)
     k0, k4 = mine.members[0].key, mine.members[4].key
-    lean = lambda key: {"accepted": True, "of_record": True,  # noqa: E731
-                        "registered": {p: {"value": e["value"], "root": e["root"]} for p, e in reads[key]["ports"].items()}}
+
+    def lean(key: str) -> dict[str, Any]:
+        return {"accepted": True, "of_record": True,
+                "registered": {p: {"value": e["value"], "root": e["root"]} for p, e in reads[key]["ports"].items()}}
+
     rec = TB.reported_reads(reads, {k0: lean(k0), k4: lean(k4)})
     t1 = mine.row_tables[1]
     assert rec["ok"] and rec["chunks"][k0] == {"reads": {CS.LINKED: {"value": t1.port, "root": c.table_roots[t1.port].hex()}},

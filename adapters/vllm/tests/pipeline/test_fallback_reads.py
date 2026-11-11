@@ -74,7 +74,12 @@ def test_checkpoint_repo_is_none_without_the_file(tmp_path: Path):
 def test_main_serves_the_manifest_s_model_else_the_role_s(tmp_path: Path, monkeypatch, case, manifest, model, served):
     seen = []
     monkeypatch.setattr(gw, "Tok", lambda path: None)
-    monkeypatch.setattr(gw, "workload_doc", lambda **kw: seen.append(kw["model"]) or {"note": ""})
+
+    def workload_doc(**kw):
+        seen.append(kw["model"])
+        return {"note": ""}
+
+    monkeypatch.setattr(gw, "workload_doc", workload_doc)
     ck = _checkpoints(tmp_path, manifest) if manifest is not None else tmp_path / "missing.json"
     a = gw.Options(case=case, model=model, tokenizer="t", profiles="P", ctx="C", out_dir=str(tmp_path / "out"), checkpoints=str(ck))
     assert gw.main(a) == 0 and seen == [served]

@@ -32,12 +32,19 @@ def refusal(opts: so.Options) -> str | None:
     return None
 
 
+def refused(opts: so.Options) -> str:
+    said = refusal(opts)
+    assert said is not None, "nothing was refused"
+    return said
+
+
 class Backend:
     """`remote.StoreBackend` as `CommitSession` builds it, its engine the session's `Lockstep`."""
 
     def __init__(self, store: Any, engine: Any, *, path: Any = None, device: Any = None) -> None:
         self.store, self.engine, self.path, self.device = store, engine, path, device
-        self.trace, self.gates, self.step_ns = None, [], 0
+        self.trace, self.step_ns = None, 0
+        self.gates: list = []
 
     def layout(self) -> dict:
         return {}
@@ -67,6 +74,7 @@ def serve(tmp_path, rs: SR.ServeSession, requests: int, order: list[str]) -> Ser
     """``requests`` certifier requests, one after another, each 4 engine steps, on a server whose session began as `main`
     begins it: after the windows were built, before the first request."""
     s = Serving(tmp_path)
+    assert s.windows is not None
     s.windows.read_extras = lambda: order.append("extras")
     s.loop.engine = rs.paced(s.loop.engine)
     rs.begin(s.windows)
@@ -80,9 +88,9 @@ def test_the_remote_options_parse_into_their_group_and_are_refused_before_the_mo
     opts = parse(*VERIFIER, "--remote-filler-gib", "1.5")
     assert (opts.remote.remote_verifier, opts.remote.remote_plan, opts.remote.remote_filler_gib) == ("127.0.0.1:7781", "serve", 1.5)
     assert refusal(opts) is None and SR.session_of(parse(), "/tmp") is None and SR.accepted(None)
-    assert "HOST:PORT" in refusal(parse("--remote-verifier", "nohost"))
-    assert "is serve" in refusal(parse(*VERIFIER, "--remote-plan", "servedrop:1"))
-    assert "--prefix-caching" in refusal(parse(*VERIFIER, "--prefix-caching"))
+    assert "HOST:PORT" in refused(parse("--remote-verifier", "nohost"))
+    assert "is serve" in refused(parse(*VERIFIER, "--remote-plan", "servedrop:1"))
+    assert "--prefix-caching" in refused(parse(*VERIFIER, "--prefix-caching"))
     assert SR.refusal(parse(*VERIFIER, "--remote-kv-lib", "kv.so", "--protocols", "pouw:eps1-sm120-h1fx1")) is None
 
 
@@ -102,7 +110,7 @@ def test_the_server_steps_in_lockstep_with_its_session_from_its_first_step_and_u
     order: list[str] = []
     rs = session(tmp_path, monkeypatch, prover(3, order))
     s = serve(tmp_path, rs, 2, order)
-    assert order == ["extras", "registered"] and s.loop.steps == 8 and s.windows.summary()["passed"]
+    assert order == ["extras", "registered"] and s.loop.steps == 8 and s.windows is not None and s.windows.summary()["passed"]
     rec = rs.end()
     assert rec["accepted"] and rec["error"] is None
     assert rec["run"] == {"steps": 8, "audited": 3, "unaudited": 5} and SR.accepted(rs)
@@ -124,7 +132,7 @@ def test_a_session_that_fails_is_rejected_and_the_server_serves_on_unaudited(tmp
 
     rs = session(tmp_path, monkeypatch, fails)
     s = serve(tmp_path, rs, 1, [])
-    assert rs.record is not None and s.windows.summary()["passed"]
+    assert rs.record is not None and s.windows is not None and s.windows.summary()["passed"]
     rec = rs.end()
     assert rec["error"] == "ConnectionRefusedError: no verifier" and not SR.accepted(rs)
     assert rec["run"] == {"steps": 4, "audited": 0, "unaudited": 4}
@@ -138,7 +146,12 @@ def test_a_server_stopped_before_its_session_began_is_rejected(tmp_path, monkeyp
 
 def test_a_sealing_server_reads_the_registered_bytes_once_under_its_weights_root(tmp_path, monkeypatch):
     calls: list[Any] = []
-    monkeypatch.setattr(sc, "extras_of", lambda com, rc: calls.append(rc.weight_registration) or ("tree", ["bytes"]))
+
+    def extras_of(com, rc):
+        calls.append(rc.weight_registration)
+        return "tree", ["bytes"]
+
+    monkeypatch.setattr(sc, "extras_of", extras_of)
     com = SimpleNamespace(weights={"root": "ab"}, weights_tree={"root": "ab"})
     sc.CommitWindows(com, tmp_path, run_id="t", window_steps=4).read_extras()
     assert calls == [], "a server that seals nothing reads nothing"

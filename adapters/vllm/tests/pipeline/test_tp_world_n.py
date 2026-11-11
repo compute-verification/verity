@@ -140,7 +140,9 @@ def test_collective_bus_world_3_peer_layout_and_rank_order():
 
 
 def _derive_world8_collective(monkeypatch, *, fused: bool, custom: bool):
-    torch = pytest.importorskip("torch")
+    pytest.importorskip("torch")
+    import torch
+
     from verity_vllm.program.frontend.derive import derive_report
     from verity_vllm.program.frontend.export_ops import ensure_ops
     from verity_vllm.program.frontend.rules import vllm_bindings as VB
@@ -181,7 +183,8 @@ RTX_PRO_6000 = ((12, 0), 188)
 
 
 def _derive_world4_all_reduce(monkeypatch, *, env: dict, gpu: tuple, M: int, N: int = 8192):
-    torch = pytest.importorskip("torch")
+    pytest.importorskip("torch")
+    import torch
     from verity.definitions.registry.tp_allreduce import settings_of
 
     from verity_vllm.program.frontend.derive import derive_report
