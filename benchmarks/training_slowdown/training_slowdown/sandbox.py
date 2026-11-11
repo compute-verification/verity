@@ -22,9 +22,10 @@ hidden. So the sandbox hides, on every machine, the directories those sockets ar
 the user's systemd manager and session bus are, and the system bus and the machine's daemons beside them, and the
 directory of the user's tmux server. COMMAND finds each empty, so it is one that reads nothing there.
 
-What it hides besides is the directories the registry names (`final_sets`) and the job's own state directory
-(`run.Kept`): a copy of a final set at another path stays as readable as the job's user finds it, and so does another
-job's state. The rest of the file system is the user's as before, a socket at another path among it. The entry
+What it hides besides is the directories the registry names (`final_sets`), the job's own state directory
+(`run.Kept`) and, where the job's run holds a key to the store, the directory the key lies in
+(`run.routes_environment`): a copy of a final set at another path stays as readable as the job's user finds it, and
+so does another job's state. The rest of the file system is the user's as before, a socket at another path among it. The entry
 imports the standard library alone, since a process makes a user namespace only while it has one thread.
 """
 from __future__ import annotations

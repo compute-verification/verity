@@ -10,7 +10,9 @@ A job is two processes. Its own (`outside`) runs no route's code: it reads the j
 route's process in the sandbox (`training_slowdown.sandbox`: no network, an empty directory where each registered
 final set is) and scores each state that process hands out. The route's process (`inside`) stops before it imports
 the route when it finds an interface up, a final set readable or a capability in its own hands, so a job never
-trains outside the sandbox; it gets no score back, and its record says what it found (`sandbox`).
+trains outside the sandbox; it gets no score back, and its record says what it found (`sandbox`). It gets no key to
+the store either: where the job's run holds one (`research run --store-read`), the route's process is started
+without its names in the environment and with the directory it lies in hidden (`routes_environment`).
 
 The route loop (`train`): the route builds its model and optimizers (`training_slowdown.routes`), the harness loads θ
 into the model and registers it, and runs the budget's steps, each the route's `step` on the next batch of the start's
@@ -908,9 +910,34 @@ def joined(prior: dict | None, rec: dict) -> dict:
         "flags": flags(totals, float(rec.get("peak_macs_per_s", 0))), "segments": prior["segments"] + [segment]}
 
 
+#: how a run that reads the store holds its key (`research run --store-read`): in its environment, under names that
+#: start `STORE_KEY`, and in a file beside the store's configuration, which `STORE_CONFIG` names
+STORE_KEY, STORE_CONFIG = "AWS_", "RESEARCH_STORE_CONFIG"
+
+
+def routes_environment(environ: dict[str, str], needs: list[Path]) -> tuple[dict[str, str], list[Path]]:
+    """What the route's process gets of `environ`, the job's own, and what is hidden from it for that: every name
+    but the store's key's (`STORE_KEY`) and `STORE_CONFIG`, and the directory `STORE_CONFIG` names or names a file
+    in, where the key lies beside the configuration. The route's process reads no store: the key is the job's shell's,
+    which fetches a stopped job's state with it. A directory that holds one of `needs`, what the route's process
+    can't run without, is refused: hidden, it would end the job with no reason given."""
+    env = {k: v for k, v in environ.items() if not k.startswith(STORE_KEY) and k != STORE_CONFIG}
+    if not environ.get(STORE_CONFIG):
+        return env, []
+    named = Path(environ[STORE_CONFIG]).resolve()
+    d = named if named.is_dir() else named.parent
+    for p in needs:
+        if d in [p.resolve(), *p.resolve().parents]:
+            raise SystemExit(f"training_slowdown: ${STORE_CONFIG} names {named}, and the route's process is not to "
+                             f"read the store's key beside it, so the job hides {d} from it, which holds {p}, "
+                             f"which that process needs. Keep the store's configuration in a directory of its own.")
+    return env, [d]
+
+
 def outside(a: argparse.Namespace, argv: list[str]) -> int:
     """The job's own process, which runs no route's code. It reads the job's held-out split, starts the route's
-    process (`inside`) in the sandbox with every registered final set and the job's state directory hidden, scores
+    process (`inside`) in the sandbox with every registered final set and the job's state directory hidden, and
+    without the store's key in its environment or on its disk (`routes_environment`), scores
     each state that process hands out, under the digest it hashes the state to itself, keeps what continuing needs
     where the job has a state directory (`Kept`), and writes the record with the scores in (`with_scores`) over
     every segment the job ran in (`joined`). Told to stop (SIGTERM, to itself or to the route's process), it writes
@@ -937,10 +964,12 @@ def outside(a: argparse.Namespace, argv: list[str]) -> int:
     told = signal.signal(signal.SIGTERM, stop) if a.retrace is None else None
     try:
         state = Kept(a.state) if a.state is not None and a.retrace is None else None
-        hide = [x for d in [*sandbox.final_sets(reg), *([state.dir] if state else [])] for x in ("--hide", str(d))]
+        env, store = routes_environment(dict(os.environ), [Path(sys.executable), Path(sys.prefix), HERE, scratch])
+        hide = [x for d in [*sandbox.final_sets(reg), *([state.dir] if state else []), *store]
+                for x in ("--hide", str(d))]
         route = [sys.executable, "-m", "training_slowdown.sandbox", *hide, "--",
                  sys.executable, "-m", "training_slowdown.run", *argv, "--inside", str(scratch)]
-        env = os.environ | {"PYTHONPATH": os.pathsep.join([str(HERE.parent), *filter(None, sys.path)])}
+        env |= {"PYTHONPATH": os.pathsep.join([str(HERE.parent), *filter(None, sys.path)])}
         if a.retrace is not None:
             return subprocess.run(route, env=env).returncode
         kept = state.load(a.seed, a.split, a.continues) if state else None

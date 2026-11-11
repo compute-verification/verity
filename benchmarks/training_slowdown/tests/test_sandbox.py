@@ -129,6 +129,53 @@ def test_a_machine_that_refuses_the_namespaces_fails_the_job_with_what_it_needs(
     assert not (tmp_path / "out").exists()
 
 
+def test_the_routes_process_gets_no_name_of_the_stores_key_and_finds_its_directory_empty(tmp_path, monkeypatch):
+    """A job whose environment holds a run's read-only key to the store, as `research run --store-read` gives it
+    (names that start AWS_, and RESEARCH_STORE_CONFIG, which names the store's configuration, the key lying in a
+    file beside it), starts its route's process with none of those names and every other, and with that directory
+    among what the sandbox hides: through the entry a process finds it empty. A configuration beside what the
+    route's process needs is refused before anything starts. The values are dummies, and only names are read: the
+    route's process is a stand-in that writes down its argv and its environment's names."""
+    staged, said, standin = tmp_path / "requests" / "store-read", tmp_path / "said.json", tmp_path / "bin" / "python"
+    for d in (staged, standin.parent):
+        d.mkdir(parents=True)
+    for name in ("store.toml", "cred.json"):
+        (staged / name).write_text("dummy")
+    standin.write_text(f"#!{sys.executable}\nimport json, os, sys\n"
+                       f"open({str(said)!r}, 'w').write(json.dumps({{'argv': sys.argv[1:], 'names': sorted(os.environ)}}))\n"
+                       f"sys.exit(1)\n")
+    standin.chmod(0o755)
+    dummy = {"AWS_ACCESS_KEY_ID": "dummy", "AWS_SECRET_ACCESS_KEY": "not-to-be-copied", "AWS_SESSION_TOKEN": "dummy",
+             "AWS_PROFILE": "dummy", "RESEARCH_STORE_CONFIG": str(staged / "store.toml"),
+             "RESEARCH_RUN_DIR": "dummy", "NOT_AWS_": "dummy"}
+    for name, value in dummy.items():
+        monkeypatch.setenv(name, value)
+    reg, python = tiny_registry(tmp_path / "reg"), sys.executable
+    argv = ["--config", write_config(tmp_path / "a.toml"), "--seed", 0, "--split", "search", "--out", tmp_path / "out",
+            "--starts", reg]
+    monkeypatch.setattr(run.sys, "executable", str(standin))
+    assert run.main(argv) == 1 and not (tmp_path / "out").exists()
+    route = json.loads(said.read_text())
+    names, kept = set(route["names"]), {"RESEARCH_RUN_DIR", "NOT_AWS_", "PATH", "PYTHONPATH"}
+    assert not [n for n in names if n.startswith("AWS_")] and "RESEARCH_STORE_CONFIG" not in names
+    assert {n for n in os.environ if n not in dummy} | kept <= names
+    entry, command = route["argv"][:route["argv"].index("--")], route["argv"][route["argv"].index("--") + 1:]
+    assert entry[:2] == ["-m", "training_slowdown.sandbox"] and entry[-2:] == ["--hide", str(staged)]
+    assert command[:3] == [str(standin), "-m", "training_slowdown.run"]
+    seen = subprocess.run([python, *entry, "--", python, "-c", f"import os; print(os.listdir({str(staged)!r}))"],
+                          cwd=Path(run.__file__).parents[1], capture_output=True, text=True)
+    assert (seen.returncode, seen.stdout) == (0, "[]\n"), seen.stderr[-2000:]
+    assert sorted(p.name for p in staged.iterdir()) == ["cred.json", "store.toml"]
+
+    said.unlink()
+    monkeypatch.setenv("RESEARCH_STORE_CONFIG", str(tmp_path / "store.toml"))
+    with pytest.raises(SystemExit) as refused:
+        run.main(argv)
+    assert str(refused.value).endswith(f"so the job hides {tmp_path} from it, which holds {standin}, which that "
+                                       f"process needs. Keep the store's configuration in a directory of its own.")
+    assert not said.exists() and not (tmp_path / "out").exists()
+
+
 def test_a_routes_process_outside_the_sandbox_stops_before_it_reads_its_config(tmp_path, monkeypatch, no_operators):
     """The route's process, started by hand where the final set is readable or an interface is up, is a failed job
     with the reason, and it has imported no route by then."""

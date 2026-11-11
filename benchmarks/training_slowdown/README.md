@@ -103,8 +103,12 @@ user's systemd manager, its session bus, tmux). That process stops before it imp
 any of them reachable, or holds a capability that could undo them, as root's does, so on a machine that can't make the
 sandbox a job fails with the reason and trains nothing. The
 job's own process reads the held-out split and scores each checkpoint's state as the route's process hands it out;
-no score goes back in. The sandbox hides those paths and nothing else of the file system: a socket at another path
-stays reachable.
+no score goes back in. Where the job's run holds a key to the store (`research run --store-read`, which a job that
+continues fetches its state with), the route's process gets none of it: it is started without the names the key and
+the store's configuration arrive under (those that start `AWS_`, and `RESEARCH_STORE_CONFIG`), and the directory the
+configuration is in, where the key lies in a file beside it, is hidden as well. The job's own process and its shell
+keep the key. The sandbox hides those paths and nothing else of the file system: a socket at another path stays
+reachable.
 
 After its last step a job traces its route's step once, outside the count, and its record's `trace` holds what the
 capture measures of it for the grade: the token axes, the forward's updated MAC nodes, and the product rows unpriced
