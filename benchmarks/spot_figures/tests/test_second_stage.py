@@ -5,6 +5,7 @@ from fractions import Fraction
 
 import pytest
 import second_stage as s2
+from verity.protocols.spot.device.challenger import COIN_BYTES, MAX_COINS
 from verity.protocols.spot.optimize import Cell
 from verity.protocols.spot.verifier import service
 
@@ -34,6 +35,8 @@ def test_a_first_read_in_rounds_and_in_the_challenger_s_coins():
     assert s2.ROUND_BYTES == 2 ** 20
     assert [s2.stages(b) for b in (1, 2 ** 20, 2 ** 20 + 1)] == [1, 1, 2]
     assert [s2.coins(b) for b in (64, 65)] == [1, 2]
+    held = MAX_COINS * COIN_BYTES
+    assert [s2.fits(b) for b in (held, held // 2, held // 2 + 1, held + 1)] == [1, 2, 1, 0]
     assert s2.refusal(3, (2, 5)) == Fraction(21, 2 ** 64)
 
 
@@ -56,14 +59,14 @@ def test_a_design_s_cells_split_each_stratum_s_count_in_proportion():
 
 def test_the_second_stage_at_a_design():
     """A verification phase of at most 3 sampled replay blocks: their cells' first reads, 82, 226 and 100 bytes a
-    replay block, in rounds and in coins, and Lean's bound at 3·12 sampled proof blocks; over the scope's 12.5 sampled
-    replay blocks, 12.5·12 of them."""
+    replay block, in rounds and in coins, the replay blocks of 408 bytes a commitment's coins hold, and Lean's bound at
+    3·12 sampled proof blocks; over the scope's 12.5 sampled replay blocks, 12.5·12 of them."""
     cells = [Cell(3, 16), Cell(100.5, 16), Cell(7, 64)]
     row = {"merged": 16, "k": {0: 10, 64: 2}, "registration_cap": 3, "replay_sample": 12.5}
     assert s2.at_design(cells, row) == {
         "cells": 3, "sampled": 12, "whole": False, "sample": 3, "read": 408, "stages": 1, "coins": 20,
-        "refusal": 36 / 2.0 ** 64, "pooled": 150 / 2.0 ** 64}
+        "fits": MAX_COINS * COIN_BYTES // 408, "refusal": 36 / 2.0 ** 64, "pooled": 150 / 2.0 ** 64}
     assert s2.at_design(cells, row | {"registration_cap": 0})["sample"] == 1
     whole = s2.at_design([Cell(2, 16)], {"merged": 16, "k": {0: 2}, "registration_cap": 1, "replay_sample": 4.0})
     assert whole == {"cells": 1, "sampled": 2, "whole": True, "sample": 1, "read": 0, "stages": 0, "coins": 0,
-                     "refusal": 0.0, "pooled": 0.0}
+                     "fits": None, "refusal": 0.0, "pooled": 0.0}

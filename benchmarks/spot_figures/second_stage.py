@@ -10,7 +10,8 @@ them.  On fewer bytes than the first reads it refuses at every coin.
 
 `first_read` is that theorem's condition and `refusal` its bound.  `stages` and `coins` count a first read in the units
 its two readers open: SPOT[Flock]'s rounds of 2^20 bytes (`SpotFlock.L`, `Held.stage` of them) and the challenger's
-64-byte coins (`challenger.COIN_BYTES`).  `design_cells` gives the cells of a planner's two-stage design
+64-byte coins (`challenger.COIN_BYTES`), of which one commitment holds at most `challenger.MAX_COINS`: `fits` is how
+many sampled replay blocks' first reads that is.  `design_cells` gives the cells of a planner's two-stage design
 (`optimize.two_stage_design`), and `at_design` all of it there, which `total_cost` carries beside every two-stage point.
 """
 from __future__ import annotations
@@ -21,7 +22,7 @@ from math import ceil
 from typing import Any
 
 import figure1 as f1
-from verity.protocols.spot.device.challenger import COIN_BYTES
+from verity.protocols.spot.device.challenger import COIN_BYTES, MAX_COINS
 from verity.protocols.spot.optimize import Cell
 
 #: the bytes SPOT[Flock]'s stages read of one round's coin, 65,536 field elements of 16 bytes (Lean's `SpotFlock.L`)
@@ -60,6 +61,12 @@ def stages(read: int) -> int:
 def coins(read: int) -> int:
     """The challenger's coins that hold `read` bytes."""
     return -(-read // COIN_BYTES)
+
+
+def fits(read: int) -> int:
+    """The sampled replay blocks whose first reads, `read` bytes each, one commitment of the challenger's holds: on a
+    replay sample of more the second stage has too few coins and refuses every run."""
+    return MAX_COINS * COIN_BYTES // read
 
 
 def _split(k: int, sizes: Sequence[int]) -> list[int]:
@@ -104,6 +111,8 @@ def at_design(cells: Sequence[Cell], row: Mapping[str, Any]) -> dict[str, Any]:
     - `sample`: the most replay blocks K a verification phase samples, which the row makes public
       (`registration_cap`), and 1 for a design whose statements each hold one sampled replay block's proof blocks;
     - `stages` and `coins`: the rounds and the challenger's coins that hold K replay blocks' first read;
+    - `fits`: the sampled replay blocks whose first reads one commitment of the challenger's holds
+      (`challenger.MAX_COINS` coins), to hold against K: on a replay sample of more, the second stage refuses;
     - `refusal`: Lean's bound on the chance a verification phase's second stage refuses an honest run, at a first-stage
       coin the first stage accepts and on coins that hold the first read, K·Σ_t k_t·2^-64;
     - `pooled`: that bound added up over the replay blocks the row's whole scope samples (`replay_sample`, expected).
@@ -114,11 +123,11 @@ def at_design(cells: Sequence[Cell], row: Mapping[str, Any]) -> dict[str, Any]:
     sample = max(1, int(row.get("registration_cap") or 1))
     out = {"cells": len(ns), "sampled": sum(ks), "whole": ks == ns, "sample": sample}
     if ks == ns:
-        return out | {"read": 0, "stages": 0, "coins": 0, "refusal": 0.0, "pooled": 0.0}
+        return out | {"read": 0, "stages": 0, "coins": 0, "fits": None, "refusal": 0.0, "pooled": 0.0}
     read = first_read(sample, ns, ks)
-    return out | {"read": read // sample, "stages": stages(read), "coins": coins(read),
+    return out | {"read": read // sample, "stages": stages(read), "coins": coins(read), "fits": fits(read // sample),
                   "refusal": float(refusal(sample, ks)),
                   "pooled": row["replay_sample"] * sum(ks) / 2.0 ** 64}
 
 
-__all__ = ["ROUND_BYTES", "at_design", "coins", "design_cells", "first_read", "refusal", "stages", "width"]
+__all__ = ["ROUND_BYTES", "at_design", "coins", "design_cells", "first_read", "fits", "refusal", "stages", "width"]

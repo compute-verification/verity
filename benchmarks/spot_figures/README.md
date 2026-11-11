@@ -123,7 +123,8 @@ uv run python benchmarks/spot_figures/record.py stamp META.json [--out DIR]  # a
   - A two-stage point's bound is for a deployment whose second stage has the coins its cells read first: on fewer it
     refuses every honest run. Each two-stage exfiltration series carries them at every β (`second_stage.at_design`):
     a sampled replay block's cells, the proof blocks sampled of them and the bytes they read first; the rounds of
-    2^20 bytes and the challenger's 64-byte coins that hold the first reads of K0 replay blocks; Lean's bound on the
+    2^20 bytes and the challenger's 64-byte coins that hold the first reads of K0 replay blocks, and the replay blocks
+    whose first reads one commitment of the challenger's holds (`challenger.MAX_COINS` coins); Lean's bound on the
     chance the second stage then refuses an honest run at a first-stage coin the first stage accepts, K0·Σ_t k_t·2^−64
     (`SpotFlock.secondDraw_refused_le_first`); and that bound added up over the replay blocks the scope samples.
   - Exfiltration: (A) and (A′) in the patterns' form (`card_influenceTwo_le_patterns`), under its two modeling
