@@ -52124,3 +52124,62 @@ For the table:
 - **The recut draft** is started: branch `cursor/proofs-recut-c2b3`, head `99ab6a2bc2be35b2a6e2e461a012da65c1afecdf`, pushed, no PR. `BatchedGemm_v1` rows are also offered in slices c output words wide (`WIDE_SLICES`; `unit_templates`, the slice layout's reader and the weight reads); the slice tests and the weight-read tests pass on my VM (39 and 6) [run]. Running on vy-nebius-cpu-7: circuit-check of `BatchedGemm_v1{B=1,K=192,N=64}` (`r20261111-114722-64aa`) and `{B=1,K=512,N=16}` (`…-47a3`), each unit's build for its size (`…-4278`, `…-36c8`), and the quick tier (`…-71d9`). The entry with items 2 and 3 comes by 13:00Z.
 
 For the table: #8917 ready to mark at `9be3347195219559728580e6d05bfd1c22baeb13`; quick tier `d53b` 55 of 55, circuit-check `900f` 30 targets and 0 failures, both at the head [run].
+
+## DRAFT-CORE (PRF-540), Wed 11 Nov 11:50Z: the SpotFlock half is open UNMARKED as #8940 at fcf8b80f3fd3883878984213c51f6aca1435bbef on the layer #8934 (unmarked, 70f018e3125778c361c255e6e35be88f10ecad9d); all 20 files done, records run exit 0; the bits stack builds on it only with five files restated (on a branch of mine); MAX_COINS 2^24 covers D*1 and widths 2^-6, 2^-7 at K0 = 6, not the record or width 2^-4
+Both are claims and Daniel's: #8934 restates `Flock.Guarantees.SampledKSTwo`; #8940 changes definitions `SpotKSTwo` and `SpotExfilTwo` read and the statement of the open premise `SpotFlock.Addresses`. I mark nothing and ask for no mark.
+
+**1. The three unmarked PRs, with full heads.**
+
+| PR | head | what | runs |
+|---|---|---|---|
+| #8914 | `3f10472f19634dfdf7bcd8460ade2981e9daabf8` | the device's caps: `MAX_COINS` 2^24 (2^30 bytes a draw), `MAX_TREE_LINES` 2^23 | quick tier 67 suites, 67 passed [run `r20261111-091201-b46c`] |
+| #8934 | `70f018e3125778c361c255e6e35be88f10ecad9d` | the layer under the code: a second stage of R rounds (`SamplingDeploy.StageOrder`, `codeTwoStage`, `StageUniform`); on #8827's head | `security/Proofs` `check.py` exit 0 [run `r20261111-104036-5ecd`]; `security` records exit 0 [run `r20261111-110705-dae6`]; quick tier 8 of 8 [run `r20261111-104036-cbfd`] |
+| #8940 | `fcf8b80f3fd3883878984213c51f6aca1435bbef` | the SpotFlock half: `SpotFlock.Held.more`, the modeled verifier reads `stage = more + 1` rounds of 2^20 bytes; stacked on #8934 | `security` records exit 0 in 813 s [run `r20261111-112540-5d43`]; 11 tries exit 0, axiom probes clean (ids in the body); quick tier 8 of 8 at its Lean before the lock commit [run `r20261111-105035-27ba`], at the head still running [`r20261111-114237-e7e0`]; the whole `security/Proofs` package at its Lean still building [`r20261111-105035-c583`] |
+
+None has had the kernel replay (the candidate's check) or a second reader.
+
+**2. The half: files done and files left.** Done: all 20 files the half changes under `security/Proofs/Flock/SpotFlock/` (`Code`, `Coins`, `Facts`, `Sessions`, `Pin`, `Cap`, `KS`, `Opens`, `Format`, `RowsOpen`, `Frame`, `FrameIsAt`, `EntriesAt`, `Depths`, `Placement`, `LayoutAt`, `RevealAt`, `SlotsAt`, `Honest`, `Accepting`); `Rows`, `FrameAt`, `FrameIsBuilt`, `Numbers` and `SamplingGeneric/Guarantees` are unchanged in text and compile on it. Left in the half: none. It adds no module; by a count of declaration lines +30 names, -4 [derived].
+
+**3. #8940's lock records [run `5d43`, read from its regenerated lock against #8934's].**
+- No guarantee's signature or type hash moves: `SpotKSTwo` and `SpotExfilTwo` keep both (their text is `∀ h : SpotFlock.Held, …` and `Held` gains a field).
+- The open premise `SpotFlock.Addresses` changes its statement (digest `381dddf63ad1` to `5a41733162d8`): it is over checked runs, which now carry the stage's coins. No premise added or dropped.
+- Definitions read: 44 changed, 8 added, 2 no longer read, in six modules' entries (`SpotFlock.Code` 9 changed and 7 new; `RevealAt` 26 and 1; `SlotsAt` 6; `FrameIsAt` 2; `Opens` 1; `Claims.Sampling.Reg` drops `bytesSecond` and `codeTwoAt`, whose last reader was SPOT[Flock]'s code).
+
+**4. What #8940 does NOT do** (also in its body): it does not tie `Held.more` to the device (by reading only, #8914's `DRAW_ROUNDS = 1024` rounds of 2^20 bytes is `stage ≤ 1024`); it does not prove that an honest run of the priced design is accepted (`Honest.lean` takes the statements' check as a hypothesis, as on `main`); it moves no bits line. What it changes: at `main`'s model the verifier accepts no run at D*1's sizes (the second stage's coin is 2^20 bytes and D*1's first read is 138,580,196 bytes a sampled replay block [modeled]); with `stage ≥ 133 / 529 / 793` at a padded first stage of 1 / 4 / 6 [derived from the modeled stream lengths] the sample is no longer refused at every coin for want of bytes.
+
+**5. The merged tree: text-clean everywhere, and it does NOT build with five files of other open PRs.** #8940's head merges clean as text (`git merge-tree --write-tree`) with `main` `08ad61db9432` and with #8827, #8836, #8820, #8781, #8828, #8857, #8906, #8912, #8922, #8924, #8915, #8916, #8919, #8871, #8874, #8873, #8889, #8914, #8888, #8896, #8819 at their heads. That is not a build. Five files read the one-round stage (`src (r (order h x).second)`, or `CheckedRun` without its stage length) and fail on the half:
+
+| file | PR | fix | compiles on the half [run] |
+|---|---|---|---|
+| `SpotFlock/RevealsOpen.lean` | #8836 | 4 textual replacements | yes, under `Drawn`'s try `r20261111-111700-0dc3` |
+| `SpotFlock/NoAlways.lean` | #8871 | 6 replacements, `CheckedRun h.stage` | yes, `r20261111-112118-fa7a` (18 theorems) |
+| `SpotFlock/Drawn.lean` | #8874 | 1 replacement | yes, `r20261111-111700-0dc3` (4 theorems) |
+| `SpotFlock/OpensWhole.lean` | #8912, #8922 | its transcript half rewritten (18 theorems) | yes, `r20261111-105808-f549` |
+| `SpotFlock/Counts.lean` | TWOWITNESS's `04def4644bc4` | 13 replacements | yes, `r20261111-112315-610e` (7 theorems) |
+
+Unchanged and compiling on the half: #8922's `OpensClass.lean` [`r20261111-110115-3f6d`], #8924's `FirstHitClassAt.lean` [`r20261111-110923-ab51`], #8915's `SpotFirstHit.lean` [`r20261111-112335-f7c3`]. All of it is on `cursor/proofs-spot-stage-hwit-9e41` at `d62dd7c7ccb1cafaa1a78513190c46414f2541f8` (the half merged with those heads; no PR). Since #8940 waits for Daniel and the others are marked or in ci's builds, the plain order is: they land, then #8940 merges `main` and takes my five commits from that branch (`ecedc49e08`, `4392cbdd7a`, `5c0f08e20f`, `d62dd7c7cc`, and `Opens.lean`'s shared run steps in the first). Nobody else needs to change anything unless #8940 is to land first.
+
+**6. `MAX_COINS` 2^24 against each design on the 11:15Z table** [derived by a script from SCALE's Σ_t k_t (relayed, 09:52Z and 10:30Z entries, plan run `r20261111-080601-3db1`) and my formula's floor and ceiling of 18 to 26 bytes a sampled block, `2·width(n)` at widths 9 to 13, without the 64 bytes a cell; K0 = 6; NOT the exact rerun of `draftcore_coin.py` on HARMSEARCH's design, which needs its planner module and `3db1`'s evicted rows]:
+
+| design | bytes a run, low..high | least power of two | fits 2^30 bytes | model's `stage ≥` |
+|---|---|---|---|---|
+| D*1 row (ii) as priced | 596,590,488..861,741,816 (exact 831,481,176 [modeled]) | 2^30 | yes | 569..822 (exact 793) |
+| record, size classes 2^-5 | 1,085,022,000..1,567,254,000 | 2^31 | NO | 1,035..1,495 |
+| width 2^-2.5 | 4,628,367,216..6,685,419,312 | 2^33 | NO | 4,414..6,376 |
+| width 2^-4 | 1,636,377,120..2,363,655,840 | 2^31..2^32 | NO | 1,561..2,255 |
+| width 2^-6 | 409,097,520..590,918,640 | 2^29..2^30 | yes | 391..564 |
+| width 2^-7 | 204,550,704..295,462,128 | 2^28..2^29 | yes | 196..282 |
+
+So #8914's 2^24 covers D*1 and the two designs that hold 2^-100 by stratum at the plan's cut (widths 2^-6, 2^-7), and does not cover the record or width 2^-4, which the recut's table quotes: at K0 = 6 those need `MAX_COINS` 2^25 (the record) and 2^25 to 2^26 (width 2^-4), with `DRAW_ROUNDS` 2,048 to 4,096. At K0 = 4 the record is 723,348,000..1,044,836,000 bytes: it fits 2^30 only at the low end.
+
+**7. Job 4's public statement at V5: not started.** #8896 (marked) holds the stratified `Q_s` at public inputs by rows and public gates (`V5/QsRows.lean`). The public statement that reads it (my guess 250 to 350 lines) has no line written. I start it now and stop at 14:00Z if it does not compile by then.
+
+For the table: SPOT[Flock]'s modeled verifier at a second stage of several 2^20-byte rounds is BUILT and unmarked for Daniel in two PRs (#8934 the layer, #8940 the code; records runs `dae6` and `5d43` exit 0, no kernel replay, no second reader). Without them the model's verifier accepts no run at D*1's sizes. They move no bits line and do not prove an honest run is accepted. The device's cap #8914 (`MAX_COINS` 2^24) covers D*1 and widths 2^-6 and 2^-7 at K0 = 6, and not the record or width 2^-4 [derived bounds, not the exact rerun].
+
+For SCALE: section 6's table. A design quoted for the bits line at K0 = 6 needs the cap that covers its second stage's stream: the record needs 2^31 bytes, over #8914's 2^30. And #8874's `Drawn.lean` needs one textual replacement if #8940 lands (row 3 of section 5); nothing to do unless #8940 goes first.
+
+For REGX: #8912 / #8922 / #8924 and #8871 compile on the half with `OpensWhole.lean`'s transcript half restated and `NoAlways.lean`'s six replacements (section 5). Your `sessWit_reveal_passes`, `gateKey*`, `sessWit_reveal_key`, `OpensClass.lean` and `FirstHitClassAt.lean` are unchanged. Nothing to do unless #8940 goes first.
+
+For TWOWITNESS: `Counts.lean` at `04def4644bc4` compiles on the half after 13 textual replacements [`r20261111-112315-610e`, 7 theorems]; if you open its PR before #8940 lands, nothing changes for you.
+
+For CAPS: Proofs/Flock: +0 modules, +23 declarations (#8934: Claims/Sampling/Reg.lean, SamplingGeneric/TwoAt.lean, SpotFlock/Coins.lean). Proofs/Flock: +0 modules, +26 declarations (#8940: twenty files under SpotFlock/, none new).
