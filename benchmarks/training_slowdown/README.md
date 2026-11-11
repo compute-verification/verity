@@ -119,10 +119,11 @@ gradients the step asks for. A job's record is the same under either kernel, and
 step's count, at any setting of the optimizer's options (`tests/test_flops.py`): AdamW counts 8 multiplications a
 parameter and Adam 7, where their unfused steps make 6 at most, and SGD and Adagrad count 4, their unfused steps'
 largest (SGD's with momentum, weight decay and either Nesterov momentum or dampening; Adagrad's foreach step with
-weight decay). A route that names anything of `training_slowdown` but the codecs and the model,
-or a route around the dispatcher (`run.FORBIDDEN`), is refused, and one that uses an op the counter can't price, reads
-token data out of torch, starts a thread or a process, or imports a module the screen refuses makes its run invalid
-(`run.py`'s docstring has the screen).
+weight decay). The one exception is at most one multiplication a step: Adagrad's unfused step with a tensor learning
+rate and weight decay divides the rate itself. A route that names anything of `training_slowdown` but the codecs and
+the model, or a route around the dispatcher (`run.FORBIDDEN`), is refused, and one that uses an op the counter can't
+price, reads token data out of torch, starts a thread or a process, or imports a module the screen refuses makes its
+run invalid (`run.py`'s docstring has the screen).
 
 A route's code runs in a process of its own, inside the job's sandbox (`sandbox.py`): no network interface is up and
 each registered final set's directory is empty there. That process stops before it imports the route if it finds

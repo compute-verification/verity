@@ -557,8 +557,8 @@ def test_choosing_a_fused_optimizer_kernel_never_lowers_a_steps_count(name):
     and Adagrad's constants are their unfused steps' largest, Adam's and AdamW's are above theirs. Between them the
     four optimizers step in every kernel of the table.
 
-    One multiplication a step is outside it, whatever the parameters' size: with a learning rate given as a tensor,
-    Adagrad's unfused step divides the rate itself, which its kernel does inside."""
+    The one exception is at most one multiplication a step, with a tensor learning rate and weight decay: Adagrad's
+    unfused step then divides the rate itself, whatever the parameters' size, which its kernel does inside."""
     n = 32
     kernels, largest, steps = *FUSED_STEPS[name][:2], FUSED_STEPS[name][2]
     assert set().union(*(k for k, _, _ in FUSED_STEPS.values())) == set(opnames.FUSED_OPTIMIZER_MACS)
@@ -587,7 +587,7 @@ def test_choosing_a_fused_optimizer_kernel_never_lowers_a_steps_count(name):
             if tensor and foreach and name.startswith("Adam"):
                 continue  # torch has no foreach step of Adam with a tensor rate
             unfused, none = count(s | {"foreach": foreach})
-            assert not none and unfused <= fused + (tensor and name == "Adagrad"), (s, foreach)
+            assert not none and unfused <= fused + (name == "Adagrad" and tensor and s["weight_decay"] > 0), (s, foreach)
             most = max(most, 0 if tensor else unfused)
     assert ran == kernels and most == largest * n
 
