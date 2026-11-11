@@ -1,8 +1,8 @@
 #!/bin/bash
 # vy-challenger-pin COMMIT < TAR: pin the tree the challenger runs from, as root. COMMIT must be on origin/main's or
 # origin/next's first-parent history, which this script fetches from GitHub itself (a commits-only partial clone in
-# /var/cache/vy-challenger/main.git), so the host pins only what drive landed or put on next. TAR is infra's `git archive COMMIT verity benchmarks/live_challenger benchmarks/network_traces
-# integrations/vllm/manifests/checkpoints-int8.json` of that commit (the manifest pins the checkpoints `model-register` takes, and
+# /var/cache/vy-challenger/main.git), so the host pins only what drive landed or put on next. TAR is infra's `git archive COMMIT verity verity/composite/device/live_challenger benchmarks/network_traces
+# adapters/vllm/manifests/checkpoints-int8.json` of that commit (the manifest pins the checkpoints `model-register` takes, and
 # network_traces is the certifier rehearsal's, `certifier-rehearse`); it is
 # unpacked root-owned at /opt/vy-challenger/COMMIT, never changed after. The Lean toolchain its spot package names is
 # installed under /opt/elan (root's) and linked as COMMIT/.lean-bin; elan itself is release ELAN, its archive checked against
@@ -13,7 +13,7 @@
 # auditor.py refuses one whose pin moved. Rerunning it for an installed COMMIT skips the unpack and reads no TAR, and logs the
 # pin again.
 #
-#   git archive COMMIT verity benchmarks/live_challenger benchmarks/network_traces integrations/vllm/manifests/checkpoints-int8.json \
+#   git archive COMMIT verity verity/composite/device/live_challenger benchmarks/network_traces adapters/vllm/manifests/checkpoints-int8.json \
 #     | ssh vy-admin@HOST sudo vy-challenger-pin COMMIT
 set -euo pipefail
 die() { echo "vy-challenger-pin: $*" >&2; exit "${2:-1}"; }
@@ -46,12 +46,12 @@ install -d -m 0755 -o root -g root "$O"
 if [ ! -d "$T" ]; then
   tmp=$(mktemp -d "$O/.pin.XXXXXX")
   tar -x -C "$tmp" --no-same-owner --no-same-permissions
-  [ -f "$tmp/benchmarks/live_challenger/auditor.py" ] || { rm -rf "$tmp"; die "the archive has no benchmarks/live_challenger/auditor.py"; }
+  [ -f "$tmp/verity/composite/device/live_challenger/auditor.py" ] || { rm -rf "$tmp"; die "the archive has no verity/composite/device/live_challenger/auditor.py"; }
   chown -R root:root "$tmp"
   chmod -R u+rwX,go+rX,go-w "$tmp"
   mv "$tmp" "$T"
 fi
-pkg=$T/verity/core/service/spot
+pkg=$T/verity/protocols/spot/verifier/lean
 tc=$(tr -d '[:space:]' < "$pkg/lean-toolchain")
 [[ $tc =~ ^leanprover/lean4:v[0-9A-Za-z.-]+$ ]] || die "$pkg/lean-toolchain: $tc"
 if [ ! -x "$ELAN_HOME/bin/elan" ]; then
@@ -74,12 +74,12 @@ find "$T" \( -name lakefile.toml -o -name lakefile.lean \) -printf '%h\n' | whil
 done
 runuser -u auditor -- env -i HOME=/var/lib/vy-challenger PATH="$T/.lean-bin:/usr/bin:/bin" sh -c "cd '$pkg' && lake build sampled-proofs-verifier" \
   | tail -1
-net=$T/verity/core/protocols/network/lean
+net=$T/verity/protocols/certifier/verifier/lean
 if [ -d "$net" ] && [ -f "$T/benchmarks/network_traces/certifier_serve.py" ]; then
   runuser -u auditor -- env -i HOME=/var/lib/vy-challenger PATH="$T/.lean-bin:/usr/bin:/bin" sh -c "cd '$net' && lake build network-records" \
     | tail -1
 fi
-/usr/bin/python3 -I "$T/benchmarks/live_challenger/auditor.py" pinned "$c" "$m"
+/usr/bin/python3 -I "$T/verity/composite/device/live_challenger/auditor.py" pinned "$c" "$m"
 ln -sfn "$c" "$O/current.tmp"
 mv -Tf "$O/current.tmp" "$O/current"
 echo "pinned: $O/current -> $c (main $m)"

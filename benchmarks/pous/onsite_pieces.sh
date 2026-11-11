@@ -1,6 +1,6 @@
 # The onsite product's own pieces of a served run, the ones its private subprotocols run: the wipe's, PoUS's and the
 # bandwidth audit's. `benchmarks/one_stage/served_verdicts.sh` and `served_composite.sh` source this file where
-# ONSITE_PIECES names it (examples/vllm/placement.toml's window run sets it), with the tree as cwd, and call:
+# ONSITE_PIECES names it (demos/vllm/placement.toml's window run sets it), with the tree as cwd, and call:
 #
 #   onsite_piece_commands   served_verdicts.sh's defaults, each kept where its variable is set (empty: none):
 #       WIPE_CMD       'bash benchmarks/pous/streamed_wipe/served_wipe.sh "$1" "$2" "$3"' where the tree has it
@@ -37,8 +37,8 @@ onsite_piece_commands() {
 
 onsite_cases() {
   local rc
-  POUS_EXE=$(exe pous-run-protocol verity/core/protocols/pous/check) \
-    && WIPE_EXE=$(exe wipe-protocol verity/core/devices/memory_challenger/lean) || return 0
+  POUS_EXE=$(exe pous-run-protocol verity/protocols/pous/verifier/check) \
+    && WIPE_EXE=$(exe wipe-protocol verity/protocols/pous/device/lean) || return 0
   GPU_LEASE_WHO=${GPU_LEASE_WHO:-vllm-composed} LEASE_MIN=${CASE_LEASE_MIN:-60} MEM_GB=${CASE_MEM_GB:-170} PY=$PY \
     POUS_EXE=$POUS_EXE WIPE_EXE=$WIPE_EXE timeout -k 1m "${CASE_TIMEOUT:-90m}" bash benchmarks/pous/served_case.sh \
     "$OUT/pieces" > "$P/served_case.log" 2>&1

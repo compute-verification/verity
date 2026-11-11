@@ -1,5 +1,5 @@
 [Unit]
-Description=the network certifier's rehearsal %i, as auditor from the pinned tree (benchmarks/live_challenger/auditor.py certifier-run)
+Description=the network certifier's rehearsal %i, as auditor from the pinned tree (verity/composite/device/live_challenger/auditor.py certifier-run)
 
 [Service]
 Type=exec
