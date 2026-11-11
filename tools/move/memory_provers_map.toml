@@ -67,8 +67,9 @@ new = { verity = "verity", verity_difftest = "verity/difftest/python/verity_diff
 "p2_v1.wire" = "verity.protocols.pous.verifier.p2_v1.wire"
 "p2_v1.vectors" = "verity.protocols.pous.verifier.p2_v1.vectors"
 
+# The directories this move empties: a file a later branch adds under one has no row here, and the move stops on it.
 [retired]
-paths = []
+paths = ["benchmarks/pous/p2_gpu/", "benchmarks/pous/p2_v1/store-toy/"]
 
 [drop]
 paths = []
