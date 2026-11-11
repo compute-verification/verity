@@ -79,6 +79,11 @@ import reader as rdr  # noqa: E402
 BLOCK = rcodec.BLOCK_BYTES
 PER_LEAF = rb.PER_LEAF
 PACK16_WORDS = BLOCK // 64 * 32  # session.cu's SK16_PACK
+
+
+def pack_words(rows: int) -> int:
+    """The packed signs' words at k_s = `rows`: session.cu's SK16_PACK at 16 rows, its SK64_PACK at 64."""
+    return PACK16_WORDS * rows // skr.ROWS
 TOP_SEGS = 32  # session.cu's: rs_top's segments, real and padding
 SLOTS = 8
 """A GPU's root ring: the root of the k-th pass launched goes to slot k mod SLOTS, the window's previous root from the
@@ -87,10 +92,11 @@ OPEN_BATCH = 128
 """Passes whose kept levels are brought back to a GPU at once to open a window."""
 
 
-def stream_head(seed: bytes) -> bytes:
-    """The head of row 0's stream of a pass's signs (`skr.sign_bits`), its last byte the row: `rs_signs16`'s input."""
+def stream_head(seed: bytes, rows: int = skr.ROWS) -> bytes:
+    """The head of row 0's stream of a pass's signs at k_s = `rows` (`skr.sign_bits`), its last byte the row:
+    `rs_signs16`'s input, and at 64 rows `rs_signs64`'s."""
     key = randomness.derive(rb._digest(seed, "a pass seed"), rb.SIGN_DOMAIN,
-                            {"tag": rb.SKETCH_SHA512, "k": skr.ROWS, "n": BLOCK})
+                            {"tag": rb.SKETCH_SHA512, "k": rows, "n": BLOCK})
     return randomness._STREAM + key.value + randomness.frame(randomness.frame("row") + randomness.frame(0))
 
 
@@ -201,7 +207,9 @@ SESSION = {   # session.cu's own functions, beside the reader's it includes (`re
     "rs_top": [_v, _v, _i, _v, _i, _i, _v, _i, _v],
     "rs_enable_peers": [],
     "rs_subtrees": [_v, _u64, _v, _v, _u64, _i, _v, _v, _v],
+    "rs_rows": [_i],
     "rs_signs16": [_b, _i, _v, _v],
+    "rs_signs64": [_b, _i, _v, _v],
     "rs_chain_set": [_b, _v],
     "rs_chain_prepare": [ctypes.c_uint, _v, _v, _v, _v],
     "rs_pack16": [_v, _v, _v],
@@ -222,6 +230,11 @@ class Lib:
         rc = getattr(self.so, fn)(*args, self.torch.cuda.current_stream().cuda_stream)
         if rc:
             raise RuntimeError(f"{fn}: {rc}")
+
+    def set_rows(self, rows: int) -> None:
+        """The registration's k_s for this library's passes, subtrees and chained signs (`rs_rows`), on every GPU."""
+        if self.so.rs_rows(rows):
+            raise ValueError(f"the session's passes are sketch-sha512 at {skr.ROWS} or {skr.ROWS64} rows, not {rows}")
 
     def set_tree(self, receipt_prefix: bytes, row_bytes: int, last_row_bytes: int, domain_id: bytes, salt_in: bytes,
                  positions: int) -> None:
@@ -386,7 +399,8 @@ class DeviceStore:
 
     def __init__(self, torch, lib: Lib, lib_open: Lib, kv: Kv, blocks: int, key: bytes, generator, *, gpus=None,
                  chunk: int = 1 << 18, kept_from: int = 6, sketch_ctas: int = 128, payload_kept_from: int = 6,
-                 host_blocks: int = 0, host_ctas: int = 16, host_consumers: int = 8, hbm=None) -> None:
+                 host_blocks: int = 0, host_ctas: int = 16, host_consumers: int = 8, hbm=None,
+                 rows: int = skr.ROWS) -> None:
         gpus = gpus or [Gpu(torch, torch.cuda.current_device(), own=False)]
         G = len(gpus)
         if blocks % PER_LEAF or blocks % chunk or blocks // chunk < G or G > 16 or host_blocks % chunk:
@@ -397,6 +411,9 @@ class DeviceStore:
         total = blocks + host_blocks
         self.torch, self.lib, self.lib_open, self.kv, self.blocks, self.key = torch, lib, lib_open, kv, total, key
         self.payload_key = key
+        self.rows = rows
+        for each in (lib, lib_open):
+            each.set_rows(rows)
         self.gpus, self.hbm_blocks = gpus, blocks
         self.host_ctas, self.host_consumers = host_ctas, host_consumers
         chunks, hchunks = blocks // chunk, host_blocks // chunk
@@ -538,12 +555,12 @@ class DeviceStore:
                 r = {"pad": torch.empty((max(2 * pad_n, 1), 8), dtype=torch.int64, device=dev),
                      "pad_out": torch.empty((max(self.pads[g][1], 1), 8), dtype=torch.int64, device=dev),
                      "seed": torch.empty(rb.DIGEST_BYTES, dtype=torch.uint8, device=dev),
-                     "pk": torch.empty(PACK16_WORDS, dtype=torch.int32, device=dev),
+                     "pk": torch.empty(pack_words(self.rows), dtype=torch.int32, device=dev),
                      "roots": torch.zeros((SLOTS + 1, 8), dtype=torch.int64, device=dev)}
                 parts = []
                 if g == 0:
                     r["seeds"] = torch.empty((SLOTS, rb.DIGEST_BYTES), dtype=torch.uint8, device=dev)
-                    r["pks"] = torch.empty((SLOTS, PACK16_WORDS), dtype=torch.int32, device=dev)
+                    r["pks"] = torch.empty((SLOTS, pack_words(self.rows)), dtype=torch.int32, device=dev)
                     r["top"] = torch.empty((SLOTS, self.top_at[H + 1], 8), dtype=torch.int64, device=dev)
                     parts += ["seeds", "pks", "top"]
                 r["host"] = {k: torch.empty(r[k].shape, dtype=r[k].dtype, pin_memory=True) for k in parts}
@@ -655,6 +672,22 @@ class DeviceStore:
         self.sync()
         return self.blocks * BLOCK / ((time.perf_counter_ns() - t0) / 1e9)
 
+    def set_rows(self, rows: int) -> None:
+        """The registration's k_s, 16 or 64: both libraries' (`Lib.set_rows`), and at a new count the rings again, a
+        pass's packed signs being `pack_words(rows)` words. A store made at the registration's rows needs no call."""
+        for lib in (self.lib, self.lib_open):
+            lib.set_rows(rows)
+        if rows != self.rows:
+            self.rows = rows
+            self.shape(self.chunk, self.h0, self.sketch_ctas)
+
+    def signs(self, head: bytes, pk, stream=None) -> int:
+        """A pass's packed signs from its stream head into pk on the current GPU (`rs_signs16`, at 64 rows
+        `rs_signs64`), on `stream` (the current one if None): the library's return code."""
+        s = self.torch.cuda.current_stream() if stream is None else stream
+        fn = self.lib.so.rs_signs64 if self.rows == skr.ROWS64 else self.lib.so.rs_signs16
+        return fn(head, len(head), pk.data_ptr(), s.cuda_stream)
+
     def set_pass(self, lib: Lib, seed: bytes) -> None:
         """A pass's constants from the host on the current GPU."""
         dom = rb.domain(seed, self.plan)
@@ -674,7 +707,7 @@ class DeviceStore:
         self.free[slot].wait()
         self.free[slot].clear()
         prev = SLOTS if after is None else after.slot
-        head = stream_head(seed) if seed is not None else None
+        head = stream_head(seed, self.rows) if seed is not None else None
         lc = self.chunk // PER_LEAF
         for g, gpu in enumerate(self.gpus):
             ring = self.ring[g]
@@ -693,7 +726,7 @@ class DeviceStore:
                                              s.cuda_stream)
                 else:
                     self.set_pass(self.lib, seed)
-                    rc = so.rs_signs16(head, len(head), pk.data_ptr(), s.cuda_stream)
+                    rc = self.signs(head, pk, s)
                 hbm, *host = self.gpu_segs[g]
                 if host and not rc:
                     # The host segment first, so its few CTAs are on the device before the shard's grids fill it.
@@ -882,15 +915,21 @@ class DeviceStore:
         return {"passes": passes, "ns": time.perf_counter_ns() - t0}
 
     def signs_match(self, seed: bytes) -> bool:
-        """The leader's packed signs of a pass (`rs_signs16`) against the reference's (`skr.signs`, packed)."""
+        """The leader's packed signs of a pass (`signs`) against the reference's, packed: `skr.signs` by `rs_pack16`
+        at 16 rows, `skr.sign_bits` by the reader's `pack64` at 64."""
         torch = self.torch
-        head = stream_head(seed)
+        head = stream_head(seed, self.rows)
         with self.on(self.gpus[0]):
             dev = self.data_g[0].device
-            got, want = (torch.empty(PACK16_WORDS, dtype=torch.int32, device=dev) for _ in range(2))
-            self.lib.call("rs_signs16", head, len(head), got.data_ptr())
-            signs = torch.from_numpy(skr.signs(seed)).to(dev)
-            self.lib.call("rs_pack16", signs.data_ptr(), want.data_ptr())
+            got = torch.empty(pack_words(self.rows), dtype=torch.int32, device=dev)
+            if self.signs(head, got):
+                raise RuntimeError("the pass's signs on the device failed")
+            if self.rows == skr.ROWS64:
+                want = torch.from_numpy(rdr.pack64(skr.sign_bits(seed, self.rows)).view(np.int32).reshape(-1)).to(dev)
+            else:
+                want = torch.empty_like(got)
+                signs = torch.from_numpy(skr.signs(seed)).to(dev)
+                self.lib.call("rs_pack16", signs.data_ptr(), want.data_ptr())
             return bool(torch.equal(got, want))
 
     def plain_root(self, seed: bytes, expected=None) -> bytes:
@@ -902,6 +941,7 @@ class DeviceStore:
         and its segment boundaries, the tiers' among them, are part of the gate rather than only its final digest."""
         torch, chunk, hc, h0 = self.torch, self.chunk, self.hc, self.h0
         lc = chunk // PER_LEAF
+        wide = self.rows == skr.ROWS64
         matches = {h: True for h in range(h0, self.H + 1)}
         level = []
         for s, g in enumerate(self.seg_gpu):
@@ -909,17 +949,24 @@ class DeviceStore:
             with self.on(gpu):
                 dev = torch.device("cuda", gpu.index)
                 self.set_pass(self.lib, seed)
-                signs = torch.from_numpy(skr.signs(seed)).to(dev)
-                sk = torch.empty((chunk, skr.ROWS), dtype=torch.int32, device=dev)
+                if wide:   # the reader's two kernels at 64 rows, under the reference's signs
+                    signs = torch.from_numpy(rdr.pack64(skr.sign_bits(seed, self.rows)).view(np.int32)).to(dev)
+                else:
+                    signs = torch.from_numpy(skr.signs(seed)).to(dev)
+                sk = torch.empty((chunk, self.rows), dtype=torch.int32, device=dev)
                 ys = torch.empty((chunk, 8), dtype=torch.int64, device=dev)
                 dig = torch.empty((lc, 8), dtype=torch.int64, device=dev)
                 up = torch.empty((lc, 8), dtype=torch.int64, device=dev)
                 want = None if expected is None else expected[2][s].to(dev)
                 for k in range(self.n[s] // chunk):
                     j0 = self.base[s] + k * chunk
-                    self.lib.call("rb_sketch", self.data_g[s].data_ptr() + k * chunk * BLOCK, None, chunk,
-                                  signs.data_ptr(), sk.data_ptr(), 0)
-                    self.lib.call("rb_sketch_hash", sk.data_ptr(), j0, chunk, ys.data_ptr())
+                    src = self.data_g[s].data_ptr() + k * chunk * BLOCK
+                    if wide:
+                        self.lib.call("rb_sketch64", src, None, chunk, signs.data_ptr(), sk.data_ptr(), 2, 0)
+                        self.lib.call("rb_sketch64_hash", sk.data_ptr(), j0, chunk, ys.data_ptr())
+                    else:
+                        self.lib.call("rb_sketch", src, None, chunk, signs.data_ptr(), sk.data_ptr(), 0)
+                        self.lib.call("rb_sketch_hash", sk.data_ptr(), j0, chunk, ys.data_ptr())
                     self.lib.call("rb_leaves", ys.data_ptr(), j0 // PER_LEAF, lc, dig.data_ptr(), None)
                     levels = climb(self.lib, dig, j0 // PER_LEAF, lc, up)
                     if want is not None:
@@ -1144,6 +1191,7 @@ class GpuBackend:
         return root
 
     def encode(self, registration: audit.Registration) -> dict:
+        self.store.set_rows(registration.rows)
         self.gates = self.gate(registration)
         self.log(f"device: gates {self.gates}")
         if not self.gates["ok"]:
@@ -1258,8 +1306,8 @@ class GpuBackend:
                 "slow_passes": self.calibration_trace["slow"],
                 "max_over_median": intervals[-1] / intervals[len(intervals) // 2],
                 "warm_openings": len(draws), "warm_open_ns": open_ns,
-                "shape": {**self.shape, "h0": s.h0, "hc": s.hc, "gpus": len(self.gpus), "segment_blocks": s.n,
-                          "segment_gpu": s.seg_gpu, "hbm_blocks": s.hbm_blocks, "host_blocks": s.blocks - s.hbm_blocks,
+                "shape": {**self.shape, "rows": s.rows, "h0": s.h0, "hc": s.hc, "gpus": len(self.gpus),
+                          "segment_blocks": s.n, "segment_gpu": s.seg_gpu, "hbm_blocks": s.hbm_blocks, "host_blocks": s.blocks - s.hbm_blocks,
                           "host_ctas": s.host_ctas, "host_consumers": s.host_consumers, "pads": s.pads},
                 "device": [torch.cuda.get_device_name(gpu.index) for gpu in self.gpus]}
 
@@ -1310,7 +1358,7 @@ class GpuBackend:
                             kept_from=self.shape["kept_from"], sketch_ctas=self.shape["sketch_ctas"],
                             payload_kept_from=self.shape["payload_kept_from"],
                             host_blocks=len(self.gpus) * self.gate_chunk if self.store.hbm_blocks < self.blocks else 0,
-                            **self.host)
+                            rows=registration.rows, **self.host)
         out["segments"] = {"blocks": small.blocks, "hbm_blocks": small.hbm_blocks, "segment_blocks": small.n,
                            "h0": small.h0, "hc": small.hc, "pads": small.pads}
         payloads = small.blocks_at(0, small.blocks)
@@ -1330,11 +1378,15 @@ class GpuBackend:
         r = rb.receipter(reg.receipt, seed, reg.rows)
         ys = [r(j, encoded[j]) for j in range(small.blocks)]
         ref = rb.tree(seed, small.plan, ys, [store_salt(self.salt_key, seed, c) for c in range(small.blocks // PER_LEAF)])
+        out["rows"] = small.rows
+        out["pass_receipts"] = all(digests(small.seg_ring[q]["ys"]) == ys[small.base[q]:small.base[q] + small.n[q]]
+                                   for q in range(len(small.n)))
         out["pass_root"] = got == ref.commitment.root
         out["session_honest"] = self.gate_session(small, reg, set())
         out["session_skip_sixteenth"] = self.gate_session(small, reg, set(range(0, small.blocks, 16)))
-        out["ok"] = (out["payload_root"] and out["encode"] and out["decode"] and out["pass_root"]
-                     and out["session_honest"]["accepted"] and out["session_skip_sixteenth"]["failure"] == "receipt")
+        out["ok"] = (out["payload_root"] and out["encode"] and out["decode"] and out["pass_receipts"]
+                     and out["pass_root"] and out["session_honest"]["accepted"]
+                     and out["session_skip_sixteenth"]["failure"] == "receipt")
         if small.hbm_blocks < small.blocks:
             out["session_skip_host"] = self.gate_session(small, reg, set(range(small.hbm_blocks, small.blocks, 4)))
             out["ok"] = out["ok"] and out["session_skip_host"]["failure"] == "receipt"

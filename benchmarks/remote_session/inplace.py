@@ -32,7 +32,7 @@ from dataclasses import dataclass
 
 import numpy as np
 
-from device import BLOCK, PACK16_WORDS, PER_LEAF, SALT_DOMAIN, Lib, digests, rb, store_salt, stream_head
+from device import BLOCK, PER_LEAF, SALT_DOMAIN, Lib, digests, pack_words, rb, skr, store_salt, stream_head
 
 ROW = 64
 """rs_gather64's row: a chunk is BLOCK // ROW of them."""
@@ -118,14 +118,18 @@ class InPlace:
     """Passes over the store `regions` describe (`Region`, in store order from chunk 0) on the current GPU, read in
     place, leaf salts under `key`; `kept_from` is h0 (at most FUSED_H0), and `ctas` the receipt grids' CTAs (0: an
     opening's as many as are resident at once, a pass's one an SM). A pass's tree is hashed on a stream of its own
-    beside the caller's."""
+    beside the caller's. `rows` is the registration's k_s, 16 or 64: each pass and each opening sets the library to
+    it with its constants (`set_pass`), so stores at different rows can share a library."""
 
     def __init__(self, torch, lib: Lib, regions: Sequence[Region], key: bytes, *, kept_from: int = 6,
-                 ctas: int = 0) -> None:
+                 ctas: int = 0, rows: int = skr.ROWS) -> None:
         if not 0 <= kept_from <= FUSED_H0:
             raise ValueError(f"a pass keeps its levels from h0 = 0 … {FUSED_H0} up, the subtree below h0 hashed in "
                              f"shared memory: kept_from {kept_from}")
         self.torch, self.lib, self.key, self.kept_from, self.ctas = torch, lib, key, kept_from, ctas
+        if rows not in rb.ROWS:
+            raise ValueError(f"sketch-sha512's rows are one of {list(rb.ROWS)}, not {rows}")
+        self.rows = rows
         self.device = torch.device("cuda", torch.cuda.current_device())
         self.side = torch.cuda.Stream(self.device)
         self.regions: tuple[Region, ...] = ()
@@ -191,14 +195,16 @@ class InPlace:
         return addrs, js
 
     def set_pass(self, seed: bytes, plan: rb.Plan):
-        """A pass's constants on the current GPU (its plan's last leaf short) and its packed signs."""
+        """A pass's constants on the current GPU (its plan's last leaf short), the library's rows and the pass's
+        packed signs."""
         n, leaves = plan.length, rb.leaves(plan.length)
+        self.lib.set_rows(self.rows)
         self.lib.set_tree(rb.prefix(seed), rb.DIGEST_BYTES * PER_LEAF, rb.DIGEST_BYTES * (n - PER_LEAF * (leaves - 1)),
                           rb.domain(seed, plan).domain_id, SALT_DOMAIN + self.key + seed, n)
         self.lib.call("rb_sketch_set", rb.sketch_prefix(seed))
-        head = stream_head(seed)
-        pk = self.torch.empty(PACK16_WORDS, dtype=self.torch.int32, device=self.device)
-        self.lib.call("rs_signs16", head, len(head), pk.data_ptr())
+        head = stream_head(seed, self.rows)
+        pk = self.torch.empty(pack_words(self.rows), dtype=self.torch.int32, device=self.device)
+        self.lib.call("rs_signs64" if self.rows == skr.ROWS64 else "rs_signs16", head, len(head), pk.data_ptr())
         return pk
 
     def receipts(self, addrs, js, pk, p0: int, n: int):

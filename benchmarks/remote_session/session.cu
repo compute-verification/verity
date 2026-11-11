@@ -695,7 +695,7 @@ __global__ void __launch_bounds__(CONSUMER_THREADS) pass_consumer_kernel(const u
         continue;
       }
       int *S = reinterpret_cast<int *>(scratch) + warp * 32 * R;
-      if (R == SK_ROWS) help_tile(data, n, base, pk, S, ys, ctr, tiles_per, lane);
+      if constexpr (R == SK_ROWS) help_tile(data, n, base, pk, S, ys, ctr, tiles_per, lane);
       else help64_tile(data, n, base, reinterpret_cast<const uint4 *>(pk), S, ys, ctr, tiles_per, lane);
     }
     __threadfence();
@@ -886,7 +886,7 @@ __global__ void __launch_bounds__(CONSUMER_THREADS) mapped_consumer_kernel(const
           continue;
         }
         int *S = reinterpret_cast<int *>(scratch) + warp * 32 * R;
-        if (R == SK_ROWS) mapped_help_tile(addrs, js, n, pk, S, ys, ctr, lane);
+        if constexpr (R == SK_ROWS) mapped_help_tile(addrs, js, n, pk, S, ys, ctr, lane);
         else mapped_help64_tile(addrs, js, n, reinterpret_cast<const uint4 *>(pk), S, ys, ctr, lane);
       }
     }
@@ -1098,6 +1098,7 @@ static int shared64(const void *k, int id) {
 
 // A receipts grid over n blocks: ctas CTAs of kernel k (256 threads, `shared` bytes of dynamic shared memory), or with
 // ctas 0 as many as are resident at once, and no more than the blocks fill.
+static_assert(SK64R_WARPS == SK16_WARPS, "a receipt CTA is 256 threads at either row count");
 static int receipts_grid(const void *k, size_t shared, uint64_t n, int ctas, unsigned *g) {
   if (!ctas) {
     int dev, sms, per;

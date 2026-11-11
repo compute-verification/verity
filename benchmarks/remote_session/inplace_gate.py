@@ -13,7 +13,8 @@ check is against the driver's reference over each chunk as the binder reads it (
     openings   every plan's (`receipts.verify_leaf`, each chunk as stored), paths through kept levels and subtrees
     appended   chunks appended at the store's end at their slots' bytes, a page's and single chunks (`InPlace.append`)
     written    a pass after weights and KV are written in place, nothing re-registered
-    contiguous the mapped receipts of a weight tensor equal to `rs_sketch16_receipts`'s over its bytes
+    contiguous the mapped receipts of a weight tensor equal to the contiguous kernels' over its bytes
+               (`contiguous_receipts`: `rs_sketch16_receipts`, at 64 rows the reader's `rb_sketch64` and its hash)
     refusals   a misaligned region, a gap, a plan past the store, a plane of part chunks, a CPU tensor, pages past
                their storage
 
@@ -24,9 +25,9 @@ signs, receipts and the tree behind them; at the weights also the constants alon
 `InPlace.fused`), beside the pass with its tree hashed after its receipts (`unfused_pass`)
 and the read and receipts of the contiguous kernels over a copy of the weights in store order. The in-place root is
 checked equal to the unfused pass's and to the contiguous one's over the copy, and sampled receipts to the
-reference's. Writes OUT/inplace.json.
+reference's. `--rows 64` runs all of it at 64 sketch rows. Writes OUT/inplace.json.
 
-    python inplace_gate.py --lib session.so --out OUT [--reps 10 --pages 2048]
+    python inplace_gate.py --lib session.so --out OUT [--reps 10 --pages 2048 --rows 64]
 """
 from __future__ import annotations
 
@@ -43,13 +44,11 @@ HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
 sys.path.insert(0, str(HERE.parents[1] / "adapters" / "vllm"))
 
-from device import BLOCK, PER_LEAF, Lib, digests, rb, store_salt  # noqa: E402
+from device import BLOCK, PER_LEAF, Lib, digests, rb, skr, store_salt  # noqa: E402
 from inplace import FUSED_H0, InPlace, Region, level_at  # noqa: E402
 from verity_vllm.protocols.remote_bandwidth.binder import PagedBacking, TorchBacking, page_layout, storage_bytes  # noqa: E402
 from verity_vllm.protocols.remote_bandwidth.interface import IDENTITY, PageLayout  # noqa: E402
 from verity_vllm.protocols.remote_bandwidth.registry import NodeMemory, RemoteBandwidthReceipt  # noqa: E402
-
-ROWS = rb.SKETCH_ROWS
 
 
 def register(torch, weights: list, kv: list, pages: int, slots: int):
@@ -80,11 +79,23 @@ def held(store, backs) -> list[bytes]:
     return out
 
 
-def reference(seed: bytes, plan: rb.Plan, blocks: list[bytes], key: bytes):
-    r = rb.receipter(rb.SKETCH_SHA512, seed, ROWS)
+def reference(seed: bytes, plan: rb.Plan, blocks: list[bytes], key: bytes, rows: int):
+    r = rb.receipter(rb.SKETCH_SHA512, seed, rows)
     ys = [r(j, blocks[j]) for j in plan]
     salts = [store_salt(key, seed, c) for c in range(rb.leaves(plan.length))]
     return ys, rb.tree(seed, plan, ys, salts).commitment.root
+
+
+def contiguous_receipts(torch, lib: Lib, rows: int, data: int, j0: int, n: int, pk, ys, sk=None) -> None:
+    """The receipts of the n chunks at address `data`, store indices j0 …, into ys under the packed signs pk, by the
+    kernels that read no map: `rs_sketch16_receipts` at 16 rows; at 64 the reader's σ (`rb_sketch64`, 2 m-tiles a
+    warp, into sk, n × 64 int32) and its hash (`rb_sketch64_hash`), pk being `pack64`'s layout."""
+    if rows == skr.ROWS64:
+        sk = torch.empty((n, rows), dtype=torch.int32, device=ys.device) if sk is None else sk
+        lib.call("rb_sketch64", data, None, n, pk.data_ptr(), sk.data_ptr(), 2, 0)
+        lib.call("rb_sketch64_hash", sk.data_ptr(), j0, n, ys.data_ptr())
+    else:
+        lib.call("rs_sketch16_receipts", data, j0, n, pk.data_ptr(), ys.data_ptr(), 0)
 
 
 def refused(fn) -> bool:
@@ -111,7 +122,7 @@ def unfused_pass(ip: InPlace, seed: bytes, plan: rb.Plan) -> bytes:
     return digests(nodes[-1:].cpu())[0]
 
 
-def gate(torch, lib: Lib, rng, log) -> dict:
+def gate(torch, lib: Lib, rng, log, rows: int = skr.ROWS) -> dict:
     dev = torch.device("cuda", torch.cuda.current_device())
     gen = torch.Generator(device=dev)
     gen.manual_seed(int(rng.integers(1 << 62)))
@@ -131,21 +142,22 @@ def gate(torch, lib: Lib, rng, log) -> dict:
     N = store.layout().blocks
     key = rng.bytes(32)
     ip = InPlace(torch, lib, [Region.of_backing(r.first, b) for r, b in zip(store.layout().regions, backs)], key,
-                 kept_from=2)
+                 kept_from=2, rows=rows)
     blocks = held(store, backs)
     page_blocks = 2 * 2   # planes · plane_blocks: a page's chunks in a layer's region
-    out = {"blocks": N, "regions": [(r.name, r.kind, r.first, r.blocks) for r in store.layout().regions]}
+    out = {"rows": rows, "blocks": N,
+           "regions": [(r.name, r.kind, r.first, r.blocks) for r in store.layout().regions]}
 
     def check(name: str, plan: rb.Plan, draws: int = 0) -> bool:
         seed = rng.bytes(64)
-        ys, want = reference(seed, plan, blocks, key)
+        ys, want = reference(seed, plan, blocks, key, rows)
         mapped = ip.pass_receipts(seed, plan)
         got = digests(mapped.cpu())
         root, handle = ip.run_pass(seed, plan)
         r = {"positions": plan.length, "runs": len(plan.runs), "receipts": got == ys, "root": root == want,
              "kept": unfused_kept(ip, mapped, handle)}
         for h in (0, FUSED_H0):
-            other = InPlace(torch, lib, ip.regions, key, kept_from=h)
+            other = InPlace(torch, lib, ip.regions, key, kept_from=h, rows=rows)
             root_h, handle_h = other.run_pass(seed, plan)
             r[f"kept_from_{h}"] = root_h == want and unfused_kept(other, mapped, handle_h)
         if draws:
@@ -201,8 +213,7 @@ def gate(torch, lib: Lib, rng, log) -> dict:
     mapped = ip.pass_receipts(seed, w3_plan)
     pk = ip.set_pass(seed, w3_plan)
     flat = torch.empty_like(mapped)
-    lib.call("rs_sketch16_receipts", backs[3].flat.data_ptr(), infos["w3"].first, infos["w3"].blocks, pk.data_ptr(),
-             flat.data_ptr(), 0)
+    contiguous_receipts(torch, lib, rows, backs[3].flat.data_ptr(), infos["w3"].first, infos["w3"].blocks, pk, flat)
     out["contiguous_equal"] = bool(torch.equal(mapped, flat))
     ok &= out["contiguous_equal"]
 
@@ -261,7 +272,7 @@ def timed(torch, fn, reps: int) -> dict:
     return {"median": ms[len(ms) // 2], "min": ms[0], "max": ms[-1]}
 
 
-def timing(torch, lib: Lib, rng, reps: int, pages: int, log) -> dict:
+def timing(torch, lib: Lib, rng, reps: int, pages: int, log, rows: int = skr.ROWS) -> dict:
     dev = torch.device("cuda", torch.cuda.current_device())
     gen = torch.Generator(device=dev)
     gen.manual_seed(int(rng.integers(1 << 62)))
@@ -270,9 +281,9 @@ def timing(torch, lib: Lib, rng, reps: int, pages: int, log) -> dict:
     store, backs = register(torch, weights, [], 0, 0)
     regions = [Region.of_backing(r.first, b) for r, b in zip(store.layout().regions, backs)]
     N, key = store.layout().blocks, rng.bytes(32)
-    ip = InPlace(torch, lib, regions, key)
+    ip = InPlace(torch, lib, regions, key, rows=rows)
     nbytes = N * BLOCK
-    out = {"model": "Llama-3.1-8B bf16", "tensors": len(weights), "registered_bytes": nbytes, "blocks": N,
+    out = {"rows": rows, "model": "Llama-3.1-8B bf16", "tensors": len(weights), "registered_bytes": nbytes, "blocks": N,
            "param_bytes": sum(t.numel() * t.element_size() for _, t in weights),
            "device": torch.cuda.get_device_name(dev)}
     copy = torch.empty(nbytes, dtype=torch.uint8, device=dev)
@@ -284,13 +295,14 @@ def timing(torch, lib: Lib, rng, reps: int, pages: int, log) -> dict:
     pk = ip.set_pass(seed, plan)
     ys = torch.empty((N, 8), dtype=torch.int64, device=dev)
     ys2 = torch.empty_like(ys)
+    sk = torch.empty((N, rows), dtype=torch.int32, device=dev) if rows == skr.ROWS64 else None
     t = {"read_contiguous": timed(torch, lambda: lib.call("rb_read", copy.data_ptr(), nbytes, xr.data_ptr(), 16 * sms),
                                   reps),
          "read_mapped": timed(torch, lambda: lib.call("rs_mapped_read", addrs.data_ptr(), N, xr.data_ptr(), 16 * sms),
                               reps),
          "map": timed(torch, lambda: ip.map(plan), reps),
-         "receipts_contiguous": timed(torch, lambda: lib.call("rs_sketch16_receipts", copy.data_ptr(), 0, N,
-                                                              pk.data_ptr(), ys2.data_ptr(), 0), reps),
+         "receipts_contiguous": timed(torch, lambda: contiguous_receipts(torch, lib, rows, copy.data_ptr(), 0, N, pk,
+                                                                         ys2, sk), reps),
          "receipts_mapped": timed(torch, lambda: lib.call("rs_mapped_receipts", addrs.data_ptr(), js.data_ptr(), N,
                                                           pk.data_ptr(), ys.data_ptr(), 0), reps)}
     out["receipts_equal"] = bool(torch.equal(ys, ys2))
@@ -314,7 +326,7 @@ def timing(torch, lib: Lib, rng, reps: int, pages: int, log) -> dict:
     plain = ip.tree(ys2, 0, leaves, width)
     out["root_equal_contiguous"] = roots["fused"] == digests(plain[-1:].cpu())[0]
     out["root_equal_unfused"] = roots["fused"] == roots["unfused"] == digests(roots.pop("kernels")[-1:].cpu())[0]
-    r = rb.receipter(rb.SKETCH_SHA512, seed, ROWS)
+    r = rb.receipter(rb.SKETCH_SHA512, seed, rows)
     host = ys.cpu()
     sample = sorted(map(int, rng.integers(0, N, 64)))
     out["sampled_receipts_reference"] = all(
@@ -325,14 +337,15 @@ def timing(torch, lib: Lib, rng, reps: int, pages: int, log) -> dict:
     out["read_GBps"] = {k: nbytes / (t[k]["median"] / 1e3) / 1e9 for k in ("read_contiguous", "read_mapped")}
     out["ms"] = t
     log(f"timing weights: {out}")
-    copy = ys2 = plain = None
+    copy = ys2 = plain = sk = None
 
     slots, kv_heads, hd = 16, 8, 128
     kv = [torch.empty((2, pages, slots, kv_heads, hd), dtype=torch.bfloat16, device=dev) for _ in range(32)]
     for x in kv:
         x.view(torch.uint8).random_(0, 256, generator=gen)
     store2, backs2 = register(torch, weights, kv, pages, slots)
-    ip2 = InPlace(torch, lib, [Region.of_backing(r.first, b) for r, b in zip(store2.layout().regions, backs2)], key)
+    ip2 = InPlace(torch, lib, [Region.of_backing(r.first, b) for r, b in zip(store2.layout().regions, backs2)], key,
+                  rows=rows)
     N2 = store2.layout().blocks
     plan2 = rb.Plan.whole(N2)
     addrs2, js2 = ip2.map(plan2)
@@ -375,14 +388,15 @@ def main() -> int:
     ap.add_argument("--pages", type=int, default=2048, help="the 8B timing's KV pages a layer")
     ap.add_argument("--seed", type=int, default=0)
     ap.add_argument("--no-timing", action="store_true")
+    ap.add_argument("--rows", type=int, default=skr.ROWS, choices=rb.ROWS, help="the sketch's rows k_s")
     a = ap.parse_args()
     a.out.mkdir(parents=True, exist_ok=True)
     rng = np.random.default_rng(a.seed)
     lib = Lib(a.lib, torch)
-    res = {"gate": gate(torch, lib, rng, print)}
+    res = {"gate": gate(torch, lib, rng, print, a.rows)}
     if res["gate"]["ok"] and not a.no_timing:
         torch.cuda.empty_cache()
-        res["timing"] = timing(torch, lib, rng, a.reps, a.pages, print)
+        res["timing"] = timing(torch, lib, rng, a.reps, a.pages, print, a.rows)
     res["ok"] = bool(res["gate"]["ok"] and (a.no_timing or res["timing"]["ok"]))
     (a.out / "inplace.json").write_text(json.dumps(res, indent=1, default=str))
     print(json.dumps({"ok": res["ok"], "gate_ok": res["gate"]["ok"]}))
