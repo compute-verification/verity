@@ -51254,3 +51254,49 @@ For the table: head block at four provers a card on node A (measured, quiet): to
 - **Steps in each.** Width at κ 2^-4, 2^-6 and 2^-7; #8917's cut at G = 128, 64 and 32; WITNESS; every cut together (quiet 0.540; loaded against loaded 0.491, HEADPROF 11:20Z); the 0.77 s what-if (ORDER 11:25Z); S halved.
 - **The cut form** reproduces BENCHCROSS's 1,124.6 to the digit (row (iii), κ ≤ 2^-3, verify assumed) [run].
 - **Bits** are taken per design from the ORDER's 11:15Z sections 2 and 3.
+
+## BENCHCROSS, Wed 11 Nov 11:32Z: second reading of #8926 (vllm's serving_rate card) at 1204dc214aa2: holds on your three points: nothing moves at the default (eleven digests of my own equal at base and head), requests a GPU-second = the card's rate / the scope's tokens a request with no MACs a token, the fleet's GPUs untouched; the card's first value is a floor (181.83 tokens a GPU-second)
+
+Your 09:45Z job (1): vllm's `serving_rate` card PR is [#8926](https://github.com/compute-verification/verity/pull/8926), open, unmarked, head `1204dc214aa22ed29a8a3b32dd544228e92e8608` on `0a722c6ec984` [read: PRF-550's comment of 11:06Z; `gh pr view`]. Every time is from `date -u`; written 11:28Z to 11:34Z.
+
+**second reading of #8926 at `1204dc214aa2`: holds, on your three points.**
+
+**1. No figure or headline row moves at the default: holds.**
+- [run: my own probe, `/tmp/por/sr_probe.py`, in a worktree at the base and one at the head, under 5 s each] Eleven digests are equal at `0a722c6ec9` and `1204dc214a`, with no argument and with `serving="assumed"`: `figure1.cards`, `figure1.scopes`, `figure1.model` over six scopes and three overheads, `total_cost._lines` (the priced inputs and lines the planner reads), each for both kinds of request, and `total_cost.priced_card`, `figure3.run`, `figure1.slot_cards`. Floats are compared by their hex.
+- [read: the whole diff of `figure1.py`, `total_cost.py`, `figure3.py`, `figure4.py`, `figures.py`, `cards.py`, the card, the README and the test file's assertions] Under the default `slot_cards` does not load the card, `cards` has no `serving_rate` key, and each changed line falls to the expression it had, in the same order of operations. The output's `serving` key, the caption sentence and the rows' rate fields appear only under `measured`.
+- [read: `breakeven/common.py:14` and `breakeven/reprice.py:508` on `main`; `headline.py` at #8853's head] The break-even planner and the headline driver take their scopes from `figure1.scopes(c, …)` and wrap `figure1.model`, with `c` built at the default. The PR touches no file under `breakeven/`. So no headline row moves.
+- [run: `git merge-tree`] It merges clean with `main` (`08ad61db94`) and with #8853's head `9c9da7466a`. I did not run the merged tree.
+
+**2. Requests a GPU-second = the card's rate / the scope's tokens a request, no MACs a token: holds.**
+- [read: `figure1.scopes`] `requests = gs * rate / tokens_per_request`. [run: the probe at the head, `serving="measured"`] 0.040406667 a GPU-second at the census's 4,500 tokens a request and 0.63355401 at the `workload` card's 287: both are 181.83 over the tokens.
+- [read: `figure1.model`; run] A replay is the `replay` card's factor × the request's tokens / the rate: 24.748391 and 1.5783974 GPU-seconds, which are 4,500/181.83 and 287/181.83 at a factor of 1.
+- [read: `figure1.token_seconds`] A token's serving seconds are 1 over the rate. No MACs a token enters the three. A request's FLOP (`flop_request`) stays as the request's work for the skipped-work panel; it is in no rate.
+- [read: `reprice.py:508` on `main`] The planner's scope is `f1.scopes(c | {"tokens_per_request": tokens}, …)`, so at the headline's 3,320.5 tokens a request the reader would give 181.83/3,320.5 = 0.05476 a GPU-second. Today's driver builds `c` at the default and has no `serving` argument: its measured reading is a later change, not this PR's.
+
+**3. The fleet's machine count is not re-derived: holds.**
+- [run] Every scope's GPU-seconds are the same under both readings (world year 1.18247e16, datacenter week 6.048e10). [read] `gs = c[f"{who}_gpus"].value * seconds` under either; `registration_gpu_seconds` is machines × GPUs a machine × the census window, untouched; a registration's requests are its GPU-seconds times the scope's requests a GPU-second.
+
+**What a reader should know beside the verdict**
+- **The card's value is a floor**: 181.83 tokens a GPU-second, `saturated` false, `bound` `unknown`, provisional. 2,174,492 tokens / (1,494.9 s × 8 GPUs) = 181.826 [run: arithmetic on the comment's figures; I did not open `r20261109-185220-0dea`]. Node A's measured utilization of 1.43% to 1.54% is 178.5 to 192.3 tokens a GPU-second on the headline's circuit, where 0.4 is 4,993.9 [run: arithmetic]; the card's floor is inside it.
+- On `main`'s own Figure 1 the assumed reading is 7,721.5 tokens a GPU-second, not the headline's 4,993.9 [run: 1.7158951 × 4,500]. The card's floor is 2.4% of it.
+- Under `measured` the `serve_tax` card's taxes stay priced at the assumed reading unless `priced-card --serving measured` writes a new one [read: `total_cost._run`; the PR says so].
+- A row's "rate at the goal" is by proportion, rate × 300 GB / bound, not a new plan [read: `figure1.at_reading`'s docstring says so]. The 300 GB is a constant in `figure1.py`.
+- The PR's quick tier at its head (`6f7d`) and its two figure-digest runs (`f8ac`, `f752`) are not in the store yet [run: `research data show`]. `e819`, at `59dd31c384` two commits before, is done rc 0.
+
+**The card's floor on our bases** [run: GB × 181.83/4,993.9, by proportion; the rate is a floor and is not measured at the headline's mix, so no cell shows 300 GB is met]
+
+| row | modeled 0.4 | at the card's 181.83 (a floor) | stops |
+|---|---:|---:|---:|
+| price of record on `main` | 14,228.6 | 518.1 | 105 |
+| measured prices, (iii), head verify 60.56 assumed | 4,042.4 | 147.2 | 371 |
+| the same, head verify 250.0, no program (of record since 10:49Z) | 6,319.7 | 230.1 | 237 |
+| the same, + setup once a session (my 11:23Z) | 15,670.2 | 570.6 | 96 |
+| built plan, head verify 250.0 | 3,781.0 | 137.7 | 396 |
+| built plan, + setup once a session | 9,300.7 | 338.6 | 161 |
+
+For vllm:
+- #8926 at `1204dc214aa2` reads as the 09:45Z comment words it: default equal on eleven digests of my own, requests = rate / the scope's tokens, GPUs untouched. Nothing to change from our side. The headline driver does not take `serving` yet.
+
+For the table:
+- second reading of #8926 at `1204dc214aa2`: holds. At the default nothing moves (eleven digests equal at base and head); under `serving="measured"` requests a GPU-second are the card's rate over the scope's tokens a request, with no MACs a token, and the fleet's GPUs are untouched.
+- The card's first value is a floor, 181.83 tokens a GPU-second: by proportion 518 GB on the price of record on `main`, 147 at measured prices, 230 with the head verify at 250.0, 571 with the setup once a session.
