@@ -341,6 +341,26 @@ def test_ceiling_reads_each_knob_and_names_the_highest_host_clock(tmp_path, caps
     assert "highest host-timed clock: 2429.9 MHz (p_light at lgc-max), -0.004% against NVML's max 2430" in got
 
 
+clocks = _load("opcode_probe_clocks", POUW / "opcode_probe" / "clocks.py")
+
+
+def test_lock_passes_megahertz_or_nvmls_id_for_tdp_and_unlimited():
+    """`clocks.py lock`: MIN and MAX reach nvmlDeviceSetGpuLockedClocks as MHz, or as NVML's limit id for `tdp` and
+    `unlimited`; the row says what was asked and the call's rc."""
+    nvml, calls = object.__new__(clocks.Nvml), []
+
+    def call(name: str, *args) -> tuple[int, str]:
+        calls.append((name, [a.value for a in args]))
+        return 3, "Not Supported"
+
+    nvml.call = call
+    assert nvml.lock("1830", "tdp") == {"op": "nvmlDeviceSetGpuLockedClocks", "min": "1830", "max": "tdp", "rc": 3,
+                                        "error": "Not Supported"}
+    nvml.lock("unlimited", "2430")
+    assert calls == [("nvmlDeviceSetGpuLockedClocks", [1830, 0xFFFFFF01]),
+                     ("nvmlDeviceSetGpuLockedClocks", [0xFFFFFF02, 2430])]
+
+
 def test_l2gather_reports_bytes_a_clock_and_mma_kept(tmp_path, capsys):
     """`eps1.py l2gather`: bytes a SM a clock (rate * words * 4) and TB/s (* nSM * clock) a gather path, the best alone
     and beside, the MMA kept beside the honest step, and whether any path beats QSTAR's 3.3 TB/s."""

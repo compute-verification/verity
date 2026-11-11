@@ -113,7 +113,7 @@ class Nvml:
         return rows
 
     def lock(self, lo: str, hi: str) -> dict:
-        v = [LIMIT_IDS.get(x, None) or int(x) for x in (lo, hi)]
+        v = [LIMIT_IDS.get(x) or int(x) for x in (lo, hi)]
         rc, e = self.call("nvmlDeviceSetGpuLockedClocks", ctypes.c_uint(v[0]), ctypes.c_uint(v[1]))
         return {"op": "nvmlDeviceSetGpuLockedClocks", "min": lo, "max": hi, "rc": rc, "error": e}
 
