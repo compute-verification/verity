@@ -1,7 +1,7 @@
 """verity_vllm.program.predict.template_counts: n_t(c), read off a request unit's key, is each template's instances in the Program
 built for it, as a template partition counts them (`TemplatePartition` over every template the Program calls, a batch counting its
-members), at GLM-5.3's class-G registration cut to its first layers: a request beside other sequences, in prefill chunks, after a
-history, resumed, leaving at a window's edge, stochastic, under its length rule and in a launch past FlashInfer's fused all-reduce;
+members), at GLM-5.3's class-G registration cut to its first layers: a request beside other sequences, in prefill chunks (one
+computing the first rows of a longer sequence in its launch, a recomputed hit's), after a history, resumed, leaving at a window's edge, stochastic, under its length rule and in a launch past FlashInfer's fused all-reduce;
 at INDEX_TOPK 16 under a decode threshold of 2, its dense-MHA prefills; at INDEX_TOPK 4, its rows past it, on a last layer that
 shares the top-k and on one that computes it, and in several blocks a call; and the B8 window's planned units."""
 
@@ -63,6 +63,7 @@ def _decodes(LP: int, T: int, first: list) -> list:
 SERVED = {
     "beside-decodes": dict(LP=3, T=2, batch=[[[3, 0]], [[1, 3], [1, 9]], [[1, 4], [1, 10]]]),
     "chunks": dict(LP=6, T=1, chunks=(4, 2), batch=[[[4, 0], [1, 7]], [[2, 4]], [[1, 6]]]),
+    "first-rows-of-a-sequence": dict(LP=6, T=1, chunks=(4, 2), entries=(5, 2), batch=[[[5, 0], [1, 7]], [[2, 4]], [[1, 6]]]),
     "history": dict(LP=6, T=2, C=4, batch=[[[2, 4]], [[1, 6]], [[1, 7]]]),
     "edge-in-prompt": dict(LP=6, T=-2, edge=("prefix",), batch=[[[4, 0]]]),
     "resumed": dict(LP=6, T=3, C=7, batch=[[[1, 7]], [[1, 8]]]),
@@ -72,6 +73,7 @@ SERVED = {
 DENSE = {
     "alone": dict(LP=4, T=1, batch=_decodes(4, 1, [[4, 0]])),
     "chunk-with-context": dict(LP=6, T=0, chunks=(3, 3), batch=[[[3, 0]], [[3, 3]]]),
+    "first-rows-of-a-sequence": dict(LP=6, T=0, chunks=(3, 3), entries=(5, 3), batch=[[[5, 0], [4, 2]], [[3, 3]]]),
     "beside-a-decode": dict(LP=3, T=1, batch=_decodes(3, 1, [[3, 0], [1, 5]])),
     "beside-an-extend": dict(LP=3, T=1, batch=_decodes(3, 1, [[3, 0], [4, 3]])),
     "after-a-history": dict(LP=6, T=1, C=3, batch=_decodes(6, 1, [[3, 3]])),
@@ -80,6 +82,7 @@ DENSE = {
 LONG = {
     "prefill-and-decodes": dict(LP=6, T=2, batch=_decodes(6, 2, [[6, 0]])),
     "chunks-to-an-edge": dict(LP=9, T=-1, chunks=(5, 3), edge=EDGE, batch=[[[5, 0]], [[3, 5]]]),
+    "first-rows-of-a-sequence": dict(LP=9, T=1, chunks=(5, 4), entries=(7, 4), batch=[[[7, 0]], [[4, 5]], [[1, 9]]]),
     "unfused": dict(LP=6, T=1, batch=[[[6, 0], [40, 0]], [[1, 6], [1, 40]]]),
     "short-prompt": dict(LP=3, T=3, batch=_decodes(3, 3, [[3, 0]])),
     "after-a-history": dict(LP=8, T=1, C=4, batch=_decodes(8, 1, [[4, 4]])),

@@ -112,31 +112,6 @@ theorem bound_T1 (k : ℝ) (hk : 0 ≤ k) : T1.bound k (1 / 2) 1 0 = k / 2 := by
   rw [max_eq_right (by positivity)]
   ring
 
-theorem entersAtMost_T1 : Assumptions.EntersAtMost T1 1 := by
-  unfold Assumptions.EntersAtMost
-  decide
-
-theorem drawsAtLeast_noLinks {r : RegisteredCircuit} (T : Threading r) (dd : ℕ) :
-    Assumptions.DrawsAtLeast (noLinks T) dd :=
-  fun _ h => absurd h (by simp [noLinks])
-
-theorem activations_T1 : Assumptions.ActivationsIncompressibleAll D T1 (noLinks T1) 2 1 (1 / 2) (1 / 2) := by
-  have key : ∀ R : Finset (Fin 4), R ⊆ C.computed →
-      (T1.weightsUsed R).card + (T1.actsUsed R).card ≤ 2 * novelReads D R := by decide
-  intro R hR
-  rw [filter_true_of_mem fun a _ h => by simp [Threading.Links.Whole, noLinks] at h]
-  have h' : ((T1.weightsUsed R).card : ℝ) + (T1.actsUsed R).card ≤ 2 * novelReads D R := by
-    exact_mod_cast key R hR.1
-  linarith
-
-theorem entersAtMost_T0 (r : RegisteredCircuit) : Assumptions.EntersAtMost (T0 r) 0 :=
-  fun _ => (card_le_card (filter_subset _ _)).trans (by simp [T0])
-
-theorem activations_T0 (r : RegisteredCircuit) (c : ℕ) (k b_w b_a : ℝ) :
-    Assumptions.ActivationsIncompressibleAll r (T0 r) (noLinks (T0 r)) c k b_w b_a := by
-  intro R _
-  simp [Threading.weightsUsed, Threading.actsUsed, Threading.mults, T0]
-
 theorem readFactor_ge {K b_w b_a d : ℝ} (hK : 0 < K) (hw : 0 ≤ b_w) (ha : 0 ≤ b_a) (hd : 0 ≤ d) :
     min (9 / 4 * b_w * b_a * d / K) (3 / 4 * b_a * √(b_w / K)) ≤ readFactor K b_w b_a d := by
   unfold readFactor
@@ -244,44 +219,6 @@ theorem ch0_T0_incompressible : Assumptions.TrainingIncompressible D (ch0 C) (T0
   rw [ch0_weightsUsed, ch0_inputsUsed]
   simp
 
-theorem pch1_notLinked (R : Finset (Fin 4))
-    (x : (ℓ : Fin ch1.toPacked.L) × Fin ch1.toPacked.N × Fin (ch1.toPacked.d ℓ)) :
-    ¬ ch1.toPacked.LinkedWhole R x.1 x.2.1 x.2.2 := by
-  rcases x with ⟨⟨ℓ, hℓ⟩, t, j⟩
-  cases ℓ with
-  | zero => exact id
-  | succ ℓ => exact absurd hℓ (by change ¬ (ℓ + 1 < 1); omega)
-
-theorem pch1_nat : ∀ R : Finset (Fin 4), R ⊆ C.computed →
-    (ch1.toPacked.weightsUsed R).card ≤ novelReads D R ∧ (ch1.toPacked.inputsUsed R).card ≤ novelReads D R := by
-  decide
-
-theorem pch1_spread {n : ℕ} (P : Partition C n)
-    (x : (ℓ : Fin ch1.toPacked.L) × Fin ch1.toPacked.N × Fin (ch1.toPacked.e ℓ)) :
-    ch1.toPacked.spread P x.1 x.2.1 x.2.2 ≤ 1 := by
-  classical
-  unfold PackedChain.spread
-  refine card_le_one.2 fun u hu v hv => ?_
-  simp only [mem_filter, mem_univ, true_and] at hu hv
-  obtain ⟨_, hu⟩ := hu
-  obtain ⟨_, hv⟩ := hv
-  rw [Partition.mem_gates] at hu hv
-  exact Option.some_injective _ (hu.symm.trans hv)
-
-theorem pch1_T1_incompressible :
-    Assumptions.PackedTrainingIncompressible D ch1.toPacked T1 2 1 (1 / 2) (1 / 2) := by
-  intro n P
-  refine ⟨fun _ => 0, ?_, fun u hu => ⟨?_, T1_weights _ hu⟩⟩
-  · refine le_trans (Finset.sum_le_sum fun x _ => Nat.sub_le_of_le_add (pch1_spread P x)) ?_
-    simp
-  · simp only [pch1_notLinked, not_false_eq_true, filter_const, ↓reduceIte, Nat.max_zero]
-    obtain ⟨hw, hi⟩ := pch1_nat _ hu.1
-    have hw' : ((ch1.toPacked.weightsUsed (P.gates u)).card : ℝ) ≤ novelReads D (P.gates u) := by
-      exact_mod_cast hw
-    have hi' : ((ch1.toPacked.inputsUsed (P.gates u)).card : ℝ) ≤ novelReads D (P.gates u) := by
-      exact_mod_cast hi
-    linarith
-
 /-- The factor the contained bounds charge a product at `μ = 1`, `K = 1`, `b_w = b_a = 1/2`, `dd = emax = 1`: its
 second branch, `μ b_a / max(emax, K/(4 b_w dd)) = 1/2`. -/
 theorem factor_half : (1 / 2 : ℝ) ≤
@@ -385,24 +322,6 @@ theorem ThreadedThrottledDarkSlots_nontrivial : Guarantees.ThreadedThrottledDark
   rw [card_T1, dark_Mθ]
   norm_num
 
-theorem ActivationsBoundOn_honest : Guarantees.ActivationsBoundOn_honest :=
-  ⟨compliesRate_D, theta_id D, entersAtMost_T1, drawsAtLeast_noLinks _ _, activations_T1⟩
-
-theorem ActivationsBoundOn_nontrivial : Guarantees.ActivationsBoundOn_nontrivial := by
-  refine ⟨by norm_num, by norm_num, by norm_num, by norm_num, by norm_num, compliesRate_Dθ, not_theta_Dθ,
-    entersAtMost_T1, drawsAtLeast_noLinks _ _, activations_T1, ?_⟩
-  rw [show (T1.M ∩ Mθ.S).card = 1 by decide]
-  norm_num
-
-theorem ActivationsTrainingOn_honest : Guarantees.ActivationsTrainingOn_honest :=
-  ⟨compliesRate_D, theta_id D, entersAtMost_T1, drawsAtLeast_noLinks _ _, activations_T1, coverage_T1⟩
-
-theorem ActivationsTrainingOn_nontrivial : Guarantees.ActivationsTrainingOn_nontrivial := by
-  refine ⟨by norm_num, by norm_num, by norm_num, by norm_num, by norm_num, compliesRate_D, theta_id D,
-    entersAtMost_T0 _, drawsAtLeast_noLinks _ _, activations_T0 _ _ _ _ _, not_coverage_T0, ?_⟩
-  rw [bound_T0, size_D, dark_id]
-  norm_num
-
 theorem LayeredTraining_honest : Guarantees.LayeredTraining_honest :=
   ⟨⟨layered1 1 2⟩, compliesRate_D, theta_id D, by norm_num [Assumptions.CapBelowColumns], T1_weights, coverage_T1⟩
 
@@ -496,30 +415,6 @@ theorem IncompressibleThreadedThrottledOn_nontrivial : Guarantees.Incompressible
     ch1_T1_incompressible, ?_⟩
   rw [show (T1.M ∩ Mθ.S).card = 1 by decide]
   norm_num
-
-theorem coverage_pch1 : Assumptions.Coverage 1 D (2 * ch1.toPacked.G) := by
-  unfold Assumptions.Coverage
-  rw [size_D, show ch1.toPacked.G = 1 from rfl]
-  norm_num
-
-theorem PackedIncompressibleContainedMatMulOn_honest : Guarantees.PackedIncompressibleContainedMatMulOn_honest :=
-  ⟨compliesRate_D, theta_id D, darkReads_M1 _, pch1_T1_incompressible⟩
-
-theorem PackedIncompressibleContainedMatMulOn_nontrivial :
-    Guarantees.PackedIncompressibleContainedMatMulOn_nontrivial :=
-  ⟨by norm_num, by norm_num, by norm_num, by norm_num, by norm_num, by norm_num, by norm_num, by norm_num, by norm_num,
-    fun _ => le_rfl, fun _ => le_rfl, compliesRate_Dθ, not_theta_Dθ, darkReads_Mθ _, pch1_T1_incompressible,
-    not_bound factor_half (Nat.one_le_cast.2 (by decide)) (by norm_num)⟩
-
-theorem PackedIncompressibleContainedTrainingOn_honest :
-    Guarantees.PackedIncompressibleContainedTrainingOn_honest :=
-  ⟨compliesRate_D, theta_id D, darkReads_M1 _, pch1_T1_incompressible, coverage_pch1⟩
-
-theorem PackedIncompressibleContainedTrainingOn_nontrivial :
-    Guarantees.PackedIncompressibleContainedTrainingOn_nontrivial :=
-  ⟨by norm_num, by norm_num, by norm_num, by norm_num, by norm_num, by norm_num, by norm_num, by norm_num, by norm_num,
-    fun _ => le_rfl, fun _ => le_rfl, compliesRate_Dθ, not_theta_Dθ, darkReads_Mθ _, pch1_T1_incompressible,
-    coverage_pch1, not_bound factor_half (by rw [size_D, dark_Mθ]; norm_num) (by norm_num)⟩
 
 theorem oneWindow_withinCompute : Assumptions.WithinCompute OneWindow.cap 2 := by
   norm_num [Assumptions.WithinCompute]
