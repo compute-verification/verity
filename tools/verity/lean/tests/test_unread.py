@@ -238,11 +238,33 @@ def test_the_kept_caps_are_a_caps_file_as_update_caps_writes_it():
     assert U.CAPS.read_text() == U.caps_text(caps), "write it with `unread.py --caps ... --update-caps`"
 
 
+def test_build_builds_what_the_lean_check_builds_of_each_analysis_package(monkeypatch):
+    """`--build` builds, in ENV, each analysis package's default targets and then the modules its lock lists under
+    `roots`, as the Lean check builds a package: a root no default target imports would otherwise be `unbuilt`, and what
+    it alone reads would count as unread on the tool's own build and as read on a check's facts."""
+    tree = U.Tree(FIXTURE, U.tracked(FIXTURE))
+    ran = []
+    monkeypatch.setattr(U.subprocess, "run", lambda argv, cwd, check: ran.append((argv, cwd, check)))
+    U.build(tree, "security/Proofs", setup=False)
+    assert all(cwd == FIXTURE / "security" / "Proofs" and check for _, cwd, check in ran)
+    assert [argv for argv, _, _ in ran] == [
+        ["lake", "build"], ["lake", "build", "+Proofs.Flock", "+Proofs.Properties.Code"],
+        ["lake", "build", "@security"], ["lake", "build", "@security/+Definitions"],
+        ["lake", "build", "@security_properties"], ["lake", "build", "@security_properties/+Properties.Code"]]
+    del tree.locks["security"]
+    ran.clear()
+    U.build(tree, "security/Proofs", setup=False)
+    assert [argv[2:] for argv, _, _ in ran] == [[], ["+Proofs.Flock", "+Proofs.Properties.Code"], ["@security"],
+                                                ["@security_properties"], ["@security_properties/+Properties.Code"]]
+
+
 @pytest.mark.slow
 @pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain")
 def test_the_kept_facts_are_what_unread_lean_writes_on_the_fixture(tmp_path):
     """The only test that runs `Unread.lean` (it builds the fixture's four packages and compiles the program): the
-    synthetic and kept facts above can't catch a change in what Lean puts in an `.olean`."""
+    synthetic and kept facts above can't catch a change in what Lean puts in an `.olean`. And the only one that runs
+    `build`'s commands: Lake takes them, and a module that no default target imports is built once the lock lists it
+    under `roots`, not before."""
     root = tmp_path / "unread"
     shutil.copytree(FIXTURE, root, ignore=shutil.ignore_patterns(".lake"))
     tree = U.Tree(root, U.tracked(root))
@@ -252,3 +274,11 @@ def test_the_kept_facts_are_what_unread_lean_writes_on_the_fixture(tmp_path):
     fresh = U.write_facts(tree, "security/Proofs", out)
     check_report(U.analyse(tree, U.Facts(fresh)))
     assert fresh.read_text() == FACTS.read_text(), f"the kept facts are stale: {REGENERATE}"
+    (root / "security" / "Proofs" / "Flock" / "Lone.lean").write_text("theorem Proofs.Flock.lone : True := trivial\n")
+    U.build(U.Tree(root, U.tracked(root)), "security/Proofs", setup=False)
+    assert not list(root.rglob("Lone.olean")), "no default target imports it"
+    lock = root / "security" / "Proofs" / "lean-audit.json"
+    rec = json.loads(lock.read_text())
+    lock.write_text(json.dumps(rec | {"roots": [*rec["roots"], "Proofs.Flock.Lone"]}))
+    U.build(U.Tree(root, U.tracked(root)), "security/Proofs", setup=False)
+    assert list(root.rglob("Lone.olean")), "a root of the lock is built though no default target imports it"
