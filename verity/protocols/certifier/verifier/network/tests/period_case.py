@@ -1611,12 +1611,13 @@ def _stratum_oversample(r: random.Random, strata: list[dict]) -> None:
         s["k"], over = s["k"] - cut, over - cut
 
 
-def _strata_resize(r: random.Random, strata: list[dict]) -> int:
+def _strata_resize(r: random.Random, strata: list[dict], seed: int) -> int:
     """A profile's `strata`, each sampled whole, no longer the size of their level: one of them holding one to three
-    more units than it samples, each holding twice as many, or one holding and sampling one fewer. No stratum samples
-    more than it holds and the level's sample is no more than the level holds (`tied-strata-sizes`). The strata's
-    sample."""
-    how, one = r.choice(["more", "twice", "fewer"]), r.choice(strata)
+    more units than it samples, each holding twice as many, or one holding and sampling one fewer, the seeds taking
+    the three in turn, so any three seeds in a row hold strata above their level's size and below it. No stratum
+    samples more than it holds and the level's sample is no more than the level holds (`tied-strata-sizes`). The
+    strata's sample."""
+    how, one = ("more", "twice", "fewer")[seed % 3], r.choice(strata)
     if how == "more":
         one["size"] += r.randint(1, 3)
     elif how == "twice":
@@ -1929,7 +1930,7 @@ def build(m: str, seed: int, small: bool = False) -> dict:
         if halves and m == "tied-stratum-oversampled":
             _stratum_oversample(r, strata)
         elif halves:
-            k = _strata_resize(r, strata)
+            k = _strata_resize(r, strata, seed)
         rec = {"format": r.choice(FORMATS), "law": law, "partition": f"loop/{i}", "population": units,
                "program": prog, "protocol": ONE_STAGE, "window": {"kind": "served", "window": i}}
         if rows:
@@ -2116,8 +2117,8 @@ def scan_negatives(p: dict) -> dict[str, tuple[dict, str]]:
     last ingress template's first output leaf (a later step's ingress when `T > 1`); `ingress`, the egress state the
     last ingress template's row input node (resized, the state's node resized to keep the count); `shared` (when
     `T > 1`), the later ingress template's `sin` its row's input node from its first leaf, the `sin` input node left
-    unread; `entries`, the egress state the slot entries' input node (resized, the state's node resized to keep the
-    count); `unread`, an input node of no members appended, which no argument reads; and `topological`, the last
+    unread; `entries`, the egress state lane 0's slot entries' input node (resized, the state's node resized to keep
+    the count); `unread`, an input node of no members appended, which no argument reads; and `topological`, the last
     ingress template's row input node moved after the templates, so the template names a later node."""
     desc, sched = p["scan"], p["schedule"]
 
