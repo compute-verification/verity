@@ -46,7 +46,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
 #: `Flock/Lookup.lean`, whose `MUFU_TABLES` Flock's Lean verifier reads from its `--archive` by SHA-512, in its order
-LOOKUP = ROOT / "verity" / "core" / "service" / "flock" / "Flock" / "Lookup.lean"
+LOOKUP = ROOT / "verity" / "protocols" / "flock" / "verifier" / "Flock" / "Lookup.lean"
 #: `FlockDeploy.FORMAT`, a statement encoding's first field
 FORMAT = "flock-verify-statement/v1"
 #: the flags of `verify` a statement's encoding carries no field for, or none this export reads
@@ -161,9 +161,9 @@ def export(out: Path, run_out: Path, stream, order: int, n: int, q: int, k: int)
     """The guard's inputs for the run at ``run_out`` on ``stream`` (its boundary registration at ``order``), with ``n``
     spans, ``q`` replay blocks sampled and ``k`` proof blocks a cell: written to ``out``; -> ``held.json``'s object."""
     import toy as T
-    from verity.core.protocols.spot import second_stage as SS
-    from verity.ml.circuits.codec import canonical_json, descriptor_id, encode_program
-    from verity.ml.windows.rows import expected_ports
+    from verity.protocols.spot.verifier import second_stage as SS
+    from verity.circuits.codec import canonical_json, descriptor_id, encode_program
+    from verity.commitments.windows.rows import expected_ports
 
     out.mkdir(parents=True, exist_ok=True)
     entry = stream._entries[order]
