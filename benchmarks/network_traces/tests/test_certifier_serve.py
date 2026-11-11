@@ -37,9 +37,9 @@ from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
-from verity.core.protocols.certifier import active
-from verity.core.protocols.certifier.certificate import Issuer
-from verity.core.protocols.certifier.release import release_of
+from verity.protocols.certifier.verifier import active
+from verity.protocols.certifier.verifier.certificate import Issuer
+from verity.protocols.certifier.verifier.release import release_of
 
 HERE = Path(__file__).resolve().parents[1]
 ROOT = Path(__file__).resolve().parents[3]
@@ -280,9 +280,9 @@ def test_a_window_that_faults_drops_its_requests_and_the_audit_follows_the_relea
 
 
 def test_the_gates_certifier_rehearsal_parses_here_with_its_sampling(tmp_path):
-    """`certifier-rehearse`'s command (`benchmarks/live_challenger/auditor.py`) is a `rehearse` this parser takes, its
+    """`certifier-rehearse`'s command (`verity/composite/device/live_challenger/auditor.py`) is a `rehearse` this parser takes, its
     temperature and top_p (0 and 1 by default) always among it, and they are the body every request sends."""
-    sys.path.insert(0, str(ROOT / "benchmarks/live_challenger"))
+    sys.path.insert(0, str(ROOT / "verity/composite/device/live_challenger"))
     import auditor as A
     req = {"requests": 8, "tamper": None, "profile": "served", "in_flight": 2, "tokens": 32, "temperature": 0.6,
            "top_p": 0.9}
@@ -303,7 +303,7 @@ def test_the_gates_keys_height_reaches_rehearse_and_a_key_above_this_files_is_ma
     as `rehearse`'s `--height`, which makes both keys at it; `load_key` makes a key above `HEIGHT` in
     `KEYGEN_WORKERS` processes (at 20, minutes, not the quarter hour one process takes) and one at or below it in one,
     and either loads back from its files."""
-    sys.path.insert(0, str(ROOT / "benchmarks/live_challenger"))
+    sys.path.insert(0, str(ROOT / "verity/composite/device/live_challenger"))
     import auditor as A
     plain = cs.parser().parse_args(A.certifier_command({"requests": 8, "tamper": None}, tmp_path, "u")[2:])
     given = cs.parser().parse_args(A.certifier_command({"requests": 8, "tamper": None, "height": 10}, tmp_path,
@@ -321,7 +321,7 @@ def test_the_gates_keys_height_reaches_rehearse_and_a_key_above_this_files_is_ma
 def test_the_gate_takes_every_tamper_the_rehearsal_has_and_each_is_a_serve_this_parser_takes(tmp_path):
     """The gate's tampers are `serve`'s `--tamper` choices, so the auditor host runs every shim this file has, and
     each reaches `serve` (which alone checks it, after the tunnel is up) as one strategy of `rehearse`."""
-    sys.path.insert(0, str(ROOT / "benchmarks/live_challenger"))
+    sys.path.insert(0, str(ROOT / "verity/composite/device/live_challenger"))
     import auditor as A
     assert A.TAMPERS == cs.TAMPERS == ("late", "extra", "drop", "token", "byte")
     for t in A.TAMPERS:
@@ -348,7 +348,7 @@ def test_the_gates_varied_rehearsal_is_a_varied_rehearse_named_for_its_run_with_
     """The gate's traffic is `rehearse`'s `--traffic`, and a varied request's command is a varied `rehearse` this
     parser takes, named for its run, with each varied flag the request has and no fixed one: without them, the plan's
     own 64, 2 a second, 16:1024, seed 0 and the probe's EOS."""
-    sys.path.insert(0, str(ROOT / "benchmarks/live_challenger"))
+    sys.path.insert(0, str(ROOT / "verity/composite/device/live_challenger"))
     import auditor as A
     assert A.CERTIFIER_TRAFFIC == cs.TRAFFIC
     req = {"run": "c20261024T120000Z-ab12", "requests": 40, "tamper": "token", "traffic": "varied", "temperature": 0.0,
@@ -504,8 +504,8 @@ def test_the_served_proxy_hands_its_certifier_each_egress_windows_sync_which_it_
     """`ServedProxy` hands its `publish` the sync its own shaper ran each egress window under, and none with an ingress
     record or past the shaper's syncs; `CertifyingPublisher` signs it salted beside the window's record (`clocks.jsonl`,
     with its opening), and the certifier's key opens exactly those syncs back (`certificate.SignedClocks`)."""
-    from verity.core.protocols.certifier.certificate import SignedClocks
-    from verity.core.protocols.certifier.grid import Certifier
+    from verity.protocols.certifier.verifier.certificate import SignedClocks
+    from verity.protocols.certifier.verifier.grid import Certifier
 
     probed = {"url": "stub", "body": cs.request_body("stub", TOKENS),
               "responses": [{"events": TOKENS, "first_s": 0.0, "last_s": 0.0}]}
@@ -561,7 +561,7 @@ def _egress_record(window: int, text: bytes, frame_bytes: int = 4096):
 
 
 def _out_shape(words: int, rows: int, program: str = "cd" * 64):
-    from verity.core.protocols.certifier import out_commit as OC
+    from verity.protocols.certifier.verifier import out_commit as OC
 
     return OC.OutShape(program, "out", words, rows)
 
@@ -573,7 +573,7 @@ def test_the_network_certifier_commits_and_signs_each_egress_windows_output_in_i
     and the witness (each row and its salt) apart, for the prover. A record whose text isn't that commits nothing, one
     that isn't the shape's rows is an ``out-shape`` line, and a refused signature is the execution phase under
     ``refused``, with no witness."""
-    from verity.core.protocols.certifier import out_commit as OC
+    from verity.protocols.certifier.verifier import out_commit as OC
 
     words = [0x0102, 0xfffe, 7, 0]
     text = b"".join(w.to_bytes(2, "little") for w in words).hex().encode() * 40
@@ -605,7 +605,7 @@ def test_the_out_value_is_committed_at_the_registered_width_in_the_records_order
     order, ``shape.words`` a row, so response j's step s is row ``j·S + s`` (`out_rows`); the record pins at that
     shape and is ``out-width`` at the per-coordinate one, and words that aren't whole rows of it, or more rows than
     it holds, are ``out-shape``, never padded."""
-    from verity.core.protocols.certifier import out_commit as OC
+    from verity.protocols.certifier.verifier import out_commit as OC
 
     words = list(range(1, 4 * 8 + 1))
     text = b"".join(w.to_bytes(2, "little") for w in words).hex().encode()
@@ -1625,7 +1625,7 @@ def gate_varied(tmp_path_factory):
     as serve-openai records them."""
     import tarfile
 
-    sys.path.insert(0, str(ROOT / "benchmarks/live_challenger"))
+    sys.path.insert(0, str(ROOT / "verity/composite/device/live_challenger"))
     import auditor as A
     tmp, endpoint, got = tmp_path_factory.mktemp("gate-varied"), _Varied(), {}
     for strategy, (run, tamper) in GATE_RUNS.items():
@@ -1682,7 +1682,7 @@ def test_the_gates_varied_rehearsal_names_its_requests_for_its_run_and_the_endpo
 def gate_compact(tmp_path_factory):
     """`GATE_RUNS` as `gate_varied`, each request with `compact` 8: the rehearsal the gate's command asks for, its plan
     made, run and checked, against one `_Varied` endpoint whose every other response ends in a merged chunk."""
-    sys.path.insert(0, str(ROOT / "benchmarks/live_challenger"))
+    sys.path.insert(0, str(ROOT / "verity/composite/device/live_challenger"))
     import auditor as A
     tmp, endpoint, got = tmp_path_factory.mktemp("gate-compact"), _Varied(merges=lambda r: r % 2 == 1), {}
     for strategy, (run, tamper) in GATE_RUNS.items():
@@ -1704,7 +1704,7 @@ def test_the_gates_compact_rehearsal_runs_compact_cells_and_its_check_reads_them
     token run accepted by `check` too, its ids differing in window 0's alone, which only the I/O tie refuses. The
     tie's compact rule (`active.compact_finish_violations`), with the endpoint's ids as the Commit's, finds nothing
     in the honest run's cells and refuses exactly window 0's responses in the token run's."""
-    sys.path.insert(0, str(ROOT / "benchmarks/live_challenger"))
+    sys.path.insert(0, str(ROOT / "verity/composite/device/live_challenger"))
     import auditor as A
     assert A.CERTIFIER_COMPACT == (active.COMPACT_RECORD.size, cs.FRAME_BYTES)
     got, endpoint = gate_compact
