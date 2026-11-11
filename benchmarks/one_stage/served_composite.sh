@@ -111,7 +111,7 @@ fi
 
 bad=0
 for x in "${products[@]}"; do
-  e=$(exe "$x" "verity/protocols/${x%-v1}") || { bad=1; continue; }
+  e=$(exe "$x" "verity/protocols/${x%-v1}/verifier") || { bad=1; continue; }
   cases=()
   while IFS= read -r c; do cases+=(--cases "$c"); done < <("$TPY" - "$D/private" "$x" "$P" "$D/private/pouw" \
     "$D/private/compose" "$D/private/deferred" <<'EOF'

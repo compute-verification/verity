@@ -5,4 +5,5 @@ markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]
 
 [tool.verity.tests]
 # What the tests import of `verity`: the Site, and the wire's canonical JSON its digests are taken over.
-inputs = ["verity/__init__.py", "verity/errors.py", "verity/core/__init__.py", "verity/configuration/wire"]
+inputs = ["verity/__init__.py", "verity/errors.py", "verity/core/__init__.py", "verity/configuration/wire",
+          "verity/configuration/__init__.py", "verity/hardware/__init__.py"]

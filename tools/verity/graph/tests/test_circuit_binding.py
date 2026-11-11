@@ -49,10 +49,10 @@ TOY = {f"{F.CHECKER}/pyproject.toml": '[tool.verity.tests]\ninputs = ["verity", 
        "verity/protocols/flock/prover/python/verity_flock/__init__.py": "",
        "verity/protocols/flock/prover/python/verity_flock/rec.circuit-check.py": NEVER_RUN + "def _rec_roots(): ...\n",
        "other/__init__.py": "", "other/z.circuit-check.py": NEVER_RUN + "def _z_roots(): ...\n",
-       "verity/configuration/config/pyproject.toml": "[project]\n", "adapters/vllm/pyproject.toml": "[project]\n",
+       "tools/config/pyproject.toml": "[project]\n", "adapters/vllm/pyproject.toml": "[project]\n",
        **{f"{F.READS}/{part}": json.dumps({"schema": F.READS_SCHEMA, **doc}) for part, doc in (
            ("registries.json", {"registries": {"files": ["verity/ml/x.py"], "listed": ["other"], "probes": [
-               "verity/configuration/config/verity_vllm", "verity/configuration/config/verity_vllm.py", "verity/configuration/config/verity_vllm/__init__.py"]}}),
+               "tools/config/verity_vllm", "tools/config/verity_vllm.py", "tools/config/verity_vllm/__init__.py"]}}),
            ("loaded.json", {"loaded": ["adapters/vllm/numpy.py"]}),
            ("bindings.json", {"bindings": {}, "groups": [{"probes": ["verity/ml/y.py"]}]}))},
        **{f"{graph.RUNNERS}/{m}.py": "" for m in ("circuit_binding", "circuit_catalog", "circuit_coverage")}}
@@ -121,16 +121,16 @@ def _keys(root: Path) -> dict[str, str]:
 
 
 @pytest.mark.parametrize(("change", "moves"), [
-    ({"verity/configuration/config/verity_vllm.py": ""}, True),
-    ({"verity/configuration/config/verity_vllm/__init__.py": ""}, True),
+    ({"tools/config/verity_vllm.py": ""}, True),
+    ({"tools/config/verity_vllm/__init__.py": ""}, True),
     ({"adapters/vllm/numpy.py": ""}, True),
     ({"queue.py": ""}, True),
     ({"pynvml/__init__.py": ""}, True),
     ({"pynvml/README.txt": ""}, True),
     ({"other/notes.txt": ""}, True),
-    ({"verity/configuration/config/pyproject.toml": "[project]\nname = 'x'\n"}, False),
+    ({"tools/config/pyproject.toml": "[project]\nname = 'x'\n"}, False),
     ({"other/__init__.py": "x = 1\n"}, False),
-    ({"verity/configuration/config/helper.py": ""}, False),
+    ({"tools/config/helper.py": ""}, False),
     ({"NOTES.md": "", "setup.cfg": "", ".hidden/m.py": ""}, False)])
 def test_a_module_file_added_where_a_run_looks_moves_every_task_s_key_and_an_edit_moves_none(tmp_path, change, moves):
     """A run looks for modules outside the files that key it: where circuit-check's read sets say its runs probed or listed,

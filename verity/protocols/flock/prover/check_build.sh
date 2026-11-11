@@ -25,7 +25,7 @@ export RUSTUP_TOOLCHAIN=$RUST_TOOLCHAIN
 cd "$F"
 git checkout -q b684b12 && git checkout -q -- . && git clean -qfd -e target
 for p in link gpu-link sha512 glue zk vtime; do
-  git apply "$ROOT/verity/ml/flock/flock-$p-b684b12.patch"
+  git apply "$ROOT/verity/protocols/flock/prover/flock-$p-b684b12.patch"
 done
 ln -s "$ROOT/verity/protocols/flock/prover/live" crates/flock-live
 grep -q '"crates/flock-live"' Cargo.toml || sed -i 's|    "crates/flock-transcript",|    "crates/flock-transcript",\n    "crates/flock-live",|' Cargo.toml

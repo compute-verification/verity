@@ -252,11 +252,11 @@ def main(argv: list[str] | None = None) -> int:
         from verity_cli.examples import status
         return status(ROOT)
     if args[0] == "demo":
-        if args[1:] and (config := ROOT / "examples" / args[1].replace("-", "_") / "config.toml").is_file():
+        if args[1:] and (config := ROOT / "demos" / args[1].replace("-", "_") / "config.toml").is_file():
             from . import run
 
             return run.run_main([str(config), *args[2:]])
-        return _runner("examples", "demo", args[1:])
+        return _runner("demos", "demo", args[1:])
     if args[0] == "lean":
         return _lean(args[1:])
     raise SystemExit(f"verity: no command {args[0]!r}\n{__doc__}")

@@ -16,6 +16,7 @@ from verity import settings as S
 
 REGISTRY = Path(S.__file__)
 AREA = Path(__file__).resolve().parents[1]
+PARTS = [AREA.parent / "definitions" / part for part in ("circuits", "ops", "silicon")]  # the rest of what was one tree
 ROOT = Path(__file__).resolve().parents[3]
 TOKEN = re.compile(r"\bVERITY_ML_[A-Z0-9_]*[A-Z0-9]\b")
 #: the attributes of ``os`` that touch the environment
@@ -144,7 +145,7 @@ def test_the_record_carries_the_value_settings_in_force_and_names_a_credential(m
 def _area() -> list[tuple[str, str]]:
     """Each Python file of the area, this one aside (it spells undeclared names to see them refused), with its text."""
     return [(p.relative_to(ROOT).as_posix(), p.read_text(encoding="utf-8")) for p in sorted(AREA.rglob("*.py"))
-            if p != Path(__file__).resolve()]
+            if p != Path(__file__).resolve()] + [(str(p), p.read_text("utf-8")) for d in PARTS for p in sorted(d.rglob("*.py"))]
 
 
 def test_the_area_reads_the_environment_through_the_registry_alone() -> None:
