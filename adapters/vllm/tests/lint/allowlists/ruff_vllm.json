@@ -1911,8 +1911,6 @@
     {"file": "verity_vllm/engine/run_facts.py", "kind": "SIM105", "symbol": "host_doc", "detail": "Use `contextlib.suppress(OSError, ValueError)` instead of `try`-`except`-`pass`"},
     {"file": "verity_vllm/engine/served.py", "kind": "ISC004", "symbol": "<module>", "detail": "Unparenthesized implicit string concatenation in collection", "count": 2},
     {"file": "verity_vllm/engine/static_schedule.py", "kind": "UP035", "symbol": "<module>", "detail": "Import from `collections.abc` instead: `Iterable`, `Mapping`"},
-    {"file": "verity_vllm/engine/stock_kernels.py", "kind": "I001", "symbol": "per_token_group_quant_fp8", "detail": "Import block is un-sorted or un-formatted"},
-    {"file": "verity_vllm/engine/stock_kernels.py", "kind": "I001", "symbol": "triton_scaled_mm", "detail": "Import block is un-sorted or un-formatted"},
     {"file": "verity_vllm/engine/vllm_adapter.py", "kind": "I001", "symbol": "<module>", "detail": "Import block is un-sorted or un-formatted"},
     {"file": "verity_vllm/glue.py", "kind": "I001", "symbol": "<module>", "detail": "Import block is un-sorted or un-formatted"},
     {"file": "verity_vllm/glue.py", "kind": "ISC004", "symbol": "render", "detail": "Unparenthesized implicit string concatenation in collection"},
