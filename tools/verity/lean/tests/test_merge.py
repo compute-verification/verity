@@ -823,9 +823,11 @@ def test_a_guarantee_a_side_brings_to_unwitnessed_or_shape_inline_lands_in_updat
         assert why == [] and candidate == []
         assert list(merged["unwitnessed"]) == list(merged["shape"]["inline"]) == ["P.a", "P.b", "P.c", "P.d"]
         assert list(merged["shape"]["inline"]["P.b"]) == premises
-        facts = {"pins": {}, "own_modules": []}
-        assert list(A.unwitnessed_kept(merged, facts, {})) == list(merged["unwitnessed"])
         listed = merged | {"guarantees": dict.fromkeys(merged["shape"]["inline"], {})}
+        # each a listed guarantee in the witnesses rule's scope, built at its entry's hash: the entries `--update` keeps
+        pin = {"kind": "theorem", "reads": [{"name": "P.Claims.Holds", "module": "P.Claims"}]}
+        facts = {"pins": {g: pin | {"type_sha256": h} for g, h in merged["unwitnessed"].items()}, "own_modules": []}
+        assert list(A.unwitnessed_kept(listed, facts, {})) == list(merged["unwitnessed"])
         assert list(A.inline_failures(listed, facts)[1]) == list(merged["shape"]["inline"])
 
 
