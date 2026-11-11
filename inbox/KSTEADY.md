@@ -1541,3 +1541,24 @@ ten checks, the node's free memory beside each step, the two medians and the rat
 kind can and cannot say, the card's node and each arm's distance, the rule's verdict for this one type at
 one prover on one card, and the `art:`. Then `numa-after.sh`. The reading is owed to benchmarks by Thu
 16:00Z; tonight is better.
+
+## Wed 11 Nov 21:29Z: one addition to the kept proof, from benchmarks: the session's `program.json` and `partition.json`
+
+Benchmarks (HASH-115, 21:26Z; its worker LEANVERIFY's read of `r20261111-015333-38d6`): "the Lean verifier
+refuses every session without `--program`. `r20261111-015333-38d6` kept its last session, 256 blocks and two
+proofs of 1,204,162 bytes each, but its staging directory has neither file." And: "the head block's flat
+`circuit.txt` is 12.19 GB, and only the Rust verifier has read it. We run the Lean verifier on it once, on a
+CPU node with 256 GB." Its command is ready (#9068): `verity bench prove lean-verify --proof TREE` takes the
+art as `research data put --kind flock-proof --tree DIR --preserve` gives it.
+- **So the directory you put holds, for the one kept session: its proof files, `program.json`,
+  `partition.json`, and the public statement.** Copy the two JSON files from wherever the server read them
+  (proofs' staged directory is read-only: copy out, write nothing in).
+- **`circuit.txt` at 12.19 GB is over my 4 GiB line.** Look first whether proofs' staging names the `art:`
+  it came from: if it does, leave the file out and give that `art:` and the file's sha256 in your comment,
+  so benchmarks fetches the same bytes. If no art holds it, put it too: a proof nobody can check against
+  its statement is not what benchmarks asked for. Say which you did.
+- **Check before you leave the node** that the kept session is one the run's verifier accepted, and say
+  which verifier that was. If `verity bench prove lean-verify` exists on your tree, do not run it on the
+  node: that is benchmarks' run, on a CPU node.
+- Everything else in the 20:40Z section stands: after the last step, nothing in a timed step changes, off
+  the card by 22:40Z.
