@@ -34,8 +34,9 @@ from __future__ import annotations
 
 import hashlib
 import operator
+from collections.abc import Callable, Sequence
 from dataclasses import dataclass
-from typing import Any, Callable, NoReturn, Sequence
+from typing import Any, NoReturn
 
 import torch
 from verity.circuits.codec import (
@@ -881,9 +882,7 @@ def _translate_node(ctx: Ctx, node) -> None:
         base = ctx.val(node.args[0])
         if isinstance(base, _LiftedConstant):
             _refuse_constant(ctx, node, base)
-        if isinstance(base, (list, tuple)):
-            ctx.define(node, base[node.args[1]], view_of=node.args[0])
-        elif isinstance(base, Coll):
+        if isinstance(base, (list, tuple, Coll)):
             ctx.define(node, base[node.args[1]], view_of=node.args[0])
         elif isinstance(base, StaticIndex):
             ctx.define(node, StaticIndex(base.tensor[node.args[1]]), view_of=node.args[0])

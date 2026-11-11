@@ -28,8 +28,9 @@ from __future__ import annotations
 
 import inspect
 import warnings
+from collections.abc import Callable, Sequence
 from dataclasses import dataclass
-from typing import Any, Callable, Sequence
+from typing import Any
 
 import torch
 from torch.utils import _pytree as pytree
@@ -93,7 +94,7 @@ class _Callable:
         """(fn definition, declared parameter types, return type) for these argument types and statics."""
         raise NotImplementedError
 
-    def bind(self, **statics) -> "Bound":
+    def bind(self, **statics) -> Bound:
         return Bound(self, statics)
 
     def __call__(self, *args, name: str = "", **kwargs):
@@ -421,7 +422,7 @@ class Ops:
     def roles(self) -> dict[str, _Callable]:
         return dict(self._roles)
 
-    def with_roles(self, **roles: _Callable) -> "Ops":
+    def with_roles(self, **roles: _Callable) -> Ops:
         return Ops(self._registry, **{**self._roles, **roles})
 
     def const(self, w: int, bits: int, name: str = ""):

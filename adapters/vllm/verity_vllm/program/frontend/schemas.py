@@ -5,8 +5,9 @@ from __future__ import annotations
 
 import inspect
 import re
+from collections.abc import Callable
 from dataclasses import dataclass
-from typing import Any, Callable
+from typing import Any
 
 from verity.circuits.types import Array, Type, Value
 from verity.circuits.types import Tuple as TupleT

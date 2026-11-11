@@ -66,18 +66,12 @@ def _runs(refs, max_runs: int = MAX_RUNS) -> list[tuple[str, int, int, int]] | N
                 return True
             if r.count > max_runs:                      # one run per leaf
                 return False
-            for space, idx, leaf in r:
-                if not push(space, idx, leaf, leaf + 1):
-                    return False
-            return True
+            return all(push(space, idx, leaf, leaf + 1) for space, idx, leaf in r)
         if isinstance(r, Concat):
             return all(walk(p) for p in r.parts)
         if len(r) > max_runs:
             return False
-        for space, idx, leaf in r:
-            if not push(space, idx, leaf, leaf + 1):
-                return False
-        return True
+        return all(push(space, idx, leaf, leaf + 1) for space, idx, leaf in r)
 
     return out if walk(refs) else None
 

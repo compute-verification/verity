@@ -4,8 +4,9 @@ view or `getitem` plumbing) and everything else is a `FrontendError`; the guarde
 from __future__ import annotations
 
 import operator
+from collections.abc import Sequence
 from dataclasses import dataclass, field
-from typing import Any, Sequence
+from typing import Any
 
 import torch
 from verity.circuits.defs import Builder

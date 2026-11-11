@@ -89,7 +89,7 @@ def test_block_gemm_picks_the_form_by_its_step() -> None:
     assert fp8_vocab.block_gemm(256, 384, 128, scale) == bind(F.ScaledMmFp8BlockSharedScale, K=256, N=384, G=128)
     assert fp8_vocab.block_gemm(256, 384, 128, scale, BlackwellE4m3QmmaDot32) == \
         bind(F.ScaledMmFp8BlockSharedScaleV3, K=256, N=384, G=128, DOT=BlackwellE4m3QmmaDot32)
-    assert fp8_vocab.SHARED_SCALE == {"ScaledMmFp8Block_v1": F.ScaledMmFp8BlockSharedScale}
+    assert {"ScaledMmFp8Block_v1": F.ScaledMmFp8BlockSharedScale} == fp8_vocab.SHARED_SCALE
 
 
 # ---------------------------------------------------------------- the version 4 forms

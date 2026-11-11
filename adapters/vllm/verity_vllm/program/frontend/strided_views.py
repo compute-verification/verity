@@ -4,7 +4,7 @@ collection of references, kept O(1) in the descriptor where the references are o
 from __future__ import annotations
 
 import math
-from typing import Sequence
+from collections.abc import Sequence
 
 import torch
 from verity.circuits.refs import (

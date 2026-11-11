@@ -53,7 +53,7 @@ def of(finished: str, output_len: int, T: int, stops: Iterable[int], *, max_toke
         raise ValueError("finished on a stop id, and the registered model states none (its config's eos_token_id): register them")
     if finished not in ("eos", "length", "abort"):
         raise ValueError(f"finished on {finished!r}, which no length rule reads")
-    code = (0 if T + 1 < output_len or finished == "abort" else 1 if finished == "eos" else 2 if output_len >= max_tokens else 3)
+    code = (0 if output_len > T + 1 or finished == "abort" else 1 if finished == "eos" else 2 if output_len >= max_tokens else 3)
     return spec(stops, max_tokens=max_tokens, prompt_len=prompt_len, max_model_len=max_model_len, outputs=T + 1, finish=code)
 
 

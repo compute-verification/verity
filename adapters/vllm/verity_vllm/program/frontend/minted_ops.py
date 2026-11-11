@@ -6,8 +6,9 @@ from __future__ import annotations
 
 import contextvars
 import hashlib
+from collections.abc import Sequence
 from dataclasses import dataclass
-from typing import Any, Sequence
+from typing import Any
 
 import torch
 from torch.utils import _pytree as pytree

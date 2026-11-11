@@ -196,8 +196,8 @@ def test_sigma_check_reads_the_boolean_function_against_sigma_of_the_word_functi
     word = _derived()
     assert BB.sigma_check(word, BB.lift(word)) == {"nodes": 6, "definitions": 5, "mismatches": [], "mismatch_n": 0, "ok": True}
     callee = BB.sigma_check(word, BB.lift(_derived({"mul": W.F32AddFtz})))
-    assert not callee["ok"] and callee["mismatches"] == [f"node 1: Calls {descriptor_id(BB.boolean_version(W.F32AddFtz))}, "
-                                                         f"σ(F32MulFtz_v1) = {descriptor_id(BB.boolean_version(W.F32MulFtz))}"]
+    assert not callee["ok"] and callee["mismatches"] == [(f"node 1: Calls {descriptor_id(BB.boolean_version(W.F32AddFtz))}, "
+                                                         f"σ(F32MulFtz_v1) = {descriptor_id(BB.boolean_version(W.F32MulFtz))}")]
     assert BB.sigma_check(one_add(1), BB.lift(one_add(1)))["ok"]
     assert BB.sigma_check(one_add(1), BB.lift(one_add(0)))["mismatches"] == ["node 0 operand 1: not the word operand's bits"]
 

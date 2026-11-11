@@ -468,7 +468,7 @@ def registered_policy_splits(sampling: dict) -> int:
     if g.get("num_sms") is None:
         raise ValueError(f"sampling.splits {S!r}: the policy's geometry declares no num_sms, so it has no registered split count")
     want = registered_splits(int(g["num_sms"]))
-    if type(S) is not int or S != want:
+    if type(S) is not int or want != S:
         raise ValueError(f"sampling.splits {S!r} is not the registered split count registered_splits({int(g['num_sms'])}) = {want}, "
                          f"the S the served engine pins")
     return S
