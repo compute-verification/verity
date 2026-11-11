@@ -398,17 +398,22 @@ theorem basis_size (sws : Array Switched) (q : Array F256) (e : ℕ) : (basis sw
   rw [← Array.foldl_toList]
   exact foldl_size_const (fun _ _ => by simp) _ _ (by simp)
 
-theorem zkSchedule_n {m : ℕ} {v : Schedule × ℕ} (h : Zk.schedule wideLeaf m = .ok v) : v.1.n = m - 7 := by
-  unfold Zk.schedule at h
-  obtain ⟨q0, -, h⟩ := except_ok_bind h
-  cases hf : fast100 m with
-  | none => rw [hf] at h; cases h
-  | some sch =>
-    rw [hf] at h
-    cases h
-    obtain ⟨hd, hm⟩ := FlockSoundness.Refine.fast100_dims m sch hf
-    show sch.n = m - 7
-    rw [hd.1, hm]
+theorem zkSchedule_n {wideLeaf : Bool} {m : ℕ} {v : Schedule × ℕ} (h : Zk.schedule wideLeaf m = .ok v) :
+    v.1.n = m - 7 := by
+  by_cases hm : m < 40
+  · have key : ∀ (w : Bool) (m : Fin 40), (match Zk.schedule w m.val with
+        | .ok v => decide (v.1.n = m.val - 7)
+        | .error _ => true) = true := by
+      decide +kernel
+    have := key wideLeaf ⟨m, hm⟩
+    simp only [h, decide_eq_true_eq] at this
+    exact this
+  · exfalso
+    unfold Zk.schedule at h
+    obtain ⟨q0, hq0, -⟩ := except_ok_bind h
+    unfold Zk.queries0 at hq0
+    simp [show ¬m ≤ 24 by omega, show m ≠ 25 by omega, show m ≠ 26 by omega, show m ≠ 27 by omega,
+      show ¬m ≤ 31 by omega, show ¬m ≤ 35 by omega] at hq0
 
 end FlockComplete.Replay
 

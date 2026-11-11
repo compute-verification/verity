@@ -434,11 +434,11 @@ theorem repPZk_grows (resp : ℕ → Claims.Msg) (h : ByteArray → ByteArray) (
 /-- The `--zk` schedules squeeze few coins: `n + 1` and every level's `q + 1` are at most `65536`. -/
 theorem zkSchedule_small {m : ℕ} (h1 : 25 ≤ m) (h2 : m ≤ 35) {v : Schedule × ℕ} (h : Zk.schedule wideLeaf m = .ok v) :
     v.1.n + 1 ≤ 65536 ∧ ∀ j, (v.1.levels.getD j default).q + 1 ≤ 65536 := by
-  have key : ∀ k : Fin 11, (match Zk.schedule wideLeaf (k.val + 25) with
+  have key : ∀ (w : Bool) (k : Fin 11), (match Zk.schedule w (k.val + 25) with
       | .ok v => decide (v.1.n + 1 ≤ 65536 ∧ ∀ j < v.1.levels.size, (v.1.levels.getD j default).q + 1 ≤ 65536)
       | .error _ => false) = true := by
     decide +kernel
-  have := key ⟨m - 25, by omega⟩
+  have := key wideLeaf ⟨m - 25, by omega⟩
   simp only [show m - 25 + 25 = m by omega, h, decide_eq_true_eq] at this
   obtain ⟨hn, hq⟩ := this
   refine ⟨hn, fun j => ?_⟩

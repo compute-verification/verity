@@ -91,11 +91,11 @@ theorem zkSch_facts {m : ℕ} (h1 : 25 ≤ m) (h2 : m ≤ 35) {v : Schedule × �
       have := hc i (by omega)
       rw [ih (by omega)] at this
       omega
-  have ht : ∀ k : Fin 11, (match Zk.schedule wideLeaf (k.val + 25) with
+  have ht : ∀ (w : Bool) (k : Fin 11), (match Zk.schedule w (k.val + 25) with
       | .ok v => decide (v.2 ≤ 2 ^ (v.1.levels.getD 0 default).cols)
       | .error _ => false) = true := by
     decide +kernel
-  have ht' := ht ⟨m - 25, by omega⟩
+  have ht' := ht wideLeaf ⟨m - 25, by omega⟩
   simp only [show m - 25 + 25 = m by omega, h, decide_eq_true_eq] at ht'
   refine ⟨zkSchedule_n h, hk0, hL, by have := hlig.dims; omega, fun j hj => ?_, hseam, hl0, hl4, hcols, ht',
     hlig.cap, by have := hlig.dims; omega⟩

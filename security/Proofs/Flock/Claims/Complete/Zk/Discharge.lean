@@ -106,13 +106,15 @@ theorem CaseZk.table {H : Claims.Msg → Claims.Msg} {rel : Readable.Parsed → 
 
 /-- `Zk.schedule` has a schedule at every `m` from 25 to 35. -/
 theorem zkSchedule_ok {m : ℕ} (h1 : 25 ≤ m) (h2 : m ≤ 35) : ∃ v, Zk.schedule wideLeaf m = .ok v := by
-  obtain ⟨q, hq⟩ : ∃ q, Zk.queries0 wideLeaf m = .ok q := by
-    unfold Zk.queries0
-    interval_cases m <;> exact ⟨_, rfl⟩
-  obtain ⟨sch, hs⟩ := Option.isSome_iff_exists.1 (fast100_isSome (by omega) h2)
-  unfold Zk.schedule
-  simp only [hq, hs]
-  exact ⟨_, rfl⟩
+  have key : ∀ (w : Bool) (k : Fin 11), (match Zk.schedule w (k.val + 25) with
+      | .ok _ => true
+      | .error _ => false) = true := by
+    decide +kernel
+  have hk := key wideLeaf ⟨m - 25, by omega⟩
+  simp only [show m - 25 + 25 = m by omega] at hk
+  cases hs : Zk.schedule wideLeaf m with
+  | ok v => exact ⟨v, rfl⟩
+  | error e => simp [hs] at hk
 
 /-- **One statement per table** (§3): the goal `TablesZk`. -/
 theorem tablesZk_goal (H : Claims.Msg → Claims.Msg) (rel : Readable.Parsed → Readable.Relation) : TablesZk H rel := by
