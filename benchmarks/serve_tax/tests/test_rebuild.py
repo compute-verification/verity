@@ -1,6 +1,7 @@
 """The rebuild's bookkeeping on stand-ins for vLLM's engine: the K/V file's layout, the hits the record forces and when
 their pages load, the blocks a re-added request shares, the start's refusal of async scheduling's extra row, and the
-per-request K/V roots and the mirror's save and load (numpy, skipped without it)."""
+per-request K/V roots and the mirror's save and load (numpy, skipped without it), and where ``--capture`` is
+refused."""
 from __future__ import annotations
 
 import sys
@@ -421,3 +422,10 @@ def test_a_served_preempted_request_is_resumed_and_any_other_stays_new() -> None
     q, w = NS(status=Status.WAITING), NS(status=Status.WAITING)
     RB.keep_preempted(q, "PREEMPTED"), RB.keep_preempted(w, "RUNNING")
     assert (q.status, w.status) == (Status.PREEMPTED, Status.WAITING)
+
+
+@pytest.mark.parametrize("args", [["--served", "S", "--scratch", "D"],
+                                  ["--arm-dir", "A", "--kv-dir", "K", "--shape-only", "r0"]])
+def test_capture_takes_only_a_served_shape_only_target_s_rows(args: list[str]) -> None:
+    with pytest.raises(SystemExit, match="--capture takes the sampler rows of --served's --shape-only target"):
+        RB.main([*args, "--capture", "TokenSelect_v4{V=8}", "--out", "O"])

@@ -667,7 +667,7 @@ def test_a_check_recorded_on_a_machine_runs_in_a_slot(monkeypatch):
     spec2 = importlib.util.spec_from_file_location("repo_check_slot", ROOT / "tools" / "verity" / "check" / "check.py")
     check = importlib.util.module_from_spec(spec2)
     spec2.loader.exec_module(check)
-    monkeypatch.setattr(check, "gather_verdicts", lambda d, given=None: None)
+    monkeypatch.setattr(check, "verdict_url_file", lambda d: None)
     calls = []
 
     def run(cmd, **kw):
@@ -689,33 +689,33 @@ def test_a_check_recorded_on_a_machine_runs_in_a_slot(monkeypatch):
 
 def test_agreement_sends_the_upstream_build_whatever_the_commit_changes(monkeypatch, tmp_path):
     """`--record --agreement`: the lander's check of a train that changes a pinned guarantee outside verity/ml/flock/ still runs
-    the agreement step, with the pinned build and inputs as the run's inputs."""
+    the agreement step, with the pinned build and inputs as the run's inputs and their URLs sent with it."""
     spec2 = importlib.util.spec_from_file_location("repo_check_agreement", ROOT / "tools" / "verity" / "check" / "check.py")
     check = importlib.util.module_from_spec(spec2)
     spec2.loader.exec_module(check)
-    import research.store.local as local
 
-    calls = []
+    calls, signed = [], []
 
     def run(cmd, **kw):
         calls.append(cmd)
         return subprocess.CompletedProcess(cmd, 0, stdout="", stderr="")
 
-    class Store:
-        def fetch(self, art):
-            f = tmp_path / art.replace(":", "_")
-            f.write_bytes(b"")
-            return f
+    def url_file(d):
+        signed.append(d)
+        pin = json.loads(check.UPSTREAM_PIN.read_text())
+        (p := d / check.AGREEMENT_URLS).write_text(json.dumps({k: {**pin[k], "bytes": 1, "url": "u"} for k in ("upstream", "inputs")}))
+        return p
 
     monkeypatch.setattr(check.subprocess, "run", run)
     monkeypatch.setattr(check, "lean_deps_url_file", lambda d: None)
-    monkeypatch.setattr(local, "LocalStore", Store)
+    monkeypatch.setattr(check, "verdict_url_file", lambda d: None)
+    monkeypatch.setattr(check, "agreement_url_file", url_file)
     assert check.record(["--on", "vy-nebius-1", "--base", "HEAD"]) == 0
-    assert "--input" not in calls[-1]
+    assert "--input" not in calls[-1] and not signed
     assert check.record(["--on", "vy-nebius-1", "--base", "HEAD", "--agreement"]) == 0
     cmd = calls[-1]
     assert [cmd[i + 1].split("=")[0] for i, x in enumerate(cmd) if x == "--input"] == ["flock_upstream", "flock_inputs"]
-    assert "--agreement" not in cmd
+    assert str(signed[0] / check.AGREEMENT_URLS) in cmd and "--agreement" not in cmd
 
 
 def test_a_priority_waiter_goes_ahead_of_waiting_lane_checks_and_behind_older_priority_ones(tmp_path):
@@ -782,7 +782,7 @@ def test_drive_s_rank_reaches_slot_py_from_record(monkeypatch):
     spec2 = importlib.util.spec_from_file_location("repo_check_rank", ROOT / "tools" / "verity" / "check" / "check.py")
     check = importlib.util.module_from_spec(spec2)
     spec2.loader.exec_module(check)
-    monkeypatch.setattr(check, "gather_verdicts", lambda d, given=None: None)
+    monkeypatch.setattr(check, "verdict_url_file", lambda d: None)
     calls = []
     monkeypatch.setattr(check.subprocess, "run", lambda cmd, **kw: calls.append(cmd) or subprocess.CompletedProcess(cmd, 0, "", ""))
     monkeypatch.setattr(check, "lean_deps_url_file", lambda d: None)
@@ -888,7 +888,7 @@ def test_priority_reaches_slot_py_from_record_and_unknown_options_are_refused(mo
     spec2 = importlib.util.spec_from_file_location("repo_check_priority", ROOT / "tools" / "verity" / "check" / "check.py")
     check = importlib.util.module_from_spec(spec2)
     spec2.loader.exec_module(check)
-    monkeypatch.setattr(check, "gather_verdicts", lambda d, given=None: None)
+    monkeypatch.setattr(check, "verdict_url_file", lambda d: None)
     calls = []
     monkeypatch.setattr(check.subprocess, "run", lambda cmd, **kw: calls.append(cmd) or subprocess.CompletedProcess(cmd, 0, "", ""))
     monkeypatch.setattr(check, "lean_deps_url_file", lambda d: None)
@@ -912,7 +912,7 @@ def test_record_asks_for_a_train_slot_only_for_a_trains_tests_or_circuit_check_a
     spec2 = importlib.util.spec_from_file_location("repo_check_min_mem", ROOT / "tools" / "verity" / "check" / "check.py")
     check = importlib.util.module_from_spec(spec2)
     spec2.loader.exec_module(check)
-    monkeypatch.setattr(check, "gather_verdicts", lambda d, given=None: None)
+    monkeypatch.setattr(check, "verdict_url_file", lambda d: None)
     calls = []
     monkeypatch.setattr(check.subprocess, "run", lambda cmd, **kw: calls.append(cmd) or subprocess.CompletedProcess(cmd, 0, "", ""))
     monkeypatch.setattr(check, "lean_deps_url_file", lambda d: None)

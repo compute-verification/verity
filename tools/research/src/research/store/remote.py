@@ -9,7 +9,8 @@
         list(prefix)       every key under `prefix`
 
 `FsRemote` and `S3Remote` also have `list_times(prefix, start_after=None)`, `[(key, last modified)]`, which the derived index
-(`bucket_index.py`) lists with.  `FsRemote(root)` is a directory (also the test double).  `S3Remote` lives in `remote_s3.py`.  `HttpRemote(base_url)` is the read-only
+(`bucket_index.py`) lists with, and `create(key, path)`, a conditional create that never reads the remote (`created`|`exists`):
+the public export writes with it, since its key may write but not read.  `FsRemote(root)` is a directory (also the test double).  `S3Remote` lives in `remote_s3.py`.  `HttpRemote(base_url)` is the read-only
 public export (`fetchset.py`): `get` and `head` over anonymous HTTPS at `<base_url>/<key>`, no `put`, no `list`.  `load_remote()` reads
 `~/.research/store.toml` (or `$RESEARCH_STORE_CONFIG`); no file, or no `[remote]` table, means no remote: the local store is the
 only replica and nothing is ever called PRESERVED.  The config names the ENV VARS that hold credentials; it never holds secrets.
@@ -87,15 +88,21 @@ class FsRemote:
 
     def put(self, key: str, path: Path) -> dict:
         dst = self._p(key)
-        size, md5 = Path(path).stat().st_size, md5_file(Path(path))
-        res = {"action": "created", "bytes": size, "etag": md5, "md5": md5, "conditional": True, "fallback": None}
         if dst.exists():
+            size, md5 = Path(path).stat().st_size, md5_file(Path(path))
             if dst.stat().st_size != size:
                 raise RemoteConflict(f"{key}: remote holds {dst.stat().st_size} bytes, local is {size}")
             have = md5_file(dst)
             if have != md5:
                 raise RemoteConflict(f"{key}: remote ETag {have} != local MD5 {md5} (same size, different bytes)")
-            return {**res, "action": "skipped"}
+            return {"action": "skipped", "bytes": size, "etag": md5, "md5": md5, "conditional": True, "fallback": None}
+        return self.create(key, path)
+
+    def create(self, key: str, path: Path) -> dict:
+        """`S3Remote.create`'s double: create `key` without reading what is there (`exists` when the key is taken)."""
+        dst = self._p(key)
+        size, md5 = Path(path).stat().st_size, md5_file(Path(path))
+        res = {"action": "created", "bytes": size, "etag": md5, "md5": md5, "conditional": True, "fallback": None}
         dst.parent.mkdir(parents=True, exist_ok=True)
         tmp = dst.parent / f".tmp-{dst.name}-{os.getpid()}-{threading.get_ident()}"
         shutil.copyfile(path, tmp)
