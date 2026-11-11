@@ -19,8 +19,9 @@ default (`ROLE=both` runs the two on one machine, a test of the scripts that aud
   verify a served or gate session's signatures are checked with and the live challenger's `serve.py`. That verifier
   runs the Lean verifier, `remote-audit-verifier` (`lean_verifier.py` beside it), beside `audit.AuditRun`, and refuses
   a run where the two differ; `wire.py` beside it frames the messages between the two processes.
-- `prover.py`: the prover's process; its GPU backend is `device.py` with `session.cu` (which includes
-  `verity/protocols/poub/prover/codec_tensor/reader.cu`), and `serve.py` serves vLLM as the prover.
+- `verity/protocols/poub/prover/remote_session/prover.py`: the prover's process, PoUB's prover's, which these scripts
+  run; its GPU backend is `device.py` with `session.cu` beside it (which includes `../codec_tensor/reader.cu`), and
+  `serve.py` here serves vLLM as the prover.
 - `auditor_line.py`: the memory line on the auditor's clock, computed by the Lean (`line_record`) and held equal to `line.py`'s.
 
 **Reads and writes:** a store (synthetic, or a pinned checkpoint `store_layout.py` writes) and the prover's plan (`PLAN`:

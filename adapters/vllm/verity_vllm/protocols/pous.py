@@ -191,7 +191,7 @@ def _flat(t: Any) -> Any:
 
 
 def _layout(scheme: str, tensors: Mapping[str, Any]) -> Any:
-    """The store's frozen layout over ``tensors``: each from a block boundary, in order (`p2_v1/store.py`'s ``build``)."""
+    """The store's frozen layout over ``tensors``: each from a block boundary, in order (`p2_store/store.py`'s ``build``)."""
     from verity.protocols.pous.verifier.layout import Layout
 
     base = _base(scheme)

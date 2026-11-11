@@ -63,7 +63,9 @@ Implementations:
     CUDA and nvcc versions (`pod.sh` pins torch and records the CPU topology, the NVMe mount and the installed packages).
 
 - `p2-v1-gpu`: P2 v4 (`verity/protocols/pous/verifier/README.md`, "P2"), in `p2_v1/`, with
-  the same steps, controls and metrics as `band-gpu` so the two compare side by side (`side_by_side.py`):
+  the same steps, controls and metrics as `band-gpu` so the two compare side by side (`side_by_side.py`). Its
+  reference, wire and vectors are the verifier's (`verity/protocols/pous/verifier/p2_v1/`), and its GPU library and
+  the store are P2's prover (`verity/protocols/pous/prover/p2/`: the package `p2_store`, with `p2_gpu/` beside it):
   - `reference.py`: the scheme on the CPU in its own setup framing (the counter-mode SHA-512 keys and the maps, both
     `schemes.p2`'s, and the RFC 6962 tree over v4's leaves, `verity.protocols.pous.verifier.verifier`'s; v4's leaves and the
     mode-0 audit derivation on `verity.commitments.randomness`), pinned by `vectors.json` (`VECTORS_SHA512`);

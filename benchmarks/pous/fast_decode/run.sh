@@ -5,7 +5,7 @@
 #   RESEARCH_RUN_DIR=DIR MAXMIN=20 GPU_LEASE_WHO=ra-fast-decode taskset -c 0-119 bash benchmarks/pous/fast_decode/run.sh
 #
 # The libraries: the tensor-core decode (tcsq.cu) at each width and Karatsuba depth in TC (PER:DEPTH:MINB), the NTT decode
-# (nttsq.cu, P2 v4's width) unless NTT=0, the decode in use (p2_v1/p2v1.cu, CGBN with p2sq.cuh's squaring) at 16,448 bits,
+# (nttsq.cu, P2 v4's width) unless NTT=0, the decode in use (p2_store/p2v1.cu, CGBN with p2sq.cuh's squaring) at 16,448 bits,
 # and CGBN's generic decode at every width in CGBN_WIDTHS. A library whose build fails is left out and its log kept.
 # ENV_DIR holds the shared torch venv and CGBN (pod.sh's WORK/pous-bench, read-only, as p2_v1/climb.sh uses them).
 # BYTES, REPS, GATE and CONTEND (space-separated library names) pass through.
