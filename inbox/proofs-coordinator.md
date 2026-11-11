@@ -65564,3 +65564,111 @@ theorem code_offIreg_le_cls_at …
 - At the try's verdict (about 22:05Z): one line here, and a fix if it names one.
 - Then the lemmas' branch with `runCalls`, its one-file try, one records run and the quick tier at its head, and the ready line to you. [guess] The ready line by Thu 12 Nov 01:00Z.
 - Thu 12 Nov 02:00Z: the entry you asked for: the second guarantee's premises one line each with where each is met, its sentence in plain words, and the square-root term at `main`'s numbers.
+
+## REFUSE, Wed 11 Nov 21:52Z: the bound compiles at SPOT[Flock]'s code (lean exit 0, standard axioms) and is at most 2^-33 a verification phase at six scopes; not ready: three repository tests fail on my imports, one of them a public-boundary question for you; and at 59 of the planner's 180 two-stage designs one commitment of 2^24 coins does not hold the second stage's first reads
+
+**Compiled.** `SpotFlock/Refused.lean` and the five modules under it, at my branch's merge with #8940's head
+`22adf3144e`: "lean exit 0 in 1470 s", "none of its 7 theorems uses an axiom beyond propext, Classical.choice and
+Quot.sound" [run `r20261111-211242-4a91`]. The run's exit code is 1, from the try's `--siblings` step alone:
+`Proofs.Pouw.Bulk` and `Proofs.Flock.Claims.ZkColsSession` both declare `main`, "a clash already in the sources", so
+the step checked none of my names [run `r20261111-211242-4a91`]. Both files hold that `def main` on `main` [read:
+`Pouw/Bulk.lean:58`, `Flock/Claims/ZkColsSession.lean:95`]. No name the six modules declare is declared a second
+time in its namespace anywhere under `security/` or `verity/` [read: a grep of every declaration, 112 names].
+
+What it says, with no `sorry` and no named hypothesis:
+
+- `SpotFlock.secondDraw_refused_le_first`: at every first-stage coin the first stage accepts, the code's second stage
+  (`secondDraw`) refuses with probability at most K·Σ_t k_t·2⁻⁶⁴ over its `stage` coins, for a first stage that
+  samples a uniform K-subset (`firstK`), cells `secondProblem` passes on some replay sample, and
+  `secondRead K ns ks ≤ stage·2^20`: the stage's bytes hold the first reads of K replay blocks' cells.
+- `SpotFlock.refused_after_first_le` and `secondDraw_none_le`: the same over both stages' coins, the second
+  with the first stage's own chance of refusing added, which nothing bounds as a whole.
+
+**The 20:23Z try's failure** was mine, not the file's: `lake build +…Refused:deps` stopped at
+`SamplingGeneric/TwoCode.lean:154:8: RegTwo.blockAt_cell has already been declared` [run `r20261111-202306-0a5d`,
+exit 1]. I had imported `Select.SecondLaw`, which reads `Select.SecondStrata`, from the root `Select.lean`, which
+`TwoCode` imports. The three modules that read `SecondStrata` are now imported from `Claims/Sampling.lean`, beside
+it; a walk of the import graph finds no cycle from `Proofs.Flock` and all six modules under it [read: my script].
+
+**Branch.** `cursor/proofs-refuse-a2c0` at `868202d761`, pushed; it holds a merge of #8940's head `22adf3144e`
+(merged clean). #8914, #8934 and #8940 are open and not on `main` (`75ef75838f`) [read: `gh pr view`, 21:20Z].
+
+**Evaluated** by `benchmarks/spot_figures/second_stage.py` on my branch, called from `total_cost.run` for GLM-5.3,
+on the planner's modeled designs, not on a served run: 180 two-stage points, 10 configurations at week, month and
+year of the world's compute and a datacenter's, at β = 0.001, 0.01 and 0.1 [run `r20261111-203301-b35f`, exit 0].
+All figures below are from that run.
+
+- The bound, a verification phase: between 2^-54.8 and 2^-33.4. The largest is at `per_expert_datacenter`, a
+  world-month, β = 0.1, K = 34.
+- The bound added up over the replay blocks a scope samples in the period (the expected count of honest refusals):
+  at β = 0.01, `tokens`: 1.3e-6, 5.4e-6, 6.6e-5 over a world-week, month, year and 3.3e-10, 1.4e-9, 1.8e-8 over a
+  datacenter's; `per_expert`: 7.1e-6, 3.0e-5, 3.7e-4 and 4.3e-9, 8.1e-9, 9.8e-8. The largest of the 180 is 3.7e-3
+  (`per_expert`, a world-year, β = 0.1).
+- What the bound's hypothesis asks of the coins, at β = 0.01: `tokens` samples 1.5 to 1.7 million of a replay
+  block's proof blocks in 154 cells, which read 38 to 44 MB first, and K = 3 replay blocks: 109 to 127 rounds of
+  2^20 bytes. `per_expert` samples 48.8 million in 152 cells, 1.23e9 bytes a replay block, K = 2: 2,352 rounds.
+  The most is 39,977 rounds (`per_expert_datacenter`, a world-month, β = 0.1).
+
+**The hypothesis fails at the challenger for a third of them.** A live coin layout holds at most `MAX_COINS` coins
+of 64 bytes [read: `challenger.py:396`], 2^30 bytes at #8914's 2^24. The first reads of the K replay blocks exceed
+that at 59 of the 180 points: `per_expert`, `per_expert_pod` and `per_expert_datacenter` at 52 of their 54 (at 44
+of them one replay block's first reads alone exceed it), and `tokens_datacenter` at 7 (K = 25 against the 24 that
+fit, a world-year at β = 0.01; K = 89 to 98 at β = 0.1). At the 2^20 of my branch's tree, which has no #8914, it
+is 126 of 180: only `tokens_sets`, `layer_of_token` and `per_expert_sets` fit. There the challenger refuses the
+layout and no run happens, so the modeled binding figure at those designs is for a deployment the code cannot run.
+Each series now carries the count that fits beside K (`second_stage.at_design`'s `fits`, read from the tree's
+`MAX_COINS`), so it moves with #8914.
+
+**Retired terms.** `ratchet_gate.py 22adf3144e HEAD` fails: my change adds 455 sites [run locally, 0.7 s]. Nearly
+all are names of the code the lemmas are about (`Flock.Draw.*`, `Spot.Draw.*`, `Select.secondLaw`, the key
+`"law"`) [read: the lint's sites by token]. The gate is off the merge gate [read: `policy.toml` `off_gate`,
+`drive.toml` `warn_steps`], and landed files of this kind carry the same sites with no entry (`SecondStrata.lean`
+49, `SpotFlock/Cap.lean` 72) [run locally: the lint's count]. I reworded the prose and put `Select/Second.lean`
+back inside its entry (86 of 87); I am leaving the names. Say if you want my own binders renamed too (about 85
+sites, [guess]).
+
+**PRF-517.** `unread_gate.py origin/main HEAD`: "0 area(s) above the cap", with the note that the Lean check's
+ratchet judges it [run locally]. I expect no cap edit: five modules are in a `SecurityProofs` namespace and
+`Refused.lean` is named in full by `second_stage.py`, so none is wholly unread [read: `unread.py`; the count itself
+has not run]. The body will list the six modules, the reader (the first-hit bound's counts at SPOT[Flock]'s code,
+`code_hNs`, `code_hKs`, `code_hKm`) and Wed 18 Nov; the cap goes to the check's count in the same pull request if
+the check counts otherwise.
+
+**Suites.** `uv run tools/verity/check/suites.py --changed 61f13c2275 --quick` at `868202d761`: 9 of 10 suites
+pass, `benchmarks/spot_figures` among them (210 passed, the slow end-to-end test of `total_cost` included); the
+`repository` suite fails 3 tests of 304, all three on imports of my Lean [run `r20261111-212035-4ff5`, exit 1]:
+
+1. `test_spot_never_imports_the_network_certifier_in_lean`: `Select/SecondSample.lean` imports the certifier's
+   `Check/LinkWindow` for four lemmas that `Flock.canon` prints a value (`canon_str`, `canon_nat`, `canon_arr`,
+   `canon_mkObj`). Mine to fix: Flock has its own (`FlockComplete.JsonRT.canon_ok_some` over `Claims.Json.Good`,
+   with `good_mkObj`) [read: `Claims/Complete/Json/{Canon,Record}.lean`].
+2. `test_no_import_all_of_an_in_tree_module`: `SecondSample.lean` and `SecondFormed.lean` `import all` `Spot.Draw`
+   and `Spot.Json`. The list of such imports is closed; it holds `Select/Second.lean: Spot.Draw` alone [read:
+   `tests/test_lean_packages.py` `IMPORT_ALL`]. `Spot.Json` needs no `all` (it is exposed but for `hexDigits`).
+   `Spot.Draw` does: the lemmas read its private `stratum?`, `natRanges`, `STRATUM_KEYS`, `WORK_STRATUM_KEYS` and
+   `sumSizes` [read]. Mine to fix: the lemmas that read them go into `Second.lean`, the listed file, behind
+   statements that name no private definition.
+3. `test_no_public_file_needs_one_the_export_does_not_copy`: `SecondSample.lean` (public, under
+   `security/Proofs/Flock`) imports `Proofs.Properties.Spot`, which the export does not copy, for one lemma:
+   `checkDraw_nil`, that `Draw.checkDraw` passes exactly the objects that are `Drawn`. No public proof reads it
+   today [read: a grep of `Proofs/Flock`]. **This one is yours to rule**, since moving a path across the boundary
+   is a boundary decision. The three ways I see:
+   (a) `checkDraw_nil` and what it reads move to a module of their own, listed in `public_boundary.toml`'s `shared`
+   as `Proofs/Properties/Spot/Bits.lean` is. The theorem then stays public and whole, and the first-hit bound's
+   counts in `SpotFlock/Counts.lean` can read it. It reorders a private file of 1,400 lines.
+   (b) The three modules that need it (`SecondSample`, `SecondFormed`, `SpotFlock/Refused`) move to the private
+   side, under `security/Proofs/Properties/Spot/`, unchanged. No proof changes. A public module cannot then import
+   the bound: `Counts.lean` would keep Pr[refused] as a term.
+   (c) The public theorems take the lemma as a hypothesis on `Draw.checkDraw` and a private module states them
+   without it.
+   **My default, which I am starting on now: (b)**, because it changes no proof and either other way can follow
+   it by moving files. Tell me if you want (a) or (c) instead.
+
+Also a warning, not a failure: Lean names that carry "law" rose to 163 against a cap of 133 [run
+`r20261111-212035-4ff5`]; mine follow the code's `Select.secondLaw` and `Draw.flockLaw`. I rename the ones that
+are not the code's own name while I am in the files.
+
+**Next.** Fix 1 and 2 and apply (b), one try of the moved `Refused` module (it builds the other two), then the
+repository suite again. The records run, the pull request and the mark still wait for #8940 on `main` (the brief:
+merge `main` once after it lands); say so if you would rather I open on #8940's head. Next entry: when that try
+reports, Thu 12 Nov 00:00Z at the latest. Ready line: Thu 12 Nov 08:00Z.
