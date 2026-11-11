@@ -7,7 +7,7 @@ The node of stubs: a vLLM venv whose interpreter is this one, except that the ve
 are `VERIFIER` and `PROVER` below (a verifier that listens, takes one connection and writes verifier.json as the word
 it is sent says; a prover that connects, sends that word and writes its record), with `verity-vllm`, `gpu-lease` and
 `nvcc` beside it, each writing what it was asked to `calls`, and an `ss` and an `nvidia-smi` that answer from files.
-`taskset` and the rest are the machine's own (`MACHINE_PATH`)."""
+`taskset` and the rest are the system's own (`MACHINE_PATH`)."""
 from __future__ import annotations
 
 import importlib.util
@@ -38,9 +38,9 @@ serve = load_serve()
 RUN = HERE.parent / "run.sh"
 BASH = shutil.which("bash")
 TREE_LEASE = "tools/research/src/research/pods/sh/gpu_lease.sh"
-MACHINE_PATH = ":".join(d for d in os.environ["PATH"].split(":") if d and not (Path(d) / "gpu-lease").exists())
-"""The machine's PATH less every directory that holds a `gpu-lease`: a line whose stub lease a test took away finds
-none, never the lease program of the machine the suite runs on.  The node's other stubs come before it."""
+MACHINE_PATH = ":".join(d for d in os.defpath.split(":") if d and not (Path(d) / "gpu-lease").exists())
+"""The system's default search path, less any directory that holds a `gpu-lease`: a line whose stub lease a test took
+away finds none, never the lease program of the machine the suite runs on.  The node's stubs come before it."""
 ROW = "llama__bf16__h200__tp1__b1__i256__o32"
 
 INTERPRETER = r"""#!/bin/bash
@@ -703,3 +703,29 @@ def test_a_red_prover_under_role_prover_ends_a_verifier_still_waiting_for_it(nod
             conn.setblocking(True)
             assert conn.recv(16) == b""
             conn.close()
+
+
+def test_a_red_prover_under_role_prover_ends_the_verifier_itself(node, tmp_path):
+    """The same against the verifier's own process, started as by hand with the Lean verifier built: the connection
+    `run.sh` opens and drops is the one it accepts, and it ends red at the closed stream rather than listening on.
+    The verifier's output is read to its end, so one that listened on would hang here."""
+    from verity.protocols.poub.verifier.session import lean_verifier as lv
+
+    port = str(free_port())
+    line = [sys.executable, str(ROOT / "verity/protocols/poub/verifier/remote_session/verifier_process.py"),
+            "--host", "127.0.0.1", "--port", port, "--out", str(tmp_path / "verifier"), "--windows", "3",
+            "--window-ms", "2000", "--samples", "2773", "--jitter-ms", "5000", "--sessions", "1", "--check-workers", "1",
+            "--lean-exe", str(lv.build())]
+    verifier = subprocess.Popen(line, cwd=ROOT, env=os.environ | {"HOME": str(tmp_path / "home")},
+                                stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
+    try:
+        assert any(x.startswith("verifier: listening") for x in iter(verifier.stdout.readline, ""))
+        (node.stub / "busy").write_text(port + "\n")
+        p = node.run(ROLE="prover", SERVE="tiny", PORT=port, STUB_PROVER="crash")
+        assert p.returncode == 1 and "the prover ended 1 with no session on record (exit 1)" in p.stdout, said(p)
+        rest = verifier.stdout.read()
+        assert verifier.wait() != 0 and "the stream closed" in rest, rest[-3000:]
+        assert not (tmp_path / "verifier" / "verifier.json").exists()       # no session, so no record of one
+    finally:
+        verifier.kill()
+        verifier.wait()
