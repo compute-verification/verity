@@ -5,9 +5,7 @@ during development. One installable package, one CLI (`research`), stdlib
 only. It runs commands and records what happened; it imports nothing from
 Verity's packages (enforced by `tests/test_cli.py::test_no_packages_import`).
 
-The user-facing procedure (when to record a run, how to find one, how to hand
-off) will be a repo-level skill, once it exists. This file is for people changing
-the tool.
+This file is for people changing the tool.
 
 ## Layout and provenance
 
@@ -208,11 +206,7 @@ reaches it. The Nebius nodes are such machines (`src/research/pods/nebius/`): `l
 needs no credentials), `teardown.sh` stops or deletes it, `n1_replacement.sh` plans n1's replacement, `check.py` is the
 bootstrap check, `prefetch.py` fills the weight cache, and the lease is `sh/lease.sh` (`LEASE_MACHINE_ID`, a stop command).
 Runs share a node's GPUs through `gpu-lease N -- CMD` (`sh/gpu_lease.sh`: a flock per GPU, `CUDA_VISIBLE_DEVICES` set).
-With `--cores CPUS` it pins CMD to those CPUs, records them in the lease, and refuses the request before it takes a GPU when they
-and the live leases' CPUs together pass the machine's CPU quota (a container's `cpu.max`), naming each lease's CPUs, or when
-`taskset` can't pin to them on the machine. The count covers leases only, and those of one lease directory, and the pin is the
-lease's word, not a fence: a job can still widen its own affinity. Every lease also writes the machine's throttle counters
-(`cpu.stat`) into its owner line at its start and at its release.
+`--cores CPUS` pins CMD to those CPUs and holds the leases to the machine's CPU quota: the script's header says how.
 
 What runs on the Nebius nodes outside a run (infra's loops and the files they read) is listed in `src/research/pods/nebius/deploy.toml`,
 each with its repository file and owner (a Slack handle), and goes there only through `research deploy install NODE --by WHO
@@ -537,12 +531,8 @@ SYNC-REFUSED lanes/x/20260928T0700Z-report-x.md: stamp 20260928T0700Z is 18 min 
 ~~~
 
 Once pushed, it looks up the `art:` ids and run ids the pushed lines cite on the store's remote, which is what every reader
-resolves, and warns, never refuses, for each note citing one the remote lacks. A run counts once its attempt, or a label on it
-(`custody waived`), is there. `RESEARCH_NOTES_CITE_CHECK=0` turns it off.
-
-~~~text
-SYNC-WARN lanes/x/20260929T0600Z-report-x.md: cites r20260928-042319-9aac, which the evidence store does not have (a run is in the store once its attempt is on the remote: `research data custody <run> --publish` where its run dir is, else `research data label <run> custody waived --by <you>`)
-~~~
+resolves, and warns (a `SYNC-WARN` line with the fix), never refuses, for each note citing one the remote lacks. A run counts
+once its attempt, or a label on it (`custody waived`), is there. `RESEARCH_NOTES_CITE_CHECK=0` turns it off.
 
 ### The steward off the laptop
 
