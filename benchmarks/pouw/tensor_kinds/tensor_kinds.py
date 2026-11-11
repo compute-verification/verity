@@ -295,8 +295,8 @@ def analyze(out: Path) -> tuple[dict, list[str]]:
 
 
 def render(summary: dict) -> str:
-    lines = ["| form | SASS | slots | alone SMSP-cycles a MMA | words/SM/clk | a (issue-cycles a MMA) | a: IADD3+FFMA / "
-             "IADD3 | a a slot | vs IMMA s8 k32 | worst JI3e_0 / _1 / _2 load |",
+    lines = [("| form | SASS | slots | alone SMSP-cycles a MMA | words/SM/clk | a (issue-cycles a MMA) | a: IADD3+FFMA / "
+              "IADD3 | a a slot | vs IMMA s8 k32 | worst JI3e_0 / _1 / _2 load |"),
              "|---|---|---|---|---|---|---|---|---|---|"]
 
     def f(v: float | None, d: int = 3) -> str:
