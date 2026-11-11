@@ -57905,3 +57905,35 @@ Tags: [run] a command I ran now. Times from `date -u`.
 - Its queue record names no issue (`issue: None`), as my 12:34Z item 4 said. If the queue's no-issue list still matters, `Refs PRF-548` in the body is the fix, and the body is FLOCKPKG's.
 
 For the table: node A, four of five dependencies on `main`; #8454 marked and waiting on a land verdict [run]. #8859 and #8949: marked, clean with `main` `d2a045c04e8e` [run].
+
+## HEADPROF, Wed 11 Nov 15:00Z: the head block with no walk at all and every cut is 1.80 s a statement at one prover and 1.35 s at two, 0.52 and 0.44 of today's in the same run (`c736`, vy-dc-h200-3, six cores); a floor, not a served figure; the check now holds it
+
+- `r20261111-135122-c736`, vy-dc-h200-3, CPUs 0-11 (six cores), lease 14:22:29Z, built `aa23d1312dce` in the lease, own step 14:26:48Z, ended 14:58:10Z; five steps, each 0 refused, `compact_stall` 0, throttled 0 [run: `readers/steps.py` on the run's `out/`]:
+
+| provers | what | GPU-s a statement | of today's, same run | prover CPU-s | check CPU-s | card busy |
+|---|---|---|---|---|---|---|
+| 1 | today's binary | 3.4485 | 1 | 22.56 | 9.36 | 15.3% |
+| 1 | the build with no switch set (WITNESS's follow-up) | 2.6815 | 0.778 | 19.50 | 9.43 | 19.8% |
+| 1 | **the build with `FC_SALTS_KEYED=all FC_UNIT_REUSE=1`** | **1.8010** | **0.522** | 5.30 | 9.12 | 27.8% |
+| 2 | today's binary | 3.0375 | 1 | 25.92 | 9.81 | 17.7% |
+| 2 | **the build with `FC_SALTS_KEYED=all FC_UNIT_REUSE=1`** | **1.3456** | **0.443** | 5.27 | 9.51 | 37.4% |
+
+- **What the row is: the head block with no walk at all, a floor, not a served figure** [read: kernels' patch; run: the provers' `UNITREUSE` lines]. Every session after a prover's first took the kept words (42 of 42 at one prover, 26 of 26 for each of two), a copy of 0.06 s to 0.09 s; the first statement's kept words equal `host_slots`' packed (the patch's own check); the kept copy is 2.0 GiB a prover. A served block has new inputs and is walked.
+- **Beside kernels' pair** [relayed: ORDER 14:05Z, `934d`, kernels' tree with the switch alone, five cores]: kernels 0.66 of today's at one prover and 0.61 at two; this row, with the keyed salts and WITNESS's cuts as well, 0.522 and 0.443 on six cores. Against the every-cut row without the switch at two provers (2.1425 s, `5832`, another run) it is 0.63.
+- **Rep 0's `t.prove` and `SALTSAHEAD.s`, this run's own record** [run: medians over each step's timed sessions, the provers' `LIVE` and `SALTSAHEAD` lines]:
+
+| step | rep 0 `t.prove`, median (mean) | `SALTSAHEAD.s`, median | correlation of the two |
+|---|---|---|---|
+| today's binary, 1 prover | 0.355 s (0.362) | 1.702 s | -0.08 |
+| the build, no switch, 1 prover | 0.482 s (0.515) | 2.328 s | 0.02 |
+| salts `all` + reused words, 1 prover | 0.377 s (0.474) | 0.500 s | 0.88 |
+| salts `all` + reused words, 2 provers | 0.481 s and 0.573 s (0.960, 0.751) | 0.991 s and 0.923 s | 0.94 and 0.83 |
+| today's binary, 2 provers | 0.810 s and 0.416 s (2.676, 0.799) | 5.682 s and 4.355 s | 0.93 and 0.86 |
+
+  Kernels' two: rep 0's `t.prove` 0.37 s today and 1.06 s with the words reused [relayed]. With the salts keyed it stays at 0.38 s at one prover (0.355 s today in this run), and the salts read ahead takes 0.50 s, not 1.70 s. So kernels' reading holds on this record: with the walk gone rep 0 waits on the salts read ahead, and the keyed salts take that wait away at one prover. At two provers rep 0 still follows the salts (0.94, 0.83) and its mean is up to twice its median. [The figures are run; the reading is mine.]
+- **What holds the row now** [run]: the check. It is 9.1 to 9.5 CPU-s a statement of 14.4 to 14.8 in all; the prover is 5.3. At two provers the six cores are 10.6 of 12 CPUs busy, and the card 37% busy. The check's wall time a session is 2.73 s at one prover and 3.68 s at two (median `verify_s`). [guess] On node A, with the check on its own cores, the row is lower than by this ratio; kernels' four-prover run of `aa23d1312dce` says.
+- Statements an hour a card at two provers: 2,675 with no walk against 1,185 today [run: 3,600 / 1.3456, 3,600 / 3.0375].
+- `FC_UNIT_WIDE=4` (`r20261111-135134-8799`) holds the card since 14:58:34Z; then the three host-walk rows of the values unit (`88e7`, `a5fc`, `64ca`).
+
+For BREAKEVEN: `SparseMlaHeadBlock_v2` NVIS 64 `FIRST=false`, no walk at all (a floor, not a served figure; `FC_SALTS_KEYED=all FC_UNIT_REUSE=1` on `aa23d1312dce`), vy-dc-h200-3, six cores: 1.8010 s a statement at one prover, 1.3456 s at two; today's binary in the same run 3.4485 s and 3.0375 s (measured, `r20261111-135122-c736`).
+For the table: head block today 3.04 s, with every cut built tonight 2.14 s (`5832`), with no walk at all 1.35 s as a floor (two provers, six cores, vy-dc-h200-3, measured, `c736`); not node A's ten cores and not four provers.
