@@ -2302,7 +2302,9 @@ def witness_failures(policy: dict, facts: dict, own: set[str]) -> list[str]:
     fails `witnesses.unwitnessed-unlisted`, as a `witnesses` entry of no guarantee fails `witnesses.stale`, and `--update`
     drops it, its own audit not failing on it (`judge`). `--update` keeps an entry only while its guarantee is in scope
     without witnesses and says the same (re-keyed when moved or lifted, `unwitnessed_kept`) and adds none, so the list
-    only shrinks (`tests/test_lean_packages.py` holds its size)."""
+    only shrinks (`tests/test_lean_packages.py` holds its size). A merge can drop the entry of a guarantee one side
+    still lists: for that case alone the failure of a guarantee without witnesses (`witnesses.missing`) prints the entry
+    at its statement as built, in the form the lock run writes (`repaired`), to be written back."""
     ws, allow = policy.get("witnesses", {}), policy.get("unwitnessed", {})
     if not isinstance(ws, dict) or not isinstance(allow, dict):
         return [Failure("witnesses.form", None, "witnesses: `witnesses` is {guarantee: {honest: [theorem], nontrivial: "
@@ -2358,8 +2360,14 @@ def witness_failures(policy: dict, facts: dict, own: set[str]) -> list[str]:
             skip = half
         if g not in ws:
             if why:
+                unfolded = (pin.get("lift") or {}).get("unfolded_sha256")
+                back = pin.get("type_sha256")
+                back = {"type_hash": back, "unfolded_hash": unfolded} if unfolded else back
                 fails.append(Failure("witnesses.missing", g, f"witnesses: {g} lists no witnesses that it says something, "
-                                     f"and the rule holds it to them ({why}): {witness_shapes(g, pin, policy, own)}"))
+                                     f"and the rule holds it to them ({why}): {witness_shapes(g, pin, policy, own)}. "
+                                     f"Only if `unwitnessed` listed it and a merge dropped the entry, write the entry "
+                                     f"back: {json.dumps({g: back}, ensure_ascii=False)[1:-1]}; a new guarantee gets "
+                                     f"its witnesses, not an entry (`UNWITNESSED` only shrinks)"))
             continue
         w = ws[g]
         honest = w.get("honest") if isinstance(w, dict) else None

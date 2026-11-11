@@ -3959,7 +3959,9 @@ def test_a_guarantee_of_what_an_acceptance_means_has_an_honest_and_a_nontrivial_
         "it builds the instance at the model level (a small hand-built descriptor, not a parsed file), with any one field "
         "that can't be built a named assumption. List both under `guarantees`, and write \"P.sound\": {\"honest\": "
         "[\"P.sound_honest\"], \"nontrivial\": \"P.sound_nontrivial\"} under `witnesses`: a guarantee carries an honest and "
-        "a nontrivial witness"]
+        "a nontrivial witness. Only if `unwitnessed` listed it and a merge dropped the entry, write the entry back: "
+        f"\"P.sound\": \"{f['pins']['P.sound']['type_sha256']}\"; a new guarantee gets its witnesses, not an entry "
+        "(`UNWITNESSED` only shrinks)"]
     out_of_scope = witnessed(guarantee={"reads": fact()["reads"]})
     assert witness_codes({**out_of_scope[0], "witnesses": {}}, out_of_scope[1]) == []
     assert witness_codes(*out_of_scope) == []
@@ -4146,13 +4148,18 @@ def test_an_unwitnessed_guarantee_is_listed_with_its_statement_and_the_list_only
 
 def test_a_listed_guarantee_left_with_neither_witnesses_nor_an_unwitnessed_entry_is_held_to_its_witnesses():
     """A guarantee in scope that the lock lists with neither witnesses nor an `unwitnessed` entry, as a merge leaves one
-    that one side lists and whose entry the other side dropped: the check holds it to its witnesses (`witnesses.missing`),
-    in the words it has for a guarantee that never had an entry, which say how to carry the witnesses and nothing of
-    listing it again. `--update` lists it under no `unwitnessed`, which only shrinks. It is listed again by its entry
-    written back at its record's type hash, or after a landing by the lock run, which lists it there and warns."""
+    that one side lists and whose entry the other side dropped: the check holds it to its witnesses
+    (`witnesses.missing`). The failure says how to carry them and, for that case alone, prints the entry to write back
+    at its statement as built, in the form the lock run writes: its type hash, or {type_hash, unfolded_hash} of a
+    guarantee stated as a definition; a new guarantee gets its witnesses. Written back as printed, the lock passes.
+    `--update` lists it under no `unwitnessed`, which only shrinks; after a landing the lock run lists it there and
+    warns."""
     lock, now = bookkeeping_cases()["witnesses.missing"]
+    h = now["pins"]["P.sound"]["type_sha256"]
     assert "P.sound" in lock["guarantees"] and "witnesses" not in lock and lock["unwitnessed"] == {}
-    assert A.judge(lock, now, FILES)[0] == [
+    (missing,) = fails = A.judge(lock, now, FILES)[0]
+    assert (missing.code, missing.entry) == ("witnesses.missing", "P.sound")
+    assert missing == (
         "witnesses: P.sound lists no witnesses that it says something, and the rule holds it to them (it reads the claim "
         "P.Holds): prove `P.sound_honest : P.Compiled d …` (its hypotheses hold at the honest deployed instance d, at the "
         "deployed verifier, taking only named assumptions of an `Assumptions` or `shape.premises` module or "
@@ -4162,18 +4169,32 @@ def test_a_listed_guarantee_left_with_neither_witnesses_nor_an_unwitnessed_entry
         "it builds the instance at the model level (a small hand-built descriptor, not a parsed file), with any one field "
         "that can't be built a named assumption. List both under `guarantees`, and write \"P.sound\": {\"honest\": "
         "[\"P.sound_honest\"], \"nontrivial\": \"P.sound_nontrivial\"} under `witnesses`: a guarantee carries an honest and "
-        "a nontrivial witness"]
-    (missing,) = fails = A.judge(lock, now, FILES)[0]
-    assert (missing.code, missing.entry) == ("witnesses.missing", "P.sound") and "unwitnessed" not in missing
+        "a nontrivial witness. Only if `unwitnessed` listed it and a merge dropped the entry, write the entry back: "
+        f"\"P.sound\": \"{h}\"; a new guarantee gets its witnesses, not an entry (`UNWITNESSED` only shrinks)")
+
+    def printed(failure) -> dict:
+        return json.loads("{" + failure.split("write the entry back: ")[1].split("; a new guarantee gets")[0] + "}")
+    assert printed(missing) == {"P.sound": h} == {"P.sound": lock["guarantees"]["P.sound"]["type_hash"]}
+    assert A.judge({**lock, "unwitnessed": printed(missing)}, now, FILES)[0] == []
     kept, rec = A.judge(lock, now, FILES, update=True)
     assert [(x.code, x.entry) for x in kept] == [("witnesses.missing", "P.sound")] and rec["unwitnessed"] == {}
-    back = {**lock, "unwitnessed": {"P.sound": lock["guarantees"]["P.sound"]["type_hash"]}}
-    assert A.judge(back, now, FILES)[0] == []
     fixed = A.repaired(lock, now, FILES, fails, TICKET)
-    assert fixed["unwitnessed"] == back["unwitnessed"] and A.judge(fixed, now, FILES)[0] == []
+    assert fixed["unwitnessed"] == printed(missing) and A.judge(fixed, now, FILES)[0] == []
     assert A.bookkeeping_warnings(fails, fixed, TICKET) == [
         "bookkeeping: P.sound (@lean): listed under `unwitnessed` at its statement's hashes now: it owes its `honest` and "
         "`nontrivial` witnesses (witnesses.missing)"]
+
+    body = wbody("P.Holds", binders=["∀", "→", "→"])
+    _, stated = witnessed({"lift": lifted_pin("P.Holds, first")["lift"], "body": body})
+    pair = {"type_hash": stated["pins"]["P.sound"]["type_sha256"], "unfolded_hash": sha("P.Holds, first")}
+    bare = {**POLICY, "guarantees": {"P.sound": {"owner": "@lean", "type_hash": pair["type_hash"]}}}
+    (lifted,) = A.witness_failures(bare, stated, WOWN)
+    assert lifted.code == "witnesses.missing" and lifted.endswith(
+        "write the entry back: \"P.sound\": " + json.dumps(pair) + "; a new guarantee gets its witnesses, not an entry "
+        "(`UNWITNESSED` only shrinks)")
+    assert printed(lifted) == {"P.sound": pair}
+    assert A.witness_failures({**bare, "unwitnessed": printed(lifted)}, stated, WOWN) == []
+    assert A.repaired(bare, stated, FILES, A.judge(bare, stated, FILES)[0], TICKET)["unwitnessed"] == {"P.sound": pair}
 
 
 def lifted_pin(body: str) -> dict:
