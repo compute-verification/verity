@@ -56362,3 +56362,25 @@ Tags: [run] a command I ran now, [read] a file I read now (place given), [relaye
 
 For BREAKEVEN: the one-parse column (+236 to +239 at one session a call, by proportion from 0.30) rests on a record that holds [run: `8ab3`]. ORDER 13:26Z's label stands: "built on a branch, only compiled; modeled by proportion from one ratio". To it I'd add "second reading of its code and A/B: holds".
 For the table: one parse (`cursor/proofs-progjson-89e3` at `b4ae0d8445a1`, no PR): second reading holds [read: code; run: `8ab3`'s record, `9640`]. Setup 0.30 of `main`'s at the 152 MB program, outputs equal. Three theorems have no axiom probe yet. It conflicts with #8789 until that lands.
+
+## CONCRETE, Wed 11 Nov 13:34Z: your 13:13Z line, recorded (`e5e2`): the row of record is inside #8939's `K ≤ 2^33` (2^-100) at M = 162 and at 205, and to M = 410: HARMSEARCH's figure is confirmed with N_s checked. κ 2^-4 at 162 is inside `K ≤ 2^35` only (2^-98): it is 0.3% over `_narrow`, though its own hash part is 2^-100.00
+
+**Labels on every cell:** (b), over the served wiring; modeled; no Lean statement at the code is behind it; K at Pr[refused] = 0 (with the stage layer, unmarked); M = 162 with the token select counted in the window's split at an LM head of 8 words [SCALE's run `3e9b`]; per-rank windows, as served [run `d970`]; PageCopy 97 to 205 (no Program holds it); K0 = 6, which reads "at a registration of at most 6/q replay blocks (K = ⌈q·n⌉; no line holds n to it)"; T = 2^80 calls each run's; compressions.
+
+**The run** [run `r20261111-132746-e5e2`, vy-nebius-cpu-1, at #8907's head `14643669694c`, done rc 0; a copy `r20261111-133227-191b` on cpu-5 is identical, and both are identical to my VM's output from the second line on]. Typed in: your two Σk (3,487,090 and 14,448,210 a sampled replay block) and the counts.
+
+| row | N_s a run | M | K a run | the instance it is within | the hash part at its own N_s and K | the bound's sum a run | a year |
+|---|---|---|---|---|---|---|---|
+| the row of record (κ 2^-6, margin 0.03) | 20,922,540 = 2^24.31 | 162 | 3,389,451,480 = 2^31.65 | **`K ≤ 2^33`: 2^-100** | 2^-102.05 | 2^-102.05 | 2^-86.37 |
+| | | 205 | 4,289,120,700 = 2^31.99 | **`K ≤ 2^33`: 2^-100** | 2^-101.71 | 2^-101.71 | 2^-86.03 |
+| κ 2^-4 (margin 0.1) | 86,689,260 = 2^26.36 | 161 | 13,956,970,860 = 2^33.70 | `_narrow`: 2^-100 | 2^-100.01 | 2^-100.01 | 2^-84.33 |
+| | | 162 | 14,043,660,120 = 2^33.70 | **`K ≤ 2^35`: 2^-98** | 2^-100.00 | 2^-100.00 | 2^-84.32 |
+| | | 205 | 17,771,298,300 = 2^34.04 | `K ≤ 2^35`: 2^-98 | 2^-99.66 | 2^-99.66 | 2^-83.98 |
+
+- **The row of record:** N_s is within every instance's cap (2^27 and 2^30). It is inside `K ≤ 2^33` up to **M = 410** (HARMSEARCH's, confirmed), inside `_narrow` up to 669, and its bound's sum holds 2^-100 up to 677 [run].
+- **κ 2^-4 at 162:** inside `K ≤ 2^33` only up to M = 99 and inside `_narrow` up to **161**, so at 162 no instance of #8939 says 2^-100 for it; `K ≤ 2^35` says 2^-98. A correction to "outside `_narrow` from M = 161": 161 is the last M inside. Its bound's sum holds 2^-100 up to M = 162 exactly, so the row is true by arithmetic at 162 and the Lean instance stops one short.
+- **What would close it in Lean:** an instance at N_s ≤ 87·10^6, K ≤ 14.05·10^9: the hash part there is at most 2^-100 [run: `at most 2^-100: True`]. One `norm_num` line through `eventTwoX_le_cls_of_caps`, in a PR after #8939 (its head does not move). Say if you want it; with the margin at 0.003 bit I would rather not offer it as a row's support.
+- Over a year nothing here holds 2^-100: the row of record reads 2^-86.37 at 162 [run].
+
+For the table: the row of record (κ 2^-6, Σk 3,487,090) at M = 162: K a run 2^31.65, inside #8939's `K ≤ 2^33` (2^-100), to M = 410; the hash part 2^-102.05 a run, 2^-86.37 a year [run `r20261111-132746-e5e2`; (b), modeled, no Lean statement at the code behind it; K at Pr[refused] = 0].
+For the table: κ 2^-4 (Σk 14,448,210) at M = 162: inside `K ≤ 2^35` only (2^-98); `_narrow` holds to 161; its own hash part 2^-100.00 [run `e5e2`].
