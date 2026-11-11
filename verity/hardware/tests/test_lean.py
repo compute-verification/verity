@@ -19,7 +19,7 @@ from pathlib import Path
 
 import pytest
 
-from verity.hardware import WORD, load, number, rate, skus
+from verity.hardware.cards import WORD, load, number, rate, skus
 
 ROOT = Path(__file__).resolve().parents[3]
 ISA = ROOT / "security/Definitions/Core/Accel/Isa.lean"
@@ -82,8 +82,8 @@ def card_table(text: str) -> tuple[dict[str, Fraction], dict[str, dict[str, str]
 
 def expected(card: dict) -> tuple[dict[str, Fraction], dict[str, dict[str, Fraction] | Fraction]]:
     """The Lean table the card file gives: its clocks in Hz (``tensorClock`` the card's ``clock.tensor``, its
-    ``clock.sm`` where it has none), each store's words, each resource's units a second (``verity.hardware.rate``, so
-    the arms hold the one calculator), each format's weight, and the model's ranges."""
+    ``clock.sm`` where it has none), each store's words, each resource's units a second
+    (``verity.hardware.cards.rate``, so the arms hold the one calculator), each format's weight, and the model's ranges."""
     sms, clock = number(card["sm"]["count"]), card["clock"]
     clocks = {"clock": number(clock["sm"]) * 10 ** 6, "tensorClock": number(clock.get("tensor", clock["sm"])) * 10 ** 6}
     store = card["store"]
