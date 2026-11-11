@@ -5,7 +5,7 @@
 # any other flag, so no flag of the lander's turns reuse off or changes what is checked.
 #
 # COMMIT (a train-prep branch or sha) is checked out in a worktree of its own, so the checkout it is run from stays on main, and
-# `check.py --record --on MACHINE --priority --keep-going` runs there: an Attempt of exactly COMMIT, in the next check slot of
+# `check.py --record --on MACHINE --priority --timeout 36000 --keep-going` runs there: an Attempt of exactly COMMIT, in the next check slot of
 # MACHINE to free, ahead of lane checks still waiting and never stopping a running one (`slot.py --priority`), with presigned
 # URLs of the pinned upstream build when COMMIT changes verity/protocols/flock/ against origin/main, which
 # the run fetches. --agreement sends them whatever the train changes: the lander's rule for a train that adds or changes a
@@ -168,7 +168,7 @@ echo "train: ${sha:0:12} on $machine${shard:+ shard $shard}; log $log"
 # `research run` stays attached to the run until it ends; the run doesn't need it (custody publishes from the machine).
 # --timeout: only a run with one extends its node's lease (`remote.lease_extend_s`), so a node that runs nothing but checks
 # would otherwise stop two hours after its boot; 10 h is past any check's wall time, as the nightly's
-setsid nohup uv run -q python tools/verity/check/check.py --record --on "$machine" --priority --keep-going --timeout 36000 \
+setsid nohup uv run -q python tools/verity/check/check.py --record --on "$machine" --priority --timeout 36000 --keep-going \
   ${pass[@]+"${pass[@]}"} \
   > "$log" 2>&1 < /dev/null &
 pid=$!
