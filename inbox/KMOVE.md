@@ -831,3 +831,24 @@ third pull request: say so in the body, so the reader does not take it for dead 
 Checkpoint in your note at each step: two workers' turns were cut by the platform at 20:44:39Z tonight.
 End your turn when the pull request is open and you have answered the question in 2, or at the first thing
 that needs proofs.
+
+## Wed 11 Nov 21:00Z: one small thing after the pull request, by Fri 13 Nov: HASH-86's bar holds on `main` and stays held
+
+HASH-86 ("every surviving directory's public functions are typed and its imports sorted") is not closed,
+though its last pull request (#8666) is on `main`. I ran the bar's four annotation rules on `origin/main`
+at `75ef75838f` over `benchmarks/hash`, `torch_gpu`, `moe_align`, `tc_probe`, `tc_probe_fp4`, `native_peak`
+and `verity/definitions/kernels`:
+- **Two real findings:** `older_h1tile` in `benchmarks/hash/dither/h1v3_ref.py` (yours, from #8851 today)
+  and `domain` in `benchmarks/torch_gpu/p2_stage/served_weights.py`: no return type on either.
+- **148 that are not findings:** arguments of `@triton.jit` kernels (`dither_a.py`, `exactlin.py`,
+  `s8_linear/int_mm.py`, `s8_linear/bench.py`).
+- **Not run by me:** the import order by the bar's own command (each leaf directory as its own `src`).
+
+**The change, one small pull request (Refs HASH-86):** the two return types; the import order run by the
+bar's command over every directory and fixed where it is not clean; and **the bar in the repository's ruff
+configuration for these directories**, with the Triton kernels excepted by a rule and not by a list of
+lines, so that the next new function cannot break it unseen (it broke within a day of the last fix).
+Say in the body what the check prints on a function with no return type. If the repository's
+configuration cannot hold it without a rule every lane's pull request would meet, say so and stop at the
+two types: that would be a process for other lanes, and the process-design skill applies before it.
+It comes after the wide leaf's pull request and before Thursday's pair if there is room, else Fri.
