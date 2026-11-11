@@ -166,7 +166,8 @@ theorem ofJson_wiresOf {j doc : Json} {W : Spot.Wires.Wiring} (h : Spot.Wires.Wi
   refine ⟨{ templates := [], cuts := cs, wires := ws, order := none }, ?_, ?_⟩
   · unfold Spot.Wires.Wiring.ofJson
     simp only [field_ok (wiresOf_templates doc), field_ok (wiresOf_cuts doc), field_ok (wiresOf_wires doc), ho,
-      fields_nil, h5, h6, h8, h9, List.mapM_nil, ok_bind, pure_bind] <;> rfl
+      fields_nil, h5, h6, h8, h9, List.mapM_nil, ok_bind, pure_bind]
+    rfl
   · cases hj : j.getObjVal? "order"
     all_goals
       simp only [hj] at h
