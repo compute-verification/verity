@@ -281,6 +281,12 @@ paths = ["Security/*/Accounting{,.lean}", "Security/Proofs/Properties/Accounting
 from = ["pouw"]
 
 [[needed]]
+why = "the evaluator's arithmetic Pearl+'s Lean verdict recomputes (FP32, the casts and the tensor-core dots: the public `verity.ml.circuits` Definitions as executable Lean), and its properties' proofs, which Pearl+'s analysis reads"
+paths = ["verity/core/primitives/evaluate/Evaluate", "Security/Proofs/Properties/Core/Evaluate.lean"]
+from = "*"
+via = ["lean import"]
+
+[[needed]]
 why = "the world a device runs in (`Core.World`: its clock, coins, links and signer's state), which the network certifier's device's driver reads"
 paths = ["verity/core/primitives/world"]
 from = ["certifier"]
