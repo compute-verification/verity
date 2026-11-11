@@ -1,10 +1,10 @@
 import json
 
 import pytest
+from conftest import calculators_count
 from synthetic import SHAPE, VOCAB, tiny_registry, write_config
 
 from training_slowdown import calculator, config, gates, library, starts
-from training_slowdown.grade import WORK
 
 
 def raw(phase: str, td: list, m: int, k: int, n: int, count: int = 1, affected: bool = True) -> dict:
@@ -30,8 +30,8 @@ def trace(rows: list[dict] = STEP) -> dict:
 def test_a_traced_steps_slowdown_is_the_calculators_bound_on_its_work():
     c = GATES / 100
     got = library.bound(trace(), c, K)
-    work = {x: got["figure"][x] for x in WORK} | {"C_gates": GATES}
-    assert got["slowdown"] == calculator.bound(c, K, work)["slowdown"] > 1
+    work = {x: got["figure"][x] for x in calculator.WORK} | {"C_gates": GATES}
+    assert got["slowdown"] == calculators_count(c, K, work) > 1
     assert got["bound"]["theorem"].endswith("HEShared") and got["figure"]["N"] == 6 * 1024 ** 3
     assert got["binds"].startswith(f"HEShared on {got['figure']['subset']}, 100% of the MACs")
     one = library.bound(trace([raw("forward", ["m"], 1024, 8, 8)]), c, K)
