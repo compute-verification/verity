@@ -277,7 +277,9 @@ def tp_build_part(d: Path, world: int) -> dict[str, Any]:
 
 def _sum(parts: list[dict[str, Any]], key: str) -> int | None:
     vals = [p.get(key) for p in parts]
-    return None if any(v is None for v in vals) else sum(int(v) for v in vals)
+    if any(v is None for v in vals):
+        return None
+    return sum(int(v) for v in vals if v is not None)
 
 
 def tp_commit_part(d: Path, world: int) -> tuple[dict[str, Any], dict[str, Any]]:
@@ -330,7 +332,7 @@ def timing_part(d: Path) -> dict[str, Any]:
     """Per arm, the run's wall and its engine steps' prefill (the first step) and mean decode time; with the control arm (the config
     run's `--config-baseline 1`), the extraction slowdown per phase: instrumented / control."""
     arms = {r.get("arm"): r for r in _jsonl(d / "commit" / "runs.jsonl")}
-    t = {a: {"wall_s": r.get("wall_s"), "prefill_s": r.get("step_wall_prefill_s"), "decode_mean_s": r.get("step_wall_decode_mean_s"),
+    t: dict[str, Any] = {a: {"wall_s": r.get("wall_s"), "prefill_s": r.get("step_wall_prefill_s"), "decode_mean_s": r.get("step_wall_decode_mean_s"),
              "engine_steps": r.get("engine_steps")} for a, r in sorted(arms.items()) if a in ("control", "instrumented")}
     i, c = t.get("instrumented") or {}, t.get("control") or {}
     t["slowdown"] = {k: (i[f] / c[f] if i.get(f) and c.get(f) else None)
@@ -360,7 +362,7 @@ def record(d: str | Path, row: str, *, tree: str | None = None, device: dict[str
               ("replay", replay.get("ok")), switches)
     why = next((f"{name} {'FAIL' if ok is False else 'not run'}" for name, ok in checks if ok is not True), None)
     if why == "served switches FAIL":
-        why = f"served switches FAIL: {'; '.join(served.get('problems') or [])}"
+        why = f"served switches FAIL: {'; '.join((served or {}).get('problems') or [])}"
     if why == "build FAIL" and programs_ok and stage and stage["manifest_rc"] not in (None, 0):
         why = f"build FAIL: the in-stage manifest exited {stage['manifest_rc']} and no manifest of record supersedes it (evidence.manifest)"
     if why == "commit FAIL" and commit.get("reason"):

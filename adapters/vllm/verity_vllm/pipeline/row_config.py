@@ -144,7 +144,7 @@ def derive_cached(row: Any, st: str, to: int, lf: str, cmd: list[str], out: str,
     tree = row.env.environ.get("RESEARCH_SOURCE_SHA")
     k = PC.key(cmd, workload=row.path(row.wl), tree=tree, device=device_id(row)) if root else None
     hit = PC.lookup(root, k) if k else None
-    if hit:
+    if k and hit:
         PC.restore(hit, out)
         with open(lf, "w") as f:
             f.write(f"program cache hit {k[:16]}: {hit}\n")

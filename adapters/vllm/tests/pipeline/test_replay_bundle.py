@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 from types import SimpleNamespace
+from typing import Any
 
 import pytest
 
@@ -107,7 +108,9 @@ def _deferred(out, keys=None, **kw):
     com, rc = commit_steps(STEPS, row_keys=keys)
     com.weights_tree, com.model = {"root": (rc.weight_registration or {}).get("root"), "names": []}, torch.nn.Module()
     args = SimpleNamespace(**{"replay_deferred": "full", "replay_bundle_overlap": 1, "retain": "host", "required_manifest": None, "openings": 64, **kw})
-    started, row, deferred = RB.start(out, 1, com, rc, args, None), {"commit": {}}, {}
+    row: dict[str, Any] = {"commit": {}}
+    deferred: dict[int, Any] = {}
+    started = RB.start(out, 1, com, rc, args, None)
     assert RB.defer(out, 1, com, rc, args, tl=Timeline(None), arm="instrumented", versions={}, reqs=[], sampling={}, tokens={}, stop_of_record=None,
                     ids_full=None, declaration=None, required_classes=[], row=row, deferred=deferred, started=started)
     files = {p.relative_to(RB.partial(out, 1)).as_posix(): p.read_bytes() for p in RB.partial(out, 1).rglob("*") if p.is_file()}
@@ -136,7 +139,9 @@ def test_the_bundle_reads_the_models_tensors_and_the_engines_facts_before_start_
     com.model.register_buffer("cos", torch.arange(4, dtype=torch.int32))
     com.weights_tree = {"root": (rc.weight_registration or {}).get("root"), "names": [["w", "bfloat16", [2], 4], ["cos", "int32", [4], 16]]}
     args = SimpleNamespace(replay_deferred="full", replay_bundle_overlap=1, retain="host", required_manifest=None, openings=64)
-    started, row, deferred = RB.start(tmp_path, 1, com, rc, args, None), {"commit": {}}, {}
+    row: dict[str, Any] = {"commit": {}}
+    deferred: dict[int, Any] = {}
+    started = RB.start(tmp_path, 1, com, rc, args, None)
     com.model = None
     monkeypatch.setattr(driver, "engine_facts_of_record", lambda: pytest.fail("the engine's facts were read after start"))
     assert RB.defer(tmp_path, 1, com, rc, args, tl=Timeline(None), arm="instrumented", versions={}, reqs=[], sampling={}, tokens={},

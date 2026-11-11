@@ -12,6 +12,7 @@ import json
 import struct
 import types
 from pathlib import Path
+from typing import Any
 
 import numpy as np
 import pytest
@@ -211,7 +212,7 @@ def test_a_dsv4_ranks_padded_sink_and_stream_broadcast_open_as_vllm_makes_them_a
     _safetensors(ckd / "model.safetensors", {"layers.0.attn.attn_sink": ("F32", sink), "layers.0.hc_attn_fn": ("F32", fn)})
 
     L0, per = "model.layers.0", HEADS // WORLD
-    padded = np.full(NH, -np.inf, dtype=np.float32)
+    padded: np.ndarray = np.full(NH, -np.inf, dtype=np.float32)
     padded[:per] = sink[rank * per:(rank + 1) * per]
     streams = fn.reshape(M, 4, H)
     broadcast = ((np.float32(0) + streams[:, 0] + streams[:, 1]) + streams[:, 2]) + streams[:, 3]
@@ -248,7 +249,8 @@ def test_a_deferred_ranks_verdict_after_its_fold_is_the_in_process_verdict(pre, 
     rank = 1
     result, grade, mismatch = replay
     sr, lk = _sr(result, grade, rank=rank, qp_ok=qp_ok, mismatch=mismatch), _lk(linked, rank)
-    here, there = {}, {}
+    here: dict[str, Any] = {}
+    there: dict[str, Any] = {}
     ok_here, why_here = C2.c2_and_pin_gates(here, _fin(rank, copy.deepcopy(sr), copy.deepcopy(lk), pin), *pre, rank=rank, replay_on=True, required=True, bundle="b", xrank_families=XF)
     ok, why = C2.c2_and_pin_gates(there, _deferred_fin(rank, pin=pin), *pre, rank=rank, replay_on=True, required=True, bundle="b", xrank_families=XF)
     if ok is not None:
@@ -263,7 +265,7 @@ def test_a_deferred_ranks_verdict_after_its_fold_is_the_in_process_verdict(pre, 
 
 
 def test_without_a_replay_of_record_the_gates_are_the_pin_alone():
-    cb = {}
+    cb: dict[str, Any] = {}
     ok, why = C2.c2_and_pin_gates(cb, _fin(0, {}, {}, True), True, None, rank=0, replay_on=False, required=True, bundle="b", xrank_families=XF)
     assert (ok, why) == (True, None) and "query_population" not in cb and "replay_deferred" not in cb
 
@@ -313,7 +315,8 @@ def _seal_deferred(tmp_path):
     root = rc.run_root.hex()
     man = tmp_path / "manifest.json"
     man.write_text(json.dumps({"identities": [], "ranks": WORLD}))
-    per_rank, fins, bundles_of = {}, [], {0: {}}
+    bundles_of: dict[int, dict[int, Any]] = {0: {}}
+    per_rank, fins = {}, []
     for r in range(WORLD):
         bmap = _bmap(r, root)
         part = RB.partial(out, 0, rank=r)
@@ -480,8 +483,17 @@ def test_a_rank_replays_its_bundle_with_the_commits_seed_against_its_own_shards(
 
 def test_the_ranks_one_process_replays_share_one_checkpoint_index(deferred, stubbed, monkeypatch):
     built, opened, stub = [], [], CPU.open_weights
-    monkeypatch.setattr(WR, "CheckpointIndex", lambda *a, **k: built.append(object()) or built[-1])
-    monkeypatch.setattr(CPU, "open_weights", lambda bdir, tree, root, ck, **k: opened.append(ck) or stub(bdir, tree, root, ck, **k))
+
+    def index(*a, **k):
+        built.append(object())
+        return built[-1]
+
+    def open_weights(bdir, tree, root, ck, **k):
+        opened.append(ck)
+        return stub(bdir, tree, root, ck, **k)
+
+    monkeypatch.setattr(WR, "CheckpointIndex", index)
+    monkeypatch.setattr(CPU, "open_weights", open_weights)
     assert TPR.main(TPR.Options(commit_out=str(deferred.out), checkpoint_dir="/ck")) == 0
     assert len(built) == 1 and opened == built * WORLD
 
@@ -538,6 +550,7 @@ def _worker(tmp_path, cfg, bmap):
     from verity_vllm.pipeline.tp import rank_worker as W
 
     class Stub:
+        _tp2_commit: dict[str, Any]
         _deferred_replay = W.TP2CaptureWorkerExtension._deferred_replay
 
     s = Stub()
@@ -623,7 +636,8 @@ def test_a_pending_tp_commit_waits_for_the_replay_stage_which_decides_it(tmp_pat
 
     t = _tp(tmp_path, "--config-run", "1", "--replay-deferred", "1")
     (Path(t.d) / "commit").mkdir()
-    bundles = [{"pair": 0, "rank": r, "path": f"{t.d}/commit/replay_bundle_p0_rank{r}", "manifest_sha256": "ab" * 32} for r in range(WORLD)]
+    bundles: list[dict[str, Any]] = [{"pair": 0, "rank": r, "path": f"{t.d}/commit/replay_bundle_p0_rank{r}", "manifest_sha256": "ab" * 32}
+                                     for r in range(WORLD)]
     (Path(t.d) / "commit" / "summary.json").write_text(json.dumps({"only_arm": "instrumented", "commit_pass": None, "pass": None,
                                                                     "replay_deferred": {"bundles": bundles}}))
     (Path(t.d) / "commit" / C2.DEFERRED).write_text("{}")
@@ -633,7 +647,12 @@ def test_a_pending_tp_commit_waits_for_the_replay_stage_which_decides_it(tmp_pat
     t.hidden_so = str(tmp_path / "verity_fa2_matReqG.so")
     Path(t.hidden_so).touch()
     ran = []
-    monkeypatch.setattr(t, "run_tl", lambda stage, to, log, cmd: ran.append((stage, cmd)) or (0 if stage == "commit.tp_commit" else rc_replay))
+
+    def run_tl(stage, to, log, cmd):
+        ran.append((stage, cmd))
+        return 0 if stage == "commit.tp_commit" else rc_replay
+
+    monkeypatch.setattr(t, "run_tl", run_tl)
     t.commit()
     assert t.replay_pending and "commit PENDING" in (Path(t.d) / "stages.txt").read_text()
     assert all(Path(b["path"]).name in (Path(t.d) / "stages.txt").read_text() for b in bundles)
@@ -703,7 +722,12 @@ def test_a_tp_commit_that_replayed_in_process_at_an_unproven_world_leaves_the_re
     t.hidden_so = str(tmp_path / "verity_fa2_matReqG.so")
     Path(t.hidden_so).touch()
     ran = []
-    monkeypatch.setattr(t, "run_tl", lambda stage, to, log, cmd: ran.append(stage) or 0)
+
+    def run_tl(stage, to, log, cmd):
+        ran.append(stage)
+        return 0
+
+    monkeypatch.setattr(t, "run_tl", run_tl)
     t.commit()
     assert not t.replay_pending and "commit PASS" in (Path(t.d) / "stages.txt").read_text()
     t.replay()
@@ -719,7 +743,12 @@ def test_a_slim_bundle_at_an_unproven_world_is_not_refused_and_reaches_tp_commit
     from verity_vllm.pipeline.row_tp import TpRow
 
     worlds = []
-    monkeypatch.setattr(TpRow, "run", lambda self: worlds.append(self.W) or 0)
+
+    def run(self):
+        worlds.append(self.W)
+        return 0
+
+    monkeypatch.setattr(TpRow, "run", run)
     o = _opts(tmp_path, "--replay-deferred", "slim", "--world", "4", row=TP_DENSE)
     assert run_row(o, o.stages) == 0 and worlds == [4]
     t = _tp(tmp_path / "t", "--replay-deferred", "slim")

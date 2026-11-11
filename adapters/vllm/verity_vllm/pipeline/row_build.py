@@ -37,6 +37,7 @@ def required_manifest(row: Any, stage: str, digest: Callable[[], str] | None = N
         p = subprocess.Popen(cmd, stdout=f, stderr=subprocess.STDOUT, stdin=subprocess.PIPE if piped else None, cwd=row.tree,
                              env=row.child_env)
         if piped:
+            assert digest is not None and p.stdin is not None    # piped: the digest is asked for, and stdin is the pipe it goes to
             wd = ""
             try:
                 wd = digest()

@@ -263,7 +263,7 @@ def build_summary(d: str) -> str:
     out: dict[str, Any] = {}
     for w in ("step", "request"):
         p = f"{d}/build_{w}/result.json"
-        r = read_json(p) if os.path.exists(p) else {"ok": False, "message": "no result.json"}
+        r: dict[str, Any] = read_json(p) if os.path.exists(p) else {"ok": False, "message": "no result.json"}
         art = f"{d}/build_{w}/artifact.json"
         a = read_json(art) if os.path.exists(art) else {}
         out[w] = {"ok": bool(r.get("ok")), "unsupported": r.get("unsupported"), "exception": r.get("exception"), "message": (r.get("message") or "")[:300],
@@ -519,7 +519,7 @@ def manifest_not_of_record(doc: Any, program_digest: str, ck: Any) -> tuple[str,
     reason); ("", "") when it is: built under the query of record with a partition, of the Build's Program digest (`program_digest`,
     the one the Commit is keyed by; unknown is not a match), under the row's tap policies, and recording the word check it passed (the
     Commit refuses one without: `commit.partition.word_check_refusal`)."""
-    q = doc.get("query") if isinstance(doc, dict) and isinstance(doc.get("query"), dict) else {}
+    q = doc["query"] if isinstance(doc, dict) and isinstance(doc.get("query"), dict) else {}
     qid = str(q.get("query_id") or "")
     if qid != QUERY_OF_RECORD:
         return "other-query", f"is not built under the query of record {QUERY_OF_RECORD} (query.query_id={qid or 'none'})"
@@ -704,7 +704,7 @@ def tp_build_summary(b: str, world: int) -> str:
     for r in range(world):
         rd = f"{b}/rank{r}"; rk: dict[str, Any] = {}
         for p in [f"{rd}/build_step"] + sorted(p for p in glob.glob(f"{rd}/build_request_LP*_T*") if os.path.isdir(p)):   # not the .log/.rc beside each dir
-            res = read_json(f"{p}/result.json") if os.path.exists(f"{p}/result.json") else {"ok": False, "message": "no result.json"}
+            res: dict[str, Any] = read_json(f"{p}/result.json") if os.path.exists(f"{p}/result.json") else {"ok": False, "message": "no result.json"}
             rk[os.path.basename(p)] = {"ok": bool(res.get("ok")), "unsupported": res.get("unsupported"), "message": (res.get("message") or "")[:300],
                                        "program_digest": (res.get("program") or {}).get("digest"), "census_digest": census_digest(res),
                                        "construction": "aot" if res.get("aot") else "trace"}
@@ -747,7 +747,7 @@ def tp_manifest_not_of_record(d: str, ck: Any) -> str:
     doc = load_json(f"{d}/manifest.json")
     if not isinstance(doc, dict) or doc.get("complete") is not True:
         return "absent or not complete"
-    q = doc.get("query") if isinstance(doc.get("query"), dict) else {}
+    q = doc["query"] if isinstance(doc.get("query"), dict) else {}
     if q.get("query_id") != QUERY_OF_RECORD or not isinstance(q.get("partition"), dict):
         return f"not built under the query of record {QUERY_OF_RECORD} with a partition"
     mismatch = policy_mismatch(q, ck)

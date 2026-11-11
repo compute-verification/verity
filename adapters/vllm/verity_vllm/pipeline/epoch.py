@@ -42,10 +42,12 @@ def _doc(p: Path) -> dict:
     return json.loads(p.read_text()) if p.is_file() else {}
 
 
-def _epoch(utc: str | None) -> int | None:
-    if not utc:
-        return None
+def _seconds(utc: str) -> int:
     return calendar.timegm(time.strptime(utc[:19].rstrip("Z"), "%Y-%m-%dT%H:%M:%S" if len(utc.rstrip("Z")) > 16 else "%Y-%m-%dT%H:%M"))
+
+
+def _epoch(utc: str | None) -> int | None:
+    return _seconds(utc) if utc else None
 
 
 def run_end(run_dir: str | Path) -> int | None:
@@ -55,7 +57,7 @@ def run_end(run_dir: str | Path) -> int | None:
     if not runs or not runs[-1].get("started_utc"):
         return None
     timeout = _doc(d / "control" / "timeout_s").get("timeout_s", runs[-1].get("timeout_s"))
-    return int(_epoch(runs[-1]["started_utc"]) + float(timeout)) if timeout else None
+    return int(_seconds(runs[-1]["started_utc"]) + float(timeout)) if timeout else None
 
 
 def job(run_dir: str | Path, custody_dir: str | Path, store_reserve_s: int, job_deadline: str | None) -> tuple[int | None, int | None, str | None]:

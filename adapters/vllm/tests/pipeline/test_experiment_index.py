@@ -159,8 +159,8 @@ def test_code_version_is_unknown_when_git_cannot_run(tmp_path: Path, monkeypatch
     monkeypatch.setattr(EXP.subprocess, "run", no_tree)
     assert EXP.code_version(tmp_path / "no-such-tree") == {"source": "unknown"}
 
-    def timeout(cmd, **kw):
-        raise subprocess.TimeoutExpired(cmd, kw.get("timeout"))
+    def timeout(cmd, timeout=None, **kw):
+        raise subprocess.TimeoutExpired(cmd, timeout)
 
     monkeypatch.setattr(EXP.subprocess, "run", timeout)
     assert EXP.code_version(tmp_path) == {"source": "unknown"}
