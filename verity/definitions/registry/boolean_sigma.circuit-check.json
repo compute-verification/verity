@@ -79,6 +79,14 @@
   "ResidualAdd_v2{N=4}": {
    "and": 2868,
    "type": "68d096322cb68beca8028e695b7e15e14d22e5a546c0f55637c0e82d058463c470c2c158f9af24fd87d39a0212918f98f87c1065740e84995265f209c5561749"
+  },
+  "RmsNormMnnvlApply_v2{G=8,SHOT=1}": {
+   "and": 35344,
+   "type": "5fcdc1aabefd8b7619c18bd4a8c4c5a68b6751a44e2ea5944df3af202b51d62d0fce9e0f6d03e3bed4c972270f7a723cf69eaae255684ede208523c8beb87ac2"
+  },
+  "RmsNormMnnvlApply_v2{G=8,SHOT=2}": {
+   "and": 35344,
+   "type": "65ecb5435ca16d2f2f06083213065f8c71d4ce3a0fc2ecb0b4aeb098952b8af163a818d49178184a127d7e933f1931f12cf7244def343f7fb296e06983372bac"
   }
  }
 }
