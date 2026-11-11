@@ -196,7 +196,7 @@ theorem ofDraws_ok {wide : Bool} {m : Nat} {g : Array F128} {d : ByteArray} {l :
     rw [root_of l s (by rw [hm, hw, ht]; exact hz) hl]
     exact build_root hb
 
-/-- A `Level0` `ofDraws` returns is at the version it was drawn at. -/
+/-- A `Level0` `ofDraws` returns is at the version it was given. -/
 theorem ofDraws_wideLeaf {wide : Bool} {m : Nat} {g : Array F128} {d : ByteArray} {l : Level0}
     (h : ofDraws wide m g d = .ok l) : l.wideLeaf = wide := by
   unfold ofDraws at h
