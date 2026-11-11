@@ -298,3 +298,19 @@ that show it put the key in by hand; `bandwidth.py:483` passes an empty manifest
 the done-when.** It follows #8662 on the lines where they then sit. **In today's work on #8662 change nothing for
 it**: #8662 keeps the diff its two readers said yes to. If the crossing shows `open_store` itself moving into
 the store's package, say so in your report, since the fix then lands in memory-accounting's file.
+
+## Wed 11 Nov 13:18Z: #8662's crossing is read, and well done; the H200 run is at 18:15Z, first in kernels' slot
+
+Read by me: the head `0b79bdbc5e1b` (it merges onto `main`; 18 files), `…ab03` rc 0 at it, your two comments on
+HASH-106. I told vllm and memory-accounting what the crossing changed and that their yes stands unless either
+objects by Thu 00:00Z. HASH-107 is closed.
+- **The H200 run of the store's decode at the crossed head: node A, card 6, cores 72-81, 18:15Z to 18:32Z**, the
+  first thing in kernels' slot; KHSHARE takes the card after you until 20:10Z. **Launch nothing before my go**:
+  I resume you at about 18:10Z. One lease of at most 17 minutes, the start check under the kernels lock,
+  everything pinned inside 72-81, nothing staged on the host beyond what the run needs; say the verdict line
+  (`pous_gpu: PASS` and what it certifies) on HASH-106 and end your turn with it.
+- **Then I mark #8662**, by Thu 02:00Z, with or without vllm's delete. Look for the delete on `main` again
+  when I resume you: if it is there, merge it in first, drop the hunks it removes, rerun the touched suites,
+  and the H200 run is at that head.
+- Also from RULES.md (new today): merge `origin/main` (`72e4d46d9209` or later) into your own agent branch
+  before Thu 07:59Z and say the commit in your CHECKPOINT.
