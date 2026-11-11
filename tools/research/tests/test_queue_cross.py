@@ -140,6 +140,19 @@ def test_an_owners_push_since_the_crossing_wins_over_its_lease(world, monkeypatc
     assert json.loads((out / Q.CROSS_PUSHED).read_text()) == {"6": f"not pushed: owner pushed since ({theirs[:12]})"}
 
 
+def test_restack_runs_without_the_queues_credentials_or_the_stores_keys(world, monkeypatch):
+    """restack.py runs each head's own code, which needs none of the queue's GitHub and Slack credentials nor the store's keys a
+    node's run reads marks with: it sees none of them, and `gh` finds no stored login."""
+    for k in (*Q.SCRIPT_UNSET, "AWS_ACCESS_KEY_ID", "RESEARCH_STORE_CONFIG"):
+        monkeypatch.setenv(k, "dummy-" + k.lower())
+    seen: dict[str, str] = {}
+    monkeypatch.setattr(Q, "run_group", lambda argv, cwd, left, env=None: seen.update(env or {}) or (1, "refused"))
+    head = _git(world.dev, "rev-parse", "origin/main")
+    assert Q.cross_one(world.dev, head, head, []) == {"why": f"{Q.RESTACK} exit 1: refused"}
+    assert not [k for k, v in seen.items() if v.startswith("dummy-")]
+    assert seen["GH_CONFIG_DIR"].startswith(seen["TMPDIR"]) and not Path(seen["GH_CONFIG_DIR"]).exists()
+
+
 def test_the_push_never_pushes_main_checked_or_next_whatever_a_pr_names(tmp_path):
     """A crossing whose PR names `main`, `checked`, `next` or a full ref as its branch is never pushed, before any git runs."""
     report = {"main": "0" * 40, "moves": [], "crossed": [

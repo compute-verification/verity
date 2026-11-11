@@ -4159,6 +4159,9 @@ CROSS_UNLANDED = ("no land verdict of its own counts, so its mark wouldn't carry
 LEASE_RE = re.compile(r"\(stale info\)")
 #: the branches `research queue cross --push` never pushes, whatever a PR names as its own
 CROSS_NEVER = ("main", "checked", "next")
+#: what `research queue cross` keeps from restack.py besides `SCRIPT_UNSET`, as it runs each head's own code: the store's keys
+#: (a node's run reads the store with them), which a restack never needs
+CROSS_UNSET = ("AWS_", "RESEARCH_STORE")
 #: whether `research queue cross` passes restack.py `--kept`, which keeps each move's check on the machine (restack.py's
 #: `KEEP`), so the run's restacks check each move once; tests keep nothing
 CROSS_KEPT = True
@@ -4193,7 +4196,7 @@ def cross_one(repo: Path, head: str, main: str, moves: list[tuple[str, list[str]
             return {"why": f"{type(e).__name__}: {e}"}
         if not restack.is_file():
             return {"why": f"{main[:12]} has no {RESTACK}"}
-        env = {k: v for k, v in _script_env().items() if k not in SCRIPT_UNSET}
+        env = {k: v for k, v in _script_env().items() if k not in SCRIPT_UNSET and not k.startswith(CROSS_UNSET)}
         argv = [sys.executable, str(restack), head, *(a for m, _ in moves for a in ("--move-commit", m)), "--onto", onto or main,
                 "--main", main, "--json", *(("--kept",) if kept else ())]
         rc, out = run_group(argv, repo, RESTACK_WAIT_S, env={**env, "TMPDIR": d, "GH_CONFIG_DIR": str(Path(d, "no-gh"))})
