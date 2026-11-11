@@ -46160,3 +46160,61 @@ For the table: HEADCIRC | the cut is exact and stages; HEADPROF's lines are the 
 - **The ready line** follows in your format once f243 passes: elaborates and axioms (`140a`), the quick tier (`aa9c`), the merged build (`f243`), "kernel replay: the candidate's check", second reader: none. Thanks for labelling PRF-534.
 
 For the table: no change. The waits' cap `2^192·k` is in #8885 at `6d4878d5670e`, unmarked and Daniel's.
+
+## SCALE, Wed 11 Nov 09:52Z: ATTACK's three corrections taken. By reader sets a head block has 132 classes, not 9 or 72 [derived], and then the 2,647 GB plan misses 2^-100 in compressions (−99.84); width κ 2^-3 holds (−100.34 at 0.656 of the GB), and κ 2^-6 holds with room (−103.34 at 0.690, 591 MB of coin). `block_census` can't give reader sets as it is; the Program it reads can
+
+**1. The corrected four-row table.** It is per run at K0 = 6, T = 2^80, with n_sess = 6·Σ_t k_t (ATTACK's (a)), modeled on the plan's rows of run `r20261111-080601-3db1`.
+
+| design | κ | Σ_t k_t | GB ratio | coin a run | by gates, calls | by gates, compressions | by rows (9), calls | by rows (9), compressions | by rows (72), compressions | by reader sets, compressions |
+|---|---|---|---|---|---|---|---|---|---|---|
+| record: size classes | 2^-5 | 10,046,500 | 1.000 | 1,567 MB | −98.34 | −89.33 | −113.73 | −104.73 | −102.45 | −101.63 |
+| the 2,647 GB plan: width | 2^-2.5 | 42,855,252 | 0.655 | 6,685 MB | −96.50 | −87.49 | −111.66 | −102.66 | −100.63 | **−99.84** |
+| width | 2^-6 | 3,787,940 | 0.690 | 591 MB | −100.00 | −90.99 | −115.16 | −106.16 | −104.13 | −103.34 |
+| width | 2^-7 | 1,893,988 | 0.798 | 295 MB | −101.00 | −91.99 | −116.14 | −107.14 | −105.13 | −104.34 |
+
+K a run, in the order of the rows:
+- by gates: 2^44.39, 2^46.23, 2^42.73, 2^41.73;
+- by rows (9): 2^28.83, 2^30.89, 2^27.39, 2^26.42;
+- by rows (72): 2^31.24, 2^33.05, 2^29.55, 2^28.56;
+- by reader sets: 2^32.07, 2^33.86, 2^30.36, 2^29.36.
+
+Which cells are run and which derived:
+- [run: `tools/scale_kfix.py`] Every number in the table is computed from the inputs below. The term is 2 + 80 + log₂(1 + n·e_max + K·(1 + e_max)) − 256, plus 9.00 bits in compressions.
+- Σ_t k_t and the GB ratio come from HARMSEARCH's planner (`kappa_rule`, `evaluate`) over run 3db1's rows [run; modeled].
+- The coin is 26 bytes a sampled block plus 64 a stratum, per sampled replay block, times 6 [relayed: DRAFT-CORE 08:40Z].
+- By gates, a block's parameter and field bits come from its Definition's signature [run: `serving_rows._bind(spec).signature()`]. The five cells without input bits are as in my 09:20Z entry: `EmbeddingRead` from `embedding.py` [read], a fused block at most the sum of its parts [derived], and `PageCopy` at every bit [relayed].
+- By rows (9): one row a parameter and one a returned field, from the same signatures [run].
+- By rows (72): the head block's `kv` counted as NVIS rows [derived].
+- By reader sets, the head block is [derived], in section 2.
+  - The others are [guess]: the router +2·TOPK − 1, `MoeSum` +TOPK − 1 and each all-reduce +WORLD − 1; every other block, its signature rows.
+  - Head blocks are 93 to 96% of the reader-set count [run], so those guesses move it little.
+- ATTACK's (a) checks out: at the record by rows (9), n_sess = the checked blocks gives −113.73 in calls, against my 09:20Z −113.90 [run]. That is ATTACK's derived figure.
+
+**2. (c): reader sets.**
+- **The head block, derived** [read: `chain_rows.py`'s docstring and `read`; `vllm_dsa.py:297-311`; the block names in the census of record]:
+  - Unit (h, j) reads `q_nope[h]` and `q_rope[h]`. Each is written by one row and read by every key block of head h's chain: 2 classes.
+  - It reads block j's 64 keys. In the unbatched form a key's `[kv_c | k_pe]` has two writers, and the plan's census holds `DsaRMSNorm_v1{N=512}` and `RoPEHeadGptJ_v2{D=64}` as blocks, so that is the form. A key is read by the head blocks of the queries whose top-k holds it, so the keys differ in their readers: 128 classes.
+  - Past FIRST, it reads the block before's max, lanes and O, all with one writer and one reader: 1 class.
+  - It returns its own three, read by the next block or the end: 1 class.
+  - So a head block has 132 classes at FIRST=false and 2·NVIS + 3 at FIRST=true; 9 and 72 both undercount it. In the batched form (`DsaLatentRow_v1`, one row a key) it would be 68.
+- **Can `block_census` give it? Not as it is** [read: `block_census.py`]. It counts proof blocks per Definition and keeps no wiring.
+- **The Program it starts from can** [read: `m1_families.py:218-233` walks `ProgramIndex.rows`, whose `args` are runs `('n', producer, lo, hi)`, per `index.py`'s `node_runs`].
+  - A pass over the same rows can give, per proof block, how many distinct reader sets its needed elements have. Index each producer's output ranges by the rows that read them, then count per row the distinct (writer, reader set) over its operands and outputs.
+  - A `CHAINS` unit's ports map onto its row's runs by `chain_rows.plan` (a key block's `p.keys`), and `step_of` gives the replay block and the side.
+  - Not built. It runs as `block_census.sh` does, on the machine holding GLM-5.3's Build: Commit `r20261021-141533-38b2`, Build `art:32c488d8`. The census of record was `r20261106-070310-502e` on vy-nebius-cpu-2, about 11 GB a rank.
+  - [guess] It is a notes tool of about 150 lines and one run. I start it after this entry unless you put it elsewhere.
+
+**3. #8874** [run]. Records run `r20261111-091422-a581` is running, and quick tier `r20261111-091429-6f84` got its slot (running at 09:47Z). Its ready line comes when both pass.
+
+For BREAKEVEN: by reader sets [derived], compressions, a run at K0 = 6, modeled:
+- width κ 2^-3: 2^-100.34 at 0.656 of the GB (2,652 GB), coin 4.73 GB (2^33);
+- width κ 2^-4: 2^-101.34 at 0.665 (2,688 GB), 2.36 GB (2^32);
+- width κ 2^-6: 2^-103.34 at 0.690 (2,789 GB), 591 MB (2^30, inside DRAFT-CORE's branch).
+- The 2,647 GB plan (κ 2^-2.5) misses, at 2^-99.84.
+
+For the table:
+- By rows in compressions, a run at K0 = 6 (modeled; n_sess the checked blocks), read at 9 rows a head block, at 72, and at its 132 reader sets [derived]:
+  - the record: −104.73, −102.45, −101.63;
+  - the 2,647 GB plan: −102.66, −100.63, −99.84;
+  - width κ 2^-6: −106.16, −104.13, −103.34.
+- By gates nothing changes: the record is −98.34 in calls and −89.33 in compressions.
