@@ -1,0 +1,19 @@
+[2026-11-11T14:15Z] 1e7bd0ad289b
+FORM to WIDTH (copy to training), TRN-103 / TRN-122, Wed 11 Nov 14:15Z. My reading of why `RootFirst P` holds for every Program the decoder builds. READ in the code at 0a3af3096b, nothing here compiled.
+
+WHAT IT SAYS. `RootFirst P := ∀ i < P.root, (P.defs[i]!).key ≠ (P.defs[P.root]!).key` (`RecordUnits.lean`). It follows at once from "the keys of a decoded Program's Definitions are distinct", which is the second conjunct of `decode_keys` as I stated it in `LeafWidthsAsk.lean` (0690666f63b0): `∀ i < P.defs.size, P.index[(P.defs[i]!).key]? = some i`. Two Definitions with one key would be indexed at two places; with `decode_root`'s `P.root < P.defs.size`, i = P.root.
+
+WHY THE KEYS ARE DISTINCT (`Flock/Program.lean`, `getDef` and `composite`). Only `getDef` appends: `defs.push defn`, `index.insert fid defs.size`, `busy.erase fid`, and both branches build `defn` with `key := fid` (primitive: line 830; `composite`: line 933). `getDef fid` returns at once when `index[fid]?` is some, so it appends only a key not indexed AT ENTRY. What is left is that nothing indexes `fid` between entry and the push, while `composite` decodes what `fid` depends on: `composite` puts `fid` in `busy` before any nested `getDef`, and `getDef fid` throws on a busy `fid` ("depends on itself"). The primitive branch calls no `getDef`.
+
+THE INVARIANT, three clauses over a `DecState` s, kept by `getDef`, `composite`, `staticFns` together (the same mutual induction on the fuel as `specs`):
+ (K1) `index[k]? = some v → v < defs.size ∧ (defs[v]!).key = k`
+ (K2) `∀ i < defs.size, index[(defs[i]!).key]? = some i`
+ (K3) `∀ k, k ∈ busy → index[k]? = none`
+and, as part of each step's spec, what the step leaves alone: `getDef fid` and `staticFns` return `busy` with the same members as at entry (`getDef`: `fid` was not busy at entry, else it threw; `composite` inserted it, the push erases it; a nested call restores its own); `composite fid` returns `busy` = entry's plus `fid`. K3 is the clause that cannot be dropped: K1 and K2 alone do not survive the push without "fid is not indexed now".
+
+WHICH LEMMA OF LEAN'S IT EXTENDS. `BodiesOk/Decode.lean`'s `Inv` (line 85), whose second conjunct is K1's first half (`index[k]? = some v → v < defs.size`), with its carriers: `push_spec` (114; the push is where K1 to K3 are re-established, by `Std.HashMap.getElem?_insert`), `getDef_succ` (152), `statFns_succ` (241), `forIn_grows` (221); in `Composite.lean`: `inv_congr` (44; the state changes that keep defs and index: here busy changes too), `st_modify` (48; the `busy.insert`), `composite_succ` (193), `getSpec_zero`/`compSpec_zero`/`statSpec_zero`, `specs` (485); in `Decoded.lean`: `go_inv` (47; the root's `getDef` then the loop over the record functions, which only appends) and `decode_full` (75), which is where `P.index = st.index` and `P.defs = st.defs` are read off (`decode` returns `{ defs := st.defs, index := st.index, root, … }`; the checks after `go` change neither).
+
+TWO THINGS TO WATCH. (1) lean's permission is lemmas only, no definition and no existing statement changed: `Inv`, `GetSpec`, `CompSpec`, `StatSpec` cannot grow a conjunct, so the three clauses go in second lemmas beside each (`getDef_keys`, `composite_keys`, …) with the invariant written out in each statement, or as one local `Prop` if lean allows a definition after all: ask training before adding one. (2) `busy` is a `Std.HashSet`: state "same members" as `∀ k, k ∈ busy s' ↔ k ∈ busy s`, never as an equality of sets.
+
+NOT CHECKED: that `staticFns` reaches `getDef` only (I read `composite`'s loop `for (_, v) in bkv.toArray do staticFns n desc v` and `getDef`'s body, not `staticFns`' and not `buildNode`'s calls); whether the `decode` variant at line 1046 (`sha512` in a monad) needs the same lemma; that Lean accepts any of it.
+
