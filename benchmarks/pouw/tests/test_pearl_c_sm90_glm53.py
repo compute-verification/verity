@@ -69,8 +69,8 @@ def test_expert_parallel_brings_the_experts_into_the_domain():
 def test_gamma_is_the_lean_twins():
     """`Pouw.PearlC.pearlCGapSm120v1Cast32Rev1_8192`: v1 under rev1 (cap 1/400) at the sm_120 record, 8192³, the honest cast
     at 32 (24 over the credited 8), the gap 173561/22302500."""
-    from verity.ml.protocols.pouw.schemes import pearl_c as C
-    from verity.ml.protocols.pouw.schemes.pearl_c_device import SM120
+    from verity.protocols.pouw.prover.schemes import pearl_c as C
+    from verity.protocols.pouw.prover.schemes.pearl_c_device import SM120
 
     s = C.PearlC(forming="v1", device=replace(SM120, cap=Fraction(1, 400)), hashing="h3")
     assert G.gamma(s, 8192, 8192, Fraction(24)) == Fraction(173561, 22302500)
@@ -395,13 +395,13 @@ def retained(tmp_path_factory):
     np = pytest.importorskip("numpy")
     torch = pytest.importorskip("torch")
     GP = _passes_module()
-    sys.path.insert(0, str(Path(__file__).resolve().parents[3] / "benchmarks/pouw/clear"))
+    sys.path.insert(0, str(Path(__file__).resolve().parents[3] / "verity/protocols/pouw/clear"))
     import clear_work as CW
     from clear_audit import Prover
     from verity_vllm.protocols.pouw import pearl_c as PPD
 
-    from verity.core.protocols.pouw import core_check as CC
-    from verity.core.protocols.pouw.audit import (
+    from verity.protocols.pouw.verifier import core_check as CC
+    from verity.protocols.pouw.verifier.audit import (
         HM96_TRANSCRIPT,
         HM96_WEIGHTS,
         ROW_SCHEMA,
@@ -415,10 +415,10 @@ def retained(tmp_path_factory):
         weight_binding,
         weights_root,
     )
-    from verity.core.protocols.pouw.coins import Challenger
-    from verity.core.protocols.pouw.protocol import Context, Matmul, Shape, Tile
-    from verity.ml.protocols.pouw.schemes import pearl_c_work as PW
-    from verity.ml.commitments.merkle import tree_levels
+    from verity.protocols.pouw.verifier.coins import Challenger
+    from verity.protocols.pouw.verifier.protocol import Context, Matmul, Shape, Tile
+    from verity.protocols.pouw.prover.schemes import pearl_c_work as PW
+    from verity.commitments.merkle import tree_levels
 
     scheme = "pearl-c-h100-v1-h3"
     s = PPD.scheme_of(scheme, k_min=32, tile=(16, 16))

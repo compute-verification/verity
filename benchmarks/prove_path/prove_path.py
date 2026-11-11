@@ -81,7 +81,7 @@ Two kinds of committed run:
   ``wrong_units``, ``location_bits`` (λ_δ), ``harm_bound`` (β_δ) and ``exfiltration_bound`` (β_δ + λ_δ).
 * **compiler**: the binding's compiler for a served run (its name, digest and ℓ, the compiler it wraps, and the φ I2 compiles
   under), the one `verity-vllm advice` registers. The inner digest is a single-GPU window's I2's (`I2Compiler.digest`) over
-  the tree's code (`source_identity.code_identity`: ``integrations/vllm`` and ``verity`` by content), so the audit runs on a
+  the tree's code (`source_identity.code_identity`: ``adapters/vllm`` and ``verity`` by content), so the audit runs on a
   tree whose two are the server's; over what the compile reads of ``serve.json`` (its model, revision and that pin's config,
   target, execution and default seed), so the audit runs on the serve.json it was registered under; over ℓ and the transfer
   gates its model's compiler of record lists (`GATES_OF_RECORD`). It is the name and digest ``verity-vllm advice
@@ -177,10 +177,10 @@ HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE.parent / "one_stage"))
 
 from records_audit import PORTS, REFUSED, free_ports, leak_count, pin_arg, pins_of, registration_roots  # noqa: E402, F401
-from verity.core.protocols.spot.consumers import exfiltration_bound, location_bits  # noqa: E402
-from verity.core.protocols.spot.one_stage import audit as AU, partition as P, registration as R  # noqa: E402
-from verity.ml.circuits.codec import canonical_json  # noqa: E402
-from verity.ml.windows import interface as IF  # noqa: E402
+from verity.protocols.spot.verifier.consumers import exfiltration_bound, location_bits  # noqa: E402
+from verity.protocols.spot.verifier.one_stage import audit as AU, partition as P, registration as R  # noqa: E402
+from verity.circuits.codec import canonical_json  # noqa: E402
+from verity.commitments.windows import interface as IF  # noqa: E402
 from verity_vllm.pipeline import advice_windows as AW  # noqa: E402
 from verity_vllm.pipeline import deferred_rows as DRW  # noqa: E402
 from verity_vllm.pipeline import edge as E  # noqa: E402
@@ -193,7 +193,7 @@ I2 = "verity/prove-path/i2-compile-steps/v0"
 #: bits a row)
 CAP_BITS = 1 << 23
 #: the checkpoint config I2's φ reads when none is given: unsloth/Llama-3.2-1B's (I2's test fixture)
-LLAMA32_1B_CONFIG = HERE.parents[1] / "integrations/vllm/tests/program/predict/fixtures/llama32-1b.config.json"
+LLAMA32_1B_CONFIG = HERE.parents[1] / "adapters/vllm/tests/program/predict/fixtures/llama32-1b.config.json"
 ROWS1 = "prove_path.py commit: a single-GPU Commit's sealed replay bundle -> rows over the registered compiler's Programs"
 #: the sampling parameters a request's body carries to I2 (vLLM's `SamplingParams` names the record holds)
 BODY_SAMPLING = ("temperature", "top_p", "top_k", "seed", "n")
@@ -338,7 +338,7 @@ def own_builds(i2: I2Compiler, requests: Sequence[Mapping[str, Any]]) -> None:
 
 
 #: the two packages a predicted Program is built from (`score.code_version`'s), by repository path
-CODE_DIRS = ("verity", "integrations/vllm/verity_vllm")
+CODE_DIRS = ("verity", "adapters/vllm/verity_vllm")
 
 
 @functools.lru_cache(maxsize=1)
@@ -385,10 +385,10 @@ def build_of(d: str, digest: str) -> dict[str, Any]:
     the verifier reads them only from Builds it wrote itself (`own_builds`)."""
     import gzip
 
-    from verity.ml.circuits.codec import decode_program, descriptor_id, program_digest
-    from verity.ml.circuits.program import is_input
+    from verity.circuits.codec import decode_program, descriptor_id, program_digest
+    from verity.circuits.program import is_input
     from verity_vllm.program.compact import expanded_file_args, file_items_from_refs
-    from verity.ml.definitions.registry.catalog import load
+    from verity.definitions.registry.catalog import load
     from verity_vllm.query.manifest import format as MF
 
     p = Path(d) / "descriptor.json.gz"
@@ -624,7 +624,7 @@ def i2_of_serve(run: str, window: int, programs_root: str, hf_config: str | None
 def served_identity() -> tuple[str, str]:
     """The code a served window's compiler runs, as `verity-vllm advice` names it (``pipeline.advice``'s
     ``registered_compiler``): compile_steps by its module path, its digest over the tree's code identity
-    (`source_identity.code_identity`: ``integrations/vllm`` and ``verity``), so the audit's tree holds the server's. The
+    (`source_identity.code_identity`: ``adapters/vllm`` and ``verity``), so the audit's tree holds the server's. The
     window's I2 is that name, with this digest as its code (`i2_of_serve`)."""
     try:
         from verity_vllm.pipeline import advice as ADV
@@ -1428,7 +1428,7 @@ def kept_scan(serve_dir: Path, cls: Any, users: Sequence[str]) -> tuple[list[lis
     buckets, whose Programs start its requests (their anchors, `scan_state.scan_anchors`); the scan reads the network
     certifier's certified ingress rows from link-window 0 and the outputs its egress cells carry (`warden_chain.io`).
     None where the front kept no run; ValueError, naming why, where the kept run doesn't give the window's scan."""
-    from verity.core.protocols.certifier import warden_rows as WRW
+    from verity.protocols.certifier.verifier import warden_rows as WRW
     from verity_vllm.program.predict import scan_state as SS
 
     with network_traces():
@@ -1570,8 +1570,8 @@ def window_commit_of_advice(a: argparse.Namespace) -> dict[str, Any]:
     from verity_vllm.program.predict import window_weights as WW
     from verity_vllm.program.predict.build import Unexpressible
     from verity_vllm.program.predict.steps import compile_steps
-    from verity.core.protocols.spot.one_stage import draw as DR
-    from verity.core.protocols.spot.one_stage import registered as CR
+    from verity.protocols.spot.verifier.one_stage import draw as DR
+    from verity.protocols.spot.verifier.one_stage import registered as CR
 
     seconds: dict[str, float] = {}
     t = time.time()

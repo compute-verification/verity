@@ -1,0 +1,73 @@
+[project]
+name = "verity-pouw-check-difftest"
+version = "0.0.0"
+description = "The difftest of `pouw_check` against `verity.protocols.pouw.verifier.core_check`, `credit` and `period_check`."
+requires-python = ">=3.12"
+dependencies = []
+
+# Not an installable package: a workspace member so that its tests run in the workspace environment.
+[tool.uv]
+package = false
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]
+
+[tool.verity.tests]
+# Test-only: the harness (`verity_difftest`); the switch, `verifier.py`; the Python held to the Lean, `core_check.py`,
+# `credit.py` and `period_check.py`, and what they import (`window.py`, `weights.py`, `coins.py`, `audit.py` and `protocol.py`, the proof system's challenger and
+# one-stage's registered domains (`one_stage/registered.py` and the `partition.py` it imports), one-stage's proof
+# verification (`one_stage/proofs.py`, its `verifier.py` and what that imports, with the integrity profile and the
+# proof system), and what they import: `verity.ml`'s circuits codec, commitments, crypto and randomness, and `verity.errors`) with the packages
+# above them; what `lake` reads through the path requires: the core protocol interface, the window's Lean and what it
+# requires (PoUW's commitments, the proof system's Lean with the LMS verifier, core's identity and randomness, Flock's
+# verifier with its configuration). The leaf statements' files `pouw-leaf-own-window` checks are `leaf_lanes.py`'s, with
+# what it imports (PoUW's `circuit/` seeds, one-stage's `produced.py`, and the `verity.definitions.kernels` `tc.py` they reach).
+inputs = ["verity/difftest", "verity/__init__.py", "verity/core/__init__.py",
+          "verity/hardware/record.py",
+          "verity/core/protocols/__init__.py", "verity/protocols/pouw/verifier/__init__.py",
+          "verity/claims/__init__.py",
+          "verity/protocols/pouw/verifier/window.py", "verity/protocols/pouw/verifier/core_check.py",
+          "verity/protocols/pouw/verifier/period_check.py",
+          "verity/protocols/pouw/verifier/verifier.py", "verity/protocols/pouw/verifier/salt.py",
+          "verity/protocols/pouw/verifier/credit.py", "verity/protocols/pouw/verifier/weights.py",
+          "verity/protocols/pouw/verifier/coins.py", "verity/protocols/pouw/verifier/audit.py",
+          "verity/protocols/pouw/verifier/protocol.py", "verity/commitments/randomness",
+          "verity/protocols/spot/verifier/__init__.py", "verity/protocols/spot/device/challenger.py",
+          "verity/protocols/spot/verifier/one_stage/__init__.py",
+          "verity/protocols/spot/verifier/one_stage/registered.py",
+          "verity/protocols/spot/verifier/one_stage/partition.py",
+          "verity/protocols/spot/verifier/one_stage/proofs.py",
+          "verity/protocols/spot/verifier/one_stage/verifier.py",
+          "verity/protocols/spot/verifier/one_stage/audit.py",
+          "verity/protocols/spot/verifier/one_stage/draw.py",
+          "verity/protocols/spot/verifier/one_stage/hello.py",
+          "verity/protocols/spot/verifier/one_stage/registration.py",
+          "verity/protocols/spot/verifier/one_stage/verdict.py",
+          "verity/protocols/spot/device/coins.py", "verity/protocols/spot/verifier/service.py",
+          "verity/protocols/spot/verifier/profile.py",
+          "verity/protocols/pouw/verifier/leaf_lanes.py", "verity/protocols/pouw/verifier/live_reads.py",
+          "verity/ml/protocols/__init__.py", "verity/protocols/pouw/prover/__init__.py", "verity/protocols/pouw/prover/circuit",
+          # pouw/grind.py: credit reads it through circuit/h1zy.py.
+          "verity/protocols/pouw/verifier/grind.py",
+          "verity/protocols/spot/verifier/one_stage/produced.py",
+          "verity/definitions/kernels/__init__.py", "verity/definitions/kernels/tc.py",
+          "verity/protocols/spot/verifier/lean/lakefile.toml", "verity/protocols/spot/verifier/lean/lake-manifest.json",
+          "verity/protocols/spot/verifier/lean/lean-toolchain", "verity/protocols/spot/verifier/lean/Spot.lean",
+          "verity/protocols/spot/verifier/lean/Spot",
+          "verity/errors.py", "verity/ml/__init__.py", "verity/circuits", "verity/commitments", "verity/commitments/crypto",
+          "verity/protocols/interface", "verity/protocols/pouw/verifier/lean/window",
+          "verity/protocols/pouw/verifier/lean/commit", "verity/commitments/identity", "verity/commitments/randomness",
+          "verity/commitments/lms/lean/lakefile.toml", "verity/commitments/lms/lean/lake-manifest.json",
+          "verity/commitments/lms/lean/lean-toolchain", "verity/commitments/lms/lean/Lms.lean",
+          "verity/commitments/lms/lean/Lms",
+          "verity/protocols/flock/verifier/lakefile.toml", "verity/protocols/flock/verifier/lake-manifest.json",
+          "verity/protocols/flock/verifier/lean-toolchain", "verity/protocols/flock/verifier/Flock"]
+# test files that start a program the read guard can't trace (git, lake, a compiler, a shell): keyed on the suite's whole tree
+untraced = [
+    "tests/test_coins.py",
+    "tests/test_difftest.py",
+    "tests/test_leaf_own.py",
+    "tests/test_live_verified_difftest.py",
+    "tests/test_verified_difftest.py",
+]

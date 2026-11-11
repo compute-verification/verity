@@ -1,6 +1,6 @@
 # tc_probe: tensor-core instructions against their models
 
-Verity's circuits for GPU arithmetic use each tensor-core instruction's exact semantics (`verity/ml/circuits/silicon`), so a
+Verity's circuits for GPU arithmetic use each tensor-core instruction's exact semantics (`verity/definitions/silicon`), so a
 served model's circuit computes the words the GPU computes, bit for bit. Honest serving passes only where those models match
 the silicon. These probes check that on the hardware: each runs an instruction on its GPU and compares every output word
 with the instruction's pinned model.
@@ -15,7 +15,7 @@ with the instruction's pinned model.
 - `canary.py`: the fixed small tile set (`tc_probe.py --canary`) to rerun after a driver or toolkit change, or on a second
   device of the SKU.
 - `trust.py`: each silicon relation's trust level (UNPROBED, HYPOTHESIS, PINNED, TRUSTED, TRUSTED_STABLE), computed from the
-  evidence store and the discrepancy log (`verity/ml/circuits/silicon/discrepancy_log.json`), never set by hand, and the
+  evidence store and the discrepancy log (`verity/definitions/silicon/discrepancy_log.json`), never set by hand, and the
   dossier that shows why.
 - `tool.py`: the store declarations, which say which parameters key a result.
 

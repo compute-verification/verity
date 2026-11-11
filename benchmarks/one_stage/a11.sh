@@ -21,15 +21,15 @@ export HZ_CACHE=${A11_CACHE:-$HOME/.cache/verity-a11}
 mkdir -p "$HZ_CACHE"
 source benchmarks/pouw/hidden_zk/job.sh
 export PATH=$HOME/.elan/bin:$PATH
-export PYTHONPATH=$SRC:$SRC/verity/ml/flock/python:$SRC/integrations/vllm:$SRC/tools/verity/circuit_check/src:$SRC/benchmarks/numerical/python
+export PYTHONPATH=$SRC:$SRC/verity/protocols/flock/prover/python:$SRC/adapters/vllm:$SRC/tools/verity/circuit_check/src:$SRC/benchmarks/numerical/python
 IN=${RESEARCH_RUN_DIR:?}/inputs
 command -v research >/dev/null && research keep "$HZ_CACHE" --owner @circuits --expires 4d --priority low --root / \
   --why "A11's builds (flock-circuit, flock-verify, the venv), keyed by their inputs" >> "$OUT/job.log" 2>&1
 case ${A11_MODE:?} in
 kinds)
   PY=$(cached venv numpy2.5.3-blake3-1.0.9 build_python)/bin/python
-  cached flock "$(tree_key verity/ml/flock/live verity/ml/flock/*.patch)" build_circuit > "$W/flock.dir" &
-  cached lean "$(tree_key verity/core/service/flock)" build_lean > "$W/lean.dir" &
+  cached flock "$(tree_key verity/protocols/flock/prover/live verity/protocols/flock/prover/*.patch)" build_circuit > "$W/flock.dir" &
+  cached lean "$(tree_key verity/protocols/flock/verifier)" build_lean > "$W/lean.dir" &
   rc=0
   for d in "$IN"/*.json.gz; do
     n=$(basename "$d" .json.gz)
@@ -44,11 +44,11 @@ kinds)
   ;;
 audit)
   setup
-  (cd verity/core/service/spot && lake build sampled-proofs-verifier) > "$OUT/build-sampled-proofs.log" 2>&1 \
+  (cd verity/protocols/spot/verifier/lean && lake build sampled-proofs-verifier) > "$OUT/build-sampled-proofs.log" 2>&1 \
     || { tail -40 "$OUT/build-sampled-proofs.log"; exit 7; }
   TARG=()
   if [ -n "${A11_LAYOUT:-}" ]; then
-    TU=$(cached tmplunit "$(tree_key verity/core/service/flock verity/ml/flock/tests/lean/TmplUnit.lean)" build_tmpl_unit)/.lake/build/bin/flock-tmpl-unit
+    TU=$(cached tmplunit "$(tree_key verity/protocols/flock/verifier verity/protocols/flock/prover/tests/lean/TmplUnit.lean)" build_tmpl_unit)/.lake/build/bin/flock-tmpl-unit
     [ -x "$TU" ] || { log "flock-tmpl-unit build FAILED: $(tail -20 "$OUT/build-tmplunit.log")"; exit 1; }
     TARG=(--layout "$A11_LAYOUT" --tmpl-unit-bin "$TU")
   fi
