@@ -7,6 +7,7 @@ import Proofs.Flock.Claims.Prob
 import Proofs.Flock.Claims.Sampling.Session
 import Proofs.Flock.EndToEnd.Joint.Prod
 import Proofs.Flock.SamplingGeneric.TwoRegMiss
+import Proofs.Flock.Soundness.Game
 
 /-!
 # A period of two-stage verification phases: one failure probability for the whole period, proved
@@ -26,8 +27,12 @@ fixes, and the two stages' draw laws bound the miss by `P̄_a` at the boundary v
 * `twoAtRec_accepted_le`: a verification phase is accepted with a sampled proof block incorrect at its boundary values
   at most as often as the hypothesis on the event says in scope, and never out of scope.
 * `twoAtRec_missed_le`: its sample misses with probability at most `escAt`.
-* `periodTwoProd_of`: `PeriodTwoProd` from each verifier's contract. So **`CompilerPeriodTwoProd` is proved**
-  (`compilerPeriodTwoProd`).
+* `periodTwoProd_of`: `PeriodTwoProd` from each verifier's contract.
+* `period_leadEscape`: the escapes of the verification phases before the first whose sample holds an incorrect proof
+  block multiply below `c` with probability at most `c`. It is `period_lead` with the escapes multiplied: a phase
+  whose sample misses passes the rest of the run the budget `c / e`, `e` its escape.
+* `periodTwoLead_of`: `PeriodTwoLead` from each verifier's contract, by `period_union` and `period_leadEscape`. So
+  **`CompilerPeriodTwoProd` is proved** (`compilerPeriodTwoProd`).
 * `periodTwoProd_regVal`: it at the committed boundary trace, where knowledge soundness of the argument and binding
   bound the event by `ε_reg,2` (`CompiledTwo.eventTwo_le`).
 -/
@@ -207,10 +212,106 @@ theorem periodTwoProd_of (H : Msg → Msg) (Lv : ℕ → CompiledTwo Coin A)
     _ ≤ (∑ t ∈ Finset.range T, ENNReal.ofReal (ε t)) + ENNReal.ofReal δ := add_le_add hA hB
     _ = ENNReal.ofReal δ + ∑ t ∈ Finset.range T, ENNReal.ofReal (ε t) := add_comm _ _
 
-/-- **The period's one failure probability from the verification phases' verifiers**: `periodTwoProd_of`. -/
+/-- **The escapes before the first sampled incorrect proof block multiply below `c` with probability at most `c`.**
+If at every strategy satisfying `good` a verification phase's records all carry one escape `e` and its sample misses
+with probability at most `e`, the escapes of the phases before the first whose sample holds an incorrect proof block
+(`ServedEsc.leadEscape`) multiply below `c` with probability at most `c`. -/
+theorem period_leadEscape {β : ℕ → Type} (G : (i : ℕ) → Verity.Game (β i))
+    (rec : (i : ℕ) → Strategy (G i) → β i → ServedEsc O V Tick Adv) (good : (i : ℕ) → Strategy (G i) → Prop)
+    (hstage : ∀ i τ, good i τ → ∃ e : ℝ≥0∞, e ≠ ⊤ ∧ (∀ b, (rec i τ b).escape = e) ∧
+      prob (fun b => ¬ (rec i τ b).sampledIncorrect) (G i) τ ≤ e) :
+    ∀ (T i : ℕ) (s : Strategy (periodG G i T)) (c : ℝ≥0∞), PeriodGood G good i T s →
+      value (fun l => ServedEsc.leadEscape l < c) (periodRun G rec i T s) ≤ c
+  | 0, i, s, c, _ => by
+      classical
+      show value (fun l => ServedEsc.leadEscape l < c) (Verity.Game.ret []) ≤ _
+      rw [value_ret]
+      split_ifs with h
+      · exact le_of_lt (by simpa only [ServedEsc.leadEscape] using h)
+      · exact zero_le
+  | T + 1, i, s, c, hs => by
+      classical
+      rcases lt_or_ge 1 c with hc | hc
+      · exact (value_le_one _ _).trans hc.le
+      obtain ⟨e, he, hw, hp⟩ := hstage i _ hs.1
+      by_cases he0 : e = 0
+      · have h := value_runBind_le_mul (fun _ => periodG G (i + 1) T)
+          (fun b s' => (periodRun G rec (i + 1) T s').map (rec i (Strategy.ofBind _ (G i) s) b :: ·))
+          (fun l => ServedEsc.leadEscape l < c)
+          (fun b => ¬ (rec i (Strategy.ofBind _ (G i) s) b).sampledIncorrect) 1 (G i) s
+          (atEnds_mono (fun b s' _ => by
+            rw [value_map]
+            by_cases hm : (rec i (Strategy.ofBind _ (G i) s) b).sampledIncorrect
+            · rw [ite_eq_right (not_not.2 hm)]
+              refine (value_mono (q := fun _ => False) (fun l hl => ?_) _).trans_eq (value_false _)
+              simp only [ServedEsc.leadEscape, ite_eq_left hm] at hl
+              exact not_lt.2 hc hl
+            · rw [ite_eq_left hm]
+              exact value_le_one _ _) (G i) s hs.2)
+        refine h.trans ?_
+        rw [mul_one]
+        exact (hp.trans_eq he0).trans zero_le
+      · have h := value_runBind_le_mul (fun _ => periodG G (i + 1) T)
+          (fun b s' => (periodRun G rec (i + 1) T s').map (rec i (Strategy.ofBind _ (G i) s) b :: ·))
+          (fun l => ServedEsc.leadEscape l < c)
+          (fun b => ¬ (rec i (Strategy.ofBind _ (G i) s) b).sampledIncorrect) (c / e) (G i) s
+          (atEnds_mono (fun b s' hg => by
+            rw [value_map]
+            by_cases hm : (rec i (Strategy.ofBind _ (G i) s) b).sampledIncorrect
+            · rw [ite_eq_right (not_not.2 hm)]
+              refine (value_mono (q := fun _ => False) (fun l hl => ?_) _).trans_eq (value_false _)
+              simp only [ServedEsc.leadEscape, ite_eq_left hm] at hl
+              exact not_lt.2 hc hl
+            · rw [ite_eq_left hm]
+              refine (value_mono (fun l hl => ?_) _).trans
+                (period_leadEscape G rec good hstage T (i + 1) s' (c / e) hg)
+              simp only [ServedEsc.leadEscape, ite_eq_right hm, hw b] at hl
+              exact (ENNReal.lt_div_iff_mul_lt (Or.inl he0) (Or.inl he)).2 (by rwa [mul_comm])) (G i) s hs.2)
+        calc value (fun l => ServedEsc.leadEscape l < c) (periodRun G rec i (T + 1) s)
+            ≤ prob (fun b => ¬ (rec i (Strategy.ofBind _ (G i) s) b).sampledIncorrect) (G i)
+                (Strategy.ofBind _ (G i) s) * (c / e) := h
+          _ ≤ e * (c / e) := by gcongr
+          _ ≤ c := ENNReal.mul_div_le
+
+/-- **The period's one failure probability through the first sampled incorrect proof block, from each verifier's
+contract**: when every verification phase's verifier meets the two-stage compiler's contract, `PeriodTwoLead` holds at
+every boundary traces `val`. -/
+theorem periodTwoLead_of (H : Msg → Msg) (Lv : ℕ → CompiledTwo Coin A)
+    (val : (t : ℕ) → Msg → Prover Unit → ℕ → Option Bool) (hS : ∀ t, (Lv t).Sessions H) :
+    PeriodTwoLead (O := O) (V := V) (Tick := Tick) (Adv := Adv) H Lv val := by
+  intro T ε s hev δ
+  have hs := periodGood_of_plays (fun t => twoGame (Lv t) ((O → V) × Tick × Adv))
+    (fun t τ => (Lv t).Scope τ.2.1.1 →
+      acceptedSampledAt H (Lv t) τ.2.1.1 τ.2.1.2 (val t τ.2.1.1 τ.2.1.2) ≤ ε t) T 0 s hev
+  have hA := period_union (fun t => twoGame (Lv t) ((O → V) × Tick × Adv))
+    (fun t τ => twoAtRec H (Lv t) (val t τ.2.1.1 τ.2.1.2) (regCountAt (Lv t) τ.2.1.1 (val t τ.2.1.1 τ.2.1.2))
+      (escAt (Lv t) τ.2.1.1 (val t τ.2.1.1 τ.2.1.2)))
+    (fun r : ServedEsc O V Tick Adv => r.accepted ∧ r.sampledIncorrect)
+    (fun t τ => (Lv t).Scope τ.2.1.1 →
+      acceptedSampledAt H (Lv t) τ.2.1.1 τ.2.1.2 (val t τ.2.1.1 τ.2.1.2) ≤ ε t)
+    (fun t => ENNReal.ofReal (ε t))
+    (fun t τ hτ => twoAtRec_accepted_le H (Lv t) (fun x P r h => (hS t).refuses x Unit P () r h) (val t) _ _ τ hτ)
+    T 0 s hs
+  simp only [Nat.zero_add] at hA
+  have hB := period_leadEscape (fun t => twoGame (Lv t) ((O → V) × Tick × Adv))
+    (fun t τ => twoAtRec H (Lv t) (val t τ.2.1.1 τ.2.1.2) (regCountAt (Lv t) τ.2.1.1 (val t τ.2.1.1 τ.2.1.2))
+      (escAt (Lv t) τ.2.1.1 (val t τ.2.1.1 τ.2.1.2)))
+    (fun t τ => (Lv t).Scope τ.2.1.1 →
+      acceptedSampledAt H (Lv t) τ.2.1.1 τ.2.1.2 (val t τ.2.1.1 τ.2.1.2) ≤ ε t)
+    (fun t τ _ => ⟨escAt (Lv t) τ.2.1.1 (val t τ.2.1.1 τ.2.1.2), escAt_ne_top _ _ _, fun _ => rfl,
+      twoAtRec_missed_le H (Lv t) (hS t) (val t) _ _ τ⟩)
+    T 0 s (ENNReal.ofReal δ) hs
+  rw [add_comm (ENNReal.ofReal δ)]
+  show Verity.Game.value (fun l : List (ServedEsc O V Tick Adv) =>
+      (∃ w ∈ l, w.accepted ∧ w.sampledIncorrect) ∨ ServedEsc.leadEscape l < ENNReal.ofReal δ)
+      (twoAtRun H Lv val T s) ≤ _
+  exact (Verity.Game.value_or_le _ _ _).trans (add_le_add hA hB)
+
+/-- **The period's one failure probability from the verification phases' verifiers**: `periodTwoLead_of` and
+`periodTwoProd_of`. -/
 theorem compilerPeriodTwoProd : CompilerPeriodTwoProd := by
   intro Coin _ _ _ A O V Tick Adv H Lv val hS
-  exact periodTwoProd_of H Lv val hS
+  exact ⟨periodTwoLead_of H Lv val hS, periodTwoProd_of H Lv val hS⟩
 
 /-- **The event at the committed boundary trace**: on a statement in scope, at a prover with no tape, the run accepts
 with a sampled proof block of the committed incorrect set with probability at most `ε_reg,2`

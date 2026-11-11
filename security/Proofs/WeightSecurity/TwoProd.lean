@@ -24,9 +24,14 @@ committed interiors) as a hypothesis, and no knowledge soundness of the argument
 * `regCountAt`, `escAt`: what a verification phase's strategy fixes before its coins, the replay blocks wrong at `val`
   and `P̄_a` at `val`'s footprint at best interiors (`0` and `1` out of the two-stage scope).
 * `ServedEsc`, `twoAtRec`, `twoAtRun`: the record, a `Served` with that escape, and the period's run.
+* `ServedEsc.leadEscape`, `ServedEsc.UndetectedBelow`: the escapes of the verification phases before the first whose
+  sample holds an incorrect proof block, multiplied, and the event that an accepted phase's sample holds one or that
+  product is below `δ`.
 * `PeriodTwoProd`: every verification phase is accepted and the escapes multiply below `δ` with probability at most
   `δ + Σ_t ε_t`, each `ε_t` bounding verification phase `t`'s event at every strategy the run plays it with.
-* `CompilerPeriodTwoProd`: `PeriodTwoProd` at every run of verifiers that meet the two-stage compiler's contract.
+* `PeriodTwoLead`: the same bound on `ServedEsc.UndetectedBelow`, which a run with a rejected verification phase can
+  be in. It gives `PeriodTwoProd`.
+* `CompilerPeriodTwoProd`: both at every run of verifiers that meet the two-stage compiler's contract.
 
 Statements only: definitions, no proofs.
 -/
@@ -86,6 +91,25 @@ structure ServedEsc (O V Tick Adv : Type) extends Served O V Tick Adv where
   escape : ℝ≥0∞
 
 variable {Coin : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin] {A : Arg Coin} {O V Tick Adv : Type}
+
+namespace ServedEsc
+
+open Classical in
+/-- **The escapes before the first sampled incorrect proof block, multiplied**: those of each verification phase, up to
+the first whose sample holds one of its incorrect proof blocks. It is `Served.lead` with the phases' escapes
+multiplied in place of their counts added. -/
+noncomputable def leadEscape : List (ServedEsc O V Tick Adv) → ℝ≥0∞
+  | [] => 1
+  | w :: l => if w.sampledIncorrect then 1 else w.escape * leadEscape l
+
+/-- **The sampling leaves escapes that multiply below `δ` undetected**: an accepted verification phase's sample held
+one of its incorrect proof blocks, or the escapes of the verification phases before the first sampled one multiply
+below `δ`. Outside it, every verification phase accepted before the first rejection is one whose sample missed, and
+the escapes of the verification phases before the first sampled one multiply to at least `δ`. -/
+def UndetectedBelow (δ : ℝ) (l : List (ServedEsc O V Tick Adv)) : Prop :=
+  (∃ w ∈ l, w.accepted ∧ w.sampledIncorrect) ∨ leadEscape l < ENNReal.ofReal δ
+
+end ServedEsc
 
 /-- **The event's probability** at a statement `x`, a prover `P` with no tape and boundary values `val`: over the
 run's coins, the run accepts and its sample holds a proof block incorrect at `val` and the committed interiors
@@ -161,14 +185,32 @@ def PeriodTwoProd (H : Msg → Msg) (Lv : ℕ → CompiledTwo Coin A)
         (twoAtRun H Lv val T s) ≤
       ENNReal.ofReal δ + ∑ t ∈ Finset.range T, ENNReal.ofReal (ε t)
 
+/-- **The period's one failure probability, through the first sampled incorrect proof block.** `PeriodTwoProd` with
+the run's later verification phases free to be rejected: under the same hypothesis, for every `δ` the probability that
+some accepted verification phase's sample holds a proof block incorrect at `val` and the committed interiors, or that
+the escapes of the verification phases before the first whose sample holds one multiply below `δ`
+(`ServedEsc.UndetectedBelow`), is at most
+$$\delta + \sum_t \varepsilon_t.$$
+It is `PeriodTwoReg` with the phases' escapes multiplied in place of one rate to the count of incorrect replay blocks,
+and it gives `PeriodTwoProd`: a run whose verification phases are all accepted either has one whose sample holds an
+incorrect proof block or multiplies every phase's escape. -/
+def PeriodTwoLead (H : Msg → Msg) (Lv : ℕ → CompiledTwo Coin A)
+    (val : (t : ℕ) → Msg → Prover Unit → ℕ → Option Bool) : Prop :=
+  ∀ (T : ℕ) (ε : ℕ → ℝ) (s : Strategy (periodG (fun t => twoGame (Lv t) ((O → V) × Tick × Adv)) 0 T)),
+    (∀ t τ, PeriodPlays (fun t => twoGame (Lv t) ((O → V) × Tick × Adv)) 0 T s t τ → (Lv t).Scope τ.2.1.1 →
+      acceptedSampledAt H (Lv t) τ.2.1.1 τ.2.1.2 (val t τ.2.1.1 τ.2.1.2) ≤ ε t) →
+    ∀ δ : ℝ, Verity.Game.value (ServedEsc.UndetectedBelow δ) (twoAtRun H Lv val T s) ≤
+      ENNReal.ofReal δ + ∑ t ∈ Finset.range T, ENNReal.ofReal (ε t)
+
 /-- **The period's one failure probability from the verification phases' verifiers**: when every verification phase's
 verifier meets the two-stage compiler's contract (`CompiledTwo.Sessions`: the two stages' draw laws and the refusal of
-what is out of scope), `PeriodTwoProd` holds at every boundary traces. It takes no knowledge soundness of the
-argument: a caller meets `PeriodTwoProd`'s hypothesis with its own bound on the event at the trace it reads. -/
+what is out of scope), `PeriodTwoLead` and `PeriodTwoProd` hold at every boundary traces. It takes no knowledge
+soundness of the argument: a caller meets their hypothesis with its own bound on the event at the trace it reads. -/
 def CompilerPeriodTwoProd : Prop :=
   ∀ (Coin : Type) [Fintype Coin] [Nonempty Coin] [Inhabited Coin] (A : Arg Coin) (O V Tick Adv : Type)
     (H : Msg → Msg) (Lv : ℕ → CompiledTwo Coin A) (val : (t : ℕ) → Msg → Prover Unit → ℕ → Option Bool),
     (∀ t, (Lv t).Sessions H) →
-    PeriodTwoProd (O := O) (V := V) (Tick := Tick) (Adv := Adv) H Lv val
+    PeriodTwoLead (O := O) (V := V) (Tick := Tick) (Adv := Adv) H Lv val ∧
+      PeriodTwoProd (O := O) (V := V) (Tick := Tick) (Adv := Adv) H Lv val
 
 end WeightSecurity.SecurityProofs
