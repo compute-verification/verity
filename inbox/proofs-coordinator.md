@@ -44552,3 +44552,53 @@ For SCALE and CONCRETE: `e_s` at m = 35 on m = 31's tower would be 1 + 210·771,
 - The statement's copy left node A on cores 8-11 only (09:04:25Z to 09:05:58Z, inside a baseline step's loading, the ssh session's process pinned too); `nr_throttled` did not move.
 
 For the table: nothing new to price: the verifier cut's first pair is 2.59 → 2.53 GPU-s a statement at one prover, measured, beside kernels' stagings (`r20261111-082337-c224`, two more steps to come).
+
+## TWOWITNESS, Wed 11 Nov 09:12Z: #8870 and SCALE's #8874 prove the same count under the same two names, so they can't build together and one must yield (I propose #8874 reads #8870); I take `hKs` and `hKm` (b2) and the refused draw (c); SessCount restated in KILIAN's shapes, uncompiled; no lock change
+
+**The overlap, for you to rule.**
+- #8874 (SCALE, `cursor/proofs-kfirst-count-208e` at `31a6b65da2cc`, opened 08:44Z) adds `SpotFlock/Drawn.lean`. In it, `selectSecond_proved_size` is #8870's `size_proved_selectSecond`: the same equality, `(Draw.proved draw).size = sample.size * ks.toList.sum` at an accepted second stage [read: both files].
+- Both files declare `drawUnits_work_size` and `getD_draw_closure` in `Properties.Spot.SecurityProofs`. Whichever lands second fails to build on a name already declared, and `--siblings` refuses it [read: both files' namespaces; guess: no tree with both has been built].
+- #8870 opened at 08:31Z on `main` alone [run: `gh pr view`]. #8874 carries #8836's stack, 18 files, and waits on #8820 [read: `gh pr view 8874`].
+- I propose #8874 imports `Proofs.Flock.Claims.Sampling.Select.SecondCount` and drops its three copies. If you rule the other way, I withdraw #8870 [guess: which lands sooner].
+- #8874's `Drawn.lean` also has `import all Spot.Draw`. That is the line my quick tier failed on (`test_no_import_all_of_an_in_tree_module`, `r20261111-083454-e31b`), so its quick tier will fail the same way [run: my log; guess: theirs].
+
+**The split with KILIAN.**
+- KILIAN proves step 1 of (b), the cost, and takes the count as three hypotheses on the coins, `hNs`, `hKs` and `hKm` [read: KILIAN's 08:41Z entry].
+- KILIAN's `ex_firstSlots_le` already gives `hNs` with `Ns := L.nSess x` [relayed: the same entry].
+- My part of b2 is `hKs` and `hKm`, plus gap c [read: the order's 08:51Z table].
+- I removed the `runExtAt`-shaped corollary from the SessCount branch, since KILIAN's `sum_runExtAt_runs_le` does that double count [read: KILIAN's entry; run: commit `b439bb7e8c`].
+- SCALE's `RegTwo.card_biUnion_checked_le_count` and `code_card_biUnion_le_count` (#8874) bound the gates where the draw is accepted, at `code h` [read: `Drawn.lean:163-215`]. I don't restate them.
+
+**What is written: SessCount**, `cursor/proofs-sesscount-c0f7` at `b439bb7e8c1cc32ca3b4031b11177efa4e7ee06c`, on `main`, one new file `security/Proofs/Flock/SamplingGeneric/SessCount.lean`, 6 theorems [run: `git push`]. Not compiled yet: try `r20261111-090223-4d00` waits for a slot [run: `research status`, 09:06Z].
+- `sum_first_sessNeeds_le` is `sessCount x needs l ≤ Σ_{u ∈ l} |needs u|`, written with KILIAN's `firstSlots`, `sessNeeds` and `sessCount` unfolded at `n = nPU`, `N = nG` [read: the file; KILIAN's definitions].
+- `card_filter_needs_le` is `|sampleNeeds x needs l| ≤ Σ_{u ∈ l} |needs u|`, unfolded the same way [read].
+- Both rest on `sum_sessions_le`, the 08:12Z inequality `Σ_g Σ_{s ∋ g} e_s ≤ e_max·Σ_u |needs u|`. Distinct sessions' first slots hold disjoint slots (`first_eq_of_key`), and a session's gates are at most its blocks' needs [read].
+- So `hKs` and `hKm` each follow from a bound on `checked`'s blocks' needs, summed, at each coin [read: the statements].
+
+**Gap c, (c1): the refused draw in expectation.** Next, not written. It goes in one new file on `main`, of under 80 lines [guess].
+- Where `selectSecond` errors, `RegTwo.checked` is `List.range N` (`Reg.lean:89-95` on `main`) [read].
+- A refused first stage reaches the same branch: `RegTwo.sample` is `#[]` there, and an empty sample is refused (`Spot/Select.lean:283-284`) [read].
+- The lemma: for any `F` of the checked list with `F ≤ B`, `0 ≤ B`, wherever the second stage accepts, `E[F(checked)] ≤ B + Pr[refused]·F(List.range N)`. It uses `Ex_ite` (`ERepCost.lean:79`) [read: on `main`].
+- Applied with SessCount at `F = |sampleNeeds|` and `F = sessCount`, both counts get `Pr[refused]·Σ_{u<N} |needs u|` added. With SCALE's accepted bound as `B`, that gives `Ks = Km = Σ_always |needs| + K·Σ_t k_t·M + Pr[refused]·Σ_{u<N} |needs u|` [guess: the composition is not written].
+
+**Gap c, (c2): when `selectSecond` is `.ok`.** On paper only; nothing in Lean today.
+- No hypothesis makes it `.ok` at every coin. A stream of `0xFF` bytes is rejected at every attempt whose modulus `m` is not a power of two, and `subset` then runs out of bytes [read: `Flock/Draw.lean`'s `uniform`].
+- Each attempt rejects with probability `(2^(8w) mod m)/2^(8w) < 2^-64`, from `width n`'s 64 bits of slack [read: `Flock/Draw.lean`].
+- Take `Σ_s (2·k_s·w_s + 64) ≤ L` and a non-empty first stage. Stratum `s`'s first read then holds `a_s = 2k_s + c_s` attempts, `c_s = ⌊64/w_s⌋`, and fails only on at least `k_s + c_s + 1` rejections. So `Pr[refused] ≤ Σ_s 2^(a_s)·2^(-64(k_s + c_s + 1)) = Σ_s 2^(−62 k_s − 63 c_s − 64)` [guess: paper bound].
+- At the model's 2^20-byte stage D*1's first read doesn't fit, and `Pr[refused] = 1` [relayed: DRAFT-CORE's 08:45Z table].
+- Its Lean is an induction on `ExecDraw.lean`'s `uniformL`/`loopL`, with the rejection side of `uniformL_le`. I size it at 200 to 400 lines and don't expect it before 12:00Z [guess].
+
+**#8870.**
+- Head `e7d354135fbb00e3a049bbffa6a859baeef2fe4d` imports `Spot.Draw` plainly. `Spot/Draw.lean` is `@[expose] public section`, so what I unfold stays visible [run: commit; read].
+- Its records run `r20261111-085250-c066` waits for a slot [run: `research status`, 09:06Z]. The try that passed (`r20261111-081457-4e4e`) was at the first head [run].
+- Next: the quick tier, then the merged-tree build with #8539 (`984a73968ccd`, which touches `Select/Code.lean`) [read: `gh pr view`].
+- PRF-533 has no goal label (`research queue open` warned) [run]. Yours to set.
+
+For SCALE:
+- `hKs` and `hKm` read the blocks' needs summed over `checked` (`Σ_{u ∈ checked} |needs u|`). The distinct gates `K` and the sessions' count are both at most that sum (SessCount) [read].
+- An accepted second stage proves exactly `|sample|·Σ_t k_t` units, in two PRs now (#8870, #8874) [read]. A refused one checks all `N` blocks [read].
+- Refusal per stratum at one first read, on paper: `2^(−62k−63c−64)`, with `c = ⌊64/w⌋` and `w = ⌈(⌊log₂ n⌋ + 65)/8⌉` bytes [guess].
+
+For the table:
+- b2 (`hKs`, `hKm`): both reduce to `checked`'s needs summed (SessCount `b439bb7e8c`, try waiting). The count at an accepted draw is in #8870 and #8874, one to yield. Modeled; the first-hit term of #8827's lemma; per sampled replay block at T = 2^80 calls a run.
+- c: (c1) `Pr[refused]·Σ_{u<N} |needs u|` added, next, not written. (c2) the refusal bound under `Σ_s (2·k_s·w_s + 64) ≤ L` and a non-empty first stage, on paper, not in Lean.
