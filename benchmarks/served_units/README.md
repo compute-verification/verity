@@ -4,9 +4,10 @@ A served model's proof blocks proved one type at a time, from synthetic values a
 one-stage audit takes: the proof block's Boolean lowering, its `verity/flock-circuit` statement with hidden outputs, a loopback
 `serve --zk` / `prove --zk` run of `flock-circuit` (Flock's circuit prover, upstream Flock b684b12 with `verity/protocols/flock/prover`'s
 patches) whose sample is every unit, and the Lean verifier (its `verify --zk`, built from `verity/protocols/flock/verifier`), which must
-pass the honest run through every check and reject the selftest build's forgeries (a committed false output word, a false
-output claim, a flipped internal bit). The verifier holds no program for a proof block (`stage.py` says why), so it then
-refuses the honest run for that alone (`ProvedScope.NO_PROGRAM`), which is what `summarize.py` passes it on.
+pass the honest run through `Zk.verify` and every check before the Program and reject the selftest build's forgeries (a
+committed false output word, a false output claim, a flipped internal bit). The verifier holds no program for a proof block
+(`stage.py` says why), so it then refuses the honest run for that alone (`ProvedScope.NO_PROGRAM`). `summarize.py` counts
+that refusal in `lean_refused_no_program`, apart from Lean's acceptances (`lean_accepted`), and never as an acceptance.
 
 Three kinds of type (`stage.py`'s docstring has each):
 
@@ -66,3 +67,12 @@ Prove times (results go to `$RESEARCH_RUN_DIR/out`, the build and stagings to `F
 research run --on NODE --cwd source -- bash benchmarks/served_units/prove_time.sh \
   PT_UNITS="fp8-coord:K=6144 fp8-coord:K=6144+public-weights" PT_NS="16 64" PT_DEVICE=gpu SM=120
 ~~~
+
+## Interface
+
+- **Provides:** `stage.py`, which stages a served proof block's statement, and the runners and scripts around it.
+- **Loaded by:** `benchmarks/one_stage`, which imports `stage`. Nothing else.
+- **Loads:** `verity.definitions`, `verity.circuits` with the primitive circuits (`verity.definitions.ops`),
+  `verity.commitments`, `verity.protocols.spot.verifier`, `verity.hardware`, Flock (`verity_flock`),
+  `circuit_check.targets` and `verity_vllm.pipeline`; the scripts build and run Flock's circuit prover and its Lean
+  verifier.
