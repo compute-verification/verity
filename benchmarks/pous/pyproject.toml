@@ -17,14 +17,13 @@ untraced = [
 # pod.sh runs bench/placement.py's deployment gate (GATE_ROLE). Of `verity`, what the tests import, and what the `lake` they
 # run and the Lean programs they start (pous-timed-audit, memory-challenger-verdict) read, which no tracer sees: those
 # packages and their path dependencies (each lakefile's `[[require]]`).
-inputs = ["verity/__init__.py", "verity/errors.py", "verity/core/__init__.py", "verity/claims/__init__.py",
-          "verity/core/protocols/__init__.py", "verity/protocols/pous", "verity/protocols/interface",
-          "verity/ml/protocols/__init__.py", "verity/protocols/pous/prover",
+inputs = ["verity/__init__.py", "verity/errors.py", "verity/claims/__init__.py",
+          "verity/protocols/pous", "verity/protocols/interface",
+          "verity/protocols/pous/prover",
           "verity/hardware/record.py", "verity/protocols/reporting.py",
-          "verity/core/devices/__init__.py",
           "verity/protocols/flock/verifier", "verity/commitments/identity", "verity/commitments/randomness",
           "verity/commitments/lms", "verity/difftest", "verity/protocols/pous/device",
-          "verity/ml/__init__.py", "verity/commitments", "verity/commitments/crypto", "verity/commitments/randomness",
+          "verity/commitments", "verity/commitments/crypto", "verity/commitments/randomness",
           "benchmarks/census/hardware.json", "benchmarks/numerical/python/verity_numerical/bench/placement.py",
           # the remote bandwidth audit over the P2 store, which p2_v1/serve.py runs, and what it imports; its party's
           # Lean verifier, `remote-audit-verifier`, which `p2_party` has `lake` build in remote_bandwidth/lean
