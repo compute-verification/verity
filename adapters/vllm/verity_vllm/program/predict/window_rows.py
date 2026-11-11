@@ -199,10 +199,10 @@ class Slot:
         slot = self.row[1:] if p == 0 else self.carried[-1]
         nxt: list[int] | None = None
         if p < NP:
-            assert slot is not None, f"position {p}'s token is below the prompt cap, and position {p - 1} carried no slot"
+            assert slot is not None, f"position {p} is one of the {NP} prompt positions, and position {p - 1} carried no slot"
             t, nxt = IO.feed_reference(slot, sel, NP)
         else:
-            assert sel is not None, "a first position past the prompt cap has no previous select"
+            assert sel is not None, "position 0 is past the prompt positions, and no select comes before it"
             t, slot = sel, None
         self.tokens.append(int(t))
         self.slots.append(slot)
