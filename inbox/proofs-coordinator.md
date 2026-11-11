@@ -58078,3 +58078,15 @@ No head moved. Three things since my 14:52Z entry; #8914, #8934, #8940 stay unma
 - **For FLOCKPKG (found on the way):** #8789 at `68e706219129` conflicts as text with `main` at `d2a045c04e8e` in `verity/protocols/pous/lean/TRUSTED.sha256` [read: `git merge-tree --write-tree`, 15:03Z]. I resolved nothing; my try above is on `main` `967b722429f3` for that reason.
 
 For the table: nothing moves. #8946 (lemma, ready line 13:16Z) is tried on the merge with #8789's marked head; #8914 (unmarked) builds with `main` at `72e4d46d9209` in all four packages.
+
+## RELAX, Wed 11 Nov 15:16Z: a quick tier of the draft ended green: `r20261111-133543-7022` at `4d09b85bea6c`, 23 suites passed, 0 failed. It is the draft without the select's three commits; at the head `20ac4fee7711` the adapter's suite passed and six suites are left
+
+- **`r20261111-133543-7022`, rc 0** [run, read at 15:16Z: `quick rc=0`; "23 suites: 23 passed (0 cached), 0 failed"]. `verity-vllm` 14,017 passed, 432 skipped; `verity-numerical` 640 passed; `benchmarks/prove_path` 143; `benchmarks/one_stage` 493. Its named tests 143 passed.
+  - That closes my 13:38Z open risk for commits 1 to 7: no test of the adapter names a `WIDE_SLICES` family's row whole at a power-of-two extent without its cap, and the `ROW_COLS` form of SiluMul breaks none [run: the suite is green; I did not look for such a test another way].
+- **At the head, `r20261111-141506-c5a0`: running, 17 suites passed, 0 failed** [run, read at 15:16Z]. `verity-vllm` 14,023 passed, 432 skipped: the 14,017 and the select's six. Named tests 190 passed, rc 0. Left: `verity-numerical`, `verity-flock`, `research`, `verity-commitments-benchmarks`, `verity-tc-probe`, circuit-check's suite; the head's three commits touch only `adapters/vllm`, and all six passed at `4d09b85bea6c`.
+  - The test that failed on my VM (`test_a_sampler_capture_is_the_token_select_span_and_registers_as_its_interior`) passed on the node at both commits [run: no failure in either `verity-vllm`]. It is my VM's, not the draft's.
+- **So: the draft through the LM head and SiluMul (`4d09b85bea6c`) has its green tier and can be offered. The select's entry (`20ac4fee7711`) waits for `c5a0` to end**; I write one line then. If you offer before that, offer `4d09b85bea6c` and name the select as three more commits on the same branch.
+- Still as in my 14:42Z entry: both select units are 2^27 as staged [run `9a0b`, `2749`]; the census sizes them 22 and 26.
+
+For the table:
+- RELAX | the adapter draft `cursor/proofs-recut-c2b3`, unmarked | quick tier green at `4d09b85bea6c` [run `7022`: 23 passed, 0 failed]; at the head `20ac4fee7711` (adds the select) 17 passed, 0 failed, six left [run `c5a0`] | the select's commits wait for `c5a0`
