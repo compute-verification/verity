@@ -10,8 +10,8 @@ product runs no onsite piece and composes sampled proofs and PoUW alone, the oth
 development piece checks the window's gate session and credits nothing, and the gate is refused while the lane has a period
 open. The period the served windows join opens, through infra's own gate, on the Program serve-openai declared and
 the circuit files built for it, as core's credit reads them, and is refused on files of anything else.
-`served_verdicts.sh`'s window circuits gate on every class of CLASSES, and the class of record's count after them
-gates nothing; its endpoint gets one token budget, T, with or without H1. Its preflight refuses a flag the tree's certifier
+`served_verdicts.sh`'s window circuits gate on every class of CLASSES, and count the class of record only where
+CLASSES names it; its endpoint gets one token budget, T, with or without H1. Its preflight refuses a flag the tree's certifier
 front doesn't take, a front whose endpoint isn't on the warden's id form, and a front load with no front; its composite
 step publishes each case's and each product's verdict lines and nothing else. Its V3c step runs the split network
 certifier's chain after the window commit and its period check on V3c's period.json, and fails where no period.json is
@@ -964,12 +964,15 @@ def _circuits(tmp_path: Path, classes: str, answers: dict) -> tuple[int, list[st
     return rc, (tmp_path / "out" / "verdicts.txt").read_text().splitlines(), (tmp_path / "limits").read_text().split()
 
 
-def test_the_class_of_record_is_measured_after_the_gating_classes_and_its_timeout_fails_nothing(tmp_path):
+def test_a_class_that_counts_passes_and_the_class_of_record_is_not_counted_unasked(tmp_path):
+    """CLASSES' one class counts under WC_TIMEOUT, its published count without the advice's length; the class of record,
+    which CLASSES doesn't name and which would run out of time here, is never started."""
     rc, lines, limits = _circuits(tmp_path, "4,32,4", {"4,32,4": "count", "record": "expire"})
-    assert rc == 0 and limits == ["30m", "45m"], (rc, lines)
+    assert rc == 0 and limits == ["30m"], (rc, lines)
+    assert len(lines) == 1, lines
     assert lines[0].startswith("WINDOW-CIRCUIT class 4,32,4: registered 7 bits, free 3 bits of 10 input bits at the "
                                "weights registration's pins; ")
-    assert lines[1:] == ["WINDOW-CIRCUIT class record (measurement) timed out after WC_RECORD_TIMEOUT=45m (exit 124): no count"]
+    assert not list(tmp_path.rglob("window-circuit*record*"))
     published = json.loads((tmp_path / "out" / "window-circuit-4-32-4.json").read_text())
     kept = json.loads((tmp_path / "serve" / "window-circuit-4-32-4.count.json").read_text())
     assert "bits" not in published and '"bits"' not in lines[0] and kept["bits"] == 772 and published["count"] == kept["count"]
@@ -981,13 +984,12 @@ def test_the_class_of_record_is_measured_after_the_gating_classes_and_its_timeou
     ("record", {"record": "expire"}, "WINDOW-CIRCUIT class record timed out after WC_TIMEOUT=30m"),
 ])
 def test_any_class_of_classes_that_does_not_count_fails_the_run(tmp_path, classes, answers, refused):
-    """Each class of CLASSES gates, not just one of them, whatever the class of record's measurement says; CLASSES that
-    names `record` gates on it under WC_TIMEOUT and doesn't measure it again."""
+    """Each class of CLASSES gates, not just one of them; CLASSES that names `record` gates on the class of record
+    under WC_TIMEOUT, and no class CLASSES doesn't name is counted."""
     rc, lines, limits = _circuits(tmp_path, classes, answers)
     assert rc != 0 and sum(line.startswith(refused) for line in lines) == 1, lines
     assert any("prove_path.py window-circuit: refused at" in line for line in lines) == (answers.get("8,64,4") == "refuse")
-    measured = [line for line in lines if line.startswith("WINDOW-CIRCUIT class record (measurement)")]
-    assert len(measured) == (classes != "record") and limits[-1] == ("30m" if classes == "record" else "45m")
+    assert len(lines) == len(classes.split()) and limits == ["30m"] * len(classes.split()), (lines, limits)
 
 
 W63K4 = "8,32,4,4,16"
