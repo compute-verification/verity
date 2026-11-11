@@ -47845,3 +47845,38 @@ For the table:
 - Without cpu-2, the per-Definition counts stay derived, as in my 10:03Z and 10:05Z entries.
 
 For the table: no change; the reader-set counts are still derived, not run.
+
+## REGX, Wed 11 Nov 10:17Z: ready to mark #8871 at 2d4670d641651ca8a33c17e079d84135a9d9c25c (always-checked term of K: +0 bits, no lock changes); and BOTH halves of the wiring COMPILE: `sessWit_reveal_passes` at the code, try `9a98` exit 0, 13 theorems on the three axioms, at `6355d051eb71`. `hwit` in EXTFORM's exact form is not written yet: on it now, due 11:15Z
+
+Modeled; the first-hit term of #8827's lemma; per sampled replay block. Nothing below is a number.
+
+**1. ready to mark #8871 at `2d4670d641651ca8a33c17e079d84135a9d9c25c`** (unmarked, no label; it changes no statement a lock records and no `lean-audit.json`).
+- Quick tier `r20261111-090221-cd8a` (`suites.py --changed origin/main --quick`): done, rc 0, SUCCESS [run].
+- Records run `r20261111-090216-1776` (`lean_changed.py --records security/Proofs --update`): done, rc 0, SUCCESS; `AUDIT: PASS`, `check.py` exit 0 in 2470 s, `"regenerated": {}` in its `audit.json` [run; read: its stdout and `audit.json`]. A `lean-fast/v1` result.
+- Elaborates, axioms: try `r20261111-085459-d5f8` at the head, lean exit 0, siblings clean, 18 theorems on `propext`, `Classical.choice`, `Quot.sound` [run]. Kernel replay: the candidate's check.
+- It merges and builds with what it touches: #8836's head `ae8886e9a2fc` is an ancestor of the head, so the runs above build with it; the head merged with #8827's `946b7b72f26d` and #8781's `b7c268c7c1fe` in one tree (local, `git merge` clean, not pushed) builds, try `r20261111-095335-c09b`, lean exit 0, 18 theorems on the three axioms [run]; `git merge-tree --write-tree` exits 0 with `main` `0a722c6ec984`, #8827's head and #8836's head [run, 10:15Z].
+- Second reader: ATTACK (09:55Z) read the fallback branch's file whole (`cursor/proofs-noalways-b7d2` at `7517af48adb5`), not this blob; this head's file is that module restated over #8836's lemmas (20 declarations against 23) [run: `git diff`]. The body says so.
+- Body rewritten in the 08:37Z order, with ATTACK's two cautions as "How to cite it": cite `ksTwo_noAlways` at an `h` whose `always` is already empty, where it is `ksTwo_spot`; no block is proved on every request, only in each sampled replay block.
+
+**2. The wiring compiles** [run]. Try `r20261111-094954-cd4c` at `f5f44cc119e9` failed at ONE line (`OpensWhole.lean:240`, inside `reveal_out`: a `congrArg` over `Reveal.frameAt` whose function elaborated late; a type mismatch, nothing about the code). Fixed by unfolding `frameAt`. Try `r20261111-100859-9a98` at `6355d051eb7115e8be5fa2eac252e0b33856f5d2` (`cursor/proofs-hall-9c2e`, stacked on #8827's `946b7b72f26d`): lean exit 0 in 244 s, no warning in the file, siblings clean, **13 theorems on the three axioms**.
+- The extractor's half: `Arg.ext_some`, `Compiled.sessWit_some` (a witness `sessWit` returns passes `A.check` at the session's statement, and the session's view accepted).
+- The code's half: `stepWith_three_msg`, `answered_two`, `run_msgs_of_answered`, `session_acc_msg`, `session_acc_run` (a session whose view accepted sits in a run whose first three messages were answered, so `stmtOk` holds and the statement is `unitStmt`).
+- Gap A: `reveal_out` (under `Built h` the code's reveal reads only the transcript's messages).
+- The composition: `reveal_passes`, `sessWit_reveal_passes` (every opening of what the extracted witness reveals at a checked unit passes, at every run, accepted or refused), and the class pieces `Reveal.rootsAt_same_side`, `reveal_has_class`, `reveal_class`.
+- Premises: `Built h`, `Addresses h`, the statement in the two-stage scope. Nothing new.
+
+**3. EXTFORM's two worries (09:51Z section 2), both answered.**
+- A run that did not accept: closed by `reveal_out` and `session_acc_run` [run: compiled in `9a98`]. `sessWit` returning a witness forces the session's view to accept, which forces the run's first three messages answered and `stmtOk`, whatever the run's own verdict.
+- A session whose first slot's block is not `u'`: cannot happen at `compiledTwo`. Its `skey` is the default `fun _ _ p => p` [read: `Definitions/Claims/SamplingGeneric.lean:249`; neither `ofDeployAt` (`SamplingGeneric/Deployed.lean:82-103`) nor `compiledTwo` (`TwoDeployed.lean:108-110`) sets it], so `Compiled.sessBlocks_eq_singleton` (`Fails.lean:288`) gives `sessBlocks x l i = [u]` at `l[i]? = some u`, `u < n_PU`: `u' = iu.2`. `Sessions.shared` is not needed. My use of it is not compiled yet.
+
+**4. `hwit`: what is left, and the key** [not written; no line it fails at so far]. I take `hwit` exactly as `eventTwoX_le_firstHit_key` states it (read on `cursor/proofs-slack-3f5a` at `e7b2e51d928b`), not `hwhole + hcls`.
+- The key at the code: `gateKey h s Pt d g = (the proof blocks below N whose `Reveal.needs` holds g, `gateBlock d.part g`, whether g is on that replay block's boundary)`, in `Finset ℕ × Option ℕ × Bool`. `hneeds` and `hblock` are then by definition; "same side at every reader's replay block" follows from the last two components and `d.part.gates.Nodup` (`gateBlock_of_mem`, in scope by `InScopeTwo`).
+- Two modules: the key and the class lemma in `OpensWhole.lean` (on #8827 only), and `hwit` in the exact form in a second file on EXTFORM's head, so that a break in one does not hide the other.
+
+For EXTFORM: keep `hwit` as it is; I do not ask for a restatement. I stack the exact form on your `e7b2e51d928b`: say if that head moves or does not build.
+
+For CAPS: Proofs/Flock +1 module +20 declarations (#8871 NoAlways.lean). (`cursor/proofs-hall-9c2e` has no PR yet; its count follows with its ready line.)
+
+For the table:
+- always-checked term of K: +0 bits. #8871 is ready to mark at `2d4670d64165`; cite `ksTwo_noAlways` at a registration whose `always` is empty.
+- By classes: "an extracted witness's reveal passes whole at every run" compiles at the code (`sessWit_reveal_passes`, try `9a98`, under `Built h` and `Addresses h`); `hwit` at the key (needers, replay block, side) is not yet written. Modeled; no new number.
