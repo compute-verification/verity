@@ -36,7 +36,7 @@ def test_refusals_name_each_interface_that_is_up_and_each_final_set_with_an_entr
         "other than root"]
     assert sandbox.refusals([empty, absent], {"lo": True, "eth0": True, "docker0": False}, 0) == [
         "the network is reachable (interface eth0 is up)", "the network is reachable (interface lo is up)"]
-    assert sandbox.refusals([empty, final], down, 0) == [f"the final set at {final} is readable (tiny.bin)"]
+    assert sandbox.refusals([empty, final], down, 0) == [f"{final}, which the sandbox hides, is readable (tiny.bin)"]
     with pytest.raises(NotADirectoryError):
         sandbox.refusals([final / "tiny.bin"], down, 0)
     assert sandbox.final_sets({"data": {"b": {"final": "/x/b"}, "a": {"final": "/x/a"}, "c": {"final": "/x/a"}}}) == [
@@ -57,7 +57,7 @@ def test_the_entrys_command_finds_no_interface_up_and_each_hidden_directory_empt
     assert p.returncode == 0, p.stderr[-2000:]
     assert json.loads(p.stdout) == {"interfaces": {"lo": False}, "refusals": [], "entries": [[]],
                                     "through_its_parent": "Permission denied", "capabilities": 0}
-    assert sandbox.refusals([final], {"lo": False}, 0) == [f"the final set at {final} is readable (tiny.bin)"]
+    assert sandbox.refusals([final], {"lo": False}, 0) == [f"{final}, which the sandbox hides, is readable (tiny.bin)"]
     file = tmp_path / "file"
     file.write_bytes(b"x")
     p = subprocess.run([sys.executable, "-m", "training_slowdown.sandbox", "--hide", file, "--", "true"], cwd=here,
@@ -98,7 +98,8 @@ def test_a_routes_process_outside_the_sandbox_stops_before_it_reads_its_config(t
     monkeypatch.setattr(config, "load", lambda *a, **k: pytest.fail("the route's process read its config"))
     monkeypatch.setattr(sandbox, "interfaces", lambda: {"lo": False})
     monkeypatch.setattr(sandbox, "capabilities", lambda: 0)
-    with pytest.raises(SystemExit, match=rf"outside it: the final set at {final} is readable \(manifest.json, tiny.bin\)"):
+    with pytest.raises(SystemExit, match=rf"outside it: {final}, which the sandbox hides, is readable "
+                                         rf"\(manifest.json, tiny.bin\)"):
         run.main(argv)
     for f in Path(final).iterdir():
         f.unlink()

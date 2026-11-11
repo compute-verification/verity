@@ -1,4 +1,5 @@
-"""The training job's sandbox: the process a route's code runs in has no network and no final set.
+"""The training job's sandbox: the process a route's code runs in has no network, no final set and none of the job's
+kept state.
 
     python -m training_slowdown.sandbox [--hide DIR]… -- COMMAND…
 
@@ -10,13 +11,14 @@ is mapped), so it can't take the mounts off. It needs a machine that lets an unp
 namespace (`REQUIRES`): where one doesn't, the entry stops with that and COMMAND never starts.
 
 `refusals` is COMMAND's own half, read before it runs any code it didn't write: what it can still reach, an interface
-that is up or an entry of a final set, each by name, and a capability it holds, as root's COMMAND does, with which it
-could undo the rest. A job that finds one stops before it trains (`run.inside`), so a sandbox that wasn't made is a
-failed job, never a job that trained outside one.
+that is up or an entry of a hidden directory, each by name, and a capability it holds, as root's COMMAND does, with
+which it could undo the rest. A job that finds one stops before it trains (`run.inside`), so a sandbox that wasn't
+made is a failed job, never a job that trained outside one.
 
-What it hides is the directories the registry names (`final_sets`): a copy of a final set at another path stays as
-readable as the job's user finds it. The rest of the file system is the user's as before, sockets at a path among it.
-The entry imports the standard library alone, since a process makes a user namespace only while it has one thread.
+What it hides is the directories the registry names (`final_sets`) and the job's own state directory (`run.Kept`): a
+copy of a final set at another path stays as readable as the job's user finds it, and so does another job's state.
+The rest of the file system is the user's as before, sockets at a path among it. The entry imports the standard
+library alone, since a process makes a user namespace only while it has one thread.
 """
 from __future__ import annotations
 
@@ -72,7 +74,7 @@ def enter(hide: Iterable[Path]) -> None:
             call(f"mounting an empty directory over {d}", libc.mount(
                 b"tmpfs", os.fsencode(d), b"tmpfs", MS_RDONLY | MS_NOSUID | MS_NODEV, b"size=4k,mode=555"))
         elif d.exists():
-            raise SystemExit(f"sandbox: {d} is not a directory: a final set is one, and nothing else is hidden")
+            raise SystemExit(f"sandbox: {d} is not a directory: what the sandbox hides is one")
 
 
 def interfaces() -> dict[str, bool]:
@@ -103,7 +105,7 @@ def refusals(hidden: Iterable[Path], up: Mapping[str, bool] | None = None, held:
     out = [f"the network is reachable (interface {name} is up)" for name in sorted(up) if up[name]]
     for d in hidden:
         if d.exists() and (seen := sorted(os.listdir(d))):
-            out.append(f"the final set at {d} is readable ({', '.join(seen[:3])})")
+            out.append(f"{d}, which the sandbox hides, is readable ({', '.join(seen[:3])})")
     if held:
         out.append(f"the process holds capabilities ({held:016x}) with which it could undo the sandbox: run the job as "
                    f"a user other than root")

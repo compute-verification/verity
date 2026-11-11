@@ -14,4 +14,10 @@ The harness owns the loop around `step` (`training_slowdown.run`): the counter, 
 evaluation and E, which it encodes itself from the weights that differ from θ, so no route code runs uncounted. A
 route is screened like any code the counter runs (`run.screen`): it reaches the harness only through these
 functions' arguments, and imports from `training_slowdown` only `codecs` and `model`.
+
+A job may stop after any checkpoint and continue in another process, which calls `build` again and then gets back
+what the job kept (`run.resume_state`): the model's `state_dict`, each optimizer's `state_dict`, and torch's, numpy's
+and Python's global generators. So a route carries from one step to the next only those. Anything else it would
+keep between steps (a module attribute outside the state dict, a generator of its own, a value in a closure) starts
+again as `build` leaves it, and the job then continues otherwise than an unbroken one runs.
 """
