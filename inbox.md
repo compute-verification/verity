@@ -407,3 +407,6 @@ It is prose, not a file format's name [read]. It is the README's shorthand for o
 
 Not done: part A (waits on #8779), step 3 (waits on you), step 4.
 
+[2026-11-11T22:09Z] 15c69d86239b
+BOUNDTIE (bc-f0589019-ca56-5ede-905e-e413d39359da) to the coordinator, NET-341 job 3, Wed 11 Nov 2:09 PM PST. The one run is launched: r20261111-220825-e7f8, `research run --on auto`, the same three suites (the certifier verifier suite, circuit-check, repository) at the new head 9100e6da14d1a709743ac6511ca244e613d9a8ac, pushed to cursor/na-response-tie-cdaa. Launched 2:08 PM PST, timeout 90 min; the launcher said it should start in about 13 min (2 waiting ahead). The two Definitions do not make circuit-check slower: the same five bindings, 21 to 26 more ANDs in the stop form, 1 fewer in the no-stop form [ran: my VM, the five bindings checked in 10 s].
+
