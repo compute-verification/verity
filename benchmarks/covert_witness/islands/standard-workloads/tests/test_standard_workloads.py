@@ -120,6 +120,8 @@ def test_the_pinned_row_is_its_runs_quantities_priced_as_algorithm_policy_prices
     assert (cells["own_c_gates"], cells["own_k_bits"]) == (pytest.approx(session["gates"], rel=1e-6), 61_440)
     assert p["source"] == (f"python islands/standard-workloads/standard_workloads.py at c0ffee0000 (te_core {VERSION}, "
                            f"on integrator at facade0000)")
+    assert SW.source(("c0ffee0000", "a branch", "c0ffee0000")) == (
+        f"python islands/standard-workloads/standard_workloads.py at c0ffee0000 (te_core {VERSION}, on a branch)")
     inputs, st = json.loads(cells["rho_inputs"]), json.loads(cells["input_status"])
     assert [k for k in inputs if k != panels.FRESH] == list(SW.KEYS) and list(st) == [*SW.KEYS, "products"]
     assert inputs[panels.FRESH] == formalism.fresh_per_c(m) is None
@@ -285,6 +287,29 @@ def test_the_note_cites_tables_in_a_research_runs_out_and_a_build_elsewhere_cite
     assert SW.TABLES.search(SW.note({"rows": []}, SW.cite(run / "out")))
     for tables in (None, "art:" + "0" * 64):
         assert not SW.TABLES.search(SW.note({"rows": []}, tables))
+
+
+def test_a_branch_named_for_the_source_must_hold_the_checkouts_commit(monkeypatch):
+    """`commits` with `branch` names that branch in place of the integrator's, at this checkout's own commit unless a
+    base is given, and refuses a branch that doesn't hold the commit here or on origin."""
+    import types
+
+    import pin
+
+    def git(*args, **kw):
+        if args[0] == "rev-parse":
+            return types.SimpleNamespace(returncode=0, stdout=("facade0000ffff" if "--verify" in args else "c0ffee0000ffff"))
+        if args[:2] == ("merge-base", "--is-ancestor"):
+            return types.SimpleNamespace(returncode=0 if args[3] in ("refs/remotes/origin/held", "HEAD") else 1, stdout="")
+        assert args[0] == "status", args
+        return types.SimpleNamespace(returncode=0, stdout="")
+
+    monkeypatch.setattr(pin, "git", git)
+    assert SW.commits(branch="held") == ("c0ffee0000", "held", "c0ffee0000")
+    assert SW.commits("a base", "held") == ("c0ffee0000", "held", "facade0000")
+    assert SW.commits("a base") == ("c0ffee0000", pin.BRANCH, "facade0000")
+    with pytest.raises(SystemExit, match="--branch gone doesn't hold this checkout's commit"):
+        SW.commits(branch="gone")
 
 
 def test_a_put_takes_a_cited_body_only_over_the_panel_the_build_read_and_reads_it_back(tmp_path, monkeypatch, capsys):
