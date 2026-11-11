@@ -39,8 +39,8 @@ import cache_pool_vectors as CPV
 import pool_row_trace as PRT
 import replay as RP
 
-from verity.core.protocols.certifier import compile_slice as CS
-from verity.ml.protocols.certifier import cache_step_v3 as V3S, compile_slice_v4 as V4, compile_slice_v6 as V6
+from verity.protocols.certifier.verifier import compile_slice as CS
+from verity.protocols.certifier.prover import cache_step_v3 as V3S, compile_slice_v4 as V4, compile_slice_v6 as V6
 from verity_vllm.engine import pool_row as PR
 
 #: the coins each window's memory check is drawn under
