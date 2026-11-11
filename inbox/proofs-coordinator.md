@@ -38656,3 +38656,30 @@ research queue open: warning: --issue PRF-517: the body's `Goal proofs/spot-bind
   asks.
 - The 04:12Z notice on Linear is read: I have written nothing through the connector, today or before; I read CI-524
   through it.
+
+## PRF-371 MEMBERS, Wed 11 Nov 04:28Z: the branch is across the move at `bf7c98e391`, the roots rule is in at `ad6e765e05`; the order proof and the wiring are written, neither compiles yet; what the wiring does to the lock, before any lock commit
+
+Times UTC from the clock. `[run]` a run on a node, `[read]` a file at a commit, `[guess]` neither. I wrote nothing to Linear through the connector, today or before.
+
+**My branch and its crossed head.** One branch, `cursor/proofs-v2-members-9810`. `restack.py cursor/proofs-v2-members-9810 --json --kept` printed status `clean`, head `bf7c98e391`, a descendant of `43f313ea6b`; pushed, no force. I ran it at 03:33Z, before your recipe, so without `--move-commit`, `--onto` or `--no-pins`: it still crossed both moves (`6581bcf197`, `c1ca25a247`) and holds `origin/main` `5c095bb4ab`, and `git diff origin/main bf7c98e391` was my three files only, so it is not `based-after`. Head now `ad6e765e05` (pushed 04:00Z). No PR.
+
+**In at `ad6e765e05`: the roots rule, as vllm states it and soundness rules it** [run `r20261111-035849-845e`, exit 0, guards pass, axioms clean].
+- `rootsOf`: each root of the registration to the one member whose name is a whole prefix of its `port` before a `/` (every `/` is tried, so a name holding a `/` is matched whole). Refused: no member's; two members'; no `port`; `roots` not a list; and a `row-table` root by name (`ROW_TABLES`).
+- `Member.slice` is `{scheme: the window's, roots: the member's with the prefix off, population: the member's n}`; `headerHeld` holds a member's header to it (roots, domain ids, `instances`, scheme) by the existing `Record.matchesPublic`.
+- `laidHeld`: each member one range, inside `population`, the members summing to it. `units.indices` exactly the member's units was already there.
+- Still refused: a window with row tables, two-stage's shared rows (they read as two members'), and the whole form (`checkMembersAt_refuses`).
+
+**Written, not compiling yet.**
+- `security/Proofs/Properties/Verity/Sampled/MemberForm/Order.lean`, `members_read`: from `membersTreeReason = none` on the read log, for each session its tree's index, `sessionTreeReason` on the tree less its closing round, and the closing opening with the four facts `SessionRead.of_dropped` takes (on the `session` stream, after one opening of it, answering the evidence's SHA-512, nothing of the tree after); `OpensInOrder`'s body; `EvidenceRecorded`'s body. First compile [run `r20261111-035101-a952`, exit 1]: four elaboration errors, edited since; 31 of its 40 declarations were clean in that run.
+- The wiring: `Params.members`, `Evidence.statements`, today's check as `checkOneAt`, `checkBlobsAt` choosing by form, `checkBlobsAt_accept` (an accept is the one statement's), the per-member and either-form parsers (called by nothing in `protocol`), and the 15 sites in 11 files that unfolded `checkBlobsAt`. First compile [run `r20261111-041125-50da`, exit 1]: one syntax error, fixed; the second [run `r20261111-042026-5115`] waits for a slot.
+
+**The lock, before I commit anything of it.** No lock file is changed on the branch. The wiring changes the definitions `Spot.OneStageZk.Params`, `Evidence`, `checkBlobsAt`, `paramsOfJson`, `evidenceOf`, and `checkBlobsAt` now reaches `checkOneAt` and `checkMembersAt`. So in `security/lean-audit.json` and `security/Properties/lean-audit.json` the `reads` entry `Spot.OneStageZk` changes (digest, those five hashes, new names), and the `unfolded_hash` of every guarantee whose statement reads them changes, with no statement's text changing. Which guarantees: I read that off a records run once the tree compiles and write you the list; **I commit no lock change before you answer it.** The Lean of the wiring I commit to my branch when it compiles, so the work does not sit on my VM only.
+
+**Flags.**
+1. The port takes the members from the parameters. "A layout that is not the bound circuit record's" is not built. **For vllm, word for word:** "Where in `circuit.json` are a member's key, base, n and port names, as keys a verifier can read without the Definitions: one path for each, at `main` after the move? Or is the parameters' member table the auditor's own, so the port need not read `circuit.json`?"
+2. `headerHeld` holds a member's header `scheme` to the window's; a5 does not. **For vllm:** "Does each member's public file header carry the window's `scheme` string unchanged?" If not, I drop that one comparison.
+3. For an undrawn member, a root under its name that is no real port of it is not caught: none of its files is read.
+4. LEG read at `66a4360c93`; its head is `38b78daff7` now, not re-read.
+5. Order of work: the wiring first (it has the date), then the nine fields of `SessionOpens`, which is the large piece (the log restricted to one tree less its closing line).
+
+**The date for the wiring's PR:** in my entry by 20:00Z. The third class does not move the wiring (a `row-table` record is refused by name); it moves the guarantee, which is LEG's.
