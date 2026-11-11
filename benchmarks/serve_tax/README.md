@@ -137,6 +137,16 @@ research run --on NODE --source . --cwd source -- bash benchmarks/serve_tax/run.
   for it). The row is labelled `scaled down` while the load is those four requests alone: half of their prompt
   tokens repeat, which is this load's share and no serve's, where such pairs arrive among requests that repeat
   nothing.
+  `--dataset prefix=FILE` serves a file of planned requests in place of those four (`serve_tax.read_trace`): a line
+  a request, with its arrival time in seconds after the pass starts, its prompt's and its output's lengths and its
+  prompt's block ids, and nothing else, so it holds no token and no text. The arm's `meta.json` records what the
+  file plans and its SHA-256, and no run keeps the file. Each request is then sent at its arrival time, however many
+  are in flight (the pass is `prefix@0`), and the row says `as they arrive` in place of `one request in flight`. It
+  says for each arm whether it served all that arrived, and whether stock kept up: stock kept up where each of its
+  passes ended within a tenth of the time the requests arrive over after the last one arrived. Where stock kept up,
+  tokens a second follows the arrivals and is not a cost: the row's cost is the two latencies, and its `value` is
+  null. Where stock did not keep up the row is read as the number is, by tokens a second. It prints tokens a second
+  and both latencies either way, and `cost` names which of them is the cost.
   With one request in flight the cost is stock's output tokens a second over the arm's, less one, by the same paired
   ratio; beside it the row gives how much longer the arm's time to the first token and its 99th-percentile gap
   between tokens are, the share of the prompt tokens each side's prefix cache served by the engine's own counters
@@ -195,7 +205,8 @@ The run's `result.json` (`serve_tax.result_of`, written by the kit's writer) hol
 named by the load, and the number as one named by the model's metric id (`Model.metric`), with `ci95`, `target`,
 `target_basis`, `target_parts` (each part with the changes the arm left off), `verdict` (one of the three, or `not
 comparable`), `better`, `load`, and `loads`, each load's cost beside it, with its `label` and the row (`prefix`). The
-row is also a measurement of its own, named `prefix`, with no target and no verdict. A job in which a load of the
+row is also a measurement of its own, named `prefix`, with no target and no verdict; its `value` is null where its
+cost is the two latencies, which are beside it (`cost`, `kept_up`, `ttft`, `itl_p99`). A job in which a load of the
 number or load `prefix` has not run writes no entry under the metric's id. `gpus.csv` names the cards the job measured on.
 
 ## Running it
