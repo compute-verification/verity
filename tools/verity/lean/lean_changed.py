@@ -68,10 +68,10 @@ module or a checkout other than the manifest's, are taken again. A spec whose `p
 never reads that package's `.lake` (`check.proved`), which an earlier or interrupted build left. When check.py fails a
 package only on its sampled recompile (`check.sampled_recompile`: a module the tree kept or restored compiles from its
 source to other outputs, which Lean's nondeterminism can do as staleness can), on record differences and on a spec's
-`proved_in` package whose build that failure kept from passing (`proved_in.unpassed`), the run discards
-those modules' files in the tree (`mismatched`, `discard`) and audits the package once more, with nothing restored from
-the artifact cache, so they are compiled; the first audit's reports go to `mismatched/<path>/`, and a second failure
-fails the run.
+`proved_in` package whose build that failure kept from passing (`proved_in.unpassed`), the run drops each of those
+modules' trace, `.hash` files and objects in the tree (`mismatched`, `forget`) and audits the package once more, with
+nothing restored from the artifact cache, so Lake compiles them; the first audit's reports go to `mismatched/<path>/`,
+and a second failure fails the run.
 
 Then it audits, the same way, every package whose guarantees' records read PKG's build (`requirers`: PKG is in its
 `closure`, by path or by `proved_in`), each after those it requires and on the records this run regenerated before it, its
@@ -1368,12 +1368,13 @@ def audit_records(name: str, deps: Path, tree: Path | None = None, update: bool 
                     if redone or not got or AUDIT.killed(got) or not (bad := mismatched(mine_out, tree)):
                         return got
                     store, redone = None, True
-                    discard(bad)
+                    for mod, d in bad.items():
+                        forget(lib := d / ".lake" / "build" / "lib" / "lean", lib / LA.MK.path_of(mod, ".trace"))
                     label(aside := set_aside(mine_out, out, p))
                     log(f"lean-records: {p}: check.py's sampled recompile compiled {', '.join(sorted(bad))} to other "
-                        f"outputs than {tree} kept (Lean's output isn't reproducible for every module); those are "
-                        f"discarded, and check.py audits {p} once more, compiling them, with nothing restored from the "
-                        f"artifact cache (the first audit's reports: {aside})")
+                        f"outputs than {tree} kept (Lean's output isn't reproducible for every module); each loses its "
+                        f"trace, its .hash files and its objects, and check.py audits {p} once more, where Lake compiles "
+                        f"them, with nothing restored from the artifact cache (the first audit's reports: {aside})")
                     return audit(with_update)
 
                 got = audit(up)
@@ -1799,17 +1800,6 @@ def mismatched(out: Path, tree: Path) -> dict[str, Path]:
     except (OSError, ValueError, KeyError, TypeError, AttributeError):
         return {}
     return found if all(d.is_relative_to(tree.resolve()) for d in found.values()) else {}
-
-
-def discard(mods: dict[str, Path]) -> None:
-    """Remove every file Lake keeps of each module of ``mods`` ({module: its package's directory}) in its package's build
-    (its outputs, their `.hash` files, its trace and its `setup.json`), so the next build compiles it."""
-    for mod, d in mods.items():
-        rel = LA.MK.path_of(mod, "")
-        for at in (d / ".lake" / "build" / "lib" / "lean" / rel, d / ".lake" / "build" / "ir" / rel):
-            for f in at.parent.glob(f"{glob.escape(at.name)}.*"):
-                if f.is_file() or f.is_symlink():
-                    f.unlink()
 
 
 def set_aside(mine_out: Path, out: Path, p: str) -> Path:

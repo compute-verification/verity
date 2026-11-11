@@ -4499,8 +4499,8 @@ def sampled_recompile(pkg: Path, roots: list[str], work: Path, built: set[str], 
     must be there in both or neither and equal byte for byte; where only `PATH_PARTS` differ, the module's parts must be
     one object graph but for strings that are absolute paths ending in the module's source path (`olean_graph.differs`):
     Lean keeps a message's file in `olean.server`, so a build at another path differs there. A failure names the module
-    and its file, the report's `mismatched` lists each module failed so ({module: its package's directory}), whose
-    outputs a records run discards before it audits again (`lean_changed.mismatched`), and the recompile's outputs stay
+    and its file, the report's `mismatched` lists each module failed so ({module: its package's directory}), which
+    a records run has Lake compile before it audits again (`lean_changed.mismatched`), and the recompile's outputs stay
     in the upper layers; a pass removes them. Without the sandbox there is no overlay, so nothing is recompiled and the
     report's `unsampled` says so; a module of the population that no build of
     this process compiled (`RUN_COMPILED`) was restored or kept, which nothing would check, so it fails the audit, and only

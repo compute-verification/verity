@@ -953,9 +953,10 @@ def kept_module(pkg: Path) -> tuple[list[Path], list[Path]]:
     """Module `P.M`'s files in the build of the package at ``pkg``, and two that aren't its: its submodule's and `P.MX`'s."""
     build = pkg / ".lake" / "build"
     module(build / "lib" / "lean", "P/M")
-    mine = sorted((build / "lib" / "lean" / "P").glob("M.*")) + [build / "ir/P" / f for f in ("M.c", "M.c.hash", "M.setup.json")]
+    mine = sorted((build / "lib" / "lean" / "P").glob("M.*")) + [
+        build / "ir/P" / f for f in ("M.c", "M.c.hash", "M.setup.json", "M.c.o.export")]
     others = [build / "lib/lean/P/M/Sub.olean", build / "lib/lean/P/MX.olean"]
-    for f in mine[-3:] + others:
+    for f in mine[-4:] + others:
         f.parent.mkdir(parents=True, exist_ok=True)
         f.write_bytes(b"olean")
     (build / "ir/P/M.c.hash").write_text("cc")             # the trace's: a whole module, which `repair` leaves as it is
@@ -967,9 +968,10 @@ def test_a_kept_module_its_source_compiles_to_other_bytes_is_compiled_and_its_pa
     """A module the slot tree kept from an earlier run can differ from what its source compiles to now, stale or because
     Lean's output for it isn't reproducible (`Spot.SecondStage`'s `check.eq_3` names a binder in whichever declaration's
     hygiene context first asks for it), and check.py's sampled recompile then fails the package. When that, and record
-    differences, are all it fails on, the run removes the module's files from the tree and audits the package once more
-    without the artifact cache, which could restore the same bytes, so the module is compiled; the first audit's reports
-    are kept apart from the verdict, and the second audit's outcome is the package's."""
+    differences, are all it fails on, the run drops the module's trace, `.hash` files and objects from the tree, as a
+    repair does (`forget`), and audits the package once more without the artifact cache, which could restore the same
+    bytes, so Lake compiles the module over the outputs in place; the first audit's reports are kept apart from the
+    verdict, and the second audit's outcome is the package's."""
     _, tree, calls = fast
     monkeypatch.delenv("RESEARCH_RUN_DIR", raising=False)
     monkeypatch.setattr(LC, "requirers", lambda *_: [])
@@ -980,7 +982,10 @@ def test_a_kept_module_its_source_compiles_to_other_bytes_is_compiled_and_its_pa
     assert LC.audit_records("pkg", tmp_path / "deps", out=out, log=said.append) == 0
     assert len(calls) == 2, "one audit more, never a third"
     assert "--artifacts" in calls[0][0] and "--artifacts" not in calls[1][0], "nothing is restored for the second audit"
-    assert not any(f.exists() for f in mine) and all(f.exists() for f in others), "only P.M's files go"
+    gone = [f for f in mine if not f.exists()]
+    assert gone == [f for f in mine if f.name.endswith((".trace", ".hash", ".c.o.export"))] and len(gone) == 5, \
+        "what tells Lake the module is built goes, and the object compiled from its C"
+    assert all(f.exists() for f in others), "and nothing of another module's"
     aside = out / "mismatched" / "pkg"
     assert json.loads((aside / "audit.json").read_text())["packages"][0]["failure_codes"][0] == "sampled"
     assert (aside / "audit-pkg" / "sampled.log").read_text() == "audit 1"
