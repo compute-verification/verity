@@ -7,4 +7,4 @@ testpaths = ["tests"]
 
 [tool.verity.tests]
 # run.py reads the run's output directory through verity_config's SHARED registry, which is built on verity/settings.py
-inputs = ["tools/config/verity_config", "verity/__init__.py", "verity/settings.py"]
+inputs = ["verity/configuration/config/verity_config", "verity/__init__.py", "verity/settings.py"]
