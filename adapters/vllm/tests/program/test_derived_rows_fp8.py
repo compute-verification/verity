@@ -4,15 +4,10 @@ words (`data/fp8_block_operands.npz`: `_C.per_token_group_fp8_quant` + blockwise
 Python >= 3.12 (`veritor.core.silicon_total_fp8`, the scalar QGMMA step)."""
 from __future__ import annotations
 
-import sys
 from pathlib import Path
 
 import numpy as np
 import pytest
-
-if sys.version_info < (3, 12):  # pragma: no cover
-    pytest.skip("veritor.core needs Python 3.12", allow_module_level=True)
-
 from verity.circuits import Program, bind
 from verity.definitions.numerics import derived_rows as D
 from verity.definitions.registry import fp8 as F

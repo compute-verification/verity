@@ -28,7 +28,7 @@ record's runs back wherever its BYTES are needed (canonical sha256 serialisation
 """
 from __future__ import annotations
 
-from typing import Callable, Iterable
+from collections.abc import Callable, Iterable
 
 Prog = tuple  # head... , base: tuple[int, ...], delta: tuple[int, ...], count: int
 

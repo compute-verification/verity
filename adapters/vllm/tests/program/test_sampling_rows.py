@@ -351,9 +351,11 @@ def test_the_select_is_the_strict_first_maximum_scan_nan_never_wins_and_a_nan_la
     x = np.array([f32b(1.0), f32b(3.0), f32b(3.0), f32b(2.0)], dtype=np.uint32)
     tok, y = SR.gumbel_select_row(x, 0, 0, 0)                                    # temp 0: no noise, first max
     assert tok == 1 and (y == x).all()
-    x_nan = x.copy(); x_nan[1] = 0x7FC00000
+    x_nan = x.copy()
+    x_nan[1] = 0x7FC00000
     assert SR.gumbel_select_row(x_nan, 0, 0, 0)[0] == 2                          # the NaN lane never wins
-    x_nan0 = x.copy(); x_nan0[0] = 0x7FC00000
+    x_nan0 = x.copy()
+    x_nan0[0] = 0x7FC00000
     assert SR.gumbel_select_row(x_nan0, 0, 0, 0)[0] == 0                         # nothing is > NaN: the scan keeps lane 0
     neg = np.full(4, SP.NEG_INF_BITS, dtype=np.uint32)
     assert SR.gumbel_select_row(neg, 0, 0, 0)[0] == 0                            # all -inf: lane 0

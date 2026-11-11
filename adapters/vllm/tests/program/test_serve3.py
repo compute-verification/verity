@@ -41,7 +41,7 @@ def c3(eos: int) -> dict:
     return {**TINY, "EOS_ID": eos}  # C₃ = {**C, "EOS_ID": id} at the binding site
 
 
-@functools.lru_cache(maxsize=None)
+@functools.cache
 def _inputs() -> tuple[tuple[int, ...], tuple[int, ...]]:
     rng = np.random.default_rng(1001)
     w = ((rng.standard_normal(weights_type(TINY).leaves) * 0.05).astype(np.float32).view(np.uint32) >> 16)
@@ -49,7 +49,7 @@ def _inputs() -> tuple[tuple[int, ...], tuple[int, ...]]:
     return tuple(int(x) for x in prompt), tuple(int(x) for x in w)
 
 
-@functools.lru_cache(maxsize=None)
+@functools.cache
 def _v1(steps: int):
     """(program, transcript, outputs) of the frozen `Serve_v1{TINY, LP, STEPS=steps}`."""
     prompt, w = _inputs()
@@ -58,7 +58,7 @@ def _v1(steps: int):
     return prog, t, [t[g] for g in prog.circuit.root_outputs()]
 
 
-@functools.lru_cache(maxsize=None)
+@functools.cache
 def _v3(eos: int):
     """(program, transcript, out, live) of `Serve_v3{TINY_PAD(eos), LP, D_MAX, Ampere}`."""
     prompt, w = _inputs()

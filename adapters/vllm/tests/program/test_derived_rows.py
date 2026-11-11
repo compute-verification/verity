@@ -462,7 +462,12 @@ def test_rope_rows_matches_the_registered_prims_word_for_word():
     NH, Dh, n = 3, 16, 600
     x = words((n, NH, Dh), 90, 150)
     cs = words((n, Dh), 118, 128)
-    x[0, 0, 0] = 0x0001; x[0, 0, 8] = 0x8000; cs[1, 0] = 0x0000; cs[2, 9] = 0x8000; x[3, 1, 5] = 0x0080   # subnormal, -0, +0 cache, -0 sin, min normal
+    # subnormal, -0, +0 cache, -0 sin, min normal
+    x[0, 0, 0] = 0x0001
+    x[0, 0, 8] = 0x8000
+    cs[1, 0] = 0x0000
+    cs[2, 9] = 0x8000
+    x[3, 1, 5] = 0x0080
     out = D.rope_rows(x, cs)
     assert out.shape == (n, NH, Dh) and out.dtype == np.uint16
     R = Dh // 2
@@ -484,7 +489,8 @@ def test_rope_rows_matches_the_registered_prims_word_for_word():
     one = D.rope_rows(xr[4], csr[4])
     assert one.shape == (12, 128) and np.array_equal(one, outr[4])
     # negative: flip one input word -> exactly its pair's two outputs change (in that head), nothing else
-    x2 = xr[4].copy(); x2[7, 20] ^= 0x0040
+    x2 = xr[4].copy()
+    x2[7, 20] ^= 0x0040
     d = np.flatnonzero(D.rope_rows(x2, csr[4]) != one)
     assert set(d.tolist()) <= {7 * 128 + 20, 7 * 128 + 84} and len(d) >= 1
     with pytest.raises(ValueError, match="RoPE_v1"):
@@ -732,7 +738,7 @@ def test_attn_block_v3_vs_gates(D_, NVIS, FIRST):
     from verity.circuits.evaluation import evaluate_call
     from verity.definitions.registry import b1
     BN = b1.fa2_kblock_n(D_)  # the geometry E6 pins for this head dim; here bound explicitly as the declared static
-    assert BN == (128 if D_ <= 64 else 64)
+    assert (128 if D_ <= 64 else 64) == BN
     prog, call = _standalone(bind(b1.AttnBlockV3, D=D_, NVIS=NVIS, FIRST=FIRST, BN=BN))
     rng = np.random.default_rng(7000 + 1000 * D_ + NVIS + FIRST)
     q = _rand_bf16(rng, D_)

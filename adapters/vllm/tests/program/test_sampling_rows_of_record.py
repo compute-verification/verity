@@ -32,7 +32,8 @@ def test_the_v2_logs_are_the_gpus_words_on_every_probed_input(tmp_path):
     runs = sorted(glob.glob(str(root / "*" / "out-*-ftz-true-*.json")))
     assert len(runs) == 4
     for path in runs:
-        d = json.load(open(path))
+        with open(path) as fh:
+            d = json.load(fh)
         for name, key in (("nv_logf", "logf"), ("nv_log1pf", "log1pf")):
             pairs = [(int(x, 16), int(w, 16)) for x, w in zip(d[key]["in"], d[key]["out"])]
             for f in _gpu_paths(name):
@@ -50,7 +51,8 @@ def test_the_r16_gpu_fixture_rows_device_token_masked_row_and_lane_walk_all_agre
 
     from verity_vllm.properties.admission import evaluate_spec
     z = np.load(os.path.join(FIX, "fstoch01_rows.npz"))
-    meta = json.load(open(os.path.join(FIX, "fstoch01_rows.npz.json")))
+    with open(os.path.join(FIX, "fstoch01_rows.npz.json")) as fh:
+        meta = json.load(fh)
     first = True
     for k, v in meta.items():
         bf = z[f"{k}_bf16_logits_bits"]

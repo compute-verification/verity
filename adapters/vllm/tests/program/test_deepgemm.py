@@ -61,17 +61,33 @@ def _guard_rows(rng, K: int) -> list[np.ndarray]:
         return (rng.integers(1, 0x80, 128) | (rng.integers(0, 2, 128) << 15)).astype(np.uint16)
 
     groups = []
-    g = sub(); groups.append(g)                                        # all subnormal, lane 0 nonzero: scale +inf, words 0x7F
-    g = sub(); g[[0, 1, 64, 65]] = 0; groups.append(g)                 # lane 0 zero, the rest subnormal: amax 0, scale 1
+    g = sub()  # all subnormal, lane 0 nonzero: scale +inf, words 0x7F
+    groups.append(g)
+    g = sub()  # lane 0 zero, the rest subnormal: amax 0, scale 1
+    g[[0, 1, 64, 65]] = 0
+    groups.append(g)
     groups.append(np.zeros(128, np.uint16))                            # all +0
     groups.append(np.full(128, 0x8000, np.uint16))                     # all -0
-    g = _bf16_rows(rng, 1, 128)[0]; g[7] = 0x7F80; groups.append(g)    # +inf: amax inf, stored scale inf
-    g = _bf16_rows(rng, 1, 128)[0]; g[70] = 0x7FC1; groups.append(g)   # NaN: dropped from the amax, its word 0x7F
-    g = _bf16_rows(rng, 1, 128)[0]; g[3] = 0xFF80; g[90] = 0xFFC0; groups.append(g)
-    g = _bf16_rows(rng, 1, 128, 1e-38)[0]; groups.append(g)            # normals and subnormals mixed
-    g = _bf16_rows(rng, 1, 128, 3e38)[0]; groups.append(g)             # near the largest finite, some +-inf
-    g = np.full(128, 0x0080, np.uint16); g[5] = 0x0081; groups.append(g)   # the smallest normals
-    g = _bf16_rows(rng, 1, 128)[0]; g[2] = 0x43E0; groups.append(g)    # 448: amax / 448 = 1
+    g = _bf16_rows(rng, 1, 128)[0]  # +inf: amax inf, stored scale inf
+    g[7] = 0x7F80
+    groups.append(g)
+    g = _bf16_rows(rng, 1, 128)[0]  # NaN: dropped from the amax, its word 0x7F
+    g[70] = 0x7FC1
+    groups.append(g)
+    g = _bf16_rows(rng, 1, 128)[0]
+    g[3] = 0xFF80
+    g[90] = 0xFFC0
+    groups.append(g)
+    g = _bf16_rows(rng, 1, 128, 1e-38)[0]  # normals and subnormals mixed
+    groups.append(g)
+    g = _bf16_rows(rng, 1, 128, 3e38)[0]  # near the largest finite, some +-inf
+    groups.append(g)
+    g = np.full(128, 0x0080, np.uint16)  # the smallest normals
+    g[5] = 0x0081
+    groups.append(g)
+    g = _bf16_rows(rng, 1, 128)[0]  # 448: amax / 448 = 1
+    g[2] = 0x43E0
+    groups.append(g)
     flat = np.concatenate(groups)
     return [np.resize(np.roll(flat, -128 * i), K) for i in range(len(groups))]
 

@@ -82,8 +82,10 @@ def test_two_identical_requests_are_two_members_of_the_fixed_population_not_one(
     assert wl2.digest != wl1.digest
     # the shared parameter maps BOTH members onto the one weights interval; each prompt onto its own
     ins0, ins1 = am["requests"][0]["inputs"], am["requests"][1]["inputs"]
-    w0 = next(i for i in ins0 if i["name"] == "weights"); w1 = next(i for i in ins1 if i["name"] == "weights")
-    p0 = next(i for i in ins0 if i["name"] == "prompt"); p1 = next(i for i in ins1 if i["name"] == "prompt")
+    w0 = next(i for i in ins0 if i["name"] == "weights")
+    w1 = next(i for i in ins1 if i["name"] == "weights")
+    p0 = next(i for i in ins0 if i["name"] == "prompt")
+    p1 = next(i for i in ins1 if i["name"] == "prompt")
     assert w0["global"] == w1["global"] == "shared.weights" and w0["gates"] == w1["gates"]
     assert p0["global"] != p1["global"] and p0["gates"][1] == p1["gates"][0]                 # two prompt intervals, disjoint, adjacent
 

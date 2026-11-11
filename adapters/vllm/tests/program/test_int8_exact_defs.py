@@ -308,7 +308,7 @@ def test_the_int8_attention_rule_declares_the_table_only_over_an_int8_layer(monk
 
 
 def test_primitives_at_their_edges():
-    assert X.LUT == tuple(int(v) for v in IA.LUT)
+    assert tuple(int(v) for v in IA.LUT) == X.LUT
     for v, want in [(0.5, 0.0), (1.5, 2.0), (-2.5, -2.0), (126.5, 126.0), (-0.3, -0.0)]:
         assert X.F32Rint.evaluate(bits_of(v)) == bits_of(want)
     nan, inf = 0x7FC00000, 0x7F800000

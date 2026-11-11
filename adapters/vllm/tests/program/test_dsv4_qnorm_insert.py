@@ -170,8 +170,8 @@ IHEAD = bind(Q.Dsv4IndexerQHead, D=X["D"], DR=X["DR"], SCALE=X["SCALE"])
 # --- the constants ---------------------------------------------------------------------------------------------------------------
 
 def test_the_constants_are_the_kernels():
-    assert Q.F_INV448 == D.f32_bits(1.0 / 448.0)
-    assert (Q.F_448, Q.F_NEG448, Q.F_127, Q.F_255) == tuple(D.f32_bits(v) for v in (448.0, -448.0, 127.0, 255.0))
+    assert D.f32_bits(1.0 / 448.0) == Q.F_INV448
+    assert tuple(D.f32_bits(v) for v in (448.0, -448.0, 127.0, 255.0)) == (Q.F_448, Q.F_NEG448, Q.F_127, Q.F_255)
     assert D.F_1EM4 == 0x38D1B717 == D.f32_bits(1e-4)
 
 

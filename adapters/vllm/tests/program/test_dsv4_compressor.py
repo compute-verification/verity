@@ -148,7 +148,7 @@ def test_the_decode_reads_the_row_back():
     """`FlashMlaKvRow_v1` at the decode's statics (DN 448, DR 64, QT 64) on a compressed row, its pad byte left off: each NoPE
     element the bf16-rounded normed word within half an e4m3 step at its group's scale, the RoPE elements as stored."""
     DN, DR, QT = F.FLASHMLA_DSV4["DN"], F.FLASHMLA_DSV4["DR"], F.FLASHMLA_DSV4["QT"]
-    assert (DN, DR, QT) == (S["D"] - S["QB"], S["QB"], S["QB"])
+    assert (S["D"] - S["QB"], S["QB"], S["QB"]) == (DN, DR, QT)
     rng = np.random.default_rng(4)
     kv, score, w, cs = _rows(rng, 3, 8)
     c = T.c4_columns(np.swapaxes(kv, -1, -2), np.swapaxes(score, -1, -2))

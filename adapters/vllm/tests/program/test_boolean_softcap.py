@@ -146,7 +146,7 @@ def _mismatches(target, inputs) -> int:
 
 
 def test_the_word_views_and_word_statics() -> None:
-    assert BSC.WORD_STATICS == {"TANH": P.MufuTanh, "EX2": P.MufuEx2Ftz}
+    assert {"TANH": P.MufuTanh, "EX2": P.MufuEx2Ftz} == BSC.WORD_STATICS
     for d in (BSC.AttnBlockSoftcap, BSC.AttentionHeadSoftcap, BSC.AttentionSoftcap):
         assert d.word_statics is BSC.WORD_STATICS
     hopper = TR.word_of(BG.HopperBF16WgmmaDot16)
@@ -191,7 +191,7 @@ def test_the_instances_reach_every_tanh_region() -> None:
     q, k = _inputs(TR.word_of(blk), 48, 1)[:2]
     with np.errstate(all="ignore"):
         x = np.abs((_f32_of_bf16(q)[:, None, :] * _f32_of_bf16(k)).sum(-1) * (16 ** -0.5 / 50.0))
-    regions = (x < IDENTITY_BELOW, (IDENTITY_BELOW <= x) & (x < SATURATE_FROM), x >= SATURATE_FROM)
+    regions = (x < IDENTITY_BELOW, (x >= IDENTITY_BELOW) & (x < SATURATE_FROM), x >= SATURATE_FROM)
     assert all(r.any(axis=1).sum() > 36 for r in regions)
 
 

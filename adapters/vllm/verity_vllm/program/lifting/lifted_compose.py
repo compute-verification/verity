@@ -3,7 +3,8 @@ components of the declared requests (`registry.lifted.lift_request_component`)."
 
 from __future__ import annotations
 
-from typing import Any, Sequence
+from collections.abc import Sequence
+from typing import Any
 
 from verity.definitions.registry.lifted import (
     BOUNDARY_PREFIX,

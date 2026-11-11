@@ -100,7 +100,9 @@ def test_moe_spec_reads_each_pairs_expert_and_weight():
             u = list(evaluate(bind(MoeExpertGemm, E=E, K=H, N=2 * I), x[t * H:(t + 1) * H].tolist(), [int(ids[p])], w13.tolist()))
             a = list(evaluate(bind(b1.SiluMul, I=I), u))
             d = list(evaluate(bind(MoeExpertGemmW, E=E, K=I, N=H), a, [int(ids[p])], [int(wts[p])], w2.tolist()))
-            up += u; act += a; dt += d
+            up += u
+            act += a
+            dt += d
         down += dt
         out += list(evaluate(bind(MoeSum, TOPK=TOPK, H=H), dt))
     assert got == up + act + down + out

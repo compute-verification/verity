@@ -3,12 +3,21 @@ descriptor's refs JSON without expanding a Strided or a gather over consecutive 
 back to the record's bytes."""
 import json
 import random
+from pathlib import Path
 
 import pytest
 from verity.circuits.refs import refs_from_json, runs
 
 from verity_vllm.observe.fold.memory import access_runs
 from verity_vllm.program import compact as K
+
+
+def _text(path) -> str:
+    return Path(path).read_text()
+
+
+def _first_line(path) -> str:
+    return _text(path).split("\n", 1)[0]
 
 
 def _rand_refs(rng, depth=0):
@@ -96,11 +105,11 @@ def test_alias_splices_the_aliased_operand_like_the_codec():
     for _ in range(1500):
         j0, j1, j2 = _rand_refs(rng), _rand_refs(rng), _rand_refs(rng)
         node0 = K.from_json(j0)
-        a = K.from_json({"concat": [j1, {"alias": [0, 0]}, j2]}, alias=lambda k, a_: node0)
+        a = K.from_json({"concat": [j1, {"alias": [0, 0]}, j2]}, alias=lambda k, a_, _n=node0: _n)
         R = runs(refs_from_json({"concat": [j1, j0, j2]}))
         assert a == K.from_runs(R) and K.expand(a) == R
         for j, plain in (({"alias": [0, 0]}, j0), ({"concat": [{"alias": [0, 0]}, j2]}, {"concat": [j0, j2]})):   # spliced: empty accumulator
-            assert K.from_json(j, alias=lambda k, a_: node0) == K.from_runs(runs(refs_from_json(plain)))
+            assert K.from_json(j, alias=lambda k, a_, _n=node0: _n) == K.from_runs(runs(refs_from_json(plain)))
 
 
 def _rle_runs(mapped_runs: list[tuple], n_base: int) -> list[tuple]:
@@ -322,15 +331,17 @@ def test_nothing_beside_the_files_of_record_is_read_a_forged_compact_sidecar_cha
     assert not [f for f in os.listdir(oracle) if ".compact." in f], os.listdir(oracle)   # the fold emits no sidecar
     # a "sidecar" pair whose source binding is perfect (the true digest, bytes and sha256 of THIS fold's record files) and whose content
     # says every instance is at step 99 -- were anything to read it, the G3/G4/G5 population would move
-    pj = json.load(open(os.path.join(oracle, "program.json")))
+    pj = json.loads(_text(os.path.join(oracle, "program.json")))
     forged_rows = []
-    for line in open(os.path.join(oracle, "instances.jsonl")).read().splitlines()[1:]:
-        o = json.loads(line); o["step"] = 99; forged_rows.append(json.dumps(o))
+    for line in _text(os.path.join(oracle, "instances.jsonl")).splitlines()[1:]:
+        o = json.loads(line)
+        o["step"] = 99
+        forged_rows.append(json.dumps(o))
     src = {name: {"bytes": os.path.getsize(os.path.join(oracle, name)), "sha256": IF.sha256_file(os.path.join(oracle, name))[0]}
            for name in ("program.json", "instances.jsonl")}
-    open(os.path.join(oracle, "program.compact.json"), "w").write(json.dumps({"schema": "verity/program-compact/v1", "form": "progressions/v1",
-                                                                            "digest": pj["digest"], "source": src, "n_rows": len(forged_rows), "nodes": []}))
-    open(os.path.join(oracle, "instances.compact.jsonl"), "w").write("\n".join([json.dumps({"schema": "verity/instances-compact/v1", "digest": pj["digest"]})] + forged_rows) + "\n")
+    Path(oracle, "program.compact.json").write_text(json.dumps({"schema": "verity/program-compact/v1", "form": "progressions/v1",
+                                                                "digest": pj["digest"], "source": src, "n_rows": len(forged_rows), "nodes": []}))
+    Path(oracle, "instances.compact.jsonl").write_text("\n".join([json.dumps({"schema": "verity/instances-compact/v1", "digest": pj["digest"]})] + forged_rows) + "\n")
     ref = gm.check(gp, oracle)
     assert ref["verdict"] == "PASS"
     for compact in (False, True):
@@ -376,10 +387,11 @@ def test_record_document_states_the_stored_form_it_loaded_like_the_fast_one(tmp_
     for impl in ("record", "fast"):
         monkeypatch.setenv(GMF.FLAG, impl)
         for tag, (gp, o) in (("v1", (gp1, o1)), ("v2", (gp2, o2))):
-            gpp = tmp_path / f"gp_{tag}.json"; gpp.write_text(json.dumps(gp))
+            gpp = tmp_path / f"gp_{tag}.json"
+            gpp.write_text(json.dumps(gp))
             out = tmp_path / f"gm_{impl}_{tag}.json"
             cli.main(["global-match", "--oracle", o, "--global-program", str(gpp), "--no-x09", "--no-alternate", "--out", str(out)])
-            docs[(impl, tag)] = json.load(open(out))
+            docs[(impl, tag)] = json.loads(_text(out))
     for (impl, tag), d in docs.items():
         assert d["verdict"] == "PASS" and d["impl"]["name"] == impl, (impl, tag, d["reasons"])
         fl = d["impl"]["fold_load"]
@@ -428,7 +440,8 @@ def test_stored_form_progressions_is_lossless_over_the_records_run_lists():
         v1 = [list(x) for x in r]
         assert K.expanded_file_args([items, v1]) == [v1, v1]                           # the readers' choke point: v1 out, either way in
         assert K.expanded_file_args([v1])[0] is v1                                     # a v1 operand passes through as the same object
-        n_items += len(items); n_runs += len(r)
+        n_items += len(items)
+        n_runs += len(r)
     assert n_items < n_runs
 
 
@@ -451,20 +464,20 @@ def test_persist_program_progressions_form_gives_the_same_prog_and_document_and_
     gp2, o2 = T.assemble([T.R0, T.R1_LATE, T.R2_LATE], tmp_path / "v2")
     monkeypatch.delenv(RC.INSTANCES_FORM_ENV, raising=False)
     i1, i2 = os.path.join(o1, "instances.jsonl"), os.path.join(o2, "instances.jsonl")
-    h1, h2 = json.loads(open(i1).readline()), json.loads(open(i2).readline())
+    h1, h2 = json.loads(_first_line(i1)), json.loads(_first_line(i2))
     assert h1["schema"] == RC.INSTANCES_SCHEMA and h1["operand_refs_form"] == "runs"
     assert h2["schema"] == RC.INSTANCES_SCHEMA_V2 and h2["operand_refs_form"] == "progressions" and h1["digest"] == h2["digest"]
     assert IF.instances_form_of(i1) == "runs" and IF.instances_form_of(i2) == "progressions"
-    rows1, rows2 = open(i1).read().split("\n")[1:], open(i2).read().split("\n")[1:]
+    rows1, rows2 = _text(i1).split("\n")[1:], _text(i2).split("\n")[1:]
     assert rows1 != rows2 and len(rows1) == len(rows2)
     assert any('"N",' in l for l in rows2) and any('["p",' in l for l in rows2)   # (the toy's gathers are short: the size win is the real fold's)
     # (1) lossless both ways, byte for byte on the rows
     c12, c21 = str(tmp_path / "v1_as_v2.jsonl"), str(tmp_path / "v2_as_v1.jsonl")
     r = IF.convert_instances(i1, c12, "progressions")
-    assert r["items_out"] < r["items_in"] and open(c12).read().split("\n")[1:] == rows2
+    assert r["items_out"] < r["items_in"] and _text(c12).split("\n")[1:] == rows2
     IF.convert_instances(i2, c21, "runs")
-    assert open(c21).read().split("\n")[1:] == rows1
-    assert json.loads(open(c21).readline())["operand_refs_form"] == "runs" and json.loads(open(c12).readline())["schema"] == RC.INSTANCES_SCHEMA_V2
+    assert _text(c21).split("\n")[1:] == rows1
+    assert json.loads(_first_line(c21))["operand_refs_form"] == "runs" and json.loads(_first_line(c12))["schema"] == RC.INSTANCES_SCHEMA_V2
     # (2) the same RootView (record form and compact form) and the same GM-01 document
     for compact in (False, True):
         C.LOAD_NOTES.clear()
@@ -489,7 +502,7 @@ def test_persist_program_progressions_form_gives_the_same_prog_and_document_and_
     assert strip(f1) == strip(f2) == strip(d1)
     # (3) nothing but the two record files was written for Match (no sidecar), and the fold digest of record is the SAME under both
     # stores (it is the Program descriptor's digest, program.json == fold_summary.digest; only the instances_sha256 tie differs)
-    assert not [f for f in os.listdir(o2) if ".compact." in f] and h1["digest"] == h2["digest"] == json.load(open(os.path.join(o2, "program.json")))["digest"]
+    assert not [f for f in os.listdir(o2) if ".compact." in f] and h1["digest"] == h2["digest"] == json.loads(_text(os.path.join(o2, "program.json")))["digest"]
     assert IF.sha256_file(i1)[0] != IF.sha256_file(i2)[0]
 
 
@@ -549,9 +562,10 @@ def test_persist_program_writer_is_byte_identical_to_the_generic_conversion(tmp_
         d.mkdir()
         w = RC.persist_program(res, d, profile_name="toy", log_path="toy")
         assert w["instances"]["operand_refs_form"] == form
-        rows = open(os.path.join(d, "instances.jsonl")).read().split("\n")[1:-1]
+        rows = _text(os.path.join(d, "instances.jsonl")).split("\n")[1:-1]
         assert rows == generic_rows(form) and len(rows) == len(res.instances)
-        lines = gzip.open(os.path.join(d, "accesses.jsonl.gz"), "rt").read().split("\n")[:-1]
+        with gzip.open(os.path.join(d, "accesses.jsonl.gz"), "rt") as fh:
+            lines = fh.read().split("\n")[:-1]
         assert lines == generic_journal(form) and len(lines) == len(res.accesses)
         assert any('"operand_views":[{"alloc":' in r for r in rows) and any('"view":{"alloc":' in l for l in lines)   # the shape path ran
 

@@ -189,10 +189,9 @@ def test_lgatherrow_equals_the_spec_letter_and_oor_equals_the_registered_origina
                 got = lg.evaluate(idx, *rows)
                 want = _Ref.lgatherrow(16, idx, rows)
                 assert got == want, (pos, name, idx)
-                if L.valid(32, idx) and idx != _Ref.bot(32) and all(L.valid(16, r) for r in rows):
-                    # payload agreement with the original wherever both are defined (Active index, no ⊥/INV row)
-                    if all(r < (1 << 16) for r in rows):
-                        assert got == orig.evaluate(idx, *rows)
+                # payload agreement with the original wherever both are defined (Active index, no ⊥/INV row)
+                if L.valid(32, idx) and idx != _Ref.bot(32) and all(L.valid(16, r) for r in rows) and all(r < (1 << 16) for r in rows):
+                    assert got == orig.evaluate(idx, *rows)
     for oor in (N, N + 1, 0x7FFFFFFF, 0x80000000, 0xFFFFFFFF):  # Active out-of-range: the registered original's value, tag 0
         got = lg.evaluate(oor, *base)
         assert got == orig.evaluate(oor, *base) == 0x7FFF and L.tag(16, got) == 0

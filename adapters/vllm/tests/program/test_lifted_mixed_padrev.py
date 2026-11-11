@@ -136,7 +136,7 @@ def test_a1_the_shared_weights_input_carries_no_bot_and_is_read_identically_by_b
     prompt, w = _inputs()
     lifted_w = L.lift_words(weights_type(TINY), list(w))
     lifted_w[0] = L.enc_bot(widths[0])
-    with pytest.raises(Exception):
+    with pytest.raises(L.BoundaryFailure, match="prescribed input must be Active"):
         for wd, x in zip(widths, lifted_w):
             L.check_boundary(wd, x, what="weights", prescribed=True)
     # both requests' weights reads are the SAME gates: one Input, two readers (no per-request copy of the weights)

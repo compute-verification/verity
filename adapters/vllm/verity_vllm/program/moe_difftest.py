@@ -98,7 +98,9 @@ def _block(B, S, x, w13, w2, ids, g, up_def, down_def):
             u = B.call(up_def, x[t], ids[t][k], w13)
             a = B.call(bind(b1.SiluMul, I=S.I), u)
             d = B.call(down_def, a, ids[t][k], g[t][k], w2)
-            up.append(u); act.append(a); dt.append(d)
+            up.append(u)
+            act.append(a)
+            dt.append(d)
         down += dt
         out.append(B.call(bind(MoeSum, TOPK=S.TOPK, H=S.H), array_of(dt)))
     return tuple_of(array_of(up), array_of(act), array_of(down), array_of(out))
