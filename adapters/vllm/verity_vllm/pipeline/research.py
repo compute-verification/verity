@@ -39,12 +39,9 @@ from collections.abc import Callable
 from typing import Any
 
 from verity_vllm.config import ROOT, UsageError
-from verity_vllm.log import init_logger
 from verity_vllm.pipeline import config_record as CR
 from verity_vllm.pipeline import source_identity
 from verity_vllm.pipeline.row_driver import CLI, utc
-
-logger = init_logger(__name__)
 
 REPO_ROOT = os.path.realpath(os.path.join(ROOT, "../.."))
 STORE_VARS = ("RESEARCH_STORE_CONFIG", "RESEARCH_STORE", "RESEARCH_RUNS")
@@ -83,8 +80,7 @@ def job_input(run_dir: str | None, name: str) -> str:
     if not run_dir:
         return ""
     try:
-        with open(os.path.join(run_dir, "job.json")) as f:
-            d = json.load(f)
+        d = json.load(open(os.path.join(run_dir, "job.json")))
         return ((d.get("store") or {}).get("inputs") or {}).get(name) or ""
     except (OSError, ValueError, AttributeError):
         return ""
@@ -173,15 +169,12 @@ def preserve(path: str, run_id: str) -> None:
     """Register ``run_id`` on the pod guard's durability list (once)."""
     try:
         os.makedirs(os.path.dirname(path), exist_ok=True)
-        have: list[str] = []
-        if os.path.exists(path):
-            with open(path) as f:
-                have = f.read().split("\n")
+        have = open(path).read().split("\n") if os.path.exists(path) else []
         if run_id not in have:
             with open(path, "a") as f:
                 f.write(run_id + "\n")
     except OSError as e:
-        logger.warning("guard preserve list %s not updated: %s", path, e)
+        print(f"guard preserve list {path} not updated: {e}", file=sys.stderr)
 
 
 def _row_json(d: str, path: tuple[str, ...], value: Any) -> None:
@@ -199,7 +192,7 @@ def _row_json(d: str, path: tuple[str, ...], value: Any) -> None:
         with open(p, "w") as f:
             json.dump(doc, f, indent=1)
     except (OSError, ValueError, KeyError, TypeError) as e:
-        logger.warning("row.json not updated: %s", e)
+        print(f"row.json not updated: {e}", file=sys.stderr)
 
 
 def publishing(o: Any) -> dict[str, str | None] | None:
@@ -324,7 +317,7 @@ def shed(o: Any) -> int:
     env = o.env
     guard = next((g for g in (env.pod_guard, os.path.join(REPO_ROOT, "tools/research/src/research/pods/sh/pod_guard.sh")) if os.path.isfile(g)), None)
     if guard is None:
-        logger.error("verity-vllm row shed: no pod_guard.sh found; not terminating")
+        print("verity-vllm row shed: no pod_guard.sh found; not terminating", file=sys.stderr)
         return 2
     child = abs_store_env(dict(env.environ))
     argv, child = research_argv(o.research_bin, o.research_py, child)

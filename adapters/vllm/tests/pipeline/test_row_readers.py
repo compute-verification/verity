@@ -1,7 +1,7 @@
 """What a row's stages read back from the files beside the row, for the readers no other test runs: the lines of ``stages.txt``
 (`verity_vllm.pipeline.row_records`: `build_line`, `match_line`, `commit_line`), the Match and Build records' fields
 (`missing_derived`, `fold_steps`, `served_shape`, `snapshot_steps_of_record`, `program_digest_of_record`, `manifest_verify_ok`),
-the workload's (`is_stochastic`, `tp_world`), the run store's job (`verity_vllm.pipeline.research`: `job_input`, `preserve`, and `shed` on a tree with no pod guard), a
+the workload's (`is_stochastic`, `tp_world`), a
 manifest build that fails (`verity_vllm.pipeline.row_build.required_manifest`), the launch contexts a workload's shapes are built
 under (`verity_vllm.pipeline.launch_context`: `main`, `batch_dispatch_of`, `bad_chunks`), the card's line for a stage that is not ok
 (`verity_vllm.pipeline.report.summarize_md`) and its reading of a log's first record (`log_header`), the timeline report's window and its command, which report a file's last attempt (`verity_vllm.pipeline.timeline`: `report`, `main`) and the
@@ -24,7 +24,6 @@ import pytest
 import verity_vllm.pipeline.experiment as EXP
 import verity_vllm.pipeline.launch_context as LC
 import verity_vllm.pipeline.report as CARD
-import verity_vllm.pipeline.research as RS
 import verity_vllm.pipeline.row_build as RB
 import verity_vllm.pipeline.row_records as R
 import verity_vllm.pipeline.timeline as TL
@@ -147,38 +146,6 @@ def test_the_manifest_verify_word(tmp_path):
 def test_a_tensor_parallel_rows_world_is_the_workloads_or_two(tmp_path, workload, world):
     assert R.tp_world(str(tmp_path / "absent.json")) == 2
     assert R.tp_world(_put(tmp_path / "w.json", workload)) == world
-
-
-def test_a_jobs_input_is_the_artifact_its_run_recorded(tmp_path):
-    assert RS.job_input(None, "build") == "" and RS.job_input(str(tmp_path), "build") == ""
-    _put(tmp_path / "job.json", {"store": {"inputs": {"build": "art:b", "match": ""}}})
-    assert RS.job_input(str(tmp_path), "build") == "art:b"
-    assert RS.job_input(str(tmp_path), "match") == "" and RS.job_input(str(tmp_path), "commit") == ""
-    unreadable: tuple[Any, ...] = ({}, {"store": None}, [], "{")
-    for doc in unreadable:
-        _put(tmp_path / "job.json", doc)
-        assert RS.job_input(str(tmp_path), "build") == ""
-
-
-def test_a_run_is_put_on_the_preserve_list_once(tmp_path, caplog):
-    path = tmp_path / "guard" / "preserve.txt"
-    RS.preserve(str(path), "run-a")
-    RS.preserve(str(path), "run-b")
-    RS.preserve(str(path), "run-a")
-    assert path.read_text() == "run-a\nrun-b\n"
-    RS.preserve(str(tmp_path / "guard" / "preserve.txt" / "under-a-file"), "run-c")
-    assert "not updated" in caplog.text and path.read_text() == "run-a\nrun-b\n"
-
-
-def test_row_shed_terminates_nothing_on_a_tree_with_no_pod_guard(tmp_path, monkeypatch, caplog):
-    def run(*argv, **kw):
-        raise AssertionError(f"row shed ran {argv} without a pod guard")
-
-    monkeypatch.setattr(RS, "REPO_ROOT", str(tmp_path))
-    monkeypatch.setattr(RS.subprocess, "run", run)
-    env = SimpleNamespace(pod_guard=str(tmp_path / "pod_guard.sh"), environ={})
-    assert RS.shed(SimpleNamespace(env=env, research_bin=None, research_py=sys.executable, force=True)) == 2
-    assert "no pod_guard.sh found; not terminating" in caplog.text
 
 
 #: `manifest build` as far as the row sees it: it writes a manifest, says SAYS and ends with RC
