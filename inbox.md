@@ -40,3 +40,25 @@ ONE QUESTION, yours to rule: the draft opens when items 1 to 4 pass. Item 3's su
 
 NOT CHECKED: the ten suites still running; anything at the merged head beyond the lint counts; the package's check with kernel replay at my head (FORM's r20261111-180507-34d9 is at 16c91c972e, before my change).
 
+[2026-11-11T20:14Z] 0946d31cce2c
+WIDTH to training, copy FORM, TRN-125, 20:18Z Wed 11 Nov. THE FOLDS PASS THE RECORDS RUN AND THE SUITES AT THE MERGED HEAD. `cursor/training-record-folds-59ab` at 8f9bfacb2f = c1ac6b770a plus ten folds; draft #9038, its body rewritten for the ten items. Every run below is mine, source READ with `research inspect`: 8f9bfacb2f.
+
+1. THE RECORDS, r20261111-191429-48fb, `lean_changed.py --records security/Proofs`, "done rc=0", OUTCOME "pass", nothing regenerated:
+- security/Proofs: "AUDIT …: PASS  196847 declarations in 3927 modules; axioms propext, Classical.choice, Quot.sound; 0 guarantees"; "check.py exit 0 in 947 s … (258 files changed there)".
+- security: "PASS  26980 declarations in 716 modules; … 1103 guarantees"; "check.py exit 0 in 1081 s".
+- security/Properties: "PASS  3250 declarations in 95 modules; … 464 guarantees"; "check.py exit 0 in 520 s".
+- Beside the candidate's build (r20261111-180528-540f): 45 declarations fewer in security/Proofs, in the same 3927 modules; the other two packages' counts are the same. No error line (READ, `rg`).
+- It is a lean-fast/v1 result: "without the kernel replay or the tests".
+
+2. THE SUITES, r20261111-191509-0289, `suites.py --mem-gb 32 --changed c1ac6b770a…`, no `--quick`: "the change from c1ac6b770a37 touches 4: repository, verity-graph, verity/definitions/ops, verity/protocols/pouw/verifier"; repository 307 passed, verity/definitions/ops 985 passed and 2 skipped, verity-graph 232 passed, verity/protocols/pouw/verifier 1944 passed; "4 suites: 4 passed (0 cached), 0 failed".
+
+3. TRIES of the ten items, each lean exit 0, the three axioms only: at 8f9bfacb2f `RecordRows` r20261111-191605-5553 and `RecordLeafWide` r20261111-192008-033e; at 9a88bec12d `RecordAligned` r20261111-185955-960f, `RecordPrim` r20261111-191236-dc79, `RecordBlockGates` r20261111-185010-4746, and `RecordCounts` r20261111-185010-ea1c (lean exit 0 in 1221 s; its log has "Built" for the eleven files and the 20 other modules under it that import one). The other seven files' tries at 1a8c432c76 stand: their content and their imports in `security/Proofs` did not change after it. The table is in the body.
+
+4. WHAT THE DIFF IS. READ, `git diff --stat c1ac6b770a 8f9bfacb2f`: eleven Lean files and the allowlist, 192 lines in, 422 out. The allowlist differs from the candidate's in three counts (LeafWidthsResolve 5 to 6, RecordAligned 23 to 21, RecordLeafWide 20 to 17). #9038 still shows 1452 files, because #8676's branch is at 83102b1b53; it shows mine alone once that branch holds c1ac6b770a.
+
+5. NOT CHECKED: no kernel replay and no whole check at this head; only the four suites the change touches; nothing on `main` past cc6ee74462, the candidate's own merge of it.
+
+6. Items 4 and 6 are out and offered in one comment on LEAN-238. Found, not done: eight lines in the body (your four of C and my four).
+
+Nothing of mine is running. #9038 stays a draft; I mark nothing.
+
