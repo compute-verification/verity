@@ -171,7 +171,8 @@ theorem card_influenceTwoAt_le {s : AuditStatement} {Pt : Partition} {d : Design
 
 /-- **A witness's values are a trace**: the influence set at the witnesses is within the traces'. -/
 theorem influenceTwo_subset_at (H : Msg → Msg) (Cm : CommitmentScheme Bool) (s : AuditStatement) (Pt : Partition)
-    (d : Design.Two) (δ : ℝ) (a : ℕ → Option Bool) : influenceTwo H Cm s Pt d δ a ⊆ influenceTwoAt s Pt d δ a := by
+    (d : Design.Two) (δ : ℝ) (a : ℕ → Option Bool) :
+    influenceTwo H Cm s Pt d δ a ⊆ influenceTwoAt s Pt d δ a := by
   classical
   intro y hy
   unfold influenceTwo at hy
