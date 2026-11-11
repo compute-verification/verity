@@ -93,7 +93,8 @@ the vector fails its check or doesn't reproduce a published number.
   our kernel's SASS a compression (`[sha512_mix]`); and the host the card sits in (`host.*`). The module and command
   keep the name `theta`. A ceiling the device's card file holds (`verity/hardware/cards/<sku>.toml`, the SKU
   `model.toml` names as `card`) is read from it: its table says `card = "rate.tensor / weight.f16"` in place of a
-  value, grade and source. What keeps a `sheet` value is what no card file holds as a ceiling.
+  value, grade and source; `host:PATH` is an entry of the host's card (`model.toml`'s `host`), as in
+  `host.sha512`. What keeps a `sheet` value is what no card file holds as a ceiling.
 - `data/citations.toml`: the notes a row or census line cites by `@NAME`.
 - `data/cover/`: the opcode table ("The opcode table").
 - `data/devices/sm_NN/`: another card's data ("Devices").

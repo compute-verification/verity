@@ -5,7 +5,7 @@ semantics; and the units that write registers (`[[writer]]`, with the census's j
 
 A ceiling the device's card file holds (`model.card`) is read from it: its table says `card = "EXPR"`, card entries
 and numbers joined by ` * ` and ` / ` (`rate.tensor / weight.f16`), in place of its value, grade and source, and the
-SM count is the card's `sm.count`.
+SM count is the card's `sm.count`. An entry written `host:PATH` is of the host's card (`model.host`).
 
 Each derivation is read twice: on the data sheet (every rate its `sheet` value) and measured (every rate its measured
 value, and the sheet's where no run has one, which the result lists as filled).
@@ -197,15 +197,17 @@ def has(data: Path) -> bool:
     return (data / THETA).is_file()
 
 
-def _reader(p: Path, card: dict):
-    """`read(v, key)`: a table's (value, grade, source), its `card` line's (every entry it names a ceiling of `card`)
-    or its own `key`, `grade` and `source`."""
+def _reader(p: Path, cards: dict):
+    """`read(v, key)`: a table's (value, grade, source), its `card` line's (every entry it names a ceiling of its card:
+    `cards[""]` for `PATH`, `cards["host"]` for `host:PATH`) or its own `key`, `grade` and `source`."""
     from verity.hardware.cards import number   # here: only a reader of the card needs verity
 
-    file = f"verity/hardware/cards/{card['sku']}.toml"
-
-    def entry(path: str) -> dict:
-        e = card
+    def entry(tok: str) -> tuple[str, str, dict]:
+        which, _, path = tok.rpartition(":")
+        if which not in cards:
+            raise SystemExit(f"{p}: {tok} names no card; an entry is PATH, of the device's card, or host:PATH")
+        e = cards[which]
+        file = f"verity/hardware/cards/{e['sku']}.toml"
         for k in path.split("."):
             e = e.get(k) if isinstance(e, dict) else None
         if not isinstance(e, dict) or "value" not in e:
@@ -213,7 +215,7 @@ def _reader(p: Path, card: dict):
         if e["mark"] != "ceiling":
             raise SystemExit(f"{p}: {file} marks {path} a {e['mark']}, not a ceiling; give the number its own value, "
                              f"grade and source here until the card file holds its ceiling")
-        return e
+        return file, path, e
 
     def read(v: dict, key: str):
         if "card" not in v:
@@ -221,7 +223,7 @@ def _reader(p: Path, card: dict):
         if clash := [k for k in (key, "grade", "source") if k in v]:
             raise SystemExit(f"{p}: {v.get('key', key)} reads the card file ({v['card']}) and also gives "
                              f"{', '.join(clash)}; delete one")
-        x, op, sources = Fraction(1), "*", []
+        x, op, sources, last = Fraction(1), "*", [], None
         for tok in v["card"].split():
             if tok in ("*", "/"):
                 op = tok
@@ -229,11 +231,12 @@ def _reader(p: Path, card: dict):
             if tok[0].isdigit():
                 y = Fraction(tok)
             else:
-                e = entry(tok)
+                file, path, e = entry(tok)
                 y = number(e)
-                sources.append(f"{tok}: {e['source']}")
+                sources.append(f"{'' if file == last else f'{file}, '}{path}: {e['source']}")
+                last = file
             x = x * y if op == "*" else x / y
-        return (int(x) if x.denominator == 1 else float(x)), "card file", f"{file}, {'; '.join(sources)}"
+        return (int(x) if x.denominator == 1 else float(x)), "card file", "; ".join(sources)
 
     return read
 
@@ -243,7 +246,7 @@ def theta(data: Path) -> Theta:
     if not p.is_file():
         raise SystemExit(f"{data}: no {THETA}; the devices with one are sm_120 (data/) and sm_90")
     t = tomllib.loads(p.read_text())
-    read = _reader(p, card_of(data))
+    read = _reader(p, {"": card_of(data), "host": card_of(data, "host")})
     clocks = {c: Clock(c, *read(v, "mhz"), v.get("measured", ""), v.get("measured_mhz"))
               for c, v in t["clocks"].items()}
     rates: dict[str, Rate] = {}

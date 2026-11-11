@@ -10,7 +10,7 @@ honest = ["e-l7qs"]
 documents = [
   "WP: NVIDIA RTX Blackwell GPU Architecture whitepaper v1.1, Appendix A, Table 4 (pp. 46-47), RTX PRO 6000 Blackwell Workstation Edition column, footnote 1 'Peak rates are based on GPU Boost Clock', footnote 2 'Effective TOPS / TFLOPS using the Sparsity Feature'; p. 11 (INT32 unified with FP32)",
   "DS: NVIDIA RTX PRO 6000 Blackwell Server Edition product page and data sheet (Apr 2025), Technical Specifications (census rtx-pro-6000-server/*)",
-  "CPG: CUDA C++ Programming Guide 12.9, §6.4.1 Table 7, CC 12.0 column; §20 Technical Specifications; §18.10 (CC 12.0)",
+  "CPG: CUDA C++ Programming Guide 12.9, its sections as 12.9.0 numbers them (12.9.1 renumbers): §6.4.1 Table 7, CC 12.0 column; §18.2 Table 28 'Technical Specifications per Compute Capability'; §18.10 (CC 12.0)",
   "PTX: PTX ISA 9.4, §9.7.14 (mma.sync, kind::f8f6f4 and kind::mxf4nvf4 on sm_120a)",
 ]
 
@@ -399,7 +399,7 @@ what = "shared memory a SM (99 KB a block), of 128 KB L1 and shared memory"
 value = 102400
 unit = "B/SM"
 grade = "Programming Guide and whitepaper"
-source = "CPG §20, CC 12.0: 'Maximum amount of shared memory per SM 100 KB', 'per thread block 99 KB'; WP Table 4 'L1 Data Cache/Shared Memory 24064 KB' (128 KB a SM)"
+source = "CPG §18.2 Table 28, CC 12.0: 'Maximum amount of shared memory per SM 100 KB', 'per thread block 99 KB'; WP Table 4 'L1 Data Cache/Shared Memory 24064 KB' (128 KB a SM)"
 
 [[capacity]]
 key = "l2"
@@ -420,7 +420,7 @@ what = "resident warps a SM"
 value = 48
 unit = "warps/SM"
 grade = "Programming Guide"
-source = "CPG §20, CC 12.0: 'Maximum number of resident warps per SM 48'"
+source = "CPG §18.2 Table 28, CC 12.0: 'Maximum number of resident warps per SM 48'"
 
 # ---- exact paths
 # ----------------------------------------------------------------------------------------------------------
@@ -650,11 +650,9 @@ gap = "a pinned device-to-host cudaMemcpy bandwidth test on an RTX PRO 6000 (GPU
 
 [[rate]]
 key = "host.sha512"
-what = "SHA-512 compressions a second on one host core (AVX-512, eight blocks across a 512-bit register's 64-bit lanes)"
+what = "SHA-512 compressions a second on one host core (AVX-512, eight blocks across a 512-bit register's 64-bit lanes), counted: a block in VPROLQ, VPSRLQ, VPTERNLOGQ and VPADDQ is 80 rounds of 17 (Σ0 and Σ1 three rotates and a ternlog each, Ch and Maj a ternlog each, 7 adds), 64 schedule words of 11 and 8 feed-forward adds, 2,072 512-bit operations per 8 blocks on the two ports 512-bit integer operations issue to (Xeon 6 product brief: 'two 512-bit fused-multiply add (FMA) units per core'), so 8 / 1,036 a cycle at the card's max turbo. One figure for every core, as host.cpu reads it (times host.cores), and an upper bound on each core without Priority Core Turbo; the card's priority cores (cpu.priority_cores, 8 a socket) reach clock.priority_turbo, 4.6 GHz, 18% above it, which host.cpu adds"
 unit = "compressions/s a core"
-sheet = 3.0116e7
-grade = "count (an upper bound: 2,072 512-bit operations per 8 blocks on two vector ports at the max turbo)"
-source = "Xeon 6776P (Intel ARK: 64 cores, max turbo 3.9 GHz, all-core 3.6 GHz, Priority Core Turbo 4.6 GHz on 8 cores); Xeon 6 product brief: 'two 512-bit fused-multiply add (FMA) units per core', the two ports 512-bit integer operations issue to; a block in VPROLQ, VPSRLQ, VPTERNLOGQ and VPADDQ: 80 rounds of 17 (Σ0 and Σ1 three rotates and a ternlog each, Ch and Maj a ternlog each, 7 adds), 64 schedule words of 11, 8 feed-forward adds = 2,072; 3.9e9 · 8 / (2,072 / 2) = 3.012e7"
+card = "host:clock.turbo * 1e9 * 8 / 1036"
 gap = "isa-l_crypto's multi-buffer sha512_mb on a 6776P host (CPU only)"
 
 [[rate]]
@@ -832,7 +830,7 @@ verdict = "open"
 rates = ["host.link", "sha512", "host.sha512", "host.int8", "host.dram"]
 bound = 0.00254262
 against = "sha512"
-why = "the host computes every compression of data it holds, so for any host the words' bytes bound it: the no-fold receipt's v1 packs 32 four-byte words into a 1024-bit hiding leaf block under a binary tree, κ = 2 compressions a 128 B of words, so host.link's 64e9 B/s carry 1e9 compressions' worth a second, 1e9 / (188 SMs · 2,092 MHz, sha512's measured clock) = 0.00254262 a SM-clock; the share of device time it frees is that over the card's hashing rate whatever L is (the link runs through the tensor time too), up to hashing's own share. Our node binds first at its cores: 12 a GPU at host.sha512's 3.012e7 = 3.61e8 a second (Priority Core Turbo's 4.6 GHz on 8 cores a socket adds 3%), 9.19e-4 a SM-clock, 5.07% of the measured sha512. Its AMX: 12 cores at host.int8 = 4.79e13 exact s8 MACs a second, 9.51% of the WP's 1,007.6 TOPS dense (5.04e14 MACs)"
+why = "the host computes every compression of data it holds, so for any host the words' bytes bound it: the no-fold receipt's v1 packs 32 four-byte words into a 1024-bit hiding leaf block under a binary tree, κ = 2 compressions a 128 B of words, so host.link's 64e9 B/s carry 1e9 compressions' worth a second, 1e9 / (188 SMs · 2,092 MHz, sha512's measured clock) = 0.00254262 a SM-clock; the share of device time it frees is that over the card's hashing rate whatever L is (the link runs through the tensor time too), up to hashing's own share. Our node binds first at its cores: 12 a GPU at host.sha512's 3.012e7 = 3.61e8 a second (Priority Core Turbo's 4.6 GHz on 8 cores a socket, 2 of a GPU's 12 if the VM holds them, adds 3%), 9.19e-4 a SM-clock, 5.07% of the measured sha512. Its AMX: 12 cores at host.int8 = 4.79e13 exact s8 MACs a second, 9.51% of the WP's 1,007.6 TOPS dense (5.04e14 MACs)"
 gap = "the prover chooses the host (P9), so a bound tighter than the link's needs the node's inventory from someone other than the prover, an open claim; κ of the receipt PROTO-DESIGN freezes (v2's 8-block leaves and 16-ary tree: about 1.1); sha512_mb, an AMX loop on the host (CPU only, cpu-3/4/5 only if their SKU is the 6776P) and a pinned device-to-host copy (GPU queue)"
 
 # The built kernel's SASS a compression, for SHA-512's ceiling on the card's pipes (`sha_ceiling`): `alu` on the ALU
