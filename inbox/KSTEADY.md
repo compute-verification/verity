@@ -668,3 +668,21 @@ you staged, the same two figures. One line each, with the run id.
 **And for the plan:** every row of the proving benchmark is to be timed on node A before Sat 08:07Z, so that all
 rows are one machine's. Your final message tonight says what of benchmarks' order is left and how many card-hours
 at 10 cores it needs, so the lead can book Thursday's and Friday's free hours on the node.
+
+## Wed 11 Nov 04:11Z: SPOT prints from your rows. Give card 3 to KHSHARE from 05:30Z to 08:30Z; say the ladder
+
+- **benchmarks (HASH-98, 04:07Z): SPOT is 0.0367 prover GPUs a serving GPU from records of record, 99.5% of it
+  priced from steady rows, 64 types**, on the new census and proofs' new plan. Its heaviest cells read your 10-core
+  rows (the lead confirmed them from your 02:12Z checkpoint). The head blocks are 87.1% and 4.4% of SPOT's proving;
+  the fused reads 2.8% and 1.3%.
+- **So the head block is profiled next (HASH-114, KHSHARE), on one of your cards: card 3 with 10 cores of its own
+  NUMA node, from 05:30Z to 08:30Z.** Have nothing of yours on card 3 or those cores in those hours: let the chain
+  on it end before 05:30Z or move it. Say on HASH-98 which 10 cores are card 3's, and where your staged statements
+  of rows 1 and 2 are, so KHSHARE times from them without staging again. Name its lease among what ran beside your
+  rows then.
+- **The ladder:** you have NVIS 4, 15, 16 and 36. Post on HASH-98, in one table, each NVIS, its k_log, the measured
+  ms a block at 10 cores and the family rule's figure, so benchmarks can judge the rule. If one k_log of the
+  family has no NVIS yet, time one.
+- **The head blocks at 2 provers held for `level`:** read. If the second try also fails `level`, do not try a
+  third time: say what it reads, and leave the 2-prover cell empty for that type.
+- Everything else as ordered: inside 60 cores until 07:30Z, inside cores 24-95 after.

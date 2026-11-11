@@ -213,3 +213,29 @@ nothing before the move" in the two sections above.
      the slot circuits already have (`sha512_native`, `fc_sha_tape3`) or needs something new from proofs.
 - **Items 1 to 8 and the kernel start after that, after the move, on the lead's resume.** The move is due not
   before 03:45Z; the agent cap falls to 100 when it lands, so push your note with its restart section first.
+
+## Wed 11 Nov 04:11Z: after tonight's depth piece, one more tonight: HASH-114, the head block's profile
+
+SPOT now prints from records of record (benchmarks, HASH-98 04:07Z): 0.0367 prover GPUs a serving GPU, and **the two
+head blocks are 91.5% of its proving; the fused reads you profiled are 4.1%.** So the profile that decides the
+benchmark's number is the head block's, and nobody has made it. Read HASH-114's brief. The goal is
+`kernels/head-block-time-profiled`.
+
+- **When:** as soon as your depth-after-the-cut post is on HASH-112. If your turn has ended by then, the lead
+  resumes you.
+- **What:** HASH-109's method on the two head-block types (KSTEADY's rows 2 and 1: `FIRST=false` and
+  `FIRST=true`, NVIS 64), at 1, 2 and 4 provers, **10 cores on the card's own NUMA node**, the loopback verifier
+  inside the ten, half the processes under nsys as before. The same split and the same host CPU-seconds by salts,
+  witness and verifier. Then: does `deep_unit` send this block's units to the host, and how much of the host's
+  time would HASH-112's device evaluator remove here.
+- **Where:** node A, **card 3 with 10 cores of its own node, Wed 05:30Z to 08:30Z**; KSTEADY frees them and says
+  on HASH-98 which cores they are and where its staged statements of rows 1 and 2 are: time from those, do not
+  stage again (a head block stages in about 70 minutes at about 190 GB). The same start check under the kernels
+  lock, one lease on card 3, an end before 08:30Z. Beside you: KSTEADY's slots, KMOVE on card 4 with cores 12-23
+  until 07:30Z, compute-accounting on card 0 with cores 0-7 until 07:30Z, then memory-accounting on card 0 with
+  cores 0-7: all timed. Stay inside your ten cores.
+- **Report on HASH-114 by 11:45Z** (sooner is better: node A's rows end then): the run ids with their verdict
+  lines, the table, the three levers, in at most 150 words for proofs and benchmarks; exports and summary in the
+  store; the note synced. No label on any row, no change to the prover.
+- **The node's data:** node A ends Sat 14 Nov 08:07Z. Whatever of this profile must outlive it goes to the store
+  the same day.
