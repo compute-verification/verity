@@ -42687,3 +42687,37 @@ For the table:
 
 - The entry headed 08:45Z was pushed at 08:40Z by `date -u`.
 - Its `For SCALE:` line gave D*2's coin as "at most 17,953,012 bytes" and κ = 2^-9's as "at most 8,976,538". The sums are `690,498·26 + 960 = 17,953,908` and `345,249·26 + 960 = 8,977,434` bytes [derived: at most 26 bytes a block and 64 a stratum, 15 strata]. The conclusion stands: both fit the deployed 2^26 bytes (67,108,864). Every other number in the entry is the script's output.
+
+## SALTS, Wed 11 Nov 08:40Z: measured on a CPU node: the salts cost 6.30 CPU-s a statement today, 4.31 with `upper`, 1.16 with `all`; the host-side branch gets 84% of what a card-side fill would
+
+**The measurement.** [run: `r20261111-083117-ea63`, vy-nebius-cpu-9, AMD EPYC-Genoa with AVX-512, kernel `6.11.0-1016-nvidia`, glibc 2.39, at my branch's head `ff48f38adc3a`; job `/tmp/salts-bench/job2.sh`, in my notes next sync]
+The job builds `flock-live` (release, `sha512`) and calls `LeafSalts::fill` for the head-block statement's 15 trees (13,996,032 leaves, 2,687,238,144 bytes) into one buffer touched beforehand, on 10 rayon threads, four rounds, with `getrusage` around the fills. The same job passed `cargo check` of `flock-circuit` in the three CPU feature sets.
+
+| `FC_SALTS_KEYED` | OS bytes read | user s | system s | CPU-s (mean of 4; min to max) | wall s on 10 threads |
+|---|---|---|---|---|---|
+| unset (today) | 2,687,238,144 | 0.01 | 6.30 | 6.31 (6.30 to 6.31) | 0.63 |
+| `upper` | 1,613,758,464 + 384 | 0.46 | 3.85 | 4.31 (4.28 to 4.33) | 0.44 |
+| `all` | 480 | 1.13 | 0.02 | 1.16 (1.15 to 1.19) | 0.12 |
+
+- The kernel's generator gives 426 MB a CPU-second there (node A's rows: 368, `r20261111-061047-6773`); `rand_chacha` in user space gives 2,350 MB a CPU-second, 5.5 times the kernel's rate [run].
+- On one thread the CPU-seconds are the same within 5% (6.39, 4.52, 1.14) [run], so the cost is the bytes, not the threads.
+- This is the CPU prover's cost of the salts alone. On a card the same host code runs (the read-ahead's pool), so I expect HEADPROF's host CPU-seconds to fall by the same amounts [guess until its row].
+
+**On kernels' rule** (0.12308 statement seconds a host CPU-second; today 2.8555 s with 23.2 CPU-s, 1.785 s once the witness is on the card) [modeled from node A's 7.30 CPU-s; the low end takes the user-space rate as measured, the high end scales it by 7.30/6.31]:
+
+| way | salts' host CPU-s on node A | statement now | witness on the card | label |
+|---|---|---|---|---|
+| today | 7.30 | 2.856 | 1.785 | measured (`r20261111-061047-6773`) |
+| `upper`, expanded on the host | 4.84 to 4.91 | 2.55 to 2.56 | 1.48 to 1.49 | modeled from measured rates |
+| `all`, expanded on the host | 1.15 to 1.33 | 2.10 to 2.12 | 1.03 to 1.05 | modeled from measured rates |
+| `all`, filled on the card (not built) | about 0 | 1.96 | 0.89 | modeled |
+
+So the host-side expansion I built takes 5.97 to 6.15 of the 7.30 CPU-seconds, 82 to 84% of the most a card-side fill can take. What the card-side fill would add is 0.14 to 0.16 s a statement and the 2.69 GB of copies and page-locked host memory. An AVX-512 ChaCha20 on the host would close about two thirds of that gap without touching the card (OpenSSL's ran 6.7 GB/s on my VM against `rand_chacha`'s 2.35 here [run, 08:00Z entry; different machines]).
+
+**My view on the card-side fill, yours to overrule.** I would not write it tonight: about 300 lines of CUDA and Rust that I cannot compile, for 0.15 s of 2.86, in HEADPROF's one window on card 3. The host-side switch gives the row. I write it if you say so.
+
+For HEADPROF: cursor/proofs-salts-8dd2 at ff48f38adc3abe6ec40ab28e5519e5a7aff2e223 (unchanged; `FC_SALTS_KEYED=all`, then `upper`; the `SALTSKEYED` stderr line confirms it took effect)
+
+For the table: salts 7.3 → 1.2 to 1.3 host CPU-s a head-block statement with every tree's salts expanded on the host from a 32-byte OS key a tree (statement 2.86 → 2.11 s, or 1.78 → 1.04 s with the witness on the card; salts measured on a CPU node, statement modeled); built as a switch on a branch, no PR; a claim (the 9 Oct ruling), no new Lean Prop.
+For the table: the part with no change to what hiding rests on (the trees above level 0 only): 7.3 → 4.9 host CPU-s (2.86 → 2.56 s; 1.78 → 1.49 s), same branch, `upper`; it needs a new statement version before it can land.
+For BREAKEVEN: salts' host CPU-s a head-block statement, before 7.30 (measured, `r20261111-061047-6773`); after, `all` on the host 1.15 to 1.33, `upper` on the host 4.84 to 4.91 (modeled: rates measured in `r20261111-083117-ea63` on vy-nebius-cpu-9, applied to node A's bytes); `all` on the card about 0 (modeled, not built). Statement seconds on your split: 2.10 to 2.12 (`all`, host), 2.55 to 2.56 (`upper`, host), 1.96 (`all`, card); with the witness on the card 1.03 to 1.05, 1.48 to 1.49, 0.89. All "evaluator's time not counted". These replace my 08:00Z rows "seed a tree, scalar ChaCha20 on host" (5.6) and "AVX-512 on host" (0.4): the built code is between them at 1.15 to 1.33.
