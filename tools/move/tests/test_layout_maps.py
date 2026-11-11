@@ -56,6 +56,20 @@ def test_a_file_goes_to_its_components_directory_under_the_name_it_has_today():
     assert "tools/t.py" not in dest
 
 
+def test_a_components_move_is_its_protocols_or_its_adapters_and_flocks_verifier_and_prover_are_each_one():
+    assert G.move_of("verity/protocols/flock/verifier") == "flock_verifier"
+    assert G.move_of("verity/protocols/flock/prover") == "flock_prover"
+    assert G.move_of("verity/protocols/flock") == "flock"
+    assert G.move_of("verity/protocols/remote/verifier") == "remote"
+    assert G.move_of("verity/protocols/interface") == "interface"
+    assert G.move_of("verity/commitments") == "commitments"
+    assert G.move_of("verity") == "verity"
+    assert G.move_of("adapters/vllm") == "vllm"
+    assert G.move_of("demos/lifecycle") == "demos"
+    components = G.json.loads((MOVE / "layout_maps.json").read_text())["components"]
+    assert {G.move_of(c["to"]) for c in components} <= {name for name, _ in G.MOVES}
+
+
 def test_a_file_or_a_component_named_in_keep_stays(monkeypatch):
     monkeypatch.setattr(G, "KEEP", {"verity/ml/gates/a.py": "a file that stays", "pous": "a component that stays"})
     dest, _ = plan()
@@ -108,6 +122,12 @@ def test_a_file_the_data_does_not_know_goes_with_its_directory_or_stops_the_scri
                                                     "its directory (stays)")
     dest, said = plan(["tools/t.py"], alone)
     assert "dropped, benchmarks/old/ is no longer tracked: a path of archived" in said
+    shared = {**DATA, "archived": ["tools/old.py"], "stays": ["tools/t.py"]}     # an archived file beside it has no say
+    dest, said = plan(["tools/old.py", "tools/t.py", "tools/u.py"], shared)
+    assert "tools/u.py" not in dest and dest["tools/old.py"][0] == "archive/tools/old.py"
+    assert "new since the data was cut: tools/u.py goes with the other files of its directory (stays)" in said
+    with pytest.raises(SystemExit, match=r"tools/u\.py: its directory's files are archived"):
+        plan(["tools/old.py", "tools/u.py"], {**shared, "stays": []})        # nothing lives there: a person places it
 
 
 def test_a_whole_directory_is_one_row_and_a_shared_one_is_a_row_a_file():
@@ -119,3 +139,22 @@ def test_a_whole_directory_is_one_row_and_a_shared_one_is_a_row_a_file():
                                                                    "v/g/a.py": "n/defs/a.py"}
     assert G.compress({**mine, "v/p/a.py": "n/q/a.py"}, dirs, own=["v/p/a.py"]) == {
         "v/p/": "n/p/", "v/p/a.py": "n/q/a.py", "v/g/a.py": "n/defs/a.py"}
+    assert G.compress({**mine, "v/p/lean/l.toml": "b/lean/l.toml"}, dirs, own=["v/p/lean/"]) == {
+        "v/p/": "n/p/", "v/p/lean/": "b/lean/", "v/g/a.py": "n/defs/a.py"}
+
+
+def test_a_directory_the_map_empties_file_by_file_is_retired_and_one_with_a_row_or_a_file_left_is_not():
+    tracked = ["a/x.py", "a/y.py", "a/sub/z.py", "a/gone.toml", "b/k.py", "b/l.py", "c/m.py", "c/n.py",
+               "d/__init__.py", "d/e/f.py", "top.py"]
+    moved = {"a/x.py": "new/one/x.py", "a/y.py": "new/two/y.py", "a/sub/z.py": "new/one/sub/z.py",
+             "b/k.py": "new/b/k.py", "b/l.py": "new/b/l.py", "c/m.py": "new/c/m.py", "d/e/f.py": "d/g/f.py"}
+    rows = {"a/x.py": "new/one/x.py", "a/y.py": "new/two/y.py", "a/sub/": "new/one/sub/", "b/": "new/b/",
+            "c/m.py": "new/c/m.py", "d/e/f.py": "d/g/f.py"}
+    # `a/` leaves file by file, a dropped file among them, and holds `a/sub/`; `b/` has a row, which carries a new file;
+    # `c/n.py` stays; `d/` keeps its `__init__.py` and takes a file, and only `d/e/` under it is emptied
+    assert G.retire(tracked, moved, ["a/gone.toml"], rows) == ["a/", "d/e/"]
+    assert G.retire(tracked, moved, [], rows) == ["d/e/"]      # `a/gone.toml` left: `a/` isn't emptied, `a/sub/` has a row
+    lay = G.L.Layout({"roots": {"old": {}, "new": {}}, "paths": rows, "retired": {"paths": ["a/", "d/e/"]}})
+    left = [p for p in ("a/late.py", "a/sub/late.py", "b/late.py", "c/late.py", "d/late.py", "d/e/late.py")
+            if lay.file(p) is None and p.startswith(lay.retired)]             # `layout.py`'s own test in `plan()`
+    assert left == ["a/late.py", "d/e/late.py"]
