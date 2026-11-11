@@ -3,6 +3,7 @@ module
 public import Definitions.Claims.SamplingGeneric
 public import Proofs.Flock.SamplingGeneric.Fails
 public import Proofs.Flock.SamplingGeneric.Split
+public import Proofs.Flock.SamplingGeneric.SessCount
 public import Proofs.Flock.SamplingGeneric.Assemble
 public import Proofs.Flock.SamplingGeneric.Coins
 public import Proofs.Flock.SamplingGeneric.Session
@@ -10,7 +11,9 @@ public import Proofs.Flock.SamplingGeneric.Count
 public import Proofs.Flock.SamplingGeneric.Bits
 public import Proofs.Flock.SamplingGeneric.KSAt
 public import Proofs.Flock.SamplingGeneric.Reg
+public import Proofs.Flock.SamplingGeneric.RegAt
 public import Proofs.Flock.SamplingGeneric.RegX
+public import Proofs.Flock.SamplingGeneric.RegCanon
 public import Proofs.Flock.SamplingGeneric.Efficient
 public import Proofs.Flock.SamplingGeneric.Counter
 public import Proofs.Flock.SamplingGeneric.Deployed
@@ -29,13 +32,19 @@ public import Proofs.Flock.SamplingGeneric.TwoReg
 public import Proofs.Flock.SamplingGeneric.TwoRegMiss
 public import Proofs.Flock.SamplingGeneric.TwoRegX
 public import Proofs.Flock.SamplingGeneric.TwoRegFirstHit
+public import Proofs.Flock.SamplingGeneric.TwoRegFirstHitClass
 public import Proofs.Flock.SamplingGeneric.RunExtAt
+public import Proofs.Flock.SamplingGeneric.TwoFirstHitAt
+public import Proofs.Flock.SamplingGeneric.TwoFirstHitClassAt
+public import Proofs.Flock.SamplingGeneric.TwoFirstHitClassCount
+public import Proofs.Flock.SamplingGeneric.TwoFirstHitClassCaps
 
 /-!
 # The sampled compiler in the claims core, at Flock
 
 The compiled extractor's failure event, its probability and `Compiled.KS` from the split are in
-`SamplingGeneric/Fails.lean`.
+`SamplingGeneric/Fails.lean`; the sessions' weights at the gates their blocks need, counted by block
+(`Compiled.sum_sessions_le`), in `SamplingGeneric/SessCount.lean`.
 
 `Arg.ofFlock` is Flock's `E^rep` at the deployed decoder with Flock's errors, so its knowledge soundness is `Flock.KS`'s
 at that decoder (`flockArgKS`, by unfolding: its coins, extractor, `κ` and `γ` are `Flock.E D D.decode`'s, `Flock.κ`'s
@@ -64,7 +73,12 @@ same way, the interior's rewinding at the first stage's coins and its conflicts 
 
 `CompilerKSAt` reads `KS`'s two hash terms at a budget on the prover's whole SHA-512 work rather than at the calls the
 oracle logs: `KS` gives it at every budget, and `CompilerEfficient`'s expected reruns and own calls bound its binding
-finder's cost (`SamplingGeneric/KSAt.lean`), so **`CompilerKSAt` is proved** (`compilerKSAt`). At two stages the
+finder's cost (`SamplingGeneric/KSAt.lean`), so **`CompilerKSAt` is proved** (`compilerKSAt`). The committed form's
+binding terms read at a budget too: `B_conf` declared at `T` a run costs at most
+`2T·(1 + n_sess·e_s) + 2·n_PU·openCalls` in expectation at the contract (`SamplingGeneric/RegAt.lean`), so
+**`CompilerKSRegAt` is proved** (`compilerKSRegAt`); on every coin it costs at most
+`2T·(1 + n_sess·ρ_s) + 2·n_PU·openCalls`, so **`CompilerKSRegAtSB` is proved** too (`compilerKSRegAtSB`), at
+`StrictBirthday` in place of `ExpectedCR`. At two stages the
 extractor is `Compiled.E` at the two-stage verifier's own waits' counts, and the two-stage contract gives the facts
 its cost reads, so **`CompilerEfficientTwo` and `CompilerKSAtTwo` are proved** (`compilerEfficientTwo`,
 `compilerKSAtTwo`, `SamplingGeneric/TwoKSAt.lean`).
@@ -150,6 +164,14 @@ theorem compilerBits : CompilerBits := compilerBits_of compilerKS compilerEffici
 
 /-- **KS read at a time budget**: `CompilerKS` and `CompilerEfficient` (`compilerKSAt_of`). -/
 theorem compilerKSAt : CompilerKSAt := compilerKSAt_of compilerKS compilerEfficient
+
+/-- **The committed form read at a time budget**: `CompilerKSReg` and `B_conf`'s expected cost
+(`compilerKSRegAt_of`). -/
+theorem compilerKSRegAt : CompilerKSRegAt := compilerKSRegAt_of compilerKSReg
+
+/-- **The committed form read at a time budget and the strict birthday bound**: `CompilerKSReg` and `B_conf`'s cost on
+every coin (`compilerKSRegAtSB_of`). -/
+theorem compilerKSRegAtSB : CompilerKSRegAtSB := compilerKSRegAtSB_of compilerKSReg
 
 end Claims.SamplingGeneric
 

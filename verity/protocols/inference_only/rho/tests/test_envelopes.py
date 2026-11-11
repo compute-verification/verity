@@ -394,7 +394,8 @@ def test_every_uncertified_term_is_keyed_by_the_route_it_escapes_by():
 
 def test_pouws_delta_splits_into_coins_and_cryptography():
     """`p = δ_s + δ_bind + δ_ks` per window, by Markov at `ε'`: the coins' share and the cryptography's add to the
-    theorem's `δ = p/ε'` (2.7e-8 at `p = 3 · 2⁻⁴⁰`, `ε' = 10⁻⁴`), and sampled proofs add their escape bound's `δ`."""
+    theorem's `δ = p/ε'` (2.7e-8 at `ε' = 10⁻⁴` with the cryptography's two terms assumed at `δ_s` each, so
+    `p = 3 · 2⁻⁴⁰`), and sampled proofs add their escape bound's `δ`."""
     ctx = context("reference-h200")
     remote, sampled = envelopes.regime(REG, "remote"), envelopes.regime(REG, "remote-sampled")
     d = remote.delta(ctx)

@@ -200,17 +200,24 @@ namespace Gen
 
 variable [S : ZkSetup]
 
+/-- **The deployed masked (`--zk`) verifier: one wait's bound**, at SHA-512, from every table's bound counted per
+round (`oneWait_of_tableBoundJR`). -/
+theorem zk_oneWait_of_tableBoundJR
+    (htab : Claims.Flock.TableBoundJR sha512 (deployZk Readable.relation) (wordLenJ true)
+      (Claims.Flock.orZeroJ (wideJ true))) :
+    Claims.Flock.OneWait sha512 (deployZk Readable.relation) :=
+  Claims.Flock.oneWait_of_tableBoundJR sha512 (deployZk Readable.relation) (wordLenJ true)
+    (fun x => sum_wordLenJ_le true x _) (fun x => εtable_nonneg true x) (V_k_pos true) (k_one_zk _)
+    (zk_parses _) _ (fun _ _ => .inl rfl) (Claims.Flock.colsOkJ_orZero _ _ _ _ (zk_colsOkJ sha512 _))
+    (zk_conflictTiedJ _) htab
+
 /-- **The deployed masked (`--zk`) verifier: KS**, at SHA-512, from every table's bound counted per round:
 `zk_KS_of_tableBoundJ` at `oneWait_of_tableBoundJR`. -/
 theorem zk_KS_of_tableBoundJR
     (htab : Claims.Flock.TableBoundJR sha512 (deployZk Readable.relation) (wordLenJ true)
       (Claims.Flock.orZeroJ (wideJ true))) :
     Claims.Flock.KS sha512 (deployZk Readable.relation) :=
-  zk_of_oneWait_sha512 Readable.relation zk_splits
-    (Claims.Flock.oneWait_of_tableBoundJR sha512 (deployZk Readable.relation) (wordLenJ true)
-      (fun x => sum_wordLenJ_le true x _) (fun x => εtable_nonneg true x) (V_k_pos true) (k_one_zk _)
-      (zk_parses _) _ (fun _ _ => .inl rfl) (Claims.Flock.colsOkJ_orZero _ _ _ _ (zk_colsOkJ sha512 _))
-      (zk_conflictTiedJ _) htab)
+  zk_of_oneWait_sha512 Readable.relation zk_splits (zk_oneWait_of_tableBoundJR htab)
 
 end Gen
 
@@ -258,14 +265,22 @@ namespace Gen
 
 variable [S : ZkSetup]
 
+/-- **The deployed masked verifier: one wait's bound**, at SHA-512 at the deployed relation, at every number of tables,
+from the live sessions' bound off the table on a witness lane at the statements some run accepts (`ZkLiveAccWJ`) and
+`ExtendJ` at full-width columns. -/
+theorem zk_oneWait_of_liveAccWJ (hl : ∀ x, ¬ Claims.Flock.NoAcc sha512 (V true) x → ZkLiveAccWJ x)
+    (hext : Claims.Flock.ExtendJ (deployZk Readable.relation) (wordLenJ true) (wideJ true)) :
+    Claims.Flock.OneWait sha512 (deployZk Readable.relation) :=
+  zk_oneWait_of_tableBoundJR (zk_tableBoundJR_of_extend Readable.relation hext
+    (Claims.Flock.tableBoundJR_of_accAtR fun x => zk_tableBoundJAccAtR hl x))
+
 /-- **The deployed masked verifier: KS**, at SHA-512 at the deployed relation, at every number of tables, from the live
 sessions' bound off the table on a witness lane at the statements some run accepts (`ZkLiveAccWJ`) and `ExtendJ` at
 full-width columns. -/
 theorem zk_KS_of_liveAccWJ (hl : ∀ x, ¬ Claims.Flock.NoAcc sha512 (V true) x → ZkLiveAccWJ x)
     (hext : Claims.Flock.ExtendJ (deployZk Readable.relation) (wordLenJ true) (wideJ true)) :
     Claims.Flock.KS sha512 (deployZk Readable.relation) :=
-  zk_KS_of_tableBoundJR (zk_tableBoundJR_of_extend Readable.relation hext
-    (Claims.Flock.tableBoundJR_of_accAtR fun x => zk_tableBoundJAccAtR hl x))
+  zk_of_oneWait_sha512 Readable.relation zk_splits (zk_oneWait_of_liveAccWJ hl hext)
 
 end Gen
 

@@ -4,6 +4,11 @@
 * every unit's Definition on the twin's inputs for it (its lanes of the row, the Call's operands and its writers' outputs)
   computes the twin's outputs, and the twin's token is the Call's in both its forms, as the circuit evaluator computes them: on
   rows with ties, -inf and NaN lanes, at temperature 0, 0.7 and 1, at every split count;
+* a select chunk of `SELECT_N` lanes that a slice ends inside counts its ties as the row does, on rows where that count
+  decides the Call's token, and gives a lane past the end its new slice's warp half, on a row where a tie's probability is
+  its half's;
+* every select chunk of a served row gives its lanes their own slice's positions (`topp_stages.positions`), at every split
+  count that has slices, and the next chunk its first lane's;
 * the twin's keep bits are `topp_keep`'s at every split count on the edge rows (NaN and +inf lanes, a few finite lanes, a
   uniform row, p = 0 and 1);
 * `plan` wires each parameter to an earlier unit's output of its type and `cut` counts its units, at small and served statics;
@@ -24,6 +29,7 @@ from verity.definitions.numerics import topp_stage_twins as TW
 from verity.definitions.registry import sampling as SA
 from verity.definitions.registry import topp_keep_builder as K
 from verity.definitions.registry import topp_stages as T
+from verity.definitions.registry.topp_word_gates import CW
 
 OPERANDS = ("top_p", "seed", "pos", "temp", "splits")
 SERVED_V = 154880
@@ -93,6 +99,98 @@ def test_the_units_compute_the_twin_s_words_whose_token_is_the_call_s(kind, temp
         assert [int(v) for v in outs[T.plan(V)[-1].key][0]] == [tok]
 
 
+@pytest.mark.slow
+def test_a_select_chunk_counts_its_ties_across_a_slice_s_end():
+    """A V = 1000 row's select chunks hold `SELECT_N` lanes, and at split counts 2, 4, 8 and 16 a slice ends inside the chunk
+    of lane 504 before it, which no chunk of a V = 64 row has (its two lanes end with their slices).  On these two rows the
+    lane's tie count decides the token: it ties with lanes 3 and 470 and its noise beats theirs, so the Call's token is lane 3
+    when top_p keeps two of the ties (it is the third along the row) and lane 504 when it keeps three.  Every select chunk
+    computes the twin's words, which count ties along the row: a chunk that read a lane past the slice's end with the ties
+    before the slice it began in keeps the lane on the first row, one that read the slice after's drops it on the second, and
+    one that didn't restart its count at the slice's end carries another count.  Half a minute, most of it the twin."""
+    V, lane = 1000, 504
+    sel = [u for u in T.plan(V) if u.key[0] == "select"]
+    at = sel[lane // T.SELECT_N]
+    assert T.chunk(V) == T.SELECT_N and at.lanes[0] <= lane < at.lanes[1]
+    for S in (2, 4, 8, 16):
+        assert any(at.lanes[0] < end <= lane for end in range(T.Geo(V, S).L, V, T.Geo(V, S).L)), S
+    for ties, top_p, tok in ((6, 0.3, 3), (7, 0.4, lane)):
+        x = np.full(V, 1.0, np.float32)
+        x[[3, 470, lane, 600, 700, 800, 900][:ties]] = 8.0
+        lg = bf16_row(x)
+        ops = {"top_p": f32(top_p), "seed": 0x1234_5678_9ABC_DEF0, "pos": 42, "temp": f32(0.7)}
+        for S in (2, 4, 8, 16):
+            assert evaluate(bind(SA.GumbelTopPTokenSelect, V=V), [int(v) for v in lg], *(ops[o] for o in OPERANDS[:4]), S) == (tok,)
+            got, outs = TW.stage_rows(V, lg, splits=S, **ops)
+            bad = [u.key for u in sel if [int(v) for v in evaluate(u.defn, *unit_args(u, lg, {**ops, "splits": S}, outs))]
+                   != [int(v) for f in outs[u.key] for v in f]]
+            assert (got, bad) == (tok, []), (top_p, S)
+
+
+@pytest.mark.slow
+def test_a_lane_past_a_slice_s_end_inside_a_chunk_takes_its_new_slice_s_warp_half():
+    """The two warp halves hold values of Z an ulp apart when the slices' exp sums round differently in the halves' two orders
+    (`topp_geometry.z_group`); a tie's probability is then its half's, and a lane counts as a tie only at its own half's.  On
+    such a row of V = 1000 (a lone top lane, seven ties under it, a floor in steps of 1/64), lane 504 is a tie past a slice's
+    end inside its chunk at split counts 4, 8 and 16, in the other half than its offset would have in the slice that ended.
+    Every select chunk computes the twin's words, each split count's tie count among them, and the twin's token is the Call's:
+    a chunk that took the half of its lanes past the end from the slice they left carries a tie count one off at all three
+    split counts, which the rows of equal ties above don't see, their halves' Z being one word.  A quarter of a minute."""
+    V, lane, ties = 1000, 504, [3, 470, 504, 600, 700, 800, 900]
+    x = ((np.arange(V) * 5 % 257) / 64 - 2).astype(np.float32)
+    x[ties], x[40] = 8.0, 9.0
+    lg = bf16_row(x)
+    sel = [u for u in T.plan(V) if u.key[0] == "select"]
+    at = sel[lane // T.SELECT_N]
+    ops = {"top_p": f32(0.5), "seed": 0x1234_5678_9ABC_DEF0, "pos": 42, "temp": f32(0.7)}
+    for S in (4, 8, 16):
+        geo, off = T.Geo(V, S), lane % T.Geo(V, S).L
+        assert at.lanes[0] < lane - off <= lane < at.lanes[1] and geo.h1(off) != geo.h1(off + geo.L), S
+        got, outs = TW.stage_rows(V, lg, splits=S, **ops)
+        pr = {v: int(w) for u in T.plan(V) if u.key[:2] == ("probs", S) for v, w in zip(range(*u.lanes), outs[u.key][0])}
+        assert len({pr[t] for t in ties}) == 2, S
+        assert evaluate(bind(SA.GumbelTopPTokenSelect, V=V), [int(v) for v in lg], *(ops[o] for o in OPERANDS[:4]), S) == (got,)
+        bad = [u.key for u in sel if [int(v) for v in evaluate(u.defn, *unit_args(u, lg, {**ops, "splits": S}, outs))]
+               != [int(v) for f in outs[u.key] for v in f]]
+        assert bad == [], S
+
+
+def test_every_served_select_chunk_s_lanes_take_their_own_slice_s_positions():
+    """At GLM-5.3's vocabulary, `topp_stages.positions` on the first lane's position of every select chunk, at every split
+    count that has slices: each lane's warp half, whether a mask block of its slice starts at it (its tie count restarts) and
+    whether it is past a slice's end are those of its own offset in its own slice, counted along the row as the twin counts
+    them, and the position of the lane past the chunk is the next chunk's first.  A slice ends inside 8 chunks at S = 16 and
+    24 at S = 32, and inside none at a smaller split count.  At S = 32 each of the 384 lanes past such an end is in the other
+    half than its offset would have in the slice that ended, so a chunk that took those lanes' half from the slice they left
+    is wrong in all 24; at S = 16 the two halves are one, and the row of 1,000 lanes above holds that split count.  The
+    chunks are the rows of one engine, the twin's, which runs one row."""
+    V, n = SERVED_V, T.chunk(SERVED_V)
+    assert n == T.SELECT_N and V % n == 0
+    first = np.arange(0, V, n)
+    lanes = first[:, None] + np.arange(n)
+    E = TW.ArrayEngine()
+    E.T = len(first)
+
+    def pos(geo, lane):
+        off = lane % geo.L
+        return np.stack([off, off % K.MASK_BLOCK, off % geo.P, lane // geo.L], 1)
+
+    def words(v):
+        return np.where(v.k, v.kv, v.d)
+
+    inside, other = {}, {}
+    for S in K.SPLIT_COUNTS[1:]:
+        geo = T.Geo(V, S)
+        h1, reset, wr, nxt = T.positions(E, geo, n, tuple(E.free(1, CW, w) for w in pos(geo, first).T))
+        off, past = lanes % geo.L, lanes // geo.L != first[:, None] // geo.L
+        want = {"h1": geo.h1(off), "reset": off % K.MASK_BLOCK == 0, "past": past, "next": pos(geo, first + n)}
+        got = {"h1": words(h1), "reset": words(reset), "past": words(wr), "next": np.concatenate([words(w) for w in nxt], 1)}
+        bad = {name: np.nonzero((got[name] != want[name]).any(1))[0].tolist() for name in want}
+        assert not any(bad.values()), (S, {name: (len(ks), ks[:4]) for name, ks in bad.items() if ks})
+        inside[S], other[S] = int(past.any(1).sum()), int((past & (geo.h1(off) != geo.h1(off + geo.L))).sum())
+    assert len(first) == 4840 and inside == {2: 0, 4: 0, 8: 0, 16: 8, 32: 24} and other == {2: 0, 4: 0, 8: 0, 16: 0, 32: 384}
+
+
 EDGE = ["ties", "nan", "few", "uniform", "posinf", "plain", "neginf"]
 
 
@@ -150,14 +248,15 @@ def test_the_plan_wires_each_parameter_to_an_earlier_unit_s_output_of_its_type(V
 
 
 def test_the_served_cut_s_units():
-    """At GLM-5.3's vocabulary the Call is 3,924 units of 85 Definitions: per split count its stats blocks and their parts,
-    its step blocks' probabilities and five rounds of steps, and 605 select chunks of at most 256 lanes."""
+    """At GLM-5.3's vocabulary the Call is 8,159 units of 85 Definitions: per split count its stats blocks and their parts,
+    its step blocks' probabilities and five rounds of steps, and 4,840 select chunks of 32 lanes (`SELECT_N`)."""
     cut = T.cut(bind(SA.GumbelTopPTokenSelectSharedGreedy, V=SERVED_V))
     by = Counter()
     for d, n in cut:
         by[d.defn.name] += n
-    assert (len(cut), sum(by.values())) == (85, 3924)
-    assert by == {"TopPStatsHead": 147, "TopPStatsExp": 268, "TopPProbs": 484, "TopPStep": 2420, "GumbelTopPSelect": 605}
+    assert (len(cut), sum(by.values())) == (85, 8159)
+    assert by == {"TopPStatsHead": 147, "TopPStatsExp": 268, "TopPProbs": 484, "TopPStep": 2420, "GumbelTopPSelect": 4840}
+    assert {d.bindings["N"] for d, _n in cut if d.defn.name == "GumbelTopPSelect"} == {T.SELECT_N} == {T.chunk(SERVED_V)}
     assert T.cut(bind(SA.GumbelTopPTokenSelect, V=SERVED_V)) == cut
     assert {SA.CUTS[f] for f in ("GumbelTopPTokenSelect_v1", "GumbelTopPTokenSelectSharedGreedy_v1")} == {T.__name__}
 
