@@ -65141,3 +65141,102 @@ Your 20:57Z and 21:20Z sections are read whole. Corrections 3 and 4 are answered
 **The branch.** `cursor/proofs-count-71ac` at `1f64540734`, pushed. Every total-cost and break-even line's second stage is now by template; `total_cost.py counts` writes a line's counts as `main`'s sampling rule takes them; each design carries its sessions a verification phase. 208 + 53 tests pass on the VM; suites not yet run at this head.
 
 **Next, in order.** (1) the three printed lines beside the plan (several sessions a template; one session a template of any size; one session of one table a template), each modeled, with its largest session in proof blocks and tables; the wording "measured" taken out of the tree where it means a limit; (2) the join of block types against templates; (3) `research data put` of the new plan and its counts file, and the artifact's id to you; (4) suites at the final head; (5) the pull request with a ready line by 04:00Z.
+
+## 21:37Z KEPT: the interface entry for PRF-548, to paste: nothing a caller wrote against changes; three lines added, each held by a test; the memory between members is measured; the order condition, and which side's test holds which half
+
+Tags: [read: file], [run: id], [measured: run id], [derived], [guess]. Every figure below is on a branch, not on `main`, from stand-in values, not the served engine, one core of a loaded node, one run each.
+
+### A. To paste on PRF-548: the interface of the kept verifier, `verify-members`
+
+On `cursor/proofs-keptverify-604f` at `0963ff842e` (the first pull request, not opened). The second pull request (`cursor/proofs-keptcircuit-7c1e` at `5e87ff2c83`, not opened) keeps the last member's circuit file too and changes no line of this.
+
+**Unchanged since Wed 11 Nov 17:56Z**
+1. **Start, once a run:** `flock-verify verify-members [--archive DIR] --program F`. `F` is the registered program as `verify` takes `--program`: a path, or with `--archive DIR` its SHA-512 in that archive.
+2. **A member:** one line on standard input, a JSON array of strings: `verify`'s argument list for that member, every word after `verify`, its own `--archive`, `--program`, `--partition`, `--registered`, `--zk` and `--session DIR...` among them.
+3. **Its answer, on standard output:** the `VERDICT` lines `verify` prints for that member alone, byte for byte, then `MEMBER {"exit":E,"index":I}`, then a flush. `E` is `verify`'s exit status on that list (0 every session accepted, 1 one refused or an exception, 2 stopped before any session). A line that is no argument list gets `MEMBER {"error":WHY,"exit":2,"index":I}`.
+4. **One member at a time:** the next line is read only after the last `MEMBER` line is flushed.
+5. **Refused:** a session whose `VERDICT` says so; a session of an answered member with no `VERDICT` line of its own; every session of a member with no `MEMBER` line.
+6. **The process's exit status:** 0 when every member's is 0, else 1; 2 with nothing printed when it has no program it can read.
+
+**Added since, each held by a test** [run: `r20261111-211945-ca3f`, 5 passed, 0 skipped, on a build of this head]
+7. **Standard error:** everything `verify` writes there for a member is written and flushed before that member's `MEMBER` line. A caller that writes a member's line only once the one before it is answered finds, at each `MEMBER` line, that member's lines last and nothing after them. The test splits the file where each `MEMBER` line arrives and holds each piece to what `verify` writes alone, but for the milliseconds.
+8. **Files held by content:** `--archive DIR` and a SHA-512 key for the program on the command line; in each line the member's own `--archive` and a key for its circuit, public file, partition and program. The test hands five members, each with an archive of its own.
+9. **It opens no connection and writes no file.** It reads standard input, its program and the files its lines name, and writes its two streams. The test runs the whole process, from its start through three members to its end, under a system-call filter that kills it at its first `socket` call; each member is answered as `verify` answers it alone. The control: a process that opens a socket under the same filter is killed.
+
+**What crosses from one member to the next**
+- First pull request: the program's digest and its two readings, which a member receives only where its own program's bytes are the kept bytes, compared in full. A member with another program reads it once, as `verify` does.
+- Second pull request: also the SHA-512 and the parse of the circuit file of the member before it, received only where the member's own circuit file, statement, flags and lookup tables are the same, compared in full. One circuit file is kept at a time, the last member's.
+- Never: a session's record, coins, tables, registered reads or verdict.
+- The equation, in the verifier's own package: a member's check in the kept process is `verify` on the same arguments, the same action, whatever is kept (`verifyMember_eq`); the three standard axioms only [run: `r20261111-211933-3153` for the first pull request, `r20261111-212529-fde4` for the second].
+
+### B. Memory the kept process holds beside the next member's prover (the vLLM lane's first ask)
+
+Resident memory of the process, read when each `MEMBER` line arrives, and its peak. GB is 10^6 kB as the kernel reports it. Medians over 2 rounds of 3 members.
+
+| | first pull request [measured: `r20261111-194300-34fd`] | second pull request [measured: `r20261111-194637-ee5b`] | `verify` alone, one process a member |
+|---|---|---|---|
+| 1.79 GB circuit file, 151.8 MB program: **between members** | **5.10 GB** | **5.26 GB** | nothing: the process ends |
+| the same: peak while a member is checked | 9.29 GB | 9.26 GB | 9.09 to 9.11 GB |
+| 542.7 MB circuit file, 141.2 MB program: between members | 2.88 GB | 3.19 GB | nothing |
+| the same: peak | 6.74 GB | 6.76 GB | 6.60 to 6.63 GB |
+
+- **Keeping the circuit file's parse adds 0.2 to 0.3 GB between members**, not the file's size. [guess] why: with only the program kept, most of the 5.10 GB is memory the last member's check freed and the allocator had not yet returned to the kernel; with the circuit file kept, the same pages hold its parse.
+- **The figure follows the last member's circuit file, not the largest seen:** after a member with the 1.79 GB file the process held 5.04 GB, and after the next member, with the 542.7 MB file, 2.93 to 3.00 GB [measured: `ee5b`, members handed in the order small, small, large, small].
+- **Measured with the allocator's default.** #9005 (open, not mine) starts `verify` with `MIMALLOC_PURGE_DELAY=-1`, which keeps every freed page. A driver that starts the kept process under that setting should expect it to hold its peak between members, about 9.3 GB at the 1.79 GB file [derived from the peak; not measured under that setting]. I can measure it: one run, about 70 min. Say if the driver will set it.
+- **When the circuit file changes between members** (second pull request): the peak was 10.52 GB against 9.26 GB without a change [measured: `ee5b`, at `16a0a485ff`], because the earlier file's parse was still held while the new one was parsed. Changed today so the earlier one is freed first (`5e87ff2c83`, pushed); the measurement that says whether it is, `r20261111-212613-d744`, is running (about 23:00Z). Until it ends, 10.52 GB is the figure for a run whose members do not share one circuit file.
+
+Seconds a member waits before its first check, for the same two runs:
+
+| | `verify` alone | first pull request, a later member | second pull request, a later member with the same circuit file |
+|---|---|---|---|
+| 1.79 GB circuit file, 151.8 MB program | 53.3 s (`34fd`), 55.2 s (`ee5b`) | 20.9 s | **2.1 s** |
+| 542.7 MB circuit file, 141.2 MB program | 39.3 s, 40.2 s | 7.2 s | **0.96 s** |
+| whole call for that member, its checks included, large / small | 77.2 s / 48.7 s (`34fd`), 81.5 s / 49.9 s (`ee5b`) | 44.7 s / 16.5 s | 25.0 s / 9.8 s |
+
+The first member of a process pays what `verify` alone pays. The guard held in every block: each member's verdict bytes in the kept process are `verify`'s alone.
+
+### C. What the 0.75 s on the vLLM lane's window is made of (its question of 19:57Z)
+
+- **All of it is the program's, and none of it the partition's** [read: `FlockVerify.lean`, `verifyCmdBy`, up to the line that prints `inputs:`]. In that stage the first pull request keeps one thing: the program's digest, which costs reading the program's bytes as JSON once, writing its canonical form and hashing it. The partition, the public file and the circuit file are read again for every member; they are in the 0.57 s that stays.
+- **The timer does not split it further.** At my sizes the same step is 13.3 s for a 141.2 MB program and 12.8 s for a 151.8 MB one [measured: `34fd`, `inputs` alone less `inputs` of a later member], 84 to 94 ms a MB. At that rate 0.75 s is a program of 8 to 9 MB [derived; I do not have its file]. If its program is far from that size, tell me and I look again.
+- The program's two readings are in the next stage (`setup`), not in `inputs`: 19.0 s alone against 0.2 s for a later member at 141.2 MB [measured: `34fd`]. On its window that stage should fall the same way.
+
+### D. Soundness's order condition (your 19:45Z, and the relay of 12:56 PM and 1:02 PM PST)
+
+The condition, in soundness's words: nothing of member k+1 is in the challenger's log before member k's closing `tree-open` round: no coin of k+1 and no line that opens its session.
+
+**Which side's test holds which half**
+- **What reaches the challenger's log, and in what order: the vLLM lane's test.** The only party that opens a session or draws a coin is the prover's kept loop (`prove --zk --stream -` behind the ZK server). Its test (member k+1's first coin's position in the log is after member k's closing round) holds the whole order. Nothing in my process can make that test pass or fail.
+- **That a verifier started early adds nothing to that log: my test.** The kept verifier is started before the first member's session and stays up through every member, which is the early start soundness allows. Line 9 above is the test: from its start to its end the process opens no socket, and `verify` writes no file [read], so it has no way to put a line in a log the challenger's host keeps. It holds nothing of a session between members, and it reads a member's files only when handed that member's line, after it has answered the member before.
+
+**Can `verify-members` refuse a group whose log breaks the order? No.** [read: `FlockVerify.lean`, `Flock/CoinTree.lean`]
+- It reads no line of the challenger's log. Of a session it reads the session's own record (`session.json`: the hello, the coin tree's key, nonce, root and spec, the rounds) and the proof files. No log position and no `tree-open` line is among its inputs.
+- Reading the log there would bring in what makes the log the challenger's (the signed close, the ledger, the key), which is Spot's code and not Flock's, and would make a position cross from member k to member k+1, which the contract rules out and no equation with `verify` for one member can state.
+- **Where it can be held:** the one-stage audit's Lean verifier already reads the whole log in order under the challenger's signed close (`Spot.Challenger.trustedTreesOf`, `sampleLinkFirst`, `sessionsTreeReason`, called from `Spot.OneStageZk`) [read]. The condition is one more scan of the same lines, about the size of `sampleLinkFirst`: the scan, its `#guard`s, its mirror in `challenger.py`, one difftest piece.
+- **What it waits on and what it touches:** the closing round is not in the tree at my base (nothing there is named `EvidenceRecorded`; it comes with PRF-490). Wiring the scan into `Spot.OneStageZk` changes a function that properties under `security/` are stated against and that five locks name, so it needs the approval a changed statement needs. Not started, and nothing of it is in either of my branches.
+- The condition, with soundness's sentence quoted, is in my note for whoever takes the prover's kept loop (`lanes/proofs/20261111T1657Z-report-kept-verifier.md`, its first section).
+
+### E. The three pull requests the first one waits on [run: `research queue status`, 21:36Z]
+
+- #8789 at `6a3d3ea5`, #8949 at `c14e4bd2` and #9042 at `00963f01`: each marked ready and admitted; the queue merges each into a candidate on `main` once it has a land verdict. #9042 was not marked at 21:12Z and is now. None is on `main` yet.
+- The queue lists #8949 among the pull requests that name no Linear issue.
+- So the date is the land verdicts' and the queue's, no longer a mark's. When all three are on `main` I merge, run the records once and the tier at the merged head, open the pull request and tell you; I do not mark it.
+
+### F. The two branches now
+
+**First, `cursor/proofs-keptverify-604f` at `0963ff842e`, pushed.** Two commits since `658d726a13`:
+- `14765d3195`: a member whose program is not the kept one reads it once. Found by the measurement: such a member parsed its program at every reading and waited 101 s before its first check against 55 s alone [measured: `ee5b`]. Its verdict was never wrong (the test has held that since the first commit); it was slow. Members of one run share the program, so the driver does not take this path. The equation is unchanged in statement; its proof gains one lemma (`ProgramRead.readers_orOf`).
+- `0963ff842e`: line 9 above, the test and two sentences of contract.
+- Checked at this head: both changed Lean files elaborate, the three axioms only [run: `r20261111-211906-8343`, `r20261111-211933-3153`]; the test [run: `ca3f`]. No lock names a changed definition; no file under `security/` changed. Not rerun: the tier and the records run, which are run once at the merged head.
+
+**Second, `cursor/proofs-keptcircuit-7c1e` at `5e87ff2c83`, pushed.** Two commits since `16a0a485ff`:
+- `4f4443d306`: the first branch's head merged in, so both of its changes are here.
+- `5e87ff2c83`: the earlier circuit file's parse is freed before another file is parsed. No statement changes.
+- Checked at this head: both changed Lean files elaborate, the three axioms only [run: `r20261111-212504-3c12`, `r20261111-212529-fde4`]; the test, 6 of 6, the system-call filter's among them [run: `r20261111-212548-fc03`]. No lock names a changed definition; no file under `security/` changed.
+- In flight: the measurement with the circuit file changing between members [run: `r20261111-212613-d744`, cpu-8, built 21:30Z, about 23:00Z]. It says whether the peak at a change is back near 9.26 GB and whether a member with another program now waits what `verify` alone waits.
+
+**Not done**
+- The second pull request: `d744`'s verdict on the peak; then, at the head that stands, its records run and tier, and its body, which will say `m1_reads.sh`'s default was fixed. By Fri 13 Nov 02:00Z.
+- The first pull request, which waits on the three above reaching `main`.
+- The memory under `MIMALLOC_PURGE_DELAY=-1`, unless you say the driver will set it.
+- The scan for the order condition in the one-stage audit's verifier: not mine to start without approval, and it waits on PRF-490.
