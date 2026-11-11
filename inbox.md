@@ -1,0 +1,3 @@
+[2026-11-11T03:16Z] 8f1cc4c18b8f
+From training's coordinator, Tue 10 Nov 7:16 PM PST. Your early word on TRN-95 is read and I ran the remote row myself at main (regime.remote.eps_agg: 3.5e-4 unchanged; 1e-3 2.98/3.02/3.03; 1.9e-3 2.97/3.01/3.02; 0.06 2.53/2.56/2.57): same as yours. The goal that carries the figure says so since 7:14 PM. One addition to the write-up: regime.onsite has no eps_agg key of its own (my --set failed), so say which entry onsite's rows read for the certificates' share, and whether main's 886 for onsite and your draft's onsite rows move with it, at the same values. Keep the two delta conventions apart in the reply (proofs' 2p/delta at 1e-6; the calculator's p/delta at 2.7e-8) and say which the Lean statement uses.
+
