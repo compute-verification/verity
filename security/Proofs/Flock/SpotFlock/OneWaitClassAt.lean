@@ -1,11 +1,12 @@
 module
 
 public import Proofs.Flock.SpotFlock.FirstHitClassAt
-public import Proofs.Flock.SamplingGeneric.TwoOneWaitAt
+public import Proofs.Flock.SamplingGeneric.TwoOneWaitNumbers
 import Proofs.Flock.SamplingGeneric
 import Proofs.Flock.Masked
 import Proofs.Flock.Claims.KS.FindsFlock
 import Proofs.Flock.Claims.KS.ZkExtend
+import Proofs.Flock.Claims.Prob
 import Proofs.Flock.Claims.Sampling.Assembled
 import Proofs.Flock.SpotFlock.RevealsLe
 
@@ -29,6 +30,9 @@ at the one-wait extraction, and one thing more:
 
 What the theorem still takes: the budget `T` a run, the three counts over the coins, and the linear expected-time
 bound at the one-wait compiled verifier's `B_conf,X` and its two by-class finders.
+`code_eventTwoX_oneWait_le_cls_513` is the bound at numbers: `3·κ_s + 2·√(k·γ_s·Pr[B]) + 2^-102` where a run and the
+opening checks call SHA-512 at most `513·2^80` times, a wait collects at most `12343986` accepted reruns, and the
+three counts are at most `2^26`, `2^38` and `2^38`.
 -/
 
 @[expose] public section
@@ -195,5 +199,52 @@ theorem code_eventTwoX_oneWait_le_cls_at_budget (hB : Built h) (hS : Addresses h
       L.oneWait.iopTable_isSome_cls FlockDeploy.sha512 P x t.1 hs d.part cls hblock t.2 ec (hkept t.1 _ ec.2) g g'
         hgg hg)
     T hT hNs hKs hKm hBc hX hI
+
+/-- **The one-wait bound at the code, at one wait a session with every call charged as `513`**:
+`code_eventTwoX_oneWait_le_cls_at_budget` with its right-hand side at numbers (`CompiledTwo.εclsOneWait_le_513`).
+Where also the budget is `T ≤ 513·2^80`, each proof block's wait collects `k ≤ 12343986` accepted reruns, the bounds
+on the sample's counts are `N_s ≤ 2^26`, `K_s ≤ 2^38` and `K_m ≤ 2^38`, and the opening checks of the statement's
+proof blocks call SHA-512 `n_PU·openCalls ≤ 513·2^80` times, an accepted run samples a proof block of the one-wait
+compiled verifier's `FregTwoX` with probability at most `3·κ_s + 2·√(k·γ_s·Pr[B]) + 2^-102`. -/
+theorem code_eventTwoX_oneWait_le_cls_513 (hB : Built h) (hS : Addresses h)
+    {L : Claims.SamplingGeneric.CompiledTwo FlockDeploy.Coin
+      (Claims.SamplingGeneric.Arg.ofFlock (FlockDeploy.deployZk _root_.Flock.Readable.relation))}
+    (hL : L = SamplingDeploy.compiledTwo (FlockDeploy.deployZk _root_.Flock.Readable.relation) (code h) iroots
+      (two h) (rs h) (cap h))
+    {x : Msg} {s : AuditStatement} {Pt : Partition} {d : Design.Two} (hx : parse h x = some s)
+    (hP : partition h s = some Pt) (hd : two h s = some d) (hin : InScopeTwo Pt d s) {Ω : Type} [Fintype Ω]
+    [Nonempty Ω] (P : Prover Ω) {needs : ℕ → Finset ℕ}
+    (hneeds : needs = fun u => (Reveal.needs (partition h) s u).toFinset) {cls : Fin (L.nG x) → Fin (L.nG x)}
+    (hcls : cls = Verity.FirstHit.clsOf fun g : Fin (L.nG x) => gateKey h s Pt d g.val) (T : ℕ)
+    (hT : ∀ ω r, (run FlockDeploy.sha512 P L.V x ω r).pLog.length +
+      (run FlockDeploy.sha512 P L.V x ω r).vLog.length ≤ T) {Ns Ks Km : ℝ}
+    (hNs : Ex (fun r : Fin (L.V.k x) → FlockDeploy.Coin =>
+      ((L.toCompiled.firstSlots x (L.checked x r)).card : ℝ)) ≤ Ns)
+    (hKs : Ex (fun r : Fin (L.V.k x) → FlockDeploy.Coin =>
+      (((L.toCompiled.sampleNeeds x needs (L.checked x r)).image cls).card : ℝ)) ≤ Ks)
+    (hKm : Ex (fun r : Fin (L.V.k x) → FlockDeploy.Coin =>
+      (L.toCompiled.sessCountIn x needs (fun l => (L.toCompiled.sampleNeeds x needs l).image cls)
+        (L.checked x r) : ℝ)) ≤ Km)
+    (hBc : ExpectedCR FlockDeploy.sha512
+      (Claims.SamplingGeneric.Compiled.BconfX FlockDeploy.sha512 L.oneWait.toCompiled Ω P x))
+    (hX : ∀ K : ℕ, ExpectedCR FlockDeploy.sha512
+      (L.oneWait.toCompiled.finderXCls FlockDeploy.sha512 P x s needs cls K))
+    (hI : ∀ K : ℕ, ExpectedCR FlockDeploy.sha512
+      (L.oneWait.finderICls FlockDeploy.sha512 P x s d.part needs cls K))
+    (hTle : T ≤ 513 * 2 ^ 80)
+    (hk : ∀ u < L.toCompiled.nPU x, (Claims.SamplingGeneric.Arg.ofFlock
+      (FlockDeploy.deployZk _root_.Flock.Readable.relation)).k (L.toCompiled.sh x u) ≤ 12343986)
+    (hNsle : Ns ≤ 2 ^ 26) (hKsle : Ks ≤ 2 ^ 38) (hKmle : Km ≤ 2 ^ 38)
+    (hown : L.toCompiled.nPU x * L.toCompiled.openCalls x ≤ 513 * 2 ^ 80) :
+    Pr (fun p : Ω × (Fin (L.V.k x) → FlockDeploy.Coin) =>
+        (run FlockDeploy.sha512 P L.V x p.1 p.2).out = .acc ∧
+          ∃ u ∈ L.checked x p.2, u ∈ L.oneWait.FregTwoX FlockDeploy.sha512 P x p.1 p.2) ≤
+      3 * L.κs x + 2 * Real.sqrt (L.V.k x * L.γs x * PrB FlockDeploy.sha512 L.V P x) + 2 ^ (-(102 : ℝ)) := by
+  have hNs0 : 0 ≤ Ns := le_trans (Ex_nonneg (by intro r; exact Nat.cast_nonneg _)) hNs
+  have hKs0 : 0 ≤ Ks := le_trans (Ex_nonneg (by intro r; exact Nat.cast_nonneg _)) hKs
+  have hKm0 : 0 ≤ Km := le_trans (Ex_nonneg (by intro r; exact Nat.cast_nonneg _)) hKm
+  exact (code_eventTwoX_oneWait_le_cls_at_budget h hB hS hL hx hP hd hin P hneeds hcls T hT hNs hKs hKm hBc hX
+    hI).trans (Claims.SamplingGeneric.CompiledTwo.εclsOneWait_le_513 FlockDeploy.sha512 L x P hNs0 hKs0 hKm0 hTle hk
+      hNsle hKsle hKmle hown)
 
 end SpotFlock
