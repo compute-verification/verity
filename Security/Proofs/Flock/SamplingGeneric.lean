@@ -27,6 +27,7 @@ public import Proofs.Flock.SamplingGeneric.Complete
 public import Proofs.Flock.SamplingGeneric.TwoRankin
 public import Proofs.Flock.SamplingGeneric.TwoReg
 public import Proofs.Flock.SamplingGeneric.TwoRegMiss
+public import Proofs.Flock.SamplingGeneric.TwoRegAt
 
 /-!
 # The sampled compiler in the claims core, at Flock
@@ -99,7 +100,9 @@ coin (`SamplingGeneric/TwoCap.lean`: `CompiledTwo.FregTwo_eq`, `CompiledTwo.Freg
 `r₂` the run's sample misses it with probability at most `(1 − r₁·r₂)^{|W|}`, `W` the replay blocks wrong at the
 committed boundary trace, and the committed form's event gives its threshold form and the headline
 (`SamplingGeneric/TwoRegMiss.lean`: **`CompilerKSRegTwo`**, **`CompilerMissTwo`** and **`CompilerHeadlineTwo`** are
-proved, `CompiledTwo.ksRegTwo_of_event`).
+proved, `CompiledTwo.ksRegTwo_of_event`). Read at a budget, `B_conf,2` declared at `T` a run costs `B_conf`'s bound in
+expectation, each of its two runs on uniform coins (`SamplingGeneric/TwoRegAt.lean`), so **`CompilerKSRegTwoAt` is
+proved** (`compilerKSRegTwoAt`).
 -/
 
 @[expose] public section

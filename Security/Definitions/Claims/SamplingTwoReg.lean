@@ -29,6 +29,10 @@ ones.
 5. **The claims**: `CompiledTwo.KSRegTwo`, two conjuncts on the run's coins, the event and the threshold form;
    `CompiledTwo.HeadlineTwo`, the acceptance probability at the committed boundary trace's best interiors;
    `CompiledTwo.MissTwo`, the miss at the replay blocks wrong at the committed boundary; and the compiler's statements.
+6. **At a time budget** (`BconfTwoAt`, `εregTwoAt`, `KSRegTwoAt`): `B_conf,2` declared at `T` a run, as
+   `Compiled.BconfAt` declares `B_conf`, and `KSRegTwo` with both finders' probabilities read at the expected cost
+   bound `c_T` (`Compiled.bconfCost`) where `ExpectedCR` holds at both; `CompilerKSRegTwoAt` at the opening checks'
+   count.
 
 Statements only: definitions, no proofs.
 -/
@@ -193,6 +197,58 @@ def MissTwo (H : Msg → Msg) (L : CompiledTwo Coin A) (r₁ r₂ : ℝ) : Prop 
       Pr (fun r : Fin (L.V.k x) → Coin => ∀ u ∈ L.checked x r, u ∉ L.FregTwo H P x ω r) ≤
         (1 - r₁ * r₂) ^ (wrongAtBoundaryAt s Pt d.part (L.regVal H P x ω)).card
 
+/-! ## 6. At a time budget -/
+
+/-- **`B_conf,2` declared at `T` a run**: `BconfTwo`'s tape, runs, extractor's coins and outcome, its cost `T` for each
+of its two runs and for each rerun of the prover their extractions make, plus the extractions' own SHA-512 calls, as
+`Compiled.BconfAt` declares `B_conf`'s. `T` caps both parties' calls in every run the finder makes. -/
+noncomputable def BconfTwoAt (H : Msg → Msg) (L : CompiledTwo Coin A) (T : ℕ) : FinderFamily := fun Ω _ _ P x =>
+  match L.parse x with
+  | none => { S := Unit, out := fun _ => none, cost := fun _ => 0 }
+  | some s =>
+    { S := Ω × (Fin (L.V.k x) → Coin) × ((Fin (L.V.k x) → Coin) × L.SlotEC x) ×
+        ((Fin (L.V.k x) → Coin) × L.SlotEC x)
+      ne := ⟨(Classical.arbitrary _, fun _ => default, (fun _ => default, Classical.arbitrary _),
+        (fun _ => default, Classical.arbitrary _))⟩
+      out := fun q =>
+        findColl (ownLog H (run H P L.V x q.1) (L.runExt x s (forkOn (L.stage2 x) q.2.1 q.2.2.1.1)
+            (run H P L.V x q.1 (forkOn (L.stage2 x) q.2.1 q.2.2.1.1)).seen q.2.2.1.2) ++
+          ownLog H (run H P L.V x q.1) (L.runExt x s (forkOn (L.stage2 x) q.2.1 q.2.2.2.1)
+            (run H P L.V x q.1 (forkOn (L.stage2 x) q.2.1 q.2.2.2.1)).seen q.2.2.2.2))
+      cost := fun q =>
+        T + T +
+          (ownLog H (run H P L.V x q.1) (L.runExt x s (forkOn (L.stage2 x) q.2.1 q.2.2.1.1)
+            (run H P L.V x q.1 (forkOn (L.stage2 x) q.2.1 q.2.2.1.1)).seen q.2.2.1.2)).length +
+          (ownLog H (run H P L.V x q.1) (L.runExt x s (forkOn (L.stage2 x) q.2.1 q.2.2.2.1)
+            (run H P L.V x q.1 (forkOn (L.stage2 x) q.2.1 q.2.2.2.1)).seen q.2.2.2.2)).length +
+          T * (((L.runExt x s (forkOn (L.stage2 x) q.2.1 q.2.2.1.1)
+              (run H P L.V x q.1 (forkOn (L.stage2 x) q.2.1 q.2.2.1.1)).seen q.2.2.1.2).eval H
+                (run H P L.V x q.1)).2.2 +
+            ((L.runExt x s (forkOn (L.stage2 x) q.2.1 q.2.2.2.1)
+              (run H P L.V x q.1 (forkOn (L.stage2 x) q.2.1 q.2.2.2.1)).seen q.2.2.2.2).eval H
+                (run H P L.V x q.1)).2.2) }
+
+/-- **The committed form's error at two stages at the budget `T`**: `ε_reg,2` with `Pr[B_conf]` and `Pr[B_conf,2]`
+read at `B_conf` and `B_conf,2` declared at `T` (`Compiled.BconfAt`, `BconfTwoAt`), whose expected costs are at most
+`c_T` (`Compiled.bconfCost`): `ε_reg(T) + N·√(c_T/2^256)` (`Compiled.εregAt`). -/
+noncomputable def εregTwoAt (H : Msg → Msg) (L : CompiledTwo Coin A) (x : Msg) {Ω : Type} [Fintype Ω] [Nonempty Ω]
+    (P : Prover Ω) (T : ℕ) : ℝ :=
+  L.εregAt H x P T + L.nG x * Real.sqrt (L.bconfCost x T / 2 ^ (256 : ℝ))
+
+/-- **KS, the committed form at two stages, read at a time budget**: `KSRegTwo`'s two bounds at every prover and every
+budget `T` on one run's SHA-512 work where `ExpectedCR` holds at `B_conf` and `B_conf,2` declared at `T`
+(`Compiled.BconfAt`, `BconfTwoAt`), with both finders' probabilities read at their expected cost bound `c_T`
+(`εregTwoAt`). -/
+def KSRegTwoAt (H : Msg → Msg) (L : CompiledTwo Coin A) : Prop :=
+  ∀ x, L.Scope x → ∀ (Ω : Type) [Fintype Ω] [Nonempty Ω] (P : Prover Ω) (T : ℕ),
+    ExpectedCR H (L.BconfAt H T Ω P x) → ExpectedCR H (BconfTwoAt H L T Ω P x) →
+    Pr (fun p : Ω × (Fin (L.V.k x) → Coin) => (run H P L.V x p.1 p.2).out = .acc ∧
+        ∃ u ∈ L.checked x p.2, u ∈ L.FregTwo H P x p.1 p.2) ≤ L.εregTwoAt H x P T ∧
+      ∀ s Pt d, L.parse x = some s → L.partition s = some Pt → L.two s = some d → ∀ δ : ℝ, 0 ≤ δ →
+        Pr (fun p : Ω × (Fin (L.V.k x) → Coin) => (run H P L.V x p.1 p.2).out = .acc ∧
+          ∀ ι : ℕ → ℕ → Bool, footprintAt s Pt d.part (L.regVal H P x p.1) ι ∉ d.M Pt δ) ≤
+          δ + L.εregTwoAt H x P T
+
 end CompiledTwo
 
 /-- **The two-stage compiler's committed form**: at `CompilerKSTwo`'s premises, every compiled two-stage verifier meets
@@ -212,5 +268,11 @@ def CompilerMissTwo : Prop :=
 def CompilerHeadlineTwo : Prop :=
   ∀ (Coin : Type) [Fintype Coin] [Nonempty Coin] [Inhabited Coin] (A : Arg Coin) (L : CompiledTwo Coin A)
     (H : Msg → Msg), L.Sessions H → L.KSRegTwo H → L.HeadlineTwo H
+
+/-- **The two-stage compiler's committed form read at a time budget**: at `CompilerKSRegTwo`'s premises and the
+opening checks' count, every compiled two-stage verifier meets `CompiledTwo.KSRegTwoAt`. -/
+def CompilerKSRegTwoAt : Prop :=
+  ∀ (Coin : Type) [Fintype Coin] [Nonempty Coin] [Inhabited Coin] (A : Arg Coin) (L : CompiledTwo Coin A)
+    (H : Msg → Msg), A.KS H → L.commit.Binds H → L.Sessions H → L.OpenCallsLe H → L.KSRegTwoAt H
 
 end Claims.SamplingGeneric

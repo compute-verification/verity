@@ -3920,6 +3920,15 @@
      "Claims.Witness.SamplingGeneric.twoOpenCalls_meets",
      "Claims.Witness.SamplingGeneric.twoSessions_meets"
     ]
+   },
+   "Claims.SamplingGeneric.CompiledTwo.KSRegTwoAt": {
+    "fails": "Claims.SamplingGeneric.CompiledTwo.KSRegTwoAt_fails",
+    "meets": [
+     "Claims.Flock.decoder_meets_plain",
+     "Claims.Flock.decoder_meets_zk",
+     "Claims.Witness.SamplingGeneric.twoOpenCalls_meets",
+     "Claims.Witness.SamplingGeneric.twoSessionsTwo_meets"
+    ]
    }
   },
   "not": {
@@ -4041,7 +4050,8 @@
    "Claims.Guarantees.CapTwo": "Claims.SecurityProofs.CapTwo",
    "Claims.SamplingGeneric.CompilerKSAtTwo": "Claims.SamplingGeneric.compilerKSAtTwo",
    "Claims.SamplingGeneric.CompilerEfficientTwo": "Claims.SamplingGeneric.compilerEfficientTwo",
-   "Claims.SamplingGeneric.CompilerKSRegAt": "Claims.SamplingGeneric.compilerKSRegAt"
+   "Claims.SamplingGeneric.CompilerKSRegAt": "Claims.SamplingGeneric.compilerKSRegAt",
+   "Claims.SamplingGeneric.CompilerKSRegTwoAt": "Claims.SamplingGeneric.compilerKSRegTwoAt"
   }
  },
  "witnesses": {
@@ -4606,6 +4616,10 @@
   "Claims.SamplingGeneric.compilerKSRegAt": {
    "honest": ["Claims.SamplingGeneric.compilerKS_honest", "Claims.SamplingGeneric.compilerBits_honest"],
    "nontrivial": "Claims.SamplingGeneric.compilerKSRegAt_nontrivial"
+  },
+  "Claims.SamplingGeneric.compilerKSRegTwoAt": {
+   "honest": ["Claims.SamplingGeneric.compilerKSTwo_honest", "Claims.SamplingGeneric.compilerBits_honest"],
+   "nontrivial": "Claims.SamplingGeneric.compilerKSRegTwoAt_nontrivial"
   }
  },
  "unwitnessed": {
@@ -26265,6 +26279,15 @@
    },
    "type_hash": "129a15e5ba38cbf426e8bf108ce5b819f0ed273352179a99b553e2155d002754",
    "unfolded_hash": "34781449a0a3c8f0ab53885fda423f5d6673b49c72fd1be9fc56713f08f055c2"
+  },
+  "Claims.SamplingGeneric.compilerKSRegTwoAt": {
+   "owner": "@proofs"
+  },
+  "Claims.SamplingGeneric.compilerKSRegTwoAt_nontrivial": {
+   "owner": "@proofs"
+  },
+  "Claims.SamplingGeneric.CompiledTwo.KSRegTwoAt_fails": {
+   "owner": "@proofs"
   }
  },
  "shape": {
