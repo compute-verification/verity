@@ -62,13 +62,13 @@ def test_a_cpu_phase_with_every_stage_skipped_writes_the_manifest_the_spec_and_t
     monkeypatch.setattr(RC, "profile_config", lambda name: None)
     (tmp_path / "wl.json").write_text(json.dumps({"requests": [{"request_id": f"r{i}", "prompt_len": n, "max_tokens": 4}
                                                                for i, n in enumerate((5, 3, 8))], "sweep": {"row_id": EAGER_ROW}}))
-    run = _run_dir(tmp_path, snapshot_steps=[0, 1], snapshot_max_bytes=777, snapshot_cap_derivation={"rows": 1})
+    run = _run_dir(tmp_path, snapshot_steps=[0, 1], snapshot_max_bytes=777)
     # r0 runs steps 0..3, r1 steps 2..4, r2 steps 4..5: two requests at once at steps 2, 3 and 4, never three
     _capture(run, [_request(0, 5, 0, 3), _request(1, 3, 2, 4), _request(2, 8, 4, 5)], engine_steps=6)
     assert _cpu_phase(run) == 0
     man = json.loads((run / "run.json").read_text())
     assert (man["config_id"], man["profile"], man["case"], man["phase"]) == ("x", "p", "B0", "cpu")
-    assert (man["snapshot_steps"], man["snapshot_max_bytes"], man["snapshot_cap_derivation"]) == ([0, 1], 777, {"rows": 1})
+    assert (man["snapshot_steps"], man["snapshot_max_bytes"]) == ([0, 1], 777)
     assert man["declared_execution"] == "bi-eager" and man["tier_b_steps"] == []
     assert man["skip"] == sorted({*CPU_STAGES, "fold_other"})          # `fold` names its group too
     real = man["realized"]
