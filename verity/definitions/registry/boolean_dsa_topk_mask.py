@@ -172,10 +172,10 @@ DsaRadixTie = _piece("DsaRadixTie", ["W", "RB"], _tie,
                      lambda S: ((("gt", BIT), ("eq", BIT), *((("c", Array(S.W, BIT)),) if S.W else ()), ("r", Array(S.RB, BIT))), BIT))
 
 
-def _count_tree(B, N: int, bits: Coll, cap: int | None = None) -> tuple[list[Coll], dict[int, Coll]]:
+def _count_tree(B, N: int, bits: Coll, top: int | None = None) -> tuple[list[Coll], dict[int, Coll]]:
     """`prefix_counts`' tree over N bits as Calls: (the sums going up, level k's the counts of its nodes of 2^k keys that lie
     whole inside the row, k + 1 bits each; the count before each key but the first, key 2^(h-1) .. 2^h - 1's under h, in h
-    bits, or in ``cap`` bits mod 2^cap where h is past it).  Going up, a level's nodes are summed in pairs
+    bits, or in ``top`` bits mod 2^top where h is past it).  Going up, a level's nodes are summed in pairs
     (`DsaCountSum_v1{W=k}`).  Going down, a node hands the count before it to its left half and that plus its left half's own
     to its right (`DsaCountSplit_v1`); a level's first node has nothing before it and its second the first's count, by
     reference.  The count before node t of level k is below t 2^k, so nodes 2^(h-1) .. 2^h - 1 carry it in k + h bits, a
@@ -189,10 +189,10 @@ def _count_tree(B, N: int, bits: Coll, cap: int | None = None) -> tuple[list[Col
     before: dict[int, Coll] = {}
     for k in reversed(range(depth)):
         n, u, above = -(-N >> k), k + 1, before
-        first = min(u, cap or u)
+        first = min(u, top or u)
         before = {1: Coll(_counts(1, first), up[k].refs.slice(0, first))}
         for h in range(2, (n - 1).bit_length() + 1):
-            lo, w = 1 << h - 1, min(k + h, cap or k + h)
+            lo, w = 1 << h - 1, min(k + h, top or k + h)
             here, own = min(2 * lo, n) - lo, min(u, w)
             parts, pairs = [], here // 2
             if pairs:
@@ -205,14 +205,14 @@ def _count_tree(B, N: int, bits: Coll, cap: int | None = None) -> tuple[list[Col
     return up, before
 
 
-def _sum_counts(B, zero: Coll, nodes: list, cap: int) -> tuple:
-    """The sum of counts given as (references, width), as (references, width) in at most ``cap`` bits: `DsaCountSum_v1` over
+def _sum_counts(B, zero: Coll, nodes: list, top: int) -> tuple:
+    """The sum of counts given as (references, width), as (references, width) in at most ``top`` bits: `DsaCountSum_v1` over
     them in turn, the narrower operand padded with zeros."""
     total, wide = nodes[0]
     for node, n in nodes[1:]:
         w = max(wide, n)
         x, y = (Coll(Array(w, BIT), concat([v, _rep(zero, w - m)]) if w > m else v) for v, m in ((total, wide), (node, n)))
-        wide = min(w + 1, cap)
+        wide = min(w + 1, top)
         total = B.call(bind(DsaCountSum, W=w), x, y).refs.slice(0, wide)
     return total, wide
 
@@ -461,7 +461,7 @@ def _tags_count(B, S, mask):
     count the sum of the tree's nodes that tile the row, one for each bit set in N."""
     M.check_net(S.N, S.K)
     N, kb, depth = S.N, M.rank_bits(S.K), (S.N - 1).bit_length()
-    up, before = _count_tree(B, N, mask, cap=kb)
+    up, before = _count_tree(B, N, mask, top=kb)
     zero = B.call(BL.constant(0))
 
     def keys(lo: int, n: int) -> Coll:
