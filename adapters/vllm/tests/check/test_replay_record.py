@@ -1,4 +1,4 @@
-"""The fold of the sampled replay's picks and the grade it gives (`check.replay.replay_record`), outcome by outcome: the texts are what
+"""The fold of the sampled replay's picks and the grade it gives (`verity_vllm.check.replay.replay_record`), outcome by outcome: the texts are what
 a stored record carries and the Commit verdict prints, so each is held to the letter."""
 from __future__ import annotations
 
