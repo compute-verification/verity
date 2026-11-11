@@ -23,7 +23,6 @@ says sm_100a (B200).
 - `f8_sm100.py` and `f8_sm100.sh` (`tcgen05_f8.cu`): the B200's `tcgen05.mma` FP8 step, generated on the CPU, captured
   under one GPU lease and scored on the CPU. `f8_model.py` is `GroupSum` on whole arrays of words, for the scoring.
 - `model5.py`: autoproof's model5, the control `probe.py` keeps. The probe refuted it on sm_120.
-- `stage0_sm120.py`: which FP4-path mnemonics ptxas accepts for sm_120a, and what each lowers to. It is record-only.
 
 `recheck.py` and `sp_e4m3.py` split into `capture` (on the GPU) and `verify` (on the CPU), so no CPU verification runs
 inside a GPU lease.
@@ -56,3 +55,10 @@ uv run python benchmarks/tc_probe_fp4/f1_rates.py build --out DIR               
 OUT=DIR bash benchmarks/tc_probe_fp4/f8_sm100.sh                                           # on a B200
 uv run tools/verity/check/suites.py benchmarks/tc_probe_fp4                                # the CPU suite
 ~~~
+
+## Interface
+
+- **Provides:** the Blackwell probes, the price microbenchmarks and the searches above, run on a GPU, and their store
+  declarations (`tool.py`).
+- **Loaded by:** the evidence store's tool registry, which loads `tool.py` by name. Nothing else.
+- **Loads:** `verity.definitions.silicon`, `verity_config`, and `research` in `tool.py`.

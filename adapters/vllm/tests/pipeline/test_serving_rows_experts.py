@@ -392,7 +392,7 @@ def test_the_circuit_record_states_each_templates_statement_as_compose_composes_
     --template`` composes and a5's composer (`records_audit.composer`) reads back: a read's layout mode and ``structural``,
     every other template's ``reads``."""
     monkeypatch.setattr(IF, "templates_of", lambda _w: [])
-    monkeypatch.setattr(SRW, "registered", lambda _ms, _rows: None)
+    monkeypatch.setattr(SRW, "registered", lambda _ms, _rows, _histories=None: None)
     monkeypatch.setattr(IF, "circuit_record", lambda _w, _name, _templates, sts, **_kw: sts)
     tmpls = [SLOTS, READ_W, READ_WS, BLOCK, PROJ["w13"].fused]
     sts = SRW.circuit_record(SimpleNamespace(members=[SimpleNamespace(template=t, schemas=True) for t in tmpls], row_tables=()), [])
