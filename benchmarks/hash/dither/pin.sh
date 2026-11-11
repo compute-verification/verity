@@ -6,13 +6,13 @@
 #   bash benchmarks/hash/dither/pin.sh      (on the host that serves it, e.g. an H200; HF_HOME, default /workspace/hf)
 set -euo pipefail
 PY=$(. benchmarks/harness/env.sh && echo "$VENV/bin/python") || exit 2
-export HF_HOME=${HF_HOME:-/workspace/hf} PYTHONPATH=$PWD/integrations/vllm:$PWD${PYTHONPATH:+:$PYTHONPATH}
+export HF_HOME=${HF_HOME:-/workspace/hf} PYTHONPATH=$PWD/adapters/vllm:$PWD${PYTHONPATH:+:$PYTHONPATH}
 OUT=${OUT:-${RESEARCH_RUN_DIR:-.}/out}
 mkdir -p "$OUT"
 "$PY" - <<'EOF'
 import json, os
 from huggingface_hub import snapshot_download
-base = next(c for c in json.load(open("integrations/vllm/manifests/checkpoints.json"))["checkpoints"] if c["role"] == "LLAMA31_8B")
+base = next(c for c in json.load(open("adapters/vllm/manifests/checkpoints.json"))["checkpoints"] if c["role"] == "LLAMA31_8B")
 print(snapshot_download(base["repo"], revision=base["revision"], allow_patterns=["*.json", "*.safetensors"],
                         cache_dir=os.environ["HF_HOME"] + "/hub"))
 EOF
