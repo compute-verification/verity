@@ -25,10 +25,10 @@ stopped and nothing is launched or posted twice:
               are the store's attempts of the clean commit whose result is a check's, but this run and any other uncached
               one. A part is a suite (its row in a suite report), a Lean package (its report in lean-audit/audit.json and
               its inputs key in the result's `passes`) or a step (its record in the result; every step but those of
-              BY_PART, whose parts are the suites and the Lean packages). It agrees when every
-              recorded verdict on it is the uncached one, under the same key where both sides hold one, and for a Lean
-              package with the same report outside RUN_FIELDS. A comparison that can't be read is tried again each pass,
-              and after COMPARE_S the night reports without one and says so.
+              BY_PART, whose parts are the suites and the Lean packages). The recorded verdict on a part is the newest
+              recorded check's that holds one. The part agrees when that verdict is the uncached one, under the same key
+              where both sides hold one, and for a Lean package with the same report outside RUN_FIELDS. A comparison
+              that can't be read is tried again each pass, and after COMPARE_S the night reports without one and says so.
     report    the outcome and the comparison, once each: a post in #agent-alerts, the rings (below), and the label
               `nightly_check` on `commit:<sha>` with the run as its ref. One that fails is tried again each pass until the
               next night is due.
@@ -44,13 +44,18 @@ The comparison changes no outcome and no label. It adds to the post how many par
 have no stored verdict, and names each part that disagrees with both verdicts, the key and the run that recorded the other
 one (with the run that stored a suite's reused pass). It reaches what check's own `cache_contradictions` doesn't, which
 is a suite's fresh failure against a pass the uncached run finds in its own cache: a recorded failure the uncached run
-passed, a Lean package, a step, a key or a Lean report that differs, in every recorded check of the commit. A part with no
-stored verdict is listed; a commit with no recorded check is said to have none, never to agree. It does not cover: each
-test's own outcome (a suite is one part, read by its row's status); the uncached run's keys for the steps check caches
-whole, which `--no-cache` never computes, so such a step's verdicts are compared and its key is the recorded side's alone;
-the key of a suite a recorded check ran in parts or passed by a traced pass, whose row holds the part's key or the suite's
-traced key and not the key of its inputs, so only its verdict is compared; circuit-check's targets, which are one part
-together; and a part the uncached run skipped, which is listed when a recorded check has it.
+passed, a Lean package, a step, a key or a Lean report that differs, on whatever machine the recorded check ran. A part
+with no stored verdict is listed; a commit with no recorded check is said to have none, never to agree. A part an earlier
+recorded check of the commit failed and a later one passed, as a check run again after a failure leaves it (or passed
+and then failed), is counted and named in one more sentence, and is no disagreement: the later verdict is the recorded
+one. It does not cover: each test's own outcome (a suite is one part, read by its row's status); the uncached run's keys
+for the steps check caches whole, which `--no-cache` never computes, so such a step's verdicts are compared and its key
+is the recorded side's alone; the key of a suite a recorded check ran in parts or passed by a traced pass, whose row holds
+the part's key or the suite's traced key and not the key of its inputs, so only its verdict is compared; circuit-check's
+targets, which are one part together; an earlier recorded check's key and Lean report, where a later one holds the part;
+a step every shard of a check runs (the preflight's), on which the shard launched last holds the recorded verdict and
+another shard's failure reads as an earlier check's; and a part the uncached run skipped, which is listed when a
+recorded check has it.
 
 The rings, each an inbox thread: nobody's for a pass with no part that disagrees (one post, naming nobody); infra's for any
 other outcome and for a comparison that could not be read; infra's and ci's when a part disagrees, whatever the outcome.
@@ -224,12 +229,13 @@ def verdicts(run: str, result: dict, suites: list[dict], audit: dict) -> dict[tu
     report or none), each step that ran but those of BY_PART. A verdict holds its `run` and `status`; the `key` it was given
     under, where an uncached and a recorded check hold the same kind of key (a Lean package's inputs key; a suite's inputs
     key, which the row of a part of a split suite and the row of a reused traced pass don't hold: theirs are the part's key
-    and the suite's traced key); a Lean package's `report`, each field outside RUN_FIELDS by digest; and `how` a pass it
-    reused came to it."""
+    and the suite's traced key); a Lean package's `report`, each field outside RUN_FIELDS by digest; `how` a pass it
+    reused came to it; and its `row`, which part of a split suite it is a verdict on (None: the whole part)."""
     out: dict[tuple[str, str], list[dict]] = {}
 
-    def add(kind: str, name, status: str, key=None, how: str = "", report: dict | None = None) -> None:
-        out.setdefault((kind, str(name)), []).append({"run": run, "status": status, "key": key, "how": how, "report": report})
+    def add(kind: str, name, status: str, key=None, how: str = "", report: dict | None = None, row: str | None = None) -> None:
+        out.setdefault((kind, str(name)), []).append(
+            {"run": run, "status": status, "key": key, "how": how, "report": report, "row": row})
 
     for r in suites:
         status = {"cached": "passed"}.get(r.get("status"), r.get("status")) if isinstance(r, dict) else None
@@ -238,7 +244,8 @@ def verdicts(run: str, result: dict, suites: list[dict], audit: dict) -> dict[tu
         since = (r.get("since") or {}) if r["status"] == "cached" else {}
         traced = "traced " if since.get("traced") else ""
         add("suite", r.get("suite"), status, None if r.get("part") or traced else r.get("key"),
-            "" if r["status"] != "cached" else f"a {traced}pass `{since['run']}` stored" if since.get("run") else f"a {traced}pass it reused")
+            "" if r["status"] != "cached" else f"a {traced}pass `{since['run']}` stored" if since.get("run") else f"a {traced}pass it reused",
+            row=json.dumps(r["part"], sort_keys=True) if r.get("part") else None)
     keys = {pkg: key for key, pkg in (result.get("passes") or {}).items()}
     reused, failed = audit.get("cached") or {}, audit.get("failed") or []
     for r in audit.get("packages") or []:
@@ -257,9 +264,10 @@ def verdicts(run: str, result: dict, suites: list[dict], audit: dict) -> dict[tu
 
 
 def told(part: tuple[str, str], u: dict, stored: list[dict]) -> str | None:
-    """The line for a part the recorded checks disagree with the uncached check on, or None when every recorded verdict is the
-    uncached one, under its key and with its report: the part, the uncached verdict and key, then each recorded verdict with
-    its run, how it came by a pass it reused, the key where it is another, and the fields of a Lean report that differ."""
+    """The line for a part the recorded check disagrees with the uncached check on, or None when every recorded verdict that
+    counts (`stored`: `tally`'s) is the uncached one, under its key and with its report: the part, the uncached verdict and
+    key, then each recorded verdict with its run, how it came by a pass it reused, the key where it is another, and the
+    fields of a Lean report that differ."""
     there, differs = [], False
     for s in stored:
         key = f", key `{s['key'][:12]}`" if s["key"] and s["key"] != u["key"] else ""
@@ -276,20 +284,32 @@ def told(part: tuple[str, str], u: dict, stored: list[dict]) -> str | None:
 def tally(mine: dict[tuple[str, str], list[dict]], theirs: dict[str, dict]) -> dict:
     """The uncached check's verdicts against the recorded checks' (`theirs`: {run: its `verdicts`}), part by part, as the night's
     state keeps the comparison: the recorded `runs`, how many parts `agree`, a line for each that disagrees (`told`), the parts
-    with no stored verdict (`unstored`) and those only a recorded check has a verdict on (`unchecked`)."""
+    with no stored verdict (`unstored`), those only a recorded check has a verdict on (`unchecked`), and those an `earlier`
+    recorded check gave another verdict than a later one, under the earlier verdict.
+
+    The recorded verdict that counts on a part is the newest recorded check's that holds one, a run's id starting with when
+    it was launched: a check run again after a failure doesn't count against the night by its first try. It is the newest
+    row by row for a suite recorded in parts, each of which a check holds in the shard that ran it."""
     stored: dict[tuple[str, str], list[dict]] = {}
-    for run in sorted(theirs):
+    earlier: dict[str, set[str]] = {status: set() for status in VERDICTS}
+    for run in sorted(theirs, reverse=True):
         for part, got in theirs[run].items():
-            stored.setdefault(part, []).extend(got)
+            newer = {v["row"]: v["status"] for v in stored.get(part, [])}
+            for v in got:
+                if v["row"] not in newer:
+                    stored.setdefault(part, []).append(v)
+                elif v["status"] != newer[v["row"]]:
+                    earlier[v["status"]].add(f"{part[0]} `{part[1]}`")
     out = {"runs": sorted(theirs), "agree": 0, "disagree": [], "unstored": [],
-           "unchecked": [f"{kind} `{name}`" for kind, name in sorted(set(stored) - set(mine))]}
+           "unchecked": [f"{kind} `{name}`" for kind, name in sorted(set(stored) - set(mine))],
+           "earlier": {status: sorted(parts) for status, parts in earlier.items()}}
     for part in sorted(mine):
         u = mine[part][0]
         if len(mine[part]) > 1:                  # the uncached check ran it in parts: one verdict, failed when a part failed
             u = {**u, "status": "failed" if any(v["status"] == "failed" for v in mine[part]) else "passed", "key": None}
         if part not in stored:
             out["unstored"].append(f"{part[0]} `{part[1]}`")
-        elif line := told(part, u, stored[part]):
+        elif line := told(part, u, sorted(stored[part], key=lambda v: v["run"])):
             out["disagree"].append(line)
         else:
             out["agree"] += 1
@@ -308,6 +328,9 @@ def said(c: dict | None) -> str:
             f"{len(c['disagree'])} disagree, {len(c['unstored'])} with no stored verdict"
             + (f" ({listed(c['unstored'])})" if c["unstored"] else "") + "; circuit-check is one part, its targets not compared one by one."
             + (f" Only the recorded check has a verdict on {listed(c['unchecked'])}." if c["unchecked"] else "")
+            + "".join(f" {len(parts)} part{'s' if len(parts) > 1 else ''} {was} in an earlier recorded check of this commit and "
+                      f"{then} in a later one: {listed(parts)}."
+                      for was, then in (("failed", "passed"), ("passed", "failed")) if (parts := c["earlier"][was]))
             + "".join(f"\n\u2022 {line}" for line in c["disagree"]))
 
 
