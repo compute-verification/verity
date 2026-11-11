@@ -143,8 +143,8 @@ def test_the_readings_and_thresholds_the_protocol_states() -> None:
 
 def one_pass_session(blocks: int, passes: int, span_ns: int, samples: int) -> audit.Record:
     """What the memory line's δ reads of a paced session that reserved no append coins: `passes` one-pass windows over
-    `blocks` blocks, `samples` openings a window, at the profile's δ, spread evenly over `span_ns`.  Its registration
-    and coins are zeros, which no part of δ reads."""
+    `blocks` blocks, `samples` openings a window at `audit.DELTA`, spread evenly over `span_ns`.  Its registration and
+    coins are zeros, which no part of δ reads."""
     profile = audit.window_profile((blocks,), samples, audit.DELTA)
     at = [span_ns * t // passes for t in range(passes + 1)]
     return audit.Record(bytes(64), bytes(64), blocks, timing.BLOCK_BYTES, tuple(
@@ -175,9 +175,10 @@ def test_the_outside_factor_multiplies_the_queries_the_bound_charges() -> None:
     def said(x: float) -> str:
         return f"2^{math.log2(x):.2f}"
 
-    record = one_pass_session(n, p, span_ns, samples)
+    record, keys = one_pass_session(n, p, span_ns, samples), 64
     quoted = {f"{p:,} one-pass windows over {n:,} blocks in {span_ns / 1e9:.1f} s, {samples} openings a window":
               "the session", f"2^-{audit.SLACK_LOG2} a pass": "`audit.SLACK_LOG2`",
+              f"all but a 2^-{keys} fraction of keys": "the key failure `ledger.hiding` is charged at",
               f"2^{wide:.2f}": "`sketch_failure` at `rows=64` and F = 2^20"}
     totals = {}
     for f, largest in ((1, "profile"), (2 ** 20, "sketch")):
@@ -187,6 +188,7 @@ def test_the_outside_factor_multiplies_the_queries_the_bound_charges() -> None:
         assert tuple(parts) == ledger.DELTA_PARTS and max(parts, key=parts.get) == largest
         assert parts["sketch"] == float(timing.sketch_failure(c, p, blocks=n, outside=f))
         assert parts["slack"] == p * 2.0 ** -audit.SLACK_LOG2
+        assert parts["hiding"] == 2 * 2.0 ** receipts.HM96.statistical_distance_log2(p, key_failure_log2=keys)
         total = 0.0
         for name in ledger.DELTA_PARTS:  # one float add a part in `memory`'s order, which `sum` doesn't promise
             total += parts[name]
