@@ -332,7 +332,7 @@
     {"file": "verity_vllm/program/predict/node_registration.py", "kind": "or-empty", "symbol": "<module>", "detail": ".get(k) or [] / {}", "count": 10},
     {"file": "verity_vllm/program/predict/phi.py", "kind": "schema-literal", "symbol": "<module>", "detail": "verity-predict/phi/v1"},
     {"file": "verity_vllm/program/predict/phi.py", "kind": "or-empty", "symbol": "<module>", "detail": ".get(k) or [] / {}", "count": 5},
-    {"file": "verity_vllm/program/predict/score.py", "kind": "or-empty", "symbol": "<module>", "detail": ".get(k) or [] / {}", "count": 2},
+    {"file": "verity_vllm/program/predict/score.py", "kind": "or-empty", "symbol": "<module>", "detail": ".get(k) or [] / {}"},
     {"file": "verity_vllm/program/predict/steps.py", "kind": "schema-literal", "symbol": "<module>", "detail": "verity-vllm/compiled-steps/v2"},
     {"file": "verity_vllm/program/predict/steps.py", "kind": "or-empty", "symbol": "<module>", "detail": ".get(k) or [] / {}"},
     {"file": "verity_vllm/program/prefix_plan.py", "kind": "or-empty", "symbol": "<module>", "detail": ".get(k) or [] / {}", "count": 6},

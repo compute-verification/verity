@@ -21,18 +21,11 @@ from .phi import Phi
 # ------------------------------------------------------------------------------------------------------------------- φ of a row
 
 
-def _checkpoint_revision(repo: str, checkpoints: dict | None) -> str | None:
-    for c in (checkpoints or {}).get("checkpoints") or []:
-        if c.get("repo") == repo and c.get("revision"):
-            return c["revision"]
-    return None
-
-
 def hf_config_path(hf_home: str, repo: str, revision: str) -> str:
     return os.path.join(hf_home, "models--" + repo.replace("/", "--"), "snapshots", revision, "config.json")
 
 
-def phi_of(rec: dict, *, hf_home: str | None = None, checkpoints: dict | None = None, config: str | None = None) -> Phi:
+def phi_of(rec: dict, *, hf_home: str | None = None, config: str | None = None) -> Phi:
     """φ from a row's declared inputs: never a Build output (the traced Programs are what φ's prediction is scored against).  The
     checkpoint's `config.json` is `config`, else the pinned snapshot's under `hf_home`."""
     from verity_vllm.config import DTYPES, RowEngine, RowId
@@ -43,7 +36,7 @@ def phi_of(rec: dict, *, hf_home: str | None = None, checkpoints: dict | None = 
     if not w:
         raise Unexpressible(f"row {rec['row']}: no declared workload manifest at {rec.get('workload_path')}")
     repo = w.get("model")
-    rev = _checkpoint_revision(repo, checkpoints) or RowEngine.of(w).revision
+    rev = RowEngine.of(w).revision
     cp = config or hf_config_path(str(hf_home), repo, rev)
     if not os.path.exists(cp):
         raise Unexpressible(f"no config.json for {repo}@{rev} under {hf_home}")
