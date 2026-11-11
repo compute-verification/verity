@@ -64,6 +64,14 @@
    "inherited": true,
    "dir":
    "../../../protocols/network/lean/../../../primitives/identity/../../difftest/lean",
+   "configFile": "lakefile.toml"},
+  {"type": "path",
+   "scope": "",
+   "name": "core_spot",
+   "manifestFile": "lake-manifest.json",
+   "inherited": true,
+   "dir":
+   "../../../protocols/network/lean/../nci/lean/../../../../service/spot",
    "configFile": "lakefile.toml"}],
  "name": "certifier_device",
  "lakeDir": ".lake",
