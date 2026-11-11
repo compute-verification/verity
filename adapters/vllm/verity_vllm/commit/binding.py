@@ -233,13 +233,11 @@ def map_context_check(bmap: dict[str, Any], run) -> tuple[bool, str]:
 
 # ---------------------------------------------------------------------- the expected population (collector-independent)
 
-def structure_of(committer, *, stochastic: bool = False, derived_splits: bool = False) -> dict[str, Any]:
+def structure_of(committer, *, stochastic: bool = False) -> dict[str, Any]:
     """Model structure from the INSTALLED module set (the model's config/architecture; the committer's hooks are on exactly these modules
     but the member rule comes from MEMBER_RULES, not from what was emitted).  Serialisable, so a fixture can be stored and diffed.
     `stochastic` (the workload's DECLARED sampling policy, temperature > 0 with per-request seeds): the sampler additionally materialises
-    the consumed per-sequence seed (`runner.sampler/seed`, the stochastic Program's registered runtime input; manifest family `sampler_seed`).
-    `derived_splits` (the workload DECLARES `sampling.splits == "derived"`): the sampler also materialises the top-p
-    split count its kernels ran with (`runner.sampler/splits`, the derived-S Program's `splits` input; manifest family `sampler_splits`)."""
+    the consumed per-sequence seed (`runner.sampler/seed`, the stochastic Program's registered runtime input; manifest family `sampler_seed`)."""
     mods = []
     rope_calls = 0
     attn_layers: set[int] = set()
@@ -276,8 +274,7 @@ def structure_of(committer, *, stochastic: bool = False, derived_splits: bool = 
     runner = getattr(committer, "runner", None)
     if runner is not None and hasattr(runner, "sample") and not any(d["op_path"] == "runner.sampler" for d in mods):
         mods.append({"op_path": "runner.sampler", "class": "Sampler", "invocations": 1,
-                     "members": ["sampled_token_ids"] + (["seed"] if stochastic else [])       # the consumed seed, stochastic workloads only
-                     + (["splits"] if (stochastic and derived_splits) else [])})               # the kernels' split count, derived-S workloads
+                     "members": ["sampled_token_ids"] + (["seed"] if stochastic else [])})     # the consumed seed, stochastic workloads only
     hidden = None
     for s in committer.sources:
         sn = getattr(s, "short_name", "") or type(s).__name__
