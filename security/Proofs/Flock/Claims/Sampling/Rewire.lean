@@ -14,6 +14,8 @@ alone (`cutBlock`).
 * `BGate.reads_rewire`, `BGate.val_rewire`, `Prog.rewire_gates`, `Prog.gate_rewire`, `Prog.rewire_const`,
   `Prog.read_rewire_of_fixed`: a rewired gate reads the images of the wires it read, its value on values `rd` is the
   gate's on `rd` read through `ω`, and it is a constant exactly where the gate is.
+* `Prog.evaluates_rewire`: values that agree with an evaluation of a gate in `C`, at the gate and, through `ω`, at
+  the wires it reads, evaluate it at the rewired program.
 * `Prog.needs_rewire_of_read`, `Prog.needs_rewire_of_written`, `Prog.needs_rewire_both`: a set that holds `ω i` and a
   set one of whose gates read `i` both need `ω i` at the rewired program.
 * `Prog.boundary_eq_false`, `Prog.boundary_rewire_eq_false`, `Prog.boundary_wired_eq_false`: a gate that is not
@@ -27,6 +29,9 @@ alone (`cutBlock`).
 * `Prog.correct_wired`: so a proof block correct in `C` on the values read through `ω` is correct, cut, at the wired
   program, where `ω` moves only input gates, to returned gates that are no constants and are outside the blocks that
   read them.
+* `Partition.blocks_cut`, `Partition.cut_getElem?`, `Partition.length_blocks_cut`, `Partition.gates_cut`,
+  `Partition.nodup_gates_cut`: the cut partition has the partition's proof blocks, each cut, at their slots, and no
+  gate twice where the partition has none.
 -/
 
 @[expose] public section
@@ -113,6 +118,19 @@ theorem Prog.read_rewire_of_fixed {C : Prog} {ω : ℕ → ℕ} {outs : List ℕ
     have h2 : (C.rewire ω outs).read ref i = ref i :=
       Prog.read_of_not_const _ ref fun c hc' => hnc c (Prog.rewire_const.1 hc')
     exact h2.trans ((congrArg ref hωi).symm.trans h1.symm)
+
+/-- **A gate evaluates at the rewired program**: where values `v₀` evaluate gate `g` in `C`, values `v` that agree
+with `v₀` at `g` and, through `ω`, at the wires `g` reads evaluate it at the rewired program. -/
+theorem Prog.evaluates_rewire {C : Prog} {ω : ℕ → ℕ} {outs : List ℕ} {v₀ v : ℕ → Bool} {g : ℕ} {y : BGate}
+    (hy : (C.rewire ω outs).gates[g]? = some y) (hyne : y ≠ .input)
+    (hv₀ : ∀ x : BGate, C.gates[g]? = some x → x ≠ .input → x.val (fun i => some (v₀ i)) none = some (v₀ g))
+    (hg : v g = v₀ g) (hrd : ∀ x : BGate, C.gates[g]? = some x → ∀ i ∈ x.reads, v (ω i) = v₀ i) :
+    y.val (fun i => some (v i)) none = some (v g) := by
+  obtain ⟨x, hx, rfl, hval⟩ := Prog.gate_rewire hy
+  have hxne : x ≠ .input := fun hxi => hyne (BGate.rewire_eq_input.2 hxi)
+  have hcongr : x.val (fun i => some (v (ω i))) none = x.val (fun i => some (v₀ i)) none :=
+    BGate.val_congr (fun i hi => congrArg some (hrd x hx i hi)) fun _ => rfl
+  exact (hval v none).trans (hcongr.trans ((hv₀ x hx hxne).trans (congrArg some hg.symm)))
 
 /-! ## One wire, two sets that need its gate -/
 
@@ -351,14 +369,32 @@ theorem mem_cutBlock {ω : ℕ → ℕ} {u : List ℕ} {g : ℕ} : g ∈ cutBloc
 
 theorem Partition.blocks_cut (P : Partition) (ω : ℕ → ℕ) : (P.cut ω).blocks = P.blocks.map (cutBlock ω) := by
   unfold Partition.cut Partition.blocks
-  first
-    | (rw [List.map_flatten, List.map_flatten]; done)
-    | simp [List.map_flatten]
+  rw [List.map_flatten, List.map_flatten]
 
 /-- The cut partition's proof blocks keep their slots. -/
 theorem Partition.cut_getElem? (P : Partition) (ω : ℕ → ℕ) (v : ℕ) :
     (P.cut ω).blocks[v]? = P.blocks[v]?.map (cutBlock ω) := by
   rw [Partition.blocks_cut, List.getElem?_map]
+
+theorem Partition.length_blocks_cut (P : Partition) (ω : ℕ → ℕ) : (P.cut ω).blocks.length = P.blocks.length := by
+  rw [Partition.blocks_cut, List.length_map]
+
+theorem flatten_map_cutBlock (ω : ℕ → ℕ) : ∀ L : List (List ℕ), (L.map (cutBlock ω)).flatten = cutBlock ω L.flatten
+  | [] => rfl
+  | u :: L => by
+    rw [List.map_cons, List.flatten_cons, List.flatten_cons, flatten_map_cutBlock ω L]
+    unfold cutBlock
+    rw [List.filter_append]
+
+/-- **The cut partition's gates** are the partition's that `ω` leaves alone, in order. -/
+theorem Partition.gates_cut (P : Partition) (ω : ℕ → ℕ) : (P.cut ω).gates = cutBlock ω P.gates := by
+  unfold Partition.gates
+  rw [Partition.blocks_cut, flatten_map_cutBlock]
+
+theorem Partition.nodup_gates_cut {P : Partition} (ω : ℕ → ℕ) (h : P.gates.Nodup) : (P.cut ω).gates.Nodup := by
+  rw [Partition.gates_cut]
+  unfold cutBlock
+  exact h.filter _
 
 /-- **The bridge**: a proof block `u` correct in `C` on the values `ref` read through `ω` is correct, cut, at the
 wired program on `ref`. `ω` moves only input gates, each to a gate `C` returns that is no constant, and no gate of `u`
