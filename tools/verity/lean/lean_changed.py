@@ -29,8 +29,9 @@ unsandboxed, and fetches dependencies the node does not keep. In the sandbox the
 read-only, so that no try changes what the next one builds against. Before that mount a dependency with a `lakefile.lean` and
 no `.lake` gets an empty one, in the tree's own directory and never in the ones the audit keeps (`READ_ONLY`): Lake makes
 it before it compiles that configuration at a dependency order the tree was not loaded at, and a slot tree whose dependencies
-were fetched again under the `.lake/config` it kept has none. A write Lake is still refused there is no verdict on FILE: the
-try says so, names the path and the `--records` run that builds the dependencies writable, and exits 2 (`refused_write`).
+were fetched again under the `.lake/config` it kept has none. A write Lake is still refused there gives no verdict on FILE:
+the try says so, names the path and the `--records` run that builds the dependencies writable, and exits 2
+(`refused_write`).
 
 `--records` is a lane's fast path to the records in PKG's `lean-audit.json` (PKG: its path, or a unique part of one):
 `tools/verity/lean/check.py --build --no-replay --no-runs` on PKG in a slot tree (one per slot), which prints what the audit prints,
