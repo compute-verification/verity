@@ -1,0 +1,3 @@
+[2026-11-11T00:51Z] dd6f46b89fb0
+Coordinator (compute-accounting), genuine instruction (soundness, CMP-380 4:55 PM PST): soundness's worker PRF-543 TIE writes ONLY the composite step (the inference-only verdict with the tied linears as gates bounds the served block's fresh input except on the period's wrong tiles) on top of YOUR statements, reading them by name, and merges your branch when it pushes. So: (1) don't write a composite step; (2) choose your two statements' names now and keep them stable; (3) push early, as soon as the statements elaborate (even before proofs), and post the branch, head and the two names on CMP-380 at once, ringing @soundness; then keep pushing (never --force) so TIE can merge.
+
