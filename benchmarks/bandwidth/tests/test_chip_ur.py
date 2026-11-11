@@ -113,3 +113,14 @@ def test_a_rewrite_the_listing_does_not_show_is_refused(rewrite, tmp_path):
     with pytest.raises(SystemExit) as stop:
         rewrite(6, 7, sass=unmoved)
     assert stop.value.code == "REFUSED: the rewritten SASS names [4, 4, 5, 5], not UR6, UR7"
+
+
+def test_the_functions_refuse_by_name_and_write_nothing(tmp_path, monkeypatch):
+    src, dst = tmp_path / "urt.cubin", tmp_path / "out.cubin"
+    src.write_bytes(cubin())
+    monkeypatch.setattr(chip_ur, "sass", listing)
+    with pytest.raises(chip_ur.Refused, match="a and b are distinct uniform registers, 0..254"):
+        chip_ur.rewrite("cuobjdump", str(src), 6, 6, str(dst))
+    with pytest.raises(chip_ur.Refused, match=r"2 loads of c\[0x0\]\[0x388\]"):
+        chip_ur.plan([*listing("cuobjdump", str(src)), ("LDCU UR9, c[0x0][0x388]", 0x0000_0000_0009_7AB9)])
+    assert not dst.exists()
