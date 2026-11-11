@@ -1,11 +1,12 @@
 """`verity_bench.steady` on made-up files: a run whose files show all nine checks, each check failing alone, each check the
-files can't show, a run's rows read from its rate file and from a directory, the window and its thirds on stated numbers,
-a window cut at whole bursts where a row declares its sessions' period, and the four conditions the reader of these rows
-still holds itself."""
+files can't show, a value that isn't a number passing nothing, a run's rows read from its rate file and from a directory,
+the window and its thirds on stated numbers, a window cut at whole bursts where a row declares its sessions' period, with
+no session of it left unjudged, and the four conditions the reader of these rows still holds itself."""
 
 from __future__ import annotations
 
 import json
+import math
 
 import pytest
 
@@ -33,7 +34,8 @@ def made(changes: dict | None = None, *, gaps=EVEN, **texts: str | None) -> tupl
     ones filed `gaps` apart (16 of them unless `gaps` says otherwise), one lease of card 3, and the card clear at the
     row's start and end. The row's window is the sessions' own: from the second timed session's filing to the third
     from last's, or every timed session where that leaves under two. `changes`: fields of the row replaced, or left out
-    (`DROP`); `texts`: a file's text replaced (`leases`, `start`, `end`, `sessions`), or the file left out (None)."""
+    (`DROP`); `texts`: a file's text replaced (`rates`, `leases`, `start`, `end`, `sessions`), or the file left out
+    (None)."""
 
     filed = [100.0]
     for gap in gaps:
@@ -53,7 +55,8 @@ def made(changes: dict | None = None, *, gaps=EVEN, **texts: str | None) -> tupl
     row = {k: v for k, v in row.items() if v is not DROP}
     files = {S.RATES: json.dumps([row]), S.LEASES: lease(int(CARD)), START: NODE, END: NODE,
              SESSIONS: "".join(json.dumps(line) + "\n" for line in lines)}
-    files |= {{"leases": S.LEASES, "start": START, "end": END, "sessions": SESSIONS}[name]: text for name, text in texts.items()}
+    files |= {{"rates": S.RATES, "leases": S.LEASES, "start": START, "end": END, "sessions": SESSIONS}[name]: text
+              for name, text in texts.items()}
     return row, {path: text for path, text in files.items() if text is not None}.get
 
 
@@ -77,9 +80,13 @@ FAILS = [
     ("not_void", {"changes": {"void": ["out of device memory: prover-gpu3-0"], "statements_per_s": None}},
      "void: out of device memory: prover-gpu3-0"),
     ("not_void", {"changes": {"statements_per_s": None}}, "no rate: its `statements_per_s` is None"),
+    ("not_void", {"changes": {"statements_per_s": math.inf}}, "no rate: its `statements_per_s` is inf"),
+    ("not_void", {"changes": {"statements_per_s": math.nan}}, "no rate: its `statements_per_s` is nan"),
     ("flat", {"changes": {"flat": False}}, "its statement cache's hit rate wasn't flat"),
     ("no_throttling", {"changes": {"throttled": {"nr_throttled": 3, "throttled_usec": 250000}}},
      "its CPUs were throttled 3 times while it ran, for 0.25 s"),
+    ("no_throttling", {"changes": {"throttled": {"nr_throttled": 3, "throttled_usec": math.nan}}},
+     "its CPUs were throttled 3 times while it ran"),
     ("one_lease_own_card", {"leases": lease(3) + lease(3)}, "the run took 2 leases"),
     ("one_lease_own_card", {"leases": lease(4)}, "its lease held GPU 4; its provers ran on GPU 3"),
     ("one_lease_own_card", {"leases": lease(3, 4)}, "its lease held GPU 3, 4; its provers ran on GPU 3"),
@@ -93,6 +100,10 @@ FAILS = [
     ("level", {"changes": {"period": 2}, "gaps": (2.0,) * 9 + (2.75,) * 6},
      "its window isn't level: a statement took 2, 2, 2.75 s in its parts of whole bursts of 4 sessions, the slowest "
      "over 1.25 times the fastest"),
+    # 31 sessions in bursts of 8: three whole bursts at 2 s a statement, then seven sessions at 10 s
+    ("level", {"changes": {"period": 4}, "gaps": (1.0, *(2.0,) * 24, *(10.0,) * 7, 1.0, 1.0)},
+     "its window isn't level: a statement took 2, 2, 9 s in its parts of whole bursts of 8 sessions counted back from "
+     "its end, the slowest over 1.25 times the fastest"),
     ("every_prover_warmed", {"changes": {"warm_per_prover": {"prover-gpu3-0": 4}}},
      "1 of its 2 provers finished a warm session before the timed ones"),
     ("every_prover_warmed", {"changes": {"idle_provers": 1}}, "1 of its 2 provers filed no session in the window"),
@@ -116,6 +127,8 @@ UNTOLD = [
     ("flat", {"changes": {"flat": DROP}}, "its row lacks `flat`"),
     ("no_throttling", {"changes": {"throttled": DROP}}, "its row lacks `throttled.nr_throttled`"),
     ("no_throttling", {"changes": {"throttled": {}}}, "its row lacks `throttled.nr_throttled`"),
+    ("one_lease_own_card", {"changes": {"gpus": DROP}}, "its row lacks `gpus`"),
+    ("one_lease_own_card", {"changes": {"gpus": None}}, "`gpus` (None) of its row isn't a count"),
     ("one_lease_own_card", {"leases": None}, "the run holds no `gpu-lease-usage.jsonl`, which gpu-lease writes when a lease ends"),
     ("one_lease_own_card", {"leases": ""}, "the run's `gpu-lease-usage.jsonl` holds no lease"),
     ("one_lease_own_card", {"leases": "not json\n"}, "line 1 of `gpu-lease-usage.jsonl` isn't JSON (Expecting value)"),
@@ -125,6 +138,17 @@ UNTOLD = [
     ("card_clear_start_end", {"start": ""}, "`out/cotenants-k2-start.txt` isn't a record of the node: it has no `epoch` line"),
     ("card_clear_start_end", {"end": "epoch 1700000000\napp nvidia-smi gave no answer\n"},
      "`out/cotenants-k2-end.txt` has no list of compute processes: nvidia-smi gave no answer"),
+    ("card_clear_start_end", {"end": "epoch 1700000000\nlease 0 held 5m\nnvidia-smi gave no answer\n"},
+     "`out/cotenants-k2-end.txt` has no list of compute processes: nvidia-smi gave no answer"),
+    ("card_clear_start_end", {"start": "epoch 1700000000\ngpu-lease status gave no answer (exit 1)\napp GPU 0 pid 12 100MiB\n"},
+     "`out/cotenants-k2-start.txt` has no list of other runs' leases: gpu-lease status gave no answer (exit 1)"),
+    ("card_clear_start_end", {"start": "epoch 1700000000\nthe node gave no answer\n"},
+     "`out/cotenants-k2-start.txt` has no list of what else was on the node: the node gave no answer"),
+    ("card_clear_start_end", {"rates": None},
+     "the run holds no `out/rate/rate.json`: it would say whether the record of its card is this row's alone"),
+    ("card_clear_start_end", {"rates": "[{"},
+     "the run's `out/rate/rate.json` isn't JSON (Expecting property name enclosed in double quotes): it would say whether "
+     "the record of its card is this row's alone"),
     ("card_clear_start_end", {"start": NODE + "app GPU ? pid 15 1MiB\n"},
      "`out/cotenants-k2-start.txt` names a compute process on a card it couldn't name (pid 15 1MiB)"),
     ("level", {"sessions": None}, "the run holds no `out/rate/gemm64-k2/sessions.jsonl`"),
@@ -135,6 +159,8 @@ UNTOLD = [
     ("level", {"changes": {"window_sessions": 11}},
      "the window `out/rate/gemm64-k2/sessions.jsonl` gives (12 sessions over 24.00 s) isn't its row's (11 over 24.0 s)"),
     ("level", {"changes": {"window_s": DROP}}, "its row lacks `window_s`"),
+    ("level", {"changes": {"window_s": math.nan}}, "`window_s` (nan) of its row isn't a window's seconds"),
+    ("level", {"changes": {"window_s": math.inf}}, "`window_s` (inf) of its row isn't a window's seconds"),
     ("level", {"changes": {"period": 0}}, "`period` (0) of its row isn't a count of sessions a prover, at least 1"),
     ("level", {"changes": {"period": 4.0}}, "`period` (4.0) of its row isn't a count of sessions a prover, at least 1"),
     ("level", {"changes": {"period": 4}},
@@ -153,6 +179,51 @@ def test_a_check_the_runs_files_cannot_show_is_not_a_pass(name, lack, why):
 
 def test_every_check_has_a_case_that_fails_it_and_one_its_files_cannot_show():
     assert {name for name, _, _ in FAILS} == {name for name, _, _ in UNTOLD} == set(S.CHECKS)
+
+
+#: every number a check reads in a row, by its place in the row
+NUMBERS = [("provers",), ("gpus",), ("warm",), ("sessions",), ("accepted",), ("refused_n",), ("unfiled",),
+           ("exits", "prover-gpu3-0"), ("statements_per_s",), ("window_sessions",), ("window_s",),
+           ("throttled", "nr_throttled"), ("warm_per_prover", "prover-gpu3-1"), ("idle_provers",), ("period",)]
+#: what isn't a number, though JSON or Python lets it stand where one goes
+NOT_NUMBERS = [math.nan, math.inf, -math.inf, True, "2", [2]]
+
+
+@pytest.mark.parametrize("place", NUMBERS, ids=[".".join(place) for place in NUMBERS])
+def test_a_value_that_is_not_a_number_passes_no_check(place):
+    row, files = made({"period": 2})
+    assert S.verdict(row, files).passed
+    for value in NOT_NUMBERS:
+        changed = json.loads(json.dumps(row))
+        at = changed
+        for key in place[:-1]:
+            at = at[key]
+        at[place[-1]] = value
+        got = S.verdict(changed, files)
+        assert not got.passed, (place, value)
+        # and the same value read back from the run's own rate file, as JSON's reader gives it
+        own = {S.RATES: json.dumps([changed])}
+        [read] = S.verdicts(lambda path, own=own: own.get(path, files(path)))
+        assert read.status == got.status, (place, value)
+
+
+def test_an_integer_no_float_holds_is_no_seconds_and_no_rate():
+    huge = 10 ** 400
+    assert [c.name for c in S.verdict(*made({"statements_per_s": huge})).checks if c.status == S.FAIL] == ["not_void"]
+    assert [c.name for c in S.verdict(*made({"window_s": huge})).checks if c.status == S.CANNOT_TELL] == ["level"]
+    throttled = S.verdict(*made({"throttled": {"nr_throttled": 3, "throttled_usec": huge}}))
+    assert throttled.why == "`no_throttling` (fail): its CPUs were throttled 3 times while it ran"
+
+
+@pytest.mark.parametrize("field", ["i", "filed"])
+def test_a_session_whose_index_or_filing_time_is_not_a_number_shows_no_level_window(field):
+    row, files = made()
+    lines = [json.loads(line) for line in files(SESSIONS).splitlines()]
+    for value in (*NOT_NUMBERS, *([10 ** 400] if field == "filed" else [])):
+        text = "".join(json.dumps(line | ({field: value} if n == 9 else {})) + "\n" for n, line in enumerate(lines))
+        got = S.verdict(row, lambda path, text=text: text if path == SESSIONS else files(path))
+        assert [(c.name, c.status, c.why) for c in got.checks if not c.ok] == [(
+            "level", S.CANNOT_TELL, "`out/rate/gemm64-k2/sessions.jsonl` isn't each session's index `i` and its `filed` time")]
 
 
 def test_a_fail_outranks_what_cannot_be_told_and_the_reason_names_both():
@@ -187,22 +258,31 @@ def test_a_runs_rows_are_judged_from_its_rate_file(tmp_path):
     # a run with no rate file, or one that isn't a list of rows, has no row to judge
     with pytest.raises(ValueError, match=r"the run holds no `out/rate/rate\.json`: it has no row to judge"):
         S.verdicts({}.get)
-    with pytest.raises(ValueError, match=r"the run's `out/rate/rate\.json` isn't a list of rows"):
+    with pytest.raises(ValueError, match=r"the run's `out/rate/rate\.json` isn't a list of rows: it has no row to judge"):
         S.verdicts({S.RATES: json.dumps({"rows": [row]})}.get)
-    with pytest.raises(ValueError, match=r"the run's `out/rate/rate\.json` isn't JSON \(Expecting value\)"):
-        S.verdicts({S.RATES: "[" + json.dumps(row) + ","}.get)
+    with pytest.raises(ValueError, match=r"the run's `out/rate/rate\.json` isn't JSON \(Expecting value\): it has no row"):
+        S.rows({S.RATES: "[" + json.dumps(row) + ","}.get)
+    assert S.rows(files) == [row]
 
 
 def test_rows_at_one_prover_count_share_a_record_of_the_card_that_clears_none_of_them():
     row, files = made()
     twin = row | {"type": "norm"}
     both = {S.RATES: json.dumps([row, twin]), f"out/rate/norm-k{K}/sessions.jsonl": files(SESSIONS)}
-    got = S.verdicts(lambda path: both.get(path, files(path)))
-    assert [(v.type, v.status) for v in got] == [(TYPE, S.CANNOT_TELL), ("norm", S.CANNOT_TELL)]
-    for v in got:
-        assert [(c.name, c.why) for c in v.checks if not c.ok] == [(
-            "card_clear_start_end", "the run holds 2 rows at 2 provers and one record of its card for them "
-                                    "(`out/cotenants-k2-start.txt`)")]
+    shared = lambda path: both.get(path, files(path))  # noqa: E731
+    why = "the run holds 2 rows at 2 provers and one record of its card for them (`out/cotenants-k2-start.txt`)"
+    # one row judged against the run's files, as a caller with a row in hand does, and every row of the run
+    for got in (S.verdict(row, shared), S.verdict(twin, shared), *S.verdicts(shared)):
+        assert got.status == S.CANNOT_TELL
+        assert [(c.name, c.why) for c in got.checks if not c.ok] == [("card_clear_start_end", why)]
+    # the row as completed after the run is judged against the same files, and shares the same record
+    assert S.verdict(row | {"flat": True, "cores": {"count": 10}}, shared).why == f"`card_clear_start_end` (cannot tell): {why}"
+    # a card the shared record shows taken clears no row either, and fails none: the record is of one row's start
+    taken = lambda path: NODE + "lease 3 held 9m pid=13 run=r-other who=other\n" if path == START else shared(path)  # noqa: E731
+    assert [c.why for c in S.verdict(row, taken).checks if not c.ok] == [why]
+    # a row at another prover count in the same run has its own record
+    other = {S.RATES: json.dumps([row, row | {"provers": 4}])}
+    assert S.verdict(row, lambda path: other.get(path, files(path))).passed
 
 
 def test_the_window_is_the_scripts_and_its_thirds_are_equal_counts_of_sessions():
@@ -253,12 +333,13 @@ def around(window: tuple[float, ...]) -> tuple[float, ...]:
     return (1.0, *window, 1.0, 1.0)
 
 
-def spread(row: dict, files: S.Files, burst: int | None = None) -> float:
-    """The slowest part of a row's window over its fastest: its thirds, or its parts of whole bursts of `burst`."""
+def spread(row: dict, files: S.Files, burst: int | None = None, *, back: bool = False) -> float:
+    """The slowest part of a row's window over its fastest: its thirds, or its parts of whole bursts of `burst`, counted
+    from its start or `back` from its end."""
 
     lines = [json.loads(line) for line in files(SESSIONS).splitlines()]
     times = S.window(sorted(line["filed"] for line in lines if line["i"] >= K * WARM), K)
-    took = S.thirds(times) if burst is None else S.burst_parts(times, burst)
+    took = S.thirds(times) if burst is None else S.burst_parts(times, burst, back=back)
     return max(took) / min(took)
 
 
@@ -270,9 +351,11 @@ def test_a_row_that_declares_its_period_has_its_window_cut_at_whole_bursts():
     assert [(c.name, c.status) for c in cut.checks if not c.ok] == [("level", S.FAIL)]
     assert cut.why.endswith("s in its thirds, the slowest over 1.25 times the fastest")
     assert S.verdict(row | {"period": None}, files).record() == cut.record()
-    # a period of four sessions a prover: the window's four whole bursts, each a part, are within the line
+    # a period of four sessions a prover: the window's four whole bursts, each a part, are within the line, counted from
+    # its start and, for the four sessions after them, back from its end
     row, files = made({"period": 4}, gaps=around(KEPT))
     assert spread(row, files, 8) == pytest.approx(1.123, abs=0.001) and S.verdict(row, files).passed
+    assert spread(row, files, 8, back=True) == pytest.approx(1.051, abs=0.001)
     # a row that isn't level by whole bursts fails with its period declared as it does without
     row, files = made({"period": 4}, gaps=around(LEFT))
     assert spread(row, files) == pytest.approx(1.648, abs=0.001) and spread(row, files, 8) == pytest.approx(1.838, abs=0.001)
@@ -302,10 +385,56 @@ def test_the_parts_of_a_window_cut_at_whole_bursts_are_a_third_of_its_bursts_eac
     # the sessions after the last whole burst are in no part, and a window of under three bursts gives under three figures
     assert S.burst_parts(times(1.0, 2.0, 3.0, odd=3), 4) == [1.0, 2.0, 3.0]
     assert S.burst_parts(times(1.0, 2.0, odd=3), 4) == [1.0, 2.0] and S.burst_parts(times(odd=3), 4) == []
+    # counted back from the window's end, the parts hold those sessions and leave out as many at its start; the shorter
+    # part of the bursts left over comes first
+    assert S.burst_parts(times(1.0, 2.0, 3.0, odd=3), 4, back=True) == [1.75, 2.75, 75.75]
+    assert S.burst_parts(times(1.0, 3.0, 2.0, 2.0, 3.0, 5.0, 7.0), 4, back=True) == [1.0, 2.5, 2.5, 6.0]
+    assert S.burst_parts(times(1.0, 2.0, odd=3), 4, back=True) == [1.75, 75.5]
+    whole = times(1.0, 3.0, 2.0, 2.0, 3.0, 5.0)
+    assert S.burst_parts(whole, 4, back=True) == S.burst_parts(whole, 4)
     # a window that is whole bursts, a multiple of three of them, reads the same by its thirds and by its bursts
     for provers, period, bursts in ((1, 4, 30), (2, 4, 3), (4, 4, 9), (3, 5, 6)):
         window = times(*[1.0 + (i * 7 % 5) / 10 for i in range(bursts)], burst=period * provers)
         assert S.burst_parts(window, period * provers) == pytest.approx(S.thirds(window))
+
+
+def test_a_window_that_is_not_whole_bursts_is_also_cut_back_from_its_end():
+    # three whole bursts of eight at 2 s a statement, then seven sessions at 10 s: by thirds the last third shows them
+    tail = around((2.0,) * 24 + (10.0,) * 7)
+    row, files = made(gaps=tail)
+    assert row["window_sessions"] == 31 and spread(row, files) == pytest.approx(78 / 11 / 2)
+    assert [(c.name, c.status) for c in S.verdict(row, files).checks if not c.ok] == [("level", S.FAIL)]
+    # with the period declared, the whole bursts from the window's start are level, and the cut back from its end isn't
+    row, files = made({"period": 4}, gaps=tail)
+    assert (spread(row, files, 8), spread(row, files, 8, back=True)) == (1.0, 4.5)
+    got = S.verdict(row, files)
+    assert [(c.name, c.status) for c in got.checks if not c.ok] == [("level", S.FAIL)]
+    assert got.why.endswith("took 2, 2, 9 s in its parts of whole bursts of 8 sessions counted back from its end, the "
+                            "slowest over 1.25 times the fastest")
+    # the same seven sessions at the window's start fail the cut from its start
+    head = S.verdict(*made({"period": 4}, gaps=around((10.0,) * 7 + (2.0,) * 24)))
+    assert head.why.endswith("took 9, 2, 2 s in its parts of whole bursts of 8 sessions, the slowest over 1.25 times the "
+                             "fastest")
+    # sessions after the last whole burst that keep the pace pass, and a window of whole bursts is cut once
+    assert S.verdict(*made({"period": 4}, gaps=around((2.0,) * 31))).passed
+    assert S.verdict(*made({"period": 4}, gaps=around((2.0,) * 16 + (2.5,) * 8))).passed
+    # under three whole bursts neither cut has three parts
+    short = S.verdict(*made({"period": 4}, gaps=around((2.0,) * 23)))
+    assert short.why == ("`level` (cannot tell): its window of 23 sessions can't be cut into three parts of whole bursts "
+                         "of 8 sessions that each took time")
+
+
+@pytest.mark.parametrize("period", [None, 2], ids=["thirds", "bursts"])
+def test_no_session_of_a_window_is_left_out_of_its_cut(period):
+    """One slow session anywhere in a window fails `level`, whatever the window's length: no cut leaves one unjudged."""
+
+    for sessions in range(12, 25):
+        for slow in range(sessions):
+            gaps = [1.0] * sessions
+            gaps[slow] = 100.0
+            row, files = made({} if period is None else {"period": period}, gaps=around(tuple(gaps)))
+            got = S.verdict(row, files)
+            assert [(c.name, c.status) for c in got.checks if not c.ok] == [("level", S.FAIL)], (sessions, slow)
 
 
 def test_the_reader_holds_four_of_the_checks_itself_and_gives_the_same_reasons():

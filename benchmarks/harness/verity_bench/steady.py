@@ -20,28 +20,32 @@ a directory's):
 - `not_void`: the row has a rate: no `void`, `error` or `skipped`, and a `statements_per_s` above 0.
 - `flat`: the provers' statement caches had stopped filling (the row's `flat`, which the script decides).
 - `no_throttling`: the kernel throttled the row's CPUs no times while it ran (the row's `throttled.nr_throttled`).
-- `one_lease_own_card`: the run took one lease, of one card, and that card is the row's `device` (`LEASES`).
+- `one_lease_own_card`: the run took one lease, of one card, that card is the row's `device`, and the row counts one
+  GPU (`LEASES`, the row's `gpus`).
 - `card_clear_start_end`: at the row's start and at its end, no other run's lease held the row's card and no compute
-  process was on it (the two `card_file`s).
+  process was on it (the two `card_file`s). The record is one a prover count, so it clears a row only where the run's
+  `RATES` holds no other row at that count.
 - `level`: the window the row rates, cut into three equal counts of sessions by their filing times, takes at most
   `LEVEL` times as long a statement in its slowest third as in its fastest (`sessions_file`). The window is rebuilt as
   the script cuts it, and must be the row's own: its `window_sessions` and `window_s`. A row whose sessions file in
   bursts declares the `period` they repeat over (`PERIOD`), and its window is cut at whole bursts instead
-  (`burst_parts`): a third that cuts a burst reads the burst's phase and not a drift.
+  (`burst_parts`): a third that cuts a burst reads the burst's phase and not a drift. A window that isn't whole bursts
+  is cut twice, from its start and back from its end, so every session is in a part, and it is level when both cuts
+  are.
 - `every_prover_warmed`: each of the row's provers finished a warm session before any timed one was submitted, and none
   filed nothing in the window (the row's `warm_per_prover` and `idle_provers`).
 
 **Each check answers** `PASS`, `FAIL` or `CANNOT_TELL` (`Check`), the last where the run's files don't show it: a file
 the run doesn't hold, a field the row lacks, a record that can't be read. Only a pass counts: a row passed
 (`RowVerdict`) when all nine did, failed when any failed, and otherwise can't be told. `verdict` judges one row against
-a run's files, and `verdicts` every row of a run's `RATES`.
+a run's files, and `verdicts` every row of a run's `RATES`. A number is a finite one: NaN and the infinities, which
+JSON's readers let through, are no seconds and no rate.
 """
 
 from __future__ import annotations
 
-import dataclasses
 import json
-from collections import Counter
+import math
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass
 from pathlib import Path
@@ -72,9 +76,10 @@ def sessions_file(row: Mapping[str, Any]) -> str:
 def card_file(row: Mapping[str, Any], when: str) -> str:
     """Where a run keeps what else was on its node at a row's `start`, before the row's provers start, or its `end`,
     after they exit: a line `epoch SECONDS`; a line `lease N ...` for each card N another run's lease held; and a line
-    `app GPU N pid P MEMORY` for each compute process on a card (N is `?` for a card it couldn't name), or one saying
-    `nvidia-smi gave no answer`. The name holds the row's prover count alone, so a run holds one such record for the rows
-    at one count."""
+    `app GPU N pid P MEMORY` for each compute process on a card (N is `?` for a card it couldn't name). Where the node
+    gave no answer on one of the two lists, a line names the tool that gave none (`gpu-lease status gave no answer`,
+    `nvidia-smi gave no answer`). The name holds the row's prover count alone, so a run holds one such record for the
+    rows at one count."""
 
     return f"out/cotenants-k{row.get('provers')}-{when}.txt"
 
@@ -154,7 +159,13 @@ def _count(x: Any) -> bool:
 
 
 def _seconds(x: Any) -> bool:
-    return isinstance(x, (int, float)) and not isinstance(x, bool)
+    """A finite number a float holds: `json` reads `NaN` and `Infinity`, which compare false with everything and so pass
+    a bound, and an integer of any length."""
+
+    try:
+        return isinstance(x, (int, float)) and not isinstance(x, bool) and math.isfinite(x)
+    except OverflowError:
+        return False
 
 
 def _unread(name: str, row: Mapping[str, Any], counts: Sequence[str] = (), others: Sequence[str] = ()) -> Check | None:
@@ -183,6 +194,31 @@ def _records(text: str, path: str) -> list[Mapping[str, Any]] | str:
         if not isinstance(record, Mapping):
             return f"line {n} of `{path}` isn't a record"
         found.append(record)
+    return found
+
+
+def _rows(files: Files) -> list[Mapping[str, Any]] | str:
+    """The rows of a run's `RATES`, or why it gives none."""
+
+    text = files(RATES)
+    if text is None:
+        return f"the run holds no `{RATES}`"
+    try:
+        found = json.loads(text)
+    except json.JSONDecodeError as e:
+        return f"the run's `{RATES}` isn't JSON ({e.msg})"
+    if not isinstance(found, list) or not all(isinstance(row, Mapping) for row in found):
+        return f"the run's `{RATES}` isn't a list of rows"
+    return found
+
+
+def rows(files: Files) -> list[Mapping[str, Any]]:
+    """The rows of a run's `RATES`. A run that holds no `RATES`, or one that isn't a list of rows, has no row to judge:
+    ValueError."""
+
+    found = _rows(files)
+    if isinstance(found, str):
+        raise ValueError(f"{found}: it has no row to judge")
     return found
 
 
@@ -273,7 +309,7 @@ def every_prover_warmed(row: Mapping[str, Any]) -> Check:
 
 def one_lease_own_card(row: Mapping[str, Any], files: Files) -> Check:
     name = "one_lease_own_card"
-    if unread := _unread(name, row, others=("device",)):
+    if unread := _unread(name, row, ("gpus",), ("device",)):
         return unread
     text = files(LEASES)
     if text is None:
@@ -291,8 +327,8 @@ def one_lease_own_card(row: Mapping[str, Any], files: Files) -> Check:
     cards, device = [str(gpu["index"]) for gpu in gpus], str(row["device"])
     if cards != [device]:
         return Check(name, FAIL, f"its lease held GPU {', '.join(cards) or 'none'}; its provers ran on GPU {device}")
-    if "gpus" in row and row["gpus"] != 1:
-        return Check(name, FAIL, f"its row counts {row['gpus']!r} GPUs on a lease of one")
+    if row["gpus"] != 1:
+        return Check(name, FAIL, f"its row counts {row['gpus']} GPUs on a lease of one")
     return Check(name, PASS)
 
 
@@ -300,6 +336,12 @@ def card_clear_start_end(row: Mapping[str, Any], files: Files) -> Check:
     name = "card_clear_start_end"
     if unread := _unread(name, row, others=("provers", "device")):
         return unread
+    others = _rows(files)
+    if isinstance(others, str):
+        return Check(name, CANNOT_TELL, f"{others}: it would say whether the record of its card is this row's alone")
+    if (at := sum(1 for other in others if other.get("provers") == row["provers"])) > 1:
+        return Check(name, CANNOT_TELL, f"the run holds {at} rows at {row['provers']} provers and one record of its card "
+                     f"for them (`{card_file(row, 'start')}`)")
     device, on_card, untold = str(row["device"]), [], []
     for when in ("start", "end"):
         path = card_file(row, when)
@@ -317,8 +359,10 @@ def card_clear_start_end(row: Mapping[str, Any], files: Files) -> Check:
                 on_card.append(f"at its {when}, a compute process ({' '.join(line[3:])[:160]})")
             elif line[:3] == ["app", "GPU", "?"]:
                 untold.append(f"`{path}` names a compute process on a card it couldn't name ({' '.join(line[3:])[:160]})")
-            elif "gave no answer" in " ".join(line):
-                untold.append(f"`{path}` has no list of compute processes: nvidia-smi gave no answer")
+            elif "gave no answer" in (said := " ".join(line[1:] if line[:1] in (["lease"], ["app"]) else line)):
+                what = ("other runs' leases" if "gpu-lease" in said else "compute processes" if "nvidia-smi" in said
+                        else "what else was on the node")
+                untold.append(f"`{path}` has no list of {what}: {said[:160]}")
     if on_card:
         return Check(name, FAIL, f"GPU {device} wasn't its own: " + "; ".join(on_card))
     if untold:
@@ -345,15 +389,20 @@ def thirds(times: Sequence[float]) -> list[float]:
     return [(times[b] - times[a]) / (b - a) for a, b in zip(cuts, cuts[1:]) if b > a]
 
 
-def burst_parts(times: Sequence[float], burst: int) -> list[float]:
+def burst_parts(times: Sequence[float], burst: int, *, back: bool = False) -> list[float]:
     """Seconds a statement in each part of a window whose sessions file in bursts of `burst`: its whole bursts, from the
     window's start, in parts of a third of them each, rounded down to whole bursts, with a last shorter part for the
-    bursts left over. So a window of three, six or nine bursts gives its thirds, and one of four gives each burst. The
-    sessions after the last whole burst are in no part (fewer than three figures for a window of under three bursts)."""
+    bursts left over. So a window of three, six or nine bursts gives its thirds, and one of four gives each burst (fewer
+    than three figures for a window of under three bursts). The sessions after the last whole burst are in no part.
+    `back`: the same cut counted back from the window's end, in the window's order, which leaves out the sessions
+    before its first whole burst instead."""
 
-    whole = (len(times) - 1) // burst
+    n = len(times) - 1
+    whole = n // burst
     part = max(whole // 3, 1) * burst
     cuts = [*range(0, whole * burst, part), whole * burst]
+    if back:
+        cuts = [n - cut for cut in reversed(cuts)]
     return [(times[b] - times[a]) / (b - a) for a, b in zip(cuts, cuts[1:])]
 
 
@@ -384,14 +433,21 @@ def level(row: Mapping[str, Any], files: Files) -> Check:
     if len(times) - 1 != row["window_sessions"] or abs(span - row["window_s"]) > WINDOW_SLACK_S:
         return Check(name, CANNOT_TELL, f"the window `{path}` gives ({max(len(times) - 1, 0)} sessions over {span:.2f} s) "
                      f"isn't its row's ({row['window_sessions']} over {row['window_s']} s)")
-    took, parts = (thirds(times), "thirds") if burst is None else (
-        burst_parts(times, burst), f"parts of whole bursts of {burst} sessions")
-    if len(took) < 3 or min(took) <= 0:
-        return Check(name, CANNOT_TELL, f"its window of {len(times) - 1} sessions can't be cut into three {parts} that each "
-                     "took time")
-    if max(took) > LEVEL * min(took):
-        return Check(name, FAIL, "its window isn't level: a statement took " + ", ".join(f"{t:.4g}" for t in took)
-                     + f" s in its {parts}, the slowest over {LEVEL} times the fastest")
+    if burst is None:
+        cuts = [(thirds(times), "thirds")]
+    else:
+        parts = f"parts of whole bursts of {burst} sessions"
+        cuts = [(burst_parts(times, burst), parts)]
+        if (len(times) - 1) % burst:
+            cuts.append((burst_parts(times, burst, back=True), f"{parts} counted back from its end"))
+    for took, parts in cuts:
+        if len(took) < 3 or min(took) <= 0:
+            return Check(name, CANNOT_TELL, f"its window of {len(times) - 1} sessions can't be cut into three {parts} that "
+                         "each took time")
+    for took, parts in cuts:
+        if max(took) > LEVEL * min(took):
+            return Check(name, FAIL, "its window isn't level: a statement took " + ", ".join(f"{t:.4g}" for t in took)
+                         + f" s in its {parts}, the slowest over {LEVEL} times the fastest")
     return Check(name, PASS)
 
 
@@ -411,26 +467,6 @@ def verdict(row: Mapping[str, Any], files: Files) -> RowVerdict:
 
 
 def verdicts(files: Files) -> list[RowVerdict]:
-    """The verdict of each row of a run's `RATES`, in the file's order. A run that holds no `RATES`, or one that isn't a
-    list of rows, has no row to judge: ValueError. Rows at one prover count share one record of the card (`card_file`),
-    which then shows it clear for none of them."""
+    """The verdict of each row of a run's `RATES` (`rows`), in the file's order."""
 
-    text = files(RATES)
-    if text is None:
-        raise ValueError(f"the run holds no `{RATES}`: it has no row to judge")
-    try:
-        rows = json.loads(text)
-    except json.JSONDecodeError as e:
-        raise ValueError(f"the run's `{RATES}` isn't JSON ({e.msg})") from e
-    if not isinstance(rows, list) or not all(isinstance(row, Mapping) for row in rows):
-        raise ValueError(f"the run's `{RATES}` isn't a list of rows")
-    at = Counter(repr(row.get("provers")) for row in rows)
-    found = []
-    for row in rows:
-        got = verdict(row, files)
-        if (n := at[repr(row.get("provers"))]) > 1:
-            shared = Check("card_clear_start_end", CANNOT_TELL, f"the run holds {n} rows at {row.get('provers')} provers "
-                           f"and one record of its card for them (`{card_file(row, 'start')}`)")
-            got = dataclasses.replace(got, checks=tuple(shared if c.name == shared.name else c for c in got.checks))
-        found.append(got)
-    return found
+    return [verdict(row, files) for row in rows(files)]
