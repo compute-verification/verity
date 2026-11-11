@@ -1,8 +1,30 @@
 {
  "definitions": {
+  "SparseMlaDotStepB_v1{DOT=HopperBF16WgmmaDot16_v2}": {
+   "and": 49,
+   "type": "6510559f69be476c4ccf3f1b4136838ade7f083c2029ee2bc7580b359231e06c999ed8d12df7da51355e3b0a0d57b5e3fbfc2e544f1f18d97207da44923c9467"
+  },
+  "SparseMlaDotStep_v1{DOT=HopperBF16WgmmaDot16_v2}": {
+   "and": 6304,
+   "type": "6aa59ddc2ba623db1bb2d4e4881d74ede79f1aaab83ba0413aac45eda481e50155fbdb4d2f4b9a509c0cc451206c86d09e9ac20551064b47b49a1b50b9dfb7ca"
+  },
   "SparseMlaHeadEnd_v2{DV=16,INV=Fa3InvSum_v2}": {
    "and": 43823,
    "type": "248c4cb736dbe4644b5ff5e11539943152d56ddf878db25569c35bebc2e04004ee7b6ef45c81707177e68e89d0021c78dc62154b397b1ca84ce5c6cc41c42e32"
+  }
+ },
+ "digests": {
+  "SparseMlaHeadBlock_v3{DR=16,DV=16,NVIS=16,FIRST=False,BN=16,DOT=HopperBF16WgmmaDot16_v2,SCALE=0.0625}": {
+   "sha512": "134807af8d7ac4d562d9446f64398ff4ead5b82e517a50456386f22ebe1442af69d6bf50b1ef60abbd630c7414683c682a1fc5b558ecff12cde628141e97882e"
+  },
+  "SparseMlaHeadBlock_v3{DR=64,DV=512,NVIS=16,FIRST=True,BN=64,DOT=HopperBF16WgmmaDot16_v2,SCALE=0.0625}": {
+   "sha512": "7ac8897bf3574c9bdb2abef58de38d7ab1426e88540a24b52fd5cd4e6349e31292d185f417fc40b9624acffbb5a98d4a34677e49b73f362c1bca8bf4d84e7636"
+  },
+  "SparseMlaHeadBlock_v3{DR=64,DV=512,NVIS=64,FIRST=False,BN=64,DOT=HopperBF16WgmmaDot16_v2,SCALE=0.0625}": {
+   "sha512": "72b0a9d998e4d189dfde437b990c2d4b855692237bd0b9e2c057716a6ff1c4b77048ab694ba2b20b8179f015928c967305a116eda0db6ab74921a05edb5435d4"
+  },
+  "SparseMlaHeadBlock_v3{DR=64,DV=512,NVIS=64,FIRST=True,BN=64,DOT=HopperBF16WgmmaDot16_v2,SCALE=0.0625}": {
+   "sha512": "0bf69ff4363950f7ccb8b04562a667948570b08c4e145cdcf573eb46332eda3f9b17cf1340140fca358230be6d1fc61cc6b19b0439446dcf66cd21c23ae5b6cb"
   }
  }
 }
