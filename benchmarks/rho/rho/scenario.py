@@ -46,11 +46,12 @@ from rho.classes import (
 from rho.envelopes import ROUTES, Context, Regime
 from rho.families import Family, family
 from rho.instances import Model, Run
-from rho.params import Registry
+from rho.params import PERIODS, Registry
 from rho.profile import Profile
 from rho.theorem import Budget, Cap, Overhead, Partition, least, overhead
 
-YEAR = 365 * 86400.0
+#: core's monitoring period of a year, in seconds
+YEAR = float(PERIODS["year"])
 
 
 @dataclass(frozen=True)
