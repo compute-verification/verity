@@ -9,7 +9,9 @@ The decoder refuses a body one of whose references names a leaf of another width
 gives it (`Flock.Program.Widths.bodyBad`). `BodyWide` says what that leaves of a body: every reference of a node's
 argument, and of the return, names a leaf as wide as the leaf of the type it is read as (`SeqWide`), among the
 sources the check reads (`srcOf`: the parameters, and the nodes before the one reading; every node, for the return).
-`tyOf` is the type a reference of an activation's body names.
+The check decides a strided part by a closed form over its pattern, which says something only where the pattern has
+a positive length (`PartInner`, `BodyInner`), as the parser leaves every strided part. `tyOf` is the type a reference
+of an activation's body names.
 -/
 
 @[expose] public section
@@ -35,6 +37,17 @@ def BodyWide (B : Body) : Prop :=
   (∀ k < B.nodes.size, ∀ a < (B.nodes[k]!).args.size,
       SeqWide (srcOf B k) ((B.nodes[k]!).args[a]!).ty ((B.nodes[k]!).args[a]!).seq) ∧
     SeqWide (srcOf B B.nodes.size) B.retType B.ret
+
+/-- A strided part repeats a pattern of positive length, as the decoder's parser leaves it: the width check's closed
+form for a strided part reads nothing of a pattern of length 0. -/
+def PartInner : Part → Prop
+  | .strided _ _ _ inner _ _ _ => 0 < inner
+  | _ => True
+
+/-- Every part of body `B`'s references is `PartInner`: each argument's, and the return's. -/
+def BodyInner (B : Body) : Prop :=
+  (∀ k < B.nodes.size, ∀ a < (B.nodes[k]!).args.size, ∀ q ∈ ((B.nodes[k]!).args[a]!).seq.parts, PartInner q) ∧
+    ∀ q ∈ B.ret.parts, PartInner q
 
 /-- The type reference `r` names in the body of activation `sc`: a parameter's, or a node's output. -/
 def tyOf (P : Prog) (sc : Scope) (r : Ref) : Ty :=

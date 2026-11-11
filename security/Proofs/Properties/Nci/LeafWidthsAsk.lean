@@ -45,14 +45,14 @@ theorem eqRange_sound (fuel : ℕ) (t : Ty) (a : ℕ) (S : Ty) (b n w w' : ℕ) 
   sorry
 
 theorem partOk_sound (B : Body) (below : ℕ) (t : Ty) (a : ℕ) (q : Part) (w w' : ℕ) (hq : BodiesOk.PartNonneg q)
-    (ha : a + q.count ≤ t.leaves) (hin : ∀ k < q.count, BodiesOk.RefIn B (q.get k))
+    (hi : PartInner q) (ha : a + q.count ≤ t.leaves) (hin : ∀ k < q.count, BodiesOk.RefIn B (q.get k))
     (h : (Widths.partOk (srcOf B below) t (Widths.homo t) a q).run w = .ok true w') :
     ∀ k < q.count, ∀ S, (srcOf B below).ty? (q.get k).p (q.get k).i = some S →
       Widths.wAt S (q.get k).j = Widths.wAt t (a + k) := by
   sorry
 
 theorem seqBad_sound (B : Body) (below : ℕ) (t : Ty) (ps : Array Part) (w w' : ℕ)
-    (hq : ∀ q ∈ ps, BodiesOk.PartNonneg q) (hc : (Seq.ofParts ps).count = t.leaves)
+    (hq : ∀ q ∈ ps, BodiesOk.PartNonneg q) (hi : ∀ q ∈ ps, PartInner q) (hc : (Seq.ofParts ps).count = t.leaves)
     (hin : ∀ j < (Seq.ofParts ps).count, BodiesOk.RefIn B ((Seq.ofParts ps).get j))
     (h : (Widths.seqBad (srcOf B below) t (Seq.ofParts ps)).run w = .ok none w') :
     SeqWide (srcOf B below) t (Seq.ofParts ps) := by
@@ -60,7 +60,7 @@ theorem seqBad_sound (B : Body) (below : ℕ) (t : Ty) (ps : Array Part) (w w' :
 
 /-- **A body the width check passes reads every leaf at its width.** -/
 theorem bodyBad_sound (defs defs' : Array Defn) (i : ℕ) (key : String) (B : Body) (w w' : ℕ)
-    (hB : BodiesOk.BodyFacts defs i B) (hret : B.ret.count = B.retType.leaves)
+    (hB : BodiesOk.BodyFacts defs i B) (hI : BodyInner B) (hret : B.ret.count = B.retType.leaves)
     (h : (Widths.bodyBad defs' key B).run w = .ok none w') : BodyWide B := by
   sorry
 
@@ -68,7 +68,7 @@ theorem bodyBad_sound (defs defs' : Array Defn) (i : ℕ) (key : String) (B : Bo
 
 theorem decoded_checked (bytes : ByteArray) (P : Prog) (h : decode bytes = .ok P) :
     ∀ d < P.defs.size, (P.defs[d]!).prim = false →
-      (P.defs[d]!).body.retType = (P.defs[d]!).ret ∧
+      (P.defs[d]!).body.retType = (P.defs[d]!).ret ∧ BodyInner (P.defs[d]!).body ∧
         ∃ defs' key w w', (Widths.bodyBad defs' key (P.defs[d]!).body).run w = .ok none w' := by
   sorry
 
@@ -97,7 +97,8 @@ theorem resolve_node (P : Prog) (hroot : P.root < P.defs.size ∧ (P.defs[P.root
 /-- **The walk arrives where the layout says**: the gate of member `m` of a primitive's node `k`, in an activation
 resolution reaches, is located at that node, with its callee for primitive. -/
 theorem gate_of_node (P : Prog) (hroot : P.root < P.defs.size ∧ (P.defs[P.root]!).prim = false)
-    (hB : ∀ sc, Good P sc → BodyOk P sc.d) (hL : ∀ d < P.defs.size, Walk.LaidOut P d) (sc : Scope)
+    (hB : ∀ sc, Good P sc → BodyOk P sc.d) (hL : ∀ d < P.defs.size, Walk.LaidOut P d)
+    (hD : ∀ d < P.defs.size, BodiesOk.DefOk P.defs d P.defs[d]!) (sc : Scope)
     (hsc : Good P sc) (k m : ℕ) (hk : k < (P.defs[sc.d]!).body.nodes.size)
     (hp : (P.defs[((P.defs[sc.d]!).body.nodes[k]!).fn]!).prim = true)
     (hm : m < ((P.defs[sc.d]!).body.nodes[k]!).members) (p : ℕ) (ops : Array ℕ) (sc' : Scope)
@@ -115,7 +116,7 @@ theorem resolve_wide (P : Prog) (hroot : P.root < P.defs.size ∧ (P.defs[P.root
     (h : resolve P sc r = .ok g) (p : ℕ) (ops : Array ℕ) (sc' : Scope) (hg : P.gate g = .ok (p, ops, sc')) :
     (P.defs[p]!).ret = .value (Widths.wAt (tyOf P sc r) r.j) := by
   obtain ⟨sc₁, k, m, hsc₁, hk, hp, hm, rfl, hw⟩ := resolve_node P hroot hB hL hD hW sc hsc r hr g h
-  rw [(gate_of_node P hroot hB hL sc₁ hsc₁ k m hk hp hm p ops sc' hg).1]
+  rw [(gate_of_node P hroot hB hL hD sc₁ hsc₁ k m hk hp hm p ops sc' hg).1]
   exact hw
 
 /-! ## A Definition has its own key -/
