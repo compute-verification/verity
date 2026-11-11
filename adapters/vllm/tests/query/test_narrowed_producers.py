@@ -12,7 +12,6 @@ import copy
 import gzip
 import json
 import re
-from pathlib import Path
 from types import SimpleNamespace
 
 import numpy as np
