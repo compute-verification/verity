@@ -58477,3 +58477,30 @@ For the table: #9007 at `e4a196030a7c`, LEAN-277, open and unmarked; quick tier 
 - I have not written the variant. I write it on its own unopened branch if you say so, with the suites it reddens named.
 
 For the table: no cell.
+
+## RELAX, Wed 11 Nov 16:00Z: today's checkpoint for (b′): written and tried clean at `09c7c534a251`, no PR yet; the lock is not regenerated (records run `9612` is building) and the quick tier is at 2 of 64 suites, 0 failed. Open: your three answers of my 15:56Z entry
+
+**Where it stands**
+- **Branch** `cursor/proofs-relaxed-check-7a3e` at `09c7c534a251fbf47fb5a184cef754781f28c577`, one commit on `origin/main` `493f49485e50`, pushed, unmarked, no PR [run]. I started it before your 15:28Z message: the commit is the cherry-pick of `4c8634f60134`, made 08:01:58Z on `cursor/proofs-registered-kept-d8c6` (that branch stays as it is, unopened).
+- **Written** (six files, +107 −63) [run: `git diff --stat`]: the Lean check (`Record.checks`, `Record.checksFast`, new `Record.subDict`), Python's twin (`audit.audit_record`), the statement (`Properties.Spot.OpenedRegistered` replaces `SameRoots` in `UnitsProved`'s last conjunct, with the guard on a reported or registered list gone), its proof (`subDict_iff`, `checks_ok`), the difftest (eight cases through the built verifier, and Lean's record against Python's) and `test_registered.py`.
+- **Compiles** [run]: each changed Lean file's try on a node, lean exit 0, the axiom probe clean, no sibling clash: `r20261111-153442-1b4c`, `r20261111-153456-7670`, `r20261111-153506-7166`.
+- **Out** [run, 16:00Z]: records `r20261111-154642-9612` (has its slot since 15:54Z; fetched 1,146 modules from other nodes' bundles, building; its slot ends it by 17:54Z at the latest) and quick tier `r20261111-154701-0c1f` (2 suites passed, 0 failed, 62 to go; one suite took 496 s, so about 17:30Z [guess]).
+- **Retired terms** on the six files, by the lint's own `sites`: 1,704 at the base and 1,704 at the head, none added [run].
+- **Pairs** [run, 15:4xZ]: clean with `origin/main` `493f49485e50`, with #8730 `f612d5d5897d` and with #8458 `81c162ded6fa`; the other ten of the brief's list have landed. I redo it at the final head.
+
+**The lock: what will change, and what the landing DM will show** [derived from the locks at the base, `tools/verity/lean/README.md`'s rule of the hashes and `research/spec_alert.py`'s `_across`; the records run decides]
+- `security/Properties/lean-audit.json`, `reads`: the hashes of `Properties.Spot.UnitsProved` and `Spot.Record.checks` change; `Properties.Spot.SameRoots` leaves; `Properties.Spot.OpenedRegistered` and `Spot.Record.subDict` enter. The DM's lines: "• definition `Properties.Spot.UnitsProved` (`Properties.Spot`) changed" and "• definition `Spot.Record.checks` (`Spot.Record`) changed". A definition that enters or leaves gets no line.
+- `security/lean-audit.json`, `reads`: the hash of `Spot.Record.checks` changes and `Spot.Record.subDict` enters. The DM's line: "• definition `Spot.Record.checks` (`Spot.Record`) changed".
+- **`Properties.Spot.acceptMeans`'s own record probably does not move** [guess]: its type is the constant `Properties.Spot.AcceptMeans`, and its `unfolded_hash` is of that definition unfolded once, which names `UnitsProved` and not its body. Then the DM carries no "changed guarantee" line and no Lean text of the conjunct: Daniel sees two definitions "changed" and must follow the link. The PR body states the conjunct before and after; vllm's page should too.
+- No other guarantee's statement changes. Which guarantees read `Spot.Record.checks` is in the run's `review.txt`; I list them when it ends.
+
+**Not started**
+- The PR (opened once the lock commit is in; the body is drafted).
+- The refusing variant (my 15:56Z finding: it would refuse every audit with own reads; I wait for your word).
+- The kernel replay (the fast path does none; the queue's lean-audit does) and a red-team by an agent other than me. The body will say no to both.
+
+**I need** (15:56Z entry, in full): the goal for the body (PRF-548 carries no goal's label); whether I may correct the one sentence of `audit.audit_record`'s docstring that becomes false (vllm's); whether to write the refusing variant at all.
+
+Correction to my 15:44Z entry: I gave the census check's time as "14:1xZ"; I did not read it from a record, so take it as no time.
+
+For the table: no cell.
