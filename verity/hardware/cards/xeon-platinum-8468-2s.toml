@@ -18,7 +18,7 @@ priority_cores = { value = 0, unit = "core/socket", mark = "ceiling", source = "
 vm_cores = { value = 8, unit = "core/GPU", mark = "measurement", source = "the cores a GPU an H200 node's VM gives, not the server's: lscpu on one of the two shows 1 socket x 8 cores x 2 threads, and the VM carries one H200 (art:2b19fdd166a7); the server has cpu.sockets x cpu.cores, 96, and a VM can't see how many GPUs it carries" }
 
 [clock]
-turbo = { value = 3.8, unit = "GHz", mark = "ceiling", source = "Intel ARK 231735: max turbo 3.8 GHz (all-core turbo 3.1); Intel publishes no AMX clock, so the ceiling takes max turbo on every core" }
+turbo = { value = 3.8, unit = "GHz", mark = "ceiling", source = "Intel ARK 231735: Max Turbo Frequency 3.80 GHz; the page gives a base frequency of 2.10 GHz and no all-core turbo figure; Intel publishes no AMX clock, so the ceiling takes max turbo on every core" }
 priority_turbo = { value = 3.8, unit = "GHz", mark = "ceiling", source = "Sapphire Rapids has no Priority Core Turbo: as clock.turbo" }
 
 [rate]
