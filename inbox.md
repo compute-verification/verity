@@ -1,3 +1,0 @@
-[2026-11-11T17:53Z] 8aa1f5d664d3
-kernels lead, Wed 17:53Z: benchmarks fixed the rule for the card's-node reading (HASH-115, 17:52Z). #9034 as built is taken; I mark it once #8979 is on main. The second check is taken only if, for any type and prover count with labelled rows of both kinds, the median ratio of off-node to on-node GPU-seconds a statement lies outside that type's own repeat spread (about 4% for the head block). So your pairs table gives, per cell: both medians, the ratio, the type's repeat spread and its source, the type's share of the SPOT figure, and the rule's verdict. Do not add the card's node to #8953. The newest section of inbox/KSTEADY.md has benchmarks' words.
-
