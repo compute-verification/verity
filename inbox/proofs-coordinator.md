@@ -50352,3 +50352,86 @@ For HARMSEARCH and BREAKEVEN: with the cut, the head block's stratum is two (sco
 For the table:
 - A later head block's 643 classes is a run now (`r20261111-110406-bac2`: 179,712 blocks of rank 0, each 512 + 1 + 128 writing proof blocks, + 2), a lower bound that I take as the count. The 10:59Z table of record stands: the record 2^-99.41 / 2^-99.38 / 2^-98.55 in compressions (mean / by stratum / one M), width κ 2^-6 2^-101.16 / 2^-101.14 / 2^-99.96, width κ 2^-7 2^-102.16 / 2^-102.14 / 2^-100.96. "One M" still rests on no other kind having more than 643, which is derived, not run.
 - Still modeled, lemmas not composed, the class count a hypothesis in Lean, the premise at three finders, and the model's verifier accepts no run at D*1's sizes (the stage layer is two branches and no PR).
+
+## SCALE, Wed 11 Nov 11:10Z: by PROOF BLOCK at the plan's cut M = 2,049 (the K=2048 linear's quant block, whose 2,048 input words are each written by their own one-word bmm block), so M <= 132 NO and M <= 142 NO; nine writer rows recut bring every served block to at most 139 (132 with q_nope proved a head); PageCopy is in no Program and bounded at 97 to 205 [derived]
+
+Every figure: [run] = a command I ran now, [read] = read now at the place named, [derived] = arithmetic or an argument on those, [relayed], [guess]. Times from `date -u`. The class counts are from my wiring dump `r20261111-105348-9d93` (cpu-2, b1 census row, rank 0, 1,331,964 rows, 909 specs; done rc 0, launched 10:53Z, before your 11:00Z correction reached me, so ATTACK's run and mine overlap; mine is finished and its numbers are below for ATTACK to check against). The pricing is on `3db1`'s "(iii) honest [base]" row, modeled. Notes tools: `unit_classes.py`, `unit_classes_plan.py`, `kfix_recut.py`, `wiring_dump.py` in the lane's notes.
+
+**1. The key, at `62eb1fdc64de` [read].**
+- `Reveal.needs s u` (`security/Proofs/Flock/SpotFlock/Reveals.lean:38`) is `Prog.needsList` of proof block u: u's own gates on its boundary, then every non-constant gate outside u that a gate of u reads (`ProgReads.lean:273-276`). `Prog.Boundary u g` (`security/Definitions/Claims/Sampling.lean:158-161`) holds when g is returned, is an input, or is read by a gate outside u. On the Program: a gate's needers are its writing proof block (whenever any other block reads it) plus every proof block that reads it.
+- `gateBlock d.part g` (`security/Proofs/Flock/SamplingGeneric/TwoCount.lean:113`) is the first replay block of the two-stage design holding g. The side is `Prog.Boundary` of that replay block at g. On the Program: the replay block of g's writer, and whether g is returned, an input, or read from another replay block.
+- **My 10:29Z 132 is NOT the needers count.** The writer's own block IS in the needers: a word another block reads is on its writer's boundary, so the writer needs it (`needsList`'s first part). And 132 counted writer ROWS, while the plan proves the q_nope row one word a block. Your 11:00Z correction and ATTACK's 10:42Z entry are right [read].
+
+**2. Classes a block by proof block, b1 census Program rank 0 [run: the wiring dump; the plan's N per writer read from `3db1`'s block names; derived: one class per writing block a port, plus one for the block's outputs].** Kinds with more than 100:
+
+| reader block (plan's) | classes | its wide port: writer row, the plan's N there |
+|---|---|---|
+| `Fp8GroupQuantUe8m0_v1{K=2048}` / `FlashInferFp8Quant1x128_v1{K=2048}` (`o_proj`'s quant) | **2,049** | x, 2,048 words from `BatchedGemm_v1{B=8,K=512,N=256}` (W_UV), proved `{B=1,K=512,N=1}`: 2,048 blocks |
+| `DsaIndexerQ_v1{H=32,D=128}` | 1,057 | q, 4,096 words from `DeepGemmFp8Linear_v1{K=2048,N=4096}` at `ScaledMm{K=2048,N=4}` (1,024); 32 weights from `CublasSplitKGemm_v1{N=160}` at N=1 |
+| `AllReduceMultimem_v1{SIZE=96}` / `AllReduceMnnvl_v1{N=96}` | 769 [derived] | 96 columns of each of 8 ranks' `EmbeddingShard_v1` outputs at H=1. The dump shows rank 0's own 96 [run]; the other 7 ranks are not node reads in a rank Program, so x8 is derived |
+| `SiluMul_v2{I=1536}` | 769 | 3,072 words from `DeepGemmFp8Linear_v1{K=6144,N=3072}` at `ScaledMm{K=6144,N=4}` (ATTACK's 769 agrees) |
+| `SparseMlaHeadBlock_v1{NVIS=64,FIRST=false}` | 643 (642 first) | q_nope[h] 512 from `BatchedGemm_v1{B=8,K=192,N=512}` at N=1, q_pe 1, 64 keys x 2, state 1, out 1 (ATTACK's 643 agrees) |
+| `SiluMul_v2{I=256}` (routed) | 513 | 512 from `MoeExpertFp8Gemm_v1{K=6144,N=512}` at `MoeExpertFp8BlockGemm_v4{N=1}` (the shared expert's is 129) |
+| `DsaRMSNorm_v1{N=2048}` | 513 | 2,048 from `FlashInferFp8Linear_v1{K=6144,N=2624}` (`wq_a`, fused) at N=4 |
+| `MoeRouterSigmoidBias*` | 257 | 256 logits from `CublasSplitKGemmF32Out_v1{K=6144,N=256}` at N=1 |
+| `AllReduceResidualMnnvl_v1{N=96}` | 194 [derived] | 8 ranks x 96 columns of `o_proj` at `ScaledMm{K=2048,N=4}` (24 a rank) + residual 1 + out |
+| `DsaRMSNorm_v1{N=512}`, `DsaIndexerKRow_v1`, `RMSNormFusedCudaVector8_v1{N=6144}` | 129 each | 512 at N=4; 128 at N=1; two 6,144-word inputs in 96 columns |
+| `ResidualAdd_v1{N=384}` | 101 | 384 from the shared down `DeepGemm{K=256,N=6144}` at N=4 (96), MoeSum 4 |
+
+Every other kind is at most 65 (`MoeSum_v1{H=96}` 25, `BatchedGemm_v1{K=192}` 49, `RoPEHeadGptJ_v2` 17, logits `N+2` with N at most 60). These are floors. A reader set splitting one writer block's words would raise them, and weight ports (inputs, no writer) add about 1 each; neither touches the maximum.
+- **M (a), by needers and replay block: 2,049. M (b), with the boundary bit: 2,049** [derived]. The replay block is the writer's (proof blocks nest in replay blocks), so it splits nothing. The side differs between two gates with equal needers only where one is returned or an input and the other is neither, since "read from another replay block" is fixed by the needers. In the served Program I found no such pair by reading, not by a run: weights' and tokens' needers are their reader sets, which no other gate shares.
+- **At the census's own cut** (`block_census.cut` over `sized-rank0.json`, coarsest fitting option) [run], M is 24,577: `MoeSum_v1{TOPK=8,H=3072}` reads 8 x 3,072 words from one-word expert coordinates. The plan's cut is the one the bound uses; this only says the census's cut is worse.
+
+**3. PageCopy[262144 bits].** No Program on a node holds it [run: no PageCopy spec in rank 0's 909 specs nor in the census's sized families]. It is the plan's modeled cell (`cacheopt_pages.py` in the notes: a carried page of 64 tokens x 92,628 B, cut into 181 rows of 262,144 bits, each an identity copy). Its Definition is `PageCopy_v1{CB}` in `verity/protocols/certifier/prover/compile_slice_v6.py:311-318` (reads keyed, fresh, wrote[CB], carried[CB], out[CB]; returns a 16-bit verdict), tested at CB = 8 only.
+- **Bound [derived]:** keyed and fresh, 1 (the pool window writes both, the same blocks read both). wrote: a 262,144-bit row holds at most 29 token-layer entries (1,187.5 B each = 92,628 / 78), each written by at most 3 blocks (kv_c norm, k_pe RoPE, indexer key), so at most 87. carried and out: reader sets, at most 2 an entry each, so at most 58 each; at most 4 each when the page's 64 tokens are one key block and two or three logits blocks. Verdict, 1. Total **97 when pages align, at most 205 otherwise**.
+- **What would count it:** a composed Program with the certifier's compile slice (`PoolWindow_v1`, `PageCopy_v1` at the deployed CB) wired to the served KV writers, put through `unit_classes.py`.
+
+**4. The thresholds.** **M <= 132: NO (M = 2,049). M <= 142: NO.** At M = 2,049 [derived, modeled; compressions, K0 = 6; mean / by stratum / one M; ATTACK's 643 values beside]:
+
+| design | Σk | GB ratio | at the counted M | ATTACK at 643 |
+|---|---|---|---|---|
+| record, size classes 2^-5 | 10,046,500 | 1.000 | -99.28 / -97.64 / -96.88 | -99.41 / -99.38 / -98.55 |
+| the 2,647 GB plan, width 2^-2.5 | 42,855,252 | 0.655 | -97.50 / -97.32 / -94.79 | -97.66 / -97.64 / -96.46 |
+| width 2^-4 | 15,151,640 | 0.665 | -99.00 / -98.82 / -96.29 | -99.16 / -99.14 / -97.96 |
+| width 2^-6 | 3,787,940 | 0.690 | -101.00 / -100.82 / -98.29 | -101.16 / -101.14 / -99.96 |
+| width 2^-7 | 1,893,988 | 0.798 | -102.00 / -101.82 / -99.29 | -102.16 / -102.14 / -100.96 |
+
+In calls every cell is 9.00 better. By stratum and one M are 1.7 bits under ATTACK's table. The mean moves 0.1 to 0.2, because the over-142 blocks are few next to the head blocks.
+
+**5. THE RECUT [derived; the plan cell's share is each served row's coordinates (rows x N) in its pooled cell, read from the dump's row counts].** Nine writer rows, each at the smallest power of two that brings every reader to at most 142, with PageCopy at 97:
+
+| writer row (served) | plan block today | share of that cell | N today -> new | in bits today -> new | k_log today -> new (upper: + log2 ratio) | reader it fixes -> classes |
+|---|---|---|---|---|---|---|
+| W_UV bmm `BatchedGemm_v1{B=8,K=512,N=256}` | `{B=1,K=512,N=1}` | 1 | 1 -> 16 | 16,384 -> 139,264 | 22 -> 26 | `o_proj` quant 2,049 -> 129 |
+| absorption bmm `BatchedGemm_v1{B=8,K=192,N=512}` | `{B=1,K=192,N=1}` | 1 | 1 -> 64 | 6,144 -> 199,680 | 21 -> 27 | head block 643 -> 139 |
+| indexer `wq_b` `DeepGemm/FlashInfer{K=2048,N=4096}` | `ScaledMm{K=2048,N=4}` | 0.1186 | 4 -> 64 | 82,944 -> 1,073,664 | 24 -> **28** | `DsaIndexerQ` 1,057 -> 97 |
+| dense gate-up `{K=6144,N=3072}` | `ScaledMm{K=6144,N=4}` | 0.0365 | 4 -> 32 | 248,832 -> 1,635,840 | 25 -> **28** | `SiluMul{I=1536}` 769 -> 97 |
+| `wq_a` fused `{K=6144,N=2624}` | `ScaledMm{K=6144,N=4}` | 0.8113 | 4 -> 16 | 248,832 -> 843,264 | 25 -> 27 | `DsaRMSNorm{2048}` 513 -> 129 |
+| routed gate-up `MoeExpertFp8Gemm_v1{K=6144,N=512}` | `MoeExpertFp8BlockGemm_v4{K=6144,N=1}` | 1 | 1 -> 4 | 248,832 -> 843,264 [derived] | 25 -> 27 | routed `SiluMul{I=256}` 513 -> 129 |
+| router `CublasSplitKGemmF32Out_v1{K=6144,N=256}` | `{N=1}` | 1 | 1 -> 2 | 196,608 -> 294,912 | 25 -> 26 | router 257 -> 129 |
+| `o_proj` `{K=2048,N=6144}` | `ScaledMm{K=2048,N=4}` | 0.6610 | 4 -> 8 | 82,944 -> 148,992 | 24 -> 25 | `AllReduceResidualMnnvl{96}` 194 -> 98 |
+| `EmbeddingShard_v1{VS=19360,H=6144}` | `{H=1}` x 8 shards | 1 | 1 -> 8 | 309,792 -> 2,478,336 | 25 -> **28** | embedding all-reduce 769 -> 97 |
+
+- **`K_MAX` = 27** (`benchmarks/one_stage/m1_families.py:31` at the census tree `52da59a094b9`) [read]. Three rows estimate 28. My k_log is an upper estimate, so they may fit; if not, cut the reader instead, which costs nothing in writer size [derived]:
+  - `SiluMul_v2{I=1536}` in 8 column slices of 192: 384 words at N=4, so 97;
+  - `DsaIndexerQ` per head: 128 at N=4 plus 32, so 65, if its heads are separable [guess];
+  - the all-reduces in 16 columns, which their `COLS` halvings allow: 8 x 16 + 1 = 129.
+- With q_nope proved a head, the absorption bmm block is k_log 30, over `K_MAX`, so 132 needs that bmm proved some other way.
+
+The frontier at the recut [derived, modeled: each widened cell's prove seconds scaled with its width; HARMSEARCH prices it; compressions, K0 = 6, mean / by stratum / one M; PageCopy 97]:
+
+| design | q_nope a head (N=512): M 132 | 64 words: M 139 | 32 words: M 147 (head block over 142) |
+|---|---|---|---|
+| record: size classes at its κ (k by `kappa_rule`) | -101.54 / -101.27 / -100.93, GB 1.046 | -101.47 / -101.21 / -100.85, GB 1.016 | -101.40 / -101.14 / -100.77, GB 1.014 |
+| the 2,647 GB plan, width 2^-2.5 | -99.74 / -99.45 / -98.88, GB 0.705 | -99.67 / -99.40 / -98.80, GB 0.673 | -99.60 / -99.33 / -98.72, GB 0.671 |
+| width 2^-4 | -101.24 / -100.95 / -100.38, GB 0.714 | -101.17 / -100.90 / -100.30, GB 0.682 | -101.10 / -100.83 / -100.22, GB 0.680 |
+| width 2^-6 | -103.24 / -102.95 / -102.38, GB 0.733 | -103.17 / -102.90 / -102.30, GB 0.704 | -103.10 / -102.83 / -102.22, GB 0.702 |
+| width 2^-7 | -104.24 / -103.95 / -103.38, GB 0.839 | -104.17 / -103.90 / -103.30, GB 0.811 | -104.10 / -103.83 / -103.22, GB 0.808 |
+
+With PageCopy at its worst case 205, one M moves to 205 everywhere and each one-M cell loses about 0.56 bit (at 64 words: record -100.29, width 2^-4 -99.73, width 2^-6 -101.73). The mean and by-stratum columns don't move. At 64 words with PageCopy at 97, the record by classes and width 2^-4 both clear 2^-100 under one M, at modeled GB ratios 1.016 and 0.682 [derived, modeled]. At 205, width 2^-4 does not; the record still does.
+
+**What I could not establish.** The exact count above the floors (reader-set splits and weight ports, about +1 a port). The other 7 ranks' all-reduce writers by run: derived x8. PageCopy by run. The recut blocks' true k_log, and so whether the three rows marked 28 fit `K_MAX`. The recut's GB at real prices: HARMSEARCH's.
+
+For the table: by proof block at the plan's cut M = 2,049 (`o_proj`'s quant); record -99.28 / -97.64 / -96.88 (mean / by stratum / one M, compressions, K0 = 6) [derived from run `9d93` on `3db1`'s rows, modeled]. At the nine-writer recut with q_nope in 64 words, M = 139: record -101.47 / -101.21 / -100.85 and width 2^-4 -101.17 / -100.90 / -100.30.
+For HARMSEARCH: the nine recut rows are in the table in section 5 (cell, share, N, in bits, k_log). `kfix_recut.py`'s `recut()` builds the cells: each new cell has n x old N / new N, and bits, prove and commit bytes x new N / old N.
+For REGX: in the served Program the boundary bit splits no class [derived, by the argument in section 2, not by a run]. The replay block is the writer's, and "read from another replay block" is fixed by the needers, so only a returned or input gate sharing a non-boundary gate's needers could split one; I found none.
