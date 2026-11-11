@@ -46,7 +46,6 @@ from __future__ import annotations
 import contextlib
 import copy
 import linecache
-import math
 import os
 import re
 import traceback
@@ -353,24 +352,18 @@ def _capture(steps, model, opts, example_batch, *, updated, token_dims, token_ax
     leaves, spec = pytree.tree_flatten(example_batch)
     dims = _token_dims(leaves, token_dims)
     sizes = _axis_sizes(leaves, dims)
-
-    def trace(leaves_: list, sizes_: tuple[int, ...]) -> Capture:
-        t = _trace(steps, model, opts, leaves_, spec, device, measured)
-        t.axis_sizes = sizes_
-        if measured is not None:
-            t.step_tokens = {measured: math.prod(sizes_)}
-        return t
-
-    base = trace(leaves, sizes)
+    base = _trace(steps, model, opts, leaves, spec, device, measured)
+    base.axis_sizes = sizes
     varied = []
     for a, n in enumerate(sizes):
         last: Exception | None = None
         for size in ((2 * n, n // 2) if n >= 4 else (2 * n,)):
             try:
-                t = trace(_resized(leaves, dims, a, size), tuple(size if i == a else s for i, s in enumerate(sizes)))
+                t = _trace(steps, model, opts, _resized(leaves, dims, a, size), spec, device, measured)
             except CaptureRefused as e:
                 last = e
                 continue
+            t.axis_sizes = tuple(size if i == a else s for i, s in enumerate(sizes))
             varied.append(t)
             break
         else:
