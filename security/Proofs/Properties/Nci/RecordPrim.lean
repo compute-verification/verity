@@ -16,6 +16,12 @@ at the activation's own gate (`resolve_default`), and every leaf such a unit ret
 
 `run_one` and `run_two_ok` give a walk its result from its first step, or its first two, at any fuel that covers
 them: where `run_two` reads a result off a walk that ended, these say that the walk ends.
+
+A leaf of a unit's parameter resolves in those two steps whatever the unit's Definition (`unit_leaf_ok`,
+`unit_param_ok`): up to the root at a reference of the node's argument, and there to a gate of an input node. So
+what the gate of a unit of a primitive reads are leaves of the unit's own parameters (`prim_unit_operands`): the
+root resolves the batch's member's references to the gates the unit's parameters resolve to. And such a unit has
+one output row of one leaf, its gate (`outLeaf_prim`).
 -/
 
 @[expose] public section
@@ -23,6 +29,7 @@ them: where `run_two` reads a result off a walk that ended, these say that the w
 namespace NciCheck.Properties.SecurityProofs.Resolve
 
 open Flock.Program
+open NciCheck.Record.SecurityProofs (batch_dims)
 
 /-- A walk whose first step ends has that step's result, at any fuel but none. -/
 theorem run_one {α β : Type} {what : String} {step : α → Flock.V (β ⊕ α)} {a : α} {b : β}
@@ -171,13 +178,61 @@ theorem gate_member_prim {k m : ℕ} (hk : k < (P.defs[P.root]!).body.nodes.size
 
 end
 
+section
+variable (bytes : ByteArray) (P : Prog) (hdec : Flock.Program.decode bytes = .ok P)
+  (hov : P.orderViolation = none) (hlay : Desc.bodiesLaidOut P = true) (hown : Record.ownRows P = true)
+include hdec hov hlay hown
+
+/-- **A leaf of a unit's parameter resolves**, to the gate the root resolves the node's argument's reference to:
+the unit's step up to the root (`rs_unit`) and the root's step to a gate of an input node (`arg_leaf`) are the whole
+walk. The unit's Definition is a composite or a primitive: neither step reads its body. -/
+theorem unit_leaf_ok {k : ℕ} (hk : k < (P.defs[P.root]!).body.nodes.size)
+    (hu : Desc.isInputNode P ((P.defs[P.root]!).body.nodes[k]!) = false)
+    (hf : ((P.defs[P.root]!).body.nodes[k]!).form = .call ∨ ((P.defs[P.root]!).body.nodes[k]!).form = .batch)
+    {m : ℕ} (hm : m < ((P.defs[P.root]!).body.nodes[k]!).members) {i : ℕ}
+    (hi : i < ((P.defs[P.root]!).body.nodes[k]!).args.size) {t : ℕ}
+    (ht : t < ((P.defs[((P.defs[P.root]!).body.nodes[k]!).fn]!).params[i]!).2.leaves) (d off : ℕ) :
+    ∃ g, resolveStep P (P.rootScope, (((P.defs[P.root]!).body.nodes[k]!).args[i]!).seq.get
+        (argIdx ((P.defs[P.root]!).body.nodes[k]!) i m t)) = .ok (.inl g) ∧
+      resolve P (.child P.rootScope d off k m) ⟨true, i, t⟩ = .ok g := by
+  obtain ⟨-, hc, hno⟩ := decoded_root bytes P hdec k hk
+  have hx : argIdx ((P.defs[P.root]!).body.nodes[k]!) i m t <
+      ((((P.defs[P.root]!).body.nodes[k]!).args[i]!).seq).count := by
+    rcases hf with hf | hf
+    · rw [argIdx_call hf]
+      have hcp : (P.defs[((P.defs[P.root]!).body.nodes[k]!).fn]!).prim = false := hno.2.2.2.1 (Or.inl hf)
+      have hbp := (hc.2 hcp).1
+      have hup := BodiesOk.up_ok _ _ hc hno i (by rw [hbp, ← hno.1]; exact hi) t (by rw [hbp]; exact ht) m hm
+      rw [hf] at hup
+      exact hup
+    · rw [argIdx_batch hf]
+      have hd : (((P.defs[P.root]!).body.nodes[k]!).args[i]!).dims.isSome = true := by
+        refine batch_dims hown (n := (P.defs[P.root]!).body.nodes[k]!) ?_ hf ?_
+        · refine List.mem_filter.2 ⟨?_, by simp [hu]⟩
+          rw [getElem!_pos _ k hk]
+          exact Array.mem_toList_iff.2 (Array.getElem_mem hk)
+        · rw [getElem!_pos _ i hi]
+          exact Array.getElem_mem hi
+      have hop := BodiesOk.op_ok _ _ hno i hi m hm t (by rw [hf, hd]; exact ht)
+      rw [hf] at hop
+      exact hop
+  obtain ⟨n, j, -, -, -, -, hstep⟩ := arg_leaf bytes P hdec hov hlay hown hk hu hi hx
+  obtain ⟨fuel, hfuel⟩ : ∃ fuel, Flock.Steps.FUEL = fuel + 2 :=
+    ⟨Flock.Steps.FUEL - 2, by unfold Flock.Steps.FUEL; omega⟩
+  refine ⟨_, hstep, ?_⟩
+  unfold resolve
+  rw [hfuel]
+  exact run_two_ok (rs_unit P d off k m i t hf) hstep fuel
+
+end
+
 end NciCheck.Properties.SecurityProofs.Resolve
 
 namespace NciCheck.Properties.Record.SecurityProofs
 
-open Flock.Program (Prog Scope)
+open Flock.Program (Prog Scope Ref)
 open Flock.TemplateQuery (TRange)
-open NciCheck.Record.SecurityProofs (ranges_spec)
+open NciCheck.Record.SecurityProofs (ranges_spec batch_dims)
 open NciCheck.Properties.SecurityProofs
 
 /-- **A unit of a primitive is a member of a root batch of it**, of one gate that holds one value, and its
@@ -239,5 +294,137 @@ theorem returnsOwn_prim {P : Prog} {ts : Array String} {rs : Array TRange} (hP :
   have hg : sc.off = g := Except.ok.inj hres
   subst hg
   exact ⟨rfl, Nat.le_refl _, by rw [hg1]; omega⟩
+
+/-- A read Program's Definitions are in order and its bodies laid out. -/
+theorem read_walk {P : Prog} (hP : ReadProg P) : P.orderViolation = none ∧ Desc.bodiesLaidOut P = true := by
+  obtain ⟨-, hov, -, -, hwk, -, -⟩ := hP
+  unfold Desc.walkable at hwk
+  simp only [Bool.and_eq_true] at hwk
+  exact ⟨hov, hwk.1.2⟩
+
+/-- **A leaf of a unit's parameter resolves**, whatever the unit's Definition, where every unit's rows are its own
+(`Record.ownRows`). -/
+theorem unit_param_ok {P : Prog} {ts : Array String} {rs : Array TRange} (hP : ReadProg P)
+    (hO : NciCheck.Record.ownRows P = true)
+    (hrs : Flock.TemplateQuery.evaluate (Flock.TemplateQuery.Desc.ofProg P) ts = .ok rs) {tid : String} {u : ℕ}
+    {sc : Scope} (hu : UnitAt P rs tid u sc) {i t : ℕ} (hi : i < (P.defs[sc.d]!).params.size)
+    (ht : t < ((P.defs[sc.d]!).params[i]!).2.leaves) :
+    ∃ g, Flock.Program.resolve P sc (⟨true, i, t⟩ : Ref) = .ok g := by
+  obtain ⟨hr, -, -, -⟩ := read_bodies hP
+  obtain ⟨hov, hlay⟩ := read_walk hP
+  obtain ⟨⟨bytes, hdec⟩, -, -, -, -, -, hfirst⟩ := hP
+  obtain ⟨-, hall⟩ := ranges_spec hr hfirst hrs
+  obtain ⟨k, m, hk, hkey, -, hm, rfl⟩ := unit_node hr hfirst hrs hu
+  obtain ⟨-, -, hno⟩ := Resolve.decoded_root bytes P hdec k hk
+  have hnode : Desc.isInputNode P ((P.defs[P.root]!).body.nodes[k]!) = false := by
+    simp [Desc.isInputNode, hkey]
+  have hform : ((P.defs[P.root]!).body.nodes[k]!).form = .call ∨
+      ((P.defs[P.root]!).body.nodes[k]!).form = .batch := by
+    obtain ⟨j, m', hj, -, -, -, hsc⟩ := hu
+    have hmem : rs[j]! ∈ rs.toList := by
+      rw [getElem!_pos rs j hj]
+      simp
+    obtain ⟨-, -, hfm, -⟩ := hall _ hmem
+    have hkj : k = rs[j]!.node := by
+      simp only [Prog.child, Scope.child.injEq] at hsc
+      exact hsc.2.2.2.1
+    rw [hkj]
+    exact hfm
+  have hi' : i < ((P.defs[P.root]!).body.nodes[k]!).args.size := Nat.lt_of_lt_of_eq hi hno.1.symm
+  obtain ⟨g, -, hg⟩ := Resolve.unit_leaf_ok bytes P hdec hov hlay hO hk hnode hform hm hi' ht
+    ((P.defs[P.root]!).body.nodes[k]!).fn (P.child P.rootScope k m).off
+  exact ⟨g, hg⟩
+
+/-- **What the gate of a unit of a primitive reads are leaves of the unit's parameters**: each operand is the gate
+a leaf of one of the unit's parameters resolves to. The gate's operands are the root's resolutions of the batch's
+member's references (`prim_unit_gate`), and a leaf of the unit's parameter resolves through the same reference to
+the same gate (`Resolve.unit_leaf_ok`). -/
+theorem prim_unit_operands {P : Prog} {ts : Array String} {rs : Array TRange} (hP : ReadProg P)
+    (hO : NciCheck.Record.ownRows P = true)
+    (hrs : Flock.TemplateQuery.evaluate (Flock.TemplateQuery.Desc.ofProg P) ts = .ok rs) {tid : String} {u : ℕ}
+    {sc : Scope} (hu : UnitAt P rs tid u sc) (hp : (P.defs[sc.d]!).prim = true) {p : ℕ} {ops : Array ℕ}
+    {sc' : Scope} (h : P.gate sc.off = .ok (p, ops, sc')) :
+    ∀ o ∈ ops, ∃ i t, i < (P.defs[sc.d]!).params.size ∧ t < ((P.defs[sc.d]!).params[i]!).2.leaves ∧
+      Flock.Program.resolve P sc (⟨true, i, t⟩ : Ref) = .ok o := by
+  obtain ⟨hpd, -, k, m, hk, hf, hm, hsc, hops⟩ := prim_unit_gate hP hrs hu hp h
+  obtain ⟨-, -, -, -, -, -, -, hg1, -⟩ := prim_unit hP hrs hu hp
+  have hkey : Flock.Program.isInputId (P.defs[p]!).key = false :=
+    unitsComputed hP hrs tid u sc sc.off p ops sc' hu (Nat.le_refl _) (by rw [hg1]; omega) h
+  obtain ⟨hov, hlay⟩ := read_walk hP
+  obtain ⟨⟨bytes, hdec⟩, -, -, -, -, -, -⟩ := hP
+  subst hsc
+  subst hpd
+  have hkey' : Flock.Program.isInputId (P.defs[((P.defs[P.root]!).body.nodes[k]!).fn]!).key = false := hkey
+  have hnode : Desc.isInputNode P ((P.defs[P.root]!).body.nodes[k]!) = false := by
+    simp [Desc.isInputNode, hkey']
+  obtain ⟨-, -, hno⟩ := Resolve.decoded_root bytes P hdec k hk
+  intro o ho
+  obtain ⟨i, hi, t, ht, hres⟩ := Resolve.operands_spec P P.rootScope _ m ops hops o ho
+  have hd : (((P.defs[P.root]!).body.nodes[k]!).args[i]!).dims.isSome = true := by
+    refine batch_dims hO (n := (P.defs[P.root]!).body.nodes[k]!) ?_ hf ?_
+    · refine List.mem_filter.2 ⟨?_, by simp [hnode]⟩
+      rw [getElem!_pos _ k hk]
+      exact Array.mem_toList_iff.2 (Array.getElem_mem hk)
+    · rw [getElem!_pos _ i hi]
+      exact Array.getElem_mem hi
+  rw [hf, hd] at ht
+  rw [hf] at hres
+  have ht' : t < ((P.defs[((P.defs[P.root]!).body.nodes[k]!).fn]!).params[i]!).2.leaves := ht
+  have hres' : Flock.Program.resolve P P.rootScope
+      ((((P.defs[P.root]!).body.nodes[k]!).args[i]!).seq.get
+        (Resolve.memberIdx (((P.defs[P.root]!).body.nodes[k]!).args[i]!) m t)) = .ok o := by
+    rw [← Resolve.memberRef_eq]
+    exact hres
+  obtain ⟨g, hstep, hg⟩ := Resolve.unit_leaf_ok bytes P hdec hov hlay hO hk hnode (Or.inr hf) hm hi ht'
+    ((P.defs[P.root]!).body.nodes[k]!).fn (P.child P.rootScope k m).off
+  rw [Resolve.argIdx_batch hf] at hstep
+  have hog : o = g := by
+    obtain ⟨fuel, hfuel⟩ : ∃ fuel, Flock.Steps.FUEL = fuel + 1 :=
+      ⟨Flock.Steps.FUEL - 1, by unfold Flock.Steps.FUEL; omega⟩
+    unfold Flock.Program.resolve at hres'
+    rw [hfuel, Resolve.run_one hstep fuel] at hres'
+    exact (Except.ok.inj hres').symm
+  refine ⟨i, t, Nat.lt_of_lt_of_eq hi hno.1, ht', ?_⟩
+  rw [hog]
+  exact hg
+
+/-- **A unit of a primitive has one output row of one leaf, its gate**: the row is `o0`, its leaf is the unit's one
+gate, at the bits of the primitive's one value, and the unit has no other leaf of an output row. -/
+theorem outLeaf_prim {P : Prog} {ts : Array String} {rs : Array TRange} (hP : ReadProg P)
+    (hrs : Flock.TemplateQuery.evaluate (Flock.TemplateQuery.Desc.ofProg P) ts = .ok rs) {tid : String} {u : ℕ}
+    {sc : Scope} (hu : UnitAt P rs tid u sc) (hp : (P.defs[sc.d]!).prim = true) :
+    ∃ w, (P.defs[sc.d]!).ret = .value w ∧ OutLeaf P sc ("o" ++ toString 0) 0 sc.off 0 w ∧
+      ∀ out l g lo hi, OutLeaf P sc out l g lo hi →
+        out = "o" ++ toString 0 ∧ l = 0 ∧ g = sc.off ∧ lo = 0 ∧ hi = w := by
+  obtain ⟨k, m, -, -, -, -, hbody, -, w, hw⟩ := prim_unit hP hrs hu hp
+  have hfields : NciCheck.RecordText.fieldsOf (P.defs[sc.d]!).ret = [.value w] :=
+    (congrArg NciCheck.RecordText.fieldsOf hw).trans rfl
+  have hwidths : (Flock.Program.Ty.value w).widths = #[w] := by rw [Flock.Program.Ty.widths]
+  have hrow : outRow (P.defs[sc.d]!) 0 = (0, #[w]) := by
+    unfold outRow
+    rw [hfields]
+    exact Prod.ext rfl hwidths
+  have hres : Flock.Program.resolve P sc ((P.defs[sc.d]!).body.ret.get 0) = .ok sc.off :=
+    Resolve.ret_default P sc 0 hbody
+  refine ⟨w, hw, ⟨0, rfl, ?_, ?_, ?_, ?_, ?_⟩, ?_⟩
+  · rw [hfields]
+    exact Nat.zero_lt_one
+  · rw [hrow]
+    exact Nat.zero_lt_one
+  · rw [hrow]
+    exact hres
+  · rw [hrow]
+    rfl
+  · rw [hrow]
+    exact (Nat.zero_add w).symm
+  · rintro out l g lo hi ⟨f, rfl, hf, hl, hg, rfl, rfl⟩
+    rw [hfields] at hf
+    have hf0 : f = 0 := Nat.lt_one_iff.1 hf
+    subst hf0
+    rw [hrow] at hl hg ⊢
+    have hl0 : l = 0 := Nat.lt_one_iff.1 hl
+    subst hl0
+    rw [Resolve.ret_default P sc _ hbody] at hg
+    exact ⟨rfl, rfl, (Except.ok.inj hg).symm, rfl, Nat.zero_add w⟩
 
 end NciCheck.Properties.Record.SecurityProofs
