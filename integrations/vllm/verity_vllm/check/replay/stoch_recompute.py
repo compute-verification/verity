@@ -293,7 +293,7 @@ def draw_accounting(draws_seen: dict[str, list[dict]], workload: str | Path | No
         try:
             for r in Workload.load(workload_file(workload)).requests:
                 wl_req[r.request_id] = {"prompt_len": r.prompt_length or 0, "cap": r.max_tokens}
-        except (OSError, ValueError) as e:  # noqa: BLE001
+        except (OSError, ValueError) as e:
             out["problems"].append(f"draw ledger: the workload manifest could not be read ({e!r}): prompt_len / cap unknown, the ledger is unjudged")
     sr = _stop_rule(build_dir)
     if sr.get("error"):
