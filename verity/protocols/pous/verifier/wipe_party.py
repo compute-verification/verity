@@ -40,8 +40,8 @@ from pathlib import Path
 from typing import Any, BinaryIO
 
 from verity.configuration.deploy.stream import Side
-
 from verity.protocols.pous.device import memory_challenger as mc
+
 from . import streamed_wipe as sw
 from . import wipe_stream
 

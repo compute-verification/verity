@@ -12,15 +12,21 @@ from pathlib import Path
 
 import pytest
 import settings
-
 from pous_fakes import Clock
+
 from verity.claims import get as core_claim
 from verity.protocols.pous.verifier import band, dense, primitives, protocol, schemes
 from verity.protocols.pous.verifier.codec import Geometry
 from verity.protocols.pous.verifier.layout import Layout
 from verity.protocols.pous.verifier.params import Params
-from verity.protocols.pous.verifier.schemes.p2 import CHACHA8, CHACHA8_NONCONFORMING, EXPERIMENTAL, P2Params
-from verity.protocols.pous.verifier.schemes.p2 import ROOT_CALL_NS, RTT_ALLOWANCE_CAP_NS
+from verity.protocols.pous.verifier.schemes.p2 import (
+    CHACHA8,
+    CHACHA8_NONCONFORMING,
+    EXPERIMENTAL,
+    ROOT_CALL_NS,
+    RTT_ALLOWANCE_CAP_NS,
+    P2Params,
+)
 from verity.protocols.pous.verifier.verifier import VerifierKey
 
 SALT = bytes(range(24))
@@ -547,7 +553,10 @@ def test_p2_family_certificate_is_the_proved_block_range():
     """`p2.family_certificate` is `P2SlackFamilyUncond`'s `λ = 128` row at k = 105, the registered certificate's every
     field but its segment pin, for a v4 store of 2^8 to 2^23 blocks at the registered width and prime in any number of
     segments; there is none off that range, at another width, or for v2's ChaCha8 keys."""
-    from verity.protocols.pous.verifier.schemes.p2 import CERT_FAMILY_BLOCKS, family_certificate
+    from verity.protocols.pous.verifier.schemes.p2 import (
+        CERT_FAMILY_BLOCKS,
+        family_certificate,
+    )
 
     reg = schemes.get("p2-16448/v4", segments=8).certificate
     assert CERT_FAMILY_BLOCKS == (1 << 8, 1 << 23)
@@ -566,8 +575,13 @@ def test_p2_wide_certificate_is_period_held_at():
     `Δ + RTT`, `2^20` queries, `⌊ρ·|C|⌋` at `1% + 2^-128`) for a v4 store of 2^19 to 2^27 blocks at the registered width
     and prime in any number of segments, Demo B's 1038 segments among them, resting on `P2_CLAIMS` and a claim for each
     of `periodHeldAt`'s premises at `N`; there is none off that range, at another width, or for v2's ChaCha8 keys."""
-    from verity.protocols.pous.verifier.schemes.p2 import CERT_WIDE_BLOCKS, P2_CLAIMS, WIDE_CLAIMS, family_certificate
-    from verity.protocols.pous.verifier.schemes.p2 import wide_certificate
+    from verity.protocols.pous.verifier.schemes.p2 import (
+        CERT_WIDE_BLOCKS,
+        P2_CLAIMS,
+        WIDE_CLAIMS,
+        family_certificate,
+        wide_certificate,
+    )
 
     fam = family_certificate(P2Params(16448, 21065, 256, 1)).to_json()
     assert CERT_WIDE_BLOCKS == (1 << 19, 1 << 27)
@@ -587,7 +601,12 @@ def test_p2_wide320_certificate_is_the_320_read_window():
     k = 320, with `δ + 2^eps_log2` exactly `2^-20`, over the same 2^19 to 2^27 blocks; none elsewhere."""
     from fractions import Fraction
 
-    from verity.protocols.pous.verifier.schemes.p2 import CERT_K_WIDE320, WIDE_CLAIMS, wide320_certificate, wide_certificate
+    from verity.protocols.pous.verifier.schemes.p2 import (
+        CERT_K_WIDE320,
+        WIDE_CLAIMS,
+        wide320_certificate,
+        wide_certificate,
+    )
 
     assert CERT_K_WIDE320 == 320
     for bps, segments in ((1 << 16, 8), (1 << 12, 128), (1 << 16, 1038), (1 << 16, 1 << 11)):
@@ -702,8 +721,13 @@ def test_p2_v4_keys_are_the_specs():
     and 16,448.  The protocol's prefix frames its 24-byte salt where the spec frames the model commitment and its 32-byte
     setup salt, and nothing else differs; both are zero-padded to whole 128-byte blocks."""
     from verity.commitments.randomness import frame
-
-    from verity.protocols.pous.verifier.schemes.p2 import KEYS_TAG, PROTOCOL_ID, expand_prefix, sha512_keys, stream
+    from verity.protocols.pous.verifier.schemes.p2 import (
+        KEYS_TAG,
+        PROTOCOL_ID,
+        expand_prefix,
+        sha512_keys,
+        stream,
+    )
 
     doc = json.loads((Path(__file__).parent / "fixtures" / "p2-v4-keys.json").read_text())
     assert doc["source_sha512"] == "959911fd371111fe20c4cee6fc532ff205bbf377962c73ac539a4d2de9b22121287e6e996d9ae4bfbef9f26fcd67ac78620873702c8b2899bc41a21bdd76e853"
@@ -731,7 +755,11 @@ def test_p2_v4_keys_are_the_specs():
 def test_p2_v2_keys_are_chacha8_from_a_segment_seed():
     """v2's per-block keys expand where they are used, on the device, from one 32-byte seed per segment (ChaCha8 with
     the block index as nonce), so no key-sized state is stored and the 1.05× space bound holds."""
-    from verity.protocols.pous.verifier.schemes.p2 import chacha_block, chacha_keys, segment_seed
+    from verity.protocols.pous.verifier.schemes.p2 import (
+        chacha_block,
+        chacha_keys,
+        segment_seed,
+    )
 
     # the ChaCha block function against RFC 8439 §2.3.2 (20 rounds, the same word layout), ChaCha8 against the published
     # zero-key, zero-nonce vector

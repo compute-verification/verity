@@ -23,17 +23,39 @@ from collections import Counter
 from dataclasses import dataclass
 from pathlib import Path
 
-import pytest
-
 import pous_continuous_model as model
-from pous_continuous_model import (ALL_SENT, CLOSED, HIT, LATE, NO_HARD_DEADLINE, NONE_OPEN, NOT_REVEALED, REJECT,
-                                   UNANSWERED, WITHIN, WRONG, ClockOracle, Record, Refused)
+import pytest
+from pous_continuous_model import (
+    ALL_SENT,
+    CLOSED,
+    HIT,
+    LATE,
+    NO_HARD_DEADLINE,
+    NONE_OPEN,
+    NOT_REVEALED,
+    REJECT,
+    UNANSWERED,
+    WITHIN,
+    WRONG,
+    ClockOracle,
+    Record,
+    Refused,
+)
 from pous_fakes import Clock
+
 from verity.protocols.pous.verifier import band
-from verity.protocols.pous.verifier.audit import UnsignedRounds, challenge_key, run_timed
+from verity.protocols.pous.verifier.audit import (
+    UnsignedRounds,
+    challenge_key,
+    run_timed,
+)
 from verity.protocols.pous.verifier.codec import encode_segments
+from verity.protocols.pous.verifier.continuous import (
+    ContinuousMemoryChallenger,
+    Reply,
+    run_continuous,
+)
 from verity.protocols.pous.verifier.verifier import VerifierKey
-from verity.protocols.pous.verifier.continuous import ContinuousMemoryChallenger, Reply, run_continuous
 
 ROOT = Path(__file__).resolve().parents[5]
 MODEL = "security/Definitions/Pous/Model/Continuous.lean"

@@ -9,10 +9,26 @@ import pytest
 
 from verity.protocols.pous.verifier.oracle import Tweak, run
 from verity.protocols.pous.verifier.params import Params
-from verity.protocols.pous.verifier.primitives import (CAPACITY_BITS, ArxButterfly, EvenMansourArx, Feistel10, FeistelP, FeistelPi,
-                                    IdealPermutation, IdealTweakablePermutation, MiyaguchiPreneel, OverwriteChain,
-                                    XorSponge, bit_diffusion_stages, diffusion_stages, key_program, key_query,
-                                    key_rounds, Primitives, reference)
+from verity.protocols.pous.verifier.primitives import (
+    CAPACITY_BITS,
+    ArxButterfly,
+    EvenMansourArx,
+    Feistel10,
+    FeistelP,
+    FeistelPi,
+    IdealPermutation,
+    IdealTweakablePermutation,
+    MiyaguchiPreneel,
+    OverwriteChain,
+    Primitives,
+    XorSponge,
+    bit_diffusion_stages,
+    diffusion_stages,
+    key_program,
+    key_query,
+    key_rounds,
+    reference,
+)
 
 PARAMS = Params(16, 32, 12)
 RNG = random.Random(7)

@@ -32,7 +32,15 @@ from dataclasses import dataclass
 from typing import Any
 
 from verity.protocols.pous.device import memory_challenger as mc
-from .schemes.p2 import CERT_BLOCKS, CERT_K, DELTA_NS, POINT, RTT_ALLOWANCE_CAP_NS, P2Params
+
+from .schemes.p2 import (
+    CERT_BLOCKS,
+    CERT_K,
+    DELTA_NS,
+    POINT,
+    RTT_ALLOWANCE_CAP_NS,
+    P2Params,
+)
 from .verifier import DIGEST_BYTES, VerifierKey
 
 SALT_BYTES = 24
