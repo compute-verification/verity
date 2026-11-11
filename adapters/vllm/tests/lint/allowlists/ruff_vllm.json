@@ -2521,6 +2521,7 @@
     {"file": "verity_vllm/program/frontend/train_step.py", "kind": "I001", "symbol": "step_report", "detail": "Import block is un-sorted or un-formatted"},
     {"file": "verity_vllm/program/frontend/train_step.py", "kind": "UP035", "symbol": "<module>", "detail": "Import from `collections.abc` instead: `Callable`"},
     {"file": "verity_vllm/program/frontend/train_step.py", "kind": "UP037", "symbol": "AdamW.from_torch", "detail": "Remove quotes from type annotation"},
+    {"file": "verity_vllm/program/frontend/triton_capture.py", "kind": "I001", "symbol": "<module>", "detail": "Import block is un-sorted or un-formatted"},
     {"file": "verity_vllm/program/frontend/vllm_meta.py", "kind": "I001", "symbol": "ChunkedGreedyRequest.forward", "detail": "Import block is un-sorted or un-formatted"},
     {"file": "verity_vllm/program/frontend/vllm_meta.py", "kind": "I001", "symbol": "GreedyRequest._step", "detail": "Import block is un-sorted or un-formatted"},
     {"file": "verity_vllm/program/frontend/vllm_meta.py", "kind": "I001", "symbol": "StochasticRequest._step", "detail": "Import block is un-sorted or un-formatted"},
