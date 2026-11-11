@@ -209,7 +209,8 @@ def test_a_record_whose_members_and_declared_tables_disagree_on_the_row_seg_rows
     with pytest.raises(ValueError, match="are not committed row-seg"):
         statements(monkeypatch, SRW.members([LAT], rows[:1], None, CAPS), declared)
     with pytest.raises(ValueError, match=r"\['o1'\] is no row of its"):
-        CR.unit_rows(SRW.template(LAT), ["o1"])
+        CR.unit_rows(SRW.template(LAT), [(LAT, "o1")])
+    assert CR.unit_rows(SRW.template(LAT), [(READ, "o1")]) == CR.unit_rows(SRW.template(LAT))
 
 
 def recomputed(h: IF.History, ms, strings_of, held) -> list[bytes]:

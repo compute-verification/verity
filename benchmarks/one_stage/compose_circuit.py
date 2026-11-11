@@ -233,7 +233,7 @@ def template(a: argparse.Namespace) -> int:
             raise SystemExit(f"--reads lays out a flat statement's table reads, and {a.template}'s statement is templated: {stmt}")
         stmt = {**stmt, "reads": a.reads}
 
-    in_rows, out_rows = CR.unit_rows(tp, a.seg)
+    in_rows, out_rows = CR.unit_rows(tp, [(a.template, row) for row in a.seg])
 
     def compose(out: Path) -> dict:
         st = UnitStager(tp.fn, "unit/serving-rows", in_rows, out_rows, circuit=out, bind=bind, **stmt)
