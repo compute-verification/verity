@@ -112,6 +112,35 @@ def test_the_embedding_trains_under_adamw_beside_the_matrices_optimizer_or_under
     assert grouped(model, matrices) == [(0.01, BLOCK)] and grouped(model, adamw) == [(0.01, ["embed", *GAINS])]
 
 
+def test_a_loaded_state_steps_at_its_groups_own_rates_and_one_from_before_them_at_lr():
+    """A continued job loads its optimizers' states, and a loaded state's groups replace the built ones. A state this
+    route wrote states each group's own rate, so the next step is at it. A state from before a group had a rate of
+    its own states only the last step's scaled rate, when every group was at `lr`: the next step is at `lr` times
+    the schedule, not at that scaled rate scaled again."""
+    rows = torch.randint(0, SHAPE["vocab"], (2, 9), generator=torch.Generator().manual_seed(1))
+
+    def continued(dials: dict, before_own_rates: bool) -> list[float]:
+        torch.manual_seed(0)
+        model, (opt,) = subset.build(SHAPE, dials)
+        subset.step(model, rows, [opt], dials, 0, 4)
+        state = opt.state_dict()
+        assert [g["lr"] for g in state["param_groups"]] != [g["initial_lr"] for g in state["param_groups"]]
+        if before_own_rates:
+            for g in state["param_groups"]:
+                del g["initial_lr"]
+        model, (opt,) = subset.build(SHAPE, dials)
+        opt.load_state_dict(state)
+        subset.step(model, rows, [opt], dials, 1, 4)
+        return [g["lr"] for g in opt.param_groups]
+
+    dials = subset.DIALS | {"lr": 0.01, "warmup": 2}
+    factor = subset.schedule(dials, 1, 4)
+    assert factor not in (1.0, subset.schedule(dials, 0, 4))
+    assert continued(dials, before_own_rates=True) == [0.01 * factor]
+    assert continued(dials, before_own_rates=False) == [0.01 * factor]
+    assert continued(dials | {"gain_lr": 0.002}, before_own_rates=False) == [0.01 * factor, 0.002 * factor]
+
+
 def test_three_rates_under_one_optimizer_are_torchs_three_groups():
     """AdamW over the whole model with a rate for the gains and one for the embedding, on a cosine schedule, against
     torch's AdamW over three groups stepped at those rates: the same weights."""

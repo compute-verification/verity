@@ -80,12 +80,13 @@ def trained(model: torch.nn.Module, dials: dict) -> list[str]:
 
 def groups(named: list, dials: dict) -> list[dict]:
     """One optimizer's tensors as its groups, one group a rate and each in the model's order: the embedding at
-    `embed_lr`, another matrix at `lr`, a gain at `gain_lr`."""
+    `embed_lr`, another matrix at `lr`, a gain at `gain_lr`. A group states its rate twice: `lr`, which `step` scales,
+    and `initial_lr`, where torch's schedulers keep a group's own rate, which nothing writes after this."""
     rates: dict[float, list] = {}
     for n, p in named:
         rate = dials["embed_lr" if n == "embed" else "lr" if p.ndim == 2 else "gain_lr"] or dials["lr"]
         rates.setdefault(rate, []).append(p)
-    return [{"params": params, "lr": rate} for rate, params in rates.items()]
+    return [{"params": params, "lr": rate, "initial_lr": rate} for rate, params in rates.items()]
 
 
 def build(shape: dict, dials: dict):
@@ -115,11 +116,12 @@ def schedule(dials: dict, t: int, n: int) -> float:
 
 
 def step(model, rows, optimizers, dials: dict, t: int, n: int) -> None:
-    """One training step. Each group's rate is the one its optimizer was built with, kept where torch's schedulers
-    keep it (`initial_lr`), times the schedule."""
+    """One training step. Each group's rate is its own (`groups`), times the schedule. A group that states none is at
+    `lr`: a route's one group built without `groups`, or the group of an optimizer's state saved before a group had
+    a rate of its own, whose `lr` is the last step's scaled rate and never the group's."""
     for o in optimizers:
         for g in o.param_groups:
-            g["lr"] = g.setdefault("initial_lr", g["lr"]) * schedule(dials, t, n)
+            g["lr"] = g.get("initial_lr", dials["lr"]) * schedule(dials, t, n)
     for x in rows.chunk(dials["micro_batches"]):
         with torch.autocast(x.device.type, dtype=torch.bfloat16, enabled=x.device.type == "cuda"):
             logits = model(x[:, :-1])
