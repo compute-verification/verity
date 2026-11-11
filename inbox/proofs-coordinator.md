@@ -45921,3 +45921,42 @@ For BREAKEVEN:
 For the table:
 - Today's cut on measured prices: 4,569 GB over a world year at the modeled 0.4 (measured rows, the planner's run `r20261111-092121-7fbe`); the range 4,566 to 4,762 is closed.
 - Templated check: measured on a fused MoE block, Lean accepts it and it costs what the flat costs (median 117.0 against 115.7 core-s a block; `r20261111-085245-a3e0`, `r20261111-085313-7268`). With the head block having no template, the lever row's two verifier changes are worth 21 GB, not 503.
+
+## ATTACK, Wed 11 Nov 09:45Z: the four checks, head by head, from records I fetched: every head I was given elaborates and is axiom-clean in a run, none has a kernel replay, and #8781 has no run at its own head. KILIAN's closing lemma (#8879, #8882) says what its entry says; with `B_conf,X` at the budget the by-rows figure is 2^-113.65 a run, not 2^-113.9
+
+**1. The four checks** [run: `research inspect` and `research fetch --all` of each run, by me, 09:40Z to 09:44Z; "log read" means I read the verdict lines in its `stdout.log`]. A records run is `lean_changed.py --records … --update`: its log says, for each package, `AUDIT … PASS  N declarations in M modules; axioms propext, Classical.choice, Quot.sound` and "without the kernel replay or the tests: a lean-fast/v1 result, which check and research merge refuse". So "axioms clean" below is that scan or a try's probe, and **no head has a kernel replay**; by the 09:42Z update that cell reads "the candidate's check".
+
+| head | elaborates | axioms clean | kernel replay | read by me |
+|---|---|---|---|---|
+| #8827 `946b7b72f26d` | try `r20261111-060554-f546` (log read: `TwoRegFirstHit.lean`, lean exit 0 in 60 s); records `r20261111-060556-2059` (log read: `security/Proofs` PASS, 193,787 declarations in 3,831 modules); quick tier `r20261111-060641-fad5` rc 0 | `f546`: its 43 theorems; `2059`: the package | none | yes: every statement the number reads (08:48Z), the line against it (09:06Z) |
+| #8857 `96985b18aafb` | try `r20261111-041745-3d52` (log read: `FirstHit.lean`, exit 0); records `r20261111-055337-819e` (log read: PASS, 193,493 in 3,819); quick `r20261111-041449-0923` rc 0 | `3d52`: its 64 theorems; `819e` | none | yes: the finder, its cost and success lemmas (08:48Z); the toy runs it (09:26Z) |
+| #8836 `ae8886e9a2fc` | try `r20261111-083223-9e57` (log read: `RegCanon.lean`, exit 0); records `r20261111-085254-6161` (log read: PASS, 193,634 in 3,831); quick `r20261111-084047-e971` rc 0; with #8827 and #8781 in one tree `2bc9818dfa13`: tries `r20261111-083302-33c3`, `r20261111-083302-134b` rc 0 | `9e57`: 7 theorems; `6161` | none | partly: its statements at `1fab3dfa6a35` (08:48Z). **The head moved since my brief**; 24 files under `security/` differ and I have not read them |
+| #8781 `b7c268c7c1fe` | **no run in its body is at this head.** Try `r20261110-232734-0713` and records `r20261111-000350-0c4d` are at `be1922028820`, quick `r20261111-015011-9852` at `1081b1f735c7`: both before the two restacks on the layout move. At the head it is built only inside merged trees: `2bc9818dfa13` (`33c3`, `134b`: two aggregators, rc 0) and CROSS's `r20261111-083411-3dd5` (records, rc 0, tree `8eed8897023a`) | [relayed: CROSS, `3dd5`] | none | yes: statements (08:48Z) |
+| #8828 `53dd644bdad8` | the head is `d2e20a395135` plus the lock commit: only `security/lean-audit.json` differs, 52 lines [run: `git diff --stat`]. Records `r20261111-041601-9bb6` at `d2e20a395135` (log read: PASS, 193,416 in 3,821; `security` regenerated, which is that commit); quick `r20261111-061053-fb5d` rc 0 at the head. The quick `r20261111-041637-da28` at `d2e20a395135` failed (rc 1), before the lock commit | `9bb6` | none | yes: statements (08:48Z) |
+| #8820 `f1a8ef0141ff` | records `r20261111-054544-9694` (log read: PASS, 193,566 in 3,828); quick `r20261111-054549-a16b` rc 0 | `9694` | none | yes: statements (08:48Z) |
+| #8879 `9eb9f26cea4a` (KILIAN) | try `r20261111-084512-03ba` (log read: `TwoFirstHitAt.lean`, exit 0 in 73 s); records `r20261111-085441-70f9` and quick `r20261111-085515-a6b0` running at 09:40Z | `03ba`: 13 theorems | none | yes: section 2 |
+| #8882 `da385b86ccd2` (KILIAN) | try `r20261111-085736-0f9c` (log read: exit 0 in 413 s); no records or quick run in its body | `0f9c`: 19 theorems | none | yes: section 2 |
+| EXTFORM `05316ae3ee20`, no PR | try `r20261111-091552-1994` (log read); the Core file's probe `r20261111-090336-d409` at `a65698e473ef` | 8 and 13 theorems | none | yes (09:39Z) |
+| #8874 `b3fb5853faf8`, #8870 `e7d354135fbb` | #8874: try `r20261111-085732-f5d6` rc 0, records and quick not ended. #8870: no run id in its body | | none | no |
+
+- The stack [run: `git merge-base --is-ancestor`]: #8820 is under #8827 and #8836; #8827 under #8879, #8882 and EXTFORM's branch; #8836 under #8874. **#8857, #8781 and #8828 are under none of them.** #8827's tree carries #8857's `FirstHit.lean` as the same blob (`54f59f54`), so the Core finder the number reads is the one #8857 holds. #8781 and #8828 enter the line only through the √ term and `B_conf` (gaps a1, a2), not through the theorem.
+
+**2. KILIAN's closing lemma, in plain words** [read: `TwoFirstHitAt.lean` at `da385b86ccd2`: lines 96-132, 222-246, 306-330, 415-470, 565-650; the statements, not every proof].
+- `eventTwoX_le_at`: #8827's theorem with its expectation replaced by `firstHitCost = T·(1 + e_s·N_s + K_s + e_s·K_m) + (1 + K_s)·n_PU·openCalls`. `eventTwoX_le_at_budget` (#8882) also replaces `Pr[B_conf,X]` by `2·(T·(1 + e_s·N_s) + n_PU·openCalls)/2^256`, under `ExpectedCR` at `B_conf,X` as a third finder. What is left open in the right-hand side is `κ_s + √(k·γ_s·Pr[B])` (gap a1).
+- What it takes beyond #8827: `hT`, every run of this prover at every tape and coins calls H at most T times, the verifier's calls included; `hopen`, the opening checks' calls (gap f); `hNs`, `hKs`, `hKm`, three means over the coins alone (gaps b2, k).
+- The three counts are what I took them for: `firstSlots` the sample's sessions at their first slots, `sampleNeeds` the distinct gates, `sessCount` the gates session by session, a gate two sessions need counted twice. With the model's one session a checked block, `sessCount` is Σ over checked blocks of the gates each needs: SCALE's K.
+- Why the sample's weight comes out of the expectation: a session's expected reruns are at most `1 + waits·k` for every prover (`A.rerunsExp_le`), and resampling the session's own rounds does not move the sample (`RunsFixed.fixed`). Every first slot is charged `e_s`, refused or not, so `K_m` and `N_s` count refused coins too (TWOWITNESS's 09:32Z point stands: a sharper lemma, not a count).
+- [derived] The own-call term is nothing in bits at any size I can make: `(1 + K_s)·n_PU·openCalls` against `T·e_s·K_m`, at most about 2^101 against 2^156 (`openCalls` taken as 2^7, a guess; n_PU up to 2^49.2, relayed).
+- [derived] `B_conf,X` at the budget adds `2·T·e_s·N_s`. By gates it is nothing. By rows it is 0.08 bit over my 09:39Z figure, since N_s is 1/7.8 of K_cls:
+
+| a run, T = 2^80 calls, `(2·runCost + 4·firstHitCost)/2^256` [derived; K relayed from SCALE] | K0 = 4 | K0 = 6 | K0 = 6, compressions |
+|---|---|---|---|
+| by gates, the record | −98.92 | −98.33 | −89.33 |
+| by rows, the record | −114.24 | −113.65 | −104.65 |
+| by rows, the 2,647 GB plan | −112.16 | −111.58 | −102.58 |
+
+For KILIAN: nothing found against `eventTwoX_le_at` or `eventTwoX_le_at_budget`. #8882's body has no records or quick run; #8879's were running at 09:40Z.
+
+For the table:
+- The four checks: each of #8827, #8857, #8836, #8828, #8820 elaborates and is axiom-clean in a records run at its head (or, #8828, at its head less the lock commit); #8781 only in merged trees; none has a kernel replay ("the candidate's check"). #8836's head is `ae8886e9a2fc`, not `1fab3dfa6a35`.
+- KILIAN's `eventTwoX_le_at_budget` (#8882, try `0f9c`, axioms clean, no records run) gives the first-hit and `B_conf,X` terms as one closed form at a budget T a run; it may be called compiled and second-read. Still hypotheses at the code: the three counts, `openCalls`, and T on every run of both parties. Still outside it: `κ_s` and the √ term.
