@@ -9,7 +9,7 @@ composition of units under that size, bound and pinned here (`pearl_c_noise.UNIT
 
 A row's digest and a row's line are over that size at every K, and are bound once each, small: `PearlCRowDigest_v2{K=40}` is
 three compressions, each a Call of `PearlCRowBlock_v2` or `PearlCShaBlock_v2`, bound and pinned here, and
-`PearlCRowLine_v2{K=15}` the digest, the row seed, the line key and the noise line."""
+`PearlCRowLine_v2{K=40}` that digest, the row seed, the line key and the noise line."""
 from __future__ import annotations
 
 from typing import Any
@@ -30,6 +30,6 @@ def _pearl_c_noise_roots() -> list[Any]:
             bind(N.PearlCLineKeyV2), bind(N.PearlCLineRawV2),
             bind(N.PearlCLineIntV2), bind(N.PearlCLineNormRootV2), bind(N.PearlCLineScaleV2), bind(N.PearlCLineCodeV2),
             bind(N.PearlCLineCodesV2), bind(N.PearlCNoiseLineV2),
-            bind(N.PearlCRowBlock), bind(N.PearlCShaBlock), bind(N.PearlCRowDigest, K=40), bind(N.PearlCRowLine, K=15),
+            bind(N.PearlCRowBlock), bind(N.PearlCShaBlock), bind(N.PearlCRowDigest, K=40), bind(N.PearlCRowLine, K=40),
             bind(N.PearlCRowBlockV2), bind(N.PearlCShaBlockV2), bind(N.PearlCRowDigestV2, K=40),
-            bind(N.PearlCRowLineV2, K=15)]
+            bind(N.PearlCRowLineV2, K=40)]

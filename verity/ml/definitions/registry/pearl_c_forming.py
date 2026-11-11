@@ -1,4 +1,4 @@
-"""Pearl-C's forming v1, its chain, the Gram matrix and the peel factors as registered Definitions, each on words (``_v1``)
+"""Pearl-C's forming v1, its chain, the Gram matrix, the peel factors and the peel as registered Definitions, each on words (``_v1``)
 and on bits (``_v2``): what a row unit of Pearl-C's tile check computes from a row and its noise, stated on the catalog's
 primitives alone, so a Program outside PoUW can call it.
 
@@ -12,6 +12,7 @@ primitives alone, so a Program outside PoUW can call it.
     PearlCPeelA{K,R,DOT,G}   (codes: e4m3[K], ep: e4m3[R], fb: e4m3[K][R]) -> bf16[2R]  one row of `pearl_c.peel_factors_a`
     PearlCPeelB{K,R,DOT,G}   (codes: e4m3[K], ep: e4m3[R], fa: e4m3[K][R], g: f32[R][R]) -> bf16[2R]
                                                                                        one row of `pearl_c.peel_factors_b`
+    PearlCPeel{R,STEP}       (c: f32, pa, pb: bf16[2R]) -> f32                         `pearl_c.peel`: U from C̃ and a row of each P
 
 A row's α, which the unscale of its useful output reads, is `PearlCRowStats`' third field and `PearlCForm`'s fifth.
 
@@ -20,7 +21,9 @@ A row's α, which the unscale of its useful output reads, is `PearlCRowStats`' t
 nearest-even add promotes it into the total; G = 0 is the unpromoted record, one accumulator from +0 over all of k. A last
 window short of G atoms is promoted as it is, as `pearl_c.chain` promotes it. ``R`` is the noise's rank, 32 wherever a
 tile is checked: the Gram matrix and the peel factors read each line only by its columns, so they are stated at any R, and
-at R = 1 or 2 each is small enough to lower whole.
+at R = 1 or 2 each is small enough to lower whole. ``STEP`` is the device's BF16 step (BF16 x BF16 into an FP32
+accumulator, k = 16: `HopperBF16WgmmaDot16` on every record), which the peel takes over the 2R operands of a row of P_A
+and of P_B sixteen at a time, so there R is a multiple of 8.
 
 These are the functions of PoUW's row units (`verity.ml.protocols.pouw.circuit.pc8`: `Pc8RowA`, `Pc8RowB`), which
 compute α and keep it: the same primitives in the same order, so each equals the unit's on every input, a row the unit
@@ -55,7 +58,8 @@ from verity.ml.circuits.types import Array, Tuple, Value
 from verity.ml.definitions.boolean import sigma_lift
 
 __all__ = ["PearlCBf16Neg", "PearlCBf16NegV2", "PearlCChain", "PearlCChainV2", "PearlCForm", "PearlCFormCode",
-           "PearlCFormCodeV2", "PearlCFormV2", "PearlCGram", "PearlCGramV2", "PearlCPeelA", "PearlCPeelAV2", "PearlCPeelB",
+           "PearlCFormCodeV2", "PearlCFormV2", "PearlCGram", "PearlCGramV2", "PearlCPeel", "PearlCPeelV2", "PearlCPeelA",
+           "PearlCPeelAV2", "PearlCPeelB",
            "PearlCPeelBV2", "PearlCRowStats", "PearlCRowStatsV2", "PearlCScaledCode", "PearlCScaledCodeV2", "PearlCSqrt",
            "PearlCSqrtV2", "bindings"]
 
@@ -261,6 +265,24 @@ def PearlCPeelB(B, S, codes, ep, fa, g):
     return array_of(mid + [B.call(PearlCBf16Neg, B.call(F2fpBf16, w)) for w in words])
 
 
+def _refuse_peel(b: dict) -> str | None:
+    if b.get("R", 8) < 8 or b.get("R", 8) % 8:
+        return "the peel takes the 2R operands of a row of P sixteen at a time: R is a positive multiple of 8"
+    return None
+
+
+@composite("PearlCPeel", 1, ["R", "STEP"],
+           lambda S: ((("c", F32), ("pa", Array(2 * S.R, BF16)), ("pb", Array(2 * S.R, BF16))), F32),
+           conformance=_HELD.format("peel"), refuse=_refuse_peel)
+def PearlCPeel(B, S, c, pa, pb):
+    """U from C̃, an FP32 word: the device's BF16 step over a row of P_A and a row of P_B, sixteen operands a step in
+    order, into C̃'s word."""
+    acc = c
+    for at in range(0, 2 * S.R, 16):
+        acc = B.call(S.STEP, acc, pa[at:at + 16], pb[at:at + 16])
+    return acc
+
+
 PearlCRowStatsV2 = sigma_lift(PearlCRowStats, 2)
 PearlCScaledCodeV2 = sigma_lift(PearlCScaledCode, 2)
 PearlCFormCodeV2 = sigma_lift(PearlCFormCode, 2)
@@ -269,15 +291,16 @@ PearlCChainV2 = sigma_lift(PearlCChain, 2)
 PearlCGramV2 = sigma_lift(PearlCGram, 2)
 PearlCPeelAV2 = sigma_lift(PearlCPeelA, 2)
 PearlCPeelBV2 = sigma_lift(PearlCPeelB, 2)
+PearlCPeelV2 = sigma_lift(PearlCPeel, 2)
 
 
 def bindings() -> list:
     """The bindings circuit-check takes (the sidecar), each Definition on words and on bits: on the H100's atom and
     sm_120's at G = 4, the chain over one promotion window and, unpromoted, over two atoms; the Gram matrix and the peel
     factors at rank 2 over one atom, and the peel factors at rank 1 over a window; the statistics of 32 words; and, on
-    the H100's atom, the forming of a row of eight. But for that last, each is within the size circuit-check lowers a
-    Definition whole at."""
-    from verity.ml.circuits.ops.prims import BlackwellE4m3QmmaDot32, HopperE4m3QgmmaDot32
+    the H100's atom, the forming of a row of eight; and the peel at rank 32. But for the forming of a row, each is within
+    the size circuit-check lowers a Definition whole at."""
+    from verity.ml.circuits.ops.prims import BlackwellE4m3QmmaDot32, HopperBF16WgmmaDot16, HopperE4m3QgmmaDot32
     from verity.ml.definitions.boolean import boolean_version
 
     out = []
@@ -296,5 +319,7 @@ def bindings() -> list:
                 out += [bind(pick(PearlCPeelA, PearlCPeelAV2), K=k, R=r, DOT=dot, G=4),
                         bind(pick(PearlCPeelB, PearlCPeelBV2), K=k, R=r, DOT=dot, G=4)]
         out += [bind(pick(PearlCForm, PearlCFormV2), K=8, DOT=atoms[0]),
-                bind(pick(PearlCChain, PearlCChainV2), K=64, DOT=atoms[1], G=0)]
+                bind(pick(PearlCChain, PearlCChainV2), K=64, DOT=atoms[1], G=0),
+                bind(pick(PearlCPeel, PearlCPeelV2), R=32,
+                     STEP=boolean_version(HopperBF16WgmmaDot16) if bits else HopperBF16WgmmaDot16)]
     return out

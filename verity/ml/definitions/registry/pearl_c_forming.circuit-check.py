@@ -10,7 +10,7 @@ from typing import Any
 
 
 def _pearl_c_forming_roots() -> list[Any]:
-    """Forming v1, the chain, the Gram matrix and the peel factors, on words and on bits (`pearl_c_forming.bindings`):
+    """Forming v1, the chain, the Gram matrix, the peel factors and the peel, on words and on bits (`pearl_c_forming.bindings`):
     the served sizes (rank 32, k in the thousands) are the same bodies over more columns and more atoms."""
     from verity.ml.definitions.registry import pearl_c_forming as F
 

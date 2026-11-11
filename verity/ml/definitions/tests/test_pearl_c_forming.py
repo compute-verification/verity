@@ -1,6 +1,6 @@
-"""Pearl-C's forming v1, chain, Gram matrix and peel factors as registered Definitions
+"""Pearl-C's forming v1, chain, Gram matrix, peel factors and peel as registered Definitions
 (`verity.ml.definitions.registry.pearl_c_forming`), word and Boolean, against PoUW's reference (`schemes.pearl_c`:
-`s5_stats`, `eprime`, `form_v1`, `chain`, `gram`, `peel_factors_a`, `peel_factors_b`), against PoUW's row units
+`s5_stats`, `eprime`, `form_v1`, `chain`, `gram`, `peel_factors_a`, `peel_factors_b`, `peel`), against PoUW's row units
 (`circuit.pc8`: `Pc8RowA`, `Pc8RowB`) on rows the reference rejects too, and on a chain the Lean specification proves of its
 own (`Pouw.PearlC.PeelExactVectors.chainV1c0`, held by `PeelExactChecks.chainsV1`)."""
 from __future__ import annotations
@@ -17,7 +17,7 @@ from verity.ml.circuits.defs import CompositeDefinition, bind
 from verity.ml.circuits.evaluation import evaluate
 from verity.ml.circuits.evaluation.bits import compile as compile_bits
 from verity.ml.circuits.evaluation.bits import evaluate_words
-from verity.ml.circuits.ops.prims import BlackwellE4m3QmmaDot32, HopperE4m3QgmmaDot32
+from verity.ml.circuits.ops.prims import BlackwellE4m3QmmaDot32, HopperBF16WgmmaDot16, HopperE4m3QgmmaDot32
 from verity.ml.definitions.boolean import boolean_version
 from verity.ml.definitions.registry import pearl_c_forming as F
 from verity.ml.protocols.pouw.circuit import pc8
@@ -129,9 +129,10 @@ def on(fn, name: str, **statics):
     """``fn`` (a word Definition or its Boolean version) at the device record ``name``'s atom and promotion period, each
     static it has."""
     dot, g = ATOMS[name]
+    step = HopperBF16WgmmaDot16
     if getattr(fn, "word", None) is not None:
-        dot = boolean_version(dot)
-    return bind(fn, **statics, **{k: v for k, v in (("DOT", dot), ("G", g)) if k in fn.statics})
+        dot, step = boolean_version(dot), boolean_version(step)
+    return bind(fn, **statics, **{k: v for k, v in (("DOT", dot), ("G", g), ("STEP", step)) if k in fn.statics})
 
 
 def rows(k: int, n: int, seed: int) -> list[list[int]]:
@@ -309,6 +310,28 @@ def test_the_gram_matrix_and_the_peel_factors_on_bits(name, k, r):
         [word(peel_a, c, ep, fb) for c, ep in every]
     assert on_bits(on(F.PearlCPeelBV2, name, K=k, R=r), *[(c, ep, fa, g) for c, ep in every]) == \
         [word(peel_b, c, ep, fa, g) for c, ep in every]
+
+
+def bf16_rows(n: int, seed: int) -> list[list[int]]:
+    """Rows of 64 BF16 words: finite ones of every scale, then with a zero, an infinity and a NaN among them."""
+    rng = random.Random(seed)
+    out = [[P.f32_to_bf16(rng.gauss(0, 10.0 ** rng.randrange(-3, 4))) for _ in range(64)] for _ in range(n)]
+    return out + [[0x0000, 0x8000, 0x7F80, 0x7FC0] * 16, [0x7F7F] * 64]
+
+
+def test_the_peel_on_words_and_on_bits():
+    """`pearl_c.peel` at rank 32 from a chain's word and from any other, and its first step alone at rank 8; on bits the
+    same, on a NaN, an infinity and the largest finite word too, where the reference rejects and the Definition computes
+    on."""
+    assert DEVICES["h100"].peel.name in pc8.PEELS and pc8.PEELS[DEVICES["h100"].peel.name] is HopperBF16WgmmaDot16
+    assert all(pc8.PEELS[DEVICES[name].peel.name] is HopperBF16WgmmaDot16 for name in ATOMS)
+    peel, pa, pb = on(F.PearlCPeel, "h100", R=32), bf16_rows(4, 27), bf16_rows(4, 28)
+    finite = [(P.f32_bits(c), a, b) for c, a, b in zip((0.0, 1.5, -3e6, 2e-20), pa, pb)]
+    for c, a, b in finite:
+        assert word(peel, c, a, b) == [C.peel(c, a, b, DEVICES["h100"])]
+        assert word(on(F.PearlCPeel, "h100", R=8), c, a[:16], b[:16]) == [DEVICES["h100"].peel.step(c, a[:16], b[:16])]
+    every = finite + [(NAN, pa[0], pb[0]), (INF, pa[1], pb[1]), (0x7F7FFFFF, pa[5], pb[5]), (0, pa[4], pb[4])]
+    assert on_bits(on(F.PearlCPeelV2, "h100", R=32), *every) == [word(peel, *i) for i in every]
 
 
 def test_the_root_and_the_negation_on_bits():

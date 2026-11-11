@@ -1,7 +1,8 @@
-"""A Pearl-C -h3 call's rows as Definitions, and a Definition laid out in the units a proof takes.
+"""A Pearl-C -h3 call's rows and cells as Definitions, and a Definition laid out in the units a proof takes.
 
-A call C = A·B under ``-h3`` forms each row of A and each row of the fixed operand B against noise nothing supplies
-(`verity.ml.protocols.pouw.schemes.pearl_c`: `PearlC.encode`):
+A call C = A·B under ``-h3`` forms each row of A and each row of the fixed operand B against noise nothing supplies, and
+computes each cell from a formed row of each (`verity.ml.protocols.pouw.schemes.pearl_c`: `PearlC.encode`,
+`PearlC.checked`):
 
     PearlCRowA{K, R, DOT, G}
         (salt, x: f32[K], root, unit, row, fa: Array<K, e4m3[32]>, fb: Array<K, e4m3[R]>)
@@ -12,6 +13,11 @@ A call C = A·B under ``-h3`` forms each row of A and each row of the fixed oper
         (x: f32[K], e: e4m3[32], fb: Array<K, e4m3[32]>, fa: Array<K, e4m3[R]>, g: Array<R, f32[R]>)
             -> (codes: e4m3[K], P_B: bf16[2R], s, ρ, α, β_row)
         the row's forming against its line E_B and F_B, and its peel factors over F_A and G (`PearlCForm`, `PearlCPeelB`)
+    PearlCCell{K, R, DOT, G, STEP}
+        (a: e4m3[K], b: e4m3[K], pa: bf16[2R], pb: bf16[2R]) -> (C̃, U)
+        cell (i, j) from row i of A's codes and factors and row j of B's: the chain C̃ of the codes, which the tickets
+        read, and the peel U of C̃ over the factors, the useful output before its unscale by the rows' α
+        (`pearl_c_forming.PearlCChain`, `PearlCPeel`)
 
 Row A is the one place a call's noise is derived from a value the call keeps private, the row: E_B, F_A, F_B and G come
 from seed_B = `PearlCSeedB` of the salt and B's root, both public, so whoever holds them derives those
@@ -19,7 +25,8 @@ from seed_B = `PearlCSeedB` of the salt and B's root, both public, so whoever ho
 parameters. On the codes and the factors a row is PoUW's row unit (`verity.ml.protocols.pouw.circuit.pc8`: `Pc8RowA`,
 `Pc8RowB` at the same atom and promotion period, R = 32), row A with its line derived; a row's admission (the unit's
 ``ok``) is not here, and reads the statistics a row returns. R, the basis' rank, is 32 in a call and a static so that
-circuit-check binds a row small.
+circuit-check binds a row small; a cell takes its factors sixteen at a time, so there R is a multiple of 8. A tile's
+caps, its leaf and the unscale are not here either.
 
 Each has a word form (``_v1``) and a Boolean version (``_v2``), the σ of the word form. A row is far over the 65,536 ANDs a
 Boolean Definition is lowered whole at, and is no proof unit: `units` lays a Boolean Definition out in the Definitions
@@ -32,10 +39,12 @@ from verity.ml.circuits.defs import PrimitiveDefinition, SpecializedDefinition, 
 from verity.ml.circuits.refs import tuple_of
 from verity.ml.circuits.types import Array, Tuple, Value
 from verity.ml.definitions.boolean import sigma_lift
-from verity.ml.definitions.registry.pearl_c_forming import LINE, SLICE, PearlCForm, PearlCPeelA, PearlCPeelB
+from verity.ml.definitions.registry.pearl_c_forming import (LINE, SLICE, PearlCChain, PearlCForm, PearlCPeel, PearlCPeelA,
+                                                            PearlCPeelB)
 from verity.ml.definitions.registry.pearl_c_noise import BYTES32, BYTES64, PearlCRowLine
 
-__all__ = ["LOWERED_WHOLE", "PearlCRowA", "PearlCRowAV2", "PearlCRowB", "PearlCRowBV2", "ands", "bindings", "units"]
+__all__ = ["LOWERED_WHOLE", "PearlCCell", "PearlCCellV2", "PearlCRowA", "PearlCRowAV2", "PearlCRowB", "PearlCRowBV2", "ands",
+           "bindings", "units"]
 
 F32, BF16, E4M3, U32 = Value(32), Value(16), Value(8), Value(32)
 #: the ANDs circuit-check lowers a Boolean Definition whole up to (`circuit_check.checks.Options.lower_max_ands`): a unit's size
@@ -92,8 +101,27 @@ def PearlCRowB(B, S, x, e, fb, fa, g):
     return tuple_of(codes, factors, s, rho, alpha, beta)
 
 
+def _refuse_cell(b: dict) -> str | None:
+    if b.get("R", 8) % 8:
+        return "the peel takes the 2R operands of a row of P sixteen at a time: R is a multiple of 8"
+    return _refuse(b)
+
+
+@composite("PearlCCell", 1, ["K", "R", "DOT", "G", "STEP"],
+           lambda S: ((("a", Array(S.K, E4M3)), ("b", Array(S.K, E4M3)), ("pa", Array(2 * S.R, BF16)),
+                       ("pb", Array(2 * S.R, BF16))), Tuple(F32, F32)),
+           conformance=f"protocol-defined; equal to `verity.ml.protocols.pouw.schemes.pearl_c.PearlC.checked` on its vectors "
+                       f"({_TESTS})", refuse=_refuse_cell)
+def PearlCCell(B, S, a, b, pa, pb):
+    """One cell of a call's tile from a formed row of A (its codes ``a``, its row ``pa`` of P_A) and a formed row of B
+    (``b``, ``pb``): C̃ = `PearlCChain_v1` of the codes and U = `PearlCPeel_v1` of C̃ over the factors, FP32 words."""
+    c = B.call(bind(PearlCChain, K=S.K, DOT=S.DOT, G=S.G), a, b)
+    return tuple_of(c, B.call(bind(PearlCPeel, R=S.R, STEP=S.STEP), c, pa, pb))
+
+
 PearlCRowAV2 = sigma_lift(PearlCRowA, 2)
 PearlCRowBV2 = sigma_lift(PearlCRowB, 2)
+PearlCCellV2 = sigma_lift(PearlCCell, 2)
 
 
 # ---- a Definition in units ---------------------------------------------------------------------------------------------------
@@ -133,12 +161,15 @@ def units(fn: SpecializedDefinition, limit: int = LOWERED_WHOLE) -> dict[str, tu
 
 
 def bindings() -> list:
-    """The bindings circuit-check takes (the sidecar): each row on words and on bits, on the H100's atom at G = 4 over one
-    atom of the row and rank 1, the least a row is."""
-    from verity.ml.circuits.ops.prims import HopperE4m3QgmmaDot32
+    """The bindings circuit-check takes (the sidecar), on words and on bits, on the H100's atom at G = 4: each row over one
+    atom of the row at rank 1, the least a row is, and a cell over one promotion window at rank 8, which is lowered whole."""
+    from verity.ml.circuits.ops.prims import HopperBF16WgmmaDot16, HopperE4m3QgmmaDot32
     from verity.ml.definitions.boolean import boolean_version
 
-    statics = {"K": SLICE, "R": 1, "G": 4}
-    return [bind(PearlCRowA, DOT=HopperE4m3QgmmaDot32, **statics), bind(PearlCRowB, DOT=HopperE4m3QgmmaDot32, **statics),
-            bind(PearlCRowAV2, DOT=boolean_version(HopperE4m3QgmmaDot32), **statics),
-            bind(PearlCRowBV2, DOT=boolean_version(HopperE4m3QgmmaDot32), **statics)]
+    out = []
+    for rows, cell, lift in (((PearlCRowA, PearlCRowB), PearlCCell, lambda d: d),
+                             ((PearlCRowAV2, PearlCRowBV2), PearlCCellV2, boolean_version)):
+        dot, step = lift(HopperE4m3QgmmaDot32), lift(HopperBF16WgmmaDot16)
+        out += [bind(row, K=SLICE, R=1, DOT=dot, G=4) for row in rows]
+        out.append(bind(cell, K=4 * SLICE, R=8, DOT=dot, G=4, STEP=step))
+    return out
