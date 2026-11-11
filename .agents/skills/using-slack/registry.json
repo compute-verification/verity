@@ -295,9 +295,7 @@
         "security/Proofs/Accounting/HMu/",
         "security/Proofs/Accounting/PouwWork.lean",
         "security/Proofs/Accounting/TS.lean",
-        "security/Proofs/Accounting/TS/",
-        "archive/examples/dither_full_util/",
-        "archive/benchmarks/pouw/"
+        "security/Proofs/Accounting/TS/"
       ],
       "branch_suffixes": [
         "e3fa",
