@@ -6,8 +6,8 @@ import random
 
 import numpy as np
 import pytest
-
 import settings
+
 from verity.circuits.defs import bind
 from verity.circuits.evaluation import bits as EB
 from verity.protocols.pous.prover import circuit as P

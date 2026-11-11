@@ -11,8 +11,8 @@ import re
 from pathlib import Path
 
 import pytest
-
 import settings
+
 from pous_fakes import Clock
 from verity.claims import get as core_claim
 from verity.protocols.pous.verifier import band, dense, primitives, protocol, schemes

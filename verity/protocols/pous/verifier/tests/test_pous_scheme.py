@@ -6,8 +6,8 @@ import hashlib
 import random
 
 import pytest
-
 import settings
+
 from verity.protocols.pous.verifier.labels import component, from_bytes, join, split, tag, to_bytes, transpose, w_labels, w_value
 from verity.protocols.pous.verifier.oracle import run
 from verity.protocols.pous.verifier.params import LEAN_P3_MEETS, OPERATING_POINT, Params
