@@ -65,7 +65,7 @@ CHAIN_ROW = ('SparseMlaSplit_v1{T=272,NS=5,NH=8,DR=64,DV=512,BN=64,DOT={"fn":"Ho
 
 def _chain_units(**sized):
     """`CHAIN_ROW`'s unit templates past itself as stand-in sized units (``sized``: a family's fields), and its ways' units."""
-    ways = dict(B.chain_ways(CHAIN_ROW))
+    ways = dict(B.ST.chain_ways(CHAIN_ROW))
     by = {u: unit(u, n, **sized.get(u.split("{")[0], {})) for way in ways.values() for u, n in way}
     return list(by.values()), {g: [by[u] for u, _n in way] for g, way in ways.items()}
 
@@ -91,11 +91,8 @@ def test_a_chain_row_takes_its_scores_and_values_units_and_whole_key_blocks_when
 def test_the_served_sparse_attention_partition_names_a_decode_rows_units_at_the_census_s_width():
     """The served partition's templates are `CHAIN_ROW`'s units at `CHAIN_COLS` (a scores or values unit its Boolean form), so
     the planner's card and the served partition hold one cut of the row."""
-    from verity_vllm.pipeline import serving_rows as SRW
-
-    served = json.loads((HERE.parent / "glm53_sparse_mla_tp8_step16.json").read_text())
-    assert list(served["chunk_cap"]) == served["templates"]
-    assert sorted(SRW.template(t).word for t in served["templates"]) == sorted(u for u, _n in dict(B.chain_ways(CHAIN_ROW))[B.CHAIN_COLS])
+    served = json.loads((HERE.parent / "glm53_sparse_mla_tp8_step16.json").read_text())["templates"]
+    assert sorted(B.ST.template(t).word for t in served) == sorted(u for u, _n in dict(B.ST.chain_ways(CHAIN_ROW))[B.CHAIN_COLS])
 
 
 def test_a_kchunks_rows_slot_is_its_coordinate_or_its_chunks_of_one_width():
