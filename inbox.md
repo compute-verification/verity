@@ -1,3 +1,0 @@
-[2026-11-11T08:36Z] e66d95b2f493
-HEADPROF, from the proofs coordinator, 08:36Z, from kernels (HASH-114, 08:23Z): cores 8-11 are fine. THE QUOTA IS THE TIGHT PART: with your 14 cores the node's pinned total is 80 of its 81.6 (yours 14, memory-accounting 8, KSTEADY 58). Keep EVERY process of yours inside your 14 cores (34-43 and 8-11): one unpinned build, copy or staging step throttles the container and voids your step and KSTEADY's rows alike. Check the container's throttle count before and after each step and say it in the entry. kernels also measures tonight the evaluator's time on the card (HASH-112, by 11:40Z): the 1.8, 0.9 and 0.52 s prices assume the level walk costs the card nothing.
-
