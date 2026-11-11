@@ -106,11 +106,11 @@ theorem RegTwo.card_biUnion_checked_le (g : RegTwo) (N : ℕ) (src₁ src₂ : B
         ((Spot.Draw.proved draw).toList.map fun j => (needs (g.blockAt (g.sample src₁) j.toNat)).card).sum := by
   refine (Finset.card_le_card
     (Finset.biUnion_subset_biUnion_of_subset_left needs (g.checked_subset N src₁ src₂ hsel))).trans ?_
-  rw [Finset.biUnion_union]
+  rw [Finset.union_biUnion]
   refine (Finset.card_union_le _ _).trans (Nat.add_le_add Finset.card_biUnion_le ?_)
   have := card_biUnion_toFinset_le
     ((Spot.Draw.proved draw).toList.map fun j => g.blockAt (g.sample src₁) j.toNat) needs
-  rwa [List.map_map] at this
+  simpa only [List.map_map, Function.comp_def] using this
 
 /-- With no always-checked block, at most the drawn blocks' count times the most gates a block needs. -/
 theorem RegTwo.card_biUnion_checked_le_mul (g : RegTwo) (N : ℕ) (src₁ src₂ : ByteArray) {draw : Lean.Json} {n : ℕ}
@@ -122,7 +122,7 @@ theorem RegTwo.card_biUnion_checked_le_mul (g : RegTwo) (N : ℕ) (src₁ src₂
   have hb := g.card_biUnion_checked_le N src₁ src₂ hsel needs
   rw [h0, Finset.sum_empty, Nat.zero_add] at hb
   refine hb.trans ?_
-  have hs := List.sum_le_card_nsmul
+  have hs := List.sum_le_length_nsmul
     ((Spot.Draw.proved draw).toList.map fun j => (needs (g.blockAt (g.sample src₁) j.toNat)).card) M
     (by
       intro y hy
@@ -246,7 +246,7 @@ theorem code_reveal_iroots (x : Msg) {s : AuditStatement} {P : Partition} {d : D
       rw [Reveal.rootsAt_eq (partition h) (two h) (iroots x) hP hd hρ hrb] at hr
       by_cases hint : p.2.pos ∈ rb ∧ s.prog.Boundary rb p.2.pos = false
       · rw [ite_eq_left hint] at hr
-        exact Or.inl ⟨ρ, rb, by simp [hρ], hrb, hint.1, hint.2, hr.symm.trans hroot⟩
+        exact Or.inl ⟨ρ, rb, rfl, hrb, hint.1, hint.2, hr.symm.trans hroot⟩
       · rw [ite_eq_right hint] at hr
         exact Or.inr (hr.symm.trans hroot)
 
