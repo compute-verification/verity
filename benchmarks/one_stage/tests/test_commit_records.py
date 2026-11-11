@@ -1,4 +1,4 @@
-"""Neither Commit script publishes a value. `examples/vllm/commit.sh` and `a5_llama1b_h200.sh` copy a row dir's records into
+"""Neither Commit script publishes a value. `demos/vllm/commit.sh` and `a5_llama1b_h200.sh` copy a row dir's records into
 $OUT, which `research run` publishes as the run's record: never a file of the row's commit/ (the Commit's token record and
 sampled replays, the sealed replay bundle, the slim keep), nor the Match's token records and capture. Each script's `records`
 runs over a row dir with those files planted, and the demo's Commit runs whole in a toy tree under a stub of vLLM's venv: it
@@ -15,7 +15,7 @@ from pathlib import Path
 import pytest
 
 ROOT = Path(__file__).resolve().parents[3]
-COMMIT_SH = ROOT / "examples" / "vllm" / "commit.sh"
+COMMIT_SH = ROOT / "demos" / "vllm" / "commit.sh"
 A5_SH = ROOT / "benchmarks" / "one_stage" / "a5_llama1b_h200.sh"
 ROW = "llama32-1b__bf16__rtxpro6000__tp1__b4__i256__o32__mixed__greedy__bi-eager"
 #: what every file that holds values carries here, and no path can
@@ -95,7 +95,7 @@ def test_records_copies_no_file_of_the_commit_nor_the_matchs_tokens(tmp_path, sc
 
 def test_the_demos_commit_stores_nothing_and_leaves_its_bundle_on_the_node(tmp_path):
     tree, venv, bin_, out, root = tmp_path / "tree", tmp_path / "venv" / "bin", tmp_path / "bin", tmp_path / "out", tmp_path / "llama"
-    for d in (tree / "integrations" / "vllm", venv, bin_):
+    for d in (tree / "adapters" / "vllm", venv, bin_):
         d.mkdir(parents=True)
     (tmp_path / "cli.py").write_text(FAKE_CLI)
     (tmp_path / "leaves.json").write_text(json.dumps(leaves()))

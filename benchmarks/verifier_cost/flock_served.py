@@ -27,9 +27,9 @@ sys.path.insert(0, str(ONE_STAGE))
 
 import a11  # noqa: E402
 import a11_kinds as K  # noqa: E402
-from verity.core.protocols.spot.one_stage import partition as P  # noqa: E402
-from verity.ml.circuits import codec  # noqa: E402
-from verity.ml.circuits.codec import canonical_json, encode_program  # noqa: E402
+from verity.protocols.spot.verifier.one_stage import partition as P  # noqa: E402
+from verity.circuits import codec  # noqa: E402
+from verity.circuits.codec import canonical_json, encode_program  # noqa: E402
 from verity_flock import class_statement as CS  # noqa: E402
 
 
