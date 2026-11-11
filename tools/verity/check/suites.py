@@ -250,9 +250,9 @@ def cpus() -> int:
     return n
 
 
-#: what one test process may hold at its peak, its children included: `test_flock_rows.py` on the rmsnorm-triton 4096 layout peaks at
-#: 8.8 GB (the lowering in the test's Python and `flock-rows` at once), and two at once on a 15 GB machine were OOM-killed
-TEST_PROCESS_GB = 9
+#: what one test process may hold at its peak, its children included, where its suite declares no `[tool.verity.tests] worker_gb`;
+#: a suite whose processes hold more declares it (flock's 16: `test_flock_rows.py` holds a lowering and `flock-rows` at once)
+TEST_PROCESS_GB = 4.5
 
 
 def default_jobs(meminfo: Path = Path("/proc/meminfo"), limit_gb: float | None = None) -> int:
