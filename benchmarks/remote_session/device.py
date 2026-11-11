@@ -40,8 +40,9 @@ sessions under the registration's key, one honest and accepted by `audit.AuditRu
 and rejected at a receipt, and with a host tier one with only host blocks dropped (every fourth) and rejected at a
 receipt; then in calibration, the chained pass against the plain pass at every kept level over the whole store, and its
 seed and signs against the reference's. Every buffer a gate store's pass or opening writes holds 0xA5 before it
-(`DeviceStore.poison`), and the first pass is a control that launches nothing, whose receipts and root the gate must
-refuse (`no_write`): so what the gates accept, the pass they ran wrote. At 64 rows one more pass has no receipt grid
+(`DeviceStore.poison`), and after the first pass a control under the same seed launches nothing: the gate must refuse
+its receipts and root (`no_write`), which are what the poison left of the first pass's. So what the gates accept, the
+pass they ran wrote. At 64 rows one more pass has no receipt grid
 (`rs_pass` at −1 CTAs), so every tile is a consumer's own (`consumer_tiles`), which no other pass is sure to run.
 """
 from __future__ import annotations
@@ -411,8 +412,9 @@ class DeviceStore:
     to a pinned host ring, both allocated with the store's shape (`shape`); the store's offloader copies each slot into
     the pass's handle in ordinary host memory and frees it for the pass SLOTS later. So no pass allocates.
 
-    With `poison` set (a gate's store), every buffer a pass writes holds POISON before the pass runs (`_poison`), and
-    so does each buffer an opening recomputes into: what a gate then reads there, that pass or opening wrote."""
+    With `poison` set (a gate's store), every buffer a pass writes on a device holds POISON before the pass runs
+    (`_poison`), and so does each buffer an opening recomputes into: what a gate then reads there, that pass or
+    opening wrote."""
 
     def __init__(self, torch, lib: Lib, lib_open: Lib, kv: Kv, blocks: int, key: bytes, generator, *, gpus=None,
                  chunk: int = 1 << 18, kept_from: int = 6, sketch_ctas: int = 128, payload_kept_from: int = 6,
@@ -716,14 +718,15 @@ class DeviceStore:
     def _poison(self, g: int, slot: int) -> None:
         """POISON in every buffer the pass about to take `slot` writes on GPU g, on the current stream: its seed and
         packed signs, its root, its padding's scratch and nodes, each of its segments' counters, receipts, tree
-        scratch and kept levels, on the leader its top levels; and in the pinned host memory their copies go to."""
+        scratch and kept levels, and on the leader its top levels. The host's copies of them are made after the pass
+        whatever it wrote (`launch`), so they hold what the pass wrote or this."""
         ring = self.ring[g]
         mine = [ring["seed"], ring["pk"], ring["pad"], ring["pad_out"], ring["roots"][slot]]
-        mine += [ring[k][slot] for k in ring["host"]] + [host[slot] for host in ring["host"].values()]
+        mine += [ring[k][slot] for k in ring["host"]]
         for q in self.gpu_segs[g]:
             x = self.seg_ring[q]
-            mine += [x["ctr"], x["ys"], x["dig"], x["up"], x["kept"][slot], x["host"][slot]]
-        poison(self.torch, *mine, *([self.root_host[slot]] if g == 0 else []))
+            mine += [x["ctr"], x["ys"], x["dig"], x["up"], x["kept"][slot]]
+        poison(self.torch, *mine)
 
     def launch(self, i: int, after: Ticket | None, seed: bytes | None = None, write: bool = True) -> Ticket:
         """Queue pass i chained from `after`'s root (None: the window's previous root, `start_chain`) on every GPU,
@@ -1442,14 +1445,15 @@ class GpuBackend:
         r = rb.receipter(reg.receipt, seed, reg.rows)
         ys = [r(j, encoded[j]) for j in range(small.blocks)]
         ref = rb.tree(seed, small.plan, ys, [store_salt(self.salt_key, seed, c) for c in range(small.blocks // PER_LEAF)])
-        # From here every pass and opening of the gate store writes into poisoned buffers. The control comes first: a
-        # pass that launches nothing, whose receipts and root the pass's own comparisons must refuse.
+        # From here every pass and opening of the gate store writes into poisoned buffers.
         small.poison = True
-        got, _ = small.wait(small.launch(0, None, seed=seed, write=False))
-        out["no_write"] = {"receipts": small.receipts() == ys, "root": got == ref.commitment.root}
         got, _ = small.run_pass(seed)
         out["rows"] = small.rows
         out["pass_receipts"], out["pass_root"] = small.receipts() == ys, got == ref.commitment.root
+        # The control: the same pass launching nothing, after the pass that wrote this seed's receipts where it reads
+        # them. What the same comparisons see is what the poison left of those, and they must refuse it.
+        got, _ = small.wait(small.launch(0, None, seed=seed, write=False))
+        out["no_write"] = {"receipts": small.receipts() == ys, "root": got == ref.commitment.root}
         out["ok"] = (out["payload_root"] and out["encode"] and out["decode"] and not any(out["no_write"].values())
                      and out["pass_receipts"] and out["pass_root"])
         if small.rows == skr.ROWS64 and small.h0 <= 8:
