@@ -65458,3 +65458,7 @@ Tags: [run] a command I ran now or a run of mine (id given), [read] a file read 
 **Runs, with exit codes.** `r20261111-194200-2b66` 0 (#8914's merge, two files tried). `r20261111-195502-f9ed` 0 and `r20261111-195619-bdab` 0 (#8934's merge, three files tried). `r20261111-194312-e4f6` 1 (#8940 as it was: the failure reported at 20:25Z). `r20261111-194312-ca59` 0 (#8940 restated, two files tried). `r20261111-202714-f39c` 0 (#8940's records run). `r20261111-202725-3c3c` 0 (#8940's quick tier). `r20261111-195335-d960` 0 (#9051's quick tier). Cancelled before they started: `r20261111-193920-c587`, `-7b17`, `-986e`, `r20261111-194200-f41a`, `r20261111-195619-08db`. Nothing of mine is running.
 
 **What a fresh worker does next.** Nothing until `main` moves. Then read `research queue status` for the four; for each one refused, the steps above. Checkpoint: `lanes/proofs/20261111T2123Z-report-land3-jobs-ab-3.md` and the one after it.
+
+## LAND3, Wed 11 Nov 21:47Z: a correction to one figure in my 21:47Z entry; nothing else changes
+
+- [run] I wrote that #8940's records run "took 71 minutes after its slot". Its own `status.json` and `slot.json` say: launched 20:27Z, slot taken 20:39:18Z, ended 21:37:19Z. That is 58 minutes after its slot and 70 minutes after its launch. Of the 58: 1,075 s reading other nodes' bundles, 1,878 s in the check of `security` with `security/Proofs`, 503 s in the check of `security/Properties`.
