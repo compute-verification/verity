@@ -115,7 +115,7 @@ def _check_main(args) -> int:
     run = Path(args.out)
     cap, ctl = run / "capture", run / "control"
     res: dict = {"schema": "tp2-match/v1", "utc": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()), "run": str(run),
-                 "campaign": os.environ.get("VERITY_CAMPAIGN", "r15"),
+                 "campaign": settings.VERITY_CAMPAIGN,
                  "what": "collective-level TP-aware Match (structure + cross-rank provenance + tokens); NOT the instance-sequence Match"}
     # the world is the number of rank Builds given (--build-rank in rank order; --build-rank0/1 are the two-rank spelling)
     builds = _build_dirs(args)
@@ -227,7 +227,7 @@ def _check_main(args) -> int:
                                 f"for r in order[1:], order = {list(order)} (b1_tp2.allreduce_order); world 8: the routed Definition")
     prov["alt_f32_once_equal"] = 0
     prov["alt_ascending_equal"] = 0
-    settings = _routed_settings(cap, ranks, world, prov)
+    switches = _routed_settings(cap, ranks, world, prov)
     for s in steps:
         pts = [cap / f"coll.rank{r}.step{s}.pt" for r in ranks]
         if not all(p.exists() for p in pts):
@@ -258,7 +258,7 @@ def _check_main(args) -> int:
                 if int(xr.get("k", k)) != k or int(xr.get("step", s)) != s:
                     _digest_fail(rank, s, k, "key", f"recorder row keyed (step {xr.get('step')}, k {xr.get('k')}) at position {k} of step {s}")
             kind = x0[k]["kind"]
-            route = _route(kind, parts, world, settings)
+            route = _route(kind, parts, world, switches)
             exp = _expected(kind, x0[k].get("path"), parts, outs, order, prov, route)
             if exp is None:
                 if kind != FN.KIND:
