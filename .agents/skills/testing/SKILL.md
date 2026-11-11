@@ -108,7 +108,7 @@ untraced`, which keys it on the suite's whole tree. A test that builds or runs a
 - **A test that needs the evidence store** skips where it can't reach it with a reason containing `the evidence store is
   not reachable` (a recorded `check`, `VERITY_STORE_REQUIRED=1`, fails that skip). Inside `check` and `research run --on`
   the store is reachable only through the run's custody key, so fetch through a helper that hands it to the store CLI
-  (adapters/vllm's `store_io`, Flock's `verifier/ci.py` `fetch`).
+  (adapters/vllm's `store_io`, Flock's `agreement/ci.py` `fetch`).
 - **A suite over a few minutes declares `parallel = true`** under `[tool.verity.tests]`, once it passes `suites.py SUITE
   --fresh` a few times, and its tests then spread over pytest-xdist workers: they must run in any order and process, and
   session and module fixtures are built once per worker, so keep them cheap. A suite whose workers are big declares
