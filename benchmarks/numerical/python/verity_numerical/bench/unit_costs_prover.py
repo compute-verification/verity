@@ -66,7 +66,7 @@ import math
 from collections import defaultdict
 from typing import Any, Mapping, Sequence
 
-from verity.ml.windows.interface import K_MAX
+from verity.commitments.windows.interface import K_MAX
 
 from . import unit_costs_padding as P
 

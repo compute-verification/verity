@@ -6,7 +6,7 @@ combine statements, costs, and the file it writes.
     run.py --guard [all] --scratch DIR --out DIR [--tree PATH]
     run.py --pin-reference --scratch DIR --out DIR
 
-The tile's lowering is `pouw_h1_circuits --lower K R C BIND PATH` (integrations/vllm), the auditor's lowering whose file a PoUW
+The tile's lowering is `pouw_h1_circuits --lower K R C BIND PATH` (adapters/vllm), the auditor's lowering whose file a PoUW
 period-open commits as ``k<K>``, bound to `BIND`. A lane's or the combine's is h1_lanes' staging of that statement of the R x C
 leaf (`lanes.py`), bound to the Program a served window's verifier derives for it. Each runs in a child process with
 ``HZ_STAGE`` (``fast`` by default) and ``H1_TMPL`` unset for the flat form or ``structural``. Its peak RSS is the child's
@@ -17,7 +17,7 @@ META's ``k_log`` and AND rows (`scan`), and deleted.
 all``: and of `WIDE`) flat, holds its SHA-512 to `REFERENCE`'s and its ``k_log`` to Flock's 2^`K_MAX` block, writing
 OUT/guard.json and exiting 1 naming each shape that fails. ``--pin-reference`` writes OUT/reference.json from this tree's
 lowering at `PINS` and `WIDE`, the guard's reference when this tree is the one pinned. ``--tree`` runs another checkout's
-lowering: its integrations/vllm and h1_lanes, its import roots first on the child's PYTHONPATH
+lowering: its adapters/vllm and h1_lanes, its import roots first on the child's PYTHONPATH
 (`research.pythonpath.tree_pythonpath`), and its .venv's Python where it has one.
 """
 from __future__ import annotations
@@ -88,7 +88,7 @@ def lower(k: int, r: int, c: int, path: Path, form: str = "flat", tree: Path = R
             python = str(tree / ".venv" / "bin" / "python")
     if unit == "tile":
         argv, cwd = [python, "-m", "tests.protocols.pouw_h1_circuits", "--lower", str(k), str(r), str(c), json.dumps(BIND),
-                     str(path)], tree / "integrations" / "vllm"
+                     str(path)], tree / "adapters" / "vllm"
     else:
         argv, cwd = [python, str(HERE / "lanes.py"), unit, str(k), str(r), str(c), str(path), str(tree), staging], tree
     start = time.monotonic()

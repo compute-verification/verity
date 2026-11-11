@@ -14,7 +14,7 @@ from pathlib import Path
 import numpy as np
 import pytest
 
-from verity.core.protocols.pous.schemes.p2 import P2Params
+from verity.protocols.pous.verifier.schemes.p2 import P2Params
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
