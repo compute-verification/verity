@@ -838,16 +838,18 @@ def audit_failures(log: str, rest: str) -> set[str]:
 
 
 def _json(path: Path) -> dict | None:
-    with contextlib.suppress(OSError, ValueError):
-        doc = json.loads(path.read_text())
-        return doc if isinstance(doc, dict) else None
-    return None
+    """The JSON object at ``path`` (a failed suite's guard report), None when the run dir has none; one that isn't a JSON
+    object raises."""
+    if not path.exists():
+        return None
+    if not isinstance(doc := json.loads(path.read_text()), dict):
+        raise ValueError(f"{path}: not a JSON object")
+    return doc
 
 
 def _text(path: Path) -> str:
-    with contextlib.suppress(OSError):
-        return path.read_text(errors="replace")
-    return ""
+    """The text at ``path`` (a failed suite's children's reads), empty when the run dir has none."""
+    return path.read_text(errors="replace") if path.exists() else ""
 
 
 def combine(graph: Verdict, slim: Verdict) -> Verdict:

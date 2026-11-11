@@ -238,6 +238,24 @@ def test_a_failure_outside_the_suites_or_without_a_failing_test_points_at_no_fil
     assert implicated(d) is None
 
 
+def test_a_runs_tree_root_is_its_job_jsons_run_cwd_and_a_malformed_job_json_raises(tmp_path):
+    """No job.json, or one naming no absolute `run.cwd`, gives no root; a job.json that isn't a JSON object raises rather than
+    reading as a run with no root."""
+    from research.landing import tree_root
+
+    assert tree_root(tmp_path) is None
+    for doc, root in (({"run": {"cwd": "/x/site/"}}, "/x/site"), ({"run": {"cwd": "site"}}, None), ({"run": None}, None),
+                      ({"environment": {}}, None)):
+        (tmp_path / "job.json").write_text(json.dumps(doc))
+        assert tree_root(tmp_path) == root, doc
+    (tmp_path / "job.json").write_text('{"run": {"cwd": "/x/si')
+    with pytest.raises(ValueError):
+        tree_root(tmp_path)
+    (tmp_path / "job.json").write_text("[]")
+    with pytest.raises(AttributeError):
+        tree_root(tmp_path)
+
+
 def test_a_guard_failed_suite_with_no_failing_test_points_at_its_outside_reads_and_their_readers(tmp_path):
     """A suite can fail with every test passing — the read guard alone — and then "the failure names no file" would leave
     attribution to an agent's archaeology. The suite's record names the files

@@ -549,11 +549,11 @@ def killed(run_dir: Path, why: str = "") -> bool:
 
 def tree_root(run_dir: Path) -> str | None:
     """The directory a run's check ran in, its job.json's `run.cwd` (`research run`'s clone or shipped source): the
-    repository's root in the absolute paths its logs print; None when job.json doesn't say."""
-    try:
-        cwd = json.loads((run_dir / "job.json").read_text())["run"]["cwd"]
-    except (OSError, ValueError, KeyError, TypeError):
+    repository's root in the absolute paths its logs print; None when the run dir has no job.json or it names no absolute
+    `run.cwd`.  A job.json that isn't a JSON object raises."""
+    if not (job := run_dir / "job.json").exists():
         return None
+    cwd = (json.loads(job.read_text()).get("run") or {}).get("cwd")
     return cwd.rstrip("/") if isinstance(cwd, str) and cwd.startswith("/") else None
 
 

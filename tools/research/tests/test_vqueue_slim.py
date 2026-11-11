@@ -20,9 +20,9 @@ from research.landing import (ACTIVE, AFTER_LANDING, AUTO_PLAN, LAUNCH_LOST_S, L
                               SIGTERM_RC, SLIM_STEPS, shard_machines, step_paths, step_records)
 from research.vqueue import (FAIL, INFRA, LIST_FAILED, PASS, PENDING, STATES, Advance, Candidate, Drop, Eject, Failed, Ready,
                              Red, Snapshot, Verdict, _inherited, decide, meets)
-from research.vqueue_slim import (BUILD, CHECK, LEAN_INPUTS, OWN_TRAIN, WHOLE, Read, abandon, audit_built, audit_failures, audited,
-                                  audits, based, combine, failures, judge, key, lean_inputs, lean_reads, read_step, read_suite,
-                                  reads, shard_count, start, step_test, suite_kind, traced_reads, unnamed)
+from research.vqueue_slim import (BUILD, CHECK, LEAN_INPUTS, OWN_TRAIN, WHOLE, Read, _json, _text, abandon, audit_built,
+                                  audit_failures, audited, audits, based, combine, failures, judge, key, lean_inputs, lean_reads,
+                                  read_step, read_suite, reads, shard_count, start, step_test, suite_kind, traced_reads, unnamed)
 from test_policy import LIVE, TEST
 from test_landing import CI_TOML, GATED_TREE, LINT_LOG, PREFLIGHTS, Harness, _main, _move_main, _plan_doc, _policy, _slim
 from test_queue import World, _git
@@ -889,6 +889,21 @@ def test_a_suite_s_reads_are_narrowed_by_what_its_run_traced_unless_a_program_no
         assert traced_reads(declared, dirs, "pkg", {"pkg/tests/test_a.py"}, {**report, **blind}, trace) == declared | {"docs/x.md"}
     assert traced_reads(declared, dirs, "pkg", {"pkg/tests/test_a.py"}, report, "X\tpkg/tests/test_a.py\t/usr/bin/git\n") == declared
     assert traced_reads(None, dirs, "pkg", {"pkg/tests/test_a.py"}, report, trace) is None
+
+
+def test_a_suites_guard_report_or_reads_that_was_never_fetched_reads_as_none_and_a_malformed_report_raises(tmp_path):
+    """A failed suite's guard report and children's reads beside its log: absent (a suite with none, or a fetch that brought
+    none) reads as no report and no reads, which leave its declared inputs whole; a report that isn't a JSON object raises
+    rather than reading as absent."""
+    report, trace = tmp_path / "pkg.json", tmp_path / "pkg.reads"
+    assert _json(report) is None and _text(trace) == ""
+    report.write_text('{"traced": []}')
+    trace.write_text("F\tpkg/tests/test_a.py\tpkg/a.py\n")
+    assert _json(report) == {"traced": []} and _text(trace) == "F\tpkg/tests/test_a.py\tpkg/a.py\n"
+    for bad in ('{"traced": [', "[]"):
+        report.write_text(bad)
+        with pytest.raises(ValueError):
+            _json(report)
 
 
 @pytest.mark.parametrize("more", ["", RECORD])
