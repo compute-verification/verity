@@ -130,9 +130,14 @@ C_MAGIC = b1.f32c(12582913.0)
 C_NEG_MAGIC_BIAS = b1.f32c(-12583039.0)
 C_LOG2E_HI = b1.f32c(f32_of(0x3FB8AA3B))
 C_LOG2E_LO = b1.f32c(f32_of(0x32A57060))
+_EXPF = EVIDENCE["cc12_expf_logf_capture"]
+EXPF_CONF = ("exact-model-tested: every word of torch.exp's f32 CUDA kernel (exp_kernel_cuda) on cc 12.0 with 188 SMs (torch "
+             "2.14.0+cu130) at 4,194,320 inputs, 16 specials (±0, ±inf, a NaN, three subnormals, FLT_MIN, ±1 and five words at "
+             "the overflow and underflow edges), 2^21 random bit patterns and 2^21 words with |x| in [2^-30, 2^7), every NaN "
+             f"result 0x7FFFFFFF as here (capture {_EXPF['run_record']}, fit {_EXPF['fit']})")
 
 
-@composite("NvExpf", 1, [], lambda S: ((("x", F32),), F32), conformance="not-yet-established")
+@composite("NvExpf", 1, [], lambda S: ((("x", F32),), F32), conformance=EXPF_CONF)
 def NvExpf(B, S, x):
     """CUDA math-library `expf(x)` (nvcc, sm_89, no fast-math) as the SASS computes it: saturated range reduction to
     `j = floor(x*log2e)` through the `fma.rm` magic-number trick, `f = x*log2e - j` in two fma steps (hi/lo split of log2e),
