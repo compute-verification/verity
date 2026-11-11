@@ -6,7 +6,7 @@ on the monotonic clock when each request was sent and when each streamed chunk a
 in front of the server would: every streamed token is one egress frame, ready when its chunk arrives, and a request is
 ⌈bytes/B⌉ ingress frames that arrive when it is sent.
 
-**The load.** A mix names workloads of `integrations/vllm/workloads/` (`MIXES`) with a period each. Instance k of a
+**The load.** A mix names workloads of `adapters/vllm/workloads/` (`MIXES`) with a period each. Instance k of a
 workload starts at k·period plus up to half a period of jitter, and its requests follow at their recorded
 `arrival_offset_s`: the rule of the rebuilt traces behind decision D. Several workloads in one mix superpose. Every
 request runs to its `max_tokens` (`ignore_eos`). Its first prompt token is replaced by a seeded random one, so that no
@@ -31,7 +31,7 @@ goes to stderr and the job exits, rather than holding its GPU to the lease's end
   GPU and of the job's CPUs, the GPU's utilisation, clocks and compute processes, and the longest stall of a 10 ms
   heartbeat thread and of the client's event loop (the monitor's own, in the offline modes);
 - `meta.json`: host, GPU, CPUs, versions, model, server arguments, the mix and t0;
-- `server.log`, and at the end `trace.json` (the calibration format, `verity.core.protocols.certifier.calibration`) and
+- `server.log`, and at the end `trace.json` (the calibration format, `verity.protocols.certifier.verifier.calibration`) and
   `summary.json`.
 
 **Exit status.** 0 when the chunk ran to its deadline. A SIGTERM (an eviction: the lease reclaimed the GPU) stops it;
@@ -80,7 +80,7 @@ from collections.abc import Callable, Iterable, Sequence
 from importlib import metadata
 from pathlib import Path
 
-WORKLOADS = Path(__file__).resolve().parents[2] / "integrations/vllm/workloads"
+WORKLOADS = Path(__file__).resolve().parents[2] / "adapters/vllm/workloads"
 MIXES = {
     "b16": "llama32-1b__bf16__l40s__tp1__b16__i1024__o128__mixed-arrivals__greedy__bi-eager.json",
     "b4": "llama32-1b__bf16__l40s__tp1__b4__i256__o32__mixed-arrivals__greedy__bi-eager.json",

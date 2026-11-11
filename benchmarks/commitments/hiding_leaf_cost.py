@@ -22,7 +22,7 @@ rounds of 7 additions, Ch and Maj, 48 schedule words of 3 additions and 8 feed-f
 80 rounds, 64 schedule words and 8 feed-forward additions (w = 64); a BLAKE3 compression is 7 rounds of 8 G of 6 additions.  A
 public prefix block is a constant midstate; every other compression is private.  hm96's XORs are those of ``b = x XOR M y`` for the
 pinned key; the hashes' own XORs are not counted.  Host times run the integration's paths on one core:
-``verity_vllm.commit.scheme.pos_leaf`` (under ``hashlib.sha512`` for SHA-512), ``verity.ml.windows.hiding.HidingLeaves``
+``verity_vllm.commit.scheme.pos_leaf`` (under ``hashlib.sha512`` for SHA-512), ``verity.commitments.windows.hiding.HidingLeaves``
 (salts from the OS generator included) and the ``blake3`` package; the median of ``--reps``.
 
 Writes ``hiding_leaf_cost.json`` and ``result.json`` (``research/result/v0.1``) to ``$RESEARCH_RUN_DIR`` or ``--out`` when either is
@@ -42,11 +42,11 @@ from collections.abc import Callable
 from pathlib import Path
 from typing import Any
 
-from verity.core.protocols.spot.optimize import SHA512_ANDS
-from verity.ml.commitments import hm96
-from verity.ml.commitments.rowleaf import ROLE_X, blake3_row_key, sha256_row_prefix, sha512_row_prefix
+from verity.protocols.spot.optimize import SHA512_ANDS
+from verity.commitments import hm96
+from verity.commitments.rowleaf import ROLE_X, blake3_row_key, sha256_row_prefix, sha512_row_prefix
 from verity_vllm.commit import scheme
-from verity.ml.windows.hiding import HidingLeaves
+from verity.commitments.windows.hiding import HidingLeaves
 
 try:
     import blake3 as _blake3

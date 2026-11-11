@@ -16,7 +16,7 @@ import pytest
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE.parent))
 import a5  # noqa: E402
-from verity.core.protocols.spot.one_stage import proofs as PF  # noqa: E402
+from verity.protocols.spot.verifier.one_stage import proofs as PF  # noqa: E402
 
 _spec = importlib.util.spec_from_file_location("one_stage_replay", HERE.parent / "replay.py")
 REPLAY = importlib.util.module_from_spec(_spec)

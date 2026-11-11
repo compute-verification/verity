@@ -5,12 +5,12 @@ R·T) when a top-up reads idle registered memory beside the serving workload, an
 `topup.cu` is the top-up (it includes `benchmarks/codec_tensor/sha512.cuh`, readers in `readers.cu` and the fill in
 `fill.cu`, whose reference is `fill_ref.py`). `bench.py` times it beside serving phases, `serve.py` serves Llama-3.1-8B
 under a bursty trace with it, `step_profile.py` profiles one decode step, and `fill.py` measures the readers' rate.
-`plan.py` is the filler a pass of the bandwidth audit (PoUB, `verity/core/protocols/remote_bandwidth`) reads in the vLLM
+`plan.py` is the filler a pass of the bandwidth audit (PoUB, `verity/protocols/poub/verifier`) reads in the vLLM
 integration's store, `green.py` the SM partition, and `lag.py`, `analyze.py` and `eta.py` price the conversion lag and η.
 
 **Status: active.** `benchmarks/stacked_share/share.py` and `benchmarks/vllm_encoded/bench_arm.py` import it (`green.py`,
 the top-up), and `benchmarks/harness` builds `topup.cu`. Decided by `rg kv_filler` over `verity/`, `benchmarks/`,
-`examples/`, `tests/` and `integrations/`.
+`demos/`, `tests/` and `adapters/`.
 
 **Run:** `uv run tools/verity/check/suites.py benchmarks/kv_filler` runs what needs no GPU: the fill's reference, the
 lag's replay, the filler plan, the analysis, and the serving and profiling scripts' pure parts. `run.sh` builds `topup.cu` and
