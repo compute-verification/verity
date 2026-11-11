@@ -23,9 +23,11 @@ What is held is the step and the kind of the encoding, not the weights, E's byte
   the config takes on the start's θ and data whenever that step is one fixed graph. The capture decides that: the
   step is traced (`run.trace_step`), and an entry whose trace the capture refuses, or whose step reads a value back
   that decides what it computes, is refused here. No route says of itself that it branches on values.
-- **Expected differences.** A CPU count differs from a CUDA record in ways that are the device's, each named by a
-  rule that fires only on its own exact case (`width`, `RULES`); the output names each one that fired with the MACs
-  on both sides. Anything else is printed as a difference, and the command exits 1.
+- **Expected differences.** A CPU count differs from a CUDA record in ways that are the device's (`width`,
+  `attention`, `norm`) and in AdamW's kernel, the fused one that the record's program asks torch for where a route
+  takes torch's default (`adamw`). Each is named by a rule that fires only on its own exact case (`width`, `RULES`);
+  the output names each one that fired with the MACs on both sides. Anything else is printed as a difference, and
+  the command exits 1.
 - **The position tables.** One expected difference is the harness's (`HARNESS`): the records' harness checked the
   model's buffers that θ doesn't hold, the position tables, like θ's weights, so a product with one is θ's, where
   `run.Harness` takes such a buffer for a weight the route made. `tables` counts the step again as the records'
@@ -75,8 +77,9 @@ STEPS = 2
 FAIR = ("Each config's step was counted at the model's own initialisation on random tokens, one row a forward, on a "
         "CPU: the count reads operand shapes and which weights have left the start, never a value, and the capture "
         "traced the step as one fixed graph that reads no value back, so it is the step a job of the config takes on "
-        "the start's weights and data. An expected difference is the device's or the harness's, named by a rule "
-        "that fires on its exact case alone. Not held: the weights, E's bytes and the loss, which only a run has.")
+        "the start's weights and data. An expected difference is named by a rule that fires on its exact case "
+        "alone: the device's, the harness's, and the fused AdamW kernel that the record's program asks torch for. "
+        "Not held: the weights, E's bytes and the loss, which only a run has.")
 #: CUDA's attention kernels beside the CPU's, which the counter prices alike (`flops.FLOP_FORMULAS`)
 ATTENTION = {"_scaled_dot_product_flash_attention": "_scaled_dot_product_flash_attention_for_cpu",
              "_scaled_dot_product_flash_attention_backward": "_scaled_dot_product_flash_attention_for_cpu_backward"}
@@ -231,9 +234,11 @@ def norm(cfg: dict, rec: dict, shape: dict) -> dict | None:
 
 
 def adamw(cfg: dict, rec: dict, shape: dict) -> dict | None:
-    """AdamW's kernel: the record's program steps CUDA's fused kernel, one op over every parameter, which the counter
-    prices at eight multiplications a parameter element; a route steps torch's unfused AdamW, whose five in-place
-    products a parameter the counter counts as they run (`UNFUSED_ADAMW`). Fires on the record's one `_fused_adamw_`
+    """AdamW's kernel: the record's program asks torch for its fused kernel, one op over every parameter, which the
+    counter prices at eight multiplications a parameter element; a route takes torch's default, which is never the
+    fused kernel and on a CPU is the unfused step, whose five in-place products a parameter the counter counts as
+    they run (`UNFUSED_ADAMW`). This one is the program's choice and not the device's: a route that asked for the
+    fused kernel would step it on a CPU too. Fires on the record's one `_fused_adamw_`
     over its parameters, their gradients and their two moments beside the config's five products once for each of
     the same parameter shapes."""
     key = next((k for k in rec if k[:3] == ("other", "param", "_fused_adamw_")), None)
@@ -252,9 +257,9 @@ def adamw(cfg: dict, rec: dict, shape: dict) -> dict | None:
     if any(cfg.get(k) != v for k, v in want.items()):
         return None
     found = {"rule": "adamw", "record_macs": rec[key][1], "config_macs": sum(v[1] for v in want.values()),
-             "what": f"torch's unfused AdamW for CUDA's fused kernel over the same {_plural(len(params), 'parameter')}"
-                     f": {len(UNFUSED_ADAMW)} products a parameter element counted as they run, where the kernel is "
-                     "priced at 8"}
+             "what": "torch's unfused AdamW, its default on a CPU, for the fused kernel the record's program asks for, "
+                     f"over the same {_plural(len(params), 'parameter')}: {len(UNFUSED_ADAMW)} products a parameter "
+                     "element counted as they run, where the kernel is priced at 8"}
     del rec[key]
     for k in want:
         del cfg[k]
