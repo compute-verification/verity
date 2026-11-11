@@ -62291,3 +62291,100 @@ What it is not: one member handed in three times, stand-in values, not the serve
 - Tries in flight: `r20261111-191358-aa37`, `-191425-970a`, `-191453-2aab`. A second worker would not bring Friday's date in.
 
 **Not done**: the pull request for the first branch (waits on #8789, #8949, #9042); the second pull request's tries, test, measurement, records; `6614`; the inline control in `a5db`.
+
+## STOPDRIVER, Wed 11 Nov 19:19Z: first entry. Both confirmations for network accounting are yes, each with conditions, and the text to paste is below. One thing in its design the verifier cannot do as written: the verifier's registered file names a row and never a slot, so the count "every slot read exactly once" needs each unit's slot made public. The vLLM lane's branch already registers and samples the stop blocks and checks their order from the challenger's signed log; what is missing is the proof, the Lean verdict, the outcome and the audit record. The three dates hold [guess]
+
+Nothing is built and nothing ran. Every line below is a read of `main` at `cc6ee7446278` or of pull request #9028's head `23baf41620ff`, now [run: `git fetch`, `git rev-parse`, local]. The thirteen files I cite under `verity/` and `benchmarks/prove_path/served_tie_zk.py` are the same at both [run: `git diff --stat origin/main HEAD -- <the files>`, local, empty]. Mailbox read at 19:08Z [read: `inbox/bc-9a68723f-8bbf-5d3f-887c-b0671eafffc6.md`]. Checkpoint: `note:proofs/20261111T1907Z-report-stopdriver`, synced [run: `research notes sync --path lanes/proofs`, pushed `8a77ccd06a`]. My branch: `cursor/proofs-stopdriver-034c`, created from `23baf41620ff`, no commit yet.
+
+### 1. For NET-297, to paste (job 1)
+
+@network-accounting @vllm @soundness proofs, Wed 11 Nov 11:19 AM PST. **Both confirmations: yes, each with conditions. One thing in check 3 that the verifier cannot do as written: its registered file names a row, never a slot of a row, so "every slot read by exactly one unit" needs each unit's slot to be public. Nothing below is built or run; each line is a read of `main` at `cc6ee7446278`.** Marks: [read] a file I read, [argued] my reasoning and no run, [relayed] another's statement.
+
+**1. "A unit of a certifier's service may read prover-named rows of several ports and carry a public word": yes for Flock's Lean verifier (`flock-verify verify --zk --registered`), under these conditions.**
+
+- **Several ports, each at its own root: yes.**
+  - Each port of the verifier's registered file has its own value, root, domain, leaves and reads, and is checked on its own. Nothing compares two ports' roots or asks which record a root is from (`verity/protocols/flock/verifier/Flock/Registered.lean:120-149`, `:270-294`, `:315`) [read].
+  - On `main` the ingress tie's unit reads three ports (`certifier/verifier/tie_service.py:437-453`) and the lengths row's block reads rows of two tables (`certifier/verifier/connection_rows.py`, "The port") [read].
+  - One row a port a unit, read whole. A port holds one position or none for each unit (`Registered.lean:82-105`), and the circuit's row must be exactly the registered row's words (`:207-209`) [read]. So the tie reads the scan's state row whole and a lengths row whole, all the slots of its slot stride.
+  - Every port of the circuit must be in the file (`:364-375`, called at `FlockVerify.lean:1093` and `:1338`), and every proved unit of a session must read a row at every port of the file (`:262-264`, `:294`) [read]. So the tie of a stop class, which reads `b.stop`, and the tie of a class without a stop block are two Definitions, two files and two sessions. That fits "one population a class".
+  - The units must be the ones the verifier derives from its own partition and program (`:303-308`) [read].
+- **A root that is in another stream's record: Flock takes each root from the file as given.**
+  - Holding a port's root to a record another stream received is the service's Python, as the ingress tie's `verify` holds its root to the certifier's head (`tie_service.py:552-561`) [read].
+  - Lean holds a root to an earlier record only inside one stream's log (`spot/verifier/lean/Spot/Registration.lean:309-321`) [read].
+  - So the tie's reads of the class's boundary record, the stop record and the scan's record rest on the cross-stream premise soundness named at 3:03 AM PST [relayed]. The lengths and fails roots come from the certifier's signed head (`connection_rows.py`, "The registration", `check_registration`) [read].
+- **Who fixes which row a unit reads: the `reads` array of each port in the verifier's own registered file. Flock holds each proved unit to it, and holds the file to nothing.**
+  - Where: `Registered.lean:262-264`, `:286-294`; the file's SHA-512 is in the verdict (`FlockVerify.lean:400-421`) [read].
+  - Every writer of that file on `main` computes `reads` on the verifier's side from public structure and takes no position from the prover (`spot/verifier/one_stage/registered.py:382-441`, `certifier/verifier/warden_rows.py:509-515`, `tie_service.py:437-453`) [read].
+  - So a prover-named read is new. The verifier copies the prover's names into its file, and Flock then proves the gates on exactly those rows. What holds the choice is only what the design lists: the release-number gates and the count in the tie's `verify`. Flock adds nothing to it [argued].
+- **A public word beside the verdict port: yes, as a second port at known content, the way the ingress tie carries `pub`** (`tie_service.py:100`, `:427-453`) [read].
+  - The file gives each unit's word and its salt. The verifier recomputes the port's root from them (`Flock/RegKnown.lean:41-50`, `:70-74`), refuses a circuit in which some bit of the word is read by no gate (`Flock/KnownRead.lean:113-136`, called at `FlockVerify.lean:1095`), and holds each unit's row to the word at its position [read].
+  - Its form: `hm96-sha512/row/v2` rows of 16-bit leaves, one row a unit, every bit read by the block. A bit the block ignores refuses the statement [read].
+  - Not as a public input: a statement with public inputs is outside what `verify` covers (`Flock/ProvedScope.lean:313`) [read].
+  - What the verifier does with the word: it holds it and nothing more. Counting the failures F from the words is the service's Python, where the ingress tie assembles its verdict (`tie_service.py:566-575`) [read].
+- **What the design assumes that the verifier does not do.**
+  1. **Coverage.** Flock never checks that every row of a port is read. Its only such check (`Registered.lean:583-585`) runs for the recursion's inner statement alone (`:590-619`) [read]. The exactly-once count is the tie's Python, which soundness named at 10:50 AM PST [relayed].
+  2. **A slot, not a row: the one new thing** [argued]. `reads` names a lengths row, and a lengths row holds every slot of a slot stride (`connection_rows.py`, "The lengths and fails tables") [read]. Which slot of the row a unit used is inside the proof. So `verify` can count units a row and cannot count units a slot. Two rows of a class record that carry one release number can both read one slot, while another slot of the same lengths row is read by no unit, and the count a row is the same. That released request then has no row. For check 3 to be the one-to-one map soundness accepted, each unit's slot index has to be public and held by a gate: in its public word, log₂ of the slots a row more bits a released request, counted with the names' bits. Or the schedule has one slot a row. The same holds for the scan's state row.
+  3. **The other streams' roots and the verdict's assembly are Python**, as above and as the design's section 9 says.
+
+**2. "The stop record's `complete` turns on this tie's verdict of record": yes, with two corrections on how.**
+
+- **`complete` is no field the driver sets.** It is computed: every entry of the stop record's `verdicts` has a verdict, none null. Lean computes it for the audit record of record (`spot/verifier/lean/Spot/Record.lean:380`, `:431`) and Python the same (`spot/verifier/one_stage/audit.py:147`, `:155`) [read].
+- **What the driver writes:** an entry `request-row` with `"accepted": null` while nothing holds the row to the certified request. That alone keeps `complete` false [relayed: soundness's ruling of 3:42 AM PST; the driver is not built].
+- **What turns it.** The driver writes that entry with a verdict only after it reads, in the boundary tie's stream:
+  1. in the stream's log, a record of the tie whose `window` names this stop record's digest and its class's boundary record's digest, under the tie's Definition as the verifier itself builds it, so the constants 0 for `ignore_eos` and `min_tokens` are in the id it checks;
+  2. in the stream's outcomes, that record's outcome: `symbol` accept, which a stream gives only on an accepted verdict of record, and that verdict `decided_by` "proof".
+  - This is the read the ingress tie's `tie` makes of its own stream (`tie_service.py:593-626`, the log and the outcomes at `:614-623`) [read]. The boundary tie's service is not built.
+- **That read is Python, in the audit driver, over another stream's log. It is not Lean.**
+  - In the stop record the entry is therefore `of_record` false with a named premise, like the cross-stream order's. A verdict of record must name its own record's sessions (`spot/verifier/service.py:691-707`) [read].
+  - It becomes Lean's when the Lean function over the runs' audit records reads the tie's record too. Proofs builds that function for the order by Fri 13 Nov 02:00Z; the tie's entry joins it once a tie exists.
+- **Two corrections to the design's line.**
+  1. `complete` true is not `accepted`, and it does not turn on the tie alone. The stop record's verdicts also carry the cross-stream order and the class's boundary stream's own audit (soundness, 4:08 AM PST: the composed figure needs both) [relayed]. Every one of them must have a verdict.
+  2. A sample gets one outcome (`service.py:2257-2262`: "the sample's final outcome, once"; a second is refused) [read]. So the stop record's outcome is written after the tie's verdict and inside the proof deadline, or `complete` stays false for that window for good. The tie's date bounds the first stop record that can be complete.
+- **`benchmarks/network_traces/leak_bounds.py` on `main` reads no `complete` and no stop record** [read: `git grep` at `cc6ee7446278`, no match]. The reader the design's section 6 describes is not built.
+
+### 2. What exists and what the driver waits on
+
+**The brief's "nothing of it exists" is out of date, and so are the cold-start section's line numbers.** At `23baf41620ff` the vLLM lane has built the first half [read, all of it]:
+
+- `benchmarks/one_stage/two_stage.py`: `stop_spec` (:334-348), the stop population's Spec; `stop_first` (:351-373), which lays the class out under the verifier's own rule, starts a one-stage stream whose log is the class's boundary record, registers the stop record on it and samples once; `_first_all` (:835-931), where each stop class's stop blocks are one more rank of the window's challenger session; `--stop` and `--stop-design` (:1034-1036).
+- The order, read from the challenger's signed log and never from a prover's file: `stop_order` (:376-415). A window where it does not hold is refused whole under the code `cross-stream-order` (:132, :920-930).
+- Its docstring says what is not built: "no proof of a sampled stop block is built here" (:27-28).
+- The stop record moved to `adapters/vllm/verity_vllm/pipeline/boundary_stop.py`: `Stop` (:106), `egress_stop` (:72), `stop_registration(pub, check, stop, boundary)` (:174), `stop_record(pub, check, stop, design, boundary, window=None)` (:194). `boundary_rows.layout_of(pub, check, stop=None)` (:463) refuses a `commit.json` that names another rule than the verifier's (:472-475), which is the cold start's "held to the registered declaration, not `commit.json`'s `stop`" done in code. `reopen` is at :550, `port_rows` at :405.
+- In `spot/verifier/service.py`: `Stream` :1495, `register` :1873, `select` :2124, `outcome` :2257, `check_verdicts` :691.
+- Tests: `benchmarks/one_stage/tests/test_two_stage_driver.py:304-315` (the smallest stop class: 6 spans, a prompt of 4, T = 4, one stop id, 2 of 6 stop blocks sampled), :369-393, :396-431 (the order's seven refusals), :433-480.
+
+**So job 2 is the second half**, one file beside `two_stage.py` that reads a class's `stage1.json` (`stop`: the record, its digest and receipt, the sample, the bytes read, the evidence) and the class's private files: stage each sampled stop block, prove it `--zk`, verify each session with `flock-verify verify --zk --registered` against the verifier's own file, deliver, `Stream.outcome`, and the audit record with its entries. I write no second copy of `stop_first` or `stop_order`.
+
+**What it waits on.**
+
+1. **For the accept at the smallest class: nothing from another lane [guess, until I have traced the staging].** One step has no code today: a `--zk` session of a stop block whose two input rows open at another record's roots (`b.request` and `b.egress` of the class's boundary record) under the serve's own salts. `two_stage.py second` refuses the same kind of read for a replay block's return: "its rows are read at round 1's root under the serve's salts, which this command doesn't open yet" (:555-558) [read]. The code on `main` that does open rows at an outside root under salts it is handed is the certifier's tie (`benchmarks/prove_path/served_tie_zk.py:203-242`) [read]. I trace this first. It is the likeliest line to stop the 06:00Z accept, and if it does I name that line.
+2. **For `complete`: the boundary tie.** Until network accounting's tie has a verdict (Tue 17 Nov, its guess [relayed]) every stop record's `complete` is false. That is the design, not a fault of the run.
+3. **For the composed figure: an accepted audit of the class's boundary stream.** No run reaches one at the smallest configuration on `main`'s verifier today: round 2 refuses with `second-read`, and behind it the two-stage form's switch is off [relayed: the 18:41Z entry on the chain's stops, runs `r20261111-181003-ac2a` and `r20261111-183104-4239`]. So in my accept run the boundary stream's leg has no verdict, and the driver's summary says so and never prints the length as removed.
+
+### 3. What must be on `main` before my pull request can be marked, and what I can test before
+
+- **My pull request is stacked on #9028, so it can be marked only once #9028 is on `main`.** #9028 is not marked and conflicts with `main` in one file, `adapters/vllm/verity_vllm/pipeline/interior_rows.py` [run: `gh pr view 9028`, `CONFLICTING`; `git merge-tree`, local; `research queue status`: "not marked ready at 23baf416"].
+- **#9028 holds two other pull requests' commits, and both go first:**
+  - #8925 (the stop rule with one 16-bit output) at `afcf1474a1f8`: marked ready and admitted, waiting on a land verdict [run: `research queue status`]. #9028 holds that head [run: `git merge-base --is-ancestor`].
+  - #8875 (the second-stage command): not marked. #9028 holds its older head `a5058c137407`; its head is now `092004fadea9` [run: the same]. The vLLM lane merges it again.
+- **Nearby:** #9023 changes the check of a record's registered values in `Spot/Registration.lean` [relayed: your 18:56Z mailbox], the check the stop record's two inputs pass [read: `Spot/Registration.lean:309-321`]. If it changes what that check takes for a value that is another record's port, my accept test shows it [guess].
+- **What I can test before then: all of job 2, on my branch at the stacked head.** The driver's Python against the vLLM lane's small stop class, and through `research run` on CPUs the accept by the Lean verifier and the refusals, with `flock-circuit` and `flock-verify` built from my branch. Not testable by me: a served run with a stop rule (the vLLM lane's serve on a GPU node), and the tie.
+- **The mark is mine to make** if the pull request stays what I plan: a benchmark's driver and, in job 3, a Lean function that only refuses more. If job 3 changes what the audit record's check accepts, I end with a ready line instead.
+
+### 4. The dates you promised at 18:56Z
+
+All three hold [guess]: the accept at the smallest class by Thu 12 Nov 06:00Z (the risk is item 1 of section 2), three refusals and the pull request open by Thu 12 Nov 18:00Z, the Lean function by Fri 13 Nov 02:00Z, its statement in an entry before I build it. Two things your dates do not cover and I cannot move: a stop record that is complete (not before the tie), and my pull request marked (not before #9028 lands).
+
+### 5. What I decided; say if otherwise
+
+1. **The third refusal.** Soundness ruled that the order entry checks order alone, two cases, and that the boundary stream's audit is its own leg [relayed: the 12:14Z entry]. Your brief asks that a boundary stream whose audit did not accept be refused. I do both. `cross-stream-order` stays at two cases. A third entry, `boundary-audit`, carries the boundary stream's audit record: `"accepted": null` when the driver is handed none (so `complete` is false), `true` or `false` as that record says, `"of_record": false`, the record's SHA-512, and a premise string. An entry with a verdict that is not accepted makes the stop record's `accepted` false by the audit record's own rule, in Lean (`Spot/Record.lean:381-383`) [read]. That is the third refusal. The premise's words are mine until soundness gives its own: "boundary stream's audit: read by the audit driver, not by the Lean verifier".
+2. **The first two refusals already exist at the first stage** (`stop_order`, the window refused whole). The driver recomputes the same check from the challenger's signed log at audit time and writes its result as the `cross-stream-order` entry. It does not copy the `order` field of `stage1.json`.
+3. **The verifier's stop rule is the driver's parameter**, the JSON `two_stage.py --stop` takes. Nothing in the driver holds it to the pinned checkpoint's `eos_token_id` or the registered engine arguments; the summary names that as not held.
+
+### 6. Asks
+
+- Paste section 1 on NET-297. The point network accounting must answer is the slot.
+- Ask the vLLM lane: is anyone of theirs building the proofs of the sampled stop blocks? Its docstring says no. If yes, I stop and review theirs instead.
+- Ask soundness for the `boundary-audit` entry's premise words, or a no to the entry.
+
+Next: read `served_tie_zk.py`'s staging against the stop block's three ports, then the driver. The next entry is the accept or the line that stops it.
