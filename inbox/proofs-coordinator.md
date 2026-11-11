@@ -51079,3 +51079,43 @@ For the table:
 For HEADPROF: cursor/proofs-witness-follow-41b5 at 3784b0a0dd6fb5998e65c2d9cd2c64d7dbb82a76 (unchanged since 11:12Z; the four rows asked there).
 For BREAKEVEN: nothing new. #8891: 0.925 of today's GPU-s a statement at one prover (HEADPROF, measured) [relayed]; #8933 has no card row.
 For the table: #8933 `3784b0a0dd6f`: open, unmarked; tests pass, quick tier running; the head block's host walk at 0.64 of `main`'s CPU-s on the small unit (measured, CPU node, at its first three commits); no card row.
+
+
+## EXTFORM, Wed 11 Nov 11:29Z: second reading of REGX's #8924 at d025f81332e6: its four class hypotheses are discharged as REGX says, and I found nothing wrong in the statement. #8906's merged-tree build `e606` is still running (no verdict). My 643 lines are superseded by your 11:15Z table at 2,049
+
+Tags: [run] a command I ran now, [read] a file I read now, [relayed] another worker's statement I did not check, [derived] my reasoning. Times from `date -u`.
+
+**1. #8924, second reading** (head `d025f81332e674746d26e91dea64f5166cb64f7f`; its try `r20261111-105516-b35a` is rc 0 at that tree [run: `research inspect`]).
+
+What I read whole [read]: `SpotFlock/FirstHitClassAt.lean` (132 lines), `SpotFlock/OpensClass.lean` (65), `SpotFlock/OpensWhole.lean` (439), the definitions they stand on (`Reveal.needs`, `Reveal.rootsAt`, `Prog.Needs`, `Prog.Boundary`, `gateBlock`, `InScopeTwo`) and `eventTwoX_le_cls_at_budget` as that head holds it. The head's diff over its parent is that one file and one import line; my two modules are there with #8906's blobs.
+
+The verdict, hypothesis by hypothesis [read]:
+- **`hpos`: yes, by `code_hpos`.** The code's reveal is a `map` over `Reveal.needs (partition h) s u`, and the opening at gate `g` has position `g`. It holds at every transcript and witness, as the bound asks.
+- **`hrep`: yes, from `gateKey_needs`.** The class's representative has its gate's key (`key_clsOf`), so every block that needs the gate needs the representative. It uses `hP` only to place the needing block inside the partition.
+- **`hallX` and `hallI`: yes, through `kept_classWhole_of_wit`.** The two terms are the ones #8906's `eventTwoX_le_firstHit_kept` passes, word for word: `opensAt_isSome_cls` and `iopTable_isSome_cls`, the second with `hblock` from `gateKey_block`.
+- **`hkept` under them is `code_hwit`**, which is #8906's `hwit` at the code:
+  - each slot of the sample is its own session, so the session's blocks are the slot's one block;
+  - `sessWit_reveal_key` gives the class-mate's opening in the same reveal, under the same roots, passing.
+- **The roots.** Same key gives the same side of the reader's replay block in both directions (`gateKey_side` twice, under the scope's disjoint replay blocks), so `rootsAt` agrees. This is what the boundary bit and the replay block are in the key for.
+- **Passing, at a refused run too.** A witness the extraction returns comes from a session view that accepted and passes the proof system's check (`sessWit_some`, `Arg.ext_some`). An accepted view means rounds 0 to 2 were answered and the statements' check held (`session_acc_run`). Then every opening of the reveal passes (`reveal_passes`, by `reveals_of_frameRows`). REGX proves more than `ClassWhole` asks: it never uses that the first opening passes.
+
+The statement [read]:
+- It takes `Built h`, `Addresses h`, the two-stage scope, the budget, the three counts and the three expected-time premises, and nothing else. `needs`, `cls` and `L` are fixed by equations a caller closes with `rfl`, so none of them is a hidden hypothesis.
+- **The right-hand side** is `εclsAt` unchanged.
+- **The body's words** match it: a new theorem, no guarantee, and nothing counts the classes.
+
+What I did not read: the lemmas these call from other files (`reveals_of_frameRows`, `frameIs_built`, `served_eval`, `firstWait_some`, `sessBlocks_eq_singleton`), which I took at the statements they are used at.
+
+One note on the count, not on the proof [derived from `Prog.Needs` and `Prog.Boundary`]: the key (needers, replay block, bit) is never finer than (writer, readers, bit), since a needed gate's writer is always among its needers. So SCALE's count by writer and readers is an upper cap for `hM`, the safe side. I agree with REGX's and SCALE's reading that the bit splits a class only between a returned or input gate and a gate that is neither.
+
+**2. #8906:** nothing changed since 11:21Z. The merged tree's build `r20261111-105440-e606` took its Lean slot at 11:19Z and is running [run: `research inspect`, 11:26Z]. Verdict here when it ends.
+
+**3. TWOPROVE's #8931 took the first copy of my file** (blob `20133b821b`), which is why its build log has two unused-variable warnings [read: its 11:18Z entry; run: the blob at `2cc7decd36a6`]. The patch in the notes has held the later copy since 10:59Z (blob `e4dd473a12`): four `omit … in` lines more and no other change, tried with no warning in `3aba` [run: `git diff` of the two commits].
+
+For TWOPROVE: a warning only, no statement differs; do not move #8931's head for it. If the head moves for another reason, `lanes/proofs/tools/extform_class_count_omit.patch` adds the four lines over your copy (`patch -p1 --dry-run` on #8931's file is clean [run]).
+
+**4. My numbers.** My 10:58Z lines read K by classes at 643, a later head block's count. Your 11:15Z table (SCALE's count over every kind, 2,049 at the plan's cut) replaces them: the record reads 2^-99.28 by the mean, 2^-97.64 by stratum and 2^-96.88 under one M, in compressions [relayed]. Nothing in #8906 or in the class-count lemmas depends on the count.
+
+For the table:
+- #8924 (`code_eventTwoX_le_cls_at_budget`, REGX): read by a second reader, EXTFORM 11:29Z, the three files whole: the four class hypotheses are discharged as stated; nothing found.
+- #8906: unchanged; ready at `e7b2e51d928b` but for the merged tree's build `e606`, running.
