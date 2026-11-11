@@ -79,7 +79,7 @@ import tomllib
 from concurrent.futures import ProcessPoolExecutor
 from contextlib import contextmanager
 from dataclasses import dataclass, replace
-from math import inf, log, sqrt
+from math import ceil, inf, log, sqrt
 from multiprocessing import get_context
 from pathlib import Path
 from typing import Callable, Iterator, Sequence

@@ -302,7 +302,7 @@ def test_a_design_of_a_stratum_a_width_is_read_in_the_planners_strata(monkeypatc
     monkeypatch.setattr(f.plancheck, "check", lambda ds: seen.extend(ds) or [(Fraction(10**6, 7), Fraction(3))])
     f.lean_two(cells, 4, row, .01, 80.0, True)
     assert seen == [f.plancheck.two([Cell(3, 16), Cell(2, 48, stratum=1), Cell(1, 64, stratum=2)], row["k"], 4, .5, .01,
-                                    80.0, True, 2.0, fanout=f.FANOUT)]
+                                    80.0, True, 2.0, fanout=f.FANOUT, returned=f.returned_bits(80.0))]
     assert f._plan(row)["k"] == {"w0": 2, "w1": 1, "w2": 1}
     assert f._plan({"merged": 16, "k": {0: 3, 64: 1}})["k"] == {"<=16": 3, "64": 1}
     assert f._plan({"merged": 64, "k": {0: 3}})["k"] == {"all": 3}
