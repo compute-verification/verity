@@ -513,7 +513,9 @@ theorem miss_le_sum [Fintype P] (op : Ω → P → Option V) (K : ℕ) (ω : Ω)
     have hp : (1 : ℕ) ≤
         (if (op ω p).isSome then (1 : ℕ) else 0) * (if (firstHit op p K ρ).isNone then (1 : ℕ) else 0) :=
       le_of_eq (by rw [ite_eq_left hs, ite_eq_left (Option.isNone_iff_eq_none.2 hn), Nat.mul_one])
-    exact hp.trans (Finset.single_le_sum (fun _ _ => Nat.zero_le _) (Finset.mem_univ p))
+    exact hp.trans (Finset.single_le_sum
+      (f := fun p => (if (op ω p).isSome then (1 : ℕ) else 0) * (if (firstHit op p K ρ).isNone then (1 : ℕ) else 0))
+      (fun _ _ => Nat.zero_le _) (Finset.mem_univ p))
   · rw [ite_eq_right hm]
     exact Nat.zero_le _
 
