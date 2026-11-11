@@ -59333,3 +59333,63 @@ Agent `bc-7938e090-f926-50ff-bf3b-05e921c5ed0b`. Tags: [read] a file or record I
 6. The asking-daniel skill on `main` says a claim goes on its page decided provisionally (Status "Decided by lane"), and that Blocking is for a click only he can make. Your brief and the Notion page say these four do not move without him. I write each as kind default whose default is "nothing changes", as the wide-leaf and salts pages were; how you post it is yours.
 
 Next: Ask 1 and Ask 2 drafts, by 00:00Z.
+
+## REGX, Wed 11 Nov 17:15Z: #8939's 18 retired-term sites are all the word "cap(s)"; #9002 removes all 18 with no statement change (the module and two lemmas renamed, no lock record names them), so 0 remain; five runs done, rc 0; ready to mark
+
+**PR:** [#9002](https://github.com/compute-verification/verity/pull/9002), head `4599efd9611112abd8641cf66273959b2bccfab8`, branch `cursor/proofs-8939-terms-7c1e`, cut from `origin/main` at `811eb216fe373d3ae3d19973cf4925d98cc87528` (#8939 was on `main` when I started). Unmarked. Body: `Lane proofs`, `Goal proofs/spot-bind-term` (#8939's own goal, written by hand: PRF-528 has no label naming a goal, so `open` warned), `Refs PRF-528`. Two files, one commit [run: `git push`, `research queue open`, `research queue edit`].
+
+**How the 18 were counted** [run]: the base's `tests/lint/test_repo_retired_terms.py` loaded alone, as the gate loads it, on the two files #8939 changes, at the Queue merge's first parent `d8761c5827` and at the merge `811eb216fe37`. `python3 adapters/vllm/tools/ratchet_gate.py d8761c5827 811eb216fe37` exits 1 with the same 18. The lint counts a word of GLOSSARY.md's "Older names" table as a word or as one part of an identifier (a camel hump, an underscore part), plurals too.
+
+**The 18 sites** [run]. Lines are at #8939's head `6b2922ce5b5e`. The word is "cap" (the Glossary's older name for Pearl's cap, now the inert-work bound) at every one. File 1 is `security/Proofs/Flock/SamplingGeneric.lean` (10 -> 11); file 2 is `security/Proofs/Flock/SamplingGeneric/TwoFirstHitClassCaps.lean` (new, 0 -> 17).
+
+| # | file:line | word | kind | fixed by |
+|---|---|---|---|---|
+| 1 | 1:38 | `Caps` | #8939's own new module name, in the aggregator's import | module renamed |
+| 2 | 2:17 | `caps` | prose (module doc) | reworded |
+| 3 | 2:20 | `caps` | prose (module doc) | reworded |
+| 4 | 2:22 | `caps` | #8939's own `εclsAt_le_of_caps`, named in the module doc | lemma renamed |
+| 5 | 2:23 | `caps` | prose (module doc) | reworded |
+| 6 | 2:32 | `caps` | #8939's own `eventTwoX_le_cls_of_caps`, named in the module doc | lemma renamed |
+| 7 | 2:33 | `caps` | prose (module doc) | reworded |
+| 8 | 2:34 | `caps` | prose (module doc) | reworded |
+| 9 | 2:36 | `caps` | prose (module doc) | reworded |
+| 10 | 2:149 | `caps` | prose (docstring) | reworded |
+| 11 | 2:152 | `caps` | #8939's own new identifier: `εclsAt_le_of_caps` declared | lemma renamed |
+| 12 | 2:173 | `caps` | use of `εclsAt_le_of_caps` in its own file | lemma renamed |
+| 13 | 2:195 | `caps` | use of `εclsAt_le_of_caps` in its own file | lemma renamed |
+| 14 | 2:216 | `caps` | use of `εclsAt_le_of_caps` in its own file | lemma renamed |
+| 15 | 2:234 | `caps` | use of `εclsAt_le_of_caps` in its own file | lemma renamed |
+| 16 | 2:247 | `caps` | prose (docstring) | reworded |
+| 17 | 2:251 | `caps` | #8939's own new identifier: `eventTwoX_le_cls_of_caps` declared | lemma renamed |
+| 18 | 2:283 | `caps` | use of `εclsAt_le_of_caps` in its own file | lemma renamed |
+
+- **By kind:** 8 prose; 10 on #8939's own three new names (1 on the module, 7 on `εclsAt_le_of_caps`, 2 on `eventTwoX_le_cls_of_caps`); **0 uses of an identifier declared elsewhere** [derived from the table].
+- **No lock record names any of the three** [run: `git grep` of `origin/main` for the two lemma names and the module name: only the import line and the file itself; no `.json`, `.toml`, `.py` or `.md`]. So all three are renamed, **nothing is left for LEAN-80, and the remainder is 0**.
+- **The names now** [run]: module `Proofs.Flock.SamplingGeneric.TwoFirstHitClassNumbers`; `CompiledTwo.εclsAt_le_of_hashBound`; `CompiledTwo.eventTwoX_le_cls_of_hashBound`. No statement changes; the hypothesis names (`hTcap` and the like) are not counted and are untouched.
+- **The prose does not take the Glossary's term.** The Glossary's row gives "the inert-work bound", which is Pearl's and is not what these sentences say (a number a quantity is at most). I wrote "numbers" a quantity is within, the file's own title and `NumbersFinder.lean`'s phrase. There is no `DESIGN.md` at the root; `GLOSSARY.md` is what the lint reads [run: `ls`].
+- **The allowlist is untouched** [run]: the aggregator's entry stays 10 and the renamed file has no entry.
+
+**After the fix** [run, local, at `4599efd96111`]:
+- The same count: file 1 11 -> 10, file 2 (renamed) 17 -> 0, 0 sites added.
+- `python3 adapters/vllm/tools/ratchet_gate.py 811eb216fe37 4599efd96111`: exit 0, "no retired-term site is new in the 2 file(s) it changes".
+- A trial merge with `origin/main` at `493f49485e50`, and again at `08c62377327f` (17:14Z; neither pushed): no conflict, same two counts, and the gate passes on the merge. The remote runs are at the head, not at a merge. The lint `main` gained since (`tests/lint/test_lean_bar.py`) finds nothing in either file and its list names neither.
+- Nobody else names the three: nothing else on `main`, and no head of the 310 open PRs at 15:24Z. Branches with no PR were not checked.
+
+**Runs** (remote, `--on auto --as proofs`, at `4599efd96111`; I read each state myself):
+- **Lint** `r20261111-153145-20c0`: done, rc 0 [run]. The lint's own test file: 5 passed. In the tree at the head: file 1 found 10, allowed 10; the renamed file found 0; the old path gone. The tree has 573 files over their allowance with 7,586 sites over, all other files' (`main` at `811eb216fe37`: 575 files, 7,604 sites [run, local]; the difference is these 2 files and 18 sites).
+- **Try of the renamed file** `r20261111-153145-b54b`: done, rc 0 [run]. `lake env lean` exit 0; axiom probe: none of its 16 theorems uses an axiom beyond `propext`, `Classical.choice`, `Quot.sound`; siblings: no clash (41 imported, 3,779 unchecked). My local watcher left at its 20 minute cap (exit 79, the run went on); I read the result from the run's own stdout.
+- **Try of the aggregator** `r20261111-153233-c18e`: done, rc 0 [run]. It built `Proofs.Flock.SamplingGeneric.TwoFirstHitClassNumbers` as a dependency; `lake env lean` exit 0; axiom probe: none of its 15 theorems beyond the three; siblings: no clash (253 imported, 3,568 unchecked).
+- **Records** `r20261111-153233-e8ec` (`lean_changed.py --records security/Proofs --update`, `--cwd clone` as the skill has it): done, rc 0, result valid, OUTCOME pass [run]. No kernel replay, no tests (a `lean-fast/v1` result).
+  - `security/Proofs`: AUDIT PASS, 194,650 declarations in 3,862 modules, the three axioms; `check.py` exit 0 in 4,063 s. **regenerated: nothing.**
+  - `security`: AUDIT PASS, 26,987 declarations in 717 modules, 1,103 guarantees; `check.py` exit 0 in 416 s. **regenerated: nothing.**
+  - `security/Properties`: AUDIT PASS, 3,089 declarations in 94 modules, 463 guarantees; `check.py` exit 0 in 505 s. **regenerated: nothing.**
+  - The run kept no record under `lean-audit/record/`, so no lock changes and there is nothing to commit.
+- **Suites** `r20261111-153237-b27a` (`suites.py --changed 811eb216fe373d3ae3d19973cf4925d98cc87528 --quick`): done, rc 0 [run]. 4 suites, 4 passed (0 cached), 0 failed: `repository` 296 passed; `verity-graph` 207; `verity/protocols/pouw/verifier` 1,844; `verity/definitions/ops` 949 passed, 2 skipped.
+
+**Not run:** the whole Lean check, a kernel replay beyond what the records fast path does, `circuit-check`, the slow tests.
+
+**One thing for you, outside this PR** [run]: #8941 (open; marked and waiting by the order's 15:32Z [read]) adds `security/Proofs/Flock/SpotFlock/FirstHitClassCaps.lean`, which at its head `b29929d015e4` holds 18 sites as the lint counts them (15 of "cap(s)", 3 of "draw(s)"): its file name, its theorem `code_eventTwoX_le_cls_at_caps` and its prose. The gate will name it when it lands. It does not use the three names #9002 renames, so neither breaks the other. It is not mine and I did not touch it.
+
+ready to mark #9002 at 4599efd9611112abd8641cf66273959b2bccfab8
+
+For the table: no number moves; no statement changed.
