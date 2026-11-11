@@ -193,6 +193,7 @@ NOT_READ = {
     "unread.py": "the ratchet on wholly unread modules, which `run` runs after the audits on the facts they wrote",
     "unread-caps.json": "the ratchet's caps, which `unread.py` reads",
     "unread_gate.py": "drive's landing gate on the seeds the ratchet reads, which runs `main`'s copy of this tool",
+    "warm.py": "the audit of a ready mark's merge, which starts `lean_audit.py` for the packages a change reaches",
     "pyproject.toml": "the tools/verity/lean suite's settings",
 }
 
@@ -957,9 +958,18 @@ MEMBER = re.compile(r"artifacts/[0-9a-f]{16}\.[a-z.]+|" + MK.INDEX + r"/[0-9a-f]
 BUNDLE_CAP = 3 << 30
 #: a key of `lean-deps-urls.json` naming a recorded check's bundle by its sha256 (`shared_bundles`)
 SHARED = "lean-artifacts/"
-#: a run's file that is a bundle (`LakeArtifacts.bundle_into` in the run's `lean-audit/`), the path `shared_bundles` lists
-BUNDLE_FILE = re.compile(r"lean-audit/lean-artifacts(-\d+)?\.tar\.gz")
-#: how many of the newest recorded checks' bundles the launcher sends
+#: a bundle's name in the directory its audit writes it in (`LakeArtifacts.bundle_into`)
+BUNDLE_NAME = r"lean-artifacts(-\d+)?\.tar\.gz"
+#: a recorded check's file that is a bundle, in the run's `lean-audit/`
+BUNDLE_FILE = re.compile("lean-audit/" + BUNDLE_NAME)
+#: the runs `shared_bundles` lists bundles of, each kind as (the store's attempts of it, a bundle's path among its files,
+#: which of the attempt's outputs list its files): a recorded check lists its own among its run's files; the audit of a
+#: ready mark's merge (`warm.py`) leaves its in the `--out` its caller gave it, which a caller that doesn't list its files
+#: still has in its run record
+PUBLISHERS = ((COMMON.RECORDED_CHECKS, BUNDLE_FILE, ("run_files",)),
+              (COMMON.MARK_AUDITS, re.compile(re.escape(COMMON.MARK_AUDIT_OUT) + BUNDLE_NAME), ("run_files", "run_record")))
+#: how many of the newest bundles of each kind of run the launcher sends: a candidate's shards end by the dozen, and counted
+#: with them a mark's bundle would be gone before the candidate that holds its change is built
 SHARED_LIMIT = 12
 
 
@@ -974,8 +984,9 @@ class LakeArtifacts:
     every declaration through the kernel, and compiles a random sample of the modules it restored again, failing on any
     output that differs (`check.sampled_recompile`), which is what binds a restored `.olean` to its source.
 
-    Between nodes, the module versions a recorded check's audit added travel as one bundle in its run's files (`bundle`); the
-    launcher sends a URL for each of the newest (`shared_bundles`), and a node takes in each it hasn't yet (`take`). A records
+    Between nodes, the module versions a recorded check's audit added travel as one bundle in its run's files (`bundle`), as
+    do those the audit of a ready mark's merge added (`warm.py`); the launcher sends a URL for each of the newest of each
+    (`shared_bundles`), and a node takes in each it hasn't yet (`take`). A records
     run (`lean_changed.py --records`) bundles what it added the same way, which `shared_bundles` doesn't list yet. A bundle is
     trusted as far as its source, as a verdict pack is (`verdicts.py`): a recorded run."""
 
@@ -1542,11 +1553,11 @@ def presigned(ttl_s: int = URL_TTL_S) -> dict[str, str]:
 
 
 def shared_bundles(store=None, limit: int = SHARED_LIMIT) -> list[str]:
-    """The sha256 of each artifact bundle (`LakeArtifacts.bundle`) among the newest recorded checks' run files, newest first, at
-    most ``limit``: only a recorded run's (`common.RECORDED_CHECKS`), as `check.verdict_packs` takes only theirs, a failed or
-    cancelled run's too, since its bundle holds only modules of packages whose audit passed. When the store has a remote, the
-    attempts started in the last `common.RECENT_S` are refreshed from it first. Empty when the store can't be read: each node
-    then reuses only what it built."""
+    """The sha256 of each artifact bundle (`LakeArtifacts.bundle`) among the files of the newest runs of each kind of
+    `PUBLISHERS`, the recorded checks' first, each kind's newest first and at most ``limit``: only a recorded run's, as
+    `check.verdict_packs` takes only theirs, a failed or cancelled run's too, since its bundle holds only modules of packages
+    whose audit passed. When the store has a remote, the attempts started in the last `common.RECENT_S` are refreshed from it
+    first. Empty when the store can't be read: each node then reuses only what it built."""
     from research.store.local import LocalStore
 
     out: list[str] = []
@@ -1554,18 +1565,22 @@ def shared_bundles(store=None, limit: int = SHARED_LIMIT) -> list[str]:
         store = store or LocalStore()
         if store.remote is not None:
             store.refresh(attempts_only=True, since=COMMON.recent(time.time()))
-        rows = store.index.sql(f"SELECT id FROM attempts WHERE {COMMON.RECORDED_CHECKS} AND state IN ('done', 'failed', 'cancelled') "
-                               "ORDER BY start_utc DESC LIMIT ?", (4 * limit,))
-        for (rid,) in rows:
-            art = ((store.get_attempt(rid) or {}).get("outputs") or {}).get("run_files")
-            for f in store.listing(art) if art else []:
-                if BUNDLE_FILE.fullmatch(f["path"]) and f["remote"] and f["sha256"] not in out:
-                    out.append(f["sha256"])
-            if len(out) >= limit:
-                break
+        for runs, bundle, listed in PUBLISHERS:
+            found: list[str] = []
+            rows = store.index.sql(f"SELECT id FROM attempts WHERE {runs} AND state IN ('done', 'failed', 'cancelled') "
+                                   "ORDER BY start_utc DESC LIMIT ?", (4 * limit,))
+            for (rid,) in rows:
+                outputs = (store.get_attempt(rid) or {}).get("outputs") or {}
+                for art in dict.fromkeys(a for a in map(outputs.get, listed) if a):
+                    for f in store.listing(art):
+                        if bundle.fullmatch(f["path"]) and f["remote"] and f["sha256"] not in (*out, *found):
+                            found.append(f["sha256"])
+                if len(found) >= limit:
+                    break
+            out += found[:limit]
     except Exception as e:  # noqa: BLE001  (no bundle: each node reuses only what it built)
         print(f"lean-audit: no artifact bundles listed from the store ({type(e).__name__}: {e})", file=sys.stderr)
-    return out[:limit]
+    return out
 
 
 def url_file(dest: Path, ttl_s: int = URL_TTL_S) -> Path | None:

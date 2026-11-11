@@ -14,6 +14,12 @@ ROOT = Path(__file__).resolve().parents[3]
 #: `check`, and every check launched under `slot.py` (drive's trains, Lean checks and after-landing runs), whose tool is
 #: `python3`
 RECORDED_CHECKS = "(tool = 'check' OR (tool = 'python3' AND manifest_json LIKE '%tools/verity/check/check.py%'))"
+#: the attempts, as `RECORDED_CHECKS` selects its own, that ran the Lean audit of a ready mark's merge
+#: (`tools/verity/lean/warm.py`, which the run's command names): the other runs whose built modules and Lean verdicts a
+#: check takes (`lean_audit.shared_bundles`, `check.verdict_packs`)
+MARK_AUDITS = "manifest_json LIKE '%tools/verity/lean/warm.py%'"
+#: where such a run's files hold what its audit left, the bundle and the verdict pack: the `--out` the quick tier gives it
+MARK_AUDIT_OUT = "out/lean-audit/"
 #: how far back a launch lists the store's attempts (`recent`): well past the longest a recorded check runs, its steps
 #: running at once and each stopped after `check.STEP_BUDGET_S`, so the newest recorded checks all started since; listing every
 #: attempt the store holds instead takes half a minute
