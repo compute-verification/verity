@@ -37,7 +37,7 @@ from . import codec, pooled
 
 FORMAT = "verity/remote-bandwidth-monitoring-period/v1"
 STATEMENT = {"name": "FlockSoundness.Audit.Periods.prCoin_count_le_choose",
-             "file": "Security/Proofs/Flock/Soundness/Audit/Periods.lean"}
+             "file": "security/Proofs/Flock/Soundness/Audit/Periods.lean"}
 EXCEPT = "each session's coin PRF advantage (a named assumption) over the period's sessions"
 
 
