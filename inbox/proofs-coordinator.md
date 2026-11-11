@@ -65672,3 +65672,46 @@ are not the code's own name while I am in the files.
 repository suite again. The records run, the pull request and the mark still wait for #8940 on `main` (the brief:
 merge `main` once after it lands); say so if you would rather I open on #8940's head. Next entry: when that try
 reports, Thu 12 Nov 00:00Z at the latest. Ready line: Thu 12 Nov 08:00Z.
+
+## PATH300, Wed 11 Nov 21:51Z: one of your page's three anchors moves. "All planned improvements, about 1,120 GB" is about 750 GB since 21:44Z (912.0 before the 18-bit ids): the Lean verifier was timed on the split head's two statements and the cost model now charges each its own seconds. The other two stand. The table is restated; the repricing of every step at a datacenter's size did not come, and six points of it are carried
+
+Tags as before. Mailbox read at 21:50Z: nothing after your 20:18Z section [run]. This file read through line 65491 [run]. The note `20261111T1843Z-draft-path300-steps` is synced with all of this (notes commit `abc2969410`) [run].
+
+**1. The three anchors of your 20:14Z page.**
+- "All planned improvements, about 1,120": **now about 750 GB** [mine], from 912.0 GB at 28,000 bits a request [relayed: line 65386, modeled from run `f8bd`'s rows on its author's machine; its run `r20261111-214039-946a` is queued] times 0.82, the ratio of the run at 15,750 bits (1,074.2 over 1,307.8) [relayed: line 64408]. 948.8, so about 780, while every statement reads its circuit in its own call (until step 6). The factor left to 300 GB is 2.5, not 3.7. At the measured serving rate about 42 GB, not 63.
+- "Those somebody is building, 6,360 to 6,690": stands. It holds no split head. At a datacenter's 600 s the same point reads 6,396.2 [relayed: line 64408].
+- "None, 29,319": stands; 29,952.1 at a datacenter's 600 s, reproduced by run `r20261111-203550-4629` [relayed: line 65115].
+- One more sentence the page may want [mine]: with steps 11 and 13 landed as well, the figure is about 1,000 to 1,100 GB (it read 1,530 to 1,620).
+
+**2. The chain as it now stands** (utilization 0.4, modeled, GB a year): 29,318.8 → 24,242.6 to 24,442.1 (step 1) → 17,182.5 to 17,249.9 (step 3) → about 6,900 to 7,450 (steps 4 and 5) → 4,724.9 (step 11) → 4,183.0 (step 12) → **998.4** (step 13 at 64 columns) → **912.0** (step 14) → **about 750** (step 15). Before 21:44Z the last three were 1,527.9 → 1,373.6 → about 1,120.
+- What changed is a price, not a design: the model charged every scores statement and every values statement the head statement's 250 core-seconds of Lean check and its prover seconds. Measured on whole kept sessions, one pinned core, verifier built from branch trees: 47.1 and 7.9 core-seconds (64 columns); prover 0.61 and 0.42 of the head statement's [relayed: line 65386]. My 20:17Z guess for this item was 710 to 820 from 1,120; the figure is inside it.
+- What the 912.0 rests on beyond the measurement [relayed: its author's own list]: one ratio for a statement's fixed seconds and its seconds a block; all 65 head strata given the seconds measured on one; prover seconds from one GPU node at two provers. 128 and 32 columns are not timed (its next runs).
+- At ten cores a GPU (node A's quota), step 14 reads about 935 to 940 and step 15 about 770 [mine: interpolated as in my 20:23Z entry].
+- Step 14 now gives 86 GB (it gave 154), step 16's allocator setting 20 to 30, one walk for both repetitions about 45 [mine, as predicted at 20:17Z].
+
+**3. At a datacenter's verification phase: six points, not every step.** COUNT's 21:40Z entry is a checkpoint on other work (the second stage's form, the plan of record); it holds no figure for each step [read: line 65115]. What exists, old figure beside it:
+
+| point of the chain | chain (the cost model's rate) | at a datacenter's 600 s, whole count | source |
+|---|---|---|---|
+| start, as `main` reads the program | 29,318.8 | 29,952.1 | run `4629` |
+| the partition `main` defines, as `main` reads the program | 19,641.8 | 20,114.4 | line 63633 |
+| the best designed configuration, as `main` reads the program | 5,444.6 | 5,202.4 | line 63633 |
+| steps 1 to 5 and 12, no read of the program | 6,344.2 | 6,396.2 | line 64408, local command |
+| steps 1 to 14 at 64 columns, by-size prices | 1,373.6 | 1,307.8 | line 64408, local command |
+| the same with 18-bit ids | about 1,120 (interpolated) | 1,074.2 | line 64408, local command |
+
+Steps 1, 3, 5, 11, 12 and 13 on their own have no figure at a datacenter's size, and neither has the 912.0. The note's "within about 5%" is gone: it now gives these six and says the rest are not repriced. If you want every step, it is one run of COUNT's script on each of the harness's keys; I cannot run it (no heavy runs), and I have not asked COUNT.
+
+**4. The step-20 list after tonight** (base about 750; none a run of mine).
+1. Sessions of several statements, up to the 200 Flock's zero-knowledge proof covers (WIRES 21:27Z, its grouping (b)): near 225 to 250 GB **if** such a session pays a statement's fixed seconds once [guess], nothing if it pays them for each statement. Not measured: no command proves more than 2. One clause of the verifier, two places in the proof, one bit of binding error a doubling. This is the only item that could reach 300 GB without Daniel's two parameters, so the measurement that decides it (one session of 2, 16 and 200 statements through the prover and the Lean verifier) is what I would run first.
+2. The serving rate the target is read at: about 750 GB stays under 300 up to about 2,000 tokens a GPU-second [mine].
+3. δ: half at 0.1.
+4. Values blocks at 32 columns: 0.88 by size, not repriced at own seconds.
+5. The serving cost's two large parts: 0.71, 0.78, 0.59 together; no design. #9059 adds 0.081 points, +1.0% on every figure [relayed: line 64151].
+- Stack [guess]: 750 → 640 to 700 (32 columns) → 580 to 650 (the small items) → 340 to 385 with neither large part of the serving cost → 290 to 325 at δ = 0.1.
+- One repetition (my old row 10) does not go with row 1: it holds a session to 20 statements [relayed: line 65080].
+- New and unpriced: HEADTIME's table has a column "at the best weight" that reads 488.5 where the chain's fixed weight (2^-6) reads 912.0 [relayed: line 65386]. I did not find what binding error the free weight gives; if the wide leaf's 4 bits buy part of it, it is the largest single item after row 1 [guess]. One line from whoever holds the binding error's expression would price it.
+
+**5. State changes carried into the note** [relayed unless tagged]: step 9, GATHER builds the Definition for each position (your A) since 21:07Z, next entry 22:15Z; step 13, HEADSPLIT's head `65ecd910b07a`, quick tier out; step 15, the cap's check is #9066, marked (OUTBITS 21:37Z); the period statement compiles (`r20261111-213516-ffa3`, EXTFORM 21:39Z) — I have not yet put the last two in the note; next sync.
+
+**Next.** I read HEADTIME's 128 and 32 column figures and WIRES's and EXTFORM's next entries into the note when they come, and end with the final message unless you send more.
