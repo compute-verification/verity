@@ -17,7 +17,7 @@ measures bumps `VERSION` (`training_slowdown/__init__.py`), which every record c
 | `opnames.py` | the op-name sets the counter, the capture and the gate prices share |
 | `gates.py` | each counted op's price in Boolean gates, from the circuits' Definitions |
 | `annotate.py` | a record's maximal annotation: per step U and D_t, the depth profile and the cut; `with_structures`, its traced steps' measured quantities |
-| `capture/` | one training step traced on fake tensors (`capture_step` traces any PyTorch step, `capture_fn` a function, `capture_run` a run of them): |C|, the update's dependence and the cuts (`capture.circuit`), and the step's matrix products as rows (`capture.products`) |
+| `capture/` | one training step traced on fake tensors (`capture_step` traces any PyTorch step, `capture_fn` a function, `capture_run` a run of them): |C|, the update's dependence and the cuts (`capture.circuit`), the step's matrix products as rows (`capture.products`) and its lowering to the training-step frontend (`capture.lower`) |
 | `formalism.py` | a record's quantities (`of_record`, `measure`), Fit and Slowdown at (c, k) (`at`), the one bound and its sensitivities (`bound`), the products term (`he_products`, `he_figure`) and the published ρ with what it rests on (`published`) |
 | `policy.py` | a start's reference shapes and the (c, k) grid; the console's policy (`CONSOLE`), one session of the 45M reference model; `named`, the one place a config's policy name becomes (c, k) |
 | `grade.py` | the grade: a config's slowdown S = p·ρ from its jobs' records and its honest config's, printed and written as `slowdown.json` (below) |
@@ -114,14 +114,14 @@ this package's capture beside them. It computes no ρ. Its tests are a suite of 
   slowdown calculator (`verity/protocols/inference_only/rho`), its directory put first on `sys.path`: its fleets and
   periods, its registry and its min-cut bound, which `calculator.py` reads, and with the registry the inference-only
   policy's calibrations (`verity/protocols/inference_only/nci/calibrations.json`), which the registry loads. From the
-  census (`benchmarks/census/deployments.json`), by path: the reference deployment's window. A run also reads what it
-  is given: the program, the start's θ and, with `--starts`, the starts registry. The grade reads the config, the
-  starts registry and the records it is given.
+  census (`benchmarks/census/deployments.json`), by path: the reference deployment's window. A run also reads the
+  program it is given, the start's θ and, where the start is named in it, the starts registry. The grade reads the
+  config, the starts registry and the records it is given.
 - **Writes.** The run command writes `OUT/run.json` (the count, the checkpoints, the flags, the program's and θ's
   digests); under `OUT/families/` (or the directory `--families` names), each counterexample family's directory: the
   encodings and `family.json` its program writes, and the check's `verified.json`; and under `OUT/checkpoints/`, the
   weights at the last checkpoint the program's step count plans and, with `--keep-checkpoints`, at every checkpoint.
-  The grade, given `--out`, writes `OUT/slowdown.json`. `capture.circuit`, `gates` and `starts` only print.
+  The grade, given `--out`, writes `OUT/slowdown.json`. `capture.circuit` and `gates` only print.
 - **Loaded by.** Nothing outside this directory: `tests/test_boundaries.py` holds everything outside `benchmarks/` to
   that, and no other benchmark imports it. The grader loads the package from `--slowdown-code`, as a directory on
   `sys.path`, and refuses a second copy in one process.
