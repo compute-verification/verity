@@ -23,7 +23,7 @@ from dataclasses import dataclass
 from typing import Any
 
 from rho.params import Registry
-from rho.scenario import Result, Scenario
+from rho.scenario import YEAR, Result, Scenario
 
 
 @dataclass(frozen=True)
@@ -120,7 +120,7 @@ def human(seconds: float) -> str:
     """`seconds` in the largest unit that keeps it at least 1 (s, min, h, days, years)."""
     if math.isinf(seconds):
         return "never"
-    for unit, size in (("years", 365 * 86400.0), ("days", 86400.0), ("h", 3600.0), ("min", 60.0)):
+    for unit, size in (("years", YEAR), ("days", 86400.0), ("h", 3600.0), ("min", 60.0)):
         if seconds >= size:
             return f"{seconds / size:.3g} {unit}"
     return f"{seconds:.3g} s"
