@@ -829,6 +829,39 @@ def test_a_changed_premise_is_listed_under_its_section_with_its_owner():
          "line": "open premise P.Leaves: changed (its statement or a definition it reads)"}]
 
 
+def test_a_domain_hypothesis_the_lock_did_not_list_gets_a_line_with_its_why_and_its_takers():
+    """A premise under `domain` that the lock before listed under none of `assumptions`, `domain` and `open` gets one line
+    of the review, with its `why` and the guarantees whose records take it: a statement change, and an item of `changes`
+    under `domain` with its entry's owner.  So does the one an update lists itself, another listed guarantee's statement,
+    with the guarantee it cites.  One that was open keeps the line that says so, and one the lock before lists the same
+    way gets none: the review compares two locks, and an entry written into the first is in both."""
+    scope = "the compiled circuits the bound is stated over"
+    pol, f = witnessed()
+    opened = A.judge(pol | {"open_seed": {"P.Defs": {"issue": "LEAN-1", "due": "2026-11-30"}}}, f, FILES, update=True)[1]
+    unlisted = {k: v for k, v in opened.items() if k != "open"}
+    entry = {k: v for k, v in opened["open"]["P.Compiled"].items() if k not in ("issue", "due")} | {"owner": "@amy"}
+    hand = unlisted | {"domain": {"P.Compiled": entry | {"why": scope}}}
+    dom = A.judge(hand, f, FILES, update=True)[1]
+    assert A.judge(dom, f, FILES)[0] == [] and dom["guarantees"]["P.sound"]["premises"]["domain"] == ["P.Compiled"]
+    line = f"domain hypothesis P.Compiled, taken by P.sound: new: {scope}"
+    assert A.assumption_changes(unlisted, dom) == [line]
+    notes = A.review(unlisted, dom, f, {})
+    assert line in A.statement_changes(notes)
+    assert [c for c in A.changes(notes, unlisted, dom) if c["kind"] == "domain"] == [
+        {"entry": "P.Compiled", "kind": "domain", "owners": ["@amy"], "line": line}]
+    assert A.assumption_changes(opened, dom) == [f"domain hypothesis P.Compiled: a domain hypothesis: {scope} (was open)"]
+    assert A.assumption_changes(hand, dom) == [] and A.assumption_changes(dom, dom) == []
+
+    several = {"domain": {"P.Scope": {"owner": "@amy", "why": scope}},
+               "guarantees": {"P.v": {"premises": {"domain": ["P.Scope"]}}, "P.t": {"premises": {"domain": ["P.Scope"]}},
+                              "P.w": {"premises": {"domain": []}}, "P.x": {"owner": "@lean"}}}
+    assert A.assumption_changes({}, several) == [f"domain hypothesis P.Scope, taken by P.t, P.v: new: {scope}"]
+
+    before = POLICY | {"guarantees": {"P.t": {"owner": "@lean"}, "P.u": {"owner": "@lean"}}}
+    assert A.assumption_changes(before, cited()[1]) == [
+        "domain hypothesis P.Guarantees.U, taken by P.t: new: P.u's statement, another listed guarantee, citing P.u"]
+
+
 TICKET = {"issue": "LEAN-186", "due": "2026-11-14", "owner": "@lean"}
 
 

@@ -4151,8 +4151,14 @@ def assumption_changes(old: dict, new: dict) -> list[str]:
     """A line for each listed premise whose `digest` changed, or that has one where its record held none, and that no
     `reads` record holds (a definition there gets its own line): its statement or a definition it reads changed; and one
     for each that moved between `assumptions`, `domain` and `open`, or whose open entry's issue or due date changed, or
-    whose domain entry's `why` or `cites` did."""
+    whose domain entry's `why` or `cites` did; and one for each domain hypothesis ``old`` lists under none of the three,
+    with its `why` and the guarantees whose records take it: it restricts what they say, and nothing else prints it."""
     was, now = map(listed_premises, (old, new))
+    records = new.get("guarantees") if isinstance(new.get("guarantees"), dict) else {}
+
+    def takers(a: str) -> list[str]:
+        return sorted(g for g, r in records.items() if isinstance(r, dict) and isinstance(p := r.get("premises"), dict)
+                      and a in (p.get("domain") or ()))
 
     def kind(policy: dict, a: str) -> str:
         return next((k for k in ("assumptions", "domain", "open") if a in (policy.get(k) if isinstance(policy.get(k), dict)
@@ -4170,6 +4176,10 @@ def assumption_changes(old: dict, new: dict) -> list[str]:
         if a in was and h and h != before and a not in held:
             out.append(Change(k, a, f"{what} {a}: " + ("changed (its statement or a definition it reads)" if before else
                                                        "recorded: its statement and the definitions it reads, digested")))
+        if a not in was and k == "domain":
+            by, entry = takers(a), rec or {}
+            out.append(Change(k, a, f"domain hypothesis {a}" + (f", taken by {', '.join(by)}" if by else "")
+                              + f": new: {entry.get('why')}" + (f", citing {entry['cites']}" if entry.get("cites") else "")))
         if a in was and k != (b := kind(old, a)):
             now_is = f"open, {rec.get('issue') or 'no issue'} due {rec.get('due')}" if k == "open" else names[k] + (
                 f": {rec.get('why')}" if k == "domain" else "")
