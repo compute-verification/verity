@@ -50,18 +50,25 @@ The planner's rows are a labelled record of the store, never named in code. The 
 `run_of_record=exfiltration-glm53-compute-audit` and no `superseded_by`, and in each the file `out/rows.jsonl` of its
 run files: one JSON object a line, a row of the plan at one scope (`world year`, `datacenter week`, ...) and one
 pinned budget, with its `world`, `row`, `step`, `scope`, `b10` (the budget), `total` and its parts, `bound_bits`,
-`weights_bits`, `target_bits`, `delta_seen`, `S`, `gpu_seconds`, `q` and `replay_sample`, and how each block family
-is priced (`split.families`, `priced`). A run holds one variant of a row: where the planner's driver wrote several
-(`h8`), the command refuses to mix them, and `--variant` reads the one it names.
+`weights_bits`, `target_bits`, `delta_seen`, `S`, `gpu_seconds`, `q` and `replay_sample`, and its `split`: each block
+family's share of proving and how it is priced (`split.families`, `share` and `priced`). A run holds one variant of a
+row: where the planner's driver wrote several (`h8`), the command refuses to mix them, and `--variant` reads the one
+it names.
 
-A run of the record may also hold a row's plan, `out/mix.json`: the sampling plan the row is priced over at one audit
-budget (`row`, `step`, `world`, `scope`, `beta`, `q`, `replay_sample`, `bound_bits`), with each cell's `block` and its
-`share` of the plan's proving time (`cells`, `left_out`). The command reads from it how the row's proving is priced:
-the cells' shares summed by block family, each family priced as the rows say (a family they don't name is priced
-in no stated way). It does not read the shares in `split.families`, which are written before the row's levers
-multiply its blocks. A plan must be its rows' plan: priced over the same requests, with the bound the rows give at
-its budget. The row a plan's run holds at the plan's budget is the plan's own and is not read off. With no plan of
-record the command says so and marks no proving measured.
+How a row's proving is priced is read from the row's plan, each family priced as the rows say (a family they don't
+name is priced in no stated way). The command finds the plan in one of two places:
+
+- **The rows' own.** A row's `split` is its own plan where it says the `q` and the `replay_sample` it is the plan of
+  (`split.q`, `split.replay_sample`) and they are the row's. The command reads the row at the pinned budget nearest
+  the β it reads the bound at.
+- **A plan of record**, `out/mix.json` in a labelled run: the sampling plan the row is priced over at one audit budget
+  (`row`, `step`, `world`, `scope`, `beta`, `q`, `replay_sample`, `bound_bits`), with each cell's `block` and its
+  `share` of the plan's proving time (`cells`, `left_out`). It is read before the rows' own. A plan must be its rows'
+  plan: priced over the same requests, with the bound the rows give at its budget. The row a plan's run holds at the
+  plan's budget is the plan's own and is not read off.
+
+A `split` that doesn't say whose plan it is, is not one: it is written before the row's levers multiply its blocks,
+and its shares are not read. With no plan in either place the command says so and marks no proving measured.
 
 ```text
 research data label RUN run_of_record exfiltration-glm53-compute-audit --by LANE     a run that holds the rows, or a plan
@@ -84,12 +91,13 @@ plan of the case, is left out and listed under "Refused".
   count it).
 - **Inputs**: every input's part, value, unit, mark and source. A mark is `measured` (a run measured it), `modeled`
   (derived from other figures) or `assumed`. The compute audit's come from its rows of record: δ, λ and the most
-  bits a request's output holds; and from the row's plan, where one is of record: the share of proving time each way
-  of pricing a block family covers (measured statements, computed, or both). The network certifier's are its
+  bits a request's output holds; and from the row's plan, where it is read: the share of proving time each way of
+  pricing a block family covers (measured statements, computed, or both). The network certifier's are its
   calculator's own marks. The fleet, a request of the plan and the weights are read by both.
 - **The compute audit's part**: each scope of record, with its run, its β at the share, its bound at λ = 1 and at the
   row's λ, the requests its rows are priced over, and each part of the total there. A β outside the pinned budgets is
-  marked extrapolated. Under it, for each scope with a plan, its proving time by how its block families are priced.
+  marked extrapolated. Under it, for each scope whose plan is read, its proving time by how its block families are
+  priced, with the plan and its budget.
 - **The network certifier's part over the world's year**: each of its rows' schedules, cells, term at D_j = 1 and
   D_j = 2, and the entries.
 - **Each monitoring period over all compute**: a week, a month and a year of the reference datacenter and of the

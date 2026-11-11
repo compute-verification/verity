@@ -13,11 +13,14 @@ store, with no GPU and no node.
   it. The row plans for the weights / λ (`weights_bits / target_bits`), and the part is λ times its bound. The requests
   a row is priced over are its sampled replays over the probability a request is sampled (`replay_sample / q`); its
   `requests` field is the planner's default scope's count, another request's, and is not read.
-* **How that part's proving is priced** is read from the row's plan, where a run of record holds one (`PLAN_FILE`, the
-  sampling plan the row is priced over at one audit budget): each cell's share of the plan's proving time, summed by
-  block family, each family priced as the rows say (`split.families`, `priced`). The shares `split.families` holds are
-  not read: they are written before the row's levers multiply its blocks. A plan is held to the rows it is read with:
-  the same requests, and the rows' bound at its budget. With no plan the command says so and marks no proving measured.
+* **How that part's proving is priced** is read from the row's plan: each block family's share of the plan's proving
+  time, each family priced as the rows say (`split.families`, `priced`). A row's `split` is its own plan where it says
+  the `q` and the sampled replays it is the plan of and they are the row's; the command then reads the row at the
+  pinned budget nearest the one it reads the bound at. A `split` that doesn't is not the row's plan (it is written
+  before the row's levers multiply its blocks) and its shares are not read. A run of record may instead hold the plan
+  itself (`PLAN_FILE`, the sampling plan the row is priced over at one audit budget, with each cell's share), which is
+  held to the rows it is read with: the same requests, and the rows' bound at its budget. With neither the command
+  says so and marks no proving measured.
 * **The network certifier's part** is `verity bench certifier_term`'s (`benchmarks/network_traces/leak_bounds.py`:
   `inputs`, `document`): the schedules, the fail cells and the jitter of each of its rows, at the same scopes.
 
@@ -212,16 +215,11 @@ def _requests(x: Mapping) -> float | None:
     return sample / q if q and sample else None
 
 
-def _priced(plan: Mapping, row: Mapping) -> dict[str, dict]:
+def _priced(shares: Mapping[str, float], said: Mapping) -> dict[str, dict]:
     """A plan's proving time by how its block families are priced: each way's share of it and its families with
-    theirs, largest first. A cell's share is the plan's; how its family is priced is the row's account
-    (`split.families`, `priced`), and `UNSTATED` for a family the row doesn't name."""
+    theirs, largest first. ``shares`` are the plan's, by family; how a family is priced is the rows' account
+    (``said``, their `split.families`, `priced`), and `UNSTATED` for a family they don't name."""
 
-    said = (row.get("split") or {}).get("families") or {}
-    shares: dict[str, float] = {}
-    for cell in (*plan["cells"], *plan.get("left_out", ())):
-        family = cell["block"].split("{")[0]
-        shares[family] = shares.get(family, 0.0) + cell["share"]
     out: dict[str, dict] = {}
     for family, its in sorted(shares.items(), key=lambda kv: -kv[1]):
         ways = (said.get(family) or {}).get("priced")
@@ -229,6 +227,18 @@ def _priced(plan: Mapping, row: Mapping) -> dict[str, dict]:
         way["share"] += its
         way["families"][family] = its
     return out
+
+
+def _own(run: str, row: Mapping) -> dict | None:
+    """A row's own plan, where its `split` is one: it says the `q` and the sampled replays it is the plan of, and they
+    are the row's. How its proving is priced (`_priced`), or None for a `split` that is not the row's plan."""
+
+    split = row.get("split") or {}
+    if not all(split.get(k) and row.get(k) and _same(split[k], row[k]) for k in ("q", "replay_sample")):
+        return None
+    families = split.get("families") or {}
+    return {"of": "rows", "run": run, "beta": row["b10"],
+            "ways": _priced({family: f["share"] for family, f in families.items()}, families)}
 
 
 def _held(scope: str, run: str, rows: Sequence[Mapping], requests: float, of: str, plan: Mapping) -> dict:
@@ -242,8 +252,13 @@ def _held(scope: str, run: str, rows: Sequence[Mapping], requests: float, of: st
     if not math.isclose(plan["bound_bits"], theirs, rel_tol=PLAN_TOLERANCE):
         raise ValueError(f"{of}'s plan of the {scope} bounds {plan['bound_bits'] / GB:,.1f} GB at β = {plan['beta']:.4%}, "
                          f"where {run}'s rows give {theirs / GB:,.1f} GB: it is not these rows' plan")
-    return {"run": of, "beta": plan["beta"],
-            "ways": _priced(plan, min(rows, key=lambda r: abs(r["b10"] - plan["beta"])))}
+    shares: dict[str, float] = {}
+    for cell in (*plan["cells"], *plan.get("left_out", ())):
+        family = cell["block"].split("{")[0]
+        shares[family] = shares.get(family, 0.0) + cell["share"]
+    near = min(rows, key=lambda r: abs(r["b10"] - plan["beta"]))
+    return {"of": "plan", "run": of, "beta": plan["beta"],
+            "ways": _priced(shares, (near.get("split") or {}).get("families") or {})}
 
 
 def at_share(scope: str, run: str, rows: Sequence[Mapping], share: float,
@@ -251,8 +266,8 @@ def at_share(scope: str, run: str, rows: Sequence[Mapping], share: float,
     """One scope's rows read off at the audit budget where the total is ``share`` of the compute: the budget, whether
     the pinned budgets bracket it, the bound there at λ = 1 and λ times it, each part of the total, and what the
     rows hold fixed (λ, δ, the most bits a request's output holds, the scope's GPU-seconds, the requests they are
-    priced over and the weights). With ``plan``, a run and the scope's plan it holds, how the plan's proving is
-    priced (`_held`); without, None."""
+    priced over and the weights). How its proving is priced is ``plan``'s account, a run and the scope's plan it
+    holds (`_held`); without one the rows' own plan's at the pinned budget nearest (`_own`), or None."""
 
     rows = sorted(rows, key=lambda r: r["b10"])
     if len(kinds := sorted({str(r[VARIANT]) for r in rows if r.get(VARIANT) is not None})) > 1:
@@ -285,7 +300,8 @@ def at_share(scope: str, run: str, rows: Sequence[Mapping], share: float,
             **{k: v.pop() for k, v in fixed.items() if k != "lambda"}, "lambda": lam, "requests": counts[0],
             "bound": {"bits": bits, "GB": bits / GB}, "bits": bits * lam, "GB": bits * lam / GB,
             "parts": {p: _between(rows, p, beta) for p in PARTS if all(r.get(p) is not None for r in rows)},
-            "priced": plan and _held(scope, run, rows, counts[0], *plan)}
+            "priced": _held(scope, run, rows, counts[0], *plan) if plan
+            else _own(run, min(rows, key=lambda r: abs(r["b10"] - beta)))}
 
 
 # ---- the requests both parts count over, and the network certifier's part ---------------------------------------------
@@ -354,7 +370,7 @@ def _inputs(points: Mapping[str, dict], runs: Sequence[str], term: Mapping, plan
         one(audit, "output_bits", head["output_bits"], "bit/request", "assumed",
             f"{where} `S`: the most bits a request's output holds, which no check certifies"),
         *(one(audit, f"proving priced {way}", p["share"], "of proving time", "measured" if way == "measured" else "modeled",
-              f"`{RECORD}` ({head['priced']['run']}) `{PLAN_FILE}`: the row's plan at β = {_part(head['priced']['beta'])}, "
+              f"`{RECORD}` ({head['priced']['run']}) {_plan(head['priced'])}, "
               f"block {'families' if len(p['families']) > 1 else 'family'} {', '.join(list(p['families'])[:2])}"
               f"{f' and {len(p["families"]) - 2} smaller' if len(p['families']) > 2 else ''}; how each is priced is the "
               f"rows' account (`split.families`)") for way, p in (head["priced"] or {"ways": {}})["ways"].items()),
@@ -470,17 +486,26 @@ def _table(head: Sequence[str], body: Sequence[Sequence[str]]) -> list[str]:
     return ["| " + " | ".join(head) + " |", "|" + " --- |" * len(head), *("| " + " | ".join(r) + " |" for r in body)]
 
 
+def _plan(priced: Mapping) -> str:
+    """Which plan an account of the proving is: the rows' own at a pinned budget, or a plan of record at its own."""
+
+    if priced["of"] == "rows":
+        return f"`split`: the row's own plan at the pinned budget nearest, β = {_part(priced['beta'])}"
+    return f"`{PLAN_FILE}`: the row's plan at β = {_part(priced['beta'])}"
+
+
 def _how(priced: Mapping | None) -> str:
     """How a scope's proving time is priced, by its plan: each way's share and the largest families; or that no plan
-    of record says."""
+    says."""
 
     if priced is None:
-        return (f"how the row's proving time is priced is not read, and none of it is marked measured: no run of record "
-                f"holds the row's plan (`{PLAN_FILE}`), and the rows' own account of it (`split.families`) is written "
-                "before the row's levers multiply its blocks")
+        return ("how the row's proving time is priced is not read, and none of it is marked measured: the rows' `split` "
+                "is not their own plan (it doesn't say the row's `q` and `replay_sample`: it is written before the row's "
+                f"levers multiply its blocks), and no run of record holds the row's plan (`{PLAN_FILE}`)")
     largest = sorted(((s, family, way) for way, p in priced["ways"].items() for family, s in p["families"].items()),
                      reverse=True)[:3]
-    return ("of the row's proving time, by its plan at β = " + _part(priced["beta"]) + f" ({priced['run']}), "
+    plan = "its own plan at the pinned budget nearest" if priced["of"] == "rows" else "its plan"
+    return (f"of the row's proving time, by {plan}, β = {_part(priced['beta'])} ({priced['run']}), "
             + "the share in block families priced each way is "
             + ", ".join(f"{_pct(p['share'])} {way}" for way, p in priced["ways"].items())
             + ": the largest families are " + ", ".join(f"{family} ({_pct(s)}, {way})" for s, family, way in largest))
@@ -528,7 +553,7 @@ def render(doc: Mapping[str, Any]) -> str:
         f"- compute-audit: {', '.join(doc['runs'])} (`{doc['record']}`): the planner's rows, "
         f"{sum(len(p['pinned']) for p in doc['compute_audit'])} of row `{doc['row']}` at step `{head['step']}` over "
         f"{len(doc['compute_audit'])} scopes"
-        + "".join(f", and the {p['scope']}'s plan ({p['priced']['run']})" for p in planned),
+        + "".join(f", and the {p['scope']}'s plan ({p['priced']['run']})" for p in planned if p["priced"]["of"] == "plan"),
         "- the network certifier's part and the requests both parts count over (modeled or assumed, read from the tree, "
         "not records): `verity bench certifier_term`'s inputs and the planner's plan, in the table below", "",
         "## Inputs", "",
@@ -541,13 +566,14 @@ def render(doc: Mapping[str, Any]) -> str:
                 [(p["scope"], p["run"], _part(p["beta"]) + ("" if p["inside"] else " (extrapolated)"), _n(p["bound"]["GB"]),
                   _n(p["GB"]), _n(p["bits"] / w["bits"]), _n(p["requests"]), *(_part(p["parts"].get(part)) for part in PARTS))
                  for p in doc["compute_audit"]]), "",
-        *(line for p in planned for line in (
-            f"The {p['scope']}'s proving time by block family, from its plan at β = {_part(p['priced']['beta'])} "
-            f"({p['priced']['run']}); how each family is priced is the rows' account:", "",
-            *_table(("priced", "share of proving time", "block families", "the largest"),
-                    [(way, _part(x["share"]), str(len(x["families"])),
+        *(planned and (
+            "Each scope's proving time by how its block families are priced, by its plan: the rows' own at the pinned "
+            "budget nearest β, or a plan of record at its own budget. How each family is priced is the rows' account.", "",
+            *_table(("scope", "plan", "at β", "priced", "share of proving time", "block families", "the largest"),
+                    [(p["scope"], p["priced"]["run"] + (" (rows)" if p["priced"]["of"] == "rows" else ""),
+                      _part(p["priced"]["beta"]), way, _part(x["share"]), str(len(x["families"])),
                       ", ".join(f"{family} {_part(s)}" for family, s in list(x["families"].items())[:3]))
-                     for way, x in p["priced"]["ways"].items()]), "")),
+                     for p in planned for way, x in p["priced"]["ways"].items()]), "")),
         "## The network certifier's part over the world's year", "",
         "`verity bench certifier_term`'s rows, at the planner's requests. The term is the schedules, the fail cells and "
         "the jitter; the entries are the compute side's.", "",

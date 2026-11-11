@@ -2,9 +2,10 @@
 compute and the rule that reads how its proving is priced from the row's plan, on small rows; then the store side on a
 real store with a directory remote that holds the planner's runs as `fixtures/exfiltration/` holds them (`records.json`
 names the runs they were cut from: one run's rows, cut to the fields the command reads and to the case it takes plus
-two it must pass over, and the run of that case's plan over the world's year, its plan cut to each cell's block and
-share): the figures a hand computation gave on those rows, the network certifier's part beside them at the planner's
-requests, every input's mark, each refusal by name, and the command."""
+two it must pass over; the run of that case's plan over the world's year, its plan cut to each cell's block and
+share; and a run whose rows hold their own plans, cut to two scopes): the figures a hand computation gave on those
+rows, the network certifier's part beside them at the planner's requests, every input's mark, each refusal by name,
+and the command."""
 
 from __future__ import annotations
 
@@ -20,7 +21,7 @@ from verity_bench import exfiltration as E
 REPO = Path(__file__).resolve().parents[3]
 FIXTURES = Path(__file__).parent / "fixtures" / "exfiltration"
 RECORDS = json.loads((FIXTURES / "records.json").read_text())["compute-audit"]
-ROWS, PLAN = RECORDS["rows"], RECORDS["plan"]
+ROWS, PLAN, PLANNED = RECORDS["rows"], RECORDS["plan"], RECORDS["planned"]
 #: the world year's figure a hand computation gave on the fixture's rows, in GB
 YEAR_GB = 14239.837095861332
 
@@ -84,7 +85,7 @@ def test_proving_time_is_priced_by_the_rows_plan_not_by_the_rows_own_shares():
                       {"block": "D_v1", "share": 0.0625}, {"block": "E_v1{K=1}", "share": 0.0625}],
             "left_out": [{"block": "Copy[8 bits]", "share": 0.0625}]}
     priced = E.at_share("world year", "r1", rows, 0.10, ("r2", plan))["priced"]
-    assert (priced["run"], priced["beta"]) == ("r2", 0.04)
+    assert (priced["of"], priced["run"], priced["beta"]) == ("plan", "r2", 0.04)
     assert priced["ways"] == {
         "computed": {"share": 0.5625, "families": {"B_v1": 0.5625}},
         "measured": {"share": 0.1875, "families": {"A_v1": 0.125, "D_v1": 0.0625}},
@@ -100,6 +101,18 @@ def test_proving_time_is_priced_by_the_rows_plan_not_by_the_rows_own_shares():
                                          "0.0 GB: it is not these rows' plan"):
         E.at_share("world year", "r1", rows, 0.10, ("r2", plan | {"bound_bits": 50.0}))
     assert E.at_share("world year", "r1", rows, 0.10, ("r2", plan | {"bound_bits": 25.0 * (1 + 5e-4)}))["priced"]
+
+    # rows whose `split` says it is at the row's q and sampled replays hold their own plans: the one at the pinned
+    # budget nearest is read, shares and all; a plan of record is read before it; a `split` at another q is no plan
+    own = [r | {"split": split | {"q": r["q"], "replay_sample": r["replay_sample"] * (1 + 1e-12)}} for r in TOY]
+    priced = E.at_share("world year", "r1", own, 0.10)["priced"]
+    assert (priced["of"], priced["run"], priced["beta"]) == ("rows", "r1", 0.03)
+    assert {k: (w["share"], list(w["families"])) for k, w in priced["ways"].items()} == {
+        "measured": (0.98, ["A_v1", "D_v1"]), "computed": (0.01, ["B_v1"]), "measured and computed": (0.01, ["C_v1"])}
+    assert E.at_share("world year", "r1", own, 0.115)["priced"]["beta"] == 0.05
+    assert E.at_share("world year", "r1", own, 0.10, ("r2", plan))["priced"]["of"] == "plan"
+    other = [r | {"split": split | {"q": r["q"] / 2, "replay_sample": r["replay_sample"]}} for r in TOY]
+    assert E.at_share("world year", "r1", other, 0.10)["priced"] is None
 
 
 # ---- the store side ----------------------------------------------------------------------------------------------------------
@@ -271,12 +284,12 @@ def test_how_the_proving_is_priced_is_the_plans_account(tmp_path):
     assert (by["proving priced computed"]["mark"], by["proving priced measured and computed"]["mark"]) == ("modeled", "modeled")
     assert f"({PLAN}) `out/mix.json`: the row's plan at β = 5.542%" in by["proving priced computed"]["source"]
     text = E.render(doc)
-    assert (f"- of the row's proving time, by its plan at β = 5.542% ({PLAN}), the share in block families priced each way is "
+    assert (f"- of the row's proving time, by its plan, β = 5.542% ({PLAN}), the share in block families priced each way is "
             "52.36% computed, 47.13% measured, 0.5086% measured and computed, 0.00179% in no stated way: the largest "
             "families are SparseMlaSplitPart_v1 (52.29%, computed), MoeExpertFp8CoordinateChunk_v1 (27.19%, measured), "
             "MoeExpertFp8GemmW_v1 (13%, measured).") in text
     assert f", and the world year's plan ({PLAN})" in text
-    assert "| computed | 52.358% | 7 | SparseMlaSplitPart_v1 52.291%, " in text and "98.6" not in text
+    assert f"| world year | {PLAN} | 5.542% | computed | 52.358% | 7 | SparseMlaSplitPart_v1 52.291%, " in text and "98.6" not in text
 
     # a plan of another row's, or of the row on other premises, is not these rows' plan
     for change, why in (({"q": plan()["q"] / 2}, f"{PLAN}'s plan of the world year is priced over 3.5568e\\+16 requests and "
@@ -295,8 +308,47 @@ def test_how_the_proving_is_priced_is_the_plans_account(tmp_path):
     assert not [i for i in bare["inputs"] if i["input"].startswith("proving priced")]
     assert [i["input"] for i in bare["inputs"] if i["mark"] == "measured"] == ["weights"]
     text = E.render(bare)
-    assert ("- how the row's proving time is priced is not read, and none of it is marked measured: no run of record holds "
-            "the row's plan (`out/mix.json`)") in text and "1 is measured" in text and "block families priced" not in text
+    assert ("- how the row's proving time is priced is not read, and none of it is marked measured: the rows' `split` is not "
+            "their own plan (it doesn't say the row's `q` and `replay_sample`: it is written before the row's levers "
+            "multiply its blocks), and no run of record holds the row's plan (`out/mix.json`).") in text
+    assert "1 is measured" in text and "block families priced" not in text and "| priced |" not in text
+
+
+def test_rows_that_hold_their_own_plans_are_read_with_them(tmp_path):
+    """A run whose rows each hold their own plan (a `split` at the row's q and sampled replays) needs no plan beside
+    it: the figures a hand computation gave on those rows over the world's year and week, each scope's proving priced
+    by its row at the pinned budget nearest, and the rows' `requests` the count they are priced over."""
+
+    s = Store(tmp_path)
+    s.label(s.ran(PLANNED, rows(PLANNED)))
+    doc = E.build(store=s.fresh(), root=REPO)
+    week, year = doc["compute_audit"]
+    assert (doc["runs"], doc["refused"], week["scope"], year["scope"]) == ([PLANNED], [], "world week", "world year")
+    assert doc["value"] == year["GB"] == pytest.approx(14228.634535615152, rel=1e-12)
+    assert year["beta"] == pytest.approx(0.055422344454158994, rel=1e-12)
+    assert week["GB"] == pytest.approx(13961.63619929689, rel=1e-12)
+    assert doc["network_check"]["GB"] == pytest.approx(15042.046132203845, rel=1e-12)
+    assert {r["requests"] for r in rows(PLANNED) if r["scope"] == "world year"} == {year["requests"]}
+    assert year["requests"] == pytest.approx(doc["periods"][-1]["requests"], rel=1e-12)
+    for p, computed, measured in ((week, 0.5346, 0.4613), (year, 0.5240, 0.4717)):
+        priced = p["priced"]
+        assert (priced["of"], priced["run"], priced["beta"]) == ("rows", PLANNED, 0.055)
+        assert {k: round(w["share"], 4) for k, w in priced["ways"].items()} == {
+            "computed": computed, "measured": measured, "measured and computed": pytest.approx(0.0042, abs=2e-4), "modeled": 0.0}
+        assert sum(w["share"] for w in priced["ways"].values()) == pytest.approx(1.0, abs=1e-9)
+        assert list(priced["ways"]["computed"]["families"])[0] == "SparseMlaSplitPart_v1"
+    by = {i["input"]: i for i in doc["inputs"]}
+    assert (by["proving priced measured"]["mark"], by["proving priced computed"]["mark"]) == ("measured", "modeled")
+    assert (f"({PLANNED}) `split`: the row's own plan at the pinned budget nearest, β = 5.500%"
+            in by["proving priced measured"]["source"])
+    text = E.render(doc)
+    assert "- **the compute audit's part: 14,229 GB** (modeled), 37.78 copies of the weights" in text
+    assert (f"- of the row's proving time, by its own plan at the pinned budget nearest, β = 5.500% ({PLANNED}), the share in "
+            "block families priced each way is 52.4% computed, 47.17% measured, 0.4277% measured and computed, 0.001791% "
+            "modeled: the largest families are SparseMlaSplitPart_v1 (52.33%, computed)") in text
+    assert f"| world week | {PLANNED} (rows) | 5.500% | computed | 53.457% | 7 | SparseMlaSplitPart_v1 53.390%, " in text
+    assert "| world | week | 2.268e+14 | 3.411e+14 | 13,962 | 0.3275 | 1,108,455 | 193.8 | 0 | 0 | 1,122,417 | 14,155 | 13,962 | 13,962 |" in text
+    assert "'s plan (" not in text
 
 
 def test_the_network_certifiers_part_is_beside_it_at_the_planners_requests(tmp_path):
