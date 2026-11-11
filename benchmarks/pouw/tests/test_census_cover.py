@@ -154,7 +154,7 @@ def data_programs(key: str, data: Path) -> list[Program]:
     out = []
     for f in files:
         if f.is_file():
-            rel = f.relative_to(POUW).as_posix()
+            rel = f"machine_model/{f.relative_to(DATA.parent).as_posix()}"
             out += [Program(key, f"{rel} [{p}]", n, False) for p, n in _tables(tomllib.loads(f.read_text()), "")]
     if (data / "attacks").is_dir():
         from verity_machine_model.model import all_attacks
