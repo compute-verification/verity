@@ -19,7 +19,7 @@ tree over the challenger's table (`row_leaf` of each row digest), whose root mus
 ``remote-audit-p2-protocol``) and everything that names the store (the registration, the verifier's logs, the session's
 record, the hiding commitment's opening) go to the private directory; the public answer is the case's answer in the core
 form under a hiding commitment to the case's digest (one ``hm96-sha512/row/v2`` row in a ``frame-v3-sha512`` tree,
-`verity.ml.commitments.advice`, bound to the window), its profile without the registration's digest.
+`verity.commitments.advice`, bound to the window), its profile without the registration's digest.
 
 **The session's length** is the request's: ``windows`` of ``window_s`` each (`WINDOWS`, `WINDOW_S`: two minutes), each of
 ``passes`` passes (`PASSES`) and ``samples`` openings (`SAMPLES`), by default the auditor's (`p2_party.SESSION`, which
@@ -45,10 +45,10 @@ if str(Path(__file__).resolve().parent) not in sys.path:
 
 from p2_v1 import bandwidth as B
 
-from verity.core.protocols.pous import verifier as V
-from verity.core.protocols.remote_bandwidth import coins, p2, p2_case, p2_party, receipts
-from verity.ml.commitments import advice
-from verity.ml.commitments.identity import canonical_json_bytes
+from verity.protocols.pous.verifier import verifier as V
+from verity.protocols.poub.verifier import coins, p2, p2_case, p2_party, receipts
+from verity.commitments import advice
+from verity.commitments.identity import canonical_json_bytes
 
 UNIT, BLOCK, DIGEST = p2.UNIT_BLOCKS, p2.BLOCK_BYTES, receipts.DIGEST_BYTES
 SALT, PER_LEAF = receipts.SALT_BYTES, receipts.PER_LEAF
@@ -205,7 +205,7 @@ def public_answer(judged: Mapping[str, Any], bind: bytes, scope: str, r_bytes_pe
     public = dict(judged["public"])
     profile = {k: v for k, v in judged["profile"].items() if k != "registration"} | {
         "scope": scope, "eps_terms": p2_case.EPS_TERMS,
-        "commitment": {"scheme": "hm96-sha512/row/v2 in frame-v3-sha512 (verity.ml.commitments.advice)", "rows": 1,
+        "commitment": {"scheme": "hm96-sha512/row/v2 in frame-v3-sha512 (verity.commitments.advice)", "rows": 1,
                        "n_bits": 8 * len(row), "binding": bind.hex(),
                        "of": "the session's case digest (p2_case.digest), its registration and plan"}}
     if r_bytes_per_s is not None and public["span_ns"] > 0:
