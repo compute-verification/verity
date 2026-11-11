@@ -47880,3 +47880,31 @@ For CAPS: Proofs/Flock +1 module +20 declarations (#8871 NoAlways.lean). (`curso
 For the table:
 - always-checked term of K: +0 bits. #8871 is ready to mark at `2d4670d64165`; cite `ksTwo_noAlways` at a registration whose `always` is empty.
 - By classes: "an extracted witness's reveal passes whole at every run" compiles at the code (`sessWit_reveal_passes`, try `9a98`, under `Built h` and `Addresses h`); `hwit` at the key (needers, replay block, side) is not yet written. Modeled; no new number.
+
+## EXTFORM, Wed 11 Nov 10:17Z: PR #8906 IS OPEN, UNMARKED (a new statement: Daniel's), at e7b2e51d928b1b02e63531c2b849493c6abd2367, stacked on #8827's head: the by-class bound with `hwit` as its last hypothesis. Both modules build at the head's content and every theorem of the Flock file prints the three axioms, in two runs that are not the head's own try; that try, the records run and the quick tier have no verdict yet
+
+**For Daniel, first:** #8906 adds a statement with new hypotheses beside #8827's; no guarantee rests on it, no lock reads it and no lock record changes. It is not to be marked without his word.
+
+**1. The PR** [run: `research queue open`, 10:15Z; `gh pr view`: open, no label, mergeable].
+- [#8906](https://github.com/compute-verification/verity/pull/8906), head `e7b2e51d928b1b02e63531c2b849493c6abd2367` on `cursor/proofs-slack-3f5a`, an ancestor chain from #8827's head `946b7b72f26d`. Over that head: four files under `security/Proofs/`, 944 lines added, none removed.
+- The head's tree is `2a8eb198e4ff`'s (`git diff` empty). KILIAN's `c6412ff634` already holds that commit, so its by-class cost twin stacks on #8906 as it is.
+- The queue tool warned that PRF-528 carries no goal label and that the body's `Goal proofs/spot-bind-term` matches none of its labels. Yours to label; I write nothing to Linear.
+
+**2. What has run at the head's content.**
+- **Builds** [read: run `r20261111-100552-85f2`'s stdout, lines 10768 and 10831]: `✔ Built Proofs.Core.SamplingGeneric.FirstHitClass`, `✔ Built Proofs.Flock.SamplingGeneric.TwoRegFirstHitClass`, in KILIAN's try on `c6412ff634`. [run: `git rev-parse`] Both files there are the head's blobs (`8abf3df0de67`, `b8f873bbdbed`). That tree is #8905's head merged with mine, so it is also the one merged build.
+- **Axioms** [read: run `r20261111-100130-8441`'s log]: every theorem of the Flock file, `eventTwoX_le_firstHit_wit` and `_key` among them, prints `propext`, `Classical.choice`, `Quot.sound`. That try was of `bf1db4193240`, the head's file plus the two corollaries I took back out, and it **exits 1**: the corollaries' helper `getElem?_of_mem_zip_finRange` is already declared in `Fails.lean:106`. The head has no such helper.
+- **Not run at the head's own tree:** the try with its siblings check, `r20261111-094823-6a1d`, still waits for a check slot on vy-nebius-cpu-2 (since 09:48Z). Records `r20261111-094935-d3c3` is running on vy-nebius-cpu-8 since 09:58Z. Quick tier `r20261111-094939-bdf4` waits on vy-nebius-cpu-4.
+- Second reader: ATTACK read the Core lemma and `eventTwoX_le_firstHit_cls` at `05316ae3ee20`. `ClassWhole`, `_kept`, `_wit`, `_key` and `clsOf` have had none.
+- No ready line from me: the statement is new, and the three runs above have no verdict.
+
+**3. The spare corollary** (not in the PR, on your 10:06Z word). `bf1db41932` derives `hwit` from REGX's `hwhole` and `hcls` and "each slot its own session". [read: run `8441`] Its two theorems `eventTwoX_le_firstHit_whole` and `_whole_key` and its lemma `sessBlocks_eq_of_skey` elaborate, axioms clean; the one fix it needs is to drop its helper for `Fails.lean`'s. The patch is in my note (`tools/extform_whole_reveal_corollaries.patch`), for whoever needs the split.
+
+For REGX: nothing changed in `hwit`; #8906's head is what you prove against (`CompiledTwo.eventTwoX_le_firstHit_wit`, `_key`). `Fails.lean:106` has the lemma that a slot paired with its index is at that index in the sample (`getElem?_of_mem_zip_finRange`), which you need for `sessBlocks = [u]`.
+
+For KILIAN: stack on #8906 at `e7b2e51d928b`; its tree is the `2a8eb198e4ff` you merged.
+
+For CAPS: Proofs/Core: +1 modules, +19 declarations; Proofs/Flock: +1 modules, +21 declarations (#8906: `Proofs/Core/SamplingGeneric/FirstHitClass.lean`, `Proofs/Flock/SamplingGeneric/TwoRegFirstHitClass.lean`). Your 10:06Z bound took the Flock module at 25, from `bf1db4193240`; at the PR's head it is 21. No lock changes; both modules are wholly unread.
+
+For the table:
+- By class: #8906 open, unmarked, at `e7b2e51d928b` on #8827's head. Elaborates and axioms clean by runs `85f2` and `8441` (neither is the head's own try, which waits for a slot); no kernel replay; second reader for the Core lemma and the `hallX`/`hallI` form only. A new statement: Daniel's.
+- Modeled, unchanged from my 10:11Z entry: by classes of gates with the same readers the first-hit term reads 2^-110.6 a run in calls and 2^-101.6 in compressions at the plan of record (K0 = 6, T = 2^80 calls in every run, K a mean), under `hwit`, which nothing yet proves at the code.
