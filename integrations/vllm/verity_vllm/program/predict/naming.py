@@ -15,8 +15,9 @@ its node's output unless said otherwise: the embedding; layer 0's input norm (`t
 `<node>/query[r]` and `<node>/key[r]`), the attention (named `<node>[t=p0+r]`), the o linear, the post-attention norm, the
 gate/up linear, `silu_and_mul` and the down linear; the final norm; then the sampled row's logits (`triton_launch`, row 0 of
 [1, V]) and its select (`argmax`, or `gumbel_topp_token_select` with its constants `top_p`, `pos`, `temperature` and, at a
-constant split count, `splits`, named `<node>/<member>`, before its row 0), under the root module. A request under a length
-rule (`frontend.stop_rule`) ends with its Call, `stop_rule`, which no fx node lowers: no occurrence. A linear is one
+constant split count, `splits`, named `<node>/<member>`, before its row 0), under the root module. A stochastic request then
+has its seed rule's Call (`frontend.seed_rule`), `seed_rule`, and a request under a length rule (`frontend.stop_rule`) ends with
+its Call, `stop_rule`; no fx node lowers either: no occurrence. A linear is one
 `triton_launch` GEMM, or under the exact-int8 linears `row_quant` then `scaled_mm`. An fx node is named by its op, counted over
 the request (`embedding`, `embedding_1`, ...). Every node of the emitted body is held to the kind its place names
 (`build._Specs`), so a body these names don't fit is refused, never misnamed; the dead units' Calls are named, then dropped with
@@ -234,12 +235,15 @@ def name_request(raw: Any, net: Any, params: tuple, *, LP: int, T: int, C: int, 
     names), or `Unexpressible` (module docstring)."""
     from verity_vllm.correspondence.runtime import SCHEMA
     from verity_vllm.program.frontend.stop_rule import NAME as STOP
+    from verity_vllm.program.frontend.seed_rule import NAME as SEED
     from verity_vllm.program.prune import kept_records
     S, Cm = net.specs, net.C
     w = _Walk(list(raw.nodes))
     for M, p0 in [(LP - C, C)] + [(1, LP + s) for s in range(T)]:
         _forward(w, S, Cm, M, p0)
         _sample(w, S, Cm, sampling)
+    if sampling.get("kind", "greedy") == "stochastic":
+        w.bare(lambda f: f.name == "SeedCheck", "seed rule", SEED)
     if stop is not None:
         w.bare(lambda f: f.name == "StopCheck", "length rule", STOP)
     if w.k != len(w.nodes):
