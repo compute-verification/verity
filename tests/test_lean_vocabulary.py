@@ -72,6 +72,8 @@ PROPOSITIONS = ("Collision",)
 SLOT_FIELDS = ("Params", "Commitment", "Evidence", "Public")
 
 D, CORE, FLOCK = "security/Definitions/", "security/Definitions/Core/", "verity/protocols/flock/verifier/Flock/"
+BASE, CIRCUITS, COMMITMENTS = ("verity/circuits/base/Base/", "verity/circuits/lean/Circuits/",
+                               "verity/commitments/lean/Commitments/")
 PROTOCOL = "verity/protocols/interface/CoreProtocol/Protocol.lean"
 REQ, REQ_PY = "verity/definitions/requirement/CircuitRequirement.lean", "verity/definitions/circuits/requirement.py"
 SITE_LEAN, SITE_PY = "verity/protocols/interface/CoreProtocol/Site.lean", "verity/hardware/site/__init__.py"
@@ -91,14 +93,14 @@ CANONICAL: dict[str, tuple[str, ...]] = {
     "Commitment": ("verity/commitments/merkle.py::Commitment",),
     "Dag": (),
     "Device": (),
-    "Digest": (f"{CORE}Digest.lean::Verity.Digest", f"{FLOCK}Hash.lean::Flock.Digest"),
+    "Digest": (f"{CORE}Digest.lean::Verity.Digest", f"{BASE}Hash.lean::Flock.Digest"),
     "Draw": (f"{CORE}Draw.lean::Verity.Draw", "verity/protocols/spot/verifier/service.py::Draw"),
     "Game": (f"{CORE}Game.lean::Verity.Game",),
-    "Gate": (f"{FLOCK}Gate.lean::Flock.Program.Gate",),
+    "Gate": (f"{CIRCUITS}Gate.lean::Flock.Program.Gate",),
     "Hardware": (),
     "Hash": (),
     "InteractiveDevice": (),
-    "Law": (f"{CORE}Draw.lean::Verity.Law", f"{FLOCK}Draw.lean::Flock.Draw.Law",
+    "Law": (f"{CORE}Draw.lean::Verity.Law", f"{COMMITMENTS}Draw.lean::Flock.Draw.Law",
             "verity/protocols/spot/verifier/service.py::Law"),
     "Layout": (),
     "Ledger": (),
@@ -110,10 +112,10 @@ CANONICAL: dict[str, tuple[str, ...]] = {
     "Op": (f"{CORE}Boolean.lean::Verity.Boolean.Op",),
     "Opening": ("security/Definitions/Hash/RowLeaf.lean::Hash.RowLeaf.Opening", "verity/commitments/merkle.py::Opening"),
     "Outcome": (f"{PROTOCOL}::Core.Outcome",),
-    "Partition": (f"{CORE}Partition.lean::Verity.Partition", f"{FLOCK}Evaluated.lean::Flock.Extract.Partition"),
+    "Partition": (f"{CORE}Partition.lean::Verity.Partition", f"{CIRCUITS}Evaluated.lean::Flock.Extract.Partition"),
     "Period": (),
     "Placement": (f"{REQ}::CircuitRequirement.Placement", f"{REQ_PY}::Placement"),
-    "Prog": (f"{CORE}Accel/Machine.lean::Verity.Accel.Machine.Prog", f"{FLOCK}Program.lean::Flock.Program.Prog"),
+    "Prog": (f"{CORE}Accel/Machine.lean::Verity.Accel.Machine.Prog", f"{CIRCUITS}Program.lean::Flock.Program.Prog"),
     "Program": ("verity/circuits/program.py::Program",),
     "Protocol": (f"{PROTOCOL}::Core.Protocol",),
     "Record": (),
@@ -154,7 +156,7 @@ MIRRORS: dict[str, tuple[str, str, str]] = {
     "verity/protocols/certifier/verifier/grid.py::Record":
         ("verity/protocols/certifier/device/lean/CertifierDevice/Certifier.lean::CertifierDevice.Record",
          "certifier-device-difftest", "the certifier device's port replays the Python grid's records"),
-    "verity/protocols/spot/verifier/service.py::Law": (f"{FLOCK}Draw.lean::Flock.Draw.Law", "sampled-proofs-difftest",
+    "verity/protocols/spot/verifier/service.py::Law": (f"{COMMITMENTS}Draw.lean::Flock.Draw.Law", "sampled-proofs-difftest",
                                                              "the service's port parses the Python's laws"),
     "verity/commitments/crypto/lms.py::Signature": ("verity/commitments/lms/lean/Lms/Verify.lean::Lms.Signature", "lms-difftest",
                                            "the LMS port verifies the Python's signatures"),
@@ -174,9 +176,9 @@ MIRRORS: dict[str, tuple[str, str, str]] = {
                                               "the memory challenger's port"),
     f"{MC_PY}verifier/streamed_wipe.py::Verdict": (f"{MC}StreamedWipe.lean::MemoryChallenger.StreamedWipe.Verdict",
                                           "memory-challenger-difftest", "the memory challenger's port, for the streamed wipe"),
-    "verity/circuits/layout.py::Gate": (f"{FLOCK}Gate.lean::Flock.Program.Gate", "verity-evaluate",
+    "verity/circuits/layout.py::Gate": (f"{CIRCUITS}Gate.lean::Flock.Program.Gate", "verity-evaluate",
                                            "the evaluator's `gate` answers each gate of the Python's layout"),
-    "verity/circuits/partition_object.py::Partition": (f"{FLOCK}Evaluated.lean::Flock.Extract.Partition", "verity-evaluate",
+    "verity/circuits/partition_object.py::Partition": (f"{CIRCUITS}Evaluated.lean::Flock.Extract.Partition", "verity-evaluate",
                                                           "the evaluator's `partition` answers the Python's Q_word evaluation"),
 }
 
@@ -928,7 +930,7 @@ KNOWN: dict[str, str] = {
         "homonym, the old word for a run, kept as one protocol's run type: rename (proofs)",
     "verity/protocols/flock/verifier/Flock/Firewall/Contract.lean::Flock.Firewall.Contract.Transcript":
         "duplicate of `Flock.Transcript`: becomes a reading of it (proofs)",
-    "verity/protocols/flock/verifier/Flock/Annot.lean::Flock.Annot.Verdict":
+    "verity/circuits/lean/Circuits/Annot.lean::Flock.Annot.Verdict":
         "homonym, the description-level annotation check's verdict: rename (proofs)",
     "verity/protocols/flock/verifier/Flock/Firewall/Contract.lean::Flock.Firewall.Contract.Verdict":
         "homonym, the firewall's release decision: rename (proofs)",
@@ -937,7 +939,7 @@ KNOWN: dict[str, str] = {
     "verity/protocols/flock/verifier/Flock/Firewall/Level0.lean::Flock.Firewall.Level0.Registry":
         "homonym, the firewall loop's tables: rename (proofs)",
     "verity/protocols/flock/verifier/Flock/Layout.lean::Flock.Layout": "homonym, C-Flock's block-type layout: rename (proofs)",
-    "verity/protocols/flock/verifier/Flock/Program.lean::Flock.Program.Node":
+    "verity/circuits/lean/Circuits/Program.lean::Flock.Program.Node":
         "homonym, a circuit program's node: rename (proofs)",
     "verity/protocols/flock/verifier/Flock/RecLinks.lean::Flock.RecLinks.Link":
         "homonym, a recursion link from a reader to a port: rename (proofs)",

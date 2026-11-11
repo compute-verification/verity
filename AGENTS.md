@@ -24,7 +24,10 @@ what the layout's design has and the tree does not.
     interface each protocol's check implements. Code the move brought from `benchmarks/`, which no unit rule reads yet:
     `pouw/clear/`, `pouw/receipts/`, `poub/device/live_verifier/`, `poub/verifier/remote_session/`,
     `inference_only/nci/` and `inference_only/rho/`.
-  - `verity/circuits/`: the circuit language (format in `circuits/PROTOCOL.md`). `verity/definitions/`: the circuits
+  - `verity/circuits/`: the circuit language (format in `circuits/PROTOCOL.md`). Three base Lean packages, which every
+    Lean package loads and Flock's verifier requires by path, hold the shared Lean: `verity/circuits/base/` (bytes,
+    hashes and parsing), `verity/circuits/lean/` (the circuit format) and `verity/commitments/lean/` (frame-v3 and the
+    sampling of units). `verity/definitions/`: the circuits
     written in it: `ops` (the primitive circuits' Definitions), `silicon` (the GPUs' exact semantics), `kernels`,
     `private_circuits` (the universal circuit), the served workloads' Definitions, and the evaluator and a circuit's
     requirement in Lean (`evaluate`, `requirement`). Target, not yet: `verity/circuits/` also holds the circuits a
@@ -69,6 +72,8 @@ only shrinks; `PLACE` gives the first two a few files outside those directories 
 affect soundness. ml never imports core (`ML_IMPORTS_CORE` names the exceptions). Inside `verity` each unit imports only
 what `ALLOWED` lists, and `verity` imports no other distribution of the workspace. Nothing outside `infra/` imports it
 (`INFRA_IMPORTERS`), and nothing under `verity/` imports an adapter (`KNOWN` in `tests/test_integration_boundaries.py`).
+A Lean package requires Flock's verifier only while `REQUIRES_FLOCK_VERIFIER` lists it, and the three base packages
+require nothing above them (`BASE_LEAN`).
 `benchmarks/` is measurement only: nothing outside it imports its code, by package name or by a path put on `sys.path`
 or loaded by file (`BENCHMARKS_IMPORTERS` names today's importers); a number a protocol uses reaches it through a card
 file citing an `art:` id. Target, not yet enforced: the layout's own rules. The runtime imports no protocol, and no
