@@ -5,6 +5,8 @@
     sudo -n vy-sudo taskset [-a] -p -c CPUS PID               also -pc / -apc; only the caller's own process
     sudo -n vy-sudo [env VAR=VAL...] systemd-run ARGS -- CMD  a slot's scope (--scope), or a job user's unit (--uid=USER --wait)
     sudo -n vy-sudo systemctl stop|kill|freeze|thaw [--signal=SIG] NAME.scope    a scope whose processes are all the caller's
+    sudo -n vy-sudo systemctl stop [--no-block] research-job-RUN  a job's unit (`research run --job-user`), which never runs as root
+    sudo -n vy-sudo job-reclaim RUN_DIR USER                  what job user USER left in the caller's run dir, back to the caller
     sudo -n vy-sudo hf-ns [VAR=VAL...] -- SCRIPT ARGS...     SCRIPT as the caller, with /workspace/jobs/hf bound on /workspace/hf
     sudo -n vy-sudo du-bundles                                the bytes of each replay bundle under BUNDLE_ROOTS (`du -sb` lines)
 
@@ -19,6 +21,10 @@ not listed is refused (exit 3) with why, before anything runs:
   An EnvironmentFile= must be a regular file the caller owns. A leading `setpriv --reuid=UID --regid=GID --init-groups --`
   that drops to the caller is removed, since `--uid`/`--gid` do the same (systemd-run calls initgroups).
   `env` takes only the variables ENV_OK matches (PATH, HOME, CUDA_*, ...): never LD_*, PYTHON* or BASH_ENV, which act on root.
+  job-reclaim runs here, not in a command of its own: under a directory the caller owns it gives the caller each file and
+  directory USER owns and removes what USER left that is neither (a symlink, a FIFO, a socket), printing each removed path. It
+  changes the owner only of an inode it holds open and has checked, and works only inside directories the caller or USER owns,
+  so it does nothing the caller couldn't do as itself or as USER, whom a job's unit already lets it act as.
 """
 from __future__ import annotations
 
@@ -26,6 +32,7 @@ import grp
 import os
 import pwd
 import re
+import stat
 import sys
 from pathlib import Path
 
@@ -57,6 +64,9 @@ PROPERTIES = frozenset({
 EMPTY_ONLY = frozenset({"CapabilityBoundingSet", "AmbientCapabilities"})
 HF_BIND = ("/workspace/jobs/hf", "/workspace/hf")
 BUNDLE_ROOTS = ("/workspace/jobs/cov", "/workspace/jobs/probe-jit")
+#: every form, as the usage line lists them; jobuser.py asks for root through this helper once it reads "job-reclaim" here
+FORMS = ("renice", "taskset", "systemd-run", "env", "systemctl", "hf-ns", "du-bundles", "job-reclaim")
+JOB_UNIT = re.compile(r"^research-job-[A-Za-z0-9._-]{1,180}$")      # jobuser.py's unit_name: research-job-RUN
 
 
 class Refused(Exception):
@@ -235,7 +245,32 @@ def scope_pids(unit: str, show=None, cgroup: Path = CGROUP) -> list[str]:
     return pids
 
 
-def systemctl(args: list[str], uid: int, show=None, cgroup: Path = CGROUP, proc: Path = PROC) -> list[str]:
+def unit_props(unit: str) -> dict[str, str]:
+    import subprocess
+
+    out = subprocess.run([SYSTEMCTL, "show", "-p", "LoadState", "-p", "User", unit], capture_output=True, text=True).stdout
+    return dict(ln.split("=", 1) for ln in out.splitlines() if "=" in ln)
+
+
+def job_unit(args: list[str], props=unit_props) -> list[str]:
+    """`stop [--no-block] research-job-RUN[.service]`: the unit a job runs in. Only vy-sudo's systemd-run makes a unit for
+    research, and never one that runs as root, so a loaded unit of that name that does is somebody else's and is refused."""
+    names = [a for a in args if a != "--no-block"]
+    if len(names) != 1 or len(args) - len(names) > 1:
+        raise Refused("systemctl stop [--no-block] research-job-RUN")
+    name = names[0][:-len(".service")] if names[0].endswith(".service") else names[0]
+    if not JOB_UNIT.match(name):
+        raise Refused(f"unit name {names[0]!r}")
+    unit = name + ".service"
+    p = props(unit)
+    if p.get("LoadState") == "loaded" and p.get("User", "") in ("", "root", "0"):
+        raise Refused(f"{unit} runs as root: not a job's unit")
+    return [SYSTEMCTL, "stop", *(a for a in args if a == "--no-block"), unit]
+
+
+def systemctl(args: list[str], uid: int, show=None, cgroup: Path = CGROUP, proc: Path = PROC, props=unit_props) -> list[str]:
+    if args[:1] == ["stop"] and any(a.startswith("research-job-") and not a.endswith(".scope") for a in args[1:]):
+        return job_unit(args[1:], props)
     if not args or args[0] not in ("stop", "kill", "freeze", "thaw"):
         raise Refused("systemctl stop|kill|freeze|thaw [--signal=SIG] NAME.scope")
     verb, rest = args[0], args[1:]
@@ -267,11 +302,67 @@ def hf_ns(args: list[str], uid: int, gid: int) -> list[str]:
             *(f"{k}={v}" for k, v in sorted(env.items())), "/bin/bash", "-c", inner, "hf-ns", *HF_BIND, str(uid), str(gid), *rest]
 
 
+def reclaim(args: list[str], uid: int, gid: int, user=job_user, say=print, warn=None) -> int:
+    """job-reclaim RUN_DIR USER, as the docstring has it. 0 once everything of USER's it reached is the caller's or gone, 1
+    when something couldn't be read or changed (each named on stderr); Refused before anything changes."""
+    warn = warn or (lambda m: print(f"vy-sudo: job-reclaim: {m}", file=sys.stderr))
+    if len(args) != 2:
+        raise Refused("job-reclaim RUN_DIR USER")
+    top, job = args[0], user(args[1]).pw_uid
+    if not top.startswith("/") or os.path.normpath(top) != top:
+        raise Refused(f"{top!r}: an absolute, normalized path")
+    try:
+        fd = os.open(top, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW)
+    except OSError as e:
+        raise Refused(f"{top}: {e.strerror}") from None
+    if os.fstat(fd).st_uid != uid:
+        os.close(fd)
+        raise Refused(f"{top} is not a directory of the caller's")
+    failed = 0
+    stack = [(fd, top, iter(sorted(os.listdir(fd))))]      # one open directory per level: nothing is reached by a path again
+    while stack:
+        dfd, base, names = stack[-1]
+        name = next(names, None)
+        if name is None:
+            os.close(dfd)
+            stack.pop()
+            continue
+        path = f"{base}/{name}"
+        try:
+            st = os.lstat(name, dir_fd=dfd)
+            if not (stat.S_ISDIR(st.st_mode) or stat.S_ISREG(st.st_mode)):
+                if st.st_uid == job:
+                    os.unlink(name, dir_fd=dfd)
+                    say(path)
+                continue
+            fd = os.open(name, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK | (os.O_DIRECTORY if stat.S_ISDIR(st.st_mode) else 0),
+                         dir_fd=dfd)
+        except OSError as e:
+            failed += 1
+            warn(f"{path}: {e.strerror}")
+            continue
+        try:
+            st = os.fstat(fd)                               # the inode this descriptor holds, whatever the name points at now
+            is_dir = stat.S_ISDIR(st.st_mode)
+            if st.st_uid == job and (is_dir or stat.S_ISREG(st.st_mode)):
+                os.fchown(fd, uid, gid)
+            if is_dir and st.st_uid in (job, uid):
+                stack.append((fd, path, iter(sorted(os.listdir(fd)))))
+                fd = -1
+        except OSError as e:
+            failed += 1
+            warn(f"{path}: {e.strerror}")
+        finally:
+            if fd >= 0:
+                os.close(fd)
+    return 1 if failed else 0
+
+
 def plan(argv: list[str], environ: dict[str, str]) -> tuple[list[str], dict[str, str]]:
     """(the argv to exec, its environment) for vy-sudo's arguments; Refused with why."""
     uid, gid = caller(environ)
     if not argv:
-        raise Refused("usage: vy-sudo renice|taskset|systemd-run|env|systemctl|hf-ns|du-bundles ...")
+        raise Refused(f"usage: vy-sudo {'|'.join(FORMS)} ...")
     base = {"PATH": "/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin", "LANG": "C.UTF-8"}
     head, rest = argv[0], argv[1:]
     if head == "renice":
@@ -304,6 +395,8 @@ def main(argv: list[str] | None = None) -> int:
         print("vy-sudo: run through sudo", file=sys.stderr)
         return REFUSED
     try:
+        if argv[:1] == ["job-reclaim"]:
+            return reclaim(argv[1:], *caller(dict(os.environ)))
         cmd, env = plan(argv, dict(os.environ))
     except Refused as e:
         print(f"vy-sudo: refused: {e}", file=sys.stderr)
