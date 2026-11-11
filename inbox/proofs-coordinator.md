@@ -66374,3 +66374,45 @@ Order large, small, large, with the kept program the large one's. The last membe
 - **First rows, 542.7 MB circuit file, second pull request, one round** [measured: `4d4e`, not ended]: the kept process holds **6.92 GB** at every `MEMBER` line, which is its peak; `verify` alone peaks at 6.74 GB under the same setting (6.62 GB under the default). So under this setting the process does hold its peak between members, as derived at 21:37Z. The 1.79 GB rows and the first pull request's follow; both tables by 23:00Z if the runs keep their pace, inside your 00:30Z.
 
 **Not done:** the two tables under the setting; `a532`'s reading and what follows for `5e87ff2c83`; the second pull request's records run, quick tier and body; the first pull request, which waits on #8789, #8949 and #9042.
+
+## FRAME, Wed 11 Nov 22:19Z: both of the address premise's files compile on #8940's base (`r20261111-213426-9cf1`, exit 0); the pull request is open as a draft, #9080, head `b7bd58b286`, unmarked; one new theorem (the property asks no more than the old premise where no gate is moved) is in its try, no verdict yet; your 21:39Z ruling is read and its check is started
+
+Tags: [run] a run of mine (id given) or a command run now, [read] a file read now (place given), [relayed], [guess]. Times from `date -u`. Mailbox read 22:12Z and again 22:17Z: four sections, the last your 21:39Z one [run].
+
+**1. Compiled on #8940's base** [run]
+- `RevealsWired.lean` (the sessions' openings at the connected program, from the property): lean exit 0 in 165 s, 33 theorems, no axiom beyond `propext`, `Classical.choice`, `Quot.sound`, siblings clean; `AddressesWired.lean` built as its import (`r20261111-213426-9cf1`, exit 0, at `82af169fac`). The statement's worker's run on the same base agrees: both files exit 0 [relayed: its 22:13Z section 5].
+- My branch `cursor/proofs-frame-8fb5` is at `b7bd58b286`: `cursor/proofs-wired-b8f4` at `335e4e4c2d` (#9043's head, #8940's head, the three files restated) merged, and five files of mine over it: the two Lean files, `Proofs/Flock.lean` (two imports), `unread-caps.json`, the retired-terms allowlist (each file's one use of `main`'s field `draw`) [run: `git diff --stat`].
+- `python3 tools/verity/lean/unread_gate.py origin/main HEAD`: exit 0 [run].
+
+**2. Not compiled yet: one theorem added at `d38bb50101`** [read: `AddressesWired.lean`; run]
+
+```lean
+theorem addressesWired_id (hA : Addresses h) : AddressesWired h id (fun _ => true)
+```
+
+- It says the property at the wiring that moves no gate and returns every returned gate follows from the old premise, so the new premise asks nothing more of a design with no wire. Five small lemmas under it (`BGate.rewire_id`, `Prog.wired_id`, `cutBlock_id`, `rootsWired_id`, `addressHoldsWired_id`).
+- Its one-file try is `r20261111-221147-67a5`, launched 22:11Z, waiting for a slot on vy-nebius-cpu-9 at 22:16Z [run: `research status`]. [guess] verdict 22:45Z to 23:10Z.
+- If it fails and is not fixed in one more try, I take it out of this pull request: nothing else reads it.
+
+**3. The pull request** [run]
+- #9080, a draft, opened at `4214ccc5fb`, not marked: https://github.com/compute-verification/verity/pull/9080. Its body on GitHub is one head behind (13 declarations in the first file, now 19); I update it with the records run's figures.
+- Cap in my diff: `Proofs/Flock` 268 modules, 2,235 declarations = #9043's 266 and 2,174, plus my 2 modules and 61 declarations by my own count [read: `unread-caps.json`]. The records run's counter governs; I hold the cap to it.
+- Two runs at `4214ccc5fb` never took a slot and I cancelled them after 24 and 25 minutes in line, because the head was about to change: `r20261111-214245-c7b4` (records) and `r20261111-214330-7b4e` (quick suites), both exit 143. One records run and one quick-suites run go out at the final head, after the try's verdict.
+- It lands after #8940 and #9043; both are open and not on `main` at 22:18Z [run: `gh pr view`].
+
+**4. Your 21:39Z ruling, item by item**
+- **Item 1 (shapes 1 and 2 refused; first the check that nothing in use needs them):** started. Three things I have read so far, none run [read: `origin/main` at `118003ab7a`]:
+  - The change is not only two lines and their mirror. `security/Proofs/Flock/SpotFlock/EntriesAt.lean:163-270` (`readOk_entry`) unfolds `readOk` and splits on both cases, so its proof changes with them; `FrameIsAt.lean:37-52` (`readsInterior`, `readKey`) model both and can lose those arms.
+  - Both shapes are written as supported today: `SecondStage.lean:1002-1020` (`interiorReads`: "a history table the interior registers, or a value its verifier supplies") names such reads in the audit record (`interior_reads`), `SecondStageExamples.lean:264-346` accepts them in its examples, and two difftests are about them (`test_difftest.py:6635`, `:6665`). So the check will refuse those by design; what I list for you is whether any staged design (the toy, the vLLM pipeline's interior, the one-stage drivers) is refused.
+  - The toy's interior (`benchmarks/two_stage/toy.py`) reads a link's port at the boundary record, a wired port at its writer's, every other at its own port of the interior record; it registers no value [read: `toy.py:13-24, 262-291`]. So I expect it to pass [guess].
+  - The check run goes out on `cursor/proofs-readshapes-<4 hex>` in this turn; its entry by Thu 06:00Z.
+- **Item 2 (shape 3, both):** the condition goes in my Thu 02:00Z entry beside `Prog.Rewires`, in Lean; the conjunct in the design check goes in item 1's pull request, with whether any Definition on `main` fails it.
+- **Item 4 (the date):** Thu 19 Nov 2026 in my body; the statement's worker's 22:13Z entry gives the same date [relayed: its section 8]. My draft body said Fri 13 Nov, from #9043's body; corrected at the next update.
+- **Item 5 (the paragraph on why two tries failed):** its own pull request. It is a change to the lean-proofs skill only, so it need not wait behind #8940 and #9043 as mine does. The skill has nothing on it (`SKILL.md:62-63` says only "fix the proof") and is at 14,875 of 16,384 bytes, so one paragraph fits [run: `wc -c`]. I write it after the Thu 02:00Z entry unless you want it sooner.
+
+**5. Next, in order**
+1. The try's verdict; then one records run and one quick-suites run at the final head; the body.
+2. While they are out: the check run of item 1.
+3. Thu 02:00Z: the property's final statement with shape 3's condition, and the witness.
+
+Next entry: at the try's verdict or 23:30Z, whichever is first. Checkpoint note `lanes/proofs/20261111T2205Z-report-frame.md`, synced [run].
