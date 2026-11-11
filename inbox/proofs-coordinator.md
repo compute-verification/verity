@@ -37681,3 +37681,94 @@ For Daniel: the Lean first-hit bound that compiled is sound as read, but it is t
 - My VM restarted a fourth time before 03:12Z; state was in the store, nothing lost.
 
 **Left**: when the layout move is on `main`: the mailbox once more, `tools/move/restack.py`, an entry on what it changed, the records run with `--update` on the moved tree and its lock as one commit, the quick tier, then "ready to mark". I look again at about 03:50Z.
+
+## EXTFORM, Wed 11 Nov 03:16Z: KILIAN's statements: FAILS AT 4 as the paper's bound (the Lean finder extracts every session of every pass it pays for, so its bound is the paper's at d = the sessions a pass); the event is `KSReg`'s own; the premise holds at the sample's `chk`; whole list, final
+
+`FAILS AT 4`, as a statement of the paper's bound; nothing I read is unsound. The Lean finder extracts every session of every pass it pays for (`runCost` reads `runExt`), so the compiled bound is the paper's at d = (the sessions a pass): 124.8 / 116.5 / 96.5 bits where the paper's form gives 132.0 / 126.6 / 116.6 (m 154 / 1,158 / 1,144,826; K 2^24.70 / 2^30.1 / 2^40.1; one session a sampled block; k 1,507; d 1; T = 2^80 calls a pass; one audit), and 127.1 / 121.7 / 111.7 at 30 sessions a pass. Items 3 (the event), 5 and 6 hold; 1 holds at the sample's `chk` only; 2 and 7 are below.
+
+Read on the source at `a08fb44276dd`, nothing built. `F` = `Security/Proofs/Core/SamplingGeneric/FirstHit.lean`, `R` = `Security/Proofs/Flock/SamplingGeneric/RegFirstHit.lean`, `Reg` = `Security/Proofs/Flock/SamplingGeneric/Reg.lean`, `SG` = `Security/Definitions/Claims/SamplingGeneric.lean`, `I` = `Security/Definitions/Core/Interaction.lean`. Marks: [read] file:line there, [derived], [run] (`kil_bits.py`), [relayed], [guess]. A "pass" is one run of the prover with the verifier.
+
+## 1. The premise: HOLDS at the sample's `chk`; the headline leaves `chk` to the caller
+
+- [read] `out` is `outOf` at `collAt` (`R:427-429`). `collAt` is `findColl` over the own logs of two passes' extractions (`R:111-114`). An own log holds only the extraction's own `.hash` calls (`Security/Definitions/Claims/Sampling.lean:477-480`); each adds 1 to `eval.2.1` (`I:198-205`), which `runCost` holds (`R:118-121`). So `coll` outputs no pair it did not pay to compute.
+- [read] The two passes are the first, always charged (`F:1045`), and one further pass that is the first to open a gate the first opened (`F:716-720`). With `hchk` that pass is charged (`le_loopCostOn`, `F:912-914`), and `hchk` is a hypothesis of every bridge theorem that takes `chk` (`R:403-404, 425-426`).
+- [derived] A finder with cost 0 that outputs a collision: no. A pair needs two entries in the own logs, so the cost is at least 2. The premise is false at a prover with a collision hard-coded, where binding is broken; `Pr[B_conf]` on `main` is large there too.
+- [read] A `coll` that does not pay: not at the bridge, which fixes `coll := collAt`. In Core `coll` is free under `hc`, `hs` (`F:1081-1090`), and a `coll` that returns one fixed collision meets both.
+- [read] `outOf` reading an uncharged pass: not at the bridge. In Core, `pr_off_sample_le_of_expectedCR` (`F:1052-1059`) and `pr_off_sample_le_ex_cap` (`F:1187`) take `out` free and no `hchk`; `pr_off_sample_le_of_coll` and `pr_off_sample_le_ex` take `_hchk` and do not use it (`F:1084`, `F:1219`). [derived] At `chk := false` and an `out` that runs `findColl` over all K + 1 passes' logs, that premise is false at an honest hash once K > 2^128.5/√c: a birthday over passes the cost does not hold. A false premise proves nothing, so this is harmless; those are lemma forms, never to be cited with the premise granted. `main`'s `link_mass_le` has the same shape (`out` and `c` free; `Security/Proofs/Flock/Soundness/LinkFinder.lean:315-323`).
+- [read] **The worst instance: `chk` is any Lean function with `hchk`** (`R:424-426`), quantified after the prover, not a function the finder can evaluate. `out` does not read `chk`; only `cost` does (`F:1044-1045`). Take `chk rc g := decide (∃ ω, (L.opTable H P x ω rc g).isSome)`. `hchk` holds by definition, and the finder is charged only for passes that open a waited gate, as if told for free which coins do.
+- [derived] That understates the cost of any finder one can run by up to the factor 1 + K (24.7, 30.1, 40.1 bits at the three designs), and the conclusion at that `chk` is better by as much. I did not find a prover that makes that premise false without holding a collision or a second preimage: `Pr[Found] ≤ 2·E[gates a pass opens off the plurality]`, and an off opening under the statement's roots is a second opening of a committed position. So it is a premise nobody argued for, not one I can refute.
+- [read] The repair is in the file: `chk := decide (∃ u ∈ L.checked x rc.1, g.val ∈ needs u)` (`R:269-292, 325-340`) is the coins' sample, and `checked : Msg → coins → List ℕ` reads no `H` (`SG:243`). No `pr_regHit_…` is stated at that `chk`; it is one line from `pr_regHit_le_of_offReg` (`R:348-354`) and `pr_offReg_le_needs_ex`.
+- [read] Free in the model and not charged: the coins, the prover's tape (in the seed, as `B_conf`'s, `SG:600`), `findColl`, `Classical.choose` among charged passes (`F:718-719`), `chk`.
+
+## 2. A family of premises: more than `main` takes; the one-cap form is the more honest
+
+- [read] `main`'s `SHA512CRExpected` is a predicate on one finder: "not a statement about all of them: some finder outputs a collision of `H` after no evaluations" (`Security/Definitions/Assumptions/Flock.lean:60-78`). It does not quantify over finders, as the brief has it. `ExpectedCR` is the same at `Finder` (`I:281-288`).
+- [read] `hCR : ∀ K, ExpectedCR H (sampleFinder … K …)` (`R:427-429`) is one instance for each cap, countably many, each at a different finder (its seed holds K passes' coins, `F:1040-1045`). `main`'s link theorem takes one instance, at a cap M, and carries `1/(eM)` (`LinkFinder.lean:315-323`).
+- [derived] The family is the premise for the uncapped loop, which is not a `Finder` (`S` is a `Fintype`, `I:263-268`). No single instance gives it. It costs no bits: every cap's expected cost is under the same `E[(1 + |sample|)·c]` (`F:1132-1136`), so at one cap K ≥ N·2^101 the term `N/(K + 1)` is under 2^-101.
+- [derived] More honest: one named finder and its term, `2·E[(1 + |sample|)·c]/2^256 + N/(K + 1)`, as `main` does. Core has it (`pr_off_sample_le_ex_cap`, `F:1187-1197`); the bridge has a cap only in the sup form (`R:159`, `R:269`). A capped `pr_regHit_…` in the expectation form is missing.
+
+## 3. The event: HOLDS word for word; one root remains and needs the strict premise at B
+
+- [read] `R:430-431` is `KSReg`'s first conjunct (`SG:631-632`) character for character. `Freg` is `SG:585-590`, untouched: `git diff 2b869ed35db5 a08fb44276dd -- Security/Definitions` is empty [run]. The plurality is `regVal`'s (`SG:575-579`; `regVal_eq_plur`, `Reg:372-374`; `isPlurality_plur`, `R:57-58`), over every (coins, extractor's coins), refused coins included.
+- [read] The bound is `κ_s + √(k·γ_s·Pr[B]) + 2·E[(1 + |sample|)·c]/2^256 + Pr[B_conf]` (`R:432-436`). `N·√Pr[B_conf]` is gone; `√(k·γ_s·Pr[B])` is still a square root of a finder's success; `Pr[B_conf]` is linear.
+- [read] `B` is two passes and no extraction (`I:330-341`), so `StrictBirthday` (`I:276-279`) applies where every pass makes at most T calls: `Pr[B] ≤ (2T)²/2^513`. `κ_s ≤ 2^-190` at SPOT[Flock]'s code (`Security/Proofs/Flock/SpotFlock/Accepting.lean:83-87` at `a930252c4993`).
+- [run] `√(k·γ_s·Pr[B])` at T = 2^80, one session a pass: 2^-151.5 to 2^-141.5 (k·γ_s from 2^48, one table, to 2^68 [read in my first final; relayed, TWOPROVE]). It grows as the square root of the sessions a pass holds [derived]: 2^-147.9 to 2^-137.9 at 154, 2^-146.4 to 2^-136.4 at 1,158, 2^-141.4 to 2^-131.4 at 1,144,826. Under the linear premise alone at B it is 2^-63.5 to 2^-53.5 at one session, and it caps the whole bound.
+- [run] `Pr[B_conf] ≤ 2T(1 + s·e_s)/2^256` where the linear premise holds at `B_conf`: 2^-156.7 at s = 1, 2^-149.5 at 154, 2^-146.6 at 1,158, 2^-136.6 at 1,144,826 (k 1,507); 2^-123.6 at the last with k 12,343,986.
+- [derived] Neither term reads N or n_PU, so B and A give the same figures at one design. With the strict premise at B the first-hit term is the largest of the four at every row of item 4's table, so nothing else keeps the bound from 100 bits. The bound rests on three premises: the linear one at the first-hit finder, the linear one at `B_conf`, the strict one at `B` with T a bound on every pass.
+
+## 4. `runCost` and E[c]: FAILS as the paper's bound; it is the paper's at d = every session of a pass
+
+- [read] `runCost` is the prover's log, the verifier's log and `(runExt …).eval.2.1` (`R:118-121`); `eval.2.1` is the extraction's own calls and every rerun's, both parties' (`I:196-205`). Unit: calls of `H` on whole messages.
+- [read] No T, e_s or d is in the Lean, and no theorem on the branch bounds `E[runCost]`. [derived] `E[c] ≤ T(1 + s·e_s) + (own calls)` is the reader's, s the sessions of the pass's sample, given T on every pass.
+- [read] `runExt` runs A's extractor once for every session of the pass's sample (`SG:363-373`). `skey` defaults to one session a slot (`SG:249`) and `ofDeployAt` has `nSess = nPU` (`Security/Proofs/Flock/SamplingGeneric/Deployed.lean:124`). `loopCostOn` charges that whole `c` at each further pass it runs, whichever gate it waits for (`F:866-870`).
+- [derived] So the term is `2(1 + W)·T(1 + s·e_s)/2^256` against the paper's `2T[(1 + s·e_s) + W(1 + d·e_s)]/2^256`: a loss of `log2((1 + s·e_s)/(1 + d·e_s))` bits.
+- [run] One audit, T = 2^80 calls a pass, W = K, k = 1,507 (k = 12,343,986 in brackets), d = 1:
+
+| design [relayed] | m | K | paper, d = 1 | Lean, s = m | loss | Lean, s = 30 | loss |
+|---|---|---|---|---|---|---|---|
+| uncapped, size-class strata | 154 | 2^24.70 | 132.0 (119.0) | 124.8 (111.8) | 7.27 | 127.1 (114.1) | 4.91 |
+| capped sets | 1,158 | 2^30.1 | 126.6 (113.6) | 116.5 (103.5) | 10.18 | 121.7 (108.7) | 4.91 |
+| capped patterns | 1,144,826 | 2^40.1 | 116.6 (103.6) | 96.5 (83.5) | 20.13 | 111.7 (98.7) | 4.91 |
+| the cost rows of record, low | 5,523,986 | 2^40.23 | 116.5 (103.5) | 94.1 (81.1) | 22.40 | 111.6 (98.6) | 4.91 |
+| the cost rows of record, high | 44,191,826 | 2^43.23 | 113.5 (100.5) | 88.1 (75.1) | 25.40 | 108.6 (95.6) | 4.91 |
+
+- s = m is one session a sampled block, the contract's default; s = 30 is one session a template [relayed]. Against d = 30 the loss at s = m is 2.36 / 5.27 / 15.22 at the first three rows; against d = 167 it is 0 / 2.79 / 12.74 [run]. A period of Q audits: subtract 10.0 (week), 12.1 (month), 15.7 (year) [relayed].
+- [derived] To get d in Lean, a further pass's cost has to depend on the waited gates (`c : Ω → Finset P → ℕ`), and `opTable` and `collAt` on an extraction of only the sessions holding them. That is a new finder, not a corollary of `loopCostOn`.
+
+## 5. `chk` and the refused coins: the sup form is unusable, HOLDS; the expectation form needs T on every pass
+
+- [read] The sup form asks `∀ rc, #{g | chk rc g} ≤ w` (`R:405`). Where the second stage is refused, `checked` is every block (`Security/Proofs/Flock/Claims/Sampling/Reg.lean:90-94`), and a pass there can open any gate a block needs. So at the sample's `chk`, w is every block's needs, about N, as soon as one coin is refused.
+- [read] The expectation form is the joint one, `E[(1 + |sample(rc)|)·c(ω, rc)]` (`ex_costOn_le_ex`, `F:1132-1136`; `R:433-434`).
+- [derived] `E[(1 + |sample|)·c] ≤ (1 + K)·E[c] + (N − K)·E[c on refused coins]`, K the largest sample at an unrefused coin: a sup, not the mean W.
+- [derived] With T a bound on every pass, a pass's expected calls given its coins are at most `C = T(1 + s·e_s)` (the sample does not read the extractor's coins or the sessions' rounds, `SG:490-491`). Then the term is at most `(1 + W)·C`, W the mean with refused coins in it, and they add `p_ref·N < 2^-229` gates [relayed]. Correlation costs nothing.
+- [derived] **Worst case, T a mean only.** A prover that makes its calls only where the sample is large gets `(1 + max|sample|)·E[c]`. With one refused coin that is `(1 + N)·E[c]`, however small p_ref: `2(1 + N)T/2^256` is 2^-116.0 at B and 2^-105.1 at A before the extraction's factor, 2^-97.7 and 2^-86.8 with it at one session (k 1,507) [run]. With no refused coin, a design whose samples are 2^40.1 gates with chance 2^-20 and empty otherwise is 20 bits short in the mean-W form [run].
+
+## 6. The second conjunct: HOLDS by the same substitution
+
+- [read] `ksReg_of_sessionKS` proves it from the first conjunct as a number: `Pr_or_le` of `h1` and `hmiss'` (`Reg:535-561`). `hmiss'` is the sample missing a set outside `M_δ`, at most δ, from `Sessions.draws` (`Reg:537-557`). No step reads `N·√`.
+- [derived] With `pr_regHit_le_sample_ex` for `h1` the same lines give `δ + κ_s + √(k·γ_s·Pr[B]) + 2·E[(1 + |sample|)·c]/2^256 + Pr[B_conf]`. `Freg` is unchanged, so it is still fixed by the tape before the coins. Not written on the branch.
+
+## 7. What else a hostile reader would say
+
+- [read] **No instance at SPOT[Flock]'s code.** `pr_regHit_le_sample_ex` takes `hS : L.Sessions H`, the one-stage contract (`R:421`). SPOT[Flock]'s only `Compiled` is its two-stage instance's `toCompiled` [relayed, SCALE], and nothing at `a08fb44276dd` proves `toCompiled.Sessions` or `toCompiled.KSReg` [run: `git grep`, no hit; `toCompiled.SessionKS` only, `Security/Proofs/Flock/SamplingGeneric/Two.lean:677`]. `pr_offReg_le_needs_ex` needs no `Sessions` and does apply there, to openings under the statement's roots only (`opensAt`, `SG:561-568`). The interior positions, nearly all of K at B and A [relayed, ATTACK], are not covered. The file's header says so.
+- [read] **The quantifier order of `chk`** (item 1): `∀ P, ∀ chk`. A guarantee has to define the sample from the statement and the coins.
+- [read] **The premise is an inline hypothesis, not a named `Prop`.** `main`'s `εreg` puts a finder's success in the error (`SG:615-618`); here `hCR` is a hypothesis for each prover. `pr_offReg_le_firstHit` (`R:82-87`) is the unconditional piece, at one tape and with `Found`, not a `Finder.Pr`.
+- [read] **`Fintype`: nothing new.** The prover's tape, `Coin` and `SlotEC` are as in `KSReg` (`SG:630`, `SG:600`); the seed `T × Ω × (Fin K → Ω)` is finite at every K.
+- [read] **After `a08fb44276dd`:** at `f0c1f1883c` Core's `chk` reads the kept part (`chk : T → Ω → P → Bool`); the one-stage bridge passes `fun _ => chk` [run: `git diff`]. At two stages the kept part holds the prover's tape, so the statement there has to make `chk` read the coins only, or item 1's worst instance returns.
+- [relayed] The unit is calls on whole messages; with T in calls on 64 KiB rows subtract 9.0.
+- Not read: `RegCanon.lean` and `RewindingCanon.lean` beyond their statements; `Prover` and `run` (that a prover's log holds all its calls); `Arg.ofFlock`; `selectSecond`. e_s as a bound on a session's expected reruns at every pass, accepted or not, is [guess].
+
+## The added line: `RevealsWithinTwo`
+
+It does not survive as I worded it; take `code_reveal_at` (so `code_reveal_roots` and `code_reveal_iroots`). [read] An interior gate's opening is under `ir v ρ`, what the round-1 message states (`Security/Proofs/Flock/SpotFlock/Reveals.lean:45-54, 60-65`; `Code.lean:586-590`), so a prover can make it equal `s.roots` or another block's, and "under the statement's roots, a boundary gate" and "none for any other ρ" are then false. [derived] My derivation used the clause twice: for the count, which needs only the position (`p.2.pos ∈ needs u`, root-free), and for one root under the two compared openings, which is by root and not by the gate's kind. Waits keyed by (root, gate): a coincidence merges two keys and changes no count, constant or event.
+
+## What I would change (recommendations; restating `εreg` is Daniel's)
+
+1. State the headline at the sample's `chk` (`pr_regHit_le_needs_ex`), and drop or mark the general-`chk` forms as lemmas.
+2. State it at one cap with `N/(K + 1)`, in the expectation form.
+3. Say in the statement's docstring that `c` is the whole pass with every session extracted, and quote bits at d = s until a finder that extracts by position exists.
+4. Name the three premises, and that T bounds every pass.
+
+For Daniel: the Lean first-hit bound that compiled is sound as read and its event is the guarantee's own, but it is the paper's bound with every session of a pass extracted at every rerun: at a design of 1,144,826 sampled blocks it gives 96.5 bits, not 116.6, for one audit at 2^80 calls a pass and k = 1,507 (111.7 at 30 sessions a pass). It has no instance at SPOT[Flock]'s two-stage code yet, and its premise must be taken at the verifier's own sample.
+
+Note: `note:proofs/20261111T0316Z-finding-extform-kilian-statements`. Supersedes my 03:07Z entry (same findings, items 2, 5, 6, 7 added). The comment text for PRF-524 is this entry's body under the title "EXTFORM (PRF-528): a reading of the first-hit Lean statements at `a08fb44276dd` against the paper finder"; it is in the note and in the worker's artifacts as `PRF-524-comment-text-from-EXTFORM.md`.
