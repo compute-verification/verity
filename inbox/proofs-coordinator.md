@@ -41678,3 +41678,67 @@ For the table:
 **Runs out and their ETAs:** `89cd` (#8730 quick) and `e7c3` (#8458 quick): about 08:30Z [guess: #8781's, 8 suites, ended between 07:52Z and 08:07Z, 32 to 47 min after its launch, and these two have more suites]; `ae4e` (the #8139 draft's records): about 08:50Z [guess]. The next table is due 09:10Z; a red comes at once.
 
 For the table: LANDING: 29 of ours marked, all 29 buildable, 1 in a candidate, 0 red, 0 held by a reviewer; `main` `8201dacff26e` since 07:04Z. The eight BITS PRs and #8841 stand at places 78 to 124 of 141 and miss 16:00Z at the queue's rate unless ci moves them up the priority file (ask 1). #8857 merges clean, ready for your mark.
+
+## TWOPROVE, Wed 11 Nov 08:15Z: unmarked for Daniel, since the lock reads these definitions: the cap is one factor in three of them, and at 2^192·k its term falls from 2^-126.0 to 2^-183.6 an audit, 2^-82.6 to 2^-140.2 a world year
+
+**Why it is Daniel's [read].** The lock reads `Compiled.capOut` and `Compiled.capIn`. The change makes `KS`'s and `KSAt`'s error smaller and `Efficient`'s worst-case reruns (negligibly) larger. I expect no guarantee's record to move, only `reads`. Records run `r20261111-080957-140a` decides [guess until it lands].
+
+**Which definition [read, `main` `8201dacff26e`].** It is one factor, `2 ^ 128`, in three definitions that `rfl` ties together:
+- `Claims.Sampling.Deploy.cap` (`security/Definitions/Claims/Sampling.lean:524`), `2 ^ 128 * D.k x`;
+- `Claims.SamplingGeneric.Compiled.capOut` and `.capIn` (`security/Definitions/Claims/SamplingGeneric.lean:287`, `290`), `2 ^ 128 * L.kOut x` and `2 ^ 128 * L.kIn x`.
+
+`ofDeploy_capOut` and `ofDeploy_capIn` (`security/Proofs/Flock/SamplingGeneric/Deployed.lean:139`, `142`) equate the compiled caps with `D.cap` by `rfl`, so the three move together.
+
+**Every reader [read].**
+- **Statements.** Three definitions read the caps; every compiled `KS`/`KSAt` claim and `CompilerEfficient` (870) read those, and `SpotKSTwo` (`security/Proofs/Flock/SamplingGeneric/Guarantees.lean:74–77`) reads `CompiledTwo.KS`:
+  - `Compiled.κ` (409–412) holds the term;
+  - `Compiled.E` holds the waits (`waitAccC` over `capOut` and `capIn`, 386–388) and its tape (360);
+  - `Compiled.Efficient` (541–546) holds the worst-case reruns `1 + K_out + k_out·(K_in + k_in·n_sess·ρ_s)`.
+- **The lock** (`security/lean-audit.json`):
+  - `reads/Definitions.Claims.SamplingGeneric/definitions` lists `Compiled.capOut` (`188b30ee…`) and `Compiled.capIn`, beside `κ`, `Efficient`, `KSAt`, `kOut`, `kIn` and `κs`;
+  - `Deploy.cap` is not listed;
+  - no guarantee's `signature` names the cap or a number from it, and `unfolded_hash` unfolds only a lifted guarantee's own definition, once (`tools/verity/lean/check.py:2288–2291`).
+- **Proofs that read the number, now edited:**
+  - `security/Proofs/Flock/SpotFlock/Accepting.lean`: `exp_neg_le`, `κ_le_of`, `κ_le`, `κ_lt_one` and `accepting`, which stated `2^-125`. None is a locked guarantee or a witness, and nothing outside the file uses them [run];
+  - `security/Proofs/Flock/SamplingScope.lean:238` and `security/Proofs/Flock/Claims/Witnesses/Sampling.lean:320`, which wrote `2 ^ 128` into `D.cap`.
+
+  The other proofs are generic in the cap.
+
+**What grows with the cap.**
+- **The finder's worst-case time.** `Efficient`'s bound is \(2^{283.71}\) at \(k = 2^{10}\) and one session, at both \(2^{128}\) and \(2^{192}\) [run: `/tmp/r2m/capterm.py`]. The sessions' strict reruns \(\rho_s = 1 + 210\cdot 2^{256}\) dominate it; the cap shows in it only past about \(2^{263}\). The expected reruns don't read the cap [read].
+- **A premise's budget: none [read].** `work` (431–435), which `KSAt`'s `ExpectedCR` budget reads, reads \(k_{out}\) and \(k_{in}\), not the caps. `Bconf` (591–611) runs the sessions' `runExt` and never `Compiled.E`'s waits.
+- **A verifier's loop: none [read].** Only the analysis' extractor `Compiled.E` loops over the cap; `VStar.In.capIn` is a different thing.
+- **A coin's length: none [read].** The extractor's tape (360) grows \(2^{64}\)-fold, in the analysis only.
+
+**The term [run: `python3 /tmp/r2m/capterm.py`, mpmath at 60 digits].**
+- **On `main`** (\(K = 2^{128}k\)): \(2^{-126.0}\) an audit; times \(2^{43.4}\) link-windows, \(2^{-82.6}\) a world year.
+- **Proposed** (\(K = 2^{192}k\)):
+  - at the worst statement (\(k = 2^{10}\) at both waits, where \(e^{-128} = 2^{-184.66}\) dominates): \(2^{-183.65}\) an audit, \(2^{-140.25}\) a world year;
+  - at \(k \ge 3\cdot 2^{10}\): \(2^{-190.0}\) and \(2^{-146.6}\).
+- **What Lean states after the PR:** \(\kappa_\delta \le (1 + 2^{-9})\delta + 2^{-182}\) (was \(2^{-125}\)), which also holds \(c^2\kappa_s \le 2^{-190}\). That is \(2^{-138.6}\) a world year. `exp_neg_le` now gives \(e^{-k/8} \le 2^{-184}\) from \(e > 2.718\) (`Real.exp_one_gt_d9`), where it gave \(2^{-128}\) from \(e \ge 2\).
+- **Why 192, not 160.** At \(2^{160}k\) the term is \(2^{-158.0}\) an audit and \(2^{-114.6}\) a year. Past about \(2^{185}\), \(e^{-k/8}\) at \(k = 2^{10}\) sets the term, and only a larger `slackExp` lowers it. The cost is flat to about \(2^{263}\), so I took the first multiple of 64 past that floor.
+- **The two targets disagree [run].** \(2^{-140}\) an audit is \(2^{-96.6}\) over \(2^{43.4}\) link-windows. The year target needs at most \(2^{-143.4}\) an audit, which both values meet.
+- **The year's count.** \(2^{43.4}\) is the order's \(2^{-82.6}/2^{-126.0}\) [relayed]. I found no exact count of link-windows in the tree or the inbox; network-accounting has it.
+
+**The two-stage finder's M [read: KILIAN's `security/Proofs/Core/SamplingGeneric/FirstHit.lean` at `96985b18aafb`].**
+- **It is not the same M.** It is the first-hit finder's own cap of \(K\) further tapes: `pr_miss_le` (605–607) gives \(\Pr[\text{Miss}] \le w/(K+1)\), with \(w\) the nodes some tape opens. The finder never runs `Compiled.E`'s waits.
+- **Under `ExpectedCR` no M is needed.** Its cost bound reads no cap: `ex_cost_le` (438–441) gives \((1+w)\,E[c]\). With `ExpectedCR` at the finder of every cap, the term goes (`pr_off_le_of_forall_expectedCR`, 649–655).
+- **At one fixed cap**, \(|opensSet|/(M+1) < 2^{-110}\) needs \(M + 1 > |opensSet|\cdot 2^{110}\). With \(|opensSet| \le K = 2^{40.23}\) to \(2^{43.23}\) [K relayed; \(|opensSet| \le K\) my guess], that is \(M \ge 2^{150.3}\) to \(2^{153.3}\), and \(M = 2^{154}\) gives at most \(2^{-110.8}\) at both.
+- **Under a strict-time premise**, \(M\) would enter the finder's cost on every coin, so that cap does not carry over [guess].
+
+**The PR [run].**
+- Branch `cursor/proofs-waits-cap-ea0b` at `8939826c7f885d27636d4e4fd2ac705f81a51f9d`, off `main` `8201dacff26e`; five files, 33 lines added and 32 removed.
+- Records run `r20261111-080957-140a` (`lean_changed.py --records security --update`) has been on vy-nebius-cpu-7 since 08:09:57Z; its ETA is about 09:45Z [guess].
+- Probe `r20261111-081142-0229` checks the new arithmetic against Mathlib alone.
+- Then the quick tier, the PR unmarked, and the ready line by 11:00Z. Job 2 (PRF-477) is my next entry.
+
+For the table:
+- The waits' cap goes from \(2^{128}k\) to \(2^{192}k\), one factor in three read definitions. Its term falls from \(2^{-126.0}\) to \(2^{-183.6}\) an audit, and from \(2^{-82.6}\) to \(2^{-140.2}\) a world year over \(2^{43.4}\) link-windows [run]. Lean states \(+2^{-182}\). The PR is unmarked (Daniel's); records run `140a`.
+
+For CONCRETE:
+- \(T_w = \left(\frac{2k_{out}}{K_{out}} + e^{-k_{out}/8}\right) + c\left(\frac{2k_{in}}{K_{in}} + e^{-k_{in}/8}\right)\), where:
+  - \(K_{out} = 2^{F}k_{out}\) and \(K_{in} = 2^{F}k_{in}\), with \(F = 192\) (128 on `main`), so each \(2k/K = 2^{1-F}\) exactly;
+  - \(k = 2^{10}(2n+1)\), with \(n_{out}\) the footprint bits and \(n_{in}\) the replay cap;
+  - \(c = 2^{2^{-10}}\).
+- At the worst statement \(T_w = (1+c)(2^{1-F} + e^{-128})\), and the whole error is \(\kappa_\delta = c^2(\delta + \kappa_s) + T_w\).
+- A world year is \(N_{lw}\,T_w\), with \(N_{lw} = 2^{43.4}\) derived.
