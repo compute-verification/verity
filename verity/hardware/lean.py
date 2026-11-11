@@ -11,9 +11,10 @@ it wrote as a product that is not the number ``table`` gives.
     uv run python -m verity.hardware.lean            name each generated module its card file no longer gives; exit 1 if any
     uv run python -m verity.hardware.lean --write    write them
 
-``modules`` is every generated module by its path, which ``--write`` writes and ``tests/test_lean.py`` holds the
-committed files to, byte for byte. Another kind of record generated from the card files is one more ``render`` function
-and its line in ``modules``; ``header`` and ``numeral`` serve both. Stdlib only, and it imports no other unit.
+``modules`` is every generated module by its path, which ``--write`` writes (``write``; ``stale`` names the ones to
+write) and ``tests/test_lean.py`` holds the committed files to, byte for byte. Another kind of record generated from
+the card files is one more ``render`` function and its line in ``modules``; ``header`` and ``numeral`` serve both.
+Stdlib only, and it imports no other unit.
 """
 
 from __future__ import annotations
@@ -143,24 +144,36 @@ def modules() -> dict[str, str]:
     return {f"{OUT}/{Path(load(sku)['lean']).stem}.lean": render(sku) for sku in tabled()}
 
 
+def stale(top: Path | None = None) -> list[str]:
+    """The generated modules that are missing under ``top`` (the repository's root), or are not ``modules``' text there."""
+    top = top or root()
+    return [path for path, text in modules().items()
+            if not (top / path).is_file() or (top / path).read_bytes() != text.encode("utf-8")]
+
+
+def write(top: Path | None = None) -> list[str]:
+    """Write each stale module under ``top`` (the repository's root), and return their paths."""
+    top, texts = top or root(), modules()
+    out = stale(top)
+    for path in out:
+        (top / path).parent.mkdir(parents=True, exist_ok=True)
+        (top / path).write_bytes(texts[path].encode("utf-8"))
+    return out
+
+
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description="The Lean card tables, generated from the card files.")
     ap.add_argument("--write", action="store_true", help="write each generated module; without it, name each one its "
                     "card file no longer gives and exit 1 if there is one")
     a = ap.parse_args(argv)
-    top, stale = root(), 0
-    for path, text in modules().items():
-        file = top / path
-        if file.is_file() and file.read_bytes() == text.encode("utf-8"):
-            continue
-        if a.write:
-            file.parent.mkdir(parents=True, exist_ok=True)
-            file.write_bytes(text.encode("utf-8"))
+    if a.write:
+        for path in write():
             print(f"wrote {path}")
-        else:
-            stale += 1
-            print(f"{path} is not what its card file gives; write it: `{COMMAND}`")
-    return 1 if stale else 0
+        return 0
+    found = stale()
+    for path in found:
+        print(f"{path} is not what its card file gives; write it: `{COMMAND}`")
+    return 1 if found else 0
 
 
 if __name__ == "__main__":

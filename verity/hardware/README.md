@@ -49,3 +49,16 @@ the card's numbers itself, and `tests/test_lean.py` holds it to each Lean table.
 **Changing a number:** change the card file, then its Lean table to match. `tests/test_lean.py` evaluates each Lean
 `card` arm as an exact rational and fails on any number that differs, and on a store, resource or format of
 `Security/Definitions/Core/Accel/Isa.lean` that either side lacks. A new SKU is a new card file and its own Lean table.
+
+**The generated tables** (`verity.hardware.lean`). Each GPU card that names a Lean table also has one nobody writes by
+hand: `render(card)` is the Lean module of the card file's numbers (`table(card)`), under the names its hand-written
+table declares, and `Security/Proofs/Core/Accel/Cards/` (`lean.OUT`) holds the two. Nothing imports them while the
+hand-written tables stand, since the two declare the same names. After a card file changes, write them again:
+
+~~~sh
+uv run python -m verity.hardware.lean --write
+~~~
+
+`tests/test_lean.py` holds each committed module to `render` byte for byte, to its card file number by number and to
+its hand-written table name for name; without `--write` the command names each module that is stale and exits 1. A
+field of ℕ in a generated table has no division, and `render` refuses a card file that would leave a fraction there.

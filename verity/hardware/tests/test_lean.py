@@ -278,3 +278,16 @@ def test_a_generated_table_has_no_truncating_division(section: str, key: str, va
     card[section][key]["value"] = value
     with pytest.raises(InvalidArtifact, match=f"{re.escape(named)} is .*not a whole number"):
         lean.render(card)
+
+
+def test_the_command_writes_the_generated_tables(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
+    """The committed modules are current, so the command without ``--write`` exits 0 and names none. Under a root that
+    has none, every module is stale; ``write`` writes each, byte for byte, and a second ``write`` has nothing to do. An
+    edited module is stale again."""
+    assert lean.stale() == [] and lean.main([]) == 0 and capsys.readouterr().out == ""
+    assert lean.stale(tmp_path) == list(GENERATED)
+    assert lean.write(tmp_path) == list(GENERATED) and lean.stale(tmp_path) == [] and lean.write(tmp_path) == []
+    assert all((tmp_path / path).read_bytes() == text.encode("utf-8") for path, text in GENERATED.items())
+    edited = next(iter(GENERATED))
+    (tmp_path / edited).write_text(GENERATED[edited].replace("* clock", "* clock * 2", 1), encoding="utf-8")
+    assert lean.stale(tmp_path) == [edited]
