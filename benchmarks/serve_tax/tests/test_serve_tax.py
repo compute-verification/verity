@@ -758,12 +758,19 @@ def test_a_table_of_planned_requests_is_checked_and_sent_as_its_requests_arrive(
     assert S.pass_prompts(load, S.ARRIVING, lines[1:], 1.0) == 1
     assert [S.pass_prompts(x, c, None, w) for x, c, w in ((load, 1, None), (load, 1, 20.0), (S.LOADS["chat"], 8, None),
                                                           (S.LOADS["chat"], 8, 20.0))] == [4, 2, 200, 16]
-    # held prompts (--hold-prompts) grow a pass with its rung and never shrink one; a warm-up and a plan stay as they are
+    # a given pass size (--pass-prompts) is every rung's alike; a warm-up stays within the load's own prompts
     chat = S.LOADS["chat"]
-    assert [S.pass_prompts(chat, c, None, hold=4) for c in (8, 50, 96, 256, 384)] == [200, 200, 384, 1024, 1536]
-    assert [S.pass_prompts(chat, 96, None, hold=h) for h in (0, 1, 2, 3)] == [200, 200, 200, 288]
-    assert (S.pass_prompts(chat, 96, None, 20.0, hold=4), S.pass_prompts(chat, 256, None, 20.0, hold=4)) == (192, 200)
-    assert S.pass_prompts(load, 1, None, hold=64) == 4 == S.pass_prompts(load, S.ARRIVING, lines, hold=64)
+    assert [S.pass_prompts(chat, c, None, prompts=1024) for c in (8, 96, 256, 384)] == [1024] * 4
+    assert [S.pass_prompts(chat, c, None, 20.0, 1024) for c in (8, 96, 256)] == [16, 192, 200]
+    assert S.pass_prompts(chat, 96, None, 20.0, 100) == 100
+    both = {"chat": (96, 256), "long": (1, 2)}
+    assert S.parse_pass_prompts("chat=1024, long=64", both) == {"chat": 1024, "long": 64}
+    assert S.parse_pass_prompts(None, both) == {} == S.parse_pass_prompts("", both)
+    for text, given, why in (("chat=1024", {"long": (1,)}, "'chat' is not a load of --loads"),
+                             ("prefix=8", {"prefix": (1,)}, "sent as planned"), ("chat=0", both, "1 or more"),
+                             ("chat", both, "NAME=N"), ("chat=4x", both, "NAME=N")):
+        with pytest.raises(SystemExit, match=why):
+            S.parse_pass_prompts(text, given)
     # the client then sends each at its arrival: nothing holds a concurrency, and nothing turns the file's times off;
     # the file it reads is the one the arm wrote from the table, never the table
     trace = S.write_trace(tmp_path / "prefix.trace.jsonl", lines)
@@ -932,11 +939,14 @@ def test_a_loads_dataset_file_is_the_nodes_copy_of_the_pinned_one_or_nothing(tmp
     text = capsys.readouterr().out
     assert f"200 prompts a pass at concurrency 4, 8, from {at} (SHA-512 {ds.sha512[:16]}...)" in text
     assert "load long: 8,192 random tokens in and 128 out" in text and "24 prompts a pass at concurrency 1, 2, 4, 8\n" in text
-    # with held prompts it prints what each rung's pass sends, where they differ
-    assert S.main(["passes", "--loads", "chat=96+192+256,long=1+2", "--hold-prompts", "4"]) == 0
+    # a given pass size is printed, with the load's own beside it
+    assert S.main(["passes", "--loads", "chat=256+384+96,long=1+2", "--pass-prompts", "chat=1024"]) == 0
     text = capsys.readouterr().out
-    assert f"; 384, 768, 1,024 prompts a pass at concurrency 96, 192, 256 in turn, from {at} " in text
+    assert (f"; 1,024 prompts a pass at concurrency 256, 384, 96 (--pass-prompts: the load's own are 200), from {at} "
+            in text)
     assert "24 prompts a pass at concurrency 1, 2\n" in text
+    with pytest.raises(SystemExit, match="'long' is not a load of --loads"):
+        S.main(["passes", "--loads", "chat", "--pass-prompts", "long=64"])
     assert S.main(["dataset", "chat"]) == 0 and capsys.readouterr().out == f"{at}\n"
     for argv, why in ((["passes", "--loads", "chat", "--arms", "compiled absent"], "absent"),
                       (["passes", "--loads", "chat", "--arms", "tick"], "corpus client"),
@@ -1465,13 +1475,15 @@ def test_one_load_alone_is_named_and_never_meets_the_target_for_the_number():
                        ([*chat, *(a | {"vllm": "0.2"} for a in long)], "two directories of arm compiled differ in vllm")):
         with pytest.raises(SystemExit, match=why):
             S.cost_report(twice)
-    # passes of another size (--hold-prompts) are other requests: no cost across them, in one arm or between two
-    held = [a | {"hold_prompts": 4} if a["arm"] == "compiled" else a for a in [*chat, *long, *row]]
-    with pytest.raises(SystemExit, match=r"compiled and whole served passes of different sizes \(--hold-prompts 4 and 0\)"):
-        S.cost_report(held, arm=WHOLE)
-    with pytest.raises(SystemExit, match="two directories of arm compiled differ in hold_prompts"):
-        S.cost_report([*chat, *(a | {"hold_prompts": 4} for a in long)])
-    same = S.cost_report([a | {"hold_prompts": 4} for a in [*chat, *long, *row]], arm=WHOLE)
+    # passes of another size (--pass-prompts on one side) are other requests: no cost across them
+    def sized(a: dict, n: int) -> dict:
+        return a | {"loads": {p: [r | {"sent": n} for r in reps] for p, reps in a["loads"].items()}}
+
+    longer = [sized(a, 1024) if a["arm"] == "compiled" else a for a in chat]
+    with pytest.raises(SystemExit, match=r"compiled and whole sent passes of different sizes at load chat, at "
+                                         r"concurrency \d+ \(1024 and 200 prompts in rep 1; --pass-prompts\)"):
+        S.cost_report([*longer, *long, *row], arm=WHOLE)
+    same = S.cost_report([*(sized(a, 1024) for a in chat), *long, *row], arm=WHOLE)
     assert [c["value"] for c in same["loads"]] == [2.04, 6.95]
 
 
@@ -1868,5 +1880,5 @@ def test_run_sh_takes_the_serving_costs_flags_and_refuses_before_it_holds_anythi
     assert all(S.ARMS[a].parent in every[:i] for i, a in enumerate(every) if S.ARMS[a].parent)
     # before it holds a GPU the job checks its arms and downloads the pinned dataset where the node has none
     assert 'passes --loads "$LOADS" "${ds[@]}" --fetch --arms "$ARMS" --model-id "$MODEL_ID"' in sh
-    # held prompts reach that check and every arm alike: the check prints the passes the arms then serve
-    assert sh.count('${HOLD_PROMPTS:+--hold-prompts "$HOLD_PROMPTS"}') == 2
+    # a given pass size reaches that check and every arm alike: the check prints the passes the arms then serve
+    assert sh.count('${PASS_PROMPTS:+--pass-prompts "$PASS_PROMPTS"}') == 2

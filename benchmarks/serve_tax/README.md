@@ -80,8 +80,9 @@ research run --on NODE --source . --cwd source -- bash benchmarks/serve_tax/run.
   until a plan of recorded long requests replaces it; the output says which it was. Its first token takes seconds on
   any engine, so its goodput counts the time per output token alone, and the engines' context limit is raised to fit
   it. A pass sends the load's prompts whatever its rung, so a rung near or past them is held for part of the pass
-  only: `HOLD_PROMPTS=N` makes a pass send at least N prompts for each request its rung holds, for a ladder that
-  climbs past them, and a cost's two arms must have run with the same N.
+  only: `PASS_PROMPTS=chat=N` makes a pass of `chat` send N prompts at every rung, for a ladder that climbs past
+  them. Every rung sends the same N, since passes of two sizes differ in tokens a second by their size alone, and
+  the cost refuses two arms whose passes sent different numbers of prompts.
 - **The dataset file** of `chat` is pinned (`serve_tax.Dataset`: its repository, revision, file and SHA-512). A node
   keeps one copy, in its Hugging Face cache outside every run's directory; `serve_tax.py passes --fetch`, which
   `run.sh` runs before it holds a GPU, downloads it there where there is none, and a download or a copy whose SHA-512
