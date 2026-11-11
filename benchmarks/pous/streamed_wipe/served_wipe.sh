@@ -49,7 +49,7 @@ if [ -z "${WIPE_OWN_LEASE:-}" ]; then  # once, before any lease: the key, the Le
     S=$(mktemp -d)
     trap 'rm -rf "$S"' EXIT
     L=verity/protocols/pous/device/lean
-    tar -C "$ROOT" -c --exclude=.lake --exclude=__pycache__ verity/core | tar -C "$S" -x
+    tar -C "$ROOT" -c --exclude=.lake --exclude=__pycache__ "$L" verity/difftest/lean verity/protocols/interface verity/protocols/flock/verifier verity/commitments/attest/lean verity/commitments/lms/lean verity/commitments/randomness | tar -C "$S" -x
     export PATH="$HOME/.elan/bin:$PATH"
     command -v lake >/dev/null 2>&1 || bash "$ROOT/tools/verity/lean/setup.sh" "$S/$L" > "$DIR/lake-setup.log" 2>&1
     (cd "$S/$L" && lake build wipe-protocol) > "$DIR/lake-build.log" 2>&1 \
