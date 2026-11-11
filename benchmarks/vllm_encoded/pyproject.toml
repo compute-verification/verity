@@ -10,9 +10,9 @@ testpaths = ["tests"]
 # append Definition; the kernels open through cuda_lib.py
 inputs = ["benchmarks/word_codec/codec.py", "benchmarks/word_codec/wide.py", "benchmarks/codec_tensor/wide.py",
           "benchmarks/word_codec/kv.py", "benchmarks/word_codec/kv_bench.py", "benchmarks/word_codec/cuda_lib.py",
-          "verity/__init__.py", "verity/errors.py", "verity/core/__init__.py", "verity/core/protocols/__init__.py",
+          "verity/__init__.py", "verity/errors.py", 
           "verity/protocols/poub/verifier/__init__.py", "verity/protocols/poub/verifier/codec.py",
-          "verity/ml/__init__.py", "verity/circuits", "verity/commitments", "verity/commitments/crypto",
+          "verity/circuits", "verity/commitments", "verity/commitments/crypto",
           "verity/definitions/kernels/__init__.py", "verity/definitions/kernels/tc.py",
           "verity/hardware",
           "verity/definitions/__init__.py", "verity/definitions/circuits", "verity/definitions/ops", "verity/definitions/silicon", "verity/protocols/__init__.py", "verity/protocols/poub/__init__.py"]  # kv_bench.py reads the RTX PRO 6000's card
