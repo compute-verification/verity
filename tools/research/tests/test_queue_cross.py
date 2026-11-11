@@ -272,3 +272,24 @@ def test_a_crossing_merges_with_mains_drivers_where_the_tree_it_merges_keeps_the
     assert not subprocess.run([sys.executable, "-c", "import subprocess, sys; sys.exit(subprocess.run(['git', '-c', "
                                "'core.hooksPath=/dev/null', 'merge-tree', '--write-tree', 'HEAD', sys.argv[1]]).returncode)",
                                base], cwd=r, env=Q._script_env(), capture_output=True).returncode
+
+
+def test_a_crossing_whose_tree_fails_the_root_suite_is_refused_with_the_test_and_never_pushed(world, monkeypatch):
+    """#1, marked and passed, adds a root test that reads a path the move retires through a string the map leaves alone.  It
+    crosses clean and its mark would carry, but the root suite fails on the crossed tree, as it would in the batch it joins,
+    so it is refused with that test and `--push` leaves its branch alone.  `main`'s root suite passes."""
+    monkeypatch.setattr(Q, "CROSS_ROOT_SYNC", None)
+    monkeypatch.setattr(Q, "CROSS_ROOT_PYTHON", sys.executable)
+    monkeypatch.setattr(Q, "CROSS_ROOT_SUITE", ["tests", "-m", "not slow"])
+    toy = "from pathlib import Path\n\n\ndef test_the_proto_is_there():\n    assert Path('old' + '_proto', 'a.py').is_file()\n"
+    _open(world, 1, old := world.change({"tests/test_toy.py": toy}))
+    _mark(world, 1, old)
+    _land(world, _move(world))
+    out = world.tmp / "out"
+    assert _cross(world, monkeypatch, "--out", str(out)) == 0
+    report = _report(out)
+    (r,) = report["refused"]
+    assert (report["crossed"], r["pr"], r["root"]) == ([], 1, ["tests/test_toy.py::test_the_proto_is_there"])
+    assert r["why"] == (f"crossed clean as {r['new'][:12]}, but the root suite fails on the crossed tree: "
+                        "tests/test_toy.py::test_the_proto_is_there")
+    assert _cross(world, monkeypatch, "--push", "--from", str(out)) == 0 and _branch(world, 1) == old

@@ -4319,13 +4319,16 @@ def cross_plan(repo: Path, prs: Iterable[PR], main: str, named: list[str], ready
 
 
 def cross_all(repo: Path, todo: dict[int, dict], main: str, jobs: int, kept: bool = False,
-              log: Callable[[str], None] = print) -> tuple[list[dict], list[dict], list[dict]]:
+              log: Callable[[str], None] = print,
+              root: Callable[[str], dict[str, str] | str] | None = None) -> tuple[list[dict], list[dict], list[dict]]:
     """Each PR of ``todo`` (`cross_plan`'s) crossed by `cross_one`, ``jobs`` stacks at once, each stack lowest first and each
     member onto the crossed head of the one below it: ([each crossed], [each refused, with why], [each skipped as a `stack`:
     above a member of its stack that doesn't cross, or one restack.py won't cross onto the crossing below it, as it refuses a
     head sharing a commit after the move's base with `--onto` (`based-after`), so its owners restack the stack]).  With
     ``kept`` and more than one job, one restack of the first move's base checks each move (restack.py's `check_generated`,
-    kept on the machine) before the rest start, so they read it."""
+    kept on the machine) before the rest start, so they read it.  With ``root`` (`root_failures` of a commit), a crossing that
+    is clean and carries counts only once the root suite passes on its tree, in the same job: one whose tree fails a test that
+    ``main``'s passes, or where the suite doesn't run, is refused, with its failing tests under "root"."""
     above: dict[int | None, list[int]] = {}
     for n, t in sorted(todo.items()):
         above.setdefault(t["below"], []).append(n)
@@ -4334,11 +4337,25 @@ def cross_all(repo: Path, todo: dict[int, dict], main: str, jobs: int, kept: boo
         got = cross_one(repo, moves[0][1][0], main, moves, kept=True)
         log(f"research queue cross: the moves' checks kept, restacking their base {moves[0][1][0][:12]}: "
             f"{got.get('why', 'clean')}")
+    base: dict[str, concurrent.futures.Future] = {}
+
+    def gate(n: int, got: dict) -> dict:
+        if root is None or "own" not in got:
+            return got
+        new = got["new"]
+        if isinstance(fails := root(new), str):
+            got = {"why": f"crossed clean as {new[:12]}, but the root suite didn't run on the crossed tree: {fails}", "new": new}
+        elif bad := [t for t in fails if t not in (b if isinstance(b := base["main"].result(), dict) else {})]:
+            got = {"why": f"crossed clean as {new[:12]}, but the root suite fails on the crossed tree: {bad[0]}"
+                          + (f" (and {len(bad) - 1} more)" if len(bad) > 1 else ""), "new": new, "root": bad}
+        log(f"research queue cross: #{n}: the root suite on {new[:12]}: {got.get('why', 'passes')}")
+        return got
 
     def stack(n: int, onto: str | None = None) -> list[tuple[int, dict]]:
         got = cross_one(repo, todo[n]["old"], main, todo[n]["moves"], onto=onto, kept=kept, src=todo[n].get("src"))
         log(f"research queue cross: #{n} at {todo[n]['old'][:12]}: " + (f"crossed as {got['new'][:12]}" if "own" in got
                                                                          else got["why"]))
+        got = gate(n, got)
         if onto is not None and got.get("status") == "based-after":
             got = {"stack": f"{RESTACK} won't cross it onto #{todo[n]['below']}'s crossing, whose old head it holds (based-after), "
                             "so its owners restack the stack"}
@@ -4348,6 +4365,12 @@ def cross_all(repo: Path, todo: dict[int, dict], main: str, jobs: int, kept: boo
         return out
 
     with concurrent.futures.ThreadPoolExecutor(max(1, jobs)) as pool:
+        if root is not None and todo:
+            base["main"] = pool.submit(root, main)
+            base["main"].add_done_callback(lambda f: log(
+                f"research queue cross: the root suite on main {main[:12]}: " + (
+                    f"didn't run ({r}), so every failure on a crossed tree counts" if isinstance(r := f.result(), str)
+                    else f"fails {', '.join(r)}, which no crossing is refused for" if r else "passes")))
         done = [x for f in [pool.submit(stack, n) for n in above.get(None, [])] for x in f.result()]
     crossed, refused, skipped = [], [], []
     for n, got in sorted(done, key=lambda x: x[0]):
@@ -4358,7 +4381,8 @@ def cross_all(repo: Path, todo: dict[int, dict], main: str, jobs: int, kept: boo
             skipped.append({"pr": n, "head": t["old"], "kind": "stack",
                             "why": got.get("stack") or f"#{got['under']} below it in its stack doesn't cross"})
         else:
-            refused.append({"pr": n, "old": t["old"], "why": got["why"], **({"new": got["new"]} if "new" in got else {})})
+            refused.append({"pr": n, "old": t["old"], "why": got["why"], **({"new": got["new"]} if "new" in got else {}),
+                            **({"root": got["root"]} if "root" in got else {})})
     return crossed, refused, skipped
 
 
@@ -4600,6 +4624,42 @@ def merged_worktree(repo: Path, commit: str, root: Path | None = None):
             _git(repo, "worktree", "remove", "--force", str(wt), check=False)
             shutil.rmtree(tmp, ignore_errors=True)
             _git(repo, "worktree", "prune", check=False)
+
+
+#: the repository's root suite as the quick tier runs it (`suites.py --quick`): `tests/` without the tests marked slow, here
+#: on 4 workers; how long `research queue cross` lets its sync and its run take on a crossed tree; the sync that makes the
+#: tree's environment, as the preflight makes a merged tree's (None: none); and the interpreter (None: the tree's `.venv`'s)
+CROSS_ROOT_SUITE = ["tests", "-m", "not slow", "-n", "4"]
+CROSS_ROOT_WAIT_S = 30 * 60
+CROSS_ROOT_SYNC: tuple[str, ...] | None = PREFLIGHT_SYNC
+CROSS_ROOT_PYTHON: str | None = None
+
+
+def root_failures(repo: Path, commit: str, sync: tuple[str, ...] | None = None,
+                  python: str | None = None) -> dict[str, str] | str:
+    """{node id: its summary line} of what fails in the repository's root suite (`CROSS_ROOT_SUITE`) on ``commit``'s tree, in a
+    `merged_worktree` made ready by ``sync`` and run by ``python`` (None: the tree's own `.venv`), without the queue's
+    credentials or the store's keys, as it runs the tree's own code: empty when it passes or the tree has no `tests/`, else
+    why it didn't run."""
+    env = {k: v for k, v in git_env().items() if k not in SCRIPT_UNSET and not k.startswith(CROSS_UNSET)}
+
+    def run(argv: list[str], cwd: Path) -> tuple[subprocess.CompletedProcess | None, str]:
+        rc, out = run_group(argv, cwd, CROSS_ROOT_WAIT_S, env=env)
+        if rc is None:
+            return None, f"`{' '.join(argv[:4])}` ran over {CROSS_ROOT_WAIT_S // 60} min"
+        return subprocess.CompletedProcess(argv, rc, out, ""), ""
+
+    try:
+        with merged_worktree(repo, commit) as wt:
+            if not (wt / "tests").is_dir():
+                return {}
+            if sync is not None:
+                r, why = run(list(sync), wt)
+                if r is None or r.returncode:
+                    return why or f"`{' '.join(sync)}` exited {r.returncode}: {r.stdout.strip()[-300:]}"
+            return pytest_failures(run, python or str(wt / ".venv" / "bin" / "python"), wt, CROSS_ROOT_SUITE)
+    except (QueueError, OSError, subprocess.SubprocessError) as e:
+        return f"{type(e).__name__}: {e}"
 
 
 @dataclass
@@ -6774,7 +6834,8 @@ def _cross(a: argparse.Namespace) -> int:
         saved = {k: os.environ.get(k) for k in drivers}
         os.environ.update(drivers)
         try:
-            crossed, refused, stacked = cross_all(top, todo, main, a.jobs, kept=CROSS_KEPT, log=log)
+            crossed, refused, stacked = cross_all(top, todo, main, a.jobs, kept=CROSS_KEPT, log=log,
+                                                  root=lambda c: root_failures(top, c, CROSS_ROOT_SYNC, CROSS_ROOT_PYTHON))
         finally:
             for k, v in saved.items():
                 if v is None:
