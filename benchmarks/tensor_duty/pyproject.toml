@@ -4,5 +4,5 @@
 testpaths = ["tests"]
 
 [tool.verity.tests]
-# summarize.py reads the bound from the card (`verity.hardware`, which imports `verity.errors` alone).
-inputs = ["verity/__init__.py", "verity/errors.py", "verity/hardware"]
+# summarize.py reads the bound from the card (`verity.hardware.cards`, which imports `verity.errors` alone).
+inputs = ["verity/__init__.py", "verity/errors.py", "verity/hardware/__init__.py", "verity/hardware/cards"]

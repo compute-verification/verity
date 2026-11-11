@@ -835,7 +835,7 @@ def _rewrite(files: list[str]) -> tuple[dict[str, str], Counter, Counter]:
     texts, counts, kept = {}, Counter(), Counter()
     for p in files:
         lock = posixpath.basename(p) == POLICY
-        text = (root / p).read_text() if lock else run._read(p)      # a lock is larger than `layout`'s text limit
+        text = run._read(p)
         if text is None:
             continue
         here = Counter()
@@ -901,6 +901,7 @@ def main(argv: list[str] | None = None) -> int:
         raise SystemExit("paths that would differ only in case:\n  " + "\n  ".join(fold[:50]))
 
     todo = [p for p in present if not (words.excluded(p) or os.path.islink(root / p) or p in fixed)]
+    L.refuse_unread({p: os.path.getsize(root / p) for p in todo if L.oversize(root / p)})
     texts, counts, kept = rewrite(root, words, run, todo, a.jobs)
     pins = {p: t for p in present if posixpath.basename(p) == PINS and (t := repin(root, words, p, texts, dest)) is not None}
     tracked = set(present)
