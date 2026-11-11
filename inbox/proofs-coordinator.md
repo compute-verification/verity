@@ -60005,3 +60005,70 @@ Tags: [run] a command I ran now; [read] a file, record or page I read now, with 
 **What I need from you (does not block me yet):** the Linear issue and due date for the three new `open` entries (the bounds on the collision finder's success and on the two off-trace probabilities). Until you say otherwise I file them under PRF-524, this PR's issue, due 2026-11-30, as the lock's other `open` entries of this lane are. [guess]
 
 Next entry: when #8885's two runs end.
+
+## 18:04Z ASKS: pages 1 and 2 are drafted in the Glossary's words, each written as decided by the lane (pick A, with its re-check), each 900 words or fewer and passing the page and card checks; Ask 4 is dropped as your 17:49Z section says; page 3 waits for your word
+
+Agent `bc-7938e090-f926-50ff-bf3b-05e921c5ed0b`. Mailbox read through its 17:49Z section [run]. Tags: [read], [run], [derived] my arithmetic, [relayed] a statement of yours or a worker's that I did not check.
+
+**The drafts** (notes, published with `research notes sync --path lanes/proofs`, commit `56313c43a2` of the notes) [run]:
+- Page 1, the connected circuit: `lanes/proofs/20261111T1725Z-draft-ask-which-program.md`.
+- Page 2, the number of requests a committed trace covers: `lanes/proofs/20261111T1739Z-draft-ask-registration-size.md` (the file keeps its name; the page does not use the word "registration").
+- The page is everything under the front matter. The front matter holds what you need to post: `post:` (Status Decided by lane, Choose a; card kind default, recommend a, default a, deadline 2026-11-16T20:00:00Z), `decision:` (the "Provisionally accepted (standing rule): A ... Re-check: ..." text), `card_question:`, `card_why:`, `card_options:`.
+
+**Word counts** [run: my counter]. The skill says "about 400 to 900 words" and no code counts them, so I give each way of counting, with the approved Merkle-leaf page beside it:
+
+| | everything | without Sources | without Sources and formulas | and without the fixed reply callout |
+|---|---:|---:|---:|---:|
+| page 1 | 1,035 | 953 | 931 | **899** |
+| page 2 | 1,025 | 959 | 932 | **900** |
+| the approved Merkle-leaf page | 1,120 | 1,015 | 974 | 942 |
+
+If you were held to 900 on a stricter count, say which and I cut to it.
+
+**Checks** [run]:
+- `research msg ask-daniel --dry-run --as proofs ... --page FILE` stops at the handle ("@proofs is held by bc-a26cefd0..., bc-6d4c481d..., and this agent is bc-7938e090..."), exit 2. In `cmd_ask_daniel` the card and page checks run before the handle check, so that refusal means both had passed.
+- So I also called the same functions without a handle (`research.slack.card`, which calls `check_page`, and `page_request`): both pages print "card ok", "page ok: six sections present and in order; reply callout present", and the page request builds (Kind Default, Area Claim or assumption, "If no answer" = option A at 12:00 PM PST, Mon 16 Nov).
+- Words: the tree's own retired-terms lint (`tests/lint/test_repo_retired_terms.py`, GLOSSARY.md's older names) on each page's body: 0 sites. Your 17:32Z list of working labels, as patterns: none left but "template" on page 1, which is the Glossary's word and is defined there in a clause ("a kind of proof block").
+
+**What changed against the brief, by your mailbox.**
+- Each page opens with a **Context.** line inside the gray callout, before **Question.** The template has no such line; the tool reads only the six headings, so it posts. Move it if you want the callout as the template has it.
+- "If you don't answer" reads "A goes ahead, decided by the lane. You can reverse it."
+- No page uses: registration (but for the one quoted header on page 1), window, prover, law, cut, row, class, K, the Greek letter for the second stage's share, first-hit, side by side, wired, budget, or a worker's name.
+
+**Page 1: the one thing to check.** On the one replay block served so far, the restated program is the same unconnected program. The verifier's check of the design derives no connection there (the shape of those reads gives none) and refuses the replay block with `second-wires` [relayed: the 15:07Z and 15:14Z second readings; run by that worker on the Python verifier at V = 128, not at any other replay block]. The page says so under "Why the lane recommends A" as one of A's two limits. If your pick includes making the check derive those connections, the page should say that instead; I found no entry that proposes it.
+
+**Page 2: the one thing to check.** The limit from the challenger's coins. A second stage that needs more coins than its layout holds is refused, and I derive that #8914's layout (2^30 bytes) has room for about 12 of this configuration's sampled requests, and `main`'s (2^26 bytes) for none [derived: 510,774,060 bytes at six sampled requests, the 12:53Z entry's run, taken as proportional to the number sampled]. That is under the 19 the binding error allows, so once #8914 lands a large trace is already refused, by a rule nobody wrote as a limit on size. The page gives it as the one thing that would change the recommendation. I did not run it. Two more for this page:
+- The table is for the configuration the exfiltration figures quote (the second stage proves 3,486,644 proof blocks of each sampled request). The configuration the Merkle-leaf page quoted (9,384,040) stays under 2^-100 only up to 9 / 7 / 7 sampled requests [derived by proportion from 2^-100.63 / 2^-100.38 / 2^-100.29 at six]. I cut that sentence for length; it belongs on the page if N is to be read off it.
+- "16 times larger with the wider Merkle leaf" is on the binding error's term alone [derived]; the coins and #8939's instance (at most 2^33 a verification phase; 21 sampled requests is 2^33.47 [relayed]) bind first.
+
+**Sentences I could not trace to a source I read** (hostile reread; none is marked on the page as more than it is).
+
+Page 1:
+1. The first half of the Context line ("the developer registers one big circuit, it is partitioned into proof blocks, and we sample over it") is my rewording of the quote in your 17:49Z section; I have not seen Daniel's message. The second half is quoted as you and the smell catalogue give it.
+2. "That is the design's picture and the abstract claims'": yours. I did not read `Claims.SamplingGeneric` to confirm what program the abstract claims take.
+3. "The two-stage design commits such values in two trees": the catalogue's sentence. Which two trees I did not trace.
+4. "one for each template (a kind of proof block)": `memberProg` takes a circuit file and a count of units [read]; that a member is a template is the catalogue's wording.
+5. "The design the rules want": my reading of AGENTS.md's Lean rules.
+6. "A is the shorter way to put a Lean statement behind the modeled figure": from "(B) the same count and more Lean" in the 12:45Z entry, plus my judgment.
+7. "if it cannot be proved we come back to you": mine.
+8. "the two refusals go into review as one change; the definitions and the restated case follow": a plan. At 14:44Z the refusals were four commits on a worker's VM, pushed nowhere [relayed].
+9. "2^-95.87 on the partition served today": your Notion page's wording; the Merkle-leaf page calls the same figure "the plan's cut".
+10. "The lock's records ... change (predicted)": one worker's reading; no records run made them.
+11. "the one replay block served so far": my reading of "today's served record" with PRF-550's comment that no second stage has run on a served engine.
+
+Page 2:
+1. "1/64 of each sampled request's proof blocks": your 17:32Z gloss of the second stage's share at 2^-6; the 3.5 million is a run's figure. I did not check that the share is exactly that ratio.
+2. "12,379 GB a year over the world's compute, at utilization 0.4": the 14:02Z entry's figure with `main`'s verifier costs counted (11,825 to 12,924); "a year over the world's compute" is the morning report's caption for the same family. The morning report's own figure for this configuration is 12,443.
+3. "162 as a machine's GPUs commit today, 193 if its eight GPUs commit together, at most 205 with a step that copies cache pages": my plain reading of "162 inside one rank's window, 193 for one window of eight ranks, PageCopy 97 to 205". The 162 is a run's count on a partition that is not built.
+4. −104.39 in the table and the 19: by proportion [derived].
+5. "The cost model counts a verification phase that samples more than 3 or 4 requests as refused": `optimize.py`'s comment on `OVERFLOW` [read] with the 12:56Z entry's 3 or 4 for this configuration [relayed].
+6. "One rule pulls the other way: a protocol carries no policy parameter, and this number would be one": my reading of AGENTS.md. You may not agree that a stated number is a policy parameter.
+7. "None of A is written or sized": not found in what I read; no search of every branch.
+8. "20.4 GB" at one request in 7,219: the 14:02Z entry's run; the morning report has 20.7 at 586 times the cost.
+9. "we size the check and its Lean statement and report N here": a plan.
+
+**Facts I checked on `main` myself** [read, at `493f49485e50`; the quoted header again at `cc6ee7446278`]: `Spot.Rate.count` and `count_ge`; that registration refuses `bernoulli` (`Spot/Select.lean`, `service.py`); `registration_deadline` off unless set; `OVERFLOW` and `registration_cap`; `MAX_COINS` 2^20; `FORM` false; `bitsProgs` and `sideBySide` in `Properties.Spot`; the header's sentence on `Addresses`; `Held`'s free fields; the lock's `open` entry for `SpotFlock.Addresses` (PRF-460, due 2026-11-30); neither two-stage guarantee is in `deployed`. The two branches' heads are unchanged (`294cd887df74`, `24b588e7fed5`) [run: `git ls-remote`].
+
+**Ask 4.** Dropped, no page. One thing from my reading that the two workers landing them may want: #8915's body says "no premise on SHA-512" and lists four hypotheses inside the form that are not in the lock's premise lists; your Notion page's line on it ("adds premises: collision resistance in expected time") does not match that body.
+
+**Page 3.** I draft it now so that it is ready for your word: three readings (2^80 compressions; 2^80 calls under a premise counted in calls, which is what the Lean says; 2^80 calls each charged 513 compressions, which is what your tables use), 9.0 bits between the first and the third, and the default you gave (compressions, for one verification phase, with what a year reads). By 04:00Z.
