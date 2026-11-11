@@ -11,6 +11,7 @@ public import Proofs.Accounting.HeadlineDc
 public import Proofs.Accounting.HeadlineDc.Meets
 public import Proofs.Accounting.Gates.Rows
 public import Proofs.Accounting.Gates.Bitwise
+public import Proofs.Accounting.Gates.ToCircuit
 public import Proofs.Accounting.Bandwidth
 public import Proofs.Accounting.ChainWork
 public import Proofs.Accounting.Prob
@@ -40,6 +41,8 @@ public import Proofs.Accounting.ReadUnit.Leaf
 public import Proofs.Accounting.ReadUnit.Select
 public import Proofs.Accounting.ReadUnit.Check
 public import Proofs.Accounting.ReadUnit.Deployed
+public import Proofs.Accounting.ReadUnit.Binding
+public import Proofs.Accounting.ReadUnit.Witnesses
 public import Proofs.Accounting.BoundReceipt
 public import Proofs.Accounting.Capacity
 public import Proofs.Accounting.RegisteredCircuit

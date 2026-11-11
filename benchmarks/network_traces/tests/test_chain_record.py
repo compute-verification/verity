@@ -44,7 +44,7 @@ from verity.core.protocols.certifier import audit, lean_audit
 
 HERE = Path(__file__).resolve().parents[1]
 PERIOD_CASE = HERE.parents[1] / "verity" / "core" / "protocols" / "network" / "tests" / "period_case.py"
-BLOCK_SCHEMA = HERE.parents[1] / "examples" / "h200" / "interfaces" / "verity_e2e_demo" / "schemas" / "block-record.v2.schema.json"
+BLOCK_SCHEMA = Path(__file__).resolve().parents[3] / "examples/h200/interfaces/verity_e2e_demo/schemas/block-record.v2.schema.json"
 
 
 def _load(name: str):
@@ -213,7 +213,8 @@ def test_custody(tmp_path):
 
 def test_job_keeps_no_gate_runs_witness(tmp_path):
     """chain_record.sh's copy of the gates' records into $OUT, which custody uploads, leaves every witness/ behind."""
-    lines = (HERE / "chain_record.sh").read_text().splitlines()
+    script = Path(__file__).resolve().parents[3] / "benchmarks/network_traces/chain_record.sh"
+    lines = script.read_text().splitlines()
     i = next(k for k, line in enumerate(lines) if line.startswith('(cd "$G" && find'))
     copy = "\n".join(lines[i:i + 2])
     run = tmp_path / "G" / "g2" / "c20261026T000000Z-0000"

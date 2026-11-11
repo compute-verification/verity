@@ -457,3 +457,9 @@ def DsaButterflyRowsPad(B, S, sw, rows_, pad):
 
 DSA_TOPK_MASK_COMPOSITES = [DsaTopKMask, DsaTopKMaskCounted, DsaTopKRow, DsaMaskTagStep, DsaButterflyRoute, DsaButterflySettings,
                             DsaButterflyRows, DsaButterflyRowsPad]
+
+#: the Calls serving stages as their cut, by family: the counted mask past `dsa_topk_mask_cut.WHOLE_MAX` keys, its threshold in
+#: digit rounds over blocks of keys and its mask a block a unit (`dsa_topk_mask_cut.cut`), which circuit-check holds to the block
+#: in the Call's place (`checks.cut_of`).  It names the module rather than importing it: that module's units are this one's
+#: Boolean versions' parts
+CUTS = {"DsaTopKMaskCounted_v1": "verity.ml.definitions.registry.dsa_topk_mask_cut"}
