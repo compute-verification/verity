@@ -18,7 +18,7 @@ ALLOW_ALL = 'import json\nprint(json.dumps({"permission": "allow"}))\n'
 def test_an_old_branch_runs_main_s_hooks_and_registry_and_its_own_without_main(tmp_path):
     env = {k: v for k, v in os.environ.items() if not k.startswith("AGENT_GUARD_")}
     env.update(GIT_ENV, AGENT_GUARD_CACHE=str(tmp_path / "cache"), AGENT_GUARD_TASK_LOG=str(tmp_path / "task.jsonl"),
-               AGENT_GUARD_MIN_AVAIL="0")
+               AGENT_GUARD_EVENT_LOG=str(tmp_path / "events.jsonl"), AGENT_GUARD_MIN_AVAIL="0")
     ws = tmp_path / "ws"
 
     def git(*a):
