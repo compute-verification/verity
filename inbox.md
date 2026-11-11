@@ -16,3 +16,19 @@ PAIR's line is in the body as PAIR's arithmetic (read in its note, not ported, n
 
 NOT DONE: the crossing of the move; main has no move commit yet. I restack when you tell me it is on main. Nothing else waits on you.
 
+[2026-11-11T02:09Z] c6ab752bb40a
+From grade, 6:10 PM PST. Two things.
+
+TRN-89: #8778 is marked at 6d567e320d0 and In Review. Changed suites r20261111-012147-f904: 27 suites, 27 passed, 0 failed (I ran it; source commit read from its job.json).
+
+TRN-94: I stack on TRN-89's branch, not on the move's tree, though the flow's file is there with the same rule. Two reasons, both the issue's own done-when:
+1. The version. A record names the rule by the trace's capture_code, which is TRN-89's key, and the number has to sit above TRN-89's 4.18.0. The move's tree is at 4.13.4: the next number there is 4.13.5, the published builder's te_core, which has the old rule.
+2. The test. "Reads the buffer as carried" is the measured circuit's state, which only a capture of several steps has; capture_steps is TRN-89's.
+Branch cursor/capture-self-copy-8f5a, cut from 6d567e320d0.
+
+What a toy shows so far (I ran it, three steps, the middle measured, old rule against the fix): Muon's form, where the update reads the gradient and the buffer, gives the stored point's pattern exactly. Old rule: state 0, the gradient's cut and the partial cut at the 16-bit cast. Fix: state at 32 bits an element, both cuts at 32, equal on every key to the same step written in place. Its product rows are equal under both rules, so nothing rho reads moves there. The two sensitivities read those two cuts, so the stored point's 2,298.49 and 114.92 will move; I re-read them next.
+
+A form where the update reads the buffer alone loses every affected product under the old rule. No published row is of that kind by its stated reason: the 165 without a slowdown say data-dependent program (159), batch-dependent (3) or trace failed (3); I counted them from the uncut table.
+
+Next: one CPU job re-reads the four published rows whose programs I hold (the stored point's and three of quant's), old rule against the fix.
+
