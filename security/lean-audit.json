@@ -105,6 +105,11 @@
    "digest": "d389c19a2ddbe109cebd6de895b010c96712878d4b5604219783c0394c18faf0",
    "why": "The compiled verifiers whose sampled sessions are the proof system's honest runs among the first `K` slots, at an error covering theirs: the ones `CompilerComplete` is stated for. (met by `compilerComplete_honest`)"
   },
+  "Claims.SamplingGeneric.CompiledTwo.KSRegTwo": {
+   "owner": "@proofs",
+   "digest": "9dc8778e3250b7defa43c3cc45152502ccc52bc5fba242ae3ea3cd52de76e559",
+   "why": "`CompilerHeadlineTwo` is stated at a compiled two-stage verifier that meets the committed form at two stages, which `CompilerKSRegTwo` proves at the contract's premises. (met by `compilerHeadlineTwo_honest`)"
+  },
   "Claims.ZKMal.RefSession.UnCausal": {
    "owner": "@proofs",
    "digest": "89ed8050e4e652dc3a78971a605b86e10dea446f111f2db071e4923ddda4df7e",
@@ -3896,6 +3901,80 @@
      "Claims.Witness.SamplingGeneric.twoOpenCalls_meets",
      "Claims.Witness.SamplingGeneric.twoSessionsTwo_meets"
     ]
+   },
+   "Claims.SamplingGeneric.CompiledTwo.KSRegTwo": {
+    "fails": "Claims.SamplingGeneric.CompiledTwo.KSRegTwo_fails",
+    "meets": [
+     "Claims.Flock.decoder_meets_plain",
+     "Claims.Flock.decoder_meets_zk",
+     "Claims.Witness.SamplingGeneric.twoSessionsTwo_meets"
+    ]
+   },
+   "Claims.SamplingGeneric.CompiledTwo.HeadlineTwo": {
+    "fails": "Claims.SamplingGeneric.CompiledTwo.HeadlineTwo_fails",
+    "meets": [
+     "Claims.Flock.decoder_meets_plain",
+     "Claims.Flock.decoder_meets_zk",
+     "Claims.Witness.SamplingGeneric.twoSessionsTwo_meets"
+    ]
+   },
+   "Claims.SamplingGeneric.CompiledTwo.MissTwo": {
+    "fails": "Claims.SamplingGeneric.CompiledTwo.MissTwo_fails",
+    "meets": [
+     "Claims.Flock.decoder_meets_plain",
+     "Claims.Flock.decoder_meets_zk",
+     "Claims.Witness.SamplingGeneric.twoSessionsTwo_meets"
+    ]
+   },
+   "Claims.SamplingGeneric.Compiled.KSRegX": {
+    "fails": "Claims.SamplingGeneric.Compiled.KSRegX_fails",
+    "meets": [
+     "Claims.Flock.decoder_meets_plain",
+     "Claims.Flock.decoder_meets_zk",
+     "Claims.Witness.SamplingGeneric.twoSessions_meets"
+    ]
+   },
+   "Claims.SamplingGeneric.CompiledTwo.KSRegTwoX": {
+    "fails": "Claims.SamplingGeneric.CompiledTwo.KSRegTwoX_fails",
+    "meets": [
+     "Claims.Flock.decoder_meets_plain",
+     "Claims.Flock.decoder_meets_zk",
+     "Claims.Witness.SamplingGeneric.twoSessionsTwo_meets"
+    ]
+   },
+   "Claims.SamplingGeneric.CompiledTwo.HeadlineTwoX": {
+    "fails": "Claims.SamplingGeneric.CompiledTwo.HeadlineTwoX_fails",
+    "meets": [
+     "Claims.Flock.decoder_meets_plain",
+     "Claims.Flock.decoder_meets_zk",
+     "Claims.Witness.SamplingGeneric.twoSessionsTwo_meets"
+    ]
+   },
+   "Claims.SamplingGeneric.CompiledTwo.MissTwoX": {
+    "fails": "Claims.SamplingGeneric.CompiledTwo.MissTwoX_fails",
+    "meets": [
+     "Claims.Flock.decoder_meets_plain",
+     "Claims.Flock.decoder_meets_zk",
+     "Claims.Witness.SamplingGeneric.twoSessionsTwo_meets"
+    ]
+   },
+   "Claims.SamplingGeneric.Compiled.KSRegAt": {
+    "fails": "Claims.SamplingGeneric.Compiled.KSRegAt_fails",
+    "meets": [
+     "Claims.Flock.decoder_meets_plain",
+     "Claims.Flock.decoder_meets_zk",
+     "Claims.Witness.SamplingGeneric.twoOpenCalls_meets",
+     "Claims.Witness.SamplingGeneric.twoSessions_meets"
+    ]
+   },
+   "Claims.SamplingGeneric.Compiled.KSRegAtSB": {
+    "fails": "Claims.SamplingGeneric.Compiled.KSRegAtSB_fails",
+    "meets": [
+     "Claims.Flock.decoder_meets_plain",
+     "Claims.Flock.decoder_meets_zk",
+     "Claims.Witness.SamplingGeneric.twoOpenCalls_meets",
+     "Claims.Witness.SamplingGeneric.twoSessions_meets"
+    ]
    }
   },
   "not": {
@@ -3999,6 +4078,9 @@
    "Claims.ZKOutLeak": "Claims.zkOutLeak",
    "Claims.SamplingGeneric.CompilerComplete": "Claims.SamplingGeneric.compilerComplete",
    "Claims.SamplingGeneric.CompilerKSTwo": "Claims.SamplingGeneric.compilerKSTwo",
+   "Claims.SamplingGeneric.CompilerKSRegTwo": "Claims.SamplingGeneric.compilerKSRegTwo",
+   "Claims.SamplingGeneric.CompilerMissTwo": "Claims.SamplingGeneric.compilerMissTwo",
+   "Claims.SamplingGeneric.CompilerHeadlineTwo": "Claims.SamplingGeneric.compilerHeadlineTwo",
    "Claims.SamplingGeneric.CompilerExfilTwo": "Claims.SamplingGeneric.compilerExfilTwo",
    "Claims.RecGeneric.CompositionKS": "Claims.RecGeneric.compositionKS",
    "Claims.RecGeneric.CompilerKS": "Claims.RecGeneric.compilerKS",
@@ -4013,7 +4095,13 @@
    "Claims.SamplingGeneric.CompilerKSAt": "Claims.SamplingGeneric.compilerKSAt",
    "Claims.Guarantees.CapTwo": "Claims.SecurityProofs.CapTwo",
    "Claims.SamplingGeneric.CompilerKSAtTwo": "Claims.SamplingGeneric.compilerKSAtTwo",
-   "Claims.SamplingGeneric.CompilerEfficientTwo": "Claims.SamplingGeneric.compilerEfficientTwo"
+   "Claims.SamplingGeneric.CompilerEfficientTwo": "Claims.SamplingGeneric.compilerEfficientTwo",
+   "Claims.SamplingGeneric.CompilerKSRegX": "Claims.SamplingGeneric.compilerKSRegX",
+   "Claims.SamplingGeneric.CompilerKSRegTwoX": "Claims.SamplingGeneric.compilerKSRegTwoX",
+   "Claims.SamplingGeneric.CompilerMissTwoX": "Claims.SamplingGeneric.compilerMissTwoX",
+   "Claims.SamplingGeneric.CompilerHeadlineTwoX": "Claims.SamplingGeneric.compilerHeadlineTwoX",
+   "Claims.SamplingGeneric.CompilerKSRegAt": "Claims.SamplingGeneric.compilerKSRegAt",
+   "Claims.SamplingGeneric.CompilerKSRegAtSB": "Claims.SamplingGeneric.compilerKSRegAtSB"
   }
  },
  "witnesses": {
@@ -4248,6 +4336,18 @@
    "honest": ["Claims.SamplingGeneric.compilerKSTwo_honest"],
    "nontrivial": "Claims.SamplingGeneric.compilerKSTwo_nontrivial"
   },
+  "Claims.SamplingGeneric.compilerKSRegTwo": {
+   "honest": ["Claims.SamplingGeneric.compilerKSTwo_honest"],
+   "nontrivial": "Claims.SamplingGeneric.compilerKSRegTwo_nontrivial"
+  },
+  "Claims.SamplingGeneric.compilerMissTwo": {
+   "honest": ["Claims.SamplingGeneric.compilerMissTwo_honest"],
+   "nontrivial": "Claims.SamplingGeneric.compilerMissTwo_nontrivial"
+  },
+  "Claims.SamplingGeneric.compilerHeadlineTwo": {
+   "honest": ["Claims.SamplingGeneric.compilerHeadlineTwo_honest"],
+   "nontrivial": "Claims.SamplingGeneric.compilerHeadlineTwo_nontrivial"
+  },
   "Claims.SamplingGeneric.compilerExfilTwo": {
    "honest": ["Claims.SamplingGeneric.compilerKSTwo_honest"],
    "nontrivial": "Claims.SamplingGeneric.compilerExfilTwo_nontrivial"
@@ -4454,10 +4554,6 @@
    "honest": ["NetTiming.Witness.SampledAuditAccepted_honest"],
    "nontrivial": "NetTiming.Witness.SampledLeakChecked_nontrivial"
   },
-  "Hash.SecurityProofs.HistoryReadBinding": {
-   "honest": ["Hash.SecurityProofs.HistoryReadBinding_honest"],
-   "nontrivial": "Hash.SecurityProofs.HistoryReadBinding_nontrivial"
-  },
   "NetTiming.SecurityProofs.SampledAuditAccepted": {
    "honest": ["NetTiming.Witness.SampledAuditAccepted_honest"],
    "nontrivial": "NetTiming.Witness.SampledAuditAccepted_nontrivial"
@@ -4542,6 +4638,10 @@
    "honest": ["WeightSecurity.SecurityProofs.TheftServedMinEntropyHonest"],
    "nontrivial": "WeightSecurity.SecurityProofs.TheftServedMinEntropyNontrivial"
   },
+  "Hash.SecurityProofs.HistoryReadBinding": {
+   "honest": ["Hash.SecurityProofs.HistoryReadBinding_honest"],
+   "nontrivial": "Hash.SecurityProofs.HistoryReadBinding_nontrivial"
+  },
   "NetTiming.SecurityProofs.PooledLeakCarried": {
    "nontrivial": "NetTiming.Witness.PooledLeakCarried_nontrivial"
   },
@@ -4570,6 +4670,30 @@
   "WeightSecurity.SecurityProofs.TheftFaulted": {
    "honest": ["WeightSecurity.SecurityProofs.TheftFaultedHonest"],
    "nontrivial": "WeightSecurity.SecurityProofs.TheftFaultedNontrivial"
+  },
+  "Claims.SamplingGeneric.compilerKSRegX": {
+   "honest": ["Claims.SamplingGeneric.compilerKS_honest"],
+   "nontrivial": "Claims.SamplingGeneric.compilerKSRegX_nontrivial"
+  },
+  "Claims.SamplingGeneric.compilerKSRegTwoX": {
+   "honest": ["Claims.SamplingGeneric.compilerKSTwo_honest"],
+   "nontrivial": "Claims.SamplingGeneric.compilerKSRegTwoX_nontrivial"
+  },
+  "Claims.SamplingGeneric.compilerMissTwoX": {
+   "honest": ["Claims.SamplingGeneric.compilerMissTwo_honest"],
+   "nontrivial": "Claims.SamplingGeneric.compilerMissTwoX_nontrivial"
+  },
+  "Claims.SamplingGeneric.compilerHeadlineTwoX": {
+   "honest": ["Claims.SamplingGeneric.compilerKSTwo_honest"],
+   "nontrivial": "Claims.SamplingGeneric.compilerHeadlineTwoX_nontrivial"
+  },
+  "Claims.SamplingGeneric.compilerKSRegAt": {
+   "honest": ["Claims.SamplingGeneric.compilerKS_honest", "Claims.SamplingGeneric.compilerBits_honest"],
+   "nontrivial": "Claims.SamplingGeneric.compilerKSRegAt_nontrivial"
+  },
+  "Claims.SamplingGeneric.compilerKSRegAtSB": {
+   "honest": ["Claims.SamplingGeneric.compilerKS_honest", "Claims.SamplingGeneric.compilerBits_honest"],
+   "nontrivial": "Claims.SamplingGeneric.compilerKSRegAtSB_nontrivial"
   }
  },
  "unwitnessed": {
@@ -5332,6 +5456,12 @@
    "type_hash": "6042883e0de54d343be42f372fe18390a11842febc9feda80046b6e3f70bb455",
    "unfolded_hash": "2eec6c9336acfa7539b2c9eecfa82c9810701d4024426048b0116374af511561"
   },
+  "NetTiming.SecurityProofs.PooledLeakCarried": {
+   "type_hash": "a9ff871790645fc89b956cc559d9b28f1f9de6812547963a09e367a883f7c74f",
+   "missing": "honest",
+   "why": "honest instance needs a deployed check that pins its checked inputs (CheckedUnique), its closing row (CheckedClosing) and its rows' roots at each pattern serving picks where every audit accepts (CarriedRoots, from each run's root check and the record rule's chain), with a proved bound on its miss (CheckedWitness, MemCheck_v1's offline check run every run on its own live coins), and its period's inputs (CIR-190)",
+   "unfolded_hash": "90c8790b267d736e22e531948ab05a382781671a2ba4d1d9adcb8a2d52a64c25"
+  },
   "Pous.SecurityProofs.BandPubMeets14": {
    "type_hash": "cc0a571f0b841ecb8d43acbf6b871e6cc71d9c7f83d30199fc0e717b117175f9",
    "unfolded_hash": "8f6522076956b9aaec905dfd60718ee9c736ab517c760a58d222cc468a2b172d"
@@ -5526,19 +5656,13 @@
    "type_hash": "a595e2305f68fd4b90134f54bc1e597de991458da482ef92bfbc67d7d7a782f3",
    "unfolded_hash": "edcf280a29bc4ea8fadd07e37edb897784d1e87a921f26547ed9ef8583b5e40a"
   },
-  "Verity.SecurityProofs.ServingBlockSum": {
-   "type_hash": "08c59698b215f650f00508d3cac6aabef1196ad39401fb6c87d6f9e097cbcec8",
-   "unfolded_hash": "76801bacbea7a7241bc4900b35606f76be5cb7c45089092a126af20fd85dd6e5"
-  },
-  "NetTiming.SecurityProofs.PooledLeakCarried": {
-   "type_hash": "a9ff871790645fc89b956cc559d9b28f1f9de6812547963a09e367a883f7c74f",
-   "missing": "honest",
-   "why": "honest instance needs a deployed check that pins its checked inputs (CheckedUnique), its closing row (CheckedClosing) and its rows' roots at each pattern serving picks where every audit accepts (CarriedRoots, from each run's root check and the record rule's chain), with a proved bound on its miss (CheckedWitness, MemCheck_v1's offline check run every run on its own live coins), and its period's inputs (CIR-190)",
-   "unfolded_hash": "90c8790b267d736e22e531948ab05a382781671a2ba4d1d9adcb8a2d52a64c25"
-  },
   "Verity.SecurityProofs.RefineIncorrect": {
    "type_hash": "f002a79b8c5c0755db0aaa9574d5a115e090df1033aa688adadab139a6b4fead",
    "unfolded_hash": "9eb08e5560e18e47ac928a89e057971d0a2163e6394c4cecb743c4bbd61b3a91"
+  },
+  "Verity.SecurityProofs.ServingBlockSum": {
+   "type_hash": "08c59698b215f650f00508d3cac6aabef1196ad39401fb6c87d6f9e097cbcec8",
+   "unfolded_hash": "76801bacbea7a7241bc4900b35606f76be5cb7c45089092a126af20fd85dd6e5"
   }
  },
  "witnesses_assumed": {
@@ -11975,6 +12099,51 @@
    },
    "type_hash": "53f421070c113209ffc605594adc7e8132cf18c8e72e973c096e7b22343e9d06"
   },
+  "Claims.SamplingGeneric.Compiled.KSRegAtSB_fails": {
+   "owner": "@proofs",
+   "signature": [
+    "Claims.SamplingGeneric.Compiled.KSRegAtSB_fails {Coin : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin]",
+    "  (H : Claims.Msg → Claims.Msg) : Exists fun A => Exists fun L => Not (Claims.SamplingGeneric.Compiled.KSRegAtSB H L)"
+   ],
+   "assumptions": [],
+   "premises": {
+    "assumptions": [],
+    "domain": [],
+    "open": ["Claims.SamplingGeneric.Compiled.Scope", "Claims.StrictBirthday"],
+    "reads": []
+   },
+   "type_hash": "d39c55ef226f4fe140830319c3f061b4c270e18f74d5920078893e77939e9908"
+  },
+  "Claims.SamplingGeneric.Compiled.KSRegAt_fails": {
+   "owner": "@proofs",
+   "signature": [
+    "Claims.SamplingGeneric.Compiled.KSRegAt_fails {Coin : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin]",
+    "  (H : Claims.Msg → Claims.Msg) : Exists fun A => Exists fun L => Not (Claims.SamplingGeneric.Compiled.KSRegAt H L)"
+   ],
+   "assumptions": [],
+   "premises": {
+    "assumptions": [],
+    "domain": [],
+    "open": ["Claims.ExpectedCR", "Claims.SamplingGeneric.Compiled.Scope"],
+    "reads": []
+   },
+   "type_hash": "a4c3aafc33b8a95c01950b2a7790f9cda765350a3474493900dd74933ac8fac4"
+  },
+  "Claims.SamplingGeneric.Compiled.KSRegX_fails": {
+   "owner": "@proofs",
+   "signature": [
+    "Claims.SamplingGeneric.Compiled.KSRegX_fails {Coin : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin]",
+    "  (H : Claims.Msg → Claims.Msg) : Exists fun A => Exists fun L => Not (Claims.SamplingGeneric.Compiled.KSRegX H L)"
+   ],
+   "assumptions": [],
+   "premises": {
+    "assumptions": [],
+    "domain": [],
+    "open": ["Claims.SamplingGeneric.Compiled.Scope"],
+    "reads": []
+   },
+   "type_hash": "83be9e5d7dd74bd9128b56e88041e37ea9445e379f3b525afff7e3da3d7ac921"
+  },
   "Claims.SamplingGeneric.Compiled.KSReg_fails": {
    "owner": "@proofs",
    "signature": [
@@ -12020,6 +12189,38 @@
    },
    "type_hash": "e4243fbaf1ee1c234ce100d08e628977ca71758e0c37225e2636dd725e44e044"
   },
+  "Claims.SamplingGeneric.CompiledTwo.HeadlineTwoX_fails": {
+   "owner": "@proofs",
+   "signature": [
+    "Claims.SamplingGeneric.CompiledTwo.HeadlineTwoX_fails {Coin : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin]",
+    "  (H : Claims.Msg → Claims.Msg) :",
+    "  Exists fun A => Exists fun L => Not (Claims.SamplingGeneric.CompiledTwo.HeadlineTwoX H L)"
+   ],
+   "assumptions": [],
+   "premises": {
+    "assumptions": [],
+    "domain": [],
+    "open": ["Claims.SamplingGeneric.CompiledTwo.Scope"],
+    "reads": []
+   },
+   "type_hash": "06c2a8dae98ba88ef66bda195747f63a3501fc7e1b4be1633363f2bc4924c3c3"
+  },
+  "Claims.SamplingGeneric.CompiledTwo.HeadlineTwo_fails": {
+   "owner": "@proofs",
+   "signature": [
+    "Claims.SamplingGeneric.CompiledTwo.HeadlineTwo_fails {Coin : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin]",
+    "  (H : Claims.Msg → Claims.Msg) :",
+    "  Exists fun A => Exists fun L => Not (Claims.SamplingGeneric.CompiledTwo.HeadlineTwo H L)"
+   ],
+   "assumptions": [],
+   "premises": {
+    "assumptions": [],
+    "domain": [],
+    "open": ["Claims.SamplingGeneric.CompiledTwo.Scope"],
+    "reads": []
+   },
+   "type_hash": "8bbf0baef0980cda282840b9a7c3a249b2dcb41025cbd7a9bac830a14b645b95"
+  },
   "Claims.SamplingGeneric.CompiledTwo.KSAt_fails": {
    "owner": "@proofs",
    "signature": [
@@ -12035,6 +12236,36 @@
    },
    "type_hash": "3ce579edc550a7489aba9d13e5f6c39c62013d660319cdef679ea5ff381bdfa2"
   },
+  "Claims.SamplingGeneric.CompiledTwo.KSRegTwoX_fails": {
+   "owner": "@proofs",
+   "signature": [
+    "Claims.SamplingGeneric.CompiledTwo.KSRegTwoX_fails {Coin : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin]",
+    "  (H : Claims.Msg → Claims.Msg) : Exists fun A => Exists fun L => Not (Claims.SamplingGeneric.CompiledTwo.KSRegTwoX H L)"
+   ],
+   "assumptions": [],
+   "premises": {
+    "assumptions": [],
+    "domain": [],
+    "open": ["Claims.SamplingGeneric.CompiledTwo.Scope"],
+    "reads": []
+   },
+   "type_hash": "cbc5b0a1f6d6299853416382e8bdb1cd10070f723e426c63fd93d868f0bd0695"
+  },
+  "Claims.SamplingGeneric.CompiledTwo.KSRegTwo_fails": {
+   "owner": "@proofs",
+   "signature": [
+    "Claims.SamplingGeneric.CompiledTwo.KSRegTwo_fails {Coin : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin]",
+    "  (H : Claims.Msg → Claims.Msg) : Exists fun A => Exists fun L => Not (Claims.SamplingGeneric.CompiledTwo.KSRegTwo H L)"
+   ],
+   "assumptions": [],
+   "premises": {
+    "assumptions": [],
+    "domain": [],
+    "open": ["Claims.SamplingGeneric.CompiledTwo.Scope"],
+    "reads": []
+   },
+   "type_hash": "827072448093bd2c3f6a5472aa999f6bfaa42aeab5c0ce5bda3eeba65756257b"
+  },
   "Claims.SamplingGeneric.CompiledTwo.KS_fails": {
    "owner": "@proofs",
    "signature": [
@@ -12049,6 +12280,40 @@
     "reads": []
    },
    "type_hash": "4bad71657d26ec907352689f45442dbd782f32e32ed982af684bf697305d4c26"
+  },
+  "Claims.SamplingGeneric.CompiledTwo.MissTwoX_fails": {
+   "owner": "@proofs",
+   "signature": [
+    "Claims.SamplingGeneric.CompiledTwo.MissTwoX_fails {Coin : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin]",
+    "  (H : Claims.Msg → Claims.Msg) :",
+    "  Exists fun A =>",
+    "    Exists fun L => Exists fun r₁ => Exists fun r₂ => Not (Claims.SamplingGeneric.CompiledTwo.MissTwoX H L r₁ r₂)"
+   ],
+   "assumptions": [],
+   "premises": {
+    "assumptions": [],
+    "domain": ["Claims.Sampling.Design.Two.FirstRate", "Claims.Sampling.Design.Two.SecondRate"],
+    "open": ["Claims.SamplingGeneric.CompiledTwo.Scope"],
+    "reads": []
+   },
+   "type_hash": "3fbaf3be388bdd01fab72010b0c0c99519e0a58f1b36e07b4246c5bd17c1b9bb"
+  },
+  "Claims.SamplingGeneric.CompiledTwo.MissTwo_fails": {
+   "owner": "@proofs",
+   "signature": [
+    "Claims.SamplingGeneric.CompiledTwo.MissTwo_fails {Coin : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin]",
+    "  (H : Claims.Msg → Claims.Msg) :",
+    "  Exists fun A =>",
+    "    Exists fun L => Exists fun r₁ => Exists fun r₂ => Not (Claims.SamplingGeneric.CompiledTwo.MissTwo H L r₁ r₂)"
+   ],
+   "assumptions": [],
+   "premises": {
+    "assumptions": [],
+    "domain": ["Claims.Sampling.Design.Two.FirstRate", "Claims.Sampling.Design.Two.SecondRate"],
+    "open": ["Claims.SamplingGeneric.CompiledTwo.Scope"],
+    "reads": []
+   },
+   "type_hash": "f6366dd9df27f88e399847c8855b57720ee0d44fbccc390f9fe14217840590d9"
   },
   "Claims.SamplingGeneric.ZkArg.ZK_fails": {
    "owner": "@proofs",
@@ -12281,6 +12546,94 @@
    },
    "type_hash": "c988a93104be12490891b9c6f062bef07f7fc39a8bc0cca3901f23255751af48"
   },
+  "Claims.SamplingGeneric.compilerHeadlineTwo": {
+   "owner": "@proofs",
+   "signature": ["Claims.SamplingGeneric.compilerHeadlineTwo : Claims.SamplingGeneric.CompilerHeadlineTwo"],
+   "assumptions": [],
+   "premises": {
+    "assumptions": [],
+    "domain": ["Claims.SamplingGeneric.CompiledTwo.KSRegTwo"],
+    "open": ["Claims.SamplingGeneric.CompiledTwo.Scope", "Claims.SamplingGeneric.CompiledTwo.Sessions"],
+    "reads": []
+   },
+   "type_hash": "4f3cf3f0f5f4afa46b847df6344ae963d3e424c8a7753fd916e3d8fc1eb7dc3c",
+   "unfolded_hash": "7c27b70db67105e02dde2cc0375fbb1046f5d7455500664eec7b4d129add3316"
+  },
+  "Claims.SamplingGeneric.compilerHeadlineTwoX": {
+   "owner": "@proofs",
+   "signature": ["Claims.SamplingGeneric.compilerHeadlineTwoX : Claims.SamplingGeneric.CompilerHeadlineTwoX"],
+   "assumptions": [],
+   "premises": {
+    "assumptions": [],
+    "domain": ["Claims.Sampling.CommitmentScheme.Binds"],
+    "open": [
+     "Claims.SamplingGeneric.Arg.KS",
+     "Claims.SamplingGeneric.CompiledTwo.Scope",
+     "Claims.SamplingGeneric.CompiledTwo.Sessions"
+    ],
+    "reads": []
+   },
+   "type_hash": "3d98419ee2a58d3a3dfef4b0cea8d678e95be760799d35e7de313fb3545f04c9",
+   "unfolded_hash": "7ab7bbdbf55cd18eb5e60394c0c85e4fb8307e179fe33a5c8f9f1692ad400b58"
+  },
+  "Claims.SamplingGeneric.compilerHeadlineTwoX_nontrivial": {
+   "owner": "@proofs",
+   "signature": [
+    "Claims.SamplingGeneric.compilerHeadlineTwoX_nontrivial :",
+    "  Not (Claims.SamplingGeneric.CompiledTwo.HeadlineTwoX FlockDeploy.sha512 (Claims.Witness.SamplingGeneric.sksLTwo Bool))"
+   ],
+   "assumptions": [],
+   "premises": {
+    "assumptions": [],
+    "domain": [],
+    "open": ["Claims.SamplingGeneric.CompiledTwo.Scope"],
+    "reads": []
+   },
+   "type_hash": "22bd1a990976998f8674c198c86bfd0a1eed749227beea3ae39fc15393acb733"
+  },
+  "Claims.SamplingGeneric.compilerHeadlineTwo_honest": {
+   "owner": "@proofs",
+   "signature": [
+    "Claims.SamplingGeneric.compilerHeadlineTwo_honest :",
+    "  And (Claims.SamplingGeneric.CompiledTwo.Sessions FlockDeploy.sha512 (Claims.Witness.SamplingGeneric.twoLTwo Bool))",
+    "    (And (Claims.SamplingGeneric.CompiledTwo.KSRegTwo FlockDeploy.sha512 (Claims.Witness.SamplingGeneric.twoLTwo Bool))",
+    "      (And ((Claims.Witness.SamplingGeneric.twoLTwo Bool).Scope List.nil)",
+    "        (∀ (r : Fin ((Claims.Witness.SamplingGeneric.twoLTwo Bool).V.k List.nil) → Bool),",
+    "          And",
+    "            (Eq ((Claims.Witness.SamplingGeneric.twoLTwo Bool).replaySample List.nil r)",
+    "              (List.cons 0 (List.cons 1 List.nil)))",
+    "            (And",
+    "              (Eq ((Claims.Witness.SamplingGeneric.twoLTwo Bool).checked List.nil r)",
+    "                (List.cons 0 (List.cons 1 List.nil)))",
+    "              (Eq",
+    "                (Claims.run FlockDeploy.sha512 Claims.Witness.silentP (Claims.Witness.SamplingGeneric.twoLTwo Bool).V",
+    "                    List.nil Unit.unit r).out",
+    "                Claims.Out.acc)))))"
+   ],
+   "assumptions": [],
+   "premises": {
+    "assumptions": [],
+    "domain": [],
+    "open": ["Claims.SamplingGeneric.CompiledTwo.Scope"],
+    "reads": []
+   },
+   "type_hash": "a59f9d5dc20ff1709b7e84ce883c2f29fa1dd17711b48b251c086f31b0ae7b7e"
+  },
+  "Claims.SamplingGeneric.compilerHeadlineTwo_nontrivial": {
+   "owner": "@proofs",
+   "signature": [
+    "Claims.SamplingGeneric.compilerHeadlineTwo_nontrivial :",
+    "  Not (Claims.SamplingGeneric.CompiledTwo.HeadlineTwo FlockDeploy.sha512 (Claims.Witness.SamplingGeneric.sksLTwo Bool))"
+   ],
+   "assumptions": [],
+   "premises": {
+    "assumptions": [],
+    "domain": [],
+    "open": ["Claims.SamplingGeneric.CompiledTwo.Scope"],
+    "reads": []
+   },
+   "type_hash": "84640a2ea982221426dcf5d427d69364ad9d6bb442b55b38c05325de2e686379"
+  },
   "Claims.SamplingGeneric.compilerKS": {
    "owner": "@proofs",
    "signature": ["Claims.SamplingGeneric.compilerKS : Claims.SamplingGeneric.CompilerKS"],
@@ -12413,6 +12766,170 @@
    "type_hash": "265125fe0373eb291365875e0e60970f68ee5ece8acbb1e4a275bfa60e18fe84",
    "unfolded_hash": "fe205dc2f44b0a7d088bf33478098cd7bd13b7f888661ee7e4b31369f963c2f7"
   },
+  "Claims.SamplingGeneric.compilerKSRegAt": {
+   "owner": "@proofs",
+   "signature": ["Claims.SamplingGeneric.compilerKSRegAt : Claims.SamplingGeneric.CompilerKSRegAt"],
+   "assumptions": [],
+   "premises": {
+    "assumptions": [],
+    "domain": ["Claims.Sampling.CommitmentScheme.Binds"],
+    "open": [
+     "Claims.ExpectedCR",
+     "Claims.SamplingGeneric.Arg.KS",
+     "Claims.SamplingGeneric.Compiled.OpenCallsLe",
+     "Claims.SamplingGeneric.Compiled.Scope",
+     "Claims.SamplingGeneric.Compiled.Sessions"
+    ],
+    "reads": []
+   },
+   "type_hash": "46646bc41b1ac0f4671436fc9fa84bda4c7ac98cd596c34e8ce3de3d2c1362a1",
+   "unfolded_hash": "e8a286c2f3b096ef084393f165a712e95bb1c252594b184314e8b4c6552bf7e0"
+  },
+  "Claims.SamplingGeneric.compilerKSRegAtSB": {
+   "owner": "@proofs",
+   "signature": ["Claims.SamplingGeneric.compilerKSRegAtSB : Claims.SamplingGeneric.CompilerKSRegAtSB"],
+   "assumptions": [],
+   "premises": {
+    "assumptions": [],
+    "domain": ["Claims.Sampling.CommitmentScheme.Binds"],
+    "open": [
+     "Claims.SamplingGeneric.Arg.KS",
+     "Claims.SamplingGeneric.Compiled.OpenCallsLe",
+     "Claims.SamplingGeneric.Compiled.Scope",
+     "Claims.SamplingGeneric.Compiled.Sessions",
+     "Claims.StrictBirthday"
+    ],
+    "reads": []
+   },
+   "type_hash": "ab85d8453843a4f9c08a9f137d975435787ed4aad28e747b7d2de8fa08c86646",
+   "unfolded_hash": "383337c0b2875cd962f8e45aa5c30ce939e23c0696946f03cb5e7f9ba1fef0d6"
+  },
+  "Claims.SamplingGeneric.compilerKSRegAtSB_nontrivial": {
+   "owner": "@proofs",
+   "signature": [
+    "Claims.SamplingGeneric.compilerKSRegAtSB_nontrivial :",
+    "  Not (Claims.SamplingGeneric.Compiled.KSRegAtSB FlockDeploy.sha512 (Claims.Witness.SamplingGeneric.sksL Bool))"
+   ],
+   "assumptions": [],
+   "premises": {
+    "assumptions": [],
+    "domain": [],
+    "open": ["Claims.SamplingGeneric.Compiled.Scope", "Claims.StrictBirthday"],
+    "reads": []
+   },
+   "type_hash": "d366aee3de223853756c82f099a9dba6ee0ac3f625009ce3a203e826d91d94da"
+  },
+  "Claims.SamplingGeneric.compilerKSRegAt_nontrivial": {
+   "owner": "@proofs",
+   "signature": [
+    "Claims.SamplingGeneric.compilerKSRegAt_nontrivial :",
+    "  Not (Claims.SamplingGeneric.Compiled.KSRegAt FlockDeploy.sha512 (Claims.Witness.SamplingGeneric.sksL Bool))"
+   ],
+   "assumptions": [],
+   "premises": {
+    "assumptions": [],
+    "domain": [],
+    "open": ["Claims.ExpectedCR", "Claims.SamplingGeneric.Compiled.Scope"],
+    "reads": []
+   },
+   "type_hash": "662a96bf55f9f7fd65204b6e08282485da881841dfc60b50d9a8199139e01365"
+  },
+  "Claims.SamplingGeneric.compilerKSRegTwo": {
+   "owner": "@proofs",
+   "signature": ["Claims.SamplingGeneric.compilerKSRegTwo : Claims.SamplingGeneric.CompilerKSRegTwo"],
+   "assumptions": [],
+   "premises": {
+    "assumptions": [],
+    "domain": ["Claims.Sampling.CommitmentScheme.Binds"],
+    "open": [
+     "Claims.SamplingGeneric.Arg.KS",
+     "Claims.SamplingGeneric.CompiledTwo.Scope",
+     "Claims.SamplingGeneric.CompiledTwo.Sessions"
+    ],
+    "reads": []
+   },
+   "type_hash": "f8899549b5c969e59c9031eec083b963a4760b6e9a22f295751a8fca993aa583",
+   "unfolded_hash": "b90bb396af25024e57bb64cf5d19957bbdd8d6af2e99e66826b6bb7e740624fc"
+  },
+  "Claims.SamplingGeneric.compilerKSRegTwoX": {
+   "owner": "@proofs",
+   "signature": ["Claims.SamplingGeneric.compilerKSRegTwoX : Claims.SamplingGeneric.CompilerKSRegTwoX"],
+   "assumptions": [],
+   "premises": {
+    "assumptions": [],
+    "domain": ["Claims.Sampling.CommitmentScheme.Binds"],
+    "open": [
+     "Claims.SamplingGeneric.Arg.KS",
+     "Claims.SamplingGeneric.CompiledTwo.Scope",
+     "Claims.SamplingGeneric.CompiledTwo.Sessions"
+    ],
+    "reads": []
+   },
+   "type_hash": "bfcfd7033abc1eff84ce976471d8d31dd1144ec9ba568601be40422a8c8e92dd",
+   "unfolded_hash": "00a3f08f576c7da21c2ef310996d6a90f2db4b6a94ef0f03c956f4989f5ee570"
+  },
+  "Claims.SamplingGeneric.compilerKSRegTwoX_nontrivial": {
+   "owner": "@proofs",
+   "signature": [
+    "Claims.SamplingGeneric.compilerKSRegTwoX_nontrivial :",
+    "  Not (Claims.SamplingGeneric.CompiledTwo.KSRegTwoX FlockDeploy.sha512 (Claims.Witness.SamplingGeneric.sksLTwo Bool))"
+   ],
+   "assumptions": [],
+   "premises": {
+    "assumptions": [],
+    "domain": [],
+    "open": ["Claims.SamplingGeneric.CompiledTwo.Scope"],
+    "reads": []
+   },
+   "type_hash": "0a239b95e53b9dfacbc6731275b3a826632b0fed95ad112b670cbe629ae43a4b"
+  },
+  "Claims.SamplingGeneric.compilerKSRegTwo_nontrivial": {
+   "owner": "@proofs",
+   "signature": [
+    "Claims.SamplingGeneric.compilerKSRegTwo_nontrivial :",
+    "  Not (Claims.SamplingGeneric.CompiledTwo.KSRegTwo FlockDeploy.sha512 (Claims.Witness.SamplingGeneric.sksLTwo Bool))"
+   ],
+   "assumptions": [],
+   "premises": {
+    "assumptions": [],
+    "domain": [],
+    "open": ["Claims.SamplingGeneric.CompiledTwo.Scope"],
+    "reads": []
+   },
+   "type_hash": "d98dc4c4a57e488a69e3b06f203b255b8fba677042501957106d4517399edcf5"
+  },
+  "Claims.SamplingGeneric.compilerKSRegX": {
+   "owner": "@proofs",
+   "signature": ["Claims.SamplingGeneric.compilerKSRegX : Claims.SamplingGeneric.CompilerKSRegX"],
+   "assumptions": [],
+   "premises": {
+    "assumptions": [],
+    "domain": ["Claims.Sampling.CommitmentScheme.Binds"],
+    "open": [
+     "Claims.SamplingGeneric.Arg.KS",
+     "Claims.SamplingGeneric.Compiled.Scope",
+     "Claims.SamplingGeneric.Compiled.Sessions"
+    ],
+    "reads": []
+   },
+   "type_hash": "8cb2c5498a27d3abf22e4f543707d261c92f161d9884d9b2619d319b9b268dde",
+   "unfolded_hash": "0f36811577bd6ebb45a09dc71abebd5b6ee71a48164447fcedc485098d5b1edc"
+  },
+  "Claims.SamplingGeneric.compilerKSRegX_nontrivial": {
+   "owner": "@proofs",
+   "signature": [
+    "Claims.SamplingGeneric.compilerKSRegX_nontrivial :",
+    "  Not (Claims.SamplingGeneric.Compiled.KSRegX FlockDeploy.sha512 (Claims.Witness.SamplingGeneric.sksL Bool))"
+   ],
+   "assumptions": [],
+   "premises": {
+    "assumptions": [],
+    "domain": [],
+    "open": ["Claims.SamplingGeneric.Compiled.Scope"],
+    "reads": []
+   },
+   "type_hash": "724ac5afce6433379572c693a4d0c0eebaf05cec827d8b19bda40a9f86f035d2"
+  },
   "Claims.SamplingGeneric.compilerKSReg_nontrivial": {
    "owner": "@proofs",
    "signature": [
@@ -12530,6 +13047,80 @@
     "reads": []
    },
    "type_hash": "2ee399e11183db0f7c3f301abcaf97a5683eac1f2825d864e2773d817b536a31"
+  },
+  "Claims.SamplingGeneric.compilerMissTwo": {
+   "owner": "@proofs",
+   "signature": ["Claims.SamplingGeneric.compilerMissTwo : Claims.SamplingGeneric.CompilerMissTwo"],
+   "assumptions": [],
+   "premises": {
+    "assumptions": [],
+    "domain": ["Claims.Sampling.Design.Two.FirstRate", "Claims.Sampling.Design.Two.SecondRate"],
+    "open": ["Claims.SamplingGeneric.CompiledTwo.Scope", "Claims.SamplingGeneric.CompiledTwo.Sessions"],
+    "reads": []
+   },
+   "type_hash": "09e401bb1e532c53972c7511f4a7c2436377179c3d62d1ac7cd2d3d024da0dd4",
+   "unfolded_hash": "e5ae09e75ec49ad1ca61372ddf5caa9a668f37ea214540be5f58cb0bd7bb0361"
+  },
+  "Claims.SamplingGeneric.compilerMissTwoX": {
+   "owner": "@proofs",
+   "signature": ["Claims.SamplingGeneric.compilerMissTwoX : Claims.SamplingGeneric.CompilerMissTwoX"],
+   "assumptions": [],
+   "premises": {
+    "assumptions": [],
+    "domain": ["Claims.Sampling.Design.Two.FirstRate", "Claims.Sampling.Design.Two.SecondRate"],
+    "open": ["Claims.SamplingGeneric.CompiledTwo.Scope", "Claims.SamplingGeneric.CompiledTwo.Sessions"],
+    "reads": []
+   },
+   "type_hash": "0c738e211f9f0189132b445b3543fad8123b8b74ce82eeb6cde1e2ea1643de59",
+   "unfolded_hash": "70c1c599d032de8578a31ed3062874fb4e4991b54c1847f2f2f56fffdf31d721"
+  },
+  "Claims.SamplingGeneric.compilerMissTwoX_nontrivial": {
+   "owner": "@proofs",
+   "signature": [
+    "Claims.SamplingGeneric.compilerMissTwoX_nontrivial :",
+    "  Not (Claims.SamplingGeneric.CompiledTwo.MissTwoX FlockDeploy.sha512 (Claims.Witness.SamplingGeneric.sksLTwo Bool) 1 1)"
+   ],
+   "assumptions": [],
+   "premises": {
+    "assumptions": [],
+    "domain": ["Claims.Sampling.Design.Two.FirstRate", "Claims.Sampling.Design.Two.SecondRate"],
+    "open": ["Claims.SamplingGeneric.CompiledTwo.Scope"],
+    "reads": []
+   },
+   "type_hash": "415dce9a933c0219d5636e74f8247764bdb4f5c4c53acc27c0aa5d9a3fa91f55"
+  },
+  "Claims.SamplingGeneric.compilerMissTwo_honest": {
+   "owner": "@proofs",
+   "signature": [
+    "Claims.SamplingGeneric.compilerMissTwo_honest :",
+    "  And (Claims.SamplingGeneric.CompiledTwo.Sessions FlockDeploy.sha512 (Claims.Witness.SamplingGeneric.twoLTwo Bool))",
+    "    (And ((Claims.Witness.SamplingGeneric.twoLTwo Bool).Scope List.nil)",
+    "      (And (Claims.Witness.SamplingGeneric.twoTwo.FirstRate 1)",
+    "        (Claims.Witness.SamplingGeneric.twoTwo.SecondRate Claims.Witness.SamplingGeneric.twoPart 1)))"
+   ],
+   "assumptions": [],
+   "premises": {
+    "assumptions": [],
+    "domain": [],
+    "open": [],
+    "reads": []
+   },
+   "type_hash": "918f05b8878ef4e8452f0f3219f8523b1ace2fabc6d8723256e2a6976aa1a41e"
+  },
+  "Claims.SamplingGeneric.compilerMissTwo_nontrivial": {
+   "owner": "@proofs",
+   "signature": [
+    "Claims.SamplingGeneric.compilerMissTwo_nontrivial :",
+    "  Not (Claims.SamplingGeneric.CompiledTwo.MissTwo FlockDeploy.sha512 (Claims.Witness.SamplingGeneric.sksLTwo Bool) 1 1)"
+   ],
+   "assumptions": [],
+   "premises": {
+    "assumptions": [],
+    "domain": ["Claims.Sampling.Design.Two.FirstRate", "Claims.Sampling.Design.Two.SecondRate"],
+    "open": ["Claims.SamplingGeneric.CompiledTwo.Scope"],
+    "reads": []
+   },
+   "type_hash": "791097081f3e7b50579e4ab8db33f0a47fda4245185e1d8516ab0ad01ead91c2"
   },
   "Claims.SamplingGeneric.compilerZK": {
    "owner": "@proofs",
@@ -26430,10 +27021,6 @@
     "function": "Hash.EmbeddingRead.ok",
     "outcome": "accept"
    },
-   "Hash.SecurityProofs.HistoryReadBinding": {
-    "function": "Hash.EmbeddingRead.ok",
-    "outcome": "accept"
-   },
    "Pouw.Salt.keyed_leaf_hides": {
     "function": "Hash.Keyed.digest",
     "outcome": "none"
@@ -26444,6 +27031,10 @@
    },
    "Verity.SecurityProofs.CapacityWithinEstimate": {
     "function": "Verity.DeviceFigures.Accepted",
+    "outcome": "accept"
+   },
+   "Hash.SecurityProofs.HistoryReadBinding": {
+    "function": "Hash.EmbeddingRead.ok",
     "outcome": "accept"
    },
    "Accounting.SecurityProofs.TableReadBinding": {
@@ -28732,6 +29323,9 @@
     "∀ (s : g.Strategy), Cls s → ENNReal.instLE.le (Verity.Game.prob Q g s) ε": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
     "∀ (s : g.Strategy), g.InducedAt post pre σ s → Cls s": "g.InducedAt taken inline, inline when the rule came: name it or state it as a guarantee's conclusion"
    },
+   "Verity.SecurityProofs.RefineIncorrect": {
+    "∀ (g : Fin C.N), SetLike.instMembership.mem Pc.committed g → Eq (Y g) (X g)": "a membership, inline when the rule came: name it or state it as a guarantee's conclusion"
+   },
    "Verity.SecurityProofs.ServingBlockSum": {
     "Finset.instPartialOrder.le V C.computed": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
     "∀ (u : Fin B), SetLike.instMembership.mem S u → Real.instLE.le ((Finset.instInter.inter V (P.gates u)).sum fun v => ω v) (qS u)": "a membership, inline when the rule came: name it or state it as a guarantee's conclusion",
@@ -28741,9 +29335,6 @@
    "Verity.SecurityProofs.SoundMono": {
     "∀ (a : α), accept' a → accept a": "a bound variable's predicate, inline when the rule came: name it or state it as a guarantee's conclusion",
     "∀ (a : α), accept' a → E a → F a": "a bound variable's predicate, inline when the rule came: name it or state it as a guarantee's conclusion"
-   },
-   "Verity.SecurityProofs.RefineIncorrect": {
-    "∀ (g : Fin C.N), SetLike.instMembership.mem Pc.committed g → Eq (Y g) (X g)": "a membership, inline when the rule came: name it or state it as a guarantee's conclusion"
    }
   }
  },
@@ -32822,7 +33413,7 @@
    }
   },
   "Definitions.Claims.SamplingGeneric": {
-   "digest": "a0b810aa069a7c6d865ed357295ee07f2b553440fa24bc028552d83e7701d577",
+   "digest": "5cccaba440b16bf3867ea18fce3d9b45ec703534aa4e5e0e7392078c8f789478",
    "definitions": {
     "Claims.SamplingGeneric.Arg": "a3523e27db94bc0fc6aa14e539db934e8b8be4d90fc860bd46115063083b28bf",
     "Claims.SamplingGeneric.Arg.E": "af0ca8a8061e3a89bb9774829557e74a7af338ec04da1c21cfd55abc0da27f8e",
@@ -32848,6 +33439,7 @@
     "Claims.SamplingGeneric.Arg.κ": "c4c9d77f552d983057694cccfc6dde520827f56856b787af915c0a8141c1d478",
     "Claims.SamplingGeneric.Compiled": "d31474bef821fbfcebbdcf9c10096da66f5fb767eda57499378ae5ab82e0c18f",
     "Claims.SamplingGeneric.Compiled.Bconf": "e2ea986e9a5b40c4002aaaffc0fc6025afda3c86bc4c87431f67124a9a43a445",
+    "Claims.SamplingGeneric.Compiled.BconfAt": "f3034fe9c9d8d804618e9d277105c3dc9a75f8df53d99eea4725649d0c006a96",
     "Claims.SamplingGeneric.Compiled.Bits": "a5614b5261d320b5eea83a35573aed21907a188a68f6996f58ef6bcffa5524a6",
     "Claims.SamplingGeneric.Compiled.BlockEC": "4340886298e4e90cfd88a740710174a5bedcaadb72a6ad81944b7ebf2d3368c7",
     "Claims.SamplingGeneric.Compiled.Complete": "9d07f35912ff694b1d32bb3f4639f1e01e522052e9f215bbcc7b8c7bece1339c",
@@ -32860,6 +33452,8 @@
     "Claims.SamplingGeneric.Compiled.KSAt": "d03a6d5adb65c1d7c168a76d67cc189fe3941bdf3d95f128cbc9aaf5a271688a",
     "Claims.SamplingGeneric.Compiled.KSCount": "bd12c6d6e9b95cefdb5b49bcaab7709aed20d5f4a5c9bf2d4a2ac24384ddbbc5",
     "Claims.SamplingGeneric.Compiled.KSReg": "27e0547943b0d12b8ba33d4968aed193b4729a174e7916f7e3a739cb41d425dd",
+    "Claims.SamplingGeneric.Compiled.KSRegAt": "ddda1fd37832e5ca8f2ef02af26149889e30b712ce372209fddd195107d0beab",
+    "Claims.SamplingGeneric.Compiled.KSRegAtSB": "310a83285f3957286d9c1bda2be4b52491a3d7197198d4b65a734a888e407bf1",
     "Claims.SamplingGeneric.Compiled.OpenCallsLe": "240e61974b75645833c0f95ae02f47cb674dada6c380ae1480eeb7ce29f7df41",
     "Claims.SamplingGeneric.Compiled.P": "2879a4497e10cba9d0ce03ef8315dc43840f62b7a885b71eacdcc920f8483cca",
     "Claims.SamplingGeneric.Compiled.Scope": "a8711fb89d051d62f4852a2a177baf5d84781ac11493a4a0f128f32c51edb387",
@@ -32867,6 +33461,8 @@
     "Claims.SamplingGeneric.Compiled.SlotEC": "b2a9cbc9781ae9d22440b8040a5e5aac22c7980ca256250c4ffb1f2dd555fe0f",
     "Claims.SamplingGeneric.Compiled.Tape": "404da7559ac0a892c57a09eb525918f1f27125efb135ef43f7687d7fcc2008b1",
     "Claims.SamplingGeneric.Compiled.V": "12648206c67ea131061c8667d52c55cdb6bbe3031f07da449efb25defce803cb",
+    "Claims.SamplingGeneric.Compiled.bconfCost": "7b2c6f26cf47813e21fd5428dff2f11399192cb548dc6b01eee88dea18190a9b",
+    "Claims.SamplingGeneric.Compiled.bconfCostStrict": "3cb638ea87e3f4a2685f9e6683a900ca14dae274dbc35e53ff335a498ce69e03",
     "Claims.SamplingGeneric.Compiled.capIn": "10c8195a70ea20c2f6d48a1669d21c7fa3d303c08e53fa44e0f5cbd5b154d112",
     "Claims.SamplingGeneric.Compiled.capOut": "188b30eeb8649bdd07d62f4a91aee1929f07b6162499506bb402a1b38cbd2a77",
     "Claims.SamplingGeneric.Compiled.checked": "b2bc82c22073a67a6ba4428e72ca2b9effdfd1ffa55e9ff5e3f82ad4bd93fb5b",
@@ -32909,6 +33505,8 @@
     "Claims.SamplingGeneric.Compiled.γs": "fe5bf6b026e23611a0f7bbb6bfd3f6de5e7654d9e557eacca1438ab4a824a552",
     "Claims.SamplingGeneric.Compiled.δc": "1567746d9428dd56d2d9af23295b2912153c9a73fc03a88d9972bc38d5f952f9",
     "Claims.SamplingGeneric.Compiled.εreg": "319db40121955316d771a9abeb026ceab37238c8205b1864e4324da841c18ed3",
+    "Claims.SamplingGeneric.Compiled.εregAt": "9ae3d95b2fad4ad83a362a34d9b3d72e6a06cb8cb184aaf180628a83a268b02e",
+    "Claims.SamplingGeneric.Compiled.εregSB": "2327bd0fe797d755ce82ff43212c4adf9b06f310aec665cd40218aa04511ea5d",
     "Claims.SamplingGeneric.Compiled.κ": "0f14e7a74f045978a0452ff3ae360047270da6c58a74b8032b82e19488c361d2",
     "Claims.SamplingGeneric.Compiled.κb": "a56f97768830ec102f69bcfecfc923f65c01344afac98a865a109cbc01dfffb1",
     "Claims.SamplingGeneric.Compiled.κs": "febf751edb3d8ac654777c3253f8af6172ea659553c5530f7762215eae25d51c",
@@ -32920,6 +33518,8 @@
     "Claims.SamplingGeneric.CompilerKSAt": "f173427ddcc92c589e4a583febb2809044639734bd4b54dc45c393b6619b0c9f",
     "Claims.SamplingGeneric.CompilerKSCount": "e15d555b4209363f8cd8ae63a3b92d8bacb599c777f228120167a8fae91c6161",
     "Claims.SamplingGeneric.CompilerKSReg": "b165887cff85d22c09d4b8bd22a75701d0ab2c7bf034f13cbb60c15cd7e798ff",
+    "Claims.SamplingGeneric.CompilerKSRegAt": "e61a91c23cfc21716862edca7c9849157ed0941cfbc1327d5a6f8cb9e423a561",
+    "Claims.SamplingGeneric.CompilerKSRegAtSB": "99f145c7f704b6bab79eb75bf5625115745193e4bdc5444bd1ed586484f4c304",
     "Claims.SamplingGeneric.CompilerZK": "0ddf1b31bd73de024274bf0cc99855a8ea13d2456cdac3dd849d4b065f256a5d",
     "Claims.SamplingGeneric.Step": "ed0e1433c9da221834a30ec29a9d62d5c97b968b46db05f4791c92aaf44be715",
     "Claims.SamplingGeneric.Step.casesOn": "a0c65b92b0435a7cb415e5d65ad8e5cd9055d8a3528b0514dd65d5e958f2ac93",
@@ -32966,6 +33566,17 @@
     "Claims.SamplingGeneric.maxBelowN": "ba180d87623d7643470a14bacb8c92162bdc4a8dffc37bb3f5c1ba4217afe3de",
     "Claims.SamplingGeneric.residual": "3fc2f3fb6d0c9ec98b3f698e953ecf5cf663875694a43515f80d31f529eea238",
     "Claims.SamplingGeneric.simAt": "0b60f8fe98acb3df4ee53a8cc10fd2ffa43444819254e111218d018b6c316c2f"
+   }
+  },
+  "Definitions.Claims.SamplingGenericX": {
+   "digest": "3caf10b596ab5014e717e685b9a573f29d7ee2dc69bf8144926883d333c6a95b",
+   "definitions": {
+    "Claims.SamplingGeneric.Compiled.BconfX": "b4bd368d3051d387748941570823fb8574f6d7b96b1fcc41ec8ba2cfa91f1008",
+    "Claims.SamplingGeneric.Compiled.FregX": "cf39662cfb549042c0b0555072c9f45863ea7b79e0182b96dd42259dd66f323e",
+    "Claims.SamplingGeneric.Compiled.KSRegX": "3828fa5de7c919e1fd04cc5e95a1534ecc2e07099fc8a0117989f62f6deb31ea",
+    "Claims.SamplingGeneric.Compiled.regValX": "8ac1b824a1c934d780512c491c02042e87ac6e61e2abc8e29fdf045831014f3e",
+    "Claims.SamplingGeneric.Compiled.εregX": "b505b5520b4217041c2c7cafd11bfe96696672f20b674ec08bab6fa349472225",
+    "Claims.SamplingGeneric.CompilerKSRegX": "7a0b638c6015a0c485cf533055070a5c87cdc9674ad876da5800878163c7726a"
    }
   },
   "Definitions.Claims.SamplingServed": {
@@ -33039,6 +33650,38 @@
     "Claims.Sampling.rankinFactor": "e287aa04eef2610430b6677637f6eca7097ad7ceb517f5372ad301f4bc83d79e",
     "Claims.Sampling.rankinFactorCapped": "02c0b0b035f1c0434ff27e513d8882f449e38ef430b534ad97da6080fef403e8",
     "Claims.Sampling.rankinFactorPatterns": "0063b26a0c3809fe529fa6ebc2c4294db168cf62ca737bd170c1e1fbc8efa676"
+   }
+  },
+  "Definitions.Claims.SamplingTwoReg": {
+   "digest": "70bb7f2f3d79480cfd57d5f23e95b5ae205df3248a3a070aea396a25de66783f",
+   "definitions": {
+    "Claims.Sampling.footprintAt": "bdb45a41848f36d679afb8b2988f9bd7b92102ca919b459e7ddb15972b25ff33",
+    "Claims.Sampling.wrongAtBoundaryAt": "19bcd2a24169ac820763603a0019fffe5dfedc5755d8becdf941a3fa29b3db07",
+    "Claims.Sampling.wrongInAt": "2dc7b771cb91a91a74342ab136ff97e0c8f471607ccc78c7e73ac0a2b385b07b",
+    "Claims.SamplingGeneric.CompiledTwo.BconfTwo": "e5f5b712fc8f5b3a2c1396c1eac60786f8a6bd3a7aff2abba24a31824be6baa1",
+    "Claims.SamplingGeneric.CompiledTwo.FregTwo": "5bb3997a29529aa961f76995c0d820df9b2e653ce1447a630f38f4126d6a2451",
+    "Claims.SamplingGeneric.CompiledTwo.HeadlineTwo": "4b82947bc9af2358e1b87dd9c34f07f4c9ab8fa74e0b3804ac9ceb86686b8d30",
+    "Claims.SamplingGeneric.CompiledTwo.KSRegTwo": "9dc8778e3250b7defa43c3cc45152502ccc52bc5fba242ae3ea3cd52de76e559",
+    "Claims.SamplingGeneric.CompiledTwo.MissTwo": "8bae0f8395baf1814f833c3ab207b377f4f48ec7d5f2bbc5639f27eef714ca88",
+    "Claims.SamplingGeneric.CompiledTwo.iopensAt": "3056f123e7f2f0af6d6a4e2107bd27ced8a0863134f924549fd6ea13c46e295e",
+    "Claims.SamplingGeneric.CompiledTwo.iregVal": "f3ae1e623ee37512210dda6461933a5611b8d3ac8d680870ac355775b55c28c9",
+    "Claims.SamplingGeneric.CompiledTwo.εregTwo": "e217bd0447e89558decc85ffbe6e93b89358e4c57209e30c8bc9b28c91108ab1",
+    "Claims.SamplingGeneric.CompilerHeadlineTwo": "0d020f75cde0338220c50766a1d2fde92dd2697de56cedc9d9e2b1d70d9a2e71",
+    "Claims.SamplingGeneric.CompilerKSRegTwo": "4b00069b6670e336421312c9b951ec2adccc632e7fad7aa23b51462c24c8f854",
+    "Claims.SamplingGeneric.CompilerMissTwo": "11b4a616ec6b83b8b1af9828590558a1ca7f432d10c359bc362fbe232f8d9dd4"
+   }
+  },
+  "Definitions.Claims.SamplingTwoRegX": {
+   "digest": "0a29e26f49b4dc183ef23405164b4436e386cbda2c364e3471c40edc487d6aee",
+   "definitions": {
+    "Claims.SamplingGeneric.CompiledTwo.FregTwoX": "e7f8b6cd53564652078f66eda8b56bfd1dfe97d49ac7dd4a7afaa447a5704375",
+    "Claims.SamplingGeneric.CompiledTwo.HeadlineTwoX": "09b4881ef5d30264d7890bbb9de954dbd2fbda21dbb6266b9a839363c1ef100f",
+    "Claims.SamplingGeneric.CompiledTwo.KSRegTwoX": "509e811eb11df020a8dcd8d146089e76e74f440f9b5214ff9d4c12fe22b6e4d6",
+    "Claims.SamplingGeneric.CompiledTwo.MissTwoX": "7d921d5d270b7bf99e390bf7d59a47fbabbf5282b0c12d779331a3a542fa012a",
+    "Claims.SamplingGeneric.CompiledTwo.εregTwoX": "556480b2225755fc3daf0d6a5c6ec23fd6a14d244e5cee009657eed0ce4725e9",
+    "Claims.SamplingGeneric.CompilerHeadlineTwoX": "7144d29b119cabe26ab9d7c7a87f675c3d5f95b28b75c5318b1518ea7abeb08b",
+    "Claims.SamplingGeneric.CompilerKSRegTwoX": "7f106b3d736ef8553e9f9f05b2f69d71c306f748057421a9a371012c149393ae",
+    "Claims.SamplingGeneric.CompilerMissTwoX": "20f8a807c5efa511f50d2e157a569c28ebef322459a165793d8aa168bc574c93"
    }
   },
   "Definitions.Claims.ZKOut": {
@@ -42113,7 +42756,7 @@
    }
   },
   "Flock.Program": {
-   "digest": "7eb3c04ee9eed43ad2105c10ec5842fc60350f0e3e5905ab8b18d1d1200f8c1b",
+   "digest": "3de022ab65403a8fecca77284276fb5b1ff073dd990953126d5509b8adb2b7db",
    "definitions": {
     "Flock.Program.Arg": "ec25eed79967a37f47bfab16d75800bb417f725b6060db8885c981bbfb54549d",
     "Flock.Program.Arg.dims": "27996c560a07b5131152e1e961d1ebeae325f7e0e78513b43fe9eb8f0763bb7a",
@@ -42149,6 +42792,7 @@
     "Flock.Program.MAX_SAFE_INT": "4bc01344d12bae09c0e6149845e367d5e920c819f37894915d6c4b5cf0e96436",
     "Flock.Program.Node": "bca669d9347f9dc1443da8232dc86ccbb66349055523e54ad1e4039a4933bee7",
     "Flock.Program.Node.args": "b587fe31ff8b192fff7fe707f4ba7762cbeec206913e98d9ad9c693ee2bd2c35",
+    "Flock.Program.Node.axes": "ba52e47ea5e09c5bac8df10e824654b8168a5bd77dfad05d26445dc5b57ec8c5",
     "Flock.Program.Node.fn": "7f385a62d7e46c1ec80c2ef87fcc1d2bf14be341b6c569fa157be8bedc02e407",
     "Flock.Program.Node.form": "8f9c0b79245bf98b207106b2cf0d191daf78ba34926c89a10f398ac6e1dfde7b",
     "Flock.Program.Node.members": "9a391288606e50415bb0410d1bd75f2ca17a651758d3e83813254fc88a350c3e",
@@ -50920,7 +51564,7 @@
    }
   },
   "Proofs.Flock.SessionLoop.Concrete.File": {
-   "digest": "0e960970de0a1f500cbaa903110f123df477e04c47e1029a8e8b81a9908d89b9",
+   "digest": "13d597d5350bf429c6db931a00ad49532d3841673fee5e26733119a88d558308",
    "definitions": {
     "FlockDeploy.Concrete.UN": "eae65df9824f358e68d1f6a3969638a6e7efb63002e46e69c509dd8b9da5ad1f",
     "FlockDeploy.Concrete.bytesOf": "0691e11e8cce145a41607848b567c8af1968bfd82a2d5b12414c5c76a30dfe3d",
@@ -50933,7 +51577,7 @@
     "FlockDeploy.Concrete.mjC": "bdf86bcb21442f13e551903473adac7ec4085e9fa03ba35fbe6c3904788b0bac",
     "FlockDeploy.Concrete.pinJ": "dd14d34ee7be16125abbef7f4aa96e4f51f109817fa1fa03488cc03ee99c283a",
     "FlockDeploy.Concrete.shaB": "04d4f78f5f0c18bf4946f34f2fb7ec2edac26c55775a0b88cf1e7bb2dd50747a",
-    "FlockDeploy.Concrete.sparse9": "90770edb769c1135f4be3ef74938501efa09a1491eb066114fdd5c0ece2209d5",
+    "FlockDeploy.Concrete.sparse9": "e022bc1f685a8559c3fc392b3cd929f843f7c7b12b34b73acfb8d362d4e56adc",
     "FlockDeploy.Concrete.t0": "ddbc8af693d1b026a35432f7b666092223d545d597bbef14aa776ca216083156",
     "FlockDeploy.Concrete.tz": "305306699d482d067cbff9bebc2ec6bd2cfbcc0fccea0e768cd15615972f19e2",
     "FlockDeploy.Concrete.unitLaid": "99df4478aff4db2dda7e6bfa0b8d787532982b42e487ba3b84f8d816dcd3be23",
@@ -56263,7 +56907,7 @@
    }
   },
   "Spot.OneStage": {
-   "digest": "58a0516d51ddbeba41e24a0f87a94f1c425dfa3b6af15a62e516fb55283b8b15",
+   "digest": "17c91b84f7b574bfb5a1851e2ce70d348d961bb359ba574b1365565d2ae2ca84",
    "definitions": {
     "Spot.OneStage.Commitment": "a73c4a90f1c2b83c2840decc48593e672266092719b09da7b4c08282e3862285",
     "Spot.OneStage.Commitment.digest": "5ad7187d0b69df894ed454b1cef1a4593b7e2e8dd1d831e2b80ef6726c4b6e46",
@@ -56302,7 +56946,7 @@
     "Spot.OneStage.evidenceOf": "0f542f2c31def5b78e5ee6d5ab4840e0562b7f0d1cbc768a31246226c9202e77",
     "Spot.OneStage.evidenceParsed": "b41893c95a243f5b9929c68df678f3483f8fa40523b96850745107b669388aad",
     "Spot.OneStage.paramsOfJson": "999d78a093de5052bca080e42c16b5b7b6ed73744fd42218f09e6f3f34202362",
-    "Spot.OneStage.paramsParsed": "e7fbdaa1daaee94d860d8d6f8abb54d04f0961e8137afaf9e9562368744d63c4",
+    "Spot.OneStage.paramsParsed": "998cfd2d39be4719f0fb83bab18d836f607b6b179bd309533a1d8d0ecd7c200a",
     "Spot.OneStage.publicJson": "1eecfca42c0f31de9d361496f31e2620a0c17671e0b9ff47d59552ef11d92e14",
     "Spot.OneStage.recordChecks": "c8f06b53e4b19f87065742547208d843a2f54ebaa146f2581da7b9fceca4eb39",
     "Spot.OneStage.rule": "7ba31f61033f83f3ac5b2be2fd9efd65b893824765e65ede6a53be4109fd4abb",
@@ -56413,7 +57057,7 @@
    }
   },
   "Spot.Partition": {
-   "digest": "073d424a29f1f85a52df1000a4382194cbdfe26cae968d51c5c7ede97ff70d19",
+   "digest": "bdd3932ff38ae0af56fe372165fcfa5096770a9e30c14706da4acabb3a1bdcc9",
    "definitions": {
     "Spot.Partition.QUERIES": "b7ec2ff065a8dc232bb4ec1360628fa3f2624ada1052fc9ab57200bb53310ded",
     "Spot.Partition.QUERY_X": "78489a58742c3288a5dc4bd60e838c5f3c367a5e9598ed3b3155762b17b1b1a0",
@@ -56428,13 +57072,21 @@
     "Spot.Partition.defaultQuery": "87ce49b8864b337e53ff49e040d2f91634dabda75dacd39dd7a82cae5ff9a3bb",
     "Spot.Partition.digest": "7d7a6767c99f98997643a310ac1f2e680bbacfedf2286764d38ce893f96fd390",
     "Spot.Partition.evaluate": "89a39084f0743a1b45906b54b8f91b160d16a3da3397412de1a7d20c6edbba9f",
+    "Spot.Partition.once": "a4e7406f0af73f0f9c7600fa468bb61521c052b54e4152e3abcab05ee96f3d5c",
+    "Spot.Partition.readAlone": "87c7aac35fcbc36f27369bbf963d2e9576e693e55665e5be7c1b5661de23a28f",
+    "Spot.Partition.runInputs": "eaf2ef28d29bf373fe4ecae880f6f6dc37e867089d1042e913f2bb66723ae170",
+    "Spot.Partition.runs": "7ccebec8ada3cf238c48724196dc17de11a3cc943a5aae0d541e7f61b7323ad5",
+    "Spot.Partition.sharedInputs": "b51c5da48e88073e9c7c2fcc231cc2fa18aa86f6eba12283c719bf1a524ec018",
+    "Spot.Partition.spanLt": "a096694bce8efa5533962ff2dcea1d0451d3b7aa85cc8f50c6c08cfcdaa05228",
     "Spot.Partition.strata": "9741c00b0264978ff835c272c53b790c1013302a9005ca16de542bbf569f439d",
     "Spot.Partition.templateBits": "cbcec163926949b3f988a648cc2fd604f0e60e48d2936d96eecf1c96e89cf8fc",
+    "Spot.Partition.templateRanges?": "bbb96d1319e03fd0efd8d72566c75c404a97d9f97d31db4a87f6baeb55344bba",
     "Spot.Partition.unitClass": "8441e40d5c04c005cd696116b2cc9847bfbe009af47971f878f91731620a57cf",
     "Spot.Partition.unitGates": "214dd5c3279ddfbd2305246cf6307a7c59c1fa8b8f7f187d1bf7c1600db0facd",
     "Spot.Partition.unitGatesBy": "5bbaed7af9040c6bb02a3b94cc5b8b908efa5239efc48763e60ba41055f8493e",
     "Spot.Partition.units": "48d2154b62df0513da07f34da24c0158629bf6983dfb52696ccc37e1d2f65b37",
     "Spot.Partition.valid": "4c499021820260c0cb04fac1eab200a83172a5355287018f77429ee07024d85b",
+    "Spot.Partition.within": "d7ead80fc7016852fb84436c8b8071d2a6d5b1055d65993535dde806cf41683e",
     "Spot.Partition.wordCalls": "8f63981ff10eb24d570f34459d08250ced98e71b4a33f28a1215bddae425d438",
     "Spot.Partition.wordGates": "db7c5ff9fcd84deb3cf9c6df63fa5e82fd15999ca9b029f8e0cdf8dbabe6cfee"
    }
@@ -56522,7 +57174,7 @@
    }
   },
   "Spot.Registration": {
-   "digest": "47b452afa5311db49072e1696bf20ddb110e921c8275adc991978c2dd12e0cda",
+   "digest": "0e8818e24bd0defecdf350ce4f50951a73106bea6a4360048b628e37fb50a2e9",
    "definitions": {
     "Spot.Registration.Earlier": "38a79710ad138599f5f588962cb4957cde8a4a01c11545392f3680d085ffcf5f",
     "Spot.Registration.Earlier.casesOn": "d0ab5c2e32c2df5ff9add433ab5d601ac1a837f07bd68cc17d3188665ddc2d16",
@@ -56553,7 +57205,7 @@
     "Spot.Registration.PortIndex.last": "b09bdde29323640281273dab04658dbacb1f6a824dc1f745e743958ceb82c3ab",
     "Spot.Registration.PortIndex.rec": "2ab9172d4c3615a0ec4cff2a50a7f91d33f3f102b576211875b1f1f50ad2e806",
     "Spot.Registration.ROOT_KEYS": "9fe33cde00fe8238bf98ebf8ea3e56cc53db3e134b48adf7182f65a8cfe87cee",
-    "Spot.Registration.Verifier": "8fe1fd7f5ac152d4990a359285a014fc02ca1c75f508b1435280d06efca04022",
+    "Spot.Registration.Verifier": "30ac2ede30ec708ea59b5f4b16b0ab2047a9ad3e7d60f41eb2697bee6af41c44",
     "Spot.Registration.Verifier.anchors": "a7c04f5970bd8d19ff0d06a13b92172113969dc719d707512cf45f708de2bcfd",
     "Spot.Registration.Verifier.binding": "b7082e7825961d6082204bf2c3f05853d4b6595286b96cc21b3b8ef689286b5a",
     "Spot.Registration.Verifier.declared": "eb5488bbbb3f929bbab59d8e8a194d26aa3db386375d5ede3acd9cbbe697e7ed",
@@ -56574,11 +57226,12 @@
     "Spot.Registration.Verifier.scheme": "323d993f979773bd53b2407e44eb510e0ee54a56bdfc91ecc1b567f2537d61b5",
     "Spot.Registration.Verifier.seedSalt": "c3543107abedf7e28cbe53fd5dcda68ae4c63f0eec71eb6476227ed7ac98cfb4",
     "Spot.Registration.Verifier.supplied": "a394ddec89a16692e4a1affe70532fc3c8b43a0f032ece4161d7391ce8c04f88",
+    "Spot.Registration.Verifier.tied": "333909cd0a9bfc889553e27a962266adcbb5372372f845f2567980466517afcf",
     "Spot.Registration.Verifier.windowRoot": "bfb234bd6ccd03c642e74d3b56eec1a8d71e470ce9b78989a8f8791889d16723",
     "Spot.Registration.Verifier.workTable": "5168d61b1a397b0e44483525077ec84869641d8b00306c3c0fc80320c9ef87f2",
     "Spot.Registration.applyOutput": "aa52307ebbf1045737a64458522798582d2a621a5f1a4fd83c1a3b5683dc09ba",
     "Spot.Registration.applyOutputs": "3ca64b38bc80309cc1017365446b3e4db37a956c8ed3ca9b0b9b17744973a9e4",
-    "Spot.Registration.check": "762ce6292f19190d5625513de1d17333fa59af84ee932431d65124eccc420771",
+    "Spot.Registration.check": "731a472bd523d678959aafef125b79eabb678eaaceb7e6ba3ad9f753500fd14f",
     "Spot.Registration.checkOutputs": "9498a405cb15e09b4f441c8e91177bed68f6fdbe00c99b24962a8ebec206e5d0",
     "Spot.Registration.checkRegistered": "cb67dff3f9efc0829f675eb68a4a79361f38c1d1ce2c97ea210cfe03f203e6ee",
     "Spot.Registration.declaredCode": "ba72591986fa52bc2832f36e5497f1a0813f72402ee1304be0ac209db0eb60f1",
@@ -56586,6 +57239,7 @@
     "Spot.Registration.earlierRoot": "29a39a916e86c0d67cb661dc4dc15bf91137002d88e57906d0e01cd1af5deeb2",
     "Spot.Registration.entryOf": "5b5644edd114094893f15218c8b449ffe1995259281d71355a69b48dd43ccf9d",
     "Spot.Registration.fixedOf": "46b967b83ef954fbc2bf464285ef894f1176553ed0b5b4217e7aeb508523417d",
+    "Spot.Registration.heldGates": "1701e319dd2e6c678ee700d7d88dd91fadacbd5b537f660e57aa479aa1d174f9",
     "Spot.Registration.heldRoots": "bfe82acfa9e4995e240891f50b802ae05a395cd06049d0cba7d38515a36a5baf",
     "Spot.Registration.kept": "32b06c3f0796dceba93bf7be89101c77797cde8b978dd0cc32437381b4332db0",
     "Spot.Registration.lastDigest": "86fcf0b0c4d195eea3e5d7be428289a8ab782b2aa6df0d232a0fc7569247d4bc",
@@ -56598,6 +57252,10 @@
     "Spot.Registration.poolOpen": "64ef3fcebfaa2b9fabda31940194a027bfd2997f47ba498afc5dcf8b338bf03c",
     "Spot.Registration.portIndex": "149382f90d91140aafab7d0d82a0f9294fd6dd65d225ec1a87153c4588ee8fe1",
     "Spot.Registration.queryDigest": "9af0e784aa6af4426bc77a9a26689df4f072b46108735d5d2712ed34cca6e7b7",
+    "Spot.Registration.r8Codes": "21da0cf50aa3cc278280ec59dd9365a6c6311e3ef865b7f6aaf6457ade27edb6",
+    "Spot.Registration.tiedBad": "566f922cdd3376ede6879b759ad6b4eb775e3839c8897e995335999368c54ad3",
+    "Spot.Registration.tiedGate": "453d4ade636d70e1174bea39da4a569304bd026ab73898380113ec9f4a4144be",
+    "Spot.Registration.tiedGates": "5e0a1dd021850b230803ea144e709780c8753fe7ef36e703dd7b4d2db7421716",
     "Spot.Registration.unwindowed": "921f423113f6fcec3e66971c414f293929f247d8b4a86b7b9a035410bd9898b4",
     "Spot.Registration.valueRoot": "f5a3f3c1a434b1796cebb3810338b821f60d0bf698d27f956435b699300b5819",
     "Spot.Registration.widthOf": "ed1e7d7c5ca5a4a595f3983ef5a3c84cb99615246c243e39070fa9dcfc742d7a",

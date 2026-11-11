@@ -13,8 +13,9 @@ GROUPS: dict[str, dict[str, Any]] = {
                   "oracle where the oracle looked."),
         "compat": ["tokens_equal", "openings", "openings_after_release", "oracle_compare", "value_correspondence", "expected_tensors", "committed_tensors", "errors_n"]},
     "local_replay": {
-        "claim": ("A post-commitment sample of required values replays exactly from the committed bytes under the Program's relations "
-                  "(C2 form (A)), over the required-value manifest Q(P) of record, with every unevaluated stratum named."),
+        "claim": ("A sample of required values replays exactly from the committed bytes under the Program's relations "
+                  "(C2 form (A)), over the required-value manifest Q(P) of record, with every unevaluated stratum named; the sample's "
+                  "seed is graded by its form (a seed from the run root alone is a measurement, not graded)."),
         "compat": ["sampled_replay", "sampled_replay_p*.json", "replay_cache"]},
     "boundary_linkage": {
         "claim": ("Every (engine step, request) boundary is linked: the declared prompt to the input ids at the arrival step, and each "

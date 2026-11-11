@@ -26,7 +26,6 @@
     {"file": "verity_vllm/commit/committer/native_host.py", "kind": "layer", "symbol": "<module>", "detail": "commit.committer.native_host -> pipeline.spans"},
     {"file": "verity_vllm/correspondence/reader_for_acquire.py", "kind": "layer", "symbol": "<module>", "detail": "correspondence.reader_for_acquire -> observe.runtime_tree"},
     {"file": "verity_vllm/program/frontend/emit.py", "kind": "layer", "symbol": "<module>", "detail": "program.frontend.emit -> correspondence.runtime"},
-    {"file": "verity_vllm/program/twins_check.py", "kind": "layer", "symbol": "<module>", "detail": "program.twins_check -> check.fold_compare"},
     {"file": "verity_vllm", "kind": "module-cycle", "symbol": "<package>", "detail": "verity.definitions.registry.sampling <-> verity.definitions.registry.topp_split"},
     {"file": "verity_vllm/program/sampling_rng.py", "kind": "layer", "symbol": "<module>", "detail": "program.sampling_rng -> check.fold_compare"},
     {"file": "verity_vllm/program/sampling_rng.py", "kind": "layer", "symbol": "<module>", "detail": "program.sampling_rng -> observe.events"},

@@ -1,12 +1,11 @@
 """The Match's fold binds the top-p select under the sampler construction the Build's Programs declare (`sampling_event.
 program_sampler_construction`, passed as `pipeline.match --program-dir`), never under the capture target's default alone.
 
-A single-request Program's select is specialised on its constant split count (`GumbelTopPTokenSelect_v2{V,S}`, `registry.topp_words`),
+A request Program's select is specialised on the registered split count (`GumbelTopPTokenSelect_v2{V,S}`, `registry.topp_words`),
 which has no shared-greedy form: it compares as the plain `GumbelTopPTokenSelect_v1{V}` (`split_selects.as_fold_selects`), so its fold
-binds that one.  A Program whose selects read the `splits` Input (every batched component) declares S4's `shared-greedy` and folds to
-`GumbelTopPTokenSelectSharedGreedy_v1{V}`, as before.  Workload 101's fourth Match failed on exactly this pair: derived
-`GumbelTopPTokenSelect_v1` x32, record `GumbelTopPTokenSelectSharedGreedy_v1` x32; its recorded Build and Match are
-`test_fold_sampler_construction_of_record`.
+binds that one, never S4's `shared-greedy` default (`GumbelTopPTokenSelectSharedGreedy_v1{V}`).  Workload 101's fourth Match failed on
+exactly this pair: derived `GumbelTopPTokenSelect_v1` x32, record `GumbelTopPTokenSelectSharedGreedy_v1` x32; its recorded Build
+and Match are `test_fold_sampler_construction_of_record`.
 """
 from __future__ import annotations
 
@@ -60,9 +59,9 @@ def test_a_programs_selects_declare_one_construction(tmp_path):
         SE.program_sampler_construction([str(tmp_path)])
 
 
-def _program_dir(tmp_path: Path, V: int, S: int | None) -> tuple[Path, str]:
-    """A stand-in request Program (`StochasticServe` through the vLLM sampler rule): single-request at a constant `S`, else reading the
-    `splits` Input as every batched component does; its dir holds the `result.json` spec histogram the Build writes.  -> (dir, select)."""
+def _program_dir(tmp_path: Path, V: int, S: int) -> tuple[Path, str]:
+    """A stand-in request Program (`StochasticServe` through the vLLM sampler rule) at the split count `S`; its dir holds the
+    `result.json` spec histogram the Build writes.  -> (dir, select)."""
     from verity_vllm.pipeline.build import _spec_histogram
     from verity_vllm.program.frontend import derive_examples as ex
     from verity_vllm.program.frontend.derive import derive_report
@@ -74,14 +73,12 @@ def _program_dir(tmp_path: Path, V: int, S: int | None) -> tuple[Path, str]:
     C = dict(b1.B0_CONFIG, NL=1, V=V, MAX_POS=64)
     rules = RuleSet("default+stoch", list(DEFAULT_RULES.rules) + list(VLLM_SAMPLING_RULES), list(DEFAULT_RULES.families))
     with torch.device("meta"):
-        m = ex.StochasticServe(C, STEPS, constant_S=S, temperature=0.8, top_p=0.95)
+        m = ex.StochasticServe(C, STEPS, S=S, temperature=0.8, top_p=0.95)
     inputs = (torch.empty(LP, dtype=torch.int32, device="meta"), torch.empty(1, dtype=torch.int64, device="meta"))
-    if S is None:
-        inputs += (torch.empty(STEPS + 1, dtype=torch.int32, device="meta"),)
     rep = derive_report(m, inputs, mode="profile", profile="b1-eager-v3", config=C, rules=rules, name="StochServe")
     assert rep.ok, rep.unsupported
     hist = _spec_histogram(rep.program)
-    d = tmp_path / ("single" if S is not None else "batched")
+    d = tmp_path / "request"
     d.mkdir()
     (d / "result.json").write_text(json.dumps({"spec_histogram": hist}))
     select = next(k for k in hist if SE.family_of(k) in SE.CONSTRUCTION_OF)
@@ -114,21 +111,19 @@ def _profile(*patterns) -> Profile:
     return Profile("stand-in", list(patterns), {}, None)
 
 
-@pytest.mark.parametrize("S, construction, folded", [(4, PLAIN, "GumbelTopPTokenSelect_v1"), (None, SHARED, "GumbelTopPTokenSelectSharedGreedy_v1")])
-def test_the_fold_binds_the_construction_the_program_declares(tmp_path, S, construction, folded):
-    """Single-request: the Program's v2 select declares the plain construction and the fold binds `GumbelTopPTokenSelect_v1{V}`, the spec
-    the compare reads the v2 select as; without the Program's construction the fold binds S4's shared-greedy default, workload 101's failure.
-    Batched: the Program's `SharedGreedy_v1` declares `shared-greedy` and the fold binds it exactly as it did before."""
+def test_the_fold_binds_the_construction_the_program_declares(tmp_path):
+    """The Program's v2 select declares the plain construction and the fold binds `GumbelTopPTokenSelect_v1{V}`, the spec the compare
+    reads the v2 select as; without the Program's construction the fold binds S4's shared-greedy default, workload 101's failure."""
     V = 64
-    d, select = _program_dir(tmp_path, V, S)
-    assert (SE.family_of(select) == "GumbelTopPTokenSelect_v2") == (S is not None)
-    assert SE.program_sampler_construction([str(d)]) == construction
-    profile = with_sampler_construction(_profile(TokenSelectGumbelTopP(), object()), construction)
+    d, select = _program_dir(tmp_path, V, 4)
+    assert SE.family_of(select) == "GumbelTopPTokenSelect_v2"
+    assert SE.program_sampler_construction([str(d)]) == PLAIN
+    profile = with_sampler_construction(_profile(TokenSelectGumbelTopP(), object()), PLAIN)
     pattern = next(p for p in profile.patterns if isinstance(p, TokenSelectGumbelTopP))
     fold = _fold_select(V, pattern)
-    assert fold == bind(getattr(SM, folded.removesuffix("_v1")), V=V).id == _as_compared(select)
+    assert fold == bind(SM.GumbelTopPTokenSelect, V=V).id == _as_compared(select)
     default = _fold_select(V, TokenSelectGumbelTopP())
-    assert (default == fold) == (construction == SHARED), "the default is S4's shared-greedy: a single-request Program no longer folds under it"
+    assert default == bind(SM.GumbelTopPTokenSelectSharedGreedy, V=V).id != fold, "the default is S4's shared-greedy: a Program never folds under it"
 
 
 def test_a_declared_target_construction_still_holds_without_program_dirs():
