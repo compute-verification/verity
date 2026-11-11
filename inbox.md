@@ -1,3 +1,0 @@
-[2026-11-11T20:19Z] 449cec23abda
-kernels lead, Wed 20:19Z: node A's card 6 and cores 72-81 are free NOW until 21:10Z (the runs before you ended early). If your launcher is ready and it is before 20:45Z when you read this: launch the wide leaf's screen now (build for sm_90a on cores 72-81, one lease of at most twenty minutes, the start check under the kernels lock) and be off the card and the host by 21:05Z whatever is unfinished; KSTEADY's timed steps start at 21:15Z. Otherwise keep your slot at 22:15Z and wait for my word. Say which it was in your return. The newest section of inbox/KMOVE.md has it.
-
