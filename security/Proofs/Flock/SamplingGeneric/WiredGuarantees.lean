@@ -2,14 +2,13 @@ module
 
 public import Proofs.Flock.SamplingGeneric.Guarantees
 public import Proofs.Flock.SpotFlock.WiredCode
-public import Proofs.Flock.SpotFlock.AddressesWired
 public import Definitions.Claims.SamplingTwoRegX
 
 /-!
 # The two-stage guarantees at the connected program: statements
 
 `Flock.Guarantees.SpotKSTwo` and `SpotExfilTwo` at SPOT[Flock]'s code over the connected program
-(`SpotFlock.codeWired`): the members' programs with every wired read sent to its writer's output, where the
+(`SpotFlock.codeConnected`): the members' programs with every wired read sent to its writer's output, where the
 side-by-side statements read programs none of whose gates reads another's. Statements only.
 
 * `SpotKSTwoWired`, `SpotExfilTwoWired`: the two guarantees in the extractor's form (`CompiledTwo.KS`,
@@ -18,31 +17,9 @@ side-by-side statements read programs none of whose gates reads another's. State
   before the sample (`CompiledTwo.KSRegTwoX`, `CompiledTwo.ExfilRegTwoX`).
 * `Claims.Sampling.influenceTwoAt`, `CompiledTwo.ExfilRegTwoX`: the influence set and the exfiltration bound of a
   trace, where `influenceTwo` and `CompiledTwo.Exfil` read a witness's openings.
-* `SpotFlock.OpensWired`: the sessions' openings at the connected code, the one premise the compiler's theorem
-  takes there.
 -/
 
 @[expose] public section
-
-namespace SpotFlock
-
-open Claims Claims.Sampling SamplingDeploy
-
-variable (h : Held)
-
-/-- **The registration's frame is SPOT's own at the connected program**: the base frame over one address a gate. -/
-def BuiltWired : Prop :=
-  ∃ (addr : ℕ → Address) (c₀ : Code),
-    h.frame = frameAt (slotsOf fun g => some (addr g)) (revealCode h (fun g => some (addr g)) c₀)
-
-/-- **The sessions' openings at the connected program** (`SessionOpensTwo` at `codeWired h` and `twoWired h`): a
-checked unit's Flock witness makes its proof block, cut, correct at the connected program on its replay block's
-values. -/
-def OpensWired : Prop :=
-  Claims.SamplingGeneric.SessionOpensTwo FlockDeploy.sha512
-    (deploy _root_.Flock.Readable.relation (codeWired h)) (twoWired h) iroots
-
-end SpotFlock
 
 namespace Claims.Sampling
 
@@ -100,41 +77,45 @@ open Claims
 
 /-- **SPOT[Flock]'s two-stage verifier is knowledge sound at the connected program**: at every registration whose
 frame is SPOT's own there (`SpotFlock.BuiltWired`) and where each gate's value has an address that holds at every
-checked unit that needs it (`SpotFlock.AddressesWired` at the code's wiring map), `CompiledTwo.KS` holds at the
-connected code (`SpotFlock.codeWired`), its design (`SpotFlock.twoWired`) and its replay sample, at Flock's masked
-record and SHA-512. The statement's program is the members' with every wired read sent to its writer's output; the
-verifier refuses a registration whose wiring the proof does not cover (`SpotFlock.wiredOk`). -/
+checked unit that needs it (`SpotFlock.AddressesWired`), both at the code's wiring map, `CompiledTwo.KS` holds at the
+connected code (`SpotFlock.codeConnected`), its design (`SpotFlock.twoConnected`) and its replay sample, at Flock's
+masked record and SHA-512. The statement's program is the members' with every wired read sent to its writer's
+output; the verifier refuses every run at a registration whose wiring the proof does not cover
+(`SpotFlock.wiredOk`). -/
 def SpotKSTwoWired : Prop :=
-  ∀ h : SpotFlock.Held, SpotFlock.BuiltWired h →
+  ∀ h : SpotFlock.Held, SpotFlock.BuiltWired h (SpotFlock.wireMap h) (SpotFlock.returned h) →
     SpotFlock.AddressesWired h (SpotFlock.wireMap h) (SpotFlock.returned h) →
-    (SamplingDeploy.compiledTwo (FlockDeploy.deployZk _root_.Flock.Readable.relation) (SpotFlock.codeWired h)
-      SpotFlock.iroots (SpotFlock.twoWired h) (SpotFlock.rsWired h) (SpotFlock.cap h)).KS FlockDeploy.sha512
+    (SamplingDeploy.compiledTwo (FlockDeploy.deployZk _root_.Flock.Readable.relation) (SpotFlock.codeConnected h)
+      SpotFlock.iroots (SpotFlock.twoConnected h) (SpotFlock.rsConnected h) (SpotFlock.cap h)).KS
+      FlockDeploy.sha512
 
 /-- **SPOT[Flock]'s two-stage verifier bounds exfiltration at the connected program**: `CompiledTwo.Exfil` at
 `SpotKSTwoWired`'s code and premises: what an accepted run serves is in the influence set at `δ`, and that set has
 at most `Σ_{T admissible} 2^{b(T)}` members, `b(T)` the bits the proof blocks of `T` commit at the connected
 program. -/
 def SpotExfilTwoWired : Prop :=
-  ∀ h : SpotFlock.Held, SpotFlock.BuiltWired h →
+  ∀ h : SpotFlock.Held, SpotFlock.BuiltWired h (SpotFlock.wireMap h) (SpotFlock.returned h) →
     SpotFlock.AddressesWired h (SpotFlock.wireMap h) (SpotFlock.returned h) →
-    (SamplingDeploy.compiledTwo (FlockDeploy.deployZk _root_.Flock.Readable.relation) (SpotFlock.codeWired h)
-      SpotFlock.iroots (SpotFlock.twoWired h) (SpotFlock.rsWired h) (SpotFlock.cap h)).Exfil FlockDeploy.sha512
+    (SamplingDeploy.compiledTwo (FlockDeploy.deployZk _root_.Flock.Readable.relation) (SpotFlock.codeConnected h)
+      SpotFlock.iroots (SpotFlock.twoConnected h) (SpotFlock.rsConnected h) (SpotFlock.cap h)).Exfil
+      FlockDeploy.sha512
 
 /-- **The committed form at the connected program**: `CompiledTwo.KSRegTwoX` at `SpotKSTwoWired`'s code and
 premises, the trace the one read at the statement and fixed before the sample. -/
 def SpotKSRegTwoXWired : Prop :=
-  ∀ h : SpotFlock.Held, SpotFlock.BuiltWired h →
+  ∀ h : SpotFlock.Held, SpotFlock.BuiltWired h (SpotFlock.wireMap h) (SpotFlock.returned h) →
     SpotFlock.AddressesWired h (SpotFlock.wireMap h) (SpotFlock.returned h) →
-    (SamplingDeploy.compiledTwo (FlockDeploy.deployZk _root_.Flock.Readable.relation) (SpotFlock.codeWired h)
-      SpotFlock.iroots (SpotFlock.twoWired h) (SpotFlock.rsWired h) (SpotFlock.cap h)).KSRegTwoX FlockDeploy.sha512
+    (SamplingDeploy.compiledTwo (FlockDeploy.deployZk _root_.Flock.Readable.relation) (SpotFlock.codeConnected h)
+      SpotFlock.iroots (SpotFlock.twoConnected h) (SpotFlock.rsConnected h) (SpotFlock.cap h)).KSRegTwoX
+      FlockDeploy.sha512
 
 /-- **The exfiltration bound at the committed trace, at the connected program**: `CompiledTwo.ExfilRegTwoX` at
 `SpotKSTwoWired`'s code and premises. -/
 def SpotExfilRegTwoXWired : Prop :=
-  ∀ h : SpotFlock.Held, SpotFlock.BuiltWired h →
+  ∀ h : SpotFlock.Held, SpotFlock.BuiltWired h (SpotFlock.wireMap h) (SpotFlock.returned h) →
     SpotFlock.AddressesWired h (SpotFlock.wireMap h) (SpotFlock.returned h) →
-    (SamplingDeploy.compiledTwo (FlockDeploy.deployZk _root_.Flock.Readable.relation) (SpotFlock.codeWired h)
-      SpotFlock.iroots (SpotFlock.twoWired h) (SpotFlock.rsWired h) (SpotFlock.cap h)).ExfilRegTwoX
-        FlockDeploy.sha512
+    (SamplingDeploy.compiledTwo (FlockDeploy.deployZk _root_.Flock.Readable.relation) (SpotFlock.codeConnected h)
+      SpotFlock.iroots (SpotFlock.twoConnected h) (SpotFlock.rsConnected h) (SpotFlock.cap h)).ExfilRegTwoX
+      FlockDeploy.sha512
 
 end Flock.Guarantees
