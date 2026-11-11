@@ -22,9 +22,11 @@ or at its ``max_tokens``, the check `TokenSelect_v4{V}`'s:
 registration that did not accept, as a boundary stream that refused its sample would log it; today's two-stage
 streams reach no outcome, so the record is written here and no stream's.
 
-``expect`` holds the rehearsal's four runs to what each must be: ``accept`` accepted by Lean's verdict of record with
-every entry that ran accepted, not complete, and no length held; ``length`` refused by Lean's verdict on the session
-alone; ``unlogged`` refused as case 2 before any session; ``unaccepted`` refused by the boundary-audit entry alone."""
+``expect`` holds the rehearsal's four runs to what each must be, each with the case Lean's verdict on the read across
+the class's two streams gives it (`stop_audit.across`): ``accept`` accepted by Lean's verdict of record with every
+entry that ran accepted, not complete, and no length held, case 3 since no boundary outcome is handed; ``length``
+refused by Lean's verdict on the session alone; ``unlogged`` refused as case 2 before any session, Lean's verdict
+that the boundary stream's log holds no such record; ``unaccepted`` refused by the boundary-audit entry alone, case 3."""
 from __future__ import annotations
 
 import argparse
@@ -40,7 +42,7 @@ sys.path.insert(0, str(HERE))
 import stop_audit as SA  # noqa: E402
 import two_stage as TS  # noqa: E402
 from verity.protocols.spot.verifier import service as S  # noqa: E402
-from verity.protocols.spot.verifier.one_stage import registration as R  # noqa: E402
+from verity.protocols.spot.verifier.one_stage import audit as A, registration as R  # noqa: E402
 from verity_vllm.pipeline import boundary_rows as BR, boundary_stop as BS  # noqa: E402
 
 SERVE = "stop-audit-small"
@@ -103,10 +105,13 @@ def unlogged(stage1: Mapping[str, Any], check: Any = None) -> dict[str, Any]:
 
 
 def unaccepted(stage1: Mapping[str, Any]) -> dict[str, Any]:
-    """An outcome record on the class's boundary registration that did not accept (module docstring)."""
+    """An outcome record on the class's boundary registration that did not accept (module docstring): its audit
+    record names that registration and holds no verdict."""
+    audit = {"format": A.FORMAT, "registration_digest": stage1["registration"], "accepted": False, "complete": True,
+             "checks": {}, "verdicts": {}}
     return {"format": S.OUTCOME, "stream": stage1["spec"], "order": 0, "registration": stage1["registration"],
             "receipt": SA.sha512(dict(stage1["receipt"])), "draw": SA.sha512(dict(stage1["draw"])), "sessions": [],
-            "symbol": S.REJECT, "public": {}, "audit": {"accepted": False, "complete": True, "checks": {}, "verdicts": {}}}
+            "symbol": S.REJECT, "public": {}, "audit": audit}
 
 
 def expect(summaries: Mapping[str, Mapping[str, Any]]) -> dict[str, bool]:
@@ -119,13 +124,13 @@ def expect(summaries: Mapping[str, Mapping[str, Any]]) -> dict[str, bool]:
         "accept": a.get("accepted") is True and a.get("symbol") == S.ACCEPT and a.get("failed") == []
         and all(va.get(k) is True for k in ran) and all(k in va and va[k] is None for k in null),
         "accept_is_not_complete": a.get("complete") is False and a.get("length_held") is False
-        and a.get("not_run") == sorted(null)
-        and {SA.BOUNDARY_PREMISE, SA.STOP_RULE_PREMISE, SA.REQUEST_PREMISE, SA.ORDER_PREMISE} <= set(a.get("premises") or ()),
+        and a.get("not_run") == sorted(null) and a.get("case") == 3
+        and {SA.BOUNDARY_PREMISE, SA.STOP_RULE_PREMISE, SA.REQUEST_PREMISE} == set(a.get("premises") or ()),
         "length": w.get("accepted") is False and vw.get(SA.LEAN) is False and vw.get(SA.ORDER) is True
         and w.get("length_held") is False,
         "unlogged": u.get("accepted") is False and u.get("refused") == [SA.ORDER] and u.get("case") == 2
-        and "verdicts" not in u,
-        "unaccepted": b.get("accepted") is False and vb.get(SA.BOUNDARY_AUDIT) is False
+        and ((u.get("across") or {}).get("logged") or {}).get("accepted") is False and "verdicts" not in u,
+        "unaccepted": b.get("accepted") is False and vb.get(SA.BOUNDARY_AUDIT) is False and b.get("case") == 3
         and all(vb.get(k) is True for k in ran) and b.get("failed") == [] and b.get("length_held") is False,
     }
 

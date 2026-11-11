@@ -1,8 +1,9 @@
 """`stop_audit.py`'s verifier's half on a stop class's hand-off, sampled on a test's own challenger
 (`fake_challenger`): the stop stream built again from ``stage1.json`` alone, the verifier's own ``--registered`` file,
-the audit record's entries and what each refuses. No proof runs here: a session's verdicts are stand-ins of the form
-`a0.lean_verify` reports, and ``stop_audit_small.sh`` is the run that proves. The class is the two-stage driver's
-tests' (`test_two_stage_driver._stop_class`)."""
+the audit record's entries and what each refuses, and Lean's verdicts on the read across the class's two streams
+(`Record.across`) held to the Python's on each of its cases. No proof runs here: a session's verdicts are stand-ins of
+the form `a0.lean_verify` reports, and ``stop_audit_small.sh`` is the run that proves. The class is the two-stage
+driver's tests' (`test_two_stage_driver._stop_class`)."""
 
 from __future__ import annotations
 
@@ -11,6 +12,7 @@ import importlib
 import json
 import sys
 from pathlib import Path
+from types import SimpleNamespace as NS
 
 import pytest
 
@@ -104,10 +106,11 @@ def test_the_verifiers_half_is_built_from_the_hand_off_and_the_verifiers_own_cop
 
 
 def test_an_accepted_record_names_what_it_did_not_check_and_is_not_complete(tmp_path, monkeypatch):
-    """On Lean's accepting verdict of record the stop stream's audit record accepts with the order recomputed from the
-    challenger's signed log (case 1), and three entries without a verdict: the boundary stream's audit, the request
-    row and the stop rule, each with its premise. So the record is not complete, and the summary says no length is
-    held and lists the premises, soundness's two sentences among them."""
+    """On Lean's accepting verdict of record the stop stream's audit record accepts with Lean's verdict on the order,
+    read from the challenger's signed log, and three entries without a verdict: the boundary stream's audit, the
+    request row and the stop rule, each with its premise. The boundary stream's audit record is missing, which is case
+    3. So the record is not complete, and the summary says no length is held and lists the premises, soundness's two
+    sentences among them."""
     stage1 = _stage1(tmp_path, monkeypatch, "accept")
     got, summary = _audit(stage1)
     audit = got["audit"]
@@ -118,7 +121,8 @@ def test_an_accepted_record_names_what_it_did_not_check_and_is_not_complete(tmp_
     assert all(verdicts[k]["accepted"] is True for k in (SA.LEAN, SA.M0, SA.READS, SA.ORDER))
     assert [k for k, v in verdicts.items() if v.get("of_record")] == [SA.LEAN]
     order = verdicts[SA.ORDER]
-    assert order["case"] == 1 and order["premise"] == SA.ORDER_PREMISE and order["tool"] == SA.TOOL
+    assert order["case"] == summary["case"] == 3 and "premise" not in order
+    assert order["tool"] == SA.ACROSS == "sampled-proofs-verifier across"
     assert order["boundary"] == {"registration": stage1["registration"], "received": 0, "audit": None}
     assert order["stop"] == {"registration": stage1["stop"]["registration"], "previous": stage1["registration"]}
     assert verdicts[SA.BOUNDARY_AUDIT]["premise"] == SA.BOUNDARY_PREMISE == (
@@ -130,16 +134,16 @@ def test_an_accepted_record_names_what_it_did_not_check_and_is_not_complete(tmp_
     assert audit["complete"] is False
     assert (summary["accepted"], summary["complete"], summary["length_held"]) == (True, False, False)
     assert summary["not_run"] == sorted(NULL)
-    assert {SA.BOUNDARY_PREMISE, SA.STOP_RULE_PREMISE, SA.REQUEST_PREMISE, SA.ORDER_PREMISE} == set(summary["premises"])
+    assert {SA.BOUNDARY_PREMISE, SA.STOP_RULE_PREMISE, SA.REQUEST_PREMISE} == set(summary["premises"])
 
 
 def test_a_record_is_refused_by_each_entry_that_ran_and_did_not_accept(tmp_path, monkeypatch):
     """One hand-off, audited on a stream built again each time. Refused: a session Lean's verdict refuses (a length
-    that is not the rule's); a boundary stream's outcome that did not accept, or that is another registration's
-    (case 3); a verdict that names another ``--registered`` file than the verifier's, or reports another root for a
-    port; and an order the challenger's signed log does not show, here a log with no coin after the stop registration.
-    With an accepting boundary outcome the entry accepts and names the audit record, and the record is still not
-    complete."""
+    that is not the rule's); a boundary stream's outcome that did not accept, that is another registration's, or
+    whose audit record Lean's verdict refuses (case 3); a verdict that names another ``--registered`` file than the
+    verifier's, or reports another root for a port; and an order the challenger's signed log does not show, here a
+    log with no coin after the stop registration (case 2). With an accepting boundary outcome the entry accepts and
+    names the audit record (case 1), and the record is still not complete."""
     stage1 = _stage1(tmp_path, monkeypatch, "refusals")
     _, summary = _audit(stage1, accepted=False, why="the proof does not verify")
     assert summary["accepted"] is False and summary["verdicts"][SA.LEAN] is False and summary["verdicts"][SA.ORDER] is True
@@ -150,14 +154,20 @@ def test_a_record_is_refused_by_each_entry_that_ran_and_did_not_accept(tmp_path,
     entry = got["audit"]["verdicts"][SA.BOUNDARY_AUDIT]
     assert summary["accepted"] is False and summary["failed"] == [] and entry["accepted"] is False
     assert entry["audit"] == SA.sha512(refused["audit"]) and "did not accept" in summary["why"][SA.BOUNDARY_AUDIT]
+    assert entry["lean"]["accepted"] is False and "did not accept" in entry["lean"]["why"] and summary["case"] == 3
     assert got["audit"]["verdicts"][SA.ORDER]["boundary"]["audit"] == entry["audit"]
     _, summary = _audit(stage1, {**refused, "registration": "00" * 64, "symbol": S.ACCEPT})
     assert summary["accepted"] is False and "another registration's" in summary["why"][SA.BOUNDARY_AUDIT]
 
     accepted = {**refused, "symbol": S.ACCEPT, "audit": {**refused["audit"], "accepted": True}}
     got, summary = _audit(stage1, accepted)
-    assert summary["accepted"] is True and got["audit"]["verdicts"][SA.BOUNDARY_AUDIT]["accepted"] is True
+    entry = got["audit"]["verdicts"][SA.BOUNDARY_AUDIT]
+    assert summary["accepted"] is True and entry["accepted"] is True and summary["case"] == 1
+    assert entry["lean"] == {"tool": SA.ACROSS, "accepted": True} and entry["tool"] == SA.TOOL
     assert summary["complete"] is False and summary["not_run"] == sorted(NULL - {SA.BOUNDARY_AUDIT})
+    _, summary = _audit(stage1, {**accepted, "audit": {**accepted["audit"], "registration_digest": "00" * 64}})
+    assert summary["accepted"] is False and summary["case"] == 3
+    assert "Lean's verdict on the boundary stream's audit record" in summary["why"][SA.BOUNDARY_AUDIT]
 
     _, summary = _audit(stage1, registered_sha512="00" * 64)
     assert summary["accepted"] is False and summary["verdicts"][SA.READS] is False
@@ -173,11 +183,85 @@ def test_a_record_is_refused_by_each_entry_that_ran_and_did_not_accept(tmp_path,
     got, summary = _audit(unseen)
     assert summary["accepted"] is False
     assert got["audit"]["verdicts"][SA.ORDER]["accepted"] is False and got["audit"]["verdicts"][SA.ORDER]["case"] == 2
+    assert summary["case"] == 2 and "the later sample's coins" in summary["why"][SA.ORDER]
+
+
+def _generic(why: str | None) -> str | None:
+    """`two_stage.stop_order`'s reason in `Record.across`'s names: the stop stream is the later one, and the class's
+    boundary stream the earlier."""
+    for mine, leans in (("the stop sample's", "the later sample's"), ("the class's boundary registration", "the earlier registration"),
+                        ("the boundary registration's", "the earlier registration's"),
+                        ("the stop registration", "the later registration")):
+        why = why if why is None else why.replace(mine, leans)
+    return why
+
+
+def _released(seed: str, *commits: tuple[str, int]) -> tuple[T.OneSession, dict[str, bytes]]:
+    """One session of the test's challenger that received ``commits``' digests in that order, each followed by its
+    count of coins, released and read whole. -> the challenger and the bytes read after each digest."""
+    one, read = T.OneSession(seed), {}
+    for digest, coins in commits:
+        one.commit(bytes.fromhex(digest))
+        read[digest] = one(64 * coins)
+    return one, read
+
+
+def test_lean_and_the_python_agree_on_each_case_of_a_read_across_streams(tmp_path, monkeypatch):
+    """`Record.across` (the Lean verifier's piece, as `stop_audit.across` calls it) against the Python on one
+    hand-off, verdict by verdict: ``logged`` against the boundary stream's log's digests (`resume`'s test), ``order``
+    against `two_stage.stop_order`, reason for reason, ``audit`` against `boundary_entry` on the outcome record, and
+    ``case`` against the three. Case 1: the hand-off with an accepting boundary outcome. Case 2: a stop record on a
+    boundary record never logged; an empty log; and, on sessions of the test's challenger that received the two
+    registrations by hand, the stop registration's coins released first, no receipt of the boundary registration, a
+    coin opened and not read, and no evidence. Case 3: the boundary stream's audit record missing, refused, and
+    another registration's."""
+    stage1 = _stage1(tmp_path, monkeypatch, "across")
+    r, s = _resume(stage1), stage1["stop"]
+    earlier, later = stage1["registration"], s["registration"]
+    refused = SMALL.unaccepted(stage1)
+    accepted = {**refused, "symbol": S.ACCEPT, "audit": {**refused["audit"], "accepted": True}}
+    others = {**accepted, "registration": "00" * 64, "audit": {**accepted["audit"], "registration_digest": "00" * 64}}
+
+    def handed(seed: str, *commits: tuple[str, int], read: int | None = None) -> dict:
+        one, got = _released(seed, *commits)
+        return {"evidence": one.evidence(later), "read": got[later][:read].hex()}
+    cases = {
+        "accepted": (1, {}, None, accepted, None),
+        "by hand": (1, handed("by-hand", (earlier, 1), (later, 2)), None, accepted, None),
+        "unlogged": (2, {"record": SMALL.unlogged(stage1, T.PAIR)["stop"]["record"]}, None, None, "the later sample's coins"),
+        "an empty log": (2, {}, [], accepted, None),
+        "the stop registration's coins first": (2, handed("first", (later, 1), (earlier, 1)), None, accepted,
+                                                "the earlier registration's coins come first"),
+        "no receipt": (2, handed("no-receipt", (later, 1)), None, accepted, "no coin released after the earlier registration"),
+        "not read whole": (2, handed("short", (earlier, 1), (later, 2), read=64), None, accepted, "a coin opened and not read"),
+        "no evidence": (2, {"evidence": None}, None, accepted, "published no signed log"),
+        "no audit record": (3, {}, None, None, None),
+        "a refused audit record": (3, {}, None, refused, None),
+        "another registration's audit record": (3, {}, None, others, None),
+    }
+    for name, (case, stop, log, outcome, why) in cases.items():
+        mine = {**stage1, "stop": {**s, **stop}}
+        log = list(r.first.stream.log) if log is None else log
+        previous = mine["stop"]["record"]["previous"]
+        logged = previous in [SA.R.digest(rec) for rec in log]
+        order = T.TS.stop_order(mine["stop"]["evidence"], r.layout.run, previous, SA.R.digest(mine["stop"]["record"]),
+                                bytes.fromhex(mine["stop"]["read"]), T.AC.lms_verify)
+        audit = SA.boundary_entry(previous, outcome)["accepted"]
+        lean = SA.across(mine, NS(layout=r.layout, stream=NS(log=log)), outcome)
+        assert "refused" not in lean, (name, lean)
+        assert lean["logged"]["accepted"] is logged and lean["received"] == (0 if logged else None), (name, lean)
+        assert lean["order"] == ({"accepted": True} if order is None else {"accepted": False, "why": _generic(order)}), (name, lean, order)
+        assert lean["audit"]["accepted"] is audit, (name, lean, audit)
+        assert lean["case"] == case == (2 if not logged or order is not None else 1 if audit is True else 3), (name, lean)
+        assert (lean["earlier"], lean["later"]) == (previous, SA.R.digest(mine["stop"]["record"])), name
+        assert why is None or why in lean["order"]["why"], (name, lean)
+        assert (order is None) == (why is None), (name, order)
 
 
 def test_the_boundary_audit_entry_reads_the_boundary_streams_outcome_record():
     """`boundary_entry` alone: null without a record; an outcome record on the class's boundary registration gives
-    its symbol's verdict and the audit record's SHA-512; anything else is refused by name."""
+    its symbol's verdict and the audit record's SHA-512, and needs Lean's verdict on the audit record when one is
+    given; anything else is refused by name."""
     boundary = "ab" * 64
     record = {"format": S.OUTCOME, "registration": boundary, "symbol": S.ACCEPT, "audit": {"accepted": True}}
     assert SA.boundary_entry(boundary, None) == {
@@ -185,6 +269,9 @@ def test_the_boundary_audit_entry_reads_the_boundary_streams_outcome_record():
         "registration": boundary}
     got = SA.boundary_entry(boundary, record)
     assert got["accepted"] is True and got["audit"] == SA.sha512(record["audit"]) and got["of_record"] is False
+    assert SA.boundary_entry(boundary, record, {"accepted": True}) == {**got, "lean": {"tool": SA.ACROSS, "accepted": True}}
+    got = SA.boundary_entry(boundary, record, {"accepted": False, "why": "another registration's"})
+    assert got["accepted"] is False and got["why"].endswith("audit record: another registration's")
     for wrong, why in (({**record, "symbol": S.REJECT}, "did not accept"),
                        ({**record, "audit": {"accepted": False}}, "did not accept"),
                        ({**record, "audit": None}, "did not accept"),
