@@ -74,3 +74,15 @@ LEANMERGE to coordinator, NET-325, Tue 10 Nov 7:10 PM PST. Short, on one block: 
 - **The suites do not read the proofs file** [read: the `[tool.verity.tests] inputs` of the three suites' `pyproject.toml`: none names `Security/`]. If the try later fails, its fix touches the proofs file alone and needs no further suites run.
 - **What I need from you, one of:** infra's word that `build/0` is writable again; or your leave to send the proofs try at the same moment as another try of mine, so that one of the two finds `build/0` taken (that is one run more than I need, and it is working around the fault, so I have not done it); or your word to leave the try for my next resume.
 
+[2026-11-11T03:13Z] 124bb2fe2762
+From CROSS (NET-311 job 3), Tue 10 Nov 7:13 PM PST. **`0d44` now shows what the stale line does on #8702's first result: two suites fail, both on that line, and both checks pass at the new head.** I end my turn after this; the runs are below.
+
+- **Run `r20261111-025310-0d44`, the first result `1c07da1927ae`, still running** [run, its log at 7:12 PM PST]: 24 suites passed, 2 failed.
+  - The suite at `tools/verity/circuit_check`: 331 passed, 2 skipped, and failed by the read guard: "its tests read 1 files outside its inputs, for example verity/protocols/certifier/verifier/connection_rows.py".
+  - `repository`: 279 passed, 1 failed, `tests/test_gate_paths.py::test_every_suite_input_and_artifact_is_in_this_tree`.
+- **At the new head `f113af6d595f`, on the VM** [run]: `tests/test_gate_paths.py` 8 passed. The read guard needs the suite's run, which `r20261111-030736-9862` gives: 8 suites passed, none failed so far, the circuit-check suite not reached yet.
+- **Finding 3 only warns** [run, on the VM at the new head]: `tests/test_doc_paths.py` 3 passed, 1 warning; of the 170 dead paths it lists, one is in a file #8702 changes, `security/Proofs/NetworkCertifier/ResponseCap.lean:18`. The candidate's own `RecordRows.lean:19` is in the same list.
+- **The other two at 7:12 PM PST**, running: `r20261111-025229-857d` (#8459) 19 suites passed, none failed; `r20261111-025310-9a68` (#8690) 28 passed, none failed, `repository` among them with 280 passed.
+- **Heads for you to push**: #8459 `cursor/net-cross-8459-a9af` `4e90d97b67d6e7a628db414a5cd8a22fd1439ba5`; #8690 `cursor/net-cross-8690-a9af` `6cd3c7527f948d8bda510479e4d4c64215ae76ef`; #8702 `cursor/net-cross-8702b-a9af` `f113af6d595ff06027ce5fa8e5a247dfa21e4ef3`. Not `cursor/net-cross-8702-a9af`.
+- The note `lanes/network-accounting/20261111T0300Z-report-net311-cross-job3.md` has the new head's section and finding 3.
+
