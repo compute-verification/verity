@@ -43485,3 +43485,29 @@ For SCALE: if (e) holds the count to evaluate is `K_cls`, the mean number of all
 For the table:
 - The by-position bound's only slack factor by proof alone is K: #8827's finders pay one extraction a waited gate. Counted by all-or-nothing rows it would read about 2^-117 an audit at D*1 (2^-108 with 64 KiB calls, 2^-101 over a year, 2^-92 with both) [derived; 9 rows a block is a guess; needs a new hypothesis proved at the code; nothing built].
 - 210 and k are forced as defined (the lock reads both); the 4 is the finder's 2, tight in general, times two tables, where at most 1 bit is slack and only conditionally.
+
+## WITNESS, Wed 11 Nov 08:52Z: the cut builds and its words are `main`'s: the walk asks the cache for each row of z 64 column indices ahead; not timed yet (runs out); one file for HEADPROF's tree; and a second cut found in kernels' own thread record: a quarter of the witness threads' time is in the kernel
+
+For HEADPROF: cursor/proofs-witness-9dbc at 1f4029960bcdf633e770b8a05a27576ac310a464
+- **On kernels' tree `c6cadd0e325f` it is one file** [run: `sha256sum` of `ir_block.rs` is the same on that tree and on `main`, c48c41bd6efe…]: `git show 1f4029960bcdf633e770b8a05a27576ac310a464:verity/protocols/flock/prover/live/src/ir_block.rs > verity/ml/flock/live/src/ir_block.rs`, then build as before. The served path needs nothing else: that tree's `circuit.rs` calls `eval64_flat` and `eval_wide`, which now ask ahead.
+- **One binary, both rows:** `FC_UNIT_AHEAD=0` in the provers' environment is today's loop; unset is the cut (64); `FC_UNIT_AHEAD=16` or `256` are other distances. `FC_UNIT_CHECK=1` asserts every group's rows against `eval64` on the real statement (slow: for one statement, not for the timed row).
+- **Please also read on node A:** `cat /sys/kernel/mm/transparent_hugepage/enabled`. It decides the second cut below.
+
+**What is on the branch** [run]:
+- `51a4f8001d`: two tests that pin the words: a digest of z, a, b from `eval_wide` (eight lane groups a pass and each alone) and of the packed a, b words `unit_ab_into` writes, the units' witness the device reads, at every width. The digests were taken on `main`'s walk (`r20261111-083459-fc1a`: `main` plus the tests only).
+- `1f4029960b`: `fold_own` (`ir_block.rs`) prefetches z at the index 64 places further on in the side's index array, across row ends. No value depends on it. Files: `ir_block.rs`; `circuit.rs` and `flock-circuit.rs` only for `unit-walk --ahead`; `benchmarks/unit_walk/run.sh`; one row of `benchmarks/README.md`.
+- **Bit-identical** [run `r20261111-084206-e7f0`, cpu-11]: flock-live's unit tests pass in both feature sets (161 and 168 passed, 0 failed) with the pins unchanged, at distances 0, 1, 64, 4096 and past the net, widths 1, 2, 4, 8. The proof is a function of these words, the salts and the coins, so it is the same; no card run of mine shows it, `FC_UNIT_CHECK=1` on HEADPROF's does.
+- **Not timed yet.** The served head block is staging on cpu-1 (`r20261111-082933-6294`, since 08:42Z, about 75 minutes); it then walks `main`'s build and each new head of my branch on the same circuit, distance 0 against 64 in one process.
+
+**Correction to my 08:27Z entry, candidate 2** [run `r20261111-081159-b494`, cpu-7, a head block at NVIS=16, BN=16: 9,011,201 rows, 380 M indices, 256 units]: a wider pass is weak. Width 1: 1.7 to 1.9 CPU-s, 0.49 s wall on ten threads. Width 4: 1.47 to 1.54 CPU-s (−20%), 1.5 s wall (3×). Width 2: 2.1 to 2.4 CPU-s, worse than width 1. So `FC_UNIT_WIDE=4` is not worth HEADPROF's card time. In the same run the transposes (`lanes_into`) are 0.20 to 0.22 s of the 1.7 to 1.9: 12%.
+
+**The second cut: the row buffers** [read: kernels' `r20261111-061047-6773`, `out/cpu/k1-threads.tsv.gz`, my sums over the steady 110 s; `huge_pages.rs`, `flock-circuit.rs:7499`]:
+- The prover's ten pool threads spend 7.6 s in user code and 2.3 s in the kernel a statement (the salts threads' 7.35 s are all kernel, SALTS's subject).
+- A statement's walk allocates z, a and b for each lane group, 256 MB each, 3 GB a statement, and frees them. The GPU prover turns the huge-page advice off (`huge_pages::set(!flag("--gpu"))`), so each is mapped anew and faulted in 4 KiB at a time: about 786,000 page faults a statement [guess: that this is most of the 2.3 s].
+- **The cut:** keep the row buffers between statements (a pool of at most 12 vectors, taken and given back in `eval_wide` and `unit_ab_into`). Same words. 1 to 2 CPU-s [guess] and the same files as above. I build it next, behind the first.
+- With small pages every read of z is also a TLB miss; the prefetch does that page walk early. If node A's setting is `madvise`, huge pages for the kept z alone are a third step.
+- `benchmarks/unit_walk` walks with the advice on (it does not pass `--gpu`), so its numbers so far are not the device prover's pages. My next head makes the walk take the device's policy.
+
+For BREAKEVEN: still 0 CPU-s measured. Two cuts with no number yet: asking ahead [guess 1 to 3 CPU-s of the 8.7] and kept row buffers [guess 1 to 2]. Do not price either before HEADPROF's row or my walk on the served block.
+
+For the table: WITNESS | cut 1 built, bit-identical by two pinned digests, branch `cursor/proofs-witness-9dbc` at `1f4029960b` | 0 CPU-s measured yet, walk on the served block about 10:00Z | cut 2 (kept row buffers, the 2.3 s of kernel time a statement) next; PR after the first timing
