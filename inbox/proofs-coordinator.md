@@ -48443,3 +48443,31 @@ Tags: [run] a command I ran now, [read] a file or record I read now, [relayed] a
 For the table:
 - Utilization, only `mfu_serve` changed, fleet held, measured prices: (iii) 4,042.4 GB at the modeled 0.4 and 144.7 to 155.8 at the measured engine rate on node A (a floor); the lever row as FUSED corrected it 3,710.4 and 132.5 to 142.7. Linear to 0.14% with the replay held, which is right. Under 300 GB only while the engine serves at most 370 / 404 tokens a GPU-second (not measured at the headline's mix). Main's price of record: 14,228.6 at 0.4, 501 to 547 at the floor.
 - The waterfall at 0.4 (modeled on measured prices; nothing built is in the plan of record): width κ 2^-3 2,650.6, then the four-quarter cut 1,696.3, then WITNESS's 0.880 1,571.1; at the floor 102.0, 65.2, 60.3. The head block's Lean verify (60.56 core-s, assumed) moves every row: +12.0 GB a core-second on the record.
+
+## CONCRETE, Wed 11 Nov 10:28Z: ready to mark #8907 at 14643669694c61d8da1d76676ffa1888d7acb889 (`binding.py` prints the gates as the Lean counts them beside the mean; quick tier 3 of 3; stacked on #8867's marked head). #8873's quick tier passed 4 of 4 at its new head; its records run is still out
+
+Tags: [run] a command I ran now, [read] a file or record I read now, [relayed] another lane's statement I did not check.
+
+**ready to mark #8907 at 14643669694c61d8da1d76676ffa1888d7acb889**
+
+- [run] It is your 10:03Z "K as the Lean counts it" in `binding.py`. #8867 is marked, so it is a new PR: #8867's head `65788418c6e8` plus one commit in the same three files. It lands after #8867.
+- [run] Quick tier `r20261111-101558-aeca` (vy-nebius-cpu-12): `suites.py --changed 8201dacff26e --quick`, 3 suites (`benchmarks/spot_figures`, `repository`, `verity-graph`), 3 passed, 0 failed. 60 tests of the file, ruff clean.
+- [run] `git merge-tree`: merges with `main` at `0a722c6ec984` and with #8784, #8779, #8777, #8568, #8517, the open PRs that touch `benchmarks/spot_figures/README.md` and merge with `main` themselves (#8462 conflicts with `main` on its own).
+- No Lean, no lock, nothing under `verity/` or `security/`; no claim.
+- What it adds: `--largest M` (the most gates one block needs) prints two more columns, "by gates as counted", at K_s = K_m = the checked blocks times M, beside "by gates" (the mean); `--largest-classes M` the same by classes; `--checked C` where the checked blocks are not the sessions. One line of the output states the count and says the figures as given are means over the coins. It is columns, not a row: the code's columns are the ways of counting, and every sum and period follows.
+
+**What it prints at the record** [run: `binding.py --K 2^41.81 --sessions 10046500 --largest 632128 --symbols 2^23 --first-stage 4` and `6` at `14643669694c`; the three counts relayed from SCALE and ATTACK]. Modeled; T = 2^80 calls in every run; one table a session; a registration with no always-checked block:
+
+| | by gates (mean), calls | compressions | by gates as counted (2^42.53), calls | compressions |
+|---|---|---|---|---|
+| the first-hit term per sampled replay block | 2^-100.91 | 2^-91.91 | 2^-100.19 | 2^-91.19 |
+| per run at K0 = 4, with the conflict term | 2^-98.91 | 2^-89.91 | 2^-98.19 | 2^-89.19 |
+| per run at K0 = 6, with the conflict term | 2^-98.33 | 2^-89.33 | 2^-97.61 | 2^-88.61 |
+
+**#8873 at 676a777193e29ef3bfb70cd0444e8c3a62a02c1f**
+
+- [run] Quick tier `r20261111-100934-0785` (vy-nebius-cpu-12): 4 suites, 4 passed, 0 failed.
+- [run] Records run `r20261111-100929-c02f`: running since 10:10Z; the old head's took 38 min in its slot. Its ready line and the `For CAPS:` line follow in the entry after it ends.
+
+For the table:
+- #8907 ready at `14643669694c` (quick tier `aeca` 3 of 3): the tree's evaluator prints the first-hit term with K as the Lean's lemmas count it. At the record by gates, a run at K0 = 4 to 6 reads 2^-98.19 to 2^-97.61 in calls (2^-88.61 in compressions at K0 = 6), against 2^-98.91 to 2^-98.33 with K the mean. Modeled.
