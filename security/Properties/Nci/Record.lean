@@ -6,6 +6,7 @@ public import NciCheck.DefinitionDigest
 public import NciCheck.RecordText
 public import Flock.TemplateQuery
 public import Spot.Wires
+public import Spot.Bits
 
 /-!
 # What accepting an execution phase's circuit record means
@@ -46,14 +47,15 @@ not whole words has bits past its writer's and lays out no circuit.
 
 **The record's text.** A record lays out a circuit only where the check reads it as its text states it (`Served`),
 by the readers a check of a circuit record is built on (`NciCheck.RecordText`), so that the check and these
-statements read one definition. The text parses, and the wiring's cuts and wires are the ones
-`Spot.Wires.Wiring.ofJson` reads of it (`wiresOf`). The text states no template's rows or outputs, which are the
-Program's (`Templates`), and the wiring's order is left free: under any order `Spot.Wires.check` accepts only wires
-without a cycle (`Spot.Wires.check_acyclic`). The slots are the ones the text's inference blocks give each unit
-(`NciCheck.RecordText.slot`), and every row the check holds is one the text declares, for the reason it declares: a
-registered read, a table read or an opening (`NciCheck.RecordText.declared`). Both readers take the Program beside
-the text. So the blocks are the text's, and θ lies within what the text declares: the check holds no row the text
-does not declare. It may hold fewer, and then counts more bits as fresh.
+statements read one definition. The text parses, and the wiring's cuts and wires are its wiring's
+(`NciCheck.RecordText.wiring`, what `Spot.Wires.Wiring.ofJson` reads of its cuts and wires). The text states no
+template's rows or outputs, which are the Program's (`Templates`), and the wiring's order is left free: under any
+order `Spot.Wires.check` accepts only wires without a cycle (`Spot.Wires.check_acyclic`). The slots are the ones the
+text's inference blocks give each unit (`NciCheck.RecordText.slot`), and every row the check holds is one the text
+declares, for the reason it declares: a registered read, a table read or an opening
+(`NciCheck.RecordText.declared`). Both readers take the Program beside the text. So the blocks are the text's, and
+θ lies within what the text declares: the check holds no row the text does not declare. It may hold fewer, and then
+counts more bits as fresh.
 
 **The rate rule** (`Complies`): where the check accepts, the instance's fields are the ones it judged by, the record
 lays out a circuit, and every circuit it lays out meets the policy block by block at the instance's `Γ` and `α`, so
@@ -94,7 +96,8 @@ open Lean (Json)
 open Flock.Program (Prog Scope Ref Ty Defn Node)
 open Flock.TemplateQuery (TRange)
 open NciCheck.Baseline (getD strAt digest lastWith)
-open NciCheck.RecordText (Row Held wiresOf fieldsOf outerOf)
+open NciCheck.RecordText (Row Held fieldsOf outerOf)
+open Spot.Bits (bitsOf)
 open NciCheck.DefinitionDigest (canonicalEntry definitionDigest closureDigest)
 
 /-! ## The interface -/
@@ -182,9 +185,6 @@ def OutLeaf (P : Prog) (sc : Scope) (out : String) (l g lo hi : ℕ) : Prop :=
 def RowLeaf (P : Prog) (rs : Array TRange) (W : Spot.Wires.Wiring) (r : Row) (l g lo hi : ℕ) : Prop :=
   ∃ sc, UnitAt P rs r.tid r.unit sc ∧ InLeaf P sc (W.cutsOf r.tid r.port) r.port r.row l g lo hi
 
-/-- A type's bits: its leaves' widths, summed. -/
-def bitsOf (t : Ty) : ℕ := t.widths.foldl (· + ·) 0
-
 /-- **`t` is Definition `d`'s template.** No two of `d`'s parameters have one name, and each is whole 16-bit words;
 `t`'s rows are `d`'s parameters by name, each with its words and its outer length; and `t`'s outputs are `d`'s output
 rows `o<f>`, each with its bits rounded up to whole words, never down: a row wired to an output has the output's
@@ -269,13 +269,18 @@ def Divides (P : Prog) (rs : Array TRange) (slot : String → ℕ → Option ℕ
     at_ x < sc.off + (P.defs[sc.d]!).gates ∧ slot tid u = some s ∧ (U.unit x).map Fin.val = some s
 
 /-- **`d` is the circuit the record `c` lays out.** The instance's Program decodes and the record's text parses. The
-check reads the record as the text states it: the wiring's cuts and wires are the ones `Spot.Wires.Wiring.ofJson`
-reads of it (`wiresOf`); the slots are the ones its inference blocks give each unit (`NciCheck.RecordText.slot`);
-and every row the check holds is one the text declares, for the reason it declares
+check reads the record as the text states it: the wiring's cuts and wires are its wiring's
+(`NciCheck.RecordText.wiring`); the slots are the ones its inference blocks give each unit
+(`NciCheck.RecordText.slot`); and every row the check holds is one the text declares, for the reason it declares
 (`NciCheck.RecordText.declared`). The wiring passes `Spot.Wires.check`, and its templates are the Program's: the
 root's nodes (`Flock.TemplateQuery.evaluate`), with their units, rows and outputs (`Templates`); every unit's rows
 are its own input gates, every wire lands whole, and every bit of a wired row is its writer's; no row the check
 holds has a writer; and `d` is the wired circuit, θ the rows the check holds and `𝓘` the slots.
+
+No clause asks that the text names its Program. Where a gate is computed or a row is held it does: the gate's unit
+has a slot and the row a declaration, and the text's readers give neither unless the text names the Program by its
+SHA-512 (`NciCheck.RecordText.templatesOf`). Where no gate is computed and no row is held, the circuit has nothing
+to count.
 
 Not tied to the text: that the check holds every row the text declares (one that holds fewer counts more bits as
 fresh); an opening's pin and its reader's roles, which are the check's (`Good`); which leaves of its parameter a
@@ -286,7 +291,7 @@ def Served (F : Form) (c : F.Case) (d : Verity.RegisteredCircuit) : Prop :=
   ∃ (P : Prog) (doc : Json) (W : Spot.Wires.Wiring) (S : Spot.Wires.Summary) (rs : Array TRange)
       (at_ : Fin d.D.N → ℕ),
     Flock.Program.decode (F.inst c).program.toUTF8 = .ok P ∧
-    Flock.JsonParse.parse (F.inst c).record = .ok doc ∧ Spot.Wires.Wiring.ofJson (wiresOf doc) = .ok W ∧
+    Flock.JsonParse.parse (F.inst c).record = .ok doc ∧ NciCheck.RecordText.wiring doc = .ok W ∧
     (F.wiring c).cuts = W.cuts ∧ (F.wiring c).wires = W.wires ∧ F.slot c = NciCheck.RecordText.slot P doc ∧
     (∀ r h, F.held c r = some h → NciCheck.RecordText.declared P doc r = some h.declared) ∧
     Spot.Wires.check (F.wiring c) = .ok S ∧
