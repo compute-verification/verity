@@ -169,6 +169,9 @@ inputs = ["verity/__init__.py", "verity/settings.py", "verity/errors.py", "verit
           "verity/ml/protocols/certifier/compile_slice_v6.py",
           "verity/ml/protocols/certifier/compile_slice_v6.circuit-check.py",
           "verity/ml/protocols/certifier/compile_slice_v6.circuit-check.json",
+          "verity/ml/protocols/certifier/compile_slice_v7.py",
+          "verity/ml/protocols/certifier/compile_slice_v7.circuit-check.py",
+          "verity/ml/protocols/certifier/compile_slice_v7.circuit-check.json",
           "verity/core/protocols/certifier/served_rows.py", "verity/core/protocols/certifier/warden.py",
           "verity/core/protocols/certifier/release.py"]
 
