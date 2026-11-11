@@ -61945,3 +61945,80 @@ Everything below marked [run local] is one of three scripts run in a scratch che
 - Your 18:29Z item 1, the guess replaced: circuit-check of `TokenSelectGroups_v2{C=7744,G=64}` gives 1,343,705 AND gates, 4 rows, a block of 14,417,920 bits, 2^24; of `TokenSelectCombineUnits_v1{V=154880,C=64,K=20}` 421,033 AND gates, 42 rows, 27,000,832 bits, 2^25; 0 failures, 5 warnings (no lowered realization compared with the reference on four targets, 32 redundant AND gates in the small combine) [run `r20261111-184053-3977`, rc 0]. The Lean of record agrees with the mirror on the difftest cases of `93f870229e`: suite `verity-core-sampled-proofs`, 5 passed [run `r20261111-184130-0316`, rc 0].
 
 **7. What I do next, on your word.** If circuits says yes: I branch from #8426's head, write the follow-up and my two-stage side on it, and give you two ready lines. Each landing waits on the one before (#8426, the follow-up, mine), which is the risk to the 03:00Z line. If circuits says no: say which of (ii) and (iii) you want; I would not start (ii) without a second reader named for the Lean.
+
+## HEADSPLIT, Wed 11 Nov 19:06Z: first entry. Serving a head's key block as one scores unit and its values units changes three places (the Definitions' chain, four spots of the vLLM adapter, the census and its cards) and not the Program; my pick is 64 columns; the second stage's design check takes the split wherever it takes today's head blocks, once the keys' value columns are their own committed rows; nothing is built yet
+
+Tags: [run] with the run id or, for a local script, its path; [read] with the place; [relayed]; [guess]. No `research run` yet. Branch `cursor/proofs-headsplit-c85e`, pushed at `origin/main` `cc6ee7446278`, no commit [run: `git push`]. Mailbox read at 19:00Z: the 18:46Z note [read: `cursor/proofs-inbox` `inbox/bc-4254fbf8-ce7c-54b6-95a1-cb4bd000e7f4.md`]. Issue CIR-241.
+
+**How the choice is made today (read first, as the brief asks).** `split_chain` chooses nothing: the only width in it is the module constant `COMBINE_COLS = 64` through `combine_cols(DV)` [read: `verity/definitions/registry/sparse_mla_split.py:494-503`, `:507-538`]. Where the adapter has a choice of widths (a coordinate's K-chunks, a column family's halvings) it offers every width as a candidate template (`serving_templates.unit_templates`), the partition names the ones it takes, and the census picks by `leak_cost` [read: `adapters/vllm/verity_vllm/pipeline/serving_templates.py:354-450`, `benchmarks/one_stage/block_census.py:107-130`]. So I put the switch there: the chain functions take a width (`None`: whole key blocks, as today), `unit_templates` offers both, and the partition's templates choose. Every partition on `main` keeps reading whole blocks; the new one names the scores and values templates. If circuits want one chain for the whole tree instead, that is a constant in `sparse_mla.py` read by the same two functions: say so and I change it.
+
+**1. Every place that changes, by file and line, with its owner** [run: `research msg owners --dry-run PATH...`; read: each place].
+
+Rows of the Program: none. The Program's row stays `SparseMlaSplit_v1{T,NS,NH,..}` (prefill: NS = 1); the units are templates a partition reads that row through, and nothing under `adapters/vllm/verity_vllm/program/` names a head unit [run: `rg` for the unit names there, no hit].
+
+| place | what changes | owner |
+|---|---|---|
+| `verity/definitions/registry/sparse_mla.py:325-339` `head_chain`, `:359` `CUTS` | a second form of the chain: per head and key block, `SparseMlaHeadScores` and DV / G `SparseMlaHeadValues`, then `SparseMlaHeadEnd{DV=G}` on each column block (#8917's composition test is this chain) | @proofs by the tool; the brief calls it circuits' |
+| `verity/definitions/registry/sparse_mla_split.py:507-538` `split_chain`, `:542` `CUTS` | the same for a split row: at NS > 1 each split's end is `SparseMlaSplitEnd{DV=G}` on each column block (it exists) and the combine is `SparseMlaCombine{NSPLIT,DV=G}`; at G = 64 the combine is today's template | @proofs |
+| `verity/definitions/numerics/sparse_mla_split_twins.py:126-180` (`_blocks`, `chain_rows`, `split_chain_rows`), `derived_rows.py:800-852` `attn_block` | the twin returns each block's max, lanes and O; the scores unit's two other outputs (bf16 of P, and the rescale) are computed inside `attn_block` and returned by nothing; the adapter needs them to fill the units' ports | @proofs |
+| `verity/definitions/registry/boolean_sparse_mla.circuit-check.py:9-22` and its pins | the Boolean units are bound and pinned at 64 keys at 128, 64 and 32 columns already (#8917); to add: the ends on a column block (`SparseMlaHeadEnd_v2{DV=64}`, `SparseMlaSplitEnd_v2{DV=64}`) and a short first block's units | @proofs |
+| `adapters/vllm/verity_vllm/pipeline/serving_templates.py:155-159` (`CHAINS`, `CHAIN_ROLES`, `CHAIN_OF`), `:422-425` (`unit_templates`) | the three new unit families and their roles; the split's units offered beside today's | @vllm |
+| `adapters/vllm/verity_vllm/pipeline/chain_rows.py:62-84` `_plan`, `:91-110` `kind` and `_key`, `:147-219` `read` (ports' order at `:199-202`, a unit's outputs at `:191-196`), `:228-266` `wire` (writers at `:237`, readers at `:247`) | a head's places for the scores, values and column-end units and what each reads; a values unit's own input is its G columns of the block's keys; a values unit's parameters interleave own rows and wired rows, which `read` does not handle today | @vllm |
+| `adapters/vllm/verity_vllm/pipeline/chunk_rows.py:59-61` `reads` | which chain units read the exponent table in lookup slots (the scores unit, as the block does today) | @vllm |
+| `benchmarks/one_stage/block_census.py:73-74` `slots`, `:107-130` `cut` | a chain row's units are one slot each with one option today; the census must hold the two forms as options and pick one | @proofs |
+| `benchmarks/sampling_plan/glm53_blocks.json` | the planner's card; it is the census over a Commit Build in the store, so it changes by rerunning the census, not by hand | @proofs |
+| `benchmarks/one_stage/glm53_sparse_mla_tp8_step16.json` (the only partition under `benchmarks/one_stage/` that names a head block) | a partition naming the scores and values templates | @proofs |
+| `benchmarks/one_stage/a5_sparse_mla.py` with `adapters/vllm/tests/pipeline/test_serving_rows_splits.py` | the small one-stage audit of this row on CPUs: its window names the block templates | @proofs; the test @vllm |
+| `benchmarks/spot_figures/cards/workload.glm-5.3.json` | see "the figure" below | @proofs |
+| `tools/verity/circuit_check/src/circuit_check/checks.py:1436-1447` `cut_of` | no change while `CUTS` names the whole-block chain; it holds one chain a family to the Flock block in the row's place | @circuits |
+
+**2. The width.** My pick is **64 columns**.
+
+| columns a values unit | the cost model's figure, GB a year (modeled, nothing built) | GPU-seconds for 256 key blocks, against the head block's 3.02 to 3.13 s (measured, kernels' harness, six cores, two provers, not the served engine) | the same with the host walking the values unit, against 2.14 s |
+|---|---|---|---|
+| 128 | 1,943.8 | 1.34 to 1.39 times | 2.26 s (1.05) |
+| 64 | 1,527.9 | 1.09 to 1.13 times | 2.21 s (1.03) |
+| 32 | not on that table; 1,267 on an earlier table whose 128-column figure reads 1,889 | 1.02 to 1.06 times | 2.14 s (1.00) |
+
+[relayed: the figures from BREAKEVEN 14:12Z, run `r20261111-134358-85c3`, and BENCHCROSS 10:57Z; the seconds from HEADPROF 15:48Z, run `6f08` with `fcd7`, `88e7`, `a5fc`, `64ca`.]
+
+Why 64 and not 32:
+- 64 is the combine's column block (`COMBINE_COLS`), so on a split row each column end reads one values unit's output row whole and the combine is the template served today; at 32 the combine becomes a new template at half the width and twice the count, and at 128 the column end needs a second form [read: `sparse_mla_split.py:494-503`, `chain_rows.py:26-28`: "a wire reads its writer's row whole, which is why a split ends in column blocks"].
+- 64 costs 416 GB less than 128 in the model and 3% to 13% more GPU-seconds than the head block; 32 would save about 200 GB more [guess, from the two tables' difference] for twice the units and committed rows a block, and its saving is not on the table of record.
+- Under 32 a short first block's values unit has no row over 111 bytes and Flock's composer refuses it; at 32 and 64 every values unit and column end is accepted [run: `/tmp/headsplit/design.py`, `interface.check_proof_block` at GLM-5.3's statics; read: `verity/commitments/windows/interface.py:320-345`].
+The partition chooses the width, so 128 and 32 stay one line of a partition away.
+
+**Why the figure falls by more than half, from the cost model's code** [read: lane notes `tools/wf_width.py:73-84` `cutg`, `tools/plan/plansearch.py:81-99` `kappa_rule`]. The model samples each type of proof block in proportion to the bits one block commits (k_t = κ n_t (b_t + ℓ_t) / B), and the head's key block is both the widest type (16,544 bits) and the most expensive to prove (a 2^27 Flock block), so it takes the sampled proofs' budget. After the split the 2^27 unit commits 1,216 bits, so it is sampled about 13 times less often, and the 16,384 bits of O sit on units of a quarter (128 columns) or an eighth (64) of the block's proving seconds, so the same budget proves a larger share of the replay blocks. That the head block takes most of the budget is [guess]: I read the rule and did not rerun the harness.
+
+**3. The second stage.** I ran the design check of `main`'s Python mirror, unchanged, on small replay blocks of one or two heads at DR = 16, DV = 32, BN = 16, 16 columns a values unit [run: `/tmp/headsplit/design.py`, local, 0.4 s, exit 0; script and output in the lane notes `tools/headsplit/` and `/opt/cursor/artifacts/headsplit-second-stage-design.*`].
+
+- **It passes** on a head of one key block and of two: links derived (5 and 9), wires derived (3 and 8: values' `pb` and `rescale` from the scores unit's `o2` and `o3`, the next scores' `m_prev` and `l_prev` from `o0` and `o1`, the next values' `o_prev` from the same column's `o0`, each column end's `l` and `o`), `_links_ok` and `_wires_ok` true over a sample of 3 replay blocks, at one head and at two.
+- **Each of the brief's four checks:**
+  - 256 rows a proof block: the scores unit has 6 rows (9 past the first block), a values unit 3 (5), a column end 3; the rows' floor is 2^26 for the scores unit and 2^23 for a values unit at 64 columns [run: `check_proof_block`].
+  - One whole output field of one node: every wire of the split is one, because the column ends are on a column block. A column end at the full width reading several values units would gather and derive none.
+  - WIRES's two conjuncts: no wire reads an output the replay block returns (only the column ends' outputs are returned), and every writer's part is before its reader's in body order [run: the script checks both on the derived links and wires; WIRES's branch itself not run].
+  - One row width a linked value: holds only if the keys' value columns are a boundary port of their own, in rows of one key block's G columns. A values unit that reads its G columns out of the one key parameter is not one aligned slice: `second-links` [run: first case of the script]. So the boundary registration must commit the keys' value columns a second time, in column blocks; nothing ties the two copies today (#8917's caveat, CIR-235).
+- **Refused, and refused the same for today's whole key blocks** [run: the same script on today's chain]:
+  - three or more key blocks in one chain: `second-wires`. The later template's `m_prev` reads the first template's output at the second block and its own template's at the third, and a port may name one writer.
+  - a first block of fewer than BN keys: `second-links`, the keys are then read at two row widths.
+  - a split row: `second-wires` at the combine, whose `lse` and `o` gather one part a split (GATHER's shape).
+- So the split adds no stop of its own to the second stage beyond the second copy of the keys' value columns, and removes none. GLM-5.3's rows are in all three refused shapes (a prefill head has several key blocks, decode is five splits), so the two-stage audit cannot take a served head chain today, split or not. **For STOPS:** nothing to add to your chain unless its replay block holds attention; if it does, the three refusals above are there before the split.
+
+**4. In flight in the same files** [run: `gh pr view N --json files`, `git diff -U0 origin/main...HEAD` of each].
+
+- I build on `origin/main` `cc6ee7446278` alone, on none of the heads below.
+- #8426 (circuits, `8377bb3a57a7`, level with `main`): `serving_templates.py` at 160-170, the lines right under `CHAIN_OF`, and at 427-428, right under the chain branch of `unit_templates`; `chunk_rows.py` 46-50 (the docstring over the line I change); `glm53_blocks.json`. Adjacent lines, so a textual conflict is likely whichever lands second; no shared logic.
+- RELAX's `cursor/proofs-recut-c2b3` (`20ac4fee7711`, behind `main`): rewrites the layout expression of `serving_templates.template` (its line 190, the `"chain"` case kept) and adds 123 lines after `coord_widths`; `chunk_rows.py` 69-90; `serving_rows.py`. I touch neither `template` nor `serving_rows.py`.
+- #8875 (`092004fadea9`): `chunk_rows.py` 2-4 and 100, `serving_rows.py` 296 and 326. Not my lines.
+- #8454 (`f95f042a4411`) and #8961 (`b686c52bcb15`): none of my files.
+- `chain_rows.py`, both sparse-MLA Definition modules, the twins and `block_census.py`: nobody else has them open.
+
+**The figure's command, and a difference to know now.** The tree's command that prints an exfiltration figure is `benchmarks/spot_figures/total_cost.py` (through `figures.py --model GLM-5.3`), which reads the `workload` card and each `partition` card [read: `benchmarks/spot_figures/README.md:79`, `total_cost.py:1083-1100`]. The 4,183 and 1,943.8 GB are not from it: they come from the lane notes' scripts on the planner at `a5e4e56a11`, which is not an ancestor of `main` [run: `git merge-base --is-ancestor`]. And `main`'s `workload.glm-5.3.json` prices an older shape of this row (`SparseMlaSplitPart_v1` strata), not the head blocks the census card holds [read: both cards]. So the tree's command will print a figure for a `partition` card of the split, but it will not sit beside 1,943.8 on the same footing; I will give both and say which cells differ.
+
+**What I build next, in commits by owner.**
+1. Definitions (@proofs by the tool; circuits' to take or redo): the chain's second form in `head_chain` and `split_chain`; the twin's scores outputs; a test that the chain's units, wired as the chain says, give the head on the rows the existing tests use; bindings and pins for the column ends.
+2. vLLM lane's: `serving_templates.py`, `chain_rows.py`, `chunk_rows.py`, and the split's window in `test_serving_rows_splits.py`.
+3. Proofs': `block_census.py`, the step-16 partition, `a5_sparse_mla.py` for the small audit, a `partition` card.
+Circuit-check and the small audit through `research run`. Times: the three commits and circuit-check before 03:00Z; the audit's accept and the figure before 09:00Z.
+
+**Asks.** None that stops me. One for you to route: the tool gives the sparse-MLA Definitions to @proofs, the brief and #8917 to circuits; I keep them in a commit of their own either way.
