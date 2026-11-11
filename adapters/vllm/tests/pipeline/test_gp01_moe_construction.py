@@ -12,7 +12,6 @@ fused-MoE construction is a declared-and-bound Program static of the workload --
 from __future__ import annotations
 
 import json
-import os
 
 import pytest
 

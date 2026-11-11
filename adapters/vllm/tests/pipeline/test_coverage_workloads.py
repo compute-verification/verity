@@ -3,7 +3,6 @@ The generated B0 workloads are `test_coverage_workloads_of_record`."""
 from __future__ import annotations
 
 import json
-import sys
 import types
 from pathlib import Path
 

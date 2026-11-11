@@ -503,7 +503,6 @@ def test_single_weights_input_node_baseline_still_passes(tmp_path):
     """Control for the mixed-width fixture machinery: the same toy with a width-HOMOGENEOUS weights RecordType (ONE Input node on both sides,
     one weight tensor `weights` named by every hint — the dense layout) goes through `decompose` as every dense workload does — attributed, no XREQ, canonical-equal, PASS — so the xfail above is about the weights node COUNT and nothing else."""
     HREC = RecordType(("wa", Array(2, Value(16))), ("wc", Array(2, Value(16))))
-    HREC_REPR = "{wa: Array<2,Value<16>>, wc: Array<2,Value<16>>}"
 
     def step(Bd, prev16, weights, s):
         a = Bd.call(ADD16, prev16, weights.field("wa")[s % 2])

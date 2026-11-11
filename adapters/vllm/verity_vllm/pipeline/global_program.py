@@ -29,9 +29,12 @@ import time
 from dataclasses import dataclass
 
 from verity.circuits.codec import canonical_json, descriptor_size
-from verity.circuits.defs import REGISTRY
+
+# published as `global_program.REGISTRY`: the registry with every registry module loaded (the loop below)
+from verity.circuits.defs import REGISTRY as REGISTRY
 from verity.definitions.registry.catalog import load as _load_registry
 
+from verity_vllm.check.match.batch_decomp import derived_shape
 from verity_vllm.config import (
     RowEngine,
     done_source_refusal,
@@ -41,15 +44,6 @@ from verity_vllm.config import (
     workload_file,
 )
 from verity_vllm.pipeline import layout as build_paths
-from verity_vllm.program import prefix_plan as PP
-from verity_vllm.program import workload as W
-from verity_vllm.records.workload import Workload, WorkloadSampling
-
-# the request descriptors decode through the registry the Match reads (`catalog.load`): every registry module loaded
-for _e in _load_registry()[1]:
-    print(f"[global_program] registry module unavailable ({_e}): components naming its Definitions will not decode", file=sys.stderr)
-
-from verity_vllm.check.match.batch_decomp import derived_shape
 from verity_vllm.pipeline.components import (  # noqa: F401
     component_of,
     component_provenance,
@@ -60,6 +54,13 @@ from verity_vllm.pipeline.components import (  # noqa: F401
     registration_refusal,
     wrapper_params,
 )
+from verity_vllm.program import prefix_plan as PP
+from verity_vllm.program import workload as W
+from verity_vllm.records.workload import Workload, WorkloadSampling
+
+# the request descriptors decode through the registry the Match reads (`catalog.load`): every registry module loaded
+for _e in _load_registry()[1]:
+    print(f"[global_program] registry module unavailable ({_e}): components naming its Definitions will not decode", file=sys.stderr)
 
 
 def request_id_of(index: int) -> str:
