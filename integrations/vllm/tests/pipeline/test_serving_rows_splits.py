@@ -68,7 +68,7 @@ def block(nvis: int | None = None, S: dict = TOY, boolean: bool = False) -> str:
     """The FIRST block template at ``nvis`` keys, or with None the full block after it."""
     st = {x: S[x] for x in ("DR", "DV", "BN", "SCALE")}
     at = {"NVIS": S["BN"], "FIRST": False} if nvis is None else {"NVIS": nvis, "FIRST": True}
-    return descriptor_id(bind(BM.SparseMlaHeadBlockV2, **at, **st, DOT=BOOL["DOT"]) if boolean
+    return descriptor_id(bind(BM.SparseMlaHeadBlockV3, **at, **st, DOT=BOOL["DOT"]) if boolean
                          else bind(M.SparseMlaHeadBlock, **at, **st, DOT=FA3["DOT"]))
 
 
