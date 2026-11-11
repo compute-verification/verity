@@ -110,6 +110,20 @@ def scale_cut(word: str, spec: str) -> str | None:
         return "whole"
     split, final = any(p[0] == fam for p in PARTS[row]), any(p[0] == fam for p in FINAL[row])
     return None if split == final else "split" if split else "whole"
+
+
+def final_hits(ts: list[Template], hits: list[tuple[int, int]], spec: str, op_path: str) -> list[tuple[int, int]]:
+    """Of the hits ``(k, units)`` of templates ``ts`` on a row of ``spec`` at ``op_path``, those that read it
+    (`serving_rows.member_rows`): all of them unless the row's family has a ``FINAL`` cut.  Such a norm row is read by its scale
+    cut (``PARTS``) when it is inside a decoder layer (`in_layer`) and the partition holds a part of that cut, and otherwise only
+    by its ``FINAL`` cut (the row itself, or the fused all-reduce's residual add and whole norm): the final norm is never split."""
+    from verity_vllm.query.program_view import spec_base
+
+    if spec_base(spec) not in FINAL:
+        return hits
+    cut = {k: scale_cut(ts[k].word, spec) for k, _ in hits}
+    take = "split" if in_layer(op_path) and "split" in cut.values() else "whole"
+    return [(k, n) for k, n in hits if cut[k] in (None, take)]
 #: the statics a ``PARTS`` row family's parts take that the row has none of: the block-FP8 linears quantise and scale in 128-wide
 #: blocks (`deepgemm.FP8_BLOCK`)
 PART_STATICS = {"DeepGemmFp8Linear_v1": {"G": 128}, "FlashInferFp8Linear_v1": {"G": 128}}

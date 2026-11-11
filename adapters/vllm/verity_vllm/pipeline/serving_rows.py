@@ -41,8 +41,7 @@ own word.  A Program row holds instances of a template when the template's word 
 row's Definition is cut into them (``CUT``: its body batches the template's word, read off the bound Definition, so a template that
 does not compute what the row computes is no match), or when the template's word is the row's Definition at N = 1 (``COORDS``: the
 row is split into its N coordinates), or for a ``WIDE_COORDS`` family at N = c (its N / c coordinates of c outputs), or at a halving of its width (``COLS``: the row is split into column blocks), or when it
-is a part of the row's Definition (``PARTS``: the row is split into Definitions of its own, one member per part; a norm's apply
-in column blocks reading its scale whole; ``FINAL``: the cut of a row outside the decoder layers, the final norm whole), or when it
+is a part of the row's Definition (``PARTS``: the row is split into Definitions of its own, one member per part, a norm's apply in column blocks; ``FINAL``: the final norm whole, `final_hits`), or when it
 is the row's Definition at every axis of a batch 1 (``SLICES``: the row is split into its slices along those axes), or when it
 is a K-chunk of the row's coordinate (``KCHUNKS``, `kchunk_rows`), a key block, an end or a combine of its heads' chains
 (``CHAINS``, `chain_rows`), or a stage of its cut (``STAGES``, `stage_rows`).  A Boolean Program's rows are its word view (`pipeline.build_instances`: each row the word Definition
@@ -148,9 +147,9 @@ from verity_vllm.pipeline import kchunk_rows as KC, part_rows as PR
 from verity_vllm.pipeline import s8_rows as S8, slice_rows as SL
 from verity_vllm.pipeline import stage_rows as ST, weight_rows as WT
 from verity_vllm.pipeline.chunk_rows import s8_words
-from verity_vllm.pipeline.serving_templates import (CHAINS, COLS, COORDS, CUT, FINAL, KCHUNKS, LAYOUTS, PACKED, PART_OF,  # noqa: F401
-                                                    PARTS, SLICES, STAGES, WIDE_COORDS, Template, _bind, col_span, coord_width,
-                                                    in_layer, part, scale_cut, template, unit_templates)
+from verity_vllm.pipeline.serving_templates import (CHAINS, COLS, COORDS, CUT, KCHUNKS, LAYOUTS, PACKED, PART_OF, PARTS,  # noqa: F401
+                                                    SLICES, STAGES, WIDE_COORDS, Template, _bind, col_span, coord_width,
+                                                    final_hits, part, template, unit_templates)
 from verity_vllm.pipeline.window_law import law_of, work_table_of
 from verity_vllm.program.compact import runs_from_file_items
 
@@ -208,11 +207,7 @@ def member_rows(programs: dict[str, dict[str, Any]], tmpls: Sequence[str], scope
     and its instance count.  Rows are matched by the template's word (:func:`template`), so two templates that compute one word
     Definition are refused.  Fixed by the Build's Programs before serving.  ``index``: the ProgramIndex's ``attention_paths`` and ``tp`` for a rank Program
     (`pipeline.tp.serving_rows`); ``reuse``: indexes already built, each taken for the Program it was built from with these
-    arguments (`index_of`).  A row of a norm family with a ``FINAL`` cut is read by its scale cut (``PARTS``) when it is inside
-    a decoder layer (`in_layer`) and the partition holds a part of that cut, and otherwise only by its ``FINAL`` cut (the row
-    itself, or the fused all-reduce's residual add and whole norm): the final norm is never split."""
-    from verity_vllm.query.program_view import spec_base
-
+    arguments (`index_of`).  A norm row with a ``FINAL`` cut is read by the templates `final_hits` keeps (the final norm whole)."""
     ts = [template(t) for t in tmpls]
     prefixes = (scope,) if isinstance(scope, str) else tuple(scope or ())
     want: dict[str, int] = {}
@@ -239,12 +234,7 @@ def member_rows(programs: dict[str, dict[str, Any]], tmpls: Sequence[str], scope
                 continue
             if steps is not None and not int(steps[0]) <= int(d["step"]) < int(steps[1]):
                 continue
-            if spec_base(r["spec"]) in FINAL:
-                cut = {k: scale_cut(ts[k].word, r["spec"]) for k, _ in hits}
-                take = "split" if in_layer(d["op_path"]) and "split" in cut.values() else "whole"
-                hits = [(k, n) for k, n in hits if cut[k] in (None, take)]
-                if not hits:
-                    continue
+            hits = final_hits(ts, hits, r["spec"], d["op_path"])
             ps = [part(ts[k].word, r["spec"]) for k, _ in hits]
             chain = {KC.chain(ts[k])[0] if ts[k].layout == "kchunk" else ts[k].layout if ts[k].layout in ("chain", "stage")
                      else None for k, _ in hits}
@@ -281,8 +271,7 @@ def row_units(t: str, d: Mapping[str, Any]) -> int:
     if tp.layout == "history":
         return HR.blocks(S)
     if tp.layout == "cols":
-        fam = spec_base(tp.word)
-        return int(S[col_span(fam)]) // int(spec_statics(tp.word)[COLS[fam]])
+        return int(S[col_span(spec_base(tp.word))]) // int(spec_statics(tp.word)[COLS[spec_base(tp.word)]])
     if tp.layout == "coord":
         return int(S["N"]) // coord_width(tp.word)
     if tp.layout in CHUNKED or tp.layout == "rope":
@@ -524,17 +513,14 @@ def read(m: CS.Member, rows: list[Row], store: Any, weights: Callable,
     are not the member's is refused (a packed template's in u16 words).  A ``cols`` member's row is ``W / w`` units, each
     operand and output its rows' columns [jw, jw + w) in order, under one index entry.  A part of the row (``PARTS``) reads the
     row's argument groups and committed outputs it names, in its order, and returns, and names in its entry, its outputs.  A
-    ``cols`` row whose blocks are not its columns (`cols_refused`) is refused in blocks.  A packed ``cols`` part (a norm's
-    apply blocks) is read by `part_rows.read_cols`."""
+    ``cols`` row whose blocks are not its columns (`cols_refused`) is refused in blocks.  A packed ``cols`` part (a norm's apply blocks): `part_rows.read_cols`."""
     from verity_vllm.pipeline.serving_templates import cols_refused
     from verity_vllm.query.program_view import spec_base, spec_statics
 
     tp = template(m.template)
     layout = tp.layout
-    if layout == "part" and tp.packed:
-        return PR.read_part(m, rows, store, weights, arrivals, _slices, _packed)
-    if layout == "cols" and tp.packed:
-        return PR.read_cols(m, rows, store, weights, arrivals, _slices, _packed)
+    if layout in ("part", "cols") and tp.packed:
+        return (PR.read_part if layout == "part" else PR.read_cols)(m, rows, store, weights, arrivals, _slices, _packed)
     if layout == "gemm":
         return GM.read(m, rows, store, weights, arrivals, _operand)
     if layout == "coord":
