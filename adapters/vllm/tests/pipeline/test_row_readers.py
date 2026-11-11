@@ -3,8 +3,9 @@
 (`missing_derived`, `fold_steps`, `served_shape`, `snapshot_steps_of_record`, `program_digest_of_record`, `manifest_verify_ok`),
 the workload's (`is_stochastic`, `tp_world`), the run store's job (`verity_vllm.pipeline.research`: `job_input`, `preserve`), a
 manifest build that fails (`verity_vllm.pipeline.row_build.required_manifest`), the launch contexts a workload's shapes are built
-under (`verity_vllm.pipeline.launch_context.main`) and the card's line for a stage that is not ok
-(`verity_vllm.pipeline.report.summarize_md`).
+under (`verity_vllm.pipeline.launch_context`: `main`, `batch_dispatch_of`, `bad_chunks`), the card's line for a stage that is not ok
+(`verity_vllm.pipeline.report.summarize_md`), the timeline report's window (`verity_vllm.pipeline.timeline.report`) and the
+experiment index's entries for the captured values and the query-use document (`verity_vllm.pipeline.experiment`).
 
 Each reads the document a stage wrote and gives a word, a line or a default; a document that is absent or does not parse gives the
 default its docstring names, never an error.
@@ -19,11 +20,13 @@ from typing import Any
 
 import pytest
 
+import verity_vllm.pipeline.experiment as EXP
 import verity_vllm.pipeline.launch_context as LC
 import verity_vllm.pipeline.report as CARD
 import verity_vllm.pipeline.research as RS
 import verity_vllm.pipeline.row_build as RB
 import verity_vllm.pipeline.row_records as R
+import verity_vllm.pipeline.timeline as TL
 from verity_vllm.program import prefix_plan as PP
 
 
@@ -213,3 +216,63 @@ def test_the_card_names_each_stage_that_is_not_ok():
     md = card({"build": {"status": "failed", "log": "build.log"}, "match": {"status": "ok"}, "commit": {}, "check": {"status": "skipped"}})
     assert "- stages not ok: build (failed, build.log), check (skipped, None)\n" in md
     assert "stages not ok" not in card({"build": {"status": "ok"}, "commit": {}})
+
+
+def test_a_row_dispatches_by_batch_when_its_target_is_not_batch_invariant_and_it_has_several_requests(tmp_path):
+    sweep = {"input_lengths": [8, 5], "output_caps": [3, 2]}
+    varies = {"engine": {"target": {"batch_invariant": False}}}
+    assert LC.batch_dispatch_of(None) is False and LC.batch_dispatch_of("") is False
+    assert LC.batch_dispatch_of(_put(tmp_path / "several.json", {**varies, "sweep": sweep})) is True
+    assert LC.batch_dispatch_of(_put(tmp_path / "one.json", {**varies, "sweep": {"input_lengths": [8], "output_caps": [3]}})) is False
+    assert LC.batch_dispatch_of(_put(tmp_path / "invariant.json", {"sweep": sweep})) is False
+
+
+def test_prefill_chunks_are_a_requests_prompt_rows_one_a_step_before_its_decodes():
+    launch = {"chunks": [5, 3], "batch_by_step": [0] * 5}
+    for none in (None, {}, {"batch_by_step": [1]}, {"chunks": [], "batch_by_step": [1]}):
+        assert LC.bad_chunks(none, "request", 8, 3, 0) is None
+    assert LC.bad_chunks(launch, "request", 8, 3, 0) is None
+    refused = LC.bad_chunks(launch, "request", 9, 3, 0)
+    assert refused is not None and refused["reason"] == "launch_context" and refused["phase"] == "applicability"
+    assert refused["hint"].startswith("prefill chunks [5, 3] at a launch batch of 5 steps") and refused["hint"].endswith("this is a request with C=0")
+    for wrapper, T, C in (("step", 3, 0), ("request", 3, 2), ("request", 4, 0)):
+        assert LC.bad_chunks(launch, wrapper, 8, T, C) is not None
+
+
+def test_the_timeline_reports_its_window_or_none_without_a_timed_event():
+    start = {"t": 10.0, "proc": "row", "pid": 1, "stage": "build", "ev": "start"}
+    rep = TL.report([start, {**start, "t": 12.5, "ev": "end"}])
+    assert (rep["events"], rep["spans"], rep["elapsed_s"]) == (2, 1, 2.5)
+    assert (rep["t_first_utc"], rep["t_last_utc"]) == ("1970-01-01T00:00:10Z", "1970-01-01T00:00:12Z")
+    for events in ([], [{"proc": "row", "pid": 1, "stage": "build", "ev": "mark"}]):
+        rep = TL.report(events)
+        assert (rep["events"], rep["spans"], rep["elapsed_s"], rep["t_first_utc"], rep["t_last_utc"]) == (len(events), 0, None, None, None)
+
+
+def test_the_experiment_index_counts_the_captured_values_and_their_steps(tmp_path):
+    absent = EXP._transcript_values(tmp_path)
+    assert absent["snapshot_index"] == {"path": "capture/snapshots.json", "present": False} and "snapshot_steps" not in absent
+    entries = [{"step": 2, "path": "a"}, {"step": "0", "skipped": "oversize", "path": "b", "shape": [1]}, {"path": "c"}, "not an entry", {"step": 2}]
+    for doc in ({"snapshots": entries}, {"entries": entries}, entries):
+        _put(tmp_path / "capture" / "snapshots.json", doc)
+        values = EXP._transcript_values(tmp_path)
+        assert (values["tensors_captured"], values["tensors_skipped_oversize"], values["snapshot_steps"]) == (4, 1, [0, 2])
+        assert values["skipped_examples"] == [{"path": "b", "shape": [1], "reason": "oversize"}]
+
+
+def test_the_experiment_index_lifts_the_query_use_documents_verdict():
+    assert EXP.vu_partition_index(None, None) == {"present": False, "gate": None}
+    gates = {"gates": {"G8": {"status": "pass", "reason": "r", "detail": {"binding": {"checked": True}}}}}
+    assert EXP.vu_partition_index(None, gates) == {"present": False, "gate": {"status": "pass", "reason": "r"}}
+    verdict = {"partition": {"status": "ok", "codes": ["c1"]}, "count": 5, "status": "pass",
+               "width": {"status": "ok", "w_max": 32, "max_seen": 16, "violators": [1, 2], "unsupported": None}}
+    assert EXP.vu_partition_index({"schema": "s", "binding_id": "b", "use": {"kind": "k", "w_max": 32}, "verdict": verdict}, gates) == {
+        "present": True, "schema": "s", "binding_id": "b", "use": {"kind": "k", "w_max": 32}, "partition": {"status": "ok", "codes": ["c1"]},
+        "width": {"status": "ok", "w_max": 32, "max_seen": 16, "n_violators": 2, "n_unsupported": 0}, "count": 5, "status": "pass",
+        "verdict_status": "pass", "binding": {"checked": True}, "gate": {"status": "pass", "reason": "r"}}
+    empty: dict[str, Any] = {
+        "present": True, "schema": None, "binding_id": None, "use": None, "partition": {"status": None, "codes": []},
+        "width": {"status": None, "w_max": None, "max_seen": None, "n_violators": 0, "n_unsupported": 0}, "count": None, "status": None,
+        "verdict_status": None, "binding": {"checked": False}, "gate": None}
+    assert EXP.vu_partition_index({"verdict": "not a verdict"}, {}) == empty
+    assert EXP.vu_partition_index({"verdict": {"partition": [], "width": None, "count": 1}}, None) == {**empty, "count": 1}
