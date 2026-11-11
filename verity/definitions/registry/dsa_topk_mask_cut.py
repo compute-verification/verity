@@ -28,6 +28,10 @@ Every port of a unit is whole u16 words, as a row of `verity.commitments.windows
 `words`(n), Array<ceil(n/16), Array<16, BIT>>, bit j word j // 16's bit j mod 16, and a prefix or an r is `wide` of its bits.  A
 writer sets the bits past its value's to 0 and a reader ignores them.  ``DsaTopKMaskWhole_v1{N,TOPK}`` is the counted mask up to
 `WHOLE_MAX` keys, a unit, in u16 words.
+
+``DsaTopKMaskBlock_v2`` and ``DsaTopKMaskWhole_v2`` are the two mask units with their ties by `DsaRadixTies_v2`, whose prefix
+count is Calls to its steps and not a gate for each key: the same masks, described in a fraction of the bytes.  `plan` and
+`cut` name the `_v1` units.
 """
 from __future__ import annotations
 
@@ -239,17 +243,27 @@ def _mask_sig(S):
     return ((("scores", Array(S.N, F32)), ("n", I32), ("key", I32), ("r", Array(wide(_rb(S.TOPK)), BIT))), words(S.N))
 
 
-def _mask(B, S, scores, n, theta, r):
+def _mask(B, S, scores, n, theta, r, ties=BM.DsaRadixTies):
     """`DsaTopKMaskBlock_v1{N,AT,TOPK}`, keys AT..AT+N-1 of a row: those below n above the threshold's key, and the first r (its
     low RB bits) of those equal to it (`DsaTopKKeyCompare_v1` per key, `DsaRadixTies_v1{N,TOPK}`), in u16 words."""
     valid = _valid(B, S.N, S.AT, n)
     cmp = B.batch(DsaTopKKeyCompare, scores, valid, theta, axes=(0, 0, None))
     eq, gt = (Coll(Array(S.N, BIT), strided_view(cmp, i, 1, 2, 1, S.N)) for i in (0, 1))
-    return to_words(B, B.call(bind(BM.DsaRadixTies, N=S.N, TOPK=S.TOPK), eq, gt, low(r, _rb(S.TOPK))), S.N)
+    return to_words(B, B.call(bind(ties, N=S.N, TOPK=S.TOPK), eq, gt, low(r, _rb(S.TOPK))), S.N)
 
 
 DsaTopKMaskBlock = CompositeDefinition("DsaTopKMaskBlock", 1, ("N", "AT", "TOPK"), _mask_sig, _mask, doc=_mask.__doc__,
                                        conformance="exact-model-tested")
+
+
+def _mask_calls(B, S, scores, n, theta, r):
+    """`DsaTopKMaskBlock_v2{N,AT,TOPK}`: `DsaTopKMaskBlock_v1` with its ties by `DsaRadixTies_v2{N,TOPK}`, the prefix count
+    written as Calls."""
+    return _mask(B, S, scores, n, theta, r, ties=BM.DsaRadixTiesV2)
+
+
+DsaTopKMaskBlockV2 = CompositeDefinition("DsaTopKMaskBlock", 2, ("N", "AT", "TOPK"), _mask_sig, _mask_calls, doc=_mask_calls.__doc__,
+                                         conformance="exact-model-tested")
 
 
 def _whole(B, S, scores, n):
@@ -261,6 +275,17 @@ def _whole(B, S, scores, n):
 DsaTopKMaskWhole = CompositeDefinition("DsaTopKMaskWhole", 1, ("N", "TOPK"),
                                        lambda S: ((("scores", Array(S.N, F32)), ("n", I32)), words(S.N)), _whole,
                                        doc=_whole.__doc__, conformance="exact-model-tested")
+
+
+def _whole_calls(B, S, scores, n):
+    """`DsaTopKMaskWhole_v2{N,TOPK}`: `DsaTopKMaskWhole_v1`'s mask, `DsaTopKMaskCounted_v2`'s radix select written out in the
+    unit with its ties by `DsaRadixTies_v2{N,TOPK}`."""
+    return to_words(B, BM._select(B, S, scores, n, ties=BM.DsaRadixTiesV2), S.N)
+
+
+DsaTopKMaskWholeV2 = CompositeDefinition("DsaTopKMaskWhole", 2, ("N", "TOPK"),
+                                         lambda S: ((("scores", Array(S.N, F32)), ("n", I32)), words(S.N)), _whole_calls,
+                                         doc=_whole_calls.__doc__, conformance="exact-model-tested")
 
 
 @dataclass(frozen=True)
@@ -355,8 +380,8 @@ def values(scores, n: int, TOPK: int, block: int = BLOCK) -> dict[tuple, tuple]:
 
 
 CUT_DEFINITIONS = [DsaRowValidFrom, DsaTopKDigitOneHot, DsaTopKPopCount, DsaTopKDigitCount, DsaTopKDigitPick, DsaTopKKeyCompare,
-                   DsaTopKMaskBlock, DsaTopKMaskWhole]
+                   DsaTopKMaskBlock, DsaTopKMaskBlockV2, DsaTopKMaskWhole, DsaTopKMaskWholeV2]
 
 __all__ = ["BLOCK", "WHOLE_MAX", "Unit", "blocks", "plan", "cut", "values", "keys_of", "wide", "words", "low", "to_words",
            "CUT_DEFINITIONS", "DsaRowValidFrom", "DsaTopKDigitOneHot", "DsaTopKPopCount", "DsaTopKDigitCount", "DsaTopKDigitPick",
-           "DsaTopKKeyCompare", "DsaTopKMaskBlock", "DsaTopKMaskWhole"]
+           "DsaTopKKeyCompare", "DsaTopKMaskBlock", "DsaTopKMaskBlockV2", "DsaTopKMaskWhole", "DsaTopKMaskWholeV2"]

@@ -5,6 +5,8 @@ circuit-check and adapters/vllm/tests/program/test_dsa_topk_mask.py hold equal t
     DsaRadixPass_v1{N,TOPK}        (eq, gt: N bits, r: RB bits, e: N bits) -> (N bits, N bits, RB bits); traced, no word
                                    Definition (RB = TOPK's bit length)
     DsaRadixTies_v1{N,TOPK}        (eq, gt: N bits, r: RB bits) -> N bits; traced, no word Definition
+    DsaRadixTies_v2{N,TOPK}        the same mask as Calls to DsaCountSum_v1{W}, DsaCountSplit_v1{W,U} and DsaRadixTie_v1{W,RB}, the
+                                   steps of its prefix count and a key's tie; no word Definition
     DsaTopKMask_v2{N,TOPK}         (scores: N x 32 bits) -> N bits; word view DsaTopKMask_v1
     DsaRowValid_v1{N}              (n: 32 bits) -> N bits, bit j n > j; traced, no word Definition
     DsaTopKMaskCounted_v2{N,TOPK}  (scores: N x 32 bits, n: 32 bits) -> N bits; word view DsaTopKMaskCounted_v1
@@ -42,11 +44,12 @@ from __future__ import annotations
 from verity.circuits import boolean as BL
 from verity.circuits.boolean.forms import NOT, ZERO, add, compress_columns, mux, or_reduce, sub
 from verity.circuits.boolean.trace import definition
-from verity.circuits.defs import bind
+from verity.circuits.defs import CompositeDefinition, bind
 from verity.definitions.ops.boolean import elementwise as EW
 from verity.circuits.refs import Coll, broadcast, concat, strided_view
 from verity.circuits.types import Array, Tuple
 from verity.definitions.registry import dsa_topk_mask as M
+from verity.definitions.registry.boolean_dsa import own_gates
 from verity.definitions.registry.boolean_dsa_topk import DsaWaksmanPickV2, DsaWaksmanSwapV2, key
 from verity.definitions.registry.dsa_topk import check_statics
 
@@ -126,6 +129,91 @@ DsaRadixTies = EW.specialized(
     doc=_radix_ties.__doc__)
 
 
+def _piece(name: str, statics: list, build, signature):
+    """A step of `DsaRadixTies_v2`, traced, with the builder that puts its own gates down wherever it is activated."""
+    d = EW.specialized(name, 1, statics, build, signature, doc=build.__doc__)
+    d.build = own_gates(d)
+    return d
+
+
+def _count_sum(S):
+    """`DsaCountSum_v1{W}`: the sum of two counts of W bits, in W + 1: a step up `prefix_counts`' tree, two halves' counts to
+    the whole's."""
+    return lambda C, a, b: [add(C, list(a), list(b), width=S.W + 1)]
+
+
+def _count_split(S):
+    """`DsaCountSplit_v1{W,U}`: a step down `prefix_counts`' tree.  p (W bits) counts what comes before a node and u (U bits)
+    what its left half holds: (p, p + u mod 2^W), what comes before its left half and before its right."""
+    return lambda C, p, u: [list(p), add(C, list(p), list(u), width=S.W)]
+
+
+def _tie(S):
+    """`DsaRadixTie_v1{W,RB}`: one key of `DsaRadixTies`' mask, gt OR (eq AND c < r), c (W bits) the equal keys before it; at
+    W = 0 the row's first key, with none before it and no c."""
+    return lambda C, g, q, *cr: [[g[0] ^ C.AND(q[0], sub(C, [x for c in cr[:-1] for x in c], list(cr[-1]), max(S.W, S.RB))[1])]]
+
+
+def _counts(n: int, width: int) -> Array:
+    return Array(n, Array(width, BIT))
+
+
+DsaCountSum = _piece("DsaCountSum", ["W"], _count_sum,
+                     lambda S: ((("a", Array(S.W, BIT)), ("b", Array(S.W, BIT))), Array(S.W + 1, BIT)))
+DsaCountSplit = _piece("DsaCountSplit", ["W", "U"], _count_split,
+                       lambda S: ((("p", Array(S.W, BIT)), ("u", Array(S.U, BIT))), _counts(2, S.W)))
+DsaRadixTie = _piece("DsaRadixTie", ["W", "RB"], _tie,
+                     lambda S: ((("gt", BIT), ("eq", BIT), *((("c", Array(S.W, BIT)),) if S.W else ()), ("r", Array(S.RB, BIT))), BIT))
+
+
+def _ties_calls(B, S, eq, gt, r):
+    """`DsaRadixTies_v2{N,TOPK}`: `DsaRadixTies_v1`'s mask, its prefix count written as Calls: a few batches for each level of
+    `prefix_counts`' tree and not a gate for each key.  Going up, level k's nodes of 2^k keys that lie whole inside the row
+    are summed in pairs (`DsaCountSum_v1{W=k}`).  Going down, a node hands the count before it to its left half and that
+    plus its left half's own to its right (`DsaCountSplit_v1`); a level's first node has nothing before it and its second
+    the first's count, by reference.  Then a `DsaRadixTie_v1` per key.  The count before node t of level k is below t 2^k,
+    so nodes 2^(h-1) .. 2^h - 1 carry it in k + h bits, a batch for each h.  `_v1` carries each count in the bits no
+    constant folds away and also sums the nodes past the row's end, which nothing reads: the two are one function and
+    differ in ANDs."""
+    check_statics(S.N, S.TOPK)
+    N, depth = S.N, (S.N - 1).bit_length()
+    up = [Coll(_counts(N, 1), eq.refs)]
+    for k in range(1, depth):
+        t, low = N >> k, up[-1]
+        up.append(B.batch(bind(DsaCountSum, W=k), *(Coll(_counts(t, k), strided_view(low, k * i, k, 2 * k, 1, t * k)) for i in (0, 1)),
+                          axes=(0, 0)))
+    before: dict[int, Coll] = {}
+    for k in reversed(range(depth)):
+        n, u, above = -(-N >> k), k + 1, before
+        before = {1: Coll(_counts(1, u), up[k].refs.slice(0, u))}
+        for h in range(2, (n - 1).bit_length() + 1):
+            lo, w = 1 << h - 1, k + h
+            here = min(2 * lo, n) - lo
+            parts, pairs = [], here // 2
+            if pairs:
+                parts.append(B.batch(bind(DsaCountSplit, W=w, U=u), Coll(_counts(pairs, w), above[h - 1].refs.slice(0, w * pairs)),
+                                     Coll(_counts(pairs, u), strided_view(up[k], lo * u, u, 2 * u, 1, pairs * u)), axes=(0, 0)).refs)
+            if here % 2:
+                parts.append(above[h - 1].refs.slice(w * pairs, w * (pairs + 1)))
+            before[h] = Coll(_counts(here, w), concat(parts))
+    def keys(lo: int, n: int) -> list[Coll]:
+        return [Coll(Array(n, BIT), x.refs.slice(lo, lo + n)) for x in (gt, eq)]
+
+    def tie(w: int):
+        return bind(DsaRadixTie, W=w, RB=_rb(S))
+
+    return Coll(Array(N, BIT), concat([
+        B.batch(tie(0), *keys(0, 1), r, axes=(0, 0, None)).refs,
+        *(B.batch(tie(h), *keys(1 << h - 1, len(c)), c, r, axes=(0, 0, 0, None)).refs for h, c in sorted(before.items()))]))
+
+
+DsaRadixTiesV2 = CompositeDefinition(
+    "DsaRadixTies", 2, ("N", "TOPK"),
+    lambda S: ((("eq", Array(S.N, BIT)), ("gt", Array(S.N, BIT)), ("r", Array(_rb(S), BIT))), Array(S.N, BIT)), _ties_calls,
+    doc=_ties_calls.__doc__,
+    conformance="exact-model-tested: held to DsaRadixTies_v1 and to the mask's rule by adapters/vllm/tests/program/test_dsa_long_row_calls.py")
+
+
 def _row_valid(S):
     """`DsaRowValid_v1{N}`: bit j is n > j (n u32), for a row's first n of N keys.  A binary trie over n's low L = ceil(log2 N)
     bits from the top, each node of a prefix p holding (E, G): n's bits so far are p, or exceed it; a node's children cost one AND,
@@ -149,9 +237,9 @@ DsaRowValid = EW.specialized("DsaRowValid", 1, ["N"], _row_valid, lambda S: ((("
                              doc=_row_valid.__doc__)
 
 
-def _select(B, S, scores, n=None):
+def _select(B, S, scores, n=None, ties=DsaRadixTies):
     """The radix select over ``scores``' keys (`DsaTopKKey_v2`): 32 `DsaRadixPass_v1` from eq all 1 (with ``n``, `DsaRowValid_v1`),
-    gt all 0 and r = TOPK, and `DsaRadixTies_v1`."""
+    gt all 0 and r = TOPK, and `DsaRadixTies_v1` (or ``ties``, its `_v2`)."""
     check_statics(S.N, S.TOPK)
     N, RB = S.N, _rb(S)
     keys = B.batch(DsaTopKKeyV2, scores, axes=(0,))
@@ -163,7 +251,7 @@ def _select(B, S, scores, n=None):
     for i in reversed(range(32)):
         out = B.call(step, eq, gt, r, Coll(Array(N, BIT), strided_view(keys, i, 1, 32, 1, N)))
         eq, gt, r = out[0], out[1], out[2]
-    return B.call(bind(DsaRadixTies, N=N, TOPK=S.TOPK), eq, gt, r)
+    return B.call(bind(ties, N=N, TOPK=S.TOPK), eq, gt, r)
 
 
 def _mask(B, S, scores):
@@ -287,7 +375,8 @@ def _row_check(B, S, scores):
 DsaTopKRowV2 = EW.on_bits("DsaTopKRow", 2, ["N", "TOPK"], lambda S: ((("scores", Array(S.N, F32)),), Array(S.TOPK, I32)),
                           _row_check, M.DsaTopKRow)
 
-BOOLEAN_DSA_TOPK_MASK = [DsaTopKKeyV2, DsaRadixPass, DsaRadixTies, DsaTopKMaskV2, DsaRowValid, DsaTopKMaskCountedV2,
+BOOLEAN_DSA_TOPK_MASK = [DsaTopKKeyV2, DsaRadixPass, DsaRadixTies, DsaCountSum, DsaCountSplit, DsaRadixTie, DsaRadixTiesV2,
+                         DsaTopKMaskV2, DsaRowValid, DsaTopKMaskCountedV2,
                          DsaButterflyTagBits, DsaButterflyCtl, DsaButterflySettingsV2, DsaButterflyRowsV2, DsaButterflyRowsPadV2,
                          DsaTopKRowV2]
 

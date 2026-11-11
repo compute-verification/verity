@@ -40,5 +40,13 @@
    "and": 3505,
    "type": "6e13f6fcdc209a61769af56427986febd5297a64a4fec32e6943f42b7fd45b956012e495becc9ff8af4f3d55c19936ae5afb4648428c641b049f02d7f1abab7a"
   }
+ },
+ "digests": {
+  "DsaRadixTies_v2{N=16384,TOPK=2048}": {
+   "sha512": ""
+  },
+  "DsaRadixTies_v2{N=40960,TOPK=2048}": {
+   "sha512": ""
+  }
  }
 }

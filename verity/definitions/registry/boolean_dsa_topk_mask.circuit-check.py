@@ -62,3 +62,14 @@ def _model_roots() -> list[tuple[str, Callable[[], Any]]]:
         ("DsaButterflyRowsPad_v2", lambda: bind(BM.DsaButterflyRowsPadV2, T=6, N=9, K=8, W=3, E=16)),
         ("DsaButterflyRowsPad_v2-long", lambda: bind(BM.DsaButterflyRowsPadV2, T=9, N=16, K=8, W=3, E=16)),
     ]
+
+
+def _ties_calls_roots() -> list[Any]:
+    """The ties with their prefix count as Calls (`DsaRadixTies_v2`, reaching `DsaCountSum_v1`, `DsaCountSplit_v1` and
+    `DsaRadixTie_v1` at each width): over the 20 keys of the mask above, a row length no power of two, and over 16; and at the
+    long row's served statics, TOPK 2,048 over a block of 16,384 keys and over the longest row a unit masks whole, 40,960,
+    each held to its digest pin."""
+    from verity.circuits.defs import bind
+    from verity.definitions.registry import boolean_dsa_topk_mask as BM
+
+    return [bind(BM.DsaRadixTiesV2, N=n, TOPK=k) for n, k in ((20, 16), (16, 8), (16384, 2048), (40960, 2048))]

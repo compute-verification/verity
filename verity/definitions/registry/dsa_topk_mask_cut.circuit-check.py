@@ -37,3 +37,13 @@ def _model_roots() -> list[tuple[str, Callable[[], Any]]]:
         ("DsaTopKMaskBlock_v1-at", lambda: bind(X.DsaTopKMaskBlock, N=6, AT=8, TOPK=4)),
         ("DsaTopKMaskWhole_v1", lambda: bind(X.DsaTopKMaskWhole, N=14, TOPK=4)),
     ]
+
+
+def _mask_calls_roots() -> list[Any]:
+    """The mask units with their ties as Calls (`DsaRadixTies_v2`), at the `_v1` units' bindings: each block's mask unit and
+    the mask whole.  And a block the cut serves, 16,384 keys from the second block on at TOPK 2,048, held to its digest pin."""
+    from verity.circuits.defs import bind
+    from verity.definitions.registry import dsa_topk_mask_cut as X
+
+    return [bind(X.DsaTopKMaskBlockV2, N=8, AT=0, TOPK=4), bind(X.DsaTopKMaskBlockV2, N=6, AT=8, TOPK=4),
+            bind(X.DsaTopKMaskWholeV2, N=14, TOPK=4), bind(X.DsaTopKMaskBlockV2, N=X.BLOCK, AT=X.BLOCK, TOPK=2048)]
