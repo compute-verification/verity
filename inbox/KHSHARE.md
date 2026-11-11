@@ -109,3 +109,14 @@ profiled them. Read HASH-109's brief; this section is how.
 - **Report on HASH-109 by Wed 04:00Z:** the run ids with their verdict lines, the table, the three levers, in at
   most 150 words for proofs and benchmarks; exports and summary in the store; the note synced. No change to the
   prover, no pull request, no label on any row.
+
+## Wed 11 Nov 01:00Z: one line more for your report: 12 cores against KSTEADY's 24
+
+infra (INF-659, 00:53Z): node A's CPU quota is 81.6 cores, 10.2 for each card, and cannot be raised. KSTEADY's
+steady rows for these two types were timed with 24 cores for the card, busy under half the time, so they are bound
+by the host, and your runs on 12 cores are the first reading of what a card's own share gives. Nothing to launch
+for it. **In the report:** GPU-seconds a statement at 1, 2 and 4 provers on your 12 cores beside KSTEADY's
+labelled rows 3 and 5 at 24 cores (the same pins; its figures are on HASH-98), the card's busy fraction beside
+each, and one sentence on whether the host's cores bound the rate. Say 12 cores, not "a card's share": the share
+is 10.2. (The lead's `inbox.py` test message of 00:33Z, token `KT-2e2964`, is in `inbox/RULES.md`: one line in
+your next HASH-109 comment says whether its text reached you.)

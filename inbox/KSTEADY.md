@@ -503,3 +503,11 @@ Your 23:38Z step down to two cards was right at the time. What has changed:
 - **A fourth slot** (card 4 with cores 12-23 beside three 24-core slots, until 04:00Z) only if infra raises the
   quota to 96: top's worker asked on INF-659 at 00:47Z, and the lead writes here if it is raised.
 - Rows 13 and 30 stay first (the 00:35Z and 00:45Z sections).
+
+## Wed 11 Nov 01:00Z: no fourth slot: the quota cannot be raised
+
+infra (INF-659, 00:53Z): the 81.6 cores are RunPod's, 10.2 for each of the eight cards, and nothing on the pod or
+through the API changes them. So three slots at once is the most, two from 08:00Z to 10:00Z, as the 00:55Z section
+says. One thing for your rows: **a card's share of this machine is 10.2 cores and each row is timed with 24.** Keep
+naming the cores in every row's record and comment, and keep the card's busy fraction with it: benchmarks and
+proofs are told (HASH-98, 01:00Z) that a row whose card is not busy nearly all the window is bound by the host.
