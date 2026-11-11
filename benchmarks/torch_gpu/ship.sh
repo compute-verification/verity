@@ -13,7 +13,7 @@ ROOT=$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)
 # refuses where the kernel won't turn randomization off. A rebuild at the same commit, with the same toolkit at the same
 # path and the same host compiler, then reproduces every cubin; after a commit that only moves a source or a file it
 # includes, cicc is handed what it was handed before, and so does that rebuild (ship_nvcc.sh's header says what that
-# leaves out)
+# leaves out; ship_probe.sh holds each build's toolkit to it)
 if [ -z "${SHIP_FRAME:-}" ] || [ ! -e "$SHIP_FRAME/ship_clock.so" ] \
     || [ $(( 0x$(cat /proc/self/personality) & 0x40000 )) -eq 0 ]; then
   setarch "$(uname -m)" -R true 2> /dev/null || {
@@ -42,11 +42,13 @@ ship_find_cuda() {
   CUDA=${CUDA:-}
 }
 
-# ship_find_cuda, refusing unless it finds one
+# ship_find_cuda, refusing unless it finds one, and unless SHIP_NVCC with that toolkit still gives one cubin for a source
+# at two places (ship_probe.sh, once a build: a toolkit or a wrapper that no longer does builds no ship)
 ship_cuda() {
   ship_find_cuda "$@"
   ship_nvcc_ok "$CUDA" || { echo "no nvcc >= 12.8 at ${CUDA:-any of $*}: set CUDA" >&2; exit 1; }
   export CUDA
+  "$ROOT/benchmarks/torch_gpu/ship_probe.sh" || exit 1
 }
 
 # FLAGS: SHIP_NVCC's command line for a cubin of the arch $1 (sm_90a, sm_120a): no FTZ, fast-math, FMA contraction or

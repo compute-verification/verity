@@ -21,8 +21,8 @@ What code outside this directory may use. Everything else here is internal.
 
 Internal, reached only through `runtime.run`'s arguments:
 
-- `channels` (`channels.py`): the pipes, untrusted by both ends: in memory, over TCP, `Playback` (a recorded side),
-  `Tee` (the log writer) and `Adversary` (drops, delays, reorders or corrupts frames).
+- `channels` (`channels.py`): the pipes, untrusted by both ends: in memory, over TCP, `Playback` (a recorded side)
+  and `Adversary` (drops, delays, reorders or corrupts frames).
 - `sources` (`sources.py`): clocks and coins as parties on the same machine: `VirtualClock` or `RealClock`,
   `SeededCoins` or `OsCoins`.
 - `process.spawn` (`process.py`): a party in a process of its own on this machine, over TCP to the run that spawned it.

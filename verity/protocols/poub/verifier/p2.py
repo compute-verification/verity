@@ -60,7 +60,6 @@ from . import audit, coins, receipts
 from .codec import P2_LAYOUT, P2Codec
 from .receipts import DIGEST_BYTES, PER_LEAF, SALT_BYTES, Plan
 
-PROTOCOL_ID = "verity/remote-bandwidth/p2/v0"
 REGISTRATION_DOMAIN = b"verity/remote-bandwidth/p2-registration/v0\0"
 BLOCK_BYTES = 2056
 UNIT_BLOCKS = 4
