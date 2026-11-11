@@ -67,8 +67,9 @@ def keys(nvis: int, S: dict, boolean: bool = False) -> str:
     return descriptor_id(bind(BM.SparseMlaHeadKeysV2 if boolean else M.SparseMlaHeadKeys, NVIS=nvis, W=S["DR"]))
 
 
-def layout(S: dict, per: str) -> tuple[dict[str, str], dict[str, int]]:
-    """The row's templates by role, and each one's chunk cap (`serving_rows.members`)."""
+def layout(S: dict, per: str, queries: bool = False) -> tuple[dict[str, str], dict[str, int]]:
+    """The row's templates by role, and each one's chunk cap (`serving_rows.members`); with ``queries`` a head's query one
+    writer too, the row's heads one member."""
     T, BN, DR, DV = (int(S[x]) for x in ("T", "BN", "DR", "DV"))
     first, nc, later = T - (T - 1) // BN * BN, DV // DR, (T - 1) // BN
     if first == BN:
@@ -77,7 +78,11 @@ def layout(S: dict, per: str) -> tuple[dict[str, str], dict[str, int]]:
           "values": TS.values(None, S, G=DR), "keys first": keys(first, S), "keys": keys(BN, S),
           "end": descriptor_id(bind(M.SparseMlaHeadEnd, DV=DR, INV=TS.FA3["INV"]))}
     kf, kl, vc = (1, later, 1) if per == "column" else (nc + 1, later * (nc + 1), nc)
-    return tm, dict(zip(tm.values(), (1, 1, vc, vc, kf, kl, nc), strict=True))
+    caps = dict(zip(tm.values(), (1, 1, vc, vc, kf, kl, nc), strict=True))
+    if queries:
+        tm["queries"] = descriptor_id(bind(M.SparseMlaHeadQuery, DR=DR, DV=DV))
+        caps[tm["queries"]] = int(S["NH"])
+    return tm, caps
 
 
 def window(s: TS.Served, ts: list[str], caps: dict[str, int], rewire=None) -> CS.Binding:
@@ -88,17 +93,19 @@ def window(s: TS.Served, ts: list[str], caps: dict[str, int], rewire=None) -> CS
     return CS.Binding(*CS.population_program(defs, several=True), D.parse_design("stratified:1"), "ab" * 32, tuple(ms))
 
 
-def computed(S: dict) -> dict[str, int]:
+def computed(S: dict, queries: bool = False) -> dict[str, int]:
     """The rows form (b) commits for the row, and their bytes, from the Definitions' signatures alone: per (head, key block) the
-    scores unit's q_nope, q_rope, m, l, pb and (past the first) rescale, and each column block's values unit's o; per (key block,
-    column block) the keys unit's in and out; per (head, column block) the end's l, o and output. A wired port held by its
-    writer commits no row: the carried state and every reader's keys."""
+    scores unit's q_nope and q_rope (unless ``queries``), m, l, pb and (past the first) rescale, and each column block's values
+    unit's o; per (key block, column block) the keys unit's in and out; per (head, column block) the end's l, o and output;
+    with ``queries``, per head its query's writer's two inputs and two outputs. A wired port held by its writer commits no row:
+    the carried state and every reader's keys (and queries)."""
     T, NH, DR, DV, BN = (int(S[x]) for x in ("T", "NH", "DR", "DV", "BN"))
     nc, blocks = DV // DR, [min(T, (b + 1) * BN) - b * BN for b in range(-(-T // BN) - 1, -1, -1)]
     rows: list[int] = []
     for k, nvis in enumerate(blocks):
-        rows += NH * [2 * DV, 2 * DR, 4, 16, 2 * nvis] + NH * (k > 0) * [4] + NH * nc * [4 * DR] + 2 * (nc + 1) * [2 * nvis * DR]
-    rows += NH * nc * [16, 4 * DR, 2 * DR]
+        rows += NH * ([] if queries else [2 * DV, 2 * DR]) + NH * [4, 16, 2 * nvis] + NH * (k > 0) * [4] + NH * nc * [4 * DR]
+        rows += 2 * (nc + 1) * [2 * nvis * DR]
+    rows += NH * nc * [16, 4 * DR, 2 * DR] + NH * queries * [2 * DV, 2 * DR, 2 * DV, 2 * DR]
     return {"rows": len(rows), "bytes": sum(rows), "bytes_whole_blocks": sum(-(-b // 128) * 128 for b in rows)}
 
 
@@ -117,9 +124,14 @@ def record(c: CS.Committed, w: CS.Binding, got) -> dict:
         return json.loads((Path(d) / "registration.json").read_text())
 
 
+#: the gate-free writers `probe_gateless` lets through
+WRITERS = ("SparseMlaHeadKeys_v1", "SparseMlaHeadQuery_v1")
+
+
 def probe_gateless():
     """A probe, not the verifier: core's partition check (`partition._check_units`) with its refusal of a template of no gate
-    set aside for `SparseMlaHeadKeys_v1` alone, every other refusal as it is, to see what else refuses the window."""
+    set aside for the writers alone (`SparseMlaHeadKeys_v1`, `SparseMlaHeadQuery_v1`), every other refusal as it is, to see
+    what else refuses the window."""
     from verity.protocols.spot.verifier.one_stage import partition as P
     from verity.protocols.spot.verifier.one_stage.partition import PO, QueryRefused, UNIT_CLASS_MAX, _template_bits, unit_class
 
@@ -129,7 +141,7 @@ def probe_gateless():
         if not isinstance(part, PO.TemplatePartition):
             return real(program, part)
         for t, fn in {t: program.root.body.nodes[k].fn for k, t, _first, n in part.ranges if n}.items():
-            if fn.gates == 0 and not t.startswith("SparseMlaHeadKeys_v1"):
+            if fn.gates == 0 and not t.startswith(WRITERS):
                 raise QueryRefused(f"template {t} has no gate", {"template": t})
             if fn.gates and unit_class(bits := _template_bits(fn)) is None:
                 raise QueryRefused(f"an instance of {t} commits {bits} bits, more than the widest class, {UNIT_CLASS_MAX}",
@@ -160,28 +172,29 @@ def refusal(f) -> str | None:
     return None
 
 
-def attack_a(w: CS.Binding, k_val: int, data, publics) -> None:
-    """A values unit's kv ref another row of its writer's table."""
+def attack_a(w: CS.Binding, k_val: int, data, publics, port_: str = "in1", what: str = "a: values kv ref names another row "
+             "of its writer's table") -> None:
+    """A reader's held port's ref another row of its writer's table (a values unit's kv by default)."""
     mine = w.members
     m = mine[k_val]
-    i = [p for p, _w in m.rows].index("in1")
-    table = dict(m.tables)["in1"]
+    i = [p for p, _w in m.rows].index(port_)
+    table = dict(m.tables)[port_]
     other = (int(data[k_val]["refs"][0, i]) + 1) % table
     if other == int(data[k_val]["refs"][0, i]):
-        emit(attack="a", member=m.key, table=table, note="its kv table is one row: no ref names another")
+        emit(attack=what, member=m.key, table=table, note="its table is one row: no ref names another")
         return
     bad = [dict(x) for x in data]
     bad[k_val] = {**data[k_val], "refs": data[k_val]["refs"].copy()}
     bad[k_val]["refs"][0, i] = other
-    emit(attack="a: values kv ref names another row of its writer's table", member=m.key, port="in1", table=table,
-         honest_ref=int(data[k_val]["refs"][0, i]), forged_ref=other,
+    emit(attack=what, member=m.key, port=port_, table=table, honest_ref=int(data[k_val]["refs"][0, i]), forged_ref=other,
          committer=refusal(lambda: CS.commit(w, bad, salt_key=bytes(32))))
     body = bytearray(publics[m.key])
     at = len(body) - 4 * m.n * len(m.all_rows) + 4 * i
     body[at:at + 4] = np.uint32(other).tobytes()
     forged = {**publics, m.key: bytes(body)}
-    emit(attack="a", verifier_check=WI.check(mine, forged), check_drawn_unit_drawn=WI.check_drawn(mine, forged, [m.base]),
-         check_drawn_unit_not_drawn=WI.check_drawn(mine, forged, [m.base + 1]))
+    others = [u for u in range(sum(x.n for x in mine)) if not m.base <= u < m.base + m.n][:1]
+    emit(attack=what[:1], verifier_check=WI.check(mine, forged), check_drawn_unit_drawn=WI.check_drawn(mine, forged, [m.base]),
+         check_drawn_unit_not_drawn=WI.check_drawn(mine, forged, others))
 
 
 def attacks(s: TS.Served, w: CS.Binding, ts: list[str], caps: dict[str, int], role: dict[str, str], got, data, c, rec) -> None:
@@ -191,6 +204,9 @@ def attacks(s: TS.Served, w: CS.Binding, ts: list[str], caps: dict[str, int], ro
     k_sc = next(k for k, m in enumerate(mine) if role[m.template] == "scores")
     k_key = next(k for k, m in enumerate(mine) if role[m.template] == "keys")
     attack_a(w, k_val, data, publics)
+    if "queries" in role.values():
+        attack_a(w, k_sc, data, publics, port(mine[k_sc].template, "q_nope"),
+                 "q: a scores unit's q_nope ref names another head's row of its writer's table")
 
     # (b) a reader given key rows of its own (wired_trees True) that differ from its writer's
     t_sc = mine[k_sc].template
@@ -273,12 +289,14 @@ def main() -> int:
     ap.add_argument("--no-check", action="store_true", help="skip the Definitions' checks on the rows")
     ap.add_argument("--probe-gateless", action="store_true", help="past the partition's refusal of the gate-free keys template, "
                     "set it aside for that template alone (`probe_gateless`) and run the rest")
+    ap.add_argument("--queries", action="store_true", help="each head's query one writer too (`SparseMlaHeadQuery_v1`), every "
+                    "scores unit's q_nope and q_rope wired to it")
     ap.add_argument("--lean", action="store_true", help="the verifier of record's registration check (Python and Lean, "
                     "`one_stage.verifier.check`, which builds the Lean verifier) on the record, the probe removed")
     a = ap.parse_args()
     t0 = time.perf_counter()
     S = {**GLM, "T": a.glm} if a.glm else TOY
-    tm, caps = layout(S, a.per)
+    tm, caps = layout(S, a.per, a.queries)
     role = {t: r for r, t in tm.items()}
     ts = list(tm.values())
     s = TS.Served(TS.row(S), n=1)
@@ -309,7 +327,7 @@ def main() -> int:
          public_bc=sum(len(c.bc[p]) for p in c.roots), public_refs=refs, salts=sum(len(c.salts[p]) for p in c.roots),
          public_bodies=sum(map(len, publics.values())), window_bytes=CS.window_bytes(w.members),
          expected_ports=len(CS.expected_ports(w)), expected_rows=sum(v["leaves"] for v in CS.expected_ports(w).values()),
-         computed=computed(S))
+         computed=computed(S, a.queries))
     emit(fact="frame-v3 domain ids shared within a member (Flock dupId)",
          members={m.key: d for k, m in enumerate(w.members) if (d := frame_dups(c, k))})
     emit(fact="verifier wiring check (wiring.check, every unit)", refused=WI.check(w.members, publics))
@@ -321,7 +339,7 @@ def main() -> int:
         if not a.probe_gateless:
             return 2
         real = probe_gateless()
-        emit(fact="PROBE: partition's no-gate refusal set aside for SparseMlaHeadKeys_v1 alone",
+        emit(fact=f"PROBE: partition's no-gate refusal set aside for {WRITERS} alone",
              population=P.units(w.program, w.query))
     rec = record(c, w, got)
     if a.lean:

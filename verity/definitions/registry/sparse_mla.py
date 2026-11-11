@@ -356,6 +356,18 @@ def SparseMlaHeadKeys(B, S, kv):
     return kv.reshape(Array(S.NVIS, Array(S.W, BF16)))
 
 
+def _head_query_type(S, bf16=BF16):
+    return ((("q_nope", Array(S.DV, bf16)), ("q_rope", Array(S.DR, bf16))), Tuple(Array(S.DV, bf16), Array(S.DR, bf16)))
+
+
+@composite("SparseMlaHeadQuery", 1, ["DR", "DV"], _head_query_type,
+           conformance="reference-defined: a copy, no gates; its outputs are its inputs")
+def SparseMlaHeadQuery(B, S, q_nope, q_rope):
+    """A head's query, its two parts as given: a copy, no gate.  The one writer of the head's query in a row, whose output rows
+    every scores unit of the head is wired to (``q_nope`` to ``o0``, ``q_rope`` to ``o1``)."""
+    return tuple_of(q_nope, q_rope)
+
+
 def _head_end_type(S, bf16=BF16, f32=F32):
     return ((("l", Array(4, f32)), ("o", Array(S.DV, f32))), Array(S.DV, bf16))
 
@@ -422,7 +434,7 @@ def SparseMla(B, S, q_nope, q_rope, kv):
 
 
 SPARSE_MLA_COMPOSITES = [SparseMlaBlock, SparseMlaHead, SparseMlaHeadBlock, SparseMlaHeadScores, SparseMlaHeadValues,
-                         SparseMlaHeadScoresCols, SparseMlaHeadKeys, SparseMlaHeadEnd, SparseMla]
+                         SparseMlaHeadScoresCols, SparseMlaHeadKeys, SparseMlaHeadQuery, SparseMlaHeadEnd, SparseMla]
 #: each family serving stages as its cut, never whole, with the cut at a binding's statics (circuit-check's ``block`` holds
 #: each unit to the Flock block in the Call's place)
 CUTS = {"SparseMla_v1": head_chain}

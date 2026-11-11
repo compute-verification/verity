@@ -226,6 +226,8 @@ def _key(tp: Template, DV: int) -> tuple:
             hit = ("values", int(S["NVIS"]), S["FIRST"] is True, int(S["G"]))
         elif k == "keys":
             hit = ("keys", int(S["NVIS"]), int(S["W"]))
+        elif k == "queries":
+            hit = ("queries", int(S["DV"]), int(S["DR"]))
         elif k == "cols":
             hit = ("cols", int(S["C"]))
         elif k == "split":
@@ -240,6 +242,8 @@ def _key(tp: Template, DV: int) -> tuple:
 
 @cache
 def _positions(key: tuple, T: int, NS: int, BN: int, DV: int) -> tuple[int, ...]:
+    if key[0] == "queries":
+        return (0,)
     pl = _key_places(T, NS, BN, DV, int(key[2])) if key[0] == "keys" else _places(T, NS, BN, DV)
     return tuple(j for j, p in enumerate(pl) if p.key == key)
 
@@ -328,6 +332,8 @@ def read(m: CS.Member, rows: Sequence[Row], store: Any, weights: Callable, arriv
         def returned(p: Place, h: int) -> list[np.ndarray]:
             if p.key[0] == "keys":
                 return [key_block(kv, p, DV)]
+            if p.key[0] == "queries":
+                return [qn[h], qr[h]]
             G = _cols(p, DV)
             cols = slice(p.col * G, (p.col + 1) * G)
             if p.key[0] in ("block", "scores", "values"):
@@ -342,6 +348,8 @@ def read(m: CS.Member, rows: Sequence[Row], store: Any, weights: Callable, arriv
         if k == "keys":
             kp = key_places(S)
             at = [(0, kp[j]) for j in positions(tp, S)]
+        elif k == "queries":
+            at = [(h, Place(("queries", DV, DR))) for h in range(NH)]
         else:
             at = [(h, pl[j]) for h in range(NH) for j in positions(tp, S)]
 
@@ -354,7 +362,7 @@ def read(m: CS.Member, rows: Sequence[Row], store: Any, weights: Callable, arriv
                 G = int(spec_statics(tp.word)["G"])
                 cols = slice(DV, DV + DR) if nm == "k_pe" else slice(int(nm[2:]) * G, (int(nm[2:]) + 1) * G)
                 return np.stack([kv[p.keys[0]:p.keys[1], cols] for _h, p in at])
-            if k not in ("first", "block", "scores") or nm not in ("q_nope", "q_rope", "kv"):
+            if k not in ("first", "block", "scores", "queries") or nm not in ("q_nope", "q_rope", "kv"):
                 return None
             return np.stack([qn[h] if nm == "q_nope" else qr[h] if nm == "q_rope" else kv[p.keys[0]:p.keys[1]] for h, p in at])
 
@@ -394,7 +402,7 @@ def _way(tp: Template, DV: int) -> int | None:
     -1 as scores and values units of any width (a scores unit); None for a unit both ways hold (a combine of
     `sparse_mla_split.combine_cols` columns)."""
     key = _key(tp, DV)
-    if key[0] == "keys":
+    if key[0] in ("keys", "queries"):
         return None
     if key[0] in ("block", "cols") or key == ("end",):
         return 0
@@ -434,7 +442,7 @@ def wire(ms: Sequence[CS.Member], tmpls: Sequence[str], rows: Sequence[list[Row]
                              f"are served one way")
     unit: dict[tuple[str, int, int, int], int] = {}
     for t, rs in of.items():
-        if kind(template(t)) in ("end", "combine", "keys"):
+        if kind(template(t)) in ("end", "combine", "keys", "queries"):
             continue
         u = base[t]
         for rid, _pi, r, d in rs:
@@ -444,7 +452,7 @@ def wire(ms: Sequence[CS.Member], tmpls: Sequence[str], rows: Sequence[list[Row]
     writers: dict[str, list[tuple[str, str, np.ndarray]]] = {}
     for t, rs in of.items():
         tp = template(t)
-        if kind(tp) == "keys":
+        if kind(tp) in ("keys", "queries"):
             continue
         g = {nm: i for i, (nm, _ty) in enumerate(tp.fn.signature()[0])}
         w: dict[tuple[str, str], list[int]] = {}
@@ -472,24 +480,30 @@ def wire(ms: Sequence[CS.Member], tmpls: Sequence[str], rows: Sequence[list[Row]
 def wire_keys(ms: Sequence[CS.Member], tmpls: Sequence[str], rows: Sequence[list[Row]]) -> list[CS.Member]:
     """``ms`` (`wire`'s) with each key block's keys read from their one writer: every scores unit's ``kv<c>`` and ``k_pe`` and
     every values unit's ``kv`` wired to the ``o0`` row of the keys unit (`key_places`) of the same row, key block and column
-    block, and every such reader a member with no trees of its own for its wired ports (`rows.Member.wired_trees`), each a
-    table of its writer member's rows (`rows.Member.tables`); refused when the partition names no keys template for a block's
-    column block, or a values unit's width is not the keys units' DR. A wired port whose rows several members wrote keeps
-    its member's n as its table, which `rows.Binding` refuses."""
+    block, where the partition names a queries template every scores unit's ``q_nope`` and ``q_rope`` to the ``o0`` and
+    ``o1`` rows of its row and head's queries unit, and every such reader a member with no trees of its own for its wired
+    ports (`rows.Member.wired_trees`), each a table of its writer member's rows (`rows.Member.tables`); refused when the
+    partition names no keys template for a block's column block, or a values unit's width is not the keys units' DR. A wired
+    port whose rows several members wrote keeps its member's n as its table, which `rows.Binding` refuses."""
     from verity.commitments.windows import wiring as WI
     from verity_vllm.query.program_view import spec_statics
 
     of = {t: rs for t, rs in zip(tmpls, rows, strict=True) if template(t).layout == "chain"}
     base = {t: min(m.base for m in ms if m.template == t) for t in of}
-    writer: dict[tuple[str, int, int, int, int], int] = {}
+    writer: dict[tuple, int] = {}
     for t, rs in of.items():
-        if kind(template(t)) == "keys":
+        if kind(template(t)) in ("keys", "queries"):
             u = base[t]
             for rid, _pi, r, d in rs:
+                if kind(template(t)) == "queries":
+                    for h in range(int(d["statics"]["NH"])):
+                        writer[(rid, int(r["i"]), "q", h)], u = u, u + 1
+                    continue
                 kp = key_places(d["statics"])
                 for j in positions(template(t), d["statics"]):
                     writer[(rid, int(r["i"]), kp[j].split, kp[j].block, kp[j].col)], u = u, u + 1
-    wires: dict[str, dict[str, list[int]]] = {}
+    queries = any(x[2] == "q" for x in writer)
+    wires: dict[str, dict[tuple[str, str], list[int]]] = {}
     for t, rs in of.items():
         tp = template(t)
         g = {nm: i for i, (nm, _ty) in enumerate(tp.fn.signature()[0])}
@@ -500,7 +514,7 @@ def wire_keys(ms: Sequence[CS.Member], tmpls: Sequence[str], rows: Sequence[list
             reads = [(f"kv{c}", c) for c in range(n)] + [("k_pe", n)]
         else:
             continue
-        w: dict[str, list[int]] = {}
+        w: dict[tuple[str, str], list[int]] = {}
         for rid, _pi, r, d in rs:
             S, pl = d["statics"], places(d["statics"])
             if kind(tp) == "values" and int(spec_statics(tp.word)["G"]) != int(S["DR"]):
@@ -514,13 +528,16 @@ def wire_keys(ms: Sequence[CS.Member], tmpls: Sequence[str], rows: Sequence[list
                         if at not in writer:
                             raise ValueError(f"{t}: row {r['i']}'s block {p.block} (visit order) column block {at[4]} is the "
                                              f"output of a keys template the partition does not name")
-                        w.setdefault(f"in{g[nm]}", []).append(writer[at])
+                        w.setdefault((f"in{g[nm]}", "o0"), []).append(writer[at])
+                    if queries and kind(tp) == "scores":
+                        for nm, o in (("q_nope", "o0"), ("q_rope", "o1")):
+                            w.setdefault((f"in{g[nm]}", o), []).append(writer[(rid, int(r["i"]), "q", h)])
         wires[t] = w
     out = []
     for m in ms:
         if m.template in wires:
             lo = m.base - base[m.template]
-            m = replace(m, wired=m.wired + tuple((p, "o0", tuple(x[lo:lo + m.n])) for p, x in wires[m.template].items()),
+            m = replace(m, wired=m.wired + tuple((p, o, tuple(x[lo:lo + m.n])) for (p, o), x in wires[m.template].items()),
                         wired_trees=False)
         out.append(m)
     at = WI.bases(out)
