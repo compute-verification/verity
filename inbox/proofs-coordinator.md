@@ -36148,3 +36148,35 @@ For Daniel: PAD counts each committed bit once, so at the card's sizes it gives 
 - [read] The rest of what my 00:31Z entry lists is unchanged: the try's command and the pre-launch scan; after (A), the
   `trace`, the records run, `--siblings` and the lock entries; (D) by Fri 13 Nov 12:00Z; and the `SpotKSTwo`/`SpotExfilTwo`
   why and `Ref.scope`.
+
+## CONCRETE, Wed 11 Nov 02:07Z: one lock record differs at #8764's picked head: the hash of `FlockDeploy.Concrete.sparse9` in `Security/lean-audit.json`'s `reads`, which two witnesses read; the compile passed; not ready to mark, and I have committed no lock
+
+Head `05c89e29e099ea9caf397bbc2be1fc498af72792`, run `r20261111-003652-2fc1` (cpu-7, ended rc 0, outcome `regenerated`). lean expected no record to differ; one does.
+
+**The record** [run; my diff of the regenerated lock against the branch's]
+- `Security/lean-audit.json`, `reads` → `Proofs.Flock.SessionLoop.Concrete.File` → `FlockDeploy.Concrete.sparse9`: `90770edb769c…` → `e022bc1f685a…`; that group's `digest` `0e960970de0a…` → `13d597d5350b…`.
+- Read by `Flock.SecurityProofs.SampledAuditAnyDeployed_nontrivial` and `Flock.SecurityProofs.SessionLoopZKAnyDeployed_honest`.
+- check.py's words: "definition FlockDeploy.Concrete.sparse9 (Proofs.Flock.SessionLoop.Concrete.File), read by … : changed", under "these change what a guarantee says, and the landing message shows them".
+- Nothing else differs: no guarantee's `type_hash` or `unfolded_hash`, no premise, no `trust_gap`. Three entries only change place in the file, same content (`NetTiming.SecurityProofs.PooledLeakCarried`, `Verity.SecurityProofs.ServingBlockSum`, `Verity.SecurityProofs.RefineIncorrect`). `Security/Proofs` and `Security/Properties`: AUDIT PASS, locks as they are. No unread cap line in the printout.
+
+**Why** 
+- The definition's text did not change [read]: `def sparse9 (r : Array (Array Nat)) : Sparse := (Sparse.ofRows r (2 ^ 9)).toOption.getD default`, line 369 on `main`, 368 at the head. Beside the `kernel_rfl'` rewrites, the one change to `Concrete/File.lean` is the dropped `public import Proofs.Flock.Soundness.Refine.Walk`.
+- [guess] `2 ^ 9` elaborates through another `Pow ℕ` instance once the file no longer sees Mathlib (Mathlib's `Monoid.Pow ℕ` with it in scope, core's `instPowNat` without), so the hashed term differs and the value does not. No probe has confirmed it.
+- What supports it: on `main` the file sees Mathlib through `Refine.Walk`; at my old head `a6723b6558` it still did, through `Text.lean`'s `public import Mathlib`, and that head's records run `r20261110-233505-c5f4` ended `pass` with nothing regenerated [run]; at lean's text the file sees no Mathlib module at all: none among its imports or the four `Proofs` modules it sees, and no file of the Flock code package imports Mathlib [read, headers].
+- So lean's split moves it, not the cut. lean's merge branch has the same `Concrete/File.lean` byte for byte, so its Lean check should show the same record [guess]; `04df` was a build only and could not show it.
+
+**The compile** [run]
+- check.py on `Security/Proofs`: exit 0 in 2,090 s, "Build completed successfully (14268 jobs)", AUDIT PASS, 193,060 declarations in 3,814 modules, axioms `propext`, `Classical.choice`, `Quot.sound`.
+- All 227 modules at or above the 15 files have a `Built` line: 226 in the library build, `Proofs.Properties.Verity.Recursive.Audit` in the roots build. So the 15 unedited modules that lost sight of Mathlib compile on `main`'s tree.
+- It is the fast path: no kernel replay, no tests (a lean-fast/v1 result).
+
+**Ways, for you and lean; I have done none**
+1. Take the record: commit the run's regenerated `Security/lean-audit.json` on the branch, and the PR says a definition two witnesses read was rehashed with its text unchanged. lean's branch needs the same record. No rerun for this head.
+2. Keep the record: one import line in `Concrete/File.lean` that puts Mathlib's instance back in scope (`public import Mathlib`, which my old head had through `Text.lean`, or a narrower module). A sixth commit, which lean's branch needs too; one more records run, about 55 minutes [guess]. Mathlib is prebuilt, so the compile chain should not lengthen [guess].
+3. Pin the instance in `sparse9`'s text: changes a definition's text to keep its hash. I would not.
+
+**`c5f4`** (old head) [run]: rc 0, outcome `pass`, check.py exit 0 on `Security/Proofs` (2,804 s), `Security` (667 s) and `Security/Properties` (606 s), no record regenerated. Its verdict is not the head's; its use is the comparison above.
+
+**Other** [read]: `main` is now `a930252c4993` (170 commits past the branch's base); the layout move is not in it (`Security/` is at the root); `git merge-tree` of it with the branch has no conflict; `sparse9`'s entry there is unchanged. My VM restarted again at about 02:00Z; scratch rebuilt from my store.
+
+**Left**: your and lean's pick of 1 or 2; that commit (and for 2 a rerun); a probe of the cause if you want it (one scratch file printing `sparse9` with explicit instances at both heads); then the crossing of the layout move, the records and the quick tier on the moved tree, and "ready to mark".
