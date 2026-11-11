@@ -11,9 +11,9 @@ from pathlib import Path
 
 import numpy as np
 import torch
-from torch.nn.attention import SDPBackend, sdpa_kernel
 
 from training_slowdown import config, run, starts
+from training_slowdown.capture.trace import _math_attention
 from training_slowdown.data import Data, Stream, bytes_to_unicode
 from training_slowdown.model import LM
 from training_slowdown.starts import Start
@@ -161,8 +161,9 @@ JOBS = {"whole": {"dials": {"trainable": "*", "lr": 1e-2}},
 
 def job_counted(root: Path, steps: int, math: bool = False, **over):
     """A job's steps through the harness's own loop (`run.train` under `run.Harness`), in this process, under the
-    attention kernel torch picks as a job runs (a fused one) or under the math kernel: the counter's record, and what
-    the job's trace is taken from (its config, route, model and optimizers)."""
+    attention kernel torch picks as a job runs (a fused one) or under the math kernel as a trace is taken under it,
+    in its operands' dtype (`capture.trace._math_attention`): the counter's record, and what the job's trace is
+    taken from (its config, route, model and optimizers)."""
     reg = tiny_registry(root / "reg")
     registry = starts.registry(reg)
     cfg = config.load(write_config(root / "a.toml", budget={"steps": steps, "batch": 4}, **over), registry)
@@ -170,7 +171,7 @@ def job_counted(root: Path, steps: int, math: bool = False, **over):
                      clock=lambda: 0.0)
     route = config.route(cfg.route)
     torch.manual_seed(0)
-    with sdpa_kernel([SDPBackend.MATH]) if math else nullcontext(), te.counter:
+    with _math_attention() if math else nullcontext(), te.counter:
         model, optimizers = route.build(cfg.start.shape, cfg.dials)
         stream = Stream(Data.of(cfg.start.data, registry), 0, ctx=int(cfg.start.shape["ctx"]))
         run.train(te, cfg, route, stream, model, optimizers)
