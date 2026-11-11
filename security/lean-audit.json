@@ -2150,12 +2150,6 @@
    "issue": "LEAN-186",
    "due": "2026-11-30"
   },
-  "Nci.Assumptions.ActivationsIncompressibleAll": {
-   "owner": "@lean",
-   "digest": "d8da3ccd538aaa5323da2eb01346c8d358cc4490fe3511c79401563e9aadd732",
-   "issue": "LEAN-186",
-   "due": "2026-11-30"
-  },
   "Nci.Assumptions.CapBelowColumns": {
    "owner": "@lean",
    "digest": "aae638ad32224f459cb0a973699c9e18f2a594f1d9c5bdf7d8950250e5a03598",
@@ -2192,18 +2186,6 @@
    "issue": "LEAN-186",
    "due": "2026-11-30"
   },
-  "Nci.Assumptions.DrawsAtLeast": {
-   "owner": "@lean",
-   "digest": "af1233ad8e9557aec76f4c46d31ed5abad70af13c43a9ccf504f57971ebdd9ae",
-   "issue": "LEAN-186",
-   "due": "2026-11-30"
-  },
-  "Nci.Assumptions.EntersAtMost": {
-   "owner": "@lean",
-   "digest": "7136d6de57bfeeb00fc95ea1370dc075ddb7f46ab0afa888c09ae39dfe459974",
-   "issue": "LEAN-186",
-   "due": "2026-11-30"
-  },
   "Nci.Assumptions.Fits": {
    "owner": "@lean",
    "digest": "c924e46d32c2891665e8ce5fd9f3ccfe6bb9b8401f133658dc2309193828d455",
@@ -2225,12 +2207,6 @@
   "Nci.Assumptions.MinEntropyHard": {
    "owner": "@training",
    "digest": "ac056d32cda0731b25c07ec1e66d1dff9f413d1672320b350a7002582c48cab7",
-   "issue": "LEAN-186",
-   "due": "2026-11-30"
-  },
-  "Nci.Assumptions.PackedTrainingIncompressible": {
-   "owner": "@lean",
-   "digest": "d0e65c730180ad9860843b972d91da6dc7cdf372704c5d2b0efb00c2379e1e4d",
    "issue": "LEAN-186",
    "due": "2026-11-30"
   },
@@ -4268,16 +4244,6 @@
    "nontrivial": "Nci.Cover.SecurityProofs.CoverTraining_nontrivial",
    "kind": "exclusion"
   },
-  "Nci.SecurityProofs.ActivationsBoundOn": {
-   "honest": ["Nci.SecurityProofs.ActivationsBoundOn_honest"],
-   "nontrivial": "Nci.SecurityProofs.ActivationsBoundOn_nontrivial",
-   "kind": "exclusion"
-  },
-  "Nci.SecurityProofs.ActivationsTrainingOn": {
-   "honest": ["Nci.SecurityProofs.ActivationsTrainingOn_honest"],
-   "nontrivial": "Nci.SecurityProofs.ActivationsTrainingOn_nontrivial",
-   "kind": "exclusion"
-  },
   "Nci.SecurityProofs.DampenerRemote": {
    "honest": ["Nci.SecurityProofs.DampenerRemote_honest"],
    "nontrivial": "Nci.SecurityProofs.DampenerRemote_nontrivial",
@@ -4311,16 +4277,6 @@
   "Nci.SecurityProofs.LayeredTraining": {
    "honest": ["Nci.SecurityProofs.LayeredTraining_honest"],
    "nontrivial": "Nci.SecurityProofs.LayeredTraining_nontrivial",
-   "kind": "exclusion"
-  },
-  "Nci.SecurityProofs.PackedIncompressibleContainedMatMulOn": {
-   "honest": ["Nci.SecurityProofs.PackedIncompressibleContainedMatMulOn_honest"],
-   "nontrivial": "Nci.SecurityProofs.PackedIncompressibleContainedMatMulOn_nontrivial",
-   "kind": "exclusion"
-  },
-  "Nci.SecurityProofs.PackedIncompressibleContainedTrainingOn": {
-   "honest": ["Nci.SecurityProofs.PackedIncompressibleContainedTrainingOn_honest"],
-   "nontrivial": "Nci.SecurityProofs.PackedIncompressibleContainedTrainingOn_nontrivial",
    "kind": "exclusion"
   },
   "Nci.SecurityProofs.ThreadedTraining": {
@@ -4707,6 +4663,10 @@
   "Claims.SamplingGeneric.compilerKSRegAtSB": {
    "honest": ["Claims.SamplingGeneric.compilerKS_honest", "Claims.SamplingGeneric.compilerBits_honest"],
    "nontrivial": "Claims.SamplingGeneric.compilerKSRegAtSB_nontrivial"
+  },
+  "NetTiming.SecurityProofs.PooledLeakAccepted": {
+   "honest": ["NetTiming.Witness.PooledLeakAccepted_honest"],
+   "nontrivial": "NetTiming.Witness.PooledLeakAccepted_nontrivial"
   }
  },
  "unwitnessed": {
@@ -5354,10 +5314,6 @@
   "Nci.Hardness.SecurityProofs.FanOutBoundPriced_nontrivial": "1127e4fa79055afa6ffeab32154ecf50e5fe4fb2e51245dbffd2ab45c131231e",
   "Nci.Hardness.SecurityProofs.PricedOfActivationRate": "e59dfc57a8e4da1ee1b1fd2935a70e70aa1466d0a2ab14b85ecd1ad898d62ad7",
   "Nci.Hardness.SecurityProofs.PricedOfActivationRate_nontrivial": "ad4414676156185b1fbc2c7c9aec32d17513c974fa51c9f21046766941f7aa24",
-  "Nci.SecurityProofs.ActivationsReads": {
-   "type_hash": "b6654137b8f0a7371afc4bf0d99f4065db7f54641684a3c268a42173846a363a",
-   "unfolded_hash": "d6923da8f8152287b59b55fd48e58cec1efa21831035a7366abcc85413401ae3"
-  },
   "Nci.SecurityProofs.CoveringBound": {
    "type_hash": "d3f79b9bf0b40f087a3ff732e52168c9d455850f506d37f97e9d327daae4af5c",
    "unfolded_hash": "89e15dcf70554fc9470ba6917de8e61cc1559b41393895f0362bbf31ff6d8595"
@@ -5465,10 +5421,6 @@
   "NetTiming.SecurityProofs.EncardDecodableWithinLeCompiledV1Counted": "4c1965a5e2a5e713ecff8b0684b90ccb00b7f75cab2d0552c2fb38625f4bfb8e",
   "NetTiming.SecurityProofs.EncardDecodableWithinLeCompiledV1Whole": "98c1037729d6fbf9d9c120ea1fb9b3799f98cfba802df100bb262266102f1cb4",
   "NetTiming.SecurityProofs.HorizonLeakAccepted": "42d2a4cd8f85bfae4af68ef6494ced78b576913d56207b74ad57533b9beafae2",
-  "NetTiming.SecurityProofs.PooledLeakAccepted": {
-   "type_hash": "6042883e0de54d343be42f372fe18390a11842febc9feda80046b6e3f70bb455",
-   "unfolded_hash": "2eec6c9336acfa7539b2c9eecfa82c9810701d4024426048b0116374af511561"
-  },
   "NetTiming.SecurityProofs.PooledLeakCarried": {
    "type_hash": "a9ff871790645fc89b956cc559d9b28f1f9de6812547963a09e367a883f7c74f",
    "missing": "honest",
@@ -17599,137 +17551,6 @@
    "type_hash": "e7a18d6079a11ae11f32255c6bb8e6c7ef16d33c5f1607672b3ff340a8ca0b9d",
    "unfolded_hash": "9b1dcdc2075ac89db26d189eb4996b17e04f8815d6066237a94e84252fed0f33"
   },
-  "Nci.SecurityProofs.ActivationsBoundOn": {
-   "owner": "@lean",
-   "signature": ["Nci.SecurityProofs.ActivationsBoundOn : Nci.Guarantees.ActivationsBoundOn"],
-   "assumptions": [],
-   "premises": {
-    "assumptions": [],
-    "domain": [],
-    "open": [
-     "Nci.Assumptions.ActivationsIncompressibleAll",
-     "Nci.Assumptions.DrawsAtLeast",
-     "Nci.Assumptions.EntersAtMost",
-     "Nci.Assumptions.ThetaRegistered",
-     "Nci.CompliesRate"
-    ],
-    "reads": []
-   },
-   "type_hash": "7edf84dc2a0076401bda2f30d3c23d99ccd96e334f84aed639205270127497b1",
-   "unfolded_hash": "0f78191478968c6dd89cd0cb373282d4ab56875d3f55ddec0803abaa171edc7d"
-  },
-  "Nci.SecurityProofs.ActivationsBoundOn_honest": {
-   "owner": "@lean",
-   "signature": ["Nci.SecurityProofs.ActivationsBoundOn_honest : Nci.Guarantees.ActivationsBoundOn_honest"],
-   "assumptions": [],
-   "premises": {
-    "assumptions": [],
-    "domain": [],
-    "open": [],
-    "reads": [
-     "Nci.Assumptions.ActivationsIncompressibleAll",
-     "Nci.Assumptions.DrawsAtLeast",
-     "Nci.Assumptions.EntersAtMost",
-     "Nci.Assumptions.ThetaRegistered"
-    ]
-   },
-   "type_hash": "68c8943d77fa8da96c5f1349ad4d38bbed14e6424afaa0dd022f2d5d6f6f9fe0",
-   "unfolded_hash": "4d9298dfeee3886f712b327342a4d1066dcca4670c9af6fe38c3378edadfd547"
-  },
-  "Nci.SecurityProofs.ActivationsBoundOn_nontrivial": {
-   "owner": "@lean",
-   "signature": ["Nci.SecurityProofs.ActivationsBoundOn_nontrivial : Nci.Guarantees.ActivationsBoundOn_nontrivial"],
-   "assumptions": [],
-   "premises": {
-    "assumptions": [],
-    "domain": [],
-    "open": [],
-    "reads": [
-     "Nci.Assumptions.ActivationsIncompressibleAll",
-     "Nci.Assumptions.DrawsAtLeast",
-     "Nci.Assumptions.EntersAtMost",
-     "Nci.Assumptions.ThetaRegistered"
-    ]
-   },
-   "type_hash": "532cad3c55d54810a14483ad188abcee15b048dad9478edc12893f7330134f6a",
-   "unfolded_hash": "a255787647db52f10e4c03ae4d99bc20230eee513a998891ef5a0121d613ed02"
-  },
-  "Nci.SecurityProofs.ActivationsReads": {
-   "owner": "@lean",
-   "signature": ["Nci.SecurityProofs.ActivationsReads : Nci.Guarantees.ActivationsReads"],
-   "assumptions": [],
-   "premises": {
-    "assumptions": [],
-    "domain": [],
-    "open": [
-     "Nci.Assumptions.ActivationsIncompressibleAll",
-     "Nci.Assumptions.DrawsAtLeast",
-     "Nci.Assumptions.EntersAtMost",
-     "Nci.Small"
-    ],
-    "reads": []
-   },
-   "type_hash": "b6654137b8f0a7371afc4bf0d99f4065db7f54641684a3c268a42173846a363a",
-   "unfolded_hash": "d6923da8f8152287b59b55fd48e58cec1efa21831035a7366abcc85413401ae3"
-  },
-  "Nci.SecurityProofs.ActivationsTrainingOn": {
-   "owner": "@lean",
-   "signature": ["Nci.SecurityProofs.ActivationsTrainingOn : Nci.Guarantees.ActivationsTrainingOn"],
-   "assumptions": [],
-   "premises": {
-    "assumptions": [],
-    "domain": [],
-    "open": [
-     "Nci.Assumptions.ActivationsIncompressibleAll",
-     "Nci.Assumptions.Coverage",
-     "Nci.Assumptions.DrawsAtLeast",
-     "Nci.Assumptions.EntersAtMost",
-     "Nci.Assumptions.ThetaRegistered",
-     "Nci.CompliesRate"
-    ],
-    "reads": []
-   },
-   "type_hash": "c4eb9f6f3eb171da49c3706a625d10ba7bc90ac1ca1672a9aa0ed2131ae404ed",
-   "unfolded_hash": "782a135efff690a2c22cdf728cc53ce59792430ca58f3dec691bb76515b58102"
-  },
-  "Nci.SecurityProofs.ActivationsTrainingOn_honest": {
-   "owner": "@lean",
-   "signature": ["Nci.SecurityProofs.ActivationsTrainingOn_honest : Nci.Guarantees.ActivationsTrainingOn_honest"],
-   "assumptions": [],
-   "premises": {
-    "assumptions": [],
-    "domain": [],
-    "open": [],
-    "reads": [
-     "Nci.Assumptions.ActivationsIncompressibleAll",
-     "Nci.Assumptions.Coverage",
-     "Nci.Assumptions.DrawsAtLeast",
-     "Nci.Assumptions.EntersAtMost",
-     "Nci.Assumptions.ThetaRegistered"
-    ]
-   },
-   "type_hash": "e5656a74fd74b52718be2b714a138aec346cf124b2908d26cb5f38e775171ac6",
-   "unfolded_hash": "afd2703e4703c09b70c3c556372696a4280e5b5e5eb8c51b9d589c4014cba8c3"
-  },
-  "Nci.SecurityProofs.ActivationsTrainingOn_nontrivial": {
-   "owner": "@lean",
-   "signature": ["Nci.SecurityProofs.ActivationsTrainingOn_nontrivial : Nci.Guarantees.ActivationsTrainingOn_nontrivial"],
-   "assumptions": [],
-   "premises": {
-    "assumptions": [],
-    "domain": [],
-    "open": [],
-    "reads": [
-     "Nci.Assumptions.ActivationsIncompressibleAll",
-     "Nci.Assumptions.Coverage",
-     "Nci.Assumptions.DrawsAtLeast",
-     "Nci.Assumptions.EntersAtMost",
-     "Nci.Assumptions.ThetaRegistered"
-    ]
-   },
-   "type_hash": "a9ad535684fd0cf42011975ab4764f5c378ab6f3de6f832a4484879aa7dbbfdd",
-   "unfolded_hash": "b166c9299a69654217625928b0191ce6492fff6fbeaf9f7ef67810e8faafff28"
-  },
   "Nci.SecurityProofs.CapabilityFloor": {
    "owner": "@training",
    "signature": ["Nci.SecurityProofs.CapabilityFloor : Nci.Guarantees.CapabilityFloor"],
@@ -18592,129 +18413,6 @@
    },
    "type_hash": "dc2cc0342c95c2490ecae5c6b453e27bd5be5e5e300fea62f02600dc95520eb0",
    "unfolded_hash": "236c9be49512341cff7457f470fc1c976f339c85b6f66aef2d7b591a452251f9"
-  },
-  "Nci.SecurityProofs.PackedIncompressibleContainedMatMulOn": {
-   "owner": "@lean",
-   "signature": [
-    "Nci.SecurityProofs.PackedIncompressibleContainedMatMulOn : Nci.Guarantees.PackedIncompressibleContainedMatMulOn"
-   ],
-   "assumptions": [],
-   "premises": {
-    "assumptions": [],
-    "domain": [],
-    "open": [
-     "Nci.Assumptions.DarkReads",
-     "Nci.Assumptions.PackedTrainingIncompressible",
-     "Nci.Assumptions.ThetaRegistered",
-     "Nci.CompliesRate"
-    ],
-    "reads": []
-   },
-   "type_hash": "489269136c34fdbbb4abbd2ee45cd3e3c5a72e8ec2322facf15516da3220425c",
-   "unfolded_hash": "ff013999f9c821891d48a998020ac81927f86451cc732b655809669cb792439f"
-  },
-  "Nci.SecurityProofs.PackedIncompressibleContainedMatMulOn_honest": {
-   "owner": "@lean",
-   "signature": [
-    "Nci.SecurityProofs.PackedIncompressibleContainedMatMulOn_honest :",
-    "  Nci.Guarantees.PackedIncompressibleContainedMatMulOn_honest"
-   ],
-   "assumptions": [],
-   "premises": {
-    "assumptions": [],
-    "domain": [],
-    "open": [],
-    "reads": [
-     "Nci.Assumptions.DarkReads",
-     "Nci.Assumptions.PackedTrainingIncompressible",
-     "Nci.Assumptions.ThetaRegistered"
-    ]
-   },
-   "type_hash": "95c81682c3f4afcbdcb6e3d5df3619055ecf8d30973031b04bc5b1d519daa696",
-   "unfolded_hash": "b019a24e7d62b55ab96ac964ecbbb9bc413b14ce5ab64e4a1d12c7afbe40df20"
-  },
-  "Nci.SecurityProofs.PackedIncompressibleContainedMatMulOn_nontrivial": {
-   "owner": "@lean",
-   "signature": [
-    "Nci.SecurityProofs.PackedIncompressibleContainedMatMulOn_nontrivial :",
-    "  Nci.Guarantees.PackedIncompressibleContainedMatMulOn_nontrivial"
-   ],
-   "assumptions": [],
-   "premises": {
-    "assumptions": [],
-    "domain": [],
-    "open": [],
-    "reads": [
-     "Nci.Assumptions.DarkReads",
-     "Nci.Assumptions.PackedTrainingIncompressible",
-     "Nci.Assumptions.ThetaRegistered"
-    ]
-   },
-   "type_hash": "633fc228944ae8df9e035386eed5f1641cea052e8ec0ea3ec20bf7970b6c8dc8",
-   "unfolded_hash": "c8c8fd051c791a122ac94dcb6220e34cc0cbd9a0da60e47d2affb8bf34465c1d"
-  },
-  "Nci.SecurityProofs.PackedIncompressibleContainedTrainingOn": {
-   "owner": "@lean",
-   "signature": [
-    "Nci.SecurityProofs.PackedIncompressibleContainedTrainingOn : Nci.Guarantees.PackedIncompressibleContainedTrainingOn"
-   ],
-   "assumptions": [],
-   "premises": {
-    "assumptions": [],
-    "domain": [],
-    "open": [
-     "Nci.Assumptions.Coverage",
-     "Nci.Assumptions.DarkReads",
-     "Nci.Assumptions.PackedTrainingIncompressible",
-     "Nci.Assumptions.ThetaRegistered",
-     "Nci.CompliesRate"
-    ],
-    "reads": []
-   },
-   "type_hash": "050a6a71067b4a587ac6b196844f86d1b35fe2ea863657b2695c575a06c1d95e",
-   "unfolded_hash": "60b33f0d830e252cb6a5d0e66055be46cc77539d28e2087a1104cc97dca61646"
-  },
-  "Nci.SecurityProofs.PackedIncompressibleContainedTrainingOn_honest": {
-   "owner": "@lean",
-   "signature": [
-    "Nci.SecurityProofs.PackedIncompressibleContainedTrainingOn_honest :",
-    "  Nci.Guarantees.PackedIncompressibleContainedTrainingOn_honest"
-   ],
-   "assumptions": [],
-   "premises": {
-    "assumptions": [],
-    "domain": [],
-    "open": [],
-    "reads": [
-     "Nci.Assumptions.Coverage",
-     "Nci.Assumptions.DarkReads",
-     "Nci.Assumptions.PackedTrainingIncompressible",
-     "Nci.Assumptions.ThetaRegistered"
-    ]
-   },
-   "type_hash": "934daa9c66ff72ebcfa62dc0b5cb87e19c26e7f9d7a218d207cd96b07103d1d4",
-   "unfolded_hash": "4e146bdcac3de2d15623c239b03aeb9fa7fa27848e1cbc29232264fcdc1dfcf5"
-  },
-  "Nci.SecurityProofs.PackedIncompressibleContainedTrainingOn_nontrivial": {
-   "owner": "@lean",
-   "signature": [
-    "Nci.SecurityProofs.PackedIncompressibleContainedTrainingOn_nontrivial :",
-    "  Nci.Guarantees.PackedIncompressibleContainedTrainingOn_nontrivial"
-   ],
-   "assumptions": [],
-   "premises": {
-    "assumptions": [],
-    "domain": [],
-    "open": [],
-    "reads": [
-     "Nci.Assumptions.Coverage",
-     "Nci.Assumptions.DarkReads",
-     "Nci.Assumptions.PackedTrainingIncompressible",
-     "Nci.Assumptions.ThetaRegistered"
-    ]
-   },
-   "type_hash": "40a8822d436daf50f942d01926ca5c313b0eb2721e35f8158f685e36a1eff26b",
-   "unfolded_hash": "2e636a2f1412f4fdce103caee8d51111f2b6d754589b6670efd4dd02d7661e5e"
   },
   "Nci.SecurityProofs.PartitionCovers": {
    "owner": "@lean",
@@ -19636,7 +19334,7 @@
     "reads": []
    },
    "type_hash": "eb1ecf1c9fd8c032de54cd8f6a7cfd92a6a3e04c65b54f8d8dfbe15a1e586b9b",
-   "unfolded_hash": "a85933f2ce75db26aab088e8a818dae42c192636418a23ca8feaa065d8cf727c"
+   "unfolded_hash": "30796106c5b5506746a4c3bdf67ae671561a427388e8ee016b6e3243267134d4"
   },
   "NetTiming.SecurityProofs.PooledIncorrectBlocksLe": {
    "owner": "@network-accounting",
@@ -19662,7 +19360,7 @@
     "reads": []
    },
    "type_hash": "6042883e0de54d343be42f372fe18390a11842febc9feda80046b6e3f70bb455",
-   "unfolded_hash": "2eec6c9336acfa7539b2c9eecfa82c9810701d4024426048b0116374af511561"
+   "unfolded_hash": "d339cc8ffd4bdca709ea2be68156cbfdfc72778e0544bab00fa6ce85d2386463"
   },
   "NetTiming.SecurityProofs.PooledLeakCarried": {
    "owner": "@proofs",
@@ -19684,6 +19382,19 @@
    },
    "type_hash": "a9ff871790645fc89b956cc559d9b28f1f9de6812547963a09e367a883f7c74f",
    "unfolded_hash": "90c8790b267d736e22e531948ab05a382781671a2ba4d1d9adcb8a2d52a64c25"
+  },
+  "NetTiming.SecurityProofs.ResponseCapped": {
+   "owner": "@network-accounting",
+   "signature": ["NetTiming.SecurityProofs.ResponseCapped : NetTiming.Guarantees.ResponseCapped"],
+   "assumptions": [],
+   "premises": {
+    "assumptions": [],
+    "domain": [],
+    "open": [],
+    "reads": []
+   },
+   "type_hash": "8cbd1fc829083c804002c158a1880ac282225ed18b807edda8d57060245f529e",
+   "unfolded_hash": "38e085d043a8726a6eab7629d914475113a2ef7fde0ecd8c502c27dab0923e45"
   },
   "NetTiming.SecurityProofs.SampledAuditAccepted": {
    "owner": "@proofs",
@@ -19817,6 +19528,83 @@
     "reads": []
    },
    "type_hash": "cc127dbbecba53abb17d1cd7eb64cbc3bf629b79bf91c4dfc0d385d177db9bb1"
+  },
+  "NetTiming.Witness.PooledLeakAccepted_honest": {
+   "owner": "@network-accounting",
+   "signature": [
+    "NetTiming.Witness.PooledLeakAccepted_honest :",
+    "  And",
+    "    (∀ (z : Unit),",
+    "      Set.instMembership.mem Set.univ z →",
+    "        ∀ (x : Fin 1)",
+    "          (x :",
+    "            Fin 1 →",
+    "              Fin",
+    "                  ((SamplingDeploy.compiled (FlockDeploy.deployZk Flock.Readable.relation) SamplingDeploy.toyCode",
+    "                          fun x x_1 x_2 => List.nil).V.k",
+    "                    List.nil) →",
+    "                FlockDeploy.Coin),",
+    "          Real.instLE.le",
+    "            (Claims.Pr fun r =>",
+    "              Eq",
+    "                (Claims.run FlockDeploy.sha512 Claims.Witness.silentP",
+    "                    (SamplingDeploy.compiled (FlockDeploy.deployZk Flock.Readable.relation) SamplingDeploy.toyCode",
+    "                        fun x x_1 x_2 => List.nil).V",
+    "                    List.nil Unit.unit r).out",
+    "                Claims.Out.acc)",
+    "            (instHAdd.hAdd (instHPow.hPow (instHSub.hSub 1 1) (Finset.instSingleton.singleton 0).card) 0))",
+    "    (∀ (z : Unit),",
+    "      Set.instMembership.mem Set.univ z →",
+    "        ∀ (i : Fin 1),",
+    "          Real.instLE.le",
+    "            (Claims.Pr fun ω =>",
+    "              And",
+    "                (Eq",
+    "                  (Claims.run FlockDeploy.sha512 Claims.Witness.silentP",
+    "                      (SamplingDeploy.compiled (FlockDeploy.deployZk Flock.Readable.relation) SamplingDeploy.toyCode",
+    "                          fun x x_1 x_2 => List.nil).V",
+    "                      List.nil Unit.unit (ω i)).out",
+    "                  Claims.Out.acc)",
+    "                (Not",
+    "                  (NetTiming.LeakAt (fun x => NetTiming.Witness.notLay) (fun x => 1)",
+    "                    (fun x => Finset.instEmptyCollection.emptyCollection) 1 Claims.Witness.SamplingGeneric.notStmt",
+    "                    Claims.Witness.SamplingGeneric.notPart (fun x => Bool.false)",
+    "                    (fun x x_1 => List.cons Bool.false List.nil) (Finset.instSingleton.singleton 0) List.nil)))",
+    "            0)"
+   ],
+   "assumptions": [],
+   "premises": {
+    "assumptions": [],
+    "domain": [],
+    "open": [],
+    "reads": []
+   },
+   "type_hash": "849836d00d097234daeca272ffe7cd39c7e8336dc94f80fdfbfb4e1e4fb4ed4a"
+  },
+  "NetTiming.Witness.PooledLeakAccepted_nontrivial": {
+   "owner": "@network-accounting",
+   "signature": [
+    "NetTiming.Witness.PooledLeakAccepted_nontrivial :",
+    "  Not",
+    "    (Real.instLE.le",
+    "      (Claims.Pr fun x =>",
+    "        And (∀ (x : Fin 1), True)",
+    "          (Not",
+    "            (NetTiming.PooledGood (fun x => NetTiming.Witness.notLay) (fun x => 1)",
+    "              (fun x => Finset.instEmptyCollection.emptyCollection) 1 (fun x => Claims.Witness.SamplingGeneric.notStmt)",
+    "              (fun x => Claims.Witness.SamplingGeneric.notPart) (fun x x_1 => Bool.false)",
+    "              (fun x x_1 x_2 x_3 => List.cons Bool.false List.nil) 1",
+    "              (fun x => Finset.instEmptyCollection.emptyCollection) fun x => List.nil)))",
+    "      (instHAdd.hAdd (instHAdd.hAdd (1 / 2) (Finset.univ.sum fun x => 0)) (Finset.univ.sum fun x => 0)))"
+   ],
+   "assumptions": [],
+   "premises": {
+    "assumptions": [],
+    "domain": [],
+    "open": [],
+    "reads": []
+   },
+   "type_hash": "6066af8a62363b4f1ad2f790755c6cfaf6b6c6779cf10f7a1b66b475f5ffa6f4"
   },
   "NetTiming.Witness.PooledLeakCarried_nontrivial": {
    "owner": "@proofs",
@@ -27220,6 +27008,10 @@
    "Accounting.SecurityProofs.TableReadBinding": {
     "function": "Flock.ReadNet.check",
     "outcome": "accept"
+   },
+   "NetTiming.SecurityProofs.ResponseCapped": {
+    "function": "NetTiming.cappedCode",
+    "outcome": "none"
    }
   },
   "frozen": {
@@ -27540,9 +27332,6 @@
    "Nci.SecurityProofs.IncompressibleThreadedThrottledOn": "frozen (no-function): It is about an arbitrary reference circuit, a chain and a threading of it and a declaration that contains part of it (a PartialContainment, security/Definitions/Nci/Dark.lean, with its baseline registered: the named BaselineRegistered, security/Definitions/Nci/Assumptions/Baseline.lean), under the named TrainingIncompressible (security/Definitions/Nci/Assumptions/Training.lean), not about the NCI check's code; joining it to NciCheck.Properties.Witnesses is what would give it an acceptance.",
    "Nci.SecurityProofs.IncompressibleContainedMatMulOn": "frozen (no-function): It is about an arbitrary reference circuit, a chain and a threading of it and a declaration that contains part of it (a PartialContainment, security/Definitions/Nci/Dark.lean, with its baseline registered: the named BaselineRegistered, security/Definitions/Nci/Assumptions/Baseline.lean), under the named TrainingIncompressible (security/Definitions/Nci/Assumptions/Training.lean), not about the NCI check's code; joining it to NciCheck.Properties.Witnesses is what would give it an acceptance.",
    "Nci.SecurityProofs.IncompressibleContainedTrainingOn": "frozen (no-function): It is about an arbitrary reference circuit, a chain and a threading of it and a declaration that contains part of it (a PartialContainment, security/Definitions/Nci/Dark.lean, with its baseline registered: the named BaselineRegistered, security/Definitions/Nci/Assumptions/Baseline.lean), under the named TrainingIncompressible (security/Definitions/Nci/Assumptions/Training.lean), not about the NCI check's code; joining it to NciCheck.Properties.Witnesses is what would give it an acceptance.",
-   "Nci.SecurityProofs.ActivationsReads": "frozen (no-function): It is about an arbitrary reference circuit, a threading of it and links of that threading (security/Definitions/Nci/Links.lean), under the named ActivationsIncompressibleAll (security/Definitions/Nci/Assumptions/Activations.lean), not about the NCI check's code; joining it to NciCheck.Properties.Witnesses is what would give it an acceptance.",
-   "Nci.SecurityProofs.ActivationsBoundOn": "frozen (no-function): It is about an arbitrary reference circuit, a threading of it and links of that threading (security/Definitions/Nci/Links.lean) and a declaration that contains part of it (a PartialContainment, security/Definitions/Nci/Dark.lean, with its baseline registered: the named BaselineRegistered, security/Definitions/Nci/Assumptions/Baseline.lean), under the named ActivationsIncompressibleAll (security/Definitions/Nci/Assumptions/Activations.lean), not about the NCI check's code; joining it to NciCheck.Properties.Witnesses is what would give it an acceptance.",
-   "Nci.SecurityProofs.ActivationsTrainingOn": "frozen (no-function): It is about an arbitrary reference circuit, a threading of it and links of that threading (security/Definitions/Nci/Links.lean) and a declaration that contains part of it (a PartialContainment, security/Definitions/Nci/Dark.lean, with its baseline registered: the named BaselineRegistered, security/Definitions/Nci/Assumptions/Baseline.lean), under the named ActivationsIncompressibleAll (security/Definitions/Nci/Assumptions/Activations.lean), not about the NCI check's code; joining it to NciCheck.Properties.Witnesses is what would give it an acceptance.",
    "Nci.SecurityProofs.CertificateSlack": "frozen (no-function): It is Markov's inequality over the windows of an arbitrary distribution on a finite outcome space, under the named PouwSound (security/Definitions/Nci/Assumptions/Remote.lean) as a bound on each window's marginal, not from a function's acceptance; joining it to PoUW's verifier, whose rejection of a wrong certificate PouwSound bounds, is what would give it one.",
    "Nci.SecurityProofs.VerdictLag": "frozen (no-function): It bounds the declared work an arbitrary set of faulty proof blocks skips past the escaped ones, under the named TerminalDetection (security/Definitions/Nci/Assumptions/Remote.lean) and a per-identity capacity bound taken as a hypothesis, not from a function's acceptance; joining it to the halt's verdict and the sampled proofs' verifier is what would give it one.",
    "Nci.SecurityProofs.DampenerRemote": "frozen (no-function): It composes the remote protocol's compute dampener from CertificateSlack, VerdictLag, the escape slack and CountHE bounding the declared source on its count verdict (Nci.CompliesAtMost), under the named PouwSound, TerminalDetection, SampledDetection (security/Definitions/Nci/Assumptions/Remote.lean) and (H) and (E) (Nci.Cut.Assumptions.Hardness and Exports, security/Definitions/Assumptions.lean), with the other sources' bounds as hypotheses, not from a function's acceptance; joining the sources to their protocols' verifiers is what would give it one.",
@@ -27559,8 +27348,6 @@
    "Accounting.SecurityProofs.FpG1.Sm120W4a8G1SheetHeadline": "frozen (conjecture,no-function,world-unlisted): W4A8-g1's headline on sm_120 at 5.860%, Accounting.SecurityProofs.TS.Sm120SheetHeadline (whose reason is this one's) at proof layers whose values are a round's operand leaves beside any other values (Leaves x W) with n_pi + 1 proofs a round, with binding at delta_bind (ProofLayer.BindingAt, #2855's form, which ProofsSoundOfPinned takes) in place of the record's fork form at delta_fork (BindingForkAt, read at sqrt(delta_fork) by BindingOfFork), so the budget reads delta_bind where the record's reads sqrt(delta_fork) and no number moves, and one hypothesis more over Definitions, every committed leaf W4A8-g1's on H1's grids (Pouw.FpG1.Leaves.W4a8 at Pouw.FpG1.Grids.h1: int8 activations in [-126, 126], doubled E2M1 weights under block scales to 9), which is not on the premises list; its conclusion reads no operand value, so the bound is the record's at g1's windows.",
    "Accounting.SecurityProofs.Remote.HeldOverTime": "frozen (no-function): It is about a trace of where the node's registered blocks are (Accounting.Remote.Held.Trace), not the verifier's code (RemoteAudit); its premise SketchBound is stated on the trace and derived on a model of the receipts' sketch (Accounting.Remote.Sketch) by Accounting.SecurityProofs.Remote.SketchBoundDeployed, whose premises Receipted and Present tie that model to the trace and whose random-oracle step is the named premise Accounting.Assumptions.SketchHashRandom at ε_ro = (Q + P)^2/2^257, added to δs (note:20261024T0839Z-report-sketchbound, note:20261024T1350Z-report-sketch-named, note:20261024T1817Z-report-rt4-fixes), and its premise LiveCoins is derived from the deployed opening draw (Key.subset on the SHA-512 first words of each window's coin, the fallbacks free, at the advantage of each window's distinguisher, one a window and fixed by the session), not from the verifier's code's acceptance, by Accounting.SecurityProofs.Remote.LiveCoinsSampled (note:20261018T2000Z-report-held-guarantee, note:20261024T0920Z-report-draw-exact, note:20261024T1346Z-report-draw-oracle)",
    "Accounting.SecurityProofs.Remote.HeldOverTimeLinks": "frozen (no-function): It is about a trace of where the node's registered blocks are (Accounting.Remote.Held.Trace), not the verifier's code (RemoteAudit); its premise SketchBound is stated on the trace and derived on a model of the receipts' sketch (Accounting.Remote.Sketch) by Accounting.SecurityProofs.Remote.SketchBoundDeployed, whose premises Receipted and Present tie that model to the trace and whose random-oracle step is the named premise Accounting.Assumptions.SketchHashRandom at ε_ro = (Q + P)^2/2^257, added to δs (note:20261024T0839Z-report-sketchbound, note:20261024T1350Z-report-sketch-named, note:20261024T1817Z-report-rt4-fixes), and its premise LiveCoins is derived from the deployed opening draw (Key.subset on the SHA-512 first words of each window's coin, the fallbacks free, at the advantage of each window's distinguisher, one a window and fixed by the session), not from the verifier's code's acceptance, by Accounting.SecurityProofs.Remote.LiveCoinsSampled (note:20261018T2000Z-report-held-guarantee, note:20261024T0920Z-report-draw-exact, note:20261024T1346Z-report-draw-oracle)",
-   "Nci.SecurityProofs.PackedIncompressibleContainedMatMulOn": "frozen (no-function): It is about an arbitrary reference circuit, a packed chain (a PackedChain, at most k products to a gate, security/Definitions/Nci/Packed.lean) and a threading of it and a declaration that contains part of it (a PartialContainment, security/Definitions/Nci/Dark.lean), under the named PackedTrainingIncompressible (security/Definitions/Nci/Assumptions/PackedTraining.lean), not about the NCI check's code; joining it to NciCheck.Properties.Witnesses is what would give it an acceptance.",
-   "Nci.SecurityProofs.PackedIncompressibleContainedTrainingOn": "frozen (no-function): It is about an arbitrary reference circuit, a packed chain (a PackedChain, at most k products to a gate, security/Definitions/Nci/Packed.lean) and a threading of it and a declaration that contains part of it (a PartialContainment, security/Definitions/Nci/Dark.lean), under the named PackedTrainingIncompressible (security/Definitions/Nci/Assumptions/PackedTraining.lean), not about the NCI check's code; joining it to NciCheck.Properties.Witnesses is what would give it an acceptance.",
    "Accounting.SecurityProofs.TS.Sm100SheetHeadline": "frozen (conjecture,no-function,world-unlisted): the B200's headline at DS-100 at 0.783%, under full checking with live coins (epsilon_sample and the Fiat-Shamir premium are separate lines), Whole.sheetDIdealFloor_whole at the exact data of DS-100 and dither-2s-licpw-redux-ldtm0-l32, crediting no tcgen05.ld (Definitions.Accounting.HeadlineDc.Sm100: 52 classes, 27 writer kinds (every MMA form the sheet rates, and UNI), the uniform pipe at the census's measured UP line (SheetDataQ), A2's catch-all NOROW at one issue slot, 14 fold routes with the generic-address checkpoint routes), with pi* DS_issue 666666667/1000000000 + DS_alu 333333333/1000000000, p = 7/8, p0 = 1/2, Lambda = max(kappa/ln(8/7), (kappa + f)/ln 2), S = 48,000 and delta = 2^-40, over every play and window of proofs on any finite coins and every unfolded share, not a Lean function, the unfolded branch binding (0.78288%; the folded one gives 0.69835%); A1-A7, FOLD-OPT per word folded at pi* (FoldOptFoldedAt at that pi* and the run's unfolded share: there a LOP3 costs 4/3 and an IMAD or FFMA 2/3, so it also says li's two-word XOR has no IMAD- or FP-pipe program of 1 instruction, checked for programs of 1 or 2 instructions within a modelled menu, FOLD-XOR #2778 and #2850, not over the B200's whole instruction set; ASK-6 = A; an open conjecture under shape.conjectures, RT2-LOGIC-1, false at every certificate on the B200's readings, RT3-LOGIC-6), so fold skippers are charged, the receipt split (the play's ideal game a ReceiptGame's and Pinned, with two luck premises: OperandHMu at 3/4, H-mu at the deficient words, the first, and ReceiptLuckAt at 1/2, HMU's B' case, the second, which give p = 7/8 by LemmaB at fibre 1 and LuckOfReceipt), WholeLuckAt at 1/2 (B' at a unit whose fold the run skips, ASK-9 = A at p0 = 1/2 for live coins only; the whole-unit guess bound 2^-64 is not granted), binding in its fork form at delta_fork (BindingForkAt, binding at sqrt(delta_fork) by BindingOfFork, so the budget asks delta_fork <= (2^-41/48,000)^2), proof soundness at delta_ZK (ProofSoundAt, which C-Flock's bound doesn't discharge until it states the rows link) and the Definitions' pinning (ProofsPin, which no Lean checks of the served relations: PouwSegCheck_v2 lacks it, PIN's checks of #2417 recompute every word they absorb; RT3-LOGIC-3), named assumptions of Definitions.Accounting.Assumptions.TS (RT2-LOGIC-2), RightFixed, and the play being its proofs' (ProofLayer.Of) and the receipt game's openings pinned (ReceiptGame.Pinned), hypotheses over Definitions, are not on the premises list.",
    "Accounting.SecurityProofs.TS.Sm100MeasuredHeadline": "frozen (conjecture,no-function,world-unlisted): the B200's headline on its measured vector DC-100-ri at 0.900%, under full checking with live coins (epsilon_sample and the Fiat-Shamir premium are separate lines), Whole.dIdealFloor_whole at the exact data of DC-100-ri and dither-2s-licpw-redux-ldtm0-l32 (Definitions.Accounting.HeadlineDc.Sm100Measured: 52 classes, 9 rows, A2's catch-all UNLISTED at the measured issue slot alone, DC-CENSUS-13, 14 fold routes; flat's fold the global CP_RED2, an exact tie at pi* with its generic twin) with pi* the issue row, q = q_T = 1/2, p = 7/8, p0 = 1/2, Lambda = max(kappa/ln(8/7), (kappa + f)/ln 2), S = 48,000 and delta = 2^-40, over every play and window of proofs on any finite coins and every unfolded share, not a Lean function, the unfolded branch binding (0.89918%; the folded one gives 0.81490%); FacetCeilings on DC-100-ri's rows, SheetWords (A6, which gives WordsWritten and ScalarRoute at 1/2), NoSum, FOLD-OPT per word folded at pi* (FoldOptFoldedAt at the issue row and the run's unfolded share, ASK-6 = A; an open conjecture under shape.conjectures, RT2-LOGIC-1, false at every certificate on the B200's readings, RT3-LOGIC-6), so fold skippers are charged, the receipt split (the play's ideal game a ReceiptGame's and Pinned, with two luck premises: OperandHMu at 3/4, H-mu at the deficient words, the first, and ReceiptLuckAt at 1/2, HMU's B' case, the second, which give p = 7/8 by LemmaB at fibre 1 and LuckOfReceipt), WholeLuckAt at 1/2 (B' at a unit whose fold the run skips, ASK-9 = A at p0 = 1/2 for live coins only; the whole-unit guess bound 2^-64 is not granted), binding in its fork form at delta_fork (BindingForkAt, binding at sqrt(delta_fork) by BindingOfFork, so the budget asks delta_fork <= (2^-41/48,000)^2), proof soundness at delta_ZK (ProofSoundAt, which C-Flock's bound doesn't discharge until it states the rows link) and the Definitions' pinning (ProofsPin, which no Lean checks of the served relations: PouwSegCheck_v2 lacks it, PIN's checks of #2417 recompute every word they absorb; RT3-LOGIC-3), named assumptions of Definitions.Accounting.Assumptions.TS (RT2-LOGIC-2), RightFixed, and the play being its proofs' (ProofLayer.Of) and the receipt game's openings pinned (ReceiptGame.Pinned), hypotheses over Definitions, are not on the premises list.",
    "Accounting.SecurityProofs.TS.Sm90SheetHeadline": "frozen (conjecture,no-function,world-unlisted): the H200's headline at DS-90 at 0.944%, under full checking with live coins (epsilon_sample and the Fiat-Shamir premium are separate lines), Whole.sheetDIdealFloor_whole at the exact data of DS-90 and dither-2s-licpw-redux-p1-l32 with ffill at p = 1 and no filler credited (Definitions.Accounting.HeadlineDc.Sm90: 50 classes, 34 writer kinds (every MMA form the sheet rates, and UNI), the uniform pipe at the census's measured UP line (SheetDataQ), A2's catch-all NOROW at one issue slot, 56 fold routes: the bit-exact loops with the generic-address checkpoint routes, and every counted fold known to come near them, none built, RT4-SHEET-13's and -14's moves of LI on li and each loop and li-bulk with its counted members, RT4-SHEET-17 and -22), with pi* DS_issue alone, p = 7/8, p0 = 1/2, Lambda = max(kappa/ln(8/7), (kappa + f)/ln 2), S = 48,000 and delta = 2^-40, over every play and window of proofs on any finite coins and every unfolded share, not a Lean function, the unfolded branch binding (0.94302%; the folded one gives 0.86184%); A1-A7, FOLD-OPT per word folded at pi* (FoldOptFoldedAt at DS_issue and the run's unfolded share: at one issue slot an instruction it is an instruction count, with no pipe premise; ASK-6 = A; an open conjecture under shape.conjectures, RT2-LOGIC-1, false at every certificate on the B200's readings, RT3-LOGIC-6, where on the H200's the fold that shows it is at least an IMAD.WIDE route of the menu on every row), so fold skippers are charged, the receipt split (the play's ideal game a ReceiptGame's and Pinned, with two luck premises: OperandHMu at 3/4, H-mu at the deficient words, the first, and ReceiptLuckAt at 1/2, HMU's B' case, the second, which give p = 7/8 by LemmaB at fibre 1 and LuckOfReceipt), WholeLuckAt at 1/2 (B' at a unit whose fold the run skips, ASK-9 = A at p0 = 1/2 for live coins only; the whole-unit guess bound 2^-64 is not granted), binding in its fork form at delta_fork (BindingForkAt, binding at sqrt(delta_fork) by BindingOfFork, so the budget asks delta_fork <= (2^-41/48,000)^2), proof soundness at delta_ZK (ProofSoundAt, which C-Flock's bound doesn't discharge until it states the rows link) and the Definitions' pinning (ProofsPin, which no Lean checks of the served relations: PouwSegCheck_v2 lacks it, PIN's checks of #2417 recompute every word they absorb; RT3-LOGIC-3), named assumptions of Definitions.Accounting.Assumptions.TS (RT2-LOGIC-2), RightFixed, and the play being its proofs' (ProofLayer.Of) and the receipt game's openings pinned (ReceiptGame.Pinned), hypotheses over Definitions, are not on the premises list.",
@@ -28907,12 +28694,6 @@
    "FlockSoundness.Audit.audit_work_whole_stratum": {
     "(FlockSoundness.Audit.Law.stratum σ s).Nonempty": "FlockSoundness.Audit.Law.stratum taken inline, inline when the rule came: name it or state it as a guarantee's conclusion"
    },
-   "Nci.SecurityProofs.ActivationsBoundOn": {
-    "Real.instLE.le (instHMul.hMul α Γ.cast) K": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion"
-   },
-   "Nci.SecurityProofs.ActivationsTrainingOn": {
-    "Real.instLE.le (instHMul.hMul α Γ.cast) K": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion"
-   },
    "Nci.SecurityProofs.CapabilityFloor": {
     "∀ (C : In → Accounting.Actual.Run L) (x : In), Set.instMembership.mem 𝒜 { fst := C, snd := x } → Core C x → instLENat.le Lc (cost (C x))": "#6636's statement when the inline rule landed, inline when the rule came: name it or state it as a guarantee's conclusion"
    },
@@ -29010,16 +28791,6 @@
     "Finset.instPartialOrder.le R D.D.computed": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
     "Finset.instPartialOrder.le (Finset.instSDiff.sdiff (D.D.into R) D.θ) (Finset.instUnion.union Sst Sin)": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
     "∀ (a : D.D.Trace), SetLike.instMembership.mem (Nci.admissible D θv) a → Exists fun s => Eq (Nci.values Sst a) (f s)": "a membership, inline when the rule came: name it or state it as a guarantee's conclusion"
-   },
-   "Nci.SecurityProofs.PackedIncompressibleContainedMatMulOn": {
-    "Real.instLE.le (instHMul.hMul α Γ.cast) K": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "∀ (ℓ : Fin ch.L), instLENat.le dd (ch.d ℓ)": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "∀ (ℓ : Fin ch.L), instLENat.le (ch.e ℓ) emax": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion"
-   },
-   "Nci.SecurityProofs.PackedIncompressibleContainedTrainingOn": {
-    "Real.instLE.le (instHMul.hMul α Γ.cast) K": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "∀ (ℓ : Fin ch.L), instLENat.le dd (ch.d ℓ)": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "∀ (ℓ : Fin ch.L), instLENat.le (ch.e ℓ) emax": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion"
    },
    "Nci.SecurityProofs.RecomputeByGates": {
     "∀ (c : κ), Real.instLE.le g (K.G c).card.cast": "#6636's statement when the inline rule landed, inline when the rule came: name it or state it as a guarantee's conclusion"
@@ -29121,8 +28892,8 @@
     "∀ (z : Z) (i : Fin m) (ω ω' : Fin m → Ω), (∀ (j : Fin m), instLTFin.lt j i → Eq (ω j) (ω' j)) → Eq (W z ω i) (W z ω' i)": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
     "∀ (z : Z) (ω : Fin m → Ω) (i : Fin m), Finset.instPartialOrder.le (W z ω i) (Finset.range (n i))": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
     "∀ (z : Z), Set.instMembership.mem Zs z → ∀ (i : Fin m) (ω : Fin m → Ω), Real.instLE.le (Claims.Pr (acc z i ω)) (instHAdd.hAdd (instHPow.hPow (instHSub.hSub 1 q) (W z ω i).card) (e i))": "a membership, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "∀ (z : Z), Set.instMembership.mem Zs z → ∀ (i : Fin m), Real.instLE.le (Claims.Pr fun ω => And (acc z i ω (ω i)) (Not (NetTiming.LeakAt lay k reg Dj (sw i) (Pw i) (ρ i) (op i) (W z ω i) ((run tap { fst := schedOf z ω, snd := srvOf z ω }).snd i)))) (e' i)": "a membership, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "Real.instLE.le (Real.log (instHDiv.hDiv 1 δ)) (instHMul.hMul q Fmax.cast)": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion"
+    "Real.instLE.le (Real.log (instHDiv.hDiv 1 δ)) (instHMul.hMul q Fmax.cast)": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
+    "∀ (z : Z), Set.instMembership.mem Zs z → ∀ (i : Fin m), Real.instLE.le (Claims.Pr fun ω => And (acc z i ω (ω i)) (Not (NetTiming.LeakAt lay k reg Dj (sw i) (Pw i) (ρ i) (op i (NetTiming.runsBefore (run tap { fst := schedOf z ω, snd := srvOf z ω }).snd i)) (W z ω i) ((run tap { fst := schedOf z ω, snd := srvOf z ω }).snd i)))) (e' i)": "a membership, inline when the rule came: name it or state it as a guarantee's conclusion"
    },
    "NetTiming.SecurityProofs.SampledLeakAccepted": {
     "∀ (s : Claims.Sampling.AuditStatement) (P : Claims.Sampling.Partition), Eq (D.partition s) (Option.some P) → ∀ (F : Finset Nat), SetLike.instMembership.mem (NetTiming.faultySets s.design P δ) F → instLENat.le (NetTiming.faultyBits s.prog P F) (β s)": "an equation, inline when the rule came: name it or state it as a guarantee's conclusion"
@@ -36127,7 +35898,7 @@
    }
   },
   "Definitions.Nci": {
-   "digest": "d53f536005ece3a2da49bf53b369411fbbf04d94ce0d0d69a882f9071719e9b3",
+   "digest": "4fd947c1f7ef5d959ae077e9150274c01074170734e5a7352ff5547de32aa5eb",
    "definitions": {
     "Nci.Chain": "0b52c8b6855d719f822cbf6fe6b18dd80ae28b16eb039ac4c1bed5de6257067b",
     "Nci.Chain.G": "fa22ae34e4b677bc281e991d81a899c284ecebc2cedae523a07b1eed0153761c",
@@ -36141,7 +35912,6 @@
     "Nci.Chain.prod": "f93107b277887433cf3cf5e3c4b288f296da194ef90a7548d50991887f1f741c",
     "Nci.Chain.spread": "2e84359e5cdd2f46797753f171674bfed9d573515c12d0137b9ea57ba19d9a98",
     "Nci.Chain.weightsUsed": "619fa633941d3f1653a7f24f6f8f15f8d4a69c1256959721a5217d5db4b78596",
-    "Nci.Chain.y": "28f2cd8376df17b7eecdf0a5765853c59c1fd834727f9abaf05f9cb065a22d62",
     "Nci.Chain.π": "6a9b562b9e4049d46f5bf4e583261877552c341e0bfef5c6f04ac925342e1373",
     "Nci.CompliesAtMost": "a92b5ed6a492ef282a3ffcc8b9a81158971ae5080d1d0acd6a4bee8e05365aad",
     "Nci.CompliesRate": "10446223528278047c50b7f61094dcb5bb4f13eb5fb1355a1ff091250905b45e",
@@ -36154,14 +35924,6 @@
    "digest": "78af6f7a9f35463b99f88fac69a44ef0e45bc85391c54d2e9caf299519a80efe",
    "definitions": {
     "Nci.Assumptions.Coverage": "f5c08e9f733d3b86105a396c50c33d7e9f6f0f3cdb0b1164500c67f530e8f6cc"
-   }
-  },
-  "Definitions.Nci.Assumptions.Activations": {
-   "digest": "57435555e79a2c7652feac06fc84c0838120bfef1ae5222d717c66f4378765af",
-   "definitions": {
-    "Nci.Assumptions.ActivationsIncompressibleAll": "d8da3ccd538aaa5323da2eb01346c8d358cc4490fe3511c79401563e9aadd732",
-    "Nci.Assumptions.DrawsAtLeast": "af1233ad8e9557aec76f4c46d31ed5abad70af13c43a9ccf504f57971ebdd9ae",
-    "Nci.Assumptions.EntersAtMost": "7136d6de57bfeeb00fc95ea1370dc075ddb7f46ab0afa888c09ae39dfe459974"
    }
   },
   "Definitions.Nci.Assumptions.Baseline": {
@@ -36248,12 +36010,6 @@
    "definitions": {
     "Nci.Assumptions.CapBelowColumns": "aae638ad32224f459cb0a973699c9e18f2a594f1d9c5bdf7d8950250e5a03598",
     "Nci.Assumptions.ReferenceLayered": "44bf4685e681184c35f39fd8f4002a2b0b7cce0cbbf2898b198c83a3f8f94e29"
-   }
-  },
-  "Definitions.Nci.Assumptions.PackedTraining": {
-   "digest": "a8634ab20ef87c71ddc6809d47b466f04c575fa8eb24f7ce788fbb4c0c9193c0",
-   "definitions": {
-    "Nci.Assumptions.PackedTrainingIncompressible": "d0e65c730180ad9860843b972d91da6dc7cdf372704c5d2b0efb00c2379e1e4d"
    }
   },
   "Definitions.Nci.Assumptions.Remote": {
@@ -36563,14 +36319,6 @@
     "Nci.Formalism.PeakAtMost": "d846aaf90484906bcd76942d72dc6be57f5601ddaff436fd6e475ca537f48dce"
    }
   },
-  "Definitions.Nci.Guarantees.Activations": {
-   "digest": "aebc0383bf07170d6113ae0fb0a66c40cd561891ee5bc6a3b348e2416c7c0ff0",
-   "definitions": {
-    "Nci.Guarantees.ActivationsBoundOn": "52d73c34de20918df38710a8f4ca4e7693e66a77cb08af149eeaca56db859bf1",
-    "Nci.Guarantees.ActivationsReads": "a8119e6af9916ef6db63c01b659edcd9cfcd3d12c21eea7741e5791a7a780626",
-    "Nci.Guarantees.ActivationsTrainingOn": "df9a6ad5e1c884cc540194481d99fb769598debefad1c236ba6a436da2e31a6e"
-   }
-  },
   "Definitions.Nci.Guarantees.Capability.Budgets": {
    "digest": "13c8d4be2d23618296ea6722e3d61b7f3fbeb279afabfdaaac42432eb11e83e9",
    "definitions": {
@@ -36720,13 +36468,6 @@
     "Nci.Guarantees.ThreadedOfLayered": "c28c1616164e63ed529d9946b5466e1a4e8757ac998d4236554ae258d303968a"
    }
   },
-  "Definitions.Nci.Guarantees.PackedTraining": {
-   "digest": "83fcf09e612673f25efcf92ccaa5d023e30d3064f81f8e7bdc27a2abd5c799d5",
-   "definitions": {
-    "Nci.Guarantees.PackedIncompressibleContainedMatMulOn": "0e5dc179cfb46433e1e68aae1fc72c48ff4141fd7908d20cd1dc7450e67b12ba",
-    "Nci.Guarantees.PackedIncompressibleContainedTrainingOn": "45c49c404589047decdbb515100b52c02882b5a18f732999bad610b8d9a85e94"
-   }
-  },
   "Definitions.Nci.Guarantees.PartitionCovers": {
    "digest": "485193d468ab95383bc50291da0b89867b4c3bc9a0428cb3e4e14000c1122daf",
    "definitions": {
@@ -36794,14 +36535,10 @@
    }
   },
   "Definitions.Nci.Guarantees.Witnesses": {
-   "digest": "be56b1251f34272c988d6495fc28bcd731f2d9fcc3b0b8c29b4095930fd35b0f",
+   "digest": "db38b2238b20a8875aa98ea87b716f28d64c26c8e8c0d0e38945295e48f0ee03",
    "definitions": {
     "Nci.Cover.Guarantees.CoverTraining_honest": "c9a43a55ce63a654a6dcb28e8e48317d4ff824f9c2820aabf171d806476cf95e",
     "Nci.Cover.Guarantees.CoverTraining_nontrivial": "09d1c7e6bb0ca1f34ff0dcf754bda1e8331e0931631a96ed9086f03345266359",
-    "Nci.Guarantees.ActivationsBoundOn_honest": "9bb3a2cac1326c60ccb5aa6d1d46a61ee7b354d8b915fb04f77e18fe21536e4b",
-    "Nci.Guarantees.ActivationsBoundOn_nontrivial": "1be55712ac8cb4360916975650a2b750dfdf8dc8639f812cb4583ec6e18b6103",
-    "Nci.Guarantees.ActivationsTrainingOn_honest": "f73b7b5f4c552f56518e003a5bc6732326ec6e84e3aefef2378351d7dcc43cf3",
-    "Nci.Guarantees.ActivationsTrainingOn_nontrivial": "65b53d3af9dc0a4ca9a40bb28c998a8f71080df92107011dd0b60e95635a77da",
     "Nci.Guarantees.DampenerRemote_honest": "3ecbecffa8549bc8dacc64232d2930bc93524a5bff8f58c994130ef6e8265063",
     "Nci.Guarantees.DampenerRemote_nontrivial": "d012e0a84a8ef62be232b4172ab9d67e4daec6d7f29154bace9cde3e27f7da91",
     "Nci.Guarantees.DampenerThreadedSlots_honest": "b252aa7f9bb6d759a5248361ba0f0de1b94b683eecfcc9afcc50cf48eae8e413",
@@ -36819,10 +36556,6 @@
     "Nci.Guarantees.IncompressibleThreadedThrottled_nontrivial": "a7bef3367d4b0b28698ee599df78460371af540424da96149b6989ccefacfcb2",
     "Nci.Guarantees.LayeredTraining_honest": "bfcc1dd5ea8a0cbc4e6386ac42c6d33e56c5f671d11262e87aeeb31c705bde02",
     "Nci.Guarantees.LayeredTraining_nontrivial": "e4639c110234ef852b9e9a3a22ab254ca15ac46da82b561ca2d19894f61e2ebd",
-    "Nci.Guarantees.PackedIncompressibleContainedMatMulOn_honest": "d021a740c9462838cb00de63b85fe77c081c1425cbce7f255c6d3a060d4462d6",
-    "Nci.Guarantees.PackedIncompressibleContainedMatMulOn_nontrivial": "4a7581c16ddee67a8134601b0036444d715d2db32d596d415a924fce93d09602",
-    "Nci.Guarantees.PackedIncompressibleContainedTrainingOn_honest": "bec11b8f87395fdbbb8378570e2e87bf6525ff4926b0766dd4879d611f92c0df",
-    "Nci.Guarantees.PackedIncompressibleContainedTrainingOn_nontrivial": "b4d1f34ba8f3d3173ff8cff9e8f13798b7a72efe7b225fb8917bd77f79dfd111",
     "Nci.Guarantees.ThreadedThrottledDarkSlots_nontrivial": "9905501ecf998130aae17807343cb98b2d3cb75e082ee672c808540dea0f139f",
     "Nci.Guarantees.ThreadedThrottledDark_nontrivial": "ef4823d6f2d158c187d6ca9a8672890c3abf9fcc25feced2971e306efbeac87b",
     "Nci.Guarantees.ThreadedThrottledOnSlots_nontrivial": "d5e0569bb81d7e901dced4eb8ccca64419ff3cee61277dc7e47fc5a1a411d990",
@@ -36850,35 +36583,6 @@
     "Nci.KeyPath.refl": "5b36966080c5a9a294c1973ae679de4154a2d49dd5bc71bd3359471046484396",
     "Nci.KeyPath.step": "cfd08e6f328028b4f2a68a4f57e7d66affdab85902c50cd4f7e467ba81896efb",
     "Nci.Layered": "2072cca4a59e133ead5a64ddd564d9c3b0b1a25cfd1b8e263215e758145ab641"
-   }
-  },
-  "Definitions.Nci.Links": {
-   "digest": "573e0524b134c98ae344125a2c4dc0184c99f660c34bdea200eaa231127efb0b",
-   "definitions": {
-    "Nci.Threading.Links": "729ad9cac201b5323af4053cb22c792a7c36cf7b0956bc46efe53032a5fc1898",
-    "Nci.Threading.Links.Whole": "04db9508221b4ef2e66fc234843e10e6b61ffdaee7acecc31667601a264ef0b1",
-    "Nci.Threading.Links.src": "458601c0bbede1da76768d9835f148f83311e9238590dae1efef60ef8c27cc2a",
-    "Nci.Threading.actsUsed": "eb0b39fdcf9b444f57efdecfb7e1e20b9aae7dfdf6b4a45508a21ac78d6824b1",
-    "Nci.Threading.instDecidablePredFinNDWhole": "d64f255de6252bfb3a30ad381e76a2eed992ad8f9af355c993e3a3425f45b35c"
-   }
-  },
-  "Definitions.Nci.Packed": {
-   "digest": "c46f9c6cca13f6300c40efc5b9ceb39cef17e173ac4d68ab328a49e6002b6ab2",
-   "definitions": {
-    "Nci.Chain.toPacked": "d9b4178fee2003a93288661d37062493af6bdf3a24a2faa61bcf05cc604935cb",
-    "Nci.PackedChain": "80e0cb21810c4c9dd07873950c6b1e8ba7de8993a4b8de51a9bda3b76022c7ab",
-    "Nci.PackedChain.G": "cbbba0620815a9007dc99788c260a50e5e811a5d09014ad8233059dc7efdc094",
-    "Nci.PackedChain.L": "13a5d3fac16fdce6db840443439418ff0682f45815924cda7e9754670dbea249",
-    "Nci.PackedChain.LinkedWhole": "576987873f57b7cdaefab2ed1a6e38212ce4c37f95152f276fecb8af67342b7e",
-    "Nci.PackedChain.N": "f3c15d29aee18d14b20895715c90ff8b5a82690cc2e6c6c02567f9613b804cd5",
-    "Nci.PackedChain.Whole": "830dd75b6609ba842aee7af0401c611dbbe8cc49f354ccbc43ca49a57e6622f9",
-    "Nci.PackedChain.d": "888cb57e73a44ddc658c268767c0a5ff922972509d204910881b0d2a7247a77d",
-    "Nci.PackedChain.e": "589f165fcf934756d2bd775bd146ed8571bafc4016fc92a25afa0921c55ac261",
-    "Nci.PackedChain.inputsUsed": "1e431bdd77a00fc13a1fe30505dbe69243ad22cc55ba4943d6411e01af78dcba",
-    "Nci.PackedChain.prod": "f572d9819efccb95791fe5af19978337aa7b76845dcb9eb381ac4f855cb429d7",
-    "Nci.PackedChain.spread": "75e36f64ebc696c267cd7f8a6de2070a1dc9f398c55fe2ce5ef60f312bdf4040",
-    "Nci.PackedChain.weightsUsed": "e1c59424a337dc4469481717ff5ce15b4faa7f057a081328ba41aedd48be2b40",
-    "Nci.PackedChain.π": "77392111ad5311e624eaaff36e4d1cd2d202d12478de4439af97dd2ed921b38f"
    }
   },
   "Definitions.Nci.Reads": {
@@ -36938,7 +36642,7 @@
    }
   },
   "Definitions.Nci.Witness": {
-   "digest": "b5a8935bf757c7e5ba00923809ec92b06f9a374f6cabf44215375e1cf306f251",
+   "digest": "4abc6b2bd04ae5575ef70305cc49b254b873a0dfa024729c97136e694c647e92",
    "definitions": {
     "Nci.Witness.Dθ": "42944b0b76930ca642e894dd6b1da29831877bfb43fb4c1f116c66f457a4127c",
     "Nci.Witness.M1": "93f9bfa9a6f5bb649bb690460769b06c0f6775610fd3d4ecd945fed3d70f2d72",
@@ -36955,7 +36659,6 @@
     "Nci.Witness.ch1": "ca341b72f1073d1a6fa3e27af0f814c9f81a77a62a633fb798cd5a25c44edcc1",
     "Nci.Witness.idC": "f42c33856350b8664a56f1e4077b5f118345561fa709b9ff1dbd25cc1b4570e4",
     "Nci.Witness.mb0": "57ee3a9eaf175aafe5823a20589c07a3710b0279f3ccbed9bd9f3a0ff283d768",
-    "Nci.Witness.noLinks": "10a3be349f18155a7dd9f5c4a5864189d54414b61e4daddbeea61ec7c6ca2364",
     "Nci.Witness.σ0": "4e91461ee7576e32fa699d459108d5586fd3566c394e6fb7aa6774faaac68591",
     "Nci.Witness.σ1": "174d7cbabc4f1cddf6a3e7781849ad79ebbb5494e4f7fb741a24f664e19571f0"
    }
@@ -36976,7 +36679,7 @@
    }
   },
   "Definitions.NetworkCertifier.Carried": {
-   "digest": "634640d7a8c1430ed2ea5ca74830afd06885d583f2874f3573da286315409b67",
+   "digest": "b5050e07ed96d112f037af9c8b5a9421894aada371ada155b824dae32f1d3638",
    "definitions": {
     "NetTiming.AccSeqsCarried": "2e8db8d1cf409825083cd52b2229dd9c5af50e6133c4c7e731c8974003b790de",
     "NetTiming.AcceptedCarried": "df9c8b60a2e4ef1965f06a821aa3066df1da64625065a2a4c403af2d096368c4",
@@ -36990,8 +36693,7 @@
     "NetTiming.PooledGoodCarried": "db76677f651d89b88b044045daa6f2a54a0217e6f7cda5fbc9195eb6153ec2c3",
     "NetTiming.RLeakCarried": "688b2c6a3314f1564a845b85baa2f8e2367e99049ce725084e73ce596c4dc26a",
     "NetTiming.ResetsIn": "f17496cd6b0bcd44de69fbfce427ecc3108c8dd849bc058ad04b6c0dc706ede3",
-    "NetTiming.poolOpen": "4874fc3cdb655140ed8eba5e750cc319bc10f261a59ae320f0f577174edd7b21",
-    "NetTiming.runsBefore": "1eb148a4221b22658388804a4f46ba808757e4ba57dfa482fc80fd56ddae1ba4"
+    "NetTiming.poolOpen": "4874fc3cdb655140ed8eba5e750cc319bc10f261a59ae320f0f577174edd7b21"
    }
   },
   "Definitions.NetworkCertifier.Checked": {
@@ -37064,9 +36766,9 @@
    }
   },
   "Definitions.NetworkCertifier.Guarantees.Period": {
-   "digest": "4ead6e402b6e55388a74abf4fe5a31a7cb7d00cbf9ae5c3a8bf6d422bedc45dc",
+   "digest": "a0507d9a58dd8c88f2e9020daba9de2c1f061f4c9fe1d8133dcb2b166469afe6",
    "definitions": {
-    "NetTiming.Guarantees.PeriodLeakAccepted": "0804ccc2658b6117fd77640b8baef1f86e0ce0ed7199405b672d6630d8012da9"
+    "NetTiming.Guarantees.PeriodLeakAccepted": "8626bd453a35bd0970731bcf8ac7f5b010e53a5aba05f8da321e0f204f6b07f4"
    }
   },
   "Definitions.NetworkCertifier.Guarantees.Pooled": {
@@ -37076,9 +36778,15 @@
    }
   },
   "Definitions.NetworkCertifier.Guarantees.PooledLeak": {
-   "digest": "38ca673b31284bd8b9d0f1e7d2a2340cd75fe4902eb71c6e3a44fc3379f3a972",
+   "digest": "9e25772ab9207a3dcf842d3fe2ac27ef7f1002d50f86e48d50d30c320c68794c",
    "definitions": {
-    "NetTiming.Guarantees.PooledLeakAccepted": "3332d3b8bf69d8e7ea8921bcf37dd07fde136b69e5687c8a821179ddd80d4002"
+    "NetTiming.Guarantees.PooledLeakAccepted": "ecc9283ccfc0633c2fca110ecf7d91a5f47414b6bdc95561508f21090609b4b3"
+   }
+  },
+  "Definitions.NetworkCertifier.Guarantees.ResponseCap": {
+   "digest": "5d33d4732983b54a820ff35b0f5c1e0209feb8a59bf3e6a08b37427d816617d7",
+   "definitions": {
+    "NetTiming.Guarantees.ResponseCapped": "806b85135cb8f8f6aac16730f71cbdee850544e9e70acdbb10dadd0f6a0baa39"
    }
   },
   "Definitions.NetworkCertifier.Guarantees.SampledAudit": {
@@ -37111,10 +36819,20 @@
    }
   },
   "Definitions.NetworkCertifier.PooledLeak": {
-   "digest": "feacd6c22bbf9dbfdecb6334f134465878f92bf72ed142f82ebc81e18a8c137a",
+   "digest": "d404880d5d6a1740da0394f5ae1559e7dbd4db60b276d087a61869b3fb798375",
    "definitions": {
     "NetTiming.LeakAt": "384ba8473c9dfde3a62acf6d4fe887c6b174f2581008ed953e7c49f597d19d55",
-    "NetTiming.PooledGood": "2b05778a0b771484955c53e73af6c5e221e8f1e027afe8027b90b5f95237f091"
+    "NetTiming.PooledGood": "82a11c0d8e1a2bf90a6a1ad8b96e18ac0539b75af43da83c2855569664285363"
+   }
+  },
+  "Definitions.NetworkCertifier.ResponseCap": {
+   "digest": "4da7b438a1a0ef1b087b5ace5b3ef49d4768726db82dfa9724ce717354e80c3b",
+   "definitions": {
+    "NetTiming.Arrivals.capped": "8ffbcd252656a69f14d52b7fffb5b73ebfbe6678bcde2926753731da06a03b03",
+    "NetTiming.CellView.isData": "a54f825dd68fb001c65b45507979c821869935328104ae645ce12f1a33750485",
+    "NetTiming.admitted": "80ae5afa62ed385459629a69e8c2e3aa6342c59dea925a91dc2c5ba1c87b2f21",
+    "NetTiming.cappedCode": "f9491687b58a1396afa9dd3076913dac8049ee1e27c64dfc5c48358e7f8107ec",
+    "NetTiming.dataCells": "7d748a2d745b27f699d1c104a032efb057eede35baa12c0cd7ba665cee5b65ad"
    }
   },
   "Definitions.NetworkCertifier.Run": {
@@ -37178,7 +36896,7 @@
    }
   },
   "Definitions.NetworkCertifier.SampledCharge": {
-   "digest": "9cc562fd05c1b89f7ac7cd7690de4175bd592b1f820be5ba1b302ed0f2d9cae7",
+   "digest": "322d79906afd4ccda3829d45c4e31d9436768456c69def2e9a65f23bc6b8250b",
    "definitions": {
     "NetTiming.AccSeqsSampled": "ad626b8423fb6d1b02f0a19e7b7bf3cc40e451d1d1fb01e9ceeedd2c65e09e80",
     "NetTiming.AcceptedFaulty": "ebfd078ac94cee1cb354ad8287355b63d6744527774706f89341de50c27c2798",
@@ -37186,7 +36904,8 @@
     "NetTiming.RLeak": "962130822d4deb3d4ac96574835a2a69a5ba3f6c63a719008a6bc92a3423ab13",
     "NetTiming.faultyBits": "11626696611eb91d66ee3f2a5c453e27db0facb8f80ee3d83b1c5f75a1a1dc27",
     "NetTiming.faultySets": "cf08892338b4055889a2cb6fd6b503d7977e9a006937f0e3c224517ffef076ba",
-    "NetTiming.freeInputs": "62e0ab9f2ca47b3d0b1c71f23e09e6ad8eb94741bd83a58b57de638b1ac62bdb"
+    "NetTiming.freeInputs": "62e0ab9f2ca47b3d0b1c71f23e09e6ad8eb94741bd83a58b57de638b1ac62bdb",
+    "NetTiming.runsBefore": "1eb148a4221b22658388804a4f46ba808757e4ba57dfa482fc80fd56ddae1ba4"
    }
   },
   "Definitions.NetworkCertifier.SampledReg": {
@@ -37243,15 +36962,18 @@
    }
   },
   "Definitions.NetworkCertifier.Warden": {
-   "digest": "4f5f7f18d2db87be80edf92a64bd7d7059f561c33f9bf5ebc1b969c51503fbcf",
+   "digest": "cbd4341892800fd4f1af92da6cfb64b9a75a1336cea334691f3d09e2a8e41fca",
    "definitions": {
     "NetTiming.Arrivals": "a9855f1bf335813d6e9e14389bc8ab6a12f280930f67aa9b05a90a5a61349651",
     "NetTiming.Arrivals.ready": "9072fe2fb441f0c20173208efd9171d9488df5c1e74d998285fa06303bda783a",
     "NetTiming.Arrivals.stream": "90546fb93b6d8fc796e2cee2d1a1a9cd0f1e6facb321853afa41ebbc51c1a909",
     "NetTiming.CellView": "3a34aa0796a8f300a192ccfcccdf919b49d79e9b5f84677f63b2b6df7f32165d",
+    "NetTiming.CellView.casesOn": "2cb36e4dbe25b4a766c0b9ef581b592a72cb40b69d0c59405885da1c926faa40",
+    "NetTiming.CellView.ctorIdx": "415370748ebf7fd52ec244b643cd845772f19c9eb10e9f2f39ba6905e6341e92",
     "NetTiming.CellView.data": "18a876d450ecca9b40059bf145040aaf84898393b339fd2c0d3531a0f865866c",
     "NetTiming.CellView.fail": "515a3655259e4d93419efd8142ce0f4c535df44a77a2519c13539e0172cb650b",
     "NetTiming.CellView.pad": "97f36790f87b13e6d3933331f3fd77a067668562d8a8e939dc6e367f4ed6e1ae",
+    "NetTiming.CellView.rec": "5380766e86d244df16d7ba0b256d67eb6b884c0a49fac105124ef48c3c542db3",
     "NetTiming.CertifierSchedule": "d9fbc604ad36aa40dadb12263be023eec703b4219d04dafefc77ea04956457e2",
     "NetTiming.CertifierSchedule.D": "a86911951c9e789bc929ca9e49dfda47e73fc489db7d1e9931564c26cbb70f02",
     "NetTiming.CertifierSchedule.adm": "460d53c9bf8c98fdcf34e6a87b3c245d5e81b2e005716203bd5962bba2e96343",
@@ -56905,8 +56627,9 @@
    }
   },
   "Spot.ChallengerTrees": {
-   "digest": "3b911b42da3631234073dc80c769790b86d915a31eea45a56277855ac7c65cae",
+   "digest": "0a260660f3be4b3de4e6d354e63f97f0fe1ab8e323a39a051478479c3f7f2348",
    "definitions": {
+    "Spot.Challenger.CLOSING_ROUND": "d5b52ed5bbc911171fcde44965fc16d98f0e7745a9c511556b7187fea8a147f4",
     "Spot.Challenger.EXTRA_OPENING": "cd951e71f0cc22850ce69d91662de65f1c56936351b021115fff7c346dec9c71",
     "Spot.Challenger.LINK_ROOT_LEN": "dc6c5de1f83adecce81e41a66fc92b3794b44c0fa624ac755628ab738dacbaea",
     "Spot.Challenger.LINK_TABLES": "a6b27aa9afa151e4feddfa991d77dc7f5753929208aeeb77b53790287bb52fca",
@@ -56918,8 +56641,11 @@
     "Spot.Challenger.LoggedTree.record": "e42e4f5cc62157f3fbc5184619bdab99aeaba5516e8526032edeea156ba98ca4",
     "Spot.Challenger.LoggedTree.root": "3e33eae116bac69851f62e434b22fb3e041b261ca5e5aee142719fabf706b416",
     "Spot.Challenger.LoggedTree.spec": "e9033d5e8acb9e223eb8ec9a3e678f05e8a55a8dfd92d56057d494818c9c8612",
+    "Spot.Challenger.LoggedTree.unclosed": "eb73982809e8ddc839e7f8fcde543b085621db1142149e29fd6a902ac2cd9311",
     "Spot.Challenger.MAX_BLOCK": "f8af3c3895ba3d97f3d8d7ef7171e821bcf1583e78f2630e6a9520f28bec5bc2",
     "Spot.Challenger.MAX_ROUNDS_LOG": "132b7629b57a9021e35161236ef1d792ab512333973fdefc9f4eb6be949c5745",
+    "Spot.Challenger.MEMBERS_ORDER": "8e64ae527911dd47999be7b23e927add285116112000cc7aeeaad6a7417ad396",
+    "Spot.Challenger.NO_CLOSING": "2591a2cfcd87c1e0d79fec9d163cfb665afef00d3cda12326866f7336119474a",
     "Spot.Challenger.NO_TREE": "7255d7516ed5c96e7001f77f31376513ea66b2b0aca4027946f7cf86b71cb7ef",
     "Spot.Challenger.SAMPLE_LINK_FIRST": "a24e542c80ecc13e2656298c6d51e7d5ec9f397cf2ce3455c37f4216fe324dd8",
     "Spot.Challenger.SHARED_TREE": "68616f377727c8d4f749fce061eae4fa5f8dbdb423c9fb30920aeeb3a1dae040",
@@ -56928,6 +56654,7 @@
     "Spot.Challenger.TREE_SESSION": "898bb4716f0e95aa52c9c33361e62935b1c27445fd32aaa39d1f0efbe6ba9fe0",
     "Spot.Challenger.TreeOpening": "e0dc4fdd8a959c3d89e93a2695df832280ee3b5dbd45b1c7e49b04c90d0c716b",
     "Spot.Challenger.TreeOpening.after": "a446217c2c1b8d2d2c02543aec51f375db4cbd02e50790144588dd628ed556d2",
+    "Spot.Challenger.TreeOpening.closes": "17b09ca0262fc4cc4e1b091cf16564c7f85e6d32239b3c5d61fa38f016104440",
     "Spot.Challenger.TreeOpening.coins": "d565f8e2beec426e5a63bcb62fa8c699debdbc864380079626f3a751788566f6",
     "Spot.Challenger.TreeOpening.n": "8211bd8ddc572a1deab3a9e6273c62ef5d9f298ff610d9b52290ca2c7a941b6a",
     "Spot.Challenger.TreeOpening.round": "19c26e76997a070c82ef668eb57e50fa4ba92b07e27680d9a037abd268accf04",
@@ -56937,7 +56664,12 @@
     "Spot.Challenger.isTreeSpec": "107fd3490f5bf5164b915022ad0e64c5d834d8d8822258ec366adc7e560006c8",
     "Spot.Challenger.linkAfter": "74a75218c14ae6825b9abf4ae9922519a42130e441e97c1cce07656821e891b6",
     "Spot.Challenger.linkLine": "90058f6303632702407698258bd46ed7d60d61f724b5d15547b9f1d822e2a0d3",
+    "Spot.Challenger.memberTreeReason": "913d804f3b9d8fab35888303b0d73ff1860014d942196653b05b2eb1d32f935c",
+    "Spot.Challenger.membersOrder": "aab66d6cfbbf8d1e05cc13978050c4ce41cb211a53e0910b6efa61a77d043d9b",
+    "Spot.Challenger.membersOrderFrom": "b00cfa90e874e4263f85fe63620f74826728449b131c4fe9c20d255812626e87",
+    "Spot.Challenger.membersTreeReason": "9691620a9f6f8eb143c56965a70d82952fb1de574ce39111c0e507c870ded339",
     "Spot.Challenger.openLine": "10d5506b59e78a1e55ebda6a29084121f5d8774e4b029274549ee5494e8a64e3",
+    "Spot.Challenger.openOf": "1b93fda303c6ce570c0f56e510ff3103de5770f27f835ea12e42a1586a70b345",
     "Spot.Challenger.recordCoins?": "45d893b6fd89398751bef88830c3ad2766cd90e98a919c0ad530f6c583294443",
     "Spot.Challenger.recordRounds": "3fdab6d45c651f7fa6b136bf0d13d9ad22e90a7ab0c4888d87c643082d86ef50",
     "Spot.Challenger.rootOf": "843b620dad8764df8cae699f487278b1fa1ffcf1c45069c4d5dc15e67bdfc167",
@@ -57144,14 +56876,35 @@
    }
   },
   "Spot.OneStageZk": {
-   "digest": "0322dec5ade726f4c007797182d274ff0522b491abb1f0017c167094efe52ad5",
+   "digest": "98db71834393617798ff105c218e45cbec1d83423f947ae53655757497af811d",
    "definitions": {
-    "Spot.OneStageZk.Evidence": "865231d981aefbe5cf442067b2f194a6c63c152496f0f7e20e25ce3245baa7f4",
+    "Spot.OneStageZk.EVIDENCE_FITS": "33f8f6fbb586fcb57dae3c7bed6c76ad5db01ca4720f43a6ca18ab4f9dd6d705",
+    "Spot.OneStageZk.Evidence": "f5fc59dc0b4a0d0d0732da27e636afe6ec207cbbf2bbe5666d18c048c5459e52",
     "Spot.OneStageZk.Evidence.base": "085d5ef75a033dd6cc8c769bc2f2f773ee79eeb5bda98797a04f5ef6dc215b93",
     "Spot.OneStageZk.Evidence.sessions": "6f77287d50bec041a5c351cc067350ebb2449e7058f11509ec9305a14216a27b",
+    "Spot.OneStageZk.Evidence.statements": "68befa9b243eed3813d8a90b864b6152b65a7f1f1a915d249395095c0c89ce92",
     "Spot.OneStageZk.FITS": "82ee228229f8e94882730084d6e3c2fbcd493df77ebcceb36f560d7c016d00b4",
+    "Spot.OneStageZk.FORMS": "277fb91256a030d6dd998d03a7fb10f0cfdb3771d48d10ea9e599110280caa51",
     "Spot.OneStageZk.INDICES_WHY": "519ae6fa1d13a847e4970499af0878de6866e339ff2fdaf7c549a34e64045b77",
     "Spot.OneStageZk.KEY_PARAMS": "6528629901d377f3e67f18b8717bd7944ccabefb1ae78f87bfb1dcc503fbd407",
+    "Spot.OneStageZk.MEMBERS_LAID": "32419f405b60a05fd6d19bfafa3f1b18053d129e1c05aecd8d5783894052283e",
+    "Spot.OneStageZk.MEMBER_STRATA": "33c312185b16fc3e2469f5c5fe000d13b40766a0b203c61cfbe211932d1cdae5",
+    "Spot.OneStageZk.MEMBER_UNITS": "851b92333768395301269b055469be04d07747aff33dc7e2e9a344ef557578fb",
+    "Spot.OneStageZk.MULTI_REFUSED": "b27d9766a59f6ebeeb0732073a2763e1740b20089dafb9629ad38a9a61005dee",
+    "Spot.OneStageZk.Member": "438d2f0ccacb3b2be9c14d3f916c837e4ce5b42a6efce589d08019d6c4202f61",
+    "Spot.OneStageZk.Member.blockHeld": "30d9e01956c29f94b2fbf784d7a5f074b5ddd59f7fa9c244a15e3259e3bec29f",
+    "Spot.OneStageZk.Member.count": "1ccacbab061c24258c9cc7c8cd6eba72c5ffbb63a1c5852aca2d3f4f51ed1f4a",
+    "Spot.OneStageZk.Member.first": "6704f9f9a0b2f923eebd37bb820de2b614b5a62c4f7e69dc240f8023a75f05be",
+    "Spot.OneStageZk.Member.g": "969b1d5d33ac4edd0908ee2381cd0c7def8467b1b3cec5aacb30a6d49bc264f1",
+    "Spot.OneStageZk.Member.heldAt": "442a5999bd5a6c52e035cc11079651076a74dad88df6e1ad2aba22abfa663d7a",
+    "Spot.OneStageZk.Member.indices": "4d7c5e8551823588b57ba950a56e42185e2db858417a0884102797901f246900",
+    "Spot.OneStageZk.Member.name": "6652d69e0aea811c3f5d3aa9c56d48bacc7e168a355f9ef28e152113b72ea67d",
+    "Spot.OneStageZk.Member.own": "ee79c077cf8f91a2421f0d36f2897c11fb80453c93ac8782ad49dd76f120b6b8",
+    "Spot.OneStageZk.Member.population": "81e3406eda7c41e3d668ce6012fb4411754f7c5b210c2c335363008f0aa14aa2",
+    "Spot.OneStageZk.Member.sizes": "83d83de467d70df47e36f1a49d7893540b0cbc5d3c5811e67df7b4b2059a8fdf",
+    "Spot.OneStageZk.Member.slice": "2a3c790d5a655d8876ca9a414792460781acb34bfcecb4e73922cac83cb1cbdb",
+    "Spot.OneStageZk.Member.statement": "30e311b3d47a705b5a884c52b9f0250b55d0d94856370525cefebfdcc5fb35e2",
+    "Spot.OneStageZk.Member.units": "dd005d06e519bda7d52b15749294ce030cd25dafbc83f4b5787d56fb77384d8d",
     "Spot.OneStageZk.NO_CHALLENGER": "e162a96e930d08f9754dac695c52dafc52cfd3daf4b4792302f54b06244b1df8",
     "Spot.OneStageZk.NO_ROW_WHY": "bdb3c1dcd200ed424ffe254184c9b7cfd1e66da41f66c6808dfba2643fd103e6",
     "Spot.OneStageZk.NO_TABLES": "89a604bf3f3fab6ba56c515638fc1c6011ccaeb7feeab9bfa86e992a1c058ad0",
@@ -57164,9 +56917,11 @@
     "Spot.OneStageZk.Own.registered": "0283eea9b13a62f45809aa68ef707fba4ec52de50fd4c5558de7e423a7be9ea3",
     "Spot.OneStageZk.POPULATION_ORDER": "178cd2bc9356770b37dbacb0aa69001b2db46f18bc0a84d496d9a9a0e0919c98",
     "Spot.OneStageZk.PROTOCOL": "65f08628cab0480576e756974a953d81851f0764f47d01b4f862b32bb8d71e0c",
-    "Spot.OneStageZk.Params": "f68f797e9319bb0e7b00d4143158618699e14e6ced21ded822c0dc3bd03a987a",
+    "Spot.OneStageZk.Params": "fb36069bfba09757ba20fd527db10ee0fae2655b3fab8e74c57bc7de1d8a109f",
     "Spot.OneStageZk.Params.base": "525e4aa770a875804263ba3e4dcc7245e450a9da45899df137c473e67df12504",
+    "Spot.OneStageZk.Params.members": "69da21bef7502142a740621e915b136597edcb0526d3498c2eb0e3b80993ca1f",
     "Spot.OneStageZk.Params.own": "0094c7b715263c7034c25f398fd009aa80a3dc3d23306c182a17dc3116aaee6d",
+    "Spot.OneStageZk.ROW_TABLES": "e609354251a17fdde3c42e912c516dbc57b6f3035676e1edead7619f46145f76",
     "Spot.OneStageZk.Reads": "4be8edb4eb001241e71990065acc194a5e6147affecc0d7f6bffa29530267591",
     "Spot.OneStageZk.Reads.known": "4c3167c668080d9ca30c508e923a52ef797f6db459b73ab46751c77ac97bfcc7",
     "Spot.OneStageZk.Reads.params": "cb58e01636ea23d472789adeb2be2fe1f7a070d0f1e5096b55c1af1a3a6637ef",
@@ -57182,27 +56937,55 @@
     "Spot.OneStageZk.RunFiles.reps": "7e9a2bb500e8fa8c0fa5d563d33ca0318a94a0cf9516eebf3440397b6c80d14e",
     "Spot.OneStageZk.STATEMENT": "dc41183a76bb077d823e5fea6d7158f3e38bb183ef7afd7365ee6e79cfb69f3b",
     "Spot.OneStageZk.SetUp": "ea6acf1e2e4190f1440626a1d4a4e102211c2857212c37ea179f092aa71c35a7",
+    "Spot.OneStageZk.StatementFiles": "117f9ceb98e8b8c71eb4949e430550e3c94931818f5ca2008304f437c0c799a2",
+    "Spot.OneStageZk.StatementFiles.member": "974132334a286f2ccede2cd7c3a659b5be92c10a8c4775d7e125bcdfc14e608e",
+    "Spot.OneStageZk.StatementFiles.sessions": "bca9515ec633f410c78828682108beb86046aa14e580ddfa3e2d1c119eb703f4",
+    "Spot.OneStageZk.StepAt": "7846b73f4dede43dda78677d073a2289dccc733bcd8cc538d9874ab9ab440ccd",
+    "Spot.OneStageZk.StepAt.I": "c9098a37b34f14defb8c930a14d29140369c805e2b0a9604a6c858ce1c5eb073",
+    "Spot.OneStageZk.StepAt.ksFiles": "5638c90ef4a18c1bdd57e1e0e6eb8675c70068451ba246ece9e4aff72dca0f00",
+    "Spot.OneStageZk.StepAt.ofOwn": "0d1bfb5ff48fa6d1ff90118a5988bf1b8ce946e4aa222cf54bc15a0703439e33",
+    "Spot.OneStageZk.StepAt.population": "157a90dafc8b73826e2b986fdb086f7916a6a02fb03b2f437da8c9ee1b18d1e0",
+    "Spot.OneStageZk.StepAt.programSha": "53d78db10adf4850663a8e948118627eb446b99090425e7a9784eecf1feffb48",
+    "Spot.OneStageZk.StepAt.rd": "9add8f49cef3ea96532b757653e1924bb5425c5fc102db30e589bc23f61db997",
+    "Spot.OneStageZk.StepAt.scope": "b1f4d741f2041386dfb15bb421a4891ed066ba2c42cd1abf9c70023b90764163",
+    "Spot.OneStageZk.StepAt.step": "ce2382ee4e88e0ed52c17bb27a63fb6c0695345c1237a69d590c8dc525e1bec1",
+    "Spot.OneStageZk.StepAt.want": "ccdf9a17b9f564ffd204fd2aeb301329f6ba62edb25cc7b505783a2a0874f459",
+    "Spot.OneStageZk.TABLE_PORT": "41afa2489c4a02dc7df3edea246f66c812742c31d8b92c8758002602c4150c77",
     "Spot.OneStageZk.UNIT_CLASS_MAX": "1345024fbc1dea4ef4be9355f1918bdab55eb41b4c3e576b214cc6736153418a",
     "Spot.OneStageZk.WIDE_WHY": "5951e578debd06c9e03a575a0d4365d95f6dcac3a93212669f566395413af179",
     "Spot.OneStageZk.WORD": "42fd0e4755e72cb224a859d7c5d730f9723f654a5cf326ddef796cb95af5d8c6",
     "Spot.OneStageZk.buildSessionOf": "364744488c948368efe8e4fe613d2165b177ca4fc89cd687cd8f25966b34b8f6",
     "Spot.OneStageZk.checkBlobs": "ff544fbc735b16c2b1c1045c9d788bba61521521ba21d54995e6537e40588e90",
-    "Spot.OneStageZk.checkBlobsAt": "e9e5351c4156f4bfa8be2d1f5b5e36f318d8d594d8adc037bddac4bbc2ee0d4a",
+    "Spot.OneStageZk.checkBlobsAt": "0580739ebc357459d8da351ee6a63099cd8ed19aa8959ae777d81e8e13843850",
     "Spot.OneStageZk.checkIdentifier": "ef0ffe1c96afe910c57ddd9af1d4c84a28fb5bf119cd435e9e683c61ec0bb395",
+    "Spot.OneStageZk.checkMembersAt": "833eb22fe3f024b1c51328b9bb5f75c58d28d458c7ba58fb968989381c740642",
+    "Spot.OneStageZk.checkOneAt": "947d9d43c53521eed7e2d49e0619bec883813d2276362e9238b13368b1fb270c",
+    "Spot.OneStageZk.classHeld": "5db9b9f7414f80e39610b87f1cdabc9f8e14325eb769700a33b18bce8d580ce5",
+    "Spot.OneStageZk.classPort": "a69efd9a6cca79a56cd16fe6a00eb0a158176cbf98e0fdaf16c848cead2fc7e9",
+    "Spot.OneStageZk.classStep": "01cdfd16e91cb8fe48e48dd52c72ad3aa32b172abe301b6c574517de7e31a2e8",
+    "Spot.OneStageZk.classTwo": "cb9cce8f01cfbc699e1c82e8f47c64e05009271f397de991ce0e0290ac1a3268",
     "Spot.OneStageZk.coinKeyOf": "75d567137e40c17596f9dfb67bf48fe264148fefb140d156a9813bd3ce77c27e",
     "Spot.OneStageZk.coinsOf": "88cf42ea035ecf852e33f3506fa92ac5e737865c6a3767290bba9686cd56f656",
     "Spot.OneStageZk.deployedKey": "202c89dd7909f7870179e8b48ec9f5ee421a7d536afd94c9ad007da6788b3615",
     "Spot.OneStageZk.drawFitsWhy": "0601f5e7ed692426e12be62da22f53b5e8581916dc0151a6b461f8f473048817",
-    "Spot.OneStageZk.evidenceOf": "6f7cb4b4c0a10b9b89932947342a0e9a136b9ed7a6f950453dc3bba9fa6b8176",
+    "Spot.OneStageZk.evidenceBytes": "ee22e17150755c25c7db5daa18c38317350755b1577ac10bdf8eb52f89edca2a",
+    "Spot.OneStageZk.evidenceOf": "ce72753663f3573deb1d883735a5e6044bb1b111159a44718e673bef005632cc",
     "Spot.OneStageZk.filesOf": "2f9d7f9f662e9d9b11b144c6221427d29f0ae179e1649835cca643b0a14598e5",
     "Spot.OneStageZk.fitsWhy": "dada44a3b6ee15d78b0a7175e7fdd9f986f98902e7be29dd7ec37279f1fc2381",
+    "Spot.OneStageZk.follows": "e453199c5e03b457de6a6eb3be796790358758dfa0cf64cadb2b44a42d522558",
+    "Spot.OneStageZk.headerHeld": "87b50ae60313bc6c9ba5ab9b986af8018e979addd113b6b8382879ecbc4991c3",
+    "Spot.OneStageZk.heldStep": "fc3d6c8735b36690b931183b552bb2be3a46a7cfe055835054d518fc57b19a7a",
     "Spot.OneStageZk.indicesHeld": "e9746ee698ca819e30d0d5cd63b4517294296935fae4ed58514a77972cd26b41",
     "Spot.OneStageZk.inputsOf": "222d59018519d209ecf764ecb2bf0a3ccff5ccbdd9ccd7d9676bee0acb75466e",
+    "Spot.OneStageZk.laidHeld": "62fee0acf3a5a492387a44adf427ef87c0cf94e9ad0468c226f74cf3f8c22754",
     "Spot.OneStageZk.linesOf": "ea58ef2214221f1a7075a8c0461ce4a6a8eb9a06da64fcf96eb7b0bc64f6a5c0",
     "Spot.OneStageZk.lookupsOf": "c6c15967aa40752c7b9f4adc4608e3732149b0d018a70ca9f1bb497ef44e1793",
+    "Spot.OneStageZk.membersHeld": "e1935c3cf06b4978654a7630080695cbf6e68f7d3384158ec88fe98a4fcaf628",
+    "Spot.OneStageZk.membersRun": "43e7e77969ee600e1f2d18d0878712060c7495015d1ebe1cf0ff8e8fb82cb259",
+    "Spot.OneStageZk.membersTreesHeld": "1a49768f7524b12bf5c7aa7bd332cb41d4bb9698167d8d73b3960ad1e4180176",
     "Spot.OneStageZk.oneSession": "3b5bc4ea098e1bcb9df88afa7689c9c6acaaf3fd29e1c6297447b1ce3a7ecf15",
     "Spot.OneStageZk.orderHeld": "dc4a26c43f92f5ac3e26f531238cf4bbaafb16dce2a97cb2859661952f44e482",
-    "Spot.OneStageZk.paramsOfJson": "c02c15ac68119249f4a102d11c43401f38185ed7f22c722388739218776cc766",
+    "Spot.OneStageZk.paramsOfJson": "a0b18722533d23f0fff8909c606a3e5a55d7ac9fc0d181cdd1c9bae0a7eb70dc",
     "Spot.OneStageZk.popHeld": "79397b8b5dd1ea4686f741751aebd72fe40b040263f878dbb15c1da9d2a8827c",
     "Spot.OneStageZk.printedSize": "21773a089e602e511fa7324868a990d5499b94c52cff27aef4fb036abe58a528",
     "Spot.OneStageZk.programDigest": "e53b161f14ef403e7f12b43c0df51b1ed4e8f3cf5439480049df021737d6f9d3",
@@ -57218,17 +57001,29 @@
     "Spot.OneStageZk.returnedBits": "526678a1f372ad9a8c1a8ab31a6f4abda9941e3417acc4670186ca4ae5b341cb",
     "Spot.OneStageZk.rootBLen": "425858b488c3fe79dd324884372fca0eb1d11ad0ca6c5e4953b128e2b2c5d9a0",
     "Spot.OneStageZk.rootBTables": "6b297e93074460ce370b991a3670df0c454272aa6b118dd5666bf54af1475493",
+    "Spot.OneStageZk.rootStep": "35f0955dc6910d71f09e66b5f919c325363d8bc044725f05f2c8560015999c0a",
+    "Spot.OneStageZk.rootsOf": "be102973e9ad3f0e573b77acb39b0598169f767ea5ae9afff50054dd677c8f0d",
     "Spot.OneStageZk.run": "417702f7ff36f19de4c4154b15cb9e47bd97c3b635e68ed7446afe853918c8cc",
+    "Spot.OneStageZk.runFrom": "9e1c21af2dfe60b4b3a847eb8f8daf0ce515ceb24fb65b31d346bcb364a90cc9",
+    "Spot.OneStageZk.runMembers": "5b86ef3f519ab280a209e47e5344ca96cf74b7cb679511987e99429d17141c35",
+    "Spot.OneStageZk.scopeOf": "e94187243787d5abe3cc13000e4f657a91ed3109f7e8a9c48ca2919b23454fd9",
     "Spot.OneStageZk.sessionAt": "c8faeafb847a3afda29031af35b25bfe70134280834f8c045d22797c7c2420a6",
+    "Spot.OneStageZk.sessionEvidence": "b7c784997338fbfe811fb30bbe5e4717a87f8bb9704cac295ccccb5c09ac110f",
     "Spot.OneStageZk.sessionTables": "8f4045ee0fa5ce8fe15e1640748b4d03e51adf18c0c8dbcc0bbd560fad0b2097",
     "Spot.OneStageZk.setupAt": "44c14b10235a468a54be584c7e667b789d472b63cacc8ed6cc84fe55f72f216d",
     "Spot.OneStageZk.setupChecks": "6e7eea147c0b79a1391bc6d73f978f1745ccde6056349dfc4a9008ed2c2257d9",
+    "Spot.OneStageZk.splitsFrom": "7181b0742833f22184fa0565070c0368a19952f2d0b0f9fbfa91483c6034f3ed",
+    "Spot.OneStageZk.splitsOf": "d18169c4bc3a4ed7a2bbcd18fe4ad3536f51583a85d0683fa7b3c78447fa7255",
+    "Spot.OneStageZk.statementOf": "5abb49800bbc7e224ac319a29853e4382d6ea3c6e5289fc9894213d84fae8b33",
     "Spot.OneStageZk.step": "3b03721d6ced6798eddc70854cb60612be4c38b1ec6167f44f123f4f83aa40d3",
+    "Spot.OneStageZk.stepMember": "9a08fa2b1f75ade7137518bba484231f2d3d4443f1b02ef1fe7853349c6effa5",
     "Spot.OneStageZk.tablesHeld": "000574eb0376f78d18d1f42de1622518420348bb5ed5667796faa54c6b7b20c4",
     "Spot.OneStageZk.tablesOf": "5d14cb4d8454567b99bad8463df6f9d6fe7503bb6809976e46259cec2c5d008b",
     "Spot.OneStageZk.templateOk": "a5e4e652dc1d4c9f51482b0b140519c4aaa029fbe83144a590e35a907e5d1348",
     "Spot.OneStageZk.treesHeld": "ceb3e31246a635beb0beffb8e7c2db3c5a23fb50a610abc780ed02952b5cce5f",
     "Spot.OneStageZk.treesOf": "ffc23e0a8e49a2ad3ae0dad3f847e068504558ca3a310e0808f0b22d5d5e6579",
+    "Spot.OneStageZk.unitsHeld": "2e5a2aa115d8986d7df11cb3408aa92e95c7d8fe96fe4be514bf779800612c99",
+    "Spot.OneStageZk.unitsIn": "c4a41c6d72d23525d0ec12687cac976b22fe1c1cf24b6fe5390118efef6c83bd",
     "Spot.OneStageZk.verdictJson": "a71159b5c6cbb7e122d1b7c40a6e3958e5f6f5fc6e481883e507a2f5094030c6",
     "Spot.OneStageZk.verdictOf": "1b4c8865d510ba5ba4827e8c25734e6fad4eac4dbfb4c81ce4e8f9126742c082",
     "_private.Spot.OneStageZk.0.Spot.OneStageZk.committedOf": "2cab8298aad1ea6696f0a352347be769387fe3b887fa30494a7a301121039e2c",
