@@ -17,7 +17,7 @@ sys.path.insert(0, str(HERE.parent))
 import kv as K  # noqa: E402
 import kv_twin as T  # noqa: E402
 
-from verity.core.protocols.remote_bandwidth import codec as RB  # noqa: E402
+from verity.protocols.poub.verifier import codec as RB  # noqa: E402
 
 SEED = hashlib.sha256(b"verity/word-codec/kv/vectors").digest()
 NAMES = sorted(K.FIELDS)
@@ -188,7 +188,7 @@ def test_token_layer_layout(name):
 
 
 def test_the_digest_is_sha512_row_v2():
-    from verity.ml.commitments.rowleaf import sha512_row_v2_digest
+    from verity.commitments.rowleaf import sha512_row_v2_digest
 
     data = _bound_data()
     assert K.digest(data) == sha512_row_v2_digest(data, 8 * K.TOKEN_LAYER_BYTES)

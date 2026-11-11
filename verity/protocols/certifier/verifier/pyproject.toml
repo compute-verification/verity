@@ -1,0 +1,31 @@
+# A suite of `verity`'s tests: they run in the workspace's environment, against the editable `verity`.
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]
+
+[tool.verity.tests]
+# test files that start a program the read guard can't trace (git, lake, a compiler, a shell): keyed on the suite's whole tree
+untraced = [
+    "tests/test_network_certifier_link_window_lean.py",
+    "tests/test_network_certifier_period.py",
+    "tests/test_network_certifier_served.py",
+    "tests/test_network_certifier_service.py",
+    "tests/test_network_certifier_tie_service.py",
+]
+inputs = ["verity"]
+
+# What these test files read that their source doesn't name (a tree a test walks, a module it loads by a name it computes,
+# what a program it starts reads): the graph's test-file tasks are keyed on it.
+
+[[tool.verity.tests.reads]]
+tests = ["tests/test_network_certifier_blocks.py"]
+paths = ["verity/circuits", "verity/definitions/kernels"]
+
+[[tool.verity.tests.reads]]
+tests = [
+    "tests/test_network_certifier_issuer_lean_difftest.py",
+    "tests/test_network_certifier_lean_difftest.py",
+    "tests/test_network_certifier_tie_service.py",
+    "tests/test_network_check_lean_difftest.py",
+]
+paths = ["verity"]
