@@ -59,7 +59,8 @@ def test_the_batch_form_parses_and_carries_max_seqlen_q():
     ctx = TG.parse_launch_context(json.dumps({"batch": BATCH}))
     assert ctx["batch_by_step"] == {0: [(1, 17), (1, 231), (65, 0)], 1: [(1, 18), (1, 65), (187, 0)]}
     assert ctx["max_seqlen_q_by_step"] == {0: 65, 1: 187} and ctx["conflict"] is False
-    for bad in ([], [[]], [[[0, 3]]], [[[1, -1]]]):
+    bads: tuple[list[object], ...] = ([], [[]], [[[0, 3]]], [[[1, -1]]])
+    for bad in bads:
         with pytest.raises(ValueError):
             TG.parse_launch_context({"batch": bad})
 
@@ -233,9 +234,9 @@ def test_moe_config_and_gate_tier_are_read_at_the_launchs_tokens(declared, monke
 
     pkg = types.ModuleType("fake_fused_moe")
     pkg.__package__ = "fake_fused_moe"
-    pkg.try_get_optimal_moe_config = config
+    pkg.__dict__["try_get_optimal_moe_config"] = config
     experts = types.ModuleType("fake_fused_moe.experts")
-    experts.try_get_optimal_moe_config = config
+    experts.__dict__["try_get_optimal_moe_config"] = config
     monkeypatch.setitem(sys.modules, pkg.__name__, pkg)
     monkeypatch.setitem(sys.modules, experts.__name__, experts)
     with hooks.Hooks() as h:
@@ -246,7 +247,7 @@ def test_moe_config_and_gate_tier_are_read_at_the_launchs_tokens(declared, monke
     assert seen == [189, 189] and pkg.try_get_optimal_moe_config is config and experts.try_get_optimal_moe_config is config
 
     site = types.ModuleType("ll_bf16_site")
-    site.ll_bf16_gemm = lambda *a, **k: (_ for _ in ()).throw(AssertionError("the CUDA kernel ran"))
+    site.__dict__["ll_bf16_gemm"] = lambda *a, **k: (_ for _ in ()).throw(AssertionError("the CUDA kernel ran"))
 
     class Gate(torch.nn.Module):
         def __init__(self, cublas: bool) -> None:

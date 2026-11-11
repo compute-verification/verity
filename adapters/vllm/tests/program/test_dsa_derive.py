@@ -92,7 +92,7 @@ def _unpatched(*a, **k):
 
 
 SITE = types.ModuleType("dsa_site_standin")
-SITE.fused_norm_rope = SITE.fused_q = _unpatched
+SITE.__dict__.update(fused_norm_rope=_unpatched, fused_q=_unpatched)
 
 
 def _bf16(rng, *shape, sd=1.0) -> torch.Tensor:
@@ -166,7 +166,7 @@ class _Layer(nn.Module):
 
     def forward(self, positions, q_c, kv_c, k_pe, q, index_k=None, index_weights=None, index_q=None):
         output = torch.empty((q_c.shape[0], NH * self.v_head_dim), dtype=q_c.dtype, device=q_c.device)
-        if self.indexer is not None:
+        if self.indexer is not None and self.indexer_rope_emb is not None:
             has_indexer, k_w, k_b, k_eps = True, self.indexer.k_norm.weight, self.indexer.k_norm.bias, self.indexer.k_norm.eps
             ics, ss, hs = self.indexer_rope_emb.cos_sin_cache, self.indexer.softmax_scale, self.indexer.n_head ** -0.5
         else:
@@ -299,7 +299,8 @@ def _reference(model: _Model, inputs, splits: int = 1, orders: dict[int, list[in
     `Attention_v4{T=i+1}` (`AttentionSplit_v1` at ``splits`` > 1) over [q_nope | q_pe roped] and the call's rows 0..i of
     k = [k_nope | k_pe roped] and v, k_nope and v each head's halves of the normed latent (the identity `kv_b_proj`)."""
     qn, rope = bind(b1.RMSNormTriton, N=NQ, EPS=EPS), bind(RoPEHeadGptJV2, D=R)
-    hist = {n: [] for n in NAMES}
+    orders = orders or {}
+    hist: dict[str, list[list[int]]] = {n: [] for n in NAMES}
     out, k = [], 0
     for p0, T in model.steps:
         for layer in model.layers:
@@ -401,7 +402,7 @@ def _cuda_only(hidden_states, router_weight, output_dtype=torch.float32):
 
 
 GATE_SITE = types.ModuleType("ll_bf16_site_standin")
-GATE_SITE.ll_bf16_gemm = _cuda_only
+GATE_SITE.__dict__["ll_bf16_gemm"] = _cuda_only
 
 
 class _Gate(nn.Module):
@@ -487,7 +488,7 @@ def test_the_observed_split_count_is_the_pin_on_the_impls_module(monkeypatch):
     the one-split pin's marker, else None (vLLM's heuristic)."""
     from verity_vllm.program.frontend import vllm_meta as vm
     attention = types.ModuleType("vllm.model_executor.layers.attention")
-    attention.Attention, attention.MLAAttention = type("Attention", (nn.Module,), {}), type("MLAAttention", (nn.Module,), {})
+    attention.__dict__.update(Attention=type("Attention", (nn.Module,), {}), MLAAttention=type("MLAAttention", (nn.Module,), {}))
     monkeypatch.setitem(sys.modules, attention.__name__, attention)
     backend = types.ModuleType("sparse_backend_standin")
     backend.__dict__["Impl"] = type("Impl", (), {"dcp_world_size": 1, "__module__": backend.__name__})
@@ -498,7 +499,7 @@ def test_the_observed_split_count_is_the_pin_on_the_impls_module(monkeypatch):
                                                parallel_config=types.SimpleNamespace(tp=8),
                                                attention_config=types.SimpleNamespace(sparse_mla_force_mqa=False))
     model = nn.Sequential(layer)
-    backend.flash_attn_varlen_func = lambda *a, **k: None
+    backend.__dict__["flash_attn_varlen_func"] = lambda *a, **k: None
     assert vm.attention_impls(model)[NAMES[0]]["num_splits"] is None
     backend.flash_attn_varlen_func.verity_sparse_mla_splits = 1
     obs = vm.attention_impls(model)[NAMES[0]]
@@ -513,8 +514,7 @@ def test_the_shims_leave_a_model_without_their_layers_unchanged(monkeypatch):
     with moe_gate_leaf(_Gate(rng, allow=False)), dsa_ops_leaf(_Gate(rng)):
         assert GATE_SITE.ll_bf16_gemm is _cuda_only
     site = types.ModuleType("dsa_forward_site")
-    site.fused_norm_rope = site.fused_q = _unpatched
-    site._Layer = _Layer
+    site.__dict__.update(fused_norm_rope=_unpatched, fused_q=_unpatched, _Layer=_Layer)
     exec("class Attn(_Layer):\n    def forward(self, *a):\n        return fused_norm_rope(*a)\n", site.__dict__)
     monkeypatch.setitem(sys.modules, site.__name__, site)
     layer = site.Attn(NAMES[0], indexer=True, seed=0)
@@ -751,8 +751,10 @@ def test_the_served_vocabulary_binds_the_norm_and_gptj_rope_roles():
 def test_each_attention_precondition_refuses_by_name(case, needle, served, monkeypatch):
     model = _model(order=(False, True) if case == "shared-first" else (True, False))
     monkeypatch.setitem(vllm_dsa.DECODE_THRESHOLD, NH, 1)
-    over = {"prefill-backend": {"prefill_backend": "FlashAttnMLAPrefill"},
-            "heads": {"prefill_backend": "FlashAttnMLAPrefill", "q_heads_per_rank": None}, "impl": {"impl": "FlashMLASparseImpl"}}.get(case)
+    overs: dict[str, dict[str, object]] = {"prefill-backend": {"prefill_backend": "FlashAttnMLAPrefill"},
+                                           "heads": {"prefill_backend": "FlashAttnMLAPrefill", "q_heads_per_rank": None},
+                                           "impl": {"impl": "FlashMLASparseImpl"}}
+    over = overs.get(case)
     if over:
         VB.observe_attention_impls({n: _observation(**over) for n in NAMES})
     if case == "target":
@@ -921,9 +923,10 @@ def test_a_prefill_fa3_splits_derives_by_attention_split(dense, monkeypatch):
 ])
 def test_each_dense_prefill_precondition_refuses_by_name(case, needle, dense, monkeypatch):
     model = _model(dense=True, topk=1 if case == "past-topk" else TOPK, steps=((0, 1), (1, 2)) if case == "chunked" else STEPS)
-    over = {"backend": {"prefill_backend": "FlashInferPrefillBackend"}, "force-mqa": {"sparse_mla_force_mqa": True},
-            "fa-version": {"prefill_fa_version": 2}, "v-padding": {"prefill_requires_v_padding": True},
-            "prefill-scale": {"prefill_scale": 0.5}, "scale": {"prefill_scale": 0.5}}.get(case)
+    overs: dict[str, dict[str, object]] = {"backend": {"prefill_backend": "FlashInferPrefillBackend"}, "force-mqa": {"sparse_mla_force_mqa": True},
+                                           "fa-version": {"prefill_fa_version": 2}, "v-padding": {"prefill_requires_v_padding": True},
+                                           "prefill-scale": {"prefill_scale": 0.5}, "scale": {"prefill_scale": 0.5}}
+    over = overs.get(case)
     if over:
         VB.observe_attention_impls({n: _dense_observation(**over) for n in NAMES})
     if case == "scale":

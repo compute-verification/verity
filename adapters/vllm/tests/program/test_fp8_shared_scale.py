@@ -84,7 +84,7 @@ def test_bit_equal_on_edge_vectors():
     K, N, G = 256, 256, 128
     old, new = _pair(K, N)
     rng = random.Random(0xF8B10C)
-    seen = set()
+    seen: set[str] = set()
     for k in range(32):
         mode = ("normal", "tiny", "special", "normal")[k % 4]
         p_edge, p_nan = (0.4, 0.0) if k % 8 != 7 else (0.2, 0.0005)
@@ -225,8 +225,12 @@ def test_the_frontend_rule_binds_a_ragged_n(monkeypatch):
         clear_observations()
 
     seen = []
+
+    def untransposed(ctx, v, k, n, name):
+        seen.append((name.rsplit("/", 1)[1], k, n))
+        return name
     monkeypatch.setattr(R, "shape", lambda ctx, v: (K, N))
-    monkeypatch.setattr(R, "_untransposed", lambda ctx, v, k, n, name: seen.append((name.rsplit("/", 1)[1], k, n)) or name)
+    monkeypatch.setattr(R, "_untransposed", untransposed)
     monkeypatch.setattr(R, "rows_of", lambda coll: ([coll, coll], ()))
     monkeypatch.setattr(R, "from_rows", lambda outs, lead: outs)
     clear_observations()

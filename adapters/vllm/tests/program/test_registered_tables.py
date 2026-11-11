@@ -89,7 +89,10 @@ def test_tanh_f32_rn_v2_is_v1_reading_the_registered_table_lazily():
     words = [(w & 0x7FFFFFFF) | s for w in words for s in (0, 1 << 31)]
     table, reads = T.tanh_rn_table(), []
     assert (table.name, table.leaves, table.declared_by) == ("tanh_rn", T.TANH_RN_TABLE.leaves, D.TanhF32Rn)
-    counted = RegisteredTable("tanh_rn", lambda j: reads.append(j) or table.word(j), table.leaves, D.TanhF32Rn)
+    def counting(j):
+        reads.append(j)
+        return table.word(j)
+    counted = RegisteredTable("tanh_rn", counting, table.leaves, D.TanhF32Rn)
     fn = bind(T.TanhF32RnV2)
     assert fn.id == "TanhF32Rn_v2"
     for w in words:

@@ -52,13 +52,14 @@ def test_a_forged_seed_fails_the_check():
     window's coin: the seed the rule gives passes, and every other a server might sample under fails: the derived seed with a
     bit flipped, the public default, the seed derived under another coin or for another id, the null field's digit sum, and
     for the seeded body the derived seed and a neighbour of its own."""
-    st, COIN = {"MODEL": "m", "LP": 2, "V": 1000, "RID": 4}, 16
+    LP, COIN = 2, 16
+    st = {"MODEL": "m", "LP": LP, "V": 1000, "RID": 4}
     coin, other = bytes(range(COIN)), bytes(range(1, COIN + 1))
     bodies = [X.sampled_encode("m", [5, 7], 9, 1000, temperature=0.7, top_p=0.9, seed=s, user=u)
               for s, u in ((None, "r001"), (12345, "r002"))]
-    arr = np.frombuffer(b"".join(bodies), dtype=np.uint8).reshape(2, -1).astype(np.uint32)
+    arr: np.ndarray = np.frombuffer(b"".join(bodies), dtype=np.uint8).reshape(2, -1).astype(np.uint32)
     rows = np.asarray(evaluate_words(bind(BX.IngressSampledV1, **st), arr), dtype=np.uint64).reshape(2, -1)
-    at = 1 + st["LP"] + 3
+    at = 1 + LP + 3
     parsed = [(int(r[0]), int(r[at]), int(r[at + 1]), bytes(int(c) for c in r[at + 2:])) for r in rows]
     assert [p[0] for p in parsed] == [1, 1] and [p[1] for p in parsed] == [0, 1] and parsed[1][2] == 12345
     derived = served_seed.derived(coin, "r001")

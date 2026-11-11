@@ -134,7 +134,7 @@ def test_s1_mlp_reference_mode_evaluates_and_matches_stated_semantics():
     with torch.no_grad():
         ref = m(x)
     ref_f = ref.numpy().reshape(-1)
-    got_f = got.view(np.float32).reshape(-1)
+    got_f: np.ndarray = got.view(np.float32).reshape(-1)
     ulp = np.abs(got.reshape(-1).astype(np.int64) - _f32_bits(ref).reshape(-1).astype(np.int64))
     assert np.allclose(got_f, ref_f, rtol=1e-5, atol=1e-6)
     assert ulp.max() <= 64
@@ -206,7 +206,7 @@ def test_gpt2_mlp_block_reference_mode_layernorm_conv1d_gelu():
     assert set(rep.provenance["rules_applied"]) == {"LayerNorm[reference]_v1", "Linear[reference]_v2", "Elementwise[reference]_v3"}
     apps = {a["node"]: a for a in rep.provenance["applications"] if a["rule"] == "Linear[reference]_v2"}
     assert all(a["preconditions_checked"]["W_transposed_view"] for a in apps.values())
-    got = _evaluate(rep.program, rep.provenance["weights"], x, m).view(np.float32).reshape(3, 16)
+    got: np.ndarray = _evaluate(rep.program, rep.provenance["weights"], x, m).view(np.float32).reshape(3, 16)
     with torch.no_grad():
         ref = m(x).numpy()
     assert np.allclose(got, ref, rtol=1e-4, atol=1e-5), np.abs(got - ref).max()
@@ -229,7 +229,7 @@ def test_gpt2_tiny_lm_reference_mode_end_to_end():
     ws = rep.provenance["weights"]
     assert ws[0]["name"] == "wte.weight" and ws[0]["aliases"] == ["lm_head.weight"]
     ids = torch.tensor([3, 17, 5, 30])
-    got = _evaluate(rep.program, ws, ids, m, x_bits=[int(v) for v in ids.tolist()]).view(np.float32).reshape(4, -1)
+    got: np.ndarray = _evaluate(rep.program, ws, ids, m, x_bits=[int(v) for v in ids.tolist()]).view(np.float32).reshape(4, -1)
     with torch.no_grad():
         ref = m(ids).numpy()
     assert np.allclose(got, ref, rtol=1e-4, atol=1e-5), np.abs(got - ref).max()
@@ -272,7 +272,7 @@ def test_xfer_conv1d_matmul_layout_and_bias_broadcast():
     rep = derive_report(m, (torch.empty(4, 16),), **REF, name="XConv1D")
     assert rep.ok, rep.unsupported
     assert set(rep.provenance["rules_applied"]) == {"Matmul[reference]_v1", "BroadcastBiasAdd[reference]_v1"}
-    got = _evaluate(rep.program, rep.provenance["weights"], x, m).view(np.float32).reshape(4, 8)
+    got: np.ndarray = _evaluate(rep.program, rep.provenance["weights"], x, m).view(np.float32).reshape(4, 8)
     with torch.no_grad():
         assert np.allclose(got, m(x).numpy(), rtol=1e-5, atol=1e-6)
 

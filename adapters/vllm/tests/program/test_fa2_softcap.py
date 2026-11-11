@@ -116,7 +116,7 @@ def test_the_capture_compare_accepts_the_definitions_own_rows(tanh_table, tmp_pa
     keys = np.arange(sk)
     kseq, vseq = k[bt[0, keys // 16], keys % 16], v[bt[0, keys // 16], keys % 16]
     BN = b1.fa2_kblock_n(D)
-    out = np.zeros((sq, H, D), dtype=np.uint16)
+    out: np.ndarray = np.zeros((sq, H, D), dtype=np.uint16)
     for r in range(sq):
         T = r + 1 + sk - sq
         spec = bind(F2S.AttentionSoftcapV2, T=T, NH=H, KVH=Hk, D=D, BN=BN, CAP=CAP, MASKED_FROM=S.C.guarded_from(sq, sq, sk, r, BN), **FA2)

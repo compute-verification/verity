@@ -284,8 +284,9 @@ def test_the_sparse_mla_exports_as_its_insert_compressor_state_and_attention_lea
     model = _SparseMla()
     with dsv4_attention_leaves(model):
         ep = torch.export.export(model, _sparse_mla_inputs(), strict=False)
-    assert {m.__func__ for m in (model._fused_qnorm_rope_kv_insert, model.forward_mqa, model.compressor.forward,
-                                 model.indexer.forward)} == {_launches}
+    methods = (model._fused_qnorm_rope_kv_insert, model.forward_mqa, model.compressor.forward, model.indexer.forward)
+    bound = [m for m in methods if isinstance(m, types.MethodType)]
+    assert len(bound) == len(methods) and {m.__func__ for m in bound} == {_launches}
     targets = _call_targets(ep)
     leaves = [t for t in targets if t.startswith("vllm_iface.")]
     assert leaves == ["vllm_iface.dsv4_compressor_state.default", "vllm_iface.dsv4_qnorm_rope_kv_insert.default",
@@ -307,8 +308,8 @@ def test_a_sparse_mla_the_leaves_do_not_model_refuses_at_export(model, refusal):
 
 def test_deep_gemms_einsum_is_the_leaf_op_in_every_vllm_module_bound_to_it(monkeypatch):
     deep_gemm, user = types.ModuleType("vllm.utils.deep_gemm"), types.ModuleType("vllm.o_proj_standin")
-    deep_gemm.fp8_einsum = user.fp8_einsum = _launches
     for module in (deep_gemm, user):
+        module.__dict__["fp8_einsum"] = _launches
         monkeypatch.setitem(sys.modules, module.__name__, module)
 
     class _OProj(nn.Module):
@@ -382,11 +383,10 @@ def marlin_site(monkeypatch):
     """vLLM's Marlin MoE modules."""
     mxfp4, oracle = types.ModuleType(mml._MXFP4), types.ModuleType(mml._ORACLE)
     site, scalar_type = types.ModuleType(mml._MARLIN_MOE), types.ModuleType("vllm.scalar_type")
-    mxfp4.Mxfp4MoEMethod = _Mxfp4Method
-    oracle.Mxfp4MoeBackend = types.SimpleNamespace(MARLIN="marlin")
-    oracle.make_mxfp4_moe_kernel = lambda **kwargs: kwargs
-    scalar_type.scalar_types = types.SimpleNamespace(float4_e2m1f=types.SimpleNamespace(id=7))
-    site.fused_marlin_moe = _launches
+    mxfp4.__dict__["Mxfp4MoEMethod"] = _Mxfp4Method
+    oracle.__dict__.update(Mxfp4MoeBackend=types.SimpleNamespace(MARLIN="marlin"), make_mxfp4_moe_kernel=lambda **kwargs: kwargs)
+    scalar_type.__dict__["scalar_types"] = types.SimpleNamespace(float4_e2m1f=types.SimpleNamespace(id=7))
+    site.__dict__["fused_marlin_moe"] = _launches
     for module in (mxfp4, oracle, site, scalar_type):
         monkeypatch.setitem(sys.modules, module.__name__, module)
     return site
@@ -723,7 +723,8 @@ class _SparseAttn(nn.Module):
             self.norm_weight = p(W.bf16(_f32(rng, SPARSE_D)))
 
     def forward(self, *xs):
-        k, outs, p0 = 3 if self.ratio > 1 else 2, [], self.p0
+        k, p0 = 3 if self.ratio > 1 else 2, self.p0
+        outs: list[torch.Tensor] = []
         for call in zip(*(xs[i::k] for i in range(k))):
             q, kv = call[-2:]
             positions = torch.arange(p0, p0 + q.shape[0], dtype=torch.int64)
@@ -774,7 +775,7 @@ def _sparse_twin(model: _SparseAttn, xs: list[np.ndarray], launch: dict | None =
                 n, ro, e = (a.reshape(-1) for a in row)
                 comp.append((n, e[:DN // QB], ro))
         for i, p in enumerate(pos):
-            s0, nc = max(p - window + 1, P), (p + 1) // ratio - P // ratio if ratio > 1 else 0
+            s0, nc = max(int(p) - window + 1, P), (p + 1) // ratio - P // ratio if ratio > 1 else 0
             w0 = s0 - P
             if len(q) == 1:
                 swa = p - s0 + 1
@@ -789,7 +790,7 @@ def _sparse_twin(model: _SparseAttn, xs: list[np.ndarray], launch: dict | None =
             else:
                 rows = comp[:nc] + win[w0:p - P + 1]
                 n, N = len(rows), -(-len(rows) // (2 * BN)) * 2 * BN
-                kvw = np.zeros((N, D), np.uint16)
+                kvw: np.ndarray = np.zeros((N, D), np.uint16)
                 kvw[:n] = FP.gather_rows(*stack(rows), QB)
                 outs.append(FP.prefill(qp[i, :2], kvw, words([0] * n + [-1] * (N - n)), words(n), words(1), sink, BN=BN,
                                        SCALE=SPARSE_SCALE))
@@ -1091,7 +1092,8 @@ class _ScoredRouter(nn.Module):
 def _scored_inputs(rng, E: int = 384) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
     """Two rows of logits under one bias: a NaN logit, and two experts tied for the largest current."""
     x, b = _f32(rng, 2, E, sd=4.0), _f32(rng, E, sd=0.1)
-    x[0, 5], x[1, 7], x[1, 9], b[7], b[9] = 0x7FC00000, *np.array([30.0, 30.0, 0.0, 0.0], np.float32).view(np.uint32)
+    x[0, 5] = 0x7FC00000
+    x[1, 7], x[1, 9], b[7], b[9] = np.array([30.0, 30.0, 0.0, 0.0], np.float32).view(np.uint32)
     return x, b, np.array([7, 2], np.int32)
 
 
@@ -1151,7 +1153,8 @@ class _MarlinLaunches(nn.Module):
 def _align(ids: np.ndarray, E: int, BM: int) -> tuple[np.ndarray, int]:
     """The deterministic `moe_align_block_size`, each expert's pairs in pair-index order: each pair's sorted position / BM, and the
     padded count / BM."""
-    blk, start = np.zeros(len(ids), np.int64), 0
+    blk: np.ndarray = np.zeros(len(ids), np.int64)
+    start = 0
     for e in range(E):
         for r, p in enumerate(np.flatnonzero(ids == e)):
             blk[p] = (start + r) // BM

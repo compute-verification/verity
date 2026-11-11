@@ -184,8 +184,9 @@ def test_every_workload_takes_the_registered_s_of_its_sm_count(tmp_path, num_sms
     from verity_vllm.program.frontend.target_profile import TargetProfile
     from verity_vllm.program.frontend.vllm_meta import registered_policy_splits
     target = TargetProfile.default().with_overrides(num_sms=num_sms)
-    cases = [dict(n=1), dict(n=2, arrive=[0, 5], caps=[16, 9]), dict(n=8), dict(n=8, caps=[16] * 4 + [3] * 4),
-             dict(n=8, arrive=[0, 0, 0, 0, 3, 3, 6, 6], caps=[16] * 8), None]
+    cases: list[tuple[int, list[int] | None, list[int] | None] | None] = [  # (n, arrive, caps), or no manifest
+        (1, None, None), (2, [0, 5], [16, 9]), (8, None, None), (8, None, [16] * 4 + [3] * 4),
+        (8, [0, 0, 0, 0, 3, 3, 6, 6], [16] * 8), None]
     geoms = set()
     for c in cases:
         for lp_t in ((8, 15), (8, 9), (None, None)):
@@ -193,7 +194,7 @@ def test_every_workload_takes_the_registered_s_of_its_sm_count(tmp_path, num_sms
                 pol = sampling_policy(None, None)
                 pol.update(kind="stochastic", seeded=True, temperature=0.8, top_p=0.95, top_k=0)
             else:
-                pol = sampling_policy(None, _requests_manifest(tmp_path, c["n"], arrive=c.get("arrive"), caps=c.get("caps")))
+                pol = sampling_policy(None, _requests_manifest(tmp_path, c[0], arrive=c[1], caps=c[2]))
             assert sampler_geometry(pol, target, LP=lp_t[0], T=lp_t[1]) is None
             assert pol["splits"] == S == registered_splits(num_sms) == splits_for(1, num_sms) and registered_policy_splits(pol) == S
             g = pol["geometry"]

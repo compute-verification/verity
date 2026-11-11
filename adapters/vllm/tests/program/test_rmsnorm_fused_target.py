@@ -80,7 +80,7 @@ def _fold(target, registered: bool = False):
 def _predict(**target):
     phi = Phi(model={"repo": "org/m", "revision": "r", "hf_config": TINY}, target={"compute_capability": [8, 9], "num_sms": 128, **target},
               workload={"requests": []})
-    return {re.match(r"\w+", k).group() for k in build_program(phi, "step").desc["definitions"]}
+    return {re.findall(r"^\w+", k)[0] for k in build_program(phi, "step").desc["definitions"]}
 
 
 def test_the_selector_binds_the_kernel_the_target_serves():

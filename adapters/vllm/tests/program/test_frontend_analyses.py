@@ -15,7 +15,7 @@ from tests.program.test_running_example import Id16, Relu16, make_program
 from verity_vllm.program.frontend.correspond import _statics_diff, compare_bodies, correspond
 from verity_vllm.program.frontend.provenance import registry_version
 
-TINY = {"model": "tiny", "revision": None, "H": 32, "NL": 2, "NH": 2, "KVH": 1, "D": 16, "I": 32, "V": 64,
+TINY: dict[str, object] = {"model": "tiny", "revision": None, "H": 32, "NL": 2, "NH": 2, "KVH": 1, "D": 16, "I": 32, "V": 64,
         "QKV": 64, "GU": 64, "EPS": 1e-5, "ROPE_THETA": 1e4, "MAX_POS": 8, "BIAS": True, "tie_word_embeddings": True, "profile": {}}
 
 

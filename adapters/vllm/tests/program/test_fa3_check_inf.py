@@ -132,7 +132,7 @@ def test_the_partition_rule_commits_the_running_max_where_the_block_is_unguarded
     for mf, guards in ((2, 0), (0, 4)):
         r = W.unit_rule(W.specialization("Attention_v4", dict(statics, MASKED_FROM=mf)))
         assert r["violations"] == [] and r["max_out_bits"] <= 32
-        heads = {}
+        heads: dict[str, int] = {}
         for i in r["committed_interior"]:
             heads[i["head"]] = heads.get(i["head"], 0) + i["words"]
         assert heads.get("GuardNegInfZero_v1", 0) == guards and heads["F32MulFtz_v1"] == 6

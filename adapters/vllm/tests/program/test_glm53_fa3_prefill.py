@@ -113,7 +113,7 @@ def test_the_kernels_fully_masked_leading_blocks_are_neutral():
 def test_the_twin_refuses_a_tile_hdim_256_does_not_run():
     rng = np.random.default_rng(1)
     q, kc = _bf16(rng, (1, D)), _bf16(rng, (8, 1, D))
-    one = np.ones(1, np.int32)
+    one: np.ndarray = np.ones(1, np.int32)
     for d, bn in ((256, 128), (128, 80)):
         with pytest.raises(ValueError, match="hdim 256 runs kBlockN 80 only"):
             fa3_model.attention_rows(q[:, :d], kc[..., :d], kc[..., :d], 0 * one, 8 * one, one, d ** -0.5, fa2_relation.tables(), kblock_n=bn)

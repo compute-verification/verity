@@ -43,6 +43,7 @@ class _ToyVllmLM(nn.Module):
 @pytest.fixture(scope="module")
 def moved_vllm_meta():
     spec = importlib.util.spec_from_file_location(OLD_PATH, vm.__file__)
+    assert spec is not None and spec.loader is not None
     mod = importlib.util.module_from_spec(spec)
     sys.modules[OLD_PATH] = mod
     try:

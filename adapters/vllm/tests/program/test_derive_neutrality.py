@@ -69,8 +69,12 @@ def _dsa():
     return DSA._derive(model, DSA._inputs(model))
 
 
+def _tp_toy(w: int, r: int):
+    return lambda: tp_toy.derive_rank(w, r)[0]
+
+
 STANDINS = {
-    **{f"tp-toy-w{w}-r{r}": (lambda w=w, r=r: tp_toy.derive_rank(w, r)[0]) for w, r in ((2, 0), (2, 1), (8, 0), (8, 7))},
+    **{f"tp-toy-w{w}-r{r}": _tp_toy(w, r) for w, r in ((2, 0), (2, 1), (8, 0), (8, 7))},
     "dsa-indexer-indexshare-h200": _dsa,
     "moe-experts-fp8-ue8m0-h200": _moe,
     "rmsnorm-6144-h200": lambda: _norm(False),

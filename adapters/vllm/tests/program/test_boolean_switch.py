@@ -214,7 +214,9 @@ def test_a_definition_with_no_boolean_version_is_refused_by_name():
 
 
 def test_derive_refuses_a_call_with_no_boolean_version_by_name():
-    torch = pytest.importorskip("torch")
+    pytest.importorskip("torch")
+    import torch
+
     from verity_vllm.program.frontend.boolean import derived
     from verity_vllm.program.frontend.derive import derive_report
 

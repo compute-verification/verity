@@ -88,7 +88,7 @@ def _routes(m, x) -> list[list[int]]:
 
 def _inputs_with_different_routing(m) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
     """Three inputs whose top-k routes differ pairwise for at least one token (searched, then asserted)."""
-    xs = []
+    xs: list[torch.Tensor] = []
     for seed in range(50):
         x = torch.randn(T, H, generator=torch.Generator().manual_seed(100 + seed)) * 1.5
         if all(_routes(m, x) != _routes(m, y) for y in xs):

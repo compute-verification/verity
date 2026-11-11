@@ -137,7 +137,8 @@ def test_the_pair_forms_gather_the_routed_experts_rows(W: bool) -> None:
     rng = np.random.default_rng(17 + W)
     x, sx, _, _ = _operands(rng, K, G)
     stack = [_operands(rng, K, G, N)[2:] for _ in range(E)]
-    w, ws = sum((s[0] for s in stack), []), sum((s[1] for s in stack), [])
+    w: list[int] = sum((s[0] for s in stack), [])
+    ws: list[int] = sum((s[1] for s in stack), [])
     g = int(np.float32(0.6875).view(np.uint32))
     pair = bind(X.MoeExpertFp8GemmW if W else X.MoeExpertFp8Gemm, E=E, K=K, N=N, G=G, KB=32, SWAP=False, DOT=BW)
     block = bind(M.MoeExpertFp8BlockGemmWV3 if W else M.MoeExpertFp8BlockGemmV3, K=K, N=N, G=G, KB=32, SWAP=False, DOT=BW)

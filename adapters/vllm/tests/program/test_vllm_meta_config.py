@@ -22,7 +22,7 @@ def _engine_args_seen(monkeypatch, **kw) -> dict:
             return seen
 
     stand_in = ModuleType("vllm.engine.arg_utils")
-    stand_in.EngineArgs = EngineArgs
+    stand_in.__dict__["EngineArgs"] = EngineArgs
     monkeypatch.setitem(sys.modules, "vllm.engine.arg_utils", stand_in)
     vm.make_vllm_config(**kw)
     return seen
