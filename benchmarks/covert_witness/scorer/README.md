@@ -141,3 +141,34 @@ lock, so the two never collide.
   there for a GPU slot (slot.py's `slot.json` not `held`), and nothing is launched that would end after `--deadline`
   (its record's GPU seconds plus 5 minutes). A `--smoke` launch checks
   the pipeline and never enters the table.
+
+## Rebuilding the published tables
+
+`replot.py` rebuilds training/algorithm-policy from the scorer's state on its node, with runs' steps traced again as
+layers (its docstring). `restate.py` restates a search record's tokens a step: its docstring says what a record
+states, what reads it and the rule. `correct.sh` is the one command that rebuilds the tables from the stored records
+with every restated record traced again; it runs as a research run's workload on the scorer's node with its inputs
+sent beside it (its header lists them), and publishes nothing:
+
+~~~text
+research run --pool research --on NODE --mem-gb 128 --send scorer/correct.sh --send scorer/restate.py \
+    --send scorer/restate.json --send scorer/replot.py --send scorer/trace40.py --send replot.bundle \
+    --send replot-code.tar --send replot-inputs.tar --send layers.tar --send meta.json \
+    -- bash -c 'TE=COMMIT exec bash "$RESEARCH_RUN_DIR/inputs/correct.sh"'
+~~~
+
+The rules a rebuild follows:
+
+- **A step's tokens.** A step structure whose steps each read one value of every weight, and that has a head forward,
+  states its own head forwards x rows; every other structure keeps the run's factor, the tokens the traced step
+  consumed over the count its record states. The case left at the factor is a step that reads two values of a weight,
+  the validation after the update: the factor counts its batch and its validation windows once each, where forwards x
+  rows would count the windows once per weight value they were read at.
+- **What a build is compared with.** A corrected or as-if build is compared with the published layer's rebuild
+  (`correct.sh`'s `fixed`), never with replot.py's control. The control is the state as the last refresh left it, and
+  the published layer already moves rows against it, so a comparison with the control counts those rows as the
+  build's.
+- **One layer of a te_core tree a state.** Layers traced by one te_core tree share a trace cache's name, so each build
+  is a `replot.py node` on a scratch state of its own.
+- **A run whose restated record does not trace** keeps its record as it is and the published trace of it; `correct.sh`
+  lists those runs.
