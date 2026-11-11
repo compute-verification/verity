@@ -9,10 +9,14 @@ public import Mathlib.Tactic
 # Resolution keeps the width
 
 A reference of a body names a leaf of a parameter or of a node's output, and resolution follows it, activation by
-activation, to the gate that computes it. This module proves what that needs of a type's leaf widths.
+activation, to the gate that computes it. This module proves that the gate is as wide as the leaf.
 
 * `wAt_widths`: the width `Widths.wAt` reads at a leaf of a type is that leaf's entry of the type's widths.
-* `axis_wide`: along an axis of an array, a leaf of a member is as wide as the leaf of the whole it is read from.
+* `resolve_node`: resolution ends at a member of a node of a primitive, in an activation it reaches, and the primitive
+  returns one value as wide as the leaf the reference names. Each step keeps the width of the leaf it names
+  (`step_wide`): going down into a member, by the node's shape (`down_wide`); going up through a parameter, by the
+  shape of the argument it is bound to (`up_wide`, with `axis_wide` for a member along an axis of a batch); and in
+  both, by the widths the body's references keep (`BodyWide`).
 -/
 
 @[expose] public section
@@ -226,5 +230,320 @@ private theorem axis_wide : ∀ (ax : ℕ) (t : Ty) (ln : ℕ) (mt : Ty) (L : �
     simp only [hne, hni, Bool.false_eq_true, ↓reduceIte]
     rw [hdiv, hmod, e1, Nat.add_mul_mod_self_right, Nat.mod_eq_of_lt hA]
     exact ih e ln' inner L hr hd (j % inner.leaves) hr' m hm
+
+/-! ## What a step reads -/
+
+private theorem wAt_value (w j : ℕ) : Widths.wAt (.value w) j = w := by
+  rw [Widths.wAt]
+
+private theorem wAt_array (n : ℕ) (e : Ty) (j : ℕ) (hL : 0 < e.leaves) :
+    Widths.wAt (.array n e) j = Widths.wAt e (j % e.leaves) := by
+  have hne : (e.leaves == 0) = false := by
+    rw [beq_eq_false_iff_ne]; omega
+  rw [Widths.wAt]
+  simp only [hne, Bool.false_eq_true, ↓reduceIte]
+
+private theorem wAt_tuple2 (a b : Ty) (j : ℕ) :
+    Widths.wAt (.tuple #[a, b]) j = if j < a.leaves then Widths.wAt a j else
+      if j < a.leaves + b.leaves then Widths.wAt b (j - a.leaves) else 0 := by
+  rw [Widths.wAt, ← Array.foldl_toList]
+  simp only [List.foldl_cons, List.foldl_nil, Nat.zero_add, Nat.sub_zero]
+  by_cases h1 : j < a.leaves
+  · simp only [h1, ↓reduceIte, Option.getD_some]
+  · simp only [h1, ↓reduceIte]
+    by_cases h2 : j < a.leaves + b.leaves
+    · simp only [h2, ↓reduceIte, Option.getD_some]
+    · simp only [h2, ↓reduceIte, Option.getD_none]
+
+/-- The type a body's sources give a reference in range is the type the reference names. -/
+private theorem src_ty (B : Body) (below : ℕ) (r : Ref) (hp : r.p = true → r.i < B.params.size)
+    (hn : r.p = false → r.i < below ∧ r.i < B.nodes.size) :
+    (srcOf B below).ty? r.p r.i = some (if r.p then (B.params[r.i]!).2 else (B.nodes[r.i]!).out) := by
+  unfold Widths.Src.ty? srcOf
+  cases hrp : r.p
+  · obtain ⟨h1, h2⟩ := hn hrp
+    simp only [Bool.false_eq_true, ↓reduceIte, h1]
+    rw [Array.getElem?_map, getElem?_pos B.nodes r.i h2, getElem!_pos B.nodes r.i h2]
+    rfl
+  · have h1 := hp hrp
+    simp only [↓reduceIte]
+    rw [Array.getElem?_map, getElem?_pos B.params r.i h1, getElem!_pos B.params r.i h1]
+    rfl
+
+/-- A reference of a sequence that keeps the widths names a leaf as wide as the leaf it is read as. -/
+private theorem seq_wide (P : Prog) (d : ℕ) (sc : Scope) (hd : sc.d = d) (below : ℕ) (t : Ty) (seq : Seq)
+    (hbelow : below ≤ (P.defs[d]!).body.nodes.size) (hw : SeqWide (srcOf (P.defs[d]!).body below) t seq) (j : ℕ)
+    (hj : j < seq.count) (hr : RefOk P d below (seq.get j)) :
+    Widths.wAt (tyOf P sc (seq.get j)) (seq.get j).j = Widths.wAt t j := by
+  subst hd
+  exact hw j hj _
+    (src_ty _ below _ (fun h => (hr.1 h).1) (fun h => ⟨(hr.2 h).1, Nat.lt_of_lt_of_le (hr.2 h).1 hbelow⟩))
+
+/-! ## Resolution keeps the width -/
+
+/-- **Down from a node's leaf.** The step ends at a member of the node, of a primitive that returns one value as wide
+as the leaf, or goes into a member, at a leaf of its return as wide as the leaf. -/
+private theorem down_wide (P : Prog) (hB : ∀ sc, Good P sc → BodyOk P sc.d)
+    (hD : ∀ d < P.defs.size, BodiesOk.DefOk P.defs d P.defs[d]!)
+    (hW : ∀ d < P.defs.size, (P.defs[d]!).prim = false →
+      (P.defs[d]!).body.retType = (P.defs[d]!).ret ∧ BodyWide (P.defs[d]!).body)
+    (sc : Scope) (hg : Good P sc) (hd : sc.d < P.defs.size) (i j : ℕ) (hi : i < (P.defs[sc.d]!).body.nodes.size)
+    (hj : j < ((P.defs[sc.d]!).body.nodes[i]!).out.leaves) (x) (h : resolveStep P (sc, ⟨false, i, j⟩) = .ok x) :
+    (∃ m, x = .inl (sc.off + (P.defs[sc.d]!).body.offsets[i]! + m) ∧
+      (P.defs[((P.defs[sc.d]!).body.nodes[i]!).fn]!).prim = true ∧ m < ((P.defs[sc.d]!).body.nodes[i]!).members ∧
+      (P.defs[((P.defs[sc.d]!).body.nodes[i]!).fn]!).ret =
+        .value (Widths.wAt ((P.defs[sc.d]!).body.nodes[i]!).out j)) ∨
+    ∃ s', x = .inr s' ∧
+      Widths.wAt (tyOf P s'.1 s'.2) s'.2.j = Widths.wAt ((P.defs[sc.d]!).body.nodes[i]!).out j := by
+  obtain ⟨hfn, -, -, hdown, -⟩ := (hB sc hg).1 i hi
+  have hdn := hdown j hj
+  obtain ⟨-, ⟨-, -, hprim, hcomp, hshape, -⟩, -⟩ := (hD sc.d hd).2.1 i hi
+  obtain ⟨hcp, hcc⟩ := (hD _ hfn).1
+  have hret := (hD _ hfn).2.2.1
+  rcases hf : ((P.defs[sc.d]!).body.nodes[i]!).form
+  · rw [Resolve.rs_prim P sc i j hf] at h
+    cases h
+    simp only [hf, BodiesOk.Shape] at hshape
+    obtain ⟨-, -, -, w, hw⟩ := hcp (hprim hf)
+    refine Or.inl ⟨0, rfl, hprim hf, by rw [Resolve.prim_members _ (Or.inl hf)]; omega, ?_⟩
+    rw [hshape.1, hw, wAt_value]
+  · rw [Resolve.rs_call P sc i j hf] at h
+    cases h
+    simp only [hf] at hdn
+    simp only [hf, BodiesOk.Shape] at hshape
+    obtain ⟨hrt, hbw⟩ := hW _ hfn hdn.1
+    refine Or.inr ⟨_, rfl, ?_⟩
+    dsimp only
+    refine Eq.trans (seq_wide P ((P.defs[sc.d]!).body.nodes[i]!).fn _ rfl _ _ _ (Nat.le_refl _) hbw.2 j hdn.2
+      (hret j hdn.2)) ?_
+    rw [hrt, hshape.1]
+  · rw [Resolve.rs_batch P sc i j hf] at h
+    simp only [hf] at hdn
+    simp only [hf, BodiesOk.Shape] at hshape
+    obtain ⟨hm, -, hrc⟩ := hdn
+    by_cases hcp' : (P.defs[((P.defs[sc.d]!).body.nodes[i]!).fn]!).prim = true
+    · simp only [hcp', ite_true] at h
+      cases h
+      obtain ⟨-, -, -, w, hw⟩ := hcp hcp'
+      refine Or.inl ⟨_, rfl, hcp', by rw [Resolve.bs_members _ (Or.inl hf)]; exact hm, ?_⟩
+      rw [hshape.1, hw, wAt_array _ _ _ (by rw [BodiesOk.leaves_value]; omega), wAt_value]
+    · simp only [hcp', Bool.false_eq_true, ite_false] at h
+      cases h
+      have hcp'' := Bool.eq_false_of_ne_true hcp'
+      obtain ⟨-, -, hol⟩ := hcc hcp''
+      obtain ⟨hrt, hbw⟩ := hW _ hfn hcp''
+      have hLpos : 0 < (P.defs[((P.defs[sc.d]!).body.nodes[i]!).fn]!).ret.leaves := by
+        rw [hshape.1, BodiesOk.leaves_array] at hj
+        rcases Nat.eq_zero_or_pos (P.defs[((P.defs[sc.d]!).body.nodes[i]!).fn]!).ret.leaves with h0 | h0
+        · rw [h0] at hj; omega
+        · exact h0
+      refine Or.inr ⟨_, rfl, ?_⟩
+      dsimp only
+      refine Eq.trans (seq_wide P ((P.defs[sc.d]!).body.nodes[i]!).fn _ rfl _ _ _ (Nat.le_refl _) hbw.2 _
+        (hrc hcp'') (hret _ (hrc hcp''))) ?_
+      rw [hrt, hshape.1, wAt_array _ _ _ hLpos, hol]
+  · simp only [hf, BodiesOk.Shape] at hshape
+    obtain ⟨carry, y, hcr, hout, -, -, -⟩ := hshape
+    have hcp'' := hcomp (Or.inr hf)
+    by_cases hn : ((P.defs[sc.d]!).body.nodes[i]!).n = 0
+    · exact absurd h (Resolve.rs_scan0 P sc i j x hf hn)
+    rw [Resolve.rs_scan P sc i j carry y hf hn hcr] at h
+    cases h
+    obtain ⟨-, hrcount, -⟩ := hcc hcp''
+    obtain ⟨hrt, hbw⟩ := hW _ hfn hcp''
+    rw [hout, BodiesOk.leaves_tuple2, BodiesOk.leaves_array] at hj
+    rw [hcr, BodiesOk.leaves_tuple2] at hrcount
+    refine Or.inr ⟨_, rfl, ?_⟩
+    dsimp only
+    by_cases hjc : j < carry.leaves
+    · simp only [hjc, ↓reduceIte]
+      refine Eq.trans (seq_wide P ((P.defs[sc.d]!).body.nodes[i]!).fn _ rfl _ _ _ (Nat.le_refl _) hbw.2 j
+        (by omega) (hret j (by omega))) ?_
+      rw [hrt, hcr, hout, wAt_tuple2, wAt_tuple2]
+      simp only [hjc, ↓reduceIte]
+    · have hy : 0 < y.leaves := by
+        rcases Nat.eq_zero_or_pos y.leaves with h0 | h0
+        · rw [h0] at hj; omega
+        · exact h0
+      have hmod := Nat.mod_lt (j - carry.leaves) hy
+      have h1 : ¬ carry.leaves + (j - carry.leaves) % y.leaves < carry.leaves := by omega
+      have h2 : carry.leaves + (j - carry.leaves) % y.leaves < carry.leaves + y.leaves := by omega
+      have h3 : j < carry.leaves + (Ty.array ((P.defs[sc.d]!).body.nodes[i]!).n y).leaves := by
+        rw [BodiesOk.leaves_array]; exact hj
+      simp only [hjc, ↓reduceIte]
+      refine Eq.trans (seq_wide P ((P.defs[sc.d]!).body.nodes[i]!).fn _ rfl _ _ _ (Nat.le_refl _) hbw.2 _
+        (by omega) (hret _ (by omega))) ?_
+      rw [hrt, hcr, hout, wAt_tuple2, wAt_tuple2]
+      simp only [h1, h2, h3, hjc, ↓reduceIte]
+      rw [wAt_array _ _ _ hy, Nat.add_sub_cancel_left]
+
+/-- **Up through a parameter's leaf.** The step goes to the parent, at a leaf of the argument the parameter is bound
+to, or to the member before, at a leaf of its return; either is as wide as the parameter's leaf. -/
+private theorem up_wide (P : Prog) (hroot : P.root < P.defs.size ∧ (P.defs[P.root]!).prim = false)
+    (hB : ∀ sc, Good P sc → BodyOk P sc.d) (hD : ∀ d < P.defs.size, BodiesOk.DefOk P.defs d P.defs[d]!)
+    (hW : ∀ d < P.defs.size, (P.defs[d]!).prim = false →
+      (P.defs[d]!).body.retType = (P.defs[d]!).ret ∧ BodyWide (P.defs[d]!).body)
+    (parent : Scope) (d off k m i j : ℕ) (hg : Good P (.child parent d off k m))
+    (hi : i < (P.defs[d]!).body.params.size) (hj : j < ((P.defs[d]!).body.params[i]!).2.leaves) (x)
+    (h : resolveStep P (.child parent d off k m, ⟨true, i, j⟩) = .ok x) :
+    ∃ s', x = .inr s' ∧
+      Widths.wAt (tyOf P s'.1 s'.2) s'.2.j = Widths.wAt ((P.defs[d]!).body.params[i]!).2 j := by
+  have hdd : d < P.defs.size := (Resolve.good_d P hroot hB _ hg).1
+  unfold Good at hg
+  obtain ⟨hp, hk, hfn, hc, hm, -⟩ := hg
+  obtain ⟨hpd, hpp⟩ := Resolve.good_d P hroot hB parent hp
+  obtain ⟨-, hargs, hup, -, -⟩ := (hB parent hp).1 k hk
+  rw [hfn] at hup
+  have hu := hup i hi j hj m hm
+  obtain ⟨-, ⟨hsz, -, -, -, hshape, -⟩, -⟩ := (hD parent.d hpd).2.1 k hk
+  rw [hfn] at hsz hshape
+  obtain ⟨hpar, -, -⟩ := (hD d hdd).1.2 hc
+  obtain ⟨hrt, hbwd⟩ := hW d hdd hc
+  have hret := (hD d hdd).2.2.1
+  have hia : i < ((P.defs[parent.d]!).body.nodes[k]!).args.size := by
+    rw [hsz, ← hpar]; exact hi
+  have hsw := (hW parent.d hpd hpp).2.1 k hk i hia
+  have harg : ∀ t, t < (((P.defs[parent.d]!).body.nodes[k]!).args[i]!).seq.count →
+      Widths.wAt (tyOf P parent ((((P.defs[parent.d]!).body.nodes[k]!).args[i]!).seq.get t))
+          ((((P.defs[parent.d]!).body.nodes[k]!).args[i]!).seq.get t).j =
+        Widths.wAt (((P.defs[parent.d]!).body.nodes[k]!).args[i]!).ty t :=
+    fun t ht => seq_wide P parent.d parent rfl k _ _ (Nat.le_of_lt hk) hsw t ht (hargs i t ht)
+  rw [hpar] at hj ⊢
+  rcases hf : ((P.defs[parent.d]!).body.nodes[k]!).form
+  · simp only [hf] at hu
+    simp only [hf, BodiesOk.Shape] at hshape
+    rw [Resolve.rs_up P parent d off k m i j (Or.inl hf)] at h
+    cases h
+    refine ⟨_, rfl, ?_⟩
+    dsimp only
+    rw [harg j hu, hshape.2 i hia]
+  · simp only [hf] at hu
+    simp only [hf, BodiesOk.Shape] at hshape
+    rw [Resolve.rs_up P parent d off k m i j (Or.inr hf)] at h
+    cases h
+    refine ⟨_, rfl, ?_⟩
+    dsimp only
+    rw [harg j hu, hshape.2 i hia]
+  · simp only [hf] at hu
+    simp only [hf, BodiesOk.Shape] at hshape
+    rw [Resolve.rs_up_batch P parent d off k m i j hf, Resolve.memberRef_eq] at h
+    cases h
+    refine ⟨_, rfl, ?_⟩
+    dsimp only
+    rw [harg _ hu]
+    rcases hshape.2 i hia with ⟨hdn, hty⟩ | ⟨ax, mt, hrem, hmt, hdims⟩
+    · have hidx : Resolve.memberIdx (((P.defs[parent.d]!).body.nodes[k]!).args[i]!) m j = j := by
+        simp only [Resolve.memberIdx, hdn]
+      rw [hidx, hty]
+    · obtain ⟨L, hax, -, -, -⟩ := BodiesOk.axis_spec ax _ _ mt hrem
+      have hidx : Resolve.memberIdx (((P.defs[parent.d]!).body.nodes[k]!).args[i]!) m j =
+          (j / L * ((P.defs[parent.d]!).body.nodes[k]!).n + m) * L + j % L := by
+        simp only [Resolve.memberIdx, hdims, hax]
+      rw [hidx, axis_wide ax _ _ mt L hrem hax j (by rw [hmt]; exact hj) m
+        (by rw [← Resolve.bs_members _ (Or.inl hf)]; exact hm), hmt]
+  · simp only [hf] at hu
+    simp only [hf, BodiesOk.Shape] at hshape
+    obtain ⟨carry, y, hcr, -, hp0, ha0, hrest⟩ := hshape
+    by_cases hi0 : i = 0
+    · subst hi0
+      simp only [ite_true] at hu
+      rw [Resolve.rs_up_scan0 P parent d off k m j hf] at h
+      rw [hp0] at hj ⊢
+      by_cases hm0 : m = 0
+      · subst hm0
+        simp only [ite_true] at hu h
+        cases h
+        refine ⟨_, rfl, ?_⟩
+        dsimp only
+        rw [harg j hu, ha0]
+      · simp only [hm0, ite_false] at hu h
+        cases h
+        refine ⟨_, rfl, ?_⟩
+        dsimp only
+        refine Eq.trans (seq_wide P d _ rfl _ _ _ (Nat.le_refl _) hbwd.2 j hu (hret j hu)) ?_
+        rw [hrt, hcr, wAt_tuple2]
+        simp only [hj, ↓reduceIte]
+    · simp only [hi0, ite_false] at hu
+      rw [Resolve.rs_up_scan P parent d off k m i j hi0 hf] at h
+      cases h
+      refine ⟨_, rfl, ?_⟩
+      dsimp only
+      obtain ⟨hxs, hnx⟩ := hrest i hia hi0
+      by_cases hx : i ≤ ((P.defs[parent.d]!).body.nodes[k]!).nxs
+      · obtain ⟨e, hety, hep, hdims⟩ := hxs hx
+        simp only [hx, ite_true, hdims, Option.map_some, Option.getD_some] at hu ⊢
+        rw [← hep] at hj ⊢
+        rw [harg _ hu, hety, wAt_array _ _ _ (by omega), Nat.add_comm, Nat.add_mul_mod_self_right,
+          Nat.mod_eq_of_lt hj]
+      · simp only [hx, ite_false] at hu ⊢
+        rw [harg j hu, hnx hx]
+
+/-- **One step of resolution keeps the width.** From a state that resolves below a bound, a step ends at a member of
+a node of the activation, of a primitive that returns one value as wide as the leaf the state names, or it moves to a
+state that names a leaf as wide. -/
+private theorem step_wide (P : Prog) (hroot : P.root < P.defs.size ∧ (P.defs[P.root]!).prim = false)
+    (hB : ∀ sc, Good P sc → BodyOk P sc.d) (hD : ∀ d < P.defs.size, BodiesOk.DefOk P.defs d P.defs[d]!)
+    (hW : ∀ d < P.defs.size, (P.defs[d]!).prim = false →
+      (P.defs[d]!).body.retType = (P.defs[d]!).ret ∧ BodyWide (P.defs[d]!).body)
+    (B : ℕ) (s : Scope × Ref) (x) (hs : Resolve.Inv P B s) (h : resolveStep P s = .ok x) :
+    (∀ g, x = .inl g → ∃ k m, k < (P.defs[s.1.d]!).body.nodes.size ∧
+      (P.defs[((P.defs[s.1.d]!).body.nodes[k]!).fn]!).prim = true ∧
+      m < ((P.defs[s.1.d]!).body.nodes[k]!).members ∧ g = s.1.off + (P.defs[s.1.d]!).body.offsets[k]! + m ∧
+      (P.defs[((P.defs[s.1.d]!).body.nodes[k]!).fn]!).ret = .value (Widths.wAt (tyOf P s.1 s.2) s.2.j)) ∧
+    (∀ s', x = .inr s' → Widths.wAt (tyOf P s'.1 s'.2) s'.2.j = Widths.wAt (tyOf P s.1 s.2) s.2.j) := by
+  obtain ⟨sc, ⟨p, i, j⟩⟩ := s
+  obtain ⟨hg, hr, -, -⟩ := hs
+  dsimp only at hg hr ⊢
+  cases p
+  · have hi : i < (P.defs[sc.d]!).body.nodes.size := (hr.2 rfl).1
+    have hj : j < ((P.defs[sc.d]!).body.nodes[i]!).out.leaves := (hr.2 rfl).2
+    have hty : tyOf P sc ⟨false, i, j⟩ = ((P.defs[sc.d]!).body.nodes[i]!).out := rfl
+    rw [hty]
+    rcases down_wide P hB hD hW sc hg (Resolve.good_d P hroot hB sc hg).1 i j hi hj x h with
+      ⟨m, rfl, hp, hm, hw⟩ | ⟨s', rfl, hw⟩
+    · exact ⟨fun g hg' => by cases hg'; exact ⟨i, m, hi, hp, hm, rfl, hw⟩, fun s' hs' => by cases hs'⟩
+    · exact ⟨fun g hg' => (by cases hg'), fun s'' hs' => by cases hs'; exact hw⟩
+  · rcases sc with ⟨d, off, st⟩ | ⟨parent, d, off, k, m⟩
+    · unfold Good at hg
+      obtain ⟨-, -, rfl⟩ := hg
+      exact absurd h (Resolve.rs_top P d off i j x)
+    · simp only [Scope.d.eq_2] at hr
+      have hi : i < (P.defs[d]!).body.params.size := (hr.1 rfl).1
+      have hj : j < ((P.defs[d]!).body.params[i]!).2.leaves := (hr.1 rfl).2
+      have hty : tyOf P (.child parent d off k m) ⟨true, i, j⟩ = ((P.defs[d]!).body.params[i]!).2 := rfl
+      rw [hty]
+      obtain ⟨s', rfl, hw⟩ := up_wide P hroot hB hD hW parent d off k m i j hg hi hj x h
+      exact ⟨fun g hg' => (by cases hg'), fun s'' hs' => by cases hs'; exact hw⟩
+
+/-- **Where resolution ends**: at a member of a node of a primitive, in an activation resolution reaches, whose
+primitive returns one value as wide as the leaf the reference names. -/
+theorem resolve_node (P : Prog) (hroot : P.root < P.defs.size ∧ (P.defs[P.root]!).prim = false)
+    (hB : ∀ sc, Good P sc → BodyOk P sc.d) (hL : ∀ d < P.defs.size, Walk.LaidOut P d)
+    (hD : ∀ d < P.defs.size, BodiesOk.DefOk P.defs d P.defs[d]!)
+    (hW : ∀ d < P.defs.size, (P.defs[d]!).prim = false →
+      (P.defs[d]!).body.retType = (P.defs[d]!).ret ∧ BodyWide (P.defs[d]!).body)
+    (sc : Scope) (hsc : Good P sc) (r : Ref) (hr : RefOk P sc.d (P.defs[sc.d]!).body.nodes.size r) (g : ℕ)
+    (h : resolve P sc r = .ok g) :
+    ∃ sc' k m, Good P sc' ∧ k < (P.defs[sc'.d]!).body.nodes.size ∧
+      (P.defs[((P.defs[sc'.d]!).body.nodes[k]!).fn]!).prim = true ∧
+      m < ((P.defs[sc'.d]!).body.nodes[k]!).members ∧ g = sc'.off + (P.defs[sc'.d]!).body.offsets[k]! + m ∧
+      (P.defs[((P.defs[sc'.d]!).body.nodes[k]!).fn]!).ret = .value (Widths.wAt (tyOf P sc r) r.j) := by
+  have hinv : Resolve.Inv P (sc.off + (P.defs[sc.d]!).body.offsets[r.i + 1]!) (sc, r) := by
+    unfold Resolve.Inv
+    exact ⟨hsc, hr, fun _ => Nat.le_add_right _ _, fun _ => Nat.le_refl _⟩
+  exact DescAgree.run_inv "scope resolution" (resolveStep P)
+    (fun s => Resolve.Inv P (sc.off + (P.defs[sc.d]!).body.offsets[r.i + 1]!) s ∧
+      Widths.wAt (tyOf P s.1 s.2) s.2.j = Widths.wAt (tyOf P sc r) r.j)
+    (fun g => ∃ sc' k m, Good P sc' ∧ k < (P.defs[sc'.d]!).body.nodes.size ∧
+      (P.defs[((P.defs[sc'.d]!).body.nodes[k]!).fn]!).prim = true ∧
+      m < ((P.defs[sc'.d]!).body.nodes[k]!).members ∧ g = sc'.off + (P.defs[sc'.d]!).body.offsets[k]! + m ∧
+      (P.defs[((P.defs[sc'.d]!).body.nodes[k]!).fn]!).ret = .value (Widths.wAt (tyOf P sc r) r.j))
+    (fun s g hs hx => by
+      obtain ⟨k, m, hk, hp, hm, hgg, hw⟩ := (step_wide P hroot hB hD hW _ s _ hs.1 hx).1 g rfl
+      rw [hs.2] at hw
+      exact ⟨s.1, k, m, hs.1.1, hk, hp, hm, hgg, hw⟩)
+    (fun s s' hs hx => ⟨(Resolve.step_ok P hroot hB hL _ s _ hs.1 hx).2 s' rfl,
+      ((step_wide P hroot hB hD hW _ s _ hs.1 hx).2 s' rfl).trans hs.2⟩)
+    _ _ _ ⟨hinv, rfl⟩ h
 
 end NciCheck.Properties.SecurityProofs.LeafWidths
