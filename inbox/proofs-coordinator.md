@@ -43720,3 +43720,50 @@ For the table:
 - The certifier's part, modeled on an assumed 4,096-id class, world year: 57,785,000 GB as charged today (`verity bench certifier_term --world-requests 1.778e16` at #8579's head, row `scan`; no command on `main`); 0 GB plus 74 GB per failure in a million "designed, not built" (row `lengths`), which needs the stop block sampled on the served Program, #8690, #8702 and the period statement.
 - Until a served audit draws a stop block, the output count stays the server's choice: 28,892,500 GB a world year at 13 bits (24,447,500 at the plan's 1,024 class); #8779's sums of 14,229 GB leave it out. Once sampled it is at most 0.11 GB a world year (modeled).
 - The stop block: #8869 open, unmarked, waiting on circuits (CIR-235) and its quick tier; 11.03 ms a block on 36 CPU cores (measured, `r20261111-080733-44ce`); no priced term moves.
+
+## FLOCKPKG, Wed 11 Nov 08:58Z: #8789 is not ready yet (41 of the head's 96 suites passed, none failed, records still building); the first steady kind is measured: `ScaledMm{K=2048,N=4}` costs Lean 7.0 s once a `verify` and 6.4 s a session
+
+**#8789 at `d68de9e61acd0edaeb42d79cf5740f6bc29f71b9`** [run: `research fetch --all` of each run, 08:55Z].
+
+- Passed at the head: `r20261111-080040-bfb1` (16 suites), piece B `r20261111-082504-a017` (9 suites, rc 0), piece D `r20261111-082556-d84b` (9 suites, rc 0). Running: piece A `r20261111-082449-bd5d` (`verity-vllm`, 30 min in), C `r20261111-082532-6589` (3 of 9 passed), E `r20261111-082609-9a53` (4 of 26 passed). Piece F `r20261111-082622-5b6a` (26 suites) still waits for a check slot on vy-nebius-cpu-8. No suite has failed in any run.
+- Records run `r20261111-075756-c476`: the composition passed; `security` is still building.
+- The head merges clean with `origin/main` `8201dacff26e` [run: `git merge-tree --write-tree`, no conflict line; the head is 596 commits behind `main` and 46 ahead].
+- I push nothing to the head. The ready line follows the minute A, C, E, F and `c476` are in.
+
+**Lean verifier, measured** [run: `r20261111-082024-2fd1`, done rc 0; source `c6cadd0e325f`, one pinned core, cpu = wall]. `census:ScaledMmFp8BlockSharedScale_v1{K=2048,N=4,G=128}` (2,197,084 ANDs, 77.3 million matrix entries, 0.64 GB of circuit text, pin `e1716a9151da13f5` as staged for the steady row), a `--zk` session proved by the CPU prover on the first N of the full statement's 2,048 blocks:
+
+| Blocks | Read (once a `verify`) | Session (setup and check) | of it setup | Peak |
+|---|---|---|---|---|
+| 1 | 7.01 s | 6.40 s | 0.20 s | 2.7 GiB |
+| 2 | 7.00 s | 6.70 s | 0.20 s | 2.7 GiB |
+| 4 | 7.06 s | 6.55 s | 0.20 s | 2.7 GiB |
+| 16 | 7.05 s | 6.81 s | 0.27 s | 2.7 GiB |
+
+- **The seconds barely grow with blocks**: 6.40 s at 1 block and 6.81 s at 16, so at most 0.03 s a block in this range. `r20261111-085125-31b6` measures 64, 256 and 1,024 blocks for the slope.
+- **`main`'s verifier is the same speed**: built from `main` `8201dacff26e`, it reads 7.00 s and checks 6.42 s on the 1-block session.
+- **Where the read goes** (flock-read's phases on the same file): SHA-512 of the file 1.3 s, UTF-8 and line split 2.0 s, parsing the three nets 2.8 s, the class 1.7 s. **Where the check goes**: one fold over the matrix is 2.7 s and there are two (one a repetition), so 5.5 of the 6.2 s.
+- **Profile of one whole `verify`** (perf, 99 Hz): SHA-512 18.9%, `Sparse.foldRow` 12.5%, `F128.mulW` 6.7%, number scan 4.7%, allocation and reference counts about 19% (`lean_dec_ref_cold`, `mi_malloc_small`, `mi_free`, `lean_array_push`, `lean_byte_array_push`).
+- Every verdict is `refused` for want of `--program`, after every check ran: stage.py's census statements bind no Program [read: the VERDICT lines].
+
+**Running for the 10:30Z entry** [run]:
+
+- Head block: `r20261111-081919-d4ef` (`FIRST=false`, staging since 08:27Z, about 75 min) and `r20261111-081959-e3ed` (`FIRST=true`, got its memory at 08:47Z).
+- Other steady kinds, 1, 16 and 128 blocks each: `r20261111-085135-5b01` (`ScaledMm{K=6144,N=4}`), `r20261111-085146-fd98` (`MoeExpertFp8ReadGemm{H=3072,K=6144}`), `r20261111-085214-593c` (`MoeExpertFp8ReadGemmW{H=4096,K=256,N=32}`). With the head block these five kinds are 91% of a token's proving seconds at the steady prices [run: `bench_prices.json` of `r20261111-065519-e0bd`, all blocks proved].
+
+**The PR.** My reading so far, to be confirmed on the head block:
+
+- **No cut in the verifier's code is small tonight.** The read's and the fold's functions have statements in the properties tree, so each needs a `security` records run, which takes over an hour on tonight's nodes.
+- **The cut that costs no verifier code is the caller's:** one `verify` for all sessions of one circuit, which pays the read once. `server_rate.py`'s Lean pass starts one `verify` a session today [read: `benchmarks/one_stage/server_rate.py` 180 to 197 on `main`], so its measured seconds a statement carry the read every time. That file has two open PRs (#8679 kernels', #8771 ours), so I do not touch it.
+- **The head block's seconds reach the number through BREAKEVEN's `V_MEASURED`** (`breakeven/headline.py`, #8853), not through the `verifier_cost` card, whose column the headline does not read for this type. So I open no card PR and hand the two numbers in `For BREAKEVEN:`.
+- **What I can open unmarked by 12:00Z** is the runner in `benchmarks/verifier_cost/` that produced these numbers (stage a census type, prove its first N blocks, time one pinned `verify`), so the measured label points at a command in the tree. It is not a cut. Say if you would rather not have it.
+
+**Left:** #8789's ready line; (B) #8814 and M6's crossing after it; the head block's seconds (10:30Z); the three other kinds; each cut's size on the head; the runner PR.
+
+For the table:
+- #8789: not ready. 34 of 96 suites passed at the head in three finished runs, 7 more in running ones, 0 failed; records `c476` running.
+- Lean verifier, `ScaledMm{K=2048,N=4}`: 7.0 s read once a `verify`, 6.4 s a session, at most 0.03 s a block up to 16 blocks (measured, `r20261111-082024-2fd1`).
+
+For BREAKEVEN:
+- `ScaledMmFp8BlockSharedScale_v1{K=2048,N=4,G=128}`, flat, `verify --zk`, one core, measured (`r20261111-082024-2fd1`): 7.0 core-seconds once a `verify` (the circuit read), plus 6.4 core-seconds a statement, plus at most 0.03 core-seconds a block (1 to 16 blocks; `31b6` firms the slope up to 1,024).
+- A caller that hands one `verify` B statements of one circuit pays `7.0/B + 6.4` a statement. Today's measured rows pay `7.0 + 6.4`.
+- The head block: nothing yet (assumed until `d4ef`).
