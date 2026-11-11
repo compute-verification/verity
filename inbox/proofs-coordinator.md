@@ -39320,3 +39320,68 @@ shows each PR at the head below `[run]`.
   records runs by about 06:30Z `[guess]`, from what the first list's took.
 - At the five first heads, read 05:20Z `[run]`: the four records runs still out (`c513`, `b16d`, `67ce`, `57e5`) and the two
   quick tiers (`3741`: 6 of its 8 suites passed so far; `5ab4`) are running, nothing failed.
+
+## FLOCKPKG, Wed 11 Nov 05:23Z: #8789 at `0d860c581fbd` waits only on its quick tier (`97a1`, cpu-11, in line; about 08:15Z); the keys are equal, so none of the eleven is launched; (B) is #8814, open and unmarked
+
+Resumed after the 04:31Z stop. Times from `date -u`. [run] is a command or run of mine, [read] its fetched output or a file, [guess] neither.
+
+**1. Not ready to mark yet. #8789 waits on one run.**
+
+- **Head:** `0d860c581fbdd68d1775b23a9b9c5a0b5bfed77e`, pushed 05:06Z [run]. It is `1f59c474be01` plus the pins commit: the three Lean vector fixtures as `fab3` wrote them. It holds `main`'s tip `5c095bb4ab70` [run: `git merge-base --is-ancestor`, 05:09Z; `git ls-remote`, 05:22Z].
+- **What it waits on:** `r20261111-050928-97a1`, `suites.py --changed 5c095bb4ab70 --quick` at `0d860c581fbd`, cpu-11, launched 05:09Z, not started at 05:22Z [read]. cpu-11's slots are blocked on memory that Lean runs reserve, with two runs ahead of mine [read: its slot log]. **ETA about 08:15Z** [guess: a start near 05:50Z, then `f129`'s 140 min]. The earlier guess was 06:15Z.
+- **Why one run at this head and not `3071` plus a small one:** `3071` (at `1f59c474be01`, cpu-7) had not started in 40 min; cpu-7's memory is reserved past its line [read]. I cancelled it by id and launched `97a1` at the pins commit, so the quick tier is at the head and covers the suites that read the three fixtures.
+- **Then:** a fix commit for each failure it shows, its verdict in #8789's body, and the line "ready to mark #8789 at <full sha>". If a fix touches a Lean input, the keys below change and I say which run is needed again.
+
+**2. The eleven locks without a guarantee: all keys equal, none launched** [run: `lean_changed.py --inputs-key PKG... --head SHA`, at `0d860c581fbd` and at `85a21e2b69`, the commit `5b02` checked (its `job.json`; tree `3c9e5695ecc5`)].
+
+| package | key at `0d860c581fbd` | at `85a21e2b69` | `5b02`'s line for it [read] |
+|---|---|---|---|
+| `verity/commitments/attest/lean` | `5ba2616e6fc8` | equal | PASS, 103 declarations |
+| `verity/commitments/identity` | `e987c1b61352` | equal | PASS, 379 |
+| `verity/commitments/lean` | `2f03c1aba81e` | equal | PASS, 296 |
+| `verity/commitments/lms/lean` | `8be639e2a5ba` | equal | PASS, 162 |
+| `verity/definitions/evaluate` | `1c66417394c4` | equal | PASS, 993 |
+| `verity/definitions/requirement` | `b349b9fbea2a` | equal | PASS, 165 |
+| `verity/difftest/lean` | `0b77cb487f91` | equal | PASS, 49 |
+| `verity/protocols/inference_only/verifier/nci/lean` | `e334883945d7` | equal | PASS |
+| `verity/protocols/interface` | `e9b9f7832891` | equal | PASS, 1694 |
+| `verity/protocols/recursion/verifier/firewall` | `5f7aceb46c4b` | equal | PASS |
+| `verity/protocols/remote/verifier/composition` | `c24857123594` | equal | PASS |
+
+- The other six of the 17 changed locks are equal at both commits too, and at `1f59c474be01` [run]. Their records runs, by key:
+  - `r20261111-013519-eb3d` (rc 0, `"outcome": "pass"`): `verity/circuits/base` `9cbb354e10f3`, Flock's verifier `3b60b9ba4904`, the network check `5e826f557f90`, `security` `8e5c96900854`, `security/Properties` `61f7bfc84e4d` [read].
+  - **`r20261111-040434-b4d1` ended rc 0, `"outcome": "pass"`, nothing regenerated** (at `631e3d733ce7`, kind `lean-fast/v1`): `verity/circuits/lean` `64247d2b5c9e` and the same four requirers again; `security/Proofs` built and passed inside it [read: its `result.json` and OUTCOME line]. So no lock commit.
+- The table and this sentence are in #8789's body [run: `research queue edit 8789`, 05:21Z].
+- No guarantee record differs from `main`'s at the head: 1,555 records in the 17 locks, 0 gone, 0 new, 0 changed [run: Python `==` on the parsed locks against `5c095bb4ab70`].
+
+**3. (B) is #8814, open, unmarked, no run of it** [run: `research queue open`, 05:16Z].
+
+- Branch `cursor/proofs-flockpkg-layers-4c7e` at `46df1f88f31e4df63040cff6f92b315814e047cd`: one commit on #8789's head, five lock files, no Lean, lakefile or test.
+- `layers` in `core_base` (`Base` imports `Base`, `Lean.Data.Json`, `Std.Data.TreeMap`: lean's list, and today's import lines fit it [run: `grep`]); `Base` out of `reads_exempt` in the four locks; `Base` into the network lock's `meaning` (the other three hold it since the cut).
+- **The network lock is `8722`'s, carried by a script in minutes:** equal to the lock `8722` wrote in every section but `runs`, whose prose names one file by its moved path [run: Python `==`]. Its `reads` gain `Base.Bytes` (2 definitions) and `Base.Canon` (5). The four guarantee records are equal to before and to `main`'s.
+- The seven values hold on this tree [run]: `security`'s and the properties tree's locks record the same seven definitions with the same values, and each module record's digest is `check.py`'s `module_digest` of its definitions.
+- Its body has the four records' old and new values, the two module records, and says its own records run follows after #8789 is ready to mark. **What that run should show** [guess, from reading `spec_reads`]: nothing to regenerate in Flock's, `security`'s or the properties tree's lock, since `Base` is under their `meaning` already.
+- For your line to network-accounting: their lock's four records keep every field; its `reads` section gains seven definitions for two of them (`evidenceOf_toEvidence` all seven, `unhex_eq` two).
+
+**4. CI-524's three numbers, at `0d860c581fbd`** [run: `git cat-file -s`, `grep -c`].
+
+- `security/lean-audit.json`: 4,176,070 bytes (under 4,194,304); `Security/` on 6 lines, the same six lines as `main`'s [run: `diff`]; 0 lines naming `verity/core/`, `verity/ml/`, `benchmarks/nci/` or `integrations/vllm`.
+- The other 16 changed locks: 0 and 0 each; the largest is the properties tree's, 1,753,782 bytes.
+- No file the cut adds or changes is over 4,194,304 bytes [run].
+- On #8814's head: `security/lean-audit.json` 4,175,847 bytes, 6, 0; its other four locks 0 and 0.
+- Outside the locks, three lines the diff against `main` adds name a retired path. All three are `main`'s own text: one row of `verity/README.md` that `main` has too, and one comment line each in `Base/JsonParse.lean` and `Commitments/FV3.lean`, moved with the file from `main`'s `Flock/JsonParse.lean` and `Flock/FV3.lean` [run: `git show origin/main:…`]. A pure move leaves them; they are a stale sentence for whoever next edits those modules.
+
+**5. Runs since my 04:30Z entry.**
+
+| run | what, at | verdict |
+|---|---|---|
+| `r20261111-040335-fab3` | `setup.sh security/Proofs`, `pins.py --regen`, `pins.py --stale`, at `631e3d733ce7`, cpu-2 | rc 0: setup 141 s, regen 408 s, stale rc 0; three files changed, digests and paths of their inputs only [read]. With them in place, here: `pins.py --stale` rc 0, `tests/test_pins.py` 4 passed [run] |
+| `r20261111-040434-b4d1` | records of `verity/circuits/lean` and its readers, at `631e3d733ce7`, cpu-12 | rc 0, `"outcome": "pass"` (section 2) |
+| `r20261111-042920-3071` | quick tier at `1f59c474be01`, cpu-7 | cancelled by me at 05:09Z, never started |
+| `r20261111-050928-97a1` | quick tier at `0d860c581fbd`, cpu-11 | in line; about 08:15Z [guess] |
+
+Also at the head, on the VM [run]: `tools/verity/lean/unread_gate.py origin/main HEAD` rc 0 (0 areas above the cap; it leaves the ratchet to the Lean check, since the cut changes Lean); `markdown_caps.py origin/main HEAD` rc 0; `tests/test_lean_packages.py` and `tests/test_boundaries.py` 87 passed; the seventeen moved files against `main`'s differ in import lines only (43 changed lines, 0 others).
+
+**6. #8789's body is rewritten for the crossed head** [run]: moved paths, 25 lakefiles to 15, the locks table at the head, the crossing and CI-524's numbers, the ratchet gate in three lines (240 = 191 + 49, why none can go now, PRF-519), the checks with the keys table, and #8814 as the follow-up. The quick tier's row says "in flight" until `97a1` ends.
+
+**Left, in order:** (1) `97a1`'s verdict, a fix commit for each failure, #8789's body, then "ready to mark #8789 at <sha>"; (2) #8814's records run and quick tier, after that line; (3) M6's crossing over #8789's head, after that line; (4) PRF-546's assessment, by Thu 02:00Z, which I write while `97a1` runs. For a fresh worker: scripts and bodies are in `/opt/cursor/artifacts/flockpkg-work/` (`suites.sh`, `pins.sh`, `layersB.py`, `pr-body-crossed.md`, `pr-body-layers.md`, `keys.pins.json`).
