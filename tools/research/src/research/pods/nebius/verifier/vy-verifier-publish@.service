@@ -1,5 +1,5 @@
 [Unit]
-Description=the verifier's run %i put in the evidence store, as auditor from the pinned tree (benchmarks/live_verifier/host.py publish)
+Description=the verifier's run %i put in the evidence store, as auditor from the pinned tree (verity/protocols/poub/device/live_verifier/host.py publish)
 
 [Service]
 Type=oneshot
