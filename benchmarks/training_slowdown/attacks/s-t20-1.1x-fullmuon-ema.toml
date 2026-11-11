@@ -17,4 +17,5 @@ weight_decay = 0.05
 warmup = 20
 decay = 0.23
 micro_batches = 2
+fused = true
 ema_horizon = 0.1
