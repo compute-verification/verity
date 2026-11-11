@@ -1,5 +1,6 @@
 name = "network_check"
-defaultTargets = ["NetworkCheck", "network-check-difftest", "network-check", "network-records", "network-period"]
+defaultTargets = ["NetworkCheck", "network-check-difftest", "network-check", "network-records", "network-period",
+  "network-rows"]
 
 [leanOptions]
 autoImplicit = false
@@ -52,3 +53,7 @@ root = "NetworkCheck.RecordsMain"
 [[lean_exe]]
 name = "network-period"
 root = "NetworkCheck.PeriodMain"
+
+[[lean_exe]]
+name = "network-rows"
+root = "NetworkCheck.RowsMain"
