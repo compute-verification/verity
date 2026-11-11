@@ -17,8 +17,10 @@ is which gates a unit needs and which roots each is opened under.
 
 * **The gates.** A cut block needs gate `g` at the wired program only where the block needs, side by side, a gate
   `i` with `ω i = g` (`Prog.needs_wired`): `g` itself where the unit writes it or reads it as a block input, and the
-  unit's own source gate `i` where the unit reads `g` through a wire. The unit's session holds `i`, so the address's
-  row is read at `i` (`RowAt` at `i`) and the address is `g`'s.
+  unit's own source gate `i` where the unit reads `g` through a wire. The unit's session holds `i`, so an address is
+  a side-by-side gate's: its row is read at `i` (`RowAt` at `i`), in the port that holds `i`, and its place and slot
+  are those of `ω i`. Two gates of one unit that the wiring sends to one gate each have their own port and the one
+  place and slot.
 * **The roots** (`CheckedRun.rootsWired`): the replay block's, where `g` is a gate of the replay block, cut, that the
   wired program doesn't commit as that block sees it; else the statement's. A written bit that only units of its own
   replay block read through wires, and that the wired program doesn't return, is such a gate; an input no wire moves
@@ -99,12 +101,18 @@ def AddressHoldsWired (S : Address) (i g : ℕ) : Prop :=
 
 end CheckedRun
 
-/-- **Every gate's value has one address at the wired program**, fixed before the run: at every accepted run's
-checked unit whose proof block, cut, needs gate `g` at the members' programs wired by `ω`, the address holds
-(`CheckedRun.AddressHoldsWired`) at each gate `i` the unit's block needs side by side that `ω` sends to `g`. -/
+/-- **Every gate's value has one address at the wired program**, fixed before the run. Each gate `i` of the members'
+programs side by side has an address: the port that holds it in its unit's session, its place in that port's row,
+and the frame's slot for the row. A gate the wiring moves has the place and the slot of the gate it is sent to: the
+two are one committed bit. And at every accepted run's checked unit, at each gate `i` its proof block needs side by
+side, the address holds (`CheckedRun.AddressHoldsWired`) under the roots the wired program opens `ω i` under.
+
+A unit that reads one written gate at two of its own gates has an address for each, in its own port, at the one
+place and slot; so has a unit that reads it and the unit that writes it. -/
 def AddressesWired : Prop :=
-  ∀ g, ∃ S : Address, ∀ r : CheckedRun, r.Ok h → (r.s.prog.wired ω keep).Needs (cutBlock ω r.b) g →
-    ∀ i, r.s.prog.Needs r.b i → ω i = g → r.AddressHoldsWired h ω keep S i g
+  ∃ addr : ℕ → Address,
+    (∀ i, (addr i).place = (addr (ω i)).place ∧ (addr i).slot = (addr (ω i)).slot) ∧
+      ∀ r : CheckedRun, r.Ok h → ∀ i, r.s.prog.Needs r.b i → r.AddressHoldsWired h ω keep (addr i) i (ω i)
 
 /-! ## The entry a writer and its readers name -/
 
@@ -118,55 +126,66 @@ theorem entryAt_interior_port (roots : List Msg) (S : Slot) (t p : String) (hk :
 
 /-! ## A connected instance: the gates and their roots
 
-Two members, each an input and its negation and each one proof block, in one replay block: the second's input wired
-to the first's output, the first's output read only there and the second's returned. -/
+Three members in one replay block, each one proof block: two writers, each an input and its negation, and a reader
+of three inputs and their conjunction. The reader's first and third inputs are wired to the first writer's output
+and its second to the second writer's; the writers' outputs are read only there and the reader's is returned. So one
+written gate is read by one unit at two of its own gates, and the two writers' outputs are read by one reader. -/
 
-/-- The two members side by side: gates `0, 1` the first's, `2, 3` the second's; both outputs returned. -/
-def wiredPair : Prog := ⟨[.input, .not 0, .input, .not 2], [1, 3]⟩
+/-- The three members side by side: gates `0, 1` the first writer's, `2, 3` the second's, `4` to `7` the reader's;
+every output returned. -/
+def fanProg : Prog := ⟨[.input, .not 0, .input, .not 2, .input, .input, .input, .and [4, 5, 6]], [1, 3, 7]⟩
 
-/-- The wire: the second member's input to the first's output. -/
-def pairWire (i : ℕ) : ℕ := if i = 2 then 1 else i
+/-- The wires: the reader's first and third inputs to the first writer's output, its second to the second's. -/
+def fanWire (i : ℕ) : ℕ := if i = 4 then 1 else if i = 5 then 3 else if i = 6 then 1 else i
 
-/-- What the wired program returns: the second member's output. -/
-def pairKeep (g : ℕ) : Bool := g == 3
+/-- What the wired program returns: the reader's output. -/
+def fanKeep (g : ℕ) : Bool := g == 7
 
-/-- **What the two cut blocks need at the wired program**: the first its input and its output, the second its output
-and the first's output, which it reads through the wire. -/
-theorem wiredPair_needs :
-    (wiredPair.wired pairWire pairKeep).needsList (cutBlock pairWire [0, 1]) = [0, 1] ∧
-      (wiredPair.wired pairWire pairKeep).needsList (cutBlock pairWire [2, 3]) = [3, 1] := by
+/-- **What the three cut blocks need at the wired program**: each writer its input and its output, the reader its
+output and the two writers' outputs, the first's twice, once for each of its own gates wired to it. -/
+theorem fanProg_needs :
+    (fanProg.wired fanWire fanKeep).needsList (cutBlock fanWire [0, 1]) = [0, 1] ∧
+      (fanProg.wired fanWire fanKeep).needsList (cutBlock fanWire [2, 3]) = [2, 3] ∧
+      (fanProg.wired fanWire fanKeep).needsList (cutBlock fanWire [4, 5, 6, 7]) = [7, 1, 3, 1] := by
   decide
 
-/-- **Which of them the cut replay block commits at the wired program**: the first member's input and the second's
-output; the wired gate, the first's output, it does not, so both units that need it open it under the replay block's
-roots. -/
-theorem wiredPair_boundary :
-    cutBlock pairWire [0, 1, 2, 3] = [0, 1, 3] ∧
-      (wiredPair.wired pairWire pairKeep).Boundary [0, 1, 3] 0 = true ∧
-      (wiredPair.wired pairWire pairKeep).Boundary [0, 1, 3] 1 = false ∧
-      (wiredPair.wired pairWire pairKeep).Boundary [0, 1, 3] 3 = true := by
+/-- **Which of them the cut replay block commits at the wired program**: the writers' inputs and the reader's
+output; the two wired gates, the writers' outputs, it does not, so every unit that needs one opens it under the
+replay block's roots. -/
+theorem fanProg_boundary :
+    cutBlock fanWire [0, 1, 2, 3, 4, 5, 6, 7] = [0, 1, 2, 3, 7] ∧
+      (fanProg.wired fanWire fanKeep).Boundary [0, 1, 2, 3, 7] 0 = true ∧
+      (fanProg.wired fanWire fanKeep).Boundary [0, 1, 2, 3, 7] 1 = false ∧
+      (fanProg.wired fanWire fanKeep).Boundary [0, 1, 2, 3, 7] 2 = true ∧
+      (fanProg.wired fanWire fanKeep).Boundary [0, 1, 2, 3, 7] 3 = false ∧
+      (fanProg.wired fanWire fanKeep).Boundary [0, 1, 2, 3, 7] 7 = true := by
   decide
 
-/-- **Side by side the replay block commits every gate a block needs**, the second member's input among them, so the
-program opens that input under the statement's roots, where no record of the first stage holds it. -/
-theorem wiredPair_sideBySide :
-    wiredPair.needsList [0, 1] = [0, 1] ∧ wiredPair.needsList [2, 3] = [2, 3] ∧
-      ∀ g ∈ [0, 1, 2, 3], wiredPair.Boundary [0, 1, 2, 3] g = true := by
+/-- **Side by side the replay block commits every gate a block needs**, the reader's three inputs among them, so the
+program opens those inputs under the statement's roots, where no record of the first stage holds them. -/
+theorem fanProg_sideBySide :
+    fanProg.needsList [0, 1] = [0, 1] ∧ fanProg.needsList [2, 3] = [2, 3] ∧
+      fanProg.needsList [4, 5, 6, 7] = [4, 5, 6, 7] ∧
+      ∀ g ∈ [0, 1, 2, 3, 4, 5, 6, 7], fanProg.Boundary [0, 1, 2, 3, 4, 5, 6, 7] g = true := by
   decide
 
-/-- **The roots at the instance**: at a run whose statement's program is the two members' and whose unit's replay
-block holds both, the wired program opens the wired gate under the replay block's roots, and the first member's input
-and the second's output under the statement's. -/
-theorem rootsWired_wiredPair (r : CheckedRun) (hp : r.s.prog = wiredPair) (hrb : r.rb = [0, 1, 2, 3]) :
-    r.rootsWired pairWire pairKeep 1 = iroots r.x r.seen r.ρ ∧ r.rootsWired pairWire pairKeep 0 = r.s.roots ∧
-      r.rootsWired pairWire pairKeep 3 = r.s.roots := by
-  obtain ⟨hc, h0, h1, h3⟩ := wiredPair_boundary
+/-- **The roots at the instance**: at a run whose statement's program is the three members' and whose unit's replay
+block holds them, the wired program opens the two wired gates under the replay block's roots, and the writers'
+inputs and the reader's output under the statement's. -/
+theorem rootsWired_fanProg (r : CheckedRun) (hp : r.s.prog = fanProg) (hrb : r.rb = [0, 1, 2, 3, 4, 5, 6, 7]) :
+    r.rootsWired fanWire fanKeep 1 = iroots r.x r.seen r.ρ ∧ r.rootsWired fanWire fanKeep 3 = iroots r.x r.seen r.ρ ∧
+      r.rootsWired fanWire fanKeep 0 = r.s.roots ∧ r.rootsWired fanWire fanKeep 2 = r.s.roots ∧
+      r.rootsWired fanWire fanKeep 7 = r.s.roots := by
+  obtain ⟨hc, h0, h1, h2, h3, h7⟩ := fanProg_boundary
   unfold CheckedRun.rootsWired
   rw [hp, hrb, hc]
-  refine ⟨ite_eq_left ⟨by decide, h1⟩, ite_eq_right fun hx => ?_, ite_eq_right fun hx => ?_⟩
+  refine ⟨ite_eq_left ⟨by decide, h1⟩, ite_eq_left ⟨by decide, h3⟩, ite_eq_right fun hx => ?_,
+    ite_eq_right fun hx => ?_, ite_eq_right fun hx => ?_⟩
   · rw [h0] at hx
     exact absurd hx.2 (by decide)
-  · rw [h3] at hx
+  · rw [h2] at hx
+    exact absurd hx.2 (by decide)
+  · rw [h7] at hx
     exact absurd hx.2 (by decide)
 
 end SpotFlock
