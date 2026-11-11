@@ -47033,3 +47033,41 @@ MiB at 09:19Z [run]): at the card's edge or over it. **`r20261111-093701-db9a` (
 
 For BREAKEVEN: `SparseMlaHeadBlock_v2` NVIS 64 `FIRST=false`, WITNESS's two cuts (`88f0665ab6`: the walk asks 64 indices ahead and keeps its row vectors), one prover on six cores of vy-dc-h200-3: 3.189 GPU-s a statement against 3.622 (ratio 0.880), measured, `r20261111-093423-17e0` against `r20261111-094637-5bee`.
 For the table: head block at one prover: node A quiet 2.53 to 2.59 s today, 2.57 with `all`, 2.49 with `upper` (`cb57`); vy-dc-h200-3 3.62 s today and 3.19 s with WITNESS's two cuts (measured); no many-prover row yet: three do not fit vy-dc-h200-3's memory, four are being tried on node A.
+
+## SCALE, Wed 11 Nov 10:05Z: ready to mark #8874 at b3fb5853faf88d60f9945379689990c2c1bde6ab; the by-stratum count is TWOWITNESS's (claimed 10:02Z), not mine and not TWOPROVE's; by reader sets the Lean's one-M count reads 2^-100.83 in compressions at the record (computed, 0.80 bit under the mean), not your guess
+
+**(4) Who writes the by-stratum count:** TWOWITNESS, on a new PR stacked on #8870 [read: TWOWITNESS 10:02Z in this inbox, "the by-stratum count is mine"]. I am not writing it, so TWOPROVE need not.
+
+**ready to mark #8874 at b3fb5853faf88d60f9945379689990c2c1bde6ab**
+- Quick tier: `r20261111-091429-6f84`, "8 suites: 8 passed (0 cached), 0 failed" at that commit [run, fetched 10:06Z].
+- Records: `r20261111-091422-a581`, pass for `security/Proofs`, with the `security` and `security/Properties` audits passing; `regenerated {}` in all three `audit.json` [run, fetched 10:07Z].
+- In one tree: the head merged with #8827's `946b7b72f26d` and #8781's `b7c268c7c1fe` (local merge `99aac9c62a`, both merges clean) builds. `Proofs/Flock.lean` try `r20261111-092214-b96d` exited 0 (12,361 jobs) and `Proofs/WeightSecurity.lean` try `r20261111-092214-793b` exited 0 [run].
+- [run, `git merge-base --is-ancestor`] The head contains #8870's head `e7d354135fbb` and #8836's marked `ae8886e9a2fc`. It lands after #8836, #8820 and #8870.
+- [read] Its body is updated with both verdicts.
+- TWOWITNESS's `SpotFlock/Counts.lean` reads its `RegTwo.proved_size_le` and `firstK`, which this head keeps.
+- No lock record changes.
+- Please label PRF-533 with the goal `proofs/spot-bind-term`.
+
+**(2) Every by-reader-set figure both ways** [derived, `scale_kfix.py` on the planner run `r20261111-080601-3db1`'s cells; K0 = 6, n_sess = 6·Σ_t k_t; reader sets counted (writer, readers), so 132 a later head block and 131 a first one; `PageCopy` at 58, a guess].
+
+| design | Σ_t k_t | mean: calls | compressions | one M = 132 (Lean today): calls | compressions | by stratum: compressions |
+|---|---|---|---|---|---|---|
+| record, size classes 2^-5 | 10,046,500 | -110.63 | -101.63 | **-109.83** | **-100.83** | -101.57 |
+| the 2,647 GB plan, width 2^-2.5 | 42,855,252 | -108.85 | -99.85 | -107.73 | -98.73 | -99.78 |
+| width 2^-3 | 30,303,243 | -109.35 | -100.35 | -108.23 | -99.23 | -100.28 |
+| width 2^-4 | 15,151,640 | -110.35 | -101.35 | -109.23 | -100.23 | -101.28 |
+| width 2^-6 | 3,787,940 | -112.35 | -103.35 | -111.23 | -102.23 | -103.28 |
+| width 2^-7 | 1,893,988 | -113.35 | -104.35 | -112.23 | -103.23 | -104.28 |
+
+- [derived] The one-M gap at the record is 0.80 bit, about the by-gates gap (0.72). Head blocks are 96% of the reader sets there, so the largest block is close to the mean block. At the width designs the gap is 1.1 bits.
+- [derived] Under REGX's class (same readers, same replay block, same side; no writer), a key's two pieces are one class, so a later head block has at most 72 (ATTACK's). Then one M reads -101.69 at the record and -99.60 at the 2,647 GB plan (my 10:03Z table).
+- **Which count is right is the theorem's**, not mine. I'd cite 72 only once REGX's wiring lemma compiles (its try `r20261111-094954-cd4c` was waiting at 09:53Z [relayed]).
+
+**(3) What `DsaLatentRow_v1` reads** [read: `verity/definitions/registry/dsa_norm.py:29-31, 170-174`].
+- `DsaLatentRow_v1{KVL=512, R=64, EPS}` is one token's latent row as the MLA cache stores it. It reads that token's `kv_a` output (KVL + R = 576 bf16), the norm weight `w` (512 bf16, registered) and the token's rope cache row `cs` (64 bf16). It writes `[kv_c | k_pe]` (576 bf16): `DsaRMSNorm_v1{512}` of the first 512, then `RoPEHeadGptJ_v2{64}` of the last 64.
+- So each key has one writer row instead of two. Counted (writer, readers), a later head block has 2 + 64 + 2 = 68 classes; under REGX's class it is unchanged (≤ 72).
+- [run, probe `r20261111-095316-8938`] The census build `52da59a094b9` serves the unbatched form: every one of 3,223,584 key reads has two writer rows, `DsaRMSNorm_v1` and `RoPEHeadGptJ_v2`.
+
+**(1) The reader-set count over the Program's rows:** starting now, on a node other than vy-nebius-cpu-2, cpu-9 and cpu-13, at `--mem-gb 16`, from the census build `art:32c488d8`. It counts per Program row both ways (writer × readers, and readers alone with the side) and by Definition, over every rank. Its run id comes in my next entry.
+
+For the table: by reader sets (132, writer counted) the record reads 2^-100.83 in compressions with the Lean's one-M count (computed, modeled) and 2^-101.63 with the mean. The 2,647 GB plan misses (-98.73 one M, -99.78 by stratum).
