@@ -233,7 +233,7 @@ def draw_k(serve_dir: Path, k: int | None) -> int:
 def drawn_calls(win: dict, k: int) -> dict[int, list[int]]:
     """Core's sample of the window at K, by call: ``{call: [global unit, ...]}``, ascending."""
     units, why = PHC.drawn_of(win["record"], {"root": win["root"]}, k, win["raw"])
-    if why is not None:
+    if why is not None or units is None:
         raise Refused(f"core draws nothing from the window: {why[0]}: {why[1]}")
     starts = list(itertools.accumulate((size for size, _w in CR.call_work(win["layout"])), initial=0))[:-1]
     out: dict[int, list[int]] = {}
@@ -433,7 +433,7 @@ class FileStager:
                                    outputs=[port(f"o{j}") for j in outs])
         self.iset = SimpleNamespace(subcircuit=self.sub, name=name.replace("/", "-"),
                                     content_digest=hashlib.sha256(content).hexdigest())
-        self.outs = None
+        self.outs: dict[str, np.ndarray] | None = None
 
     def stage(self, rows: dict, out_dir: Path, salt_key: bytes, salts: dict, indices: Sequence[int], set_name: str,
               tables: dict, refs: dict, registered: dict) -> dict:

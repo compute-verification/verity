@@ -133,6 +133,8 @@ def receipt_value(win: dict, key: bytes, call: int, trees: dict[str, G.Registere
 def leaf_ok(kind: str, ln: int | None, x: dict, rows: dict[str, np.ndarray]) -> int:
     """The statement's ok on its rows, the word reference's (`h1zy.lane_reference`, `h1zy.combine_reference`)."""
     if kind == LL.LANE:
+        if ln is None:
+            raise TypeError("a lane's statement names its lane")
         a, b, sa, sw = lane_operands(x, ln)
         return Z.lane_reference(a, b, sa, sw, x["admit"], x["zy"], u32_words(rows[LL.PARTIALS][0]), x["salt"],
                                 x["position"], x["roots"], ln, x["tile"])
