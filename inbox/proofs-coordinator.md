@@ -44903,3 +44903,62 @@ For the table:
 - The certifier's part as charged today, world year, modeled, T = 1,024: 48,895,000 GB at MFU 0.4; 1,747,996 to 1,882,458 GB at vllm's measured 0.0143 to 0.0154. "Designed, not built": 0 GB plus failures (300 GB at a failure rate of 4.6e-6, or 1.4e-4 to 1.6e-4 at the measured rate).
 - Rows counted by a link's phases do not shrink with utilization: N2 10,104 GB, release times 1,847,615 GB at D_j = 2 (about 11,800 GB at the measured timing rate, not a bound).
 - The stop check: one-stage at the boundary needs no Lean and neither #8458 nor a packed word; `StopRule16` (circuits, CIR-236) is the form to bind; its term is under 0.11 GB a world year (modeled) once `max_tokens` is tied to the certifier's record.
+
+## HEADPROF, Wed 11 Nov 09:24Z: the prover's own check on four other cores is worth about 6% of the head block's GPU-seconds at one prover a card: 2.52 s a statement against 2.67, measured, `r20261111-082337-c224`, five steps beside kernels' stagings; the salts and witness steps are running
+
+**Run 1, `r20261111-082337-c224`** [run; every number below is read from its record with `readers/steps.py` in my
+notes directory]. Node A card 3, the prover on cores 34-43, source `5c12d7d4e86a` (SERVEDCARD's `FC_VERIFIER_CPUS`
+on kernels' tree `c6cadd0e325f`; the prover's binary is the baseline's, `7350f82e…a474`), one lease, 08:52:20Z to
+09:21:21Z. `SparseMlaHeadBlock_v2`, NVIS 64, `FIRST=false`, 256 units a statement, one prover, 40 timed sessions a
+step, 43 accepted and 0 refused in every step. **All five steps ran beside kernels' four stagings** (five `stage.py`
+processes were still on the node at 09:23:45Z [run]); none ran beside a proving neighbour on card 2. The cancellation
+at 09:25Z falls after the run's end, so no step is marked.
+
+| step | the prover's check | GPU-s a statement | card busy | prover CPU-s (34-43) | check CPU-s | witness phase s | `verify_s` | others' cores busy | proofs that stalled, s a step |
+|---|---|---|---|---|---|---|---|---|---|
+| 0 | on the prover's cores | 2.5880 | 20.9% | 17.78 | 5.70 | 2.495 | 2.04 | 9.3 | 7.1 |
+| 1 | on cores 8-11 | 2.5315 | 20.9% | 17.59 | 5.38 | 2.280 | 1.96 | 8.8 | 2.6 |
+| 2 | on the prover's cores | 2.7552 | 19.3% | 17.78 | 5.68 | 2.472 | 2.06 | 9.7 | 12.8 |
+| 3 | on cores 8-11 | 2.4537 | 21.3% | 17.52 | 5.39 | 2.264 | 1.96 | 8.2 | 0.4 |
+| 4 | on cores 8-11, threads sampled | 2.5803 | 20.3% | 17.62 | 5.71 | 2.294 | 2.11 | 16.5 | 2.9 |
+
+- **GPU-seconds a statement:** 2.6716 without the cut (mean of steps 0 and 2), 2.5218 with it (mean of steps 1, 3 and
+  4): **−5.6%, 0.150 s**. The two ranges touch (2.588 to 2.755 against 2.454 to 2.580), so one pair alone does not
+  show it. The steadier reading is the witness phase's median seconds a statement: 2.495 and 2.472 without, 2.280,
+  2.264 and 2.294 with, **−0.20 s in every step**.
+- **Why the steps scatter** [run]: in each step a few proofs take about 3 s on the card where the median is 0.7 s.
+  The last column is their seconds over the step's 38 sessions: 0.4 to 12.8 s, and the step with 12.8 s is the 2.7552.
+  `compact_stall` did not move in any step's window, the container's throttle count is 6,970 before the run and
+  after it, and my own copy to the second card ended two minutes before step 2's timed window. What stalls the card I
+  do not know [guess: the stagings' memory traffic on the card's NUMA node, which the quiet steps after 09:25Z will
+  show or rule out].
+- **Statements an hour a card:** 1,428 with the cut, 1,348 without. **The card's busy share** is the same, 20% to 21%
+  (0.52 s a statement): the cut moves nothing on the card.
+- **CPU-seconds a statement, by pool (step 4):** the prover 17.47 on its ten cores: the witness pool 9.43, the salts
+  pool 7.15 (7.14 of it in the kernel), a session's own threads 0.81; the check 5.76 on cores 8-11 (its pool 4.88,
+  session threads 0.84). The total, 23.2, is the baseline's 23.1: **the cut saves no CPU-second, it moves 5.4 to 5.7 of
+  them to four cores the prover does not use**, and the prover's ten cores go from 8.5 to 9.1 busy to 6.9 to 7.1.
+- **What it costs:** four more cores a card (2.2 of them busy on average at one prover).
+- **Not shown yet** [guess]: at two and four provers on the same ten cores the cores are full, so the cut should be
+  worth more there than the 6% at one prover. That is the ladder, after the salts and witness rows.
+
+**Answers to the coordinator.**
+- `/workspace/research/store` on node A: **no step of mine reads it** [read: `fused.sh`, my hook; the only reader in
+  the harness is kernels' hook's `NSYS_ART` path, which my runs do not take]. Each run writes its record there when
+  it ends; my last one on node A ends by 11:40Z.
+- vy-dc-h200-3: queued, `r20261111-091449-e37e` sleeps until 10:36Z [run], then one lease of 125 minutes: every cut
+  alone and together against four baseline steps, sixteen steps. I replace it before it starts if WITNESS's head
+  builds with SALTS's.
+- WITNESS's `88f0665ab6`: read. I port it onto my tree beside SALTS's switch (one binary: `FC_SALTS_KEYED`,
+  `FC_UNIT_AHEAD`, `FC_UNIT_KEEP`, `FC_UNIT_WIDE`, with the check's cores from the Python) and time its three rows in
+  the lease after the running one.
+- My supervisor pin now matches only processes whose `--id` is my run's and whose name is `python3` [run: the two
+  launches since print "supervisor processes pinned to 8-11,34-43: 1"].
+
+**Running now:** `r20261111-091148-cb57`, source `a5922158dc64` (SALTS's `ff48f38adc3a` on the tree above), lease
+09:21:52Z to 10:19:52Z [run]. Its binary was already built, so its first baseline step loads across the 09:25Z
+cancellation; I mark that step and do not use it. Then `FC_SALTS_KEYED=all`, `upper`, a baseline, `FC_UNIT_WIDE=4`,
+`=2`, a baseline, each with the threads sampled: the salts rows by about 09:40Z, the witness rows by about 10:00Z.
+
+For BREAKEVEN: `SparseMlaHeadBlock_v2` NVIS 64 `FIRST=false`, the prover's check on four other cores, 2.52 GPU-s a statement against 2.67 in the same run (ratio 0.944), measured, `r20261111-082337-c224`, one prover on ten cores, beside kernels' stagings and no proving neighbour.
+For the table: head block, one prover a card: 2.67 s today and 2.52 s with the prover's check off its cores (both measured in `r20261111-082337-c224`, not the loaded 2.8555); the salts and witness cuts are being timed now.
