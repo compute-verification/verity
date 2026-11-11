@@ -42890,3 +42890,21 @@ For the table:
 - #8862 at `23e96bd37477`: records pass (`r20261111-080302-a139`, measured), quick tier running (`r20261111-080306-3938`); merges with `main` and the ten heads at 08:41Z; no ready line yet.
 - Writer (c): built on `cursor/proofs-v2-members-writer-9810` at `c8fa42992004`, no PR; its Lean and its difftest row are not run yet (three runs wait for a slot). The form stays refused.
 - Held branch at `01d759cdbb4d`: the bases check now reads a one-member template's bare name; unopened.
+
+## REGX, Wed 11 Nov 08:46Z: RESTACKED on #8827's head, as your 08:29Z update orders: new branch `cursor/proofs-noalways-b7d2` at 7517af48adb510e997906ff280879827bacdb0f5, no longer on #8836; #8871 is superseded, please close it; the new try run is out
+
+**Changes to a lock-recorded statement: none** [read: the diff over `946b7b72f26d` is one new file and one import line].
+
+- [read] Your 08:29Z update: #8836 does not build with #8820 and #8827, so new Lean work stacks on `946b7b72f26d`. PR #8871 held #8836's head `1fab3dfa6a35`, so it cannot land as it is.
+- [run] New branch `cursor/proofs-noalways-b7d2` = #8827's head `946b7b72f26d04d65cf5df48622c0240abfdc48e` plus one commit, head `7517af48adb510e997906ff280879827bacdb0f5`. I did not rewrite `cursor/proofs-noalways-4e1c` (that needs a force push) and did not revert #8836 inside it (a reverted merge would drop SCALE's files when the restated #8836 lands).
+- [run] The module no longer reads #8836. The two K lemmas are proved from the module's own `code_noAlways_checked_drawn` (each checked unit of `code h.noAlways` is a drawn block) and Mathlib, not from SCALE's `code_card_biUnion_le`. `code_card_biUnion_noAlways_le` now bounds K by `∑ v ∈ (the drawn blocks, each once), (needs v).card`; `code_card_biUnion_noAlways_le_mul` is as before, `(Draw.proved draw).size * M`. Added `sessionOpensTwo_noAlways (hB : Built h) (hS : Addresses h)`, the sessions' openings at `h.noAlways`, for whoever instantiates the by-position bound at the code. Every other statement is the one of 08:19Z, proved in try `f3d0` at the old head [run].
+- [read] `security/Proofs/Flock/SpotFlock/*` is the same at `main` `8201dacff26e` and at `946b7b72f26d` (`git diff --stat` between them shows no file there), so the proofs that passed should pass again [guess]; three are new and untried: `code_noAlways_checked_reg`, `code_noAlways_checked_drawn`, and the two K lemmas' new proofs.
+- [run] I cancelled the two runs at the old head by run id (`r20261111-082857-f3f2`, `r20261111-082903-d865`; 14 min each, 4 and 2 of them in a slot) so they do not hold slots for a head nobody marks.
+- [run] Out: try `r20261111-084520-5fd7` (`verity lean try … --siblings --on auto`) at `7517af48adb5` on `vy-nebius-cpu-11`. Then the records run and the quick tier at that head, which is also the build of the tree with #8820 and #8827, its ancestors. Then a new PR, unmarked, with the body in the order your 08:37Z update gives.
+- **Asks:** (1) close or eject #8871 (I may not); (2) a second reader for `ksTwo_noAlways`'s statement, which the body's four checks need. For ATTACK: the question to test is whether `(code h.noAlways).checked` being the drawn blocks alone weakens what `KS` says of a block the design means to prove on every request; my reading is no, because such a block is in `Draw.proved draw` (a cell with `k_t = n_t`), not in `always` [read: `Select.lean:286-292`].
+
+For SCALE: nothing changes in the number: +0 bits on K mean at D*1 (2^37.69 [relayed]). When #8836 is restated, its `code_card_biUnion_le_mul` at `h.noAlways` takes `hal := noAlways_always h`; you need not carry `hal` or an always term.
+
+For the table:
+- K's always-checked term is 0; the lemma is proved at the old head (try `f3d0` [run]) and restacked on #8827 at `7517af48adb5`, try out.
+- #8871 is superseded by the restack; the new PR number follows with its runs.
