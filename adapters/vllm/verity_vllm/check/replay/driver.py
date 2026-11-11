@@ -51,6 +51,7 @@ names in `__all__` are its interface.
 from __future__ import annotations
 
 import ctypes
+import gc
 import multiprocessing
 import os
 import re
@@ -63,6 +64,7 @@ from typing import Any
 
 import numpy as np
 from verity.commitments.randomness import Key
+from verity.definitions.numerics import prims_twins
 from verity.definitions.numerics.rows import EVALUATOR_PROVENANCE, EVALUATORS
 
 from verity_vllm import settings
@@ -102,6 +104,7 @@ from verity_vllm.check.replay.sample import _catch_probability, challenge_seed, 
 from verity_vllm.commit.opened import opened_in_children
 from verity_vllm.program.compact import p_item_weight_span
 from verity_vllm.query import norm_scales
+from verity_vllm.query.required import QUERIES
 
 __all__ = ["arrivals_of_record", "boundary_linkage", "challenge_seed", "engine_facts_of_record", "executed_prefix_of_record",
            "linkage_horizon", "model_weights_provider", "ProgramIndex", "sampled_replay", "SCHEMA", "V2_QUERY"]
@@ -198,7 +201,6 @@ def _prewarm_evaluators(picked: list[dict]) -> dict[str, str]:
         out.update(getattr(ev, "prewarm", lambda _p: {})(picked))
     if "rms" in need:
         try:
-            from verity.definitions.numerics import prims_twins
             rm, _t = prims_twins.rms_twin()
             rm.lib()
             out["rms_triton_model"] = str(rm.LIB)
@@ -206,7 +208,6 @@ def _prewarm_evaluators(picked: list[dict]) -> dict[str, str]:
             out["rms_triton_model"] = f"prewarm failed: {type(e).__name__}: {str(e)[:120]}"
     if "fa2" in need:
         try:
-            from verity.definitions.numerics import prims_twins
             _fa2_model, _tables = prims_twins.fa2_twin()
             out["fa2_mufu_tables"] = f"loaded ({type(_tables).__name__})"
         except Exception as e:  # noqa: BLE001
@@ -298,7 +299,6 @@ def _parallel_replay(fn: Callable[[dict], tuple[dict, dict, float]], picked: lis
     Semantics-free: gc.freeze changes WHEN unreachable cycles are reclaimed, never a value; the parent unfreezes right after the pool
     joins.  The record carries what was frozen (`evaluator.fork`)."""
     global _FORK_FN, _FORK_VUS
-    import gc
     _FORK_FN, _FORK_VUS = fn, picked
     _FORK_STATS.clear()
     _FORK_STATS.update({"gc_freeze": bool(FORK_GC_FREEZE), "workers": int(workers), "picked": len(picked)})
@@ -493,7 +493,6 @@ def _kept(split: tuple[list[dict], list[dict]], indices: dict, all_vus: list[dic
 
 def manifest_query(manifest: dict[str, Any] | None) -> str | None:
     """The query the manifest was built under, when it is one the population knows (`required.QUERIES`); else None (the query of record)."""
-    from verity_vllm.query.required import QUERIES
     q = ((manifest or {}).get("query") or {}).get("query_id")
     return q if q in QUERIES else None
 

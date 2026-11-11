@@ -26,6 +26,22 @@ from collections.abc import Iterable
 from types import SimpleNamespace
 from typing import Any
 
+from verity.circuits.codec import (
+    definition_digest,
+    descriptor_id,
+    encode_program,
+    lookup_primitive,
+    program_digest,
+)
+from verity.circuits.defs import CompositeDefinition, bind
+from verity.definitions.numerics import kernel_registry as KR
+from verity.definitions.numerics.rows import KERNEL, ROWS
+from verity.definitions.registry.catalog import load
+
+from verity_vllm.check.replay.delegate import DELEGATES
+from verity_vllm.commit import challenge as CH
+from verity_vllm.query.manifest.format import spec_family
+
 SHOWN = 5
 #: family -> why its row kernel is not its Definition in this tree ([] when it is), checked once a process
 _KERNEL_CHECKS: dict[str, list[str]] = {}
@@ -33,11 +49,6 @@ _KERNEL_CHECKS: dict[str, list[str]] = {}
 
 def evaluated_specs(rows: Iterable[dict[str, Any]]) -> list[str]:
     """The specializations of the rows the replay evaluates: a family with a row kernel (`rows.ROWS`) or a protocol's delegate."""
-    from verity.definitions.numerics.rows import ROWS
-
-    from verity_vllm.check.replay.delegate import DELEGATES
-    from verity_vllm.query.manifest.format import spec_family
-
     return sorted({str(r["spec"]) for r in rows if spec_family(str(r["spec"])) in ROWS or spec_family(str(r["spec"])) in DELEGATES})
 
 
@@ -60,12 +71,6 @@ def of_record(dirs: dict[str, str], digs: dict[str, str], rows: dict[str, list[d
 def kernel_refusal(specs: Iterable[str]) -> str | None:
     """Why a row kernel this tree grades ``specs`` by is not its family's Definition, or None: each family's row kernel against
     the reference by core `self_check` (`kernel_registry.check`; module docstring), once a family per process."""
-    from verity.definitions.numerics import kernel_registry as KR
-    from verity.definitions.numerics.rows import KERNEL, ROWS
-
-    from verity_vllm.commit import challenge as CH
-    from verity_vllm.query.manifest.format import spec_family
-
     bad: list[str] = []
     for family in sorted({spec_family(str(s)) for s in specs} & set(ROWS)):
         if family not in _KERNEL_CHECKS:
@@ -80,9 +85,6 @@ def kernel_refusal(specs: Iterable[str]) -> str | None:
 def refusal(program_dir: str, digest: str, specs: Iterable[str]) -> str | None:
     """Why the Definitions this tree evaluates ``specs`` by are not the ones the Build at ``program_dir`` bound into Program
     ``digest``, or None.  With no ``specs`` nothing is evaluated, so nothing is read."""
-    from verity.circuits.codec import program_digest
-    from verity.definitions.registry.catalog import load
-
     specs = list(specs)
     if not specs:
         return None
@@ -111,9 +113,6 @@ def refusal(program_dir: str, digest: str, specs: Iterable[str]) -> str | None:
 
 def _ours(desc: dict[str, Any], fid: str, registry: Any, ours: dict[str, Any]) -> Any:
     """This tree's specialization for the descriptor's ``fid``: the registry's Definition bound at the Build's binding record."""
-    from verity.circuits.codec import descriptor_id, lookup_primitive
-    from verity.circuits.defs import CompositeDefinition, bind
-
     if fid in ours:
         return ours[fid]
     e = desc["definitions"].get(fid)
@@ -147,8 +146,6 @@ def _static(desc: dict[str, Any], v: Any, registry: Any, ours: dict[str, Any]) -
 
 def _differs(desc: dict[str, Any], fn: Any, seen: dict[str, str | None]) -> list[str]:
     """Each Definition ``fn`` reaches in this tree whose entry is not the Build's descriptor's, named."""
-    from verity.circuits.codec import definition_digest, encode_program
-
     # encode_program reads a program's root, fn and annotations: here the specialization alone, in the Build's schema
     mine = encode_program(SimpleNamespace(root=fn, fn=fn, annotations={}), desc["schema"])
     out: list[str] = []

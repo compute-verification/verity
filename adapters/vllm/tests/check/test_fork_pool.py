@@ -2,6 +2,7 @@
 daemonic parent forks them too."""
 from __future__ import annotations
 
+import ctypes
 import multiprocessing as mp
 import os
 import select
@@ -90,7 +91,6 @@ def test_a_child_forked_after_its_parent_died_exits_at_once():
 
 
 def _pdeathsig(_=None) -> tuple[int, int]:
-    import ctypes
     sig = ctypes.c_int(0)
     assert ctypes.CDLL(None, use_errno=True).prctl(2, ctypes.byref(sig), 0, 0, 0) == 0   # PR_GET_PDEATHSIG
     return os.getpid(), sig.value

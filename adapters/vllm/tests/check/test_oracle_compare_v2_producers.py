@@ -33,10 +33,11 @@ from tests.check.test_oracle_compare_promoted_key import (
 from verity_vllm.check import oracle_compare as OC
 from verity_vllm.check.replay.coverage import form_b_families
 from verity_vllm.correspondence.reader_for_query import Correspondence
+from verity_vllm.pipeline import commit_plan as C
 from verity_vllm.query import program_view as pv
 from verity_vllm.query.manifest import format as MF
 from verity_vllm.query.program_view import CallView, InputView, Port, ProgramView
-from verity_vllm.query.required import request_manifest
+from verity_vllm.query.required import QUERIES, request_manifest
 from verity_vllm.query.units import ValueRef as R
 from verity_vllm.records.fields import MissingField
 
@@ -87,8 +88,6 @@ def test_the_commit_derives_the_facts_of_a_manifest_of_either_query_under_that_q
     """A Q_word manifest (the record since S1) carries no producer annotations either: the Commit derives its facts from the Programs,
     keyed as that manifest names its instance outputs, and the handed-down `model/out` is promoted; a manifest the query path did not
     build keeps its own entries."""
-    from verity_vllm.pipeline import commit_plan as C
-    from verity_vllm.query.required import QUERIES
     P = gemma_like_program()
     corr = Correspondence(P)
     for query in QUERIES:

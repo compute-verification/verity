@@ -7,6 +7,7 @@ GM-01 G6 PASS with the lag exercised; the Commit required r0's steps 12..31 (bou
 test_binding_negatives)."""
 from __future__ import annotations
 
+import json
 from collections.abc import Set
 from typing import Any
 
@@ -20,6 +21,7 @@ from tests.commit.test_binding_negatives import (
     commit,
 )
 from verity_vllm.check import executed_prefix as EPL
+from verity_vllm.check.replay import population as POP
 from verity_vllm.check.replay.linkage import linkage_horizon
 from verity_vllm.commit import binding as B
 from verity_vllm.commit import executed_prefix as EP
@@ -298,7 +300,6 @@ def test_a_missing_match_account_leg_is_named_on_the_facts_and_faults_first(tmp_
     the Commit was queued; tokens.json went with it, a_r fell to the G6 leg and the class faulted 'a_r is not linked' / 'LAG rule not
     attested' after 47 min -- a missing INPUT read as a verdict.  The facts name the missing leg(s) (a_r_source suffix + account_missing),
     and the population's normaliser puts that fault FIRST, before (a) and (b), still fail-closed."""
-    from verity_vllm.check.replay import population as POP
     e = _mixed_epr()
     # tokens.json absent, global_match.json present: exactly #39's record after the move
     acct = EPL.load_match_account(_match_account(tmp_path, write_tokens=False))
@@ -385,7 +386,6 @@ def _mixed_epr(lag: int = 1):
 
 def _match_account(tmp_path, *, served=None, tj_lag=1, gm_verdict="PASS", g6_lens=None, g6_lag=None, write_gm=True, write_tokens=True):
     """A row directory shaped like row_pod's: <row>/match/capture/tokens.json (m1_capture's fields) + <row>/global_match.json (GM-01's)."""
-    import json
     served = served if served is not None else _served({"r0": 11, "r1": 32}, {"r0"})
     row = tmp_path / "row"
     (row / "match" / "capture").mkdir(parents=True, exist_ok=True)
