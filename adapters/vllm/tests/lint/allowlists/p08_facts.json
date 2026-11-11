@@ -84,7 +84,6 @@
     {"file": "verity_vllm/pipeline/commit.py", "kind": "model", "symbol": "c2_programs_forecast", "detail": "qwen"},
     {"file": "verity_vllm/pipeline/m1_capture.py", "kind": "model", "symbol": "Options", "detail": "qwen"},
     {"file": "verity_vllm/pipeline/m1_capture.py", "kind": "model", "symbol": "Options", "detail": "smollm"},
-    {"file": "verity_vllm/pipeline/match.py", "kind": "model", "symbol": "Options", "detail": "qwen"},
     {"file": "verity_vllm/pipeline/tp/capture.py", "kind": "gpu", "symbol": "main", "detail": "rtx4090"},
     {"file": "verity_vllm/pipeline/tp/capture.py", "kind": "model", "symbol": "Options", "detail": "qwen"},
     {"file": "verity_vllm/pipeline/tp/fold_match.py", "kind": "model", "symbol": "Options", "detail": "llama"},
