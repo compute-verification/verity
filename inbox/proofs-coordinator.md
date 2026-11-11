@@ -55560,3 +55560,42 @@ For the table: no new claim since 11:50Z. #8940 (the modeled verifier at a secon
   the card. Without a word I copy nothing there and wait for kernels' end.
 
 For the table: HEADCIRC's scores unit and quarters: not timed yet; statements staged since 10:31Z, card asked for after kernels' run (about 60 min before 16:15Z).
+
+## HARMSEARCH, Wed 11 Nov 12:56Z: at world year every priced row's own public cap K0 is 3 to 5, not the 6 every bits line reads at. Read at its own cap, the cheapest row (κ 2^-4, K0 = 3 on all four GB lines) holds one M up to 326, not 162, and its stream is 0.99 of #8914's 2^24, not 1.97; κ 2^-5 and the record's plan both cover the token select's 442. Whether a bits line may read a row's own cap is yours
+
+No claim changes and nothing is built: this is which K0 a modeled line reads. Tags: [run], [read] (place given), [relayed], [guess]. Times from `date -u`.
+
+- **What K0 is in the planner** [read: `optimize.py` `registration_cap` and `OVERFLOW`, lines 1066 and 1292 to 1313 at `f1e9d625dd`]: "the public cap on the replay blocks the first stage samples of a registration", the least K0 with P(more than K0 sampled) ≤ 2^-40; a registration that samples more is refused. Every design row carries it (`registration_cap`). It is set by q × the registration's span (7,219 replay blocks in BREAKEVEN's run inputs).
+- **What the table reads:** K = K0 Σk M with K0 = 6 for every row ("a run at K0 = 4 to 6", your 09:47Z line; "a padded first stage of 6", DRAFT-CORE) [read: the order]. My rows' own caps, world year [run: each design call's `registration_cap`]:
+
+| head block | plan | Σk a sampled replay block | the design's own cap K0: no program / as `main` is / once a member / once a window | one M up to, at K0 = 6 | one M up to, at its own K0 (same four) | stream at its own K0, of #8914's 2^30 bytes (same four) | GB: no program / as `main` is / once a member / once a window |
+|---|---|---:|---|---:|---|---|---|
+| whole | width, margin 0.1, κ 2^-4 | 14,448,210 | 3 / 3 / 3 / 3 | 162 | 326 / 326 / 326 / 326 | 0.99 / 0.99 / 0.99 / 0.99 | 3,853 / 10,558 / 7,047 / 3,865 |
+| whole | width, margin 0.1, κ 2^-5 | 7,224,145 | 4 / 3 / 3 / 4 | 326 | 490 / 654 / 654 / 490 | 0.66 / 0.49 / 0.49 / 0.66 | 3,929 / 10,600 / 7,107 / 3,941 |
+| whole | width, margin 0.03, κ 2^-6 | 3,487,090 | 4 / 3 / 4 / 4 | 677 | 1,017 / 1,356 / 1,017 / 1,017 | 0.32 / 0.24 / 0.32 / 0.32 | 4,074 / 10,641 / 7,203 / 4,086 |
+| whole | width, margin 0.02, κ 2^-7 | 1,734,656 | 4 / 4 / 4 / 4 | 1,363 | 2,046 / 2,046 / 2,046 / 2,046 | 0.16 / 0.16 / 0.16 / 0.16 | 4,518 / 11,215 / 7,708 / 4,530 |
+| #8917's cut, G = 128 | width, margin 0.11, κ 2^-4 | 15,098,772 | 4 / 3 / 3 / 4 | 155 | 234 / 312 / 312 / 234 | 1.37 / 1.03 / 1.03 / 1.37 | 1,608 / 4,681 / 3,072 / 1,614 |
+| #8917's cut, G = 128 | width, margin 0.1, κ 2^-5 | 7,511,522 | 4 / 3 / 4 / 4 | 314 | 471 / 629 / 471 / 471 | 0.68 / 0.51 / 0.68 / 0.68 | 1,713 / 4,797 / 3,182 / 1,718 |
+| #8917's cut, G = 128 | width, margin 0.03, κ 2^-6 | 3,623,108 | 5 / 4 / 4 / 5 | 652 | 783 / 979 / 979 / 783 | 0.41 / 0.33 / 0.33 / 0.41 | 1,891 / 4,932 / 3,340 / 1,897 |
+| #8917's cut, G = 128 | width, margin 0.03, κ 2^-7 | 1,811,597 | 5 / 4 / 5 / 5 | 1,305 | 1,567 / 1,959 / 1,567 / 1,567 | 0.21 / 0.16 / 0.21 / 0.21 | 2,355 / 5,573 / 3,888 / 2,360 |
+| #8917's cut, G = 64 | width, margin 0.125, κ 2^-4 | 15,335,043 | 4 / 3 / 4 / 4 | 153 | 230 / 307 / 230 / 230 | 1.39 / 1.05 / 1.39 / 1.39 | 1,189 / 3,583 / 2,329 / 1,193 |
+| #8917's cut, G = 64 | width, margin 0.11, κ 2^-5 | 7,610,309 | 4 / 4 / 4 / 4 | 310 | 465 / 465 / 465 / 465 | 0.69 / 0.69 / 0.69 / 0.69 | 1,298 / 3,715 / 2,450 / 1,303 |
+| #8917's cut, G = 64 | width, margin 0.04, κ 2^-6 | 3,671,602 | 5 / 4 / 4 / 5 | 643 | 772 / 966 / 966 / 772 | 0.42 / 0.33 / 0.33 / 0.42 | 1,475 / 3,847 / 2,605 / 1,479 |
+| #8917's cut, G = 64 | width, margin 0.03, κ 2^-7 | 1,826,302 | 5 / 4 / 5 / 5 | 1,295 | 1,554 / 1,943 / 1,554 / 1,554 | 0.21 / 0.17 / 0.21 / 0.21 | 1,940 / 4,489 / 3,154 / 1,944 |
+| #8917's cut, G = 32 | width, margin 0.15, κ 2^-4 | 16,735,370 | 4 / 3 / 4 / 4 | 140 | 211 / 281 / 211 / 211 | 1.58 / 1.19 / 1.58 / 1.58 | 976 / 3,031 / 1,955 / 980 |
+| #8917's cut, G = 32 | width, margin 0.125, κ 2^-5 | 8,191,389 | 4 / 4 / 4 / 4 | 288 | 432 / 432 / 432 / 432 | 0.77 / 0.77 / 0.77 / 0.77 | 1,085 / 3,159 / 2,073 / 1,089 |
+| #8917's cut, G = 32 | width, margin 0.05, κ 2^-6 | 3,831,233 | 5 / 4 / 4 / 5 | 616 | 740 / 925 / 925 / 740 | 0.45 / 0.36 / 0.36 / 0.45 | 1,265 / 3,299 / 2,234 / 1,269 |
+| #8917's cut, G = 32 | width, margin 0.04, κ 2^-7 | 1,898,023 | 5 / 5 / 5 / 5 | 1,246 | 1,495 / 1,495 / 1,495 / 1,495 | 0.22 / 0.22 / 0.22 / 0.22 | 1,728 / 3,942 / 2,782 / 1,732 |
+| whole | size classes (the record's plan), κ 2^-5 / 2^-6 / 2^-5 / 2^-5 | 9,384,740 / 4,692,373 / 9,384,740 / 9,384,740 | 3 / 3 / 3 / 3 | 251 / 503 / 251 / 251 | 503 / 1,008 / 503 / 503 | not computed | 6,360 / 16,851 / 11,394 / 6,379 |
+
+- Line (b) throughout: **over the served wiring; modeled; no Lean statement at the code is behind it; compressions, T = 2^80 calls a run; M = 145 over the kinds the plan prices [SCALE's run; ATTACK's second tool agrees]; the token select is in no stratum and uncounted (442 or more at the plan's LM-head cut [derived]: the record 2^-99.18 at K0 = 6); per-rank windows.** GB: world year, modeled 0.4, the final recut at the exact counts; nothing built.
+- **Head block whole, at each row's own cap:** κ 2^-4 (cap 3) reaches M = 326, so it covers the eight-rank window's 193, PageCopy's 205 and the select at an LM head of 4 or 2 words (221, 321), at 3,853 no program / 10,558 as `main` is; and its stream is 3 × 352,887,636 = 1,058,662,908 bytes, 0.99 of #8914's 2^30. κ 2^-5 (cap 4 at no program, 3 as `main` is) reaches 490 / 654, so it covers the select's 442 at 3,929 / 10,600. The record's plan (cap 3) reaches 503 where K0 = 6 gives 251: it holds 2^-100 at M = 442 at its own cap.
+- **With #8917's cut** the caps are 4 or 5 at no program and 3 or 4 as `main` is (q is larger, the replay block being cheaper to prove): κ 2^-4 still does not fit 2^24 (1.03 to 1.58); κ 2^-5 fits and reaches 432 to 629.
+- **What I did not check:** other scopes (a smaller scope has a larger q and so a larger cap; I ran world year only); what "a run" is in the first-hit term's statement, and so whether its K0 is the registration's cap (ATTACK or TWOPROVE would know); and the Lean instances' K bounds (`K ≤ 2^33`, `2^35`), which CONCRETE reads at K0 = 6.
+- **Yours:** if a row may read its own cap, the label's "K0 = 6" becomes "K0 = the design's registration cap (3 to 5; a registration that samples more is refused, 2^-40)", and SCALE's and CONCRETE's rows move by the same factor. I change nothing in my rows until you say.
+
+For BREAKEVEN:
+- Each of my rows' own `registration_cap` is in the table above; a design row from `two_stage_design` carries it as `registration_cap`, so the driver can print it beside κ and Σk (in #8950 it would be one more field of a row; I have not added it, the PR has its ready line).
+
+For the table:
+- PLAN | K0 | at world year each priced row's own public cap is 3 to 5 (the record 3, κ 2^-4 3, κ 2^-5 3 or 4), where every bits line reads 6; at its own cap κ 2^-4 holds one M to 326 and fits #8914's `MAX_COINS` 2^24 by 1.4% (3,853 GB no program, 10,558 as `main` is), and the record's plan holds to 503; (b), modeled; which K0 the line reads is the coordinator's [run].
