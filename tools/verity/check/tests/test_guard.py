@@ -62,6 +62,28 @@ def test_a_parallel_suite_that_reads_only_its_inputs_passes(tmp_path, monkeypatc
     assert (r.status, r.outside, r.unguarded, r.counts["passed"]) == ("passed", {}, [], 4), r.log.read_text()
 
 
+@pytest.mark.parametrize("workers", [1, 2])
+def test_a_quick_run_keeps_the_slow_tests_of_the_files_it_takes_whole_and_no_others(tmp_path, monkeypatch, workers):
+    """`--changed --quick` takes the test modules the change reaches whole (`suites.taken_whole`): the guard marks their tests in
+    every process that collects them, under strict markers, so the run's `-m` keeps their slow tests and leaves out the rest's."""
+    if workers > 1:
+        pytest.importorskip("xdist")
+    S, suite = _suite(tmp_path, monkeypatch, reads_outside=False)
+    tests = tmp_path / "pkg" / "tests"
+    (tests / "test_reads.py").unlink()
+    (tests / "deep").mkdir()
+    body = "import pytest\n\ndef test_quick():\n    pass\n\n@pytest.mark.slow\ndef test_slow():\n    pass\n"
+    for f in ("test_changed.py", "test_other.py", "deep/test_deep.py"):
+        (tests / f).write_text(body)
+    (tmp_path / "pkg" / "pyproject.toml").write_text('[project]\nname = "pkg"\n\n[tool.pytest.ini_options]\ntestpaths = ["tests"]\n'
+                                                     'addopts = "--strict-markers"\nmarkers = ["slow: slow"]\n')
+    args = S.whole_args(suite, ["pkg/tests/test_changed.py", "pkg/tests/deep/test_deep.py"], [])
+    r = S.run(suite, ["pkg"], args, tmp_path / "logs", workers)
+    assert r.status == "passed", r.log.read_text()
+    assert sorted(r.passed) == [f"tests/{f}::test_{t}" for f in ("deep/test_deep.py", "test_changed.py") for t in ("quick", "slow")] + [
+        "tests/test_other.py::test_quick"]
+
+
 def test_a_cached_module_read_outside_the_inputs_is_named_as_its_source(tmp_path, monkeypatch):
     """A suite that imports an undeclared helper through its warm `__pycache__` must not fail naming only `...cpython-*.pyc`,
     which no PR's diff touches, so drive could find no culprit. The read is named as the `.py` source,

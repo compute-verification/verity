@@ -1,8 +1,8 @@
-# The card files (`verity.hardware`)
+# The card files (`verity.hardware.cards`)
 
-One TOML file per SKU in `cards/`, the one source of that card's numbers. A card is a GPU's (`kind = "gpu"`) or a
-host's (`kind = "host"`: a server's CPUs and DRAM, apart from the GPUs it carries, so the same GPU in another host needs
-no second card). Each number is an entry `{ value, unit, mark, source }`:
+One TOML file per SKU in `cards/`, beside their loader (`cards/__init__.py`), the one source of that card's numbers. A
+card is a GPU's (`kind = "gpu"`) or a host's (`kind = "host"`: a server's CPUs and DRAM, apart from the GPUs it carries,
+so the same GPU in another host needs no second card). Each number is an entry `{ value, unit, mark, source }`:
 
 - `mark` is `ceiling` (no program on that SKU and firmware exceeds it: what the model's premises need), `measurement`
   (a measured value, so only a lower bound on the ceiling) or `placeholder` (neither: open);
@@ -25,10 +25,19 @@ code space). A host card's are `cpu` (sockets and cores), `clock`, `rate` (AMX M
 the host's on-chip bytes in S_chip).
 
 ~~~python
-from verity.hardware import load, skus
+from verity.hardware.cards import load, skus
 skus("host")                                    # ['xeon-6776p-2s', 'xeon-platinum-8468-2s']
 load("xeon-6776p-2s")["rate"]["ops"]            # {'value': 1045299200000000.0, 'unit': 'op/s', 'mark': 'ceiling', ...}
 ~~~
+
+**The interface.** Other code reads a card through `verity.hardware.cards` and imports from nowhere else: the functions
+`load`, `skus`, `rate` and `number` (an entry's value as an exact `Fraction`), and the constants `KINDS` (a card's
+kinds), `MARKS` (an entry's marks), `ENTRY` (an entry's keys), `WORD` (the bytes in a 32-bit word) and `CARDS` (the
+directory the card files are in). The module imports the standard library and `verity.errors` only. The package file,
+`verity/hardware/__init__.py`, holds a docstring and nothing else: no import and no re-export. The record
+(`verity.hardware.record`), the registration log (`verity.hardware.registration`) and the Site (`verity.hardware.site`)
+share the package, so importing one of them, in a verifier too, runs no card-loading code; `tests/test_package.py` holds
+both.
 
 `load(sku) -> dict` returns the parsed file and refuses a number without its unit, mark and source, and a card without
 its kind. `skus(kind=None)` lists the cards, or those of one kind.
@@ -39,6 +48,21 @@ and `clock.sm` where it doesn't, for the rest `clock.sm`, or the clock `mhz` nam
 given, and device memory's `memory.bandwidth` in words. A benchmark that quotes a peak calls it rather than multiplying
 the card's numbers itself, and `tests/test_lean.py` holds it to each Lean table.
 
-**Changing a number:** change the card file, then its Lean table to match. `tests/test_lean.py` evaluates each Lean
-`card` arm as an exact rational and fails on any number that differs, and on a store, resource or format of
-`security/Definitions/Core/Accel/Isa.lean` that either side lacks. A new SKU is a new card file and its own Lean table.
+**The Lean tables are generated** (`verity/hardware/lean.py`). A GPU card file that names a Lean table (`lean`) gives
+that module: `render(card)` is its text, the card file's numbers (`table(card)`) under the namespace, `clock`,
+`tensorClock` and `card` its importers read, and nobody edits it. The text's shape is fixed (the module's docstring
+gives it): the Lean check's record of a definition digests the term, so a number written another way, or an arm moved,
+is a changed record though no number changed. A division in a field of ℕ is exact, and `render` refuses a card file
+whose entry would make Lean's ℕ division truncate.
+
+**Changing a number:** change the card file, then write its table:
+
+~~~sh
+uv run python -m verity.hardware.lean --write
+~~~
+
+Without `--write` the command names each table its card file no longer gives and exits 1. `tests/test_lean.py` holds
+each committed table to `render` byte for byte; it also evaluates each `card` arm as an exact rational, independently
+of the generator, and fails on any number that differs from the card file's, and on a store, resource or format of
+`security/Definitions/Core/Accel/Isa.lean` that either side lacks. A new SKU is a new card file, whose `lean` names its
+table.
