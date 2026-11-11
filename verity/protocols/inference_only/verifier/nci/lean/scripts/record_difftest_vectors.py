@@ -55,6 +55,8 @@ read, a table read, an opening's port and ingress, each refused. Then a template
 templates. Then a template keyed as an input id (`KEYED`), bound per run and bound at registration: a composite, so
 its gates are computed and a root node of it is no input. The record of that one template, and the served shape's
 record with a unit of it more at the Program's root that the record does not list, each refused with its templates.
+Then a template that is a primitive (`PRIMITIVE`), one gate over a word: the record of that one template, which
+lists it, refused with its templates, since a unit is a composite's.
 
 Every wire of every case is one `Record.sameSlot`'s search decides within its fuel (`searched`, the search
 mirrored and held to the expansion as the cases are made), so the Lean's count of a wire is the reference's.
@@ -475,10 +477,8 @@ def random_circuit(rng, seed: int) -> Circuit:
             outs = [rng.choice(OUTS) for _ in range(rng.randint(1, 3))]
         fn = template(f"Rec{seed}T{j}", params, outs, reading(rng, params, outs, rng.choice([0.3, 0.7, 1.0])))
         if rng.random() < 0.08:
-            fn = prim(tuple(rng.choice([16, 32]) for _ in range(rng.randint(1, 2))), 16)
-            if codec.descriptor_id(fn) in c.units:
-                continue
-            params, outs = list(fn.params), [fn.ret]
+            params, outs = [(f"a{i}", Value(rng.choice([16, 32]))) for i in range(rng.randint(1, 2))], [Value(16)]
+            fn = template(f"Rec{seed}T{j}", params, outs, [[("op", 16, [(i, 0) for i in range(len(params))])]])
         tid = c.add(fn, _layout(rng, S))
         specs.append((tid, params, outs))
         shut[tid] = closed(fn)
@@ -825,6 +825,10 @@ KEYED: dict[str, str] = {
     "a template keyed as an input bound at registration": "RegisteredInput7",
 }
 
+#: a template that is a primitive and no input (`prim`): one gate over one word, returning a word. A primitive has no
+#: body, so a unit of it would have no return for its output row to be read from.
+PRIMITIVE = "a template that is a primitive"
+
 
 def shaped() -> list[dict]:
     """The cases on `lowered` circuits, at two slots and three positions and at four slots and 35, each size under one
@@ -870,7 +874,11 @@ def shaped() -> list[dict]:
     Then a template keyed as an input id (`KEYED`), a composite of one gate over a word: the accepted case with its
     Program and record those of that one template, a unit a slot (`_alone`), and the accepted case with a unit of
     it more at its Program's root, which its record does not list (`_unlisted`). Each is refused with its templates
-    (`templates`): a root node of a composite is no input, whatever its key reads as."""
+    (`templates`): a root node of a composite is no input, whatever its key reads as.
+
+    Then a template that is a primitive (`PRIMITIVE`): the accepted case with its Program and record those of that
+    one template, a unit a slot, each unit one gate of the root. It is refused with its templates (`templates`): a
+    root node of a primitive is an input or nothing, since a unit is a composite's."""
     out = []
     first = None
     for n, (S, T) in enumerate([(2, 3), (4, 35)]):
@@ -1010,6 +1018,8 @@ def shaped() -> list[dict]:
         seed = 47 + len(TWICE) + len(BITLESS) + 2 * k
         first(f"2x3 {what}, alone", lowered(2, 3), seed, broken="templates", alone=keyed)
         first(f"2x3 {what}, unlisted", lowered(2, 3), seed + 1, broken="templates", unlisted=keyed)
+    first(f"2x3 {PRIMITIVE}", lowered(2, 3), 47 + len(TWICE) + len(BITLESS) + 2 * len(KEYED), broken="templates",
+          alone=prim((16,), 16))
     return out
 
 
@@ -1583,7 +1593,7 @@ NAMES = ("cases", "python")
 
 def total() -> int:
     """How many cases the audit's data has: the random ones and `shaped()`'s."""
-    return COUNT + 50 + len(TWICE) + len(BITLESS) + 2 * len(KEYED)
+    return COUNT + 50 + len(TWICE) + len(BITLESS) + 2 * len(KEYED) + 1
 
 
 def results(case: dict) -> dict:
