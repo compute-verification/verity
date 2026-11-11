@@ -58,8 +58,9 @@ class Rule(torch.optim.Optimizer):
 
 def plain(dials: dict, optimizers) -> dict:
     """The weights after the same steps as plain torch writes them: the parameters the dials' patterns name, one
-    forward and backward over the whole batch, the gradient clipped, each optimizer of `optimizers(matrices, gains)`
-    stepped at the scheduled rate. With an `ema_decay`, torch's own average of them (`AveragedModel`)."""
+    forward and backward over the whole batch, the gradient clipped, each optimizer of `optimizers(matrices, beside)`
+    (the blocks' matrices; the gains and the embedding) stepped at the scheduled rate. With an `ema_decay`, torch's own
+    average of them (`AveragedModel`)."""
     torch.manual_seed(0)
     model = LM.of(SHAPE)
     average = "ema_decay" in dials and AveragedModel(model, multi_avg_fn=get_ema_multi_avg_fn(dials["ema_decay"]))
@@ -67,7 +68,8 @@ def plain(dials: dict, optimizers) -> dict:
     for n, p in model.named_parameters():
         p.requires_grad_(any(fnmatch.fnmatchcase(n, pat) for pat in patterns))
     params = [p for p in model.parameters() if p.requires_grad]
-    opts = optimizers([p for p in params if p.ndim == 2], [p for p in params if p.ndim != 2])
+    beside = [p for p in params if p.ndim != 2 or p is model.embed]
+    opts = optimizers([p for p in params if p.ndim == 2 and p is not model.embed], beside)
     for t, rows in enumerate(batches()):
         logits = model(rows[:, :-1])
         F.cross_entropy(logits.flatten(0, 1), rows[:, 1:].flatten()).backward()
@@ -113,7 +115,7 @@ def lora(dials: dict) -> dict:
 
 
 def adamw(d: dict):
-    return lambda matrices, gains: [torch.optim.AdamW(matrices + gains, lr=d["lr"], betas=(0.9, 0.95),
+    return lambda matrices, beside: [torch.optim.AdamW(matrices + beside, lr=d["lr"], betas=(0.9, 0.95),
                                                       weight_decay=d["weight_decay"])]
 
 
@@ -126,17 +128,17 @@ def muon_rule(p, g, state, group):
 
 
 def muon(d: dict):
-    return lambda matrices, gains: [Rule(matrices, muon_rule, lr=d["lr"], weight_decay=d["weight_decay"]),
-                                    torch.optim.AdamW(gains, lr=d["lr"], betas=(0.9, 0.95), weight_decay=0.0)]
+    return lambda matrices, beside: [Rule(matrices, muon_rule, lr=d["lr"], weight_decay=d["weight_decay"]),
+                                    torch.optim.AdamW(beside, lr=d["lr"], betas=(0.9, 0.95), weight_decay=0.0)]
 
 
 def sgd(d: dict):
-    return lambda matrices, gains: [torch.optim.SGD(matrices + gains, lr=d["lr"], momentum=0.9, nesterov=True,
+    return lambda matrices, beside: [torch.optim.SGD(matrices + beside, lr=d["lr"], momentum=0.9, nesterov=True,
                                                     weight_decay=d["weight_decay"])]
 
 
 def adafactor(d: dict):
-    return lambda matrices, gains: [torch.optim.Adafactor(matrices + gains, lr=d["lr"],
+    return lambda matrices, beside: [torch.optim.Adafactor(matrices + beside, lr=d["lr"],
                                                           weight_decay=d["weight_decay"])]
 
 
@@ -148,7 +150,7 @@ def lion_rule(p, g, state, group):
 
 
 def lion(d: dict):
-    return lambda matrices, gains: [Rule(matrices + gains, lion_rule, lr=d["lr"], weight_decay=d["weight_decay"])]
+    return lambda matrices, beside: [Rule(matrices + beside, lion_rule, lr=d["lr"], weight_decay=d["weight_decay"])]
 
 
 def inverse_fourth_root(a: torch.Tensor) -> torch.Tensor:
@@ -167,8 +169,8 @@ def shampoo_rule(p, g, state, group):
 
 
 def shampoo(d: dict):
-    return lambda matrices, gains: [Rule(matrices, shampoo_rule, lr=d["lr"], weight_decay=d["weight_decay"]),
-                                    torch.optim.AdamW(gains, lr=d["lr"], betas=(0.9, 0.95), weight_decay=0.0)]
+    return lambda matrices, beside: [Rule(matrices, shampoo_rule, lr=d["lr"], weight_decay=d["weight_decay"]),
+                                    torch.optim.AdamW(beside, lr=d["lr"], betas=(0.9, 0.95), weight_decay=0.0)]
 
 
 #: the most a route's weight may differ from its reference's, as a share of the tensor's largest move from the start:
@@ -189,10 +191,12 @@ REFERENCES = {
     "s-t20-1.1x-last-blocks": (under(adamw), CLOSE),
     "s-t20-1.1x-lion": (under(lion), CLOSE),
     "s-t20-1.1x-lora": (lora, CLOSE),
+    "s-t20-1.1x-muon-whole": (under(muon), CLOSE_BF16),
     "s-t20-1.1x-ref-optim": (under(muon), CLOSE_BF16),
     "s-t20-1.1x-sgd": (under(sgd), CLOSE),
     "s-t20-1.1x-shallow-strideshare": (under(muon), CLOSE_BF16),
     "s-t20-1.1x-shampoo": (under(shampoo), CLOSE),
+    "s-t20-1.1x-shampoo-whole": (under(shampoo), CLOSE),
 }
 
 
