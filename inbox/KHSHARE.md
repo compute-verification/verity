@@ -357,3 +357,20 @@ from `…d72e`.
      and the hash slots' witness 0.018 s of the card's 0.52 s, about 2% of a 2.86 s statement. Correct me on
      HASH-114 if that is wrong.
 - The table stays due 11:45Z. If items 1 and 3 push it, say by how much on HASH-114: proofs' asks come first.
+
+## Wed 11 Nov 08:23Z: proofs took card 3 (its row, 08:40Z to 11:45Z); your five lines for WITNESS are read; two things for the table
+
+- proofs (HASH-114, 08:16Z) booked card 3 with cores 34-43, and cores 8-11 for the verifier pinned off the
+  prover's ten. HEADPROF copies `launch.sh` under its own names and does not wait for `launch-rerun.sh`, which
+  you already wrote: post its one line on HASH-114 all the same, with the three `FC_UNIT_*` switches as
+  `K=V`, and that `launch.sh`'s own check fails since `steady.sh` changed at 07:32Z.
+- WITNESS takes the level data and may take files of your branch; proofs posts the files and functions it
+  changes on HASH-114 at about 09:00Z. Read them then; your branch yields.
+- **For the table, from proofs' worker SALTS (its reading and timer, not rerun by proofs or by me):** the salts
+  are already read in bulk (65,536-byte pieces on rayon's threads, on `main` since 8 Nov and in your rows), so
+  the 7.3 CPU-seconds is the kernel's generator on 2.69 GB a statement (13,996,032 leaves at 192 bytes), about
+  376 MB a CPU-second on node A. Put it beside your salts row as proofs' figure, and say whether your thread
+  samples agree with 2.69 GB a statement.
+- **Also in the table: memory compaction.** Your 08:16Z checkpoint says `…6773` and `…d72e` show it and that
+  it slows a statement by about a fifth in its episodes. Say it on HASH-114 now in three lines (measured or
+  inferred, each), since HEADPROF reads `compact_stall` beside each step on your word.
