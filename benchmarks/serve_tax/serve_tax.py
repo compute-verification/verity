@@ -53,7 +53,8 @@ The arms, each one engine configuration; each adds its change to the arm it name
   seconds of a load): the engine drains, the KV pool is hashed where it lies by the row-table kernels under a fresh key
   and copied to pinned host memory (on the ranks ``--kv-copy`` names), and the scheduler's state and each rank's runner
   rows and generators are taken, all kept until the next edge (`servetax_plugin.edges_of`, `boundary.rank_take`).
-- ``boundary-rows``: ``record`` with prefix caching off and the two-stage audit's boundary commitment at serve, each
+- ``boundary-rows``: ``record`` with prefix caching off, no sampling default from the checkpoint's generation config
+  (`ROWS_ARGS`) and the two-stage audit's boundary commitment at serve, each
   window's finished requests committed by size class (`verity_vllm.pipeline.boundary_rows`), its object the two-stage
   serve's (`ROWS`, with the model's check template, `Model.check`) or ``--boundary-rows``'s JSON instead (``check``,
   ``per_prompt``, ``per_output``, ``drained``, ``inline``), at ``--window-s``; the server is held after its loads
@@ -192,6 +193,11 @@ PRIVATE = "{private}"
 #: counters kept on the node
 TOPK = (("verity_dsa_topk = dsa_topk:register", "benchmarks/dsa_topk"),)
 TOPK_ENV = {"VERITY_DSA_TOPK": "canonical", "VERITY_DSA_TOPK_LOG": f"{PRIVATE}/topk-log"}
+#: the boundary commitment's server flags: prefix caching off, and vLLM's own sampling defaults in place of the
+#: checkpoint's generation config's, so a request that leaves a sampling field out is sampled as `verity-vllm
+#: serve-openai` samples it, whatever the checkpoint's file names. The hook refuses an engine launched without either
+#: (`BoundaryWindows.install`)
+ROWS_ARGS = ("--no-enable-prefix-caching", "--generation-config", "vllm")
 #: the boundary commitment's object (`verity_vllm.pipeline.boundary_rows.BoundaryWindows.of`): a replay block of one
 #: check a served id with the check template's body in place, a window closed when it drains
 ROWS = {"inline": True, "per_prompt": 0, "per_output": 1, "drained": True}
@@ -229,12 +235,13 @@ ARMS = {
                     "state and each rank's runner rows and generators taken and kept; no leaf dump, no per-step timing",
                     plugin=("record", "tokens"), edges=True, edge_dump=False, edge_busy=False),
     "boundary-rows": Arm("record", "+ the two-stage boundary commitment at serve: each window's finished requests committed "
-                         "by size class (boundary_rows), prefix caching off", ("--no-enable-prefix-caching",),
+                         "by size class (boundary_rows), prefix caching off, no sampling default from the checkpoint's "
+                         "generation config", ROWS_ARGS,
                          plugin=("record", "boundary_rows"), rows=ROWS),
     "canonical-topk": Arm("compiled", "+ the canonical DSA top-k (dsa_topk's plugin, VERITY_DSA_TOPK=canonical)",
                           env=TOPK_ENV, general=TOPK),
     "two-stage": Arm("boundary-rows", "the two-stage serve's launch line: + the canonical DSA top-k and one attention "
-                     "layer's history tables in the boundary commitment", ("--no-enable-prefix-caching",),
+                     "layer's history tables in the boundary commitment", ROWS_ARGS,
                      plugin=("record", "boundary_rows"), env=TOPK_ENV, general=TOPK, rows={**ROWS, "tables": TABLES}),
 }
 #: the changes of ours an arm's engine can have on, each read from the arm's data: what a serving cost is made of, and

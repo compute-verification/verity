@@ -152,8 +152,10 @@ class Request:
 class Scheduler:
     """vLLM's V1 scheduler as the hook wraps it."""
 
-    def __init__(self, caching: bool = False):
+    def __init__(self, caching: bool = False, defaults: dict | None = None):
         self.cache_config = NS(enable_prefix_caching=caching)
+        if defaults is not None:
+            self.vllm_config = NS(model_config=NS(get_diff_sampling_param=lambda: dict(defaults)))
         self.added: list[str] = []
         self.outputs: dict = {}
 
@@ -181,7 +183,8 @@ def _step(sched: Scheduler, served: dict[str, tuple[list[int], str | None]]) -> 
 def test_the_hook_commits_each_windows_finished_requests_by_class_as_it_closes(tmp_path):
     """Three requests: at the first schedule a window's length after it opened, window 0 closes with the two finished,
     by class, and carries the third; the third's finish, the only one running, closes window 1; each class's files
-    reopen to the roots its sink line holds; an abort finishes a request; and prefix caching is refused."""
+    reopen to the roots its sink line holds; an abort finishes a request; and prefix caching is refused, as is an
+    engine that takes a sampling default from a file."""
     now, lines = [0.0], []
     sched, hooks = Scheduler(), Hooks(tag="test-boundary-rows")
     bw = BR.BoundaryWindows(tmp_path, PAIR, 0, 1, 10.0, sink=lines.append, clock=lambda: now[0], serve="s").install(sched, hooks)
@@ -216,3 +219,11 @@ def test_the_hook_commits_each_windows_finished_requests_by_class_as_it_closes(t
         hooks.uninstall()
     with pytest.raises(ValueError, match="prefix caching off"):
         BR.BoundaryWindows(tmp_path / "x", PAIR, 0, 1, 10.0, clock=lambda: 0.0).install(Scheduler(caching=True), Hooks())
+    with pytest.raises(ValueError, match=r"--generation-config vllm.*takes \{'top_k': 50\} from a file"):
+        BR.BoundaryWindows(tmp_path / "y", PAIR, 0, 1, 10.0, clock=lambda: 0.0).install(Scheduler(defaults={"top_k": 50}), Hooks())
+    neutral, mine = Hooks(tag="test-boundary-rows-neutral"), BR.BoundaryWindows(tmp_path / "z", PAIR, 0, 1, 10.0, clock=lambda: 0.0)
+    try:
+        assert mine.install(Scheduler(defaults={}), neutral) is mine
+    finally:
+        mine.stop()
+        neutral.uninstall()
