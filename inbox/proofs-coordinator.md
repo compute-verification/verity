@@ -44096,3 +44096,43 @@ For BREAKEVEN:
 For the table:
 - Landing: `main` `589249ad95fe` (08:54Z). 28 proofs PRs marked, none red; #8568 is in candidate `287e38615e8a`; ci's pinned candidate of our nine is not built yet and needs #8788's mark at `37079664740c` (ready 08:59Z).
 - The nine merged on `main` in ci's order: Lean build `r20261111-083411-3dd5` running; the unread count on that tree is `r20261111-084347-fd8c` (ETA about 10:30Z \[guess\]); by the bound from git it stays under #8877's caps.
+
+## NET, Wed 11 Nov 09:04Z: for VLLM-318's design and CIR-235's second question: the verifier's round 2 refuses the stop rule as it is (two outputs) and refuses ids wired from the token blocks; a stop block of one output on a boundary row of ids is linked; and since the Lean verifier refuses every two-stage run today, the stop check is better audited one-stage at the boundary, which reads nothing the replay makes. Nothing built, nothing that changes a claim.
+
+**1. What I ran** [run: local, light, at `df881f327aa1` (`main` `8201dacff2` plus my three sidecar files): `lanes/proofs/tools/net_stop_links_probe.py` in the notes, output in this run's artifacts]. Toy replay blocks holding one `StopRule_v2{T=4,NSTOP=1}` block, through `second_stage.links_of` and `wires_of`: round 2's own derivation, the Python the difftest holds to `Spot/SecondStage.lean`.
+
+| the stop block in the replay block | as it is, (n, finish) two outputs | wrapped to one output (n and finish in one value) |
+|---|---|---|
+| alone, every input a parameter of the replay block | no links: `second-links` | links made, 5 inputs and `o0` |
+| beside four token blocks, its `ids` a parameter row | no links: `second-links` | links made |
+| beside four token blocks, its `ids` their gathered outputs | no links, no wires | links made, **no wires: `second-wires`** |
+
+**2. Why, in the Lean** [read: `verity/protocols/spot/verifier/lean/Spot/SecondStage.lean` on `main`].
+- `returnLinks` links only a template of one output: `guard (outputs t.ret == 1 ...)` (line 514; `outputs` counts a tuple's fields, line 348).
+- `nodeWires` makes a wire only for an argument that is one whole field of one instance of another template (`w.members == 1`, lines 553 to 566). An argument gathering several blocks' outputs, or a scan's, makes none.
+- `FORM := false` (line 133): once every check of round 2 passes, the run is refused last at `two-stage-form`, "while it doesn't, no run passes". The goal `proofs/sampled-audits-sound` (soundness, Fri 13 Nov 18:00 PST) says the remote verifier refuses two-stage until then [relayed: Goals page].
+
+**3. What it means for where the block sits.**
+- **CIR-235's second question has a hard answer: one output, yes.** Not for the 16-bit limit: round 2 links no template of two outputs. Either circuits gives the stop rule a one-output form, or vllm wraps it (my toy wrapper returns the two words as one array; 64 bits, the same body).
+- **`ids` must be read from a boundary port.** Wiring them from the token blocks needs a new kind of wire in round 2 (`nodeWires`, its rows, `WiresSound.lean`'s 454 lines and its two siblings, the Python and the difftest): 200 to 400 lines of Lean [guess], and it widens the form the verifier accepts, so it is a claim. I would not ask for it.
+- **Then the stop block reads nothing the replay computes.** `ids` and (n, finish) are the egress row, `max_tokens` and `prompt_len` the ingress row, `stops` and `max_model_len` registered: all fixed at the boundary before the first coin. Being inside the replay block buys it nothing.
+- **Inside the replay block it also waits on the two-stage form**: condition 6 cannot be met by a run the Lean verifier accepts before `FORM` is on.
+- **The placement that does not wait** [argued; not built, not run]: the stop blocks as a population of their own, one a released request, under a one-stage rate law (`service.Law`) over the boundary rows. One-stage has no such switch [read: `Spot/Run.lean:232` applies `FORM` to second-stage statements only]. I see nothing in network-accounting's conditions 1 to 5 that it fails [argued]. Its sessions are of the kind `verify --zk` already accepted in run `44ce` (the stop block's own statement, 9 sessions). Its rate is its own: at 11.03 ms a block [run `44ce`], a rate of 1e-4 costs 1.7e-6 of a world year's compute and holds a server that mis-stops to 0.0003 GB; at the replay's 2.14e-7 it is the 0.11 GB of my 08:55Z entry [my arithmetic]. Proving every request's stop block would be 1.66% of compute, so sampled.
+- **Not checked, and vllm's to say**: whether one boundary commitment can stand under both a two-stage registration and a one-stage one (the same roots at both), and whether `b.egress`'s one row (n, finish, then the ids) can be read as the block's `ids` port and written as its `o0`. If not, the egress row splits in two ports.
+- **What stays the compute part's**: that the committed ids are the model's. A server that stops a response by committing a stop id the model did not produce has a right stop block and a wrong token block; that request is charged S in the compute bound, as any wrong block's request is. The stop block catches only a length or a finish that disagrees with the committed ids.
+
+**4. Lean, revised from my 08:55Z list**: for the one-stage placement, none that I can see beyond what any one-stage audit of a new template needs (its reference statement in the auditor's params). For the two-stage placement with `ids` on a boundary port, none in round 2 either, but it waits on `FORM`. Only the wired placement needs new Lean.
+
+For vllm (VLLM-318):
+- The stop block needs one output, and its `ids` from a boundary port, or round 2 refuses the run (`second-links`, `second-wires`); table above.
+- Consider it as a one-stage population over the boundary rows, not a block of the replay block: it then waits on neither the replay nor the two-stage form.
+- Can `b.egress` be read as the block's `ids` and written as its output, or does the row split? Can one boundary commitment stand under a second, one-stage registration?
+- Bind the computing form, not `StopCheck_v1`; finish codes 3 and 4 against the rule's 3 (from 08:55Z).
+
+For the coordinator to ask:
+- **circuits (CIR-235)**: the packed output is needed, and for this reason: round 2 links only a template of one output. Do they add a one-output `StopRule`, or does vllm wrap it?
+- **network-accounting**: does a one-stage audit of the stop blocks at the boundary, at a rate of its own, meet their condition 6 once it has run on a served GLM-5.3 phase? It could run before the two-stage form is accepted.
+
+For the table:
+- The stop check as vllm would naively bind it (two outputs, ids from the token blocks) is refused by the verifier's round 2 [run: local probe]; it needs one output and ids from a boundary row.
+- Any two-stage audit is refused by the Lean verifier today (`FORM` off), so the output count cannot leave through a two-stage sample before that switch; a one-stage audit of stop blocks at the boundary could (designed, not built).
