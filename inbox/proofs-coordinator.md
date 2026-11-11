@@ -46948,3 +46948,43 @@ Is `full` the N your row takes, as rows 1 and 2 were staged? And is one quarter 
 For BREAKEVEN: unchanged and still [modeled]: scores + four quarters reads 0.57 of the head block by width at the planner's price, 0.34 of the plan of record's class-capped head block; measured only when HEADPROF times `af06`'s and `7121`'s statements. Gates [run, staged]: scores 16,724,332 + 4 × 3,945,721 = 32,507,216 against the block's 30,909,225 read off (I know proving scales with the block, 2^k_log, not the ANDs in it, only from the planner's law `rate * 2**k_log` [read: `total_cost.priced`]; HEADPROF's row is what says).
 
 For the table: HEADCIRC | scores + four quarters, exact, both units built on nodes at k_log 27 and 26 [run] | 0.57 by width, 0.34 of the plan of record [modeled] | statements for the timed row staging (`7121`, `af06`); PR after `a0f1` and `965c`.
+
+## SALTS, Wed 11 Nov 10:04Z: I read `cb57`'s record myself: HEADPROF's salts rows hold to 1%, and the run's second baseline (2.530 s) puts both salts settings inside the baselines' spread. Two things the record adds: at one prover the ten cores are already 9.1 busy, and about 0.75 of the salts pool's 7.2 CPU-s is not the OS's generator but a fresh 1.61 GB level-0 buffer in most sessions, which an existing switch may remove with no assumption (untested)
+
+**1. The rows, read from the record.** [run: `research data fetch` of `r20261111-091148-cb57`'s record; its `rate-k1.json`, thread samples and the prover's log of each step; my own split of the samples over the steady window]
+
+| step | GPU-s a statement | prover CPU-s (mine / the record's) | salts pool: user + system | check CPU-s | cores busy of ten | the read-ahead's wall time, median | sessions |
+|---|---|---|---|---|---|---|---|
+| today, timed only | 2.588 | | | | | | 43, 0 refused |
+| `all` | 2.570 | 12.50 / 12.58 | 1.46 + 0.75 = 2.21 | 5.73 | 7.1 | 0.67 s | 43, 0; `"keyed":[15]` |
+| `upper` | 2.494 | 15.45 / 15.57 | 0.57 + 4.60 = 5.18 | 5.65 | 8.5 | 1.64 s | 43, 0; `"keyed":[12]` |
+| today, threads sampled | 2.530 | 17.37 / 17.47 | 0.01 + 7.18 = 7.19 | 5.58 | 9.1 | 2.10 s | 43, 0 |
+
+- So the measured columns of my 09:56Z table are now read, not relayed, and they hold. The pool's 7.15 there was another run's; this run's own baseline reads 7.19.
+- **Two baselines in one run read 2.588 and 2.530 s.** `all` (2.570) lies between them; `upper` (2.494) is 1.4% under the lower. Neither is a saving.
+- "Cores busy" is the prover's and the check's CPU-seconds a statement over its seconds. The witness phase is 2.45 to 2.47 s in every step.
+
+**2. Why no time, in the record's own numbers.**
+- Today the read-ahead (ten threads at nice 19, taking what the walk and the check leave) finishes its 13 trees in 2.10 s, 0.35 s before the witness phase ends. With `all` it finishes in 0.67 s. Nothing waits on it either way.
+- **The cores are 9.1 of ten busy at one prover**, so the bound "host CPU-seconds over ten cores" is 2.31 s today, 9% under the measured 2.53. [guess] So a cut of the walk alone soon meets that bound, and there the salts' CPU-seconds count: with `all` the bound is 1.83 s. HEADPROF's one-prover rows "WITNESS's two cuts" against "every cut together" are the test.
+- A session that needs a tree before the read-ahead has it reads its own at normal priority (`flock-circuit.rs` l.1406-1408) [read]. So with a shorter walk the thing to watch in the prover's log is `SALTSAHEAD`'s `untaken`: above 0 means salts were read twice. It is 0 in all 129 sessions here [run].
+
+**3. What the salts pool's 7.2 CPU-s are.** This corrects two things of mine.
+- With `all` the pool reads 480 bytes from the OS a statement and still spends 0.75 CPU-s of system time [run]. So that part is not the generator.
+- Every steady session logs `SALTSAHEAD {"pinned":13,"reused":12}` (34 to 36 of 43 a step) [run]. The buffer that is not reused is level 0's, 1.61 GB: with `FC_LEVEL0_AHEAD` on (the default) a session sets its level-0 buffer aside for the next session's early read (`flock-circuit.rs` l.4676-4679), and that read is taken in only 5 to 7 sessions of 43 (`LEVEL0AHEAD {"salts":false}` in the rest) [read, run]. The other sessions allocate, first touch and page-lock a fresh 1.61 GB.
+- [guess] That is the 0.75 CPU-s. If so, the generator itself costs node A about 6.4 CPU-s a statement, 417 MB a CPU-second, the rate of my CPU node (427). My 08:00Z reconciliation gave all 7.3 to the generator, and my 09:56Z guess (the first touch of every buffer) was too wide: 12 of 13 buffers are refilled in place.
+- **Why `all` left 2.2 and not my 1.15 to 1.33:** the 0.75 above, and ChaCha20 at 1.84 GB a CPU-second on node A's Xeon 8568Y+ where my Genoa node gave 2.37 [run: both].
+- **A lever with no assumption and no code, untested:** `FC_LEVEL0_AHEAD=0` keeps level 0's buffer with the other twelve, so every session should log `"reused":13`. Expected: about 0.7 CPU-s a statement less in the salts pool at any salts setting, and no time at one prover. It gives up the early level-0 read in the 5 to 7 sessions that take it. I can't test it: the read-ahead exists only in the GPU build, and I launch on no card.
+
+**For HEADPROF, if a slot is left and the coordinator agrees:** one one-prover step with `FC_LEVEL0_AHEAD=0` and threads sampled, beside a baseline. What to read: `SALTSAHEAD`'s `reused` (13 expected) and the salts pool's CPU-seconds (about 6.4 expected against 7.2). My 09:56Z ask (a four-prover step with only `FC_SALTS_KEYED=all`) stands and comes first.
+
+**Not established:** any time saved by the salts at any prover count; what the 0.75 CPU-s is (a guess from the log and the code); why the early level-0 read is taken in so few sessions.
+
+For HEADPROF: cursor/proofs-salts-8dd2 at ff48f38adc3abe6ec40ab28e5519e5a7aff2e223 (unchanged).
+
+For the table:
+- Salts at one prover, measured, `r20261111-091148-cb57`: 2.59 and 2.53 s today (two baselines), 2.57 s with every tree keyed, 2.49 s with the upper trees keyed: no saving. The salts pool falls from 7.19 to 2.21 or 5.18 CPU-s a statement.
+- At one prover the ten cores are 9.1 busy, so the head block is 9% above its CPU bound (2.31 s): a shorter walk alone soon meets it (my reading, not a measured row).
+
+For BREAKEVEN:
+- Nothing new to price. The one-prover rows of my 09:56Z entry hold as read from the record, with a second baseline at 2.530 s; use "no saving at one prover" for both salts settings.
