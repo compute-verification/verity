@@ -29,13 +29,15 @@ import json
 from pathlib import Path
 from typing import Any
 
+from verity_vllm.engine.profiles import layer_classes as LC
+
 PARTIAL_PRODUCERS = ("EmbeddingShard_v1", "Gemm_v1", "Gemm_v2", "DeepGemmFp8Linear", "FlashInferFp8Linear", "MoeSum", "MoeExpertSum", "batch:Gemm")   # own-partial producer classes
 LINEAR_PRODUCERS = ("Gemm_v1", "Gemm_v2", "DeepGemmFp8Linear", "FlashInferFp8Linear", "batch:Gemm")
 MOE_SITES = ("FusedMoE", "SharedFusedMoE", "MoERunner")
 #: the producer class the ISSUING MODULE's class admits (the link table names the class: `... (RowParallelLinear)`): an all-reduce issued
 #: by a RowParallelLinear reduces a K-sharded Gemm output, never an embedding row (equal-result-but-wrong-producer fails here by name)
-PRODUCER_BY_SITE_CLASS = {"VocabParallelEmbedding": ("EmbeddingShard_v1",), "RowParallelLinear": LINEAR_PRODUCERS,
-                          "LogitsProcessor": ("Gemm_v1", "Gemm_v2", "batch:Gemm"), "ParallelLMHead": ("Gemm_v1", "Gemm_v2", "batch:Gemm"),
+PRODUCER_BY_SITE_CLASS = {LC.EMBEDDING: ("EmbeddingShard_v1",), LC.ROW_LINEAR: LINEAR_PRODUCERS,
+                          LC.LOGITS: ("Gemm_v1", "Gemm_v2", "batch:Gemm"), "ParallelLMHead": ("Gemm_v1", "Gemm_v2", "batch:Gemm"),
                           **{c: ("MoeSum", "MoeExpertSum") for c in MOE_SITES}}
 #: what a summed partial may add to a partial of its site's class: at a MoE site, the shared expert's down-proj, which the MoE runner
 #: reduces with the routed sum (GLM-5.3's and DeepSeek-V4's MoE blocks)
