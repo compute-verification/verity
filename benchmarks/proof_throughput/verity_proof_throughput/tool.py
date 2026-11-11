@@ -16,7 +16,7 @@ def parse_point(argv: list[str]) -> dict[str, str]:
 
 
 CLOSURE = ["benchmarks/proof_throughput/**", "benchmarks/numerical/python/verity_numerical/bench/**",
-           "verity/protocols/flock/prover/**", "verity/circuits/**", "uv.lock"]
+           "verity/protocols/flock/prover/**", "verity/protocols/flock/pod/**", "verity/protocols/flock/agreement/**", "verity/protocols/flock/tool.py", "verity/circuits/**", "uv.lock"]
 
 PROVER_POINT = Tool(
     name="proof_throughput_prover",
