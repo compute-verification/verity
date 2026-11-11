@@ -695,6 +695,7 @@
       "owns": [
         "verity/protocols/inference_only/rho/",
         "benchmarks/circuit_properties/",
+        "benchmarks/inference_only/",
         "benchmarks/training_slowdown/"
       ],
       "branch_suffixes": [
