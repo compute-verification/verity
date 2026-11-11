@@ -51,7 +51,6 @@ import json
 import re
 import sys
 from pathlib import Path
-from typing import Any
 
 import ra_cases as M
 import verity_difftest as D

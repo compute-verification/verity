@@ -523,8 +523,8 @@ def _grid() -> None:
     print()
     _sizing(gap)
     print()
-    print(f"# appendix, live coins: a coin a pass, no chain; μ_timing + μ_overlap a pass in steady state at the least "
-          f"deadline; floor = the trusted RTT floor as a fraction of RTT; U = RTT + 2J − floor")
+    print("# appendix, live coins: a coin a pass, no chain; μ_timing + μ_overlap a pass in steady state at the least "
+          "deadline; floor = the trusted RTT floor as a fraction of RTT; U = RTT + 2J − floor")
     print("| pass ms | RTT ms | floor | U ms | Δ = pass | Δ* ms | at Δ* | chained |")
     print("| --- | --- | --- | --- | --- | --- | --- | --- |")
     for p in (20, 50):
