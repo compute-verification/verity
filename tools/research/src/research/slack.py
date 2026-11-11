@@ -49,6 +49,8 @@ Notes are records, never messages.
                           --default V --deadline '3:00 PM'|ISO (--page FILE.md --area AREA | --link NOTION_URL) [--wait]
                           # the ask's page in the Asks for Daniel database, and a card in #ask-daniel linking it; prints `<id> <ts> <permalink>`
   research msg ask-daniel status ID [--wait] [--json] | resolve ID --choice V [--note T]
+                          # status follows the ask's page once its Status has left Waiting on Daniel: the page's Status and
+                          # Decision, and one `differs:` line when the card says otherwise; an unreadable page leaves the card alone
   research msg ask-daniel extend ID --deadline '3:00 PM'|ISO [--note T] | withdraw ID --note T   # the asker only, while pending
                           # --wait polls for at most 20 min: a card still pending then exits 79 with the status command (research/waitcap.py)
   research msg ask-daniel pages [--as HANDLE] [--hours H] [--json]  # asks' pages edited lately: Status, Decision, newest comment
@@ -2782,6 +2784,8 @@ def issue_state(ident: str, asker: str | None, cache: dict[str, tuple[bool, str]
 
 
 PAGE_WAITING = "Waiting on Daniel"                               # an ask's page's Status until a decision (or its deadline) moves it
+PAGE_OTHERWISE = "Decided otherwise"                             # Daniel's own Decision text, not the recommendation
+PAGE_DECISIONS = ("Approved", PAGE_OTHERWISE, "Decided by lane", "Default applied")   # the Statuses that record a decision
 URL_RE = re.compile(r"https://[^\s\"'<>|()\\]+")
 
 
@@ -2827,15 +2831,17 @@ def daniel_cards(api: Slack, reg: dict, since: float, now: float) -> list[dict]:
 
 
 def page_state(notion: "Notion", page: str) -> dict:
-    """An ask's page as its record says: `{status, answered, at}`.  Answered once its Status has left PAGE_WAITING (approved,
-    decided otherwise or sent back for a revision, or its default applied); `at` is then the page's last edit, the latest
-    the Status can have moved, since Notion keeps no history of a property."""
+    """An ask's page as its record says: `{status, answered, at, decision, choose}`.  Answered once its Status has left
+    PAGE_WAITING (approved, decided otherwise or sent back for a revision, or its default applied); `at` is then the page's
+    last edit, the latest the Status can have moved, since Notion keeps no history of a property.  `decision` and `choose`
+    are its Decision text and Choose letter, empty until set."""
     p = notion.call("GET", f"/pages/{page}")
-    status = prop_text((p.get("properties") or {}).get("Status"))
+    props = p.get("properties") or {}
+    status = prop_text(props.get("Status"))
     if not status:
         raise SlackError(f"page {page} has no Status")
     answered = status != PAGE_WAITING
-    return {"status": status, "answered": answered,
+    return {"status": status, "answered": answered, "decision": prop_text(props.get("Decision")), "choose": prop_text(props.get("Choose")),
             "at": _iso_epoch(p["last_edited_time"]) if answered and p.get("last_edited_time") else None}
 
 
@@ -4022,12 +4028,12 @@ class AskDaniel:
 
 def wait_for(get: Callable[[], dict], *, sleep: Callable[[float], None], every: float, polls: int,
              max_s: float = math.inf, clock: Callable[[], float] = time.monotonic) -> tuple[dict, bool]:
-    """GET a card until it leaves `pending` (decided, or a blocking card overdue), at most `polls` times, `every` s apart, for at
-    most `max_s` of `clock` time; and whether it stopped at `max_s` with the card still pending."""
+    """GET a card until it leaves `pending` (decided, or a blocking card overdue) or its page is answered, at most `polls` times,
+    `every` s apart, for at most `max_s` of `clock` time; and whether it stopped at `max_s` with the card still pending."""
     start = clock()
     for i in range(max(1, polls)):
         out = get()
-        if out.get("status") != "pending" or i == polls - 1:
+        if out.get("status") != "pending" or (out.get("page") or {}).get("answered") or i == polls - 1:
             return out, False
         if (left := max_s - (clock() - start)) <= 0:
             return out, True
@@ -4035,10 +4041,61 @@ def wait_for(get: Callable[[], dict], *, sleep: Callable[[float], None], every: 
     return out, False
 
 
+def card_page(api: Slack, reg: dict, out: dict) -> str | None:
+    """The page a card links, as `daniel_cards` finds it: in the card, else in its thread (its asker's mention)."""
+    if not out.get("ts") or not (ch := out.get("channel") or channel_id_for(reg, ASK_CHANNEL)):
+        return None
+    return next((u for m in api.paged("conversations.replies", "messages", channel=ch, ts=out["ts"]) if (u := page_link(m))), None)
+
+
+def card_differs(out: dict, page: dict) -> str | None:
+    """What the card says, when its answered page says otherwise: one of the two is decided and the other isn't, the page is
+    Daniel's own Decision while the card's choice is the lane's or the default's, or the card's choice is an option letter
+    other than the page's Choose.  A choice that isn't a letter can't be held against Choose, and passes."""
+    held, decided = out.get("status") in DECIDED, page["status"] in PAGE_DECISIONS
+    choice, choose = str(out.get("choice") or "").lower(), (page.get("choose") or "").lower()
+    if held == decided and not (held and ((page["status"] == PAGE_OTHERWISE and out.get("source") in ("lane", "default"))
+                                          or (choose and re.fullmatch(r"[a-e]", choice) and choice != choose))):
+        return None
+    if not held:
+        return f"the card is {out.get('status') or '-'}"
+    return f"the card records `{out.get('choice') or '-'}` ({out.get('source') or '-'}, {out.get('decided_at') or '-'})"
+
+
+def page_follower(ns: argparse.Namespace, reg: dict) -> Callable[[dict], dict]:
+    """A reader of a card's page (Notion's record of the ask): the card with `page` (`{url, status, answered, decision, ...}`,
+    or `error` when it can't be read) and, once the page is answered, `differs` (`card_differs`).  A card that links no page
+    is returned as it is.  The link is looked up once, and the page is read at every call."""
+    links: dict = {}
+
+    def read(out: dict) -> dict:
+        ts = out.get("ts")
+        if ts and ts not in links:
+            try:
+                links[ts] = card_page(client(ns), reg, out)
+            except SlackError as e:
+                links[ts] = e
+        url = links.get(ts)
+        if isinstance(url, SlackError):
+            return {**out, "page": {"url": None, "status": None, "answered": False, "error": f"the card's thread wasn't read: {url}"}}
+        if not url:
+            return out
+        page = {"url": url, **Pages().state(notion_page_id(url))}
+        return {**out, "page": page, **({"differs": card_differs(out, page)} if page["answered"] else {})}
+    return read
+
+
+def _decided(out: dict) -> bool:
+    """Whether the ask is decided: by its page once that is answered, else by the card."""
+    page = out.get("page") or {}
+    return page["status"] in PAGE_DECISIONS if page.get("answered") else out.get("status") in DECIDED
+
+
 def _await_card(ns: argparse.Namespace, reg: dict, route: "AskDaniel", cid: str, polls: int) -> int:
-    """`ask-daniel ... --wait`: poll card `cid` until it is decided, `polls` polls or WAIT_CAP_S run out; a card still pending at
-    the cap exits STILL_GOING with the command that reads it later (research.waitcap)."""
-    out, capped = wait_for(lambda: route.call("GET", "/" + urllib.parse.quote(cid, safe="")), sleep=_sleep, every=ns.every,
+    """`ask-daniel ... --wait`: poll card `cid` until it is decided or its page is answered, `polls` polls or WAIT_CAP_S run
+    out; a card still pending at the cap exits STILL_GOING with the command that reads it later (research.waitcap)."""
+    follow = page_follower(ns, reg)
+    out, capped = wait_for(lambda: follow(route.call("GET", "/" + urllib.parse.quote(cid, safe=""))), sleep=_sleep, every=ns.every,
                            polls=polls, max_s=waitcap.WAIT_CAP_S, clock=_clock)
     ring_decision(ns, reg, cid, out)
     rc = _show(out, ns.json)
@@ -4051,15 +4108,18 @@ def _await_card(ns: argparse.Namespace, reg: dict, route: "AskDaniel", cid: str,
 
 
 def ring_decision(ns: argparse.Namespace, reg: dict, cid: str, out: dict) -> None:
-    """Once a card is decided, ring the admin's inbox with its question, outcome and asker, so the decision reaches the
-    decisions log without an issue filed for it.  Once per card: a ring already in the inbox isn't repeated."""
-    if out.get("status") not in DECIDED or ns.dry_run:
+    """Once an ask is decided, ring the admin's inbox with its question, outcome and asker, so the decision reaches the
+    decisions log without an issue filed for it.  The outcome is the page's Status and Decision once the page is answered
+    (`page_follower`), and the card's choice only until then; a card that differs from its page rings as that, naming both.
+    Once per card and kind of ring: a ring already in the inbox isn't repeated."""
+    if not _decided(out) or ns.dry_run:
         return
     to, r = routes_of(ns).resolve("top")
     if not r or r.get("closed"):
         return
     api, ch = client(ns), r.get("channel") or channel_id(ns, reg, FRONT_DOOR)
-    mark = f"card `{cid}` decided"
+    page = out.get("page") or {}
+    mark = f"card `{cid}` differs from its page" if out.get("differs") else f"card `{cid}` decided"
     if any(is_doorbell(m, reg) and (m.get("text") or "").startswith(f"from ask-daniel, {mark}") for m in api.paged("conversations.replies", "messages", channel=ch, ts=r["inbox_ts"],
                                                              oldest=f"{_now().timestamp() - 14 * 86400:.6f}")):
         return
@@ -4075,18 +4135,32 @@ def ring_decision(ns: argparse.Namespace, reg: dict, cid: str, out: dict) -> Non
             link = permalink(reg, card_ch, out["ts"])
         except SlackError:
             pass
-    text = (f"from ask-daniel, {mark}: `{out.get('choice') or '-'}` ({out.get('source') or '-'}, {out.get('decided_at') or '-'})"
+    if page.get("answered"):
+        said = f"its page says {page['status']}: {page.get('decision') or '-'} ({page['url']})" + (f"; {out['differs']}" if out.get("differs") else "")
+    else:
+        said = (f"`{out.get('choice') or '-'}` ({out.get('source') or '-'}, {out.get('decided_at') or '-'})"
+                + ("; its page was unreadable, so this is the card's choice alone" if page.get("error") else ""))
+    text = (f"from ask-daniel, {mark}: {said}"
             + (f" on: {question}" if question else "") + (f"; asked by {asker}" if asker else "") + (f" {link}" if link else ""))
     api.call("chat.postMessage", channel=ch, thread_ts=r["inbox_ts"], username="router", unfurl_links="false", text=text)
     print(f"route @{to}: rang with the decision", file=sys.stderr)
 
 
 def _show(out: dict, as_json: bool) -> int:
+    """Print the card, and its page once that is answered: a card that differs from its page is named on one line under the
+    page's, never as the decision.  Exit 0 once the ask is decided."""
+    page = out.get("page") or {}
+    card = " ".join(str(out.get(k) or "-") for k in ("status", "choice", "source", "decided_at"))
     if as_json:
         print(json.dumps(out, indent=2, ensure_ascii=False))
+    elif not page.get("answered"):
+        print(card)
     else:
-        print(" ".join(str(out.get(k) or "-") for k in ("status", "choice", "source", "decided_at")))
-    return 0 if out.get("status") in DECIDED else 1
+        says = f"page {page['status']}: {page.get('decision') or '-'} {page['url']}"
+        print(f"{says}\ndiffers: {out['differs']}; its page says {page['status']}" if out.get("differs") else f"{card}\n{says}")
+    if page.get("error"):
+        print(f"ask-daniel: the ask's page is unreadable ({page['error']}): this is the card alone, unchecked against its page", file=sys.stderr)
+    return 0 if _decided(out) else 1
 
 
 def permalink(reg: dict, ch: str, ts: str) -> str:
@@ -4141,7 +4215,7 @@ def cmd_ask_daniel(ns: argparse.Namespace, reg: dict) -> int:
                 print(f"dry-run: POST {ASK_DANIEL}{path}/resolve {json.dumps(body, sort_keys=True)}", file=sys.stderr)
                 return 0
             try:
-                out = AskDaniel().call("POST", f"{path}/resolve", body)
+                out = page_follower(ns, reg)(AskDaniel().call("POST", f"{path}/resolve", body))
                 ring_decision(ns, reg, str(ns.id), out)
                 return _show(out, ns.json)
             except RouteError as e:
@@ -4440,7 +4514,7 @@ def main(argv: list[str], prog: str = "research msg") -> int:
     p.add_argument("--urgent", action="store_true", help="--as: exit 1 unless an unread doorbell is URGENT")
     p.add_argument("--json", action="store_true")
     p = cmd("ask-daniel", "an ask's page in the Asks for Daniel database and its card in #ask-daniel; `status ID` reads the card's "
-            "answer, `resolve ID` records one from its page or thread, `extend ID` moves its deadline later, `withdraw ID` "
+            "answer and, once its page is answered, the page's Status and Decision, `resolve ID` records one from its page or thread, `extend ID` moves its deadline later, `withdraw ID` "
             "takes back an ask events overtook, `pages` lists the pages edited lately")
     p.add_argument("verb", nargs="?", choices=("status", "resolve", "extend", "withdraw", "pages"),
                    help="read a card's decision, record Daniel's answer from its page or thread, move its deadline later "
@@ -4452,7 +4526,7 @@ def main(argv: list[str], prog: str = "research msg") -> int:
     p.add_argument("--link", default=None, metavar="NOTION_URL", help="the ask's page, made with the Notion MCP, in place of --page")
     p.add_argument("--hours", type=float, default=24, metavar="H", help="pages: edited in the last H hours (default 24)")
     p.add_argument("--wait", action="store_true",
-                   help=f"poll until the card is decided (or overdue); exit 0 once decided, for at most {waitcap.WAIT_CAP_S} s (no tool "
+                   help=f"poll until the card is decided (or overdue) or its page is answered; exit 0 once decided, for at most {waitcap.WAIT_CAP_S} s (no tool "
                         f"call blocks longer than 20 minutes): a card still pending then exits {waitcap.STILL_GOING}, "
                         "naming `ask-daniel status ID` to check back")
     p.add_argument("--every", type=float, default=WAIT_EVERY_S, metavar="S", help=f"seconds between polls (default {WAIT_EVERY_S})")
