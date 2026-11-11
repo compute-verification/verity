@@ -56,7 +56,8 @@ RANGES = {
     "step_flop": (1e3, 1e6, "guess"),
     "p_evade": (1e-15, 2.0 ** -20, "guess, around the planner's 2^-40"),
     "luck": (1.0, 32.0, "no luck; spec sheet 8; high a guess"),
-    "step_bits": (8.0, 32.0, "low a guess; 16; one 32-bit gate"),
+    "step_bits": (float(T.partition_v2.UNIT_CLASSES[0]), float(T.partition_v2.UNIT_CLASS_MAX),
+                  "a proof block's outputs fit its Definition's public size class: the smallest; the widest"),
     "intake_x": (1.0, 1.3e6, "1 once the count check is in the ZK flow; line rate until then"),
     "identities": (1.0, 1e3, "guess"),
     "lag_s": (60.0, 86400.0, "guess: a minute's verdict to a day; one hour assumed"),
@@ -108,6 +109,9 @@ SERVED_4GB = SCENARIOS["served today, R_wipe 4 GB"]
 WIPE_2GB = {"pous_rounds": 74000.0, "pous_floor": 0.0, "unfilled_gb": 1.83}
 #: the threading ReferenceThreaded gives under its conjecture, at which the closed-form memory cap binds
 KEYED = {"d": T.REFERENCE_THREADED[0]}
+#: batched proving's cost, at which the injecting blocks' pool is worth less than the fleet's capacity; at today's sparse
+#: samples it is worth more, and ``evaluate`` stops the cheating share at 1, which the closed form chi does not
+BATCHED = {"overhead": 1.6e8}
 #: points where a closed form is checked against evaluate(): the probe, its overrides, the tier, the term (eta against
 #: the bound, mu against the monitored part when memory caps it, nu against the declared part, chi against the cheating
 #: share) and the regime; a regime that starts with "breaks" is one the closed form doesn't cover
@@ -116,7 +120,7 @@ CHECKS = [
     ("1 GB streamed-label wipes", WIPE_2GB | KEYED | {"unfilled_gb": 0.83}, "T4", "mu",
      "the floor credit's residual is above the cap"),
     ("design", DESIGN, "T4", "eta", "memory caps nothing: mu > r"),
-    ("host CPUs bounded", DESIGN | {"host_share": 0.0}, "T5", "eta", "r = 1%, chi on top"),
+    ("host CPUs bounded, batched", DESIGN | BATCHED | {"host_share": 0.0}, "T5", "eta", "r = 1%, chi on top"),
     ("unmonitored 0.1", DESIGN | {"unmonitored": 0.1}, "T4", "eta", "s of spent FLOP, the rest scaled by 1 - s"),
     ("intake at line rate", {"residual": 0.9, "intake_x": 1.3e6}, "T4", "eta", "no count check: mu >> 1 caps nothing"),
     ("served, R_wipe 4 GB", SERVED_4GB | KEYED, "T3", "mu", "memory caps the residual"),
@@ -125,18 +129,22 @@ CHECKS = [
      "helpers refill R_wipe; sigma joins lambda_in"),
     ("defaults", {}, "T1", "nu", "Lambda(K) = K / (2 d b_w)"),
     ("K 1e6", {"K": 1e6}, "T1", "nu", "Lambda(K) = e"),
-    ("design", DESIGN, "T5", "chi", "(1, 0) above thread_bits: one block is full at S_1"),
-    ("batched proving", DESIGN | {"overhead": 1.6e8}, "T5", "chi", "overhead 1.6e8"),
-    ("1,000 servers", DESIGN | {"nodes": 1e3}, "T5", "chi", "the pool doesn't shrink with the fleet"),
+    ("512 samples per statement", DESIGN | {"overhead": 1.7e10}, "T5", "chi",
+     "(1, 0) above thread_bits: one block is full at S_1"),
+    ("batched proving", DESIGN | BATCHED, "T5", "chi", "overhead 1.6e8"),
+    ("1,000 servers, batched", DESIGN | BATCHED | {"nodes": 1e3}, "T5", "chi", "the pool doesn't shrink with the fleet"),
     ("no dark compute", {"residual": 0.0, "host_share": 0.0, "clock_share": 0.0, "eps_w": 0.0, "eps_agg": 0.0, "lag_s": 0.0, "kappa_chain": 0.0695}, "T4", "nu", "breaks: the partial-sum law binds below nu"),
     ("served 4 GB, daily wipes", SERVED_4GB | {"wipe_s": 86400.0}, "T4", "mu",
      "breaks: wipe period above R_wipe / lambda_in"),
     ("served, R_wipe 22 MB", {"residual": 0.9, "unfilled_gb": 0.01, "pous_rounds": 1e6, "pous_floor": 0.0,
                               "wipe_s": 1.0, "d": 65536.0}, "T3", "mu",
      "breaks: R_wipe < d b_w e, the cap floors at nu"),
-    ("whole embedding table", KEYED | {"thread_bits": 2.94e9}, "T5", "chi",
+    ("design", DESIGN, "T5", "chi",
+     "breaks: at sparse samples the pool is worth more than the fleet's capacity, where the share stops at 1"),
+    ("whole embedding table", KEYED | BATCHED | {"thread_bits": 2.94e9}, "T5", "chi",
      "breaks: threading certified past S_1, the chord ends at thread_bits"),
-    ("proofs nearly free", {"overhead": 1.0, "replay": 1.0}, "T5", "chi", "breaks: the pool can't fill one block"),
+    ("proofs nearly free", {"overhead": 1.0, "replay": 1.0, "share": 0.5}, "T5", "chi",
+     "breaks: the pool can't fill one block"),
 ]
 
 
