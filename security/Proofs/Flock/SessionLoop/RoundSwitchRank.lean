@@ -43,9 +43,9 @@ namespace LeanRelease
 open _root_.Flock.Firewall.Frame (K_SKIP)
 open Loop Ranked
 
-set_option maxHeartbeats 1600000 in
-
 variable {wideLeaf : Bool}
+
+set_option maxHeartbeats 1600000 in
 /-- **The frame passes a rep's rank check at its ring switch's first round**: on a history of at most `refK x`
 openings whose last coins the frame takes, at table `j`'s rep `r`'s rank check (`Masked.rankSlot`), the round after
 the rep's algebraic phase, the rep's rank check holds at the opened coins. The frame took the algebraic phase's last
@@ -148,7 +148,7 @@ theorem rank_unrefused_pcs (T : ZKMal.CoinLayer.TableData)
   obtain ⟨hts', ⟨tp, htp⟩, -⟩ := Count.placeholder_tab hph0
   rw [hz, Except.ok.injEq, Prod.mk.injEq] at htp
   obtain ⟨htsch, -⟩ := htp
-  obtain ⟨hm36, -, -, -⟩ := Count.sched_facts (htsch ▸ hz : _root_.Flock.Zk.schedule wideLeaf _ = .ok (t.sch, y.tPad))
+  obtain ⟨hm36, -, -, -⟩ := Count.sched_facts (htsch ▸ hz : _root_.Flock.Zk.schedule _ _ = .ok (t.sch, y.tPad))
   obtain ⟨-, hdom', -, -⟩ := sizesOk_at (sizesOk_of_serves hSv s0 spec _ hsx) hq2
   obtain ⟨lay, mask, hds, hc', hdm, -⟩ := placeholder_ok hph0
   have hdg : t.st.digest.size < 2 ^ 64 := by
