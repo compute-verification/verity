@@ -50,7 +50,8 @@ untraced = [
 # served_verdicts' load, whose timings file its tests read and whose fixed window `test_serve_load` runs against
 # serve-openai's endpoint (`adapters/vllm/verity_vllm`) over a stand-in engine; `demos/vllm/serve.sh`: the
 # demo's endpoint (`test_vllm_example`); `demos/vllm/commit.sh`: the demo's Commit, which `test_commit_records` runs
-# through bash in a toy tree. `benchmarks/spot_proved/stage.py`: its allreduce and cuBLAS GEMM staging on fake captures,
+# through bash in a toy tree, with `demos/vllm/published.sh`, the list of files a Commit run publishes.
+# `benchmarks/spot_proved/stage.py`: its allreduce and cuBLAS GEMM staging on fake captures,
 # and the match gate's a11, which imports a6's `benchmarks/served_units/stage.py` and its circuit-check targets.
 inputs = ["verity", "verity/protocols/spot/verifier/lean/lakefile.toml", "verity/composite/device/live_challenger",
           "benchmarks/spot_proved/stage.py", "benchmarks/served_units/stage.py",
@@ -58,7 +59,7 @@ inputs = ["verity", "verity/protocols/spot/verifier/lean/lakefile.toml", "verity
           "tools/verity/circuit_check/src/circuit_check/entries.py", "tools/verity/circuit_check/src/circuit_check/targets.py",
           "benchmarks/one_stage/interfaces/verity_e2e_demo", "benchmarks/torch_gpu/commit_slots/slots.py",
           "benchmarks/prove_path/records_audit.py", "demos/vllm/serve_load.py", "demos/vllm/serve.sh",
-          "demos/vllm/commit.sh",
+          "demos/vllm/commit.sh", "demos/vllm/published.sh",
           "benchmarks/one_stage/interfaces/tests/fixtures/drawn-unit-bundle.json",
           "benchmarks/one_stage/interfaces/tests/fixtures/drawn-unit-bundle.bin",
           "benchmarks/one_stage/interfaces/tests/fixtures/drawn-unit-registration.json",
