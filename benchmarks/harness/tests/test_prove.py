@@ -1173,7 +1173,7 @@ def test_a_lean_verifier_run_of_record_gives_both_figures_as_modeled_and_says_wh
                                  "seconds": [600.0, 500.0, 520.0], "statement_seconds": 520.0, "proof_bytes": 2_000_000,
                                  "run": run, "host": "cpu-node-0 (64 cores, A CPU 9000)"}]
     assert doc["inputs"][-1] == {"slot": R.LEAN, "record": "prove-glm53-lean-verify", "targets": [run],
-                                 "what": "the Lean verifier (`flock-verify verify`) on one statement of each of 1 block "
+                                 "what": "the Lean verifier (its `verify`) on one statement of each of 1 block "
                                          "type(s); every other type's Lean verifier seconds and proof bytes are scaled "
                                          "from them"}
     assert doc["refused"] == [] and t["verifier_seconds_per_token"]["block_types"] == 8
@@ -1185,7 +1185,7 @@ def test_a_lean_verifier_run_of_record_gives_both_figures_as_modeled_and_says_wh
     assert lines["- Lean verifier seconds"] == (
         f"- Lean verifier seconds per token: {R._n(seconds['value'])}, modeled, not measured. Measured: one block type, "
         f"`{RMSNORM}` ({share} of the proving time), in its statement of 256 blocks of 2^27 witness bits each (a full "
-        "statement), which `flock-verify verify` accepted in 520 s (the median of 3 runs: 600, 500, 520 s; a run is one "
+        "statement), which the Lean verifier's `verify` accepted in 520 s (the median of 3 runs: 600, 500, 520 s; a run is one "
         f"process, the statement read and set up in it), in run {run} on cpu-node-0 (64 cores, A CPU 9000). Scaled: the "
         f"other 149 block types, {1 - seconds['measured_share']:.1%} of this figure, each at the measured statement's "
         f"seconds a witness bit times its 2^k_log bits: {P.LEAN_SECONDS_BASIS}.")
@@ -1213,8 +1213,8 @@ def test_a_lean_verifier_run_of_record_gives_both_figures_as_modeled_and_says_wh
     doc = R.build("flock", "glm53", store=s.fresh("third"), root=REPO)
     assert [x["run"] for x in doc["totals"]["lean_verify"]] == [newer] and doc["inputs"][-1]["targets"] == [newer, run]
     assert doc["totals"]["lean_verifier_seconds_per_token"]["value"] == pytest.approx(2 * 300.0 / 520.0 * seconds["value"])
-    assert ("in its statement of 128 blocks of 2^27 witness bits each (128/256 of a full statement), which `flock-verify "
-            "verify` accepted in 300 s (one run; a run is one process") in R.render(doc)
+    assert ("in its statement of 128 blocks of 2^27 witness bits each (128/256 of a full statement), which the Lean "
+            "verifier's `verify` accepted in 300 s (one run; a run is one process") in R.render(doc)
 
 
 def test_a_lean_verifier_run_that_measures_nothing_is_refused_by_name_and_both_figures_stay_not_measured(tmp_path):
@@ -1268,7 +1268,7 @@ def test_a_lean_verifier_run_that_measures_nothing_is_refused_by_name_and_both_f
 
 
 class Verifier:
-    """`flock-verify` as the runner starts it, with no process: `archive-put` names each file by a key, and each
+    """The Lean verifier as the runner starts it, with no process: `archive-put` names each file by a key, and each
     `verify` takes the next verdict (None: it prints none), a made-up clock advancing by the seconds it took."""
 
     def __init__(self, monkeypatch, verdicts: list[tuple[dict | None, float]], *, put_rc: int = 0):
@@ -1286,7 +1286,7 @@ class Verifier:
         verdict, took = self.verdicts.pop(0)
         self.now += took
         session = cmd[cmd.index("--session") + 1]
-        log.write_text(f"inputs: 40 ms\nsetup (drawn): 900 ms\n{session}: 2000 ms\n")
+        log.write_text(f"inputs: 40 ms\nsetup: 900 ms\n{session}: 2000 ms\n")
         accepted = bool(verdict and verdict["accepted"])
         return (0 if accepted else 1, "" if verdict is None else "VERDICT " + json.dumps(verdict) + "\n",
                 {"cpu_s": took * 2, "user_s": took, "maxrss_gib": 1.5})
@@ -1309,7 +1309,9 @@ def kept_proof(tmp: Path, *, stage: dict | None = None) -> Path:
 
 
 STAGE = {"word": RMSNORM, "definition": "Staged_v2{N=1}", "k_log": 27, "n": 256}
-ACCEPTED = {"accepted": True, "unit_draw": {"seed": "ab", "units": [1, 2, 3]}}
+#: the path the runner is given for the verifier: the fake starts no process, so no file is there
+VERIFIER = "bin/lean-verifier"
+ACCEPTED = {"accepted": True}
 
 
 def test_the_lean_verifiers_runner_records_each_run_of_the_verifier_on_a_kept_proof(tmp_path, monkeypatch, capsys):
@@ -1319,13 +1321,13 @@ def test_the_lean_verifiers_runner_records_each_run_of_the_verifier_on_a_kept_pr
 
     tree, out = kept_proof(tmp_path, stage=STAGE), tmp_path / "out"
     verifier = Verifier(monkeypatch, [(ACCEPTED, 12.5), (ACCEPTED, 10.0), (ACCEPTED, 11.0)])
-    assert main(["lean-verify", "--lean", "flock-verify", "--proof", str(tree), "--out", str(out)]) == 0
+    assert main(["lean-verify", "--lean", VERIFIER, "--proof", str(tree), "--out", str(out)]) == 0
     doc = json.loads((out / L.RECORD).read_text())
     put, *verifies = verifier.calls
     archive = put[2]
-    assert put[:2] == ["flock-verify", "archive-put"] and [Path(x).name for x in put[3:]] == ["circuit.txt", "pub-256.bin", "program.json"]
+    assert put[:2] == [VERIFIER, "archive-put"] and [Path(x).name for x in put[3:]] == ["circuit.txt", "pub-256.bin", "program.json"]
     assert not Path(archive).exists()                                # the verifier's archive is scratch, outside the record
-    assert verifies == 3 * [["flock-verify", "verify", "--statement", "verity/flock-circuit", "--archive", archive,
+    assert verifies == 3 * [[VERIFIER, "verify", "--statement", "verity/flock-circuit", "--archive", archive,
                              "--circuit", "key-circuit.txt", "--public", "key-pub-256.bin", "--program", "key-program.json",
                              "--zk", "--session", str(tree / "session")]]
     assert doc["schema"] == L.SCHEMA and doc["accepted"] is True and doc["host"] == LEAN_HOST
@@ -1337,9 +1339,10 @@ def test_the_lean_verifiers_runner_records_each_run_of_the_verifier_on_a_kept_pr
     assert (doc["statement"]["zk"], doc["statement"]["circuit_sha512"]) == (True, "key-circuit.txt")
     v = doc["verifier"]
     assert (v["archive_put_s"], v["repeat"], [r["wall_s"] for r in v["runs"]]) == (0.25, 3, [12.5, 10.0, 11.0])
+    assert v["command"][:2] == ["lean-verifier", "verify"]                 # the executable by its file's name, not its path
     assert v["runs"][0] | {"verdict_sha512": None} == {
         "wall_s": 12.5, "cpu_s": 25.0, "user_s": 12.5, "maxrss_gib": 1.5, "rc": 0, "accepted": True, "why": None,
-        "verdict_sha512": None, "draw": {"seed": "ab"}, "phases_ms": {"inputs": 40, "setup (drawn)": 900, "session": 2000}}
+        "verdict_sha512": None, "phases_ms": {"inputs": 40, "setup": 900, "session": 2000}}
     assert capsys.readouterr().out.startswith('LEAN-VERIFY {"accepted": true, ')
 
     # the record is the one `prove` reads
@@ -1357,7 +1360,7 @@ def test_a_refusal_ends_the_lean_verifiers_runner_with_no_further_run(tmp_path, 
     tree, out = kept_proof(tmp_path, stage=STAGE), tmp_path / "out"
     verifier = Verifier(monkeypatch, [(ACCEPTED, 12.0), ({"accepted": False, "why": "table circuit: lincheck"}, 3.0),
                                       (ACCEPTED, 12.0)])
-    assert main(["lean-verify", "--lean", "flock-verify", "--proof", str(tree), "--out", str(out)]) == 1
+    assert main(["lean-verify", "--lean", VERIFIER, "--proof", str(tree), "--out", str(out)]) == 1
     doc = json.loads((out / L.RECORD).read_text())
     assert len(verifier.calls) == 3 and len(verifier.verdicts) == 1          # archive-put and two runs: no third
     assert doc["accepted"] is False and [(r["accepted"], r["why"], r["rc"]) for r in doc["verifier"]["runs"]] == [
@@ -1366,7 +1369,7 @@ def test_a_refusal_ends_the_lean_verifiers_runner_with_no_further_run(tmp_path, 
     assert R.lean_verify(doc, "r20261110-000000-0001") == "the Lean verifier refused its statement: table circuit: lincheck"
 
     Verifier(monkeypatch, [(None, 1.0)])
-    assert main(["lean-verify", "--lean", "flock-verify", "--proof", str(tree), "--out", str(out), "--repeat", "1"]) == 1
+    assert main(["lean-verify", "--lean", VERIFIER, "--proof", str(tree), "--out", str(out), "--repeat", "1"]) == 1
     assert json.loads((out / L.RECORD).read_text())["verifier"]["runs"][0]["why"] == "no verdict (rc 1)"
 
 
@@ -1374,7 +1377,7 @@ def test_the_lean_verifiers_runner_finds_each_file_by_name_and_takes_the_block_f
     def measured(*argv: str) -> dict:
         parser = argparse.ArgumentParser()
         L.add_arguments(parser)
-        return L.measure(parser.parse_args(["--lean", "flock-verify", "--proof", str(tree), "--repeat", "1", *argv]), tmp_path / "out")
+        return L.measure(parser.parse_args(["--lean", VERIFIER, "--proof", str(tree), "--repeat", "1", *argv]), tmp_path / "out")
 
     tree = kept_proof(tmp_path)
     verifier = Verifier(monkeypatch, [(ACCEPTED, 1.0)] * 3)
@@ -1461,13 +1464,13 @@ def test_verity_bench_prove_lean_verify_is_the_lean_verifiers_runner_and_the_tab
         return done.value.code, capsys.readouterr().out
 
     out_dir = tmp_path / "lean-out"
-    code, out = run("lean-verify", "--lean", "flock-verify", "--proof", str(kept_proof(tmp_path, stage=STAGE)), "--out",
+    code, out = run("lean-verify", "--lean", VERIFIER, "--proof", str(kept_proof(tmp_path, stage=STAGE)), "--out",
                     str(out_dir), "--repeat", "1")
     assert code == 0 and out.startswith("LEAN-VERIFY ")
     lean_ran(s, tmp_path, "r20261110-000000-0001", json.loads((out_dir / L.RECORD).read_text()))
     code, out = run("--system", "flock", "--workload", "glm53")
     assert code == 0 and ", modeled, not measured. Measured: one block type, `RMSNormFusedCudaVector8_v1{" in out
-    assert "which `flock-verify verify` accepted in 9 s (one run;" in out and "per token: not measured" not in out
+    assert "which the Lean verifier's `verify` accepted in 9 s (one run;" in out and "per token: not measured" not in out
     code, out = run("--system", "flock", "--workload", "glm53", "--json")
     t = json.loads(out)["totals"]
     assert (t["lean_verifier_seconds_per_token"]["status"], t["proof_bytes_per_token"]["status"]) == ("modeled", "modeled")

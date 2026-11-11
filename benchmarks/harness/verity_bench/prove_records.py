@@ -429,7 +429,7 @@ def lean(store: Any, workload: Workload, census: P.Census) -> tuple[list[P.LeanV
         return [], [], []
     types = len({v.definition for v in found})
     return found, [_input(LEAN, workload, [v.run for v in found],
-                          f"the Lean verifier (`flock-verify verify`) on one statement of each of {types} block type(s); "
+                          f"the Lean verifier (its `verify`) on one statement of each of {types} block type(s); "
                           "every other type's Lean verifier seconds and proof bytes are scaled from them" if found else
                           "none that measures a block type: the Lean verifier's seconds and the proof's bytes are not "
                           "measured")], refused
@@ -603,7 +603,7 @@ def _lean_lines(doc: Mapping[str, Any]) -> list[str]:
         return f"- {name} per token: {_n(v['value'])}, {status}. Measured: {one}, {what}{more}.{scaled}{bare}"
 
     return [line("Lean verifier seconds", seconds,
-                 f"{block}, which `flock-verify verify` accepted in {_n(m['statement_seconds'])} s ({runs}; a run is one "
+                 f"{block}, which the Lean verifier's `verify` accepted in {_n(m['statement_seconds'])} s ({runs}; a run is one "
                  f"process, the statement read and set up in it), in run {m['run']} on {m['host']}", "seconds"),
             line("proof bytes", size,
                  f"{block}, whose proof files are {_n(m['proof_bytes'])} bytes in all (run {m['run']})", "bytes")]

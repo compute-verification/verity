@@ -1,7 +1,7 @@
-"""`verity bench prove lean-verify`: Flock's Lean verifier (`flock-verify verify`) timed on one kept proof, and the
+"""`verity bench prove lean-verify`: Flock's Lean verifier (its `verify`) timed on one kept proof, and the
 proof's bytes, as one record `verity bench prove` reads.
 
-    verity bench prove lean-verify --lean flock-verify --proof TREE [--repeat 3] [--out DIR]
+    verity bench prove lean-verify --lean VERIFIER --proof TREE [--repeat 3] [--out DIR]
         [--session DIR] [--circuit F] [--public F] [--program F] [--partition F] [--registered F] [--tables DIR]
         [--stage F] [--word TYPE] [--definition ID] [--k-log K] [--blocks N] [--full N] [--statement ID] [--plain]
         [--verify-arg=ARG ...]
@@ -14,8 +14,8 @@ the tree holds the stager's, names the block type: the census type it was staged
 id (`definition`), log2 of a block's witness bits (`k_log`) and the statement's blocks (`blocks`, else `n`) of a full
 one's (`full`, else 2^35 witness bits' worth); the flags give or override them.
 
-**A run** is one `flock-verify verify` process, as `benchmarks/one_stage/a0.py` runs the verifier: the
-statement's files held by content in the verifier's own archive (`flock-verify archive-put`, timed apart and in no
+**A run** is one process of the verifier's `verify`, as `benchmarks/one_stage/a0.py` runs the verifier: the
+statement's files held by content in the verifier's own archive (its `archive-put`, timed apart and in no
 run's seconds), then `verify --archive --circuit --public [--partition --program --registered] --zk --session`. So a
 run's wall seconds hold the verifier reading the statement, setting it up and verifying the one session. The command
 runs it `--repeat` times and records each run: its wall and CPU seconds, peak RSS, exit code, verdict, and the phases
@@ -135,11 +135,10 @@ def host() -> dict:
     and the commit of the tree."""
 
     def read(path: str, key: str) -> str | None:
-        try:
-            return next((line.split(":", 1)[1].strip() for line in Path(path).read_text().splitlines()
-                         if line.split(":", 1)[0].strip() == key), None)
-        except OSError:
+        if not Path(path).exists():
             return None
+        return next((line.split(":", 1)[1].strip() for line in Path(path).read_text().splitlines()
+                     if line.split(":", 1)[0].strip() == key), None)
 
     kb = read("/proc/meminfo", "MemTotal")
     commit = settings.RESEARCH_SOURCE_SHA
@@ -197,7 +196,6 @@ def measure(a: Any, out: Path, *, run: Callable[[Sequence[str], Path], tuple[int
             runs.append({"wall_s": round(wall, 3), **used, "rc": rc, "accepted": verdict.get("accepted") is True and rc == 0,
                          "why": verdict.get("why") or None,
                          "verdict_sha512": hashlib.sha512(line.encode()).hexdigest() if line else None,
-                         "draw": {k: v for k, v in (verdict.get("unit_draw") or {}).items() if k != "units"} or None,
                          "phases_ms": {"session" if m["name"] == str(f["session"]) else m["name"]: int(m["ms"])
                                        for m in PHASE.finditer(log)}})
             if not runs[-1]["accepted"]:
@@ -210,14 +208,14 @@ def measure(a: Any, out: Path, *, run: Callable[[Sequence[str], Path], tuple[int
                       "files": [_sized(p) for p in held], "tables": [_sized(p) for p in tables]},
         "proof": {"files": [_sized(p) for p in proofs], "bytes": sum(p.stat().st_size for p in proofs),
                   "record_bytes": (f["session"] / "session.json").stat().st_size},
-        "verifier": {"command": ["flock-verify", *cmd[1:]], "archive_put_s": round(put_s, 3), "repeat": a.repeat, "runs": runs},
+        "verifier": {"command": [Path(a.lean).name, *cmd[1:]], "archive_put_s": round(put_s, 3), "repeat": a.repeat, "runs": runs},
         "accepted": len(runs) == a.repeat and all(r["accepted"] for r in runs),
         "host": stamp(),
     }
 
 
 def add_arguments(parser: argparse.ArgumentParser) -> None:
-    parser.add_argument("--lean", required=True, help="flock-verify, the Lean verifier's executable")
+    parser.add_argument("--lean", required=True, help="the Lean verifier's executable, as `lake build` leaves it in verity/protocols/flock/verifier")
     parser.add_argument("--proof", required=True, metavar="TREE", help="the kept proof: a session directory and its statement")
     parser.add_argument("--out", type=Path, default=None, help="where lean-verify.json and the logs go (default: $OUT)")
     parser.add_argument("--repeat", type=int, default=3, help="runs of the verifier, each recorded (default: 3)")

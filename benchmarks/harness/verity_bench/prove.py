@@ -38,7 +38,7 @@ proving out, so they name each such type with its share of the blocks, and of th
 type with no time has no share of the proving time), and `modeled` otherwise.
 
 **The Lean verifier's seconds and the proof's bytes** are a block's too, from the statements the Lean verifier was
-run on (`LeanVerify`, a `lean-verify` record: one statement of a block type that `flock-verify verify` accepted, each
+run on (`LeanVerify`, a `lean-verify` record: one statement of a block type that the Lean verifier's `verify` accepted, each
 run's seconds and its proof files' bytes). A block type with a record of its own takes it, `measured`: its statement's
 seconds (the median of its runs) and bytes over the statement's blocks. Every other type with a k_log is `scaled`:
 the measured statements' median seconds, and bytes, a witness bit times its 2^k_log bits, so a full statement of any
@@ -294,7 +294,7 @@ class Steady:
 class LeanVerify:
     """A statement the Lean verifier accepted, as a `lean-verify` record holds it: the staged Definition (by its id),
     its `blocks` blocks of 2^k_log witness bits each where a full statement holds `full`, each run's wall seconds (a
-    run is one `flock-verify verify` process: the statement read and set up, and the one session verified), the bytes
+    run is one process of the Lean verifier's `verify`: the statement read and set up, and the one session verified), the bytes
     of the session's proof files, the run that measured it and its host as the report words it."""
 
     definition: str

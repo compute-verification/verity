@@ -12,7 +12,7 @@ verity bench prove --system spot --workload glm53 [--sampling ART]  Flock at the
     [--rows N]                                                      the N costliest block types, the rest in one row
     [--json]                                                        the table as JSON, every row whole
     [--local-only]                                                  this machine's catalog alone, not the store's remote
-verity bench prove lean-verify --lean flock-verify --proof TREE     the Lean verifier timed on one kept proof (below)
+verity bench prove lean-verify --lean VERIFIER --proof TREE         the Lean verifier timed on one kept proof (below)
 ```
 
 ## What it prints
@@ -126,18 +126,19 @@ serving MFU (`verity/protocols/inference_only/rho/data/reference.toml`) of the c
 `verity bench prove lean-verify` runs Flock's Lean verifier on one kept proof and writes the record the table reads:
 
 ```text
-verity bench prove lean-verify --lean flock-verify --proof TREE [--repeat 3] [--out DIR]
+verity bench prove lean-verify --lean VERIFIER --proof TREE [--repeat 3] [--out DIR]
     [--word TYPE] [--definition ID] [--k-log K] [--blocks N] [--full N]   the block type, where TREE's stage.json doesn't say
     [--session DIR] [--circuit F] [--public F] [--program F] [--partition F] [--registered F] [--tables DIR]
 ```
 
-TREE holds one session directory (`session.json` and its proof files, `<table>.rep0.bin` and `<table>.rep1.bin`) and
-the statement it was proved on (`circuit.txt`, the public file, and `program.json`, `partition.json` and
-`registered.json` where the statement has them), each found by its name. A run is one `flock-verify verify` process on
-the session, as `benchmarks/one_stage/a0.py` runs the verifier, so its seconds hold the verifier reading the
-statement, setting it up and verifying the session. The command runs it `--repeat` times and records each run's
-seconds, the proof files' bytes, the block type and the host (node, cores, CPU model). A run the verifier refuses ends
-the command: the record says refused, with the verifier's reason, and nothing is run again.
+VERIFIER is the Lean verifier's executable, as `lake build` leaves it under `verity/protocols/flock/verifier`. TREE
+holds one session directory (`session.json` and its proof files, `<table>.rep0.bin` and `<table>.rep1.bin`) and the
+statement it was proved on (`circuit.txt`, the public file, and `program.json`, `partition.json` and `registered.json`
+where the statement has them), each found by its name. A run is one process of the verifier's `verify` on the session,
+as `benchmarks/one_stage/a0.py` runs the verifier, so its seconds hold the verifier reading the statement, setting it
+up and verifying the session. The command runs it `--repeat` times and records each run's seconds, the proof files'
+bytes, the block type and the host (node, cores, CPU model). A run the verifier refuses ends the command: the record
+says refused, with the verifier's reason, and nothing is run again.
 
 As a research run, from a clone on a CPU node (`lean_verify.sh` builds the verifier and fetches the proof's art):
 
