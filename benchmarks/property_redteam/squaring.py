@@ -54,9 +54,22 @@ marked modeled.
 
 from __future__ import annotations
 
-from typing import Callable
+from collections.abc import Callable
 
-from gates import S8, S32_MAX, S32_MIN, U8, Builder, Iv, clog2, iv_add, iv_scale, operand_bits, proven
+from gates import (
+    S8,
+    S32_MAX,
+    S32_MIN,
+    U8,
+    Builder,
+    Iv,
+    clog2,
+    iv_add,
+    iv_scale,
+    operand_bits,
+    proven,
+)
+
 from verity.protocols.poub.verifier import codec
 
 F = codec.P1024
@@ -317,7 +330,7 @@ def seam_square(b: Builder, a: list[int]) -> tuple[list[int], int]:
 
 
 def _within_s32(iv: Iv) -> bool:
-    return S32_MIN <= iv[0] and iv[1] <= S32_MAX
+    return iv[0] >= S32_MIN and iv[1] <= S32_MAX
 
 
 def _iv_bits(iv: Iv) -> int:
@@ -525,8 +538,8 @@ def main() -> None:
     for name, fmt in (("u8", U8), ("s8", S8)):
         cols = column_intervals(fmt)
         for merge in (False, True):
-            def fewest(limit: int) -> tuple[int, int]:
-                return min((group_plan(cols, fmt == S8, limit, merge, s)[0], s) for s in range(N_LIMBS))
+            def fewest(limit: int, cols: list[Iv] = cols, signed: bool = fmt == S8, merge: bool = merge) -> tuple[int, int]:
+                return min((group_plan(cols, signed, limit, merge, s)[0], s) for s in range(N_LIMBS))
             groups, start = fewest(128)
             limit = 128
             while fewest(limit)[0] >= groups:

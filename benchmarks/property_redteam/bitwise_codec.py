@@ -185,9 +185,9 @@ def encode_block(n: int, c: int, rounds: int, words: list[int]) -> tuple[Builder
 
     def read(slot: tuple, binding: str) -> list[int]:
         out = []
-        for l in range(L):
-            g = b.inp(slot + (l,), 0, 255, binding=binding)
-            slots[slot + (l,)] = g
+        for ell in range(L):
+            g = b.inp(slot + (ell,), 0, 255, binding=binding)
+            slots[slot + (ell,)] = g
             out += B.byte_bits(g)
         return out
 
@@ -202,7 +202,7 @@ def encode_block(n: int, c: int, rounds: int, words: list[int]) -> tuple[Builder
             if r:
                 x = F.sigma(x, mask)
             x = F.rho(F.add_mod(F.add_mod(x, cs[r]), t))
-        outs[i] = [B.value(x[8 * l:8 * l + 8], 1 if l == 0 else 0) for l in range(L)]
+        outs[i] = [B.value(x[8 * ell:8 * ell + 8], 1 if ell == 0 else 0) for ell in range(L)]
     return b, outs, slots
 
 
@@ -210,11 +210,11 @@ def sample_inputs(n: int, c: int, cs: list[int], mask: int, tau: int, payload: d
     """The slot values of a sample `(cs, mask, τ)` with payload words `payload` (`Slot.value`)."""
     p, L = (1 << n) - c, n // 8
     x: dict = {}
-    for l in range(L):
-        x[("mask", l)] = mask >> (8 * l) & 255
-        x[("tweak", 1, l)] = tau % p >> (8 * l) & 255
+    for ell in range(L):
+        x[("mask", ell)] = mask >> (8 * ell) & 255
+        x[("tweak", 1, ell)] = tau % p >> (8 * ell) & 255
         for r, cr in enumerate(cs):
-            x[("const", r, l)] = cr >> (8 * l) & 255
+            x[("const", r, ell)] = cr >> (8 * ell) & 255
         for i, m in payload.items():
-            x[("payload", i, l)] = m >> (8 * l) & 255
+            x[("payload", i, ell)] = m >> (8 * ell) & 255
     return x
