@@ -37,8 +37,8 @@ from p2_v1 import serve  # noqa: E402
 import layout as L  # noqa: E402
 import sketch as K  # noqa: E402
 import stage as S  # noqa: E402
-from verity.core.protocols.remote_bandwidth import p2  # noqa: E402
-from verity.core.protocols.remote_bandwidth import receipts as R  # noqa: E402
+from verity.protocols.poub.verifier import p2  # noqa: E402
+from verity.protocols.poub.verifier import receipts as R  # noqa: E402
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Iterable
