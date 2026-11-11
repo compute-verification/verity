@@ -186,17 +186,20 @@ def test_an_owners_push_since_the_crossing_wins_over_its_lease(world, monkeypatc
     assert json.loads((out / Q.CROSS_PUSHED).read_text()) == {"6": f"not pushed: owner pushed since ({theirs[:12]})"}
 
 
-def test_restack_runs_without_the_queues_credentials_or_the_stores_keys(world, monkeypatch):
+def test_restack_runs_with_mains_drivers_and_without_the_queues_credentials_or_the_stores_keys(world, monkeypatch):
     """restack.py runs each head's own code, which needs none of the queue's GitHub and Slack credentials nor the store's keys a
-    node's run reads marks with: it sees none of them, and `gh` finds no stored login."""
+    node's run reads marks with: it sees none of them, and `gh` finds no stored login.  It merges with `main`'s drivers, the
+    environment `cross_drivers` gave `cross_one`."""
     for k in (*Q.SCRIPT_UNSET, "AWS_ACCESS_KEY_ID", "RESEARCH_STORE_CONFIG"):
         monkeypatch.setenv(k, "dummy-" + k.lower())
     seen: dict[str, str] = {}
     monkeypatch.setattr(Q, "run_group", lambda argv, cwd, left, env=None: seen.update(env or {}) or (1, "refused"))
     head = _git(world.dev, "rev-parse", "origin/main")
-    assert Q.cross_one(world.dev, head, head, []) == {"why": f"{Q.RESTACK} exit 1: refused"}
+    drivers = {"GIT_CONFIG_PARAMETERS": "'merge.x.driver'='python3 /d/x.py %O %A %B %P'"}
+    assert Q.cross_one(world.dev, head, head, [], drivers=drivers) == {"why": f"{Q.RESTACK} exit 1: refused"}
     assert not [k for k, v in seen.items() if v.startswith("dummy-")]
     assert seen["GH_CONFIG_DIR"].startswith(seen["TMPDIR"]) and not Path(seen["GH_CONFIG_DIR"]).exists()
+    assert seen["GIT_CONFIG_PARAMETERS"] == drivers["GIT_CONFIG_PARAMETERS"]
 
 
 def test_the_push_never_pushes_main_checked_or_next_whatever_a_pr_names(tmp_path):
@@ -263,8 +266,8 @@ def test_a_crossing_merges_with_mains_drivers_where_the_tree_it_merges_keeps_the
                                                                                                      driver):
     """Every git the queue runs registers the merge drivers (`git_env`), which may name a path a move changed: merging two
     trees from before the move, as a crossing's base merge does, finds no `python3 PATH` driver at `main`'s path and conflicts,
-    unless it runs `main`'s copy (`cross_drivers`).  A driver that is a shell command finding its script at either place is
-    left as it is, and merges there itself."""
+    unless its environment runs `main`'s copy (`cross_drivers`), as the carry check's merge's does (`mapped_change`).  A driver
+    that is a shell command finding its script at either place is left as it is, and merges there itself."""
     monkeypatch.delenv("GIT_CONFIG_PARAMETERS", raising=False)
     monkeypatch.setitem(RECORD_DRIVER, "merge.vllm-allowlist.driver", driver)
     r = tmp_path / "r"
@@ -292,16 +295,17 @@ def test_a_crossing_merges_with_mains_drivers_where_the_tree_it_merges_keeps_the
     assert "nowhere" not in env.get("GIT_CONFIG_PARAMETERS", "")
     if driver.startswith("python3 "):
         assert Q._git(r, "merge-tree", "--write-tree", "HEAD", base, check=False).returncode == 1
+        assert "doesn't merge" in Q.mapped_change(r, "head", main, [(main, [base])], tmp_path)[1]
+        assert "doesn't merge" not in Q.mapped_change(r, "head", main, [(main, [base])], tmp_path, env)[1]
         assert list(env) == ["GIT_CONFIG_PARAMETERS"]
         assert f"'merge.vllm-allowlist.driver'='python3 {tmp_path / 'd'}/" in env["GIT_CONFIG_PARAMETERS"]
-        monkeypatch.setenv("GIT_CONFIG_PARAMETERS", env["GIT_CONFIG_PARAMETERS"])
     else:
         assert "vllm-allowlist" not in env.get("GIT_CONFIG_PARAMETERS", "")
-    merged = Q._git(r, "merge-tree", "--write-tree", "HEAD", base).stdout.strip()
+    merged = Q._git(r, "merge-tree", "--write-tree", "HEAD", base, env=env).stdout.strip()
     assert _git(r, "show", f"{merged}:x.lst") == "a\nc\nb"
     assert not subprocess.run([sys.executable, "-c", "import subprocess, sys; sys.exit(subprocess.run(['git', '-c', "
                                "'core.hooksPath=/dev/null', 'merge-tree', '--write-tree', 'HEAD', sys.argv[1]]).returncode)",
-                               base], cwd=r, env=Q._script_env(), capture_output=True).returncode
+                               base], cwd=r, env={**Q._script_env(), **env}, capture_output=True).returncode
 
 
 def test_a_crossing_whose_tree_fails_the_root_suite_is_refused_with_the_test_and_never_pushed(world, monkeypatch):

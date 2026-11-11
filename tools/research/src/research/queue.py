@@ -4066,15 +4066,16 @@ def _own_onto(repo: Path, onto: str, commit: str) -> str | None:
     return own_change(repo, mb, commit) if mb else None
 
 
-def mapped_change(repo: Path, head: str, onto: str, moves: list[tuple[str, list[str]]], restack: Path) -> tuple[str | None, str]:
+def mapped_change(repo: Path, head: str, onto: str, moves: list[tuple[str, list[str]]], restack: Path,
+                  env: dict[str, str] | None = None) -> tuple[str | None, str]:
     """(``head``'s own change once it has crossed ``moves`` (`moves_between`: those ``onto`` has and it lacks) as
     `tools/move/restack.py` carries a branch, from its merge base with ``onto``, ''), or (None, why it can't): it refuses a head
     with a commit of ``onto``'s that came after the last move's parent, as the restack does (`based-after`), and skips an
     earlier move such a head is based after, as a restack naming only the moves after it crosses; before each move it merges
-    the move's parent when it lacks it, a merge that must leave its own change as it was (as a merge of `main` must, to keep a
-    mark: `StoreLabels`), then the move's script runs on it (`mapped_tree`, ``restack`` the directory holding main's
-    `restack.py`), and the result takes the move as a second parent.  What a restack of ``head`` gives for its own change, when
-    `main` since the last move touched none of it."""
+    the move's parent when it lacks it (with ``env`` in that git's environment: `cross_drivers`), a merge that must leave its
+    own change as it was (as a merge of `main` must, to keep a mark: `StoreLabels`), then the move's script runs on it
+    (`mapped_tree`, ``restack`` the directory holding main's `restack.py`), and the result takes the move as a second parent.
+    What a restack of ``head`` gives for its own change, when `main` since the last move touched none of it."""
     x = head
     for i, (move, parents) in enumerate(moves):
         if len(parents) != 1:
@@ -4088,7 +4089,7 @@ def mapped_change(repo: Path, head: str, onto: str, moves: list[tuple[str, list[
                           "refuses it (based-after)")
         if _git(repo, "merge-base", "--is-ancestor", base, x, check=False).returncode:
             before = _own_onto(repo, onto, x)
-            r = _git(repo, "merge-tree", "--write-tree", "--name-only", "--no-messages", "-z", x, base, check=False)
+            r = _git(repo, "merge-tree", "--write-tree", "--name-only", "--no-messages", "-z", x, base, check=False, env=env)
             got = [s for s in r.stdout.split("\0") if s]
             if r.returncode or not got:
                 return None, (f"it doesn't merge with {base[:12]}, the base of the move {move[:12]}: "
@@ -4124,13 +4125,14 @@ def mapped_key(head: str, moves: list[tuple[str, list[str]]]) -> str:
     return f"{head} {hashlib.sha512(' '.join(m for m, _ in moves).encode()).hexdigest()}"
 
 
-def map_one(repo: Path, head: str, onto: str, moves: list[tuple[str, list[str]]]) -> tuple[str | None, str]:
+def map_one(repo: Path, head: str, onto: str, moves: list[tuple[str, list[str]]],
+            env: dict[str, str] | None = None) -> tuple[str | None, str]:
     """`mapped_change` with ``onto``'s `tools/move/restack.py` (`main` as the restack found it), written to a `scratch`
-    directory, or (None, why) for what it raised."""
+    directory, and ``env`` for its merges, or (None, why) for what it raised."""
     try:
         with scratch() as d:
             restack = write_scripts(repo, scripts_at(repo, onto, [RESTACK]), Path(d)) / MOVE_DIR
-            return mapped_change(repo, head, onto, moves, restack)
+            return mapped_change(repo, head, onto, moves, restack, env)
     except (QueueError, OSError, subprocess.SubprocessError) as e:
         return None, f"{type(e).__name__}: {e}"
 
@@ -4176,10 +4178,11 @@ def _commit(repo: Path, sha: str) -> bool:
 
 
 def cross_drivers(repo: Path, main: str, into: Path) -> dict[str, str]:
-    """The `GIT_CONFIG_PARAMETERS` that runs each merge driver git would run as `python3 PATH ...`, PATH in the worktree, from
-    ``main``'s copy of PATH written under ``into``: a crossing merges trees from before a move, where the path ``main``'s
-    drivers name may not be, and a driver that isn't found leaves its file conflicted.  Git reads these settings after every
-    `GIT_CONFIG_COUNT` one, `git_env`'s drivers included."""
+    """The environment (`GIT_CONFIG_PARAMETERS`) that runs each merge driver git would run as `python3 PATH ...`, PATH in the
+    worktree, from ``main``'s copy of PATH written under ``into``, which `cross_one` gives each git that merges a crossing
+    (restack.py's, and its carry check's merge): a crossing merges trees from before a move, where the path ``main``'s drivers
+    name may not be, and a driver that isn't found leaves its file conflicted.  Git reads these settings after every
+    `GIT_CONFIG_COUNT` one, `git_env`'s drivers included; they replace any `GIT_CONFIG_PARAMETERS` the caller had."""
     drivers: dict[str, str] = {}
     for line in _git(repo, "config", "--get-regexp", r"^merge\..*\.driver$", check=False).stdout.splitlines():
         key, _, cmd = line.partition(" ")
@@ -4195,8 +4198,7 @@ def cross_drivers(repo: Path, main: str, into: Path) -> dict[str, str]:
         f.write_text(src.stdout, errors="surrogateescape")
         got.append((key, " ".join(["python3", str(f), *words[2:]])))
     quote = lambda s: "'" + s.replace("'", "'\\''") + "'"  # noqa: E731
-    have = os.environ.get("GIT_CONFIG_PARAMETERS", "")
-    return {"GIT_CONFIG_PARAMETERS": " ".join([*filter(None, [have]), *(f"{quote(k)}={quote(v)}" for k, v in got)])} if got else {}
+    return {"GIT_CONFIG_PARAMETERS": " ".join(f"{quote(k)}={quote(v)}" for k, v in got)} if got else {}
 
 
 def restack_why(x: dict) -> str:
@@ -4208,11 +4210,12 @@ def restack_why(x: dict) -> str:
 
 
 def cross_one(repo: Path, head: str, main: str, moves: list[tuple[str, list[str]]], onto: str | None = None,
-              kept: bool = False, src: str | None = None) -> dict:
+              kept: bool = False, src: str | None = None, drivers: dict[str, str] | None = None) -> dict:
     """``head`` carried across ``moves`` by ``main``'s own `tools/move/restack.py`, run from a `scratch` directory as `map_one`
     runs it and as `mapped_tree` runs a move's script, without the queue's credentials (`SCRIPT_UNSET`): `--move-commit` each
     move, `--onto` ``onto`` (the crossed head of the PR below it in its stack), else ``main``, `--main` ``main``, and `--kept`
-    with ``kept``.  {"new": the crossed head, "own": its own change, "key": `mapped_key` of ``src``} when restack.py says clean
+    with ``kept``.  restack.py and the carry check's merge run with ``drivers`` in their environment (`cross_drivers`).
+    {"new": the crossed head, "own": its own change, "key": `mapped_key` of ``src``} when restack.py says clean
     and the crossed head's own change from its merge base with ``main`` is the own change of ``src`` (the head whose labels
     would carry, default ``head``) mapped across the moves that base has and it lacks (`map_one`): the equality the loop
     carries a mark and verdict across by (`StoreLabels`'s ``moved``, `Queue.mapped_change`); else {"why": ...}, restack.py's
@@ -4227,7 +4230,8 @@ def cross_one(repo: Path, head: str, main: str, moves: list[tuple[str, list[str]
         env = {k: v for k, v in _script_env().items() if k not in SCRIPT_UNSET and not k.startswith(CROSS_UNSET)}
         argv = [sys.executable, str(restack), head, *(a for m, _ in moves for a in ("--move-commit", m)), "--onto", onto or main,
                 "--main", main, "--json", *(("--kept",) if kept else ())]
-        rc, out = run_group(argv, repo, RESTACK_WAIT_S, env={**env, "TMPDIR": d, "GH_CONFIG_DIR": str(Path(d, "no-gh"))})
+        rc, out = run_group(argv, repo, RESTACK_WAIT_S,
+                            env={**env, **(drivers or {}), "TMPDIR": d, "GH_CONFIG_DIR": str(Path(d, "no-gh"))})
     if rc is None:
         return {"why": f"{RESTACK} ran over {RESTACK_WAIT_S // 60} min"}
     try:
@@ -4241,7 +4245,7 @@ def cross_one(repo: Path, head: str, main: str, moves: list[tuple[str, list[str]
     base = _git(repo, "merge-base", main, new, check=False).stdout.strip()
     crossed = moves_between(repo, base, src) if base else []
     own = own_change(repo, base, new) if base else None
-    mapped, why = map_one(repo, src, base, crossed) if crossed else (None, f"{new[:12]} crosses no move of {main[:12]}")
+    mapped, why = map_one(repo, src, base, crossed, drivers) if crossed else (None, f"{new[:12]} crosses no move of {main[:12]}")
     if own is None or own != mapped:
         whose = "its old one" if src == head else f"that of {src[:12]}, whose verdict it takes,"
         return {"new": new, "why": f"{RESTACK} crossed it clean as {new[:12]}, but its own change there ({(own or 'none')[:12]}) "
@@ -4318,22 +4322,23 @@ def cross_plan(repo: Path, prs: Iterable[PR], main: str, named: list[str], ready
 
 
 def cross_all(repo: Path, todo: dict[int, dict], main: str, jobs: int, kept: bool = False,
-              log: Callable[[str], None] = print,
-              root: Callable[[str], dict[str, str] | str] | None = None) -> tuple[list[dict], list[dict], list[dict]]:
-    """Each PR of ``todo`` (`cross_plan`'s) crossed by `cross_one`, ``jobs`` stacks at once, each stack lowest first and each
-    member onto the crossed head of the one below it: ([each crossed], [each refused, with why], [each skipped as a `stack`:
-    above a member of its stack that doesn't cross, or one restack.py won't cross onto the crossing below it, as it refuses a
-    head sharing a commit after the move's base with `--onto` (`based-after`), so its owners restack the stack]).  With
-    ``kept`` and more than one job, one restack of the first move's base checks each move (restack.py's `check_generated`,
-    kept on the machine) before the rest start, so they read it.  With ``root`` (`root_failures` of a commit), a crossing that
-    is clean and carries counts only once the root suite passes on its tree, in the same job: one whose tree fails a test that
-    ``main``'s passes, or where the suite doesn't run, is refused, with its failing tests under "root"."""
+              log: Callable[[str], None] = print, root: Callable[[str], dict[str, str] | str] | None = None,
+              drivers: dict[str, str] | None = None) -> tuple[list[dict], list[dict], list[dict]]:
+    """Each PR of ``todo`` (`cross_plan`'s) crossed by `cross_one` with ``drivers``, ``jobs`` stacks at once, each stack
+    lowest first and each member onto the crossed head of the one below it: ([each crossed], [each refused, with why], [each
+    skipped as a `stack`: above a member of its stack that doesn't cross, or one restack.py won't cross onto the crossing below
+    it, as it refuses a head sharing a commit after the move's base with `--onto` (`based-after`), so its owners restack the
+    stack]).  With ``kept`` and more than one job, one restack of the first move's base checks each move (restack.py's
+    `check_generated`, kept on the machine) before the rest start, so they read it.  With ``root`` (`root_failures` of a
+    commit), a crossing that is clean and carries counts only once the root suite passes on its tree, in the same job: one whose
+    tree fails a test that ``main``'s passes, or where the suite doesn't run, is refused, with its failing tests under
+    "root"."""
     above: dict[int | None, list[int]] = {}
     for n, t in sorted(todo.items()):
         above.setdefault(t["below"], []).append(n)
     if kept and jobs > 1 and todo:
         moves = max((t["moves"] for t in todo.values()), key=len)
-        got = cross_one(repo, moves[0][1][0], main, moves, kept=True)
+        got = cross_one(repo, moves[0][1][0], main, moves, kept=True, drivers=drivers)
         log(f"research queue cross: the moves' checks kept, restacking their base {moves[0][1][0][:12]}: "
             f"{got.get('why', 'clean')}")
     base: dict[str, concurrent.futures.Future] = {}
@@ -4351,7 +4356,8 @@ def cross_all(repo: Path, todo: dict[int, dict], main: str, jobs: int, kept: boo
         return got
 
     def stack(n: int, onto: str | None = None) -> list[tuple[int, dict]]:
-        got = cross_one(repo, todo[n]["old"], main, todo[n]["moves"], onto=onto, kept=kept, src=todo[n].get("src"))
+        got = cross_one(repo, todo[n]["old"], main, todo[n]["moves"], onto=onto, kept=kept, src=todo[n].get("src"),
+                        drivers=drivers)
         log(f"research queue cross: #{n} at {todo[n]['old'][:12]}: " + (f"crossed as {got['new'][:12]}" if "own" in got
                                                                          else got["why"]))
         got = gate(n, got)
@@ -6825,21 +6831,12 @@ def _cross(a: argparse.Namespace) -> int:
     todo, skipped = cross_plan(top, prs, main, named, labels.ready, verdict, set(a.only or ()), slug_)
     log(f"research queue cross: {len(todo)} to cross, {len(skipped)} skipped; crossing {a.jobs} at once")
     with scratch() as d:
-        drivers = cross_drivers(top, main, Path(d))
-        saved = {k: os.environ.get(k) for k in drivers}
-        os.environ.update(drivers)
-        try:
-            crossed, refused, stacked = cross_all(top, todo, main, a.jobs, kept=CROSS_KEPT, log=log,
-                                                  root=lambda c: root_failures(top, c, CROSS_ROOT_SYNC, CROSS_ROOT_PYTHON))
-        finally:
-            for k, v in saved.items():
-                if v is None:
-                    os.environ.pop(k, None)
-                else:
-                    os.environ[k] = v
+        crossed, refused, stacked = cross_all(top, todo, main, a.jobs, kept=CROSS_KEPT, log=log,
+                                              root=lambda c: root_failures(top, c, CROSS_ROOT_SYNC, CROSS_ROOT_PYTHON),
+                                              drivers=cross_drivers(top, main, Path(d)))
     report = {"main": main, "moves": named or list(dict.fromkeys(m for t in todo.values() for m, _ in t["moves"])),
               "crossed": crossed, "refused": refused, "skipped": skipped + stacked}
-    out = a.out or Path(os.environ.get("OUT") or "cross")
+    out = a.out or Path("cross")
     cross_write(top, out, report)
     if a.push:
         report["pushed"] = cross_push(top, report, push_to, {p.number: p for p in gh.open_prs()}, log)
@@ -6970,7 +6967,7 @@ def main(argv: list[str]) -> int:
     ap.add_argument("--out", type=Path, metavar="FILE", help="checked-heads: write the checked train heads newest first "
                     "to FILE (an optional source for the verifier's --main file) instead of listing them on stdout; map-moves: "
                     f"write the JSON there instead; cross: the directory for {CROSS_REPORT}, {CROSS_BUNDLE} and {CROSS_MAPPED} "
-                    "(default $OUT, else ./cross)")
+                    "(default ./cross; in a `research run`, give it \"$OUT\")")
     ap.add_argument("--draft", action="store_true", help="open: as a draft (default: ready for review)")
     ap.add_argument("--log", type=Path, help="stats: drive's log (its stdout, every tick's)")
     ap.add_argument("--tips", type=int, default=10, metavar="N", help="shadow-report: the newest N `checked` tips drive compared "
