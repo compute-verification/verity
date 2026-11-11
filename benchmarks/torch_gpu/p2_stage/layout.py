@@ -19,7 +19,7 @@ shape), O, up and down; after the last layer the head (`HEAD`, 256 x 16,384) is 
 at its stream offset, QKV being wq, wk and wv one after another, each with its f32 scales, and the head the stream's
 `head` (`Tensor.stream_names`). `payloads` lays it out as the store's W.
 
-`check_blocks` holds rows to W's payloads by memory-accounting's reference decode of one block (`p2_v1/store.py`'s
+`check_blocks` holds rows to W's payloads by memory-accounting's reference decode of one block (`p2_store/store.py`'s
 `decode_block`: `verity.protocols.pous.verifier.p2_v1.reference.decode` under `reference.keys_after`), which refuses a row not below p, or a decode
 wider than the payload.
 """
@@ -277,7 +277,7 @@ def payloads(lay: StoreLayout, src: Weights, read: Read, j0: int, n: int) -> byt
 
 
 def store_salt(setup: dict, layout_doc: dict, layout_sha512: str, source: bytes, commitment: bytes) -> bytes:
-    """The salt an encoded store is under (`p2_v1/store.py encode`'s directory, whose `setup.json` is `setup`):
+    """The salt an encoded store is under (`p2_store/store.py encode`'s directory, whose `setup.json` is `setup`):
     `setup.draw_salt(source, commitment)`, the auditor's coin `source` flipped after the store's commitment. Refused unless
     the store commits to `commitment` in this layout (`layout_sha512`, its JSON's SHA-512) under its parameters, and
     under this coin and salt where `setup.json` records them."""
@@ -337,7 +337,7 @@ def segment_rows(root: Path, spec: R.Params, j0: int, n: int) -> bytes:
 
 def check_blocks(params: S.P2Params, prefix: bytes, first: int, rows: bytes | memoryview,
                  payloads: bytes | memoryview) -> list[tuple[int, str]]:
-    """The blocks `first ..` of `rows` (2,056 bytes each) whose reference decode (`p2_v1/store.py`'s `decode_block`) is
+    """The blocks `first ..` of `rows` (2,056 bytes each) whose reference decode (`p2_store/store.py`'s `decode_block`) is
     refused or differs from their 2,054 bytes of `payloads`, with why."""
     from p2_store.store import decode_block
 

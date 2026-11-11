@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # One load run on an H200, from build.sh's lib, the weights module, the weights manifest with
-# digests memory-accounting held W to, and the store's fixture (its layout JSON, `p2_v1/store.py layout`,
-# and its toy, `p2_v1/store-toy/`); cwd = the source tree's root:
+# digests memory-accounting held W to, and the store's fixture (its layout JSON, `p2_store/store.py layout`,
+# and its toy, `p2_store/store-toy/`); cwd = the source tree's root:
 #
 #   tar -C BUILD_RUN/out -cf /tmp/p2lib.tar .
 #   tar -C verity/protocols/pous/prover/p2/p2_store/store-toy -cf /tmp/store-toy.tar toy.json spot.json c-star.bin spot-c.bin
@@ -42,7 +42,7 @@ SALT=${SALT:-011feb1ddfe7334099b02f79a43b4d1411bec106975fffe4}
 # the deployment's coin of record and W's commitment under the frozen layout
 SOURCE=${SOURCE:-dd56f549e504fa8a48db829588683baa66d5ab0c8c381665a87c3b53ffeb3ced}
 COMMITMENT=${COMMITMENT:-9aaaf192b1a7c0962b6139b7bad5b6a2abc9809d889ed5da5890628d1799dfe4291ce318bc8ba410b41886e30d52278f89686f429839257eab1728ac5902706a}
-# p2_v1/store.py's LAYOUT_SHA512, and h200-manifest.json's
+# p2_store/store.py's LAYOUT_SHA512, and h200-manifest.json's
 LAYOUT_SHA512=${LAYOUT_SHA512:-45436c2a341cfef20219a071b9b27bd9013535b1de9001ae22d0bf3bd25a825e6aa7c82a60734047d1de59c38e572e126e3c7c64c78f1176e258cb8cb833b783}
 MANIFEST_SHA256=${MANIFEST_SHA256:-28a29668627351e0118b02bbb4dddd0d3f25e2dfa6860b82f3048c0871792f27}
 STEPS=${STEPS:-toy,stage,gemm,check}

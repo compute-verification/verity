@@ -1,6 +1,6 @@
 """The store's load: a layer's matrices from the P2-encoded store into plaintext load buffers on the GPU, by
 memory-accounting's decode unchanged (`libp2v1.so` from `benchmarks/pous/p2_v1/`, built for sm_90a by `build.sh`, through
-its own wrapper `p2_store.gpu.Kernels`), with the refusals the store's reference decode (`p2_v1/store.py`'s `decode_range`)
+its own wrapper `p2_store.gpu.Kernels`), with the refusals the store's reference decode (`p2_store/store.py`'s `decode_range`)
 makes that the library's fast decode leaves to its caller.
 
 `EncodedRows` is the encoded rows of a range of the store's blocks resident on the device (`rows`, [n, 2056] uint8, block

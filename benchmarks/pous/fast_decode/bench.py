@@ -1,7 +1,7 @@
 """The fast-decode prototypes' decode rates on one GPU, each library gated byte-exact against `verity.protocols.pous.verifier.p2_v1.reference` first.
 
 Libraries: `--lib NAME=PATH` for a prototype (`tcsq.cu`, `nttsq.cu`: `fd_config`, `fd_decode` with mode 0 = D(c) and mode 1
-= d(c), and the TC builds' `fd_keys`), `--cgbn NAME=PATH` for a `libp2v1.so` (`p2_v1/p2v1.cu`, the CUDA-core decode in use,
+= d(c), and the TC builds' `fd_keys`), `--cgbn NAME=PATH` for a `libp2v1.so` (`p2_store/p2v1.cu`, the CUDA-core decode in use,
 or its generic CGBN path at another width). Every width a library names gets `--bytes` of uniformly random canonical labels
 (at least the ten edge values of `c` first) under v4's keys of a fixed setup at that width (`reference.expand_prefix` frames
 the width's prime), with the payload profile of the label less two bytes.

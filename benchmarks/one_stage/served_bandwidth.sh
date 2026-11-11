@@ -24,7 +24,7 @@
 # files 0600, never DIR: the case holds the store's opened blocks and the verifier's coins), the answer the Lean's when
 # BW_CASE_EXE names `remote-audit-p2-protocol`, else `p2_case.answer`'s; DIR/session/session.json says where it went.
 #
-# The layout is the store's (`p2_v1/store.py layout`), held to the store's setup.json; the lib is kernels' build
+# The layout is the store's (`p2_store/store.py layout`), held to the store's setup.json; the lib is kernels' build
 # (`benchmarks/torch_gpu/p2_stage/build.sh` at this commit, its source.txt and MANIFEST.sha256 kept in DIR), or BW_LIB, a
 # built lib/ directory. Both are written to scratch under DIR, which is removed: DIR keeps only records. A toy on the
 # CPU: BW_STORE, BW_LAYOUT, BW_REGISTRATION and BW_NODE name it, BW_DEVICE=cpu, BW_REF_DECODE=1 and BW_LEASE_MIN=0

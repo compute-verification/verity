@@ -404,7 +404,7 @@ def test_layer_driver_stages_and_checks_on_a_stand_in_codec(tmp_path: Path, monk
 
 
 def encoded_store(root: Path, rows: np.ndarray, per_segment: int, setup: dict) -> None:
-    """An encoded store's directory as `p2_v1/store.py encode` writes it: `setup.json`, and each segment's rows in
+    """An encoded store's directory as `p2_store/store.py encode` writes it: `setup.json`, and each segment's rows in
     `seg/<s>.c` with their SHA-512 in `seg/<s>.json`."""
     (root / "seg").mkdir(parents=True)
     (root / "setup.json").write_text(json.dumps(setup))
@@ -557,7 +557,7 @@ TOY_W = b"verity-pous/p2-store/toy/w/v1\0"
 
 
 def toy_stream(doc: dict) -> tuple[dict, bytes]:
-    """The toy's W (each tensor `p2.stream(TOY_W, name, size)` at its offset, as `p2_v1/store.py`'s `toy_plain` packs
+    """The toy's W (each tensor `p2.stream(TOY_W, name, size)` at its offset, as `p2_store/store.py`'s `toy_plain` packs
     it, held to toy.json's digest) and then each stream tensor's f32 scales: a weights stream, and its manifest with
     SHA-256s naming each store tensor's stream tensors (QKV as wq, wk and wv of 64 rows each but the query's) in W."""
     lay = L.store_layout(doc["layout"], PREFIX)
