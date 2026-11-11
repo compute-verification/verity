@@ -2,8 +2,9 @@
 # nvcc for a ship build (ship.sh's frame): CUDA's nvcc with the same arguments, except that cicc, its device compiler,
 # reads nothing that says where a file sits in the tree. cicc's PTX follows the lengths of the strings it is given (its
 # decisions follow its heap's layout), and three of them follow a file's place:
-#   - the line markers of the preprocessed text, which name every file as its #include spells it or as -I finds it: here
-#     each names its file by base name alone (its line and its system-header flag stay, so diagnostics read as before);
+#   - the line markers of the preprocessed text it compiles, which name every file as its #include spells it or as -I
+#     finds it: here each names its file by base name alone (its line and its system-header flag stay, so cicc's
+#     diagnostics keep their lines and stay silent on system headers);
 #   - --orig_src_path_name, the source's absolute path, which cudafe++ also hashes into the module id that names every
 #     internal-linkage symbol: here the base name under /k, a directory nothing opens;
 #   - the directory and the environment cicc runs in: here TMPDIR, with PATH, LD_LIBRARY_PATH, LD_PRELOAD and TMPDIR
@@ -31,13 +32,11 @@ while IFS= read -r line; do
   line=$(sed -E 's|--orig_src_path_name "[^"]*/([^"/]*)"|--orig_src_path_name "/k/\1"|' <<< "$line")
   case $line in
     *'/cicc" '*)
+      ii=$(grep -o '"[^"]*\.ii"' <<< "$line" | tr -d '"')
+      sed -E -i 's|^# ([0-9]+) "[^"<]*/([^"/]*)"|# \1 "\2"|' "$ii"
       (cd "$TMPDIR" && env -i PATH="$PATH" LD_LIBRARY_PATH="${LD_LIBRARY_PATH:-}" LD_PRELOAD="${LD_PRELOAD:-}" \
         TMPDIR="$TMPDIR" "$BASH" -c "${line//\$CICC_PATH/$CICC_PATH}") ;;
+    'rm '*) eval "rm -f ${line#rm }" ;;   # nvcc's own rm doesn't mind a file it never wrote
     *) eval "$line" ;;
-  esac
-  case $line in
-    *' -E '*' -o "'*'.ii"'*)
-      ii=$(sed -E 's|.* -o "([^"]*\.ii)".*|\1|' <<< "$line")
-      sed -E -i 's|^# ([0-9]+) "[^"<]*/([^"/]*)"|# \1 "\2"|' "$ii" ;;
   esac
 done <<< "$dry"
