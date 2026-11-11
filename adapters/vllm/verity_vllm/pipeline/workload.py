@@ -40,6 +40,7 @@ import uuid
 from dataclasses import dataclass
 from importlib import resources
 from pathlib import Path
+from typing import Any
 
 import numpy as np
 
@@ -134,7 +135,7 @@ def plan_values(n: int, lo: int, hi: int, rng: np.random.Generator, *, anchor_ne
         return [hi] * n
     out: list[int] = []
     q = _quartile_bounds(lo, hi)
-    near_lo = lo if not anchor_near_lo else int(min(hi, lo + rng.integers(0, 4)))
+    near_lo = lo if not anchor_near_lo else min(hi, lo + int(rng.integers(0, 4)))
     anchors = [hi, near_lo]
     for k in (1, 2, 0, 3):
         a, b = q[k]
@@ -330,7 +331,7 @@ def build_requests(tok: Tok, p: dict) -> list[dict]:
     for i in range(B):
         need = int(p["input_lengths"][i])
         ids, used = _passage(tok, paras, starts[i], need, prefix if i in sharers else None)
-        req = {"request_id": str(uuid.uuid5(uuid.NAMESPACE_URL, f"verity-sweep/{p['row_id']}/{i}")), "index": i,
+        req: dict[str, Any] = {"request_id": str(uuid.uuid5(uuid.NAMESPACE_URL, f"verity-sweep/{p['row_id']}/{i}")), "index": i,
                "prompt_len": need, "max_tokens": int(p["output_caps"][i]), "arrive_step": int(p["arrive_steps"][i]),
                "arrival_offset_s": float(p["arrival_offsets_s"][i]),
                "prompt_token_ids": ids, "prompt_text": tok.decode(ids), "origin": {"corpus": CORPUS.name, "paragraphs": used}}
@@ -346,7 +347,7 @@ def build_requests(tok: Tok, p: dict) -> list[dict]:
 def workload_doc(p: dict, *, hf_repo: str, revision: str, case: str | None, tok: Tok | None) -> dict:
     B, max_in, max_out = int(p["batch"]), int(p["max_input"]), int(p["max_output"])
     n, sharers = int(p["shared_prefix"]), prefix_sharers(p)
-    reqs = build_requests(tok, p) if tok is not None else [
+    reqs: list[dict[str, Any]] = build_requests(tok, p) if tok is not None else [
         {"request_id": str(uuid.uuid5(uuid.NAMESPACE_URL, f"verity-sweep/{p['row_id']}/{i}")), "index": i,
          "prompt_len": int(p["input_lengths"][i]), "max_tokens": int(p["output_caps"][i]), "arrive_step": int(p["arrive_steps"][i]),
          "arrival_offset_s": float(p["arrival_offsets_s"][i]), **({"shared_prefix_tokens": n} if i in sharers else {}),
@@ -477,17 +478,17 @@ def main(a: Options) -> int:
     if a.target:
         from verity_vllm.program.frontend.target_profile import TargetProfile
         t = json.loads(a.target)
-        tp = TargetProfile.from_json({**TargetProfile.default().to_json(), **t})   # validates the fields; cc / SMs come from the host at run time
+        profile = TargetProfile.from_json({**TargetProfile.default().to_json(), **t})   # validates the fields; cc / SMs come from the host at run time
         doc["engine"]["target"] = t
-        doc["engine"]["args"].update(tp.engine_args())
+        doc["engine"]["args"].update(profile.engine_args())
         if "env" in doc["engine"]:
-            doc["engine"]["env"].update(tp.env())
-        doc["sweep"]["execution"] = tp.execution_label
+            doc["engine"]["env"].update(profile.env())
+        doc["sweep"]["execution"] = profile.execution_label
         exec_suffix = row_tokens(a.row_id)[-1]
-        if exec_suffix != tp.execution_label:
-            print(f"[error] row id execution suffix {exec_suffix!r} != the target's execution label {tp.execution_label!r}", file=sys.stderr)
+        if exec_suffix != profile.execution_label:
+            print(f"[error] row id execution suffix {exec_suffix!r} != the target's execution label {profile.execution_label!r}", file=sys.stderr)
             return 3
-        if "attention" in tp.int8_parts:
+        if "attention" in profile.int8_parts:
             reasons.setdefault("attention_backend", INT8_ATTENTION_REASON)
     if reasons:
         doc["engine"]["reasons"] = reasons

@@ -26,7 +26,9 @@ import json
 import os
 import sys
 import time
+from collections.abc import Mapping
 from dataclasses import dataclass
+from typing import Any
 
 from verity.circuits.codec import canonical_json, descriptor_size
 
@@ -82,8 +84,8 @@ def manifest_requests(w: Workload) -> list[dict]:
         out.append({"request_id": request_id_of(i), "workload_request_id": r.request_id, "index": i, "prompt_len": r.prompt_length,
                     "cap": r.max_tokens, "arrive_step": r.arrive_step or 0})
     doc = w.dump()
-    for r, p in zip(out, PP.plan(doc) if out and PP.prefix_caching(doc) else ()):   # a warm request's cached rows and their producers
-        r["cached"], r["producers"] = p["cached"], [request_id_of(q) for q in p["producers"]]
+    for row, p in zip(out, PP.plan(doc) if out and PP.prefix_caching(doc) else ()):   # a warm request's cached rows and their producers
+        row["cached"], row["producers"] = p["cached"], [request_id_of(q) for q in p["producers"]]
     return out
 
 
@@ -137,7 +139,7 @@ def compilation_facts(block: dict | None) -> dict:
 _MODE_NAMES = {"0": "NONE", "1": "STOCK_TORCH_COMPILE", "2": "DYNAMO_TRACE_ONCE", "3": "VLLM_COMPILE"}
 
 
-def workload_target(target: dict | None):
+def workload_target(target: Mapping[str, Any] | None):
     """The row's declared TargetProfile as GP-01 reads it: its declared `target` block (the row file's `engine.target`, the ONE
     declared target source; the row driver passes the same block to derive_step as --target and every GPU stage builds its engine for it)
     over the default profile.  A GP-01 compose has no GPU, so cc / SMs are whatever the block says (they do not enter the lag); an unknown
@@ -391,7 +393,9 @@ def sampler_geometry(app: dict, reqs: list[dict]) -> dict | None:
     for greedy); a stochastic sampler without an agreed num_SMs, or whose components declare another S, is a named refusal.  Not part
     of the Program digest (a declaration beside `applicability`, like `stop_rule`).  ``reqs`` is unused: S reads no request."""
     comps = app.get("components") or {}
-    samp = comps.get("sampler") if isinstance(comps.get("sampler"), dict) else {}
+    samp = comps.get("sampler")
+    if not isinstance(samp, dict):
+        samp = {}
     if (samp.get("kind") or "greedy") != "stochastic":
         return None
     nsm = comps.get("num_sms")
@@ -422,7 +426,7 @@ def stop_rule(checkpoint_dir: str | None, eos_token_ids: list[int] | None, sampl
     Not part of the Program digest (a declaration beside `applicability`); a Program without it makes GM-01 FAIL CLOSED on any
     request that stopped early.  `sampling`: the workload record's sampling parameters (`Workload.sampling`), None for none."""
     ids: set[int] = set(int(x) for x in (eos_token_ids or []))
-    sources: dict[str, list[int]] = {}
+    sources: dict[str, list[int] | str] = {}
     if eos_token_ids:
         sources["--eos-token-ids"] = sorted(ids)
     # the manifest's sampling parameters may add per-workload stop ids (vLLM stop_token_ids) or switch EOS off (ignore_eos: every request
@@ -447,7 +451,7 @@ def stop_rule(checkpoint_dir: str | None, eos_token_ids: list[int] | None, sampl
     if sampling is not None and sampling.eos_token_ids is not None:
         ms = sorted(set(sampling.eos_token_ids))
         sources["manifest.sampling.eos_token_ids"] = ms
-        ck = sorted({v for k, v in sources.items() if k in ("config.json", "generation_config.json") and isinstance(v, list) for v in v})
+        ck = sorted({x for k, v in sources.items() if k in ("config.json", "generation_config.json") and isinstance(v, list) for x in v})
         if ck and set(ck) != set(ms):
             return {"schema": "verity/workload-program/v1/stop-rule", "eos_token_ids": None, "source": sources, "checkpoint_dir": checkpoint_dir,
                     "refusal": f"manifest sampling.eos_token_ids {ms} != the pinned checkpoint's eos_token_id set {ck}: the manifest was pinned "
@@ -704,7 +708,8 @@ def main(a: Options) -> int:
     from verity_vllm.pipeline.gc_tuning import tune as _gc_tune
     _gc_tune()
     eos = [int(x) for x in a.eos_token_ids.split(",") if x.strip()] if a.eos_token_ids else None
-    early, canon = None, {}
+    early = None
+    canon: dict = {}
     if a.follow:
         reqs = manifest_requests(Workload.load(workload_file(a.workload)))
         early = follow_components(a.derived, {shape_of(r) for r in reqs}, canon, timeout=a.follow, done=a.follow_done,
