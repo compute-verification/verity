@@ -79,6 +79,9 @@ SH_SELF = re.compile(r'^\s*(?:export\s+|readonly\s+|local\s+)?(?P<v>[A-Za-z_]\w*
 SH_OWN = {"0", "BASH_SOURCE", "BASH_SOURCE[0]"}
 #: what stands before a shell variable's default (`${DEFS:-verity/x.json}`): the `-` there is no part of a longer word
 SH_DEFAULT = re.compile(r"\$\{\w+:?-\Z")
+#: what stands for the root before a path from it: what closes a placeholder or a command (`{ROOT}/`, `<tree>/`,
+#: `$(pwd)/`), a shell variable, the home's checkout, a pod's. `tools/verity/check/move_check.py` reads a path as this does.
+ROOT_PREFIX = r"[})>]/|\$\{?\w+\}?/|~/(?:verity/)?|/workspace/"
 
 
 def is_shell(path: str, text: str) -> bool:
@@ -535,8 +538,7 @@ class Run:
     def _paths(self, path: str, old: str, text: str) -> str:
         if not hasattr(self, "_path_re"):
             alts = alternation(self.L.prefixes())
-            self._path_re = re.compile(rf"(?P<pre>[}})>]/|\$\{{?\w+\}}?/|~/(?:verity/)?|/workspace/)?(?P<p>{alts})(?![\w\-]|\.\w)"
-                                       rf"(?P<rest>(?:/[\w.\-*{{}},]*)*)")
+            self._path_re = re.compile(rf"(?P<pre>{ROOT_PREFIX})?(?P<p>{alts})(?![\w\-]|\.\w)(?P<rest>(?:/[\w.\-*{{}},]*)*)")
             self._rel_re = re.compile(r"(?<![\w.\-/$}])(?P<v>)(?P<p>(?:\.\.?/)+[\w.\-]+(?:/[\w.\-]+)*/?)"
                                       r"|(?P<v2>\$\{?\w+\}?/)(?P<p2>(?:\.\./)+[\w.\-]+(?:/[\w.\-]+)*/?)")
             roots = "|".join(re.escape(n) for n in sorted(self.L.old_roots, key=len, reverse=True))
