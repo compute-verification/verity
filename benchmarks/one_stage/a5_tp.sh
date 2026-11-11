@@ -15,8 +15,6 @@
 #     rows, its partition's law); with A5_WINDOWS=bundles it is served_tp --deferred and its windows come from its bundles.
 #     The STANDIN entry sparse-mla is a5_sparse_mla.py: test_serving_rows_splits' window (one SparseMlaSplit row's key blocks,
 #     column ends and combines, each read row wired to the unit that wrote it), run as the entry row-tables is.
-#     The STANDIN entry dsa-norm is a5_dsa_norm.py: two DsaRMSNorm rows cut at their scale, each one's sum of squares and its
-#     apply blocks written as Calls, every block's scale row wired to its sum of squares; run as the entry sparse-mla is.
 #     The STANDIN entry row-tables is a5_row_tables.py: test_row_tables' window (ScaledMmS8Coordinate chunks whose x rows link
 #     its row tables) as rank 0 of a one-rank step, on a local challenger's coins (it needs A5_CHALLENGER for --main).
 #     The STANDIN entries warden and warden:KIND are a5_warden.py: transfer-gate chunks whose ports open the bucket rows of
@@ -231,7 +229,7 @@ if [ -n "${A5_TP:-}" ]; then
   audit $N $A5_TP/commit ${A5_BUILD:-$A5_TP/build} "$WL" $WIN $PART "${ADV[@]}" || rc=1
 else
   for e in ${STANDIN:-256:subset:4 1536:subset:4}; do   # a rank's stand-in window holds 8 units; a sample of all leaves no negative
-    if [ "$e" = row-tables ] || [ "$e" = sparse-mla ] || [ "$e" = dsa-norm ]; then
+    if [ "$e" = row-tables ] || [ "$e" = sparse-mla ]; then
       [ -n "$MAIN" ] || { echo "STANDIN $e draws from a challenger's coins: set A5_CHALLENGER=local"; exit 3; }
       mkdir -p $O/$e
       $TIME $PY benchmarks/one_stage/a5_${e//-/_}.py --m0-pythonpath $M0PATH --bin $BIN --lean $LEAN "${ZKS[@]}" --main $MAIN \
