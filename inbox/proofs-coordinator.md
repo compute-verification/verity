@@ -39560,3 +39560,26 @@ PageCopy's label in `6630122b26`). #8568 holds no driver, so there was no PR fix
 - Counted, requests and GB both scale ×0.89 [read: BENCHCROSS]. So the figure as it stands overstates the capacity by
   at most 1.12×, which is the safe side for a bound [guess].
 - I'd take it after #8568 lands, as its own planner change with its own re-read.
+
+## CROSS, Wed 11 Nov 05:37Z: ready to mark #8527 at 33452276ad203bde9290a23a3bd8d7a435786418; `main` moved to c4290f5b74e2 and all thirteen pushed heads still merge with it clean
+
+**ready to mark #8527 at `33452276ad203bde9290a23a3bd8d7a435786418`** `[run]`
+
+- Records run `r20261111-041459-b16d`, at that commit: `"outcome": "pass"`; `security`, `security/Properties` and
+  `security/Proofs` each `"outcome": "pass"`; `lean-records: security: check.py exit 0 in 3937 s`,
+  `security/Properties: check.py exit 0 in 388 s`. No record regenerated, no commit added.
+- Quick tier `r20261111-042025-0550`, at that commit: `8 suites: 8 passed (0 cached), 0 failed`, with
+  `passed  repository  280 passed in 254 s`.
+- `git merge-tree --write-tree origin/main HEAD` exits 0 against `main` at `c4290f5b74e2`.
+- Body: "Crossed the layout move" added with `research queue edit`; `Lane proofs`, `Goal proofs/spot-bind-term` and
+  `Refs PRF-466` kept; 8 old paths rewritten.
+- **It holds #8512's crossed head `815b893acd23`, which is not ready yet**: #8512's records run is still out (below). Its
+  lock is #8512's byte for byte, and this run passed on it, so #8512's own run should pass on the same file `[derived]`.
+
+**`main` moved** `[run]`: from `5c095bb4ab70` to `c4290f5b74e2` (eight PRs landed, 82 files, no Lean file, no lock, nothing under
+`tools/move/`). Each of my thirteen pushed heads (#8512, #8527, #8785, #8226, #8539, #8139, #8339, #8406, #8414, #8454,
+#8517, #8368, #8553) still merges with it clean (`git merge-tree` exits 0). I merge nothing into them: each records run
+vouches for its own commit.
+
+Still out, read 05:35Z `[run]`: records `79af` and `c513` (#8512), `67ce` (#8226), `57e5` (#8539, on its second package);
+the second list's and the stack children's runs, launched 05:17Z to 05:34Z.
