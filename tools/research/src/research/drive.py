@@ -66,8 +66,8 @@ already moved, so none below it is merged again.
 
 Lock records are regenerated after landing (drive.toml's `regenerate_locks`).  While what `checked` holds since its newest
 commit whose records are the regenerated ones (`postland["fresh"]`, `_fresh`) changes Lean, a lock or the spec
-(`queue.lean_change`: a lock, the spec, `Security/`'s Definitions and its package's Lake files, or a Lean source
-outside `Security/` of a package that has a lock; Lean proofs alone don't), drive launches one lock run of `checked`'s tip
+(`queue.lean_change`: a lock, the spec, `security/`'s Definitions and its package's Lake files, or a Lean source
+outside `security/` of a package that has a lock; Lean proofs alone don't), drive launches one lock run of `checked`'s tip
 (`train.sh TIP MACHINES --deferred lean-audit`, which regenerates them: `_start_locks`), ahead of the rest of the
 after-landing check, one at a time, and not again on a tip whose lock run failed.  Passed, the records it regenerated are
 committed on its tip as `Lock records regenerated for #N...` (`Checked:` the run, `Regenerated:` the files), which the merge
@@ -2739,7 +2739,7 @@ class Driver:
 
     def _postland_args(self, pl: dict, tip: str, base: bool) -> tuple[dict, list[str], str | None, str]:
         """An after-landing run of ``tip``'s (`launch_postland`'s keywords, the steps it skips by name, ratchet-gate's base, its
-        flags as a message gives them), the baseline's when ``base``.  It sends the upstream build when the landings since the
+        flags as a message gives them), the baseline's when ``base``.  It sends the upstream build's URLs when the landings since the
         last verified `main` change what lean-agreement checks (as check.py finds against that base), and skips lean-agreement
         else; lean-changed has no cache to compare with under --no-cache; lean-audit fails on a record difference, since the
         records it checks are the ones the lock run regenerated (`_target`); circuit-check reuses its per-target passes all the same, since a
@@ -4245,7 +4245,7 @@ class Driver:
 
     def _circuit_held(self, m: Member) -> str | None:
         """Why ``m`` waits while circuit-check is red on `checked` (`CIRCUIT_RED`): its own change touches circuit-check's inputs
-        (`queue.forces_cold`, `_input_rule`'s rule for it, which takes all of `verity/ml/circuits/` and
+        (`queue.forces_cold`, `_input_rule`'s rule for it, which takes all of `verity/circuits/` and
         `tools/verity/circuit_check/` but their tests and docs), and its body doesn't say `fixes step circuit-check` (the fix
         of a red no culprit was named for has to land).  None otherwise."""
         if CIRCUIT_RED not in ((self._drive or {}).get("postland") or {}).get("red", {}) or not forces_cold(self._own(m)):

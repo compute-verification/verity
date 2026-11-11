@@ -9,7 +9,7 @@ misses F ≤ f₀, the (1 − α) quantile of the honest miss count, Poisson wit
 false-alarm rate, never soundness.  ε_proof(d) is an ideal-permutation-model bound, and τ counts whole `Π₂` calls of
 `call_ns`, the model's unit: at the reference Feistel-SHAKE256 `Π₂` a prover rebuilds a label from 1.53% of `C` in 481
 Keccak-f, about a tenth of a call, so neither bounds an adversary there (the red team's state attack,
-`verity.core.protocols.pous.primitives.pi2_keccak_f`).
+`verity.protocols.pous.verifier.primitives.pi2_keccak_f`).
 
 The page evaluates the file with plain floats and closed forms only (§6 "The rules"), and `evaluate` is that evaluation
 here, from the file alone:
@@ -63,7 +63,7 @@ US_PER_KIB = 0.15
 Z99 = 2.3263478740408408
 
 #: ε_proof, the per-answer slack, by the adversary's effective call count D = d: estimates at 64 KiB (from
-#: `Security/Proofs/Pous/Chain/Family.lean`'s certificate, not proved; D = 0 is the extracted single-segment
+#: `security/Proofs/Pous/Chain/Family.lean`'s certificate, not proved; D = 0 is the extracted single-segment
 #: value ≈ 0.21%)
 EPS_PROOF = (
     {"D": 0, "eps_proof_fraction": 0.0021, "status": "extracted", "source": "single-segment ε_proof(0) ≈ 0.21% from Chain/Family.lean's certificate (replaces the D = 1 placeholder 0.40%)"},
@@ -160,9 +160,9 @@ FINE = np.arange(int(1.002e5 / H_US) + 1) * H_US
 
 
 def call_ns(block_bytes: int) -> int:
-    """The fastest whole `Π₂` call on `block_bytes` labels (`verity.core.protocols.pous.primitives.pi2_call_ns`, in bits): the
+    """The fastest whole `Π₂` call on `block_bytes` labels (`verity.protocols.pous.verifier.primitives.pi2_call_ns`, in bits): the
     ideal-permutation model's unit, not the adversary's floor at the reference Feistel-SHAKE256 `Π₂`."""
-    from verity.core.protocols.pous.primitives import pi2_call_ns
+    from verity.protocols.pous.verifier.primitives import pi2_call_ns
 
     return pi2_call_ns(8 * block_bytes)
 

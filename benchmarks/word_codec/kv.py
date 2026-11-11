@@ -21,7 +21,7 @@ b          its offset: LE(XOF(DOMAIN ‖ frame ‖ seed ‖ u32be 2^32 − 3 ‖
            LAYERS + layer, added to t(i) in every round of its words (0 under the seed's key)
 ~~~
 
-The table is the store's codec (`verity.core.protocols.remote_bandwidth.codec`), whose field, key, ρ, rounds and bound
+The table is the store's codec (`verity.protocols.poub.verifier.codec`), whose field, key, ρ, rounds and bound
 offset these are: `key` is its `derive` over a `Sloth` at the fields above and any k ≥ 1, which at p512 and p1024,
 k ≥ 2, is `codec.key` of the codec a registration names, and `encode_word`, `decode_word` and `binding` are its own.
 This module keeps the KV cache's layout and the kernel's root chain.
@@ -54,7 +54,7 @@ from __future__ import annotations
 
 import hashlib
 
-from verity.core.protocols.remote_bandwidth.codec import (  # noqa: F401  the store codec's, which this module's users take
+from verity.protocols.poub.verifier.codec import (  # noqa: F401  the store codec's, which this module's users take
     BIND_INDEX, DOMAIN, P512, P1024, SEED_BYTES, Field, Key, Sloth, binding, decode_word, derive, encode_word, rho,
     rho_inv)
 
@@ -67,7 +67,7 @@ HEAD_DIM = 128
 KV_ELEMENT_BYTES = 2
 TOKEN_LAYER_BYTES = 2 * KV_HEADS * HEAD_DIM * KV_ELEMENT_BYTES
 TOKEN_BYTES = LAYERS * TOKEN_LAYER_BYTES
-# sha512/row/v2's first block for a row of TOKEN_LAYER_BYTES (`verity.ml.commitments.rowleaf`, held to it by the tests).
+# sha512/row/v2's first block for a row of TOKEN_LAYER_BYTES (`verity.commitments.rowleaf`, held to it by the tests).
 ROW_PREFIX = (b"verity/sha512-row/v2\0" + (8 * TOKEN_LAYER_BYTES).to_bytes(8, "big")).ljust(128, b"\0")
 
 FIELDS = {f.name: f for f in (P512, Field("p768", 768, 825), P1024, Field("p1280", 1280, 1665),
