@@ -49972,3 +49972,131 @@ For CONCRETE: the by-class line of #8906 at the record is K = 2^34.31 a run by t
 For the table:
 - CORRECTION: strike my 10:50Z "2^-101.57 by stratum at 132". By #8906's key (the needing proof blocks) a later head block has 643 classes [relayed: ATTACK, derived], and the by-class bound at the record reads 2^-108.41 a run in calls and 2^-99.41 in compressions with K a mean [derived]: it misses 2^-100 in compressions by 0.59 bit. Modeled; the first-hit term of #8827's lemma by classes; a run at K0 = 6, T = 2^80 calls in every run; at a registration with no always-checked block; it rests on the expected-time premise at two finders no guarantee names.
 - By proof alone K by classes is the one factor that moved (12.3 bits at 132, 10.1 bits at 643, against by gates); the rest of the 2.2 bits is the plan's cut of the block that writes a head block's queries, not a proof.
+
+## CROSS, Wed 11 Nov 11:04Z: SHEPHERD TABLE 4: #8568 is on `main` (`08ad61db9432`, 10:55Z); 18 of ours are in three candidates and nothing of ours is red; #8454 is merged with `main` and pushed; 15 marked Lean heads and 5 result PRs without Lean miss 16:00Z by rank unless you ask for them
+
+**Since table 3** [run: the decisions log, `git fetch`, `research queue status --json`, the label store, 10:53Z to 11:02Z]:
+- `main`: `8f5d3c3823f0` at 10:39:45Z (the cold batch), then **`08ad61db94326fa7ddab8e9071da7c0d29155633` at 10:55:03Z, with #8568**, #8694, #8698 and #8054.
+- The chain: `ee28015ba726` (ten of ours: #8877, #8819, #8841, #8857, #8866, #8888, #8354, #8536, #8890, #8517), `86c03d1840cb` (ci's pinned six: #8785, #8820, #8827, #8788, #8828, #8781), and since 10:57:59Z `847136846dae` on top (#8523, #8553 of ours, with 13 of other lanes). ci's estimate [relayed, CI-489 10:36Z]: `ee28`'s verdict about 12:30Z, `86c0`'s about 13:30Z.
+- **86 open PRs of ours, 44 marked, 18 of those in a candidate.** Every one of the 44 merges with `main` `08ad61db9432` [run: `shepherd.py`, 11:00Z]. No GitHub comment or review on any of ours [run: `gh pr view`, 10:40Z, the 78 open then].
+- **#8454: pushed.** With #8694 and #8698 on `main`, `cursor/proofs-fusedserve-1ffe` went `4d87c7899a6d` to `f95f042a441124d813ff95bafef65c885da8fa61` at 10:57:55Z, a fast-forward: the marked head merged with `main` `08ad61db9432` by hand in two files, as drafted at 08:19Z. `benchmarks/served_units/README.md`, the `tests/` item, keeps #8454's "`stage_window.py`'s member choice and public-body check" and #8694's "with the paths the key hashes (`KEY_PATHS` in each) held to the tree". `benchmarks/served_units/prove_time.py`'s docstring keeps #8454's sentence on a block's MACs with #8698's `verity.hardware.cards`. Against `main` it is 14 files, +363 −28 (it was +362 −27). `pins.py --stale` exits 0. It merges with `main` and with all 45 other marked or ready heads [run: `git merge-tree`, 10:58Z]. The push unmarked it. The loop skipped the old head for the conflict at 10:57:57Z and built `847136846dae` without it at 10:57:59Z. Quick tier at that head: `r20261111-105855-387c` (vy-nebius-cpu-9, 3 checks ahead) and `r20261111-105239-8b6f` (vy-nebius-cpu-10, no slot free), same command; its ready line when the first ends.
+
+**What will not reach `main` by 16:00Z as things stand** [guess, from the places below, 16 a batch, three candidates at a time, and the cold batch's 81 minutes from build to `main`]:
+- **The second pinned five** (#8836, #8226, #8539, #8764, #8368) are borderline: top's yes stands, `2b3b` passed, and ci has not built them yet [run: no candidate holds them at 11:00Z].
+- **Ten more marked Lean heads are held by `--lean 0`** and by top's word (CI-489, 10:13Z) ride "the loop's rank order across lanes" after the five, behind other lanes' Lean heads: #8458, #8730, #8862, #8870, #8871, #8873, #8874, #8879, #8882, #8896 (places 124 to 151 of 161; #8873 joins the line with its verdict). My table 3 said an ordinary batch takes #8458 and #8730: wrong, each changes two Lean files of the Spot verifier.
+- **Five PRs without Lean sit at places 89 to 103**: #8859, #8867, #8891, #8899, #8907. By place, three more batches of 16 before 16:00Z reach about place 48.
+- Likely in time: #8339 (place 10), #8425 (15), #8771 (16), #8540 (24), #8576 (27), #8741 (28).
+
+**Asks, in order:**
+1. Which of the ten Lean heads and the five at places 89 to 103 must be on `main` by morning: `ask ci to pin #N` for those, or ask top. top called the pinned five "the last build a lane gets by asking".
+2. `ask ci for a verdict on #8873` (marked 10:55Z, none yet).
+3. `mark #8898 at 9d9adf6fe72375bdb0d4eeef1537a554a2df1066` (MEMBERS, 10:46Z) and `mark #8904 at f1e9d625dd778c6b965134a6a0f54b9b90f034b5` (HARMSEARCH, 10:44Z): each merges with `main` `08ad61db9432` and with every marked head [run: `git merge-tree`]; #8898 is stacked on #8862.
+4. `close #8900` (CONCRETE superseded it; it is the one head #8873 does not merge with, in `Claims/NumbersFinder.lean`).
+5. `mark #8454 at f95f042a441124d813ff95bafef65c885da8fa61` when its ready line is here.
+
+**Pairs that do not merge** [run: `/tmp/pairs-new4.txt` 10:41Z and three later runs; 36 heads against `main` and every marked or ready head]: #8862 `23e96bd37477` and #8898 `9d9adf6fe723` against #8789 `5124b2689c75` and #8814 `2ff70e199447`, in `verity/protocols/pous/lean/TRUSTED.sha256`; #8873 against #8900. Every other pair is clean, the eight you marked since 10:02Z and #8871, #8882, #8896, #8907, #8873 among them. Standing: #8512 and #8527 with #8785; #8139 and #8414 and #8552 with #8539; #8406 with #8339.
+- **#8789 against #8862:** #8862 is marked and #8789 is in top's own batch plan (CI-485). Whichever lands second needs `main` merged in by hand in that one file. Its worker (FLOCKPKG) should know now.
+
+**Builds of merged trees, mine** [run]:
+- `r20261111-094021-2b3b`: PASS, in my 10:56Z entry (the 18; all three locks `pass`).
+- `r20261111-101145-dc0b` (all 21 marked at 10:05Z, with #8836): building since 10:18Z. Its tree is the second pinned tree plus #8458 and #8730.
+- `r20261111-103626-515d` (the exact Lean tree of `86c03d1840cb`): building since 10:37Z.
+- `r20261111-104748-53eb` (every marked Lean head at 10:45Z on `86c03d1840cb`, scratch `3d55ddde270a`: the 21, #8862, #8870, #8874, #8879, #8871, #8882): one check ahead of it. #8896 and #8873 were marked after it was made and are not in it.
+
+**The eleven unmarked heads below the move** (the loop leaves them out silently) [run: `restack.py` dry, 10:19Z to 10:35Z, onto `0a722c6ec984`; nothing pushed]: seven cross clean (#7952, #8120, #8177, #8363, #8543, #8563, #8767); four conflict (#7850 in 54 files and #8438 and #8462 in 3 each at the base step, #8578 in one file at the `moved` step). None is on my list. Say `CROSS cross #N` for any that should land tonight and I push the crossing and run it.
+
+**Holds:** #8406 until #8339 is on `main`; #8139 and #8552 until #8539 is; #8527 is yours after #8820; #8512 and #8414 never.
+
+| PR | head | marked | verdict | in a candidate | place in the line | refused or held | Lean: builds with | ask |
+|---|---|---|---|---|---|---|---|---|
+| #8226 | `f8a3b83aa0f0` | 06:23Z | land (review-17, 06:33Z) | no | 129 of 161 |  | adds 1 Proofs/WeightSecurity; the 18 marked at 09:38Z: `2b3b` pass; all 21 with #8836: `dc0b` running; every marked Lean head: `53eb` waiting for a slot | none from you: `2b3b` passed (10:54Z), #8836 has its verdict; the build above `86c03d1840cb` is ci's (top's yes, CI-489 10:13Z) |
+| #8339 | `9fd291257ffc` | 06:33Z | none; low-risk, needs none | no | 10 of 161 |  |  | none: low-risk, an ordinary batch takes it in line order |
+| #8354 | `5591b15e3b35` | 06:40Z | land (review-17, 07:00Z) | `ee28015ba726` |  |  | adds 1 Proofs/Flock, no lock change; in `86c03d1840cb`'s exact tree: `515d` running; the 18: `2b3b` pass | none: in `ee28015ba726` |
+| #8368 | `c833b3ff0a9b` | 06:53Z | land (review-13, 07:01Z) | no | 122 of 161 | lands after #8354 | adds 2 Proofs/Flock; the 18 marked at 09:38Z: `2b3b` pass; all 21 with #8836: `dc0b` running; every marked Lean head: `53eb` waiting for a slot | none from you: `2b3b` passed (10:54Z), #8836 has its verdict; the build above `86c03d1840cb` is ci's (top's yes, CI-489 10:13Z) |
+| #8425 | `d4967690acd5` | 06:49Z | none; low-risk, needs none | no | 15 of 161 |  |  | none: low-risk, an ordinary batch takes it in line order |
+| #8458 | `81c162ded6fa` | 06:55Z | land (review-17, 07:18Z) | no | 124 of 161 |  | the 18 marked at 09:38Z: `2b3b` pass; all 21 with #8836: `dc0b` running; every marked Lean head: `53eb` waiting for a slot | held by `--lean 0`; by top's 10:13Z it rides the rank-order Lean builds after the pinned five. If it must be on `main` by 16:00Z, that is yours to ask of top. My table 3 said an ordinary batch takes it: wrong, it changes two Lean files of the Spot verifier |
+| #8517 | `620badf31958` | 05:58Z | land (review-16, 06:19Z) | `ee28015ba726` |  |  |  | none: in `ee28015ba726` |
+| #8523 | `b61bbcfd88aa` | 06:37Z | none; low-risk, needs none | `847136846dae` |  |  |  | none: in `847136846dae` |
+| #8536 | `7c9387e95a73` | 06:57Z | land (review-13, 07:02Z) | `ee28015ba726` |  |  | adds 5 Proofs/Flock, no lock change; in `86c03d1840cb`'s exact tree: `515d` running; the 18: `2b3b` pass | none: in `ee28015ba726` |
+| #8539 | `984a73968ccd` | 05:58Z | land (review-15, 06:50Z) | no | 138 of 161 |  | the 18 marked at 09:38Z: `2b3b` pass; all 21 with #8836: `dc0b` running; every marked Lean head: `53eb` waiting for a slot | none from you: `2b3b` passed (10:54Z), #8836 has its verdict; the build above `86c03d1840cb` is ci's (top's yes, CI-489 10:13Z) |
+| #8540 | `1b0f4f7b64fe` | 06:59Z | none; low-risk, needs none | no | 24 of 161 |  |  | none: low-risk, an ordinary batch takes it in line order |
+| #8553 | `650593be39af` | 06:23Z | none; low-risk, needs none | `847136846dae` |  | lands after #8523 |  | none: in `847136846dae` |
+| #8576 | `d35fd4990def` | 07:01Z | land (review-13, 07:17Z) | no | 27 of 161 |  |  | none: an ordinary batch takes it in line order |
+| #8583 | `4624bfc6cd0f` | yes, carried | none at this head; an older head's counts | no | 109 of 161 |  |  | none |
+| #8730 | `f612d5d5897d` | 07:03Z | land (review-14, 07:34Z) | no | 130 of 161 |  | the 18 marked at 09:38Z: `2b3b` pass; all 21 with #8836: `dc0b` running; every marked Lean head: `53eb` waiting for a slot | held by `--lean 0`; by top's 10:13Z it rides the rank-order Lean builds after the pinned five. If it must be on `main` by 16:00Z, that is yours to ask of top. As #8458 |
+| #8741 | `2e61e09454d2` | 07:04Z | land (review-14, 07:59Z) | no | 28 of 161 |  |  | none: an ordinary batch takes it in line order |
+| #8764 | `8dfde58665a3` | 05:27Z | land (review-13, 05:39Z) | no | 144 of 161 |  | adds 2 Proofs/Flock; the 18 marked at 09:38Z: `2b3b` pass; all 21 with #8836: `dc0b` running; every marked Lean head: `53eb` waiting for a slot | none from you: `2b3b` passed (10:54Z), #8836 has its verdict; the build above `86c03d1840cb` is ci's (top's yes, CI-489 10:13Z) |
+| #8771 | `4b3b557b8c46` | 06:51Z | none; low-risk, needs none | no | 16 of 161 | lands after #8425 |  | none: low-risk, an ordinary batch takes it in line order |
+| #8781 | `b7c268c7c1fe` | 07:04Z | land (review-16, 07:16Z) | `86c03d1840cb` |  |  | adds 2 Proofs/Flock; `86c03d1840cb`'s exact Lean tree: `515d` running; the nine alone: `3dd5` pass | none: in ci's pinned `86c03d1840cb` |
+| #8785 | `e7b741b17e53` | 05:32Z | land (review-15, 05:36Z) | `86c03d1840cb` |  |  | adds 1 Definitions/Claims, 1 Proofs/Flock; `86c03d1840cb`'s exact Lean tree: `515d` running; the nine alone: `3dd5` pass | none: in ci's pinned `86c03d1840cb` |
+| #8788 | `37079664740c` | 09:02Z | land (top, 08:50Z) | `86c03d1840cb` |  |  | `86c03d1840cb`'s exact Lean tree: `515d` running; the nine alone: `3dd5` pass; alone `a26f` pass | none: in ci's pinned `86c03d1840cb` |
+| #8819 | `9a8a32c7c85b` | 06:00Z | land (review-17, 06:14Z) | `ee28015ba726` |  |  | adds 4 Proofs/Flock, no lock change; `86c03d1840cb`'s exact Lean tree: `515d` running; the nine alone: `3dd5` pass | none: in `ee28015ba726` |
+| #8820 | `f1a8ef0141ff` | 07:06Z | land (review-13, 07:24Z) | `86c03d1840cb` |  | lands after #8785 | adds 3 Definitions/Claims, 7 Proofs/Flock, 3 Proofs/WeightSecurity; `86c03d1840cb`'s exact Lean tree: `515d` running; the nine alone: `3dd5` pass | none: in ci's pinned `86c03d1840cb` |
+| #8827 | `946b7b72f26d` | 07:41Z | land (review-15, 07:58Z) | `86c03d1840cb` |  | lands after #8785, #8820 | adds 3 Definitions/Claims, 1 Proofs/Core, 9 Proofs/Flock, 3 Proofs/WeightSecurity; `86c03d1840cb`'s exact Lean tree: `515d` running; the nine alone: `3dd5` pass | none: in ci's pinned `86c03d1840cb` |
+| #8828 | `53dd644bdad8` | 07:40Z | land (review-13, 07:48Z) | `86c03d1840cb` |  | lands after #8788 | adds 3 Proofs/Flock; `86c03d1840cb`'s exact Lean tree: `515d` running; the nine alone: `3dd5` pass | none: in ci's pinned `86c03d1840cb` |
+| #8836 | `ae8886e9a2fc` | 09:50Z | land (review-17, 09:53Z) | no | 1 of 161 | lands after #8785, #8820 | adds 3 Definitions/Claims, 1 Proofs/Core, 9 Proofs/Flock, 3 Proofs/WeightSecurity; all 21: `dc0b` running; every marked Lean head: `53eb` waiting | none from you: `2b3b` passed (10:54Z), #8836 has its verdict; the build above `86c03d1840cb` is ci's (top's yes, CI-489 10:13Z) |
+| #8841 | `5f197bc45539` | 07:39Z | land (review-17, 07:54Z) | `ee28015ba726` |  |  |  | none: in `ee28015ba726` |
+| #8857 | `96985b18aafb` | 08:09Z | land (review-13, 09:29Z) | `ee28015ba726` |  |  | adds 1 Proofs/Core, no lock change; `86c03d1840cb`'s exact Lean tree: `515d` running; the nine alone: `3dd5` pass | none: in `ee28015ba726` |
+| #8859 | `563d9b20e91e` | 09:38Z | none; low-risk, needs none | no | 89 of 161 |  |  | low-risk, in line order; at its place it misses 16:00Z [guess]. If it must be on `main` by morning: `ask ci to pin #8859` |
+| #8862 | `23e96bd37477` | 10:20Z | land (review-17, 10:31Z) | no | 146 of 161 |  | adds 3 Proofs/Properties; `f4bd` with fifteen marked heads [relayed: MEMBERS 09:58Z]; every marked Lean head: `53eb` waiting | held by `--lean 0`; by top's 10:13Z it rides the rank-order Lean builds after the pinned five. If it must be on `main` by 16:00Z, that is yours to ask of top |
+| #8866 | `e19752e7b617` | 09:20Z | land (review-16, 09:29Z) | `ee28015ba726` |  |  | in `86c03d1840cb`'s exact tree: `515d` running; all 21: `dc0b` running | none: in `ee28015ba726` |
+| #8867 | `65788418c6e8` | 10:02Z | none; low-risk, needs none | no | 95 of 161 |  |  | low-risk, in line order; at its place it misses 16:00Z [guess]. If it must be on `main` by morning: `ask ci to pin #8867` |
+| #8870 | `e7d354135fbb` | 10:14Z | land (review-14, 10:23Z) | no | 131 of 161 |  | adds 1 Proofs/Flock, no lock change; `b6e9` with eight marked heads [relayed: TWOWITNESS 10:42Z]; `53eb` waiting | held by `--lean 0`; by top's 10:13Z it rides the rank-order Lean builds after the pinned five. If it must be on `main` by 16:00Z, that is yours to ask of top |
+| #8871 | `2d4670d64165` | 10:37Z | land (review-14, 10:44Z) | no | 150 of 161 | lands after #8785, #8820, #8836 | adds 3 Definitions/Claims, 1 Proofs/Core, 10 Proofs/Flock, 3 Proofs/WeightSecurity; its file, try `c09b`, with #8827 and #8781 [relayed: REGX 10:17Z]; `53eb` waiting | held by `--lean 0`; by top's 10:13Z it rides the rank-order Lean builds after the pinned five. If it must be on `main` by 16:00Z, that is yours to ask of top (after #8836) |
+| #8873 | `676a777193e2` | 10:55Z | none | no | not in it | no land verdict | adds 1 Proofs/Flock, no lock change; with #8879 and #8764 [relayed: CONCRETE 10:45Z] | `ask ci for a verdict on #8873` (marked, none yet); `close #8900`, the one head it does not merge with. Then held by `--lean 0`; by top's 10:13Z it rides the rank-order Lean builds after the pinned five. If it must be on `main` by 16:00Z, that is yours to ask of top |
+| #8874 | `b3fb5853faf8` | 10:14Z | land (review-14, 10:27Z) | no | 151 of 161 | lands after #8785, #8820, #8836, #8870 | adds 3 Definitions/Claims, 1 Proofs/Core, 11 Proofs/Flock, 3 Proofs/WeightSecurity; `b96d` with #8827 and #8781 [relayed: SCALE]; `53eb` waiting | held by `--lean 0`; by top's 10:13Z it rides the rank-order Lean builds after the pinned five. If it must be on `main` by 16:00Z, that is yours to ask of top (after #8836 and #8870) |
+| #8877 | `b16bb41f1657` | 09:02Z | land (review-17, 09:06Z) | `ee28015ba726` |  |  | caps only | none: in `ee28015ba726` |
+| #8879 | `9eb9f26cea4a` | 10:14Z | land (review-16, 10:25Z) | no | 148 of 161 | lands after #8785, #8820, #8827 | adds 3 Definitions/Claims, 1 Proofs/Core, 10 Proofs/Flock, 3 Proofs/WeightSecurity; `ed8e` with #8781, #8828, #8857 [relayed: KILIAN]; `53eb` waiting | held by `--lean 0`; by top's 10:13Z it rides the rank-order Lean builds after the pinned five. If it must be on `main` by 16:00Z, that is yours to ask of top |
+| #8882 | `da385b86ccd2` | 10:38Z | land (review-17, 10:44Z) | no | 149 of 161 | lands after #8785, #8820, #8827, #8879 | adds 3 Definitions/Claims, 1 Proofs/Core, 10 Proofs/Flock, 3 Proofs/WeightSecurity; its file, try `b9d5`, with #8781, #8828, #8857 [relayed: KILIAN 10:17Z]; `53eb` waiting | held by `--lean 0`; by top's 10:13Z it rides the rank-order Lean builds after the pinned five. If it must be on `main` by 16:00Z, that is yours to ask of top (after #8879) |
+| #8888 | `746c43e0c848` | 09:28Z | land (review-13, 09:36Z) | `ee28015ba726` |  | lands after #8819 | adds 6 Proofs/Flock, no lock change; in `86c03d1840cb`'s exact tree: `515d` running; all 21: `dc0b` running | none: in `ee28015ba726` |
+| #8890 | `3abd6b5bc8e2` | 10:14Z | land (review-18, 10:17Z) | `ee28015ba726` |  | lands after #8877 | caps only | none: in `ee28015ba726` |
+| #8891 | `88f0665ab664` | 10:02Z | none; low-risk, needs none | no | 96 of 161 |  |  | low-risk, in line order; at its place it misses 16:00Z [guess]. If it must be on `main` by morning: `ask ci to pin #8891` |
+| #8896 | `6128ce8267e3` | 10:44Z | land (review-17, 10:46Z) | no | 140 of 161 | lands after #8819, #8888 | adds 7 Proofs/Flock, no lock change; its file over a merged tree `00851aa76c39` [relayed: DRAFT-CORE 10:19Z]; in no build of mine | held by `--lean 0`; by top's 10:13Z it rides the rank-order Lean builds after the pinned five. If it must be on `main` by 16:00Z, that is yours to ask of top (after #8888) |
+| #8899 | `6950f9d93eb3` | 10:14Z | none; low-risk, needs none | no | 97 of 161 |  |  | low-risk, in line order; at its place it misses 16:00Z [guess]. If it must be on `main` by morning: `ask ci to pin #8899` |
+| #8907 | `14643669694c` | 10:45Z | none; low-risk, needs none | no | 103 of 161 | lands after #8867 |  | low-risk, in line order; at its place it misses 16:00Z [guess]. If it must be on `main` by morning: `ask ci to pin #8907` behind #8867 |
+| #7850 | `ed27bb143d82` | no | none | no |  | stale; conflicts with `main` |  | below the move; the dry crossing conflicts at the base step in 54 files: its worker's |
+| #7952 | `4d3d22fda080` | no | land (review-1) | no |  | stale |  | below the move; it crosses clean dry (`42f22a094d91`). Say `CROSS cross #7952` if it is to land tonight |
+| #8120 | `b6e0c1dc5de8` | no | none | no |  | stale; conflicts with `main` |  | below the move; crosses clean dry (`3820b484ff79`) |
+| #8139 | `c274cac9c132` | no | none | no |  |  | adds 1 Proofs/Flock, 1 Proofs/Properties;  | none yet: after #8539 lands (the 11-file merge is drafted) |
+| #8177 | `6dd74f50be00` | no | none | no |  |  |  | below the move; crosses clean dry (`9dd3784b7afc`) |
+| #8363 | `a81a1b11ea1d` | no | none | no |  | conflicts with `main` |  | below the move; crosses clean dry (`b99175dbf212`) |
+| #8406 | `3d8e9aa8c0af` | no | none | no |  |  |  | none yet: after #8339 lands I merge `main` in and write its line |
+| #8414 | `359724056748` | no | none | no |  |  |  | none, ever (inside #8539) |
+| #8438 | `e04dd44e6ccd` | no | none | no |  | conflicts with `main` |  | below the move; the dry crossing conflicts at the base step in 3 files: its worker's |
+| #8454 | `f95f042a4411` | no | none | no |  |  |  | pushed 10:57:55Z: `f95f042a4411` is the marked head `4d87c7899a6d` merged with `main` `08ad61db9432` (two prose hunks, both changes kept). The push unmarked it. `mark #8454 at f95f042a441124d813ff95bafef65c885da8fa61` when I post its ready line: the quick tier is out (`387c`, `8b6f`, both waiting for a slot) |
+| #8462 | `6f4ffa9e7a6a` | no | none | no |  | conflicts with `main` |  | below the move; the dry crossing conflicts at the base step in 3 files: its worker's |
+| #8512 | `815b893acd23` | no | none | no |  |  | adds 1 Definitions/Claims, 4 Proofs/Flock, 3 Proofs/WeightSecurity;  | none, ever (inside #8820) |
+| #8527 | `33452276ad20` | no | none | no |  |  | adds 1 Definitions/Claims, 4 Proofs/Flock, 6 Proofs/WeightSecurity;  | yours: mark at `33452276ad20` once #8820 is on `main` |
+| #8543 | `2007687fd9b8` | no | none | no |  | conflicts with `main` |  | below the move; crosses clean dry (`68ce4a958f03`) |
+| #8552 | `cb416aece716` | no | none | no |  |  |  | none yet: after #8539 lands |
+| #8563 | `80bc72a80541` | no | none | no |  |  |  | below the move; crosses clean dry (`e45390121616`) |
+| #8578 | `0a713e7caaf6` | no | none | no |  | conflicts with `main` |  | below the move; the dry crossing conflicts at the `moved` step in `verity/commitments/windows/interface.py`: its worker's |
+| #8767 | `d6cf59bccf21` | no | none | no |  |  |  | below the move; crosses clean dry (`143a1749b500`) |
+| #8789 | `5124b2689c75` | no | none | no |  |  |  | none: top places its batch (CI-485). It does not merge with #8862 or #8898 (`verity/protocols/pous/lean/TRUSTED.sha256`): whichever lands second needs `main` merged in by hand |
+| #8814 | `2ff70e199447` | no | none | no |  |  |  | as #8789 (the same file against #8862 and #8898) |
+| #8853 | `2e47293cc645` | no | none | no |  |  |  | none |
+| #8869 | `df881f327aa1` | no | none | no |  |  |  | none |
+| #8878 | `816e2396bdf7` | no | none | no |  |  |  | none |
+| #8885 | `6d4878d5670e` | no | none | no |  |  |  | Daniel's (TWOPROVE, 09:54Z): no mark before his ruling |
+| #8889 | `50b06ae65a50` | no | none | no |  |  | adds 1 Proofs/Flock, no lock change;  | none |
+| #8892 | `5bbe4bd22803` | no | none | no |  |  | adds 1 Proofs/Flock, no lock change;  | none |
+| #8893 | `6f65951e0eb8` | no | none | no |  |  |  | none |
+| #8898 | `9d9adf6fe723` | no | none | no |  |  | adds 3 Proofs/Properties; `8ea5` with #8862 and fifteen marked heads [relayed: MEMBERS 10:46Z] | `mark #8898 at 9d9adf6fe72375bdb0d4eeef1537a554a2df1066` on MEMBERS's line (10:46Z) plus this row; it lands after #8862 |
+| #8900 | `1c041bac78f5` | no | none | no |  |  | adds 1 Proofs/Flock, no lock change;  | `close #8900`: CONCRETE superseded it (10:13Z) |
+| #8902 | `c7a5093af335` | no | none | no |  |  |  | none |
+| #8904 | `f1e9d625dd77` | no | none | no |  |  |  | `mark #8904 at f1e9d625dd778c6b965134a6a0f54b9b90f034b5` on HARMSEARCH's line (10:44Z) plus this row |
+| #8905 | `40b8e7d04736` | no | none | no |  |  | adds 3 Definitions/Claims, 1 Proofs/Core, 10 Proofs/Flock, 3 Proofs/WeightSecurity;  | none: KILIAN's, its runs are out (10:17Z) |
+| #8906 | `e7b2e51d928b` | no | none | no |  |  | adds 3 Definitions/Claims, 2 Proofs/Core, 10 Proofs/Flock, 3 Proofs/WeightSecurity;  | Daniel's (EXTFORM, 10:17Z): a new statement |
+| #8912 | `62eb1fdc64de` | no | none | no |  |  | adds 3 Definitions/Claims, 1 Proofs/Core, 10 Proofs/Flock, 3 Proofs/WeightSecurity;  | none: REGX's, unmarked |
+| #8914 | `3f10472f1963` | no | none | no |  |  |  | Daniel's (DRAFT-CORE, 10:44Z): it changes definitions the lock reads |
+| #8915 | `e72d160dda87` | no | none | no |  |  | adds 3 Definitions/Claims, 1 Proofs/Core, 12 Proofs/Flock, 3 Proofs/WeightSecurity;  | Daniel's (KILIAN, 10:43Z): a new guarantee |
+| #8916 | `8784a105de5b` | no | none | no |  |  | adds 3 Definitions/Claims, 2 Proofs/Core, 12 Proofs/Flock, 3 Proofs/WeightSecurity;  | none: KILIAN's, unmarked |
+| #8917 | `9be334719521` | no | none | no |  |  |  | none: RELAX's, unmarked (10:41Z) |
+| #8919 | `eb4dde919628` | no | none | no |  |  | adds 2 Proofs/Flock, no lock change;  | none: TWOWITNESS's, unmarked (10:42Z) |
+| #8921 | `58a3e8b90f40` | no | none | no |  |  | adds 3 Proofs/Properties;  | none: MEMBERS's follow-up, unmarked, its runs are out (10:46Z) |
+| #8922 | `5b37c49d6a5c` | no | none | no |  |  | adds 3 Definitions/Claims, 2 Proofs/Core, 12 Proofs/Flock, 3 Proofs/WeightSecurity;  | none: REGX's, unmarked (10:32Z) |
+
+For the table:
+- LANDING: `main` is `08ad61db9432` (10:55Z) with #8568. In candidates: ten of ours in `ee28015ba726`, the pinned six in `86c03d1840cb`, #8523 and #8553 in `847136846dae`; nothing of ours is red [run]. ci's estimate for our ten: on `main` before 16:00Z [relayed].
+- #8454 is merged with `main` and pushed at `f95f042a4411` (two prose hunks); its quick tier is out. By rank, 15 marked Lean heads (the pinned five borderline) and #8859, #8867, #8891, #8899, #8907 miss 16:00Z unless asked for [guess].
+- CROSS's runs out: `dc0b`, `515d`, `53eb` (merged-tree records), `387c` and `8b6f` (#8454's quick tier).
