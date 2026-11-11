@@ -3810,6 +3810,14 @@
      "Claims.Witness.SamplingGeneric.twoSessions_meets"
     ]
    },
+   "Claims.SamplingGeneric.Compiled.KSRegX": {
+    "fails": "Claims.SamplingGeneric.Compiled.KSRegX_fails",
+    "meets": [
+     "Claims.Flock.decoder_meets_plain",
+     "Claims.Flock.decoder_meets_zk",
+     "Claims.Witness.SamplingGeneric.twoSessions_meets"
+    ]
+   },
    "Claims.SamplingGeneric.Compiled.Bits": {
     "fails": "Claims.SamplingGeneric.Compiled.Bits_fails",
     "meets": [
@@ -3978,6 +3986,7 @@
    "Claims.SamplingGeneric.CompilerKS": "Claims.SamplingGeneric.compilerKS",
    "Claims.SamplingGeneric.CompilerKSCount": "Claims.SamplingGeneric.compilerKSCount",
    "Claims.SamplingGeneric.CompilerKSReg": "Claims.SamplingGeneric.compilerKSReg",
+   "Claims.SamplingGeneric.CompilerKSRegX": "Claims.SamplingGeneric.compilerKSRegX",
    "Claims.SamplingGeneric.CompilerBits": "Claims.SamplingGeneric.compilerBits",
    "Claims.SamplingGeneric.CompilerEfficient": "Claims.SamplingGeneric.compilerEfficient",
    "Claims.SamplingGeneric.CompilerZK": "Claims.SamplingGeneric.compilerZK",
@@ -4094,6 +4103,10 @@
   "Claims.SamplingGeneric.compilerKSReg": {
    "honest": ["Claims.SamplingGeneric.compilerKS_honest"],
    "nontrivial": "Claims.SamplingGeneric.compilerKSReg_nontrivial"
+  },
+  "Claims.SamplingGeneric.compilerKSRegX": {
+   "honest": ["Claims.SamplingGeneric.compilerKS_honest"],
+   "nontrivial": "Claims.SamplingGeneric.compilerKSRegX_nontrivial"
   },
   "Claims.SamplingGeneric.compilerKSCount": {
    "honest": ["Claims.SamplingGeneric.compilerKS_honest"],
@@ -11904,6 +11917,9 @@
    },
    "type_hash": "53f421070c113209ffc605594adc7e8132cf18c8e72e973c096e7b22343e9d06"
   },
+  "Claims.SamplingGeneric.Compiled.KSRegX_fails": {
+   "owner": "@proofs"
+  },
   "Claims.SamplingGeneric.Compiled.KSReg_fails": {
    "owner": "@proofs",
    "signature": [
@@ -12341,6 +12357,12 @@
    },
    "type_hash": "265125fe0373eb291365875e0e60970f68ee5ece8acbb1e4a275bfa60e18fe84",
    "unfolded_hash": "fe205dc2f44b0a7d088bf33478098cd7bd13b7f888661ee7e4b31369f963c2f7"
+  },
+  "Claims.SamplingGeneric.compilerKSRegX": {
+   "owner": "@proofs"
+  },
+  "Claims.SamplingGeneric.compilerKSRegX_nontrivial": {
+   "owner": "@proofs"
   },
   "Claims.SamplingGeneric.compilerKSReg_nontrivial": {
    "owner": "@proofs",
