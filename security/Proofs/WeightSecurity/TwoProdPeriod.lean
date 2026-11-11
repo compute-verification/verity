@@ -6,6 +6,7 @@ import Proofs.Core.Game.Tape
 import Proofs.Flock.Claims.Prob
 import Proofs.Flock.Claims.Sampling.Session
 import Proofs.Flock.EndToEnd.Joint.Prod
+import Proofs.Flock.SamplingGeneric.TwoReg
 import Proofs.Flock.SamplingGeneric.TwoRegMiss
 import Proofs.Flock.Soundness.Game
 
@@ -121,21 +122,21 @@ as `ε`, when `ε` bounds that event at the statement and prover its strategy se
 never, since the verifier refuses it. -/
 theorem twoAtRec_accepted_le (H : Msg → Msg) (L : CompiledTwo Coin A)
     (href : ∀ x (P : Prover Unit) r, (run H P L.V x () r).out = .acc → L.Scope x)
-    (val : Msg → Prover Unit → ℕ → Option Bool) (n : ℕ) (e : ℝ≥0∞) {ε : ℝ}
+    (val : (O → V) × Tick × Adv → Msg → Prover Unit → ℕ → Option Bool) (n : ℕ) (e : ℝ≥0∞) {ε : ℝ}
     (τ : Strategy (twoGame L ((O → V) × Tick × Adv)))
-    (hev : L.Scope τ.2.1.1 → acceptedSampledAt H L τ.2.1.1 τ.2.1.2 (val τ.2.1.1 τ.2.1.2) ≤ ε) :
-    prob (fun b => (twoAtRec H L (val τ.2.1.1 τ.2.1.2) n e b).accepted ∧
-        (twoAtRec H L (val τ.2.1.1 τ.2.1.2) n e b).sampledIncorrect) (twoGame L _) τ ≤ ENNReal.ofReal ε := by
+    (hev : L.Scope τ.2.1.1 → acceptedSampledAt H L τ.2.1.1 τ.2.1.2 (val τ.1 τ.2.1.1 τ.2.1.2) ≤ ε) :
+    prob (fun b => (twoAtRec H L (val τ.1 τ.2.1.1 τ.2.1.2) n e b).accepted ∧
+        (twoAtRec H L (val τ.1 τ.2.1.1 τ.2.1.2) n e b).sampledIncorrect) (twoGame L _) τ ≤ ENNReal.ofReal ε := by
   obtain ⟨m, ⟨x, P⟩, k⟩ := τ
   show Verity.Game.prCoin (fun r => (run H P L.V x () r).out = .acc ∧
-      ∃ u ∈ L.checked x r, u ∈ L.FregTwoAt H P x () (val x P) r) ≤ ENNReal.ofReal ε
+      ∃ u ∈ L.checked x r, u ∈ L.FregTwoAt H P x () (val m x P) r) ≤ ENNReal.ofReal ε
   by_cases hx : L.Scope x
   · have h : Pr (fun r : Fin (L.V.k x) → Coin => (run H P L.V x () r).out = .acc ∧
-        ∃ u ∈ L.checked x r, u ∈ L.FregTwoAt H P x () (val x P) r) ≤ ε := hev hx
+        ∃ u ∈ L.checked x r, u ∈ L.FregTwoAt H P x () (val m x P) r) ≤ ε := hev hx
     rw [Verity.Game.prCoin_eq_ofReal_pr]
     exact ENNReal.ofReal_le_ofReal h
   · rw [show (fun r => (run H P L.V x () r).out = .acc ∧
-          ∃ u ∈ L.checked x r, u ∈ L.FregTwoAt H P x () (val x P) r) =
+          ∃ u ∈ L.checked x r, u ∈ L.FregTwoAt H P x () (val m x P) r) =
         fun _ => False from funext fun r => propext (iff_false_intro fun h => hx (href x P r h.1)),
       Verity.Game.prCoin_false]
     exact zero_le
@@ -144,53 +145,53 @@ theorem twoAtRec_accepted_le (H : Msg → Msg) (L : CompiledTwo Coin A)
 the escape there (`escAt`): in scope, the two stages' draw laws bound the miss by `P̄_a` at the boundary values'
 footprint at best interiors (`CompiledTwo.pr_missTwo_le_Pa`); out of scope the escape is `1`. -/
 theorem twoAtRec_missed_le (H : Msg → Msg) (L : CompiledTwo Coin A) (hS : L.Sessions H)
-    (val : Msg → Prover Unit → ℕ → Option Bool) (n : ℕ) (e : ℝ≥0∞)
+    (val : (O → V) × Tick × Adv → Msg → Prover Unit → ℕ → Option Bool) (n : ℕ) (e : ℝ≥0∞)
     (τ : Strategy (twoGame L ((O → V) × Tick × Adv))) :
-    prob (fun b => ¬ (twoAtRec H L (val τ.2.1.1 τ.2.1.2) n e b).sampledIncorrect) (twoGame L _) τ ≤
-      escAt L τ.2.1.1 (val τ.2.1.1 τ.2.1.2) := by
+    prob (fun b => ¬ (twoAtRec H L (val τ.1 τ.2.1.1 τ.2.1.2) n e b).sampledIncorrect) (twoGame L _) τ ≤
+      escAt L τ.2.1.1 (val τ.1 τ.2.1.1 τ.2.1.2) := by
   obtain ⟨m, ⟨x, P⟩, k⟩ := τ
-  show prob (fun b => ¬ (twoAtRec H L (val x P) n e b).sampledIncorrect) (twoGame L _) ⟨m, ⟨x, P⟩, k⟩ ≤
-    escAt L x (val x P)
-  rcases escAt_cases L x (val x P) with h1 | ⟨s, Pt, d, hs, hPt, hd, hin, he⟩
+  show prob (fun b => ¬ (twoAtRec H L (val m x P) n e b).sampledIncorrect) (twoGame L _) ⟨m, ⟨x, P⟩, k⟩ ≤
+    escAt L x (val m x P)
+  rcases escAt_cases L x (val m x P) with h1 | ⟨s, Pt, d, hs, hPt, hd, hin, he⟩
   · rw [h1]
     exact Verity.Game.prob_le_one _ _ _
   · rw [he]
-    show Verity.Game.prCoin (fun r => ¬ ∃ u ∈ L.checked x r, u ∈ L.FregTwoAt H P x () (val x P) r) ≤ _
-    obtain ⟨ι, hι⟩ := exists_best_interiorsAt s Pt d (val x P)
-    rw [Verity.Game.prCoin_eq_ofReal_pr, d.paBestAt_eq s Pt (val x P) hι]
+    show Verity.Game.prCoin (fun r => ¬ ∃ u ∈ L.checked x r, u ∈ L.FregTwoAt H P x () (val m x P) r) ≤ _
+    obtain ⟨ι, hι⟩ := exists_best_interiorsAt s Pt d (val m x P)
+    rw [Verity.Game.prCoin_eq_ofReal_pr, d.paBestAt_eq s Pt (val m x P) (ι := ι) hι]
     refine ENNReal.ofReal_le_ofReal (le_trans (Pr_mono ?_)
-      (CompiledTwo.pr_missTwo_le_Pa H L hS hs hPt hd hin P () (val x P) ι hι))
+      (CompiledTwo.pr_missTwo_le_Pa H L hS hs hPt hd hin P () (val m x P) ι hι))
     intro r hr u hu hF
     exact hr ⟨u, hu, by rw [CompiledTwo.FregTwoAt_eq H L P hs hPt hd]; exact hF⟩
 
 /-- **The period's one failure probability, from each verifier's contract**: when every verification phase's verifier
 meets the two-stage compiler's contract, `PeriodTwoProd` holds at every boundary traces `val`. -/
 theorem periodTwoProd_of (H : Msg → Msg) (Lv : ℕ → CompiledTwo Coin A)
-    (val : (t : ℕ) → Msg → Prover Unit → ℕ → Option Bool) (hS : ∀ t, (Lv t).Sessions H) :
+    (val : (t : ℕ) → (O → V) × Tick × Adv → Msg → Prover Unit → ℕ → Option Bool) (hS : ∀ t, (Lv t).Sessions H) :
     PeriodTwoProd (O := O) (V := V) (Tick := Tick) (Adv := Adv) H Lv val := by
   intro T ε s hev δ
   have hs := periodGood_of_plays (fun t => twoGame (Lv t) ((O → V) × Tick × Adv))
     (fun t τ => (Lv t).Scope τ.2.1.1 →
-      acceptedSampledAt H (Lv t) τ.2.1.1 τ.2.1.2 (val t τ.2.1.1 τ.2.1.2) ≤ ε t) T 0 s hev
+      acceptedSampledAt H (Lv t) τ.2.1.1 τ.2.1.2 (val t τ.1 τ.2.1.1 τ.2.1.2) ≤ ε t) T 0 s hev
   -- some verification phase accepted with a sampled proof block incorrect at its boundary values
   have hA := period_union (fun t => twoGame (Lv t) ((O → V) × Tick × Adv))
-    (fun t τ => twoAtRec H (Lv t) (val t τ.2.1.1 τ.2.1.2) (regCountAt (Lv t) τ.2.1.1 (val t τ.2.1.1 τ.2.1.2))
-      (escAt (Lv t) τ.2.1.1 (val t τ.2.1.1 τ.2.1.2)))
+    (fun t τ => twoAtRec H (Lv t) (val t τ.1 τ.2.1.1 τ.2.1.2) (regCountAt (Lv t) τ.2.1.1 (val t τ.1 τ.2.1.1 τ.2.1.2))
+      (escAt (Lv t) τ.2.1.1 (val t τ.1 τ.2.1.1 τ.2.1.2)))
     (fun r : ServedEsc O V Tick Adv => r.accepted ∧ r.sampledIncorrect)
     (fun t τ => (Lv t).Scope τ.2.1.1 →
-      acceptedSampledAt H (Lv t) τ.2.1.1 τ.2.1.2 (val t τ.2.1.1 τ.2.1.2) ≤ ε t)
+      acceptedSampledAt H (Lv t) τ.2.1.1 τ.2.1.2 (val t τ.1 τ.2.1.1 τ.2.1.2) ≤ ε t)
     (fun t => ENNReal.ofReal (ε t))
     (fun t τ hτ => twoAtRec_accepted_le H (Lv t) (fun x P r h => (hS t).refuses x Unit P () r h) (val t) _ _ τ hτ)
     T 0 s hs
   simp only [Nat.zero_add] at hA
   -- every sample misses, with the product of the escapes below `δ`
   have hB := period_prod (fun t => twoGame (Lv t) ((O → V) × Tick × Adv))
-    (fun t τ => twoAtRec H (Lv t) (val t τ.2.1.1 τ.2.1.2) (regCountAt (Lv t) τ.2.1.1 (val t τ.2.1.1 τ.2.1.2))
-      (escAt (Lv t) τ.2.1.1 (val t τ.2.1.1 τ.2.1.2)))
+    (fun t τ => twoAtRec H (Lv t) (val t τ.1 τ.2.1.1 τ.2.1.2) (regCountAt (Lv t) τ.2.1.1 (val t τ.1 τ.2.1.1 τ.2.1.2))
+      (escAt (Lv t) τ.2.1.1 (val t τ.1 τ.2.1.1 τ.2.1.2)))
     (fun r : ServedEsc O V Tick Adv => ¬ r.sampledIncorrect) ServedEsc.escape
     (fun t τ => (Lv t).Scope τ.2.1.1 →
-      acceptedSampledAt H (Lv t) τ.2.1.1 τ.2.1.2 (val t τ.2.1.1 τ.2.1.2) ≤ ε t)
-    (fun t τ _ => ⟨escAt (Lv t) τ.2.1.1 (val t τ.2.1.1 τ.2.1.2), escAt_ne_top _ _ _, fun _ => rfl,
+      acceptedSampledAt H (Lv t) τ.2.1.1 τ.2.1.2 (val t τ.1 τ.2.1.1 τ.2.1.2) ≤ ε t)
+    (fun t τ _ => ⟨escAt (Lv t) τ.2.1.1 (val t τ.1 τ.2.1.1 τ.2.1.2), escAt_ne_top _ _ _, fun _ => rfl,
       twoAtRec_missed_le H (Lv t) (hS t) (val t) _ _ τ⟩)
     T 0 s (ENNReal.ofReal δ) hs
   calc Verity.Game.value (fun l : List (ServedEsc O V Tick Adv) =>
@@ -277,28 +278,28 @@ theorem period_leadEscape {β : ℕ → Type} (G : (i : ℕ) → Verity.Game (β
 contract**: when every verification phase's verifier meets the two-stage compiler's contract, `PeriodTwoLead` holds at
 every boundary traces `val`. -/
 theorem periodTwoLead_of (H : Msg → Msg) (Lv : ℕ → CompiledTwo Coin A)
-    (val : (t : ℕ) → Msg → Prover Unit → ℕ → Option Bool) (hS : ∀ t, (Lv t).Sessions H) :
+    (val : (t : ℕ) → (O → V) × Tick × Adv → Msg → Prover Unit → ℕ → Option Bool) (hS : ∀ t, (Lv t).Sessions H) :
     PeriodTwoLead (O := O) (V := V) (Tick := Tick) (Adv := Adv) H Lv val := by
   intro T ε s hev δ
   have hs := periodGood_of_plays (fun t => twoGame (Lv t) ((O → V) × Tick × Adv))
     (fun t τ => (Lv t).Scope τ.2.1.1 →
-      acceptedSampledAt H (Lv t) τ.2.1.1 τ.2.1.2 (val t τ.2.1.1 τ.2.1.2) ≤ ε t) T 0 s hev
+      acceptedSampledAt H (Lv t) τ.2.1.1 τ.2.1.2 (val t τ.1 τ.2.1.1 τ.2.1.2) ≤ ε t) T 0 s hev
   have hA := period_union (fun t => twoGame (Lv t) ((O → V) × Tick × Adv))
-    (fun t τ => twoAtRec H (Lv t) (val t τ.2.1.1 τ.2.1.2) (regCountAt (Lv t) τ.2.1.1 (val t τ.2.1.1 τ.2.1.2))
-      (escAt (Lv t) τ.2.1.1 (val t τ.2.1.1 τ.2.1.2)))
+    (fun t τ => twoAtRec H (Lv t) (val t τ.1 τ.2.1.1 τ.2.1.2) (regCountAt (Lv t) τ.2.1.1 (val t τ.1 τ.2.1.1 τ.2.1.2))
+      (escAt (Lv t) τ.2.1.1 (val t τ.1 τ.2.1.1 τ.2.1.2)))
     (fun r : ServedEsc O V Tick Adv => r.accepted ∧ r.sampledIncorrect)
     (fun t τ => (Lv t).Scope τ.2.1.1 →
-      acceptedSampledAt H (Lv t) τ.2.1.1 τ.2.1.2 (val t τ.2.1.1 τ.2.1.2) ≤ ε t)
+      acceptedSampledAt H (Lv t) τ.2.1.1 τ.2.1.2 (val t τ.1 τ.2.1.1 τ.2.1.2) ≤ ε t)
     (fun t => ENNReal.ofReal (ε t))
     (fun t τ hτ => twoAtRec_accepted_le H (Lv t) (fun x P r h => (hS t).refuses x Unit P () r h) (val t) _ _ τ hτ)
     T 0 s hs
   simp only [Nat.zero_add] at hA
   have hB := period_leadEscape (fun t => twoGame (Lv t) ((O → V) × Tick × Adv))
-    (fun t τ => twoAtRec H (Lv t) (val t τ.2.1.1 τ.2.1.2) (regCountAt (Lv t) τ.2.1.1 (val t τ.2.1.1 τ.2.1.2))
-      (escAt (Lv t) τ.2.1.1 (val t τ.2.1.1 τ.2.1.2)))
+    (fun t τ => twoAtRec H (Lv t) (val t τ.1 τ.2.1.1 τ.2.1.2) (regCountAt (Lv t) τ.2.1.1 (val t τ.1 τ.2.1.1 τ.2.1.2))
+      (escAt (Lv t) τ.2.1.1 (val t τ.1 τ.2.1.1 τ.2.1.2)))
     (fun t τ => (Lv t).Scope τ.2.1.1 →
-      acceptedSampledAt H (Lv t) τ.2.1.1 τ.2.1.2 (val t τ.2.1.1 τ.2.1.2) ≤ ε t)
-    (fun t τ _ => ⟨escAt (Lv t) τ.2.1.1 (val t τ.2.1.1 τ.2.1.2), escAt_ne_top _ _ _, fun _ => rfl,
+      acceptedSampledAt H (Lv t) τ.2.1.1 τ.2.1.2 (val t τ.1 τ.2.1.1 τ.2.1.2) ≤ ε t)
+    (fun t τ _ => ⟨escAt (Lv t) τ.2.1.1 (val t τ.1 τ.2.1.1 τ.2.1.2), escAt_ne_top _ _ _, fun _ => rfl,
       twoAtRec_missed_le H (Lv t) (hS t) (val t) _ _ τ⟩)
     T 0 s (ENNReal.ofReal δ) hs
   rw [add_comm (ENNReal.ofReal δ)]
@@ -324,7 +325,7 @@ theorem acceptedSampledAt_regVal_le {H : Msg → Msg} {L : CompiledTwo Coin A} (
   simp only [CompiledTwo.FregTwo_eq H L P hs hPt hd] at h
   unfold acceptedSampledAt
   simp only [CompiledTwo.FregTwoAt_eq H L P hs hPt hd]
-  exact (Pr_unit fun r => (run H P L.V x () r).out = .acc ∧
+  exact (Pr_unit fun r : Fin (L.V.k x) → Coin => (run H P L.V x () r).out = .acc ∧
     ∃ u ∈ L.checked x r, u ∈ wrongAllAt s Pt d.part (L.regVal H P x ()) (L.iregVal H P x () r)).symm.trans_le h
 
 /-- **The period's one failure probability at the committed boundary trace**: when the argument is knowledge sound and
@@ -340,9 +341,9 @@ theorem periodTwoProd_regVal (H : Msg → Msg) (Lv : ℕ → CompiledTwo Coin A)
       (Lv t).εregTwo H τ.2.1.1 τ.2.1.2 ≤ ε t) (δ : ℝ) :
     Verity.Game.value (fun l : List (ServedEsc O V Tick Adv) =>
         (∀ r ∈ l, r.accepted) ∧ (l.map ServedEsc.escape).prod < ENNReal.ofReal δ)
-        (twoAtRun H Lv (fun t x P => (Lv t).regVal H P x ()) T s) ≤
+        (twoAtRun H Lv (fun t _ x P => (Lv t).regVal H P x ()) T s) ≤
       ENNReal.ofReal δ + ∑ t ∈ Finset.range T, ENNReal.ofReal (ε t) :=
-  periodTwoProd_of H Lv (fun t x P => (Lv t).regVal H P x ()) (fun t => (hS t).2) T ε s
+  periodTwoProd_of H Lv (fun t _ x P => (Lv t).regVal H P x ()) (fun t => (hS t).2) T ε s
     (fun t τ hp hx => (acceptedSampledAt_regVal_le hA (hS t).1 (hS t).2 hx τ.2.1.2).trans (herr t τ hp)) δ
 
 end WeightSecurity.SecurityProofs

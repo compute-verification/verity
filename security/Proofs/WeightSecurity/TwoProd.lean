@@ -10,9 +10,10 @@ failure probability and a cap in each verification phase. Here the period pays o
 verification phase's record carries the probability that its sample misses, as the two-stage design gives it at the
 boundary trace the phase's strategy fixes, and those probabilities multiply across the period's verification phases.
 
-The boundary trace is a parameter `val`, one per verification phase, statement and prover, so the statement reads the
-same at the committed boundary trace (`Compiled.regVal` at a prover with no tape), at the boundary trace read at the
-statement (`Compiled.regValX`), and at either trace of a verifier whose extractor waits differently. It takes each
+The boundary trace is a parameter `val`, one per verification phase and per release, statement and prover that the
+phase's strategy sends before the phase's coins, so the statement reads the same at the committed boundary trace
+(`Compiled.regVal` at a prover with no tape), at the boundary trace read at the statement (`Compiled.regValX`), at
+either trace of a verifier whose extractor waits differently, and at a trace that reads the release. It takes each
 verification phase's bound on the event (the run accepts with a sampled proof block incorrect at `val` and the
 committed interiors) as a hypothesis, and no knowledge soundness of the argument.
 
@@ -156,15 +157,15 @@ noncomputable def twoAtRec (H : Msg → Msg) (L : CompiledTwo Coin A) (val : ℕ
   escape := e
 
 /-- **The run over `T` two-stage verification phases** at the datacenter's strategy `s` and the boundary traces
-`val`: verification phase `t` is recorded by `twoAtRec` at the boundary values `val t x P` of the statement `x` and the
-prover `P` its strategy sends, with the count and the escape there (`regCountAt`, `escAt`). -/
+`val`: verification phase `t` is recorded by `twoAtRec` at the boundary values `val t m x P` of the release `m`, the
+statement `x` and the prover `P` its strategy sends, with the count and the escape there (`regCountAt`, `escAt`). -/
 noncomputable def twoAtRun (H : Msg → Msg) (Lv : ℕ → CompiledTwo Coin A)
-    (val : (t : ℕ) → Msg → Prover Unit → ℕ → Option Bool) (T : ℕ)
+    (val : (t : ℕ) → (O → V) × Tick × Adv → Msg → Prover Unit → ℕ → Option Bool) (T : ℕ)
     (s : Strategy (periodG (fun t => twoGame (Lv t) ((O → V) × Tick × Adv)) 0 T)) :
     Verity.Game (List (ServedEsc O V Tick Adv)) :=
   periodRun (fun t => twoGame (Lv t) ((O → V) × Tick × Adv))
-    (fun t τ => twoAtRec H (Lv t) (val t τ.2.1.1 τ.2.1.2) (regCountAt (Lv t) τ.2.1.1 (val t τ.2.1.1 τ.2.1.2))
-      (escAt (Lv t) τ.2.1.1 (val t τ.2.1.1 τ.2.1.2))) 0 T s
+    (fun t τ => twoAtRec H (Lv t) (val t τ.1 τ.2.1.1 τ.2.1.2) (regCountAt (Lv t) τ.2.1.1 (val t τ.1 τ.2.1.1 τ.2.1.2))
+      (escAt (Lv t) τ.2.1.1 (val t τ.1 τ.2.1.1 τ.2.1.2))) 0 T s
 
 /-- **The period's one failure probability, at boundary traces `val`.** Over `T` two-stage verification phases played
 by one adaptive strategy `s`, if at every strategy the run plays verification phase `t` with, on a statement in scope,
@@ -175,10 +176,10 @@ $$\delta + \sum_t \varepsilon_t.$$
 Outside it, when every verification phase is accepted, the escapes multiply to at least `δ`. The sampling term is `δ`
 however many verification phases the period has. -/
 def PeriodTwoProd (H : Msg → Msg) (Lv : ℕ → CompiledTwo Coin A)
-    (val : (t : ℕ) → Msg → Prover Unit → ℕ → Option Bool) : Prop :=
+    (val : (t : ℕ) → (O → V) × Tick × Adv → Msg → Prover Unit → ℕ → Option Bool) : Prop :=
   ∀ (T : ℕ) (ε : ℕ → ℝ) (s : Strategy (periodG (fun t => twoGame (Lv t) ((O → V) × Tick × Adv)) 0 T)),
     (∀ t τ, PeriodPlays (fun t => twoGame (Lv t) ((O → V) × Tick × Adv)) 0 T s t τ → (Lv t).Scope τ.2.1.1 →
-      acceptedSampledAt H (Lv t) τ.2.1.1 τ.2.1.2 (val t τ.2.1.1 τ.2.1.2) ≤ ε t) →
+      acceptedSampledAt H (Lv t) τ.2.1.1 τ.2.1.2 (val t τ.1 τ.2.1.1 τ.2.1.2) ≤ ε t) →
     ∀ δ : ℝ, Verity.Game.value
         (fun l : List (ServedEsc O V Tick Adv) =>
           (∀ r ∈ l, r.accepted) ∧ (l.map ServedEsc.escape).prod < ENNReal.ofReal δ)
@@ -195,10 +196,10 @@ It is `PeriodTwoReg` with the phases' escapes multiplied in place of one rate to
 and it gives `PeriodTwoProd`: a run whose verification phases are all accepted either has one whose sample holds an
 incorrect proof block or multiplies every phase's escape. -/
 def PeriodTwoLead (H : Msg → Msg) (Lv : ℕ → CompiledTwo Coin A)
-    (val : (t : ℕ) → Msg → Prover Unit → ℕ → Option Bool) : Prop :=
+    (val : (t : ℕ) → (O → V) × Tick × Adv → Msg → Prover Unit → ℕ → Option Bool) : Prop :=
   ∀ (T : ℕ) (ε : ℕ → ℝ) (s : Strategy (periodG (fun t => twoGame (Lv t) ((O → V) × Tick × Adv)) 0 T)),
     (∀ t τ, PeriodPlays (fun t => twoGame (Lv t) ((O → V) × Tick × Adv)) 0 T s t τ → (Lv t).Scope τ.2.1.1 →
-      acceptedSampledAt H (Lv t) τ.2.1.1 τ.2.1.2 (val t τ.2.1.1 τ.2.1.2) ≤ ε t) →
+      acceptedSampledAt H (Lv t) τ.2.1.1 τ.2.1.2 (val t τ.1 τ.2.1.1 τ.2.1.2) ≤ ε t) →
     ∀ δ : ℝ, Verity.Game.value (ServedEsc.UndetectedBelow δ) (twoAtRun H Lv val T s) ≤
       ENNReal.ofReal δ + ∑ t ∈ Finset.range T, ENNReal.ofReal (ε t)
 
@@ -208,7 +209,8 @@ what is out of scope), `PeriodTwoLead` and `PeriodTwoProd` hold at every boundar
 soundness of the argument: a caller meets their hypothesis with its own bound on the event at the trace it reads. -/
 def CompilerPeriodTwoProd : Prop :=
   ∀ (Coin : Type) [Fintype Coin] [Nonempty Coin] [Inhabited Coin] (A : Arg Coin) (O V Tick Adv : Type)
-    (H : Msg → Msg) (Lv : ℕ → CompiledTwo Coin A) (val : (t : ℕ) → Msg → Prover Unit → ℕ → Option Bool),
+    (H : Msg → Msg) (Lv : ℕ → CompiledTwo Coin A)
+    (val : (t : ℕ) → (O → V) × Tick × Adv → Msg → Prover Unit → ℕ → Option Bool),
     (∀ t, (Lv t).Sessions H) →
     PeriodTwoLead (O := O) (V := V) (Tick := Tick) (Adv := Adv) H Lv val ∧
       PeriodTwoProd (O := O) (V := V) (Tick := Tick) (Adv := Adv) H Lv val
