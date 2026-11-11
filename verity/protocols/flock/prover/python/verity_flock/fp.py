@@ -1,0 +1,7 @@
+"""`verity.definitions.silicon.fp`, under its Flock name: the same module object, so `boolean_export`'s in-place tracing patches reach
+every caller."""
+import sys
+
+from verity.definitions.silicon import fp
+
+sys.modules[__name__] = fp

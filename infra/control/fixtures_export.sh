@@ -1,7 +1,8 @@
 #!/bin/sh
 # Every 5 min: copy every fixture origin/main's fixtures/artifacts.json registers to the public export that nodes and pods fetch
 # fixtures from (`research data export`, the store README's export), so a newly registered fixture reaches it with nobody running
-# the export by hand. The export skips what the bucket already holds, so a pass with nothing new only HEADs. Code and registry
+# the export by hand. The export never reads the bucket: each object is a conditional PUT (412 = already there), and the
+# export store's record of what landed keeps a pass with nothing new from sending anything. Code and registry
 # both come from a checkout of origin/main kept at /data/infra/fixtures-export-repo, fetched over https with verity-drive's App token (gh_app_token.sh).
 # r2.env's key reads the private store and writes the public bucket; it goes only into the environment.
 # Log: /data/infra/fixtures-export.log. The relay's `fixtures-public` monitor alerts when a registered fixture stays missing.

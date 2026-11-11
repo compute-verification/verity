@@ -50,7 +50,7 @@ PAGED = {   # paged.cu's functions, beside the kv.cu it includes (`kv_bench.Lib`
 
 
 class PagedLib(KB.Lib):
-    """kv.cu with paged.cu's launchers (`run.sh` builds it at the stack's field, mask, FOLD6 and query heads)."""
+    """kv.cu with paged.cu's launchers (`stack.sh` builds it at the stack's field, mask, FOLD6 and query heads)."""
 
     def __init__(self, name: str, path: str) -> None:
         super().__init__(name, path, PAGED)

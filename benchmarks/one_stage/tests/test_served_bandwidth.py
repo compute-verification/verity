@@ -21,13 +21,13 @@ pytest.importorskip("torch")
 ROOT = Path(__file__).resolve().parents[3]
 sys.path.insert(0, str(ROOT / "benchmarks" / "one_stage"))
 sys.path.insert(0, str(ROOT / "benchmarks" / "pous"))
-sys.path.insert(0, str(ROOT / "examples" / "h200" / "interfaces"))
+sys.path.insert(0, str(ROOT / "benchmarks" / "one_stage" / "interfaces"))
 import served_bandwidth as SB  # noqa: E402
 import served_verdicts as S  # noqa: E402
 from p2_v1 import bandwidth as B  # noqa: E402
 from verity_e2e_demo import block_record as BR  # noqa: E402
 
-from verity.core.protocols.remote_bandwidth import p2, p2_party  # noqa: E402
+from verity.protocols.poub.verifier import p2, p2_party  # noqa: E402
 
 CMD = 'bash benchmarks/one_stage/served_bandwidth.sh "$1" "$2" "$3"'
 
@@ -43,7 +43,7 @@ def _serve_dir(path: Path) -> Path:
 
 def _env(tmp: Path, cheat: str = "") -> dict[str, str]:
     toy = tmp / "toy"
-    party = (f"cd {ROOT} && exec {sys.executable} -S -E -m verity.core.protocols.remote_bandwidth.p2_party "
+    party = (f"cd {ROOT} && exec {sys.executable} -S -E -m verity.protocols.poub.verifier.p2_party "
              f"--device {tmp / 'party'} --listen 127.0.0.1:0 --registration {toy / 'registration.json'} "
              "--windows 1 --passes 2 --samples 64 --window-ns 1000000 --deadline-ns 1000000")
     return dict(os.environ) | {"BANDWIDTH_CMD": CMD, "PY": sys.executable, "BW_STORE": str(toy / "store"),

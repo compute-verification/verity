@@ -3,9 +3,9 @@
 # and one receipt
 set -uo pipefail
 ROOT=$PWD
-cd integrations/vllm
+cd adapters/vllm
 PY=/workspace/jobs/venv312/bin/python3
-export PYTHONPATH=.:$ROOT:$ROOT/tools/research/src:$ROOT/tools/config:$ROOT/benchmarks/pouw/served_h1 HF_HOME=/workspace/hf
+export PYTHONPATH=.:$ROOT:$ROOT/tools/research/src:$ROOT/verity/configuration/config:$ROOT/benchmarks/pouw/served_h1 HF_HOME=/workspace/hf
 echo "research: $(command -v research)"
 ls -d /workspace/hf/hub/models--verity-int8--Llama-3.1-8B-INT8/snapshots/723d342ac443b040931242c768df342b0f6f15a7 || echo "PIN MISSING"
 CUDA_VISIBLE_DEVICES= "$PY" - <<'PY'
@@ -13,7 +13,7 @@ import time, os, sys
 t = time.perf_counter()
 import serve, receipts as RC, commit as CM
 from tests.engine import int8_exact_gpu as G
-from verity.core.protocols.pouw.coins import Challenger
+from verity.protocols.pouw.verifier.coins import Challenger
 from verity_vllm import protocols as PO
 from verity_vllm.engine import int8_exact as E, int8_ops
 from verity_vllm.engine.build import build_engine, target_mismatches

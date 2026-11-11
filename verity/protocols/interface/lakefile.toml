@@ -1,0 +1,26 @@
+# The interface every core protocol implements: its parameters, commitment and evidence read from canonical bytes, one
+# check, and an outcome (verdict, public outputs, profile) written as canonical JSON. Each protocol's package requires
+# this one and C-Flock's verifier (for its canonical JSON, bytes and hashes); none needs Mathlib.
+name = "core_protocol"
+defaultTargets = ["CoreProtocol", "core-protocol-example", "core-registration"]
+
+[leanOptions]
+autoImplicit = false
+relaxedAutoImplicit = false
+backward.proofsInPublic = true
+
+[[require]]
+name = "flock_verifier"
+path = "../flock/verifier"
+
+[[lean_lib]]
+name = "CoreProtocol"
+
+[[lean_exe]]
+name = "core-protocol-example"
+root = "CoreProtocol.ExampleMain"
+
+# The registration log's check as a core protocol (`verity/registration/log/v1`), the executable its difftest drives.
+[[lean_exe]]
+name = "core-registration"
+root = "CoreProtocol.RegistrationMain"
