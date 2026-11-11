@@ -23,6 +23,8 @@ any disagreement, so a drift between this table and the model is caught.
 """
 from __future__ import annotations
 
+__all__ = ["classify"]
+
 # The tensor-core MMA families. Each heads products on the tensor route (A3). `omega` forms, operand formats and peaks
 # are the sheet's; a form whose operand type has no sheet peak is priced at 0 (DMMA FP64, b1, s4 on sm_120) -- a gap A3
 # can't price. mul=True, word=True, route="tensor".

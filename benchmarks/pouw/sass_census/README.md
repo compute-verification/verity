@@ -49,4 +49,8 @@ python3 eps_counts.py OUT --src TAG=APV_CU [--src ...] [--json FILE]            
 - `eps_counts.py` counts, from each architecture's SASS, the instruction differences ε_skip is priced with, placed by
   the source lines each instruction's inline chain passes through.
 
+Nothing outside the directory reads its Python. `sass_semantics.py` offers `classify` to `diff_menu.py`, and the
+`unpriced*.cu` probes include `../opcode_probe/probe.cuh` and are started by its `probe.py`. `dump.sh`, `lowering.sh`
+and `eps_counts.sh` never take a GPU.
+
 The tests are `../tests/test_sass_census.py` and `../tests/test_eps_counts.py`.

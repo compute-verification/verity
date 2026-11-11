@@ -26,6 +26,9 @@ import sys
 from fnmatch import fnmatchcase
 from pathlib import Path
 
+#: what the censuses beside this directory read (sm89/census.py, ../dc/census.py, ../facet_break/loads.py)
+__all__ = ["FAMILY", "IMMA", "OPS", "SMSPS", "facets", "frontier_points", "load", "main"]
+
 IMMA = "IMMA.16832.S8.S8"
 SMSPS = 4
 

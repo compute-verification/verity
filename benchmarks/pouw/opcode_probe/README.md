@@ -127,4 +127,17 @@ over the block's `clock64` cycles from `OP_BEGIN` to `OP_END`; the median block,
   Every 64-bit ATOM.E but EXCH and CAS carries a QSPC + ATOMS.CAST.SPIN.64 fallback loop, so the gate refuses it by
   `loops`: 8 loops nested in the timed loop. ATOME64 is timed by its EXCH.64 and CAS.64 forms.
 
+## What other directories read
+
+The directory is no Python package, so a caller loads a module by its path.
+
+- `probe.cuh` is what a probe source includes, here and in `../dc/probes/`, `../facet_break/` and `../sass_census/`.
+- `probe.py` is the launcher their scripts start (`../dc/`'s, `../facet_break/run.sh`, `../sass_census/rates.sh`). A GPU
+  machine's own `python3` runs it, so it and `rows.py` read nothing outside the standard library, this directory and
+  `../gpu_kit/`'s gate.
+- `rows.py` is the census line, and `eps1.py` gives the frontier's points and facets to `sm89/census.py`,
+  `../dc/census.py` and `../facet_break/loads.py`. Each module's `__all__` lists what a caller may read.
+
+Nothing here writes a row for a probe the gate refused.
+
 The tests are `../tests/test_opcode_probe.py`.

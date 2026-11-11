@@ -26,4 +26,5 @@ python3 benchmarks/int8_class_rate/summarize.py ~/.research/runs/RUN1/out ~/.res
 ~~~
 
 `run.sh`'s header lists its knobs: classes, encodings, kernels, ratios, seconds an arm, rounds and clock. Nothing here
-is a proof, and there are no tests: a run's rates are its record.
+is a proof, and there are no tests: a run's rates are its record. Nothing imports this directory: `summarize.py` is a
+command over runs' outputs, on the standard library alone.
