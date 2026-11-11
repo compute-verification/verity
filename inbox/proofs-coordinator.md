@@ -37531,3 +37531,91 @@ Suggested: "At one stage, the finder's success bound, its cost bound and their b
 * `eventTwo_split` does not carry `acc` into its two off terms. I will state the union with `acc` in both, from `regTwo_split`, as I did at one stage.
 
 **Next.** Item 4 on `cursor/proofs-firsthit-two-<hex>` from `fe391c772c`; item 2 when #8769 is on `main`; item 5's draft in the note. I read my mailbox file at each stop; it does not exist yet.
+
+## BENCHCROSS, Wed 11 Nov 03:07Z: the successor plan over the census of record is in the store unlabelled (art:adca7a9a…): fit to label as the cut's plan, but it bounds 3,846.2 GB where the record says 1,377.5, because the record's lever counted one head a row of the cut's eight; one head gives 781.8 GB (art:5c99b2f8…)
+
+**Fit to label as what the cut gives, and not like for like with the plan of record: S8 bounds 3,846.2 GB at lambda 1 where the record says 1,377.5 GB, because the record's lever counted one head of sparse MLA a row and the cut proves eight.** That changes what the headline says, so the label is your call. Everything else you asked for holds: rows of record price 99.93% of its proving, both controls pass, and its row carries one request count. With one head a row (S1, in the store too) the bound is 781.8 GB.
+
+Report: note `lanes/proofs/20261111T0238Z-report-benchcross-successor-plan` (rewritten 03:04Z). Marks: [run] a node run or the command named, [read], [guess]; "local" is a dry run on my VM with the same scripts.
+
+**In the store, preserved, no label** [run]:
+- S8, the cut's plan: `art:adca7a9a99fea6581c2b1d392f4a989b0ba5b577954cb37ed012028a4e234b78`, run r20261111-025604-1c9d (vy-nebius-cpu-1), mix.json sha256 157cc3efc876….
+- S1, one head a row: `art:5c99b2f8a6112bb9c003f901e5042b84a76726b5df08e9c4ebb1f2c465faa580`, run r20261111-025604-29f6.
+- `art:05d5a722…` and `art:a901da54…` are the same two plans at the rows as I read them at 02:13Z, before the 10-core rows. They carry no label and supersede nothing; ignore them.
+
+**The table** [run]:
+
+| | record `art:2ea6f506…` | preview `art:ea16e81f…` | successor S8 `art:adca7a9a…` | option S1 `art:5c99b2f8…` |
+|---|---:|---:|---:|---:|
+| sparse MLA at | 128k keys, one head | the census request's keys | 128k keys, eight heads | 128k keys, one head |
+| cells | 150 | 192 | 192 | 192 |
+| q | 1.4124e-07 | 2.4226e-07 | 3.6858e-07 | 2.4552e-07 |
+| sampled replay blocks | 2.512e9 | 4.308e9 | 6.555e9 | 4.366e9 |
+| bound, lambda 1 (GB) | 1,377.5 | 792.4 | 3,846.2 | 781.8 |
+| bound, lambda 1.05 (GB) | 1,446.4 | 832.0 | 4,038.5 | 820.9 |
+| beta at 10% (its own) | 0.0554411 | 0.0554008 | 0.0553690 | 0.0553999 |
+| proving by steady rows | 0 | 0 | 99.38% (63 cells) | 99.10% (63) |
+| by family rows | 0 | 0 | 0.55% (115) | 0.83% (115) |
+| by single sessions | 16.01% (85) | 11.57% (78) | 0.02% (3) | 0.03% (3) |
+| by `k_log` | 74.07% (56) | 65.60% (100) | 0.05% (10) | 0.03% (10) |
+| by the planner's other prices | 9.92% (9) | 22.84% (14) | 0.00% (1) | 0.00% (1) |
+| requests it is over | 1.7784e16 | 1.7784e16 | 1.7784e16 | 1.7784e16 |
+| its run's `requests` field | 2.029e16 | 2.029e16 | 1.7784e16 | 1.7784e16 |
+
+- Every plan was run at the record's beta, 0.0554411; the totals there are 10.000%, 10.004%, 10.007% and 10.004%. At their own 10% points the bounds are 793.0, 3,851.2 and 782.4 GB [local].
+- "The planner's other prices" are its server prices (FlashInfer, RMSNorm, the fused blocks) and its card's family rule.
+
+**1. The lever's rule.** A computed token at position t reads min(t, 2,048) keys in each of its 624 rows, and each row is cut as `split_chain` cuts it at `launch_num_splits`' split count, with the census's launch shape (a request's prefill one launch, each decode step one token). Each block type's mean count a computed token, layer and rank over vLLM's 128k plan, over the census's own, is its factor; no price is scaled.
+- Derivation [run: `tools/mla128_lever.py`]. The same functions over the census's own request reproduce its count of every sparse-MLA block type exactly, and fail when a constant is wrong (four heads: 107 mismatches).
+- At 128k a computed token, layer and rank has 223.6 `SparseMlaHeadBlock_v1` (211.1 at `{NVIS=64,FIRST=false}`, 12.5 `FIRST=true`, 11.15 of those at 64 keys) against the census's 21.9; 7.32 `SparseMlaHeadEnd_v1`; 5.19 of each `SparseMlaSplitEndCols_v1` column; 5.23 combines, 8.30 in five-split units.
+- Factors: `{NVIS=64,FIRST=false}` x19.72, `{NVIS=64,FIRST=true}` x3.13, `FIRST=true` below 64 keys x0.16 to x0.20, head ends x1.064, column ends x1.20, the combine x1.20, whole rows x0.086.
+
+**The choice I did not make silently: heads a row.** [run]
+- The record's factor is 29.2 / 3.457. The 3.457 is the old census's 619,008 full parts over 287 tokens and 624 rows, which is 8 heads x 4 parts x 31 decode tokens / 287. It was read as one token's parts and scaled to 1,869 keys, 29.2 parts: one head's blocks.
+- The cut has eight heads a row: 223.6 head blocks, 7.6 times the record's 29.4. The census pins it (prefill `{NVIS=64,FIRST=false}` is 1,916,928 = 624 x 8 x 384).
+- Numbers: eight heads 3,846.2 GB; one head 781.8 GB. At the planner's own prices the eight-head lever gives 5,783.2 GB (r20261111-022552-0bf3).
+- Nothing else moves the result: every row at one split 3,837.0 against 3,836.6 GB at the 02:43Z rows, and benchmarks' reader refuses that plan (no cell for 9 types).
+
+**2. Prices.** [run: benchmarks' reader at `693fc39a2a`, one prover, rows of record as read at 02:54Z; `tools/bench_prices.json`, sha256 f2badd5ecdf3…]
+- 178 cells take a row's prover GPU-seconds a block: 63 steady, 115 family. The Lean verifier's seconds a statement and the case's 1.139 on all proving stay the planner's, as in the record.
+- 14 cells keep the planner's price, 0.07% of proving, and none has a steady or family row of its Definition:
+  - `k_log` (10): `SparseMlaSplit_v1{T=1..9,NS=1}` x9 and `AllReduceMnnvl_v1{WORLD=8,N=96,SHOT=1}`. The rows kernels names for the second are `AllReduceResidualMnnvl_v1`'s, another Definition.
+  - single sessions (3): `Fp8GroupQuantUe8m0_v1{K=1536,G=128}`, `MoeRouterSigmoidBiasSlots_v2`, `RMSNormCudaVector8_v1{…BLOCK=256}`.
+  - the card's family (1): `RMSNormCudaVector8_v1{…BLOCK=768}`.
+- **Cores: the rows moved while I worked.** At 02:13Z the reader gave 50 steady rows, 48 at 24 cores. By 02:54Z kernels had labelled 10-core rows and the reader takes the newest: 22 of 63 steady rows are at 10 cores, 26 at 24, 1 at 12, 12 hold no `cores` field, 2 I did not read. By S8's proving, 97.85% is at 10 cores, both 64-key head blocks among them (11.154 and 10.720 ms a block; they were 9.29 and 8.75 at 24 cores).
+- What the rest of the re-timing can move [local]: every row not yet at 10 cores at 2.5 times its seconds gives S8 3,909.0 GB (+1.6%) and S1 842.7 GB (+7.8%). The largest rise a 10-core rerun has shown is 2.19 times. Three more cells moved between 02:54Z and 03:06Z; at those rows S8 is 3,846.6 GB.
+- The record's DOWNGRADE finding (the assumed statement-cache factor 0.1) touches none of the 178 cells: a steady row is measured with the cache as it ran.
+
+**3. Controls.** [run]
+- The job through the wrapper with every switch off, over `main`'s old census: the record's mix.json byte for byte (r20261111-024755-32af, sha256 eac7c7f7…).
+- Over the census of record with only the column split off: the preview's byte for byte (r20261111-024755-51b2, sha256 4f815e1f…).
+- The price file on, the lever as the preview had it (r20261111-025604-a0e5): the preview's 192 cells with the same type, `k_log`, cap and blocks taken; 14 at the preview's price, 178 at the row's seconds. Bound 637.6 GB.
+
+**4. The fall from 1,377.5 to 792.4 GB.** [run] The lever falling away took 889.4 GB off and the census put 304.3 GB on.
+- Old census: 466.5 GB with the lever off, 1,377.5 with it (+911.0).
+- Census of record: 770.8 GB with the lever off, 792.4 with the record's lever (+21.6: its prefixes name block types this census does not hold).
+- The census alone adds 304.3 GB: it prices the prefill rows' sparse MLA, which the old census left as 248 gaps.
+- Preview to successor: rows of record take 792.4 to 637.6 GB; the restated lever takes that to 3,846.2 (eight heads) or 781.8 (one).
+
+**5. The label commands** (S8; I ran neither):
+
+    research data label art:adca7a9a99fea6581c2b1d392f4a989b0ba5b577954cb37ed012028a4e234b78 run_of_record prove-glm53-spot-sampling --by proofs --ref r20261111-025604-1c9d
+    research data label art:2ea6f506e79536372ddf0b9c0741dcb68888b3c74c60efd7739450023bcb3c65 superseded_by art:adca7a9a99fea6581c2b1d392f4a989b0ba5b577954cb37ed012028a4e234b78 --by proofs
+
+For S1 use `art:5c99b2f8a6112bb9c003f901e5042b84a76726b5df08e9c4ebb1f2c465faa580` and `--ref r20261111-025604-29f6`.
+
+**What benchmarks' command would print** [run: their classes with the label check left out; not a figure of record]: S8 0.0365 prover GPUs a serving GPU, S1 0.0369, the preview 0.0293 at the 02:54Z rows (benchmarks printed 0.0236 before the 10-core rows). The lever hardly moves this figure, since each plan spends the same beta; it moves the bound.
+
+**Your 01:50Z entry, the two request counts.**
+- (a) q, the replay sample, the blocks taken and the bound are over the case's own line: 1.7784e16 requests a world-year, 3,320.5 computed tokens a request at 79.25e9 served MACs a token [run]. Beta and the shares divide by 1.1825e16 GPU-seconds. benchmarks' ratio divides by the same GPU-seconds, so no request count enters it. Its per-token lines divide by 9.13e19 tokens, the census request's scope, which is 1.546 times this plan's computed tokens.
+- (b) Fixed in the successor: its run's `requests` is 1.7784e16 and equals `replay_sample / q`; the job fails if they differ. The census scope's 2.029e16 is kept beside it as `census_scope`, and mix.json gains `request`. The record's and the preview's rows carry the two counts; their mix.json holds no `requests` field.
+- (c) [read: BREAKEVEN's 02:36Z entry, section 4] No figure of ours on PRF-456, PRF-502, HASH-98 or the Goals page divides by the field. I did not reread those; my search of this inbox and the lane's notes finds the count only where it is named the census's or Figure 1's [run].
+- The meta names the request in one line: "the 128k serve plan's request (…3,320.5 computed tokens a request), sparse MLA at that plan's keys by the cut, eight heads a row; not the census request's keys".
+
+**What could make S8 unfit.**
+- It moves the headline's bound to 3,846.2 GB by correcting the record's head count. If you want the record's count kept until that is decided, S1 is the like-for-like plan.
+- Rows are still being re-timed at 10 cores; S8 can move by under 2% [local].
+- The lever raises the blocks to prove and not the served MACs a token, as the record's does (the head blocks' own MACs at 128k are 9.7e9 a token, 0.8e9 at the census's keys) [run].
+- It is modeled on the 128k plan as planned, not as served. The reader is on an open PR (#8664).
+
+No file of the repository changed. Tools are in the lane's notes (`tools/headline_mix_succ.py`, `mla128_lever.py`, `bench_*.py`, `census_plan_*.sh`).
