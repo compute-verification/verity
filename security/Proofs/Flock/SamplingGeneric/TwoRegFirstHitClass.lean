@@ -42,10 +42,10 @@ have a proof block needing the representative `q` extracted (`callsBy`).
   (`Compiled.ClassWhole`: an opening they keep comes with one they keep, under the same roots, at each gate of its
   class; `Compiled.opensAt_isSome_cls`), and, for the interiors, a class lies in one replay block
   (`CompiledTwo.iopTable_isSome_cls`): `CompiledTwo.eventTwoX_le_firstHit_kept`.
-* **From one reveal.** The extractions keep classes whole where what each witness they extract reveals at each proof
-  block of its session does (`Compiled.kept_classWhole_of_wit`), so where every reveal does
-  (`Compiled.kept_classWhole_of_reveal`, `CompiledTwo.eventTwoX_le_firstHit_reveal`). That is for the code that
-  instantiates `reveal` and `commit` to show.
+* **From what the extracted witnesses reveal.** The extractions keep classes whole where what each witness they
+  extract reveals at each proof block of its session does (`Compiled.kept_classWhole_of_wit`,
+  `CompiledTwo.eventTwoX_le_firstHit_wit`). That is for the code that instantiates `reveal`, `commit` and the sessions
+  to show; a witness no extraction returns is not asked about.
 * **What the finders read.** The seed, the sample, the waits and the output are the by-position finders'. At a further
   run the output reads the extraction of the sessions with a proof block needing the gate it compares
   (`Compiled.collBy`), and the finder is charged the sessions with a proof block needing that gate's representative.
@@ -172,14 +172,6 @@ theorem kept_classWhole_of_wit (H : Msg → Msg) (L : Compiled Coin A) {Ω : Typ
     obtain ⟨p', hp', h1, h2, h3⟩ := hwit iu hium hu w hw u' hu' q hmem hok g g' hg hgg
     exact ⟨p', L.mem_kept_of_sessExt H P x s ω r c hium hu (L.mem_sessExt_of_reveal H hw hu' hp' h3), h1, h2, h3⟩
   · simp [RP.eval] at hiu
-
-/-- **A run's extractions keep classes whole, where every reveal holds classes whole** (`hrow`, at every proof block,
-transcript and witness). -/
-theorem kept_classWhole_of_reveal (H : Msg → Msg) (L : Compiled Coin A) {Ω : Type} (P : Prover Ω) (x : Msg)
-    (s : AuditStatement) (ω : Ω) (cls : Fin (L.nG x) → Fin (L.nG x))
-    (hrow : ∀ u v w, L.ClassWhole H x cls (L.reveal s u v w)) (r : Fin (L.V.k x) → Coin) (c : L.SlotEC x) :
-    L.ClassWhole H x cls (L.kept H P x s ω r c) :=
-  L.kept_classWhole_of_wit H P x s ω cls r c fun _ _ _ w _ u' _ => hrow u' _ w
 
 /-- A kept opening under the statement's roots that passes opens its gate. -/
 theorem opensAt_isSome_of_kept (H : Msg → Msg) (L : Compiled Coin A) {Ω : Type} (P : Prover Ω) (x : Msg) (ω : Ω)
@@ -513,7 +505,7 @@ theorem eventTwoX_le_firstHit_cls {H : Msg → Msg} {L : CompiledTwo Coin A} (hA
     exact h
   exact Verity.FirstHit.le_of_forall_cap hcap
 
-/-! ## From what the extractions keep, and from one reveal -/
+/-! ## From what the extractions keep, and from what the extracted witnesses reveal -/
 
 /-- **A run's extractions open a class whole under a replay block's interior roots**, where they keep classes whole
 and a class lies in one replay block (`hblock`): the by-class finder's hypothesis at the committed interiors
@@ -572,18 +564,26 @@ theorem eventTwoX_le_firstHit_kept {H : Msg → Msg} {L : CompiledTwo Coin A} (h
     (fun t ec g g' hgg hg =>
       L.iopTable_isSome_cls H P x t.1 hs d.part cls hblock t.2 ec (hkept t.1 _ ec.2) g g' hgg hg) hX hI
 
-/-- **The event of `KSRegTwoX` with the by-class finders' terms, from one reveal**: `eventTwoX_le_firstHit_kept` where
-every reveal holds classes whole (`hrow`: at every proof block, transcript and witness, an opening of the reveal that
-passes its opening check has, for each gate of its class, an opening in the same reveal, under the same roots, that
-passes too). -/
-theorem eventTwoX_le_firstHit_reveal {H : Msg → Msg} {L : CompiledTwo Coin A} (hA : A.KS H)
+/-- **The event of `KSRegTwoX` with the by-class finders' terms, from what the extracted witnesses reveal**:
+`eventTwoX_le_firstHit_kept` where, at every run, for each session of the run's sample, extracted at its first slot,
+each witness `w` its extraction returns and each proof block `u'` of the session, what `w` reveals at `u'` holds
+classes whole (`hwit`: an opening of that reveal that passes its opening check has, for each gate of its class, an
+opening in the same reveal, under the same roots, that passes too). The run need not accept, and a witness no
+extraction returns is not asked about. -/
+theorem eventTwoX_le_firstHit_wit {H : Msg → Msg} {L : CompiledTwo Coin A} (hA : A.KS H)
     (hbind : L.commit.Binds H) (hS : L.Sessions H) {x : Msg} {s : AuditStatement} {Pt : Partition}
     {d : Sampling.Design.Two} (hs : L.parse x = some s) (hPt : L.partition s = some Pt) (hd : L.two s = some d)
     (hin : InScopeTwo Pt d s) {Ω : Type} [Fintype Ω] [Nonempty Ω] (P : Prover Ω) (needs : ℕ → Finset ℕ)
     (hpos : ∀ u v w, ∀ p ∈ L.reveal s u v w, p.2.pos ∈ needs u) (cls : Fin (L.nG x) → Fin (L.nG x))
     (hrep : ∀ u (g : Fin (L.nG x)), g.val ∈ needs u → (cls g).val ∈ needs u)
     (hblock : ∀ g g' : Fin (L.nG x), cls g = cls g' → gateBlock d.part g.val = gateBlock d.part g'.val)
-    (hrow : ∀ u v w, L.toCompiled.ClassWhole H x cls (L.reveal s u v w))
+    (hwit : ∀ (ω : Ω) (r : Fin (L.V.k x) → Coin) (c : L.SlotEC x),
+      ∀ iu ∈ (List.finRange (L.nPU x)).zip (L.checked x r),
+        ∀ hu : iu.2 < L.nPU x ∧ (L.sessSlots x (L.checked x r) iu.1).head? = some iu.1.val, ∀ w : A.W,
+          ((L.sessWit x iu.2 r (run H P L.V x ω r).seen (c iu.1 ⟨iu.2, hu.1⟩)).eval H (run H P L.V x ω)).1 =
+              some w →
+            ∀ u' ∈ L.sessBlocks x (L.checked x r) iu.1,
+              L.toCompiled.ClassWhole H x cls (L.reveal s u' (run H P L.V x ω r).seen w))
     (hX : ∀ K : ℕ, ExpectedCR H (L.toCompiled.finderXCls H P x s needs cls K))
     (hI : ∀ K : ℕ, ExpectedCR H (L.finderICls H P x s d.part needs cls K)) :
     Pr (fun p : Ω × (Fin (L.V.k x) → Coin) => (run H P L.V x p.1 p.2).out = .acc ∧
@@ -596,7 +596,7 @@ theorem eventTwoX_le_firstHit_reveal {H : Msg → Msg} {L : CompiledTwo Coin A} 
               L.toCompiled.callsBy H P x s needs c.val q.1 q.2.1 q.2.2 : ℕ) : ℝ)) /
           2 ^ (256 : ℝ) :=
   eventTwoX_le_firstHit_kept hA hbind hS hs hPt hd hin P needs hpos cls hrep hblock
-    (fun ω r c => L.toCompiled.kept_classWhole_of_reveal H P x s ω cls hrow r c) hX hI
+    (fun ω r c => L.toCompiled.kept_classWhole_of_wit H P x s ω cls r c (hwit ω r c)) hX hI
 
 end CompiledTwo
 
