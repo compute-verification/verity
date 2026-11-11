@@ -392,5 +392,7 @@ def main(argv: list[str] | None = None) -> int:
     return report(compare(), a.out)
 
 
+__all__ = ["Store", "compare", "lean_verdict", "main", "record", "replay", "report"]
+
 if __name__ == "__main__":
     sys.exit(main())

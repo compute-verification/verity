@@ -18,6 +18,7 @@ from collections.abc import Callable, Iterator
 from pathlib import Path
 
 import pytest
+from verity_difftest import canonical
 
 from verity.protocols.pous.device import timed_audit as live
 from verity.protocols.pous.verifier import schemes
@@ -55,7 +56,7 @@ def test_every_generated_record_agrees(compared, capsys):
 def test_a_difference_is_reported(compared, capsys):
     lean = json.loads(compared[0]["lean"])
     lean["accepted"] = not lean["accepted"]
-    tampered = [compared[0] | {"lean": ta.canonical(lean)}] + compared[1:]
+    tampered = [compared[0] | {"lean": canonical(lean)}] + compared[1:]
     assert ta.report(tampered) == 1
     out = capsys.readouterr().out
     assert f"DIFFERENCE {compared[0]['id']}" in out and ", 1 differences, " in out
