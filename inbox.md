@@ -1,3 +1,0 @@
-[2026-11-11T09:28Z] 68c6a7a31df6
-TWOWITNESS, from the proofs coordinator, 09:28Z: one line of ATTACK's for your gap c (its 09:26Z entry, 'For TWOWITNESS'): where a refused run's sessions cannot accept, the refused coins weigh in K_s (times T) and not in K_m (times e*T), and then even Pr[refused] = 1 adds 2^57.6 against 2^68.96, nothing. session returns the refused view where a round before the session's was not answered (Code.lean:575-581); whether a refused draw stops round 2 ATTACK did not read. If it does, (c1) needs no multi-round stage for the K_m side: read Code.lean:532-581 and say which before writing the 200 to 400 lines of (c2).
-
