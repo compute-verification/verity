@@ -107,8 +107,6 @@ def _engine_main(args) -> None:
 
 
 def _check_main(args) -> int:
-    import torch
-
     run = Path(args.out)
     cap, ctl = run / "capture", run / "control"
     res: dict = {"schema": "tp2-match/v1", "utc": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()), "run": str(run),
@@ -132,9 +130,20 @@ def _check_main(args) -> int:
     recorder_sha = {str(r): hashlib.sha256((cap / f"coll.rank{r}.jsonl").read_bytes()).hexdigest() for r in ranks}
     steps = sorted({x["step"] for r in ranks for x in recs[r]})
     tok = json.loads((cap / "tokens.json").read_text())
-    sched = step_rows(tok)
-    gens = [len(q["generated_token_ids"]) for q in tok["requests"]]
-    # ---- 1. structure vs each rank's Build peer-input signature
+    struct = res["structure"] = _structure(builds, recs, steps, step_rows(tok))
+    prov = res["provenance"] = _provenance(cap, ranks, recs, steps, recorder_sha)
+    tk = res["tokens"] = _tokens(ctl, tok)
+    res["recorder"], res["mid_module_sites_ruled_out"] = tok.get("recorder"), _ruled_out_sites(cap, ranks)
+    res["pass"] = bool(struct["pass"] and prov["pass"] and prov["collectives_checked"] > 0 and tk.get("pass") is not False)
+    _write(run, res)
+    print(json.dumps({k: res[k] for k in ("pass", "structure", "provenance", "tokens")}, indent=1, default=str)[:6000])
+    return 0 if res["pass"] else 1
+
+
+def _structure(builds: list[str], recs: dict, steps: list, sched: dict[int, tuple[int, int]]) -> dict[str, Any]:
+    """Part 1 of the check: each rank's recorded collectives against the peer-input signature and the sites of its Build, and their rows
+    against the schedule the capture realized (``sched``, `step_rows`)."""
+    world = len(builds)
     struct: dict[str, Any] = {"pass": True, "per_rank": {}}
     for r, bdir in enumerate(builds):
         links = read_tp_links(str(Path(bdir) / "tp_links.json"))
@@ -196,8 +205,15 @@ def _check_main(args) -> int:
     struct["step_rows"] = {s: list(sched.get(s, (0, 0))) for s in steps}
     struct["rows_rule"] = ("per step of the realized schedule (tokens.json timing.requests first_step + generated tokens): all-reduce rows == "
                            "the step's tokens; the logits all-gather's rows == its sampled rows (required); mid-module all-gather rows == its tokens; nothing else")
-    res["structure"] = struct
-    # ---- 2. cross-rank provenance on the stored steps
+    return struct
+
+
+def _provenance(cap: Path, ranks: list[int], recs: dict, steps: list, recorder_sha: dict[str, str]) -> dict[str, Any]:
+    """Part 2 of the check, on the stored steps: every stored tensor digests to its recorder row (``recorder_sha``: the recorder files'
+    own digests, which travel with the record), and every rank received the registered Definition of the ranks' partials."""
+    import torch
+
+    world = len(ranks)
     prov: dict[str, Any] = {"pass": True, "steps_checked": 0, "collectives_checked": 0, "elements_checked": 0, "all_reduce_checked": 0, "all_gather_checked": 0,
             "mismatches": [], "received_equal_both_ranks": 0,
             # the stored tensors are BOUND to the recorder rows: sha256 of every .pt part / out (the recorder's own bytes rule:
@@ -278,23 +294,21 @@ def _check_main(args) -> int:
         prov["steps_checked"] += 1
     prov["n_mismatches"] = len(prov["mismatches"])
     prov["mismatches"] = prov["mismatches"][:20]
-    res["provenance"] = prov
-    # ---- 3. tokens: instrumented == control, per request
+    return prov
+
+
+def _tokens(ctl: Path, tok: dict) -> dict[str, Any]:
+    """Part 3 of the check: the instrumented run's tokens (``tok``) are the control arm's, per request; not judged without a control arm."""
     tk: dict[str, Any] = {"pass": None}
     if (ctl / "tokens.json").exists():
         c = json.loads((ctl / "tokens.json").read_text())
         A = [(q["request_id"], q["prompt_token_ids"], q["generated_token_ids"]) for q in tok["requests"]]
         B = [(q["request_id"], q["prompt_token_ids"], q["generated_token_ids"]) for q in c["requests"]]
-        tk = {"pass": A == B and len(A) > 0, "n_requests": len(A), "generated_lengths": gens,
+        tk = {"pass": A == B and len(A) > 0, "n_requests": len(A), "generated_lengths": [len(q["generated_token_ids"]) for q in tok["requests"]],
               "capture_run_s": tok.get("run_s"), "control_run_s": c.get("run_s")}
     else:
         tk["note"] = "no control arm"
-    res["tokens"] = tk
-    res["recorder"], res["mid_module_sites_ruled_out"] = tok.get("recorder"), _ruled_out_sites(cap, ranks)
-    res["pass"] = bool(struct["pass"] and prov["pass"] and prov["collectives_checked"] > 0 and tk.get("pass") is not False)
-    _write(run, res)
-    print(json.dumps({k: res[k] for k in ("pass", "structure", "provenance", "tokens")}, indent=1, default=str)[:6000])
-    return 0 if res["pass"] else 1
+    return tk
 
 
 def _routed_settings(cap: Path, ranks: list[int], world: int, prov: dict) -> dict | None:
