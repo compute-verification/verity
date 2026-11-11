@@ -1618,7 +1618,11 @@ def test_the_row_of_requests_sent_as_they_arrive_says_whether_stock_kept_up_and_
     four = S.cost_report(cost_arms())["prefix"]
     assert (four["cost"], four["kept_up"], four["why"], four["tokens"], four["reference"]["tail_s"]) == (
         S.TOKENS, None, None, {"value": four["value"], "ci95": four["ci95"]}, None)
-    assert four["value"] is not None and "readings" not in four["ttft"]
+    assert four["value"] is not None and "readings" not in four["ttft"] and four["scaled_down"]
+    # a directory whose plan names no span of arrivals, as one in flight needs none, is of the four requests all the same
+    arms = [a | {"planned": {"prefix": {k: v for k, v in a["planned"]["prefix"].items() if k != "span_s"}}}
+            if "planned" in a else a for a in cost_arms()]
+    assert S.cost_report(arms)["prefix"]["scaled_down"]
 
 
 def test_the_cost_says_what_the_arms_boundary_commitment_did_and_whether_its_tables_were_built():

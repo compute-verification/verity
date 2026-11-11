@@ -1959,7 +1959,8 @@ def prefix_row(by: dict[str, dict], reference: str, arm: str) -> dict | None:
         return {"value": tokens["value"], "ci95": tokens["ci95"], "cost": LATENCY if kept else TOKENS, "kept_up": kept,
                 "why": why, "tokens": tokens, "reps": c["reps"], "ttft": ttft, "itl_p99": itl, "reference": sa, "arm": sb}
 
-    scaled = all(plan.get(k) == v for k, v in planned(trace_lines(PAIRS)).items())
+    four = planned(trace_lines(PAIRS))
+    scaled = all(plan.get(k) == four[k] for k in ("requests", "prompt_tokens", "repeated_tokens"))
     return {"load": PREFIX, "what": GIVEN if arriving else LOADS[PREFIX].what, "label": "on a repeated prefix",
             "scaled_down": scaled,
             "planned": {**plan, "repeated_share": _pct(plan["repeated_tokens"] / plan["prompt_tokens"])},
