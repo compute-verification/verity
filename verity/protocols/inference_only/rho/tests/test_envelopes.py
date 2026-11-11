@@ -110,8 +110,8 @@ def test_with_nothing_else_bounding_the_padded_size_ratio_is_lean_dampener_remot
     assert pad <= 1 / (s + (1 - s) * u) and pad == pytest.approx(1 / (s + (1 - s) * u), rel=1e-4)
 
 
-#: `Nci.Dampener.remoteDampener` as Security/Definitions/Nci/Remote.lean defines it, and the conclusion of
-#: `Nci.Guarantees.DampenerRemote` (Security/Definitions/Nci/Guarantees/Remote.lean) that names it `ρ`
+#: `Nci.Dampener.remoteDampener` as security/Definitions/Nci/Remote.lean defines it, and the conclusion of
+#: `Nci.Guarantees.DampenerRemote` (security/Definitions/Nci/Guarantees/Remote.lean) that names it `ρ`
 REMOTE_DAMPENER = "noncomputable def remoteDampener (mfu s x : ℝ) : ℝ := max 1 (1 / (s + x / mfu))"
 REMOTE_CONCLUSION = "remoteDampener mfu (unregisteredShare C U)"
 
@@ -123,7 +123,7 @@ def test_the_remote_overhead_is_lean_remote_dampener_at_the_references_mfu():
     server and the H200 give the same `x = 0.33`, and `ρ = 3.04` (1.22 without reference efficiency), as
     `verity/protocols/inference_only/nci`'s slowdown reads it. Without both assumptions tiers' server (host CPUs 12.6% of the GPUs)
     has `x = 0.45`, which outruns that developer, so `ρ = 1`; the H200 (2.9%) has 1.12."""
-    lean_dir = ROOT / "Security" / "Definitions" / "Nci"
+    lean_dir = ROOT / "security" / "Definitions" / "Nci"
     assert REMOTE_DAMPENER in (lean_dir / "Remote.lean").read_text()
     assert REMOTE_CONCLUSION in (lean_dir / "Guarantees" / "Remote.lean").read_text()
     for mfu, s, x in ((0.4, 0.001, 0.45), (1.0, 0.0, 0.2), (0.4, 0.0, 0.0), (0.5, 0.2, 0.01)):

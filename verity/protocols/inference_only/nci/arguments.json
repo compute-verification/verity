@@ -118,7 +118,7 @@
    "id": "p-inference-theorem",
    "kind": "theorem",
    "status": "proved",
-   "statement": "A declaration divided into sessions reading only theta and their prompts complies (a lemma, with NCI's proofs in Security/Proofs/Nci/Lemmas.lean).",
+   "statement": "A declaration divided into sessions reading only theta and their prompts complies (a lemma, with NCI's proofs in security/Proofs/Nci/Lemmas.lean).",
    "refs": {}
   },
   {

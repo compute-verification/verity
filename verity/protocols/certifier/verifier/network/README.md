@@ -11,7 +11,7 @@ names `window` and `LinkWindow` until a format version (the Glossary's older nam
 - `verity/protocols/certifier/`: the network certifier itself (its relay, records, certificates and the Python
   audit), and in its README the protocol.
 - `nci/`: the inference-only policy's check, a separate package with its own README.
-- `Security/Proofs/NetworkCertifier/README.md`: the guarantees and proofs about the certifier's timing channel, which
+- `security/Proofs/NetworkCertifier/README.md`: the guarantees and proofs about the certifier's timing channel, which
   bound `K` (below).
 
 ## What runs
@@ -58,7 +58,7 @@ one-stage, one answer per registered sampling block of the workload). Its parame
 
 It accepts when every link-window passes its form's check and every compute audit accepted. It then publishes `K`, the
 bits a covert sender in the server can move through the network certifier in the period, as
-`NetTiming.Guarantees.PeriodLeakAccepted` counts them (`Security/Proofs/NetworkCertifier/README.md`).
+`NetTiming.Guarantees.PeriodLeakAccepted` counts them (`security/Proofs/NetworkCertifier/README.md`).
 
 ## Who runs it
 

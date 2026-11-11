@@ -17,7 +17,7 @@ import pytest
 
 LEAN = Path(__file__).resolve().parents[2] / "verifier"
 VERIFIER = Path(__file__).resolve().parents[2] / "agreement"
-PROOFS = Path(__file__).resolve().parents[5] / "Security" / "Proofs"
+PROOFS = Path(__file__).resolve().parents[5] / "security" / "Proofs"
 TOOLCHAIN = "leanprover/lean4:v4.34.0"  # the security packages' Mathlib and ArkLib pin v4.34.0
 FORBIDDEN = re.compile(r"\b(native_decide|implemented_by|extern|unsafe)\b")
 
@@ -32,7 +32,7 @@ def build_proofs_verifier() -> None:
 
 
 def sources():
-    """The executable's sources (its proofs are under `Security/Proofs/Flock/`, with their own dependencies and checks)."""
+    """The executable's sources (its proofs are under `security/Proofs/Flock/`, with their own dependencies and checks)."""
     return sorted(p for p in LEAN.rglob("*.lean") if ".lake" not in p.parts)
 
 
@@ -65,7 +65,7 @@ def test_audit_layer_is_abstract():
     """The audit theorems import only the interaction model, Mathlib, each other, Flock's spec (`Definitions.Flock.*`, which
     the lock's layers hold to itself and Mathlib) and their lifted statements
     (`Proofs.Flock.Lemmas.Audit`, which imports only Mathlib), so any backend can instantiate them
-    (`Security/Proofs/Flock/Soundness/DESIGN.md` §12). The Flock instantiations are the only files that import Flock's theorems:
+    (`security/Proofs/Flock/Soundness/DESIGN.md` §12). The Flock instantiations are the only files that import Flock's theorems:
     `Flock.lean` (oracle layer), `FlockCompiled.lean` (one table), `FlockBatched.lean` (several tables),
     `FlockBatchedAcc.lean` (the expected-time extractor), `FlockLink.lean` (the link theorem), `FlockLinked.lean` (the
     two composed) and `FlockWork.lean` (the executable's work rule). No proof is admitted."""

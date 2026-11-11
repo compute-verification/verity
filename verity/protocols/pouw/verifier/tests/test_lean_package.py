@@ -1,5 +1,5 @@
-"""PoUW's Lean (in `Security`) and what the rest of this directory says about it: every Lean name the README cites is
-a guarantee in `Security/lean-audit.json`, a named assumption or a definition one states, and its FP8 conformance data is what `verity.definitions.silicon`
+"""PoUW's Lean (in `security`) and what the rest of this directory says about it: every Lean name the README cites is
+a guarantee in `security/lean-audit.json`, a named assumption or a definition one states, and its FP8 conformance data is what `verity.definitions.silicon`
 computes. `lean/scripts/fp8atom_vectors.py`, run again, writes the kernel-pinned vectors in `Definitions/Pouw/Fp8Atom/` and
 their checks in `Proofs/Pouw/Fp8Atom/` byte for byte, and the bulk whose SHA-256 the proofs' record holds for
 `Proofs.Pouw.Bulk`. The
@@ -18,7 +18,7 @@ import pytest
 
 HERE = Path(__file__).resolve().parents[1]
 ROOT = HERE.parents[3]
-LEAN = ROOT / "Security"
+LEAN = ROOT / "security"
 SCRIPT = HERE / "lean" / "scripts" / "fp8atom_vectors.py"
 POLICY = json.loads((LEAN / "lean-audit.json").read_text())
 RUNS = json.loads((LEAN / "Proofs" / "lean-audit.json").read_text())["runs"]

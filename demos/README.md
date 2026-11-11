@@ -27,8 +27,8 @@ verifier establishes with no hardware of its own at the developer's site. It com
 Remote accepts only when all three accept over one commitment that binds them, each having committed to the same record
 (`Core.Composition.same`); any one's rejection rejects it, whatever the others answer. It rests on live coins (flipped after
 the commitment, never flipped again) and on what each subprotocol's own
-guarantee assumes; each subprotocol states its guarantee in `Security/`, and the composite's
-(`Verity.RemoteSoundness`, `Security/Properties/Verity/Soundness.lean`) is proved from theirs, which it takes as
+guarantee assumes; each subprotocol states its guarantee in `security/`, and the composite's
+(`Verity.RemoteSoundness`, `security/Properties/Verity/Soundness.lean`) is proved from theirs, which it takes as
 hypotheses, so no demo's `proof` is past `none`. `lifecycle/` is the only demo that steps through the whole
 remote composite, H1's development one, on CPU with a stand-in prover. Its demo is the vLLM demo
 (`verity demo vllm`), on H1's development executable: one served run of Llama-3.2-1B INT8 on one H200, sampled proofs

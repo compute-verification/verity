@@ -1,4 +1,4 @@
-"""`Security/Proofs/Accounting/TS/J10RChecks.lean`'s vectors are the Python's: each `theorem NAME : LHS = RHS` the kernel
+"""`security/Proofs/Accounting/TS/J10RChecks.lean`'s vectors are the Python's: each `theorem NAME : LHS = RHS` the kernel
 evaluates there is recomputed here from `seeds` and `h1tile`, so the Lean definitions of J10-R's noise (`J10R.lean`) and
 the units' references can't drift apart."""
 from __future__ import annotations
@@ -12,7 +12,7 @@ from verity.protocols.pouw.prover.circuit import h1tile as H
 from verity.protocols.pouw.prover.circuit import seeds as SD
 
 pytestmark = pytest.mark.skipif(H.SG is None, reason="H1's receipts (circuit.segment) are not on this tree")
-CHECKS = Path(__file__).resolve().parents[5] / "Security" / "Proofs" / "Accounting" / "TS" / "J10RChecks.lean"
+CHECKS = Path(__file__).resolve().parents[5] / "security" / "Proofs" / "Accounting" / "TS" / "J10RChecks.lean"
 SALT = bytes(range(64))
 RA = bytes((7 * i + 3) % 256 for i in range(64))
 RB = bytes((5 * i + 1) % 256 for i in range(64))

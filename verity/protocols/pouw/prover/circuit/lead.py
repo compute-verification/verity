@@ -1,6 +1,6 @@
 """The lead's sampled unit (`verity/pouw/v2`): one 16 × 8 MMA tile of one call over one block of at most 32 k32 steps, its
 committed words checked against the call's data and the certifier's coins, and on the call's last block the served fold,
-at the layout of `Security/Definitions/Pouw/Lead/Layout.lean` (`Pouw.Lead`); and its window, what the verifier reads
+at the layout of `security/Definitions/Pouw/Lead/Layout.lean` (`Pouw.Lead`); and its window, what the verifier reads
 around the units.
 
 The lead is `tag-blc4a-t64-rot/served/s8/k32/w/l1w/l1a/min`. A call of ``rows`` × K × ``cols`` commits its words over

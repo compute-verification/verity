@@ -36,7 +36,7 @@ structure (the frame's declared size class), never a private value's length.
 
 Every key is an HMAC-SHA512 output under a uniform key, so a PRF under ``prf/sha-512`` (Bellare 2006), and a KEM's
 shared secret enters only as an HMAC key. Standard library only. The premises are named Props in
-``Security/Definitions/Core/Assumptions/Transport.lean``: ``WitnessPathPrivate`` for a channel without keys,
+``security/Definitions/Core/Assumptions/Transport.lean``: ``WitnessPathPrivate`` for a channel without keys,
 ``ImprintPathPrivate`` for the cable during the imprint, and ``ChannelHides`` and ``ChannelAuthentic`` for what this
 module gives; ``Verity.Guarantees.TransportPassiveZk`` takes the first or the third.
 """

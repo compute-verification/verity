@@ -1,6 +1,6 @@
 """A registered circuit's requirement of memory, from its wiring and its schedule (the Program, never a kernel): the values its
 execution keeps live when each step begins and the values each step reads, in bits, in all and by block of the store.
-The Python counterpart of `Security/Definitions/Accounting/Requirement.lean`, by explicit expansion of the canonical
+The Python counterpart of `security/Definitions/Accounting/Requirement.lean`, by explicit expansion of the canonical
 circuit (small Programs, `layout.Circuit`'s explicit limit), which the Lean definitions and the memory map (I3) are held to.
 
     live(t)  = the values produced before step t (or registered) that a gate run at step t or later has as an operand
