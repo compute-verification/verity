@@ -215,6 +215,9 @@ research data put --kind spot-figure/v1 --tree DIR --preserve                # f
     longest call (`--longest-call`, 64 KiB unless stated). With `--classes`, the classes of gates one reveal opens
     whole, a design by position is printed in four columns: by gates and by classes, each in calls and in
     compressions.
+  - K_s and K_m as given are means over the verifier's coins. With `--largest`, the most gates one block needs, it
+    prints beside them the gates as a count of the sample gives them: the blocks it checks (`--checked`, the
+    sessions unless stated) times that. `--largest-classes` does the same by classes.
   - It prints the sums per sampled replay block, per run and over each monitoring period, marks each above 2^-100
     (`--target`), gives the most gates that keep the collision term there, and beside them the term of the cap on
     the extractor's waits at each cap, per run (`--waits-k`).
