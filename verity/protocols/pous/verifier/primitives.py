@@ -50,7 +50,7 @@ from verity.commitments.randomness import Key, derive
 
 from .labels import mask
 from .oracle import HQuery, KeyQuery, PiInvQuery, PiQuery, Query, Tweak
-from .params import TAG_BITS, Params
+from .params import Params
 
 CAPACITY_BITS = 512
 HEADER = b"pous-p3-v1-H"
@@ -96,16 +96,6 @@ def pi2_call_ns(m: int) -> int:
 def key_query(params: Params, tag: int, layer: int, node: int, labels: Mapping[int, int] | Sequence[int]) -> KeyQuery:
     """Node `node`'s key query: Lean `parentsOf L v = fun u => if u ∈ G.par v then some (L u) else none`."""
     return KeyQuery(tag, layer, node, tuple((u, labels[u]) for u in params.parents(node)))
-
-
-def check_key_query(params: Params, q: KeyQuery) -> None:
-    if not 0 <= q.tag < 1 << TAG_BITS or q.layer not in (0, 1) or not 0 <= q.node < params.n:
-        raise ValueError("key query outside KQ'")
-    last = -1
-    for u, label in q.parents:
-        if not last < u < params.n or not 0 <= label < 1 << params.m:
-            raise ValueError("key query parents must be increasing nodes with m-bit labels")
-        last = u
 
 
 class KeyStepper(Protocol):
