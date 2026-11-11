@@ -78,7 +78,7 @@ def test_one_mathlib():
 #: (`check.py`'s `witness_failures`)
 # Security's 279: Flock.SecurityProofs.SpotExfilTwo, NetTiming.SecurityProofs.SampledLeakChecked and PooledLeakChecked carry
 # their nontrivial witnesses; their honest ones are due with the two-stage layout and the deployed check pinning CheckedUnique
-UNWITNESSED = {"Security": 303, "Security/Properties": 191, "verity/protocols/flock/verifier": 7}
+UNWITNESSED = {"security": 303, "security/Properties": 191, "verity/protocols/flock/verifier": 7}
 
 
 def test_the_unwitnessed_list_only_shrinks():
@@ -95,14 +95,14 @@ def test_the_trust_base_is_one_list():
     with the same trust assumption, so no package's deployed guarantees count a premise as trusted that another's count
     in their gap; a premise one guarantee alone may rest on is its own (`trust.extra`)."""
     bases = {_rel(p): _lock(p)["trust"]["base"] for p in lake_packages() if "trust" in _lock(p)}
-    assert "Security" in bases and len({json.dumps(b, sort_keys=True) for b in bases.values()}) == 1, bases
+    assert "security" in bases and len({json.dumps(b, sort_keys=True) for b in bases.values()}) == 1, bases
 
 
 def test_the_randomness_assumption_cites_this_toolchain():
     """A3 (Flock soundness's `ASSUMPTIONS.md`, `Assumptions.UniformRandomBytes` in `Definitions/Assumptions/Flock.lean`)
     cites what the toolchain's runtime reads for `IO.getRandomBytes` (`lean_io_get_random_bytes`), so a toolchain bump
     fails here until someone re-reads it and updates the citation."""
-    security = ROOT / "Security"
+    security = ROOT / "security"
     version = (security / "Proofs/lean-toolchain").read_text().strip().rpartition(":")[2]
     for doc in ("Proofs/Flock/Soundness/ASSUMPTIONS.md", "Definitions/Assumptions/Flock.lean"):
         assert f"Lean {version}'s runtime" in (security / doc).read_text(), doc
@@ -226,7 +226,7 @@ def test_an_import_its_bundle_does_not_hold_built_is_named():
     assert unbundled(imports, listed, {"Proofs"}) == ["P/X.lean: ArkLib.B (Arklib)", "P/Z.lean: VCVio.C (VCVio)"]
 
 
-SECURITY = ROOT / "Security"
+SECURITY = ROOT / "security"
 PROOFS = SECURITY / "Proofs"
 
 
@@ -235,7 +235,7 @@ def _requires(pkg: Path) -> list[dict]:
 
 
 def test_security_package_requires_only_mathlib():
-    """The security analysis's trusted text (`Security`: the spec, Definitions) is what every guarantee is stated
+    """The security analysis's trusted text (`security`: the spec, Definitions) is what every guarantee is stated
     in, so it requires nothing of the repository and no ArkLib: a path dependency here would put a component or a proof
     under every guarantee."""
     assert SECURITY in lake_packages()
@@ -243,7 +243,7 @@ def test_security_package_requires_only_mathlib():
 
 
 def test_proofs_require_the_security_package():
-    """The proofs (`Security/Proofs`, srcDir `..`) prove what `security` states, so they require it by path."""
+    """The proofs (`security/Proofs`, srcDir `..`) prove what `security` states, so they require it by path."""
     assert PROOFS in lake_packages()
     paths = {(PROOFS / r["path"]).resolve() for r in _requires(PROOFS) if "path" in r}
     assert SECURITY in paths
@@ -252,9 +252,9 @@ def test_proofs_require_the_security_package():
 
 def test_code_never_requires_the_security_analysis():
     """Code (Flock's verifier, the PoUS grader, the certifier's program) stays with its component and never imports
-    `Security/`: the analysis reads the code, never the reverse."""
+    `security/`: the analysis reads the code, never the reverse."""
     code = [pkg for pkg in lake_packages() if not pkg.is_relative_to(SECURITY) and not pkg.is_relative_to(ROOT / "tools")]
-    assert code, "no code packages outside Security"
+    assert code, "no code packages outside security"
     bad = [f"{pkg.relative_to(ROOT)} requires {(pkg / r['path']).resolve().relative_to(ROOT)}"
            for pkg in code for r in _requires(pkg) if "path" in r and (pkg / r["path"]).resolve().is_relative_to(SECURITY)]
     assert not bad, bad
@@ -293,7 +293,7 @@ def test_every_open_conjecture_names_a_test_that_exists():
 #: the 398 premises of the lemmas and completeness theorems the lock stopped listing and the guarantees deleted with the
 #: falsified conjectures they rest on; a renamed or restated premise counts twice, under both texts, until `--update`
 #: drops the one no tree prints
-INLINE = {"Security": 915, "Security/Properties": 132, "verity/protocols/flock/verifier": 6}
+INLINE = {"security": 915, "security/Properties": 132, "verity/protocols/flock/verifier": 6}
 
 
 def test_the_inline_list_only_shrinks():
@@ -309,7 +309,7 @@ def test_the_inline_list_only_shrinks():
 #: how far a cap here may stand above its count ({"CAP key": room}): changes queued on `next` when the caps came to equal
 #: their counts moved the counts and not the caps, so each room is the gap between `next`'s count and `main`'s, and each
 #: cap holds on both. Once those changes have landed, a cap and its room come down to the count together.
-ROOM = {"INLINE Security": 3, "INLINE Security/Properties": 20, "UNWITNESSED Security": 2, "RETIRED_NAMES draw": 59, "RETIRED_NAMES wrong": 10, "OVERLONG Security/Proofs": 275, "RETIRED_NAMES escape": 9, "RETIRED_NAMES law": 9, "TREES_EXCEPT Security": 1, "UNWITNESSED Security/Properties": 3, "OVERLONG verity/protocols/pouw/verifier/lean/check": 3, "OVERLONG verity/protocols/flock/verifier": 4, "IMPORT_ALL_USES Security/Proofs": 1}
+ROOM = {"INLINE security": 3, "INLINE security/Properties": 20, "UNWITNESSED security": 2, "RETIRED_NAMES draw": 59, "RETIRED_NAMES wrong": 10, "OVERLONG security/Proofs": 275, "RETIRED_NAMES escape": 9, "RETIRED_NAMES law": 9, "TREES_EXCEPT security": 1, "UNWITNESSED security/Properties": 3, "OVERLONG verity/protocols/pouw/verifier/lean/check": 3, "OVERLONG verity/protocols/flock/verifier": 4, "IMPORT_ALL_USES security/Proofs": 1}
 
 
 def test_the_caps_the_lock_run_repairs_are_the_files_drive_commits():
@@ -355,7 +355,7 @@ def _held(name: str, caps: dict[str, int], got: dict[str, int], what: str, fix: 
 
 #: the size of each lock's `trees.except`: the modules whose statements may read a definition of the proofs tree, almost
 #: all Flock's until its spec is extracted
-TREES_EXCEPT = {"Security": 41}
+TREES_EXCEPT = {"security": 41}
 
 
 def test_the_trees_except_list_only_shrinks():
@@ -367,7 +367,7 @@ def test_the_trees_except_list_only_shrinks():
 
 #: the size of each lock's `four_names_except`: the guarantees under a root `four_names` lists that weren't in the four-name
 #: form, frozen or a witness when the rule came to every root
-FOUR_NAMES_EXCEPT = {"Security": 3}
+FOUR_NAMES_EXCEPT = {"security": 3}
 
 
 def test_the_four_names_exceptions_only_shrink():
@@ -506,9 +506,9 @@ def undocumented(read: dict[str, set[str]], sources: dict[str, tuple[str, str]])
     return sorted(out)
 
 
-#: the definitions of the spec (`Security`) that a lock-listed guarantee's statement reads (a lock's `reads`) and no doc
+#: the definitions of the spec (`security`) that a lock-listed guarantee's statement reads (a lock's `reads`) and no doc
 #: comment heads
-UNDOCUMENTED = {"Security": 61}
+UNDOCUMENTED = {"security": 61}
 
 
 def test_every_definition_a_guarantee_reads_says_what_it_means():
@@ -521,12 +521,12 @@ def test_every_definition_a_guarantee_reads_says_what_it_means():
             read.setdefault(m, set()).update(r.get("definitions", {}))
     sources = {m: (_rel(f), _text(f)) for m in read if (f := _module_file(SECURITY, m)) is not None}
     bad = undocumented(read, sources)
-    _held("UNDOCUMENTED", UNDOCUMENTED, {"Security": len(bad)}, "the read definitions without a doc comment",
+    _held("UNDOCUMENTED", UNDOCUMENTED, {"security": len(bad)}, "the read definitions without a doc comment",
           "add a `/-- … -/` above each new one saying what it means; the landing DM shows it:\n  " + "\n  ".join(bad))
 
 
-#: the theorems the spec (`Security`) states: `theorem` and `lemma` declarations in its files
-SPEC_THEOREMS = {"Security": 156}
+#: the theorems the spec (`security`) states: `theorem` and `lemma` declarations in its files
+SPEC_THEOREMS = {"security": 156}
 
 
 def test_the_spec_states_no_new_lemma():
@@ -534,7 +534,7 @@ def test_the_spec_states_no_new_lemma():
     may change without a statement reviewer, except a theorem a definition's proof field needs."""
     bad = sorted(f"{_rel(f)}:{d.line} {d.name}" for f, pkg in _lean_files().items() if pkg == SECURITY
                  for d in declarations(_text(f)) if d.kind in ("theorem", "lemma"))
-    _held("SPEC_THEOREMS", SPEC_THEOREMS, {"Security": len(bad)}, "the spec's theorems",
+    _held("SPEC_THEOREMS", SPEC_THEOREMS, {"security": len(bad)}, "the spec's theorems",
           "move the new one to `Proofs/<Area>/`; a theorem a definition's proof field needs stays, and raises the cap in "
           "this change:\n  " + "\n  ".join(bad))
 
@@ -542,7 +542,7 @@ def test_the_spec_states_no_new_lemma():
 #: the lines a module may run to: one module is one unit of rebuild, so a long one costs every check and train its build
 LONG = 2000
 #: the lines past `LONG` of each package's modules, summed
-OVERLONG = {"Security": 963, "Security/Proofs": 54185, "verity/protocols/pouw/verifier/lean/check": 281, "verity/protocols/flock/verifier": 700}
+OVERLONG = {"security": 963, "security/Proofs": 54185, "verity/protocols/pouw/verifier/lean/check": 281, "verity/protocols/flock/verifier": 700}
 
 
 def overlong(lines: dict[str, int]) -> dict[str, int]:
@@ -568,11 +568,11 @@ RETIRED_NAMES = {"draw": 1020, "law": 133, "escape": 98, "wrong": 130, "dampener
 #: each `import all` of an in-tree module ({"FILE: MODULE": why}), those in the tree or on `next` when the rule came; an
 #: entry whose FILE the tree doesn't have waits for the change on `next` that adds it
 IMPORT_ALL: dict[str, str] = {
-    "Security/Proofs/Flock/Claims/Sampling/Select/Second.lean: Spot.Draw":
+    "security/Proofs/Flock/Claims/Sampling/Select/Second.lean: Spot.Draw":
         "its proofs open `Spot.Draw`'s private `stratum?` and `natRanges` to read the stratified law's strata",
 }
 #: the entries of `IMPORT_ALL` whose FILE the tree has, per package
-IMPORT_ALL_USES = {"Security/Proofs": 1}
+IMPORT_ALL_USES = {"security/Proofs": 1}
 
 
 def imports_all(files: dict[str, str], in_tree) -> list[str]:
