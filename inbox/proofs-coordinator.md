@@ -55511,3 +55511,30 @@ For BREAKEVEN:
 
 For the table:
 - PLAN | the coin cap against the plan | at K0 = 6, #8914's `MAX_COINS` 2^24 holds κ 2^-6 and narrower, not κ 2^-4 (which needs 2^25, or 2^26 with #8917's cut); the κ 2^-6 row is 4,074 GB no program, 10,641 as `main` is (world year, modeled 0.4), 221 and 84 GB over the κ 2^-4 row, and holds one M to 677 [run; nothing built].
+
+## DRAFT-CORE (PRF-540), Wed 11 Nov 12:54Z: #8940 (UNMARKED, Daniel's) now sits on main 967b722429f3 with #8836 and builds with it at 84f88534120b8609f84fca1f1f72fb91d171351a (RevealsOpen restated; records run out, one lock commit to come); #8946 compiles, its ready line waits on its records run
+#8940 and #8934 stay unmarked for Daniel (#8940 changes definitions `SpotKSTwo` and `SpotExfilTwo` read and the open premise `SpotFlock.Addresses`' statement; #8934 restates `SampledKSTwo`). #8946 is a lemma PR and has no ready line yet: its records run is still out.
+
+**1. #8940 moved, because #8836 landed** (`main` `967b722429f3`). Its head is now `84f88534120b8609f84fca1f1f72fb91d171351a`: `main` merged in, and `SpotFlock/RevealsOpen.lean` restated at the stage (4 textual replacements, as my 11:50Z entry's table said). At that head:
+- `RevealsOpen.lean` compiles [run `r20261111-122855-a4d0`, 17 theorems, axiom probe clean]; so do `main`'s new SpotFlock files unchanged: `ScopeDesc.lean` with `ScopeOf.lean` under it [`r20261111-122855-e6c9`, 19 theorems] and `Accepting.lean` with #8866's `ref_one_table` merged in [`r20261111-122900-5929`, 12 theorems].
+- Quick tier: 9 suites, 9 passed, 0 failed [`r20261111-123001-3dd4`].
+- `security` records: running [`r20261111-122911-f861`, cpu-8]. Its regenerated lock becomes one more commit (the lock only), so the head moves once more; I post the final sha then.
+- Files left, each when its PR lands: `NoAlways.lean` (#8871), `Drawn.lean` (#8874), `OpensWhole.lean` (#8912, #8922), `Counts.lean` (TWOWITNESS's, no PR yet). Each is restated and compiling on `cursor/proofs-spot-stage-hwit-9e41` (`d62dd7c7ccb1cafaa1a78513190c46414f2541f8`); the recipe is: merge `main`, `git checkout origin/cursor/proofs-spot-stage-hwit-9e41 -- <file>` after checking the diff is only the replacements, try, records, quick tier.
+
+**2. The 12:06Z line and #8940.** #8940 moves `SpotFlock.Addresses`' digest (`381dddf63ad1` to `5a41733162d8`) because a checked run now carries the stage's coins (`CheckedRun h.stage`); what the premise says of a checked run is unchanged, so the two readings that it is false at a registration whose checked units have a row in the interior record apply to #8940 exactly as to `main`. #8940 neither repairs nor worsens that; its body gains the line with its next edit.
+
+**3. #8946 (job 4's public statement, lemma only)** is open at `4dbd0898d7f17d24f0364d6c7130c4e486e7b974`:
+- try at the head: lean exit 0, 2 theorems, axiom probe clean [`r20261111-120115-ef99`];
+- quick tier: 4 suites, 4 passed, 0 failed [`r20261111-120424-263b`];
+- merged tree: text-clean with `main` and every open head of ours I listed; by an over-approximated import closure (1,333 files) only #8896 (its base) and #8789 change a file it imports, and the file compiles on the merge with #8789's `5124b2689c75` [`r20261111-120656-8900`];
+- `security/Proofs` records: still running [`r20261111-120338-cfdc`, cpu-8, 50 minutes in; the same check took 58 minutes for #8940 on a cold slot]. The ready line follows it.
+
+**4. #8934** is unchanged at `70f018e3125778c361c255e6e35be88f10ecad9d`; I do not merge `main` into it (its runs are done; 11:58Z). #8914 unchanged at `3f10472f19634dfdf7bcd8460ade2981e9daabf8`.
+
+**5. A correction to my 12:15Z entry:** "D*1 measured 25.09" is wrong wording. 25.09 bytes a sampled proof block is computed by the formula over D*1's strata [modeled]; nothing was measured.
+
+For EXTFORM: if your repair changes `SpotFlock.Addresses` (`SlotsAt.lean`) or `CheckedRun` (`RevealAt.lean`), #8940 touches both: there `CheckedRun` takes the stage's length (`CheckedRun h.stage`) and `c₁` is the stage's coins. Whichever lands second re-merges; the change on my side is mechanical.
+
+For CAPS: #8946 is the PR of my 12:02Z line: Proofs/Flock: +1 module, +2 declarations (#8946: Bridge/V5/Rows.lean). #8940 after the merge: still +0 modules, +26 declarations of its own.
+
+For the table: no new claim since 11:50Z. #8940 (the modeled verifier at a second stage of several rounds, unmarked for Daniel) now sits on `main` with #8836 and builds with it [tries `a4d0`, `e6c9`, `5929`; quick tier `3dd4` 9 of 9; records run out]. #8946 (the stratified `Q_s` in `SampledKSLiveV5`'s own shape, lemma only) compiles and waits on its records run.
