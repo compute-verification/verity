@@ -40,30 +40,11 @@ from verity.circuits.defs import Builder, CompositeDefinition, bind
 from verity.circuits.program import Program
 from verity.circuits.refs import Affine, Coll, concat
 from verity.circuits.types import Array, RecordType, Type, Value
-
 from verity_vllm.program.inputs import check_params
 from verity_vllm.program.prune import dead_free as dead_free_form
 
-from .common import (
-    Unexpressible,
-    _arr,
-    _arr_shape,
-    _Peers,
-    _ptypes,
-    _Stochastic,
-    drive,
-    edge_config,
-    in_launch,
-    kind,
-    launch_batch,
-    launch_rows,
-    launch_seqlen_q,
-    request_passes,
-    select_token,
-    served_class,
-    with_checks,
-    with_edge,
-)
+from .common import (Unexpressible, _arr, _arr_shape, _Peers, _ptypes, _Stochastic, drive, edge_config, in_launch, kind,
+                     launch_batch, launch_rows, launch_seqlen_q, request_passes, select_token, served_class, with_checks, with_edge)
 from .domain import check_phi
 from .phi import Phi
 
@@ -335,8 +316,6 @@ class _Specs:
             self.q_norm, self.k_norm = (
                 self.kind("rmsnorm", N=n * C.D * world, EPS=C.EPS, TARGET=target, M=M) for n in (C.NH, C.KVH)
             )
-            self.q_gather: Any
-            self.k_gather: Any
             self.q_gather, self.k_gather = (self.kind("all_gather2", N=n * C.D) for n in (C.NH, C.KVH)) if world > 1 else (None, None)
         self.gate_up, self.down, self.logits = self.linear(C.H, 2 * C.I), self.linear(C.I, C.H), self.gemm(C.H, VS)
         if C.E:
@@ -360,13 +339,8 @@ class _Specs:
         """The fused-MoE block's kinds under the target's declared construction (`rules.vllm_moe`): the router GEMM, the top-k
         softmax (in selection order under `indexed-read-ordered`; the renormalizing form when the family renormalizes), the per-pair
         expert GEMMs (the target's k16 step as `DOT` where `frontend.targets.moe_expert_dot` names one) and the routed sum."""
+        from verity_vllm.program.frontend.rules.vllm_moe import INDEXED_READ, INDEXED_READ_ORDERED, TOPK_SOFTMAX_VPT
         import torch
-
-        from verity_vllm.program.frontend.rules.vllm_moe import (
-            INDEXED_READ,
-            INDEXED_READ_ORDERED,
-            TOPK_SOFTMAX_VPT,
-        )
         C = self.C
         c = self.tp.effective_moe_construction()
         if c not in (INDEXED_READ, INDEXED_READ_ORDERED):
@@ -475,7 +449,6 @@ class _Model:
         n += 1 if C.embed_scale else 0
         self.cos_sin = W[n]
         self.hist: list[tuple[list, list]] = [([], []) for _ in range(C.NL)]
-        self.ctx: dict | None
         self.cached, self.ctx = 0, None
         self.lp_of: dict[int, int] = {}
         self.plus_one: dict[int, Coll] = {}
