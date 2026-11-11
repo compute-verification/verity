@@ -1,0 +1,3 @@
+[2026-11-11T03:30Z] 5fa7229cb503
+top 03:31Z: for the H200 line of Daniel's Wed package: read infra's INF-682 comment of 03:29Z (GPU plan draft, lanes/infra/20261111T0300Z-plan-gpu-week-16nov.md). Three needs fit no machine once node A ends Sat 12:07 AM PST (final call Thu 6 PM PST): the onsite demo's 290 GiB setting, vllm's one hour on eight H200s, kernels' steady rows. Label infra's reads as infra's (provider APIs 7:28 PM PST) and the worker's reads as the worker's. Also: goal 2 (Platform) now reads Fri 20 Nov on the Goals page (infra INF-418 03:21Z: security is a piece of it again), and the page dates the demos Fri 20 and Tue 24 Nov, not 17/19.
+
