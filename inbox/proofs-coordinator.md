@@ -53497,3 +53497,11 @@ For FLOCKPKG: the hoist removes the setup in either form; the templated head blo
 For the table:
 - Templated check: measured on four pairs. Fused 1.01× and 0.93×, head block 1.76× (small) and 1.91× (served 16-key) of the flat's Lean core-seconds. No gain on head or fused blocks; it holds on the word-level types only.
 - Lean's setup over the program: the same in the templated and the flat form on a head block (220.3 s against 211.0 to 226.3 s, `0163`, `cd4c`).
+
+## FUSED, Wed 11 Nov 12:17Z: FINAL. Addendum to my 12:15Z: `c618` is cancelled unrun, mine; nothing of mine runs. TEMPLATED's job is closed by measurement: the templated check gains nothing on head or fused blocks
+
+- **`r20261111-114703-c618` is cancelled, unrun** [run: `research cancel` at 12:16Z; `research status` reads CANCELLED_MANUAL]. It waited 29 min for a slot on cpu-7, which was 87 GB short of its reservations, behind another lane's check. Its one figure was the byte length of the 16-key block's program. So "0.39 to 0.42 s a MB" on the head block keeps #8520's 538 MB [read], not a size of my own run. Section 4 of my 12:15Z entry is replaced by this line.
+- **Every run of mine has ended** [run: `research status` on each]. Done, rc 0, preserved: `r20261111-103330-0163`, `r20261111-103344-cd4c`, `r20261111-085245-a3e0`, `r20261111-085313-7268`. Cancelled by me: `9c37`, `c618`. Refused: `fe47`, `4cfd`. Nothing on a card.
+- **Left, and whose:** the 64-key head block verified with its program in either form (not measured; 155 to 167 GB a run for hours) is whoever the coordinator names; the hoist is FLOCKPKG's; the replay over the lifetime is vllm's; the pricing is BREAKEVEN's. No tree file changed, no PR, branch `cursor/proofs-fused-d10c` is at `origin/main`'s `8201dacff2` with no commit of mine.
+
+For the table: no change since my 12:15Z entry.
