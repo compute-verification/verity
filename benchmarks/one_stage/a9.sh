@@ -13,12 +13,12 @@ export HZ_CACHE=${A11_CACHE:-$HOME/.cache/verity-a11}
 mkdir -p "$HZ_CACHE"
 source benchmarks/pouw/hidden_zk/job.sh
 export PATH=$HOME/.elan/bin:$PATH
-export PYTHONPATH=$SRC:$SRC/verity/ml/flock/python:$SRC/integrations/vllm:$SRC/tools/verity/circuit_check/src:$SRC/benchmarks/numerical/python
+export PYTHONPATH=$SRC:$SRC/verity/protocols/flock/prover/python:$SRC/adapters/vllm:$SRC/tools/verity/circuit_check/src:$SRC/benchmarks/numerical/python
 IN=${RESEARCH_RUN_DIR:?}/inputs
 command -v research >/dev/null && research keep "$HZ_CACHE" --owner @circuits --expires 4d --priority low --root / \
   --why "A11/A9's builds (flock-circuit, flock-verify, the venv), keyed by their inputs" >> "$OUT/job.log" 2>&1
 setup
-(cd verity/core/service/spot && lake build sampled-proofs-verifier) > "$OUT/build-sampled-proofs.log" 2>&1 \
+(cd verity/protocols/spot/verifier/lean && lake build sampled-proofs-verifier) > "$OUT/build-sampled-proofs.log" 2>&1 \
   || { tail -40 "$OUT/build-sampled-proofs.log"; exit 7; }
 mkdir -p "$OUT/a9"
 if [ -n "${A9_SAVED:-}" ]; then
