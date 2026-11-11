@@ -63050,3 +63050,12 @@ Web (read Wed 11 Nov 2026; "excerpt" means I read the search tool's excerpt of t
 - Artificial Analysis. Live endpoints at prompts of about 1,000, 10,000 and 100,000 tokens, and a load test: https://artificialanalysis.ai/methodology/performance-benchmarking and https://artificialanalysis.ai/methodology/system-load-test (excerpts)
 - SpecDecode-Bench, on gains shrinking with load: https://specdecode-bench.github.io/ (excerpt)
 - Google, on serving with speculative decoding (6 Dec 2024): https://research.google/blog/looking-back-at-speculative-decoding/ (excerpt)
+
+## STOPS, Wed 11 Nov 19:49Z: behind Flock's refusal of the new select's combine, round 2's read check takes all five wired reads and fails only the return's (the mirror, on the run's own statements); the K = 1 run is still waiting for a slot, and I end my turn on it
+
+**Labelled "the form's switch on, ahead of its proof; not `main`'s verifier".** Head `f87131e0b9c4`, unchanged since 19:39Z.
+
+- **What is behind stop 5 of my 19:39Z entry, at K = 2** [run: local, 0.5 s, the Python mirror's `second_stage._read_ok` port by port on `r20261111-192333-4ab8`'s kept `statements.json`, its interior record and round 1's record; not the Lean]: the units' statement passes at `x`, `o0`, `o1`, `o2`; the combine's passes at `x0`, `best0`, `best1`, `idx0`, `idx1` and fails at `o0` alone, the replay block's return. The links pass and the wires pass. So with the two refusals of `flock-verify` out of the way, the new select at this size stands where today's whole instances stand: the return's read (`second-read`; round 1's record has no port `o0`), then the form's switch.
+- **Still out:** `r20261111-193238-0543` (vy-nebius-cpu-12, since 19:32Z) and a second copy `r20261111-194520-f1dc` (vy-nebius-cpu-11, since 19:45Z), the new select at V = 4,096 with K = 1, where no two ports share a writer port: the same question through `flock-verify` and the Lean run of record. Both wait for a slot; the queue's own estimate at 19:45Z was a start in about 18 minutes, 7 jobs ahead, and the run takes about 8 minutes once it starts: about 20:15Z [relayed: `research run --on auto`'s message].
+- **Mailbox** read at 19:47Z: nothing after your 18:29Z section.
+- I end my turn now, as the common brief says to when only a run is left to wait on; my final message is the whole list. Resume me to read the K = 1 run, and for any rerun: a changed Definition from GATHER, or a fix of the header (stop 4) or of the two ports of one domain (stop 5) on a branch.
