@@ -18031,7 +18031,7 @@
    }
   },
   "Flock.TemplateQuery": {
-   "digest": "166493e9cfd348a34bda8f14b7c3c3619df84c630eb59051a854d98bf6f7ca4a",
+   "digest": "1bc6d9938098c862f92035a470ad8770be699ed81765ef3f1c66dd2ab826f816",
    "definitions": {
     "Flock.TemplateQuery.DDef": "645f008e487ba991572c3d7659e26904c597f4992a45203064a039b8390c5c25",
     "Flock.TemplateQuery.DDef.nodes": "b1e5faa09c8fdd900e35d000003880cda625866e44f4dbade582562d61802677",
@@ -18047,6 +18047,7 @@
     "Flock.TemplateQuery.Desc.defs": "a466ca8d691807d57e076170a41ac696cafde709cdf171d5f214cd3035cb666a",
     "Flock.TemplateQuery.Desc.gates": "90ed4812c8d8ad8feea377aa03e417eddae2e141bbcde1b42d4ba94be4fa4113",
     "Flock.TemplateQuery.Desc.gatesIn": "09daf78f5e602e3c708ff32e89649a49b7fa56725b01751eed99e87096f0b1a3",
+    "Flock.TemplateQuery.Desc.isInputNode": "0ec689001aea7bd568d5134e1888b5489529ad9c74306deccf20b30e26c4c1d2",
     "Flock.TemplateQuery.Desc.ofProg": "ca9b2d923236232dd7f5fa741b8bd3ec89d5d96eb279de359c182caf5f949c73",
     "Flock.TemplateQuery.Desc.parse": "e397549c59fec305ce4176bb97f093caa6899b006c720650ba16e1276cc39d69",
     "Flock.TemplateQuery.Desc.parseWith": "b463f3f79bc81bd4a8974ccafcdb81811a08b197f66599874247a3e6591f9616",
@@ -18058,7 +18059,7 @@
     "Flock.TemplateQuery.TRange.node": "5f1b0a67687c76e53492726f0160d1345cf542d428ef2a35fb83ff200d3b7e93",
     "Flock.TemplateQuery.TRange.template": "c97082152447cce908ab19f4a60920ab5762ecbe2fe15762729a512482a742bd",
     "Flock.TemplateQuery.contiguous": "b6a0f00b9ec63011cf891494779e722d069181639af9026c612b39948d269e85",
-    "Flock.TemplateQuery.evaluate": "2c3cffe6280f54537c9f2424150d19110696a0200b1d791868c5f080e3771e5c",
+    "Flock.TemplateQuery.evaluate": "55ea8e3bd88afcbf89fff06b5852f6f48aa564b31f15f86b35f4b693c81feca7",
     "Flock.TemplateQuery.gates": "5834244410f77b6e314f8c92aea6efb071fdc9eabdfeb24029bb1e9b202771ac",
     "Flock.TemplateQuery.instInhabitedDNode": "1d2ed3dda22709ce0a00c64c4cb97c5e33bcf5033920f6dc47ae79bcd0570ad5",
     "Flock.TemplateQuery.instInhabitedDNode.default": "94198a736ebb97161ae0924e4fce4e54396152761848cd6e2aea2603ff42b3aa",
@@ -24388,7 +24389,7 @@
    }
   },
   "Spot.Slots": {
-   "digest": "ff8b9ed3e47dcf4320fda568412f347fe56aaa83896e02d1302aee2ed7a708b9",
+   "digest": "f98206564a5b94e3b7d7189b3bb099141ce39c0c157d24f3dd7e3dc555357c88",
    "definitions": {
     "Spot.Slots.Layout": "7c47421fefd4889bcf07f60f4898c527cb3a052906ea2ecbec110be4022c60e8",
     "Spot.Slots.Layout.blocks": "fe4a02698a388f6b9a36dc02dce1a88d05db30accf460c4b2a185ad80debf146",
@@ -24397,7 +24398,7 @@
     "Spot.Slots.ProofBlock.gates": "c5ab7acf6c7b6f8df1eb21891b6cf7ca2be4a45c39a7a4fc60249ef78a94fd03",
     "Spot.Slots.ProofBlock.unit": "fb8aa17cf5aca756bdf74957bfe008ee78cbd81104650b36aa55d2a3744f5007",
     "Spot.Slots.checked": "d2279c23749bc519b158359f81ba8913ba08661f1e232a77d9d7492e0fa107cf",
-    "Spot.Slots.inputGates": "dc606f638788a1070c50c77c176eca9402ec3142e5c59909e93442b9b9ea8c66",
+    "Spot.Slots.inputGates": "b7c4a137abdb8faae886f759630b1f3d0a279781592d526a7b0b606669adc0fd",
     "Spot.Slots.layout": "cac887d54a6fb5ec7fb0c8d2f27c0bd848c81788ab78c2bb7d531fcbc99fdab6",
     "Spot.Slots.popOf": "125c71deb10de4273631a0ab5f27b1948e0214e5c1375f8ccdc3756b90639023",
     "Spot.Slots.popOk": "b72d1c142384ad8343e43067120dca40d62271d0b602ef279b8cc02dab748cc9",
