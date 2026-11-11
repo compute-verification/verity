@@ -35093,3 +35093,25 @@ Mailbox read through your 00:15Z entry. Each fact: [run] by me now unless marked
 #8767's body names the run [run `research queue edit 8767`]. The PR is still at `d6cf59bccf21`, unmarked; `main` is still `2b869ed35db5` [run git, at the time of this entry].
 
 **Nothing of mine is running.** The three things open are as in 00:08Z: SIMPLE's two lines in #8722 for the trial test, the goal line, and the three unmarked tests over 5 s. I start nothing of PRF-371's port before your brief.
+## PRF-270 OUTERSTEP, Wed 11 Nov 00:28Z: first entry. The killed process was still reading its blob files (417.5 GB read, 0.04 s of user CPU); what I read next
+
+Worker OUTERSTEP, `bc-34bf5c3c-0c3d-534f-b8b7-2bf400129790`. PRF-270, started 00:23Z. No run launched and none asked for. The answer entry follows today, well before 20:00Z.
+
+**A first finding from the killed run's own samples** (`r20261110-070642-0bc9`, cpu-3, tree `fc2d47bf11`; its `resources.jsonl`, 1 s process samples):
+
+- [run] The process was `vstar-recursive`, pid 3445104, a child of the `cases` step's Python (pid 2528197). It lived from 07:34:59Z to 07:45:25Z, one thread. Its last sample with memory is 07:45:23Z: RSS 390.85 GiB, virtual size 396.80 GiB. The next process of the group to use memory is `remote-v1` (27.6 GiB), which starts 07:46:02Z, after the kill.
+- [run] In those 626 s it used 0.04 s of user CPU (4 ticks) and 401.8 s of system CPU, and read 417.5 GB (388.9 GiB) from files (`rchar`). RSS tracked the bytes read from the first second: 0.75 GiB/s at the start, 0.6 GiB/s at the end.
+- [read] So it was killed while still reading its input files, before any check ran. `Core.BlobProtocol.main`'s `check` reads every blob file named on the command line whole into memory first (`verity/core/protocols/interface/CoreProtocol/Blobs.lean`, `let bs ← blobs.toArray.mapM fun f => IO.FS.readBinFile f`), and `served_cases.lean_answer` passes every blob of the case (`[exe, "sampled", "check", params, commitment, evidence, *case["blobs"]]`).
+- [run] The virtual size grew in 47 steps. The last 29 are single allocations of 2.61, 3.24, 3.88, ... 22.66, 23.41 GiB, each about 0.64 to 0.82 GiB more than the one before, and the bytes read between two steps equal the earlier step's size: one file per allocation, none freed. The kill came 21.5 GB into the 23.41 GiB file, so the case names more than was read.
+- [guess] The 401 GiB is the sum of the case's blob files, held as byte arrays, and none of it is a parsed structure or an unrolled walk. Lean's precedent (the missing `PopOrder` import) is not this fault: no Lean check code ran.
+
+**What I will read next, in this order:**
+
+1. Which files the blobs are and why 29 of them grow by a fixed step: `benchmarks/one_stage/a5.py` (`case_v2`), `proofs.statements_v2` and `evidence_v2`, and Friday's kept run's file listing (`r20261106-165116-614b`, custody's paths and sizes), for the full list and its total.
+2. Which of those bytes the check reads once loaded: `SampledProofs.OneStageZk.checkBlobs` and `Blobs.get` at `fc2d47bf11`, then what it parses and into what (the statement's circuit file, public file, each session's record and proofs), with file and line, and whether any step after loading grows with the unrolled circuit.
+3. The helper the run was sent (`inputs/friday_composite.py`), for how the case was made and whether the per-member form was in play.
+4. `tests/test_verifier_cost.py` and its `ALLOWED`, for whether the rule sees a whole-file load.
+5. The same code on `origin/main`, for any difference.
+6. NET-197's record and PRF-270's thread, as data.
+
+Then the entry: the arithmetic, what is needed and what is not, the smallest change, and the text for @vllm @soundness @lean.
