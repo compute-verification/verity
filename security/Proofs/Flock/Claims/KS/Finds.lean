@@ -66,14 +66,14 @@ theorem firstWait_eval {R W Op : Type} (H : Msg → Msg) (run : R → Transcript
     | none => simpa using ih
     | some w => by_cases hc : check w = true <;> simp [hc, RP.eval, ih]
 
-/-! ## The first of `m` independent draws -/
+/-! ## The first of `m` independent tries -/
 
 section FindSome
 
 variable {δ W : Type} [Fintype δ] [Nonempty δ]
 
-/-- **The first of `m` independent draws that returns something** has a property `G` with the probability that one
-draw returns something with `G`, times `1 + f + … + f^{m−1}`, `f` the probability that one draw returns nothing. -/
+/-- **The first of `m` independent tries that returns something** has a property `G` with the probability that one
+try returns something with `G`, times `1 + f + … + f^{m−1}`, `f` the probability that one try returns nothing. -/
 theorem Pr_findSome (o : δ → Option W) (G : W → Prop) : ∀ m : ℕ,
     Pr (fun ρ : Fin m → δ => ∃ w, ((List.finRange m).map ρ).findSome? o = some w ∧ G w) =
       Pr (fun d : δ => ∃ w, o d = some w ∧ G w) * ∑ i ∈ Finset.range m, Pr (fun d : δ => o d = none) ^ i

@@ -120,7 +120,7 @@ theorem code_hwit_oneWait (hB : Built h) (hS : Addresses h)
 gates each proof block's reveal opens and `cls` the classes of `gateKey`, under `Built` and `Addresses` at a
 statement in the two-stage scope. Where every run calls SHA-512 at most `T` times, both parties' calls counted
 (`hT`), `N_s`, `K_s` and `K_m` are `code_eventTwoX_le_cls_at_budget`'s three counts, and the one-wait compiled
-verifier's `B_conf,X` and its two by-class finders of every cap meet the linear expected-time bound, an accepted run
+verifier's `B_conf,X` and its two by-class finders at every `K` meet the linear expected-time bound, an accepted run
 samples a proof block of the one-wait compiled verifier's `FregTwoX` with probability at most `εclsOneWait`. -/
 theorem code_eventTwoX_oneWait_le_cls_at_budget (hB : Built h) (hS : Addresses h)
     {L : Claims.SamplingGeneric.CompiledTwo FlockDeploy.Coin

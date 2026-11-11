@@ -1,7 +1,7 @@
 module
 
 public import Proofs.Flock.SamplingGeneric.TwoOneWaitAt
-public import Proofs.Flock.SamplingGeneric.TwoFirstHitClassCaps
+public import Proofs.Flock.SamplingGeneric.TwoFirstHitClassNumbers
 import Proofs.Flock.SamplingGeneric.Deployed
 import Proofs.Flock.SamplingGeneric.Fails
 import Proofs.Flock.Claims.Prob
@@ -16,24 +16,26 @@ import Proofs.Flock.Claims.Prob
 
 `Claims.Flock.Numbers.hashBound`, the sum `εclsAt` reads, with `e_s` the one-wait compiled verifier's: a session's
 extraction reruns `1 + k` times in expectation where the proof system's reruns `1 + m′·k` times. This file bounds
-that part by a number at caps on what it reads:
+that part by a number where what it reads is within given numbers:
 
 * `Compiled.oneWait_es_le`: where every proof block's shape collects at most `k` accepting runs a wait, the one-wait
   compiled verifier's `e_s` is at most `1 + k`;
-* `CompiledTwo.εclsOneWait_le_of_caps`: at a budget, an `e_s`, an `N_s`, a `K_s`, a `K_m` and an `n_PU·openCalls`
-  within rational caps at which `hashBound` is at most `b`, the right-hand side `εclsOneWait` is at most
-  `3·κ_s + 2·√(k·γ_s·Pr[B]) + 2·b`;
+* `CompiledTwo.εclsOneWait_le_of_hashBound`: at a budget, an `e_s`, an `N_s`, a `K_s`, a `K_m` and an
+  `n_PU·openCalls` within rational numbers at which `hashBound` is at most `b`, the right-hand side `εclsOneWait` is
+  at most `3·κ_s + 2·√(k·γ_s·Pr[B]) + 2·b`;
 * the instances, each at sessions of one table (`k ≤ 12343986`, so `e_s ≤ 12343987`) with every call charged as
   `513`: `hashBound_oneWait_513` at `N_s ≤ 2^26` and `K_s, K_m ≤ 2^38`, at most `2^-103`, and
   `εclsOneWait_le_513`, the right-hand side there at most `3·κ_s + 2·√(k·γ_s·Pr[B]) + 2^-102`; and over the
   rationals `hashBound_oneWait_513_k40`, at `N_s ≤ 2^30` and `K_s, K_m ≤ 2^40` at most `2^-101`;
-* `CompiledTwo.eventTwoX_oneWait_le_cls_of_caps`: `eventTwoX_oneWait_le_cls_at_budget` with its right-hand side
-  replaced by `3·κ_s + 2·√(k·γ_s·Pr[B]) + 2·b` at any such caps, and `CompiledTwo.eventTwoX_oneWait_le_cls_513`,
-  the same at the first instance's caps: at most `3·κ_s + 2·√(k·γ_s·Pr[B]) + 2^-102`.
+* `CompiledTwo.eventTwoX_oneWait_le_cls_of_hashBound`: `eventTwoX_oneWait_le_cls_at_budget` with its right-hand
+  side replaced by `3·κ_s + 2·√(k·γ_s·Pr[B]) + 2·b` at any such numbers, and
+  `CompiledTwo.eventTwoX_oneWait_le_cls_513`, the same at the first instance's numerals: at most
+  `3·κ_s + 2·√(k·γ_s·Pr[B]) + 2^-102`.
 
-The caps are hypotheses, as in `εclsAt_le_of_caps`: on the budget `T`, on the accepting runs a wait collects, on the
-three counts and on `n_PU·openCalls`. A call is one of SHA-512 on a whole message; `513·2^80` in place of `2^80` is
-the same expression at numbers `513` times larger, a call charged as the `513` compressions of a row of `2^16` bytes.
+That each is within its number is a hypothesis, as in `εclsAt_le_of_hashBound`: on the budget `T`, on the accepting
+runs a wait collects, on the three counts and on `n_PU·openCalls`. A call is one of SHA-512 on a whole message;
+`513·2^80` in place of `2^80` is the same expression at numbers `513` times larger, a call charged as the `513`
+compressions of a row of `2^16` bytes.
 -/
 
 @[expose] public section
@@ -84,11 +86,11 @@ theorem Compiled.oneWait_es_le (L : Compiled Coin A) (x : Msg) {k : ℕ}
 
 namespace CompiledTwo
 
-/-- **The one-wait by-class right-hand side at caps.** Where the budget `T`, the one-wait compiled verifier's
+/-- **The one-wait by-class right-hand side at numbers.** Where the budget `T`, the one-wait compiled verifier's
 expected reruns a session `e_s`, `N_s`, `K_s`, `K_m` and `n_PU·openCalls` are within rational numbers at which
 `hashBound` is at most `b`, `εclsOneWait` is at most `3·κ_s + 2·√(k·γ_s·Pr[B]) + 2·b`: its two costs over `2^256`
 are bounded together, and it reads them twice. -/
-theorem εclsOneWait_le_of_caps (H : Msg → Msg) (L : CompiledTwo Coin A) (x : Msg) {Ω : Type} [Fintype Ω]
+theorem εclsOneWait_le_of_hashBound (H : Msg → Msg) (L : CompiledTwo Coin A) (x : Msg) {Ω : Type} [Fintype Ω]
     [Nonempty Ω] (P : Prover Ω) {T : ℕ} {Ns Ks Km : ℝ} {T' e' Ns' Ks' Km' c' b : ℚ} (hNs0 : 0 ≤ Ns)
     (hKs0 : 0 ≤ Ks) (hKm0 : 0 ≤ Km) (hT : (T : ℝ) ≤ T') (he : L.oneWait.toCompiled.es x ≤ e') (hNs : Ns ≤ Ns')
     (hKs : Ks ≤ Ks') (hKm : Km ≤ Km')
@@ -118,7 +120,7 @@ theorem εclsOneWait_le_513 (H : Msg → Msg) (L : CompiledTwo Coin A) (x : Msg)
   have he : L.oneWait.toCompiled.es x ≤ 1 + ((12343986 : ℕ) : ℝ) := L.toCompiled.oneWait_es_le x hk
   have hown' : L.oneWait.toCompiled.nPU x * L.oneWait.toCompiled.openCalls x ≤ 513 * 2 ^ 80 := hown
   rw [← two_mul_cast_two_pow_neg_103]
-  refine εclsOneWait_le_of_caps H L x P (T' := 513 * 2 ^ 80) (e' := 12343987) (Ns' := 2 ^ 26) (Ks' := 2 ^ 38)
+  refine εclsOneWait_le_of_hashBound H L x P (T' := 513 * 2 ^ 80) (e' := 12343987) (Ns' := 2 ^ 26) (Ks' := 2 ^ 38)
     (Km' := 2 ^ 38) (c' := 513 * 2 ^ 80) hNs0 hKs0 hKm0 ?_ ?_ ?_ ?_ ?_ ?_ hashBound_oneWait_513
   · exact_mod_cast hT
   · refine he.trans (le_of_eq ?_)
@@ -132,12 +134,12 @@ theorem εclsOneWait_le_513 (H : Msg → Msg) (L : CompiledTwo Coin A) (x : Msg)
     exact hKm
   · exact_mod_cast hown'
 
-/-- **The event at the one-wait extraction's traces, by class of gates, at caps.** Under
+/-- **The event at the one-wait extraction's traces, by class of gates, at numbers.** Under
 `eventTwoX_oneWait_le_cls_at_budget`'s hypotheses, where the budget `T`, the one-wait compiled verifier's expected
 reruns a session `e_s`, the bounds `N_s`, `K_s` and `K_m` on the sample's counts and `n_PU·openCalls` are within
 rational numbers at which `hashBound` is at most `b`, an accepted run samples a proof block of the one-wait compiled
 verifier's `FregTwoX` with probability at most `3·κ_s + 2·√(k·γ_s·Pr[B]) + 2·b`. -/
-theorem eventTwoX_oneWait_le_cls_of_caps {H : Msg → Msg} {L : CompiledTwo Coin A} (hF : A.OneWaitFinds H)
+theorem eventTwoX_oneWait_le_cls_of_hashBound {H : Msg → Msg} {L : CompiledTwo Coin A} (hF : A.OneWaitFinds H)
     (hA : A.KS H) (hbind : L.commit.Binds H) (hS : L.Sessions H) (hopen : L.toCompiled.OpenCallsLe H) {x : Msg}
     {s : AuditStatement} {Pt : Partition} {d : Sampling.Design.Two} (hs : L.parse x = some s)
     (hPt : L.partition s = some Pt) (hd : L.two s = some d) (hin : InScopeTwo Pt d s) {Ω : Type} [Fintype Ω]
@@ -169,7 +171,8 @@ theorem eventTwoX_oneWait_le_cls_of_caps {H : Msg → Msg} {L : CompiledTwo Coin
   have hKs0 : 0 ≤ Ks := le_trans (Ex_nonneg (by intro r; exact Nat.cast_nonneg _)) hKs
   have hKm0 : 0 ≤ Km := le_trans (Ex_nonneg (by intro r; exact Nat.cast_nonneg _)) hKm
   exact (eventTwoX_oneWait_le_cls_at_budget hF hA hbind hS hopen hs hPt hd hin P needs hpos cls hallX hallI T hT
-    hNs hKs hKm hB hX hI).trans (εclsOneWait_le_of_caps H L x P hNs0 hKs0 hKm0 hTcap he hNscap hKscap hKmcap hown h)
+    hNs hKs hKm hB hX hI).trans
+      (εclsOneWait_le_of_hashBound H L x P hNs0 hKs0 hKm0 hTcap he hNscap hKscap hKmcap hown h)
 
 /-- **The event at the one-wait extraction's traces, by class of gates, at sessions of one table with every call
 charged as `513`.** Under `eventTwoX_oneWait_le_cls_at_budget`'s hypotheses, where the budget is `T ≤ 513·2^80`,

@@ -22,7 +22,7 @@ session, and the event is the one at that extraction's committed traces:
   one wait's, `e_s ≤ 1 + k`, where `εclsAt`'s is `m′` waits'.
 
 The premises are `eventTwoX_le_cls_at_budget`'s, read at the one-wait compiled verifier (its extractions open a class
-whole or not at all, the linear expected-time bound at its `B_conf,X` and its two by-class finders of every cap), and
+whole or not at all, the linear expected-time bound at its `B_conf,X` and its two by-class finders at every `K`), and
 `Arg.OneWaitFinds` beside the proof system's knowledge soundness. No statement of the definitions tree changes.
 -/
 
@@ -72,7 +72,7 @@ scope, where a reveal for proof block `u` opens only gates of `needs u`, the one
 open a class of gates whole or not at all under the statement's roots (`hallX`) and under a replay block's interior
 roots (`hallI`), every run calls `H` at most `T` times, both parties' calls counted (`hT`), the opening checks call
 `H` at most `openCalls` times a slot (`hopen`), `N_s`, `K_s` and `K_m` are `eventTwoX_le_cls_at_budget`'s, and the
-one-wait compiled verifier's `B_conf,X` and its two by-class finders of every cap meet the linear expected-time
+one-wait compiled verifier's `B_conf,X` and its two by-class finders at every `K` meet the linear expected-time
 bound, an accepted run samples a proof block of the one-wait compiled verifier's `FregTwoX` with probability at most
 `εclsOneWait`:
 
