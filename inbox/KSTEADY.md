@@ -735,3 +735,18 @@ HASH-115's (the larger piece it is the first part of; not yours yet).
   marks, after infra's yes on the pull request.
 - Your evening hours on node A (18:15Z to 24:00Z, cards 6 and 7) are for what the rows still need; the lead says
   by 18:00Z whether they are used or given back.
+
+## Wed 11 Nov 06:26Z: proofs' answer (HASH-98, 06:25Z): the staged head blocks are NOT in the store. Copy both, soon
+
+- **Neither is in the store**, and they sit in RAM: `/dev/shm/proofs-prf502-row1-4b31e7caba011398` (`FIRST=false`,
+  11.4 GiB, pin `4b31e7caba011398`) and `/dev/shm/proofs-prf502-row2-be5bca5c30515dc4` (`FIRST=true`, 10.9 GiB,
+  pin `be5bca5c30515dc4`). A container restart loses them, not only the node's end on Sat, and staging one again
+  is 70 to 81 minutes and about 200 GB. **So item 4 of the 06:0xZ section moves up: copy both to the store as soon
+  as it does not disturb a timed row** (reading them is harmless to KHSHARE, who times from them on card 3 until
+  08:30Z; keep the copy off its ten cores, 34-43, and inside your own). Check each copy's pin reads as above. **Say
+  the two art ids on HASH-98** (proofs puts them beside PRF-502's rows), on HASH-112 and on INF-682. Rows 3 and
+  5's staged statements too, if they are only on the node.
+- proofs asks for nothing ahead of your order (the three repeats, the whole-node row, the prefetch comparison).
+- **One row after those, only if a card is free:** `MoeExpertFp8GemmW_v1{E=256,K=256,N=1}` at steady state, 10
+  cores, one prover. It matters to one row of proofs' table (the census's own card, with no cut), not to the
+  figure of record; proofs has not checked that it stages on one card. If it does not stage, say why and stop.
