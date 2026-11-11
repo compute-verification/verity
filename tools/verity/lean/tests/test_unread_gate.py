@@ -82,14 +82,14 @@ def repo(tmp_path, monkeypatch):
 
 
 def keys_at(root: Path, rev: str, work: Path):
-    """`lean_audit` as the fixture has it, and the keys of ``rev``'s `Security` and `Security/Proofs`."""
+    """`lean_audit` as the fixture has it, and the keys of ``rev``'s `security` and `security/Proofs`."""
     LA = _load(root / "tools/verity/lean/lean_audit.py", f"lean_audit_for_gate_test_{rev[:8]}")
     LA.ROOT = G.archive(rev, work / rev)
     return LA, {p: LA.key(p, G.tracked(rev), LA.FLAGS) for p in LA.UNREAD_FACTS}
 
 
 def keep_facts(root: Path, rev: str, work: Path) -> dict[str, str]:
-    """The fixture's facts in the gate's cache under the keys of ``rev``'s `Security` and `Security/Proofs` (each the one
+    """The fixture's facts in the gate's cache under the keys of ``rev``'s `security` and `security/Proofs` (each the one
     file: `Facts` joins them by name); the keys."""
     LA, keys = keys_at(root, rev, work)
     cache = LA.COMMON.cache_dir() / "unread-gate"
@@ -125,9 +125,9 @@ def test_taking_away_a_declaration_s_last_mention_fails_naming_its_module_the_li
         "Definitions/Dead", ["Definitions.Dead"], "Definitions/Gone", ["Definitions.Gone"])
     assert dead["why"] == (f"Definitions/Dead would have 1 wholly unread modules (2 declarations), above its cap of 0 (0 "
                            f"declarations) in {G.CAPS} and up from 0 (0) at {base[:12]}: Definitions.Dead (2 declarations, "
-                           "Security/Definitions/Dead.lean) loses the last mention outside Lean that kept it: `Dead.lonely` at "
+                           "security/Definitions/Dead.lean) loses the last mention outside Lean that kept it: `Dead.lonely` at "
                            "tools/lonely.py:2")
-    assert gone["why"].endswith("Definitions.Gone (0 declarations, Security/Definitions/Gone.lean) was kept only through what went")
+    assert gone["why"].endswith("Definitions.Gone (0 declarations, security/Definitions/Gone.lean) was kept only through what went")
     assert dead["fix"][0] == ("delete Definitions.Dead (its file, and its import where another module imports it): nothing "
                               "reads it") and dead["fix"][1].startswith("or seed it again: keep a mention of it outside Lean")
     assert not list(fake.glob("*.ran")), "the gate builds no Lean"
@@ -150,8 +150,8 @@ def test_a_change_that_leaves_each_name_somewhere_or_that_a_lean_check_reads_pas
     doc = G.gate(base, other)
     assert (doc["stage"], doc["went"], doc["failures"]) == ("git", [], [])
     git(repo, "checkout", "-q", "-b", "c", base)
-    lean = commit(repo, "drop the name and edit the Lean", {"tools/lonely.py": "", "Security/Definitions/Dead.lean":
-                                                            (repo / "Security/Definitions/Dead.lean").read_text() + "\n"})
+    lean = commit(repo, "drop the name and edit the Lean", {"tools/lonely.py": "", "security/Definitions/Dead.lean":
+                                                            (repo / "security/Definitions/Dead.lean").read_text() + "\n"})
     doc = G.gate(base, lean)
     assert doc["stage"] == "lean" and doc["failures"] == [] and "the Lean check's ratchet judges it" in doc["notes"][0]
 
@@ -165,8 +165,8 @@ def test_with_none_of_the_tree_s_facts_it_can_t_judge_and_with_main_s_it_judges_
     assert "can't judge" in err and f"the facts of the Lean of {base[:12]}" in err and "no store in this test" in err
     git(repo, "checkout", "-q", "main")
     git(repo, "reset", "-q", "--hard", base)
-    main = commit(repo, "a Lean change on main", {"Security/Definitions/Core.lean":
-                                                  (repo / "Security/Definitions/Core.lean").read_text() + "\n"})
+    main = commit(repo, "a Lean change on main", {"security/Definitions/Core.lean":
+                                                  (repo / "security/Definitions/Core.lean").read_text() + "\n"})
     keep_facts(repo, main, tmp_path / "keys")
     doc = G.gate(main, top)
     assert doc["below"] == base and [f["area"] for f in doc["failures"]] == ["Definitions/Dead", "Definitions/Gone"]
@@ -174,8 +174,8 @@ def test_with_none_of_the_tree_s_facts_it_can_t_judge_and_with_main_s_it_judges_
     assert doc["failures"][0]["why"].endswith(f"(on the facts of `main` {main[:12]}'s Lean)")
     monkeypatch.setattr(G, "judged", judged_again)
     assert G.gate(main, top)["notes"][-1].startswith("kept: ")
-    moved = commit(repo, "main's Lean moves", {"Security/Definitions/Core.lean":
-                                               (repo / "Security/Definitions/Core.lean").read_text() + "\n"})
+    moved = commit(repo, "main's Lean moves", {"security/Definitions/Core.lean":
+                                               (repo / "security/Definitions/Core.lean").read_text() + "\n"})
     with pytest.raises(AssertionError, match="judged again"):
         G.gate(moved, top)
 
@@ -214,15 +214,15 @@ def test_with_neither_tree_s_facts_it_judges_on_the_newest_ancestor_s_a_check_pu
     parents, within `ANCESTORS`, that a recorded check published all of at; past the bound it can't judge."""
     old = git(repo, "rev-parse", "HEAD")
     _, keys = keys_at(repo, old, tmp_path / "keys")
-    core = (repo / "Security/Definitions/Core.lean").read_text()
-    lean = commit(repo, "a Lean change", {"Security/Definitions/Core.lean": core + "\n"})
+    core = (repo / "security/Definitions/Core.lean").read_text()
+    lean = commit(repo, "a Lean change", {"security/Definitions/Core.lean": core + "\n"})
     _, partial = keys_at(repo, lean, tmp_path / "keys")
-    main = commit(repo, "another", {"Security/Definitions/Core.lean": core + "\n\n"})
+    main = commit(repo, "another", {"security/Definitions/Core.lean": core + "\n\n"})
     top = commit(repo, "drop the name", {"tools/lonely.py": ""})
     data = gzip.compress(FACTS.read_bytes())
     at = "out/lean-audit/unread/{}.jsonl.gz".format
     published = {at(k): (data, hashlib.sha256(data).hexdigest()) for k in keys.values()}
-    store = Store([("r2", {at(partial["Security"]): published[at(keys["Security"])]}), ("r1", published)],
+    store = Store([("r2", {at(partial["security"]): published[at(keys["security"])]}), ("r1", published)],
                   {"r2": lean, "r1": old})
     monkeypatch.setattr(G, "evidence_store", lambda: store)
     monkeypatch.setattr(G, "ANCESTORS", 1)
@@ -249,22 +249,22 @@ def test_the_store_lookup_takes_the_newest_recorded_check_s_facts_of_each_key_wh
                     "out/lean-audit/unread/seen.json": (b"[]", hashlib.sha256(b"[]").hexdigest())}),
             ("r2", {at(k1): (b"one", hashlib.sha256(b"one").hexdigest()), at(k2): (b"old", hashlib.sha256(b"old").hexdigest())}),
             ("r1", {at(k1): (b"oldest", hashlib.sha256(b"oldest").hexdigest())})]
-    got, errors = G.stored({"Security": k1, "Security/Proofs": k2}, tmp_path, "1", store=Store(runs))
-    assert {p: f.read_bytes() for p, f in got.items()} == {"Security": b"one", "Security/Proofs": b"two"}
-    assert got["Security"] == tmp_path / f"{k1}.jsonl.gz" and errors == [f"r3: {at(k1)} isn't the bytes its listing names"]
+    got, errors = G.stored({"security": k1, "security/Proofs": k2}, tmp_path, "1", store=Store(runs))
+    assert {p: f.read_bytes() for p, f in got.items()} == {"security": b"one", "security/Proofs": b"two"}
+    assert got["security"] == tmp_path / f"{k1}.jsonl.gz" and errors == [f"r3: {at(k1)} isn't the bytes its listing names"]
     (tmp_path / "none").mkdir()
-    got, errors = G.stored({"Security": k1}, tmp_path / "none", "1", store=Store(runs[:1]), scan=1)
+    got, errors = G.stored({"security": k1}, tmp_path / "none", "1", store=Store(runs[:1]), scan=1)
     assert got == {} and errors == [f"r3: {at(k1)} isn't the bytes its listing names"]
     (tmp_path / "old").mkdir()
-    got, _ = G.stored({"Security": k1}, tmp_path / "old", "1", store=Store([runs[0], runs[2]], {"r1": "c" * 40}), scan=1,
+    got, _ = G.stored({"security": k1}, tmp_path / "old", "1", store=Store([runs[0], runs[2]], {"r1": "c" * 40}), scan=1,
                       commits=("c" * 40,))
-    assert got["Security"].read_bytes() == b"oldest", "a check of the commit judged is read however many checks ran since"
+    assert got["security"].read_bytes() == b"oldest", "a check of the commit judged is read however many checks ran since"
 
 
 def test_the_names_lean_declares_read_alike_under_any_locale_and_are_kept_by_the_lean_s_tree(repo, tmp_path, monkeypatch):
     """Under `C`, git's `[^...⟨]` matches bytes, so `fooΨ.psiOnly` would stop inside `Ψ` (whose last byte is one of `⟨`'s) and
     the line would be no UTF-8; the gate runs git under `LOCALE`, so the host's locale doesn't change what it reads."""
-    rev = commit(repo, "a name past ASCII", {"Security/Definitions/Psi.lean": "theorem fooΨ.psiOnly : True := trivial\n"})
+    rev = commit(repo, "a name past ASCII", {"security/Definitions/Psi.lean": "theorem fooΨ.psiOnly : True := trivial\n"})
     monkeypatch.setenv("LC_ALL", "C")
     heads, lasts = G.declared(rev)
     assert "foo" in heads and "psiOnly" in lasts
