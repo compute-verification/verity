@@ -4,7 +4,7 @@ import torch.nn.functional as F
 from torch.nn.attention import SDPBackend, sdpa_kernel
 
 from conftest import D, PER_TOKEN, VOCAB, loss_of
-from training_slowdown import flops
+from training_slowdown import flops, opnames
 from training_slowdown.annotate import annotate
 from training_slowdown.flops import Counter, flags, forward_macs_per_token, gather_selects, guard_exits, leaked, mux_tree
 
@@ -499,6 +499,30 @@ def test_a_kernels_dropout_and_its_word_on_the_gradients_asked_are_read():
         a, b = kernel(asked), math(asked)
         assert a.log == b.log and (a.matmul_macs, a.elementwise_macs, a.by) == (b.matmul_macs, b.elementwise_macs, b.by), asked
     assert kernel([True] * 4).elementwise_macs == n * (2 * (L * E + E * S) + 3 * L * S)
+
+
+def test_every_fused_attention_kernel_names_the_operands_the_counter_reads():
+    """`Counter._attention` reads a kernel's operands by its schema's names. Every fused kernel torch has names q, k and
+    v as it reads them, and dropout, a mask and the gradients asked where it takes them: a kernel torch adds, or an
+    operand it renames, fails here. The kernels of devices no job runs on (another backend's, MPS's) are none of them:
+    a run that reaches one is invalid, as for any op named for products that the counter has no count of."""
+    read = {"dropout_p", "attn_mask", "attn_bias", "grad_input_mask"}
+    names = {str(p).removeprefix("aten._scaled_dot_product_"): {a.name for o in p.overloads()
+                                                                for a in getattr(p, o)._schema.arguments}
+             for p in flops.FUSED_ATTENTION}
+    assert all({"query", "key", "value"} <= n for n in names.values())
+    assert {k: sorted(n & read) for k, n in names.items()} == {
+        "flash_attention": ["dropout_p"], "flash_attention_backward": ["dropout_p"],
+        "flash_attention_for_cpu": ["attn_mask", "dropout_p"],
+        "flash_attention_for_cpu_backward": ["attn_mask", "dropout_p"],
+        "efficient_attention": ["attn_bias", "dropout_p"],
+        "efficient_attention_backward": ["attn_bias", "dropout_p", "grad_input_mask"],
+        "cudnn_attention": ["attn_bias", "dropout_p"], "cudnn_attention_backward": ["attn_bias", "dropout_p"]}
+    others = {n for n in dir(torch.ops.aten) if "scaled_dot_product" in n} - {f"_scaled_dot_product_{k}" for k in names}
+    assert others == {"scaled_dot_product_attention", "_scaled_dot_product_attention_math_for_mps",
+                      "_scaled_dot_product_fused_attention_overrideable",
+                      "_scaled_dot_product_fused_attention_overrideable_backward"}
+    assert all(opnames.gemm_like(n) for n in others)
 
 
 def test_forward_macs_per_token_and_flags(tiny):
