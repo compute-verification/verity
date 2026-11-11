@@ -32,8 +32,10 @@ and a Boolean version (``_v2``) whose word view it is; on bits a byte is 8 bits,
 On bits each hash is one compression of its message from its label's midstate, a constant, written with
 `verity.commitments.gates.sha512`'s `compress_gadget`. A word gate returns one value, so a compression's word form is one
 gate a byte of one primitive, byte ``at`` of its value (``PearlCSeedBByte_v1`` and its like), each fed its index as a
-constant; no Boolean version computes one byte alone. A labelled hash's evaluator is `hashlib`'s SHA-512 of the label's
-block and the message; a compression from a given state is `compress_ref`.
+constant; no Boolean version computes one byte alone. That primitive's evaluator reads no table by index and keeps no memo,
+so it declares none (`PrimitiveDefinition.tables`): a labelled hash is `hashlib`'s SHA-512 of the label's block and the
+message, and a compression from a given state, which `hashlib` does not give, is `_compress`, whose round constants are
+computed as FIPS 180-4 defines them. One written with `compress_ref` would reach SHA-512's round constants as a table.
 
 A Boolean Definition is a proof unit only up to 65,536 ANDs, the size circuit-check lowers one whole at, and a compression is
 about 56,000. So a Definition of more than one compression is a composition of units under that size, each lowered and pinned
@@ -47,6 +49,7 @@ from __future__ import annotations
 
 import hashlib
 import math
+import struct
 from functools import lru_cache
 from typing import Callable
 
@@ -62,7 +65,7 @@ from verity.circuits.refs import array_of
 from verity.definitions.silicon import fp
 from verity.circuits.types import Array, Value
 from verity.commitments import rowleaf
-from verity.commitments.gates.sha512 import compress_gadget, compress_ref, midstate, pad_tail, words_be
+from verity.commitments.gates.sha512 import IV, compress_gadget, midstate, pad_tail
 from verity.definitions.boolean import sigma_lift
 
 __all__ = ["BLOCK", "BYTES32", "BYTES64", "NORM_E", "NORM_F", "ROLES", "ROW_WORDS", "PearlCLineCode", "PearlCLineCodeV2", "PearlCLineCodes",
@@ -86,6 +89,7 @@ ROLES = ("seed-A", "seed-B", "noise-line", "line")
 NORM_E, NORM_F = 0x4600, 0x4400
 #: `F2fpBf16_v1`'s word for a NaN
 _NAN_BF16 = 0x7FFF
+_M64 = (1 << 64) - 1
 #: where the tests hold each Definition to its reference
 _TESTS = "verity/definitions/tests/test_pearl_c_noise.py"
 
@@ -107,6 +111,41 @@ def _midstate(role: str) -> tuple[int, ...]:
 def s512(role: str, message: bytes) -> bytes:
     """-h3's labelled hash: the first 32 bytes of SHA-512(``label(role)`` ‖ ``message``)."""
     return hashlib.sha512(label(role) + message).digest()[:32]
+
+
+def _round_constants() -> list[int]:
+    """SHA-512's 80 round constants as FIPS 180-4 §4.2.3 defines them: the first 64 bits of the fractional part of the cube
+    root of each of the first 80 primes, so ⌊∛(p · 2^192)⌋ mod 2^64, by Newton's iteration from above (p < 2^9)."""
+    out, p = [], 1
+    while len(out) < 80:
+        p += 1
+        if all(p % q for q in range(2, math.isqrt(p) + 1)):
+            n, x = p << 192, 1 << 67
+            while (y := (2 * x + n // (x * x)) // 3) < x:
+                x = y
+            out.append(x & _M64)
+    return out
+
+
+def _rotr(x: int, n: int) -> int:
+    return ((x >> n) | (x << (64 - n))) & _M64
+
+
+def _compress(state: bytes, block: bytes) -> bytes:
+    """One SHA-512 compression (FIPS 180-4 §6.4.2) of a 128-byte ``block`` from the chaining value ``state``, each as its
+    bytes: `sha512.compress_ref`, which the tests hold it to, with the round constants computed rather than read. A byte
+    primitive's evaluator is this, so that it reads no table (`sha512.K` is one) and keeps no memo."""
+    k, cv, w = _round_constants(), struct.unpack(">8Q", state), list(struct.unpack(">16Q", block))
+    for t in range(16, 80):
+        s0 = _rotr(w[t - 15], 1) ^ _rotr(w[t - 15], 8) ^ (w[t - 15] >> 7)
+        s1 = _rotr(w[t - 2], 19) ^ _rotr(w[t - 2], 61) ^ (w[t - 2] >> 6)
+        w.append((w[t - 16] + s0 + w[t - 7] + s1) & _M64)
+    a, b, c, d, e, f, g, h = cv
+    for t in range(80):
+        t1 = (h + (_rotr(e, 14) ^ _rotr(e, 18) ^ _rotr(e, 41)) + ((e & f) ^ (~e & g)) + k[t] + w[t]) & _M64
+        t2 = ((_rotr(a, 28) ^ _rotr(a, 34) ^ _rotr(a, 39)) + ((a & b) ^ (a & c) ^ (b & c))) & _M64
+        h, g, f, e, d, c, b, a = g, f, e, (d + t1) & _M64, c, b, a, (t1 + t2) & _M64
+    return struct.pack(">8Q", *((x + y) & _M64 for x, y in zip(cv, (a, b, c, d, e, f, g, h))))
 
 
 def _words(data: list[list]) -> list[list]:
@@ -144,9 +183,8 @@ def _compression(name: str, params: tuple, n: int, value: Callable, value_bits: 
     parameters' elements on bits."""
     held = f"protocol-defined; equal to `{reference}` on its vectors ({_TESTS})"
     at_type, ret = Value((n - 1).bit_length()), Array(n, U8)
-    cached = lru_cache(maxsize=4096)(lambda x: value(list(x)))
     byte = PrimitiveDefinition(
-        f"{name}Byte", 1, (*params, ("at", at_type)), U8, lambda *x: cached(tuple(int(v) for v in x[:-1]))[int(x[-1])],
+        f"{name}Byte", 1, (*params, ("at", at_type)), U8, lambda *x: value([int(v) for v in x[:-1]])[int(x[-1])],
         doc=f"Byte ``at`` of {rule}: {name}_v1's gates.", conformance="protocol-defined")
 
     def body(B, S, *args):
@@ -209,7 +247,7 @@ def _row_seed_tail(x: list[int]) -> bytes:
     """`PearlCRowSeedTail_v1`'s 32 bytes from its parameters' words: the state's 64 bytes, the root's last 32, the unit and
     the row."""
     block = bytes(x[64:96]) + _le32(x[97]) + _le32(x[96]) + pad_tail(_ROW_SEED_BYTES)
-    return _state(compress_ref(words_be(bytes(x[:64])), words_be(block)))[:32]
+    return _compress(bytes(x[:64]), block)[:32]
 
 
 def _row_seed_tail_bits(C, el: list) -> list[list]:
@@ -219,7 +257,7 @@ def _row_seed_tail_bits(C, el: list) -> list[list]:
 
 PearlCRowSeedHeadByte, PearlCRowSeedHead, PearlCRowSeedHeadV2 = _compression(
     "PearlCRowSeedHead", (("salt", BYTES32), ("leaf", BYTES64), ("root_head", BYTES32)), 64,
-    lambda x: _state(compress_ref(list(_midstate("seed-A")), words_be(bytes(x)))),
+    lambda x: _compress(_compress(_state(IV), label("seed-A")), bytes(x)),
     lambda C, el: _word_bytes(compress_gadget(C, [const_bits(v, 64) for v in _midstate("seed-A")], _words(list(el)))),
     "the chaining value of a row seed's hash after its message's first block, salt ‖ leaf ‖ the root's first 32 bytes",
     "pearl_c.row_seed", "the first of its two SHA-512 compressions, from the label's midstate")
@@ -256,14 +294,14 @@ PearlCRowSeedV2 = sigma_lift(PearlCRowSeed, 2)
 
 PearlCRowBlockByte, PearlCRowBlock, PearlCRowBlockV2 = _compression(
     "PearlCRowBlock", (("state", BYTES64), ("x", ROW_WORDS)), 64,
-    lambda x: _state(compress_ref(words_be(bytes(x[:64])), words_be(b"".join(_le32(w) for w in x[64:])))),
+    lambda x: _compress(bytes(x[:64]), b"".join(_le32(w) for w in x[64:])),
     lambda C, el: _word_bytes(compress_gadget(C, _words(el[:64]), _words([b for w in el[64:] for b in _bytes(w)]))),
     "the chaining value of SHA-512 after one block, 32 words of a row little-endian, from the chaining value ``state``",
     "sha512.compress_ref", "one SHA-512 compression")
 
 PearlCShaBlockByte, PearlCShaBlock, PearlCShaBlockV2 = _compression(
     "PearlCShaBlock", (("state", BYTES64), ("block", BLOCK)), 64,
-    lambda x: _state(compress_ref(words_be(bytes(x[:64])), words_be(bytes(x[64:])))),
+    lambda x: _compress(bytes(x[:64]), bytes(x[64:])),
     lambda C, el: _word_bytes(compress_gadget(C, _words(el[:64]), _words(list(el[64:])))),
     "the chaining value of SHA-512 after one block of 128 bytes, from the chaining value ``state``",
     "sha512.compress_ref", "one SHA-512 compression")

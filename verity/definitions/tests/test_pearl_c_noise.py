@@ -196,6 +196,12 @@ def test_the_row_seed_is_its_two_compressions_on_words():
         assert bytes(word(N.PearlCRowSeedTail, state, tail, unit, row)) == b"".join(w.to_bytes(8, "big") for w in want[:4])
 
 
+def test_the_evaluators_compression_computes_sha512s_round_constants():
+    """`_compress`, a byte primitive's evaluator, reads no table: its round constants are FIPS 180-4's cube roots, computed,
+    and they are `sha512.K`."""
+    assert N._round_constants() == SHA.K
+
+
 def test_a_block_is_one_sha512_compression_on_words():
     """`PearlCShaBlock` from the initial value on a padded message of one block is hashlib's SHA-512, and from any state
     `sha512.compress_ref`; `PearlCRowBlock` is `PearlCShaBlock` on its 32 words' bytes, little-endian."""
