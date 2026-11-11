@@ -35,4 +35,5 @@ inputs = ["verity/protocols/interface", "verity/protocols/flock/verifier/lakefil
           # the JSON parser's port reads the recorded public files' headers (`RECORDED_FIXTURES`), fetched fixtures
           "verity/protocols/flock/prover/tests/fixtures/forged-proofs", "verity/protocols/flock/prover/tests/fixtures/public-inputs",
           "verity/protocols/flock/prover/tests/fixtures/public-inputs-blocks", "verity/protocols/flock/prover/tests/fixtures/rec-coins",
-          "verity/protocols/flock/prover/tests/fixtures/rec-links", "verity/protocols/flock/prover/tests/fixtures/zk-sessions"]
+          "verity/protocols/flock/prover/tests/fixtures/rec-links", "verity/protocols/flock/prover/tests/fixtures/zk-sessions",
+          "verity/protocols/__init__.py"]
