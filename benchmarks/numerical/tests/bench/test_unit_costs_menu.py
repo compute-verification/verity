@@ -128,7 +128,7 @@ def test_the_pinned_lean_menu_is_generated_from_the_pinned_menu_json():
     from pathlib import Path
 
     here = Path(__file__).resolve()
-    pinned = here.parents[4] / "verity/core/service/flock/VStar/Menu/Pinned.lean"
+    pinned = here.parents[4] / "verity/protocols/flock/verifier/VStar/Menu/Pinned.lean"
     mn = json.loads((here.parent / "data/f6-menu.json").read_text())
     assert M.lean(mn, "`benchmarks/numerical/tests/bench/data/f6-menu.json`") == pinned.read_text()
 
