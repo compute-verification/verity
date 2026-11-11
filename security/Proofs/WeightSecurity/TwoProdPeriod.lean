@@ -34,8 +34,8 @@ fixes, and the two stages' draw laws bound the miss by `P̄_a` at the boundary v
   whose sample misses passes the rest of the run the budget `c / e`, `e` its escape.
 * `periodTwoLead_of`: `PeriodTwoLead` from each verifier's contract, by `period_union` and `period_leadEscape`. So
   **`CompilerPeriodTwoProd` is proved** (`compilerPeriodTwoProd`).
-* `periodTwoProd_regVal`: it at the committed boundary trace, where knowledge soundness of the argument and binding
-  bound the event by `ε_reg,2` (`CompiledTwo.eventTwo_le`).
+* `periodTwoProd_regVal`, `periodTwoLead_regVal`: both at the committed boundary trace, where knowledge soundness of
+  the argument and binding bound the event by `ε_reg,2` (`CompiledTwo.eventTwo_le`).
 -/
 
 @[expose] public section
@@ -346,6 +346,21 @@ theorem periodTwoProd_regVal (H : Msg → Msg) (Lv : ℕ → CompiledTwo Coin A)
         (twoAtRun H Lv (fun t _ x P => (Lv t).regVal H P x ()) T s) ≤
       ENNReal.ofReal δ + ∑ t ∈ Finset.range T, ENNReal.ofReal (ε t) :=
   periodTwoProd_of H Lv (fun t _ x P => (Lv t).regVal H P x ()) (fun t => (hS t).2) T ε s
+    (fun t τ hp hx => (acceptedSampledAt_regVal_le hA (hS t).1 (hS t).2 hx τ.2.1.2).trans (herr t τ hp)) δ
+
+/-- **The period's one failure probability through the first sampled incorrect proof block, at the committed boundary
+trace**: under `periodTwoProd_regVal`'s premises, some verification phase is accepted with a sampled proof block of
+its committed incorrect set, or the escapes at the committed boundary traces of the verification phases before the
+first such sample multiply below `δ`, with probability at most `δ + Σ_t ε_t`. -/
+theorem periodTwoLead_regVal (H : Msg → Msg) (Lv : ℕ → CompiledTwo Coin A) (hA : A.KS H)
+    (hS : ∀ t, (Lv t).commit.Binds H ∧ (Lv t).Sessions H) (T : ℕ) (ε : ℕ → ℝ)
+    (s : Strategy (periodG (fun t => twoGame (Lv t) ((O → V) × Tick × Adv)) 0 T))
+    (herr : ∀ t τ, PeriodPlays (fun t => twoGame (Lv t) ((O → V) × Tick × Adv)) 0 T s t τ →
+      (Lv t).εregTwo H τ.2.1.1 τ.2.1.2 ≤ ε t) (δ : ℝ) :
+    Verity.Game.value (ServedEsc.UndetectedBelow δ)
+        (twoAtRun H Lv (fun t _ x P => (Lv t).regVal H P x ()) T s) ≤
+      ENNReal.ofReal δ + ∑ t ∈ Finset.range T, ENNReal.ofReal (ε t) :=
+  periodTwoLead_of H Lv (fun t _ x P => (Lv t).regVal H P x ()) (fun t => (hS t).2) T ε s
     (fun t τ hp hx => (acceptedSampledAt_regVal_le hA (hS t).1 (hS t).2 hx τ.2.1.2).trans (herr t τ hp)) δ
 
 end WeightSecurity.SecurityProofs
