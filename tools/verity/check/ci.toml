@@ -113,7 +113,7 @@ group = 7
 # lean-audit runs on a scratch tree, so a shard audits without lean-build; the jobs that read lean-build's binaries `needs`
 # it, or run `after` it, and a shard that holds one of them whole holds it too. lean-suites is split by suite: a shard that
 # holds some of its parts and not lean-build builds the verifier again beside them, a short build.
-# The spec and Security/Properties are audited beside their proofs (Security/Proofs, which their `proved_in` names), from one
+# The spec and security/Properties are audited beside their proofs (security/Proofs, which their `proved_in` names), from one
 # build of the proofs, so the three share a shard; a spec package a plan doesn't name goes with its provers
 # (`declaration.resolve`), and no plan names the spec: its path is the analysis directory's bare name.
 # The composition suite (verity-core-composition) declares three parts by test id (`[tool.verity.tests] parts`), so that no
@@ -123,7 +123,7 @@ group = 7
 # 3 pods: the security analysis's audit beside the suites; the rest of the Lean; the Rust build and the circuits.
 [[plan]]
 shards = [
-    ["lean-audit:Security/Proofs", "lean-audit:Security/Properties", "pytest",
+    ["lean-audit:security/Proofs", "lean-audit:security/Properties", "pytest",
      "lean-suites:verity-core-composition:3/3"],
     ["lean-build", "lean-unit-cut", "lean-audit:*", "lean-suites:verity-core-composition:1/3", "lean-suites:*", "lean-agreement",
      "lean-changed"],
@@ -134,7 +134,7 @@ shards = [
 # circuit-check is no single pod's long pole.
 [[plan]]
 shards = [
-    ["lean-audit:Security/Proofs", "lean-audit:Security/Properties", "circuit-check:1/4",
+    ["lean-audit:security/Proofs", "lean-audit:security/Properties", "circuit-check:1/4",
      "lean-suites:verity-core-composition:3/3"],
     ["lean-build", "lean-unit-cut", "lean-audit:*", "lean-suites:verity-core-composition:1/3", "lean-suites:*", "lean-agreement",
      "lean-changed", "circuit-check:2/4"],
@@ -145,7 +145,7 @@ shards = [
 # 5 pods: each of those apart.
 [[plan]]
 shards = [
-    ["lean-audit:Security/Proofs", "lean-audit:Security/Properties", "lean-suites:verity-core-composition:3/3"],
+    ["lean-audit:security/Proofs", "lean-audit:security/Properties", "lean-suites:verity-core-composition:3/3"],
     ["lean-audit:*", "lean-changed"],
     ["lean-build", "lean-unit-cut", "lean-suites:verity-core-composition:1/3", "lean-suites:*", "lean-agreement"],
     ["pytest"],
