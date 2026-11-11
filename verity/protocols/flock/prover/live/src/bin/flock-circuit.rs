@@ -1326,6 +1326,39 @@ fn salt_trees(st: &Stmt, lig: LigeritoProfile, level0: u64) -> Vec<(u64, usize)>
     trees
 }
 
+/// `FC_SALTS_KEYED`: the trees of a `--zk` table whose samples expand a 32-byte key read from the OS
+/// (`LeafSalts::expand_from_key`) in place of reading 192 OS bytes a leaf. With it set the session's salts are not what the
+/// statement's `leaf_scheme` says, so it is for timing the prover only.
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum SaltsKeyed {
+    /// `upper`: each rep's Ligerito levels 1 to R, whose leaves hide nothing
+    Upper,
+    /// `all`: those, level 0's tree and each rep's pads tree, whose hiding then rests on the expansion
+    All,
+}
+
+/// The session's `FC_SALTS_KEYED`; none under the ZK server, whose Lean draws the salts.
+fn salts_keyed(st: &Stmt, plan: &Plan) -> Option<SaltsKeyed> {
+    let mode = match std::env::var("FC_SALTS_KEYED").as_deref() {
+        Err(_) | Ok("" | "0") => return None,
+        Ok("upper") => SaltsKeyed::Upper,
+        Ok("all") => SaltsKeyed::All,
+        Ok(v) => refuse(format!("FC_SALTS_KEYED={v}: `upper` (each rep's Ligerito levels after level 0) or `all` (every tree)")),
+    };
+    (is_zk(st) && salted(st) && plan.lean_frames.is_none() && !firewall_on(st) && !flock_live::zk_hooks::os_source_set()).then_some(mode)
+}
+
+/// The trees `mode` names in the table whose level-0 tree is `level0`, by id ([`salt_trees`]'s and `zk_prepare`'s).
+fn keyed_trees(st: &Stmt, lig: LigeritoProfile, level0: u64, mode: SaltsKeyed) -> Vec<u64> {
+    let trees = salt_trees(st, lig, level0);
+    let r = (trees.len() as u64 - 1) / 2;
+    let upper = trees[1..].iter().map(|t| t.0);
+    match mode {
+        SaltsKeyed::Upper => upper.collect(),
+        SaltsKeyed::All => upper.chain([level0, level0 + 1, level0 + 2 + r]).collect(),
+    }
+}
+
 #[cfg(feature = "gpu")]
 type SaltBuf = flock_live::gpu_circuit::Pinned;
 #[cfg(not(feature = "gpu"))]
@@ -1438,10 +1471,14 @@ fn give_level0_bufs(bufs: impl IntoIterator<Item = SaltBuf>) {
 impl Level0Ahead {
     /// Starts the read of the session of `seed`'s level 0 at `st`'s sizes: its salts (`salts`) and its hiding (`hiding`).
     fn start(st: &Arc<Stmt>, plan: &Plan, seed: ProverSeed, lig: LigeritoProfile, salts: bool, hiding: bool) {
+        let keyed = salts_keyed(st, plan) == Some(SaltsKeyed::All);
         let salts = salts.then(|| {
             let n = pcs_of(st, lig).n_leaves();
             (n, flock_live::spawn(move || {
-                let s = flock_live::zk_hooks::LeafSalts::for_seed(&seed);
+                let mut s = flock_live::zk_hooks::LeafSalts::for_seed(&seed);
+                if keyed {
+                    s.expand_from_key([s.level0_id()]);
+                }
                 let mut free = std::mem::take(&mut *LEVEL0_BUFS.lock().unwrap_or_else(PoisonError::into_inner));
                 let mut held = Vec::new();
                 let mut read = || salt_buffer(&mut free, &mut held, n * flock_live::zk_hooks::SALT_BYTES, &mut |b| s.fill(s.level0_id(), b));
@@ -4101,10 +4138,22 @@ fn session_proved(st: &Arc<Stmt>, inst: &Arc<Instances>, t: SharedTransport, pla
     let lig = if plan.fast { LigeritoProfile::Fast } else { LigeritoProfile::Fast100 };
     // hm96-sha512 leaf salts, read from the OS: the level-0 tree is id 0 (both reps bind one root), every later tree a fresh
     // id (table j's from j << 32). The device takes the host's salts tree by tree, as a CPU proof does.
+    let keyed = salts_keyed(st, plan);
     let salts_t: Vec<Arc<Mutex<flock_live::zk_hooks::LeafSalts>>> = {
         let s = flock_live::zk_hooks::LeafSalts::for_seed(&seed);
-        (0..tabs.list.len()).map(|j| Arc::new(Mutex::new(s.table(j as u64)))).collect()
+        tabs.list.iter().enumerate().map(|(j, tb)| {
+            let mut t = s.table(j as u64);
+            if let Some(mode) = keyed {
+                t.expand_from_key(keyed_trees(&tb.st, lig, t.level0_id(), mode));
+            }
+            Arc::new(Mutex::new(t))
+        }).collect()
     };
+    if let Some(mode) = keyed {
+        let named: Vec<usize> = tabs.list.iter().map(|tb| keyed_trees(&tb.st, lig, 0, mode).len()).collect();
+        eprintln!("SALTSKEYED\t{}", json!({"trees": if mode == SaltsKeyed::All { "all" } else { "upper" }, "keyed": named,
+                                            "os_bytes_a_keyed_tree": 32}));
+    }
     // the device's trees' salts read beside the witness build, on the read-ahead's own pool (`salts_pool`), into page-locked
     // buffers for its copies (`SALT_BUFS`), not inside its timed phases (FC_SALTS_AHEAD=0: each tree's where the device builds
     // it; FC_SALTS_AFTER=1: from when every table's witness is built, beside the device's phases only); not under the ZK
