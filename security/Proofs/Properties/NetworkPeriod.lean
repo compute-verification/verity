@@ -367,19 +367,19 @@ theorem auditCheck_facts {i : ℕ} {a : Audit} {reg : Lean.Json} {x : Core.Answe
   cases ha : answered s!"audit {i}" reg x with
   | error r =>
     simp only [ha, bind, Except.bind] at h
-    by_cases c1 : (reg.getObjValD "program" == Lean.Json.str a.program) = true <;>
+    by_cases c1 : Flock.J.strIs (reg.getObjValD "program") a.program = true <;>
       simp [c1, refuse] at h
   | ok pp =>
     obtain ⟨prof, pub⟩ := pp
     cases hf : factsOf s!"audit {i}" prof pub with
     | error r =>
       simp only [ha, hf, bind, Except.bind] at h
-      by_cases c1 : (reg.getObjValD "program" == Lean.Json.str a.program) = true <;>
+      by_cases c1 : Flock.J.strIs (reg.getObjValD "program") a.program = true <;>
         simp [c1, refuse] at h
     | ok g =>
       refine ⟨prof, pub, ha, ?_⟩
       simp only [ha, hf, bind, Except.bind] at h
-      by_cases c1 : (reg.getObjValD "program" == Lean.Json.str a.program) = true <;>
+      by_cases c1 : Flock.J.strIs (reg.getObjValD "program") a.program = true <;>
         by_cases c2 : g.units = a.units <;> simp_all [refuse, pure, Except.pure]
 
 /-- The facts `factsOf` gives sample no more than their level holds: it refuses a profile that names more. -/
