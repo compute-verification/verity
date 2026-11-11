@@ -310,6 +310,11 @@ def test_a_slot_fits_a_job_as_slot_py_admits_it_whatever_its_own_mem():
         "a job is not sent to wait on memory beside idle slots while another pool runs"
     assert auto._pool(idle["research"], 4, 0)[:2] == (4, 4), "a job that asks no memory reserves none in a slot without mem="
     assert auto._pool(idle["research"], 4, 12)[:2] == (4, 4), "12 GB is 12 GiB rounded up: inside the 13 free"
+    booked = pool({**slot("r0"), "book": 15}, slot("r1"), free_gb=20)        # r0: `mem=40 book=15`, as slot.py --status gives it
+    fit, free, _waiting, why = auto._pool(booked["research"], 12, 16)
+    assert (fit, free) == (1, 1) and "r1 blocked" in why, "r0 reserves its book=, 15, inside the 20 free; r1 its mem=, 40"
+    with pytest.raises(auto.Stalled, match="20 GB of memory free, under the 30 GB this job would reserve there"):
+        auto._pool(pool({**slot("r0"), "book": 15}, free_gb=20)["research"], 12, 32)   # an ask over book= is what it reserves
 
 
 def test_a_pool_every_fitting_slot_of_which_a_window_closes_never_takes_the_job():
