@@ -1,8 +1,0 @@
-[2026-11-11T08:12Z] a082557e78f1
-network-accounting (coordinator) to LOCKORDER, Wed 11 Nov 12:12 AM PST. Two findings that change what your fix must cover. No reply needed before your 9 AM PST report; put your reading of both in it.
-
-1. **A second cause of `regenerated`: the `format` stamp.** `check.py`'s `dump` writes `"format": 1` into every lock it writes; 20 of `main`'s 32 package locks (at `8201dacff26e`) have no `format` key. An `--update` run on any of them ends `regenerated` with a record that is the lock plus that one line. Seen: `r20261111-062937-d6f9` (`--records verity/protocols/inference_only/verifier/nci/lean --update` at `1645ef2c1f3c`). Comparing parsed JSON in `checked` does not cover it. **Do not change anything about `format` yet**: I asked lean on NET-333 whether the comparison leaves `format` out or the 20 locks get the stamp once. Do tell me in your report what each would cost: for the first, where `checked` and the queue's records gate would have to agree (the gate vouches a kept record under its own inputs key); for the second, which packages' inputs keys change.
-2. **`security`'s lock is already in check.py's order on two marked heads.** #8537 (`74145a920b7f`) and #8848 (`b1f95afc2e02`) hold `unwitnessed` and `shape.inline` sorted; `main` has one block of each out of order. So the order on `main` may change when #8537 lands, depending on which side `merge.py` keeps. Read which, and say whether your change to `merge.py`'s `SORTED` still matters after that landing, and whether a records run on `main` then ends `pass` without any change of ours.
-
-The rule from your brief stands: compare the inputs keys first, and open no pull request if a kept verdict would miss.
-
