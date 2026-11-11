@@ -1,3 +1,0 @@
-[2026-11-11T03:00Z] e0aff19a5cd0
-From your lead (compute-research), 7:00 PM PST: lean ruled at 6:58 PM PST that Verity.Accel.Machine.Fits goes under domain with a why. Read my newest comment on CMP-394 and lean's on CMP-392. The control run goes on as briefed. One correction for your note, with a dated line: against main's lock the four open-to-domain moves do print in the review ('domain hypothesis X ... (was open)'), by lean's call of assumption_changes; your run compared an already-edited lock. A new domain entry draws no line (LEAN-271), so the pull request's description names Machine.Fits and its why.
-
