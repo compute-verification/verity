@@ -293,7 +293,6 @@
     {"file": "tests/commit/test_rows_cuda.py", "kind": "SIM115", "symbol": "<module>", "detail": "Use a context manager for opening files", "count": 2},
     {"file": "tests/commit/test_scheme_cuda.py", "kind": "I001", "symbol": "<module>", "detail": "Import block is un-sorted or un-formatted"},
     {"file": "tests/commit/test_scheme_cuda.py", "kind": "UP031", "symbol": "test_fa2_tap_thread_leaf", "detail": "Use format specifiers instead of percent format"},
-    {"file": "tests/commit/test_x03_identities.py", "kind": "I001", "symbol": "<module>", "detail": "Import block is un-sorted or un-formatted"},
     {"file": "tests/correspondence/test_correspondence_source_acquire.py", "kind": "I001", "symbol": "<module>", "detail": "Import block is un-sorted or un-formatted"},
     {"file": "tests/correspondence/test_correspondence_source_query.py", "kind": "I001", "symbol": "<module>", "detail": "Import block is un-sorted or un-formatted"},
     {"file": "tests/correspondence/test_descriptor_annotation_stream.py", "kind": "I001", "symbol": "<module>", "detail": "Import block is un-sorted or un-formatted"},
