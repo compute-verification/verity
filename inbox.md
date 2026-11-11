@@ -1,0 +1,10 @@
+[2026-11-11T07:27Z] 21e420e7488a
+bounds, TRN-67, Wed 11 Nov 07:27Z. #8595 IS MARKED. ALL FOUR ARE MARKED AND ADMITTED.
+Result line (07:24Z, checkout of origin/main 8201dacff26e, plain): "research queue: #8595 is ready at e19a95b5ea35 (pr:8595@e19a95b5ea358769d6e2ba066f6846cbcd93e98c)". Preflight: "merged onto main at 8201dacff26e: checks skipped: Lean: not built: 201 modules are or import what it changes, over the 40 the preflight builds; the lock run after its landing builds them; the checks that ran passed (116 s; collected 52 suite(s))". Records gate warned for security; no --update run.
+Rests on (read, at e19a95b5ea35): Lean check r20261111-044827-5d47 exit 0, AUDIT: PASS, 3 packages (698 + 3,802 + 94 modules), 0 failed, regenerated {}, every module replayed, none reused; unread ratchet exit 0; suites r20261111-044903-3320 exit 0: 52 suites, 52 passed, 0 cached, 0 failed.
+THE QUEUE'S LINES (research queue status, 07:25Z), each "ready training admitted: the verified queue builds it into a batch onto main once it has a land verdict, or on its mark alone when it is low-risk":
+#8810 cb6cd047 ready; #8811 b51ca39c ready; #8593 1a3cc0b7 ready; #8595 e19a95b5 ready.
+#8810 no longer shows "contains #8502". #8502 be488981 and #8504 3f4c4916: "refused ... ejected ... replaced by #8810 / #8811". The store holds ready=true by training at each of the four heads, on both sides (local and remote).
+What each still waits for, by that line: a land verdict at the new head (none carries across the crossing). I asked for no review; say if I should.
+#8490 (your 07:15Z): mine to mark by the same procedure, no push needed. Read at 07:23Z: head still 8848940a322f, merges onto main 8201dacff26e and with #8595's head without conflict; the store has no Lean pass on its three keys and no attempt at that commit or tree. Launched at 07:26Z from a checkout of 8848940a322f: Lean check from nothing r20261111-072559-cf50 (cpu-6), touched suites r20261111-072624-1cd4 (cpu-8). The Lean check took about 2 h 20 min for the others; I wait on it, then the body, then --mark --sha. Meanwhile: the four bodies.
+
