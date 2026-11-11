@@ -158,6 +158,7 @@ def test_the_live_templates_circuit_file_is_built_beside_the_strata_and_a_commit
         GPU.period_files(out, _sha(raw), layout, decl)
 
 
+@pytest.mark.slow
 def test_past_the_piece_rows_the_live_file_is_bound_to_the_pieced_live_program():
     """At T past `live.PIECE_ROWS` (a V3 prefill round's T 8,192) the live Program is cut by rows: ``--live T,S`` binds
     the live file to `live.program_rows` of T / 64 pieces a round and its `live.query_rows` partition, and up to it to

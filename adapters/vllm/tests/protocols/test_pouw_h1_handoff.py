@@ -191,10 +191,14 @@ def test_the_stream_outlives_the_process_that_handed_it_over(tmp_path):
         assert there.recv(7) == b"round 2"
 
 
+@pytest.mark.slow
 def test_every_served_row_of_a_saved_window_rebuilds_from_the_provers_directory(tmp_path, monkeypatch):
     """The served trees a window saves keep no rows, and `pouw_h1_kept.kept_row` rebuilds every row of each
     of its step A tables, z tables and its ``b/<K>`` from the prover's directory and the saved state, each committing to
-    its tree's ``b || c`` under the tree's own salt; a kept A code changed afterwards rebuilds a row that isn't."""
+    its tree's ``b || c`` under the tree's own salt; a kept A code changed afterwards rebuilds a row that isn't.
+
+    Slow, about two minutes on a check node: it holds every leaf of every tree, which a sample of rows would not, so a
+    rebuild that is right for a tree's first rows and wrong past a call's or a step's boundary is caught."""
     from verity.protocols.spot.verifier.one_stage import registered as G
     _host(tmp_path, monkeypatch)
     prover = tmp_path / "prover"
