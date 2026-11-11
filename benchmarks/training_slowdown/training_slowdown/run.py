@@ -83,7 +83,7 @@ bytecode cache is read, so what runs is the source that was screened.
 On a CPU each of the job's two processes limits oneDNN's instruction set to below AMX before torch computes anything
 (`limit_cpu`, `CPU_ISA`): oneDNN's AMX kernels can return a wrong bf16 product on a virtual CPU, so that one step run
 twice gives two results, and a job's products are to be the same every time. The record names the variable and the
-value the route's process holds (`cpu_isa`; null on any other device, where nothing is set).
+value the route's process set (`cpu_isa`; null on any other device, where nothing is set).
 """
 from __future__ import annotations
 
@@ -1188,7 +1188,7 @@ def inside(a: argparse.Namespace) -> int:
                                           "sha256": file_sha256(route.__file__)},
         "label": f"{config.LABEL_KEY}={config.Job(cfg, a.seed, a.split).label}", "commit": git_commit(),
         "hardware": torch.cuda.get_device_name() if torch.cuda.is_available() else "cpu",
-        "cpu_isa": {CPU_ISA[0]: os.environ.get(CPU_ISA[0])} if on_cpu(a.device) else None,
+        "cpu_isa": a.cpu_isa,
         "peak_macs_per_s": a.peak_macs_per_s,
         "sandbox": {"interfaces": sandbox.interfaces(),
                     "final_sets": {str(d): "empty" if d.exists() else "absent" for d in hidden}}}
@@ -1216,22 +1216,21 @@ def inside(a: argparse.Namespace) -> int:
     return 0
 
 
-def on_cpu(device: str) -> bool:
-    return torch.device(device).type == "cpu"
-
-
-def limit_cpu(device: str) -> None:
+def limit_cpu(device: str) -> dict[str, str] | None:
     """Limits oneDNN's instruction set in this process (`CPU_ISA`) where the job's device is a CPU, whatever the
-    process was started with; on any other device it sets nothing. oneDNN reads the variable once, at its first
-    product, so each of a job's processes calls this before torch computes anything (`main`)."""
-    if on_cpu(device):
-        os.environ[CPU_ISA[0]] = CPU_ISA[1]
+    process was started with, and returns what it set, the record's `cpu_isa`; on any other device it sets nothing
+    and returns None. oneDNN reads the variable once, at its first product, so each of a job's processes calls this
+    before torch computes anything (`main`)."""
+    if torch.device(device).type != "cpu":
+        return None
+    os.environ[CPU_ISA[0]] = CPU_ISA[1]
+    return dict([CPU_ISA])
 
 
 def main(argv=None) -> int:
     argv = sys.argv[1:] if argv is None else [str(x) for x in argv]
     a = parse(argv)
-    limit_cpu(a.device)
+    a.cpu_isa = limit_cpu(a.device)
     return inside(a) if a.inside is not None else outside(a, argv)
 
 

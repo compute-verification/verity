@@ -194,7 +194,7 @@ with the scores in. It holds no weights by default: beside the record, its last 
 A job on a CPU computes with oneDNN held below AMX (`ONEDNN_MAX_CPU_ISA=AVX512_CORE_BF16`, `run.limit_cpu`): each of
 its two processes sets the limit itself, over whatever it was started with, before torch computes anything, because
 oneDNN's AMX kernels can return a wrong bf16 product on a virtual CPU and a step run twice then gives two results.
-The record names the variable and the value the route's process holds (`cpu_isa`); on a GPU a job sets nothing and
+The record names the variable and the value the route's process set (`cpu_isa`); on a GPU a job sets nothing and
 the field is null.
 
 Run the `python -m` commands from this directory. A start and its data are read where `starts.toml` says a node holds them, and checked

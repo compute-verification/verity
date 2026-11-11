@@ -564,22 +564,25 @@ def test_a_job_whose_routes_process_ends_as_it_takes_the_trace_writes_its_record
 
 
 def test_a_job_on_a_cpu_limits_onednn_in_each_of_its_processes_before_either_does_anything(ran, tmp_path, monkeypatch):
-    """The record of a job on a CPU names the limit as the route's process held it. Each of the job's processes sets
-    it itself, over whatever it was started with, before it does anything else; on a GPU neither sets anything."""
+    """The record of a job on a CPU names the limit its route's process set. Each of the job's processes sets it
+    itself, over whatever it was started with, before it does anything else, and changes nothing else of its
+    environment; on a GPU neither changes anything, and the record's field is null."""
     name, limit = run.CPU_ISA
     assert (name, limit) == ("ONEDNN_MAX_CPU_ISA", "AVX512_CORE_BF16") and ran[0]["cpu_isa"] == {name: limit}
-    held = []
-    monkeypatch.setattr(run, "inside", lambda a: held.append(os.environ.get(name)) or 0)
-    monkeypatch.setattr(run, "outside", lambda a, argv: held.append(os.environ.get(name)) or 0)
+    entered = []
+    monkeypatch.setattr(run, "inside", lambda a: entered.append((a.cpu_isa, dict(os.environ))) or 0)
+    monkeypatch.setattr(run, "outside", lambda a, argv: entered.append((a.cpu_isa, dict(os.environ))) or 0)
     job = ["--config", tmp_path / "a.toml", "--seed", 0, "--split", "search", "--out", tmp_path / "out"]
-    for device, started_with, holds in [("cpu", None, limit), ("cpu", "ALL", limit), ("cuda", None, None),
-                                        ("cuda:1", "ALL", "ALL")]:
+    for device, started_with in [("cpu", None), ("cpu", "ALL"), ("cuda", None), ("cuda:1", "ALL")]:
         for process in ([], ["--inside", tmp_path]):
             if started_with is None:
                 monkeypatch.delenv(name, raising=False)
             else:
                 monkeypatch.setenv(name, started_with)
-            assert run.main([*job, "--device", device, *process]) == 0 and held.pop() == holds, (device, process)
+            before = dict(os.environ)
+            assert run.main([*job, "--device", device, *process]) == 0
+            said, held = entered.pop()
+            assert (said, held) == (({name: limit}, before | {name: limit}) if device == "cpu" else (None, before))
 
 
 #: the route's process's interpreter: the job's own, started without the limit and with oneDNN's log on
