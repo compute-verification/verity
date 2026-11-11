@@ -30,7 +30,12 @@ def computed(monkeypatch: pytest.MonkeyPatch) -> list[int]:
     """The linears whose root was computed, not reused, in call order, from an empty cache."""
     monkeypatch.setattr(PHK, "_ROOTS", {})
     seen: list[int] = []
-    monkeypatch.setattr(PH, "weight_root", lambda w, rows, key=None: seen.append(w) or FRESH(w, rows, key))
+
+    def computing(w: int, rows: np.ndarray, key: bytes | None = None) -> bytes:
+        seen.append(w)
+        return FRESH(w, rows, key)
+
+    monkeypatch.setattr(PH, "weight_root", computing)
     return seen
 
 

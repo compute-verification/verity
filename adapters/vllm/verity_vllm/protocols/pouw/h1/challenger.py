@@ -428,8 +428,8 @@ def session_reason(commits: Mapping[str, Any], ledger: Ledger, fetch: Fetch, reg
     if commits.get("scheme") in PPD.SCHEMES:
         return salt_session_reason(commits, ledger, fetch, registered, commit, verify)
     why, window = held(commits.get("session"), ledger, commit)
-    if why is not None:
-        return why
+    if why is not None or window is None:
+        return why or "no window of the auditor's ledger holds the window's session"
     if registered is not None and commits.get("weights_root") != bytes(registered).hex():
         return "the window's weights' root is not the one the period registered"
     sid, root = window["open"]["session"], Ch.root_of(window["open"])
@@ -469,8 +469,8 @@ def salt_session_reason(commits: Mapping[str, Any], ledger: Ledger, fetch: Fetch
     if isinstance(commits.get("session"), Mapping) and "secret" in commits["session"]:
         return "the pass's session names its hello's secret, which a pass never records: a refused pass"
     why, window = held(commits.get("session"), ledger, root.hex())
-    if why is not None:
-        return why
+    if why is not None or window is None:
+        return why or "no window of the auditor's ledger holds the pass's session"
     sid, reserve, end = window["open"]["session"], window["reserve"], window["end"]["body"]
     families = None if reserve is None else reserve["body"].get("families")
     salt_only = [list(f) for f in Wd.SALT_FAMILIES]
@@ -634,7 +634,7 @@ def _layout(descriptor: Any) -> tuple[dict | None, Any]:
     return CR.layout_of(bytes(descriptor))
 
 
-def drawn_of(record: Mapping[str, Any], window: Mapping[str, Any], k: Any, descriptor: bytes
+def drawn_of(record: Mapping[str, Any], window: Mapping[str, Any], k: Any, descriptor: bytes | None
              ) -> tuple[list[int] | None, Any]:
     """The proof blocks core samples from the window `record` (`pouw_h1.CALLS_FILE`) at K = `k`, and None; or None and core's
     refusal: `credit.drawn` of its sampling coin over the layout of `descriptor` (`credit.layout_of`, the bytes of the
@@ -645,8 +645,8 @@ def drawn_of(record: Mapping[str, Any], window: Mapping[str, Any], k: Any, descr
     if why is not None:
         return None, why
     try:
-        c = _commitment(record)
-        draw = c.get("draw") if isinstance(c.get("draw"), Mapping) else {}
+        given = _commitment(record).get("draw")
+        draw: Mapping[str, Any] = given if isinstance(given, Mapping) else {}
         coin = LiveOpening.from_json(draw.get("coin")).coin.hex()
     except (CoinError, ValueError) as e:
         return None, ("draw", f"the window's draw coin is malformed ({e})")
@@ -715,8 +715,8 @@ def credit_reason(record: Mapping[str, Any], directory: str | Path, heads: Seque
         out["window"] = why
     ok = out["manifest"] is None and out["window"] is None
     if ok:
-        e = CR.established(_layout(descriptor)[0], out["calls"], [row[CR.SERVED_ROWS] for row in ev["calls"]], out["k"])
-        out["eps"] = None if e is None else str(e)
+        eps = CR.established(_layout(descriptor)[0], out["calls"], [row[CR.SERVED_ROWS] for row in ev["calls"]], out["k"])
+        out["eps"] = None if eps is None else str(eps)
     out["credit"] = out["calls"] if ok else None
     return out
 

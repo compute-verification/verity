@@ -287,7 +287,7 @@ def tables_reason(salt: bytes, log: Sequence[Mapping[str, Any]], rows: Sequence[
         if bare is not None:
             return (f"call {bare.get('index')} of step {r} has no A table root, so round {r}'s slot table names A-table "
                     "leaves that no round root commits")
-        if step_digest(salt, r, got).hex() != x.get("calls"):
+        if not isinstance(r, int) or step_digest(salt, r, got).hex() != x.get("calls"):
             return f"step {r}'s calls in the record (their tables' roots among them) are not the ones under round {r}'s root"
     return None
 
@@ -345,23 +345,23 @@ class RoundOpening:
 
 
 def _round(log: Sequence[Mapping[str, Any]], commitment: LiveCommitment, salt: bytes, r: int
-           ) -> tuple[Mapping[str, Any] | None, str | None]:
+           ) -> Mapping[str, Any] | str:
     """Round r's row of the log, once its root is over its parts and its coin is the challenger's round coin r, opened
-    after that root (`live_reason`); else why not."""
+    after that root (`live_reason`); else why not, a string."""
     row = next((x for x in log if x.get("round") == r), None)
     if row is None:
-        return None, f"the round log has no round {r}"
+        return f"the round log has no round {r}"
     why = round_reason(salt, row)
     if why is not None:
-        return None, why
+        return why
     root = bytes.fromhex(row["root"])
     if row.get("coin") is None:
-        return None, f"round {r} has no live coin, so nothing shows its root committed before one"
+        return f"round {r} has no live coin, so nothing shows its root committed before one"
     try:
         why = live_reason(commitment, LiveOpening.from_json(row["coin"]), Wd.ROUND, r, root)
     except CoinError as e:
         why = str(e)
-    return (row, None) if why is None else (None, f"round {r}'s coin: {why}")
+    return row if why is None else f"round {r}'s coin: {why}"
 
 
 def _leaf(binding: bytes, r: int, root_hex: str, rows: int, opening: RoundOpening) -> bool:
@@ -398,9 +398,9 @@ def request_reason(log: Sequence[Mapping[str, Any]], commitment: LiveCommitment,
         return f"request {i} was {late_admission(r)}"
     if opening.value[:-HM96_SALT] != entry.row():
         return f"request {i}: the leaf opened under round {r} is not its entry"
-    row, why = _round(log, commitment, salt, r)
-    if why is not None:
-        return f"request {i}: {why}"
+    row = _round(log, commitment, salt, r)
+    if isinstance(row, str):
+        return f"request {i}: {row}"
     # round 0's request root folds its input-ids table's root into the table's (credit.requests_root, held by credit._arow)
     table = row.get("request_table", row["requests"]) if r == 0 else row["requests"]
     if not _leaf(requests_binding(salt, r), r, table, rows, opening):
@@ -426,9 +426,9 @@ def slot_reason(log: Sequence[Mapping[str, Any]], commitment: LiveCommitment, sa
     `first` as `request_reason` takes them under `admission`) is under the slot's round or an earlier one, and a slot past
     the served rows names none; None when it is."""
     s, p = slot.round, slot.position
-    row, why = _round(log, commitment, salt, s)
-    if why is not None:
-        return why
+    row = _round(log, commitment, salt, s)
+    if isinstance(row, str):
+        return row
     if step_digest(salt, s, calls) != bytes.fromhex(row["calls"]):
         return f"step {s}'s calls are not the ones under round {s}'s root"
     owner, why = _slot(row, salt, rows, slot)

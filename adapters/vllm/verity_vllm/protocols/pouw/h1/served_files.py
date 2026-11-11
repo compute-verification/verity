@@ -25,7 +25,7 @@ def file_name(call: int) -> str:
 
 def _served(run: Any) -> Any:
     served = getattr(run, "served", None)
-    if getattr(served, "registered", None) is None:
+    if served is None or getattr(served, "registered", None) is None:
         raise ValueError(f"{run.entry}: the window's rows aren't registered values (the run has no `Served`)")
     if not run.closed:
         raise ValueError(f"{run.entry}: the window isn't closed, so its tables aren't all committed")

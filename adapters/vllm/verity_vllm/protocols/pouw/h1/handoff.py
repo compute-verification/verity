@@ -202,7 +202,9 @@ class Holder:
     (`take`), this process's to pass on and close."""
 
     def __init__(self, path: str | Path) -> None:
-        self.path, self.fd, self.error = Path(path), None, None
+        self.path = Path(path)
+        self.fd: int | None = None
+        self.error: str | None = None
         self._sock = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
         self._sock.bind(str(self.path))
         self._sock.listen(1)

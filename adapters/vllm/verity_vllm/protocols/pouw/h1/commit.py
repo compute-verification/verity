@@ -208,8 +208,8 @@ class CommitTap:
         self._at.setdefault(value, {})[call.index] = (call.index, j, s, len(codes))
         if len(rows) < len(cs):
             return
-        rows, got = self._rows.pop(value), self._at.pop(value)
-        mine, at = np.concatenate([rows[c] for c in cs]), [got[c] for c in cs]
+        rows, places = self._rows.pop(value), self._at.pop(value)
+        mine, at = np.concatenate([rows[c] for c in cs]), [places[c] for c in cs]
         same = words is not None and np.array_equal(mine, words) and value in served.registered
         reg = served.registered[value] if same else served.a_tree(run, call, mine)
         self._put(CR.commit_rows(call.step, call.k), reg, same,
@@ -331,8 +331,8 @@ def reused(run: Any, window: Any, record: Any) -> str | None:
         return (f"the named record's previous is not the window registration's digest {previous[:16]}…: it is chained "
                 "right after the registration whose tables it reuses")
     theirs: dict[Any, list[Mapping[str, Any]]] = {}
-    for e in got[1]:
-        theirs.setdefault(e.get("value"), []).append(e)
+    for entry in got[1]:
+        theirs.setdefault(entry.get("value"), []).append(entry)
     for s, mine, name, calls in _tables(run):
         table = f"A table {served.a_table(calls[0])}" if calls is not None else "input-ids table"
         if mine is None:
