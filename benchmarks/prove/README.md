@@ -12,6 +12,7 @@ verity bench prove --system spot --workload glm53 [--sampling ART]  Flock at the
     [--rows N]                                                      the N costliest block types, the rest in one row
     [--json]                                                        the table as JSON, every row whole
     [--local-only]                                                  this machine's catalog alone, not the store's remote
+verity bench prove lean-verify --lean flock-verify --proof TREE     the Lean verifier timed on one kept proof (below)
 ```
 
 ## What it prints
@@ -31,9 +32,15 @@ verity bench prove --system spot --workload glm53 [--sampling ART]  Flock at the
   steady-state types' median seconds a witness bit. A total is called measured only when every block type is measured
   at steady state. When a block type has no figure the totals leave its proving out and are called partial, naming each
   such type with its share of the blocks, and of the MACs where the census holds them (a type with no time has no
-  share of the proving time). Otherwise a total is modeled. The verifier's seconds and the proof's bytes are given
-  where a record holds them, and "not measured" where none does. The served MACs the census holds in no proof block
+  share of the proving time). Otherwise a total is modeled. The proof server's verifier's seconds are given where a
+  steady-state row holds them, and "not measured" where none does. The served MACs the census holds in no proof block
   are in no figure, and the totals give their share.
+- **The Lean verifier's seconds and the proof's bytes per served token, modeled.** Both are "not measured" until a
+  Lean verifier run of record exists (below). With one, the block type it ran on takes its figures, and every other
+  block type is scaled from it; each line says `modeled, not measured`, then what was measured (the block type and its
+  share of the proving time, its statement, the verifier's seconds on it with each run's, or its proof files' bytes,
+  the run and its host) and what was scaled (how many block types, their share of the figure, and the basis). A total
+  is called measured only when every block type has a run of its own.
 - **Under a sampling plan that states its own prices, both totals.** A plan's sample is sized by its planner at the
   planner's price of each block, which the plan's record may state (`prove_s` a cell: its seconds for the blocks the
   cell takes). The table prices the same blocks from its own sources, so the two totals differ wherever those prices
@@ -65,6 +72,7 @@ Every input is a record of the store, named there by a label and never in code: 
 | `flock-steady` | each run of `benchmarks/one_stage/server_rate.py`, an art naming them in its `runs`, or an art holding one run's rows as its `rate.json` |
 | `flock-single` | the `proof_overhead` card |
 | `spot-sampling` | the sampling plan's art, for `--system spot` |
+| `lean-verify` | each run of `verity bench prove lean-verify` (optional: without one the two figures are "not measured") |
 
 ```text
 research data label TARGET run_of_record prove-glm53-census --by LANE     name TARGET the glm53 census of record
@@ -111,3 +119,51 @@ accepted and its cache was flat. A run that holds `rate.json` is read from it al
 
 The serving rate is not a record. It is a stated, modeled input: the census's MACs a served token at the fleet's assumed
 serving MFU (`verity/protocols/inference_only/rho/data/reference.toml`) of the card's data-sheet peak (`benchmarks/census/hardware.json`).
+
+
+## The Lean verifier's seconds and the proof's bytes
+
+`verity bench prove lean-verify` runs Flock's Lean verifier on one kept proof and writes the record the table reads:
+
+```text
+verity bench prove lean-verify --lean flock-verify --proof TREE [--repeat 3] [--out DIR]
+    [--word TYPE] [--definition ID] [--k-log K] [--blocks N] [--full N]   the block type, where TREE's stage.json doesn't say
+    [--session DIR] [--circuit F] [--public F] [--program F] [--partition F] [--registered F] [--tables DIR]
+```
+
+TREE holds one session directory (`session.json` and its proof files, `<table>.rep0.bin` and `<table>.rep1.bin`) and
+the statement it was proved on (`circuit.txt`, the public file, and `program.json`, `partition.json` and
+`registered.json` where the statement has them), each found by its name. A run is one `flock-verify verify` process on
+the session, as `benchmarks/one_stage/a0.py` runs the verifier, so its seconds hold the verifier reading the
+statement, setting it up and verifying the session. The command runs it `--repeat` times and records each run's
+seconds, the proof files' bytes, the block type and the host (node, cores, CPU model). A run the verifier refuses ends
+the command: the record says refused, with the verifier's reason, and nothing is run again.
+
+As a research run, from a clone on a CPU node (`lean_verify.sh` builds the verifier and fetches the proof's art):
+
+```text
+research run --project verity --on NODE --mem-gb GB --timeout SECONDS --source . --cwd clone -- \
+    bash benchmarks/prove/lean_verify.sh ART [--repeat N] [--word TYPE] [--k-log K] [--blocks N]
+research data label RUN run_of_record prove-glm53-lean-verify --by LANE --ref RUN
+```
+
+The table reads `out/lean-verify.json` from each labelled run. A block type's record is its newest run's. A run whose
+record the verifier refused, that wrote no record, or whose block type the census doesn't hold under its cut measures
+nothing and is listed under "Refused".
+
+**What is scaled, and on what basis.** A block type with a run of its own takes the statement's seconds (the median
+of its runs) and its proof files' bytes, each over the statement's blocks. Every other block type takes the measured
+statement's seconds, and bytes, a witness bit times its own 2^k_log bits, so a full statement of any type is priced
+as the measured one:
+
+- **Bytes:** a proof file's length is fixed by its statement's shape (its size m, the block's k_log and the opening's
+  claims: `Flock.Proof.decodeRead`, `Flock.Zk.reader`) and by nothing else of the block type. Every full statement has
+  m = 35, so its proof is the measured one's but for the lincheck's rounds, two field elements a unit of k_log, and a
+  ring switch for each opening claim past the first two.
+- **Seconds:** the rounds and Ligerito queries of a session are fixed by m too, but the verifier also reads and sets up
+  the statement from its circuit file and folds the lincheck over the circuit's matrix entries, work that grows with a
+  block's description. Scaling prices every type's description at the measured type's, and no measurement of a second
+  type backs that.
+
+Both figures assume full statements, as the proving time's steady-state rows do. They are a model from one block type
+until more types have runs of their own.
