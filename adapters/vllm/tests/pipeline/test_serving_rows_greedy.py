@@ -128,8 +128,10 @@ def test_every_served_unit_s_proof_block_composes():
     assert got == {**{f"GreedyChunk_v2{{N=7744,OFF={c * 7744}}}": 24 for c in range(19)}, "GreedyCombine_v2{V=154880,N=7744}": 25}
 
 
+@pytest.mark.slow
 def test_verify_zk_takes_every_served_unit():
-    """Each served unit reads in slots but no table a slot holds, so `verify --zk` takes it (`chunk_rows.zk_refusal`)."""
+    """Each served unit reads in slots but no table a slot holds, so `verify --zk` takes it (`chunk_rows.zk_refusal`); its
+    seconds are the twenty units' 7,744 lanes each."""
     for d, _n in G.cut(bind(b1.TokenSelect, V=SERVED_V)):
         tp = SRW.template(descriptor_id(d))
         assert (CR.zk_refusal(tp), CR.slot_tables(tp.fn)) == (None, ()), tp.id
