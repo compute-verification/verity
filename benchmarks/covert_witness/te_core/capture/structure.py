@@ -22,7 +22,9 @@ depend on the run's own persistent values, however the circuit is written.
   slot an earlier step wrote that this one doesn't, and every slot the step writes from a dependent slot (its own old
   value included: W ← W − u). Of the slots the step writes, the largest set closed under that rule is dependent, so a
   cache the step rewrites from θ, constants and token data alone (``copy_``, ``fill_`` and in-place samplers write a
-  whole storage without reading it) is not, and a parameter the step updates in place is.
+  whole storage without reading it) is not, and a parameter the step updates in place is. A storage copied onto itself
+  is read: the copy's source is the storage's own value (``b.copy_(b.float().mul_(μ).add_(g))`` on an fp32 buffer,
+  whose ``float()`` is the buffer), so a momentum buffer written that way keeps what it held.
 - A value is **update-dependent** when it is computed, through any path, from a dependent slot's value at the step's
   start. A gather of a dependent table is (its rows are), with no MAC; a value computed only from θ, constants and token
   data is not.
@@ -93,7 +95,8 @@ _SCALE = {"mul", "div", "neg", "add", "sub"}
 #: ops that read only their argument's shape
 _SHAPE_ONLY = {"ones_like", "zeros_like", "empty_like", "full_like", "new_zeros", "new_ones", "new_empty", "new_full",
                "sym_size", "sym_numel", "sym_stride", "empty_strided", "randn_like", "rand_like", "randint_like"}
-#: in-place ops that write every element of what they write without reading it
+#: in-place ops that write every element of what they write without reading it. `_Flow` skips the written argument by
+#: its position, so a source that is the storage written (``b.copy_(b)``) is still read
 _OVERWRITE = {"copy_", "fill_", "zero_", "set_", "normal_", "uniform_", "bernoulli_", "random_", "exponential_",
               "geometric_", "log_normal_", "cauchy_", "_foreach_copy_", "_foreach_zero_"}
 #: matmul-like names that `_gemms` must account for (te_core.flops's); any other op with one of these in its name is refused
@@ -505,8 +508,8 @@ class _Flow:
         mutated = [a for p, a in singles if p in written_pos]
         reads = set(scalars)
         if not shape_only:
-            for _, a in singles:
-                if not (overwrite and a in mutated and self._whole(a)):
+            for p, a in singles:
+                if not (overwrite and p in written_pos and self._whole(a)):
                     reads |= self._rd(a)
             for _, a in lists:
                 for x in a:
