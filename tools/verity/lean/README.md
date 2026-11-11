@@ -223,6 +223,10 @@ One line per mechanism; a new one gets its line here and its detail in the docst
   the lock `--update` would among its reports (`regenerated`, `changes`). A candidate's records run runs with
   `--regenerate`, and the verified queue commits those records on top of the candidate, whose check passes
   `--no-regenerate`, so a record difference that reaches it fails there (`research.vqueue_records`).
+- **An allowance is no pass.** A lane's fast path takes a finding ruled open as known, by its code and entry
+  (`lean_changed.py --records --allow CODE:ENTRY`; `failure_codes` and `failure_entries` in `report.json`): the run
+  exits 3 and keeps no pass, and the record it regenerates stays outside `record/` (`lean_changed.py`'s `ALLOWABLE`,
+  `conclude` and `withheld`). `check.py` takes none.
 - **Bookkeeping warns in a records run.** A candidate's records run (`--bookkeeping warn`) repairs a lock that fails
   only on bookkeeping, and the caps beside it, and warns each owner (`BOOKKEEPING`, `repaired`, `bookkeeping_repairs`;
   `lean_audit.py`'s `held_caps` and `raised_unread`; `research.merge.REPAIRED`).
