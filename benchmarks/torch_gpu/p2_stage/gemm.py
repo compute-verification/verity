@@ -11,7 +11,7 @@
 - `cvt.rn.bf16.f32` as integer round-to-nearest-even on the f32 bits, `(u + 0x7FFF + ((u >> 16) & 1)) >> 16`.
 
 `samples` picks coordinates and their inputs, which `check.py` hands to the Definition's own evaluator
-(`verity.ml.circuits.evaluation.evaluate_batch`, the plain-integer reference) on the CPU: that ties the twin's formula, and
+(`verity.circuits.evaluation.evaluate_batch`, the plain-integer reference) on the CPU: that ties the twin's formula, and
 the GPU's words, to the registered Definition.
 """
 from __future__ import annotations
@@ -78,9 +78,9 @@ def samples(x: Any, sx: Any, w: Any, sw: Any, y: Any, count: int, gen: torch.Gen
 
 def definition_words(K: int, x: np.ndarray, sx: np.ndarray, w: np.ndarray, sw: np.ndarray) -> np.ndarray:
     """`ScaledMmS8Coordinate_v1{K, GEMM_SM90_S8}` on each sample by the Definition's plain-integer reference (CPU)."""
-    from verity.ml.circuits.defs import bind
-    from verity.ml.circuits.evaluation import batch as E
-    from verity.ml.circuits.ops import gemm as G
+    from verity.circuits.defs import bind
+    from verity.circuits.evaluation import batch as E
+    from verity.definitions.ops import gemm as G
 
     target = bind(G.ScaledMmS8Coordinate, K=K, **G.GEMM_SM90_S8)
     out = E.evaluate_batch(target, np.ascontiguousarray(x).view(np.uint8), np.ascontiguousarray(sx).view(np.uint32),
