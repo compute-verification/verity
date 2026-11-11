@@ -325,7 +325,8 @@ def leavesOf (P : Prog) (passed : Array (List Nat)) (t : Tmpl) : Leaves :=
 /-- **Every unit's rows are its own input gates** (the module docstring's "Rows of its own"), read from the root's
 body: every argument of a root node that is no input node is runs of leaves of the root's input nodes (affine parts
 and no other; an input node a primitive or a batch of one, a leaf a gate), a batch maps every argument over its
-members, and no two runs, of one argument or of two, share a leaf. It costs the root's argument parts, sorted. -/
+members (each has the `dims` resolution reads a member's leaves by), and no two runs, of one argument or of two,
+share a leaf. It costs the root's argument parts, sorted. -/
 def ownRows (P : Prog) : Bool :=
   let nodes := (P.defs[P.root]!).body.nodes
   let units := nodes.toList.filter fun n => !Desc.isInputNode P n
@@ -337,7 +338,7 @@ def ownRows (P : Prog) : Bool :=
       else none
     | _ => none
   let sorted := (runs.filter fun r => r.2.2 > 0).mergeSort fun a b => a.1 < b.1 || (a.1 == b.1 && a.2.1 ≤ b.2.1)
-  units.all (fun n => n.form != .batch || (n.axes.size == n.args.size && n.axes.all (·.isSome))) &&
+  units.all (fun n => n.form != .batch || n.args.all (·.dims.isSome)) &&
     runs.length == parts.length &&
     (sorted.zip sorted.tail).all fun (a, b) => a.1 != b.1 || a.2.1 + a.2.2 ≤ b.2.1
 
