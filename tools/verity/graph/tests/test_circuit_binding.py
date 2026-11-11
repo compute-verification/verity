@@ -53,10 +53,10 @@ TOY = {f"{F.CHECKER}/pyproject.toml": '[tool.verity.tests]\ninputs = ["verity", 
        "stacks/s/pk/__init__.py": "", "stacks/s/pk/__init__.circuit-check.py": NEVER_RUN + "def _q_roots(): ...\n",
        "stacks/s/pk/in/__init__.py": "", "stacks/s/pk/in/w.circuit-check.py": NEVER_RUN + "def _w_roots(): ...\n",
        "stacks/s/un/__init__.py": "", "stacks/s/un/v.circuit-check.py": NEVER_RUN + "def _v_roots(): ...\n",
-       "verity/configuration/config/pyproject.toml": "[project]\n", "adapters/vllm/pyproject.toml": "[project]\n",
+       "tools/config/pyproject.toml": "[project]\n", "adapters/vllm/pyproject.toml": "[project]\n",
        **{f"{F.READS}/{part}": json.dumps({"schema": F.READS_SCHEMA, **doc}) for part, doc in (
            ("registries.json", {"registries": {"files": ["verity/ml/x.py"], "listed": ["other"], "probes": [
-               "verity/configuration/config/verity_vllm", "verity/configuration/config/verity_vllm.py", "verity/configuration/config/verity_vllm/__init__.py"]}}),
+               "tools/config/verity_vllm", "tools/config/verity_vllm.py", "tools/config/verity_vllm/__init__.py"]}}),
            ("loaded.json", {"loaded": ["adapters/vllm/numpy.py"]}),
            ("bindings.json", {"bindings": {}, "groups": [{"probes": ["verity/ml/y.py"]}]}))},
        **{f"{graph.RUNNERS}/{m}.py": "" for m in ("circuit_binding", "circuit_catalog", "circuit_coverage")}}
@@ -127,16 +127,16 @@ def _keys(root: Path) -> dict[str, str]:
 
 
 @pytest.mark.parametrize(("change", "moves"), [
-    ({"verity/configuration/config/verity_vllm.py": ""}, True),
-    ({"verity/configuration/config/verity_vllm/__init__.py": ""}, True),
+    ({"tools/config/verity_vllm.py": ""}, True),
+    ({"tools/config/verity_vllm/__init__.py": ""}, True),
     ({"adapters/vllm/numpy.py": ""}, True),
     ({"queue.py": ""}, True),
     ({"pynvml/__init__.py": ""}, True),
     ({"pynvml/README.txt": ""}, True),
     ({"other/notes.txt": ""}, True),
-    ({"verity/configuration/config/pyproject.toml": "[project]\nname = 'x'\n"}, False),
+    ({"tools/config/pyproject.toml": "[project]\nname = 'x'\n"}, False),
     ({"other/__init__.py": "x = 1\n"}, False),
-    ({"verity/configuration/config/helper.py": ""}, False),
+    ({"tools/config/helper.py": ""}, False),
     ({"NOTES.md": "", "setup.cfg": "", ".hidden/m.py": ""}, False)])
 def test_a_module_file_added_where_a_run_looks_moves_every_task_s_key_and_an_edit_moves_none(tmp_path, change, moves):
     """A run looks for modules outside the files that key it: where circuit-check's read sets say its runs probed or listed,
@@ -407,14 +407,14 @@ def test_a_binding_s_output_is_each_failure_of_its_definition_targets_by_check_c
 
 
 #: what ``reads/`` declares of ``B_ROOTS`` in the cases below
-DECLARED = {"files": ["verity/ml/x.py"], "listed": ["other"], "probes": ["verity/configuration/config/verity_vllm", "verity/ml/y.py"],
+DECLARED = {"files": ["verity/ml/x.py"], "listed": ["other"], "probes": ["tools/config/verity_vllm", "verity/ml/y.py"],
             "registry": False}
 
 
 @pytest.mark.parametrize(("read", "beyond"), [
-    ({"files": ["verity/ml/x.py"], "probes": ["verity/ml/y.py", "verity/configuration/config/verity_vllm"]}, []),
+    ({"files": ["verity/ml/x.py"], "probes": ["verity/ml/y.py", "tools/config/verity_vllm"]}, []),
     ({"files": ["verity/ml/x.py"], "listed": ["other"], "probes": ["verity/ml/x.py"]}, []),
-    ({"files": ["verity/ml/x.py"], "probes": ["verity/configuration/config/numpy"]}, ["verity/configuration/config/numpy"]),
+    ({"files": ["verity/ml/x.py"], "probes": ["tools/config/numpy"]}, ["tools/config/numpy"]),
     ({"probes": ["queue.py", "verity/ml/y.py"]}, ["queue.py"]),
     ({"files": ["verity/ml/x.py"], "listed": ["other", "verity/ml"]}, ["verity/ml"]),
     ({"files": ["verity/ml/x.py", "verity/ml/z.py"]}, ["verity/ml/z.py"]),
