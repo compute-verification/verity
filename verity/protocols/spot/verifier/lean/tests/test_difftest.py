@@ -4527,19 +4527,21 @@ def _read_interior(c: dict, x: int) -> dict:
 LINKED_VALUE = {"root": "7f" * 64, "domain": "80" * 64}
 
 
-def _read_linked(c: dict, x: int) -> dict:
+def _read_linked(c: dict, x: int, kept: bool = False) -> dict:
     """`c` with its interior registering a value of its first link's name (`LINKED_VALUE`, the link's rows a block for
-    each sampled block), and each statement of the linked template reading it at the linked port as round 2 places it,
-    each slot its unit's row of its cell's sampled block, as the verifier of record reports it. By `x`, that read is as
-    placed, at the boundary port, at another root, domain or leaf count, or at the boundary port's rows."""
-    links, rows, sample, ss = c.get("links"), c.get("rows"), c.get("sample"), c.get("statements")
+    each sampled block), the boundary record then holding no port of that name unless `kept`, and each statement of the
+    linked template reading it at the linked port as round 2 places it, each slot its unit's row of its cell's sampled
+    block, as the verifier of record reports it. By `x`, that read is as placed, at the boundary port, at another root,
+    domain or leaf count, or at the boundary port's rows."""
+    links, rows, sample, ss, b = c.get("links"), c.get("rows"), c.get("sample"), c.get("statements"), c.get("boundary")
     if not (isinstance(links, list) and links and isinstance(rows, list) and isinstance(sample, list)
-            and isinstance(ss, list)):
+            and isinstance(ss, list) and isinstance(b, dict)):
         return c
     link = links[0]
     per = next(r["per"] for r in rows if r["template"] == link["template"] and r["port"] == link["port"])
     entry = {"value": link["value"], **LINKED_VALUE, "leaves": len(sample) * per}
-    out, reported = c, dict(c["verdicts"]["lean"].get("registered") or {})
+    out = c if kept else {**c, "boundary": {**b, "roots": [r for r in b["roots"] if r["port"] != link["value"]]}}
+    reported = dict(c["verdicts"]["lean"].get("registered") or {})
     for k, s in enumerate(ss):
         if s.get("template") != link["template"]:
             continue
@@ -4554,13 +4556,28 @@ def _read_linked(c: dict, x: int) -> dict:
     return {**out, "interior": {**out["interior"], "registered": [*(out["interior"].get("registered") or []), entry]},
             "verdicts": {**out["verdicts"], "lean": {**out["verdicts"]["lean"], "registered": reported}}}
 
+
+def _shadowing(c: dict, x: int) -> dict:
+    """`c` with its interior registering a value (`INTERIOR_VALUES`' first's root, domain and leaves) of a name the
+    boundary record has, by `x` one of its ports' or of the values it registers."""
+    rec, b = c.get("interior"), c.get("boundary")
+    if not (isinstance(rec, dict) and isinstance(b, dict)):
+        return c
+    names = [e[k] for f, k in (("roots", "port"), ("registered", "value")) if isinstance(b.get(f), list)
+             for e in b[f] if isinstance(e, dict) and isinstance(e.get(k), str)]
+    if not names:
+        return c
+    held = rec.get("registered") if isinstance(rec.get("registered"), list) else []
+    return {**c, "interior": {**rec, "registered": [*held, {**INTERIOR_VALUES[0], "value": names[x % len(names)]}]}}
+
 #: A change to a second_statements input, its `x` drawn: a statement changed (`_restated`), reversed, one dropped, none,
 #: a slot drawn more, the sample reversed, one replay block more or one fewer, a registered value's read by a port of
 #: no interior root, every read moved on (checked as moved, or not), the design's links, wires or rows, the reads the
 #: verifier reports, what a verdict of record names of a session it checked (`_unverified`), the reference
 #: headers (`_referenced`), the reference statements' registered reads (`_valued`), a registered value read where the
 #: reference reads it or another (`_read_registered`), a value only the interior registers read (`_read_interior`),
-#: the interior record's replay sample or run (`_reordered`), or the rows a header shares (`_shared_rows`).
+#: the interior registering a value of a name the boundary record has (`_shadowing`), the interior record's replay
+#: sample or run (`_reordered`), or the rows a header shares (`_shared_rows`).
 SECOND_CHANGES = [
     lambda c, x: {**c, "statements": _shifted(c["statements"], 1 + x % 3)},
     lambda c, x: _as_stated({**c, "statements": _shifted(c["statements"], 1 + x % 3)}),
@@ -4573,6 +4590,7 @@ SECOND_CHANGES = [
     _valued,
     _read_registered,
     _read_interior,
+    _shadowing,
     _reordered,
     _shared_rows,
     lambda c, x: {**c, "statements": _restated(c["statements"], x)},
@@ -4682,7 +4700,8 @@ SWAP = bind(CompositeDefinition("CoreSpotSwap", 0, (), lambda S: ((("x", Array(2
 #: second's output, returned beside them; ID8 over the second output of DUO, a template of two; and, deriving none, PAIR
 #: over two parameters, PAIR over a slice not one of its rows, an ID8 batch mapped over a PAIR batch's outputs, PAIR
 #: over the parameter and over SWAP's output (a port one caller links and another wires), and PAIR over two ID8 outputs
-#: (a port gathered from two writers).
+#: (a port gathered from two writers); then DUO over each of two rows, its first outputs returned, its second, both as
+#: two fields, and, deriving none, the first's first beside the second's second.
 MULTI_REPLAYS = [bind(CompositeDefinition(f"CoreSpotReplay{name}", 0, (), sig, body, register=False))
                  for name, sig, body in (
     ("Pairs", lambda S: ((("x", Array(2, Array(2, Value(8)))),), Array(2, Value(8))),
@@ -4700,7 +4719,16 @@ MULTI_REPLAYS = [bind(CompositeDefinition(f"CoreSpotReplay{name}", 0, (), sig, b
     ("Kinds", lambda S: ((("x", Array(2, Value(8))),), Array(2, Value(8))),
      lambda B, S, x: array_of([B.call(PAIR, x), B.call(PAIR, B.call(SWAP, x))])),
     ("Gathered", lambda S: ((("x", Array(2, Value(8))),), Value(8)),
-     lambda B, S, x: B.call(PAIR, array_of([B.call(ID8, x[0]), B.call(ID8, x[1])]))))]
+     lambda B, S, x: B.call(PAIR, array_of([B.call(ID8, x[0]), B.call(ID8, x[1])]))),
+    ("Heads", lambda S: ((("x", Array(2, Array(2, Value(8)))),), Array(2, Value(8))),
+     lambda B, S, x: array_of([B.call(DUO, x[0])[0], B.call(DUO, x[1])[0]])),
+    ("Tails", lambda S: ((("x", Array(2, Array(2, Value(8)))),), Array(2, Value(8))),
+     lambda B, S, x: array_of([B.call(DUO, x[0])[1], B.call(DUO, x[1])[1]])),
+    ("Halves", lambda S: ((("x", Array(2, Array(2, Value(8)))),), Tuple(Array(2, Value(8)), Array(2, Value(8)))),
+     lambda B, S, x: (lambda a, b: tuple_of(array_of([a[0], b[0]]), array_of([a[1], b[1]])))(
+         B.call(DUO, x[0]), B.call(DUO, x[1]))),
+    ("Uneven", lambda S: ((("x", Array(2, Array(2, Value(8)))),), Array(2, Value(8))),
+     lambda B, S, x: array_of([B.call(DUO, x[0])[0], B.call(DUO, x[1])[1]])))]
 REPLAY_PROGRAMS = [(P.population_program(r, 2), codec.descriptor_id(r)) for r in REPLAYS] + [
     (P.mixed_population_program([(BLOCK, 2), (PAIR, 3)]), codec.descriptor_id(BLOCK))] + [
     (P.population_program(r, 2), codec.descriptor_id(r)) for r in WIRE_REPLAYS + MULTI_REPLAYS]
@@ -6550,13 +6578,14 @@ def test_round_two_reads_values_only_the_interior_registers_and_names_each(piece
     assert "interior_reads" not in SS.attach({"checks": {}}, v)
 
 def test_round_two_reads_a_linked_port_at_the_value_the_interior_registers_for_it(pieces):
-    """A port a link names reads the value the interior registers under the link's name, where it registers one, and
-    never the boundary port then, each slot at its unit's row of its cell's sampled block (`readOk`, `wiredRow`):
-    Lean's the Python's whole (`second-read`, `second_interior_reads`), over the two-template interior after a replay
-    sample of two with TRIPLE's `x` linked (`_read_linked`). The read as placed passes; at the boundary port, at another
-    root, domain or leaf count, or at the boundary port's rows it is refused (`second-read`). Each such read is named
-    (`second_interior_reads`, at another root too), and with no such value the boundary port is read as before. A
-    value the verifier supplies (a table's root, an index) reaches a template's parameter this way."""
+    """A port a link names reads the value the interior registers under the link's name, where it registers one (one
+    the boundary record has no port of: `second-interior-names`), and never the boundary port then, each slot at its
+    unit's row of its cell's sampled block (`readOk`, `wiredRow`): Lean's the Python's whole (`second-read`,
+    `second_interior_reads`), over the two-template interior after a replay sample of two with TRIPLE's `x` linked
+    (`_read_linked`). The read as placed passes; at the boundary port, at another root, domain or leaf count, or at the
+    boundary port's rows it is refused (`second-read`). Each such read is named (`second_interior_reads`, at another
+    root too), and with no such value the boundary port is read as before. A value the verifier supplies (a table's
+    root, an index) reaches a template's parameter this way."""
     _, triple = SECOND_MIXED.templates
     linked = _second_case(SECOND_MIXED, True, [0, 2], [1, 4, 6, 9], links={triple}, allow=True)
     for x in range(6):
@@ -6569,6 +6598,27 @@ def test_round_two_reads_a_linked_port_at_the_value_the_interior_registers_for_i
         got = second_interior_reads(copy.deepcopy(case))
         assert D.replay(SECOND_INTERIOR_READS, case, pieces) == ("output", D.canonical(got)), (want, got)
         assert got == want, (want, got)
+
+
+def test_round_two_refuses_an_interior_that_registers_a_name_round_one_has(pieces):
+    """Each name a session reads is one registration's (`namesOk`): round 2 refuses an interior record registering a
+    value of a name the boundary record has, a port or a registered value (`second-interior-names`), Lean's the
+    Python's whole, so the interior's value of a name, registered after the first stage's coins, never stands in for
+    one round 1 committed. Over the two-template interior after a replay sample of two: a value of each of the
+    boundary's ports' names and of each value it registers (`_shadowing`), with no port linked; and with TRIPLE's `x`
+    linked, the interior's value of the link's name beside the boundary's port of it (`_read_linked`, `kept`), refused
+    though the read as placed passes `second-read`, and with it at the boundary port's root."""
+    _, triple = SECOND_MIXED.templates
+    honest = _second_case(SECOND_MIXED, True, [0, 2], [1, 4, 6, 9], allow=True)
+    linked = _second_case(SECOND_MIXED, True, [0, 2], [1, 4, 6, 9], links={triple}, allow=True)
+    names = len(SECOND_BOUNDARY["roots"]) + len(SECOND_BOUNDARY["registered"])
+    cases = [*((_shadowing(honest, x), ["second-interior-names"]) for x in range(names)),
+             (_read_linked(linked, 0, kept=True), ["second-interior-names"]),
+             (_read_linked(linked, 1, kept=True), ["second-interior-names", "second-read"])]
+    for case, codes in [(honest, []), (linked, []), *cases]:
+        got = second_statements(copy.deepcopy(case))
+        assert D.replay(SECOND_STATEMENTS, case, pieces) == ("output", D.canonical(got)), (codes, got)
+        assert got["codes"] == codes and got["ok"] == (codes == []), (codes, got)
 
 
 def test_round_two_holds_each_statement_to_the_verdict_that_checked_it(pieces):
@@ -6672,9 +6722,11 @@ def test_the_designs_rows_place_each_callers_units(pieces):
     its own output a field of one row; ID8 over DUO's second output reads it at DUO's `o1`. PAIR's callers reading two
     parameters, or a slice not one of its rows, or one the parameter and the other SWAP's output, make no links, and
     the last no wires either; an ID8 batch mapped over a PAIR batch's outputs, or PAIR over two ID8 outputs, makes no
-    wires; the rows are then only those of the others."""
+    wires; the rows are then only those of the others. DUO over each of two rows, returned one field of each, links
+    that field's port (`o<f>`), each field returned its own; its first output at one caller and its second at the other
+    links neither."""
     pair, id8, duo = (codec.descriptor_id(d) for d in (PAIR, ID8, DUO))
-    pairs, crossed, fan, field, apart, askew, members, kinds, gathered = MULTI_REPLAYS
+    pairs, crossed, fan, field, apart, askew, members, kinds, gathered, heads, tails, halves, uneven = MULTI_REPLAYS
 
     def link(t, port, value):
         return {"port": port, "template": t, "value": value}
@@ -6699,6 +6751,11 @@ def test_the_designs_rows_place_each_callers_units(pieces):
         (members, [link(pair, "x", "x"), link(id8, "o0", "o0")], None, rows((pair, "x", 2, two), (id8, "o0", 2, two))),
         (kinds, None, None, []),
         (gathered, [link(id8, "y", "x"), link(pair, "o0", "o0")], None, rows((id8, "y", 2, two), (pair, "o0", 1, one))),
+        (heads, [link(duo, "x", "x"), link(duo, "o0", "o0")], [], rows((duo, "x", 2, two), (duo, "o0", 2, two))),
+        (tails, [link(duo, "x", "x"), link(duo, "o1", "o0")], [], rows((duo, "x", 2, two), (duo, "o1", 2, two))),
+        (halves, [link(duo, "x", "x"), link(duo, "o0", "o0"), link(duo, "o1", "o1")], [],
+         rows((duo, "x", 2, two), (duo, "o0", 2, two), (duo, "o1", 2, two))),
+        (uneven, None, [], []),
     ]
     for r, links, wires, want in cases:
         c = {"program": _json(codec.encode_program(P.population_program(r, 2))), "replay": codec.descriptor_id(r),
