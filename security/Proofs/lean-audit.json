@@ -89,6 +89,8 @@
   "Proofs.Properties.Firewall",
   "Proofs.Properties.Core.Site",
   "Proofs.Properties.Nci.Protocol",
+  "Proofs.Properties.Nci.RecordRead",
+  "Proofs.Properties.Nci.DecodeKeys",
   "Proofs.Properties.Verity.Soundness",
   "Proofs.Properties.Verity.Sampled",
   "Proofs.Properties.Verity.Sampled.Unbound",
