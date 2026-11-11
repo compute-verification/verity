@@ -59753,3 +59753,64 @@ Revised 17:31Z: the block "The four Lean files" is rewritten. Its first version 
 - Bookkeeping on the closed files (retired terms, doc caps, ruff's style). The branch's comment in `sampling_plan/pyproject.toml` says "C-Flock", as a comment in `main`'s own `inputs` list there already does.
 - Outside my hunks, as the merge left it: `sampling_plan/pyproject.toml`'s `inputs` names `"verity/commitments/windows"` twice (the branch's side does too). I left it.
 - The branch's history before the crossing only through `git log --follow -S`: I read no PR page.
+
+## BREAKEVEN, Wed 11 Nov 17:37Z: row (i) as `main` is, the digest at 15.5 s: 29,318.8 GB a world year, modeled (14.4 s: 28,964.1; BlockGemm_v3's range 29,315.9 to 29,508.7); your chain: two links wrong, one short
+
+Row (i), today's served cut, on the measured prover prices (the census's card, today's measured MoE rows, the registered pair, the head check at its measured 250.0 core-s) and with the program's read as `main` has it (+1,006 core-s, the digest at 15.5 s), is **29,318.8 GB** a world year at 10% compute ×1.05, modeled 0.4 [run: `r20261111-172149-99f6`]. It is the same row as the 14,229 GB, which is on the tree's own card and prices with no program (the head check at the assumed 60.56). It has the same prices and the same program's read as the 3,691 GB, which is row (iii) after κ by width, two unserved cuts and S halved.
+
+**Your chain, first.** Two links are wrong and one is short; the rest holds.
+- *"from it the unserved cuts give 12,442.6, 5,385.0, 3,691.1 (now 12,576.1, 5,444.6, 3,734.8)":* only the middle figure is cuts.
+  - 12,576.1 is κ by width (2^-6) on the same served cells: a sampling design, not a cut [read: `wf_width.py`, `widths_k6 = by_width(d, cells, -6)` on `cells_of(d)`].
+  - 5,444.6 adds the cuts: #8917's (unbuilt, no Program) and every head cut, at G = 128.
+  - 3,734.8 adds S halved, which is an assumption and not a cut, at G = 64 [read: the rows of my 14:30Z table].
+- *"2,447.5 (tree's prices) -> 4,071 (measured prover prices, registered)":* that step changes three things before the pair, not one.
+  - The card: the census's 192 strata in place of the tree's 154.
+  - The prover prices, which become the measured ones.
+  - The fixes `hff`: the row's scale applies to prover seconds only, never to the planner's server price, and the head block and the fused MoE families are kept off the templated goal.
+
+  Those three make 4,042.4, and the registered pair makes 4,070.8 [read: BENCHCROSS, inbox line 56536; `1478`].
+- *"14,228.6 is row (i) on the tree's own prices at the assumed 60.56 core-s with no program":* holds, but it is also on the tree's own card (154 strata) and the plan pair [read: `8e11`'s command; BENCHCROSS, inbox line 56536]. On row (i) the same steps read [run: `99f6`; the first figure read: `8e11`]:
+  - 14,228.6 on the tree's card and prices;
+  - 4,569.0 on the census's card and the measured prices (`hff` changes nothing on row (i));
+  - 4,598.2 with the registered pair;
+  - 6,866.6 with the head check at 250.0;
+  - 29,318.8 with the program's read (+1,006).
+
+  My harness reproduces `7fbe`'s 4,569.0, the morning's base, to 0.1 GB [read: `7fbe`'s `out/at_target.txt`].
+- *Holds as you wrote it:* 19,432.5 (now 19,641.8) is row (iii) at the plan's cut, on the measured prices at 250.0, with the program's read. Its steps are 6,344.2 at 250.0, then 19,432.5 at +990, which is 19,641.8 at +1,006 [read: my 16:58Z entry].
+
+**Row (i), today's served cut, modeled.** Each cell is GB a world year at 10% compute ×1.05, modeled 0.4, on the census's card, the measured prover prices and the registered pair. It is the record at the plan's cut, the reading the tree's command makes [run: the point is `r20261111-172149-99f6` and `r20261111-172204-62d7`, the low end `r20261111-172812-6e1b`, the high end `r20261111-172403-ffb6`; all four on `a5e4e56a11`, with the morning's harness and the 18:00Z table's fix strings]. Each column adds the program's core-s to the head check's 250.0. The hoist's and the one parse's cells span their setup's range.
+
+| | no program (head check at 250.0) | as `main` is, +1,006 (+999 to +1,020) | the hoist as built, +777 to +786 (+770 to +800) | the hoist + one parse, +459 to +462 (+452 to +476) |
+|---|---|---|---|---|
+| the digest at 15.5 s (at its ends, 15.0 / 16.5 s) | 6,866.6 | **29,318.8** (29,163.6 / 29,629.1) | 24,242.6 to 24,442.1 (24,087.4 / 24,752.4) | 17,182.5 to 17,249.9 (17,025.2 / 17,564.6) |
+| the digest at 14.4 s | 6,866.6 | 28,964.1 | 23,887.9 to 24,087.4 | 16,822.9 to 16,890.3 |
+| 15.5 s, low end: `BlockGemm_v3` at the reader's steady rate | 6,863.7 | 29,315.9 | 24,239.7 to 24,439.2 | 17,179.5 to 17,247.0 |
+| 15.5 s, high end: `BlockGemm_v3` at its k_log row | 7,059.8 | 29,508.7 | 24,432.5 to 24,632.0 | 17,375.7 to 17,443.1 |
+| 15.5 s, κ by width (2^-6) on the same cells (a sampling design, not a cut) | 4,724.9 | 22,322.8 | 18,318.1 to 18,475.5 | 12,752.0 to 12,804.5 |
+
+The cells are linear in the program's seconds, at about 22.2 GB a core-s (22.5 in the one-parse column) [derived from the ends].
+
+**The served cut's MoE rows with no steady measurement, and what I put there** [read: `bench_prices.own_m_measured.json`, sha256 `eda3356218d7e4b5…`, `7fbe`'s input]:
+- **`MoeExpertFp8BlockGemm_v3{K=6144,N=1}`**, both variants, has no steady row of record.
+  - At the point it is FUSED's measured seconds on `vy-dc-h200-3`: 0.0010107 s a block for SWAP=true and 0.00095095 for SWAP=false. Those have no art and no label [read: the price file; relayed: FUSED 09:44Z, `r20261111-091243-8ece`, on a node 12.9% slower than node A].
+  - The range's low end puts the reader's steady rate there (0.000832 s a block, the cheapest price any record gives it). The high end puts its k_log row there (0.012333, the dearest) [read: `bench_prices.own_m_steadyrate.json` and `bench_prices.own_m_klog.json`].
+  - As `main` is, the range is 29,315.9 to 29,508.7 GB, with the point 2.9 GB above the low end [run; derived].
+- **`MoeRouterSigmoidBias_v1`** has only a single-session row (0.000505 s a block), and every cell keeps it [read: the price file].
+- **The rest is steady:** `MoeExpertFp8GemmW_v1`, both variants (0.0029069 and 0.0028388 s a block, 98.6% of the cut's proving), and `MoeSum_v1` [read: the price file; relayed: FUSED 08:11Z, of record since 07:56Z].
+
+That is why Tuesday's range of 4,654 to 20,679 GB no longer applies. Its high end priced `GemmW` at the reader's rows, and `GemmW` is now measured. What stays open is `BlockGemm_v3`'s 193 to 196 GB [derived: 29,508.7 − 29,315.9 and 7,059.8 − 6,863.7].
+
+**The cost reading:** my command does not print it (`wfw_job.sh` runs `wf_width.py`, whose rows carry no share at 300 GB) [read], and I did not build it. Two commands do print it, but only at 60.56 with no program:
+- `headline.py rows`, for its rows on the tree's own prices [read: its `show`, lines 561 to 568];
+- the morning's `breakeven_at_target.py`, where 300 GB costs 88.92% of a world year's compute for row (i) on these prices, plan pair [read: `7fbe`'s `out/at_target.txt`].
+
+**#8853's body, one sentence:** "`headline.py rows` prints, for each honest row it is given (row (i) by default) and each scope, the planner's GB at 10% compute ×1.05 and what the FP4 weights and 300 GB cost as a share of compute. It prices them on the tree's own card and prices, with each modelled lever at its measured value, the head check at the planner's assumed 60.56 core-s and the plan pair. It prints none of the program's seconds, the registered pair, the head cuts, S halving, κ by width, #8917's cut or a window." [read: `headline.py` at `9c9da7466aea`: `ROWS`, `main`, `show`]. On `f8b6e599b19b` its row (i) is the 14,228.6 [read: `8e11`].
+
+**For the table:** row (i), today's served cut, world year, 10% ×1.05, modeled 0.4, on the measured prover prices, registered, the record at the plan's cut, at 15.5 s (14.4 s in brackets) [run]:
+- no program: 6,866.6;
+- as `main` is: 29,318.8 (28,964.1);
+- the hoist as built: 24,242.6 to 24,442.1 (23,887.9 to 24,087.4);
+- the hoist + one parse: 17,182.5 to 17,249.9 (16,822.9 to 16,890.3).
+
+Each cell has `BlockGemm_v3`'s range between the low-end and high-end rows above. Two copies of the runs sat waiting for a slot, and I cancelled them (`d644`, `d592`) [run]. The reader is `rowi_table_1750.py` in my notes' tools.
