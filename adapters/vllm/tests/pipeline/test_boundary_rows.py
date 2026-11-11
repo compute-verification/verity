@@ -565,7 +565,8 @@ def test_the_hook_files_the_spans_the_stop_rule_ends_in_stop_classes_and_the_res
     for a request that set ``ignore_eos``) is committed in the stop class of its prompt's size, at the rule's T whatever
     its count, with its stop word; one it doesn't (an end at an id that is no stop id of the rule's, an abort) by its
     size class under ``-nostop``, without one, beside a stop class of the same sizes; every class names the rule and
-    whether it is a stop class, and reopens to its sink line's roots; and a serve's configuration names the rule."""
+    whether it is a stop class, and reopens to its sink line's roots; every line of the window says how many of its
+    spans were filed with a stop block and how many without; and a serve's configuration names the rule."""
     lines: list[dict] = []
     sched, hooks = Scheduler(), Hooks(tag="test-boundary-rows-stop")
     bw = BW.BoundaryWindows(tmp_path, PAIR, 0, 1, 10.0, sink=lines.append, clock=lambda: 0.0, serve="s", stop=RULE)
@@ -581,6 +582,8 @@ def test_the_hook_files_the_spans_the_stop_rule_ends_in_stop_classes_and_the_res
         got = {(x["prompt"], x["outputs"], x["stopped"]): x for x in lines}
         assert sorted(got) == [(2, 2, False), (4, 2, False), (4, 4, False), (4, 4, True), (16, 4, True)]
         assert all("error" not in x and x["window"] == 0 and x["stop"] == RULE.to_json() for x in lines)
+        assert all(x["filed"] == {"stop": 3, "nostop": 3} for x in lines)
+        assert sum(x["spans"] for x in lines if x["stopped"]) == 3
         for (p, o, held), x in got.items():
             c = BR.reopen(tmp_path / "w0" / f"p{p}-o{o}{'' if held else '-nostop'}", PAIR, stop=RULE)
             assert {k: v.hex() for k, v in c.roots.items()} == {k: v["root"] for k, v in x["values"].items()}

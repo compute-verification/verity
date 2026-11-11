@@ -57,8 +57,9 @@ class BoundaryWindows:
     are committed in the stop classes, (P, T), and the rest by size class without a stop block, under
     ``p<P>-o<O>-nostop`` (`filed`). ``release``: for a serve behind a network certifier, a request's release by its engine
     id, (run, N) or None for a request the certifier didn't release (`serve_admit.release_of`'s, as the serve's admission
-    keeps it); each span keeps its own, and one without is in no stop class. A failed commit is reported to ``sink``
-    (``error``) and registers nothing."""
+    keeps it); each span keeps its own, and one without is in no stop class. Under a rule every line of a window says
+    how many of its spans were filed with a stop block and how many without (``filed``), so a rule that ends no response
+    as the engine does shows as a count. A failed commit is reported to ``sink`` (``error``) and registers nothing."""
 
     def __init__(self, out: Path, check: SpecializedDefinition | Callable[[], SpecializedDefinition], per_prompt: int,
                  per_output: int, window_s: float, *, drained: bool = True, inline: bool = False,
@@ -163,7 +164,10 @@ class BoundaryWindows:
         while (job := self.jobs.get()) is not None:
             window, opened, closed, carried, spans = job
             rule = self.stop_rule
-            for (p, o, held), mine in filed(spans, rule, self.release is not None).items():
+            classes = filed(spans, rule, self.release is not None)
+            n = [sum(len(mine) for k, mine in classes.items() if k[2] is held) for held in (True, False)]
+            counts = {} if rule is None else {"filed": {"stop": n[0], "nostop": n[1]}}
+            for (p, o, held), mine in classes.items():
                 unheld = rule is not None and not held
                 try:
                     layout = Layout(self.check, self.per_prompt, self.per_output, p, o, len(mine),
@@ -171,10 +175,11 @@ class BoundaryWindows:
                                     held=held)
                     c = commit(mine, layout, window, tables=self._tables(window, layout, mine))
                     write(c, self.out / f"w{window}" / f"p{p}-o{o}{'-nostop' if unheld else ''}")
-                    line = {**c.public(), "serve": self.serve, "open_s": opened, "close_s": closed, "carried": carried}
+                    line = {**c.public(), "serve": self.serve, "open_s": opened, "close_s": closed, "carried": carried,
+                            **counts}
                 except (ValueError, TypeError, KeyError, OverflowError, struct.error, OSError) as e:  # the sink says why
                     line = {"format": FORMAT, "window": window, "prompt": p, "outputs": o, "spans": len(mine),
-                            **({} if rule is None else {"stop": rule.to_json(), "stopped": held}),
+                            **({} if rule is None else {"stop": rule.to_json(), "stopped": held}), **counts,
                             "error": f"{type(e).__name__}: {e}"}
                 if self.sink is not None:
                     self.sink(line)
