@@ -54779,3 +54779,77 @@ The final recut [run `eb26`; SCALE's column from `exact_merged.json`, `final2`]:
 **What I did not check.** SCALE's reader-set hashing line by line. Ranks 1 to 7 (both tools ran rank 0). The frontier's pricing (`kfix_exact.py`) beyond line 103. PageCopy, which no Program holds.
 
 For the table: (b) at the final recut: "M = 145 over the kinds the plan prices [SCALE's run; a second tool agrees kind by kind, run `eb26`]: the record 2^-100.79 under one M. The token select is in no stratum and in neither count; counted at the plan's LM-head cut its worst unit is 442 or more [derived], and the record reads 2^-99.18." The table may not say "exact over the served wiring" without the select, nor that the record holds 2^-100 under one M at the final recut until the select has a cut and a count. The plan's cut: 4,130 holds [run `eb26`: floor 4,123]; my 2,049 is withdrawn.
+
+## BENCHCROSS, Wed 11 Nov 12:37Z: second reading of BREAKEVEN's 12:22Z tables: holds on 71 cells of row (iii), each within 0.11% of my own planner path (as `main` is, +783 on every statement: 16,738 mine / 16,724 its, registered, modeled 0.4; no program 6,348 / 6,344); ONE what-if cell does not: values units at 2^26 with every head cut reads 2,387 on my path against its 2,359 (1.2%); its lever-row table is not second-read; the order's 12:24Z bits cells hold by hand
+
+Tags: [run] a command I ran now, [read] a file or record I read now (place given), [relayed] another lane's statement I did not check, [guess] mine, unchecked. Times from `date -u`; this entry's last command ended 12:36Z.
+
+**second reading of BREAKEVEN's 12:22Z tables (its runs `f8bd`, `c268`, `1478`, `4c62`, `80ea`, `e5c0`, `f77a`, read as its entry prints them): holds on 71 cells of row (iii), each within 0.11%; does not on one what-if cell: "G = 128's four values units at 2^26 + every head cut" reads 2,331.1 (plan pair) and 2,387.2 (registered) on my path where it prints 2,302.8 and 2,358.8, 1.2% apart; the lever table (section 2) is not recomputed.**
+
+**How I recomputed** [run]: my own path, not its scripts: `plan_levers.py` (my notes tool) on the design call that `r20261111-080601-3db1` dumped for "(iii) honest", world year, the 10% point, in the planner tree with #8878 and #8893. The head's Lean verify is scaled from the planner's 60.557 core-s (250.0 is × 4.1283), "+C every statement" adds C core-s to every stratum, the registered pair is the replay × 5,960/5,258, width rows are held to one κ. Every figure below is the sampling plan's bound alone, modeled 0.4, modeled prices where the lever is unbuilt; none removes the certifier's output count.
+
+**1. Section 1, no program (not what `main` verifies), head verify 250.0: mine against its** [run]
+
+| step | plan pair: mine / its | registered: mine / its |
+|---|---|---|
+| record | 6,319.7 / 6,315.8 | 6,348.1 / 6,344.2 |
+| width κ 2^-4 | 4,144.1 / 4,141.5 | 4,159.4 / 4,156.8 |
+| width κ 2^-6 | 4,129.5 / 4,127.0 | 4,185.5 / 4,183.0 |
+| width κ 2^-7 | 4,574.2 / 4,571.5 | 4,685.8 / 4,683.0 |
+| κ 2^-6 + 0.925 | 4,007.1 / 4,004.8 | |
+| κ 2^-6 + 0.809 | 3,817.8 / 3,815.1 | |
+| κ 2^-6 + every head cut 0.540 | 3,378.9 / 3,378.3 | 3,434.9 / 3,434.3 |
+| κ 2^-6 + loaded 0.491 | 3,298.9 / 3,297.9 | |
+| κ 2^-6 + what-if 0.307 | 2,998.7 / 2,997.5 | |
+| κ 2^-6 + 0.540 + S halved | 2,697.9 / 2,700.5 | 2,726.3 / 2,729.0 |
+| G = 128 on κ 2^-6 | 1,888.8 / 1,887.8 | 1,944.8 / 1,943.8 |
+| G = 128 + 0.925 | 1,848.5 / 1,847.6 | |
+| G = 128 + 0.540 | 1,641.5 / 1,641.3 | 1,697.6 / 1,697.4 |
+| G = 128 + 0.491 | 1,615.2 / 1,614.9 | |
+| G = 128 + 0.307 | 1,516.3 / 1,516.0 | |
+| G = 64 + 0.540 | 1,317.6 / 1,317.5 | |
+| G = 32 + 0.540 | 1,157.6 / 1,157.5 | 1,213.9 / 1,213.7 |
+| G = 128 + 0.540 + S halved | 1,360.1 / 1,359.9 | 1,388.7 / 1,388.4 |
+| **G = 128's four values units at 2^26 + 0.540** | **2,331.1 / 2,302.8** | **2,387.2 / 2,358.8** |
+
+- The 2^26 row is the one I do not reproduce [run]. Mine is four units of 4,096 bits, each at half the head's seconds a block and half its fixed seconds (the same form that gives its G = 128 row to 0.01% at a quarter). I tried six other forms: two units of 8,192 bits reads 2,288.4; scores at 2^26 too 2,214.2; head ratios 0.520 and 0.491 read 2,312.2 and 2,284.7; none gives 2,302.8. Its script for that row is not in the notes (`tools/wf_width.py`'s `cut4` is, and on paper equals my form), so I cannot say which of us is off. The row is a what-if (a key row written), on no headline line. It reads lower in its table than in mine.
+
+**2. Section 3, row (iii) by the head-verify reading, plan pair: mine / its** [run]
+
+| head verify | which | record | width κ 2^-6 | κ 2^-6 + 0.540 | G = 128 + 0.540 |
+|---|---|---|---|---|---|
+| 60.56 | assumed: the planner's own | 4,042.4 / 4,042 | 2,790.5 / 2,791 | 2,039.9 / 2,040 | 1,178.3 / 1,178 |
+| 250.0 | no program (not what `main` verifies) | 6,319.7 / 6,316 | 4,129.5 / 4,127 | 3,378.9 / 3,378 | 1,641.5 / 1,641 |
+| 250.0 + 1.4 every | a window in one process, unbuilt | 6,338.3 / 6,334 | 4,141.2 / 4,139 | 3,390.6 / (not printed) | 1,646.7 / (not printed) |
+| 317.9 the head's | the hoist at 16 sessions a call, the head alone, modeled | 7,135.9 / 7,131 | 4,609.4 / 4,606 | 3,858.8 / 3,857 | 1,807.6 / 1,807 |
+| 521.8 the head's | the hoist at 4 sessions a call, the head alone, modeled | 9,587.0 / 9,578 | 6,050.5 / 6,045 | 5,299.9 / 5,296 | 2,306.2 / 2,304 |
+| 250.0 + 373 every | the shared parse, unbuilt | 11,276.6 / 11,265 | 7,244.7 / 7,237 | 6,494.1 / 6,489 | 3,032.2 / 3,030 |
+| 1,033 the head's | as `main` is, the head alone | 15,670.2 / 15,657 | 9,663.6 / 9,655 | 8,913.0 / 8,907 | 3,556.2 / 3,554 |
+| 250.0 + 783 every | as `main` is: every call reads the population's program | 16,682.5 / 16,669 | 10,668.9 / 10,660 | 9,918.3 / 9,912 | 4,560.8 / 4,558 |
+| 1,336.3 the head's | as `main` is, the head alone: today's pool | 19,252.3 / 19,233 | 11,807.2 / 11,795 | 11,056.6 / 11,047 | 4,297.9 / 4,294 |
+
+- Registered pair, its verdict's cells [run]: as `main` is (+783 every), record 16,738.2 / its 16,724.4; κ 2^-6 10,725.0 / 10,716.5; κ 2^-6 + 0.540 9,974.4 / 9,964; G = 128 on κ 2^-6 4,864.1 / 4,860.9; G = 128 + 0.540 4,616.9 / 4,612.4; G = 32 + 0.540 3,123.4 / 3,120.8. The shared parse, unbuilt (+373): 11,305.0 / 11,293.1; 7,300.7 / 7,293.3; 3,088.2 / 3,086.0. A window in one process (+1.4): 6,366.7 / 6,362.7. The head alone: 15,725.9 / 15,712.5 at 1,033 (G = 128 + 0.540: 3,612.3 / 3,609.8) and 19,308.0 / 19,288.4 at the pool.
+- Mine reads above its by at most 0.11% in every cell but the two "κ 2^-6 + 0.540 + S halved" cells, where it reads 0.10% below: two independent paths on one census, and no cell moves a verdict.
+
+**3. Its other columns and lines** [run: arithmetic on its printed cells]
+- "Stops at": 300 / GB × 4,993.9 gives its printed rate within 1.2 tokens a GPU-second on all 38 rows of sections 1 and 2 (it interpolates between the measured bases and 0.4; I take the straight proportion).
+- The floor column: its floors are 0.03544 to 0.03581 and 0.03821 to 0.03857 of the modeled-0.4 cell, where the straight proportion is 0.03575 and 0.0385. They are its planner's runs at the two measured rates; I did not rerun the planner there, so the floors hold only as "within 0.9% of the proportion".
+- Its ratios at 250.0, plan pair: 0.656 / 0.653 / 0.724; mine 0.6557 / 0.6534 / 0.7238. Its "what is left": 4.6, 4.0, 9.1, 10.4, 15.4, 12.0 times 300 GB all follow from its cells.
+- Its lever table's arithmetic holds: 1.3574 / 2.512 = 0.540; 1.402 / 2.8555 = 0.491; 2.031 / 2.512 = 0.809; 0.77 / 2.512 = 0.307; 358.3 + 194.6 + 783.4 = 1,336.3; (552 + 2.4 (k − 1)) / k = 139.8 and 36.75 at k = 4 and 16; 6.8 / 81.82 / 2.8555 = 0.029, so 0.971; (2.512 − 0.278) / 2.512 = 0.889; 0.540 × 0.7945 / 0.925 = 0.464.
+
+**4. Its bits table (section 4) is superseded by the order's 12:24Z, and the order's cells hold by hand** [run: my arithmetic; Σk of the plan's cut from my own designs, of the final recut from SCALE's 12:19Z table, relayed]
+- All cells: line (b), over the served wiring; modeled; no Lean statement at the code is behind it; compressions, K0 = 6, T = 2^80 calls a run; first hit 4 · 513 T · (1 + e N + M N + e M N) / 2^256 with N = 6 Σk.
+- BREAKEVEN's own cells were right at the counts it had: record, one M = 2,049: 2^-96.879 (its −96.88); one M = 139 at recut A's Σk 9,387,373: 2^-100.849 (its −100.85). Both counts are struck.
+- The plan's cut, M = 4,130 [run: Σk mine]: record (Σk 10,046,500) 2^-95.868; width κ 2^-4 (15,151,640) 2^-95.275; κ 2^-6 (3,787,940) 2^-97.275; κ 2^-7 (1,893,988) 2^-98.275. The order's −95.87 / −95.28 / −97.28 / −98.28: holds.
+- The final recut, M = 145 [Σk relayed: SCALE]: record (9,384,740) 2^-100.789; width κ 2^-4 (13,733,766) 2^-100.240; at PageCopy 205: 2^-100.292 and 2^-99.743. The order's −100.79 / −100.24 / −100.29 / −99.74: holds. My recut A's record has Σk 9,387,373 and reads the same 2^-100.789.
+- These are the first-hit term. With the conflict and rewinding terms added the recut's cells are 0.005 bit weaker (2^-100.784, 2^-100.235, 2^-100.289, 2^-99.739); the plan's cut's do not move in the third place. No cell crosses 100.
+- Not recomputed: the "mean" and "by stratum" columns (they need each stratum's own count, which I do not have).
+
+**5. What I did not read**
+- Section 2 (the lever row, 19 rows) and the two lever blocks of section 3: `3db1`'s dump of the lever row carries the templated gain on the head and fused blocks, which BREAKEVEN's rows keep flat, so my path has no input for them. Its runs are named by four hex digits only, and `research data show` needs the whole id, so I could not open their records.
+- HARMSEARCH's `3bf0` rows in section 8, sections 9 and 10 (`adca` on `main`, #8853): relayed in its entry, not read here.
+
+For BREAKEVEN: (1) the 2^26 row: say how it is formed, or print mine (2,331.1 plan pair, 2,387.2 registered, at 250.0, no program) beside it; (2) every bits cell from the order's 12:24Z: one M 4,130 at the plan's cut (record 2^-95.87, κ 2^-4 2^-95.28, κ 2^-6 2^-97.28, κ 2^-7 2^-98.28) and 145 at the final recut (record 2^-100.79, κ 2^-4 2^-100.24), which I recomputed; (3) print each run's whole id once, so a reader can open its record; (4) FLOCKPKG's 12:27Z measures the built hoist (PR #8949) [relayed]: the "+552 at one session a call" row is modeled until that reading is second-read.
+
+For the table: second reading of BREAKEVEN's 12:22Z tables: holds on 71 cells of row (iii) within 0.11% (as `main` is, +783 on every statement: 16,738 mine / 16,724 its, registered, modeled 0.4; no program: 6,348 / 6,344; with G = 32 and every head cut as `main` is: 3,123 / 3,121); one what-if cell differs by 1.2% (values units at 2^26: 2,387 mine / 2,359 its); its lever-row table is not second-read.
+For the table: the order's 12:24Z bits cells hold by hand (line (b), modeled, no Lean statement at the code behind it): 2^-95.87 at the plan's cut (M = 4,130), 2^-100.79 at the final recut (M = 145), record, compressions.
