@@ -98,7 +98,8 @@ whose step reads a value back, is refused. It prints, an entry:
   be the record's; this list is the entry's update structure;
 - `log`: the step's products, each by phase, kind, op, operand shapes, count and MACs, which must be the record's;
 - the start and the steps, which must be the record's, and E: its plan's kinds, each of which must be one of the
-  record's format's (`E_KINDS`), with its size after the two steps beside the record's last checkpoint's;
+  record's format's (`E_KINDS`), with its size after the two steps beside the record's last checkpoint's, and how a
+  codec packs the same encoding another way than the record's program did (`E_PACKING`);
 - `expected`: a difference that is the device's or the harness's, named by the rule that covers it, with the MACs on
   each side. A rule fires on its exact case alone. The device's: weights read at 32 bits where the record's are read
   at 16 (`width`), the CPU's attention kernels of the same count and MACs (`attention`), the norm as elementwise ops
