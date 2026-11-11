@@ -288,4 +288,63 @@ theorem Prog.Rewires.of_earlier {C : Prog} {P : Partition} {ω mem : ℕ → ℕ
         exact Nat.lt_irrefl t hlt
       · exact hinj u hu i j hi hj h1 h2 hij
 
+/-- `Prog.Rewires.of_earlier`'s conditions are met by a map that moves a gate: two members of an input and its
+negation each, each a proof block, the second's input wired to the first's output. -/
+example : ∃ (C : Prog) (P : Partition) (ω : ℕ → ℕ) (keep : ℕ → Bool), C.Rewires P ω keep ∧ ω 2 ≠ 2 := by
+  refine ⟨⟨[.input, .not 0, .input, .not 2], [1, 3]⟩, ⟨[[[[0, 1], [2, 3]]]]⟩, fun i => if i = 2 then 1 else i,
+    fun g => g == 3, ?_, by decide⟩
+  have hω : ∀ i : ℕ, (if i = 2 then 1 else i) ≠ i → i = 2 := fun i h => by
+    by_cases hi : i = 2
+    · exact hi
+    · exact (h (if_neg hi)).elim
+  refine Prog.Rewires.of_earlier (mem := fun i => i / 2) ?_ ?_ ?_ ?_ ?_ ?_ ?_ ?_
+  · intro i h
+    obtain rfl := hω i h
+    decide
+  · intro i h
+    obtain rfl := hω i h
+    exact ⟨by decide, fun c => by cases c <;> decide⟩
+  · intro i h
+    obtain rfl := hω i h
+    decide
+  · intro i j h
+    have h' : i / 2 < j / 2 := h
+    omega
+  · intro i h
+    obtain rfl := hω i h
+    decide
+  · intro i h
+    obtain rfl := hω i h
+    decide
+  · intro u hu
+    have hu' : u ∈ ([[0, 1], [2, 3]] : List (List ℕ)) := hu
+    rcases List.mem_cons.1 hu' with rfl | hu''
+    · refine ⟨⟨1, by decide, by decide⟩, 0, fun i hi => ?_⟩
+      rcases hi with hi | ⟨g, hg, x, hx, hi⟩
+      · exact (by decide : ∀ i ∈ [0, 1], i / 2 = 0) i hi
+      · rcases List.mem_cons.1 hg with rfl | hg'
+        · have hx' : (some BGate.input : Option BGate) = some x := hx
+          cases hx'
+          exact absurd hi List.not_mem_nil
+        · obtain rfl := List.mem_singleton.1 hg'
+          have hx' : (some (BGate.not 0) : Option BGate) = some x := hx
+          cases hx'
+          obtain rfl := List.mem_singleton.1 hi
+          rfl
+    · obtain rfl := List.mem_singleton.1 hu''
+      refine ⟨⟨3, by decide, by decide⟩, 1, fun i hi => ?_⟩
+      rcases hi with hi | ⟨g, hg, x, hx, hi⟩
+      · exact (by decide : ∀ i ∈ [2, 3], i / 2 = 1) i hi
+      · rcases List.mem_cons.1 hg with rfl | hg'
+        · have hx' : (some BGate.input : Option BGate) = some x := hx
+          cases hx'
+          exact absurd hi List.not_mem_nil
+        · obtain rfl := List.mem_singleton.1 hg'
+          have hx' : (some (BGate.not 2) : Option BGate) = some x := hx
+          cases hx'
+          obtain rfl := List.mem_singleton.1 hi
+          rfl
+  · intro u _ i j _ _ hi hj _
+    exact (hω i hi).trans (hω j hj).symm
+
 end Claims.Sampling
