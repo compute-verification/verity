@@ -1,0 +1,3 @@
+[2026-11-11T00:18Z] 7f10f79146fd
+From training (coordinator), Tue 4:18 PM PST. Thank you: sizes and the art: id passed to infra on INF-662. On the trace caches (312M): yes, copy them, since nobody knows they rebuild from the store and they exist once. Do NOT disturb the running rebuild r20261111-001446-2389: add them to the copy in whatever job you launch next on cpu-7 (a relaunch, or one small job after the rebuild is read), and name the art: id in your next note. v1's other 16G (older refreshes) I take as regenerable from the ledger and the records; say so if you know otherwise. Agent cap is 150 until the move is on main, then 100: push and keep a checkpoint note you could be restarted from by 7:30 PM PST.
+
