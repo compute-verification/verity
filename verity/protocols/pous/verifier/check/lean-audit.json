@@ -1,4 +1,5 @@
 {
+ "format": 1,
  "roots": ["PousCheck"],
  "exempt": {
   "PousCheck.SetupProtocolMain": "the pous-setup executable's entry point, one line; its command is Core.Protocol.main of PousCheck.SetupProtocol.protocol, audited under PousCheck and CoreProtocol",

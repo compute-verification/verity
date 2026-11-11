@@ -1,5 +1,6 @@
 module
 
+public import Proofs.Properties.Nci.DecodeKeys
 public import Proofs.Properties.Nci.RecordTakes
 public import Proofs.Properties.Nci.RecordUnits
 public import Proofs.Properties.Nci.OperandsResolve
@@ -11,7 +12,8 @@ public import Mathlib.Tactic
 
 A unit is a member of a root node that is no input, and its gates are that member's place in the node's.
 
-`ReadProg`: what the record check reads of a Program before it reads a unit of it. `unit_node` gives a unit its root
+`ReadProg`: what the record check reads of a Program before it reads a unit of it; its last clause, that the root is
+the first Definition of its key, the decoder gives (`readProg_of_decode`). `unit_node` gives a unit its root
 node and member, from the root's ranges (`ranges_spec`), and `unit_within` puts the member's gates inside the node's.
 From those:
 
@@ -35,6 +37,13 @@ key. -/
 def ReadProg (P : Prog) : Prop :=
   (∃ bytes, Flock.Program.decode bytes = .ok P) ∧ P.orderViolation = none ∧ Desc.rootLaidOut P = true ∧
     Desc.inputsAtRoot P = true ∧ Desc.walkable P = true ∧ NciCheck.RecordText.keyedAsInput P = false ∧ RootFirst P
+
+/-- **A decoded Program that passes the check's reads is one the record check reads**: the decoder puts no
+Definition of the root's key before the root (`DecodeKeys.root_first`). -/
+theorem readProg_of_decode {bytes : ByteArray} {P : Prog} (hdec : Flock.Program.decode bytes = .ok P)
+    (hov : P.orderViolation = none) (hl : Desc.rootLaidOut P = true) (hin : Desc.inputsAtRoot P = true)
+    (hwk : Desc.walkable P = true) (hkey : NciCheck.RecordText.keyedAsInput P = false) : ReadProg P :=
+  ⟨⟨bytes, hdec⟩, hov, hl, hin, hwk, hkey, DecodeKeys.root_first bytes P hdec⟩
 
 /-- **A unit is a member of a root node that is no input**: the node's callee has the unit's template for its key,
 which is no input id. -/

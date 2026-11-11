@@ -249,7 +249,9 @@ CENSUS: dict[str, Census] = {
 
 def census_leaves(rng: np.random.Generator, ty, n: int) -> np.ndarray:
     """``n`` rows of a parameter of type ``ty`` as u16 words, its leaves packed at their width: bf16 of N(0, 1) for 16-bit
-    leaves, E4M3 codes other than NaN for 8-bit ones, f32 powers of two from 2^-10 to 2^-4 (a block scale) for 32-bit ones."""
+    leaves, E4M3 codes other than NaN for 8-bit ones, f32 powers of two from 2^-10 to 2^-4 (a block scale) for 32-bit ones,
+    and uniform bits for 1-bit ones, leaf j the low bit of word j / 16 on (a table read's token, digests, salt and path, and
+    every port of a fused read's member, which its word view gives at bit level)."""
     w = set(ty.leaf_widths())
     if w == {16}:
         return bf16(rng.standard_normal((n, ty.leaves)))
@@ -257,6 +259,8 @@ def census_leaves(rng: np.random.Generator, ty, n: int) -> np.ndarray:
         c = rng.integers(0, 256, (n, ty.leaves), dtype=np.uint8)
         c[(c & 0x7F) == 0x7F] ^= 1
         return c.view("<u2")
+    if w == {1} and ty.leaves % 16 == 0:
+        return np.packbits(rng.integers(0, 2, (n, ty.leaves), dtype=np.uint8), axis=1, bitorder="little").view("<u2")
     if w == {32}:
         return np.ldexp(np.ones((n, ty.leaves), np.float32), rng.integers(-10, -3, (n, ty.leaves))).astype("<f4").view("<u2")
     raise SystemExit(f"stage.py: a census parameter of {ty.leaves} leaves of {sorted(w)} bits, which `census_leaves` doesn't generate")
