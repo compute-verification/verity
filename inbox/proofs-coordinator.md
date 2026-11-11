@@ -52458,3 +52458,42 @@ For the table: the same at "no program (not what `main` verifies)": (a) 3,781 (8
 For the table:
 - On `main` since 11:51:17Z (`ee28015ba726`): #8877, #8819, #8841, #8857, #8866, #8888, #8354, #8536, #8890, #8517 [run].
 - `86c03d1840cb` judged pass 11:35:32Z, not yet advanced at 11:52Z; `847136846dae` and `967b722429f3` pending [run].
+
+## ATTACK, Wed 11 Nov 11:54Z: PRF-553 before the PR: I find no registered program with a composite keyed by an input id (one test vector has one, on purpose); tonight's statements at `code h` read both skips through `two h` and nothing else, and the decoy's gates are outside the program they are about; on the decoders my line is yes, in a second change, because the format already says such an id always denotes the input primitive
+
+lean's finding, our files. Your three questions in order. `main` is `08ad61db94`; the proofs side is read at REGX's head `62eb1fdc64de`.
+
+**1. Is anything accepted today that should not be? Nothing I can find; one scan is still out.**
+- **Descriptors in the tree** [run, local, `tools/attack_decoy_scan.py` in the lane's notes]: 8 JSON files hold 28 descriptors with 251 definitions. 33 are keyed by an input id, all of form `primitive`. None is a composite keyed by, or with the id of, an input id.
+- **Every name a composite is built with in Python** [run, local: the syntax tree of the 5,763 Python files at `main`]: 1,627 literal names. One is an input id's name: `Input16` in `verity/protocols/inference_only/verifier/nci/lean/scripts/desc_difftest_vectors.py:173`. That is NCI's difftest vector `decoy`, built to hold NCI's check to treating the node as computed (`:168-183`). 307 names are computed; none of the templates I read makes `Input<w>`, and no other string in the tree is one [read: grep]. A computed name I did not follow could still make one [guess: no].
+- **The plan of record** [read: `inputs/census.json` of `r20261111-080601-3db1`, ranks 0 to 7]: 192 definitions, 288 rows that are no block, 1 gap. None is keyed by an input id; no name holds `Input`.
+- **Rank 0 of the row of record** [run `r20261111-111848-38b9`]: the 317 definition ids my count met hold none.
+- **Not done.** The row's own descriptor files and every rank's rows: run `r20261111-114256-77a1` waits for a check slot on vy-nebius-cpu-5 (cpu-2 refused it for memory). I report it when it returns. Other lanes' runs' statement bytes: not read.
+
+**2. Do tonight's statements at `code h` read the skips? Yes, through `two h`; the decoy does not make any of them false.**
+- **The path** [read]. `two` reads `Spot.Slots.layout h.reg.first.program h.reg.first.query` (`SpotFlock/Code.lean:348-349`). `layout` calls `Partition.evaluate`, which calls `TemplateQuery.evaluate` (`Spot/Partition.lean:173`), and `inputGates` (`Spot/Slots.lean:72`). `replayDesign` reads `slotDesign` on the same program (`Code.lean:331-332`).
+- **Who reads `two`** [read]. `CheckedRun.Ok` asks `two h r.s = some d` (`RevealAt.lean:291-292`). `Addresses h` quantifies over `Ok` runs (`SlotsAt.lean:322-323`), and `Built h` reads the address map (`FrameIsBuilt.lean:31`). The two-stage scope is decided inside `two` (`scopeOk`, `Code.lean:228`).
+- **Who does not** [read]. `parse` and `partition`: the statement's program is `bitsProgs h.ms` and its partition `membersPart h.ms`, from the members' circuit files (`Code.lean:336-343`).
+- **What the decoy does today** [derived by reading; not run].
+  - `evaluate` skips its node, so it is no unit. `inputGates` puts its gates in the input class, each a slot with no unit (`Slots.lean:58, 72`).
+  - `filesReplay` gives a slot with no unit an empty block (`slotFiles`, `Bridge/Members.lean:537-540`), and `filesOk` asks nothing of it (`Code.lean:282-292`). `scopeOk` passes: the empty blocks add no gate. So `two h` evaluates, with more empty replay blocks under the rule `all`.
+  - Every statement holds as stated. Each is about `bitsProgs h.ms`, and the decoy's gates are not gates of it.
+- **So the decoy is outside tonight's statements, not against them.** Nothing at `code h` says the registration's program computes only its units. It is the shape of my 11:35Z item 4: `h.reg.first.program` is read for its layout alone.
+- **After DECOY's change** [derived]. `evaluate` refuses, `layout` errors, `two h` is `none`, and no run of that registration is `Ok`. The verifier refuses it, the statements hold there with nothing to say, and `Addresses h` asks no more than before.
+- **The locks** [derived; I have not seen the PR]. Every statement that reads `two` has `evaluate` and `inputGates` among what it reads. Each record should change in what it reads and in no statement's text. That is the check I will make on the PR's lock diff.
+
+**3. The decoders: my line is yes, refuse it in `Program.decode` and `Desc.parse`, as a second change after DECOY's two skips and not instead of them.**
+- **The format already says it** [read]. `verity/circuits/PROTOCOL.md` §5.1: "an `Input<w>_v1` or `RegisteredInput<w>_v1` id always denotes the Program's input primitive" (lines 130-131). §5.2: a node is an input node "exactly when its callee's id matches" (line 297). Neither decoder holds a composite to it: Lean's asks `Name_vN` and the key (`Flock/Program.lean:837-857`), Python's the same (`verity/circuits/codec.py:896-902`). Python's `is_input` adds that the callee is a primitive (`program.py:46-48`); the Lean's `isInput` does not (`TemplateQuery.lean:45`).
+- **Who tests the key alone on `main`** [read: every use of `isInputId` and `inputId?` in Lean]. Six: `TemplateQuery.evaluate` (`:126`), `Slots.inputGates` (`:58`), `Registered.programInputs` (`Flock/Registered.lean:321-322`), `PouwCheck/Credit.lean:626` and `:1882`, `PouwCheck/Lanes.lean:215`. The other fourteen test the primitive too, or read a located gate's primitive.
+- **What each does with a decoy** [read].
+  - `evaluate`, `inputGates`: DECOY's finding.
+  - `programInputs`: a composite keyed `RegisteredInput<w>_v1` makes `checkProgram` ask for registered roots. It refuses more, never less.
+  - PoUW's three: the Python mirror tests the key alone as well (`credit.py:371`, `_INPUT`), so no difftest separates them. A decoy root node is skipped by both, and the body check passes with a node that is no tile. Whether a later step refuses that program I did not trace.
+  - One reader in Flock's own verifier already tests the primitive (`HmRow.nodes`, `Flock/HmRow.lean:2285`), next to `evaluate` on the same program (`HmRow.lean:1204-1207`). On a decoy the two list different units; consequence not traced.
+- **Why at the decoders.** It makes §5.1 true, so "the key" and "a primitive with the key" are one test at all six readers and at the next one written. It is the only one of the two fixes that reaches PoUW's three.
+- **Why both decoders.** Flock's partition check and `checkProgram` read `Desc.parse` alone (`HmRow.lean:1204, 1414`; `Registered.lean:336`); SPOT reads `Program.decode` (`Spot/Program.lean:23`).
+- **What it costs.** It is a rule of the format: the Python decoder refuses the same in the same PR, NCI's `decoy` vectors turn from "a computed node" into "refused", and `Program.decode` is read by most of Flock's records, so the lock diff is wide. That wants a records run, which tonight's rule on whole-package audits argues against.
+- **Why DECOY's skips first.** They bring the Lean to the Python reference today with no change to the format.
+- Whether the format gains the rule is lean's to decide, not mine.
+
+For the table: PRF-553 moves no number. The table may say "the Lean verifier on `main` accepts a program the Python reference refuses (a composite keyed like an input, lean's finding); no registered program found has one [run, read; the row's own files still out]". It may not say the population covers every computed gate of the registered program: no Lean statement at `code h` says so, with or without the fix.
