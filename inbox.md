@@ -19,3 +19,13 @@ FAILFORMS to network-accounting, Tue 10 Nov 4:01 PM PST. **After my 4 PM report 
 3. I cancelled `r20261110-234600-c53d` and `r20261110-234616-e686` (12 and 7 min in): their verdicts would be on a head that is no longer mine. In their place at the merged head, both placed by `--on auto` on vy-nebius-cpu-2 at 3:59 PM PST: `r20261110-235911-82a4` (the lock, `--update`) and `r20261110-235915-a6d6` (the suites my change touches).
 4. Least sure: whether the merged lock is the tree's record without a regeneration; the run says. Not run at the merged head yet: anything.
 
+[2026-11-11T00:06Z] 30d111290949
+NET-312 LEANMERGE to coordinator, Tue 10 Nov 4:08 PM PST: **the branch builds.** (Answer to point 2 of your 4:05 PM PST; the report and the 25 names follow.)
+
+- **Branch `cursor/net-leantrees-7c3e`, head `b4c43f88b5318fc9e57cdb19466cae5409329dc5`**, pushed. It is my two commits (`96c2c1a9dc`, `691ed547f7`) on `97876e5336e1`, then a merge of the base's `f63a7b76334d` (no rebase). The base is still at `f63a7b76334d` [`git ls-remote`, 4:08 PM PST].
+- **Built on a node** [run `r20261110-233140-023d`, vy-nebius-cpu-8, rc 0, preserved]: `lake build Proofs.NetworkCertifier` rc 0, 11,042 jobs, 1,106 s, 0 errors, no `sorry`; each of the ten modules I touched or that import a moved definition was built; `lake build @security/Definitions` rc 0 (9,653 jobs). It ran at `691ed547f7`; `Security`'s Lean is the same tree at the head (`Security/Definitions` `1e3e6699d53a`, `Security/Proofs` `484009cf9cb8` at both) [run: `git rev-parse`].
+- **What the 21 witnesses' statements read** [same run, a probe that walks each as `Facts.lean`'s `readsWhere` does]: 20 read no proofs-tree constant outside the lock's excepted prefixes; `PooledLeakAccepted_honest` reads `NetTiming.RowsFormat.recordFormat` alone, the line that stays under (C). (`PooledLeakAccepted_nontrivial` also reads `notStmt` and `notPart` of `Proofs.Flock.Claims.…`, `main`'s toys under the excepted prefix `Proofs.Flock.Claims`.)
+- Moved: 21 definitions, names and bodies unchanged: `fxQueueSched` to `Definitions.NetworkCertifier.RecordRows`; `obs0`, `obs1` and 18 of `WitnessToys` to `Definitions.NetworkCertifier.Witness`. No lock edited, no `trees.except` entry.
+- `tests/test_lean_packages.py` and `tests/test_lean_vocabulary.py` at the head: 46 passed [run, VM].
+- **Not yet:** the lock's own check on the head. It is launched once, `r20261111-000406-1d52` (vy-nebius-cpu-7, `lean_changed.py --records Security`, no `--update`), waiting for a slot at 4:05 PM PST; it gives the `trees` lines you asked for. So "builds" is [run]; "the lock's trees check passes but for one line" is still [argued] from the probe.
+
