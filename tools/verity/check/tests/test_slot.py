@@ -1,6 +1,7 @@
 """`tools/verity/check/slot.py`: a `--record --on` check takes a free check slot's lock and cores, as the lander's train checks do."""
 from __future__ import annotations
 
+import errno
 import fcntl
 import importlib.util
 import json
@@ -139,6 +140,53 @@ def test_a_slot_with_windows_pauses_from_its_lead_to_the_windows_end(tmp_path):
     w.write_text("2026-10-01T09:20Z 30\n")
     assert SLOT.take([slot], tmp_path, NOW) is None
     assert SLOT.parse("a 0-1")[0]["windows"] is None and SLOT.blocked(SLOT.parse("a 0-1")[0], NOW) is None
+
+
+def test_a_slot_whose_windows_cant_be_read_starts_no_check_and_says_how_to_fix_it(tmp_path, monkeypatch):
+    """A windows file that is gone, or a line of it that isn't a window, holds the slot with the fix in its reason, in a wait
+    and in `--status`; it raises in neither, so it never ends every check waiting on the machine."""
+    monkeypatch.setattr(SLOT, "SLOTS", tmp_path / "slots")
+    w = tmp_path / "hold.windows"
+    slot = SLOT.parse(f"d 0-47 windows={w} lead=30")[0]
+    fix = f"take windows= off slot d in {tmp_path / 'slots'}"
+    gone = (f"its windows file {w} can't be read ({os.strerror(errno.ENOENT)}), so no check starts in it: put the file back "
+            f"(an empty one has no windows) or {fix}")
+    assert SLOT.blocked(slot, NOW) == gone
+    assert SLOT.take([slot], tmp_path, NOW) is None and SLOT.upcoming(slot, NOW) == []
+    assert SLOT.status([slot], tmp_path, NOW) == [f"d  cores 0-47  free; blocked: {gone}"]
+    for bad in ("2026-10-01 09:20Z", "2026-10-01T09:20 30", "soon 30", "2026-10-01T09:20Z half"):
+        w.write_text(f"2026-10-01T15:00Z 30 # a window\n{bad} # not one\n")
+        assert SLOT.blocked(slot, NOW) == (f"line 2 of its windows file {w} ({bad!r}) isn't `START_UTC MINUTES` "
+                                           f"(`2026-10-01T09:20Z 30`), so no check starts in it: fix the line or {fix}"), bad
+        assert SLOT.upcoming(slot, NOW) == []
+    w.write_text("")
+    assert SLOT.blocked(slot, NOW) is None
+    taken, fd = SLOT.take([slot], tmp_path, NOW)
+    os.close(fd)
+    assert taken["name"] == "d"
+
+
+def test_a_check_waiting_on_a_hold_outlives_the_holds_end(tmp_path, monkeypatch):
+    """A hold ends by taking windows= off SLOTS and moving its windows file away. A check that read SLOTS before and looks for
+    the file after waits one more try, told why, then runs in the slot."""
+    w = tmp_path / "hold.windows"
+    (tmp_path / "slots").write_text(f"a 0 windows={w} lead=30\n")
+    monkeypatch.setattr(SLOT, "SLOTS", tmp_path / "slots")
+    slept, ran = [], {}
+
+    def end_the_hold(s):
+        slept.append(s)
+        (tmp_path / "slots").write_text("a 0\n")
+
+    def execvpe(f, argv, env):
+        ran.update(argv=argv, slot=env["CHECK_SLOT"])
+        raise Exec
+
+    monkeypatch.setattr(SLOT.os, "sched_setaffinity", lambda pid, cpus: None)
+    monkeypatch.setattr(SLOT.os, "execvpe", execvpe)
+    with pytest.raises(Exec):
+        SLOT.main(["--", "uv", "run", "check.py"], now=lambda: NOW, sleep=end_the_hold)
+    assert slept == [SLOT.POLL_S] and ran == {"argv": ["uv", "run", "check.py"], "slot": "a"}
 
 
 def test_with_every_slot_busy_it_waits_then_runs_in_the_slot_that_frees(tmp_path, monkeypatch):

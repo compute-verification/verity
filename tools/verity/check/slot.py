@@ -12,7 +12,10 @@ The first slot whose lock (`check-NAME.lock` beside SLOTS, the lock the lander's
 taken. Its lock stays held by CMD (an inherited descriptor), and CMD runs pinned to CPUS with that slot's test cache
 (`~/.cache/verity/tests-slot-NAME`), without LEASE_DIR and with LEASE_DEADLINE_FILE pointing nowhere. A slot with windows= is
 skipped while one of FILE's windows (`START_UTC MINUTES`, the node-2 fill runner's format) is open or starts within lead (30)
-minutes: a check there would run into a whole-node timed measurement. A slot with only=trains is taken only by a `--priority` waiter
+minutes: a check there would run into a whole-node timed measurement. It is skipped too while FILE can't be read as windows
+(it is gone, or a line of it isn't a window), and the wait and `--status` say which and how to fix it: to end a hold, take
+windows= off SLOTS, which waiters read again at every try, and the file may go at any time.
+A slot with only=trains is taken only by a `--priority` waiter
 (the lander's train checks), so a lane's long check or quick tier never holds the slot a train needs (a slot.py from before it
 reads the key as unknown and the slot as any other). A slot with mem=GB is skipped while less than GB is free to this process
 (`memory_gb`: the least of MemAvailable and what each cgroup v2 memory limit over it leaves, the user slice's on a VM, less what
@@ -319,14 +322,35 @@ def reserve(slot: dict, now: datetime, priority: bool = False) -> str | None:
     return f"slot: holds a {gb:g} GB research.mem reservation ({path}) while the check runs"
 
 
+class Unread(Exception):
+    """A slot's windows FILE can't be read as windows: its text is why `blocked` holds the slot, and the fix."""
+
+
 def _windows(slot: dict) -> list[tuple[str, datetime, int, str]]:
-    """`slot`'s windows as its FILE writes them: (start as written, start, minutes, comment)."""
+    """`slot`'s windows as its FILE writes them: (start as written, start, minutes, comment). `Unread` when FILE can't be read
+    (a hold ended by moving its file while SLOTS, or a waiter's last reading of it, still names it) or a line of it isn't a
+    window: a slot whose windows nobody can read starts no check, and no waiter or `--status` on the machine dies of it."""
+    if not slot["windows"]:
+        return []
+    fix = f"take windows= off slot {slot['name']} in {SLOTS}"
+    try:
+        lines = Path(slot["windows"]).read_text().splitlines()
+    except OSError as e:
+        raise Unread(f"its windows file {slot['windows']} can't be read ({e.strerror or e}), so no check starts in it: put the "
+                     f"file back (an empty one has no windows) or {fix}") from None
     out = []
-    for line in Path(slot["windows"]).read_text().splitlines() if slot["windows"] else []:
+    for n, line in enumerate(lines, 1):
         body, _, note = line.partition("#")
         f = body.split()
         if len(f) >= 2:
-            out.append((f[0], datetime.fromisoformat(f[0].replace("Z", "+00:00")), int(f[1]), note.strip()))
+            try:
+                start, minutes = datetime.fromisoformat(f[0].replace("Z", "+00:00")), int(f[1])
+                if start.tzinfo is None:
+                    raise ValueError(f[0])
+            except ValueError:
+                raise Unread(f"line {n} of its windows file {slot['windows']} ({body.strip()!r}) isn't `START_UTC MINUTES` "
+                             f"(`2026-10-01T09:20Z 30`), so no check starts in it: fix the line or {fix}") from None
+            out.append((f[0], start, minutes, note.strip()))
     return out
 
 
@@ -368,7 +392,11 @@ def blocked(slot: dict, now: datetime, priority: bool = False) -> str | None:
     """Why `slot` can't start a check at `now` (a window open or within its lead, a disk short of space (`disk_short`), or less
     memory free than its mem=), or None. A `priority` waiter's check, or any check of an only=trains slot (which only those
     take), counts only other priority checks' reservations (`reserved_gb`)."""
-    for raw, start, minutes, _note in _windows(slot):
+    try:
+        windows = _windows(slot)
+    except Unread as e:
+        return str(e)
+    for raw, start, minutes, _note in windows:
         if start - timedelta(minutes=slot["lead"]) < now < start + timedelta(minutes=minutes):
             return f"window {raw} ({minutes} min) is open or starts within {slot['lead']} min"
     if short := disk_short() or disk_short(cache_disk()):
@@ -388,9 +416,13 @@ NOTE_WORDS = 6
 
 def upcoming(slot: dict, now: datetime, hours: int = AHEAD_H) -> list[dict]:
     """`slot`'s windows open at `now` or starting within `hours`, by start: when, how long, minutes until it starts (negative
-    while open) and its comment's first NOTE_WORDS words."""
+    while open) and its comment's first NOTE_WORDS words; none while they can't be read, which `blocked` says."""
     out = []
-    for raw, start, minutes, note in sorted(_windows(slot), key=lambda w: w[1]):
+    try:
+        windows = _windows(slot)
+    except Unread:
+        return out
+    for raw, start, minutes, note in sorted(windows, key=lambda w: w[1]):
         if now < start + timedelta(minutes=minutes) and start < now + timedelta(hours=hours):
             words = note.split()
             out.append({"start": raw, "minutes": minutes, "starts_in_min": int((start - now).total_seconds() // 60),
