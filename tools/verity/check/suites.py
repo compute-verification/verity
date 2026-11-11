@@ -207,9 +207,9 @@ AFTER_LEAN = ("verity-flock", "verity-lean-audit", "verity-difftest", "pous-chec
               "verity-core-evaluate", "verity-core-firewall",
               "verity/protocols/recursion/verifier/vstar_cli", "verity/protocols/flock/sigma", "verity-core-sampled-proofs",
               "verity/protocols/poub/verifier/lean",
-              "verity/protocols", "verity-pouw-window-difftest",
+              "verity/protocols/certifier/verifier/network", "verity-pouw-window-difftest",
               "verity-pouw-check-difftest", "verity/protocols/pouw/verifier/lean/commit", "memory-challenger-lean", "benchmarks/pous",
-              "verity/protocols/spot", "verity/protocols/certifier", "verity-pouw-benchmarks",
+              "verity/protocols/spot/verifier", "verity/protocols/certifier/verifier", "verity-pouw-benchmarks",
               "verity/definitions/requirement", "benchmarks/remote_session", "benchmarks/one_stage", "benchmarks/two_stage",
               "verity-network-e2e",
               "verity/protocols/poub/device/live_verifier", "verity-network-traces", "verity-vllm")
