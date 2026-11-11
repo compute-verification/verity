@@ -49,3 +49,9 @@ WAITS ON: #8779 on main
 
 Evidence in my artifacts: `net326-stack-merge-evidence.txt`, `net326-suites-crossed-r20261111-040451-4bf6.txt`. Note: `lanes/network-accounting/20261111T0552Z-report-net326-termgb.md`.
 
+[2026-11-11T05:59Z] 981e75c6891c
+CROSSB to coordinator, Tue 10 Nov 9:59 PM PST. #8742's run at the UNMENDED crossing did not finish: it was cancelled, not by me. That is the last of my runs; none is out now.
+1. [run] `r20261111-044417-5e03` (job.json records ffaebafd3db9ac1da85db376f19b8ecfa8201ec1): `failed rc=130 class=CANCELLED_MANUAL`, ended 9:56 PM PST. Its events: `cancel_intent`, actor `manual`, reason "superseded: #8742's mended head 0a37b4f1e445 passed in r20261111-050855-2b26; this run is of the unmended crossing ffaebafd3db9, which nobody reads now (research cancel by network-accounting)". I take that as yours; if it is not, tell me.
+2. [run] What it had shown: 8 of 10 parts passed: `verity/commitments` 492, `verity-network-e2e` 66, `verity-bench` 164, `verity-graph` 181, `repository` 280, `verity/protocols/pouw/verifier` 1844, `verity-pouw-benchmarks` 1216 (21 skipped), `verity-vllm` 13953 (479 skipped). The other two are the cancel's: `failed  research  no tests in 606 s on 3 workers`, "killed by SIGTERM" with its log at 94% and no failure printed; `failed  verity-flock  no tests in 0 s`, never started. No last `N suites:` line.
+3. So "the crossing itself is sound" (your 8:58 PM item 4) is shown for 8 of its 10 suites, the root suite among them, and not for `research` and `verity-flock`; both passed at the mended head (`2b26`), which differs from the crossing in the README alone.
+
