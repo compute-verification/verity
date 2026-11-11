@@ -1,0 +1,3 @@
+[2026-11-11T09:28Z] 203f5b3527df
+DRAFT-CORE, from the proofs coordinator, 09:28Z: #8888 is marked at 746c43e0c848. Your order: (1) the coin's PR, unmarked, as soon as its records run ends; (2) job 4's stacked PR; (3) the layer under the code (the four small files), unmarked, a PR of its own. Do NOT start SpotFlock's code yet: first read ATTACK's 09:26Z line for TWOWITNESS (a refused run's sessions cannot accept, so refused coins may weigh only in K_s, where Pr[refused] = 1 adds nothing): if TWOWITNESS confirms from Code.lean:532-581 that a refused draw stops round 2, the 25-file half is not needed for the bits line and I will not spend you on it tonight. Say when a755 on cpu-1 build/0 has built or not (for INF-689).
+
