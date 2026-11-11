@@ -884,6 +884,127 @@ def test_a_tree_that_held_another_version_ends_with_every_output_object_and_exec
     assert build(trees[0]) == (set(), {}, 0) and held(trees[0]) == a, "and nothing changes where the source did not"
 
 
+#: `Toy.Word` with a function the other versions lack, and the `Main` that calls it
+EXTRA = ('@[noinline] def Toy.extra (n : Nat) : Nat := n + 41\n'
+         '@[noinline] def Toy.word (n : Nat) : String := s!"version B {Toy.extra n}"\n')
+CALLS_EXTRA = "import Toy\n\ndef main : IO Unit := IO.println (Toy.word (Toy.extra 1))\n"
+
+
+@pytest.mark.skipif(LAKE is None, reason="no lake")
+def test_a_repair_leaves_no_object_of_an_earlier_source_for_lake_to_take_as_built(tmp_path, monkeypatch):
+    """A slot tree sees three kinds of build: a records run's (`repair`, stage, the default targets, put), a `--build`
+    run's (`repair`, then the changed modules alone, read from Lake's own cache where it holds them) and a build of the
+    default targets that reads Lake's own cache. Lake's own cache holds a published build as `.ltar` archives, and Lake
+    unpacks one over the outputs in place and leaves their `.hash` files, which it then reads for the new bytes. So the
+    object it compiles from the unpacked C is recorded under the hash of the C that was there before, and when the source
+    returns to that C the module is rebuilt and the object, whose trace names that hash, is taken as built: the link
+    fails where the earlier source lacks a symbol, and passes with the earlier source's code where it doesn't.
+
+    The repair drops the object with the module, so the records run after it ends with every file of a tree built apart;
+    and a tree an earlier repair left with the module rebuilt and the object kept loses the object for being older than
+    the C beside it."""
+    LC, LA, LCH = (_load(f"repair_objects_{n}", HERE.parent / f"{n}.py") for n in ("check", "lean_audit", "lean_changed"))
+    MK = LA.MK
+    store, own = tmp_path / "artifacts", tmp_path / "lakes-own-cache"
+    monkeypatch.setattr(LC, "ARTIFACTS", store)
+    tree, publisher = (toy(tmp_path / n / "toy") for n in ("build-0", "publisher"))
+    ir = tree / ".lake" / "build" / "ir" / "Toy"
+    n = iter(range(99))
+
+    def edit(pkg: Path, word: str, main: str = TOY["Main.lean"]) -> None:
+        for name, text in (("Toy/Word.lean", word), ("Main.lean", main)):
+            if (pkg / name).read_text() != text:
+                (pkg / name).write_text(text)
+
+    def lake(pkg: Path, pre: list[str], *targets: str) -> tuple[int, str]:
+        r = subprocess.run(LC.in_sandbox(pkg, [*pre, "lake", "build", *targets]), cwd=pkg, capture_output=True, text=True,
+                           env=LC.lake_env())
+        return r.returncode, r.stdout + r.stderr
+
+    def from_own_cache(*targets: str) -> str:
+        """`lake build` as `lean_changed.build` runs it: Lake's own cache read, not written."""
+        rc, out = lake(tree, ["env", "-u", "LAKE_ARTIFACT_CACHE", f"LAKE_CACHE_DIR={own}"], *targets)
+        assert rc == 0, out
+        return out
+
+    def repair() -> list[str]:
+        said: list[str] = []
+        LCH.repair(tree.parent, [tree.name], {}, None, said.append)
+        return said
+
+    def records() -> tuple[int, str]:
+        """`check.py`'s build, as a records run reaches it: staged, built in the sandbox, then put."""
+        cache = store / MK.STAGE / f"test-{next(n)}"
+        LC.stage_build(MK, tree, ["Toy", "Main"], cache)
+        rc, out = lake(tree, ["env", "-u", "LAKE_ARTIFACT_CACHE", f"LAKE_CACHE_DIR={cache}"])
+        shutil.rmtree(cache)
+        LA.LakeArtifacts(store).put({tree: {"sandbox": True}})
+        return rc, out
+
+    def says() -> str:
+        return subprocess.run([str(tree / ".lake" / "build" / "bin" / "toy")], check=True, capture_output=True,
+                              text=True).stdout.strip()
+
+    def apart(name: str, word: str, main: str = TOY["Main.lean"]) -> dict[str, str]:
+        pkg = toy(tmp_path / name / "toy")
+        edit(pkg, word, main)
+        assert lake(pkg, [])[0] == 0
+        return held(pkg)
+
+    def publish(word: str) -> None:
+        """A published build of ``word`` in Lake's own cache, as `cache.py` builds, stages and restores one."""
+        edit(publisher, word)
+        out = tmp_path / "published"
+        writable = {**LC.lake_env(), "LAKE_ARTIFACT_CACHE": "true", "LAKE_CACHE_DIR": str(out / "lake-cache")}
+        for argv, env in ((["lake", "build", "-o", str(out / "outputs.jsonl")], writable),
+                          (["lake", "cache", "stage", str(out / "outputs.jsonl"), str(out / "stage")], writable),
+                          (["lake", "cache", "unstage", str(out / "stage")], {**LC.lake_env(), "LAKE_CACHE_DIR": str(own)})):
+            subprocess.run(argv, cwd=publisher, env=env, check=True, capture_output=True)
+        assert any(f.suffix == ".ltar" for f in (out / "stage").iterdir())
+
+    z, a = WORD.replace("{tag}", "Z"), WORD.replace("{tag}", "A")
+    publish(a)
+    edit(tree, z)
+    assert repair() == [] and records()[0] == 0 and says() == "version Z 1"
+
+    edit(tree, EXTRA, CALLS_EXTRA)
+    assert repair() == []
+    assert "Built Toy.Word" in from_own_cache("+Toy.Word", "+Main"), "a `--build` run compiles what Lake's cache lacks"
+    extra_c = (ir / "Word.c.hash").read_text()
+    edit(tree, a)
+    out = from_own_cache()
+    assert "Unpacked Toy.Word" in out and "Built Toy.Word:c.o" in out and says() == "version A 1"
+    assert (ir / "Word.c.hash").read_text() == extra_c and extra_c in (ir / "Word.c.o.export.trace").read_text(), \
+        "the unpacked C lies beside the `.hash` of the C before it, which the object compiled from it records as its input"
+
+    edit(tree, EXTRA, CALLS_EXTRA)
+    assert any("1 module(s) half-written by an earlier build, rebuilt: Toy/Word" in s for s in repair())
+    rc, out = records()
+    assert rc == 0, out
+    assert says() == "version B 83" and held(tree) == apart("apart-b", EXTRA, CALLS_EXTRA)
+
+    edit(tree, z)
+    assert repair() == [] and "Built Toy.Word" in from_own_cache("+Toy.Word", "+Main")
+    edit(tree, a)
+    assert "Unpacked Toy.Word" in from_own_cache() and says() == "version A 1"
+    edit(tree, z)
+    lib = tree / ".lake" / "build" / "lib" / "lean" / "Toy"
+    for f in (lib / "Word.trace", *lib.glob("Word.*.hash"), *ir.glob("Word.*.hash")):
+        f.unlink()                                                      # what the repair dropped before it dropped objects
+    rc, out = records()
+    assert rc == 0 and "Toy.Word:c.o" not in out and says() == "version A 1", \
+        "the module is restored, its object is taken as built, and the executable runs the earlier source"
+    assert repair() == ["lean-records: toy: 2 object(s) older than the C they were compiled from, dropped: "
+                        "Toy/Word.c.o.export, Toy.c.o.export"], \
+        "`Toy`'s too, compiled from the same C as the one restored after it: Lake compiles it once more"
+    rc, out = records()
+    assert rc == 0, out
+    # `Main`'s object is the published build's, restored from Lake's own cache: the same C, compiled under another name
+    mine, theirs = ({f: d for f, d in h.items() if not f.startswith(("ir/Main.c.o.", "bin/"))}
+                    for h in (held(tree), apart("apart-z", z)))
+    assert says() == "version Z 1" and mine == theirs
+
+
 @pytest.mark.skipif(LAKE is None, reason="no lake")
 def test_a_module_file_above_a_private_import_is_stored_and_another_tree_restores_it(tmp_path, monkeypatch):
     """Through Lake, on `module` files: `Modular` imports `Modular.Uses`, which imports `Modular.Hidden` and

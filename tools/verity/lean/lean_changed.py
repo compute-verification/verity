@@ -566,51 +566,88 @@ def left_by(tree: Path) -> dict | None:
 #: file `.olean.server` and `.olean.private`), `.ilean` (`i`), and in a `module` file `.ir` (`r`) and `.ir.sig` (`rs`). All
 #: but the `.ilean` are in the olean format, which starts `olean`.
 LIB_OUTPUTS = ("o", "i", "r", "rs")
+#: the keys of a module trace's `outputs` that name what `lean` wrote in the build's `ir/`: the C, and the LLVM bitcode
+IR_OUTPUTS = ("c", "b")
+#: what Lake compiles from them there, by suffix, and the suffix of the output each is compiled from; each has a `.hash`
+#: and a `.trace` of its own beside it
+OBJECTS = {"c.o.export": "c", "c.o.noexport": "c", "bc.o": "bc"}
 
 
 def damaged(lib: Path) -> list[Path]:
     """The traces under ``lib`` (a `.lake/build/lib/lean`) whose module an interrupted build or a restore left half-written:
     an output the trace lists beside it that is missing (`LIB_OUTPUTS`), one in the olean format without its header, an
-    output whose `.hash` is not the trace's or is older than the output, or a trace that is not JSON. Lake rebuilds a module
+    output there or in the build's `ir/` (`IR_OUTPUTS`) whose `.hash` is not the trace's or is older than the output, or a
+    trace that is not JSON. Lake rebuilds a module
     whose outputs are missing, but takes one whose trace matches and whose files exist as built, half-written or not, and
     reads an output's hash from its `.hash` without hashing the output. Every Lake path writes the `.hash` after its output,
     but two leave an older one: a build killed after `lean` wrote its outputs, and a restore from Lake's cache that unpacks
     a `.ltar` over the outputs.
     A module that imports one then records the old hash for the new bytes, and a later build on the other side of the
     change replays it beside a module built against the new ones (a clash such as `Proofs.Pouw`'s on
-    `W1.Instr.exec.eq_10`). So each loses its trace and its `.hash` files (`forget`) for Lake to rebuild it."""
+    `W1.Instr.exec.eq_10`); an object compiled from its C is recorded under the old C's hash, and is taken as built once
+    the module's source is back at that C. So each loses its trace, its `.hash` files and its objects (`forget`) for Lake
+    to rebuild it."""
     out = []
+    ir = lib.parent.parent / "ir"
     for trace in sorted(lib.rglob("*.trace")) if lib.is_dir() else []:
         base = trace.with_suffix("")
         try:
             doc = json.loads(trace.read_text())
             outputs = doc.get("outputs") if isinstance(doc, dict) else None
-            names = [n for k, v in outputs.items() if k in LIB_OUTPUTS for n in (v if isinstance(v, list) else [v])
-                     if isinstance(n, str)] if isinstance(outputs, dict) else []
-            for name in names:
+            names = [(k in LIB_OUTPUTS, n) for k, v in outputs.items() if k in LIB_OUTPUTS + IR_OUTPUTS
+                     for n in (v if isinstance(v, list) else [v]) if isinstance(n, str)] if isinstance(outputs, dict) else []
+            for beside, name in names:
                 digest, _, ext = name.partition(".")
-                f = base.with_name(f"{base.name}.{ext}")
-                if not f.is_file() or (ext != "ilean" and f.open("rb").read(5) != b"olean"):
+                f = (base if beside else ir / base.relative_to(lib)).with_name(f"{base.name}.{ext}")
+                if beside and (not f.is_file() or (ext != "ilean" and f.open("rb").read(5) != b"olean")):
                     raise ValueError(f"{f.name} missing or not in the olean format")
                 if (h := f.with_name(f"{f.name}.hash")).is_file():
                     if h.read_text().strip() != digest:
                         raise ValueError(f"{h.name} is not the trace's")
-                    if f.stat().st_mtime_ns > h.stat().st_mtime_ns:
+                    if f.is_file() and f.stat().st_mtime_ns > h.stat().st_mtime_ns:
                         raise ValueError(f"{h.name} is older than {f.name}")
         except (OSError, ValueError, UnicodeDecodeError):
             out.append(trace)
     return out
 
 
+def objects(base: Path) -> list[Path]:
+    """The objects Lake compiled from the module whose `ir/` outputs are ``base``'s (`ir/A/B` for `A.B`), each with the
+    `.hash` and the `.trace` beside it: the files that are there."""
+    return [f for o in OBJECTS for end in ("", ".hash", ".trace") if (f := base.with_name(f"{base.name}.{o}{end}")).exists()]
+
+
 def forget(lib: Path, trace: Path) -> None:
-    """Drop ``trace`` (a module's, under ``lib``) and the `.hash` file of each of the module's outputs, in ``lib`` and in
-    the build's `ir/`. A restore from Lake's cache that finds an output in place keeps it and its `.hash` as they are, so
-    a stale `.hash` left beside the trace would outlive the rebuild."""
+    """Drop ``trace`` (a module's, under ``lib``), the `.hash` file of each of the module's outputs, in ``lib`` and in
+    the build's `ir/`, and the module's objects there with their traces. A restore from Lake's cache that finds an output
+    in place keeps it and its `.hash` as they are, so a stale `.hash` left beside the trace would outlive the rebuild; an
+    object's trace names the hash Lake read for the C when it compiled it, which a stale `.hash` made another C's, so the
+    object would outlive it too."""
     rel = trace.relative_to(lib).with_suffix("")
     for d in (lib, lib.parent.parent / "ir"):
         for h in (d / rel).parent.glob(f"{glob.escape(rel.name)}.*.hash"):
             h.unlink(missing_ok=True)
+    for f in objects(lib.parent.parent / "ir" / rel):
+        f.unlink(missing_ok=True)
     trace.unlink(missing_ok=True)
+
+
+def outdated(lib: Path) -> list[Path]:
+    """The objects in the build's `ir/` (``lib`` is its `.lake/build/lib/lean`) written before the C or bitcode beside
+    them, which Lake compiles them from: Lake writes an object after its source, so such an object is from an earlier
+    source, and Lake takes it as built whenever its trace names the hash the new source has. A `repair` that dropped a
+    module's trace and `.hash` files and kept its objects left them so."""
+    out = []
+    ir = lib.parent.parent / "ir"
+    for o, of in OBJECTS.items() if ir.is_dir() else ():
+        for obj in ir.rglob(f"*.{o}"):
+            src = obj.with_name(obj.name.removesuffix(o) + of)
+            try:
+                if src.stat().st_mtime_ns > obj.stat().st_mtime_ns:
+                    out.append(obj)
+            except OSError:
+                pass
+    return sorted(out)
 
 
 def orphaned(lib: Path) -> dict[str, list[Path]]:
@@ -646,8 +683,9 @@ def clashed(tree: Path, pkgs: list[str], text: str) -> list[str]:
 
 def repair(tree: Path, pkgs: list[str], links: dict[str, str], left: dict | None, log=print) -> None:
     """Make ``tree``'s copy of ``pkgs`` one Lake builds from, whatever a run left there: each module whose outputs `damaged`
-    finds loses its trace and `.hash` files (`forget`), so Lake rebuilds it, and a module with no trace loses its `.hash`
-    files (`orphaned`). Where a run ended mid-way (``left``, its `DIRTY`), also each package whose
+    finds loses its trace, its `.hash` files and its objects (`forget`), so Lake rebuilds it, a module with no trace loses
+    its `.hash` files (`orphaned`), and an object older than the C beside it goes with its trace (`outdated`), so Lake
+    compiles it again. Where a run ended mid-way (``left``, its `DIRTY`), also each package whose
     fetched dependencies hold a damaged module or a checkout that is not its manifest's, and the one whose dependencies it
     was taking (`phase` `deps`), has them dropped, so they are taken again."""
     if left is not None:
@@ -668,6 +706,13 @@ def repair(tree: Path, pkgs: list[str], links: dict[str, str], left: dict | None
                 h.unlink(missing_ok=True)
             names = list(lone)
             log(f"lean-records: {p}: {len(names)} module(s) without a trace kept their .hash files, dropped: "
+                f"{', '.join(names[:8])}{' ...' if len(names) > 8 else ''}")
+        if old := outdated(lib):
+            for obj in old:
+                for f in (obj, obj.with_name(f"{obj.name}.hash"), obj.with_name(f"{obj.name}.trace")):
+                    f.unlink(missing_ok=True)
+            names = [str(obj.relative_to(lib.parent.parent / "ir")) for obj in old]
+            log(f"lean-records: {p}: {len(names)} object(s) older than the C they were compiled from, dropped: "
                 f"{', '.join(names[:8])}{' ...' if len(names) > 8 else ''}")
         if left is None:
             continue

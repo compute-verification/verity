@@ -774,6 +774,69 @@ def test_an_output_newer_than_its_hash_is_half_written_and_loses_every_hash_with
     assert any("1 module(s) half-written by an earlier build, rebuilt: P/Torn" in s for s in said)
 
 
+def test_a_c_file_under_a_hash_that_is_not_the_trace_s_or_is_older_is_half_written_and_its_objects_go(tmp_path):
+    """A `.ltar` restore writes the C over the one in place and leaves its `.hash`, as it does in `lib/lean`: Lake then
+    compiles the module's object from the new C and records the old C's hash as its input, so the object is taken as built
+    when the source is back at the old C. The module's objects go with its trace; a module with the same prefix keeps
+    its own, and a trace that names a C the build doesn't hold (a fetched dependency's) is not half-written."""
+    tree = tmp_path / "tree"
+    lib = tree / "pkg" / ".lake" / "build" / "lib" / "lean"
+    ir = tree / "pkg" / ".lake" / "build" / "ir" / "P"
+    ir.mkdir(parents=True)
+    traces = {name: module(lib, f"P/{name}") for name in ("Good", "GoodToo", "NoC", "Other", "Later")}
+    at = 10**18
+    for name in traces:
+        for f in (*lib.glob(f"P/{name}.*"), ir / f"{name}.c", ir / f"{name}.c.hash", ir / f"{name}.c.o.export",
+                  ir / f"{name}.c.o.export.hash", ir / f"{name}.c.o.export.trace", ir / f"{name}.c.o.noexport", ir / f"{name}.bc.o"):
+            if f.parent == ir and not (name == "NoC" and f.name.startswith("NoC.c")):
+                f.write_text("zz" if f.name == "Other.c.hash" else "cc")
+            if f.exists():
+                os.utime(f, ns=(at, at))
+    os.utime(ir / "Later.c", ns=(at + 1, at + 1))
+    assert LC.damaged(lib) == [traces["Later"], traces["Other"]]
+    said = []
+    LC.repair(tree, ["pkg"], {}, None, said.append)
+    for name in ("Later", "Other"):
+        assert not traces[name].exists() and [f.name for f in sorted(ir.glob(f"{name}.*"))] == [f"{name}.c"], \
+            "the C stays for Lake to replace; its `.hash`, the objects and their `.hash` and `.trace` go"
+    for name in ("Good", "GoodToo"):
+        assert traces[name].exists() and len(list(ir.glob(f"{name}.*"))) == 7
+    assert traces["NoC"].exists() and (ir / "NoC.bc.o").exists()
+    assert said == ["lean-records: pkg: 2 module(s) half-written by an earlier build, rebuilt: P/Later, P/Other"]
+
+
+def test_an_object_older_than_the_c_beside_it_goes_with_its_hash_and_trace(tmp_path):
+    """Lake compiles an object after its C, so one that is older was compiled from an earlier C, and Lake takes it as
+    built when its trace names the hash the C has now: what a repair that kept a rebuilt module's objects left."""
+    tree = tmp_path / "tree"
+    lib = tree / "pkg" / ".lake" / "build" / "lib" / "lean"
+    ir = tree / "pkg" / ".lake" / "build" / "ir" / "P"
+    ir.mkdir(parents=True)
+    at = 10**18
+    for name, c, bc in (("Old", at + 1, at), ("Same", at, at), ("New", at - 1, at), ("OldBc", at, at + 1)):
+        module(lib, f"P/{name}")
+        for f, t in ((ir / f"{name}.c", c), (ir / f"{name}.bc", bc), (ir / f"{name}.c.hash", at + 2)):
+            f.write_text("cc")
+            os.utime(f, ns=(t, t))
+        for o in ("c.o.export", "c.o.noexport", "bc.o"):
+            for f in (ir / f"{name}.{o}", ir / f"{name}.{o}.hash", ir / f"{name}.{o}.trace"):
+                f.write_text("o")
+                os.utime(f, ns=(at, at))
+    for f in lib.rglob("*"):
+        os.utime(f, ns=(at, at))
+    assert LC.damaged(lib) == []
+    old = [ir / "Old.c.o.export", ir / "Old.c.o.noexport", ir / "OldBc.bc.o"]
+    assert LC.outdated(lib) == old
+    said = []
+    LC.repair(tree, ["pkg"], {}, None, said.append)
+    assert not any(f.with_name(f.name + end).exists() for f in old for end in ("", ".hash", ".trace"))
+    assert len(list(ir.glob("Same.*"))) == len(list(ir.glob("New.*"))) == 12 and (ir / "Old.bc.o").exists() \
+        and (ir / "OldBc.c.o.export.trace").exists() and all((ir / f"{n}.c").exists() for n in ("Old", "OldBc"))
+    assert said == ["lean-records: pkg: 3 object(s) older than the C they were compiled from, dropped: P/Old.c.o.export, "
+                    "P/Old.c.o.noexport, P/OldBc.bc.o"]
+    assert LC.outdated(lib) == [] and LC.outdated(tmp_path / "none" / "lib" / "lean") == []
+
+
 def test_a_module_without_a_trace_loses_the_hash_files_it_kept(tmp_path):
     """A tree can hold an `.olean` newer than its `.hash` and no `.trace`, as a `repair` that drops only the trace leaves it;
     `damaged` reads only traces, so it goes unflagged, and the next `.ltar` restore would keep the stale `.hash` beside a
