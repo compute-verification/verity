@@ -567,7 +567,8 @@ def install(sched: Any, cfg: Mapping[str, Any]) -> list[Any]:
 
         sink = _lines(out / f"boundary.{pid}.jsonl")
         kept = Path(cfg["private"]) if cfg.get("private") else out
-        done.append(BR.BoundaryWindows.of(cfg["boundary_rows"], kept / "boundary", sink).install(sched, hooks))
+        released = release_key if cfg.get("release_order") else None
+        done.append(BR.BoundaryWindows.of(cfg["boundary_rows"], kept / "boundary", sink, released).install(sched, hooks))
     if cfg.get("release_order"):
         add, finish = sched.add_request, sched.finish_requests
         gate = ReleaseGate(add, lambda ids: finish(ids, _aborted()), key=release_key, hold_s=float(cfg.get("hold_s", 5.0)))
