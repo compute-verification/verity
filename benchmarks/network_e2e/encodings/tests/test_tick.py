@@ -322,7 +322,7 @@ def test_without_the_tick_the_same_run_needs_decisions():
 
 
 def test_a_count_capped_at_0_costs_nothing():
-    """A count capped at 0 codes in 0 bits. `TICK_CAPS` caps every count at 0, so a window costs nothing; v1's own caps
+    """A count capped at 0 codes in 0 bits. `TICK_CAPS` caps every count at 0, so a window's segment costs nothing; v1's own caps
     hold the hits, the resumes and the lag bits at 0, so an empty window costs only its decisions' and order entries'
     counts, less than under caps with room for the other three."""
     counts = ("arrived", "hits", "resumes", "order", "lag")
