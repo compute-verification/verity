@@ -33,7 +33,7 @@ and the program = the reference (proved):
   the program's `bitlen` is Lean core's `Nat.log2` plus one, the reference's `Nat.size`;
 * `CodeChargesWhole`: the program's whole-window charges (`NetworkCertifier.WindowCharge.charges`, which the window
   difftest runs against `window_charge.reference_window`) are the reference's (`WindowCharge.charges`), for books with
-  the same tables and priors and windows with the same fields.
+  the same tables and priors and windows with the same fields, length terms included.
 
 Each statement relates the two sides by their fields rather than by a transport, so that it reads only the two sides'
 definitions. The transports (`frameRef`, `syncRef`, `syncSetRef`, `syncSetCode`, `tallyRef`, `carryRef`, `tableRef`,
@@ -382,7 +382,7 @@ def bookRef (bk : NetworkCertifier.WindowCharge.Book) : WindowCharge.Book :=
 def wcarryRef (c : NetworkCertifier.WindowCharge.Carry) : WindowCharge.Carry := ⟨carryRef c.dec, c.pos, c.rank⟩
 
 /-- The reference form of the program's window. -/
-def windowRef (x : NetworkCertifier.WindowCharge.Window) : WindowCharge.Window := ⟨x.ds, x.hits, x.order⟩
+def windowRef (x : NetworkCertifier.WindowCharge.Window) : WindowCharge.Window := ⟨x.ds, x.hits, x.order, x.lens⟩
 
 theorem code_codeAll : ∀ (st : NetworkCertifier.AdviceV1.Tally) (ss : List (ℕ × ℕ × ℕ)),
     (NetworkCertifier.WindowCharge.codeAll st ss).map tallyRef = WindowCharge.codeAll (tallyRef st) ss
@@ -471,14 +471,21 @@ theorem code_syms (bk : NetworkCertifier.WindowCharge.Book) (N H O : ℕ) (cy : 
         simp only [Option.map_some, Option.bind_some, code_binned, code_countHi]
         rfl
 
-theorem code_wwindow (bk : NetworkCertifier.WindowCharge.Book) (N H O : ℕ) (cy : NetworkCertifier.WindowCharge.Carry)
-    (x : NetworkCertifier.WindowCharge.Window) :
-    (NetworkCertifier.WindowCharge.window bk N H O cy x).map (fun p => (p.1, wcarryRef p.2)) =
-      WindowCharge.window (bookRef bk) N H O (wcarryRef cy) (windowRef x) := by
+theorem code_tailBits : ∀ ts : List (ℕ × ℕ),
+    NetworkCertifier.WindowCharge.tailBits ts = WindowCharge.tailBits ts
+  | [] => rfl
+  | t :: ts => by
+    simp only [NetworkCertifier.WindowCharge.tailBits, WindowCharge.tailBits, code_tailBits ts, code_bitlen]
+    rfl
+
+theorem code_wwindow (bk : NetworkCertifier.WindowCharge.Book) (N H O L : ℕ)
+    (cy : NetworkCertifier.WindowCharge.Carry) (x : NetworkCertifier.WindowCharge.Window) :
+    (NetworkCertifier.WindowCharge.window bk N H O L cy x).map (fun p => (p.1, wcarryRef p.2)) =
+      WindowCharge.window (bookRef bk) N H O L (wcarryRef cy) (windowRef x) := by
   simp only [NetworkCertifier.WindowCharge.window, WindowCharge.window]
-  show (if x.ds.length ≤ N ∧ x.hits.length ≤ H ∧ x.order.length ≤ O ∧ cy.dec.run < 3 ∧
+  show (if x.ds.length ≤ N ∧ x.hits.length ≤ H ∧ x.order.length ≤ O ∧ x.lens.length ≤ L ∧ cy.dec.run < 3 ∧
       cy.rank ≤ WindowCharge.INDEX_CAP + 1 then _ else none).map _ =
-    if x.ds.length ≤ N ∧ x.hits.length ≤ H ∧ x.order.length ≤ O ∧ cy.dec.run < 3 ∧
+    if x.ds.length ≤ N ∧ x.hits.length ≤ H ∧ x.order.length ≤ O ∧ x.lens.length ≤ L ∧ cy.dec.run < 3 ∧
       cy.rank ≤ WindowCharge.INDEX_CAP + 1 then _ else none
   split_ifs
   · rw [← code_syms]
@@ -490,35 +497,46 @@ theorem code_wwindow (bk : NetworkCertifier.WindowCharge.Book) (N H O : ℕ) (cy
       cases NetworkCertifier.WindowCharge.codeAll NetworkCertifier.AdviceV1.Tally.fresh q.1 with
       | none => rfl
       | some st =>
-        simp only [Option.bind_some, Option.map_some, code_finish]
-        cases AdviceV1.finish (tallyRef st) <;> rfl
+        simp only [Option.bind_some, Option.map_some, code_finish, code_tailBits, windowRef]
+        cases AdviceV1.finish (tallyRef st) with
+        | none => rfl
+        | some c =>
+          simp only [Option.bind_some]
+          cases WindowCharge.tailBits x.lens with
+          | none => rfl
+          | some t =>
+            simp only [Option.bind_some]
+            show (if c + t < 2 ^ AdviceV1.CW then some (c + t, q.2) else none).map _ =
+              if c + t < 2 ^ AdviceV1.CW then some (c + t, wcarryRef q.2) else none
+            split_ifs <;> rfl
   · rfl
 
-theorem code_wsession (bk : NetworkCertifier.WindowCharge.Book) (N H O : ℕ) :
+theorem code_wsession (bk : NetworkCertifier.WindowCharge.Book) (N H O L : ℕ) :
     ∀ (cy : NetworkCertifier.WindowCharge.Carry) (ws : List NetworkCertifier.WindowCharge.Window),
-      NetworkCertifier.WindowCharge.session bk N H O cy ws =
-        WindowCharge.session (bookRef bk) N H O (wcarryRef cy) (ws.map windowRef)
+      NetworkCertifier.WindowCharge.session bk N H O L cy ws =
+        WindowCharge.session (bookRef bk) N H O L (wcarryRef cy) (ws.map windowRef)
   | _, [] => rfl
   | cy, x :: ws => by
     simp only [NetworkCertifier.WindowCharge.session, WindowCharge.session, List.map_cons,
-      ← code_wwindow bk N H O cy x]
-    cases NetworkCertifier.WindowCharge.window bk N H O cy x with
+      ← code_wwindow bk N H O L cy x]
+    cases NetworkCertifier.WindowCharge.window bk N H O L cy x with
     | none => rfl
     | some p =>
       simp only [Option.bind_some, Option.map_some]
-      rw [code_wsession bk N H O p.2 ws]
+      rw [code_wsession bk N H O L p.2 ws]
 
 /-- **Advice v1's whole window charged in the program is the reference's** (`CodeChargesWhole`): for books with the
-same tables (each one's frequencies and total) and the same priors, and windows with the same decisions, hits and order
-entries, the program's `charges` of the windows, listed in order, is the reference's. -/
+same tables (each one's frequencies and total) and the same priors, and windows with the same decisions, hits, order
+entries and length terms, the program's `charges` of the windows, listed in order, is the reference's. -/
 theorem CodeChargesWhole (bk : NetworkCertifier.WindowCharge.Book) (bk' : WindowCharge.Book)
     (ht : [bk.arrived, bk.nHits, bk.hit, bk.resumes, bk.nOrder, bk.gap, bk.index, bk.lag].map (fun t => (t.freqs, t.total)) =
       [bk'.arrived, bk'.nHits, bk'.hit, bk'.resumes, bk'.nOrder, bk'.gap, bk'.index, bk'.lag].map
         (fun t => (t.freqs, t.total)))
-    (hp : bk.priors = bk'.priors) (N H O : ℕ) {W : ℕ} (a : Fin W → NetworkCertifier.WindowCharge.Window)
+    (hp : bk.priors = bk'.priors) (N H O L : ℕ) {W : ℕ} (a : Fin W → NetworkCertifier.WindowCharge.Window)
     (a' : Fin W → WindowCharge.Window)
-    (ha : ∀ w, (a w).ds = (a' w).ds ∧ (a w).hits = (a' w).hits ∧ (a w).order = (a' w).order) :
-    NetworkCertifier.WindowCharge.charges bk N H O (List.ofFn a) = WindowCharge.charges bk' N H O a' := by
+    (ha : ∀ w, (a w).ds = (a' w).ds ∧ (a w).hits = (a' w).hits ∧ (a w).order = (a' w).order ∧
+      (a w).lens = (a' w).lens) :
+    NetworkCertifier.WindowCharge.charges bk N H O L (List.ofFn a) = WindowCharge.charges bk' N H O L a' := by
   have hb : bk' = bookRef bk := by
     obtain ⟨⟨_, _⟩, ⟨_, _⟩, ⟨_, _⟩, ⟨_, _⟩, ⟨_, _⟩, ⟨_, _⟩, ⟨_, _⟩, ⟨_, _⟩, _⟩ := bk'
     simp only [List.map_cons, List.map_nil, List.cons.injEq, Prod.mk.injEq, and_true] at ht
@@ -528,10 +546,10 @@ theorem CodeChargesWhole (bk : NetworkCertifier.WindowCharge.Book) (bk' : Window
     rfl
   have hw : a' = fun w => windowRef (a w) := by
     funext w
-    obtain ⟨h1, h2, h3⟩ := ha w
-    rcases e : a' w with ⟨d, h, o⟩
-    rw [e] at h1 h2 h3
-    simp only [windowRef, h1, h2, h3]
+    obtain ⟨h1, h2, h3, h4⟩ := ha w
+    rcases e : a' w with ⟨d, h, o, l⟩
+    rw [e] at h1 h2 h3 h4
+    simp only [windowRef, h1, h2, h3, h4]
   rw [NetworkCertifier.WindowCharge.charges, WindowCharge.charges, code_wsession, hb, hw, List.map_ofFn]
   rfl
 
