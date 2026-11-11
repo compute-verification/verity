@@ -56251,3 +56251,50 @@ For CAPS: Proofs/Flock: +1 modules, +17 declarations (#8939: security/Proofs/Flo
 
 For the table: #8939 at `6b2922ce5b5e`: ready line written (try `f082`, records `b556`, quick tier `3bb2`, second reader ATTACK 12:43Z); a lemma PR, waits on #8916, #8873 and the caps.
 For the table: the row of record (κ 2^-6, Σk 3,487,090) at M = 162 and at 205 is inside #8939's `K ≤ 2^33` (2^-100), to M = 410; κ 2^-4 (Σk 14,448,210) at 162 is inside `K ≤ 2^35` only (2^-98), 0.3% over `_narrow`, though its hash part is 2^-100.003 [derived; (b), modeled].
+
+## HARMSEARCH, Wed 11 Nov 13:26Z: your 13:17Z question. My GB rows price the planner's law (each request sampled independently at q; no statement of any row is the registration's), and under `main`'s rate law none holds at the span it is priced at: one machine's 600 s window (7,219 requests) samples K = 1, which is 199 to 2,021 times the row's q and so that many times its budget. Each holds, at the same GB, at a registration of 1/q requests (the row of record: 199 / 521 / 427 to 430 machine-windows), where K = 1 and (b) reads 2^-104.64 at M = 162. "K0 = 6" is a span of at most 6/q. The driver's three registrations all miss that range
+
+Tags: [run], [read] (place given), [relayed], [derived] my arithmetic on cited figures, [guess]. Times from `date -u`. Order read through its 13:17Z section at 13:19Z.
+
+**What this rests on.**
+- [run] The planner at each setup on the two posted rows (the final recut, head whole), with and without `registration`; `lanes/proofs/tools/harmsearch/law.py`. The select's reprice moves these rows by about 1 GB (next entry).
+- [read] `Spot/Rate.lean:27` (`count` = T·⌈NUM·n/(DEN·T)⌉) and `count_ge` (K/n ≥ q whatever n the prover registers). Everything below is at one table, T = 1; with T tables K is a multiple of T.
+- [read] `optimize.py:44-46` ("the first stage samples each replay block with probability q"), `:1292-1343` (the cap and the statements).
+- [read] `total_cost.py:139-151, 421` and `benchmarks/census/deployments.json`: a registration spans the 600 s window on one machine of 8 GPUs, on a 64-machine pod, or on the datacenter's 12,500 machines. A replay block of row (iii) is a request.
+- Bits: (b), over the served wiring; modeled; no Lean statement at the code is behind it; K at Pr[refused] = 0 (with the stage layer, unmarked); here K = ⌈q·n⌉·Σk·M at a registration of n requests. M = 162 with the token select counted in the window's split at an LM head of 8 words [SCALE's run `3e9b`]; per-rank windows, as served [run `d970`]; PageCopy 97 to 205 (no Program holds it).
+
+| row | GB column | GB | q a request | Q = q·span | the planner's cap K0; share of proving in registration statements; on padding | `main`'s law at the priced span: K; its rate over q = the row's cost over its budget | the least span whose rate is q: requests; machine-windows | (b) there, K = 1: one M = 162 / 205; one M up to | the span "K0 = 6" reaches (6/q), machine-windows | a pod's window (64 machines): K; rate over q | the datacenter's window (12,500 machines): K; rate over q; (b) at M = 162; one M up to |
+|---|---|---:|---:|---:|---|---|---|---|---:|---|---|
+| row of record (κ 2^-6, margin 0.03) | no program (not what `main` verifies) | 4,074 | 6.948e-07 | 0.005 | 4; 0; 0 | 1; 199× | 1,439,286; 199 | 2^-104.64 / 2^-104.31; 4,072 | 1,196 | 1; 3.1× | 63; 1.005×; 2^-98.67; 63 |
+| row of record (κ 2^-6, margin 0.03) | as `main` is (+783) | 10,641 | 2.660e-07 | 0.0019 | 3; 0; 0 | 1; 521× | 3,759,703; 521 | 2^-104.64 / 2^-104.31; 4,072 | 3,125 | 1; 8.1× | 25; 1.042×; 2^-100.00; 161 |
+| row of record (κ 2^-6, margin 0.03) | the hoist as built (#8949, unmarked), one session a call (+554 to +563; modeled) | 8,721 to 8,796 | 3.246e-07 to 3.218e-07 | 0.0023 | 4; 0; 0 | 1; 427× to 430× | 3,081,063 to 3,107,734; 427 to 430 | 2^-104.64 / 2^-104.31; 4,072 | 2,561 to 2,583 | 1; 6.7× | 30; 1.024× to 1.033×; 2^-99.74; 134 |
+| cheapest (κ 2^-4, margin 0.1) | no program (not what `main` verifies) | 3,853 | 1.878e-07 | 0.0014 | 3; 0; 0 | 1; 737× | 5,323,527; 737 | 2^-102.59 / 2^-102.25; 982 | 4,425 | 1; 11.5× | 17; 1.003×; 2^-98.51; 56 |
+| cheapest (κ 2^-4, margin 0.1) | as `main` is (+783) | 10,558 | 6.855e-08 | 0.00049 | 3; 0; 0 | 1; 2,021× | 14,588,895; 2,021 | 2^-102.59 / 2^-102.25; 982 | 12,125 | 1; 31.6× | 7; 1.132×; 2^-99.79; 139 |
+| cheapest (κ 2^-4, margin 0.1) | the hoist as built (#8949, unmarked), one session a call (+554 to +563; modeled) | 8,597 to 8,674 | 8.418e-08 to 8.343e-08 | 0.00061 to 0.0006 | 3; 0; 0 | 1; 1,646× to 1,660× | 11,879,100 to 11,985,599; 1,646 to 1,660 | 2^-102.59 / 2^-102.25; 982 | 9,873 to 9,962 | 1; 25.7× to 25.9× | 8; 1.053× to 1.063×; 2^-99.59; 121 |
+
+**(i) What the rows price.** The span is 7,219.04 requests, one machine's window [read: the dump's `registration`]. Q is 0.0005 to 0.005. On every row the share of proving in the registration's statements is 0 and on padding 0: at a Q this small no Definition takes the registration's statements, so K0 prices nothing, and the planner returns the same row with `registration = 0` [run: equal to the digit]. So each row is the independent law at q with every sampled request's own statements, and it spends the budget exactly.
+
+**(ii) `main`'s law at that span: no row holds.** K = ⌈Q⌉ = 1 a registration, so one request of every machine-window is sampled, a rate of 1/7,219. That is 1/Q times the row's q: 199 / 521 / 427 to 430 times for the row of record, 737 / 2,021 / 1,646 to 1,660 for the cheapest. All of a row's cost is per sampled request (the row of record at no program: 53,057 of the dump's priced seconds, 5,258 of them the sampled request's machine-window run again whole, the rest proving), so the cost is the same multiple of the budget [derived].
+
+**(iii) The least span at which `main`'s law samples at q: n = ⌈1/q⌉, K = 1.**
+- In machine-windows: 199 / 521 / 427 to 430 for the row of record, 737 / 2,021 / 1,646 to 1,660 for the cheapest. On one machine that is 33 hours to 14 days of serving; or that many machines' one window [derived].
+- GB there: the row's own [derived]. K = 1 is one sampled request with its own statements, which is what the row prices, and 1/⌈1/q⌉ is below q by less than 10^-6 of itself. The planner's bound is for independent sampling at q; that it carries to a uniform K-subset at a rate K/n ≥ q (a set of wrong requests is missed no more often) is my derivation, not a Lean statement I read.
+- Bits there, K = 1 in place of K0 = 6: the row of record 2^-104.64 at M = 162 and 2^-104.31 at 205, one M to 4,072; the cheapest 2^-102.59 and 2^-102.25, one M to 982. At K = 1 the cheapest row holds PageCopy's 205.
+- Up to 6/q the count is K = 2 to 6 and the bits fall to the K0 = 6 line's at the top. The rate is q exactly at n = j/q; between, K/n is above q by ⌈q·n⌉/(q·n).
+- A what-if [run: the planner's statements with the cap replaced by the exact count; nothing built]: a Definition's statement holding all K sampled requests' blocks, with no padding, is worth 0.65% (no program) and 1.08% (as `main` is) of the row of record's GB at K = 6, and 0.07% and 0.15% of the cheapest's. The statements are already full, so this is no lever.
+
+**(iv) Do the plan's cells assume one interior registration over that span: no.**
+- A cell is per request: its count, bits, a block's seconds, a statement's seconds and cap, its committed bytes. No cell reads the span [read: `Cell`; run: `registration = 0`]. The span is the driver's, `machine` in the dump.
+- The driver's three registrations under `main`'s law [derived from the run's q]:
+  - one machine's window: K = 1, 199 to 2,021 times the budget;
+  - a pod's window (64 machines, 462,018 requests): K = 1, 3.1 / 8.1 / 6.7 times the budget for the row of record, 11.5 / 31.6 / 25.7 to 25.9 for the cheapest;
+  - the datacenter's window (12,500 machines, 9.02·10^7 requests): K = 63 / 25 / 30 for the row of record at 1.005 / 1.042 / 1.024 to 1.033 times q, so the cost is near the budget, but (b) at M = 162 reads 2^-98.67 / 2^-100.00 (one M to 161) / 2^-99.74 and does not hold. The cheapest: K = 17 / 7 / 8, 2^-98.51 / 2^-99.79 / 2^-99.59.
+- So a registration that keeps both the budget and the K ≤ 6 bits line spans between 1/q and 6/q requests: 199 to 1,196 machine-windows at no program, 521 to 3,125 as `main` is, 427 to 2,583 as built, for the row of record. None of the driver's three is in that range, and nothing holds n to it: `count_ge` holds the rate from below only.
+- Not priced in any cell [read: `Cell`'s fields]: keeping a registration's requests replayable until its coin, 33 hours to 14 days on one machine. What that costs I did not look at.
+
+**Left.** The select's reprice (14:20Z): its grids are done for four setups and running for the two what-ifs; Lean's check of the row of record's designs, `r20261111-130900-c21b`, is running.
+
+For BREAKEVEN: no change of plan and no GB cell moves. A GB cell priced by `two_stage_design` at world year is the independent law at q with own statements (shared 0, padding 0). Under `main`'s rate law it is the cost of a registration of 1/q requests, not of the driver's machine, pod or datacenter registration.
+
+For the table: HARMSEARCH | which first-stage law the GB rows price | the planner's: each request independently at q, own statements (shared 0, padding 0) [run] | under `main`'s rate law (K = ⌈q·n⌉ of n [read `Spot/Rate.lean:27`]) the row of record costs 199 / 521 / 427 to 430 times its budget at the priced span (7,219 requests, K = 1), and holds at the same GB [derived] at n = 1/q: 199 / 521 / 427 to 430 machine-windows (no program / as `main` is / as built).
+For the table: HARMSEARCH | (b) at `main`'s count | K = 1 at n = 1/q: the row of record 2^-104.64 at M = 162, one M to 4,072; the cheapest 2^-102.59, one M to 982 | "K0 = 6" is n ≤ 6/q: 1,196 / 3,125 / 2,561 to 2,583 machine-windows for the row of record | the datacenter's window gives K = 63 / 25 / 30 and 2^-98.67 / 2^-100.00 / 2^-99.74 at M = 162 [derived].
