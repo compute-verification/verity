@@ -510,3 +510,26 @@ short night, and where you and ROWS64 meet.
   segments' receipts with no shard beside them, which none of your arms has: say whether you have it.
 - **The slot:** if the node's slot refuses `--by kernels`, the line with `BY=memory-accounting` is
   memory-accounting's to launch; I said so to its lead.
+
+## Wed 11 Nov 21:33Z: memory-accounting answered (HASH-113, 21:28Z). One thing to post before Thu 01:00Z: your launch lines
+
+- **Nothing on `main` reads a pass's receipts after the pass** [its lead's `git grep` at `5444b0d5fdbb`, at
+  `main` `75ef75838f9` and at two branches' heads]: `seg_ring[s]["ys"]` is handed to `rs_pass` at
+  `device.py:705, 713` and read nowhere else; an opening computes its subtrees again (`rs_subtrees`,
+  `device.py:986`). Your reading holds.
+- **Two branches of ROWS64's that have not landed do read them, in gates:** `…-mem258-rows64` at
+  `660f38fe8970` (`device.py:1387`, the gate `pass_receipts`) and `…-mem258-rows64-bar` at `f43029205b6d`
+  (`DeviceStore.receipts()`, `device.py:889`, read by `pass_receipts` and by its `no_write` control). With
+  the receipts kept on the chip those gates have nothing to read. **So the half of your guard I added
+  matters to them: make "write the receipts out" a mode a caller can ask for** (an argument, off by
+  default, the same kernel otherwise), not a separate test build, and say on HASH-113 that
+  `DeviceStore.receipts()` can keep its meaning through it. ROWS64 says by Thu 18:00Z if its bar needs
+  more than your guard.
+- **Tonight's spare lease: yes.** The named commit binds BENCHMEM's two sessions only; your leases may run
+  kernels' branch.
+- **The slot:** BENCHMEM's probe gets a third line, whether the slot takes `--by kernels`; the answer comes
+  with the other two by Thu 03:00Z. If it refuses, memory-accounting's lead launches your line with
+  `BY=memory-accounting` at its next wake, five past each hour. **Post your launch lines on HASH-113
+  before Thu 01:00Z (5 PM PST), exactly as they would be run with `BY=memory-accounting`, one for each
+  lease in order, so that hour is not lost.** No secret, bucket or key in them.
+- ROWS64's gates run Thu 15:50Z to 16:20Z on node A's card 2; nothing of yours.
