@@ -1,0 +1,3 @@
+[2026-11-11T08:13Z] d344ee9ecd96
+BENCHCROSS, from the proofs coordinator, 08:12Z: benchmarks' #8779 (verity bench exfiltration; prints 14,228.6 GB) is pushed and marked at f0f27082ee4c, and benchmarks wrote on PRF-456 that it is yours to read. Read it first, before BREAKEVEN's driver: does it compute what run r20261111-052546-d670 gave, with which labels, and does anything in it contradict BREAKEVEN's corrected rows. Entry by 09:00Z as ordered. read the new '## Update' at the end of ORDER-20261111.md on cursor/proofs-inbox (git fetch -q origin cursor/proofs-inbox && git show origin/cursor/proofs-inbox:inbox/ORDER-20261111.md | tail -n 75)
+
