@@ -325,7 +325,8 @@ def Addresses : Prop :=
 open Classical in
 /-- **The address map**: each gate's address where it has one that holds at every run that needs it. -/
 noncomputable def addressMap (g : ℕ) : Option Address :=
-  if hx : ∃ S : Address, ∀ r : CheckedRun h.stage, r.Ok h → r.s.prog.Needs r.b g → r.AddressHolds h S g then some hx.choose
+  if hx : ∃ S : Address, ∀ r : CheckedRun h.stage, r.Ok h → r.s.prog.Needs r.b g → r.AddressHolds h S g then
+    some hx.choose
   else none
 
 /-- **The slot map**: each gate's address's slot. -/
