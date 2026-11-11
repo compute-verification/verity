@@ -6,8 +6,9 @@ forward, backward (autograd's threads inherit the mode; a program's own threads 
 optimizer alike. It counts, in multiply-accumulates (MACs):
 
 - matmuls (`mm`, `addmm`, `bmm`, `baddbmm`, `dot`, `mv`, `addmv`, `addbmm`, `addr`, `_int_mm`, `_scaled_mm`, their
-  in-place forms), attention and convolutions, by torch's FLOP formulas (`torch.utils.flop_counter`) halved, or by
-  shape; distances (`cdist`, `pdist`) at one MAC per coordinate pair, and `embedding_bag` at one per index and column;
+  in-place forms), attention and convolutions, by torch's FLOP formulas (`torch.utils.flop_counter`, and the fused
+  attention's for the CPU flash attention) halved, or by shape; distances (`cdist`, `pdist`) at one MAC per
+  coordinate pair, and `embedding_bag` at one per index and column;
 - elementwise multiplications (`mul`, `div`, `addcmul`, `addcdiv`, `lerp`, `add` with a scale, their in-place and
   `_foreach_` forms), one MAC per output element, so a matmul written as a broadcast product or quotient is counted
   too, and fused optimizer steps at their unfused forms' multiplications per parameter;
@@ -131,6 +132,13 @@ ACCUMULATING = _ops("addmm", "addmm_", "_addmm_activation", "baddbmm", "baddbmm_
 SHAPE_OPS = _ops("mm", "_int_mm", "addmm", "addmm_", "_addmm_activation", "bmm", "baddbmm", "baddbmm_", "addbmm", "addbmm_",
                  "dot", "vdot", "mv", "addmv", "addmv_", "_cdist_forward", "_cdist_backward", "_euclidean_dist",
                  "_pdist_forward", "_pdist_backward") | ADDR | EMBEDDING_BAG
+#: torch's FLOP formulas, with the CPU flash attention's, which they leave out, taken from the fused attention's: both
+#: take the same leading operands (query, key and value; the backward the output's gradient first)
+FLOP_FORMULAS = flop_counter.flop_registry | {
+    aten._scaled_dot_product_flash_attention_for_cpu:
+        flop_counter.flop_registry[aten._scaled_dot_product_flash_attention],
+    aten._scaled_dot_product_flash_attention_for_cpu_backward:
+        flop_counter.flop_registry[aten._scaled_dot_product_flash_attention_backward]}
 #: the op namespaces whose kernels the counter knows; any other (a `torch.library` custom op, whose body it can't see)
 #: makes a run invalid
 NAMESPACES = frozenset({"aten", "prims", "profiler"})
@@ -700,8 +708,8 @@ class Counter(TorchDispatchMode):
         p = func.overloadpacket
         if p in SHAPE_OPS:
             return _shape_macs(func, args), "matmul"
-        if p in flop_counter.flop_registry:
-            return int(flop_counter.flop_registry[p](*args, **kwargs, out_val=out)) // 2, "matmul"
+        if p in FLOP_FORMULAS:
+            return int(FLOP_FORMULAS[p](*args, **kwargs, out_val=out)) // 2, "matmul"
         if p in ELEMENTWISE or p in SCALED and kwargs.get("alpha", 1) != 1:
             return sum(t.numel() for t in _tensors(out) or _tensors(args[0])), "elementwise"
         if p in FUSED_OPTIMIZERS:

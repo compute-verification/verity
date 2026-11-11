@@ -3,9 +3,14 @@ import json
 
 import pytest
 import torch
+import torch.nn.functional as F
+from synthetic import tiny_data, tiny_start
 
-from training_slowdown import run
+from training_slowdown import run, starts
 from training_slowdown.counterexample import check
+from training_slowdown.data import Stream
+from training_slowdown.evaluate import Evaluator
+from training_slowdown.model import LM
 
 
 def test_c_is_4096_forward_passes():
@@ -158,3 +163,36 @@ def test_tokens_outside_a_step_make_the_run_invalid(tmp_path, theta_file):
 def test_a_program_reaching_into_the_harness_is_refused(tmp_path, theta_file):
     with pytest.raises(SystemExit, match="refused"):
         launch(tmp_path, theta_file, MODEL + "\ndef train(te):\n    te.counter.pause()\n", "sneaky")
+
+
+def test_a_split_scores_a_registered_start_only(tmp_path, theta_file):
+    with pytest.raises(SystemExit, match="--split scores a registered start"):
+        launch(tmp_path, theta_file, SGD, "split", "--split", "search")
+
+
+def test_each_checkpoint_of_a_registered_start_is_scored_on_the_jobs_split(tmp_path):
+    data = tiny_data(tmp_path / "data")
+    s, _ = tiny_start(tmp_path / "starts")
+    theta = starts.load(s, tmp_path / "starts")
+    te = run.Harness(theta, tmp_path / "out", start=s.entry(), split="search",
+                     evaluator=Evaluator(data, "search", theta, s.shape, "cpu"))
+    stream = Stream(data, seed=0, ctx=16)
+    with te.counter:
+        m = te.load(LM.of(s.shape))
+        te.plan(2)
+        opt = torch.optim.SGD(m.parameters(), lr=0.1)
+        for _ in range(2):
+            with te.step():
+                rows = te.batch(stream.next(4))
+                logits = m(rows[:, :-1])
+                F.cross_entropy(logits.reshape(-1, logits.shape[-1]), rows[:, 1:].reshape(-1)).backward()
+                opt.step()
+                opt.zero_grad()
+    rec = te.finish({})
+    assert rec["split"] == "search" and rec["start"]["name"] == s.name and rec["start"]["shape"] == s.shape
+    assert [cp["step"] for cp in rec["checkpoints"]] == [0, 1]
+    for cp in rec["checkpoints"]:
+        sc = cp["score"]
+        assert sc["split"] == "search" and cp["bpb"] == sc["bpb"]
+        assert sc["slice"]["weights_digest"] == cp["output_sha256"]
+    assert rec["invalid"] == []
