@@ -274,8 +274,9 @@ PearlCPeelBV2 = sigma_lift(PearlCPeelB, 2)
 def bindings() -> list:
     """The bindings circuit-check takes (the sidecar), each Definition on words and on bits: on the H100's atom and
     sm_120's at G = 4, the chain over one promotion window and, unpromoted, over two atoms; the Gram matrix and the peel
-    factors at rank 2 over one atom, and the peel factors at rank 1 over a window; the statistics of 32 words; and the
-    forming of a row of eight. But for that last, each is within the size circuit-check lowers a Definition whole at."""
+    factors at rank 2 over one atom, and the peel factors at rank 1 over a window; the statistics of 32 words; and, on
+    the H100's atom, the forming of a row of eight. But for that last, each is within the size circuit-check lowers a
+    Definition whole at."""
     from verity.ml.circuits.ops.prims import BlackwellE4m3QmmaDot32, HopperE4m3QgmmaDot32
     from verity.ml.definitions.boolean import boolean_version
 
@@ -288,11 +289,12 @@ def bindings() -> list:
         if bits:
             out.append(bind(PearlCBf16NegV2))
         for dot in atoms:
-            out += [bind(pick(PearlCFormCode, PearlCFormCodeV2), DOT=dot), bind(pick(PearlCForm, PearlCFormV2), K=8, DOT=dot),
+            out += [bind(pick(PearlCFormCode, PearlCFormCodeV2), DOT=dot),
                     bind(pick(PearlCChain, PearlCChainV2), K=128, DOT=dot, G=4),
                     bind(pick(PearlCGram, PearlCGramV2), K=32, R=2, DOT=dot, G=4)]
             for k, r in ((128, 1), (32, 2)):
                 out += [bind(pick(PearlCPeelA, PearlCPeelAV2), K=k, R=r, DOT=dot, G=4),
                         bind(pick(PearlCPeelB, PearlCPeelBV2), K=k, R=r, DOT=dot, G=4)]
-        out.append(bind(pick(PearlCChain, PearlCChainV2), K=64, DOT=atoms[1], G=0))
+        out += [bind(pick(PearlCForm, PearlCFormV2), K=8, DOT=atoms[0]),
+                bind(pick(PearlCChain, PearlCChainV2), K=64, DOT=atoms[1], G=0)]
     return out
