@@ -4,9 +4,10 @@ A served model's proof blocks proved one type at a time, from synthetic values a
 one-stage audit takes: the proof block's Boolean lowering, its `verity/flock-circuit` statement with hidden outputs, a loopback
 `serve --zk` / `prove --zk` run of `flock-circuit` (Flock's circuit prover, upstream Flock b684b12 with `verity/protocols/flock/prover`'s
 patches) whose sample is every unit, and the Lean verifier (its `verify --zk`, built from `verity/protocols/flock/verifier`), which must
-pass the honest run through every check and reject the selftest build's forgeries (a committed false output word, a false
-output claim, a flipped internal bit). The verifier holds no program for a proof block (`stage.py` says why), so it then
-refuses the honest run for that alone (`ProvedScope.NO_PROGRAM`), which is what `summarize.py` passes it on.
+pass the honest run through `Zk.verify` and every check before the Program and reject the selftest build's forgeries (a
+committed false output word, a false output claim, a flipped internal bit). The verifier holds no program for a proof block
+(`stage.py` says why), so it then refuses the honest run for that alone (`ProvedScope.NO_PROGRAM`). `summarize.py` counts
+that refusal in `lean_refused_no_program`, apart from Lean's acceptances (`lean_accepted`), and never as an acceptance.
 
 Four kinds of type (`stage.py`'s docstring has each):
 
@@ -48,7 +49,8 @@ Files:
   which a later `prove` balances its GPUs by (`WIN_SECONDS`). `settings.py` declares each variable it reads, with its
   default.
 - `tests/`: `window.py`'s `prove` on a stub `prove_time.sh`, `settings.py`, `ks_form.py` on synthetic circuit heads,
-  `stage.py`'s `census:NAME` and `full/D` on a stub stager, and `window.py`'s `name()` and `KEY` held to `prove_time.sh`'s.
+  `stage.py`'s `census:NAME` and `full/D` on a stub stager, and `window.py`'s `name()` and `KEY` held to `prove_time.sh`'s,
+  with the paths the key hashes (`KEY_PATHS` in each) held to the tree.
 - `ks_form.py FLOCK_WORK...`: whether `verify --zk` takes each staged statement, before proving: the Python mirror of
   the Lean verifier's `ks-form` on the circuit file's head. The loopback `serve --zk` the timings run is Flock's own verifier and
   doesn't apply it, so a statement it refuses is proved and timed but not verified by the Lean verifier under `--zk`.
