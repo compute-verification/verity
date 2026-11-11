@@ -42,8 +42,6 @@ open FlockSoundness FlockSoundness.Model
 
 local notation "𝔽" => FlockLevel3.GF128
 
-variable {wideLeaf : Bool}
-
 /-- **The masked verifier's schedule at `m`**: `Zk.schedule`'s schedule and padding `t = 2·q₀`; the default where the
 verifier refuses `m`. -/
 def zkSched (wideLeaf : Bool) (m : ℕ) : Flock.Schedule × ℕ :=

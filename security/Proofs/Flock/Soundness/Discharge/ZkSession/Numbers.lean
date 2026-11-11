@@ -147,7 +147,7 @@ theorem TabZK.bound_le_m1 (hF : Fintype.card F = 2 ^ 128) (T : TabZK F mPts) (hT
     · rw [ENNReal.ofReal_of_nonpos h.le]
       simp
   have hpt : l + r ^ 2 ≤ (2 : ℝ) ^ (-(205 : ℝ)) := by
-    have := padTableError_le_m1 m h1 h2 _ hst
+    have := padTableError_le_m1 (wide := wideLeaf) m h1 h2 _ hst
     rw [← hsch, ← ht, ← he] at this
     exact this
   have hb : b ≤ ENNReal.ofReal ((2 : ℝ) ^ (-(114 : ℝ))) := by

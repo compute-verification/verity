@@ -338,9 +338,9 @@ theorem table_sound_pad_m1 (A : Arith F K) (hA : A.Correct)
     prob (fun out => out.1 = true ∧ ¬ CommittedPad A S (m1Schedule wideLeaf S.m) (m1Pad wideLeaf S.m) c₀ out.2)
       (tablePad A S (m1Schedule wideLeaf S.m) (by omega) (m1Pad wideLeaf S.m) c₀ 2 ptLocal mPts) σ ≤
       ENNReal.ofReal ((2 : ℝ) ^ (-(205 : ℝ))) :=
-  (table_sound_pad A hA S (m1Schedule wideLeaf S.m) (m1_shape S.m hm1 hm2) (m1Schedule_m S.m hm1 hm2)
-    (by omega) (m1Pad wideLeaf S.m) (m1_padOK S.m hm1 hm2) c₀ 2 ptLocal mPts hlay
-    (m1_rep_nonneg S.m hm1 hm2 _) σ).trans
-    (ENNReal.ofReal_le_ofReal (padTableError_le_m1 S.m hm1 hm2 _ hshape))
+  (table_sound_pad A hA S (m1Schedule wideLeaf S.m) (m1_shape S.m hm1 hm2) (m1Schedule_m (wide := wideLeaf) S.m hm1 hm2)
+    (by omega) (m1Pad wideLeaf S.m) (m1_padOK (wide := wideLeaf) S.m hm1 hm2) c₀ 2 ptLocal mPts hlay
+    (m1_rep_nonneg (wide := wideLeaf) S.m hm1 hm2 _) σ).trans
+    (ENNReal.ofReal_le_ofReal (padTableError_le_m1 (wide := wideLeaf) S.m hm1 hm2 _ hshape))
 
 end FlockSoundness
