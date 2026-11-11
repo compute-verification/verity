@@ -769,10 +769,11 @@ def test_a_build_keys_each_module_from_the_digests_its_imports_entries_name(tmp_
     assert MK.stage(store, root, [], tmp_path / "cache2")[0] == {("d", "5" * 16): "D.X"}, "D.X's olean is another"
 
 
-def test_an_entry_records_what_its_key_read_and_a_miss_says_which_input_differs(tmp_path):
+def test_an_entry_records_what_its_key_read_and_a_miss_says_which_inputs_differ(tmp_path):
     """Each entry records its key's inputs (`record`): its vars, the env's parts, each file's digest and what it read of
     each module it loads. A build that doesn't restore a module says why against the entry the module was last indexed
-    under: the first input that differs, or that it reads a module that isn't restored."""
+    under: every input that differs, in one phrase, or that it reads a module that isn't restored. The first alone was
+    read as the cause of a miss whose source had changed too."""
     files = {"r/lakefile.toml": LIBS, "r/R/A.lean": "import D.X\n", "r/S.lean": "", "r/T.lean": ""}
     root = _workspace(tmp_path / "ws", files)
     store = tmp_path / "store"
@@ -810,6 +811,11 @@ def test_an_entry_records_what_its_key_read_and_a_miss_says_which_input_differs(
     (root / "lean-toolchain").write_text(TOOLCHAIN)
     (root / "lake-manifest.json").write_text(_manifest(root, lambda d: d["packages"][1].update(rev="abd")))
     assert missed()[0] == {"the fetched packages": 2, "reads a module not restored": 2}
+    (root / "T.lean").write_text("-- edited\n")
+    assert missed() == ({"the fetched packages": 1, "the fetched packages and its source": 1, "reads a module not restored": 2},
+                        {"the fetched packages": "D.X", "the fetched packages and its source": "T",
+                         "reads a module not restored": "R.A"}), "T's pins and its source both differ, and the line names both"
+    (root / "T.lean").write_text("")
     (root / "lake-manifest.json").write_text(_manifest(root, lambda d: d["packages"][1].update(rev="abc")))
     _stock(store, MK.keys(root, ["T"]), {"D.X": ("5" * 16, {"9" * 16 + ".olean": b"X'", "b" * 16 + ".ilean": b"x"})})
     assert missed() == ({"an output it reads": 1, "reads a module not restored": 1},
@@ -820,6 +826,14 @@ def test_an_entry_records_what_its_key_read_and_a_miss_says_which_input_differs(
     _stock(store, MK.keys(root, ["T"]), stock)
     (store / "artifacts" / ("c" * 16 + ".olean")).write_bytes(b"not what R.A's entry names")
     assert missed()[0] == {"an artifact of its entry differs": 1, "reads a module not restored": 1}
+    was = e["inputs"]
+    assert MK.differs(was, was) == MK.GONE and MK.differs(was, None) == MK.NEVER
+    other = {"vars": was["vars"] | {"library": "S"}, "env": {p: "0" for p in was["env"]},
+             "files": {"r/R.lean": "0", "r/lakefile.toml": "0", "r/notes.txt": "0"}, "reads": {}}
+    assert MK.differs(was, other) == ("its library, the toolchain, the fetched packages, its source, its lakefile, "
+                                      "an input file and an output it reads")
+    assert MK.differs(was, was | {"reads": {}}) == "an output it reads"
+    assert MK.differs(was, was | {"files": was["files"] | {"r/notes.txt": "0"}, "reads": {}}) == "an input file and an output it reads"
 
 
 def _held(keyed: dict, mod: str, files: dict[str, bytes], h: str = "0" * 16) -> Path:

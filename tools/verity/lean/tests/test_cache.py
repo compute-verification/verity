@@ -12,6 +12,7 @@ import os
 import shutil
 import subprocess
 import sys
+import tarfile
 import threading
 import urllib.parse
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
@@ -709,10 +710,16 @@ def test_a_module_version_a_passing_audit_built_is_restored_on_another_tree(tmp_
     trace = json.loads((lib / "Control" / "Thms.trace").read_text())
     assert trace["synthetic"] and trace["log"] == []                  # fetched from the cache: no `lean` ran
     other = tmp_path / "node-b"                                       # another node, which built none of it
-    dest = tmp_path / "lean-artifacts.tar.gz"
-    assert arts.bundle(dest) == len(arts.added) > 0
-    h = hashlib.sha256(dest.read_bytes()).hexdigest()
-    assert LA.LakeArtifacts(other).take({LA.SHARED + h: dest.as_uri()}, lambda s: None) == len(arts.added)
+    sizes = [(store / e).stat().st_size + sum((store / "artifacts" / o).stat().st_size for o in outs) for e, outs in arts.added]
+    out = tmp_path / "out"
+    out.mkdir()
+    dests, n = arts.bundle_into(out, room := max(sizes))              # what it added is more than one bundle holds
+    assert n == len(arts.added) > 0 and len(dests) > 1
+    for d in dests:
+        with tarfile.open(d) as t:
+            assert sum(m.size for m in t.getmembers()) <= room
+    urls = {LA.SHARED + hashlib.sha256(d.read_bytes()).hexdigest(): d.as_uri() for d in dests}
+    assert LA.LakeArtifacts(other).take(urls, lambda s: None) == len(arts.added)
     shutil.rmtree(pkg / ".lake")
     assert sorted(staged(other).values()) == mods
     for f, b in was.items():
@@ -963,7 +970,6 @@ EXTRA = ('@[noinline] def Toy.extra (n : Nat) : Nat := n + 41\n'
 CALLS_EXTRA = "import Toy\n\ndef main : IO Unit := IO.println (Toy.word (Toy.extra 1))\n"
 
 
-@pytest.mark.skipif(LAKE is None, reason="no lake")
 def publish(LC, pkg: Path, out: Path, own: Path) -> None:
     """A published build of ``pkg`` in the Lake cache ``own``, as `cache.py` builds, stages and restores one."""
     writable = {**LC.lake_env(), "LAKE_ARTIFACT_CACHE": "true", "LAKE_CACHE_DIR": str(out / "lake-cache")}
@@ -974,6 +980,7 @@ def publish(LC, pkg: Path, out: Path, own: Path) -> None:
     assert any(f.suffix == ".ltar" for f in (out / "stage").iterdir())
 
 
+@pytest.mark.skipif(LAKE is None, reason="no lake")
 def test_a_module_lake_unpacked_from_a_published_build_is_not_indexed_as_one_the_build_compiled(tmp_path):
     """A `--try` or `--build` build reads Lake's own cache, which holds main's published build as `.ltar` archives. Where
     a tree compiled a module before (its `setup.json` is there) and a repair has cleared its `.hash` files, Lake unpacks
@@ -1014,6 +1021,7 @@ def test_a_module_lake_unpacked_from_a_published_build_is_not_indexed_as_one_the
     assert put("as-said", compiled=LCH.compiled(out)) == []
 
 
+@pytest.mark.skipif(LAKE is None, reason="no lake")
 def test_a_repair_leaves_no_object_of_an_earlier_source_for_lake_to_take_as_built(tmp_path, monkeypatch):
     """A slot tree sees three kinds of build: a records run's (`repair`, stage, the default targets, put), a `--build`
     run's (`repair`, then the changed modules alone, read from Lake's own cache where it holds them) and a build of the
