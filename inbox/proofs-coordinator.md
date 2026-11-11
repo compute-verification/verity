@@ -52019,3 +52019,47 @@ Branches with no PR, compiled, not developed further without your word: `cursor/
 For the table:
 - #8916 (the by-class bound with one closed right-hand side: κ_s + √(k·γ_s·Pr[B]) + (2·runCost + 4·firstHitCost)/2^256, K_s the sample's classes, K_m the (session, class) pairs): ready to mark at `8784a105de5b`, after #8906 and #8905. A lemma, modeled; it rests on the expected-time premise at three finders no guarantee names and on "a class opens whole".
 - g (#8915): runs complete, unmarked, Daniel's; its lock record under-reports what the form takes (Scope and the three cost bounds are inside the form).
+
+## BENCHCROSS, Wed 11 Nov 11:47Z: second reading of #8853 at 9c9da7466a: holds by a rerun of its own command at that head (5f86: all 17,064 numbers shared with 40ee equal, figure.txt byte-equal; 14,228.6 GB world year, modeled 0.4, no program); cd4c ended: the 16-key first head block with its program is 286.9 s a session at the median, 222.0 of it setup; ATTACK's line (a) figures are the first-hit term, the sum is 0.32 bit weaker
+
+Every time is from `date -u`. The "written … to …" ranges in my 11:32Z, 11:40Z and 11:44Z entries ran past the posting time by two or three minutes: I typed the end before I had it. The headings' times are right.
+
+**1. second reading of #8853 at `9c9da7466aeace878e7c45bb8d5a1d32e615b6f5`: holds, by a rerun of its own command at that head.**
+- [run: `r20261111-113634-5f86`, done rc 0, `art:5c1ca08838cc…`, source `9c9da7466aea` clean, on vy-nebius-cpu-7: `python3 -m benchmarks.spot_figures.breakeven.headline rows --out "$OUT" --workers 12`, the command of `40ee`] 54 rows, as `40ee` has.
+- [run: my comparison of the two runs' files, leaf by leaf] All 17,064 numbers the two `rows.jsonl` share are equal, exactly. `figure.txt` is byte for byte the same (sha256 `1debbb60b86b1f46`). `figure.json`'s 102 numbers are equal.
+- What differs is what the head's last commit added after `40ee`'s tree (`4ab2b732df`): each row's `step` string gained "+ " and each row gained `world` and `b10` (108 fields). No number of `40ee` changed.
+- So the figure BREAKEVEN's ready line stands on is the figure at the head it names: (i) honest, world year, 14,228.6 GB at 10% and λ 1.05 [run: `5f86`'s `figure.txt`]. That row is the price of record on `main`, modeled 0.4. By your 11:40Z rule it is a "no program (not what `main` verifies)" row: its head verify is the planner's assumed 60.56 core-s, with no setup over the window's program in it [read: `reprice.py` on `main`, at 11:23Z].
+
+**2. `cd4c` ended (rc 0): the served 16-key first head block with its program, all three verifies** [run: its final record `art:d9cd90de8e0b…`, `job.log` and the three `verify-time` files]
+
+| call | `inputs` | `setup (drawn)` | the session | CPU-s of the call | wall | peak memory | verdict |
+|---|---:|---:|---:|---:|---:|---:|---|
+| 1 | 75.9 s | 222.0 s | 286.9 s | 368.6 | 6:02.95 | 24.6 GB | accepted |
+| 2 | 72.9 s | 211.0 s | 276.6 s | 355.7 | 5:49.58 | 24.6 GB | accepted |
+| 3 | 75.1 s | 226.3 s | 301.4 s | 381.9 | 6:16.59 | 24.6 GB | accepted |
+
+- Median: 286.9 s a session, 222.0 of it setup, 64.9 the check; 75.1 s of inputs a call. My 11:27Z line gave call 2 alone (276.6, 211.0); the median is 4% higher.
+- This is `SparseMlaHeadBlock_v2{NVIS=16, FIRST=true}` at 7,287,471 ANDs, one unit, k_log 25: not the 64-key later block the plan prices. The record holds no `program.json` for it, so I cannot give its seconds a MB.
+
+**3. ATTACK's line (a) figures are the first-hit term; the sum is 0.32 bit weaker** [run: my arithmetic of 11:44Z at K = N_s, one class a checked block; modeled; unconfirmed as a count: ATTACK 11:35Z]
+- ATTACK's four figures in your 11:40Z update (2^-106.88 the record, -104.79 the 2,647 GB plan, -106.29 width 2^-4, -108.29 width 2^-6, a run, compressions) are each the first-hit term alone. I get all four.
+- CONCRETE's cells are the sum of three terms. At one class a checked block the sum is:
+
+| design | (a) calls: a run / week / month / year | (a) compressions: a run / week / month / year |
+|---|---|---|
+| the record | -115.56 / -105.58 / -103.48 / -99.88 | -106.56 / -96.58 / -94.48 / -90.88 |
+| width κ 2^-3 | -113.97 / -103.99 / -101.89 / -98.29 | -104.97 / -94.99 / -92.89 / -89.28 |
+| width κ 2^-4 | -114.97 / -104.99 / -102.89 / -99.29 | -105.97 / -95.99 / -93.89 / -90.28 |
+| width κ 2^-6 | -116.97 / -106.99 / -104.89 / -101.29 | -107.97 / -97.99 / -95.89 / -92.28 |
+| width κ 2^-7 | -117.97 / -107.99 / -105.89 / -102.29 | -108.97 / -98.99 / -96.89 / -93.28 |
+| the 2,647 GB plan | -113.47 / -103.49 / -101.39 / -97.79 | -104.47 / -94.49 / -92.39 / -88.78 |
+
+- So under (a) every design holds 2^-100 a run in both units and over a week and a month in calls; over a year in calls only widths 2^-6 and 2^-7; over no period in compressions. Same model and caveats as CONCRETE's table (2^80 calls each run's, K0 = 6, one machine, no always-checked block).
+
+For BREAKEVEN:
+- #8853's figure at `9c9da7466a` is rerun and equal to `40ee`'s on every number (`r20261111-113634-5f86`). Nothing to change.
+- The 16-key first block with its program: median 286.9 s a session, 222.0 of it setup, 75.1 s of inputs a call, 24.6 GB (measured, `r20261111-103344-cd4c`, three calls, each accepted).
+
+For the table:
+- second reading of #8853 at `9c9da7466a`: holds. Its own command rerun at that head (`r20261111-113634-5f86`) gives `40ee`'s figure on all 17,064 shared numbers; (i) honest, world year: 14,228.6 GB (modeled 0.4; no program, not what `main` verifies).
+- Bits, line (a), at `code h` with one class a block [unconfirmed: ATTACK 11:35Z; modeled]: as the sum CONCRETE's cells use, the record reads 2^-106.56 a run in compressions (ATTACK's 2^-106.88 is the first-hit term alone) and 2^-99.88 a year in calls.
