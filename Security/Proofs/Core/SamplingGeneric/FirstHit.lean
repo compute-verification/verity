@@ -1061,10 +1061,13 @@ theorem pr_off_sample_le_of_expectedCR {T : Type} [Fintype T] [Nonempty T] [Fint
   linarith
 
 /-- `pr_off_sample_le_of_expectedCR` at the finder whose output is `outOf`: `coll t` reads two runs at the tape `t`,
-outputs a pair wherever they open a node to two values, and outputs only collisions of `H`. -/
+outputs a pair wherever they open a node to two values, and outputs only collisions of `H`. A run opens only nodes of
+its sample (`hchk`): the proof doesn't read it, and it is what makes the finder's cost the calls of every run its
+output reads (`le_loopCostOn`), so the premise is about a finder that pays for what it runs. -/
 theorem pr_off_sample_le_of_coll {T : Type} [Fintype T] [Nonempty T] [Fintype Ω] [Nonempty Ω] [Fintype P]
     [DecidableEq V] (H : Msg → Msg) (op : T → Ω → P → Option V) {vstar : T → P → V}
-    (hv : ∀ t, IsPlurality (op t) (vstar t)) (chk : Ω → P → Bool) {w : ℕ}
+    (hv : ∀ t, IsPlurality (op t) (vstar t)) (chk : Ω → P → Bool)
+    (_hchk : ∀ (t : T) (ω : Ω) (p : P), (op t ω p).isSome → chk ω p = true) {w : ℕ}
     (hw : ∀ ω, #(univ.filter fun p : P => chk ω p) ≤ w) (c : T → Ω → ℕ) (K : ℕ)
     (coll : T → Ω → Ω → Option (Msg × Msg))
     (hc : ∀ (t : T) (ω ω' : Ω) (p : P), ConflictAt (op t) (ω, ω') p → (coll t ω ω').isSome)

@@ -131,7 +131,8 @@ theorem collAt_of_conflictAt {H : Msg → Msg} {L : Compiled Coin A} (hbind : L.
   exact Option.isSome_iff_exists.2 ⟨(u, v), huv⟩
 
 /-- **The off-trace mass at the sample's size, under `ExpectedCR` at one finder.** `chk` reads a run's coins and says
-which gates its sample holds, at most `w` of them at any coins. The finder draws the prover's tape and a first run,
+which gates its sample holds, at most `w` of them at any coins, and a run's extractions open only gates of its sample
+(`hchk`). The finder draws the prover's tape and a first run,
 then further runs' coins, and makes a further run only when its sample holds a gate the first run opened that no
 further run has opened yet; it outputs `collAt` at the first run and a further run that is the first to open such a
 gate. If it meets the linear expected-time bound, a run at a uniform tape opens a gate of the program off the committed
@@ -139,7 +140,9 @@ trace with probability at most `2·(1 + w)·E[c]/2^256 + N/(K + 1)`: `c` a run's
 gates, `K` the finder's cap. -/
 theorem pr_offReg_le_sample {H : Msg → Msg} {L : Compiled Coin A} (hbind : L.commit.Binds H) {x : Msg}
     {s : AuditStatement} (hs : L.parse x = some s) {Ω : Type} [Fintype Ω] [Nonempty Ω] (P : Prover Ω)
-    (chk : (Fin (L.V.k x) → Coin) × L.SlotEC x → Fin (L.nG x) → Bool) {w : ℕ}
+    (chk : (Fin (L.V.k x) → Coin) × L.SlotEC x → Fin (L.nG x) → Bool)
+    (hchk : ∀ (ω : Ω) (rc : (Fin (L.V.k x) → Coin) × L.SlotEC x) (g : Fin (L.nG x)),
+      (L.opTable H P x ω rc g).isSome → chk rc g = true) {w : ℕ}
     (hw : ∀ rc, #(univ.filter fun g : Fin (L.nG x) => chk rc g) ≤ w) (K : ℕ)
     (hCR : ExpectedCR H (Verity.FirstHit.sampleFinder (L.opTable H P x) chk (L.runCost H P x s) K
       fun q : Ω × (((Fin (L.V.k x) → Coin) × L.SlotEC x) × (Fin K → (Fin (L.V.k x) → Coin) × L.SlotEC x)) =>
@@ -158,7 +161,7 @@ theorem pr_offReg_le_sample {H : Msg → Msg} {L : Compiled Coin A} (hbind : L.c
       rw [L.regVal_eq_plur H P x q.1 hb]
       exact (hb.symm.trans h).symm
   have h := Verity.FirstHit.pr_off_sample_le_of_coll H (L.opTable H P x)
-    (vstar := fun (ω : Ω) (g : Fin (L.nG x)) => L.plur H P x ω g) (fun ω => L.isPlurality_plur H P x ω) chk hw
+    (vstar := fun (ω : Ω) (g : Fin (L.nG x)) => L.plur H P x ω g) (fun ω => L.isPlurality_plur H P x ω) chk hchk hw
     (L.runCost H P x s) K (L.collAt H P x s)
     (fun ω rc rc' g hg => collAt_of_conflictAt hbind hs P ω rc rc' g hg)
     (fun ω rc rc' u v huv => L.collAt_collision H P x s ω rc rc' huv) hCR
