@@ -163,6 +163,13 @@ def test_verdict_fails_closed():
     r = signed.batches[0]
     forged = dataclasses.replace(signed, batches=(dataclasses.replace(r, receipt_ns=r.receipt_ns + 1), *signed.batches[1:]))
     assert "the signature does not verify" in sw.verdict(forged, c.commitment, trusted=trusted, schemes=ts.SCHEMES).reasons
+
+    def raises(*_):
+        raise ValueError("a malformed signature")
+
+    for verify in (raises, lambda *_: False, lambda *_: None):  # a scheme that raises, refuses or says nothing
+        got = sw.verdict(signed, c.commitment, trusted=trusted, schemes={signed.scheme: verify})
+        assert not got.accepted and got.reasons == ("the signature does not verify",)
     more = dataclasses.replace(signed, egress_bits=0)
     assert not sw.verdict(more, c.commitment, trusted=trusted, schemes=ts.SCHEMES).accepted
 
