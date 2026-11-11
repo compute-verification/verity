@@ -5985,7 +5985,17 @@
    "unfolded_hash": "5a3693102054db02f9527919b681090f753d8ed926ec5e3f69ab4b4a3fb11bbc"
   },
   "Properties.NetworkPeriod.rowsTiedCharged": {
-   "owner": "@network-accounting"
+   "owner": "@network-accounting",
+   "signature": ["Properties.NetworkPeriod.rowsTiedCharged : Properties.NetworkPeriod.RowsTiedCharged"],
+   "assumptions": [],
+   "premises": {
+    "assumptions": [],
+    "domain": [],
+    "open": [],
+    "reads": []
+   },
+   "type_hash": "967b07df0522c5dce4ce83861b18efea825ce959281ecbb6ee4dc28ca39efcd1",
+   "unfolded_hash": "01fba8c75836b4820c353663bbf4732e6991a2484048acf73454e8e5b333e868"
   },
   "Properties.NetworkRecords.acceptMeans": {
    "owner": "@network-accounting",
@@ -24116,14 +24126,18 @@
    }
   },
   "Properties.NetworkPeriod": {
-   "digest": "748fac8d381639899bb16d46f8e4805dcf2624e8c8735e3bbab720a878b74f26",
+   "digest": "90782066c03a659fe50ef3667be4758c9b19dfb3333c2b25677fc7e8ae9ed8b2",
    "definitions": {
+    "Properties.NetworkPeriod.AuditFacts": "eada0fae9ca4b260e02678dfa27199fe761825968d364c252289b0b873513a4a",
     "Properties.NetworkPeriod.ClockKBoundsCount": "8cdb92caa40b67dd32763dd0bd4b5c1a316280f88dc25339058d7a54a38df555",
     "Properties.NetworkPeriod.RowsKBoundsCount": "61a3494840160823999dfc356fd013dad48ca366380e7809c37840c1160fc79c",
     "Properties.NetworkPeriod.RowsProgWired": "56037d243b6bcb5406f264b67aea64b8b1ede6bde74f457301a27e646ab0e3b1",
     "Properties.NetworkPeriod.RowsProgWiredAt": "5e7f3c60d8a285208fa801ab7225c2842566177cc45ea1e5326f99a323f83694",
     "Properties.NetworkPeriod.RowsStateTied": "a04739b3f4efea724b0ccc0993a8a603aad7fb5862c2d9544e779b31ff88f9ac",
-    "Properties.NetworkPeriod.RowsStateTiedAt": "ff582df8e2003fcfb754440ef36cc0eb6792c81f0298ed809b57414821dd7849"
+    "Properties.NetworkPeriod.RowsStateTiedAt": "ff582df8e2003fcfb754440ef36cc0eb6792c81f0298ed809b57414821dd7849",
+    "Properties.NetworkPeriod.RowsTiedCharged": "7e96450fcdb886ed24fd7ef8125e060d87b13ef8d0a6adbcdb584b0230af3f6c",
+    "Properties.NetworkPeriod.RowsTiedChargedAt": "e779721116429d1e2741a626ed232aa3caeb397070c1562d56bdd7e6074b614c",
+    "Properties.NetworkPeriod.tiedInPart": "81af3d439de76d2b6dab464e5e4f92f32511b01998f7c69bafca26e54f541ff7"
    }
   },
   "Properties.NetworkScan": {
