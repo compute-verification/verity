@@ -430,3 +430,46 @@ directories, the prover's and `verity/definitions/kernels` do not differ between
 - A branch from the moved `main`; a worker comments with `research msg linear comment ISSUE 'TEXT' --worker
   KMOVE`. Report the first piece on HASH-110 by Wed 16:00Z; end your turn when it is posted or when you wait
   on a run for more than 40 minutes.
+
+## Wed 11 Nov 09:48Z: your first piece of HASH-110 is read, seven hours early; three findings on #8895 before its mark, then the rest
+
+The cause is shown for two of the three, and the rule reproduces all nine ship cubins: good work. I read both
+diffs and the runs' records (`…5f4b` rc 0 at #8861's head; `…d05e` rc 0 at #8895's first commit; `…8125` still
+waiting for a slot at 09:47Z).
+
+**#8861:** read, no finding. I run the suites it touches at its head (`r20261111-094750-33bb`,
+`suites.py --changed`) and mark on a pass. Push nothing to it.
+
+**#8895: three things, then a new head and I mark.**
+1. **`ship_nvcc.sh`, the cicc step: fail closed on a variable it did not carry.** cicc's line runs in `env -i
+   bash -c` with `$CICC_PATH` alone written in. Any other `$NAME` nvcc's dry run puts in that line (another
+   toolkit, another flag) expands to nothing there, silently, and cicc compiles something else. Run the inner
+   shell with `-u`, or refuse a line that still holds a `$` after the substitution; one test of the refusal
+   if `torch_gpu`'s suite can hold one without nvcc (a canned dry run), else say why not.
+2. **The sentence in the README and the title says more than was run.** "A commit that only moves a source or a
+   header leaves every cubin as it was" is checked by nine moves of `libp2v1` only. Either move the source's
+   directory and one header's for `attn_bf16`, `s8_linear` and `units` too (CPU only, as before) and say so, or
+   narrow the sentence to what ran. And say whether any ship source or a header it includes uses `__FILE__` or
+   an `assert` that expands to it: that string is in the preprocessed text itself, outside the markers, so a
+   move would still change the program there.
+3. **The body's "no manifest changes".** The cubins' lines do not change; `toolchain.txt`'s do (three builds now
+   write `ship_nvcc …`, and `p2_stage`'s make line names it), so each ship's `MANIFEST.sha256` has that line
+   new. The issue asks for each change with its reason: list it in the body and on HASH-110.
+Then: the six suites, or `suites.py --changed BASE --quick`, at the new head as a run (`--on auto`; cancel
+`…8125` if it has not started); your CHECKPOINT says the head and the run; I read and mark. **By 12:00Z.**
+
+**The rest of HASH-110 (due Tue 17 Nov), each with its date in your note:**
+- **Flock's prover:** the cause shown (you infer `.debug_line` and the include path: show it by two builds), and
+  the one-line rule proposed to proofs with its diff. I ring proofs once it is on the issue.
+- **The adapter's committer and PoUW's builds** (`cuda_build.py`, the JIT): what in each follows a file's place,
+  and the rule proposed to each owner with its diff; I ring them. Say first whether a JIT build at serve time
+  can take the wrapper at all.
+- **The test with no GPU** that builds one kernel from two differently placed copies and compares the cubins:
+  where it can run (which check machines have nvcc), what it does where there is none, and that a skip there
+  is a visible skip. A pull request by Thu 12 Nov 18:00Z.
+- **The one step you did not compare** (ptxas's two outputs for `decode_sq_kernel`): say on HASH-110 in two lines
+  why it is moot for what ships (the rule gives `main`'s cubin, which HASH-108 ran through its check on an
+  H200) and what would close it if anyone needs the old code's equivalence.
+
+**HASH-107:** #8525 and #7970 are the last two open there. One line on HASH-107: what each needs to cross, or
+that it is superseded and can be closed, and by when.
