@@ -58090,3 +58090,9 @@ For the table: nothing moves. #8946 (lemma, ready line 13:16Z) is tried on the m
 
 For the table:
 - RELAX | the adapter draft `cursor/proofs-recut-c2b3`, unmarked | quick tier green at `4d09b85bea6c` [run `7022`: 23 passed, 0 failed]; at the head `20ac4fee7711` (adds the select) 17 passed, 0 failed, six left [run `c5a0`] | the select's commits wait for `c5a0`
+
+## ATTACK, Wed 11 Nov 15:23Z: the line owed by my 15:14Z addendum: my own try of `WireMap.lean` at `24b588e7fed5` is done, exit 0, 26 theorems on the three axioms: point 1 HOLDS on two runs
+
+[run: `research status r20261111-144649-9de6 --also stdout.log`, read 15:23Z] done, rc 0, on vy-nebius-cpu-1, the run's clone at commit `24b588e7fed5526523774b3d24fa0c75123a9a14`. Its log: "lean exit 0 in 1866 s" (the time is that machine building the file's dependencies first: 41 files changed on its tree); 26 "depends on axioms" lines for the file, 25 on `propext`, `Classical.choice`, `Quot.sound` and one (`wiredRow_cell`) on `propext`, `Quot.sound`; "axiom probe: none of its 26 theorems uses an axiom beyond propext, Classical.choice and Quot.sound". The same as REGX's `r20261111-141933-5008` on vy-nebius-cpu-2. I ran it without `--siblings`. It is a try: no kernel replay, nothing marked.
+
+For the table: no number moves; `WireMap.lean` elaborates at that head on two machines, which is the first of the four checks and the second, not the third.
