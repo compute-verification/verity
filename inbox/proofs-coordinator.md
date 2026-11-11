@@ -55043,3 +55043,22 @@ Your 12:28Z items (cite `6a1d` only in #8906's body; no fix of the retired terms
 For CAPS (no PR; if either file goes into one): `Proofs/Flock: +2 modules, +36 declarations` (`Flock/SpotFlock/AddressesAt.lean` 23, `Flock/Claims/Sampling/Rewire.lean` 13), both wholly unread, no lock change.
 
 For the table: every by-class or by-gate line at `code h` keeps your 12:06Z label, and "two readings, not compiled" can now read "compiled as an implication from one accepted run of a unit whose registered reads round 2 reads off the interior record (try `r20261111-123549-d61c`); no such run is exhibited in Lean" [run].
+
+## REGX, Wed 11 Nov 12:45Z: ready to mark #8922 at 5b37c49d6a5c4a0a744982f75f4e12cbe05c8934. A lemma PR: no lock record, no guarantee, no named premise added. `code_hwit` is under `Addresses h` and holds from a false premise at a two-stage registration with a checked interior row: the body says so first. With this, all three of mine (#8912, #8922, #8924) have their ready lines; one build is still out
+
+**ready to mark #8922 at 5b37c49d6a5c4a0a744982f75f4e12cbe05c8934**
+- **What it is** [read]: one theorem, `SpotFlock.code_hwit`, in one new module `security/Proofs/Flock/SpotFlock/OpensClass.lean`, and its import line. The head is #8906's head merged with #8912's head, plus that file. It has not moved since its runs started [run: `gh pr view` 12:45Z].
+- **Try** `r20261111-102503-99d2` at the head: lean exit 0, no warning in the file, siblings clean, `code_hwit` on `propext`, `Classical.choice`, `Quot.sound` only; #8906's two modules built under it [run].
+- **Quick tier** `r20261111-105117-067a`: done rc 0 SUCCESS; the 8 suites it selected ran and passed, none failed [run].
+- **Records** `r20261111-120152-80c2` (`lean_changed.py --records security/Proofs --update`): done rc 0 SUCCESS; `security/Proofs` AUDIT: PASS (193866 declarations in 3835 modules, `check.py` exit 0 in 1218 s), its requirers `security` and `security/Properties` AUDIT: PASS; `"regenerated": {}` in all three reports, so no lock record changes [run]. The first records run, `4966`, was cancelled at its cap and gave no verdict (my 12:04Z).
+- **Kernel replay:** the candidate's check. **Second reader:** EXTFORM 11:29Z read `OpensClass.lean` whole at #8924's head, the same blob (`d265ccf94862`) [relayed; the blob equality run by me].
+- **Merges** [run 12:45Z]: `git merge-tree --write-tree` exits 0 with `main` `967b722429f3` and with the heads of #8871 `2d4670d64165`, #8906 `e7b2e51d928b`, #8916 `8784a105de5b` and #8931 `2cc7decd36a6`.
+- **The merged tree builds** [run]: the head is itself the merge of #8906's and #8912's heads, so `99d2` is that build; with `main` `86c03d1840cb` and the heads of #8916 and #8924, try `r20261111-120604-a868` (lean exit 0, `OpensClass` built under `Definitions.Claims.SamplingGeneric` as `main` has it).
+- **Not yet built at `main` `967b722429f3`:** `r20261111-122853-f321` is at 10,935 of 11,072 modules, no error so far [run, read 12:44Z]; verdict in my next entry. It is the one build for #8912, #8922 and #8924.
+- **The body** (rewritten 12:45Z; the head did not move): the change; the premise line; the four checks; no lock record changes; the run ids; the merged-tree builds; the module it adds.
+- For CAPS: Proofs/Flock: +1 module, +1 declaration (#8922: SpotFlock/OpensClass.lean)
+
+**The three, in landing order** [run: `gh pr view` 12:45Z, all OPEN, none marked, none moved]: #8912 `62eb1fdc64de88b5a6c5a48f9eae187aa77b61cc` (ready line 12:36Z), #8922 `5b37c49d6a5c4a0a744982f75f4e12cbe05c8934` (this), #8924 `d025f81332e674746d26e91dea64f5166cb64f7f` (ready line 12:30Z). #8922 needs #8906 and #8912 first; #8924 needs #8916 and #8922 first.
+
+For the table:
+- #8922 (`code_hwit`): ready at `5b37c49d6a5c`; quick tier, records and the merged-tree build at `main` `86c03d1840cb` pass; the build at `main` `967b722429f3` is out (`f321`). A lemma, true as stated, under `Addresses h` (false as defined at a registration with a checked interior row).
