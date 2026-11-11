@@ -19,6 +19,10 @@ the wired program returns no gate `ω` moves; and every proof block has a gate `
 * `Partition.partitions_cut`: the cut partition partitions the wired program.
 * `replayOf_cut`, `replayOf_cut_eq`, `Partition.stratumOf_cut`, `cell_cut`: a cut proof block lies in the replay block
   and the stratum the block lay in, so each cell holds the proof blocks it held.
+* `Prog.Rewires`: every condition on the map as one proposition, with the scope (`Prog.Rewires.inScopeTwo`) and a cut
+  proof block's correctness (`Prog.Rewires.exists_correct`) under it, and `Prog.Rewires.of_earlier`: it holds of a map
+  that moves only input gates, each to a returned gate of an earlier member, no two that one proof block holds or
+  reads to one gate.
 -/
 
 @[expose] public section
@@ -198,5 +202,75 @@ theorem inScopeTwo_cut {Pt : Partition} {d : Design.Two} {s : AuditStatement} {�
     obtain ⟨h1, h2, h3⟩ := hwf
     exact ⟨(Design.wellFormed_shape d.replay (Partition.shape_cut d.part ω)).2 h1,
       h2.trans (Partition.length_strata_cut Pt ω).symm, h3⟩
+
+/-! ## What the wired program asks of a map, as one proposition -/
+
+/-- **A gate proof block `u` holds or reads** in `C`. -/
+def Prog.Touches (C : Prog) (u : List ℕ) (i : ℕ) : Prop :=
+  i ∈ u ∨ ∃ g ∈ u, ∃ x : BGate, C.gates[g]? = some x ∧ i ∈ x.reads
+
+/-- **`ω` rewires `C` over partition `P`, returning `keep`**: every condition the wired program's scope
+(`Prog.Rewires.inScopeTwo`) and a cut proof block's correctness there (`Prog.Rewires.exists_correct`) read, each
+decidable over a program, a partition and a map given as tables. -/
+structure Prog.Rewires (C : Prog) (P : Partition) (ω : ℕ → ℕ) (keep : ℕ → Bool) : Prop where
+  /-- `ω` moves only input gates -/
+  input : ∀ i, ω i ≠ i → C.gates[i]? = some .input
+  /-- each to a gate that is no constant -/
+  noConst : ∀ i, ω i ≠ i → ∀ c, C.gates[ω i]? ≠ some (.const c)
+  /-- which `C` returns -/
+  out : ∀ i, ω i ≠ i → ω i ∈ C.outs
+  /-- and is no later -/
+  le : ∀ i, ω i ≤ i
+  /-- `ω` moves no gate it sends a wire to -/
+  idem : ∀ i, ω (ω i) = ω i
+  /-- the wired program returns no gate `ω` moves -/
+  kept : ∀ i, ω i ≠ i → keep i = false
+  /-- every proof block has a gate `ω` leaves alone -/
+  stays : ∀ u ∈ P.blocks, ∃ g ∈ u, ω g = g
+  /-- no proof block reads one of its own gates through `ω` -/
+  off : ∀ u ∈ P.blocks, ∀ g ∈ u, ∀ x : BGate, C.gates[g]? = some x → ∀ i ∈ x.reads, ω i ≠ i → ω i ∉ u
+  /-- `ω` sends no two gates one proof block holds or reads to one gate -/
+  inj : ∀ u ∈ P.blocks, ∀ i j, C.Touches u i → C.Touches u j → ω i = ω j → i = j
+
+/-- **The two-stage scope at the wired program** (`inScopeTwo_cut`), under `Prog.Rewires`. -/
+theorem Prog.Rewires.inScopeTwo {Pt : Partition} {d : Design.Two} {s : AuditStatement} {ω : ℕ → ℕ} {keep : ℕ → Bool}
+    (hW : s.prog.Rewires Pt ω keep) (h : InScopeTwo Pt d s) :
+    InScopeTwo (Pt.cut ω) { d with part := d.part.cut ω } { s with prog := s.prog.wired ω keep } :=
+  inScopeTwo_cut hW.input hW.out hW.le hW.idem hW.kept hW.stays h
+
+/-- **A proof block correct in `C` is correct, cut, at the wired program** (`Prog.exists_correct_wired`), under
+`Prog.Rewires`: on values that are, through `ω`, the block's own at every gate it holds or reads. -/
+theorem Prog.Rewires.exists_correct {C : Prog} {P : Partition} {ω : ℕ → ℕ} {keep : ℕ → Bool}
+    (hW : C.Rewires P ω keep) {u : List ℕ} (hu : u ∈ P.blocks) {v₀ : ℕ → Bool}
+    (hc : C.Correct (fun g => some (v₀ g)) u) :
+    ∃ v : ℕ → Bool, (∀ i, C.Touches u i → v (ω i) = v₀ i) ∧
+      (C.wired ω keep).Correct (fun g => some (v g)) (cutBlock ω u) :=
+  Prog.exists_correct_wired hW.input hW.noConst hW.out (hW.off u hu) (C.Touches u) (fun _ hg => Or.inl hg)
+    (fun g hg x hx _ hi => Or.inr ⟨g, hg, x, hx, hi⟩) (hW.inj u hu) hc
+
+/-- **A map into earlier members rewires `C`**: `ω` moves only input gates, each to a returned gate of an earlier
+member (`mem`, a member's gates before every later member's) that is no input and no constant; the wired program
+returns no gate `ω` moves; each proof block has a gate that is no input, and the gates it holds or reads are one
+member's; and `ω` sends no two of them to one gate. -/
+theorem Prog.Rewires.of_earlier {C : Prog} {P : Partition} {ω mem : ℕ → ℕ} {keep : ℕ → Bool}
+    (hin : ∀ i, ω i ≠ i → C.gates[i]? = some .input)
+    (hgate : ∀ i, ω i ≠ i → C.gates[ω i]? ≠ some .input ∧ ∀ c, C.gates[ω i]? ≠ some (.const c))
+    (hout : ∀ i, ω i ≠ i → ω i ∈ C.outs)
+    (hmem : ∀ i j, mem i < mem j → i < j) (hω : ∀ i, ω i ≠ i → mem (ω i) < mem i)
+    (hkeep : ∀ i, ω i ≠ i → keep i = false)
+    (hblk : ∀ u ∈ P.blocks, (∃ g ∈ u, C.gates[g]? ≠ some .input) ∧ ∃ t, ∀ i, C.Touches u i → mem i = t)
+    (hinj : ∀ u ∈ P.blocks, ∀ i j, C.Touches u i → C.Touches u j → ω i = ω j → i = j) :
+    C.Rewires P ω keep where
+  input := hin
+  noConst := fun i h => (hgate i h).2
+  out := hout
+  le := le_of_earlier hmem hω
+  idem := idem_of_not_input hin fun i h => (hgate i h).1
+  kept := hkeep
+  stays := fun u hu => stays_of_not_input hin (hblk u hu).1
+  off := fun u hu => by
+    obtain ⟨t, ht⟩ := (hblk u hu).2
+    exact off_of_earlier (fun g hg => ht g (Or.inl hg)) (fun g hg x hx i hi => ht i (Or.inr ⟨g, hg, x, hx, hi⟩)) hω
+  inj := hinj
 
 end Claims.Sampling
