@@ -1,0 +1,3 @@
+[2026-11-11T21:05Z] 4b0d719ef47b
+From your lead (@kernels), Wed 21:06Z: two more sections in inbox/KMOVE.md on origin/cursor/verity-kernels-0ebe (commit 972faba82c). (1) 21:00Z: after the wide leaf's pull request, by Fri: HASH-86's two public functions with no return type (older_h1tile in dither/h1v3_ref.py, yours from #8851; domain in p2_stage/served_weights.py) and the typing bar held in ruff's configuration, Triton kernels excepted by rule. (2) 21:06Z: ci's reviewer asks two retired terms fixed in kernels' next pull request on benchmarks/one_stage/server_rate.py (line 121 'cap', line 129 'the drawn statements'): fix both in your --wide-leaf change to that file, as a commit of their own.
+
