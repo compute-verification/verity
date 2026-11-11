@@ -39,8 +39,11 @@ from typing import Any
 
 from verity_vllm.config import option
 from verity_vllm.errors import Refused
+from verity_vllm.log import init_logger
 from verity_vllm.pipeline import replay_bundle as RB
 from verity_vllm.pipeline.tp import c2 as C2
+
+logger = init_logger(__name__)
 
 RESULT_SCHEMA = "verity-vllm/tp-rank-replay/v1"
 
@@ -175,9 +178,9 @@ def replay_rank(o: Options, out: Path, dd: dict[str, Any], pair: int, rank: int,
         # the bytes the relations consume are the checkpoint's, opened against the run's committed weights root: self-consistency
         # with the run as in the rank's process, from the checkpoint's bytes; the pin of record stays the Commit's weights pin
         wc.update(self_consistent=wc["equal"], pin_of_record=None, pinned=None)
-        print(f"[tp-replay] WEIGHTS (pair {pair}, rank {rank}): {'OPENED' if wc['equal'] else 'FAIL'} {wc['opened']}/{wc['servable']} registered shards "
-              f"against the committed weights root {str(wc['committed_root'])[:16]} ({wc['opened_by_source']}; unopened {wc['unopened_n']}) in {wc['wall_s']} s"
-              + (f" -- {wc['why']}" if wc["why"] else ""), flush=True)
+        logger.info("[tp-replay] WEIGHTS (pair %s, rank %s): %s %s/%s registered shards against the committed weights root %s (%s; unopened %s) "
+                    "in %s s%s", pair, rank, "OPENED" if wc["equal"] else "FAIL", wc["opened"], wc["servable"], str(wc["committed_root"])[:16],
+                    wc["opened_by_source"], wc["unopened_n"], wc["wall_s"], f" -- {wc['why']}" if wc["why"] else "")
         consumed: set[str] = set()
         sr, lk = RR.evaluate(p, cfg, bmap=bmap, committed=OC.OpenedReader(store, run), weights_of=lambda prefix: CPU.provider(words, prefix, consumed),
                              weights_check=wc, run_root=run.run_root, manifest_doc=man, worker_peak=CPU.worker_peak(o))
@@ -192,9 +195,10 @@ def replay_rank(o: Options, out: Path, dd: dict[str, Any], pair: int, rank: int,
            "wall_s": round(time.perf_counter() - t0, 3), "peak_rss_bytes": _peak_rss(), "utc": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())}
     C2.write_atomic(result_path(out, pair, rank), json.dumps(doc, indent=1, default=str) + "\n")
     smp = sr.get("sample") or {}
-    print(f"[tp-replay] SAMPLED REPLAY (pair {pair}, rank {rank}): result {sr.get('result')} grade {sr.get('grade')} picked {smp.get('picked')} "
-          f"evaluated {smp.get('evaluated')} equal {smp.get('equal')} mismatch {smp.get('mismatch_n')}; boundary linkage {lk.get('result')} "
-          f"{lk.get('linked')}/{lk.get('pairs')}; {doc['wall_s']} s, peak RSS {doc['peak_rss_bytes'] >> 20} MiB; {sr.get('why') or ''}", flush=True)
+    logger.info("[tp-replay] SAMPLED REPLAY (pair %s, rank %s): result %s grade %s picked %s evaluated %s equal %s mismatch %s; boundary linkage %s "
+                "%s/%s; %s s, peak RSS %s MiB; %s", pair, rank, sr.get("result"), sr.get("grade"), smp.get("picked"), smp.get("evaluated"),
+                smp.get("equal"), smp.get("mismatch_n"), lk.get("result"), lk.get("linked"), lk.get("pairs"), doc["wall_s"],
+                doc["peak_rss_bytes"] >> 20, sr.get("why") or "")
     return doc
 
 
@@ -301,7 +305,7 @@ def main(o: Options) -> int:
             raise Refused(f"{out / C2.DEFERRED}: not a deferred TP Commit (tp-commit --replay-deferred) or decided in the Commit")
         dd = json.loads((out / C2.DEFERRED).read_text())
         if dd.get("decided"):
-            print(f"[tp-replay] already decided: pass {dd['decided'].get('pass')} ({dd['decided'].get('utc')})", flush=True)
+            logger.info("[tp-replay] already decided: pass %s (%s)", dd["decided"].get("pass"), dd["decided"].get("utc"))
             return 0 if dd["decided"].get("pass") else 3
         want = {int(x) for x in o.ranks.split(",")} if o.ranks else None
         todo = [(int(b["pair"]), int(b["rank"])) for b in dd["bundles"]
@@ -313,11 +317,11 @@ def main(o: Options) -> int:
                 replay_rank(o, out, dd, pair, rank, ck)
         ok = fold(out)
     except (Refused, PoolDoesNotFit) as e:
-        print(f"[tp-replay] REFUSED: {e}", flush=True)
+        logger.error("[tp-replay] REFUSED: %s", e)
         return 2
     sys.stdout.flush()
     if ok is None:
         left = [(int(b["pair"]), int(b["rank"])) for b in dd["bundles"] if not result_path(out, b["pair"], b["rank"]).is_file()]
-        print(f"[tp-replay] PENDING: (pair, rank) {left} have no replay on the record yet", flush=True)
+        logger.info("[tp-replay] PENDING: (pair, rank) %s have no replay on the record yet", left)
         return 4
     return 0 if ok else 3

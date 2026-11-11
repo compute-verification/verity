@@ -33,7 +33,10 @@ from typing import Any
 
 from verity_vllm.check.match import rank_match as RM
 from verity_vllm.config import UsageError, option, workload_arg
+from verity_vllm.log import init_logger
 from verity_vllm.pipeline.tp.links import read_tp_links
+
+logger = init_logger(__name__)
 
 SCHEMA = "verity/tp2/fold-match/v1"
 
@@ -241,14 +244,15 @@ def _rank_legs(a: Options, r: int, rd: Path, build: Path, derived: list[str], gp
     def gm01(x09: list[str] | None = None) -> dict:
         assert gprog is not None and a.workload is not None
         g = global_match_rank(a.python, rd, Path(gprog), Path(a.workload), a.within_step, a.timeout, reuse_legs, x09)
-        print(f"[tp2foldmatch] rank {r} GM-01: {g['verdict']} failed={g['failed_checks']} concurrency={g['achieved_concurrency']} {g['seconds']}s", flush=True)
+        logger.info("[tp2foldmatch] rank %s GM-01: %s failed=%s concurrency=%s %ss", r, g["verdict"], g["failed_checks"], g["achieved_concurrency"],
+                    g["seconds"])
         return g
 
     shared = a.shared_x09 and bool(derived) and bool(gprog) and bool(a.workload)
     if shared:     # GM-01 first: its X-09 document is the compare's
         pr["global_match"] = gm01([str(build), *derived])
     pr["compare"] = compare_rank(a.python, rd, build, derived, a.within_step, a.timeout, reuse_legs, shared)
-    print(f"[tp2foldmatch] rank {r} compare ({pr['compare']['comparator']}): {pr['compare']['verdict']} {pr['compare']['seconds']}s", flush=True)
+    logger.info("[tp2foldmatch] rank %s compare (%s): %s %ss", r, pr["compare"]["comparator"], pr["compare"]["verdict"], pr["compare"]["seconds"])
     if pr["compare"]["verdict"] != "PASS":
         problems.append(f"rank {r}: compare {pr['compare']['verdict']}")
     if not gprog or not a.workload:
@@ -315,9 +319,10 @@ def main(a: Options) -> int:
             _link(rd / "capture" / "tokens.json", cap / "tokens.json")
         with fold_slots:
             pr["fold"] = fold_rank(a.python, log, a.profile, rd, a.timeout, a.reuse_fold, construction=construction[r])
-        print(f"[tp2foldmatch] rank {r} fold: ok={pr['fold']['ok']} rc={pr['fold']['rc']} instances={pr['fold']['n_instances']} steps={pr['fold']['n_steps']} "
-              f"errors={pr['fold']['errors']} unresolved={pr['fold']['unresolved']} unsupported={pr['fold']['unsupported']} collectives={pr['fold']['collectives']} "
-              f"{pr['fold']['collectives_by_kind']} tp={pr['fold']['tp']} {pr['fold']['seconds']}s", flush=True)
+        fold = pr["fold"]
+        logger.info("[tp2foldmatch] rank %s fold: ok=%s rc=%s instances=%s steps=%s errors=%s unresolved=%s unsupported=%s collectives=%s %s tp=%s %ss",
+                    r, fold["ok"], fold["rc"], fold["n_instances"], fold["n_steps"], fold["errors"], fold["unresolved"], fold["unsupported"],
+                    fold["collectives"], fold["collectives_by_kind"], fold["tp"], fold["seconds"])
         if not pr["fold"]["ok"]:
             problems.append(f"rank {r}: fold not ok (rc {pr['fold']['rc']}, errors {pr['fold']['errors']}, unresolved {pr['fold']['unresolved']}): "
                             f"{json.dumps(pr['fold']['error_examples'])[:300]}")
@@ -390,8 +395,8 @@ def main(a: Options) -> int:
             xr["failed"] = list(xr.get("failed") or []) + ["provenance_missing"]
             xr["verdict"] = "FAIL"
         (out / "tp2_rank_match.json").write_text(json.dumps(xr, indent=1, default=str) + "\n")
-        print(f"[tp2foldmatch] cross-rank check: {xr['verdict']} failed={xr.get('failed')} collectives={xr.get('n_collectives')} "
-              f"checks={[(c['name'], c['pass']) for c in xr.get('checks') or []]}", flush=True)
+        logger.info("[tp2foldmatch] cross-rank check: %s failed=%s collectives=%s checks=%s", xr["verdict"], xr.get("failed"), xr.get("n_collectives"),
+                    [(c["name"], c["pass"]) for c in xr.get("checks") or []])
     res["cross_rank"] = {k: v for k, v in xr.items() if k not in ("peer_binding",)}
     res["cross_rank"]["peer_binding_n"] = len(xr.get("peer_binding") or {})
     res["cross_rank"]["artifact"] = str(out / "tp2_rank_match.json")
@@ -405,5 +410,6 @@ def main(a: Options) -> int:
                    "global_match_per_rank": {str(r): (res["per_rank"][str(r)].get("global_match") or {}).get("verdict") for r in ranks},
                    "cross_rank": xr.get("verdict")}
     (out / "tp2_fold_match.json").write_text(json.dumps(res, indent=1, default=str) + "\n")
-    print(f"[tp2foldmatch] {'PASS' if res['pass'] else 'FAIL'} legs={res['legs']} problems={res['problems'][:4]} {res['seconds']}s -> {out / 'tp2_fold_match.json'}", flush=True)
+    logger.info("[tp2foldmatch] %s legs=%s problems=%s %ss -> %s", "PASS" if res["pass"] else "FAIL", res["legs"], res["problems"][:4], res["seconds"],
+                out / "tp2_fold_match.json")
     return 0 if res["pass"] else 1

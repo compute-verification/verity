@@ -10,6 +10,7 @@ import hashlib
 import numpy as np
 import pytest
 
+from verity_vllm.errors import Refused
 from verity_vllm.pipeline.tp.negatives import parse_serve_shard_from
 from verity_vllm.check import weights_of_record as WR
 from tests.check.test_weights_of_record import PREFIX, _program, _served, checkpoint, live_digests  # noqa: F401  (fixture)
@@ -27,7 +28,7 @@ def test_parse_serve_shard_from_names_rank_param_and_another_rank():
     swap = parse_serve_shard_from(["0:X.weight:1", "1:X.weight:0"], 2)
     assert swap == {"0": [{"param": "X.weight", "from_rank": 1}], "1": [{"param": "X.weight", "from_rank": 0}]}
     for bad in (["1:X.weight"], ["1::0"], ["1:X.weight:1"], ["2:X.weight:0"], ["1:X.weight:5"]):
-        with pytest.raises(SystemExit):
+        with pytest.raises(Refused):
             parse_serve_shard_from(bad, 2)
 
 
