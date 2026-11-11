@@ -589,6 +589,27 @@ def test_the_bound_of_record_is_the_calculators_and_rho_follows_it(monkeypatch):
     assert not empty["bound_of_record"]["available"] and len(calls) == made
 
 
+def test_the_grades_slowdown_is_the_entry_points(monkeypatch):
+    """Where Fit fails, the grade's `rho`, the bound of record and S are the entry point's and the grade computes
+    none: with `calculator.slowdown` replaced by one that gives 7.25 wherever the real one gives a slowdown, `rho`
+    and the bound of record's slowdown are 7.25, S is p times it, and the products term beside them stays the real
+    one's."""
+    runs, ref = [job([OVER, UNDER], 0), job([OVER, UNDER], 1), traced([OVER, UNDER])], [job([UNDER])]
+    real, honest = calculator.slowdown, graded(runs, ref)
+
+    def entry(pol, step, run=None):
+        got = real(pol, step, run)
+        return got if got["slowdown"] is None else got | {"slowdown": 7.25, "bound": got["bound"] | {"slowdown": 7.25}}
+
+    monkeypatch.setattr(calculator, "slowdown", entry)
+    s = graded(runs, ref)
+    assert s["rho"]["rho"] == s["bound_of_record"]["slowdown"] == 7.25 != honest["rho"]["rho"]
+    assert s["rho"]["binding_kind"] == "products" and s["rho"]["terms"] == honest["rho"]["terms"]
+    assert s["S"]["any"] == pytest.approx(s["p"]["any"]["p"] * 7.25) and s["p"] == honest["p"]
+    assert s["rho"]["work"] == s["bound_of_record"]["work"] == honest["rho"]["work"]
+    assert s["rho"]["work"]["C_gates"] == s["rho"]["C_gates"]
+
+
 def test_the_bound_call_fits_the_calculator_as_it_is():
     """On the calculator as the tree has it, the grade's own call gives a slowdown of at least 1 under one of the two
     statements the calculator's `min_cut` names, the first of them the one the grade says ρ's products term solves
