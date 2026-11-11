@@ -1048,8 +1048,8 @@ def classStep (acc : Std.HashMap String (String × Flock.Registered.Port)) (m : 
 
 /-- **A registered value is one tree for every member**: over the parameters' members, drawn or not, every port of
 one value names one root, one count of leaves, one row width, one domain and one leaf schema (`classStep`), so the
-values the members read are a function of the parameters, each with one root. It reads the parameters only: each
-member's registered file once, and no blob. -/
+values the members read are a function of the parameters, each with one root. It is one pass over the parameters'
+members, each member's registered file read once, and it reads no blob. -/
 def classHeld (ms : Array Member) : V Unit :=
   ms.foldlM classStep {} >>= fun _ => pure ()
 
