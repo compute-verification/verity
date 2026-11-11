@@ -75,7 +75,8 @@ After its last step a job traces its route's step once, outside the count, and i
 capture measures of it for the grade: the token axes, the forward's updated MAC nodes, and the product rows unpriced
 at each k of the console's dial (`capture.products.raw_on_dial`), which `capture.products.priced` prices where they
 are read. The capture takes the run's last three steps in one graph and measures the middle one (`capture_steps`),
-so the measured step reads what the step before it wrote and the step after it reads what it makes. That gives the
+so the measured step reads what the step before it wrote and the step after it reads what it makes; where the three
+aren't the run's first steps, the first of them reads the run's own weights, not θ's (`mid_run`). That gives the
 step a circuit, which the trace keeps as the capture measures it (`circuit`: the gradient's cut and a token group's
 partial, the carried state, τ, a, the update's profile, and the shares of its gates in token ops and in ops an update
 reaches, at the gate prices of the code that took it), with that code's version (`capture_code`). A step the capture

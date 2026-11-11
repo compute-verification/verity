@@ -331,6 +331,38 @@ def test_the_first_of_the_steps_reads_no_update():
         capture_steps([standard] * 3, model, lm_batch(), measured=3, optimizers=opt)
 
 
+def narrowed(m, batch, _opts):
+    """A step whose update passes through 16 bits on its way into the weights, as an orthogonalised update does."""
+    for p in m.parameters():
+        p.grad = None
+    lm_loss(m, batch).backward()
+    with torch.no_grad():
+        for p in m.blocks[-1].parameters():
+            p.add_(p.grad.bfloat16().float(), alpha=-0.01)
+
+
+def widths(g) -> dict:
+    """The width each operand of the measured step's affected products is passed at, by product."""
+    return {(r["phase"], r["op"], tuple(sorted(r["dims"].items()))): tuple(r["widths"])
+            for r in products.raw_on_dial(g)["rows"] if any(r["affected"])}
+
+
+def test_steps_taken_mid_run_read_the_runs_own_weights():
+    """A step whose update is cast to 16 bits before it is added to a 32-bit weight. Among a run's first steps the
+    measured step's weight is θ plus that update, which a block makes from the update alone, so the weight is passed
+    at the update's 16 bits. Mid-run the first captured step's weight is the run's own, a block needs it at its 32
+    bits, and the measured step's rows are the step's captured alone. The step's circuit is the same either way: the
+    gradient's cut is at the cast, 16 bits an element."""
+    model, _ = top_block()
+    alone = products.raw_on_dial(capture_fn(narrowed, model, lm_batch()))
+    first = capture_steps([narrowed] * 3, model, lm_batch(), measured=1)
+    late = capture_steps([narrowed] * 3, model, lm_batch(), measured=1, mid_run=True)
+    assert products.raw_on_dial(late) == alone and products.raw_on_dial(first) != alone
+    by_weight = {k: (a, b) for (k, a), b in zip(widths(first).items(), widths(late).values()) if a != b}
+    assert by_weight and set(by_weight.values()) == {((32, 16), (32, 32))}
+    assert late.formalism == first.formalism and late.formalism["grad_cut_bits"] == 16 * (4 * H + 4 * H2 + 2 * HI)
+
+
 # --- refusals ----------------------------------------------------------------------------------------------------------
 
 class Branchy(torch.nn.Module):

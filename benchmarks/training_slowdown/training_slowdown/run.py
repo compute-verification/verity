@@ -513,7 +513,8 @@ def trace_step(cfg: config.Config, route, model, optimizers, device: str) -> dic
     and the start's context, as the capture measures it (`capture_steps`, `capture.products.raw_on_dial`). The
     capture takes the run's last three steps in one graph and measures the middle one, which reads what the step
     before it wrote and makes what the step after it reads (`TRACED_STEPS`; a run of two steps is measured at its
-    second, a run of one at its only step, which reads no update). It keeps the capture's and torch's versions, the
+    second, a run of one at its only step, which reads no update). Where the three aren't the run's first steps the
+    capture is told so (`mid_run`): the first of them reads the run's own weights, not θ's. It keeps the capture's and torch's versions, the
     version of the code that took the trace (`capture_code`, this tree's: a record whose trace is taken again keeps
     its job's `training_slowdown`), the step and the token axes it was traced at, the forward's updated MAC nodes
     (`StepGraph.structure`'s `updated`), the product rows with their operands' dtypes and no price at each k of the
@@ -539,7 +540,7 @@ def trace_step(cfg: config.Config, route, model, optimizers, device: str) -> dic
     example = (torch.zeros(batch, ctx, dtype=torch.long), torch.zeros(batch, 1, dtype=torch.long))
     try:
         g = capture_steps([step(t) for t in ts], model, example, measured=at, optimizers=optimizers,
-                          token_dims=((0, 1), (0,)), device=device)
+                          token_dims=((0, 1), (0,)), device=device, mid_run=ts[0] > 0)
     except CaptureRefused as e:
         return {"refused": {"reason": e.reason, "op": e.op, "message": str(e)}}
     raw = products.raw_on_dial(g)

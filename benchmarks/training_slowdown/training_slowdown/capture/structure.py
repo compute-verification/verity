@@ -549,6 +549,27 @@ def _arg_nodes(n) -> list:
     return out
 
 
+def _slots(base, flow) -> tuple[dict, dict, set]:
+    """The graph attributes' values where the capture first reads them, by slot; the values the capture writes to each
+    slot; and the slots that hold the run's own value there, not θ's: the ones steps before the capture wrote
+    (`Capture.written_before`), and in a capture that starts after its run's first step (`Capture.mid_run`) every slot
+    the capture writes."""
+    entry = {k: v for v, k in flow.source.items() if k[0] == "attr"}
+    writes: dict = {}
+    for k, v, _ in flow.writes:
+        if k[0] == "attr":
+            writes.setdefault(k, []).append(v)
+    before = {("attr", t) for t in base.written_before if ("attr", t) in entry}
+    return entry, writes, before | (set(writes) & set(entry) if base.mid_run else set())
+
+
+def _past(flow, region: int, entry: dict, before: set) -> set:
+    """What the run produced before step `region` of a capture that names it: the token inputs of the steps before it,
+    and the slots that hold the run's own value where the capture first reads them (`_slots`)."""
+    return ({v for v, k in flow.source.items() if k[0] == "input" and flow.step[v] < region}
+            | {entry[k] for k in before})
+
+
 def _closure(flow: _Flow, seed) -> list[bool]:
     out = []
     for v, ps in enumerate(flow.preds):
@@ -639,16 +660,10 @@ class StepGraph:
         # dependent slots: the largest set of written slots closed under the rule (module docstring); a program recorded
         # from its start reads it off its history: what a step reads is the run's own when it depends on an earlier
         # step's token data, through whatever the program carried (in place, rebound, by hand)
-        entry = {k: v for v, k in flow.source.items() if k[0] == "attr"}
-        writes: dict = {}
-        for k, v, _ in flow.writes:
-            if k[0] == "attr":
-                writes.setdefault(k, []).append(v)
-        before = {("attr", t) for t in base.written_before if ("attr", t) in entry}
+        entry, writes, before = _slots(base, flow)
         carried: list[int] = []
         if region is not None:
-            past = {v for v, k in flow.source.items() if k[0] == "input" and flow.step[v] < region}
-            dep = _closure(flow, past.__contains__)
+            dep = _closure(flow, _past(flow, region, entry, before).__contains__)
             carried = sorted({p for v, ps in enumerate(flow.preds) if flow.step[v] == region for p in ps
                               if flow.step[p] < region and dep[p]})
             dependent: set = set()

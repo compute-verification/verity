@@ -91,7 +91,9 @@ class Capture:
     recorded program's update period) gives each step's tokens by its nodes' ``meta["te_step"]`` (`step_tokens`), and
     the graph attributes steps before it wrote (`written_before`: the run's own values when the graph reads them). A
     program recorded from its start names the step it measures (`region`): the graph holds every step before it, which
-    decide what the run produced, and the step after it, whose forward reads the new values."""
+    decide what the run produced, and the step after it, whose forward reads the new values. A capture whose first
+    step isn't its run's first says so (`mid_run`): every parameter and buffer it writes then holds the run's own value
+    where the capture first reads it, not θ's."""
     gm: torch.fx.GraphModule
     attrs: dict[str, tuple[str, str, tuple[str, ...]]]
     state: list[dict]
@@ -99,6 +101,7 @@ class Capture:
     step_tokens: dict | None = None
     written_before: frozenset = frozenset()
     region: int | None = None
+    mid_run: bool = False
 
 
 def _default_token_dims(t: torch.Tensor) -> tuple[int, ...]:
@@ -347,13 +350,14 @@ def _axis_name(names: Sequence[str], a: int) -> str:
     return names[a] if a < len(names) else f"axis{a}"
 
 
-def _capture(steps, model, opts, example_batch, *, updated, token_dims, token_axes, device, name, measured=None):
+def _capture(steps, model, opts, example_batch, *, updated, token_dims, token_axes, device, name, measured=None,
+             mid_run=False):
     from training_slowdown.capture.structure import StepGraph
     leaves, spec = pytree.tree_flatten(example_batch)
     dims = _token_dims(leaves, token_dims)
     sizes = _axis_sizes(leaves, dims)
     base = _trace(steps, model, opts, leaves, spec, device, measured)
-    base.axis_sizes = sizes
+    base.axis_sizes, base.mid_run = sizes, mid_run
     varied = []
     for a, n in enumerate(sizes):
         last: Exception | None = None
@@ -363,7 +367,7 @@ def _capture(steps, model, opts, example_batch, *, updated, token_dims, token_ax
             except CaptureRefused as e:
                 last = e
                 continue
-            t.axis_sizes = tuple(size if i == a else s for i, s in enumerate(sizes))
+            t.axis_sizes, t.mid_run = tuple(size if i == a else s for i, s in enumerate(sizes)), mid_run
             varied.append(t)
             break
         else:
@@ -401,13 +405,16 @@ def capture_fn(step_fn: Callable[[torch.nn.Module, Any, list], Any], model: torc
 
 def capture_steps(step_fns: Sequence[Callable[[torch.nn.Module, Any, list], Any]], model: torch.nn.Module, example_batch,
                   *, measured: int, optimizers=None, token_dims=None, token_axes: Sequence[str] = ("batch", "seq"),
-                  device=None, name: str | None = None):
+                  device=None, name: str | None = None, mid_run: bool = False):
     """Capture `step_fns` in order, consecutive steps of one run each written as `capture_fn`'s ``step_fn``, on one
     model and one set of fresh optimizers, each on a batch of its own of `example_batch`'s shapes, as the `StepGraph`
     of step `measured` of them, with its step circuit (module docstring). What the measured step reads of the run is
     what the steps before it wrote, so it takes one before it to read an updated weight; its cut's sinks are the values
-    the step after it reads, so the last of `step_fns` has no cut (0)."""
+    the step after it reads, so the last of `step_fns` has no cut (0). `mid_run` says the first of `step_fns` isn't the
+    run's first: the parameters and buffers the steps write then hold the run's own values where the first of them
+    reads them, where a run's first step reads θ's (so a weight the measured step reads is the run's own plus an
+    update, not θ plus one, which a block could make from the update alone)."""
     if not 0 <= measured < len(step_fns):
         raise ValueError(f"capture_steps: measured is {measured}, and there are {len(step_fns)} steps")
     return _capture(list(step_fns), model, _optimizers(optimizers), example_batch, updated=None, token_dims=token_dims,
-                    token_axes=token_axes, device=device, name=name, measured=measured)
+                    token_axes=token_axes, device=device, name=name, measured=measured, mid_run=mid_run)
