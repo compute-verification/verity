@@ -2611,8 +2611,7 @@ def main(argv: list[str]) -> int:
                                                              f"its check (default {DEPTH})")
     ap.add_argument("--lean", type=int, default=LEAN, help=f"the most members of a candidate whose Lean change compiles: a "
                                                            f"spec's or a Lean source's, not a lock's alone; none while a PR "
-                                                           f"with no Lean change ranked ahead of every Lean change waits "
-                                                           f"(default {LEAN})")
+                                                           f"with no Lean change waits (default {LEAN})")
     ap.add_argument("--wide-file", type=Path, default=WIDE,
                     help=f"the PRs whose Lean change is wide, one number a line, read each tick as --priority-file is: a "
                          f"candidate taking one takes no other member --lean counts, and one stacked on a candidate holding "

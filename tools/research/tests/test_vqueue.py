@@ -642,10 +642,10 @@ def test_the_pool_leaves_out_chain_members_conflicts_and_the_ejected():
 @pytest.mark.parametrize("wide", [frozenset(), frozenset({3, 5, 99})])
 @pytest.mark.parametrize(("lean", "first", "then"), [(1, (1,), (2,)), (3, (1, 2, 4), (6,))])
 def test_prs_with_no_lean_change_go_in_a_batch_of_their_own_then_one_holds_at_most_lean_lean_prs(lean, first, then, wide):
-    """While a PR with no Lean change ranked ahead of every Lean PR waits, a batch takes no Lean PR; then, with no wide PR
-    (`Snapshot.wide` empty, as a missing or empty `--wide-file` reads, or naming only PRs the cap doesn't count or that
-    aren't ready), the cap alone makes every batch."""
-    ready = [pr(1, lean=True), pr(2, lean=True), pr(3, rank=0), pr(4, lean=True), pr(5, rank=0), pr(6, lean=True)]
+    """While a PR with no Lean change waits, a batch takes no Lean PR; then, with no wide PR (`Snapshot.wide` empty, as a
+    missing or empty `--wide-file` reads, or naming only PRs the cap doesn't count or that aren't ready), the cap alone makes
+    every batch."""
+    ready = [pr(1, lean=True), pr(2, lean=True), pr(3), pr(4, lean=True), pr(5), pr(6, lean=True)]
     assert decide(snap(ready=ready, lean=lean, batch=5, wide=wide)) == [Build((3, 5), MAIN, 2)]
     on = (cand("q1", MAIN, 3, 5),)
     assert decide(snap(*on, ready=ready, lean=lean, batch=5, depth=3, wide=wide)) == [Build(first, "q1", 2)]
@@ -654,53 +654,24 @@ def test_prs_with_no_lean_change_go_in_a_batch_of_their_own_then_one_holds_at_mo
 
 
 def test_a_pr_with_no_lean_change_keeps_lean_prs_out_of_a_batch_unless_it_is_set_aside_or_on_main():
-    """A PR with no Lean change that a batch may take, ranked ahead of every Lean PR, keeps every Lean PR out of it, whatever
-    its cap: a suspect of a failed outcome goes in a batch of its own.  One set aside (`infra`), which goes after every other,
-    alone, or on `main` at its head (`pass`) keeps none out."""
-    ready = [pr(1, lean=True), pr(2, rank=0), pr(3, lean=True)]
+    """A PR with no Lean change that a batch may take keeps every Lean PR out of it, whatever its cap: a suspect of a failed
+    outcome goes in a batch of its own.  One set aside (`infra`), which goes after every other, alone, or on `main` at its head
+    (`pass`) keeps none out."""
+    ready = [pr(1, lean=True), pr(2), pr(3, lean=True)]
     fail = Outcome((2, 4), heads(2, 4), FAIL, (2, 4), MAIN)
     assert decide(snap(ready=ready, lean=3, history=[fail])) == [Build((2,), MAIN, 2)]
     for state in (INFRA, PASS):
         held = Outcome((2,), heads(2), state, (2,) if state == INFRA else (), MAIN)
         assert decide(snap(ready=ready, lean=3, history=[held])) == [Build((1, 3), MAIN, 2)]
-    assert decide(snap(ready=[pr(1, lean=True), pr(2, "h2b", rank=0), pr(3, lean=True)], lean=3, history=[held])) == [
+    assert decide(snap(ready=[pr(1, lean=True), pr(2, "h2b"), pr(3, lean=True)], lean=3, history=[held])) == [
         Build((2,), MAIN, 2)]
-
-
-def test_a_lean_pr_ranked_ahead_of_every_pr_with_no_lean_change_goes_in_the_next_batch_with_the_prs_behind_it():
-    """A Lean PR ranked ahead of every PR with no Lean change (the priority file puts it first) goes in the next batch, with
-    the PRs ranked behind it."""
-    assert decide(snap(ready=[pr(1, lean=True, rank=0), pr(2, rank=1)], lean=3)) == [Build((1, 2), MAIN, 2)]
-
-
-def test_a_pr_with_no_lean_change_ranked_ahead_of_every_lean_pr_a_batch_may_take_keeps_them_all_out():
-    """A PR with no Lean change ranked ahead of every Lean PR keeps them out of the batch.  A Lean PR ranked ahead of it that
-    the batch may not take, set aside (`infra`) or on `main` at its head (`pass`), lets no Lean PR in."""
-    assert decide(snap(ready=[pr(1, rank=0), pr(2, lean=True, rank=1)], lean=3)) == [Build((1,), MAIN, 2)]
-    ready = [pr(1, lean=True, rank=0), pr(2, rank=1), pr(3, lean=True, rank=2)]
-    for state in (INFRA, PASS):
-        held = Outcome((1,), heads(1), state, (1,) if state == INFRA else (), MAIN)
-        assert decide(snap(ready=ready, lean=3, history=[held])) == [Build((2,), MAIN, 2)]
-
-
-def test_the_lean_cap_the_wide_rules_and_a_suspect_s_cap_hold_for_lean_prs_ranked_first():
-    """With two Lean PRs ranked first and `lean` 1, the batch takes the first and the PR with no Lean change behind them, and
-    the second goes next.  A wide one ranked first fills the cap, a candidate holding a wide PR keeps every Lean PR out of a
-    batch built on it, and a suspect goes in a batch no bigger than its cap."""
-    ready = [pr(1, lean=True, rank=0), pr(2, lean=True, rank=1), pr(3, rank=2)]
-    assert decide(snap(ready=ready, lean=1)) == [Build((1, 3), MAIN, 2)]
-    assert decide(snap(cand("q1", MAIN, 1, 3), ready=ready, lean=1, depth=3)) == [Build((2,), "q1", 2)]
-    assert decide(snap(ready=ready, lean=3, wide={1})) == [Build((1, 3), MAIN, 2)]
-    assert decide(snap(cand("q1", MAIN, 1), ready=ready, lean=3, depth=3, wide={1})) == [Build((3,), "q1", 2)]
-    fail = Outcome((1, 4), heads(1, 4), FAIL, (1, 4), MAIN)
-    assert decide(snap(ready=ready, lean=3, history=[fail])) == [Build((1,), MAIN, 2)]
 
 
 def test_a_batch_taking_a_wide_pr_takes_no_other_lean_pr():
     """A: a wide PR (`Snapshot.wide`, one the `lean` cap counts) fills that cap.  A batch taking it takes no other PR the cap
-    counts, and one that took such a PR first leaves the wide one for a later batch.  PRs with no Lean change, ranked first,
-    went first, in a batch of their own."""
-    ready = [pr(1, lean=True), pr(2, rank=0), pr(3, lean=True), pr(4, rank=0), pr(5, lean=True)]
+    counts, and one that took such a PR first leaves the wide one for a later batch.  PRs with no Lean change went first,
+    in a batch of their own."""
+    ready = [pr(1, lean=True), pr(2), pr(3, lean=True), pr(4), pr(5, lean=True)]
     for wide in ({1}, {3}):
         assert decide(snap(ready=ready, lean=3, batch=5, wide=wide)) == [Build((2, 4), MAIN, 2)]
     on = (cand("q1", MAIN, 2, 4),)
@@ -713,9 +684,8 @@ def test_a_batch_taking_a_wide_pr_takes_no_other_lean_pr():
 def test_a_batch_on_a_candidate_holding_a_wide_pr_takes_no_lean_pr_and_prs_with_no_lean_change_still_go():
     """B: while a candidate on main's chain holds a wide PR, a batch built on it, or on a candidate above it, takes no PR the
     `lean` cap counts, wide or not, and takes those with no Lean change as ever; with only Lean PRs waiting, none is built.
-    A candidate holding Lean PRs none of which is wide keeps nothing out: a wide PR goes on it, filling its batch's cap, once
-    the PRs with no Lean change ranked ahead of it have gone."""
-    ready = [pr(1, lean=True), pr(2, lean=True), pr(3, rank=0), pr(4, lean=True), pr(5, rank=0), pr(6, rank=0)]
+    A candidate holding Lean PRs none of which is wide keeps nothing out: a wide PR goes on it, filling its batch's cap."""
+    ready = [pr(1, lean=True), pr(2, lean=True), pr(3), pr(4, lean=True), pr(5), pr(6)]
     assert decide(snap(cand("q1", MAIN, 1), ready=ready, lean=3, depth=3, wide={1, 4})) == [Build((3, 5, 6), "q1", 2)]
     assert decide(snap(cand("q1", MAIN, 1), cand("q2", "q1", 3), ready=ready, lean=3, depth=3, wide={1})) == [
         Build((5, 6), "q2", 1)]
@@ -1285,11 +1255,11 @@ class World:
                 assert not wide or len(leans) == 1, f"{where}: a wide PR built with another Lean PR"
                 assert not leans or not [m for m in below if built[m].lean and m in s.wide], (
                     f"{where}: a Lean PR built on a wide PR in flight")
-                waiting = sorted(self.pool(s, acts), key=lambda r: (r.rank, r.number))
-                assert not leans or not waiting or waiting[0].lean, (
-                    f"{where}: a Lean PR built while a PR with no Lean change ranked ahead of every Lean PR waited")
-                self.seen["a Lean PR waited for PRs with no Lean change"] += any(r.lean for r in waiting) and not leans
-                self.seen["a Lean PR ranked first built beside PRs with no Lean change"] += 0 < len(leans) < len(a.members)
+                assert not leans or len(leans) == len(a.members), f"{where}: a batch mixes Lean PRs and PRs with no Lean"
+                waiting = {r.number: r.lean for r in self.pool(s, acts)}
+                assert not leans or not [m for m, lean in waiting.items() if not lean], (
+                    f"{where}: a Lean PR built while a PR with no Lean change waited")
+                self.seen["a Lean PR waited for PRs with no Lean change"] += any(waiting.values()) and not leans
                 self.seen["a lean PR built"] += any(ready[m].lean for m in a.members)
                 self.seen["two lean PRs built together"] += sum(ready[m].lean for m in a.members) > 1
                 self.seen["a wide PR built"] += bool(wide)
@@ -1456,8 +1426,8 @@ def test_the_simulated_queue_keeps_every_invariant_and_settles():
     it, any infra or listing error, a `tree` one too, is retried, then rung and bisected from `rings` enqueues, ejecting
     nobody, and a lone member's is rung to its owner too and set aside behind the PRs waiting, else retried; a candidate
     pending past the bound is retried once and rung past twice it; a lone member's own failure is rerun once
-    before it is ejected; a batch holds at most `lean` Lean PRs, and none while a PR with no Lean change it may take ranks
-    ahead of every Lean PR it may take; a move of main by someone else drops the stale candidates
+    before it is ejected; a batch holds at most `lean` Lean PRs, and none beside a PR with no Lean change or while one it may
+    take waits; a move of main by someone else drops the stale candidates
     and rebuilds on it; an inherited failure ejects nobody, and its red rings once; a restart repeats nothing but a ring, or
     a red whose drop it didn't apply; and every good PR reaches main and every bad one is ejected within `ticks`, every
     erring one too with `tree_ejects`, and without it only erring PRs stay live, each with its owner rung.  Each situation
@@ -1480,8 +1450,7 @@ def test_the_simulated_queue_keeps_every_invariant_and_settles():
                  "infra rung and retried", "rung, and infra reran it",
                  "advanced on a red main", "built on a red main", "inherited by tests", "inherited at its key alone",
                  "a mixed failure", "waited for the rest of a check", "a fix cleared a red", "landed as built",
-                 "dropped for a reviewer's hold", "a Lean PR waited for PRs with no Lean change",
-                 "a Lean PR ranked first built beside PRs with no Lean change"):
+                 "dropped for a reviewer's hold", "a Lean PR waited for PRs with no Lean change"):
         assert seen[what], f"no seed exercised: {what}"
 
 

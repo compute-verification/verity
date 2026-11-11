@@ -1604,7 +1604,7 @@ def test_the_wide_file_is_read_each_tick_as_the_priority_file_is_and_a_line_that
     """`--wide-file` (`World.wide`) is read into `Snapshot.wide` each tick with the priority file's parsing
     (`queue.priority_list`): one PR number a line, none while the file is missing or empty, so the `lean` cap alone makes the
     batch, and a line that isn't a PR number is refused, naming the file and the line, so the tick fails until it is fixed.
-    A wide PR fills its batch's cap, once the PR with no Lean change, ranked first, has gone in a batch of its own."""
+    A wide PR fills its batch's cap, once the PR with no Lean change has gone in a batch of its own."""
     _main_to(env, {"pkg/lean-audit.json": "{}\n", "pkg/A.lean": "-- a\n"})
     env.put(1, {"pkg/A.lean": "-- b\n"})
     env.put(2, {"Security/Definitions/D.lean": "-- d\n"})
@@ -1612,15 +1612,13 @@ def test_the_wide_file_is_read_each_tick_as_the_priority_file_is_and_a_line_that
     seen: list[Snapshot] = []
     loop = env.loop(lambda s: seen.append(s) or [], lean=3)
     loop.world.wide_file = wide = env.tmp / "wide"
-    (prio := env.tmp / "priority").write_text("3\n")
-    loop.world.priority_file = prio
     loop.tick()
     wide.write_text("")
     loop.tick()
     assert [s.wide for s in seen] == [frozenset(), frozenset()]
-    assert [(r.number, r.lean) for r in seen[-1].ready] == [(3, False), (1, True), (2, True)]
+    assert [(r.number, r.lean) for r in seen[-1].ready] == [(1, True), (2, True), (3, False)]
     assert vqueue.decide(seen[-1]) == [Build((3,), seen[-1].main, L.DEPTH)]
-    leans = replace(seen[-1], ready=seen[-1].ready[1:])
+    leans = replace(seen[-1], ready=seen[-1].ready[:2])
     assert vqueue.decide(leans) == [Build((1, 2), seen[-1].main, L.DEPTH)]
     wide.write_text("1\n\n1\n")
     loop.tick()
@@ -2776,7 +2774,7 @@ def test_the_loop_s_batch_depth_and_lean_default_to_16_3_and_3_on_the_command_an
     with pytest.raises(SystemExit):
         Q.main(["vqueue", "--help"])
     said = " ".join(capsys.readouterr().out.split())
-    assert all(f"{o} (default {n})" in said for o, n in (("holds", 16), ("its check", 3), ("every Lean change waits", 3))), said
+    assert all(f"{o} (default {n})" in said for o, n in (("holds", 16), ("its check", 3), ("no Lean change waits", 3))), said
     loop = Loop(None, tmp_path / "log")
     assert (loop.batch, loop.depth, loop.lean) == (L.BATCH, L.DEPTH, L.LEAN) == (16, 3, 3)
 
