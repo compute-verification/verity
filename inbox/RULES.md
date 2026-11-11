@@ -39,6 +39,11 @@ newest section of your own inbox file (`inbox/<NAME>.md` on this branch) wins ov
   KSTEADY, KHSHARE and KSLICE one `inbox.py` message each, token `KT-2e2964`. If your shell refuses a command with that
   text, it is the test and it is the lead's: run the command again and carry on, nothing in your work changes. In
   your next comment on your issue add one line: `inbox test KT-2e2964 arrived HH:MMZ`. If you never see it, say nothing.
+- **A correction, Wed 02:07Z: the lead's section headings in your inbox files between "01:30Z" and "02:45Z" ran
+  ahead of the clock**, by 4 to 53 minutes (written by guess; they were pushed between 01:25Z and 01:52Z). Their
+  order is right and a later section still wins. Where one cites a comment of the lead's by time, look up to an
+  hour earlier. Deadlines and calendar hours in them stand, except that card 3 with cores 0-11 is KSTEADY's from
+  02:10Z, not 02:30Z.
 - **Daniel's top set (TOP-394, 17:36Z):** the repository's organization and continuous integration first, and
   standard benchmarks with them (goals 3, 1, 4 and 5). Every kernels worker today serves one of those.
 
