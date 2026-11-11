@@ -9,7 +9,7 @@ The canonical tables, their drill-downs and views are evidence, not code: the ev
 (`tables`, `drilldown` and `views`, each as `.md` and `.json`, with the docs site's last entities JSON and the last
 parity report), over the cells of a `dataset-snapshot/v1`. The renderers are in Git history.
 
-Campaign-side numerical work for `verity.ml.circuits.targets.target.FIRST`. `verity_numerical.reference`
+Campaign-side numerical work for `verity.definitions.circuits.targets.target.FIRST`. `verity_numerical.reference`
 is lane WP1 (independent numerical references); `verity_numerical.checker` is lane WP2. The archived systems' exporter,
 drivers, explorations and red-team forgeries were deleted with the archive in `2091252fe3`.
 
@@ -31,9 +31,9 @@ run's `cc.json` (same name) and `DIR/tree` with `--meta @DIR/meta.json --ref cir
 
 ## WP1: independence audit of the existing columns
 
-The target names three executable columns of the finite-domain step: Python `verity.ml.circuits.silicon.models`, Rust
+The target names three executable columns of the finite-domain step: Python `verity.definitions.silicon.models`, Rust
 `tc.rs` (SP1's guest, deleted with the archive in `2091252fe3`), Lean `veritor/lean/VeritorSpec/TC.lean` in the `veritor` repository (reused unchanged by `TCB.lean`, which only adds the
-casts). Reading them against Hawkeye's pinned simulator (`verity/ml/circuits/silicon/hawkeye/PIN.json`, `src/Ampere_simulator.cpp::group_sum`,
+casts). Reading them against Hawkeye's pinned simulator (`verity/definitions/silicon/hawkeye/PIN.json`, `src/Ampere_simulator.cpp::group_sum`,
 `utils/utils.cpp::multiply_bfloat16_to_gfloat`, `src/gfloat.cpp::Gfloat::operator float`):
 
 - `models.py` states its body is "a bit-exact pure-Python port of" the reference simulator at that commit. `models.group_sum` is the
@@ -55,7 +55,7 @@ casts). Reading them against Hawkeye's pinned simulator (`verity/ml/circuits/sil
 
 Finding: the three columns are transliterations of one derivation -- the simulator's `group_sum`, ported once into Python and
 from there into Rust and Lean. Their agreement establishes transcription fidelity, not independent confirmation of the hardware
-semantics. The independent evidence for the target is (i) the hardware captures (`verity/ml/circuits/ops/tests/fixtures`, and the
+semantics. The independent evidence for the target is (i) the hardware captures (`verity/definitions/ops/tests/fixtures`, and the
 recorded probe runs below), (ii) the compiled pinned simulator itself, driven on the same cases by
 `tests/reference/hawkeye_harness.cpp`, and (iii) the closed-form normalisation of log entry D3, a different formula shown equal
 to the successive shifts by an SMT proof over the whole reachable domain (`tests/reference/test_normalisation_d3.py`).
@@ -87,7 +87,7 @@ uv run research run --on vy-sp1 --project verity --source . --exclusive --stage 
 uv run research run --on vy-sp1 --project verity --source . --exclusive --stage wp1.probe.4090 --require-result \
   -- bash -c 'export PYTHONPATH=.:benchmarks/numerical/python PATH=/usr/local/cuda/bin:$PATH; \
      /root/.local/bin/uv run --no-project --with numpy --python 3.12 python benchmarks/tc_probe/tc_probe.py --arch sm_89 \
-       --out "$RESEARCH_RUN_DIR" --procs 48 --replay-golden verity/ml/circuits/ops/tests/fixtures/golden/ada_bf16_m16n8k16.json --sweep'
+       --out "$RESEARCH_RUN_DIR" --procs 48 --replay-golden verity/definitions/ops/tests/fixtures/golden/ada_bf16_m16n8k16.json --sweep'
 # A100 (sm_80): same, with --on vy-a100 --stage wp1.probe.a100, --arch sm_80, and instead of the (Ada) golden replay
 #   --replay-special PATH, PATH the A100 special-value fixture
 #   (its a100/mma_special.reduced.json.gz path is in fixtures/artifacts.json)
@@ -134,7 +134,7 @@ record returns to a finite value). Log entry D8.
 `verity_numerical.checker` was BF16-only by construction: `Params` asserted an adder at least as wide as the accumulator's
 significand (`width >= acc_sig`, 25 >= 24), and one exponent width served operands and accumulator alike. Hopper/Ada E4M3
 break both -- the FP8 adders are 14 bits wide and truncate the incoming FP32 accumulator's 24-bit significand to 14 before
-the grouped add (`verity.ml.circuits.silicon.models.GroupSum.step`; a group of zero products is therefore not a no-op, log entry D10), and
+the grouped add (`verity.definitions.silicon.models.GroupSum.step`; a group of zero products is therefore not a no-op, log entry D10), and
 E4M3 has a 4-bit exponent with its own NaN rule (`0x7F`/`0xFF` are the NaNs, `0x7E` = 448 is finite, there are no infinities).
 
 What changed (`python/verity_numerical/checker/`):
@@ -158,6 +158,6 @@ What changed (`python/verity_numerical/checker/`):
   the zero-product truncation of D10, the E4M3 NaN words, rescale-hint mutations rejected, the E5M2 hypotheses through the same
   `Params`, and an exhaustive slice of `TOY_LOSSY`.
 
-The FP8 drafts these serve are `verity.ml.circuits.targets.target.FP8_HOPPER_WGMMA` / `FP8_ADA_MMA` (`status="draft"`, no guest bound);
-their instructions and evidence are in `verity.ml.circuits.silicon.instructions`, the replicas in `verity/ml/circuits/silicon/captures/`, the open hardware questions
-in `verity/ml/circuits/silicon/discrepancy_log.json` D13-D15.
+The FP8 drafts these serve are `verity.definitions.circuits.targets.target.FP8_HOPPER_WGMMA` / `FP8_ADA_MMA` (`status="draft"`, no guest bound);
+their instructions and evidence are in `verity.definitions.silicon.instructions`, the replicas in `verity/definitions/silicon/captures/`, the open hardware questions
+in `verity/definitions/silicon/discrepancy_log.json` D13-D15.

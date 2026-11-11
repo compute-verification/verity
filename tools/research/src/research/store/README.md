@@ -83,8 +83,9 @@ snapshots are ordinary artifacts (kind dataset-snapshot/v1)
 trees/<hex>/                         LOCAL ONLY: where `fetch ART` (no --to) materialises a tree payload
 catalog.sqlite                       LOCAL ONLY: rebuildable index (§5); never uploaded
 scratch/<reuse_key>/<name>/          LOCAL ONLY: tool caches namespaced by reuse_key (§6.5)
-steward/lease.json                   REMOTE ONLY, not a store record: the steward lease, the one mutable key, changed by conditional
+steward/lease.json                   REMOTE ONLY, not a store record: the steward lease, a mutable key, changed by conditional
                                      PUT only (research/steward.py); the store never reads, lists or indexes it
+packs/labels/latest.{tar.gz,json}    REMOTE ONLY, not a store record: the labels pack (§8), replaced in place
 live/<run id>/<seq>.json             REMOTE ONLY, not a store record: a running check's live record, a new immutable object per
                                      write with the run's custody key (tools/verity/check/live.py, read by `verity ci`); the store
                                      never reads, lists or indexes it, and gc leaves it
@@ -224,7 +225,7 @@ from research.store.tool import Tool
 TC_PROBE = Tool(
     name="tc_probe", version="1",
     command=["python", "benchmarks/tc_probe/tc_probe.py"],
-    closure=["benchmarks/tc_probe/**", "verity/ml/circuits/silicon/**"],   # repo-relative globs -> file manifest at run time
+    closure=["benchmarks/tc_probe/**", "verity/definitions/silicon/**"],   # repo-relative globs -> file manifest at run time
     key_params=["instruction", "families", "seed", "n_random", "replay_golden"],
     key_conditions=["hw.family"],
     param_artifacts=["replay_golden", "replay_instances"],  # path-valued params: identity = content, never pathname
@@ -307,14 +308,11 @@ class Remote(Protocol):
 `FsRemote` and `S3Remote` also have `list_times(prefix, start_after=None) -> [(key, last modified)]`, what `index()` (§5.1) lists with.
 
 `FsRemote(root)` (a directory, also the test double; its `etag` is the file's MD5) and `S3Remote(endpoint, bucket, access_key,
-secret_key, region="auto", session_token=None)` (SigV4 with signed payload hashes, stdlib `urllib`+`hmac`, path-style
-`<endpoint>/<bucket>/<key>`; one PUT for objects <= 5 GiB, the service's PutObject limit; above that `push` raises `StoreError`
-naming multipart as unimplemented — the planned design is multipart with per-part sha256 recorded in a sidecar key
-`<key>.parts.json`). `S3Remote.put` is HEAD-then-`PUT If-None-Match: *`: a 412 means another writer created the key first
-(`exists`, fine for immutable content); a 400/501 means the service lacks conditional PUT, so it is switched off for the rest of
-the session and the plain PUT is used (the push report carries a note). Cloudflare R2 honours `If-None-Match: *` (checked live).
-The signer is tested against the AWS documented vectors and the client against R2. Config `~/.research/store.toml` (or
-`$RESEARCH_STORE_CONFIG`):
+secret_key, region="auto", session_token=None)` (SigV4 with signed payload hashes, path-style `<endpoint>/<bucket>/<key>`; one
+PUT for objects <= 64 MiB, a multipart upload above). `S3Remote.put` creates with `PUT If-None-Match: *` and never overwrites:
+a key that exists is `skipped` when it holds the same bytes, else a `RemoteConflict`; where the service lacks conditional PUT
+(a 400/501), a plain PUT follows a HEAD for the rest of the session (the push report carries a note). Config
+`~/.research/store.toml` (or `$RESEARCH_STORE_CONFIG`):
 
 ~~~toml
 [remote]
@@ -376,11 +374,13 @@ algorithm: `remote-replicas/README.md`.
 - `fetch-fixtures` makes fetched entries present and exact (a tree's directory holds its files and nothing else), never writes a
   tracked file, and is offline once fetched. `suites.py` runs it first and keys each suite on the ids under its inputs.
 - `export` copies every entry and `previous` id to the export bucket (`remote.load_export`; never the store's own), blobs first.
-  A superseded id the store lacks comes from git history; one neither holds is a warning. `--verify-url` is the end-to-end test.
+  Its key may write but not read, so each object is one `PUT If-None-Match: *` (`create`; 412 = already there), and keys a
+  pass saw land, kept under the store's `export/`, aren't sent again (`--fresh` sends all). A superseded id the store lacks
+  comes from git history; one neither holds is a warning. `--verify-url` is the end-to-end test.
 
 ### 7.4 Retention on the remote — `research data gc` (`gc.py`)
 
-Blobs that only uncited artifacts past their kind's TTL hold leave the remote (the store grew ~840 GiB a day).
+Blobs that only uncited artifacts past their kind's TTL hold leave the remote.
 TTLs are `gc.TTL_DAYS`, by the manifest's LastModified: run-record/v1, vllm-replay-bundle/v1 and vllm-replay-slim/v1 7 days, vllm-rowdir-tar/v1 3,
 run-files/v1 and vllm-row-meta/v1 14, telemetry/v1 30; every other kind keeps no TTL. Kept: an artifact or run that a label
 (target, ref or value), a citing tree (`--cite`: the notes repository, a checkout of the code with its fixture registry), Linear
@@ -395,7 +395,9 @@ An artifact that holds values which must never be shared leaves by `research dat
 (`withdraw.py`), cited or not: its blobs are deleted at once and each artifact gets a `withdrawn` label saying why, the
 tombstone. Its manifest stays, so a citation still resolves and `fetch` reports the payload absent. A blob another artifact
 also holds is kept and named (it holds the same bytes, so withdraw that one too or decide otherwise). Read-only without
-`--apply`; it runs where the store's write keys are, the control pod.
+`--apply`; it runs where the store's write keys are, the control pod. `--path P` withdraws only the files under P. `preserved`
+reports a missing blob a `withdrawn` label covers as withdrawn, not absent (WITHDRAWN, exit 4: delete its local copies, never
+put them back), and `put --tree` refuses them.
 
 ## 8. Labels
 
@@ -410,10 +412,15 @@ immutable, append-only; a target's assertion set is the listing of its prefix):
 Assertions travel with what they describe (`labels_sync.py`): `push RUN` / `attempt publish` / `push ART` push the assertions
 about the attempt, its derivation and its named artifacts (`attempt_targets`); `push --pending` and `labels-sync` push every local
 one; `reindex --remote`, `labels-sync` and `pull --from MACHINE` bring remote/machine assertions into the local layout and index.
-`preserved` is a three-part gate (attempt manifest, artifacts, labels) naming the part that fails; a preserved Attempt is not
-preserved until its assertions are on the remote. `labels TARGET --remote` marks each both / LOCAL ONLY / REMOTE ONLY.
+`preserved` is a three-part gate (attempt manifest, artifacts, labels) naming the part that fails. `labels TARGET --remote`
+marks each both / LOCAL ONLY / REMOTE ONLY.
 Conflicting ones coexist on both sides. A landing is a `landed` label by `research-merge` on each run its `Check:`
 trailer names, valued main's commit (`research merge`; `--label-landed REV` backfills).
+
+The labels pack (§3) is every assertion of the remote's `labels/` as one tarball beside its sha256, which `labels-pack`
+rebuilds and replaces, hourly on the control pod; a sync that lacks more than 5,000 assertions takes it first and pulls only
+the rest. It is a cache of `labels/`, never its source: a member lands only under a name the remote lists and its
+content hashes to, and a pack that is absent or fails its sha256 is ignored.
 
 Append-only, one file per assertion (`O_EXCL`, mode 0444), never read-modify-write. The file name uses the compact ts
 (`20260922T112029Z`), `by` restricted to `[A-Za-z0-9._-]`, and a `~N` suffix when the same asserter labels twice in one
@@ -451,7 +458,8 @@ prints the table; the groups are:
   carries no verdict — ignored; `verdict` (enum: pass | fail | error, error when no run gave a result) and `result` (a result/v1 document) on `task:<key>`, by the
   executor's worker, `tasks_graph` and `verity_graph` on `commit:<sha>`, by the executor (the `art:` id of the
   `tasks-graph/v1` or `verity-graph/v2` graph it listed on a worker), and `executor_shadow` on `commit:<sha>`, by drive
-  (`research.executor`); `label_auth` beside a ready mark or land verdict on `pr:<n>@<head>`, and `label_delegation` on an
+  (`research.executor`); `nightly_check` on `commit:<sha>`, by the control pod's nightly check;
+  `label_auth` beside a ready mark or land verdict on `pr:<n>@<head>`, and `label_delegation` on an
   agent's delegation target (`task:<sha512>`), each by a handle (`research.labelauth`).
 - **evidence** — probe captures and input sets: `instruction`, `model`, `model_agrees` (bool), `model_status`,
   `model_rejected`, `evidence`, `family`, `instances_dataset`, `instances_tier`, `mismatches`, `target`, `component`, `jobs`, `dtype`;
@@ -485,13 +493,14 @@ research data labels TARGET [--history] [--key K] [--by PAT] [--remote] [--json]
                                               --remote: both / LOCAL ONLY (not durable) / REMOTE ONLY per assertion; exit 1 if any is local only
 research data label  TARGET KEY VALUE --by WHO [--ref REF] [--value-json] [--off-vocab]   refuses what the vocabulary (§8.1) cannot place
 research data preserved (RUN|ART)... [--mode head|readback|recorded] [--jobs N] [--json]
-                                              the durability gate: attempt manifest + artifacts + labels on the remote, else the failing legs
+                                              the durability gate: attempt manifest + artifacts + labels on the remote, else the failing legs;
+                                              exit 4: WITHDRAWN (§7.4)
 research data vocab [--json]                  the label vocabulary (§8.1): key, asserter group, value form, enum values, status
 research data refresh-fixtures [--preserve] [--dry-run] [--repo DIR] [--json]
                                               re-register every fixtures/artifacts.json entry whose bytes changed (§7)
 research data fetch-fixtures [PATH ...] [--repo DIR] [--check] [--stubs] [--public-url URL] [--no-private] [--jobs N] [--json]
                                               make the fetched registry entries under PATH present and exact (§7.3); exit 1 if any is missing
-research data export [--repo DIR] [--dry-run] [--no-previous] [--blobs FILE] [--id ART]... [--jobs N] [--json]
+research data export [--repo DIR] [--dry-run [--write-check]] [--fresh] [--no-previous] [--blobs FILE] [--id ART]... [--jobs N] [--json]
                                               copy every registry entry and its `previous` ids, and each --id, to the export bucket (§7.3)
 research data export --verify-url URL [...]   fetch all of it back through URL into a scratch store, every byte checked
 research data doctor [--clean] [--runs-dir D] [--json]

@@ -69,7 +69,7 @@ def _land(h: Review, n: int) -> str:
 
 
 def _passed_run(h: Review, tmp_path) -> None:
-    """The newest after-landing run passes every step, suite `pkg` and the Lake package `Security`."""
+    """The newest after-landing run passes every step, suite `pkg` and the Lake package `security`."""
     rid = f"r-post-{len(h.posted) - 1}"
     h.run_state[rid] = ("done", 0, None)
     d = tmp_path / rid
@@ -245,7 +245,7 @@ def test_shadow_enqueues_each_tips_check_without_a_graph_and_compares_by_the_exe
     h.tick()
     assert _main(world) == one                                  # the run alone moves `main`
     (rec,) = world.store.labels(f"commit:{one}", key=vocab.EXECUTOR_SHADOW)
-    n = len(AFTER_LANDING) + 2                                  # every step, suite `pkg` and the Lake package `Security`
+    n = len(AFTER_LANDING) + 2                                  # every step, suite `pkg` and the Lake package `security`
     assert rec.value == {"check": f"after-landing:{one}", "graph": _graph_id(fake, one), "run": "r-post-0", "units": n,
                          "agree": n, "pending": [], "disagree": [], "missing": [], "executor_only": []}
     assert one not in h.q.load_state()["drive"].get("executor", {})
@@ -907,7 +907,7 @@ def test_on_main_waits_for_the_run_of_lean_agreement_and_ratchet_gate_beside_the
     ratchet-gate (`train.sh --deferred lean-agreement,ratchet-gate --agreement`).  The graph's own tasks of those two fail,
     which counts for nothing, and every other task passes: nothing is gated, verified or red while that run runs, and once it
     passed both, the tip is verified on every step and `main` follows."""
-    monkeypatch.setattr(merge, "required_steps", lambda repo, base, commit, tool: {"lean-agreement": ["verity/ml/flock/"]})
+    monkeypatch.setattr(merge, "required_steps", lambda repo, base, commit, tool: {"lean-agreement": ["verity/protocols/flock/prover/"]})
     h = Review(world, monkeypatch, land_into="checked")
     fake = _executor(h, tmp_path, "on")
     main = _main(world)
@@ -993,7 +993,7 @@ def test_on_a_red_in_the_run_beside_the_check_holds_main_only_on_the_gate(world,
     it unless that is on the gate by the `off_gate` a run of every step reads (`_gating`), or is a preflight, which no graph/v2
     task runs, so it holds `main` though the run's one step after it, ratchet-gate (lean-agreement skipped), is off the gate."""
     if fails == "lean-agreement":
-        monkeypatch.setattr(merge, "required_steps", lambda repo, base, commit, tool: {"lean-agreement": ["verity/ml/flock/"]})
+        monkeypatch.setattr(merge, "required_steps", lambda repo, base, commit, tool: {"lean-agreement": ["verity/protocols/flock/prover/"]})
     _move_main(world, {**GATED_TREE, "tools/verity/check/policy.toml": _policy(off_gate=off_gate)})
     h = Review(world, monkeypatch, land_into="checked")
     fake = _executor(h, tmp_path, "on")

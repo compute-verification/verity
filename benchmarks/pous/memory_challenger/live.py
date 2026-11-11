@@ -1,5 +1,5 @@
-"""The memory challenger's process in the harness's timed audit (`p2-v3-mc-gpu`): `verity.core.protocols.pous.
-memory_challenger` against the responder, over the harness's responder wire (`verity/core/devices/memory_challenger/timed_audit.py`).
+"""The memory challenger's process in the harness's timed audit (`p2-v3-mc-gpu`): `verity.protocols.pous.verifier.
+memory_challenger` against the responder, over the harness's responder wire (`verity/protocols/pous/device/timed_audit.py`).
 
     python benchmarks/pous/memory_challenger/live.py --ready READY.json --leaves DIGESTS.bin --out AUDIT.json [--audits N]
         [--pings N] [--k K] [--verifier-cpu C] [--limit-ns N] [--calibrate-only] [--clock logical] [--strict]
@@ -32,7 +32,7 @@ against C's leaf).
   (`lean_verdict`, built with `lake` on first use) and with the Python, which stays the reference, and keeps both in the
   witness (`verdicts`).  `RECORD_VERDICT` names the one that is the record's (the Lean's); where the two disagree, on the
   accept bit or the reasons, the session is rejected for it (`DISAGREE`, listing both).
-  `verity/core/devices/memory_challenger/lean/tests/test_verdict.py` holds the Lean to the Python on generated records.
+  `verity/protocols/pous/device/lean/tests/test_verdict.py` holds the Lean to the Python on generated records.
   `accepted_under_signer` is the same verdict under the signer's own mapping (`memory_challenger.SCHEMES` for `lms`, the
   test signer's for `test`): for `test`, every check but the scheme's acceptance, and never the verdict.
 - **The record** separates what is published (`public`: the commitment, the verdict, the coin openings) from the witness
@@ -63,7 +63,7 @@ from typing import Any
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from verity.core.devices.memory_challenger.timed_audit import (  # noqa: E402
+from verity.protocols.pous.device.timed_audit import (  # noqa: E402
     ALLOWANCE_KIND,
     HEADER,
     OP_CHALLENGE,
@@ -79,8 +79,8 @@ from verity.core.devices.memory_challenger.timed_audit import (  # noqa: E402
 )
 
 ROOT = Path(__file__).resolve().parents[3]
-TEST_SIGNER = ROOT / "verity" / "core" / "protocols" / "pous" / "tests" / "pous_test_signer.py"
-LEAN_VERDICT = ROOT / "verity" / "core" / "devices" / "memory_challenger" / "lean" / "verdict.py"
+TEST_SIGNER = ROOT / "verity" / "protocols" / "pous" / "verifier" / "tests" / "pous_test_signer.py"
+LEAN_VERDICT = ROOT / "verity" / "protocols" / "pous" / "device" / "lean" / "verdict.py"
 RECORD_VERDICT = "lean"
 """Which verdict is the record's: `"lean"` (`lean_verdict`) or `"python"` (`memory_challenger.verdict`, the reference).
 `judge` computes both on every session and records both either way."""
@@ -131,15 +131,15 @@ def write_sessions(path: str | os.PathLike, sig: Any, sessions: list[dict[str, A
 
 
 def rtt_cap_ns() -> int:
-    from verity.core.protocols.pous.schemes import p2
+    from verity.protocols.pous.verifier.schemes import p2
     return p2.RTT_ALLOWANCE_CAP_NS
 
 
 def lms_signer(directory: str | os.PathLike, workers: int = 1, params: Any = None) -> Any:
     """The memory challenger's S1 signer whose key is in `directory`, made there first when absent; at `params` other than
     `lms.DEPLOYED` (tests), under a `test/` id."""
-    from verity.ml.crypto import lms
-    from verity.core.protocols.pous import memory_challenger as mc
+    from verity.commitments.crypto import lms
+    from verity.protocols.pous.device import memory_challenger as mc
 
     p = params or lms.DEPLOYED
     d = Path(directory)
@@ -176,7 +176,7 @@ def lms_signer(directory: str | os.PathLike, workers: int = 1, params: Any = Non
 
 def session_log(path: str | os.PathLike, new_key: bool) -> Any:
     """The memory challenger's used-session log at `path` (`memory_challenger.SessionLog`), made there when the key is new."""
-    from verity.core.protocols.pous import memory_challenger as mc
+    from verity.protocols.pous.device import memory_challenger as mc
 
     if new_key and not Path(path).exists():
         mc.SessionLog.create(path)
@@ -186,7 +186,7 @@ def session_log(path: str | os.PathLike, new_key: bool) -> Any:
 def signer_schemes(scheme: str) -> Mapping[str, Any]:
     """The mapping a session signed under `scheme` is judged by beside `memory_challenger.SCHEMES`: that one for S1's
     scheme, the test signer's for a test one."""
-    from verity.core.protocols.pous import memory_challenger as mc
+    from verity.protocols.pous.device import memory_challenger as mc
 
     return mc.SCHEMES if scheme in mc.SCHEMES else test_signer().SCHEMES
 
@@ -194,7 +194,7 @@ def signer_schemes(scheme: str) -> Mapping[str, Any]:
 def setup_root(params: Any, salt: bytes, digests: bytes) -> bytes:
     """What a session audits: the root the setup publishes for the `C*` whose block digests are `digests`, under `salt`
     (`VerifierKey.root`)."""
-    from verity.core.protocols.pous.verifier import VerifierKey
+    from verity.protocols.pous.verifier.verifier import VerifierKey
 
     return VerifierKey.from_row_digests(params, salt, [digests[64 * i:64 * (i + 1)] for i in range(params.blocks)]).root
 
@@ -204,7 +204,7 @@ def verdicts(s: dict[str, Any], expected: Callable[[int], bytes], trusted: set[b
     """Session `s` judged by the Lean verdict and by the Python's: the record's verdict, which is `RECORD_VERDICT`'s unless
     the two disagree (accept bit or reasons), and then a rejection for it naming both; and both as recorded.  A record the
     Lean refuses to read (`ValueError`) is its rejection."""
-    from verity.core.protocols.pous import memory_challenger as mc
+    from verity.protocols.pous.device import memory_challenger as mc
 
     args = (s["signed"], s["commitment"], s["openings"], expected)
     kw = {"trusted": trusted, **({} if schemes is None else {"schemes": schemes})}
@@ -249,7 +249,7 @@ def signature_control(doc: dict[str, Any], expected: Callable[[int], bytes]) -> 
     """The bad-signature control, on the honest audit's signed sessions: each with one signature bit flipped, and each with
     one round's receipt time moved 1 ns earlier after signing (an on-time bit forged), judged under the signer's own
     mapping (`signer_schemes`); every one must be rejected for its signature, and the unedited sessions must pass."""
-    from verity.core.protocols.pous import memory_challenger as mc
+    from verity.protocols.pous.device import memory_challenger as mc
 
     schemes = signer_schemes(doc["signer"]["scheme"])
     out = {"sessions": 0, "unedited_accepted": 0, "flipped_rejected": 0, "edited_rejected": 0}
@@ -288,9 +288,9 @@ def audit(host: str, port: int, scheme: Any, salt: bytes, digests: bytes, *, aud
     sessions are written to `sessions_out` (`write_sessions`) when the session loop ends, however it ends, before any
     verdict runs.  Every session's id is in `session_log_path` (`session_log`) before its first round; without one (the
     test signer), in a temporary directory with the test signer's leaf state, removed once the sessions are signed."""
-    from verity.core.protocols.pous import audit as pous_audit
-    from verity.core.protocols.pous import memory_challenger as mc
-    from verity.core.protocols.pous.protocol import StorageProfile
+    from verity.protocols.pous.verifier import audit as pous_audit
+    from verity.protocols.pous.device import memory_challenger as mc
+    from verity.protocols.pous.verifier.protocol import StorageProfile
 
     if signer not in ("lms", "test") or (signer == "lms") != (lms_key is not None):
         raise ValueError(f"the signer is 'lms' with a key directory or 'test' without one, not {signer!r}, {lms_key!r}")
@@ -403,7 +403,7 @@ def audit(host: str, port: int, scheme: Any, salt: bytes, digests: bytes, *, aud
 
 
 def main(argv: list[str] | None = None) -> int:
-    from verity.core.protocols.pous import audit as pous_audit
+    from verity.protocols.pous.verifier import audit as pous_audit
 
     ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     ap.add_argument("--ready", required=True)

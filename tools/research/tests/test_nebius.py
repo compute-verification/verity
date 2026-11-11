@@ -31,7 +31,7 @@ from research.store import custody as CU
 
 NEBIUS = Path(registry.__file__).resolve().parent / "nebius"
 GPU_LEASE = Path(registry.__file__).resolve().parent / "sh" / "gpu_lease.sh"
-CHECKPOINTS = Path(__file__).resolve().parents[3] / "integrations" / "vllm" / "manifests" / "checkpoints.json"
+CHECKPOINTS = Path(__file__).resolve().parents[3] / "adapters" / "vllm" / "manifests" / "checkpoints.json"
 HOST = "203.0.113.7"
 
 
@@ -844,7 +844,12 @@ def test_dry_run_renders_the_cloud_init_and_vm_spec_without_credentials():
                       ("/usr/local/share/vy/lease.sh", L.LEASE_SH), ("/usr/local/bin/gpu-lease", GPU_LEASE)]:
         assert code(embedded[path]) == code(src.read_bytes()), path
         assert subprocess.run(["bash", "-n"], input=embedded[path], capture_output=True).returncode == 0, path
-    assert embedded["/etc/systemd/system/user@.service.d/vy-cpuset.conf"] == (NEBIUS / "user-cpuset.conf").read_bytes()
+    for path, name in [("/etc/systemd/system/user@.service.d/vy-cpuset.conf", "user-cpuset.conf"),
+                       ("/etc/apt/apt.conf.d/52vy-trust", "apt-security-updates.conf"),
+                       ("/etc/needrestart/conf.d/50-vy.conf", "needrestart-list-only.conf")]:
+        assert embedded[path] == (NEBIUS / name).read_bytes(), path
+    # the first boot writes no unattended-upgrades policy of its own: the one cloud-init wrote is the one deploy.toml installs
+    assert "apt.conf.d" not in "\n".join(code((NEBIUS / "vm_setup.sh").read_bytes()))
     assert b"VY_USER=research\n" in embedded["/etc/vy/vy.env"]
     s = json.loads(spec)["spec"]
     assert s["resources"] == {"platform": "gpu-rtx6000-a", "preset": "8gpu-192vcpu-1744gb"}
@@ -2577,10 +2582,10 @@ def test_n2_commit_keeps_a_row_whose_plans_are_keyed_to_other_code_on_node_1(tmp
     """A Build whose plans came from a job tree a redeploy then replaced has a Commit that, on node 2, runs from the new tree, finds
     the plans' code key differing and derives both with its GPU held at 0% for whole leases. submit refuses such a row
     before it touches node 2, so node 1's leased Commit derives the plans before it takes a GPU. The job tree is a stand-in whose
-    source_identity hashes one file (integrations/vllm's own tests cover code_identity)."""
+    source_identity hashes one file (adapters/vllm's own tests cover code_identity)."""
     row_name = "gemma2-9b__bf16__rtxpro6000__tp1__b8__i1024__o128__mixed__greedy__bi-eager"
     tree, row, bin_, log = tmp_path / "tree", tmp_path / "sweep" / row_name, tmp_path / "bin", tmp_path / "ssh.log"
-    pipeline = tree / "integrations" / "vllm" / "verity_vllm" / "pipeline"
+    pipeline = tree / "adapters" / "vllm" / "verity_vllm" / "pipeline"
     for d in (pipeline, row / "plan", bin_):
         d.mkdir(parents=True)
     (pipeline.parent / "__init__.py").write_text("")

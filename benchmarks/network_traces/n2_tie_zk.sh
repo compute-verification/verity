@@ -27,7 +27,7 @@ if [ "${N2_GPU:-0}" = 1 ]; then
   done
   C13=${CUDA_TK:-/usr/local/cuda-13.3}; export LD_LIBRARY_PATH=$C13/compat:$C13/lib64:${LD_LIBRARY_PATH:-}
   G=${RESEARCH_RUN_DIR:?}/out/build-gpu; mkdir -p "$G"
-  OUT=$G bash verity/ml/flock/pod/70-class-sweep.sh BUILD_ONLY=1 GPU=1 SM=${SM:-120} > "$G/build.txt" 2>&1
+  OUT=$G bash verity/protocols/flock/pod/70-class-sweep.sh BUILD_ONLY=1 GPU=1 SM=${SM:-120} > "$G/build.txt" 2>&1
   FLOCK_PROVE=$(sed -n 's/^BINARY=//p' "$G/build.txt" | tail -1)
   FLOCK_SELFTEST=$(sed -n 's/^SELFTEST_BINARY=//p' "$G/build.txt" | tail -1)
   [ -x "$FLOCK_PROVE" ] || { tail -30 "$G/build.txt"; echo "no CUDA flock-circuit" >&2; exit 7; }
@@ -36,9 +36,9 @@ fi
 if [ -n "${N2_CACHE:-}" ] && mkdir -p "$N2_CACHE" 2>/dev/null && [ -w "$N2_CACHE" ]; then export HZ_CACHE=$N2_CACHE; fi
 source benchmarks/pouw/hidden_zk/job.sh
 export PATH=$HOME/.elan/bin:$PATH
-export PYTHONPATH=$SRC:$SRC/verity/ml/flock/python:$SRC/integrations/vllm:$SRC/tools/verity/circuit_check/src:$SRC/benchmarks/numerical/python
+export PYTHONPATH=$SRC:$SRC/verity/protocols/flock/prover/python:$SRC/adapters/vllm:$SRC/tools/verity/circuit_check/src:$SRC/benchmarks/numerical/python
 setup
-(cd verity/core/service/spot && lake build sampled-proofs-verifier) > "$OUT/build-sampled-proofs.log" 2>&1 \
+(cd verity/protocols/spot/verifier/lean && lake build sampled-proofs-verifier) > "$OUT/build-sampled-proofs.log" 2>&1 \
   || { tail -40 "$OUT/build-sampled-proofs.log"; exit 7; }
 export FC_FIREWALL_LEAN=${LEAN%/*}/flock-firewall
 (exec 8>"${LEAN%/.lake/*}.firewall.lock"; flock 8; [ -x "$FC_FIREWALL_LEAN" ] || (cd "${LEAN%/.lake/*}" && lake build flock-firewall)) \

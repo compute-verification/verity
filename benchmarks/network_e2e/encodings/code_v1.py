@@ -16,7 +16,7 @@ from collections.abc import Iterable, Sequence
 from pathlib import Path
 from typing import Any
 
-from verity.ml.protocols.certifier.window_charge import Window
+from verity.protocols.certifier.prover.window_charge import Window
 from verity_vllm.pipeline.advice_code.window_code import (
     Book, Caps, DEFAULT_CAPS, decode as decode, Decoder as Decoder, encode as encode, Encoded as Encoded,
     Encoder as Encoder, ints, context_key, KT, pack as pack, CoderState, unpack as unpack, code_window,

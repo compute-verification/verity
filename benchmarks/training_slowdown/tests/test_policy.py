@@ -13,7 +13,7 @@ from training_slowdown import flops, policy
 from training_slowdown import formalism as F
 from training_slowdown.gates import per_mac
 
-LF_PATH = Path(__file__).resolve().parents[3] / "integrations" / "vllm" / "tests" / "program" / "train_step_lf.py"
+LF_PATH = Path(__file__).resolve().parents[3] / "adapters" / "vllm" / "tests" / "program" / "train_step_lf.py"
 
 
 def _lf():
@@ -72,7 +72,7 @@ def test_the_consoles_c_is_one_full_session_of_the_reference_model():
 
 def test_the_stated_shapes_are_the_lf_models_and_its_counted_forward_is_the_sessions_weight_products():
     """Every stated shape has its parameters and heads 64 wide, and the 45M reference is the lf model
-    (`integrations/vllm/tests/program/train_step_lf.py`) at its s size over the GPT-2 vocabulary padded to 50,304:
+    (`adapters/vllm/tests/program/train_step_lf.py`) at its s size over the GPT-2 vocabulary padded to 50,304:
     the model's parameters are `parameters`' count, and a token's counted forward MACs at a context are the session's
     matrices and LM head there, its causal attention and elementwise ops under 0.1% of them."""
     for params, sh in policy.SHAPES.items():

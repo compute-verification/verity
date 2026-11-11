@@ -10,7 +10,7 @@
                                                  # onto vy-nebius-2 from this checkout (kind agent-test: 4 CPUs, 16 GB, 60 min unless given;
                                                  # a suites.py run of named suites: their [tool.verity.tests] worker_gb and timeout_s),
                                                  # on whole cores of its own, waiting on the node while none are free; or, when it starts
-                                                 # sooner there, a slot of a CPU node's research pool (research/auto.py's SPILL)
+                                                 # sooner there, a slot of a CPU node's research pool (research/auto.py's `spill`: every CPU node)
   research run --on MACHINE --project P [--source GITDIR] [--send FILE ...] [--env K=V ...] [--exclusive] [--mem-gb N [--mem-wait S]]
                [--gpus N] [--custody-ttl 6h | --no-custody-r2] [--preflight TOOL] [...] -- CMD...   # run custody on the store's remote is the default
                                                  # where gpu-lease hands out the GPUs, only --gpus N (a FCFS wait for N) shows the run any
@@ -25,7 +25,7 @@
   research status [RUN] [--on NAME] [--runs-dir D] [--refresh] [--balance] [--all] [--json]
   research inspect <run-id|prefix|path> [--on NAME] [--runs-dir D] [--json | --py-spy]
                                                  # a full run id another VM launched (no local dir): found on --on NAME, else on
-                                                 # each ssh machine, and its records fetched here (remote.adopt)
+                                                 # each ssh machine but the auditor hosts, and its records fetched here (remote.adopt)
   research keeper set NAME --on NODE --project P --n N --until UTC [--gpus G] [--max-min M] [--source GITDIR] [...] -- CMD... {seed}
   research keeper stop NAME --on NODE [--cancel] | status [NAME] --on NODE [--json]
                                                  # a standing campaign target: the node keeps N chunks leased, a fresh seed each,
@@ -75,6 +75,9 @@
                                                  # idle: `cluster usage` (infra/cluster usage.py) over the console's record on vy-nebius-1
   research lean-times [--hours 24] [--until T] [--over 15] [--json]   # each Lean task's wall time, from the store's attempts: records
                                                  # runs and checks' Lean steps, p50/p95/max per kind and package (research/lean_times.py)
+  research run-times [--hours 12] [--until T] [--over 10] [--on MACHINE,...] [--json]   # each run's wait to start, setup and run
+                                                 # time from its records on the machines, p50/p90/p95 by kind, machine and pool, and
+                                                 # each run that waited over 10 min with what it waited behind (research/run_times.py)
   research pods ssh TARGET [--print] [-- CMD...]  # TARGET = machines.toml name | pod id | pod name; the port is looked up, never hard-coded
   research pods sync TARGET [SRC] [--dest DIR]    # rsync the worktree's git-visible files (default /workspace/src), prune what it shipped before
   research notes checkpoint LANE STATE TEXT...   # CHECKPOINT <sha> (<HH:MM>Z) [open|blocked|final|superseded] line atop the report
@@ -198,7 +201,7 @@ def _cmd_run(argv: list[str], clones: list[Path]) -> int:
     ap.add_argument("--on", default=None, metavar="MACHINE",
                     help="run on an existing authorized machine listed in the machines file; `auto`: an agent's suite or build, "
                          "queued onto vy-nebius-2 from this checkout, 4 CPUs, 16 GB and 60 min unless the run says otherwise, or "
-                         "a slot of a CPU node's research pool when it starts sooner there (research/auto.py's SPILL); the "
+                         "a slot of a CPU node's research pool when it starts sooner there (research/auto.py's `spill`: every CPU node); the "
                          "launch says where it went and when it should start")
     ap.add_argument("--accept-wait", action="store_true",
                     help="with --on auto: queue the run though it isn't expected to start within 10 minutes "
@@ -2013,6 +2016,10 @@ def main(argv: list[str] | None = None) -> int:
         from .lean_times import main as lean_times_main
 
         return lean_times_main(rest)
+    if cmd == "run-times":
+        from .run_times import main as run_times_main
+
+        return run_times_main(rest)
     if cmd == "agents":
         from .agents import main as agents_main
 

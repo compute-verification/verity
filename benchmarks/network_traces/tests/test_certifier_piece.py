@@ -40,7 +40,7 @@ import jsonschema
 import pytest
 
 HERE = Path(__file__).resolve().parents[1]
-ROOT = HERE.parents[1]
+ROOT = Path(__file__).resolve().parents[3]
 sys.path[:0] = [str(HERE), str(Path(__file__).resolve().parent), str(ROOT / "benchmarks" / "one_stage")]
 
 import certifier_piece as CP  # noqa: E402
@@ -48,10 +48,10 @@ import chain_record as CR  # noqa: E402
 import served_verdicts as S  # noqa: E402
 from test_served_session import RUN, STUB  # noqa: E402
 from test_warden_chain import WC, gate_run  # noqa: E402
-from verity.ml.circuits.codec import canonical_json  # noqa: E402
+from verity.circuits.codec import canonical_json  # noqa: E402
 from verity_e2e_demo import block_record as BR  # noqa: E402
 
-PERIOD_CASE = ROOT / "verity" / "core" / "protocols" / "network" / "tests" / "period_case.py"
+PERIOD_CASE = ROOT / "verity" / "protocols" / "certifier" / "verifier" / "network" / "tests" / "period_case.py"
 SCHEMA = json.loads((Path(BR.__file__).parent / "schemas" / "block-record.v2.schema.json").read_text())
 K = 3
 #: the gate's end of a rehearsal its check passed, and of one whose every request was late past the network certifier's
@@ -149,7 +149,8 @@ def _piece_cmd(tmp_path: Path, chain: Path, answer: dict, cmd: str | None = None
                         f"cat {shlex.quote(str(tmp_path / 'lean-answer.json'))}\n")
         lean.chmod(0o755)
     cmd = cmd or f'mkdir -p "$RESEARCH_RUN_DIR" && cp -r {shlex.quote(str(chain / "out"))} "$RESEARCH_RUN_DIR/"'
-    return (f"{shlex.quote(sys.executable)} {shlex.quote(str(HERE / 'certifier_piece.py'))} piece \"$@\" "
+    piece = ROOT / "benchmarks/network_traces/certifier_piece.py"
+    return (f"{shlex.quote(sys.executable)} {shlex.quote(str(piece))} piece \"$@\" "
             f"--lean {shlex.quote(str(lean))} --chain-cmd {shlex.quote(cmd)}")
 
 

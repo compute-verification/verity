@@ -64,13 +64,13 @@ sys.path.insert(0, str(HERE))
 
 import leak_scan as LS  # noqa: E402
 import warden_serve as ws  # noqa: E402
-from verity.ml.circuits import boolean as BL  # noqa: E402
-from verity.ml.circuits.defs import CompositeDefinition, bind  # noqa: E402
-from verity.ml.circuits.types import Array  # noqa: E402
-from verity.core.protocols.certifier import warden_rows as WR  # noqa: E402
-from verity.core.protocols.certifier.active import DATA, PAD  # noqa: E402
-from verity.core.protocols.certifier.certificate import Certificate  # noqa: E402
-from verity.core.protocols.certifier.warden import END, WardenParams, cell  # noqa: E402
+from verity.circuits import boolean as BL  # noqa: E402
+from verity.circuits.defs import CompositeDefinition, bind  # noqa: E402
+from verity.circuits.types import Array  # noqa: E402
+from verity.protocols.certifier.verifier import warden_rows as WR  # noqa: E402
+from verity.protocols.certifier.verifier.active import DATA, PAD  # noqa: E402
+from verity.protocols.certifier.verifier.certificate import Certificate  # noqa: E402
+from verity.protocols.certifier.verifier.warden import END, WardenParams, cell  # noqa: E402
 
 MEMBERS = {"sender": ("o0", True), "receiver": ("row", True), "unsigned": ("o0", False), "altered": ("o0", False),
            "pad": ("o0", False), "pad-named": ("o0", False), "swapped": ("o0", False)}
@@ -206,9 +206,9 @@ def _one_stage():
     import a7
     import a8
     import numpy as np
-    from verity.core.protocols.spot.one_stage import draw as D, partition as P, registration as R, verifier as V
-    from verity.ml.circuits.codec import canonical_json, encode_program
-    from verity.ml.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_V2 as V2
+    from verity.protocols.spot.verifier.one_stage import draw as D, partition as P, registration as R, verifier as V
+    from verity.circuits.codec import canonical_json, encode_program
+    from verity.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_V2 as V2
     from verity_flock import class_statement as CS
 
     return SimpleNamespace(a0=a0, a7=a7, a8=a8, np=np, D=D, P=P, R=R, V=V, canonical_json=canonical_json,

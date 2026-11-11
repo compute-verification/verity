@@ -11,7 +11,7 @@ every row a function of its logits.
 ## The canonical row
 
 For a row of `n` keys with float32 logits `v[0..n)`, the canonical row is the registered selection's
-(`verity.ml.definitions.registry.dsa_topk`: `topk_set`, which `DsaTopKLongRow` checks) in ascending order:
+(`verity.definitions.registry.dsa_topk`: `topk_set`, which `DsaTopKLongRow` checks) in ascending order:
 
 - **Key.** `key(v)` is `convert_to_uint32_v2` of the float's 32 bits, the key the pin's kernels rank by: `~b` for a
   negative word, `b | 2^31` otherwise. Keys order as the floats do, with `-0` below `+0`, a positive NaN above `+inf`
@@ -57,7 +57,7 @@ PYTHONPATH=DIR${PYTHONPATH:+:$PYTHONPATH} VERITY_DSA_TOPK=canonical [VERITY_DSA_
 
 ## Measuring
 
-On a GPU node with the pin's venv (`integrations/vllm/verity_vllm/ops/pod_bootstrap.sh`'s `venv312`):
+On a GPU node with the pin's venv (`adapters/vllm/verity_vllm/ops/pod_bootstrap.sh`'s `venv312`):
 
 ~~~text
 research run --on NODE --project verity --source . --cwd source -- bash benchmarks/dsa_topk/run.sh

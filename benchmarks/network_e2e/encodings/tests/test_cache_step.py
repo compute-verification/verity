@@ -1,4 +1,4 @@
-"""CacheStep_v1's specification (`verity.core.protocols.certifier.cache_step.reference`) against the derived rules'
+"""CacheStep_v1's specification (`verity.protocols.certifier.verifier.cache_step.reference`) against the derived rules'
 prefix rules (`derived.Prefixes`) over whole traces, through `cache_vectors.drive`, and the certifier's difftest vectors
 as `cache_vectors` makes them now."""
 from __future__ import annotations
@@ -27,7 +27,7 @@ def _load(name, path):
 V = _load("enc_cache_vectors", HERE.parent / "cache_vectors.py")
 D = V.D
 FIXTURES = HERE / "fixtures"
-VECTORS = REPO / "verity" / "core" / "protocols" / "certifier" / "tests" / "fixtures" / "cache_step_vectors.json"
+VECTORS = REPO / "verity" / "protocols" / "certifier" / "verifier" / "tests" / "fixtures" / "cache_step_vectors.json"
 
 
 def _trace(name):
@@ -37,9 +37,10 @@ def _trace(name):
 @pytest.mark.parametrize("name", ["sync-crush.json.gz", "corpus-smallkv"])
 def test_the_cache_is_derived_s_prefix_rules_over_a_whole_trace(name) -> None:
     """Every call of the trace, in scheduling order: each derived hit is the one `Prefixes` derives (vLLM's own hit) and
-    one unit either side is refused; each sent hit is a cached prefix (vLLM's eviction never hits past the cache that
-    never evicts) and one unit past the cache is refused; each hit's sources at its step's end are `Prefixes.sources`
-    and the advice's; and the lookup and the computed units in one call leave the same table as in two."""
+    one unit either side is refused; each hit past the bound, in `sent` mode, is a cached prefix (vLLM's eviction never
+    hits past the cache that never evicts) and one unit past the cache is refused; each hit's sources at its step's end
+    are `Prefixes.sources` and the advice's; and the lookup and the computed units in one call leave the same table as
+    in two."""
     tr = _trace(name)
     cfg = D.config_of(tr)
     adv, order = D.advice_of(tr)

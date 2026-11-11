@@ -47,7 +47,7 @@ import sys
 from collections import defaultdict
 from pathlib import Path
 
-CONFIG = (Path(__file__).resolve().parents[3] / "integrations/vllm/verity_vllm/engine/profiles/hf_configs"
+CONFIG = (Path(__file__).resolve().parents[3] / "adapters/vllm/verity_vllm/engine/profiles/hf_configs"
           / "LLAMA32_1B_INT8.config.json")
 SHEET_MHZ = 1830.0
 THETA_INT8 = 4096 * 132 * SHEET_MHZ * 1e6  # MAC/s: the H200's dense s8 MACs a SM-clock, its SMs, its sheet's clock

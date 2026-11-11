@@ -14,7 +14,7 @@ import tarfile
 from pathlib import Path
 
 HERE = Path(__file__).resolve().parents[1]
-ROOT = HERE.parents[1]
+ROOT = Path(__file__).resolve().parents[3]
 RUN = "c20261027T160500Z-0000"
 #: a witness value the stub's status plants (STUB_NOTE), 64 hex characters: two of the guard's text pieces
 PLANTED = hashlib.sha256(b"a certified line").hexdigest()
@@ -64,9 +64,11 @@ def _gate(tmp_path: Path, popen: bool = False, **env: str):
            "HOME": str(tmp_path), "OUT": str(out), "RESEARCH_RUN_DIR": str(tmp_path / "run"), "RESEARCH_RUN_ID": "r1",
            "GATE_KEY": str(tmp_path / "key"), "REQUESTS": "4", "PY": sys.executable, **env}
     if popen:
-        return subprocess.Popen(["bash", str(HERE / "wipe_gate.sh")], cwd=ROOT, stdout=subprocess.PIPE,
-                                stderr=subprocess.STDOUT, text=True, env=env, start_new_session=True)
-    return subprocess.run(["bash", str(HERE / "wipe_gate.sh")], cwd=ROOT, capture_output=True, text=True, env=env)
+        return subprocess.Popen(["bash", str(ROOT / "benchmarks/network_traces/wipe_gate.sh")], cwd=ROOT,
+                                stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, env=env,
+                                start_new_session=True)
+    return subprocess.run(["bash", str(ROOT / "benchmarks/network_traces/wipe_gate.sh")], cwd=ROOT, capture_output=True,
+                          text=True, env=env)
 
 
 def _published(tmp_path: Path) -> list[str]:
