@@ -35210,3 +35210,33 @@ Now nothing of mine is running or queued [run `research status` on `e39b`, `7cdc
   - Neither `main` nor this branch has a `Circuits` root under `Security/Proofs` [run: `git ls-tree`]. My guess is that cpu-1's slot tree `build-0` still holds another branch's module list.
   - In place of the sibling check, a grep finds each of the 17 names part 2 adds declared exactly once in `Security` and `verity` [run].
 - [run] The build of the two importers, `r20261111-003040-f010` (vy-nebius-cpu-8), runs `lean_changed.py --build Security/Proofs/Flock/SamplingGeneric.lean Security/Proofs/Flock/Claims/Witnesses.lean`. ETA about 00:50Z [guess].
+
+## PRF-522 PUBUNITS, Wed 11 Nov 00:34Z: the base's, not mine: `r20261110-232449-2161` failed in one build, `benchmarks/verifier_cost/whole_run/Main.lean:86`, which fails the same way at the base without my change (`r20261111-002830-23e3`); `f2090e464bd9` passed its three other steps and can go into the base as it is
+
+**The base's.** Nothing to tell lean. `f2090e464bd9` is unchanged.
+
+**What failed** [run, `r20261110-232449-2161`, vy-nebius-cpu-3, at `f2090e464bd9`, exit 1]
+- Step 4 of 4, the scratch build of `whole-run-time` from `benchmarks/verifier_cost/whole_run/Main.lean` against the clone's spot package, as `whole_run.sh` builds it.
+- The error: `Main.lean:86:6: Type mismatch`, `some rule'` has type `Option ?m.113` but is expected to have type `List Nat → Option Select.Rule`.
+- Line 86 is `let some rule' := rule.over n | throw …`. `Select.Rule.over` is `Rule → Nat → List Nat → Option Rule` (`Spot/Select.lean:235`). The call gives it one argument too few.
+
+**What passed in the same run** [run]
+- `tests/test_flock_json.py` on the node: 3 passed.
+- The spot suite's `test_a_piece_agrees[public_units]` through `suites.py verity-core-sampled-proofs`: 1 passed in 60 s. This is the difftest of the `public_units` piece.
+- The scratch build of `registration-time` from `benchmarks/verifier_cost/registration/Main.lean`: built, 462 jobs.
+
+**Why it is not my change's**
+- [run] `r20261111-002830-23e3`, vy-nebius-cpu-6, at the base's head `f63a7b76334d`, which does not hold my commit (its `Spot/PublicUnits.lean:31` still reads `Json.parse`): the same build fails with the same error at the same line. Exit 0, because the run's exit is its second build's.
+- [read] Line 86 and `Rule.over`'s declaration are byte for byte the same at `97876e5336e1`, `f2090e464bd9`, `f63a7b76334d` and `main` (`2b869ed35d`). My commit changes `Spot/PublicUnits.lean` alone.
+- [read] `93447c44a1` (8 Nov, "a stratified rate is the stratified law at the K its strata need") gave `Rule.over` its strata sizes and did not touch `whole_run/Main.lean`. No test names that file, so nothing went red. **It is broken on `main` too.**
+
+**The cure, tried and not pushed** [run, same run `r20261111-002830-23e3`]
+- Line 86 as `let some rule' := rule.over n (Select.strataSizes v.program v.query) | throw …`, the argument `Run.lean:246` hands it: `whole-run-time` builds, 462 jobs.
+- I pushed it nowhere. The file is proofs', the fault is `main`'s and not the merge's. Say where it goes: a PR onto `main`, or a commit of its own on my cures branch for lean.
+
+**Correction to my 23:41Z entry.** I wrote that run 2 "builds the two benchmark files that `import Spot`" as if both would build. One does not, on any head.
+
+**What is left**
+- PRF-522's own item is done: branch `cursor/proofs-remote-publicunits-537a` at `f2090e464bd925aa65c52a6d389d70193177b0f9`, named on LEAN-249 at 23:40Z, all its checks run.
+- I am now on the cures of your 00:20Z message, on `cursor/proofs-remote-cures-dac3`, cut from `f63a7b76334d`, not pushed yet. Next entry by 01:30Z.
+- My VM came back without its worktrees at 00:23Z. Nothing was lost: every commit was pushed. A fresh worker needs only the two branch names.
