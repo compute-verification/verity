@@ -27,7 +27,7 @@ from typing import Any
 
 from verity_vllm.config import ROOT as REPO
 from verity_vllm.config import UsageError, option
-from verity_vllm.properties.record import seal
+from verity_vllm.properties.record import REGISTRY, seal
 
 CORPUS = Path(__file__).resolve().parent / "golden" / "corpus.json"
 
@@ -72,7 +72,7 @@ def load_corpus(path: Path = CORPUS) -> dict[str, Any]:
 
 def check(corpus_path: Path = CORPUS, only: list[str] | None = None) -> dict[str, Any]:
     corpus = load_corpus(corpus_path)
-    out: dict[str, Any] = {"schema": "verity-gen/golden-check/v1", "status": "pass", "utc": _utc(), "corpus": str(corpus_path), "entries": []}
+    out: dict[str, Any] = {"schema": REGISTRY["golden"].schema, "status": "pass", "utc": _utc(), "corpus": str(corpus_path), "entries": []}
     for e in corpus["entries"]:
         if only and e["name"] not in only:
             continue

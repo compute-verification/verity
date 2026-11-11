@@ -28,11 +28,11 @@ from __future__ import annotations
 
 from typing import Any
 
-from verity_vllm.properties.record import digest_of
+from verity_vllm.properties.record import REGISTRY, digest_of
 from verity_vllm.properties.record import seal as seal_record
 from verity_vllm.query import router_softmax as RS
 
-SCHEMA = "verity-vllm/router-tap-exactness/v1"
+SCHEMA = REGISTRY["router_tap_exactness"].schema
 RECORD = "router_tap_exactness.json"
 #: (E, TOPK, VPT, renormalize)
 CONFIGS = ((64, 8, 8, False), (64, 8, 8, True), (128, 8, 8, False), (128, 8, 8, True))

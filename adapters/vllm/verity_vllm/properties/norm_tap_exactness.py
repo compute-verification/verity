@@ -29,10 +29,10 @@ from __future__ import annotations
 import difflib
 from typing import Any
 
-from verity_vllm.properties.record import digest_of
+from verity_vllm.properties.record import REGISTRY, digest_of
 from verity_vllm.properties.record import seal as seal_record
 
-SCHEMA = "verity-vllm/norm-tap-exactness/v1"
+SCHEMA = REGISTRY["norm_tap_exactness"].schema
 RECORD = "norm_tap_exactness.json"
 KERNELS = ("cuda", "triton")
 #: two scale-buffer fills (NaN payloads the kernels never write): a word both launches leave at their fill was not written

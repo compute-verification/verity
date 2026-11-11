@@ -21,11 +21,11 @@ from __future__ import annotations
 
 from typing import Any
 
-from verity_vllm.properties.record import digest_of
+from verity_vllm.properties.record import REGISTRY, digest_of
 from verity_vllm.properties.record import seal as seal_record
 from verity_vllm.query import vocab_range as VR
 
-SCHEMA = "verity-vllm/vocab-range-exactness/v1"
+SCHEMA = REGISTRY["vocab_range_exactness"].schema
 RECORD = "vocab_range_exactness.json"
 WORLD = 2
 _CALLS: dict[tuple, Any] = {}

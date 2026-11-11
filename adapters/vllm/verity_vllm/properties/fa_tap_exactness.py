@@ -58,10 +58,10 @@ from verity_vllm.acquire.sources.hidden_source import (
     fa3_tile,
 )
 from verity_vllm.commit.hidden_stream import ROW_GUARD_FIELD, SRC_BITS, StreamLayout
-from verity_vllm.properties.record import digest_of
+from verity_vllm.properties.record import REGISTRY, digest_of
 from verity_vllm.properties.record import seal as seal_record
 
-SCHEMA = "verity-vllm/fa-tap-exactness/v1"
+SCHEMA = REGISTRY["fa_tap_exactness"].schema
 RECORD = "fa_tap_exactness.json"
 PAGE = 16
 #: an f32 NaN payload no tap word takes (the kernels write finite, -inf and +0 words)

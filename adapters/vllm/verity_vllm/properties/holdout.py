@@ -26,7 +26,7 @@ from typing import Any
 from verity_vllm.check.gates import HOLDOUT_GATES
 from verity_vllm.commit import challenge as CH
 from verity_vllm.config import VLLM, WORKLOAD_SCHEMA, UsageError, option
-from verity_vllm.properties.record import seal
+from verity_vllm.properties.record import REGISTRY, seal
 
 #: prompt lengths that straddle the kernel-specialization boundaries of the pinned profile (FA2 kBlockN 64 / 128, the
 #: persistent matmul's 64/128-row tiles) plus a short and a long one; the generator samples from this pool.
@@ -71,7 +71,7 @@ def generate(out_dir: Path, *, case: str, model: str, vocab: int, n: int, seed: 
 
 
 def assemble(holdouts_dir: Path) -> dict[str, Any]:
-    out: dict[str, Any] = {"schema": "verity-gen/holdouts/v1", "status": "fail", "holdouts": []}
+    out: dict[str, Any] = {"schema": REGISTRY["holdout"].schema, "status": "fail", "holdouts": []}
     for d in sorted(p for p in holdouts_dir.iterdir() if p.is_dir()):
         g = d / "gates.json"
         ent: dict[str, Any] = {"name": d.name, "run_dir": str(d), "workload": None, "gates": {}}

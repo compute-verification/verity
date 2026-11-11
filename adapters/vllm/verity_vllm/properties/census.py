@@ -59,7 +59,7 @@ from verity_vllm.observe.kernel_trace import (
     load_trace,
     summarize_kernels,
 )
-from verity_vllm.properties.record import seal
+from verity_vllm.properties.record import REGISTRY, seal
 
 # ---------------------------------------------------------------------------------------------------------
 # declared name -> regexes over the demangled kernel name (torch-free)
@@ -449,7 +449,7 @@ def reconcile(census: dict, log_path: str, profile_name: str, proposed_allowlist
                          "patterns": sorted(row["patterns"]), "residue": not row["claims"]})
     total_kernels = sum(cs["n_kernels"] for cs in census_steps)
     rep = {
-        "schema": "verity-capture/census-reconciliation/v2",
+        "schema": REGISTRY["census"].schema,
         "utc": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
         "census": {"utc": census.get("utc"), "workload_sha256": (census.get("workload") or {}).get("sha256"),
                    "engine_steps": census.get("engine_steps"), "steps_with_device_work": len(census_steps),
