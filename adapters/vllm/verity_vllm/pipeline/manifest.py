@@ -27,10 +27,10 @@ import os
 import re
 import sys
 import time
-from collections.abc import Callable
+from collections.abc import Callable, Mapping
 from contextlib import contextmanager
 from dataclasses import dataclass, field
-from typing import Any
+from typing import Any, Protocol
 
 from verity.definitions import cross_call
 from verity.definitions import word as word_query
@@ -57,8 +57,16 @@ __all__ = ["TAPS", "DEFAULT_TAPS", "taps_of", "word_record", "cpus", "prefetch_w
 #: `--jobs`'s variable
 JOBS_ENV = "VERITY_MANIFEST_JOBS"
 
+
+class _TapPolicy(Protocol):
+    """What `build` reads of a tap policy: the word class of each identity it adds."""
+
+    @property
+    def tap_words(self) -> Mapping[str, Any]: ...
+
+
 #: the tap policies whose identities are Call-interior values, by name (`request_manifest(taps=...)`)
-TAPS = {RS.FAMILY: RS.POLICY, VR.FAMILY: VR.POLICY}
+TAPS: dict[str, _TapPolicy] = {RS.FAMILY: RS.POLICY, VR.FAMILY: VR.POLICY}
 #: the tap policies every manifest is built under (each adds nothing to a Program without its Calls)
 DEFAULT_TAPS = (SP.POLICY,)
 
@@ -372,7 +380,7 @@ def _owner(path: str) -> str:
 def _build_forked(tasks: list[tuple[str, dict[str, Any]]], jobs: int, after: Callable[[int, dict[str, Any]], None], head: int,
                   log) -> list[dict[str, Any]]:
     import multiprocessing
-    from multiprocessing.connection import wait
+    from multiprocessing.connection import Connection, wait
     ctx = multiprocessing.get_context("fork")
     budget = int(head * HEADROOM_SHARE)
     need = [e if (e := _peak(d)) is not None else budget + 1 for d, _kw in tasks]
@@ -394,7 +402,7 @@ def _build_forked(tasks: list[tuple[str, dict[str, Any]]], jobs: int, after: Cal
             send.close()
             running[recv] = (i, p)
             used += need[i]
-        for conn in wait(list(running)):
+        for conn in (c for c in wait(list(running)) if isinstance(c, Connection)):   # the pipes' read ends: all `running` holds
             i, p = running.pop(conn)
             try:
                 results[i] = conn.recv()

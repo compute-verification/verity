@@ -100,7 +100,8 @@ class Options:
 
 def main(a: Options) -> int:
     doc = CR.load_index(Path(a.pins))
-    out, report, failed, unpinned = Path(a.out), {"schema": "verity-vllm/neutrality/v1", "pins": a.pins, "rows": {}}, False, []
+    out, failed, unpinned = Path(a.out), False, []
+    report: dict[str, Any] = {"schema": "verity-vllm/neutrality/v1", "pins": a.pins, "rows": {}}
     out.mkdir(parents=True, exist_ok=True)
     for row in select(doc, a.rows, a.tier):
         pin = doc["rows"][row]

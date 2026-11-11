@@ -38,7 +38,7 @@ def key(argv: list[str], *, workload: str | Path, tree: str | None, device: dict
     """The cache key of one derive, None when it cannot be keyed (no tree commit, no device, or not a `build` command)."""
     if not tree or not device or "build" not in argv:
         return None
-    args = list(argv[argv.index("build"):])
+    args: list[Any] = list(argv[argv.index("build"):])
     if "--out" in args:
         i = args.index("--out")
         del args[i:i + 2]
