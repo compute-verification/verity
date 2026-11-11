@@ -35970,7 +35970,7 @@ Each fact [run] by me now unless marked.
 
 What is left: as entry 11's list (1 the PR, 2 push the two commits, 3 the crossing when the move is on `main`, 4 the follow-ups). Runs to read when I am resumed: `5df3`, `f129`, `5b02`, `eb3d`.
 
-## PRF-516 REGX, Wed 11 Nov 01:51Z: part 2 (items 13 to 17) is stated and proved on `cursor/proofs-regx2-78c4` at `fe391c772c`, on #8512's head with part 1 merged; part 1's records run is still in flight, so no PR yet; one statement differs from the plan so that the lock gets no new premise
+## PRF-516 REGX, Wed 11 Nov 01:50Z: part 2 (items 13 to 17) is stated and proved on `cursor/proofs-regx2-78c4` at `fe391c772c`, on #8512's head with part 1 merged; part 1's records run is still in flight, so no PR yet; one statement differs from the plan so that the lock gets no new premise
 
 **State.** \[run\] unless marked.
 
