@@ -452,6 +452,54 @@ def test_a_brace_list_whose_paths_go_two_ways_is_split(tmp_path):
     assert (r / "boundary.toml").read_text() == want
 
 
+LIMIT_MAP = '[roots]\nold = {}\nnew = {}\n\n[paths]\n"census/" = "catalog/census/"\n\n[modules]\n"census" = "catalog.census"\n'
+
+
+def _limit_tree(root: Path, files: dict[str, str | bytes], rows: str = "") -> tuple[Path, list[str]]:
+    """A tree whose map moves `census/`, and the arguments that move it."""
+    r = root / "repo"
+    for p, t in {"census/hardware.json": "{}\n", "tools/research/src/research/store/moves.json": '{"moves": []}\n', **files}.items():
+        (r / p).parent.mkdir(parents=True, exist_ok=True)
+        (r / p).write_bytes(t if isinstance(t, bytes) else t.encode())
+    (root / "map.toml").write_text(LIMIT_MAP + rows)
+    git(r, "init", "-q", "-b", "main")
+    git(r, "add", "-A")
+    git(r, "commit", "-q", "-m", "old")
+    return r, ["--root", str(r), "--map", str(root / "map.toml"), "--no-lock"]
+
+
+def test_a_lean_lock_over_the_limit_is_rewritten_as_one_under_it(tmp_path, monkeypatch):
+    """A lock that grew past the limit moved with every old path in it, and the move said nothing."""
+    lock = json.dumps({"shape": {"frozen": {"T": "reads census/hardware.json, " + "as it was frozen, " * 30}}}, indent=1) + "\n"
+    under, argv = _limit_tree(tmp_path / "under", {"Security/lean-audit.json": lock})
+    assert L.main(argv) == 0
+    over, argv = _limit_tree(tmp_path / "over", {"Security/lean-audit.json": lock})
+    monkeypatch.setattr(L, "TEXT_LIMIT", len(lock) - 1)
+    assert L.main(argv) == 0
+    assert "reads catalog/census/hardware.json, " in (over / "Security/lean-audit.json").read_text()
+    assert (over / "Security/lean-audit.json").read_bytes() == (under / "Security/lean-audit.json").read_bytes()
+
+
+def test_a_text_file_over_the_limit_stops_the_move_which_names_it_until_the_map_excludes_it(tmp_path, monkeypatch):
+    """No file is left with its old paths for its size alone and passed over: text is what has no NUL in its first 8 KiB."""
+    notes = "see census/hardware.json\n" * 20
+    files = {"docs/notes.md": notes, "blob.bin": b"\0" + notes.encode()}
+    monkeypatch.setattr(L, "TEXT_LIMIT", len(notes) - 1)
+    _, argv = _limit_tree(tmp_path / "named", files)
+    with pytest.raises(SystemExit, match=rf"\n  docs/notes\.md \({len(notes)} bytes\)\n") as stop:
+        L.main(argv)
+    assert "blob.bin" not in str(stop.value) and "exclude in the map" in str(stop.value)
+    _, argv = _limit_tree(tmp_path / "dry", files)
+    with pytest.raises(SystemExit, match=r"docs/notes\.md"):
+        L.main([*argv, "--dry-run"])
+    excluded, argv = _limit_tree(tmp_path / "excluded", files, '\n[rewrite]\nexclude = ["docs/notes.md"]\n')
+    assert L.main(argv) == 0 and (excluded / "docs/notes.md").read_text() == notes
+    monkeypatch.setattr(L, "TEXT_LIMIT", len(notes))
+    at, argv = _limit_tree(tmp_path / "at", files)
+    assert L.main(argv) == 0 and (at / "docs/notes.md").read_text() == notes.replace("census/", "catalog/census/")
+    assert (at / "blob.bin").read_bytes() == files["blob.bin"]
+
+
 def test_rust_literals_spans_strings_and_skips_comments_chars_and_lifetimes():
     text = '''// "no" \n/* "no" /* "nested" */ */ let a = "x\\"y"; let b = br##"r"#"##; let c = '"'; fn f<'a>() { "z" }'''
     got = [text[s:e] for s, e in L.rust_literals(text)]
