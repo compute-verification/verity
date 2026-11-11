@@ -919,6 +919,7 @@ def test_a_sidecar_whose_module_is_gone_is_an_error(tmp_path, monkeypatch):
     (tmp_path / "synorphan/kept.circuit-check.json").write_text("{}")
     monkeypatch.syspath_prepend(str(tmp_path))
     monkeypatch.setattr(SC, "PACKAGES", ("synorphan",))
+    monkeypatch.setattr(SC, "TREES", ())
     SC.discover.cache_clear()
     try:
         assert list(SC.discover()) == ["synorphan.kept"]
@@ -941,6 +942,7 @@ def test_a_sidecar_under_two_packages_roots_is_named_once_from_the_deeper(tmp_pa
     monkeypatch.syspath_prepend(str(tmp_path))
     monkeypatch.syspath_prepend(str(tmp_path / "synouter/src"))
     monkeypatch.setattr(SC, "PACKAGES", ("synouter", "syninner"))
+    monkeypatch.setattr(SC, "TREES", ())
     SC.discover.cache_clear()
     try:
         assert list(SC.discover()) == ["syninner.rec"]
@@ -963,6 +965,7 @@ def test_a_sidecar_behind_a_namespace_directory_is_named_only_from_its_own_packa
     (tmp_path / "synout2/__init__.py").write_text("")
     monkeypatch.syspath_prepend(str(tmp_path))
     monkeypatch.setattr(SC, "PACKAGES", ("synout2", "synin2"))
+    monkeypatch.setattr(SC, "TREES", ())
     SC.discover.cache_clear()
     try:
         assert list(SC.discover()) == ["synin2.rec"]
@@ -970,8 +973,36 @@ def test_a_sidecar_behind_a_namespace_directory_is_named_only_from_its_own_packa
         SC.discover.cache_clear()
 
 
+def test_a_package_of_another_distribution_registers_itself_by_a_sidecar_of_its_own_module(tmp_path, monkeypatch):
+    """A package in one of `sidecars.TREES` (``<tree>/<stack>/<package>``) is searched once it has a sidecar of its own module,
+    and its sidecars are named from its own top; one without is not searched, and `sidecars.PACKAGES` names neither."""
+    from circuit_check import sidecars as SC
+
+    for pkg in ("synreg", "synunreg"):
+        sub = tmp_path / "stacks/s" / pkg / "sub"
+        sub.mkdir(parents=True)
+        for d in (sub.parent, sub):
+            (d / "__init__.py").write_text("")
+        (sub / "rec.py").write_text("")
+        (sub / "rec.circuit-check.py").write_text("")
+    own = tmp_path / "stacks/s/synreg/__init__.circuit-check.py"
+    own.write_text("")
+    monkeypatch.syspath_prepend(str(tmp_path / "stacks/s"))
+    monkeypatch.setattr(SC, "REPO", tmp_path)
+    monkeypatch.setattr(SC, "PACKAGES", ())
+    monkeypatch.setattr(SC, "TREES", ("stacks",))
+    SC.discover.cache_clear()
+    try:
+        assert list(SC.discover()) == ["synreg", "synreg.sub.rec"] and SC.packages() == {"synreg"}
+        assert SC.path_of("synreg", "py") == own.resolve()
+        assert SC.path_of("synreg.sub.rec", "json") == (own.parent / "sub/rec.circuit-check.json").resolve()
+        assert SC.path_of("synunreg.sub.rec", "py") is None
+    finally:
+        SC.discover.cache_clear()
+
+
 def test_every_package_that_defines_a_definition_is_one_sidecars_are_found_in():
-    """`sidecars.PACKAGES` holds the top-level package of every module that defines a registered Definition: a sidecar in any
+    """`sidecars.packages` holds the top-level package of every module that defines a registered Definition: a sidecar in any
     other package is never read, so its bindings would leave the task list without an error."""
     from circuit_check import sidecars as SC
     from circuit_check import targets as TG
@@ -979,7 +1010,9 @@ def test_every_package_that_defines_a_definition_is_one_sidecars_are_found_in():
 
     TG.load_registries()
     tops = {m.partition(".")[0] for d in REGISTRY.defs.values() if TG._authored(d) and (m := SC.owner(d))}
-    assert tops <= set(SC.PACKAGES), sorted(tops - set(SC.PACKAGES))
+    assert tops <= SC.packages(), (f"{sorted(tops - SC.packages())} define Definitions where circuit-check finds no sidecar: "
+                                   f"register each by a sidecar of its own module (`<package>/__init__{SC.SUFFIX}.py`, "
+                                   f"`sidecars.TREES`)")
 
 
 def test_a_target_that_would_reuse_a_memoized_result_reruns_when_its_dependency_changes(tmp_path):
@@ -1401,7 +1434,7 @@ def test_the_catalogs_units_are_its_root_functions_and_entries():
     assert {f"_model_roots:{label}" for label in labels} <= every and len(labels) > 50
     assert {f"TEMPLATE_PARAMS:{tid}" for tid in TG.template_params()} <= every
     assert {"_core_roots", "_boolean_roots", "_pouw_roots", "_kernel_roots", "_vocabulary_bindings", "common"} <= every
-    assert {"_kernel_roots", "_vocabulary_bindings", "common"} <= set(units[CC.TARGETS])
+    assert {"_kernel_roots", "common"} <= set(units[CC.TARGETS])
     src = srcs[CC.TARGETS]
     assert CC._units_of(src.replace("\ndef catalog(", "\n# a comment\ndef catalog(", 1))[0] == units[CC.TARGETS]
     b1 = SC.path_of("verity.definitions.registry.b1", "py")
@@ -1410,9 +1443,9 @@ def test_the_catalogs_units_are_its_root_functions_and_entries():
     assert {u for u in units[b1] if edited.get(u) != units[b1][u]} == {"_model_roots:ResidualAdd_v1"}
 
 
-#: `targets.py`'s own binding units: what no one module owns (every kernel's and vocabulary kind's self-check bindings), its
-#: module body, and `_root_bindings`, a helper whose name reads as a binding's
-TARGETS_UNITS = {"_kernel_roots", "_vocabulary_bindings", "_vocabulary_roots", "_root_bindings", "common"}
+#: `targets.py`'s own binding units: what no one module owns (every kernel's self-check bindings), its module body, and
+#: `_root_bindings`, a helper whose name reads as a binding's
+TARGETS_UNITS = {"_kernel_roots", "_root_bindings", "common"}
 
 
 def test_every_binding_and_pin_is_in_the_module_it_binds():
