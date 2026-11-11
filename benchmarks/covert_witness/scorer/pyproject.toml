@@ -1,0 +1,8 @@
+# The training-efficiency search's scorer and the builder of its tables (README.md). Not a package: its programs run by
+# path, and its tests run here as a suite (`uv run tools/verity/check/suites.py benchmarks/covert_witness/scorer`).
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+
+[tool.verity.tests]
+# test_replot rewrites a run's ledger rows with te_core, which it imports from benchmarks/covert_witness.
+inputs = ["benchmarks/covert_witness/te_core"]
