@@ -460,16 +460,14 @@ of leaking it.
 | the HTTP status line and headers (`date`, `server`, `content-type`, request ids, load metrics), chunk sizes, keep-alives | refused | none: no HTTP head leaves |
 
 **Not yet true.**
-- The format gate isn't written. `warden.Warden._egress` cuts the server's bytes into cells without reading them, and
-  `warden.REASONS` has no `format`. The reasons are in the parameters' digest, so the gate changes the network
-  certifier's parameters.
 - The I/O tie is a prototype on a fake upstream: in no Spec, unproved, and with the real port, vLLM's Commit, not wired
   to it. Its Lean is to be the egress half of the explanation premise of the composed weight-security theorem.
 - No proof block checks the stop rule yet. Advice v1's tie checks it in the clear (`stop_rule`), and the compile slice
   has no stopping request.
-- The deployed network certifier has neither the gate nor the tie. Its egress check is the step-indexed scan's
-  egress transfer blocks (`EgressBucket`), which render a drawn bucket's id-form row from the scan's slot state, so a
-  byte out of form is caught only in a drawn bucket.
+- The network certifier has the gate in the id egress form only (`warden.Warden._egress`; a schedule in the bytes form
+  relays any bytes), and not the tie. What a cell's ids are is checked by the step-indexed scan's egress transfer
+  blocks (`EgressBucket`), which render a sampled bucket's id-form row from the scan's slot state, so a wrong id is
+  caught only in a sampled bucket.
 - vLLM's own server emits its stock framing, so behind the gate every connection of its would fail `format`. (`LiveServer`
   in `benchmarks/network_traces/active_replay.py` writes the ordinal event, which `parse_cell` doesn't read, but it never
   sits behind the gate: it is the active replay's server side, where the ordinal event tells requests apart.)
@@ -2047,6 +2045,57 @@ any other it fails the connection (`format`) in that cell's slot, and none of th
 never rewrites. An honest id-form server writes one `io_tie.id_event` of exactly P bytes an output, then `TRAILER`, so
 the cut gives one event a `DATA` cell and the `END` holds the trailer; any other byte stream fails at its first cell.
 
+**The response cap** (`WardenParams.max_tokens_cap`, id form only, none by default) bounds every response in tokens. The
+network certifier reads each request's `max_tokens` from its first request cell (`active.id_request_max_tokens`) before
+cutting it. A request whose field isn't a u32 at its place, or exceeds the cap, is refused (`cap`): none of its bytes is
+cut into a cell or reaches the server, and it fails at once. It is never clamped. Every other response is held to its
+request's `max_tokens`: a whole `DATA` cell past that many fails the connection (`limit`) in its slot. So each
+certified response holds at most its request's `max_tokens` tokens, hence at most the cap
+(`NetTiming.Guarantees.ResponseCapped`). The cap and its reason enter the parameters' digest, so every record head binds
+them; an uncapped schedule hashes neither and keeps its digest. The period check reads uncapped schedules only.
+
+**The lengths rows** (`WardenParams.lengths`, id form only, none by default) are what the network certifier signs of the
+requests it released, beside its cells: each one's place in the release order, its request's bytes, its response's
+outputs (its `DATA` cells) and whether it ended in a `FAIL`. With them the network certifier:
+- releases no connection whose client has failed (no `END`, no place in the release order, nothing for the server), so
+  every released connection ends at an egress slot, in its `END` or a server's `FAIL`;
+- fails such a connection at its first egress slot, bucket s + D, with padding both ways until then, so every
+  connection holds its lane through s + D, as long as the ingress proof block's scan holds its slot, and a client's
+  failure leaves the next admission a slot. The read of the records in the clear (`warden.audit`) fails no window for
+  a connection that was never released;
+- cuts a request cell only where the ingress proof block's reference reads it as the next cell of a canonical id
+  request (`io_request.read`). A request that is none fails as its client's (`malformed`), unreleased: no server sees
+  it, so it is never a server's failure;
+- lays each execution phase's releases out a row a slot stride in two tables, `lengths` and `fails`, K =
+  `WardenParams.stride_releases` slots a row whatever the load, commits each as it commits its cells' rows, and signs
+  one head for the link's execution phase, once, that lists both (`connection_rows`, whose docstring has the slots,
+  the head and the registration). It signs execution phase w's head at the close of execution phase w + 1, where every
+  connection released in w has ended, so a period's last execution phase needs the one after it. An execution phase
+  whose records, or the next one's, weren't published complete has no head.
+
+The tables say what the same execution phases' records say, in another order: the network certifier writes both from
+the cells it cut and released, and that they agree rests on its own code (`trusted-host`), not on a proof. The form
+enters the parameters' digest; a schedule without lengths rows hashes nothing of it and keeps its digest, records, heads
+and certificates.
+
+**The lengths row's proof block** (`verity.protocols.certifier.prover.lengths_row`, `LengthsRow`, in no Spec) is one a link,
+execution phase and slot stride. It reads the compute side's committed row of the stride's K request slots (each
+`valid`, the request's place in the release order, its prompt's ids P and its outputs O, the arrival slots' layout) and
+row j of the fails table, a registered read, and no cell. Its gates compute row j of the lengths table: at a valid slot
+the place plus one, the bytes of the canonical id request of P prompt ids, a function of P and the cell size alone, and
+O, or where the fails slot has a failure the `DATA` cells sent before it. Its statement commits that row under the
+network certifier's salt and registers it as a read of lengths row j (`connection_rows.port`), which opens the signed
+root only when the computed row is the signed one, so the request row's lengths are the wire's. Its public outputs are a
+verdict, that the fails row is of its form against the request row (a failure only on a valid slot, after at most O
+cells), and the row's failures. Every switch is computed and none is witness, so the block adds no free input: the wire's
+length is held to O, which a tied audit already counts among its free inputs. A row is the block's output whole, 96 bits
+a slot in a size class of at most 262,144 bits, so one block returns a row of at most 2,730 slots
+(`connection_rows.check_slots`), and `WardenParams` refuses a schedule with lengths rows whose slot stride releases
+more, naming the longest stride that fits. The prover's side (`blocks`) builds each row's arguments, outputs and
+registered reads from the network certifier's opening and refuses request rows that give another row than the signed
+one. The period check reads schedules without lengths rows only: nothing yet ties the request row to the compute
+side's committed values or reads the block's verdict and failures.
+
 **The leak bound** is what a server can signal on the wire beyond the response it sends:
 - **0 size bits.** Every cell is B bytes, whatever its kind (`PAD`, `DATA`, `END`, `FAIL` or `REFUSED`).
 - **0 timing bits, at bucket resolution.**
@@ -2067,11 +2116,12 @@ the cut gives one event a `DATA` cell and the `END` holds the trailer; any other
   - A server that fails connection q picks the egress cell it fails at, or not to fail: at most n + 1 ≤
     `egress_cells` + 1 outcomes.
   - Every failure sends the same `FAIL` cell, with no payload: a missed deadline, a stream that hasn't ended by the
-    last cell, a broken server connection, a cell out of the egress form, and the client's own two. The reason is a
+    last cell, a broken server connection, a cell out of the egress form, and the client's own three. The reason is a
     frame of the network certifier's `fails` record, in the bucket of the `FAIL`: witness, certified with the others
     and never on the wire. A server that departs from the form at cell i gives the client what a server late at cell
     i does, so `format` adds no outcome.
-  - A failure the client causes (`ingress`, `malformed`) fails at once, and only returns the client's own bits to it.
+  - A failure the client causes (`ingress`, `malformed`, `cap`) fails at once, and only returns the client's own bits
+    to it. A server held to its request's `max_tokens` fails at a cell it chose, so the cap adds no outcome.
   - A failed connection frees its lane at its `FAIL`'s bucket, so f also moves later connections' s. That carries no
     bits beyond f's, which this term charges, though they reach another client.
 
