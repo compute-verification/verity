@@ -233,12 +233,12 @@ def test_an_around_that_swallows_vllms_error_is_refused() -> None:
 def test_the_wraps_go_on_with_the_first_part_and_off_with_the_last_in_any_order() -> None:
     log: list[str] = []
     runner, before = Runner(log), hooks.live()
-    assert runner_step.parts(runner) == () and hooks.live(runner_step.TAG) == ()
+    assert runner_step.parts(runner) == () and wrapped(runner) == []
     a, b, c = (Recorder(n, r, log) for n, r in (("admit", Rank.ADMIT), ("commit", Rank.COMMIT), ("pass", Rank.PASS)))
     off_b = runner_step.add(runner, b)
     assert wrapped(runner) == ["execute_model", "sample"] and {"execute_model", "sample"} <= set(vars(runner))
     off_a, off_c = runner_step.add(runner, a), runner_step.add(runner, c)
-    assert len(hooks.live(runner_step.TAG)) == 2 and runner_step.parts(runner) == (a, b, c)
+    assert wrapped(runner) == ["execute_model", "sample"] and runner_step.parts(runner) == (a, b, c)
     one_step(runner)
     off_b()                                                           # the first added goes first: not last in, first out
     off_b()                                                           # idempotent
@@ -247,7 +247,7 @@ def test_the_wraps_go_on_with_the_first_part_and_off_with_the_last_in_any_order(
     one_step(runner)
     assert log and not [line for line in log if line.startswith("commit")]
     off_a()
-    assert runner_step.parts(runner) == (c,) and len(hooks.live(runner_step.TAG)) == 2
+    assert runner_step.parts(runner) == (c,) and wrapped(runner) == ["execute_model", "sample"]
     off_c()
     assert runner_step.parts(runner) == () and hooks.live() == before
     assert "execute_model" not in vars(runner) and "sample" not in vars(runner)
@@ -303,7 +303,7 @@ def test_removing_the_last_part_is_refused_while_a_later_patch_covers_the_wraps(
     remove_other()                                                    # not the last: the wraps stay, nothing to refuse
     with pytest.raises(RuntimeError, match="refused to uninstall"):
         remove()
-    assert runner_step.parts(runner) == (part,) and len(hooks.live(runner_step.TAG)) == 2
+    assert runner_step.parts(runner) == (part,) and wrapped(runner) == ["execute_model", "sample"]
     one_step(runner)
     assert log[-1] == "commit after_sample"
     cover.uninstall()
