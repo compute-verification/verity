@@ -67,12 +67,14 @@ it, as does a module's `.hash` file when the module has no trace, and after a ru
 module or a checkout other than the manifest's, are taken again. A spec whose `proved_in` package's build did not pass
 never reads that package's `.lake` (`check.proved`), which an earlier or interrupted build left. When check.py fails a
 package only on its sampled recompile (`check.sampled_recompile`: a module the tree kept or restored compiles from its
-source to other outputs, which Lean's nondeterminism can do as staleness can), on record differences and on a spec
-whose `proved_in` package that failure failed (`proved_in.unpassed` where it kept that package's build from passing,
-`proved_in.sampled` where the sample ran on that package's seal, after its build passed), the run drops each of those
+source to other outputs, which Lean's nondeterminism can do as staleness can), on record differences and on a spec's
+`proved_in` package whose build that failure kept from passing (`proved_in.unpassed`), the run drops each of those
 modules' trace, `.hash` files and objects in the tree (`mismatched`, `forget`) and audits the package once more, with
 nothing restored from the artifact cache, so Lake compiles them; the first audit's reports go to `mismatched/<path>/`,
 and a second failure fails the run.
+
+In the build sandbox a prover's sample runs on its seal, after its build passed, so a spec that read that seal fails
+`proved_in.sampled` there rather than `proved_in.unpassed`; the run takes the one as the other (`SAMPLED_ONLY`).
 
 Then it audits, the same way, every package whose guarantees' records read PKG's build (`requirers`: PKG is in its
 `closure`, by path or by `proved_in`), each after those it requires and on the records this run regenerated before it, its
@@ -176,6 +178,10 @@ def _module(path: Path, name: str):
 LA = _module(ROOT / "tools" / "verity" / "lean" / "lean_audit.py", "lean_audit_for_lean_changed")
 #: `tools/verity/lean/check.py`, this step's own copy: `records` runs its commands in the sandbox
 AUDIT = _module(ROOT / "tools" / "verity" / "lean" / "check.py", "lean_audit_tool_for_lean_changed")
+#: the failure codes a report's sampled mismatch alone explains (`mismatched`): the package's own (`sampled`), and a
+#: spec's whose `proved_in` package it failed, `proved_in.unpassed` where it kept that package's build from passing and
+#: `proved_in.sampled` where the sample ran on that package's seal, after its build passed
+SAMPLED_ONLY = ("sampled", "proved_in.unpassed", "proved_in.sampled")
 SIBLINGS = _module(ROOT / "tools" / "verity" / "lean" / "siblings.py", "lean_siblings_for_lean_changed")
 PROBE = _module(ROOT / "tools" / "verity" / "lean" / "axiom_probe.py", "axiom_probe_for_lean_changed")
 #: where `Facts.lean` writes a package's facts: inside its `.lake`, which the sandbox leaves writable and `sync` leaves alone
@@ -1818,18 +1824,18 @@ def settles(out: Path, at: Path) -> bool:
 def mismatched(out: Path, tree: Path, log=print) -> dict[str, Path]:
     """{module: its package's directory} of each module whose outputs in ``tree`` check.py's sampled recompile found other
     than what its source compiles to (the reports' `sampled` `mismatched`, under ``out``), when every other failure there
-    is a record difference (`RECORD_DIFFERENCE`), which `--update` settles, or a spec's `proved_in.unpassed` or
-    `proved_in.sampled`, which a prover's failures there cause; {} when there is none, when another failure is there, when a package it names is
+    is a record difference (`RECORD_DIFFERENCE`), which `--update` settles, or a spec's `proved_in.unpassed`, which a
+    prover's failures there cause; {} when there is none, when another failure is there, when a package it names is
     outside ``tree``, or when the reports can't be read, which it says (``log``). Lean's output is not reproducible for every module (`olean_graph`): a kept build compiled once can
-    differ from a recompile of the same source, as a stale one does."""
+    differ from a recompile of the same source, as a stale one does. A spec's `proved_in.sampled`, where its prover's
+    sample ran on the prover's seal, counts as its `proved_in.unpassed` does (`SAMPLED_ONLY`)."""
     found: dict[str, Path] = {}
     try:
         for r in json.loads((out / "audit.json").read_text())["packages"]:
             fails, codes, s = r.get("failures") or [], r.get("failure_codes") or [], r.get("sampled")
             mods = s.get("mismatched") or {} if isinstance(s, dict) else {}
             if len(codes) != len(fails) or codes.count("sampled") != len(mods) or \
-                    not all(c in ("sampled", "proved_in.unpassed", "proved_in.sampled") or c in AUDIT.RECORD_DIFFERENCE
-                            for c in codes):
+                    not all(c in SAMPLED_ONLY or c in AUDIT.RECORD_DIFFERENCE for c in codes):
                 return {}
             found |= {m: Path(d).resolve() for m, d in mods.items()}
     except (OSError, ValueError, KeyError, TypeError, AttributeError) as e:
