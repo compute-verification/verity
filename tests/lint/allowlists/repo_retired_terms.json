@@ -3754,7 +3754,6 @@
     {"file": "benchmarks/torch_gpu/sha512_rows/hashcat.sh", "count": 4},
     {"file": "benchmarks/torch_gpu/sha512_rows/rows.cu", "count": 1},
     {"file": "benchmarks/torch_gpu/sha512_rows/rows.cuh", "count": 1},
-    {"file": "benchmarks/training_slowdown/tests/test_against_counter.py", "count": 3},
     {"file": "benchmarks/training_slowdown/training_slowdown/capture/circuit.py", "count": 17},
     {"file": "benchmarks/training_slowdown/training_slowdown/formalism.py", "count": 22},
     {"file": "benchmarks/unit_lowering/README.md", "count": 1},

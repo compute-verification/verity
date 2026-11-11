@@ -965,11 +965,6 @@ class StepGraph:
                    beta=beta, cut=cut, sinks=sink_names, circuit=circuit,
                    formalism=measure(circuit) if circuit is not None else None, _inputs=(base, varied, axis_names))
 
-    def with_updated(self, updated) -> "StepGraph":
-        """The same graph classified with another `updated` set (no recapture)."""
-        base, varied, names = self._inputs
-        return StepGraph._analyze(base, varied, names, frozenset(updated), self.name)
-
     # -- totals -----------------------------------------------------------------------------------------------------
     @property
     def macs(self) -> int:

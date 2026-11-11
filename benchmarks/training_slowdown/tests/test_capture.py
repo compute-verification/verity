@@ -29,6 +29,11 @@ def roles(g) -> Counter:
     return Counter((m.phase, m.role, m.macs) for m in g.matmuls)
 
 
+def macs_of(g, role: str) -> int:
+    """The MACs of the step's GEMMs with role `role`."""
+    return sum(m.macs for m in g.matmuls if m.role == role)
+
+
 def fwd_layer(role: str) -> Counter:
     """One block's forward: q, k, v, o (T·H² each), up and down (T·H·I), QK and PV (T·S·H), all with role `role`."""
     return Counter({("forward", role, T * H * H): 4, ("forward", role, T * H * I): 2, ("forward", role, T * S * H): 2})
@@ -211,12 +216,13 @@ def test_transformer_mezo_forward_only():
     assert g.cut_bits == 32 and g.beta == 32 / (g.updated_macs() / T)
 
 
-def test_with_updated_reclassifies_without_recapture():
+def test_a_step_that_reads_theta_alone_multiplies_nothing_updated():
     model = TinyLM(V, H, NH, I, L)
     g = capture_step(model, torch.optim.AdamW(model.parameters()), lm_loss, lm_batch())
-    first = g.with_updated(())   # the period's first step reads θ: nothing it multiplies is new
+    # the period's first step reads θ: nothing it multiplies is new
+    first = capture_step(model, torch.optim.AdamW(model.parameters()), lm_loss, lm_batch(), updated=())
     assert first.digest == g.digest and first.macs == g.macs
-    assert first.role_macs("updated") == 0 and first.role_macs("producing") == g.role_macs("producing")
+    assert macs_of(first, "updated") == 0 and macs_of(first, "producing") == macs_of(g, "producing") > 0
     assert first.dependent == [] and first.cut_bits == 0 and first.beta is None
 
 
