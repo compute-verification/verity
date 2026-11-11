@@ -16,7 +16,7 @@ from pathlib import Path
 
 import pytest
 
-import research.drive as D
+import research.landing as L
 import research.queue as Q
 from research.queue import RESTACKING
 from test_drive_checked import _checked, _pass
@@ -51,7 +51,7 @@ def world(tmp_path):
 
 @dataclasses.dataclass
 class Job:
-    """A restack job a sync started, as it gave `drive.detach` the job: it runs only when a test runs it, and until it ends its
+    """A restack job a sync started, as it gave `landing.detach` the job: it runs only when a test runs it, and until it ends its
     process is the test's own, alive."""
     argv: list[str]
     cwd: Path
@@ -63,15 +63,15 @@ class Job:
         return self.argv[self.argv.index("--move-commit") - 1]
 
     def start(self, gate: Path | None = None) -> subprocess.Popen:
-        """Start it as `drive.detach` does, in a session of its own, its output into `log` and its exit into `rc`; with
+        """Start it as `landing.detach` does, in a session of its own, its output into `log` and its exit into `rc`; with
         ``gate``, its command waits until the test lets go of the gate's lock (`HOLD`)."""
         argv = self.argv if gate is None else [sys.executable, "-c", HOLD, str(gate), *self.argv]
-        return subprocess.Popen(["sh", "-c", D.DETACH_JOB, "sh", str(self.dir), *argv], cwd=self.cwd, env=self.env,
+        return subprocess.Popen(["sh", "-c", L.DETACH_JOB, "sh", str(self.dir), *argv], cwd=self.cwd, env=self.env,
                                 stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
                                 start_new_session=True)
 
     def run(self) -> None:
-        """Run it to its end as `drive.detach`'s job does."""
+        """Run it to its end as `landing.detach`'s job does."""
         assert self.start().wait() == 0
 
     def end(self, rc: int, log: str) -> None:
@@ -88,11 +88,11 @@ def jobs(monkeypatch, tmp_path) -> list[Job]:
 
     def detach(repo: Path, argv: list[str], env: dict[str, str], script: str | None = None,
                source: Path | None = None) -> dict:
-        d = Path(tempfile.mkdtemp(prefix="train-", dir=tmp_path / D.LAUNCHES))
+        d = Path(tempfile.mkdtemp(prefix="train-", dir=tmp_path / L.LAUNCHES))
         started.append(Job(argv, Path(repo), env, d))
         return {"dir": str(d), "pid": os.getpid()}
 
-    monkeypatch.setattr(D, "detach", detach)
+    monkeypatch.setattr(L, "detach", detach)
     return started
 
 
@@ -234,7 +234,7 @@ def test_three_restack_jobs_at_once_in_one_clone_end_clean_with_their_results_th
     monkeypatch.setenv("TMPDIR", str(scratch))                    # where each restack.py makes its scratch worktrees
     gate = tmp_path / "gate"
     gate.touch()
-    procs, fake = [], D.detach
+    procs, fake = [], L.detach
 
     def detach(repo: Path, argv: list[str], env: dict[str, str], script: str | None = None,
                source: Path | None = None) -> dict:
@@ -242,7 +242,7 @@ def test_three_restack_jobs_at_once_in_one_clone_end_clean_with_their_results_th
         procs.append(jobs[-1].start(gate))
         return rec
 
-    monkeypatch.setattr(D, "detach", detach)
+    monkeypatch.setattr(L, "detach", detach)
     _move_pr(world, 1)
     heads = {n: world.change({f"old_proto/x{n}.py": f"X = {n}\n"}) for n in (2, 3, 4)}
     for n, head in heads.items():

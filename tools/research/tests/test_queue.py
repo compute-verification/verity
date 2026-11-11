@@ -2007,7 +2007,7 @@ def test_an_ejection_naming_a_head_refuses_once_its_owner_pushed_another(world):
 def test_a_hand_ejection_is_posted_as_its_ejector_to_ci_and_the_owner_and_says_so_when_no_one_was_told(world, monkeypatch, capsys):
     """A hand eject's notice isn't only a handoff note on the ejecting VM, which syncs no notes, and the eject doesn't log that
     it told the owner when it didn't."""
-    import research.drive as D
+    import research.landing as L
     import research.queue as Qm
 
     cfg = world.tmp / "store.toml"
@@ -2024,7 +2024,7 @@ def test_a_hand_ejection_is_posted_as_its_ejector_to_ci_and_the_owner_and_says_s
     world.gh.put(1, head := world.change({"a.txt": "1\n"}))
     monkeypatch.setattr(Qm, "GitHub", lambda repo: world.gh)
     posts, ok = [], [True]
-    monkeypatch.setattr(D, "merge_thread_post", lambda text, to, sender="ci": posts.append((text, to, sender)) or ok[0])
+    monkeypatch.setattr(L, "merge_thread_post", lambda text, to, sender="ci": posts.append((text, to, sender)) or ok[0])
     argv = ["queue", "eject", "1", "--reason", "breaks suite `verity`", "--by", "ci", "--workdir", str(world.tmp / "q" / "verity"),
             "--remote", str(world.origin), "--repo", "o/verity", "--store", str(world.tmp / "queue-store")]
     assert research_main(argv) == 0
@@ -2041,12 +2041,12 @@ def test_a_hand_ejection_is_posted_as_its_ejector_to_ci_and_the_owner_and_says_s
 def test_off_drive_the_queue_verbs_never_push_next_or_main(world, monkeypatch, capsys):
     """GitHub's rulesets let only drive's App move `main` and `next`, yet don't stop verity-agents[bot] force-pushing `next` from a
     VM's `research queue eject` that syncs. Off drive an eject only withdraws the mark; sync refuses."""
-    import research.drive as D
+    import research.landing as L
     import research.queue as Qm
 
     monkeypatch.delenv("RESEARCH_DRIVE")
     monkeypatch.setattr(Qm, "GitHub", lambda repo: world.gh)
-    monkeypatch.setattr(D, "merge_thread_post", lambda *a, **k: True)
+    monkeypatch.setattr(L, "merge_thread_post", lambda *a, **k: True)
     world.gh.put(1, world.change({"a.txt": "1\n"}))
     base = ["--workdir", str(world.tmp / "q" / "verity"), "--remote", str(world.origin), "--repo", "o/verity",
             "--store", str(world.tmp / "queue-store")]

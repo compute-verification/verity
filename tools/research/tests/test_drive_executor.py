@@ -17,19 +17,19 @@ import pytest
 
 import research.drive as D
 from research import merge
-from research.drive import AFTER_LANDING, AFTER_LANDING_OPTIONAL, SLIM_JUDGED, SLIM_STEPS, task_files
+from research.drive import AFTER_LANDING, task_files
 from research.executor import (AFTER_LANDING_PRIORITY, BLOCKED, GRAPH_V2, SHADOW_WAIT_S, TASKS_GRAPH_KIND, Executor, FileTransport,
                                QueueTransport, Shadowed, agrees, compare, fold_results, keyed, old_verdicts, shadow_records,
                                shadow_report, task_key, task_target)
 from research.store.local import LocalStore
+from research.landing import AFTER_LANDING_OPTIONAL, SLIM_STEPS
 from research.store import vocab
-from test_drive_policy import EXPIRED, LIVE, _policy
-from test_drive_review import GATED_TREE, Review, _main, _move_main, _owning, _rings
+from test_drive_policy import EXPIRED, LIVE
+from test_drive_review import Review, _owning, _rings
+from test_landing import GATED_TREE, _main, _move_main, _policy, _slim
 from test_queue import World, _git
 
 K_SUITE, K_LEAN = "a" * 128, "b" * 128
-#: the preflights a check runs before any step (check.py's `preflight`), which the run beside the executor's check judges
-PREFLIGHTS = tuple(s for s in SLIM_JUDGED if s not in SLIM_STEPS)
 #: the jobs the graph lists whole, unkeyed (a build, or a job that keeps no verdict of its own)
 WHOLE = tuple(j for j in AFTER_LANDING if j not in ("pytest", "lean-audit", "flock-rust-tests", "circuit-check"))
 N_TASKS = 5 + len(WHOLE)
@@ -450,23 +450,6 @@ def _reader_key(g: dict, reader: str, producer: str) -> str:
     by = {t["id"]: t for t in g["tasks"]}
     p = by[producer]
     return task_key(by[reader], g["files"], ENVS[by[reader]["env"]]["digest"], {producer: _result(p, p["key"])["outputs"]})
-
-
-def _slim(h: Review, tmp_path, **logs: str) -> Path:
-    """The newest run beside the executor's check (`r-post-N`, of `SLIM_STEPS` but one it skips) ended: each preflight and each
-    of its steps passed, but each ``logs`` names (``ratchet_gate=LOG``), which failed with that log, its exit 1 then; after a
-    failed preflight it ran no step, as check.py starts none."""
-    rid, failed = f"r-post-{len(h.posted) - 1}", {k.replace("_", "-"): v for k, v in logs.items()}
-    d = tmp_path / rid
-    d.mkdir(parents=True)
-    rows = []
-    for s in (*PREFLIGHTS, *(() if failed.keys() & set(PREFLIGHTS) else h.posted[-1][1].split(","))):
-        rows.append({"step": s, "status": "failed", "rc": 1, "log": f"{s}.log"} if s in failed else {"step": s, "status": "passed"})
-        if s in failed:
-            (d / f"{s}.log").write_text(failed[s])
-    (d / "steps.jsonl").write_text("".join(json.dumps(r) + "\n" for r in rows))
-    h.run_state[rid], h.evidence = ("done", 1 if failed else 0, None), [d]
-    return d
 
 
 def _results(fake: FileTransport, g: dict, fails: dict[str, dict] | None = None, reader: str | None = "pass") -> None:
@@ -1134,3 +1117,29 @@ def test_the_queue_transport_enqueues_graph_v2_and_reads_its_graph_and_results_t
     got = ex.settle(g)
     assert {i: got[i][0] for i in (X, A, B, FP8_TASK)} == {X: "fail", A: "pass", B: "pass", FP8_TASK: "pending"}, got
     assert got[B][1] == _result(by[B], _reader_key(g, B, A))
+
+
+@pytest.mark.parametrize("agreement", [False, True])
+def test_drives_run_beside_the_executors_check_is_the_queues_run_beside_a_candidate(world, monkeypatch, agreement):
+    """Drive's run beside the executor's check (`Driver._start_slim`), with the verified `main` as its base, launches what the
+    queue's run beside a candidate on that base does (`vqueue_slim.start`, `Landing.beside_args`): the same steps and keywords
+    but drive's own cache flags, off, and the same record but drive's ratchet base."""
+    import test_vqueue_slim as S
+    from research.vqueue_slim import start
+
+    class Both(S.Beside):
+        make = D.Driver
+
+    monkeypatch.setattr(S, "Beside", Both)
+    h, base, sha, _ = S._harness(world, monkeypatch, agreement)
+    rec = start(h.d, sha, base)
+    pl = {"verified": base}
+    h.d._start_slim({}, pl, sha, False)
+    (_, steps, kw), (_, drives, drive_kw) = h.posted
+    assert drives == steps and drive_kw == {**{k: v for k, v in kw.items() if k != "train_from"}, "no_cache": False,
+                                            "circuit_cache": False}
+    assert pl["slim"]["ratchet_base"] == base
+    assert {k: v for k, v in pl["slim"].items() if k not in ("ids", "ratchet_base")} == \
+        {k: v for k, v in rec.items() if k not in ("ids", "base")}
+    assert h.d._postland_args({"verified": base}, sha, False)[0] == {**h.d.beside_args(sha, base)[0], "no_cache": False,
+                                                                     "circuit_cache": False}

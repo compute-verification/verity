@@ -65,7 +65,7 @@ untraced = [
     "tests/test_holds.py",
     "tests/test_jobs_dispatch.py",
     "tests/test_jobuser.py",
-    "tests/test_labelauth.py", "tests/test_lean_prune.py",
+    "tests/test_labelauth.py", "tests/test_lean_prune.py", "tests/test_landing.py",
     "tests/test_mem_admission.py",
     "tests/test_merge_gate.py",
     "tests/test_merge_shards.py",
@@ -125,6 +125,7 @@ untraced = [
     "tests/test_undeclared_derivation.py",
     "tests/test_vqueue_compare.py",
     "tests/test_vqueue_loop.py",
+    "tests/test_vqueue_records.py",
     "tests/test_vqueue_slim.py",
 ]
 # Test-only, and to move: some tests exercise this repository's Tools, workspace and fixtures rather than the tool itself.
@@ -229,6 +230,7 @@ paths = ["tools/verity/check/gates/markdown_caps.py"]
 tests = [
     "tests/test_cores.py",
     "tests/test_jobuser.py",
+    "tests/test_landing.py",
     "tests/test_mem_admission.py",
     "tests/test_merge_gate.py",
     "tests/test_remote_preflight.py",

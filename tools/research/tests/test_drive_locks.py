@@ -17,7 +17,7 @@ from research.queue import PR
 from test_drive_checked import _checked, _pass
 from test_drive_review import FLOCK_LOCK, Review, _detached, _main, _move_main, _rings, _subject
 from test_queue import World, _git
-from test_queue_drive import _failed_run, _live_run, _steps_run
+from test_landing import _failed_run, _live_run, _steps_run
 
 #: a change to `pkg`'s Lean and its lock
 LEAN = {"pkg/A.lean": "theorem a : True := trivial\n", "pkg/lean-audit.json": '{"records": 1}\n'}
@@ -97,6 +97,21 @@ def test_a_lean_member_lands_on_its_verdict_and_main_moves_only_to_its_lock_comm
     _pass(h)
     h.tick()
     assert _main(world) == lock and h.after[-1][0] == main and len(h.launched) == 1, world.logs
+
+
+def test_a_lock_commit_the_merge_gate_refuses_is_held_and_ci_told(world, monkeypatch):
+    """The merge gate refusing a lock commit (`vqueue_records.unvouched`) holds it off `checked`, `CI` told why."""
+    import research.vqueue_records as R
+
+    h = _locks(world, monkeypatch)
+    tip = _lands(h, {1: LEAN})
+    (rid,) = h.lock_ids()
+    _passes(h, rid, tip, {"pkg": '{"records": 2}\n'})
+    monkeypatch.setattr(R, "unvouched", lambda driver, rid, commit="HEAD": "the merge gate refuses its lock commit")
+    h.tick()
+    assert _checked(world) == tip and h.postland()["locks"]["state"] == "passed", world.logs
+    assert any(f"the lock run {rid} of `checked` {tip[:12]} passed, but the merge gate refuses its lock commit" in p
+               for p in h.posts), h.posts
 
 
 def test_the_bookkeeping_a_lock_run_repaired_is_committed_with_its_records_and_told(world, monkeypatch):
@@ -413,3 +428,20 @@ def test_a_launched_lock_run_survives_a_tick_that_fails_after_it(world, monkeypa
     del h.d.start_postland
     h.tick()
     assert len(h.launched) == 1 and h.postland()["locks"]["state"] is None, world.logs
+
+
+def test_drive_reverts_a_queue_records_commit_with_the_prs_its_subject_names(world, monkeypatch):
+    """A records commit the queue made on a candidate (`vqueue_records.commit`) is a lock commit drive reverts with a PR its
+    subject names (`Driver._lock_commits`), and with no other."""
+    import research.drive as D
+    from research.queue import Member
+    from research.vqueue_records import commit, start
+    from test_vqueue_records import _harness, _passes
+
+    h, sha = _harness(world, monkeypatch)
+    rid = start(h.d, sha)["ids"][0]
+    _passes(h, rid, sha)
+    made, _, _ = commit(h.d, sha, rid, (1, 2))
+    d = D.Driver(h.q, on="m1")
+    assert d._lock_commits(f"{sha}^", made, [Member(1, sha, "lane-1", sha)]) == [made]
+    assert d._lock_commits(f"{sha}^", made, [Member(3, sha, "lane-3", sha)]) == []

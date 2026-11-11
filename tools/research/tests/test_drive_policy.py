@@ -14,19 +14,13 @@ from research import merge, policy, quick_tier
 from research import queue as Q
 from research.drive import AFTER_LANDING
 from test_drive_checked import _checked, _landed
-from test_drive_review import GATED_TREE, Review, _main, _move_main, _owning, _rings
+from test_drive_review import Review, _owning, _rings
+from test_landing import GATED_TREE, _main, _move_main, _policy
 from test_queue import World, _git
 
 LIVE, EXPIRED = "2099-01-01T00:00:00Z", "1970-01-01T00:00:00Z"   # the harness's clock reads 1970-01-12
 TEST = "tests/test_x.py::test_y"
 FP8 = "partition/gate-recomputed ScaledMmFp8Block_v1"
-
-
-def _policy(*allow: tuple[str, str, str], off_gate: tuple[str, ...] = ("circuit-check",)) -> str:
-    """policy.toml's text: ``off_gate`` and an allowance (id, owner, expires) for each of ``allow``."""
-    return (f'schema = "{policy.SCHEMA}"\noff_gate = {json.dumps(list(off_gate))}\n'
-            + "".join(f'[[allow]]\nid = "{i}"\nowner = "{o}"\nexpires = "{e}"\nreason = "red; its fix is landing"\n'
-                      for i, o, e in allow))
 
 
 # -- the file
