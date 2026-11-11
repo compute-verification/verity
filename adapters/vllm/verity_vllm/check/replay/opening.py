@@ -29,7 +29,7 @@ def alias_table(manifest: RequiredManifest | dict[str, Any] | None) -> dict[str,
     """`manifest.op_path_aliases` as ONE table: Program op_path -> (canonical op_path, invocation).  Shared modules
     (vLLM's one RotaryEmbedding instance called by every layer) are addressed by the required manifest at the FIRST layer's path with
     invocation = layer order; the per-layer Program paths are recorded as aliases ('model.layers.7.self_attn.rotary_emb' ->
-    ['model.layers.0.self_attn.rotary_emb', 7]).  The population reconciliation (`query_population._key`) and the committed store
+    ['model.layers.0.self_attn.rotary_emb', 7]).  The population reconciliation (`coverage._reach`) and the committed store
     (`CommittedStore.words`) resolve through THIS table and no other -- the two never disagree on which identity a Program path names."""
     if isinstance(manifest, RequiredManifest):
         return {str(k): (str(v[0]), int(v[1])) for k, v in (manifest.op_path_aliases or {}).items()}
