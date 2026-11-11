@@ -356,6 +356,17 @@ def test_a_lost_release_at_the_end_of_its_bucket_or_a_bucket_all_lost_leaves_not
     assert h.step() and not h.gate.pending() and h.sched.added == [] and h.gate.next == 2
 
 
+def test_an_open_gate_adds_a_lost_releases_request_at_once_like_any_other():
+    g = Gated()
+    g.release(0, bucket=0)
+    g.arrive("r0")
+    g.gate.open("draining")                          # what the gate held is added, before the line that names it lost
+    g.mark(2, lost=[0, 1])
+    g.release(1, bucket=0)
+    g.arrive("r1")                                   # and one that comes after its line
+    assert g.sched.added == ["r0", "r1"] and g.gate.lost == {0, 1} and g.gate.counts["dropped"] == 0
+
+
 def test_unnumbered_aborted_passed_and_new_runs():
     g = Gated()
     g.arrive("probe", out=5)
@@ -445,7 +456,8 @@ def test_watermark_lines_as_the_certifier_sends_them():
     assert sa.watermark_line(line(3, 7, [5]), (2, 5)) == (3, 7, (5,))                 # one lost release, the bucket's first
     assert sa.watermark_line(line(3, 9, [5, 6, 8]), (2, 5)) == (3, 9, (5, 6, 8))      # several, its last among them
     assert sa.watermark_line(line(0, 2, [0, 1])) == (0, 2, (0, 1))                    # the first line, its bucket all lost
-    for raw, last in ((b"1 0\n", None), (b"3 4\n", (2, 5)), (b"0 1", None), (b"01 1\n", None), (b"0  1\n", None)):
+    for raw, last in ((line(1, 0), None), (line(3, 4), (2, 5)), (line(0, 1)[:-1], None), (b"0" + line(1, 1), None),
+                      (line(0, 1).replace(b" ", b"  "), None)):     # t not 0 first, n below the last, then the form
         with pytest.raises(ValueError):
             sa.watermark_line(raw, last)
     got: list[dict] = []
@@ -456,16 +468,18 @@ def test_watermark_lines_as_the_certifier_sends_them():
                    {"run": "ab", "t": 3, "n": 6, "lost": [2, 4, 5]}, {"run": "ab", "end": True}]
     bad: list[dict] = []
     w = sa.Watermark("ab", bad.append)
-    assert not w.feed(b"0 0\n2 0\n") and not w.feed(b"3 0\n") and bad[-1]["error"].startswith("watermark (2, 0) after (0, 0)")
+    assert not w.feed(line(0, 0) + line(2, 0)) and not w.feed(line(3, 0))
+    assert bad[-1]["error"].startswith("watermark (2, 0) after (0, 0)")
     cut: list[dict] = []
     w = sa.Watermark("ab", cut.append)
-    w.feed(b"0 0\n0")
+    w.feed(line(0, 0) + line(1, 0)[:1])
     assert not w.close() and "inside a line" in cut[-1]["error"]
 
 
 def test_a_line_whose_lost_releases_are_not_its_buckets_is_refused_and_breaks_the_watermark():
-    """Each refused line is one the network certifier wrote with one thing changed, read after the line ``2 5``: a lost
-    release must be one of the line's own bucket (at least 5, below its n), named once, in rising order."""
+    """Each refused line is one the network certifier's writer built, read after the line ``2 5``, with one thing
+    changed in its bytes where the writer itself refuses to build it: a lost release must be one of the line's own
+    bucket (at least 5, below its n), named once, in rising order."""
     last, good = (2, 5), line(3, 9, [6, 8])
     assert sa.watermark_line(good, last) == (3, 9, (6, 8))
     outside = "watermark \\(3, 9\\) after \\(2, 5\\): its lost releases {} rise from 5 below n"
