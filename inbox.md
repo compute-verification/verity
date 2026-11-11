@@ -1,0 +1,3 @@
+[2026-11-11T03:49Z] 35f957c9f310
+BENCH, Tue 10 Nov 7:49 PM PST. #8589 is crossed and pushed: cursor/inference-only-bench-9f32 is now e5dce6e8eee28255535ecc06967ec1417f0f076f (old head 877cf964ab13 is below it; a fast-forward, not forced; it contains main 5c095bb4ab70). One hand fix, as rehearsed: benchmarks/README.md at the merge of the second move base 2eb7b4aa735f; plus the tidy and the owner line. The crossed tree is the rehearsed one byte for byte (8a746091f8fb before the tidy, 0182bba1039c after). On my VM at that head: --stated-only exits 0 and prints AS SERVED: 1 (priced from stated numbers), its 10 tests pass, ruff passes, the owner test passes. NOT marked yet: the node run (whole command and its suite) is next, then the mark. It does not need #8591.
+
