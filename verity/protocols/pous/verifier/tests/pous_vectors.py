@@ -20,12 +20,7 @@ from verity.protocols.pous.verifier import band, dense
 from verity.protocols.pous.verifier.labels import salt_value, tag
 from verity.protocols.pous.verifier.oracle import Tweak, run
 from verity.protocols.pous.verifier.params import OPERATING_POINT, Params
-from verity.protocols.pous.verifier.primitives import (
-    heuristic_arx,
-    key_program,
-    key_query,
-    reference,
-)
+from verity.protocols.pous.verifier.primitives import heuristic_arx, key_program, key_query, reference
 from verity.protocols.pous.verifier.scheme import encode
 
 SMALL = Params(4, 96, 2, 2)

@@ -7,10 +7,10 @@ import hashlib
 import random
 
 import numpy as np
-import pous_test_signer as ts
 import pytest
-from pous_fakes import Clock
 
+import pous_test_signer as ts
+from pous_fakes import Clock
 from verity.circuits import boolean as BL
 from verity.circuits.defs import bind
 from verity.circuits.evaluation import bits as EB

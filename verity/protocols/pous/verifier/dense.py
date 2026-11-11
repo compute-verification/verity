@@ -26,16 +26,8 @@ from .codec import Codec
 from .labels import salt_value, tag
 from .oracle import KeyQuery, PiInvQuery, PiQuery, Prog, Query, parallel, run
 from .params import SALT_BITS
-from .primitives import (
-    CAPACITY_BITS,
-    FeistelPi,
-    IdealPermutation,
-    OverwriteStepper,
-    Permutation,
-    Primitives,
-    key_program,
-    pi2_call_ns,
-)
+from .primitives import (CAPACITY_BITS, FeistelPi, IdealPermutation, OverwriteStepper, Permutation, Primitives,
+                         key_program, pi2_call_ns)
 
 
 @dataclass(frozen=True, slots=True)

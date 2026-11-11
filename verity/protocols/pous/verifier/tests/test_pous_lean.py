@@ -17,11 +17,7 @@ from verity.protocols.pous.verifier import adversary as A
 from verity.protocols.pous.verifier.labels import component, join, transpose, w_labels
 from verity.protocols.pous.verifier.oracle import KeyQuery, Tweak, run
 from verity.protocols.pous.verifier.params import Params
-from verity.protocols.pous.verifier.primitives import (
-    Primitives,
-    RandomOracleKey,
-    key_query,
-)
+from verity.protocols.pous.verifier.primitives import Primitives, RandomOracleKey, key_query
 from verity.protocols.pous.verifier.scheme import decode_prog, encode_prog
 
 FIXTURE = json.loads((Path(__file__).parent / "fixtures" / "lean_vectors.json").read_text())

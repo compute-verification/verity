@@ -14,22 +14,14 @@ from pathlib import Path
 import pytest
 
 from verity.protocols.pous.verifier import band, dense, setup
-from verity.protocols.pous.verifier.audit import (
-    UnsignedRounds,
-    challenge_key,
-    run_timed,
-)
+from verity.protocols.pous.verifier.audit import UnsignedRounds, challenge_key, run_timed
 from verity.protocols.pous.verifier.codec import Codec, split
 from verity.protocols.pous.verifier.labels import salt_value, tag
 from verity.protocols.pous.verifier.oracle import KeyQuery, run
 from verity.protocols.pous.verifier.params import Params
 from verity.protocols.pous.verifier.primitives import Primitives, key_program, reference
 from verity.protocols.pous.verifier.scheme import P3
-from verity.protocols.pous.verifier.verifier import (
-    MerkleTree,
-    VerifierKey,
-    segment_leaves,
-)
+from verity.protocols.pous.verifier.verifier import MerkleTree, VerifierKey, segment_leaves
 
 LEAN = json.loads((Path(__file__).parent / "fixtures" / "lean_dense_vectors.json").read_text())
 LEAN_BAND = json.loads((Path(__file__).parent / "fixtures" / "lean_band_vectors.json").read_text())

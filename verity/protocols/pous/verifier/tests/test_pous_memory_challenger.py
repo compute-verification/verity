@@ -9,10 +9,10 @@ import hashlib
 import os
 import tempfile
 
-import pous_test_signer as ts
 import pytest
-from pous_fakes import Clock
 
+import pous_test_signer as ts
+from pous_fakes import Clock
 from verity.commitments import rowleaf
 from verity.commitments.crypto import lms
 from verity.protocols.pous.device import memory_challenger as mc

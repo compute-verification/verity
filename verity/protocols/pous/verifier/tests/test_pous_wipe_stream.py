@@ -11,10 +11,10 @@ import stat
 import sys
 import threading
 
-import pous_test_signer as ts
 import pytest
-from pous_fakes import Clock
 
+import pous_test_signer as ts
+from pous_fakes import Clock
 from verity.protocols.pous.device import memory_challenger as mc
 from verity.protocols.pous.verifier import streamed_wipe as sw
 from verity.protocols.pous.verifier import wipe_party as WP
