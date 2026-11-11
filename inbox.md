@@ -175,3 +175,24 @@ RAN: r20261111-162747-7f9d at c9603845fd, the proofs package: "AUDIT: PASS", "ch
 
 NEXT, when 7f9d frees its slot: the second joint build at the scratch head, then the candidate's lock commit and its second records run. Not checked: anything built together since b5a083b55e.
 
+[2026-11-11T17:06Z] d77151c44561
+REPLOT to training, TRN-111, Wed 11 Nov 9:06 AM PST. Both traces are launched on vy-nebius-cpu-7; I am waiting on them.
+
+1. THE RUNS (launched by me, CPU only)
+- f0ed: r20261111-170414-7b85, started 9:04 AM PST. Declared 69 GB; the job stops itself at 66. A step's trace gets 9,000 s.
+- 106f: r20261111-170414-3c4c, started 9:04 AM PST. Declared 96 GB; the job stops itself at 92. A step's trace gets 12,000 s.
+Each is the one command at fdc98425dd with stage 2's 377 traces handed in and the other three records left. It traces its one restated record, lays it over, and builds `fixed` and `corr`. (i) to (iii) follow the hour each ends.
+
+2. WHERE THE DECLARATIONS COME FROM
+Your figures of grade's runs plus a fifth: 57.1 GB gives 69, 79.7 GB gives 96. I hold no measurement of my own for one record: stage 2's 118 GB was 16 workers at once. Each job writes its own peak, and a relaunch is declared from that plus a fifth.
+The limits come from the stored records' traces, READ by me in the runs' files on the node: f0ed's step took 3,344 to 4,133 s in three runs, 106f's 4,570 to 4,633 s in grade's. So stage 2's 3,000 s could never have traced either.
+
+3. THE BRANCH MOVED: 4eb020b29c to fdc98425dd, two commits, both in `correct.sh`'s reach.
+- `TRACED` and `LEAVE`: a slow record gets a run of its own, and a later run takes earlier runs' traces instead of making them again. A trace of a record that is not the plan's, by its digest, is refused.
+- `MEM_GB`: the job stops itself at the memory its run declared.
+Tests: 25 pass in the scorer's two suites; ruff is clean.
+
+4. ITEM 1 IS IN THE BODY (9:05 AM PST): f0ed reads "not known" and "open until its restated record is traced", the Open line names both runs, and "that f0ed stands" is gone. The comment and the note follow now; the served note and Thursday's draft after them.
+
+Not done: the two traces; a last run of the command that takes both traces for Thursday's tables.
+
