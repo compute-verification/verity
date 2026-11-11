@@ -104,20 +104,23 @@ def test_a_calls_y_is_handed_on_in_the_fewest_doublings_of_words_its_unit_fits(l
 
 
 def test_the_cut_replaces_every_linear_but_the_lm_head(low):
-    """Each linear is one `LinearARow_v1{K, R, ROUND, CALL}` unit, its x its writers' R rows (q/k/v's and gate/up's the
-    norm's one, o's the attention's 4 heads', down's SiluMul's one), and one `LinearOut_v1{N, 16, ROUND, CALL}` unit, a
-    template each a round's call, and no `Gemm_v2` but the LM head's: its 16 slices a position, all of which the token
-    selects' group units read, and its ``x0``, though gate/up is its shape. Every other template is the uncut circuit's at
-    its count, and no input is free."""
+    """Each linear is one `LinearARow_v1{K, R}` unit, its x its writers' R rows (q/k/v's and gate/up's the norm's one, o's
+    the attention's 4 heads', down's SiluMul's one), and one `LinearOut_v1{N, 16}` unit, a template a shape whatever the
+    round and the call (TINY's 8 calls in 2 rounds take 3 A-row shapes and 3 y shapes: 6 templates, not 32), and no
+    `Gemm_v2` but the LM head's: its 16 slices a position, all of which the token selects' group units read, and its
+    ``x0``, though gate/up is its shape. Every other template is the uncut circuit's at its count, and no input is free."""
     c = low.circuit
     n = {_label(fn): k for fn, k in c.templates}
     plain = {_label(fn): k for fn, k in WC.lower(_registered(), CLASS, None, GRAIN, provable=False).circuit.templates}
     want = {"Gemm_v2{K=64,N=16}": 16 * 10, "Gemm_v2{K=64,N=1}": 10}
     for s, m in M.items():
         for ci, (K, N) in enumerate(CALLS):
-            want[f"LinearARow_v1{{K={K},R={4 if ci % 4 == 1 else 1},ROUND={s},CALL={ci}}}"] = m
-            want[f"LinearOut_v1{{N={N},W=16,ROUND={s},CALL={ci}}}"] = m
+            for t in (f"LinearARow_v1{{K={K},R={4 if ci % 4 == 1 else 1}}}", f"LinearOut_v1{{N={N},W=16}}"):
+                want[t] = want.get(t, 0) + m
     assert {t: k for t, k in n.items() if t.startswith(("Linear", "Gemm"))} == want
+    assert {t: k for t, k in want.items() if t.startswith("Linear")} == {
+        "LinearARow_v1{K=64,R=1}": 40, "LinearARow_v1{K=64,R=4}": 20, "LinearARow_v1{K=128,R=1}": 20,
+        "LinearOut_v1{N=128,W=16}": 20, "LinearOut_v1{N=64,W=16}": 40, "LinearOut_v1{N=256,W=16}": 20}
     assert {t: k for t, k in n.items() if not t.startswith(("Linear", "Gemm"))} == {
         t: k for t, k in plain.items() if not t.startswith("Gemm")}
     ids = {_label(fn): IF.descriptor_id(fn) for fn, _ in c.templates}
@@ -168,23 +171,30 @@ def test_each_cut_linear_reads_its_row_of_its_calls_a_rows_and_y(low):
         assert seg[tid] == {port} and {p for p, s in rows.items() if s == IF.SEG} == {port}
 
 
-def test_each_tables_readers_are_templates_of_their_own(low):
-    """A sample stratified by template draws a unit from every template, so each value has a drawn reader: each template
-    that reads one reads it on every unit and reads no other, and every value has readers."""
+def test_a_shapes_readers_are_one_template_reading_every_call_of_the_shape(low):
+    """Every value has readers, all units of one template, its call's shape's; a template reads a value on each of its
+    units, the values of every round's every call of its shape. So a window's templates don't grow with its rounds and
+    calls, and a sample stratified by template has a reader of each shape, not of each value."""
     c = low.circuit
-    units, values, read = {IF.descriptor_id(fn): n for fn, n in c.templates}, {}, {}
+    units, values, read, readers = {IF.descriptor_id(fn): n for fn, n in c.templates}, {}, {}, {}
     for (tid, _port, u), (v, _row) in _value_rows(c).items():
         values.setdefault(tid, set()).add(v)
         read.setdefault(tid, set()).add(u)
-    assert all(len(vs) == 1 and read[t] == set(range(units[t])) for t, vs in values.items())
-    assert {v for vs in values.values() for v in vs} == set(c.registered.values)
+        readers.setdefault(v, set()).add(tid)
+    assert all(read[t] == set(range(units[t])) for t in values) and len(values) == 6
+    assert set(readers) == set(c.registered.values) and all(len(ts) == 1 for ts in readers.values())
+    shape = {v: t for s in M for ci, (K, N) in enumerate(CALLS)
+             for v, t in ((PEARL.a(s, ci), f"LinearARow_v1{{K={K},R={4 if ci % 4 == 1 else 1}}}"),
+                          (PEARL.y(s, ci), f"LinearOut_v1{{N={N},W=16}}"))}
+    labels = {IF.descriptor_id(fn): _label(fn) for fn, _ in c.templates}
+    assert {v: labels[t] for v, (t,) in readers.items()} == shape
 
 
 def test_the_census_counts_each_cut_linear_by_shape_and_ties_none(low):
     """`census` is a row a round's call: its round and call, K, N and W, the round's rows and its multiply-adds, its A rows'
-    value and rows (m₁₆) and its y's (m), and PoUW's scheme; none is tied (`UNTIED`). Its multiply-adds are the circuit
-    description's own, each call's `LinearARow_v1` units times its K and its `LinearOut_v1`'s N, and an uncut circuit has
-    no census."""
+    value and rows (m₁₆) and its y's (m), and PoUW's scheme; none is tied (`UNTIED`). Its multiply-adds are the circuit's
+    own, the units reading each call's A rows times their `LinearARow_v1`'s K and the N of the `LinearOut_v1` reading its
+    y, and an uncut circuit has no census."""
     cen = WK.census(low)
     assert [(r["round"], r["call"], r["k"], r["n"], r["w"], r["rows"]) for r in cen] == [
         (s, ci, K, N, 16, M[s]) for s in M for ci, (K, N) in enumerate(CALLS)]
@@ -192,10 +202,11 @@ def test_the_census_counts_each_cut_linear_by_shape_and_ties_none(low):
         s, ci, m = r["round"], r["call"], r["rows"]
         assert r["macs"] == m * r["n"] * r["k"] and (r["scheme"], r["tied"], r["untied"]) == (PEARL.scheme, False, WK.UNTIED)
         assert (r["a"], r["y"]) == ({"value": PEARL.a(s, ci), "rows": 16}, {"value": PEARL.y(s, ci), "rows": m})
-    fns = {(fn.name, fn.bindings["ROUND"], fn.bindings["CALL"]): (fn, n) for fn, n in low.circuit.templates
-           if fn.name in ("LinearARow", "LinearOut")}
-    assert sum(r["macs"] for r in cen) == sum(n * fn.bindings["K"] * fns[("LinearOut", s, ci)][0].bindings["N"]
-                                              for (name, s, ci), (fn, n) in fns.items() if name == "LinearARow") == 737280
+    fns, read = {IF.descriptor_id(fn): fn for fn, _ in low.circuit.templates}, {}
+    for (tid, _port, _u), (v, _row) in _value_rows(low.circuit).items():
+        read.setdefault(v, []).append(fns[tid].bindings)
+    assert sum(r["macs"] for r in cen) == sum(len(read[r["a"]["value"]]) * read[r["a"]["value"]][0]["K"]
+                                              * read[r["y"]["value"]][0]["N"] for r in cen) == 737280
     assert WK.census(WC.lower(_registered(), CLASS, None, GRAIN, wired=False)) == []
 
 
@@ -234,9 +245,11 @@ def test_the_cut_at_the_smallest_provable_class_is_proof_blocks_c_flock_proves()
     n = {_label(fn): k for fn, k in c.templates}
     P = PROVABLE_CLASS.positions * PROVABLE_CLASS.slots
     want = {"Gemm_v2{K=128,N=64}": 8 * P, "Gemm_v2{K=128,N=1}": P}
-    for ci, (K, N, R) in enumerate(((128, 256, 1), (128, 128, 2), (128, 512, 1), (256, 128, 1)) * 2):
-        want |= {f"LinearARow_v1{{K={K},R={R},ROUND=0,CALL={ci}}}": P, f"LinearOut_v1{{N={N},W=64,ROUND=0,CALL={ci}}}": P}
+    for K, N, R in ((128, 256, 1), (128, 128, 2), (128, 512, 1), (256, 128, 1)) * 2:
+        for t in (f"LinearARow_v1{{K={K},R={R}}}", f"LinearOut_v1{{N={N},W=64}}"):
+            want[t] = want.get(t, 0) + P
     assert {t: k for t, k in n.items() if t.startswith(("Linear", "Gemm"))} == want
+    assert sorted(k // P for t, k in want.items() if t.startswith("Linear")) == [2, 2, 2, 2, 4, 4]
     assert all(IF.check_proof_block(fn, c.cuts.get(IF.descriptor_id(fn))) <= 27 for fn, _ in c.templates)
 
 
