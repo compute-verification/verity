@@ -58621,3 +58621,100 @@ Each with where it is and whose it is.
 One more thing: my VM restarted at about 16:22Z and `/tmp/work` went with it (the scratch worktrees and the local copies of the PR bodies). Nothing is lost that is not on a branch, a PR or in the notes; the record itself is in `69de`'s run directory on cpu-8.
 
 For the table: #8940 (unmarked) at `131a557ffc03` builds and audits with `main` at `493f49485e50` in `security`, the whole `security/Proofs` and `security/Properties`, quick tier 9 of 9 [runs `r20261111-153509-69de`, `r20261111-153523-73d5`; no kernel replay, no second reader]. Its lock holds exactly the records its body lists; the run's "regenerated" is a key order `main` carries.
+
+## AUDITSUM, Wed 11 Nov 16:37Z: JOB 3, Dither's κ_S: the Lean leaves it free with no instance; what an answer is matches the recursion's outer proof (row 15), 2^-94.95 a proof at 2^80 calls and 2^-110.95 at 2^64, against the budget of 2^-57.1: 37.8 and 53.8 bits inside it. For compute-research on PRF-537
+
+The Lean leaves κ_S free, and no statement of ours instantiates it: it is a real number `WorkSound`, `WorkMoment`, `WorkSoundNoFold` and the card instances take under the open premise `Pouw.Assumptions.ProofSystemSound`, whose only proof on main is the toy witness's at κ_S = 0. What Dither's answer is matches the recursion's outer proof, `Flock.Guarantees.RecursiveKSDeployed` (row 15), one run an answer: \(2^{-94.95}\) a proof at \(2^{80}\) calls and \(2^{-110.95}\) at \(2^{64}\), against the budget of \(2^{-57.1}\) a proof, so 37.8 and 53.8 bits inside it. [read for the Lean and the document; derived for the margins]
+
+Read at `origin/main` `493f49485e50`, fetched at 16:30Z.
+
+**Where κ_S enters, and what it is.**
+- `WorkSound` (`security/Definitions/Pouw/Guarantees/Dither.lean:129-149`), `WorkMoment` (`:161-181`) and `WorkSoundNoFold` (`:211-240`) quantify over a real `κS`, take the hypothesis `ProofSystemSound G P k Reg verdict dev κS`, and add `κS` to the failure: `δ + κS + κx A + κsha A + k * (κdmm (Badv A) + κdsha (Badv A))`. [read]
+- `FleetSound` (`:280-292`) never names κ_S. It takes each replica's `MomentSound … (κ u)` and `κ u (A u ω) ≤ κmax u`, and its failure is `δcoin + ∑ u, κmax u`. κ_S sits inside each `κ u`, through `WorkMoment` (docstring, `:270-272`). [read]
+- The premise (`security/Definitions/Pouw/Assumptions/Dither.lean:158-161`): for every prover `A`, `prob (A.Passes verdict dev ∧ ¬ A.Accepted Reg) ≤ κS`, over the oracle and the period's `k` blocks' dither and check coins. So κ_S is a whole period's error (a replica-week's), not one proof's. [read]
+- `Accepted` (`security/Definitions/Pouw/Dither.lean:387-390`) says every block's instance is registrable and its answer passes the block's check against its commitment. On the served round (`ditherSelected`, `:236, 251`) an unselected block's check holds with nothing checked. [read]
+- Dither's proof uses κ_S once, to pass from "the verdict accepts" to "the checks pass at registrable instances" (`security/Proofs/Pouw/Dither.lean:23`: "the service's `κ_S` (which also covers an unregistrable instance)"). [read]
+- The lock lists `Pouw.Assumptions.ProofSystemSound` under `open`: owner @compute-research, LEAN-186, due 2026-11-30. It is an open premise of `WorkSound`, `WorkMoment`, `WorkSoundNoFold` and five `DitherInstance` guarantees. The only proof of it is `twService … 0` (`security/Proofs/Pouw/DitherWitness.lean:334`), a toy machine whose verdict implies the checks. The lock's shape note says the statement is "frozen (verdict) … it gets the shape when the proof system's verdict is a named Lean function the event reads". `security/Definitions/Nci/Assumptions/Remote.lean:31` says "`ProofSystemSound` is undischarged". [read]
+
+**Which statement of ours it would be.**
+- The document says what an answer is: "Each selected execution phase's answer is one outer proof, which the ZK server releases on its own. Its statement, the proof block's Program on the call's committed values, is fixed by the value-root receipt and the check coin" (`verity/protocols/pouw/verifier/dither/PROTOCOL.md:472-474`). One outer proof is one run of the recursive verifier, which is `RecursiveKSDeployed` (`security/Proofs/Flock/Recursive/KSCoinTreeStatement.lean:78`; deployed in the lock; open premises `Claims.Flock.ListWithin`, `Claims.Hm96Hiding`, `RecDeploy.DenseAt`). [read]
+- Not one base session (row 14, `MaskedKS`): that would fit only an answer proved with no recursion, and `MaskedKS` is locked and not deployed. Its figures are shown below for the comparison.
+- Not a sampled audit's error (rows 1 and 3): Dither's own check coin is its sample, paid for by δ_coin and ε_S, and every selected block gets a proof. SPOT's terms are for sampling units inside one registered run, which an answer does not do. [my reading of `PROTOCOL.md:262-268`; no source says it in these words]
+
+**The number against the budget.** The budget is compute-research's (row 10 of its note): a replica's κ at most \(\delta_{coin}/G = 2^{-43.4}\) a week, so \(2^{-57.1}\) an answer at \(q = 13{,}816\) answers a replica-week. The formula is FL's reading of the Lean numerals: \(\Pr[\text{acc} \wedge \neg R] \le 2^{-167.7} + t \cdot 2^{-174.95}\), with t the prover's SHA-512 calls.
+
+| Budget of the prover | One proof | A replica-week, \(q\) answers | A fleet-week, \(G = 1.15 \cdot 10^{7}\) replicas | Margin to \(2^{-57.1}\) a proof |
+|---|---|---|---|---|
+| \(2^{80}\) calls a proof | \(2^{-94.95}\) [read FL] | \(2^{-81.2}\) [derived] | \(2^{-57.7}\), against δ_coin = \(2^{-19.9}\) [derived] | 37.8 bits [derived] |
+| \(2^{64}\) calls a proof | \(2^{-110.95}\) [read FL] | \(2^{-97.2}\) [derived] | \(2^{-73.7}\) [derived] | 53.8 bits [derived] |
+| \(2^{80}\) compressions, 4 KiB rows | \(2^{-92.4}\) [read FL, on its guess that every charged call is a whole row] | \(2^{-78.7}\) [derived] | | 35.3 bits [derived] |
+| \(2^{80}\) compressions, 64 KiB rows | \(2^{-88.6}\) [read FL, same guess] | \(2^{-74.9}\) [derived] | | 31.5 bits [derived] |
+| The off-shape branch, \(t \cdot 2^{-135.7}\), at \(2^{80}\) calls | \(2^{-55.7}\) [read FL] | \(2^{-41.9}\) [derived] | | 1.4 bits over the budget [derived] |
+| The off-shape branch at \(2^{64}\) calls | \(2^{-71.7}\) [derived] | \(2^{-57.9}\) [derived] | | 14.6 bits [derived] |
+| One base session (row 14) at \(2^{80}\) calls | \(2^{-150.0}\) to \(2^{-144.4}\) [read FL] | \(2^{-130.7}\) at worst [derived] | | 87.3 bits or more [derived] |
+| One base session at \(2^{64}\) calls | \(2^{-166.0}\) to \(2^{-160.4}\) [read FL] | \(2^{-146.7}\) at worst [derived] | | 103.3 bits or more [derived] |
+
+- The bound is linear in t, so a week whose answers share \(2^{80}\) calls in all reads \(2^{-94.95}\) for the week. It meets the budget up to \(2^{117.8}\) calls a proof. [derived]
+- This replaces the two guesses of compute-research's row 11 (\(2^{-33.6}\) and \(2^{-80}\) a proof): at \(2^{-94.95}\) a proof κ_S is \(2^{-81.2}\) a replica-week and \(4.15 \cdot 10^{-18}\) summed over the fleet, where the guesses gave \(2^{-19.8}\) and 12.2, or \(2^{-66.2}\) and \(1.3 \cdot 10^{-13}\). [derived]
+- Label: the two numerals are Lean's on main (FL read them in `Claims/Recursion/KappaEpsCap.lean`); the evaluation at a budget is modeled; every sum over answers and replicas is mine, by the union bound, with compute-research's own counts.
+
+**What it rests on, and what an instance still needs.**
+- The three open premises under `RecursiveKSDeployed` (`ListWithin`, `Hm96Hiding`, `DenseAt`), and its hiding term \(2 k(x) \delta_1\) (row 20: \(2^{-183}\) or \(2^{-175.8}\), under `Hm96Hiding`). [read lock; FL, CY]
+- The shape. The off-shape branch is over Dither's budget at \(2^{80}\) calls by 1.4 bits. The code refuses the shape and no lemma says acceptance gives `OneTable` (FL), so for Dither that refusal carries the budget.
+- No lemma on main takes `ProofSystemSound` from any Flock statement. `RecursiveKSDeployed` says the run accepts at most as often as an extractor recovers a witness, plus the bound; `ProofSystemSound` says the prover's own answer passes the plain check. Three things lie between them: the value root's binding to the extracted witness (a SHA-512 collision, \(2^{-353}\) at \(2^{80}\) calls, row 23); the outer proof's own live coins, which are not in `ProofSystemSound`'s sample space (the oracle and each block's dither and check coin only); and the verdict as a named Lean function, which the lock's shape note asks for. [my reading of the two statements; no source says it]
+- κ_S also covers "every block's instance is registrable", unselected blocks included, and no proof of ours speaks to an unselected block. [read `Accepted` and the proof's line 23]
+- None of Dither's guarantees covers v3.2's proof block (`Guarantees/Dither.lean:10-12`), and no source checks a Dither proof block's size against the recursion's deployed caps. [read]
+- κ_S inside its budget does not put Dither's failure near δ_coin: κ_dmm and κ_dsha still have no value (`PROTOCOL.md:289`). [read]
+
+The script (its output is the table above):
+
+```python
+from math import log2
+def l2sum(*xs):
+    m = max(xs); return m + log2(sum(2.0 ** (x - m) for x in xs))
+# Dither's design point [read: dither/PROTOCOL.md:282-285 (delta_coin, G, k); Guarantees/Dither.lean:266 (q)]
+dcoin, G, q, k = 1e-6, 1.15e7, 13816, 1e9
+bud_week  = log2(dcoin / G)            # a replica's kappa, a week: delta_coin / G
+bud_proof = bud_week - log2(q)         # one answer's share of it: delta_coin / (G q)
+print(f"budget: 2^{bud_week:.2f} a replica-week, 2^{bud_proof:.2f} an answer; log2 q = {log2(q):.2f}, log2 G = {log2(G):.2f}")
+# (a) the recursion's outer proof [read: FL lines 34, 36]: Pr[acc and not R] <= 2^-167.7 + t 2^-174.95
+for T in (80, 64):
+    one   = l2sum(-167.7, T - 174.95)
+    week  = one + log2(q)                          # q answers, each prover with t = 2^T calls
+    weekT = l2sum(log2(q) - 167.7, T - 174.95)     # q answers, 2^T calls over the whole week
+    fleet = week + log2(G)
+    print(f"(a) T=2^{T} calls: one proof 2^{one:.2f} (margin {bud_proof - one:.1f} bits); a replica-week 2^{week:.2f} "
+          f"(2^{weekT:.2f} if the week shares 2^{T} calls; margin {bud_week - week:.1f}); fleet-week sum 2^{fleet:.2f} vs delta_coin 2^{log2(dcoin):.2f}")
+print(f"(a) calls a proof at which it meets the budget: 2^{174.95 + bud_proof:.1f}")
+# (a) in compressions [read: FL line 159, at 2^80 only]
+for name, v in (("4 KiB rows", -92.4), ("64 KiB rows", -88.6)):
+    print(f"(a) 2^80 compressions, {name}: one proof 2^{v} (margin {bud_proof - v:.1f}); a replica-week 2^{v + log2(q):.2f}")
+# (a') the off-shape branch [read: FL line 597]: t 2^-135.7
+for T in (80, 64):
+    v = T - 135.7
+    print(f"(a') off-shape, T=2^{T}: 2^{v:.1f} a proof (margin {bud_proof - v:.1f}); a replica-week 2^{v + log2(q):.2f}")
+# (b) one base session [read: FL lines 54, 126]
+for T, vs in ((80, (-150.0, -144.4)), (64, (-166.0, -160.4))):
+    print(f"(b) T=2^{T}: one session 2^{vs[0]} to 2^{vs[1]} (margin {bud_proof - vs[1]:.1f} or more); a replica-week 2^{vs[1] + log2(q):.2f} at worst")
+# compute-research's row 11 guesses, for the record
+for v in (-33.6, -80.0, -94.95):
+    print(f"2^{v} a proof: a replica-week 2^{v + log2(q):.2f}; fleet sum {G * q * 2.0 ** v:.3g}")
+```
+
+```text
+budget: 2^-43.39 a replica-week, 2^-57.14 an answer; log2 q = 13.75, log2 G = 23.46
+(a) T=2^80 calls: one proof 2^-94.95 (margin 37.8 bits); a replica-week 2^-81.20 (2^-94.95 if the week shares 2^80 calls; margin 37.8); fleet-week sum 2^-57.74 vs delta_coin 2^-19.93
+(a) T=2^64 calls: one proof 2^-110.95 (margin 53.8 bits); a replica-week 2^-97.20 (2^-110.95 if the week shares 2^64 calls; margin 53.8); fleet-week sum 2^-73.74 vs delta_coin 2^-19.93
+(a) calls a proof at which it meets the budget: 2^117.8
+(a) 2^80 compressions, 4 KiB rows: one proof 2^-92.4 (margin 35.3); a replica-week 2^-78.65
+(a) 2^80 compressions, 64 KiB rows: one proof 2^-88.6 (margin 31.5); a replica-week 2^-74.85
+(a') off-shape, T=2^80: 2^-55.7 a proof (margin -1.4); a replica-week 2^-41.95
+(a') off-shape, T=2^64: 2^-71.7 a proof (margin 14.6); a replica-week 2^-57.95
+(b) T=2^80: one session 2^-150.0 to 2^-144.4 (margin 87.3 or more); a replica-week 2^-130.65 at worst
+(b) T=2^64: one session 2^-166.0 to 2^-160.4 (margin 103.3 or more); a replica-week 2^-146.65 at worst
+2^-33.6 a proof: a replica-week 2^-19.85; fleet sum 12.2
+2^-80.0 a proof: a replica-week 2^-66.25; fleet sum 1.31e-13
+2^-94.95 a proof: a replica-week 2^-81.20; fleet sum 4.15e-18
+```
+
+The same text goes into `note:proofs/20261111T1620Z-report-security-numbers-audit` with jobs 1 and 2. Row 45 of the table keeps its verdict (κ_dmm and κ_dsha have no value); its κ_S cell takes this figure. Jobs 1 and 2 follow.
