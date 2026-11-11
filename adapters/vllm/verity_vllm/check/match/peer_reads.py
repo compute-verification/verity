@@ -7,9 +7,13 @@ boundaries first (`_split_peer`), so a WORLD > 2 fold compares with the rank Pro
 """
 from __future__ import annotations
 
+from collections.abc import Callable
+
 
 class PeerReads:
     """`RootView`'s reads of peers Input nodes (`instance_sequence.RootView`, and through it `batch_decomp.Projection`)."""
+
+    _per_run: Callable[[tuple, bool], list[tuple]]   # the view's own (`RootView._per_run`), declared and nothing more
 
     def _peer_src(self, idx: int, lo: int, hi: int):
         """("PEER", k, lo', hi') for a read of leaf range [lo, hi) of peers Input node `idx`; None when the range is not inside one field."""

@@ -30,6 +30,7 @@ import collections
 import functools
 import os
 from collections.abc import Callable
+from typing import TYPE_CHECKING
 
 from verity_vllm import settings
 from verity_vllm.check.match import dag_form as DAG
@@ -110,11 +111,20 @@ def leave() -> None:
 
 # ------------------------------------------------------------------------------------------------ canon (per RootView, per instance)
 
-class _CanonMemo:
+if TYPE_CHECKING:
+    _View = SEQ.RootView   # what `_CanonMemo` is mixed in ahead of, so the type checker reads its `super().canon` as the view's
+else:
+    _View = object
+
+
+class _CanonMemo(_View):
     """Mixin over compare.RootView (`MemoProg`) and projection.Projection (`_MemoProjection`): `canon` computed once per (instance,
     unfold) and returned as the SAME list object thereafter (no caller mutates it: compare._canon_step_relative, dag_form.dag_hashes
     / live_cone and global_match iterate only).  A Projection's `_xreq` calls made during the first computation are recorded and
     replayed on every hit, so cross-request read counts are unchanged."""
+
+    _fast_canon: dict[tuple[int, bool], tuple[list[list[tuple]], tuple]]   # (instance, unfold) -> (canon, the `_xreq` calls it made)
+    _xreq: Callable[..., None]   # a Projection's (`Projection._xreq`), declared and nothing more: a plain view has none, and `canon` asks
 
     def canon(self, i: int, unfold: bool = False):
         cache = self.__dict__.get("_fast_canon")
@@ -272,7 +282,7 @@ def _dag_hashes_intern(P: SEQ.RootView, only: set[int] | None = None) -> dict[in
                                 h = hashes.get(ii)
                                 if h is None:
                                     memo = False
-                                    item = ("N", f"forward-ref-or-dead:{ii}", lo0 + k * dlo, hi0 + k * dhi)
+                                    item: tuple = ("N", f"forward-ref-or-dead:{ii}", lo0 + k * dlo, hi0 + k * dhi)
                                 else:
                                     item = ("N", h, lo0 + k * dlo, hi0 + k * dhi)
                                 nk = trie.get((node, item))
@@ -332,7 +342,7 @@ def _canon_step_relative_identity(P: SEQ.RootView, i: int, seqs: list[list[int]]
         return C._canon_step_relative(P, i, seqs, unfold)
     ident = P.__dict__.get("_fast_seqs_ident")
     if ident is None or ident[0] is not seqs:
-        P._fast_seqs_ident = ident = (seqs, seqs == P.steps)
+        P.__dict__["_fast_seqs_ident"] = ident = (seqs, seqs == P.steps)
         stats["seqs_identity_checks"] += 1
     if not ident[1]:
         return C._canon_step_relative(P, i, seqs, unfold)

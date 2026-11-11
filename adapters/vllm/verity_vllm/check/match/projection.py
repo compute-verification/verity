@@ -69,6 +69,13 @@ class Projection(PX.CachedKv, C.RootView):
         self.xreq_examples: list[dict] = []
         self._segment()
 
+    def canon(self, i: int, unfold: bool = False) -> list[list[tuple]]:
+        """The view's canon, but a warm request's attention instance reads its cached key / value rows as `prefix_reads.CachedKv` links them."""
+        rl = self._kv_row_leaves(i) if self.cached_rows else None
+        if rl is None:
+            return super().canon(i, unfold)
+        return self._kv_canon(i, rl, unfold)
+
     def _src(self, run, unfold: bool):
         space, idx, lo, hi = run
         if space == "n":
