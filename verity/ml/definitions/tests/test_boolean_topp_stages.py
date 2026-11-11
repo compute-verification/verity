@@ -6,6 +6,8 @@
   unit (`numerics.topp_stage_twins`) compute the twin's words, which the word unit computes (`test_topp_stages`);
 * at the served vocabulary every unit's Boolean version, at every split count, has rows a proof block holds
   (`interface.check_proof_block`) and fits one Flock block, and every Definition its body Calls is Boolean;
+* select chunks of a served row (the first, the last, and two that a slice's end falls inside) compute the twin's words on
+  its inputs, as words and on bits;
 * a served select chunk on bits, lowered flat, stays within the nonzeros of the largest unit proved under ``--zk``.
 """
 from __future__ import annotations
@@ -17,7 +19,7 @@ from verity.ml.circuits import boolean as BL
 from verity.ml.circuits.boolean.trace import word_of
 from verity.ml.circuits.codec import descriptor_id
 from verity.ml.circuits.defs import bind
-from verity.ml.circuits.evaluation import evaluate_words
+from verity.ml.circuits.evaluation import evaluate, evaluate_words
 from verity.ml.definitions import boolean as BB
 from verity.ml.definitions.numerics import topp_stage_twins as TW
 from verity.ml.definitions.registry import boolean_topp_stages as BT
@@ -139,6 +141,36 @@ def test_each_served_unit_on_bits_fits_a_proof_block():
         assert IF.check_proof_block(b) == IF.check_proof_block(d) <= IF.K_MAX and IF.unit_rows(b) == IF.unit_rows(d), t
         block = FC.unit_block(b)
         assert FC.past_block(block) is None and block["k_log"] <= IF.K_MAX, (t, block)
+
+
+@pytest.mark.slow
+def test_the_served_select_chunks_compute_the_twin_s_words():
+    """At GLM-5.3's vocabulary, select chunks of a served row compute the twin's words on its inputs for them, as words and on
+    bits (bit-sliced, so with every word `gumbel_boolean.philox_round` commits): the first chunk, the last, and the two forms
+    of a middle one that a V = 64 row's chunks of two lanes never take, a chunk that a slice's end falls inside at S = 32
+    and one at S = 16 and 32 both (`topp_stages.positions`' wrap, which every later chunk's carried offsets, slices and tie
+    counts follow from).  About a minute, most of it the twin over the row: these are the Definitions a served row's 4,840
+    select units are, at their 32 lanes, and no smaller row has them."""
+    V, n = SERVED_V, T.chunk(SERVED_V)
+    lg = row(V, "plain", seed=V)
+    ops = {"top_p": f32(0.9), "seed": 0x1234_5678_9ABC_DEF0, "pos": 41, "temp": f32(0.7), "splits": 32}
+    _tok, outs = TW.stage_rows(V, lg, **ops)
+    sel = [u for u in T.plan(V) if u.key[0] == "select"]
+    inside = {S: [k for k, u in enumerate(sel) if any(u.lanes[0] < e < u.lanes[1] for e in range(T.Geo(V, S).L, V, T.Geo(V, S).L))]
+              for S in (16, 32)}
+    picked = [0, min(set(inside[32]) - set(inside[16])), min(inside[16]), len(sel) - 1]
+    assert n == 32 and set(inside[16]) < set(inside[32]) and len(set(picked)) == 4
+    assert {(sel[k].defn.bindings["FIRST"], sel[k].defn.bindings["LAST"]) for k in picked} == {(True, False), (False, False),
+                                                                                           (False, True)}
+    for k in picked:
+        u = sel[k]
+        args = unit_args(u, lg, ops, outs)
+        want = [int(v) for f in outs[u.key] for v in f]
+        assert [int(v) for v in evaluate(u.defn, *args)] == want, u.key
+        b = BB.boolean_version(u.defn)
+        assert descriptor_id(word_of(b)) == descriptor_id(u.defn) and u.defn.bindings["N"] == n, u.key
+        got = evaluate_words(b, *(np.atleast_1d(np.asarray(a, dtype=np.uint64))[None] for a in args))
+        assert got.reshape(-1).astype(np.uint64).tolist() == want, u.key
 
 
 @pytest.mark.slow
