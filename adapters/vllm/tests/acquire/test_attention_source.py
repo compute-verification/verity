@@ -348,7 +348,7 @@ def test_each_sparse_mla_call_boundary_holds_the_attn_tensor_of_its_layer_and_st
 @pytest.mark.slow
 def test_the_binding_map_covers_each_held_call_boundary_exactly_and_names_the_rest(bruns):
     on = bruns[True]
-    layouts = {}
+    layouts: dict[int, list[TensorMeta]] = {}
     for k, recs in on.rec.items():
         layouts[k], off = [], 0
         for j, (name, t) in enumerate(recs):

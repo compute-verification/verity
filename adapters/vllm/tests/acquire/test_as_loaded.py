@@ -51,8 +51,8 @@ def repack(layer, w13, w2, s13, s2):
 @pytest.fixture
 def vllm_mxfp4(monkeypatch):
     mxfp4, oracle = types.ModuleType(mml._MXFP4), types.ModuleType(mml._ORACLE)
-    mxfp4.Mxfp4MoEMethod = _Mxfp4Method
-    oracle.Mxfp4MoeBackend = types.SimpleNamespace(MARLIN="marlin")
+    mxfp4.__dict__.update(Mxfp4MoEMethod=_Mxfp4Method)
+    oracle.__dict__.update(Mxfp4MoeBackend=types.SimpleNamespace(MARLIN="marlin"))
     for module in (mxfp4, oracle):
         monkeypatch.setitem(sys.modules, module.__name__, module)
 
