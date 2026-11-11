@@ -9,7 +9,7 @@ testpaths = ["tests"]
 # test files that start a program the read guard can't trace (git, lake, a compiler, a shell): keyed on the suite's whole tree
 untraced = ["tests/test_sketch.py"]
 # layout.py reads the registered scheme (verity.protocols.pous.verifier.schemes.p2) and the P2 spec's reference
-# (benchmarks/pous/p2_v1: reference.py, pinned by vectors.json; stage.py imports gpu.py); the toy test reads P2's toy
+# (the verifier's p2_v1/reference.py, pinned by vectors.json; stage.py imports the prover's gpu.py); the toy test reads P2's toy
 # store (p2_store/store-toy); gemm.py's check evaluates
 # ScaledMmS8Coordinate_v1 (verity.circuits), and what those import; full.py's GEMM is s8_linear's int_mm.py.
 # sketch.py's receipts are PoUB's (verity.protocols.poub.verifier, which imports
