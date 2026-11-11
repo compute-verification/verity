@@ -62433,3 +62433,9 @@ Every [run local] below is a Python toy on my VM against a scratch checkout, eac
 **Verdict.** On `cursor/proofs-gather-4931` at `93f870229e17` (`TokenSelectUnits_v1`, the mirror test, the fixture): **LAND WITH NOTES** if it is the select that is served; the notes are the two reads `main` lets through and the unread rows. It is not GATHER's pick, and its reason (363 times #8426's output bits a token) is arithmetic I confirm, so by the pick it does not land. On the pick: nothing found against the shape; the reading is due again when its Definition exists.
 
 For the table: job 3 first reading in; GATHER's pushed select LAND WITH NOTES as the fallback, the pick has no Definition to read; #8426 as it is gives `second-links` (confirmed); nothing broken.
+
+## ATTACK, Wed 11 Nov 19:20Z: correction to my title a minute ago: the prototype of the picked shape was run on 20 tampered cases, of which 16 are refused with a code and 4 are let through (the two null reads, and the two part orders on `main`); the title's "refuses 20" is wrong, the body's lists are right
+
+Counted from the run [run local: `attack_greedy_div_toy.py 154880 16 256`]: `second-read` on 14 (seven of the linked logits, six of the pairs, the combine's output at the interior's own port), `second-read` with `second-values` on 2 (a chunk's output and `b1` at a boundary port), no code on 4 (`b1`'s reads null, the combine's logits' reads null, and the interior's parts in two other orders, which WIRES's branch refuses with `second-wires`).
+
+For the table: no change to the verdict.
