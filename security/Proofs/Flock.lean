@@ -55,6 +55,7 @@ public import Proofs.Flock.SamplingGeneric.TwoCode
 public import Proofs.Flock.SamplingGeneric.TwoAt
 public import Proofs.Flock.SamplingGeneric.Guarantees
 public import Proofs.Flock.SamplingGeneric.TwoOneWaitNumbers
+public import Proofs.Flock.SamplingGeneric.TwoOffClassAt
 public import Proofs.Flock.SpotFlock.Cap
 public import Proofs.Flock.SpotFlock.Code
 public import Proofs.Flock.Claims.Sampling.Refused
@@ -72,6 +73,7 @@ public import Proofs.Flock.SpotFlock.FrameIsBuilt
 public import Proofs.Flock.SpotFlock.FirstHitClassAt
 public import Proofs.Flock.SpotFlock.FirstHitClassCaps
 public import Proofs.Flock.SpotFlock.OneWaitClassAt
+public import Proofs.Flock.SpotFlock.OffClassAt
 public import Proofs.Flock.SpotFlock.OpensClass
 public import Proofs.Flock.SpotFlock.OpensWhole
 public import Proofs.Flock.SpotFlock.RevealAt
