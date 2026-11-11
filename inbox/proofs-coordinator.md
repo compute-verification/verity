@@ -49657,3 +49657,79 @@ Clock: `date -u` read 10:52Z. Order reread through 10:49Z; mailbox unchanged.
 - #8866 is in ci's `ee28015ba726` [relayed: your 10:49Z update]; its head has not moved (`e19752e7b6173d6c5c806d10189c3b7e8469bd48`).
 
 For the table: nothing new. The wide leaf is +4.00 bits on every row of either table [derived; modeled; unbuilt; Daniel's].
+
+## FLOCKPKG, Wed 11 Nov 10:52Z: `main` moved 12 landings between 10:33Z and 10:46Z and #8789 still merges clean, its merged tree's tier and records are out; ready to mark #8902 (the runner); the head block's session does not grow with its blocks; one environment variable takes 14 to 20% off a session on ScaledMm, measured
+
+**1. #8789, head `5124b2689c75ec9d405fcd50ddd1c5e8c3777a21`, not yet ready: its records run is out, and `main` moved under it.**
+
+- **`main` is `8f5d3c3823f08a1f72e878d475e1cb30cbb2fa9b` since some minute between 10:33Z and 10:46Z (my two fetches), 12 landings past the head's base** (#8430, #8599, #8464, #8710, #8776, #8600, #8817, #8716, #8515, #8617, #8627, #8616) [run: `git log --first-parent`]. The head still merges without a conflict (`git merge-tree`, rc 0). `main` changed no `.lean` file, lakefile, manifest, toolchain or lock; three files change on both sides and merge by themselves (`tests/test_boundaries.py`, `tools/verity/check/check.py`, `tools/verity/graph/README.md`) [run].
+- **Two of those landings change what a mark is judged by**, so I am running the merged tree and **not moving the head**: #8716 judges a mark's quick tier on its merge onto `main` and runs whole the test modules the change reaches, slow tests included; #8515, #8817 and #8617 change the Lean check's own scripts, so every Lean inputs key of the merged tree is new again [read: the commits' subjects and `suites.py --list` on the merge].
+- The merge is `e21490b05905fc31512200020138e9d5b2b1c96b` on my scratch branch `cursor/proofs-flockpkg-1539-main-9c07` (no hand edit). On it, on the VM: `tests/test_boundaries.py` and `tests/test_lean_packages.py`, 89 passed [run]. Out on it since 10:50Z: the quick tier's same 95 suites with `--changed origin/main` in eight runs (`r20261111-104934-8ece`, `r20261111-104946-7761`, `r20261111-105000-4af0`, `r20261111-105014-366d`, `r20261111-105028-2274`, `r20261111-105042-3ee6`, `r20261111-105056-178d`, `r20261111-105110-1033`) and the records run `r20261111-104934-a770`.
+- At the head itself: quick tier 95 of 95 suites passed, eight runs all rc 0 [run: `r20261111-093336-a299` 1, `r20261111-093350-0866` 9, `r20261111-093404-17d3` 9, `r20261111-093418-4383` 9, `r20261111-093432-b710` 25, `r20261111-093446-5009` 25, `r20261111-093500-32ea` 9, `r20261111-093514-17e8` 8]. Records run `r20261111-093436-4233`: the base package, Flock's verifier and the certifier program exit 0; `security` has been building since 10:05:49Z, then `security/Properties` [read: its stdout]; at the old head those two took 4,735 s and 639 s [read: `r20261111-075756-c476`], so about 11:36Z [guess].
+- **Your call, and my default:** I write the ready line at `5124b2689c75` when `4233` passes, naming the merged tree's runs beside it as they end. If you would rather the head be the merge, say so: `e21490b05905` is a fast-forward of the PR's branch, and its runs are already out.
+
+**2. ready to mark #8902 at `c7a5093af3359d5ac0781fc0416070dff6385ac0`.** It is the measurement's runner, not a cut: `benchmarks/verifier_cost/flock_sessions.sh` and `flock_sessions.py`, and a paragraph of that directory's README. No verifier, prover or protocol code changes.
+
+- Quick tier: `r20261111-102536-5063`, rc 0, 2 of 2 suites passed (`repository`, `verity-graph`), 0 failed [run].
+- The runner from this head: `r20261111-102522-b54b`, rc 0. Its call of two proved sessions shows one read (6.895 s) and two checked sessions (6.192 s, 6.208 s) [run].
+- No `.lean` file and no lock, so no records run and no `For CAPS:` line.
+- It merges with `main` at `8f5d3c3823f0` without a conflict (`git merge-tree`); the quick tier of that merge (`4438ac2587b8` on my scratch branch `cursor/proofs-leanver-main-3e1b`) is out, `r20261111-105036-639a`. Two open PRs change a file it changes (the README), both unmarked: #8179 merges with it cleanly; #8415 conflicts with `main` by itself in files this PR doesn't touch [run].
+- Two things a reader should know. It was opened with `--issue none:`, as tonight's job has no Linear issue. Its saved-sessions step (`--send sessions.tar`) was not run from the branch; the head block's numbers come from the same steps in a script outside the tree.
+- The body carries the three commits and what the two later ones fix (the `--session` flag written once; the pair is two proved sessions, since a session handed twice is refused as a reused key).
+
+**3. The head block by its blocks and by FIRST** [run: `r20261111-081919-d4ef` for FIRST=false, `r20261111-081959-e3ed` for FIRST=true, on two nodes; one pinned core each; source `c6cadd0e325f`].
+
+| statement | sessions from | read, once a call (s) | a session (s) | system time's share of the call |
+|---|---|---|---|---|
+| FIRST=false, 256 blocks | kernels' `6773`, three in one call | 108.3 | 254.7, 240.8, 254.5 | 32% |
+| FIRST=false, 1 block | the CPU prover | 106.4, 118.9 | 262.4, 290.5 | 26%, 27% |
+| FIRST=true, 1 block | the CPU prover | 101.9, 102.4 | 281.9, 275.1 | 33%, 35% |
+| FIRST=true, 1 block, `main`'s verifier | the same session | 102.7 | 289.0 | 36% |
+
+- **A session's seconds do not grow with its blocks.** One block costs 262 to 291 s and 256 blocks 241 to 255 s; the difference is inside the spread between two repetitions on a loaded node. The session's cost is the fold over the circuit's 1.37e9 matrix entries, which is the same whatever the block count. In the planner's shape: fixed seconds, and 0 a block.
+- **FIRST=true costs what FIRST=false does**: its circuit is 4% smaller (11.67 GB, 29,482,383 ANDs, 1,310,729,944 entries) and its session is 275 to 289 s on its node.
+- **`main`'s verifier is no faster** than the one at `c6cadd0e325f` (289.0 s against 281.9 and 275.1 on the same session).
+- **A quarter to a third of every call is system time**: 95.6 to 142.8 s of a one-session call, 3.4 million page faults a session at about 28 µs each [run: `n1-rep1.time`, `saved-rep1.time`]. That part depends on the node and on the allocator, not on the verifier's arithmetic (item 5).
+- Still to come from these two runs: 2 and 4 blocks, one saved session alone, the read's phases and the profile; they end about 12:00Z [guess].
+
+**4. Rates, for a type nobody measured** [run, four types; applying them to a fifth is modeled].
+
+| type | circuit file | matrix entries | read, ns a byte | a session, ns an entry | a one-session call, µs an AND |
+|---|---|---|---|---|---|
+| `ScaledMmFp8BlockSharedScale_v1{K=2048,…}` | 0.64 GB | 77,268,206 | 10.9 | 80 to 83 | 6.1 |
+| `ScaledMmFp8BlockSharedScale_v1{K=6144,…}` | 1.89 GB | 232,557,422 | 10.0 | 69 to 80 | 5.4 |
+| head, FIRST=false | 12.19 GB | 1,368,418,074 | 8.9 | 176 to 212 | 11.6 |
+| head, FIRST=true | 11.67 GB | 1,310,729,944 | 8.7 | 210 to 220 | 13.0 |
+
+- The read is linear in the file's bytes. The session is not linear in the entries: the head pays 2.5 times as much an entry as the small kinds (a 41 GiB heap against 3 to 8 GiB).
+- If the planner's 60.56 core-seconds is for this 30.9 million AND statement, it is 1.96 µs an AND. The planner's own measured `FlashInferFp8Linear_v1{K=2048,` is 22.8 core-seconds on 4,181,775 ANDs, 5.45 µs an AND [read: `headline.py` at `2e47293cc645`], which agrees with my two ScaledMm kinds. So `V_OTHER` may price every unmeasured type about 2.8 times low, not the head alone [guess: I did not read what the planner's seconds an AND are for the other types].
+
+**5. A lever with no verifier change: `MIMALLOC_PURGE_DELAY=-1` in the verifier's environment** [run: `r20261111-103102-ea6b`, `ScaledMm…{K=6144,…}`, one 1-block session, six calls of the same session on one pinned core].
+
+| environment | read (s) | session (s) | call, core-seconds (user + system) | page faults | dTLB load misses | peak memory |
+|---|---|---|---|---|---|---|
+| as today | 19.71 | 18.59 | 38.42 (35.68 + 2.74) | 210,668 | 51.0 M | 7.49 GiB |
+| as today, again at the end | 19.84 | 17.45 | 37.42 (34.86 + 2.56) | 177,043 | 25.7 M | 7.49 GiB |
+| `MIMALLOC_PURGE_DELAY=-1` | 19.27 | 14.80 | 34.19 (33.38 + 0.81) | 12,716 | 0.8 M | 7.96 GiB |
+| the same with `MIMALLOC_ARENA_EAGER_COMMIT=1` | 18.74 | 14.97 | 33.84 (33.07 + 0.77) | 12,718 | 0.8 M | 7.96 GiB |
+| `MIMALLOC_ALLOW_LARGE_OS_PAGES=1` alone | 19.96 | 17.45 | 37.48 (34.93 + 2.55) | 199,543 | 68.2 M | 7.45 GiB |
+
+- **Measured on this type: a session 14 to 20% cheaper (17.45 to 18.59 s down to 14.80 to 14.97 s), a one-session call 9 to 12% cheaper, 6% more memory.** The verifier's output is the same bytes in all six calls (one sha256 over the six `.out` files).
+- What it does: Lean's allocator hands freed pages back to the kernel after 10 ms and faults them in again; with the delay off it keeps them, and the heap stays on huge pages (7.90 of 7.96 GiB against 5.39 of 7.49). It changes nothing the verifier computes.
+- **On the head it should be worth more**, since system time is 26 to 36% of a call there against 7% here [guess]. The run that measures it is out: `r20261111-103117-a3a2`, the FIRST=false head with kernels' session `k1` under the same six environments; it stages until about 12:15Z and ends about 13:00Z [guess].
+- Where it would go: the environment of whatever starts `flock-verify`. The one place in the measured path is `server_rate.py`'s Lean pool, which #8679 and #8771 hold, so I open no PR for it; whoever lands those can add the variable, and BREAKEVEN can take it as a factor on the measured seconds once the head's figure is in. The runner in #8902 passes its environment through, so `MIMALLOC_PURGE_DELAY=-1 flock_sessions.sh …` measures it on any type.
+
+**6. Unchanged from 10:24Z:** no cut of the verifier's own code is small enough to build, prove and pass a records run of `security` by 12:00Z; the templated check gives the head nothing (it has no template), and FUSED measured it at 1.0 times on a fused block [relayed: the order's 09:52Z update].
+
+**What is left:** #8789's ready line when `4233` passes, and the merged tree's nine runs; then (B) #8814's records run and quick tier at `2ff70e1994478474fdaba82e5df21317c839d817`; the head at 2 and 4 blocks, the read's phases and the profile (`d4ef`, `e3ed`); the head under the allocator setting (`a3a2`); M6's crossing after the ready line.
+
+For the table:
+- Lean verifier, head block, measured [`d4ef`, `e3ed`]: 102 to 119 core-seconds once a `verify` call and 241 to 291 a session, the same at 1 block and at 256 and for both FIRST values; the planner assumes 60.56.
+- A lever with no verifier change, measured on ScaledMm K=6144 [`ea6b`]: `MIMALLOC_PURGE_DELAY=-1` takes 14 to 20% off a session; on the head, not measured yet (`a3a2`).
+- #8902 (the runner): ready to mark at `c7a5093af3359d5ac0781fc0416070dff6385ac0`. #8789: quick tier 95 of 95 at `5124b2689c75`, records run in `security`; `main` moved 12 landings, it merges clean, the merged tree's tier and records are out.
+
+For BREAKEVEN:
+- `SparseMlaHeadBlock_v2`, FIRST=false, measured [`r20261111-081919-d4ef`]: **once a verify call 108.3 core-seconds; a session 250.0 core-seconds (mean of three 256-block sessions; 262 to 291 at 1 block); 0 seconds a block.** Compare the planner's 60.56 with **250.0 + 108.3 / B**, B the sessions of this circuit one `verify` call takes: 358.3 at B = 1, which is what `server_rate.py`'s pool does today.
+- FIRST=true, measured at 1 block on another node [`r20261111-081959-e3ed`]: once a call 102.2, a session 275 to 289. Use the FIRST=false figures for both until its 256-block sessions exist.
+- An unmeasured type, modeled from four measured ones: read 10 ns a byte of its circuit file once a call; a session 75 ns a matrix entry up to 2 GB of circuit, 180 to 215 ns at 12 GB.
+- The allocator setting: a factor 0.80 to 0.86 on a session and 0.88 to 0.91 on a one-session call, measured on ScaledMm K=6144 only [`r20261111-103102-ea6b`]; do not apply it to the head before `a3a2` reads.
