@@ -1,5 +1,6 @@
 module
 
+public import Flock.Sigma
 public import Flock.TemplateQuery
 public import Spot.Wires
 
@@ -41,6 +42,7 @@ namespace NciCheck.RecordText
 
 open Lean (Json toJson)
 open Flock.Program
+open Flock.Sigma (bits)
 open Spot.Wires (nat?)
 
 /-! ## The text -/
@@ -68,28 +70,9 @@ def wiring (doc : Json) : Except String Spot.Wires.Wiring := Spot.Wires.Wiring.o
 
 /-! ## Templates -/
 
-private theorem lt_array (n : Nat) (e : Ty) : sizeOf e < sizeOf (Ty.array n e) := by simp; omega
-
-private theorem lt_tuple {f : Ty} {fs : Array Ty} (h : f ∈ fs) : sizeOf f < sizeOf (Ty.tuple fs) := by
-  have := Array.sizeOf_lt_of_mem h; simp; omega
-
-private theorem lt_record {f : String × Ty} {fs : Array (String × Ty)} (h : f ∈ fs) :
-    sizeOf f.2 < sizeOf (Ty.record fs) := by
-  have := Array.sizeOf_lt_of_mem h; cases f; simp at *; omega
-
-/-- The bits of a type's leaves, from its structure: an Array's are one element's times its length. -/
-def bits : Ty → Nat
-  | .value w => w
-  | .array n e => n * bits e
-  | .tuple fs => (fs.toList.attach.map fun ⟨f, _⟩ => bits f).sum
-  | .record fs => (fs.toList.attach.map fun ⟨f, _⟩ => bits f.2).sum
-termination_by t => sizeOf t
-decreasing_by
-  · exact lt_array _ _
-  · exact lt_tuple (Array.mem_def.mpr ‹_›)
-  · exact lt_record (Array.mem_def.mpr ‹_›)
-
-/-- A return type's fields, each one output row: a Tuple's or a Record's fields, else the type itself. -/
+/-- A return type's fields, each one output row: a Tuple's or a Record's fields, else the type itself. A Tuple or a
+Record of no field is itself its one field, as the interface that writes the record takes it: that row has no bit,
+so a Definition that returns no field is refused as one whose output has no bit is (`tmplOf`). -/
 def fieldsOf (t : Ty) : List Ty :=
   match t with
   | .tuple fs => if fs.isEmpty then [t] else fs.toList
@@ -113,7 +96,10 @@ structure Tmpl where
   deriving Inhabited
 
 /-- The template of one root node's units, from its Definition's parameters and return type. Refused (`templates`)
-where a parameter is not whole 16-bit words, an output has no bit, or two ports share a name. -/
+where a parameter is not whole 16-bit words, an output has no bit, or two ports share a name. A type's bits are read
+from its structure (`Flock.Sigma.bits`: an Array's are one element's times its length), never leaf by leaf. An
+output with no bit has no word, so no wire could read it: a wire's two rows have the same words
+(`Spot.Wires.check`), and a parameter's row has at least one. -/
 def tmplOf (P : Prog) (r : Flock.TemplateQuery.TRange) : Except String Tmpl := do
   let d := (((P.defs[P.root]!).body.nodes[r.node]?).map (·.fn)).getD 0
   let defn := P.defs[d]!

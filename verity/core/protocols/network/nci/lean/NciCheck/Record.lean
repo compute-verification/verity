@@ -237,6 +237,7 @@ namespace NciCheck.Record
 
 open Lean (Json toJson)
 open Flock.Program
+open Flock.Sigma (bits)
 open NciCheck.RecordText
 
 /-! ## The instance -/
