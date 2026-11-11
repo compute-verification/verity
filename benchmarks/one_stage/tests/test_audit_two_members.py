@@ -15,7 +15,9 @@ and hands `a5.audit` the members, each proved by C-Flock's prover (`flock-circui
 * **The binaries.** `flock-verify` and `flock-firewall` are what check's lean-build step builds before this suite
   (`AFTER_LEAN`, the suite's ``artifacts``), and the tests skip without them. `flock-circuit` is built by
   `check_build.sh bin` on the checkout check's flock-circuit-build step keeps, which that script clones, with its Rust
-  toolchain, on a machine that has neither.
+  toolchain, on a machine that has neither. The stream's and the challenger's Lean (`sampled-proofs-verifier`) is its
+  own package's, which the audit builds with `lake` on first use (`one_stage.verifier.executable`): a checkout's first
+  audit pays that build.
 
 Slow, and past a minute in `check`: every other test of the audit gives `a5.audit`, the prover or the verifier a
 stand-in, so none sees what only the real ones refuse: a rule the stream's service doesn't take, a statement the prover
